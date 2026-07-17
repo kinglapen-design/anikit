@@ -1,20 +1,18 @@
 /// 任务 2 spike：从窗口拖出文件到其他软件（WebView HTML5 拖拽出不了窗口边界，
 /// 由原生层发起系统级拖拽，Windows 底层即 CF_HDROP）。
 #[tauri::command]
-async fn drag_files(window: tauri::WebviewWindow, paths: Vec<String>) -> Result<(), String> {
-  tauri::async_runtime::spawn_blocking(move || {
-    let items: Vec<std::path::PathBuf> = paths.iter().map(std::path::PathBuf::from).collect();
-    drag::start_drag(
-      &window,
-      drag::DragItem::Files(items),
-      drag::Image::Raw(Vec::new()),
-      |_result, _cursor| {},
-      drag::Options::default(),
-    )
-    .map_err(|e| e.to_string())
-  })
-  .await
-  .map_err(|e| e.to_string())?
+fn drag_files(window: tauri::WebviewWindow, paths: Vec<String>) -> Result<(), String> {
+  // OLE 拖拽（DoDragDrop）必须在主线程发起：同步命令即运行于主线程，
+  // 拖拽的模态循环本身就是消息泵；放线程池会导致拖拽被瞬间取消（无声失败）。
+  let items: Vec<std::path::PathBuf> = paths.iter().map(std::path::PathBuf::from).collect();
+  drag::start_drag(
+    &window,
+    drag::DragItem::Files(items),
+    drag::Image::Raw(Vec::new()),
+    |_result, _cursor| {},
+    drag::Options::default(),
+  )
+  .map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
