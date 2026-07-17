@@ -21,6 +21,33 @@ fn drag_files(window: tauri::WebviewWindow, paths: Vec<String>) -> Result<(), St
   .map_err(|e| e.to_string())
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct FakeItem {
+  id: u32,
+  name: String,
+  w: u32,
+  h: u32,
+  color: String,
+}
+
+/// 任务 4 spike：加载 10 万条假数据（测读盘 + 解析 + IPC 耗时）。
+/// 数据由 tools/gen-fake-data.py 生成到 spike/scroll-proto/out/。
+#[tauri::command]
+fn load_fake_items() -> Result<Vec<FakeItem>, String> {
+  let t = std::time::Instant::now();
+  let text = std::fs::read_to_string("../spike/scroll-proto/out/fake-items.json")
+    .map_err(|e| format!("读取失败（请先运行 tools/gen-fake-data.py 生成假数据）: {e}"))?;
+  let read_ms = t.elapsed().as_millis();
+  let items: Vec<FakeItem> = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+  log::info!(
+    "fake-items: 读盘 {}ms，读盘+解析 {}ms，共 {} 条",
+    read_ms,
+    t.elapsed().as_millis(),
+    items.len()
+  );
+  Ok(items)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -112,7 +139,7 @@ pub fn run() {
 
       Ok(())
     })
-    .invoke_handler(tauri::generate_handler![drag_files])
+    .invoke_handler(tauri::generate_handler![drag_files, load_fake_items])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

@@ -13,5 +13,8 @@
     "@tauri-apps/cli": "^2.11.4",
     "typescript": "^7.0.2",
     "vite": "^8.1.5"
+  },
+  "dependencies": {
+    "justified-layout": "^4.1.0"
   }
 }
