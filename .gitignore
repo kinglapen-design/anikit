@@ -1,0 +1,18 @@
+# 前端
+node_modules/
+dist/
+
+# Rust / Tauri
+src-tauri/target/
+
+# Python
+**/.venv/
+__pycache__/
+*.pyc
+
+# spike 输出（剪贴板数据等，可能含隐私）
+spike/**/out/
+
+# 系统
+.DS_Store
+Thumbs.db
