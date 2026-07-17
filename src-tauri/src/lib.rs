@@ -1,9 +1,15 @@
+use tauri::{
+  menu::{Menu, MenuItem},
+  tray::TrayIconBuilder,
+  Manager,
+};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+
 /// 任务 2 spike：从窗口拖出文件到其他软件（WebView HTML5 拖拽出不了窗口边界，
 /// 由原生层发起系统级拖拽，Windows 底层即 CF_HDROP）。
+/// 注意：OLE 拖拽（DoDragDrop）必须在主线程发起，同步命令即运行于主线程。
 #[tauri::command]
 fn drag_files(window: tauri::WebviewWindow, paths: Vec<String>) -> Result<(), String> {
-  // OLE 拖拽（DoDragDrop）必须在主线程发起：同步命令即运行于主线程，
-  // 拖拽的模态循环本身就是消息泵；放线程池会导致拖拽被瞬间取消（无声失败）。
   let items: Vec<std::path::PathBuf> = paths.iter().map(std::path::PathBuf::from).collect();
   drag::start_drag(
     &window,
@@ -18,6 +24,14 @@ fn drag_files(window: tauri::WebviewWindow, paths: Vec<String>) -> Result<(), St
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    // 单实例必须最先注册：二次启动时聚焦已有窗口
+    .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+      if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+      }
+    }))
+    .plugin(tauri_plugin_global_shortcut::Builder::new().build())
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -26,6 +40,76 @@ pub fn run() {
             .build(),
         )?;
       }
+
+      // 全局热键 alt+`：呼出 / 隐藏主窗口（后续用于快捷搜索框）
+      app.global_shortcut().on_shortcut(
+        Shortcut::new(Some(Modifiers::ALT), Code::Backquote),
+        |app, _shortcut, event| {
+          if event.state() != ShortcutState::Pressed {
+            return;
+          }
+          if let Some(w) = app.get_webview_window("main") {
+            let visible = w.is_visible().unwrap_or(false);
+            let focused = w.is_focused().unwrap_or(false);
+            if visible && focused {
+              let _ = w.hide();
+            } else {
+              let _ = w.show();
+              let _ = w.set_focus();
+            }
+          }
+        },
+      )?;
+
+      // 托盘菜单：显示 / 退出
+      let show = MenuItem::with_id(app, "show", "显示", true, None::<&str>)?;
+      let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+      let menu = Menu::with_items(app, &[&show, &quit])?;
+      let _tray = TrayIconBuilder::new()
+        .icon(app.default_window_icon().expect("no window icon").clone())
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+          "show" => {
+            if let Some(w) = app.get_webview_window("main") {
+              let _ = w.show();
+              let _ = w.set_focus();
+            }
+          }
+          "quit" => app.exit(0),
+          _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+          // 左键单击托盘图标 = 显示主窗口
+          if let tauri::tray::TrayIconEvent::Click {
+            button,
+            button_state,
+            ..
+          } = event
+          {
+            if matches!(button, tauri::tray::MouseButton::Left)
+              && matches!(button_state, tauri::tray::MouseButtonState::Up)
+            {
+              if let Some(w) = tray.app_handle().get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+              }
+            }
+          }
+        })
+        .build(app)?;
+
+      // 关闭按钮 = 隐藏到托盘，不退出（快捷搜索框要求软件常驻后台）
+      if let Some(w) = app.get_webview_window("main") {
+        let w2 = w.clone();
+        w.on_window_event(move |event| {
+          if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = w2.hide();
+          }
+        });
+      }
+
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![drag_files])
