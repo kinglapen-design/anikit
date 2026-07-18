@@ -1,0 +1,64 @@
+/* AniKit 设计 tokens —— 由 docs/02_样式与布局/01_样式 token.md 生成，勿手改。
+   换配色只需改 --c1 ~ --c4 与品牌色，透明度衍生自动跟随（color-mix）。 */
+
+:root {
+  /* 品牌色 */
+  --brand-1: #1e83b5;
+  --brand-2: #2b9fd9;
+
+  /* 通用色（衍生基础） */
+  --c1: #09090a;
+  --c2: #1b1c1f;
+  --c3: #1f2023;
+  --c4: #f2f4fa;
+
+  /* 透明度衍生 */
+  --c1-80: color-mix(in srgb, var(--c1) 80%, transparent);
+  --c1-50: color-mix(in srgb, var(--c1) 50%, transparent);
+  --c1-15: color-mix(in srgb, var(--c1) 15%, transparent);
+  --c1-7: color-mix(in srgb, var(--c1) 7%, transparent);
+  --c4-70: color-mix(in srgb, var(--c4) 70%, transparent);
+  --c4-40: color-mix(in srgb, var(--c4) 40%, transparent);
+  --c4-15: color-mix(in srgb, var(--c4) 15%, transparent);
+  --c4-7: color-mix(in srgb, var(--c4) 7%, transparent);
+
+  /* 文件夹卡片 */
+  --folder-card-back: #202124;
+  --folder-card-front: #262629;
+  --folder-card-file: #c6c7cc;
+
+  /* 文字 */
+  --font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  --text-title-size: 16px;
+  --text-title-line: 22px;
+  --text-title-weight: 700;
+  --text-body-size: 14px;
+  --text-body-line: 20px;
+  --text-body-weight: 400;
+  --text-caption-size: 12px;
+  --text-caption-line: 18px;
+  --text-caption-weight: 400;
+
+  /* 线框 */
+  --border-thick: 2px;
+  --border-thin: 1px;
+
+  /* 间距 */
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-18: 18px;
+
+  /* 圆角 */
+  --radius-4: 4px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-12: 12px;
+
+  /* 图标 */
+  --icon-large: 16px;
+  --icon-small: 8px;
+}
