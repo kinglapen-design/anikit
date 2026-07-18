@@ -19,6 +19,7 @@
   --c1-7: color-mix(in srgb, var(--c1) 7%, transparent);
   --c4-70: color-mix(in srgb, var(--c4) 70%, transparent);
   --c4-40: color-mix(in srgb, var(--c4) 40%, transparent);
+  --c4-20: color-mix(in srgb, var(--c4) 20%, transparent);
   --c4-15: color-mix(in srgb, var(--c4) 15%, transparent);
   --c4-7: color-mix(in srgb, var(--c4) 7%, transparent);
 
