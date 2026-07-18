@@ -1,0 +1,140 @@
+<script setup lang="ts">
+// 右侧边栏（C3）：标题栏（收起 / 置顶 + 窗口控制）/ 详情视图 / AI 三视图占位 / 底部视图切换。
+import { computed } from "vue";
+import AppIcon from "./AppIcon.vue";
+import IconButton from "./IconButton.vue";
+import WindowControls from "./WindowControls.vue";
+import ViewSwitch, { type ViewOption } from "./ViewSwitch.vue";
+import DetailPanel from "./DetailPanel.vue";
+import { useUiStore, type RightView } from "../stores/ui";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
+const ui = useUiStore();
+const appWindow = getCurrentWindow();
+
+const rightOptions: ViewOption[] = [
+  { value: "detail", icon: "detail-view", title: "详情视图" },
+  { value: "aiChat", icon: "ai-chat-view", title: "AI 对话框" },
+  { value: "aiPaint", icon: "ai-paint-view", title: "AI 绘画框" },
+  { value: "aiVideo", icon: "ai-video-view", title: "AI 视频框" },
+];
+
+const aiIcons: Record<Exclude<RightView, "detail">, string> = {
+  aiChat: "ai-chat-view",
+  aiPaint: "ai-paint-view",
+  aiVideo: "ai-video-view",
+};
+const placeholderIcon = computed(() =>
+  ui.rightView === "detail" ? "detail-view" : aiIcons[ui.rightView],
+);
+
+async function togglePin(): Promise<void> {
+  ui.alwaysOnTop = !ui.alwaysOnTop;
+  await appWindow.setAlwaysOnTop(ui.alwaysOnTop);
+}
+</script>
+
+<template>
+  <aside v-if="!ui.rightCollapsed" class="sidebar-right" :style="{ width: `${ui.rightWidth}px` }">
+    <header class="bar-title" data-tauri-drag-region>
+      <IconButton name="toggle-sidebar-right" title="收起侧边栏" @click="ui.rightCollapsed = true" />
+      <IconButton
+        :name="ui.alwaysOnTop ? 'window-pin-on' : 'window-pin-off'"
+        title="窗口置顶"
+        @click="togglePin"
+      />
+      <span class="spacer" />
+      <WindowControls />
+    </header>
+
+    <div class="view-body">
+      <DetailPanel v-if="ui.rightView === 'detail'" />
+      <div v-else class="ai-placeholder">
+        <AppIcon :name="placeholderIcon" />
+        <p>该视图为占位，后续阶段实现。</p>
+      </div>
+    </div>
+
+    <footer class="bar-footer">
+      <ViewSwitch v-model="ui.rightView" :options="rightOptions" />
+    </footer>
+  </aside>
+
+  <aside v-else class="sidebar-right collapsed">
+    <IconButton
+      name="toggle-sidebar-right"
+      title="展开侧边栏"
+      class="flip"
+      @click="ui.rightCollapsed = false"
+    />
+    <IconButton
+      :name="ui.alwaysOnTop ? 'window-pin-on' : 'window-pin-off'"
+      title="窗口置顶"
+      @click="togglePin"
+    />
+    <span class="spacer" />
+    <WindowControls vertical />
+  </aside>
+</template>
+
+<style scoped>
+.sidebar-right {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  background: var(--c3);
+  border: 1px solid var(--c4-15);
+  border-radius: var(--radius-6);
+  padding: var(--space-4);
+  min-height: 0;
+}
+.sidebar-right.collapsed {
+  width: 36px;
+  align-items: center;
+  gap: var(--space-4);
+}
+.flip {
+  transform: scaleX(-1);
+}
+/* 组件布局 06.1：标题栏内容容器内边距 8 / 子项间距自适应 */
+.bar-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-8);
+}
+.spacer {
+  flex: 1;
+}
+.view-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--space-4);
+}
+.view-body::-webkit-scrollbar {
+  width: 4px;
+}
+.view-body::-webkit-scrollbar-thumb {
+  background: var(--c4-15);
+  border-radius: 2px;
+}
+.ai-placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  color: var(--c4);
+}
+.ai-placeholder p {
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  color: var(--c4-40);
+}
+/* 组件布局 06.7：视图切换内容容器内边距 4 8 8 8 */
+.bar-footer {
+  padding: var(--space-4) var(--space-8) var(--space-8) var(--space-8);
+}
+</style>

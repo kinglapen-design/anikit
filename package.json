@@ -11,10 +11,13 @@
   "devDependencies": {
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/cli": "^2.11.4",
+    "@vitejs/plugin-vue": "^6.0.8",
     "typescript": "^7.0.2",
     "vite": "^8.1.5"
   },
   "dependencies": {
-    "justified-layout": "^4.1.0"
+    "justified-layout": "^4.1.0",
+    "pinia": "^4.0.2",
+    "vue": "^3.5.40"
   }
 }

@@ -1,0 +1,51 @@
+/* 全局基础样式：reset + 字体。设计变量一律取 tokens.css，此处不写颜色数值。 */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  font-weight: var(--text-body-weight);
+  color: var(--c4);
+  /* 无边框透明窗口：body 透明，圆角与底色由 App 根容器绘制 */
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+}
+
+/* 主列表滚动为自定义 transform 方案（踩坑 005），原生滚动条全局隐藏；
+   侧栏等次要区域的原生滚动在组件内按 token 15 单独绘制 */
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
