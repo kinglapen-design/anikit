@@ -26,3 +26,9 @@ tauri-plugin-log = "2"
 drag = "2.1.1"
 tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-single-instance = "2.4.3"
+# 无边框窗口恢复 DWM 阴影（MIT）
+window-shadows = "0.2"
+# window-shadows 0.2 基于 rwh 0.5（tauri 为 0.6，类型不通用），需手动构造句柄传入
+raw-window-handle = "0.5"
+# DWM 圆角偏好设置（消除 DWM 8px 圆角与自绘 12px 圆角重叠）
+windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation"] }

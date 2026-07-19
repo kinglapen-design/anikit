@@ -17,14 +17,19 @@ async function syncMaximized(): Promise<void> {
   maximized.value = await appWindow.isMaximized();
 }
 
+let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+function onResize(): void {
+  // 拖动窗口期间高频触发，debounce 后再查窗口状态（IPC）
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => void syncMaximized(), 150);
+}
+
 onMounted(() => {
   void syncMaximized();
   window.addEventListener("resize", onResize);
 });
-function onResize(): void {
-  void syncMaximized();
-}
 onBeforeUnmount(() => {
+  clearTimeout(resizeTimer);
   window.removeEventListener("resize", onResize);
 });
 </script>

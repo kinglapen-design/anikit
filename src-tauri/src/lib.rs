@@ -21,6 +21,20 @@ fn drag_files(window: tauri::WebviewWindow, paths: Vec<String>) -> Result<(), St
   .map_err(|e| e.to_string())
 }
 
+// window-shadows 0.2 要求 rwh 0.5 的 HasRawWindowHandle（tauri 为 0.6，类型不通用），
+// 包装原始 HWND 手动实现该 trait。
+#[cfg(target_os = "windows")]
+struct RawHwnd(isize);
+
+#[cfg(target_os = "windows")]
+unsafe impl raw_window_handle::HasRawWindowHandle for RawHwnd {
+  fn raw_window_handle(&self) -> raw_window_handle::RawWindowHandle {
+    let mut h = raw_window_handle::Win32WindowHandle::empty();
+    h.hwnd = self.0 as *mut core::ffi::c_void;
+    raw_window_handle::RawWindowHandle::Win32(h)
+  }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -101,6 +115,29 @@ pub fn run() {
 
       // 关闭按钮 = 隐藏到托盘，不退出（快捷搜索框要求软件常驻后台）
       if let Some(w) = app.get_webview_window("main") {
+        // 无边框窗口：禁 DWM 圆角（避免 Windows 11 的 8px 圆角与自绘 12px 圆角重叠），
+        // 并用 window-shadows 恢复 DWM 阴影（无边框窗口默认无阴影）
+        #[cfg(target_os = "windows")]
+        {
+          use windows::Win32::Foundation::HWND;
+          use windows::Win32::Graphics::Dwm::{
+            DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND,
+          };
+          if let Ok(raw) = w.hwnd() {
+            let hwnd = HWND(raw.0 as _);
+            let pref = DWMWCP_DONOTROUND;
+            unsafe {
+              let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                &pref as *const _ as *const core::ffi::c_void,
+                std::mem::size_of_val(&pref) as u32,
+              );
+            }
+            let _ = window_shadows::set_shadow(&RawHwnd(raw.0 as isize), true);
+          }
+        }
+
         let w2 = w.clone();
         w.on_window_event(move |event| {
           if let tauri::WindowEvent::CloseRequested { api, .. } = event {

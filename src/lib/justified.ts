@@ -1,8 +1,8 @@
-// 自适应布局（等高不等宽）封装：justified-layout 预计算，滚动时不读图（规范第 7 条）。
-// 卡片文字区（标题 + 标签）为固定像素高，不参与等比缩放：
-// 按行分组后把每行 top 下移"行号 × 文字区高"、box 高度加上文字区高，
+// 自适应布局（等高不等宽）：贪心分行算法，替代 justified-layout npm 库。
+// 换库原因：该库 10 万条布局实测约 2.6s（内部对象分配过重），resize 重排卡死主线程；
+// 算法本身简单（按目标行高贪心填行、行内等比拉伸对齐），自写单循环即可，实测 <100ms。
+// 卡片文字区（标题 + 标签）为固定像素高，不参与等比缩放：按行追加到 top / height，
 // 使 box 覆盖整张卡片而图片区仍严格等比（见 AssetGrid / AssetCard）。
-import justifiedLayout from "justified-layout";
 
 // 卡片文字区高：标题 20 + 间距 2 + 标签 18 + 间距 2（token 17）
 export const CARD_CAPTION_H = 42;
@@ -27,44 +27,55 @@ export interface JustifiedResult {
   totalHeight: number;
 }
 
+// 素材卡片容器内边距 8 8 0 8、素材列表子项间距 6（02_组件布局 05）
+const PAD = { top: 8, right: 8, bottom: 0, left: 8 };
+const SPACING = 6;
+
 export function computeJustified(
   items: { w: number; h: number }[],
   containerWidth: number,
   targetRowHeight: number,
   captionHeight = 0,
 ): JustifiedResult {
-  const geo = justifiedLayout(
-    items.map((i) => ({ width: i.w, height: i.h })),
-    // 素材卡片容器内边距 8 8 0 8、素材列表子项间距 6（02_组件布局 05）
-    { containerWidth, targetRowHeight, boxSpacing: 6, containerPadding: { top: 8, right: 8, bottom: 0, left: 8 } },
-  );
-  const boxes = geo.boxes as unknown as Box[];
-
+  const n = items.length;
+  const boxes = new Array<Box>(n);
   const rows: Row[] = [];
-  for (let i = 0; i < boxes.length; i++) {
-    const b = boxes[i];
-    let row = rows[rows.length - 1];
-    if (!row || row.top !== b.top) {
-      row = { top: b.top, height: b.height, start: i, end: i + 1 };
-      rows.push(row);
-    } else {
-      row.end = i + 1;
+  const contentWidth = containerWidth - PAD.left - PAD.right;
+  let y = PAD.top;
+  let rowStart = 0;
+  let ratioSum = 0;
+
+  const layoutRow = (start: number, end: number, height: number): void => {
+    const top = y + rows.length * captionHeight;
+    let x = PAD.left;
+    for (let i = start; i <= end; i++) {
+      const w = (items[i].w / items[i].h) * height;
+      boxes[i] = { top, left: x, width: w, height: height + captionHeight };
+      x += w + SPACING;
+    }
+    rows.push({ top, height: height + captionHeight, start, end: end + 1 });
+    y += height + SPACING;
+  };
+
+  for (let i = 0; i < n; i++) {
+    ratioSum += items[i].w / items[i].h;
+    const count = i - rowStart + 1;
+    // 加入第 i 项后行高压到目标行高以下即封行（行内等比拉伸填满宽度）
+    if ((contentWidth - SPACING * (count - 1)) / ratioSum <= targetRowHeight) {
+      layoutRow(rowStart, i, (contentWidth - SPACING * (count - 1)) / ratioSum);
+      rowStart = i + 1;
+      ratioSum = 0;
     }
   }
-
-  if (captionHeight > 0) {
-    for (let r = 0; r < rows.length; r++) {
-      const row = rows[r];
-      for (let i = row.start; i < row.end; i++) {
-        boxes[i].top += r * captionHeight;
-        boxes[i].height += captionHeight;
-      }
-      row.top += r * captionHeight;
-      row.height += captionHeight;
-    }
+  // 末行：不拉伸，左对齐
+  if (rowStart < n) {
+    const count = n - rowStart;
+    const h = Math.min(targetRowHeight, (contentWidth - SPACING * (count - 1)) / ratioSum);
+    layoutRow(rowStart, n - 1, h);
   }
 
-  return { boxes, rows, totalHeight: geo.containerHeight + rows.length * captionHeight };
+  const totalHeight = rows.length === 0 ? 0 : y - SPACING + PAD.bottom + rows.length * captionHeight;
+  return { boxes, rows, totalHeight };
 }
 
 // 行顶二分：第一个 top >= v 的行下标

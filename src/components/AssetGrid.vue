@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // 内容区素材网格：自适应布局 + 自定义 transform 虚拟滚动（踩坑 005 定案）。
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+// 布局为自写贪心算法（lib/justified.ts，10 万条 <100ms）；
+// 窗口 / 拆分条 resize 经 debounce 后才重排，拖动过程保持旧布局。
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import AssetCard from "./AssetCard.vue";
 import { CARD_CAPTION_H, computeJustified, lowerBound, type Box, type Row } from "../lib/justified";
 import { useVirtualScroll } from "../lib/useVirtualScroll";
@@ -20,7 +22,6 @@ const thumbRef = ref<HTMLElement>();
 
 const boxes = shallowRef<Box[]>([]);
 const rows = shallowRef<Row[]>([]);
-const layingOut = ref(true);
 const r0 = ref(0);
 const r1 = ref(0);
 let totalHeight = 0;
@@ -49,48 +50,45 @@ const visibleCards = computed(() => {
   return out;
 });
 
-let relayoutSeq = 0;
-async function relayout(): Promise<void> {
+function relayout(): void {
   const vp = viewportRef.value;
   if (!vp || vp.clientWidth <= 0) return;
-  const seq = ++relayoutSeq;
-  layingOut.value = true;
-  await nextTick();
-  // 10 万条约 2.6s（05 待办：分片 / 缓存 / 移 Rust），先让"布局计算中…"绘制出来
-  await new Promise((r) => setTimeout(r, 30));
-  if (seq !== relayoutSeq) return;
+  const t0 = performance.now();
   const result = computeJustified(props.items, vp.clientWidth, ui.targetRowHeight, CARD_CAPTION_H);
   boxes.value = result.boxes;
   rows.value = result.rows;
   totalHeight = result.totalHeight;
-  layingOut.value = false;
   setTotal(totalHeight);
+  console.debug(`[AssetGrid] 布局 ${props.items.length} 条：${(performance.now() - t0).toFixed(1)}ms`);
 }
 
 let lastW = 0;
 let lastH = 0;
+let resizeTimer: ReturnType<typeof setTimeout> | undefined;
 const ro = new ResizeObserver(() => {
   const vp = viewportRef.value;
   if (!vp) return;
   const w = vp.clientWidth;
   const h = vp.clientHeight;
-  if (w !== lastW) {
-    lastW = w;
-    lastH = h;
-    void relayout();
-  } else if (h !== lastH) {
-    lastH = h;
-    setTotal(totalHeight);
-  }
+  if (w === lastW && h === lastH) return;
+  const widthChanged = w !== lastW;
+  lastW = w;
+  lastH = h;
+  // 拖动窗口 / 拆分条期间 debounce：过程不重排，停顿 200ms 后才重排
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (widthChanged) relayout();
+    else setTotal(totalHeight);
+  }, 200);
 });
 
 watch(
   () => props.items,
-  () => void relayout(),
+  () => relayout(),
 );
 watch(
   () => ui.targetRowHeight,
-  () => void relayout(),
+  () => relayout(),
 );
 
 onMounted(() => {
@@ -98,10 +96,11 @@ onMounted(() => {
   lastW = viewportRef.value!.clientWidth;
   lastH = viewportRef.value!.clientHeight;
   ro.observe(viewportRef.value!);
-  void relayout();
+  relayout();
 });
 
 onBeforeUnmount(() => {
+  clearTimeout(resizeTimer);
   detach();
   ro.disconnect();
 });
@@ -119,7 +118,6 @@ onBeforeUnmount(() => {
         @click="content.selectedAssetId = c.asset.id"
       />
     </div>
-    <div v-if="layingOut" class="laying-out">布局计算中…</div>
     <div ref="trackRef" class="grid-track">
       <div
         ref="thumbRef"
@@ -144,16 +142,6 @@ onBeforeUnmount(() => {
   top: 0;
   right: 0;
   will-change: transform;
-}
-.laying-out {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--text-caption-size);
-  color: var(--c4-40);
-  pointer-events: none;
 }
 /* token 15：滚动条 4px 胶囊 C4-15、距右 4px、不影响布局；命中区放宽至 12px */
 .grid-track {
