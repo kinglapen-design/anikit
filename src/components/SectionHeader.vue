@@ -40,7 +40,7 @@ const emit = defineEmits<{ add: [] }>();
   width: 24px;
   height: 24px;
   padding: var(--space-4);
-  border-radius: var(--radius-6);
+  border-radius: var(--radius-4);
   color: var(--c4);
   flex: none;
   transition: background 0.12s ease;
@@ -51,14 +51,14 @@ const emit = defineEmits<{ add: [] }>();
   stroke-opacity: 0.4;
   fill-opacity: 0.4;
 }
+/* hover：底色 C4-7，图标 C4-70（恢复 SVG 烘的 0.7） */
 .head-btn:hover {
   background: var(--c4-7);
 }
-/* 悬停图标高亮 C4 */
 .head-btn:hover :deep(svg [stroke-opacity="0.4"]),
 .head-btn:hover :deep(svg [fill-opacity="0.4"]) {
-  stroke-opacity: 1;
-  fill-opacity: 1;
+  stroke-opacity: 0.7;
+  fill-opacity: 0.7;
 }
 .chev {
   transition: transform 0.15s ease;

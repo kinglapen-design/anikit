@@ -35,10 +35,12 @@ defineEmits<{ click: [e: MouseEvent] }>();
   flex: none;
   transition: background 0.12s ease;
 }
+/* 图标按钮-小（24×24）：圆角 4 */
 .icon-btn.small {
   width: 24px;
   height: 24px;
   padding: var(--space-4);
+  border-radius: var(--radius-4);
 }
 .icon-btn:hover {
   background: var(--c4-7);
