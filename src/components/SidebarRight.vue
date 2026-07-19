@@ -106,10 +106,11 @@ async function togglePin(): Promise<void> {
 .spacer {
   flex: 1;
 }
+/* 滚动条用 overlay：悬浮不占布局空间（token 15：不影响布局），紧贴区块容器右侧 */
 .view-body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: overlay;
 }
 .view-body::-webkit-scrollbar {
   width: 4px;

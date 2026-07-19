@@ -125,12 +125,12 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 滚动容器不再让位：滚动条（宽 4）落在右缘内 4~8px 处，与内容右缘（8）不重叠，
-   且各区块右边距统一为 8（切换按钮与 item hover 背景右缘对齐） */
+/* 滚动条用 overlay：悬浮不占布局空间（否则内容区被挤 4px、各区块右缘错位）——
+   滚动条紧贴区块容器右侧，侧栏 4px padding 成为其右外边距（token 15：不影响布局） */
 .view-body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: overlay;
   overflow-x: hidden;
 }
 .view-body::-webkit-scrollbar {
