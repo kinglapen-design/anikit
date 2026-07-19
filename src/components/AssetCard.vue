@@ -44,25 +44,24 @@ const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
   gap: var(--space-2);
   cursor: default;
 }
-/* 图片容器：内边距 4 / 圆角 12；边框常态透明占位，悬停 / 选中换色不抖动 */
+/* 图片容器：内边距 4 / 圆角 12；悬停 / 选中 2px 内阴影描边（不占空间不抖动） */
 .thumb {
   position: relative;
   padding: var(--space-4);
   border-radius: var(--radius-12);
-  border: var(--border-thick) solid transparent;
-  transition: border-color 0.12s ease;
+  transition: box-shadow 0.12s ease;
 }
 .asset-card:hover .thumb {
-  border-color: var(--c4-40);
+  box-shadow: inset 0 0 0 2px var(--c4-40);
 }
 .asset-card.selected .thumb {
-  border-color: var(--brand-1);
+  box-shadow: inset 0 0 0 2px var(--brand-1);
 }
 .img {
   width: 100%;
   height: 100%;
   border-radius: var(--radius-8);
-  border: 1px solid var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--c4-15);
 }
 /* 格式角标：图片左上角，距上左 4px（= 容器内边距 4 + 4），内边距 2 4 / 圆角 6 / C1-80 */
 .badge {

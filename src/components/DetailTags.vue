@@ -44,7 +44,7 @@ const tags = ["全部标签", "场景"];
   padding: var(--space-6) var(--space-6) var(--space-6) var(--space-8);
   border-radius: var(--radius-8);
   background: var(--c1-15);
-  border: 1px solid var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--c4-15);
   color: var(--c4);
 }
 .tag-item:hover {

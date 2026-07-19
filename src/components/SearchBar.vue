@@ -40,10 +40,10 @@ const focused = ref(false);
   padding: var(--space-6);
   border-radius: var(--radius-8);
   background: var(--c1-50);
-  border: 1px solid var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--c4-15);
 }
 .search-bar.focused {
-  border-color: var(--brand-1);
+  box-shadow: inset 0 0 0 1px var(--brand-1);
 }
 /* 搜索图标容器：搜索图标 + 展开图标（8×8），间距 2 */
 .lead {

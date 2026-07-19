@@ -40,8 +40,8 @@ const items = computed(() => (ui.showSubfolders ? content.assets : content.asset
   flex: 1;
   min-width: 0;
   background: var(--c2);
-  border: 1px solid var(--c4-7);
   border-radius: var(--radius-6);
+  box-shadow: inset 0 0 0 1px var(--c4-7);
   padding: var(--space-4);
 }
 .content-body {

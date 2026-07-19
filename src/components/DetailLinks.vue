@@ -45,7 +45,7 @@ import AppIcon from "./AppIcon.vue";
   padding: var(--space-6) var(--space-6) var(--space-6) var(--space-8);
   border-radius: var(--radius-8);
   background: var(--c1-15);
-  border: 1px solid var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--c4-15);
 }
 .link-item:hover {
   background: var(--c1-7);

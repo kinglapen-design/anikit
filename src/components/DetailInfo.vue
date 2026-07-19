@@ -74,14 +74,14 @@ const rows = [
   padding: var(--space-6) var(--space-8);
   border-radius: var(--radius-8);
   background: var(--c1-15);
-  border: 1px solid var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--c4-15);
 }
 /* 带链接按钮（03_输入框 02）：内边距 2 2 2 8 */
 .field.with-btn {
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-8);
 }
 .field:focus-within {
-  border-color: var(--brand-1);
+  box-shadow: inset 0 0 0 1px var(--brand-1);
 }
 .field input {
   flex: 1;

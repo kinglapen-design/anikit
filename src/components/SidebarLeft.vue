@@ -74,8 +74,8 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
   flex-direction: column;
   flex: none;
   background: var(--c3);
-  border: 1px solid var(--c4-15);
   border-radius: var(--radius-6);
+  box-shadow: inset 0 0 0 1px var(--c4-15);
   padding: var(--space-4);
   min-height: 0;
 }

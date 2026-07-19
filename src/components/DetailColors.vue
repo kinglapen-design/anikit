@@ -43,7 +43,7 @@ const colors = ["#3A6EA5", "#2B9FD9", "#7A5C3E", "#A53E3E", "#3E8A57", "#6B4F8A"
   width: 100%;
   height: 120px;
   border-radius: var(--radius-6);
-  border: 1px solid var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--c4-15);
   background: hsl(215 30% 22%);
 }
 /* 格式角标：左上 4px / 内边距 2 4 / 圆角 4 / C1-80 */
@@ -67,16 +67,16 @@ const colors = ["#3A6EA5", "#2B9FD9", "#7A5C3E", "#A53E3E", "#3E8A57", "#6B4F8A"
   padding: var(--space-4);
   border-radius: 14px;
   background: var(--c1-15);
-  border: 1px solid var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--c4-15);
 }
 .swatch {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 1px solid var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--c4-15);
   flex: none;
 }
 .swatch:hover {
-  border-color: var(--c4-70);
+  box-shadow: inset 0 0 0 1px var(--c4-70);
 }
 </style>

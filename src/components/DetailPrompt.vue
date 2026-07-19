@@ -44,14 +44,14 @@ const prompt =
   padding: var(--space-8);
   border-radius: var(--radius-8);
   background: var(--c1-15);
-  border: 1px solid var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--c4-15);
   color: var(--c4-40);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   resize: none;
 }
 .prompt-text:focus {
-  border-color: var(--brand-1);
+  box-shadow: inset 0 0 0 1px var(--brand-1);
 }
 .prompt-text::-webkit-scrollbar {
   width: 4px;

@@ -26,17 +26,16 @@ const folderSvg = getIcon("folder-card");
   border-radius: var(--radius-8);
   cursor: default;
 }
-/* 图标容器：内边距 4 / 圆角 12；悬停 2px C4-40 / 选中 2px 品牌色-1（常态透明占位） */
+/* 图标容器：内边距 4 / 圆角 12；悬停 2px / 选中 2px 内阴影描边（不占空间不抖动） */
 .icon-wrap {
   width: 100%;
   padding: var(--space-4);
   border-radius: var(--radius-12);
-  border: var(--border-thick) solid transparent;
-  transition: border-color 0.12s ease;
+  transition: box-shadow 0.12s ease;
   line-height: 0;
 }
 .folder-card:hover .icon-wrap {
-  border-color: var(--c4-40);
+  box-shadow: inset 0 0 0 2px var(--c4-40);
 }
 .icon-wrap :deep(svg) {
   width: 100%;

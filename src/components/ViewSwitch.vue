@@ -50,7 +50,7 @@ function select(value: string): void {
   padding: var(--space-6);
   border-radius: var(--radius-8);
   background: var(--c1-50);
-  border: 1px solid var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--c4-15);
   width: 100%;
 }
 /* 选中底色：宽度 = 均分按钮宽，按（自身宽 + 间距 6）平移 */

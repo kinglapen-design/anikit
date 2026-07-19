@@ -38,7 +38,7 @@ defineProps<{ label: string }>();
   width: 16px;
   height: 16px;
   border-radius: var(--radius-4);
-  border: 1px solid var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--c4-15);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -46,13 +46,13 @@ defineProps<{ label: string }>();
   flex: none;
 }
 .app-checkbox:hover .box {
-  border-color: var(--c4-40);
+  box-shadow: inset 0 0 0 1px var(--c4-40);
 }
 .app-checkbox.on {
   color: var(--brand-1);
 }
 .app-checkbox.on .box {
-  border-color: var(--brand-2);
+  box-shadow: inset 0 0 0 1px var(--brand-2);
   background: var(--brand-1);
 }
 </style>
