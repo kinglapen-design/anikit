@@ -57,7 +57,7 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
     </section>
 
     <section v-if="ui.leftView === 'tags'" class="block">
-      <SectionHeader title="标签群组" :count="2" addable pad="0 10px 0 14px" />
+      <SectionHeader title="标签群组" :count="2" addable pad="0 8px 0 14px" />
       <div class="items">
         <TreeItem icon="tag-group" label="标签群组" :count="12" />
         <TreeItem icon="tag-group" label="标签群组" :count="34" />

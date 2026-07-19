@@ -32,7 +32,7 @@ const quickItems = [
       </div>
     </section>
     <section class="block tree">
-      <SectionHeader title="文件夹" :count="1231" addable pad="0 10px 0 14px" />
+      <SectionHeader title="文件夹" :count="1231" addable pad="0 8px 0 14px" />
       <div class="items">
         <FolderTree :nodes="content.folders" />
       </div>
