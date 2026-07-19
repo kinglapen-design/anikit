@@ -3,15 +3,18 @@
 // 视图切换：旧区块往左滑出、新区块从右滑入（03_UI 布局/02_左侧边栏 01）；
 // 切换资源库区块仅在工作空间 ↔ 其他三视图之间切换时才滑出滑入。
 // 折叠后收成窄条（保留菜单、添加与展开按钮）。
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import AppIcon from "./AppIcon.vue";
 import IconButton from "./IconButton.vue";
 import ViewSwitch, { type ViewOption } from "./ViewSwitch.vue";
 import LibraryView from "./LibraryView.vue";
 import SidebarViews from "./SidebarViews.vue";
 import { useUiStore } from "../stores/ui";
+import { useSideThumb } from "../lib/useSideThumb";
 
 const ui = useUiStore();
+const bodyRef = ref<HTMLElement>();
+const thumb = useSideThumb(bodyRef);
 
 const leftOptions: ViewOption[] = [
   { value: "library", icon: "library-view", title: "资源库视图" },
@@ -44,12 +47,17 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
       </div>
     </Transition>
 
-    <div class="view-body">
+    <div ref="bodyRef" class="view-body">
       <Transition name="slide" mode="out-in">
         <LibraryView v-if="ui.leftView === 'library'" key="library" />
         <SidebarViews v-else :key="ui.leftView" />
       </Transition>
     </div>
+    <span
+      v-show="thumb.show"
+      class="side-thumb"
+      :style="{ top: `${thumb.top}px`, height: `${thumb.height}px` }"
+    />
 
     <footer class="bar-footer">
       <ViewSwitch v-model="ui.leftView" :options="leftOptions" />
@@ -70,6 +78,7 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
 
 <style scoped>
 .sidebar-left {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: none;
@@ -78,6 +87,16 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
   box-shadow: inset 0 0 0 1px var(--c4-15);
   padding: var(--space-4);
   min-height: 0;
+}
+/* 悬浮滚动条：4px 胶囊 C4-15、距右 4px、不占布局（token 15） */
+.side-thumb {
+  position: absolute;
+  right: 4px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--c4-15);
+  pointer-events: none;
+  z-index: 10;
 }
 .sidebar-left.collapsed {
   width: 36px;
@@ -125,20 +144,12 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 滚动条用 overlay：悬浮不占布局空间（否则内容区被挤 4px、各区块右缘错位）——
-   滚动条紧贴区块容器右侧，侧栏 4px padding 成为其右外边距（token 15：不影响布局） */
+/* 原生条由 base.css 全局隐藏，滚动条为悬浮 side-thumb（不占位） */
 .view-body {
   flex: 1;
   min-height: 0;
-  overflow-y: overlay;
+  overflow-y: auto;
   overflow-x: hidden;
-}
-.view-body::-webkit-scrollbar {
-  width: 4px;
-}
-.view-body::-webkit-scrollbar-thumb {
-  background: var(--c4-15);
-  border-radius: 2px;
 }
 /* 视图切换动画：旧区块往左滑出，新区块从右滑入 */
 .slide-enter-active,

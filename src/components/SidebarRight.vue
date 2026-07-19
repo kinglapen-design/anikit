@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 右侧边栏（C3）：标题栏（收起 / 置顶 + 窗口控制）/ 详情视图 / AI 三视图占位 / 底部视图切换。
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import AppIcon from "./AppIcon.vue";
 import IconButton from "./IconButton.vue";
 import WindowControls from "./WindowControls.vue";
@@ -8,8 +8,11 @@ import ViewSwitch, { type ViewOption } from "./ViewSwitch.vue";
 import DetailPanel from "./DetailPanel.vue";
 import { useUiStore, type RightView } from "../stores/ui";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useSideThumb } from "../lib/useSideThumb";
 
 const ui = useUiStore();
+const bodyRef = ref<HTMLElement>();
+const thumb = useSideThumb(bodyRef);
 const appWindow = getCurrentWindow();
 
 const rightOptions: ViewOption[] = [
@@ -47,13 +50,18 @@ async function togglePin(): Promise<void> {
       <WindowControls />
     </header>
 
-    <div class="view-body">
+    <div ref="bodyRef" class="view-body">
       <DetailPanel v-if="ui.rightView === 'detail'" />
       <div v-else class="ai-placeholder">
         <AppIcon :name="placeholderIcon" />
         <p>该视图为占位，后续阶段实现。</p>
       </div>
     </div>
+    <span
+      v-show="thumb.show"
+      class="side-thumb"
+      :style="{ top: `${thumb.top}px`, height: `${thumb.height}px` }"
+    />
 
     <footer class="bar-footer">
       <ViewSwitch v-model="ui.rightView" :options="rightOptions" />
@@ -79,6 +87,7 @@ async function togglePin(): Promise<void> {
 
 <style scoped>
 .sidebar-right {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: none;
@@ -87,6 +96,16 @@ async function togglePin(): Promise<void> {
   box-shadow: inset 0 0 0 1px var(--c4-15);
   padding: var(--space-4);
   min-height: 0;
+}
+/* 悬浮滚动条：4px 胶囊 C4-15、距右 4px、不占布局（token 15） */
+.side-thumb {
+  position: absolute;
+  right: 4px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--c4-15);
+  pointer-events: none;
+  z-index: 10;
 }
 .sidebar-right.collapsed {
   width: 36px;
@@ -106,18 +125,11 @@ async function togglePin(): Promise<void> {
 .spacer {
   flex: 1;
 }
-/* 滚动条用 overlay：悬浮不占布局空间（token 15：不影响布局），紧贴区块容器右侧 */
+/* 原生条由 base.css 全局隐藏，滚动条为悬浮 side-thumb（不占位） */
 .view-body {
   flex: 1;
   min-height: 0;
-  overflow-y: overlay;
-}
-.view-body::-webkit-scrollbar {
-  width: 4px;
-}
-.view-body::-webkit-scrollbar-thumb {
-  background: var(--c4-15);
-  border-radius: 2px;
+  overflow-y: auto;
 }
 .ai-placeholder {
   height: 100%;
