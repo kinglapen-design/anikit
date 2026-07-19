@@ -82,9 +82,12 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 .tree-item.leaf.last .expand::before {
   bottom: 50%;
 }
+/* 无子项时占位保留（藏图标不藏容器：缩进线伪元素要照常显示） */
 .expand.placeholder {
-  opacity: 0;
   pointer-events: none;
+}
+.expand.placeholder .chev {
+  opacity: 0;
 }
 .chev {
   transition: transform 0.15s ease;
