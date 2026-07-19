@@ -42,8 +42,8 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
 
 <template>
   <div class="sidebar-views">
-    <template v-if="current.quick.length > 0">
-      <SectionHeader title="快速访问" pad="0 8px 0 16px" />
+    <section v-if="current.quick.length > 0" class="block">
+      <SectionHeader title="快速访问" pad="0 8px 0 14px" />
       <div class="items">
         <TreeItem
           v-for="q in current.quick"
@@ -54,23 +54,23 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
           @select="content.sidebarSelected = `quick:${q.key}`"
         />
       </div>
-    </template>
+    </section>
 
-    <template v-if="ui.leftView === 'tags'">
-      <SectionHeader title="标签群组" :count="2" addable pad="0 10px 0 16px" />
+    <section v-if="ui.leftView === 'tags'" class="block">
+      <SectionHeader title="标签群组" :count="2" addable pad="0 10px 0 14px" />
       <div class="items">
         <TreeItem icon="tag-group" label="标签群组" :count="12" />
         <TreeItem icon="tag-group" label="标签群组" :count="34" />
       </div>
-    </template>
+    </section>
 
-    <template v-if="ui.leftView === 'pins'">
-      <SectionHeader title="快捷入口" pad="0 8px 0 16px" />
+    <section v-if="ui.leftView === 'pins'" class="block">
+      <SectionHeader title="快捷入口" pad="0 8px 0 14px" />
       <div class="items">
         <TreeItem icon="folder-closed" label="新建文件夹" />
         <TreeItem icon="tag" label="全部标签" />
       </div>
-    </template>
+    </section>
 
     <p class="hint">{{ current.hint }}</p>
   </div>
@@ -78,16 +78,20 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
 
 <style scoped>
 .sidebar-views {
-  padding: var(--space-8) 0;
+  display: flex;
+  flex-direction: column;
+}
+.block {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  padding: var(--space-8) 0;
 }
 .items {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: 0 var(--space-8) 0 var(--space-4);
+  padding: 0 var(--space-8) 0 3px;
 }
 .hint {
   margin: var(--space-8) var(--space-16) 0;

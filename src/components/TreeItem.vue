@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// 文件树 item（02_通用组件/02_item 02）：高 28；展开按钮容器 28×28 方形（增大判定范围），
-// 无子项时保留占位保证装饰图标列对齐；缩进按层 14px（配合 FolderTree 缩进线）。
+// 文件树 item（02_通用组件/02_item 02）：高 28；展开按钮容器宽 12（高随 item，增大判定高度），
+// 无子项时保留占位——装饰图标中心与区块副标题展开按钮中心（28px）竖向对齐。
+// 缩进按层 14px（配合 FolderTree 缩进线）。
 import AppIcon from "./AppIcon.vue";
 
 withDefaults(
@@ -21,7 +22,7 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 <template>
   <div class="tree-item" :class="{ leaf: !expandable }" :style="{ paddingLeft: `${depth * 14}px` }">
     <button class="expand" :class="{ placeholder: !expandable }" @click.stop="emit('toggle')">
-      <AppIcon name="tree-expand-arrow" :size="8" class="chev" :class="{ open }" />
+      <AppIcon name="tree-expand-arrow" :size="9" class="chev" :class="{ open }" />
     </button>
     <button class="body" :class="{ selected }" @click="emit('select')">
       <AppIcon :name="icon" class="deco" />
@@ -39,12 +40,12 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   gap: var(--space-2);
   height: 28px;
 }
-/* 展开按钮容器：28×28 方形（增加鼠标判定范围），图标 8×8 实心三角，展开时旋转 90° */
+/* 展开按钮容器：宽 9（= 图标宽）/ 高 28（判定高度），图标 9×9 实心三角，展开时旋转 90° */
 .expand {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  width: 9px;
   height: 28px;
   color: var(--c4);
   flex: none;
@@ -59,8 +60,8 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 .chev.open {
   transform: rotate(90deg);
 }
-.expand:hover .chev :deep(svg [fill-opacity="0.7"]) {
-  fill-opacity: 1;
+.expand:hover .chev :deep(svg [fill-opacity="0.4"]) {
+  fill-opacity: 0.7;
 }
 /* item 容器：内边距 4 6 / 圆角 6 / 间距 6 */
 .body {
