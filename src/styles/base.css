@@ -23,7 +23,6 @@ body {
   background: transparent;
   user-select: none;
   -webkit-user-select: none;
-  -webkit-font-smoothing: antialiased;
 }
 
 button {
