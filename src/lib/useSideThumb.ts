@@ -7,10 +7,17 @@ export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
   const thumb = { show: false, top: 0, height: 30 };
   const state = reactive(thumb);
   let ro: ResizeObserver | undefined;
+  let observedChild: Element | null = null;
 
   function sync(): void {
     const el = bodyRef.value;
     if (!el) return;
+    // 内容根元素可能因视图切换 / 展开折叠而替换或变高，需跟随重观测
+    if (ro && el.firstElementChild !== observedChild) {
+      if (observedChild) ro.unobserve(observedChild);
+      observedChild = el.firstElementChild;
+      if (observedChild) ro.observe(observedChild);
+    }
     const { scrollHeight, clientHeight, scrollTop } = el;
     state.show = scrollHeight > clientHeight;
     if (!state.show) return;
