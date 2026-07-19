@@ -45,11 +45,18 @@ const emit = defineEmits<{ add: [] }>();
   flex: none;
   transition: background 0.12s ease;
 }
+/* 容器内图标 C4-40（02_item 05：SVG 烘 0.7，此处压到 0.4） */
+.head-btn :deep(svg [stroke-opacity="0.7"]),
+.head-btn :deep(svg [fill-opacity="0.7"]) {
+  stroke-opacity: 0.4;
+  fill-opacity: 0.4;
+}
 .head-btn:hover {
   background: var(--c4-7);
 }
-.head-btn:hover :deep(svg [stroke-opacity="0.7"]),
-.head-btn:hover :deep(svg [fill-opacity="0.7"]) {
+/* 悬停图标高亮 C4 */
+.head-btn:hover :deep(svg [stroke-opacity="0.4"]),
+.head-btn:hover :deep(svg [fill-opacity="0.4"]) {
   stroke-opacity: 1;
   fill-opacity: 1;
 }
