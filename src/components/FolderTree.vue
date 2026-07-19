@@ -20,7 +20,7 @@ function toggle(id: number): void {
 </script>
 
 <template>
-  <div v-for="node in nodes" :key="node.id">
+  <div v-for="(node, index) in nodes" :key="node.id">
     <TreeItem
       :icon="openSet.has(node.id) ? 'folder-open' : 'folder-closed'"
       :label="node.name"
@@ -29,15 +29,12 @@ function toggle(id: number): void {
       :expandable="node.children.length > 0"
       :open="openSet.has(node.id)"
       :selected="content.sidebarSelected === `folder:${node.id}`"
+      :last="index === nodes.length - 1"
       guide
       @toggle="toggle(node.id)"
       @select="content.sidebarSelected = `folder:${node.id}`"
     />
-    <div
-      v-if="openSet.has(node.id) && node.children.length > 0"
-      class="ft-children"
-      :style="{ '--guide-x': `${(depth + 1) * 14 + 5}px` }"
-    >
+    <div v-if="openSet.has(node.id) && node.children.length > 0" class="ft-children">
       <FolderTree :nodes="node.children" :depth="depth + 1" />
     </div>
   </div>
@@ -45,20 +42,8 @@ function toggle(id: number): void {
 
 <style scoped>
 .ft-children {
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-}
-/* 连续竖线：穿过整层（含 2px item 间距与有子项的行），止于最后子项中心（L 收笔）。
-   颜色 = 装饰图标 fill 色（C4-7），自定义文件夹颜色时同步 */
-.ft-children::before {
-  content: "";
-  position: absolute;
-  left: var(--guide-x);
-  top: 0;
-  bottom: 14px;
-  width: 1px;
-  background: var(--c4-7);
 }
 </style>
