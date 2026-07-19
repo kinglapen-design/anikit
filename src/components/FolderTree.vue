@@ -37,7 +37,7 @@ function toggle(id: number): void {
     <div
       v-if="openSet.has(node.id) && node.children.length > 0"
       class="ft-children"
-      :style="{ '--guide-x': `${(depth + 1) * 14 + 5}px` }"
+      :style="{ '--guide-x': `${depth * 14 + 25}px` }"
     >
       <FolderTree :nodes="node.children" :depth="depth + 1" />
     </div>
@@ -51,9 +51,10 @@ function toggle(id: number): void {
   flex-direction: column;
   gap: var(--space-2);
 }
-/* 缩进竖线（02_左侧边栏 04）：子层容器级连续线，从子项展开占位中心（x5，对齐箭尖）
+/* 缩进竖线（02_左侧边栏 04）：从父级装饰图标中心（= 子项 item 容器左缘，depth×14+25）
    贯穿整层——穿过 item 间距与嵌套子层区域（子级的子级旁父级线仍在，两条并存），
-   止于最后子项中心（L 收笔）；颜色 = 装饰图标 fill 色（C4-7），自定义文件夹颜色时同步 */
+   止于最后子项中心（L 收笔）；各层线间距 = 层级缩进 14px。
+   颜色 = 装饰图标 fill 色（C4-7），自定义文件夹颜色时同步 */
 .ft-children::before {
   content: "";
   position: absolute;

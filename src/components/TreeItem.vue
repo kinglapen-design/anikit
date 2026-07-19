@@ -57,22 +57,7 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   color: var(--c4);
   flex: none;
 }
-/* 有箭头的容器铺侧栏底色——遮住穿过的缩进竖线（视觉不穿过箭头，同 Eagle） */
-.expand:not(.placeholder) {
-  background: var(--c3);
-}
-/* L 形横线：仅最后一个叶子 item，x5 → x9（竖线由 ft-children 容器级绘制，
-   止于本行中心，与此横线组成 L）；中间子项纯竖线，不画横线 */
-.tree-item.leaf.last .expand::after {
-  content: "";
-  position: absolute;
-  left: 5px;
-  top: 50%;
-  width: 4px;
-  height: 1px;
-  background: var(--c4-7);
-}
-/* 无子项时占位保留（藏图标不藏容器：叶子行的竖线要照常穿过） */
+/* 无子项时占位保留（藏图标不藏容器） */
 .expand.placeholder {
   pointer-events: none;
 }
@@ -90,6 +75,7 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 }
 /* item 容器：内边距 4 6 / 圆角 6 / 间距 6 */
 .body {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-6);
@@ -99,6 +85,17 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   border-radius: var(--radius-6);
   color: var(--c4);
   transition: background 0.12s ease;
+}
+/* L 形横线：仅最后一个叶子 item，从竖线（item 容器左缘）向右 6px 连到图标；
+   竖线由 ft-children 容器级绘制、止于本行中心，与此横线组成 L；中间子项纯竖线 */
+.tree-item.leaf.last .body::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 6px;
+  height: 1px;
+  background: var(--c4-7);
 }
 .body:hover {
   background: var(--c4-7);
