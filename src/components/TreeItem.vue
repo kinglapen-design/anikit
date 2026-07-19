@@ -13,10 +13,9 @@ withDefaults(
     expandable?: boolean;
     open?: boolean;
     selected?: boolean;
-    last?: boolean;
     guide?: boolean;
   }>(),
-  { count: undefined, depth: 0, expandable: false, open: false, selected: false, last: false, guide: false },
+  { count: undefined, depth: 0, expandable: false, open: false, selected: false, guide: false },
 );
 const emit = defineEmits<{ toggle: []; select: [] }>();
 </script>
@@ -24,7 +23,7 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 <template>
   <div
     class="tree-item"
-    :class="{ leaf: guide && !expandable, last }"
+    :class="{ leaf: guide && !expandable && depth > 0 }"
     :style="{ paddingLeft: `${depth * 14}px` }"
   >
     <button class="expand" :class="{ placeholder: !expandable }" @click.stop="emit('toggle')">
@@ -57,18 +56,8 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   color: var(--c4);
   flex: none;
 }
-/* 缩进线（02_左侧边栏 04）：仅叶子 item 在展开占位空间内绘制，有子项的行跳过断开；
-   颜色与装饰图标 border 一致（C4-40），自定义文件夹颜色时同步 */
-.tree-item.leaf .expand::before {
-  content: "";
-  position: absolute;
-  left: 5px;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--c4-40);
-}
-/* 横线：x5 → x9 */
+/* 横线：仅 depth>0 的叶子 item（有子项的行跳过、根层不画），x5 → x9；
+   颜色与竖线一致 = 装饰图标 fill 色（C4-7） */
 .tree-item.leaf .expand::after {
   content: "";
   position: absolute;
@@ -76,11 +65,7 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   top: 50%;
   width: 4px;
   height: 1px;
-  background: var(--c4-40);
-}
-/* 最后一个子项画 L 形：竖线止于行中心 */
-.tree-item.leaf.last .expand::before {
-  bottom: 50%;
+  background: var(--c4-7);
 }
 /* 无子项时占位保留（藏图标不藏容器：缩进线伪元素要照常显示） */
 .expand.placeholder {
