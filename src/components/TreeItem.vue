@@ -13,14 +13,20 @@ withDefaults(
     expandable?: boolean;
     open?: boolean;
     selected?: boolean;
+    last?: boolean;
+    guide?: boolean;
   }>(),
-  { count: undefined, depth: 0, expandable: false, open: false, selected: false },
+  { count: undefined, depth: 0, expandable: false, open: false, selected: false, last: false, guide: false },
 );
 const emit = defineEmits<{ toggle: []; select: [] }>();
 </script>
 
 <template>
-  <div class="tree-item" :class="{ leaf: !expandable }" :style="{ paddingLeft: `${depth * 14}px` }">
+  <div
+    class="tree-item"
+    :class="{ leaf: guide && !expandable, last }"
+    :style="{ paddingLeft: `${depth * 14}px` }"
+  >
     <button class="expand" :class="{ placeholder: !expandable }" @click.stop="emit('toggle')">
       <AppIcon name="tree-expand-arrow" :size="9" class="chev" :class="{ open }" />
     </button>
@@ -42,6 +48,7 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 }
 /* 展开按钮容器：宽 9（= 图标宽）/ 高 28（判定高度），图标 9×9 实心三角，展开时旋转 90° */
 .expand {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -49,6 +56,31 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   height: 28px;
   color: var(--c4);
   flex: none;
+}
+/* 缩进线（02_左侧边栏 04）：仅叶子 item 在展开占位空间内绘制，有子项的行跳过断开；
+   颜色与装饰图标 border 一致（C4-40），自定义文件夹颜色时同步 */
+.tree-item.leaf .expand::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--c4-40);
+}
+/* 横线：x5 → x9 */
+.tree-item.leaf .expand::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  width: 4px;
+  height: 1px;
+  background: var(--c4-40);
+}
+/* 最后一个子项画 L 形：竖线止于行中心 */
+.tree-item.leaf.last .expand::before {
+  bottom: 50%;
 }
 .expand.placeholder {
   opacity: 0;
