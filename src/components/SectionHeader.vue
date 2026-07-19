@@ -16,13 +16,13 @@ const emit = defineEmits<{ add: [] }>();
 <template>
   <div class="section-header" :style="{ padding: pad }">
     <button class="head-btn" @click="open = !open">
-      <AppIcon name="chevron-small" :size="8" class="chev" :class="{ closed: !open }" />
+      <AppIcon name="chevron-large" class="chev" :class="{ closed: !open }" />
     </button>
     <span class="title">{{ title }}</span>
     <span v-if="count !== undefined" class="count">({{ count.toLocaleString() }})</span>
     <span class="spacer" />
     <button v-if="addable" class="head-btn" @click.stop="emit('add')">
-      <AppIcon name="add-small" :size="8" />
+      <AppIcon name="add-large" />
     </button>
   </div>
 </template>
