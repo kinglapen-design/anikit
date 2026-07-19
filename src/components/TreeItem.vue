@@ -57,19 +57,13 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   color: var(--c4);
   flex: none;
 }
-/* 竖线：仅 depth>0 的叶子 item（有子项的行断开跳过、根层不画），
-   x5（对齐展开箭头的尖角，左右各留 4px），bottom -2px 延伸覆盖 item 间距保持连续；
-   横线 x5 → x9；颜色 = 装饰图标 fill 色（C4-7），自定义文件夹颜色时同步 */
-.tree-item.leaf .expand::before {
-  content: "";
-  position: absolute;
-  left: 5px;
-  top: 0;
-  bottom: -2px;
-  width: 1px;
-  background: var(--c4-7);
+/* 有箭头的容器铺侧栏底色——遮住穿过的缩进竖线（视觉不穿过箭头，同 Eagle） */
+.expand:not(.placeholder) {
+  background: var(--c3);
 }
-.tree-item.leaf .expand::after {
+/* L 形横线：仅最后一个叶子 item，x5 → x9（竖线由 ft-children 容器级绘制，
+   止于本行中心，与此横线组成 L）；中间子项纯竖线，不画横线 */
+.tree-item.leaf.last .expand::after {
   content: "";
   position: absolute;
   left: 5px;
@@ -78,11 +72,7 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   height: 1px;
   background: var(--c4-7);
 }
-/* 最后一个子项画 L 形：竖线止于行中心 */
-.tree-item.leaf.last .expand::before {
-  bottom: 50%;
-}
-/* 无子项时占位保留（藏图标不藏容器：缩进线伪元素要照常显示） */
+/* 无子项时占位保留（藏图标不藏容器：叶子行的竖线要照常穿过） */
 .expand.placeholder {
   pointer-events: none;
 }

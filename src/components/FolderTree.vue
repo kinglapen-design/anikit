@@ -34,7 +34,11 @@ function toggle(id: number): void {
       @toggle="toggle(node.id)"
       @select="content.sidebarSelected = `folder:${node.id}`"
     />
-    <div v-if="openSet.has(node.id) && node.children.length > 0" class="ft-children">
+    <div
+      v-if="openSet.has(node.id) && node.children.length > 0"
+      class="ft-children"
+      :style="{ '--guide-x': `${(depth + 1) * 14 + 5}px` }"
+    >
       <FolderTree :nodes="node.children" :depth="depth + 1" />
     </div>
   </div>
@@ -42,8 +46,21 @@ function toggle(id: number): void {
 
 <style scoped>
 .ft-children {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+/* 缩进竖线（02_左侧边栏 04）：子层容器级连续线，从子项展开占位中心（x5，对齐箭尖）
+   贯穿整层——穿过 item 间距与嵌套子层区域（子级的子级旁父级线仍在，两条并存），
+   止于最后子项中心（L 收笔）；颜色 = 装饰图标 fill 色（C4-7），自定义文件夹颜色时同步 */
+.ft-children::before {
+  content: "";
+  position: absolute;
+  left: var(--guide-x);
+  top: 0;
+  bottom: 14px;
+  width: 1px;
+  background: var(--c4-7);
 }
 </style>
