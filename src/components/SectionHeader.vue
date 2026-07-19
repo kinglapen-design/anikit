@@ -51,12 +51,12 @@ const emit = defineEmits<{ add: [] }>();
   stroke-opacity: 0.4;
   fill-opacity: 0.4;
 }
-/* hover：底色 C4-7，图标 C4-70（恢复 SVG 烘的 0.7） */
+/* hover：底色 C4-7，图标 C4-70（:hover 伪类提权，覆盖常态 0.4 恢复 SVG 烘的 0.7） */
 .head-btn:hover {
   background: var(--c4-7);
 }
-.head-btn:hover :deep(svg [stroke-opacity="0.4"]),
-.head-btn:hover :deep(svg [fill-opacity="0.4"]) {
+.head-btn:hover :deep(svg [stroke-opacity="0.7"]),
+.head-btn:hover :deep(svg [fill-opacity="0.7"]) {
   stroke-opacity: 0.7;
   fill-opacity: 0.7;
 }
