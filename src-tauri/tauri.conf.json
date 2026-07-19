@@ -13,13 +13,13 @@
     "windows": [
       {
         "title": "AniKit",
-        "width": 1334,
-        "height": 1150,
+        "width": 1374,
+        "height": 1190,
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
         "transparent": true,
-        "shadow": true,
+        "shadow": false,
         "center": true
       }
     ],

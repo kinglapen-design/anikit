@@ -45,18 +45,25 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 全透明窗口：容器内缩 20px 作阴影带，圆角与阴影纯 CSS 绘制（跨平台一致）。
+   阴影参数暂无 token，初值 0 4 24 rgba(0,0,0,.5)，验收时与用户确认。 */
 .window {
-  height: 100%;
+  height: calc(100% - 40px);
+  margin: 20px;
   display: flex;
   gap: 0;
   padding: var(--space-8);
   background: var(--c1);
   border: var(--border-thick) solid var(--c4-15);
   border-radius: var(--radius-12);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
 .window.maximized {
+  height: 100%;
+  margin: 0;
   border-radius: 0;
   border-color: transparent;
+  box-shadow: none;
 }
 </style>

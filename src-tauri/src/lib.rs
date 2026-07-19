@@ -42,7 +42,8 @@ pub fn run() {
       }
 
       // 全局热键 alt+`：呼出 / 隐藏主窗口（后续用于快捷搜索框）
-      app.global_shortcut().on_shortcut(
+      // 注册失败（热键被他方占用）只记日志降级，不阻断启动
+      if let Err(e) = app.global_shortcut().on_shortcut(
         Shortcut::new(Some(Modifiers::ALT), Code::Backquote),
         |app, _shortcut, event| {
           if event.state() != ShortcutState::Pressed {
@@ -59,7 +60,9 @@ pub fn run() {
             }
           }
         },
-      )?;
+      ) {
+        log::error!("全局热键 alt+` 注册失败（可能被其他程序占用）: {e}");
+      }
 
       // 托盘菜单：显示 / 退出
       let show = MenuItem::with_id(app, "show", "显示", true, None::<&str>)?;
@@ -100,29 +103,8 @@ pub fn run() {
         .build(app)?;
 
       // 关闭按钮 = 隐藏到托盘，不退出（快捷搜索框要求软件常驻后台）
+      // 窗口为全透明无边框 + CSS 圆角/阴影（跨平台同一套代码），无需 DWM 调整
       if let Some(w) = app.get_webview_window("main") {
-        // 无边框窗口：禁 DWM 圆角（避免 Windows 11 的 8px 圆角与自绘 12px 圆角重叠），
-        // 并用 window-shadows 恢复 DWM 阴影（无边框窗口默认无阴影）
-        #[cfg(target_os = "windows")]
-        {
-          use windows::Win32::Foundation::HWND;
-          use windows::Win32::Graphics::Dwm::{
-            DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND,
-          };
-          if let Ok(raw) = w.hwnd() {
-            let hwnd = HWND(raw.0 as _);
-            let pref = DWMWCP_DONOTROUND;
-            unsafe {
-              let _ = DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_WINDOW_CORNER_PREFERENCE,
-                &pref as *const _ as *const core::ffi::c_void,
-                std::mem::size_of_val(&pref) as u32,
-              );
-            }
-          }
-        }
-
         let w2 = w.clone();
         w.on_window_event(move |event| {
           if let tauri::WindowEvent::CloseRequested { api, .. } = event {
