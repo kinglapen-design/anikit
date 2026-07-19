@@ -12,8 +12,9 @@ export const useUiStore = defineStore("ui", {
     leftCollapsed: false,
     rightCollapsed: false,
     alwaysOnTop: false,
-    // 内容区滑块：自适应布局目标行高
+    // 内容区滑块：自适应布局目标行高（min 80，max = gridWidth 即单张撑满）
     targetRowHeight: 220,
+    gridWidth: 800,
     showSubfolders: true,
   }),
 });

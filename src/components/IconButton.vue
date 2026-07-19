@@ -1,11 +1,11 @@
 <script setup lang="ts">
-// 图标按钮（token 07）：无底色装饰（默认）/ 有底色装饰（filled）。
-// 大 = 28×28（内边距 6），小 = 24×24（内边距 4）。
+// 图标按钮（02_通用组件/01_按钮）：无底色装饰（默认）/ 有底色装饰（filled）。
+// 大 = 28×28（内边距 6），小 = 24×24（内边距 4）；danger 用于窗口控制关闭（hover 错误色）。
 import AppIcon from "./AppIcon.vue";
 
 withDefaults(
-  defineProps<{ name: string; small?: boolean; filled?: boolean; disabled?: boolean; title?: string }>(),
-  { small: false, filled: false, disabled: false, title: undefined },
+  defineProps<{ name: string; small?: boolean; filled?: boolean; danger?: boolean; disabled?: boolean; title?: string }>(),
+  { small: false, filled: false, danger: false, disabled: false, title: undefined },
 );
 defineEmits<{ click: [e: MouseEvent] }>();
 </script>
@@ -13,7 +13,7 @@ defineEmits<{ click: [e: MouseEvent] }>();
 <template>
   <button
     class="icon-btn"
-    :class="{ small, filled }"
+    :class="{ small, filled, danger }"
     :disabled="disabled"
     :title="title"
     @click="$emit('click', $event)"
@@ -48,6 +48,9 @@ defineEmits<{ click: [e: MouseEvent] }>();
 }
 .icon-btn.filled:hover {
   background: var(--c4-15);
+}
+.icon-btn.danger:hover {
+  background: var(--error);
 }
 .icon-btn:disabled {
   cursor: default;

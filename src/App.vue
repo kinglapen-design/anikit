@@ -46,17 +46,17 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* 全透明窗口：容器内缩 20px 作阴影带，圆角与阴影纯 CSS 绘制（跨平台一致）。
-   阴影参数暂无 token，初值 0 4 24 rgba(0,0,0,.5)，验收时与用户确认。 */
+   主窗口（03_UI 布局/01）：padding 6 / 圆角 8 / 阴影 0 4 40 rgba(0,0,0,.4)。 */
 .window {
   height: calc(100% - 40px);
   margin: 20px;
   display: flex;
   gap: 0;
-  padding: var(--space-8);
+  padding: var(--space-6);
   background: var(--c1);
   border: var(--border-thick) solid var(--c4-15);
-  border-radius: var(--radius-12);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  border-radius: var(--radius-8);
+  box-shadow: 0 4px 40px rgba(0, 0, 0, 0.4);
   overflow: hidden;
 }
 .window.maximized {

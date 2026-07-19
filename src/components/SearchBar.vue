@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 搜索框（token 12）：阶段 1 仅 UI，搜索功能阶段 4 接入。
+// 搜索框（02_通用组件/03_输入框 03）：阶段 1 仅 UI，搜索功能阶段 4 接入。
 import { ref } from "vue";
 import AppIcon from "./AppIcon.vue";
 
@@ -9,13 +9,16 @@ const focused = ref(false);
 
 <template>
   <div class="search-bar" :class="{ focused }">
-    <button class="icon-slot" title="搜索">
-      <AppIcon name="search" />
-    </button>
+    <span class="lead">
+      <button class="icon-slot" title="搜索">
+        <AppIcon name="search" />
+      </button>
+      <AppIcon name="chevron-small" :size="8" class="lead-chev" />
+    </span>
     <input
       v-model="text"
       type="text"
-      placeholder="输入文字搜索当前文件夹子项，/ 切换筛选模式，// 全局搜索"
+      placeholder="输入文字搜索当前文件夹子项，tab 切换全局和当前目录..."
       @focus="focused = true"
       @blur="focused = false"
     />
@@ -29,6 +32,7 @@ const focused = ref(false);
 </template>
 
 <style scoped>
+/* 总容器：内边距 6 / 间距 6 / 圆角 8 / C1-50 / 1px C4-15；聚焦边框品牌色-1 */
 .search-bar {
   display: flex;
   align-items: center;
@@ -40,6 +44,21 @@ const focused = ref(false);
 }
 .search-bar.focused {
   border-color: var(--brand-1);
+}
+/* 搜索图标容器：搜索图标 + 展开图标（8×8），间距 2 */
+.lead {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+.lead:hover :deep(svg [stroke-opacity="0.7"]),
+.lead:hover :deep(svg [fill-opacity="0.7"]) {
+  stroke-opacity: 1;
+  fill-opacity: 1;
+}
+.lead-chev {
+  color: var(--c4);
 }
 .icon-slot {
   display: inline-flex;
@@ -61,8 +80,8 @@ const focused = ref(false);
 .icon-slot:hover {
   background: var(--c4-7);
 }
-.icon-slot:hover :deep(svg [stroke-opacity="0.4"]),
-.icon-slot:hover :deep(svg [fill-opacity="0.4"]) {
+.icon-slot:hover :deep(svg [stroke-opacity="0.7"]),
+.icon-slot:hover :deep(svg [fill-opacity="0.7"]) {
   stroke-opacity: 1;
   fill-opacity: 1;
 }

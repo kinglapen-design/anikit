@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// 中栏标题栏（组件布局 05.1）：返回 / 前进 + 面包屑 + 滑块 + 显示子文件夹内容 + 插件 / 查看方式。
-// 返回前进阶段 1 无导航历史，禁用态；查看方式二级菜单无设计，仅摆按钮。
-import AppIcon from "./AppIcon.vue";
+// 中栏标题栏（03_UI 布局/03_中间面板 02）：返回 / 前进 + 标题（当前父级文件夹）
+// + 滑块（min 80 / max = 内容区宽）+ 显示子文件夹内容 + 插件 / 查看方式。
+// 返回前进阶段 1 无导航历史，禁用态 C4-20；搜索结果容器阶段 4 接入。
 import IconButton from "./IconButton.vue";
 import SideSlider from "./SideSlider.vue";
 import AppCheckbox from "./AppCheckbox.vue";
@@ -12,14 +12,13 @@ const ui = useUiStore();
 
 <template>
   <div class="content-titlebar" data-tauri-drag-region>
-    <IconButton name="chevron-large" title="返回" class="rot-ccw" disabled />
-    <IconButton name="chevron-large" title="前进" class="rot-cw" disabled />
-    <button class="crumb">
+    <div class="nav-group">
+      <IconButton name="chevron-large" title="返回" class="rot-ccw" disabled />
+      <IconButton name="chevron-large" title="前进" class="rot-cw" disabled />
       <span class="crumb-text">全部</span>
-      <AppIcon name="chevron-small" :size="8" />
-    </button>
+    </div>
     <span class="spacer" />
-    <SideSlider v-model="ui.targetRowHeight" :min="120" :max="400" />
+    <SideSlider v-model="ui.targetRowHeight" :min="80" :max="ui.gridWidth" />
     <AppCheckbox v-model="ui.showSubfolders" label="显示子文件夹内容" />
     <span class="spacer" />
     <IconButton name="plugin" title="插件" />
@@ -28,33 +27,33 @@ const ui = useUiStore();
 </template>
 
 <style scoped>
-/* 内容容器：内边距 8 / 子项间距自适应 */
+/* 总容器：内边距 8 / space-between */
 .content-titlebar {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-6);
   padding: var(--space-8);
   flex: none;
 }
-/* chevron-large 原图标朝下：返回 = 逆时针 90°（朝左），前进 = 顺时针 90°（朝右） */
+/* 面包屑导航容器：返回前进按钮组（间距 4）+ 标题容器 */
+.nav-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+/* chevron-large 原图标朝下：返回 = 顺时针 90°（朝左），前进 = 逆时针 90°（朝右） */
 .rot-ccw :deep(svg) {
   transform: rotate(90deg);
 }
 .rot-cw :deep(svg) {
   transform: rotate(-90deg);
 }
-.crumb {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-4);
-  border-radius: var(--radius-6);
-  color: var(--c4);
+.crumb-text {
+  padding: 0 var(--space-4);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-}
-.crumb:hover {
-  background: var(--c4-7);
+  color: var(--c4);
+  white-space: nowrap;
 }
 .spacer {
   flex: 1;

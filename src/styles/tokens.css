@@ -1,16 +1,22 @@
 /* AniKit 设计 tokens —— 由 docs/02_样式与布局/01_样式 token.md 生成，勿手改。
-   换配色只需改 --c1 ~ --c4 与品牌色，透明度衍生自动跟随（color-mix）。 */
+   换配色只需改品牌色与 C1 ~ C5，透明度衍生自动跟随（color-mix）。 */
 
 :root {
   /* 品牌色 */
-  --brand-1: #1e83b5;
-  --brand-2: #2b9fd9;
+  --brand-1: #0c8ce9;
+  --brand-2: #096cb2;
+
+  /* 语义色 */
+  --error: #d04833; /* 窗口控制关闭 */
+  --warning: #bf9325; /* 评分选中 */
+  --success: #29a13d;
 
   /* 通用色（衍生基础） */
   --c1: #09090a;
   --c2: #1b1c1f;
   --c3: #1f2023;
   --c4: #f2f4fa;
+  --c5: #18191c; /* 二级窗口 / 模态窗口 */
 
   /* 透明度衍生 */
   --c1-80: color-mix(in srgb, var(--c1) 80%, transparent);
@@ -23,10 +29,10 @@
   --c4-15: color-mix(in srgb, var(--c4) 15%, transparent);
   --c4-7: color-mix(in srgb, var(--c4) 7%, transparent);
 
-  /* 文件夹卡片 */
-  --folder-card-back: #202124;
+  /* 文件夹卡片（图层1 正面 / 图层2 文件 / 图层4 背面） */
   --folder-card-front: #262629;
   --folder-card-file: #c6c7cc;
+  --folder-card-back: #202124;
 
   /* 文字 */
   --font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
@@ -49,9 +55,10 @@
   --space-4: 4px;
   --space-6: 6px;
   --space-8: 8px;
-  --space-12: 12px;
+  --space-10: 10px;
+  --space-14: 14px;
   --space-16: 16px;
-  --space-18: 18px;
+  --space-20: 20px;
 
   /* 圆角 */
   --radius-4: 4px;

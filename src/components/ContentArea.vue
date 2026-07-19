@@ -52,11 +52,14 @@ const items = computed(() => (ui.showSubfolders ? content.assets : content.asset
   /* 文件夹卡片列表与素材卡片列表间距 16（token 间距） */
   gap: var(--space-16);
 }
+/* 素材卡片区块：内边距 8 8 0 8 / 间距 6 */
 .asset-section {
   display: flex;
   flex-direction: column;
+  gap: var(--space-6);
   flex: 1;
   min-height: 0;
+  padding: var(--space-8) var(--space-8) 0 var(--space-8);
 }
 /* 组件布局 05.3：搜索框内容容器内边距 4 8 8 8 */
 .search-wrap {

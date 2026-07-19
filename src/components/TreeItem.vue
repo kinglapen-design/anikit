@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// 文件树 item（token 4）：展开按钮 + 基础 item（图标 + 标题）+ 数量标签。
-// 无子项时展开按钮保留占位（透明度 0），保证装饰图标竖向对齐（token 4 备注）。
+// 文件树 item（02_通用组件/02_item 02）：高 28；展开按钮容器 28×28 方形（增大判定范围），
+// 无子项时保留占位保证装饰图标列对齐；缩进按层 14px（配合 FolderTree 缩进线）。
 import AppIcon from "./AppIcon.vue";
 
 withDefaults(
@@ -19,9 +19,9 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 </script>
 
 <template>
-  <div class="tree-item" :style="{ paddingLeft: `${depth * 12}px` }">
+  <div class="tree-item" :class="{ leaf: !expandable }" :style="{ paddingLeft: `${depth * 14}px` }">
     <button class="expand" :class="{ placeholder: !expandable }" @click.stop="emit('toggle')">
-      <AppIcon name="chevron-small" :size="8" class="chev" :class="{ closed: !open }" />
+      <AppIcon name="tree-expand-arrow" :size="8" class="chev" :class="{ open }" />
     </button>
     <button class="body" :class="{ selected }" @click="emit('select')">
       <AppIcon :name="icon" class="deco" />
@@ -33,15 +33,18 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 
 <style scoped>
 .tree-item {
+  position: relative;
   display: flex;
   align-items: center;
+  gap: var(--space-2);
+  height: 28px;
 }
-/* 展开按钮：图标 8×8 C4-40，旋转动画 */
+/* 展开按钮容器：28×28 方形（增加鼠标判定范围），图标 8×8 实心三角，展开时旋转 90° */
 .expand {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
+  width: 28px;
   height: 28px;
   color: var(--c4);
   flex: none;
@@ -53,16 +56,20 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 .chev {
   transition: transform 0.15s ease;
 }
-.chev.closed {
-  transform: rotate(-90deg);
+.chev.open {
+  transform: rotate(90deg);
 }
+.expand:hover .chev :deep(svg [fill-opacity="0.7"]) {
+  fill-opacity: 1;
+}
+/* item 容器：内边距 4 6 / 圆角 6 / 间距 6 */
 .body {
   display: flex;
   align-items: center;
   gap: var(--space-6);
   flex: 1;
   min-width: 0;
-  padding: var(--space-4);
+  padding: var(--space-4) var(--space-6);
   border-radius: var(--radius-6);
   color: var(--c4);
   transition: background 0.12s ease;
@@ -73,9 +80,8 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 .body.selected {
   background: var(--c4-15);
 }
-/* 选中：装饰图标线条 C4、数量标签 C4 */
-.body.selected .deco :deep(svg [stroke-opacity="0.4"]),
-.body.selected .deco :deep(svg [fill-opacity="0.4"]) {
+.body.selected .deco :deep(svg [stroke-opacity="0.7"]),
+.body.selected .deco :deep(svg [fill-opacity="0.7"]) {
   stroke-opacity: 1;
   fill-opacity: 1;
 }

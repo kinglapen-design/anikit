@@ -38,6 +38,8 @@ export function useVirtualScroll(onUpdate: (pos: number) => void) {
   }
 
   function onWheel(e: WheelEvent): void {
+    // ctrl + 滚轮为卡片缩放（03_UI 布局/03_中间面板 02），交给 AssetGrid 处理
+    if (e.ctrlKey) return;
     e.preventDefault();
     scrollTo(pos.value + e.deltaY * 1.5);
   }

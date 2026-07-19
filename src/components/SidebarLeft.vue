@@ -1,6 +1,9 @@
 <script setup lang="ts">
-// 左侧边栏（C3）：标题栏 / 切换素材库 / 视图内容 / 底部视图切换。
-// 折叠后收成窄条（保留菜单、添加与展开按钮），拖拽调宽由 App 的拆分条负责。
+// 左侧边栏（C3）：标题栏 / 切换资源库 / 视图内容 / 底部视图切换。
+// 视图切换：旧区块往左滑出、新区块从右滑入（03_UI 布局/02_左侧边栏 01）；
+// 切换资源库区块仅在工作空间 ↔ 其他三视图之间切换时才滑出滑入。
+// 折叠后收成窄条（保留菜单、添加与展开按钮）。
+import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
 import IconButton from "./IconButton.vue";
 import ViewSwitch, { type ViewOption } from "./ViewSwitch.vue";
@@ -16,6 +19,9 @@ const leftOptions: ViewOption[] = [
   { value: "tags", icon: "tag-view", title: "标签视图" },
   { value: "pins", icon: "favorites-view", title: "快捷入口" },
 ];
+
+// 资源库视图 / 标签视图 / 快捷入口视图共用资源库；工作空间是另一套（03_UI 布局/02 03）
+const isWorkspace = computed(() => ui.leftView === "workspace");
 </script>
 
 <template>
@@ -27,16 +33,22 @@ const leftOptions: ViewOption[] = [
       <IconButton name="toggle-sidebar-left" title="收起侧边栏" @click="ui.leftCollapsed = true" />
     </header>
 
-    <div class="library-switch">
-      <span class="badge"><AppIcon name="library-badge" :size="17" /></span>
-      <span class="lib-name">动画素材库</span>
-      <span class="spacer" />
-      <IconButton name="switch-library" title="切换素材库" />
-    </div>
+    <Transition name="slide" mode="out-in">
+      <div class="library-switch" :key="isWorkspace ? 'ws' : 'lib'">
+        <span class="badge">
+          <AppIcon :name="isWorkspace ? 'workspace-badge' : 'library-badge'" :size="16" />
+        </span>
+        <span class="lib-name">{{ isWorkspace ? "我的项目" : "动画素材库" }}</span>
+        <span class="spacer" />
+        <IconButton name="switch-library" title="切换" />
+      </div>
+    </Transition>
 
     <div class="view-body">
-      <LibraryView v-if="ui.leftView === 'library'" />
-      <SidebarViews v-else />
+      <Transition name="slide" mode="out-in">
+        <LibraryView v-if="ui.leftView === 'library'" key="library" />
+        <SidebarViews v-else :key="ui.leftView" />
+      </Transition>
     </div>
 
     <footer class="bar-footer">
@@ -75,27 +87,30 @@ const leftOptions: ViewOption[] = [
 .flip {
   transform: scaleX(-1);
 }
-/* 组件布局 04.1：标题栏内容容器内边距 8 8 8 12 */
+/* 标题栏：内边距 8 8 8 14 */
 .bar-title {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-14);
 }
 .spacer {
   flex: 1;
 }
-/* token 11 切换素材库：内边距 8 8 8 18 */
+/* 切换资源库：内边距 8 8 8 20 / 间距 8；图标容器 24×24 品牌色-1 圆角 6 */
 .library-switch {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-18);
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-20);
+  border-radius: var(--radius-6);
 }
 .badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 24px;
+  height: 24px;
   padding: var(--space-4);
   border-radius: var(--radius-6);
   background: var(--brand-1);
@@ -114,9 +129,9 @@ const leftOptions: ViewOption[] = [
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: var(--space-4);
 }
-/* 次要区域原生滚动条按 token 15 绘制（主列表为自定义 transform 滚动） */
 .view-body::-webkit-scrollbar {
   width: 4px;
 }
@@ -124,7 +139,22 @@ const leftOptions: ViewOption[] = [
   background: var(--c4-15);
   border-radius: 2px;
 }
-/* 组件布局 04.5：视图切换内容容器内边距 4 8 8 8 */
+/* 视图切换动画：旧区块往左滑出，新区块从右滑入 */
+.slide-enter-active,
+.slide-leave-active {
+  transition:
+    transform 0.18s ease,
+    opacity 0.18s ease;
+}
+.slide-enter-from {
+  transform: translateX(40px);
+  opacity: 0;
+}
+.slide-leave-to {
+  transform: translateX(-40px);
+  opacity: 0;
+}
+/* 视图切换总容器：内边距 4 8 8 8 */
 .bar-footer {
   padding: var(--space-4) var(--space-8) var(--space-8) var(--space-8);
 }

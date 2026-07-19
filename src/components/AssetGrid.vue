@@ -53,6 +53,10 @@ const visibleCards = computed(() => {
 function relayout(): void {
   const vp = viewportRef.value;
   if (!vp || vp.clientWidth <= 0) return;
+  ui.gridWidth = vp.clientWidth;
+  // 滑块 max = 内容区宽（第一张卡片刚好撑满容器）；min 80
+  const maxH = Math.max(80, vp.clientWidth);
+  if (ui.targetRowHeight > maxH) ui.targetRowHeight = maxH;
   const t0 = performance.now();
   const result = computeJustified(props.items, vp.clientWidth, ui.targetRowHeight, CARD_CAPTION_H);
   boxes.value = result.boxes;
@@ -62,6 +66,15 @@ function relayout(): void {
   canvasScale.value = 1;
   setTotal(totalHeight);
   console.debug(`[AssetGrid] 布局 ${props.items.length} 条：${(performance.now() - t0).toFixed(1)}ms`);
+}
+
+// ctrl + 滚轮缩放卡片（与滑块联动）
+function onCtrlWheel(e: WheelEvent): void {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  const max = Math.max(80, viewportRef.value?.clientWidth ?? 800);
+  const next = ui.targetRowHeight + (e.deltaY > 0 ? -10 : 10);
+  ui.targetRowHeight = Math.max(80, Math.min(max, next));
 }
 
 // 拖动窗口 / 拆分条期间：canvas 按宽度差等比缩放（卡片实时跟随，GPU 合成零成本），
@@ -108,6 +121,7 @@ watch(
 
 onMounted(() => {
   attach(viewportRef.value!, trackRef.value!, thumbRef.value!);
+  viewportRef.value!.addEventListener("wheel", onCtrlWheel, { passive: false });
   lastW = viewportRef.value!.clientWidth;
   lastH = viewportRef.value!.clientHeight;
   ro.observe(viewportRef.value!);
@@ -116,6 +130,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearTimeout(resizeTimer);
+  viewportRef.value?.removeEventListener("wheel", onCtrlWheel);
   detach();
   ro.disconnect();
 });

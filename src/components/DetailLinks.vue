@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 详情模块 · 分布至文件夹（token 7.4 链接文件夹 item，阶段 1 静态假数据）。
+// 详情模块 · 关联文件夹（02_通用组件/02_item 06，阶段 1 静态假数据）。
 import SectionHeader from "./SectionHeader.vue";
 import IconButton from "./IconButton.vue";
 import AppIcon from "./AppIcon.vue";
@@ -7,7 +7,7 @@ import AppIcon from "./AppIcon.vue";
 
 <template>
   <section class="detail-links">
-    <SectionHeader title="分布至文件夹" addable />
+    <SectionHeader title="关联文件夹" addable />
     <div class="body">
       <div class="link-item">
         <div class="row">
@@ -23,13 +23,21 @@ import AppIcon from "./AppIcon.vue";
 </template>
 
 <style scoped>
+/* 区块容器：内边距 8 / 间距 6 / 圆角 8 */
+.detail-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8);
+  border-radius: var(--radius-8);
+}
+/* item 容器：间距 8 */
 .body {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  padding: var(--space-4) var(--space-8) 0;
 }
-/* 链接文件夹 item：竖向 / 内边距 6 6 6 8 / 圆角 8 / C1-15 / 1px C4-15 */
+/* 关联文件夹 item：竖向 / 内边距 6 6 6 8 / 圆角 8 / C1-15 / 1px C4-15 / 间距 2 */
 .link-item {
   display: flex;
   flex-direction: column;

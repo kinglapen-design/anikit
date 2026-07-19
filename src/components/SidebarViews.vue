@@ -43,7 +43,7 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
 <template>
   <div class="sidebar-views">
     <template v-if="current.quick.length > 0">
-      <SectionHeader title="快速访问" />
+      <SectionHeader title="快速访问" pad="0 8px 0 16px" />
       <div class="items">
         <TreeItem
           v-for="q in current.quick"
@@ -57,7 +57,7 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
     </template>
 
     <template v-if="ui.leftView === 'tags'">
-      <SectionHeader title="标签群组" :count="2" addable />
+      <SectionHeader title="标签群组" :count="2" addable pad="0 10px 0 16px" />
       <div class="items">
         <TreeItem icon="tag-group" label="标签群组" :count="12" />
         <TreeItem icon="tag-group" label="标签群组" :count="34" />
@@ -65,7 +65,7 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
     </template>
 
     <template v-if="ui.leftView === 'pins'">
-      <SectionHeader title="快捷入口" />
+      <SectionHeader title="快捷入口" pad="0 8px 0 16px" />
       <div class="items">
         <TreeItem icon="folder-closed" label="新建文件夹" />
         <TreeItem icon="tag" label="全部标签" />
@@ -79,6 +79,9 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
 <style scoped>
 .sidebar-views {
   padding: var(--space-8) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
 }
 .items {
   display: flex;
@@ -87,7 +90,7 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
   padding: 0 var(--space-8) 0 var(--space-4);
 }
 .hint {
-  margin: var(--space-12) var(--space-12) 0;
+  margin: var(--space-8) var(--space-16) 0;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   color: var(--c4-40);

@@ -17,7 +17,7 @@ const quickItems = [
 
 <template>
   <div class="library-view">
-    <SectionHeader title="快速访问" />
+    <SectionHeader title="快速访问" pad="0 8px 0 16px" />
     <div class="items">
       <TreeItem
         v-for="q in quickItems"
@@ -29,7 +29,7 @@ const quickItems = [
         @select="content.sidebarSelected = `quick:${q.key}`"
       />
     </div>
-    <SectionHeader title="文件夹" :count="1231" addable />
+    <SectionHeader title="文件夹" :count="1231" addable pad="0 10px 0 16px" />
     <div class="items">
       <FolderTree :nodes="content.folders" />
     </div>
@@ -37,10 +37,13 @@ const quickItems = [
 </template>
 
 <style scoped>
+/* 快速访问区块：内边距 8 0 / 间距 6；item 组：内边距 0 8 0 4 / 间距 2 */
 .library-view {
   padding: var(--space-8) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
 }
-/* 组件布局 04：item 组内边距 0 8 0 4、子项间距 2 */
 .items {
   display: flex;
   flex-direction: column;

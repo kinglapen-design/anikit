@@ -27,8 +27,8 @@ export interface JustifiedResult {
   totalHeight: number;
 }
 
-// 素材卡片容器内边距 8 8 0 8、素材列表子项间距 6（02_组件布局 05）
-const PAD = { top: 8, right: 8, bottom: 0, left: 8 };
+// 素材卡片区块内边距 8 8 0 8 由 ContentArea 的区块容器承担，网格内部不再留边
+const PAD = { top: 0, right: 0, bottom: 0, left: 0 };
 const SPACING = 6;
 
 export function computeJustified(

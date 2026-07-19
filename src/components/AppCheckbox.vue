@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// 单选框（token 9）：方框圆角 4、线条 C4-15；选中品牌色填充 + 对勾。
-defineProps<{ label: string }>();
+// 单选框 / 复选框（02_通用组件/01_按钮 04）：按钮 16×16、线条 C4-15、圆角 4；
+// 选中：边框品牌色-2 + 填充品牌色-1，文字品牌色-1。
 const model = defineModel<boolean>({ required: true });
+defineProps<{ label: string }>();
 </script>
 
 <template>
@@ -27,31 +28,31 @@ const model = defineModel<boolean>({ required: true });
   display: inline-flex;
   align-items: center;
   gap: var(--space-6);
-  padding: var(--space-6) var(--space-4);
+  padding: 0;
   color: var(--c4-40);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
   flex: none;
 }
 .box {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   border-radius: var(--radius-4);
   border: 1px solid var(--c4-15);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--c4-70);
+  color: var(--c4);
   flex: none;
 }
 .app-checkbox:hover .box {
   border-color: var(--c4-40);
 }
 .app-checkbox.on {
-  color: var(--c4-70);
+  color: var(--brand-1);
 }
 .app-checkbox.on .box {
-  border-color: var(--brand-1);
+  border-color: var(--brand-2);
   background: var(--brand-1);
 }
 </style>

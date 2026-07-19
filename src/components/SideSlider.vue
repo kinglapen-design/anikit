@@ -49,10 +49,11 @@ function onUp(e: PointerEvent): void {
 </template>
 
 <style scoped>
+/* 总容器：宽 120 高 10（04_滑块）；滑轨 3px 线（top 5 居中），拖钮 10×10 */
 .side-slider {
   position: relative;
   width: 120px;
-  height: 16px;
+  height: 10px;
   flex: none;
   cursor: pointer;
 }

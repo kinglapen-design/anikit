@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 详情模块 · 标签（token 7.3 标签带删除按钮，阶段 1 静态假数据）。
+// 详情模块 · 标签（02_通用组件/02_item 07 标签带删除按钮，阶段 1 静态假数据）。
 import SectionHeader from "./SectionHeader.vue";
 import IconButton from "./IconButton.vue";
 import AppIcon from "./AppIcon.vue";
@@ -22,12 +22,19 @@ const tags = ["全部标签", "场景"];
 </template>
 
 <style scoped>
-/* item 列表：流式布局，宽度不够换行（组件布局 06.5） */
+/* 区块容器：内边距 8 / 间距 6 / 圆角 8 */
+.detail-tags {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8);
+  border-radius: var(--radius-8);
+}
+/* 标签流式布局：间距 4，宽度不够换行 */
 .body {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-8) 0;
 }
 /* 标签 item：内边距 6 6 6 8 / 圆角 8 / C1-15 / 1px C4-15 / 间距 6 */
 .tag-item {

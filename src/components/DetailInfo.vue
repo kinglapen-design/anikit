@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// 详情模块 · 基础信息（组件布局 06.3）：标题 / 注释 / 链接输入框 + 详情表（token 14）。
-// 阶段 1 静态假数据，改名等交互阶段 4 接入。
+// 详情模块 · 基础信息（03_UI 布局/04_右侧边栏 03）：标题 / 注释 / 链接输入框（高 32）
+// + 详情容器（两列：标题 C4-70 / 内容 C4-40，行距 2）。阶段 1 静态假数据。
 import SectionHeader from "./SectionHeader.vue";
 import IconButton from "./IconButton.vue";
 import AppIcon from "./AppIcon.vue";
@@ -51,23 +51,32 @@ const rows = [
 </template>
 
 <style scoped>
+/* 区块容器：内边距 8 / 间距 6 / 圆角 8 */
+.detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8);
+  border-radius: var(--radius-8);
+}
+/* 内容容器：间距 8 */
 .body {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  padding: var(--space-4) var(--space-8) 0;
 }
-/* 输入框（token 6 不带按钮）：内边距 6 8 / 圆角 8 / C1-15 / 1px C4-15 */
+/* 输入框（03_输入框 01）：内边距 6 8 / 圆角 8 / C1-15 / 1px C4-15；聚焦边框品牌色-1 */
 .field {
   display: flex;
   align-items: center;
   gap: var(--space-4);
+  height: 32px;
   padding: var(--space-6) var(--space-8);
   border-radius: var(--radius-8);
   background: var(--c1-15);
   border: 1px solid var(--c4-15);
 }
-/* 带链接按钮：内边距 2 2 2 8 */
+/* 带链接按钮（03_输入框 02）：内边距 2 2 2 8 */
 .field.with-btn {
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-8);
 }
@@ -84,12 +93,13 @@ const rows = [
 .field input::placeholder {
   color: var(--c4-40);
 }
-/* 详情表（token 14）：标题 C4-70 / 内容 C4-40，行距 4 */
+/* 详情容器：内边距 8 / 间距 16 / 圆角 8；标题 C4-70 / 内容 C4-40，行距 2 */
 .detail-table {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: var(--space-4) var(--space-8);
+  gap: var(--space-2) var(--space-16);
   padding: var(--space-8);
+  border-radius: var(--radius-8);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
 }
@@ -100,17 +110,17 @@ const rows = [
 .v {
   color: var(--c4-40);
 }
-/* 评分（token 20）：5 星 12×12，选中线框 + 填充品牌色-1 */
+/* 评分 item（02_item 09）：5 星 12×12 / 间距 4；常态线框 C4-40，选中线框 + 填充警告色 */
 .stars {
   display: inline-flex;
-  gap: var(--space-2);
+  gap: var(--space-4);
 }
 .star.on {
-  color: var(--brand-1);
+  color: var(--warning);
 }
-.star.on :deep(svg [stroke-opacity="0.4"]),
+.star.on :deep(svg [stroke-opacity="0.7"]),
 .star.on :deep(svg [fill-opacity="0.07"]),
-.star.on :deep(svg [fill-opacity="0.4"]) {
+.star.on :deep(svg [fill-opacity="0.7"]) {
   stroke-opacity: 1;
   fill-opacity: 1;
 }

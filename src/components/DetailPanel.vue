@@ -18,10 +18,9 @@ import DetailPrompt from "./DetailPrompt.vue";
 </template>
 
 <style scoped>
+/* 详情容器：各区块自带内边距 8（02_通用组件/05_区块），容器不再加距 */
 .detail-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-8) 0;
 }
 </style>
