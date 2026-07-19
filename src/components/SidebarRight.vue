@@ -110,7 +110,6 @@ async function togglePin(): Promise<void> {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-right: var(--space-4);
 }
 .view-body::-webkit-scrollbar {
   width: 4px;
