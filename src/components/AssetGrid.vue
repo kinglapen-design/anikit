@@ -58,9 +58,17 @@ function relayout(): void {
   boxes.value = result.boxes;
   rows.value = result.rows;
   totalHeight = result.totalHeight;
+  layoutWidth.value = vp.clientWidth;
+  canvasScale.value = 1;
   setTotal(totalHeight);
   console.debug(`[AssetGrid] 布局 ${props.items.length} 条：${(performance.now() - t0).toFixed(1)}ms`);
 }
+
+// 拖动窗口 / 拆分条期间：canvas 按宽度差等比缩放（卡片实时跟随，GPU 合成零成本），
+// 宽度差超过 12% 立即重排，否则停顿 240ms 后精确重排（Eagle 同款交互）。
+const layoutWidth = ref(0);
+const canvasScale = ref(1);
+const SCALE_THRESHOLD = 0.12;
 
 let lastW = 0;
 let lastH = 0;
@@ -74,12 +82,19 @@ const ro = new ResizeObserver(() => {
   const widthChanged = w !== lastW;
   lastW = w;
   lastH = h;
-  // 拖动窗口 / 拆分条期间 debounce：过程不重排，停顿 200ms 后才重排
+  if (!widthChanged) {
+    setTotal(totalHeight);
+    return;
+  }
+  if (layoutWidth.value > 0) {
+    canvasScale.value = w / layoutWidth.value;
+  }
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    if (widthChanged) relayout();
-    else setTotal(totalHeight);
-  }, 200);
+  if (Math.abs(canvasScale.value - 1) > SCALE_THRESHOLD) {
+    relayout();
+  } else {
+    resizeTimer = setTimeout(relayout, 240);
+  }
 });
 
 watch(
@@ -108,7 +123,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="viewportRef" class="grid-viewport" tabindex="0">
-    <div class="grid-canvas" :style="{ transform: `translateY(${-pos}px)` }">
+    <div
+      class="grid-canvas"
+      :style="{ transform: `scale(${canvasScale}) translateY(${-pos}px)` }"
+    >
       <AssetCard
         v-for="c in visibleCards"
         :key="c.asset.id"
@@ -142,6 +160,7 @@ onBeforeUnmount(() => {
   top: 0;
   right: 0;
   will-change: transform;
+  transform-origin: 0 0;
 }
 /* token 15：滚动条 4px 胶囊 C4-15、距右 4px、不影响布局；命中区放宽至 12px */
 .grid-track {

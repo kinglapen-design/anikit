@@ -21,20 +21,6 @@ fn drag_files(window: tauri::WebviewWindow, paths: Vec<String>) -> Result<(), St
   .map_err(|e| e.to_string())
 }
 
-// window-shadows 0.2 要求 rwh 0.5 的 HasRawWindowHandle（tauri 为 0.6，类型不通用），
-// 包装原始 HWND 手动实现该 trait。
-#[cfg(target_os = "windows")]
-struct RawHwnd(isize);
-
-#[cfg(target_os = "windows")]
-unsafe impl raw_window_handle::HasRawWindowHandle for RawHwnd {
-  fn raw_window_handle(&self) -> raw_window_handle::RawWindowHandle {
-    let mut h = raw_window_handle::Win32WindowHandle::empty();
-    h.hwnd = self.0 as *mut core::ffi::c_void;
-    raw_window_handle::RawWindowHandle::Win32(h)
-  }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -134,7 +120,6 @@ pub fn run() {
                 std::mem::size_of_val(&pref) as u32,
               );
             }
-            let _ = window_shadows::set_shadow(&RawHwnd(raw.0 as isize), true);
           }
         }
 
