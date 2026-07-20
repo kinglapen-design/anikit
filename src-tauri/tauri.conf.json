@@ -13,14 +13,15 @@
     "windows": [
       {
         "title": "AniKit",
-        "width": 1338,
-        "height": 1190,
+        "width": 1298,
+        "height": 1150,
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
-        "transparent": true,
-        "shadow": false,
-        "center": true
+        "transparent": false,
+        "shadow": true,
+        "center": true,
+        "backgroundColor": "#09090A"
       }
     ],
     "security": {

@@ -72,29 +72,19 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
 </template>
 
 <style scoped>
-/* 全透明窗口：容器内缩 20px 作阴影带，圆角与阴影纯 CSS 绘制（跨平台一致）。
-   主窗口（03_UI 布局/01）：padding 6 / 圆角 8 / 阴影 0 4 40 rgba(0,0,0,.4)。 */
+/* 不透明窗口 + 原生装饰（DWM 圆角 8px / 阴影 / 边框）：容器贴满窗口，
+   圆角与投影交给系统（Win11 8px 圆角与设计一致，mac 系统圆角，Win10 直角接受） */
 .window {
   position: relative;
-  height: calc(100% - 40px);
-  margin: 20px;
+  height: 100%;
   display: flex;
   gap: 0;
   padding: 0;
   background: var(--c1);
-  border-radius: var(--radius-8);
-  /* Figma 描边为 inside（不占空间）：边框一律 inset 阴影绘制，padding 即标注值。
-     投影 blur 收到 16px：阴影带仅 20px，blur 40 会被窗口物理边缘裁成硬边（工程限制） */
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.4),
-    inset 0 0 0 1px var(--c4-15);
   overflow: hidden;
 }
 .window.maximized {
-  height: 100%;
-  margin: 0;
   border-radius: 0;
-  box-shadow: none;
 }
 /* 可视边缘内 8px 的 resize 判定热区（startResizeDragging 手动发起） */
 .resize-zone {

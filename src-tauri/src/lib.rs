@@ -103,8 +103,28 @@ pub fn run() {
         .build(app)?;
 
       // 关闭按钮 = 隐藏到托盘，不退出（快捷搜索框要求软件常驻后台）
-      // 窗口为全透明无边框 + CSS 圆角/阴影（跨平台同一套代码），无需 DWM 调整
+      // 窗口为不透明 + 原生装饰（DWM 圆角/阴影），线框色用 DWMWA_BORDER_COLOR 指定
       if let Some(w) = app.get_webview_window("main") {
+        #[cfg(target_os = "windows")]
+        {
+          use windows::Win32::Foundation::HWND;
+          use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
+          if let Ok(raw) = w.hwnd() {
+            let hwnd = HWND(raw.0 as _);
+            // 主窗口 1px 线框 ≈ C4-15 在 C1 底上的合成色 RGB(44,45,47)（COLORREF 0x00BBGGRR），
+            // Win11 22000+ 生效，Win10 忽略
+            let border: u32 = 0x002F_2D2C;
+            unsafe {
+              let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_BORDER_COLOR,
+                &border as *const _ as *const core::ffi::c_void,
+                std::mem::size_of_val(&border) as u32,
+              );
+            }
+          }
+        }
+
         let w2 = w.clone();
         w.on_window_event(move |event| {
           if let tauri::WindowEvent::CloseRequested { api, .. } = event {

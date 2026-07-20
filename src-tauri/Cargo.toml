@@ -26,3 +26,5 @@ tauri-plugin-log = "2"
 drag = "2.1.1"
 tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-single-instance = "2.4.3"
+# 主窗口 1px 线框色（DWMWA_BORDER_COLOR，Win11+）
+windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation"] }
