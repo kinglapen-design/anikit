@@ -1,7 +1,10 @@
 <script setup lang="ts">
 // 搜索框（02_通用组件/03_输入框 03）：阶段 1 仅 UI，搜索功能阶段 4 接入。
+// 搜索图标 + 展开小箭头是"搜索方式"菜单入口（非搜索按钮）：hover 只改颜色不给底色，
+// 避免用户以为要点按钮才搜索（实时输入实时搜索）。
 import { ref } from "vue";
 import AppIcon from "./AppIcon.vue";
+import IconButton from "./IconButton.vue";
 
 const text = ref("");
 const focused = ref(false);
@@ -9,12 +12,10 @@ const focused = ref(false);
 
 <template>
   <div class="search-bar" :class="{ focused }">
-    <span class="lead">
-      <button class="icon-slot" title="搜索">
-        <AppIcon name="search" />
-      </button>
-      <AppIcon name="chevron-small" :size="8" class="lead-chev" />
-    </span>
+    <button class="lead" title="搜索方式">
+      <AppIcon name="search" />
+      <AppIcon name="chevron-small" :size="8" class="up" />
+    </button>
     <input
       v-model="text"
       type="text"
@@ -22,22 +23,20 @@ const focused = ref(false);
       @focus="focused = true"
       @blur="focused = false"
     />
-    <button v-if="text" class="icon-slot small" title="清除" @click="text = ''">
+    <button v-if="text" class="clear" title="清除" @click="text = ''">
       <AppIcon name="clear" />
     </button>
-    <button class="icon-slot" title="展开">
-      <AppIcon name="chevron-small" :size="8" class="up" />
-    </button>
+    <IconButton name="chevron-small" title="展开" class="expand-btn" />
   </div>
 </template>
 
 <style scoped>
-/* 总容器：内边距 6 / 间距 6 / 圆角 8 / C1-50 / 1px C4-15；聚焦边框品牌色-1 */
+/* 总容器：内边距 4 / 间距 6 / 圆角 8 / C1-50 / 1px C4-15；聚焦边框品牌色-1 */
 .search-bar {
   display: flex;
   align-items: center;
   gap: var(--space-6);
-  padding: var(--space-6);
+  padding: var(--space-4);
   border-radius: var(--radius-8);
   background: var(--c1-50);
   box-shadow: inset 0 0 0 1px var(--c4-15);
@@ -45,11 +44,14 @@ const focused = ref(false);
 .search-bar.focused {
   box-shadow: inset 0 0 0 1px var(--brand-1);
 }
-/* 搜索图标容器：搜索图标 + 展开图标（8×8），间距 2 */
+/* 搜索方式入口（搜索图标 + 展开小箭头朝上，间距 2）：无按钮底色，
+   常态 C4-70 / 悬停 C4（仅颜色） */
 .lead {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  padding: var(--space-4) 0;
+  color: var(--c4);
   flex: none;
 }
 .lead:hover :deep(svg [stroke-opacity="0.7"]),
@@ -57,36 +59,37 @@ const focused = ref(false);
   stroke-opacity: 1;
   fill-opacity: 1;
 }
-.lead-chev {
-  color: var(--c4);
+.up {
+  transform: rotate(180deg);
 }
-.icon-slot {
+/* 清除按钮（小 24×24）：常态 C4-40 / 悬停 C4-70（颜色），hover 底色 C4-7 */
+.clear {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: var(--space-6);
-  border-radius: var(--radius-6);
+  width: 24px;
+  height: 24px;
+  padding: var(--space-4);
+  border-radius: var(--radius-4);
   color: var(--c4);
   flex: none;
   transition: background 0.12s ease;
 }
-.icon-slot.small {
-  width: 24px;
-  height: 24px;
-  padding: var(--space-4);
+.clear :deep(svg [stroke-opacity="0.7"]) {
+  stroke-opacity: 0.4;
 }
-.icon-slot:hover {
+.clear:hover {
   background: var(--c4-7);
 }
-.icon-slot:hover :deep(svg [stroke-opacity="0.7"]),
-.icon-slot:hover :deep(svg [fill-opacity="0.7"]) {
-  stroke-opacity: 1;
-  fill-opacity: 1;
+.clear:hover :deep(svg [stroke-opacity="0.7"]) {
+  stroke-opacity: 0.7;
 }
-.up {
+/* 最右侧展开按钮（图标按钮-大 28×28）：图标 16×16 朝上，hover 图标 C4 */
+.expand-btn :deep(svg) {
   transform: rotate(180deg);
+}
+.expand-btn:hover :deep(svg [stroke-opacity="0.7"]) {
+  stroke-opacity: 1;
 }
 input {
   flex: 1;
