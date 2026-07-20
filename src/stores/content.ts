@@ -9,7 +9,9 @@ export const useContentStore = defineStore("content", {
     folders: markRaw(genFolderTree()) as FakeFolder[],
     // 左栏选中项（阶段 1 仅样式展示，不联动内容区）：quick:all / folder:{id}
     sidebarSelected: "quick:all",
+    // 选中互斥：选中素材卡片时取消文件夹卡片选中，反之亦然
     selectedAssetId: -1,
+    selectedFolderId: -1,
   }),
   getters: {
     // 目录卡片横排用的假文件夹（取树一级节点）

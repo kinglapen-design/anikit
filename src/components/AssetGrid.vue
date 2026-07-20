@@ -84,11 +84,12 @@ function onCtrlWheel(e: WheelEvent): void {
   ui.targetRowHeight = Math.max(80, Math.min(max, next));
 }
 
-// 拖动窗口 / 拆分条期间：canvas 按宽度差等比缩放（卡片实时跟随，GPU 合成零成本），
-// 宽度差超过 12% 立即重排，否则停顿 240ms 后精确重排（Eagle 同款交互）。
+// 拖动窗口 / 拆分条期间：卡片层按宽度差等比缩放作重排前的视觉过渡——
+// 用户拖窗口是要更多展示空间（更多列），不是放大卡片：scale 限制 ±4%（轻微补充），
+// 超出立即重排（justified 列数随宽度变化），否则停顿 240ms 精确重排。
 const layoutWidth = ref(0);
 const canvasScale = ref(1);
-const SCALE_THRESHOLD = 0.12;
+const SCALE_THRESHOLD = 0.04;
 
 let lastW = 0;
 let lastH = 0;
@@ -157,7 +158,8 @@ onBeforeUnmount(() => {
     <div class="grid-canvas" :style="{ transform: `translateY(${-pos}px)` }">
       <div ref="headerRef" class="grid-header">
         <FolderStrip />
-        <SectionHeader title="内容" :count="items.length" />
+        <!-- 素材区块顶 padding 8（与文件夹区块底 8、总容器 gap 16 构成间距 32 = 8 + 16 + 8） -->
+        <SectionHeader title="内容" :count="items.length" pad="8px 0 0 0" />
       </div>
       <div
         class="cards-layer"
@@ -169,7 +171,10 @@ onBeforeUnmount(() => {
           :asset="c.asset"
           :box="c.box"
           :selected="content.selectedAssetId === c.asset.id"
-          @click="content.selectedAssetId = c.asset.id"
+          @click="
+            content.selectedAssetId = c.asset.id;
+            content.selectedFolderId = -1;
+          "
         />
       </div>
     </div>

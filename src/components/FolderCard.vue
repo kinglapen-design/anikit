@@ -5,7 +5,10 @@ import { computed } from "vue";
 import { getIcon } from "../lib/icons";
 import type { FakeFolder } from "../lib/fakeData";
 
-const props = defineProps<{ folder: FakeFolder }>();
+const props = withDefaults(defineProps<{ folder: FakeFolder; selected?: boolean }>(), {
+  selected: false,
+});
+const emit = defineEmits<{ select: [] }>();
 const folderSvg = getIcon("folder-card");
 
 // 副文本规则：有子文件夹显示"X 个文件 / Y 个子文件夹"，没有则仅"X 个文件"（可为 0）
@@ -18,7 +21,7 @@ const meta = computed(() => {
 </script>
 
 <template>
-  <div class="folder-card">
+  <div class="folder-card" :class="{ selected }" @click="emit('select')">
     <div class="icon-wrap" v-html="folderSvg" />
     <div class="fname">{{ folder.name }}</div>
     <div class="fmeta">{{ meta }}</div>
@@ -45,6 +48,9 @@ const meta = computed(() => {
 }
 .folder-card:hover .icon-wrap {
   box-shadow: inset 0 0 0 2px var(--c4-40);
+}
+.folder-card.selected .icon-wrap {
+  box-shadow: inset 0 0 0 2px var(--brand-1);
 }
 .icon-wrap :deep(svg) {
   width: 100%;

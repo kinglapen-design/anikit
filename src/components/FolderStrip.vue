@@ -12,25 +12,37 @@ const content = useContentStore();
   <section class="folder-block">
     <SectionHeader title="文件夹" :count="content.stripFolders.length" />
     <div class="flow">
-      <FolderCard v-for="f in content.stripFolders" :key="f.id" :folder="f" class="cell" />
+      <FolderCard
+        v-for="f in content.stripFolders"
+        :key="f.id"
+        :folder="f"
+        class="cell"
+        :selected="content.selectedFolderId === f.id"
+        @select="
+          content.selectedFolderId = f.id;
+          content.selectedAssetId = -1;
+        "
+      />
     </div>
   </section>
 </template>
 
 <style scoped>
-/* 文件夹卡片区块：间距 6；padding 上 8 / 右 8（右缘与素材卡片对齐），左 0（随素材区块容器左缘） */
+/* 文件夹卡片区块：间距 6；padding 上 8 / 右 8 / 下 8（与素材区块顶 padding 8、
+   总容器 gap 16 共同构成两区块间距 32 = 8 + 16 + 8），左 0（随素材区块容器左缘） */
 .folder-block {
   flex: none;
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
-  padding: var(--space-8) var(--space-8) 0 0;
+  padding: var(--space-8) var(--space-8) var(--space-8) 0;
 }
-/* 卡片列表：基础网格，固定 189 列宽（用户 2026-07-20 定：文件夹卡片固定大小，不自适应），
-   间距 6，满了换行 */
+/* 卡片列表：grid 均分同宽（auto-fill 空轨道同宽，末行不被拉宽）——
+   卡片等比例跟随拖拽缩放（SVG 天然等比，无布局计算），满了换行；
+   查看方式的自适应 / 瀑布 / 网格只影响素材卡片，与文件夹卡片无关 */
 .flow {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 189px);
+  grid-template-columns: repeat(auto-fill, minmax(189px, 1fr));
   gap: var(--space-6);
 }
 .cell {
