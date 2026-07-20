@@ -13,7 +13,7 @@ const focused = ref(false);
 <template>
   <div class="search-bar" :class="{ focused }">
     <button class="lead" title="搜索方式">
-      <AppIcon name="search" />
+      <span class="lead-icon"><AppIcon name="search" /></span>
       <AppIcon name="chevron-small" :size="8" class="up" />
     </button>
     <input
@@ -44,15 +44,23 @@ const focused = ref(false);
 .search-bar.focused {
   box-shadow: inset 0 0 0 1px var(--brand-1);
 }
-/* 搜索方式入口（搜索图标 + 展开小箭头朝上，间距 2）：无按钮底色，
+/* 搜索方式入口（搜索图标容器 28×28 + 展开小箭头朝上，间距 2）：无按钮底色，
    常态 C4-70 / 悬停 C4（仅颜色） */
 .lead {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-4) 0;
   color: var(--c4);
   flex: none;
+}
+/* 搜索图标容器：28×28（内边距 6），与右侧展开按钮对齐 */
+.lead-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: var(--space-6);
 }
 .lead:hover :deep(svg [stroke-opacity="0.7"]),
 .lead:hover :deep(svg [fill-opacity="0.7"]) {
