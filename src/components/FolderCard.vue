@@ -1,18 +1,27 @@
 <script setup lang="ts">
 // 文件夹卡片（02_通用组件/06_卡片 01 无缩略图态）：189 宽，图标容器 189×158（内边距 4 / 圆角 12）
 // + 图标组 181×150（内联 SVG，结构色 var() 化）+ 标题 + 标签（文件数 / 子文件夹数）。
+import { computed } from "vue";
 import { getIcon } from "../lib/icons";
 import type { FakeFolder } from "../lib/fakeData";
 
-defineProps<{ folder: FakeFolder }>();
+const props = defineProps<{ folder: FakeFolder }>();
 const folderSvg = getIcon("folder-card");
+
+// 副文本规则：有子文件夹显示"X 个文件 / Y 个子文件夹"，没有则仅"X 个文件"（可为 0）
+const meta = computed(() => {
+  const files = `${props.folder.count.toLocaleString()} 个文件`;
+  return props.folder.children.length > 0
+    ? `${files} / ${props.folder.children.length} 个子文件夹`
+    : files;
+});
 </script>
 
 <template>
   <div class="folder-card">
     <div class="icon-wrap" v-html="folderSvg" />
     <div class="fname">{{ folder.name }}</div>
-    <div class="fmeta">{{ folder.count.toLocaleString() }} 个文件 / {{ folder.children.length }} 个子文件夹</div>
+    <div class="fmeta">{{ meta }}</div>
   </div>
 </template>
 

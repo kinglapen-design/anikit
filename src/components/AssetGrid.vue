@@ -28,13 +28,15 @@ const boxes = shallowRef<Box[]>([]);
 const rows = shallowRef<Row[]>([]);
 const r0 = ref(0);
 const r1 = ref(0);
+const headerH = ref(0);
 let totalHeight = 0;
 
 function updateRange(scrollPos: number): void {
   const vh = viewportRef.value?.clientHeight ?? 0;
+  const off = headerH.value + 6;
   const rs = rows.value;
-  r0.value = Math.max(0, lowerBound(rs, scrollPos - BUFFER) - 1);
-  r1.value = Math.min(rs.length, lowerBound(rs, scrollPos + vh + BUFFER) + 1);
+  r0.value = Math.max(0, lowerBound(rs, scrollPos - off - BUFFER) - 1);
+  r1.value = Math.min(rs.length, lowerBound(rs, scrollPos + vh - off + BUFFER) + 1);
 }
 
 const { pos, thumbTop, thumbHeight, setTotal, attach, detach } = useVirtualScroll(updateRange);
@@ -61,13 +63,12 @@ function relayout(): void {
   // 滑块 max = 内容区宽（第一张卡片刚好撑满容器）；min 80
   const maxH = Math.max(80, vp.clientWidth);
   if (ui.targetRowHeight > maxH) ui.targetRowHeight = maxH;
-  // 网格按头部（文件夹区块 + 内容副标题）高度 + 区块间距 6 偏移
-  const offsetTop = (headerRef.value?.clientHeight ?? 0) + 6;
   const t0 = performance.now();
-  const result = computeJustified(props.items, vp.clientWidth, ui.targetRowHeight, CARD_CAPTION_H, offsetTop);
+  const result = computeJustified(props.items, vp.clientWidth, ui.targetRowHeight, CARD_CAPTION_H);
   boxes.value = result.boxes;
   rows.value = result.rows;
-  totalHeight = result.totalHeight;
+  // 总高 = 头部（文件夹区块 + 内容副标题 + 间距 6）+ 网格高
+  totalHeight = result.totalHeight + headerH.value + 6;
   layoutWidth.value = vp.clientWidth;
   canvasScale.value = 1;
   setTotal(totalHeight);
@@ -92,6 +93,7 @@ const SCALE_THRESHOLD = 0.12;
 let lastW = 0;
 let lastH = 0;
 let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+let headerRo: ResizeObserver | undefined;
 const ro = new ResizeObserver(() => {
   const vp = viewportRef.value;
   if (!vp) return;
@@ -131,6 +133,13 @@ onMounted(() => {
   lastW = viewportRef.value!.clientWidth;
   lastH = viewportRef.value!.clientHeight;
   ro.observe(viewportRef.value!);
+  // 头部高度实时跟踪（grid 换行 / 宽度变化时卡片层偏移即时跟随，避免重叠拉远）
+  headerH.value = headerRef.value!.clientHeight;
+  headerRo = new ResizeObserver(() => {
+    headerH.value = headerRef.value!.clientHeight;
+    setTotal(totalHeight);
+  });
+  headerRo.observe(headerRef.value!);
   relayout();
 });
 
@@ -139,27 +148,30 @@ onBeforeUnmount(() => {
   viewportRef.value?.removeEventListener("wheel", onCtrlWheel);
   detach();
   ro.disconnect();
+  headerRo?.disconnect();
 });
 </script>
 
 <template>
   <div ref="viewportRef" class="grid-viewport" tabindex="0">
-    <div
-      class="grid-canvas"
-      :style="{ transform: `scale(${canvasScale}) translateY(${-pos}px)` }"
-    >
+    <div class="grid-canvas" :style="{ transform: `translateY(${-pos}px)` }">
       <div ref="headerRef" class="grid-header">
         <FolderStrip />
         <SectionHeader title="内容" :count="items.length" />
       </div>
-      <AssetCard
-        v-for="c in visibleCards"
-        :key="c.asset.id"
-        :asset="c.asset"
-        :box="c.box"
-        :selected="content.selectedAssetId === c.asset.id"
-        @click="content.selectedAssetId = c.asset.id"
-      />
+      <div
+        class="cards-layer"
+        :style="{ transform: `translateY(${headerH + 6}px) scale(${canvasScale})` }"
+      >
+        <AssetCard
+          v-for="c in visibleCards"
+          :key="c.asset.id"
+          :asset="c.asset"
+          :box="c.box"
+          :selected="content.selectedAssetId === c.asset.id"
+          @click="content.selectedAssetId = c.asset.id"
+        />
+      </div>
     </div>
     <div ref="trackRef" class="grid-track">
       <div
@@ -185,13 +197,21 @@ onBeforeUnmount(() => {
   top: 0;
   right: 0;
   will-change: transform;
-  transform-origin: 0 0;
 }
-/* 头部：文件夹区块与"内容"副标题（间距 16），随 canvas 一起滚动 */
+/* 头部：文件夹区块与"内容"副标题（间距 16），grid 自然流即时精确，不参与缩放 */
 .grid-header {
   display: flex;
   flex-direction: column;
   gap: var(--space-16);
+}
+/* 卡片层：translateY 实时跟随头部高度 + scale 跟随宽度差（重排前的视觉过渡） */
+.cards-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 /* token 15：滚动条 4px 胶囊 C4-15、贴 viewport 右缘、不影响布局；命中区 12px */
 .grid-track {

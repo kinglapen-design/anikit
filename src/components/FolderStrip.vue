@@ -26,10 +26,11 @@ const content = useContentStore();
   gap: var(--space-6);
   padding: var(--space-8) var(--space-8) 0 0;
 }
-/* 卡片列表：间距 6，grid 均分同宽（auto-fill 空轨道同宽，末行不被拉宽），满了换行 */
+/* 卡片列表：基础网格，固定 189 列宽（用户 2026-07-20 定：文件夹卡片固定大小，不自适应），
+   间距 6，满了换行 */
 .flow {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(189px, 1fr));
+  grid-template-columns: repeat(auto-fill, 189px);
   gap: var(--space-6);
 }
 .cell {

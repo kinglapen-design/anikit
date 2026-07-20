@@ -36,13 +36,12 @@ export function computeJustified(
   containerWidth: number,
   targetRowHeight: number,
   captionHeight = 0,
-  offsetTop = 0,
 ): JustifiedResult {
   const n = items.length;
   const boxes = new Array<Box>(n);
   const rows: Row[] = [];
   const contentWidth = containerWidth - PAD.left - PAD.right;
-  let y = PAD.top + offsetTop;
+  let y = PAD.top;
   let rowStart = 0;
   let ratioSum = 0;
 
