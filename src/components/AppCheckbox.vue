@@ -49,7 +49,7 @@ defineProps<{ label: string }>();
   box-shadow: inset 0 0 0 1px var(--c4-40);
 }
 .app-checkbox.on {
-  color: var(--brand-1);
+  color: var(--c4-70);
 }
 .app-checkbox.on .box {
   box-shadow: inset 0 0 0 1px var(--brand-2);
