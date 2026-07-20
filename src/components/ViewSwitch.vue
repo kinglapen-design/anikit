@@ -47,7 +47,7 @@ function select(value: string): void {
   position: relative;
   display: flex;
   gap: var(--space-6);
-  padding: var(--space-6);
+  padding: var(--space-4);
   border-radius: var(--radius-8);
   background: var(--c1-50);
   box-shadow: inset 0 0 0 1px var(--c4-15);
@@ -56,9 +56,9 @@ function select(value: string): void {
 /* 选中底色：宽度 = 均分按钮宽，按（自身宽 + 间距 6）平移 */
 .indicator {
   position: absolute;
-  left: var(--space-6);
-  top: var(--space-6);
-  width: calc((100% - 30px) / 4);
+  left: var(--space-4);
+  top: var(--space-4);
+  width: calc((100% - 26px) / 4);
   height: 28px;
   border-radius: var(--radius-6);
   background: var(--c4-15);
