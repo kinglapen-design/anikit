@@ -15,7 +15,7 @@ const tags = ["全部标签", "场景"];
         <AppIcon name="tag" class="deco" />
         <span class="label">{{ t }}</span>
         <span class="spacer" />
-        <IconButton name="clear" small title="删除标签" />
+        <IconButton name="clear" small title="删除标签" class="del" />
       </div>
     </div>
   </section>
@@ -57,5 +57,12 @@ const tags = ["全部标签", "场景"];
 }
 .spacer {
   flex: 1;
+}
+/* 删除 ×：常态 C4-40 / 悬停 C4-70 */
+.del :deep(svg [stroke-opacity="0.7"]) {
+  stroke-opacity: 0.4;
+}
+.del:hover :deep(svg [stroke-opacity="0.7"]) {
+  stroke-opacity: 0.7;
 }
 </style>

@@ -14,7 +14,7 @@ import AppIcon from "./AppIcon.vue";
           <AppIcon name="folder-closed" class="deco" />
           <span class="label">人物</span>
           <span class="spacer" />
-          <IconButton name="clear" small title="移除" />
+          <IconButton name="clear" small title="移除" class="del" />
         </div>
         <div class="sub">雪枝-走路.fla</div>
       </div>
@@ -70,5 +70,12 @@ import AppIcon from "./AppIcon.vue";
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   color: var(--c4-40);
+}
+/* 删除 ×：常态 C4-40 / 悬停 C4-70 */
+.del :deep(svg [stroke-opacity="0.7"]) {
+  stroke-opacity: 0.4;
+}
+.del:hover :deep(svg [stroke-opacity="0.7"]) {
+  stroke-opacity: 0.7;
 }
 </style>
