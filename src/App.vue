@@ -52,13 +52,13 @@ onBeforeUnmount(() => {
   margin: 20px;
   display: flex;
   gap: 0;
-  padding: var(--space-6);
+  padding: 0;
   background: var(--c1);
-  border-radius: var(--radius-10);
+  border-radius: var(--radius-8);
   /* Figma 描边为 inside（不占空间）：边框一律 inset 阴影绘制，padding 即标注值 */
   box-shadow:
     0 4px 40px rgba(0, 0, 0, 0.4),
-    inset 0 0 0 2px var(--c4-15);
+    inset 0 0 0 1px var(--c4-15);
   overflow: hidden;
 }
 .window.maximized {

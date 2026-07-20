@@ -92,8 +92,8 @@ async function togglePin(): Promise<void> {
   flex-direction: column;
   flex: none;
   background: var(--c3);
-  border-radius: var(--radius-6);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  /* 三栏面板无圆角无边框，仅左侧 1px 作视觉分割线（主窗口结构调整） */
+  box-shadow: inset 1px 0 0 0 var(--c4-15);
   padding: var(--space-4);
   min-height: 0;
 }
