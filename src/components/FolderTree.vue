@@ -20,7 +20,7 @@ function toggle(id: number): void {
 </script>
 
 <template>
-  <div v-for="(node, index) in nodes" :key="node.id">
+  <div v-for="(node, index) in nodes" :key="node.id" class="ft-node">
     <TreeItem
       :icon="openSet.has(node.id) ? 'folder-open' : 'folder-closed'"
       :label="node.name"
@@ -45,6 +45,12 @@ function toggle(id: number): void {
 </template>
 
 <style scoped>
+/* 节点：TreeItem 与展开子层之间同样 2px 间距（父级与第一个子级不紧贴） */
+.ft-node {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
 .ft-children {
   position: relative;
   display: flex;
