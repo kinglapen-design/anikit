@@ -31,7 +31,12 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
     <button class="expand" :class="{ placeholder: !expandable }" @click.stop="emit('toggle')">
       <AppIcon name="tree-expand-arrow" :size="8" class="chev" :class="{ open }" />
     </button>
-    <button class="body" :class="{ selected }" @click="emit('select')">
+    <button
+      class="body"
+      :class="{ selected }"
+      @click="emit('select')"
+      @dblclick="expandable && emit('toggle')"
+    >
       <AppIcon :name="icon" class="deco" />
       <span class="label">{{ label }}</span>
       <span v-if="count !== undefined" class="count">{{ count.toLocaleString() }}</span>
