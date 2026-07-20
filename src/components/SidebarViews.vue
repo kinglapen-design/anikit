@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 工作空间 / 标签 / 快捷入口视图：按 PRD 04-1 摆各自快速访问项，内容为占位（后续阶段接入）。
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import SectionHeader from "./SectionHeader.vue";
 import TreeItem from "./TreeItem.vue";
 import { useContentStore } from "../stores/content";
@@ -8,6 +8,9 @@ import { useUiStore } from "../stores/ui";
 
 const ui = useUiStore();
 const content = useContentStore();
+const quickOpen = ref(true);
+const groupOpen = ref(true);
+const pinsOpen = ref(true);
 
 interface ViewConfig {
   quick: { key: string; icon: string; label: string }[];
@@ -43,8 +46,8 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
 <template>
   <div class="sidebar-views">
     <section v-if="current.quick.length > 0" class="block">
-      <SectionHeader title="快速访问" pad="0 8px 0 14px" />
-      <div class="items">
+      <SectionHeader title="快速访问" pad="0 8px 0 14px" v-model:open="quickOpen" />
+      <div v-if="quickOpen" class="items">
         <TreeItem
           v-for="q in current.quick"
           :key="q.key"
@@ -57,16 +60,16 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
     </section>
 
     <section v-if="ui.leftView === 'tags'" class="block">
-      <SectionHeader title="标签群组" :count="2" addable pad="0 8px 0 14px" />
-      <div class="items">
+      <SectionHeader title="标签群组" :count="2" addable pad="0 8px 0 14px" v-model:open="groupOpen" />
+      <div v-if="groupOpen" class="items">
         <TreeItem icon="tag-group" label="标签群组" :count="12" />
         <TreeItem icon="tag-group" label="标签群组" :count="34" />
       </div>
     </section>
 
     <section v-if="ui.leftView === 'pins'" class="block">
-      <SectionHeader title="快捷入口" pad="0 8px 0 14px" />
-      <div class="items">
+      <SectionHeader title="快捷入口" pad="0 8px 0 14px" v-model:open="pinsOpen" />
+      <div v-if="pinsOpen" class="items">
         <TreeItem icon="folder-closed" label="新建文件夹" />
         <TreeItem icon="tag" label="全部标签" />
       </div>

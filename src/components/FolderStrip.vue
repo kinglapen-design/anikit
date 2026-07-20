@@ -1,19 +1,25 @@
 <script setup lang="ts">
 // 文件夹卡片区（03_UI 布局/03_中间面板 03）：换行流式布局，随网格统一滚动（在 AssetGrid canvas 内）。
-// 卡片同宽：grid auto-fill 均分列宽（含空轨道），拖动窗口 / 拆分条时整体缩放、阈值换行。
-import { ref } from "vue";
+// 卡片同宽：grid auto-fill 均分列宽（含空轨道）；列宽跟随滑块（与素材行高同比例缩放，
+// 滚轮 / 滑块可同时缩放文件夹卡片，窗口拉伸后仍有缩小手段）。
+import { computed, ref } from "vue";
 import SectionHeader from "./SectionHeader.vue";
 import FolderCard from "./FolderCard.vue";
 import { useContentStore } from "../stores/content";
+import { useUiStore } from "../stores/ui";
 
 const content = useContentStore();
+const ui = useUiStore();
 const folderOpen = ref(true);
+
+// 列宽 = 189 × 滑块行高 / 220（基准行高 220 时列宽 189）
+const colWidth = computed(() => Math.max(80, Math.round((189 * ui.targetRowHeight) / 220)));
 </script>
 
 <template>
   <section class="folder-block">
     <SectionHeader title="文件夹" :count="content.stripFolders.length" v-model:open="folderOpen" />
-    <div v-if="folderOpen" class="flow">
+    <div v-if="folderOpen" class="flow" :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${colWidth}px, 1fr))` }">
       <FolderCard
         v-for="f in content.stripFolders"
         :key="f.id"

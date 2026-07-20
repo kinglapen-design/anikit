@@ -30,7 +30,6 @@ async function togglePin(): Promise<void> {
       <IconButton
         name="toggle-sidebar-left"
         title="展开侧边栏"
-        class="flip"
         @click="ui.leftCollapsed = false"
       />
     </div>
@@ -56,7 +55,6 @@ async function togglePin(): Promise<void> {
       <IconButton
         name="toggle-sidebar-right"
         title="展开侧边栏"
-        class="flip"
         @click="ui.rightCollapsed = false"
       />
       <IconButton
@@ -90,9 +88,6 @@ async function togglePin(): Promise<void> {
   align-items: center;
   gap: var(--space-4);
   flex: none;
-}
-.flip {
-  transform: scaleX(-1);
 }
 /* chevron-large 原图标朝下：返回 = 顺时针 90°（朝左），前进 = 逆时针 90°（朝右） */
 .rot-ccw :deep(svg) {

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 // 资源库视图（PRD 04-1）：快速访问区块 + 文件树区块（03_UI 布局/02_左侧边栏 04 树形容器）。
+import { ref } from "vue";
 import SectionHeader from "./SectionHeader.vue";
 import TreeItem from "./TreeItem.vue";
 import FolderTree from "./FolderTree.vue";
 import { useContentStore } from "../stores/content";
 
 const content = useContentStore();
+const quickOpen = ref(true);
+const treeOpen = ref(true);
 
 const quickItems = [
   { key: "all", icon: "library-all", label: "全部" },
@@ -18,8 +21,8 @@ const quickItems = [
 <template>
   <div class="library-view">
     <section class="block quick">
-      <SectionHeader title="快速访问" pad="0 8px 0 14px" />
-      <div class="items">
+      <SectionHeader title="快速访问" pad="0 8px 0 14px" v-model:open="quickOpen" />
+      <div v-if="quickOpen" class="items">
         <TreeItem
           v-for="q in quickItems"
           :key="q.key"
@@ -32,8 +35,8 @@ const quickItems = [
       </div>
     </section>
     <section class="block tree">
-      <SectionHeader title="文件夹" :count="1231" addable pad="0 8px 0 14px" />
-      <div class="items">
+      <SectionHeader title="文件夹" :count="1231" addable pad="0 8px 0 14px" v-model:open="treeOpen" />
+      <div v-if="treeOpen" class="items">
         <FolderTree :nodes="content.folders" />
       </div>
     </section>
