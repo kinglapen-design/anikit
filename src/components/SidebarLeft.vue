@@ -29,7 +29,7 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
 
 <template>
   <aside v-if="!ui.leftCollapsed" class="sidebar-left" :style="{ width: `${ui.leftWidth}px` }">
-    <header class="bar-title">
+    <header class="bar-title" data-tauri-drag-region>
       <IconButton name="menu" title="菜单" />
       <span class="spacer" />
       <IconButton name="add-large" title="添加" />
