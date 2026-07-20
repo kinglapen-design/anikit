@@ -60,11 +60,12 @@ function relayout(): void {
   const vp = viewportRef.value;
   if (!vp || vp.clientWidth <= 0) return;
   ui.gridWidth = vp.clientWidth;
-  // 滑块 max = 内容区宽（第一张卡片刚好撑满容器）；min 80
+  // 行高只在布局时按容器宽 clamp（滑块 max = 内容区宽、min 80），
+  // 不回写 targetRowHeight——否则窗口收窄到最小再拉出，卡片会保持被压的小尺寸
   const maxH = Math.max(80, vp.clientWidth);
-  if (ui.targetRowHeight > maxH) ui.targetRowHeight = maxH;
+  const rowH = Math.max(80, Math.min(maxH, ui.targetRowHeight));
   const t0 = performance.now();
-  const result = computeJustified(props.items, vp.clientWidth, ui.targetRowHeight, CARD_CAPTION_H);
+  const result = computeJustified(props.items, vp.clientWidth, rowH, CARD_CAPTION_H);
   boxes.value = result.boxes;
   rows.value = result.rows;
   // 总高 = 头部（文件夹区块 + 内容副标题 + 间距 6）+ 网格高
