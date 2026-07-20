@@ -1,9 +1,12 @@
 <script setup lang="ts">
 // 内容区素材网格：自适应布局 + 自定义 transform 虚拟滚动（踩坑 005 定案）。
-// 布局为自写贪心算法（lib/justified.ts，10 万条 <100ms）；
-// 窗口 / 拆分条 resize 经 debounce 后才重排，拖动过程保持旧布局。
+// 卡片列表共用一个滚动（03_UI 布局/03_中间面板 03）：文件夹区块与"内容"副标题
+// 作为 canvas 头部随网格一起滚动，网格 boxes 按头部高度偏移；
+// 滚动条贴 viewport 右缘（不占布局），中间面板 4px 内边距作呼吸（token 15）。
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import AssetCard from "./AssetCard.vue";
+import FolderStrip from "./FolderStrip.vue";
+import SectionHeader from "./SectionHeader.vue";
 import { CARD_CAPTION_H, computeJustified, lowerBound, type Box, type Row } from "../lib/justified";
 import { useVirtualScroll } from "../lib/useVirtualScroll";
 import { useContentStore } from "../stores/content";
@@ -19,6 +22,7 @@ const BUFFER = 800;
 const viewportRef = ref<HTMLElement>();
 const trackRef = ref<HTMLElement>();
 const thumbRef = ref<HTMLElement>();
+const headerRef = ref<HTMLElement>();
 
 const boxes = shallowRef<Box[]>([]);
 const rows = shallowRef<Row[]>([]);
@@ -57,8 +61,10 @@ function relayout(): void {
   // 滑块 max = 内容区宽（第一张卡片刚好撑满容器）；min 80
   const maxH = Math.max(80, vp.clientWidth);
   if (ui.targetRowHeight > maxH) ui.targetRowHeight = maxH;
+  // 网格按头部（文件夹区块 + 内容副标题）高度 + 区块间距 6 偏移
+  const offsetTop = (headerRef.value?.clientHeight ?? 0) + 6;
   const t0 = performance.now();
-  const result = computeJustified(props.items, vp.clientWidth, ui.targetRowHeight, CARD_CAPTION_H);
+  const result = computeJustified(props.items, vp.clientWidth, ui.targetRowHeight, CARD_CAPTION_H, offsetTop);
   boxes.value = result.boxes;
   rows.value = result.rows;
   totalHeight = result.totalHeight;
@@ -142,6 +148,10 @@ onBeforeUnmount(() => {
       class="grid-canvas"
       :style="{ transform: `scale(${canvasScale}) translateY(${-pos}px)` }"
     >
+      <div ref="headerRef" class="grid-header">
+        <FolderStrip />
+        <SectionHeader title="内容" :count="items.length" />
+      </div>
       <AssetCard
         v-for="c in visibleCards"
         :key="c.asset.id"
@@ -177,18 +187,24 @@ onBeforeUnmount(() => {
   will-change: transform;
   transform-origin: 0 0;
 }
-/* token 15：滚动条 4px 胶囊 C4-15、距右 4px、不影响布局；命中区放宽至 12px */
+/* 头部：文件夹区块与"内容"副标题（间距 16），随 canvas 一起滚动 */
+.grid-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+/* token 15：滚动条 4px 胶囊 C4-15、贴 viewport 右缘、不影响布局；命中区 12px */
 .grid-track {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: 4px;
+  right: 0;
   width: 12px;
   z-index: 10;
 }
 .grid-thumb {
   position: absolute;
-  left: 4px;
+  right: 0;
   width: 4px;
   border-radius: 2px;
   background: var(--c4-15);

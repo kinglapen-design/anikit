@@ -1,9 +1,7 @@
 <script setup lang="ts">
-// 中间内容展示区（C2）：标题栏 + 文件夹区 + 素材网格（自适应 + 虚拟滚动）+ 搜索框。
+// 中间内容展示区（C2）：标题栏 + 卡片列表（统一滚动：文件夹区块 + 素材网格）+ 搜索框。
 import { computed } from "vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
-import FolderStrip from "./FolderStrip.vue";
-import SectionHeader from "./SectionHeader.vue";
 import AssetGrid from "./AssetGrid.vue";
 import SearchBar from "./SearchBar.vue";
 import { useContentStore } from "../stores/content";
@@ -20,13 +18,9 @@ const items = computed(() => (ui.showSubfolders ? content.assets : content.asset
 <template>
   <main class="content-area">
     <ContentTitleBar />
-    <div class="content-body">
-      <FolderStrip />
-      <section class="asset-section">
-        <SectionHeader title="内容" :count="items.length" />
-        <AssetGrid :items="items" />
-      </section>
-    </div>
+    <section class="asset-section">
+      <AssetGrid :items="items" />
+    </section>
     <footer class="search-wrap">
       <SearchBar />
     </footer>
@@ -43,24 +37,15 @@ const items = computed(() => (ui.showSubfolders ? content.assets : content.asset
   /* 三栏面板无圆角无边框（主窗口结构调整） */
   padding: var(--space-4);
 }
-.content-body {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  /* 文件夹卡片列表与素材卡片列表间距 16（token 间距） */
-  gap: var(--space-16);
-}
-/* 素材卡片区块：内边距 8 8 0 8 / 间距 6 */
+/* 素材卡片区块：内边距 8 0 0 8（右 0——滚动条贴区块右缘，中栏 4px 内边距作呼吸） */
 .asset-section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
   flex: 1;
   min-height: 0;
-  padding: var(--space-8) var(--space-8) 0 var(--space-8);
+  padding: var(--space-8) 0 0 var(--space-8);
 }
-/* 组件布局 05.3：搜索框内容容器内边距 4 8 8 8 */
+/* 搜索框内容容器：内边距 4 8 8 8 */
 .search-wrap {
   flex: none;
   padding: var(--space-4) var(--space-8) var(--space-8) var(--space-8);

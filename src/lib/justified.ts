@@ -27,8 +27,8 @@ export interface JustifiedResult {
   totalHeight: number;
 }
 
-// 素材卡片区块内边距 8 8 0 8 由 ContentArea 的区块容器承担，网格内部不再留边
-const PAD = { top: 0, right: 0, bottom: 0, left: 0 };
+// 网格内边距：左 0（由素材区块容器 padding 左 8 承担），右 8（滚动条 4 + 卡片间距 4）
+const PAD = { top: 0, right: 8, bottom: 0, left: 0 };
 const SPACING = 6;
 
 export function computeJustified(
@@ -36,12 +36,13 @@ export function computeJustified(
   containerWidth: number,
   targetRowHeight: number,
   captionHeight = 0,
+  offsetTop = 0,
 ): JustifiedResult {
   const n = items.length;
   const boxes = new Array<Box>(n);
   const rows: Row[] = [];
   const contentWidth = containerWidth - PAD.left - PAD.right;
-  let y = PAD.top;
+  let y = PAD.top + offsetTop;
   let rowStart = 0;
   let ratioSum = 0;
 
