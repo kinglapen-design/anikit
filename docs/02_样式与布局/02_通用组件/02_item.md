@@ -72,7 +72,7 @@ justify-content: center;
 align-items: center;
 padding: 0px;
 
-width: 子项; /* = 展开按钮图标 9px：item 组左 3 + 容器 9 + gap 2 = 14，与汉堡菜单 / 副标题按钮左缘对齐 */
+width: 子项; /* = 展开按钮图标 8px：item 组左 4 + 容器 8 + gap 2 = 14，与汉堡菜单 / 副标题按钮左缘对齐 */
 height: 主容器高度; /* 增加鼠标判定范围，方便点选 */
 
 /* Inside auto layout */

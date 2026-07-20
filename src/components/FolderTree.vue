@@ -37,7 +37,7 @@ function toggle(id: number): void {
     <div
       v-if="openSet.has(node.id) && node.children.length > 0"
       class="ft-children"
-      :style="{ '--guide-x': `${depth * 20 + 25}px` }"
+      :style="{ '--guide-x': `${depth * 20 + 24}px` }"
     >
       <FolderTree :nodes="node.children" :depth="depth + 1" />
     </div>

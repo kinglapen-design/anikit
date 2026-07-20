@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// 文件树 item（02_通用组件/02_item 02）：高 28；展开按钮容器宽 9（= 图标宽，高随 item），
+// 文件树 item（02_通用组件/02_item 02）：高 28；展开按钮容器宽 8（= 图标宽，高随 item），
 // 无子项时保留占位保证装饰图标列对齐。
-// 层级缩进 20px：子项展开箭头尖角（缩进 + 4.5）对齐父级装饰图标中心（缩进 + 25），
-// 即缩进 = 9/2 + gap 2 + padding 6 + 图标 16/2 = 20.5 ≈ 20。
+// 层级缩进 20px：子项展开箭头尖角（缩进 + 4）对齐父级装饰图标中心（缩进 + 24），
+// 即缩进 = 8/2 + gap 2 + padding 6 + 图标 16/2 = 20（8×8 图标无 0.5 偏差）。
 import AppIcon from "./AppIcon.vue";
 
 withDefaults(
@@ -29,7 +29,7 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
     :style="{ paddingLeft: `${depth * 20}px` }"
   >
     <button class="expand" :class="{ placeholder: !expandable }" @click.stop="emit('toggle')">
-      <AppIcon name="tree-expand-arrow" :size="9" class="chev" :class="{ open }" />
+      <AppIcon name="tree-expand-arrow" :size="8" class="chev" :class="{ open }" />
     </button>
     <button class="body" :class="{ selected }" @click="emit('select')">
       <AppIcon :name="icon" class="deco" />
@@ -47,14 +47,14 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   gap: var(--space-2);
   height: 28px;
 }
-/* 展开按钮容器：宽 9（= 图标宽）/ 高 28（判定高度），图标 9×9 实心三角，展开时旋转 90°；
+/* 展开按钮容器：宽 8（= 图标宽）/ 高 28（判定高度），图标 8×8 实心三角，展开时旋转 90°；
    有箭头的容器铺侧栏底色——遮住穿过的缩进竖线（视觉不穿过箭头，同 Eagle） */
 .expand {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 9px;
+  width: 8px;
   height: 28px;
   color: var(--c4);
   flex: none;
@@ -78,12 +78,12 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 .expand:hover .chev :deep(svg [fill-opacity="0.4"]) {
   fill-opacity: 0.7;
 }
-/* L 形横线：仅最后一个叶子 item，x5 → x9（竖线由 ft-children 容器级绘制、
-   止于本行中心，与此横线组成 L）；中间子项纯竖线，不画横线 */
+/* L 形横线：仅最后一个叶子 item，x4 → x8（竖线由 ft-children 容器级绘制、
+   止于本行中心，与此横线组成 L；竖线 1px 位于 x4-5 正中）；中间子项纯竖线，不画横线 */
 .tree-item.leaf.last .expand::after {
   content: "";
   position: absolute;
-  left: 5px;
+  left: 4px;
   top: 50%;
   width: 4px;
   height: 1px;

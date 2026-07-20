@@ -91,7 +91,7 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: 0 var(--space-8) 0 3px;
+  padding: 0 var(--space-8) 0 4px;
 }
 .hint {
   margin: var(--space-8) var(--space-16) 0;
