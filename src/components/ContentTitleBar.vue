@@ -1,21 +1,39 @@
 <script setup lang="ts">
 // 中栏标题栏（03_UI 布局/03_中间面板 02）：导航组（返回 / 前进 + 标题 + 搜索结果容器）
-// / 滑块 / 显示子文件夹内容 / 按钮组——四组 space-between 等距。
-// 返回前进阶段 1 无导航历史，禁用态 C4-20。
+// / 滑块 / 显示子文件夹内容 / 按钮组——space-between 等距。
+// 侧边栏收起时完全隐藏，其按钮组移入本标题栏（多个图标组合在一个容器里，子项间距 4）：
+// 左收起 → 左侧放（汉堡菜单 + 展开按钮）；右收起 → 右侧放（展开 + 置顶 + 窗口控制）。
 import { ref } from "vue";
 import IconButton from "./IconButton.vue";
 import SideSlider from "./SideSlider.vue";
 import AppCheckbox from "./AppCheckbox.vue";
+import WindowControls from "./WindowControls.vue";
 import { useUiStore } from "../stores/ui";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const ui = useUiStore();
+const appWindow = getCurrentWindow();
 
 // 搜索结果容器：搜索后从左侧滑入、取消后往左滑出（阶段 1 演示——点击标题模拟搜索 / 撤销，阶段 4 接真搜索）
 const showResult = ref(false);
+
+async function togglePin(): Promise<void> {
+  ui.alwaysOnTop = !ui.alwaysOnTop;
+  await appWindow.setAlwaysOnTop(ui.alwaysOnTop);
+}
 </script>
 
 <template>
   <div class="content-titlebar" data-tauri-drag-region>
+    <div v-if="ui.leftCollapsed" class="btn-group">
+      <IconButton name="menu" title="菜单" />
+      <IconButton
+        name="toggle-sidebar-left"
+        title="展开侧边栏"
+        class="flip"
+        @click="ui.leftCollapsed = false"
+      />
+    </div>
     <div class="nav-group">
       <div class="btn-group">
         <IconButton name="chevron-large" title="返回" class="rot-ccw" disabled />
@@ -34,11 +52,25 @@ const showResult = ref(false);
       <IconButton name="plugin" title="插件" />
       <IconButton name="view-options" title="查看方式" />
     </div>
+    <div v-if="ui.rightCollapsed" class="btn-group">
+      <IconButton
+        name="toggle-sidebar-right"
+        title="展开侧边栏"
+        class="flip"
+        @click="ui.rightCollapsed = false"
+      />
+      <IconButton
+        :name="ui.alwaysOnTop ? 'window-pin-off' : 'window-pin-on'"
+        title="窗口置顶"
+        @click="togglePin"
+      />
+      <WindowControls />
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* 总容器：内边距 8 / 四组 space-between 等距 */
+/* 总容器：内边距 8 / 各组 space-between 等距 */
 .content-titlebar {
   display: flex;
   align-items: center;
@@ -58,6 +90,9 @@ const showResult = ref(false);
   align-items: center;
   gap: var(--space-4);
   flex: none;
+}
+.flip {
+  transform: scaleX(-1);
 }
 /* chevron-large 原图标朝下：返回 = 顺时针 90°（朝左），前进 = 逆时针 90°（朝右） */
 .rot-ccw :deep(svg) {

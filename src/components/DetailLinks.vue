@@ -1,14 +1,16 @@
 <script setup lang="ts">
+import { ref } from "vue";
 // 详情模块 · 关联文件夹（02_通用组件/02_item 06，阶段 1 静态假数据）。
 import SectionHeader from "./SectionHeader.vue";
 import IconButton from "./IconButton.vue";
 import AppIcon from "./AppIcon.vue";
+const open = ref(true);
 </script>
 
 <template>
   <section class="detail-links">
-    <SectionHeader title="关联文件夹" addable />
-    <div class="body">
+    <SectionHeader title="关联文件夹" addable v-model:open="open" />
+    <div v-if="open" class="body">
       <div class="link-item">
         <div class="row">
           <AppIcon name="folder-closed" class="deco" />

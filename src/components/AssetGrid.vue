@@ -29,7 +29,13 @@ const rows = shallowRef<Row[]>([]);
 const r0 = ref(0);
 const r1 = ref(0);
 const headerH = ref(0);
-let totalHeight = 0;
+const gridTotal = ref(0);
+const assetsOpen = ref(true);
+
+// 总高 = 头部（文件夹区块 + 内容副标题 + 间距 6）+ 网格高（折叠"内容"时不计）
+function currentTotal(): number {
+  return (assetsOpen.value ? gridTotal.value : 0) + headerH.value + 6;
+}
 
 function updateRange(scrollPos: number): void {
   const vh = viewportRef.value?.clientHeight ?? 0;
@@ -68,11 +74,10 @@ function relayout(): void {
   const result = computeJustified(props.items, vp.clientWidth, rowH, CARD_CAPTION_H);
   boxes.value = result.boxes;
   rows.value = result.rows;
-  // 总高 = 头部（文件夹区块 + 内容副标题 + 间距 6）+ 网格高
-  totalHeight = result.totalHeight + headerH.value + 6;
+  gridTotal.value = result.totalHeight;
   layoutWidth.value = vp.clientWidth;
   canvasScale.value = 1;
-  setTotal(totalHeight);
+  setTotal(currentTotal());
   console.debug(`[AssetGrid] 布局 ${props.items.length} 条：${(performance.now() - t0).toFixed(1)}ms`);
 }
 
@@ -106,7 +111,7 @@ const ro = new ResizeObserver(() => {
   lastW = w;
   lastH = h;
   if (!widthChanged) {
-    setTotal(totalHeight);
+    setTotal(currentTotal());
     return;
   }
   if (layoutWidth.value > 0) {
@@ -128,6 +133,8 @@ watch(
   () => ui.targetRowHeight,
   () => relayout(),
 );
+// 折叠 / 展开"内容"：网格高度不计入总高
+watch(assetsOpen, () => setTotal(currentTotal()));
 
 onMounted(() => {
   attach(viewportRef.value!, trackRef.value!, thumbRef.value!);
@@ -139,7 +146,7 @@ onMounted(() => {
   headerH.value = headerRef.value!.clientHeight;
   headerRo = new ResizeObserver(() => {
     headerH.value = headerRef.value!.clientHeight;
-    setTotal(totalHeight);
+    setTotal(currentTotal());
   });
   headerRo.observe(headerRef.value!);
   relayout();
@@ -160,9 +167,10 @@ onBeforeUnmount(() => {
       <div ref="headerRef" class="grid-header">
         <FolderStrip />
         <!-- 素材区块顶 padding 8（与文件夹区块底 8、总容器 gap 16 构成间距 32 = 8 + 16 + 8） -->
-        <SectionHeader title="内容" :count="items.length" pad="8px 0 0 0" />
+        <SectionHeader title="内容" :count="items.length" pad="8px 0 0 0" v-model:open="assetsOpen" />
       </div>
       <div
+        v-show="assetsOpen"
         class="cards-layer"
         :style="{ transform: `translateY(${headerH + 6}px) scale(${canvasScale})` }"
       >

@@ -1,16 +1,18 @@
 <script setup lang="ts">
+import { ref } from "vue";
 // 详情模块 · 标签（02_通用组件/02_item 07 标签带删除按钮，阶段 1 静态假数据）。
 import SectionHeader from "./SectionHeader.vue";
 import IconButton from "./IconButton.vue";
 import AppIcon from "./AppIcon.vue";
 
 const tags = ["全部标签", "场景"];
+const open = ref(true);
 </script>
 
 <template>
   <section class="detail-tags">
-    <SectionHeader title="标签" addable />
-    <div class="body">
+    <SectionHeader title="标签" addable v-model:open="open" />
+    <div v-if="open" class="body">
       <div v-for="t in tags" :key="t" class="tag-item">
         <AppIcon name="tag" class="deco" />
         <span class="label">{{ t }}</span>

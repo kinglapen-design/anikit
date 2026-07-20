@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 // 详情模块 · 基础信息（03_UI 布局/04_右侧边栏 03）：标题 / 注释 / 链接输入框（高 32）
 // + 详情容器（两列：标题 C4-70 / 内容 C4-40，行距 2）。阶段 1 静态假数据。
 import SectionHeader from "./SectionHeader.vue";
@@ -13,12 +14,13 @@ const rows = [
   { k: "创建日期", v: "2026/07/12 14:26" },
   { k: "修改日期", v: "2026/07/12 14:26" },
 ];
+const open = ref(true);
 </script>
 
 <template>
   <section class="detail-info">
-    <SectionHeader title="基础信息" />
-    <div class="body">
+    <SectionHeader title="基础信息" v-model:open="open" />
+    <div v-if="open" class="body">
       <div class="field">
         <input type="text" value="中继站场景" placeholder="输入标题" readonly />
       </div>

@@ -1,16 +1,18 @@
 <script setup lang="ts">
+import { ref } from "vue";
 // 详情模块 · 颜色信息（03_UI 布局/04_右侧边栏 03）：图片容器（圆角 6 / 1px C4-15 + 格式角标）
 // + 色块容器（胶囊圆角 14 / C1-15）。阶段 1 静态假数据。
 import SectionHeader from "./SectionHeader.vue";
 
 // 假色板：贴近参考图的 10 色
 const colors = ["#3A6EA5", "#2B9FD9", "#7A5C3E", "#A53E3E", "#3E8A57", "#6B4F8A", "#C0A23E", "#4E4E52", "#8A8D99", "#1F2023"];
+const open = ref(true);
 </script>
 
 <template>
   <section class="detail-colors">
-    <SectionHeader title="颜色信息" />
-    <div class="body">
+    <SectionHeader title="颜色信息" v-model:open="open" />
+    <div v-if="open" class="body">
       <div class="thumb">
         <span class="badge">PSD</span>
       </div>

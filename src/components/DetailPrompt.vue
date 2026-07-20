@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 // 详情模块 · 提示词（03_UI 布局/04_右侧边栏 03 有提示词态，阶段 1 静态假数据）。
 // 输入框高 125（AI 搜索框 6 行滚动）；按钮组三按钮均分填充。
 import SectionHeader from "./SectionHeader.vue";
@@ -6,12 +7,13 @@ import IconButton from "./IconButton.vue";
 
 const prompt =
   "1.基础信息：参考图1是主角，参考图2是故事发生的场景。\n2.氛围与情绪：主角拿着剑斩杀恶龙，突显恶龙和主角之间的大小对比，突出巨龙的压迫感，强调战斗的紧张感，黄沙弥漫，渲染神秘感。";
+const open = ref(true);
 </script>
 
 <template>
   <section class="detail-prompt">
-    <SectionHeader title="提示词" />
-    <div class="body">
+    <SectionHeader title="提示词" v-model:open="open" />
+    <div v-if="open" class="body">
       <textarea class="prompt-text" :value="prompt" readonly rows="6" />
       <div class="actions">
         <IconButton name="copy-prompt" filled title="复制提示词" class="action" />

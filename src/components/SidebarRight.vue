@@ -67,22 +67,6 @@ async function togglePin(): Promise<void> {
       <ViewSwitch v-model="ui.rightView" :options="rightOptions" />
     </footer>
   </aside>
-
-  <aside v-else class="sidebar-right collapsed">
-    <IconButton
-      name="toggle-sidebar-right"
-      title="展开侧边栏"
-      class="flip"
-      @click="ui.rightCollapsed = false"
-    />
-    <IconButton
-      :name="ui.alwaysOnTop ? 'window-pin-off' : 'window-pin-on'"
-      title="窗口置顶"
-      @click="togglePin"
-    />
-    <span class="spacer" />
-    <WindowControls vertical />
-  </aside>
 </template>
 
 <style scoped>
@@ -106,14 +90,6 @@ async function togglePin(): Promise<void> {
   background: var(--c4-15);
   pointer-events: none;
   z-index: 10;
-}
-.sidebar-right.collapsed {
-  width: 36px;
-  align-items: center;
-  gap: var(--space-4);
-}
-.flip {
-  transform: scaleX(-1);
 }
 /* 组件布局 06.1：标题栏内容容器内边距 8 / 子项间距自适应 */
 .bar-title {

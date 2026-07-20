@@ -63,17 +63,6 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
       <ViewSwitch v-model="ui.leftView" :options="leftOptions" />
     </footer>
   </aside>
-
-  <aside v-else class="sidebar-left collapsed">
-    <IconButton name="menu" title="菜单" />
-    <IconButton name="add-large" title="添加" />
-    <IconButton
-      name="toggle-sidebar-left"
-      title="展开侧边栏"
-      class="flip"
-      @click="ui.leftCollapsed = false"
-    />
-  </aside>
 </template>
 
 <style scoped>
@@ -97,14 +86,6 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
   background: var(--c4-15);
   pointer-events: none;
   z-index: 10;
-}
-.sidebar-left.collapsed {
-  width: 36px;
-  align-items: center;
-  gap: var(--space-4);
-}
-.flip {
-  transform: scaleX(-1);
 }
 /* 标题栏：内边距 8 8 8 14 */
 .bar-title {
