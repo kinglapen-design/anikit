@@ -93,10 +93,10 @@ const rows = [
 .field input::placeholder {
   color: var(--c4-40);
 }
-/* 详情容器：内边距 8 / 间距 16 / 圆角 8；标题 C4-70 / 内容 C4-40，行距 2 */
+/* 详情容器：内边距 8 / 间距 16 / 圆角 8；标题列拉伸居左、值列居右，行距 2 */
 .detail-table {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: 1fr auto;
   gap: var(--space-2) var(--space-16);
   padding: var(--space-8);
   border-radius: var(--radius-8);
@@ -110,18 +110,20 @@ const rows = [
 .v {
   color: var(--c4-40);
 }
-/* 评分 item（02_item 09）：5 星 12×12 / 间距 4；常态线框 C4-40，选中线框 + 填充警告色 */
+/* 评分 item（02_item 09）：5 星 12×12 / 间距 4；常态线框 C4-40，选中线条 + 填充警告色 */
 .stars {
   display: inline-flex;
   gap: var(--space-4);
 }
-.star.on {
-  color: var(--warning);
+.star {
+  color: var(--c4);
 }
-.star.on :deep(svg [stroke-opacity="0.7"]),
-.star.on :deep(svg [fill-opacity="0.07"]),
-.star.on :deep(svg [fill-opacity="0.7"]) {
+.star :deep(svg [stroke-opacity="0.7"]) {
+  stroke-opacity: 0.4;
+}
+.star.on :deep(path) {
+  fill: var(--warning);
+  stroke: var(--warning);
   stroke-opacity: 1;
-  fill-opacity: 1;
 }
 </style>

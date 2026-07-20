@@ -15,7 +15,7 @@ const tags = ["全部标签", "场景"];
         <AppIcon name="tag" class="deco" />
         <span class="label">{{ t }}</span>
         <span class="spacer" />
-        <IconButton name="window-close" small title="删除标签" />
+        <IconButton name="clear" small title="删除标签" />
       </div>
     </div>
   </section>
@@ -30,11 +30,11 @@ const tags = ["全部标签", "场景"];
   padding: var(--space-8);
   border-radius: var(--radius-8);
 }
-/* 标签流式布局：间距 4，宽度不够换行 */
+/* 标签流式布局：间距 8，宽度不够换行 */
 .body {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
+  gap: var(--space-8);
 }
 /* 标签 item：内边距 6 6 6 8 / 圆角 8 / C1-15 / 1px C4-15 / 间距 6 */
 .tag-item {

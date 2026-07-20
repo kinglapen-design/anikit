@@ -42,7 +42,7 @@ async function togglePin(): Promise<void> {
     <header class="bar-title" data-tauri-drag-region>
       <IconButton name="toggle-sidebar-right" title="收起侧边栏" @click="ui.rightCollapsed = true" />
       <IconButton
-        :name="ui.alwaysOnTop ? 'window-pin-on' : 'window-pin-off'"
+        :name="ui.alwaysOnTop ? 'window-pin-off' : 'window-pin-on'"
         title="窗口置顶"
         @click="togglePin"
       />
@@ -76,7 +76,7 @@ async function togglePin(): Promise<void> {
       @click="ui.rightCollapsed = false"
     />
     <IconButton
-      :name="ui.alwaysOnTop ? 'window-pin-on' : 'window-pin-off'"
+      :name="ui.alwaysOnTop ? 'window-pin-off' : 'window-pin-on'"
       title="窗口置顶"
       @click="togglePin"
     />

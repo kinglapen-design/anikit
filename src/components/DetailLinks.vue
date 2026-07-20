@@ -14,7 +14,7 @@ import AppIcon from "./AppIcon.vue";
           <AppIcon name="folder-closed" class="deco" />
           <span class="label">人物</span>
           <span class="spacer" />
-          <IconButton name="window-close" small title="移除" />
+          <IconButton name="clear" small title="移除" />
         </div>
         <div class="sub">雪枝-走路.fla</div>
       </div>
