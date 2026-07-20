@@ -28,7 +28,7 @@ function select(value: string): void {
 
 <template>
   <div class="view-switch" :class="{ sliding }">
-    <span class="indicator" :style="{ transform: `translateX(calc(${index} * (100% + 6px)))` }" />
+    <span class="indicator" :style="{ transform: `translateX(calc(${index} * (100% + 4px)))` }" />
     <button
       v-for="o in options"
       :key="o.value"
@@ -46,19 +46,19 @@ function select(value: string): void {
 .view-switch {
   position: relative;
   display: flex;
-  gap: var(--space-6);
+  gap: var(--space-4);
   padding: var(--space-4);
   border-radius: var(--radius-8);
   background: var(--c1-50);
   box-shadow: inset 0 0 0 1px var(--c4-15);
   width: 100%;
 }
-/* 选中底色：宽度 = 均分按钮宽，按（自身宽 + 间距 6）平移 */
+/* 选中底色：宽度 = 均分按钮宽，按（自身宽 + 间距 4）平移 */
 .indicator {
   position: absolute;
   left: var(--space-4);
   top: var(--space-4);
-  width: calc((100% - 26px) / 4);
+  width: calc((100% - 20px) / 4);
   height: 28px;
   border-radius: var(--radius-6);
   background: var(--c4-15);
