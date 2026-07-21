@@ -74,21 +74,15 @@ function select(value: string): void {
   color: var(--c4);
   transition: background 0.12s ease;
 }
-/* 未选中图标 C4-40（SVG 烘 0.7，此处压到 0.4） */
-.item :deep(svg [stroke-opacity="0.7"]),
-.item :deep(svg [fill-opacity="0.7"]) {
-  stroke-opacity: 0.4;
-  fill-opacity: 0.4;
-}
 .item:hover {
   background: var(--c4-7);
 }
 .sliding .item:hover {
   background: none;
 }
-/* 选中图标高亮 C4 */
-.item.on :deep(svg [stroke-opacity="0.7"]),
-.item.on :deep(svg [fill-opacity="0.7"]) {
+/* 选中图标高亮 C4（不限烘值档位） */
+.item.on :deep(svg [stroke-opacity]),
+.item.on :deep(svg [fill-opacity]) {
   stroke-opacity: 1;
   fill-opacity: 1;
 }

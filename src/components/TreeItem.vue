@@ -112,8 +112,8 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 .body.selected {
   background: var(--c4-15);
 }
-.body.selected .deco :deep(svg [stroke-opacity="0.7"]),
-.body.selected .deco :deep(svg [fill-opacity="0.7"]) {
+.body.selected .deco :deep(svg [stroke-opacity]),
+.body.selected .deco :deep(svg [fill-opacity]) {
   stroke-opacity: 1;
   fill-opacity: 1;
 }
