@@ -29,8 +29,10 @@ const tagQuickItems = [
 </script>
 
 <template>
-  <!-- 工作空间：根目录 / 置顶 / 常用 / 文件夹 -->
-  <div v-if="ui.leftView === 'workspace'" class="sidebar-views">
+  <!-- 单根包裹（Transition 要求单根子组件，多根 Fragment 会导致过渡失效、内容透明） -->
+  <div>
+    <!-- 工作空间：根目录 / 置顶 / 常用 / 文件夹 -->
+    <div v-if="ui.leftView === 'workspace'" class="sidebar-views">
     <section class="block">
       <SectionHeader title="根目录" pad="0 8px 0 14px" v-model:open="rootOpen" />
       <div v-if="rootOpen" class="items">
@@ -112,6 +114,7 @@ const tagQuickItems = [
         <TreeItem icon="tag" label="场景" />
       </div>
     </section>
+  </div>
   </div>
 </template>
 

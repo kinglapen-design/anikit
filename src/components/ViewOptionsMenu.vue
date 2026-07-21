@@ -32,40 +32,42 @@ function pickLayout(v: (typeof layouts)[number]["value"]): void {
 </script>
 
 <template>
-  <AppMenu :x="anchor.x" :y="anchor.y" @close="emit('close')">
-    <div class="check-wrap">
-      <AppCheckbox v-model="ui.useGlobalView" label="使用全局设置" />
-    </div>
-    <MenuDivider />
-    <MenuItem icon="view-mode" label="布局方式" arrow @pointerenter="sub = 'layout'" @select="sub = 'layout'" />
-    <MenuItem icon="sort-order" label="排序方式" arrow @pointerenter="sub = 'sort'" @select="sub = 'sort'" />
-    <MenuItem icon="group-by" label="分组依据" arrow @pointerenter="sub = 'group'" @select="sub = 'group'" />
-  </AppMenu>
+  <div ref="groupRef" style="display: contents">
+    <AppMenu :x="anchor.x" :y="anchor.y" :group="groupRef ?? null" @close="emit('close')">
+      <div class="check-wrap">
+        <AppCheckbox v-model="ui.useGlobalView" label="使用全局设置" />
+      </div>
+      <MenuDivider />
+      <MenuItem icon="view-mode" label="布局方式" arrow @pointerenter="sub = 'layout'" @select="sub = 'layout'" />
+      <MenuItem icon="sort-order" label="排序方式" arrow @pointerenter="sub = 'sort'" @select="sub = 'sort'" />
+      <MenuItem icon="group-by" label="分组依据" arrow @pointerenter="sub = 'group'" @select="sub = 'group'" />
+    </AppMenu>
 
-  <AppMenu v-if="sub === 'layout'" :x="anchor.x + 177" :y="anchor.y + 32" @close="emit('close')">
-    <MenuItem
-      v-for="l in layouts"
-      :key="l.value"
-      :label="l.label"
-      checkable
-      :checked="ui.layoutMode === l.value"
-      @select="pickLayout(l.value)"
-    />
-  </AppMenu>
+    <AppMenu v-if="sub === 'layout'" :x="anchor.x + 177" :y="anchor.y + 32" :group="groupRef ?? null" @close="emit('close')">
+      <MenuItem
+        v-for="l in layouts"
+        :key="l.value"
+        :label="l.label"
+        checkable
+        :checked="ui.layoutMode === l.value"
+        @select="pickLayout(l.value)"
+      />
+    </AppMenu>
 
-  <AppMenu v-if="sub === 'sort'" :x="anchor.x + 177" :y="anchor.y + 60" @close="emit('close')">
-    <MenuItem
-      v-for="s in sorts"
-      :key="s"
-      :label="s"
-      checkable
-      :checked="ui.sortBy === s"
-      @select="ui.sortBy = s"
-    />
-    <MenuDivider />
-    <MenuItem label="升序" checkable :checked="ui.sortAsc" @select="ui.sortAsc = true" />
-    <MenuItem label="降序" checkable :checked="!ui.sortAsc" @select="ui.sortAsc = false" />
-  </AppMenu>
+    <AppMenu v-if="sub === 'sort'" :x="anchor.x + 177" :y="anchor.y + 60" :group="groupRef ?? null" @close="emit('close')">
+      <MenuItem
+        v-for="s in sorts"
+        :key="s"
+        :label="s"
+        checkable
+        :checked="ui.sortBy === s"
+        @select="ui.sortBy = s"
+      />
+      <MenuDivider />
+      <MenuItem label="升序" checkable :checked="ui.sortAsc" @select="ui.sortAsc = true" />
+      <MenuItem label="降序" checkable :checked="!ui.sortAsc" @select="ui.sortAsc = false" />
+    </AppMenu>
+  </div>
 </template>
 
 <style scoped>
