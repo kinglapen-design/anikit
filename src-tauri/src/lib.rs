@@ -5,6 +5,9 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
+mod commands;
+mod core;
+
 /// 任务 2 spike：从窗口拖出文件到其他软件（WebView HTML5 拖拽出不了窗口边界，
 /// 由原生层发起系统级拖拽，Windows 底层即 CF_HDROP）。
 /// 注意：OLE 拖拽（DoDragDrop）必须在主线程发起，同步命令即运行于主线程。
@@ -32,6 +35,8 @@ pub fn run() {
       }
     }))
     .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+    .plugin(tauri_plugin_dialog::init())
+    .manage(commands::library::AppState { library: std::sync::Mutex::new(None) })
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -118,7 +123,7 @@ pub fn run() {
               let _ = DwmSetWindowAttribute(
                 hwnd,
                 DWMWA_BORDER_COLOR,
-                &border as *const _ as *const core::ffi::c_void,
+                &border as *const _ as *const std::ffi::c_void,
                 std::mem::size_of_val(&border) as u32,
               );
             }
@@ -136,7 +141,13 @@ pub fn run() {
 
       Ok(())
     })
-    .invoke_handler(tauri::generate_handler![drag_files])
+    .invoke_handler(tauri::generate_handler![
+      drag_files,
+      commands::library::create_library,
+      commands::library::open_library,
+      commands::library::get_current_library,
+      commands::library::list_recent_libraries,
+    ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

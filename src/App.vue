@@ -2,16 +2,21 @@
 // 主窗口（03_UI 布局/01）：C1 底 / 圆角 8 / padding 0 / 间距 0 / 外边框 1px C4-15。
 // 全透明无边框窗口：最大化时去圆角与边框；resize 判定在可视边缘内 8px（startResizeDragging）。
 import { onBeforeUnmount, onMounted, ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, type ResizeDirection } from "@tauri-apps/api/window";
 import SidebarLeft from "./components/SidebarLeft.vue";
 import SidebarRight from "./components/SidebarRight.vue";
 import ContentArea from "./components/ContentArea.vue";
 import SplitBar from "./components/SplitBar.vue";
+import LibrarySetupModal from "./components/LibrarySetupModal.vue";
 import { useUiStore } from "./stores/ui";
 
 const ui = useUiStore();
 const maximized = ref(false);
 const appWindow = getCurrentWindow();
+
+// 启动时未打开任何素材库 → 强制弹"创建/打开资源库"模态（PRD 01-1）
+const needLibrarySetup = ref(false);
 
 async function syncMaximized(): Promise<void> {
   maximized.value = await appWindow.isMaximized();
@@ -27,6 +32,14 @@ function onResize(): void {
 onMounted(() => {
   void syncMaximized();
   window.addEventListener("resize", onResize);
+  // 查询库状态失败按"未打开"处理，让用户能经模态重试
+  invoke<unknown>("get_current_library")
+    .then((lib) => {
+      needLibrarySetup.value = lib === null;
+    })
+    .catch(() => {
+      needLibrarySetup.value = true;
+    });
 });
 onBeforeUnmount(() => {
   clearTimeout(resizeTimer);
@@ -68,6 +81,7 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
         @mousedown="startResize(z.dir, $event)"
       />
     </template>
+    <LibrarySetupModal v-if="needLibrarySetup" @done="needLibrarySetup = false" />
   </div>
 </template>
 
