@@ -39,6 +39,8 @@ dirs = "5"
 sha2 = "0.10"
 # 阶段 3：图片宽高探测与缩略图生成（裁剪特性控制体积）
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+# 阶段 3：有损 webp 缩略图编码（libwebp 官方绑定 q=80；image crate 的 WebPEncoder 只支持无损，体积差 5 倍）
+webp = { version = "0.3", default-features = false }
 # 阶段 3：剪贴板图片读取（剪贴板导入）
 arboard = "3"
 
