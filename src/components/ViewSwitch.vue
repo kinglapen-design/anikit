@@ -80,9 +80,10 @@ function select(value: string): void {
 .sliding .item:hover {
   background: none;
 }
-/* 选中图标高亮 C4（不限烘值档位） */
+/* 选中图标线条高亮 C4（填充层 0.07 保持不提亮） */
 .item.on :deep(svg [stroke-opacity]),
-.item.on :deep(svg [fill-opacity]) {
+.item.on :deep(svg [fill-opacity="0.4"]),
+.item.on :deep(svg [fill-opacity="0.7"]) {
   stroke-opacity: 1;
   fill-opacity: 1;
 }

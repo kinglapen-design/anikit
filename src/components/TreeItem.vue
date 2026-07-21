@@ -112,8 +112,10 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 .body.selected {
   background: var(--c4-15);
 }
+/* 选中：装饰图标线条 C4（填充层 0.07 保持 C4-7 不提亮） */
 .body.selected .deco :deep(svg [stroke-opacity]),
-.body.selected .deco :deep(svg [fill-opacity]) {
+.body.selected .deco :deep(svg [fill-opacity="0.4"]),
+.body.selected .deco :deep(svg [fill-opacity="0.7"]) {
   stroke-opacity: 1;
   fill-opacity: 1;
 }
