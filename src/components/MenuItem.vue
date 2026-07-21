@@ -22,16 +22,7 @@ const emit = defineEmits<{ select: [] }>();
   <button class="menu-item" @click="emit('select')">
     <span class="main">
       <span v-if="checkable" class="check-slot">
-        <svg v-if="checked" width="8" height="8" viewBox="0 0 8 8">
-          <path
-            d="M1.5 4.3 3.2 6 6.5 2"
-            stroke="currentColor"
-            stroke-width="1"
-            fill="none"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
+        <AppIcon v-if="checked" name="check" :size="8" />
       </span>
       <AppIcon v-else-if="icon" :name="icon" class="deco" />
       <span class="label">{{ label }}</span>
