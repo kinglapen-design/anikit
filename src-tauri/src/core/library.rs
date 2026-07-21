@@ -15,6 +15,8 @@ pub const ASSTES_DIR: &str = "asstes";
 pub const BACKUP_DIR: &str = "backup";
 pub const CACHE_DIR: &str = "cache";
 pub const VECTORS_DIR: &str = "vectors";
+/// 收件箱（PRD 05-5.1：自动导入目录，过境语义、常态为空；subst 挂载与 notify 监听在阶段 3 实现）
+pub const INBOX_DIR: &str = "inbox";
 pub const FOLDERS_FILE: &str = "folders.json";
 pub const TAGS_FILE: &str = "tags.json";
 pub const PINS_FILE: &str = "pins.json";
@@ -113,7 +115,7 @@ pub fn create(path: &Path) -> Result<Library, DataError> {
   if fs::read_dir(path)?.next().is_some() {
     return Err(DataError::NotEmpty);
   }
-  for dir in [ASSTES_DIR, BACKUP_DIR, CACHE_DIR, VECTORS_DIR] {
+  for dir in [ASSTES_DIR, BACKUP_DIR, CACHE_DIR, VECTORS_DIR, INBOX_DIR] {
     fs::create_dir_all(path.join(dir))?;
   }
   write_json(&path.join(FOLDERS_FILE), &FoldersFile::new())?;
@@ -129,7 +131,7 @@ pub fn create(path: &Path) -> Result<Library, DataError> {
 /// 缺失的子目录自动补建（自愈）；缺失的数据文件视为损坏，报错提示回滚（PRD 06-04）。
 pub fn open(path: &Path) -> Result<Library, DataError> {
   validate(path)?;
-  for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR] {
+  for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR, INBOX_DIR] {
     fs::create_dir_all(path.join(dir))?;
   }
   migrate::migrate_library_if_needed(path)?;
@@ -165,7 +167,7 @@ mod tests {
     let root = dir.path().join("我的素材库");
     let lib = create(&root).unwrap();
 
-    for d in [ASSTES_DIR, BACKUP_DIR, CACHE_DIR, VECTORS_DIR] {
+    for d in [ASSTES_DIR, BACKUP_DIR, CACHE_DIR, VECTORS_DIR, INBOX_DIR] {
       assert!(root.join(d).is_dir(), "缺目录 {d}");
     }
     for f in ROOT_DATA_FILES {
