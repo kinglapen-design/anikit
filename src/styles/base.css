@@ -61,7 +61,7 @@ textarea {
   background: var(--c5);
   box-shadow:
     inset 0 0 0 1px var(--c4-15),
-    0 4px 24px rgba(0, 0, 0, 0.6);
+    var(--shadow-pop);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   color: var(--c4);

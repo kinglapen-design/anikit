@@ -33,7 +33,7 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   gap: var(--space-16);
   background: var(--c5);
   box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.4),
+    var(--shadow-pop),
     inset 0 0 0 1px var(--c4-15);
   border-radius: var(--radius-8);
 }

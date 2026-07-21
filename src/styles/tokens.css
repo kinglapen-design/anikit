@@ -70,4 +70,7 @@
   --icon-large: 16px;
   --icon-small: 8px;
   --icon-xlarge: 24px;
+
+  /* 阴影（统一悬浮投影：主窗口 / 菜单 / 二级窗口 / 模态窗口 / 工具 tip） */
+  --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
