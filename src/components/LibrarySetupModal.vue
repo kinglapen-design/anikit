@@ -1,11 +1,14 @@
 <script setup lang="ts">
 // 创建/打开资源库模态（03_UI 布局/06）：未打开库时强制选择，无"稍后"（设计稿仅两按钮）。
-// 流程：创建 → 系统对话框选文件夹 → 中间行显示路径 → 确认路径建库 / 重新选择回初始；
-//       打开 → 系统对话框选文件夹 → 校验资源库结构直接打开，失败显示错误行。
+// 三态：initial（插画 + 创建/打开）→ create（07 名称表单）/ error（08 路径错误）。
+// 创建：表单输名称 → 系统对话框选保存位置 → 在选中位置建以名称命名的库文件夹并打开；
+// 打开：系统对话框选文件夹 → 校验资源库结构直开，失败进错误态（重试 / 取消回初始）。
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import AppIcon from "./AppIcon.vue";
+import CreateLibraryForm from "./CreateLibraryForm.vue";
+import PathErrorDialog from "./PathErrorDialog.vue";
 import { getIcon } from "../lib/icons";
 
 interface LibraryInfo {
@@ -18,79 +21,93 @@ interface LibraryInfo {
 const emit = defineEmits<{ done: [info: LibraryInfo] }>();
 
 const illustration = getIcon("create-library-illustration");
-const confirmingPath = ref<string | null>(null); // 非空 = 确认路径态
-const error = ref("");
+type View = "initial" | "create" | "error";
+const view = ref<View>("initial");
+const createName = ref(""); // 名称提升保存：创建失败重试回到表单时不丢
+const errorMsg = ref("");
 const busy = ref(false);
+let retryAction: "open" | "create" = "open";
 
 async function pickFolder(): Promise<string | null> {
   const picked = await open({ directory: true, multiple: false });
   return typeof picked === "string" ? picked : null;
 }
 
-async function onCreate(): Promise<void> {
-  if (busy.value) return;
-  error.value = "";
-  const path = await pickFolder();
-  if (path) confirmingPath.value = path;
+function toError(e: unknown, action: "open" | "create"): void {
+  retryAction = action;
+  const text = String(e);
+  // 结构校验失败用 08 设计文案；其余错误（损坏 / 版本过高 / IO）显示后端中文文案
+  errorMsg.value = text.includes("不是 AniKit 资源库")
+    ? "选择的路径中找不到 AniKit 的资源文件，请确认路径是否正确。"
+    : text;
+  view.value = "error";
 }
 
-async function onConfirm(): Promise<void> {
-  if (!confirmingPath.value || busy.value) return;
+async function openLibraryFlow(): Promise<void> {
+  const path = await pickFolder();
+  if (!path || busy.value) return;
   busy.value = true;
-  error.value = "";
   try {
-    const info = await invoke<LibraryInfo>("create_library", { path: confirmingPath.value });
-    emit("done", info);
+    emit("done", await invoke<LibraryInfo>("open_library", { path }));
   } catch (e) {
-    error.value = String(e);
-    confirmingPath.value = null; // 失败回初始态，错误行保留
+    toError(e, "open");
   } finally {
     busy.value = false;
   }
 }
 
-async function onOpen(): Promise<void> {
-  if (busy.value) return;
-  error.value = "";
-  const path = await pickFolder();
-  if (!path) return;
+async function onCreateSubmit(name: string): Promise<void> {
+  const parent = await pickFolder();
+  if (!parent || busy.value) return;
   busy.value = true;
   try {
-    const info = await invoke<LibraryInfo>("open_library", { path });
-    emit("done", info);
+    emit("done", await invoke<LibraryInfo>("create_library", { path: `${parent}/${name}` }));
   } catch (e) {
-    error.value = String(e);
+    toError(e, "create");
   } finally {
     busy.value = false;
+  }
+}
+
+function onRetry(): void {
+  if (retryAction === "create") {
+    view.value = "create"; // 名称保留，重新点"选择保存路径"
+  } else {
+    view.value = "initial";
+    void openLibraryFlow(); // 打开失败：直接再弹系统对话框
   }
 }
 </script>
 
 <template>
   <div class="setup-mask">
-    <div class="setup-card">
+    <div v-if="view === 'initial'" class="setup-card">
       <div class="illustration" v-html="illustration" />
-      <p v-if="confirmingPath" class="message" :title="confirmingPath">{{ confirmingPath }}</p>
-      <p v-else-if="error" class="message error">{{ error }}</p>
       <div class="actions">
-        <template v-if="confirmingPath">
-          <button class="btn primary text-only" :disabled="busy" @click="onConfirm">确认路径</button>
-          <button class="btn secondary text-only" :disabled="busy" @click="confirmingPath = null">
-            重新选择
-          </button>
-        </template>
-        <template v-else>
-          <button class="btn primary" :disabled="busy" @click="onCreate">
-            <AppIcon name="create-library-large" :size="24" />
-            <span>创建资源库</span>
-          </button>
-          <button class="btn secondary" :disabled="busy" @click="onOpen">
-            <AppIcon name="open-library-large" :size="24" />
-            <span>打开资源库</span>
-          </button>
-        </template>
+        <button class="btn primary" :disabled="busy" @click="view = 'create'">
+          <AppIcon name="create-library-large" :size="24" />
+          <span>创建资源库</span>
+        </button>
+        <button class="btn secondary" :disabled="busy" @click="openLibraryFlow">
+          <AppIcon name="open-library-large" :size="24" />
+          <span>打开资源库</span>
+        </button>
       </div>
     </div>
+    <CreateLibraryForm
+      v-else-if="view === 'create'"
+      v-model:name="createName"
+      :busy="busy"
+      @submit="onCreateSubmit"
+      @cancel="view = 'initial'"
+    />
+    <PathErrorDialog
+      v-else
+      :message="errorMsg"
+      :busy="busy"
+      @retry="onRetry"
+      @cancel="view = 'initial'"
+    />
   </div>
 </template>
 
@@ -105,7 +122,7 @@ async function onOpen(): Promise<void> {
   justify-content: center;
   background: var(--c1-80);
 }
-/* 卡片：686×500 / C5 底 / 1px C4-15 描边（规范 4：inset box-shadow 模拟）/ 圆角 8 */
+/* 初始卡片：686×500 / C5 / 1px C4-15 描边（inset box-shadow，规范 4）+ 二级窗口投影 / 圆角 8 */
 .setup-card {
   box-sizing: border-box;
   width: 686px;
@@ -116,7 +133,9 @@ async function onOpen(): Promise<void> {
   padding: var(--space-16);
   gap: var(--space-16);
   background: var(--c5);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px var(--c4-15);
   border-radius: var(--radius-8);
 }
 .illustration {
@@ -129,23 +148,7 @@ async function onOpen(): Promise<void> {
   height: 100%;
   display: block;
 }
-/* 路径 / 错误行：正文样式（确认路径 C4-70，错误用语义色 --error） */
-.message {
-  margin: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  font-weight: var(--text-body-weight);
-  color: var(--c4-70);
-}
-.message.error {
-  color: var(--error);
-  white-space: normal;
-}
-/* 按钮组 */
+/* 按钮组（01_按钮#06 大标题按钮-大按钮）：带图标 250×52 / 圆角 8 */
 .actions {
   box-sizing: border-box;
   display: flex;
@@ -183,14 +186,9 @@ async function onOpen(): Promise<void> {
 }
 .btn.secondary {
   background: var(--c4-7);
-  height: 50px;
 }
 .btn.secondary:hover {
   background: var(--c4-15);
-}
-/* 确认路径 / 重新选择：纯文字、宽 200（用户确认的调整） */
-.btn.text-only {
-  width: 200px;
 }
 .btn:disabled {
   cursor: default;
