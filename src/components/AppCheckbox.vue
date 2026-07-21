@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // 单选框 / 复选框（02_通用组件/01_按钮 04）：按钮 16×16、线条 C4-15、圆角 4；
 // 选中：边框品牌色-2 + 填充品牌色-1，文字品牌色-1。
+import AppIcon from "./AppIcon.vue";
+
 const model = defineModel<boolean>({ required: true });
 defineProps<{ label: string }>();
 </script>
@@ -8,16 +10,7 @@ defineProps<{ label: string }>();
 <template>
   <button class="app-checkbox" :class="{ on: model }" @click="model = !model">
     <span class="box">
-      <svg v-if="model" width="8" height="8" viewBox="0 0 8 8">
-        <path
-          d="M1.5 4.3 3.2 6 6.5 2"
-          stroke="currentColor"
-          stroke-width="1.2"
-          fill="none"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
+      <AppIcon v-if="model" name="check" :size="8" />
     </span>
     <span class="label">{{ label }}</span>
   </button>
@@ -43,6 +36,7 @@ defineProps<{ label: string }>();
   align-items: center;
   justify-content: center;
   color: var(--c4);
+  line-height: 0;
   flex: none;
 }
 .app-checkbox:hover .box {

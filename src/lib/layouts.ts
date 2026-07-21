@@ -109,15 +109,16 @@ export function computeWaterfall(
   return { boxes: order.map((boxIdx) => boxes[boxIdx]), rows, totalHeight: Math.max(...tops, 0) + PAD.bottom };
 }
 
-// —— 网格（固定正方形）：格子边长 = 滑块值，列数随宽度，右侧留空 ——
+// —— 网格（正方形）：格子随容器宽度自适应填充（列数由目标格宽决定，格宽弹性均分无右侧空余） ——
 export function computeGrid(
   items: { w: number; h: number }[],
   containerWidth: number,
-  cell: number,
+  targetCell: number,
   captionHeight = 0,
 ): LayoutResult {
   const contentWidth = containerWidth - PAD.left - PAD.right;
-  const cols = Math.max(1, Math.floor((contentWidth + SPACING) / (cell + SPACING)));
+  const cols = Math.max(1, Math.floor((contentWidth + SPACING) / (targetCell + SPACING)));
+  const cell = (contentWidth - SPACING * (cols - 1)) / cols;
   const rowH = cell + captionHeight + SPACING;
   const boxes: Box[] = [];
   const rows: Row[] = [];

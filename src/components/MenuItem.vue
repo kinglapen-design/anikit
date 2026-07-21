@@ -22,7 +22,7 @@ const emit = defineEmits<{ select: [] }>();
   <button class="menu-item" @click="emit('select')">
     <span class="main">
       <span v-if="checkable" class="check-slot">
-        <AppIcon v-if="checked" name="check" :size="8" />
+        <AppIcon v-if="checked" name="check" :size="16" />
       </span>
       <AppIcon v-else-if="icon" :name="icon" class="deco" />
       <span class="label">{{ label }}</span>
@@ -59,8 +59,8 @@ const emit = defineEmits<{ select: [] }>();
   flex: none;
 }
 .check-slot {
-  width: 8px;
-  height: 8px;
+  width: 16px;
+  height: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
