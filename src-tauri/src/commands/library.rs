@@ -9,9 +9,11 @@ use tauri::State;
 use crate::core::config::{self, LibraryEntry};
 use crate::core::library::{self, Library};
 
-/// 应用状态：当前打开的素材库（同一时刻只开一个库）
+/// 应用状态：当前打开的素材库（同一时刻只开一个库）+ 导入任务注册表
 pub struct AppState {
   pub library: Mutex<Option<Library>>,
+  /// 导入任务取消标记：task_id → 置位即取消（任务结束从表中移除）
+  pub imports: Mutex<std::collections::HashMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>>>,
 }
 
 #[derive(Debug, Clone, Serialize)]

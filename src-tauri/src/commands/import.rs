@@ -1,16 +1,24 @@
-//! 命令 API：导入（文件 / 文件夹 / 剪贴板）与导入弹窗所需的树 / 列表查询。
-//! 命令层只做参数解析与状态取用，业务全部在 services（01_开发规范 第 1 条）。
+//! 命令 API：导入（任务化）与导入弹窗所需的树 / 列表查询。
+//! 导入命令只做参数解析与短锁校验，随即 spawn 工作线程跑 services::import_task::run_import，
+//! 立即返回 task_id；进度 / 结果经 on_event Channel 推送，cancel_import 可取消。
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 
 use serde::Serialize;
-use tauri::State;
+use tauri::ipc::Channel;
+use tauri::{AppHandle, Manager, State};
 
 use crate::commands::library::AppState;
-use crate::core::library::{Library, ASSTES_DIR, CACHE_DIR};
+use crate::core::library::{Library, CACHE_DIR};
 use crate::core::models::Placement;
-use crate::services::import as svc;
-use crate::services::import::{ImportOptions, ImportOutcome, Source, Structure};
+use crate::services::import::{ImportEvent, ImportOptions, Source, Structure, ROOT_FOLDER_ID};
+use crate::services::import_task::run_import;
+use crate::services::views::{placement_view, PlacementView};
+
+/// 导入任务 ID 自增源
+static NEXT_TASK_ID: AtomicU64 = AtomicU64::new(1);
 
 // ---------- 导入前预估 ----------
 
@@ -63,47 +71,118 @@ fn count_files(dir: &Path) -> u32 {
   count
 }
 
-// ---------- 导入 ----------
+// ---------- 导入（任务化） ----------
 
-/// 导入文件 / 文件夹：structure "flatten"/"keep"，source "copy"/"move"
+/// 导入文件 / 文件夹：立即返回 task_id，工作线程执行，事件经 on_event 推送
 #[tauri::command]
 pub fn import_paths(
-  state: State<AppState>,
+  app: AppHandle,
   paths: Vec<String>,
   structure: String,
   source: String,
   target_folder: Option<String>,
-) -> Result<ImportOutcome, String> {
+  on_event: Channel<ImportEvent>,
+) -> Result<u64, String> {
   let structure = parse_structure(&structure)?;
   let source = parse_source(&source)?;
-  let paths: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库再导入".to_string())?;
-  Ok(svc::import_paths(lib, &paths, &ImportOptions { structure, source, target_folder }))
+  let root = current_root(&app)?;
+  ensure_target(&app, &target_folder)?;
+  let opts =
+    ImportOptions { structure, source, target_folder, paths: paths.iter().map(PathBuf::from).collect() };
+  Ok(spawn_import(app, root, opts, on_event, None))
 }
 
-/// 剪贴板导入：取剪贴板位图 → 落 cache/ 临时 PNG → 以 Move + Flatten 走标准导入管线
-/// （剪贴板来源没有目录概念，永远剔除层级）
+/// 剪贴板导入：读图（无图即时报错）→ PNG 落 cache/ → 任务化走同一 run_import
+/// （剪贴板来源没有目录概念，永远 Move + Flatten）
 #[tauri::command]
-pub fn import_clipboard(state: State<AppState>, target_folder: Option<String>) -> Result<ImportOutcome, String> {
+pub fn import_clipboard(
+  app: AppHandle,
+  target_folder: Option<String>,
+  on_event: Channel<ImportEvent>,
+) -> Result<u64, String> {
   let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("剪贴板不可用：{e}"))?;
   let img = clipboard.get_image().map_err(|_| "剪贴板里没有图片".to_string())?;
+  let root = current_root(&app)?;
+  ensure_target(&app, &target_folder)?;
 
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库再导入".to_string())?;
-
-  let cache_dir = lib.root.join(CACHE_DIR);
+  let cache_dir = root.join(CACHE_DIR);
   std::fs::create_dir_all(&cache_dir).map_err(|e| format!("缓存目录创建失败：{e}"))?;
   let tmp = cache_dir.join(clipboard_png_name(&cache_dir));
   save_clipboard_png(&img, &tmp)?;
 
-  let opts = ImportOptions { structure: Structure::Flatten, source: Source::Move, target_folder };
-  let outcome = svc::import_paths(lib, std::slice::from_ref(&tmp), &opts);
-  // 查重命中时管线不移动实体，临时文件自行清理，cache/ 不留残留
-  if tmp.exists() {
-    let _ = std::fs::remove_file(&tmp);
+  let opts =
+    ImportOptions { structure: Structure::Flatten, source: Source::Move, target_folder, paths: vec![tmp.clone()] };
+  // 临时文件由工作线程在导入结束后清理（覆盖查重命中不移动实体的场景）
+  Ok(spawn_import(app, root, opts, on_event, Some(tmp)))
+}
+
+/// 取消导入任务：置位取消标记，工作线程在下一个文件处理前中断（数量如实进 Finished）
+#[tauri::command]
+pub fn cancel_import(state: State<AppState>, task_id: u64) -> Result<(), String> {
+  let registry = state.imports.lock().map_err(|e| e.to_string())?;
+  match registry.get(&task_id) {
+    Some(flag) => {
+      flag.store(true, Ordering::Relaxed);
+      Ok(())
+    }
+    None => Err("导入任务不存在或已结束".to_string()),
   }
-  Ok(outcome)
+}
+
+/// 短锁拿库 root 并校验库存在（命令唯一需要的共享状态）
+fn current_root(app: &AppHandle) -> Result<PathBuf, String> {
+  let state = app.state::<AppState>();
+  let guard = state.library.lock().map_err(|e| e.to_string())?;
+  guard.as_ref().map(|l| l.root.clone()).ok_or_else(|| "请先打开素材库再导入".to_string())
+}
+
+/// 短锁校验目标文件夹存在（None / "root" 直接放行），失败在 spawn 前即时报错
+fn ensure_target(app: &AppHandle, target_folder: &Option<String>) -> Result<(), String> {
+  let Some(id) = target_folder else { return Ok(()) };
+  if id == ROOT_FOLDER_ID {
+    return Ok(());
+  }
+  let state = app.state::<AppState>();
+  let guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库再导入".to_string())?;
+  if lib.index.folders.contains_key(id) {
+    Ok(())
+  } else {
+    Err("目标文件夹不存在，可能已被删除".to_string())
+  }
+}
+
+/// 注册任务 + 起工作线程：线程内 run_import（分段短锁），结束注销任务、清理临时文件
+fn spawn_import(
+  app: AppHandle,
+  root: PathBuf,
+  opts: ImportOptions,
+  on_event: Channel<ImportEvent>,
+  cleanup: Option<PathBuf>,
+) -> u64 {
+  let task_id = NEXT_TASK_ID.fetch_add(1, Ordering::Relaxed);
+  let cancel = Arc::new(AtomicBool::new(false));
+  match app.state::<AppState>().imports.lock() {
+    Ok(mut registry) => {
+      registry.insert(task_id, cancel.clone());
+    }
+    Err(_) => log::error!("导入任务 {task_id} 注册失败（锁冲突），该任务将无法取消"),
+  }
+  std::thread::spawn(move || {
+    let state = app.state::<AppState>();
+    run_import(&state.library, root, opts, move |ev| {
+      if let Err(e) = on_event.send(ev) {
+        log::debug!("导入事件推送失败（前端可能已关闭）：{e}");
+      }
+    }, &cancel);
+    if let Some(p) = cleanup.filter(|p| p.exists()) {
+      let _ = std::fs::remove_file(&p);
+    }
+    if let Ok(mut registry) = state.imports.lock() {
+      registry.remove(&task_id);
+    };
+  });
+  task_id
 }
 
 /// 剪贴板临时文件名：剪贴板-yyyyMMdd-HHmm.png，重名追加 -序号
@@ -180,20 +259,6 @@ fn folder_tree(lib: &Library) -> Vec<FolderNode> {
   children_of(lib, None)
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PlacementView {
-  pub asset_id: String,
-  pub folder_id: String,
-  pub name: String,
-  pub w: Option<u32>,
-  pub h: Option<u32>,
-  pub ext: String,
-  /// 缩略图绝对路径（无缩略图为 null）
-  pub thumb_path: Option<String>,
-  pub origin: bool,
-}
-
 /// 列出 Placement：folder=None 全部；Some(id) 指定文件夹（"root" 表示根目录）
 #[tauri::command]
 pub fn list_placements(state: State<AppState>, folder: Option<String>) -> Result<Vec<PlacementView>, String> {
@@ -202,47 +267,42 @@ pub fn list_placements(state: State<AppState>, folder: Option<String>) -> Result
   Ok(placement_views(lib, folder.as_deref()))
 }
 
-/// Placement → 视图：按索引反查资源补宽高 / 缩略图；资源缺失的 Placement 跳过
+/// Placement → 视图：资源在索引中缺失的脏 Placement 跳过
 fn placement_views(lib: &Library, folder: Option<&str>) -> Vec<PlacementView> {
   let items: Vec<&Placement> = match folder {
     Some(id) => lib.index.placements_by_folder.get(id).map(|v| v.iter().collect()).unwrap_or_default(),
     None => lib.folders.items.iter().collect(),
   };
-  items.into_iter().filter_map(|p| to_view(lib, p)).collect()
-}
-
-fn to_view(lib: &Library, p: &Placement) -> Option<PlacementView> {
-  let meta = lib.index.assets.get(&p.asset)?;
-  let thumb_path = meta.thumbnail.as_ref().map(|t| {
-    lib.root.join(ASSTES_DIR).join(format!("{}.info", meta.id)).join(t).to_string_lossy().into_owned()
-  });
-  Some(PlacementView {
-    asset_id: p.asset.clone(),
-    folder_id: p.folder.clone(),
-    name: p.name.clone(),
-    w: meta.width,
-    h: meta.height,
-    ext: meta.ext.clone(),
-    thumb_path,
-    origin: p.origin,
-  })
+  items.into_iter().filter_map(|p| lib.index.assets.get(&p.asset).map(|m| placement_view(&lib.root, m, p))).collect()
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
   use crate::core::library;
-  use crate::services::import::ROOT_FOLDER_ID;
+  use std::sync::Mutex;
 
-  fn make_lib() -> (tempfile::TempDir, Library) {
-    let dir = tempfile::tempdir().unwrap();
-    let lib = library::create(&dir.path().join("测试库")).unwrap();
-    (dir, lib)
+  struct Harness {
+    _dir: tempfile::TempDir,
+    lib: Mutex<Option<Library>>,
+    root: PathBuf,
   }
 
-  fn import(lib: &mut Library, paths: &[PathBuf], structure: Structure) {
-    let opts = ImportOptions { structure, source: Source::Copy, target_folder: None };
-    svc::import_paths(lib, paths, &opts);
+  fn make_lib() -> Harness {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("测试库");
+    let lib = library::create(&root).unwrap();
+    Harness { _dir: dir, lib: Mutex::new(Some(lib)), root }
+  }
+
+  /// 同步跑导入（事件丢弃）
+  fn import(h: &Harness, paths: Vec<PathBuf>, structure: Structure) {
+    let opts = ImportOptions { structure, source: Source::Copy, target_folder: None, paths };
+    run_import(&h.lib, h.root.clone(), opts, |_| {}, &AtomicBool::new(false));
+  }
+
+  fn with_lib<R>(h: &Harness, f: impl FnOnce(&Library) -> R) -> R {
+    f(h.lib.lock().unwrap().as_ref().unwrap())
   }
 
   #[test]
@@ -266,14 +326,14 @@ mod tests {
 
   #[test]
   fn folder_tree_nests_and_counts_direct_placements() {
-    let (dir, mut lib) = make_lib();
-    let src = dir.path().join("参考");
+    let h = make_lib();
+    let src = h._dir.path().join("参考");
     std::fs::create_dir_all(src.join("人物")).unwrap();
     std::fs::write(src.join("a.txt"), "a").unwrap();
     std::fs::write(src.join("人物/b.txt"), "b").unwrap();
-    import(&mut lib, &[src], Structure::Keep);
+    import(&h, vec![src], Structure::Keep);
 
-    let tree = folder_tree(&lib);
+    let tree = with_lib(&h, folder_tree);
     assert_eq!(tree.len(), 1);
     assert_eq!((tree[0].name.as_str(), tree[0].count), ("参考", 1));
     assert_eq!((tree[0].children[0].name.as_str(), tree[0].children[0].count), ("人物", 1));
@@ -281,27 +341,27 @@ mod tests {
 
   #[test]
   fn placement_views_join_meta_and_skip_missing() {
-    let (dir, mut lib) = make_lib();
-    let png = dir.path().join("图.png");
+    let h = make_lib();
+    let png = h._dir.path().join("图.png");
     image::RgbaImage::from_pixel(10, 20, image::Rgba([0, 0, 0, 255])).save(&png).unwrap();
-    import(&mut lib, &[png], Structure::Flatten);
+    import(&h, vec![png], Structure::Flatten);
 
-    let views = placement_views(&lib, Some(ROOT_FOLDER_ID));
+    let views = with_lib(&h, |l| placement_views(l, Some(ROOT_FOLDER_ID)));
     assert_eq!(views.len(), 1);
     assert_eq!((views[0].w, views[0].h), (Some(10), Some(20)));
     assert_eq!(views[0].ext, "png");
     assert!(views[0].origin);
     assert!(views[0].thumb_path.as_ref().unwrap().ends_with("_thumbnail.webp"));
 
-    // 资源在索引中缺失的 Placement 跳过
-    lib.folders.items.push(Placement {
+    // 资源在索引中缺失的脏 Placement 跳过
+    h.lib.lock().unwrap().as_mut().unwrap().folders.items.push(Placement {
       asset: "AN-不存在".into(),
       folder: ROOT_FOLDER_ID.into(),
       name: "幽灵.txt".into(),
       order: 1,
       origin: false,
     });
-    assert_eq!(placement_views(&lib, None).len(), 1);
+    assert_eq!(with_lib(&h, |l| placement_views(l, None).len()), 1);
   }
 
   #[test]

@@ -37,7 +37,10 @@ pub fn run() {
     }))
     .plugin(tauri_plugin_global_shortcut::Builder::new().build())
     .plugin(tauri_plugin_dialog::init())
-    .manage(commands::library::AppState { library: std::sync::Mutex::new(None) })
+    .manage(commands::library::AppState {
+      library: std::sync::Mutex::new(None),
+      imports: std::sync::Mutex::new(std::collections::HashMap::new()),
+    })
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -151,6 +154,7 @@ pub fn run() {
       commands::import::classify_paths,
       commands::import::import_paths,
       commands::import::import_clipboard,
+      commands::import::cancel_import,
       commands::import::list_folder_tree,
       commands::import::list_placements,
     ])
