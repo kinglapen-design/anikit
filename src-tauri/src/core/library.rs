@@ -80,8 +80,32 @@ pub fn validate(path: &Path) -> Result<(), DataError> {
   read_json::<serde_json::Value>(&folders_path).map(|_| ())
 }
 
+/// 资源库名称合法性（Windows 文件夹命名规则；前端表单同规则，命令接口统一把关）
+fn validate_library_name(name: &str) -> Result<(), DataError> {
+  if name.is_empty() {
+    return Err(DataError::NameInvalid("名称不能留空"));
+  }
+  if name.contains(['\\', '/', ':', '*', '?', '"', '<', '>', '|']) {
+    return Err(DataError::NameInvalid("名称不能包含 \\ / : * ? \" < > | 特殊符号"));
+  }
+  if name.ends_with([' ', '.']) {
+    return Err(DataError::NameInvalid("名称不能以空格或点结尾"));
+  }
+  const RESERVED: &[&str] = &[
+    "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
+    "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+  ];
+  if RESERVED.contains(&name.to_ascii_lowercase().as_str()) {
+    return Err(DataError::NameInvalid("该名称为系统保留名，请换一个"));
+  }
+  Ok(())
+}
+
 /// 在指定文件夹创建素材库（文件夹名即素材库名）。要求文件夹为空；已是资源库则提示改用打开。
 pub fn create(path: &Path) -> Result<Library, DataError> {
+  // 名称校验在 mkdir 之前，避免建出非法 / 半截目录
+  let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+  validate_library_name(name)?;
   fs::create_dir_all(path)?;
   if validate(path).is_ok() {
     return Err(DataError::AlreadyLibrary);
@@ -156,6 +180,19 @@ mod tests {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("随便一个文件.txt"), "hi").unwrap();
     assert!(matches!(create(dir.path()), Err(DataError::NotEmpty)));
+  }
+
+  #[test]
+  fn create_rejects_invalid_names() {
+    let dir = tempfile::tempdir().unwrap();
+    // 特殊符号 / 结尾点 / 系统保留名（Windows 文件夹命名规则）
+    for name in ["bad:name", "bad|name", "lib.", "lib ", "CON", "com1", "Lpt9"] {
+      let result = create(&dir.path().join(name));
+      assert!(matches!(result, Err(DataError::NameInvalid(_))), "名称 {name} 应被拒绝");
+      assert!(!dir.path().join(name).exists(), "名称 {name} 不应建出目录");
+    }
+    // 合法中文名可用
+    assert!(create(&dir.path().join("我的素材")).is_ok());
   }
 
   #[test]

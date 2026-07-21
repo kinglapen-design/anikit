@@ -57,21 +57,21 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   font-weight: var(--text-caption-weight);
   color: var(--c4-40);
 }
-/* 按钮组（01_按钮#07 大标题按钮-小按钮）：160×34 / 圆角 6 / 无图标 */
+/* 按钮组（01_按钮#07 大标题按钮-小按钮）：撑满、两按钮等分 / 圆角 6 / 无图标 */
 .actions {
   display: flex;
   flex-direction: row;
   gap: var(--space-16);
-  width: 336px;
+  width: 100%;
 }
 .btn {
   display: flex;
   flex-direction: row;
   justify-content: center;
   align-items: center;
+  flex: 1;
   padding: 6px 0;
   gap: var(--space-6);
-  width: 160px;
   height: 34px;
   border: none;
   border-radius: var(--radius-6);

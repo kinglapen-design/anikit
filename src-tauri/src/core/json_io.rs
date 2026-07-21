@@ -27,6 +27,8 @@ pub enum DataError {
   AlreadyLibrary,
   /// 目标文件夹非空（创建要求空文件夹）
   NotEmpty,
+  /// 资源库名称不合法（Windows 文件夹命名规则）
+  NameInvalid(&'static str),
 }
 
 impl std::fmt::Display for DataError {
@@ -41,6 +43,7 @@ impl std::fmt::Display for DataError {
       DataError::NotALibrary => write!(f, "该文件夹不是 AniKit 资源库"),
       DataError::AlreadyLibrary => write!(f, "该文件夹已是 AniKit 资源库，请改用打开资源库"),
       DataError::NotEmpty => write!(f, "目标文件夹不是空文件夹，请选择空文件夹创建资源库"),
+      DataError::NameInvalid(msg) => write!(f, "{msg}"),
     }
   }
 }
