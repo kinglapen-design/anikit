@@ -34,8 +34,14 @@ function show(el: HTMLElement, value: TipValue): void {
   }
   const rect = el.getBoundingClientRect();
   tip.style.left = `${rect.left + rect.width / 2}px`;
-  tip.style.top = `${rect.bottom + 6}px`;
   tip.classList.add("show");
+  // 位置自适应：下方空间不足（会被窗口下缘截断）时翻到元素上方
+  const tipH = tip.offsetHeight;
+  let top = rect.bottom + 6;
+  if (top + tipH > window.innerHeight - 4) {
+    top = rect.top - tipH - 6;
+  }
+  tip.style.top = `${Math.max(4, top)}px`;
 }
 
 function hide(): void {

@@ -11,7 +11,7 @@ import AppCheckbox from "./AppCheckbox.vue";
 import { useUiStore } from "../stores/ui";
 
 const ui = useUiStore();
-const props = defineProps<{ anchor: { x: number; y: number } }>();
+const props = defineProps<{ anchor: { x: number; y: number }; trigger?: HTMLElement | null }>();
 const emit = defineEmits<{ close: [] }>();
 
 const sub = ref<"layout" | "sort" | "group" | null>(null);
@@ -41,7 +41,7 @@ function pickLayout(v: (typeof layouts)[number]["value"]): void {
 
 <template>
   <div ref="groupRef" style="display: contents">
-    <AppMenu :x="anchor.x" :y="anchor.y" :group="groupRef ?? null" @close="emit('close')">
+    <AppMenu :x="anchor.x" :y="anchor.y" :group="groupRef ?? null" :trigger="trigger ?? null" @close="emit('close')">
       <div class="check-wrap">
         <AppCheckbox v-model="ui.useGlobalView" label="使用全局设置" />
       </div>
@@ -51,7 +51,7 @@ function pickLayout(v: (typeof layouts)[number]["value"]): void {
       <MenuItem icon="group-by" label="分组依据" arrow @pointerenter="sub = 'group'" @select="sub = 'group'" />
     </AppMenu>
 
-    <AppMenu v-if="sub === 'layout'" :x="subX()" :y="anchor.y + 32" :group="groupRef ?? null" @close="emit('close')">
+    <AppMenu v-if="sub === 'layout'" :x="subX()" :y="anchor.y + 32" :group="groupRef ?? null" :trigger="trigger ?? null" @close="emit('close')">
       <MenuItem
         v-for="l in layouts"
         :key="l.value"
@@ -62,7 +62,7 @@ function pickLayout(v: (typeof layouts)[number]["value"]): void {
       />
     </AppMenu>
 
-    <AppMenu v-if="sub === 'sort'" :x="subX()" :y="anchor.y + 60" :group="groupRef ?? null" @close="emit('close')">
+    <AppMenu v-if="sub === 'sort'" :x="subX()" :y="anchor.y + 60" :group="groupRef ?? null" :trigger="trigger ?? null" @close="emit('close')">
       <MenuItem
         v-for="s in sorts"
         :key="s"

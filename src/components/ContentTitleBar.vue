@@ -18,9 +18,10 @@ const appWindow = getCurrentWindow();
 // 搜索结果容器：搜索后从左侧滑入、取消后往左滑出（阶段 1 演示——点击标题模拟搜索 / 撤销，阶段 4 接真搜索）
 const showResult = ref(false);
 
-// 查看方式菜单：按钮右缘对齐、下方展开；再次点击按钮关闭（toggle）
+// 查看方式菜单：按钮右缘对齐、下方展开；再次点击按钮收起（toggle）
 const viewMenuOpen = ref(false);
 const viewMenuAnchor = ref({ x: 0, y: 0 });
+const viewBtnRef = ref<HTMLElement>();
 function openViewMenu(e: MouseEvent): void {
   if (viewMenuOpen.value) {
     viewMenuOpen.value = false;
@@ -63,7 +64,9 @@ async function togglePin(): Promise<void> {
     <AppCheckbox v-model="ui.showSubfolders" label="显示子文件夹内容" />
     <div class="btn-group">
       <IconButton name="plugin" title="插件" />
-      <IconButton name="view-options" title="查看方式" @click="openViewMenu" />
+      <span ref="viewBtnRef" style="display: contents">
+        <IconButton name="view-options" title="查看方式" @click="openViewMenu" />
+      </span>
     </div>
     <div v-if="ui.rightCollapsed" class="btn-group">
       <IconButton
@@ -78,7 +81,7 @@ async function togglePin(): Promise<void> {
       />
       <WindowControls />
     </div>
-    <ViewOptionsMenu v-if="viewMenuOpen" :anchor="viewMenuAnchor" @close="viewMenuOpen = false" />
+    <ViewOptionsMenu v-if="viewMenuOpen" :anchor="viewMenuAnchor" :trigger="viewBtnRef ?? null" @close="viewMenuOpen = false" />
   </div>
 </template>
 

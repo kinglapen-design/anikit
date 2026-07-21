@@ -5,14 +5,16 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 
 const props = withDefaults(
-  defineProps<{ x: number; y: number; width?: number; group?: HTMLElement | null }>(),
-  { width: 175, group: null },
+  defineProps<{ x: number; y: number; width?: number; group?: HTMLElement | null; trigger?: HTMLElement | null }>(),
+  { width: 175, group: null, trigger: null },
 );
 const emit = defineEmits<{ close: [] }>();
 const rootRef = ref<HTMLElement>();
 
 function onPointerDown(e: PointerEvent): void {
   const t = e.target as Node;
+  // 触发按钮本身不算组外（toggle 由按钮的 click 处理，避免"组外先关、click 又开"反复弹）
+  if (props.trigger?.contains(t)) return;
   if (rootRef.value?.contains(t)) return;
   if (props.group && props.group !== rootRef.value && props.group.contains(t)) return;
   emit("close");
