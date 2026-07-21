@@ -1,14 +1,21 @@
 <script setup lang="ts">
 // 菜单容器（02_通用组件/07_右键菜单、03_UI 布局/05_查看方式）：
-// C5 / 圆角 8 / 1px C4-15（inset）/ 内边距 4 / 子项间距 2，fixed 定位，外部点击 / Esc 关闭。
+// C5 / 圆角 8 / 1px C4-15（inset）/ 内边距 4 / 子项间距 2 / 投影 0 4 24（层级）；
+// fixed 定位，点击组外（group 之外）或 Esc 关闭；菜单项点击不自动关闭（连续操作）。
 import { onBeforeUnmount, onMounted, ref } from "vue";
 
-withDefaults(defineProps<{ x: number; y: number; width?: number }>(), { width: 175 });
+const props = withDefaults(
+  defineProps<{ x: number; y: number; width?: number; group?: HTMLElement | null }>(),
+  { width: 175, group: null },
+);
 const emit = defineEmits<{ close: [] }>();
 const rootRef = ref<HTMLElement>();
 
 function onPointerDown(e: PointerEvent): void {
-  if (rootRef.value && !rootRef.value.contains(e.target as Node)) emit("close");
+  const t = e.target as Node;
+  if (rootRef.value?.contains(t)) return;
+  if (props.group && props.group !== rootRef.value && props.group.contains(t)) return;
+  emit("close");
 }
 function onKeydown(e: KeyboardEvent): void {
   if (e.key === "Escape") emit("close");
@@ -45,6 +52,8 @@ onBeforeUnmount(() => {
   padding: var(--space-4);
   border-radius: var(--radius-8);
   background: var(--c5);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  box-shadow:
+    inset 0 0 0 1px var(--c4-15),
+    0 4px 24px rgba(0, 0, 0, 0.6);
 }
 </style>

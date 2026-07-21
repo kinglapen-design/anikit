@@ -11,10 +11,18 @@ import AppCheckbox from "./AppCheckbox.vue";
 import { useUiStore } from "../stores/ui";
 
 const ui = useUiStore();
-defineProps<{ anchor: { x: number; y: number } }>();
+const props = defineProps<{ anchor: { x: number; y: number } }>();
 const emit = defineEmits<{ close: [] }>();
 
 const sub = ref<"layout" | "sort" | "group" | null>(null);
+const groupRef = ref<HTMLElement>();
+
+// 二级菜单位置：优先向右展开；右侧空间不足（查看方式按钮总在窗口右侧）则向左展开
+function subX(): number {
+  return props.anchor.x + 177 + 175 > window.innerWidth - 20
+    ? props.anchor.x - 177
+    : props.anchor.x + 177;
+}
 
 const layouts = [
   { value: "justified", label: "自适应" },
@@ -25,9 +33,9 @@ const layouts = [
 
 const sorts = ["标题", "扩展名", "文件大小", "尺寸", "评分", "时长", "添加日期", "创建日期", "修改日期"];
 
+// 选中不关闭菜单（对勾与界面即时同步，用户可连续切换对比；点组外 / 再点工具栏按钮关闭）
 function pickLayout(v: (typeof layouts)[number]["value"]): void {
   ui.layoutMode = v;
-  emit("close");
 }
 </script>
 
@@ -43,7 +51,7 @@ function pickLayout(v: (typeof layouts)[number]["value"]): void {
       <MenuItem icon="group-by" label="分组依据" arrow @pointerenter="sub = 'group'" @select="sub = 'group'" />
     </AppMenu>
 
-    <AppMenu v-if="sub === 'layout'" :x="anchor.x + 177" :y="anchor.y + 32" :group="groupRef ?? null" @close="emit('close')">
+    <AppMenu v-if="sub === 'layout'" :x="subX()" :y="anchor.y + 32" :group="groupRef ?? null" @close="emit('close')">
       <MenuItem
         v-for="l in layouts"
         :key="l.value"
@@ -54,7 +62,7 @@ function pickLayout(v: (typeof layouts)[number]["value"]): void {
       />
     </AppMenu>
 
-    <AppMenu v-if="sub === 'sort'" :x="anchor.x + 177" :y="anchor.y + 60" :group="groupRef ?? null" @close="emit('close')">
+    <AppMenu v-if="sub === 'sort'" :x="subX()" :y="anchor.y + 60" :group="groupRef ?? null" @close="emit('close')">
       <MenuItem
         v-for="s in sorts"
         :key="s"
