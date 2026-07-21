@@ -36,16 +36,18 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
       <IconButton name="toggle-sidebar-left" title="收起侧边栏" @click="ui.leftCollapsed = true" />
     </header>
 
-    <Transition name="slide">
-      <div class="library-switch" :key="isWorkspace ? 'ws' : 'lib'">
-        <span class="badge">
-          <AppIcon :name="isWorkspace ? 'workspace-badge' : 'library-badge'" :size="16" />
-        </span>
-        <span class="lib-name">{{ isWorkspace ? "我的项目" : "动画素材库" }}</span>
-        <span class="spacer" />
-        <IconButton name="switch-library" title="切换" />
-      </div>
-    </Transition>
+    <div class="switch-wrap">
+      <Transition name="slide" mode="out-in">
+        <div class="library-switch" :key="isWorkspace ? 'ws' : 'lib'">
+          <span class="badge">
+            <AppIcon :name="isWorkspace ? 'workspace-badge' : 'library-badge'" :size="16" />
+          </span>
+          <span class="lib-name">{{ isWorkspace ? "我的项目" : "动画素材库" }}</span>
+          <span class="spacer" />
+          <IconButton name="switch-library" title="切换" />
+        </div>
+      </Transition>
+    </div>
 
     <div ref="bodyRef" class="view-body">
       <Transition name="slide" mode="out-in">
@@ -101,6 +103,13 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
   flex: 1;
 }
 /* 切换资源库：内边距 8 8 8 20 / 间距 8；图标容器 24×24 品牌色-1 圆角 6 */
+.switch-wrap {
+  /* 固定高度容器（40 = padding 8×2 + 图标 24）：out-in 中间态不塌高，文件树容器不跳帧 */
+  height: 40px;
+  flex: none;
+  position: relative;
+  overflow: hidden;
+}
 .library-switch {
   display: flex;
   align-items: center;
