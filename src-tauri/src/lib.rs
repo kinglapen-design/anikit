@@ -7,6 +7,7 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 
 mod commands;
 mod core;
+mod services;
 
 /// 任务 2 spike：从窗口拖出文件到其他软件（WebView HTML5 拖拽出不了窗口边界，
 /// 由原生层发起系统级拖拽，Windows 底层即 CF_HDROP）。
@@ -147,6 +148,11 @@ pub fn run() {
       commands::library::open_library,
       commands::library::get_current_library,
       commands::library::list_recent_libraries,
+      commands::import::classify_paths,
+      commands::import::import_paths,
+      commands::import::import_clipboard,
+      commands::import::list_folder_tree,
+      commands::import::list_placements,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

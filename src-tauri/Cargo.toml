@@ -21,7 +21,7 @@ tauri-build = { version = "2.6.3", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.11.3", features = ["tray-icon"] }
+tauri = { version = "2.11.3", features = ["protocol-asset", "tray-icon"] }
 tauri-plugin-log = "2"
 drag = "2.1.1"
 tauri-plugin-global-shortcut = "2.3.2"
@@ -35,6 +35,12 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 rand = "0.8"
 # 全局配置目录（Windows %APPDATA%）
 dirs = "5"
+# 阶段 3：导入 hash 查重（sha256）
+sha2 = "0.10"
+# 阶段 3：图片宽高探测与缩略图生成（裁剪特性控制体积）
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+# 阶段 3：剪贴板图片读取（剪贴板导入）
+arboard = "3"
 
 [dev-dependencies]
 tempfile = "3"

@@ -2,6 +2,7 @@
 //! 库根布局：asstes/ backup/ cache/ vectors/ + 五个数据文件；
 //! 内部路径全部相对化，整个目录可整体搬迁、换盘符不影响使用（PRD 06-01.1）。
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -157,6 +158,32 @@ fn load_assets(root: &Path) -> Result<Vec<AssetMeta>, DataError> {
   Ok(assets)
 }
 
+/// folders.json 单一写点（01_开发规范 第 1 条）：全量保存文件夹树 + 全部 Placement。
+pub fn save_folders(lib: &Library) -> Result<(), DataError> {
+  write_json(&lib.root.join(FOLDERS_FILE), &lib.folders)
+}
+
+/// 同文件夹内显示名唯一化：无冲突原样返回；冲突时在扩展名前追加 -序号
+/// （如 男人-1.fla、男人-2.fla；无扩展名则在末尾追加，如 参考-1）。
+pub fn unique_name(existing: &HashSet<String>, name: &str) -> String {
+  if !existing.contains(name) {
+    return name.to_string();
+  }
+  // rsplit_once 取最后一个点："a.b.fla" → ("a.b", "fla")；".hidden" 不视为扩展名
+  let (stem, ext) = match name.rsplit_once('.') {
+    Some((s, e)) if !s.is_empty() => (s.to_string(), format!(".{e}")),
+    _ => (name.to_string(), String::new()),
+  };
+  let mut n = 1;
+  loop {
+    let candidate = format!("{stem}-{n}{ext}");
+    if !existing.contains(&candidate) {
+      return candidate;
+    }
+    n += 1;
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -258,5 +285,32 @@ mod tests {
     fs::create_dir_all(&info).unwrap();
     fs::write(info.join("metadata.json"), "{ broken").unwrap();
     assert!(matches!(open(root), Err(DataError::Corrupt(_))));
+  }
+
+  #[test]
+  fn save_folders_roundtrip() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("库");
+    let mut lib = create(&root).unwrap();
+    lib.folders.folders.push(Folder { id: "F01".into(), name: "人物".into(), parent: None, order: 0 });
+    save_folders(&lib).unwrap();
+    let back: FoldersFile = read_json(&root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(back.folders.len(), 1);
+    assert_eq!(back.folders[0].name, "人物");
+  }
+
+  #[test]
+  fn unique_name_appends_counter_before_ext() {
+    let existing: HashSet<String> =
+      ["男人.fla".to_string(), "男人-1.fla".to_string(), "参考".to_string()].into_iter().collect();
+    // 无冲突原样返回
+    assert_eq!(unique_name(&existing, "女人.fla"), "女人.fla");
+    // 冲突在扩展名前追加 -序号，已占用的序号跳过
+    assert_eq!(unique_name(&existing, "男人.fla"), "男人-2.fla");
+    // 无扩展名在末尾追加
+    assert_eq!(unique_name(&existing, "参考"), "参考-1");
+    // 点开头不视为扩展名
+    let hidden: HashSet<String> = [".gitignore".to_string()].into_iter().collect();
+    assert_eq!(unique_name(&hidden, ".gitignore"), ".gitignore-1");
   }
 }

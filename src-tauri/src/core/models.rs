@@ -9,7 +9,6 @@ pub const DATA_VERSION: u32 = 1;
 
 /// 生成资源 ID：`AN` + 时间戳（yyMMddHHmm，时间有序）+ 5 位随机字符（防同秒冲突）。
 /// ID 不承载语义，语义全部在 metadata（PRD 01-2.1）。
-#[allow(dead_code)] // 阶段 3 导入启用
 pub fn new_asset_id() -> String {
   // 去掉易混淆字符 0/O/1/I，肉眼抄录不出错
   const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
