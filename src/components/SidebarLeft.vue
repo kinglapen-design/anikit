@@ -48,9 +48,12 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
     </Transition>
 
     <div ref="bodyRef" class="view-body">
-      <Transition name="slide">
-        <LibraryView v-if="ui.leftView === 'library'" key="library" />
-        <SidebarViews v-else :key="ui.leftView" />
+      <Transition name="slide" mode="out-in">
+        <!-- Transition 只包普通元素（与"切换资源库"同一稳定机制），组件作为内容渲染 -->
+        <div :key="ui.leftView" class="view-pane">
+          <LibraryView v-if="ui.leftView === 'library'" />
+          <SidebarViews v-else />
+        </div>
       </Transition>
     </div>
     <span
@@ -133,17 +136,15 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
   overflow-y: auto;
   overflow-x: hidden;
 }
-/* 视图切换动画：旧区块往左滑出，新区块从右滑入（并行过渡，leave 脱离文档流不占位） */
+.view-pane {
+  height: 100%;
+}
+/* 视图切换动画：旧区块往左滑出，新区块从右滑入（out-in 串行，无并行排列问题） */
 .slide-enter-active,
 .slide-leave-active {
   transition:
     transform 0.18s ease,
     opacity 0.18s ease;
-}
-.slide-leave-active {
-  /* 只脱离文档流（enter 元素直接占位），保持原位置与宽度，不左右跳 */
-  position: absolute;
-  width: 100%;
 }
 .slide-enter-from {
   transform: translateX(40px);
