@@ -8,6 +8,7 @@ import IconButton from "./IconButton.vue";
 import SideSlider from "./SideSlider.vue";
 import AppCheckbox from "./AppCheckbox.vue";
 import WindowControls from "./WindowControls.vue";
+import ViewOptionsMenu from "./ViewOptionsMenu.vue";
 import { useUiStore } from "../stores/ui";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
@@ -16,6 +17,15 @@ const appWindow = getCurrentWindow();
 
 // 搜索结果容器：搜索后从左侧滑入、取消后往左滑出（阶段 1 演示——点击标题模拟搜索 / 撤销，阶段 4 接真搜索）
 const showResult = ref(false);
+
+// 查看方式菜单：按钮右缘对齐、下方展开
+const viewMenuOpen = ref(false);
+const viewMenuAnchor = ref({ x: 0, y: 0 });
+function openViewMenu(e: MouseEvent): void {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  viewMenuAnchor.value = { x: rect.right - 175, y: rect.bottom + 4 };
+  viewMenuOpen.value = true;
+}
 
 async function togglePin(): Promise<void> {
   ui.alwaysOnTop = !ui.alwaysOnTop;
@@ -49,7 +59,7 @@ async function togglePin(): Promise<void> {
     <AppCheckbox v-model="ui.showSubfolders" label="显示子文件夹内容" />
     <div class="btn-group">
       <IconButton name="plugin" title="插件" />
-      <IconButton name="view-options" title="查看方式" />
+      <IconButton name="view-options" title="查看方式" @click="openViewMenu" />
     </div>
     <div v-if="ui.rightCollapsed" class="btn-group">
       <IconButton
@@ -64,6 +74,7 @@ async function togglePin(): Promise<void> {
       />
       <WindowControls />
     </div>
+    <ViewOptionsMenu v-if="viewMenuOpen" :anchor="viewMenuAnchor" @close="viewMenuOpen = false" />
   </div>
 </template>
 

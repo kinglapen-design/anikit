@@ -16,5 +16,10 @@ export const useUiStore = defineStore("ui", {
     targetRowHeight: 220,
     gridWidth: 800,
     showSubfolders: true,
+    // 查看方式（阶段 1：布局生效，排序 / 分组占位）
+    layoutMode: "justified" as "justified" | "waterfall" | "grid" | "list",
+    useGlobalView: true,
+    sortBy: "",
+    sortAsc: true,
   }),
 });

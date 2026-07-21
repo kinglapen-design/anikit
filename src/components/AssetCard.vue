@@ -4,7 +4,7 @@
 // + 标题 + 尺寸标签。
 import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
-import { CARD_CAPTION_H, type Box } from "../lib/justified";
+import { CARD_CAPTION_H, type Box } from "../lib/layouts";
 import type { FakeAsset } from "../stores/content";
 
 const props = withDefaults(defineProps<{ asset: FakeAsset; box: Box; selected?: boolean }>(), {

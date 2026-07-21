@@ -5,9 +5,20 @@
 // 滚动条贴 viewport 右缘（不占布局），中间面板 4px 内边距作呼吸（token 15）。
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import AssetCard from "./AssetCard.vue";
+import ListRowCard from "./ListRowCard.vue";
+import ListHeader from "./ListHeader.vue";
 import FolderStrip from "./FolderStrip.vue";
 import SectionHeader from "./SectionHeader.vue";
-import { CARD_CAPTION_H, computeJustified, lowerBound, type Box, type Row } from "../lib/justified";
+import {
+  CARD_CAPTION_H,
+  computeJustified,
+  computeWaterfall,
+  computeGrid,
+  computeList,
+  lowerBound,
+  type Box,
+  type Row,
+} from "../lib/layouts";
 import { useVirtualScroll } from "../lib/useVirtualScroll";
 import { useContentStore } from "../stores/content";
 import { useUiStore } from "../stores/ui";
@@ -33,8 +44,11 @@ const gridTotal = ref(0);
 const assetsOpen = ref(true);
 
 // 总高 = 头部（文件夹区块 + 内容副标题 + 间距 6）+ 网格高（折叠"内容"时不计）
+// 列表模式另有固定列头 28px（不占布局、不随滚动）
+const listExtra = computed(() => (ui.layoutMode === "list" ? 28 : 0));
+
 function currentTotal(): number {
-  return (assetsOpen.value ? gridTotal.value : 0) + headerH.value + 6;
+  return (assetsOpen.value ? gridTotal.value : 0) + headerH.value + 6 + listExtra.value;
 }
 
 function updateRange(scrollPos: number): void {
@@ -50,13 +64,13 @@ const { pos, thumbTop, thumbHeight, setTotal, attach, detach } = useVirtualScrol
 const visibleCards = computed(() => {
   const rs = rows.value;
   const bs = boxes.value;
-  const out: { asset: FakeAsset; box: Box }[] = [];
+  const out: { asset: FakeAsset; box: Box; odd: boolean }[] = [];
   if (rs.length === 0) return out;
   const from = Math.min(r0.value, rs.length - 1);
   const to = Math.min(r1.value, rs.length);
   for (let r = from; r < to; r++) {
     for (let i = rs[r].start; i < rs[r].end; i++) {
-      out.push({ asset: props.items[i], box: bs[i] });
+      out.push({ asset: props.items[bs[i].i], box: bs[i], odd: r % 2 === 1 });
     }
   }
   return out;
@@ -71,7 +85,15 @@ function relayout(): void {
   const maxH = Math.max(80, vp.clientWidth);
   const rowH = Math.max(80, Math.min(maxH, ui.targetRowHeight));
   const t0 = performance.now();
-  const result = computeJustified(props.items, vp.clientWidth, rowH, CARD_CAPTION_H);
+  // 四种布局（PRD 04）：自适应 / 瀑布流 / 网格 / 列表
+  const result =
+    ui.layoutMode === "waterfall"
+      ? computeWaterfall(props.items, vp.clientWidth, rowH, CARD_CAPTION_H)
+      : ui.layoutMode === "grid"
+        ? computeGrid(props.items, vp.clientWidth, rowH, CARD_CAPTION_H)
+        : ui.layoutMode === "list"
+          ? computeList(props.items, vp.clientWidth, rowH, CARD_CAPTION_H)
+          : computeJustified(props.items, vp.clientWidth, rowH, CARD_CAPTION_H);
   boxes.value = result.boxes;
   rows.value = result.rows;
   gridTotal.value = result.totalHeight;
@@ -135,6 +157,11 @@ watch(
 );
 // 折叠 / 展开"内容"：网格高度不计入总高
 watch(assetsOpen, () => setTotal(currentTotal()));
+// 布局方式切换（查看方式菜单）
+watch(
+  () => ui.layoutMode,
+  () => relayout(),
+);
 
 onMounted(() => {
   attach(viewportRef.value!, trackRef.value!, thumbRef.value!);
@@ -172,19 +199,35 @@ onBeforeUnmount(() => {
       <div
         v-show="assetsOpen"
         class="cards-layer"
-        :style="{ transform: `translateY(${headerH + 6}px) scale(${canvasScale})` }"
+        :style="{ transform: `translateY(${headerH + 6 + listExtra}px) scale(${canvasScale})` }"
       >
-        <AssetCard
-          v-for="c in visibleCards"
-          :key="c.asset.id"
-          :asset="c.asset"
-          :box="c.box"
-          :selected="content.selectedAssetId === c.asset.id"
-          @click="
-            content.selectedAssetId = c.asset.id;
-            content.selectedFolderId = -1;
-          "
-        />
+        <template v-if="ui.layoutMode === 'list'">
+          <ListRowCard
+            v-for="c in visibleCards"
+            :key="c.asset.id"
+            :asset="c.asset"
+            :box="c.box"
+            :odd="c.odd"
+            :selected="content.selectedAssetId === c.asset.id"
+            @select="
+              content.selectedAssetId = c.asset.id;
+              content.selectedFolderId = -1;
+            "
+          />
+        </template>
+        <template v-else>
+          <AssetCard
+            v-for="c in visibleCards"
+            :key="c.asset.id"
+            :asset="c.asset"
+            :box="c.box"
+            :selected="content.selectedAssetId === c.asset.id"
+            @click="
+              content.selectedAssetId = c.asset.id;
+              content.selectedFolderId = -1;
+            "
+          />
+        </template>
       </div>
     </div>
     <div ref="trackRef" class="grid-track">
@@ -194,6 +237,11 @@ onBeforeUnmount(() => {
         :style="{ top: `${thumbTop}px`, height: `${thumbHeight}px` }"
       />
     </div>
+    <!-- 列头：随内容滚动至顶部后钉住（自定义 transform 滚动无 CSS sticky，手动计算） -->
+    <ListHeader
+      v-if="ui.layoutMode === 'list' && assetsOpen"
+      :style="{ top: `${Math.max(0, headerH + 6 - pos)}px` }"
+    />
   </div>
 </template>
 
