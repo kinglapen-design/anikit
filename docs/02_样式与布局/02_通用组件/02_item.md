@@ -473,4 +473,120 @@ flex: none;
 flex-grow: 0;
 ```
 
+## 10. 列表 Item
+
+``` css
+/* 总容器：标题容器 + 详情容器 */
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: space-between;
+align-items: center;
+padding: 6px 8px;
+
+width: 734px;
+height: 57px;
+
+background: C3 / C2; /* 两个底色交替出现，用于视觉能快速区分每一行 */
+
+border: 1px solid C4-7;
+border-radius: 8px;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+/* 标题容器：缩略图 + 名称 */
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px;
+gap: 8px;
+
+margin: 0 auto;
+width: 缩略图 + gap + 名称长度;
+height: 子项缩略图高度;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+/* 缩略图 */
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: flex-start;
+padding: 0px;
+
+width: 80px; /* 可随滑块和滚轮缩放 */
+height: 45px; /* 可随滑块和滚轮缩放 */
+
+/* 不同尺寸的缩略图都被限定在容器里，不裁剪，等高不等宽，缩略图圆角边框线都和文件夹卡片一致 */
+
+flex: none;
+order: 0;
+flex-grow: 0;
+
+/* 名称 */
+[[01_样式 token#02. 文字]] / 正文
+
+color: C4;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+/* 详情容器：尺寸 + 格式 + 文件大小 + 修改日期容器 */
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px;
+gap: 16px;
+
+margin: 0 auto;
+width: 313px;
+height: 20px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+/* 详情容器：尺寸 + 格式 + 文件大小 */
+[[01_样式 token#02. 文字]] / 正文
+
+color: C4-40;
+
+/* 修改日期容器：日期 + 时间 */
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px;
+gap: 4px;
+
+width: 119px;
+height: 18px;
+
+/* Inside auto layout */
+flex: none;
+order: 3;
+flex-grow: 0;
+
+/* 日期 + 时间 */
+[[01_样式 token#02. 文字]] / 正文
+
+日期：2026/07/12 /* 年月日 */
+时间：14:26 /* 小时 分钟 */
+
+color: C4-40;
+```
 

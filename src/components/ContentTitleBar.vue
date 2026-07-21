@@ -38,7 +38,7 @@ async function togglePin(): Promise<void> {
         <IconButton name="chevron-large" title="返回" class="rot-ccw" disabled />
         <IconButton name="chevron-large" title="前进" class="rot-cw" disabled />
       </div>
-      <button class="crumb-text" title="演示：点击切换搜索结果" @click="showResult = !showResult">
+      <button class="crumb-text" v-tip="'演示：点击切换搜索结果'" @click="showResult = !showResult">
         全部
       </button>
       <Transition name="slide-x">

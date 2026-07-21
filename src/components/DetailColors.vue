@@ -17,7 +17,7 @@ const open = ref(true);
         <span class="badge">PSD</span>
       </div>
       <div class="swatches">
-        <span v-for="c in colors" :key="c" class="swatch" :style="{ background: c }" :title="c" />
+        <span v-for="c in colors" :key="c" class="swatch" :style="{ background: c }" v-tip="c" />
       </div>
     </div>
   </section>

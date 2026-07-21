@@ -12,7 +12,7 @@ const focused = ref(false);
 
 <template>
   <div class="search-bar" :class="{ focused }">
-    <button class="lead" title="搜索方式">
+    <button class="lead" v-tip="'搜索方式'">
       <span class="lead-icon"><AppIcon name="search" /></span>
       <AppIcon name="chevron-small" :size="8" class="up" />
     </button>
@@ -23,7 +23,7 @@ const focused = ref(false);
       @focus="focused = true"
       @blur="focused = false"
     />
-    <button v-if="text" class="clear" title="清除" @click="text = ''">
+    <button v-if="text" class="clear" v-tip="'清除'" @click="text = ''">
       <AppIcon name="clear" />
     </button>
     <IconButton name="chevron-small" title="展开" class="expand-btn" />

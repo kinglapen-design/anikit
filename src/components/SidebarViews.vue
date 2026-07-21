@@ -1,55 +1,77 @@
 <script setup lang="ts">
-// 工作空间 / 标签 / 快捷入口视图：按 PRD 04-1 摆各自快速访问项，内容为占位（后续阶段接入）。
-import { computed, ref } from "vue";
+// 工作空间 / 标签 / 快捷入口视图（03_UI 布局/02_左侧边栏 06 其他视图布局）：
+// 按设计结构摆区块与 item，数据为占位（后续阶段接入）。
+import { ref } from "vue";
 import SectionHeader from "./SectionHeader.vue";
 import TreeItem from "./TreeItem.vue";
+import FolderTree from "./FolderTree.vue";
 import { useContentStore } from "../stores/content";
 import { useUiStore } from "../stores/ui";
 
 const ui = useUiStore();
 const content = useContentStore();
-const quickOpen = ref(true);
-const groupOpen = ref(true);
-const pinsOpen = ref(true);
 
-interface ViewConfig {
-  quick: { key: string; icon: string; label: string }[];
-  hint: string;
-}
+const rootOpen = ref(true);
+const pinnedOpen = ref(true);
+const frequentOpen = ref(true);
+const wsTreeOpen = ref(true);
+const tagQuickOpen = ref(true);
+const tagGroupOpen = ref(true);
+const pinAssetOpen = ref(true);
+const pinFolderOpen = ref(true);
+const pinTagOpen = ref(true);
 
-const configs: Record<string, ViewConfig> = {
-  workspace: {
-    quick: [
-      { key: "ws-all", icon: "library-all", label: "全部" },
-      { key: "ws-pinned", icon: "window-pin-on", label: "置顶" },
-      { key: "ws-frequent", icon: "recent", label: "常用" },
-    ],
-    hint: "工作空间（索引式管理）为占位视图，后续阶段接入真实文件夹树。",
-  },
-  tags: {
-    quick: [
-      { key: "tag-all", icon: "tag", label: "全部标签" },
-      { key: "tag-untagged", icon: "untagged", label: "未标签文件" },
-      { key: "tag-uncategorized", icon: "uncategorized", label: "未分类标签" },
-    ],
-    hint: "标签视图为占位，标签管理后续阶段接入。",
-  },
-  pins: {
-    quick: [],
-    hint: "快捷入口为占位：文件夹 / 标签 / 文件经右键菜单固定后在此显示。",
-  },
-};
-
-const current = computed(() => configs[ui.leftView] ?? configs.workspace);
+const tagQuickItems = [
+  { key: "tag-all", icon: "tag", label: "全部标签" },
+  { key: "tag-uncategorized", icon: "uncategorized", label: "未分类标签" },
+  { key: "tag-untagged", icon: "untagged", label: "未标签素材" },
+];
 </script>
 
 <template>
-  <div class="sidebar-views">
-    <section v-if="current.quick.length > 0" class="block">
-      <SectionHeader title="快速访问" pad="0 8px 0 14px" v-model:open="quickOpen" />
-      <div v-if="quickOpen" class="items">
+  <!-- 工作空间：根目录 / 置顶 / 常用 / 文件夹 -->
+  <div v-if="ui.leftView === 'workspace'" class="sidebar-views">
+    <section class="block">
+      <SectionHeader title="根目录" pad="0 8px 0 14px" v-model:open="rootOpen" />
+      <div v-if="rootOpen" class="items">
         <TreeItem
-          v-for="q in current.quick"
+          icon="workspace-all"
+          label="根目录"
+          :count="1235"
+          :selected="content.sidebarSelected === 'quick:ws-root'"
+          @select="content.sidebarSelected = 'quick:ws-root'"
+        />
+      </div>
+    </section>
+    <section class="block">
+      <SectionHeader title="置顶" pad="0 8px 0 14px" v-model:open="pinnedOpen" />
+      <div v-if="pinnedOpen" class="items">
+        <TreeItem icon="folder-closed" label="新建文件夹" :count="132" />
+        <TreeItem icon="folder-closed" label="新建文件夹" :count="45" />
+      </div>
+    </section>
+    <section class="block">
+      <SectionHeader title="常用" pad="0 8px 0 14px" v-model:open="frequentOpen" />
+      <div v-if="frequentOpen" class="items">
+        <TreeItem icon="folder-closed" label="新建文件夹" :count="321" />
+        <TreeItem icon="folder-closed" label="新建文件夹" :count="87" />
+      </div>
+    </section>
+    <section class="block">
+      <SectionHeader title="文件夹" :count="1231" addable pad="0 8px 0 14px" v-model:open="wsTreeOpen" />
+      <div v-if="wsTreeOpen" class="items">
+        <FolderTree :nodes="content.folders" />
+      </div>
+    </section>
+  </div>
+
+  <!-- 标签视图：快速访问 / 标签群组 -->
+  <div v-else-if="ui.leftView === 'tags'" class="sidebar-views">
+    <section class="block">
+      <SectionHeader title="快速访问" pad="0 8px 0 14px" v-model:open="tagQuickOpen" />
+      <div v-if="tagQuickOpen" class="items">
+        <TreeItem
+          v-for="q in tagQuickItems"
           :key="q.key"
           :icon="q.icon"
           :label="q.label"
@@ -58,24 +80,38 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
         />
       </div>
     </section>
-
-    <section v-if="ui.leftView === 'tags'" class="block">
-      <SectionHeader title="标签群组" :count="2" addable pad="0 8px 0 14px" v-model:open="groupOpen" />
-      <div v-if="groupOpen" class="items">
+    <section class="block">
+      <SectionHeader title="标签群组" :count="2" addable pad="0 8px 0 14px" v-model:open="tagGroupOpen" />
+      <div v-if="tagGroupOpen" class="items">
         <TreeItem icon="tag-group" label="标签群组" :count="12" />
         <TreeItem icon="tag-group" label="标签群组" :count="34" />
       </div>
     </section>
+  </div>
 
-    <section v-if="ui.leftView === 'pins'" class="block">
-      <SectionHeader title="快捷入口" pad="0 8px 0 14px" v-model:open="pinsOpen" />
-      <div v-if="pinsOpen" class="items">
-        <TreeItem icon="folder-closed" label="新建文件夹" />
-        <TreeItem icon="tag" label="全部标签" />
+  <!-- 快捷入口：素材 / 文件夹 / 标签 -->
+  <div v-else class="sidebar-views">
+    <section class="block">
+      <SectionHeader title="素材" :count="2" pad="0 8px 0 14px" v-model:open="pinAssetOpen" />
+      <div v-if="pinAssetOpen" class="items">
+        <TreeItem icon="pin-asset" label="素材" />
+        <TreeItem icon="pin-asset" label="素材" />
       </div>
     </section>
-
-    <p class="hint">{{ current.hint }}</p>
+    <section class="block">
+      <SectionHeader title="文件夹" :count="2" addable pad="0 8px 0 14px" v-model:open="pinFolderOpen" />
+      <div v-if="pinFolderOpen" class="items">
+        <TreeItem icon="folder-closed" label="新建文件夹" />
+        <TreeItem icon="folder-closed" label="新建文件夹" />
+      </div>
+    </section>
+    <section class="block">
+      <SectionHeader title="标签" :count="2" addable pad="0 8px 0 14px" v-model:open="pinTagOpen" />
+      <div v-if="pinTagOpen" class="items">
+        <TreeItem icon="tag" label="全部标签" />
+        <TreeItem icon="tag" label="场景" />
+      </div>
+    </section>
   </div>
 </template>
 
@@ -95,11 +131,5 @@ const current = computed(() => configs[ui.leftView] ?? configs.workspace);
   flex-direction: column;
   gap: var(--space-2);
   padding: 0 var(--space-8) 0 4px;
-}
-.hint {
-  margin: var(--space-8) var(--space-16) 0;
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--c4-40);
 }
 </style>

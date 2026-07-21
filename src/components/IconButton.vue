@@ -15,7 +15,7 @@ defineEmits<{ click: [e: MouseEvent] }>();
     class="icon-btn"
     :class="{ small, filled, danger }"
     :disabled="disabled"
-    :title="title"
+    v-tip="title"
     @click="$emit('click', $event)"
   >
     <AppIcon :name="name" />

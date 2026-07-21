@@ -27,7 +27,7 @@ const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
     <div class="thumb" :style="{ height: `${imgH}px` }">
       <div class="img" :style="{ background: asset.color }" />
       <span class="badge">{{ asset.format.toUpperCase() }}</span>
-      <button class="zoom" title="查看大图" @click.stop>
+      <button class="zoom" v-tip="'查看大图'" @click.stop>
         <AppIcon name="magnifier" />
       </button>
     </div>
