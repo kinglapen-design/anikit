@@ -12,6 +12,7 @@ import ContentArea from "./components/ContentArea.vue";
 import SplitBar from "./components/SplitBar.vue";
 import LibrarySetupModal from "./components/LibrarySetupModal.vue";
 import ImportDialog from "./components/ImportDialog.vue";
+import ImportResultDialog from "./components/ImportResultDialog.vue";
 import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
 
@@ -41,10 +42,11 @@ async function onLibraryReady(): Promise<void> {
   await content.refresh();
 }
 
-// 导入弹窗确认完成：清草稿 + 刷新内容区
-async function onImportDone(): Promise<void> {
+// 导入弹窗确认：关弹窗，导入走后台任务（Channel 流式，到一个显示一个，UI 不阻塞）
+function onImportConfirm(opts: { structure: "flatten" | "keep"; source: "copy" | "move" }): void {
+  const draft = content.importDraft;
   content.importDraft = null;
-  await content.refresh();
+  if (draft) void content.startImport(draft, opts.structure, opts.source);
 }
 
 // 拖拽导入（PRD 05-01）：webview 拖放事件拿文件路径，落点在文件树 item 上则导入至该文件夹
@@ -74,8 +76,7 @@ async function onPaste(e: KeyboardEvent): Promise<void> {
   if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
   if (needLibrarySetup.value || content.importDraft) return;
   try {
-    await invoke("import_clipboard", { targetFolder: content.currentFolderId });
-    await content.refresh();
+    await content.startImportClipboard(content.currentFolderId);
   } catch (err) {
     console.debug("剪贴板导入不可用：", err);
   }
@@ -150,8 +151,13 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
     <ImportDialog
       v-else-if="content.importDraft"
       :draft="content.importDraft"
-      @done="onImportDone"
+      @confirm="onImportConfirm"
       @cancel="content.importDraft = null"
+    />
+    <ImportResultDialog
+      v-if="content.importFailed"
+      :failed="content.importFailed"
+      @close="content.importFailed = null"
     />
   </div>
 </template>
