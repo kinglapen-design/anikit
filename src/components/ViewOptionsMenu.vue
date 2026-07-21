@@ -79,8 +79,12 @@ function pickLayout(v: (typeof layouts)[number]["value"]): void {
 </template>
 
 <style scoped>
-/* 单选框菜单项：padding 4 6 4 6（05_查看方式） */
+/* 单选框菜单项：padding 4 6 4 6（05_查看方式）；
+   用 flex 容器承载单选框（inline-flex 在 block 里按 baseline 对齐，
+   选中后图形出现会改变 baseline 导致整行偏移 ~1px） */
 .check-wrap {
+  display: flex;
+  align-items: center;
   padding: var(--space-4) var(--space-6);
 }
 </style>
