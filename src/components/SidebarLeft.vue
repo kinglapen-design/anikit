@@ -36,7 +36,7 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
       <IconButton name="toggle-sidebar-left" title="收起侧边栏" @click="ui.leftCollapsed = true" />
     </header>
 
-    <Transition name="slide" mode="out-in">
+    <Transition name="slide">
       <div class="library-switch" :key="isWorkspace ? 'ws' : 'lib'">
         <span class="badge">
           <AppIcon :name="isWorkspace ? 'workspace-badge' : 'library-badge'" :size="16" />
@@ -48,7 +48,7 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
     </Transition>
 
     <div ref="bodyRef" class="view-body">
-      <Transition name="slide" mode="out-in">
+      <Transition name="slide">
         <LibraryView v-if="ui.leftView === 'library'" key="library" />
         <SidebarViews v-else :key="ui.leftView" />
       </Transition>
@@ -127,17 +127,23 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
 }
 /* 原生条由 base.css 全局隐藏，滚动条为悬浮 side-thumb（不占位） */
 .view-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
-/* 视图切换动画：旧区块往左滑出，新区块从右滑入 */
+/* 视图切换动画：旧区块往左滑出，新区块从右滑入（并行过渡，leave 脱离文档流不占位） */
 .slide-enter-active,
 .slide-leave-active {
   transition:
     transform 0.18s ease,
     opacity 0.18s ease;
+}
+.slide-leave-active {
+  /* 只脱离文档流（enter 元素直接占位），保持原位置与宽度，不左右跳 */
+  position: absolute;
+  width: 100%;
 }
 .slide-enter-from {
   transform: translateX(40px);
