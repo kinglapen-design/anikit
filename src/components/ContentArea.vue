@@ -5,14 +5,12 @@ import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
 import SearchBar from "./SearchBar.vue";
 import { useContentStore } from "../stores/content";
-import { useUiStore } from "../stores/ui";
 
 const content = useContentStore();
-const ui = useUiStore();
 
-// PRD 04-1：开启"显示子文件夹内容"= 递归显示全部子项（"全部"视图即此模式）；
-// 关闭则只显示当前目录（假数据取前 1231 条演示）。
-const items = computed(() => (ui.showSubfolders ? content.assets : content.assets.slice(0, 1231)));
+// 当前视口资源（"全部"= 全部 Placement；文件夹 = 该文件夹直接 Placement）。
+// PRD 04-1"显示子文件夹内容"开关：递归展开子文件夹内容阶段 4 接（当前两种状态同列表）。
+const items = computed(() => content.visiblePlacements);
 </script>
 
 <template>

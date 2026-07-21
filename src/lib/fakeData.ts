@@ -1,5 +1,6 @@
 // 阶段 1 假数据：固定 seed 伪随机，每次启动数据一致，便于验收对照。
-// 阶段 2 数据层落地后由真实 Asset 替换。
+// 阶段 3.1 起内容区接真实数据（stores/content.ts → list_placements / list_folder_tree）；
+// 本文件保留作 10 万级性能压测（阶段 6 打磨时手动接回，勿删）。
 
 export interface FakeAsset {
   id: number;

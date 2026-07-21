@@ -28,7 +28,7 @@ const colWidth = computed(() => Math.max(80, Math.round((189 * ui.targetRowHeigh
         :selected="content.selectedFolderId === f.id"
         @select="
           content.selectedFolderId = f.id;
-          content.selectedAssetId = -1;
+          content.selectedAssetKey = '';
         "
       />
     </div>

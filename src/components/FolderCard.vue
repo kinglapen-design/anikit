@@ -3,9 +3,9 @@
 // + 图标组 181×150（内联 SVG，结构色 var() 化）+ 标题 + 标签（文件数 / 子文件夹数）。
 import { computed } from "vue";
 import { getIcon } from "../lib/icons";
-import type { FakeFolder } from "../lib/fakeData";
+import type { FolderNode } from "../stores/content";
 
-const props = withDefaults(defineProps<{ folder: FakeFolder; selected?: boolean }>(), {
+const props = withDefaults(defineProps<{ folder: FolderNode; selected?: boolean }>(), {
   selected: false,
 });
 const emit = defineEmits<{ select: [] }>();

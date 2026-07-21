@@ -3,20 +3,37 @@
 // / 滑块 / 显示子文件夹内容 / 按钮组——space-between 等距。
 // 侧边栏收起时完全隐藏，其按钮组移入本标题栏（多个图标组合在一个容器里，子项间距 4）：
 // 左收起 → 左侧放（汉堡菜单 + 展开按钮）；右收起 → 右侧放（展开 + 置顶 + 窗口控制）。
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import IconButton from "./IconButton.vue";
 import SideSlider from "./SideSlider.vue";
 import AppCheckbox from "./AppCheckbox.vue";
 import WindowControls from "./WindowControls.vue";
 import ViewOptionsMenu from "./ViewOptionsMenu.vue";
 import { useUiStore } from "../stores/ui";
+import { useContentStore } from "../stores/content";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const ui = useUiStore();
+const content = useContentStore();
 const appWindow = getCurrentWindow();
 
 // 搜索结果容器：搜索后从左侧滑入、取消后往左滑出（阶段 1 演示——点击标题模拟搜索 / 撤销，阶段 4 接真搜索）
 const showResult = ref(false);
+
+const QUICK_LABELS: Record<string, string> = {
+  all: "全部",
+  uncategorized: "未分类",
+  inbox: "收件箱",
+  recent: "最近使用",
+  trash: "回收站",
+};
+
+// 面包屑标题：当前视口名（快速访问项 / 文件夹名）
+const crumb = computed(() => {
+  const sel = content.sidebarSelected;
+  if (sel.startsWith("folder:")) return content.folderName(sel.slice(7)) ?? "文件夹";
+  return QUICK_LABELS[sel.slice(6)] ?? "全部";
+});
 
 // 查看方式菜单：按钮右缘对齐、下方展开；再次点击按钮收起（toggle）
 const viewMenuOpen = ref(false);
@@ -54,7 +71,7 @@ async function togglePin(): Promise<void> {
         <IconButton name="chevron-large" title="前进" class="rot-cw" disabled />
       </div>
       <button class="crumb-text" v-tip="'演示：点击切换搜索结果'" @click="showResult = !showResult">
-        全部
+        {{ crumb }}
       </button>
       <Transition name="slide-x">
         <span v-if="showResult" class="result-text">/ 搜索结果 (123)</span>

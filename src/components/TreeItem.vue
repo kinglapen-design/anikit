@@ -16,8 +16,9 @@ withDefaults(
     selected?: boolean;
     last?: boolean;
     guide?: boolean;
+    folderId?: string; // 拖拽导入落点判定（App.vue elementFromPoint → closest）
   }>(),
-  { count: undefined, depth: 0, expandable: false, open: false, selected: false, last: false, guide: false },
+  { count: undefined, depth: 0, expandable: false, open: false, selected: false, last: false, guide: false, folderId: undefined },
 );
 const emit = defineEmits<{ toggle: []; select: [] }>();
 </script>
@@ -27,6 +28,7 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
     class="tree-item"
     :class="{ leaf: guide && !expandable && depth > 0, last }"
     :style="{ paddingLeft: `${depth * 20}px` }"
+    :data-folder-id="folderId"
   >
     <button class="expand" :class="{ placeholder: !expandable }" @click.stop="emit('toggle')">
       <AppIcon name="tree-expand-arrow" :size="8" class="chev" :class="{ open }" />

@@ -3,14 +3,22 @@
 // + 图片（圆角 8 / 1px C4-15）+ 格式角标（左上 4px / C1-80）+ 放大镜按钮（悬停显示，右下 4px）
 // + 标题 + 尺寸标签。
 import { computed } from "vue";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import { CARD_CAPTION_H, type Box } from "../lib/layouts";
-import type { FakeAsset } from "../stores/content";
+import type { PlacementView } from "../stores/content";
 
-const props = withDefaults(defineProps<{ asset: FakeAsset; box: Box; selected?: boolean }>(), {
+const props = withDefaults(defineProps<{ asset: PlacementView; box: Box; selected?: boolean }>(), {
   selected: false,
 });
 const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
+const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
+// 尺寸标签：fla 等无尺寸资源显示格式（阶段 5 插件补图后即有尺寸）
+const meta = computed(() =>
+  props.asset.w != null && props.asset.h != null
+    ? `${props.asset.w} x ${props.asset.h}`
+    : props.asset.ext.toUpperCase(),
+);
 </script>
 
 <template>
@@ -25,14 +33,22 @@ const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
     }"
   >
     <div class="thumb" :style="{ height: `${imgH}px` }">
-      <div class="img" :style="{ background: asset.color }" />
-      <span class="badge">{{ asset.format.toUpperCase() }}</span>
+      <img
+        v-if="thumbUrl"
+        class="img"
+        :src="thumbUrl"
+        :alt="asset.name"
+        decoding="async"
+        draggable="false"
+      />
+      <div v-else class="img" />
+      <span class="badge">{{ asset.ext.toUpperCase() }}</span>
       <button class="zoom" v-tip="'查看大图'" @click.stop>
         <AppIcon name="magnifier" />
       </button>
     </div>
     <div class="title">{{ asset.name }}</div>
-    <div class="meta">{{ asset.w }} x {{ asset.h }}</div>
+    <div class="meta">{{ meta }}</div>
   </div>
 </template>
 
@@ -58,10 +74,13 @@ const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
   box-shadow: inset 0 0 0 2px var(--brand-1);
 }
 .img {
+  display: block;
   width: 100%;
   height: 100%;
   border-radius: var(--radius-8);
   box-shadow: inset 0 0 0 1px var(--c4-15);
+  object-fit: cover;
+  background: var(--c4-7);
 }
 /* 格式角标：图片左上角，距上左 4px（= 容器内边距 4 + 4），内边距 2 4 / 圆角 6 / C1-80 */
 .badge {

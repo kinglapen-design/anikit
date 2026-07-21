@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // 列表行（02_通用组件/02_item 10）：缩略图（可随滑块缩放）+ 名称 + 尺寸 / 格式 / 文件大小 / 修改日期。
 // C3 / C2 交替行底色；1px C4-7（inset）/ 圆角 8 / 内边距 6 8。
+// 文件大小 / 修改日期仍是假占位：阶段 4 排序功能接真实值（后端 PlacementView 待补 size / modifiedAt）。
 import { computed } from "vue";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import type { Box } from "../lib/layouts";
-import type { FakeAsset } from "../stores/content";
+import type { PlacementView } from "../stores/content";
 import { useUiStore } from "../stores/ui";
 
 const props = withDefaults(
-  defineProps<{ asset: FakeAsset; box: Box; odd?: boolean; selected?: boolean }>(),
+  defineProps<{ asset: PlacementView; box: Box; odd?: boolean; selected?: boolean }>(),
   { odd: false, selected: false },
 );
 const ui = useUiStore();
@@ -15,9 +17,13 @@ const ui = useUiStore();
 // 缩略图随滑块缩放（80×45 基准 × 行高 / 220），等高不等宽限定容器内不裁剪
 const thumbW = computed(() => Math.max(30, Math.round((80 * ui.targetRowHeight) / 220)));
 const thumbH = computed(() => Math.max(17, Math.round((45 * ui.targetRowHeight) / 220)));
+const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
+const size = computed(() =>
+  props.asset.w != null && props.asset.h != null
+    ? `${props.asset.w} x ${props.asset.h}`
+    : props.asset.ext.toUpperCase(),
+);
 const emit = defineEmits<{ select: [] }>();
-void emit;
-void props;
 </script>
 
 <template>
@@ -28,12 +34,21 @@ void props;
     @click="emit('select')"
   >
     <div class="main">
-      <div class="thumb" :style="{ width: `${thumbW}px`, height: `${thumbH}px`, background: asset.color }" />
+      <img
+        v-if="thumbUrl"
+        class="thumb"
+        :style="{ width: `${thumbW}px`, height: `${thumbH}px` }"
+        :src="thumbUrl"
+        :alt="asset.name"
+        decoding="async"
+        draggable="false"
+      />
+      <div v-else class="thumb" :style="{ width: `${thumbW}px`, height: `${thumbH}px` }" />
       <span class="name">{{ asset.name }}</span>
     </div>
     <div class="details">
-      <span class="col size">{{ asset.w }} x {{ asset.h }}</span>
-      <span class="col format">{{ asset.format.toUpperCase() }}</span>
+      <span class="col size">{{ size }}</span>
+      <span class="col format">{{ asset.ext.toUpperCase() }}</span>
       <span class="col filesize">123 MB</span>
       <span class="col date">2026/07/12 14:26</span>
     </div>
@@ -73,8 +88,11 @@ void props;
 }
 .thumb {
   flex: none;
+  display: block;
   border-radius: var(--radius-4);
   box-shadow: inset 0 0 0 1px var(--c4-15);
+  object-fit: cover;
+  background: var(--c4-7);
 }
 .name {
   font-size: var(--text-body-size);

@@ -29,14 +29,14 @@ const quickItems = [
           :key="q.key"
           :icon="q.icon"
           :label="q.label"
-          :count="1235"
+          :count="q.key === 'all' ? content.placements.length : undefined"
           :selected="content.sidebarSelected === `quick:${q.key}`"
           @select="content.sidebarSelected = `quick:${q.key}`"
         />
       </div>
     </section>
     <section class="block tree">
-      <SectionHeader title="文件夹" :count="1231" addable pad="0 8px 0 14px" v-model:open="treeOpen" />
+      <SectionHeader title="文件夹" :count="content.folderTotal" addable pad="0 8px 0 14px" v-model:open="treeOpen" />
       <div v-if="treeOpen" class="items">
         <FolderTree :nodes="content.folders" />
       </div>

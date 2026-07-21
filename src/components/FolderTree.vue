@@ -4,14 +4,13 @@
 // 穿过有子项的行与 item 间距，止于最后子项中心）；横线由叶子 TreeItem 自画（x5→x9）。
 import { ref } from "vue";
 import TreeItem from "./TreeItem.vue";
-import { useContentStore } from "../stores/content";
-import type { FakeFolder } from "../lib/fakeData";
+import { useContentStore, type FolderNode } from "../stores/content";
 
-withDefaults(defineProps<{ nodes: FakeFolder[]; depth?: number }>(), { depth: 0 });
+withDefaults(defineProps<{ nodes: FolderNode[]; depth?: number }>(), { depth: 0 });
 const content = useContentStore();
 
-const openSet = ref(new Set<number>());
-function toggle(id: number): void {
+const openSet = ref(new Set<string>());
+function toggle(id: string): void {
   const next = new Set(openSet.value);
   if (next.has(id)) next.delete(id);
   else next.add(id);
@@ -30,6 +29,7 @@ function toggle(id: number): void {
       :open="openSet.has(node.id)"
       :selected="content.sidebarSelected === `folder:${node.id}`"
       :last="index === nodes.length - 1"
+      :folder-id="node.id"
       guide
       @toggle="toggle(node.id)"
       @select="content.sidebarSelected = `folder:${node.id}`"

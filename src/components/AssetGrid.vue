@@ -22,11 +22,14 @@ import {
 import { useVirtualScroll } from "../lib/useVirtualScroll";
 import { useContentStore } from "../stores/content";
 import { useUiStore } from "../stores/ui";
-import type { FakeAsset } from "../stores/content";
+import type { PlacementView } from "../stores/content";
 
-const props = defineProps<{ items: FakeAsset[] }>();
+const props = defineProps<{ items: PlacementView[] }>();
 const ui = useUiStore();
 const content = useContentStore();
+
+// 布局算法只认数值宽高：fla 等无尺寸资源按 400×300 默认比例（阶段 5 插件补图后刷新）
+const layoutItems = computed(() => props.items.map((it) => ({ w: it.w ?? 400, h: it.h ?? 300 })));
 
 const BUFFER = 800;
 
@@ -64,7 +67,7 @@ const { pos, thumbTop, thumbHeight, setTotal, attach, detach } = useVirtualScrol
 const visibleCards = computed(() => {
   const rs = rows.value;
   const bs = boxes.value;
-  const out: { asset: FakeAsset; box: Box; odd: boolean }[] = [];
+  const out: { asset: PlacementView; box: Box; odd: boolean }[] = [];
   if (rs.length === 0) return out;
   const from = Math.min(r0.value, rs.length - 1);
   const to = Math.min(r1.value, rs.length);
@@ -88,12 +91,12 @@ function relayout(): void {
   // 四种布局（PRD 04）：自适应 / 瀑布流 / 网格 / 列表
   const result =
     ui.layoutMode === "waterfall"
-      ? computeWaterfall(props.items, vp.clientWidth, rowH, CARD_CAPTION_H)
+      ? computeWaterfall(layoutItems.value, vp.clientWidth, rowH, CARD_CAPTION_H)
       : ui.layoutMode === "grid"
-        ? computeGrid(props.items, vp.clientWidth, rowH, CARD_CAPTION_H)
+        ? computeGrid(layoutItems.value, vp.clientWidth, rowH, CARD_CAPTION_H)
         : ui.layoutMode === "list"
-          ? computeList(props.items, vp.clientWidth, rowH, CARD_CAPTION_H)
-          : computeJustified(props.items, vp.clientWidth, rowH, CARD_CAPTION_H);
+          ? computeList(layoutItems.value, vp.clientWidth, rowH, CARD_CAPTION_H)
+          : computeJustified(layoutItems.value, vp.clientWidth, rowH, CARD_CAPTION_H);
   boxes.value = result.boxes;
   rows.value = result.rows;
   gridTotal.value = result.totalHeight;
@@ -204,27 +207,27 @@ onBeforeUnmount(() => {
         <template v-if="ui.layoutMode === 'list'">
           <ListRowCard
             v-for="c in visibleCards"
-            :key="c.asset.id"
+            :key="`${c.asset.assetId}|${c.asset.folderId}`"
             :asset="c.asset"
             :box="c.box"
             :odd="c.odd"
-            :selected="content.selectedAssetId === c.asset.id"
+            :selected="content.selectedAssetKey === `${c.asset.assetId}|${c.asset.folderId}`"
             @select="
-              content.selectedAssetId = c.asset.id;
-              content.selectedFolderId = -1;
+              content.selectedAssetKey = `${c.asset.assetId}|${c.asset.folderId}`;
+              content.selectedFolderId = '';
             "
           />
         </template>
         <template v-else>
           <AssetCard
             v-for="c in visibleCards"
-            :key="c.asset.id"
+            :key="`${c.asset.assetId}|${c.asset.folderId}`"
             :asset="c.asset"
             :box="c.box"
-            :selected="content.selectedAssetId === c.asset.id"
+            :selected="content.selectedAssetKey === `${c.asset.assetId}|${c.asset.folderId}`"
             @click="
-              content.selectedAssetId = c.asset.id;
-              content.selectedFolderId = -1;
+              content.selectedAssetKey = `${c.asset.assetId}|${c.asset.folderId}`;
+              content.selectedFolderId = '';
             "
           />
         </template>

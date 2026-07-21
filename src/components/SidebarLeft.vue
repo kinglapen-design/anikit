@@ -4,15 +4,20 @@
 // 切换资源库区块仅在工作空间 ↔ 其他三视图之间切换时才滑出滑入。
 // 折叠后收成窄条（保留菜单、添加与展开按钮）。
 import { computed, ref } from "vue";
+import { open } from "@tauri-apps/plugin-dialog";
 import AppIcon from "./AppIcon.vue";
 import IconButton from "./IconButton.vue";
+import AppMenu from "./AppMenu.vue";
+import MenuItem from "./MenuItem.vue";
 import ViewSwitch, { type ViewOption } from "./ViewSwitch.vue";
 import LibraryView from "./LibraryView.vue";
 import SidebarViews from "./SidebarViews.vue";
 import { useUiStore } from "../stores/ui";
+import { useContentStore } from "../stores/content";
 import { useSideThumb } from "../lib/useSideThumb";
 
 const ui = useUiStore();
+const content = useContentStore();
 const bodyRef = ref<HTMLElement>();
 const thumb = useSideThumb(bodyRef);
 
@@ -25,6 +30,35 @@ const leftOptions: ViewOption[] = [
 
 // 资源库视图 / 标签视图 / 快捷入口视图共用资源库；工作空间是另一套（03_UI 布局/02 03）
 const isWorkspace = computed(() => ui.leftView === "workspace");
+
+// 导入菜单（阶段 3 需求：添加按钮弹出，样式同右键菜单，两项）
+const importMenuOpen = ref(false);
+const importMenuAnchor = ref({ x: 0, y: 0 });
+const importBtnRef = ref<HTMLElement>();
+
+function toggleImportMenu(e: MouseEvent): void {
+  if (importMenuOpen.value) {
+    importMenuOpen.value = false;
+    return;
+  }
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  importMenuAnchor.value = { x: rect.left, y: rect.bottom + 4 };
+  importMenuOpen.value = true;
+}
+
+// 菜单触发系统对话框（PRD 05-01 导入位置：导入文件 → 当前视口目录；导入文件夹 → 根目录）
+async function pickImport(kind: "files" | "folder"): Promise<void> {
+  importMenuOpen.value = false;
+  const picked = await open(
+    kind === "files" ? { multiple: true } : { directory: true, multiple: false },
+  );
+  if (!picked) return;
+  content.importDraft = {
+    kind,
+    paths: Array.isArray(picked) ? picked : [picked],
+    targetFolder: kind === "files" ? content.currentFolderId : null,
+  };
+}
 </script>
 
 <template>
@@ -32,9 +66,21 @@ const isWorkspace = computed(() => ui.leftView === "workspace");
     <header class="bar-title" data-tauri-drag-region>
       <IconButton name="menu" title="菜单" />
       <span class="spacer" />
-      <IconButton name="add-large" title="添加" />
+      <span ref="importBtnRef" style="display: contents">
+        <IconButton name="add-large" title="添加" @click="toggleImportMenu" />
+      </span>
       <IconButton name="toggle-sidebar-left" title="收起侧边栏" @click="ui.leftCollapsed = true" />
     </header>
+    <AppMenu
+      v-if="importMenuOpen"
+      :x="importMenuAnchor.x"
+      :y="importMenuAnchor.y"
+      :trigger="importBtnRef ?? null"
+      @close="importMenuOpen = false"
+    >
+      <MenuItem icon="import-file" label="导入文件" @select="pickImport('files')" />
+      <MenuItem icon="import-folder" label="导入文件夹" @select="pickImport('folder')" />
+    </AppMenu>
 
     <div class="switch-wrap">
       <Transition name="slide" mode="out-in">

@@ -1,14 +1,15 @@
 <script setup lang="ts">
 // 单选框 / 复选框（02_通用组件/01_按钮 04）：按钮 16×16、线条 C4-15、圆角 4；
 // 选中：边框品牌色-2 + 填充品牌色-1，文字品牌色-1。
+// tone：menu（默认）文字 C4-40/70；dialog（09 导入弹窗）文字 C4-70/C4，与提示文字区分。
 import AppIcon from "./AppIcon.vue";
 
 const model = defineModel<boolean>({ required: true });
-defineProps<{ label: string }>();
+withDefaults(defineProps<{ label: string; tone?: "menu" | "dialog" }>(), { tone: "menu" });
 </script>
 
 <template>
-  <button class="app-checkbox" :class="{ on: model }" @click="model = !model">
+  <button class="app-checkbox" :class="{ on: model, dialog: tone === 'dialog' }" @click="model = !model">
     <span class="box">
       <AppIcon v-if="model" name="check" :size="8" />
     </span>
@@ -44,6 +45,13 @@ defineProps<{ label: string }>();
 }
 .app-checkbox.on {
   color: var(--c4-70);
+}
+/* dialog 语气（09 导入弹窗）：未选中 C4-70 / 选中 C4，与提示文字（C4-40）区分 */
+.app-checkbox.dialog {
+  color: var(--c4-70);
+}
+.app-checkbox.dialog.on {
+  color: var(--c4);
 }
 .app-checkbox.on .box {
   box-shadow: inset 0 0 0 1px var(--brand-2);
