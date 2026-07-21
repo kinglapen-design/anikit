@@ -49,4 +49,8 @@ defineProps<{ label: string }>();
   box-shadow: inset 0 0 0 1px var(--brand-2);
   background: var(--brand-1);
 }
+/* 选中时对勾 C4 全亮（二级菜单对勾颜色独立，不受影响） */
+.app-checkbox.on .box :deep(svg [stroke-opacity]) {
+  stroke-opacity: 1;
+}
 </style>

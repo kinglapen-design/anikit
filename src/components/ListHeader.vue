@@ -19,26 +19,27 @@ const cols = ["尺寸", "格式", "文件大小", "修改日期"] as const;
     <div class="details">
       <span class="col size">
         尺寸
-        <AppIcon name="sort-arrow" :size="8" class="sort-arrow" />
+        <AppIcon name="sort-arrow" :size="16" class="sort-arrow" />
       </span>
       <span class="col format">
         格式
-        <AppIcon name="sort-arrow" :size="8" class="sort-arrow" />
+        <AppIcon name="sort-arrow" :size="16" class="sort-arrow" />
       </span>
       <span class="col filesize">
         文件大小
-        <AppIcon name="sort-arrow" :size="8" class="sort-arrow" />
+        <AppIcon name="sort-arrow" :size="16" class="sort-arrow" />
       </span>
       <span class="col date">
         修改日期
-        <AppIcon name="sort-arrow" :size="8" class="sort-arrow" />
+        <AppIcon name="sort-arrow" :size="16" class="sort-arrow" />
       </span>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* 列头行：固定于列表区顶部（不随滚动），高 28，背景 C2 */
+/* 列头行：固定于列表区顶部（不随滚动），高 28，背景 C2；标题文字正文（14/20），
+   右 padding 16（与行 details 右缘对齐：行 box 右缘 -8 + 行 padding-right 8） */
 .list-header {
   position: absolute;
   top: 0;
@@ -49,10 +50,10 @@ const cols = ["尺寸", "格式", "文件大小", "修改日期"] as const;
   align-items: center;
   justify-content: space-between;
   height: 28px;
-  padding: 0 var(--space-8);
+  padding: 0 16px 0 8px;
   background: var(--c2);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
   color: var(--c4-40);
 }
 .main {
@@ -70,7 +71,7 @@ const cols = ["尺寸", "格式", "文件大小", "修改日期"] as const;
 .col {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-4);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -86,12 +87,15 @@ const cols = ["尺寸", "格式", "文件大小", "修改日期"] as const;
 .date {
   width: 130px;
 }
-/* 悬停列显示排序箭头（sort-arrow 自带 C4-40 烘色） */
+/* 悬停列显示排序箭头（16×16，hover 提亮 C4） */
 .sort-arrow {
   opacity: 0;
   transition: opacity 0.12s ease;
 }
 .col:hover .sort-arrow {
   opacity: 1;
+}
+.col:hover .sort-arrow :deep(svg [stroke-opacity]) {
+  stroke-opacity: 1;
 }
 </style>

@@ -31,7 +31,7 @@ const layouts = [
   { value: "list", label: "列表" },
 ] as const;
 
-const sorts = ["标题", "扩展名", "文件大小", "尺寸", "评分", "时长", "添加日期", "创建日期", "修改日期"];
+const sorts = ["自定义", "标题", "扩展名", "文件大小", "尺寸", "评分", "时长", "添加日期", "创建日期", "修改日期"];
 
 // 选中不关闭菜单（对勾与界面即时同步，用户可连续切换对比；点组外 / 再点工具栏按钮关闭）
 function pickLayout(v: (typeof layouts)[number]["value"]): void {

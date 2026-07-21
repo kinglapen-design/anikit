@@ -13,6 +13,7 @@ const treeOpen = ref(true);
 const quickItems = [
   { key: "all", icon: "library-all", label: "全部" },
   { key: "uncategorized", icon: "uncategorized", label: "未分类" },
+  { key: "inbox", icon: "inbox", label: "收件箱" },
   { key: "recent", icon: "recent", label: "最近使用" },
   { key: "trash", icon: "trash", label: "回收站" },
 ];

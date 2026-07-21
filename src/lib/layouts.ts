@@ -136,7 +136,7 @@ export function computeGrid(
   return { boxes, rows, totalHeight };
 }
 
-// —— 列表（行式，02_item 10）：行高随滑块（57 基准 × 行高 / 220），交替底色由渲染层处理 ——
+// —— 列表（行式，02_item 10）：行高随滑块（57 基准 × 行高 / 220），item 间距 6，交替底色由渲染层处理 ——
 export function computeList(
   items: { w: number; h: number }[],
   containerWidth: number,
@@ -144,7 +144,7 @@ export function computeList(
   _captionHeight = 0,
 ): LayoutResult {
   const rowH = Math.max(21, Math.round((57 * targetRowHeight) / 220));
-  const gap = 2; // item 间距 2（token）
+  const gap = 6; // item 间距 6（token）
   const width = containerWidth - PAD.left - PAD.right;
   const boxes: Box[] = [];
   const rows: Row[] = [];

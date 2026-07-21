@@ -44,8 +44,8 @@ const gridTotal = ref(0);
 const assetsOpen = ref(true);
 
 // 总高 = 头部（文件夹区块 + 内容副标题 + 间距 6）+ 网格高（折叠"内容"时不计）
-// 列表模式另有固定列头 28px（不占布局、不随滚动）
-const listExtra = computed(() => (ui.layoutMode === "list" ? 28 : 0));
+// 列表模式另有固定列头 28px + 列头与列表间距 6（不占布局、不随滚动）
+const listExtra = computed(() => (ui.layoutMode === "list" ? 34 : 0));
 
 function currentTotal(): number {
   return (assetsOpen.value ? gridTotal.value : 0) + headerH.value + 6 + listExtra.value;
