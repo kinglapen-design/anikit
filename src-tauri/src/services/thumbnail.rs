@@ -200,6 +200,25 @@ mod tests {
     assert_eq!(generate(dir.path(), &txt, "工程"), None);
   }
 
+  /// Eagle 缩略图参数实验（#[ignore]）：cargo test -- --ignored webp_param_probe --nocapture
+  /// 样本 = assets/image/寒冰射手_thumbnail.png（Eagle 出品，实为 webp：VP8X+ICC+有损 alpha）
+  #[test]
+  #[ignore]
+  fn webp_param_probe() {
+    let data = std::fs::read("../assets/image/寒冰射手_thumbnail.png").unwrap();
+    let img = image::load_from_memory(&data).unwrap();
+    let rgba = img.to_rgba8();
+    println!("解码 {}x{}，Eagle 样本 13894B（ICC 456 + ALPH 5096 + VP8 8288）", rgba.width(), rgba.height());
+    for (q, aq, m) in [(80.0, 100, 4), (80.0, 80, 4), (75.0, 80, 4), (70.0, 80, 4), (60.0, 80, 4), (80.0, 80, 6)] {
+      let mut config = webp::WebPConfig::new().unwrap();
+      config.quality = q;
+      config.alpha_quality = aq;
+      config.method = m;
+      let mem = webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height()).encode_advanced(&config).unwrap();
+      println!("q{q} alpha{aq} m{m}: {}B", mem.len());
+    }
+  }
+
   #[cfg(windows)]
   #[test]
   fn ensure_format_icon_caches_once_per_ext() {
