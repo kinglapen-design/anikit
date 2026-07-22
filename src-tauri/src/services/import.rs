@@ -187,8 +187,18 @@ fn walk(
 /// 单文件建档（锁外重活）：建 info 文件夹 → 实体入库 → 探测宽高 → 缩略图 → 写 metadata.json。
 /// 路径全由新 ID 推导，不依赖共享状态。
 pub(crate) fn build_asset(root: &Path, file: &PendingFile, hash: &str, source: Source) -> Result<AssetMeta, String> {
-  let id = new_asset_id();
-  let info_dir = root.join(ASSTES_DIR).join(format!("{id}.info"));
+  build_asset_with_id(root, file, hash, &new_asset_id(), source)
+}
+
+/// 同 build_asset，但使用预分配的 asset id（并行管线在阶段 2 查重时统一分配）
+pub(crate) fn build_asset_with_id(
+  root: &Path,
+  file: &PendingFile,
+  hash: &str,
+  asset_id: &str,
+  source: Source,
+) -> Result<AssetMeta, String> {
+  let info_dir = root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
   fs::create_dir_all(&info_dir).map_err(|e| format!("info 文件夹创建失败：{e}"))?;
 
   let origin_name = file_name(&file.path);
@@ -198,7 +208,7 @@ pub(crate) fn build_asset(root: &Path, file: &PendingFile, hash: &str, source: S
 
   let (width, height) = thumbnail::probe(&dest).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None));
   let thumb = thumbnail::generate(&info_dir, &dest, file_stem(&file.path).as_str());
-  let meta = make_meta(&id, file, &origin_name, size, hash, width, height, thumb);
+  let meta = make_meta(asset_id, file, &origin_name, size, hash, width, height, thumb);
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
   Ok(meta)
 }

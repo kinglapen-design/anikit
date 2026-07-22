@@ -43,6 +43,8 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 webp = { version = "0.3", default-features = false }
 # 阶段 3：剪贴板图片读取（剪贴板导入）
 arboard = "3"
+# 阶段 3：导入管线并行（sha256 / 复制 / 缩略图多线程，rayon 数据并行标准方案）
+rayon = "1"
 
 [dev-dependencies]
 tempfile = "3"

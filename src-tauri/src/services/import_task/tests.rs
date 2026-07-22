@@ -216,7 +216,7 @@
   }
 
   #[test]
-  fn cancel_stops_mid_import_and_reports_partial_counts() {
+  fn cancel_before_start_processes_nothing() {
     let h = make_lib();
     let paths: Vec<PathBuf> = (0..3)
       .map(|i| {
@@ -226,30 +226,24 @@
       })
       .collect();
 
-    // 第一个 asset 事件即置位取消 → 后续文件不再处理
-    let cancel = AtomicBool::new(false);
+    // 预置取消：不领取任何文件（并行语义：置位后不再领新活），事件仍完整
+    let cancel = AtomicBool::new(true);
     let events = Mutex::new(Vec::new());
     let outcome = run_import(
       &h.lib,
       h.root.clone(),
       opts(Structure::Flatten, Source::Copy, paths),
-      |e| {
-        if matches!(e, ImportEvent::Asset { .. }) {
-          cancel.store(true, Ordering::Relaxed);
-        }
-        events.lock().unwrap().push(e);
-      },
+      |e| events.lock().unwrap().push(e),
       &cancel,
     );
 
-    assert_eq!((outcome.imported, outcome.conflicts.len(), outcome.failed.len()), (1, 0, 0));
-    assert_eq!(kinds(&events.into_inner().unwrap()), vec!["started", "asset", "finished"]);
-    // 已导入的 1 条正常落盘
-    assert_eq!(with_lib(&h, |l| l.folders.items.len()), 1);
+    assert_eq!((outcome.imported, outcome.conflicts.len(), outcome.failed.len()), (0, 0, 0));
+    assert_eq!(kinds(&events.into_inner().unwrap()), vec!["started", "finished"]);
+    assert_eq!(with_lib(&h, |l| l.folders.items.len()), 0);
   }
 
   #[test]
-  fn cancel_preserves_collected_conflicts() {
+  fn cancel_mid_import_keeps_completed_and_conflicts() {
     let h = make_lib();
     // 先入库一个资源作为冲突目标
     let base = h._dir.path().join("基准.txt");
@@ -263,8 +257,10 @@
     fs::write(&n1, "新内容一").unwrap();
     fs::write(&n2, "新内容二").unwrap();
 
-    // 顺序：冲突项先入收集，第一个 asset 事件置位取消 → 第二个新文件不再处理
+    // 第一个 asset 事件即置位取消。并行语义：冲突在阶段 2 已收集（确定），
+    // 进行中的文件写完（imported ≥ 1，具体数量取决于调度，不作硬性断言）
     let cancel = AtomicBool::new(false);
+    let events = Mutex::new(Vec::new());
     let outcome = run_import(
       &h.lib,
       h.root.clone(),
@@ -273,11 +269,91 @@
         if matches!(e, ImportEvent::Asset { .. }) {
           cancel.store(true, Ordering::Relaxed);
         }
+        events.lock().unwrap().push(e);
       },
       &cancel,
     );
 
-    // 取消中断时已收集的冲突如实随结果返回
-    assert_eq!((outcome.imported, outcome.conflicts.len(), outcome.failed.len()), (1, 1, 0));
+    assert!(outcome.imported >= 1, "触发取消的文件应已完成：{outcome:?}");
+    assert_eq!(outcome.conflicts.len(), 1);
+    assert_eq!(outcome.failed.len(), 0);
     assert_eq!(outcome.conflicts[0].source_path, dup);
+    // 不变式：started 必先、finished 必尾
+    let events = events.into_inner().unwrap();
+    assert!(matches!(events.first().unwrap(), ImportEvent::Started { .. }));
+    assert!(matches!(events.last().unwrap(), ImportEvent::Finished { .. }));
+    // 已注册数量与落盘一致（+1 为冲突目标自身的 origin Placement）
+    assert_eq!(with_lib(&h, |l| l.folders.items.len()), outcome.imported as usize + 1);
+  }
+
+  #[test]
+  fn parallel_import_of_32_files_matches_serial_semantics() {
+    let h = make_lib();
+    let paths: Vec<PathBuf> = (0..32)
+      .map(|i| {
+        let p = h._dir.path().join(format!("并行{i}.txt"));
+        fs::write(&p, format!("内容{i}")).unwrap();
+        p
+      })
+      .collect();
+
+    let (out, events) = run(&h, opts(Structure::Flatten, Source::Copy, paths));
+    assert_eq!((out.imported, out.conflicts.len(), out.failed.len()), (32, 0, 0), "failed: {:?}", out.failed);
+    // 与串行一致的终态：32 条 Placement、32 个实体、名字全唯一
+    with_lib(&h, |l| {
+      assert_eq!(l.folders.items.len(), 32);
+      assert_eq!(l.index.assets.len(), 32);
+      let names: std::collections::HashSet<&str> = l.folders.items.iter().map(|p| p.name.as_str()).collect();
+      assert_eq!(names.len(), 32);
+    });
+    assert_eq!(info_dir_count(&h), 32);
+    // 事件不变式：started 必先、finished 必尾、asset 数量 = 32
+    assert!(matches!(events.first().unwrap(), ImportEvent::Started { total: 32 }));
+    assert!(matches!(events.last().unwrap(), ImportEvent::Finished { .. }));
+    assert_eq!(events.iter().filter(|e| matches!(e, ImportEvent::Asset { .. })).count(), 32);
+  }
+
+  /// 性能基准（手动跑）：cargo test bench_serial_vs_parallel -- --ignored --nocapture
+  /// 100 张 1024x512 随机噪声图（≈2MB/张），串行 vs 并行（sha256 + 复制 + 缩略图）
+  #[test]
+  #[ignore]
+  fn bench_serial_vs_parallel() {
+    use rand::Rng;
+    use rayon::prelude::*;
+    use std::time::Instant;
+
+    let h = make_lib();
+    let dir = h._dir.path().join("基准素材");
+    fs::create_dir_all(&dir).unwrap();
+    let mut rng = rand::thread_rng();
+    let paths: Vec<PathBuf> = (0..100)
+      .map(|i| {
+        let p = dir.join(format!("噪声{i:03}.png"));
+        let img =
+          image::RgbaImage::from_fn(1024, 512, |_, _| image::Rgba([rng.gen(), rng.gen(), rng.gen(), 255]));
+        img.save(&p).unwrap();
+        p
+      })
+      .collect();
+    println!(">>> 100 张测试图就绪（约 2MB/张 随机噪声 PNG）");
+
+    // 单文件重活（与管线阶段 1+3 相同）：sha256 + 复制 + 探测 + 缩略图 + metadata
+    let heavy = |p: &PathBuf, tag: &str| {
+      let file = PendingFile { path: p.clone(), chain: Vec::new() };
+      let hash = ops::sha256_file(&file.path).unwrap();
+      ops::build_asset_with_id(&h.root, &file, &hash, tag, Source::Copy).unwrap();
+    };
+
+    let t = Instant::now();
+    for (i, p) in paths.iter().enumerate() {
+      heavy(p, &format!("BS{i:03}"));
+    }
+    let serial = t.elapsed();
+
+    let t = Instant::now();
+    paths.par_iter().enumerate().for_each(|(i, p)| heavy(p, &format!("BP{i:03}")));
+    let parallel = t.elapsed();
+
+    let speedup = serial.as_secs_f64() / parallel.as_secs_f64();
+    println!(">>> 串行: {serial:.2?}  并行: {parallel:.2?}  加速比: {speedup:.2}x");
   }
