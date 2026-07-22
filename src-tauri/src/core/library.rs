@@ -137,6 +137,13 @@ pub fn open(path: &Path) -> Result<Library, DataError> {
   for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR, INBOX_DIR] {
     fs::create_dir_all(path.join(dir))?;
   }
+  // 冲突弹窗预览缓存为会话级临时（4.2）：打开库时清空上一轮遗留
+  let preview_tmp = path.join(CACHE_DIR).join("tmp");
+  if preview_tmp.is_dir() {
+    if let Err(e) = fs::remove_dir_all(&preview_tmp) {
+      log::warn!("预览缓存目录清理失败：{e}");
+    }
+  }
   migrate::migrate_library_if_needed(path)?;
   let folders: FoldersFile = read_json(&path.join(FOLDERS_FILE))?;
   let tags: TagsFile = read_json(&path.join(TAGS_FILE))?;
@@ -300,6 +307,19 @@ mod tests {
     fs::create_dir_all(&info).unwrap();
     fs::write(info.join("metadata.json"), "{ broken").unwrap();
     assert!(matches!(open(root), Err(DataError::Corrupt(_))));
+  }
+
+  #[test]
+  fn open_clears_preview_tmp_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    create(root).unwrap();
+    // 冲突弹窗预览缓存（4.2）为会话级临时：打开库时整目录清空
+    let tmp = root.join("cache/tmp");
+    fs::create_dir_all(&tmp).unwrap();
+    fs::write(tmp.join("a.webp"), b"x").unwrap();
+    open(root).unwrap();
+    assert!(!tmp.exists(), "打开库应清空预览缓存目录");
   }
 
   #[test]

@@ -41,6 +41,9 @@ pub struct ConflictResolution {
   /// 序列帧组信息（冲突项原样回传；action = "copy" 时按此重新打包建档，4.1）
   #[serde(default)]
   pub sequence: Option<ops::SequenceSource>,
+  /// 预览缓存路径（冲突项原样回传；决策完成后删除——cache/tmp 会话级临时，4.2）
+  #[serde(default)]
+  pub source_thumb_path: Option<String>,
 }
 
 /// 决策执行汇总（skip 也计入 resolved——用户已决策、无需动作）
@@ -52,6 +55,7 @@ pub struct ResolveReport {
 }
 
 /// 逐项执行决策：skip 直接过；copy 复用建档原语（继承 source）；useExisting / link 为轻操作；
+/// 决策成功（含 skip）即删除该项预览缓存（cache/tmp 会话级临时，4.2）；
 /// 全部处理完重建 Placement 索引 + folders.json 一次落盘（有改动才写）。
 pub fn resolve_conflicts(lib: &mut Library, items: &[ConflictResolution], source: Source) -> ResolveReport {
   let mut report = ResolveReport { resolved: 0, failed: Vec::new() };
@@ -61,6 +65,7 @@ pub fn resolve_conflicts(lib: &mut Library, items: &[ConflictResolution], source
       Ok(changed) => {
         dirty |= changed;
         report.resolved += 1;
+        cleanup_preview(item);
       }
       Err(reason) => {
         report.failed.push(FailedItem { path: item.source_path.to_string_lossy().into_owned(), reason });
@@ -75,6 +80,16 @@ pub fn resolve_conflicts(lib: &mut Library, items: &[ConflictResolution], source
   }
   log::info!("冲突决策完成：成功 {}、失败 {}", report.resolved, report.failed.len());
   report
+}
+
+/// 决策完成（含 skip）后删除该项预览缓存（cache/tmp 会话级临时）；删除失败仅记日志——
+/// 启动时 open 还会整目录兜底清空，不阻塞决策
+fn cleanup_preview(item: &ConflictResolution) {
+  if let Some(p) = &item.source_thumb_path {
+    if let Err(e) = std::fs::remove_file(p) {
+      log::warn!("预览缓存删除失败（{p}）：{e}");
+    }
+  }
 }
 
 /// 执行单项决策；返回 Ok(true) 表示 folders.json 有改动
@@ -221,6 +236,33 @@ mod tests {
     f(h.lib.lock().unwrap().as_mut().unwrap())
   }
 
+  #[test]
+  fn resolved_decision_removes_preview_cache() {
+    let h = make_lib();
+    // 预览缓存文件（cache/tmp）；决策完成（含 skip）即删
+    let cache = h.root.join("cache/tmp/abc.webp");
+    std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    std::fs::write(&cache, b"x").unwrap();
+
+    let report = with_lib(&h, |l| {
+      resolve_conflicts(
+        l,
+        &[ConflictResolution {
+          source_path: PathBuf::from("源.svg"),
+          existing_asset_id: "AN-X".into(),
+          target_folder: ROOT_FOLDER_ID.into(),
+          action: ResolveAction::Skip,
+          link_name: None,
+          sequence: None,
+          source_thumb_path: Some(cache.to_string_lossy().into_owned()),
+        }],
+        Source::Copy,
+      )
+    });
+    assert_eq!(report.resolved, 1);
+    assert!(!cache.exists(), "决策完成后预览缓存应删除");
+  }
+
   /// 导入 paths 制造冲突：先入库 seed（内容按 seed_name 唯一，避免撞上前用例的资源），
   /// 再导入同内容文件 → 返回冲突项
   fn make_conflict(h: &Harness, seed_name: &str, dup_name: &str, target: Option<String>) -> ops::ConflictItem {
@@ -270,6 +312,7 @@ mod tests {
       action,
       link_name: link_name.map(|s| s.into()),
       sequence: c.sequence.clone(),
+      source_thumb_path: c.source_thumb_path.clone(),
     }
   }
 

@@ -79,6 +79,7 @@ export interface ConflictResolution {
   action: "useExisting" | "copy" | "link" | "skip";
   linkName?: string | null;
   sequence?: SequenceSource | null; // 序列帧冲突原样回传（4.1）
+  sourceThumbPath?: string | null; // 预览缓存原样回传（决策完成后后端删除，4.2）
 }
 
 // 导入任务事件（后端 services/import.rs ImportEvent，serde tag="type" camelCase）
