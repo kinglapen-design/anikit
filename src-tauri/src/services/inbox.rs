@@ -133,7 +133,14 @@ fn dispatch_loop(app: AppHandle, root: PathBuf, rx: mpsc::Receiver<Vec<PathBuf>>
       break;
     }
     let state = app.state::<AppState>();
-    let opts = ImportOptions { structure: Structure::Keep, source: Source::Move, target_folder: None, paths };
+    let opts = ImportOptions {
+      structure: Structure::Keep,
+      source: Source::Move,
+      target_folder: None,
+      paths,
+      // 收件箱渠道标记：撞 hash 且已有资产同渠道时自动合并（PRD 01-2.3 注）
+      imported_from: Some("inbox".to_string()),
+    };
     let app_ev = app.clone();
     // 收件箱导入无 UI 取消入口（批次通常很小），cancel 恒 false
     run_import(

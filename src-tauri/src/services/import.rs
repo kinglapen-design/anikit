@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::core::json_io::write_json;
+use crate::core::json_io::{read_json, write_json};
 use crate::core::library::{self, Library, ASSTES_DIR};
 use crate::core::models::{new_asset_id, AssetMeta, Folder, Placement, DATA_VERSION};
 use crate::services::thumbnail;
@@ -53,6 +53,10 @@ pub struct ImportOptions {
   pub target_folder: Option<String>,
   #[serde(default)]
   pub paths: Vec<PathBuf>,
+  /// 导入渠道标记（写入 metadata.importedFrom）："inbox" = 收件箱自动导入；
+  /// 携带标记的导入撞 hash 且已有资产同渠道时自动合并（PRD 01-2.3 注）
+  #[serde(default)]
+  pub imported_from: Option<String>,
 }
 
 /// 单文件失败记录（reason 为中文人话，不给堆栈）
@@ -187,16 +191,18 @@ fn walk(
 /// 单文件建档（锁外重活）：建 info 文件夹 → 实体入库 → 探测宽高 → 缩略图 → 写 metadata.json。
 /// 路径全由新 ID 推导，不依赖共享状态。
 pub(crate) fn build_asset(root: &Path, file: &PendingFile, hash: &str, source: Source) -> Result<AssetMeta, String> {
-  build_asset_with_id(root, file, hash, &new_asset_id(), source)
+  build_asset_with_id(root, file, hash, &new_asset_id(), source, None)
 }
 
 /// 同 build_asset，但使用预分配的 asset id（并行管线在阶段 2 查重时统一分配）
+/// 并携带导入渠道标记（inbox 导入写 metadata.importedFrom）
 pub(crate) fn build_asset_with_id(
   root: &Path,
   file: &PendingFile,
   hash: &str,
   asset_id: &str,
   source: Source,
+  imported_from: Option<&str>,
 ) -> Result<AssetMeta, String> {
   let info_dir = root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
   fs::create_dir_all(&info_dir).map_err(|e| format!("info 文件夹创建失败：{e}"))?;
@@ -208,9 +214,47 @@ pub(crate) fn build_asset_with_id(
 
   let (width, height) = thumbnail::probe(&dest).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None));
   let thumb = thumbnail::generate(&info_dir, &dest, file_stem(&file.path).as_str());
-  let meta = make_meta(asset_id, file, &origin_name, size, hash, width, height, thumb);
+  let meta = make_meta(asset_id, file, &origin_name, size, hash, width, height, thumb, imported_from);
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
   Ok(meta)
+}
+
+/// 收件箱自动合并（PRD 01-2.3 importedFrom，2026-07-22 用户定案）：内容相同不重复存——
+/// 已有资产（同为 inbox 渠道）改名为新文件真实名：磁盘 originName 与词干缩略图一并改名
+/// （4.1 重命名语义提前落地），metadata 更新（originName / name / thumbnail / modifiedAt）；
+/// 新文件与库内内容相同（hash 一致），作为重复丢弃。全部在锁外执行（单资源单文件）；
+/// 返回（更新后的 metadata, 是否发生了改名），调用方负责锁内索引与 Placement 更新。
+pub(crate) fn merge_rename(root: &Path, file: &PendingFile, asset_id: &str) -> Result<(AssetMeta, bool), String> {
+  let info_dir = root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
+  let meta_path = info_dir.join("metadata.json");
+  let mut meta: AssetMeta = read_json(&meta_path).map_err(|e| e.to_string())?;
+  let new_name = file_name(&file.path);
+  let renamed = meta.origin_name != new_name;
+  if renamed {
+    let old_origin = info_dir.join(&meta.origin_name);
+    if old_origin.exists() {
+      fs::rename(&old_origin, info_dir.join(&new_name)).map_err(|e| format!("文件改名失败：{e}"))?;
+    }
+    // 词干缩略图（{stem}_thumbnail.webp/png）同步改名并重新登记
+    if let Some(thumb) = meta.thumbnail.clone() {
+      let old_thumb = info_dir.join(&thumb);
+      if old_thumb.exists() {
+        let ext = Path::new(&thumb).extension().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "webp".into());
+        let new_thumb = format!("{}_thumbnail.{ext}", file_stem(&file.path));
+        fs::rename(&old_thumb, info_dir.join(&new_thumb)).map_err(|e| format!("缩略图改名失败：{e}"))?;
+        meta.thumbnail = Some(new_thumb);
+      }
+    }
+    meta.origin_name = new_name;
+    meta.name = file_stem(&file.path);
+  }
+  meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
+  write_json(&meta_path, &meta).map_err(|e| e.to_string())?;
+  // 重复源丢弃（过境语义）；删除失败仅记日志——启动清点会再撞一次合并，幂等无害
+  if let Err(e) = fs::remove_file(&file.path) {
+    log::error!("收件箱重复文件丢弃失败：{e}");
+  }
+  Ok((meta, renamed))
 }
 
 /// 实体入库：Copy 复制；Move 优先 rename（同盘零拷贝），失败回退 复制+删除源（跨盘场景）
@@ -230,6 +274,7 @@ fn store_file(src: &Path, dest: &Path, source: Source) -> Result<(), String> {
 }
 
 /// 组装 metadata.json 内容（PRD 01-2.3：只存资源固有属性，位置信息在 folders.json）
+#[allow(clippy::too_many_arguments)]
 fn make_meta(
   id: &str,
   file: &PendingFile,
@@ -239,6 +284,7 @@ fn make_meta(
   width: Option<u32>,
   height: Option<u32>,
   thumbnail: Option<String>,
+  imported_from: Option<&str>,
 ) -> AssetMeta {
   // RFC3339 本地时间，与 PRD 示例一致（精确到秒，不带小数）
   let now = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
@@ -256,6 +302,7 @@ fn make_meta(
     rating: 0,
     links: Vec::new(),
     imported_at: now.clone(),
+    imported_from: imported_from.map(|s| s.to_string()),
     modified_at: now,
     tags: Vec::new(),
     note: String::new(),

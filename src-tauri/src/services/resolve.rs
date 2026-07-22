@@ -197,7 +197,7 @@ mod tests {
   }
 
   fn import(h: &Harness, paths: Vec<PathBuf>, target: Option<String>) -> ops::ImportOutcome {
-    let opts = ImportOptions { structure: Structure::Flatten, source: Source::Copy, target_folder: target, paths };
+    let opts = ImportOptions { structure: Structure::Flatten, source: Source::Copy, target_folder: target, paths, imported_from: None };
     run_import(&h.lib, h.root.clone(), opts, |_| {}, &AtomicBool::new(false))
   }
 
@@ -364,6 +364,7 @@ mod tests {
       source: Source::Copy,
       target_folder: None,
       paths: vec![tree],
+      imported_from: None,
     };
     let outcome = run_import(&h.lib, h.root.clone(), opts, |_| {}, &AtomicBool::new(false));
     assert_eq!(outcome.conflicts.len(), 1);

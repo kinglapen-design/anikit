@@ -51,6 +51,9 @@ pub struct AssetMeta {
   #[serde(default)]
   pub links: Vec<String>,
   pub imported_at: String,
+  /// 导入渠道（"inbox" = 收件箱自动导入；常规导入 None）——收件箱 hash 冲突自动合并的判定依据（PRD 01-2.3 注）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub imported_from: Option<String>,
   pub modified_at: String,
   #[serde(default)]
   pub tags: Vec<String>,

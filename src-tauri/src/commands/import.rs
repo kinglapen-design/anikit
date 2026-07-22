@@ -88,7 +88,7 @@ pub fn import_paths(
   let root = current_root(&app)?;
   ensure_target(&app, &target_folder)?;
   let opts =
-    ImportOptions { structure, source, target_folder, paths: paths.iter().map(PathBuf::from).collect() };
+    ImportOptions { structure, source, target_folder, paths: paths.iter().map(PathBuf::from).collect(), imported_from: None };
   Ok(spawn_import(app, root, opts, on_event, None))
 }
 
@@ -110,8 +110,13 @@ pub fn import_clipboard(
   let tmp = cache_dir.join(clipboard_png_name(&cache_dir));
   save_clipboard_png(&img, &tmp)?;
 
-  let opts =
-    ImportOptions { structure: Structure::Flatten, source: Source::Move, target_folder, paths: vec![tmp.clone()] };
+  let opts = ImportOptions {
+    structure: Structure::Flatten,
+    source: Source::Move,
+    target_folder,
+    paths: vec![tmp.clone()],
+    imported_from: None,
+  };
   // 临时文件由工作线程在导入结束后清理（覆盖查重命中不移动实体的场景）
   Ok(spawn_import(app, root, opts, on_event, Some(tmp)))
 }
@@ -311,7 +316,7 @@ mod tests {
 
   /// 同步跑导入（事件丢弃）
   fn import(h: &Harness, paths: Vec<PathBuf>, structure: Structure) {
-    let opts = ImportOptions { structure, source: Source::Copy, target_folder: None, paths };
+    let opts = ImportOptions { structure, source: Source::Copy, target_folder: None, paths, imported_from: None };
     run_import(&h.lib, h.root.clone(), opts, |_| {}, &AtomicBool::new(false));
   }
 

@@ -1,7 +1,7 @@
   use super::*;
   use crate::core::json_io::read_json;
   use crate::core::library::{ASSTES_DIR, FOLDERS_FILE};
-  use crate::core::models::FoldersFile;
+  use crate::core::models::{AssetMeta, FoldersFile};
   use crate::services::import::Source;
   use std::fs;
 
@@ -19,7 +19,7 @@
   }
 
   fn opts(structure: Structure, source: Source, paths: Vec<PathBuf>) -> ImportOptions {
-    ImportOptions { structure, source, target_folder: None, paths }
+    ImportOptions { structure, source, target_folder: None, paths, imported_from: None }
   }
 
   /// 同步跑导入并收集事件
@@ -341,7 +341,7 @@
     let heavy = |p: &PathBuf, tag: &str| {
       let file = PendingFile { path: p.clone(), chain: Vec::new() };
       let hash = ops::sha256_file(&file.path).unwrap();
-      ops::build_asset_with_id(&h.root, &file, &hash, tag, Source::Copy).unwrap();
+      ops::build_asset_with_id(&h.root, &file, &hash, tag, Source::Copy, None).unwrap();
     };
 
     let t = Instant::now();
@@ -356,4 +356,122 @@
 
     let speedup = serial.as_secs_f64() / parallel.as_secs_f64();
     println!(">>> 串行: {serial:.2?}  并行: {parallel:.2?}  加速比: {speedup:.2}x");
+  }
+
+  // ---------- 收件箱自动合并（PRD 01-2.3 importedFrom，2026-07-22 用户定案 A） ----------
+
+  /// inbox 渠道导入辅助：携带 importedFrom 标记 + Move 过境
+  fn inbox_opts(paths: Vec<PathBuf>) -> ImportOptions {
+    ImportOptions {
+      structure: Structure::Flatten,
+      source: Source::Move,
+      target_folder: None,
+      paths,
+      imported_from: Some("inbox".into()),
+    }
+  }
+
+  /// 唯一资源的 info 目录（单资源场景）
+  fn only_info_dir(h: &Harness) -> PathBuf {
+    fs::read_dir(h.root.join(ASSTES_DIR)).unwrap().next().unwrap().unwrap().path()
+  }
+
+  /// 自动合并：RECOVER 快照先入、真实文件后入撞 hash——已有资产静默改名为真实名
+  ///（磁盘 + metadata + Placement + Asset 事件），新文件作为重复丢弃，无冲突
+  #[test]
+  fn inbox_merge_renames_existing_asset_silently() {
+    let h = make_lib();
+    let recover = h._dir.path().join("RECOVER_无标题.fla");
+    fs::write(&recover, "相同内容").unwrap();
+    let (out1, _) = run(&h, inbox_opts(vec![recover]));
+    assert_eq!((out1.imported, out1.conflicts.len()), (1, 0));
+
+    let real = h._dir.path().join("无标题.fla");
+    fs::write(&real, "相同内容").unwrap();
+    let (out2, ev2) = run(&h, inbox_opts(vec![real.clone()]));
+    assert_eq!(out2.conflicts.len(), 0, "同渠道撞 hash 应自动合并，无冲突弹窗");
+    assert_eq!(out2.failed.len(), 0);
+    assert_eq!(out2.imported, 1, "合并改名计一次流入");
+    assert!(!real.exists(), "重复源应被丢弃");
+
+    assert_eq!(info_dir_count(&h), 1, "资产唯一");
+    let (origin_name, name, ifrom, placement_name) = with_lib(&h, |l| {
+      let meta = l.index.assets.values().next().unwrap();
+      (meta.origin_name.clone(), meta.name.clone(), meta.imported_from.clone(), l.folders.items[0].name.clone())
+    });
+    assert_eq!((origin_name.as_str(), name.as_str()), ("无标题.fla", "无标题"));
+    assert_eq!(ifrom.as_deref(), Some("inbox"), "渠道标记保留");
+    assert_eq!(placement_name, "无标题.fla", "origin Placement 显示名同步");
+
+    let info_dir = only_info_dir(&h);
+    let meta: AssetMeta = read_json(&info_dir.join("metadata.json")).unwrap();
+    assert_eq!(meta.origin_name, "无标题.fla", "metadata.json 落盘同步");
+    assert!(info_dir.join("无标题.fla").exists(), "磁盘实体已改名");
+    assert!(ev2.iter().any(|e| matches!(e, ImportEvent::Asset { .. })), "合并发 Asset 事件");
+  }
+
+  /// 同名同内容的纯重复过境：静默丢弃，无改名、不计入、不发 Asset 事件
+  #[test]
+  fn inbox_pure_duplicate_discards_quietly() {
+    let h = make_lib();
+    let a = h._dir.path().join("a.txt");
+    fs::write(&a, "x").unwrap();
+    run(&h, inbox_opts(vec![a.clone()]));
+    fs::write(&a, "x").unwrap(); // 同名同内容再来一次
+    let (out, ev) = run(&h, inbox_opts(vec![a.clone()]));
+    assert_eq!((out.imported, out.conflicts.len(), out.failed.len()), (0, 0, 0));
+    assert!(!a.exists(), "重复源应被丢弃");
+    assert_eq!(info_dir_count(&h), 1);
+    assert!(!ev.iter().any(|e| matches!(e, ImportEvent::Asset { .. })), "纯重复不发 Asset 事件");
+  }
+
+  /// 合并门禁：已有资产非 inbox 渠道（正式资产）→ 照常冲突询问，绝不被自动改名
+  #[test]
+  fn merge_never_touches_formal_assets() {
+    let h = make_lib();
+    let formal = h._dir.path().join("正式.fla");
+    fs::write(&formal, "相同内容").unwrap();
+    run(&h, opts(Structure::Flatten, Source::Copy, vec![formal]));
+
+    let new = h._dir.path().join("新来的.fla");
+    fs::write(&new, "相同内容").unwrap();
+    let (out, _) = run(&h, inbox_opts(vec![new.clone()]));
+    assert_eq!(out.conflicts.len(), 1, "正式资产应走冲突询问");
+    assert!(new.exists(), "冲突未决策源文件保留");
+    let origin = with_lib(&h, |l| l.index.assets.values().next().unwrap().origin_name.clone());
+    assert_eq!(origin, "正式.fla", "正式资产名不受影响");
+  }
+
+  /// 反向门禁：inbox 渠道的已有资产被常规导入撞 hash → 照常冲突（自动合并是收件箱专属）
+  #[test]
+  fn normal_import_still_conflicts_against_inbox_asset() {
+    let h = make_lib();
+    let a = h._dir.path().join("RECOVER_a.fla");
+    fs::write(&a, "相同内容").unwrap();
+    run(&h, inbox_opts(vec![a]));
+
+    let b = h._dir.path().join("b.fla");
+    fs::write(&b, "相同内容").unwrap();
+    let (out, _) = run(&h, opts(Structure::Flatten, Source::Copy, vec![b]));
+    assert_eq!(out.conflicts.len(), 1, "常规导入撞 inbox 资产仍应询问");
+  }
+
+  /// 合并时词干缩略图一并改名并重新登记（4.1 重命名语义）
+  #[test]
+  fn inbox_merge_renames_stem_thumbnail() {
+    let h = make_lib();
+    let recover = h._dir.path().join("RECOVER_图.png");
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([1, 2, 3, 255])).save(&recover).unwrap();
+    run(&h, inbox_opts(vec![recover]));
+
+    let real = h._dir.path().join("图.png");
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([1, 2, 3, 255])).save(&real).unwrap(); // 同字节同 hash
+    let (out, _) = run(&h, inbox_opts(vec![real]));
+    assert_eq!(out.imported, 1);
+
+    let thumb = with_lib(&h, |l| l.index.assets.values().next().unwrap().thumbnail.clone());
+    assert_eq!(thumb.as_deref(), Some("图_thumbnail.webp"), "缩略图登记同步改名");
+    let info_dir = only_info_dir(&h);
+    assert!(info_dir.join("图_thumbnail.webp").exists());
+    assert!(!info_dir.join("RECOVER_图_thumbnail.webp").exists());
   }
