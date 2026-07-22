@@ -1,13 +1,19 @@
 use tauri::{
-  menu::{Menu, MenuItem},
+  menu::{CheckMenuItem, Menu, MenuItem},
   tray::TrayIconBuilder,
   Manager,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
+mod adapters;
 mod commands;
 mod core;
 mod services;
+
+/// 托盘菜单项句柄（收件箱盘符勾选态 / 标注由 services::inbox::sync_tray 同步）
+pub struct TrayItems {
+  pub inbox: CheckMenuItem<tauri::Wry>,
+}
 
 /// 任务 2 spike：从窗口拖出文件到其他软件（WebView HTML5 拖拽出不了窗口边界，
 /// 由原生层发起系统级拖拽，Windows 底层即 CF_HDROP）。
@@ -40,6 +46,7 @@ pub fn run() {
     .manage(commands::library::AppState {
       library: std::sync::Mutex::new(None),
       imports: std::sync::Mutex::new(std::collections::HashMap::new()),
+      inbox: std::sync::Mutex::new(None),
     })
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -73,10 +80,12 @@ pub fn run() {
         log::error!("全局热键 alt+` 注册失败（可能被其他程序占用）: {e}");
       }
 
-      // 托盘菜单：显示 / 退出
+      // 托盘菜单：显示 / 收件箱盘符开关（3.2）/ 退出
       let show = MenuItem::with_id(app, "show", "显示", true, None::<&str>)?;
+      let inbox_item = CheckMenuItem::with_id(app, "inbox-drive", "收件箱盘符（未挂载）", true, false, None::<&str>)?;
       let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-      let menu = Menu::with_items(app, &[&show, &quit])?;
+      let menu = Menu::with_items(app, &[&show, &inbox_item, &quit])?;
+      app.manage(TrayItems { inbox: inbox_item.clone() });
       let _tray = TrayIconBuilder::new()
         .icon(app.default_window_icon().expect("no window icon").clone())
         .menu(&menu)
@@ -88,6 +97,7 @@ pub fn run() {
               let _ = w.set_focus();
             }
           }
+          "inbox-drive" => services::inbox::toggle_drive(app),
           "quit" => app.exit(0),
           _ => {}
         })
@@ -159,6 +169,12 @@ pub fn run() {
       commands::import::list_folder_tree,
       commands::import::list_placements,
     ])
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application")
+    // 退出时收尾收件箱（3.2）：停监听 + 卸载盘符（PRD：启动时挂载、退出卸载）
+    .run(|app, event| {
+      if let tauri::RunEvent::Exit = event {
+        services::inbox::stop(app);
+      }
+    });
 }

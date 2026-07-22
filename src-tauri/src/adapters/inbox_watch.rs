@@ -1,0 +1,202 @@
+//! 收件箱文件监听适配器（PRD 05-01）：notify 增量事件（Windows 走 ReadDirectoryChangesW，
+//! 非轮询、常驻零 CPU）监听 inbox 目录；按"顶层条目"（被丢入的文件 / 文件夹）聚合活动，
+//! 做写入完成检测——距最后一次活动超过 STABLE、大小两轮探测一致、全部文件可打开，
+//! 三者齐备才整批回调。文件被占用时顺延活动时刻，自然延迟到下一轮重试。
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
+
+use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
+
+/// 写入完成判定：距最后一次文件活动的静默时长（PRD"大小连续 N 秒稳定"）
+const STABLE: Duration = Duration::from_secs(2);
+/// 探测节拍：事件收集体积 + 大小稳定性对比间隔
+const TICK: Duration = Duration::from_millis(500);
+
+/// 监听句柄：stop 置位 + join 回收线程；Drop 自动停（防泄漏）
+pub struct WatchHandle {
+  stop: Arc<AtomicBool>,
+  join: Option<JoinHandle<()>>,
+}
+
+impl WatchHandle {
+  pub fn stop(&mut self) {
+    self.stop.store(true, Ordering::Relaxed);
+    if let Some(j) = self.join.take() {
+      let _ = j.join();
+    }
+  }
+}
+
+impl Drop for WatchHandle {
+  fn drop(&mut self) {
+    self.stop();
+  }
+}
+
+/// 启动监听：目录下每个就绪的顶层条目整批触发 on_ready。
+/// 启动时先清点存量条目（上次崩溃残留 / 用户跳过项），与通知事件走同一判定。
+pub fn spawn(dir: PathBuf, on_ready: impl Fn(Vec<PathBuf>) + Send + 'static) -> Result<WatchHandle, String> {
+  let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
+  let mut watcher = RecommendedWatcher::new(tx, Config::default()).map_err(|e| format!("文件监听创建失败：{e}"))?;
+  watcher.watch(&dir, RecursiveMode::Recursive).map_err(|e| format!("收件箱监听失败：{e}"))?;
+  let stop = Arc::new(AtomicBool::new(false));
+  let stop_thread = stop.clone();
+  let join = std::thread::spawn(move || watch_loop(dir, rx, watcher, stop_thread, on_ready));
+  Ok(WatchHandle { stop, join: Some(join) })
+}
+
+/// 待就绪条目状态：最后活动时刻 + 上一轮大小快照
+struct Pending {
+  last_activity: Instant,
+  last_size: Option<u64>,
+}
+
+impl Pending {
+  fn hot() -> Self {
+    Self { last_activity: Instant::now(), last_size: None }
+  }
+}
+
+fn watch_loop(
+  dir: PathBuf,
+  rx: mpsc::Receiver<notify::Result<Event>>,
+  _watcher: RecommendedWatcher, // 持有保活，线程退出即停止监听
+  stop: Arc<AtomicBool>,
+  on_ready: impl Fn(Vec<PathBuf>),
+) {
+  let mut pending: HashMap<PathBuf, Pending> = HashMap::new();
+  // 存量清点：目录里已存在的条目按"刚有活动"入队，静默期满后照常入库
+  if let Ok(entries) = std::fs::read_dir(&dir) {
+    for entry in entries.filter_map(|e| e.ok()) {
+      pending.insert(entry.path(), Pending::hot());
+    }
+  }
+  loop {
+    if stop.load(Ordering::Relaxed) {
+      break;
+    }
+    match rx.recv_timeout(TICK) {
+      Ok(Ok(ev)) => {
+        for p in &ev.paths {
+          if let Some(root) = root_entry(&dir, p) {
+            pending.entry(root).and_modify(|s| s.last_activity = Instant::now()).or_insert_with(Pending::hot);
+          }
+        }
+      }
+      Ok(Err(e)) => log::error!("收件箱监听事件异常：{e}"),
+      Err(mpsc::RecvTimeoutError::Timeout) => {}
+      Err(mpsc::RecvTimeoutError::Disconnected) => break,
+    }
+    drain_ready(&mut pending, &on_ready);
+  }
+}
+
+/// 顶层条目：p 相对 inbox 目录的第一级（文件本身 / 被丢入的文件夹）；
+/// 目录自身与目录外路径返回 None
+fn root_entry(dir: &Path, p: &Path) -> Option<PathBuf> {
+  let first = p.strip_prefix(dir).ok()?.components().next()?;
+  Some(dir.join(first.as_os_str()))
+}
+
+/// 逐条判定就绪：静默期满 + 全部文件可打开 + 大小两轮一致 → 出队回调；
+/// 条目被移走 / 读不了则丢弃；被占用顺延活动时刻（延迟重试）
+fn drain_ready(pending: &mut HashMap<PathBuf, Pending>, on_ready: &impl Fn(Vec<PathBuf>)) {
+  let mut ready = Vec::new();
+  pending.retain(|path, st| {
+    if !path.exists() {
+      return false; // 写入中途被移走 / 删除，丢弃
+    }
+    if st.last_activity.elapsed() < STABLE {
+      return true;
+    }
+    if !entry_openable(path) {
+      st.last_activity = Instant::now(); // 占用：顺延，下轮重试
+      return true;
+    }
+    let Some(size) = entry_size(path) else { return false }; // 读不了（多半已不可用），丢弃
+    if st.last_size == Some(size) {
+      ready.push(path.clone());
+      false
+    } else {
+      st.last_size = Some(size);
+      true
+    }
+  });
+  if !ready.is_empty() {
+    on_ready(ready);
+  }
+}
+
+/// 条目内全部文件（文件夹递归）；目录读取失败的条目跳过
+fn files_of(path: &Path) -> Vec<PathBuf> {
+  if path.is_file() {
+    return vec![path.to_path_buf()];
+  }
+  let mut out = Vec::new();
+  if let Ok(entries) = std::fs::read_dir(path) {
+    for entry in entries.filter_map(|e| e.ok()) {
+      out.extend(files_of(&entry.path()));
+    }
+  }
+  out
+}
+
+/// 条目总大小；任一元数据读取失败返回 None
+fn entry_size(path: &Path) -> Option<u64> {
+  files_of(path).iter().try_fold(0u64, |acc, f| std::fs::metadata(f).ok().map(|m| acc + m.len()))
+}
+
+/// 全部文件可以只读打开（写入方未放手时打开失败 → 视为占用）
+fn entry_openable(path: &Path) -> bool {
+  files_of(path).iter().all(|f| std::fs::File::open(f).is_ok())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn root_entry_maps_to_top_level() {
+    let dir = Path::new("inbox");
+    assert_eq!(root_entry(dir, Path::new("inbox/a.png")), Some(dir.join("a.png")));
+    assert_eq!(root_entry(dir, Path::new("inbox/夹/b.png")), Some(dir.join("夹")));
+    assert_eq!(root_entry(dir, Path::new("inbox")), None);
+    assert_eq!(root_entry(dir, Path::new("elsewhere/a.png")), None);
+  }
+
+  #[test]
+  fn entry_size_sums_tree_recursively() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("夹");
+    std::fs::create_dir_all(dir.join("子")).unwrap();
+    std::fs::write(dir.join("a.txt"), "1234").unwrap();
+    std::fs::write(dir.join("子/b.txt"), "12").unwrap();
+    assert_eq!(entry_size(&dir), Some(6));
+    assert_eq!(entry_size(Path::new("不存在")), Some(0)); // 读不了的目录按空树计
+  }
+
+  /// 真监听集成：写入文件 → 静默期满 → 回调就绪（STABLE + 两轮探测 ≈ 3s，给足余量）
+  #[test]
+  fn watcher_reports_settled_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("inbox");
+    std::fs::create_dir_all(&dir).unwrap();
+    let (tx, rx) = mpsc::channel();
+    let mut handle = spawn(dir.clone(), move |paths| {
+      let _ = tx.send(paths);
+    })
+    .unwrap();
+
+    let file = dir.join("图.png");
+    std::fs::write(&file, "内容").unwrap();
+    let got = rx.recv_timeout(Duration::from_secs(15)).expect("15 秒内应收到就绪回调");
+    assert!(got.contains(&file), "就绪批次应包含写入的文件：{got:?}");
+
+    handle.stop();
+  }
+}

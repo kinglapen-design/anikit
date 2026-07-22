@@ -89,6 +89,7 @@ onMounted(() => {
   void syncMaximized();
   window.addEventListener("resize", onResize);
   window.addEventListener("keydown", onPaste);
+  void content.initInboxListener(); // 收件箱自动入库（3.2），App 存活期注册一次
   void webview.onDragDropEvent((event) => {
     if (event.payload.type === "drop") {
       void onDrop(event.payload.paths, event.payload.position.x, event.payload.position.y);

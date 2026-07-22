@@ -4,16 +4,18 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::core::config::{self, LibraryEntry};
 use crate::core::library::{self, Library};
 
-/// 应用状态：当前打开的素材库（同一时刻只开一个库）+ 导入任务注册表
+/// 应用状态：当前打开的素材库（同一时刻只开一个库）+ 导入任务注册表 + 收件箱实例
 pub struct AppState {
   pub library: Mutex<Option<Library>>,
   /// 导入任务取消标记：task_id → 置位即取消（任务结束从表中移除）
   pub imports: Mutex<std::collections::HashMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+  /// 收件箱运行实例（3.2）：随库打开 / 切换 / 退出由 services::inbox 重建
+  pub inbox: Mutex<Option<crate::services::inbox::InboxHandle>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -34,26 +36,28 @@ fn to_info(lib: &Library) -> LibraryInfo {
   }
 }
 
-/// 库进入打开状态：更新应用状态 + 记录到全局配置最近列表
-fn activate(state: &State<AppState>, lib: Library) -> Result<LibraryInfo, String> {
+/// 库进入打开状态：更新应用状态 + 记录到全局配置最近列表 + 启动收件箱（3.2）
+fn activate(app: &AppHandle, state: &State<AppState>, lib: Library) -> Result<LibraryInfo, String> {
   let info = to_info(&lib);
+  let root = lib.root.clone();
   *state.library.lock().map_err(|e| e.to_string())? = Some(lib);
   config::record_library_open(&info.name, &info.path).map_err(|e| e.to_string())?;
+  crate::services::inbox::start(app, &root);
   Ok(info)
 }
 
 /// 在选定文件夹创建素材库（前端系统对话框选定后调用；文件夹名即素材库名）
 #[tauri::command]
-pub fn create_library(state: State<AppState>, path: String) -> Result<LibraryInfo, String> {
+pub fn create_library(app: AppHandle, state: State<'_, AppState>, path: String) -> Result<LibraryInfo, String> {
   let lib = library::create(Path::new(&path)).map_err(|e| e.to_string())?;
-  activate(&state, lib)
+  activate(&app, &state, lib)
 }
 
 /// 打开素材库（打开前校验结构，不是 AniKit 资源库的文件夹会被拒绝）
 #[tauri::command]
-pub fn open_library(state: State<AppState>, path: String) -> Result<LibraryInfo, String> {
+pub fn open_library(app: AppHandle, state: State<'_, AppState>, path: String) -> Result<LibraryInfo, String> {
   let lib = library::open(Path::new(&path)).map_err(|e| e.to_string())?;
-  activate(&state, lib)
+  activate(&app, &state, lib)
 }
 
 /// 当前打开的素材库；未打开返回 null（前端据此决定是否弹"创建/打开资源库"窗口）

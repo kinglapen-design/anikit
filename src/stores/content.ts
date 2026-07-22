@@ -1,6 +1,7 @@
 import { markRaw } from "vue";
 import { defineStore } from "pinia";
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 // 与后端 commands/import.rs 输出一一对应（camelCase，07_接口文档）
 export interface PlacementView {
@@ -73,6 +74,9 @@ const FLUSH_MS = 250;
 let assetBuffer: PlacementView[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 
+// 收件箱事件监听（3.2）：App 存活期注册一次，后端监听 inbox 目录自动入库
+let unlistenInbox: (() => void) | undefined;
+
 // 递归查文件夹节点（stripFolders / 标题栏 crumbs 共用）
 function findFolder(nodes: FolderNode[], id: string): FolderNode | null {
   for (const n of nodes) {
@@ -106,7 +110,7 @@ export const useContentStore = defineStore("content", {
     importFailed: null as FailedItem[] | null,
     importConflicts: null as ConflictItem[] | null,
     // 原导入的来源模式（冲突"保留两个"决策继承；剪贴板导入恒 move）
-    lastImportSource: "copy" | "move",
+    lastImportSource: "copy" as "copy" | "move",
   }),
   getters: {
     // 当前视口的资源列表（未分类 / 收件箱 / 最近 / 回收站阶段 4 接，本轮给空）
@@ -201,6 +205,19 @@ export const useContentStore = defineStore("content", {
       items: ConflictResolution[],
     ): Promise<{ resolved: number; failed: FailedItem[] }> {
       return await invoke("resolve_conflicts", { items, source: this.lastImportSource });
+    },
+
+    // 收件箱后台导入（PRD 05-01，3.2）：后端监听 inbox 目录自动入库，
+    // 事件形状与导入 Channel 一致，复用 11_导入进度条 / 10_重复添加提示
+    async initInboxListener(): Promise<void> {
+      if (unlistenInbox) return;
+      unlistenInbox = await listen<ImportEvent>("inbox-import", (e) => {
+        if (e.payload.type === "started" && !this.importProgress) {
+          this.lastImportSource = "move"; // 收件箱恒 Move（过境：导入后即移走）
+          this.importProgress = { taskId: null, total: 0, done: 0, startedAt: Date.now() };
+        }
+        this.onImportEvent(e.payload);
+      });
     },
 
     onImportEvent(e: ImportEvent): void {

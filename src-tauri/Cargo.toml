@@ -27,8 +27,8 @@ drag = "2.1.1"
 tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-single-instance = "2.4.3"
 tauri-plugin-dialog = "2"
-# 主窗口 1px 线框色（DWMWA_BORDER_COLOR，Win11+）
-windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation"] }
+# 主窗口 1px 线框色（DWMWA_BORDER_COLOR，Win11+）+ 收件箱盘符（DefineDosDeviceW，3.2）
+windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_Storage_FileSystem"] }
 # 数据层：时间戳（ID / importedAt / 备份命名）
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 # 数据层：ID 随机字符
@@ -45,6 +45,8 @@ webp = { version = "0.3", default-features = false }
 arboard = "3"
 # 阶段 3：导入管线并行（sha256 / 复制 / 缩略图多线程，rayon 数据并行标准方案）
 rayon = "1"
+# 阶段 3.2：收件箱目录监听（Windows 走 ReadDirectoryChangesW 增量事件，非轮询、常驻零 CPU）
+notify = "8"
 
 [dev-dependencies]
 tempfile = "3"
