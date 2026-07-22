@@ -8,8 +8,10 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::core::library::{self, Library};
+use crate::core::models::new_asset_id;
 use crate::services::import as ops;
 use crate::services::import::{FailedItem, Source, ROOT_FOLDER_ID};
+use crate::services::sequence;
 
 /// 用户决策（serde 小驼峰："useExisting" / "copy" / "link" / "skip"）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,6 +37,9 @@ pub struct ConflictResolution {
   pub action: ResolveAction,
   #[serde(default)]
   pub link_name: Option<String>,
+  /// 序列帧组信息（冲突项原样回传；action = "copy" 时按此重新打包建档，4.1）
+  #[serde(default)]
+  pub sequence: Option<ops::SequenceSource>,
 }
 
 /// 决策执行汇总（skip 也计入 resolved——用户已决策、无需动作）
@@ -141,17 +146,44 @@ fn use_existing(lib: &mut Library, item: &ConflictResolution) -> Result<(), Stri
   Ok(())
 }
 
-/// copy：源文件走标准建档（新 ID 新实体 + origin Placement），继承原导入的 source
+/// copy：源走标准建档（新 ID 新实体 + origin Placement），继承原导入的 source；
+/// 序列帧冲突按回传的组信息重新打包（frames/ 归一，组 hash 重算）
 fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Result<(), String> {
   check_target(lib, &item.target_folder)?;
-  let pending = ops::PendingFile { path: item.source_path.clone(), chain: Vec::new() };
-  let hash = ops::sha256_file(&pending.path).map_err(|e| format!("文件读取失败：{e}"))?;
   let root = lib.root.clone();
-  let asset = ops::build_asset(&root, &pending, &hash, source)?;
-  let name = ops::file_name(&pending.path);
-  ops::add_placement(lib, asset.id.clone(), item.target_folder.clone(), name, true);
-  lib.index.assets.insert(asset.id.clone(), asset);
-  Ok(())
+  match &item.sequence {
+    Some(seq) => {
+      let frames: Vec<(PathBuf, u32)> = seq.frames.iter().map(|f| (f.path.clone(), f.number)).collect();
+      let mut hashes = Vec::with_capacity(frames.len());
+      for (path, _) in &frames {
+        hashes.push(ops::sha256_file(path).map_err(|e| format!("文件读取失败：{e}"))?);
+      }
+      let hash = sequence::group_hash(&hashes.iter().map(String::as_str).collect::<Vec<_>>());
+      let asset = sequence::build_sequence_asset(
+        &root,
+        &seq.name,
+        &seq.ext,
+        seq.width as usize,
+        &frames,
+        &hash,
+        &new_asset_id(),
+        source,
+        None,
+      )?;
+      ops::add_placement(lib, asset.id.clone(), item.target_folder.clone(), format!("{}.{}", seq.name, seq.ext), true);
+      lib.index.assets.insert(asset.id.clone(), asset);
+      Ok(())
+    }
+    None => {
+      let pending = ops::PendingFile { path: item.source_path.clone(), chain: Vec::new() };
+      let hash = ops::sha256_file(&pending.path).map_err(|e| format!("文件读取失败：{e}"))?;
+      let asset = ops::build_asset(&root, &pending, &hash, source)?;
+      let name = ops::file_name(&pending.path);
+      ops::add_placement(lib, asset.id.clone(), item.target_folder.clone(), name, true);
+      lib.index.assets.insert(asset.id.clone(), asset);
+      Ok(())
+    }
+  }
 }
 
 #[cfg(test)]
@@ -159,7 +191,7 @@ mod tests {
   use super::*;
   use crate::core::library::ASSTES_DIR;
   use crate::core::models::{Folder, Placement};
-  use crate::services::import::{ImportOptions, Structure};
+  use crate::services::import::{ImportOptions, SequenceMode, Structure};
   use crate::services::import_task::run_import;
   use std::sync::atomic::AtomicBool;
   use std::sync::Mutex;
@@ -197,7 +229,14 @@ mod tests {
   }
 
   fn import(h: &Harness, paths: Vec<PathBuf>, target: Option<String>) -> ops::ImportOutcome {
-    let opts = ImportOptions { structure: Structure::Flatten, source: Source::Copy, target_folder: target, paths, imported_from: None };
+    let opts = ImportOptions {
+      structure: Structure::Flatten,
+      source: Source::Copy,
+      target_folder: target,
+      paths,
+      imported_from: None,
+      sequence_mode: SequenceMode::Scatter,
+    };
     run_import(&h.lib, h.root.clone(), opts, |_| {}, &AtomicBool::new(false))
   }
 
@@ -222,6 +261,7 @@ mod tests {
       target_folder: c.target_folder.clone(),
       action,
       link_name: link_name.map(|s| s.into()),
+      sequence: c.sequence.clone(),
     }
   }
 
@@ -365,6 +405,7 @@ mod tests {
       target_folder: None,
       paths: vec![tree],
       imported_from: None,
+      sequence_mode: SequenceMode::Scatter,
     };
     let outcome = run_import(&h.lib, h.root.clone(), opts, |_| {}, &AtomicBool::new(false));
     assert_eq!(outcome.conflicts.len(), 1);
@@ -377,5 +418,56 @@ mod tests {
     let report = resolve(&h, vec![to_resolution(&outcome.conflicts[0], ResolveAction::Link, None)], Source::Copy);
     assert_eq!(report.failed.len(), 0);
     assert_eq!(with_lib(&h, |l| l.index.placements_by_folder[leaf.as_str()].len()), 1);
+  }
+
+  /// 打包模式导入（4.1）
+  fn import_pack(h: &Harness, paths: Vec<PathBuf>) -> ops::ImportOutcome {
+    let opts = ImportOptions {
+      structure: Structure::Flatten,
+      source: Source::Copy,
+      target_folder: None,
+      paths,
+      imported_from: None,
+      sequence_mode: SequenceMode::Pack,
+    };
+    run_import(&h.lib, h.root.clone(), opts, |_| {}, &AtomicBool::new(false))
+  }
+
+  #[test]
+  fn copy_action_repacks_sequence_from_source() {
+    let h = make_lib();
+    // 造 3 帧 PNG 序列（内容固定，两次导入组 hash 相同）
+    let src = h._dir.path().join("序列");
+    std::fs::create_dir_all(&src).unwrap();
+    let mut paths = Vec::new();
+    for n in 1..=3u8 {
+      let p = src.join(format!("走路_{n}.png"));
+      image::RgbaImage::from_pixel(8, 8, image::Rgba([n, 0, 0, 255])).save(&p).unwrap();
+      paths.push(p);
+    }
+
+    // 首次打包入库（copy 源保留）→ 再次打包导入撞组 hash 挂起冲突
+    assert_eq!(import_pack(&h, paths.clone()).imported, 1);
+    let out = import_pack(&h, paths.clone());
+    assert_eq!(out.conflicts.len(), 1, "序列帧应整组挂起一个冲突");
+    let c = out.conflicts[0].clone();
+    assert_eq!(c.source_name, "走路.png", "显示名用序列帧标题");
+    assert!(c.sequence.is_some(), "冲突项应携带组信息");
+
+    // "保留两个"：按回传组信息重新打包（新 ID、frames/ 归一、fps/frameCount 元数据）
+    let report = resolve(&h, vec![to_resolution(&c, ResolveAction::Copy, None)], Source::Copy);
+    assert_eq!((report.resolved, report.failed.len()), (1, 0));
+    assert_eq!(with_lib(&h, |l| l.index.assets.len()), 2);
+    let new_meta = with_lib(&h, |l| {
+      l.index.assets.values().find(|a| a.id != c.existing_asset_id).unwrap().clone()
+    });
+    assert_eq!((new_meta.fps, new_meta.frame_count), (Some(24.0), Some(3)));
+    let frames_dir = h.root.join(ASSTES_DIR).join(format!("{}.info", new_meta.id)).join("frames");
+    for n in 1..=3 {
+      assert!(frames_dir.join(format!("走路-{n}.png")).is_file());
+    }
+    assert_eq!(placements_of(&h, &new_meta.id)[0].name, "走路-1.png", "同文件夹显示名唯一化（原标题已占用）");
+    // 源帧保留（继承 copy）
+    assert!(paths.iter().all(|p| p.exists()));
   }
 }

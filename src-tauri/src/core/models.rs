@@ -67,8 +67,9 @@ pub struct AssetMeta {
   pub fps: Option<f64>,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub frame_count: Option<u32>,
+  /// 封面帧文件名（frames/ 内的归一名 标题-序号.扩展名；2026-07-22 用户定案：默认首帧文件名）
   #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub thumb_frame: Option<u32>,
+  pub thumb_frame: Option<String>,
   // 视频虚拟片段（PRD 01-2.6）：type 为 "segment" 时 source/start/end 有效
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub r#type: Option<String>,

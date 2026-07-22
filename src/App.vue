@@ -12,6 +12,7 @@ import ContentArea from "./components/ContentArea.vue";
 import SplitBar from "./components/SplitBar.vue";
 import LibrarySetupModal from "./components/LibrarySetupModal.vue";
 import ImportDialog from "./components/ImportDialog.vue";
+import SequenceDialog from "./components/SequenceDialog.vue";
 import ImportResultDialog from "./components/ImportResultDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
 import { useUiStore } from "./stores/ui";
@@ -43,11 +44,12 @@ async function onLibraryReady(): Promise<void> {
   await content.refresh();
 }
 
-// 导入弹窗确认：关弹窗，导入走后台任务（Channel 流式，到一个显示一个，UI 不阻塞）
+// 导入弹窗确认：关弹窗，先检测序列帧（命中追加 12_序列帧弹窗，4.1），导入走后台任务
+//（Channel 流式，到一个显示一个，UI 不阻塞）
 function onImportConfirm(opts: { structure: "flatten" | "keep"; source: "copy" | "move" }): void {
   const draft = content.importDraft;
   content.importDraft = null;
-  if (draft) void content.startImport(draft, opts.structure, opts.source);
+  if (draft) void content.probeSequences(draft, opts.structure, opts.source);
 }
 
 // 拖拽导入（PRD 05-01）：webview 拖放事件拿文件路径，落点在文件树 item 上则导入至该文件夹
@@ -155,6 +157,12 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
       :draft="content.importDraft"
       @confirm="onImportConfirm"
       @cancel="content.importDraft = null"
+    />
+    <!-- 序列帧弹窗（12_序列帧弹窗）：09 确认后检测到序列帧时追加；取消 = 放弃整个导入 -->
+    <SequenceDialog
+      v-if="content.sequencePrompt"
+      @confirm="content.confirmSequenceImport"
+      @cancel="content.sequencePrompt = null"
     />
     <ImportResultDialog
       v-if="content.importFailed"

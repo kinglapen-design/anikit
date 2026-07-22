@@ -5,8 +5,10 @@
 //! 4. mpsc 消费者串行注册 Placement/索引并发 Asset 事件（到一个显示一个）。
 //!
 //! 分段短锁纪律不变：锁内只做查重、Placement 追加、索引插入、folders.json 节流落盘
-//! （脏且距上次 ≥2s 才落，结束强制落）。cancel 置位后不再领取新文件，进行中的写完。
+//! （脏且距上次 ≥2s 才落，结束强制落）。cancel 置位后不再领取新单元，进行中的写完。
 //! hash 冲突不自动链接（PRD 10_重复添加提示）：收集 ConflictItem 挂起，待用户决策。
+//! 序列帧打包模式（SequenceMode::Pack，4.1）：扫描后先按 sequence::detect_groups 分组，
+//! 管线以"单元"推进——单文件或整组序列帧；组 hash 查重、整组建一个 Asset（frames/ 归一）。
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -20,9 +22,10 @@ use crate::core::library::{self, Library};
 use crate::core::models::{new_asset_id, AssetMeta};
 use crate::services::import as ops;
 use crate::services::import::{
-  ConflictItem, FailedItem, ImportEvent, ImportOptions, ImportOutcome, PendingFile, Source, Structure,
-  ROOT_FOLDER_ID,
+  ConflictItem, FailedItem, ImportEvent, ImportOptions, ImportOutcome, PendingFile, SequenceFrameSource, SequenceMode,
+  SequenceSource, Source, Structure, ROOT_FOLDER_ID,
 };
+use crate::services::sequence::{self, SequenceGroup};
 use crate::services::thumbnail;
 use crate::services::views::{placement_view, thumb_path, PlacementView};
 
@@ -46,9 +49,40 @@ impl TaskState {
   }
 }
 
+/// 导入单元：单文件（files 下标）或一组序列帧（groups 下标，打包模式）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Unit {
+  Solo(usize),
+  Group(usize),
+}
+
+/// 单元显示用代表路径（失败记录 / 冲突项 source_path）：单文件为自身，序列帧组为首帧
+fn unit_path(files: &[PendingFile], groups: &[SequenceGroup], unit: Unit) -> PathBuf {
+  match unit {
+    Unit::Solo(i) => files[i].path.clone(),
+    Unit::Group(g) => files[groups[g].frames[0].file_idx].path.clone(),
+  }
+}
+
+/// 单元 Placement 显示名：单文件为文件名，序列帧组为 `标题.扩展名`
+fn unit_name(files: &[PendingFile], groups: &[SequenceGroup], unit: Unit) -> String {
+  match unit {
+    Unit::Solo(i) => ops::file_name(&files[i].path),
+    Unit::Group(g) => format!("{}.{}", groups[g].name, groups[g].ext),
+  }
+}
+
+/// 单元落点目录链（keep 模式）：取代表帧的目录链（同组帧同目录同链）
+fn unit_chain<'a>(files: &'a [PendingFile], groups: &[SequenceGroup], unit: Unit) -> &'a [String] {
+  match unit {
+    Unit::Solo(i) => &files[i].chain,
+    Unit::Group(g) => &files[groups[g].frames[0].file_idx].chain,
+  }
+}
+
 /// 阶段 2 产物：待建档工作项（ID 与落点已预分配）
 struct WorkItem {
-  file_idx: usize,
+  unit: Unit,
   hash: String,
   asset_id: String,
   target_folder: String,
@@ -56,7 +90,7 @@ struct WorkItem {
 
 /// 同批次重复：延后到 twin 资源注册完成（元数据齐备）再组装冲突项
 struct DeferredConflict {
-  file_idx: usize,
+  unit: Unit,
   target_folder: String,
   twin_id: String,
 }
@@ -77,7 +111,7 @@ struct Phase2 {
 /// 阶段 3 → 4 的消息：建档成功（工作项 + 元数据）/ 失败（原因）
 enum Phase3Msg {
   Built { item: WorkItem, asset: AssetMeta },
-  Broken { file_idx: usize, reason: String },
+  Broken { unit: Unit, reason: String },
 }
 
 /// 导入执行体（工作线程调；单测同步直调）。四阶段并行流水线，语义与串行版一致。
@@ -91,47 +125,87 @@ pub fn run_import(
   let mut state = TaskState::new();
   let target = opts.target_folder.clone().unwrap_or_else(|| ROOT_FOLDER_ID.to_string());
 
-  // 阶段 1：锁外扫描展开 → started（扫描+哈希即"扫描中"）→ 并行 sha256
+  // 阶段 1：锁外扫描展开 → 序列帧分组（打包模式）→ started → 并行 sha256
   let files = ops::collect(&opts.paths, opts.structure, &mut state.outcome.failed);
-  on_event(ImportEvent::Started { total: files.len() as u32 });
+  let groups = if opts.sequence_mode == SequenceMode::Pack { sequence::detect_groups(&files) } else { Vec::new() };
+  let member_count: usize = groups.iter().map(|g| g.frames.len()).sum();
+  on_event(ImportEvent::Started { total: (files.len() - member_count + groups.len()) as u32 });
   let ready = hash_all(&files, cancel, &mut state);
+  let units = build_units(&mut state, &files, &groups, &ready);
 
   // 阶段 2：keep 建层级发 folders（层级先行）→ 一次短锁全量查重
   if opts.structure == Structure::Keep {
     if let Err(reason) = prepare_folders(&mut state, lib, &target, &files) {
-      return abort(state, lib, &on_event, &files, &ready, reason, "导入层级准备失败");
+      return abort(state, lib, &on_event, &files, &groups, &units, reason, "导入层级准备失败");
     }
     on_event(ImportEvent::Folders);
   }
-  let mut phase2 = match dedup_phase(&mut state, lib, &root, &target, &ready, &files, opts.imported_from.as_deref()) {
-    Ok(p) => p,
-    Err(reason) => return abort(state, lib, &on_event, &files, &ready, reason, "导入查重失败"),
-  };
+  let mut phase2 =
+    match dedup_phase(&mut state, lib, &root, &target, &units, &files, &groups, opts.imported_from.as_deref()) {
+      Ok(p) => p,
+      Err(reason) => return abort(state, lib, &on_event, &files, &groups, &units, reason, "导入查重失败"),
+    };
 
   // 自动合并（inbox 渠道撞 hash）：改名 + 丢弃重复源，先于管线发 Asset 事件
   apply_merges(&mut state, lib, &root, &files, std::mem::take(&mut phase2.merges), &on_event);
 
   // 阶段 3+4：并行建档 → 消费者串行注册 + 事件
-  pipeline(&mut state, lib, &root, opts.source, opts.imported_from.as_deref(), &files, phase2, &on_event, cancel);
+  pipeline(&mut state, lib, &root, opts.source, opts.imported_from.as_deref(), &files, &groups, phase2, &on_event, cancel);
   finish(state, lib, &on_event)
 }
 
-/// 阶段整体失败：已就绪文件全部进 failed（原因中文），收尾落盘并发 Finished
+/// 阶段 1 收尾：把就绪哈希装配成导入单元。打包模式：组成员不单独进管线，
+/// 各帧哈希按序号升序串联出组 hash；有帧哈希失败的组整组不进（已就绪帧逐个记失败，不吞文件）
+fn build_units(
+  state: &mut TaskState,
+  files: &[PendingFile],
+  groups: &[SequenceGroup],
+  ready: &[(usize, String)],
+) -> Vec<(Unit, String)> {
+  let hash_of: HashMap<usize, &str> = ready.iter().map(|(i, h)| (*i, h.as_str())).collect();
+  let mut units = Vec::new();
+  for (gi, g) in groups.iter().enumerate() {
+    let hashes: Vec<Option<&str>> = g.frames.iter().map(|f| hash_of.get(&f.file_idx).copied()).collect();
+    if hashes.iter().all(Option::is_some) {
+      units.push((Unit::Group(gi), sequence::group_hash(&hashes.into_iter().flatten().collect::<Vec<_>>())));
+    } else {
+      for f in &g.frames {
+        if hash_of.contains_key(&f.file_idx) {
+          state.outcome.failed.push(FailedItem {
+            path: files[f.file_idx].path.to_string_lossy().into_owned(),
+            reason: format!("序列帧《{}》有帧读取失败，整组未导入", g.name),
+          });
+        }
+      }
+    }
+  }
+  let member: HashSet<usize> = groups.iter().flat_map(|g| g.frames.iter().map(|f| f.file_idx)).collect();
+  for (idx, hash) in ready {
+    if !member.contains(idx) {
+      units.push((Unit::Solo(*idx), hash.clone()));
+    }
+  }
+  units
+}
+
+/// 阶段整体失败：已就绪单元全部进 failed（原因中文），收尾落盘并发 Finished
+#[allow(clippy::too_many_arguments)]
 fn abort(
   mut state: TaskState,
   lib: &Mutex<Option<Library>>,
   on_event: &impl Fn(ImportEvent),
   files: &[PendingFile],
-  ready: &[(usize, String)],
+  groups: &[SequenceGroup],
+  units: &[(Unit, String)],
   reason: String,
   log_prefix: &str,
 ) -> ImportOutcome {
   log::error!("{log_prefix}：{reason}");
-  for (idx, _) in ready {
+  for (unit, _) in units {
     state
       .outcome
       .failed
-      .push(FailedItem { path: files[*idx].path.to_string_lossy().into_owned(), reason: reason.clone() });
+      .push(FailedItem { path: unit_path(files, groups, *unit).to_string_lossy().into_owned(), reason: reason.clone() });
   }
   finish(state, lib, on_event)
 }
@@ -175,43 +249,45 @@ fn prepare_folders(
   Ok(())
 }
 
-/// 阶段 2（一次短锁）：全量查重。命中库内 → 同渠道（inbox）自动合并，否则立即组装冲突
-/// （源侧锁外补）；命中同批次 → 延后冲突；未命中 → 预分配 ID + 解析落点生成工作项
+/// 阶段 2（一次短锁）：全量查重。命中库内 → 同渠道（inbox）自动合并（仅单文件单元），
+/// 否则立即组装冲突（源侧锁外补）；命中同批次 → 延后冲突；未命中 → 预分配 ID + 解析落点生成工作项
 #[allow(clippy::too_many_arguments)]
 fn dedup_phase(
   state: &mut TaskState,
   lib: &Mutex<Option<Library>>,
   root: &Path,
   target: &str,
-  ready: &[(usize, String)],
+  units: &[(Unit, String)],
   files: &[PendingFile],
+  groups: &[SequenceGroup],
   merge_mark: Option<&str>,
 ) -> Result<Phase2, String> {
   let root_buf = root.to_path_buf();
   let mut phase = Phase2 { work: Vec::new(), deferred: Vec::new(), merges: Vec::new() };
-  let mut immediate: Vec<(usize, ConflictItem)> = Vec::new();
-  let mut no_folder: Vec<usize> = Vec::new();
+  let mut immediate: Vec<(Unit, ConflictItem)> = Vec::new();
+  let mut no_folder: Vec<Unit> = Vec::new();
   with_lib(lib, state, |l| {
     let by_hash: HashMap<&str, &AssetMeta> = l.index.assets.values().map(|a| (a.hash.as_str(), a)).collect();
     let mut batch: HashMap<String, String> = HashMap::new(); // hash → 同批次 twin asset id
-    for (idx, hash) in ready {
-      match classify_one(l, &by_hash, &mut batch, &root_buf, target, &files[*idx], *idx, hash, merge_mark) {
-        Classified::Conflict(i, c) => immediate.push((i, c)),
+    for (unit, hash) in units {
+      let chain = unit_chain(files, groups, *unit);
+      match classify_one(l, &by_hash, &mut batch, &root_buf, target, chain, *unit, hash, merge_mark) {
+        Classified::Conflict(u, c) => immediate.push((u, c)),
         Classified::Merge(i, id) => phase.merges.push(MergeItem { file_idx: i, asset_id: id }),
         Classified::Deferred(d) => phase.deferred.push(d),
         Classified::Work(w) => phase.work.push(w),
-        Classified::NoFolder(i) => no_folder.push(i),
+        Classified::NoFolder(u) => no_folder.push(u),
       }
     }
   })?;
-  for idx in no_folder {
+  for unit in no_folder {
     state.outcome.failed.push(FailedItem {
-      path: files[idx].path.to_string_lossy().into_owned(),
+      path: unit_path(files, groups, unit).to_string_lossy().into_owned(),
       reason: "目标文件夹不存在，可能已被删除".to_string(),
     });
   }
-  for (idx, mut c) in immediate {
-    fill_source_side(&mut c, &files[idx]);
+  for (unit, mut c) in immediate {
+    fill_source_side(&mut c, files, groups, unit);
     state.outcome.conflicts.push(c);
   }
   Ok(phase)
@@ -219,15 +295,15 @@ fn dedup_phase(
 
 /// 查重分类结果（阶段 2 锁内）
 enum Classified {
-  Conflict(usize, ConflictItem),
+  Conflict(Unit, ConflictItem),
   Merge(usize, String),
   Deferred(DeferredConflict),
   Work(WorkItem),
-  NoFolder(usize),
+  NoFolder(Unit),
 }
 
-/// 查重分类单项：命中库内 → 同渠道（inbox）自动合并，否则冲突；命中同批次 → 延后冲突；
-/// 未命中 → 预分配 ID 建工作项
+/// 查重分类单项：命中库内 → 单文件单元且同渠道（inbox）自动合并，否则冲突；命中同批次 → 延后冲突；
+/// 未命中 → 预分配 ID 建工作项。序列帧组永不自动合并（打包模式不带渠道标记，双保险）
 #[allow(clippy::too_many_arguments)]
 fn classify_one(
   l: &Library,
@@ -235,27 +311,28 @@ fn classify_one(
   batch: &mut HashMap<String, String>,
   root: &Path,
   target: &str,
-  file: &PendingFile,
-  idx: usize,
+  chain: &[String],
+  unit: Unit,
   hash: &str,
   merge_mark: Option<&str>,
 ) -> Classified {
-  let Some(folder_id) = ops::find_folder(l, target, &file.chain) else {
-    return Classified::NoFolder(idx);
+  let Some(folder_id) = ops::find_folder(l, target, chain) else {
+    return Classified::NoFolder(unit);
   };
   if let Some(meta) = by_hash.get(hash) {
     // 自动合并判定：本次导入与已有资产同为 inbox 渠道（正式资产绝不被自动改名）
-    if merge_mark.is_some() && meta.imported_from.as_deref() == merge_mark {
-      Classified::Merge(idx, meta.id.clone())
-    } else {
-      Classified::Conflict(idx, conflict_of(l, root, meta, folder_id))
+    if let (Unit::Solo(idx), Some(mark)) = (unit, merge_mark) {
+      if meta.imported_from.as_deref() == Some(mark) {
+        return Classified::Merge(idx, meta.id.clone());
+      }
     }
+    Classified::Conflict(unit, conflict_of(l, root, meta, folder_id))
   } else if let Some(twin) = batch.get(hash) {
-    Classified::Deferred(DeferredConflict { file_idx: idx, target_folder: folder_id, twin_id: twin.clone() })
+    Classified::Deferred(DeferredConflict { unit, target_folder: folder_id, twin_id: twin.clone() })
   } else {
     let asset_id = new_asset_id();
     batch.insert(hash.to_string(), asset_id.clone());
-    Classified::Work(WorkItem { file_idx: idx, hash: hash.to_string(), asset_id, target_folder: folder_id })
+    Classified::Work(WorkItem { unit, hash: hash.to_string(), asset_id, target_folder: folder_id })
   }
 }
 
@@ -268,6 +345,7 @@ fn pipeline(
   source: Source,
   imported_from: Option<&str>,
   files: &[PendingFile],
+  groups: &[SequenceGroup],
   phase2: Phase2,
   on_event: &(impl Fn(ImportEvent) + Sync),
   cancel: &AtomicBool,
@@ -278,16 +356,18 @@ fn pipeline(
     let consumer = s.spawn(move || {
       for msg in rx {
         match msg {
-          Phase3Msg::Built { item, asset } => register_one(state, lib, root, files, item, asset, &mut deferred, on_event),
-          Phase3Msg::Broken { file_idx, reason } => state.outcome.failed.push(FailedItem {
-            path: files[file_idx].path.to_string_lossy().into_owned(),
+          Phase3Msg::Built { item, asset } => {
+            register_one(state, lib, root, files, groups, item, asset, &mut deferred, on_event)
+          }
+          Phase3Msg::Broken { unit, reason } => state.outcome.failed.push(FailedItem {
+            path: unit_path(files, groups, unit).to_string_lossy().into_owned(),
             reason,
           }),
         }
       }
-      drain_orphan_deferred(state, files, deferred);
+      drain_orphan_deferred(state, files, groups, deferred);
     });
-    produce(phase2.work, root, source, imported_from, files, &tx, cancel);
+    produce(phase2.work, root, source, imported_from, files, groups, &tx, cancel);
     drop(tx); // 关闭通道，消费者收完尾部结果后退出
     if consumer.join().is_err() {
       log::error!("导入注册线程异常（panic）");
@@ -295,13 +375,15 @@ fn pipeline(
   });
 }
 
-/// 阶段 3 生产者：并行执行 复制/移动 + 缩略图 + metadata.json；cancel 后不再领新文件
+/// 阶段 3 生产者：并行执行 复制/移动 + 缩略图 + metadata.json；cancel 后不再领新单元
+#[allow(clippy::too_many_arguments)]
 fn produce(
   work: Vec<WorkItem>,
   root: &Path,
   source: Source,
   imported_from: Option<&str>,
   files: &[PendingFile],
+  groups: &[SequenceGroup],
   tx: &mpsc::Sender<Phase3Msg>,
   cancel: &AtomicBool,
 ) {
@@ -309,9 +391,9 @@ fn produce(
     if cancel.load(Ordering::Relaxed) {
       return;
     }
-    let msg = match ops::build_asset_with_id(root, &files[item.file_idx], &item.hash, &item.asset_id, source, imported_from) {
+    let msg = match build_one(root, source, imported_from, files, groups, &item) {
       Ok(asset) => Phase3Msg::Built { item, asset },
-      Err(reason) => Phase3Msg::Broken { file_idx: item.file_idx, reason },
+      Err(reason) => Phase3Msg::Broken { unit: item.unit, reason },
     };
     if tx.send(msg).is_err() {
       log::error!("导入结果通道异常，结果丢失");
@@ -319,12 +401,44 @@ fn produce(
   });
 }
 
+/// 阶段 3 单元建档：单文件走 build_asset_with_id；序列帧组整组打包（frames/ 归一重命名）
+fn build_one(
+  root: &Path,
+  source: Source,
+  imported_from: Option<&str>,
+  files: &[PendingFile],
+  groups: &[SequenceGroup],
+  item: &WorkItem,
+) -> Result<AssetMeta, String> {
+  match item.unit {
+    Unit::Solo(idx) => ops::build_asset_with_id(root, &files[idx], &item.hash, &item.asset_id, source, imported_from),
+    Unit::Group(gi) => {
+      let g = &groups[gi];
+      let frames: Vec<(PathBuf, u32)> =
+        g.frames.iter().map(|f| (files[f.file_idx].path.clone(), f.number)).collect();
+      sequence::build_sequence_asset(
+        root,
+        &g.name,
+        &g.ext,
+        g.num_width,
+        &frames,
+        &item.hash,
+        &item.asset_id,
+        source,
+        imported_from,
+      )
+    }
+  }
+}
+
 /// 阶段 4 单项：锁内注册 Placement + 索引 → 发 Asset；twin 完成即组装其延后冲突
+#[allow(clippy::too_many_arguments)]
 fn register_one(
   state: &mut TaskState,
   lib: &Mutex<Option<Library>>,
   root: &Path,
   files: &[PendingFile],
+  groups: &[SequenceGroup],
   item: WorkItem,
   asset: AssetMeta,
   deferred: &mut HashMap<String, Vec<DeferredConflict>>,
@@ -332,50 +446,56 @@ fn register_one(
 ) {
   state.dirty = true; // Placement 必改 folders.json，先标脏让节流落盘生效
   let root_buf = root.to_path_buf();
-  let name = ops::file_name(&files[item.file_idx].path);
+  let name = unit_name(files, groups, item.unit);
   let asset_id = asset.id.clone();
   let result = with_lib(lib, state, move |l| {
     let placement = ops::add_placement(l, asset_id.clone(), item.target_folder.clone(), name, true);
     let view = placement_view(&root_buf, &asset, &placement);
     let twins = deferred.remove(&asset_id).unwrap_or_default();
     let conflicts =
-      twins.into_iter().map(|d| (d.file_idx, conflict_of(l, &root_buf, &asset, d.target_folder))).collect::<Vec<_>>();
+      twins.into_iter().map(|d| (d.unit, conflict_of(l, &root_buf, &asset, d.target_folder))).collect::<Vec<_>>();
     l.index.assets.insert(asset_id, asset);
     (view, conflicts)
   });
-  collect_registered(state, files, item.file_idx, result, on_event);
+  collect_registered(state, files, groups, item.unit, result, on_event);
 }
 
 /// 注册结果入帐：成功发 Asset 事件并补源侧冲突数据；失败进 failed
 fn collect_registered(
   state: &mut TaskState,
   files: &[PendingFile],
-  file_idx: usize,
-  result: Result<(PlacementView, Vec<(usize, ConflictItem)>), String>,
+  groups: &[SequenceGroup],
+  unit: Unit,
+  result: Result<(PlacementView, Vec<(Unit, ConflictItem)>), String>,
   on_event: &impl Fn(ImportEvent),
 ) {
   match result {
     Ok((view, conflicts)) => {
       state.outcome.imported += 1;
       on_event(ImportEvent::Asset { placement: view });
-      for (idx, mut c) in conflicts {
-        fill_source_side(&mut c, &files[idx]);
+      for (u, mut c) in conflicts {
+        fill_source_side(&mut c, files, groups, u);
         state.outcome.conflicts.push(c);
       }
     }
     Err(reason) => state
       .outcome
       .failed
-      .push(FailedItem { path: files[file_idx].path.to_string_lossy().into_owned(), reason }),
+      .push(FailedItem { path: unit_path(files, groups, unit).to_string_lossy().into_owned(), reason }),
   }
 }
 
 /// twin 建档失败的延后冲突：内容不在库内，提示用户重试导入即可正常建档
-fn drain_orphan_deferred(state: &mut TaskState, files: &[PendingFile], deferred: HashMap<String, Vec<DeferredConflict>>) {
+fn drain_orphan_deferred(
+  state: &mut TaskState,
+  files: &[PendingFile],
+  groups: &[SequenceGroup],
+  deferred: HashMap<String, Vec<DeferredConflict>>,
+) {
   for ds in deferred.into_values() {
     for d in ds {
       state.outcome.failed.push(FailedItem {
-        path: files[d.file_idx].path.to_string_lossy().into_owned(),
+        path: unit_path(files, groups, d.unit).to_string_lossy().into_owned(),
         reason: "同批次的相同文件入库失败，该文件请重试导入".to_string(),
       });
     }
@@ -472,6 +592,7 @@ fn conflict_of(l: &Library, root: &Path, meta: &AssetMeta, folder_id: String) ->
     existing_ext: meta.ext.clone(),
     existing_thumb_path: thumb_path(root, meta),
     existing_folder_name: chosen.map(|p| folder_display_name(l, &p.folder)).unwrap_or_default(),
+    sequence: None, // 源侧信息由 fill_source_side 补（序列帧组覆盖为组信息）
   }
 }
 
@@ -483,14 +604,34 @@ fn folder_display_name(l: &Library, folder_id: &str) -> String {
   l.index.folders.get(folder_id).map(|f| f.name.clone()).unwrap_or_else(|| "未知文件夹".to_string())
 }
 
-/// 锁外补冲突项的源文件侧数据：文件名 / 字节数 / 图片宽高（probe 失败即非图片，None）
-fn fill_source_side(item: &mut ConflictItem, file: &PendingFile) {
-  item.source_path = file.path.clone();
-  item.source_name = ops::file_name(&file.path);
-  item.source_size = std::fs::metadata(&file.path).map(|m| m.len()).unwrap_or(0);
-  let (w, h) = thumbnail::probe(&file.path).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None));
-  item.source_w = w;
-  item.source_h = h;
+/// 锁外补冲突项的源文件侧数据：文件名 / 字节数 / 图片宽高（probe 失败即非图片，None）；
+/// 序列帧组：显示名 = `标题.扩展名`，source_path 取首帧（弹窗预览首帧），并携带组信息
+/// （前端原样回传给 resolve_conflicts，"保留两个"按此重新打包）
+fn fill_source_side(item: &mut ConflictItem, files: &[PendingFile], groups: &[SequenceGroup], unit: Unit) {
+  match unit {
+    Unit::Solo(idx) => {
+      let file = &files[idx];
+      item.source_path = file.path.clone();
+      item.source_name = ops::file_name(&file.path);
+      item.source_size = std::fs::metadata(&file.path).map(|m| m.len()).unwrap_or(0);
+      let (w, h) = thumbnail::probe(&file.path).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None));
+      item.source_w = w;
+      item.source_h = h;
+    }
+    Unit::Group(gi) => {
+      let g = &groups[gi];
+      let frames: Vec<SequenceFrameSource> =
+        g.frames.iter().map(|f| SequenceFrameSource { path: files[f.file_idx].path.clone(), number: f.number }).collect();
+      item.source_path = frames[0].path.clone();
+      item.source_name = format!("{}.{}", g.name, g.ext);
+      item.source_size = frames.iter().map(|f| std::fs::metadata(&f.path).map(|m| m.len()).unwrap_or(0)).sum();
+      let (w, h) = thumbnail::probe(&frames[0].path).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None));
+      item.source_w = w;
+      item.source_h = h;
+      item.sequence =
+        Some(SequenceSource { name: g.name.clone(), ext: g.ext.clone(), width: g.num_width as u32, frames });
+    }
+  }
 }
 
 /// 短锁执行：锁中毒 / 库已关闭给中文错；f 执行后按节流尝试落盘

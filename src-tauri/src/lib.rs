@@ -162,6 +162,7 @@ pub fn run() {
       commands::library::get_current_library,
       commands::library::list_recent_libraries,
       commands::import::classify_paths,
+      commands::import::detect_sequences,
       commands::import::import_paths,
       commands::import::import_clipboard,
       commands::import::cancel_import,

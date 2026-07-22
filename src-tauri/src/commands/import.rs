@@ -13,7 +13,7 @@ use tauri::{AppHandle, Manager, State};
 use crate::commands::library::AppState;
 use crate::core::library::{Library, CACHE_DIR};
 use crate::core::models::Placement;
-use crate::services::import::{ImportEvent, ImportOptions, Source, Structure, ROOT_FOLDER_ID};
+use crate::services::import::{ImportEvent, ImportOptions, SequenceMode, Source, Structure, ROOT_FOLDER_ID};
 use crate::services::import_task::run_import;
 use crate::services::views::{placement_view, PlacementView};
 
@@ -71,9 +71,35 @@ fn count_files(dir: &Path) -> u32 {
   count
 }
 
+// ---------- 序列帧检测（4.1，09 导入弹窗确认后调用） ----------
+
+/// 检测到的序列帧组摘要（前端"监测到序列帧"弹窗依据；打包入库由 import_paths 重新检测执行）
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SequenceGroupInfo {
+  /// 基础名（资产标题）
+  pub name: String,
+  pub ext: String,
+  pub frame_count: u32,
+}
+
+/// 检测所选路径中的序列帧（后端为唯一事实来源：同目录兄弟文件按 基础名+扩展名+位宽 分组，
+/// 序号连续允许少量缺帧且 ≥3，仅图片格式）；检测失败的路径静默跳过（导入阶段会进 failed）
+#[tauri::command]
+pub fn detect_sequences(paths: Vec<String>) -> Vec<SequenceGroupInfo> {
+  let mut ignored = Vec::new();
+  let raw: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
+  let files = crate::services::import::collect(&raw, Structure::Flatten, &mut ignored);
+  crate::services::sequence::detect_groups(&files)
+    .into_iter()
+    .map(|g| SequenceGroupInfo { name: g.name, ext: g.ext, frame_count: g.frames.len() as u32 })
+    .collect()
+}
+
 // ---------- 导入（任务化） ----------
 
-/// 导入文件 / 文件夹：立即返回 task_id，工作线程执行，事件经 on_event 推送
+/// 导入文件 / 文件夹：立即返回 task_id，工作线程执行，事件经 on_event 推送；
+/// sequence_mode "pack" 时检测到的序列帧整组打包为一个资源（4.1）
 #[tauri::command]
 pub fn import_paths(
   app: AppHandle,
@@ -81,14 +107,22 @@ pub fn import_paths(
   structure: String,
   source: String,
   target_folder: Option<String>,
+  sequence_mode: String,
   on_event: Channel<ImportEvent>,
 ) -> Result<u64, String> {
   let structure = parse_structure(&structure)?;
   let source = parse_source(&source)?;
+  let sequence_mode = parse_sequence_mode(&sequence_mode)?;
   let root = current_root(&app)?;
   ensure_target(&app, &target_folder)?;
-  let opts =
-    ImportOptions { structure, source, target_folder, paths: paths.iter().map(PathBuf::from).collect(), imported_from: None };
+  let opts = ImportOptions {
+    structure,
+    source,
+    target_folder,
+    paths: paths.iter().map(PathBuf::from).collect(),
+    imported_from: None,
+    sequence_mode,
+  };
   Ok(spawn_import(app, root, opts, on_event, None))
 }
 
@@ -116,6 +150,7 @@ pub fn import_clipboard(
     target_folder,
     paths: vec![tmp.clone()],
     imported_from: None,
+    sequence_mode: SequenceMode::Scatter, // 剪贴板只有单张 PNG，永不打包
   };
   // 临时文件由工作线程在导入结束后清理（覆盖查重命中不移动实体的场景）
   Ok(spawn_import(app, root, opts, on_event, Some(tmp)))
@@ -239,6 +274,14 @@ fn parse_source(s: &str) -> Result<Source, String> {
   }
 }
 
+fn parse_sequence_mode(s: &str) -> Result<SequenceMode, String> {
+  match s {
+    "pack" => Ok(SequenceMode::Pack),
+    "scatter" => Ok(SequenceMode::Scatter),
+    _ => Err(format!("未知的序列帧模式：{s}（可选 pack / scatter）")),
+  }
+}
+
 // ---------- 文件夹树与 Placement 列表（导入弹窗 / 中间面板） ----------
 
 #[derive(Debug, Serialize)]
@@ -316,7 +359,14 @@ mod tests {
 
   /// 同步跑导入（事件丢弃）
   fn import(h: &Harness, paths: Vec<PathBuf>, structure: Structure) {
-    let opts = ImportOptions { structure, source: Source::Copy, target_folder: None, paths, imported_from: None };
+    let opts = ImportOptions {
+      structure,
+      source: Source::Copy,
+      target_folder: None,
+      paths,
+      imported_from: None,
+      sequence_mode: SequenceMode::Scatter,
+    };
     run_import(&h.lib, h.root.clone(), opts, |_| {}, &AtomicBool::new(false));
   }
 
@@ -389,6 +439,35 @@ mod tests {
     assert!(parse_structure("树形").is_err());
     assert!(parse_source("move").is_ok());
     assert!(parse_source("拖拽").is_err());
+    assert!(parse_sequence_mode("pack").is_ok());
+    assert!(parse_sequence_mode("打包").is_err());
+  }
+
+  #[test]
+  fn detect_sequences_groups_frames_and_skips_non_sequences() {
+    let dir = tempfile::tempdir().unwrap();
+    let png = |name: &str| {
+      let p = dir.path().join(name);
+      image::RgbaImage::from_pixel(4, 4, image::Rgba([0, 0, 0, 255])).save(&p).unwrap();
+    };
+    for n in 1..=3 {
+      png(&format!("走路{n:03}.png"));
+    }
+    png("单张.png");
+    let sub = dir.path().join("子");
+    std::fs::create_dir_all(&sub).unwrap();
+    for n in 1..=4 {
+      image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 1, 1, 255])).save(sub.join(format!("跑_{n}.png"))).unwrap();
+    }
+
+    let s = |p: &Path| p.to_string_lossy().into_owned();
+    let groups = detect_sequences(vec![s(dir.path())]);
+    assert_eq!(groups.len(), 2, "同目录成组、子目录递归展开：{groups:?}");
+    let walk = groups.iter().find(|g| g.name == "走路").unwrap();
+    assert_eq!((walk.ext.as_str(), walk.frame_count), ("png", 3));
+    assert_eq!(groups.iter().find(|g| g.name == "跑").unwrap().frame_count, 4);
+    // 无序列帧 → 空（走 09 现状流程）
+    assert!(detect_sequences(vec![s(&dir.path().join("单张.png"))]).is_empty());
   }
 
   #[test]

@@ -93,6 +93,7 @@ function buildResolutions(): ConflictResolution[] {
           : base
             ? withExt(base, c.sourceName)
             : null, // 未输入：后端用源文件原名
+    sequence: c.sequence ?? null, // 序列帧组信息原样回传（"保留两个"重新打包用，4.1）
   }));
 }
 

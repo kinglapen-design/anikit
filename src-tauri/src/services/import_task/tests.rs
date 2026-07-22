@@ -19,7 +19,19 @@
   }
 
   fn opts(structure: Structure, source: Source, paths: Vec<PathBuf>) -> ImportOptions {
-    ImportOptions { structure, source, target_folder: None, paths, imported_from: None }
+    ImportOptions {
+      structure,
+      source,
+      target_folder: None,
+      paths,
+      imported_from: None,
+      sequence_mode: SequenceMode::Scatter,
+    }
+  }
+
+  /// 打包模式导入（4.1）
+  fn pack_opts(paths: Vec<PathBuf>) -> ImportOptions {
+    ImportOptions { sequence_mode: SequenceMode::Pack, ..opts(Structure::Flatten, Source::Copy, paths) }
   }
 
   /// 同步跑导入并收集事件
@@ -368,6 +380,7 @@
       target_folder: None,
       paths,
       imported_from: Some("inbox".into()),
+      sequence_mode: SequenceMode::Scatter,
     }
   }
 
@@ -474,4 +487,123 @@
     let info_dir = only_info_dir(&h);
     assert!(info_dir.join("图_thumbnail.webp").exists());
     assert!(!info_dir.join("RECOVER_图_thumbnail.webp").exists());
+  }
+
+  // ---------- 序列帧打包（PRD 01-2.5，4.1） ----------
+
+  /// 造 PNG 序列帧目录（内容按序号区分）
+  fn make_sequence(h: &Harness, dir: &str, stem: &str, nums: &[u32]) -> PathBuf {
+    let src = h._dir.path().join(dir);
+    fs::create_dir_all(&src).unwrap();
+    for &n in nums {
+      let p = src.join(format!("{stem}{n:03}.png"));
+      image::RgbaImage::from_pixel(16, 12, image::Rgba([n as u8, 10, 10, 255])).save(&p).unwrap();
+    }
+    src
+  }
+
+  /// 打包模式：序列帧整组建一个 Asset（frames/ 归一 + fps/frameCount/thumbFrame），
+  /// 散文件照常逐个导入；started.total 按单元计
+  #[test]
+  fn pack_imports_sequence_as_single_asset() {
+    let h = make_lib();
+    let src = make_sequence(&h, "导出", "走路", &[1, 2, 3, 4]);
+    fs::write(src.join("封面.txt"), "散文件").unwrap();
+
+    let (out, events) = run(&h, pack_opts(vec![src]));
+    assert_eq!((out.imported, out.failed.len()), (2, 0), "failed: {:?}", out.failed);
+    assert!(matches!(events[0], ImportEvent::Started { total: 2 }), "total 按单元计：1 组 + 1 散文件");
+    assert_eq!(info_dir_count(&h), 2);
+
+    let meta = with_lib(&h, |l| l.index.assets.values().find(|a| a.frame_count.is_some()).unwrap().clone());
+    assert_eq!((meta.name.as_str(), meta.ext.as_str()), ("走路", "png"));
+    assert_eq!((meta.fps, meta.frame_count), (Some(24.0), Some(4)));
+    assert_eq!(meta.thumb_frame.as_deref(), Some("走路-001.png"));
+    assert_eq!((meta.width, meta.height), (Some(16), Some(12)));
+    // frames/ 归一重命名（位宽 3），缩略图复用图片管线
+    let info_dir = h.root.join(ASSTES_DIR).join(format!("{}.info", meta.id));
+    for n in 1..=4 {
+      assert!(info_dir.join("frames").join(format!("走路-{n:03}.png")).is_file());
+    }
+    assert!(meta.thumbnail.as_deref().unwrap().ends_with("_thumbnail.webp"));
+    // Placement 显示名 = 标题.扩展名；copy 源帧保留
+    let placement = with_lib(&h, |l| l.folders.items.iter().find(|p| p.asset == meta.id).unwrap().clone());
+    assert_eq!(placement.name, "走路.png");
+    assert!(h._dir.path().join("导出/走路001.png").exists());
+  }
+
+  /// 缺帧容忍与打包判定：缺 1 帧仍打包；同目录 <3 帧不成组、逐文件导入
+  #[test]
+  fn pack_tolerates_small_gap_and_ignores_short_groups() {
+    let h = make_lib();
+    let src = make_sequence(&h, "缺帧", "跳", &[1, 2, 4, 5]); // 跨度 5 缺 1 → 成组
+    let short = make_sequence(&h, "短组", "跑", &[1, 2]); // <3 → 不成组
+
+    let (out, _) = run(&h, pack_opts(vec![src, short]));
+    assert_eq!(out.imported, 3, "1 组 + 2 散文件：{:?}", out.failed);
+    let meta = with_lib(&h, |l| l.index.assets.values().find(|a| a.frame_count.is_some()).unwrap().clone());
+    assert_eq!(meta.frame_count, Some(4));
+    assert_eq!(with_lib(&h, |l| l.index.assets.values().filter(|a| a.frame_count.is_none()).count()), 2);
+  }
+
+  /// 剪切来源对整组生效：打包后全部源帧移走
+  #[test]
+  fn pack_move_removes_all_source_frames() {
+    let h = make_lib();
+    let src = make_sequence(&h, "剪切组", "走", &[1, 2, 3]);
+    let mut o = pack_opts(vec![src.clone()]);
+    o.source = Source::Move;
+    let (out, _) = run(&h, o);
+    assert_eq!(out.imported, 1);
+    for n in 1..=3 {
+      assert!(!src.join(format!("走{n:03}.png")).exists(), "剪切后源帧应消失");
+    }
+  }
+
+  /// 撞组 hash：整组挂起一个冲突，显示名用序列帧标题，源帧保留待决策
+  #[test]
+  fn pack_hash_conflict_suspends_whole_group() {
+    let h = make_lib();
+    let src = make_sequence(&h, "组", "跑", &[1, 2, 3]);
+    let (out1, _) = run(&h, pack_opts(vec![src.clone()]));
+    assert_eq!(out1.imported, 1);
+
+    let (out2, _) = run(&h, pack_opts(vec![src.clone()]));
+    assert_eq!((out2.imported, out2.conflicts.len()), (0, 1));
+    let c = &out2.conflicts[0];
+    assert_eq!(c.source_name, "跑.png", "冲突显示名 = 序列帧标题");
+    let seq = c.sequence.as_ref().expect("冲突项应携带组信息");
+    assert_eq!((seq.name.as_str(), seq.width, seq.frames.len()), ("跑", 3, 3));
+    assert!(src.join("跑001.png").exists(), "冲突未决策源帧保留");
+  }
+
+  /// keep 层级 + 打包：组落目录链末级文件夹
+  #[test]
+  fn pack_keep_lands_group_in_chain_leaf() {
+    let h = make_lib();
+    let tree = h._dir.path().join("参考");
+    let src = tree.join("走路");
+    fs::create_dir_all(&src).unwrap();
+    for n in 1..=3u8 {
+      image::RgbaImage::from_pixel(8, 8, image::Rgba([n, 0, 0, 255])).save(src.join(format!("帧{n}.png"))).unwrap();
+    }
+    let mut o = pack_opts(vec![tree]);
+    o.structure = Structure::Keep;
+    let (out, _) = run(&h, o);
+    assert_eq!(out.imported, 1);
+    with_lib(&h, |l| {
+      let p = &l.folders.items[0];
+      let folder = &l.index.folders[&p.folder];
+      assert_eq!(folder.name, "走路", "组应落目录链末级");
+    });
+  }
+
+  /// 分散模式：序列帧不打包，逐文件导入（与现状一致）
+  #[test]
+  fn scatter_imports_frames_individually() {
+    let h = make_lib();
+    let src = make_sequence(&h, "散", "走", &[1, 2, 3]);
+    let (out, _) = run(&h, opts(Structure::Flatten, Source::Copy, vec![src]));
+    assert_eq!(out.imported, 3);
+    assert!(with_lib(&h, |l| l.index.assets.values().all(|a| a.frame_count.is_none())));
   }

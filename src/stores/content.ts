@@ -35,8 +35,8 @@ export interface FailedItem {
 
 // hash 冲突挂起项（后端 services/import.rs ConflictItem，携带双侧显示数据供 10_重复添加提示）
 export interface ConflictItem {
-  sourcePath: string; // 源文件绝对路径
-  sourceName: string; // 源文件名（含扩展名）
+  sourcePath: string; // 源文件绝对路径（序列帧冲突为首帧路径，弹窗预览首帧）
+  sourceName: string; // 源文件名（含扩展名）；序列帧冲突为 标题.扩展名
   sourceSize: number;
   sourceW: number | null; // 图片宽高（非图片 null）
   sourceH: number | null;
@@ -50,6 +50,22 @@ export interface ConflictItem {
   existingExt: string;
   existingThumbPath: string | null;
   existingFolderName: string; // 已有资源所在文件夹显示名
+  sequence?: SequenceSource | null; // 序列帧组信息（原样回传给 resolve_conflicts，4.1）
+}
+
+// 序列帧组信息（4.1）：冲突项携带、决策时原样回传，"保留两个"按此重新打包
+export interface SequenceSource {
+  name: string; // 基础名（资产标题）
+  ext: string;
+  width: number; // 序号位宽
+  frames: { path: string; number: number }[]; // 按序号升序
+}
+
+// detect_sequences 返回的组摘要（12_序列帧弹窗弹出依据）
+export interface SequenceGroupInfo {
+  name: string;
+  ext: string;
+  frameCount: number;
 }
 
 // 冲突决策（后端 commands resolve_conflicts 入参）
@@ -59,6 +75,7 @@ export interface ConflictResolution {
   targetFolder: string;
   action: "useExisting" | "copy" | "link" | "skip";
   linkName?: string | null;
+  sequence?: SequenceSource | null; // 序列帧冲突原样回传（4.1）
 }
 
 // 导入任务事件（后端 services/import.rs ImportEvent，serde tag="type" camelCase）
@@ -99,6 +116,13 @@ export const useContentStore = defineStore("content", {
     selectedFolderId: "",
     // 导入弹窗草稿：菜单 / 拖拽触发后填入，ImportDialog 读取；确认或取消后清空
     importDraft: null as ImportDraft | null,
+    // 序列帧弹窗（12_序列帧弹窗，4.1）：09 确认后 detect_sequences 命中时填入；
+    // 确认（打包/分散）或取消（放弃整个导入）后清空
+    sequencePrompt: null as {
+      draft: ImportDraft;
+      structure: "flatten" | "keep";
+      source: "copy" | "move";
+    } | null,
     // 后台导入进度（11_导入进度条）；total=0 表示仍在扫描（总数未知）
     importProgress: null as {
       taskId: number | null;
@@ -172,11 +196,40 @@ export const useContentStore = defineStore("content", {
       this.folders = markRaw(await invoke<FolderNode[]>("list_folder_tree"));
     },
 
-    // 后台导入任务：命令立即返回 task_id，进度经 Channel 推送（异步不阻塞 UI）
+    // 09 导入弹窗确认后（4.1）：先经后端检测所选路径中的序列帧——
+    // 命中则追加弹 12_序列帧弹窗（打包/分散），未命中按现状直接后台导入；
+    // 检测异常不阻塞导入（按分散处理）
+    async probeSequences(
+      draft: ImportDraft,
+      structure: "flatten" | "keep",
+      source: "copy" | "move",
+    ): Promise<void> {
+      try {
+        const groups = await invoke<SequenceGroupInfo[]>("detect_sequences", { paths: draft.paths });
+        if (groups.length > 0) {
+          this.sequencePrompt = { draft, structure, source };
+          return;
+        }
+      } catch (e) {
+        console.error("序列帧检测失败，按分散导入：", e);
+      }
+      await this.startImport(draft, structure, source, "scatter");
+    },
+
+    // 12_序列帧弹窗确认：打包导入预览（pack）/ 分散图片导入（scatter）；取消 = 放弃整个导入
+    async confirmSequenceImport(mode: "pack" | "scatter"): Promise<void> {
+      const prompt = this.sequencePrompt;
+      this.sequencePrompt = null;
+      if (prompt) await this.startImport(prompt.draft, prompt.structure, prompt.source, mode);
+    },
+
+    // 后台导入任务：命令立即返回 task_id，进度经 Channel 推送（异步不阻塞 UI）；
+    // sequenceMode：序列帧打包（pack）或逐文件分散导入（scatter）
     async startImport(
       draft: ImportDraft,
       structure: "flatten" | "keep",
       source: "copy" | "move",
+      sequenceMode: "pack" | "scatter",
     ): Promise<void> {
       this.lastImportSource = source;
       this.importProgress = { taskId: null, total: 0, done: 0, startedAt: Date.now() };
@@ -187,6 +240,7 @@ export const useContentStore = defineStore("content", {
         structure,
         source,
         targetFolder: draft.targetFolder,
+        sequenceMode,
         onEvent,
       });
       if (this.importProgress && this.importProgress.taskId === null) {

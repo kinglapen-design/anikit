@@ -44,6 +44,17 @@ pub enum Source {
   Move,
 }
 
+/// 序列帧模式（4.1）：Pack 检测到的序列帧打包为一个资源；Scatter 逐文件导入（默认，
+/// 剪贴板 / 收件箱导入恒 Scatter）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum SequenceMode {
+  #[serde(rename = "pack")]
+  Pack,
+  #[default]
+  #[serde(rename = "scatter")]
+  Scatter,
+}
+
 /// 导入参数（target_folder 为目标文件夹 ID，None 表示根目录；paths 为展开前原始路径）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,6 +68,9 @@ pub struct ImportOptions {
   /// 携带标记的导入撞 hash 且已有资产同渠道时自动合并（PRD 01-2.3 注）
   #[serde(default)]
   pub imported_from: Option<String>,
+  /// 序列帧处理模式（仅 UI 导入弹窗给 Pack；收件箱 / 剪贴板恒 Scatter）
+  #[serde(default)]
+  pub sequence_mode: SequenceMode,
 }
 
 /// 单文件失败记录（reason 为中文人话，不给堆栈）
@@ -67,6 +81,26 @@ pub struct FailedItem {
   pub reason: String,
 }
 
+/// 序列帧源信息（4.1）：冲突挂起项携带，前端原样回传给 resolve_conflicts，
+/// "保留两个"决策按此重新打包建档（帧清单按序号升序）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SequenceSource {
+  /// 基础名（资产标题）
+  pub name: String,
+  pub ext: String,
+  /// 序号位宽（入库补齐用）
+  pub width: u32,
+  pub frames: Vec<SequenceFrameSource>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SequenceFrameSource {
+  pub path: PathBuf,
+  pub number: u32,
+}
+
 /// hash 冲突挂起项（PRD 10_重复添加提示：导入中不询问，finished 后由前端逐项弹窗决策）。
 /// 直接携带弹窗左右对照（已存在 vs 新文件）全部显示数据，前端无需再发查询。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -74,7 +108,7 @@ pub struct FailedItem {
 pub struct ConflictItem {
   /// 源文件绝对路径
   pub source_path: PathBuf,
-  /// 源文件名（含扩展名）
+  /// 源文件名（含扩展名）；序列帧冲突为 `标题.扩展名`
   pub source_name: String,
   /// 源文件字节数
   pub source_size: u64,
@@ -97,6 +131,9 @@ pub struct ConflictItem {
   pub existing_thumb_path: Option<String>,
   /// origin Placement 所在文件夹显示名（root → "根目录"）
   pub existing_folder_name: String,
+  /// 序列帧冲突的组信息（普通文件冲突无此字段；前端原样回传供"保留两个"重新打包）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub sequence: Option<SequenceSource>,
 }
 
 /// 导入结果汇总：新导入数、冲突挂起、失败明细
@@ -258,7 +295,7 @@ pub(crate) fn merge_rename(root: &Path, file: &PendingFile, asset_id: &str) -> R
 }
 
 /// 实体入库：Copy 复制；Move 优先 rename（同盘零拷贝），失败回退 复制+删除源（跨盘场景）
-fn store_file(src: &Path, dest: &Path, source: Source) -> Result<(), String> {
+pub(crate) fn store_file(src: &Path, dest: &Path, source: Source) -> Result<(), String> {
   match source {
     Source::Copy => {
       fs::copy(src, dest).map_err(|e| format!("文件复制失败：{e}"))?;
@@ -471,6 +508,7 @@ mod tests {
         existing_ext: "png".into(),
         existing_thumb_path: None,
         existing_folder_name: "根目录".into(),
+        sequence: None,
       }],
       failed: vec![FailedItem { path: "q".into(), reason: "r".into() }],
     })

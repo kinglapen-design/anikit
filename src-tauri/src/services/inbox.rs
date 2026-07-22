@@ -14,7 +14,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::adapters::{inbox_drive, inbox_watch};
 use crate::commands::library::AppState;
-use crate::services::import::{ImportOptions, Source, Structure};
+use crate::services::import::{ImportOptions, SequenceMode, Source, Structure};
 use crate::services::import_task::run_import;
 
 /// 库内收件箱目录名
@@ -140,6 +140,8 @@ fn dispatch_loop(app: AppHandle, root: PathBuf, rx: mpsc::Receiver<Vec<PathBuf>>
       paths,
       // 收件箱渠道标记：撞 hash 且已有资产同渠道时自动合并（PRD 01-2.3 注）
       imported_from: Some("inbox".to_string()),
+      // 收件箱无弹窗交互，序列帧维持逐文件导入（4.1 留待，见 05_项目进度）
+      sequence_mode: SequenceMode::Scatter,
     };
     let app_ev = app.clone();
     // 收件箱导入无 UI 取消入口（批次通常很小），cancel 恒 false
