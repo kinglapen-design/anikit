@@ -109,24 +109,37 @@ export const useContentStore = defineStore("content", {
     // 失败清单（ImportResultDialog）与冲突挂起队列（DuplicateDialog 逐个询问）
     importFailed: null as FailedItem[] | null,
     importConflicts: null as ConflictItem[] | null,
+    // 收件箱视图（quick:inbox）：本会话收件箱收进来的文件，新的在前；
+    // 会话级，重启清空（持久化与"最近使用"体系随对应阶段再定）
+    inboxReceived: [] as PlacementView[],
     // 原导入的来源模式（冲突"保留两个"决策继承；剪贴板导入恒 move）
     lastImportSource: "copy" as "copy" | "move",
   }),
   getters: {
-    // 当前视口的资源列表（未分类 / 收件箱 / 最近 / 回收站阶段 4 接，本轮给空）
+    // 当前视口的资源列表（最近使用 / 回收站对应阶段再接，本轮给空）
     visiblePlacements(state): PlacementView[] {
       if (state.sidebarSelected.startsWith("folder:")) {
         const id = state.sidebarSelected.slice(7);
         return state.placements.filter((p) => p.folderId === id);
       }
-      return state.sidebarSelected === "quick:all" ? state.placements : [];
+      switch (state.sidebarSelected) {
+        case "quick:all": // 全部 = 递归显示所有文件（2026-07-22 用户定案）
+          return state.placements;
+        case "quick:uncategorized": // 未分类 = 未归入任何文件夹（root 即未分类；收件箱新件也在此列）
+          return state.placements.filter((p) => p.folderId === "root");
+        case "quick:inbox": // 收件箱 = 本会话收件箱收进来的文件（新的在前）
+          return state.inboxReceived;
+        default:
+          return [];
+      }
     },
-    // 文件夹卡片横排（03_中间面板）：当前视口的直接子文件夹；"全部"视图 = 根一级
+    // 文件夹卡片横排（03_中间面板）：仅文件夹视图显示直接子文件夹；
+    // 快速访问视图一律不出文件夹区块（2026-07-22 用户定案；回收站保留文件夹随对应阶段另议）
     stripFolders(state): FolderNode[] {
       if (state.sidebarSelected.startsWith("folder:")) {
         return findFolder(state.folders, state.sidebarSelected.slice(7))?.children ?? [];
       }
-      return state.folders;
+      return [];
     },
     // 文件夹区块标题计数（全树节点总数）
     folderTotal(state): number {
@@ -215,6 +228,15 @@ export const useContentStore = defineStore("content", {
         if (e.payload.type === "started" && !this.importProgress) {
           this.lastImportSource = "move"; // 收件箱恒 Move（过境：导入后即移走）
           this.importProgress = { taskId: null, total: 0, done: 0, startedAt: Date.now() };
+        }
+        // 收件箱视图收集：新的在前，同键（assetId|folderId）去重
+        if (e.payload.type === "asset") {
+          const p = e.payload.placement;
+          const key = `${p.assetId}|${p.folderId}`;
+          this.inboxReceived = [
+            markRaw(p),
+            ...this.inboxReceived.filter((x) => `${x.assetId}|${x.folderId}` !== key),
+          ];
         }
         this.onImportEvent(e.payload);
       });
