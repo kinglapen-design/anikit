@@ -1,7 +1,7 @@
 //! 收件箱文件监听适配器（PRD 05-01）：notify 增量事件（Windows 走 ReadDirectoryChangesW，
 //! 非轮询、常驻零 CPU）监听 inbox 目录；按"顶层条目"（被丢入的文件 / 文件夹）聚合活动，
-//! 做写入完成检测——距最后一次活动超过 STABLE、大小两轮探测一致、全部文件可移走，
-//! 三者齐备才整批回调。文件被占用时顺延活动时刻，自然延迟到下一轮重试。
+//! 做写入完成检测——编辑中门禁（任一文件被占用则整批按住不动）、距最后一次活动超过
+//! STABLE、大小两轮探测一致、全部文件可移走，齐备才整批回调。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -117,9 +117,16 @@ fn root_entry(dir: &Path, p: &Path) -> Option<PathBuf> {
   Some(dir.join(first.as_os_str()))
 }
 
-/// 逐条判定就绪：静默期满 + 全部文件可移走 + 大小两轮一致 → 出队回调；
-/// 条目被移走 / 读不了则丢弃；被占用顺延活动时刻（延迟重试）
+/// 逐条判定就绪：编辑中门禁（任一文件被占用则整批按住）→ 静默期满 + 全部文件可移走
+/// + 大小两轮一致 → 出队回调；条目被移走 / 读不了则丢弃
 fn drain_ready(pending: &mut HashMap<PathBuf, Pending>, on_ready: &impl Fn(Vec<PathBuf>)) {
+  // 编辑中门禁（2026-07-22 用户定案）：任一文件仍被占用（编辑软件没放手）→ 所有文件都不动。
+  // 编辑软件的恢复/临时文件命名千奇百怪（AN 的 RECOVER_*、Blender 的 .blend1……），命名过滤
+  // 永远筛不完；按住期间它们随软件正常关闭自行消失（下方 exists 检查丢弃），真实文件放手后
+  // 入库；软件崩溃导致恢复文件残留的，随真实文件一并入库——保住用户的崩溃恢复数据。
+  if pending.keys().any(|p| p.exists() && !entry_movable(p)) {
+    return;
+  }
   let mut ready = Vec::new();
   pending.retain(|path, st| {
     if !path.exists() {
@@ -129,7 +136,7 @@ fn drain_ready(pending: &mut HashMap<PathBuf, Pending>, on_ready: &impl Fn(Vec<P
       return true;
     }
     if !entry_movable(path) {
-      st.last_activity = Instant::now(); // 占用：顺延，下轮重试
+      st.last_activity = Instant::now(); // 门禁与判定之间的竞态：顺延，下轮重试
       return true;
     }
     let Some(size) = entry_size(path) else { return false }; // 读不了（多半已不可用），丢弃
@@ -270,6 +277,61 @@ mod tests {
     let t0 = Instant::now();
     handle.stop();
     assert!(t0.elapsed() < Duration::from_secs(2), "空闲时停止应立即返回：{:?}", t0.elapsed());
+  }
+
+  /// 编辑中门禁（用户定案）：任一文件被占用 → 整批按住不放行（可移走的文件也不进）；
+  /// 放手后全部入库
+  #[cfg(target_os = "windows")]
+  #[test]
+  fn occupied_file_holds_back_whole_batch() {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::Storage::FileSystem::{
+      CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_MODE, FILE_SHARE_READ, OPEN_EXISTING,
+    };
+    const GENERIC_READ_WRITE: u32 = 0xC000_0000;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("inbox");
+    std::fs::create_dir_all(&dir).unwrap();
+    let (tx, rx) = mpsc::channel();
+    let mut handle = spawn(dir.clone(), move |paths| {
+      let _ = tx.send(paths);
+    })
+    .unwrap();
+
+    let locked = dir.join("占用.fla");
+    let free = dir.join("自由.png");
+    std::fs::write(&locked, "x").unwrap();
+    std::fs::write(&free, "y").unwrap();
+
+    // 模拟编辑软件持有（只给读共享，拒绝 delete 共享）
+    let wide: Vec<u16> = locked.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    let hold = unsafe {
+      CreateFileW(
+        PCWSTR(wide.as_ptr()),
+        GENERIC_READ_WRITE,
+        FILE_SHARE_MODE(FILE_SHARE_READ.0),
+        None,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        None,
+      )
+      .unwrap()
+    };
+    // 超过就绪周期也不应有任何回调（自由文件同样被按住）
+    assert!(rx.recv_timeout(Duration::from_secs(5)).is_err(), "占用期间整批按住，不应有回调");
+
+    unsafe {
+      let _ = CloseHandle(hold);
+    }
+    // 放手后两个文件都入库（同批或先后两批）
+    let mut all = rx.recv_timeout(Duration::from_secs(15)).expect("放手后应收到就绪回调");
+    while !(all.contains(&locked) && all.contains(&free)) {
+      all.extend(rx.recv_timeout(Duration::from_secs(15)).expect("放手后应收齐全部文件"));
+    }
+    handle.stop();
   }
 
   /// 占用探测：持有方只给读共享、拒绝 delete 共享时（Animate 保存后持有 fla 的场景）
