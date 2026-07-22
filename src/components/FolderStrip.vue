@@ -47,11 +47,13 @@ const colWidth = computed(() => Math.max(80, Math.round((189 * ui.targetRowHeigh
 }
 /* 卡片列表：grid 均分同宽（auto-fill 空轨道同宽，末行不被拉宽）——
    卡片等比例跟随拖拽缩放（SVG 天然等比，无布局计算），满了换行；
+   列间距 6 / 行间距 14（阶段3修改定案，与素材卡片同步）；
    查看方式的自适应 / 瀑布 / 网格只影响素材卡片，与文件夹卡片无关 */
 .flow {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(189px, 1fr));
-  gap: var(--space-6);
+  column-gap: var(--space-6);
+  row-gap: var(--space-14);
 }
 .cell {
   min-width: 0;

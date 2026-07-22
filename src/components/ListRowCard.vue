@@ -92,7 +92,8 @@ const emit = defineEmits<{ select: [] }>();
   border-radius: var(--radius-4);
   box-shadow: inset 0 0 0 1px var(--c4-15);
   object-fit: cover;
-  background: var(--c4-7);
+  /* 无缩略图占位：中间面板底色 C2（阶段3修改——不要 C4-7 灰块） */
+  background: var(--c2);
 }
 .name {
   font-size: var(--text-body-size);

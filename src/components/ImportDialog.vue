@@ -131,9 +131,9 @@ const sourceTip = computed(() =>
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 6px 0;
-  width: 160px;
-  height: 34px;
+  padding: 8px 16px;
+  gap: var(--space-6);
+  height: 38px;
   border: none;
   border-radius: var(--radius-6);
   cursor: pointer;

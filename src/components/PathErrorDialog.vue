@@ -57,7 +57,7 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   font-weight: var(--text-caption-weight);
   color: var(--c4-40);
 }
-/* 按钮组（01_按钮#07 大标题按钮-小按钮）：撑满、两按钮等分 / 圆角 6 / 无图标 */
+/* 按钮组（01_按钮#07 大标题按钮-小按钮）：宽度按标题自适应（padding 8/16 / 高 38）/ 圆角 6 / 无图标 */
 .actions {
   display: flex;
   flex-direction: row;
@@ -69,10 +69,9 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  flex: 1;
-  padding: 6px 0;
+  padding: 8px 16px;
   gap: var(--space-6);
-  height: 34px;
+  height: 38px;
   border: none;
   border-radius: var(--radius-6);
   cursor: pointer;

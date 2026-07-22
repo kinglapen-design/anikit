@@ -80,7 +80,8 @@ const meta = computed(() =>
   border-radius: var(--radius-8);
   box-shadow: inset 0 0 0 1px var(--c4-15);
   object-fit: cover;
-  background: var(--c4-7);
+  /* 无缩略图占位：中间面板底色 C2（阶段3修改——不要 C4-7 灰块） */
+  background: var(--c2);
 }
 /* 格式角标：图片左上角，距上左 4px（= 容器内边距 4 + 4），内边距 2 4 / 圆角 6 / C1-80 */
 .badge {

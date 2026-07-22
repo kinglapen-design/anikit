@@ -32,12 +32,40 @@ export interface FailedItem {
   reason: string;
 }
 
+// hash 冲突挂起项（后端 services/import.rs ConflictItem，携带双侧显示数据供 10_重复添加提示）
+export interface ConflictItem {
+  sourcePath: string; // 源文件绝对路径
+  sourceName: string; // 源文件名（含扩展名）
+  sourceSize: number;
+  sourceW: number | null; // 图片宽高（非图片 null）
+  sourceH: number | null;
+  targetFolder: string; // 落点文件夹 ID（"root" 或 F 开头）
+  targetFolderName: string; // 落点文件夹显示名（root → "根目录"）
+  existingAssetId: string;
+  existingName: string; // 已有资源显示名（origin Placement 名）
+  existingW: number | null;
+  existingH: number | null;
+  existingSize: number;
+  existingExt: string;
+  existingThumbPath: string | null;
+  existingFolderName: string; // 已有资源所在文件夹显示名
+}
+
+// 冲突决策（后端 commands resolve_conflicts 入参）
+export interface ConflictResolution {
+  sourcePath: string;
+  existingAssetId: string;
+  targetFolder: string;
+  action: "useExisting" | "copy" | "link" | "skip";
+  linkName?: string | null;
+}
+
 // 导入任务事件（后端 services/import.rs ImportEvent，serde tag="type" camelCase）
 export type ImportEvent =
   | { type: "started"; total: number }
   | { type: "folders" } // keep 模式层级已建，重拉文件树
   | { type: "asset"; placement: PlacementView } // 到一个显示一个
-  | { type: "finished"; imported: number; linked: number; failed: FailedItem[] };
+  | { type: "finished"; imported: number; conflicts: ConflictItem[]; failed: FailedItem[] };
 
 // 流式追加节流：asset 事件先进缓冲，每 250ms 批量入列——
 // 逐条 push 会让 10 万级列表每文件重排一次（布局 ~10ms×N 必卡），批量后重排 ≤4 次/秒
@@ -67,9 +95,18 @@ export const useContentStore = defineStore("content", {
     selectedFolderId: "",
     // 导入弹窗草稿：菜单 / 拖拽触发后填入，ImportDialog 读取；确认或取消后清空
     importDraft: null as ImportDraft | null,
-    // 后台导入进度（设计稿落地后接进度 UI）；失败清单供 ImportResultDialog 显示
-    importProgress: null as { total: number; done: number } | null,
+    // 后台导入进度（11_导入进度条）；total=0 表示仍在扫描（总数未知）
+    importProgress: null as {
+      taskId: number | null;
+      total: number;
+      done: number;
+      startedAt: number;
+    } | null,
+    // 失败清单（ImportResultDialog）与冲突挂起队列（DuplicateDialog 逐个询问）
     importFailed: null as FailedItem[] | null,
+    importConflicts: null as ConflictItem[] | null,
+    // 原导入的来源模式（冲突"保留两个"决策继承；剪贴板导入恒 move）
+    lastImportSource: "copy" | "move",
   }),
   getters: {
     // 当前视口的资源列表（未分类 / 收件箱 / 最近 / 回收站阶段 4 接，本轮给空）
@@ -124,26 +161,55 @@ export const useContentStore = defineStore("content", {
       structure: "flatten" | "keep",
       source: "copy" | "move",
     ): Promise<void> {
+      this.lastImportSource = source;
+      this.importProgress = { taskId: null, total: 0, done: 0, startedAt: Date.now() };
       const onEvent = new Channel<ImportEvent>();
       onEvent.onmessage = (e) => this.onImportEvent(e);
-      await invoke("import_paths", {
+      const taskId = await invoke<number>("import_paths", {
         paths: draft.paths,
         structure,
         source,
         targetFolder: draft.targetFolder,
         onEvent,
       });
+      if (this.importProgress && this.importProgress.taskId === null) {
+        this.importProgress.taskId = taskId;
+      }
     },
     async startImportClipboard(targetFolder: string | null): Promise<void> {
+      this.lastImportSource = "move"; // 剪贴板临时 PNG 以 move 走管线
+      this.importProgress = { taskId: null, total: 0, done: 0, startedAt: Date.now() };
       const onEvent = new Channel<ImportEvent>();
       onEvent.onmessage = (e) => this.onImportEvent(e);
-      await invoke("import_clipboard", { targetFolder, onEvent });
+      const taskId = await invoke<number>("import_clipboard", { targetFolder, onEvent });
+      if (this.importProgress && this.importProgress.taskId === null) {
+        this.importProgress.taskId = taskId;
+      }
+    },
+
+    // 取消导入（11_导入进度条）：进度条立即隐藏；后台把当前文件写完后真实停止（cancel 语义）
+    async cancelImport(): Promise<void> {
+      const p = this.importProgress;
+      this.importProgress = null;
+      if (p?.taskId != null) {
+        await invoke("cancel_import", { taskId: p.taskId }).catch(() => {});
+      }
+    },
+
+    // 冲突决策提交（10_重复添加提示）：逐项或"全部应用"批量，来源模式继承原导入
+    async resolveConflicts(
+      items: ConflictResolution[],
+    ): Promise<{ resolved: number; failed: FailedItem[] }> {
+      return await invoke("resolve_conflicts", { items, source: this.lastImportSource });
     },
 
     onImportEvent(e: ImportEvent): void {
       switch (e.type) {
         case "started":
-          this.importProgress = { total: e.total, done: 0 };
+          if (this.importProgress) {
+            this.importProgress.total = e.total;
+            this.importProgress.startedAt = Date.now(); // ETA 从扫描结束起算
+          }
           break;
         case "folders":
           void this.refreshFolders();
@@ -164,6 +230,8 @@ export const useContentStore = defineStore("content", {
           assetBuffer = [];
           this.importProgress = null;
           if (e.failed.length > 0) this.importFailed = e.failed;
+          // 冲突挂起队列：导入全部完成后逐个询问（10_重复添加提示）
+          if (e.conflicts.length > 0) this.importConflicts = e.conflicts;
           void this.refresh(); // 兜底全量对齐（链接 / 层级以最终态为准）
           break;
       }

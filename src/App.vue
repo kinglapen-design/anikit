@@ -13,6 +13,7 @@ import SplitBar from "./components/SplitBar.vue";
 import LibrarySetupModal from "./components/LibrarySetupModal.vue";
 import ImportDialog from "./components/ImportDialog.vue";
 import ImportResultDialog from "./components/ImportResultDialog.vue";
+import DuplicateDialog from "./components/DuplicateDialog.vue";
 import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
 
@@ -159,6 +160,8 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
       :failed="content.importFailed"
       @close="content.importFailed = null"
     />
+    <!-- hash 冲突逐个询问（导入完成后弹出；10_重复添加提示） -->
+    <DuplicateDialog v-if="content.importConflicts && content.importConflicts.length > 0" />
   </div>
 </template>
 

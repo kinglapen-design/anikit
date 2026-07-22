@@ -29,7 +29,9 @@ export interface LayoutResult {
 
 // 网格内边距：左 0（区块容器 padding 左 8 承担），右 8（滚动条 4 + 卡片间距 4）
 const PAD = { top: 0, right: 8, bottom: 0, left: 0 };
-const SPACING = 6;
+// 卡片间距（阶段3修改定案）：列间距 6，行间距 14（token --space-14）
+const COL_GAP = 6;
+const ROW_GAP = 14;
 
 // —— 自适应（等高不等宽）：贪心分行，行内等比拉伸填满宽度 ——
 export function computeJustified(
@@ -52,28 +54,28 @@ export function computeJustified(
     for (let i = start; i <= end; i++) {
       const w = (items[i].w / items[i].h) * height;
       boxes[i] = { top, left: x, width: w, height: height + captionHeight, i };
-      x += w + SPACING;
+      x += w + COL_GAP;
     }
     rows.push({ top, height: height + captionHeight, start, end: end + 1 });
-    y += height + SPACING;
+    y += height + ROW_GAP;
   };
 
   for (let i = 0; i < n; i++) {
     ratioSum += items[i].w / items[i].h;
     const count = i - rowStart + 1;
-    if ((contentWidth - SPACING * (count - 1)) / ratioSum <= targetRowHeight) {
-      layoutRow(rowStart, i, (contentWidth - SPACING * (count - 1)) / ratioSum);
+    if ((contentWidth - COL_GAP * (count - 1)) / ratioSum <= targetRowHeight) {
+      layoutRow(rowStart, i, (contentWidth - COL_GAP * (count - 1)) / ratioSum);
       rowStart = i + 1;
       ratioSum = 0;
     }
   }
   if (rowStart < n) {
     const count = n - rowStart;
-    const h = Math.min(targetRowHeight, (contentWidth - SPACING * (count - 1)) / ratioSum);
+    const h = Math.min(targetRowHeight, (contentWidth - COL_GAP * (count - 1)) / ratioSum);
     layoutRow(rowStart, n - 1, h);
   }
 
-  const totalHeight = rows.length === 0 ? 0 : y - SPACING + PAD.bottom + rows.length * captionHeight;
+  const totalHeight = rows.length === 0 ? 0 : y - ROW_GAP + PAD.bottom + rows.length * captionHeight;
   return { boxes, rows, totalHeight };
 }
 
@@ -85,8 +87,8 @@ export function computeWaterfall(
   captionHeight = 0,
 ): LayoutResult {
   const contentWidth = containerWidth - PAD.left - PAD.right;
-  const cols = Math.max(1, Math.floor((contentWidth + SPACING) / (targetColWidth + SPACING)));
-  const colW = (contentWidth - SPACING * (cols - 1)) / cols;
+  const cols = Math.max(1, Math.floor((contentWidth + COL_GAP) / (targetColWidth + COL_GAP)));
+  const colW = (contentWidth - COL_GAP * (cols - 1)) / cols;
   const tops = new Array<number>(cols).fill(PAD.top);
   const boxes: Box[] = [];
 
@@ -94,8 +96,8 @@ export function computeWaterfall(
     let c = 0;
     for (let k = 1; k < cols; k++) if (tops[k] < tops[c]) c = k;
     const h = (items[i].h / items[i].w) * colW + captionHeight;
-    boxes.push({ top: tops[c], left: PAD.left + c * (colW + SPACING), width: colW, height: h, i });
-    tops[c] += h + SPACING;
+    boxes.push({ top: tops[c], left: PAD.left + c * (colW + COL_GAP), width: colW, height: h, i });
+    tops[c] += h + ROW_GAP;
   }
 
   // 瀑布无天然行：按 top 排序后每卡一行（滚动二分用）
@@ -117,9 +119,9 @@ export function computeGrid(
   captionHeight = 0,
 ): LayoutResult {
   const contentWidth = containerWidth - PAD.left - PAD.right;
-  const cols = Math.max(1, Math.floor((contentWidth + SPACING) / (targetCell + SPACING)));
-  const cell = (contentWidth - SPACING * (cols - 1)) / cols;
-  const rowH = cell + captionHeight + SPACING;
+  const cols = Math.max(1, Math.floor((contentWidth + COL_GAP) / (targetCell + COL_GAP)));
+  const cell = (contentWidth - COL_GAP * (cols - 1)) / cols;
+  const rowH = cell + captionHeight + ROW_GAP;
   const boxes: Box[] = [];
   const rows: Row[] = [];
 
@@ -127,7 +129,7 @@ export function computeGrid(
     const r = Math.floor(i / cols);
     const c = i % cols;
     const top = PAD.top + r * rowH;
-    boxes.push({ top, left: PAD.left + c * (cell + SPACING), width: cell, height: cell + captionHeight, i });
+    boxes.push({ top, left: PAD.left + c * (cell + COL_GAP), width: cell, height: cell + captionHeight, i });
     if (c === 0) rows.push({ top, height: cell + captionHeight, start: i, end: i + 1 });
     else rows[rows.length - 1].end = i + 1;
   }
@@ -144,7 +146,7 @@ export function computeList(
   _captionHeight = 0,
 ): LayoutResult {
   const rowH = Math.max(21, Math.round((57 * targetRowHeight) / 220));
-  const gap = 6; // item 间距 6（token）
+  const gap = ROW_GAP; // 行间距 14（token，阶段3修改定案）
   const width = containerWidth - PAD.left - PAD.right;
   const boxes: Box[] = [];
   const rows: Row[] = [];

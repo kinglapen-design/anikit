@@ -195,7 +195,8 @@ onBeforeUnmount(() => {
   <div ref="viewportRef" class="grid-viewport" tabindex="0">
     <div class="grid-canvas" :style="{ transform: `translateY(${-pos}px)` }">
       <div ref="headerRef" class="grid-header">
-        <FolderStrip />
+        <!-- 当前视口无子文件夹时整个文件夹区块隐藏（阶段3修改定案） -->
+        <FolderStrip v-if="content.stripFolders.length > 0" />
         <!-- 素材区块顶 padding 8（与文件夹区块底 8、总容器 gap 16 构成间距 32 = 8 + 16 + 8） -->
         <SectionHeader title="内容" :count="items.length" pad="8px 0 0 0" v-model:open="assetsOpen" />
       </div>

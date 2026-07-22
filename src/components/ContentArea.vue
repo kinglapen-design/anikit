@@ -4,6 +4,7 @@ import { computed } from "vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
 import SearchBar from "./SearchBar.vue";
+import ImportProgressBar from "./ImportProgressBar.vue";
 import { useContentStore } from "../stores/content";
 
 const content = useContentStore();
@@ -16,6 +17,7 @@ const items = computed(() => content.visiblePlacements);
 <template>
   <main class="content-area">
     <ContentTitleBar />
+    <ImportProgressBar />
     <section class="asset-section">
       <AssetGrid :items="items" />
     </section>
