@@ -71,9 +71,9 @@ const emit = defineEmits<{ select: [] }>();
 .list-row.odd {
   background: var(--c3);
 }
-/* hover / 选中与素材卡片一致：2px 内阴影描边不用 fill；悬停 C4-40，选中品牌色-1 */
+/* hover / 选中与素材卡片一致：2px 内阴影描边不用 fill；悬停 C4-15，选中品牌色-1 */
 .list-row:hover {
-  box-shadow: inset 0 0 0 2px var(--c4-40);
+  box-shadow: inset 0 0 0 2px var(--c4-15);
 }
 .list-row.selected {
   box-shadow: inset 0 0 0 2px var(--brand-1);

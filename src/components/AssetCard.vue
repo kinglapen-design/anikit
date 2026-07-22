@@ -68,7 +68,7 @@ const meta = computed(() =>
   transition: box-shadow 0.12s ease;
 }
 .asset-card:hover .thumb {
-  box-shadow: inset 0 0 0 2px var(--c4-40);
+  box-shadow: inset 0 0 0 2px var(--c4-15);
 }
 .asset-card.selected .thumb {
   box-shadow: inset 0 0 0 2px var(--brand-1);
@@ -78,7 +78,8 @@ const meta = computed(() =>
   width: 100%;
   height: 100%;
   border-radius: var(--radius-8);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  /* 卡片线框 C4-7（用户验收：C4-15 卡片多了偏深影响可读性） */
+  box-shadow: inset 0 0 0 1px var(--c4-7);
   object-fit: cover;
   /* 无缩略图占位：中间面板底色 C2（阶段3修改——不要 C4-7 灰块） */
   background: var(--c2);

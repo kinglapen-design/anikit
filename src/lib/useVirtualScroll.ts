@@ -7,6 +7,8 @@ export function useVirtualScroll(onUpdate: (pos: number) => void) {
   const pos = ref(0);
   const thumbTop = ref(0);
   const thumbHeight = ref(30);
+  // 有可滚内容才显示滚动条（用户验收：无需滚动时轨道要隐藏）
+  const scrollable = ref(false);
   let viewport: HTMLElement | null = null;
   let total = 0;
 
@@ -14,6 +16,7 @@ export function useVirtualScroll(onUpdate: (pos: number) => void) {
 
   function syncThumb(): void {
     const vh = viewH();
+    scrollable.value = total > 0 && vh > 0 && total > vh;
     if (total <= 0 || vh <= 0) {
       thumbHeight.value = 30;
       thumbTop.value = 0;
@@ -110,5 +113,5 @@ export function useVirtualScroll(onUpdate: (pos: number) => void) {
     viewport = null;
   }
 
-  return { pos, thumbTop, thumbHeight, scrollTo, setTotal, attach, detach };
+  return { pos, thumbTop, thumbHeight, scrollable, scrollTo, setTotal, attach, detach };
 }

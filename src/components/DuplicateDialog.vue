@@ -189,7 +189,7 @@ function onSkip(): void {
               v-model="linkName"
               class="name-input"
               type="text"
-              placeholder="链接名称（默认原名）"
+              placeholder="留空默认"
             />
           </Transition>
           <Transition name="fade">
@@ -254,7 +254,7 @@ function onSkip(): void {
   box-shadow: inset 0 -1px 0 0 var(--c4-7);
 }
 .dup-title {
-  margin: 0 auto;
+  margin: 0; /* 左对齐（用户验收：模态窗标题不要居中） */
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
@@ -290,11 +290,11 @@ function onSkip(): void {
   max-width: 500px;
   max-height: 500px;
   border-radius: var(--radius-8);
+  box-shadow: inset 0 0 0 1px var(--c4-15); /* 两侧图片统一带边框 */
 }
-/* 新的文件：图片 50% 透明 + 1px C4-15（选"保留两个"后 100%，透明度过渡动画） */
+/* 新的文件：图片 30% 透明（用户验收：50% 与已存在拉不开）+ 1px C4-15（选"保留两个"后 100%，透明度过渡动画） */
 .new-img {
-  opacity: 0.5;
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  opacity: 0.3;
   transition: opacity 0.3s ease;
 }
 .new-img.solid {
@@ -316,7 +316,7 @@ function onSkip(): void {
   background: var(--success);
 }
 .tag.new {
-  background: var(--brand-1);
+  background: var(--warning); /* 警告色（用户验收：与已存在成功色区分） */
 }
 .no-img {
   font-size: var(--text-title-size);

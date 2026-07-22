@@ -62,7 +62,7 @@ function updateRange(scrollPos: number): void {
   r1.value = Math.min(rs.length, lowerBound(rs, scrollPos + vh - off + BUFFER) + 1);
 }
 
-const { pos, thumbTop, thumbHeight, setTotal, attach, detach } = useVirtualScroll(updateRange);
+const { pos, thumbTop, thumbHeight, scrollable, setTotal, attach, detach } = useVirtualScroll(updateRange);
 
 const visibleCards = computed(() => {
   const rs = rows.value;
@@ -234,7 +234,7 @@ onBeforeUnmount(() => {
         </template>
       </div>
     </div>
-    <div ref="trackRef" class="grid-track">
+    <div v-show="scrollable" ref="trackRef" class="grid-track">
       <div
         ref="thumbRef"
         class="grid-thumb"

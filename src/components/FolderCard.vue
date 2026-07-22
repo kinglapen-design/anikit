@@ -47,7 +47,7 @@ const meta = computed(() => {
   line-height: 0;
 }
 .folder-card:hover .icon-wrap {
-  box-shadow: inset 0 0 0 2px var(--c4-40);
+  box-shadow: inset 0 0 0 2px var(--c4-15);
 }
 .folder-card.selected .icon-wrap {
   box-shadow: inset 0 0 0 2px var(--brand-1);
