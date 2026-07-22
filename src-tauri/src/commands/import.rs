@@ -335,7 +335,7 @@ fn placement_views(lib: &Library, folder: Option<&str>) -> Vec<PlacementView> {
     Some(id) => lib.index.placements_by_folder.get(id).map(|v| v.iter().collect()).unwrap_or_default(),
     None => lib.folders.items.iter().collect(),
   };
-  items.into_iter().filter_map(|p| lib.index.assets.get(&p.asset).map(|m| placement_view(&lib.root, m, p))).collect()
+  items.into_iter().filter_map(|p| lib.index.assets.get(&p.asset).map(|m| placement_view(&lib.root, m, p, &lib.format_icons))).collect()
 }
 
 #[cfg(test)]
@@ -431,6 +431,26 @@ mod tests {
       origin: false,
     });
     assert_eq!(with_lib(&h, |l| placement_views(l, None).len()), 1);
+  }
+
+  #[cfg(windows)]
+  #[test]
+  fn import_non_image_falls_back_to_format_icon() {
+    let h = make_lib();
+    let fla = h._dir.path().join("工程.fla");
+    std::fs::write(&fla, "fake fla bytes").unwrap();
+    import(&h, vec![fla], Structure::Flatten);
+
+    let views = with_lib(&h, |l| placement_views(l, Some(ROOT_FOLDER_ID)));
+    assert_eq!(views.len(), 1);
+    // 无内容缩略图 → 回退系统格式图标缓存（cache/thumbs，info 内无 shell 产物）
+    let thumb = views[0].thumb_path.as_deref().unwrap();
+    assert!(thumb.ends_with("fla.webp") && thumb.contains("thumbs"), "应回退格式图标缓存：{thumb}");
+    assert!(h.root.join("cache/thumbs/fla.webp").is_file());
+    assert!(with_lib(&h, |l| l.format_icons.contains("fla")));
+    // 重开库后内存集从缓存扫描恢复
+    let reopened = library::open(&h.root).unwrap();
+    assert!(reopened.format_icons.contains("fla"));
   }
 
   #[test]

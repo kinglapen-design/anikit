@@ -1,11 +1,16 @@
-//! 缩略图服务：图片宽高探测 + 缩略图生成。
+//! 缩略图服务：图片宽高探测 + 缩略图生成 + 格式图标缓存（4.2）。
 //! 缩略图存 info 文件夹（{名}_thumbnail.webp），是缓存可重建、不进备份（PRD 06-04）。
+//! 格式图标（shell 保底）按格式存 cache/thumbs/{ext}.webp，不进 info（2026-07-22 用户定案）。
 //! 探测 / 解码失败返回 None 属"能力探测"语义（不是图片），不算吞错误。
 
 use std::fs;
 use std::path::Path;
 
 use image::DynamicImage;
+
+use crate::adapters::shell_thumb;
+use crate::core::library::CACHE_DIR;
+use crate::services::thumb_formats;
 
 /// 缩略图短边长度（像素）：短边缩到 320、长边等比（对齐 Eagle 同级策略；
 /// 768 长边对千像素级原图过剩，体积不合算）
@@ -14,16 +19,16 @@ pub const THUMB_SHORT_EDGE: u32 = 320;
 /// 有损 webp 质量（libwebp q80：目视接近无损，体积约为无损编码 1/5）
 const WEBP_QUALITY: f32 = 80.0;
 
-/// 探测图片宽高；非图片 / 探测失败返回 None
+/// 探测图片宽高；非图片 / 探测失败返回 None（PSD/SVG 走 thumb_formats 补充探测）
 pub fn probe(path: &Path) -> Option<(u32, u32)> {
-  image::image_dimensions(path).ok()
+  image::image_dimensions(path).ok().or_else(|| thumb_formats::probe(path))
 }
 
 /// 生成缩略图：短边缩到 320、长边等比（原图短边不足 320 不放大），
 /// 优先存有损 webp，失败退回 PNG。gif 取首帧（image::open 行为即首帧）。
 /// 返回缩略图文件名；非图片 / 解码失败返回 None。
 pub fn generate(info_dir: &Path, origin: &Path, stem: &str) -> Option<String> {
-  let img = image::open(origin).ok()?;
+  let img = load_origin(origin)?;
   let thumb = shrink_to_thumb(img);
 
   let webp_name = format!("{stem}_thumbnail.webp");
@@ -36,6 +41,41 @@ pub fn generate(info_dir: &Path, origin: &Path, stem: &str) -> Option<String> {
     return Some(png_name);
   }
   None
+}
+
+/// 原图解码：image crate（jpg/png/gif/webp/bmp）→ PSD/SVG 解码补充（thumb_formats，4.2）
+fn load_origin(origin: &Path) -> Option<DynamicImage> {
+  if let Ok(img) = image::open(origin) {
+    return Some(img);
+  }
+  thumb_formats::decode(origin).map(DynamicImage::ImageRgba8)
+}
+
+/// 格式图标缓存（PRD 04-03：系统缩略图按格式缓存一份，cache/thumbs/{ext}.webp，**不进 info**——
+/// 避免与后期补的伴生缩略图并存污染 info，2026-07-22 用户定案）。已存在直接 true；
+/// 否则经 shell 适配器取系统图标落盘。返回该格式图标是否可用。
+pub fn ensure_format_icon(root: &Path, path: &Path, ext: &str) -> bool {
+  let key = if ext.is_empty() { "file" } else { ext };
+  let dest = root.join(CACHE_DIR).join("thumbs").join(format!("{key}.webp"));
+  if dest.is_file() {
+    return true;
+  }
+  let Some(img) = shell_thumb::format_icon(path, shell_thumb::FORMAT_ICON_EDGE) else {
+    return false;
+  };
+  let Some(parent) = dest.parent() else {
+    return false;
+  };
+  if let Err(e) = fs::create_dir_all(parent) {
+    log::error!("格式图标缓存目录创建失败：{e}");
+    return false;
+  }
+  if let Err(e) = save_webp(&DynamicImage::ImageRgba8(img), &dest) {
+    log::error!("格式图标缓存落盘失败（{key}）：{e}");
+    return false;
+  }
+  log::info!("格式图标已缓存：{key}");
+  true
 }
 
 /// 短边缩到 THUMB_SHORT_EDGE、长边等比（整数除法 floor，短边恰好 320）；原图短边不足不放大
@@ -134,6 +174,28 @@ mod tests {
     let txt = dir.path().join("工程.fla");
     std::fs::write(&txt, "fake fla bytes").unwrap();
     assert_eq!(generate(dir.path(), &txt, "工程"), None);
+  }
+
+  #[cfg(windows)]
+  #[test]
+  fn ensure_format_icon_caches_once_per_ext() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let fla = root.join("工程.fla");
+    std::fs::write(&fla, "fake fla bytes").unwrap();
+
+    assert!(ensure_format_icon(root, &fla, "fla"));
+    let icon = root.join("cache/thumbs/fla.webp");
+    assert!(icon.is_file());
+    // 二次调用幂等：文件不重复生成
+    let mtime = fs::metadata(&icon).unwrap().modified().unwrap();
+    assert!(ensure_format_icon(root, &fla, "fla"));
+    assert_eq!(fs::metadata(&icon).unwrap().modified().unwrap(), mtime);
+    // 无扩展名归 "file" 键
+    let noext = root.join("无扩展名");
+    std::fs::write(&noext, "bytes").unwrap();
+    assert!(ensure_format_icon(root, &noext, ""));
+    assert!(root.join("cache/thumbs/file.webp").is_file());
   }
 }
 

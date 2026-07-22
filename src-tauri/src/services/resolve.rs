@@ -7,11 +7,12 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::library::{self, Library};
+use crate::core::library::{self, Library, ASSTES_DIR};
 use crate::core::models::new_asset_id;
 use crate::services::import as ops;
 use crate::services::import::{FailedItem, Source, ROOT_FOLDER_ID};
 use crate::services::sequence;
+use crate::services::thumbnail;
 
 /// 用户决策（serde 小驼峰："useExisting" / "copy" / "link" / "skip"）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -179,6 +180,13 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
       let hash = ops::sha256_file(&pending.path).map_err(|e| format!("文件读取失败：{e}"))?;
       let asset = ops::build_asset(&root, &pending, &hash, source)?;
       let name = ops::file_name(&pending.path);
+      // 4.2：无内容缩略图补系统格式图标缓存（cache/thumbs，不进 info）并登记内存集
+      if asset.thumbnail.is_none() {
+        let origin = root.join(ASSTES_DIR).join(format!("{}.info", asset.id)).join(&asset.origin_name);
+        if thumbnail::ensure_format_icon(&root, &origin, &asset.ext) {
+          lib.format_icons.insert(asset.ext.clone());
+        }
+      }
       ops::add_placement(lib, asset.id.clone(), item.target_folder.clone(), name, true);
       lib.index.assets.insert(asset.id.clone(), asset);
       Ok(())

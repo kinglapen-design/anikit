@@ -40,6 +40,8 @@ pub struct Library {
   pub recycle: RecycleFile,
   pub recent: RecentFile,
   pub index: LibraryIndex,
+  /// 已缓存系统格式图标的扩展名集（cache/thumbs/{ext}.webp，4.2）——视图层回退查内存集，免逐卡片 stat
+  pub format_icons: HashSet<String>,
 }
 
 /// 数据文件全量清单：库根五个 + asstes/*.info/{metadata,annotation}.json（备份与迁移共用）
@@ -143,7 +145,20 @@ pub fn open(path: &Path) -> Result<Library, DataError> {
   let recent: RecentFile = read_json(&path.join(RECENT_FILE))?;
   let index = LibraryIndex::build(&folders, load_assets(path)?);
   backup::backup_if_stale(path);
-  Ok(Library { root: path.to_path_buf(), folders, tags, pins, recycle, recent, index })
+  Ok(Library { root: path.to_path_buf(), folders, tags, pins, recycle, recent, index, format_icons: scan_format_icons(path) })
+}
+
+/// 扫描 cache/thumbs/*.webp 建格式图标内存集（4.2；缓存可重建，目录缺失 / 读取失败按空集处理）
+fn scan_format_icons(root: &Path) -> HashSet<String> {
+  fs::read_dir(root.join(CACHE_DIR).join("thumbs"))
+    .map(|rd| {
+      rd.filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("webp"))
+        .filter_map(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
+        .collect()
+    })
+    .unwrap_or_default()
 }
 
 /// 扫描 asstes/*.info/metadata.json 读入全部资源元数据；任一损坏即报错（提示回滚，不吞错误）

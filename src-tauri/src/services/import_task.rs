@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 
 use rayon::prelude::*;
 
-use crate::core::library::{self, Library};
+use crate::core::library::{self, Library, ASSTES_DIR};
 use crate::core::models::{new_asset_id, AssetMeta};
 use crate::services::import as ops;
 use crate::services::import::{
@@ -108,9 +108,9 @@ struct Phase2 {
   merges: Vec<MergeItem>,
 }
 
-/// 阶段 3 → 4 的消息：建档成功（工作项 + 元数据）/ 失败（原因）
+/// 阶段 3 → 4 的消息：建档成功（工作项 + 元数据 + 格式图标就绪的扩展名）/ 失败（原因）
 enum Phase3Msg {
-  Built { item: WorkItem, asset: AssetMeta },
+  Built { item: WorkItem, asset: AssetMeta, icon: Option<String> },
   Broken { unit: Unit, reason: String },
 }
 
@@ -356,8 +356,8 @@ fn pipeline(
     let consumer = s.spawn(move || {
       for msg in rx {
         match msg {
-          Phase3Msg::Built { item, asset } => {
-            register_one(state, lib, root, files, groups, item, asset, &mut deferred, on_event)
+          Phase3Msg::Built { item, asset, icon } => {
+            register_one(state, lib, root, files, groups, item, asset, icon, &mut deferred, on_event)
           }
           Phase3Msg::Broken { unit, reason } => state.outcome.failed.push(FailedItem {
             path: unit_path(files, groups, unit).to_string_lossy().into_owned(),
@@ -392,7 +392,7 @@ fn produce(
       return;
     }
     let msg = match build_one(root, source, imported_from, files, groups, &item) {
-      Ok(asset) => Phase3Msg::Built { item, asset },
+      Ok((asset, icon)) => Phase3Msg::Built { item, asset, icon },
       Err(reason) => Phase3Msg::Broken { unit: item.unit, reason },
     };
     if tx.send(msg).is_err() {
@@ -401,7 +401,8 @@ fn produce(
   });
 }
 
-/// 阶段 3 单元建档：单文件走 build_asset_with_id；序列帧组整组打包（frames/ 归一重命名）
+/// 阶段 3 单元建档：单文件走 build_asset_with_id；序列帧组整组打包（frames/ 归一重命名）。
+/// 返回（元数据, 格式图标就绪的扩展名）：无内容缩略图的单元锁外补 shell 格式图标缓存（4.2）
 fn build_one(
   root: &Path,
   source: Source,
@@ -409,9 +410,9 @@ fn build_one(
   files: &[PendingFile],
   groups: &[SequenceGroup],
   item: &WorkItem,
-) -> Result<AssetMeta, String> {
-  match item.unit {
-    Unit::Solo(idx) => ops::build_asset_with_id(root, &files[idx], &item.hash, &item.asset_id, source, imported_from),
+) -> Result<(AssetMeta, Option<String>), String> {
+  let asset = match item.unit {
+    Unit::Solo(idx) => ops::build_asset_with_id(root, &files[idx], &item.hash, &item.asset_id, source, imported_from)?,
     Unit::Group(gi) => {
       let g = &groups[gi];
       let frames: Vec<(PathBuf, u32)> =
@@ -426,12 +427,25 @@ fn build_one(
         &item.asset_id,
         source,
         imported_from,
-      )
+      )?
     }
-  }
+  };
+  let icon = ensure_unit_icon(root, &asset);
+  Ok((asset, icon))
 }
 
-/// 阶段 4 单项：锁内注册 Placement + 索引 → 发 Asset；twin 完成即组装其延后冲突
+/// 无内容缩略图的单元：补系统格式图标缓存（按格式一份，cache/thumbs，**不进 info**）。
+/// 图标取自 info 内已入库文件（剪切语义下源文件已移走）；就绪返回扩展名交消费者登记内存集
+fn ensure_unit_icon(root: &Path, asset: &AssetMeta) -> Option<String> {
+  if asset.thumbnail.is_some() {
+    return None;
+  }
+  let origin = root.join(ASSTES_DIR).join(format!("{}.info", asset.id)).join(&asset.origin_name);
+  thumbnail::ensure_format_icon(root, &origin, &asset.ext).then(|| asset.ext.clone())
+}
+
+/// 阶段 4 单项：锁内注册 Placement + 索引 → 发 Asset；twin 完成即组装其延后冲突；
+/// 格式图标就绪的扩展名同步登记进内存集（4.2，视图层回退用）
 #[allow(clippy::too_many_arguments)]
 fn register_one(
   state: &mut TaskState,
@@ -441,6 +455,7 @@ fn register_one(
   groups: &[SequenceGroup],
   item: WorkItem,
   asset: AssetMeta,
+  icon: Option<String>,
   deferred: &mut HashMap<String, Vec<DeferredConflict>>,
   on_event: &impl Fn(ImportEvent),
 ) {
@@ -449,8 +464,11 @@ fn register_one(
   let name = unit_name(files, groups, item.unit);
   let asset_id = asset.id.clone();
   let result = with_lib(lib, state, move |l| {
+    if let Some(ext) = icon {
+      l.format_icons.insert(ext);
+    }
     let placement = ops::add_placement(l, asset_id.clone(), item.target_folder.clone(), name, true);
-    let view = placement_view(&root_buf, &asset, &placement);
+    let view = placement_view(&root_buf, &asset, &placement, &l.format_icons);
     let twins = deferred.remove(&asset_id).unwrap_or_default();
     let conflicts =
       twins.into_iter().map(|d| (d.unit, conflict_of(l, &root_buf, &asset, d.target_folder))).collect::<Vec<_>>();
@@ -539,7 +557,7 @@ fn apply_merges(
     let root_buf = root.to_path_buf();
     let view = with_lib(lib, state, |l| {
       l.index.assets.insert(m.asset_id.clone(), meta.clone());
-      rename_origin_placement(l, &m.asset_id, &meta.origin_name).map(|p| placement_view(&root_buf, &meta, &p))
+      rename_origin_placement(l, &m.asset_id, &meta.origin_name).map(|p| placement_view(&root_buf, &meta, &p, &l.format_icons))
     });
     match view {
       Ok(Some(v)) => {
@@ -590,7 +608,7 @@ fn conflict_of(l: &Library, root: &Path, meta: &AssetMeta, folder_id: String) ->
     existing_h: meta.height,
     existing_size: meta.size,
     existing_ext: meta.ext.clone(),
-    existing_thumb_path: thumb_path(root, meta),
+    existing_thumb_path: thumb_path(root, meta, &l.format_icons),
     existing_folder_name: chosen.map(|p| folder_display_name(l, &p.folder)).unwrap_or_default(),
     sequence: None, // 源侧信息由 fill_source_side 补（序列帧组覆盖为组信息）
   }
