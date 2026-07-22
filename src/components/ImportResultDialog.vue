@@ -39,10 +39,12 @@ function fileName(p: string): string {
   justify-content: center;
   background: var(--c1-80);
 }
-/* 总容器（同 09 导入弹窗）：C5 / 1px C4-15（inset）/ 圆角 8 / --shadow-pop */
+/* 总容器（08_二级窗口通用规则）：宽度随最宽子项、上限 368，失败清单长文本换行 */
 .result-card {
   box-sizing: border-box;
-  width: 368px;
+  width: fit-content;
+  max-width: 368px;
+  min-width: 320px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -86,6 +88,7 @@ function fileName(p: string): string {
 .actions {
   display: flex;
   flex-direction: row;
+  justify-content: flex-end; /* 08 通用规则：按钮组右对齐 */
   gap: var(--space-16);
   width: 100%;
 }
@@ -93,9 +96,8 @@ function fileName(p: string): string {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 6px 0;
-  width: 100%;
-  height: 34px;
+  padding: 8px 16px; /* 01_按钮#07 修订：宽度按标题自适应 */
+  height: 38px;
   border: none;
   border-radius: var(--radius-6);
   cursor: pointer;

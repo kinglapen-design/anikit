@@ -82,10 +82,12 @@ const sourceTip = computed(() =>
   justify-content: center;
   background: var(--c1-80);
 }
-/* 总容器（09）：C5 / 1px C4-15（inset）/ 圆角 8 / --shadow-pop */
+/* 总容器（08_二级窗口通用规则）：宽度随最宽子项、上限 368，超出文字换行；
+   C5 / 1px C4-15（inset）/ 圆角 8 / --shadow-pop */
 .import-card {
   box-sizing: border-box;
-  width: 368px;
+  width: fit-content;
+  max-width: 368px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -104,12 +106,14 @@ const sourceTip = computed(() =>
   font-weight: var(--text-title-weight);
   color: var(--c4);
 }
-/* 提示文字：副文本 C4-40；剪切选中时警示（--warning） */
+/* 提示文字：副文本 C4-40；超 368 上限换行（08 通用规则）；剪切选中时警示（--warning） */
 .tip {
   margin: 0;
+  max-width: 100%;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   color: var(--c4-40);
+  word-break: break-all;
 }
 .tip.warn {
   color: var(--warning);
@@ -121,9 +125,11 @@ const sourceTip = computed(() =>
   gap: var(--space-16);
 }
 /* 按钮组（09）：确认导入（主要）/ 取消（非主要），各 160×34，间距 16 */
+/* 按钮组（08 通用规则：右对齐） */
 .actions {
   display: flex;
   flex-direction: row;
+  justify-content: flex-end;
   gap: var(--space-16);
   width: 100%;
 }

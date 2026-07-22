@@ -73,10 +73,10 @@ function onSubmit(): void {
 </template>
 
 <style scoped>
-/* 卡片：408 宽 / C5 / 1px C4-15 描边（inset box-shadow，规范 4）+ 二级窗口投影 / 圆角 8 */
+/* 卡片：上限 368（08_二级窗口通用规则；内容设计为撑满型按上限取值）/ C5 / 描边 + 投影 / 圆角 8 */
 .form-card {
   box-sizing: border-box;
-  width: 408px;
+  width: 368px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -170,6 +170,7 @@ function onSubmit(): void {
 .actions {
   display: flex;
   flex-direction: row;
+  justify-content: flex-end; /* 08 通用规则：按钮组右对齐 */
   gap: var(--space-16);
   width: 100%;
 }

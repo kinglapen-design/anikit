@@ -22,10 +22,11 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
 </template>
 
 <style scoped>
-/* 卡片样式与 07 创建表单一致（C5 / 描边 + 投影 / 圆角 8 / padding 16 / gap 16） */
+/* 卡片：宽度随最宽子项、上限 368（08_二级窗口通用规则），长路径消息换行 */
 .error-card {
   box-sizing: border-box;
-  width: 408px;
+  width: fit-content;
+  max-width: 368px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -52,15 +53,18 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
 }
 .hint {
   margin: 0;
+  max-width: 100%;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   font-weight: var(--text-caption-weight);
   color: var(--c4-40);
+  word-break: break-all; /* 长路径超 368 上限时换行（08 通用规则） */
 }
 /* 按钮组（01_按钮#07 大标题按钮-小按钮）：宽度按标题自适应（padding 8/16 / 高 38）/ 圆角 6 / 无图标 */
 .actions {
   display: flex;
   flex-direction: row;
+  justify-content: flex-end; /* 08 通用规则：按钮组右对齐 */
   gap: var(--space-16);
   width: 100%;
 }
