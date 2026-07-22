@@ -477,6 +477,7 @@ mod tests {
       ext: "png".into(),
       thumb_path: None,
       origin: true,
+      frame_count: None,
     };
     let asset = serde_json::to_value(ImportEvent::Asset { placement: view }).unwrap();
     assert_eq!(
@@ -485,7 +486,8 @@ mod tests {
         "type": "asset",
         "placement": {
           "assetId": "AN-X", "folderId": "root", "name": "a.png",
-          "w": 1, "h": null, "ext": "png", "thumbPath": null, "origin": true
+          "w": 1, "h": null, "ext": "png", "thumbPath": null, "origin": true,
+          "frameCount": null
         }
       })
     );

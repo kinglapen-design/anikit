@@ -20,6 +20,8 @@ pub struct PlacementView {
   /// 缩略图绝对路径（无缩略图为 null）
   pub thumb_path: Option<String>,
   pub origin: bool,
+  /// 序列帧帧数（PRD 01-2.5）；非序列帧为 null——前端据此把格式标签与名称后缀显示为"序列帧"
+  pub frame_count: Option<u32>,
 }
 
 /// 缩略图绝对路径（无缩略图为 None）
@@ -41,5 +43,6 @@ pub fn placement_view(root: &Path, meta: &AssetMeta, p: &Placement) -> Placement
     ext: meta.ext.clone(),
     thumb_path: thumb_path(root, meta),
     origin: p.origin,
+    frame_count: meta.frame_count,
   }
 }

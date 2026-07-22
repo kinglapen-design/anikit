@@ -13,11 +13,15 @@ const props = withDefaults(defineProps<{ asset: PlacementView; box: Box; selecte
 });
 const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
 const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
+// 序列帧（2026-07-22 用户定）：格式角标显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
+const isSeq = computed(() => props.asset.frameCount != null);
+const badge = computed(() => (isSeq.value ? "序列帧" : props.asset.ext.toUpperCase()));
+const displayName = computed(() =>
+  isSeq.value ? `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧` : props.asset.name,
+);
 // 尺寸标签：fla 等无尺寸资源显示格式（阶段 5 插件补图后即有尺寸）
 const meta = computed(() =>
-  props.asset.w != null && props.asset.h != null
-    ? `${props.asset.w} x ${props.asset.h}`
-    : props.asset.ext.toUpperCase(),
+  props.asset.w != null && props.asset.h != null ? `${props.asset.w} x ${props.asset.h}` : badge.value,
 );
 </script>
 
@@ -42,12 +46,12 @@ const meta = computed(() =>
         draggable="false"
       />
       <div v-else class="img" />
-      <span class="badge">{{ asset.ext.toUpperCase() }}</span>
+      <span class="badge">{{ badge }}</span>
       <button class="zoom" v-tip="'查看大图'" @click.stop>
         <AppIcon name="magnifier" />
       </button>
     </div>
-    <div class="title">{{ asset.name }}</div>
+    <div class="title">{{ displayName }}</div>
     <div class="meta">{{ meta }}</div>
   </div>
 </template>

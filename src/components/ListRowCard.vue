@@ -23,6 +23,12 @@ const size = computed(() =>
     ? `${props.asset.w} x ${props.asset.h}`
     : props.asset.ext.toUpperCase(),
 );
+// 序列帧（2026-07-22 用户定）：格式列显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
+const isSeq = computed(() => props.asset.frameCount != null);
+const format = computed(() => (isSeq.value ? "序列帧" : props.asset.ext.toUpperCase()));
+const displayName = computed(() =>
+  isSeq.value ? `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧` : props.asset.name,
+);
 const emit = defineEmits<{ select: [] }>();
 </script>
 
@@ -44,11 +50,11 @@ const emit = defineEmits<{ select: [] }>();
         draggable="false"
       />
       <div v-else class="thumb" :style="{ width: `${thumbW}px`, height: `${thumbH}px` }" />
-      <span class="name">{{ asset.name }}</span>
+      <span class="name">{{ displayName }}</span>
     </div>
     <div class="details">
       <span class="col size">{{ size }}</span>
-      <span class="col format">{{ asset.ext.toUpperCase() }}</span>
+      <span class="col format">{{ format }}</span>
       <span class="col filesize">123 MB</span>
       <span class="col date">2026/07/12 14:26</span>
     </div>

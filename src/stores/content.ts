@@ -13,6 +13,7 @@ export interface PlacementView {
   ext: string;
   thumbPath: string | null; // 缩略图绝对路径，无则卡片显示占位底色
   origin: boolean;
+  frameCount: number | null; // 序列帧帧数；非序列帧为 null——据此把格式标签与名称后缀显示为"序列帧"
 }
 
 export interface FolderNode {
