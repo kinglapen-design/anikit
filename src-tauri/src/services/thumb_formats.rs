@@ -22,10 +22,11 @@ pub fn probe(path: &Path) -> Option<(u32, u32)> {
   }
 }
 
-/// 解码 PSD / PSB / SVG 为 RGBA（SVG 按缩略图短边渲染，PSD / PSB 取合成图原尺寸）；失败返回 None
+/// 解码 PSD / PSB / SVG 为 RGBA（SVG 按缩略图短边渲染，PSD / PSB 取合成图原尺寸）；失败返回 None。
+/// .psd 失败兜底走 psb.rs：存在 PSD 扩展名 + PSB 结构（version=2）的变体文件
 pub fn decode(path: &Path) -> Option<RgbaImage> {
   match ext_of(path).as_str() {
-    "psd" => decode_psd(path),
+    "psd" => decode_psd(path).or_else(|| psb::decode_composite(path)),
     "psb" => psb::decode_composite(path),
     "svg" => decode_svg(path),
     _ => None,

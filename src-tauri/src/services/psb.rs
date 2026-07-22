@@ -37,13 +37,16 @@ struct Head {
   is_psb: bool,
 }
 
-/// 文件头 26 字节（PSD / PSB 布局一致）：签名 4 + 版本 2 + 保留 6 + 通道 2 + 高 4 + 宽 4 + 位深 2 + 颜色模式 2
+/// 文件头 26 字节（PSD / PSB 布局一致）：签名 4 + 版本 2 + 保留 6 + 通道 2 + 高 4 + 宽 4 + 位深 2 + 颜色模式 2。
+/// PSB 结构判定看**版本号**（2 = 8 字节长度字段）而非签名——存在 8BPS+version2 的变体文件
+///（部分工具链导出，2026-07-23 实测踩坑），按签名判定会把 8 字节长度误读为 4 字节导致 seek 错位
 fn read_header(f: &mut File, path: &Path) -> Option<Head> {
   let mut head = [0u8; 26];
   f.read_exact(&mut head).ok()?;
-  let is_psb = match &head[0..4] {
-    b"8BPS" => false,
-    b"8BPB" => true,
+  let version = u16::from_be_bytes(head[4..6].try_into().ok()?);
+  let is_psb = match (&head[0..4], version) {
+    (b"8BPS", 1) => false,
+    (b"8BPS" | b"8BPB", 2) => true,
     _ => return None,
   };
   let h = u32::from_be_bytes(head[14..18].try_into().ok()?);
@@ -221,8 +224,13 @@ mod tests {
 
   /// 构造最小 PSB：头 + 三个空节 + image data
   fn make_psb(path: &Path, channels: u16, w: u32, h: u32, depth: u16, mode: u16, compression: u16, tail: &[u8]) {
+    make_variant(path, b"8BPB", channels, w, h, depth, mode, compression, tail);
+  }
+
+  /// 同 make_psb 但自定义签名（8BPS+version2 变体：部分工具链导出，按版本号判 PSB 结构）
+  fn make_variant(path: &Path, sig: &[u8; 4], channels: u16, w: u32, h: u32, depth: u16, mode: u16, compression: u16, tail: &[u8]) {
     let mut data = Vec::new();
-    data.extend_from_slice(b"8BPB");
+    data.extend_from_slice(sig);
     data.extend_from_slice(&2u16.to_be_bytes());
     data.extend_from_slice(&[0u8; 6]);
     data.extend_from_slice(&channels.to_be_bytes());
@@ -232,10 +240,20 @@ mod tests {
     data.extend_from_slice(&mode.to_be_bytes());
     data.extend_from_slice(&0u32.to_be_bytes()); // color mode data
     data.extend_from_slice(&0u32.to_be_bytes()); // image resources
-    data.extend_from_slice(&0u64.to_be_bytes()); // layer & mask（PSB 8 字节）
+    data.extend_from_slice(&0u64.to_be_bytes()); // layer & mask（version=2 → 8 字节）
     data.extend_from_slice(&compression.to_be_bytes());
     data.extend_from_slice(tail);
     fs::write(path, data).unwrap();
+  }
+
+  #[test]
+  fn decodes_8bps_version2_variant() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = dir.path().join("变体.psb");
+    // 8BPS 签名 + version 2（实测公司工具链导出文件）：layer 长度仍按 8 字节
+    make_variant(&f, b"8BPS", 3, 1, 1, 8, 3, 0, &[9, 8, 7]);
+    let img = decode_composite(&f).unwrap();
+    assert_eq!(img.get_pixel(0, 0).0, [9, 8, 7, 255]);
   }
 
   #[test]
@@ -305,5 +323,18 @@ mod tests {
     let bad = dir.path().join("坏.psb");
     fs::write(&bad, b"8BPB\x00").unwrap();
     assert!(decode_composite(&bad).is_none());
+  }
+
+  /// 真实文件手动验证（#[ignore]）：cargo test -- --ignored real_psb_decodes
+  /// 样本 = 公司工具链导出的 8BPS+version2 变体（RGBA 879×1016，RLE）
+  #[test]
+  #[ignore]
+  fn real_psb_decodes() {
+    let f = std::path::Path::new(r"E:/02_Assets/测试/asstes/AN2607230147-C8JQ7.info/闹钟.psb");
+    let img = decode_composite(f).expect("真实 PSB 应解码成功");
+    assert_eq!((img.width(), img.height()), (879, 1016));
+    // RGBA 素材应有透明像素（alpha 平面真实读出，非恒 255）
+    let has_transparent = img.pixels().any(|p| p[3] < 255);
+    assert!(has_transparent, "alpha 通道应生效");
   }
 }
