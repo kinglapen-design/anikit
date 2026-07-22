@@ -421,6 +421,7 @@ mod tests {
     assert_eq!(views[0].ext, "png");
     assert!(views[0].origin);
     assert!(views[0].thumb_path.as_ref().unwrap().ends_with("_thumbnail.webp"));
+    assert_eq!(views[0].thumb_kind, Some(crate::services::views::ThumbKind::Asset));
 
     // 资源在索引中缺失的脏 Placement 跳过
     h.lib.lock().unwrap().as_mut().unwrap().folders.items.push(Placement {
@@ -446,6 +447,7 @@ mod tests {
     // 无内容缩略图 → 回退系统格式图标缓存（cache/thumbs，info 内无 shell 产物）
     let thumb = views[0].thumb_path.as_deref().unwrap();
     assert!(thumb.ends_with("fla.webp") && thumb.contains("thumbs"), "应回退格式图标缓存：{thumb}");
+    assert_eq!(views[0].thumb_kind, Some(crate::services::views::ThumbKind::FormatIcon));
     assert!(h.root.join("cache/thumbs/fla.webp").is_file());
     assert!(with_lib(&h, |l| l.format_icons.contains("fla")));
     // 重开库后内存集从缓存扫描恢复

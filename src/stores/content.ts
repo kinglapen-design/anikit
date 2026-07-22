@@ -8,10 +8,11 @@ export interface PlacementView {
   assetId: string;
   folderId: string;
   name: string;
-  w: number | null; // fla 等无尺寸为 null，布局按 400×300 默认比例
+  w: number | null; // fla 等无尺寸为 null，布局按 1:1 默认比例（4.2：无尺寸资产显示方形格式图标）
   h: number | null;
   ext: string;
   thumbPath: string | null; // 缩略图绝对路径，无则卡片显示占位底色
+  thumbKind: "asset" | "formatIcon" | null; // 缩略图来源：格式图标为方形，卡片 contain 显示不裁切（4.2）
   origin: boolean;
   frameCount: number | null; // 序列帧帧数；非序列帧为 null——据此把格式标签与名称后缀显示为"序列帧"
 }

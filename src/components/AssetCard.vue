@@ -40,6 +40,7 @@ const meta = computed(() =>
       <img
         v-if="thumbUrl"
         class="img"
+        :class="{ icon: asset.thumbKind === 'formatIcon' }"
         :src="thumbUrl"
         :alt="asset.name"
         decoding="async"
@@ -87,6 +88,10 @@ const meta = computed(() =>
   object-fit: cover;
   /* 无缩略图占位：中间面板底色 C2（阶段3修改——不要 C4-7 灰块） */
   background: var(--c2);
+}
+/* 系统格式图标：方形图标 contain 完整显示不裁切（4.2 用户定） */
+.img.icon {
+  object-fit: contain;
 }
 /* 格式角标：图片左上角，距上左 4px（= 容器内边距 4 + 4），内边距 2 4 / 圆角 6 / C1-80 */
 .badge {

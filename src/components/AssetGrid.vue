@@ -28,8 +28,8 @@ const props = defineProps<{ items: PlacementView[] }>();
 const ui = useUiStore();
 const content = useContentStore();
 
-// 布局算法只认数值宽高：fla 等无尺寸资源按 400×300 默认比例（阶段 5 插件补图后刷新）
-const layoutItems = computed(() => props.items.map((it) => ({ w: it.w ?? 400, h: it.h ?? 300 })));
+// 布局算法只认数值宽高：fla 等无尺寸资源按 1:1 方形（4.2 用户定——格式图标为方形，容器随方不裁切）
+const layoutItems = computed(() => props.items.map((it) => ({ w: it.w ?? 300, h: it.h ?? 300 })));
 
 const BUFFER = 800;
 

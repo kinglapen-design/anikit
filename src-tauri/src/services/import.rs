@@ -476,6 +476,7 @@ mod tests {
       h: None,
       ext: "png".into(),
       thumb_path: None,
+      thumb_kind: None,
       origin: true,
       frame_count: None,
     };
@@ -486,7 +487,7 @@ mod tests {
         "type": "asset",
         "placement": {
           "assetId": "AN-X", "folderId": "root", "name": "a.png",
-          "w": 1, "h": null, "ext": "png", "thumbPath": null, "origin": true,
+          "w": 1, "h": null, "ext": "png", "thumbPath": null, "thumbKind": null, "origin": true,
           "frameCount": null
         }
       })

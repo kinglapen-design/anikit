@@ -43,6 +43,7 @@ const emit = defineEmits<{ select: [] }>();
       <img
         v-if="thumbUrl"
         class="thumb"
+        :class="{ icon: asset.thumbKind === 'formatIcon' }"
         :style="{ width: `${thumbW}px`, height: `${thumbH}px` }"
         :src="thumbUrl"
         :alt="asset.name"
@@ -100,6 +101,10 @@ const emit = defineEmits<{ select: [] }>();
   object-fit: cover;
   /* 无缩略图占位：中间面板底色 C2（阶段3修改——不要 C4-7 灰块） */
   background: var(--c2);
+}
+/* 系统格式图标：方形图标 contain 完整显示不裁切（4.2 用户定） */
+.thumb.icon {
+  object-fit: contain;
 }
 .name {
   font-size: var(--text-body-size);
