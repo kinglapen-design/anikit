@@ -14,18 +14,23 @@ use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 
 /// 写入完成判定：距最后一次文件活动的静默时长（PRD"大小连续 N 秒稳定"）
 const STABLE: Duration = Duration::from_secs(2);
-/// 探测节拍：事件收集体积 + 大小稳定性对比间隔
+/// 就绪判定节拍：仅队列非空时启用（队列空则纯事件阻塞，零定时器）；
+/// 每拍只对事件已上报的条目做探测（exists + 可移走 + 大小），不扫目录
 const TICK: Duration = Duration::from_millis(500);
 
-/// 监听句柄：stop 置位 + join 回收线程；Drop 自动停（防泄漏）
+/// 监听句柄：stop 置位 + 唤醒事件 + join 回收线程；Drop 自动停（防泄漏）
 pub struct WatchHandle {
   stop: Arc<AtomicBool>,
+  /// 事件通道的发送端副本：队列空时线程纯阻塞在 recv（无定时器），停止需补事件唤醒
+  wake: mpsc::Sender<notify::Result<Event>>,
   join: Option<JoinHandle<()>>,
 }
 
 impl WatchHandle {
   pub fn stop(&mut self) {
     self.stop.store(true, Ordering::Relaxed);
+    // 空闲阻塞的线程收不到事件就不会醒，补一个无路径的空事件让它退出
+    let _ = self.wake.send(Ok(Event::new(notify::event::EventKind::Other)));
     if let Some(j) = self.join.take() {
       let _ = j.join();
     }
@@ -42,12 +47,12 @@ impl Drop for WatchHandle {
 /// 启动时先清点存量条目（上次崩溃残留 / 用户跳过项），与通知事件走同一判定。
 pub fn spawn(dir: PathBuf, on_ready: impl Fn(Vec<PathBuf>) + Send + 'static) -> Result<WatchHandle, String> {
   let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
-  let mut watcher = RecommendedWatcher::new(tx, Config::default()).map_err(|e| format!("文件监听创建失败：{e}"))?;
+  let mut watcher = RecommendedWatcher::new(tx.clone(), Config::default()).map_err(|e| format!("文件监听创建失败：{e}"))?;
   watcher.watch(&dir, RecursiveMode::Recursive).map_err(|e| format!("收件箱监听失败：{e}"))?;
   let stop = Arc::new(AtomicBool::new(false));
   let stop_thread = stop.clone();
   let join = std::thread::spawn(move || watch_loop(dir, rx, watcher, stop_thread, on_ready));
-  Ok(WatchHandle { stop, join: Some(join) })
+  Ok(WatchHandle { stop, wake: tx, join: Some(join) })
 }
 
 /// 待就绪条目状态：最后活动时刻 + 上一轮大小快照
@@ -80,17 +85,26 @@ fn watch_loop(
     if stop.load(Ordering::Relaxed) {
       break;
     }
-    match rx.recv_timeout(TICK) {
-      Ok(Ok(ev)) => {
+    // 队列空：纯阻塞等事件（零定时器，真零 CPU 常驻）；队列非空：TICK 节拍驱动就绪判定
+    let msg = if pending.is_empty() {
+      rx.recv().ok()
+    } else {
+      match rx.recv_timeout(TICK) {
+        Ok(m) => Some(m),
+        Err(mpsc::RecvTimeoutError::Timeout) => None,
+        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+      }
+    };
+    match msg {
+      Some(Ok(ev)) => {
         for p in &ev.paths {
           if let Some(root) = root_entry(&dir, p) {
             pending.entry(root).and_modify(|s| s.last_activity = Instant::now()).or_insert_with(Pending::hot);
           }
         }
       }
-      Ok(Err(e)) => log::error!("收件箱监听事件异常：{e}"),
-      Err(mpsc::RecvTimeoutError::Timeout) => {}
-      Err(mpsc::RecvTimeoutError::Disconnected) => break,
+      Some(Err(e)) => log::error!("收件箱监听事件异常：{e}"),
+      None => {}
     }
     drain_ready(&mut pending, &on_ready);
   }
@@ -243,6 +257,19 @@ mod tests {
     assert!(got.contains(&file), "就绪批次应包含写入的文件：{got:?}");
 
     handle.stop();
+  }
+
+  /// 空闲（队列空、纯阻塞等事件）时停止应立即返回——唤醒事件机制兜底
+  #[test]
+  fn stop_while_idle_returns_promptly() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("inbox");
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut handle = spawn(dir, |_| {}).unwrap();
+    std::thread::sleep(Duration::from_millis(200)); // 让线程先进入空闲阻塞
+    let t0 = Instant::now();
+    handle.stop();
+    assert!(t0.elapsed() < Duration::from_secs(2), "空闲时停止应立即返回：{:?}", t0.elapsed());
   }
 
   /// 占用探测：持有方只给读共享、拒绝 delete 共享时（Animate 保存后持有 fla 的场景）
