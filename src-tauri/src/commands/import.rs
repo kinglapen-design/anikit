@@ -129,6 +129,20 @@ pub fn cancel_import(state: State<AppState>, task_id: u64) -> Result<(), String>
   }
 }
 
+/// 冲突逐项决策（PRD 10_重复添加提示）：导入挂起的 hash 冲突，前端逐个弹窗收集
+/// 用户决策后一次性提交；逐项执行、单项失败不阻塞，folders.json 一次落盘
+#[tauri::command]
+pub fn resolve_conflicts(
+  state: State<AppState>,
+  items: Vec<crate::services::resolve::ConflictResolution>,
+  source: String,
+) -> Result<crate::services::resolve::ResolveReport, String> {
+  let source = parse_source(&source)?;
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  Ok(crate::services::resolve::resolve_conflicts(lib, &items, source))
+}
+
 /// 短锁拿库 root 并校验库存在（命令唯一需要的共享状态）
 fn current_root(app: &AppHandle) -> Result<PathBuf, String> {
   let state = app.state::<AppState>();

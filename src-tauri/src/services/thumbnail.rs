@@ -7,8 +7,9 @@ use std::path::Path;
 
 use image::DynamicImage;
 
-/// 缩略图最长边上限（像素）：对齐高 DPI 卡片显示（Eagle 同级为 754）
-pub const THUMB_MAX_EDGE: u32 = 768;
+/// 缩略图短边长度（像素）：短边缩到 320、长边等比（对齐 Eagle 同级策略；
+/// 768 长边对千像素级原图过剩，体积不合算）
+pub const THUMB_SHORT_EDGE: u32 = 320;
 
 /// 有损 webp 质量（libwebp q80：目视接近无损，体积约为无损编码 1/5）
 const WEBP_QUALITY: f32 = 80.0;
@@ -18,8 +19,9 @@ pub fn probe(path: &Path) -> Option<(u32, u32)> {
   image::image_dimensions(path).ok()
 }
 
-/// 生成缩略图：等比缩到最长边 ≤ 768（不足 768 不放大），优先存有损 webp，失败退回 PNG。
-/// gif 取首帧（image::open 行为即首帧）。返回缩略图文件名；非图片 / 解码失败返回 None。
+/// 生成缩略图：短边缩到 320、长边等比（原图短边不足 320 不放大），
+/// 优先存有损 webp，失败退回 PNG。gif 取首帧（image::open 行为即首帧）。
+/// 返回缩略图文件名；非图片 / 解码失败返回 None。
 pub fn generate(info_dir: &Path, origin: &Path, stem: &str) -> Option<String> {
   let img = image::open(origin).ok()?;
   let thumb = shrink_to_thumb(img);
@@ -36,13 +38,20 @@ pub fn generate(info_dir: &Path, origin: &Path, stem: &str) -> Option<String> {
   None
 }
 
-/// 等比缩小到最长边 ≤ THUMB_MAX_EDGE；原图不足不放大
+/// 短边缩到 THUMB_SHORT_EDGE、长边等比（整数除法 floor，短边恰好 320）；原图短边不足不放大
 fn shrink_to_thumb(img: DynamicImage) -> DynamicImage {
-  if img.width().max(img.height()) > THUMB_MAX_EDGE {
-    img.thumbnail(THUMB_MAX_EDGE, THUMB_MAX_EDGE)
-  } else {
-    img
+  let (w, h) = (img.width(), img.height());
+  if w.min(h) <= THUMB_SHORT_EDGE {
+    return img;
   }
+  let (nw, nh) = if w <= h {
+    (THUMB_SHORT_EDGE, (h as u64 * THUMB_SHORT_EDGE as u64 / w as u64) as u32)
+  } else {
+    ((w as u64 * THUMB_SHORT_EDGE as u64 / h as u64) as u32, THUMB_SHORT_EDGE)
+  };
+  // imageops::resize 输出严格 nw×nh（thumbnail 的 fit-within 是长边语义，不合短边策略）
+  let rgba = img.to_rgba8();
+  DynamicImage::ImageRgba8(image::imageops::resize(&rgba, nw, nh, image::imageops::FilterType::Triangle))
 }
 
 /// 有损 webp 编码落盘（libwebp 官方绑定；image crate 的 WebPEncoder 只支持无损故不用）
@@ -80,21 +89,32 @@ mod tests {
   }
 
   #[test]
-  fn generate_shrinks_large_image_to_thumb_edge() {
+  fn generate_shrinks_to_short_edge() {
     let dir = tempfile::tempdir().unwrap();
-    let src = dir.path().join("big.png");
-    make_png(&src, 800, 600);
 
-    let name = generate(dir.path(), &src, "big").unwrap();
-    assert_eq!(name, "big_thumbnail.webp");
+    // 横向 800x600 → 426x320（高缩到 320、宽等比）
+    let land = dir.path().join("land.png");
+    make_png(&land, 800, 600);
+    let name = generate(dir.path(), &land, "land").unwrap();
     let out = dir.path().join(&name);
+    assert_eq!(name, "land_thumbnail.webp");
     assert!(out.is_file());
-
-    // 产物可再解码为 webp，最长边 ≤ 768 且等比（800x600 → 768x576）
-    let (w, h) = image::image_dimensions(&out).unwrap();
-    assert_eq!((w, h), (768, 576));
+    // 产物可再解码为 webp
+    assert_eq!(image::image_dimensions(&out).unwrap(), (426, 320));
     // 有损压缩体积量级：纯色图应只有几 KB（无损 webp 同图为数十 KB 起）
     assert!(fs::metadata(&out).unwrap().len() < 50 * 1024, "缩略图体积异常");
+
+    // 竖向 600x800 → 320x426（宽缩到 320、高等比）
+    let port = dir.path().join("port.png");
+    make_png(&port, 600, 800);
+    let name = generate(dir.path(), &port, "port").unwrap();
+    assert_eq!(image::image_dimensions(dir.path().join(&name)).unwrap(), (320, 426));
+
+    // 方形 500x500 → 320x320
+    let square = dir.path().join("square.png");
+    make_png(&square, 500, 500);
+    let name = generate(dir.path(), &square, "square").unwrap();
+    assert_eq!(image::image_dimensions(dir.path().join(&name)).unwrap(), (320, 320));
   }
 
   #[test]

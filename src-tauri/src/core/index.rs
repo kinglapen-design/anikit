@@ -24,11 +24,18 @@ impl LibraryIndex {
       folders: folders_file.folders.iter().map(|f| (f.id.clone(), f.clone())).collect(),
       ..Default::default()
     };
-    for p in &folders_file.items {
-      index.placements_by_asset.entry(p.asset.clone()).or_default().push(p.clone());
-      index.placements_by_folder.entry(p.folder.clone()).or_default().push(p.clone());
-    }
+    index.rebuild_placements(&folders_file.items);
     index
+  }
+
+  /// 由 Placement 全量重建两张反查表（批量改动 Placement 后统一调用，如冲突决策落库）
+  pub fn rebuild_placements(&mut self, items: &[Placement]) {
+    self.placements_by_asset.clear();
+    self.placements_by_folder.clear();
+    for p in items {
+      self.placements_by_asset.entry(p.asset.clone()).or_default().push(p.clone());
+      self.placements_by_folder.entry(p.folder.clone()).or_default().push(p.clone());
+    }
   }
 
   /// 反查资源关联的全部 Placement（无关联时返回空切片）

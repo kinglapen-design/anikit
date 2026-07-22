@@ -155,6 +155,7 @@ pub fn run() {
       commands::import::import_paths,
       commands::import::import_clipboard,
       commands::import::cancel_import,
+      commands::import::resolve_conflicts,
       commands::import::list_folder_tree,
       commands::import::list_placements,
     ])

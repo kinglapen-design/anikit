@@ -22,12 +22,16 @@ pub struct PlacementView {
   pub origin: bool,
 }
 
-/// Placement + 资源元数据 → 视图；调用方负责跳过索引中缺失的资源（脏 Placement）
-pub fn placement_view(root: &Path, meta: &AssetMeta, p: &Placement) -> PlacementView {
-  let thumb_path = meta
+/// 缩略图绝对路径（无缩略图为 None）
+pub fn thumb_path(root: &Path, meta: &AssetMeta) -> Option<String> {
+  meta
     .thumbnail
     .as_ref()
-    .map(|t| root.join(ASSTES_DIR).join(format!("{}.info", meta.id)).join(t).to_string_lossy().into_owned());
+    .map(|t| root.join(ASSTES_DIR).join(format!("{}.info", meta.id)).join(t).to_string_lossy().into_owned())
+}
+
+/// Placement + 资源元数据 → 视图；调用方负责跳过索引中缺失的资源（脏 Placement）
+pub fn placement_view(root: &Path, meta: &AssetMeta, p: &Placement) -> PlacementView {
   PlacementView {
     asset_id: p.asset.clone(),
     folder_id: p.folder.clone(),
@@ -35,7 +39,7 @@ pub fn placement_view(root: &Path, meta: &AssetMeta, p: &Placement) -> Placement
     w: meta.width,
     h: meta.height,
     ext: meta.ext.clone(),
-    thumb_path,
+    thumb_path: thumb_path(root, meta),
     origin: p.origin,
   }
 }

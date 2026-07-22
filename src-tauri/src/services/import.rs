@@ -63,12 +63,44 @@ pub struct FailedItem {
   pub reason: String,
 }
 
-/// 导入结果汇总：新导入数、查重链接数、失败明细
+/// hash 冲突挂起项（PRD 10_重复添加提示：导入中不询问，finished 后由前端逐项弹窗决策）。
+/// 直接携带弹窗左右对照（已存在 vs 新文件）全部显示数据，前端无需再发查询。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictItem {
+  /// 源文件绝对路径
+  pub source_path: PathBuf,
+  /// 源文件名（含扩展名）
+  pub source_name: String,
+  /// 源文件字节数
+  pub source_size: u64,
+  /// 源文件图片宽高（非图片 None）
+  pub source_w: Option<u32>,
+  pub source_h: Option<u32>,
+  /// 落点文件夹 ID（"root" 或 F 开头；keep 模式为目录链末级）
+  pub target_folder: String,
+  /// 落点文件夹显示名（"root" → "根目录"）
+  pub target_folder_name: String,
+  /// 库内 hash 相同的已有资源
+  pub existing_asset_id: String,
+  /// 已有资源显示名（其 origin Placement 名；无 origin 则任一 Placement 名）
+  pub existing_name: String,
+  pub existing_w: Option<u32>,
+  pub existing_h: Option<u32>,
+  pub existing_size: u64,
+  pub existing_ext: String,
+  /// 已有资源缩略图绝对路径（无则 None）
+  pub existing_thumb_path: Option<String>,
+  /// origin Placement 所在文件夹显示名（root → "根目录"）
+  pub existing_folder_name: String,
+}
+
+/// 导入结果汇总：新导入数、冲突挂起、失败明细
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportOutcome {
   pub imported: u32,
-  pub linked: u32,
+  pub conflicts: Vec<ConflictItem>,
   pub failed: Vec<FailedItem>,
 }
 
@@ -80,10 +112,10 @@ pub enum ImportEvent {
   Started { total: u32 },
   /// keep 模式层级已建好（前端重拉文件夹树）；flatten 不发
   Folders,
-  /// 每导入 / 链接一个推一个（流式：到一个显示一个）
+  /// 每导入一个推一个（流式：到一个显示一个）；冲突挂起项不发 Asset
   Asset { placement: PlacementView },
-  /// 全部处理完（含取消中断），数量为已实际处理数
-  Finished { imported: u32, linked: u32, failed: Vec<FailedItem> },
+  /// 全部处理完（含取消中断），数量为已实际处理数；conflicts 待 resolve_conflicts 决策
+  Finished { imported: u32, conflicts: Vec<ConflictItem>, failed: Vec<FailedItem> },
 }
 
 /// 待导入文件：源路径 + Keep 模式目录链（Flatten 恒为空）
@@ -328,4 +360,78 @@ pub(crate) fn file_name(path: &Path) -> String {
 /// metadata.name：去扩展名的文件名
 fn file_stem(path: &Path) -> String {
   path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn import_event_json_shape_is_stable() {
+    // 前端 TS 类型按此形状写，序列化契约变更会打爆这个用例
+    let started = serde_json::to_value(ImportEvent::Started { total: 3 }).unwrap();
+    assert_eq!(started, serde_json::json!({ "type": "started", "total": 3 }));
+    let folders = serde_json::to_value(ImportEvent::Folders).unwrap();
+    assert_eq!(folders, serde_json::json!({ "type": "folders" }));
+
+    let view = PlacementView {
+      asset_id: "AN-X".into(),
+      folder_id: "root".into(),
+      name: "a.png".into(),
+      w: Some(1),
+      h: None,
+      ext: "png".into(),
+      thumb_path: None,
+      origin: true,
+    };
+    let asset = serde_json::to_value(ImportEvent::Asset { placement: view }).unwrap();
+    assert_eq!(
+      asset,
+      serde_json::json!({
+        "type": "asset",
+        "placement": {
+          "assetId": "AN-X", "folderId": "root", "name": "a.png",
+          "w": 1, "h": null, "ext": "png", "thumbPath": null, "origin": true
+        }
+      })
+    );
+
+    let finished = serde_json::to_value(ImportEvent::Finished {
+      imported: 1,
+      conflicts: vec![ConflictItem {
+        source_path: PathBuf::from("p"),
+        source_name: "新图.png".into(),
+        source_size: 100,
+        source_w: Some(10),
+        source_h: None,
+        target_folder: ROOT_FOLDER_ID.into(),
+        target_folder_name: "根目录".into(),
+        existing_asset_id: "AN-X".into(),
+        existing_name: "旧图.png".into(),
+        existing_w: None,
+        existing_h: None,
+        existing_size: 200,
+        existing_ext: "png".into(),
+        existing_thumb_path: None,
+        existing_folder_name: "根目录".into(),
+      }],
+      failed: vec![FailedItem { path: "q".into(), reason: "r".into() }],
+    })
+    .unwrap();
+    assert_eq!(
+      finished,
+      serde_json::json!({
+        "type": "finished", "imported": 1,
+        "conflicts": [{
+          "sourcePath": "p", "sourceName": "新图.png", "sourceSize": 100,
+          "sourceW": 10, "sourceH": null,
+          "targetFolder": "root", "targetFolderName": "根目录",
+          "existingAssetId": "AN-X", "existingName": "旧图.png",
+          "existingW": null, "existingH": null, "existingSize": 200,
+          "existingExt": "png", "existingThumbPath": null, "existingFolderName": "根目录"
+        }],
+        "failed": [{ "path": "q", "reason": "r" }]
+      })
+    );
+  }
 }
