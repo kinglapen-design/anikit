@@ -1,6 +1,6 @@
 //! 收件箱文件监听适配器（PRD 05-01）：notify 增量事件（Windows 走 ReadDirectoryChangesW，
 //! 非轮询、常驻零 CPU）监听 inbox 目录；按"顶层条目"（被丢入的文件 / 文件夹）聚合活动，
-//! 做写入完成检测——距最后一次活动超过 STABLE、大小两轮探测一致、全部文件可打开，
+//! 做写入完成检测——距最后一次活动超过 STABLE、大小两轮探测一致、全部文件可移走，
 //! 三者齐备才整批回调。文件被占用时顺延活动时刻，自然延迟到下一轮重试。
 
 use std::collections::HashMap;
@@ -103,7 +103,7 @@ fn root_entry(dir: &Path, p: &Path) -> Option<PathBuf> {
   Some(dir.join(first.as_os_str()))
 }
 
-/// 逐条判定就绪：静默期满 + 全部文件可打开 + 大小两轮一致 → 出队回调；
+/// 逐条判定就绪：静默期满 + 全部文件可移走 + 大小两轮一致 → 出队回调；
 /// 条目被移走 / 读不了则丢弃；被占用顺延活动时刻（延迟重试）
 fn drain_ready(pending: &mut HashMap<PathBuf, Pending>, on_ready: &impl Fn(Vec<PathBuf>)) {
   let mut ready = Vec::new();
@@ -114,7 +114,7 @@ fn drain_ready(pending: &mut HashMap<PathBuf, Pending>, on_ready: &impl Fn(Vec<P
     if st.last_activity.elapsed() < STABLE {
       return true;
     }
-    if !entry_openable(path) {
+    if !entry_movable(path) {
       st.last_activity = Instant::now(); // 占用：顺延，下轮重试
       return true;
     }
@@ -151,9 +151,54 @@ fn entry_size(path: &Path) -> Option<u64> {
   files_of(path).iter().try_fold(0u64, |acc, f| std::fs::metadata(f).ok().map(|m| acc + m.len()))
 }
 
-/// 全部文件可以只读打开（写入方未放手时打开失败 → 视为占用）
-fn entry_openable(path: &Path) -> bool {
-  files_of(path).iter().all(|f| std::fs::File::open(f).is_ok())
+/// 全部文件可移走（过境语义的关键探针）：只读打开能过不代表移得动——
+/// 写入方常允许读共享但拒绝 delete 共享（Animate 保存 fla 后仍持有文件即如此），
+/// 此时导入 move 必败，文件会搁浅在 inbox 再无事件触发。探测口径与 store_file 的
+/// rename 判定一致，没放手就留在队列里等，放手后下一拍自动入库。
+fn entry_movable(path: &Path) -> bool {
+  files_of(path).iter().all(|f| file_movable(f))
+}
+
+/// Windows：以 GENERIC_READ | DELETE 访问探测——持有方未共享读 / 删除时打开失败
+/// （共享冲突），与 move（rename）实际判定同口径；我们自身放开全部共享，即开即关
+#[cfg(target_os = "windows")]
+fn file_movable(path: &Path) -> bool {
+  use std::os::windows::ffi::OsStrExt;
+  use windows::core::PCWSTR;
+  use windows::Win32::Foundation::CloseHandle;
+  use windows::Win32::Storage::FileSystem::{
+    CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_DELETE, FILE_SHARE_MODE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    OPEN_EXISTING,
+  };
+  const GENERIC_READ: u32 = 0x8000_0000;
+  const DELETE: u32 = 0x0001_0000;
+  let wide: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+  let handle = unsafe {
+    CreateFileW(
+      PCWSTR(wide.as_ptr()),
+      GENERIC_READ | DELETE,
+      FILE_SHARE_MODE(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0 | FILE_SHARE_DELETE.0),
+      None,
+      OPEN_EXISTING,
+      FILE_ATTRIBUTE_NORMAL,
+      None,
+    )
+  };
+  match handle {
+    Ok(h) => {
+      unsafe {
+        let _ = CloseHandle(h);
+      }
+      true
+    }
+    Err(_) => false,
+  }
+}
+
+/// 非 Windows：以读写打开近似（POSIX 无 delete 共享语义，rename 不受持有影响）
+#[cfg(not(target_os = "windows"))]
+fn file_movable(path: &Path) -> bool {
+  std::fs::OpenOptions::new().read(true).write(true).open(path).is_ok()
 }
 
 #[cfg(test)]
@@ -198,5 +243,42 @@ mod tests {
     assert!(got.contains(&file), "就绪批次应包含写入的文件：{got:?}");
 
     handle.stop();
+  }
+
+  /// 占用探测：持有方只给读共享、拒绝 delete 共享时（Animate 保存后持有 fla 的场景）
+  /// 判定不可移走；句柄释放后判定可移走
+  #[cfg(target_os = "windows")]
+  #[test]
+  fn file_movable_detects_delete_share_lock() {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::Storage::FileSystem::{
+      CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_MODE, FILE_SHARE_READ, OPEN_EXISTING,
+    };
+    const GENERIC_READ_WRITE: u32 = 0xC000_0000;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let file = tmp.path().join("工程.fla");
+    std::fs::write(&file, "x").unwrap();
+
+    let wide: Vec<u16> = file.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    let hold = unsafe {
+      CreateFileW(
+        PCWSTR(wide.as_ptr()),
+        GENERIC_READ_WRITE,
+        FILE_SHARE_MODE(FILE_SHARE_READ.0), // 只共享读，不共享写 / 删除
+        None,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        None,
+      )
+      .unwrap()
+    };
+    assert!(!file_movable(&file), "delete 共享被拒时应判定不可移走");
+    unsafe {
+      let _ = CloseHandle(hold);
+    }
+    assert!(file_movable(&file), "句柄释放后应判定可移走");
   }
 }

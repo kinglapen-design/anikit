@@ -28,7 +28,8 @@ tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-single-instance = "2.4.3"
 tauri-plugin-dialog = "2"
 # 主窗口 1px 线框色（DWMWA_BORDER_COLOR，Win11+）+ 收件箱盘符（DefineDosDeviceW，3.2）
-windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_Storage_FileSystem"] }
+# + 收件箱占用探测（CreateFileW 的 SECURITY_ATTRIBUTES 参数要求 Win32_Security，3.2）
+windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security"] }
 # 数据层：时间戳（ID / importedAt / 备份命名）
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 # 数据层：ID 随机字符
