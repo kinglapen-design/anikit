@@ -1,7 +1,8 @@
 //! 收件箱文件监听适配器（PRD 05-01）：notify 增量事件（Windows 走 ReadDirectoryChangesW，
 //! 非轮询、常驻零 CPU）监听 inbox 目录；按"顶层条目"（被丢入的文件 / 文件夹）聚合活动，
-//! 做写入完成检测——编辑中门禁（任一文件被占用则整批按住不动）、距最后一次活动超过
-//! STABLE、大小两轮探测一致、全部文件可移走，齐备才整批回调。
+//! 做写入完成检测——距最后一次活动超过 STABLE、大小两轮探测一致、全部文件可移走，
+//! 三者齐备才整批回调。逐条目独立判定（2026-07-22 用户定案）：被占用的条目自己等放手，
+//! 不影响其他条目入库；recover 类临时文件会随之入库，由用户自删（伴生图识别归 3.7 族后置）。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -117,16 +118,9 @@ fn root_entry(dir: &Path, p: &Path) -> Option<PathBuf> {
   Some(dir.join(first.as_os_str()))
 }
 
-/// 逐条判定就绪：编辑中门禁（任一文件被占用则整批按住）→ 静默期满 + 全部文件可移走
-/// + 大小两轮一致 → 出队回调；条目被移走 / 读不了则丢弃
+/// 逐条判定就绪：静默期满 + 全部文件可移走 + 大小两轮一致 → 出队回调；
+/// 条目被移走 / 读不了则丢弃；被占用顺延活动时刻（自己等放手，不拖累其他条目）
 fn drain_ready(pending: &mut HashMap<PathBuf, Pending>, on_ready: &impl Fn(Vec<PathBuf>)) {
-  // 编辑中门禁（2026-07-22 用户定案）：任一文件仍被占用（编辑软件没放手）→ 所有文件都不动。
-  // 编辑软件的恢复/临时文件命名千奇百怪（AN 的 RECOVER_*、Blender 的 .blend1……），命名过滤
-  // 永远筛不完；按住期间它们随软件正常关闭自行消失（下方 exists 检查丢弃），真实文件放手后
-  // 入库；软件崩溃导致恢复文件残留的，随真实文件一并入库——保住用户的崩溃恢复数据。
-  if pending.keys().any(|p| p.exists() && !entry_movable(p)) {
-    return;
-  }
   let mut ready = Vec::new();
   pending.retain(|path, st| {
     if !path.exists() {
@@ -136,7 +130,7 @@ fn drain_ready(pending: &mut HashMap<PathBuf, Pending>, on_ready: &impl Fn(Vec<P
       return true;
     }
     if !entry_movable(path) {
-      st.last_activity = Instant::now(); // 门禁与判定之间的竞态：顺延，下轮重试
+      st.last_activity = Instant::now(); // 占用：顺延，下轮重试
       return true;
     }
     let Some(size) = entry_size(path) else { return false }; // 读不了（多半已不可用），丢弃
@@ -279,11 +273,10 @@ mod tests {
     assert!(t0.elapsed() < Duration::from_secs(2), "空闲时停止应立即返回：{:?}", t0.elapsed());
   }
 
-  /// 编辑中门禁（用户定案）：任一文件被占用 → 整批按住不放行（可移走的文件也不进）；
-  /// 放手后全部入库
+  /// 逐条目独立（用户定案）：被占用的条目自己等放手；不被占用的条目照常入库，不被拖累
   #[cfg(target_os = "windows")]
   #[test]
-  fn occupied_file_holds_back_whole_batch() {
+  fn free_entry_imports_while_another_is_occupied() {
     use std::os::windows::ffi::OsStrExt;
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::CloseHandle;
@@ -320,17 +313,19 @@ mod tests {
       )
       .unwrap()
     };
-    // 超过就绪周期也不应有任何回调（自由文件同样被按住）
-    assert!(rx.recv_timeout(Duration::from_secs(5)).is_err(), "占用期间整批按住，不应有回调");
+    // 自由文件照常入库，且批次不含被占用文件
+    let got = rx.recv_timeout(Duration::from_secs(15)).expect("自由文件应照常入库");
+    assert!(got.contains(&free), "批次应包含自由文件：{got:?}");
+    assert!(!got.contains(&locked), "批次不应包含被占用文件：{got:?}");
+    // 占用未放手：不应再有回调
+    assert!(rx.recv_timeout(Duration::from_secs(4)).is_err(), "占用期间被占用文件不应入库");
 
     unsafe {
       let _ = CloseHandle(hold);
     }
-    // 放手后两个文件都入库（同批或先后两批）
-    let mut all = rx.recv_timeout(Duration::from_secs(15)).expect("放手后应收到就绪回调");
-    while !(all.contains(&locked) && all.contains(&free)) {
-      all.extend(rx.recv_timeout(Duration::from_secs(15)).expect("放手后应收齐全部文件"));
-    }
+    // 放手后被占用文件入库
+    let got2 = rx.recv_timeout(Duration::from_secs(15)).expect("放手后应收到就绪回调");
+    assert!(got2.contains(&locked), "放手后被占用文件应入库：{got2:?}");
     handle.stop();
   }
 
