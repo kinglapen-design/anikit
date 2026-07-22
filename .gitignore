@@ -16,3 +16,6 @@ spike/**/out/
 # 系统
 .DS_Store
 Thumbs.db
+
+# 用户维护目录（只读，禁止跟踪）
+docs/00_修改与需求/
