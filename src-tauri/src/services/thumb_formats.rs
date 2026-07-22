@@ -1,5 +1,6 @@
-//! 图片格式解码补充（4.2）：image crate 覆盖不了的 PSD / SVG，无 Adobe 依赖出内容缩略图。
+//! 图片格式解码补充（4.2）：image crate 覆盖不了的 PSD / PSB / SVG，无 Adobe 依赖出内容缩略图。
 //! - PSD：psd crate 解文件内嵌合成图；宽高走轻量固定头解析，不整文件解码。
+//! - PSB：psd crate 不支持，自研轻量合成图解析（psb.rs，Raw / RLE PackBits）。
 //! - SVG：resvg（usvg 解析 + tiny-skia 渲染）；宽高取 usvg tree size（pt/mm 等单位换算已处理）。
 //! 解析 / 解码失败返回 None 属"能力探测"语义，由 thumbnail 回退到格式图标。
 
@@ -9,21 +10,23 @@ use std::path::Path;
 
 use image::RgbaImage;
 
+use crate::services::psb;
 use crate::services::thumbnail::THUMB_SHORT_EDGE;
 
-/// 探测 PSD / SVG 宽高；其他格式 / 解析失败返回 None
+/// 探测 PSD / PSB / SVG 宽高；其他格式 / 解析失败返回 None
 pub fn probe(path: &Path) -> Option<(u32, u32)> {
   match ext_of(path).as_str() {
-    "psd" => probe_psd(path),
+    "psd" | "psb" => probe_photoshop(path),
     "svg" => probe_svg(path),
     _ => None,
   }
 }
 
-/// 解码 PSD / SVG 为 RGBA（SVG 按缩略图短边渲染，PSD 取合成图原尺寸）；失败返回 None
+/// 解码 PSD / PSB / SVG 为 RGBA（SVG 按缩略图短边渲染，PSD / PSB 取合成图原尺寸）；失败返回 None
 pub fn decode(path: &Path) -> Option<RgbaImage> {
   match ext_of(path).as_str() {
     "psd" => decode_psd(path),
+    "psb" => psb::decode_composite(path),
     "svg" => decode_svg(path),
     _ => None,
   }
@@ -35,11 +38,12 @@ fn ext_of(path: &Path) -> String {
 
 // ---------- PSD ----------
 
-/// PSD 固定头（大端）："8BPS" 签名(0-3) + 版本(4-5) + 保留(6-11) + 通道数(12-13) + 高(14-17) + 宽(18-21)
-fn probe_psd(path: &Path) -> Option<(u32, u32)> {
+/// PSD / PSB 固定头（大端，两者布局一致）：签名(0-3，8BPS / 8BPB) + 版本(4-5) + 保留(6-11)
+/// + 通道数(12-13) + 高(14-17) + 宽(18-21)
+fn probe_photoshop(path: &Path) -> Option<(u32, u32)> {
   let mut head = [0u8; 22];
   fs::File::open(path).ok()?.read_exact(&mut head).ok()?;
-  if &head[0..4] != b"8BPS" {
+  if &head[0..4] != b"8BPS" && &head[0..4] != b"8BPB" {
     return None;
   }
   let h = u32::from_be_bytes(head[14..18].try_into().ok()?);
@@ -109,8 +113,12 @@ mod tests {
 
   /// 构造 PSD 头（签名 + 版本 + 保留 + 通道 + 高 + 宽），尾部补零
   fn make_fake_psd(path: &Path, w: u32, h: u32) {
+    make_fake_header(path, b"8BPS", w, h);
+  }
+
+  fn make_fake_header(path: &Path, sig: &[u8; 4], w: u32, h: u32) {
     let mut data = vec![0u8; 64];
-    data[0..4].copy_from_slice(b"8BPS");
+    data[0..4].copy_from_slice(sig);
     data[4..6].copy_from_slice(&1u16.to_be_bytes());
     data[12..14].copy_from_slice(&3u16.to_be_bytes());
     data[14..18].copy_from_slice(&h.to_be_bytes());
@@ -125,7 +133,12 @@ mod tests {
     make_fake_psd(&f, 200, 100);
     assert_eq!(probe(&f), Some((200, 100)));
 
-    // 签名不对不算 PSD
+    // PSB（8BPB）同布局同样可读
+    let b = dir.path().join("大画.psb");
+    make_fake_header(&b, b"8BPB", 4000, 3000);
+    assert_eq!(probe(&b), Some((4000, 3000)));
+
+    // 签名不对不算
     let bad = dir.path().join("坏.psd");
     fs::write(&bad, b"not a psd at all, just some bytes").unwrap();
     assert_eq!(probe(&bad), None);
