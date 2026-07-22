@@ -78,6 +78,30 @@ pub fn ensure_format_icon(root: &Path, path: &Path, ext: &str) -> bool {
   true
 }
 
+/// 冲突弹窗"新的文件"预览缓存（cache/tmp/{key}.webp）：webview 直渲不了的格式（PSD/PSB/SVG 等）
+/// 经解码管线生成 320 短边 webp，成功返回绝对路径；非图片 / 解码失败 None（前端按扩展名占位）。
+/// 不复用已有侧缩略图：将来支持剪贴板自定义缩略图后，hash 相同缩略图也可能不同（2026-07-23 用户定）。
+/// 按 key 幂等（已存在直接返回），不主动清理——cache 属可重建缓存（PRD 06）
+pub fn generate_preview(root: &Path, origin: &Path, key: &str) -> Option<String> {
+  let name = format!("{key}.webp");
+  let dest = root.join(CACHE_DIR).join("tmp").join(&name);
+  if dest.is_file() {
+    return Some(dest.to_string_lossy().into_owned());
+  }
+  let img = load_origin(origin)?;
+  let thumb = shrink_to_thumb(img);
+  let parent = dest.parent()?;
+  if let Err(e) = fs::create_dir_all(parent) {
+    log::error!("预览缓存目录创建失败：{e}");
+    return None;
+  }
+  if let Err(e) = save_webp(&thumb, &dest) {
+    log::error!("预览缓存落盘失败（{}）：{e}", origin.display());
+    return None;
+  }
+  Some(dest.to_string_lossy().into_owned())
+}
+
 /// 短边缩到 THUMB_SHORT_EDGE、长边等比（整数除法 floor，短边恰好 320）；原图短边不足不放大
 fn shrink_to_thumb(img: DynamicImage) -> DynamicImage {
   let (w, h) = (img.width(), img.height());

@@ -73,6 +73,35 @@
   }
 
   #[test]
+  fn conflict_fills_source_thumb_preview() {
+    let h = make_lib();
+    // 同内容两个路径：第一个入库，第二个撞 hash 挂起冲突
+    let svg_a = h._dir.path().join("甲.svg");
+    let svg_b = h._dir.path().join("乙.svg");
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="#ff0000"/></svg>"##;
+    fs::write(&svg_a, svg).unwrap();
+    fs::write(&svg_b, svg).unwrap();
+    run(&h, opts(Structure::Flatten, Source::Copy, vec![svg_a]));
+    let (out, _) = run(&h, opts(Structure::Flatten, Source::Copy, vec![svg_b]));
+
+    assert_eq!(out.conflicts.len(), 1);
+    // webview 直渲不了的 svg：后端生成预览缓存（cache/tmp），供弹窗"新的文件"显示
+    let preview = out.conflicts[0].source_thumb_path.as_deref().expect("应生成预览缓存");
+    assert!(preview.ends_with(".webp") && preview.contains("tmp"), "预览缓存路径：{preview}");
+    assert!(Path::new(preview).is_file());
+
+    // 图片格式（png）走前端直读源文件，不生成预览缓存
+    let png_a = h._dir.path().join("一.png");
+    let png_b = h._dir.path().join("二.png");
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([1, 2, 3, 255])).save(&png_a).unwrap();
+    fs::copy(&png_a, &png_b).unwrap();
+    run(&h, opts(Structure::Flatten, Source::Copy, vec![png_a]));
+    let (out, _) = run(&h, opts(Structure::Flatten, Source::Copy, vec![png_b]));
+    assert_eq!(out.conflicts.len(), 1);
+    assert!(out.conflicts[0].source_thumb_path.is_none(), "图片格式不生成预览缓存");
+  }
+
+  #[test]
   fn flatten_imports_flat_and_streams_events() {
     let h = make_lib();
     let src = make_tree(&h);

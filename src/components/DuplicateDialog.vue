@@ -41,10 +41,12 @@ function stemOf(name: string): string {
   return name.replace(/\.[^.]+$/, "");
 }
 
-// 新文件预览：图片格式直读源文件（asset 协议），非图片显示格式占位
+// 新文件预览：后端预览缓存（PSD/PSB/SVG 等）优先；图片格式直读源文件（asset 协议）；非图片显示格式占位
 const sourceUrl = computed(() => {
   const c = current.value;
-  if (!c || imgError.value || !IMAGE_EXTS.has(extOf(c.sourceName))) return null;
+  if (!c || imgError.value) return null;
+  if (c.sourceThumbPath) return convertFileSrc(c.sourceThumbPath);
+  if (!IMAGE_EXTS.has(extOf(c.sourceName))) return null;
   return convertFileSrc(c.sourcePath);
 });
 const existingUrl = computed(() =>

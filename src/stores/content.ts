@@ -42,6 +42,7 @@ export interface ConflictItem {
   sourceSize: number;
   sourceW: number | null; // 图片宽高（非图片 null）
   sourceH: number | null;
+  sourceThumbPath: string | null; // webview 直渲不了的格式（PSD/PSB/SVG 等）后端生成的预览缓存（cache/tmp），图片格式为 null 走直读源文件
   targetFolder: string; // 落点文件夹 ID（"root" 或 F 开头）
   targetFolderName: string; // 落点文件夹显示名（root → "根目录"）
   existingAssetId: string;

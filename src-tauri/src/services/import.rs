@@ -115,6 +115,8 @@ pub struct ConflictItem {
   /// 源文件图片宽高（非图片 None）
   pub source_w: Option<u32>,
   pub source_h: Option<u32>,
+  /// 源文件预览缓存路径（webview 直渲不了的格式经后端解码生成，cache/tmp；图片格式 None 走前端直读源文件）
+  pub source_thumb_path: Option<String>,
   /// 落点文件夹 ID（"root" 或 F 开头；keep 模式为目录链末级）
   pub target_folder: String,
   /// 落点文件夹显示名（"root" → "根目录"）
@@ -501,6 +503,7 @@ mod tests {
         source_size: 100,
         source_w: Some(10),
         source_h: None,
+        source_thumb_path: None,
         target_folder: ROOT_FOLDER_ID.into(),
         target_folder_name: "根目录".into(),
         existing_asset_id: "AN-X".into(),
@@ -522,7 +525,7 @@ mod tests {
         "type": "finished", "imported": 1,
         "conflicts": [{
           "sourcePath": "p", "sourceName": "新图.png", "sourceSize": 100,
-          "sourceW": 10, "sourceH": null,
+          "sourceW": 10, "sourceH": null, "sourceThumbPath": null,
           "targetFolder": "root", "targetFolderName": "根目录",
           "existingAssetId": "AN-X", "existingName": "旧图.png",
           "existingW": null, "existingH": null, "existingSize": 200,

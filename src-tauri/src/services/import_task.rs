@@ -287,7 +287,7 @@ fn dedup_phase(
     });
   }
   for (unit, mut c) in immediate {
-    fill_source_side(&mut c, files, groups, unit);
+    fill_source_side(&mut c, &root_buf, files, groups, unit);
     state.outcome.conflicts.push(c);
   }
   Ok(phase)
@@ -475,12 +475,13 @@ fn register_one(
     l.index.assets.insert(asset_id, asset);
     (view, conflicts)
   });
-  collect_registered(state, files, groups, item.unit, result, on_event);
+  collect_registered(state, root, files, groups, item.unit, result, on_event);
 }
 
 /// 注册结果入帐：成功发 Asset 事件并补源侧冲突数据；失败进 failed
 fn collect_registered(
   state: &mut TaskState,
+  root: &Path,
   files: &[PendingFile],
   groups: &[SequenceGroup],
   unit: Unit,
@@ -492,7 +493,7 @@ fn collect_registered(
       state.outcome.imported += 1;
       on_event(ImportEvent::Asset { placement: view });
       for (u, mut c) in conflicts {
-        fill_source_side(&mut c, files, groups, u);
+        fill_source_side(&mut c, root, files, groups, u);
         state.outcome.conflicts.push(c);
       }
     }
@@ -600,6 +601,7 @@ fn conflict_of(l: &Library, root: &Path, meta: &AssetMeta, folder_id: String) ->
     source_size: 0,
     source_w: None,
     source_h: None,
+    source_thumb_path: None,
     target_folder_name: folder_display_name(l, &folder_id),
     target_folder: folder_id,
     existing_asset_id: meta.id.clone(),
@@ -622,10 +624,24 @@ fn folder_display_name(l: &Library, folder_id: &str) -> String {
   l.index.folders.get(folder_id).map(|f| f.name.clone()).unwrap_or_else(|| "未知文件夹".to_string())
 }
 
+/// 前端 webview 可直接渲染的图片格式（与 DuplicateDialog 的 IMAGE_EXTS 对齐）：
+/// 这些格式弹窗直读源文件，其余（PSD/PSB/SVG 等）走后端预览缓存
+const WEBVIEW_DIRECT_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "gif", "bmp"];
+
+/// 预览缓存键：路径 + 大小的散列（同路径同大小命中同一份缓存，cache/tmp 幂等）
+fn preview_key(path: &Path, size: u64) -> String {
+  use std::hash::{Hash, Hasher};
+  let mut h = std::collections::hash_map::DefaultHasher::new();
+  path.hash(&mut h);
+  size.hash(&mut h);
+  format!("{:x}", h.finish())
+}
+
 /// 锁外补冲突项的源文件侧数据：文件名 / 字节数 / 图片宽高（probe 失败即非图片，None）；
 /// 序列帧组：显示名 = `标题.扩展名`，source_path 取首帧（弹窗预览首帧），并携带组信息
-/// （前端原样回传给 resolve_conflicts，"保留两个"按此重新打包）
-fn fill_source_side(item: &mut ConflictItem, files: &[PendingFile], groups: &[SequenceGroup], unit: Unit) {
+/// （前端原样回传给 resolve_conflicts，"保留两个"按此重新打包）；
+/// webview 直渲不了的格式生成预览缓存（cache/tmp）供弹窗"新的文件"对照显示（4.2）
+fn fill_source_side(item: &mut ConflictItem, root: &Path, files: &[PendingFile], groups: &[SequenceGroup], unit: Unit) {
   match unit {
     Unit::Solo(idx) => {
       let file = &files[idx];
@@ -635,6 +651,10 @@ fn fill_source_side(item: &mut ConflictItem, files: &[PendingFile], groups: &[Se
       let (w, h) = thumbnail::probe(&file.path).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None));
       item.source_w = w;
       item.source_h = h;
+      let ext = file.path.extension().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+      if !WEBVIEW_DIRECT_EXTS.contains(&ext.as_str()) {
+        item.source_thumb_path = thumbnail::generate_preview(root, &file.path, &preview_key(&file.path, item.source_size));
+      }
     }
     Unit::Group(gi) => {
       let g = &groups[gi];
