@@ -1,7 +1,10 @@
 <script setup lang="ts">
-// 素材卡片（02_通用组件/06_卡片 03）：图片容器（内边距 4 / 圆角 12，悬停 2px font-icon-3 / 选中 2px 品牌色-1）
-// + 图片（圆角 8 / 1px border-2）+ 格式角标（左上 4px / C1）+ 放大镜按钮（悬停显示，右下 4px）
-// + 标题 + 尺寸标签。
+// 素材卡片（02_通用组件/06_卡片 03，2026-07-23 用户新设计）：
+// 总容器 padding 0 / gap 0 / 1px border-2 / 圆角 8（hover 2px border-1 / 选中 2px 品牌色-1）；
+// 图片区（上两角圆角 8，overflow 裁切）+ 标题容器（padding 8 / 两端自动拉伸）：
+//   文字容器（名称 正文 font-icon-1 + 标签 副文本 font-icon-3，纵向间距 4）
+//   格式角标容器（间距 8）：实底格式色徽章（padding 0 6 / 圆角 4 / 角标文字 12/18 粗体）
+//   + 按钮容器（间距 4，图标 16×16 / font-icon-3 / hover font-icon-1）。
 import { computed } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
@@ -17,7 +20,7 @@ const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.as
 // 序列帧（2026-07-22 用户定）：格式角标显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
 const isSeq = computed(() => props.asset.frameCount != null);
 const badge = computed(() => (isSeq.value ? "序列帧" : props.asset.ext.toUpperCase()));
-// 角标文字色：品牌格式各自品牌色 / 图片与序列帧统一色 / 其他 font-icon-2（01_样式 token 01-5）
+// 角标徽章底色：格式实色（01_样式 token 01-6，7 组）
 const badgeColor = computed(() => formatBadgeColor(props.asset.ext, isSeq.value));
 const displayName = computed(() =>
   isSeq.value ? `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧` : props.asset.name,
@@ -50,96 +53,82 @@ const meta = computed(() =>
         draggable="false"
       />
       <div v-else class="img" />
-      <span class="badge" :style="{ color: badgeColor }">{{ badge }}</span>
-      <button class="zoom" v-tip="'查看大图'" @click.stop>
-        <AppIcon name="magnifier" />
-      </button>
     </div>
-    <div class="title">{{ displayName }}</div>
-    <div class="meta">{{ meta }}</div>
+    <div class="caption">
+      <div class="texts">
+        <span class="title">{{ displayName }}</span>
+        <span class="meta">{{ meta }}</span>
+      </div>
+      <div class="badge-group">
+        <span class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
+        <div class="actions">
+          <button class="act" v-tip="'发送至 Animate'" @click.stop>
+            <AppIcon name="send-to" />
+          </button>
+          <button class="act" v-tip="'查看大图'" @click.stop>
+            <AppIcon name="magnifier" />
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
+/* 总容器：padding 0 / gap 0 / 1px border-2 / 圆角 8（overflow 裁切图片与文字区角） */
 .asset-card {
   position: absolute;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  border-radius: var(--radius-8);
+  box-shadow: inset 0 0 0 1px var(--border-2);
+  overflow: hidden;
   cursor: default;
-}
-/* 图片容器：内边距 4 / 圆角 12；悬停 / 选中 2px 内阴影描边（不占空间不抖动） */
-.thumb {
-  position: relative;
-  padding: var(--space-4);
-  border-radius: var(--radius-12);
   transition: box-shadow 0.12s ease;
 }
-.asset-card:hover .thumb {
+.asset-card:hover {
   box-shadow: inset 0 0 0 2px var(--border-1);
 }
-.asset-card.selected .thumb {
+.asset-card.selected {
   box-shadow: inset 0 0 0 2px var(--brand-1);
+}
+/* 图片区：上两角随容器圆角（overflow 裁切），无缩略图占位 = 中间面板底色 C1 */
+.thumb {
+  flex: none;
+  overflow: hidden;
 }
 .img {
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: var(--radius-8);
-  /* 卡片常态边框专用暗线 border-2（2026-07-23 用户定：其他边框一律 border-1） */
-  box-shadow: inset 0 0 0 1px var(--border-2);
   object-fit: cover;
-  /* 无缩略图占位：中间面板底色 C1（阶段3修改——不要 font-icon-4 灰块） */
   background: var(--c1);
 }
 /* 系统格式图标：方形图标 contain 完整显示不裁切（4.2 用户定） */
 .img.icon {
   object-fit: contain;
 }
-/* 格式角标：图片左上角，距上左 4px（= 容器内边距 4 + 4），内边距 2 4 / 圆角 6 / C1 */
-.badge {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-6);
-  background: var(--c1);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-2);
-  pointer-events: none;
-  z-index: 2;
-}
-/* 放大镜按钮：图片右下角，距右下 4px，悬停卡片时显示，悬停自身底色 C1 */
-.zoom {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  display: inline-flex;
+/* 标题容器：内边距 8 / 两端自动拉伸 / 垂直居中 */
+.caption {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: var(--space-4);
-  border-radius: var(--radius-6);
-  color: var(--font-icon-1);
-  opacity: 0;
-  transition:
-    opacity 0.12s ease,
-    background 0.12s ease;
-  z-index: 1;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-8);
+  flex: 1;
+  min-height: 0;
 }
-.asset-card:hover .zoom {
-  opacity: 1;
-}
-.zoom:hover {
-  background: var(--c1);
+/* 文字容器：纵向间距 4 */
+.texts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
 }
 .title {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
   color: var(--font-icon-1);
-  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -148,7 +137,40 @@ const meta = computed(() =>
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   color: var(--font-icon-3);
-  text-align: center;
   white-space: nowrap;
+}
+/* 格式角标容器：间距 8 */
+.badge-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex: none;
+}
+/* 格式角标徽章：实底格式色 / 内边距 0 6 / 圆角 4 / 角标文字 12/18 粗体 */
+.badge {
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-4);
+  font-size: var(--text-badge-size);
+  line-height: var(--text-badge-line);
+  font-weight: var(--text-badge-weight);
+  color: var(--font-icon-1);
+  pointer-events: none;
+}
+/* 按钮容器：间距 4，图标 16×16 / font-icon-3 / hover font-icon-1 */
+.actions {
+  display: flex;
+  gap: var(--space-4);
+}
+.act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--font-icon-3);
+  transition: color 0.12s ease;
+}
+.act:hover {
+  color: var(--font-icon-1);
 }
 </style>

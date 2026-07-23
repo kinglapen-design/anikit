@@ -61,6 +61,10 @@
   --text-caption-size: 12px;
   --text-caption-line: 18px;
   --text-caption-weight: 400;
+  /* 格式角标文字（2026-07-23 用户定：素材卡片实底徽章专用） */
+  --text-badge-size: 12px;
+  --text-badge-line: 18px;
+  --text-badge-weight: 700;
 
   /* 线框（2026-07-23 用户定案：边框一律 1px——含二级窗口 / 模态 / 菜单外边框，不设粗细层级；
      2px 仅保留卡片悬停 / 选中描边与拆分条高亮；主窗口 = DWM 1px 边框，染 border-1） */

@@ -3,8 +3,9 @@
 // 自适应为贪心分行（替换 justified-layout npm 库，10 万条 <100ms）；
 // 卡片文字区（标题 + 标签）固定像素高，不参与等比缩放（justified 按行追加）。
 
-// 卡片文字区高：标题 20 + 间距 2 + 标签 18 + 间距 2（06_卡片）
-export const CARD_CAPTION_H = 42;
+// 卡片文字区（标题容器）固定像素高，不参与等比缩放（justified 按行追加）。
+/** 素材卡片文字区高度（2026-07-23 新设计：padding 8×2 + 名称 20 + 间距 4 + 标签 18 = 58） */
+export const CARD_CAPTION_H = 58;
 
 export interface Box {
   top: number;
