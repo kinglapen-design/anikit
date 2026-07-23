@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 // 详情模块 · 基础信息（03_UI 布局/04_右侧边栏 03）：标题 / 注释 / 链接输入框（高 32）
-// + 详情容器（两列：标题 C4-70 / 内容 C4-40，行距 2）。阶段 1 静态假数据。
+// + 详情容器（两列：标题 font-icon-2 / 内容 font-icon-3，行距 2）。阶段 1 静态假数据。
 import SectionHeader from "./SectionHeader.vue";
 import IconButton from "./IconButton.vue";
 import AppIcon from "./AppIcon.vue";
@@ -67,7 +67,7 @@ const open = ref(true);
   flex-direction: column;
   gap: var(--space-8);
 }
-/* 输入框（03_输入框 01）：内边距 6 8 / 圆角 8 / C1-15 / 1px C4-15；聚焦边框品牌色-1 */
+/* 输入框（03_输入框 01）：内边距 6 8 / 圆角 8 / C4 / 1px border-2；聚焦边框品牌色-1 */
 .field {
   display: flex;
   align-items: center;
@@ -75,8 +75,8 @@ const open = ref(true);
   height: 32px;
   padding: var(--space-6) var(--space-8);
   border-radius: var(--radius-8);
-  background: var(--c1-15);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-2);
 }
 /* 带链接按钮（03_输入框 02）：内边距 2 2 2 8 */
 .field.with-btn {
@@ -88,12 +88,12 @@ const open = ref(true);
 .field input {
   flex: 1;
   min-width: 0;
-  color: var(--c4);
+  color: var(--font-icon-1);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
 }
 .field input::placeholder {
-  color: var(--c4-40);
+  color: var(--font-icon-3);
 }
 /* 详情容器：内边距 8 / 间距 16 / 圆角 8；标题列拉伸居左、值列居右，行距 2 */
 .detail-table {
@@ -106,19 +106,19 @@ const open = ref(true);
   line-height: var(--text-caption-line);
 }
 .k {
-  color: var(--c4-70);
+  color: var(--font-icon-2);
   white-space: nowrap;
 }
 .v {
-  color: var(--c4-40);
+  color: var(--font-icon-3);
 }
-/* 评分 item（02_item 09）：5 星 12×12 / 间距 4；常态线框 C4-40，选中线条 + 填充警告色 */
+/* 评分 item（02_item 09）：5 星 12×12 / 间距 4；常态线框 font-icon-3，选中线条 + 填充警告色 */
 .stars {
   display: inline-flex;
   gap: var(--space-4);
 }
 .star {
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .star :deep(svg [stroke-opacity="0.7"]) {
   stroke-opacity: 0.4;

@@ -72,7 +72,7 @@ const sourceTip = computed(() =>
 </template>
 
 <style scoped>
-/* 遮罩：与 LibrarySetupModal 一致（C1-80） */
+/* 遮罩：与 LibrarySetupModal 一致（C1） */
 .import-mask {
   position: absolute;
   inset: 0;
@@ -80,10 +80,10 @@ const sourceTip = computed(() =>
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c1-80);
+  background: var(--c1);
 }
 /* 总容器（08_二级窗口通用规则）：宽度随最宽子项、上限 368，超出文字换行；
-   C5 / 1px C4-15（inset）/ 圆角 8 / --shadow-pop */
+   C3 / 2px border-1（inset）/ 圆角 8 / --shadow-pop */
 .import-card {
   box-sizing: border-box;
   width: fit-content;
@@ -93,10 +93,10 @@ const sourceTip = computed(() =>
   align-items: flex-start;
   padding: var(--space-16);
   gap: var(--space-16);
-  background: var(--c5);
+  background: var(--c3);
   box-shadow:
     var(--shadow-pop),
-    inset 0 0 0 1px var(--c4-15);
+    inset 0 0 0 2px var(--border-1);
   border-radius: var(--radius-8);
 }
 .title {
@@ -104,15 +104,15 @@ const sourceTip = computed(() =>
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
-/* 提示文字：副文本 C4-40；超 368 上限换行（08 通用规则）；剪切选中时警示（--warning） */
+/* 提示文字：副文本 font-icon-3；超 368 上限换行（08 通用规则）；剪切选中时警示（--warning） */
 .tip {
   margin: 0;
   max-width: 100%;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
   word-break: break-all;
 }
 .tip.warn {
@@ -147,7 +147,7 @@ const sourceTip = computed(() =>
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .btn.primary {
   background: var(--brand-1);
@@ -156,10 +156,10 @@ const sourceTip = computed(() =>
   background: var(--brand-2);
 }
 .btn.secondary {
-  background: var(--c4-7);
+  background: var(--c5);
 }
 .btn.secondary:hover {
-  background: var(--c4-15);
+  background: var(--border-1);
 }
 .btn:disabled {
   cursor: default;

@@ -39,24 +39,24 @@ const open = ref(true);
   flex-direction: column;
   gap: var(--space-8);
 }
-/* 关联文件夹 item：竖向 / 内边距 6 6 6 8 / 圆角 8 / C1-15 / 1px C4-15 / 间距 2 */
+/* 关联文件夹 item：竖向 / 内边距 6 6 6 8 / 圆角 8 / C4 / 1px border-2 / 间距 2 */
 .link-item {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-6) var(--space-6) var(--space-6) var(--space-8);
   border-radius: var(--radius-8);
-  background: var(--c1-15);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-2);
 }
 .link-item:hover {
-  background: var(--c1-7);
+  background: var(--font-icon-6);
 }
 .row {
   display: flex;
   align-items: center;
   gap: var(--space-6);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .label {
   font-size: var(--text-body-size);
@@ -71,9 +71,9 @@ const open = ref(true);
 .sub {
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
 }
-/* 删除 ×：常态 C4-40 / 悬停 C4-70 */
+/* 删除 ×：常态 font-icon-3 / 悬停 font-icon-2 */
 .del :deep(svg [stroke-opacity="0.7"]) {
   stroke-opacity: 0.4;
 }

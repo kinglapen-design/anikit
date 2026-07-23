@@ -41,19 +41,19 @@ const emit = defineEmits<{ add: [] }>();
   height: 24px;
   padding: var(--space-4);
   border-radius: var(--radius-4);
-  color: var(--c4);
+  color: var(--font-icon-1);
   flex: none;
   transition: background 0.12s ease;
 }
-/* 容器内图标 C4-40（02_item 05：SVG 烘 0.7，此处压到 0.4） */
+/* 容器内图标 font-icon-3（02_item 05：SVG 烘 0.7，此处压到 0.4） */
 .head-btn :deep(svg [stroke-opacity="0.7"]),
 .head-btn :deep(svg [fill-opacity="0.7"]) {
   stroke-opacity: 0.4;
   fill-opacity: 0.4;
 }
-/* hover：底色 C4-7，图标 C4-70（:hover 伪类提权，覆盖常态 0.4 恢复 SVG 烘的 0.7） */
+/* hover：底色 font-icon-6，图标 font-icon-2（:hover 伪类提权，覆盖常态 0.4 恢复 SVG 烘的 0.7） */
 .head-btn:hover {
-  background: var(--c4-7);
+  background: var(--font-icon-6);
 }
 .head-btn:hover :deep(svg [stroke-opacity="0.7"]),
 .head-btn:hover :deep(svg [fill-opacity="0.7"]) {
@@ -70,7 +70,7 @@ const emit = defineEmits<{ add: [] }>();
 .count {
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
   white-space: nowrap;
 }
 .spacer {

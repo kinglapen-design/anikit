@@ -223,7 +223,7 @@ function onSkip(): void {
 </template>
 
 <style scoped>
-/* 遮罩（同 LibrarySetupModal）：C1-80 */
+/* 遮罩（同 LibrarySetupModal）：C1 */
 .dup-mask {
   position: absolute;
   inset: 0;
@@ -231,23 +231,23 @@ function onSkip(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c1-80);
+  background: var(--c1);
 }
-/* 总容器（10）：1052×732 / C5 / 1px C4-15（inset）/ 圆角 8 / --shadow-pop */
+/* 总容器（10）：1052×732 / C3 / 2px border-1（inset，窗口级边框）/ 圆角 8 / --shadow-pop */
 .dup-card {
   box-sizing: border-box;
   width: 1052px;
   height: 732px;
   display: flex;
   flex-direction: column;
-  background: var(--c5);
+  background: var(--c3);
   box-shadow:
     var(--shadow-pop),
-    inset 0 0 0 1px var(--c4-15);
+    inset 0 0 0 2px var(--border-1);
   border-radius: var(--radius-8);
   overflow: hidden;
 }
-/* 标题栏：高 44 / 内边距 8 8 8 16 / 下分割线 C4-7（inset，规范禁 border） */
+/* 标题栏：高 44 / 内边距 8 8 8 16 / 下分割线 border-2（inset，规范禁 border） */
 .dup-titlebar {
   display: flex;
   align-items: center;
@@ -255,14 +255,14 @@ function onSkip(): void {
   padding: var(--space-8) var(--space-8) var(--space-8) var(--space-16);
   height: 44px;
   flex: none;
-  box-shadow: inset 0 -1px 0 0 var(--c4-7);
+  box-shadow: inset 0 -1px 0 0 var(--border-2);
 }
 .dup-title {
   margin: 0; /* 左对齐（用户验收：模态窗标题不要居中） */
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 /* 图片对照区：内边距 16 / 间距 20 */
 .compare {
@@ -294,9 +294,9 @@ function onSkip(): void {
   max-width: 500px;
   max-height: 500px;
   border-radius: var(--radius-8);
-  box-shadow: inset 0 0 0 1px var(--c4-15); /* 两侧图片统一带边框 */
+  box-shadow: inset 0 0 0 1px var(--border-2); /* 两侧图片统一带边框 */
 }
-/* 新的文件：图片 30% 透明（用户验收：50% 与已存在拉不开）+ 1px C4-15（选"保留两个"后 100%，透明度过渡动画） */
+/* 新的文件：图片 30% 透明（用户验收：50% 与已存在拉不开）+ 1px border-2（选"保留两个"后 100%，透明度过渡动画） */
 .new-img {
   opacity: 0.3;
   transition: opacity 0.3s ease;
@@ -314,7 +314,7 @@ function onSkip(): void {
   border-radius: var(--radius-6);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .tag.exists {
   background: var(--success);
@@ -326,12 +326,12 @@ function onSkip(): void {
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
 }
 .name {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4);
+  color: var(--font-icon-1);
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
@@ -340,19 +340,19 @@ function onSkip(): void {
 .meta {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
 }
 .folder {
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 底栏：高 70 / 内边距 16 / 上分割线 C4-15（inset） */
+/* 底栏：高 70 / 内边距 16 / 上分割线 border-2（inset） */
 .dup-footer {
   display: flex;
   align-items: center;
@@ -361,7 +361,7 @@ function onSkip(): void {
   padding: var(--space-16);
   height: 70px;
   flex: none;
-  box-shadow: inset 0 1px 0 0 var(--c4-15);
+  box-shadow: inset 0 1px 0 0 var(--border-2);
 }
 /* 单选项组合：间距 14 */
 .options {
@@ -370,20 +370,20 @@ function onSkip(): void {
   gap: var(--space-14);
   min-width: 0;
 }
-/* 输入框（03_输入框#01 通用）：高 32 / 内边距 6 8 / C1-15 底 + 1px C4-15 / 圆角 8 */
+/* 输入框（03_输入框#01 通用）：高 32 / 内边距 6 8 / C4 底 + 1px border-2 / 圆角 8 */
 .name-input {
   width: 111px;
   height: 32px;
   padding: var(--space-6) var(--space-8);
   border: none;
   outline: none;
-  background: var(--c1-15);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-2);
   border-radius: var(--radius-8);
   font-family: var(--font-family);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .name-input:focus {
   box-shadow: inset 0 0 0 1px var(--brand-1);
@@ -396,7 +396,7 @@ function onSkip(): void {
 .seq-label {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 /* 透明度出入动画（关联输入框 / 序号组） */
 .fade-enter-active,
@@ -429,14 +429,14 @@ function onSkip(): void {
   height: 28px;
   padding: var(--space-4);
   border-radius: 14px;
-  background: var(--c4-15);
+  background: var(--font-icon-5);
   transition: background 0.2s ease;
 }
 .dot {
   width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: var(--c4);
+  background: var(--font-icon-1);
   transition: transform 0.2s ease;
 }
 .apply-all.on .switch {
@@ -448,10 +448,10 @@ function onSkip(): void {
 .apply-text {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
 }
 .apply-all.on .apply-text {
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 /* 确认导入（01_按钮#07 大标题按钮-小按钮 / 主要） */
 .btn {
@@ -468,7 +468,7 @@ function onSkip(): void {
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .btn.primary {
   background: var(--brand-1);

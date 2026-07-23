@@ -63,7 +63,7 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   justify-content: center;
   width: 8px;
   height: 28px;
-  color: var(--c4);
+  color: var(--font-icon-1);
   flex: none;
 }
 .expand:not(.placeholder) {
@@ -94,7 +94,7 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   top: 50%;
   width: 4px;
   height: 1px;
-  background: var(--c4-7);
+  background: var(--font-icon-6);
 }
 /* item 容器：内边距 4 6 / 圆角 6 / 间距 6 */
 .body {
@@ -105,16 +105,16 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   min-width: 0;
   padding: var(--space-4) var(--space-6);
   border-radius: var(--radius-6);
-  color: var(--c4);
+  color: var(--font-icon-1);
   transition: background 0.12s ease;
 }
 .body:hover {
-  background: var(--c4-7);
+  background: var(--font-icon-6);
 }
 .body.selected {
-  background: var(--c4-15);
+  background: var(--font-icon-5);
 }
-/* 选中：装饰图标线条 C4（填充层 0.07 保持 C4-7 不提亮） */
+/* 选中：装饰图标线条 font-icon-1（填充层保持 font-icon-4 不提亮） */
 .body.selected .deco :deep(svg [stroke-opacity]),
 .body.selected .deco :deep(svg [fill-opacity="0.4"]),
 .body.selected .deco :deep(svg [fill-opacity="0.7"]) {
@@ -134,10 +134,10 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 .count {
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
   flex: none;
 }
 .body.selected .count {
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 </style>

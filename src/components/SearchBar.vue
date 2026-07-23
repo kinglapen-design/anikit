@@ -31,26 +31,26 @@ const focused = ref(false);
 </template>
 
 <style scoped>
-/* 总容器：内边距 4 / 间距 6 / 圆角 8 / C1-50 / 1px C4-15；聚焦边框品牌色-1 */
+/* 总容器：内边距 4 / 间距 6 / 圆角 8 / C4 / 1px border-2；聚焦边框品牌色-1 */
 .search-bar {
   display: flex;
   align-items: center;
   gap: var(--space-6);
   padding: var(--space-4);
   border-radius: var(--radius-8);
-  background: var(--c1-50);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-2);
 }
 .search-bar.focused {
   box-shadow: inset 0 0 0 1px var(--brand-1);
 }
 /* 搜索方式入口（搜索图标容器 28×28 + 展开小箭头朝上，间距 2）：无按钮底色，
-   常态 C4-70 / 悬停 C4（仅颜色） */
+   常态 font-icon-2 / 悬停 C4（仅颜色） */
 .lead {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  color: var(--c4);
+  color: var(--font-icon-1);
   flex: none;
 }
 /* 搜索图标容器：28×28（内边距 6），与右侧展开按钮对齐 */
@@ -70,7 +70,7 @@ const focused = ref(false);
 .up {
   transform: rotate(180deg);
 }
-/* 清除按钮（小 24×24）：常态 C4-40 / 悬停 C4-70（颜色），hover 底色 C4-7 */
+/* 清除按钮（小 24×24）：常态 font-icon-3 / 悬停 font-icon-2（颜色），hover 底色 font-icon-6 */
 .clear {
   display: inline-flex;
   align-items: center;
@@ -79,7 +79,7 @@ const focused = ref(false);
   height: 24px;
   padding: var(--space-4);
   border-radius: var(--radius-4);
-  color: var(--c4);
+  color: var(--font-icon-1);
   flex: none;
   transition: background 0.12s ease;
 }
@@ -87,7 +87,7 @@ const focused = ref(false);
   stroke-opacity: 0.4;
 }
 .clear:hover {
-  background: var(--c4-7);
+  background: var(--font-icon-6);
 }
 .clear:hover :deep(svg [stroke-opacity="0.7"]) {
   stroke-opacity: 0.7;
@@ -102,11 +102,11 @@ const focused = ref(false);
 input {
   flex: 1;
   min-width: 0;
-  color: var(--c4);
+  color: var(--font-icon-1);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
 }
 input::placeholder {
-  color: var(--c4-40);
+  color: var(--font-icon-3);
 }
 </style>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 导入结果弹窗：后台导入任务结束后，有失败项时列出清单（不吞错误，规范第 6 条）。
-// 壳与零件沿用 09 导入弹窗（C5 / padding 16 / gap 16 / --shadow-pop）。
+// 壳与零件沿用 09 导入弹窗（C3 / padding 16 / gap 16 / --shadow-pop）。
 import type { FailedItem } from "../stores/content";
 
 defineProps<{ failed: FailedItem[] }>();
@@ -29,7 +29,7 @@ function fileName(p: string): string {
 </template>
 
 <style scoped>
-/* 遮罩：与 LibrarySetupModal 一致（C1-80） */
+/* 遮罩：与 LibrarySetupModal 一致（C1） */
 .result-mask {
   position: absolute;
   inset: 0;
@@ -37,7 +37,7 @@ function fileName(p: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c1-80);
+  background: var(--c1);
 }
 /* 总容器（08_二级窗口通用规则）：宽度随最宽子项、上限 368，失败清单长文本换行 */
 .result-card {
@@ -50,10 +50,10 @@ function fileName(p: string): string {
   align-items: flex-start;
   padding: var(--space-16);
   gap: var(--space-16);
-  background: var(--c5);
+  background: var(--c3);
   box-shadow:
     var(--shadow-pop),
-    inset 0 0 0 1px var(--c4-15);
+    inset 0 0 0 2px var(--border-1);
   border-radius: var(--radius-8);
 }
 .title {
@@ -61,15 +61,15 @@ function fileName(p: string): string {
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .tip {
   margin: 0;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
 }
-/* 失败清单：副文本 C4-40，超高滚动 */
+/* 失败清单：副文本 font-icon-3，超高滚动 */
 .fail-list {
   display: flex;
   flex-direction: column;
@@ -82,7 +82,7 @@ function fileName(p: string): string {
   margin: 0;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
   word-break: break-all;
 }
 .actions {
@@ -105,7 +105,7 @@ function fileName(p: string): string {
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .btn.primary {
   background: var(--brand-1);

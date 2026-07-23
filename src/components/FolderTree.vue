@@ -60,7 +60,7 @@ function toggle(id: string): void {
 /* 缩进竖线（02_左侧边栏 04）：从父级装饰图标中心（= 子项 item 容器左缘，depth×14+25）
    贯穿整层——穿过 item 间距与嵌套子层区域（子级的子级旁父级线仍在，两条并存），
    止于最后子项中心（L 收笔）；各层线间距 = 层级缩进 14px。
-   颜色 = 装饰图标 fill 色（C4-7），自定义文件夹颜色时同步 */
+   颜色 = 装饰图标 fill 色（font-icon-4），自定义文件夹颜色时同步 */
 .ft-children::before {
   content: "";
   position: absolute;
@@ -68,6 +68,6 @@ function toggle(id: string): void {
   top: 0;
   bottom: 14px;
   width: 1px;
-  background: var(--c4-7);
+  background: var(--font-icon-6);
 }
 </style>

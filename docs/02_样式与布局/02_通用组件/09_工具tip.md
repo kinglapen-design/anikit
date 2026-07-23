@@ -5,7 +5,7 @@ link: "[[00_组件目录]]"
 
 标题为：[[01_样式 token#02. 文字]] / 副文本 C4
 
-快捷键：[[01_样式 token#02. 文字]] / 副文本 C4-40
+快捷键：[[01_样式 token#02. 文字]] / 副文本 font-icon-3
 
 ``` css
 /* 工具tip */
@@ -22,8 +22,8 @@ position: relative;
 width: 107px;
 height: 26px;
 
-background: C5;
+background: C3;
 
-border: 1px solid C4-15;
+border: 2px solid border-1;
 border-radius: 6px;
 ```

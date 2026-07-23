@@ -31,7 +31,7 @@ defineEmits<{ click: [e: MouseEvent] }>();
   height: 28px;
   padding: var(--space-6);
   border-radius: var(--radius-6);
-  color: var(--c4);
+  color: var(--font-icon-1);
   flex: none;
   transition: background 0.12s ease;
 }
@@ -43,13 +43,13 @@ defineEmits<{ click: [e: MouseEvent] }>();
   border-radius: var(--radius-4);
 }
 .icon-btn:hover {
-  background: var(--c4-7);
+  background: var(--font-icon-6);
 }
 .icon-btn.filled {
-  background: var(--c4-7);
+  background: var(--c5);
 }
 .icon-btn.filled:hover {
-  background: var(--c4-15);
+  background: var(--border-1);
 }
 .icon-btn.danger:hover {
   background: var(--error);

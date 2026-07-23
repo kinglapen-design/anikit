@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 主窗口（03_UI 布局/01）：C1 底 / 圆角 8 / padding 0 / 间距 0 / 外边框 1px C4-15。
+// 主窗口（03_UI 布局/01）：C1 底 / 圆角 8 / padding 0 / 间距 0 / 外边框 2px border-1。
 // 全透明无边框窗口：最大化时去圆角与边框；resize 判定在可视边缘内 8px（startResizeDragging）。
 // 导入弹窗宿主：菜单 / 拖拽填 content.importDraft，ImportDialog 确认后刷新内容区。
 import { onBeforeUnmount, onMounted, ref } from "vue";
@@ -175,8 +175,8 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
 </template>
 
 <style scoped>
-/* 不透明窗口 + 原生装饰（DWM 圆角 8px / 阴影 / 边框）：容器贴满窗口，
-   圆角与投影交给系统（Win11 8px 圆角与设计一致，mac 系统圆角，Win10 直角接受） */
+/* 不透明窗口 + 原生装饰（DWM 阴影）：容器贴满窗口；
+   圆角 8 与 DWM 一致 + 2px border-1 外边框自绘（2026-07-23 线框定案：窗口级 2px），最大化时去除 */
 .window {
   position: relative;
   height: 100%;
@@ -185,9 +185,14 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
   padding: 0;
   background: var(--c1);
   overflow: hidden;
+  /* 主窗口 2px 外边框（2026-07-23 线框定案：窗口级 2px，其余 1px）；
+     圆角 8 与系统 DWM 圆角一致 */
+  border-radius: var(--radius-8);
+  box-shadow: inset 0 0 0 2px var(--border-1);
 }
 .window.maximized {
   border-radius: 0;
+  box-shadow: none;
 }
 /* 可视边缘内 8px 的 resize 判定热区（startResizeDragging 手动发起） */
 .resize-zone {

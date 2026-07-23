@@ -2,7 +2,7 @@
 // 内容区素材网格：自适应布局 + 自定义 transform 虚拟滚动（踩坑 005 定案）。
 // 卡片列表共用一个滚动（03_UI 布局/03_中间面板 03）：文件夹区块与"内容"副标题
 // 作为 canvas 头部随网格一起滚动，网格 boxes 按头部高度偏移；
-// 滚动条贴 viewport 右缘（不占布局），中间面板 4px 内边距作呼吸（token 15）。
+// 滚动条贴 viewport 右缘（不占布局），中间面板 4px 内边距作呼吸。
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import AssetCard from "./AssetCard.vue";
 import ListRowCard from "./ListRowCard.vue";
@@ -279,7 +279,7 @@ onBeforeUnmount(() => {
   transform-origin: 0 0;
   will-change: transform;
 }
-/* token 15：滚动条 4px 胶囊 C4-15、贴 viewport 右缘、不影响布局；命中区 12px */
+/* border-1：滚动条 4px 胶囊、贴 viewport 右缘、不影响布局；命中区 12px */
 .grid-track {
   position: absolute;
   top: 0;
@@ -293,7 +293,7 @@ onBeforeUnmount(() => {
   right: 0;
   width: 4px;
   border-radius: 2px;
-  background: var(--c4-15);
+  background: var(--border-1);
   cursor: grab;
 }
 </style>

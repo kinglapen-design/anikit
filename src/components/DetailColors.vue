@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
-// 详情模块 · 颜色信息（03_UI 布局/04_右侧边栏 03）：图片容器（圆角 6 / 1px C4-15 + 格式角标）
-// + 色块容器（胶囊圆角 14 / C1-15）。阶段 1 静态假数据。
+// 详情模块 · 颜色信息（03_UI 布局/04_右侧边栏 03）：图片容器（圆角 6 / 1px border-2 + 格式角标）
+// + 色块容器（胶囊圆角 14 / C4）。阶段 1 静态假数据。
 import SectionHeader from "./SectionHeader.vue";
 
 // 假色板：贴近参考图的 10 色
@@ -39,46 +39,46 @@ const open = ref(true);
   align-items: center;
   gap: var(--space-8);
 }
-/* 图片容器：高 120 / 圆角 6 / 1px C4-15 */
+/* 图片容器：高 120 / 圆角 6 / 1px border-2 */
 .thumb {
   position: relative;
   width: 100%;
   height: 120px;
   border-radius: var(--radius-6);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--border-2);
   background: hsl(215 30% 22%);
 }
-/* 格式角标：左上 4px / 内边距 2 4 / 圆角 4 / C1-80 */
+/* 格式角标：左上 4px / 内边距 2 4 / 圆角 4 / C1 */
 .badge {
   position: absolute;
   top: 4px;
   left: 4px;
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-4);
-  background: var(--c1-80);
+  background: var(--c1);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-70);
+  color: var(--font-icon-2);
   pointer-events: none;
 }
-/* 色块容器（02_item 08）：胶囊圆角 14 / C1-15 / 1px C4-15 / 内边距 4 / 间距 4 */
+/* 色块容器（02_item 08）：胶囊圆角 14 / C4 / 1px border-2 / 内边距 4 / 间距 4 */
 .swatches {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4);
   padding: var(--space-4);
   border-radius: 14px;
-  background: var(--c1-15);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-2);
 }
 .swatch {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--border-2);
   flex: none;
 }
 .swatch:hover {
-  box-shadow: inset 0 0 0 1px var(--c4-70);
+  box-shadow: inset 0 0 0 1px var(--font-icon-2);
 }
 </style>

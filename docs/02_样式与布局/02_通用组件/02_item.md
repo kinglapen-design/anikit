@@ -25,7 +25,7 @@ flex-grow: 1;
 width: 16px;
 height: 16px;
 
-color: border C4-40 fill C4-7;
+color: border font-icon-3 fill font-icon-4;
 
 /* Inside auto layout */
 flex: none;
@@ -35,7 +35,7 @@ flex-grow: 0;
 /* 标题 */
 font: [[01_样式 token#02. 文字]] / 正文;
 
-color: C4;
+color: font-icon-1;
 
 /* Inside auto layout */
 flex: none;
@@ -85,9 +85,9 @@ flex-grow: 0;
 width: 9px;
 height: 9px;
 
-background: C4-40;
+background: font-icon-3;
 
-hover: background C4-70;
+hover: background font-icon-2;
 
 /* Inside auto layout */
 flex: none;
@@ -107,9 +107,9 @@ height: padding + 子项;
 
 border-radius: 6px;
 
-hover: background C4-7;
+hover: background font-icon-6;
 
-active: background C4-15; /* 持久化选中 */
+active: background font-icon-5; /* 持久化选中 */
 
 /* Inside auto layout */
 flex: none;
@@ -121,12 +121,12 @@ flex-grow: 1;
 
 order: 0;
 
-active: 容器内图标 border C4 fill C4-7; /* 持久化选中 */
+active: 容器内图标 border font-icon-1 fill font-icon-4; /* 持久化选中 */
 
 /* 数量标签 */
 font: [[01_样式 token#02. 文字]] / 副文本;
 
-color: C4-40;
+color: font-icon-3;
 
 active: color C4; /* 持久化选中 */
 
@@ -155,7 +155,7 @@ height: 子项;
 
 border-radius: 6px;
 
-hover: background C4-7
+hover: background font-icon-6
 
 /* Inside auto layout */
 flex: none;
@@ -170,7 +170,7 @@ order: 0;
 /* 快捷键标签 */
 font: [[01_样式 token#02. 文字]] / 副文本;
 
-color: C4-40;
+color: font-icon-3;
 
 /* Inside auto layout */
 flex: none;
@@ -181,7 +181,7 @@ flex-grow: 0;
 width: 8px;
 height: 8px;
 
-background: C4-40;
+background: font-icon-3;
 
 /* Inside auto layout */
 flex: none;
@@ -211,7 +211,7 @@ flex-grow: 0;
 width: 填充父容器;
 height: 0px;
 
-border: 1px solid C4-15; /* 圆头 */
+border: 1px solid border-2; /* 圆头 */
 
 /* Inside auto layout */
 flex: none;
@@ -224,7 +224,7 @@ flex-grow: 0;
 
 有的区块需要添加按钮，比如文件树需要添加文件夹等，但有的区块不需要添加按钮，不要需要添加按钮的直接删掉即可。
 
-折叠按钮和添加都按钮用：chevron-small，add-small（16×16 显示），按钮为图标按钮-小 24×24（padding 4 / 圆角 4）；常态图标 C4-40，hover background C4-7 / 图标 C4-70。
+折叠按钮和添加都按钮用：chevron-small，add-small（16×16 显示），按钮为图标按钮-小 24×24（padding 4 / 圆角 4）；常态图标 font-icon-3，hover background font-icon-6 / 图标 font-icon-2。
 
 ``` css
 /* 总容器：标题容器 + 添加按钮 */
@@ -264,14 +264,14 @@ flex-grow: 1;
 /* 展开按钮 */
 [[01_按钮#01. 图标按钮 - 无底色装饰]] / 小图标;
 
-color: 容器内图标 C4-40;
+color: 容器内图标 font-icon-3;
 
 order: 0;
 
 /* 标题 */
 font: [[01_样式 token#02. 文字]] / 副文本;
 
-color: C4-40;
+color: font-icon-3;
 
 /* Inside auto layout */
 flex: none;
@@ -281,7 +281,7 @@ flex-grow: 0;
 /* 添加按钮 */
 [[01_按钮#01. 图标按钮 - 无底色装饰]] / 小图标;
 
-color: 容器内图标 C4-40;
+color: 容器内图标 font-icon-3;
 
 order: 1;
 ```
@@ -302,11 +302,11 @@ gap: 2px;
 width: 填充父容器;
 height: padding + gap + 子项;
 
-background: C1-15;
+background: C4;
 
-hover: background C1-7
+hover: background font-icon-6
 
-border: 1px solid C4-15;
+border: 1px solid border-2;
 border-radius: 8px;
 
 /* Inside auto layout */
@@ -339,16 +339,16 @@ order: 0;
 /* 删除按钮 */
 [[01_按钮#01. 图标按钮 - 无底色装饰]] / 小图标;
 
-color: 容器内图标 C4-40;
+color: 容器内图标 font-icon-3;
 
-hover: background C4-7
+hover: background font-icon-6
 
 order: 1;
 
 /* 文件名称 */
 font: [[01_样式 token#02. 文字]] / 副文本;
 
-color: C4-40;
+color: font-icon-3;
 
 order: 1;
 ```
@@ -369,11 +369,11 @@ gap: 6px;
 width: padding + gap + 基础 item + 删除按钮;
 height: padding + 子项;
 
-background: C1-15;
+background: C4;
 
-hover: background C1-7
+hover: background font-icon-6
 
-border: 1px solid C4-15;
+border: 1px solid border-2;
 border-radius: 8px;
 
 /* Inside auto layout */
@@ -389,9 +389,9 @@ order: 0;
 /* 删除按钮 */
 [[01_按钮#01. 图标按钮 - 无底色装饰]] / 小图标;
 
-color: 容器内图标 C4-40;
+color: 容器内图标 font-icon-3;
 
-hover: background C4-7
+hover: background font-icon-6
 
 order: 1;
 ```
@@ -412,9 +412,9 @@ gap: 4px;
 width: padding + gap +子项;
 height: padding + 子项;
 
-background: C1-15;
+background: C4;
 
-border: 1px solid C4-15;
+border: 1px solid border-2;
 border-radius: 14px; /* 胶囊形 */
 
 /* Inside auto layout */
@@ -429,9 +429,9 @@ height: 16px;
 
 background: 实际分析的颜色;
 
-border: 1px solid C4-15;
+border: 1px solid border-2;
 
-hover: 1px solid C4-70 / 色号悬停 tip;
+hover: 1px solid font-icon-2 / 色号悬停 tip;
 
 /* Inside auto layout */
 flex: none;
@@ -462,9 +462,9 @@ flex-grow: 1;
 width: 12px;
 height: 12px;
 
-color: border C4-40;
+color: border font-icon-3;
 
-hover: border C4-70;
+hover: border font-icon-2;
 
 active: border 警告色 fill 警告色; /* 持久化选中 */
 
@@ -491,7 +491,7 @@ height: 57px;
 
 background: C3 / C2; /* 两个底色交替出现，用于视觉能快速区分每一行 */
 
-border: 1px solid C4-7;
+border: 1px solid border-2;
 border-radius: 8px;
 
 /* Inside auto layout */
@@ -536,7 +536,7 @@ flex-grow: 0;
 /* 名称 */
 [[01_样式 token#02. 文字]] / 正文
 
-color: C4;
+color: font-icon-1;
 
 /* Inside auto layout */
 flex: none;
@@ -563,7 +563,7 @@ flex-grow: 0;
 /* 详情容器：尺寸 + 格式 + 文件大小 */
 [[01_样式 token#02. 文字]] / 正文
 
-color: C4-40;
+color: font-icon-3;
 
 /* 修改日期容器：日期 + 时间 */
 /* Auto layout */
@@ -587,6 +587,6 @@ flex-grow: 0;
 日期：2026/07/12 /* 年月日 */
 时间：14:26 /* 小时 分钟 */
 
-color: C4-40;
+color: font-icon-3;
 ```
 

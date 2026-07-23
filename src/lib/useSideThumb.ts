@@ -1,4 +1,4 @@
-// 侧栏悬浮滚动条（token 15：4px 胶囊 C4-15、距右 4px、不影响布局）。
+// 侧栏悬浮滚动条（border-1：4px 胶囊、距右 4px、不影响布局）。
 // 原生滚动条占位会把内容区向左挤、导致各区块右缘错位；Chromium 已弃用 overflow: overlay，
 // 故隐藏原生条（base.css 全局 width 0），自绘悬浮 thumb 同步滚动位置。
 import { onBeforeUnmount, onMounted, reactive, type Ref } from "vue";

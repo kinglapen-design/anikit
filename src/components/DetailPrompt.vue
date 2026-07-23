@@ -39,15 +39,15 @@ const open = ref(true);
   flex-direction: column;
   gap: var(--space-8);
 }
-/* AI 搜索框（03_输入框 04）：内边距 8 / 圆角 8 / C1-15 / 1px C4-15 / 最多 6 行滚动 */
+/* AI 搜索框（03_输入框 04）：内边距 8 / 圆角 8 / C4 / 1px border-2 / 最多 6 行滚动 */
 .prompt-text {
   width: 100%;
   height: 125px;
   padding: var(--space-8);
   border-radius: var(--radius-8);
-  background: var(--c1-15);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
-  color: var(--c4-40);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-2);
+  color: var(--font-icon-3);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   resize: none;
@@ -59,7 +59,7 @@ const open = ref(true);
   width: 4px;
 }
 .prompt-text::-webkit-scrollbar-thumb {
-  background: var(--c4-15);
+  background: var(--border-1);
   border-radius: 2px;
 }
 /* 按钮组：间距 4，三按钮均分填充 */

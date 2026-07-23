@@ -1,5 +1,5 @@
-// 工具 tip（02_通用组件/09_工具tip）：C5 / 圆角 6 / 1px C4-15 / 内边距 4 6 / 间距 6，
-// 标题 副文本 C4 + 快捷键 副文本 C4-40。悬停 400ms 显示，跟随元素下方居中。
+// 工具 tip（02_通用组件/09_工具tip）：C3 / 圆角 6 / 2px border-1 / 内边距 4 6 / 间距 6，
+// 标题 副文本 font-icon-1 + 快捷键 副文本 font-icon-3。悬停 400ms 显示，跟随元素下方居中。
 // 用法：v-tip="'菜单'" 或 v-tip="{ text: '新建', keys: 'Ctrl+N' }"
 import type { Directive } from "vue";
 

@@ -41,7 +41,7 @@ const mode = ref<"pack" | "scatter">("pack");
 </template>
 
 <style scoped>
-/* 遮罩：与 ImportDialog 一致（C1-80） */
+/* 遮罩：与 ImportDialog 一致（C1） */
 .seq-mask {
   position: absolute;
   inset: 0;
@@ -49,10 +49,10 @@ const mode = ref<"pack" | "scatter">("pack");
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c1-80);
+  background: var(--c1);
 }
 /* 总容器（08_二级窗口通用规则，同 09）：宽度随最宽子项、上限 368；
-   C5 / 1px C4-15（inset）/ 圆角 8 / --shadow-pop */
+   C3 / 2px border-1（inset）/ 圆角 8 / --shadow-pop */
 .seq-card {
   box-sizing: border-box;
   width: fit-content;
@@ -62,10 +62,10 @@ const mode = ref<"pack" | "scatter">("pack");
   align-items: flex-start;
   padding: var(--space-16);
   gap: var(--space-16);
-  background: var(--c5);
+  background: var(--c3);
   box-shadow:
     var(--shadow-pop),
-    inset 0 0 0 1px var(--c4-15);
+    inset 0 0 0 2px var(--border-1);
   border-radius: var(--radius-8);
 }
 .title {
@@ -73,15 +73,15 @@ const mode = ref<"pack" | "scatter">("pack");
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
-/* 提示文字：副文本 C4-40；超 368 上限换行（08 通用规则） */
+/* 提示文字：副文本 font-icon-3；超 368 上限换行（08 通用规则） */
 .tip {
   margin: 0;
   max-width: 100%;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
   word-break: break-all;
 }
 /* 单选框容器（同 09）：横向 / 间距 16 */
@@ -112,7 +112,7 @@ const mode = ref<"pack" | "scatter">("pack");
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .btn.primary {
   background: var(--brand-1);
@@ -121,9 +121,9 @@ const mode = ref<"pack" | "scatter">("pack");
   background: var(--brand-2);
 }
 .btn.secondary {
-  background: var(--c4-7);
+  background: var(--c5);
 }
 .btn.secondary:hover {
-  background: var(--c4-15);
+  background: var(--border-1);
 }
 </style>

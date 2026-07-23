@@ -33,7 +33,7 @@ const cols = ["尺寸", "格式", "文件大小", "修改日期"] as const;
 </template>
 
 <style scoped>
-/* 列头行：固定于列表区顶部（不随滚动），高 28，背景 C2；标题文字正文（14/20），
+/* 列头行：固定于列表区顶部（不随滚动），高 28，背景 C1；标题文字正文（14/20），
    右 padding 16（与行 details 右缘对齐：行 box 右缘 -8 + 行 padding-right 8） */
 .list-header {
   position: absolute;
@@ -46,10 +46,10 @@ const cols = ["尺寸", "格式", "文件大小", "修改日期"] as const;
   justify-content: space-between;
   height: 28px;
   padding: 0 16px 0 8px;
-  background: var(--c2);
+  background: var(--c1);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
 }
 .main {
   flex: 1;

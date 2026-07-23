@@ -135,15 +135,15 @@ async function togglePin(): Promise<void> {
   padding: 0 var(--space-4);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4);
+  color: var(--font-icon-1);
   white-space: nowrap;
   border-radius: var(--radius-6);
 }
-/* 搜索结果容器：/ + 搜索结果 + (数量)，正文 C4-40 */
+/* 搜索结果容器：/ + 搜索结果 + (数量)，正文 font-icon-3 */
 .result-text {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
   white-space: nowrap;
 }
 /* 从左侧滑入 / 往左滑出 */

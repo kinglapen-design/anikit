@@ -73,7 +73,7 @@ function onSubmit(): void {
 </template>
 
 <style scoped>
-/* 卡片：上限 368（08_二级窗口通用规则；内容设计为撑满型按上限取值）/ C5 / 描边 + 投影 / 圆角 8 */
+/* 卡片：上限 368（08_二级窗口通用规则；内容设计为撑满型按上限取值）/ C3 / 描边 + 投影 / 圆角 8 */
 .form-card {
   box-sizing: border-box;
   width: 368px;
@@ -82,10 +82,10 @@ function onSubmit(): void {
   align-items: flex-start;
   padding: var(--space-16);
   gap: var(--space-16);
-  background: var(--c5);
+  background: var(--c3);
   box-shadow:
     var(--shadow-pop),
-    inset 0 0 0 1px var(--c4-15);
+    inset 0 0 0 2px var(--border-1);
   border-radius: var(--radius-8);
 }
 /* 标题容器：图标 24 + 大标题，gap 6 */
@@ -107,22 +107,22 @@ function onSubmit(): void {
   padding: var(--space-4);
   border-radius: var(--radius-6);
   background: var(--brand-1);
-  color: var(--c4);
+  color: var(--font-icon-1);
   flex: none;
 }
 .title {
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
-/* 提示文字：副文本 C4-40 */
+/* 提示文字：副文本 font-icon-3 */
 .hint {
   margin: 0;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   font-weight: var(--text-caption-weight);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
 }
 /* 输入框 + 错误提示行：撑满父容器 */
 .field {
@@ -131,7 +131,7 @@ function onSubmit(): void {
   gap: var(--space-4);
   width: 100%;
 }
-/* 输入框（03_输入框#01 通用）：C1-15 / 1px C4-15 / 圆角 8 / focus 品牌色-1 / 错误态 --error */
+/* 输入框（03_输入框#01 通用）：C4 / 1px border-2 / 圆角 8 / focus 品牌色-1 / 错误态 --error */
 .name-input {
   box-sizing: border-box;
   width: 100%;
@@ -139,17 +139,17 @@ function onSubmit(): void {
   padding: 6px var(--space-8);
   border: none;
   outline: none;
-  background: var(--c1-15);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-2);
   border-radius: var(--radius-8);
   font-family: var(--font-family);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
   font-weight: var(--text-body-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .name-input::placeholder {
-  color: var(--c4-40);
+  color: var(--font-icon-3);
 }
 .name-input:focus {
   box-shadow: inset 0 0 0 1px var(--brand-1);
@@ -189,7 +189,7 @@ function onSubmit(): void {
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .btn.primary {
   background: var(--brand-1);
@@ -198,10 +198,10 @@ function onSubmit(): void {
   background: var(--brand-2);
 }
 .btn.secondary {
-  background: var(--c4-7);
+  background: var(--c5);
 }
 .btn.secondary:hover {
-  background: var(--c4-15);
+  background: var(--border-1);
 }
 .btn:disabled {
   cursor: default;

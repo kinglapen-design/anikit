@@ -123,18 +123,18 @@ async function pickImport(kind: "files" | "folder"): Promise<void> {
   flex-direction: column;
   flex: none;
   background: var(--c3);
-  /* 三栏面板无圆角无边框，仅右侧 1px C4-7 作视觉分割线（主窗口结构调整） */
-  box-shadow: inset -1px 0 0 0 var(--c4-7);
+  /* 三栏面板无圆角无边框，仅右侧 1px border-2 作视觉分割线（2026-07-23 线框定案） */
+  box-shadow: inset -1px 0 0 0 var(--border-2);
   padding: var(--space-4);
   min-height: 0;
 }
-/* 悬浮滚动条：4px 胶囊 C4-15、距右 4px、不占布局（token 15） */
+/* 悬浮滚动条：4px 胶囊 border-1、距右 4px、不占布局 */
 .side-thumb {
   position: absolute;
   right: 4px;
   width: 4px;
   border-radius: 2px;
-  background: var(--c4-15);
+  background: var(--border-1);
   pointer-events: none;
   z-index: 10;
 }
@@ -172,13 +172,13 @@ async function pickImport(kind: "files" | "folder"): Promise<void> {
   padding: var(--space-4);
   border-radius: var(--radius-6);
   background: var(--brand-1);
-  color: var(--c4);
+  color: var(--font-icon-1);
   flex: none;
 }
 .lib-name {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4);
+  color: var(--font-icon-1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

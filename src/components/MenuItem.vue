@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 菜单项（02_通用组件/02_item 03 右键菜单 item）：内边距 4 6 / 圆角 6 / hover C4-7。
+// 菜单项（02_通用组件/02_item 03 右键菜单 item）：内边距 4 6 / 圆角 6 / hover font-icon-6。
 // 一级项：图标 + 标题 + 快捷键标签或二级菜单提示右箭头（8×8）；
 // 二级项（checkable）：8×8 对勾占位（选中显示，未选中隐藏但占位保证标题列对齐）。
 import AppIcon from "./AppIcon.vue";
@@ -41,11 +41,11 @@ const emit = defineEmits<{ select: [] }>();
   width: 100%;
   padding: var(--space-4) var(--space-6);
   border-radius: var(--radius-6);
-  color: var(--c4);
+  color: var(--font-icon-1);
   transition: background 0.12s ease;
 }
 .menu-item:hover {
-  background: var(--c4-7);
+  background: var(--font-icon-6);
 }
 /* 基础 item：图标 + 标题，间距 6 */
 .main {
@@ -64,7 +64,7 @@ const emit = defineEmits<{ select: [] }>();
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--c4);
+  color: var(--font-icon-1);
   flex: none;
 }
 .label {
@@ -77,7 +77,7 @@ const emit = defineEmits<{ select: [] }>();
 .shortcut {
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
   flex: none;
 }
 .arrow {

@@ -54,13 +54,13 @@ const eta = computed(() => {
   height: 44px;
   flex: none;
 }
-/* 进度条（10_进度条）：高 6 胶囊 / C4-15 底 / 品牌色-1 已加载，占剩余空间 */
+/* 进度条（10_进度条）：高 6 胶囊 / border-2 底 / 品牌色-1 已加载，占剩余空间 */
 .bar {
   position: relative;
   flex: 1;
   height: 6px;
   border-radius: 3px;
-  background: var(--c4-15);
+  background: var(--border-2);
   overflow: hidden;
 }
 .fill {
@@ -83,12 +83,12 @@ const eta = computed(() => {
     left: 70%;
   }
 }
-/* 标签与预计时间：副文本 C4-40 */
+/* 标签与预计时间：副文本 font-icon-3 */
 .label,
 .eta {
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
   white-space: nowrap;
   flex: none;
 }

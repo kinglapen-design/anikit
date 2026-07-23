@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 视图切换按钮组（02_通用组件/01_按钮 05）：撑满父容器、按钮均分，永远有一个选中；
-// 切换时选中底色 C4-15 平移动画，点击瞬间先取消 hover 再平移。
+// 切换时选中底色 border-1 平移动画，点击瞬间先取消 hover 再平移。
 import { computed, ref } from "vue";
 import AppIcon from "./AppIcon.vue";
 
@@ -49,8 +49,8 @@ function select(value: string): void {
   gap: var(--space-4);
   padding: var(--space-4);
   border-radius: var(--radius-8);
-  background: var(--c1-50);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-2);
   width: 100%;
 }
 /* 选中底色：宽度 = 均分按钮宽，按（自身宽 + 间距 4）平移 */
@@ -61,7 +61,7 @@ function select(value: string): void {
   width: calc((100% - 20px) / 4);
   height: 28px;
   border-radius: var(--radius-6);
-  background: var(--c4-15);
+  background: var(--border-1);
   transition: transform 0.18s ease;
 }
 .item {
@@ -71,11 +71,11 @@ function select(value: string): void {
   height: 28px;
   padding: var(--space-6) 0;
   border-radius: var(--radius-6);
-  color: var(--c4);
+  color: var(--font-icon-1);
   transition: background 0.12s ease;
 }
 .item:hover {
-  background: var(--c4-7);
+  background: var(--font-icon-6);
 }
 .sliding .item:hover {
   background: none;

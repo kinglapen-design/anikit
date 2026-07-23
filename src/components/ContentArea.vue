@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 中间内容展示区（C2）：标题栏 + 卡片列表（统一滚动：文件夹区块 + 素材网格）+ 搜索框。
+// 中间内容展示区（C1）：标题栏 + 卡片列表（统一滚动：文件夹区块 + 素材网格）+ 搜索框。
 import { computed } from "vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
@@ -33,7 +33,7 @@ const items = computed(() => content.visiblePlacements);
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  background: var(--c2);
+  background: var(--c1);
   /* 三栏面板无圆角无边框（主窗口结构调整） */
   padding: var(--space-4);
 }

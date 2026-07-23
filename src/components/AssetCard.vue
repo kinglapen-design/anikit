@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// 素材卡片（02_通用组件/06_卡片 03）：图片容器（内边距 4 / 圆角 12，悬停 2px C4-40 / 选中 2px 品牌色-1）
-// + 图片（圆角 8 / 1px C4-15）+ 格式角标（左上 4px / C1-80）+ 放大镜按钮（悬停显示，右下 4px）
+// 素材卡片（02_通用组件/06_卡片 03）：图片容器（内边距 4 / 圆角 12，悬停 2px font-icon-3 / 选中 2px 品牌色-1）
+// + 图片（圆角 8 / 1px border-2）+ 格式角标（左上 4px / C1）+ 放大镜按钮（悬停显示，右下 4px）
 // + 标题 + 尺寸标签。
 import { computed } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -17,7 +17,7 @@ const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.as
 // 序列帧（2026-07-22 用户定）：格式角标显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
 const isSeq = computed(() => props.asset.frameCount != null);
 const badge = computed(() => (isSeq.value ? "序列帧" : props.asset.ext.toUpperCase()));
-// 角标文字色：品牌格式各自品牌色 / 图片与序列帧统一色 / 其他 C4-70（01_样式 token 01-5）
+// 角标文字色：品牌格式各自品牌色 / 图片与序列帧统一色 / 其他 font-icon-2（01_样式 token 01-5）
 const badgeColor = computed(() => formatBadgeColor(props.asset.ext, isSeq.value));
 const displayName = computed(() =>
   isSeq.value ? `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧` : props.asset.name,
@@ -76,7 +76,7 @@ const meta = computed(() =>
   transition: box-shadow 0.12s ease;
 }
 .asset-card:hover .thumb {
-  box-shadow: inset 0 0 0 2px var(--c4-15);
+  box-shadow: inset 0 0 0 2px var(--border-1);
 }
 .asset-card.selected .thumb {
   box-shadow: inset 0 0 0 2px var(--brand-1);
@@ -86,31 +86,31 @@ const meta = computed(() =>
   width: 100%;
   height: 100%;
   border-radius: var(--radius-8);
-  /* 卡片线框 C4-7（用户验收：C4-15 卡片多了偏深影响可读性） */
-  box-shadow: inset 0 0 0 1px var(--c4-7);
+  /* 卡片线框 border-2（2026-07-23 线框定案：静态线统一一档，废弃弱透明线） */
+  box-shadow: inset 0 0 0 1px var(--border-2);
   object-fit: cover;
-  /* 无缩略图占位：中间面板底色 C2（阶段3修改——不要 C4-7 灰块） */
-  background: var(--c2);
+  /* 无缩略图占位：中间面板底色 C1（阶段3修改——不要 font-icon-4 灰块） */
+  background: var(--c1);
 }
 /* 系统格式图标：方形图标 contain 完整显示不裁切（4.2 用户定） */
 .img.icon {
   object-fit: contain;
 }
-/* 格式角标：图片左上角，距上左 4px（= 容器内边距 4 + 4），内边距 2 4 / 圆角 6 / C1-80 */
+/* 格式角标：图片左上角，距上左 4px（= 容器内边距 4 + 4），内边距 2 4 / 圆角 6 / C1 */
 .badge {
   position: absolute;
   top: 8px;
   left: 8px;
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-6);
-  background: var(--c1-80);
+  background: var(--c1);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-70);
+  color: var(--font-icon-2);
   pointer-events: none;
   z-index: 2;
 }
-/* 放大镜按钮：图片右下角，距右下 4px，悬停卡片时显示，悬停自身底色 C1-80 */
+/* 放大镜按钮：图片右下角，距右下 4px，悬停卡片时显示，悬停自身底色 C1 */
 .zoom {
   position: absolute;
   right: 8px;
@@ -122,7 +122,7 @@ const meta = computed(() =>
   height: 24px;
   padding: var(--space-4);
   border-radius: var(--radius-6);
-  color: var(--c4);
+  color: var(--font-icon-1);
   opacity: 0;
   transition:
     opacity 0.12s ease,
@@ -133,12 +133,12 @@ const meta = computed(() =>
   opacity: 1;
 }
 .zoom:hover {
-  background: var(--c1-80);
+  background: var(--c1);
 }
 .title {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4);
+  color: var(--font-icon-1);
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -147,7 +147,7 @@ const meta = computed(() =>
 .meta {
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
   text-align: center;
   white-space: nowrap;
 }

@@ -112,7 +112,7 @@ function onRetry(): void {
 </template>
 
 <style scoped>
-/* 遮罩：挡住主界面交互（C1-80 现有 token） */
+/* 遮罩：挡住主界面交互（C1 现有 token） */
 .setup-mask {
   position: absolute;
   inset: 0;
@@ -120,9 +120,9 @@ function onRetry(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c1-80);
+  background: var(--c1);
 }
-/* 初始卡片：686×500 / C5 / 1px C4-15 描边（inset box-shadow，规范 4）+ 二级窗口投影 / 圆角 8 */
+/* 初始卡片：686×500 / C3 / 2px border-1 描边（inset box-shadow，规范 4）+ 二级窗口投影 / 圆角 8 */
 .setup-card {
   box-sizing: border-box;
   width: 686px;
@@ -132,10 +132,10 @@ function onRetry(): void {
   align-items: center;
   padding: var(--space-16);
   gap: var(--space-16);
-  background: var(--c5);
+  background: var(--c3);
   box-shadow:
     var(--shadow-pop),
-    inset 0 0 0 1px var(--c4-15);
+    inset 0 0 0 2px var(--border-1);
   border-radius: var(--radius-8);
 }
 .illustration {
@@ -176,7 +176,7 @@ function onRetry(): void {
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .btn.primary {
   background: var(--brand-1);
@@ -185,10 +185,10 @@ function onRetry(): void {
   background: var(--brand-2);
 }
 .btn.secondary {
-  background: var(--c4-7);
+  background: var(--c5);
 }
 .btn.secondary:hover {
-  background: var(--c4-15);
+  background: var(--border-1);
 }
 .btn:disabled {
   cursor: default;

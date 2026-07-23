@@ -47,7 +47,7 @@ const meta = computed(() => {
   line-height: 0;
 }
 .folder-card:hover .icon-wrap {
-  box-shadow: inset 0 0 0 2px var(--c4-15);
+  box-shadow: inset 0 0 0 2px var(--border-1);
 }
 .folder-card.selected .icon-wrap {
   box-shadow: inset 0 0 0 2px var(--brand-1);
@@ -62,7 +62,7 @@ const meta = computed(() => {
   height: 20px;
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4);
+  color: var(--font-icon-1);
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -73,7 +73,7 @@ const meta = computed(() => {
   height: 18px;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
   text-align: center;
   white-space: nowrap;
   overflow: hidden;

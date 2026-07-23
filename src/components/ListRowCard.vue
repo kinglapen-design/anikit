@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 列表行（02_通用组件/02_item 10）：缩略图（可随滑块缩放）+ 名称 + 尺寸 / 格式 / 文件大小 / 修改日期。
-// C3 / C2 交替行底色；1px C4-7（inset）/ 圆角 8 / 内边距 6 8。
+// C3 / C1 交替行底色；1px border-2（inset）/ 圆角 8 / 内边距 6 8。
 // 文件大小 / 修改日期仍是假占位：阶段 4 排序功能接真实值（后端 PlacementView 待补 size / modifiedAt）。
 import { computed } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -70,17 +70,17 @@ const emit = defineEmits<{ select: [] }>();
   justify-content: space-between;
   padding: var(--space-6) var(--space-8);
   border-radius: var(--radius-8);
-  background: var(--c2);
-  box-shadow: inset 0 0 0 1px var(--c4-7);
+  background: var(--c1);
+  box-shadow: inset 0 0 0 1px var(--border-2);
   cursor: default;
 }
-/* C3 / C2 交替行底色 */
+/* C3 / C1 交替行底色 */
 .list-row.odd {
   background: var(--c3);
 }
-/* hover / 选中与素材卡片一致：2px 内阴影描边不用 fill；悬停 C4-15，选中品牌色-1 */
+/* hover / 选中与素材卡片一致：2px 内阴影描边不用 fill；悬停 border-1，选中品牌色-1 */
 .list-row:hover {
-  box-shadow: inset 0 0 0 2px var(--c4-15);
+  box-shadow: inset 0 0 0 2px var(--border-1);
 }
 .list-row.selected {
   box-shadow: inset 0 0 0 2px var(--brand-1);
@@ -97,10 +97,10 @@ const emit = defineEmits<{ select: [] }>();
   flex: none;
   display: block;
   border-radius: var(--radius-4);
-  box-shadow: inset 0 0 0 1px var(--c4-15);
+  box-shadow: inset 0 0 0 1px var(--border-2);
   object-fit: cover;
-  /* 无缩略图占位：中间面板底色 C2（阶段3修改——不要 C4-7 灰块） */
-  background: var(--c2);
+  /* 无缩略图占位：中间面板底色 C1（阶段3修改——不要 font-icon-4 灰块） */
+  background: var(--c1);
 }
 /* 系统格式图标：方形图标 contain 完整显示不裁切（4.2 用户定） */
 .thumb.icon {
@@ -109,12 +109,12 @@ const emit = defineEmits<{ select: [] }>();
 .name {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4);
+  color: var(--font-icon-1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 详情容器：尺寸 / 格式 / 文件大小 / 修改日期，正文 C4-40，固定列宽与列头对齐 */
+/* 详情容器：尺寸 / 格式 / 文件大小 / 修改日期，正文 font-icon-3，固定列宽与列头对齐 */
 .details {
   display: flex;
   align-items: center;
@@ -122,7 +122,7 @@ const emit = defineEmits<{ select: [] }>();
   flex: none;
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
 }
 .col {
   white-space: nowrap;

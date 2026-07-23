@@ -32,10 +32,10 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   align-items: flex-start;
   padding: var(--space-16);
   gap: var(--space-16);
-  background: var(--c5);
+  background: var(--c3);
   box-shadow:
     var(--shadow-pop),
-    inset 0 0 0 1px var(--c4-15);
+    inset 0 0 0 2px var(--border-1);
   border-radius: var(--radius-8);
 }
 .title-row {
@@ -49,7 +49,7 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .hint {
   margin: 0;
@@ -57,7 +57,7 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   font-weight: var(--text-caption-weight);
-  color: var(--c4-40);
+  color: var(--font-icon-3);
   word-break: break-all; /* 长路径超 368 上限时换行（08 通用规则） */
 }
 /* 按钮组（01_按钮#07 大标题按钮-小按钮）：宽度按标题自适应（padding 8/16 / 高 38）/ 圆角 6 / 无图标 */
@@ -83,7 +83,7 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--c4);
+  color: var(--font-icon-1);
 }
 .btn.primary {
   background: var(--brand-1);
@@ -92,10 +92,10 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   background: var(--brand-2);
 }
 .btn.secondary {
-  background: var(--c4-7);
+  background: var(--c5);
 }
 .btn.secondary:hover {
-  background: var(--c4-15);
+  background: var(--border-1);
 }
 .btn:disabled {
   cursor: default;

@@ -1,47 +1,52 @@
 /* AniKit 设计 tokens —— 由 docs/02_样式与布局/01_样式 token.md 生成，勿手改。
-   换配色只需改品牌色与 C1 ~ C5，透明度衍生自动跟随（color-mix）。 */
+   2026-07-23 新体系（用户设计 03_新token）：边框实色化（透明度线条是"脏"的来源），
+   文字/图标按 F8F5FA 透明度衍生，换文字色只改 --font-icon-base。 */
 
 :root {
   /* 品牌色 */
-  --brand-1: #0c8ce9;
-  --brand-2: #096cb2;
+  --brand-1: #a64cff; /* 主要按钮 / 拆分条 / 切换素材库图标底色 / 输入框聚焦 */
+  --brand-2: #bf80ff; /* 主要按钮悬停 */
 
   /* 语义色 */
-  --error: #d04833; /* 窗口控制关闭 */
-  --warning: #bf9325; /* 评分选中 */
-  --success: #29a13d;
+  --error: #eb4460;
+  --warning: #df8e32;
+  --success: #38a33d;
 
-  /* 通用色（衍生基础）——明度阶梯：C1 < C2 < C3 < C5（内容区压暗、侧边栏提亮、浮层最亮，2026-07-23 用户定案） */
-  --c1: #0a0b0e; /* 窗口底（最深） */
-  --c2: #101218; /* 中间面板·内容区（暗） */
-  --c3: #1c1f27; /* 左右侧边栏（亮） */
-  --c4: #f2f4fa;
-  --c5: #262b35; /* 二级窗口 / 模态窗口（浮层最亮） */
+  /* 通用色 */
+  --c1: #15141a; /* 中间面板（窗口底同） */
+  --c2: #1a1a1f; /* 详情面板区块悬停底色 */
+  --c3: #1d1d21; /* 左右侧边栏 / 二级窗口 / 模态窗口 / 菜单窗口 */
+  --c4: #252429; /* 详情面板 item 底色 / 输入框 */
+  --c5: #2f2e33; /* 详情面板 item 悬停 / 通用按钮带底色 */
 
-  /* 透明度衍生 */
-  --c1-80: color-mix(in srgb, var(--c1) 80%, transparent);
-  --c1-50: color-mix(in srgb, var(--c1) 50%, transparent);
-  --c1-15: color-mix(in srgb, var(--c1) 15%, transparent);
-  --c1-7: color-mix(in srgb, var(--c1) 7%, transparent);
-  --c4-70: color-mix(in srgb, var(--c4) 70%, transparent);
-  --c4-40: color-mix(in srgb, var(--c4) 40%, transparent);
-  --c4-20: color-mix(in srgb, var(--c4) 20%, transparent);
-  --c4-15: color-mix(in srgb, var(--c4) 15%, transparent);
-  --c4-7: color-mix(in srgb, var(--c4) 7%, transparent);
+  /* 边框线（实色，不用透明度） */
+  --border-1: #3a3940; /* 边框线-亮 / 通用按钮带底色悬停 / 视图切换按钮选中 */
+  --border-2: #2a292e; /* 边框线-暗 */
 
-  /* 文件夹卡片（图层1 正面 / 图层2 文件 / 图层4 背面） */
+  /* 文字 / 图标 / 交互（F8F5FA 透明度衍生） */
+  --font-icon-base: #f8f5fa;
+  --font-icon-1: var(--font-icon-base); /* 高亮 / 基础 / 侧栏标题栏图标 / 文件树 item 名称 */
+  --font-icon-2: color-mix(in srgb, var(--font-icon-base) 80%, transparent); /* 装饰图标线框 / 正文 / 中栏标题栏图标 */
+  --font-icon-3: color-mix(in srgb, var(--font-icon-base) 60%, transparent); /* 副文本 / 提示文字 / 小图标按钮 */
+  --font-icon-4: color-mix(in srgb, var(--font-icon-base) 12%, transparent); /* 装饰图标填充 */
+  --font-icon-5: color-mix(in srgb, var(--font-icon-base) 10%, transparent); /* 选中 */
+  --font-icon-6: color-mix(in srgb, var(--font-icon-base) 5%, transparent); /* 悬停 */
+  /* 禁用：新 token 未含，暂按 40% 补档，待用户确认 */
+  --font-icon-disabled: color-mix(in srgb, var(--font-icon-base) 40%, transparent);
+
+  /* 文件夹卡片（新 token 未涉及，沿用旧值，过组件时再对） */
   --folder-card-front: #262b36;
   --folder-card-file: #c6c7cc;
   --folder-card-back: #1f232d;
 
-  /* 格式角标文字色（2026-07-23 用户定：各软件品牌色，节制——底色仍 C1-80，仅文字带色；
-     图片格式与序列帧统一一色，未列出的格式用 C4-70 通用色） */
-  --fmt-psd: #31a8ff; /* Photoshop（PSD / PSB） */
-  --fmt-ai: #ff9a00; /* Illustrator */
-  --fmt-fla: #ff6666; /* Animate */
-  --fmt-aep: #9999ff; /* After Effects */
-  --fmt-svg: #ffb13b; /* SVG 标志橙 */
-  --fmt-image: #3ebd6e; /* 图片格式统一（PNG / JPG / BMP / GIF / WEBP / 序列帧） */
+  /* 格式角标（7 组实色；角标样式——实底白字 / 位置归组件层，过组件时统一） */
+  --fmt-psd: #258ad4;
+  --fmt-fla: #a94131;
+  --fmt-svg: #c07502; /* SVG / EPS / AI 同组 */
+  --fmt-aep: #4545f7;
+  --fmt-anim: #a64cff; /* WEBP 动图 / 序列帧 / GIF（品牌紫） */
+  --fmt-image: #338972; /* 静态图片 */
+  --fmt-other: #5b5868;
 
   /* 文字 */
   --font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
@@ -55,7 +60,8 @@
   --text-caption-line: 18px;
   --text-caption-weight: 400;
 
-  /* 线框 */
+  /* 线框（用户定案：2px = 主窗口 / 二级窗口 / 模态窗口 / 菜单外边框；1px = 其他线条；
+     交互态描边不受此限：hover 提亮、选中品牌色） */
   --border-thick: 2px;
   --border-thin: 1px;
 
@@ -80,6 +86,6 @@
   --icon-small: 8px;
   --icon-xlarge: 24px;
 
-  /* 阴影（统一悬浮投影：主窗口 / 菜单 / 二级窗口 / 模态窗口 / 工具 tip） */
-  --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.4);
+  /* 阴影（x0 y4 blur40 60%：二级窗口 / 模态窗口 / 菜单 / 弹窗） */
+  --shadow-pop: 0 4px 40px rgba(0, 0, 0, 0.6);
 }
