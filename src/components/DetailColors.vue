@@ -72,12 +72,14 @@ const colors = ["#3A6EA5", "#2B9FD9", "#7A5C3E", "#A53E3E", "#3E8A57", "#6B4F8A"
   line-height: var(--text-caption-line);
   pointer-events: none;
 }
-/* 色块容器（02_item 08）：胶囊圆角 14 / C4 / 1px border-1 / 内边距 4 / 间距 4 */
+/* 色块容器（02_item 08）：胶囊圆角 14 / C4 / 1px border-1 / 内边距 4 / 间距 4 /
+   宽度按子项自适应（fit-content，2026-07-23 用户定，原填充宽度右侧多余） */
 .swatches {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4);
   padding: var(--space-4);
+  width: fit-content;
   border-radius: 14px;
   background: var(--c4);
   box-shadow: inset 0 0 0 1px var(--border-1);

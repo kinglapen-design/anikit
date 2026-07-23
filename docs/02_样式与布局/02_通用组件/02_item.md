@@ -398,9 +398,9 @@ display: flex;
 flex-direction: row;
 align-items: center;
 padding: 4px;
-/* 无间距：X 内边距兼作间隔，文件名右 4 */
+gap: 4px;
 
-width: padding + gap +子项;
+width: padding + gap + 子项（按子项自适应 fit-content，2026-07-23 用户定）;
 height: padding + 子项;
 
 background: C4;
