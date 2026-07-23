@@ -43,7 +43,7 @@ const colWidth = computed(() => Math.max(80, Math.round((189 * ui.targetRowHeigh
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  padding: var(--space-8) 20px var(--space-8) 0;
+  padding: var(--space-8) var(--space-20) var(--space-8) 0;
 }
 /* 卡片列表：grid 均分同宽（auto-fill 空轨道同宽，末行不被拉宽）——
    卡片等比例跟随拖拽缩放（SVG 天然等比，无布局计算），满了换行；

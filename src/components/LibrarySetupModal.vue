@@ -165,7 +165,7 @@ function onRetry(): void {
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  padding: 14px 0;
+  padding: var(--space-14) 0;
   gap: var(--space-8);
   width: 250px;
   height: 52px;

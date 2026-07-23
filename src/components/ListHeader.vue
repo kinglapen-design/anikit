@@ -45,7 +45,7 @@ const cols = ["尺寸", "格式", "文件大小", "修改日期"] as const;
   align-items: center;
   justify-content: space-between;
   height: 28px;
-  padding: 0 16px 0 8px;
+  padding: 0 var(--space-16) 0 var(--space-8);
   background: var(--c1);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);

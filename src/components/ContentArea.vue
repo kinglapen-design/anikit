@@ -45,11 +45,11 @@ const items = computed(() => content.visiblePlacements);
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 0 0 0 20px;
+  padding: 0 0 0 var(--space-20);
 }
 /* 搜索框内容容器：内边距 4 12 8 12（中栏外层 4 + 12 = 左右缘均 16，2026-07-23 用户定） */
 .search-wrap {
   flex: none;
-  padding: var(--space-4) 12px var(--space-8) 12px;
+  padding: var(--space-4) var(--space-12) var(--space-12) var(--space-12);
 }
 </style>

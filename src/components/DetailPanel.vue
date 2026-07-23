@@ -27,7 +27,7 @@ import DetailPrompt from "./DetailPrompt.vue";
 }
 .detail-panel :deep(.detail-block) {
   gap: var(--space-8);
-  padding: 12px 16px;
+  padding: var(--space-12) var(--space-16);
   box-shadow: inset 0 1px 0 0 var(--border-2);
 }
 .detail-panel :deep(.detail-block:first-child) {

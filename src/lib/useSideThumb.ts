@@ -1,11 +1,12 @@
-// 侧栏悬浮滚动条（border-1：4px 胶囊、距右 4px、不影响布局）。
+// 侧栏悬浮滚动条（font-icon-5：4px 胶囊、距右 4px、不影响布局）。
 // 原生滚动条占位会把内容区向左挤、导致各区块右缘错位；Chromium 已弃用 overflow: overlay，
 // 故隐藏原生条（base.css 全局 width 0），自绘悬浮 thumb 同步滚动位置。
+// 拖拽：pointerdown 后按 内容可滚动高 / 可视高 比例换算 scrollTop（2026-07-23 补，
+// 此前 pointer-events none 纯指示——事件穿透导致右侧误触窗口 resize 热区）。
 import { onBeforeUnmount, onMounted, reactive, type Ref } from "vue";
 
 export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
-  const thumb = { show: false, top: 0, height: 30 };
-  const state = reactive(thumb);
+  const state = reactive({ show: false, top: 0, height: 30, onThumbDown });
   let ro: ResizeObserver | undefined;
   let mo: MutationObserver | undefined;
   let observedChild: Element | null = null;
@@ -25,6 +26,26 @@ export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
     state.height = Math.max(30, (clientHeight / scrollHeight) * clientHeight);
     state.top =
       el.offsetTop + (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - state.height);
+  }
+
+  /** 拖拽滚动：thumb 位移按比例映射到 scrollTop */
+  function onThumbDown(e: PointerEvent): void {
+    const el = bodyRef.value;
+    if (!el || !state.show) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+    const startScroll = el.scrollTop;
+    const ratio = (el.scrollHeight - el.clientHeight) / (el.clientHeight - state.height);
+    const onMove = (ev: PointerEvent): void => {
+      el.scrollTop = startScroll + (ev.clientY - startY) * ratio;
+    };
+    const onUp = (): void => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
   onMounted(() => {

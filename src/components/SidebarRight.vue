@@ -61,6 +61,7 @@ async function togglePin(): Promise<void> {
       v-show="thumb.show"
       class="side-thumb"
       :style="{ top: `${thumb.top}px`, height: `${thumb.height}px` }"
+      @pointerdown="thumb.onThumbDown"
     />
 
     <footer class="bar-footer">
@@ -88,10 +89,14 @@ async function togglePin(): Promise<void> {
   right: 4px;
   width: 4px;
   border-radius: 2px;
-  /* 常态 font-icon-5（选中色，2026-07-23 用户定） */
+  /* 常态 font-icon-5（选中色）/ hover border-1；可拖拽（z-index 101 盖过窗口边缘
+     resize 热区 100，防事件穿透误触拉伸，2026-07-23 用户定） */
   background: var(--font-icon-5);
-  pointer-events: none;
-  z-index: 10;
+  z-index: 101;
+  transition: background 0.12s ease;
+}
+.side-thumb:hover {
+  background: var(--border-1);
 }
 /* 标题栏：内边距 8 16 8 16（2026-07-23 用户定，与区块 16 对齐） */
 .bar-title {

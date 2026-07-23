@@ -73,7 +73,7 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  padding: 8px 16px;
+  padding: var(--space-8) var(--space-16);
   gap: var(--space-6);
   height: 38px;
   border: none;

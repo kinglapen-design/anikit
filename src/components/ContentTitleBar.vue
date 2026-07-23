@@ -110,7 +110,7 @@ async function togglePin(): Promise<void> {
   align-items: center;
   justify-content: space-between;
   /* 内边距 12（中栏外层 4 + 12 = 左右缘均 16，2026-07-23 用户定） */
-  padding: 12px;
+  padding: var(--space-12);
   flex: none;
 }
 .content-titlebar :deep(.icon-btn) {

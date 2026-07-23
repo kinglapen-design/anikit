@@ -96,7 +96,7 @@ function fileName(p: string): string {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 8px 16px; /* 01_按钮#07 修订：宽度按标题自适应 */
+  padding: var(--space-8) var(--space-16); /* 01_按钮#07 修订：宽度按标题自适应 */
   height: 38px;
   border: none;
   border-radius: var(--radius-6);
