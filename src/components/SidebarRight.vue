@@ -92,12 +92,12 @@ async function togglePin(): Promise<void> {
   pointer-events: none;
   z-index: 10;
 }
-/* 组件布局 06.1：标题栏内容容器内边距 8 / 子项间距自适应 */
+/* 标题栏：内边距 8 16 8 16（2026-07-23 用户定，与区块 16 对齐） */
 .bar-title {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-8);
+  padding: var(--space-8) var(--space-16);
 }
 .spacer {
   flex: 1;
@@ -122,8 +122,8 @@ async function togglePin(): Promise<void> {
   line-height: var(--text-caption-line);
   color: var(--font-icon-3);
 }
-/* 组件布局 06.7：视图切换内容容器内边距 4 8 8 8 */
+/* 视图切换：内边距 4 16 8 16（2026-07-23 用户定） */
 .bar-footer {
-  padding: var(--space-4) var(--space-8) var(--space-8) var(--space-8);
+  padding: var(--space-4) var(--space-16) var(--space-8) var(--space-16);
 }
 </style>
