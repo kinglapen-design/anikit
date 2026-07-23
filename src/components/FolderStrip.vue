@@ -36,14 +36,14 @@ const colWidth = computed(() => Math.max(80, Math.round((189 * ui.targetRowHeigh
 </template>
 
 <style scoped>
-/* 文件夹卡片区块：间距 8；padding 上 8 / 右 16 / 下 8（左 0 由素材区块容器 16 承担；
-   右 16 与网格预留对齐——文件夹卡片右缘距中栏外边框同为 24，2026-07-23 用户定） */
+/* 文件夹卡片区块：间距 8；padding 上 8 / 右 20 / 下 8（左 0 由素材区块容器 20 承担；
+   右 20 与网格预留对齐——文件夹卡片右缘距中栏外边框同为 24，2026-07-23 用户定） */
 .folder-block {
   flex: none;
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  padding: var(--space-8) var(--space-16) var(--space-8) 0;
+  padding: var(--space-8) 20px var(--space-8) 0;
 }
 /* 卡片列表：grid 均分同宽（auto-fill 空轨道同宽，末行不被拉宽）——
    卡片等比例跟随拖拽缩放（SVG 天然等比，无布局计算），满了换行；

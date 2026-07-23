@@ -293,7 +293,11 @@ onBeforeUnmount(() => {
   right: 0;
   width: 4px;
   border-radius: 2px;
+  /* 滚动条常态 font-icon-5（选中色），悬停 border-1；不用抓手光标（2026-07-23 用户定） */
+  background: var(--font-icon-5);
+  transition: background 0.12s ease;
+}
+.grid-thumb:hover {
   background: var(--border-1);
-  cursor: grab;
 }
 </style>

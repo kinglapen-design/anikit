@@ -34,24 +34,22 @@ const items = computed(() => content.visiblePlacements);
   flex: 1;
   min-width: 0;
   background: var(--c1);
-  /* 三栏面板无圆角无边框（主窗口结构调整）；padding 左右 8——标题栏 / 搜索框
-     （自身 padding 8）左右缘均为 16（2026-07-23 用户定） */
-  padding: var(--space-8);
+  /* 三栏面板无圆角无边框（主窗口结构调整）；padding 左右 4——标题栏 / 搜索框
+     （自身 padding 12）左右缘均为 16；滚动条可见条右缘距中栏外边框 4（2026-07-23 用户定） */
+  padding: var(--space-4);
 }
-/* 素材卡片区块：内边距 0 0 0 16（左 16 + 中栏 8 = 卡片距中栏外边框左 24；
-   右 0——滚动条定位在里层 viewport，可见条右缘距中栏外边框 8（中栏右 padding 8）；
-   卡片右缘 24 = 中栏右 8 + 里层网格预留 16（2026-07-23 用户定）；
-   上 8 由"内容"副标题 pad 承担，与文件夹区块底 8、总容器 gap 16 构成间距 32） */
+/* 素材卡片区块：内边距 0 0 0 20（左 20 + 中栏 4 = 卡片距中栏外边框左 24；
+   右 0——滚动条可见条右缘距中栏外边框 4；卡片右缘 24 = 中栏右 4 + 里层网格预留 20） */
 .asset-section {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 0 0 0 var(--space-16);
+  padding: 0 0 0 20px;
 }
-/* 搜索框内容容器：内边距 4 8 8 8 */
+/* 搜索框内容容器：内边距 4 12 8 12（中栏外层 4 + 12 = 左右缘均 16，2026-07-23 用户定） */
 .search-wrap {
   flex: none;
-  padding: var(--space-4) var(--space-8) var(--space-8) var(--space-8);
+  padding: var(--space-4) 12px var(--space-8) 12px;
 }
 </style>

@@ -7,6 +7,7 @@ export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
   const thumb = { show: false, top: 0, height: 30 };
   const state = reactive(thumb);
   let ro: ResizeObserver | undefined;
+  let mo: MutationObserver | undefined;
   let observedChild: Element | null = null;
 
   function sync(): void {
@@ -32,12 +33,16 @@ export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
     el.addEventListener("scroll", sync, { passive: true });
     ro = new ResizeObserver(sync);
     ro.observe(el);
+    // 内容根元素替换时 RO 不一定触发（尺寸未变 / 旧观测元素已卸载）——补 childList 监听兜底
+    mo = new MutationObserver(sync);
+    mo.observe(el, { childList: true });
     sync();
   });
 
   onBeforeUnmount(() => {
     bodyRef.value?.removeEventListener("scroll", sync);
     ro?.disconnect();
+    mo?.disconnect();
   });
 
   return state;

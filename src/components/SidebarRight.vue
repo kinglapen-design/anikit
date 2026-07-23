@@ -88,7 +88,8 @@ async function togglePin(): Promise<void> {
   right: 4px;
   width: 4px;
   border-radius: 2px;
-  background: var(--border-1);
+  /* 常态 font-icon-5（选中色，2026-07-23 用户定） */
+  background: var(--font-icon-5);
   pointer-events: none;
   z-index: 10;
 }
