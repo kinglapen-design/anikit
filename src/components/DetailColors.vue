@@ -38,10 +38,11 @@ const colors = ["#3A6EA5", "#2B9FD9", "#7A5C3E", "#A53E3E", "#3E8A57", "#6B4F8A"
   display: flex;
   flex-direction: column;
 }
-/* 预览图 + 颜色 item 容器：间距 8 */
+/* 预览图 + 颜色 item 容器：间距 8；色块容器居中（2026-07-23 用户定） */
 .preview-group {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-8);
 }
 /* 输入框组容器：间距 8 / 内边距 0 */
@@ -88,7 +89,8 @@ const colors = ["#3A6EA5", "#2B9FD9", "#7A5C3E", "#A53E3E", "#3E8A57", "#6B4F8A"
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 1px var(--border-1);
+  /* 描边 12% 透明白（font-icon-4）：透下去与色块自身颜色叠加，不用实灰（发糊，2026-07-23 用户定） */
+  box-shadow: inset 0 0 0 1px var(--font-icon-4);
   flex: none;
 }
 .swatch:hover {

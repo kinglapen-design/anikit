@@ -400,7 +400,7 @@ align-items: center;
 padding: 4px;
 gap: 4px;
 
-width: padding + gap + 子项（按子项自适应 fit-content，2026-07-23 用户定）;
+width: padding + gap + 子项（按子项自适应 fit-content，容器在预览图下居中）;
 height: padding + 子项;
 
 background: C4;
