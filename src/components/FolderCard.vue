@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// 文件夹卡片（02_通用组件/06_卡片 01 无缩略图态）：189 宽，图标容器 189×158（内边距 4 / 圆角 12）
-// + 图标组 181×150（内联 SVG，结构色 var() 化）+ 标题 + 标签（文件数 / 子文件夹数）。
+// 文件夹卡片（02_通用组件/06_卡片 01 无缩略图态，2026-07-23 用户定稿）：
+// 总容器间距 4；图标容器 padding 0 / 圆角 8 / 1px border-2（hover 2px font-icon-20 /
+// 选中 2px 品牌色——与素材卡片一致）；文字组与素材卡片一致（间距 2 / 高 60 / 标题两行截断）。
 import { computed } from "vue";
 import { getIcon } from "../lib/icons";
 import type { FolderNode } from "../stores/content";
@@ -23,54 +24,62 @@ const meta = computed(() => {
 <template>
   <div class="folder-card" :class="{ selected }" @click="emit('select')">
     <div class="icon-wrap" v-html="folderSvg" />
-    <div class="fname">{{ folder.name }}</div>
-    <div class="fmeta">{{ meta }}</div>
+    <div class="texts">
+      <span class="title">{{ folder.name }}</span>
+      <span class="meta">{{ meta }}</span>
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* 总容器：间距 2 / 圆角 8；宽度由 FolderStrip 弹性控制（基准 189） */
+/* 总容器：间距 4；宽度由 FolderStrip 弹性控制（基准 189） */
 .folder-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  border-radius: var(--radius-8);
+  gap: var(--space-4);
   cursor: default;
 }
-/* 图标容器：内边距 4 / 圆角 12；悬停 2px / 选中 2px 内阴影描边（不占空间不抖动） */
+/* 图标容器：padding 0 / 圆角 8 / 1px border-2（真 border，与素材卡片一致）；
+   hover 2px font-icon-20 / 选中 2px 品牌色 */
 .icon-wrap {
   width: 100%;
-  padding: var(--space-4);
-  border-radius: var(--radius-12);
-  transition: box-shadow 0.12s ease;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-8);
+  overflow: hidden;
   line-height: 0;
+  transition: border-color 0.12s ease;
 }
 .folder-card:hover .icon-wrap {
-  box-shadow: inset 0 0 0 2px var(--border-1);
+  border: 2px solid var(--font-icon-20);
 }
 .folder-card.selected .icon-wrap {
-  box-shadow: inset 0 0 0 2px var(--brand-1);
+  border: 2px solid var(--brand-1);
 }
 .icon-wrap :deep(svg) {
   width: 100%;
   height: auto;
   display: block;
 }
-.fname {
-  width: 100%;
-  height: 20px;
+/* 文字组：与素材卡片一致——间距 2 / 居中 / 高 60 顶部对齐 / 标题两行截断 */
+.texts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  height: 60px;
+  flex: none;
+}
+.title {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
   color: var(--font-icon-1);
   text-align: center;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-all;
 }
-.fmeta {
-  width: 100%;
-  height: 18px;
+.meta {
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   color: var(--font-icon-3);

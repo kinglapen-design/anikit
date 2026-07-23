@@ -42,10 +42,11 @@
   /* 图片悬停描边（2026-07-23 用户定） */
   --font-icon-20: color-mix(in srgb, var(--font-icon-base) 20%, transparent);
 
-  /* 文件夹卡片（新 token 未涉及，沿用旧值，过组件时再对） */
-  --folder-card-front: #262b36;
-  --folder-card-file: #c6c7cc;
-  --folder-card-back: #1f232d;
+  /* 文件夹卡片（2026-07-23 用户定：图层1 正面 = C4 / 图层4 背面 = C2 / 图层2 文件纸 #CAC8CC；
+     图层边框：1·4 = border-1、2 = font-icon-3（60%）、3 = font-icon-20（20%）） */
+  --folder-card-front: var(--c4);
+  --folder-card-file: #cac8cc;
+  --folder-card-back: var(--c2);
 
   /* 格式角标（2026-07-23 降噪定案：深色底 + 60% 字，静态图片不出角标；位置图片左上 4px） */
   --fmt-psd: #1b384d;
