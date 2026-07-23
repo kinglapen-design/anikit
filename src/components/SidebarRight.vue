@@ -78,7 +78,7 @@ async function togglePin(): Promise<void> {
   background: var(--c3);
   /* 三栏面板无圆角无边框，仅左侧 1px border-1 作视觉分割线（2026-07-23 线框定案） */
   box-shadow: inset 1px 0 0 0 var(--border-1);
-  padding: var(--space-4);
+  padding: var(--space-8);
   min-height: 0;
 }
 /* 悬浮滚动条：4px 胶囊 border-1、距右 4px、不占布局 */

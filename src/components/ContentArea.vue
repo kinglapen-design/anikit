@@ -35,7 +35,7 @@ const items = computed(() => content.visiblePlacements);
   min-width: 0;
   background: var(--c1);
   /* 三栏面板无圆角无边框（主窗口结构调整） */
-  padding: var(--space-4);
+  padding: var(--space-8);
 }
 /* 素材卡片区块：内边距 8 0 0 8（右 0——滚动条贴区块右缘，中栏 4px 内边距作呼吸） */
 .asset-section {
