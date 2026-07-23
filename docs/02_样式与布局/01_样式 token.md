@@ -48,8 +48,8 @@ font-icon-3：F8F5FA - 60%（副文本 / 提示文字 / 小图标按钮）
 font-icon-4：F8F5FA - 12%（装饰图标填充）
 font-icon-5：F8F5FA - 10%（选中）
 font-icon-6：F8F5FA - 5%（悬停）
-font-icon-placeholder：F8F5FA - 30%（占位符文字：输入框 placeholder / AI 提示词常态，聚焦时提 100%，2026-07-23 用户定）
-font-icon-disabled：F8F5FA - 40%（禁用——新 token 未含，暂补档，待用户确认）
+font-icon-placeholder：F8F5FA - 40%（占位符文字：输入框 placeholder / AI 提示词常态，聚焦时提 100%，2026-07-23 用户定）
+font-icon-disabled：F8F5FA - 30%（禁用，与占位符对调定案——不可用感更弱，2026-07-23 用户定）
 ```
 
 5. 其他颜色

@@ -32,9 +32,9 @@
   --font-icon-5: color-mix(in srgb, var(--font-icon-base) 10%, transparent); /* 选中 */
   --font-icon-6: color-mix(in srgb, var(--font-icon-base) 5%, transparent); /* 悬停 */
   /* 占位符文字（2026-07-23 用户定：输入框 placeholder / AI 提示词常态，聚焦时提 100%） */
-  --font-icon-placeholder: color-mix(in srgb, var(--font-icon-base) 30%, transparent);
-  /* 禁用：新 token 未含，暂按 40% 补档，待用户确认 */
-  --font-icon-disabled: color-mix(in srgb, var(--font-icon-base) 40%, transparent);
+  --font-icon-placeholder: color-mix(in srgb, var(--font-icon-base) 40%, transparent);
+  /* 禁用（与占位符对调定案：不可用感更弱，2026-07-23 用户定） */
+  --font-icon-disabled: color-mix(in srgb, var(--font-icon-base) 30%, transparent);
 
   /* 文件夹卡片（新 token 未涉及，沿用旧值，过组件时再对） */
   --folder-card-front: #262b36;
