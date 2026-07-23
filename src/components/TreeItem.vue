@@ -104,7 +104,8 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   gap: var(--space-6);
   flex: 1;
   min-width: 0;
-  padding: var(--space-4) var(--space-6);
+  /* 内边距 0 8 0 0（2026-07-23 用户定） */
+  padding: 0 var(--space-8) 0 0;
   border-radius: var(--radius-6);
   color: var(--font-icon-1);
   transition: background 0.12s ease;

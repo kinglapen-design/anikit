@@ -138,12 +138,12 @@ async function pickImport(kind: "files" | "folder"): Promise<void> {
   pointer-events: none;
   z-index: 10;
 }
-/* 标题栏：内边距 8 8 8 14 */
+/* 标题栏：内边距 8 8 8 10（2026-07-23 用户定） */
 .bar-title {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-14);
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-10);
 }
 .spacer {
   flex: 1;
@@ -160,7 +160,8 @@ async function pickImport(kind: "files" | "folder"): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-20);
+  /* 内边距 8 8 8 16（2026-07-23 用户定，原左 20） */
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-16);
   border-radius: var(--radius-6);
 }
 .badge {
@@ -175,9 +176,11 @@ async function pickImport(kind: "files" | "folder"): Promise<void> {
   color: var(--font-icon-1);
   flex: none;
 }
+/* 切换资源库标题：大标题 16/22（2026-07-23 用户定） */
 .lib-name {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  font-size: var(--text-title-size);
+  line-height: var(--text-title-line);
+  font-weight: var(--text-title-weight);
   color: var(--font-icon-1);
   white-space: nowrap;
   overflow: hidden;

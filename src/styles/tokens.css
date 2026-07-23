@@ -86,6 +86,10 @@
   --icon-small: 8px;
   --icon-xlarge: 24px;
 
+  /* 布局（2026-07-23 用户定）：左右侧边栏 260 / 中间面板 820 → 主窗口 1340（tauri.conf 同步） */
+  --sidebar-width: 260px;
+  --content-width: 820px;
+
   /* 阴影（x0 y4 blur40 60%：二级窗口 / 模态窗口 / 菜单 / 弹窗） */
   --shadow-pop: 0 4px 40px rgba(0, 0, 0, 0.6);
 }

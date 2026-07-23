@@ -34,7 +34,7 @@ const tagQuickItems = [
     <!-- 工作空间：根目录 / 置顶 / 常用 / 文件夹 -->
     <div v-if="ui.leftView === 'workspace'" class="sidebar-views">
     <section class="block">
-      <SectionHeader title="根目录" pad="0 8px 0 14px" v-model:open="rootOpen" />
+      <SectionHeader title="根目录" pad="0 8px 0 16px" v-model:open="rootOpen" />
       <div v-if="rootOpen" class="items">
         <TreeItem
           icon="workspace-all"
@@ -46,21 +46,21 @@ const tagQuickItems = [
       </div>
     </section>
     <section class="block">
-      <SectionHeader title="置顶" pad="0 8px 0 14px" v-model:open="pinnedOpen" />
+      <SectionHeader title="置顶" pad="0 8px 0 16px" v-model:open="pinnedOpen" />
       <div v-if="pinnedOpen" class="items">
         <TreeItem icon="folder-closed" label="新建文件夹" :count="132" />
         <TreeItem icon="folder-closed" label="新建文件夹" :count="45" />
       </div>
     </section>
     <section class="block">
-      <SectionHeader title="常用" pad="0 8px 0 14px" v-model:open="frequentOpen" />
+      <SectionHeader title="常用" pad="0 8px 0 16px" v-model:open="frequentOpen" />
       <div v-if="frequentOpen" class="items">
         <TreeItem icon="folder-closed" label="新建文件夹" :count="321" />
         <TreeItem icon="folder-closed" label="新建文件夹" :count="87" />
       </div>
     </section>
     <section class="block">
-      <SectionHeader title="文件夹" :count="1231" addable pad="0 8px 0 14px" v-model:open="wsTreeOpen" />
+      <SectionHeader title="文件夹" :count="1231" addable pad="0 8px 0 16px" v-model:open="wsTreeOpen" />
       <div v-if="wsTreeOpen" class="items">
         <FolderTree :nodes="content.folders" />
       </div>
@@ -70,7 +70,7 @@ const tagQuickItems = [
   <!-- 标签视图：快速访问 / 标签群组 -->
   <div v-else-if="ui.leftView === 'tags'" class="sidebar-views">
     <section class="block">
-      <SectionHeader title="快速访问" pad="0 8px 0 14px" v-model:open="tagQuickOpen" />
+      <SectionHeader title="快速访问" pad="0 8px 0 16px" v-model:open="tagQuickOpen" />
       <div v-if="tagQuickOpen" class="items">
         <TreeItem
           v-for="q in tagQuickItems"
@@ -83,7 +83,7 @@ const tagQuickItems = [
       </div>
     </section>
     <section class="block">
-      <SectionHeader title="标签群组" :count="2" addable pad="0 8px 0 14px" v-model:open="tagGroupOpen" />
+      <SectionHeader title="标签群组" :count="2" addable pad="0 8px 0 16px" v-model:open="tagGroupOpen" />
       <div v-if="tagGroupOpen" class="items">
         <TreeItem icon="tag-group" label="标签群组" :count="12" />
         <TreeItem icon="tag-group" label="标签群组" :count="34" />
@@ -94,21 +94,21 @@ const tagQuickItems = [
   <!-- 快捷入口：素材 / 文件夹 / 标签 -->
   <div v-else class="sidebar-views">
     <section class="block">
-      <SectionHeader title="素材" :count="2" pad="0 8px 0 14px" v-model:open="pinAssetOpen" />
+      <SectionHeader title="素材" :count="2" pad="0 8px 0 16px" v-model:open="pinAssetOpen" />
       <div v-if="pinAssetOpen" class="items">
         <TreeItem icon="pin-asset" label="素材" />
         <TreeItem icon="pin-asset" label="素材" />
       </div>
     </section>
     <section class="block">
-      <SectionHeader title="文件夹" :count="2" addable pad="0 8px 0 14px" v-model:open="pinFolderOpen" />
+      <SectionHeader title="文件夹" :count="2" addable pad="0 8px 0 16px" v-model:open="pinFolderOpen" />
       <div v-if="pinFolderOpen" class="items">
         <TreeItem icon="folder-closed" label="新建文件夹" />
         <TreeItem icon="folder-closed" label="新建文件夹" />
       </div>
     </section>
     <section class="block">
-      <SectionHeader title="标签" :count="2" addable pad="0 8px 0 14px" v-model:open="pinTagOpen" />
+      <SectionHeader title="标签" :count="2" addable pad="0 8px 0 16px" v-model:open="pinTagOpen" />
       <div v-if="pinTagOpen" class="items">
         <TreeItem icon="tag" label="全部标签" />
         <TreeItem icon="tag" label="场景" />
@@ -126,7 +126,7 @@ const tagQuickItems = [
 .block {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-8);
   padding: var(--space-8) 0;
 }
 .items {

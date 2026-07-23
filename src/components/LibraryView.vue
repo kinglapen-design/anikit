@@ -22,7 +22,7 @@ const quickItems = [
 <template>
   <div class="library-view">
     <section class="block quick">
-      <SectionHeader title="快速访问" pad="0 8px 0 14px" v-model:open="quickOpen" />
+      <SectionHeader title="快速访问" pad="0 8px 0 16px" v-model:open="quickOpen" />
       <div v-if="quickOpen" class="items">
         <TreeItem
           v-for="q in quickItems"
@@ -36,7 +36,7 @@ const quickItems = [
       </div>
     </section>
     <section class="block tree">
-      <SectionHeader title="文件夹" :count="content.folderTotal" addable pad="0 8px 0 14px" v-model:open="treeOpen" />
+      <SectionHeader title="文件夹" :count="content.folderTotal" addable pad="0 8px 0 16px" v-model:open="treeOpen" />
       <div v-if="treeOpen" class="items">
         <FolderTree :nodes="content.folders" />
       </div>
@@ -49,19 +49,19 @@ const quickItems = [
   display: flex;
   flex-direction: column;
 }
-/* 快速访问区块：内边距 8 0 / 间距 6 */
+/* 快速访问区块：内边距 8 0 / 间距 8（2026-07-23 用户定） */
 .block.quick {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-8);
   padding: var(--space-8) 0;
 }
-/* 文件树区块：内边距 8 0 0 / 间距 6，填满剩余 */
+/* 文件树区块：内边距 8 0 / 间距 8，填满剩余 */
 .block.tree {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-8) 0 0;
+  gap: var(--space-8);
+  padding: var(--space-8) 0;
   flex: 1;
 }
 /* item 组：内边距 0 8 0 4 / 间距 2（4 + 展开容器 8 + gap 2 = 14，与标题栏按钮左缘对齐） */

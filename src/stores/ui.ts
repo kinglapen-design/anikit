@@ -7,8 +7,8 @@ export const useUiStore = defineStore("ui", {
   state: () => ({
     leftView: "library" as LeftView,
     rightView: "detail" as RightView,
-    leftWidth: 250,
-    rightWidth: 250,
+    leftWidth: 260,
+    rightWidth: 260,
     leftCollapsed: false,
     rightCollapsed: false,
     alwaysOnTop: false,

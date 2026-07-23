@@ -148,3 +148,11 @@ WEBP 动图 / 序列帧 / GIF：#A64CFF（品牌紫）
 ``` text
 0 4px 40px rgba(0, 0, 0, 0.6)（CSS 变量 --shadow-pop）
 ```
+
+## 08. 布局
+
+``` text
+左右侧边栏宽度：260px（--sidebar-width）
+中间面板宽度：820px（--content-width，弹性基准）
+主窗口宽度：1340px（= 260 + 820 + 260，tauri.conf.json 同步）
+```
