@@ -39,6 +39,8 @@
   --font-icon-placeholder: color-mix(in srgb, var(--font-icon-base) 40%, transparent);
   /* 禁用（与占位符对调定案：不可用感更弱，2026-07-23 用户定） */
   --font-icon-disabled: color-mix(in srgb, var(--font-icon-base) 30%, transparent);
+  /* 图片悬停描边（2026-07-23 用户定） */
+  --font-icon-20: color-mix(in srgb, var(--font-icon-base) 20%, transparent);
 
   /* 文件夹卡片（新 token 未涉及，沿用旧值，过组件时再对） */
   --folder-card-front: #262b36;

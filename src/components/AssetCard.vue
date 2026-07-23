@@ -89,7 +89,7 @@ const meta = computed(() =>
   transition: border-color 0.12s ease;
 }
 .asset-card:hover .thumb {
-  border: 2px solid var(--c1-20);
+  border: 2px solid var(--font-icon-20);
 }
 .asset-card.selected .thumb {
   border: 2px solid var(--brand-1);
