@@ -19,7 +19,8 @@ import DetailPrompt from "./DetailPrompt.vue";
 
 <style scoped>
 /* 详情容器：区块统一规则（2026-07-23 用户定）——内边距 12 16 / 间距 8 /
-   border-top 通栏分割线（border-2，首个区块不画）；侧栏外层无 padding，分割线横贯 */
+   通栏分割线 border-2 以 inset box-shadow 绘制（在背景之上，hover 底色 C2 盖不住；
+   首个区块不画）；侧栏外层无 padding，分割线横贯 */
 .detail-panel {
   display: flex;
   flex-direction: column;
@@ -27,10 +28,10 @@ import DetailPrompt from "./DetailPrompt.vue";
 .detail-panel :deep(.detail-block) {
   gap: var(--space-8);
   padding: 12px 16px;
-  border-top: 1px solid var(--border-2);
+  box-shadow: inset 0 1px 0 0 var(--border-2);
 }
 .detail-panel :deep(.detail-block:first-child) {
-  border-top: none;
+  box-shadow: none;
 }
 /* 颜色信息区块（pinned：永久置顶、无副标题、不参与拖拽排序）：
    内边距 8 16 12 16 / 间距 16 */
