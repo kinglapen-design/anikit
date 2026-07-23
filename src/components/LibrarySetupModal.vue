@@ -122,7 +122,7 @@ function onRetry(): void {
   justify-content: center;
   background: var(--c1);
 }
-/* 初始卡片：686×500 / C3 / 2px border-1 描边（inset box-shadow，规范 4）+ 二级窗口投影 / 圆角 8 */
+/* 初始卡片：686×500 / C3 / 1px border-1 描边（inset box-shadow，规范 4）+ 二级窗口投影 / 圆角 8 */
 .setup-card {
   box-sizing: border-box;
   width: 686px;
@@ -135,7 +135,7 @@ function onRetry(): void {
   background: var(--c3);
   box-shadow:
     var(--shadow-pop),
-    inset 0 0 0 2px var(--border-1);
+    inset 0 0 0 1px var(--border-1);
   border-radius: var(--radius-8);
 }
 .illustration {

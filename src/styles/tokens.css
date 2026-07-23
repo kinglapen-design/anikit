@@ -60,8 +60,8 @@
   --text-caption-line: 18px;
   --text-caption-weight: 400;
 
-  /* 线框（用户定案：2px = 主窗口 / 二级窗口 / 模态窗口 / 菜单外边框；1px = 其他线条；
-     交互态描边不受此限：hover 提亮、选中品牌色） */
+  /* 线框（2026-07-23 用户定案：边框一律 1px——含二级窗口 / 模态 / 菜单外边框，不设粗细层级；
+     2px 仅保留卡片悬停 / 选中描边与拆分条高亮；主窗口 = DWM 1px 边框，染 border-1） */
   --border-thick: 2px;
   --border-thin: 1px;
 

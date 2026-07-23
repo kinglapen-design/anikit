@@ -24,6 +24,6 @@ height: 26px;
 
 background: C3;
 
-border: 2px solid border-1;
+border: 1px solid border-1;
 border-radius: 6px;
 ```

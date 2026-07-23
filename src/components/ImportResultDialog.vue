@@ -53,7 +53,7 @@ function fileName(p: string): string {
   background: var(--c3);
   box-shadow:
     var(--shadow-pop),
-    inset 0 0 0 2px var(--border-1);
+    inset 0 0 0 1px var(--border-1);
   border-radius: var(--radius-8);
 }
 .title {

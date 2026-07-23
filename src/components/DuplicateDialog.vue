@@ -233,7 +233,7 @@ function onSkip(): void {
   justify-content: center;
   background: var(--c1);
 }
-/* 总容器（10）：1052×732 / C3 / 2px border-1（inset，窗口级边框）/ 圆角 8 / --shadow-pop */
+/* 总容器（10）：1052×732 / C3 / 1px border-1（inset，窗口级边框）/ 圆角 8 / --shadow-pop */
 .dup-card {
   box-sizing: border-box;
   width: 1052px;
@@ -243,7 +243,7 @@ function onSkip(): void {
   background: var(--c3);
   box-shadow:
     var(--shadow-pop),
-    inset 0 0 0 2px var(--border-1);
+    inset 0 0 0 1px var(--border-1);
   border-radius: var(--radius-8);
   overflow: hidden;
 }

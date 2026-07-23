@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 菜单容器（02_通用组件/07_右键菜单、03_UI 布局/05_查看方式）：
-// C3 / 圆角 8 / 2px border-1（inset）/ 内边距 4 / 子项间距 2 / 投影 --shadow-pop（token 07）；
+// C3 / 圆角 8 / 1px border-1（inset）/ 内边距 4 / 子项间距 2 / 投影 --shadow-pop（token 07）；
 // fixed 定位，点击组外（group 之外）或 Esc 关闭；菜单项点击不自动关闭（连续操作）。
 import { onBeforeUnmount, onMounted, ref } from "vue";
 
@@ -55,7 +55,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-8);
   background: var(--c3);
   box-shadow:
-    inset 0 0 0 2px var(--border-1),
+    inset 0 0 0 1px var(--border-1),
     var(--shadow-pop);
 }
 </style>

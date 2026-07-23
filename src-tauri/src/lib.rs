@@ -137,9 +137,9 @@ pub fn run() {
           use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
           if let Ok(raw) = w.hwnd() {
             let hwnd = HWND(raw.0 as _);
-            // 主窗口 1px 线框 ≈ C4-15 在 C1 底上的合成色 RGB(44,45,47)（COLORREF 0x00BBGGRR），
+            // 主窗口 DWM 1px 边框染为 border-1 #3A3940（COLORREF 0x00BBGGRR），
             // Win11 22000+ 生效，Win10 忽略
-            let border: u32 = 0x002F_2D2C;
+            let border: u32 = 0x0040_393A;
             unsafe {
               let _ = DwmSetWindowAttribute(
                 hwnd,

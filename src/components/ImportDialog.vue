@@ -83,7 +83,7 @@ const sourceTip = computed(() =>
   background: var(--c1);
 }
 /* 总容器（08_二级窗口通用规则）：宽度随最宽子项、上限 368，超出文字换行；
-   C3 / 2px border-1（inset）/ 圆角 8 / --shadow-pop */
+   C3 / 1px border-1（inset）/ 圆角 8 / --shadow-pop */
 .import-card {
   box-sizing: border-box;
   width: fit-content;
@@ -96,7 +96,7 @@ const sourceTip = computed(() =>
   background: var(--c3);
   box-shadow:
     var(--shadow-pop),
-    inset 0 0 0 2px var(--border-1);
+    inset 0 0 0 1px var(--border-1);
   border-radius: var(--radius-8);
 }
 .title {
