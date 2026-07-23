@@ -75,22 +75,23 @@ const meta = computed(() =>
 </template>
 
 <style scoped>
-/* 总容器：padding 0 / gap 0 / 1px border-2 / 圆角 8（overflow 裁切图片与文字区角） */
+/* 总容器：padding 0 / gap 0 / 1px border-2 / 圆角 8（overflow 裁切图片与文字区角）；
+   边框用真 border——inset box-shadow 会被铺满的图片盖住（同主窗口机制） */
 .asset-card {
   position: absolute;
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--border-2);
   border-radius: var(--radius-8);
-  box-shadow: inset 0 0 0 1px var(--border-2);
   overflow: hidden;
   cursor: default;
-  transition: box-shadow 0.12s ease;
+  transition: border-color 0.12s ease;
 }
 .asset-card:hover {
-  box-shadow: inset 0 0 0 2px var(--border-1);
+  border: 2px solid var(--border-1);
 }
 .asset-card.selected {
-  box-shadow: inset 0 0 0 2px var(--brand-1);
+  border: 2px solid var(--brand-1);
 }
 /* 图片区：上两角随容器圆角（overflow 裁切），无缩略图占位 = 中间面板底色 C1 */
 .thumb {
@@ -139,10 +140,13 @@ const meta = computed(() =>
   color: var(--font-icon-3);
   white-space: nowrap;
 }
-/* 格式角标容器：间距 8 */
+/* 格式角标容器：竖向（角标在上 + 按钮组在下），间距 8，右对齐；
+   高 = 角标 18 + 8 + 按钮 16 = 42，与左侧文字容器（20 + 4 + 18）等高 */
 .badge-group {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
   gap: var(--space-8);
   flex: none;
 }
