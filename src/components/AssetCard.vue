@@ -142,11 +142,15 @@ const meta = computed(() =>
   padding: var(--space-4);
   border-radius: var(--radius-4);
   background: var(--c1-20);
-  color: var(--font-icon-1);
-  transition: background 0.12s ease;
+  /* 图标常态 60%，悬停按钮 80%（2026-07-23 用户定） */
+  color: var(--font-icon-3);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 .act:hover {
   background: var(--c1-40);
+  color: var(--font-icon-2);
 }
 /* 文字组：间距 2 / 居中 / 高 60 顶部对齐（内容一行时与图片间距恒为总容器 gap 4）；
    标题最多两行截断 */
