@@ -39,8 +39,4 @@ import DetailPrompt from "./DetailPrompt.vue";
   gap: var(--space-16);
   padding: var(--space-8) var(--space-16) 12px;
 }
-/* 可移动区块 hover：底色 C2（详情面板区块悬停底色，2026-07-23 用户定） */
-.detail-panel :deep(.detail-block:not(.pinned)):hover {
-  background: var(--c2);
-}
 </style>
