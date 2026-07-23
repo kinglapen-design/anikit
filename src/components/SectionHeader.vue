@@ -41,24 +41,17 @@ const emit = defineEmits<{ add: [] }>();
   height: 24px;
   padding: var(--space-4);
   border-radius: var(--radius-4);
-  color: var(--font-icon-1);
+  /* 区块副标题图标 60%（2026-07-23 用户定：font-icon-3；SVG 一律烘 100%，明暗全由 color 档位表达） */
+  color: var(--font-icon-3);
   flex: none;
-  transition: background 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
-/* 容器内图标 font-icon-3（02_item 05：SVG 烘 0.7，此处压到 0.4） */
-.head-btn :deep(svg [stroke-opacity="0.7"]),
-.head-btn :deep(svg [fill-opacity="0.7"]) {
-  stroke-opacity: 0.4;
-  fill-opacity: 0.4;
-}
-/* hover：底色 font-icon-6，图标 font-icon-2（:hover 伪类提权，覆盖常态 0.4 恢复 SVG 烘的 0.7） */
+/* hover：底色 font-icon-6，图标提亮 font-icon-2 */
 .head-btn:hover {
   background: var(--font-icon-6);
-}
-.head-btn:hover :deep(svg [stroke-opacity="0.7"]),
-.head-btn:hover :deep(svg [fill-opacity="0.7"]) {
-  stroke-opacity: 0.7;
-  fill-opacity: 0.7;
+  color: var(--font-icon-2);
 }
 .chev {
   transition: transform 0.15s ease;

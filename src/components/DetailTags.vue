@@ -60,11 +60,11 @@ const open = ref(true);
 .spacer {
   flex: 1;
 }
-/* 删除 ×：常态 font-icon-3 / 悬停 font-icon-2 */
-.del :deep(svg [stroke-opacity="0.7"]) {
-  stroke-opacity: 0.4;
+/* 删除 ×：常态 font-icon-3 / 悬停 font-icon-2（SVG 烘 100%，明暗全由 color 档位） */
+.del {
+  color: var(--font-icon-3);
 }
-.del:hover :deep(svg [stroke-opacity="0.7"]) {
-  stroke-opacity: 0.7;
+.del:hover {
+  color: var(--font-icon-2);
 }
 </style>

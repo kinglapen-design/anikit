@@ -63,7 +63,8 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
   justify-content: center;
   width: 8px;
   height: 28px;
-  color: var(--font-icon-1);
+  /* 展开箭头常态 font-icon-3（02_item：容器内图标），hover 提亮 font-icon-2 */
+  color: var(--font-icon-3);
   flex: none;
 }
 .expand:not(.placeholder) {
@@ -82,8 +83,8 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 .chev.open {
   transform: rotate(90deg);
 }
-.expand:hover .chev :deep(svg [fill-opacity="0.4"]) {
-  fill-opacity: 0.7;
+.expand:hover .chev {
+  color: var(--font-icon-2);
 }
 /* L 形横线：仅最后一个叶子 item，x4 → x8（竖线由 ft-children 容器级绘制、
    止于本行中心，与此横线组成 L；竖线 1px 位于 x4-5 正中）；中间子项纯竖线，不画横线 */
@@ -114,12 +115,12 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 .body.selected {
   background: var(--font-icon-5);
 }
-/* 选中：装饰图标线条 font-icon-1（填充层保持 font-icon-4 不提亮） */
-.body.selected .deco :deep(svg [stroke-opacity]),
-.body.selected .deco :deep(svg [fill-opacity="0.4"]),
-.body.selected .deco :deep(svg [fill-opacity="0.7"]) {
-  stroke-opacity: 1;
-  fill-opacity: 1;
+/* 选中：装饰图标提亮 font-icon-1（常态 font-icon-3，SVG 烘 100% 后明暗全由 color 档位表达） */
+.deco {
+  color: var(--font-icon-3);
+}
+.body.selected .deco {
+  color: var(--font-icon-1);
 }
 .label {
   flex: 1;

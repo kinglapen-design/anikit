@@ -103,13 +103,17 @@ async function togglePin(): Promise<void> {
 </template>
 
 <style scoped>
-/* 总容器：内边距 8 / 各组 space-between 等距 */
+/* 总容器：内边距 8 / 各组 space-between 等距；
+   中栏标题栏图标按钮 80%（2026-07-23 用户定：面板深，满亮太抢眼；左右侧栏标题栏保持 font-icon-1） */
 .content-titlebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: var(--space-8);
   flex: none;
+}
+.content-titlebar :deep(.icon-btn) {
+  color: var(--font-icon-2);
 }
 /* 面包屑导航容器：返回前进按钮组（间距 4）+ 标题容器（间距 4） */
 .nav-group {

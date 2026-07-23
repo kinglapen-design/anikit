@@ -57,8 +57,8 @@ withDefaults(defineProps<{ label: string; tone?: "menu" | "dialog" }>(), { tone:
   box-shadow: inset 0 0 0 1px var(--brand-2);
   background: var(--brand-1);
 }
-/* 选中时对勾 C4 全亮（二级菜单对勾颜色独立，不受影响） */
-.app-checkbox.on .box :deep(svg [stroke-opacity]) {
-  stroke-opacity: 1;
+/* 选中时对勾 font-icon-1 全亮（SVG 烘 100%，无需再提 opacity；二级菜单对勾颜色独立） */
+.app-checkbox.on .box {
+  color: var(--font-icon-1);
 }
 </style>

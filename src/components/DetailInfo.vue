@@ -118,14 +118,10 @@ const open = ref(true);
   gap: var(--space-4);
 }
 .star {
-  color: var(--font-icon-1);
-}
-.star :deep(svg [stroke-opacity="0.7"]) {
-  stroke-opacity: 0.4;
+  color: var(--font-icon-3);
 }
 .star.on :deep(path) {
   fill: var(--warning);
   stroke: var(--warning);
-  stroke-opacity: 1;
 }
 </style>

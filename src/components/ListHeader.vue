@@ -90,7 +90,4 @@ const cols = ["尺寸", "格式", "文件大小", "修改日期"] as const;
 .col:hover .sort-arrow {
   opacity: 1;
 }
-.col:hover .sort-arrow :deep(svg [stroke-opacity]) {
-  stroke-opacity: 1;
-}
 </style>

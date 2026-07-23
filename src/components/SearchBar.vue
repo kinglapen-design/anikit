@@ -45,12 +45,12 @@ const focused = ref(false);
   box-shadow: inset 0 0 0 1px var(--brand-1);
 }
 /* 搜索方式入口（搜索图标容器 28×28 + 展开小箭头朝上，间距 2）：无按钮底色，
-   常态 font-icon-2 / 悬停 C4（仅颜色） */
+   常态 font-icon-3 / 悬停 font-icon-1（仅颜色；SVG 烘 100%，明暗全由 color 档位） */
 .lead {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  color: var(--font-icon-1);
+  color: var(--font-icon-3);
   flex: none;
 }
 /* 搜索图标容器：28×28（内边距 6），与右侧展开按钮对齐 */
@@ -62,10 +62,8 @@ const focused = ref(false);
   height: 28px;
   padding: var(--space-6);
 }
-.lead:hover :deep(svg [stroke-opacity="0.7"]),
-.lead:hover :deep(svg [fill-opacity="0.7"]) {
-  stroke-opacity: 1;
-  fill-opacity: 1;
+.lead:hover {
+  color: var(--font-icon-1);
 }
 .up {
   transform: rotate(180deg);
@@ -79,25 +77,25 @@ const focused = ref(false);
   height: 24px;
   padding: var(--space-4);
   border-radius: var(--radius-4);
-  color: var(--font-icon-1);
+  color: var(--font-icon-3);
   flex: none;
-  transition: background 0.12s ease;
-}
-.clear :deep(svg [stroke-opacity="0.7"]) {
-  stroke-opacity: 0.4;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 .clear:hover {
   background: var(--font-icon-6);
+  color: var(--font-icon-2);
 }
-.clear:hover :deep(svg [stroke-opacity="0.7"]) {
-  stroke-opacity: 0.7;
+/* 最右侧展开按钮（图标按钮-大 28×28）：图标 16×16 朝上，常态 font-icon-3 / hover font-icon-1 */
+.expand-btn {
+  color: var(--font-icon-3);
 }
-/* 最右侧展开按钮（图标按钮-大 28×28）：图标 16×16 朝上，hover 图标 C4 */
+.expand-btn:hover {
+  color: var(--font-icon-1);
+}
 .expand-btn :deep(svg) {
   transform: rotate(180deg);
-}
-.expand-btn:hover :deep(svg [stroke-opacity="0.7"]) {
-  stroke-opacity: 1;
 }
 input {
   flex: 1;

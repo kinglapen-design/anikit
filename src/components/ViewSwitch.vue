@@ -71,7 +71,8 @@ function select(value: string): void {
   height: 28px;
   padding: var(--space-6) 0;
   border-radius: var(--radius-6);
-  color: var(--font-icon-1);
+  /* 视图切换图标常态 font-icon-3，选中 font-icon-1（SVG 烘 100%，明暗全由 color 档位） */
+  color: var(--font-icon-3);
   transition: background 0.12s ease;
 }
 .item:hover {
@@ -80,11 +81,7 @@ function select(value: string): void {
 .sliding .item:hover {
   background: none;
 }
-/* 选中图标线条高亮 C4（填充层 0.07 保持不提亮） */
-.item.on :deep(svg [stroke-opacity]),
-.item.on :deep(svg [fill-opacity="0.4"]),
-.item.on :deep(svg [fill-opacity="0.7"]) {
-  stroke-opacity: 1;
-  fill-opacity: 1;
+.item.on {
+  color: var(--font-icon-1);
 }
 </style>

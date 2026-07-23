@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 图标组件：内联 SVG（currentColor / 文件夹卡片 var() 均要求内联）。
-// 颜色一律 color: var(--font-icon-1)，明暗由 SVG 烘的透明度决定（线条 0.4 / 填充 0.07）；
-// 需要高亮（悬停 / 选中）时由父级 :deep 覆盖 opacity 至 1。
+// 颜色继承父级 color（font-icon 档位）；SVG 线条层一律烘 100%，明暗全由 color 表达，
+// 仅装饰填充层烘 0.12（= font-icon-4）——2026-07-23 废弃旧体系"SVG 烘透明度 + 父级 :deep 提 opacity"。
 import { computed } from "vue";
 import { getIcon } from "../lib/icons";
 
