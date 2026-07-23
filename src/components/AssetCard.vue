@@ -52,7 +52,7 @@ const meta = computed(() =>
         draggable="false"
       />
       <div v-else class="img" />
-      <span class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
+      <span v-if="badgeColor" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
       <div class="actions">
         <button class="act" v-tip="'发送至 Animate'" @click.stop>
           <AppIcon name="send-to" />
@@ -106,17 +106,17 @@ const meta = computed(() =>
 .img.icon {
   object-fit: contain;
 }
-/* 格式角标：图片左上各 4px；实底格式色 / 内边距 0 6 / 圆角 4 / 角标文字 12/18 粗体 */
+/* 格式角标：图片左上各 4px；深色实底（降噪）/ 内边距 0 4 / 圆角 4 / 角标文字 10/16 粗体 60% */
 .badge {
   position: absolute;
   top: 4px;
   left: 4px;
-  padding: 0 var(--space-6);
+  padding: 0 var(--space-4);
   border-radius: var(--radius-4);
   font-size: var(--text-badge-size);
   line-height: var(--text-badge-line);
   font-weight: var(--text-badge-weight);
-  color: var(--font-icon-1);
+  color: var(--font-icon-3);
   pointer-events: none;
 }
 /* 按钮组：图片右下各 4px / 间距 4；图标按钮-小（24×24 圆角 4），

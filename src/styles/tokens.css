@@ -47,14 +47,13 @@
   --folder-card-file: #c6c7cc;
   --folder-card-back: #1f232d;
 
-  /* 格式角标（7 组实色；角标样式——实底白字 / 位置归组件层，过组件时统一） */
-  --fmt-psd: #258ad4;
-  --fmt-fla: #a94131;
-  --fmt-svg: #c07502; /* SVG / EPS / AI 同组 */
-  --fmt-aep: #4545f7;
-  --fmt-anim: #a64cff; /* WEBP 动图 / 序列帧 / GIF（品牌紫） */
-  --fmt-image: #338972; /* 静态图片 */
-  --fmt-other: #5b5868;
+  /* 格式角标（2026-07-23 降噪定案：深色底 + 60% 字，静态图片不出角标；位置图片左上 4px） */
+  --fmt-psd: #1b384d;
+  --fmt-fla: #542822;
+  --fmt-svg: #80591d; /* SVG / EPS / AI 同组 */
+  --fmt-aep: #323281;
+  --fmt-anim: #4e2675; /* WEBP 动图 / 序列帧 / GIF */
+  /* 静态图片（PNG / JPG / BMP / WEBP）不出角标；其他格式用 C1-40 */
 
   /* 文字 */
   --font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
@@ -67,9 +66,9 @@
   --text-caption-size: 12px;
   --text-caption-line: 18px;
   --text-caption-weight: 400;
-  /* 格式角标文字（2026-07-23 用户定：素材卡片实底徽章专用） */
-  --text-badge-size: 12px;
-  --text-badge-line: 18px;
+  /* 格式角标文字（2026-07-23 用户定：素材卡片徽章专用，10/16 粗体） */
+  --text-badge-size: 10px;
+  --text-badge-line: 16px;
   --text-badge-weight: 700;
 
   /* 线框（2026-07-23 用户定案：边框一律 1px——含二级窗口 / 模态 / 菜单外边框，不设粗细层级；
