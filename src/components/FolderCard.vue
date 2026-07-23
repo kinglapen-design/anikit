@@ -69,12 +69,12 @@ const meta = computed(() => {
   height: auto;
   display: block;
 }
-/* 文字组：与素材卡片一致——间距 2 / 居中 / 高 60 顶部对齐 / 标题两行截断 */
+/* 文字组：间距 2 / 居中 / 高度按内容自适应（单行 40，两行 60）——文件夹图标比例固定，
+   无需像素材卡片那样为布局预留定高（2026-07-23 用户定：区域紧凑）；标题最多两行截断 */
 .texts {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  height: 60px;
   flex: none;
 }
 .title {
