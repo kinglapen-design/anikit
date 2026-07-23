@@ -34,12 +34,12 @@ const open = ref(true);
   flex-wrap: wrap;
   gap: var(--space-8);
 }
-/* 标签 item：内边距 6 6 6 8 / 圆角 8 / C4 / 1px border-1 / 间距 6 */
+/* 标签 item：内边距 4 4 4 8（2026-07-23 用户定）/ 圆角 8 / C4 / 1px border-1 / 间距 6 */
 .tag-item {
   display: flex;
   align-items: center;
   gap: var(--space-6);
-  padding: var(--space-6) var(--space-6) var(--space-6) var(--space-8);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-8);
   border-radius: var(--radius-8);
   background: var(--c4);
   box-shadow: inset 0 0 0 1px var(--border-1);

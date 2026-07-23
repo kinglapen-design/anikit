@@ -290,19 +290,22 @@ order: 1;
 
 ## 06. 详情面板关联文件夹 item
 
+> 一栏布局（2026-07-23 用户定，替代原竖向两行稿）：文件夹名（图标 + 名称）与文件名一栏；
+> 文件名与 X 一组（间距 4）；X 常态不占位隐藏（宽度 0，空间留给文件名），悬停 item 时展开 24px 露出，文件名随之左移。
+
 ``` css
-/* 总容器：文件夹标题容器 + 文件名称 */
+/* 总容器：基础 item + 文件名组 */
 box-sizing: border-box;
 
 /* Auto layout */
 display: flex;
-flex-direction: column;
-align-items: flex-start;
-padding: 6px 6px 6px 8px;
-gap: 2px;
+flex-direction: row;
+align-items: center;
+padding: 4px 4px 4px 8px;
+gap: 6px;
 
 width: 填充父容器;
-height: padding + gap + 子项;
+height: padding + 子项;
 
 background: C4;
 
@@ -316,44 +319,30 @@ flex: none;
 align-self: stretch;
 flex-grow: 0;
 
-/* 文件夹标题容器：基础 item + 删除按钮 */
-/* Auto layout */
-display: flex;
-flex-direction: row;
-justify-content: space-between;
-align-items: center;
-padding: 0px;
-
-width: 填充父容器;
-height: 子项;
-
-/* Inside auto layout */
-flex: none;
-order: 0;
-align-self: stretch;
-flex-grow: 0;
-
 /* 基础 item */
 [[#01. 基础 item]];
 
-order: 0;
-
-/* 删除按钮 */
-[[01_按钮#01. 图标按钮 - 无底色装饰]] / 小图标;
-
-color: 容器内图标 font-icon-3;
-
-hover: background font-icon-6
-
-order: 1;
+/* 文件名组：文件名称 + 删除按钮，间距 4 */
+display: flex;
+flex-direction: row;
+align-items: center;
+gap: 4px;
 
 /* 文件名称 */
 font: [[01_样式 token#02. 文字]] / 副文本;
 
 color: font-icon-3;
 
-order: 1;
+/* 删除按钮 */
+[[01_按钮#01. 图标按钮 - 无底色装饰]] / 小图标;
+
+color: 容器内图标 font-icon-3;
+
+常态: width 0 / opacity 0（不占位隐藏）;
+hover（item 级）: width 24px / opacity 1（露出，文件名左移）;
+hover（自身）: 图标 font-icon-2
 ```
+
 
 ## 07. 详情面板标签 item
 
@@ -365,7 +354,7 @@ box-sizing: border-box;
 display: flex;
 flex-direction: row;
 align-items: center;
-padding: 6px 6px 6px 8px;
+padding: 4px 4px 4px 8px; /* 2026-07-23 用户定 */
 gap: 6px;
 
 width: padding + gap + 基础 item + 删除按钮;
