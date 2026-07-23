@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-// 详情模块 · 颜色信息（03_UI 布局/04_右侧边栏 03）：图片容器（圆角 6 / 1px border-2 + 格式角标）
+// 详情模块 · 颜色信息（03_UI 布局/04_右侧边栏 03）：图片容器（圆角 6 / 1px border-1 + 格式角标）
 // + 色块容器（胶囊圆角 14 / C4）。阶段 1 静态假数据。
 import SectionHeader from "./SectionHeader.vue";
 
@@ -39,13 +39,13 @@ const open = ref(true);
   align-items: center;
   gap: var(--space-8);
 }
-/* 图片容器：高 120 / 圆角 6 / 1px border-2 */
+/* 图片容器：高 120 / 圆角 6 / 1px border-1 */
 .thumb {
   position: relative;
   width: 100%;
   height: 120px;
   border-radius: var(--radius-6);
-  box-shadow: inset 0 0 0 1px var(--border-2);
+  box-shadow: inset 0 0 0 1px var(--border-1);
   background: hsl(215 30% 22%);
 }
 /* 格式角标：左上 4px / 内边距 2 4 / 圆角 4 / C1 */
@@ -61,7 +61,7 @@ const open = ref(true);
   color: var(--font-icon-2);
   pointer-events: none;
 }
-/* 色块容器（02_item 08）：胶囊圆角 14 / C4 / 1px border-2 / 内边距 4 / 间距 4 */
+/* 色块容器（02_item 08）：胶囊圆角 14 / C4 / 1px border-1 / 内边距 4 / 间距 4 */
 .swatches {
   display: flex;
   flex-wrap: wrap;
@@ -69,13 +69,13 @@ const open = ref(true);
   padding: var(--space-4);
   border-radius: 14px;
   background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-2);
+  box-shadow: inset 0 0 0 1px var(--border-1);
 }
 .swatch {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 1px var(--border-2);
+  box-shadow: inset 0 0 0 1px var(--border-1);
   flex: none;
 }
 .swatch:hover {

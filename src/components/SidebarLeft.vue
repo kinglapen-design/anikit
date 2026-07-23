@@ -123,8 +123,8 @@ async function pickImport(kind: "files" | "folder"): Promise<void> {
   flex-direction: column;
   flex: none;
   background: var(--c3);
-  /* 三栏面板无圆角无边框，仅右侧 1px border-2 作视觉分割线（2026-07-23 线框定案） */
-  box-shadow: inset -1px 0 0 0 var(--border-2);
+  /* 三栏面板无圆角无边框，仅右侧 1px border-1 作视觉分割线（2026-07-23 线框定案） */
+  box-shadow: inset -1px 0 0 0 var(--border-1);
   padding: var(--space-4);
   min-height: 0;
 }

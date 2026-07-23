@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 滑块（token 10，无百分比）：滑轨 3px / 120px 胶囊 border-2，拖钮 10×10 font-icon-1。
+// 滑块（token 10，无百分比）：滑轨 3px / 120px 胶囊 border-1，拖钮 10×10 font-icon-1。
 // 拖动中实时更新 v-model，pointerup 时 emit commit（用于触发布局重算等重操作）。
 import { computed, ref } from "vue";
 
@@ -66,7 +66,7 @@ function onUp(e: PointerEvent): void {
   height: 3px;
   transform: translateY(-50%);
   border-radius: 2px;
-  background: var(--border-2);
+  background: var(--border-1);
 }
 .thumb {
   position: absolute;

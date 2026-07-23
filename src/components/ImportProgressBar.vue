@@ -54,13 +54,13 @@ const eta = computed(() => {
   height: 44px;
   flex: none;
 }
-/* 进度条（10_进度条）：高 6 胶囊 / border-2 底 / 品牌色-1 已加载，占剩余空间 */
+/* 进度条（10_进度条）：高 6 胶囊 / border-1 底 / 品牌色-1 已加载，占剩余空间 */
 .bar {
   position: relative;
   flex: 1;
   height: 6px;
   border-radius: 3px;
-  background: var(--border-2);
+  background: var(--border-1);
   overflow: hidden;
 }
 .fill {

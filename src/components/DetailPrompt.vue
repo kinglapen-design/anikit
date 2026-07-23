@@ -39,14 +39,14 @@ const open = ref(true);
   flex-direction: column;
   gap: var(--space-8);
 }
-/* AI 搜索框（03_输入框 04）：内边距 8 / 圆角 8 / C4 / 1px border-2 / 最多 6 行滚动 */
+/* AI 搜索框（03_输入框 04）：内边距 8 / 圆角 8 / C4 / 1px border-1 / 最多 6 行滚动 */
 .prompt-text {
   width: 100%;
   height: 125px;
   padding: var(--space-8);
   border-radius: var(--radius-8);
   background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-2);
+  box-shadow: inset 0 0 0 1px var(--border-1);
   color: var(--font-icon-3);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);

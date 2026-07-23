@@ -31,7 +31,7 @@ const focused = ref(false);
 </template>
 
 <style scoped>
-/* 总容器：内边距 4 / 间距 6 / 圆角 8 / C4 / 1px border-2；聚焦边框品牌色-1 */
+/* 总容器：内边距 4 / 间距 6 / 圆角 8 / C4 / 1px border-1；聚焦边框品牌色-1 */
 .search-bar {
   display: flex;
   align-items: center;
@@ -39,7 +39,7 @@ const focused = ref(false);
   padding: var(--space-4);
   border-radius: var(--radius-8);
   background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-2);
+  box-shadow: inset 0 0 0 1px var(--border-1);
 }
 .search-bar.focused {
   box-shadow: inset 0 0 0 1px var(--brand-1);

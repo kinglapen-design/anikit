@@ -131,7 +131,7 @@ function onSubmit(): void {
   gap: var(--space-4);
   width: 100%;
 }
-/* 输入框（03_输入框#01 通用）：C4 / 1px border-2 / 圆角 8 / focus 品牌色-1 / 错误态 --error */
+/* 输入框（03_输入框#01 通用）：C4 / 1px border-1 / 圆角 8 / focus 品牌色-1 / 错误态 --error */
 .name-input {
   box-sizing: border-box;
   width: 100%;
@@ -140,7 +140,7 @@ function onSubmit(): void {
   border: none;
   outline: none;
   background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-2);
+  box-shadow: inset 0 0 0 1px var(--border-1);
   border-radius: var(--radius-8);
   font-family: var(--font-family);
   font-size: var(--text-body-size);

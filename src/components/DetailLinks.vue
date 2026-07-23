@@ -39,7 +39,7 @@ const open = ref(true);
   flex-direction: column;
   gap: var(--space-8);
 }
-/* 关联文件夹 item：竖向 / 内边距 6 6 6 8 / 圆角 8 / C4 / 1px border-2 / 间距 2 */
+/* 关联文件夹 item：竖向 / 内边距 6 6 6 8 / 圆角 8 / C4 / 1px border-1 / 间距 2 */
 .link-item {
   display: flex;
   flex-direction: column;
@@ -47,7 +47,7 @@ const open = ref(true);
   padding: var(--space-6) var(--space-6) var(--space-6) var(--space-8);
   border-radius: var(--radius-8);
   background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-2);
+  box-shadow: inset 0 0 0 1px var(--border-1);
 }
 .link-item:hover {
   background: var(--font-icon-6);

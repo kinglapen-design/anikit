@@ -67,7 +67,7 @@ const open = ref(true);
   flex-direction: column;
   gap: var(--space-8);
 }
-/* 输入框（03_输入框 01）：内边距 6 8 / 圆角 8 / C4 / 1px border-2；聚焦边框品牌色-1 */
+/* 输入框（03_输入框 01）：内边距 6 8 / 圆角 8 / C4 / 1px border-1；聚焦边框品牌色-1 */
 .field {
   display: flex;
   align-items: center;
@@ -76,7 +76,7 @@ const open = ref(true);
   padding: var(--space-6) var(--space-8);
   border-radius: var(--radius-8);
   background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-2);
+  box-shadow: inset 0 0 0 1px var(--border-1);
 }
 /* 带链接按钮（03_输入框 02）：内边距 2 2 2 8 */
 .field.with-btn {

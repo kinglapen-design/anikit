@@ -247,7 +247,7 @@ function onSkip(): void {
   border-radius: var(--radius-8);
   overflow: hidden;
 }
-/* 标题栏：高 44 / 内边距 8 8 8 16 / 下分割线 border-2（inset，规范禁 border） */
+/* 标题栏：高 44 / 内边距 8 8 8 16 / 下分割线 border-1（inset，规范禁 border） */
 .dup-titlebar {
   display: flex;
   align-items: center;
@@ -255,7 +255,7 @@ function onSkip(): void {
   padding: var(--space-8) var(--space-8) var(--space-8) var(--space-16);
   height: 44px;
   flex: none;
-  box-shadow: inset 0 -1px 0 0 var(--border-2);
+  box-shadow: inset 0 -1px 0 0 var(--border-1);
 }
 .dup-title {
   margin: 0; /* 左对齐（用户验收：模态窗标题不要居中） */
@@ -294,9 +294,9 @@ function onSkip(): void {
   max-width: 500px;
   max-height: 500px;
   border-radius: var(--radius-8);
-  box-shadow: inset 0 0 0 1px var(--border-2); /* 两侧图片统一带边框 */
+  box-shadow: inset 0 0 0 1px var(--border-1); /* 两侧图片统一带边框 */
 }
-/* 新的文件：图片 30% 透明（用户验收：50% 与已存在拉不开）+ 1px border-2（选"保留两个"后 100%，透明度过渡动画） */
+/* 新的文件：图片 30% 透明（用户验收：50% 与已存在拉不开）+ 1px border-1（选"保留两个"后 100%，透明度过渡动画） */
 .new-img {
   opacity: 0.3;
   transition: opacity 0.3s ease;
@@ -352,7 +352,7 @@ function onSkip(): void {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 底栏：高 70 / 内边距 16 / 上分割线 border-2（inset） */
+/* 底栏：高 70 / 内边距 16 / 上分割线 border-1（inset） */
 .dup-footer {
   display: flex;
   align-items: center;
@@ -361,7 +361,7 @@ function onSkip(): void {
   padding: var(--space-16);
   height: 70px;
   flex: none;
-  box-shadow: inset 0 1px 0 0 var(--border-2);
+  box-shadow: inset 0 1px 0 0 var(--border-1);
 }
 /* 单选项组合：间距 14 */
 .options {
@@ -370,7 +370,7 @@ function onSkip(): void {
   gap: var(--space-14);
   min-width: 0;
 }
-/* 输入框（03_输入框#01 通用）：高 32 / 内边距 6 8 / C4 底 + 1px border-2 / 圆角 8 */
+/* 输入框（03_输入框#01 通用）：高 32 / 内边距 6 8 / C4 底 + 1px border-1 / 圆角 8 */
 .name-input {
   width: 111px;
   height: 32px;
@@ -378,7 +378,7 @@ function onSkip(): void {
   border: none;
   outline: none;
   background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-2);
+  box-shadow: inset 0 0 0 1px var(--border-1);
   border-radius: var(--radius-8);
   font-family: var(--font-family);
   font-size: var(--text-body-size);

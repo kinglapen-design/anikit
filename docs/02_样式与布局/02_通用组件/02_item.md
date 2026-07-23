@@ -211,7 +211,7 @@ flex-grow: 0;
 width: 填充父容器;
 height: 0px;
 
-border: 1px solid border-2; /* 圆头 */
+border: 1px solid border-1; /* 圆头 */
 
 /* Inside auto layout */
 flex: none;
@@ -306,7 +306,7 @@ background: C4;
 
 hover: background font-icon-6
 
-border: 1px solid border-2;
+border: 1px solid border-1;
 border-radius: 8px;
 
 /* Inside auto layout */
@@ -373,7 +373,7 @@ background: C4;
 
 hover: background font-icon-6
 
-border: 1px solid border-2;
+border: 1px solid border-1;
 border-radius: 8px;
 
 /* Inside auto layout */
@@ -414,7 +414,7 @@ height: padding + 子项;
 
 background: C4;
 
-border: 1px solid border-2;
+border: 1px solid border-1;
 border-radius: 14px; /* 胶囊形 */
 
 /* Inside auto layout */
@@ -429,7 +429,7 @@ height: 16px;
 
 background: 实际分析的颜色;
 
-border: 1px solid border-2;
+border: 1px solid border-1;
 
 hover: 1px solid font-icon-2 / 色号悬停 tip;
 
@@ -491,7 +491,7 @@ height: 57px;
 
 background: C3 / C2; /* 两个底色交替出现，用于视觉能快速区分每一行 */
 
-border: 1px solid border-2;
+border: 1px solid border-1;
 border-radius: 8px;
 
 /* Inside auto layout */

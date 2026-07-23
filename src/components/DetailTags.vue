@@ -38,7 +38,7 @@ const open = ref(true);
   flex-wrap: wrap;
   gap: var(--space-8);
 }
-/* 标签 item：内边距 6 6 6 8 / 圆角 8 / C4 / 1px border-2 / 间距 6 */
+/* 标签 item：内边距 6 6 6 8 / 圆角 8 / C4 / 1px border-1 / 间距 6 */
 .tag-item {
   display: flex;
   align-items: center;
@@ -46,7 +46,7 @@ const open = ref(true);
   padding: var(--space-6) var(--space-6) var(--space-6) var(--space-8);
   border-radius: var(--radius-8);
   background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-2);
+  box-shadow: inset 0 0 0 1px var(--border-1);
   color: var(--font-icon-1);
 }
 .tag-item:hover {

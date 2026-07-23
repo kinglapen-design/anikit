@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 单选框 / 复选框（02_通用组件/01_按钮 04）：按钮 16×16、线条 border-2、圆角 4；
+// 单选框 / 复选框（02_通用组件/01_按钮 04）：按钮 16×16、线条 border-1、圆角 4；
 // 选中：边框品牌色-2 + 填充品牌色-1，文字品牌色-1。
 // tone：menu（默认）文字 font-icon-3/70；dialog（09 导入弹窗）文字 font-icon-2/C4，与提示文字区分。
 import AppIcon from "./AppIcon.vue";
@@ -32,7 +32,7 @@ withDefaults(defineProps<{ label: string; tone?: "menu" | "dialog" }>(), { tone:
   width: 16px;
   height: 16px;
   border-radius: var(--radius-4);
-  box-shadow: inset 0 0 0 1px var(--border-2);
+  box-shadow: inset 0 0 0 1px var(--border-1);
   display: flex;
   align-items: center;
   justify-content: center;

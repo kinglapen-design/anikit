@@ -86,7 +86,7 @@ const meta = computed(() =>
   width: 100%;
   height: 100%;
   border-radius: var(--radius-8);
-  /* 卡片线框 border-2（2026-07-23 线框定案：静态线统一一档，废弃弱透明线） */
+  /* 卡片常态边框专用暗线 border-2（2026-07-23 用户定：其他边框一律 border-1） */
   box-shadow: inset 0 0 0 1px var(--border-2);
   object-fit: cover;
   /* 无缩略图占位：中间面板底色 C1（阶段3修改——不要 font-icon-4 灰块） */
