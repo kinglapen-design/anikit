@@ -25,7 +25,7 @@ flex-grow: 1;
 width: 16px;
 height: 16px;
 
-color: border font-icon-3 fill font-icon-4;
+color: border font-icon-2 fill var(--font-icon-4);
 
 /* Inside auto layout */
 flex: none;

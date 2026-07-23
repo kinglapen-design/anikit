@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// 图标组件：内联 SVG（currentColor / 文件夹卡片 var() 均要求内联）。
-// 颜色继承父级 color（font-icon 档位）；SVG 线条层一律烘 100%，明暗全由 color 表达，
-// 仅装饰填充层烘 0.12（= font-icon-4）——2026-07-23 废弃旧体系"SVG 烘透明度 + 父级 :deep 提 opacity"。
+// 图标组件：内联 SVG（currentColor / var() 均要求内联）。
+// 颜色约定（2026-07-23 新体系）：线条层一律 100%（不烘透明度），fill="currentColor" 吃父级
+// color（font-icon 档位表达明暗）；装饰填充层 fill="var(--font-icon-4)" 恒 12% 不随 color。
 import { computed } from "vue";
 import { getIcon } from "../lib/icons";
 

@@ -115,9 +115,10 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
 .body.selected {
   background: var(--font-icon-5);
 }
-/* 选中：装饰图标提亮 font-icon-1（常态 font-icon-3，SVG 烘 100% 后明暗全由 color 档位表达） */
+/* 装饰图标线条 font-icon-2（80%），选中提亮 font-icon-1（100%）；
+   填充层 SVG 直接引用 var(--font-icon-4)，恒 12% 不随 color、选中不变（2026-07-23 用户定） */
 .deco {
-  color: var(--font-icon-3);
+  color: var(--font-icon-2);
 }
 .body.selected .deco {
   color: var(--font-icon-1);
