@@ -39,21 +39,29 @@ const meta = computed(() => {
   gap: var(--space-4);
   cursor: default;
 }
-/* 图标容器：padding 0 / 常态无边框（2px transparent 占位，hover/选中变色不抖动）；
-   hover 2px border-1 / 选中 2px 品牌色；
-   圆角 10 = SVG 外形圆角 8 + 边框 2——边框内缘（10-2=8）与 SVG 圆角精确贴合 */
+/* 图标容器：padding 0 / 圆角 10（= SVG 圆角 8 + 边框 2，内缘 8 与 SVG 贴合）；
+   边框由 ::after 绘制（不占布局——SVG 常态即与副标题左对齐，hover/选中仅上色） */
 .icon-wrap {
+  position: relative;
   width: 100%;
-  border: 2px solid transparent;
   border-radius: 10px;
   overflow: hidden;
   line-height: 0;
+}
+.icon-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  pointer-events: none;
   transition: border-color 0.12s ease;
 }
-.folder-card:hover .icon-wrap {
+/* hover 2px border-1 / 选中 2px 品牌色 */
+.folder-card:hover .icon-wrap::after {
   border-color: var(--border-1);
 }
-.folder-card.selected .icon-wrap {
+.folder-card.selected .icon-wrap::after {
   border-color: var(--brand-1);
 }
 .icon-wrap :deep(svg) {
