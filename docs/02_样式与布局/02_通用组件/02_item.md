@@ -226,7 +226,7 @@ flex-grow: 0;
 
 折叠按钮和添加都按钮用：chevron-small，add-small（16×16 显示），按钮为图标按钮-小 24×24（padding 4 / 圆角 4）；常态图标 font-icon-3，hover background font-icon-6 / 图标 font-icon-2。
 
-> **顺序（2026-07-23 用户定）：标题 + 数量 + 展开箭头 + …… + 添加按钮——展开箭头与标题交换位置，箭头在标题组之后**。
+> **顺序（2026-07-23 用户定）：标题 + 数量 + 展开箭头 + …… + 添加按钮——展开箭头与标题交换位置，箭头在标题组之后**。整行（标题 / 数量 / 箭头）均为折叠判定区；详情面板 grip 变体 hover 整行抓手 + 提亮 font-icon-1，**添加按钮不参与抓手**（常规图标按钮 hover 底色）。
 
 ``` css
 /* 总容器：标题容器 + 添加按钮 */
@@ -236,7 +236,7 @@ flex-direction: row;
 justify-content: space-between;
 align-items: center;
 padding: 0px;
-gap: 4px;
+/* 无间距：X 内边距兼作间隔，文件名右 4 */
 
 width: 填充父容器;
 height: 子项;
@@ -252,7 +252,7 @@ display: flex;
 flex-direction: row;
 align-items: center;
 padding: 0px;
-gap: 4px;
+/* 无间距：X 内边距兼作间隔，文件名右 4 */
 
 margin: 0 auto;
 width: 按钮 + gap + 标题;
@@ -291,7 +291,7 @@ order: 1;
 ## 06. 详情面板关联文件夹 item
 
 > 一栏布局（2026-07-23 用户定，替代原竖向两行稿）：文件夹名（图标 + 名称）与文件名一栏；
-> 文件名与 X 一组（间距 4）；X 常态不占位隐藏（宽度 0，空间留给文件名），悬停 item 时展开 24px 露出，文件名随之左移。
+> 文件名与 X 一组（无间距，X 内边距 4 兼作间隔；文件名右 4 与左 8 补齐一致）；X 常态不占位隐藏（宽度 0，空间留给文件名），悬停 item 时展开 24px 露出，文件名随之左移。
 
 ``` css
 /* 总容器：基础 item + 文件名组 */
@@ -309,7 +309,7 @@ height: padding + 子项;
 
 background: C4;
 
-hover: background font-icon-6
+hover: background C5（详情面板 item 悬停，2026-07-23 用户定）
 
 border: 1px solid border-1;
 border-radius: 8px;
@@ -326,7 +326,7 @@ flex-grow: 0;
 display: flex;
 flex-direction: row;
 align-items: center;
-gap: 4px;
+/* 无间距：X 内边距兼作间隔，文件名右 4 */
 
 /* 文件名称 */
 font: [[01_样式 token#02. 文字]] / 副文本;
@@ -362,7 +362,7 @@ height: padding + 子项;
 
 background: C4;
 
-hover: background font-icon-6
+hover: background C5（详情面板 item 悬停）
 
 border: 1px solid border-1;
 border-radius: 8px;
@@ -382,7 +382,7 @@ order: 0;
 
 color: 容器内图标 font-icon-3;
 
-hover: background font-icon-6
+hover: background C5（详情面板 item 悬停）
 
 order: 1;
 ```
@@ -398,7 +398,7 @@ display: flex;
 flex-direction: row;
 align-items: center;
 padding: 4px;
-gap: 4px;
+/* 无间距：X 内边距兼作间隔，文件名右 4 */
 
 width: padding + gap +子项;
 height: padding + 子项;
@@ -440,7 +440,7 @@ display: flex;
 flex-direction: row;
 align-items: center;
 padding: 0px;
-gap: 4px;
+/* 无间距：X 内边距兼作间隔，文件名右 4 */
 
 width: gap + 子项;
 height: 子项;
@@ -562,7 +562,7 @@ display: flex;
 flex-direction: row;
 align-items: center;
 padding: 0px;
-gap: 4px;
+/* 无间距：X 内边距兼作间隔，文件名右 4 */
 
 width: 119px;
 height: 18px;

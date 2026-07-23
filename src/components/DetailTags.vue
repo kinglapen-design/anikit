@@ -46,7 +46,7 @@ const open = ref(true);
   color: var(--font-icon-1);
 }
 .tag-item:hover {
-  background: var(--font-icon-6);
+  background: var(--c5);
 }
 .label {
   font-size: var(--text-body-size);

@@ -49,7 +49,7 @@ const open = ref(true);
   color: var(--font-icon-1);
 }
 .link-item:hover {
-  background: var(--font-icon-6);
+  background: var(--c5);
 }
 .label {
   font-size: var(--text-body-size);
@@ -61,11 +61,10 @@ const open = ref(true);
 .spacer {
   flex: 1;
 }
-/* 文件名 + X 一组：间距 4 */
+/* 文件名 + X 一组：无间距（X 自身内边距 4 兼作间隔；X 隐藏时文件名的右 4 与左 8 补齐一致） */
 .file-group {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
   flex: none;
   min-width: 0;
 }
@@ -77,6 +76,7 @@ const open = ref(true);
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  padding-right: var(--space-4);
 }
 /* X：常态不占位隐藏（宽度 0），悬停 item 时展开 24px 露出（文件名随之左移）；
    选择器带 .link-item 提权，覆盖 IconButton.small 的 width 24 */
