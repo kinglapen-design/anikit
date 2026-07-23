@@ -28,10 +28,9 @@ export interface LayoutResult {
   totalHeight: number;
 }
 
-// 网格内边距：左 0（区块容器 padding 左 16 承担），右 20（命中区 12 + 间距 8——
-// 滚动条定位在里层 viewport 右缘，卡片右缘距中栏外边框 = asset-section 右 4 + 20 = 24，
-// 与左侧 24 一致；滚动条可见条右缘距外边框 4，2026-07-23 用户定）
-const PAD = { top: 0, right: 20, bottom: 0, left: 0 };
+// 网格内边距：左 0（区块容器 padding 左 16 承担），右 16（命中区 12 + 间距 4——
+// 卡片右缘距中栏外边框 = 中栏右 8 + 16 = 24，与左侧 24 一致，2026-07-23 用户定）
+const PAD = { top: 0, right: 16, bottom: 0, left: 0 };
 // 卡片间距（2026-07-23 用户定）：列间距 16，行间距 16
 const COL_GAP = 16;
 const ROW_GAP = 16;

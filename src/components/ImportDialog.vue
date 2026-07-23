@@ -80,7 +80,7 @@ const sourceTip = computed(() =>
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c1);
+  background: var(--c1-80);
 }
 /* 总容器（08_二级窗口通用规则）：宽度随最宽子项、上限 368，超出文字换行；
    C3 / 1px border-1（inset）/ 圆角 8 / --shadow-pop */

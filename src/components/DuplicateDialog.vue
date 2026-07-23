@@ -231,7 +231,7 @@ function onSkip(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c1);
+  background: var(--c1-80);
 }
 /* 总容器（10）：1052×732 / C3 / 1px border-1（inset，窗口级边框）/ 圆角 8 / --shadow-pop */
 .dup-card {

@@ -120,7 +120,7 @@ function onRetry(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c1);
+  background: var(--c1-80);
 }
 /* 初始卡片：686×500 / C3 / 1px border-1 描边（inset box-shadow，规范 4）+ 二级窗口投影 / 圆角 8 */
 .setup-card {

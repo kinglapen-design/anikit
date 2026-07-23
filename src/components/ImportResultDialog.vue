@@ -37,7 +37,7 @@ function fileName(p: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c1);
+  background: var(--c1-80);
 }
 /* 总容器（08_二级窗口通用规则）：宽度随最宽子项、上限 368，失败清单长文本换行 */
 .result-card {
