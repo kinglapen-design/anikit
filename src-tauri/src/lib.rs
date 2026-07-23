@@ -33,6 +33,13 @@ fn drag_files(window: tauri::WebviewWindow, paths: Vec<String>) -> Result<(), St
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  // WebView2 色彩管理对齐（2026-07-23 偏色排查）：WebView2 与 Edge 在 BT2020 广色域屏上
+  // 色彩表现不一致（WebView2 已知问题 WebViewFeedback #141/#4245）——Edge/Figma 偏紫、
+  // 软件偏灰，暗部最明显。强制按 sRGB 渲染，保证设计稿（sRGB）在软件内所见即所得。
+  // 须在 webview 创建前设置。
+  #[cfg(windows)]
+  std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--force-color-profile=srgb");
+
   tauri::Builder::default()
     // 单实例必须最先注册：二次启动时聚焦已有窗口
     .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
