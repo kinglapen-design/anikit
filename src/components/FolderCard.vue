@@ -39,18 +39,19 @@ const meta = computed(() => {
   gap: var(--space-4);
   cursor: default;
 }
-/* 图标容器：padding 0 / 圆角 8 / 常态无边框（2px transparent 占位，hover/选中变色不抖动）；
-   hover 2px font-icon-20 / 选中 2px 品牌色 */
+/* 图标容器：padding 0 / 常态无边框（2px transparent 占位，hover/选中变色不抖动）；
+   hover 2px border-1 / 选中 2px 品牌色；
+   圆角 10 = SVG 外形圆角 8 + 边框 2——边框内缘（10-2=8）与 SVG 圆角精确贴合 */
 .icon-wrap {
   width: 100%;
   border: 2px solid transparent;
-  border-radius: var(--radius-8);
+  border-radius: 10px;
   overflow: hidden;
   line-height: 0;
   transition: border-color 0.12s ease;
 }
 .folder-card:hover .icon-wrap {
-  border-color: var(--font-icon-20);
+  border-color: var(--border-1);
 }
 .folder-card.selected .icon-wrap {
   border-color: var(--brand-1);
