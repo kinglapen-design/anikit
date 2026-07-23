@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// 区块副标题 item（02_通用组件/02_item 05）：展开按钮（小图标 24×24）+ 标题 + 数量标签，
-// 可选添加按钮；v-model:open 控制下方内容展开 / 折叠。
+// 区块副标题 item（02_通用组件/02_item 05）：标题 + 数量标签 + 展开按钮（小图标 24×24，
+// 2026-07-23 用户定：箭头与标题交换位置），可选添加按钮；v-model:open 控制下方内容展开 / 折叠。
 // pad 由布局处给（如左栏快速访问 0 8 0 16、文件夹 0 10 0 16）。
 import AppIcon from "./AppIcon.vue";
 
@@ -15,11 +15,11 @@ const emit = defineEmits<{ add: [] }>();
 
 <template>
   <div class="section-header" :style="{ padding: pad }">
+    <span class="title">{{ title }}</span>
+    <span v-if="count !== undefined" class="count">({{ count.toLocaleString() }})</span>
     <button class="head-btn" @click="open = !open">
       <AppIcon name="chevron-small" class="chev" :class="{ closed: !open }" />
     </button>
-    <span class="title">{{ title }}</span>
-    <span v-if="count !== undefined" class="count">({{ count.toLocaleString() }})</span>
     <span class="spacer" />
     <button v-if="addable" class="head-btn" @click.stop="emit('add')">
       <AppIcon name="add-small" />

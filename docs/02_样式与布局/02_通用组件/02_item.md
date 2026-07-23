@@ -226,6 +226,8 @@ flex-grow: 0;
 
 折叠按钮和添加都按钮用：chevron-small，add-small（16×16 显示），按钮为图标按钮-小 24×24（padding 4 / 圆角 4）；常态图标 font-icon-3，hover background font-icon-6 / 图标 font-icon-2。
 
+> **顺序（2026-07-23 用户定）：标题 + 数量 + 展开箭头 + …… + 添加按钮——展开箭头与标题交换位置，箭头在标题组之后**。
+
 ``` css
 /* 总容器：标题容器 + 添加按钮 */
 /* Auto layout */
@@ -244,7 +246,7 @@ flex: none;
 align-self: stretch;
 flex-grow: 0;
 
-/* 标题容器：展开按钮 + 标题 */
+/* 标题容器：标题 + 数量 + 展开按钮 */
 /* Auto layout */
 display: flex;
 flex-direction: row;
