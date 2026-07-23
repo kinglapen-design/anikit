@@ -76,9 +76,10 @@ async function togglePin(): Promise<void> {
   flex-direction: column;
   flex: none;
   background: var(--c3);
-  /* 三栏面板无圆角无边框，仅左侧 1px border-1 作视觉分割线（2026-07-23 线框定案） */
+  /* 三栏面板无圆角无边框，仅左侧 1px border-1 作视觉分割线（2026-07-23 线框定案）；
+     外层无 padding——通栏分割线横贯侧栏，间距由各区块自身 padding 撑开（2026-07-23 用户定） */
   box-shadow: inset 1px 0 0 0 var(--border-1);
-  padding: var(--space-8);
+  padding: 0;
   min-height: 0;
 }
 /* 悬浮滚动条：4px 胶囊 border-1、距右 4px、不占布局 */

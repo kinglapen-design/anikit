@@ -11,8 +11,8 @@ const open = ref(true);
 </script>
 
 <template>
-  <section class="detail-prompt">
-    <SectionHeader title="提示词" v-model:open="open" />
+  <section class="detail-prompt detail-block">
+    <SectionHeader title="提示词" grip v-model:open="open" />
     <div v-if="open" class="body">
       <textarea class="prompt-text" :value="prompt" readonly rows="6" />
       <div class="actions">
@@ -25,13 +25,9 @@ const open = ref(true);
 </template>
 
 <style scoped>
-/* 区块容器：内边距 8 / 间距 6 / 圆角 8 */
 .detail-prompt {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-8);
-  border-radius: var(--radius-8);
 }
 /* 内容容器：间距 8 */
 .body {

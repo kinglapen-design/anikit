@@ -4,17 +4,18 @@
 // pad 由布局处给（如左栏快速访问 0 8 0 16、文件夹 0 10 0 16）。
 import AppIcon from "./AppIcon.vue";
 
-withDefaults(defineProps<{ title: string; count?: number; addable?: boolean; pad?: string }>(), {
+withDefaults(defineProps<{ title: string; count?: number; addable?: boolean; pad?: string; grip?: boolean }>(), {
   count: undefined,
   addable: false,
   pad: "0",
+  grip: false,
 });
 const open = defineModel<boolean>("open", { default: true });
 const emit = defineEmits<{ add: [] }>();
 </script>
 
 <template>
-  <div class="section-header" :style="{ padding: pad }">
+  <div class="section-header" :class="{ grip }" :style="{ padding: pad }">
     <span class="title">{{ title }}</span>
     <span v-if="count !== undefined" class="count">({{ count.toLocaleString() }})</span>
     <button class="head-btn" @click="open = !open">
@@ -65,8 +66,23 @@ const emit = defineEmits<{ add: [] }>();
   line-height: var(--text-caption-line);
   color: var(--font-icon-3);
   white-space: nowrap;
+  transition: color 0.12s ease;
 }
 .spacer {
   flex: 1;
+}
+/* 详情面板变体（2026-07-23 用户定）：整行 hover 抓手（为拖拽排序准备），
+   展开箭头 + 标题提亮 font-icon-1，无底色 */
+.section-header.grip,
+.section-header.grip .head-btn {
+  cursor: grab;
+}
+.section-header.grip:hover .title,
+.section-header.grip:hover .count,
+.section-header.grip:hover .head-btn {
+  color: var(--font-icon-1);
+}
+.section-header.grip:hover .head-btn {
+  background: none;
 }
 </style>

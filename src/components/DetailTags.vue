@@ -10,8 +10,8 @@ const open = ref(true);
 </script>
 
 <template>
-  <section class="detail-tags">
-    <SectionHeader title="标签" addable v-model:open="open" />
+  <section class="detail-tags detail-block">
+    <SectionHeader title="标签" addable grip v-model:open="open" />
     <div v-if="open" class="body">
       <div v-for="t in tags" :key="t" class="tag-item">
         <AppIcon name="tag" class="deco" />
@@ -24,13 +24,9 @@ const open = ref(true);
 </template>
 
 <style scoped>
-/* 区块容器：内边距 8 / 间距 6 / 圆角 8 */
 .detail-tags {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-8);
-  border-radius: var(--radius-8);
 }
 /* 标签流式布局：间距 8，宽度不够换行 */
 .body {

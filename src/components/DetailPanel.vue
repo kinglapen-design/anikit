@@ -18,9 +18,24 @@ import DetailPrompt from "./DetailPrompt.vue";
 </template>
 
 <style scoped>
-/* 详情容器：各区块自带内边距 8（02_通用组件/05_区块），容器不再加距 */
+/* 详情容器：区块统一规则（2026-07-23 用户定）——内边距 12 16 / 间距 8 /
+   border-top 通栏分割线（border-2，首个区块不画）；侧栏外层无 padding，分割线横贯 */
 .detail-panel {
   display: flex;
   flex-direction: column;
+}
+.detail-panel :deep(.detail-block) {
+  gap: var(--space-8);
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-2);
+}
+.detail-panel :deep(.detail-block:first-child) {
+  border-top: none;
+}
+/* 颜色信息区块（pinned：永久置顶、无副标题、不参与拖拽排序）：
+   内边距 8 16 12 16 / 间距 16 */
+.detail-panel :deep(.detail-block.pinned) {
+  gap: var(--space-16);
+  padding: var(--space-8) var(--space-16) 12px;
 }
 </style>

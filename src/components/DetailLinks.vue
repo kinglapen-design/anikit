@@ -8,8 +8,8 @@ const open = ref(true);
 </script>
 
 <template>
-  <section class="detail-links">
-    <SectionHeader title="关联文件夹" addable v-model:open="open" />
+  <section class="detail-links detail-block">
+    <SectionHeader title="关联文件夹" addable grip v-model:open="open" />
     <div v-if="open" class="body">
       <div class="link-item">
         <div class="row">
@@ -25,13 +25,9 @@ const open = ref(true);
 </template>
 
 <style scoped>
-/* 区块容器：内边距 8 / 间距 6 / 圆角 8 */
 .detail-links {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-8);
-  border-radius: var(--radius-8);
 }
 /* item 容器：间距 8 */
 .body {
