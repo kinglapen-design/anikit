@@ -53,7 +53,7 @@ const colWidth = computed(() => Math.max(80, Math.round((189 * ui.targetRowHeigh
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(189px, 1fr));
   column-gap: var(--space-16);
-  row-gap: var(--space-8);
+  row-gap: var(--space-16);
 }
 .cell {
   min-width: 0;

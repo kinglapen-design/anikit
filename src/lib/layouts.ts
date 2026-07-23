@@ -32,9 +32,9 @@ export interface LayoutResult {
 // 滚动条定位在里层 viewport 右缘，卡片右缘距中栏外边框 = asset-section 右 4 + 20 = 24，
 // 与左侧 24 一致；滚动条可见条右缘距外边框 4，2026-07-23 用户定）
 const PAD = { top: 0, right: 20, bottom: 0, left: 0 };
-// 卡片间距（2026-07-23 用户定）：列间距 16，行间距 8
+// 卡片间距（2026-07-23 用户定）：列间距 16，行间距 16
 const COL_GAP = 16;
-const ROW_GAP = 8;
+const ROW_GAP = 16;
 
 // —— 自适应（等高不等宽）：贪心分行，行内等比拉伸填满宽度 ——
 export function computeJustified(
