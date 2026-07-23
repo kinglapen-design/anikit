@@ -39,21 +39,21 @@ const meta = computed(() => {
   gap: var(--space-4);
   cursor: default;
 }
-/* 图标容器：padding 0 / 圆角 8 / 1px border-2（真 border，与素材卡片一致）；
+/* 图标容器：padding 0 / 圆角 8 / 常态无边框（2px transparent 占位，hover/选中变色不抖动）；
    hover 2px font-icon-20 / 选中 2px 品牌色 */
 .icon-wrap {
   width: 100%;
-  border: 1px solid var(--border-2);
+  border: 2px solid transparent;
   border-radius: var(--radius-8);
   overflow: hidden;
   line-height: 0;
   transition: border-color 0.12s ease;
 }
 .folder-card:hover .icon-wrap {
-  border: 2px solid var(--font-icon-20);
+  border-color: var(--font-icon-20);
 }
 .folder-card.selected .icon-wrap {
-  border: 2px solid var(--brand-1);
+  border-color: var(--brand-1);
 }
 .icon-wrap :deep(svg) {
   width: 100%;
