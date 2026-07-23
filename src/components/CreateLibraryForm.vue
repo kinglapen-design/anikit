@@ -149,7 +149,7 @@ function onSubmit(): void {
   color: var(--font-icon-1);
 }
 .name-input::placeholder {
-  color: var(--font-icon-3);
+  color: var(--font-icon-placeholder);
 }
 .name-input:focus {
   box-shadow: inset 0 0 0 1px var(--brand-1);

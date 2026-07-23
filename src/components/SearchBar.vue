@@ -105,6 +105,6 @@ input {
   line-height: var(--text-body-line);
 }
 input::placeholder {
-  color: var(--font-icon-3);
+  color: var(--font-icon-placeholder);
 }
 </style>

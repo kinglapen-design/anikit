@@ -35,7 +35,8 @@ const open = ref(true);
   flex-direction: column;
   gap: var(--space-8);
 }
-/* AI 搜索框（03_输入框 04）：内边距 8 / 圆角 8 / C4 / 1px border-1 / 最多 6 行滚动 */
+/* AI 搜索框（03_输入框 04）：内边距 8 / 圆角 8 / C4 / 1px border-1 / 最多 6 行滚动；
+   文字常态占位符档 30%（字多不抓视线，2026-07-23 用户定），聚焦时提 100% 方便输入 */
 .prompt-text {
   width: 100%;
   height: 125px;
@@ -43,13 +44,15 @@ const open = ref(true);
   border-radius: var(--radius-8);
   background: var(--c4);
   box-shadow: inset 0 0 0 1px var(--border-1);
-  color: var(--font-icon-3);
+  color: var(--font-icon-placeholder);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   resize: none;
+  transition: color 0.12s ease;
 }
 .prompt-text:focus {
   box-shadow: inset 0 0 0 1px var(--brand-1);
+  color: var(--font-icon-1);
 }
 .prompt-text::-webkit-scrollbar {
   width: 4px;

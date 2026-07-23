@@ -118,6 +118,6 @@ const colors = ["#3A6EA5", "#2B9FD9", "#7A5C3E", "#A53E3E", "#3E8A57", "#6B4F8A"
   line-height: var(--text-body-line);
 }
 .field input::placeholder {
-  color: var(--font-icon-3);
+  color: var(--font-icon-placeholder);
 }
 </style>
