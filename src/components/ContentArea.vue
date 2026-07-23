@@ -37,13 +37,14 @@ const items = computed(() => content.visiblePlacements);
   /* 三栏面板无圆角无边框（主窗口结构调整） */
   padding: var(--space-8);
 }
-/* 素材卡片区块：内边距 8 0 0 8（右 0——滚动条贴区块右缘，中栏 4px 内边距作呼吸） */
+/* 素材卡片区块：内边距 0 16（左右 16 统一承担文件夹/素材两区块的左右 16，2026-07-23 用户定；
+   上 8 由"内容"副标题 pad 承担，与文件夹区块底 8、总容器 gap 16 构成间距 32） */
 .asset-section {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: var(--space-8) 0 0 var(--space-8);
+  padding: 0 var(--space-16);
 }
 /* 搜索框内容容器：内边距 4 8 8 8 */
 .search-wrap {
