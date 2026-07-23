@@ -1,10 +1,9 @@
 <script setup lang="ts">
-// 素材卡片（02_通用组件/06_卡片 03，2026-07-23 用户新设计）：
-// 总容器 padding 0 / gap 0 / 1px border-2 / 圆角 8（hover 2px border-1 / 选中 2px 品牌色-1）；
-// 图片区（上两角圆角 8，overflow 裁切）+ 标题容器（padding 8 / 两端自动拉伸）：
-//   文字容器（名称 正文 font-icon-1 + 标签 副文本 font-icon-3，纵向间距 4）
-//   格式角标容器（间距 8）：实底格式色徽章（padding 0 6 / 圆角 4 / 角标文字 12/18 粗体）
-//   + 按钮容器（间距 4，图标 16×16 / font-icon-3 / hover font-icon-1）。
+// 素材卡片（02_通用组件/06_卡片 03，2026-07-23 用户定：回退图片+居中文字方案）：
+// 总容器 padding 0 / 间距 4（无卡片框）；图片圆角 8 / 1px border-2（hover 2px 40% / 选中 2px 品牌色）；
+// 格式角标：图片左上各 4px（实底格式色徽章）；按钮组：图片右下各 4px（图标按钮-小 24×24，
+// 悬停卡片显示，hover 底色 C5——图片干扰大不裸奔 16 图标）；
+// 文字组：间距 2 / 居中 / 标题最多两行截断。
 import { computed } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
@@ -53,105 +52,65 @@ const meta = computed(() =>
         draggable="false"
       />
       <div v-else class="img" />
+      <span class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
+      <div class="actions">
+        <button class="act" v-tip="'发送至 Animate'" @click.stop>
+          <AppIcon name="send-to" />
+        </button>
+        <button class="act" v-tip="'查看大图'" @click.stop>
+          <AppIcon name="magnifier" />
+        </button>
+      </div>
     </div>
-    <div class="caption">
-      <div class="texts">
-        <span class="title">{{ displayName }}</span>
-        <span class="meta">{{ meta }}</span>
-      </div>
-      <div class="badge-group">
-        <span class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
-        <div class="actions">
-          <button class="act" v-tip="'发送至 Animate'" @click.stop>
-            <AppIcon name="send-to" />
-          </button>
-          <button class="act" v-tip="'查看大图'" @click.stop>
-            <AppIcon name="magnifier" />
-          </button>
-        </div>
-      </div>
+    <div class="texts">
+      <span class="title">{{ displayName }}</span>
+      <span class="meta">{{ meta }}</span>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* 总容器：padding 0 / gap 0 / 1px border-2 / 圆角 8（overflow 裁切图片与文字区角）；
-   边框用真 border——inset box-shadow 会被铺满的图片盖住（同主窗口机制） */
+/* 总容器：padding 0 / 间距 4（无卡片框） */
 .asset-card {
   position: absolute;
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
+  cursor: default;
+}
+/* 图片：圆角 8 / 1px border-2（真 border，inset shadow 会被图片盖住）；
+   hover 2px 40% / 选中 2px 品牌色（粗细变化由 cover 图片吸收，不动布局） */
+.thumb {
+  position: relative;
+  flex: none;
   border: 1px solid var(--border-2);
   border-radius: var(--radius-8);
   overflow: hidden;
-  cursor: default;
   transition: border-color 0.12s ease;
 }
-.asset-card:hover {
-  border: 2px solid var(--border-1);
+.asset-card:hover .thumb {
+  border: 2px solid var(--font-icon-placeholder);
 }
-.asset-card.selected {
+.asset-card.selected .thumb {
   border: 2px solid var(--brand-1);
-}
-/* 图片区：上两角随容器圆角（overflow 裁切），无缩略图占位 = 中间面板底色 C1 */
-.thumb {
-  flex: none;
-  overflow: hidden;
 }
 .img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* 无缩略图占位：中间面板底色 C1 */
   background: var(--c1);
 }
 /* 系统格式图标：方形图标 contain 完整显示不裁切（4.2 用户定） */
 .img.icon {
   object-fit: contain;
 }
-/* 标题容器：内边距 8 / 两端自动拉伸 / 垂直居中 */
-.caption {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-8);
-  padding: var(--space-8);
-  flex: 1;
-  min-height: 0;
-}
-/* 文字容器：纵向间距 4 */
-.texts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  min-width: 0;
-}
-.title {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.meta {
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
-  white-space: nowrap;
-}
-/* 格式角标容器：竖向（角标在上 + 按钮组在下），间距 8，右对齐；
-   高 = 角标 18 + 8 + 按钮 16 = 42，与左侧文字容器（20 + 4 + 18）等高 */
-.badge-group {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: center;
-  gap: var(--space-8);
-  flex: none;
-}
-/* 格式角标徽章：实底格式色 / 内边距 0 6 / 圆角 4 / 角标文字 12/18 粗体 */
+/* 格式角标：图片左上各 4px；实底格式色 / 内边距 0 6 / 圆角 4 / 角标文字 12/18 粗体 */
 .badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
   padding: 0 var(--space-6);
   border-radius: var(--radius-4);
   font-size: var(--text-badge-size);
@@ -160,21 +119,60 @@ const meta = computed(() =>
   color: var(--font-icon-1);
   pointer-events: none;
 }
-/* 按钮容器：间距 4，图标 16×16 / font-icon-3 / hover font-icon-1 */
+/* 按钮组：图片右下各 4px / 间距 4；图标按钮-小（24×24 圆角 4，底色 C1 压图），
+   悬停卡片显示，hover 底色 C5 */
 .actions {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
   display: flex;
   gap: var(--space-4);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.asset-card:hover .actions {
+  opacity: 1;
 }
 .act {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  color: var(--font-icon-3);
-  transition: color 0.12s ease;
+  width: 24px;
+  height: 24px;
+  padding: var(--space-4);
+  border-radius: var(--radius-4);
+  background: var(--c1);
+  color: var(--font-icon-1);
+  transition: background 0.12s ease;
 }
 .act:hover {
+  background: var(--c5);
+}
+/* 文字组：间距 2 / 居中 / 高 60 内容垂直居中；标题最多两行截断 */
+.texts {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 60px;
+  flex: none;
+}
+.title {
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
   color: var(--font-icon-1);
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+.meta {
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  color: var(--font-icon-3);
+  text-align: center;
+  white-space: nowrap;
 }
 </style>

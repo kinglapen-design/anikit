@@ -4,8 +4,8 @@
 // 卡片文字区（标题 + 标签）固定像素高，不参与等比缩放（justified 按行追加）。
 
 // 卡片文字区（标题容器）固定像素高，不参与等比缩放（justified 按行追加）。
-/** 素材卡片文字区高度（2026-07-23 新设计：padding 8×2 + 名称 20 + 间距 4 + 标签 18 = 58） */
-export const CARD_CAPTION_H = 58;
+/** 素材卡片文字区高度（2026-07-23 回退方案：总容器间距 4 + 文字组 60（标题两行 40 + 间距 2 + 标签 18）= 64） */
+export const CARD_CAPTION_H = 64;
 
 export interface Box {
   top: number;
