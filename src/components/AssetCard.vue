@@ -89,7 +89,7 @@ const meta = computed(() =>
   transition: border-color 0.12s ease;
 }
 .asset-card:hover .thumb {
-  border: 2px solid var(--font-icon-placeholder);
+  border: 2px solid var(--c1-20);
 }
 .asset-card.selected .thumb {
   border: 2px solid var(--brand-1);
@@ -119,8 +119,8 @@ const meta = computed(() =>
   color: var(--font-icon-1);
   pointer-events: none;
 }
-/* 按钮组：图片右下各 4px / 间距 4；图标按钮-小（24×24 圆角 4，底色 C1 压图），
-   悬停卡片显示，hover 底色 C5 */
+/* 按钮组：图片右下各 4px / 间距 4；图标按钮-小（24×24 圆角 4），
+   底色 C1-20% 压图（深色透明不抢眼），悬停卡片显示，hover 底色 C1-40% */
 .actions {
   position: absolute;
   right: 4px;
@@ -141,18 +141,18 @@ const meta = computed(() =>
   height: 24px;
   padding: var(--space-4);
   border-radius: var(--radius-4);
-  background: var(--c1);
+  background: var(--c1-20);
   color: var(--font-icon-1);
   transition: background 0.12s ease;
 }
 .act:hover {
-  background: var(--c5);
+  background: var(--c1-40);
 }
-/* 文字组：间距 2 / 居中 / 高 60 内容垂直居中；标题最多两行截断 */
+/* 文字组：间距 2 / 居中 / 高 60 顶部对齐（内容一行时与图片间距恒为总容器 gap 4）；
+   标题最多两行截断 */
 .texts {
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: var(--space-2);
   height: 60px;
   flex: none;
