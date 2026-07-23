@@ -28,11 +28,12 @@ export interface LayoutResult {
   totalHeight: number;
 }
 
-// 网格内边距：左 0（区块容器 padding 左 8 承担），右 8（滚动条 4 + 卡片间距 4）
-const PAD = { top: 0, right: 8, bottom: 0, left: 0 };
-// 卡片间距（阶段3修改定案）：列间距 6，行间距 14（token --space-14）
+// 网格内边距：左 0（区块容器 padding 左 16 承担），右 12（滚动条命中区全让开——
+// 滚动条贴卡片容器最右边，可见条右缘距中栏外边框 4px，2026-07-23 用户定）
+const PAD = { top: 0, right: 12, bottom: 0, left: 0 };
+// 卡片间距（2026-07-23 用户定）：列间距 16，行间距 8
 const COL_GAP = 16;
-const ROW_GAP = 16;
+const ROW_GAP = 8;
 
 // —— 自适应（等高不等宽）：贪心分行，行内等比拉伸填满宽度 ——
 export function computeJustified(
