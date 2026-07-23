@@ -12,7 +12,7 @@ const colors = ["#3A6EA5", "#2B9FD9", "#7A5C3E", "#A53E3E", "#3E8A57", "#6B4F8A"
   <section class="detail-colors detail-block pinned">
     <div class="preview-group">
       <div class="thumb">
-        <span class="badge" :style="{ color: 'var(--fmt-psd)' }">PSD</span>
+        <span class="badge">PSD</span>
       </div>
       <div class="swatches">
         <span v-for="c in colors" :key="c" class="swatch" :style="{ background: c }" v-tip="c" />
@@ -61,16 +61,18 @@ const colors = ["#3A6EA5", "#2B9FD9", "#7A5C3E", "#A53E3E", "#3E8A57", "#6B4F8A"
   box-shadow: inset 0 0 0 1px var(--border-1);
   background: hsl(215 30% 22%);
 }
-/* 格式角标：左上 4px / 内边距 2 4 / 圆角 4 / C1 */
+/* 格式角标：左上 4px / 内边距 0 4 / 圆角 4 / 深色实底（同素材卡片降噪定案）/ 角标文字 10/16 粗体 60% */
 .badge {
   position: absolute;
   top: 4px;
   left: 4px;
-  padding: var(--space-2) var(--space-4);
+  padding: 0 var(--space-4);
   border-radius: var(--radius-4);
-  background: var(--c1);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
+  background: var(--fmt-psd);
+  font-size: var(--text-badge-size);
+  line-height: var(--text-badge-line);
+  font-weight: var(--text-badge-weight);
+  color: var(--font-icon-3);
   pointer-events: none;
 }
 /* 色块容器（02_item 08）：胶囊圆角 14 / C4 / 1px border-1 / 内边距 4 / 间距 4 /
