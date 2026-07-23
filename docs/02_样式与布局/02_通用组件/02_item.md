@@ -93,13 +93,13 @@ hover: background font-icon-2;
 flex: none;
 flex-grow: 0;
 
-/* item 容器：基础 item + 数量标签（内边距 0 8 0 0，2026-07-23 用户定） */
+/* item 容器：基础 item + 数量标签 */
 /* Auto layout */
 display: flex;
 flex-direction: row;
 justify-content: space-between;
 align-items: center;
-padding: 0px 8px 0px 0px;
+padding: 4px 6px;
 gap: 6px;
 
 min-width: 140px;

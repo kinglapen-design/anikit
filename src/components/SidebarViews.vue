@@ -133,6 +133,6 @@ const tagQuickItems = [
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: 0 var(--space-8) 0 4px;
+  padding: 0 var(--space-8) 0 0;
 }
 </style>

@@ -64,11 +64,11 @@ const quickItems = [
   padding: var(--space-8) 0;
   flex: 1;
 }
-/* item 组：内边距 0 8 0 4 / 间距 2（4 + 展开容器 8 + gap 2 = 14，与标题栏按钮左缘对齐） */
+/* item 组：内边距 0 8 0 0 / 间距 2（2026-07-23 用户定，原左 4） */
 .items {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: 0 var(--space-8) 0 4px;
+  padding: 0 var(--space-8) 0 0;
 }
 </style>
