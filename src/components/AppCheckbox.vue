@@ -11,7 +11,7 @@ withDefaults(defineProps<{ label: string; tone?: "menu" | "dialog" }>(), { tone:
 <template>
   <button class="app-checkbox" :class="{ on: model, dialog: tone === 'dialog' }" @click="model = !model">
     <span class="box">
-      <AppIcon v-if="model" name="check" :size="8" />
+      <AppIcon v-if="model" name="check" :size="16" />
     </span>
     <span class="label">{{ label }}</span>
   </button>
@@ -53,12 +53,10 @@ withDefaults(defineProps<{ label: string; tone?: "menu" | "dialog" }>(), { tone:
 .app-checkbox.dialog.on {
   color: var(--font-icon-1);
 }
+/* 选中：填充品牌色-1 + 边框 12% 透明白（同颜色信息色块边线，2026-07-23 用户定），对勾 80% */
 .app-checkbox.on .box {
-  box-shadow: inset 0 0 0 1px var(--brand-2);
+  box-shadow: inset 0 0 0 1px var(--font-icon-4);
   background: var(--brand-1);
-}
-/* 选中时对勾 font-icon-1 全亮（SVG 烘 100%，无需再提 opacity；二级菜单对勾颜色独立） */
-.app-checkbox.on .box {
-  color: var(--font-icon-1);
+  color: var(--font-icon-2);
 }
 </style>

@@ -78,6 +78,10 @@ const open = ref(true);
   min-width: 0;
   padding-right: var(--space-4);
 }
+/* 装饰图标：font-icon-2（80%，同文件树 item，2026-07-23 用户定） */
+.deco {
+  color: var(--font-icon-2);
+}
 /* X：常态不占位隐藏（宽度 0），悬停 item 时展开 24px 露出（文件名随之左移）；
    选择器带 .link-item 提权，覆盖 IconButton.small 的 width 24 */
 .link-item .del {

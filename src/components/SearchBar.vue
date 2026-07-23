@@ -38,7 +38,8 @@ const focused = ref(false);
   gap: var(--space-6);
   padding: var(--space-4);
   border-radius: var(--radius-8);
-  background: var(--c4);
+  /* 底色 C3（2026-07-23 用户定，原 C4） */
+  background: var(--c3);
   box-shadow: inset 0 0 0 1px var(--border-1);
 }
 .search-bar.focused {

@@ -34,7 +34,7 @@ function select(value: string): void {
       :key="o.value"
       class="item"
       :class="{ on: o.value === model }"
-      :title="o.title"
+      v-tip="o.title"
       @click="select(o.value)"
     >
       <AppIcon :name="o.icon" />

@@ -63,4 +63,8 @@ const open = ref(true);
 .del:hover {
   color: var(--font-icon-2);
 }
+/* 装饰图标：font-icon-2（80%，同文件树 item，2026-07-23 用户定） */
+.deco {
+  color: var(--font-icon-2);
+}
 </style>
