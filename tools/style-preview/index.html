@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>AniKit 样式预览 · 新 token 方案</title>
+<style>
+/* ============================================================
+   新样式 token 方案（预览版）
+   设计方向：内容区压暗、侧边栏提亮、浮层最亮，冷调去灰脏
+   阶梯：C1 窗口底 < C2 内容区 < C3 侧边栏 < C5 浮层
+   ============================================================ */
+:root {
+  /* 品牌色（保留不动） */
+  --brand-1: #0c8ce9;
+  --brand-2: #096cb2;
+
+  /* 语义色（保留不动） */
+  --error: #d04833;
+  --warning: #bf9325;
+  --success: #29a13d;
+
+  /* 通用色（本方案核心改动：拉开明度阶梯 + 冷调） */
+  --c1: #0a0b0e;  /* 窗口底（最深） */
+  --c2: #101218;  /* 中间面板·内容区（暗） */
+  --c3: #1c1f27;  /* 左右侧边栏（亮） */
+  --c4: #f2f4fa;  /* 文字高亮 */
+  --c5: #262b35;  /* 二级窗口 / 模态（浮层最亮） */
+
+  /* 透明度衍生（百分比沿用现体系，color-mix 自动跟随基础色） */
+  --c1-80: color-mix(in srgb, var(--c1) 80%, transparent);
+  --c1-50: color-mix(in srgb, var(--c1) 50%, transparent);
+  --c1-15: color-mix(in srgb, var(--c1) 15%, transparent);
+  --c1-7:  color-mix(in srgb, var(--c1) 7%, transparent);
+  --c4-70: color-mix(in srgb, var(--c4) 70%, transparent);
+  --c4-40: color-mix(in srgb, var(--c4) 40%, transparent);
+  --c4-20: color-mix(in srgb, var(--c4) 20%, transparent);
+  --c4-15: color-mix(in srgb, var(--c4) 15%, transparent);
+  --c4-7:  color-mix(in srgb, var(--c4) 7%, transparent);
+
+  /* 文件夹卡片（随新底色调冷） */
+  --folder-card-front: #262b36;
+  --folder-card-file:  #c6c7cc;
+  --folder-card-back:  #1f232d;
+
+  /* 格式角标文字色（与工程 tokens.css 一致） */
+  --fmt-psd: #31a8ff;
+  --fmt-ai: #ff9a00;
+  --fmt-fla: #ff6666;
+  --fmt-aep: #9999ff;
+  --fmt-svg: #ffb13b;
+  --fmt-image: #3ebd6e;
+
+  /* 文字 */
+  --font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  --text-title-size: 16px; --text-title-line: 22px; --text-title-weight: 700;
+  --text-body-size: 14px;  --text-body-line: 20px;  --text-body-weight: 400;
+  --text-caption-size: 12px; --text-caption-line: 18px; --text-caption-weight: 400;
+
+  /* 间距 / 圆角 / 图标 / 阴影（沿用现体系） */
+  --space-2: 2px; --space-4: 4px; --space-6: 6px; --space-8: 8px;
+  --space-10: 10px; --space-14: 14px; --space-16: 16px; --space-20: 20px;
+  --radius-4: 4px; --radius-6: 6px; --radius-8: 8px; --radius-12: 12px;
+  --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { background: #000; }
+body {
+  font-family: var(--font-family);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  color: var(--c4);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  align-items: center;
+  user-select: none;
+}
+
+.section-label {
+  align-self: flex-start;
+  max-width: 1560px;
+  width: 100%;
+  font-size: var(--text-caption-size);
+  color: var(--c4-40);
+}
+.section-label b { color: var(--c4-70); font-weight: 400; }
+
+/* ================= 主窗口 ================= */
+.window {
+  width: 1560px;
+  height: 900px;
+  display: flex;
+  background: var(--c1);
+  border-radius: var(--radius-8);
+  overflow: hidden;
+  box-shadow: var(--shadow-pop);
+  flex: none;
+}
+
+/* ---------- 侧边栏（亮） ---------- */
+.sidebar {
+  width: 250px;
+  flex: none;
+  background: var(--c3);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4);
+}
+.sidebar.right { border-left: 1px solid var(--c4-7); }
+.sidebar.left  { border-right: 1px solid var(--c4-7); }
+
+.bar-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-14);
+  height: 44px;
+  flex: none;
+}
+.bar-row.even { padding: var(--space-8); }
+.icon-group { display: flex; flex-direction: row; gap: var(--space-4); }
+
+/* 图标按钮 - 无底色 */
+.ibtn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: var(--radius-6);
+  color: var(--c4-70);
+  cursor: pointer;
+  border: none; background: none;
+}
+.ibtn:hover { background: var(--c4-7); }
+.ibtn.danger:hover { background: var(--error); color: var(--c4); }
+.ibtn.disabled { color: var(--c4-20); pointer-events: none; }
+.ibtn svg { width: 16px; height: 16px; display: block; }
+
+/* 切换资源库 */
+.lib-switch {
+  display: flex; flex-direction: row; justify-content: space-between; align-items: center;
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-20);
+  height: 44px; flex: none;
+  border-radius: var(--radius-6);
+  cursor: pointer;
+}
+.lib-switch:hover { background: var(--c4-7); }
+.lib-switch .left { display: flex; align-items: center; gap: var(--space-6); }
+.lib-badge {
+  width: 24px; height: 24px;
+  background: var(--brand-1);
+  border-radius: var(--radius-6);
+  display: flex; align-items: center; justify-content: center;
+}
+.lib-badge svg { width: 16px; height: 16px; color: var(--c4); }
+
+/* 区块 */
+.block { display: flex; flex-direction: column; gap: var(--space-6); padding: var(--space-8) 0; flex: none; }
+.block.grow { flex: 1; min-height: 0; }
+.block-head {
+  display: flex; flex-direction: row; align-items: center;
+  padding: 0 var(--space-8) 0 var(--space-14);
+  gap: var(--space-4);
+  height: 24px;
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  color: var(--c4-40);
+}
+.block-head .arrow { width: 8px; height: 8px; color: var(--c4-40); flex: none; }
+.block-head .spacer { flex: 1; }
+.block-head .ibtn { width: 24px; height: 24px; padding: 4px; }
+
+/* item（文件树 / 快速访问） */
+.items { display: flex; flex-direction: column; gap: var(--space-2); padding: 0 var(--space-8) 0 var(--space-4); }
+.item {
+  display: flex; flex-direction: row; align-items: center;
+  gap: var(--space-6);
+  height: 28px;
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-6);
+  color: var(--c4-70);
+  cursor: pointer;
+  font-size: var(--text-body-size);
+}
+.item svg { width: 16px; height: 16px; flex: none; }
+.item:hover { background: var(--c4-7); }
+.item.selected { background: var(--c4-15); color: var(--c4); }
+.item .count { margin-left: auto; font-size: var(--text-caption-size); color: var(--c4-40); }
+.item.indent-1 { margin-left: 20px; }
+.item.indent-2 { margin-left: 40px; }
+.item .tw { width: 8px; height: 8px; flex: none; color: var(--c4-40); }
+
+/* 视图切换 */
+.view-switch-wrap { padding: var(--space-4) var(--space-8) var(--space-8); flex: none; }
+.view-switch {
+  display: flex; flex-direction: row; gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--c1-50);
+  border: 1px solid var(--c4-15);
+  border-radius: var(--radius-8);
+}
+.view-switch .vbtn {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  height: 28px;
+  border-radius: var(--radius-6);
+  color: var(--c4-40);
+  cursor: pointer;
+}
+.view-switch .vbtn svg { width: 16px; height: 16px; }
+.view-switch .vbtn:hover { background: var(--c4-7); }
+.view-switch .vbtn.active { background: var(--c4-15); color: var(--c4); }
+
+/* ---------- 中间面板（暗） ---------- */
+.content {
+  flex: 1;
+  min-width: 0;
+  background: var(--c2);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4);
+}
+.content-titlebar {
+  display: flex; flex-direction: row; align-items: center;
+  justify-content: space-between;
+  padding: var(--space-8);
+  height: 44px; flex: none;
+  gap: var(--space-8);
+}
+.crumb { display: flex; align-items: center; gap: var(--space-6); min-width: 0; }
+.crumb .title { color: var(--c4); white-space: nowrap; }
+.crumb .sub { color: var(--c4-40); white-space: nowrap; }
+
+/* 滑块 */
+.slider { display: flex; align-items: center; gap: var(--space-6); width: 120px; flex: none; }
+.slider .track { position: relative; flex: 1; height: 2px; background: var(--c4-15); border-radius: 1px; }
+.slider .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 55%; background: var(--c4-40); border-radius: 1px; }
+.slider .thumb {
+  position: absolute; top: 50%; left: 55%;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--c4);
+  transform: translate(-50%, -50%);
+}
+
+/* 复选框 */
+.checkbox { display: flex; align-items: center; gap: var(--space-6); cursor: pointer; flex: none; }
+.checkbox .box {
+  width: 16px; height: 16px;
+  border: 1px solid var(--c4-15);
+  border-radius: var(--radius-4);
+  display: flex; align-items: center; justify-content: center;
+}
+.checkbox.checked .box { background: var(--brand-1); border-color: var(--brand-2); }
+.checkbox.checked .box svg { width: 10px; height: 10px; color: var(--c4); }
+.checkbox .label { color: var(--c4-40); font-size: var(--text-body-size); white-space: nowrap; }
+.checkbox.checked .label { color: var(--c4-70); }
+
+/* 卡片滚动区 */
+.card-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-8) 0 0 var(--space-8); }
+.card-scroll::-webkit-scrollbar { width: 4px; }
+.card-scroll::-webkit-scrollbar-thumb { background: var(--c4-15); border-radius: 2px; }
+
+.grid-folders { display: flex; flex-wrap: wrap; column-gap: 6px; row-gap: 14px; }
+.grid-assets  { display: flex; flex-wrap: wrap; column-gap: 6px; row-gap: 14px; }
+
+/* 文件夹卡片 */
+.folder-card { width: 189px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+.folder-card .art {
+  height: 158px;
+  border-radius: var(--radius-12);
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid transparent;
+}
+.folder-card:hover .art { border-color: var(--c4-15); }
+.folder-card.selected .art { border-color: var(--brand-1); }
+.folder-card .name {
+  height: 20px; line-height: 20px; text-align: center; color: var(--c4);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.folder-card .meta {
+  height: 18px; line-height: 18px; text-align: center;
+  font-size: var(--text-caption-size); color: var(--c4-40);
+}
+
+/* 素材卡片 */
+.asset-card { width: 300px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+.asset-card .thumb-wrap {
+  position: relative;
+  height: 170px;
+  border-radius: var(--radius-12);
+  padding: 4px;
+  border: 2px solid transparent;
+}
+.asset-card:hover .thumb-wrap { border-color: var(--c4-15); }
+.asset-card.selected .thumb-wrap { border-color: var(--brand-1); }
+.asset-card .thumb {
+  position: relative;
+  width: 100%; height: 100%;
+  border: 1px solid var(--c4-7);
+  border-radius: var(--radius-8);
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.badge {
+  position: absolute; left: 8px; top: 8px;
+  padding: 2px 4px;
+  background: var(--c1-80);
+  border-radius: var(--radius-6);
+  font-size: var(--text-caption-size); line-height: var(--text-caption-line);
+  color: var(--c4);
+  z-index: 2;
+}
+.zoom-btn {
+  position: absolute; right: 8px; bottom: 8px;
+  width: 24px; height: 24px;
+  border-radius: var(--radius-6);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--c4-70);
+  z-index: 2;
+}
+.zoom-btn:hover { background: var(--c1-80); }
+.zoom-btn svg { width: 16px; height: 16px; }
+.asset-card .name {
+  height: 20px; line-height: 20px; text-align: center; color: var(--c4);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.asset-card .meta {
+  height: 18px; line-height: 18px; text-align: center;
+  font-size: var(--text-caption-size); color: var(--c4-40);
+}
+
+/* 假缩略图（模拟图片） */
+.ph-1 { background: linear-gradient(135deg, #2b4a6b 0%, #16283d 60%, #0f1c2c 100%); }
+.ph-2 { background: linear-gradient(160deg, #5a3a4d 0%, #33202e 55%, #1c1219 100%); }
+.ph-3 { background: linear-gradient(120deg, #2e5546 0%, #1a332b 60%, #0e1f19 100%); }
+.ph-4 { background: linear-gradient(150deg, #6b5a2b 0%, #403617 60%, #241f0d 100%); }
+.ph-5 { background: linear-gradient(140deg, #3d3d55 0%, #23233a 60%, #141422 100%); }
+.ph-6 { background: linear-gradient(125deg, #63423a 0%, #3a2521 60%, #201311 100%); }
+
+/* 搜索框 */
+.search-wrap { padding: var(--space-4) var(--space-8) var(--space-8); flex: none; }
+.search-box {
+  display: flex; align-items: center; gap: var(--space-6);
+  height: 40px;
+  padding: var(--space-6);
+  background: var(--c1-50);
+  border: 1px solid var(--c4-15);
+  border-radius: var(--radius-8);
+  color: var(--c4-40);
+}
+.search-box svg { width: 16px; height: 16px; flex: none; }
+.search-box .placeholder { flex: 1; }
+
+/* ---------- 详情面板 ---------- */
+.detail-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.detail-scroll::-webkit-scrollbar { width: 4px; }
+.detail-scroll::-webkit-scrollbar-thumb { background: var(--c4-15); border-radius: 2px; }
+.detail-block {
+  display: flex; flex-direction: column; gap: var(--space-6);
+  padding: var(--space-8);
+  border-radius: var(--radius-8);
+  flex: none;
+}
+.detail-block:hover { background: var(--c1-15); }
+.detail-block .block-head { padding: 0; }
+
+.detail-thumb {
+  position: relative;
+  height: 120px;
+  border: 1px solid var(--c4-15);
+  border-radius: var(--radius-6);
+  overflow: hidden;
+}
+.detail-thumb .badge { left: 4px; top: 4px; border-radius: var(--radius-4); }
+
+.color-row { display: flex; gap: var(--space-4); padding: var(--space-4); }
+.color-chip { width: 18px; height: 18px; border-radius: var(--radius-4); cursor: pointer; }
+.color-chip:hover { outline: 1px solid var(--c4-40); }
+
+/* 输入框 */
+.input {
+  display: flex; align-items: center;
+  height: 32px;
+  padding: var(--space-6) var(--space-8);
+  background: var(--c1-50);
+  border: 1px solid var(--c4-15);
+  border-radius: var(--radius-8);
+  color: var(--c4-40);
+  gap: var(--space-4);
+}
+.input .val { color: var(--c4-70); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.input .ph { flex: 1; }
+.input:focus-within, .input.focus { border-color: var(--brand-1); }
+.input .ibtn { width: 24px; height: 24px; padding: 4px; flex: none; }
+
+/* 详情容器（评分/尺寸/日期） */
+.kv {
+  display: flex; flex-direction: row; gap: 16px;
+  padding: var(--space-8);
+  border-radius: var(--radius-8);
+  background: var(--c1-15);
+}
+.kv .col { display: flex; flex-direction: column; gap: 2px; }
+.kv .k { font-size: var(--text-caption-size); line-height: var(--text-caption-line); color: var(--c4-70); }
+.kv .v { font-size: var(--text-caption-size); line-height: var(--text-caption-line); color: var(--c4-40); text-align: right; }
+.stars { display: flex; gap: 4px; align-items: center; height: 18px; }
+.stars svg { width: 12px; height: 12px; color: var(--c4-20); }
+.stars svg.on { color: var(--warning); }
+
+/* 标签 */
+.tag-flow { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.tag-item {
+  display: flex; align-items: center; gap: var(--space-6);
+  padding: var(--space-6) var(--space-6) var(--space-6) var(--space-8);
+  background: var(--c1-15);
+  border-radius: var(--radius-6);
+  color: var(--c4-70);
+  cursor: pointer;
+}
+.tag-item:hover { background: var(--c1-7); }
+.tag-item .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+/* 图标按钮 - 有底色 */
+.ibtn-filled {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 28px; height: 28px;
+  padding: var(--space-6);
+  background: var(--c4-7);
+  border-radius: var(--radius-6);
+  color: var(--c4-70);
+  cursor: pointer;
+  border: none;
+}
+.ibtn-filled:hover { background: var(--c4-15); }
+.ibtn-filled svg { width: 16px; height: 16px; }
+.btn-row { display: flex; gap: var(--space-4); }
+.btn-row .ibtn-filled { flex: 1; }
+
+/* ================= 标本区 ================= */
+.specimen {
+  width: 1560px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.spec-grid { display: flex; gap: 24px; flex-wrap: wrap; }
+.spec-card {
+  background: var(--c3);
+  border-radius: var(--radius-8);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 300px;
+}
+.spec-card.on-c2 { background: var(--c2); }
+.spec-card h3 {
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  color: var(--c4-40);
+  font-weight: 400;
+}
+.spec-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+/* 大标题按钮 */
+.btn-big {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 250px; height: 52px;
+  border-radius: var(--radius-8);
+  font-size: var(--text-title-size); line-height: var(--text-title-line); font-weight: var(--text-title-weight);
+  color: var(--c4);
+  cursor: pointer; border: none;
+}
+.btn-big.plain { background: var(--c4-7); }
+.btn-big.plain:hover { background: var(--c4-15); }
+.btn-big.brand { background: var(--brand-1); }
+.btn-big.brand:hover { background: var(--brand-2); }
+.btn-big svg { width: 24px; height: 24px; }
+
+.btn-small {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 16px;
+  height: 38px;
+  border-radius: var(--radius-6);
+  font-size: var(--text-title-size); line-height: var(--text-title-line); font-weight: var(--text-title-weight);
+  color: var(--c4);
+  cursor: pointer; border: none;
+}
+.btn-small.plain { background: var(--c4-7); }
+.btn-small.plain:hover { background: var(--c4-15); }
+.btn-small.brand { background: var(--brand-1); }
+.btn-small.brand:hover { background: var(--brand-2); }
+.btn-small svg { width: 16px; height: 16px; }
+
+/* 带标题图标按钮 */
+.ibtn-titled {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  height: 32px; padding: 6px 12px;
+  background: var(--c4-7);
+  border-radius: var(--radius-6);
+  color: var(--c4-70);
+  cursor: pointer; border: none;
+  font-size: var(--text-body-size);
+}
+.ibtn-titled:hover { background: var(--c4-15); }
+.ibtn-titled svg { width: 16px; height: 16px; color: var(--c4-40); }
+
+/* 开关 */
+.switch {
+  width: 50px; height: 28px;
+  padding: 4px;
+  background: var(--c4-15);
+  border-radius: 14px;
+  display: flex;
+  cursor: pointer;
+  border: none;
+}
+.switch .knob { width: 20px; height: 20px; border-radius: 999px; background: var(--c4); }
+.switch.on { background: var(--brand-1); justify-content: flex-end; }
+
+/* 右键菜单 / 下拉菜单（浮层 C5） */
+.menu {
+  width: 220px;
+  background: var(--c5);
+  border-radius: var(--radius-8);
+  box-shadow: inset 0 0 0 1px var(--c4-15), var(--shadow-pop);
+  padding: var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.menu-item {
+  display: flex; align-items: center; gap: var(--space-6);
+  height: 28px;
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-6);
+  color: var(--c4-70);
+  cursor: pointer;
+}
+.menu-item svg { width: 16px; height: 16px; }
+.menu-item:hover { background: var(--c4-7); color: var(--c4); }
+.menu-item .keys { margin-left: auto; font-size: var(--text-caption-size); color: var(--c4-40); }
+.menu-divider { height: 1px; background: var(--c4-7); margin: var(--space-2) var(--space-8); }
+
+/* 弹窗（浮层 C5） */
+.modal {
+  width: 420px;
+  background: var(--c5);
+  border-radius: var(--radius-8);
+  box-shadow: inset 0 0 0 1px var(--c4-15), var(--shadow-pop);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.modal-head {
+  display: flex; align-items: center; gap: var(--space-6);
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-14);
+  height: 44px;
+}
+.modal-head .lib-badge { width: 24px; height: 24px; }
+.modal-head .mtitle { font-size: var(--text-title-size); font-weight: var(--text-title-weight); }
+.modal-body { padding: var(--space-8) 14px; display: flex; flex-direction: column; gap: var(--space-8); }
+.modal-body .desc { color: var(--c4-70); }
+.modal-foot {
+  display: flex; justify-content: flex-end; gap: var(--space-8);
+  padding: var(--space-8) 14px 14px;
+}
+
+/* 工具 tip */
+.tip {
+  display: inline-flex; align-items: center; gap: var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-6);
+  background: var(--c5);
+  box-shadow: inset 0 0 0 1px var(--c4-15), var(--shadow-pop);
+  font-size: var(--text-caption-size);
+  color: var(--c4);
+}
+.tip .keys { color: var(--c4-40); }
+
+/* token 色板 */
+.palette { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.swatch-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.swatch {
+  width: 150px; height: 64px;
+  border-radius: var(--radius-6);
+  border: 1px solid var(--c4-7);
+  padding: 6px 8px;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  font-size: 11px; line-height: 14px;
+}
+.swatch .nm { color: rgba(255,255,255,.85); }
+.swatch .hx { color: rgba(255,255,255,.45); }
+.swatch.light .nm { color: rgba(0,0,0,.75); }
+.swatch.light .hx { color: rgba(0,0,0,.45); }
+</style>
+</head>
+<body>
+
+<!-- 图标定义 -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></symbol>
+    <symbol id="i-collapse-l" viewBox="0 0 16 16"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+    <symbol id="i-collapse-r" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 16 16"><path d="M4 6h8M9 3l3 3-3 3M12 10H4M7 13l-3-3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+    <symbol id="i-lib" viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 6.5h11" stroke="currentColor" stroke-width="1.4"/></symbol>
+    <symbol id="i-all" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1" fill="currentColor"/><rect x="9" y="2" width="5" height="5" rx="1" fill="currentColor"/><rect x="2" y="9" width="5" height="5" rx="1" fill="currentColor"/><rect x="9" y="9" width="5" height="5" rx="1" fill="currentColor"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M2 9l2-5h8l2 5v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M2 9h4l1 2h2l1-2h4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-uncat" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6 6.5C6 5.7 6.9 5 8 5s2 .7 2 1.5c0 1.2-2 1.3-2 2.7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".9" fill="currentColor"/></symbol>
+    <symbol id="i-recent" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.2l2.2 1.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4V3h3v1M4.5 4.5l.7 8.5a1 1 0 0 0 1 .9h3.6a1 1 0 0 0 1-.9l.7-8.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3.2L8 5.5h5a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-folder-open" viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3.2L8 5.5h4.5v2H4.8L2.6 12.6 2 12V4.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M4 7.5h9.7a.6.6 0 0 1 .6.8l-1.6 4.2a1 1 0 0 1-.9.6H2.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    <symbol id="i-back" viewBox="0 0 16 16"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+    <symbol id="i-fwd" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+    <symbol id="i-plugin" viewBox="0 0 16 16"><path d="M6 2.5v3M10 2.5v3M4 5.5h8v2a4 4 0 0 1-8 0v-2zM8 11.5v2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-view" viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="5" cy="4" r="1.4" fill="currentColor"/><circle cx="11" cy="8" r="1.4" fill="currentColor"/><circle cx="7" cy="12" r="1.4" fill="currentColor"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-zoom" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 10.5L14 14M5 7h4M7 5v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 16 16"><path d="M9.5 2.5l4 4-1.5.5-2 2-.5 3.5-2-2L4 13l2.5-3.5-2-2 3.5-.5 2-2 .5-1.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    <symbol id="i-min" viewBox="0 0 16 16"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-max" viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+    <symbol id="i-arrow8" viewBox="0 0 8 8"><path d="M2.5 1.5l3 2.5-3 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+    <symbol id="i-arrow8-d" viewBox="0 0 8 8"><path d="M1.5 2.5l2.5 3 2.5-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+    <symbol id="i-link" viewBox="0 0 16 16"><path d="M6.5 9.5a3 3 0 0 0 4.2.2l2-2a3 3 0 0 0-4.2-4.2l-1.2 1.1M9.5 6.5a3 3 0 0 0-4.2-.2l-2 2a3 3 0 0 0 4.2 4.2l1.2-1.1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-star" viewBox="0 0 16 16"><path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.2L8 11.5l-3.8 2 .7-4.2-3.1-3 4.3-.6L8 1.8z" fill="currentColor"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5v-1h-8v8h1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 16 16"><path d="M9.5 3.5l3 3L6 13H3v-3l6.5-6.5zM8.5 4.5l3 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 16 16"><path d="M2.5 2.5H8L13.5 8 8 13.5 2.5 8V2.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1.2" fill="currentColor"/></symbol>
+    <symbol id="i-import" viewBox="0 0 16 16"><path d="M8 2v8M5 7l3 3 3-3M3 11v2.5a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5V11" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-rename" viewBox="0 0 16 16"><path d="M2.5 13.5h11M4 10.5L10.5 4l1.5 1.5L5.5 12H4v-1.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.5L14.5 13h-13L8 2.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6.5v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11" r=".8" fill="currentColor"/></symbol>
+  </defs>
+</svg>
+
+<div class="section-label">
+  <b>主窗口整体</b> —— 内容区 C2 #101218（暗） · 侧边栏 C3 #1C1F27（亮） · 窗口底 C1 #0A0B0E
+</div>
+
+<!-- ================= 主窗口 ================= -->
+<div class="window">
+
+  <!-- 左侧边栏 -->
+  <aside class="sidebar left">
+    <div class="bar-row">
+      <button class="ibtn"><svg><use href="#i-menu"/></svg></button>
+      <div class="icon-group">
+        <button class="ibtn"><svg><use href="#i-plus"/></svg></button>
+        <button class="ibtn"><svg><use href="#i-collapse-l"/></svg></button>
+      </div>
+    </div>
+
+    <div class="lib-switch">
+      <div class="left">
+        <div class="lib-badge"><svg><use href="#i-lib"/></svg></div>
+        <span>我的素材</span>
+      </div>
+      <button class="ibtn"><svg><use href="#i-swap"/></svg></button>
+    </div>
+
+    <div class="block">
+      <div class="block-head">
+        <svg class="arrow"><use href="#i-arrow8-d"/></svg>
+        <span>快速访问</span>
+      </div>
+      <div class="items">
+        <div class="item selected"><svg><use href="#i-all"/></svg>全部<span class="count">1280</span></div>
+        <div class="item"><svg><use href="#i-uncat"/></svg>未分类<span class="count">45</span></div>
+        <div class="item"><svg><use href="#i-inbox"/></svg>收件箱<span class="count">6</span></div>
+        <div class="item"><svg><use href="#i-recent"/></svg>最近使用</div>
+        <div class="item"><svg><use href="#i-trash"/></svg>回收站</div>
+      </div>
+    </div>
+
+    <div class="block grow">
+      <div class="block-head">
+        <svg class="arrow"><use href="#i-arrow8-d"/></svg>
+        <span>文件夹 (12)</span>
+        <span class="spacer"></span>
+        <button class="ibtn"><svg><use href="#i-plus"/></svg></button>
+      </div>
+      <div class="items">
+        <div class="item"><svg class="tw"><use href="#i-arrow8-d"/></svg><svg><use href="#i-folder-open"/></svg>角色设计</div>
+        <div class="item indent-1"><svg class="tw"><use href="#i-arrow8"/></svg><svg><use href="#i-folder"/></svg>主角</div>
+        <div class="item indent-1"><svg class="tw"><use href="#i-arrow8"/></svg><svg><use href="#i-folder"/></svg>配角</div>
+        <div class="item"><svg class="tw"><use href="#i-arrow8"/></svg><svg><use href="#i-folder"/></svg>场景</div>
+        <div class="item"><svg class="tw"><use href="#i-arrow8"/></svg><svg><use href="#i-folder"/></svg>道具</div>
+        <div class="item"><svg class="tw"><use href="#i-arrow8"/></svg><svg><use href="#i-folder"/></svg>特效参考</div>
+        <div class="item"><svg class="tw"><use href="#i-arrow8"/></svg><svg><use href="#i-folder"/></svg>分镜</div>
+      </div>
+    </div>
+
+    <div class="view-switch-wrap">
+      <div class="view-switch">
+        <div class="vbtn active"><svg><use href="#i-lib"/></svg></div>
+        <div class="vbtn"><svg><use href="#i-folder"/></svg></div>
+        <div class="vbtn"><svg><use href="#i-tag"/></svg></div>
+        <div class="vbtn"><svg><use href="#i-all"/></svg></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 中间面板 -->
+  <main class="content">
+    <div class="content-titlebar">
+      <div class="crumb">
+        <div class="icon-group">
+          <button class="ibtn disabled"><svg><use href="#i-back"/></svg></button>
+          <button class="ibtn"><svg><use href="#i-fwd"/></svg></button>
+        </div>
+        <span class="title">角色设计</span>
+        <span class="sub">/ 搜索结果 (32)</span>
+      </div>
+      <div class="slider"><div class="track"><div class="fill"></div><div class="thumb"></div></div></div>
+      <div class="checkbox checked">
+        <div class="box"><svg><use href="#i-check"/></svg></div>
+        <span class="label">显示子文件夹内容</span>
+      </div>
+      <div class="icon-group">
+        <button class="ibtn"><svg><use href="#i-plugin"/></svg></button>
+        <button class="ibtn"><svg><use href="#i-view"/></svg></button>
+      </div>
+    </div>
+
+    <div class="card-scroll">
+      <div class="block">
+        <div class="block-head" style="padding:0">
+          <svg class="arrow"><use href="#i-arrow8-d"/></svg>
+          <span>文件夹 (3)</span>
+        </div>
+        <div class="grid-folders">
+          <div class="folder-card">
+            <div class="art">
+              <svg width="96" height="80" viewBox="0 0 96 80">
+                <path d="M8 18a6 6 0 0 1 6-6h20l8 10h40a6 6 0 0 1 6 6v40a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6V18z" fill="#1f232d"/>
+                <path d="M8 24a6 6 0 0 1 6-6h20l8 10h40a6 6 0 0 1 6 6v34a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6V24z" fill="#262b36"/>
+              </svg>
+            </div>
+            <div class="name">主角</div>
+            <div class="meta">36 个文件 / 2 个子文件夹</div>
+          </div>
+          <div class="folder-card selected">
+            <div class="art">
+              <svg width="96" height="80" viewBox="0 0 96 80">
+                <path d="M8 18a6 6 0 0 1 6-6h20l8 10h40a6 6 0 0 1 6 6v40a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6V18z" fill="#1f232d"/>
+                <rect x="18" y="26" width="60" height="40" rx="3" fill="#c6c7cc"/>
+                <path d="M8 24a6 6 0 0 1 6-6h20l8 10h40a6 6 0 0 1 6 6v34a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6V24z" fill="#262b36" opacity=".92"/>
+              </svg>
+            </div>
+            <div class="name">配角</div>
+            <div class="meta">58 个文件</div>
+          </div>
+          <div class="folder-card">
+            <div class="art">
+              <svg width="96" height="80" viewBox="0 0 96 80">
+                <path d="M8 18a6 6 0 0 1 6-6h20l8 10h40a6 6 0 0 1 6 6v40a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6V18z" fill="#1f232d"/>
+                <path d="M8 24a6 6 0 0 1 6-6h20l8 10h40a6 6 0 0 1 6 6v34a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6V24z" fill="#262b36"/>
+              </svg>
+            </div>
+            <div class="name">路人甲设定集</div>
+            <div class="meta">12 个文件</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-head" style="padding:0">
+          <svg class="arrow"><use href="#i-arrow8-d"/></svg>
+          <span>内容 (128)</span>
+        </div>
+        <div class="grid-assets">
+          <div class="asset-card">
+            <div class="thumb-wrap"><div class="thumb ph-1"><span class="badge" style="color:var(--fmt-image)">PNG</span><span class="zoom-btn"><svg><use href="#i-zoom"/></svg></span></div></div>
+            <div class="name">寒冰射手-立绘</div>
+            <div class="meta">1920 × 1080</div>
+          </div>
+          <div class="asset-card selected">
+            <div class="thumb-wrap"><div class="thumb ph-2"><span class="badge" style="color:var(--fmt-psd)">PSD</span><span class="zoom-btn"><svg><use href="#i-zoom"/></svg></span></div></div>
+            <div class="name">主角-三视图.psd</div>
+            <div class="meta">2048 × 2048</div>
+          </div>
+          <div class="asset-card">
+            <div class="thumb-wrap"><div class="thumb ph-3"><span class="badge" style="color:var(--fmt-image)">序列帧</span><span class="zoom-btn"><svg><use href="#i-zoom"/></svg></span></div></div>
+            <div class="name">跑步循环.序列帧</div>
+            <div class="meta">24 帧 · 24 fps</div>
+          </div>
+          <div class="asset-card">
+            <div class="thumb-wrap"><div class="thumb ph-4"><span class="badge" style="color:var(--fmt-image)">GIF</span><span class="zoom-btn"><svg><use href="#i-zoom"/></svg></span></div></div>
+            <div class="name">爆炸特效-v3</div>
+            <div class="meta">480 × 270</div>
+          </div>
+          <div class="asset-card">
+            <div class="thumb-wrap"><div class="thumb ph-5"><span class="badge" style="color:var(--fmt-svg)">SVG</span><span class="zoom-btn"><svg><use href="#i-zoom"/></svg></span></div></div>
+            <div class="name">UI图标-背包</div>
+            <div class="meta">矢量</div>
+          </div>
+          <div class="asset-card">
+            <div class="thumb-wrap"><div class="thumb ph-6"><span class="badge" style="color:var(--fmt-fla)">FLA</span><span class="zoom-btn"><svg><use href="#i-zoom"/></svg></span></div></div>
+            <div class="name">场景-森林黄昏.fla</div>
+            <div class="meta">格式图标</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="search-wrap">
+      <div class="search-box">
+        <svg><use href="#i-search"/></svg>
+        <span class="placeholder">搜索…（"/" 分词 · "//" 筛选）</span>
+        <span style="font-size:var(--text-caption-size)">Ctrl+F</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- 右侧边栏 -->
+  <aside class="sidebar right">
+    <div class="bar-row even">
+      <div class="icon-group">
+        <button class="ibtn"><svg><use href="#i-collapse-r"/></svg></button>
+        <button class="ibtn"><svg><use href="#i-pin"/></svg></button>
+      </div>
+      <div class="icon-group">
+        <button class="ibtn"><svg><use href="#i-min"/></svg></button>
+        <button class="ibtn"><svg><use href="#i-max"/></svg></button>
+        <button class="ibtn danger"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </div>
+
+    <div class="detail-scroll">
+      <div class="detail-block">
+        <div class="block-head"><svg class="arrow"><use href="#i-arrow8-d"/></svg><span>颜色信息</span></div>
+        <div class="detail-thumb ph-2"><span class="badge" style="color:var(--fmt-psd)">PSD</span></div>
+        <div class="color-row">
+          <div class="color-chip" style="background:#3a6ea5"></div>
+          <div class="color-chip" style="background:#2b9fd9"></div>
+          <div class="color-chip" style="background:#7a5c3e"></div>
+          <div class="color-chip" style="background:#a53e3e"></div>
+          <div class="color-chip" style="background:#3e8a57"></div>
+          <div class="color-chip" style="background:#6b4f8a"></div>
+          <div class="color-chip" style="background:#c0a23e"></div>
+          <div class="color-chip" style="background:#8a8d99"></div>
+        </div>
+      </div>
+
+      <div class="detail-block">
+        <div class="block-head"><svg class="arrow"><use href="#i-arrow8-d"/></svg><span>基础信息</span></div>
+        <div class="input"><span class="val">主角-三视图.psd</span></div>
+        <div class="input"><span class="ph">输入注释</span></div>
+        <div class="input"><span class="ph">http://</span><button class="ibtn"><svg><use href="#i-link"/></svg></button></div>
+        <div class="kv">
+          <div class="col">
+            <span class="k">评分</span><span class="k">尺寸</span><span class="k">文件大小</span><span class="k">格式</span><span class="k">添加日期</span><span class="k">修改日期</span>
+          </div>
+          <div class="col" style="flex:1">
+            <div class="stars" style="justify-content:flex-end">
+              <svg class="on"><use href="#i-star"/></svg><svg class="on"><use href="#i-star"/></svg><svg class="on"><use href="#i-star"/></svg><svg class="on"><use href="#i-star"/></svg><svg><use href="#i-star"/></svg>
+            </div>
+            <span class="v">2048 × 2048</span>
+            <span class="v">24.6 MB</span>
+            <span class="v">PSD</span>
+            <span class="v">2026/07/18 14:32</span>
+            <span class="v">2026/07/21 09:15</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-block">
+        <div class="block-head">
+          <svg class="arrow"><use href="#i-arrow8-d"/></svg><span>标签</span>
+          <span class="spacer"></span>
+          <button class="ibtn"><svg><use href="#i-plus"/></svg></button>
+        </div>
+        <div class="tag-flow">
+          <div class="tag-item"><span class="dot" style="background:#2b9fd9"></span>主角</div>
+          <div class="tag-item"><span class="dot" style="background:#3e8a57"></span>已定稿</div>
+          <div class="tag-item"><span class="dot" style="background:#c0a23e"></span>待优化</div>
+        </div>
+      </div>
+
+      <div class="detail-block">
+        <div class="block-head"><svg class="arrow"><use href="#i-arrow8-d"/></svg><span>提示词</span></div>
+        <div class="input" style="height:72px;align-items:flex-start;padding-top:8px"><span class="ph">输入 AI 提示词…</span></div>
+        <div class="btn-row">
+          <button class="ibtn-filled"><svg><use href="#i-copy"/></svg></button>
+          <button class="ibtn-filled"><svg><use href="#i-edit"/></svg></button>
+          <button class="ibtn-filled"><svg><use href="#i-trash"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="view-switch-wrap">
+      <div class="view-switch">
+        <div class="vbtn active"><svg><use href="#i-all"/></svg></div>
+        <div class="vbtn"><svg><use href="#i-edit"/></svg></div>
+        <div class="vbtn"><svg><use href="#i-plugin"/></svg></div>
+        <div class="vbtn"><svg><use href="#i-view"/></svg></div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="section-label">
+  <b>组件标本</b> —— 按钮 / 输入框 / 开关 / 菜单 / 弹窗（浮层 C5 #262B35） / 工具 tip
+</div>
+
+<!-- ================= 标本区 ================= -->
+<div class="specimen">
+  <div class="spec-grid">
+
+    <div class="spec-card">
+      <h3>按钮（C3 底上）</h3>
+      <div class="spec-row">
+        <button class="ibtn"><svg><use href="#i-plus"/></svg></button>
+        <button class="ibtn-filled"><svg><use href="#i-copy"/></svg></button>
+        <button class="ibtn-titled"><svg><use href="#i-import"/></svg>导入文件</button>
+      </div>
+      <div class="spec-row">
+        <button class="btn-small plain">取消</button>
+        <button class="btn-small brand"><svg><use href="#i-check"/></svg>确认导入</button>
+      </div>
+      <div class="spec-row">
+        <button class="btn-big plain"><svg><use href="#i-folder-open"/></svg>打开资源库</button>
+      </div>
+      <div class="spec-row">
+        <button class="btn-big brand">创建资源库</button>
+      </div>
+    </div>
+
+    <div class="spec-card">
+      <h3>表单（C3 底上）</h3>
+      <div class="input"><span class="ph">输入名称</span></div>
+      <div class="input focus"><span class="val">我的素材|</span></div>
+      <div class="spec-row">
+        <div class="checkbox checked"><div class="box"><svg><use href="#i-check"/></svg></div><span class="label">复制（保留原文件）</span></div>
+      </div>
+      <div class="spec-row">
+        <div class="checkbox"><div class="box"></div><span class="label">剪切（移动原文件）</span></div>
+      </div>
+      <div class="spec-row">
+        <button class="switch on"><span class="knob"></span></button>
+        <button class="switch"><span class="knob"></span></button>
+        <span class="label" style="color:var(--c4-40)">开关按钮</span>
+      </div>
+      <div class="spec-row">
+        <div class="slider" style="width:160px"><div class="track"><div class="fill"></div><div class="thumb"></div></div></div>
+      </div>
+    </div>
+
+    <div class="spec-card">
+      <h3>右键菜单（C5 浮层）</h3>
+      <div class="menu">
+        <div class="menu-item"><svg><use href="#i-zoom"/></svg>预览<span class="keys">双击</span></div>
+        <div class="menu-item"><svg><use href="#i-folder-open"/></svg>打开所在文件夹</div>
+        <div class="menu-divider"></div>
+        <div class="menu-item"><svg><use href="#i-copy"/></svg>复制<span class="keys">Ctrl+C</span></div>
+        <div class="menu-item"><svg><use href="#i-rename"/></svg>重命名<span class="keys">F2</span></div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" style="color:var(--error)"><svg><use href="#i-trash"/></svg>删除<span class="keys">Del</span></div>
+      </div>
+    </div>
+
+    <div class="spec-card">
+      <h3>弹窗（C5 浮层） + 工具 tip</h3>
+      <div class="modal">
+        <div class="modal-head">
+          <div class="lib-badge" style="background:var(--warning)"><svg><use href="#i-warn"/></svg></div>
+          <span class="mtitle">重复添加提示</span>
+        </div>
+        <div class="modal-body">
+          <span class="desc">「主角-三视图.psd」已存在于资源库中，选择处理方式：</span>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-small plain">跳过</button>
+          <button class="btn-small plain">保留两个</button>
+          <button class="btn-small brand">用已存入</button>
+        </div>
+      </div>
+      <div class="spec-row">
+        <span class="tip">导入文件 <span class="keys">Ctrl+V 粘贴剪贴板图片</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- token 色板 -->
+  <div class="spec-card" style="min-width:0">
+    <h3>token 色板（左：现值 → 右：新值）</h3>
+    <div class="palette">
+      <div class="swatch-row">
+        <div class="swatch" style="background:#09090a"><span class="nm">C1 现 #09090A</span><span class="hx">窗口底</span></div>
+        <div class="swatch" style="background:#0a0b0e"><span class="nm">C1 新 #0A0B0E</span><span class="hx">窗口底</span></div>
+        <div class="swatch" style="background:#1b1c1f"><span class="nm">C2 现 #1B1C1F</span><span class="hx">内容区</span></div>
+        <div class="swatch" style="background:#101218"><span class="nm">C2 新 #101218</span><span class="hx">内容区（压暗）</span></div>
+        <div class="swatch" style="background:#1f2023"><span class="nm">C3 现 #1F2023</span><span class="hx">侧边栏</span></div>
+        <div class="swatch" style="background:#1c1f27"><span class="nm">C3 新 #1C1F27</span><span class="hx">侧边栏（提亮）</span></div>
+      </div>
+      <div class="swatch-row">
+        <div class="swatch" style="background:#18191c"><span class="nm">C5 现 #18191C</span><span class="hx">浮层</span></div>
+        <div class="swatch" style="background:#262b35"><span class="nm">C5 新 #262B35</span><span class="hx">浮层（最亮）</span></div>
+        <div class="swatch light" style="background:#f2f4fa"><span class="nm">C4 #F2F4FA</span><span class="hx">文字（不动）</span></div>
+        <div class="swatch" style="background:#0c8ce9"><span class="nm">品牌-1</span><span class="hx">#0C8CE9</span></div>
+        <div class="swatch" style="background:#096cb2"><span class="nm">品牌-2</span><span class="hx">#096CB2</span></div>
+        <div class="swatch" style="background:#d04833"><span class="nm">错误</span><span class="hx">#D04833</span></div>
+        <div class="swatch" style="background:#bf9325"><span class="nm">警告</span><span class="hx">#BF9325</span></div>
+        <div class="swatch" style="background:#29a13d"><span class="nm">成功</span><span class="hx">#29A13D</span></div>
+      </div>
+      <div class="swatch-row">
+        <div class="swatch" style="background:#262b36"><span class="nm">文件夹·正面</span><span class="hx">#262B36</span></div>
+        <div class="swatch" style="background:#1f232d"><span class="nm">文件夹·背面</span><span class="hx">#1F232D</span></div>
+        <div class="swatch light" style="background:#c6c7cc"><span class="nm">文件夹·文件</span><span class="hx">#C6C7CC</span></div>
+      </div>
+      <div class="swatch-row">
+        <div class="swatch" style="background:#101218"><span class="nm" style="color:#31a8ff">PSD #31A8FF</span><span class="hx">角标文字色（C1-80 底上）</span></div>
+        <div class="swatch" style="background:#101218"><span class="nm" style="color:#ff9a00">AI #FF9A00</span><span class="hx">Illustrator</span></div>
+        <div class="swatch" style="background:#101218"><span class="nm" style="color:#ff6666">FLA #FF6666</span><span class="hx">Animate</span></div>
+        <div class="swatch" style="background:#101218"><span class="nm" style="color:#9999ff">AEP #9999FF</span><span class="hx">After Effects</span></div>
+        <div class="swatch" style="background:#101218"><span class="nm" style="color:#ffb13b">SVG #FFB13B</span><span class="hx">SVG 标志橙</span></div>
+        <div class="swatch" style="background:#101218"><span class="nm" style="color:#3ebd6e">图片 #3EBD6E</span><span class="hx">PNG/JPG/序列帧等</span></div>
+        <div class="swatch" style="background:#101218"><span class="nm" style="color:rgba(242,244,250,.7)">其他 C4-70</span><span class="hx">通用色</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

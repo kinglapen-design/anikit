@@ -6,6 +6,7 @@ import { computed } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import { CARD_CAPTION_H, type Box } from "../lib/layouts";
+import { formatBadgeColor } from "../lib/formatBadge";
 import type { PlacementView } from "../stores/content";
 
 const props = withDefaults(defineProps<{ asset: PlacementView; box: Box; selected?: boolean }>(), {
@@ -16,6 +17,8 @@ const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.as
 // 序列帧（2026-07-22 用户定）：格式角标显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
 const isSeq = computed(() => props.asset.frameCount != null);
 const badge = computed(() => (isSeq.value ? "序列帧" : props.asset.ext.toUpperCase()));
+// 角标文字色：品牌格式各自品牌色 / 图片与序列帧统一色 / 其他 C4-70（01_样式 token 01-5）
+const badgeColor = computed(() => formatBadgeColor(props.asset.ext, isSeq.value));
 const displayName = computed(() =>
   isSeq.value ? `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧` : props.asset.name,
 );
@@ -47,7 +50,7 @@ const meta = computed(() =>
         draggable="false"
       />
       <div v-else class="img" />
-      <span class="badge">{{ badge }}</span>
+      <span class="badge" :style="{ color: badgeColor }">{{ badge }}</span>
       <button class="zoom" v-tip="'查看大图'" @click.stop>
         <AppIcon name="magnifier" />
       </button>

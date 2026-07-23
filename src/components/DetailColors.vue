@@ -14,7 +14,7 @@ const open = ref(true);
     <SectionHeader title="颜色信息" v-model:open="open" />
     <div v-if="open" class="body">
       <div class="thumb">
-        <span class="badge">PSD</span>
+        <span class="badge" :style="{ color: 'var(--fmt-psd)' }">PSD</span>
       </div>
       <div class="swatches">
         <span v-for="c in colors" :key="c" class="swatch" :style="{ background: c }" v-tip="c" />

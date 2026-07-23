@@ -11,12 +11,12 @@
   --warning: #bf9325; /* 评分选中 */
   --success: #29a13d;
 
-  /* 通用色（衍生基础） */
-  --c1: #09090a;
-  --c2: #1b1c1f;
-  --c3: #1f2023;
+  /* 通用色（衍生基础）——明度阶梯：C1 < C2 < C3 < C5（内容区压暗、侧边栏提亮、浮层最亮，2026-07-23 用户定案） */
+  --c1: #0a0b0e; /* 窗口底（最深） */
+  --c2: #101218; /* 中间面板·内容区（暗） */
+  --c3: #1c1f27; /* 左右侧边栏（亮） */
   --c4: #f2f4fa;
-  --c5: #18191c; /* 二级窗口 / 模态窗口 */
+  --c5: #262b35; /* 二级窗口 / 模态窗口（浮层最亮） */
 
   /* 透明度衍生 */
   --c1-80: color-mix(in srgb, var(--c1) 80%, transparent);
@@ -30,9 +30,18 @@
   --c4-7: color-mix(in srgb, var(--c4) 7%, transparent);
 
   /* 文件夹卡片（图层1 正面 / 图层2 文件 / 图层4 背面） */
-  --folder-card-front: #262629;
+  --folder-card-front: #262b36;
   --folder-card-file: #c6c7cc;
-  --folder-card-back: #202124;
+  --folder-card-back: #1f232d;
+
+  /* 格式角标文字色（2026-07-23 用户定：各软件品牌色，节制——底色仍 C1-80，仅文字带色；
+     图片格式与序列帧统一一色，未列出的格式用 C4-70 通用色） */
+  --fmt-psd: #31a8ff; /* Photoshop（PSD / PSB） */
+  --fmt-ai: #ff9a00; /* Illustrator */
+  --fmt-fla: #ff6666; /* Animate */
+  --fmt-aep: #9999ff; /* After Effects */
+  --fmt-svg: #ffb13b; /* SVG 标志橙 */
+  --fmt-image: #3ebd6e; /* 图片格式统一（PNG / JPG / BMP / GIF / WEBP / 序列帧） */
 
   /* 文字 */
   --font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
