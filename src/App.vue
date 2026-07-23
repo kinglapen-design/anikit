@@ -185,14 +185,27 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
   padding: 0;
   background: var(--c1);
   overflow: hidden;
-  /* 主窗口 2px 外边框（2026-07-23 线框定案：窗口级 2px，其余 1px）；
-     圆角 8 与系统 DWM 圆角一致 */
+  /* 圆角 8 与系统 DWM 圆角一致（overflow 裁剪子元素圆角） */
   border-radius: var(--radius-8);
-  box-shadow: inset 0 0 0 2px var(--border-1);
+}
+/* 主窗口 2px 外边框（2026-07-23 线框定案：窗口级 2px，其余 1px）：
+   不能用 inset box-shadow——其绘制在内容之下，会被铺满的三栏子元素完全遮住；
+   改用 ::after 叠层绘制，不挤布局、pointer-events 不拦截，最大化时去除 */
+.window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--border-1);
+  border-radius: var(--radius-8);
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 150;
 }
 .window.maximized {
   border-radius: 0;
-  box-shadow: none;
+}
+.window.maximized::after {
+  display: none;
 }
 /* 可视边缘内 8px 的 resize 判定热区（startResizeDragging 手动发起） */
 .resize-zone {
