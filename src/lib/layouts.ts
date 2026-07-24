@@ -34,6 +34,8 @@ const PAD = { top: 0, right: 20, bottom: 0, left: 0 };
 // 卡片间距（2026-07-23 用户定）：列间距 16，行间距 16
 const COL_GAP = 16;
 const ROW_GAP = 16;
+/** 列表模式行间距（2026-07-24 用户定：紧凑 6px，独立于卡片 ROW_GAP） */
+const LIST_ROW_GAP = 6;
 
 // —— 自适应（等高不等宽）：贪心分行，行内等比拉伸填满宽度 ——
 export function computeJustified(
@@ -148,7 +150,7 @@ export function computeList(
   _captionHeight = 0,
 ): LayoutResult {
   const rowH = Math.max(21, Math.round((57 * targetRowHeight) / 220));
-  const gap = ROW_GAP; // 行间距 14（token，阶段3修改定案）
+  const gap = LIST_ROW_GAP;
   const width = containerWidth - PAD.left - PAD.right;
   const boxes: Box[] = [];
   const rows: Row[] = [];
