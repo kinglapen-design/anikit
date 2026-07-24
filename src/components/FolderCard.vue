@@ -39,12 +39,13 @@ const meta = computed(() => {
   gap: var(--space-4);
   cursor: default;
 }
-/* 图标容器：padding 0 / 圆角 10（= SVG 圆角 8 + 边框 2，内缘 8 与 SVG 贴合）；
-   边框由 ::after 绘制（不占布局——SVG 常态即与副标题左对齐，hover/选中仅上色） */
+/* 图标容器：padding 0 / 圆角 8（= SVG 外形圆角，裁切弧与 SVG 弧重合，常态不截断）；
+   边框由 ::after 绘制（不占布局，圆角同为 8——hover/选中框外缘与 SVG 弧重合，
+   框盖在图形上 2px，与素材卡片边框盖图片同一机制） */
 .icon-wrap {
   position: relative;
   width: 100%;
-  border-radius: 10px;
+  border-radius: var(--radius-8);
   overflow: hidden;
   line-height: 0;
 }
@@ -53,7 +54,7 @@ const meta = computed(() => {
   position: absolute;
   inset: 0;
   border: 2px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--radius-8);
   pointer-events: none;
   transition: border-color 0.12s ease;
 }
