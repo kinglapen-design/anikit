@@ -41,12 +41,21 @@ const layoutLabel = computed(() => layouts.find((l) => l.value === ui.layoutMode
 const briefLabel = computed(() => briefs.find((b) => b.value === ui.briefMode)?.label ?? "尺寸");
 const sortLabel = computed(() => ui.sortBy || "自定义");
 
-// 下拉选择器：记录当前打开的行与锚点；选项菜单与主窗口同组（点组外一起关闭）
+// 下拉选择器：记录当前打开的行、锚点与触发按钮（trigger 用于"再点同一按钮关闭"，
+// 防止"组外先关、click 又开"反复弹）；选项菜单独立于主窗口——点主窗口空白即可收起
 type PickerKind = "scope" | "layout" | "sort" | "brief" | "group";
 const picker = ref<{ kind: PickerKind; x: number; y: number } | null>(null);
+const pickerTrigger = ref<HTMLElement | null>(null);
 
 function openPicker(kind: PickerKind, e: MouseEvent): void {
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  // 再点同一按钮 = 收起
+  if (picker.value?.kind === kind) {
+    picker.value = null;
+    return;
+  }
+  const el = e.currentTarget as HTMLElement;
+  const rect = el.getBoundingClientRect();
+  pickerTrigger.value = el;
   picker.value = { kind, x: Math.max(8, rect.right - 175), y: rect.bottom + 4 };
 }
 function closeAll(): void {
@@ -71,35 +80,35 @@ function closeAll(): void {
           <span class="label">查看范围</span>
           <button class="picker" @click="openPicker('scope', $event)">
             <span class="val">{{ ui.useGlobalView ? "全局" : "当前目录" }}</span>
-            <AppIcon name="chevron-small" :size="8" class="down" />
+            <AppIcon name="chevron-small" :size="16" class="down" />
           </button>
         </div>
         <div class="row">
           <span class="label">布局方式</span>
           <button class="picker" @click="openPicker('layout', $event)">
             <span class="val">{{ layoutLabel }}</span>
-            <AppIcon name="chevron-small" :size="8" class="down" />
+            <AppIcon name="chevron-small" :size="16" class="down" />
           </button>
         </div>
         <div class="row">
           <span class="label">排序方式</span>
           <button class="picker" @click="openPicker('sort', $event)">
             <span class="val">{{ sortLabel }}</span>
-            <AppIcon name="chevron-small" :size="8" class="down" />
+            <AppIcon name="chevron-small" :size="16" class="down" />
           </button>
         </div>
         <div class="row">
           <span class="label">显示简介</span>
           <button class="picker" @click="openPicker('brief', $event)">
             <span class="val">{{ briefLabel }}</span>
-            <AppIcon name="chevron-small" :size="8" class="down" />
+            <AppIcon name="chevron-small" :size="16" class="down" />
           </button>
         </div>
         <div class="row">
           <span class="label">分组方式</span>
           <button class="picker" @click="openPicker('group', $event)">
             <span class="val">{{ ui.groupBy }}</span>
-            <AppIcon name="chevron-small" :size="8" class="down" />
+            <AppIcon name="chevron-small" :size="16" class="down" />
           </button>
         </div>
       </div>
@@ -130,45 +139,45 @@ function closeAll(): void {
     </AppMenu>
 
     <!-- 选项菜单（与主窗口同组） -->
-    <AppMenu v-if="picker?.kind === 'scope'" :x="picker.x" :y="picker.y" :group="groupRef ?? null" :trigger="trigger ?? null" @close="picker = null">
-      <MenuItem label="全局" checkable :checked="ui.useGlobalView" @select="ui.useGlobalView = true" />
-      <MenuItem label="当前目录" checkable :checked="!ui.useGlobalView" @select="ui.useGlobalView = false" />
+    <AppMenu v-if="picker?.kind === 'scope'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
+      <MenuItem label="全局" checkable :checked="ui.useGlobalView" @select="ui.useGlobalView = true; picker = null" />
+      <MenuItem label="当前目录" checkable :checked="!ui.useGlobalView" @select="ui.useGlobalView = false; picker = null" />
     </AppMenu>
-    <AppMenu v-if="picker?.kind === 'layout'" :x="picker.x" :y="picker.y" :group="groupRef ?? null" :trigger="trigger ?? null" @close="picker = null">
+    <AppMenu v-if="picker?.kind === 'layout'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
       <MenuItem
         v-for="l in layouts"
         :key="l.value"
         :label="l.label"
         checkable
         :checked="ui.layoutMode === l.value"
-        @select="ui.layoutMode = l.value"
+        @select="ui.layoutMode = l.value; picker = null"
       />
     </AppMenu>
-    <AppMenu v-if="picker?.kind === 'sort'" :x="picker.x" :y="picker.y" :group="groupRef ?? null" :trigger="trigger ?? null" @close="picker = null">
+    <AppMenu v-if="picker?.kind === 'sort'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
       <MenuItem
         v-for="s in sorts"
         :key="s"
         :label="s"
         checkable
         :checked="sortLabel === s"
-        @select="ui.sortBy = s === '自定义' ? '' : s"
+        @select="ui.sortBy = s === '自定义' ? '' : s; picker = null"
       />
       <MenuDivider />
-      <MenuItem label="升序" checkable :checked="ui.sortAsc" @select="ui.sortAsc = true" />
-      <MenuItem label="降序" checkable :checked="!ui.sortAsc" @select="ui.sortAsc = false" />
+      <MenuItem label="升序" checkable :checked="ui.sortAsc" @select="ui.sortAsc = true; picker = null" />
+      <MenuItem label="降序" checkable :checked="!ui.sortAsc" @select="ui.sortAsc = false; picker = null" />
     </AppMenu>
-    <AppMenu v-if="picker?.kind === 'brief'" :x="picker.x" :y="picker.y" :group="groupRef ?? null" :trigger="trigger ?? null" @close="picker = null">
+    <AppMenu v-if="picker?.kind === 'brief'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
       <MenuItem
         v-for="b in briefs"
         :key="b.value"
         :label="b.label"
         checkable
         :checked="ui.briefMode === b.value"
-        @select="ui.briefMode = b.value"
+        @select="ui.briefMode = b.value; picker = null"
       />
     </AppMenu>
-    <AppMenu v-if="picker?.kind === 'group'" :x="picker.x" :y="picker.y" :group="groupRef ?? null" :trigger="trigger ?? null" @close="picker = null">
-      <MenuItem label="自定义" checkable :checked="true" @select="ui.groupBy = '自定义'" />
+    <AppMenu v-if="picker?.kind === 'group'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
+      <MenuItem label="自定义" checkable :checked="true" @select="ui.groupBy = '自定义'; picker = null" />
     </AppMenu>
   </div>
 </template>
@@ -224,6 +233,10 @@ function closeAll(): void {
 }
 .picker .down {
   color: var(--font-icon-3);
+  transition: color 0.12s ease;
+}
+.picker:hover .down {
+  color: var(--font-icon-1);
 }
 /* 开关组：内边距 8 32（通栏分割线之间）；末组下 32 */
 .switch-group {
