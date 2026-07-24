@@ -61,6 +61,11 @@ export const vTip: Directive<HTMLElement, string | TipValue | undefined> = {
       clearTimeout(showTimer);
       hide();
     });
+    // 点击即隐藏（打开菜单 / 弹窗后 tip 不应残留，2026-07-24 用户定）
+    el.addEventListener("pointerdown", () => {
+      clearTimeout(showTimer);
+      hide();
+    });
   },
   unmounted() {
     clearTimeout(showTimer);
