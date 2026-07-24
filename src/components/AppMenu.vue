@@ -5,8 +5,8 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 
 const props = withDefaults(
-  defineProps<{ x: number; y: number; width?: number; pad?: string; group?: HTMLElement | null; trigger?: HTMLElement | null }>(),
-  { width: 175, pad: "var(--space-8)", group: null, trigger: null },
+  defineProps<{ x: number; y: number; width?: number; pad?: string; gap?: string; group?: HTMLElement | null; trigger?: HTMLElement | null }>(),
+  { width: 175, pad: "var(--space-8)", gap: "var(--space-2)", group: null, trigger: null },
 );
 const emit = defineEmits<{ close: [] }>();
 const rootRef = ref<HTMLElement>();
@@ -37,7 +37,7 @@ onBeforeUnmount(() => {
   <div
     ref="rootRef"
     class="app-menu"
-    :style="{ left: `${x}px`, top: `${y}px`, width: `${width}px`, padding: pad }"
+    :style="{ left: `${x}px`, top: `${y}px`, width: `${width}px`, padding: pad, gap }"
     @pointerdown.stop
   >
     <slot />
@@ -50,7 +50,6 @@ onBeforeUnmount(() => {
   z-index: 2000;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
   border-radius: var(--radius-8);
   background: var(--c3);
   box-shadow:

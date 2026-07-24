@@ -7,7 +7,6 @@
 import { computed, ref } from "vue";
 import AppMenu from "./AppMenu.vue";
 import MenuItem from "./MenuItem.vue";
-import MenuDivider from "./MenuDivider.vue";
 import AppSwitch from "./AppSwitch.vue";
 import AppIcon from "./AppIcon.vue";
 import { useUiStore } from "../stores/ui";
@@ -70,7 +69,8 @@ function closeAll(): void {
       :x="winX"
       :y="anchor.y"
       :width="WINDOW_W"
-      pad="var(--space-16)"
+      pad="0"
+      gap="0"
       :group="groupRef ?? null"
       :trigger="trigger ?? null"
       @close="closeAll"
@@ -113,7 +113,6 @@ function closeAll(): void {
         </div>
       </div>
 
-      <MenuDivider />
       <div class="switch-group">
         <div class="switch-row">
           <span class="label">自动播放动图</span>
@@ -125,7 +124,6 @@ function closeAll(): void {
         </div>
       </div>
 
-      <MenuDivider />
       <div class="switch-group last">
         <div class="switch-row">
           <span class="label">显示扩展名角标</span>
@@ -162,7 +160,6 @@ function closeAll(): void {
         :checked="sortLabel === s"
         @select="ui.sortBy = s === '自定义' ? '' : s; picker = null"
       />
-      <MenuDivider />
       <MenuItem label="升序" checkable :checked="ui.sortAsc" @select="ui.sortAsc = true; picker = null" />
       <MenuItem label="降序" checkable :checked="!ui.sortAsc" @select="ui.sortAsc = false; picker = null" />
     </AppMenu>
@@ -183,12 +180,14 @@ function closeAll(): void {
 </template>
 
 <style scoped>
-/* 行 item 组：间距 8（二级设置窗口 padding 16，2026-07-24 用户定规则：
-   标准菜单式 8 / 工具栏弹出的二级设置窗口 16 / UI 中间弹出的模态·非模态框 32） */
+/* 区块结构（2026-07-24 用户定，替代通栏/divider 方案）：窗口 padding 0，
+   三个区块各自 padding 16 / gap 8，组间用 inset 顶部分割线（border-2，同详情面板）；
+   衔接处 16+16=32 自然形成区块感 */
 .rows {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
+  padding: var(--space-16);
 }
 /* 行：裸（无底色无边框，2026-07-24 用户定） */
 .row {
@@ -237,14 +236,12 @@ function closeAll(): void {
 .picker:hover .down {
   color: var(--font-icon-1);
 }
-/* 开关组：间距 8；分割线两侧间距一致（divider 上下 margin 4 + 自身 padding 2 + 容器 gap 2） */
 .switch-group {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-}
-:deep(.menu-divider) {
-  margin: var(--space-4) 0;
+  padding: var(--space-16);
+  box-shadow: inset 0 1px 0 0 var(--border-2);
 }
 .switch-row {
   display: flex;
