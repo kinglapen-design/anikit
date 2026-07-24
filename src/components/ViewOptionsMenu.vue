@@ -70,7 +70,7 @@ function closeAll(): void {
       :x="winX"
       :y="anchor.y"
       :width="WINDOW_W"
-      pad="var(--space-32)"
+      pad="var(--space-16)"
       :group="groupRef ?? null"
       :trigger="trigger ?? null"
       @close="closeAll"
@@ -183,8 +183,8 @@ function closeAll(): void {
 </template>
 
 <style scoped>
-/* 行 item 组：间距 8（窗口 padding 32，2026-07-24 用户定：放弃通栏分割线——
-   1px 线在缩放动画后渲染粗细不一） */
+/* 行 item 组：间距 8（二级设置窗口 padding 16，2026-07-24 用户定规则：
+   标准菜单式 8 / 工具栏弹出的二级设置窗口 16 / UI 中间弹出的模态·非模态框 32） */
 .rows {
   display: flex;
   flex-direction: column;
@@ -237,12 +237,14 @@ function closeAll(): void {
 .picker:hover .down {
   color: var(--font-icon-1);
 }
-/* 开关组：间距 8 / 上下内边距 8（与行组拉开） */
+/* 开关组：间距 8；分割线两侧间距一致（divider 上下 margin 4 + 自身 padding 2 + 容器 gap 2） */
 .switch-group {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  padding: var(--space-8) 0;
+}
+:deep(.menu-divider) {
+  margin: var(--space-4) 0;
 }
 .switch-row {
   display: flex;
