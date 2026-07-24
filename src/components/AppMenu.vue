@@ -1,12 +1,12 @@
 <script setup lang="ts">
 // 菜单容器（02_通用组件/07_右键菜单、03_UI 布局/05_查看方式）：
-// C3 / 圆角 8 / 1px border-1（inset）/ 内边距 4 / 子项间距 2 / 投影 --shadow-pop（token 07）；
+// C3 / 圆角 8 / 1px border-1（inset）/ 内边距 8（2026-07-23 用户定）/ 子项间距 2 / 投影 --shadow-pop；
 // fixed 定位，点击组外（group 之外）或 Esc 关闭；菜单项点击不自动关闭（连续操作）。
 import { onBeforeUnmount, onMounted, ref } from "vue";
 
 const props = withDefaults(
-  defineProps<{ x: number; y: number; width?: number; group?: HTMLElement | null; trigger?: HTMLElement | null }>(),
-  { width: 175, group: null, trigger: null },
+  defineProps<{ x: number; y: number; width?: number; pad?: string; group?: HTMLElement | null; trigger?: HTMLElement | null }>(),
+  { width: 175, pad: "var(--space-8)", group: null, trigger: null },
 );
 const emit = defineEmits<{ close: [] }>();
 const rootRef = ref<HTMLElement>();
@@ -37,7 +37,7 @@ onBeforeUnmount(() => {
   <div
     ref="rootRef"
     class="app-menu"
-    :style="{ left: `${x}px`, top: `${y}px`, width: `${width}px` }"
+    :style="{ left: `${x}px`, top: `${y}px`, width: `${width}px`, padding: pad }"
     @pointerdown.stop
   >
     <slot />
@@ -51,7 +51,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-4);
   border-radius: var(--radius-8);
   background: var(--c3);
   box-shadow:

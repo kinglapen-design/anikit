@@ -9,11 +9,13 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import { CARD_CAPTION_H, type Box } from "../lib/layouts";
 import { formatBadgeColor } from "../lib/formatBadge";
+import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
 
 const props = withDefaults(defineProps<{ asset: PlacementView; box: Box; selected?: boolean }>(), {
   selected: false,
 });
+const ui = useUiStore();
 const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
 const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
 // 序列帧（2026-07-22 用户定）：格式角标显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
@@ -52,7 +54,7 @@ const meta = computed(() =>
         draggable="false"
       />
       <div v-else class="img" />
-      <span v-if="badgeColor" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
+      <span v-if="badgeColor && ui.showExtBadge" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
       <div class="actions">
         <button class="act" v-tip="'发送至 Animate'" @click.stop>
           <AppIcon name="send-to" />
@@ -64,7 +66,7 @@ const meta = computed(() =>
     </div>
     <div class="texts">
       <span class="title">{{ displayName }}</span>
-      <span class="meta">{{ meta }}</span>
+      <span v-show="ui.briefMode !== 'none'" class="meta">{{ meta }}</span>
     </div>
   </div>
 </template>
