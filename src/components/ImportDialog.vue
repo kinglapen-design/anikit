@@ -91,7 +91,7 @@ const sourceTip = computed(() =>
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: var(--space-16);
+  padding: var(--space-32);
   gap: var(--space-16);
   background: var(--c3);
   box-shadow:

@@ -56,5 +56,18 @@ onBeforeUnmount(() => {
   box-shadow:
     inset 0 0 0 1px var(--border-1),
     var(--shadow-pop);
+  /* 弹出动画：快速缩放 + 透明度过渡，缓出曲线（2026-07-24 用户定） */
+  animation: menu-pop 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top left;
+}
+@keyframes menu-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 </style>

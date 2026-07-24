@@ -61,7 +61,7 @@ function closeAll(): void {
       :x="winX"
       :y="anchor.y"
       :width="WINDOW_W"
-      pad="var(--space-16)"
+      pad="0"
       :group="groupRef ?? null"
       :trigger="trigger ?? null"
       @close="closeAll"
@@ -105,23 +105,27 @@ function closeAll(): void {
       </div>
 
       <MenuDivider />
-      <div class="switch-row">
-        <span class="label">自动播放动图</span>
-        <AppSwitch v-model="ui.autoPlayGif" />
-      </div>
-      <div class="switch-row">
-        <span class="label">自动播放视频</span>
-        <AppSwitch v-model="ui.autoPlayVideo" />
+      <div class="switch-group">
+        <div class="switch-row">
+          <span class="label">自动播放动图</span>
+          <AppSwitch small v-model="ui.autoPlayGif" />
+        </div>
+        <div class="switch-row">
+          <span class="label">自动播放视频</span>
+          <AppSwitch small v-model="ui.autoPlayVideo" />
+        </div>
       </div>
 
       <MenuDivider />
-      <div class="switch-row">
-        <span class="label">显示扩展名角标</span>
-        <AppSwitch v-model="ui.showExtBadge" />
-      </div>
-      <div class="switch-row">
-        <span class="label">显示子文件夹内容</span>
-        <AppSwitch v-model="ui.showSubfolders" />
+      <div class="switch-group last">
+        <div class="switch-row">
+          <span class="label">显示扩展名角标</span>
+          <AppSwitch small v-model="ui.showExtBadge" />
+        </div>
+        <div class="switch-row">
+          <span class="label">显示子文件夹内容</span>
+          <AppSwitch small v-model="ui.showSubfolders" />
+        </div>
       </div>
     </AppMenu>
 
@@ -170,22 +174,20 @@ function closeAll(): void {
 </template>
 
 <style scoped>
-/* 行 item ×5：间距 8 */
+/* 行 item 组：内边距 16 16 8（窗口 padding 0，子项撑开，分割线通栏，2026-07-24 用户定） */
 .rows {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
+  padding: var(--space-16) var(--space-16) var(--space-8);
 }
-/* 行：C4 底 / 1px border-1 / 圆角 8 / 内边距 4 4 4 8 */
+/* 行：裸（无底色无边框，2026-07-24 用户定） */
 .row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
-  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-8);
-  border-radius: var(--radius-8);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-1);
+  padding: 0 var(--space-4);
 }
 .label {
   font-size: var(--text-body-size);
@@ -193,7 +195,7 @@ function closeAll(): void {
   color: var(--font-icon-1);
   white-space: nowrap;
 }
-/* 下拉选择器：1px border-1 / 圆角 6 / 内边距 4 8 / 最小宽 96，值 + 下拉箭头 */
+/* 下拉选择器：裸（无底色无边框），hover 底色 font-icon-6 / 圆角 6 */
 .picker {
   display: flex;
   align-items: center;
@@ -201,7 +203,6 @@ function closeAll(): void {
   min-width: 96px;
   padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-6);
-  box-shadow: inset 0 0 0 1px var(--border-1);
   color: var(--font-icon-2);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
@@ -213,7 +214,7 @@ function closeAll(): void {
 }
 .picker .val {
   flex: 1;
-  text-align: left;
+  text-align: right;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -221,11 +222,20 @@ function closeAll(): void {
 .picker .down {
   color: var(--font-icon-3);
 }
-/* 开关行：裸文字 + 开关，间距 8（rows 复用行间距由 MenuDivider 分隔） */
+/* 开关组：内边距 8 16（通栏分割线之间）；末组下 16 */
+.switch-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-16);
+}
+.switch-group.last {
+  padding-bottom: var(--space-16);
+}
 .switch-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2) 0 var(--space-2) var(--space-4);
+  padding: 0 var(--space-4);
 }
 </style>

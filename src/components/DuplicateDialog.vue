@@ -272,7 +272,7 @@ function onSkip(): void {
   align-items: center;
   justify-content: center;
   gap: 20px;
-  padding: var(--space-16);
+  padding: var(--space-32);
 }
 .side {
   width: 500px;
@@ -358,7 +358,7 @@ function onSkip(): void {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-16);
-  padding: var(--space-16);
+  padding: var(--space-32);
   height: 70px;
   flex: none;
   box-shadow: inset 0 1px 0 0 var(--border-1);

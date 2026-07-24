@@ -89,6 +89,15 @@
   --space-14: 14px;
   --space-16: 16px;
   --space-20: 20px;
+  --space-32: 32px; /* 2026-07-24 用户定：二级窗口 / 模态窗口内间距 */
+
+  /* 开关按钮（01_按钮 08：标准 50×28 圆钮 20 / 小号 40×24 圆钮 16，2026-07-24 用户定） */
+  --switch-w: 50px;
+  --switch-h: 28px;
+  --switch-knob: 20px;
+  --switch-small-w: 40px;
+  --switch-small-h: 24px;
+  --switch-small-knob: 16px;
 
   /* 圆角 */
   --radius-4: 4px;
