@@ -197,8 +197,8 @@ onBeforeUnmount(() => {
       <div ref="headerRef" class="grid-header">
         <!-- 当前视口无子文件夹时整个文件夹区块隐藏（阶段3修改定案） -->
         <FolderStrip v-if="content.stripFolders.length > 0" />
-        <!-- 无子文件夹时"内容"副标题同样隐藏（2026-07-23 用户定：无需区分文件夹与内容） -->
-        <SectionHeader v-if="content.stripFolders.length > 0" title="内容" :count="items.length" pad="8px 0 0 0" v-model:open="assetsOpen" />
+        <!-- "内容"副标题：无子文件夹时隐藏（无需区分）；有子文件夹但无文件时同样隐藏（2026-07-24 用户定） -->
+        <SectionHeader v-if="content.stripFolders.length > 0 && items.length > 0" title="内容" :count="items.length" pad="8px 0 0 0" v-model:open="assetsOpen" />
       </div>
       <div
         v-show="assetsOpen"

@@ -12,8 +12,9 @@ const content = useContentStore();
 const ui = useUiStore();
 const folderOpen = ref(true);
 
-// 列宽 = 189 × 滑块行高 / 220（基准行高 220 时列宽 189）
-const colWidth = computed(() => Math.max(80, Math.round((189 * ui.targetRowHeight) / 220)));
+// 列宽 = 181 × 滑块行高 / 220（基准行高 220 时列宽 181——gap 16 + 左右间距后
+// 189 一排只放得下 3 列，181 一排正好 4 列；181 也是文件夹 SVG 原生宽度，1:1 显示）
+const colWidth = computed(() => Math.max(80, Math.round((181 * ui.targetRowHeight) / 220)));
 </script>
 
 <template>
