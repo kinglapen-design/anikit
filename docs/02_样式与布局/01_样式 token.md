@@ -159,6 +159,15 @@ WEBP 动图 / 序列帧 / GIF：#4E2675
 
 ## 06. 图标
 
+开关按钮尺寸（2026-07-24 用户定，AppSwitch 组件）：
+
+``` text
+标准：50 × 28（圆钮 20）——--switch-w / --switch-h / --switch-knob
+小号：40 × 24（圆钮 16）——--switch-small-w / --switch-small-h / --switch-small-knob
+```
+
+## 06. 图标
+
 所有图标均为 16 x 16，只有文件树 item 的展开小箭头和二级菜单提示右箭头用 8 x 8。
 
 ## 07. 阴影
