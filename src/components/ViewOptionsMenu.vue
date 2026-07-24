@@ -17,7 +17,7 @@ const props = defineProps<{ anchor: { x: number; y: number }; trigger?: HTMLElem
 const emit = defineEmits<{ close: [] }>();
 const groupRef = ref<HTMLElement>();
 
-const WINDOW_W = 264;
+const WINDOW_W = 296;
 // 原级联菜单宽 175：窗口加宽后右缘与原位置对齐（不超出窗口右缘）
 const winX = computed(() => props.anchor.x - (WINDOW_W - 175));
 
@@ -174,12 +174,13 @@ function closeAll(): void {
 </template>
 
 <style scoped>
-/* 行 item 组：内边距 16 16 8（窗口 padding 0，子项撑开，分割线通栏，2026-07-24 用户定） */
+/* 行 item 组：内边距 32 32 8（窗口 padding 0，子项撑开，分割线通栏；
+   非标准菜单形浮层一律 32，2026-07-24 用户定） */
 .rows {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  padding: var(--space-16) var(--space-16) var(--space-8);
+  padding: var(--space-32) var(--space-32) var(--space-8);
 }
 /* 行：裸（无底色无边框，2026-07-24 用户定） */
 .row {
@@ -195,7 +196,7 @@ function closeAll(): void {
   color: var(--font-icon-1);
   white-space: nowrap;
 }
-/* 下拉选择器：裸（无底色无边框），hover 底色 font-icon-6 / 圆角 6 */
+/* 下拉选择器：C4 底 / 1px border-1 / 圆角 6（2026-07-24 用户定）；hover C5 */
 .picker {
   display: flex;
   align-items: center;
@@ -203,6 +204,8 @@ function closeAll(): void {
   min-width: 96px;
   padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-6);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-1);
   color: var(--font-icon-2);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
@@ -210,7 +213,7 @@ function closeAll(): void {
   transition: background 0.12s ease;
 }
 .picker:hover {
-  background: var(--font-icon-6);
+  background: var(--c5);
 }
 .picker .val {
   flex: 1;
@@ -222,15 +225,15 @@ function closeAll(): void {
 .picker .down {
   color: var(--font-icon-3);
 }
-/* 开关组：内边距 8 16（通栏分割线之间）；末组下 16 */
+/* 开关组：内边距 8 32（通栏分割线之间）；末组下 32 */
 .switch-group {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  padding: var(--space-8) var(--space-16);
+  padding: var(--space-8) var(--space-32);
 }
 .switch-group.last {
-  padding-bottom: var(--space-16);
+  padding-bottom: var(--space-32);
 }
 .switch-row {
   display: flex;
