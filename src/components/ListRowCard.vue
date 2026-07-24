@@ -68,7 +68,8 @@ const emit = defineEmits<{ select: [] }>();
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-6) var(--space-8);
+  /* 上下 padding 8（2026-07-24 用户定，原 6） */
+  padding: var(--space-8);
   border-radius: var(--radius-8);
   background: var(--c1);
   box-shadow: inset 0 0 0 1px var(--border-2);
@@ -98,13 +99,10 @@ const emit = defineEmits<{ select: [] }>();
   display: block;
   border-radius: var(--radius-4);
   box-shadow: inset 0 0 0 1px var(--border-2);
-  object-fit: cover;
+  /* contain 完整显示不裁切（行高固定 cover 必裁，2026-07-24 用户定；格式图标同规则） */
+  object-fit: contain;
   /* 无缩略图占位：中间面板底色 C1（阶段3修改——不要 font-icon-4 灰块） */
   background: var(--c1);
-}
-/* 系统格式图标：方形图标 contain 完整显示不裁切（4.2 用户定） */
-.thumb.icon {
-  object-fit: contain;
 }
 .name {
   font-size: var(--text-body-size);

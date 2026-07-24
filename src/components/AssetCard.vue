@@ -47,7 +47,7 @@ const meta = computed(() =>
       <img
         v-if="thumbUrl"
         class="img"
-        :class="{ icon: asset.thumbKind === 'formatIcon' }"
+        :class="{ icon: asset.thumbKind === 'formatIcon', contain: ui.layoutMode === 'grid' }"
         :src="thumbUrl"
         :alt="asset.name"
         decoding="async"
@@ -96,6 +96,7 @@ const meta = computed(() =>
 .asset-card.selected .thumb {
   border: 2px solid var(--brand-1);
 }
+/* 网格模式固定格：contain 完整显示不裁切（cover 必裁，2026-07-24 用户定） */
 .img {
   display: block;
   width: 100%;
@@ -104,7 +105,7 @@ const meta = computed(() =>
   /* 无缩略图占位：中间面板底色 C1 */
   background: var(--c1);
 }
-/* 系统格式图标：方形图标 contain 完整显示不裁切（4.2 用户定） */
+.img.contain,
 .img.icon {
   object-fit: contain;
 }
