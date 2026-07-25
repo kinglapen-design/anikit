@@ -36,6 +36,20 @@ impl WatchHandle {
       let _ = j.join();
     }
   }
+
+  /// 重投路径进等待队列（自动导入 failed 残留重投，4.4）：经 wake 通道发带路径的
+  /// synthetic 事件，watch_loop 的 Some(Ok(ev)) 分支会把对应顶层条目入 pending hot，
+  /// 走常规就绪判定（静默期满 + 可移走 + 大小稳定）后照常回调——不绕开占用探测
+  pub fn requeue(&self, paths: Vec<PathBuf>) {
+    if paths.is_empty() {
+      return;
+    }
+    let mut ev = Event::new(notify::event::EventKind::Other);
+    for p in paths {
+      ev = ev.add_path(p);
+    }
+    let _ = self.wake.send(Ok(ev));
+  }
 }
 
 impl Drop for WatchHandle {
@@ -46,13 +60,18 @@ impl Drop for WatchHandle {
 
 /// 启动监听：目录下每个就绪的顶层条目整批触发 on_ready。
 /// 启动时先清点存量条目（上次崩溃残留 / 用户跳过项），与通知事件走同一判定。
-pub fn spawn(dir: PathBuf, on_ready: impl Fn(Vec<PathBuf>) + Send + 'static) -> Result<WatchHandle, String> {
+/// on_change：任何带路径的监听事件都触发（不做过滤，由前端去抖），服务"工程文件"磁盘实况热刷新。
+pub fn spawn(
+  dir: PathBuf,
+  on_ready: impl Fn(Vec<PathBuf>) + Send + 'static,
+  on_change: impl Fn() + Send + 'static,
+) -> Result<WatchHandle, String> {
   let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
   let mut watcher = RecommendedWatcher::new(tx.clone(), Config::default()).map_err(|e| format!("文件监听创建失败：{e}"))?;
   watcher.watch(&dir, RecursiveMode::Recursive).map_err(|e| format!("收件箱监听失败：{e}"))?;
   let stop = Arc::new(AtomicBool::new(false));
   let stop_thread = stop.clone();
-  let join = std::thread::spawn(move || watch_loop(dir, rx, watcher, stop_thread, on_ready));
+  let join = std::thread::spawn(move || watch_loop(dir, rx, watcher, stop_thread, on_ready, on_change));
   Ok(WatchHandle { stop, wake: tx, join: Some(join) })
 }
 
@@ -74,6 +93,7 @@ fn watch_loop(
   _watcher: RecommendedWatcher, // 持有保活，线程退出即停止监听
   stop: Arc<AtomicBool>,
   on_ready: impl Fn(Vec<PathBuf>),
+  on_change: impl Fn(),
 ) {
   let mut pending: HashMap<PathBuf, Pending> = HashMap::new();
   // 存量清点：目录里已存在的条目按"刚有活动"入队，静默期满后照常入库
@@ -98,6 +118,9 @@ fn watch_loop(
     };
     match msg {
       Some(Ok(ev)) => {
+        if !ev.paths.is_empty() {
+          on_change(); // 磁盘实况热刷新信号（直调，前端去抖）
+        }
         for p in &ev.paths {
           if let Some(root) = root_entry(&dir, p) {
             pending.entry(root).and_modify(|s| s.last_activity = Instant::now()).or_insert_with(Pending::hot);
@@ -148,7 +171,7 @@ fn drain_ready(pending: &mut HashMap<PathBuf, Pending>, on_ready: &impl Fn(Vec<P
 }
 
 /// 条目内全部文件（文件夹递归）；目录读取失败的条目跳过
-fn files_of(path: &Path) -> Vec<PathBuf> {
+pub(crate) fn files_of(path: &Path) -> Vec<PathBuf> {
   if path.is_file() {
     return vec![path.to_path_buf()];
   }
@@ -162,7 +185,7 @@ fn files_of(path: &Path) -> Vec<PathBuf> {
 }
 
 /// 条目总大小；任一元数据读取失败返回 None
-fn entry_size(path: &Path) -> Option<u64> {
+pub(crate) fn entry_size(path: &Path) -> Option<u64> {
   files_of(path).iter().try_fold(0u64, |acc, f| std::fs::metadata(f).ok().map(|m| acc + m.len()))
 }
 
@@ -170,7 +193,7 @@ fn entry_size(path: &Path) -> Option<u64> {
 /// 写入方常允许读共享但拒绝 delete 共享（Animate 保存 fla 后仍持有文件即如此），
 /// 此时导入 move 必败，文件会搁浅在 inbox 再无事件触发。探测口径与 store_file 的
 /// rename 判定一致，没放手就留在队列里等，放手后下一拍自动入库。
-fn entry_movable(path: &Path) -> bool {
+pub(crate) fn entry_movable(path: &Path) -> bool {
   files_of(path).iter().all(|f| file_movable(f))
 }
 
@@ -247,9 +270,13 @@ mod tests {
     let dir = tmp.path().join("inbox");
     std::fs::create_dir_all(&dir).unwrap();
     let (tx, rx) = mpsc::channel();
-    let mut handle = spawn(dir.clone(), move |paths| {
-      let _ = tx.send(paths);
-    })
+    let mut handle = spawn(
+      dir.clone(),
+      move |paths| {
+        let _ = tx.send(paths);
+      },
+      || {},
+    )
     .unwrap();
 
     let file = dir.join("图.png");
@@ -266,7 +293,7 @@ mod tests {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path().join("inbox");
     std::fs::create_dir_all(&dir).unwrap();
-    let mut handle = spawn(dir, |_| {}).unwrap();
+    let mut handle = spawn(dir, |_| {}, || {}).unwrap();
     std::thread::sleep(Duration::from_millis(200)); // 让线程先进入空闲阻塞
     let t0 = Instant::now();
     handle.stop();
@@ -289,9 +316,13 @@ mod tests {
     let dir = tmp.path().join("inbox");
     std::fs::create_dir_all(&dir).unwrap();
     let (tx, rx) = mpsc::channel();
-    let mut handle = spawn(dir.clone(), move |paths| {
-      let _ = tx.send(paths);
-    })
+    let mut handle = spawn(
+      dir.clone(),
+      move |paths| {
+        let _ = tx.send(paths);
+      },
+      || {},
+    )
     .unwrap();
 
     let locked = dir.join("占用.fla");

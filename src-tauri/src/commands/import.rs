@@ -184,7 +184,7 @@ pub fn resolve_conflicts(
 }
 
 /// 短锁拿库 root 并校验库存在（命令唯一需要的共享状态）
-fn current_root(app: &AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn current_root(app: &AppHandle) -> Result<PathBuf, String> {
   let state = app.state::<AppState>();
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   guard.as_ref().map(|l| l.root.clone()).ok_or_else(|| "请先打开素材库再导入".to_string())
@@ -207,7 +207,7 @@ fn ensure_target(app: &AppHandle, target_folder: &Option<String>) -> Result<(), 
 }
 
 /// 注册任务 + 起工作线程：线程内 run_import（分段短锁），结束注销任务、清理临时文件
-fn spawn_import(
+pub(crate) fn spawn_import(
   app: AppHandle,
   root: PathBuf,
   opts: ImportOptions,

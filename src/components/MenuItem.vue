@@ -12,14 +12,15 @@ withDefaults(
     arrow?: boolean;
     checkable?: boolean;
     checked?: boolean;
+    disabled?: boolean; // 禁用态（如收件箱占用条目的"导入"）：不响应 hover / 点击
   }>(),
-  { icon: undefined, shortcut: undefined, arrow: false, checkable: false, checked: false },
+  { icon: undefined, shortcut: undefined, arrow: false, checkable: false, checked: false, disabled: false },
 );
 const emit = defineEmits<{ select: [] }>();
 </script>
 
 <template>
-  <button class="menu-item" @click="emit('select')">
+  <button class="menu-item" :disabled="disabled" @click="emit('select')">
     <span class="main">
       <span v-if="checkable" class="check-slot">
         <AppIcon v-if="checked" name="check" :size="16" />
@@ -46,6 +47,14 @@ const emit = defineEmits<{ select: [] }>();
 }
 .menu-item:hover {
   background: var(--font-icon-6);
+}
+/* 禁用态：降透明度、不响应 hover（暂补档位 font-icon-3 表禁用文字） */
+.menu-item:disabled {
+  color: var(--font-icon-3);
+  cursor: default;
+}
+.menu-item:disabled:hover {
+  background: none;
 }
 /* 基础 item：图标 + 标题，间距 6 */
 .main {

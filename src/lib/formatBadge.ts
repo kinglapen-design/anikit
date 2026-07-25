@@ -17,6 +17,11 @@ const BRAND_COLORS: Record<string, string> = {
 /** 静态图片格式：不出角标 */
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "bmp", "webp"]);
 
+/** 静态图片判定（4.4 文件夹卡片缩略图取子项同口径：排除 GIF / 序列帧 / 工程与矢量格式） */
+export function isStaticImageExt(ext: string): boolean {
+  return IMAGE_EXTS.has(ext.toLowerCase());
+}
+
 /** 角标底色：null = 不显示角标 */
 export function formatBadgeColor(ext: string, isSeq = false): string | null {
   if (isSeq) return "var(--fmt-anim)";

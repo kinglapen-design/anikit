@@ -2,6 +2,7 @@ import { markRaw } from "vue";
 import { defineStore } from "pinia";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { isStaticImageExt } from "../lib/formatBadge";
 
 // 与后端 commands/import.rs 输出一一对应（camelCase，07_接口文档）
 export interface PlacementView {
@@ -15,6 +16,7 @@ export interface PlacementView {
   thumbKind: "asset" | "formatIcon" | null; // 缩略图来源：格式图标为方形，卡片 contain 显示不裁切（4.2）
   origin: boolean;
   frameCount: number | null; // 序列帧帧数；非序列帧为 null——据此把格式标签与名称后缀显示为"序列帧"
+  importedFrom: string | null; // 导入渠道标记；"inbox" 且未摘标（root）= 收件箱"已导入"持久显示
 }
 
 export interface FolderNode {
@@ -89,6 +91,18 @@ export type ImportEvent =
   | { type: "asset"; placement: PlacementView } // 到一个显示一个
   | { type: "finished"; imported: number; conflicts: ConflictItem[]; failed: FailedItem[] };
 
+// 收件箱磁盘实况条目（后端 services/inbox.rs InboxEntry；"工程文件"区块数据源，
+// 磁盘为事实来源——不建档不写库，热刷新 = 全量重扫替换）
+export interface InboxDiskEntry {
+  name: string; // 顶层条目名（含扩展名）
+  isDir: boolean;
+  size: number; // 字节（文件夹递归；快层快照中目录先给 0，inbox-disk-details 事件补齐）
+  modifiedAt: number; // Unix 毫秒
+  autoImportable: boolean; // 白名单判定；false 的留在磁盘等手动导入
+  occupied: boolean; // 被其他软件占用（占用条目禁止导入 / 重命名）
+  iconPath: string | null; // 系统格式图标缓存绝对路径；null 时回退扩展名角标（目录恒 null）
+}
+
 // 流式追加节流：asset 事件先进缓冲，每 250ms 批量入列——
 // 逐条 push 会让 10 万级列表每文件重排一次（布局 ~10ms×N 必卡），批量后重排 ≤4 次/秒
 const FLUSH_MS = 250;
@@ -145,9 +159,11 @@ export const useContentStore = defineStore("content", {
     // 失败清单（ImportResultDialog）与冲突挂起队列（DuplicateDialog 逐个询问）
     importFailed: null as FailedItem[] | null,
     importConflicts: null as ConflictItem[] | null,
-    // 收件箱视图（quick:inbox）：本会话收件箱收进来的文件，新的在前；
-    // 会话级，重启清空（持久化与"最近使用"体系随对应阶段再定）
-    inboxReceived: [] as PlacementView[],
+    // 收件箱磁盘实况（4.4"工程文件"区块）：磁盘为事实来源，不建档不写库；
+    // inbox-fs-changed 事件（去抖 150ms）与手动操作后全量重扫替换
+    inboxDisk: [] as InboxDiskEntry[],
+    // 选中互斥第三态：磁盘实况条目选中名（与 selectedAssetKey / selectedFolderId 互斥）
+    selectedInboxName: "",
     // 原导入的来源模式（冲突"保留两个"决策继承；剪贴板导入恒 move）
     lastImportSource: "copy" as "copy" | "move",
   }),
@@ -163,8 +179,10 @@ export const useContentStore = defineStore("content", {
           return state.placements;
         case "quick:uncategorized": // 未分类 = 未归入任何文件夹（root 即未分类；收件箱新件也在此列）
           return state.placements.filter((p) => p.folderId === "root");
-        case "quick:inbox": // 收件箱 = 本会话收件箱收进来的文件（新的在前）
-          return state.inboxReceived;
+        case "quick:inbox": // 收件箱"已导入" = importedFrom=inbox 且未摘标的资产，持久显示
+          // （2026-07-25 用户定：用户没分类走就要一直在）。不限 folderId=root——手动导入 Keep
+          // 生成的层级也算未分类；摘标 = 清 importedFrom（归 6.3），清后自然消失
+          return state.placements.filter((p) => p.importedFrom === "inbox");
         default:
           return [];
       }
@@ -176,6 +194,18 @@ export const useContentStore = defineStore("content", {
         return findFolder(state.folders, state.sidebarSelected.slice(7))?.children ?? [];
       }
       return [];
+    },
+    // 文件夹卡片缩略图（4.4）：每个文件夹的直接子项中，按 placements 顺序取第一个静态图片；
+    // 排除序列帧（frameCount）与 GIF/工程/矢量格式，右键自定义缩略图归 6.3
+    folderThumbMap(state): Map<string, string> {
+      const map = new Map<string, string>();
+      for (const p of state.placements) {
+        if (map.has(p.folderId)) continue;
+        if (p.frameCount != null || p.thumbKind !== "asset" || !p.thumbPath) continue;
+        if (!isStaticImageExt(p.ext)) continue;
+        map.set(p.folderId, p.thumbPath);
+      }
+      return map;
     },
     // 文件夹区块标题计数（全树节点总数）
     folderTotal(state): number {
@@ -295,7 +325,8 @@ export const useContentStore = defineStore("content", {
     },
 
     // 收件箱后台导入（PRD 05-01，3.2）：后端监听 inbox 目录自动入库，
-    // 事件形状与导入 Channel 一致，复用 11_导入进度条 / 10_重复添加提示
+    // 事件形状与导入 Channel 一致，复用 11_导入进度条 / 10_重复添加提示；
+    // inbox-fs-changed（4.4）：磁盘实况热刷新信号，去抖 150ms 重扫快照
     async initInboxListener(): Promise<void> {
       if (unlistenInbox) return;
       unlistenInbox = await listen<ImportEvent>("inbox-import", (e) => {
@@ -303,17 +334,29 @@ export const useContentStore = defineStore("content", {
           this.lastImportSource = "move"; // 收件箱恒 Move（过境：导入后即移走）
           this.importProgress = { taskId: null, total: 0, done: 0, startedAt: Date.now() };
         }
-        // 收件箱视图收集：新的在前，同键（assetId|folderId）去重
-        if (e.payload.type === "asset") {
-          const p = e.payload.placement;
-          const key = `${p.assetId}|${p.folderId}`;
-          this.inboxReceived = [
-            markRaw(p),
-            ...this.inboxReceived.filter((x) => `${x.assetId}|${x.folderId}` !== key),
-          ];
-        }
         this.onImportEvent(e.payload);
       });
+      // 实况首次就位 + 监听热刷新（写入连发事件，去抖合并为一拍）
+      void this.refreshInboxDisk();
+      let fsTimer: ReturnType<typeof setTimeout> | undefined;
+      await listen("inbox-fs-changed", () => {
+        clearTimeout(fsTimer);
+        fsTimer = setTimeout(() => void this.refreshInboxDisk(), 150);
+      });
+      // 慢层 details（递归大小 / 占用 / 格式图标）后台算好整体推送，全量替换快层快照：
+      // 快层目录 size=0 / occupied=false 是已知过渡态，占用标记与目录大小以本事件合并后为准
+      await listen<InboxDiskEntry[]>("inbox-disk-details", (e) => {
+        this.inboxDisk = markRaw(e.payload);
+      });
+    },
+
+    // 拉取收件箱磁盘实况快层快照（4.4）：失败静默降级——实况是辅助展示，不阻断任何流程
+    async refreshInboxDisk(): Promise<void> {
+      try {
+        this.inboxDisk = markRaw(await invoke<InboxDiskEntry[]>("list_inbox_snapshot"));
+      } catch (e) {
+        console.warn("收件箱磁盘实况刷新失败（静默降级）：", e);
+      }
     },
 
     onImportEvent(e: ImportEvent): void {

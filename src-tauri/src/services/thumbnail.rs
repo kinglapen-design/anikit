@@ -60,12 +60,19 @@ fn load_origin(origin: &Path) -> Option<DynamicImage> {
   thumb_formats::decode(origin).map(DynamicImage::ImageRgba8)
 }
 
+/// 格式图标缓存路径（cache/thumbs/{ext}.webp；无扩展名归 "file" 键）。
+/// 只组路径不判存在：供"只命中已缓存"的快照场景（收件箱实况快层）与落盘后回填复用
+pub fn format_icon_path(root: &Path, ext: &str) -> PathBuf {
+  let key = if ext.is_empty() { "file" } else { ext };
+  root.join(CACHE_DIR).join("thumbs").join(format!("{key}.webp"))
+}
+
 /// 格式图标缓存（PRD 04-03：系统缩略图按格式缓存一份，cache/thumbs/{ext}.webp，**不进 info**——
 /// 避免与后期补的伴生缩略图并存污染 info，2026-07-22 用户定案）。已存在直接 true；
 /// 否则经 shell 适配器取系统图标落盘。返回该格式图标是否可用。
 pub fn ensure_format_icon(root: &Path, path: &Path, ext: &str) -> bool {
   let key = if ext.is_empty() { "file" } else { ext };
-  let dest = root.join(CACHE_DIR).join("thumbs").join(format!("{key}.webp"));
+  let dest = format_icon_path(root, ext);
   if dest.is_file() {
     return true;
   }

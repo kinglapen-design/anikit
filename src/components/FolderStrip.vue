@@ -25,11 +25,13 @@ const colWidth = computed(() => Math.max(80, Math.round((181 * ui.targetRowHeigh
         v-for="f in content.stripFolders"
         :key="f.id"
         :folder="f"
+        :thumb-path="content.folderThumbMap.get(f.id) ?? null"
         class="cell"
         :selected="content.selectedFolderId === f.id"
         @select="
           content.selectedFolderId = f.id;
           content.selectedAssetKey = '';
+          content.selectedInboxName = '';
         "
       />
     </div>

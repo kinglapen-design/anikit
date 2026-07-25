@@ -34,6 +34,8 @@ pub struct PlacementView {
   pub origin: bool,
   /// 序列帧帧数（PRD 01-2.5）；非序列帧为 null——前端据此把格式标签与名称后缀显示为"序列帧"
   pub frame_count: Option<u32>,
+  /// 导入渠道标记（PRD 01-2.3）："inbox" = 收件箱渠道；快速访问"已导入"据此持久显示未摘标资产
+  pub imported_from: Option<String>,
 }
 
 /// 格式图标缓存键（空扩展名归 "file"）
@@ -73,5 +75,6 @@ pub fn placement_view(root: &Path, meta: &AssetMeta, p: &Placement, icons: &Hash
     thumb_kind,
     origin: p.origin,
     frame_count: meta.frame_count,
+    imported_from: meta.imported_from.clone(),
   }
 }

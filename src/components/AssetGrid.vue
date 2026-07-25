@@ -8,6 +8,7 @@ import AssetCard from "./AssetCard.vue";
 import ListRowCard from "./ListRowCard.vue";
 import ListHeader from "./ListHeader.vue";
 import FolderStrip from "./FolderStrip.vue";
+import InboxDiskSection from "./InboxDiskSection.vue";
 import SectionHeader from "./SectionHeader.vue";
 import {
   CARD_CAPTION_H,
@@ -52,6 +53,9 @@ const r1 = ref(0);
 const headerH = ref(0);
 const gridTotal = ref(0);
 const assetsOpen = ref(true);
+
+// 收件箱视口（quick:inbox，4.4）：头部出"工程文件"磁盘实况区块，"内容"副标题改题"已导入"
+const isInbox = computed(() => content.sidebarSelected === "quick:inbox");
 
 // 总高 = 头部（文件夹区块 + 内容副标题 + 间距 6）+ 网格高（折叠"内容"时不计）
 // 列表模式另有固定列头 28px + 列头与列表间距 6（不占布局、不随滚动）
@@ -226,8 +230,17 @@ onBeforeUnmount(() => {
       <div ref="headerRef" class="grid-header">
         <!-- 当前视口无子文件夹时整个文件夹区块隐藏（阶段3修改定案） -->
         <FolderStrip v-if="content.stripFolders.length > 0" />
-        <!-- "内容"副标题：无子文件夹时隐藏（无需区分）；有子文件夹但无文件时同样隐藏（2026-07-24 用户定） -->
-        <SectionHeader v-if="content.stripFolders.length > 0 && items.length > 0" title="内容" :count="items.length" pad="8px 0 0 0" v-model:open="assetsOpen" />
+        <!-- 收件箱视口（4.4）：磁盘实况"工程文件"区块在 FolderStrip 同位（快速访问不出文件夹区块） -->
+        <InboxDiskSection v-if="isInbox && content.inboxDisk.length > 0" />
+        <!-- "内容"副标题：无子文件夹时隐藏（无需区分）；有子文件夹但无文件时同样隐藏（2026-07-24 用户定）。
+             收件箱视口改题"已导入"（4.4）：无文件夹区块概念，只要有已导入内容就显示 -->
+        <SectionHeader
+          v-if="items.length > 0 && (isInbox || content.stripFolders.length > 0)"
+          :title="isInbox ? '已导入' : '内容'"
+          :count="items.length"
+          pad="8px 0 0 0"
+          v-model:open="assetsOpen"
+        />
       </div>
       <div
         v-show="assetsOpen"
@@ -245,6 +258,7 @@ onBeforeUnmount(() => {
             @select="
               content.selectedAssetKey = `${c.asset.assetId}|${c.asset.folderId}`;
               content.selectedFolderId = '';
+              content.selectedInboxName = '';
             "
             @dblclick="openPreview(c.asset)"
           />
@@ -259,6 +273,7 @@ onBeforeUnmount(() => {
             @click="
               content.selectedAssetKey = `${c.asset.assetId}|${c.asset.folderId}`;
               content.selectedFolderId = '';
+              content.selectedInboxName = '';
             "
             @dblclick="openPreview(c.asset)"
             @preview="openPreview(c.asset)"
