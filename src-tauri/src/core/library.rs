@@ -137,11 +137,14 @@ pub fn open(path: &Path) -> Result<Library, DataError> {
   for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR, INBOX_DIR] {
     fs::create_dir_all(path.join(dir))?;
   }
-  // 冲突弹窗预览缓存为会话级临时（4.2）：打开库时清空上一轮遗留
-  let preview_tmp = path.join(CACHE_DIR).join("tmp");
-  if preview_tmp.is_dir() {
-    if let Err(e) = fs::remove_dir_all(&preview_tmp) {
-      log::warn!("预览缓存目录清理失败：{e}");
+  // 会话级缓存（2026-07-25 用户定）：tmp（冲突弹窗预览）/ previews（PSD 高清层）/ frames（序列帧帧条小图）
+  // 打开库时清空上一轮遗留——点开过的素材缓存不留到下一会话，防容量膨胀；cache/thumbs 格式图标按格式跨会话保留
+  for sub in ["tmp", "previews", "frames"] {
+    let dir = path.join(CACHE_DIR).join(sub);
+    if dir.is_dir() {
+      if let Err(e) = fs::remove_dir_all(&dir) {
+        log::warn!("会话级缓存目录清理失败（{sub}）：{e}");
+      }
     }
   }
   migrate::migrate_library_if_needed(path)?;
@@ -310,16 +313,25 @@ mod tests {
   }
 
   #[test]
-  fn open_clears_preview_tmp_cache() {
+  fn open_clears_session_caches() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     create(root).unwrap();
-    // 冲突弹窗预览缓存（4.2）为会话级临时：打开库时整目录清空
-    let tmp = root.join("cache/tmp");
-    fs::create_dir_all(&tmp).unwrap();
-    fs::write(tmp.join("a.webp"), b"x").unwrap();
+    // 会话级缓存（2026-07-25 用户定）：tmp / previews / frames 打开库时整目录清空
+    for sub in ["tmp", "previews", "frames"] {
+      let d = root.join("cache").join(sub);
+      fs::create_dir_all(&d).unwrap();
+      fs::write(d.join("a.webp"), b"x").unwrap();
+    }
+    // 格式图标缓存跨会话保留
+    let thumbs = root.join("cache/thumbs");
+    fs::create_dir_all(&thumbs).unwrap();
+    fs::write(thumbs.join("fla.webp"), b"x").unwrap();
     open(root).unwrap();
-    assert!(!tmp.exists(), "打开库应清空预览缓存目录");
+    for sub in ["tmp", "previews", "frames"] {
+      assert!(!root.join("cache").join(sub).exists(), "打开库应清空 cache/{sub}");
+    }
+    assert!(thumbs.join("fla.webp").exists(), "格式图标缓存应保留");
   }
 
   #[test]

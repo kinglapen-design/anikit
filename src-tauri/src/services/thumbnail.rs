@@ -1,7 +1,8 @@
 //! 缩略图服务：图片宽高探测 + 缩略图生成 + 格式图标缓存（4.2）。
 //! 缩略图存 info 文件夹（{名}_thumbnail.webp），是缓存可重建、不进备份（PRD 06-04）。
 //! 格式图标（shell 保底）按格式存 cache/thumbs/{ext}.webp，不进 info（2026-07-22 用户定案）。
-//! 序列帧帧条小图按资源存 cache/frames/{asset_id}/{帧名}.webp，同样不进 info（预览窗口播放条）。
+//! 序列帧帧条小图按资源存 cache/frames/{asset_id}/{帧名}.webp，不进 info（会话级，打开库清空）。
+//! cache 下的会话级目录（tmp / previews / frames）打开库时统一清空（2026-07-25 用户定）；thumbs 格式图标跨会话保留。
 //! 探测 / 解码失败返回 None 属"能力探测"语义（不是图片），不算吞错误。
 
 use std::fs;
@@ -111,8 +112,9 @@ pub fn generate_preview(root: &Path, origin: &Path, key: &str) -> Option<String>
 }
 
 /// 全尺寸预览缓存（cache/previews/{asset_id}_{size}_{mtime}.webp）：psd/psb 等 webview 直渲不了的
-/// 格式，解码后长边 ≤ 4096 存 webp，作预览窗口渐进加载的高清层。**持久缓存**（不随 cache/tmp 清空），
-/// 按源文件 大小+修改时间 失效（文件名散列，同资源旧缓存顺手清理）。解码失败返回 None。
+/// 格式，解码后长边 ≤ 4096 存 webp，作预览窗口渐进加载的高清层。**会话级缓存**（打开库时清空，
+/// 2026-07-25 用户定：点开过的素材缓存不留到下一会话，防容量膨胀），按源文件 大小+修改时间 失效
+/// （文件名散列，同资源旧缓存顺手清理）。解码失败返回 None。
 pub fn generate_full_preview(root: &Path, origin: &Path, asset_id: &str) -> Option<String> {
   let meta = fs::metadata(origin).ok()?;
   let mtime = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
@@ -145,8 +147,8 @@ pub fn generate_full_preview(root: &Path, origin: &Path, asset_id: &str) -> Opti
 }
 
 /// 序列帧帧条小图（cache/frames/{asset_id}/{帧名}.webp，短边 128 等比不放大）：
-/// 预览窗口播放条逐帧预生成——存 cache 不进 info（缓存可重建，PRD 06）。已存在直接返回路径；
-/// 非图片 / 解码失败返回 None。
+/// 预览窗口播放条逐帧预生成——存 cache 不进 info，会话级（打开库时清空，2026-07-25 用户定）。
+/// 已存在直接返回路径；非图片 / 解码失败返回 None。
 pub fn generate_frame_strip(root: &Path, origin: &Path, asset_id: &str, frame_name: &str) -> Option<String> {
   let dest = root.join(CACHE_DIR).join("frames").join(asset_id).join(format!("{frame_name}.webp"));
   if dest.is_file() {
