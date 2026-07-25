@@ -15,6 +15,8 @@ import type { PlacementView } from "../stores/content";
 const props = withDefaults(defineProps<{ asset: PlacementView; box: Box; selected?: boolean }>(), {
   selected: false,
 });
+// 查看大图按钮 → 进预览（4.3）；双击由 AssetGrid 绑在组件根元素上
+defineEmits<{ preview: [] }>();
 const ui = useUiStore();
 const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
 const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
@@ -59,7 +61,7 @@ const meta = computed(() =>
         <button class="act" v-tip="'发送至 Animate'" @click.stop>
           <AppIcon name="send-to" />
         </button>
-        <button class="act" v-tip="'查看大图'" @click.stop>
+        <button class="act" v-tip="'查看大图'" @click.stop="$emit('preview')">
           <AppIcon name="magnifier" />
         </button>
       </div>

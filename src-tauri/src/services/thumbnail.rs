@@ -1,6 +1,7 @@
 //! 缩略图服务：图片宽高探测 + 缩略图生成 + 格式图标缓存（4.2）。
 //! 缩略图存 info 文件夹（{名}_thumbnail.webp），是缓存可重建、不进备份（PRD 06-04）。
 //! 格式图标（shell 保底）按格式存 cache/thumbs/{ext}.webp，不进 info（2026-07-22 用户定案）。
+//! 序列帧帧条小图按资源存 cache/frames/{asset_id}/{帧名}.webp，同样不进 info（预览窗口播放条）。
 //! 探测 / 解码失败返回 None 属"能力探测"语义（不是图片），不算吞错误。
 
 use std::fs;
@@ -15,6 +16,9 @@ use crate::services::thumb_formats;
 /// 缩略图短边长度（像素）：短边缩到 320、长边等比（对齐 Eagle 同级策略；
 /// 768 长边对千像素级原图过剩，体积不合算）
 pub const THUMB_SHORT_EDGE: u32 = 320;
+
+/// 帧条小图短边长度（像素）：预览窗口序列帧播放条用，预生成存 cache/frames 不进 info
+pub const STRIP_SHORT_EDGE: u32 = 128;
 
 /// 有损 webp 质量（libwebp q80：目视接近无损，体积约为无损编码 1/5）
 const WEBP_QUALITY: f32 = 80.0;
@@ -102,16 +106,43 @@ pub fn generate_preview(root: &Path, origin: &Path, key: &str) -> Option<String>
   Some(dest.to_string_lossy().into_owned())
 }
 
+/// 序列帧帧条小图（cache/frames/{asset_id}/{帧名}.webp，短边 128 等比不放大）：
+/// 预览窗口播放条逐帧预生成——存 cache 不进 info（缓存可重建，PRD 06）。已存在直接返回路径；
+/// 非图片 / 解码失败返回 None。
+pub fn generate_frame_strip(root: &Path, origin: &Path, asset_id: &str, frame_name: &str) -> Option<String> {
+  let dest = root.join(CACHE_DIR).join("frames").join(asset_id).join(format!("{frame_name}.webp"));
+  if dest.is_file() {
+    return Some(dest.to_string_lossy().into_owned());
+  }
+  let img = load_origin(origin)?;
+  let strip = shrink_to_edge(img, STRIP_SHORT_EDGE);
+  let parent = dest.parent()?;
+  if let Err(e) = fs::create_dir_all(parent) {
+    log::error!("帧条缓存目录创建失败：{e}");
+    return None;
+  }
+  if let Err(e) = save_webp(&strip, &dest) {
+    log::error!("帧条缓存落盘失败（{}）：{e}", origin.display());
+    return None;
+  }
+  Some(dest.to_string_lossy().into_owned())
+}
+
 /// 短边缩到 THUMB_SHORT_EDGE、长边等比（整数除法 floor，短边恰好 320）；原图短边不足不放大
 fn shrink_to_thumb(img: DynamicImage) -> DynamicImage {
+  shrink_to_edge(img, THUMB_SHORT_EDGE)
+}
+
+/// 短边缩到 short_edge、长边等比（整数除法 floor）；原图短边不足不放大
+fn shrink_to_edge(img: DynamicImage, short_edge: u32) -> DynamicImage {
   let (w, h) = (img.width(), img.height());
-  if w.min(h) <= THUMB_SHORT_EDGE {
+  if w.min(h) <= short_edge {
     return img;
   }
   let (nw, nh) = if w <= h {
-    (THUMB_SHORT_EDGE, (h as u64 * THUMB_SHORT_EDGE as u64 / w as u64) as u32)
+    (short_edge, (h as u64 * short_edge as u64 / w as u64) as u32)
   } else {
-    ((w as u64 * THUMB_SHORT_EDGE as u64 / h as u64) as u32, THUMB_SHORT_EDGE)
+    ((w as u64 * short_edge as u64 / h as u64) as u32, short_edge)
   };
   // imageops::resize 输出严格 nw×nh（thumbnail 的 fit-within 是长边语义，不合短边策略）
   let rgba = img.to_rgba8();

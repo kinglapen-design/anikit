@@ -22,11 +22,18 @@ import {
 import { useVirtualScroll } from "../lib/useVirtualScroll";
 import { useContentStore } from "../stores/content";
 import { useUiStore } from "../stores/ui";
+import { usePreviewStore } from "../stores/preview";
 import type { PlacementView } from "../stores/content";
 
 const props = defineProps<{ items: PlacementView[] }>();
 const ui = useUiStore();
 const content = useContentStore();
+const preview = usePreviewStore();
+
+// 进预览（4.3）：双击卡片 / 卡片"查看大图"按钮
+function openPreview(p: PlacementView): void {
+  void preview.open(`${p.assetId}|${p.folderId}`);
+}
 
 // 布局算法只认数值宽高：fla 等无尺寸资源按 1:1 方形（4.2 用户定——格式图标为方形，容器随方不裁切）
 const layoutItems = computed(() => props.items.map((it) => ({ w: it.w ?? 300, h: it.h ?? 300 })));
@@ -217,6 +224,7 @@ onBeforeUnmount(() => {
               content.selectedAssetKey = `${c.asset.assetId}|${c.asset.folderId}`;
               content.selectedFolderId = '';
             "
+            @dblclick="openPreview(c.asset)"
           />
         </template>
         <template v-else>
@@ -230,6 +238,8 @@ onBeforeUnmount(() => {
               content.selectedAssetKey = `${c.asset.assetId}|${c.asset.folderId}`;
               content.selectedFolderId = '';
             "
+            @dblclick="openPreview(c.asset)"
+            @preview="openPreview(c.asset)"
           />
         </template>
       </div>

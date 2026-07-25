@@ -30,7 +30,8 @@ tauri-plugin-dialog = "2"
 # 主窗口 1px 线框色（DWMWA_BORDER_COLOR，Win11+）+ 收件箱盘符（DefineDosDeviceW，3.2）
 # + 收件箱占用探测（CreateFileW 的 SECURITY_ATTRIBUTES 参数要求 Win32_Security，3.2）
 # + 4.2 格式图标保底（IShellItemImageFactory 取系统图标 → GetDIBits 转 RGBA；COM 初始化为 STA）
-windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_UI_Shell", "Win32_Graphics_Gdi", "Win32_System_Com"] }
+# + 预览窗口"默认程序打开"（ShellExecuteW；SW_SHOW 在 Win32_UI_WindowsAndMessaging）
+windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_Com"] }
 # 数据层：时间戳（ID / importedAt / 备份命名）
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 # 数据层：ID 随机字符

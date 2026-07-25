@@ -10,6 +10,7 @@ import SidebarLeft from "./components/SidebarLeft.vue";
 import SidebarRight from "./components/SidebarRight.vue";
 import ContentArea from "./components/ContentArea.vue";
 import SplitBar from "./components/SplitBar.vue";
+import PreviewWindow from "./components/PreviewWindow.vue";
 import LibrarySetupModal from "./components/LibrarySetupModal.vue";
 import ImportDialog from "./components/ImportDialog.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
@@ -26,6 +27,9 @@ const webview = getCurrentWebviewWindow();
 
 // 启动时未打开任何素材库 → 强制弹"创建/打开资源库"模态（PRD 01-1）
 const needLibrarySetup = ref(false);
+
+// 独立预览窗口（4.3 新窗口打开）：URL ?preview={assetKey} 进入，只渲染预览布局（无三栏、无导入弹窗）
+const previewParam = new URLSearchParams(window.location.search).get("preview");
 
 async function syncMaximized(): Promise<void> {
   maximized.value = await appWindow.isMaximized();
@@ -99,10 +103,10 @@ onMounted(() => {
   }).then((fn) => {
     unlistenDragDrop = fn;
   });
-  // 查询库状态失败按"未打开"处理，让用户能经模态重试
+  // 查询库状态失败按"未打开"处理，让用户能经模态重试（预览窗口不弹库模态，PreviewWindow 自行拉数据）
   invoke<unknown>("get_current_library")
     .then((lib) => {
-      needLibrarySetup.value = lib === null;
+      needLibrarySetup.value = lib === null && !previewParam;
       if (lib !== null) void content.refresh();
     })
     .catch(() => {
@@ -137,11 +141,14 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
 
 <template>
   <div class="window" :class="{ maximized }">
-    <SidebarLeft />
-    <SplitBar v-if="!ui.leftCollapsed" side="left" />
-    <ContentArea />
-    <SplitBar v-if="!ui.rightCollapsed" side="right" />
-    <SidebarRight />
+    <PreviewWindow v-if="previewParam" :asset-key="previewParam" />
+    <template v-else>
+      <SidebarLeft />
+      <SplitBar v-if="!ui.leftCollapsed" side="left" />
+      <ContentArea />
+      <SplitBar v-if="!ui.rightCollapsed" side="right" />
+      <SidebarRight />
+    </template>
     <template v-if="!maximized">
       <div
         v-for="z in resizeZones"

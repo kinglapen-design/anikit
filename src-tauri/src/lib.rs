@@ -176,6 +176,11 @@ pub fn run() {
       commands::import::resolve_conflicts,
       commands::import::list_folder_tree,
       commands::import::list_placements,
+      commands::preview::get_asset_file_path,
+      commands::preview::list_sequence_frames,
+      commands::preview::set_thumb_frame,
+      commands::preview::open_with_default_app,
+      commands::preview::open_preview_window,
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")
