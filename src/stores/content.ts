@@ -98,6 +98,10 @@ let flushTimer: ReturnType<typeof setTimeout> | undefined;
 // 收件箱事件监听（3.2）：App 存活期注册一次，后端监听 inbox 目录自动入库
 let unlistenInbox: (() => void) | undefined;
 
+// 视口滚动位置（会话级，2026-07-25 用户定）：进出预览 / 切换目录都恢复——
+// 预览返回不跳顶（设缩略图后可直接确认），对比两个文件夹不用重新翻
+const scrollPositions = new Map<string, number>();
+
 // 递归查文件夹节点（stripFolders / 标题栏 crumbs 共用）
 function findFolder(nodes: FolderNode[], id: string): FolderNode | null {
   for (const n of nodes) {
@@ -186,6 +190,14 @@ export const useContentStore = defineStore("content", {
     },
   },
   actions: {
+    // 视口滚动位置存取（key = sidebarSelected；会话级 Map，零响应式开销）
+    saveScrollPos(key: string, pos: number): void {
+      scrollPositions.set(key, pos);
+    },
+    getScrollPos(key: string): number | null {
+      return scrollPositions.get(key) ?? null;
+    },
+
     // 库打开后 / 导入完成后全量刷新（增量刷新随阶段 4 任务队列再做）
     async refresh(): Promise<void> {
       const [placements, folders] = await Promise.all([

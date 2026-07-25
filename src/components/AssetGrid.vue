@@ -69,7 +69,11 @@ function updateRange(scrollPos: number): void {
   r1.value = Math.min(rs.length, lowerBound(rs, scrollPos + vh - off + BUFFER) + 1);
 }
 
-const { pos, thumbTop, thumbHeight, scrollable, setTotal, attach, detach } = useVirtualScroll(updateRange);
+const { pos, thumbTop, thumbHeight, scrollable, scrollTo, setTotal, attach, detach } =
+  useVirtualScroll(updateRange);
+
+// 滚动位置持久化（2026-07-25 用户定）：按视口 key 保存，重排完成后恢复（null = 不恢复）
+let restorePos: number | null = null;
 
 const visibleCards = computed(() => {
   const rs = rows.value;
@@ -110,6 +114,11 @@ function relayout(): void {
   layoutWidth.value = vp.clientWidth;
   canvasScale.value = 1;
   setTotal(currentTotal());
+  // 滚动位置恢复（进出预览 / 切换目录后的重排；超出新列表由 scrollTo 自夹）
+  if (restorePos !== null) {
+    scrollTo(restorePos);
+    restorePos = null;
+  }
   console.debug(`[AssetGrid] 布局 ${props.items.length} 条：${(performance.now() - t0).toFixed(1)}ms`);
 }
 
@@ -157,6 +166,15 @@ const ro = new ResizeObserver(() => {
   }
 });
 
+// 切换目录 / 视图：保存旧视口位置、登记新视口待恢复（随后 items watch 重排完成时恢复。
+// 注册顺序必须在 items watch 之前——同 tick 内按注册顺序触发，restorePos 要先就位）
+watch(
+  () => content.sidebarSelected,
+  (newKey, oldKey) => {
+    content.saveScrollPos(oldKey, pos.value);
+    restorePos = content.getScrollPos(newKey) ?? 0;
+  },
+);
 watch(
   () => props.items,
   () => relayout(),
@@ -186,10 +204,14 @@ onMounted(() => {
     setTotal(currentTotal());
   });
   headerRo.observe(headerRef.value!);
+  // 预览返回 / 视口初次挂载：恢复上次滚动位置（2026-07-25 用户定）
+  restorePos = content.getScrollPos(content.sidebarSelected);
   relayout();
 });
 
 onBeforeUnmount(() => {
+  // 卸载（进预览等）前保存当前视口滚动位置
+  content.saveScrollPos(content.sidebarSelected, pos.value);
   clearTimeout(resizeTimer);
   viewportRef.value?.removeEventListener("wheel", onCtrlWheel);
   detach();
