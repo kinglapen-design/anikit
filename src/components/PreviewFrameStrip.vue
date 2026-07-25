@@ -59,6 +59,10 @@ watch(
 .rot-r :deep(svg) {
   transform: rotate(-90deg);
 }
+/* 中栏工具栏图标按钮 80%（2026-07-23 用户定，同预览标题栏） */
+.frame-strip :deep(.icon-btn) {
+  color: var(--font-icon-2);
+}
 .frames {
   display: flex;
   gap: var(--space-8);

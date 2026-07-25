@@ -73,13 +73,14 @@ async function togglePin(): Promise<void> {
       <IconButton
         name="chevron-large"
         title="上一个"
-        class="rot-180"
+        class="rot-ccw"
         :disabled="preview.index <= 0"
         @click="preview.step(-1)"
       />
       <IconButton
         name="chevron-large"
         title="下一个"
+        class="rot-cw"
         :disabled="preview.index >= preview.total - 1"
         @click="preview.step(1)"
       />
@@ -126,12 +127,12 @@ async function togglePin(): Promise<void> {
   gap: var(--space-6);
   flex: none;
 }
-/* chevron-large 原图标朝下：返回 = 顺时针 90°（朝左）；上一个 = 旋转 180°（朝上），下一个原样（朝下） */
+/* chevron-large 原图标朝下：返回 / 上一个 = 顺时针 90°（朝左），下一个 = 逆时针 90°（朝右）（2026-07-25 用户定：上/下一个用左右方向） */
 .rot-ccw :deep(svg) {
   transform: rotate(90deg);
 }
-.rot-180 :deep(svg) {
-  transform: rotate(180deg);
+.rot-cw :deep(svg) {
+  transform: rotate(-90deg);
 }
 .index-text {
   font-size: var(--text-body-size);

@@ -92,6 +92,10 @@ function onSeekUp(e: PointerEvent): void {
   white-space: nowrap;
   flex: none;
 }
+/* 中栏工具栏图标按钮 80%（2026-07-23 用户定，同预览标题栏） */
+.play-bar :deep(.icon-btn) {
+  color: var(--font-icon-2);
+}
 /* 进度条：3px 轨道 border-1 底，品牌紫填充，10px 拖钮（SideSlider 语言） */
 .progress {
   position: relative;
