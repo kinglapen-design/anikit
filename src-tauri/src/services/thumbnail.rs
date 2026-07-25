@@ -20,6 +20,10 @@ pub const THUMB_SHORT_EDGE: u32 = 320;
 /// 帧条小图短边长度（像素）：预览窗口序列帧播放条用，预生成存 cache/frames 不进 info
 pub const STRIP_SHORT_EDGE: u32 = 128;
 
+/// 全尺寸预览缓存长边上限（像素）：psd/psb 等 webview 直渲不了的格式，
+/// 预览窗口"渐进加载"的高清层（Eagle 式：先秒显 info 缩略图，后台解析真尺寸替换，2026-07-25 用户定）
+pub const FULL_PREVIEW_LONG_EDGE: u32 = 4096;
+
 /// 有损 webp 质量（libwebp q80：目视接近无损，体积约为无损编码 1/5）
 const WEBP_QUALITY: f32 = 80.0;
 
@@ -106,6 +110,40 @@ pub fn generate_preview(root: &Path, origin: &Path, key: &str) -> Option<String>
   Some(dest.to_string_lossy().into_owned())
 }
 
+/// 全尺寸预览缓存（cache/previews/{asset_id}_{size}_{mtime}.webp）：psd/psb 等 webview 直渲不了的
+/// 格式，解码后长边 ≤ 4096 存 webp，作预览窗口渐进加载的高清层。**持久缓存**（不随 cache/tmp 清空），
+/// 按源文件 大小+修改时间 失效（文件名散列，同资源旧缓存顺手清理）。解码失败返回 None。
+pub fn generate_full_preview(root: &Path, origin: &Path, asset_id: &str) -> Option<String> {
+  let meta = fs::metadata(origin).ok()?;
+  let mtime = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
+  let key = format!("{asset_id}_{}_{}", meta.len(), mtime);
+  let dir = root.join(CACHE_DIR).join("previews");
+  let dest = dir.join(format!("{key}.webp"));
+  if dest.is_file() {
+    return Some(dest.to_string_lossy().into_owned());
+  }
+  let img = load_origin(origin)?;
+  let img = shrink_long_edge(img, FULL_PREVIEW_LONG_EDGE);
+  if let Err(e) = fs::create_dir_all(&dir) {
+    log::error!("全尺寸预览缓存目录创建失败：{e}");
+    return None;
+  }
+  if let Err(e) = save_webp(&img, &dest) {
+    log::error!("全尺寸预览缓存落盘失败（{}）：{e}", origin.display());
+    return None;
+  }
+  // 同资源旧缓存（源文件已变化）顺手清理
+  let prefix = format!("{asset_id}_");
+  if let Ok(entries) = fs::read_dir(&dir) {
+    for e in entries.flatten() {
+      if e.file_name().to_string_lossy().starts_with(&prefix) && e.path() != dest {
+        let _ = fs::remove_file(e.path());
+      }
+    }
+  }
+  Some(dest.to_string_lossy().into_owned())
+}
+
 /// 序列帧帧条小图（cache/frames/{asset_id}/{帧名}.webp，短边 128 等比不放大）：
 /// 预览窗口播放条逐帧预生成——存 cache 不进 info（缓存可重建，PRD 06）。已存在直接返回路径；
 /// 非图片 / 解码失败返回 None。
@@ -145,6 +183,21 @@ fn shrink_to_edge(img: DynamicImage, short_edge: u32) -> DynamicImage {
     ((w as u64 * short_edge as u64 / h as u64) as u32, short_edge)
   };
   // imageops::resize 输出严格 nw×nh（thumbnail 的 fit-within 是长边语义，不合短边策略）
+  let rgba = img.to_rgba8();
+  DynamicImage::ImageRgba8(image::imageops::resize(&rgba, nw, nh, image::imageops::FilterType::Triangle))
+}
+
+/// 长边缩到 long_edge、短边等比；原图长边不足不放大
+fn shrink_long_edge(img: DynamicImage, long_edge: u32) -> DynamicImage {
+  let (w, h) = (img.width(), img.height());
+  if w.max(h) <= long_edge {
+    return img;
+  }
+  let (nw, nh) = if w >= h {
+    (long_edge, (h as u64 * long_edge as u64 / w as u64) as u32)
+  } else {
+    ((w as u64 * long_edge as u64 / h as u64) as u32, long_edge)
+  };
   let rgba = img.to_rgba8();
   DynamicImage::ImageRgba8(image::imageops::resize(&rgba, nw, nh, image::imageops::FilterType::Triangle))
 }
@@ -229,6 +282,45 @@ mod tests {
     let txt = dir.path().join("工程.fla");
     std::fs::write(&txt, "fake fla bytes").unwrap();
     assert_eq!(generate(dir.path(), &txt, "工程"), None);
+  }
+
+  #[test]
+  fn generate_full_preview_caches_by_size_and_mtime() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let origin = root.join("a.png");
+    make_png(&origin, 640, 480);
+
+    // 首次生成：640×480（长边不足 4096 保持原尺寸）
+    let p1 = generate_full_preview(root, &origin, "A1").unwrap();
+    assert!(p1.contains("cache") && p1.contains("previews"));
+    assert_eq!(image::image_dimensions(&p1).unwrap(), (640, 480));
+
+    // 二次调用幂等：路径相同、文件不变
+    let mtime = fs::metadata(&p1).unwrap().modified().unwrap();
+    let p2 = generate_full_preview(root, &origin, "A1").unwrap();
+    assert_eq!(p1, p2);
+    assert_eq!(fs::metadata(&p2).unwrap().modified().unwrap(), mtime);
+
+    // 源文件变化（大小不同 → 散列变）→ 新缓存，旧缓存被清理
+    make_png(&origin, 800, 600);
+    let p3 = generate_full_preview(root, &origin, "A1").unwrap();
+    assert_ne!(p1, p3);
+    assert!(!Path::new(&p1).exists(), "旧缓存应被清理");
+  }
+
+  #[test]
+  fn shrink_long_edge_caps_at_limit() {
+    let dir = tempfile::tempdir().unwrap();
+    let big = dir.path().join("big.png");
+    make_png(&big, 8000, 4000);
+    let img = image::open(&big).unwrap();
+    let out = shrink_long_edge(img, FULL_PREVIEW_LONG_EDGE);
+    assert_eq!((out.width(), out.height()), (4096, 2048));
+    // 不足上限不缩放
+    let small = image::open(dir.path().join("big.png")).unwrap();
+    let out2 = shrink_long_edge(small, 9000);
+    assert_eq!((out2.width(), out2.height()), (8000, 4000));
   }
 
   /// Eagle 缩略图参数实验（#[ignore]）：cargo test -- --ignored webp_param_probe --nocapture

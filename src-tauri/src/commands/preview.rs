@@ -39,7 +39,8 @@ fn asset_file_path(lib: &Library, asset_id: &str) -> Result<Option<String>, Stri
     return Ok(Some(origin.to_string_lossy().into_owned()));
   }
   if matches!(ext.as_str(), "psd" | "psb") {
-    return Ok(thumbnail::generate_preview(&lib.root, &origin, asset_id));
+    // 渐进加载高清层（Eagle 式，2026-07-25 用户定）：全尺寸缓存 cache/previews（持久、按源文件失效）
+    return Ok(thumbnail::generate_full_preview(&lib.root, &origin, asset_id));
   }
   Ok(None)
 }

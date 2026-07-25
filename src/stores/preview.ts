@@ -127,7 +127,10 @@ export const usePreviewStore = defineStore("preview", {
       this.assetKey = `${p.assetId}|${p.folderId}`;
       await this.loadAsset();
     },
-    // 按当前 PlacementView 判定类型并加载显示路径
+    // 按当前 PlacementView 判定类型并加载显示路径。
+    // 渐进加载（Eagle 式，2026-07-25 用户定）：先秒显 info 缩略图（thumbPath），
+    // 真路径到达后替换高清（大图解析不阻塞首显；psd/psb 为全尺寸缓存）——
+    // 同时保证切换素材时旧图不残留。
     async loadAsset(): Promise<void> {
       this.stopEngine();
       this.playing = false;
@@ -139,23 +142,25 @@ export const usePreviewStore = defineStore("preview", {
         this.assetKey = null;
         return;
       }
+      this.filePath = p.thumbPath; // 秒显：info 缩略图（格式图标同路径，other 情形也先盖住旧图）
       if (p.frameCount != null) {
         this.kind = "sequence";
-        this.seq = await invoke<SequenceFrames>("list_sequence_frames", { assetId: p.assetId });
+        const seq = await invoke<SequenceFrames>("list_sequence_frames", { assetId: p.assetId });
+        if (this.current?.assetId !== p.assetId) return; // await 期间已切走
+        this.seq = seq;
         // 封面帧为初始帧（thumbFrame 是文件名）
-        const cover = this.seq.thumbFrame
-          ? this.seq.frames.findIndex((f) => f.name === this.seq!.thumbFrame)
-          : -1;
+        const cover = seq.thumbFrame ? seq.frames.findIndex((f) => f.name === seq.thumbFrame) : -1;
         this.frame = cover >= 0 ? cover : 0;
-        this.filePath = this.seq.frames[this.frame]?.fullPath ?? null;
+        this.filePath = seq.frames[this.frame]?.fullPath ?? null;
         return;
       }
       const path = await invoke<string | null>("get_asset_file_path", { assetId: p.assetId });
+      if (this.current?.assetId !== p.assetId) return; // await 期间已切走
       if (path) {
         this.kind = "image";
-        this.filePath = path;
+        this.filePath = path; // 高清层替换（onImageLoad 保持视觉尺寸）
       } else {
-        this.kind = "other"; // 格式图标保底（current.thumbPath）
+        this.kind = "other"; // 格式图标保底（PreviewPanel 用 current.thumbPath 渲染）
         this.filePath = null;
       }
     },
@@ -168,9 +173,16 @@ export const usePreviewStore = defineStore("preview", {
       this.naturalW = 0;
       this.naturalH = 0;
     },
-    // img onload：记录显示图实际尺寸，初始化为适合窗口（序列帧同尺寸帧切换不重置视图）
+    // img onload：记录显示图实际尺寸，初始化为适合窗口（序列帧同尺寸帧切换不重置视图）。
+    // 渐进替换（缩略图 → 高清，同比例）：按新旧像素比换算 zoom，视觉尺寸不动、pan 不动（容器坐标系）
     onImageLoad(w: number, h: number): void {
       if (this.naturalW === w && this.naturalH === h) return;
+      if (this.naturalW > 0 && this.naturalH > 0) {
+        this.zoom = this.zoom * (this.naturalW / w);
+        this.naturalW = w;
+        this.naturalH = h;
+        return;
+      }
       this.naturalW = w;
       this.naturalH = h;
       this.fit();
