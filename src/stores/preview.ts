@@ -4,6 +4,7 @@
 import { defineStore } from "pinia";
 import { nextTick } from "vue";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useContentStore } from "./content";
 
@@ -11,13 +12,19 @@ import { useContentStore } from "./content";
 export interface FrameEntry {
   name: string; // 帧文件名（标题-序号.扩展名）
   fullPath: string; // 帧原图绝对路径（大图显示）
-  stripPath: string; // 帧条小图绝对路径（cache/frames/，后端预生成）
+  stripPath: string | null; // 帧条小图绝对路径；null = 后台生成中（preview-strips-ready 渐进填充）
 }
 
 interface SequenceFrames {
   fps: number;
   thumbFrame: string | null;
   frames: FrameEntry[];
+}
+
+// get_asset_file_path 返回：pending = 高清层后台解析中（preview-full-ready 到达后替换）
+interface AssetFilePath {
+  path: string | null;
+  pending: boolean;
 }
 
 // image = 可显示图（直渲或 psd 缓存）；sequence = 序列帧；other = 格式图标保底
@@ -33,6 +40,9 @@ export const RATES = [0.25, 0.5, 1, 2, 4];
 let rafId = 0;
 let lastT = 0;
 let acc = 0;
+// 预览就绪事件监听（App 存活期注册一次；多窗口各自注册，事件广播按 assetId 匹配生效）
+let unlistenFull: (() => void) | undefined;
+let unlistenStrips: (() => void) | undefined;
 
 export const usePreviewStore = defineStore("preview", {
   state: () => ({
@@ -105,6 +115,26 @@ export const usePreviewStore = defineStore("preview", {
     },
   },
   actions: {
+    // 预览就绪事件监听（App 启动注册一次）：PSD 高清 / 帧条小图后台生成完成后渐进替换
+    async initPreviewListener(): Promise<void> {
+      if (unlistenFull && unlistenStrips) return;
+      unlistenFull = await listen<{ assetId: string; path: string }>("preview-full-ready", (e) => {
+        if (this.current?.assetId === e.payload.assetId && this.kind === "image") {
+          this.filePath = e.payload.path; // onImageLoad 按像素比换算保持视觉
+        }
+      });
+      unlistenStrips = await listen<{ assetId: string; items: { name: string; stripPath: string }[] }>(
+        "preview-strips-ready",
+        (e) => {
+          if (!this.seq || this.current?.assetId !== e.payload.assetId) return;
+          for (const item of e.payload.items) {
+            const f = this.seq.frames.find((x) => x.name === item.name);
+            if (f) f.stripPath = item.stripPath;
+          }
+        },
+      );
+    },
+
     // 进入预览（双击卡片 / 查看大图按钮）
     async open(key: string): Promise<void> {
       this.assetKey = key;
@@ -152,13 +182,17 @@ export const usePreviewStore = defineStore("preview", {
         const cover = seq.thumbFrame ? seq.frames.findIndex((f) => f.name === seq.thumbFrame) : -1;
         this.frame = cover >= 0 ? cover : 0;
         this.filePath = seq.frames[this.frame]?.fullPath ?? null;
+        // 进入自动播放（2026-07-25 用户定）；帧条小图后台生成，不阻塞播放
+        if (seq.frames.length >= 2) this.play();
         return;
       }
-      const path = await invoke<string | null>("get_asset_file_path", { assetId: p.assetId });
+      const r = await invoke<AssetFilePath>("get_asset_file_path", { assetId: p.assetId });
       if (this.current?.assetId !== p.assetId) return; // await 期间已切走
-      if (path) {
+      if (r.path) {
         this.kind = "image";
-        this.filePath = path; // 高清层替换（onImageLoad 保持视觉尺寸）
+        this.filePath = r.path; // 高清层替换（onImageLoad 保持视觉尺寸）
+      } else if (r.pending) {
+        this.kind = "image"; // 保持缩略图，preview-full-ready 事件到达后替换
       } else {
         this.kind = "other"; // 格式图标保底（PreviewPanel 用 current.thumbPath 渲染）
         this.filePath = null;

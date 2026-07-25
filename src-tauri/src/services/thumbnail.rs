@@ -6,7 +6,7 @@
 //! 探测 / 解码失败返回 None 属"能力探测"语义（不是图片），不算吞错误。
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use image::DynamicImage;
 
@@ -111,22 +111,36 @@ pub fn generate_preview(root: &Path, origin: &Path, key: &str) -> Option<String>
   Some(dest.to_string_lossy().into_owned())
 }
 
+/// 全尺寸预览缓存目标路径（cache/previews/{asset_id}_{size}_{mtime}.webp，按源文件 大小+修改时间 散列）；
+/// 源文件元数据读取失败返回 None
+fn full_preview_dest(root: &Path, origin: &Path, asset_id: &str) -> Option<PathBuf> {
+  let meta = fs::metadata(origin).ok()?;
+  let mtime = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
+  let key = format!("{asset_id}_{}_{}", meta.len(), mtime);
+  Some(root.join(CACHE_DIR).join("previews").join(format!("{key}.webp")))
+}
+
+/// 全尺寸预览缓存"只判存在不解码"版本：缓存命中返回路径，未命中 / 元数据读取失败返回 None。
+/// 命令层用它决定直给路径还是进预览解析队列——generate_full_preview 未命中会同步解码（秒级），
+/// 命令层直接调会阻塞 tokio 线程池（2026-07-25 预览解析队列改造）
+pub fn full_preview_path(root: &Path, origin: &Path, asset_id: &str) -> Option<String> {
+  let dest = full_preview_dest(root, origin, asset_id)?;
+  dest.is_file().then(|| dest.to_string_lossy().into_owned())
+}
+
 /// 全尺寸预览缓存（cache/previews/{asset_id}_{size}_{mtime}.webp）：psd/psb 等 webview 直渲不了的
 /// 格式，解码后长边 ≤ 4096 存 webp，作预览窗口渐进加载的高清层。**会话级缓存**（打开库时清空，
 /// 2026-07-25 用户定：点开过的素材缓存不留到下一会话，防容量膨胀），按源文件 大小+修改时间 失效
 /// （文件名散列，同资源旧缓存顺手清理）。解码失败返回 None。
 pub fn generate_full_preview(root: &Path, origin: &Path, asset_id: &str) -> Option<String> {
-  let meta = fs::metadata(origin).ok()?;
-  let mtime = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
-  let key = format!("{asset_id}_{}_{}", meta.len(), mtime);
-  let dir = root.join(CACHE_DIR).join("previews");
-  let dest = dir.join(format!("{key}.webp"));
+  let dest = full_preview_dest(root, origin, asset_id)?;
   if dest.is_file() {
     return Some(dest.to_string_lossy().into_owned());
   }
   let img = load_origin(origin)?;
   let img = shrink_long_edge(img, FULL_PREVIEW_LONG_EDGE);
-  if let Err(e) = fs::create_dir_all(&dir) {
+  let dir = dest.parent()?;
+  if let Err(e) = fs::create_dir_all(dir) {
     log::error!("全尺寸预览缓存目录创建失败：{e}");
     return None;
   }
@@ -136,7 +150,7 @@ pub fn generate_full_preview(root: &Path, origin: &Path, asset_id: &str) -> Opti
   }
   // 同资源旧缓存（源文件已变化）顺手清理
   let prefix = format!("{asset_id}_");
-  if let Ok(entries) = fs::read_dir(&dir) {
+  if let Ok(entries) = fs::read_dir(dir) {
     for e in entries.flatten() {
       if e.file_name().to_string_lossy().starts_with(&prefix) && e.path() != dest {
         let _ = fs::remove_file(e.path());
@@ -146,11 +160,23 @@ pub fn generate_full_preview(root: &Path, origin: &Path, asset_id: &str) -> Opti
   Some(dest.to_string_lossy().into_owned())
 }
 
+/// 帧条缓存目标路径（cache/frames/{asset_id}/{帧名}.webp）
+fn frame_strip_dest(root: &Path, asset_id: &str, frame_name: &str) -> PathBuf {
+  root.join(CACHE_DIR).join("frames").join(asset_id).join(format!("{frame_name}.webp"))
+}
+
+/// 帧条缓存"只判存在不生成"版本：已生成返回路径，未生成返回 None。
+/// 命令层用它填 stripPath——未缓存帧进预览解析队列后台生成（2026-07-25 预览解析队列改造）
+pub fn frame_strip_path(root: &Path, asset_id: &str, frame_name: &str) -> Option<String> {
+  let dest = frame_strip_dest(root, asset_id, frame_name);
+  dest.is_file().then(|| dest.to_string_lossy().into_owned())
+}
+
 /// 序列帧帧条小图（cache/frames/{asset_id}/{帧名}.webp，短边 128 等比不放大）：
 /// 预览窗口播放条逐帧预生成——存 cache 不进 info，会话级（打开库时清空，2026-07-25 用户定）。
 /// 已存在直接返回路径；非图片 / 解码失败返回 None。
 pub fn generate_frame_strip(root: &Path, origin: &Path, asset_id: &str, frame_name: &str) -> Option<String> {
-  let dest = root.join(CACHE_DIR).join("frames").join(asset_id).join(format!("{frame_name}.webp"));
+  let dest = frame_strip_dest(root, asset_id, frame_name);
   if dest.is_file() {
     return Some(dest.to_string_lossy().into_owned());
   }
@@ -309,6 +335,38 @@ mod tests {
     let p3 = generate_full_preview(root, &origin, "A1").unwrap();
     assert_ne!(p1, p3);
     assert!(!Path::new(&p1).exists(), "旧缓存应被清理");
+  }
+
+  #[test]
+  fn full_preview_path_only_checks_existence() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let origin = root.join("a.png");
+    make_png(&origin, 640, 480);
+
+    // 未生成：None（不解码、不落盘）
+    assert_eq!(full_preview_path(root, &origin, "A1"), None);
+    assert!(!root.join("cache").exists(), "只判存在不应创建任何目录");
+
+    // 生成后命中，与 generate_full_preview 同 key 同路径
+    let p = generate_full_preview(root, &origin, "A1").unwrap();
+    assert_eq!(full_preview_path(root, &origin, "A1").as_deref(), Some(p.as_str()));
+
+    // 源文件不存在：None
+    assert_eq!(full_preview_path(root, &root.join("不存在.png"), "A1"), None);
+  }
+
+  #[test]
+  fn frame_strip_path_only_checks_existence() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let frame = root.join("f1.png");
+    make_png(&frame, 640, 480);
+
+    assert_eq!(frame_strip_path(root, "A1", "f1.png"), None);
+    let p = generate_frame_strip(root, &frame, "A1", "f1.png").unwrap();
+    assert_eq!(frame_strip_path(root, "A1", "f1.png").as_deref(), Some(p.as_str()));
+    assert_eq!(frame_strip_path(root, "A1", "f2.png"), None);
   }
 
   #[test]

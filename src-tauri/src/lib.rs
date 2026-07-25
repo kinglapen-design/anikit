@@ -64,6 +64,10 @@ pub fn run() {
         )?;
       }
 
+      // 预览解析队列（4.3 预览窗口）：单 worker 串行执行 psd 解码 / 帧条生成，
+      // 提交新任务作废旧任务（快速切换素材不堆积），须在命令可达前初始化
+      services::preview_queue::init(app.handle().clone());
+
       // 全局热键 alt+`：呼出 / 隐藏主窗口（后续用于快捷搜索框）
       // 注册失败（热键被他方占用）只记日志降级，不阻断启动
       if let Err(e) = app.global_shortcut().on_shortcut(

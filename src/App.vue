@@ -18,9 +18,11 @@ import ImportResultDialog from "./components/ImportResultDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
 import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
+import { usePreviewStore } from "./stores/preview";
 
 const ui = useUiStore();
 const content = useContentStore();
+const preview = usePreviewStore();
 const maximized = ref(false);
 const appWindow = getCurrentWindow();
 const webview = getCurrentWebviewWindow();
@@ -96,6 +98,7 @@ onMounted(() => {
   window.addEventListener("resize", onResize);
   window.addEventListener("keydown", onPaste);
   void content.initInboxListener(); // 收件箱自动入库（3.2），App 存活期注册一次
+  void preview.initPreviewListener(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3）
   void webview.onDragDropEvent((event) => {
     if (event.payload.type === "drop") {
       void onDrop(event.payload.paths, event.payload.position.x, event.payload.position.y);

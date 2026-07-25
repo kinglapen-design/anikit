@@ -1,5 +1,6 @@
 //! 命令 API：预览窗口——资源文件路径解析、序列帧帧清单、封面帧切换、默认程序打开。
-//! 命令层只做取库与参数传递，路径推导与帧条预生成走 services（01_开发规范 第 1 条）。
+//! 命令层只做取库与参数传递，路径推导走 services；重活（psd 解码 / 帧条生成）一律进
+//! 预览解析队列异步执行，命令立即返回（2026-07-25 预览解析队列改造：快速切换素材不堆积）。
 
 use std::fs;
 use std::path::PathBuf;
@@ -12,6 +13,7 @@ use crate::commands::library::AppState;
 use crate::core::json_io::{read_json, write_json};
 use crate::core::library::{Library, ASSTES_DIR};
 use crate::core::models::AssetMeta;
+use crate::services::preview_queue::{self, PreviewTask};
 use crate::services::sequence::DEFAULT_FPS;
 use crate::services::thumbnail;
 
@@ -22,27 +24,47 @@ fn is_webview_direct(ext: &str) -> bool {
   matches!(ext, "png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp" | "svg")
 }
 
-/// 预览文件路径解析：webview 可直渲格式返回源文件绝对路径；psd / psb 走解码预览缓存
-/// （cache/tmp，会话级临时）；其余格式返回 null（前端用格式图标兜底）。
+/// 预览文件路径解析结果
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetFilePath {
+  /// 可渲染的文件路径（直渲格式 = 源路径；psd/psb = 已缓存的解码预览）；暂不可得为 null
+  pub path: Option<String>,
+  /// true = 解析中（psd/psb 已进预览解析队列），完成经 preview-full-ready 事件推送
+  pub pending: bool,
+}
+
+/// 预览文件路径解析：webview 可直渲格式返回源文件绝对路径；psd / psb 缓存命中直给、
+/// 未命中进预览解析队列（pending=true，解码完成经 preview-full-ready 推送）；
+/// 其余格式 path=null（前端用格式图标兜底）。
 /// async：Tauri v2 非 async 命令在主线程执行，IO 重活一律线程池（2026-07-25 死锁教训）
 #[tauri::command]
-pub async fn get_asset_file_path(state: State<'_, AppState>, asset_id: String) -> Result<Option<String>, String> {
+pub async fn get_asset_file_path(state: State<'_, AppState>, asset_id: String) -> Result<AssetFilePath, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
   asset_file_path(lib, &asset_id)
 }
 
-fn asset_file_path(lib: &Library, asset_id: &str) -> Result<Option<String>, String> {
+fn asset_file_path(lib: &Library, asset_id: &str) -> Result<AssetFilePath, String> {
   let (_info_dir, origin, meta) = locate_asset(lib, asset_id)?;
   let ext = meta.ext.to_lowercase();
   if is_webview_direct(&ext) {
-    return Ok(Some(origin.to_string_lossy().into_owned()));
+    return Ok(AssetFilePath { path: Some(origin.to_string_lossy().into_owned()), pending: false });
   }
   if matches!(ext.as_str(), "psd" | "psb") {
-    // 渐进加载高清层（Eagle 式，2026-07-25 用户定）：全尺寸缓存 cache/previews（持久、按源文件失效）
-    return Ok(thumbnail::generate_full_preview(&lib.root, &origin, asset_id));
+    // 渐进加载高清层（Eagle 式，2026-07-25 用户定）：全尺寸缓存 cache/previews（持久、按源文件失效）。
+    // 只判存在不解码——generate_full_preview 未命中会同步解码 1-2s，命令层直接调会堵线程池
+    if let Some(path) = thumbnail::full_preview_path(&lib.root, &origin, asset_id) {
+      return Ok(AssetFilePath { path: Some(path), pending: false });
+    }
+    preview_queue::global().submit(PreviewTask::FullPreview {
+      root: lib.root.clone(),
+      asset_id: asset_id.to_string(),
+      origin,
+    });
+    return Ok(AssetFilePath { path: None, pending: true });
   }
-  Ok(None)
+  Ok(AssetFilePath { path: None, pending: false })
 }
 
 // ---------- 序列帧帧清单 ----------
@@ -66,13 +88,15 @@ pub struct FrameEntry {
   pub name: String,
   /// 帧原图绝对路径
   pub full_path: String,
-  /// 帧条小图绝对路径（cache/frames/{asset_id}/{帧名}.webp，短边 128 等比不放大；
-  /// 生成失败时回退原图路径，前端小尺寸直渲）
-  pub strip_path: String,
+  /// 帧条小图绝对路径（cache/frames/{asset_id}/{帧名}.webp，短边 128 等比不放大）；
+  /// null = 未缓存（已进预览解析队列后台生成，批次完成经 preview-strips-ready 推送；
+  /// 生成失败维持 null，前端小尺寸直渲 fullPath 兜底）
+  pub strip_path: Option<String>,
 }
 
-/// 序列帧帧清单：扫 frames/ 按文件名排序（帧可能缺号，不按序号推导）；逐帧预生成帧条小图
-/// （存 cache/frames 不进 info，已存在跳过）。非序列帧资源（无 frames 目录）报错。
+/// 序列帧帧清单：扫 frames/ 按文件名排序（帧可能缺号，不按序号推导）；**立即返回**——
+/// 帧条不再同步生成：已缓存的填 stripPath，未缓存帧收集进预览解析队列后台生成
+/// （存 cache/frames 不进 info，批次完成经 preview-strips-ready 推送）。非序列帧资源（无 frames 目录）报错。
 #[tauri::command]
 pub async fn list_sequence_frames(state: State<'_, AppState>, asset_id: String) -> Result<SequenceFrames, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
@@ -94,16 +118,25 @@ fn sequence_frames(lib: &Library, asset_id: &str) -> Result<SequenceFrames, Stri
     .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
     .collect();
   names.sort();
+  let mut uncached: Vec<(String, PathBuf)> = Vec::new();
   let frames = names
     .into_iter()
     .map(|name| {
       let full = frames_dir.join(&name);
-      let full_path = full.to_string_lossy().into_owned();
-      let strip_path =
-        thumbnail::generate_frame_strip(&lib.root, &full, asset_id, &name).unwrap_or_else(|| full_path.clone());
-      FrameEntry { name, full_path, strip_path }
+      let strip_path = thumbnail::frame_strip_path(&lib.root, asset_id, &name);
+      if strip_path.is_none() {
+        uncached.push((name.clone(), full.clone()));
+      }
+      FrameEntry { name, full_path: full.to_string_lossy().into_owned(), strip_path }
     })
     .collect();
+  if !uncached.is_empty() {
+    preview_queue::global().submit(PreviewTask::FrameStrips {
+      root: lib.root.clone(),
+      asset_id: asset_id.to_string(),
+      frames: uncached,
+    });
+  }
   Ok(SequenceFrames { fps: meta.fps.unwrap_or(DEFAULT_FPS), thumb_frame: meta.thumb_frame, frames })
 }
 
@@ -218,9 +251,21 @@ fn locate_asset(lib: &Library, asset_id: &str) -> Result<(PathBuf, PathBuf, Asse
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::library;
+  use crate::core::library::{self, CACHE_DIR};
   use crate::services::import::{self, PendingFile, Source};
   use crate::services::sequence;
+
+  /// 走全局预览队列的测试互斥：队列语义是"新任务作废旧任务"，并行测试会互相顶掉任务
+  static QUEUE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+  /// 轮询等待条件成立（10s 超时判定失败），不裸 sleep 长等
+  fn wait_until(mut cond: impl FnMut() -> bool, what: &str) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !cond() {
+      assert!(std::time::Instant::now() < deadline, "等待超时：{what}");
+      std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+  }
 
   struct Harness {
     dir: tempfile::TempDir,
@@ -274,26 +319,28 @@ mod tests {
   fn get_asset_file_path_direct_render_returns_origin() {
     let mut h = make_lib();
     add_file(&mut h, "AN-PNG", "参考图.png");
-    let path = asset_file_path(&h.lib, "AN-PNG").unwrap().unwrap();
+    let result = asset_file_path(&h.lib, "AN-PNG").unwrap();
     let expected = h.lib.root.join(ASSTES_DIR).join("AN-PNG.info").join("参考图.png");
-    assert_eq!(path, expected.to_string_lossy());
+    assert_eq!(result, AssetFilePath { path: Some(expected.to_string_lossy().into_owned()), pending: false });
   }
 
   #[test]
   fn get_asset_file_path_other_format_returns_none() {
     let mut h = make_lib();
     add_file(&mut h, "AN-FLA", "工程.fla");
-    assert_eq!(asset_file_path(&h.lib, "AN-FLA").unwrap(), None);
+    // 不可直渲也不走解码的格式：path=null 且不入队（前端格式图标兜底）
+    assert_eq!(asset_file_path(&h.lib, "AN-FLA").unwrap(), AssetFilePath { path: None, pending: false });
     // 不存在的资源报错
     assert!(asset_file_path(&h.lib, "AN-不存在").is_err());
   }
 
-  // psd / psb 分支走 thumbnail::generate_preview（cache/tmp 幂等缓存），
-  // 单测造不出合法 PSD 二进制（psd crate 只解码不编码），该分支不覆盖——
-  // 分支本身只有 ext 匹配 + 一行转发，generate_preview 已有自身测试。
+  // psd / psb 分支：缓存命中走 full_preview_path 直给（thumbnail.rs 已测），未命中进队列
+  // 返回 pending=true。单测造不出合法 PSD 二进制（psd crate 只解码不编码），该分支不覆盖——
+  // 分支本身只有 ext 匹配 + 查缓存 + submit 转发，队列与缓存各有自身测试。
 
   #[test]
-  fn list_sequence_frames_sorts_and_pregenerates_strips() {
+  fn list_sequence_frames_returns_immediately_and_enqueues_strips() {
+    let _lock = QUEUE_TEST_LOCK.lock().unwrap();
     let mut h = make_lib();
     add_sequence(&mut h, "AN-SEQ");
     let list = sequence_frames(&h.lib, "AN-SEQ").unwrap();
@@ -304,30 +351,44 @@ mod tests {
     let names: Vec<&str> = list.frames.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(names, ["走路-001.png", "走路-002.png", "走路-003.png"]);
 
-    // 每帧：原图在 info/frames，帧条小图预生成到 cache/frames/{id}/（短边 128 等比，不进 info）
+    // 立即返回：帧条未缓存时 stripPath=null（后台队列异步生成）；语义：Some 时文件必须存在
     let info = h.lib.root.join(ASSTES_DIR).join("AN-SEQ.info");
+    let strips: Vec<PathBuf> = list
+      .frames
+      .iter()
+      .map(|f| h.lib.root.join(CACHE_DIR).join("frames").join("AN-SEQ").join(format!("{}.webp", f.name)))
+      .collect();
     for f in &list.frames {
       assert!(PathBuf::from(&f.full_path).is_file(), "帧原图缺失：{}", f.full_path);
       assert!(f.full_path.starts_with(info.join("frames").to_string_lossy().as_ref()));
-      let strip = PathBuf::from(&f.strip_path);
-      assert!(strip.is_file(), "帧条缺失：{}", f.strip_path);
-      assert!(f.strip_path.contains("cache"), "帧条应存 cache：{}", f.strip_path);
-      assert!(f.strip_path.ends_with(&format!("{}.webp", f.name)));
-      let (w, h) = image::image_dimensions(&strip).unwrap();
+      if let Some(p) = &f.strip_path {
+        assert!(PathBuf::from(p).is_file(), "stripPath 非空时文件必须存在：{p}");
+      }
+    }
+
+    // 后台队列最终生成全部帧条（cache/frames/{id}/，短边 128 等比，不进 info）
+    wait_until(|| strips.iter().all(|p| p.is_file()), "帧条后台生成");
+    for (f, strip) in list.frames.iter().zip(&strips) {
+      let (w, h) = image::image_dimensions(strip).unwrap();
       assert_eq!(h.min(w), 128, "帧条短边应为 128：{w}x{h}");
       assert!(!info.join(format!("{}.webp", f.name)).exists(), "帧条不应进 info");
     }
 
-    // 二次调用幂等：已存在跳过（mtime 不变）
-    let first = list.frames[0].strip_path.clone();
-    let mtime = fs::metadata(&first).unwrap().modified().unwrap();
+    // 二次调用：全部命中缓存，stripPath 直给且不再入队
     let again = sequence_frames(&h.lib, "AN-SEQ").unwrap();
-    assert_eq!(again.frames[0].strip_path, first);
-    assert_eq!(fs::metadata(&first).unwrap().modified().unwrap(), mtime);
+    for (f, strip) in again.frames.iter().zip(&strips) {
+      assert_eq!(f.strip_path.as_deref(), Some(strip.to_string_lossy().as_ref()));
+    }
+
+    // 幂等：已存在不重复生成（mtime 不变）
+    let mtime = fs::metadata(&strips[0]).unwrap().modified().unwrap();
+    sequence_frames(&h.lib, "AN-SEQ").unwrap();
+    assert_eq!(fs::metadata(&strips[0]).unwrap().modified().unwrap(), mtime);
   }
 
   #[test]
   fn list_sequence_frames_defaults_fps_and_rejects_non_sequence() {
+    let _lock = QUEUE_TEST_LOCK.lock().unwrap();
     let mut h = make_lib();
     let mut meta = add_sequence(&mut h, "AN-SEQ2");
     // metadata 无 fps 字段（历史数据 / 手改）→ 缺省 24

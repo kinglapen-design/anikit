@@ -32,7 +32,8 @@ watch(
         :class="{ active: i === preview.frame }"
         @click="preview.setFrame(i)"
       >
-        <img :src="convertFileSrc(f.stripPath)" :alt="f.name" draggable="false" loading="lazy" />
+        <img v-if="f.stripPath" :src="convertFileSrc(f.stripPath)" :alt="f.name" draggable="false" loading="lazy" />
+        <span v-else class="strip-pending" />
       </button>
     </div>
     <IconButton name="chevron-small" title="下一帧" class="rot-r" @click="preview.stepFrame(1)" />
@@ -85,5 +86,12 @@ watch(
 }
 .frame.active {
   border: 2px solid var(--brand-1);
+}
+/* 帧条小图后台生成中的占位（方形 C4，就绪后按图比例替换，2026-07-25） */
+.strip-pending {
+  display: block;
+  width: 56px;
+  height: 100%;
+  background: var(--c4);
 }
 </style>
