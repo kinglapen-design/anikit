@@ -23,9 +23,10 @@ fn is_webview_direct(ext: &str) -> bool {
 }
 
 /// 预览文件路径解析：webview 可直渲格式返回源文件绝对路径；psd / psb 走解码预览缓存
-/// （cache/tmp，会话级临时）；其余格式返回 null（前端用格式图标兜底）
+/// （cache/tmp，会话级临时）；其余格式返回 null（前端用格式图标兜底）。
+/// async：Tauri v2 非 async 命令在主线程执行，IO 重活一律线程池（2026-07-25 死锁教训）
 #[tauri::command]
-pub fn get_asset_file_path(state: State<'_, AppState>, asset_id: String) -> Result<Option<String>, String> {
+pub async fn get_asset_file_path(state: State<'_, AppState>, asset_id: String) -> Result<Option<String>, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
   asset_file_path(lib, &asset_id)
@@ -72,7 +73,7 @@ pub struct FrameEntry {
 /// 序列帧帧清单：扫 frames/ 按文件名排序（帧可能缺号，不按序号推导）；逐帧预生成帧条小图
 /// （存 cache/frames 不进 info，已存在跳过）。非序列帧资源（无 frames 目录）报错。
 #[tauri::command]
-pub fn list_sequence_frames(state: State<'_, AppState>, asset_id: String) -> Result<SequenceFrames, String> {
+pub async fn list_sequence_frames(state: State<'_, AppState>, asset_id: String) -> Result<SequenceFrames, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
   sequence_frames(lib, &asset_id)
@@ -118,7 +119,7 @@ pub struct SetThumbResult {
 /// 切换序列帧封面帧：用指定帧重新生成缩略图（与导入同管线、同命名 {资源名}_thumbnail.webp）→
 /// metadata 落盘（thumbFrame / thumbnail / modifiedAt）→ 同步内存索引（先落盘再更新索引）
 #[tauri::command]
-pub fn set_thumb_frame(
+pub async fn set_thumb_frame(
   state: State<'_, AppState>,
   asset_id: String,
   frame_name: String,
@@ -164,7 +165,7 @@ fn apply_thumb_frame(lib: &mut Library, asset_id: &str, frame_name: &str) -> Res
 
 /// 用系统默认程序打开源文件（Windows ShellExecuteW "open"；非 Windows 暂不支持）
 #[tauri::command]
-pub fn open_with_default_app(state: State<'_, AppState>, asset_id: String) -> Result<(), String> {
+pub async fn open_with_default_app(state: State<'_, AppState>, asset_id: String) -> Result<(), String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
   let (_info_dir, origin, _meta) = locate_asset(lib, &asset_id)?;
@@ -173,9 +174,11 @@ pub fn open_with_default_app(state: State<'_, AppState>, asset_id: String) -> Re
 
 // ---------- 新窗口打开 ----------
 
-/// 新窗口打开预览（4.3）：同资产复用聚焦，否则开无边框预览窗（视觉参数同主窗口）
+/// 新窗口打开预览（4.3）：同资产复用聚焦，否则开无边框预览窗（视觉参数同主窗口）。
+/// **必须 async**——Tauri v2 非 async 命令在主线程执行，主线程内 build 窗口会与事件循环互等死锁
+/// （2026-07-25 实测：界面/托盘全卡死）；async 走线程池，build 内部 dispatch 回主线程不阻塞
 #[tauri::command]
-pub fn open_preview_window(app: tauri::AppHandle, asset_key: String) -> Result<(), String> {
+pub async fn open_preview_window(app: tauri::AppHandle, asset_key: String) -> Result<(), String> {
   let asset_id = asset_key.split('|').next().unwrap_or(&asset_key);
   let label = format!("preview-{asset_id}");
   if let Some(win) = app.get_webview_window(&label) {
