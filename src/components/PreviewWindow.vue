@@ -33,10 +33,12 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* 独立预览窗口：占满窗口（中栏外层 4 内边距语言一致） */
+/* 独立预览窗口：占满窗口（App.vue 的 .window 是横向 flex——必须 flex:1，否则宽度由内容撑开、右侧留白） */
 .preview-window {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-width: 0;
   height: 100%;
   padding: var(--space-4);
 }
