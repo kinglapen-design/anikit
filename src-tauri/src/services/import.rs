@@ -9,7 +9,7 @@
 //! 纪律：metadata.json 由 build_asset 写（每资源单文件单写点，路径由 ID 推导无需共享状态）；
 //! folders.json 不在此写，统一由 import_task 经 core::library::save_folders 节流落盘。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -406,20 +406,46 @@ fn create_folder(lib: &mut Library, parent: &str, name: &str) -> String {
   id
 }
 
-/// 加 Placement：同文件夹显示名唯一化（冲突追加 -序号），order 取文件夹内末尾，索引同步
-pub(crate) fn add_placement(lib: &mut Library, asset_id: String, folder_id: String, name: String, origin: bool) -> Placement {
+/// 加 Placement（**前插**，2026-07-25 用户定：新导入的素材排在文件夹最前，不用下拉滚轮找）：
+/// 同文件夹显示名唯一化（冲突追加 -序号）；front_anchor 记录各文件夹本批已前插数——
+/// 批内按到达顺序从段首依次后移（保序），新批次锚点从 0 起排在旧批次之前；
+/// order 向负生长（仅作相对键、当前无消费者，7.1 排序落地时统一重排），索引同步
+pub(crate) fn add_placement(
+  lib: &mut Library,
+  asset_id: String,
+  folder_id: String,
+  name: String,
+  origin: bool,
+  front_anchor: &mut HashMap<String, usize>,
+) -> Placement {
   let existing: HashSet<String> = lib
     .index
     .placements_by_folder
     .get(&folder_id)
     .map(|v| v.iter().map(|p| p.name.clone()).collect())
     .unwrap_or_default();
-  let order = lib.index.placements_by_folder.get(&folder_id).map(|v| v.len()).unwrap_or(0) as i32;
+  let batch = front_anchor.entry(folder_id.clone()).or_insert(0);
+  let order = lib
+    .index
+    .placements_by_folder
+    .get(&folder_id)
+    .and_then(|v| v.first())
+    .map(|f| f.order - 1)
+    .unwrap_or(0);
   let placement =
     Placement { asset: asset_id, folder: folder_id.clone(), name: library::unique_name(&existing, &name), order, origin };
-  lib.folders.items.push(placement.clone());
+  // items 前插：该文件夹段首 + 本批已插数（无同文件夹项时追加末尾）
+  let pos = lib
+    .folders
+    .items
+    .iter()
+    .position(|p| p.folder == folder_id)
+    .map(|i| i + *batch)
+    .unwrap_or(lib.folders.items.len());
+  lib.folders.items.insert(pos, placement.clone());
   lib.index.placements_by_asset.entry(placement.asset.clone()).or_default().push(placement.clone());
-  lib.index.placements_by_folder.entry(folder_id).or_default().push(placement.clone());
+  lib.index.placements_by_folder.entry(folder_id).or_default().insert(*batch, placement.clone());
+  *batch += 1;
   placement
 }
 
@@ -461,6 +487,28 @@ fn file_stem(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn add_placement_inserts_front_with_batch_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut lib = library::create(dir.path()).unwrap();
+    let mut anchor = HashMap::new();
+    // 同批三个：批内保序（到达顺序即显示顺序）
+    add_placement(&mut lib, "A1".into(), "root".into(), "a.png".into(), true, &mut anchor);
+    add_placement(&mut lib, "A2".into(), "root".into(), "b.png".into(), true, &mut anchor);
+    add_placement(&mut lib, "A3".into(), "root".into(), "c.png".into(), true, &mut anchor);
+    let names: Vec<&str> =
+      lib.index.placements_by_folder["root"].iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["a.png", "b.png", "c.png"], "文件夹视图批内保序");
+    let items: Vec<&str> = lib.folders.items.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(items, ["a.png", "b.png", "c.png"], "全部视图批内保序");
+    // 新批次（新锚点）：整批排在旧批次之前
+    let mut anchor2 = HashMap::new();
+    add_placement(&mut lib, "A4".into(), "root".into(), "z.png".into(), true, &mut anchor2);
+    let names: Vec<&str> =
+      lib.index.placements_by_folder["root"].iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["z.png", "a.png", "b.png", "c.png"], "新批次排最前");
+  }
 
   #[test]
   fn import_event_json_shape_is_stable() {

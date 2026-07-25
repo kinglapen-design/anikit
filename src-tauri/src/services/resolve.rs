@@ -2,7 +2,7 @@
 //! 用户决策后一次性提交执行。单项失败不阻塞（中文原因进 failed），
 //! 全部处理完重建 Placement 索引 + folders.json 一次落盘。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -127,7 +127,7 @@ fn link(lib: &mut Library, item: &ConflictResolution) -> Result<(), String> {
     .clone()
     .filter(|n| !n.trim().is_empty())
     .unwrap_or_else(|| ops::file_name(&item.source_path));
-  ops::add_placement(lib, item.existing_asset_id.clone(), item.target_folder.clone(), name, false);
+  ops::add_placement(lib, item.existing_asset_id.clone(), item.target_folder.clone(), name, false, &mut HashMap::new());
   Ok(())
 }
 
@@ -186,7 +186,7 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
         source,
         None,
       )?;
-      ops::add_placement(lib, asset.id.clone(), item.target_folder.clone(), format!("{}.{}", seq.name, seq.ext), true);
+      ops::add_placement(lib, asset.id.clone(), item.target_folder.clone(), format!("{}.{}", seq.name, seq.ext), true, &mut HashMap::new());
       lib.index.assets.insert(asset.id.clone(), asset);
       Ok(())
     }
@@ -202,7 +202,7 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
           lib.format_icons.insert(asset.ext.clone());
         }
       }
-      ops::add_placement(lib, asset.id.clone(), item.target_folder.clone(), name, true);
+      ops::add_placement(lib, asset.id.clone(), item.target_folder.clone(), name, true, &mut HashMap::new());
       lib.index.assets.insert(asset.id.clone(), asset);
       Ok(())
     }
@@ -328,7 +328,7 @@ mod tests {
     let asset_id = conflict.existing_asset_id.clone();
     // 预置：目标文件夹已有一条该资源的链接 Placement（应被去重删掉）
     with_lib(&h, |l| {
-      ops::add_placement(l, asset_id.clone(), folder_id.clone(), "快捷.png".into(), false);
+      ops::add_placement(l, asset_id.clone(), folder_id.clone(), "快捷.png".into(), false, &mut HashMap::new());
     });
 
     let report = resolve(&h, vec![to_resolution(&conflict, ResolveAction::UseExisting, None)], Source::Copy);

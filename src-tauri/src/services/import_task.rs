@@ -354,10 +354,12 @@ fn pipeline(
   let mut deferred = group_deferred(phase2.deferred);
   std::thread::scope(|s| {
     let consumer = s.spawn(move || {
+      // 前插锚点（2026-07-25 用户定：新导入排最前）：任务级，批内按到达顺序保序
+      let mut front_anchor: HashMap<String, usize> = HashMap::new();
       for msg in rx {
         match msg {
           Phase3Msg::Built { item, asset, icon } => {
-            register_one(state, lib, root, files, groups, item, asset, icon, &mut deferred, on_event)
+            register_one(state, lib, root, files, groups, item, asset, icon, &mut deferred, &mut front_anchor, on_event)
           }
           Phase3Msg::Broken { unit, reason } => state.outcome.failed.push(FailedItem {
             path: unit_path(files, groups, unit).to_string_lossy().into_owned(),
@@ -457,6 +459,7 @@ fn register_one(
   asset: AssetMeta,
   icon: Option<String>,
   deferred: &mut HashMap<String, Vec<DeferredConflict>>,
+  front_anchor: &mut HashMap<String, usize>,
   on_event: &impl Fn(ImportEvent),
 ) {
   state.dirty = true; // Placement 必改 folders.json，先标脏让节流落盘生效
@@ -467,7 +470,7 @@ fn register_one(
     if let Some(ext) = icon {
       l.format_icons.insert(ext);
     }
-    let placement = ops::add_placement(l, asset_id.clone(), item.target_folder.clone(), name, true);
+    let placement = ops::add_placement(l, asset_id.clone(), item.target_folder.clone(), name, true, front_anchor);
     let view = placement_view(&root_buf, &asset, &placement, &l.format_icons);
     let twins = deferred.remove(&asset_id).unwrap_or_default();
     let conflicts =

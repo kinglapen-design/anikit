@@ -94,6 +94,10 @@ export type ImportEvent =
 const FLUSH_MS = 250;
 let assetBuffer: PlacementView[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
+// 流式导入前插锚点（2026-07-25 用户定：新导入排视口最前）：
+// 本批已前插数——flush 时 splice 到锚点位并后移（批内保序，与后端 add_placement 锚点同语义；
+// finished 后 refresh 全量对齐，目标文件夹段首位置以后端为准）
+let importAnchor: number | null = null;
 
 // 收件箱事件监听（3.2）：App 存活期注册一次，后端监听 inbox 目录自动入库
 let unlistenInbox: (() => void) | undefined;
@@ -315,6 +319,7 @@ export const useContentStore = defineStore("content", {
     onImportEvent(e: ImportEvent): void {
       switch (e.type) {
         case "started":
+          importAnchor = 0; // 新导入批次：从列表最前开始流入
           if (this.importProgress) {
             this.importProgress.total = e.total;
             this.importProgress.startedAt = Date.now(); // ETA 从扫描结束起算
@@ -329,7 +334,15 @@ export const useContentStore = defineStore("content", {
           if (!flushTimer) {
             flushTimer = setTimeout(() => {
               flushTimer = undefined;
-              if (assetBuffer.length > 0) this.placements.push(...assetBuffer.splice(0));
+              if (assetBuffer.length > 0) {
+                const batch = assetBuffer.splice(0);
+                if (importAnchor !== null) {
+                  this.placements.splice(importAnchor, 0, ...batch);
+                  importAnchor += batch.length;
+                } else {
+                  this.placements.push(...batch);
+                }
+              }
             }, FLUSH_MS);
           }
           break;
@@ -337,11 +350,12 @@ export const useContentStore = defineStore("content", {
           clearTimeout(flushTimer);
           flushTimer = undefined;
           assetBuffer = [];
+          importAnchor = null;
           this.importProgress = null;
           if (e.failed.length > 0) this.importFailed = e.failed;
           // 冲突挂起队列：导入全部完成后逐个询问（10_重复添加提示）
           if (e.conflicts.length > 0) this.importConflicts = e.conflicts;
-          void this.refresh(); // 兜底全量对齐（链接 / 层级以最终态为准）
+          void this.refresh(); // 兜底全量对齐（链接 / 层级 / 目标文件夹段首以最终态为准）
           break;
       }
     },
