@@ -21,7 +21,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="preview-window">
+  <div class="preview-window" :class="{ fullscreen: preview.fullscreen }">
     <PreviewTitleBar v-if="!preview.fullscreen" window />
     <section class="pw-body">
       <PreviewPanel />
@@ -55,5 +55,16 @@ onMounted(async () => {
   position: relative;
   flex: none;
   padding: var(--space-4) var(--space-12) var(--space-12) var(--space-12);
+}
+/* 全屏：去窗口内边距，播放条/帧条脱离文档流浮在画面底部（画面按整个窗口铺满，2026-07-26 用户定） */
+.preview-window.fullscreen {
+  padding: 0;
+}
+.preview-window.fullscreen .pw-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
 }
 </style>

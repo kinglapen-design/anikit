@@ -123,10 +123,10 @@ export const usePreviewStore = defineStore("preview", {
     visualH(): number {
       return this.rotate % 180 === 0 ? this.naturalH : this.naturalW;
     },
-    // 适合窗口缩放（小图也铺满；Eagle 适合窗口即铺满）
+    // 适合窗口缩放（小图也铺满；Eagle 适合窗口即铺满；全屏时无留白——画面按整个窗口铺满，2026-07-26 用户定）
     fitZoom(): number {
       if (!this.viewW || !this.viewH || !this.visualW || !this.visualH) return 1;
-      const pad = 48;
+      const pad = this.fullscreen ? 0 : 48;
       return Math.min(
         (this.viewW - pad) / this.visualW,
         (this.viewH - pad) / this.visualH,

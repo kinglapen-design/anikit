@@ -89,6 +89,14 @@ const items = computed(() => content.visiblePlacements);
   z-index: 1500;
   background: var(--c1);
 }
+/* 全屏时播放条/帧条脱离文档流浮在画面底部（2026-07-26 用户：画面按整个窗口铺满，挡住就挡住） */
+.preview-root.fullscreen .preview-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
 .preview-section {
   display: flex;
   flex-direction: column;
