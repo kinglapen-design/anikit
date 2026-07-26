@@ -265,6 +265,51 @@ mod tests {
     img.save(path).unwrap();
   }
 
+  /// 帧条生成耗时基准（#[ignore] 手动跑，--release --nocapture）：定位 GIF 帧条慢根因
+  #[test]
+  #[ignore]
+  fn bench_frame_strip_stages() {
+    use std::time::Instant;
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    // 1920×1080 噪声图（模拟解包大帧；纯色会掩盖重采样成本）
+    let mut img = image::RgbaImage::new(1920, 1080);
+    for (i, p) in img.pixels_mut().enumerate() {
+      let v = (i % 255) as u8;
+      *p = image::Rgba([v, 255 - v, ((i / 1920) % 255) as u8, 255]);
+    }
+    let dyn_img = image::DynamicImage::ImageRgba8(img);
+    let webp_path = root.join("big-00001.webp");
+    save_webp(&dyn_img, &webp_path).unwrap();
+    let png_path = root.join("big-00001.png");
+    dyn_img.save(&png_path).unwrap();
+
+    for (label, path) in [("webp-1080p", &webp_path), ("png-1080p", &png_path)] {
+      let t = Instant::now();
+      let img = load_origin(path).unwrap();
+      let t_load = t.elapsed();
+      let t = Instant::now();
+      let strip = shrink_to_edge(img.clone(), STRIP_SHORT_EDGE);
+      let t_resize = t.elapsed();
+      let t = Instant::now();
+      save_webp(&strip, &root.join(format!("out-{label}.webp"))).unwrap();
+      let t_enc = t.elapsed();
+      println!("{label}: load={t_load:?} resize={t_resize:?} encode={t_enc:?}");
+    }
+    // 小图对照（用户序列帧量级 500×700）
+    let small = root.join("small-00001.png");
+    image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(500, 700, |x, y| {
+      image::Rgba([(x % 255) as u8, (y % 255) as u8, 128, 255])
+    }))
+    .save(&small)
+    .unwrap();
+    let t = Instant::now();
+    let img = load_origin(&small).unwrap();
+    let strip = shrink_to_edge(img, STRIP_SHORT_EDGE);
+    save_webp(&strip, &root.join("out-small.webp")).unwrap();
+    println!("png-500x700 total: {:?}", t.elapsed());
+  }
+
   #[test]
   fn probe_reads_image_dimensions() {
     let dir = tempfile::tempdir().unwrap();

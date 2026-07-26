@@ -60,3 +60,15 @@ image-webp = "0.2"
 
 [dev-dependencies]
 tempfile = "3"
+
+# dev 构建优化（2026-07-26 实测定位，动图帧条 5-10 秒根因）：
+# 纯 debug（opt-level 0）图像解码 / 重采样慢 10-30 倍（1080p webp 帧条 725ms/帧）。
+# 自身 crate O1：image crate 的 imageops::resize 是泛型函数，在调用方（我们）单态化编译，
+# 只优化依赖 crate 管不到它；O1 对数值重采样提升一个量级，编译速度损失可忽略
+[profile.dev]
+opt-level = 1
+
+# 全部依赖 O2（解码链在依赖 crate 内的部分：webp/png/psd 解码等）；
+# 依赖只编一次，不影响日常增量构建；release 不受影响
+[profile.dev.package."*"]
+opt-level = 2
