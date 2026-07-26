@@ -106,6 +106,16 @@ function onDblClick(): void {
   else preview.fit();
 }
 
+// 逐帧步进（, 和 . = YouTube / mpv / Premiere / Animate 同约定，2026-07-26 用户定）：
+// 序列帧/动图步一帧（stepFrame 内含步进即暂停）；视频暂停后 ±1/24s；其他类型无逐帧
+function stepOneFrame(delta: number): void {
+  if (preview.kind === "sequence" || preview.kind === "anim") preview.stepFrame(delta);
+  else if (preview.kind === "video") {
+    media.pause();
+    media.seekBy(delta / 24);
+  }
+}
+
 function onKeydown(e: KeyboardEvent): void {
   const t = e.target as HTMLElement;
   if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return; // 笔记编辑中不抢键（5.2）
@@ -114,19 +124,17 @@ function onKeydown(e: KeyboardEvent): void {
       if (preview.fullscreen) void preview.setFullscreen(false);
       else preview.close();
       break;
-    case "ArrowLeft":
-      if (preview.kind === "sequence" || preview.kind === "anim") preview.stepFrame(-1);
-      else if (preview.kind === "video") {
-        media.pause(); // 逐帧步进即暂停（2026-07-26 用户，与 stepFrame 同语义）
-        media.seekBy(-1 / 24);
-      } else void preview.step(-1);
+    case "ArrowLeft": // ←/→ 全类型统一 = 上/下一个素材（2026-07-26 用户定，逐帧让位给 , .）
+      void preview.step(-1);
       break;
     case "ArrowRight":
-      if (preview.kind === "sequence" || preview.kind === "anim") preview.stepFrame(1);
-      else if (preview.kind === "video") {
-        media.pause();
-        media.seekBy(1 / 24);
-      } else void preview.step(1);
+      void preview.step(1);
+      break;
+    case ",":
+      stepOneFrame(-1);
+      break;
+    case ".":
+      stepOneFrame(1);
       break;
     case " ":
       if (preview.kind === "sequence" || preview.kind === "anim") preview.togglePlay();
