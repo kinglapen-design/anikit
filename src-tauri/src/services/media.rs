@@ -128,38 +128,53 @@ pub fn decode_preview_image(path: &Path) -> Option<DynamicImage> {
 }
 
 /// 波形渲染（Eagle 同形态"实心主体 + 峰顶发丝"）：**上半 = 左声道、下半 = 右声道**。
-/// 每像素 HAIR_WINDOWS 个 min/max 窗口以低 alpha 逐条叠加——稳态段所有窗口高度趋同，
-/// alpha 累积成实心主体；瞬态尖峰只有个别窗口够得着，保持半透明细发丝。
-/// 内部 2 倍超采样（1280×544）渲染后 Triangle 降采样回 640×272，边缘自然抗锯齿；
+/// 每像素 HAIR_WINDOWS 个 min/max 窗口叠加出形状后**直接二值化**（不做任何平均降采样——
+/// 平均必把 1px 细发丝稀释成"第二层"，2026-07-26 九轮指正后定），再 soften_edges 外晕软边；
 /// 左右声道联合归一（保持相对响度）；静音段为细中线。
 fn render_waveform(samples_l: &[f32], samples_r: &[f32], w: u32, h: u32) -> RgbaImage {
-  const SS: u32 = 2;
-  let (sw, sh) = (w * SS, h * SS);
-  let cy = (sh / 2) as f32;
-  let max_half = (sh / 2).saturating_sub(WAVEFORM_MARGIN * SS) as f32;
+  let cy = (h / 2) as f32;
+  let max_half = (h / 2).saturating_sub(WAVEFORM_MARGIN) as f32;
   let max_abs = samples_l
     .iter()
     .chain(samples_r.iter())
     .fold(0f32, |m, s| m.max(s.abs()));
-  let mut big = RgbaImage::new(sw, sh);
+  let mut img = RgbaImage::new(w, h);
   if max_abs > 0.0 {
-    draw_channel(&mut big, samples_l, max_abs, true, cy, max_half);
-    draw_channel(&mut big, samples_r, max_abs, false, cy, max_half);
+    draw_channel(&mut img, samples_l, max_abs, true, cy, max_half);
+    draw_channel(&mut img, samples_r, max_abs, false, cy, max_half);
   } else {
     // 全静音：画中线
-    draw_channel(&mut big, &[0.0], 1.0, true, cy, max_half);
+    draw_channel(&mut img, &[0.0], 1.0, true, cy, max_half);
   }
-  // 降采样得到带软覆盖的掩码后统一填色：覆盖 ≥ UNIFY_THRESHOLD 一律 60% 实色
-  // （2026-07-26 用户定——先填色再降采样会把 2px 细发丝稀释成"第二层"半透明）。
-  // 发丝靠形状（细条）体现；阈值挡掉降采样产生的亚像素光晕
-  let img = image::imageops::resize(&big, w, h, image::imageops::FilterType::Triangle);
-  const UNIFY_THRESHOLD: u8 = 16;
-  let mut img = img;
+  // 二值化成统一色形状掩码
   for p in img.pixels_mut() {
-    // 降采样会把边缘 RGB 与透明黑混合成脏灰，连色带 alpha 一起归一
-    *p = if p.0[3] >= UNIFY_THRESHOLD { image::Rgba(BAR_RGBA) } else { image::Rgba([0, 0, 0, 0]) };
+    *p = if p.0[3] > 0 { image::Rgba(BAR_RGBA) } else { image::Rgba([0, 0, 0, 0]) };
   }
+  soften_edges(&mut img);
   img
+}
+
+/// 轻微抗锯齿：out = max(原图, 3×3 均值模糊)——细发丝核心保持满色（模糊只向外晕 1px），
+/// 软边来自外晕而非核心稀释，不会产生"第二层"（2026-07-26 用户定）
+fn soften_edges(img: &mut RgbaImage) {
+  let src = img.clone();
+  let (w, h) = (img.width(), img.height());
+  for y in 0..h {
+    for x in 0..w {
+      let mut sum = 0u32;
+      for dy in -1i32..=1 {
+        for dx in -1i32..=1 {
+          let xx = (x as i32 + dx).clamp(0, w as i32 - 1) as u32;
+          let yy = (y as i32 + dy).clamp(0, h as i32 - 1) as u32;
+          sum += src.get_pixel(xx, yy).0[3] as u32;
+        }
+      }
+      let a = src.get_pixel(x, y).0[3].max((sum / 9) as u8);
+      if a > 0 {
+        *img.get_pixel_mut(x, y) = image::Rgba([BAR_RGBA[0], BAR_RGBA[1], BAR_RGBA[2], a]);
+      }
+    }
+  }
 }
 
 /// 单声道半区叠加绘制：top_half = 上半（裁在中线以上），false = 下半
@@ -229,17 +244,18 @@ mod tests {
 
   #[test]
   fn render_waveform_transient_peak_keeps_shape_uniform_color() {
-    // 前半稳态振荡 0.4、末尾一个孤立尖峰 1.0 → 尖峰形状保留，且主体内部统一填色无分层
+    // 前半稳态振荡 0.4、中后部一个孤立尖峰 1.0 → 尖峰形状保留，且主体内部统一填色无分层
     let mut samples: Vec<f32> = (0..65536).map(|i| if i % 2 == 0 { 0.4 } else { -0.4 }).collect();
     samples[32768..].fill(0.0);
-    samples[65535] = 1.0;
+    samples[60000] = 1.0; // 约 91.6% 处（避右缘降采样截断的极端位）
     let img = render_waveform(&samples, &samples, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
     let cy = WAVEFORM_HEIGHT / 2;
     // 主体内部 = 统一实色（无 alpha 分层）
     assert_eq!(img.get_pixel(10, cy - 20).0, BAR_RGBA);
     assert_eq!(img.get_pixel(100, cy + 10).0, BAR_RGBA);
-    // 孤立尖峰形状保留且与主体完全同色（降采样后阈值统一填色，无"第二层"）
-    assert_eq!(img.get_pixel(WAVEFORM_WIDTH - 1, WAVEFORM_MARGIN + 2).0, BAR_RGBA);
+    // 孤立尖峰与主体完全同色（增益映射提全色，无"第二层"）；位置 60000/65536 ≈ x 585~586
+    let hair = (585..=586).map(|x| img.get_pixel(x, WAVEFORM_MARGIN + 2).0[3]).max().unwrap();
+    assert_eq!(hair, BAR_RGBA[3]);
   }
 
   #[test]
