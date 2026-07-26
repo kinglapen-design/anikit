@@ -21,8 +21,6 @@ const PCM_RATE: u32 = 8000;
 pub const WAVEFORM_WIDTH: u32 = 640;
 /// 波形图高（px）
 pub const WAVEFORM_HEIGHT: u32 = 272;
-/// 每像素叠加的 min/max 窗口数：窗口越多形状细节越丰富（2026-07-26 用户定）
-const HAIR_WINDOWS: usize = 16;
 /// 波形柱色（#F8F5FA 60% alpha，2026-07-26 用户定，与 font-icon-3 同档观感）
 const BAR_RGBA: [u8; 4] = [0xF8, 0xF5, 0xFA, 153];
 /// 波形上下留白（px）
@@ -124,9 +122,9 @@ pub fn decode_preview_image(path: &Path) -> Option<DynamicImage> {
 }
 
 /// 波形渲染（Eagle 同形态"实心主体 + 峰顶发丝"）：**上半 = 左声道、下半 = 右声道**。
-/// 每像素 HAIR_WINDOWS 个 min/max 窗口满色绘制形状（峰值辨识度不丢），
-/// soften_edges 做唯一的透明度变化——边缘向外 1px 柔化（2026-07-26 用户定：
-/// 这不是透明度问题，只是边缘柔化问题）。左右声道联合归一；静音段为细中线。
+/// 每像素 1 个 min/max 窗口满色纵线（细发丝恒 1px 宽、峰值辨识度不丢），
+/// 仅竖向边缘柔化（横向零晕染，2026-07-26 用户定：线条要细不要粗硬）。
+/// 左右声道联合归一；静音段为细中线。
 fn render_waveform(samples_l: &[f32], samples_r: &[f32], w: u32, h: u32) -> RgbaImage {
   let cy = (h / 2) as f32;
   let max_half = (h / 2).saturating_sub(WAVEFORM_MARGIN) as f32;
@@ -142,26 +140,23 @@ fn render_waveform(samples_l: &[f32], samples_r: &[f32], w: u32, h: u32) -> Rgba
     // 全静音：画中线
     draw_channel(&mut img, &[0.0], 1.0, true, cy, max_half);
   }
-  soften_edges(&mut img);
+  soften_vertical(&mut img);
   img
 }
 
-/// 边缘柔化（唯一的透明度变化，2026-07-26 用户定）：out = max(原图, 3×3 均值模糊)——
-/// 形状内部（含每根细发丝）保持满色不稀释，只从边缘向外晕 1px 软边
-fn soften_edges(img: &mut RgbaImage) {
+/// 仅竖向边缘柔化：横向绝不晕染（细发丝恒 1px 宽），峰尖与主体上下缘向外 1px 过渡
+/// （max(原图, 竖向 3 行均值)，核心零稀释）
+fn soften_vertical(img: &mut RgbaImage) {
   let src = img.clone();
   let (w, h) = (img.width(), img.height());
   for y in 0..h {
     for x in 0..w {
       let mut sum = 0u32;
       for dy in -1i32..=1 {
-        for dx in -1i32..=1 {
-          let xx = (x as i32 + dx).clamp(0, w as i32 - 1) as u32;
-          let yy = (y as i32 + dy).clamp(0, h as i32 - 1) as u32;
-          sum += src.get_pixel(xx, yy).0[3] as u32;
-        }
+        let yy = (y as i32 + dy).clamp(0, h as i32 - 1) as u32;
+        sum += src.get_pixel(x, yy).0[3] as u32;
       }
-      let a = src.get_pixel(x, y).0[3].max((sum / 9) as u8);
+      let a = src.get_pixel(x, y).0[3].max((sum / 3) as u8);
       if a > 0 {
         *img.get_pixel_mut(x, y) = image::Rgba([BAR_RGBA[0], BAR_RGBA[1], BAR_RGBA[2], a]);
       }
@@ -169,29 +164,26 @@ fn soften_edges(img: &mut RgbaImage) {
   }
 }
 
-/// 单声道半区叠加绘制：top_half = 上半（裁在中线以上），false = 下半
+/// 单声道半区绘制：每像素 1 个 min/max 窗口满色纵线（多窗口对满色无意义：
+/// max of maxes 等价于一个大窗口）；top_half = 上半（裁在中线以上），false = 下半
 fn draw_channel(img: &mut RgbaImage, samples: &[f32], max_abs: f32, top_half: bool, cy: f32, max_half: f32) {
   let (sw, sh) = (img.width(), img.height());
-  let windows = sw as usize * HAIR_WINDOWS;
-  let step = samples.len() as f32 / windows as f32;
+  let step = samples.len() as f32 / sw as f32;
   let (lo_bound, hi_bound) = if top_half { (cy - max_half, cy) } else { (cy, cy + max_half) };
-  for i in 0..windows {
-    let s0 = (i as f32 * step) as usize;
-    let s1 = (((i + 1) as f32 * step) as usize).max(s0 + 1).min(samples.len());
+  for x in 0..sw {
+    let s0 = (x as f32 * step) as usize;
+    let s1 = (((x + 1) as f32 * step) as usize).max(s0 + 1).min(samples.len());
     let (mut hi, mut lo) = (0f32, 0f32);
     for &s in &samples[s0..s1] {
       hi = hi.max(s);
       lo = lo.min(s);
     }
-    // 该窗口的纵线区间 [cy - hi*H, cy - lo*H]，裁剪到所属半区
+    // 该列的纵线区间 [cy - hi*H, cy - lo*H]，裁剪到所属半区
     let y0 = (cy - (hi / max_abs) * max_half).max(lo_bound);
     let y1 = (cy - (lo / max_abs) * max_half).min(hi_bound);
     if y1 < y0 {
       continue;
     }
-    let x = (i / HAIR_WINDOWS) as u32;
-    // 形状一律满色绘制（2026-07-26 用户定：透明度渐变会抹去峰值辨识度——
-    // 这不是透明度问题，只是边缘柔化问题）
     for y in (y0 as u32)..=(y1 as u32).min(sh - 1) {
       img.put_pixel(x, y, image::Rgba(BAR_RGBA));
     }
