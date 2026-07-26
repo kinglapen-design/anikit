@@ -7,7 +7,7 @@
 //! - sequence：序列帧检测与打包入库（PRD 01-2.5，4.1）
 //! - psb：PSB 合成图解码（psd crate 不支持 PSB，自研轻量解析只取内嵌合成图，4.2 补）
 //! - preview_queue：预览解析队列（4.3 预览窗口：单 worker + 代际作废，切换素材不堆积）
-//! - thumb_formats：PSD / PSB / SVG 解码补充（psd / resvg crate + psb.rs，无 Adobe 依赖，4.2）
+//! - thumb_formats：图片格式解码注册表（新格式 = 目录内新增一个适配器文件 + ADAPTERS 一行；4.2）
 //! - thumbnail：缩略图与图片宽高探测（缓存，可重建）
 //! - views：Placement 列表视图（中间面板与导入事件共用）
 

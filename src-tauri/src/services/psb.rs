@@ -136,7 +136,7 @@ fn unpack_bits(data: &[u8], expected: usize) -> Option<Vec<u8>> {
       let count = (1i16 - n as i16) as usize;
       let b = *data.get(i)?;
       i += 1;
-      out.extend(std::iter::repeat_n(b, count));
+      out.extend(std::iter::repeat(b).take(count));
     }
   }
   out.truncate(expected);
@@ -223,11 +223,13 @@ mod tests {
   use std::fs;
 
   /// 构造最小 PSB：头 + 三个空节 + image data
+  #[allow(clippy::too_many_arguments)] // 测试构造器按 PSB 头字段平铺，读比封装 struct 更直接
   fn make_psb(path: &Path, channels: u16, w: u32, h: u32, depth: u16, mode: u16, compression: u16, tail: &[u8]) {
     make_variant(path, b"8BPB", channels, w, h, depth, mode, compression, tail);
   }
 
   /// 同 make_psb 但自定义签名（8BPS+version2 变体：部分工具链导出，按版本号判 PSB 结构）
+  #[allow(clippy::too_many_arguments)] // 测试构造器按 PSB 头字段平铺，读比封装 struct 更直接
   fn make_variant(path: &Path, sig: &[u8; 4], channels: u16, w: u32, h: u32, depth: u16, mode: u16, compression: u16, tail: &[u8]) {
     let mut data = Vec::new();
     data.extend_from_slice(sig);

@@ -110,7 +110,8 @@ struct Phase2 {
 
 /// 阶段 3 → 4 的消息：建档成功（工作项 + 元数据 + 格式图标就绪的扩展名）/ 失败（原因）
 enum Phase3Msg {
-  Built { item: WorkItem, asset: AssetMeta, icon: Option<String> },
+  // AssetMeta 体积大，装箱压低 enum 判别成本（clippy large_enum_variant）
+  Built { item: WorkItem, asset: Box<AssetMeta>, icon: Option<String> },
   Broken { unit: Unit, reason: String },
 }
 
@@ -243,7 +244,12 @@ fn prepare_folders(
   files: &[PendingFile],
 ) -> Result<(), String> {
   let created = with_lib(lib, state, |l| {
-    files.iter().filter(|f| !f.chain.is_empty()).fold(false, |acc, f| ops::ensure_chain(l, target, &f.chain) || acc)
+    // 不用 any：ensure_chain 有建文件夹副作用，必须每条链都跑到，不能短路
+    let mut created = false;
+    for f in files.iter().filter(|f| !f.chain.is_empty()) {
+      created |= ops::ensure_chain(l, target, &f.chain);
+    }
+    created
   })?;
   state.dirty |= created;
   Ok(())
@@ -272,7 +278,7 @@ fn dedup_phase(
     for (unit, hash) in units {
       let chain = unit_chain(files, groups, *unit);
       match classify_one(l, &by_hash, &mut batch, &root_buf, target, chain, *unit, hash, merge_mark) {
-        Classified::Conflict(u, c) => immediate.push((u, c)),
+        Classified::Conflict(u, c) => immediate.push((u, *c)),
         Classified::Merge(i, id) => phase.merges.push(MergeItem { file_idx: i, asset_id: id }),
         Classified::Deferred(d) => phase.deferred.push(d),
         Classified::Work(w) => phase.work.push(w),
@@ -295,7 +301,8 @@ fn dedup_phase(
 
 /// 查重分类结果（阶段 2 锁内）
 enum Classified {
-  Conflict(Unit, ConflictItem),
+  // ConflictItem 体积大，装箱压低 enum 判别成本（clippy large_enum_variant）
+  Conflict(Unit, Box<ConflictItem>),
   Merge(usize, String),
   Deferred(DeferredConflict),
   Work(WorkItem),
@@ -326,7 +333,7 @@ fn classify_one(
         return Classified::Merge(idx, meta.id.clone());
       }
     }
-    Classified::Conflict(unit, conflict_of(l, root, meta, folder_id))
+    Classified::Conflict(unit, Box::new(conflict_of(l, root, meta, folder_id)))
   } else if let Some(twin) = batch.get(hash) {
     Classified::Deferred(DeferredConflict { unit, target_folder: folder_id, twin_id: twin.clone() })
   } else {
@@ -359,7 +366,7 @@ fn pipeline(
       for msg in rx {
         match msg {
           Phase3Msg::Built { item, asset, icon } => {
-            register_one(state, lib, root, files, groups, item, asset, icon, &mut deferred, &mut front_anchor, on_event)
+            register_one(state, lib, root, files, groups, item, *asset, icon, &mut deferred, &mut front_anchor, on_event)
           }
           Phase3Msg::Broken { unit, reason } => state.outcome.failed.push(FailedItem {
             path: unit_path(files, groups, unit).to_string_lossy().into_owned(),
@@ -394,7 +401,7 @@ fn produce(
       return;
     }
     let msg = match build_one(root, source, imported_from, files, groups, &item) {
-      Ok((asset, icon)) => Phase3Msg::Built { item, asset, icon },
+      Ok((asset, icon)) => Phase3Msg::Built { item, asset: Box::new(asset), icon },
       Err(reason) => Phase3Msg::Broken { unit: item.unit, reason },
     };
     if tx.send(msg).is_err() {

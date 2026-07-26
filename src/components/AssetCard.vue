@@ -87,6 +87,9 @@ const meta = computed(() =>
 .thumb {
   position: relative;
   flex: none;
+  display: flex; /* 格式图标居中缩到 50%（2026-07-25 用户定）；内容缩略图仍 width/height 100% */
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--border-2);
   border-radius: var(--radius-8);
   overflow: hidden;
@@ -107,8 +110,14 @@ const meta = computed(() =>
   /* 无缩略图占位：中间面板底色 C1 */
   background: var(--c1);
 }
-.img.contain,
+.img.contain {
+  object-fit: contain;
+}
+/* shell 格式图标：最大边 = 容器 50%（左右各留 1/4，Eagle 口径——小一点，
+   不与真正的内容缩略图抢视觉噪音，2026-07-25 用户定） */
 .img.icon {
+  width: 50%;
+  height: 50%;
   object-fit: contain;
 }
 /* 格式角标：图片左上各 4px；深色实底（降噪）/ 内边距 0 4 / 圆角 4 / 角标文字 10/16 粗体 60% */

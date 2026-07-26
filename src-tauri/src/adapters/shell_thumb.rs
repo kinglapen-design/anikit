@@ -107,14 +107,16 @@ mod imp {
     if w <= 0 || h <= 0 {
       return None;
     }
-    let mut bmi = BITMAPINFO::default();
-    bmi.bmiHeader = BITMAPINFOHEADER {
-      biSize: size_of::<BITMAPINFOHEADER>() as u32,
-      biWidth: w,
-      biHeight: -h, // 负 = 顶向下行序
-      biPlanes: 1,
-      biBitCount: 32,
-      biCompression: BI_RGB.0,
+    let mut bmi = BITMAPINFO {
+      bmiHeader: BITMAPINFOHEADER {
+        biSize: size_of::<BITMAPINFOHEADER>() as u32,
+        biWidth: w,
+        biHeight: -h, // 负 = 顶向下行序
+        biPlanes: 1,
+        biBitCount: 32,
+        biCompression: BI_RGB.0,
+        ..Default::default()
+      },
       ..Default::default()
     };
     let mut buf = vec![0u8; (w * h * 4) as usize];

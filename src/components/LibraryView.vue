@@ -16,7 +16,22 @@ const quickItems = [
   { key: "inbox", icon: "inbox", label: "收件箱" },
   { key: "recent", icon: "recent", label: "最近使用" },
   { key: "trash", icon: "trash", label: "回收站" },
-];
+] as const;
+
+// 数量口径（4.4）：全部=全部 Placement；未分类=root；收件箱=importedFrom=inbox 未摘标；
+// 最近使用 / 回收站对应 6.1 未开工，先不出数量标签
+function quickCount(key: (typeof quickItems)[number]["key"]): number | undefined {
+  switch (key) {
+    case "all":
+      return content.placements.length;
+    case "uncategorized":
+      return content.uncategorizedCount;
+    case "inbox":
+      return content.inboxCount;
+    default:
+      return undefined;
+  }
+}
 </script>
 
 <template>
@@ -29,7 +44,7 @@ const quickItems = [
           :key="q.key"
           :icon="q.icon"
           :label="q.label"
-          :count="q.key === 'all' ? content.placements.length : undefined"
+          :count="quickCount(q.key)"
           :selected="content.sidebarSelected === `quick:${q.key}`"
           @select="content.sidebarSelected = `quick:${q.key}`"
         />

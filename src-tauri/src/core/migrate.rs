@@ -25,7 +25,7 @@ pub fn migrate_library_if_needed(root: &Path) -> Result<(), DataError> {
   let files = data_files(root)?;
   let needs = files
     .iter()
-    .any(|p| file_version(p).map(|v| v < DATA_VERSION && v >= 1).unwrap_or(false));
+    .any(|p| file_version(p).map(|v| v < DATA_VERSION).unwrap_or(false));
   if !needs {
     return Ok(());
   }

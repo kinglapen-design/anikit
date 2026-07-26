@@ -46,7 +46,7 @@ pub fn generate(info_dir: &Path, origin: &Path, stem: &str) -> Option<String> {
   }
   log::warn!("webp 缩略图编码失败，退回 PNG：{}", origin.display());
   let png_name = format!("{stem}_thumbnail.png");
-  if thumb.save(&info_dir.join(&png_name)).is_ok() {
+  if thumb.save(info_dir.join(&png_name)).is_ok() {
     return Some(png_name);
   }
   None

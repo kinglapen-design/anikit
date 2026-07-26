@@ -257,10 +257,11 @@ const entries = computed(() => content.inboxDisk);
 .folder-icon {
   color: var(--font-icon-3);
 }
-/* 系统格式图标：缓存源图 256px，contain 缩进正方形图标位（与缩略图同 object-fit 口径，不新造 token） */
+/* 系统格式图标：缓存源图 256px，最大边 = 正方形图标位 50%（与素材卡片 / 列表行同一口径，
+   shell 小一点给内容缩略图让视觉噪音，2026-07-25 用户定） */
 .format-icon {
-  max-width: 48px;
-  max-height: 48px;
+  max-width: 50%;
+  max-height: 50%;
   object-fit: contain;
 }
 /* 扩展名角标文本：实底白字（格式角标 7 组实色映射，01 样式 token 01-6） */

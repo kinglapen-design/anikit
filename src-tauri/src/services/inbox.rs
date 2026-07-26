@@ -158,7 +158,7 @@ fn modified_millis(meta: &std::fs::Metadata) -> u64 {
 
 /// 按名称小写排序（快层 / 慢层同口径，前端整体替换时顺序稳定）
 fn sort_entries(out: &mut [InboxEntry]) {
-  out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+  out.sort_by_key(|e| e.name.to_lowercase());
 }
 
 /// 文件扩展名（小写）

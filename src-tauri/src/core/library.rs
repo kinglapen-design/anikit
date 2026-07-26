@@ -148,12 +148,24 @@ pub fn open(path: &Path) -> Result<Library, DataError> {
     }
   }
   migrate::migrate_library_if_needed(path)?;
-  let folders: FoldersFile = read_json(&path.join(FOLDERS_FILE))?;
+  let mut folders: FoldersFile = read_json(&path.join(FOLDERS_FILE))?;
   let tags: TagsFile = read_json(&path.join(TAGS_FILE))?;
   let pins: PinsFile = read_json(&path.join(PINS_FILE))?;
   let recycle: RecycleFile = read_json(&path.join(RECYCLE_FILE))?;
   let recent: RecentFile = read_json(&path.join(RECENT_FILE))?;
-  let index = LibraryIndex::build(&folders, load_assets(path)?);
+  let assets = load_assets(path)?;
+  // 打开自检（2026-07-25 用户反馈：手动删 asstes/{ID}.info 后数量成永久错误）：
+  // 剔除指向缺失 info 的 Placement（内存与磁盘同清，数量统计随索引重建归零）。
+  // 落盘前先强制备份一份含脏数据的快照；备份失败则不写盘（只内存清理，防误删无可回滚）。
+  let removed = prune_missing_placements(&mut folders, &assets);
+  if removed > 0 {
+    log::warn!("打开自检剔除 {removed} 条指向缺失 info 的 Placement");
+    match backup::backup_library(path) {
+      Ok(_) => write_json(&path.join(FOLDERS_FILE), &folders)?,
+      Err(e) => log::error!("自检清理前备份失败，folders.json 保持原样（仅本会话内存清理）：{e}"),
+    }
+  }
+  let index = LibraryIndex::build(&folders, assets);
   backup::backup_if_stale(path);
   Ok(Library { root: path.to_path_buf(), folders, tags, pins, recycle, recent, index, format_icons: scan_format_icons(path) })
 }
@@ -181,6 +193,15 @@ fn load_assets(root: &Path) -> Result<Vec<AssetMeta>, DataError> {
     }
   }
   Ok(assets)
+}
+
+/// 打开自检：剔除 folders.items 中指向缺失资源（info 已不在 / metadata 未载入）的 Placement，
+/// 返回剔除条数。只动 Placement，不动文件夹节点与资源数据
+fn prune_missing_placements(folders: &mut FoldersFile, assets: &[AssetMeta]) -> usize {
+  let ids: HashSet<&str> = assets.iter().map(|a| a.id.as_str()).collect();
+  let before = folders.items.len();
+  folders.items.retain(|p| ids.contains(p.asset.as_str()));
+  before - folders.items.len()
 }
 
 /// folders.json 单一写点（01_开发规范 第 1 条）：全量保存文件夹树 + 全部 Placement。
@@ -299,6 +320,47 @@ mod tests {
     assert_eq!(lib.index.placements_by_folder["F01"].len(), 1);
     // 首次打开触发一次定时备份
     assert!(root.join(BACKUP_DIR).read_dir().unwrap().next().is_some());
+  }
+
+  /// 打开自检（2026-07-25 用户反馈）：手动删除 asstes/{ID}.info 后，指向它的 Placement
+  /// 必须剔除（内存计数即时正确，并落盘防永久错误数据）；落盘前强制备份含脏数据快照
+  #[test]
+  fn open_prunes_placements_pointing_to_missing_info() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    create(root).unwrap();
+
+    // 真实资源 AN-REAL 的 info 存在；AN-GONE 只有 Placement，info 已被用户手动删掉
+    let info = root.join("asstes/AN-REAL.info");
+    fs::create_dir_all(&info).unwrap();
+    fs::write(
+      info.join("metadata.json"),
+      r#"{
+        "version": 1, "id": "AN-REAL", "name": "在", "originName": "在.fla",
+        "ext": "fla", "size": 1, "importedAt": "2026-07-25T00:00:00+08:00",
+        "modifiedAt": "2026-07-25T00:00:00+08:00"
+      }"#,
+    )
+    .unwrap();
+    let folders: FoldersFile = serde_json::from_str(
+      r#"{
+        "version": 1,
+        "folders": [ { "id": "F01", "name": "人物", "parent": null, "order": 0 } ],
+        "items": [
+          { "asset": "AN-REAL", "folder": "F01", "name": "在.fla", "order": 0, "origin": true },
+          { "asset": "AN-GONE", "folder": "F01", "name": "没了.fla", "order": 1, "origin": true }
+        ]
+      }"#,
+    )
+    .unwrap();
+    write_json(&root.join(FOLDERS_FILE), &folders).unwrap();
+
+    let lib = open(root).unwrap();
+    assert_eq!(lib.index.placements_by_folder["F01"].len(), 1, "缺失 info 的 Placement 不进索引");
+    assert_eq!(lib.index.placements_by_folder["F01"][0].asset, "AN-REAL");
+    let persisted: FoldersFile = read_json(&root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(persisted.items.len(), 1, "folders.json 应落盘清理，防永久错误计数");
+    assert_eq!(persisted.items[0].asset, "AN-REAL");
   }
 
   #[test]

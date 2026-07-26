@@ -289,7 +289,7 @@ fn parse_sequence_mode(s: &str) -> Result<SequenceMode, String> {
 pub struct FolderNode {
   pub id: String,
   pub name: String,
-  /// 该文件夹直接 Placement 数（不含子文件夹）
+  /// 该文件夹递归 Placement 总数（含全部子文件夹；2026-07-25 用户定：整洁层级下直接数会大面积为 0）
   pub count: u32,
   pub children: Vec<FolderNode>,
 }
@@ -310,11 +310,11 @@ fn folder_tree(lib: &Library) -> Vec<FolderNode> {
     folders.sort_by_key(|f| f.order);
     folders
       .into_iter()
-      .map(|f| FolderNode {
-        id: f.id.clone(),
-        name: f.name.clone(),
-        count: lib.index.placements_by_folder.get(&f.id).map(|v| v.len()).unwrap_or(0) as u32,
-        children: children_of(lib, Some(&f.id)),
+      .map(|f| {
+        let children = children_of(lib, Some(&f.id));
+        let direct = lib.index.placements_by_folder.get(&f.id).map(|v| v.len()).unwrap_or(0) as u32;
+        let recursive = direct + children.iter().map(|c| c.count).sum::<u32>();
+        FolderNode { id: f.id.clone(), name: f.name.clone(), count: recursive, children }
       })
       .collect()
   }
@@ -394,7 +394,7 @@ mod tests {
   }
 
   #[test]
-  fn folder_tree_nests_and_counts_direct_placements() {
+  fn folder_tree_nests_and_counts_recursive_placements() {
     let h = make_lib();
     let src = h._dir.path().join("参考");
     std::fs::create_dir_all(src.join("人物")).unwrap();
@@ -404,7 +404,8 @@ mod tests {
 
     let tree = with_lib(&h, folder_tree);
     assert_eq!(tree.len(), 1);
-    assert_eq!((tree[0].name.as_str(), tree[0].count), ("参考", 1));
+    // count = 递归总数：父级"参考"= 自身 a.txt 1 + 子文件夹"人物" b.txt 1
+    assert_eq!((tree[0].name.as_str(), tree[0].count), ("参考", 2));
     assert_eq!((tree[0].children[0].name.as_str(), tree[0].children[0].count), ("人物", 1));
   }
 

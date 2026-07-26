@@ -3,9 +3,10 @@
 // 无子项时保留占位保证装饰图标列对齐。
 // 层级缩进 20px：子项展开箭头尖角（缩进 + 4）对齐父级装饰图标中心（缩进 + 24），
 // 即缩进 = 8/2 + gap 2 + padding 6 + 图标 16/2 = 20（8×8 图标无 0.5 偏差）。
+import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     icon: string;
     label: string;
@@ -21,6 +22,10 @@ withDefaults(
   { count: undefined, depth: 0, expandable: false, open: false, selected: false, last: false, guide: false, folderId: undefined },
 );
 const emit = defineEmits<{ toggle: []; select: [] }>();
+
+// 数量标签显示规则（2026-07-25 用户定）：0 不显示（去视觉噪音）；父级展开后隐藏——
+// 数量的作用是提醒"哪个文件夹里有文件"，展开后用户已在观察父级内容，折叠后重新显示
+const showCount = computed(() => props.count !== undefined && props.count > 0 && !props.open);
 </script>
 
 <template>
@@ -41,7 +46,7 @@ const emit = defineEmits<{ toggle: []; select: [] }>();
     >
       <AppIcon :name="icon" class="deco" />
       <span class="label">{{ label }}</span>
-      <span v-if="count !== undefined" class="count">{{ count.toLocaleString() }}</span>
+      <span v-if="showCount" class="count">{{ (count ?? 0).toLocaleString() }}</span>
     </button>
   </div>
 </template>

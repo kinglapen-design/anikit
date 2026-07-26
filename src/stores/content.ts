@@ -22,7 +22,7 @@ export interface PlacementView {
 export interface FolderNode {
   id: string;
   name: string;
-  count: number; // 该文件夹直接 Placement 数
+  count: number; // 该文件夹递归 Placement 总数（含全部子文件夹，2026-07-25 用户定）
   children: FolderNode[];
 }
 
@@ -186,6 +186,14 @@ export const useContentStore = defineStore("content", {
         default:
           return [];
       }
+    },
+    // 快速访问 item 数量（4.4 查缺补漏）：全部 / 未分类 / 收件箱接真实统计；
+    // 最近使用 / 回收站留 6.1，工作空间 / 标签 / 快捷入口占位视图不接（对应阶段未开工）
+    uncategorizedCount(state): number {
+      return state.placements.filter((p) => p.folderId === "root").length;
+    },
+    inboxCount(state): number {
+      return state.placements.filter((p) => p.importedFrom === "inbox").length;
     },
     // 文件夹卡片横排（03_中间面板）：仅文件夹视图显示直接子文件夹；
     // 快速访问视图一律不出文件夹区块（2026-07-22 用户定案；回收站保留文件夹随对应阶段另议）
