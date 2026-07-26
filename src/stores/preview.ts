@@ -173,7 +173,7 @@ export const usePreviewStore = defineStore("preview", {
         return;
       }
       this.filePath = p.thumbPath; // 秒显：info 缩略图（格式图标同路径，other 情形也先盖住旧图）
-      if (p.frameCount != null) {
+      if (p.frameCount != null && !p.animated) {
         this.kind = "sequence";
         const seq = await invoke<SequenceFrames>("list_sequence_frames", { assetId: p.assetId });
         if (this.current?.assetId !== p.assetId) return; // await 期间已切走

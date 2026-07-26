@@ -45,10 +45,11 @@ const DETAIL_DELAY: Duration = Duration::from_millis(200);
 static DETAIL_RUNNING: AtomicBool = AtomicBool::new(false);
 
 /// 自动导入白名单（小写比较）：可视素材扩展名（4.2 可出缩略图口径 + 2026-07-25 用户补视频
-/// mp4/mov/avi/mpeg4/m4v；音频待 5.1 波形/元数据就位再扩）；
+/// mp4/mov/avi/mpeg4/m4v + 2026-07-26 音频 mp3/wav/wma（5.1 波形/元数据就位，消化 4.4 留待））；
 /// 白名单以外一律不自动导入——不反向枚举工程格式（枚举不完，2026-07-25 用户定案）
 pub const AUTO_IMPORT_EXTS: &[&str] = &[
   "png", "jpg", "jpeg", "bmp", "webp", "gif", "psd", "psb", "svg", "ai", "mp4", "mov", "avi", "mpeg4", "m4v",
+  "mp3", "wav", "wma",
 ];
 
 /// 单文件可否自动导入：扩展名在白名单（无扩展名不可）

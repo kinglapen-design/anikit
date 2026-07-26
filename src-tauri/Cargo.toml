@@ -54,6 +54,9 @@ notify = "8"
 psd = "0.3"
 # 阶段 4.2：SVG 内容缩略图（usvg 解析 + tiny-skia 渲染，Linebender 维护，Apache-2.0 OR MIT）
 resvg = "0.47"
+# 阶段 5.1：WEBP 动图逐帧解码（image crate 的门面未暴露动画 API，直接用其底层实现；
+# 纯 Rust 无 C 依赖，is_animated / num_frames / duration_ms / read_frame）
+image-webp = "0.2"
 
 [dev-dependencies]
 tempfile = "3"

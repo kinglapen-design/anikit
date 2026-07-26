@@ -251,9 +251,23 @@ pub(crate) fn build_asset_with_id(
   let size = fs::metadata(&file.path).map(|m| m.len()).unwrap_or(0);
   store_file(&file.path, &dest, source)?;
 
-  let (width, height) = thumbnail::probe(&dest).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None));
+  // 5.1：动图（GIF/WEBP 动图）→ 视频 → 音频依次探测（按扩展名门禁，普通文件零开销）；
+  // sidecar 缺失 / 解码失败全部 None，退化为现状（格式图标保底），导入不失败
+  let anim = crate::services::anim::probe(&dest);
+  let video = crate::services::media::probe_video(&dest);
+  let audio = crate::services::media::probe_audio(&dest);
+  let (width, height) = if let Some(a) = anim {
+    (Some(a.width), Some(a.height))
+  } else if let Some(v) = video {
+    (Some(v.width), Some(v.height))
+  } else {
+    thumbnail::probe(&dest).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None))
+  };
   let thumb = thumbnail::generate(&info_dir, &dest, file_stem(&file.path).as_str());
-  let meta = make_meta(asset_id, file, &origin_name, size, hash, width, height, thumb, imported_from);
+  let mut meta = make_meta(asset_id, file, &origin_name, size, hash, width, height, thumb, imported_from);
+  meta.duration = anim.map(|a| a.duration_secs).or(video.map(|v| v.duration)).or(audio.map(|a| a.duration));
+  meta.frame_count = anim.map(|a| a.frame_count);
+  meta.bpm = audio.and_then(|a| a.bpm);
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
   Ok(meta)
 }
@@ -338,6 +352,7 @@ fn make_meta(
     width,
     height,
     duration: None,
+    bpm: None,
     rating: 0,
     links: Vec::new(),
     imported_at: now.clone(),
@@ -529,6 +544,9 @@ mod tests {
       thumb_kind: None,
       origin: true,
       frame_count: None,
+      animated: false,
+      duration: None,
+      bpm: None,
       imported_from: None,
     };
     let asset = serde_json::to_value(ImportEvent::Asset { placement: view }).unwrap();
@@ -539,7 +557,7 @@ mod tests {
         "placement": {
           "assetId": "AN-X", "folderId": "root", "name": "a.png",
           "w": 1, "h": null, "ext": "png", "thumbPath": null, "thumbKind": null, "origin": true,
-          "frameCount": null, "importedFrom": null
+          "frameCount": null, "animated": false, "duration": null, "bpm": null, "importedFrom": null
         }
       })
     );

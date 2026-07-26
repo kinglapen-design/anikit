@@ -15,7 +15,10 @@ export interface PlacementView {
   thumbPath: string | null; // 缩略图绝对路径，无则卡片显示占位底色
   thumbKind: "asset" | "formatIcon" | null; // 缩略图来源：格式图标为方形，卡片 contain 显示不裁切（4.2）
   origin: boolean;
-  frameCount: number | null; // 序列帧帧数；非序列帧为 null——据此把格式标签与名称后缀显示为"序列帧"
+  frameCount: number | null; // 序列帧帧数；动图（GIF/WEBP 动图）同字段（5.1）；皆非为 null
+  animated: boolean; // 动图标记（5.1）：与序列帧区分——序列帧显示"序列帧"角标/后缀，动图显示紫角标
+  duration: number | null; // 音视频 / 动图时长（秒，5.1）；无时长资源为 null——卡片标签显示 mm:ss
+  bpm: number | null; // 音频 BPM（只读内嵌标签，5.1）；无标签为 null
   importedFrom: string | null; // 导入渠道标记；"inbox" 且未摘标（root）= 收件箱"已导入"持久显示
 }
 
@@ -204,7 +207,7 @@ export const useContentStore = defineStore("content", {
       return [];
     },
     // 文件夹卡片缩略图（4.4）：每个文件夹的直接子项中，按 placements 顺序取第一个静态图片；
-    // 排除序列帧（frameCount）与 GIF/工程/矢量格式，右键自定义缩略图归 6.3
+    // 排除序列帧/动图（frameCount）与 GIF/工程/矢量格式，右键自定义缩略图归 6.3
     folderThumbMap(state): Map<string, string> {
       const map = new Map<string, string>();
       for (const p of state.placements) {

@@ -4,6 +4,8 @@ dist/
 
 # Rust / Tauri
 src-tauri/target/
+# ffmpeg sidecar 二进制（tools/fetch-ffmpeg.py 下载，不入库）
+src-tauri/binaries/
 
 # Python
 **/.venv/

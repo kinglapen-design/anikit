@@ -212,7 +212,8 @@ mod tests {
       ("a.mp4", true), // 视频纳入白名单（2026-07-25 用户补）
       ("a.m4v", true),
       ("a.mkv", false), // PRD 5.1 MVP 视频口径以外仍不自动导入
-      ("a.mp3", false), // 音频待 5.1 波形/元数据就位再扩
+      ("a.mp3", true), // 音频纳入白名单（5.1 波形/元数据就位，2026-07-26）
+      ("a.wma", true),
       ("无扩展名", false),
     ] {
       let p = dir.join(name);

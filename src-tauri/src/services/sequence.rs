@@ -187,6 +187,7 @@ pub(crate) fn build_sequence_asset(
     width,
     height,
     duration: None,
+    bpm: None,
     rating: 0,
     links: Vec::new(),
     imported_at: now.clone(),

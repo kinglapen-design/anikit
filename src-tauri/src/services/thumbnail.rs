@@ -53,11 +53,15 @@ pub fn generate(info_dir: &Path, origin: &Path, stem: &str) -> Option<String> {
 }
 
 /// 原图解码：image crate（jpg/png/gif/webp/bmp）→ PSD/SVG 解码补充（thumb_formats，4.2）
+/// → 视频首帧 / 音频波形（media，5.1 ffmpeg sidecar；缺失返回 None 退格式图标）
 fn load_origin(origin: &Path) -> Option<DynamicImage> {
   if let Ok(img) = image::open(origin) {
     return Some(img);
   }
-  thumb_formats::decode(origin).map(DynamicImage::ImageRgba8)
+  if let Some(img) = thumb_formats::decode(origin) {
+    return Some(DynamicImage::ImageRgba8(img));
+  }
+  crate::services::media::decode_preview_image(origin)
 }
 
 /// 格式图标缓存路径（cache/thumbs/{ext}.webp；无扩展名归 "file" 键）。

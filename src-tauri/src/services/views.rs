@@ -32,8 +32,14 @@ pub struct PlacementView {
   /// 缩略图来源（无缩略图为 null）
   pub thumb_kind: Option<ThumbKind>,
   pub origin: bool,
-  /// 序列帧帧数（PRD 01-2.5）；非序列帧为 null——前端据此把格式标签与名称后缀显示为"序列帧"
+  /// 序列帧帧数（PRD 01-2.5）；动图（GIF/WEBP 动图）同字段（5.1）；非序列帧非动图为 null
   pub frame_count: Option<u32>,
+  /// 动图标记（5.1）：frame_count 非空且 ext 为 gif/webp——前端据此与序列帧区分（角标 / 名称后缀）
+  pub animated: bool,
+  /// 音视频 / 动图时长（秒，5.1）；无时长资源为 null——前端卡片标签据此显示 mm:ss
+  pub duration: Option<f64>,
+  /// 音频 BPM（只读内嵌标签，5.1）；无标签为 null
+  pub bpm: Option<f64>,
   /// 导入渠道标记（PRD 01-2.3）："inbox" = 收件箱渠道；快速访问"已导入"据此持久显示未摘标资产
   pub imported_from: Option<String>,
 }
@@ -75,6 +81,9 @@ pub fn placement_view(root: &Path, meta: &AssetMeta, p: &Placement, icons: &Hash
     thumb_kind,
     origin: p.origin,
     frame_count: meta.frame_count,
+    animated: meta.frame_count.is_some() && matches!(meta.ext.as_str(), "gif" | "webp"),
+    duration: meta.duration,
+    bpm: meta.bpm,
     imported_from: meta.imported_from.clone(),
   }
 }

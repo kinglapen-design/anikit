@@ -73,6 +73,7 @@ dependencies = [
  "dirs 5.0.1",
  "drag",
  "image",
+ "image-webp",
  "log",
  "notify",
  "psd",

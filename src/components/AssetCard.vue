@@ -9,6 +9,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import { CARD_CAPTION_H, type Box } from "../lib/layouts";
 import { formatBadgeColor } from "../lib/formatBadge";
+import { formatDuration } from "../lib/formatDuration";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
 
@@ -20,18 +21,26 @@ defineEmits<{ preview: [] }>();
 const ui = useUiStore();
 const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
 const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
+// 动图（5.1）：GIF / WEBP 动图；与序列帧区分（序列帧同样带 frameCount）
+const isAnim = computed(() => props.asset.animated);
 // 序列帧（2026-07-22 用户定）：格式角标显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
-const isSeq = computed(() => props.asset.frameCount != null);
-const badge = computed(() => (isSeq.value ? "序列帧" : props.asset.ext.toUpperCase()));
+const isSeq = computed(() => props.asset.frameCount != null && !isAnim.value);
+// 角标文案：音频带 BPM 显示"格式 · BPM"（格式标签补齐为 格式 / BPM 值，05 进度 5.1；无设计参照待复验）
+const badge = computed(() => {
+  if (isSeq.value) return "序列帧";
+  const ext = props.asset.ext.toUpperCase();
+  return props.asset.bpm != null ? `${ext} · ${Math.round(props.asset.bpm)}` : ext;
+});
 // 角标徽章底色：格式实色（01_样式 token 01-6，7 组）
-const badgeColor = computed(() => formatBadgeColor(props.asset.ext, isSeq.value));
+const badgeColor = computed(() => formatBadgeColor(props.asset.ext, isSeq.value, isAnim.value));
 const displayName = computed(() =>
   isSeq.value ? `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧` : props.asset.name,
 );
-// 尺寸标签：fla 等无尺寸资源显示格式（阶段 5 插件补图后即有尺寸）
-const meta = computed(() =>
-  props.asset.w != null && props.asset.h != null ? `${props.asset.w} x ${props.asset.h}` : badge.value,
-);
+// 标签行：音视频改时长属性（mm:ss，5.1）；动图与其他按尺寸；fla 等无尺寸资源显示格式角标文案
+const meta = computed(() => {
+  if (props.asset.duration != null && !isAnim.value) return formatDuration(props.asset.duration);
+  return props.asset.w != null && props.asset.h != null ? `${props.asset.w} x ${props.asset.h}` : badge.value;
+});
 </script>
 
 <template>

@@ -45,6 +45,9 @@ pub struct AssetMeta {
   pub height: Option<u32>,
   #[serde(default)]
   pub duration: Option<f64>,
+  /// 音频 BPM（只读文件内嵌标签 TBPM/bpm，无标签为 null——不做自动节拍检测，2026-07-26 用户定）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub bpm: Option<f64>,
   /// 0-5 星评分
   #[serde(default)]
   pub rating: u8,

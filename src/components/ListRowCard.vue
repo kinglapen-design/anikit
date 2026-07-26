@@ -23,8 +23,9 @@ const size = computed(() =>
     ? `${props.asset.w} x ${props.asset.h}`
     : props.asset.ext.toUpperCase(),
 );
-// 序列帧（2026-07-22 用户定）：格式列显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
-const isSeq = computed(() => props.asset.frameCount != null);
+// 序列帧（2026-07-22 用户定）：格式列显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）；
+// 动图（5.1）同带 frameCount，按 animated 区分——格式列显示扩展名大写
+const isSeq = computed(() => props.asset.frameCount != null && !props.asset.animated);
 const format = computed(() => (isSeq.value ? "序列帧" : props.asset.ext.toUpperCase()));
 const displayName = computed(() =>
   isSeq.value ? `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧` : props.asset.name,
