@@ -55,7 +55,8 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       });
       return el;
     },
-    // 解析播放源并装载（转码可能数十秒，期间 transcoding=true）
+    // 解析播放源并装载（转码可能数十秒，期间 transcoding=true）；
+    // 装载完成即自动播放（2026-07-26 用户定：打开预览的目的就是播放，同动图/序列帧口径）
     async load(assetId: string, kind: "audio" | "video"): Promise<void> {
       const preview = usePreviewStore();
       this.kind = kind;
@@ -67,6 +68,7 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
         const v = this.getEl();
         v.src = convertFileSrc(r.path);
         v.loop = this.loop;
+        this.play();
       } catch (e) {
         if (preview.current?.assetId !== assetId) return;
         console.error("音视频源解析失败：", e);
