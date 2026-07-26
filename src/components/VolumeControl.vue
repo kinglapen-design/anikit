@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 音量控件（5.2，音频/视频播放条共用）：图标点击切静音（volume/mute 图标随状态），
 // 悬停出竖向滑块弹层调音量（与倍率弹窗同款容器：C3 / inset 1px border-1 / 圆角 8 /
-// --shadow-pop / 内边距 4；竖向轨道高 96，3px 轨道 border-1 底 + 品牌紫填充 + 10px 拖钮，
+// --shadow-pop；内边距上下 8 左右 4——细长 item 上下留白为左右两倍，拖钮不出容器；
+// 竖向轨道高 96，3px 轨道 border-1 底 + 品牌紫填充 + 10px 拖钮，
 // 同播放进度条自绘口径转 90°，SideSlider 为横向缩放滑块专用不复用）。
 // 拖/点设音量 0-1：静音时滑块归 0 联动显示，拖离 0 经 setVolume 自动解除静音。
 // 弹层底部 4px 透明桥接区（padding）保证指针从按钮滑入弹层不断开。
@@ -78,10 +79,11 @@ function onUp(e: PointerEvent): void {
   padding-bottom: var(--space-4);
   z-index: 10;
 }
-/* 浮层卡片：C3 / inset 1px border-1 / 圆角 8 / --shadow-pop / 内边距 4（同倍率弹窗） */
+/* 浮层卡片：C3 / inset 1px border-1 / 圆角 8 / --shadow-pop；
+   内边距上下 8 左右 4（细长 item 上下留白为左右两倍，拖钮不出容器，2026-07-26 用户定） */
 .vol-pop {
   display: flex;
-  padding: var(--space-4);
+  padding: var(--space-8) var(--space-4);
   border-radius: var(--radius-8);
   background: var(--c3);
   box-shadow:

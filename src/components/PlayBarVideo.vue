@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 视频播放条（5.2）：放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8 / 内边距 4 / 间距 6）。
-// 播放/暂停、快退/快进（∓5 秒）、音量（VolumeControl）、当前时间/总时长、
+// 播放/暂停、快退/快进（∓5 秒）、上/下一帧（step-frame 图标左右翻转，步进即暂停，快捷键 , . 的实体入口）、
+// 音量（VolumeControl）、当前时间/总时长、
 // 进度条（3px 轨道 border-1 + 品牌紫填充 + 10px 拖钮，同帧播放条自绘样式）、
 // 倍率（RateControl 悬停竖排弹窗）、循环、
 // 笔记（浮层）、当前画面设为预览图（set_video_thumb）、显示器全屏。转码中显示加载提示。
@@ -41,6 +42,11 @@ function onSeekUp(e: PointerEvent): void {
   seeking = false;
   trackRef.value!.releasePointerCapture(e.pointerId);
 }
+// 逐帧步进（±1/24s，步进即暂停；按钮 = 快捷键 , . 的实体入口，2026-07-26 用户定）
+function stepFrame(delta: number): void {
+  media.pause();
+  media.seekBy(delta / 24);
+}
 </script>
 
 <template>
@@ -56,6 +62,9 @@ function onSeekUp(e: PointerEvent): void {
       />
       <IconButton name="rewind" title="快退 5 秒" @click="media.seekBy(-5)" />
       <IconButton name="fast-forward" title="快进 5 秒" @click="media.seekBy(5)" />
+      <!-- 上下帧（逐帧步进即暂停；step-frame 图标左右翻转使用，快捷键 , . 的实体入口） -->
+      <IconButton class="flip-h" name="step-frame" title="上一帧（,）" @click="stepFrame(-1)" />
+      <IconButton name="step-frame" title="下一帧（.）" @click="stepFrame(1)" />
       <VolumeControl />
       <span class="time-text">{{ formatDuration(media.currentTime) }} / {{ formatDuration(media.duration) }}</span>
       <div
@@ -151,5 +160,9 @@ function onSeekUp(e: PointerEvent): void {
   background: var(--font-icon-1);
   transform: translate(-50%, -50%);
   pointer-events: none;
+}
+/* 上一帧按钮：step-frame 图标水平翻转（左右翻转使用，2026-07-26 用户定） */
+.flip-h :deep(svg) {
+  transform: scaleX(-1);
 }
 </style>

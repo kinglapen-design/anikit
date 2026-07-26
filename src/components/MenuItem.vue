@@ -20,7 +20,7 @@ const emit = defineEmits<{ select: [] }>();
 </script>
 
 <template>
-  <button class="menu-item" :disabled="disabled" @click="emit('select')">
+  <button class="menu-item" :class="{ checked }" :disabled="disabled" @click="emit('select')">
     <span class="main">
       <span v-if="checkable" class="check-slot">
         <AppIcon v-if="checked" name="check" :size="16" />
