@@ -62,6 +62,10 @@ pub struct AssetMeta {
   pub tags: Vec<String>,
   #[serde(default)]
   pub note: String,
+  /// 逐帧笔记条数冗余（5.2 展示层：卡片角标 / 详情区块免读 notes.json）；
+  /// set_note 同步维护，0 记 None 不写字段（None = 无笔记，比 Some(0) 干净）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub note_count: Option<u32>,
   /// 缩略图文件名（与 metadata 同目录）
   #[serde(default)]
   pub thumbnail: Option<String>,

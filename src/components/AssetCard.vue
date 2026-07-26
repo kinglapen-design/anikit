@@ -66,6 +66,7 @@ const meta = computed(() => {
       />
       <div v-else class="img" />
       <span v-if="badgeColor && ui.showExtBadge" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
+      <span v-if="asset.noteCount" class="note-badge">{{ asset.noteCount }}</span>
       <div class="actions">
         <button class="act" v-tip="'发送至 Animate'" @click.stop>
           <AppIcon name="send-to" />
@@ -140,6 +141,23 @@ const meta = computed(() => {
   line-height: var(--text-badge-line);
   font-weight: var(--text-badge-weight);
   color: var(--font-icon-3);
+  pointer-events: none;
+}
+/* 笔记角标（5.2，Eagle 式数字圆标）：图片右上各 4px / 直径 16 / 品牌紫实底 /
+   白色数字（角标文字 10/16 粗体）；与左上格式角标不冲突 */
+.note-badge {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--brand-1);
+  font-size: var(--text-badge-size);
+  line-height: 16px;
+  font-weight: var(--text-badge-weight);
+  color: #fff;
+  text-align: center;
   pointer-events: none;
 }
 /* 按钮组：图片右下各 4px / 间距 4；图标按钮-小（24×24 圆角 4），

@@ -364,6 +364,7 @@ fn make_meta(
     modified_at: now,
     tags: Vec::new(),
     note: String::new(),
+    note_count: None,
     thumbnail,
     fps: None,
     frame_count: None,
@@ -552,6 +553,7 @@ mod tests {
       duration: None,
       bpm: None,
       imported_from: None,
+      note_count: None,
     };
     let asset = serde_json::to_value(ImportEvent::Asset { placement: view }).unwrap();
     assert_eq!(
@@ -561,7 +563,8 @@ mod tests {
         "placement": {
           "assetId": "AN-X", "folderId": "root", "name": "a.png",
           "w": 1, "h": null, "ext": "png", "thumbPath": null, "thumbKind": null, "origin": true,
-          "frameCount": null, "animated": false, "duration": null, "bpm": null, "importedFrom": null
+          "frameCount": null, "animated": false, "duration": null, "bpm": null, "importedFrom": null,
+          "noteCount": null
         }
       })
     );

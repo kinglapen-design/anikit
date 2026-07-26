@@ -3,6 +3,7 @@
 // set_note 的 text 去空白后为空 = 删除；两条命令统一返回按 key 排序全量，前端直接替换。
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
+import { useContentStore } from "./content";
 import { usePreviewStore } from "./preview";
 import { usePreviewMediaStore } from "./previewMedia";
 
@@ -56,6 +57,8 @@ export const usePreviewNotesStore = defineStore("previewNotes", {
       const p = usePreviewStore().current;
       if (!p || !key) return;
       this.notes = await invoke<NoteEntry[]>("set_note", { assetId: p.assetId, key, text });
+      // noteCount 冗余同步卡片角标（后端已落 metadata，前端按返回全量算条数）
+      useContentStore().setNoteCount(p.assetId, this.notes.length);
     },
     async remove(key: string): Promise<void> {
       await this.save(key, ""); // 空文本 = 删除（后端约定）

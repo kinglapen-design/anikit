@@ -195,6 +195,7 @@ pub(crate) fn build_sequence_asset(
     modified_at: now,
     tags: Vec::new(),
     note: String::new(),
+    note_count: None,
     thumbnail: thumb,
     fps: Some(DEFAULT_FPS),
     frame_count: Some(frames.len() as u32),

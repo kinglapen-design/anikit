@@ -207,7 +207,8 @@ pub fn generate_frame_strip(root: &Path, origin: &Path, asset_id: &str, frame_na
 }
 
 /// 短边缩到 THUMB_SHORT_EDGE、长边等比（整数除法 floor，短边恰好 320）；原图短边不足不放大
-fn shrink_to_thumb(img: DynamicImage) -> DynamicImage {
+/// pub(crate)：笔记帧画面缓存（commands/notes）复用同一缩放规格
+pub(crate) fn shrink_to_thumb(img: DynamicImage) -> DynamicImage {
   shrink_to_edge(img, THUMB_SHORT_EDGE)
 }
 

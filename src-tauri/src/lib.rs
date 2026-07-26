@@ -197,6 +197,7 @@ pub fn run() {
       commands::media::get_waveform,
       commands::notes::get_notes,
       commands::notes::set_note,
+      commands::notes::get_note_thumb,
       commands::preview::open_with_default_app,
       commands::preview::open_preview_window,
     ])

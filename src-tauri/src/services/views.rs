@@ -42,6 +42,8 @@ pub struct PlacementView {
   pub bpm: Option<f64>,
   /// 导入渠道标记（PRD 01-2.3）："inbox" = 收件箱渠道；快速访问"已导入"据此持久显示未摘标资产
   pub imported_from: Option<String>,
+  /// 逐帧笔记条数冗余（5.2 展示层：卡片笔记角标据此显隐）；无笔记为 null
+  pub note_count: Option<u32>,
 }
 
 /// 格式图标缓存键（空扩展名归 "file"）
@@ -85,5 +87,6 @@ pub fn placement_view(root: &Path, meta: &AssetMeta, p: &Placement, icons: &Hash
     duration: meta.duration,
     bpm: meta.bpm,
     imported_from: meta.imported_from.clone(),
+    note_count: meta.note_count,
   }
 }

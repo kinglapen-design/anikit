@@ -20,6 +20,7 @@ export interface PlacementView {
   duration: number | null; // 音视频 / 动图时长（秒，5.1）；无时长资源为 null——卡片标签显示 mm:ss
   bpm: number | null; // 音频 BPM（只读内嵌标签，5.1）；无标签为 null
   importedFrom: string | null; // 导入渠道标记；"inbox" 且未摘标（root）= 收件箱"已导入"持久显示
+  noteCount?: number | null; // 逐帧笔记条数冗余（5.2 展示层：卡片笔记角标据此显隐）；无笔记为 null
 }
 
 export interface FolderNode {
@@ -241,6 +242,15 @@ export const useContentStore = defineStore("content", {
     },
     getScrollPos(key: string): number | null {
       return scrollPositions.get(key) ?? null;
+    },
+
+    // 逐帧笔记条数冗余同步（5.2 展示层）：set_note 返回全量后由前端算条数更新——
+    // 同一资产的全部 Placement（多文件夹链接）一并刷新，卡片角标 / 详情区块即时跟随
+    setNoteCount(assetId: string, count: number): void {
+      const v = count > 0 ? count : null;
+      for (const p of this.placements) {
+        if (p.assetId === assetId) p.noteCount = v;
+      }
     },
 
     // 库打开后 / 导入完成后全量刷新（增量刷新随阶段 4 任务队列再做）
