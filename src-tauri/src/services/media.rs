@@ -16,10 +16,13 @@ pub const AUDIO_EXTS: &[&str] = &["mp3", "wav", "wma"];
 
 /// 波形 PCM 采样率（Hz，mono f32）：8kHz 足够描波形，3 分钟音频约 5.6MB 内存
 const PCM_RATE: u32 = 8000;
-/// 波形图边长（px，方形透明底，卡片 contain 显示）
-const WAVEFORM_SIZE: u32 = 320;
-/// 波形柱数：320 宽 / 4px 槽位（2px 柱 + 2px 间距）
-const WAVEFORM_BARS: usize = 80;
+/// 波形图宽（px，长方形透明底，Eagle 同形态约 2.35:1——2026-07-26 用户截图定；
+/// 音频 metadata.width/height 同写此尺寸，卡片按宽比例布局，不再方形挤压）
+pub const WAVEFORM_WIDTH: u32 = 640;
+/// 波形图高（px）
+pub const WAVEFORM_HEIGHT: u32 = 272;
+/// 波形柱数：640 宽 / 4px 槽位（2px 柱 + 2px 间距）
+const WAVEFORM_BARS: usize = 160;
 /// 波形柱色（#F8F5FA 60% alpha，2026-07-26 用户定，与 font-icon-3 同档观感）
 const BAR_RGBA: [u8; 4] = [0xF8, 0xF5, 0xFA, 153];
 /// 波形上下留白（px）
@@ -100,7 +103,7 @@ pub fn waveform_image(path: &Path) -> Option<RgbaImage> {
   }
   let samples = ffmpeg::audio_pcm_f32(path, PCM_RATE)?;
   let peaks = peaks_from_samples(&samples, WAVEFORM_BARS);
-  Some(render_waveform(&peaks, WAVEFORM_SIZE, WAVEFORM_SIZE))
+  Some(render_waveform(&peaks, WAVEFORM_WIDTH, WAVEFORM_HEIGHT))
 }
 
 /// 预览图统一入口（thumbnail::load_origin 兜底调用）：视频首帧 / 音频波形；其他格式 None
@@ -181,10 +184,10 @@ mod tests {
   fn render_waveform_draws_centered_bars() {
     let mut peaks = vec![0.0; WAVEFORM_BARS];
     peaks[0] = 1.0;
-    let img = render_waveform(&peaks, WAVEFORM_SIZE, WAVEFORM_SIZE);
-    assert_eq!((img.width(), img.height()), (WAVEFORM_SIZE, WAVEFORM_SIZE));
+    let img = render_waveform(&peaks, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
+    assert_eq!((img.width(), img.height()), (WAVEFORM_WIDTH, WAVEFORM_HEIGHT));
     // 第 1 柱满幅：槽位 4px 内柱占 x=1..=2（居中），中心行 x=1 处有柱色
-    assert_eq!(img.get_pixel(1, WAVEFORM_SIZE / 2).0, BAR_RGBA);
+    assert_eq!(img.get_pixel(1, WAVEFORM_HEIGHT / 2).0, BAR_RGBA);
     // 满幅柱顶 = margin
     assert_eq!(img.get_pixel(1, WAVEFORM_MARGIN).0, BAR_RGBA);
     // 第 2 柱（峰值 0）只有中线 2px：y=0 处透明

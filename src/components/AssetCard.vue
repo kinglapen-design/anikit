@@ -25,11 +25,11 @@ const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.as
 const isAnim = computed(() => props.asset.animated);
 // 序列帧（2026-07-22 用户定）：格式角标显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
 const isSeq = computed(() => props.asset.frameCount != null && !isAnim.value);
-// 角标文案：音频带 BPM 显示"格式 · BPM"（格式标签补齐为 格式 / BPM 值，05 进度 5.1；无设计参照待复验）
+// 角标文案：音频带 BPM 显示"格式 / BPM: 值"（Eagle 同格式，2026-07-26 用户截图定稿）
 const badge = computed(() => {
   if (isSeq.value) return "序列帧";
   const ext = props.asset.ext.toUpperCase();
-  return props.asset.bpm != null ? `${ext} · ${Math.round(props.asset.bpm)}` : ext;
+  return props.asset.bpm != null ? `${ext} / BPM: ${Math.round(props.asset.bpm)}` : ext;
 });
 // 角标徽章底色：格式实色（01_样式 token 01-6，7 组）
 const badgeColor = computed(() => formatBadgeColor(props.asset.ext, isSeq.value, isAnim.value));

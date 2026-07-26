@@ -260,6 +260,9 @@ pub(crate) fn build_asset_with_id(
     (Some(a.width), Some(a.height))
   } else if let Some(v) = video {
     (Some(v.width), Some(v.height))
+  } else if audio.is_some() {
+    // 音频无画面宽高：记波形缩略图尺寸（长方形，卡片按宽比例布局不再方形挤压，2026-07-26 用户截图定）
+    (Some(crate::services::media::WAVEFORM_WIDTH), Some(crate::services::media::WAVEFORM_HEIGHT))
   } else {
     thumbnail::probe(&dest).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None))
   };

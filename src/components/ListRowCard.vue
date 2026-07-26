@@ -5,6 +5,8 @@
 import { computed } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { Box } from "../lib/layouts";
+import { isAudioExt } from "../lib/formatBadge";
+import { formatDuration } from "../lib/formatDuration";
 import type { PlacementView } from "../stores/content";
 import { useUiStore } from "../stores/ui";
 
@@ -18,11 +20,13 @@ const ui = useUiStore();
 const thumbW = computed(() => Math.max(30, Math.round((80 * ui.targetRowHeight) / 220)));
 const thumbH = computed(() => Math.max(17, Math.round((45 * ui.targetRowHeight) / 220)));
 const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
-const size = computed(() =>
-  props.asset.w != null && props.asset.h != null
+// 尺寸列：音频显示时长（metadata 宽高是波形图尺寸非内容尺寸，5.1）；其余 w×h，无尺寸显示格式
+const size = computed(() => {
+  if (props.asset.duration != null && isAudioExt(props.asset.ext)) return formatDuration(props.asset.duration);
+  return props.asset.w != null && props.asset.h != null
     ? `${props.asset.w} x ${props.asset.h}`
-    : props.asset.ext.toUpperCase(),
-);
+    : props.asset.ext.toUpperCase();
+});
 // 序列帧（2026-07-22 用户定）：格式列显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）；
 // 动图（5.1）同带 frameCount，按 animated 区分——格式列显示扩展名大写
 const isSeq = computed(() => props.asset.frameCount != null && !props.asset.animated);

@@ -23,6 +23,14 @@ const BRAND_COLORS: Record<string, string> = {
 /** 静态图片格式：不出角标 */
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "bmp", "webp"]);
 
+/** 音频格式（5.1）：列表"尺寸"列改显示时长（metadata 宽高是波形图尺寸，不是内容尺寸） */
+const AUDIO_EXTS = new Set(["mp3", "wav", "wma"]);
+
+/** 音频判定（5.1，PRD 05-01 MVP 口径） */
+export function isAudioExt(ext: string): boolean {
+  return AUDIO_EXTS.has(ext.toLowerCase());
+}
+
 /** 静态图片判定（4.4 文件夹卡片缩略图取子项同口径：排除 GIF / 序列帧 / 工程与矢量格式） */
 export function isStaticImageExt(ext: string): boolean {
   return IMAGE_EXTS.has(ext.toLowerCase());
