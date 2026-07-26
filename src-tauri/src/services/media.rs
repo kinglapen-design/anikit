@@ -21,9 +21,12 @@ const PCM_RATE: u32 = 8000;
 pub const WAVEFORM_WIDTH: u32 = 640;
 /// 波形图高（px）
 pub const WAVEFORM_HEIGHT: u32 = 272;
-/// 波形列数（RMS 采样网格：320 列；渲染 2 倍超采样逐像素插值 + Triangle 降采样——
-/// 1px 细柱"线条感"、逐列整数阶跃"阶梯像素感"、2px 网格折角，均被 2026-07-26 用户截图指正）
-const WAVEFORM_COLS: usize = 320;
+/// 每像素叠加的 min/max 窗口数：alpha 累积让稳态主体叠成实心，瞬态尖峰只有少量窗口
+/// 覆盖、呈半透明细发丝（Eagle 同形态"主体实心 + 峰顶发丝"，2026-07-26 用户定）；
+/// 平滑口径（RMS / 滑动平均）会把尖峰抹成圆角一坨，被用户指正后弃用
+const HAIR_WINDOWS: usize = 4;
+/// 单次叠加 alpha（over 合成）：发丝 ~70，主体经 4 次累积趋近 180
+const HAIR_ALPHA: u8 = 70;
 /// 波形柱色（#F8F5FA 60% alpha，2026-07-26 用户定，与 font-icon-3 同档观感）
 const BAR_RGBA: [u8; 4] = [0xF8, 0xF5, 0xFA, 153];
 /// 波形上下留白（px）
@@ -110,18 +113,7 @@ pub fn waveform_image(path: &Path) -> Option<RgbaImage> {
     l.push(pair[0]);
     r.push(pair[1]);
   }
-  let mut cols_l = rms_columns(&l, WAVEFORM_COLS);
-  let mut cols_r = rms_columns(&r, WAVEFORM_COLS);
-  // 联合归一（保持左右声道相对响度），再 3 点平滑连成连续包络
-  let max = cols_l.iter().chain(cols_r.iter()).cloned().fold(0f32, f32::max);
-  if max > 0.0 {
-    for v in cols_l.iter_mut().chain(cols_r.iter_mut()) {
-      *v /= max;
-    }
-  }
-  smooth3(&mut cols_l);
-  smooth3(&mut cols_r);
-  Some(render_waveform(&cols_l, &cols_r, WAVEFORM_WIDTH, WAVEFORM_HEIGHT))
+  Some(render_waveform(&l, &r, WAVEFORM_WIDTH, WAVEFORM_HEIGHT))
 }
 
 /// 预览图统一入口（thumbnail::load_origin 兜底调用）：视频首帧 / 音频波形；其他格式 None
@@ -135,69 +127,64 @@ pub fn decode_preview_image(path: &Path) -> Option<DynamicImage> {
   None
 }
 
-/// PCM 分桶 RMS 能量（逐列响度口径，未归一——左右声道联合归一在调用方做）：
-/// 逐桶"最大峰值"会让每桶都打到波形振荡峰顶——整段一样高、糊成一坨、动态小的内容无波峰波谷；
-/// RMS（能量均值开方）反映真实响度包络，安静段低、爆发段高（2026-07-26 用户截图指正后改）。
-fn rms_columns(samples: &[f32], buckets: usize) -> Vec<f32> {
-  if samples.is_empty() || buckets == 0 {
-    return vec![0.0; buckets];
-  }
-  let bucket_len = samples.len().div_ceil(buckets);
-  let mut cols: Vec<f32> = samples
-    .chunks(bucket_len)
-    .map(|c| (c.iter().map(|s| s * s).sum::<f32>() / c.len() as f32).sqrt())
-    .collect();
-  cols.resize(buckets, 0.0);
-  cols
-}
-
-/// 3 点滑动平均（边缘重复端点）：相邻列 RMS 独立计算高频起伏大，
-/// 平滑后连成连续包络，波形呈块状整体而非一根根细线
-fn smooth3(cols: &mut [f32]) {
-  if cols.len() < 3 {
-    return;
-  }
-  let src = cols.to_vec();
-  for (i, v) in cols.iter_mut().enumerate() {
-    let a = src[i.saturating_sub(1)];
-    let b = src[i];
-    let c = src[(i + 1).min(src.len() - 1)];
-    *v = (a + b + c) / 3.0;
-  }
-}
-
-/// 列坐标 p（浮点）处的插值高度：相邻列线性插值——逐列整数阶跃是边缘"阶梯像素感"的根因
-/// （2026-07-26 用户放大截图指正：Eagle 边缘连续平滑），插值后包络线为连续折线
-fn height_at(cols: &[f32], p: f32) -> f32 {
-  let i = p.floor() as usize;
-  let f = p - i as f32;
-  let a = cols.get(i).copied().unwrap_or(0.0);
-  let b = cols.get(i + 1).copied().unwrap_or(a);
-  a + (b - a) * f
-}
-
-/// 波形渲染（Eagle 同形态块状波形）：**2 倍超采样**——1280×544 逐像素硬填充（高度 = 320 列
-/// 采样网格的列间线性插值），再 Triangle 降采样回 640×272。逐列整数阶跃与 2px 网格折角
-/// 由降采样的多点混合消除，边缘自然抗锯齿（对齐 Eagle 的连续平滑，2026-07-26 用户放大截图定）。
-/// 上半 = 左声道、下半 = 右声道；静音列 2× 下 2px 中线（降采样后约 1px 细线）
-fn render_waveform(cols_l: &[f32], cols_r: &[f32], w: u32, h: u32) -> RgbaImage {
+/// 波形渲染（Eagle 同形态"实心主体 + 峰顶发丝"）：**上半 = 左声道、下半 = 右声道**。
+/// 每像素 HAIR_WINDOWS 个 min/max 窗口以低 alpha 逐条叠加——稳态段所有窗口高度趋同，
+/// alpha 累积成实心主体；瞬态尖峰只有个别窗口够得着，保持半透明细发丝。
+/// 内部 2 倍超采样（1280×544）渲染后 Triangle 降采样回 640×272，边缘自然抗锯齿；
+/// 左右声道联合归一（保持相对响度）；静音段为细中线。
+fn render_waveform(samples_l: &[f32], samples_r: &[f32], w: u32, h: u32) -> RgbaImage {
   const SS: u32 = 2;
   let (sw, sh) = (w * SS, h * SS);
   let cy = (sh / 2) as f32;
   let max_half = (sh / 2).saturating_sub(WAVEFORM_MARGIN * SS) as f32;
+  let max_abs = samples_l
+    .iter()
+    .chain(samples_r.iter())
+    .fold(0f32, |m, s| m.max(s.abs()));
   let mut big = RgbaImage::new(sw, sh);
-  let color = image::Rgba(BAR_RGBA);
-  for x in 0..sw {
-    let p = x as f32 * WAVEFORM_COLS as f32 / sw as f32;
-    let top = (height_at(cols_l, p).clamp(0.0, 1.0) * max_half).max(1.0);
-    let bot = (height_at(cols_r, p).clamp(0.0, 1.0) * max_half).max(1.0);
-    let y0 = (cy - top).max(0.0) as u32;
-    let y1 = ((cy + bot) as u32).min(sh - 1);
-    for y in y0..=y1 {
-      big.put_pixel(x, y, color);
-    }
+  if max_abs > 0.0 {
+    draw_channel(&mut big, samples_l, max_abs, true, cy, max_half);
+    draw_channel(&mut big, samples_r, max_abs, false, cy, max_half);
+  } else {
+    // 全静音：画中线
+    draw_channel(&mut big, &[0.0], 1.0, true, cy, max_half);
   }
   image::imageops::resize(&big, w, h, image::imageops::FilterType::Triangle)
+}
+
+/// 单声道半区叠加绘制：top_half = 上半（裁在中线以上），false = 下半
+fn draw_channel(img: &mut RgbaImage, samples: &[f32], max_abs: f32, top_half: bool, cy: f32, max_half: f32) {
+  let (sw, sh) = (img.width(), img.height());
+  let windows = sw as usize * HAIR_WINDOWS;
+  let step = samples.len() as f32 / windows as f32;
+  let (lo_bound, hi_bound) = if top_half { (cy - max_half, cy) } else { (cy, cy + max_half) };
+  for i in 0..windows {
+    let s0 = (i as f32 * step) as usize;
+    let s1 = (((i + 1) as f32 * step) as usize).max(s0 + 1).min(samples.len());
+    let (mut hi, mut lo) = (0f32, 0f32);
+    for &s in &samples[s0..s1] {
+      hi = hi.max(s);
+      lo = lo.min(s);
+    }
+    // 该窗口的纵线区间 [cy - hi*H, cy - lo*H]，裁剪到所属半区
+    let y0 = (cy - (hi / max_abs) * max_half).max(lo_bound);
+    let y1 = (cy - (lo / max_abs) * max_half).min(hi_bound);
+    if y1 < y0 {
+      continue;
+    }
+    let x = (i / HAIR_WINDOWS) as u32;
+    for y in (y0 as u32)..=(y1 as u32).min(sh - 1) {
+      blend_alpha(img, x, y, HAIR_ALPHA);
+    }
+  }
+}
+
+/// 同色 over 合成：a' = 1 - (1-a)(1-A)——主体随叠加次数趋实，单次覆盖保持半透明发丝
+fn blend_alpha(img: &mut RgbaImage, x: u32, y: u32, a: u8) {
+  let p = img.get_pixel_mut(x, y);
+  let old = p.0[3] as u32;
+  let new = 255 - (255 - old) * (255 - a as u32) / 255;
+  *p = image::Rgba([BAR_RGBA[0], BAR_RGBA[1], BAR_RGBA[2], new as u8]);
 }
 
 #[cfg(test)]
@@ -205,56 +192,43 @@ mod tests {
   use super::*;
 
   #[test]
-  fn rms_reflects_loudness_envelope() {
-    // 前 4 样本响（±0.5 振荡）、后 4 样本静音，4 桶 → [0.5, 0.5, 0, 0]（未归一）
-    let samples = [0.5, -0.5, 0.5, -0.5, 0.0, 0.0, 0.0, 0.0];
-    assert_eq!(rms_columns(&samples, 4), vec![0.5, 0.5, 0.0, 0.0]);
-    // 半响段 = 全响段能量一半（峰值口径下两者同为 1.0，分不清动态）
-    let samples = [1.0, -1.0, 0.5, -0.5];
-    assert_eq!(rms_columns(&samples, 2), vec![1.0, 0.5]);
+  fn blend_alpha_accumulates() {
+    let mut img = RgbaImage::new(1, 1);
+    blend_alpha(&mut img, 0, 0, HAIR_ALPHA);
+    let a1 = img.get_pixel(0, 0).0[3];
+    assert_eq!(a1, HAIR_ALPHA);
+    blend_alpha(&mut img, 0, 0, HAIR_ALPHA);
+    assert!(img.get_pixel(0, 0).0[3] > a1, "同色叠加 alpha 递增");
   }
 
   #[test]
-  fn rms_empty_and_zero_buckets() {
-    assert_eq!(rms_columns(&[], 4), vec![0.0; 4]);
-    assert_eq!(rms_columns(&[1.0], 0), Vec::<f32>::new());
-    // 桶多于样本：后补零
-    assert_eq!(rms_columns(&[0.5], 3), vec![0.5, 0.0, 0.0]);
-  }
-
-  #[test]
-  fn smooth3_averages_neighbors() {
-    let mut cols = vec![0.0, 0.0, 1.0, 0.0, 0.0];
-    smooth3(&mut cols);
-    let third = 1.0 / 3.0;
-    assert!((cols[1] - third).abs() < 1e-6 && (cols[2] - third).abs() < 1e-6 && (cols[3] - third).abs() < 1e-6);
-    assert_eq!(cols[0], 0.0);
-  }
-
-  #[test]
-  fn height_at_interpolates_between_columns() {
-    let cols = [0.0, 1.0, 0.0];
-    assert_eq!(height_at(&cols, 0.0), 0.0);
-    assert_eq!(height_at(&cols, 0.5), 0.5);
-    assert_eq!(height_at(&cols, 1.0), 1.0);
-    assert_eq!(height_at(&cols, 9.0), 0.0, "越界回退 0");
-  }
-
-  #[test]
-  fn render_waveform_supersampled_shape() {
-    let mut cols_l = vec![0.0; WAVEFORM_COLS];
-    let mut cols_r = vec![0.0; WAVEFORM_COLS];
-    cols_l[0] = 1.0;
-    cols_r[0] = 1.0;
-    let img = render_waveform(&cols_l, &cols_r, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
-    assert_eq!((img.width(), img.height()), (WAVEFORM_WIDTH, WAVEFORM_HEIGHT));
+  fn render_waveform_body_solid_and_silence_is_thin_line() {
     let cy = WAVEFORM_HEIGHT / 2;
-    // 第 1 列满幅：中心有波形、图外缘透明
-    assert!(img.get_pixel(0, cy).0[3] > 0);
-    assert_eq!(img.get_pixel(0, 0).0[3], 0);
-    // 静音列（列 1 在 x=4，p = x * 320 / 1280）：中线附近有波形、远离中线透明
-    assert!(img.get_pixel(4, cy).0[3] > 0);
-    assert_eq!(img.get_pixel(4, cy - 4).0[3], 0);
+    // 过零振荡稳态信号（每窗口 hi=0.5 / lo=-0.5）→ 主体多次叠加趋实
+    let samples: Vec<f32> = (0..4096).map(|i| if i % 2 == 0 { 0.5 } else { -0.5 }).collect();
+    let img = render_waveform(&samples, &samples, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
+    assert_eq!((img.width(), img.height()), (WAVEFORM_WIDTH, WAVEFORM_HEIGHT));
+    assert!(img.get_pixel(10, cy).0[3] > 100, "稳态主体应趋实");
+    assert_eq!(img.get_pixel(10, 0).0[3], 0, "图外缘透明");
+    // 静音 → 只在中线附近有波形
+    let silence = vec![0.0f32; 4096];
+    let img = render_waveform(&silence, &silence, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
+    assert!(img.get_pixel(10, cy).0[3] > 0);
+    assert_eq!(img.get_pixel(10, cy - 4).0[3], 0);
+  }
+
+  #[test]
+  fn render_waveform_transient_peak_stays_translucent_hair() {
+    // 前半稳态振荡 0.4、末尾一个孤立尖峰 1.0 → 尖峰只有个别窗口覆盖，呈半透明发丝
+    let mut samples: Vec<f32> = (0..65536).map(|i| if i % 2 == 0 { 0.4 } else { -0.4 }).collect();
+    samples[32768..].fill(0.0);
+    samples[65535] = 1.0;
+    let img = render_waveform(&samples, &samples, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
+    let cy = WAVEFORM_HEIGHT / 2;
+    let body = img.get_pixel(10, cy - 20).0[3];
+    let hair = img.get_pixel(WAVEFORM_WIDTH - 1, WAVEFORM_MARGIN + 2).0[3];
+    assert!(body > 100, "稳态主体应趋实：{body}");
+    assert!(hair > 0 && hair < body, "孤立尖峰应为半透明发丝：hair={hair} body={body}");
   }
 
   #[test]
