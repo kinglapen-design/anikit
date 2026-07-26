@@ -149,6 +149,13 @@ fn render_waveform(samples_l: &[f32], samples_r: &[f32], w: u32, h: u32) -> Rgba
     // 全静音：画中线
     draw_channel(&mut big, &[0.0], 1.0, true, cy, max_half);
   }
+  // 叠加次数只作形状掩码：统一填成一个颜色（2026-07-26 用户定——alpha 分层肉眼可见）；
+  // 发丝靠形状（细条）而非透明度体现，降采样的边缘抗锯齿不受影响
+  for p in big.pixels_mut() {
+    if p.0[3] > 0 {
+      p.0[3] = BAR_RGBA[3];
+    }
+  }
   image::imageops::resize(&big, w, h, image::imageops::FilterType::Triangle)
 }
 
@@ -218,17 +225,18 @@ mod tests {
   }
 
   #[test]
-  fn render_waveform_transient_peak_stays_translucent_hair() {
-    // 前半稳态振荡 0.4、末尾一个孤立尖峰 1.0 → 尖峰只有个别窗口覆盖，呈半透明发丝
+  fn render_waveform_transient_peak_keeps_shape_uniform_color() {
+    // 前半稳态振荡 0.4、末尾一个孤立尖峰 1.0 → 尖峰形状保留，且主体内部统一填色无分层
     let mut samples: Vec<f32> = (0..65536).map(|i| if i % 2 == 0 { 0.4 } else { -0.4 }).collect();
     samples[32768..].fill(0.0);
     samples[65535] = 1.0;
     let img = render_waveform(&samples, &samples, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
     let cy = WAVEFORM_HEIGHT / 2;
-    let body = img.get_pixel(10, cy - 20).0[3];
-    let hair = img.get_pixel(WAVEFORM_WIDTH - 1, WAVEFORM_MARGIN + 2).0[3];
-    assert!(body > 100, "稳态主体应趋实：{body}");
-    assert!(hair > 0 && hair < body, "孤立尖峰应为半透明发丝：hair={hair} body={body}");
+    // 主体内部 = 统一实色（无 alpha 分层）
+    assert_eq!(img.get_pixel(10, cy - 20).0, BAR_RGBA);
+    assert_eq!(img.get_pixel(100, cy + 10).0, BAR_RGBA);
+    // 孤立尖峰形状仍在（半透明经降采样稀释，>0 即可）
+    assert!(img.get_pixel(WAVEFORM_WIDTH - 1, WAVEFORM_MARGIN + 2).0[3] > 0, "尖峰形状保留");
   }
 
   #[test]
