@@ -44,7 +44,7 @@ const SOURCE_EXTS = ["psd", "psb", "ai", "svg"];
 
 const ZOOM_MIN = 0.02;
 const ZOOM_MAX = 32;
-export const RATES = [0.25, 0.5, 1, 2, 4];
+export const RATES = [8, 4, 3, 2, 1.75, 1.5, 1.25, 1, 0.75, 0.5, 0.25];
 
 // 帧播放引擎（模块级单例，store 外持有避免响应式开销）
 let rafId = 0;

@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // 视频播放条（5.2）：放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8 / 内边距 4 / 间距 6）。
 // 播放/暂停、快退/快进（∓5 秒）、音量（VolumeControl）、当前时间/总时长、
-// 进度条（3px 轨道 border-1 + 品牌紫填充 + 10px 拖钮，同帧播放条自绘样式）、倍率、循环、
+// 进度条（3px 轨道 border-1 + 品牌紫填充 + 10px 拖钮，同帧播放条自绘样式）、
+// 倍率（RateControl 悬停竖排弹窗）、循环、
 // 笔记（浮层）、当前画面设为预览图（set_video_thumb）、显示器全屏。转码中显示加载提示。
 import { computed, ref } from "vue";
 import IconButton from "./IconButton.vue";
 import VolumeControl from "./VolumeControl.vue";
+import RateControl from "./RateControl.vue";
 import { formatDuration } from "../lib/formatDuration";
-import { RATES, usePreviewStore } from "../stores/preview";
+import { usePreviewStore } from "../stores/preview";
 import { usePreviewMediaStore } from "../stores/previewMedia";
 import { usePreviewNotesStore } from "../stores/previewNotes";
 
@@ -18,11 +20,6 @@ const trackRef = ref<HTMLElement>();
 let seeking = false;
 
 const pct = computed(() => (media.duration > 0 ? (media.currentTime / media.duration) * 100 : 0));
-
-function cycleRate(): void {
-  const i = RATES.indexOf(media.rate);
-  media.setRate(RATES[(i + 1) % RATES.length]);
-}
 
 function seek(e: PointerEvent): void {
   if (media.duration <= 0) return;
@@ -72,7 +69,7 @@ function onSeekUp(e: PointerEvent): void {
         <span class="fill" :style="{ width: `${pct}%` }" />
         <span class="knob" :style="{ left: `${pct}%` }" />
       </div>
-      <button class="rate-btn" v-tip="'倍率（点击切换）'" @click="cycleRate">{{ media.rate }}x</button>
+      <RateControl :rate="media.rate" @select="media.setRate" />
       <IconButton name="loop" title="循环播放" :active="media.loop" @click="media.toggleLoop()" />
       <IconButton name="annotate" title="笔记" :active="notes.open" @click="notes.toggle()" />
       <IconButton name="set-as-thumb" title="当前画面设为预览图" @click="media.setVideoThumb()" />
@@ -154,19 +151,5 @@ function onSeekUp(e: PointerEvent): void {
   background: var(--font-icon-1);
   transform: translate(-50%, -50%);
   pointer-events: none;
-}
-.rate-btn {
-  padding: 0 var(--space-4);
-  height: 24px;
-  border-radius: var(--radius-4);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-1);
-  white-space: nowrap;
-  flex: none;
-  transition: background 0.12s ease;
-}
-.rate-btn:hover {
-  background: var(--font-icon-6);
 }
 </style>

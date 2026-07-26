@@ -1,22 +1,18 @@
 <script setup lang="ts">
 // 帧播放条（4.3 序列帧；5.2 动图完全复用）：放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8）。
-// 播放/暂停、当前帧/总帧数、进度条（拖动定位帧）、倍率（点击循环切换）、
+// 播放/暂停、当前帧/总帧数、进度条（拖动定位帧）、倍率（RateControl 悬停竖排弹窗）、
 // 笔记（5.2 浮层，开着时品牌紫激活态）、当前帧设为预览图、显示器全屏（Esc 退出）。
 // 动图未解包兜底态（unpacking）：只显示"解析中…" + 禁用的笔记/设封面 + 全屏。
 import { ref } from "vue";
 import IconButton from "./IconButton.vue";
-import { RATES, usePreviewStore } from "../stores/preview";
+import RateControl from "./RateControl.vue";
+import { usePreviewStore } from "../stores/preview";
 import { usePreviewNotesStore } from "../stores/previewNotes";
 
 const preview = usePreviewStore();
 const notes = usePreviewNotesStore();
 const trackRef = ref<HTMLElement>();
 let seeking = false;
-
-function cycleRate(): void {
-  const i = RATES.indexOf(preview.rate);
-  preview.setRate(RATES[(i + 1) % RATES.length]);
-}
 
 function seek(e: PointerEvent): void {
   const rect = trackRef.value!.getBoundingClientRect();
@@ -76,7 +72,7 @@ function onSeekUp(e: PointerEvent): void {
         :style="{ left: `${(preview.frame / Math.max(1, preview.seq.frames.length - 1)) * 100}%` }"
       />
     </div>
-    <button class="rate-btn" v-tip="'倍率（点击切换）'" @click="cycleRate">{{ preview.rate }}x</button>
+    <RateControl :rate="preview.rate" @select="preview.setRate" />
     <IconButton name="annotate" title="笔记" :active="notes.open" @click="notes.toggle()" />
     <IconButton name="set-as-thumb" title="当前画面设为预览图" @click="preview.setAsThumb()" />
     <IconButton
@@ -160,19 +156,5 @@ function onSeekUp(e: PointerEvent): void {
   background: var(--font-icon-1);
   transform: translate(-50%, -50%);
   pointer-events: none;
-}
-.rate-btn {
-  padding: 0 var(--space-4);
-  height: 24px;
-  border-radius: var(--radius-4);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-1);
-  white-space: nowrap;
-  flex: none;
-  transition: background 0.12s ease;
-}
-.rate-btn:hover {
-  background: var(--font-icon-6);
 }
 </style>

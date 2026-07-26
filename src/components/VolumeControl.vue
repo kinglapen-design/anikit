@@ -1,20 +1,41 @@
 <script setup lang="ts">
 // 音量控件（5.2，音频/视频播放条共用）：图标点击切静音（volume/mute 图标随状态），
-// 悬停出小滑块浮层调音量（04_滑块语言：C3 / inset 1px border-1 / 圆角 8 / --shadow-pop）。
-// 浮层底部 4px 透明桥接区（padding）保证指针从按钮滑入浮层不断开。
+// 悬停出竖向滑块弹层调音量（与倍率弹窗同款容器：C3 / inset 1px border-1 / 圆角 8 /
+// --shadow-pop / 内边距 4；竖向轨道高 96，3px 轨道 border-1 底 + 品牌紫填充 + 10px 拖钮，
+// 同播放进度条自绘口径转 90°，SideSlider 为横向缩放滑块专用不复用）。
+// 拖/点设音量 0-1：静音时滑块归 0 联动显示，拖离 0 经 setVolume 自动解除静音。
+// 弹层底部 4px 透明桥接区（padding）保证指针从按钮滑入弹层不断开。
 import { computed, ref } from "vue";
 import IconButton from "./IconButton.vue";
-import SideSlider from "./SideSlider.vue";
 import { usePreviewMediaStore } from "../stores/previewMedia";
 
 const media = usePreviewMediaStore();
 const open = ref(false);
+const trackRef = ref<HTMLElement>();
+let dragging = false;
 
-// SideSlider 0~100 ↔ volume 0~1
-const vol = computed({
-  get: () => Math.round(media.volume * 100),
-  set: (v: number) => media.setVolume(v / 100),
-});
+// 静音时滑块显示 0（联动），实际音量保留在 media.volume 供取消静音恢复
+const pct = computed(() => (media.muted ? 0 : media.volume) * 100);
+
+function apply(e: PointerEvent): void {
+  const rect = trackRef.value!.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, 1 - (e.clientY - rect.top) / rect.height));
+  media.setVolume(ratio);
+}
+function onDown(e: PointerEvent): void {
+  dragging = true;
+  trackRef.value!.setPointerCapture(e.pointerId);
+  apply(e);
+  e.preventDefault();
+}
+function onMove(e: PointerEvent): void {
+  if (dragging) apply(e);
+}
+function onUp(e: PointerEvent): void {
+  if (!dragging) return;
+  dragging = false;
+  trackRef.value!.releasePointerCapture(e.pointerId);
+}
 </script>
 
 <template>
@@ -26,7 +47,17 @@ const vol = computed({
     />
     <div v-if="open" class="vol-pop-wrap">
       <div class="vol-pop">
-        <SideSlider v-model="vol" :min="0" :max="100" />
+        <div
+          ref="trackRef"
+          class="vol-track"
+          style="touch-action: none"
+          @pointerdown="onDown"
+          @pointermove="onMove"
+          @pointerup="onUp"
+        >
+          <span class="fill" :style="{ height: `${pct}%` }" />
+          <span class="knob" :style="{ bottom: `${pct}%` }" />
+        </div>
       </div>
     </div>
   </div>
@@ -47,15 +78,52 @@ const vol = computed({
   padding-bottom: var(--space-4);
   z-index: 10;
 }
-/* 浮层卡片：C3 / inset 1px border-1 / 圆角 8 / --shadow-pop / 内边距 8 */
+/* 浮层卡片：C3 / inset 1px border-1 / 圆角 8 / --shadow-pop / 内边距 4（同倍率弹窗） */
 .vol-pop {
   display: flex;
-  align-items: center;
-  padding: var(--space-8);
+  padding: var(--space-4);
   border-radius: var(--radius-8);
   background: var(--c3);
   box-shadow:
     var(--shadow-pop),
     inset 0 0 0 1px var(--border-1);
+}
+/* 竖向轨道：高 96 宽 16（点击热区），3px 轨道 border-1 底，品牌紫填充自底向上，10px 拖钮 */
+.vol-track {
+  position: relative;
+  width: 16px;
+  height: 96px;
+  cursor: pointer;
+}
+.vol-track::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: var(--border-1);
+}
+.fill {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: var(--brand-1);
+  pointer-events: none;
+}
+.knob {
+  position: absolute;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--font-icon-1);
+  transform: translate(-50%, 50%);
+  pointer-events: none;
 }
 </style>

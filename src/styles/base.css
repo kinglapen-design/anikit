@@ -30,6 +30,8 @@ button {
   color: inherit;
   background: none;
   border: none;
+  /* 无焦点框设计：清除浏览器 UA 的 :focus / :focus-visible 默认 outline */
+  outline: none;
   cursor: pointer;
 }
 

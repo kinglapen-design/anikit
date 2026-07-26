@@ -4,14 +4,15 @@
 // 波形进度条（波形按轨道实际像素后端重采样渲染，任意宽度 1px 级清晰；两层 div 以波形图作 CSS
 // mask：底层 wave-pending 实色 = 未播放（与 C3 混合后的实际色号，不受 mask alpha 影响）、
 // 已播放层 brand-1 紫 clip-path 裁到进度，播放头 1px 品牌紫竖线；
-// 点击/拖动 seek）、倍率、循环。转码中显示加载提示。音频无笔记/全屏。
+// 点击/拖动 seek）、倍率（RateControl 悬停竖排弹窗）、循环。转码中显示加载提示。音频无笔记/全屏。
 import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import IconButton from "./IconButton.vue";
 import VolumeControl from "./VolumeControl.vue";
+import RateControl from "./RateControl.vue";
 import { formatDuration } from "../lib/formatDuration";
 import { useHiresWaveform } from "../lib/useHiresWaveform";
-import { RATES, usePreviewStore } from "../stores/preview";
+import { usePreviewStore } from "../stores/preview";
 import { usePreviewMediaStore } from "../stores/previewMedia";
 
 const preview = usePreviewStore();
@@ -29,11 +30,6 @@ const waveUrl = computed(() => {
 // 两层 mask 共用的图地址（CSS 变量下发，mask 走 alpha 通道）
 const waveMask = computed(() => (waveUrl.value ? { "--wave-url": `url("${waveUrl.value}")` } : {}));
 const pct = computed(() => (media.duration > 0 ? (media.currentTime / media.duration) * 100 : 0));
-
-function cycleRate(): void {
-  const i = RATES.indexOf(media.rate);
-  media.setRate(RATES[(i + 1) % RATES.length]);
-}
 
 function seek(e: PointerEvent): void {
   if (media.duration <= 0) return;
@@ -85,7 +81,7 @@ function onSeekUp(e: PointerEvent): void {
         </template>
         <span class="head" :style="{ left: `${pct}%` }" />
       </div>
-      <button class="rate-btn" v-tip="'倍率（点击切换）'" @click="cycleRate">{{ media.rate }}x</button>
+      <RateControl :rate="media.rate" @select="media.setRate" />
       <IconButton name="loop" title="循环播放" :active="media.loop" @click="media.toggleLoop()" />
     </template>
   </div>
@@ -160,19 +156,5 @@ function onSeekUp(e: PointerEvent): void {
   background: var(--brand-1);
   z-index: 2;
   pointer-events: none;
-}
-.rate-btn {
-  padding: 0 var(--space-4);
-  height: 24px;
-  border-radius: var(--radius-4);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-1);
-  white-space: nowrap;
-  flex: none;
-  transition: background 0.12s ease;
-}
-.rate-btn:hover {
-  background: var(--font-icon-6);
 }
 </style>
