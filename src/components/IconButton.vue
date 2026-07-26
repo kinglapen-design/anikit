@@ -4,8 +4,8 @@
 import AppIcon from "./AppIcon.vue";
 
 withDefaults(
-  defineProps<{ name: string; small?: boolean; filled?: boolean; danger?: boolean; disabled?: boolean; title?: string }>(),
-  { small: false, filled: false, danger: false, disabled: false, title: undefined },
+  defineProps<{ name: string; small?: boolean; filled?: boolean; danger?: boolean; active?: boolean; disabled?: boolean; title?: string }>(),
+  { small: false, filled: false, danger: false, active: false, disabled: false, title: undefined },
 );
 defineEmits<{ click: [e: MouseEvent] }>();
 </script>
@@ -13,7 +13,7 @@ defineEmits<{ click: [e: MouseEvent] }>();
 <template>
   <button
     class="icon-btn"
-    :class="{ small, filled, danger }"
+    :class="{ small, filled, danger, active }"
     :disabled="disabled"
     v-tip="title"
     @click="$emit('click', $event)"
@@ -53,6 +53,10 @@ defineEmits<{ click: [e: MouseEvent] }>();
 }
 .icon-btn.danger:hover {
   background: var(--error);
+}
+/* 激活态（5.2：笔记浮层开着 / 循环播放开启）：品牌紫 */
+.icon-btn.active {
+  color: var(--brand-1);
 }
 .icon-btn:disabled {
   cursor: default;

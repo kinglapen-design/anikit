@@ -1,23 +1,36 @@
 <script setup lang="ts">
-// 预览画面区（4.3）：图片/源文件/序列帧共用渲染（filePath 由 store 维护，序列帧切帧即换 src）。
-// 缩放/平移作用于外层 wrap（left/top 计算式定位，无 transform-origin 坑）；
-// 旋转/翻转只作用于 <img> 自身，pan/zoom 数学不受影响。
-// 交互：滚轮缩放（瞄点跟鼠标）、左键拖动平移、双击 适合窗口⇄原图大小、
-// ←/→ 图片=上/下一个素材 序列帧=上/下帧、空格播放暂停、Esc 退出全屏/预览。
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+// 预览画面区（4.3/5.2）：image/sequence/anim 走 <img>（filePath 由 store 维护，切帧即换 src）；
+// video 把 previewMedia 的 <video> 元素挂进画面区（缩放/平移/旋转/翻转复用图片那套数学，
+// 尺寸经 loadedmetadata → onImageLoad 喂入）；audio 显示波形缩略图大图（contain），无缩放平移。
+// 交互：滚轮缩放（瞄点跟鼠标）、左键拖动平移、双击 适合窗口⇄原图大小；
+// ←/→ sequence/anim=上/下帧 video=逐帧步进(±1/24s) 其余=上/下一个素材；
+// 空格 sequence/anim/audio/video=播放暂停；Esc 退出全屏/预览。
+import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import PreviewNavigator from "./PreviewNavigator.vue";
 import { usePreviewStore } from "../stores/preview";
+import { usePreviewMediaStore } from "../stores/previewMedia";
 
 const preview = usePreviewStore();
+const media = usePreviewMediaStore();
 const stageRef = ref<HTMLElement>();
+const videoWrapRef = ref<HTMLElement>();
 let ro: ResizeObserver | undefined;
 
 const url = computed(() => (preview.filePath ? convertFileSrc(preview.filePath) : null));
+// <img> 渲染的 kind（video 走元素挂载，audio 走波形大图）
+const showImg = computed(
+  () => url.value && preview.kind !== "video" && preview.kind !== "audio" && preview.kind !== "other",
+);
 // other 保底：格式图标大图
 const iconUrl = computed(() => {
   const p = preview.current;
   return preview.kind === "other" && p?.thumbPath ? convertFileSrc(p.thumbPath) : null;
+});
+// audio：波形缩略图大图（5.1 info 波形图）
+const waveUrl = computed(() => {
+  const p = preview.current;
+  return preview.kind === "audio" && p?.thumbPath ? convertFileSrc(p.thumbPath) : null;
 });
 
 // wrap 定位：图中心 = 容器中心 + pan，尺寸 = 自然尺寸 × zoom（left/top 直算，无 origin 问题）
@@ -31,14 +44,31 @@ const imgStyle = computed(() => ({
   transform: `${preview.flipH ? "scaleX(-1) " : ""}rotate(${preview.rotate}deg)`,
 }));
 
+// video：元素挂进画面区（模块级单例，kind 切入时 append；切走随 v-if 脱离 DOM，store 仍持有）
+watch(
+  [() => preview.kind, videoWrapRef],
+  ([k]) => {
+    if (k === "video" && videoWrapRef.value) {
+      const v = media.getEl();
+      if (v.parentElement !== videoWrapRef.value) videoWrapRef.value.appendChild(v);
+    }
+  },
+  { immediate: true, flush: "post" },
+);
+// video 旋转/翻转同步到元素（wrap 定位/pan/zoom 数学不受影响）
+watchEffect(() => {
+  if (preview.kind !== "video") return;
+  media.getEl().style.transform = imgStyle.value.transform;
+});
+
 function onLoad(e: Event): void {
   const img = e.target as HTMLImageElement;
   preview.onImageLoad(img.naturalWidth, img.naturalHeight);
 }
 
-// 滚轮缩放：瞄点跟鼠标位置（2026-07-25 定案）
+// 滚轮缩放：瞄点跟鼠标位置（2026-07-25 定案）；audio/other 无查看器交互
 function onWheel(e: WheelEvent): void {
-  if (preview.kind === "other") return;
+  if (!preview.viewable) return;
   const rect = stageRef.value!.getBoundingClientRect();
   const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
   preview.zoomAt(preview.zoom * factor, e.clientX - rect.left, e.clientY - rect.top);
@@ -48,7 +78,7 @@ function onWheel(e: WheelEvent): void {
 // 左键拖动平移
 let dragging = false;
 function onPointerDown(e: PointerEvent): void {
-  if (e.button !== 0 || preview.kind === "other") return;
+  if (e.button !== 0 || !preview.viewable) return;
   dragging = true;
   stageRef.value!.setPointerCapture(e.pointerId);
 }
@@ -65,30 +95,34 @@ function onPointerUp(e: PointerEvent): void {
 
 // 双击：适合窗口 ⇄ 原图大小
 function onDblClick(): void {
-  if (preview.kind === "other") return;
+  if (!preview.viewable) return;
   if (Math.abs(preview.zoom - preview.fitZoom) < 0.01) preview.actual();
   else preview.fit();
 }
 
 function onKeydown(e: KeyboardEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return; // 笔记编辑中不抢键（5.2）
   switch (e.key) {
     case "Escape":
       if (preview.fullscreen) void preview.setFullscreen(false);
       else preview.close();
       break;
     case "ArrowLeft":
-      if (preview.kind === "sequence") preview.stepFrame(-1);
+      if (preview.kind === "sequence" || preview.kind === "anim") preview.stepFrame(-1);
+      else if (preview.kind === "video") media.seekBy(-1 / 24); // 逐帧步进（5.2 定案）
       else void preview.step(-1);
       break;
     case "ArrowRight":
-      if (preview.kind === "sequence") preview.stepFrame(1);
+      if (preview.kind === "sequence" || preview.kind === "anim") preview.stepFrame(1);
+      else if (preview.kind === "video") media.seekBy(1 / 24);
       else void preview.step(1);
       break;
     case " ":
-      if (preview.kind === "sequence") {
-        preview.togglePlay();
-        e.preventDefault();
-      }
+      if (preview.kind === "sequence" || preview.kind === "anim") preview.togglePlay();
+      else if (preview.kind === "audio" || preview.kind === "video") media.togglePlay();
+      else break;
+      e.preventDefault();
       break;
   }
 }
@@ -109,7 +143,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
 });
 
-// 全屏时禁止标题栏拖拽区域误触（预览区无拖拽区，无需处理）；切素材时结束拖动
+// 切素材时结束拖动
 watch(
   () => preview.assetKey,
   () => (dragging = false),
@@ -120,18 +154,22 @@ watch(
   <div
     ref="stageRef"
     class="preview-stage"
-    :class="{ dragging: dragging || undefined, pannable: preview.kind !== 'other' }"
+    :class="{ dragging: dragging || undefined, pannable: preview.viewable }"
     @wheel="onWheel"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
     @dblclick="onDblClick"
   >
-    <div v-if="url" class="img-wrap" :style="wrapStyle">
-      <img :src="url" :style="imgStyle" draggable="false" @load="onLoad" />
+    <div v-if="showImg" class="img-wrap" :style="wrapStyle">
+      <img :src="url!" :style="imgStyle" draggable="false" @load="onLoad" />
     </div>
+    <div v-else-if="preview.kind === 'video'" ref="videoWrapRef" class="img-wrap" :style="wrapStyle" />
+    <img v-else-if="waveUrl" class="wave-large" :src="waveUrl" draggable="false" />
     <img v-else-if="iconUrl" class="format-icon" :src="iconUrl" draggable="false" />
-    <PreviewNavigator v-if="preview.overflow && preview.kind !== 'other'" />
+    <span v-if="media.transcoding" class="hint">转码中…</span>
+    <span v-if="preview.error" class="error-text">{{ preview.error }}</span>
+    <PreviewNavigator v-if="preview.overflow" />
   </div>
 </template>
 
@@ -160,6 +198,16 @@ watch(
   height: 100%;
   /* 旋转/翻转绕图中心，视觉可溢出 wrap（stage overflow hidden 兜底） */
 }
+/* audio：波形缩略图大图（contain 居中） */
+.wave-large {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
 .format-icon {
   position: absolute;
   left: 50%;
@@ -168,5 +216,20 @@ watch(
   width: 256px;
   height: 256px;
   object-fit: contain;
+}
+/* 转码加载态 / 媒体源报错文案（说明文字档，居中底部） */
+.hint,
+.error-text {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-16);
+  transform: translateX(-50%);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  color: var(--font-icon-3);
+  white-space: nowrap;
+}
+.error-text {
+  color: var(--error);
 }
 </style>

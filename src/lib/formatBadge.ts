@@ -26,9 +26,17 @@ const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "bmp", "webp"]);
 /** 音频格式（5.1）：列表"尺寸"列改显示时长（metadata 宽高是波形图尺寸，不是内容尺寸） */
 const AUDIO_EXTS = new Set(["mp3", "wav", "wma"]);
 
+/** 视频格式（5.1/5.2，PRD 05-01 MVP 口径）：预览走 <video> 播放 */
+const VIDEO_EXTS = new Set(["mp4", "mov", "avi", "mpeg4", "m4v"]);
+
 /** 音频判定（5.1，PRD 05-01 MVP 口径） */
 export function isAudioExt(ext: string): boolean {
   return AUDIO_EXTS.has(ext.toLowerCase());
+}
+
+/** 视频判定（5.2 预览 kind 分派） */
+export function isVideoExt(ext: string): boolean {
+  return VIDEO_EXTS.has(ext.toLowerCase());
 }
 
 /** 静态图片判定（4.4 文件夹卡片缩略图取子项同口径：排除 GIF / 序列帧 / 工程与矢量格式） */

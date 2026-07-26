@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// 预览态标题栏（4.3）：返回 + 索引 x/y / 缩放滑块+百分比 / 工具按钮组。
+// 预览态标题栏（4.3/5.2）：返回 + 索引 x/y / 缩放滑块+百分比 / 工具按钮组。
 // 布局模式照 ContentTitleBar（space-between 等距、中栏图标 80%）。
-// 图片/序列帧：缩放、适合窗口、原图大小（源文件 PSD·AI·SVG 去旋转翻转、加默认应用打开）；
-// 其他格式：仅返回、索引、插件、默认应用打开、上/下一个（5.2 定案，4.3 保底先行）。
+// image/sequence/anim/video：缩放组 + 适合窗口 + 原图大小（源文件 PSD·AI·SVG 去旋转翻转、加默认应用打开；
+// anim/video 无默认应用打开）；audio：仅返回、索引、插件、新窗口打开、上/下一个；
+// other：返回、索引、插件、默认应用打开、新窗口打开、上/下一个。
 // window 模式（新窗口打开）：返回 + 索引替换为文件名标题，加置顶与完整窗口控制按钮（PRD 4.3）。
 import { computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
@@ -46,13 +47,13 @@ async function togglePin(): Promise<void> {
       </template>
       <span v-else class="index-text">{{ preview.current?.name ?? "预览" }}</span>
     </div>
-    <div v-if="preview.kind !== 'other'" class="zoom-group">
+    <div v-if="preview.viewable" class="zoom-group">
       <SideSlider v-model="zoomPct" :min="2" :max="800" />
       <span class="zoom-text">{{ Math.round(preview.zoom * 100) }}%</span>
     </div>
     <div class="btn-group">
       <IconButton name="plugin" title="插件" />
-      <template v-if="preview.kind !== 'other'">
+      <template v-if="preview.viewable">
         <IconButton v-if="!preview.isSource" name="rotate-cw" title="旋转" @click="preview.rotateCw()" />
         <IconButton v-if="!preview.isSource" name="flip-h" title="水平翻转" @click="preview.toggleFlip()" />
         <IconButton name="fit-window" title="适合窗口" @click="preview.fit()" />

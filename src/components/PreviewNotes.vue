@@ -1,0 +1,187 @@
+<script setup lang="ts">
+// 逐帧笔记浮层（5.2）：播放条上方弹出（footer 内绝对定位 bottom:100%+间距 4，
+// C3 底 / inset 1px border-1 / 圆角 8 / --shadow-pop / 内边距 8）。
+// 头部："笔记" + 当前帧标识（sequence/anim=帧 x/y，video=mm:ss）+ 关闭；
+// textarea 写当前帧/时间点笔记（C4 输入框样式，失焦与 Ctrl+Enter 保存，key 见 previewNotes）；
+// 下方全部笔记列表（帧号/时间 + 摘要单行省略 + 删除；点击跳帧/跳时间，当前项高亮）。
+import { computed, ref, watch } from "vue";
+import IconButton from "./IconButton.vue";
+import { formatDuration } from "../lib/formatDuration";
+import { usePreviewStore } from "../stores/preview";
+import { usePreviewMediaStore } from "../stores/previewMedia";
+import { usePreviewNotesStore } from "../stores/previewNotes";
+
+const preview = usePreviewStore();
+const media = usePreviewMediaStore();
+const notes = usePreviewNotesStore();
+
+const draft = ref("");
+
+// 当前帧标识：sequence/anim = 帧 x/y；video = 当前时间 mm:ss
+const frameLabel = computed(() => {
+  if (preview.kind === "video") return formatDuration(media.currentTime);
+  const n = preview.seq?.frames.length ?? 0;
+  return n > 0 ? `帧 ${preview.frame + 1} / ${n}` : "";
+});
+
+// 切帧/切素材时回填该帧已有笔记（失焦保存先于跳转触发，草稿不丢）
+watch(
+  () => notes.currentKey,
+  () => {
+    draft.value = notes.currentText;
+  },
+  { immediate: true },
+);
+
+function save(): void {
+  const k = notes.currentKey;
+  if (k && draft.value !== notes.currentText) void notes.save(k, draft.value);
+}
+function onKeydown(e: KeyboardEvent): void {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+    save();
+    e.preventDefault();
+  }
+}
+// 列表条目标识：t:{秒} → mm:ss；帧名 → 帧号
+function itemLabel(key: string): string {
+  if (key.startsWith("t:")) return formatDuration(Number(key.slice(2)));
+  const i = preview.seq?.frames.findIndex((f) => f.name === key) ?? -1;
+  return i >= 0 ? `帧 ${i + 1}` : key;
+}
+</script>
+
+<template>
+  <div v-if="notes.open" class="notes-pop">
+    <header class="notes-head">
+      <span class="notes-title">笔记</span>
+      <span class="notes-frame">{{ frameLabel }}</span>
+      <IconButton name="window-close" small title="关闭" @click="notes.open = false" />
+    </header>
+    <textarea
+      v-model="draft"
+      class="notes-input"
+      rows="3"
+      placeholder="记下这一帧的想法..."
+      @blur="save"
+      @keydown="onKeydown"
+    />
+    <ul v-if="notes.notes.length > 0" class="notes-list">
+      <li
+        v-for="n in notes.notes"
+        :key="n.key"
+        class="note-item"
+        :class="{ active: n.key === notes.currentKey }"
+        @click="notes.jump(n.key)"
+      >
+        <span class="note-key">{{ itemLabel(n.key) }}</span>
+        <span class="note-text">{{ n.text }}</span>
+        <IconButton name="clear" small title="删除" @click.stop="notes.remove(n.key)" />
+      </li>
+    </ul>
+  </div>
+</template>
+
+<style scoped>
+/* 浮层：播放条上方（footer relative 内 bottom:100%+4），C3 / inset border-1 / 圆角 8 / --shadow-pop / 内边距 8 */
+.notes-pop {
+  position: absolute;
+  left: var(--space-12);
+  right: var(--space-12);
+  bottom: 100%;
+  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-8);
+  border-radius: var(--radius-8);
+  background: var(--c3);
+  box-shadow:
+    var(--shadow-pop),
+    inset 0 0 0 1px var(--border-1);
+  z-index: 20;
+}
+.notes-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+.notes-title {
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  color: var(--font-icon-1);
+  flex: none;
+}
+.notes-frame {
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  color: var(--font-icon-3);
+  flex: 1;
+  min-width: 0;
+}
+/* 输入框：C4 底 / inset border-1 / 圆角 8 / 内边距 8，聚焦品牌紫描边（03_输入框语言） */
+.notes-input {
+  width: 100%;
+  padding: var(--space-8);
+  border-radius: var(--radius-8);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-1);
+  color: var(--font-icon-1);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  resize: none;
+}
+.notes-input::placeholder {
+  color: var(--font-icon-placeholder);
+}
+.notes-input:focus {
+  box-shadow: inset 0 0 0 1px var(--brand-1);
+}
+/* 笔记列表：最多 5 条高滚动；当前项选中底色（font-icon-5） */
+.notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 150px;
+  overflow-y: auto;
+}
+.notes-list::-webkit-scrollbar {
+  width: 4px;
+}
+.notes-list::-webkit-scrollbar-thumb {
+  background: var(--border-1);
+  border-radius: 2px;
+}
+.note-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-4);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.note-item:hover {
+  background: var(--font-icon-6);
+}
+.note-item.active {
+  background: var(--font-icon-5);
+}
+.note-key {
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  color: var(--font-icon-3);
+  white-space: nowrap;
+  flex: none;
+}
+.note-text {
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  color: var(--font-icon-2);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

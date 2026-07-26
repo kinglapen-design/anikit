@@ -6,8 +6,10 @@ import { nextTick, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import IconButton from "./IconButton.vue";
 import { usePreviewStore } from "../stores/preview";
+import { usePreviewNotesStore } from "../stores/previewNotes";
 
 const preview = usePreviewStore();
+const notes = usePreviewNotesStore();
 const listRef = ref<HTMLElement>();
 
 // 高亮块确保可见（nearest：可见区外才滑动，正好实现"先移到两端、顶头后按需滑动"）
@@ -34,6 +36,7 @@ watch(
       >
         <img v-if="f.stripPath" :src="convertFileSrc(f.stripPath)" :alt="f.name" draggable="false" loading="lazy" />
         <span v-else class="strip-pending" />
+        <span v-if="notes.keySet.has(f.name)" class="note-dot" />
       </button>
     </div>
     <IconButton name="chevron-small" title="下一帧" class="rot-r" @click="preview.stepFrame(1)" />
@@ -76,12 +79,23 @@ watch(
 }
 /* 帧块：高 56 宽按比例 / 圆角 8 / 1px border-2；当前帧 2px 品牌紫（卡片选中语言） */
 .frame {
+  position: relative;
   flex: none;
   height: 56px;
   border: 1px solid var(--border-2);
   border-radius: var(--radius-8);
   overflow: hidden;
   transition: border-color 0.12s ease;
+}
+/* 有笔记的帧：右上角品牌紫小圆点（5.2） */
+.note-dot {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: 50%;
+  background: var(--brand-1);
 }
 .frame img {
   display: block;

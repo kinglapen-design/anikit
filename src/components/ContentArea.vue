@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 中间内容展示区（C1）：标题栏 + 卡片列表（统一滚动：文件夹区块 + 素材网格）+ 搜索框。
-// 预览模式（4.3）：preview.assetKey 非空时整栏切换——预览标题栏 / 预览画面 / 序列帧播放条+帧条
-// （播放条占搜索栏位置，2026-07-25 定案）；全屏时 preview-root fixed 铺满窗口、隐藏标题栏。
+// 预览模式（4.3/5.2）：preview.assetKey 非空时整栏切换——预览标题栏 / 预览画面 / 播放条+帧条+笔记浮层
+// （播放条占搜索栏位置，2026-07-25 定案；sequence/anim/audio/video 四种形态分发）；全屏时 preview-root fixed 铺满窗口、隐藏标题栏。
 import { computed } from "vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
@@ -11,6 +11,7 @@ import PreviewTitleBar from "./PreviewTitleBar.vue";
 import PreviewPanel from "./PreviewPanel.vue";
 import PreviewPlayBar from "./PreviewPlayBar.vue";
 import PreviewFrameStrip from "./PreviewFrameStrip.vue";
+import PreviewNotes from "./PreviewNotes.vue";
 import { useContentStore } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
 
@@ -30,9 +31,10 @@ const items = computed(() => content.visiblePlacements);
         <section class="preview-section">
           <PreviewPanel />
         </section>
-        <footer v-if="preview.kind === 'sequence'" class="preview-footer">
+        <footer v-if="preview.hasPlayBar" class="preview-footer">
           <PreviewPlayBar />
           <PreviewFrameStrip />
+          <PreviewNotes />
         </footer>
       </div>
     </template>
@@ -93,8 +95,9 @@ const items = computed(() => content.visiblePlacements);
   flex: 1;
   min-height: 0;
 }
-/* 播放条 + 帧条容器：与搜索框容器同位置同内边距 */
+/* 播放条 + 帧条容器：与搜索框容器同位置同内边距；relative 供笔记浮层（bottom:100%）锚定 */
 .preview-footer {
+  position: relative;
   flex: none;
   padding: var(--space-4) var(--space-12) var(--space-12) var(--space-12);
 }
