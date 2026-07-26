@@ -21,10 +21,10 @@ const PCM_RATE: u32 = 8000;
 pub const WAVEFORM_WIDTH: u32 = 640;
 /// 波形图高（px）
 pub const WAVEFORM_HEIGHT: u32 = 272;
-/// 波形列数（每列 2px 宽连续拼接 + 3 点平滑——宽条平滑呈块状整体；
-/// 1px 细柱高频起伏呈"线条感"，2026-07-26 用户指正）
+/// 波形列数（RMS 采样网格：320 列 × 2px 间隔采样，渲染按列间线性插值 + 边缘抗锯齿——
+/// 1px 细柱呈"线条感"、逐列整数阶跃呈"阶梯像素感"，均被 2026-07-26 用户截图指正）
 const WAVEFORM_COLS: usize = 320;
-/// 每列像素宽（640 / 320 = 2）
+/// 采样网格像素间隔（640 / 320 = 2；渲染逐像素插值，不再是"每列 2px 实心拼接"）
 const COL_PX: u32 = 2;
 /// 波形柱色（#F8F5FA 60% alpha，2026-07-26 用户定，与 font-icon-3 同档观感）
 const BAR_RGBA: [u8; 4] = [0xF8, 0xF5, 0xFA, 153];
@@ -168,23 +168,39 @@ fn smooth3(cols: &mut [f32]) {
   }
 }
 
-/// 波形渲染（Eagle 同形态块状波形）：**上半 = 左声道、下半 = 右声道**，每列 COL_PX 宽
-/// 连续拼接；静音列只画 1px 中线（上 0 / 下 0，安静段呈细横线）
+/// 列坐标 p（浮点）处的插值高度：相邻列线性插值——逐列整数阶跃是边缘"阶梯像素感"的根因
+/// （2026-07-26 用户放大截图指正：Eagle 边缘连续平滑），插值后包络线为连续折线
+fn height_at(cols: &[f32], p: f32) -> f32 {
+  let i = p.floor() as usize;
+  let f = p - i as f32;
+  let a = cols.get(i).copied().unwrap_or(0.0);
+  let b = cols.get(i + 1).copied().unwrap_or(a);
+  a + (b - a) * f
+}
+
+/// 波形渲染（Eagle 同形态块状波形）：**上半 = 左声道、下半 = 右声道**；
+/// 每像素按列间插值得浮点高度，边缘行按覆盖比例写 alpha（抗锯齿，无阶梯感）；
+/// 静音列只画 1px 中线（最小高度 0.5px 上 + 0.5px 下）
 fn render_waveform(cols_l: &[f32], cols_r: &[f32], w: u32, h: u32) -> RgbaImage {
   let mut img = RgbaImage::new(w, h);
-  let cy = h / 2;
-  let max_half = (h / 2).saturating_sub(WAVEFORM_MARGIN);
-  let color = image::Rgba(BAR_RGBA);
-  for (i, (&lv, &rv)) in cols_l.iter().zip(cols_r.iter()).enumerate() {
-    let x0 = i as u32 * COL_PX;
-    if x0 >= w {
-      break;
+  let cy = (h / 2) as f32;
+  let max_half = (h / 2).saturating_sub(WAVEFORM_MARGIN) as f32;
+  for x in 0..w {
+    let p = x as f32 / COL_PX as f32;
+    let top = (height_at(cols_l, p).clamp(0.0, 1.0) * max_half).max(0.5);
+    let bot = (height_at(cols_r, p).clamp(0.0, 1.0) * max_half).max(0.5);
+    let (y0, y1) = (cy - top, cy + bot);
+    if top <= 0.5 && bot <= 0.5 {
+      // 静音列：中线 1px 实心（跨行各 0.5 覆盖会淡成灰线）
+      img.put_pixel(x, cy as u32, image::Rgba(BAR_RGBA));
+      continue;
     }
-    let top = (lv.clamp(0.0, 1.0) * max_half as f32) as u32;
-    let bot = (rv.clamp(0.0, 1.0) * max_half as f32) as u32;
-    for x in x0..(x0 + COL_PX).min(w) {
-      for y in (cy - top)..=(cy + bot).min(h - 1) {
-        img.put_pixel(x, y, color);
+    for y in 0..h {
+      // 当前像素行 [y, y+1] 与波形区间 [y0, y1] 的覆盖比例（0..=1）
+      let cov = (y1.min(y as f32 + 1.0) - y0.max(y as f32)).clamp(0.0, 1.0);
+      if cov > 0.0 {
+        let a = (BAR_RGBA[3] as f32 * cov).round() as u8;
+        img.put_pixel(x, y, image::Rgba([BAR_RGBA[0], BAR_RGBA[1], BAR_RGBA[2], a]));
       }
     }
   }
@@ -223,22 +239,23 @@ mod tests {
   }
 
   #[test]
-  fn render_waveform_fills_blocky_columns() {
+  fn render_waveform_interpolates_smooth_edges() {
     let mut cols_l = vec![0.0; WAVEFORM_COLS];
     let mut cols_r = vec![0.0; WAVEFORM_COLS];
     cols_l[0] = 1.0;
     cols_r[0] = 1.0;
     let img = render_waveform(&cols_l, &cols_r, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
-    assert_eq!((img.width(), img.height()), (WAVEFORM_WIDTH, WAVEFORM_HEIGHT));
-    // 第 1 列满幅实心、COL_PX 宽：x=0 与 x=1 从 margin 到 h-margin 连续有柱色
-    for x in 0..COL_PX {
-      assert_eq!(img.get_pixel(x, WAVEFORM_MARGIN).0, BAR_RGBA);
-      assert_eq!(img.get_pixel(x, WAVEFORM_HEIGHT - WAVEFORM_MARGIN - 1).0, BAR_RGBA);
-    }
-    // 第 2 列（能量 0）只画 1px 中线：相邻行透明、中线有色
-    let x = COL_PX;
-    assert_eq!(img.get_pixel(x, WAVEFORM_HEIGHT / 2).0, BAR_RGBA);
-    assert_eq!(img.get_pixel(x, WAVEFORM_HEIGHT / 2 - 1).0[3], 0);
+    let cy = WAVEFORM_HEIGHT / 2;
+    let max_half = cy - WAVEFORM_MARGIN;
+    // x=0 满幅（最外边界行为半透明抗锯齿，取内行断言全色）
+    assert_eq!(img.get_pixel(0, cy).0, BAR_RGBA);
+    assert_eq!(img.get_pixel(0, WAVEFORM_MARGIN + 1).0, BAR_RGBA);
+    // x=1 = 列 0→1 中点：插值高度约一半——半高以内实心、半高以外透明（无阶梯跳变）
+    assert_eq!(img.get_pixel(1, cy - max_half / 2 + 2).0, BAR_RGBA);
+    assert_eq!(img.get_pixel(1, cy - max_half / 2 - 2).0[3], 0);
+    // x=2（列 1，能量 0）：只画 1px 中线，隔行透明
+    assert_eq!(img.get_pixel(2, cy).0, BAR_RGBA);
+    assert_eq!(img.get_pixel(2, cy - 2).0[3], 0);
   }
 
   #[test]
