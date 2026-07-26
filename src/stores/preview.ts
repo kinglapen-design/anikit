@@ -351,7 +351,8 @@ export const usePreviewStore = defineStore("preview", {
     stepFrame(delta: number): void {
       if (!this.seq) return;
       const n = this.seq.frames.length;
-      // 逐帧步进到头停（播放中才循环）
+      // 逐帧步进即暂停（2026-07-26 用户：不该多一道手动暂停）；步进到头停（播放中才循环）
+      if (this.playing) this.pause();
       this.setFrame(Math.min(n - 1, Math.max(0, this.frame + delta)));
     },
     play(): void {

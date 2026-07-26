@@ -110,13 +110,17 @@ function onKeydown(e: KeyboardEvent): void {
       break;
     case "ArrowLeft":
       if (preview.kind === "sequence" || preview.kind === "anim") preview.stepFrame(-1);
-      else if (preview.kind === "video") media.seekBy(-1 / 24); // 逐帧步进（5.2 定案）
-      else void preview.step(-1);
+      else if (preview.kind === "video") {
+        media.pause(); // 逐帧步进即暂停（2026-07-26 用户，与 stepFrame 同语义）
+        media.seekBy(-1 / 24);
+      } else void preview.step(-1);
       break;
     case "ArrowRight":
       if (preview.kind === "sequence" || preview.kind === "anim") preview.stepFrame(1);
-      else if (preview.kind === "video") media.seekBy(1 / 24);
-      else void preview.step(1);
+      else if (preview.kind === "video") {
+        media.pause();
+        media.seekBy(1 / 24);
+      } else void preview.step(1);
       break;
     case " ":
       if (preview.kind === "sequence" || preview.kind === "anim") preview.togglePlay();
