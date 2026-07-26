@@ -21,8 +21,8 @@ const PCM_RATE: u32 = 8000;
 pub const WAVEFORM_WIDTH: u32 = 640;
 /// 波形图高（px）
 pub const WAVEFORM_HEIGHT: u32 = 272;
-/// 波形柱数：640 宽 / 4px 槽位（2px 柱 + 2px 间距）
-const WAVEFORM_BARS: usize = 160;
+/// 波形列数（= 图宽，逐像素 1 列连续填充，Eagle 同形态实心波形）
+const WAVEFORM_COLS: usize = WAVEFORM_WIDTH as usize;
 /// 波形柱色（#F8F5FA 60% alpha，2026-07-26 用户定，与 font-icon-3 同档观感）
 const BAR_RGBA: [u8; 4] = [0xF8, 0xF5, 0xFA, 153];
 /// 波形上下留白（px）
@@ -102,8 +102,8 @@ pub fn waveform_image(path: &Path) -> Option<RgbaImage> {
     return None;
   }
   let samples = ffmpeg::audio_pcm_f32(path, PCM_RATE)?;
-  let peaks = peaks_from_samples(&samples, WAVEFORM_BARS);
-  Some(render_waveform(&peaks, WAVEFORM_WIDTH, WAVEFORM_HEIGHT))
+  let cols = rms_from_samples(&samples, WAVEFORM_COLS);
+  Some(render_waveform(&cols, WAVEFORM_WIDTH, WAVEFORM_HEIGHT))
 }
 
 /// 预览图统一入口（thumbnail::load_origin 兜底调用）：视频首帧 / 音频波形；其他格式 None
@@ -117,44 +117,39 @@ pub fn decode_preview_image(path: &Path) -> Option<DynamicImage> {
   None
 }
 
-/// PCM 样本分桶取峰值并全局归一（0..=1）；空输入返回全零（静音波形仍出图，一条中线）
-fn peaks_from_samples(samples: &[f32], buckets: usize) -> Vec<f32> {
+/// PCM 分桶 RMS 能量（逐列响度口径，2026-07-26 用户截图指正后改）：
+/// 逐桶"最大峰值"会让每桶都打到波形振荡峰顶——整段一样高、糊成一坨、动态小的内容无波峰波谷；
+/// RMS（能量均值开方）反映真实响度包络，安静段低、爆发段高。全局归一到 0..=1。
+fn rms_from_samples(samples: &[f32], buckets: usize) -> Vec<f32> {
   if samples.is_empty() || buckets == 0 {
     return vec![0.0; buckets];
   }
   let bucket_len = samples.len().div_ceil(buckets);
-  let mut peaks: Vec<f32> = samples
+  let mut cols: Vec<f32> = samples
     .chunks(bucket_len)
-    .map(|c| c.iter().fold(0f32, |m, s| m.max(s.abs())))
+    .map(|c| (c.iter().map(|s| s * s).sum::<f32>() / c.len() as f32).sqrt())
     .collect();
-  peaks.resize(buckets, 0.0);
-  let max = peaks.iter().cloned().fold(0f32, f32::max);
+  cols.resize(buckets, 0.0);
+  let max = cols.iter().cloned().fold(0f32, f32::max);
   if max > 0.0 {
-    for p in &mut peaks {
-      *p /= max;
+    for v in &mut cols {
+      *v /= max;
     }
   }
-  peaks
+  cols
 }
 
-/// 峰值数组渲染为透明底竖条图：柱 2px、槽位均分、垂直居中、上下留白 WAVEFORM_MARGIN
-fn render_waveform(peaks: &[f32], w: u32, h: u32) -> RgbaImage {
+/// RMS 列渲染（Eagle 同形态实心波形）：每列 1px 从 中线-v 填到 中线+v（连续无间距）；
+/// 静音列也有最低 3px 中线（v=0 → half=1，安静段呈现为细横线）
+fn render_waveform(cols: &[f32], w: u32, h: u32) -> RgbaImage {
   let mut img = RgbaImage::new(w, h);
-  if peaks.is_empty() {
-    return img;
-  }
-  let slot = (w / peaks.len() as u32).max(1);
-  let bar_w = (slot / 2).max(1);
   let cy = h / 2;
   let max_half = (h / 2).saturating_sub(WAVEFORM_MARGIN);
   let color = image::Rgba(BAR_RGBA);
-  for (i, &p) in peaks.iter().enumerate() {
-    let x0 = i as u32 * slot + (slot - bar_w) / 2;
-    let half = ((p.clamp(0.0, 1.0) * max_half as f32) as u32).max(1);
-    for x in x0..(x0 + bar_w).min(w) {
-      for y in (cy - half)..=(cy + half).min(h - 1) {
-        img.put_pixel(x, y, color);
-      }
+  for (x, &v) in cols.iter().enumerate().take(w as usize) {
+    let half = ((v.clamp(0.0, 1.0) * max_half as f32) as u32).max(1);
+    for y in (cy - half)..=(cy + half).min(h - 1) {
+      img.put_pixel(x as u32, y, color);
     }
   }
   img
@@ -165,33 +160,36 @@ mod tests {
   use super::*;
 
   #[test]
-  fn peaks_normalizes_and_buckets() {
-    // 8 样本 4 桶：每桶 2 样本取 max abs → [0.5, 1.0, 0.25, 0.75] 归一 → [0.5, 1.0, 0.25, 0.75]（max=1）
-    let samples = [0.1, -0.5, 0.9, -1.0, 0.2, -0.25, 0.7, -0.75];
-    let peaks = peaks_from_samples(&samples, 4);
-    assert_eq!(peaks, vec![0.5, 1.0, 0.25, 0.75]);
+  fn rms_reflects_loudness_envelope() {
+    // 前 4 样本响（±0.5 振荡）、后 4 样本静音，4 桶 → [1, 1, 0, 0]（归一）
+    let samples = [0.5, -0.5, 0.5, -0.5, 0.0, 0.0, 0.0, 0.0];
+    assert_eq!(rms_from_samples(&samples, 4), vec![1.0, 1.0, 0.0, 0.0]);
+    // 半响段 = 全响段能量一半 → 0.5（峰值口径下两者同为 1.0，分不清动态）
+    let samples = [1.0, -1.0, 0.5, -0.5];
+    assert_eq!(rms_from_samples(&samples, 2), vec![1.0, 0.5]);
   }
 
   #[test]
-  fn peaks_empty_and_zero_buckets() {
-    assert_eq!(peaks_from_samples(&[], 4), vec![0.0; 4]);
-    assert_eq!(peaks_from_samples(&[1.0], 0), Vec::<f32>::new());
+  fn rms_empty_and_zero_buckets() {
+    assert_eq!(rms_from_samples(&[], 4), vec![0.0; 4]);
+    assert_eq!(rms_from_samples(&[1.0], 0), Vec::<f32>::new());
     // 桶多于样本：后补零
-    assert_eq!(peaks_from_samples(&[0.5], 3), vec![1.0, 0.0, 0.0]);
+    assert_eq!(rms_from_samples(&[0.5], 3), vec![1.0, 0.0, 0.0]);
   }
 
   #[test]
-  fn render_waveform_draws_centered_bars() {
-    let mut peaks = vec![0.0; WAVEFORM_BARS];
-    peaks[0] = 1.0;
-    let img = render_waveform(&peaks, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
+  fn render_waveform_fills_columns_continuously() {
+    let mut cols = vec![0.0; WAVEFORM_COLS];
+    cols[0] = 1.0;
+    let img = render_waveform(&cols, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
     assert_eq!((img.width(), img.height()), (WAVEFORM_WIDTH, WAVEFORM_HEIGHT));
-    // 第 1 柱满幅：槽位 4px 内柱占 x=1..=2（居中），中心行 x=1 处有柱色
+    // 第 1 列满幅实心：x=0 从 margin 到 h-margin 连续有柱色
+    assert_eq!(img.get_pixel(0, WAVEFORM_MARGIN).0, BAR_RGBA);
+    assert_eq!(img.get_pixel(0, WAVEFORM_HEIGHT / 2).0, BAR_RGBA);
+    assert_eq!(img.get_pixel(0, WAVEFORM_HEIGHT - WAVEFORM_MARGIN - 1).0, BAR_RGBA);
+    // 第 2 列（能量 0）只有中线：y=0 透明、中线有色
+    assert_eq!(img.get_pixel(1, 0).0[3], 0);
     assert_eq!(img.get_pixel(1, WAVEFORM_HEIGHT / 2).0, BAR_RGBA);
-    // 满幅柱顶 = margin
-    assert_eq!(img.get_pixel(1, WAVEFORM_MARGIN).0, BAR_RGBA);
-    // 第 2 柱（峰值 0）只有中线 2px：y=0 处透明
-    assert_eq!(img.get_pixel(4, 0).0[3], 0);
   }
 
   #[test]
@@ -216,7 +214,9 @@ mod tests {
     if let Ok(a) = std::env::var("ANIKIT_TEST_AUDIO") {
       let info = probe_audio(Path::new(&a)).expect("音频元数据应成功");
       assert!(info.duration > 0.0);
-      assert!(waveform_image(Path::new(&a)).is_some());
+      let img = waveform_image(Path::new(&a)).expect("波形应成功");
+      // 目检调试用：波形落盘 target/waveform_debug.png（不入库）
+      let _ = img.save(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/waveform_debug.png"));
     }
   }
 }
