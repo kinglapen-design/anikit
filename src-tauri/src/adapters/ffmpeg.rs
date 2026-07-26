@@ -93,9 +93,9 @@ pub fn video_frame_png(path: &Path, at_secs: f64) -> Option<Vec<u8>> {
   run("ffmpeg", &args)
 }
 
-/// ffmpeg 解音频为 f32le PCM（mono，sample_rate Hz，时长封顶 PCM_MAX_SECS）；
-/// 返回逐样本 f32；解码失败返回 None
-pub fn audio_pcm_f32(path: &Path, sample_rate: u32) -> Option<Vec<f32>> {
+/// ffmpeg 解音频为 f32le PCM（sample_rate Hz，时长封顶 PCM_MAX_SECS）；
+/// channels = 声道数（1 = 混音 mono，2 = 立体声交错 LRLR…）；返回逐样本 f32；解码失败返回 None
+pub fn audio_pcm_f32(path: &Path, sample_rate: u32, channels: u16) -> Option<Vec<f32>> {
   let args = vec![
     "-v".into(),
     "error".into(),
@@ -104,7 +104,7 @@ pub fn audio_pcm_f32(path: &Path, sample_rate: u32) -> Option<Vec<f32>> {
     "-t".into(),
     PCM_MAX_SECS.to_string(),
     "-ac".into(),
-    "1".into(),
+    channels.to_string(),
     "-ar".into(),
     sample_rate.to_string(),
     "-f".into(),

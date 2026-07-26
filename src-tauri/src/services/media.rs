@@ -21,8 +21,11 @@ const PCM_RATE: u32 = 8000;
 pub const WAVEFORM_WIDTH: u32 = 640;
 /// 波形图高（px）
 pub const WAVEFORM_HEIGHT: u32 = 272;
-/// 波形列数（= 图宽，逐像素 1 列连续填充，Eagle 同形态实心波形）
-const WAVEFORM_COLS: usize = WAVEFORM_WIDTH as usize;
+/// 波形列数（每列 2px 宽连续拼接 + 3 点平滑——宽条平滑呈块状整体；
+/// 1px 细柱高频起伏呈"线条感"，2026-07-26 用户指正）
+const WAVEFORM_COLS: usize = 320;
+/// 每列像素宽（640 / 320 = 2）
+const COL_PX: u32 = 2;
 /// 波形柱色（#F8F5FA 60% alpha，2026-07-26 用户定，与 font-icon-3 同档观感）
 const BAR_RGBA: [u8; 4] = [0xF8, 0xF5, 0xFA, 153];
 /// 波形上下留白（px）
@@ -96,14 +99,31 @@ pub fn video_first_frame(path: &Path) -> Option<RgbaImage> {
   image::load_from_memory(&png).ok().map(|i| i.to_rgba8())
 }
 
-/// 音频波形预览图（320×320 透明底竖条）；缩略图与冲突弹窗预览共用
+/// 音频波形预览图（640×272 透明底；**上半 = 左声道、下半 = 右声道**立体声分绘，
+/// mono 源 ffmpeg 复制成双声道自然对称）；缩略图与冲突弹窗预览共用
 pub fn waveform_image(path: &Path) -> Option<RgbaImage> {
   if !is_audio(path) {
     return None;
   }
-  let samples = ffmpeg::audio_pcm_f32(path, PCM_RATE)?;
-  let cols = rms_from_samples(&samples, WAVEFORM_COLS);
-  Some(render_waveform(&cols, WAVEFORM_WIDTH, WAVEFORM_HEIGHT))
+  let pcm = ffmpeg::audio_pcm_f32(path, PCM_RATE, 2)?;
+  // 立体声交错去交错（LRLR… → L / R 两路）
+  let (mut l, mut r) = (Vec::with_capacity(pcm.len() / 2), Vec::with_capacity(pcm.len() / 2));
+  for pair in pcm.chunks_exact(2) {
+    l.push(pair[0]);
+    r.push(pair[1]);
+  }
+  let mut cols_l = rms_columns(&l, WAVEFORM_COLS);
+  let mut cols_r = rms_columns(&r, WAVEFORM_COLS);
+  // 联合归一（保持左右声道相对响度），再 3 点平滑连成连续包络
+  let max = cols_l.iter().chain(cols_r.iter()).cloned().fold(0f32, f32::max);
+  if max > 0.0 {
+    for v in cols_l.iter_mut().chain(cols_r.iter_mut()) {
+      *v /= max;
+    }
+  }
+  smooth3(&mut cols_l);
+  smooth3(&mut cols_r);
+  Some(render_waveform(&cols_l, &cols_r, WAVEFORM_WIDTH, WAVEFORM_HEIGHT))
 }
 
 /// 预览图统一入口（thumbnail::load_origin 兜底调用）：视频首帧 / 音频波形；其他格式 None
@@ -117,10 +137,10 @@ pub fn decode_preview_image(path: &Path) -> Option<DynamicImage> {
   None
 }
 
-/// PCM 分桶 RMS 能量（逐列响度口径，2026-07-26 用户截图指正后改）：
+/// PCM 分桶 RMS 能量（逐列响度口径，未归一——左右声道联合归一在调用方做）：
 /// 逐桶"最大峰值"会让每桶都打到波形振荡峰顶——整段一样高、糊成一坨、动态小的内容无波峰波谷；
-/// RMS（能量均值开方）反映真实响度包络，安静段低、爆发段高。全局归一到 0..=1。
-fn rms_from_samples(samples: &[f32], buckets: usize) -> Vec<f32> {
+/// RMS（能量均值开方）反映真实响度包络，安静段低、爆发段高（2026-07-26 用户截图指正后改）。
+fn rms_columns(samples: &[f32], buckets: usize) -> Vec<f32> {
   if samples.is_empty() || buckets == 0 {
     return vec![0.0; buckets];
   }
@@ -130,26 +150,42 @@ fn rms_from_samples(samples: &[f32], buckets: usize) -> Vec<f32> {
     .map(|c| (c.iter().map(|s| s * s).sum::<f32>() / c.len() as f32).sqrt())
     .collect();
   cols.resize(buckets, 0.0);
-  let max = cols.iter().cloned().fold(0f32, f32::max);
-  if max > 0.0 {
-    for v in &mut cols {
-      *v /= max;
-    }
-  }
   cols
 }
 
-/// RMS 列渲染（Eagle 同形态实心波形）：每列 1px 从 中线-v 填到 中线+v（连续无间距）；
-/// 静音列也有最低 3px 中线（v=0 → half=1，安静段呈现为细横线）
-fn render_waveform(cols: &[f32], w: u32, h: u32) -> RgbaImage {
+/// 3 点滑动平均（边缘重复端点）：相邻列 RMS 独立计算高频起伏大，
+/// 平滑后连成连续包络，波形呈块状整体而非一根根细线
+fn smooth3(cols: &mut [f32]) {
+  if cols.len() < 3 {
+    return;
+  }
+  let src = cols.to_vec();
+  for (i, v) in cols.iter_mut().enumerate() {
+    let a = src[i.saturating_sub(1)];
+    let b = src[i];
+    let c = src[(i + 1).min(src.len() - 1)];
+    *v = (a + b + c) / 3.0;
+  }
+}
+
+/// 波形渲染（Eagle 同形态块状波形）：**上半 = 左声道、下半 = 右声道**，每列 COL_PX 宽
+/// 连续拼接；静音列只画 1px 中线（上 0 / 下 0，安静段呈细横线）
+fn render_waveform(cols_l: &[f32], cols_r: &[f32], w: u32, h: u32) -> RgbaImage {
   let mut img = RgbaImage::new(w, h);
   let cy = h / 2;
   let max_half = (h / 2).saturating_sub(WAVEFORM_MARGIN);
   let color = image::Rgba(BAR_RGBA);
-  for (x, &v) in cols.iter().enumerate().take(w as usize) {
-    let half = ((v.clamp(0.0, 1.0) * max_half as f32) as u32).max(1);
-    for y in (cy - half)..=(cy + half).min(h - 1) {
-      img.put_pixel(x as u32, y, color);
+  for (i, (&lv, &rv)) in cols_l.iter().zip(cols_r.iter()).enumerate() {
+    let x0 = i as u32 * COL_PX;
+    if x0 >= w {
+      break;
+    }
+    let top = (lv.clamp(0.0, 1.0) * max_half as f32) as u32;
+    let bot = (rv.clamp(0.0, 1.0) * max_half as f32) as u32;
+    for x in x0..(x0 + COL_PX).min(w) {
+      for y in (cy - top)..=(cy + bot).min(h - 1) {
+        img.put_pixel(x, y, color);
+      }
     }
   }
   img
@@ -161,35 +197,48 @@ mod tests {
 
   #[test]
   fn rms_reflects_loudness_envelope() {
-    // 前 4 样本响（±0.5 振荡）、后 4 样本静音，4 桶 → [1, 1, 0, 0]（归一）
+    // 前 4 样本响（±0.5 振荡）、后 4 样本静音，4 桶 → [0.5, 0.5, 0, 0]（未归一）
     let samples = [0.5, -0.5, 0.5, -0.5, 0.0, 0.0, 0.0, 0.0];
-    assert_eq!(rms_from_samples(&samples, 4), vec![1.0, 1.0, 0.0, 0.0]);
-    // 半响段 = 全响段能量一半 → 0.5（峰值口径下两者同为 1.0，分不清动态）
+    assert_eq!(rms_columns(&samples, 4), vec![0.5, 0.5, 0.0, 0.0]);
+    // 半响段 = 全响段能量一半（峰值口径下两者同为 1.0，分不清动态）
     let samples = [1.0, -1.0, 0.5, -0.5];
-    assert_eq!(rms_from_samples(&samples, 2), vec![1.0, 0.5]);
+    assert_eq!(rms_columns(&samples, 2), vec![1.0, 0.5]);
   }
 
   #[test]
   fn rms_empty_and_zero_buckets() {
-    assert_eq!(rms_from_samples(&[], 4), vec![0.0; 4]);
-    assert_eq!(rms_from_samples(&[1.0], 0), Vec::<f32>::new());
+    assert_eq!(rms_columns(&[], 4), vec![0.0; 4]);
+    assert_eq!(rms_columns(&[1.0], 0), Vec::<f32>::new());
     // 桶多于样本：后补零
-    assert_eq!(rms_from_samples(&[0.5], 3), vec![1.0, 0.0, 0.0]);
+    assert_eq!(rms_columns(&[0.5], 3), vec![0.5, 0.0, 0.0]);
   }
 
   #[test]
-  fn render_waveform_fills_columns_continuously() {
-    let mut cols = vec![0.0; WAVEFORM_COLS];
-    cols[0] = 1.0;
-    let img = render_waveform(&cols, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
+  fn smooth3_averages_neighbors() {
+    let mut cols = vec![0.0, 0.0, 1.0, 0.0, 0.0];
+    smooth3(&mut cols);
+    let third = 1.0 / 3.0;
+    assert!((cols[1] - third).abs() < 1e-6 && (cols[2] - third).abs() < 1e-6 && (cols[3] - third).abs() < 1e-6);
+    assert_eq!(cols[0], 0.0);
+  }
+
+  #[test]
+  fn render_waveform_fills_blocky_columns() {
+    let mut cols_l = vec![0.0; WAVEFORM_COLS];
+    let mut cols_r = vec![0.0; WAVEFORM_COLS];
+    cols_l[0] = 1.0;
+    cols_r[0] = 1.0;
+    let img = render_waveform(&cols_l, &cols_r, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
     assert_eq!((img.width(), img.height()), (WAVEFORM_WIDTH, WAVEFORM_HEIGHT));
-    // 第 1 列满幅实心：x=0 从 margin 到 h-margin 连续有柱色
-    assert_eq!(img.get_pixel(0, WAVEFORM_MARGIN).0, BAR_RGBA);
-    assert_eq!(img.get_pixel(0, WAVEFORM_HEIGHT / 2).0, BAR_RGBA);
-    assert_eq!(img.get_pixel(0, WAVEFORM_HEIGHT - WAVEFORM_MARGIN - 1).0, BAR_RGBA);
-    // 第 2 列（能量 0）只有中线：y=0 透明、中线有色
-    assert_eq!(img.get_pixel(1, 0).0[3], 0);
-    assert_eq!(img.get_pixel(1, WAVEFORM_HEIGHT / 2).0, BAR_RGBA);
+    // 第 1 列满幅实心、COL_PX 宽：x=0 与 x=1 从 margin 到 h-margin 连续有柱色
+    for x in 0..COL_PX {
+      assert_eq!(img.get_pixel(x, WAVEFORM_MARGIN).0, BAR_RGBA);
+      assert_eq!(img.get_pixel(x, WAVEFORM_HEIGHT - WAVEFORM_MARGIN - 1).0, BAR_RGBA);
+    }
+    // 第 2 列（能量 0）只画 1px 中线：相邻行透明、中线有色
+    let x = COL_PX;
+    assert_eq!(img.get_pixel(x, WAVEFORM_HEIGHT / 2).0, BAR_RGBA);
+    assert_eq!(img.get_pixel(x, WAVEFORM_HEIGHT / 2 - 1).0[3], 0);
   }
 
   #[test]
