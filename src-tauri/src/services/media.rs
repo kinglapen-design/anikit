@@ -149,14 +149,17 @@ fn render_waveform(samples_l: &[f32], samples_r: &[f32], w: u32, h: u32) -> Rgba
     // 全静音：画中线
     draw_channel(&mut big, &[0.0], 1.0, true, cy, max_half);
   }
-  // 叠加次数只作形状掩码：统一填成一个颜色（2026-07-26 用户定——alpha 分层肉眼可见）；
-  // 发丝靠形状（细条）而非透明度体现，降采样的边缘抗锯齿不受影响
-  for p in big.pixels_mut() {
-    if p.0[3] > 0 {
-      p.0[3] = BAR_RGBA[3];
-    }
+  // 降采样得到带软覆盖的掩码后统一填色：覆盖 ≥ UNIFY_THRESHOLD 一律 60% 实色
+  // （2026-07-26 用户定——先填色再降采样会把 2px 细发丝稀释成"第二层"半透明）。
+  // 发丝靠形状（细条）体现；阈值挡掉降采样产生的亚像素光晕
+  let img = image::imageops::resize(&big, w, h, image::imageops::FilterType::Triangle);
+  const UNIFY_THRESHOLD: u8 = 16;
+  let mut img = img;
+  for p in img.pixels_mut() {
+    // 降采样会把边缘 RGB 与透明黑混合成脏灰，连色带 alpha 一起归一
+    *p = if p.0[3] >= UNIFY_THRESHOLD { image::Rgba(BAR_RGBA) } else { image::Rgba([0, 0, 0, 0]) };
   }
-  image::imageops::resize(&big, w, h, image::imageops::FilterType::Triangle)
+  img
 }
 
 /// 单声道半区叠加绘制：top_half = 上半（裁在中线以上），false = 下半
@@ -235,8 +238,8 @@ mod tests {
     // 主体内部 = 统一实色（无 alpha 分层）
     assert_eq!(img.get_pixel(10, cy - 20).0, BAR_RGBA);
     assert_eq!(img.get_pixel(100, cy + 10).0, BAR_RGBA);
-    // 孤立尖峰形状仍在（半透明经降采样稀释，>0 即可）
-    assert!(img.get_pixel(WAVEFORM_WIDTH - 1, WAVEFORM_MARGIN + 2).0[3] > 0, "尖峰形状保留");
+    // 孤立尖峰形状保留且与主体完全同色（降采样后阈值统一填色，无"第二层"）
+    assert_eq!(img.get_pixel(WAVEFORM_WIDTH - 1, WAVEFORM_MARGIN + 2).0, BAR_RGBA);
   }
 
   #[test]
