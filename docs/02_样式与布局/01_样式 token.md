@@ -76,14 +76,16 @@ PSD（PSD / PSB）：#1B384D
 FLA：#542822
 SVG / EPS / AI：#80591D
 AEP：#323281
-WEBP 动图 / 序列帧 / GIF：#4E2675
+WEBP 动图 / 序列帧 / GIF / 视频（MP4 / MOV / AVI / MPEG4 / M4V，5.1 归动图组）：#4E2675
 静态图片格式（PNG / JPG / JPEG / BMP / WEBP）：不出角标
-其他：C1-40
+其他（含音频 MP3 / WAV / WMA）：C1-40
 ```
 
 7. 专项使用（2026-07-23 用户定）
 
 ``` text
+音频波形缩略图（5.1 后端生成图，非 CSS，2026-07-26 用户定）：320×320 透明底 / 80 柱（柱 2px + 间距 2px）/ 柱色 #F8F5FA 60% alpha / 上下留白 10px——生成进 webp 后前端不可再调色
+```
 文件夹卡片-图层1（正面）：C4，border 1px border-1
 文件夹卡片-图层2（文件纸）：#CAC8CC，border 1px font-icon-3（60%）
 文件夹卡片-图层3（后层纸）：font-icon-3（60%），border 1px font-icon-20（20%）
