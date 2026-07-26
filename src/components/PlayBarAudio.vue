@@ -2,7 +2,8 @@
 // 音频播放条（5.2）：放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8 / 内边距 4 / 间距 6）。
 // 播放/暂停、音量（VolumeControl）、当前时间/总时长（mm:ss 同 formatDuration 口径）、
 // 波形进度条（波形按轨道实际像素后端重采样渲染，任意宽度 1px 级清晰；两层 div 以波形图作 CSS
-// mask：底层 font-icon-3 灰、已播放层 brand-1 紫 clip-path 裁到进度，播放头 1px 品牌紫竖线；
+// mask：底层 wave-pending 实色 = 未播放（与 C3 混合后的实际色号，不受 mask alpha 影响）、
+// 已播放层 brand-1 紫 clip-path 裁到进度，播放头 1px 品牌紫竖线；
 // 点击/拖动 seek）、倍率、循环。转码中显示加载提示。音频无笔记/全屏。
 import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -122,8 +123,8 @@ function onSeekUp(e: PointerEvent): void {
   padding: 0 var(--space-4);
 }
 /* 波形进度条：高 24，圆角 4；两层 div 以波形图作 CSS mask（alpha 通道，mask-size 铺满）——
-   底层灰（font-icon-3）= 未播放，上层紫（brand-1）clip-path 裁到进度 = 已播放（Eagle 蓝/灰对比的
-   紫/灰版，2026-07-26 用户定）；播放头 1px 品牌紫 */
+   底层 wave-pending 实色 = 未播放（font-icon-3 60% 与 C3 混合的实际色号，2026-07-26 用户定，
+   不受 mask alpha 影响），上层紫（brand-1）clip-path 裁到进度 = 已播放；播放头 1px 品牌紫 */
 .wave-progress {
   position: relative;
   flex: 1;
@@ -145,7 +146,7 @@ function onSeekUp(e: PointerEvent): void {
   pointer-events: none;
 }
 .wave-layer.base {
-  background: var(--font-icon-3);
+  background: var(--wave-pending);
 }
 .wave-layer.played {
   background: var(--brand-1);

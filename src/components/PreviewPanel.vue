@@ -175,7 +175,7 @@ watch(
       <img :src="url!" :style="imgStyle" draggable="false" @load="onLoad" />
     </div>
     <div v-else-if="preview.kind === 'video'" ref="videoWrapRef" class="img-wrap" :style="wrapStyle" />
-    <img v-else-if="waveUrl" class="wave-large" :src="waveUrl" draggable="false" />
+    <div v-else-if="waveUrl" class="wave-large" :style="{ '--wave-url': `url(&quot;${waveUrl}&quot;)` }" />
     <img v-else-if="iconUrl" class="format-icon" :src="iconUrl" draggable="false" />
     <span v-if="media.transcoding" class="hint">转码中…</span>
     <span v-if="preview.error" class="error-text">{{ preview.error }}</span>
@@ -208,15 +208,20 @@ watch(
   height: 100%;
   /* 旋转/翻转绕图中心，视觉可溢出 wrap（stage overflow hidden 兜底） */
 }
-/* audio：波形大图（contain 居中；重采样图为画面区等比尺寸，contain 即铺满） */
+/* audio：波形大图（重采样图按画面区等比渲染；CSS mask 方案——图柱 alpha 恒 100% 供 mask 取形，
+   颜色走 token font-icon-3 与原 60% 白观感一致，mask-size contain 居中即原 object-fit 行为） */
 .wave-large {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  inset: 0;
+  background: var(--font-icon-3);
+  -webkit-mask-image: var(--wave-url);
+  mask-image: var(--wave-url);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 .format-icon {
   position: absolute;
