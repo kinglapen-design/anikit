@@ -2,13 +2,14 @@
 //! 缩略图存 info 文件夹（{名}_thumbnail.webp），是缓存可重建、不进备份（PRD 06-04）。
 //! 格式图标（shell 保底）按格式存 cache/thumbs/{ext}.webp，不进 info（2026-07-22 用户定案）。
 //! 序列帧帧条小图按资源存 cache/frames/{asset_id}/{帧名}.webp，不进 info（会话级，打开库清空）。
-//! cache 下的会话级目录（tmp / previews / frames）打开库时统一清空（2026-07-25 用户定）；thumbs 格式图标跨会话保留。
+//! 动图播放帧按资源存 cache/anim/{asset_id}/{帧名}.webp，不进 info（会话级，打开库清空，5.2）。
+//! cache 下的会话级目录（tmp / previews / frames / anim）打开库时统一清空（2026-07-25 用户定）；thumbs 格式图标跨会话保留。
 //! 探测 / 解码失败返回 None 属"能力探测"语义（不是图片），不算吞错误。
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use image::DynamicImage;
+use image::{DynamicImage, RgbaImage};
 
 use crate::adapters::shell_thumb;
 use crate::core::library::CACHE_DIR;
@@ -205,6 +206,39 @@ pub fn generate_frame_strip(root: &Path, origin: &Path, asset_id: &str, frame_na
   Some(dest.to_string_lossy().into_owned())
 }
 
+/// 动图播放帧缓存目标路径（cache/anim/{asset_id}/{帧名}.webp）
+fn anim_frame_dest(root: &Path, asset_id: &str, frame_name: &str) -> PathBuf {
+  root.join(CACHE_DIR).join("anim").join(asset_id).join(format!("{frame_name}.webp"))
+}
+
+/// 动图播放帧缓存"只判存在不生成"版本：已生成返回路径，未生成返回 None。
+/// 命令层用它填 fullPath——未缓存帧进预览解析队列后台流式解码（5.2，同 frame_strip_path 语义）
+pub fn anim_frame_path(root: &Path, asset_id: &str, frame_name: &str) -> Option<String> {
+  let dest = anim_frame_dest(root, asset_id, frame_name);
+  dest.is_file().then(|| dest.to_string_lossy().into_owned())
+}
+
+/// 动图播放帧落盘（cache/anim/{asset_id}/{帧名}.webp，长边 ≤ 4096 等比、超过才缩放，
+/// libwebp 编码参数与帧条/全尺寸预览一致）：预览窗口动图播放逐帧预生成——存 cache 不进 info，
+/// 会话级（打开库时清空）。已存在直接返回路径（幂等）；编码失败返回 None。
+pub fn save_anim_frame(root: &Path, asset_id: &str, frame_name: &str, img: RgbaImage) -> Option<String> {
+  let dest = anim_frame_dest(root, asset_id, frame_name);
+  if dest.is_file() {
+    return Some(dest.to_string_lossy().into_owned());
+  }
+  let img = shrink_long_edge(DynamicImage::ImageRgba8(img), FULL_PREVIEW_LONG_EDGE);
+  let parent = dest.parent()?;
+  if let Err(e) = fs::create_dir_all(parent) {
+    log::error!("动图播放帧缓存目录创建失败：{e}");
+    return None;
+  }
+  if let Err(e) = save_webp(&img, &dest) {
+    log::error!("动图播放帧缓存落盘失败（{asset_id}/{frame_name}）：{e}");
+    return None;
+  }
+  Some(dest.to_string_lossy().into_owned())
+}
+
 /// 短边缩到 THUMB_SHORT_EDGE、长边等比（整数除法 floor，短边恰好 320）；原图短边不足不放大
 fn shrink_to_thumb(img: DynamicImage) -> DynamicImage {
   shrink_to_edge(img, THUMB_SHORT_EDGE)
@@ -365,6 +399,23 @@ mod tests {
 
     // 源文件不存在：None
     assert_eq!(full_preview_path(root, &root.join("不存在.png"), "A1"), None);
+  }
+
+  #[test]
+  fn anim_frame_cache_roundtrip() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let img = image::RgbaImage::from_pixel(64, 48, image::Rgba([40, 200, 40, 255]));
+
+    assert_eq!(anim_frame_path(root, "A1", "frame-00001"), None);
+    let p = save_anim_frame(root, "A1", "frame-00001", img.clone()).unwrap();
+    assert!(p.contains("cache") && p.contains("anim") && p.ends_with("frame-00001.webp"), "{p}");
+    assert_eq!(anim_frame_path(root, "A1", "frame-00001").as_deref(), Some(p.as_str()));
+    // 不足长边上限保持原尺寸；二次调用幂等（mtime 不变）
+    assert_eq!(image::image_dimensions(&p).unwrap(), (64, 48));
+    let mtime = fs::metadata(&p).unwrap().modified().unwrap();
+    save_anim_frame(root, "A1", "frame-00001", img).unwrap();
+    assert_eq!(fs::metadata(&p).unwrap().modified().unwrap(), mtime);
   }
 
   #[test]

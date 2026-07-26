@@ -15,3 +15,4 @@ pub mod json_io;
 pub mod library;
 pub mod migrate;
 pub mod models;
+pub mod notes;

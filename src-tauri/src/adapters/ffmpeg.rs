@@ -58,6 +58,72 @@ fn run(name: &str, args: &[String]) -> Option<Vec<u8>> {
   Some(out.stdout)
 }
 
+/// ffmpeg sidecar 是否可用：转码类命令据此区分"组件缺失"与"转码失败"两种中文文案
+pub fn ffmpeg_available() -> bool {
+  sidecar_path("ffmpeg").is_some()
+}
+
+/// 运行 sidecar 只判退出码（转码类调用输出写文件，stdout 无内容）；缺失 / 启动失败 / 非零退出均 false + warn
+fn run_status(name: &str, args: &[String]) -> bool {
+  let Some(bin) = sidecar_path(name) else {
+    log::warn!("{name} sidecar 缺失");
+    return false;
+  };
+  let mut cmd = Command::new(bin);
+  cmd.args(args).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped());
+  #[cfg(windows)]
+  std::os::windows::process::CommandExt::creation_flags(&mut cmd, CREATE_NO_WINDOW);
+  match cmd.output() {
+    Ok(o) if o.status.success() => true,
+    Ok(o) => {
+      log::warn!("{name} 退出码 {:?}：{}", o.status.code(), String::from_utf8_lossy(&o.stderr).trim());
+      false
+    }
+    Err(e) => {
+      log::warn!("{name} 启动失败：{e}");
+      false
+    }
+  }
+}
+
+/// 是否含音频流（转码组参用：无音频流不带 -c:a）；探测失败视同无音频——转出无声视频仍可播
+fn has_audio_stream(path: &Path) -> bool {
+  probe_json(path)
+    .and_then(|j| j.get("streams").and_then(|s| s.as_array()).cloned())
+    .is_some_and(|streams| {
+      streams.iter().any(|s| s.get("codec_type").and_then(|t| t.as_str()) == Some("audio"))
+    })
+}
+
+/// 转码为 webview 可播格式（5.2 播放源兜底）：视频 → mp4（libx264 veryfast crf23 + faststart，
+/// 有音频流才带 aac）；音频 → wav（pcm_s16le）。二进制缺失 / 非零退出 / 产物未生成均 false + warn。
+pub fn transcode_for_webview(path: &Path, out_path: &Path, is_audio: bool) -> bool {
+  let src = path.to_string_lossy().into_owned();
+  let out = out_path.to_string_lossy().into_owned();
+  let args: Vec<String> = if is_audio {
+    vec!["-v".into(), "error".into(), "-y".into(), "-i".into(), src, "-vn".into(), "-c:a".into(), "pcm_s16le".into(), out]
+  } else {
+    let mut a = vec!["-v".into(), "error".into(), "-y".into(), "-i".into(), src, "-map".into(), "0:v:0".into()];
+    if has_audio_stream(path) {
+      a.extend(["-map".into(), "0:a:0".into(), "-c:a".into(), "aac".into()]);
+    }
+    a.extend([
+      "-c:v".into(), "libx264".into(), "-preset".into(), "veryfast".into(),
+      "-crf".into(), "23".into(), "-movflags".into(), "+faststart".into(), out,
+    ]);
+    a
+  };
+  if !run_status("ffmpeg", &args) {
+    return false;
+  }
+  if out_path.is_file() {
+    true
+  } else {
+    log::warn!("转码产物未生成：{}", out_path.display());
+    false
+  }
+}
+
 /// ffprobe 元数据（format + streams，JSON）；解析失败返回 None
 pub fn probe_json(path: &Path) -> Option<serde_json::Value> {
   let args = vec![
@@ -149,5 +215,21 @@ mod tests {
     assert!(json.get("format").is_some());
     let png = video_frame_png(Path::new(&sample), 0.0).expect("抽帧应成功");
     assert!(png.starts_with(b"\x89PNG"));
+  }
+
+  /// 需要真二进制 + 真媒体文件：cargo test -- --ignored ffmpeg_transcode --nocapture
+  #[test]
+  #[ignore]
+  fn ffmpeg_transcode_smoke() {
+    let sample = std::env::var("ANIKIT_TEST_VIDEO").expect("设 ANIKIT_TEST_VIDEO=某 mp4 路径");
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.mp4");
+    assert!(transcode_for_webview(Path::new(&sample), &out, false), "视频转码应成功");
+    assert!(out.is_file());
+    if let Ok(a) = std::env::var("ANIKIT_TEST_AUDIO") {
+      let wav = dir.path().join("out.wav");
+      assert!(transcode_for_webview(Path::new(&a), &wav, true), "音频转码应成功");
+      assert!(wav.is_file());
+    }
   }
 }

@@ -4,7 +4,7 @@
 //!   每份备份都是完整快照，回滚不需要跨备份拼接，删除旧备份不影响其余）；
 //! - 滚动 10 份，超出删最旧；缓存与向量库不备份（可重建）。
 //!
-//! 备份对象 = library::data_files() 清单：库根数据文件 + 全部 info 内 metadata.json / annotation.json。
+//! 备份对象 = library::data_files() 清单：库根数据文件 + 全部 info 内 metadata.json / annotation.json / notes.json。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -163,9 +163,11 @@ mod tests {
     let info = root.join("asstes/AN2607211305-X7K2Q.info");
     fs::create_dir_all(&info).unwrap();
     fs::write(info.join("metadata.json"), r#"{ "version": 1 }"#).unwrap();
+    fs::write(info.join("notes.json"), r#"{ "version": 1, "notes": [] }"#).unwrap();
 
     let backup = backup_library(root).unwrap();
     assert!(backup.join("asstes/AN2607211305-X7K2Q.info/metadata.json").is_file());
+    assert!(backup.join("asstes/AN2607211305-X7K2Q.info/notes.json").is_file());
   }
 
   #[test]

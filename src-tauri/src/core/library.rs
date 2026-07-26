@@ -28,7 +28,7 @@ pub const RECENT_FILE: &str = "recent.json";
 pub const ROOT_DATA_FILES: &[&str] = &[FOLDERS_FILE, TAGS_FILE, PINS_FILE, RECYCLE_FILE, RECENT_FILE];
 
 /// info 文件夹内的数据文件（备份对象；缩略图/波形图是缓存可重建，不备份）
-const INFO_DATA_FILES: &[&str] = &["metadata.json", "annotation.json"];
+const INFO_DATA_FILES: &[&str] = &["metadata.json", "annotation.json", "notes.json"];
 
 /// 打开状态的素材库：数据 + 内存索引（运行期查询走内存，写操作先落盘再更新内存，PRD 06-03）
 #[allow(dead_code)] // 各数据字段随阶段 3/4 业务命令落地逐一启用
@@ -44,7 +44,7 @@ pub struct Library {
   pub format_icons: HashSet<String>,
 }
 
-/// 数据文件全量清单：库根五个 + asstes/*.info/{metadata,annotation}.json（备份与迁移共用）
+/// 数据文件全量清单：库根五个 + asstes/*.info/{metadata,annotation,notes}.json（备份与迁移共用）
 pub fn data_files(root: &Path) -> Result<Vec<PathBuf>, DataError> {
   let mut files: Vec<PathBuf> =
     ROOT_DATA_FILES.iter().map(|f| root.join(f)).filter(|p| p.exists()).collect();
@@ -137,9 +137,9 @@ pub fn open(path: &Path) -> Result<Library, DataError> {
   for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR, INBOX_DIR] {
     fs::create_dir_all(path.join(dir))?;
   }
-  // 会话级缓存（2026-07-25 用户定）：tmp（冲突弹窗预览）/ previews（PSD 高清层）/ frames（序列帧帧条小图）
-  // 打开库时清空上一轮遗留——点开过的素材缓存不留到下一会话，防容量膨胀；cache/thumbs 格式图标按格式跨会话保留
-  for sub in ["tmp", "previews", "frames"] {
+  // 会话级缓存（2026-07-25 用户定）：tmp（冲突弹窗预览）/ previews（PSD 高清层）/ frames（序列帧+动图帧条小图）
+  // / anim（动图全尺寸播放帧，5.2）打开库时清空上一轮遗留——点开过的素材缓存不留到下一会话，防容量膨胀；cache/thumbs 格式图标按格式跨会话保留
+  for sub in ["tmp", "previews", "frames", "anim"] {
     let dir = path.join(CACHE_DIR).join(sub);
     if dir.is_dir() {
       if let Err(e) = fs::remove_dir_all(&dir) {
@@ -379,8 +379,8 @@ mod tests {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     create(root).unwrap();
-    // 会话级缓存（2026-07-25 用户定）：tmp / previews / frames 打开库时整目录清空
-    for sub in ["tmp", "previews", "frames"] {
+    // 会话级缓存（2026-07-25 用户定）：tmp / previews / frames / anim 打开库时整目录清空
+    for sub in ["tmp", "previews", "frames", "anim"] {
       let d = root.join("cache").join(sub);
       fs::create_dir_all(&d).unwrap();
       fs::write(d.join("a.webp"), b"x").unwrap();
@@ -390,7 +390,7 @@ mod tests {
     fs::create_dir_all(&thumbs).unwrap();
     fs::write(thumbs.join("fla.webp"), b"x").unwrap();
     open(root).unwrap();
-    for sub in ["tmp", "previews", "frames"] {
+    for sub in ["tmp", "previews", "frames", "anim"] {
       assert!(!root.join("cache").join(sub).exists(), "打开库应清空 cache/{sub}");
     }
     assert!(thumbs.join("fla.webp").exists(), "格式图标缓存应保留");

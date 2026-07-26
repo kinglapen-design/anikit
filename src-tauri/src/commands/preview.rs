@@ -1,6 +1,7 @@
-//! 命令 API：预览窗口——资源文件路径解析、序列帧帧清单、封面帧切换、默认程序打开。
+//! 命令 API：预览窗口——资源文件路径解析、序列帧帧清单、默认程序打开、新窗口打开。
 //! 命令层只做取库与参数传递，路径推导走 services；重活（psd 解码 / 帧条生成）一律进
 //! 预览解析队列异步执行，命令立即返回（2026-07-25 预览解析队列改造：快速切换素材不堆积）。
+//! 封面帧切换（序列帧/动图/视频）在 commands/thumb_frame.rs；动图帧清单在 commands/anim.rs。
 
 use std::fs;
 use std::path::PathBuf;
@@ -10,7 +11,7 @@ use tauri::{Manager, State};
 
 use crate::adapters::shell_open;
 use crate::commands::library::AppState;
-use crate::core::json_io::{read_json, write_json};
+use crate::core::json_io::read_json;
 use crate::core::library::{Library, ASSTES_DIR};
 use crate::core::models::AssetMeta;
 use crate::services::preview_queue::{self, PreviewTask};
@@ -140,61 +141,6 @@ fn sequence_frames(lib: &Library, asset_id: &str) -> Result<SequenceFrames, Stri
   Ok(SequenceFrames { fps: meta.fps.unwrap_or(DEFAULT_FPS), thumb_frame: meta.thumb_frame, frames })
 }
 
-// ---------- 封面帧切换 ----------
-
-/// 封面帧切换结果
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetThumbResult {
-  /// 新缩略图绝对路径
-  pub thumb_path: String,
-}
-
-/// 切换序列帧封面帧：用指定帧重新生成缩略图（与导入同管线、同命名 {资源名}_thumbnail.webp）→
-/// metadata 落盘（thumbFrame / thumbnail / modifiedAt）→ 同步内存索引（先落盘再更新索引）
-#[tauri::command]
-pub async fn set_thumb_frame(
-  state: State<'_, AppState>,
-  asset_id: String,
-  frame_name: String,
-) -> Result<SetThumbResult, String> {
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  apply_thumb_frame(lib, &asset_id, &frame_name)
-}
-
-fn apply_thumb_frame(lib: &mut Library, asset_id: &str, frame_name: &str) -> Result<SetThumbResult, String> {
-  let (info_dir, _origin, mut meta) = locate_asset(lib, asset_id)?;
-  let frames_dir = info_dir.join("frames");
-  if !frames_dir.is_dir() {
-    return Err(format!("「{}」不是序列帧资源", meta.name));
-  }
-  let frame_path = frames_dir.join(frame_name);
-  if !frame_path.is_file() {
-    return Err(format!("帧不存在：{frame_name}"));
-  }
-  // 删旧缩略图再生成（sequence.rs 建档同款）。词干 = 资源名，新旧文件名通常相同：
-  // 同名交给 generate 直接覆盖（避免先删后生成失败留下悬空引用），仅不同名（改名遗留）才先删
-  let old_thumb = meta.thumbnail.clone();
-  let stem = meta.name.clone();
-  if let Some(old) = old_thumb.as_deref() {
-    if old != format!("{stem}_thumbnail.webp") && old != format!("{stem}_thumbnail.png") {
-      if let Err(e) = fs::remove_file(info_dir.join(old)) {
-        log::warn!("旧缩略图删除失败（{old}）：{e}");
-      }
-    }
-  }
-  let thumb =
-    thumbnail::generate(&info_dir, &frame_path, &stem).ok_or_else(|| format!("帧图片解码失败：{frame_name}"))?;
-  // 先落盘再更新内存索引（01_开发规范 第 7 条）
-  meta.thumb_frame = Some(frame_name.to_string());
-  meta.thumbnail = Some(thumb.clone());
-  meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
-  write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
-  lib.index.assets.insert(asset_id.to_string(), meta);
-  Ok(SetThumbResult { thumb_path: info_dir.join(&thumb).to_string_lossy().into_owned() })
-}
-
 // ---------- 默认程序打开 ----------
 
 /// 用系统默认程序打开源文件（Windows ShellExecuteW "open"；非 Windows 暂不支持）
@@ -238,7 +184,8 @@ pub async fn open_preview_window(app: tauri::AppHandle, asset_key: String) -> Re
 // ---------- 共用 ----------
 
 /// 定位资源：读 metadata + 推导 info 目录与源文件绝对路径（PRD 01-2.3：真实路径不存绝对路径，由 ID 推导）
-fn locate_asset(lib: &Library, asset_id: &str) -> Result<(PathBuf, PathBuf, AssetMeta), String> {
+/// pub(crate)：thumb_frame / anim 等预览系命令共用
+pub(crate) fn locate_asset(lib: &Library, asset_id: &str) -> Result<(PathBuf, PathBuf, AssetMeta), String> {
   let info_dir = lib.root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
   if !info_dir.is_dir() {
     return Err(format!("资源不存在：{asset_id}"));
@@ -251,12 +198,11 @@ fn locate_asset(lib: &Library, asset_id: &str) -> Result<(PathBuf, PathBuf, Asse
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::core::json_io::write_json;
   use crate::core::library::{self, CACHE_DIR};
   use crate::services::import::{self, PendingFile, Source};
+  use crate::services::preview_queue::TEST_LOCK;
   use crate::services::sequence;
-
-  /// 走全局预览队列的测试互斥：队列语义是"新任务作废旧任务"，并行测试会互相顶掉任务
-  static QUEUE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
   /// 轮询等待条件成立（10s 超时判定失败），不裸 sleep 长等
   fn wait_until(mut cond: impl FnMut() -> bool, what: &str) {
@@ -340,7 +286,7 @@ mod tests {
 
   #[test]
   fn list_sequence_frames_returns_immediately_and_enqueues_strips() {
-    let _lock = QUEUE_TEST_LOCK.lock().unwrap();
+    let _lock = TEST_LOCK.lock().unwrap();
     let mut h = make_lib();
     add_sequence(&mut h, "AN-SEQ");
     let list = sequence_frames(&h.lib, "AN-SEQ").unwrap();
@@ -388,7 +334,7 @@ mod tests {
 
   #[test]
   fn list_sequence_frames_defaults_fps_and_rejects_non_sequence() {
-    let _lock = QUEUE_TEST_LOCK.lock().unwrap();
+    let _lock = TEST_LOCK.lock().unwrap();
     let mut h = make_lib();
     let mut meta = add_sequence(&mut h, "AN-SEQ2");
     // metadata 无 fps 字段（历史数据 / 手改）→ 缺省 24
@@ -400,35 +346,6 @@ mod tests {
     // 非序列帧资源（无 frames 目录）中文报错
     add_file(&mut h, "AN-ONE", "单张.png");
     let err = sequence_frames(&h.lib, "AN-ONE").unwrap_err();
-    assert!(err.contains("不是序列帧"), "{err}");
-  }
-
-  #[test]
-  fn set_thumb_frame_regenerates_and_syncs_index() {
-    let mut h = make_lib();
-    let before = add_sequence(&mut h, "AN-SEQ3");
-    let info = h.lib.root.join(ASSTES_DIR).join("AN-SEQ3.info");
-
-    let result = apply_thumb_frame(&mut h.lib, "AN-SEQ3", "走路-002.png").unwrap();
-    // 新缩略图沿用导入命名（词干 = 资源名），绝对路径指向 info 内文件
-    assert!(result.thumb_path.ends_with("走路_thumbnail.webp"), "{}", result.thumb_path);
-    assert!(PathBuf::from(&result.thumb_path).is_file());
-
-    // metadata 落盘：thumbFrame / thumbnail / modifiedAt 更新
-    let disk: AssetMeta = read_json(&info.join("metadata.json")).unwrap();
-    assert_eq!(disk.thumb_frame.as_deref(), Some("走路-002.png"));
-    assert_eq!(disk.thumbnail.as_deref(), Some("走路_thumbnail.webp"));
-    assert_ne!(disk.thumb_frame, before.thumb_frame);
-
-    // 内存索引同步（先落盘再更新）
-    let indexed = &h.lib.index.assets["AN-SEQ3"];
-    assert_eq!(indexed.thumb_frame.as_deref(), Some("走路-002.png"));
-    assert_eq!(indexed.thumbnail.as_deref(), Some("走路_thumbnail.webp"));
-
-    // 帧不存在 / 非序列帧资源 → 中文报错
-    assert!(apply_thumb_frame(&mut h.lib, "AN-SEQ3", "走路-999.png").is_err());
-    add_file(&mut h, "AN-ONE2", "单张.png");
-    let err = apply_thumb_frame(&mut h.lib, "AN-ONE2", "走路-001.png").unwrap_err();
     assert!(err.contains("不是序列帧"), "{err}");
   }
 }

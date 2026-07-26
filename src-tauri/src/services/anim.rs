@@ -1,8 +1,8 @@
-//! 动图（GIF / WEBP 动图）探测与逐帧解码（5.1）：纯 Rust，无 ffmpeg 依赖。
+//! 动图（GIF / WEBP 动图）探测与逐帧解码（5.1 探测、5.2 流式解码）：纯 Rust，无 ffmpeg 依赖。
 //! GIF 走 image crate 的 gif feature（AnimationDecoder）；WEBP 动图走 image-webp 直接依赖
 //! （image crate 门面未暴露动画 API）。
-//! 帧数据按需解析 + cache 会话级（不进 info，2026-07-25 用户定）——本模块只解码，
-//! 缓存与播放归 5.2 预览播放套。静态 gif/webp（单帧）一律返回 None（按静态图片现状处理）。
+//! decode_frames 流式逐帧回调（5.2）：单趟解码供预览队列落盘 cache/anim 播放帧 +
+//! cache/frames 帧条（均会话级不进 info，2026-07-25 用户定）。静态 gif/webp（单帧）按静态图片处理。
 
 use std::path::Path;
 
@@ -26,14 +26,37 @@ pub fn probe(path: &Path) -> Option<AnimInfo> {
   }
 }
 
-/// 解码第 index 帧（0 起）与其显示时长（ms）；越界 / 非动图 / 失败返回 None
-#[allow(dead_code)] // 5.2 预览播放套消费（帧条 / 播放 / 设封面帧），本轮只到服务层 + 测试
-pub fn decode_frame(path: &Path, index: u32) -> Option<(RgbaImage, u32)> {
+/// 动图播放帧名：`frame-` + 序号 5 位补齐（1 起，如 frame-00001）。
+/// cache/anim 播放帧与 cache/frames 帧条共用同一命名（与序列帧帧条同构，前端帧条逻辑零改动复用）
+pub fn anim_frame_name(index: u32) -> String {
+  format!("frame-{:05}", index + 1)
+}
+
+/// 流式解码全部帧：逐帧回调（帧序号 0 起、RGBA 完整帧、该帧显示时长 ms），回调返回 false 中止。
+/// 单趟解码（替代 decode_frame 每帧全量重解码的 O(n²)，5.2 预览队列消费）。
+/// GIF 迭代器内部已完成 disposal/画布合成（image 0.25 GifFrameIterator 直接产完整画面），
+/// 与 decode_frame 的 collect_frames 语义一致；单帧解码失败跳过并 warn（序号仍占位），不整体失败。
+/// 非 gif/webp / 打开失败返回 None。
+pub fn decode_frames(path: &Path, mut on_frame: impl FnMut(u32, RgbaImage, u32) -> bool) -> Option<()> {
   match ext_of(path).as_str() {
-    "gif" => decode_gif_frame(path, index),
-    "webp" => decode_webp_frame(path, index),
+    "gif" => stream_gif(path, &mut on_frame),
+    "webp" => stream_webp(path, &mut on_frame),
     _ => None,
   }
+}
+
+/// 解码第 index 帧（0 起）与其显示时长（ms）；越界 / 非动图 / 失败返回 None
+#[allow(dead_code)] // 单帧按需解码入口（5.1 起的服务层 API，5.2 主链路走 decode_frames）
+pub fn decode_frame(path: &Path, index: u32) -> Option<(RgbaImage, u32)> {
+  let mut hit = None;
+  decode_frames(path, |i, img, delay| {
+    if i == index {
+      hit = Some((img, delay));
+      return false;
+    }
+    true
+  })?;
+  hit
 }
 
 fn ext_of(path: &Path) -> String {
@@ -56,12 +79,25 @@ fn probe_gif(path: &Path) -> Option<AnimInfo> {
   Some(AnimInfo { width, height, frame_count, duration_secs: ms as f64 / 1000.0 })
 }
 
-#[allow(dead_code)] // 经 decode_frame 调用（5.2 消费）；clippy 直达性分析按非 test 构建判定
-fn decode_gif_frame(path: &Path, index: u32) -> Option<(RgbaImage, u32)> {
+/// GIF 流式解码：into_frames 逐帧迭代（单趟）。image 0.25 的 GifFrameIterator 内部按
+/// disposal 合成完整画布帧（left/top 恒 0），逐帧即完整画面，与 collect_frames 输出一致
+fn stream_gif(path: &Path, on_frame: &mut impl FnMut(u32, RgbaImage, u32) -> bool) -> Option<()> {
   let decoder = image::codecs::gif::GifDecoder::new(std::io::BufReader::new(std::fs::File::open(path).ok()?)).ok()?;
-  let frames = decoder.into_frames().collect_frames().ok()?;
-  let frame = frames.get(index as usize)?;
-  Some((frame.buffer().clone(), delay_ms(frame)))
+  for (i, frame) in decoder.into_frames().enumerate() {
+    let i = i as u32; // 失败帧也占号：帧名与 frameCount 预生成占位清单一一对应，坏帧维持 null 兜底
+    let frame = match frame {
+      Ok(f) => f,
+      Err(e) => {
+        log::warn!("GIF 第 {i} 帧解码失败，跳过（{}）：{e}", path.display());
+        continue;
+      }
+    };
+    let delay = delay_ms(&frame);
+    if !on_frame(i, frame.into_buffer(), delay) {
+      return Some(());
+    }
+  }
+  Some(())
 }
 
 fn delay_ms(frame: &image::Frame) -> u32 {
@@ -83,26 +119,34 @@ fn probe_webp(path: &Path) -> Option<AnimInfo> {
   })
 }
 
-#[allow(dead_code)] // 经 decode_frame 调用（5.2 消费）；clippy 直达性分析按非 test 构建判定
-fn decode_webp_frame(path: &Path, index: u32) -> Option<(RgbaImage, u32)> {
+/// WEBP 动图流式解码：read_frame 逐帧读（单趟），libwebp 动画解码器输出完整画布帧
+fn stream_webp(path: &Path, on_frame: &mut impl FnMut(u32, RgbaImage, u32) -> bool) -> Option<()> {
   let mut decoder = image_webp::WebPDecoder::new(std::io::BufReader::new(std::fs::File::open(path).ok()?)).ok()?;
-  if !decoder.is_animated() || index >= decoder.num_frames() {
+  if !decoder.is_animated() {
     return None;
   }
   let (w, h) = decoder.dimensions();
   let bpp = if decoder.has_alpha() { 4usize } else { 3 };
   let mut buf = vec![0u8; decoder.output_buffer_size()?];
-  let mut delay = 0u32;
-  for _ in 0..=index {
-    delay = decoder.read_frame(&mut buf).ok()?;
+  let pixels = w as usize * h as usize * bpp;
+  for index in 0..decoder.num_frames() {
+    let delay = match decoder.read_frame(&mut buf) {
+      Ok(d) => d,
+      Err(e) => {
+        log::warn!("WEBP 第 {index} 帧解码失败，跳过（{}）：{e}", path.display());
+        continue;
+      }
+    };
+    let img = if bpp == 4 {
+      RgbaImage::from_raw(w, h, buf[..pixels].to_vec())?
+    } else {
+      image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(w, h, buf[..pixels].to_vec())?).to_rgba8()
+    };
+    if !on_frame(index, img, delay) {
+      return Some(());
+    }
   }
-  buf.truncate(w as usize * h as usize * bpp);
-  let img = if bpp == 4 {
-    RgbaImage::from_raw(w, h, buf)?
-  } else {
-    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(w, h, buf)?).to_rgba8()
-  };
-  Some((img, delay))
+  Some(())
 }
 
 #[cfg(test)]
@@ -184,5 +228,56 @@ mod tests {
     assert_eq!(delay, 200);
     let p = img.get_pixel(10, 10);
     assert!(p[2] > 150 && p[0] < 120, "第 3 帧应为蓝色（有损编码容差）");
+  }
+
+  #[test]
+  fn decode_frames_streams_gif_in_order_with_delays() {
+    let dir = tempfile::tempdir().unwrap();
+    let gif = dir.path().join("动图.gif");
+    make_gif(&gif, 3);
+    let mut seen: Vec<(u32, u32, [u8; 4])> = Vec::new();
+    let done = decode_frames(&gif, |i, img, delay| {
+      seen.push((i, delay, img.get_pixel(10, 10).0));
+      true
+    });
+    assert!(done.is_some());
+    assert_eq!(seen.len(), 3, "3 帧应逐帧回调");
+    assert_eq!(seen.iter().map(|f| f.0).collect::<Vec<_>>(), [0, 1, 2], "帧序号按序");
+    assert!(seen.iter().all(|f| f.1 == 200), "每帧 delay 200ms");
+    assert!(seen[0].2[0] > 150 && seen[1].2[1] > 150 && seen[2].2[2] > 150, "红/绿/蓝顺序");
+  }
+
+  #[test]
+  fn decode_frames_aborts_when_callback_returns_false() {
+    let dir = tempfile::tempdir().unwrap();
+    let gif = dir.path().join("动图.gif");
+    make_gif(&gif, 3);
+    let mut count = 0;
+    let done = decode_frames(&gif, |_, _, _| {
+      count += 1;
+      false // 首帧即中止（预览队列代际切换的停解码路径）
+    });
+    assert!(done.is_some());
+    assert_eq!(count, 1, "中止后不应继续解码后续帧");
+  }
+
+  #[test]
+  fn decode_frames_streams_real_samples() {
+    for name in ["anim3.gif", "anim3.webp"] {
+      let mut seen: Vec<(u32, u32)> = Vec::new();
+      decode_frames(&sample(name), |i, _img, delay| {
+        seen.push((i, delay));
+        true
+      })
+      .unwrap_or_else(|| panic!("{name} 应流式解码成功"));
+      assert_eq!(seen, [(0, 200), (1, 200), (2, 200)], "{name} 3 帧各 200ms");
+    }
+  }
+
+  #[test]
+  fn decode_frames_rejects_non_anim() {
+    let txt = Path::new("文档.txt");
+    assert!(decode_frames(txt, |_, _, _| true).is_none());
+    assert!(decode_frames(&sample("still.webp"), |_, _, _| true).is_none(), "静态 webp 不是动图");
   }
 }

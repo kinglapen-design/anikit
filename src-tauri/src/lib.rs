@@ -187,7 +187,12 @@ pub fn run() {
       commands::inbox::delete_inbox_entry,
       commands::preview::get_asset_file_path,
       commands::preview::list_sequence_frames,
-      commands::preview::set_thumb_frame,
+      commands::anim::list_anim_frames,
+      commands::thumb_frame::set_thumb_frame,
+      commands::thumb_frame::set_video_thumb,
+      commands::media::get_media_source,
+      commands::notes::get_notes,
+      commands::notes::set_note,
       commands::preview::open_with_default_app,
       commands::preview::open_preview_window,
     ])
