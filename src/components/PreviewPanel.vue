@@ -92,6 +92,7 @@ function onPointerMove(e: PointerEvent): void {
   if (!dragging) return;
   preview.panX += e.movementX;
   preview.panY += e.movementY;
+  preview.fitMode = false; // 手动拖动退出"适合窗口"跟随
 }
 function onPointerUp(e: PointerEvent): void {
   if (!dragging) return;
@@ -152,6 +153,8 @@ onMounted(() => {
     const r = el.getBoundingClientRect();
     preview.viewW = r.width;
     preview.viewH = r.height;
+    // 处于"适合窗口"状态时容器变化自动跟随（全屏切换 / 窗口拉伸画面随容器撑满）
+    if (preview.fitMode) preview.fit();
   });
   ro.observe(stageRef.value!);
   window.addEventListener("keydown", onKeydown);

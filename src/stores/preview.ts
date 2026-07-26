@@ -70,6 +70,9 @@ export const usePreviewStore = defineStore("preview", {
     zoom: 1,
     panX: 0,
     panY: 0,
+    // 当前视图处于"适合窗口"状态：容器尺寸变化（全屏切换 / 窗口拉伸）时自动跟随重新 fit；
+    // 手动缩放 / 拖动 / 原图大小后置 false 不跟随（2026-07-26 用户：全屏画面要随容器撑满）
+    fitMode: false,
     rotate: 0 as 0 | 90 | 180 | 270,
     flipH: false,
     // 帧播放（序列帧/动图统一）
@@ -316,22 +319,24 @@ export const usePreviewStore = defineStore("preview", {
     // 缩放瞄点：保持容器内 (cx, cy) 点不动（滚轮传鼠标位置，滑块传容器中心）
     zoomAt(newZoom: number, cx: number, cy: number): void {
       const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, newZoom));
-      const cX = cx - this.viewW / 2;
-      const cY = cy - this.viewH / 2;
+      const cX = cx - this.viewW / 2;      const cY = cy - this.viewH / 2;
       const k = z / this.zoom;
       this.panX = cX - (cX - this.panX) * k;
       this.panY = cY - (cY - this.panY) * k;
       this.zoom = z;
+      this.fitMode = false; // 手动缩放退出"适合窗口"跟随
     },
     fit(): void {
       this.zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, this.fitZoom));
       this.panX = 0;
       this.panY = 0;
+      this.fitMode = true;
     },
     actual(): void {
       this.zoom = 1;
       this.panX = 0;
       this.panY = 0;
+      this.fitMode = false;
     },
     rotateCw(): void {
       this.rotate = ((this.rotate + 90) % 360) as 0 | 90 | 180 | 270;
