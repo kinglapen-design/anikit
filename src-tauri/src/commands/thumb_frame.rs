@@ -1,6 +1,7 @@
 //! 命令 API：封面帧切换（4.3 序列帧起，5.2 扩展动图 / 视频）。
-//! 帧来源三路：序列帧 = info/frames/ 帧原图；动图 = cache/anim/{asset_id}/ 解码播放帧；
-//! 视频 = ffmpeg 任意时间点截帧。三路共用同一条缩略图再生成管线（thumbnail::generate，
+//! 帧来源两路：序列帧 / 动图 = info/frames/ 帧原图（动图 2026-07-26 定案：解包持久化后与序列帧
+//! 同构同路径，未解包完成报"动图解析中，请稍后重试"）；视频 = ffmpeg 任意时间点截帧。
+//! 两路共用同一条缩略图再生成管线（thumbnail::generate，
 //! 与导入同参数同命名 {资源名}_thumbnail.webp），先落盘 metadata.json 再同步内存索引（规范第 7 条）。
 
 use std::fs;
@@ -26,7 +27,7 @@ pub struct SetThumbResult {
 }
 
 /// 切换序列帧 / 动图封面帧：用指定帧重新生成缩略图 → metadata 落盘（thumbFrame / thumbnail /
-/// modifiedAt）→ 同步内存索引。动图帧在 cache/anim 解码就绪后才可设封面（未就绪报"稍后重试"）。
+/// modifiedAt）→ 同步内存索引。动图未解包完成（frames/ 未就绪）报"动图解析中，请稍后重试"。
 /// async：涉及 IO（缩略图再生成），一律走线程池（规范第 2 条）
 #[tauri::command]
 pub async fn set_thumb_frame(
@@ -41,7 +42,7 @@ pub async fn set_thumb_frame(
 
 fn apply_thumb_frame(lib: &mut Library, asset_id: &str, frame_name: &str) -> Result<SetThumbResult, String> {
   let (info_dir, _origin, meta) = locate_asset(lib, asset_id)?;
-  let frame_path = resolve_frame_path(lib, &info_dir, &meta, asset_id, frame_name)?;
+  let frame_path = resolve_frame_path(&info_dir, &meta, frame_name)?;
   let thumb = regenerate(&info_dir, &meta, &frame_path).ok_or_else(|| format!("帧图片解码失败：{frame_name}"))?;
   persist(lib, info_dir, meta, asset_id, thumb, frame_name.to_string())
 }
@@ -79,30 +80,18 @@ fn apply_video_thumb(lib: &mut Library, asset_id: &str, at_secs: f64) -> Result<
   persist(lib, info_dir, meta, asset_id, thumb, format!("t:{at_secs:.3}"))
 }
 
-/// 帧文件定位：动图（gif/webp 且 frame_count 有值）取 cache/anim 解码帧，
-/// 未解码就绪报"稍后重试"；序列帧取 info/frames/ 帧原图
-fn resolve_frame_path(
-  lib: &Library,
-  info_dir: &Path,
-  meta: &AssetMeta,
-  asset_id: &str,
-  frame_name: &str,
-) -> Result<PathBuf, String> {
-  if is_anim_asset(meta) {
-    let path = lib.root.join(CACHE_DIR).join("anim").join(asset_id).join(format!("{frame_name}.webp"));
-    return path.is_file().then_some(path).ok_or_else(|| "帧尚未解码完成，请稍后重试".to_string());
-  }
+/// 帧文件定位：序列帧 / 动图统一取 info/frames/ 帧原图（动图解包持久化后与序列帧同路径，
+/// 2026-07-26 定案）；动图未解包完成（frames/ 未就绪）报"动图解析中，请稍后重试"
+fn resolve_frame_path(info_dir: &Path, meta: &AssetMeta, frame_name: &str) -> Result<PathBuf, String> {
   let frames_dir = info_dir.join("frames");
   if !frames_dir.is_dir() {
+    if crate::services::anim::is_anim(meta) {
+      return Err("动图解析中，请稍后重试".to_string());
+    }
     return Err(format!("「{}」不是序列帧资源", meta.name));
   }
   let path = frames_dir.join(frame_name);
   path.is_file().then_some(path).ok_or_else(|| format!("帧不存在：{frame_name}"))
-}
-
-/// 动图判定：gif/webp 且已 probe 出多帧（frame_count 有值，导入时 anim::probe 写入）
-fn is_anim_asset(meta: &AssetMeta) -> bool {
-  meta.frame_count.is_some() && matches!(meta.ext.to_lowercase().as_str(), "gif" | "webp")
 }
 
 /// 重新生成缩略图：词干 = 资源名，与导入同管线同命名（{资源名}_thumbnail.webp）。
@@ -231,27 +220,27 @@ mod tests {
   }
 
   #[test]
-  fn set_thumb_frame_anim_branch_uses_cache_anim_frames() {
+  fn set_thumb_frame_anim_branch_uses_info_frames() {
     let mut h = make_lib();
     add_anim(&mut h, "AN-GIF");
     let info = h.lib.root.join(ASSTES_DIR).join("AN-GIF.info");
 
-    // 帧未解码就绪（cache/anim 无该帧）→ 中文错误文案，不动 metadata
-    let err = apply_thumb_frame(&mut h.lib, "AN-GIF", "frame-00002").unwrap_err();
-    assert!(err.contains("帧尚未解码完成，请稍后重试"), "{err}");
+    // 未解包（frames/ 未就绪）→ 中文错误文案，不动 metadata
+    let err = apply_thumb_frame(&mut h.lib, "AN-GIF", "动图-00002.webp").unwrap_err();
+    assert!(err.contains("动图解析中，请稍后重试"), "{err}");
 
-    // 模拟预览队列已落盘 cache/anim/{id}/frame-00002.webp（内容为 PNG，image 按内容嗅探）
-    let frame = h.lib.root.join(CACHE_DIR).join("anim").join("AN-GIF").join("frame-00002.webp");
+    // 解包后帧在 info/frames/（与序列帧同路径；内容为 PNG，image 按内容嗅探）
+    let frame = info.join("frames").join("动图-00002.webp");
     fs::create_dir_all(frame.parent().unwrap()).unwrap();
     make_png(&frame, 64, 48);
 
-    let result = apply_thumb_frame(&mut h.lib, "AN-GIF", "frame-00002").unwrap();
+    let result = apply_thumb_frame(&mut h.lib, "AN-GIF", "动图-00002.webp").unwrap();
     assert!(result.thumb_path.ends_with("动图_thumbnail.webp"), "{}", result.thumb_path);
     assert!(PathBuf::from(&result.thumb_path).is_file());
     let disk: AssetMeta = read_json(&info.join("metadata.json")).unwrap();
-    assert_eq!(disk.thumb_frame.as_deref(), Some("frame-00002"));
+    assert_eq!(disk.thumb_frame.as_deref(), Some("动图-00002.webp"));
     assert_eq!(disk.thumbnail.as_deref(), Some("动图_thumbnail.webp"));
-    assert_eq!(h.lib.index.assets["AN-GIF"].thumb_frame.as_deref(), Some("frame-00002"));
+    assert_eq!(h.lib.index.assets["AN-GIF"].thumb_frame.as_deref(), Some("动图-00002.webp"));
   }
 
   #[test]

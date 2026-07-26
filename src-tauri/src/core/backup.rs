@@ -4,7 +4,7 @@
 //!   每份备份都是完整快照，回滚不需要跨备份拼接，删除旧备份不影响其余）；
 //! - 滚动 10 份，超出删最旧；缓存与向量库不备份（可重建）。
 //!
-//! 备份对象 = library::data_files() 清单：库根数据文件 + 全部 info 内 metadata.json / annotation.json / notes.json。
+//! 备份对象 = library::data_files() 清单：库根数据文件 + 全部 info 内 metadata.json / annotation.json / notes.json / frames.json。
 
 use std::fs;
 use std::path::{Path, PathBuf};

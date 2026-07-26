@@ -636,3 +636,27 @@
     assert_eq!(out.imported, 3);
     assert!(with_lib(&h, |l| l.index.assets.values().all(|a| a.frame_count.is_none())));
   }
+
+  /// 动图导入挂钩（2026-07-26 定案）：单元注册完成且资产为动图 → 提交解包队列，
+  /// 逐帧高清图持久化 info/frames/ + frames.json（全局队列 cfg(test) 只落盘不发事件）
+  #[test]
+  fn anim_import_enqueues_unpack_to_info_frames() {
+    let h = make_lib();
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tools/test-assets/anim3.gif");
+    let (out, _) = run(&h, opts(Structure::Flatten, Source::Copy, vec![src]));
+    assert_eq!(out.imported, 1, "导入失败：{:?}", out.failed);
+    let meta = with_lib(&h, |l| l.index.assets.values().find(|a| a.ext == "gif").unwrap().clone());
+    assert_eq!(meta.frame_count, Some(3), "probe 应写 frameCount");
+
+    let info = h.root.join(ASSTES_DIR).join(format!("{}.info", meta.id));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    // frames.json 在帧图之后写，一起等防竞态
+    while !((1..=3).all(|n| info.join("frames").join(format!("{}-{n:05}.webp", meta.name)).is_file())
+      && info.join("frames.json").is_file())
+    {
+      assert!(std::time::Instant::now() < deadline, "等待超时：动图解包落盘");
+      std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let delays = crate::services::anim_unpack::read_delays(&info).unwrap();
+    assert_eq!(delays, [200, 200, 200]);
+  }

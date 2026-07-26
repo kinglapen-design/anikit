@@ -68,6 +68,10 @@ pub fn run() {
       // 提交新任务作废旧任务（快速切换素材不堆积），须在命令可达前初始化
       services::preview_queue::init(app.handle().clone());
 
+      // 动图解包队列（2026-07-26 定案）：单 worker 无代际作废，导入完成的动图资产
+      // 逐帧高清图持久化 info/frames/，完成发 anim-unpacked 事件
+      services::unpack_queue::init(app.handle().clone());
+
       // 全局热键 alt+`：呼出 / 隐藏主窗口（后续用于快捷搜索框）
       // 注册失败（热键被他方占用）只记日志降级，不阻断启动
       if let Err(e) = app.global_shortcut().on_shortcut(
@@ -187,7 +191,6 @@ pub fn run() {
       commands::inbox::delete_inbox_entry,
       commands::preview::get_asset_file_path,
       commands::preview::list_sequence_frames,
-      commands::anim::list_anim_frames,
       commands::thumb_frame::set_thumb_frame,
       commands::thumb_frame::set_video_thumb,
       commands::media::get_media_source,

@@ -36,8 +36,10 @@ fn to_info(lib: &Library) -> LibraryInfo {
   }
 }
 
-/// 库进入打开状态：更新应用状态 + 记录到全局配置最近列表 + 启动收件箱（3.2）
+/// 库进入打开状态：更新应用状态 + 记录到全局配置最近列表 + 启动收件箱（3.2）；
+/// 库切换清空动图解包队列 pending（任务绑定库 root，切库后无意义，2026-07-26）
 fn activate(app: &AppHandle, state: &State<AppState>, lib: Library) -> Result<LibraryInfo, String> {
+  crate::services::unpack_queue::clear_pending();
   let info = to_info(&lib);
   let root = lib.root.clone();
   *state.library.lock().map_err(|e| e.to_string())? = Some(lib);

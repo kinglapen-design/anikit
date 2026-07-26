@@ -1,12 +1,14 @@
-//! 动图（GIF / WEBP 动图）探测与逐帧解码（5.1 探测、5.2 流式解码）：纯 Rust，无 ffmpeg 依赖。
-//! GIF 走 image crate 的 gif feature（AnimationDecoder）；WEBP 动图走 image-webp 直接依赖
-//! （image crate 门面未暴露动画 API）。
-//! decode_frames 流式逐帧回调（5.2）：单趟解码供预览队列落盘 cache/anim 播放帧 +
-//! cache/frames 帧条（均会话级不进 info，2026-07-25 用户定）。静态 gif/webp（单帧）按静态图片处理。
+//! 动图（GIF / WEBP 动图）探测与逐帧解码：纯 Rust，无 ffmpeg 依赖。
+//! probe：GIF 走自研字节级扫描（2026-07-26：image crate into_frames 全量解码像素数帧，
+//! 大 GIF 导入等半天——字节扫描只读块结构不解像素，微秒级返回）；WEBP 走 image-webp 元数据。
+//! decode_frames 流式逐帧回调：单趟解码供动图解包（anim_unpack，持久化 info/frames/，
+//! 2026-07-26 用户定案）。静态 gif/webp（单帧）按静态图片处理。
 
 use std::path::Path;
 
-use image::{AnimationDecoder, ImageDecoder as _, RgbaImage};
+use image::{AnimationDecoder, RgbaImage};
+
+use crate::core::models::AssetMeta;
 
 /// 动图信息：导入时写 metadata（width/height/duration/frameCount）
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -26,14 +28,14 @@ pub fn probe(path: &Path) -> Option<AnimInfo> {
   }
 }
 
-/// 动图播放帧名：`frame-` + 序号 5 位补齐（1 起，如 frame-00001）。
-/// cache/anim 播放帧与 cache/frames 帧条共用同一命名（与序列帧帧条同构，前端帧条逻辑零改动复用）
-pub fn anim_frame_name(index: u32) -> String {
-  format!("frame-{:05}", index + 1)
+/// 动图资产判定：gif/webp 且已 probe 出多帧（frame_count 有值，导入时 probe 写入）。
+/// 解包挂钩（import_task）/ list_sequence_frames 路由 / 封面帧分支共用同一口径
+pub fn is_anim(meta: &AssetMeta) -> bool {
+  meta.frame_count.is_some() && matches!(meta.ext.to_lowercase().as_str(), "gif" | "webp")
 }
 
 /// 流式解码全部帧：逐帧回调（帧序号 0 起、RGBA 完整帧、该帧显示时长 ms），回调返回 false 中止。
-/// 单趟解码（替代 decode_frame 每帧全量重解码的 O(n²)，5.2 预览队列消费）。
+/// 单趟解码（替代 decode_frame 每帧全量重解码的 O(n²)，动图解包 anim_unpack 消费）。
 /// GIF 迭代器内部已完成 disposal/画布合成（image 0.25 GifFrameIterator 直接产完整画面），
 /// 与 decode_frame 的 collect_frames 语义一致；单帧解码失败跳过并 warn（序号仍占位），不整体失败。
 /// 非 gif/webp / 打开失败返回 None。
@@ -46,7 +48,7 @@ pub fn decode_frames(path: &Path, mut on_frame: impl FnMut(u32, RgbaImage, u32) 
 }
 
 /// 解码第 index 帧（0 起）与其显示时长（ms）；越界 / 非动图 / 失败返回 None
-#[allow(dead_code)] // 单帧按需解码入口（5.1 起的服务层 API，5.2 主链路走 decode_frames）
+#[allow(dead_code)] // 单帧按需解码入口（5.1 起的服务层 API，主链路走 decode_frames）
 pub fn decode_frame(path: &Path, index: u32) -> Option<(RgbaImage, u32)> {
   let mut hit = None;
   decode_frames(path, |i, img, delay| {
@@ -63,20 +65,70 @@ fn ext_of(path: &Path) -> String {
   path.extension().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default()
 }
 
+/// GIF 字节级探测（2026-07-26）：只解析块结构不解像素——帧数 = 图像描述块（0x2C）次数，
+/// 时长 = 图形控制扩展（0x21 0xF9）delay（1/100 秒）累加。任何结构畸形（截断 / 未知块）返回 None
 fn probe_gif(path: &Path) -> Option<AnimInfo> {
-  let decoder = image::codecs::gif::GifDecoder::new(std::io::BufReader::new(std::fs::File::open(path).ok()?)).ok()?;
-  let (width, height) = decoder.dimensions();
+  let data = std::fs::read(path).ok()?;
+  scan_gif(&data)
+}
+
+/// GIF 块结构扫描：Header(6B) + 逻辑屏幕描述(7B，拿宽高) + [全局色表] + 块循环
+/// （0x21 扩展块 / 0x2C 图像描述块 / 0x3B 结束）
+fn scan_gif(d: &[u8]) -> Option<AnimInfo> {
+  if d.len() < 13 || !matches!(&d[..6], b"GIF87a" | b"GIF89a") {
+    return None;
+  }
+  let width = u16::from_le_bytes([d[6], d[7]]) as u32;
+  let height = u16::from_le_bytes([d[8], d[9]]) as u32;
+  let mut pos = 13 + color_table_len(d[10]); // 全局色表（无则 0）
   let mut frame_count = 0u32;
   let mut ms = 0u64;
-  for frame in decoder.into_frames() {
-    let frame = frame.ok()?;
-    frame_count += 1;
-    ms += delay_ms(&frame) as u64;
+  while pos < d.len() {
+    match d[pos] {
+      0x3B => break, // 结束块
+      0x21 => {
+        // 扩展块：图形控制扩展（0xF9）拿 delay，其余（应用 / 注释 / 纯文本）直接跳子块链
+        let label = *d.get(pos + 1)?;
+        if label == 0xF9 && d.get(pos + 2) == Some(&4) {
+          // [0xF9][块长=4][packed + delay(2B LE, 1/100s) + 透明色索引][0]
+          ms += u16::from_le_bytes([*d.get(pos + 4)?, *d.get(pos + 5)?]) as u64 * 10;
+        }
+        pos = skip_sub_blocks(d, pos + 2)?;
+      }
+      0x2C => {
+        // 图像描述块（一帧）：10B 描述 + [局部色表] + LZW 最小码长 1B + 子块链
+        frame_count += 1;
+        let packed = *d.get(pos + 9)?;
+        pos += 10 + color_table_len(packed);
+        pos = skip_sub_blocks(d, pos + 1)?; // +1 = LZW 最小码长
+      }
+      _ => return None, // 未知块 = 畸形
+    }
   }
   if frame_count < 2 {
     return None;
   }
   Some(AnimInfo { width, height, frame_count, duration_secs: ms as f64 / 1000.0 })
+}
+
+/// 色表字节数：packed 最高位为 1 时存在，大小 = 3 * 2^(低 3 位 + 1)
+fn color_table_len(packed: u8) -> usize {
+  if packed & 0x80 == 0 { 0 } else { 3 * (1usize << ((packed & 0x07) + 1)) }
+}
+
+/// 跳过子块链：循环读 [size][size 字节] 直到 size=0，返回链后位置；越界（畸形）返回 None
+fn skip_sub_blocks(d: &[u8], mut pos: usize) -> Option<usize> {
+  loop {
+    let size = *d.get(pos)? as usize;
+    pos += 1;
+    if size == 0 {
+      return Some(pos);
+    }
+    pos = pos.checked_add(size)?;
+    if pos > d.len() {
+      return None;
+    }
+  }
 }
 
 /// GIF 流式解码：into_frames 逐帧迭代（单趟）。image 0.25 的 GifFrameIterator 内部按
@@ -191,6 +243,45 @@ mod tests {
     assert_eq!(probe(&txt), None);
   }
 
+  /// 旧解码路径参照（image crate 全量解码数帧）：交叉校验字节级扫描的 frameCount / duration
+  fn decode_path_reference(path: &Path) -> (u32, u64) {
+    let decoder =
+      image::codecs::gif::GifDecoder::new(std::io::BufReader::new(std::fs::File::open(path).unwrap())).unwrap();
+    let mut count = 0u32;
+    let mut ms = 0u64;
+    for frame in decoder.into_frames() {
+      let frame = frame.unwrap();
+      count += 1;
+      ms += delay_ms(&frame) as u64;
+    }
+    (count, ms)
+  }
+
+  /// 字节级 probe_gif 与 image crate 全量解码结果交叉校验（样本 + 真实文件）
+  #[test]
+  fn probe_gif_byte_scan_matches_image_crate_decode() {
+    let dir = tempfile::tempdir().unwrap();
+    let gif = dir.path().join("动图.gif");
+    make_gif(&gif, 3);
+    for path in [gif, sample("anim3.gif")] {
+      let info = probe_gif(&path).unwrap();
+      let (count, ms) = decode_path_reference(&path);
+      assert_eq!(info.frame_count, count, "{} 帧数一致", path.display());
+      assert_eq!(info.duration_secs, ms as f64 / 1000.0, "{} 时长一致", path.display());
+    }
+  }
+
+  #[test]
+  fn probe_gif_truncated_returns_none() {
+    let dir = tempfile::tempdir().unwrap();
+    let gif = dir.path().join("动图.gif");
+    make_gif(&gif, 3);
+    let full = std::fs::read(&gif).unwrap();
+    let truncated = dir.path().join("截断.gif");
+    std::fs::write(&truncated, &full[..full.len() / 2]).unwrap();
+    assert_eq!(probe(&truncated), None, "截断畸形文件返回 None（能力探测语义）");
+  }
+
   #[test]
   fn decode_gif_frame_returns_frame_and_delay() {
     let dir = tempfile::tempdir().unwrap();
@@ -255,7 +346,7 @@ mod tests {
     let mut count = 0;
     let done = decode_frames(&gif, |_, _, _| {
       count += 1;
-      false // 首帧即中止（预览队列代际切换的停解码路径）
+      false // 首帧即中止（解码方主动停解码的路径）
     });
     assert!(done.is_some());
     assert_eq!(count, 1, "中止后不应继续解码后续帧");

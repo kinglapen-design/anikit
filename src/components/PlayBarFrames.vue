@@ -2,6 +2,7 @@
 // 帧播放条（4.3 序列帧；5.2 动图完全复用）：放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8）。
 // 播放/暂停、当前帧/总帧数、进度条（拖动定位帧）、倍率（点击循环切换）、
 // 笔记（5.2 浮层，开着时品牌紫激活态）、当前帧设为预览图、显示器全屏（Esc 退出）。
+// 动图未解包兜底态（unpacking）：只显示"解析中…" + 禁用的笔记/设封面 + 全屏。
 import { ref } from "vue";
 import IconButton from "./IconButton.vue";
 import { RATES, usePreviewStore } from "../stores/preview";
@@ -40,7 +41,18 @@ function onSeekUp(e: PointerEvent): void {
 </script>
 
 <template>
-  <div v-if="preview.seq" class="play-bar">
+  <!-- 动图未解包兜底态（5.2 改版）：隐藏播放/进度/倍率，笔记与设封面禁用（无帧概念，后端会报错） -->
+  <div v-if="preview.unpacking" class="play-bar">
+    <span class="hint">解析中…</span>
+    <IconButton name="annotate" title="笔记" disabled />
+    <IconButton name="set-as-thumb" title="当前画面设为预览图" disabled />
+    <IconButton
+      name="fullscreen"
+      :title="preview.fullscreen ? '退出全屏' : '全屏'"
+      @click="preview.setFullscreen(!preview.fullscreen)"
+    />
+  </div>
+  <div v-else-if="preview.seq" class="play-bar">
     <IconButton
       :name="preview.playing ? 'pause' : 'play'"
       :title="preview.playing ? '暂停' : '播放'"
@@ -92,6 +104,15 @@ function onSeekUp(e: PointerEvent): void {
   color: var(--font-icon-1);
   white-space: nowrap;
   flex: none;
+}
+/* 动图解包中提示（说明文字档，同 PlayBarAudio 转码提示）；flex:1 把右侧按钮顶到尾部 */
+.hint {
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  color: var(--font-icon-3);
+  padding: 0 var(--space-4);
+  flex: 1;
+  min-width: 0;
 }
 /* 中栏工具栏图标按钮 80%（2026-07-23 用户定，同预览标题栏） */
 .play-bar :deep(.icon-btn) {

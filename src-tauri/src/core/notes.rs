@@ -1,6 +1,6 @@
 //! 逐帧笔记 notes.json（5.2）：info 内单资源数据文件，单一写点 = 本模块（规范第 1 条）。
 //! 结构 `{ "version": 1, "notes": [{ key, text, updatedAt }] }`（camelCase）；
-//! key 语义约定：序列帧 / 动图 = 帧名（frame-00001），视频 = `t:{秒:.3}`（如 t:12.500）。
+//! key 语义约定：序列帧 / 动图 = 帧名（归一名，如 标题-001.png / 标题-00001.webp），视频 = `t:{秒:.3}`（如 t:12.500）。
 //! 读写复用 json_io 原子写 + version 门禁；文件不存在 = 空列表（不算错误）。
 
 use std::path::{Path, PathBuf};

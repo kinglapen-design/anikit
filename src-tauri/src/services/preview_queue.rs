@@ -1,18 +1,16 @@
-//! 预览解析队列（4.3 预览窗口）：单 worker 线程串行执行 PSD/PSB 全尺寸解码、序列帧帧条生成
-//! 与动图流式解码（5.2：cache/anim 播放帧 + cache/frames 帧条）。
+//! 预览解析队列（4.3 预览窗口）：单 worker 线程串行执行 PSD/PSB 全尺寸解码与序列帧 / 动图
+//! 帧条生成（cache/frames，动图 2026-07-26 定案后帧原图 = 解包持久化的 info/frames/，帧条仍会话级）。
 //!
 //! 解决的问题（2026-07-25）：预览窗口快速切换素材时，解析命令在 tokio 线程池堆积且不取消，
 //! 当前停留素材要等前面全部解析完；序列帧要等帧条全部生成完才能播放。
 //!
 //! 语义：**预览窗口只服务"当前停留"的素材**——submit 新任务时清空 pending 队列并代际 +1，
-//! 旧任务一律作废；进行中的 FrameStrips / AnimFrames 逐帧比对代际，切换即中断（FullPreview
+//! 旧任务一律作废；进行中的 FrameStrips 逐帧比对代际，切换即中断（FullPreview
 //! 单文件解码不可中断，完成落盘无害——产物按源文件散列幂等，切回来直接命中）。
 //!
 //! 事件（app 为 None 时不发，仅执行落盘——单测用）：
 //! - `preview-full-ready`：`{ assetId, path }`（FullPreview 完成且代际仍有效时）
 //! - `preview-strips-ready`：`{ assetId, items: [{ name, stripPath }] }`（每凑满 8 帧或收尾一批）
-//! - `preview-anim-frames-ready`：`{ assetId, done, items: [{ name, delayMs, fullPath, stripPath }] }`
-//!   （每凑满 8 帧一批 done=false；解码收尾再发一批 done=true 作全部就绪标记，items 可能为空）
 //!
 //! 注意（2026-07-25 踩坑）：**测试构建（cfg(test)）不持 AppHandle**——其方法 / 析构会把
 //! tauri GUI 依赖链（rfd 的 comctl32!TaskDialogIndirect 等）拉进测试 exe，而测试 exe 无
@@ -20,7 +18,7 @@
 //! 故 cfg(test) 下 emit 为空实现、start 丢弃句柄（mem::forget，避免实例化其析构）。
 
 use std::collections::VecDeque;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
@@ -29,17 +27,15 @@ use tauri::AppHandle;
 #[cfg(not(test))]
 use tauri::Emitter;
 
-use crate::services::{anim, thumbnail};
+use crate::services::thumbnail;
 
 /// 全尺寸预览就绪事件名
 pub const EVENT_FULL_READY: &str = "preview-full-ready";
 /// 帧条批次就绪事件名
 pub const EVENT_STRIPS_READY: &str = "preview-strips-ready";
-/// 动图帧批次就绪事件名
-pub const EVENT_ANIM_FRAMES_READY: &str = "preview-anim-frames-ready";
 
 /// 走全局队列（global()）的命令层测试互斥锁：队列语义是"新任务作废旧任务"，
-/// 并行测试会互相顶掉任务（commands/preview.rs、commands/anim.rs 的测试共用）
+/// 并行测试会互相顶掉任务（commands/preview.rs 的测试用）
 #[cfg(test)]
 pub(crate) static TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -64,14 +60,6 @@ pub enum PreviewTask {
     asset_id: String,
     /// (帧名, 帧原图绝对路径)，按播放顺序
     frames: Vec<(String, PathBuf)>,
-  },
-  /// 动图流式解码（5.2）：cache/anim 全尺寸播放帧 + cache/frames 帧条，逐帧落盘逐批推送
-  AnimFrames {
-    /// 库根目录
-    root: PathBuf,
-    asset_id: String,
-    /// 动图源文件绝对路径（gif/webp）
-    origin: PathBuf,
   },
 }
 
@@ -99,30 +87,6 @@ struct StripsReadyPayload {
 struct StripItem {
   name: String,
   strip_path: String,
-}
-
-/// preview-anim-frames-ready 事件负载
-#[cfg(not(test))]
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AnimFramesReadyPayload {
-  asset_id: String,
-  /// true = 全部帧解码收尾（最后一批，items 可能为空——前端据此结束等待）
-  done: bool,
-  items: Vec<AnimFrameItem>,
-}
-
-/// 单条动图帧结果（帧名与 list_anim_frames 占位清单一一对应）
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AnimFrameItem {
-  name: String,
-  /// 该帧显示时长（ms）——动图逐帧时长不同，前端播放引擎按它驱动
-  delay_ms: u32,
-  /// 全尺寸播放帧绝对路径（cache/anim/{asset_id}/{帧名}.webp）
-  full_path: String,
-  /// 帧条小图绝对路径；null = 帧条生成失败（前端直渲 fullPath 兜底）
-  strip_path: Option<String>,
 }
 
 /// worker 共享状态（Arc 让 worker 线程与 PreviewQueue 实例共用）
@@ -161,15 +125,6 @@ impl Shared {
       }
     }
   }
-
-  fn emit_anim_frames_ready(&self, asset_id: &str, items: Vec<AnimFrameItem>, done: bool) {
-    if let Some(app) = &self.app {
-      let payload = AnimFramesReadyPayload { asset_id: asset_id.to_string(), done, items };
-      if let Err(e) = app.emit(EVENT_ANIM_FRAMES_READY, payload) {
-        log::debug!("{EVENT_ANIM_FRAMES_READY} 事件推送失败（前端可能已关闭）：{e}");
-      }
-    }
-  }
 }
 
 /// cfg(test) 空实现：测试构建不发事件（见模块头注释）；引用事件名常量避免 dead_code
@@ -180,9 +135,6 @@ impl Shared {
   }
   fn emit_strips_ready(&self, _: &str, _: Vec<StripItem>) {
     let _ = EVENT_STRIPS_READY;
-  }
-  fn emit_anim_frames_ready(&self, _: &str, _: Vec<AnimFrameItem>, _: bool) {
-    let _ = EVENT_ANIM_FRAMES_READY;
   }
 }
 
@@ -288,39 +240,6 @@ fn execute(shared: &Shared, gen: u64, task: PreviewTask) {
         }
       }
     }
-    PreviewTask::AnimFrames { root, asset_id, origin } => run_anim_frames(shared, gen, root, asset_id, origin),
-  }
-}
-
-/// 动图流式解码（5.2）：单趟解码，逐帧落盘 cache/anim 全尺寸播放帧 + cache/frames 帧条，
-/// 每凑满 8 帧推一批（done=false），收尾再推一批 done=true（items 可能为空，前端据此结束等待）。
-/// 每帧执行前查代际：切换素材即中止解码（回调返回 false）
-fn run_anim_frames(shared: &Shared, gen: u64, root: PathBuf, asset_id: String, origin: PathBuf) {
-  let mut items: Vec<AnimFrameItem> = Vec::with_capacity(STRIP_BATCH);
-  let decoded = anim::decode_frames(&origin, |index, img, delay_ms| {
-    if !shared.is_current(gen) {
-      return false;
-    }
-    let name = anim::anim_frame_name(index);
-    // 全尺寸帧落盘失败跳过该帧（清单维持 null，前端格式占位兜底）；帧条失败仅 stripPath=null
-    match thumbnail::save_anim_frame(&root, &asset_id, &name, img) {
-      Some(full_path) => {
-        let strip_path = thumbnail::generate_frame_strip(&root, Path::new(&full_path), &asset_id, &name);
-        items.push(AnimFrameItem { name, delay_ms, full_path, strip_path });
-      }
-      None => log::warn!("动图播放帧落盘失败（{asset_id}/{name}）"),
-    }
-    if items.len() >= STRIP_BATCH && shared.is_current(gen) {
-      shared.emit_anim_frames_ready(&asset_id, std::mem::take(&mut items), false);
-    }
-    true
-  });
-  if decoded.is_none() {
-    log::warn!("动图解码失败（{}）", origin.display());
-  }
-  // 收尾批：代际仍有效才发（切换素材后不再打扰前端）
-  if shared.is_current(gen) {
-    shared.emit_anim_frames_ready(&asset_id, std::mem::take(&mut items), true);
   }
 }
 
@@ -359,48 +278,6 @@ mod tests {
     while !cond() {
       assert!(Instant::now() < deadline, "等待超时：{what}");
       std::thread::sleep(Duration::from_millis(5));
-    }
-  }
-
-  /// 造测试 gif（红/绿/蓝各 200ms，64x48）
-  fn make_gif(path: &Path, frames: u32) {
-    let colors = [[220, 40, 40, 255], [40, 200, 40, 255], [40, 40, 220, 255]];
-    let file = std::fs::File::create(path).unwrap();
-    let mut enc = image::codecs::gif::GifEncoder::new(file);
-    enc.set_repeat(image::codecs::gif::Repeat::Infinite).unwrap();
-    let frames: Vec<image::Frame> = colors
-      .iter()
-      .take(frames as usize)
-      .map(|c| image::Frame::from_parts(image::RgbaImage::from_pixel(64, 48, image::Rgba(*c)), 0, 0, image::Delay::from_numer_denom_ms(200, 1)))
-      .collect();
-    enc.encode_frames(frames).unwrap();
-  }
-
-  fn anim_full_file(root: &Path, asset_id: &str, frame_name: &str) -> PathBuf {
-    root.join(CACHE_DIR).join("anim").join(asset_id).join(format!("{frame_name}.webp"))
-  }
-
-  /// start(None) 不发事件只执行：动图流式解码逐帧落盘 cache/anim 播放帧 + cache/frames 帧条
-  #[test]
-  fn anim_frames_generate_products() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().to_path_buf();
-    let gif = root.join("动图.gif");
-    make_gif(&gif, 3);
-
-    let queue = PreviewQueue::start(None);
-    queue.submit(PreviewTask::AnimFrames { root: root.clone(), asset_id: "G1".to_string(), origin: gif });
-
-    let names = ["frame-00001", "frame-00002", "frame-00003"];
-    wait_until(
-      || names.iter().all(|n| anim_full_file(&root, "G1", n).is_file() && strip_file(&root, "G1", n).is_file()),
-      "动图帧全部落盘",
-    );
-    for n in names {
-      // 播放帧：64x48 原样（长边不足 4096 不缩放），产物可解码为 webp
-      assert_eq!(image::image_dimensions(anim_full_file(&root, "G1", n)).unwrap(), (64, 48));
-      // 帧条与序列帧同构：cache/frames/{id}/{帧名}.webp（短边 48 < 128 不放大）
-      assert_eq!(image::image_dimensions(strip_file(&root, "G1", n)).unwrap(), (64, 48));
     }
   }
 

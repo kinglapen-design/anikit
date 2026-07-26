@@ -473,6 +473,8 @@ fn register_one(
   let root_buf = root.to_path_buf();
   let name = unit_name(files, groups, item.unit);
   let asset_id = asset.id.clone();
+  // 动图（2026-07-26 定案）：注册成功后提交解包队列——逐帧高清图持久化 info/frames/
+  let unpack = crate::services::anim::is_anim(&asset);
   let result = with_lib(lib, state, move |l| {
     if let Some(ext) = icon {
       l.format_icons.insert(ext);
@@ -485,6 +487,10 @@ fn register_one(
     l.index.assets.insert(asset_id, asset);
     (view, conflicts)
   });
+  if unpack && result.is_ok() {
+    crate::services::unpack_queue::global()
+      .submit(crate::services::unpack_queue::UnpackTask { root: root.to_path_buf(), asset_id: item.asset_id.clone() });
+  }
   collect_registered(state, root, files, groups, item.unit, result, on_event);
 }
 
