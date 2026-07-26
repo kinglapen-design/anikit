@@ -194,6 +194,7 @@ pub fn run() {
       commands::thumb_frame::set_thumb_frame,
       commands::thumb_frame::set_video_thumb,
       commands::media::get_media_source,
+      commands::media::get_waveform,
       commands::notes::get_notes,
       commands::notes::set_note,
       commands::preview::open_with_default_app,

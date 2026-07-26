@@ -14,7 +14,7 @@ use crate::adapters::ffmpeg;
 use crate::commands::library::AppState;
 use crate::commands::preview::locate_asset;
 use crate::core::library::{Library, CACHE_DIR};
-use crate::services::media;
+use crate::services::{media, thumbnail};
 
 /// 音视频播放源解析结果
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -105,6 +105,64 @@ fn transcode_source(lib: &Library, asset_id: &str, origin: &Path, is_video: bool
   Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true })
 }
 
+// ---------- 波形图按需重采样 ----------
+
+/// 波形图渲染尺寸钳制范围（防前端异常值）：宽 32~7680、高 8~1080
+const WAVE_W: std::ops::RangeInclusive<u32> = 32..=7680;
+const WAVE_H: std::ops::RangeInclusive<u32> = 8..=1080;
+
+/// 按需重采样波形图结果
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WaveformImage {
+  /// 重采样波形图绝对路径（cache/waveforms/{assetId}_{宽}x{高}.webp）
+  pub path: String,
+}
+
+/// 按需重采样波形图（2026-07-26 波形清晰度修复）：前端按播放条 / 预览大图实际显示像素
+/// （CSS px × devicePixelRatio）请求，后端按该尺寸重渲 PCM 波形（渲染口径同 5.1 定稿，
+/// 任意宽度 1px 级清晰，对齐 Eagle），产物缓存 cache/waveforms/（会话级，开库清空），
+/// 已存在直给不重渲。非音频资源中文报错；ffmpeg 缺失 / 提取失败给中文文案（前端回退
+/// info 缩略图拉伸旧行为）。async：ffmpeg sidecar 调用为 IO 重活，一律走线程池（规范第 2 条）
+#[tauri::command]
+pub async fn get_waveform(
+  state: State<'_, AppState>,
+  asset_id: String,
+  width: u32,
+  height: u32,
+) -> Result<WaveformImage, String> {
+  let guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+  waveform(lib, &asset_id, width, height)
+}
+
+fn waveform(lib: &Library, asset_id: &str, width: u32, height: u32) -> Result<WaveformImage, String> {
+  let (_info_dir, origin, meta) = locate_asset(lib, asset_id)?;
+  if !media::is_audio(&origin) {
+    return Err(format!("「{}」不是音频资源", meta.name));
+  }
+  let (w, h) = clamp_wave_size(width, height);
+  let dir = lib.root.join(CACHE_DIR).join("waveforms");
+  let out = dir.join(format!("{asset_id}_{w}x{h}.webp"));
+  if out.is_file() {
+    return Ok(WaveformImage { path: out.to_string_lossy().into_owned() });
+  }
+  if !ffmpeg::ffmpeg_available() {
+    return Err("音视频组件缺失，无法生成波形图".to_string());
+  }
+  let Some(img) = media::waveform_image_sized(&origin, w, h) else {
+    return Err("波形提取失败，请检查音频文件".to_string());
+  };
+  fs::create_dir_all(&dir).map_err(|e| format!("波形缓存目录创建失败：{e}"))?;
+  thumbnail::save_webp(&image::DynamicImage::ImageRgba8(img), &out).map_err(|e| format!("波形图保存失败：{e}"))?;
+  Ok(WaveformImage { path: out.to_string_lossy().into_owned() })
+}
+
+/// 波形图请求尺寸钳制（前端异常值不炸渲染：过小糊成一团、过大撑爆内存）
+fn clamp_wave_size(w: u32, h: u32) -> (u32, u32) {
+  (w.clamp(*WAVE_W.start(), *WAVE_W.end()), h.clamp(*WAVE_H.start(), *WAVE_H.end()))
+}
+
 /// 产物旁的戳文件：media-{assetId}.mp4.stamp
 fn stamp_path(out: &Path) -> PathBuf {
   let mut s = out.as_os_str().to_os_string();
@@ -152,6 +210,38 @@ mod tests {
 
   fn probe_json(streams: serde_json::Value) -> serde_json::Value {
     serde_json::json!({ "streams": streams })
+  }
+
+  #[test]
+  fn clamp_wave_size_bounds() {
+    assert_eq!(clamp_wave_size(1, 1), (32, 8));
+    assert_eq!(clamp_wave_size(99999, 99999), (7680, 1080));
+    assert_eq!(clamp_wave_size(1200, 48), (1200, 48));
+  }
+
+  #[test]
+  fn waveform_rejects_non_audio_and_serves_cache_idempotently() {
+    let mut h = make_lib();
+    // 非音频资源中文报错
+    add_file(&mut h, "AN-PIC", "参考图.png");
+    let err = waveform(&h.lib, "AN-PIC", 640, 272).unwrap_err();
+    assert!(err.contains("不是音频资源"), "{err}");
+
+    // 缓存命中直给（命中判定先于二进制检查：无 ffmpeg / 假字节也直接返回）
+    add_file(&mut h, "AN-AU", "配乐.mp3");
+    let out = h.lib.root.join(CACHE_DIR).join("waveforms").join("AN-AU_1200x48.webp");
+    fs::create_dir_all(out.parent().unwrap()).unwrap();
+    fs::write(&out, b"webp").unwrap();
+    let r = waveform(&h.lib, "AN-AU", 1200, 48).unwrap();
+    assert_eq!(r, WaveformImage { path: out.to_string_lossy().into_owned() });
+    // 幂等：已存在不重写（mtime 不变）
+    let mtime = fs::metadata(&out).unwrap().modified().unwrap();
+    waveform(&h.lib, "AN-AU", 1200, 48).unwrap();
+    assert_eq!(fs::metadata(&out).unwrap().modified().unwrap(), mtime);
+
+    // 未命中且源是假字节：组件缺失 / 提取失败 中文文案（按环境有无 ffmpeg 二选一）
+    let err = waveform(&h.lib, "AN-AU", 640, 272).unwrap_err();
+    assert!(err.contains("组件缺失") || err.contains("波形提取失败"), "{err}");
   }
 
   #[test]

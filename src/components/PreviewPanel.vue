@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // 预览画面区（4.3/5.2）：image/sequence/anim 走 <img>（filePath 由 store 维护，切帧即换 src）；
 // video 把 previewMedia 的 <video> 元素挂进画面区（缩放/平移/旋转/翻转复用图片那套数学，
-// 尺寸经 loadedmetadata → onImageLoad 喂入）；audio 显示波形缩略图大图（contain），无缩放平移。
+// 尺寸经 loadedmetadata → onImageLoad 喂入）；audio 显示波形大图（按画面区实际像素后端重采样，
+// 未就绪回退 info 波形缩略图 contain），无缩放平移。
 // 交互：滚轮缩放（瞄点跟鼠标）、左键拖动平移、双击 适合窗口⇄原图大小；
 // ←/→ sequence/anim=上/下帧 video=逐帧步进(±1/24s) 其余=上/下一个素材；
 // 空格 sequence/anim/audio/video=播放暂停；Esc 退出全屏/预览。
 import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import PreviewNavigator from "./PreviewNavigator.vue";
+import { useHiresWaveform } from "../lib/useHiresWaveform";
 import { usePreviewStore } from "../stores/preview";
 import { usePreviewMediaStore } from "../stores/previewMedia";
 
@@ -27,10 +29,14 @@ const iconUrl = computed(() => {
   const p = preview.current;
   return preview.kind === "other" && p?.thumbPath ? convertFileSrc(p.thumbPath) : null;
 });
-// audio：波形缩略图大图（5.1 info 波形图）
+// audio：波形大图——优先后端按画面区实际像素重采样的高清图（useHiresWaveform 内部已按
+// kind==='audio' 门控），未就绪 / 生成失败回退 info 波形缩略图（5.1）拉伸旧行为
+const hiresWavePath = useHiresWaveform(stageRef);
 const waveUrl = computed(() => {
   const p = preview.current;
-  return preview.kind === "audio" && p?.thumbPath ? convertFileSrc(p.thumbPath) : null;
+  if (preview.kind !== "audio") return null;
+  const src = hiresWavePath.value ?? p?.thumbPath;
+  return src ? convertFileSrc(src) : null;
 });
 
 // wrap 定位：图中心 = 容器中心 + pan，尺寸 = 自然尺寸 × zoom（left/top 直算，无 origin 问题）
@@ -202,7 +208,7 @@ watch(
   height: 100%;
   /* 旋转/翻转绕图中心，视觉可溢出 wrap（stage overflow hidden 兜底） */
 }
-/* audio：波形缩略图大图（contain 居中） */
+/* audio：波形大图（contain 居中；重采样图为画面区等比尺寸，contain 即铺满） */
 .wave-large {
   position: absolute;
   left: 50%;

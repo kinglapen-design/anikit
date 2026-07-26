@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // 音频播放条（5.2）：放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8 / 内边距 4 / 间距 6）。
 // 播放/暂停、音量（VolumeControl）、当前时间/总时长（mm:ss 同 formatDuration 口径）、
-// 波形进度条（波形缩略图铺满整条：未播放部分压 C1-40 罩层、已播放部分全亮，两层同图 clip-path 裁切，
-// 播放头 1px 品牌紫竖线；点击/拖动 seek）、倍率、循环。转码中显示加载提示。音频无笔记/全屏。
+// 波形进度条（波形按轨道实际像素后端重采样渲染，任意宽度 1px 级清晰；两层 div 以波形图作 CSS
+// mask：底层 font-icon-3 灰、已播放层 brand-1 紫 clip-path 裁到进度，播放头 1px 品牌紫竖线；
+// 点击/拖动 seek）、倍率、循环。转码中显示加载提示。音频无笔记/全屏。
 import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import IconButton from "./IconButton.vue";
 import VolumeControl from "./VolumeControl.vue";
 import { formatDuration } from "../lib/formatDuration";
+import { useHiresWaveform } from "../lib/useHiresWaveform";
 import { RATES, usePreviewStore } from "../stores/preview";
 import { usePreviewMediaStore } from "../stores/previewMedia";
 
@@ -16,11 +18,15 @@ const media = usePreviewMediaStore();
 const trackRef = ref<HTMLElement>();
 let seeking = false;
 
-// 波形缩略图（5.1 info 波形图）作进度条底图
+// 波形底图：优先后端按轨道实际像素重采样的高清图（useHiresWaveform），
+// 未就绪 / 生成失败回退 info 波形缩略图（5.1）拉伸旧行为
+const hiresPath = useHiresWaveform(trackRef);
 const waveUrl = computed(() => {
-  const p = preview.current?.thumbPath;
+  const p = hiresPath.value ?? preview.current?.thumbPath;
   return p ? convertFileSrc(p) : null;
 });
+// 两层 mask 共用的图地址（CSS 变量下发，mask 走 alpha 通道）
+const waveMask = computed(() => (waveUrl.value ? { "--wave-url": `url("${waveUrl.value}")` } : {}));
 const pct = computed(() => (media.duration > 0 ? (media.currentTime / media.duration) * 100 : 0));
 
 function cycleRate(): void {
@@ -66,20 +72,16 @@ function onSeekUp(e: PointerEvent): void {
       <div
         ref="trackRef"
         class="wave-progress"
+        :style="waveMask"
         style="touch-action: none"
         @pointerdown="onSeekDown"
         @pointermove="onSeekMove"
         @pointerup="onSeekUp"
       >
-        <img v-if="waveUrl" class="wave" :src="waveUrl" draggable="false" />
-        <span class="wave-dim" />
-        <img
-          v-if="waveUrl"
-          class="wave lit"
-          :src="waveUrl"
-          :style="{ clipPath: `inset(0 ${100 - pct}% 0 0)` }"
-          draggable="false"
-        />
+        <template v-if="waveUrl">
+          <div class="wave-layer base" />
+          <div class="wave-layer played" :style="{ clipPath: `inset(0 ${100 - pct}% 0 0)` }" />
+        </template>
         <span class="head" :style="{ left: `${pct}%` }" />
       </div>
       <button class="rate-btn" v-tip="'倍率（点击切换）'" @click="cycleRate">{{ media.rate }}x</button>
@@ -119,7 +121,9 @@ function onSeekUp(e: PointerEvent): void {
   color: var(--font-icon-3);
   padding: 0 var(--space-4);
 }
-/* 波形进度条：高 24，圆角 4；两层同图 + 未播放区 C1-40 罩层，播放头 1px 品牌紫 */
+/* 波形进度条：高 24，圆角 4；两层 div 以波形图作 CSS mask（alpha 通道，mask-size 铺满）——
+   底层灰（font-icon-3）= 未播放，上层紫（brand-1）clip-path 裁到进度 = 已播放（Eagle 蓝/灰对比的
+   紫/灰版，2026-07-26 用户定）；播放头 1px 品牌紫 */
 .wave-progress {
   position: relative;
   flex: 1;
@@ -129,21 +133,22 @@ function onSeekUp(e: PointerEvent): void {
   overflow: hidden;
   cursor: pointer;
 }
-.wave {
+.wave-layer {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: fill;
+  -webkit-mask-image: var(--wave-url);
+  mask-image: var(--wave-url);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
   pointer-events: none;
 }
-.wave-dim {
-  position: absolute;
-  inset: 0;
-  background: var(--c1-40);
-  pointer-events: none;
+.wave-layer.base {
+  background: var(--font-icon-3);
 }
-.wave.lit {
+.wave-layer.played {
+  background: var(--brand-1);
   z-index: 1;
 }
 .head {

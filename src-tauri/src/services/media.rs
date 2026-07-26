@@ -97,6 +97,12 @@ pub fn video_first_frame(path: &Path) -> Option<RgbaImage> {
 /// 音频波形预览图（640×272 透明底；**上半 = 左声道、下半 = 右声道**立体声分绘，
 /// mono 源 ffmpeg 复制成双声道自然对称）；缩略图与冲突弹窗预览共用
 pub fn waveform_image(path: &Path) -> Option<RgbaImage> {
+  waveform_image_sized(path, WAVEFORM_WIDTH, WAVEFORM_HEIGHT)
+}
+
+/// 按任意尺寸重采样波形图（渲染口径同 5.1 定稿——满色纵线 / 竖向柔化 / 声道分绘 / 静音中线 /
+/// 60% alpha，仅宽高为参数）：播放条 / 预览大图按实际显示像素请求重渲（1px 级清晰，2026-07-26 定）
+pub fn waveform_image_sized(path: &Path, width: u32, height: u32) -> Option<RgbaImage> {
   if !is_audio(path) {
     return None;
   }
@@ -107,7 +113,7 @@ pub fn waveform_image(path: &Path) -> Option<RgbaImage> {
     l.push(pair[0]);
     r.push(pair[1]);
   }
-  Some(render_waveform(&l, &r, WAVEFORM_WIDTH, WAVEFORM_HEIGHT))
+  Some(render_waveform(&l, &r, width, height))
 }
 
 /// 预览图统一入口（thumbnail::load_origin 兜底调用）：视频首帧 / 音频波形；其他格式 None
@@ -229,6 +235,17 @@ mod tests {
       a > 0 && a < BAR_RGBA[3]
     });
     assert!(has_soft, "边缘应有 1px 柔化过渡");
+  }
+
+  #[test]
+  fn render_waveform_scales_to_arbitrary_size() {
+    // 参数化渲染：任意宽高产物尺寸正确（播放条 1200×48 / 钳制下限 32×8 / 预览大图 1920×400）
+    let samples: Vec<f32> = (0..4096).map(|i| if i % 2 == 0 { 0.5 } else { -0.5 }).collect();
+    for (w, h) in [(1200u32, 48u32), (32, 8), (1920, 400)] {
+      let img = render_waveform(&samples, &samples, w, h);
+      assert_eq!((img.width(), img.height()), (w, h));
+      assert!(img.get_pixel(w / 2, h / 2).0[3] > 0, "{w}x{h} 中线应有波形");
+    }
   }
 
   #[test]
