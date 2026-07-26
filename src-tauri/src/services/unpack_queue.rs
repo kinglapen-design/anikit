@@ -117,9 +117,15 @@ impl UnpackQueue {
     Self { shared }
   }
 
-  /// 提交解包任务：**排队直到完成**（无代际作废——解包是建档的一部分，不能随切换丢弃）
+  /// 提交解包任务：**排队直到完成**（无代际作废——解包是建档的一部分，不能随切换丢弃）。
+  /// 同资产 pending 去重（重复提交幂等无害——unpack_frames 完成态跳过，但白跑一趟全量解码）
   pub fn submit(&self, task: UnpackTask) {
-    self.shared.pending.lock().unwrap().push_back(task);
+    {
+      let mut q = self.shared.pending.lock().unwrap();
+      if !push_dedup(&mut q, task) {
+        return;
+      }
+    }
     self.shared.condvar.notify_one();
   }
 
@@ -149,9 +155,17 @@ pub fn clear_pending() {
   }
 }
 
+/// pending 尾插，同资产去重；返回 false = 已在队列未插入
+fn push_dedup(q: &mut VecDeque<UnpackTask>, task: UnpackTask) -> bool {
+  if q.iter().any(|t| t.asset_id == task.asset_id) {
+    return false;
+  }
+  q.push_back(task);
+  true
+}
+
 /// worker 主循环：取任务 → 执行；空闲 park（无代际比对，任务排到就必执行）
-fn worker_loop(shared: &Shared) {
-  loop {
+fn worker_loop(shared: &Shared) {  loop {
     let task = {
       let mut q = shared.pending.lock().unwrap();
       loop {
@@ -253,5 +267,16 @@ mod tests {
     // 已被 worker 取走的任务落盘幂等无害；clear 后提交的任务照常执行
     queue.submit(UnpackTask { root: h.root.clone(), asset_id: "AN-WEBP".to_string() });
     wait_until(|| unpacked(&h, "AN-WEBP", "anim3"), "clear 后新任务照常执行");
+  }
+
+  /// 同资产 pending 去重：重复提交只排一份（自愈重投/导入挂钩+预览补提交可能撞车）
+  #[test]
+  fn push_dedup_skips_same_asset() {
+    let mut q = VecDeque::new();
+    let t = |id: &str| UnpackTask { root: PathBuf::from("/r"), asset_id: id.to_string() };
+    assert!(push_dedup(&mut q, t("A")));
+    assert!(!push_dedup(&mut q, t("A")), "同资产重复提交应被去重");
+    assert!(push_dedup(&mut q, t("B")));
+    assert_eq!(q.len(), 2);
   }
 }

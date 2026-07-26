@@ -120,7 +120,17 @@ fn sequence_frames(lib: &Library, asset_id: &str) -> Result<SequenceFrames, Stri
   let frames_dir = info_dir.join("frames");
   // 动图分支（与序列帧同构，帧原图 = 解包持久化的 info/frames/）
   if crate::services::anim::is_anim(&meta) {
-    if !frames_dir.is_dir() {
+    // 解包完成标记 = frames.json（解包最后一步原子落盘）——frames/ 逐帧写入，目录存在不代表解完
+    // （曾用 frames_dir.is_dir() 判定：解包中途进预览误返"已解包共 1 帧"，前端卡 1/1 且不在兜底态收不到热切换）
+    if !info_dir.join("frames.json").is_file() {
+      // 自愈：导入挂钩遗漏 / 解包失败 / 库重启中断遗留的，进预览即补提交（队列去重 + 落盘幂等）。
+      // cfg(not(test))：单测共享全局 worker，submit 会与测试手动解包并发写同一临时库（偶发竞态失败）；
+      // 自愈是薄包装，队列与解包本身各有独立测试覆盖
+      #[cfg(not(test))]
+      crate::services::unpack_queue::global().submit(crate::services::unpack_queue::UnpackTask {
+        root: lib.root.clone(),
+        asset_id: asset_id.to_string(),
+      });
       return Ok(SequenceFrames { fps: None, thumb_frame: None, frames: Vec::new(), unpacking: true });
     }
     let delays = crate::services::anim_unpack::read_delays(&info_dir).unwrap_or_default();
@@ -419,5 +429,22 @@ mod tests {
     for f in &list.frames {
       assert!(PathBuf::from(&f.full_path).is_file(), "帧原图缺失：{}", f.full_path);
     }
+  }
+
+  /// 回归：解包中途（frames/ 已写入部分帧、frames.json 未落盘）必须仍判 unpacking——
+  /// 目录存在 ≠ 解完（曾误返"已解包共 1 帧"：前端卡 1/1 静止，且不在兜底态收不到热切换）
+  #[test]
+  fn list_sequence_frames_anim_partial_frames_still_unpacking() {
+    let _lock = TEST_LOCK.lock().unwrap();
+    let mut h = make_lib();
+    add_anim(&mut h, "AN-GIF2");
+    let info = h.lib.root.join(ASSTES_DIR).join("AN-GIF2.info");
+    let frames_dir = info.join("frames");
+    fs::create_dir_all(&frames_dir).unwrap();
+    fs::write(frames_dir.join("anim3-00001.webp"), b"partial").unwrap();
+
+    let r = sequence_frames(&h.lib, "AN-GIF2").unwrap();
+    assert!(r.unpacking, "frames.json 未落盘 = 解包未完，必须 unpacking");
+    assert!(r.frames.is_empty(), "半成品帧不下发");
   }
 }
