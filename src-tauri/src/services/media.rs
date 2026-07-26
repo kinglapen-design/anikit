@@ -21,11 +21,8 @@ const PCM_RATE: u32 = 8000;
 pub const WAVEFORM_WIDTH: u32 = 640;
 /// 波形图高（px）
 pub const WAVEFORM_HEIGHT: u32 = 272;
-/// 每像素叠加的 min/max 窗口数：窗口越多形状内部梯度越细腻（发丝从尖端到根部渐浓，
-/// 连续渐变而非"两层"割裂，2026-07-26 用户定）；二值化曾把内部纹理抹平丢细节，已回撤
+/// 每像素叠加的 min/max 窗口数：窗口越多形状细节越丰富（2026-07-26 用户定）
 const HAIR_WINDOWS: usize = 16;
-/// 单次叠加 alpha（over 合成）：1 次 ≈ 15（发丝尖），16 次 ≈ 160 封顶 153（实心主体）
-const HAIR_ALPHA: u8 = 15;
 /// 波形柱色（#F8F5FA 60% alpha，2026-07-26 用户定，与 font-icon-3 同档观感）
 const BAR_RGBA: [u8; 4] = [0xF8, 0xF5, 0xFA, 153];
 /// 波形上下留白（px）
@@ -127,10 +124,9 @@ pub fn decode_preview_image(path: &Path) -> Option<DynamicImage> {
 }
 
 /// 波形渲染（Eagle 同形态"实心主体 + 峰顶发丝"）：**上半 = 左声道、下半 = 右声道**。
-/// 每像素 HAIR_WINDOWS 个 min/max 窗口以低 alpha 逐条叠加——稳态段所有窗口高度趋同
-/// 叠成实心主体；瞬态尖峰只有少数窗口覆盖，从尖端到根部渐浓（连续梯度，
-/// 不二值化——二值化抹平内部纹理丢细节且必然硬边，2026-07-26 用户指正）。
-/// 左右声道联合归一（保持相对响度）；静音段为细中线。
+/// 每像素 HAIR_WINDOWS 个 min/max 窗口满色绘制形状（峰值辨识度不丢），
+/// soften_edges 做唯一的透明度变化——边缘向外 1px 柔化（2026-07-26 用户定：
+/// 这不是透明度问题，只是边缘柔化问题）。左右声道联合归一；静音段为细中线。
 fn render_waveform(samples_l: &[f32], samples_r: &[f32], w: u32, h: u32) -> RgbaImage {
   let cy = (h / 2) as f32;
   let max_half = (h / 2).saturating_sub(WAVEFORM_MARGIN) as f32;
@@ -146,14 +142,31 @@ fn render_waveform(samples_l: &[f32], samples_r: &[f32], w: u32, h: u32) -> Rgba
     // 全静音：画中线
     draw_channel(&mut img, &[0.0], 1.0, true, cy, max_half);
   }
-  // 多窗口梯度即成品（alpha 封顶 60%，RGB 归一）：发丝从尖端到根部渐浓，
-  // 主体实心，不二值化（会抹平内部纹理丢细节、且必然硬边，2026-07-26 用户指正）
-  for p in img.pixels_mut() {
-    if p.0[3] > 0 {
-      p.0 = [BAR_RGBA[0], BAR_RGBA[1], BAR_RGBA[2], p.0[3].min(BAR_RGBA[3])];
+  soften_edges(&mut img);
+  img
+}
+
+/// 边缘柔化（唯一的透明度变化，2026-07-26 用户定）：out = max(原图, 3×3 均值模糊)——
+/// 形状内部（含每根细发丝）保持满色不稀释，只从边缘向外晕 1px 软边
+fn soften_edges(img: &mut RgbaImage) {
+  let src = img.clone();
+  let (w, h) = (img.width(), img.height());
+  for y in 0..h {
+    for x in 0..w {
+      let mut sum = 0u32;
+      for dy in -1i32..=1 {
+        for dx in -1i32..=1 {
+          let xx = (x as i32 + dx).clamp(0, w as i32 - 1) as u32;
+          let yy = (y as i32 + dy).clamp(0, h as i32 - 1) as u32;
+          sum += src.get_pixel(xx, yy).0[3] as u32;
+        }
+      }
+      let a = src.get_pixel(x, y).0[3].max((sum / 9) as u8);
+      if a > 0 {
+        *img.get_pixel_mut(x, y) = image::Rgba([BAR_RGBA[0], BAR_RGBA[1], BAR_RGBA[2], a]);
+      }
     }
   }
-  img
 }
 
 /// 单声道半区叠加绘制：top_half = 上半（裁在中线以上），false = 下半
@@ -177,33 +190,17 @@ fn draw_channel(img: &mut RgbaImage, samples: &[f32], max_abs: f32, top_half: bo
       continue;
     }
     let x = (i / HAIR_WINDOWS) as u32;
+    // 形状一律满色绘制（2026-07-26 用户定：透明度渐变会抹去峰值辨识度——
+    // 这不是透明度问题，只是边缘柔化问题）
     for y in (y0 as u32)..=(y1 as u32).min(sh - 1) {
-      blend_alpha(img, x, y, HAIR_ALPHA);
+      img.put_pixel(x, y, image::Rgba(BAR_RGBA));
     }
   }
-}
-
-/// 同色 over 合成：a' = 1 - (1-a)(1-A)——主体随叠加次数趋实，单次覆盖保持半透明发丝
-fn blend_alpha(img: &mut RgbaImage, x: u32, y: u32, a: u8) {
-  let p = img.get_pixel_mut(x, y);
-  let old = p.0[3] as u32;
-  let new = 255 - (255 - old) * (255 - a as u32) / 255;
-  *p = image::Rgba([BAR_RGBA[0], BAR_RGBA[1], BAR_RGBA[2], new as u8]);
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  #[test]
-  fn blend_alpha_accumulates() {
-    let mut img = RgbaImage::new(1, 1);
-    blend_alpha(&mut img, 0, 0, HAIR_ALPHA);
-    let a1 = img.get_pixel(0, 0).0[3];
-    assert_eq!(a1, HAIR_ALPHA);
-    blend_alpha(&mut img, 0, 0, HAIR_ALPHA);
-    assert!(img.get_pixel(0, 0).0[3] > a1, "同色叠加 alpha 递增");
-  }
 
   #[test]
   fn render_waveform_body_solid_and_silence_is_thin_line() {
@@ -222,19 +219,24 @@ mod tests {
   }
 
   #[test]
-  fn render_waveform_transient_peak_fades_gradient() {
-    // 前半稳态振荡 0.4、中后部一个孤立尖峰 1.0 → 尖峰只有个别窗口覆盖，
-    // 透明度低于主体但 >0（连续梯度，不是"两层"也不是二值化抹平）
+  fn render_waveform_transient_peak_full_color_with_soft_edge() {
+    // 前半稳态振荡 0.4、中后部一个孤立尖峰 1.0 → 尖峰满色（辨识度不丢），
+    // 仅边缘外晕 1px 软边（存在 0<alpha<满色 的像素）
     let mut samples: Vec<f32> = (0..65536).map(|i| if i % 2 == 0 { 0.4 } else { -0.4 }).collect();
     samples[32768..].fill(0.0);
     samples[60000] = 1.0; // 约 91.6% 处
     let img = render_waveform(&samples, &samples, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
     let cy = WAVEFORM_HEIGHT / 2;
-    // 主体实心（封顶 60%）
     assert_eq!(img.get_pixel(10, cy - 20).0, BAR_RGBA);
-    // 孤立尖峰：有形状且透明度低于主体（渐细发丝）
+    // 孤立尖峰满色（位置 60000/65536 ≈ x 585~586）
     let hair = (585..=586).map(|x| img.get_pixel(x, WAVEFORM_MARGIN + 2).0[3]).max().unwrap();
-    assert!(hair > 0 && hair < BAR_RGBA[3], "尖峰应为渐细发丝：{hair}");
+    assert_eq!(hair, BAR_RGBA[3], "尖峰应满色保持辨识度");
+    // 边缘柔化存在：满色与透明之间有过渡像素
+    let has_soft = (0..img.height()).any(|y| {
+      let a = img.get_pixel(585, y).0[3];
+      a > 0 && a < BAR_RGBA[3]
+    });
+    assert!(has_soft, "边缘应有 1px 柔化过渡");
   }
 
   #[test]
