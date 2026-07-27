@@ -441,6 +441,14 @@ mod tests {
     assert!(views[0].thumb_path.as_ref().unwrap().ends_with("_thumbnail.webp"));
     assert_eq!(views[0].thumb_kind, Some(crate::services::views::ThumbKind::Asset));
 
+    // 封面帧透传（5.3 卡片悬停播放范围起点）：未设置为 None；设置后随视图下发
+    assert_eq!(views[0].thumb_frame, None);
+    let id = views[0].asset_id.clone();
+    h.lib.lock().unwrap().as_mut().unwrap().index.assets.get_mut(&id).unwrap().thumb_frame =
+      Some("t:3.500".into());
+    let views = with_lib(&h, |l| placement_views(l, Some(ROOT_FOLDER_ID)));
+    assert_eq!(views[0].thumb_frame.as_deref(), Some("t:3.500"));
+
     // 资源在索引中缺失的脏 Placement 跳过
     h.lib.lock().unwrap().as_mut().unwrap().folders.items.push(Placement {
       asset: "AN-不存在".into(),

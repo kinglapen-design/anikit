@@ -5,6 +5,7 @@
 // 滚动条贴 viewport 右缘（不占布局），中间面板 4px 内边距作呼吸。
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import AssetCard from "./AssetCard.vue";
+import HoverZoomOverlay from "./HoverZoomOverlay.vue";
 import ListRowCard from "./ListRowCard.vue";
 import ListHeader from "./ListHeader.vue";
 import FolderStrip from "./FolderStrip.vue";
@@ -31,10 +32,13 @@ const ui = useUiStore();
 const content = useContentStore();
 const preview = usePreviewStore();
 
-// 进预览（4.3）：双击卡片 / 卡片"查看大图"按钮
+// 进预览（4.3）：双击卡片
 function openPreview(p: PlacementView): void {
   void preview.open(`${p.assetId}|${p.folderId}`);
 }
+
+// 悬停放大浮层（5.3）：卡片放大镜按钮触发，同时最多一个
+const zoomAsset = ref<PlacementView | null>(null);
 
 // 布局算法只认数值宽高：fla 等无尺寸资源按 1:1 方形（4.2 用户定——格式图标为方形，容器随方不裁切）
 const layoutItems = computed(() => props.items.map((it) => ({ w: it.w ?? 300, h: it.h ?? 300 })));
@@ -276,7 +280,7 @@ onBeforeUnmount(() => {
               content.selectedInboxName = '';
             "
             @dblclick="openPreview(c.asset)"
-            @preview="openPreview(c.asset)"
+            @zoom="zoomAsset = c.asset"
           />
         </template>
       </div>
@@ -293,6 +297,8 @@ onBeforeUnmount(() => {
       v-if="ui.layoutMode === 'list' && assetsOpen"
       :style="{ top: `${Math.max(0, headerH + 6 - pos)}px` }"
     />
+    <!-- 悬停放大浮层（5.3）：Teleport 到 body，点击任意处 / Esc 关闭 -->
+    <HoverZoomOverlay v-if="zoomAsset" :asset="zoomAsset" @close="zoomAsset = null" />
   </div>
 </template>
 

@@ -4,11 +4,17 @@
 // 格式角标：图片左上各 4px（实底格式色徽章）；按钮组：图片右下各 4px（图标按钮-小 24×24，
 // 悬停卡片显示，hover 底色 C5——图片干扰大不裸奔 16 图标）；
 // 文字组：间距 2 / 居中 / 标题最多两行截断。
-import { computed } from "vue";
-import { convertFileSrc } from "@tauri-apps/api/core";
+// 悬停行为按类型分发（5.3，2026-07-27 用户定案）：视频/音频/动图悬停直接播放（无按钮）；
+// 静态图片/序列帧 = 放大镜（悬浮大图）；PSD/SVG 类图片工程 = 放大镜 + 默认应用打开；
+// 格式图标（fla/zip/AI 等无内容缩略图）= 仅默认应用打开；动画工程有内容缩略图时（8.2 后）
+// = 发送 + 默认应用打开 + 放大镜（发送仍占位，8.5 接）。
+import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
+import HoverVideoLayer from "./HoverVideoLayer.vue";
+import HoverAudioLayer from "./HoverAudioLayer.vue";
 import { CARD_CAPTION_H, type Box } from "../lib/layouts";
-import { formatBadgeColor } from "../lib/formatBadge";
+import { formatBadgeColor, isAudioExt, isVideoExt } from "../lib/formatBadge";
 import { formatDuration } from "../lib/formatDuration";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
@@ -16,8 +22,8 @@ import type { PlacementView } from "../stores/content";
 const props = withDefaults(defineProps<{ asset: PlacementView; box: Box; selected?: boolean }>(), {
   selected: false,
 });
-// 查看大图按钮 → 进预览（4.3）；双击由 AssetGrid 绑在组件根元素上
-defineEmits<{ preview: [] }>();
+// 放大镜按钮 → 悬浮大图浮层（5.3，由 AssetGrid 统一管理）；双击进中栏预览由 AssetGrid 绑根元素
+const emit = defineEmits<{ zoom: [] }>();
 const ui = useUiStore();
 const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
 const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
@@ -25,6 +31,64 @@ const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.as
 const isAnim = computed(() => props.asset.animated);
 // 序列帧（2026-07-22 用户定）：格式角标显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
 const isSeq = computed(() => props.asset.frameCount != null && !isAnim.value);
+// 图片工程（预览窗口"默认应用打开"同口径，preview.ts SOURCE_EXTS）：有内容缩略图时配放大镜
+const SOURCE_EXTS = new Set(["psd", "psb", "ai", "svg"]);
+// 动画工程（fla/aep）：8.2 伴生缩略图后才可能有内容缩略图，届时出 发送+默认应用打开+放大镜
+const ENGINEERING_EXTS = new Set(["fla", "aep"]);
+
+type HoverKind = "anim" | "sequence" | "video" | "audio" | "image" | "source" | "engineering" | "iconOnly";
+const kind = computed<HoverKind>(() => {
+  const ext = props.asset.ext.toLowerCase();
+  if (isAnim.value) return "anim";
+  if (isSeq.value) return "sequence";
+  if (isVideoExt(ext)) return "video";
+  if (isAudioExt(ext)) return "audio";
+  if (props.asset.thumbKind !== "asset") return "iconOnly"; // 格式图标 / 无缩略图
+  if (ENGINEERING_EXTS.has(ext)) return "engineering";
+  if (SOURCE_EXTS.has(ext)) return "source";
+  return "image";
+});
+// 悬停按钮按类型分发（DOM 顺序固定：发送 → 默认应用打开 → 放大镜）
+const showSend = computed(() => kind.value === "engineering");
+const showOpenDefault = computed(
+  () => kind.value === "iconOnly" || kind.value === "source" || kind.value === "engineering",
+);
+const showZoom = computed(
+  () => kind.value === "image" || kind.value === "sequence" || kind.value === "source" || kind.value === "engineering",
+);
+
+// 悬停态：驱动播放层挂载（视频/音频）与动图播放
+const hovered = ref(false);
+
+// 动图悬停播放：300ms 延迟后把卡片图换成源文件（webview 原生循环，零等待），移出还原封面
+const animSrc = ref<string | null>(null);
+let animTimer: ReturnType<typeof setTimeout> | undefined;
+watch(hovered, (h) => {
+  clearTimeout(animTimer);
+  if (h && kind.value === "anim") {
+    animTimer = setTimeout(() => void loadAnim(), 300);
+  } else {
+    animSrc.value = null;
+  }
+});
+async function loadAnim(): Promise<void> {
+  try {
+    const r = await invoke<{ path: string | null; pending: boolean }>("get_asset_file_path", {
+      assetId: props.asset.assetId,
+    });
+    if (r.path && hovered.value) animSrc.value = convertFileSrc(r.path);
+  } catch {
+    // 解析失败保持静态封面
+  }
+}
+onBeforeUnmount(() => clearTimeout(animTimer));
+
+function openDefault(): void {
+  void invoke("open_with_default_app", { assetId: props.asset.assetId }).catch((e) =>
+    console.warn("默认应用打开失败：", e),
+  );
+}
+
 // 角标文案：音频带 BPM 显示"格式 / BPM: 值"（Eagle 同格式，2026-07-26 用户截图定稿）
 const badge = computed(() => {
   if (isSeq.value) return "序列帧";
@@ -54,24 +118,34 @@ const meta = computed(() => {
       height: `${box.height}px`,
     }"
   >
-    <div class="thumb" :style="{ height: `${imgH}px` }">
+    <div
+      class="thumb"
+      :style="{ height: `${imgH}px` }"
+      @mouseenter="hovered = true"
+      @mouseleave="hovered = false"
+    >
       <img
         v-if="thumbUrl"
         class="img"
         :class="{ icon: asset.thumbKind === 'formatIcon', contain: ui.layoutMode === 'grid' }"
-        :src="thumbUrl"
+        :src="animSrc ?? thumbUrl"
         :alt="asset.name"
         decoding="async"
         draggable="false"
       />
       <div v-else class="img" />
+      <HoverVideoLayer v-if="hovered && kind === 'video'" :asset="asset" />
+      <HoverAudioLayer v-else-if="hovered && kind === 'audio'" :asset="asset" />
       <span v-if="badgeColor && ui.showExtBadge" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
       <span v-if="asset.noteCount" class="note-badge">{{ asset.noteCount }}</span>
       <div class="actions">
-        <button class="act" v-tip="'发送至 Animate'" @click.stop>
+        <button v-if="showSend" class="act" v-tip="'发送至 Animate'" @click.stop>
           <AppIcon name="send-to" />
         </button>
-        <button class="act" v-tip="'查看大图'" @click.stop="$emit('preview')">
+        <button v-if="showOpenDefault" class="act" v-tip="'默认应用打开'" @click.stop="openDefault">
+          <AppIcon name="open-default" />
+        </button>
+        <button v-if="showZoom" class="act" v-tip="'查看大图'" @click.stop="emit('zoom')">
           <AppIcon name="magnifier" />
         </button>
       </div>

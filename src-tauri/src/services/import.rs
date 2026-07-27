@@ -554,6 +554,7 @@ mod tests {
       bpm: None,
       imported_from: None,
       note_count: None,
+      thumb_frame: None,
     };
     let asset = serde_json::to_value(ImportEvent::Asset { placement: view }).unwrap();
     assert_eq!(
@@ -564,7 +565,7 @@ mod tests {
           "assetId": "AN-X", "folderId": "root", "name": "a.png",
           "w": 1, "h": null, "ext": "png", "thumbPath": null, "thumbKind": null, "origin": true,
           "frameCount": null, "animated": false, "duration": null, "bpm": null, "importedFrom": null,
-          "noteCount": null
+          "noteCount": null, "thumbFrame": null
         }
       })
     );

@@ -44,6 +44,9 @@ pub struct PlacementView {
   pub imported_from: Option<String>,
   /// 逐帧笔记条数冗余（5.2 展示层：卡片笔记角标据此显隐）；无笔记为 null
   pub note_count: Option<u32>,
+  /// 封面帧（PRD 01）：序列帧/动图 = frames/ 内帧名；视频 = `t:{秒}`（5.2 set_video_thumb 写入，
+  /// 卡片悬停播放范围起点 = 该秒数，5.3）；未设置为 null
+  pub thumb_frame: Option<String>,
 }
 
 /// 格式图标缓存键（空扩展名归 "file"）
@@ -88,5 +91,6 @@ pub fn placement_view(root: &Path, meta: &AssetMeta, p: &Placement, icons: &Hash
     bpm: meta.bpm,
     imported_from: meta.imported_from.clone(),
     note_count: meta.note_count,
+    thumb_frame: meta.thumb_frame.clone(),
   }
 }

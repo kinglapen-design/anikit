@@ -21,6 +21,7 @@ export interface PlacementView {
   bpm: number | null; // 音频 BPM（只读内嵌标签，5.1）；无标签为 null
   importedFrom: string | null; // 导入渠道标记；"inbox" 且未摘标（root）= 收件箱"已导入"持久显示
   noteCount?: number | null; // 逐帧笔记条数冗余（5.2 展示层：卡片笔记角标据此显隐）；无笔记为 null
+  thumbFrame?: string | null; // 封面帧：序列帧/动图 = 帧名；视频 = `t:{秒}`（5.2 写入，5.3 悬停播放范围起点）
 }
 
 export interface FolderNode {
