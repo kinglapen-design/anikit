@@ -103,13 +103,40 @@ function onEnded(): void {
   v.currentTime = rangeStart();
   void v.play().catch(() => {});
 }
-// 跟随鼠标快进快退（仅悬停模式）：横向位置映射到 [start, end]
+// 跟随鼠标快进快退（仅悬停模式）：横向位置映射到 [start, end]。
+// pointermove 只记目标比例，rAF 合帧应用（2026-07-27 用户实测：每次 move 直接 seek 卡顿不跟手）——
+// seek 上限 15fps（66ms 门控，解码器喘得过气）；目标与上次差 <0.05s 不 seek（手停微抖不触发）
+let scrubRatio: number | null = null;
+let scrubDirty = false;
+let scrubRaf = 0;
+let lastSeekAt = 0;
+let lastSeekSec = -1;
+
 function onScrub(e: PointerEvent): void {
-  const v = videoRef.value;
-  if (!v || !ready.value || props.auto) return;
+  if (!ready.value || props.auto) return;
   const rect = layerRef.value!.getBoundingClientRect();
-  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  v.currentTime = rangeStart() + ratio * (rangeEnd() - rangeStart());
+  scrubRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  scrubDirty = true;
+  if (!scrubRaf) scrubRaf = requestAnimationFrame(applyScrub);
+}
+function applyScrub(): void {
+  scrubRaf = 0;
+  const v = videoRef.value;
+  if (!v || scrubRatio == null) {
+    scrubDirty = false;
+    return;
+  }
+  const now = performance.now();
+  if (now - lastSeekAt < 66) {
+    if (scrubDirty) scrubRaf = requestAnimationFrame(applyScrub); // 门控等待，下帧再试
+    return;
+  }
+  const target = rangeStart() + scrubRatio * (rangeEnd() - rangeStart());
+  scrubDirty = false;
+  if (Math.abs(target - lastSeekSec) < 0.05) return;
+  lastSeekAt = now;
+  lastSeekSec = target;
+  v.currentTime = target;
 }
 function toggleMute(): void {
   const v = videoRef.value;
@@ -121,6 +148,7 @@ function toggleMute(): void {
 onBeforeUnmount(() => {
   disposed = true;
   clearTimeout(timer);
+  cancelAnimationFrame(scrubRaf);
   unregister?.();
   const v = videoRef.value;
   if (v) {
