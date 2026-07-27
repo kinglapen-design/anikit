@@ -68,6 +68,7 @@ function stepFrame(delta: number): void {
     <div
       ref="trackRef"
       class="progress"
+      :class="{ transcoding: media.transcodingSlow }"
       style="touch-action: none"
       @pointerdown="onSeekDown"
       @pointermove="onSeekMove"
@@ -145,6 +146,10 @@ function stepFrame(delta: number): void {
   transform: translateY(-50%);
   border-radius: 2px;
   background: var(--border-1);
+}
+/* 转码中：轨道隐藏（防与"转码中…"文字交叠，2026-07-26 用户定） */
+.progress.transcoding::before {
+  display: none;
 }
 .fill {
   position: absolute;

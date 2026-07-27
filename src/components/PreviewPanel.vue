@@ -188,7 +188,6 @@ watch(
     <div v-else-if="preview.kind === 'video'" ref="videoWrapRef" class="img-wrap" :style="wrapStyle" />
     <div v-else-if="waveUrl" class="wave-large" :style="{ '--wave-url': `url(&quot;${waveUrl}&quot;)` }" />
     <img v-else-if="iconUrl" class="format-icon" :src="iconUrl" draggable="false" />
-    <span v-if="media.transcodingSlow" class="hint">转码中…</span>
     <span v-if="preview.error" class="error-text">{{ preview.error }}</span>
     <PreviewNavigator v-if="preview.overflow" />
   </div>
@@ -243,8 +242,7 @@ watch(
   height: 256px;
   object-fit: contain;
 }
-/* 转码加载态 / 媒体源报错文案（说明文字档，居中底部） */
-.hint,
+/* 媒体源报错文案（说明文字档，居中底部；转码提示已挪进播放条进度区，2026-07-26 用户定） */
 .error-text {
   position: absolute;
   left: 50%;
@@ -252,10 +250,7 @@ watch(
   transform: translateX(-50%);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
   white-space: nowrap;
-}
-.error-text {
   color: var(--error);
 }
 </style>

@@ -25,7 +25,7 @@ watch(
 
 <template>
   <div v-if="preview.seq" class="frame-strip">
-    <IconButton name="chevron-small" title="上一帧" class="rot-l" @click="preview.stepFrame(-1)" />
+    <IconButton name="chevron-small" title="上一帧" class="rot-l" :disabled="preview.frame <= 0" @click="preview.stepFrame(-1)" />
     <div ref="listRef" class="frames">
       <button
         v-for="(f, i) in preview.seq.frames"
@@ -39,7 +39,13 @@ watch(
         <span v-if="notes.keySet.has(f.name)" class="note-dot" />
       </button>
     </div>
-    <IconButton name="chevron-small" title="下一帧" class="rot-r" @click="preview.stepFrame(1)" />
+    <IconButton
+      name="chevron-small"
+      title="下一帧"
+      class="rot-r"
+      :disabled="preview.frame >= preview.seq.frames.length - 1"
+      @click="preview.stepFrame(1)"
+    />
   </div>
 </template>
 
