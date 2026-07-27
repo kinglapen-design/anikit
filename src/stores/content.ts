@@ -319,13 +319,18 @@ export const useContentStore = defineStore("content", {
       }
     },
     async startImportClipboard(targetFolder: string | null): Promise<void> {
-      this.lastImportSource = "move"; // 剪贴板临时 PNG 以 move 走管线
+      this.lastImportSource = "copy"; // 剪贴板统一 Copy（2026-07-27 定：绝不移动用户原文件）
       this.importProgress = { taskId: null, total: 0, done: 0, startedAt: Date.now() };
       const onEvent = new Channel<ImportEvent>();
       onEvent.onmessage = (e) => this.onImportEvent(e);
-      const taskId = await invoke<number>("import_clipboard", { targetFolder, onEvent });
-      if (this.importProgress && this.importProgress.taskId === null) {
-        this.importProgress.taskId = taskId;
+      try {
+        const taskId = await invoke<number>("import_clipboard", { targetFolder, onEvent });
+        if (this.importProgress && this.importProgress.taskId === null) {
+          this.importProgress.taskId = taskId;
+        }
+      } catch (e) {
+        this.importProgress = null; // 失败复位进度条（剪贴板无图无文件等，防卡"扫描中"）
+        throw e;
       }
     },
 

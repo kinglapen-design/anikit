@@ -78,7 +78,7 @@ async function onDrop(paths: string[], x: number, y: number): Promise<void> {
   }
 }
 
-// 剪贴板导入（PRD 05-01）：Ctrl+V 直存 PNG，无弹窗；剪贴板无图属常态，静默降级
+// 剪贴板导入（PRD 05-01；2026-07-27 扩：图片 + 文件列表，恒 Copy）；剪贴板无图无文件属常态，静默降级
 async function onPaste(e: KeyboardEvent): Promise<void> {
   if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "v") return;
   const t = e.target as HTMLElement;

@@ -126,8 +126,10 @@ pub fn import_paths(
   Ok(spawn_import(app, root, opts, on_event, None))
 }
 
-/// 剪贴板导入：读图（无图即时报错）→ PNG 落 cache/ → 任务化走同一 run_import
-/// （剪贴板来源没有目录概念，永远 Move + Flatten）
+/// 剪贴板导入：先读图片（截图场景 → PNG 落 cache/ 临时文件），无图再读文件列表
+/// （资源管理器 Ctrl+C 的文件，CF_HDROP）；两者皆无报错"剪贴板里没有图片或文件"。
+/// 来源恒 Copy（2026-07-27 定：剪贴板复制的文件绝不能 Move 走用户原文件；
+/// 临时 PNG 由工作线程导入结束后清理，Copy 与 Move 等价且更安全）；Flatten + Scatter。
 #[tauri::command]
 pub fn import_clipboard(
   app: AppHandle,
@@ -135,25 +137,40 @@ pub fn import_clipboard(
   on_event: Channel<ImportEvent>,
 ) -> Result<u64, String> {
   let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("剪贴板不可用：{e}"))?;
-  let img = clipboard.get_image().map_err(|_| "剪贴板里没有图片".to_string())?;
   let root = current_root(&app)?;
   ensure_target(&app, &target_folder)?;
 
-  let cache_dir = root.join(CACHE_DIR);
-  std::fs::create_dir_all(&cache_dir).map_err(|e| format!("缓存目录创建失败：{e}"))?;
-  let tmp = cache_dir.join(clipboard_png_name(&cache_dir));
-  save_clipboard_png(&img, &tmp)?;
+  // 图片分支：截图 / 剪贴板图片 → PNG 落 cache/ 走管线（临时文件导入后清理）
+  if let Ok(img) = clipboard.get_image() {
+    let cache_dir = root.join(CACHE_DIR);
+    std::fs::create_dir_all(&cache_dir).map_err(|e| format!("缓存目录创建失败：{e}"))?;
+    let tmp = cache_dir.join(clipboard_png_name(&cache_dir));
+    save_clipboard_png(&img, &tmp)?;
+    let opts = ImportOptions {
+      structure: Structure::Flatten,
+      source: Source::Copy,
+      target_folder,
+      paths: vec![tmp.clone()],
+      imported_from: None,
+      sequence_mode: SequenceMode::Scatter, // 剪贴板只有单张 PNG，永不打包
+    };
+    return Ok(spawn_import(app, root, opts, on_event, Some(tmp)));
+  }
 
+  // 文件列表分支：资源管理器复制的文件 / 文件夹（CF_HDROP）
+  let files = clipboard.get().file_list().unwrap_or_default();
+  if files.is_empty() {
+    return Err("剪贴板里没有图片或文件".to_string());
+  }
   let opts = ImportOptions {
     structure: Structure::Flatten,
-    source: Source::Move,
+    source: Source::Copy,
     target_folder,
-    paths: vec![tmp.clone()],
+    paths: files,
     imported_from: None,
-    sequence_mode: SequenceMode::Scatter, // 剪贴板只有单张 PNG，永不打包
+    sequence_mode: SequenceMode::Scatter, // 剪贴板恒分散（4.1 定案）
   };
-  // 临时文件由工作线程在导入结束后清理（覆盖查重命中不移动实体的场景）
-  Ok(spawn_import(app, root, opts, on_event, Some(tmp)))
+  Ok(spawn_import(app, root, opts, on_event, None))
 }
 
 /// 取消导入任务：置位取消标记，工作线程在下一个文件处理前中断（数量如实进 Finished）

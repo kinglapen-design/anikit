@@ -44,12 +44,12 @@ const eta = computed(() => {
 </template>
 
 <style scoped>
-/* 容器（11）：padding 8 / 无底无边 / 子项间距 6 / 高 = 关闭按钮 28 + 16 */
+/* 容器（11）：padding 8 16（左右 16 与中间面板标题栏 / 网格对齐，2026-07-27 用户定）/ 无底无边 / 子项间距 6 / 高 = 关闭按钮 28 + 16 */
 .import-progress {
   display: flex;
   align-items: center;
   gap: var(--space-6);
-  padding: var(--space-8);
+  padding: var(--space-8) var(--space-16);
   box-sizing: border-box;
   height: 44px;
   flex: none;
