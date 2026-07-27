@@ -475,6 +475,8 @@ fn register_one(
   let asset_id = asset.id.clone();
   // 动图（2026-07-26 定案）：注册成功后提交解包队列——逐帧高清图持久化 info/frames/
   let unpack = crate::services::anim::is_anim(&asset);
+  // 视频（2026-07-28 定案）：注册成功后提交 scrub 帧预抽——解码成本摊到导入期，悬停毫秒级命中
+  let scrub = crate::services::media::VIDEO_EXTS.contains(&asset.ext.as_str());
   let result = with_lib(lib, state, move |l| {
     if let Some(ext) = icon {
       l.format_icons.insert(ext);
@@ -490,6 +492,9 @@ fn register_one(
   if unpack && result.is_ok() {
     crate::services::unpack_queue::global()
       .submit(crate::services::unpack_queue::UnpackTask { root: root.to_path_buf(), asset_id: item.asset_id.clone() });
+  }
+  if scrub && result.is_ok() {
+    crate::services::unpack_queue::global().submit_scrub(root.to_path_buf(), item.asset_id.clone());
   }
   collect_registered(state, root, files, groups, item.unit, result, on_event);
 }

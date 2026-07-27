@@ -1,14 +1,17 @@
-//! 动图解包队列（2026-07-26 用户定案：动图 = 导入时自动解包的序列帧，持久化 info/frames/）。
+//! 媒体后台队列（2026-07-26 动图解包；2026-07-28 扩展视频 scrub 帧预抽——导入期生成，
+//! 悬停毫秒级命中，Eagle 手感的来源即"帧图提前就绪"）。
 //! 仿 preview_queue 结构（单 worker 线程 + Condvar），但**无代际作废语义**——解包是建档的
 //! 一部分（丢了资产就永远没有帧图），不是"当前停留素材"的预览解析，任务排队直到完成；
 //! 库切换时清空 pending（任务绑定库 root，切库后无意义，进行中的任务落盘幂等无害）。
 //!
-//! 挂钩：import_task 单元注册完成且资产为动图（anim::is_anim）时 submit（手动导入 / 收件箱
-//! 同一管线）。库打开时不自动补解包（本轮新导入才有；5.1 期间存量动图归 5.4 查缺补漏评估）。
+//! 挂钩：import_task 单元注册完成时——资产为动图（anim::is_anim）submit 解包；为视频
+//! （media::VIDEO_EXTS）submit_scrub 预抽（手动导入 / 收件箱同一管线）。库打开时不自动补
+//! （本轮新导入才有；scrub 帧另由悬停命令 ensure 补抽存量与预抽失败，全部场景闭合）。
 //!
 //! 事件（app 为 None 时不发，仅执行落盘——单测用）：
 //! - `anim-unpacked`：`{ assetId }`（解包完成，前端预览中收到后重拉 list_sequence_frames 切帧驱动）
 //! - `anim-unpack-failed`：`{ assetId }`（解码失败；资产仍可用，维持原生 `<img>` 播放兜底）
+//! - scrub 预抽不发事件：前端无 scrub 事件消费者（悬停 invoke 时命中缓存或 ensure 补抽）
 //!
 //! cfg(test) 不持 AppHandle（同 preview_queue：tauri GUI 依赖链会拖垮测试 exe，见踩坑 014）——
 //! emit 为空实现、不执行 apply_meta（metadata 同步归非测试构建）。
@@ -38,6 +41,24 @@ pub struct UnpackTask {
   pub asset_id: String,
 }
 
+/// 后台任务（2026-07-28 扩展）：动图解包 / 视频 scrub 帧预抽
+#[derive(Debug)]
+pub enum QueueTask {
+  Unpack(UnpackTask),
+  /// 视频 scrub 预览帧预抽（cache/scrub/，services::scrub_frames）
+  Scrub { root: PathBuf, asset_id: String },
+}
+
+impl QueueTask {
+  /// 去重键（同类型同资产才互斥：动图解包与视频抽帧不会同资产，但防御性区分）
+  fn dedup_key(&self) -> (&'static str, &str) {
+    match self {
+      QueueTask::Unpack(t) => ("unpack", &t.asset_id),
+      QueueTask::Scrub { asset_id, .. } => ("scrub", asset_id),
+    }
+  }
+}
+
 /// 事件负载（两个事件同形状）
 #[cfg(not(test))]
 #[derive(Debug, Clone, Serialize)]
@@ -51,7 +72,7 @@ struct Shared {
   /// 事件发射 + metadata 短锁同步句柄（None = 不发事件只落盘）；cfg(test) 不持有（见模块头注释）
   #[cfg(not(test))]
   app: Option<AppHandle>,
-  pending: Mutex<VecDeque<UnpackTask>>,
+  pending: Mutex<VecDeque<QueueTask>>,
   condvar: Condvar,
 }
 
@@ -120,6 +141,16 @@ impl UnpackQueue {
   /// 提交解包任务：**排队直到完成**（无代际作废——解包是建档的一部分，不能随切换丢弃）。
   /// 同资产 pending 去重（重复提交幂等无害——unpack_frames 完成态跳过，但白跑一趟全量解码）
   pub fn submit(&self, task: UnpackTask) {
+    self.push(QueueTask::Unpack(task));
+  }
+
+  /// 提交视频 scrub 帧预抽任务（2026-07-28 导入期预抽定案）：排队直到完成；
+  /// 已缓存 / 生成中撞车由 services::scrub_frames 幂等收口
+  pub fn submit_scrub(&self, root: PathBuf, asset_id: String) {
+    self.push(QueueTask::Scrub { root, asset_id });
+  }
+
+  fn push(&self, task: QueueTask) {
     {
       let mut q = self.shared.pending.lock().unwrap();
       if !push_dedup(&mut q, task) {
@@ -155,9 +186,10 @@ pub fn clear_pending() {
   }
 }
 
-/// pending 尾插，同资产去重；返回 false = 已在队列未插入
-fn push_dedup(q: &mut VecDeque<UnpackTask>, task: UnpackTask) -> bool {
-  if q.iter().any(|t| t.asset_id == task.asset_id) {
+/// pending 尾插，同类型同资产去重；返回 false = 已在队列未插入
+fn push_dedup(q: &mut VecDeque<QueueTask>, task: QueueTask) -> bool {
+  let key = task.dedup_key();
+  if q.iter().any(|t| t.dedup_key() == key) {
     return false;
   }
   q.push_back(task);
@@ -179,16 +211,24 @@ fn worker_loop(shared: &Shared) {  loop {
   }
 }
 
-fn execute(shared: &Shared, task: UnpackTask) {
-  match anim_unpack::unpack_frames(&task.root, &task.asset_id) {
-    Ok(UnpackOutcome::Unpacked { first_frame, .. }) => {
-      shared.apply_meta(&task.asset_id, &first_frame);
-      shared.emit(EVENT_UNPACKED, &task.asset_id);
-    }
-    Ok(UnpackOutcome::Skipped) => log::debug!("动图解包跳过（已解包或非动图）：{}", task.asset_id),
-    Err(reason) => {
-      log::warn!("动图解包失败（{}）：{reason}", task.asset_id);
-      shared.emit(EVENT_UNPACK_FAILED, &task.asset_id);
+fn execute(shared: &Shared, task: QueueTask) {
+  match task {
+    QueueTask::Unpack(t) => match anim_unpack::unpack_frames(&t.root, &t.asset_id) {
+      Ok(UnpackOutcome::Unpacked { first_frame, .. }) => {
+        shared.apply_meta(&t.asset_id, &first_frame);
+        shared.emit(EVENT_UNPACKED, &t.asset_id);
+      }
+      Ok(UnpackOutcome::Skipped) => log::debug!("动图解包跳过（已解包或非动图）：{}", t.asset_id),
+      Err(reason) => {
+        log::warn!("动图解包失败（{}）：{reason}", t.asset_id);
+        shared.emit(EVENT_UNPACK_FAILED, &t.asset_id);
+      }
+    },
+    // scrub 帧预抽：只落盘不发事件（前端无消费者；失败下次悬停 ensure 补抽，资产仍可用）
+    QueueTask::Scrub { root, asset_id } => {
+      if let Err(reason) = crate::services::scrub_frames::generate_by_id(&root, &asset_id) {
+        log::warn!("scrub 帧预抽失败（{asset_id}）：{reason}");
+      }
     }
   }
 }
@@ -269,14 +309,17 @@ mod tests {
     wait_until(|| unpacked(&h, "AN-WEBP", "anim3"), "clear 后新任务照常执行");
   }
 
-  /// 同资产 pending 去重：重复提交只排一份（自愈重投/导入挂钩+预览补提交可能撞车）
+  /// 同类型同资产 pending 去重：重复提交只排一份；Unpack 与 Scrub 不互斥（防御性区分类型）
   #[test]
-  fn push_dedup_skips_same_asset() {
+  fn push_dedup_skips_same_kind_and_asset() {
     let mut q = VecDeque::new();
-    let t = |id: &str| UnpackTask { root: PathBuf::from("/r"), asset_id: id.to_string() };
-    assert!(push_dedup(&mut q, t("A")));
-    assert!(!push_dedup(&mut q, t("A")), "同资产重复提交应被去重");
-    assert!(push_dedup(&mut q, t("B")));
-    assert_eq!(q.len(), 2);
+    let u = |id: &str| QueueTask::Unpack(UnpackTask { root: PathBuf::from("/r"), asset_id: id.to_string() });
+    let s = |id: &str| QueueTask::Scrub { root: PathBuf::from("/r"), asset_id: id.to_string() };
+    assert!(push_dedup(&mut q, u("A")));
+    assert!(!push_dedup(&mut q, u("A")), "同类型同资产重复提交应被去重");
+    assert!(push_dedup(&mut q, u("B")));
+    assert!(push_dedup(&mut q, s("A")), "不同类型同资产不互斥");
+    assert!(!push_dedup(&mut q, s("A")), "Scrub 同资产重复提交应被去重");
+    assert_eq!(q.len(), 3);
   }
 }

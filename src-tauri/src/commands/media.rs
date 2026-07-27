@@ -4,10 +4,8 @@
 //! 音频转 cache/tmp/media-{assetId}.wav（pcm_s16le）。转码幂等：产物旁 .stamp 记源文件
 //! "大小:mtime秒"，一致直接复用不重复转码；源变化重转。sidecar 缺失 / 转码失败给中文文案。
 
-use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
 
 use serde::Serialize;
 use tauri::State;
@@ -16,7 +14,7 @@ use crate::adapters::ffmpeg;
 use crate::commands::library::AppState;
 use crate::commands::preview::locate_asset;
 use crate::core::library::{Library, CACHE_DIR};
-use crate::services::{media, thumbnail};
+use crate::services::{media, scrub_frames as scrub, thumbnail};
 
 /// 音视频播放源解析结果
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -167,17 +165,6 @@ fn clamp_wave_size(w: u32, h: u32) -> (u32, u32) {
 
 // ---------- 视频悬停 scrub 预览帧（5.3，Eagle 帧图方案） ----------
 
-/// scrub 预览帧：全片均匀抽帧数量与帧高（480 高 ≈ 30KB/帧，40 帧 ≈ 1.2MB，卡片显示足够清晰）
-const SCRUB_FRAME_COUNT: u32 = 40;
-const SCRUB_FRAME_HEIGHT: u32 = 480;
-
-/// 生成中登记（防重入：悬停反复进出 / 快速滚动会并发触发同资产抽帧，ffmpeg 全片扫描 3-10 秒不可叠加）
-static SCRUB_RUNNING: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-
-fn scrub_running() -> &'static Mutex<HashSet<String>> {
-  SCRUB_RUNNING.get_or_init(|| Mutex::new(HashSet::new()))
-}
-
 /// scrub 预览帧清单结果
 #[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -188,9 +175,11 @@ pub struct ScrubFrames {
   pub pending: bool,
 }
 
-/// 视频悬停 scrub 预览帧清单（2026-07-28 用户实测 video seek 卡顿后改 Eagle 帧图方案）：
-/// 已缓存（帧目录非空 + 源戳匹配）直给；未缓存同步生成（ffmpeg 全片均匀抽 40 帧，
+/// 视频悬停 scrub 预览帧清单（2026-07-28 用户实测 video seek 卡顿后改 Eagle 帧图方案：
+/// 鼠标移动只切帧图、零解码 seek）。薄壳：核心逻辑在 services::scrub_frames——
+/// 缓存命中直给；未命中同步生成（≤30s 按 4fps / >30s 按 0.5fps，8~150 帧，480 高 libwebp，
 /// 会话级缓存 cache/scrub/ 开库清空，源变化按 大小+mtime 戳失效重抽）；生成中重入返 pending。
+/// 导入期异步预抽（unpack_queue 挂钩）已覆盖新导入视频，本命令补存量 / 预抽失败。
 /// 非视频资源中文报错；ffmpeg 缺失 / 生成失败给中文文案（前端维持 video seek 兜底不炸）。
 /// async：ffprobe / ffmpeg sidecar 调用为 IO 重活，一律走线程池（规范第 2 条）
 #[tauri::command]
@@ -205,61 +194,10 @@ fn scrub_frames(lib: &Library, asset_id: &str) -> Result<ScrubFrames, String> {
   if !media::is_video(&origin) {
     return Err(format!("「{}」不是视频资源", meta.name));
   }
-  let dir = lib.root.join(CACHE_DIR).join("scrub").join(asset_id);
-  // 缓存命中直给（判定先于 ffmpeg 存在性检查，同转码口径）
-  if let Some(frames) = cached_scrub_frames(&dir) {
-    if source_stamp(&origin).is_some_and(|s| read_stamp(&dir.join(".stamp")) == Some(s)) {
-      return Ok(ScrubFrames { frames, pending: false });
-    }
+  match scrub::ensure(&lib.root, asset_id, &origin)? {
+    scrub::ScrubOutcome::Ready(frames) => Ok(ScrubFrames { frames, pending: false }),
+    scrub::ScrubOutcome::Pending => Ok(ScrubFrames { frames: Vec::new(), pending: true }),
   }
-  // 防重入：生成中重复调用 → pending
-  {
-    let mut running = scrub_running().lock().map_err(|e| e.to_string())?;
-    if !running.insert(asset_id.to_string()) {
-      return Ok(ScrubFrames { frames: Vec::new(), pending: true });
-    }
-  }
-  let result = generate_scrub_frames(&dir, &origin);
-  if let Ok(mut running) = scrub_running().lock() {
-    running.remove(asset_id);
-  }
-  Ok(ScrubFrames { frames: result?, pending: false })
-}
-
-fn generate_scrub_frames(dir: &Path, origin: &Path) -> Result<Vec<String>, String> {
-  if !ffmpeg::ffmpeg_available() {
-    return Err("音视频组件缺失，无法生成预览帧".to_string());
-  }
-  let duration = ffmpeg::probe_json(origin)
-    .and_then(|j| j.get("format")?.get("duration")?.as_str()?.parse::<f64>().ok())
-    .ok_or_else(|| "视频时长探测失败".to_string())?;
-  // 先整目录清旧帧：防源变化后新旧帧混杂 / 旧帧数更多残留尾部
-  let _ = fs::remove_dir_all(dir);
-  fs::create_dir_all(dir).map_err(|e| format!("预览帧缓存目录创建失败：{e}"))?;
-  let files = ffmpeg::video_scrub_frames(origin, dir, duration, SCRUB_FRAME_COUNT, SCRUB_FRAME_HEIGHT)
-    .filter(|f| f.len() >= 2) // 单帧无 scrub 意义（且前端按 len-1 插值会 0/0）：视为生成失败走兜底
-    .ok_or_else(|| "预览帧生成失败".to_string())?;
-  if let Some(s) = source_stamp(origin) {
-    if let Err(e) = fs::write(dir.join(".stamp"), s) {
-      log::warn!("预览帧戳写入失败（{}）：{e}", dir.display());
-    }
-  }
-  Ok(files.iter().map(|p| p.to_string_lossy().into_owned()).collect())
-}
-
-/// 已缓存帧清单（f-*.webp 按名排序）；目录不存在 / 无帧为 None
-fn cached_scrub_frames(dir: &Path) -> Option<Vec<String>> {
-  let mut names: Vec<String> = fs::read_dir(dir)
-    .ok()?
-    .filter_map(|e| e.ok())
-    .map(|e| e.file_name().to_string_lossy().into_owned())
-    .filter(|n| n.starts_with("f-") && n.ends_with(".webp"))
-    .collect();
-  if names.is_empty() {
-    return None;
-  }
-  names.sort();
-  Some(names.iter().map(|n| dir.join(n).to_string_lossy().into_owned()).collect())
 }
 
 /// 产物旁的戳文件：media-{assetId}.mp4.stamp
@@ -444,16 +382,5 @@ mod tests {
     fs::write(&origin, b"fake-changed-longer").unwrap();
     let err = scrub_frames(&h.lib, "AN-VID").unwrap_err();
     assert!(err.contains("组件缺失") || err.contains("探测失败") || err.contains("生成失败"), "{err}");
-  }
-
-  #[test]
-  fn scrub_frames_reentrant_call_returns_pending() {
-    let mut h = make_lib();
-    add_file(&mut h, "AN-VID2", "片段2.mp4");
-    // 模拟另一调用正在生成：登记后重复调用返 pending 空清单（不报错）
-    scrub_running().lock().unwrap().insert("AN-VID2".to_string());
-    let r = scrub_frames(&h.lib, "AN-VID2").unwrap();
-    assert_eq!(r, ScrubFrames { frames: Vec::new(), pending: true });
-    scrub_running().lock().unwrap().remove("AN-VID2");
   }
 }

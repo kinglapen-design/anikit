@@ -24,6 +24,7 @@ pub mod media;
 pub mod preview_queue;
 pub mod psb;
 pub mod resolve;
+pub mod scrub_frames;
 pub mod sequence;
 pub mod thumb_formats;
 pub mod thumbnail;
