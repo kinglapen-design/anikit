@@ -55,14 +55,14 @@ function stepFrame(delta: number): void {
     <IconButton
       :name="media.playing ? 'pause' : 'play'"
       :title="media.playing ? '暂停' : '播放'"
-      :disabled="media.transcoding"
+      :disabled="media.transcodingSlow"
       @click="media.togglePlay()"
     />
-    <IconButton name="rewind" title="快退 5 秒" :disabled="media.transcoding" @click="media.seekBy(-5)" />
-    <IconButton name="fast-forward" title="快进 5 秒" :disabled="media.transcoding" @click="media.seekBy(5)" />
+    <IconButton name="rewind" title="快退 5 秒" :disabled="media.transcodingSlow" @click="media.seekBy(-5)" />
+    <IconButton name="fast-forward" title="快进 5 秒" :disabled="media.transcodingSlow" @click="media.seekBy(5)" />
     <!-- 上下帧（逐帧步进即暂停；step-frame 图标左右翻转使用，快捷键 , . 的实体入口） -->
-    <IconButton class="flip-h" name="step-frame" title="上一帧（,）" :disabled="media.transcoding" @click="stepFrame(-1)" />
-    <IconButton name="step-frame" title="下一帧（.）" :disabled="media.transcoding" @click="stepFrame(1)" />
+    <IconButton class="flip-h" name="step-frame" title="上一帧（,）" :disabled="media.transcodingSlow" @click="stepFrame(-1)" />
+    <IconButton name="step-frame" title="下一帧（.）" :disabled="media.transcodingSlow" @click="stepFrame(1)" />
     <VolumeControl />
     <span class="time-text">{{ formatDuration(media.currentTime) }} / {{ formatDuration(media.duration) }}</span>
     <div
@@ -73,7 +73,7 @@ function stepFrame(delta: number): void {
       @pointermove="onSeekMove"
       @pointerup="onSeekUp"
     >
-      <span v-if="media.transcoding" class="hint">转码中…</span>
+      <span v-if="media.transcodingSlow" class="hint">转码中…</span>
       <template v-else>
         <span class="fill" :style="{ width: `${pct}%` }" />
         <span class="knob" :style="{ left: `${pct}%` }" />
@@ -81,8 +81,8 @@ function stepFrame(delta: number): void {
     </div>
     <RateControl :rate="media.rate" @select="media.setRate" />
     <IconButton name="loop" title="循环播放" :active="media.loop" @click="media.toggleLoop()" />
-    <IconButton name="annotate" title="笔记" :active="notes.open" :disabled="media.transcoding" @click="notes.toggle()" />
-    <IconButton name="set-as-thumb" title="当前画面设为预览图" :disabled="media.transcoding" @click="media.setVideoThumb()" />
+    <IconButton name="annotate" title="笔记" :active="notes.open" :disabled="media.transcodingSlow" @click="notes.toggle()" />
+    <IconButton name="set-as-thumb" title="当前画面设为预览图" :disabled="media.transcodingSlow" @click="media.setVideoThumb()" />
     <IconButton
       name="fullscreen"
       :title="preview.fullscreen ? '退出全屏' : '全屏'"

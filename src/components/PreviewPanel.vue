@@ -188,7 +188,7 @@ watch(
     <div v-else-if="preview.kind === 'video'" ref="videoWrapRef" class="img-wrap" :style="wrapStyle" />
     <div v-else-if="waveUrl" class="wave-large" :style="{ '--wave-url': `url(&quot;${waveUrl}&quot;)` }" />
     <img v-else-if="iconUrl" class="format-icon" :src="iconUrl" draggable="false" />
-    <span v-if="media.transcoding" class="hint">转码中…</span>
+    <span v-if="media.transcodingSlow" class="hint">转码中…</span>
     <span v-if="preview.error" class="error-text">{{ preview.error }}</span>
     <PreviewNavigator v-if="preview.overflow" />
   </div>

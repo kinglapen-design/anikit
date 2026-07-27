@@ -15,6 +15,8 @@ interface MediaSource {
 
 // 媒体元素单例（模块级；store 状态响应式、元素本身不进响应式系统）
 let el: HTMLVideoElement | null = null;
+// transcodingSlow 延迟定时器（300ms 防闪）
+let slowTimer: ReturnType<typeof setTimeout> | undefined;
 
 function errText(e: unknown): string {
   if (typeof e === "string") return e;
@@ -26,7 +28,10 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
   state: () => ({
     kind: null as "audio" | "video" | null,
     srcPath: null as string | null, // 播放源绝对路径（源文件或转码产物）
-    transcoding: false, // get_media_source 解析/转码中（"转码中…"加载态）
+    transcoding: false, // get_media_source 解析/转码中（内部真实状态）
+    // UI 显示用（2026-07-26 用户：切换素材时直渲解析一瞬会闪"转码中…"）——
+    // transcoding 持续 300ms 以上才置真：真转码才出提示，瞬间往返不闪
+    transcodingSlow: false,
     playing: false,
     currentTime: 0,
     duration: 0,
@@ -61,6 +66,11 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       const preview = usePreviewStore();
       this.kind = kind;
       this.transcoding = true;
+      this.transcodingSlow = false;
+      clearTimeout(slowTimer);
+      slowTimer = setTimeout(() => {
+        if (this.transcoding) this.transcodingSlow = true;
+      }, 300);
       try {
         const r = await invoke<MediaSource>("get_media_source", { assetId });
         if (preview.current?.assetId !== assetId) return; // await 期间已切走
@@ -75,7 +85,9 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
         preview.kind = "other"; // 降级：格式图标/缩略图静态 + 报错文案
         preview.error = errText(e);
       } finally {
+        clearTimeout(slowTimer);
         this.transcoding = false;
+        this.transcodingSlow = false;
       }
     },
     // 释放（切素材/退出预览）：暂停并卸载源，状态归零（音量/静音保留用户设置）
@@ -87,7 +99,9 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       }
       this.kind = null;
       this.srcPath = null;
+      clearTimeout(slowTimer);
       this.transcoding = false;
+      this.transcodingSlow = false;
       this.playing = false;
       this.currentTime = 0;
       this.duration = 0;

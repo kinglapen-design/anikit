@@ -59,7 +59,7 @@ function onSeekUp(e: PointerEvent): void {
     <IconButton
       :name="media.playing ? 'pause' : 'play'"
       :title="media.playing ? '暂停' : '播放'"
-      :disabled="media.transcoding"
+      :disabled="media.transcodingSlow"
       @click="media.togglePlay()"
     />
     <VolumeControl />
@@ -73,12 +73,12 @@ function onSeekUp(e: PointerEvent): void {
       @pointermove="onSeekMove"
       @pointerup="onSeekUp"
     >
-      <span v-if="media.transcoding" class="hint">转码中…</span>
+      <span v-if="media.transcodingSlow" class="hint">转码中…</span>
       <template v-else-if="waveUrl">
         <div class="wave-layer base" />
         <div class="wave-layer played" :style="{ clipPath: `inset(0 ${100 - pct}% 0 0)` }" />
       </template>
-      <span v-if="!media.transcoding" class="head" :style="{ left: `${pct}%` }" />
+      <span v-if="!media.transcodingSlow" class="head" :style="{ left: `${pct}%` }" />
     </div>
     <RateControl :rate="media.rate" @select="media.setRate" />
     <IconButton name="loop" title="循环播放" :active="media.loop" @click="media.toggleLoop()" />
