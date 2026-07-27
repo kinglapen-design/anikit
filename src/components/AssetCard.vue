@@ -4,15 +4,18 @@
 // 格式角标：图片左上各 4px（实底格式色徽章）；按钮组：图片右下各 4px（图标按钮-小 24×24，
 // 悬停卡片显示，hover 底色 C5——图片干扰大不裸奔 16 图标）；
 // 文字组：间距 2 / 居中 / 标题最多两行截断。
-// 悬停行为按类型分发（5.3，2026-07-27 用户定案）：视频/音频/动图悬停直接播放（无按钮）；
-// 静态图片/序列帧 = 放大镜（悬浮大图）；PSD/SVG 类图片工程 = 放大镜 + 默认应用打开；
-// 格式图标（fla/zip/AI 等无内容缩略图）= 仅默认应用打开；动画工程有内容缩略图时（8.2 后）
-// = 发送 + 默认应用打开 + 放大镜（发送仍占位，8.5 接）。
+// 悬停行为按类型分发（5.3，2026-07-27 用户定案）：视频悬停完整播放 / 音频悬停有声播放 /
+// 动图·序列帧悬停播放（序列帧归动图范围：打包就是为了看动画效果），播放类均无按钮；
+// 查看方式菜单"自动播放动图（含序列帧）/ 自动播放视频"开关 = 网格内免悬停自动播放
+// （视频自动播放范围 = 封面帧起 10 秒循环）；静态图片 = 放大镜（悬浮大图）；
+// PSD/SVG 类图片工程 = 放大镜 + 默认应用打开；格式图标（fla/zip/AI 等无内容缩略图）=
+// 仅默认应用打开；动画工程有内容缩略图时（8.2 后）= 发送 + 默认应用打开 + 放大镜（发送仍占位，8.5 接）。
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import HoverVideoLayer from "./HoverVideoLayer.vue";
 import HoverAudioLayer from "./HoverAudioLayer.vue";
+import HoverSequenceLayer from "./HoverSequenceLayer.vue";
 import { CARD_CAPTION_H, type Box } from "../lib/layouts";
 import { formatBadgeColor, isAudioExt, isVideoExt } from "../lib/formatBadge";
 import { formatDuration } from "../lib/formatDuration";
@@ -48,24 +51,27 @@ const kind = computed<HoverKind>(() => {
   if (SOURCE_EXTS.has(ext)) return "source";
   return "image";
 });
-// 悬停按钮按类型分发（DOM 顺序固定：发送 → 默认应用打开 → 放大镜）
+// 悬停按钮按类型分发（DOM 顺序固定：发送 → 默认应用打开 → 放大镜）；
+// 序列帧归动图范围（2026-07-27 用户定：打包就是为了看动画效果）——悬停 / 自动播放，无按钮
 const showSend = computed(() => kind.value === "engineering");
 const showOpenDefault = computed(
   () => kind.value === "iconOnly" || kind.value === "source" || kind.value === "engineering",
 );
 const showZoom = computed(
-  () => kind.value === "image" || kind.value === "sequence" || kind.value === "source" || kind.value === "engineering",
+  () => kind.value === "image" || kind.value === "source" || kind.value === "engineering",
 );
 
 // 悬停态：驱动播放层挂载（视频/音频）与动图播放
 const hovered = ref(false);
 
-// 动图悬停播放：300ms 延迟后把卡片图换成源文件（webview 原生循环，零等待），移出还原封面
+// 动图播放（5.3）：悬停或"自动播放动图"开关（序列帧同归此开关，2026-07-27 用户定）——
+// 300ms 延迟后把卡片图换成源文件（webview 原生循环，零等待），停止后还原封面
 const animSrc = ref<string | null>(null);
 let animTimer: ReturnType<typeof setTimeout> | undefined;
-watch(hovered, (h) => {
+const animPlaying = computed(() => hovered.value || ui.autoPlayGif);
+watch(animPlaying, (p) => {
   clearTimeout(animTimer);
-  if (h && kind.value === "anim") {
+  if (p && kind.value === "anim") {
     animTimer = setTimeout(() => void loadAnim(), 300);
   } else {
     animSrc.value = null;
@@ -76,7 +82,7 @@ async function loadAnim(): Promise<void> {
     const r = await invoke<{ path: string | null; pending: boolean }>("get_asset_file_path", {
       assetId: props.asset.assetId,
     });
-    if (r.path && hovered.value) animSrc.value = convertFileSrc(r.path);
+    if (r.path && animPlaying.value) animSrc.value = convertFileSrc(r.path);
   } catch {
     // 解析失败保持静态封面
   }
@@ -134,8 +140,13 @@ const meta = computed(() => {
         draggable="false"
       />
       <div v-else class="img" />
-      <HoverVideoLayer v-if="hovered && kind === 'video'" :asset="asset" />
+      <HoverVideoLayer
+        v-if="(hovered || ui.autoPlayVideo) && kind === 'video'"
+        :asset="asset"
+        :auto="!hovered"
+      />
       <HoverAudioLayer v-else-if="hovered && kind === 'audio'" :asset="asset" />
+      <HoverSequenceLayer v-else-if="(hovered || ui.autoPlayGif) && kind === 'sequence'" :asset="asset" />
       <span v-if="badgeColor && ui.showExtBadge" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
       <span v-if="asset.noteCount" class="note-badge">{{ asset.noteCount }}</span>
       <div class="actions">

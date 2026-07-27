@@ -21,7 +21,8 @@ export const useUiStore = defineStore("ui", {
     useGlobalView: true,
     sortBy: "",
     sortAsc: true,
-    // 查看方式二级窗口（2026-07-23）：显示简介（尺寸已实现，其余随 7.x 接线）/ 自动播放（5.3 接）/ 角标开关
+    // 查看方式二级窗口（2026-07-23）：显示简介（尺寸已实现，其余随 7.x 接线）/ 角标开关；
+    // 自动播放（5.3 已接，2026-07-27）：动图开关含序列帧（用户定：序列帧也是动图范围）
     briefMode: "size" as "size" | "fileSize" | "createdAt" | "modifiedAt" | "tags" | "none",
     groupBy: "自定义",
     autoPlayGif: false,

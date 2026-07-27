@@ -1,9 +1,12 @@
 <script setup lang="ts">
-// 视频卡片悬停播放层（5.3，2026-07-27 用户定案，参考图 1）：无悬停按钮，悬停即自动播放。
-// 预览范围 = 封面帧（thumbFrame `t:{秒}`，未设置 = 0）起 10 秒封顶时长，循环播放；
-// 跟随鼠标横向移动快进快退（scrub 到范围内对应位置）；右下胶囊 = 当前时间 + 音量钮（默认静音）；
-// 底部 3px 进度条显示范围内进度。media 元素组件自管（与 previewMedia 预览单例隔离）。
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+// 视频卡片播放层（5.3，2026-07-27 用户定案，参考图 1），双模式：
+// - 悬停模式（auto=false）：完整播放整段视频（循环），跟随鼠标横向移动快进快退（scrub 全片），
+//   右下胶囊 = 当前时间 + 音量钮（默认静音），底部 3px 进度条显示全片进度；
+// - 自动播放模式（auto=true，查看方式菜单"自动播放视频"开启且未悬停）：无控件、恒静音，
+//   范围 = 封面帧（thumbFrame `t:{秒}`，未设置 = 0）起 10 秒封顶时长循环——
+//   "设置当前画面为预览图"后自动播放范围自动跟随该帧（无需新设置 UI）。
+// 悬停接管 / 移出在同一组件内切换（media 元素不重建）；media 元素组件自管（与 previewMedia 隔离）。
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import { formatDuration } from "../lib/formatDuration";
@@ -11,12 +14,12 @@ import { registerHoverPlayer } from "../stores/hoverPreview";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
 
-const props = defineProps<{ asset: PlacementView }>();
+const props = withDefaults(defineProps<{ asset: PlacementView; auto?: boolean }>(), { auto: false });
 const ui = useUiStore();
 
-// 自动播放预览范围上限（秒，2026-07-27 用户定：最大只支持 10 秒）
+// 自动播放预览范围上限（秒，2026-07-27 用户定：自动播放最大只支持 10 秒）
 const RANGE_SECS = 10;
-// 悬停进入延迟（毫秒）：防快速划过触发加载/转码
+// 进入延迟（毫秒）：防快速划过 / 快速滚动触发加载与转码
 const ENTER_DELAY = 300;
 
 const layerRef = ref<HTMLElement>();
@@ -24,18 +27,21 @@ const videoRef = ref<HTMLVideoElement>();
 const ready = ref(false); // canplay：视频淡入（之前保持底层静态缩略图，转码等待无闪烁）
 const currentTime = ref(0);
 const duration = ref(0);
-const muted = ref(true); // 默认静音，音量钮点击切换（图 1"可开音量"）
+const muted = ref(true); // 默认静音；自动播放模式恒静音（多视频同播），悬停可点音量钮开
 
-// 范围起点：封面帧秒数；源已变短于封面帧时回退 0
+// 范围起点：自动播放 = 封面帧秒数（源已变短于封面帧时回退 0）；悬停 = 0（完整播放）
 function rangeStart(): number {
+  if (!props.auto) return 0;
   const tf = props.asset.thumbFrame;
   let s = tf?.startsWith("t:") ? Number(tf.slice(2)) || 0 : 0;
   const d = duration.value || props.asset.duration || 0;
   if (d > 0 && s >= d) s = 0;
   return s;
 }
+// 范围终点：自动播放 = 起点 + 10 秒封顶时长；悬停 = 片尾
 function rangeEnd(): number {
   const d = duration.value || props.asset.duration || 0;
+  if (!props.auto) return d > 0 ? d : Number.MAX_SAFE_INTEGER;
   return d > 0 ? Math.min(rangeStart() + RANGE_SECS, d) : rangeStart() + RANGE_SECS;
 }
 const pct = computed(() => {
@@ -62,16 +68,29 @@ async function loadSource(): Promise<void> {
     if (!v) return;
     v.src = convertFileSrc(r.path);
     v.currentTime = rangeStart();
-    void v.play().catch((e) => console.warn("悬停播放失败：", e));
+    void v.play().catch((e) => console.warn("卡片播放失败：", e));
   } catch (e) {
-    console.warn("悬停播放源解析失败：", e);
+    console.warn("卡片播放源解析失败：", e);
   }
 }
+
+// 模式切换（悬停接管 / 移出回自动播放）：元素不重建——切回自动播放强制静音，
+// 位置超出范围由 timeupdate 自然跳回起点
+watch(
+  () => props.auto,
+  (auto) => {
+    const v = videoRef.value;
+    if (auto && v) {
+      v.muted = true;
+      muted.value = true;
+    }
+  },
+);
 
 function onTimeUpdate(): void {
   const v = videoRef.value;
   if (!v) return;
-  // 范围循环：到终点跳回起点（不足 10 秒的视频 end = 片尾，自然整段循环）
+  // 范围循环：到终点跳回起点（悬停模式 = 片尾跳回开头整段循环；不足 10 秒的视频自然整段循环）
   if (v.currentTime >= rangeEnd()) v.currentTime = rangeStart();
   currentTime.value = v.currentTime;
 }
@@ -84,10 +103,10 @@ function onEnded(): void {
   v.currentTime = rangeStart();
   void v.play().catch(() => {});
 }
-// 跟随鼠标快进快退：横向位置映射到 [start, end]
+// 跟随鼠标快进快退（仅悬停模式）：横向位置映射到 [start, end]
 function onScrub(e: PointerEvent): void {
   const v = videoRef.value;
-  if (!v || !ready.value) return;
+  if (!v || !ready.value || props.auto) return;
   const rect = layerRef.value!.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   v.currentTime = rangeStart() + ratio * (rangeEnd() - rangeStart());
@@ -126,8 +145,8 @@ onBeforeUnmount(() => {
       @loadedmetadata="onLoadedMetadata"
       @ended="onEnded"
     />
-    <!-- 底部控件区：不触发 scrub -->
-    <div class="hud" @pointermove.stop>
+    <!-- 底部控件区（仅悬停模式）：不触发 scrub -->
+    <div v-if="!auto" class="hud" @pointermove.stop>
       <div class="capsule">
         <span class="time">{{ formatDuration(currentTime) }}</span>
         <button class="hud-btn" v-tip="muted ? '取消静音' : '静音'" @click.stop="toggleMute">
