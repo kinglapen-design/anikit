@@ -4,7 +4,7 @@
 // 头部："笔记" + 当前帧标识（sequence/anim=帧 x/y，video=mm:ss）+ 关闭；
 // textarea 写当前帧/时间点笔记（C4 输入框样式，失焦与 Ctrl+Enter 保存，key 见 previewNotes）；
 // 下方全部笔记列表（帧号/时间 + 摘要单行省略 + 删除；点击跳帧/跳时间，当前项高亮）。
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import IconButton from "./IconButton.vue";
 import { formatDuration } from "../lib/formatDuration";
 import { usePreviewStore } from "../stores/preview";
@@ -16,6 +16,10 @@ const media = usePreviewMediaStore();
 const notes = usePreviewNotesStore();
 
 const draft = ref("");
+const inputRef = ref<HTMLTextAreaElement>();
+// 用户编辑标志：仅 dirty 时失焦才保存——"打开未动就关/点列表项"不触发保存，
+// 防空草稿误写删笔记（2026-07-26 用户反馈：从详情面板进入后笔记被误删）
+const dirty = ref(false);
 
 // 当前帧标识：sequence/anim = 帧 x/y；video = 当前时间 mm:ss
 const frameLabel = computed(() => {
@@ -24,18 +28,33 @@ const frameLabel = computed(() => {
   return n > 0 ? `帧 ${preview.frame + 1} / ${n}` : "";
 });
 
-// 切帧/切素材时回填该帧已有笔记（失焦保存先于跳转触发，草稿不丢）
+// 回填草稿：盯 currentText 本身（切帧/切素材/笔记异步加载完成都会触发）；
+// 用户编辑中（dirty）不回填，防冲掉草稿
 watch(
-  () => notes.currentKey,
+  () => [notes.currentKey, notes.currentText] as const,
   () => {
+    if (dirty.value) return;
     draft.value = notes.currentText;
   },
   { immediate: true },
 );
 
+// 打开即进入编辑状态（v-if 挂载后聚焦输入框）
+watch(
+  () => notes.open,
+  async (on) => {
+    if (!on) return;
+    await nextTick();
+    inputRef.value?.focus();
+  },
+  { immediate: true },
+);
+
 function save(): void {
+  if (!dirty.value) return;
   const k = notes.currentKey;
   if (k && draft.value !== notes.currentText) void notes.save(k, draft.value);
+  dirty.value = false;
 }
 function onKeydown(e: KeyboardEvent): void {
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
@@ -59,10 +78,12 @@ function itemLabel(key: string): string {
       <IconButton name="window-close" small title="关闭" @click="notes.open = false" />
     </header>
     <textarea
+      ref="inputRef"
       v-model="draft"
       class="notes-input"
       rows="3"
       placeholder="记下这一帧的想法..."
+      @input="dirty = true"
       @blur="save"
       @keydown="onKeydown"
     />
