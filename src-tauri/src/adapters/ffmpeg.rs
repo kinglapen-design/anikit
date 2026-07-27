@@ -163,50 +163,6 @@ pub fn video_frame_png(path: &Path, at_secs: f64) -> Option<Vec<u8>> {
   run("ffmpeg", &args)
 }
 
-/// ffmpeg 全片均匀抽预览帧序列（5.3 视频悬停 scrub，Eagle 帧图方案——鼠标移动只切图零解码延迟）：
-/// fps 滤镜（fps = count/duration_secs 均匀抽 count 帧）+ scale=-2:{height}（高恒 height 宽等比），
-/// 输出 out_dir/f-%03d.webp；**必须显式 `-c:v libwebp`**——.webp 扩展名默认走原生单帧 webp 编码器，
-/// image2 序列模式 40 帧全覆盖到同一个 f-001.webp（2026-07-28 实测定位：png/显式 libwebp 均正常 40 帧）。
-/// 解码 `-threads 8` 限流（全片真解码一次性成本高，限线程防风扇猛转，2026-07-28 用户实测；
-/// GPU 硬解已实测否决：d3d11va 5.2s 反慢于 CPU 3.8s——帧在显存需逐帧回拷贝，抽帧场景无优势）。
-/// 成功返回实际生成文件清单（按名排序，帧数随浮点 ±1），无帧生成 / 失败返回 None。
-/// 调用方负责目录创建清理与幂等戳；同步阻塞（调用方在线程池，同模块口径）
-pub fn video_scrub_frames(path: &Path, out_dir: &Path, duration_secs: f64, count: u32, height: u32) -> Option<Vec<PathBuf>> {
-  if duration_secs <= 0.0 || count == 0 {
-    return None;
-  }
-  let fps = count as f64 / duration_secs;
-  let args = vec![
-    "-v".into(),
-    "error".into(),
-    "-y".into(),
-    "-threads".into(),
-    "8".into(), // 输入选项（-i 前）：解码线程限流
-    "-i".into(),
-    path.to_string_lossy().into_owned(),
-    "-map".into(),
-    "0:v:0".into(),
-    "-vf".into(),
-    format!("fps={fps:.6},scale=-2:{height}"),
-    "-c:v".into(),
-    "libwebp".into(),
-    "-quality".into(),
-    "80".into(),
-    out_dir.join("f-%03d.webp").to_string_lossy().into_owned(),
-  ];
-  if !run_status("ffmpeg", &args) {
-    return None;
-  }
-  let mut files: Vec<PathBuf> = std::fs::read_dir(out_dir)
-    .ok()?
-    .filter_map(|e| e.ok())
-    .map(|e| e.path())
-    .filter(|p| p.is_file() && p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("f-")))
-    .collect();
-  files.sort();
-  if files.is_empty() { None } else { Some(files) }
-}
-
 /// ffmpeg 解音频为 f32le PCM（sample_rate Hz，时长封顶 PCM_MAX_SECS）；
 /// channels = 声道数（1 = 混音 mono，2 = 立体声交错 LRLR…）；返回逐样本 f32；解码失败返回 None
 pub fn audio_pcm_f32(path: &Path, sample_rate: u32, channels: u16) -> Option<Vec<f32>> {

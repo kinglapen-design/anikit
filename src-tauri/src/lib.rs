@@ -199,7 +199,6 @@ pub fn run() {
       commands::thumb_frame::set_video_thumb,
       commands::media::get_media_source,
       commands::media::get_waveform,
-      commands::media::list_video_scrub_frames,
       commands::notes::get_notes,
       commands::notes::set_note,
       commands::notes::get_note_thumb,

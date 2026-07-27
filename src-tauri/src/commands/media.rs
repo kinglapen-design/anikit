@@ -14,7 +14,7 @@ use crate::adapters::ffmpeg;
 use crate::commands::library::AppState;
 use crate::commands::preview::locate_asset;
 use crate::core::library::{Library, CACHE_DIR};
-use crate::services::{media, scrub_frames as scrub, thumbnail};
+use crate::services::{media, thumbnail};
 
 /// 音视频播放源解析结果
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -161,43 +161,6 @@ fn waveform(lib: &Library, asset_id: &str, width: u32, height: u32) -> Result<Wa
 /// 波形图请求尺寸钳制（前端异常值不炸渲染：过小糊成一团、过大撑爆内存）
 fn clamp_wave_size(w: u32, h: u32) -> (u32, u32) {
   (w.clamp(*WAVE_W.start(), *WAVE_W.end()), h.clamp(*WAVE_H.start(), *WAVE_H.end()))
-}
-
-// ---------- 视频悬停 scrub 预览帧（5.3，Eagle 帧图方案） ----------
-
-/// scrub 预览帧清单结果
-#[derive(Debug, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct ScrubFrames {
-  /// 帧图绝对路径清单（cache/scrub/{assetId}/f-NNN.webp，按名排序）；未就绪为空
-  pub frames: Vec<String>,
-  /// true = 另一调用正在生成（前端维持 video seek 兜底，下次悬停再取）
-  pub pending: bool,
-}
-
-/// 视频悬停 scrub 预览帧清单（2026-07-28 用户实测 video seek 卡顿后改 Eagle 帧图方案：
-/// 鼠标移动只切帧图、零解码 seek）。薄壳：核心逻辑在 services::scrub_frames——
-/// 缓存命中直给；未命中同步生成（≤30s 按 4fps / >30s 按 0.5fps，8~150 帧，480 高 libwebp，
-/// 会话级缓存 cache/scrub/ 开库清空，源变化按 大小+mtime 戳失效重抽）；生成中重入返 pending。
-/// 导入期异步预抽（unpack_queue 挂钩）已覆盖新导入视频，本命令补存量 / 预抽失败。
-/// 非视频资源中文报错；ffmpeg 缺失 / 生成失败给中文文案（前端维持 video seek 兜底不炸）。
-/// async：ffprobe / ffmpeg sidecar 调用为 IO 重活，一律走线程池（规范第 2 条）
-#[tauri::command]
-pub async fn list_video_scrub_frames(state: State<'_, AppState>, asset_id: String) -> Result<ScrubFrames, String> {
-  let guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
-  scrub_frames(lib, &asset_id)
-}
-
-fn scrub_frames(lib: &Library, asset_id: &str) -> Result<ScrubFrames, String> {
-  let (_info_dir, origin, meta) = locate_asset(lib, asset_id)?;
-  if !media::is_video(&origin) {
-    return Err(format!("「{}」不是视频资源", meta.name));
-  }
-  match scrub::ensure(&lib.root, asset_id, &origin)? {
-    scrub::ScrubOutcome::Ready(frames) => Ok(ScrubFrames { frames, pending: false }),
-    scrub::ScrubOutcome::Pending => Ok(ScrubFrames { frames: Vec::new(), pending: true }),
-  }
 }
 
 /// 产物旁的戳文件：media-{assetId}.mp4.stamp
@@ -356,31 +319,5 @@ mod tests {
       err.contains("该格式暂时无法播放") || err.contains("音视频组件缺失"),
       "{err}"
     );
-  }
-
-  #[test]
-  fn scrub_frames_rejects_non_video_and_serves_cache_idempotently() {
-    let mut h = make_lib();
-    // 非视频资源中文报错
-    add_file(&mut h, "AN-PIC", "参考图.png");
-    let err = scrub_frames(&h.lib, "AN-PIC").unwrap_err();
-    assert!(err.contains("不是视频资源"), "{err}");
-
-    // 缓存命中（帧目录非空 + 戳匹配）直给：假字节源、无 ffmpeg 也直接返回
-    add_file(&mut h, "AN-VID", "片段.mp4");
-    let origin = h.lib.root.join(ASSTES_DIR).join("AN-VID.info").join("片段.mp4");
-    let dir = h.lib.root.join(CACHE_DIR).join("scrub").join("AN-VID");
-    fs::create_dir_all(&dir).unwrap();
-    fs::write(dir.join("f-001.webp"), b"webp1").unwrap();
-    fs::write(dir.join("f-002.webp"), b"webp2").unwrap();
-    fs::write(dir.join(".stamp"), source_stamp(&origin).unwrap()).unwrap();
-    let r = scrub_frames(&h.lib, "AN-VID").unwrap();
-    assert_eq!(r.frames.len(), 2);
-    assert!(r.frames[0].ends_with("f-001.webp") && !r.pending);
-
-    // 戳失配（源变化）→ 重抽：无 ffmpeg 则组件缺失文案，有 ffmpeg 则假字节探测失败
-    fs::write(&origin, b"fake-changed-longer").unwrap();
-    let err = scrub_frames(&h.lib, "AN-VID").unwrap_err();
-    assert!(err.contains("组件缺失") || err.contains("探测失败") || err.contains("生成失败"), "{err}");
   }
 }
