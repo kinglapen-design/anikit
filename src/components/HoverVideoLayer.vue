@@ -1,8 +1,11 @@
 <script setup lang="ts">
 // 视频卡片播放层（5.3，2026-07-27 用户定案，参考图 1），双模式：
-// - 悬停模式（auto=false）：完整播放整段视频（循环），跟随鼠标横向移动快进快退（scrub 全片），
+// - 悬停模式（auto=false）：完整播放整段视频（循环），跟随鼠标横向移动快进快退——
+//   scrub 走**预生成预览帧切图**（Eagle 同方案，list_video_scrub_frames 全片均匀 40 帧，
+//   鼠标移动只换 img 零解码 seek，2026-07-28 用户实测 video seek 卡顿后改）；
+//   帧未就绪时退化为 video seek（rAF 合帧 + 66ms 门控）兜底；鼠标停 300ms 后 video 从该位置续播；
 //   右下胶囊 = 当前时间 + 音量钮（默认静音），底部 3px 进度条显示全片进度；
-// - 自动播放模式（auto=true，查看方式菜单"自动播放视频"开启且未悬停）：无控件、恒静音，
+// - 自动播放模式（auto=true，查看方式菜单"自动播放视频"开启且未悬停）：无控件、恒静音、不 scrub，
 //   范围 = 封面帧（thumbFrame `t:{秒}`，未设置 = 0）起 10 秒封顶时长循环——
 //   "设置当前画面为预览图"后自动播放范围自动跟随该帧（无需新设置 UI）。
 // 悬停接管 / 移出在同一组件内切换（media 元素不重建）；media 元素组件自管（与 previewMedia 隔离）。
@@ -21,6 +24,8 @@ const ui = useUiStore();
 const RANGE_SECS = 10;
 // 进入延迟（毫秒）：防快速划过 / 快速滚动触发加载与转码
 const ENTER_DELAY = 300;
+// 鼠标停止移动判定（毫秒）：超过即结束 scrub，video 从该位置续播
+const SCRUB_END_DELAY = 300;
 
 const layerRef = ref<HTMLElement>();
 const videoRef = ref<HTMLVideoElement>();
@@ -28,6 +33,10 @@ const ready = ref(false); // canplay：视频淡入（之前保持底层静态�
 const currentTime = ref(0);
 const duration = ref(0);
 const muted = ref(true); // 默认静音；自动播放模式恒静音（多视频同播），悬停可点音量钮开
+// scrub 预览帧（Eagle 帧图方案）：null = 未就绪 / 不可用（维持 video seek 兜底）
+const scrubFrames = ref<string[] | null>(null);
+const scrubbing = ref(false); // 帧图 scrub 中（帧图层显示、video 暂停）
+const scrubIdx = ref(0);
 
 // 范围起点：自动播放 = 封面帧秒数（源已变短于封面帧时回退 0）；悬停 = 0（完整播放）
 function rangeStart(): number {
@@ -50,12 +59,16 @@ const pct = computed(() => {
 });
 
 let timer: ReturnType<typeof setTimeout> | undefined;
+let scrubEndTimer: ReturnType<typeof setTimeout> | undefined;
 let disposed = false;
 let unregister: (() => void) | undefined;
 
 onMounted(() => {
   unregister = registerHoverPlayer(() => videoRef.value?.pause());
-  timer = setTimeout(() => void loadSource(), ENTER_DELAY);
+  timer = setTimeout(() => {
+    void loadSource();
+    if (!props.auto) void loadScrubFrames(); // 自动播放模式不 scrub，不触发抽帧（省一次全片扫描）
+  }, ENTER_DELAY);
 });
 
 async function loadSource(): Promise<void> {
@@ -71,6 +84,19 @@ async function loadSource(): Promise<void> {
     void v.play().catch((e) => console.warn("卡片播放失败：", e));
   } catch (e) {
     console.warn("卡片播放源解析失败：", e);
+  }
+}
+
+// 加载 scrub 预览帧（后端全片均匀抽 40 帧，会话级缓存；首次 3-10 秒，期间维持 video seek 兜底）
+async function loadScrubFrames(): Promise<void> {
+  try {
+    const r = await invoke<{ frames: string[]; pending: boolean }>("list_video_scrub_frames", {
+      assetId: props.asset.assetId,
+    });
+    if (disposed || r.frames.length === 0) return;
+    scrubFrames.value = r.frames.map((p) => convertFileSrc(p));
+  } catch {
+    // 组件缺失 / 生成失败：维持 video seek 兜底
   }
 }
 
@@ -104,8 +130,8 @@ function onEnded(): void {
   void v.play().catch(() => {});
 }
 // 跟随鼠标快进快退（仅悬停模式）：横向位置映射到 [start, end]。
-// pointermove 只记目标比例，rAF 合帧应用（2026-07-27 用户实测：每次 move 直接 seek 卡顿不跟手）——
-// seek 上限 15fps（66ms 门控，解码器喘得过气）；目标与上次差 <0.05s 不 seek（手停微抖不触发）
+// pointermove 只记目标比例，rAF 合帧应用（img 换 src 也有解码开销，合帧降载）——
+// 预览帧就绪 = 帧图模式（切图零解码 seek，跟手）；未就绪 = video seek 兜底（66ms 门控 15fps 上限）
 let scrubRatio: number | null = null;
 let scrubDirty = false;
 let scrubRaf = 0;
@@ -113,7 +139,7 @@ let lastSeekAt = 0;
 let lastSeekSec = -1;
 
 function onScrub(e: PointerEvent): void {
-  if (!ready.value || props.auto) return;
+  if (props.auto) return;
   const rect = layerRef.value!.getBoundingClientRect();
   scrubRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   scrubDirty = true;
@@ -121,8 +147,30 @@ function onScrub(e: PointerEvent): void {
 }
 function applyScrub(): void {
   scrubRaf = 0;
+  if (scrubRatio == null) {
+    scrubDirty = false;
+    return;
+  }
+  const ratio = scrubRatio;
+  const frames = scrubFrames.value;
+  if (frames && frames.length > 0) {
+    // 帧图模式：切图 + video 暂停；鼠标停 SCRUB_END_DELAY 后由 endScrub 续播
+    scrubDirty = false;
+    const idx = Math.round(ratio * (frames.length - 1));
+    scrubIdx.value = idx;
+    scrubbing.value = true;
+    const v = videoRef.value;
+    if (v && !v.paused) v.pause();
+    const d = duration.value || props.asset.duration || 0;
+    currentTime.value = (idx / (frames.length - 1)) * d;
+    lastSeekSec = currentTime.value;
+    clearTimeout(scrubEndTimer);
+    scrubEndTimer = setTimeout(endScrub, SCRUB_END_DELAY);
+    return;
+  }
+  // 兜底：video seek（预览帧未就绪）
   const v = videoRef.value;
-  if (!v || scrubRatio == null) {
+  if (!v || !ready.value) {
     scrubDirty = false;
     return;
   }
@@ -131,12 +179,20 @@ function applyScrub(): void {
     if (scrubDirty) scrubRaf = requestAnimationFrame(applyScrub); // 门控等待，下帧再试
     return;
   }
-  const target = rangeStart() + scrubRatio * (rangeEnd() - rangeStart());
+  const target = rangeStart() + ratio * (rangeEnd() - rangeStart());
   scrubDirty = false;
   if (Math.abs(target - lastSeekSec) < 0.05) return;
   lastSeekAt = now;
   lastSeekSec = target;
   v.currentTime = target;
+}
+// 鼠标停 300ms：帧图层收起，video 从 scrub 位置续播完整视频
+function endScrub(): void {
+  scrubbing.value = false;
+  const v = videoRef.value;
+  if (!v || !v.src) return;
+  v.currentTime = lastSeekSec;
+  void v.play().catch(() => {});
 }
 function toggleMute(): void {
   const v = videoRef.value;
@@ -148,6 +204,7 @@ function toggleMute(): void {
 onBeforeUnmount(() => {
   disposed = true;
   clearTimeout(timer);
+  clearTimeout(scrubEndTimer);
   cancelAnimationFrame(scrubRaf);
   unregister?.();
   const v = videoRef.value;
@@ -172,6 +229,16 @@ onBeforeUnmount(() => {
       @timeupdate="onTimeUpdate"
       @loadedmetadata="onLoadedMetadata"
       @ended="onEnded"
+    />
+    <!-- scrub 帧图层（Eagle 帧图方案）：鼠标移动时盖住 video 切帧图，停下后收起续播 -->
+    <img
+      v-if="scrubbing && scrubFrames"
+      class="v scrub-img"
+      :class="{ contain: ui.layoutMode === 'grid' }"
+      :src="scrubFrames[scrubIdx]"
+      :alt="asset.name"
+      decoding="async"
+      draggable="false"
     />
     <!-- 底部控件区（仅悬停模式）：不触发 scrub -->
     <div v-if="!auto" class="hud" @pointermove.stop>
@@ -203,6 +270,12 @@ onBeforeUnmount(() => {
   object-fit: contain;
 }
 .v.ready {
+  opacity: 1;
+}
+/* scrub 帧图层：盖 video（不参与 ready 淡入，直接不透明；DOM 序在 video 后自然在上） */
+.scrub-img {
+  position: absolute;
+  inset: 0;
   opacity: 1;
 }
 /* 控件区贴底部：进度条在最下沿横贯，胶囊在其上方右下（图 1） */
