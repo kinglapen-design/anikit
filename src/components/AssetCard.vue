@@ -69,14 +69,20 @@ const hovered = ref(false);
 const animSrc = ref<string | null>(null);
 let animTimer: ReturnType<typeof setTimeout> | undefined;
 const animPlaying = computed(() => hovered.value || ui.autoPlayGif);
-watch(animPlaying, (p) => {
-  clearTimeout(animTimer);
-  if (p && kind.value === "anim") {
-    animTimer = setTimeout(() => void loadAnim(), 300);
-  } else {
-    animSrc.value = null;
-  }
-});
+// immediate：虚拟滚动销毁重建 / 开关已开时挂载，animPlaying 初始即 true 无"变化"不触发——
+// 挂载即评估一次（修复：自动播放滚出视口再回来 / 视口外滚入不播，2026-07-27 用户实测）
+watch(
+  animPlaying,
+  (p) => {
+    clearTimeout(animTimer);
+    if (p && kind.value === "anim") {
+      animTimer = setTimeout(() => void loadAnim(), 300);
+    } else {
+      animSrc.value = null;
+    }
+  },
+  { immediate: true },
+);
 async function loadAnim(): Promise<void> {
   try {
     const r = await invoke<{ path: string | null; pending: boolean }>("get_asset_file_path", {
