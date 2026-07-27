@@ -95,8 +95,12 @@ fn has_audio_stream(path: &Path) -> bool {
     })
 }
 
-/// 转码为 webview 可播格式（5.2 播放源兜底）：视频 → mp4（libx264 veryfast crf23 + faststart，
+/// 转码为 webview 可播格式（5.2 播放源兜底）：视频 → mp4（**libopenh264** + faststart，
 /// 有音频流才带 aac）；音频 → wav（pcm_s16le）。二进制缺失 / 非零退出 / 产物未生成均 false + warn。
+/// 编码器说明（2026-07-27 实测定位）：sidecar 是 LGPL 构建，**没有 libx264**（x264 是 GPL）——
+/// 转码失败报"该格式暂时无法播放"的根因；libopenh264（Cisco，BSD）是 LGPL 构建内可用的
+/// h264 软编码器，无许可传染、跨机器一致（h264_mf 依赖 Windows 组件，不作首选）。
+/// openh264 不支持 x264 的 crf/preset，用码率控制（1080p 动画素材 3M 预览足够）。
 pub fn transcode_for_webview(path: &Path, out_path: &Path, is_audio: bool) -> bool {
   let src = path.to_string_lossy().into_owned();
   let out = out_path.to_string_lossy().into_owned();
@@ -108,8 +112,8 @@ pub fn transcode_for_webview(path: &Path, out_path: &Path, is_audio: bool) -> bo
       a.extend(["-map".into(), "0:a:0".into(), "-c:a".into(), "aac".into()]);
     }
     a.extend([
-      "-c:v".into(), "libx264".into(), "-preset".into(), "veryfast".into(),
-      "-crf".into(), "23".into(), "-movflags".into(), "+faststart".into(), out,
+      "-c:v".into(), "libopenh264".into(), "-b:v".into(), "3M".into(),
+      "-movflags".into(), "+faststart".into(), out,
     ]);
     a
   };
