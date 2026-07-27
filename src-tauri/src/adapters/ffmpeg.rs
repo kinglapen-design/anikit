@@ -165,9 +165,10 @@ pub fn video_frame_png(path: &Path, at_secs: f64) -> Option<Vec<u8>> {
 
 /// ffmpeg 全片均匀抽预览帧序列（5.3 视频悬停 scrub，Eagle 帧图方案——鼠标移动只切图零解码延迟）：
 /// fps 滤镜（fps = count/duration_secs 均匀抽 count 帧）+ scale=-2:{height}（高恒 height 宽等比），
-/// 输出 out_dir/f-%03d.webp（libwebp，BtbN LGPL 构建自带）；成功返回实际生成文件清单（按名排序，
-/// 帧数随浮点 ±1），无帧生成 / 失败返回 None。调用方负责目录创建清理与幂等戳；
-/// 同步阻塞（调用方在线程池，同模块口径）
+/// 输出 out_dir/f-%03d.webp；**必须显式 `-c:v libwebp`**——.webp 扩展名默认走原生单帧 webp 编码器，
+/// image2 序列模式 40 帧全覆盖到同一个 f-001.webp（2026-07-28 实测定位：png/显式 libwebp 均正常 40 帧）；
+/// 成功返回实际生成文件清单（按名排序，帧数随浮点 ±1），无帧生成 / 失败返回 None。
+/// 调用方负责目录创建清理与幂等戳；同步阻塞（调用方在线程池，同模块口径）
 pub fn video_scrub_frames(path: &Path, out_dir: &Path, duration_secs: f64, count: u32, height: u32) -> Option<Vec<PathBuf>> {
   if duration_secs <= 0.0 || count == 0 {
     return None;
@@ -183,6 +184,10 @@ pub fn video_scrub_frames(path: &Path, out_dir: &Path, duration_secs: f64, count
     "0:v:0".into(),
     "-vf".into(),
     format!("fps={fps:.6},scale=-2:{height}"),
+    "-c:v".into(),
+    "libwebp".into(),
+    "-quality".into(),
+    "80".into(),
     out_dir.join("f-%03d.webp").to_string_lossy().into_owned(),
   ];
   if !run_status("ffmpeg", &args) {

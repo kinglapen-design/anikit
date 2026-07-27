@@ -93,7 +93,7 @@ async function loadScrubFrames(): Promise<void> {
     const r = await invoke<{ frames: string[]; pending: boolean }>("list_video_scrub_frames", {
       assetId: props.asset.assetId,
     });
-    if (disposed || r.frames.length === 0) return;
+    if (disposed || r.frames.length < 2) return; // 单帧无 scrub 意义（len-1 插值会 0/0），维持兜底
     scrubFrames.value = r.frames.map((p) => convertFileSrc(p));
   } catch {
     // 组件缺失 / 生成失败：维持 video seek 兜底

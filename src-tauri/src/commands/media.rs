@@ -237,7 +237,7 @@ fn generate_scrub_frames(dir: &Path, origin: &Path) -> Result<Vec<String>, Strin
   let _ = fs::remove_dir_all(dir);
   fs::create_dir_all(dir).map_err(|e| format!("预览帧缓存目录创建失败：{e}"))?;
   let files = ffmpeg::video_scrub_frames(origin, dir, duration, SCRUB_FRAME_COUNT, SCRUB_FRAME_HEIGHT)
-    .filter(|f| !f.is_empty())
+    .filter(|f| f.len() >= 2) // 单帧无 scrub 意义（且前端按 len-1 插值会 0/0）：视为生成失败走兜底
     .ok_or_else(|| "预览帧生成失败".to_string())?;
   if let Some(s) = source_stamp(origin) {
     if let Err(e) = fs::write(dir.join(".stamp"), s) {
