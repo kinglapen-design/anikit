@@ -131,10 +131,16 @@ async function jump(key: string): Promise<void> {
 </template>
 
 <style scoped>
+/* 区块容器：flex column 必须有（detail-block 公共规则 gap 8 = 副标题与内容间距才生效） */
+.detail-notes {
+  display: flex;
+  flex-direction: column;
+}
+/* 子项容器：间距 8（与关联文件夹 / 标签区块统一，2026-07-26 用户） */
 .items {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-8);
 }
 /* 笔记 item（02_item 06 关联文件夹同款）：C4 底 / hover C5 / inset 1px border-1 / 圆角 8 /
    内边距 4 4 4 8 / 间距 6；relative 供浮帧画面锚定 */
@@ -172,13 +178,19 @@ async function jump(key: string): Promise<void> {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* × 删除：常态不占位隐藏（宽度 0 留给文本），悬停 item 展开 24px 露出（02_item 06 同款） */
-.del {
+/* × 删除：常态不占位隐藏（宽度 0 留给文本），悬停 item 展开 24px 露出（02_item 06 同款）；
+   选择器带 .item 提权，覆盖 IconButton.small 的固定 width 24（同 DetailLinks 既有处理） */
+.item .del {
   width: 0;
+  padding-left: 0;
+  padding-right: 0;
   opacity: 0;
   overflow: hidden;
   color: var(--font-icon-3);
-  transition: width 0.12s ease;
+  transition:
+    width 0.12s ease,
+    opacity 0.12s ease,
+    color 0.12s ease;
 }
 .item:hover .del {
   width: 24px;
