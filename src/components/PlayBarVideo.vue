@@ -51,43 +51,43 @@ function stepFrame(delta: number): void {
 
 <template>
   <div class="play-bar">
-    <template v-if="media.transcoding">
-      <span class="hint">转码中…</span>
-    </template>
-    <template v-else>
-      <IconButton
-        :name="media.playing ? 'pause' : 'play'"
-        :title="media.playing ? '暂停' : '播放'"
-        @click="media.togglePlay()"
-      />
-      <IconButton name="rewind" title="快退 5 秒" @click="media.seekBy(-5)" />
-      <IconButton name="fast-forward" title="快进 5 秒" @click="media.seekBy(5)" />
-      <!-- 上下帧（逐帧步进即暂停；step-frame 图标左右翻转使用，快捷键 , . 的实体入口） -->
-      <IconButton class="flip-h" name="step-frame" title="上一帧（,）" @click="stepFrame(-1)" />
-      <IconButton name="step-frame" title="下一帧（.）" @click="stepFrame(1)" />
-      <VolumeControl />
-      <span class="time-text">{{ formatDuration(media.currentTime) }} / {{ formatDuration(media.duration) }}</span>
-      <div
-        ref="trackRef"
-        class="progress"
-        style="touch-action: none"
-        @pointerdown="onSeekDown"
-        @pointermove="onSeekMove"
-        @pointerup="onSeekUp"
-      >
+    <!-- 转码中保持播放条结构（高度不跳变防闪烁，2026-07-26 用户）：控件禁用，提示放进度条区 -->
+    <IconButton
+      :name="media.playing ? 'pause' : 'play'"
+      :title="media.playing ? '暂停' : '播放'"
+      :disabled="media.transcoding"
+      @click="media.togglePlay()"
+    />
+    <IconButton name="rewind" title="快退 5 秒" :disabled="media.transcoding" @click="media.seekBy(-5)" />
+    <IconButton name="fast-forward" title="快进 5 秒" :disabled="media.transcoding" @click="media.seekBy(5)" />
+    <!-- 上下帧（逐帧步进即暂停；step-frame 图标左右翻转使用，快捷键 , . 的实体入口） -->
+    <IconButton class="flip-h" name="step-frame" title="上一帧（,）" :disabled="media.transcoding" @click="stepFrame(-1)" />
+    <IconButton name="step-frame" title="下一帧（.）" :disabled="media.transcoding" @click="stepFrame(1)" />
+    <VolumeControl />
+    <span class="time-text">{{ formatDuration(media.currentTime) }} / {{ formatDuration(media.duration) }}</span>
+    <div
+      ref="trackRef"
+      class="progress"
+      style="touch-action: none"
+      @pointerdown="onSeekDown"
+      @pointermove="onSeekMove"
+      @pointerup="onSeekUp"
+    >
+      <span v-if="media.transcoding" class="hint">转码中…</span>
+      <template v-else>
         <span class="fill" :style="{ width: `${pct}%` }" />
         <span class="knob" :style="{ left: `${pct}%` }" />
-      </div>
-      <RateControl :rate="media.rate" @select="media.setRate" />
-      <IconButton name="loop" title="循环播放" :active="media.loop" @click="media.toggleLoop()" />
-      <IconButton name="annotate" title="笔记" :active="notes.open" @click="notes.toggle()" />
-      <IconButton name="set-as-thumb" title="当前画面设为预览图" @click="media.setVideoThumb()" />
-      <IconButton
-        name="fullscreen"
-        :title="preview.fullscreen ? '退出全屏' : '全屏'"
-        @click="preview.setFullscreen(!preview.fullscreen)"
-      />
-    </template>
+      </template>
+    </div>
+    <RateControl :rate="media.rate" @select="media.setRate" />
+    <IconButton name="loop" title="循环播放" :active="media.loop" @click="media.toggleLoop()" />
+    <IconButton name="annotate" title="笔记" :active="notes.open" :disabled="media.transcoding" @click="notes.toggle()" />
+    <IconButton name="set-as-thumb" title="当前画面设为预览图" :disabled="media.transcoding" @click="media.setVideoThumb()" />
+    <IconButton
+      name="fullscreen"
+      :title="preview.fullscreen ? '退出全屏' : '全屏'"
+      @click="preview.setFullscreen(!preview.fullscreen)"
+    />
   </div>
 </template>
 
@@ -115,12 +115,17 @@ function stepFrame(delta: number): void {
   white-space: nowrap;
   flex: none;
 }
-/* 转码加载提示（说明文字档） */
+/* 转码加载提示（说明文字档；进度条区内居中——转码中播放条结构保持，高度不跳变防闪烁） */
 .hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   color: var(--font-icon-3);
-  padding: 0 var(--space-4);
+  pointer-events: none;
 }
 /* 进度条：3px 轨道 border-1 底，品牌紫填充，10px 拖钮（SideSlider 语言，同帧播放条） */
 .progress {

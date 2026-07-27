@@ -55,35 +55,33 @@ function onSeekUp(e: PointerEvent): void {
 
 <template>
   <div class="play-bar">
-    <template v-if="media.transcoding">
-      <span class="hint">转码中…</span>
-    </template>
-    <template v-else>
-      <IconButton
-        :name="media.playing ? 'pause' : 'play'"
-        :title="media.playing ? '暂停' : '播放'"
-        @click="media.togglePlay()"
-      />
-      <VolumeControl />
-      <span class="time-text">{{ formatDuration(media.currentTime) }} / {{ formatDuration(media.duration) }}</span>
-      <div
-        ref="trackRef"
-        class="wave-progress"
-        :style="waveMask"
-        style="touch-action: none"
-        @pointerdown="onSeekDown"
-        @pointermove="onSeekMove"
-        @pointerup="onSeekUp"
-      >
-        <template v-if="waveUrl">
-          <div class="wave-layer base" />
-          <div class="wave-layer played" :style="{ clipPath: `inset(0 ${100 - pct}% 0 0)` }" />
-        </template>
-        <span class="head" :style="{ left: `${pct}%` }" />
-      </div>
-      <RateControl :rate="media.rate" @select="media.setRate" />
-      <IconButton name="loop" title="循环播放" :active="media.loop" @click="media.toggleLoop()" />
-    </template>
+    <!-- 转码中保持播放条结构（高度不跳变防闪烁，2026-07-26 用户）：控件禁用，提示放波形区 -->
+    <IconButton
+      :name="media.playing ? 'pause' : 'play'"
+      :title="media.playing ? '暂停' : '播放'"
+      :disabled="media.transcoding"
+      @click="media.togglePlay()"
+    />
+    <VolumeControl />
+    <span class="time-text">{{ formatDuration(media.currentTime) }} / {{ formatDuration(media.duration) }}</span>
+    <div
+      ref="trackRef"
+      class="wave-progress"
+      :style="waveMask"
+      style="touch-action: none"
+      @pointerdown="onSeekDown"
+      @pointermove="onSeekMove"
+      @pointerup="onSeekUp"
+    >
+      <span v-if="media.transcoding" class="hint">转码中…</span>
+      <template v-else-if="waveUrl">
+        <div class="wave-layer base" />
+        <div class="wave-layer played" :style="{ clipPath: `inset(0 ${100 - pct}% 0 0)` }" />
+      </template>
+      <span v-if="!media.transcoding" class="head" :style="{ left: `${pct}%` }" />
+    </div>
+    <RateControl :rate="media.rate" @select="media.setRate" />
+    <IconButton name="loop" title="循环播放" :active="media.loop" @click="media.toggleLoop()" />
   </div>
 </template>
 
@@ -111,12 +109,17 @@ function onSeekUp(e: PointerEvent): void {
   white-space: nowrap;
   flex: none;
 }
-/* 转码加载提示（说明文字档） */
+/* 转码加载提示（说明文字档；波形区内居中——转码中播放条结构保持，高度不跳变防闪烁） */
 .hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   color: var(--font-icon-3);
-  padding: 0 var(--space-4);
+  pointer-events: none;
 }
 /* 波形进度条：高 24，圆角 4；两层 div 以波形图作 CSS mask（alpha 通道，mask-size 铺满）——
    底层 wave-pending 实色 = 未播放（font-icon-3 60% 与 C3 混合的实际色号，2026-07-26 用户定，

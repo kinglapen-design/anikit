@@ -121,6 +121,19 @@ function itemLabel(key: string): string {
     var(--shadow-pop),
     inset 0 0 0 1px var(--border-1);
   z-index: 20;
+  /* 弹出动画同查看方式菜单（锚点在下——从播放条向上展开，2026-07-26 用户定） */
+  animation: menu-pop 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: bottom center;
+}
+@keyframes menu-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 .notes-head {
   display: flex;
@@ -187,6 +200,13 @@ function itemLabel(key: string): string {
 }
 .note-item.active {
   background: var(--font-icon-5);
+}
+/* 列表项小 ×：60% / hover 80%（与头部窗口关闭的主次区分，2026-07-26 用户定） */
+.note-item .icon-btn {
+  color: var(--font-icon-3);
+}
+.note-item .icon-btn:hover {
+  color: var(--font-icon-2);
 }
 .note-key {
   font-size: var(--text-caption-size);
