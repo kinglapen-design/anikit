@@ -55,6 +55,7 @@ let unlistenFull: (() => void) | undefined;
 let unlistenStrips: (() => void) | undefined;
 let unlistenUnpacked: (() => void) | undefined;
 let unlistenUnpackFailed: (() => void) | undefined;
+let unlistenHidden: (() => void) | undefined;
 
 export const usePreviewStore = defineStore("preview", {
   state: () => ({
@@ -143,7 +144,7 @@ export const usePreviewStore = defineStore("preview", {
   actions: {
     // 预览就绪事件监听（App 启动注册一次）：PSD 高清 / 帧条小图渐进 / 动图解包完成与失败
     async initPreviewListener(): Promise<void> {
-      if (unlistenFull && unlistenStrips && unlistenUnpacked && unlistenUnpackFailed) return;
+      if (unlistenFull && unlistenStrips && unlistenUnpacked && unlistenUnpackFailed && unlistenHidden) return;
       unlistenFull = await listen<{ assetId: string; path: string }>("preview-full-ready", (e) => {
         if (this.current?.assetId === e.payload.assetId && this.kind === "image") {
           this.filePath = e.payload.path; // onImageLoad 按像素比换算保持视觉
@@ -171,6 +172,12 @@ export const usePreviewStore = defineStore("preview", {
         if (this.kind === "anim" && this.unpacking && this.current?.assetId === e.payload.assetId) {
           console.warn(`动图解包失败，维持原生播放：${e.payload.assetId}`);
         }
+      });
+      // 主窗口隐藏到托盘（关闭按钮 / 全局热键）：暂停双引擎播放
+      // （2026-07-27 用户定：最小化保持播放，隐藏到托盘停止；重新显示后手动再播）
+      unlistenHidden = await listen("main-window-hidden", () => {
+        this.pause();
+        usePreviewMediaStore().pause();
       });
     },
 

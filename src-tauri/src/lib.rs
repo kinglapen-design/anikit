@@ -1,7 +1,7 @@
 use tauri::{
   menu::{CheckMenuItem, Menu, MenuItem},
   tray::TrayIconBuilder,
-  Manager,
+  Emitter, Manager,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -85,6 +85,8 @@ pub fn run() {
             let focused = w.is_focused().unwrap_or(false);
             if visible && focused {
               let _ = w.hide();
+              // 窗口隐藏即通知前端暂停播放（2026-07-27 用户定：最小化保持播放，隐藏到托盘停止）
+              let _ = w.emit("main-window-hidden", ());
             } else {
               let _ = w.show();
               let _ = w.set_focus();
@@ -164,6 +166,8 @@ pub fn run() {
           if let tauri::WindowEvent::CloseRequested { api, .. } = event {
             api.prevent_close();
             let _ = w2.hide();
+            // 关闭到托盘即通知前端暂停播放（2026-07-27 用户定）
+            let _ = w2.emit("main-window-hidden", ());
           }
         });
       }
