@@ -17,6 +17,8 @@ export const usePreviewNotesStore = defineStore("previewNotes", {
   state: () => ({
     open: false, // 浮层开关（笔记按钮激活态）
     notes: [] as NoteEntry[],
+    // 数据变更版本号（set_note 后 +1）：详情面板笔记区块 watch 它做热刷新（2026-07-26 用户）
+    version: 0,
   }),
   getters: {
     // 帧条笔记圆点判定（sequence/anim）
@@ -59,6 +61,7 @@ export const usePreviewNotesStore = defineStore("previewNotes", {
       this.notes = await invoke<NoteEntry[]>("set_note", { assetId: p.assetId, key, text });
       // noteCount 冗余同步卡片角标（后端已落 metadata，前端按返回全量算条数）
       useContentStore().setNoteCount(p.assetId, this.notes.length);
+      this.version += 1; // 详情面板笔记区块热刷新
     },
     async remove(key: string): Promise<void> {
       await this.save(key, ""); // 空文本 = 删除（后端约定）
