@@ -16,6 +16,7 @@ const emit = defineEmits<{ close: [] }>();
 const src = ref<string | null>(props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null);
 
 let unlisten: (() => void) | undefined;
+let disposed = false;
 
 onMounted(() => {
   void loadFull();
@@ -27,18 +28,25 @@ async function loadFull(): Promise<void> {
     const r = await invoke<{ path: string | null; pending: boolean }>("get_asset_file_path", {
       assetId: props.asset.assetId,
     });
+    if (disposed) return;
     if (r.path) {
       src.value = convertFileSrc(r.path);
       return;
     }
     if (r.pending) {
       // psd/psb 已进预览解析队列：高清解码完成推送（assetId 匹配即换并退订）
-      unlisten = await listen<{ assetId: string; path: string }>("preview-full-ready", (e) => {
+      const ul = await listen<{ assetId: string; path: string }>("preview-full-ready", (e) => {
         if (e.payload.assetId === props.asset.assetId) {
           src.value = convertFileSrc(e.payload.path);
           unlisten?.();
         }
       });
+      // await 期间浮层已关闭：立即退订防监听器泄漏（2026-07-28 内存自查）
+      if (disposed) {
+        ul();
+        return;
+      }
+      unlisten = ul;
     }
     // path = null（序列帧等无直渲源）：保持 info 缩略图
   } catch {
@@ -51,6 +59,7 @@ function onKeydown(e: KeyboardEvent): void {
 }
 
 onBeforeUnmount(() => {
+  disposed = true;
   unlisten?.();
   window.removeEventListener("keydown", onKeydown);
 });
