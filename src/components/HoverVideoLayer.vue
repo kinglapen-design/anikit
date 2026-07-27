@@ -156,10 +156,15 @@ function applyScrub(): void {
   if (frames && frames.length > 0) {
     // 帧图模式：切图 + video 暂停；鼠标停 SCRUB_END_DELAY 后由 endScrub 续播
     scrubDirty = false;
+    const v = videoRef.value;
+    // 再次 scrub：取消上次 endScrub 的 seeked 等待（防旧回调误收帧图层）
+    if (pendingSeeked) {
+      if (v) v.removeEventListener("seeked", pendingSeeked);
+      pendingSeeked = null;
+    }
     const idx = Math.round(ratio * (frames.length - 1));
     scrubIdx.value = idx;
     scrubbing.value = true;
-    const v = videoRef.value;
     if (v && !v.paused) v.pause();
     const d = duration.value || props.asset.duration || 0;
     currentTime.value = (idx / (frames.length - 1)) * d;
@@ -186,13 +191,24 @@ function applyScrub(): void {
   lastSeekSec = target;
   v.currentTime = target;
 }
-// 鼠标停 300ms：帧图层收起，video 从 scrub 位置续播完整视频
+// 鼠标停 300ms：video seek 到 scrub 位置——帧图层保持到 seek 到位（seeked）再收起续播，
+// 防"帧图 → scrub 前旧画面 → 新画面"两次跳变（2026-07-28 用户实测）；再次 scrub 取消等待
+let pendingSeeked: (() => void) | null = null;
 function endScrub(): void {
-  scrubbing.value = false;
   const v = videoRef.value;
-  if (!v || !v.src) return;
+  if (!v || !v.src) {
+    scrubbing.value = false;
+    return;
+  }
+  if (pendingSeeked) v.removeEventListener("seeked", pendingSeeked);
+  pendingSeeked = () => {
+    if (pendingSeeked) v.removeEventListener("seeked", pendingSeeked);
+    pendingSeeked = null;
+    scrubbing.value = false;
+    void v.play().catch(() => {});
+  };
+  v.addEventListener("seeked", pendingSeeked);
   v.currentTime = lastSeekSec;
-  void v.play().catch(() => {});
 }
 function toggleMute(): void {
   const v = videoRef.value;
@@ -206,6 +222,8 @@ onBeforeUnmount(() => {
   clearTimeout(timer);
   clearTimeout(scrubEndTimer);
   cancelAnimationFrame(scrubRaf);
+  const v0 = videoRef.value;
+  if (v0 && pendingSeeked) v0.removeEventListener("seeked", pendingSeeked);
   unregister?.();
   const v = videoRef.value;
   if (v) {
@@ -272,11 +290,13 @@ onBeforeUnmount(() => {
 .v.ready {
   opacity: 1;
 }
-/* scrub 帧图层：盖 video（不参与 ready 淡入，直接不透明；DOM 序在 video 后自然在上） */
+/* scrub 帧图层：盖 video（不参与 ready 淡入，直接不透明；DOM 序在 video 后自然在上）；
+   C1 底——带 alpha 的 mov 帧图透明区会透出底下 video 画面（同序列帧修复，2026-07-28 用户实测） */
 .scrub-img {
   position: absolute;
   inset: 0;
   opacity: 1;
+  background: var(--c1);
 }
 /* 控件区贴底部：进度条在最下沿横贯，胶囊在其上方右下（图 1） */
 .hud {

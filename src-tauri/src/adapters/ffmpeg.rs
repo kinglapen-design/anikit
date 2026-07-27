@@ -163,6 +163,11 @@ pub fn video_frame_png(path: &Path, at_secs: f64) -> Option<Vec<u8>> {
   run("ffmpeg", &args)
 }
 
+/// 长视频抽帧只解关键帧的时长阈值（秒）：>30s 加 -skip_frame nokey 只解关键帧、fps 滤镜复制补齐
+/// （2026-07-28 实测 185s/303MB mp4：全片解码 3.9s → 关键帧 0.95s，4 倍提速、CPU 大降）；
+/// 短视频关键帧太少（可能仅 1 个）会退化为全同帧，30s 内仍全片解码（本就零点几秒）
+const SKIP_KEYFRAME_MIN_SECS: f64 = 30.0;
+
 /// ffmpeg 全片均匀抽预览帧序列（5.3 视频悬停 scrub，Eagle 帧图方案——鼠标移动只切图零解码延迟）：
 /// fps 滤镜（fps = count/duration_secs 均匀抽 count 帧）+ scale=-2:{height}（高恒 height 宽等比），
 /// 输出 out_dir/f-%03d.webp；**必须显式 `-c:v libwebp`**——.webp 扩展名默认走原生单帧 webp 编码器，
@@ -174,10 +179,13 @@ pub fn video_scrub_frames(path: &Path, out_dir: &Path, duration_secs: f64, count
     return None;
   }
   let fps = count as f64 / duration_secs;
-  let args = vec![
-    "-v".into(),
-    "error".into(),
-    "-y".into(),
+  let mut args: Vec<String> = vec!["-v".into(), "error".into(), "-y".into()];
+  if duration_secs > SKIP_KEYFRAME_MIN_SECS {
+    // 输入选项（必须在 -i 前）：只解关键帧，fps 滤镜复制补齐均匀帧——
+    // scrub 定位用关键帧画面足够，精度退化为 GOP 级（动画素材通常 2-5 秒）
+    args.extend(["-skip_frame".into(), "nokey".into()]);
+  }
+  args.extend([
     "-i".into(),
     path.to_string_lossy().into_owned(),
     "-map".into(),
@@ -189,7 +197,7 @@ pub fn video_scrub_frames(path: &Path, out_dir: &Path, duration_secs: f64, count
     "-quality".into(),
     "80".into(),
     out_dir.join("f-%03d.webp").to_string_lossy().into_owned(),
-  ];
+  ]);
   if !run_status("ffmpeg", &args) {
     return None;
   }
