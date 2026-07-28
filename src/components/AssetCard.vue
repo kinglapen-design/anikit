@@ -415,20 +415,25 @@ const meta = computed(() => {
   text-align: center;
   white-space: nowrap;
 }
-/* 就地重命名输入（6.1 C2）：C4 底 / 1px border-1 / 圆角 6（输入框 token 口径，同收件箱行内重命名） */
+/* 就地重命名输入（6.1 C2）：C4 底 / 1px border-1 / 圆角 6（输入框 token 口径，同收件箱行内重命名）；
+   高度恒 20 = 字体行高（2026-07-29 用户定：不再撑高卡片）；聚焦描边品牌色-1（用户定） */
 .rename-input {
   width: 100%;
+  height: 20px;
   box-sizing: border-box;
-  padding: var(--space-2) var(--space-6);
+  padding: 0 var(--space-6);
   border: none;
   border-radius: var(--radius-6);
   background: var(--c4);
   box-shadow: inset 0 0 0 1px var(--border-1);
   color: var(--font-icon-1);
   font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  line-height: 20px;
   text-align: center;
   outline: none;
+}
+.rename-input:focus {
+  box-shadow: inset 0 0 0 1px var(--brand-1);
 }
 </style>
 

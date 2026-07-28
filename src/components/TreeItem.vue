@@ -240,10 +240,12 @@ const dropZone = computed(() =>
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 命名输入（C3）：C4 底 / 1px border-1 / 圆角 6（输入框 token 口径）；违规描边 --error */
+/* 命名输入（C3）：C4 底 / 1px border-1 / 圆角 6（输入框 token 口径）；违规描边 --error；
+   高度恒 20 = 字体行高（2026-07-29 用户定：不撑高 item）；聚焦描边品牌色-1（用户定） */
 .name-input {
   flex: 1;
   min-width: 0;
+  height: 20px;
   box-sizing: border-box;
   padding: 0 var(--space-6);
   border: none;
@@ -252,11 +254,15 @@ const dropZone = computed(() =>
   box-shadow: inset 0 0 0 1px var(--border-1);
   color: var(--font-icon-1);
   font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  line-height: 20px;
   text-align: left;
   outline: none;
 }
-.name-input.error {
+.name-input:focus {
+  box-shadow: inset 0 0 0 1px var(--brand-1);
+}
+.name-input.error,
+.name-input.error:focus {
   box-shadow: inset 0 0 0 1px var(--error);
 }
 .count {
