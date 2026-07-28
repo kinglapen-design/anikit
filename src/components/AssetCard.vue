@@ -360,12 +360,6 @@ const meta = computed(() => {
 .asset-card:hover .actions {
   opacity: 1;
 }
-/* 拖拽期间禁用悬停控件（2026-07-29 复验二轮 5，CSS 闸）：引擎 startDrag 置 body.dragging，
-   按钮组隐藏且不可点（防拖拽中残留显示）；特异性压过上行 hover 规则 */
-:global(body.dragging) .thumb .actions {
-  opacity: 0;
-  pointer-events: none;
-}
 .act {
   display: inline-flex;
   align-items: center;
@@ -426,5 +420,16 @@ const meta = computed(() => {
   line-height: var(--text-body-line);
   text-align: center;
   outline: none;
+}
+</style>
+
+<!-- 非 scoped 全局规则：拖拽期间禁用悬停控件（2026-07-29 复验二轮 5，CSS 闸）。
+     注意：曾写在 scoped 块内用 :global(body.dragging) .thumb .actions——SFC 编译把
+     后代部分吞掉，产物只剩 body.dragging{opacity:0} 导致拖拽时整窗透明黑屏（2026-07-29 用户实测）。
+     全局写法类名原样保留可匹配 scoped 编译产物，特异性 (0,4,1) 压过 .asset-card:hover .actions (0,4,0) -->
+<style>
+body.dragging .asset-card .thumb .actions {
+  opacity: 0;
+  pointer-events: none;
 }
 </style>
