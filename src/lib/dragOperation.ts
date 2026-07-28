@@ -8,8 +8,10 @@
 //   c) 文件树落点：item 高度三等分——上/下 1/3 = 排序插入线（仅文件夹拖拽生效，
 //      素材拖到树 item 任何位置都算并入），中间 1/3 = 并入高亮；
 //   d) Ctrl 拖拽：素材落文件夹（树 / 文件夹卡片）= 弹关联弹窗而非移动；落间距排序忽略 Ctrl。
-// 混排护栏：FolderCard / 树文件夹拖拽只做同级排序（reorder_folders），素材只对素材排序；
-// 文件夹并入（移动层级）走 move_folders（2026-07-28 复验反馈 5 接入，替换原"暂不支持"toast）。
+// 混排护栏：FolderCard / 树文件夹拖拽只与文件夹排序，素材只对素材排序；
+// 树上/下 1/3：整组同父 = reorder_folders 同级排序，跨父级 = move_folders 带 beforeFolderId
+// 定位插入（2026-07-29 复验：嵌套文件夹拖出）；树中间 1/3 / 文件夹卡片并入 = move_folders 移动层级
+//（2026-07-28 复验反馈 5 接入，替换原"暂不支持"toast）。
 // 拖拽中 Esc 取消；拖出窗口 / 松开无效区域 = 无操作。
 //
 // 2026-07-28 复验反馈修复（根因记录）：
@@ -326,7 +328,10 @@ async function dropFoldersInto(folderIds: string[], targetId: string): Promise<v
   await ops.moveFolders(ids, targetId);
 }
 
-// 文件夹落树 item 上/下 1/3：reorder_folders 同级排序（before = 插到目标前 / after = 目标下一兄弟前）
+// 文件夹落树 item 上/下 1/3：整组按树可见顺序，before = 插到目标前 / after = 目标下一兄弟前
+// （无下一兄弟 = null = 末尾）。全部与目标同父 = reorder_folders 同级排序（行为不变）；
+// 跨父级 = move_folders 移动到目标父级并插入指定位置（2026-07-29 复验：嵌套文件夹拖出——
+// 原"整组须与目标同父否则无操作"护栏把跨父级落点全拒，嵌套文件夹永远拖不出来）
 async function dropFolderBeside(
   folderIds: string[],
   targetId: string,
@@ -335,15 +340,17 @@ async function dropFolderBeside(
   const content = useContentStore();
   const hit = findParentAndNext(content.folders, targetId);
   if (!hit) return;
-  // 同级护栏（混排）：整组按树可见顺序，须全部与目标同父，否则无操作；
   // 组在树全不可见（条带拖拽且树折叠）时退用引擎侧组序
   const visible = visibleTreeFolderIds().filter((id) => folderIds.includes(id));
   const ordered = visible.length > 0 ? visible : folderIds;
-  for (const id of ordered) {
-    const d = findParentAndNext(content.folders, id);
-    if (!d || d.parentId !== hit.parentId) return;
+  const beforeId = zone === "before" ? targetId : hit.nextId;
+  const sameParent = ordered.every((id) => findParentAndNext(content.folders, id)?.parentId === hit.parentId);
+  if (sameParent) {
+    await ops.reorderFolders(ordered, hit.parentId, beforeId);
+  } else {
+    // 混合组里本就在目标父级的成员后端会跳过（留在原处），可接受
+    await ops.moveFolders(ordered, hit.parentId, beforeId);
   }
-  await ops.reorderFolders(ordered, hit.parentId, zone === "before" ? targetId : hit.nextId);
 }
 
 // 文件夹落文件夹卡片间隙：条带内同级排序（parent = 当前文件夹；组按条带顺序）

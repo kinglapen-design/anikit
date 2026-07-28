@@ -127,19 +127,22 @@ pub async fn reorder_folders(
 }
 
 /// 文件夹重设父级（仅改数据不动磁盘）：targetParent = null / "root" 为顶层；
+/// beforeFolderId 给了 = 插到该兄弟（targetParent 直接子级）之前（跨父级上/下 1/3 落点定位，
+/// 2026-07-29 复验：嵌套文件夹拖出），null = 同级末尾；
 /// 循环（移入自身或子孙）整条报错，同父 / 陈旧 ID 跳过，返回实际移动数
 #[tauri::command]
 pub async fn move_folders(
   state: State<'_, AppState>,
   folder_ids: Vec<String>,
   target_parent: Option<String>,
+  before_folder_id: Option<String>,
 ) -> Result<usize, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin(format!("移动 {} 个文件夹", folder_ids.len()));
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  match operations::move_folders(lib, &folder_ids, target_parent.as_deref()) {
+  match operations::move_folders(lib, &folder_ids, target_parent.as_deref(), before_folder_id.as_deref()) {
     Ok(moved) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(moved)

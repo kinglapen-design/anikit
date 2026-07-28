@@ -77,11 +77,17 @@ export async function reorderFolders(
 }
 
 // 移动文件夹层级（2026-07-28 复验反馈 5）：targetParent null 或 "root" = 顶层；
+// beforeFolderId 给了 = 插到该兄弟（targetParent 直接子级）之前——跨父级上/下 1/3 落点定位
+// （2026-07-29 复验：嵌套文件夹拖出），null = 同级末尾；
 // 循环护栏与同父跳过在后端（撤销标签「移动 N 个文件夹」）；树 item 中间 1/3 与文件夹卡片并入走此
-export async function moveFolders(folderIds: string[], targetParent: string | null): Promise<boolean> {
+export async function moveFolders(
+  folderIds: string[],
+  targetParent: string | null,
+  beforeFolderId: string | null = null,
+): Promise<boolean> {
   let moved = 0;
   return await runOp(async () => {
-    moved = await invoke<number>("move_folders", { folderIds, targetParent });
+    moved = await invoke<number>("move_folders", { folderIds, targetParent, beforeFolderId });
   }, () => `移动 ${moved} 个文件夹`);
 }
 
