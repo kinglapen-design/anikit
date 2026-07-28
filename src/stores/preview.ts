@@ -450,7 +450,10 @@ export const usePreviewStore = defineStore("preview", {
     },
     async openDefaultApp(): Promise<void> {
       const p = this.current;
-      if (p) await invoke("open_with_default_app", { assetId: p.assetId });
+      if (!p) return;
+      await invoke("open_with_default_app", { assetId: p.assetId });
+      // 成功后直接重拉最近使用（2026-07-29 复验反馈：双保险，同 AssetCard.openDefault）
+      await useContentStore().refreshRecent();
     },
   },
 });

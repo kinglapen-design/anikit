@@ -171,9 +171,11 @@ onBeforeUnmount(() => {
 });
 
 function openDefault(): void {
-  void invoke("open_with_default_app", { assetId: props.asset.assetId }).catch((e) =>
-    console.warn("默认应用打开失败：", e),
-  );
+  // 成功后直接重拉最近使用（2026-07-29 复验反馈：双保险——后端 recent-changed 事件之外，
+  // 前端 invoke 成功即刷新，不依赖运行中的后端是否为最新构建）
+  void invoke("open_with_default_app", { assetId: props.asset.assetId })
+    .then(() => useContentStore().refreshRecent())
+    .catch((e) => console.warn("默认应用打开失败：", e));
 }
 
 // 角标文案：音频带 BPM 显示"格式 / BPM: 值"（Eagle 同格式，2026-07-26 用户截图定稿）
