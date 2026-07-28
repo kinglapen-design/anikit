@@ -16,13 +16,16 @@ import ImportDialog from "./components/ImportDialog.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
 import ImportResultDialog from "./components/ImportResultDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
+import ToastStack from "./components/ToastStack.vue";
 import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
 import { usePreviewStore } from "./stores/preview";
+import { useUndoStore } from "./stores/undo";
 
 const ui = useUiStore();
 const content = useContentStore();
 const preview = usePreviewStore();
+const undo = useUndoStore();
 const maximized = ref(false);
 const appWindow = getCurrentWindow();
 const webview = getCurrentWebviewWindow();
@@ -91,6 +94,19 @@ async function onPaste(e: KeyboardEvent): Promise<void> {
   }
 }
 
+// 撤销 / 重做（6.0）：Ctrl+Z / Ctrl+Shift+Z；输入框内不拦截（保留文本编辑自身的撤销）
+function onUndoRedo(e: KeyboardEvent): void {
+  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
+  const t = e.target as HTMLElement;
+  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+  e.preventDefault();
+  if (e.shiftKey) {
+    void undo.redo();
+  } else {
+    void undo.undo();
+  }
+}
+
 let unlistenDragDrop: (() => void) | undefined;
 let unlistenMoved: (() => void) | undefined;
 let unlistenResized: (() => void) | undefined;
@@ -123,6 +139,7 @@ onMounted(() => {
   void ui.initSettings(); // 全局 UI 设置加载 + 变更防抖写回（2026-07-28 持久化）
   window.addEventListener("resize", onResize);
   window.addEventListener("keydown", onPaste);
+  window.addEventListener("keydown", onUndoRedo);
   void content.initInboxListener(); // 收件箱自动入库（3.2），App 存活期注册一次
   void content.initFpsHealListener(); // 存量视频 fps 自愈通知（2026-07-28 复验反馈修复）
   void preview.initPreviewListener(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3）
@@ -153,6 +170,7 @@ onBeforeUnmount(() => {
   clearTimeout(winStateTimer);
   window.removeEventListener("resize", onResize);
   window.removeEventListener("keydown", onPaste);
+  window.removeEventListener("keydown", onUndoRedo);
   unlistenDragDrop?.();
   unlistenMoved?.();
   unlistenResized?.();
@@ -180,6 +198,8 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
 <template>
   <div class="window" :class="{ maximized }">
     <PreviewWindow v-if="previewParam" :asset-key="previewParam" />
+    <!-- 预览子窗口的通知条挂点（6.0；主窗口挂在 ContentArea 内） -->
+    <ToastStack v-if="previewParam" />
     <template v-else>
       <SidebarLeft />
       <SplitBar v-if="!ui.leftCollapsed" side="left" />

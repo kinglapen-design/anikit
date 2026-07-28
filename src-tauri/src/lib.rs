@@ -54,6 +54,7 @@ pub fn run() {
       library: std::sync::Mutex::new(None),
       imports: std::sync::Mutex::new(std::collections::HashMap::new()),
       inbox: std::sync::Mutex::new(None),
+      undo: std::sync::Mutex::new(core::undo::UndoManager::default()),
     })
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -228,6 +229,9 @@ pub fn run() {
       commands::notes::get_notes,
       commands::notes::set_note,
       commands::notes::get_note_thumb,
+      commands::undo::undo,
+      commands::undo::redo,
+      commands::undo::get_undo_state,
       commands::preview::open_with_default_app,
       commands::preview::open_preview_window,
     ])

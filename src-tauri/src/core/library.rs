@@ -212,6 +212,20 @@ pub fn save_folders(lib: &Library) -> Result<(), DataError> {
   write_json(&lib.root.join(FOLDERS_FILE), &lib.folders)
 }
 
+/// 撤销 / 重做回滚后重载：盘上是事实来源——重读全部数据文件 + 重建内存索引（6.0）。
+/// 不触发备份 / 迁移 / 缓存清理（与 open 区分：回滚只是把内存同步回盘上现状）。
+pub fn reload(lib: &mut Library) -> Result<(), DataError> {
+  let root = lib.root.clone();
+  lib.folders = read_json(&root.join(FOLDERS_FILE))?;
+  lib.tags = read_json(&root.join(TAGS_FILE))?;
+  lib.pins = read_json(&root.join(PINS_FILE))?;
+  lib.recycle = read_json(&root.join(RECYCLE_FILE))?;
+  lib.recent = read_json(&root.join(RECENT_FILE))?;
+  let assets = load_assets(&root)?;
+  lib.index = LibraryIndex::build(&lib.folders, assets);
+  Ok(())
+}
+
 /// 同文件夹内显示名唯一化：无冲突原样返回；冲突时在扩展名前追加 -序号
 /// （如 男人-1.fla、男人-2.fla；无扩展名则在末尾追加，如 参考-1）。
 pub fn unique_name(existing: &HashSet<String>, name: &str) -> String {

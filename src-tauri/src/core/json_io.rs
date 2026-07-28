@@ -78,6 +78,11 @@ pub fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T, DataError> {
 pub fn write_json<T: Serialize>(path: &Path, data: &T) -> Result<(), DataError> {
   let text =
     serde_json::to_string_pretty(data).map_err(|e| DataError::Corrupt(format!("序列化失败：{e}")))?;
+  write_text_atomic(path, &text)
+}
+
+/// 原子写文本（.tmp 先写后换）：撤销回滚直接写快照原文，与 write_json 同一套落盘语义
+pub(crate) fn write_text_atomic(path: &Path, text: &str) -> Result<(), DataError> {
   let tmp = path.with_extension("json.tmp");
   fs::write(&tmp, text)?;
   if path.exists() {

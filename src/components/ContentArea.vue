@@ -12,6 +12,7 @@ import PreviewPanel from "./PreviewPanel.vue";
 import PreviewPlayBar from "./PreviewPlayBar.vue";
 import PreviewFrameStrip from "./PreviewFrameStrip.vue";
 import PreviewNotes from "./PreviewNotes.vue";
+import ToastStack from "./ToastStack.vue";
 import { useContentStore } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
 
@@ -48,11 +49,13 @@ const items = computed(() => content.visiblePlacements);
         <SearchBar />
       </footer>
     </template>
+    <ToastStack />
   </main>
 </template>
 
 <style scoped>
 .content-area {
+  position: relative; /* 通知条（ToastStack）锚定 */
   display: flex;
   flex-direction: column;
   flex: 1;
