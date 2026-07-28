@@ -1,9 +1,11 @@
 <script setup lang="ts">
-// 悬停放大浮层（5.3，2026-07-27 用户定案，参考图 3）：卡片放大镜按钮触发，
-// 居中大图浮层（max 80vw×80vh，C3 底 / inset 1px border-1 / 圆角 8 / --shadow-pop）。
-// 图源复用 get_asset_file_path：直渲格式给源路径；psd/psb 缓存命中给全尺寸解码图、
-// 未命中先显 info 缩略图（秒显层）、preview-full-ready 事件到达换高清；
-// 其余（序列帧等）回退 info 缩略图。点击任意处 / Esc 关闭。纯展示无交互。
+// 悬停放大浮层（5.3，2026-07-28 用户定：悬停即出不再点击，参考图 3）：图片类卡片悬停
+// 400ms 触发（AssetCard 驱动），居中大图浮层（max 80vw×80vh，C3 底 / inset 1px border-1 /
+// 圆角 8 / --shadow-pop）。**整体 pointer-events: none**——鼠标事件穿透到下方网格：
+// 浮层出现时鼠标仍 hover 在原卡片不触发移出，移出卡片区域（含浮层覆盖处）自然关闭；
+// 双击等操作同样穿透（可直进预览）。Esc 兜底关闭。图源复用 get_asset_file_path：
+// 直渲格式给源路径；psd/psb 缓存命中给全尺寸解码图、未命中先显 info 缩略图（秒显层）、
+// preview-full-ready 事件到达换高清；其余（序列帧等）回退 info 缩略图。纯展示无交互。
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -66,9 +68,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <!-- 卡片在虚拟滚动 transform 层内：fixed 浮层必须 Teleport 到 body（同 InboxDiskSection 右键菜单） -->
+  <!-- 卡片在虚拟滚动 transform 层内：fixed 浮层必须 Teleport 到 body（同 InboxDiskSection 右键菜单）；
+       整体 pointer-events: none——鼠标穿透，移出卡片区域由 AssetCard 的 mouseleave 关闭浮层 -->
   <Teleport to="body">
-    <div class="zoom-mask" @click="emit('close')">
+    <div class="zoom-mask">
       <div class="zoom-box">
         <img v-if="src" class="zoom-img" :src="src" :alt="asset.name" draggable="false" />
       </div>
@@ -77,7 +80,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* 遮罩：全屏透明（参考图 3 背景不变暗），点击任意处关闭 */
+/* 遮罩：全屏透明（参考图 3 背景不变暗）+ 事件穿透（悬停即出模式：移出卡片即关，2026-07-28） */
 .zoom-mask {
   position: fixed;
   inset: 0;
@@ -85,6 +88,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: none;
 }
 /* 浮层壳：C3 底 / inset 1px border-1 / 圆角 8 / --shadow-pop（浮层统一规格），内边距 8 */
 .zoom-box {

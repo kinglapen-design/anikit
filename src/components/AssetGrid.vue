@@ -281,6 +281,7 @@ onBeforeUnmount(() => {
             "
             @dblclick="openPreview(c.asset)"
             @zoom="zoomAsset = c.asset"
+            @zoom-close="zoomAsset = null"
           />
         </template>
       </div>
