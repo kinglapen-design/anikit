@@ -7,7 +7,9 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     host: "127.0.0.1",
-    port: 5173,
+    // 端口 5373：原 5173 被 Windows NAT/Hyper-V 动态保留段（5144-5243）覆盖，
+    // listen 报 EACCES（踩坑 020）；保留段随系统重启漂移，选段外端口
+    port: 5373,
     strictPort: true,
     watch: {
       // cargo 构建产物会被 vite 监视并报 EBUSY，必须排除
