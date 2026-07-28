@@ -137,6 +137,8 @@ let importAnchor: number | null = null;
 let unlistenInbox: (() => void) | undefined;
 // 存量视频 fps 自愈事件监听（2026-07-28 复验反馈修复）：App 存活期注册一次
 let unlistenFpsHeal: (() => void) | undefined;
+// 最近使用变更事件监听（2026-07-29 复验反馈修复：原仅全量 refresh 拉取、要重启才更新）
+let unlistenRecent: (() => void) | undefined;
 
 // 视口滚动位置（会话级，2026-07-25 用户定）：进出预览 / 切换目录都恢复——
 // 预览返回不跳顶（设缩略图后可直接确认），对比两个文件夹不用重新翻
@@ -441,6 +443,13 @@ export const useContentStore = defineStore("content", {
           if (p.assetId === e.payload.assetId) p.fps = e.payload.fps;
         }
       });
+    },
+
+    // 最近使用热刷新（2026-07-29 复验反馈：原仅全量 refresh 拉取、要重启才更新）——
+    // 后端 open_with_default_app 记录成功广播 recent-changed，此处重拉视图与数量
+    async initRecentListener(): Promise<void> {
+      if (unlistenRecent) return;
+      unlistenRecent = await listen("recent-changed", () => void this.refreshRecent());
     },
 
     // 拉取收件箱磁盘实况快层快照（4.4）：失败静默降级——实况是辅助展示，不阻断任何流程

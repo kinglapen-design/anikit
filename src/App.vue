@@ -220,6 +220,7 @@ onMounted(() => {
   watch(() => content.sidebarSelected, () => selection.clear());
   void content.initInboxListener(); // 收件箱自动入库（3.2），App 存活期注册一次
   void content.initFpsHealListener(); // 存量视频 fps 自愈通知（2026-07-28 复验反馈修复）
+  void content.initRecentListener(); // 最近使用热刷新（2026-07-29 复验反馈修复）
   void preview.initPreviewListener(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3）
   if (!previewParam) {
     // 主窗口几何监听（预览子窗口不记录）
