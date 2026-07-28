@@ -7,4 +7,5 @@ pub mod library;
 pub mod media;
 pub mod notes;
 pub mod preview;
+pub mod settings;
 pub mod thumb_frame;

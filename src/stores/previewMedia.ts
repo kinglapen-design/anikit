@@ -11,6 +11,7 @@ import { usePreviewStore } from "./preview";
 interface MediaSource {
   path: string;
   transcoded: boolean;
+  fps?: number | null; // 素材自身帧率（自愈后的准确值随响应下发，2026-07-28 复验反馈修复）
 }
 
 // 媒体元素单例（模块级；store 状态响应式、元素本身不进响应式系统）
@@ -78,6 +79,9 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       try {
         const r = await invoke<MediaSource>("get_media_source", { assetId });
         if (preview.current?.assetId !== assetId) return; // await 期间已切走
+        // 响应 fps 优先（自愈后的准确值；PlacementView 参数只是开库时的旧快照，
+        // 2026-07-28 复验反馈修复：存量视频播放条/笔记立即正确）
+        if (kind === "video" && r.fps != null) this.fps = r.fps;
         this.srcPath = r.path;
         const v = this.getEl();
         v.src = convertFileSrc(r.path);

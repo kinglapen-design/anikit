@@ -21,6 +21,7 @@
         "transparent": false,
         "shadow": true,
         "center": true,
+        "visible": false,
         "backgroundColor": "#09090A"
       }
     ],

@@ -141,6 +141,29 @@ pub fn run() {
       // 关闭按钮 = 隐藏到托盘，不退出（快捷搜索框要求软件常驻后台）
       // 窗口为不透明 + 原生装饰（DWM 圆角/阴影），线框色用 DWMWA_BORDER_COLOR 指定
       if let Some(w) = app.get_webview_window("main") {
+        // 主窗口几何恢复（2026-07-28 用户定：窗口大小位置持久化；tauri.conf visible:false
+        // 先隐后显防跳变，预览子窗口不记录不恢复）：显示器拔除致坐标落空时只恢复尺寸不恢复位置
+        if let Some(s) = core::config::window_state() {
+          let on_monitor = app
+            .available_monitors()
+            .map(|ms| {
+              ms.iter().any(|m| {
+                let (p, z) = (m.position(), m.size());
+                s.x + 32 > p.x && s.y + 32 > p.y && s.x < p.x + z.width as i32 && s.y < p.y + z.height as i32
+              })
+            })
+            .unwrap_or(false);
+          let _ = w.set_size(tauri::PhysicalSize::new(s.width.max(400), s.height.max(300)));
+          if on_monitor {
+            let _ = w.set_position(tauri::PhysicalPosition::new(s.x, s.y));
+          }
+          if s.maximized {
+            let _ = w.maximize();
+          }
+        }
+        let _ = w.show();
+        let _ = w.set_focus();
+
         #[cfg(target_os = "windows")]
         {
           use windows::Win32::Foundation::HWND;
@@ -180,6 +203,9 @@ pub fn run() {
       commands::library::open_library,
       commands::library::get_current_library,
       commands::library::list_recent_libraries,
+      commands::settings::get_ui_settings,
+      commands::settings::save_ui_settings,
+      commands::settings::save_window_state,
       commands::import::classify_paths,
       commands::import::detect_sequences,
       commands::import::import_paths,

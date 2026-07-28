@@ -92,13 +92,45 @@ async function onPaste(e: KeyboardEvent): Promise<void> {
 }
 
 let unlistenDragDrop: (() => void) | undefined;
+let unlistenMoved: (() => void) | undefined;
+let unlistenResized: (() => void) | undefined;
+
+// 主窗口几何持久化（2026-07-28 用户定："用户设置要持久化，包括窗口大小，位置"）：
+// resize/move 高频事件防抖 500ms 整体写回全局 config（settings.window 子树）；
+// 仅主窗口记录（预览子窗口不记录不恢复）；最大化时后端只刷标志位、几何保留还原尺寸
+let winStateTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleSaveWindowState(): void {
+  clearTimeout(winStateTimer);
+  winStateTimer = setTimeout(() => void saveWindowState(), 500);
+}
+async function saveWindowState(): Promise<void> {
+  try {
+    const [pos, size, maximized] = await Promise.all([
+      appWindow.outerPosition(),
+      appWindow.outerSize(),
+      appWindow.isMaximized(),
+    ]);
+    await invoke("save_window_state", {
+      state: { x: pos.x, y: pos.y, width: size.width, height: size.height, maximized },
+    });
+  } catch (e) {
+    console.warn("窗口几何写回失败（静默降级）：", e);
+  }
+}
 
 onMounted(() => {
   void syncMaximized();
+  void ui.initSettings(); // 全局 UI 设置加载 + 变更防抖写回（2026-07-28 持久化）
   window.addEventListener("resize", onResize);
   window.addEventListener("keydown", onPaste);
   void content.initInboxListener(); // 收件箱自动入库（3.2），App 存活期注册一次
+  void content.initFpsHealListener(); // 存量视频 fps 自愈通知（2026-07-28 复验反馈修复）
   void preview.initPreviewListener(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3）
+  if (!previewParam) {
+    // 主窗口几何监听（预览子窗口不记录）
+    void appWindow.onMoved(() => scheduleSaveWindowState()).then((fn) => (unlistenMoved = fn));
+    void appWindow.onResized(() => scheduleSaveWindowState()).then((fn) => (unlistenResized = fn));
+  }
   void webview.onDragDropEvent((event) => {
     if (event.payload.type === "drop") {
       void onDrop(event.payload.paths, event.payload.position.x, event.payload.position.y);
@@ -118,9 +150,12 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   clearTimeout(resizeTimer);
+  clearTimeout(winStateTimer);
   window.removeEventListener("resize", onResize);
   window.removeEventListener("keydown", onPaste);
   unlistenDragDrop?.();
+  unlistenMoved?.();
+  unlistenResized?.();
 });
 
 // 可视窗口边缘 resize 判定（透明阴影带外缘的 tao 物理判定保留作补充）

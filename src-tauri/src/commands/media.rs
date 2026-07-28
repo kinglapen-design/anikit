@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{Emitter, State};
 
 use crate::adapters::ffmpeg;
 use crate::commands::library::AppState;
@@ -18,13 +18,16 @@ use crate::core::library::{Library, CACHE_DIR};
 use crate::services::{media, thumbnail};
 
 /// 音视频播放源解析结果
-#[derive(Debug, Serialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct MediaSource {
   /// 可播放文件绝对路径（transcoded=false = 源文件；true = cache/tmp 转码产物）
   pub path: String,
   /// true = webview 播不了源格式，返回的是后端转码产物（mp4/wav）
   pub transcoded: bool,
+  /// 素材自身帧率（视频；2026-07-28 复验反馈修复：自愈后的准确值随响应下发，
+  /// 前端播放条/笔记立即正确，不等重拉 PlacementView）；音频 / 未知为 null
+  pub fps: Option<f64>,
 }
 
 /// 播放路由：直渲（源文件可直接喂 <video>/<audio>）还是转码兜底
@@ -38,38 +41,52 @@ enum Route {
 /// 非音视频资源中文报错；ffmpeg 缺失报"组件缺失"，转码失败报"该格式暂时无法播放"。
 /// async：ffprobe / ffmpeg sidecar 调用为 IO 重活，一律走线程池（规范第 2 条）
 #[tauri::command]
-pub async fn get_media_source(state: State<'_, AppState>, asset_id: String) -> Result<MediaSource, String> {
+pub async fn get_media_source(
+  app: tauri::AppHandle,
+  state: State<'_, AppState>,
+  asset_id: String,
+) -> Result<MediaSource, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  media_source(lib, &asset_id)
+  media_source(lib, &asset_id, Some(&app))
 }
 
-fn media_source(lib: &mut Library, asset_id: &str) -> Result<MediaSource, String> {
+fn media_source(lib: &mut Library, asset_id: &str, app: Option<&tauri::AppHandle>) -> Result<MediaSource, String> {
   let (info_dir, origin, mut meta) = locate_asset(lib, asset_id)?;
   let video = media::is_video(&origin);
   if !video && !media::is_audio(&origin) {
     return Err(format!("「{}」不是音视频资源", meta.name));
   }
   let ext = meta.ext.to_lowercase();
+  let mut fps = meta.fps;
   // 存量视频 fps 自愈（5.3 帧化改造）：5.3 前导入的视频 metadata 无 fps，
   // 首次播放解析时补探测写回（先落盘 metadata.json 再同步内存索引，规范第 7 条）；
-  // 探测失败（sidecar 缺失 / 文件损坏）静默跳过——下次播放再试，不阻塞播放
-  if video && meta.fps.is_none() {
-    if let Some(fps) = media::probe_video(&origin).and_then(|v| v.fps) {
-      meta.fps = Some(fps);
+  // 探测失败（sidecar 缺失 / 文件损坏）静默跳过——下次播放再试，不阻塞播放。
+  // 写回成功广播 video-fps-healed（2026-07-28 复验反馈修复）：前端 content store 同步
+  // PlacementView.fps——卡片悬停胶囊 / 详情笔记即时正确，免重开窗口重拉
+  if video && fps.is_none() {
+    if let Some(f) = media::probe_video(&origin).and_then(|v| v.fps) {
+      meta.fps = Some(f);
       match write_json(&info_dir.join("metadata.json"), &meta) {
         Ok(()) => {
           lib.index.assets.insert(asset_id.to_string(), meta);
+          fps = Some(f);
+          if let Some(app) = app {
+            let _ = app.emit("video-fps-healed", serde_json::json!({ "assetId": asset_id, "fps": f }));
+          }
         }
         Err(e) => log::warn!("视频 fps 自愈落盘失败（{asset_id}）：{e}"),
       }
     }
   }
   let probe = ffmpeg::probe_json(&origin);
-  if route(&ext, video, probe.as_ref()) == Route::Direct {
-    return Ok(MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false });
-  }
-  transcode_source(lib, asset_id, &origin, video)
+  let mut src = if route(&ext, video, probe.as_ref()) == Route::Direct {
+    MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps: None }
+  } else {
+    transcode_source(lib, asset_id, &origin, video)?
+  };
+  src.fps = fps;
+  Ok(src)
 }
 
 /// 播放路由判定（纯逻辑，单测直接构造 probe JSON）：
@@ -103,7 +120,7 @@ fn transcode_source(lib: &Library, asset_id: &str, origin: &Path, is_video: bool
   let out = out_dir.join(format!("media-{asset_id}.{}", if is_video { "mp4" } else { "wav" }));
   let stamp = stamp_path(&out);
   if out.is_file() && source_stamp(origin).is_some_and(|s| read_stamp(&stamp) == Some(s)) {
-    return Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true });
+    return Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None });
   }
   if !ffmpeg::ffmpeg_available() {
     return Err("音视频组件缺失，无法播放该格式".to_string());
@@ -118,7 +135,7 @@ fn transcode_source(lib: &Library, asset_id: &str, origin: &Path, is_video: bool
       log::warn!("转码戳写入失败（{}）：{e}", stamp.display());
     }
   }
-  Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true })
+  Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None })
 }
 
 // ---------- 波形图按需重采样 ----------
@@ -304,14 +321,14 @@ mod tests {
   fn media_source_rejects_non_av_and_direct_renders_mp3() {
     let mut h = make_lib();
     add_file(&mut h, "AN-PIC", "参考图.png");
-    let err = media_source(&mut h.lib, "AN-PIC").unwrap_err();
+    let err = media_source(&mut h.lib, "AN-PIC", None).unwrap_err();
     assert!(err.contains("不是音视频资源"), "{err}");
 
     // mp3 不看内容直渲（假字节也直给源路径）
     add_file(&mut h, "AN-AU", "配乐.mp3");
-    let src = media_source(&mut h.lib, "AN-AU").unwrap();
+    let src = media_source(&mut h.lib, "AN-AU", None).unwrap();
     let origin = h.lib.root.join(ASSTES_DIR).join("AN-AU.info").join("配乐.mp3");
-    assert_eq!(src, MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false });
+    assert_eq!(src, MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps: None });
   }
 
   #[test]
@@ -325,7 +342,7 @@ mod tests {
     fs::create_dir_all(out.parent().unwrap()).unwrap();
     fs::write(&out, b"transcoded").unwrap();
     fs::write(stamp_path(&out), source_stamp(&origin).unwrap()).unwrap();
-    let src = media_source(&mut h.lib, "AN-VID2").unwrap();
+    let src = media_source(&mut h.lib, "AN-VID2", None).unwrap();
     assert!(src.transcoded);
     let disk: crate::core::models::AssetMeta =
       crate::core::json_io::read_json(&h.lib.root.join(ASSTES_DIR).join("AN-VID2.info/metadata.json")).unwrap();
@@ -343,12 +360,12 @@ mod tests {
     fs::create_dir_all(out.parent().unwrap()).unwrap();
     fs::write(&out, b"transcoded").unwrap();
     fs::write(stamp_path(&out), source_stamp(&origin).unwrap()).unwrap();
-    let src = media_source(&mut h.lib, "AN-VID").unwrap();
-    assert_eq!(src, MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true });
+    let src = media_source(&mut h.lib, "AN-VID", None).unwrap();
+    assert_eq!(src, MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None });
 
     // 源变化（大小变了戳失配）→ 重转：假 mp4 转码失败给中文文案；无 ffmpeg 则组件缺失文案
     fs::write(&origin, b"fake-changed-longer").unwrap();
-    let err = media_source(&mut h.lib, "AN-VID").unwrap_err();
+    let err = media_source(&mut h.lib, "AN-VID", None).unwrap_err();
     assert!(
       err.contains("该格式暂时无法播放") || err.contains("音视频组件缺失"),
       "{err}"

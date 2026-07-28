@@ -121,6 +121,8 @@ let importAnchor: number | null = null;
 
 // 收件箱事件监听（3.2）：App 存活期注册一次，后端监听 inbox 目录自动入库
 let unlistenInbox: (() => void) | undefined;
+// 存量视频 fps 自愈事件监听（2026-07-28 复验反馈修复）：App 存活期注册一次
+let unlistenFpsHeal: (() => void) | undefined;
 
 // 视口滚动位置（会话级，2026-07-25 用户定）：进出预览 / 切换目录都恢复——
 // 预览返回不跳顶（设缩略图后可直接确认），对比两个文件夹不用重新翻
@@ -375,6 +377,19 @@ export const useContentStore = defineStore("content", {
       // 快层目录 size=0 / occupied=false 是已知过渡态，占用标记与目录大小以本事件合并后为准
       await listen<InboxDiskEntry[]>("inbox-disk-details", (e) => {
         this.inboxDisk = markRaw(e.payload);
+      });
+    },
+
+    // 存量视频 fps 自愈通知（2026-07-28 复验反馈修复）：get_media_source 补探测写回后广播，
+    // 同步该资产全部 Placement 的 fps（同 setNoteCount 多 Placement 口径）——
+    // 卡片悬停胶囊（HoverVideoLayer 读 PlacementView.fps）与详情笔记即时正确，免重开窗口重拉；
+    // 同一资产只自愈一次（写回后 metadata.fps 非空不再命中），天然不刷屏
+    async initFpsHealListener(): Promise<void> {
+      if (unlistenFpsHeal) return;
+      unlistenFpsHeal = await listen<{ assetId: string; fps: number }>("video-fps-healed", (e) => {
+        for (const p of this.placements) {
+          if (p.assetId === e.payload.assetId) p.fps = e.payload.fps;
+        }
       });
     },
 

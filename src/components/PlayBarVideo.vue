@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // 视频播放条（5.2）：放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8 / 内边距 4 / 间距 6）。
 // 播放/暂停、快退/快进（∓5 秒）、上/下一帧（step-frame 图标左右翻转，步进即暂停，快捷键 , . 的实体入口）、
-// 音量（VolumeControl）、当前帧/总帧数（5.3 帧化：查看方式"时间显示 = 帧数"且 fps 可用；
-// 回退 当前时间/总时长）、
+// 音量（VolumeControl）、当前帧/总帧数（TimeDisplayControl：5.3 帧化，查看方式"时间显示 = 帧数"且
+// fps 可用，回退 当前时间/总时长；悬停出帧数/时间码就地切换弹窗，2026-07-28 用户定）、
 // 进度条（3px 轨道 border-1 + 品牌紫填充 + 10px 拖钮，同帧播放条自绘样式）、
 // 倍率（RateControl 悬停竖排弹窗）、循环、
 // 笔记（浮层）、当前画面设为预览图（set_video_thumb）、显示器全屏。转码中显示加载提示。
@@ -10,6 +10,7 @@ import { computed, ref } from "vue";
 import IconButton from "./IconButton.vue";
 import VolumeControl from "./VolumeControl.vue";
 import RateControl from "./RateControl.vue";
+import TimeDisplayControl from "./TimeDisplayControl.vue";
 import { formatDuration } from "../lib/formatDuration";
 import { formatFrameRange } from "../lib/formatFrame";
 import { useUiStore } from "../stores/ui";
@@ -79,7 +80,7 @@ function stepFrame(delta: number): void {
     <IconButton class="flip-h" name="step-frame" title="上一帧（,）" :disabled="media.transcodingSlow" @click="stepFrame(-1)" />
     <IconButton name="step-frame" title="下一帧（.）" :disabled="media.transcodingSlow" @click="stepFrame(1)" />
     <VolumeControl />
-    <span class="time-text">{{ posText }}</span>
+    <TimeDisplayControl :text="posText" />
     <div
       ref="trackRef"
       class="progress"
@@ -123,13 +124,6 @@ function stepFrame(delta: number): void {
 }
 .play-bar :deep(.icon-btn.active) {
   color: var(--brand-1);
-}
-.time-text {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-1);
-  white-space: nowrap;
-  flex: none;
 }
 /* 转码加载提示（说明文字档；进度条区内居中——转码中播放条结构保持，高度不跳变防闪烁） */
 .hint {

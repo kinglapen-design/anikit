@@ -50,6 +50,18 @@ pub struct WorkspaceEntry {
   pub last_opened_at: String,
 }
 
+/// 主窗口几何（settings.window 子树，2026-07-28 用户定："用户设置要持久化，包括窗口大小，位置"）；
+/// 预览子窗口不记录不恢复
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowState {
+  pub x: i32,
+  pub y: i32,
+  pub width: u32,
+  pub height: u32,
+  pub maximized: bool,
+}
+
 pub fn config_path() -> Result<std::path::PathBuf, DataError> {
   dirs::config_dir()
     .map(|d| d.join("AniKit").join("config.json"))
@@ -91,6 +103,47 @@ fn load_from(path: &Path) -> AppConfig {
       log::error!("全局配置损坏，已重置为默认：{e}");
       AppConfig::default()
     }
+  }
+}
+
+// ---------- UI 设置与主窗口几何（2026-07-28 复验反馈：用户设置持久化） ----------
+
+/// UI 设置读取（settings.ui 子树原样返回；从未保存为空对象，前端按默认值补齐）
+pub fn ui_settings() -> Result<serde_json::Value, DataError> {
+  Ok(load()?.settings.get("ui").cloned().unwrap_or_else(|| serde_json::json!({})))
+}
+
+/// UI 设置整体写回（前端变更防抖 500ms 后整体提交，settings.ui 单点覆盖）
+pub fn save_ui_settings(value: serde_json::Value) -> Result<(), DataError> {
+  let p = config_path()?;
+  let mut cfg = load_from(&p);
+  cfg.settings["ui"] = value;
+  save_to(&p, &cfg)
+}
+
+/// 主窗口几何读取（启动恢复用；从未保存 / 形状损坏为 None，走 tauri.conf 默认居中）
+pub fn window_state() -> Option<WindowState> {
+  let cfg = load().ok()?;
+  serde_json::from_value(cfg.settings.get("window")?.clone()).ok()
+}
+
+/// 主窗口几何写回（前端 resize/move 防抖提交）。
+/// 最大化时只刷新标志位：几何保留上次的还原尺寸——退出最大化后不丢位置
+pub fn save_window_state(state: WindowState) -> Result<(), DataError> {
+  let p = config_path()?;
+  let mut cfg = load_from(&p);
+  let old = cfg.settings.get("window").cloned().and_then(|v| serde_json::from_value::<WindowState>(v).ok());
+  let merged = merge_window_state(old, state);
+  cfg.settings["window"] = serde_json::to_value(merged).map_err(|e| DataError::Corrupt(e.to_string()))?;
+  save_to(&p, &cfg)
+}
+
+/// 最大化合并（纯逻辑，单测直调）：最大化只刷标志位、几何保留旧值；非最大化整体覆盖
+fn merge_window_state(old: Option<WindowState>, new: WindowState) -> WindowState {
+  if new.maximized {
+    old.map(|o| WindowState { maximized: true, ..o }).unwrap_or(new)
+  } else {
+    new
   }
 }
 
@@ -136,5 +189,36 @@ mod tests {
     std::fs::write(&path, "{ broken").unwrap();
     let cfg = load_from(&path);
     assert_eq!(cfg, AppConfig::default());
+  }
+
+  #[test]
+  fn ui_settings_roundtrip_via_settings_subtree() {
+    // settings.ui 子树整体覆盖写回（前端防抖提交语义），不碰资源库列表等其他字段
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("AniKit/config.json");
+    let mut cfg = AppConfig::default();
+    upsert_library(&mut cfg, "素材库", "E:/素材库");
+    cfg.settings["ui"] = serde_json::json!({ "layoutMode": "grid", "timeDisplay": "frames" });
+    save_to(&path, &cfg).unwrap();
+    let back = load_from(&path);
+    assert_eq!(back.settings["ui"]["layoutMode"], "grid");
+    assert_eq!(back.settings["ui"]["timeDisplay"], "frames");
+    assert_eq!(back.libraries.len(), 1, "写 UI 设置不应动资源库列表");
+    // 从未保存过 ui 的配置读回空对象（前端按默认值补齐）
+    let plain = AppConfig::default();
+    assert!(plain.settings.get("ui").is_none());
+  }
+
+  #[test]
+  fn window_state_maximized_keeps_restore_geometry() {
+    let normal = WindowState { x: 100, y: 50, width: 1340, height: 1150, maximized: false };
+    // 非最大化整体覆盖
+    assert_eq!(merge_window_state(None, normal), normal);
+    // 最大化只刷标志位，几何保留上次还原尺寸
+    let maxed = WindowState { x: 0, y: 0, width: 2560, height: 1440, maximized: true };
+    let merged = merge_window_state(Some(normal), maxed);
+    assert_eq!(merged, WindowState { maximized: true, ..normal });
+    // 无旧值（首次最大化）按新值存
+    assert_eq!(merge_window_state(None, maxed), maxed);
   }
 }

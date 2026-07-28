@@ -1,7 +1,36 @@
 import { defineStore } from "pinia";
+import { invoke } from "@tauri-apps/api/core";
 
 export type LeftView = "library" | "workspace" | "tags" | "pins";
 export type RightView = "detail" | "aiChat" | "aiPaint" | "aiVideo";
+
+// 持久化字段清单（2026-07-28 用户定："用户设置要持久化"）：存全局 config.json
+// settings.ui 子树（core/config.rs 单一写点，应用级不随库）
+const PERSIST_KEYS = [
+  "leftView",
+  "rightView",
+  "leftWidth",
+  "rightWidth",
+  "leftCollapsed",
+  "rightCollapsed",
+  "alwaysOnTop",
+  "targetRowHeight",
+  "layoutMode",
+  "useGlobalView",
+  "sortBy",
+  "sortAsc",
+  "briefMode",
+  "groupBy",
+  "autoPlayGif",
+  "autoPlayVideo",
+  "showExtBadge",
+  "showSubfolders",
+  "timeDisplay",
+] as const;
+
+// 变更防抖写回（500ms；模块级单例防重复订阅）
+let persistTimer: ReturnType<typeof setTimeout> | undefined;
+let subscribed = false;
 
 export const useUiStore = defineStore("ui", {
   state: () => ({
@@ -32,4 +61,34 @@ export const useUiStore = defineStore("ui", {
     // 按帧号显示（fps 缺失回退时间）；音频无帧概念恒时间显示
     timeDisplay: "frames" as "frames" | "timecode",
   }),
+  actions: {
+    // 启动加载全局 UI 设置并订阅变更防抖写回（多预览窗口各自独立 Pinia 各自加载，
+    // 不做跨窗口同步，2026-07-28 定）；读取失败 / 字段类型不符一律按默认值，不阻断启动
+    async initSettings(): Promise<void> {
+      try {
+        const saved = await invoke<Record<string, unknown>>("get_ui_settings");
+        const state = this.$state as unknown as Record<string, unknown>;
+        for (const k of PERSIST_KEYS) {
+          const v = saved[k];
+          // 类型对照默认值校验：config 手改 / 旧版本字段变形不污染 store
+          if (v !== undefined && typeof v === typeof state[k]) state[k] = v;
+        }
+      } catch (e) {
+        console.warn("UI 设置读取失败（用默认值）：", e);
+      }
+      if (subscribed) return;
+      subscribed = true;
+      this.$subscribe(() => {
+        clearTimeout(persistTimer);
+        persistTimer = setTimeout(() => {
+          const state = this.$state as unknown as Record<string, unknown>;
+          const snapshot: Record<string, unknown> = {};
+          for (const k of PERSIST_KEYS) snapshot[k] = state[k];
+          invoke("save_ui_settings", { settings: snapshot }).catch((e) =>
+            console.warn("UI 设置写回失败（静默降级）：", e),
+          );
+        }, 500);
+      });
+    },
+  },
 });
