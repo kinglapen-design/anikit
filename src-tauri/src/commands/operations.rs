@@ -22,7 +22,8 @@ fn meta_path(lib: &Library, asset_id: &str) -> PathBuf {
 }
 
 /// 业务失败收尾：丢弃撤销事务 + 内存从盘重载（防半截内存态），返回错误文案
-fn fail(lib: &mut Library, undo: &mut UndoManager, e: String) -> String {
+/// pub(crate)：commands::recycle 还原命令同约复用
+pub(crate) fn fail(lib: &mut Library, undo: &mut UndoManager, e: String) -> String {
   undo.cancel();
   if let Err(re) = library::reload(lib) {
     log::error!("操作失败后内存重载失败：{re}");

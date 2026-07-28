@@ -42,6 +42,14 @@ export interface DeletePrompt {
   lastCount: number; // 涉及"最后一条 Placement"的资源数（询问窗文案）
 }
 
+// 回收站彻底删除两段式询问（6.1 二轮，2026-07-29）：delete_recycle / clear_recycle 干跑
+// 返回 needConfirm 时填入（携带虚拟片段引用数警示），确认后带 confirmed=true 再调——不可恢复，无撤销
+export interface RecyclePrompt {
+  kind: "delete" | "clear"; // delete = 彻底删除选中项 / clear = 清空回收站
+  assetIds: string[];
+  segmentRefs: number; // 被虚拟片段引用数（确认窗警示文案）
+}
+
 // （2026-07-29 复验三轮：新建文件夹改"先建后命名"，原 NewFolderDraft 命名中临时节点已移除）
 
 function keyOf(p: { assetId: string; folderId: string }): string {
@@ -61,6 +69,7 @@ export const useSelectionStore = defineStore("selection", {
     clipboard: null as InternalClipboard | null,
     linkDraft: null as LinkDraft | null, // 非空 = 关联弹窗打开（宿主 App.vue）
     deletePrompt: null as DeletePrompt | null, // 非空 = 删除询问窗打开（宿主 App.vue）
+    recyclePrompt: null as RecyclePrompt | null, // 非空 = 回收站彻底删除确认窗打开（宿主 App.vue，6.1 二轮）
     // 卡片就地重命名目标 key（C2；F2 / 右键菜单设置，单选才可；滚出视口 / Esc = 取消置 null）
     renamingKey: null as string | null,
     // 新建文件夹命名态目标 id（2026-07-29 复验三轮"先建后命名"：createFolder 成功返回 id 后置位，
@@ -229,10 +238,14 @@ export const useSelectionStore = defineStore("selection", {
     },
 
     // content.refresh() 全量替换 placements 后调用：剔除已不存在的 key（链接被删 / 移动后 folderId 变等）；
-    // 文件夹域同口径剔除（2026-07-28 复验反馈 5）
+    // 文件夹域同口径剔除（2026-07-28 复验反馈 5）。
+    // 2026-07-29 二轮：有效集并上回收站 / 最近使用条目——回收站 key（folderId="recycle"）不在
+    // placements 里，彻底删除后条目消失、key 随 prune 清理；最近使用 key 多为真实 Placement 冗余保护
     prune(): void {
       const content = useContentStore();
       const valid = new Set(content.placements.map(keyOf));
+      for (const e of content.recycleEntries) valid.add(keyOf(e));
+      for (const e of content.recentAssets) valid.add(keyOf(e));
       for (const k of [...this.selected]) {
         if (!valid.has(k)) this.selected.delete(k);
       }

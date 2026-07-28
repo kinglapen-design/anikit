@@ -242,6 +242,11 @@ pub fn run() {
       commands::operations::duplicate_placements,
       commands::operations::rename_placement,
       commands::operations::delete_placements,
+      commands::recent::list_recent_assets,
+      commands::recycle::list_recycle,
+      commands::recycle::restore_recycle,
+      commands::recycle::delete_recycle,
+      commands::recycle::clear_recycle,
       commands::preview::open_with_default_app,
       commands::preview::open_preview_window,
     ])

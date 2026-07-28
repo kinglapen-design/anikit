@@ -496,6 +496,11 @@ export function gridPointerDown(e: PointerEvent, onBlank: (e: PointerEvent) => v
   }
   const card = t.closest(".asset-card, .list-row");
   if (card) {
+    // 回收站视口（6.1 二轮，2026-07-29）：卡片只读不可拖拽，按下交空白回调（框选 / 清空选择）
+    if (useContentStore().isRecycleView) {
+      onBlank(e);
+      return;
+    }
     const key = card.getAttribute("data-key");
     if (key) beginAssetDrag(e, key);
     return;

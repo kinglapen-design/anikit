@@ -12,6 +12,7 @@ import FolderStrip from "./FolderStrip.vue";
 import InboxDiskSection from "./InboxDiskSection.vue";
 import SectionHeader from "./SectionHeader.vue";
 import AssetCardMenu from "./AssetCardMenu.vue";
+import RecycleCardMenu from "./RecycleCardMenu.vue";
 import {
   CARD_CAPTION_H,
   computeJustified,
@@ -418,8 +419,9 @@ onBeforeUnmount(() => {
     />
     <!-- 悬停放大浮层（5.3）：Teleport 到 body，点击任意处 / Esc 关闭 -->
     <HoverZoomOverlay v-if="zoomAsset" :asset="zoomAsset" @close="zoomAsset = null" />
-    <!-- 卡片右键菜单（6.1 C6）：组件内 Teleport body（transform 祖先坑，同 InboxDiskSection） -->
-    <AssetCardMenu v-if="cardMenu" :x="cardMenu.x" :y="cardMenu.y" @close="cardMenu = null" />
+    <!-- 卡片右键菜单（6.1 C6）：组件内 Teleport body（防 transform 祖先坑）；回收站视口换只读菜单（2026-07-29 二轮） -->
+    <AssetCardMenu v-if="cardMenu && !content.isRecycleView" :x="cardMenu.x" :y="cardMenu.y" @close="cardMenu = null" />
+    <RecycleCardMenu v-else-if="cardMenu" :x="cardMenu.x" :y="cardMenu.y" @close="cardMenu = null" />
   </div>
 </template>
 

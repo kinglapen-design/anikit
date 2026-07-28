@@ -24,6 +24,7 @@ import { formatDuration } from "../lib/formatDuration";
 import { renamePlacement } from "../lib/placementOps";
 import { useUiStore } from "../stores/ui";
 import { useSelectionStore } from "../stores/selection";
+import { useContentStore } from "../stores/content";
 import type { PlacementView } from "../stores/content";
 
 const props = withDefaults(
@@ -115,8 +116,10 @@ async function commitRename(): Promise<void> {
   );
 }
 // 双击名称 = 就地重命名（2026-07-29 复验三轮，renamingKey 既有机制——
-// 双击第一下 click 已把卡片单选入域，此处仅置重命名目标）
+// 双击第一下 click 已把卡片单选入域，此处仅置重命名目标）；
+// 回收站视口只读不可重命名（2026-07-29 二轮，与 F2 / 菜单同口径闸）
 function startRename(): void {
+  if (useContentStore().isRecycleView) return;
   selection.renamingKey = cardKey;
 }
 

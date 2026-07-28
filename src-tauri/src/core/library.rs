@@ -32,7 +32,7 @@ pub const ROOT_DATA_FILES: &[&str] = &[FOLDERS_FILE, TAGS_FILE, PINS_FILE, RECYC
 const INFO_DATA_FILES: &[&str] = &["metadata.json", "annotation.json", "notes.json", "frames.json"];
 
 /// 打开状态的素材库：数据 + 内存索引（运行期查询走内存，写操作先落盘再更新内存，PRD 06-03）
-#[allow(dead_code)] // 各数据字段随阶段 3/4 业务命令落地逐一启用
+#[allow(dead_code)] // tags 字段随阶段 7 标签业务启用
 pub struct Library {
   pub root: PathBuf,
   pub folders: FoldersFile,
@@ -216,6 +216,17 @@ pub fn save_folders(lib: &Library) -> Result<(), DataError> {
 /// recycle.json 单一写点（01_开发规范 第 1 条）：全量保存回收站记录（6.1 删除落地启用）。
 pub fn save_recycle(lib: &Library) -> Result<(), DataError> {
   write_json(&lib.root.join(RECYCLE_FILE), &lib.recycle)
+}
+
+/// recent.json 单一写点（01_开发规范 第 1 条）：全量保存最近使用记录（6.1 第二轮启用）。
+pub fn save_recent(lib: &Library) -> Result<(), DataError> {
+  write_json(&lib.root.join(RECENT_FILE), &lib.recent)
+}
+
+/// pins.json 单一写点（01_开发规范 第 1 条）：全量保存快捷入口
+/// （pins 功能未启用；delete_recycle 彻底删除时引用清理用）。
+pub fn save_pins(lib: &Library) -> Result<(), DataError> {
+  write_json(&lib.root.join(PINS_FILE), &lib.pins)
 }
 
 /// 撤销 / 重做回滚后重载：盘上是事实来源——重读全部数据文件 + 重建内存索引（6.0）。

@@ -39,7 +39,6 @@ impl LibraryIndex {
   }
 
   /// 反查资源关联的全部 Placement（无关联时返回空切片）
-  #[allow(dead_code)] // 阶段 4 详情面板"已关联文件夹"反查启用
   pub fn placements_of(&self, asset_id: &str) -> &[Placement] {
     self.placements_by_asset.get(asset_id).map(Vec::as_slice).unwrap_or(&[])
   }

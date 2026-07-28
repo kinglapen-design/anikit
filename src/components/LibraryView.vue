@@ -27,11 +27,12 @@ const quickItems = [
   { key: "uncategorized", icon: "uncategorized", label: "未分类" },
   { key: "inbox", icon: "inbox", label: "收件箱" },
   { key: "recent", icon: "recent", label: "最近使用" },
-  { key: "trash", icon: "trash", label: "回收站" },
+  { key: "recycle", icon: "trash", label: "回收站" },
 ] as const;
 
 // 数量口径（4.4）：全部=全部 Placement；未分类=root；收件箱=importedFrom=inbox 未摘标；
-// 最近使用 / 回收站对应 6.1 未开工，先不出数量标签
+// 最近使用 / 回收站（6.1 二轮，2026-07-29）= recentAssets / recycleEntries 实长；
+// 工作空间 / 标签 / 快捷入口占位视图不接（对应阶段未开工）
 function quickCount(key: (typeof quickItems)[number]["key"]): number | undefined {
   switch (key) {
     case "all":
@@ -40,6 +41,10 @@ function quickCount(key: (typeof quickItems)[number]["key"]): number | undefined
       return content.uncategorizedCount;
     case "inbox":
       return content.inboxCount;
+    case "recent":
+      return content.recentAssets.length;
+    case "recycle":
+      return content.recycleEntries.length;
     default:
       return undefined;
   }

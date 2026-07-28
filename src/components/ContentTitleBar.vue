@@ -25,7 +25,7 @@ const QUICK_LABELS: Record<string, string> = {
   uncategorized: "未分类",
   inbox: "收件箱",
   recent: "最近使用",
-  trash: "回收站",
+  recycle: "回收站", // 2026-07-29 二轮：视图 key 由 trash 改 recycle（与后端 / 文档术语一致）
 };
 
 // 面包屑标题：当前视口名（快速访问项 / 文件夹名）

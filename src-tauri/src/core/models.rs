@@ -212,7 +212,7 @@ pub struct RecycleItem {
 
 // ---------- recent.json（最近使用，上限 500 条） ----------
 
-#[allow(dead_code)] // 阶段 4 最近使用记录启用
+/// LRU 上限：超出淘汰最旧（6.1 第二轮启用）
 pub const RECENT_LIMIT: usize = 500;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -232,7 +232,8 @@ impl RecentFile {
 #[serde(rename_all = "camelCase")]
 pub struct RecentItem {
   pub asset: String,
-  pub accessed_at: String,
+  /// 最近一次"使用"时间（打开成功等入口写入，RFC3339 本地秒）
+  pub viewed_at: String,
 }
 
 #[cfg(test)]

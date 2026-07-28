@@ -18,13 +18,14 @@ import ImportResultDialog from "./components/ImportResultDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
 import LinkDialog from "./components/LinkDialog.vue";
 import DeleteConfirmDialog from "./components/DeleteConfirmDialog.vue";
+import RecycleConfirmDialog from "./components/RecycleConfirmDialog.vue";
 import ToastStack from "./components/ToastStack.vue";
 import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
 import { useUndoStore } from "./stores/undo";
-import { copySelection, deletePlacements, pasteClipboard, pasteDuplicate } from "./lib/placementOps";
+import { copySelection, deletePlacements, deleteRecycle, pasteClipboard, pasteDuplicate, recycleSelectedAssetIds } from "./lib/placementOps";
 
 const ui = useUiStore();
 const content = useContentStore();
@@ -138,6 +139,8 @@ function onSelectionKeys(e: KeyboardEvent): void {
 // Del = 删除选中项（两段式：先干跑，needConfirm 弹询问窗「移入回收站 / 保留为未分类」）；
 // Ctrl+C / Ctrl+X = 写内部剪贴板（仅素材）；Ctrl+V 仲裁（内部非空 → copy 弹关联弹窗 / cut 移动；
 // 空 → onPaste 系统剪贴板导入）；Ctrl+Shift+V = 直接副本不弹窗（名称同源）。
+// 回收站视口（6.1 二轮，2026-07-29）：F2 不触发（只读）；Del 分流彻底删除两段式
+//（delete_recycle，虚拟片段引用确认窗，不可恢复无撤销）——delete_placements 路径不再走。
 // 快速访问视图不作粘贴目标（toast 提示）；菜单 / 浮层 / 弹窗打开时让位
 function onOperationKeys(e: KeyboardEvent): void {
   const t = e.target as HTMLElement;
@@ -145,7 +148,7 @@ function onOperationKeys(e: KeyboardEvent): void {
   if (previewParam || preview.assetKey || needLibrarySetup.value) return;
   if (document.querySelector(".app-menu, .zoom-mask, .link-mask, .del-mask")) return;
   if (e.key === "F2") {
-    if (selection.count === 1) {
+    if (selection.count === 1 && !content.isRecycleView) {
       e.preventDefault();
       selection.renamingKey = selection.first;
     }
@@ -154,7 +157,11 @@ function onOperationKeys(e: KeyboardEvent): void {
   if (e.key === "Delete") {
     if (selection.count > 0) {
       e.preventDefault();
-      void deletePlacements(selection.selectedRefs());
+      if (content.isRecycleView) {
+        void deleteRecycle(recycleSelectedAssetIds()); // 回收站 = 彻底删除两段式
+      } else {
+        void deletePlacements(selection.selectedRefs());
+      }
     }
     return;
   }
@@ -313,6 +320,8 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
     <LinkDialog v-if="selection.linkDraft" />
     <!-- 删除两段式询问窗（6.1 C1）：needConfirm 时弹出「移入回收站 / 保留为未分类」 -->
     <DeleteConfirmDialog v-if="selection.deletePrompt" />
+    <!-- 回收站彻底删除确认窗（6.1 二轮）：虚拟片段引用警示，不可恢复无撤销 -->
+    <RecycleConfirmDialog v-if="selection.recyclePrompt" />
   </div>
 </template>
 

@@ -188,13 +188,18 @@ fn scan_frames(
 
 // ---------- 默认程序打开 ----------
 
-/// 用系统默认程序打开源文件（Windows ShellExecuteW "open"；非 Windows 暂不支持）
+/// 用系统默认程序打开源文件（Windows ShellExecuteW "open"；非 Windows 暂不支持）。
+/// 打开成功才记最近使用（2026-07-29 用户定：recent 唯一启用入口）；记录失败只记日志降级
 #[tauri::command]
 pub async fn open_with_default_app(state: State<'_, AppState>, asset_id: String) -> Result<(), String> {
-  let guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let (_info_dir, origin, _meta) = locate_asset(lib, &asset_id)?;
-  shell_open::open(&origin)
+  shell_open::open(&origin)?;
+  if let Err(e) = crate::services::recent::touch_recent(lib, &asset_id) {
+    log::error!("最近使用记录失败（打开已成功，不阻断）：{e}");
+  }
+  Ok(())
 }
 
 // ---------- 新窗口打开 ----------

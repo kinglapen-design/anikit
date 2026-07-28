@@ -26,6 +26,19 @@ export interface PlacementView {
   fps?: number | null; // 帧率：序列帧 = 播放帧率；视频 = 素材自身帧率（5.3 帧化：帧号显示 / 逐帧步进按 1/fps）
 }
 
+// 最近使用条目（6.1 二轮，2026-07-29；后端 list_recent_assets）：PlacementView 同构 +
+// 最近查看时间（后端按时间倒序）；元素含 PlacementView 全部字段，AssetGrid 零改动复用
+export interface RecentAssetView extends PlacementView {
+  viewedAt: string;
+}
+
+// 回收站条目（6.1 二轮；后端 list_recycle）：PlacementView 同构（folderId 恒 "recycle"、
+// origin 恒 false——key 与素材域天然独立）+ 删除时间 + 该资源现存 Placement 数
+export interface RecycleEntryView extends PlacementView {
+  deletedAt: string;
+  placementCount: number;
+}
+
 export interface FolderNode {
   id: string;
   name: string;
@@ -144,6 +157,9 @@ export const useContentStore = defineStore("content", {
     // 10 万级：全量赋值一次完成（元素 markRaw 追加），数组保持可追踪以便流式 push 触发
     placements: [] as PlacementView[],
     folders: markRaw([]) as FolderNode[],
+    // 快速访问"最近使用 / 回收站"（6.1 二轮，2026-07-29）：refresh 一并拉取，失败静默降级
+    recentAssets: [] as RecentAssetView[],
+    recycleEntries: [] as RecycleEntryView[],
     // 左栏选中项：quick:all / quick:uncategorized… / folder:{id}
     sidebarSelected: "quick:all",
     // 选中互斥：素材卡片选中（selection store）与收件箱条目选中互斥。
@@ -182,7 +198,7 @@ export const useContentStore = defineStore("content", {
     selectedAssetKey(): string {
       return useSelectionStore().first;
     },
-    // 当前视口的资源列表（最近使用 / 回收站对应阶段再接，本轮给空）
+    // 当前视口的资源列表（"最近使用 / 回收站"已接真实视图，6.1 二轮：元素为 PlacementView 超集，AssetGrid 零改动复用）
     visiblePlacements(state): PlacementView[] {
       if (state.sidebarSelected.startsWith("folder:")) {
         const id = state.sidebarSelected.slice(7);
@@ -197,9 +213,17 @@ export const useContentStore = defineStore("content", {
           // （2026-07-25 用户定：用户没分类走就要一直在）。不限 folderId=root——手动导入 Keep
           // 生成的层级也算未分类；摘标 = 清 importedFrom（归 6.3），清后自然消失
           return state.placements.filter((p) => p.importedFrom === "inbox");
+        case "quick:recent": // 最近使用（后端已按时间倒序）
+          return state.recentAssets;
+        case "quick:recycle": // 回收站（folderId 恒 "recycle"，key 与素材域互不干扰）
+          return state.recycleEntries;
         default:
           return [];
       }
+    },
+    // 回收站视口判定（6.1 二轮，2026-07-29）：只读语义统一判断点——禁拖拽 / 禁重命名 / Del 分流彻底删除
+    isRecycleView(state): boolean {
+      return state.sidebarSelected === "quick:recycle";
     },
     // 快速访问 item 数量（4.4 查缺补漏）：全部 / 未分类 / 收件箱接真实统计；
     // 最近使用 / 回收站留 6.1，工作空间 / 标签 / 快捷入口占位视图不接（对应阶段未开工）
@@ -272,8 +296,26 @@ export const useContentStore = defineStore("content", {
       // 数组保持可追踪（流式 push 触发）；元素由 Vue 惰性代理，10 万级只代理可视区
       this.placements = placements;
       this.folders = markRaw(folders);
-      // 选择态剔除已不存在的 key（6.1；refresh 后 placements 已就位）
+      // 最近使用 / 回收站一并拉（6.1 二轮）：保持简单——操作后 refresh 即全量对齐
+      await Promise.all([this.refreshRecent(), this.refreshRecycle()]);
+      // 选择态剔除已不存在的 key（三域就位后统一 prune——回收站 key 存活以 recycleEntries 为准）
       useSelectionStore().prune();
+    },
+    // 快速访问"最近使用"（6.1 二轮）：失败静默降级——后端并行开发期命令未就绪不阻断主流程
+    async refreshRecent(): Promise<void> {
+      try {
+        this.recentAssets = await invoke<RecentAssetView[]>("list_recent_assets");
+      } catch (e) {
+        console.warn("最近使用刷新失败（静默降级）：", e);
+      }
+    },
+    // 回收站（6.1 二轮）：同 refreshRecent 静默降级口径
+    async refreshRecycle(): Promise<void> {
+      try {
+        this.recycleEntries = await invoke<RecycleEntryView[]>("list_recycle");
+      } catch (e) {
+        console.warn("回收站刷新失败（静默降级）：", e);
+      }
     },
     async refreshFolders(): Promise<void> {
       this.folders = markRaw(await invoke<FolderNode[]>("list_folder_tree"));

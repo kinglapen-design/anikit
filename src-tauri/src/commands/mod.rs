@@ -8,6 +8,8 @@ pub mod media;
 pub mod notes;
 pub mod operations;
 pub mod preview;
+pub mod recent;
+pub mod recycle;
 pub mod settings;
 pub mod thumb_frame;
 pub mod undo;

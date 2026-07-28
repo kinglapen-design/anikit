@@ -5,6 +5,8 @@
 // 2026-07-28 复验反馈修复：toast 计数文案改惰性求值（label 在 action 完成后才拼——
 // 原先把模板串在 invoke 前求值，移动 / 关联 / 副本恒显示"0 个"，复验误判"没有实际事件执行"）；
 // 新增 move_folders 入口（第 9 条命令，文件夹移动层级，替换原"暂不支持移动文件夹层级"toast）。
+// 2026-07-29 二轮：回收站操作入口（restore_recycle 带撤销；delete_recycle / clear_recycle
+// 两段式确认、不可恢复无撤销；后端契约并行开发，UI 直接 invoke）。
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
@@ -151,6 +153,101 @@ export async function confirmDelete(lastAction: "recycle" | "uncategorized"): Pr
   try {
     await invoke("delete_placements", { items: prompt.items, lastAction });
     await runOp(async () => {}, () => `删除 ${prompt.items.length} 个项目`);
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "info" });
+  }
+}
+
+// —— 回收站（6.1 二轮，2026-07-29；后端契约并行开发：restore_recycle / delete_recycle / clear_recycle）——
+
+// 彻底删除返回（delete_recycle / clear_recycle 同构）：needConfirm = 有虚拟片段引用需确认
+interface RecycleDeleteResult {
+  needConfirm: boolean;
+  segmentRefs: number;
+  deleted: number;
+}
+
+// 硬删除统一收尾：刷新 + 成功 toast（不可恢复，无撤销按钮——与 runOp 的区别仅此）
+async function runHardDelete(label: () => string): Promise<void> {
+  const content = useContentStore();
+  await content.refresh();
+  useToastStore().notify({ message: `已${label()}` });
+}
+
+// 回收站视口选中项的 assetId 清单（右键菜单 / Del 键入参；按回收站条目顺序去重输出）
+export function recycleSelectedAssetIds(): string[] {
+  const selection = useSelectionStore();
+  const content = useContentStore();
+  const out: string[] = [];
+  for (const e of content.recycleEntries) {
+    if (selection.selected.has(`${e.assetId}|${e.folderId}`) && !out.includes(e.assetId)) {
+      out.push(e.assetId);
+    }
+  }
+  return out;
+}
+
+// 还原（restore_recycle）：成功 toast 带撤销（后端撤销标签「还原 N 个项目」）
+export async function restoreRecycle(assetIds: string[]): Promise<boolean> {
+  if (assetIds.length === 0) return false;
+  let restored = 0;
+  return await runOp(async () => {
+    restored = await invoke<number>("restore_recycle", { assetIds });
+  }, () => `还原 ${restored} 个项目`);
+}
+
+// 彻底删除两段式：confirmed=false 干跑——needConfirm 时弹确认窗（虚拟片段引用警示，
+// RecycleConfirmDialog），确认后 confirmRecycleDelete 带 confirmed=true 再调
+export async function deleteRecycle(assetIds: string[]): Promise<void> {
+  if (assetIds.length === 0) return;
+  const selection = useSelectionStore();
+  const toast = useToastStore();
+  try {
+    const r = await invoke<RecycleDeleteResult>("delete_recycle", { assetIds, confirmed: false });
+    if (r.needConfirm) {
+      selection.recyclePrompt = { kind: "delete", assetIds, segmentRefs: r.segmentRefs };
+      return;
+    }
+    await runHardDelete(() => `彻底删除 ${r.deleted} 个项目`);
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "info" });
+  }
+}
+
+// 清空回收站两段式（同 deleteRecycle 口径）
+export async function clearRecycle(): Promise<void> {
+  const selection = useSelectionStore();
+  const toast = useToastStore();
+  try {
+    const r = await invoke<RecycleDeleteResult>("clear_recycle", { confirmed: false });
+    if (r.needConfirm) {
+      selection.recyclePrompt = { kind: "clear", assetIds: [], segmentRefs: r.segmentRefs };
+      return;
+    }
+    await runHardDelete(() => `清空回收站（${r.deleted} 个项目）`);
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "info" });
+  }
+}
+
+// 确认窗确认后执行（RecycleConfirmDialog 唯一入口）
+export async function confirmRecycleDelete(): Promise<void> {
+  const selection = useSelectionStore();
+  const prompt = selection.recyclePrompt;
+  selection.recyclePrompt = null;
+  if (!prompt) return;
+  const toast = useToastStore();
+  try {
+    const r =
+      prompt.kind === "delete"
+        ? await invoke<RecycleDeleteResult>("delete_recycle", {
+            assetIds: prompt.assetIds,
+            confirmed: true,
+          })
+        : await invoke<RecycleDeleteResult>("clear_recycle", { confirmed: true });
+    await runHardDelete(() =>
+      prompt.kind === "delete" ? `彻底删除 ${r.deleted} 个项目` : `清空回收站（${r.deleted} 个项目）`,
+    );
   } catch (e) {
     toast.notify({ message: String(e), icon: "info" });
   }
