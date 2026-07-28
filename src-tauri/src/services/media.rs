@@ -31,12 +31,15 @@ const MASK_ALPHA: u8 = 255;
 /// 波形上下留白（px）
 const WAVEFORM_MARGIN: u32 = 10;
 
-/// 视频元数据（导入写 metadata.width/height/duration）
+/// 视频元数据（导入写 metadata.width/height/duration；fps 5.3 帧化改造起写入，
+/// 2026-07-28 用户定：视频播放条 / 悬停胶囊 / 笔记以帧号显示，按素材自身帧率）
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct VideoInfo {
   pub width: u32,
   pub height: u32,
   pub duration: f64,
+  /// 帧率（首个视频流 avg_frame_rate，"0/0" 或缺失回退 r_frame_rate；皆不可得为 None）
+  pub fps: Option<f64>,
 }
 
 /// 音频元数据（导入写 metadata.duration/bpm）
@@ -58,7 +61,7 @@ pub fn is_audio(path: &Path) -> bool {
   AUDIO_EXTS.contains(&ext_of(path).as_str())
 }
 
-/// 视频元数据（ffprobe）：首个视频流宽高 + format.duration（秒）；非视频格式 / 失败返回 None
+/// 视频元数据（ffprobe）：首个视频流宽高 + format.duration（秒）+ 帧率；非视频格式 / 失败返回 None
 pub fn probe_video(path: &Path) -> Option<VideoInfo> {
   if !is_video(path) {
     return None;
@@ -69,7 +72,18 @@ pub fn probe_video(path: &Path) -> Option<VideoInfo> {
   let width = video.get("width")?.as_u64()? as u32;
   let height = video.get("height")?.as_u64()? as u32;
   let duration = json.get("format")?.get("duration")?.as_str()?.parse::<f64>().ok()?;
-  Some(VideoInfo { width, height, duration })
+  let fps = parse_rate(video.get("avg_frame_rate")).or_else(|| parse_rate(video.get("r_frame_rate")));
+  Some(VideoInfo { width, height, duration, fps })
+}
+
+/// ffprobe 分数形式帧率解析："30000/1001" → 约 29.97，"24/1" → 24；
+/// "0/0"（VFR 未知）/ 缺字段 / 非分数 / 零值 → None（调用方回退或放弃）
+fn parse_rate(value: Option<&serde_json::Value>) -> Option<f64> {
+  let s = value?.as_str()?;
+  let (num, den) = s.split_once('/')?;
+  let num = num.parse::<f64>().ok()?;
+  let den = den.parse::<f64>().ok()?;
+  (num > 0.0 && den > 0.0).then_some(num / den)
 }
 
 /// 音频元数据（ffprobe）：format.duration（秒）+ 内嵌标签 BPM（TBPM/bpm 大小写不敏感，
@@ -265,6 +279,24 @@ mod tests {
       assert_eq!((img.width(), img.height()), (w, h));
       assert!(img.get_pixel(w / 2, h / 2).0[3] > 0, "{w}x{h} 中线应有波形");
     }
+  }
+
+  #[test]
+  fn parse_rate_fraction_forms() {
+    let v = |s: &str| Some(serde_json::Value::String(s.to_string()));
+    // NTSC 分数帧率
+    let fps = parse_rate(v("30000/1001").as_ref()).unwrap();
+    assert!((fps - 29.97).abs() < 0.001, "{fps}");
+    // 整数帧率
+    assert_eq!(parse_rate(v("24/1").as_ref()), Some(24.0));
+    assert_eq!(parse_rate(v("25/1").as_ref()), Some(25.0));
+    // "0/0"（VFR 未知帧率）→ None（调用方回退 r_frame_rate）
+    assert_eq!(parse_rate(v("0/0").as_ref()), None);
+    // 缺字段 / 非分数 / 非法值 → None
+    assert_eq!(parse_rate(None), None);
+    assert_eq!(parse_rate(v("24").as_ref()), None);
+    assert_eq!(parse_rate(v("abc/def").as_ref()), None);
+    assert_eq!(parse_rate(v("24/0").as_ref()), None);
   }
 
   #[test]

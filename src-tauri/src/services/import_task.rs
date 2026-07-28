@@ -507,7 +507,7 @@ fn collect_registered(
   match result {
     Ok((view, conflicts)) => {
       state.outcome.imported += 1;
-      on_event(ImportEvent::Asset { placement: view });
+      on_event(ImportEvent::Asset { placement: Box::new(view) });
       for (u, mut c) in conflicts {
         fill_source_side(&mut c, root, files, groups, u);
         state.outcome.conflicts.push(c);
@@ -579,7 +579,7 @@ fn apply_merges(
     match view {
       Ok(Some(v)) => {
         state.outcome.imported += 1;
-        on_event(ImportEvent::Asset { placement: v });
+        on_event(ImportEvent::Asset { placement: Box::new(v) });
       }
       // 异常数据（缺 origin Placement）：metadata 已改名，仅记日志不中断
       Ok(None) => log::error!("自动合并：资源 {} 缺少 origin Placement", m.asset_id),

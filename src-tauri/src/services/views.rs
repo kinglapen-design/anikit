@@ -47,6 +47,9 @@ pub struct PlacementView {
   /// 封面帧（PRD 01）：序列帧/动图 = frames/ 内帧名；视频 = `t:{秒}`（5.2 set_video_thumb 写入，
   /// 卡片悬停播放范围起点 = 该秒数，5.3）；未设置为 null
   pub thumb_frame: Option<String>,
+  /// 帧率（序列帧 = 播放帧率默认 24；视频 = 素材自身帧率，5.3 帧化改造补——前端帧号显示 /
+  /// 逐帧步进按 1/fps）；无帧概念资源为 null
+  pub fps: Option<f64>,
 }
 
 /// 格式图标缓存键（空扩展名归 "file"）
@@ -92,5 +95,6 @@ pub fn placement_view(root: &Path, meta: &AssetMeta, p: &Placement, icons: &Hash
     imported_from: meta.imported_from.clone(),
     note_count: meta.note_count,
     thumb_frame: meta.thumb_frame.clone(),
+    fps: meta.fps,
   }
 }

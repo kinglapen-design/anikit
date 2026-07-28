@@ -259,7 +259,8 @@ const meta = computed(() => {
   pointer-events: none;
 }
 /* 笔记角标（5.2，Eagle 式数字圆标）：图片右上各 4px / 直径 16 / 品牌紫实底 /
-   白色数字（角标文字 10/16 粗体）；与左上格式角标不冲突 */
+   数字 font-icon-1（角标文字 10/16 粗体；5.4 红线修正：#fff 硬编码改 token，2026-07-28）；
+   与左上格式角标不冲突 */
 .note-badge {
   position: absolute;
   top: var(--space-4);
@@ -271,7 +272,7 @@ const meta = computed(() => {
   font-size: var(--text-badge-size);
   line-height: 16px;
   font-weight: var(--text-badge-weight);
-  color: #fff;
+  color: var(--font-icon-1);
   text-align: center;
   pointer-events: none;
 }

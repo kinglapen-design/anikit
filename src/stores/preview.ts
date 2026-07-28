@@ -252,7 +252,7 @@ export const usePreviewStore = defineStore("preview", {
       }
       if (isVideoExt(ext)) {
         this.kind = "video";
-        await media.load(p.assetId, "video");
+        await media.load(p.assetId, "video", p.fps ?? null); // fps 随 PlacementView 透传（5.3 帧化）
         void notes.load();
         return;
       }

@@ -69,7 +69,8 @@ pub struct AssetMeta {
   /// 缩略图文件名（与 metadata 同目录）
   #[serde(default)]
   pub thumbnail: Option<String>,
-  // 序列帧（PRD 01-2.5），普通资源无此三字段
+  // 序列帧（PRD 01-2.5）与视频（5.3 帧化改造：导入探测 / get_media_source 存量自愈写入）；
+  // 其他普通资源无此三字段
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub fps: Option<f64>,
   #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -35,6 +35,9 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
     playing: false,
     currentTime: 0,
     duration: 0,
+    // 视频帧率（5.3 帧化改造，2026-07-28 用户定：帧数优先）：load 时由 PlacementView.fps 传入，
+    // 音频 / 未知为 null（帧显示与逐帧步进回退时间口径）；切素材 release 复位
+    fps: null as number | null,
     volume: 1,
     muted: false,
     rate: 1,
@@ -62,9 +65,10 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
     },
     // 解析播放源并装载（转码可能数十秒，期间 transcoding=true）；
     // 装载完成即自动播放（2026-07-26 用户定：打开预览的目的就是播放，同动图/序列帧口径）
-    async load(assetId: string, kind: "audio" | "video"): Promise<void> {
+    async load(assetId: string, kind: "audio" | "video", fps: number | null = null): Promise<void> {
       const preview = usePreviewStore();
       this.kind = kind;
+      this.fps = kind === "video" ? fps : null;
       this.transcoding = true;
       this.transcodingSlow = false;
       clearTimeout(slowTimer);
@@ -105,6 +109,7 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       this.playing = false;
       this.currentTime = 0;
       this.duration = 0;
+      this.fps = null;
       this.rate = 1;
       this.loop = false;
     },

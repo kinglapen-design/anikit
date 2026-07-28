@@ -3,7 +3,8 @@
 // - 悬停模式（auto=false）：完整播放整段视频（循环），跟随鼠标横向移动快进快退
 //   （video seek：pointermove 只记目标比例，rAF 合帧 + 66ms 门控应用，2026-07-27 定稿；
 //   预生成帧图方案已于 2026-07-28 用户决策废弃——CPU 长期高负载 / 磁盘占用大 / 载入慢）；
-//   右下胶囊 = 当前时间 + 音量钮（默认静音），底部 3px 进度条显示全片进度；
+//   右下胶囊 = 当前帧号（5.3 帧化：查看方式"时间显示 = 帧数"且 fps 可用；回退当前时间）+ 音量钮
+//   （默认静音），底部 3px 进度条显示全片进度；
 // - 自动播放模式（auto=true，查看方式菜单"自动播放视频"开启且未悬停）：无控件、恒静音、不 scrub，
 //   范围 = 封面帧（thumbFrame `t:{秒}`，未设置 = 0）起 10 秒封顶时长循环——
 //   "设置当前画面为预览图"后自动播放范围自动跟随该帧（无需新设置 UI）。
@@ -12,6 +13,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import { formatDuration } from "../lib/formatDuration";
+import { frameOfTime, totalFrames } from "../lib/formatFrame";
 import { registerHoverPlayer } from "../stores/hoverPreview";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
@@ -49,6 +51,16 @@ function rangeEnd(): number {
 const pct = computed(() => {
   const span = rangeEnd() - rangeStart();
   return span > 0 ? Math.min(100, Math.max(0, ((currentTime.value - rangeStart()) / span) * 100)) : 0;
+});
+// 胶囊位置标识（5.3 帧化改造，2026-07-28 用户定：帧数优先）：查看方式"时间显示 = 帧数"且
+// 素材 fps 可用 → 当前帧号；fps 缺失或时间码模式回退当前时间（mm:ss）
+const posText = computed(() => {
+  const fps = props.asset.fps;
+  if (ui.timeDisplay === "frames" && fps != null && fps > 0) {
+    const total = totalFrames(duration.value || props.asset.duration || 0, fps);
+    return String(frameOfTime(currentTime.value, fps, total));
+  }
+  return formatDuration(currentTime.value);
 });
 
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -178,7 +190,7 @@ onBeforeUnmount(() => {
     <!-- 底部控件区（仅悬停模式）：不触发 scrub -->
     <div v-if="!auto" class="hud" @pointermove.stop>
       <div class="capsule">
-        <span class="time">{{ formatDuration(currentTime) }}</span>
+        <span class="time">{{ posText }}</span>
         <button class="hud-btn" v-tip="muted ? '取消静音' : '静音'" @click.stop="toggleMute">
           <AppIcon :name="muted ? 'mute' : 'volume'" />
         </button>

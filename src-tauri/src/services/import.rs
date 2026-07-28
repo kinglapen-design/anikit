@@ -156,7 +156,8 @@ pub enum ImportEvent {
   /// keep 模式层级已建好（前端重拉文件夹树）；flatten 不发
   Folders,
   /// 每导入一个推一个（流式：到一个显示一个）；冲突挂起项不发 Asset
-  Asset { placement: PlacementView },
+  /// （Box：PlacementView 较大，避免枚举整体膨胀——serde 序列化形状不变）
+  Asset { placement: Box<PlacementView> },
   /// 全部处理完（含取消中断），数量为已实际处理数；conflicts 待 resolve_conflicts 决策
   Finished { imported: u32, conflicts: Vec<ConflictItem>, failed: Vec<FailedItem> },
 }
@@ -272,6 +273,8 @@ pub(crate) fn build_asset_with_id(
   meta.duration = anim.map(|a| a.duration_secs).or(video.map(|v| v.duration)).or(audio.map(|a| a.duration));
   meta.frame_count = anim.map(|a| a.frame_count);
   meta.bpm = audio.and_then(|a| a.bpm);
+  // 视频帧率（5.3 帧化改造，2026-07-28 用户定：帧数优先显示）；序列帧 fps 仍由 sequence 管线写
+  meta.fps = video.and_then(|v| v.fps);
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
   Ok(meta)
 }
@@ -555,8 +558,9 @@ mod tests {
       imported_from: None,
       note_count: None,
       thumb_frame: None,
+      fps: None,
     };
-    let asset = serde_json::to_value(ImportEvent::Asset { placement: view }).unwrap();
+    let asset = serde_json::to_value(ImportEvent::Asset { placement: Box::new(view) }).unwrap();
     assert_eq!(
       asset,
       serde_json::json!({
@@ -565,7 +569,7 @@ mod tests {
           "assetId": "AN-X", "folderId": "root", "name": "a.png",
           "w": 1, "h": null, "ext": "png", "thumbPath": null, "thumbKind": null, "origin": true,
           "frameCount": null, "animated": false, "duration": null, "bpm": null, "importedFrom": null,
-          "noteCount": null, "thumbFrame": null
+          "noteCount": null, "thumbFrame": null, "fps": null
         }
       })
     );

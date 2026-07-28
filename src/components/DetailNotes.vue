@@ -2,7 +2,7 @@
 // 详情模块 · 逐帧笔记（5.2 展示层）：有笔记才显示（无选中资产 / 无笔记整个区块不渲染）。
 // 数据源：选中资产变化 / previewNotes.version（写删笔记）变化时调 get_notes 拉取（热刷新）。
 // item = 02_item 06 关联文件夹同款（C4 底 / hover C5 / 圆角 8 / 内边距 4 4 4 8 / 间距 6 /
-// inset 1px border-1）：左侧时间（视频 mm:ss）或帧号（副文本档）+ 文本单行省略，
+// inset 1px border-1）：左侧时间（视频 帧号/mm:ss 随"时间显示"设置，5.3）或帧号（副文本档）+ 文本单行省略，
 // × 常态不占位隐藏、悬停 item 展开 24px 露出（删除 = set_note 空文本 + noteCount 同步角标）。
 // 悬停浮帧画面（Eagle 式）：item 正上方贴近浮出该帧截图（get_note_thumb；C3 / inset border-1 /
 // 圆角 8 / --shadow-pop / 内边距 4，宽 160 按比例），未就绪 C4 占位；移出 / 切选中即关闭。
@@ -12,12 +12,15 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import SectionHeader from "./SectionHeader.vue";
 import IconButton from "./IconButton.vue";
 import { formatDuration } from "../lib/formatDuration";
+import { frameOfTime, totalFrames } from "../lib/formatFrame";
 import { useContentStore } from "../stores/content";
+import { useUiStore } from "../stores/ui";
 import { usePreviewStore } from "../stores/preview";
 import { usePreviewMediaStore } from "../stores/previewMedia";
 import { usePreviewNotesStore, type NoteEntry } from "../stores/previewNotes";
 
 const content = useContentStore();
+const ui = useUiStore();
 const notesStore = usePreviewNotesStore();
 const open = ref(true);
 const notes = ref<NoteEntry[]>([]);
@@ -45,9 +48,18 @@ watch(
   { immediate: true },
 );
 
-// item 左侧标识：视频 t:{秒} → mm:ss；序列帧/动图帧名（标题-00001.webp）→ 帧号数字
+// item 左侧标识：视频 t:{秒} → 帧号（帧数模式且素材 fps 可用，5.3 帧化；底层 key 仍 `t:{秒}` 不变）
+// 或 mm:ss（时间码模式 / fps 缺失 / 音频）；序列帧/动图帧名（标题-00001.webp）→ 帧号数字
 function label(key: string): string {
-  if (key.startsWith("t:")) return formatDuration(Number(key.slice(2)) || 0);
+  if (key.startsWith("t:")) {
+    const secs = Number(key.slice(2)) || 0;
+    const fps = selected.value?.fps;
+    if (ui.timeDisplay === "frames" && fps != null && fps > 0) {
+      const total = totalFrames(selected.value?.duration ?? 0, fps);
+      return String(frameOfTime(secs, fps, total));
+    }
+    return formatDuration(secs);
+  }
   const m = key.match(/-(\d+)\.[^.]+$/);
   return m ? String(parseInt(m[1], 10)) : key;
 }

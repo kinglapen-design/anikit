@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 查看方式（03_UI 布局/05_查看方式，2026-07-23 用户定：级联菜单改二级窗口模式）：
-// 行 item（名称 + 下拉选择器）×5：查看范围（全局/当前目录）/ 布局方式 / 排序方式（含升降序）/
-// 显示简介（尺寸已实现，其余随 7.x 接线）/ 分组方式（占位）；
+// 行 item（名称 + 下拉选择器）×6：查看范围（全局/当前目录）/ 布局方式 / 排序方式（含升降序）/
+// 显示简介（尺寸已实现，其余随 7.x 接线）/ 分组方式（占位）/
+// 时间显示（5.3 帧化改造，2026-07-28 用户定：帧数优先——帧数/时间码切换，仅影响视频）；
 // 分割线 + 开关组（自动播放动图/视频——5.3 接功能，先存状态）；
 // 分割线 + 开关组（显示扩展名角标 / 显示子文件夹内容）。
 import { computed, ref } from "vue";
@@ -26,7 +27,7 @@ const layouts = [
   { value: "grid", label: "网格" },
   { value: "list", label: "列表" },
 ] as const;
-const sorts = ["自定义", "标题", "扩展名", "文件大小", "尺寸", "评分", "时长", "添加日期", "创建日期", "修改日期"];
+const sorts = ["自定义", "标题", "扩展名", "文件大小", "尺寸", "时长", "添加日期", "创建日期", "修改日期"];
 const briefs = [
   { value: "size", label: "尺寸" },
   { value: "fileSize", label: "文件大小" },
@@ -35,14 +36,20 @@ const briefs = [
   { value: "tags", label: "标签" },
   { value: "none", label: "无显示" },
 ] as const;
+// 时间显示（5.3 帧化改造，2026-07-28 用户定：默认帧数）
+const timeDisplays = [
+  { value: "frames", label: "帧数" },
+  { value: "timecode", label: "时间码" },
+] as const;
 
 const layoutLabel = computed(() => layouts.find((l) => l.value === ui.layoutMode)?.label ?? "自适应");
 const briefLabel = computed(() => briefs.find((b) => b.value === ui.briefMode)?.label ?? "尺寸");
+const timeDisplayLabel = computed(() => timeDisplays.find((t) => t.value === ui.timeDisplay)?.label ?? "帧数");
 const sortLabel = computed(() => ui.sortBy || "自定义");
 
 // 下拉选择器：记录当前打开的行、锚点与触发按钮（trigger 用于"再点同一按钮关闭"，
 // 防止"组外先关、click 又开"反复弹）；选项菜单独立于主窗口——点主窗口空白即可收起
-type PickerKind = "scope" | "layout" | "sort" | "brief" | "group";
+type PickerKind = "scope" | "layout" | "sort" | "brief" | "group" | "timeDisplay";
 const picker = ref<{ kind: PickerKind; x: number; y: number } | null>(null);
 const pickerTrigger = ref<HTMLElement | null>(null);
 
@@ -111,6 +118,13 @@ function closeAll(): void {
             <AppIcon name="chevron-small" :size="16" class="down" />
           </button>
         </div>
+        <div class="row">
+          <span class="label">时间显示</span>
+          <button class="picker" @click="openPicker('timeDisplay', $event)">
+            <span class="val">{{ timeDisplayLabel }}</span>
+            <AppIcon name="chevron-small" :size="16" class="down" />
+          </button>
+        </div>
       </div>
 
       <div class="switch-group">
@@ -175,6 +189,16 @@ function closeAll(): void {
     </AppMenu>
     <AppMenu v-if="picker?.kind === 'group'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
       <MenuItem label="自定义" checkable :checked="true" @select="ui.groupBy = '自定义'; picker = null" />
+    </AppMenu>
+    <AppMenu v-if="picker?.kind === 'timeDisplay'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
+      <MenuItem
+        v-for="t in timeDisplays"
+        :key="t.value"
+        :label="t.label"
+        checkable
+        :checked="ui.timeDisplay === t.value"
+        @select="ui.timeDisplay = t.value; picker = null"
+      />
     </AppMenu>
   </div>
 </template>

@@ -28,5 +28,8 @@ export const useUiStore = defineStore("ui", {
     autoPlayGif: false,
     autoPlayVideo: false,
     showExtBadge: true,
+    // 时间显示（5.3 帧化改造，2026-07-28 用户定：帧数优先）——视频播放条 / 悬停胶囊 / 笔记
+    // 按帧号显示（fps 缺失回退时间）；音频无帧概念恒时间显示
+    timeDisplay: "frames" as "frames" | "timecode",
   }),
 });

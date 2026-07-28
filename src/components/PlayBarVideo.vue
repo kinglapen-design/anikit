@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 视频播放条（5.2）：放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8 / 内边距 4 / 间距 6）。
 // 播放/暂停、快退/快进（∓5 秒）、上/下一帧（step-frame 图标左右翻转，步进即暂停，快捷键 , . 的实体入口）、
-// 音量（VolumeControl）、当前时间/总时长、
+// 音量（VolumeControl）、当前帧/总帧数（5.3 帧化：查看方式"时间显示 = 帧数"且 fps 可用；
+// 回退 当前时间/总时长）、
 // 进度条（3px 轨道 border-1 + 品牌紫填充 + 10px 拖钮，同帧播放条自绘样式）、
 // 倍率（RateControl 悬停竖排弹窗）、循环、
 // 笔记（浮层）、当前画面设为预览图（set_video_thumb）、显示器全屏。转码中显示加载提示。
@@ -10,10 +11,13 @@ import IconButton from "./IconButton.vue";
 import VolumeControl from "./VolumeControl.vue";
 import RateControl from "./RateControl.vue";
 import { formatDuration } from "../lib/formatDuration";
+import { formatFrameRange } from "../lib/formatFrame";
+import { useUiStore } from "../stores/ui";
 import { usePreviewStore } from "../stores/preview";
 import { usePreviewMediaStore } from "../stores/previewMedia";
 import { usePreviewNotesStore } from "../stores/previewNotes";
 
+const ui = useUiStore();
 const preview = usePreviewStore();
 const media = usePreviewMediaStore();
 const notes = usePreviewNotesStore();
@@ -21,6 +25,15 @@ const trackRef = ref<HTMLElement>();
 let seeking = false;
 
 const pct = computed(() => (media.duration > 0 ? (media.currentTime / media.duration) * 100 : 0));
+
+// 帧显示（5.3 帧化改造，2026-07-28 用户定：帧数优先）：查看方式"时间显示 = 帧数"且 fps 可用
+// → 当前帧/总帧数；fps 缺失或时间码模式回退时间显示（mm:ss）
+const useFrames = computed(() => ui.timeDisplay === "frames" && media.fps != null && media.fps > 0);
+const posText = computed(() =>
+  useFrames.value && media.fps
+    ? formatFrameRange(media.currentTime, media.duration, media.fps)
+    : `${formatDuration(media.currentTime)} / ${formatDuration(media.duration)}`,
+);
 
 function seek(e: PointerEvent): void {
   if (media.duration <= 0) return;
@@ -42,10 +55,12 @@ function onSeekUp(e: PointerEvent): void {
   seeking = false;
   trackRef.value!.releasePointerCapture(e.pointerId);
 }
-// 逐帧步进（±1/24s，步进即暂停；按钮 = 快捷键 , . 的实体入口，2026-07-26 用户定）
+// 逐帧步进（步进即暂停；按钮 = 快捷键 , . 的实体入口，2026-07-26 用户定）。
+// 步长（5.3 帧化改造，2026-07-28 用户定："逐帧"语义与显示模式解耦）——
+// fps 可用恒按 1/fps（素材自身帧率，时间码模式也一样），fps 缺失才回退 ±1/24s
 function stepFrame(delta: number): void {
   media.pause();
-  media.seekBy(delta / 24);
+  media.seekBy(delta / (media.fps != null && media.fps > 0 ? media.fps : 24));
 }
 </script>
 
@@ -64,7 +79,7 @@ function stepFrame(delta: number): void {
     <IconButton class="flip-h" name="step-frame" title="上一帧（,）" :disabled="media.transcodingSlow" @click="stepFrame(-1)" />
     <IconButton name="step-frame" title="下一帧（.）" :disabled="media.transcodingSlow" @click="stepFrame(1)" />
     <VolumeControl />
-    <span class="time-text">{{ formatDuration(media.currentTime) }} / {{ formatDuration(media.duration) }}</span>
+    <span class="time-text">{{ posText }}</span>
     <div
       ref="trackRef"
       class="progress"
