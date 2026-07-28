@@ -20,6 +20,7 @@ const props = withDefaults(
     expandable?: boolean;
     open?: boolean;
     selected?: boolean;
+    dimmed?: boolean; // 拖拽源半透明（2026-07-28 复验反馈 6①）
     last?: boolean;
     guide?: boolean;
     folderId?: string; // 拖拽导入落点判定（App.vue elementFromPoint → closest）
@@ -32,6 +33,7 @@ const props = withDefaults(
     expandable: false,
     open: false,
     selected: false,
+    dimmed: false,
     last: false,
     guide: false,
     folderId: undefined,
@@ -41,7 +43,7 @@ const props = withDefaults(
 );
 const emit = defineEmits<{
   toggle: [];
-  select: [];
+  select: [e: MouseEvent]; // 携带修饰键（2026-07-28 复验反馈 5：Ctrl 加选 / Shift 范围选）
   nameCommit: [name: string];
   nameCancel: [];
 }>();
@@ -80,6 +82,7 @@ const dropZone = computed(() =>
       last,
       'drop-before': dropZone === 'before',
       'drop-after': dropZone === 'after',
+      dimmed,
     }"
     :style="{ paddingLeft: `${depth * 20}px` }"
     :data-folder-id="folderId"
@@ -106,7 +109,7 @@ const dropZone = computed(() =>
       v-else
       class="body"
       :class="{ selected, 'drop-into': dropZone === 'into' }"
-      @click="emit('select')"
+      @click="emit('select', $event)"
       @dblclick="expandable && emit('toggle')"
     >
       <AppIcon :name="icon" class="deco" />
@@ -123,6 +126,10 @@ const dropZone = computed(() =>
   align-items: center;
   gap: var(--space-2);
   height: 28px;
+}
+/* 拖拽源整项半透明（2026-07-28 复验反馈 6①，拖拽结束引擎清态即恢复） */
+.tree-item.dimmed {
+  opacity: var(--opacity-drag-source);
 }
 /* 展开按钮容器：宽 8（= 图标宽）/ 高 28（判定高度），图标 8×8 实心三角，展开时旋转 90°；
    有箭头的容器铺侧栏底色——遮住穿过的缩进竖线（视觉不穿过箭头，同 Eagle） */

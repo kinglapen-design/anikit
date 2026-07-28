@@ -126,6 +126,28 @@ pub async fn reorder_folders(
   }
 }
 
+/// 文件夹重设父级（仅改数据不动磁盘）：targetParent = null / "root" 为顶层；
+/// 循环（移入自身或子孙）整条报错，同父 / 陈旧 ID 跳过，返回实际移动数
+#[tauri::command]
+pub async fn move_folders(
+  state: State<'_, AppState>,
+  folder_ids: Vec<String>,
+  target_parent: Option<String>,
+) -> Result<usize, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin(format!("移动 {} 个文件夹", folder_ids.len()));
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  match operations::move_folders(lib, &folder_ids, target_parent.as_deref()) {
+    Ok(moved) => {
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(moved)
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
 /// 关联：目标文件夹逐条建链接 Placement，返回关联条数；
 /// names[i] 非空 ? 自定义显示名 : 源 Placement 名
 #[tauri::command]

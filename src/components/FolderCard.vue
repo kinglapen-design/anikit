@@ -11,10 +11,11 @@ import { dragView } from "../lib/dragOperation";
 import type { FolderNode } from "../stores/content";
 
 const props = withDefaults(
-  defineProps<{ folder: FolderNode; thumbPath?: string | null; selected?: boolean }>(),
-  { thumbPath: null, selected: false },
+  defineProps<{ folder: FolderNode; thumbPath?: string | null; selected?: boolean; dimmed?: boolean }>(),
+  { thumbPath: null, selected: false, dimmed: false },
 );
-const emit = defineEmits<{ select: [] }>();
+// select 携带 MouseEvent（2026-07-28 复验反馈 5：Ctrl 加选 / Shift 范围选需要修饰键）
+const emit = defineEmits<{ select: [e: MouseEvent] }>();
 const folderSvg = getIcon("folder-card");
 const backSvg = getIcon("folder-card-layer4");
 const frontThumbSvg = getIcon("folder-card-thumb-layer1");
@@ -39,10 +40,10 @@ const meta = computed(() => {
 <template>
   <div
     class="folder-card"
-    :class="{ selected }"
+    :class="{ selected, dimmed }"
     :data-folder-id="folder.id"
     :data-drag-name="folder.name"
-    @click="emit('select')"
+    @click="emit('select', $event)"
   >
     <div class="icon-wrap" :class="{ thumb: !!thumbUrl }">
       <template v-if="thumbUrl">
@@ -183,6 +184,10 @@ const meta = computed(() => {
 }
 .folder-card.selected .icon-wrap::after {
   border-color: var(--brand-1);
+}
+/* 拖拽源整卡半透明（2026-07-28 复验反馈 6①，拖拽结束引擎清态即恢复） */
+.folder-card.dimmed {
+  opacity: var(--opacity-drag-source);
 }
 .icon-wrap :deep(svg) {
   width: 100%;

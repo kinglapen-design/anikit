@@ -2,6 +2,10 @@
 // key = `${assetId}|${folderId}`（Placement 无自身 ID，沿用原 selectedAssetKey 同构格式）。
 // 消费口径：详情面板 / 预览等单资产消费方读 content.selectedAssetKey（= 本 store first() 转发）；
 // 卡片选中视觉读 isSelected；范围选按 content.visiblePlacements 顺序取锚点区间。
+// 文件夹选择域（2026-07-28 复验反馈 5）：selectedFolders（folderId）+ folderAnchor，
+// 与素材选择互斥（选文件夹清素材、选素材清文件夹）；全选 / 框选仍只涉及素材；
+// 范围选顺序由调用方给（文件夹卡片 = 条带顺序 / 树 item = 可见展开态扁平化顺序），
+// 锚点不在同域可见列表时退化单选（与素材范围选同规则）。
 // content store 与本 store 互相 lazy 取用（函数内 useXxxStore），避免模块循环引用初始化问题。
 import { defineStore } from "pinia";
 import { useContentStore, type FolderNode } from "./content";
@@ -55,6 +59,9 @@ export const useSelectionStore = defineStore("selection", {
     selected: new Set<string>() as Set<string>,
     // Shift 范围选锚点（最后单击项；范围选 / 清空不移动）
     anchor: null as string | null,
+    // 文件夹选择域（2026-07-28 复验反馈 5）：folderId 集合 + 范围选锚点；与素材选择互斥
+    selectedFolders: new Set<string>() as Set<string>,
+    folderAnchor: null as string | null,
     // —— 6.1 阶段 C 操作态（会话级，均不进持久化）——
     clipboard: null as InternalClipboard | null,
     linkDraft: null as LinkDraft | null, // 非空 = 关联弹窗打开（宿主 App.vue）
@@ -79,11 +86,21 @@ export const useSelectionStore = defineStore("selection", {
     isSelected(key: string): boolean {
       return this.selected.has(key);
     },
+    isFolderSelected(id: string): boolean {
+      return this.selectedFolders.has(id);
+    },
+
+    // 素材域选中 = 清文件夹域（互斥，2026-07-28 复验反馈 5）
+    clearFolders(): void {
+      this.selectedFolders.clear();
+      this.folderAnchor = null;
+    },
 
     // 卡片点击三态（2026-07-28 用户定案）：
     // 无修饰 = 单选（清空后选它，anchor = 它）；ctrl = 切换该项（anchor 跟到最后点击）；
     // shift = 锚点（无则当前首项）到该项在当前视口顺序中的区间全选（清空后选区间，anchor 不动）
     clickItem(key: string, mods: ClickMods = {}): void {
+      this.clearFolders(); // 选素材清文件夹（互斥）
       if (mods.shift) {
         const keys = useContentStore().visiblePlacements.map(keyOf);
         const to = keys.indexOf(key);
@@ -113,16 +130,49 @@ export const useSelectionStore = defineStore("selection", {
       this.anchor = key;
     },
 
-    // 单选并互斥清文件夹卡片 / 收件箱条目选中（卡片点击、右键未选中项先单选同口径，6.1 阶段 C）
+    // 文件夹点击三态（2026-07-28 复验反馈 5，与 clickItem 同规则）：
+    // order = 同域可见顺序（条带顺序 / 树可见展开态扁平化顺序），范围选取锚点区间；
+    // 锚点不在 order 内（跨域 / 折叠未见）退化单选；order 为空时 shift 等同单选
+    clickFolder(id: string, mods: ClickMods = {}, order: string[] = []): void {
+      // 选文件夹清素材（互斥）；收件箱条目选中一并清（原 FolderStrip 口径）
+      this.selected.clear();
+      this.anchor = null;
+      this.renamingKey = null;
+      useContentStore().selectedInboxName = "";
+      if (mods.shift) {
+        const to = order.indexOf(id);
+        const from = this.folderAnchor ? order.indexOf(this.folderAnchor) : -1;
+        if (to < 0 || from < 0) {
+          this.selectedFolders.clear();
+          this.selectedFolders.add(id);
+          this.folderAnchor = id;
+          return;
+        }
+        this.selectedFolders.clear();
+        const [a, b] = from < to ? [from, to] : [to, from];
+        for (let i = a; i <= b; i++) this.selectedFolders.add(order[i]);
+        return; // folderAnchor 不动
+      }
+      if (mods.ctrl) {
+        if (this.selectedFolders.has(id)) this.selectedFolders.delete(id);
+        else this.selectedFolders.add(id);
+        this.folderAnchor = id;
+        return;
+      }
+      this.selectedFolders.clear();
+      this.selectedFolders.add(id);
+      this.folderAnchor = id;
+    },
+
+    // 单选并互斥清收件箱条目选中（卡片点击、右键未选中项先单选同口径，6.1 阶段 C）
     selectOnly(key: string): void {
       this.clickItem(key);
-      const content = useContentStore();
-      content.selectedFolderId = "";
-      content.selectedInboxName = "";
+      useContentStore().selectedInboxName = "";
     },
 
     // 全选（Ctrl+A，2026-07-28 用户定：仅素材卡片口径 = 当前视口全部 Placement）
     selectAll(): void {
+      this.clearFolders();
       const keys = useContentStore().visiblePlacements.map(keyOf);
       this.selected.clear();
       for (const k of keys) this.selected.add(k);
@@ -131,6 +181,7 @@ export const useSelectionStore = defineStore("selection", {
 
     // 框选命中集整体写入（B3）：追加语义由调用方把 drag 起点的 base 并入 hits 后传入
     setSelection(keys: Iterable<string>): void {
+      this.clearFolders();
       this.selected.clear();
       for (const k of keys) this.selected.add(k);
     },
@@ -139,6 +190,7 @@ export const useSelectionStore = defineStore("selection", {
       this.selected.clear();
       this.anchor = null;
       this.renamingKey = null; // 选择清空 = 重命名输入态一并取消
+      this.clearFolders();
     },
 
     // 选中项三元组清单（6.1 命令入参）：按当前视口顺序输出（稳定、与可见顺序一致），
@@ -163,13 +215,44 @@ export const useSelectionStore = defineStore("selection", {
       return out;
     },
 
-    // content.refresh() 全量替换 placements 后调用：剔除已不存在的 key（链接被删 / 移动后 folderId 变等）
+    // 选中文件夹 id 清单（2026-07-28 复验反馈 5，命令入参）：按给定可见顺序输出，
+    // 不在顺序内的选中项（条带 / 折叠未见的）按 Set 序追加在后
+    orderedSelectedFolderIds(order: string[] = []): string[] {
+      const out = order.filter((id) => this.selectedFolders.has(id));
+      for (const id of this.selectedFolders) {
+        if (!out.includes(id)) out.push(id);
+      }
+      return out;
+    },
+
+    // 被剪切项（2026-07-28 复验反馈 8）：cut 期间卡片半透明；粘贴成功 / 被新 copy 覆盖 /
+    // 清空后 clipboard 变化即自动恢复
+    isCut(key: string): boolean {
+      const c = this.clipboard;
+      return !!c && c.action === "cut" && c.items.some((it) => keyOf(it) === key);
+    },
+
+    // content.refresh() 全量替换 placements 后调用：剔除已不存在的 key（链接被删 / 移动后 folderId 变等）；
+    // 文件夹域同口径剔除（2026-07-28 复验反馈 5）
     prune(): void {
-      const valid = new Set(useContentStore().placements.map(keyOf));
+      const content = useContentStore();
+      const valid = new Set(content.placements.map(keyOf));
       for (const k of [...this.selected]) {
         if (!valid.has(k)) this.selected.delete(k);
       }
       if (this.anchor && !valid.has(this.anchor)) this.anchor = null;
+      const folderIds = new Set<string>();
+      const walk = (nodes: FolderNode[]): void => {
+        for (const n of nodes) {
+          folderIds.add(n.id);
+          walk(n.children);
+        }
+      };
+      walk(content.folders);
+      for (const id of [...this.selectedFolders]) {
+        if (!folderIds.has(id)) this.selectedFolders.delete(id);
+      }
+      if (this.folderAnchor && !folderIds.has(this.folderAnchor)) this.folderAnchor = null;
     },
   },
 });

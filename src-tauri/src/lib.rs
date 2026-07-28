@@ -236,6 +236,7 @@ pub fn run() {
       commands::operations::move_placements,
       commands::operations::reorder_placements,
       commands::operations::reorder_folders,
+      commands::operations::move_folders,
       commands::operations::link_placements,
       commands::operations::duplicate_placements,
       commands::operations::rename_placement,

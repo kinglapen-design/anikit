@@ -8,7 +8,7 @@
 // 树 item 右键（C3）：「新建同级文件夹 / 新建子文件夹」菜单宿主在 LibraryView（Teleport body）。
 import { computed, ref } from "vue";
 import TreeItem from "./TreeItem.vue";
-import { dragView } from "../lib/dragOperation";
+import { dragView, visibleTreeFolderIds } from "../lib/dragOperation";
 import { createFolder, validateWindowsName } from "../lib/placementOps";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
@@ -36,9 +36,15 @@ function isOpen(id: string): boolean {
   return openSet.value.has(id) || (props.forceOpenIds?.has(id) ?? false);
 }
 
-// 选中：有效拖拽结束后的紧随 click 不触发（C4 引擎置位）
-function onSelect(id: string): void {
+// 选中：有效拖拽结束后的紧随 click 不触发（C4 引擎置位）；
+// 多选（2026-07-28 复验反馈 5）：Ctrl = 加选切换 / Shift = 按可见展开态扁平化顺序锚点范围选
+//（文件夹选择域在 selection store，与素材互斥由 clickFolder 内部做）——多选不切换当前文件夹视图
+function onSelect(id: string, e: MouseEvent): void {
   if (dragView.suppressClick) return;
+  if (e.ctrlKey || e.metaKey || e.shiftKey) {
+    selection.clickFolder(id, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey }, visibleTreeFolderIds());
+    return;
+  }
   content.sidebarSelected = `folder:${id}`;
 }
 
@@ -89,13 +95,14 @@ function onNameCancel(): void {
         :depth="depth"
         :expandable="node.children.length > 0"
         :open="isOpen(node.id)"
-        :selected="content.sidebarSelected === `folder:${node.id}`"
+        :selected="content.sidebarSelected === `folder:${node.id}` || selection.isFolderSelected(node.id)"
+        :dimmed="dragView.folderIds?.has(node.id) ?? false"
         :last="index === nodes.length - 1"
         :folder-id="node.id"
         :data-drag-name="node.name"
         guide
         @toggle="toggle(node.id)"
-        @select="onSelect(node.id)"
+        @select="onSelect(node.id, $event)"
       />
       <div
         v-if="isOpen(node.id) && node.children.length > 0"

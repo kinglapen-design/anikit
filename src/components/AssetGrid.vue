@@ -23,13 +23,14 @@ import {
   type Row,
 } from "../lib/layouts";
 import { useVirtualScroll } from "../lib/useVirtualScroll";
-import { useMarquee, makeBoxHitTest } from "../lib/useMarquee";
+import { useMarquee, makeBoxHitTest, headerBlankClear } from "../lib/useMarquee";
 import {
   dragView,
   gridPointerDown,
   makeGridResolver,
   registerGridResolver,
   unregisterGridResolver,
+  assetCardFade,
 } from "../lib/dragOperation";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
@@ -49,12 +50,12 @@ function openPreview(p: PlacementView): void {
 }
 
 // 卡片点击选择（6.1，2026-07-28 用户定案）：单击 = 单选 / Ctrl+单击 = 加选切换 /
-// Shift+单击 = 锚点范围选（selection store 三态）；素材卡片选中与文件夹卡片 / 收件箱条目互斥
+// Shift+单击 = 锚点范围选（selection store 三态）；素材卡片选中与文件夹 / 收件箱条目互斥
+//（文件夹选择域在 selection store，clickItem 内部互斥清理，2026-07-28 复验反馈 5）
 function onCardClick(p: PlacementView, e: MouseEvent): void {
   if (dragView.suppressClick) return; // 有效拖拽结束后紧随的 click 不当选择（拖拽引擎置位）
   if (e.ctrlKey || e.metaKey || e.shiftKey) {
     selection.clickItem(`${p.assetId}|${p.folderId}`, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
-    content.selectedFolderId = "";
     content.selectedInboxName = "";
   } else {
     selection.selectOnly(`${p.assetId}|${p.folderId}`);
@@ -175,6 +176,7 @@ const {
 } = useMarquee({
   viewport: viewportRef,
   // 卡片 / 头部（文件夹区块、"内容"副标题、工程文件、列表列头）/ 滚动条 / 按钮上不启动框选
+  //（卡片行 / 列间距点在 cards-layer 上，不在排除列——正确落入框选，2026-07-28 复验反馈 3）
   ignoreSelector: ".asset-card, .list-row, .grid-header, .list-header, .grid-track, button",
   hitTest: makeBoxHitTest({
     boxes: () => boxes.value,
@@ -316,7 +318,7 @@ onBeforeUnmount(() => {
     @contextmenu="onCardContextMenu"
   >
     <div class="grid-canvas" :style="{ transform: `translateY(${-pos}px)` }">
-      <div ref="headerRef" class="grid-header">
+      <div ref="headerRef" class="grid-header" @pointerdown="headerBlankClear">
         <!-- 当前视口无子文件夹时整个文件夹区块隐藏（阶段3修改定案） -->
         <FolderStrip v-if="content.stripFolders.length > 0" />
         <!-- 收件箱视口（4.4）：磁盘实况"工程文件"区块在 FolderStrip 同位（快速访问不出文件夹区块） -->
@@ -335,7 +337,10 @@ onBeforeUnmount(() => {
         v-show="assetsOpen"
         ref="cardsLayerRef"
         class="cards-layer"
-        :style="{ transform: `translateY(${headerH + 6 + listExtra}px) scale(${canvasScale})` }"
+        :style="{
+          transform: `translateY(${headerH + 6 + listExtra}px) scale(${canvasScale})`,
+          height: `${gridTotal}px`,
+        }"
       >
         <template v-if="ui.layoutMode === 'list'">
           <ListRowCard
@@ -346,6 +351,7 @@ onBeforeUnmount(() => {
             :odd="c.odd"
             :selected="selection.isSelected(`${c.asset.assetId}|${c.asset.folderId}`)"
             :renaming="selection.renamingKey === `${c.asset.assetId}|${c.asset.folderId}`"
+            :faded="assetCardFade(`${c.asset.assetId}|${c.asset.folderId}`)"
             :data-key="`${c.asset.assetId}|${c.asset.folderId}`"
             :data-drag-name="c.asset.name"
             @select="onCardClick(c.asset, $event)"
@@ -360,6 +366,7 @@ onBeforeUnmount(() => {
             :box="c.box"
             :selected="selection.isSelected(`${c.asset.assetId}|${c.asset.folderId}`)"
             :renaming="selection.renamingKey === `${c.asset.assetId}|${c.asset.folderId}`"
+            :faded="assetCardFade(`${c.asset.assetId}|${c.asset.folderId}`)"
             :data-key="`${c.asset.assetId}|${c.asset.folderId}`"
             :data-drag-name="c.asset.name"
             @click="onCardClick(c.asset, $event)"
@@ -433,7 +440,9 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: var(--space-16);
 }
-/* 卡片层：translateY 实时跟随头部高度 + scale 跟随宽度差（重排前的视觉过渡） */
+/* 卡片层：translateY 实时跟随头部高度 + scale 跟随宽度差（重排前的视觉过渡）；
+   显式高度 = 网格总高（2026-07-28 复验反馈 2/3 根因：子卡片全绝对定位、层高度塌缩为 0——
+   间隙落点容差与"点在层上但未点中卡片"的框选判定都依赖层有自己的命中区域） */
 .cards-layer {
   position: absolute;
   left: 0;

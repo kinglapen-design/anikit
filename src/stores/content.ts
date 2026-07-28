@@ -146,9 +146,9 @@ export const useContentStore = defineStore("content", {
     folders: markRaw([]) as FolderNode[],
     // 左栏选中项：quick:all / quick:uncategorized… / folder:{id}
     sidebarSelected: "quick:all",
-    // 选中互斥：选中素材卡片（selection store）时取消文件夹卡片选中，反之亦然。
-    // 素材卡片选中键已迁 selection store（6.1 多选改造），selectedAssetKey 为下方派生 getter
-    selectedFolderId: "",
+    // 选中互斥：素材卡片选中（selection store）与收件箱条目选中互斥。
+    // 素材卡片选中键已迁 selection store（6.1 多选改造），selectedAssetKey 为下方派生 getter；
+    // 文件夹卡片 / 树 item 多选同迁 selection store 文件夹选择域（2026-07-28 复验反馈 5）
     // 导入弹窗草稿：菜单 / 拖拽触发后填入，ImportDialog 读取；确认或取消后清空
     importDraft: null as ImportDraft | null,
     // 序列帧弹窗（12_序列帧弹窗，4.1）：09 确认后 detect_sequences 命中时填入；
@@ -171,7 +171,7 @@ export const useContentStore = defineStore("content", {
     // 收件箱磁盘实况（4.4"工程文件"区块）：磁盘为事实来源，不建档不写库；
     // inbox-fs-changed 事件（去抖 150ms）与手动操作后全量重扫替换
     inboxDisk: [] as InboxDiskEntry[],
-    // 选中互斥第三态：磁盘实况条目选中名（与素材卡片选中（selection store）/ selectedFolderId 互斥）
+    // 选中互斥第三态：磁盘实况条目选中名（与素材 / 文件夹选中（均在 selection store）互斥）
     selectedInboxName: "",
     // 原导入的来源模式（冲突"保留两个"决策继承；剪贴板导入恒 move）
     lastImportSource: "copy" as "copy" | "move",

@@ -46,11 +46,11 @@ function sizeLabel(e: InboxDiskEntry): string {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
-// 选中：与素材卡片 / 文件夹卡片互斥（content.selectedInboxName 第三态）
+// 选中：与素材 / 文件夹选中互斥（content.selectedInboxName 第三态；
+// selection.clear() 内部已清素材与文件夹两域，2026-07-28 复验反馈 5）
 function select(e: InboxDiskEntry): void {
   content.selectedInboxName = e.name;
   selection.clear();
-  content.selectedFolderId = "";
 }
 
 // 右键菜单：打开 / 重命名 / 删除 / 导入（占用禁用导入；菜单点击不自动关，动作内手动关）

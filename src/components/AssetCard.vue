@@ -26,8 +26,14 @@ import { useSelectionStore } from "../stores/selection";
 import type { PlacementView } from "../stores/content";
 
 const props = withDefaults(
-  defineProps<{ asset: PlacementView; box: Box; selected?: boolean; renaming?: boolean }>(),
-  { selected: false, renaming: false },
+  defineProps<{
+    asset: PlacementView;
+    box: Box;
+    selected?: boolean;
+    renaming?: boolean;
+    faded?: "source" | "cut" | null; // 拖拽源半透明 / 被剪切半透明（2026-07-28 复验反馈 6①/8）
+  }>(),
+  { selected: false, renaming: false, faded: null },
 );
 // 悬停浮层：放大镜按钮 hover 触发（2026-07-28 用户定：**悬停到放大镜图标上**即出大图，
 // 不点击；动图 / 序列帧同有放大镜，浮层内播放），关闭由按钮 mouseleave / 组件销毁驱动
@@ -178,7 +184,7 @@ const meta = computed(() => {
 <template>
   <div
     class="asset-card"
-    :class="{ selected }"
+    :class="{ selected, 'fade-source': faded === 'source', 'fade-cut': faded === 'cut' }"
     :style="{
       left: `${box.left}px`,
       top: `${box.top}px`,
@@ -275,6 +281,13 @@ const meta = computed(() => {
 }
 .asset-card.selected .thumb {
   border: 2px solid var(--brand-1);
+}
+/* 拖拽源 / 被剪切整体半透明（2026-07-28 复验反馈 6①/8，token 透明度档） */
+.asset-card.fade-source {
+  opacity: var(--opacity-drag-source);
+}
+.asset-card.fade-cut {
+  opacity: var(--opacity-cut);
 }
 /* 网格模式固定格：contain 完整显示不裁切（cover 必裁，2026-07-24 用户定） */
 .img {

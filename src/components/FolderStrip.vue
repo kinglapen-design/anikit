@@ -15,12 +15,16 @@ const selection = useSelectionStore();
 const ui = useUiStore();
 const folderOpen = ref(true);
 
-// 文件夹卡片选中（与素材卡片 / 收件箱条目互斥）；有效拖拽结束后的紧随 click 不触发（C4 引擎置位）
-function onSelect(id: string): void {
+// 文件夹卡片选中（2026-07-28 复验反馈 5：迁 selection store 文件夹选择域——单击 = 单选 /
+// Ctrl+单击 = 加选切换 / Shift+单击 = 按条带顺序锚点范围选；与素材 / 收件箱条目互斥，
+// 互斥清理由 clickFolder 内部统一做）；有效拖拽结束后的紧随 click 不触发（C4 引擎置位）
+function onSelect(id: string, e: MouseEvent): void {
   if (dragView.suppressClick) return;
-  content.selectedFolderId = id;
-  selection.clear();
-  content.selectedInboxName = "";
+  selection.clickFolder(
+    id,
+    { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey },
+    content.stripFolders.map((f) => f.id),
+  );
 }
 
 // 列宽 = 181 × 滑块行高 / 220（基准行高 220 时列宽 181——gap 16 + 左右间距后
@@ -38,8 +42,9 @@ const colWidth = computed(() => Math.max(80, Math.round((181 * ui.targetRowHeigh
         :folder="f"
         :thumb-path="content.folderThumbMap.get(f.id) ?? null"
         class="cell"
-        :selected="content.selectedFolderId === f.id"
-        @select="onSelect(f.id)"
+        :selected="selection.isFolderSelected(f.id)"
+        :dimmed="dragView.folderIds?.has(f.id) ?? false"
+        @select="onSelect(f.id, $event)"
       />
     </div>
   </section>

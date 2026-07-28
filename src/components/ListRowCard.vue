@@ -13,8 +13,15 @@ import type { PlacementView } from "../stores/content";
 import { useUiStore } from "../stores/ui";
 
 const props = withDefaults(
-  defineProps<{ asset: PlacementView; box: Box; odd?: boolean; selected?: boolean; renaming?: boolean }>(),
-  { odd: false, selected: false, renaming: false },
+  defineProps<{
+    asset: PlacementView;
+    box: Box;
+    odd?: boolean;
+    selected?: boolean;
+    renaming?: boolean;
+    faded?: "source" | "cut" | null; // 拖拽源半透明 / 被剪切半透明（2026-07-28 复验反馈 6①/8）
+  }>(),
+  { odd: false, selected: false, renaming: false, faded: null },
 );
 const ui = useUiStore();
 
@@ -77,7 +84,7 @@ async function commitRename(): Promise<void> {
 <template>
   <div
     class="list-row"
-    :class="{ odd, selected }"
+    :class="{ odd, selected, 'fade-source': faded === 'source', 'fade-cut': faded === 'cut' }"
     :style="{ left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` }"
     @click="emit('select', $event)"
   >
@@ -138,6 +145,13 @@ async function commitRename(): Promise<void> {
 }
 .list-row.selected {
   box-shadow: inset 0 0 0 2px var(--brand-1);
+}
+/* 拖拽源 / 被剪切整体半透明（2026-07-28 复验反馈 6①/8，token 透明度档） */
+.list-row.fade-source {
+  opacity: var(--opacity-drag-source);
+}
+.list-row.fade-cut {
+  opacity: var(--opacity-cut);
 }
 /* 标题容器：缩略图 + 名称，间距 8 */
 .main {

@@ -119,4 +119,10 @@
 
   /* 阴影（x0 y4 blur40 60%：二级窗口 / 模态窗口 / 菜单 / 弹窗） */
   --shadow-pop: 0 4px 40px rgba(0, 0, 0, 0.6);
+
+  /* 透明度档（2026-07-28 复验反馈补档：拖拽源项 0.4 / 拖拽 ghost 0.75 / 被剪切项 0.5；
+     docs/02_样式与布局 由用户同步） */
+  --opacity-drag-source: 0.4;
+  --opacity-drag-ghost: 0.75;
+  --opacity-cut: 0.5;
 }
