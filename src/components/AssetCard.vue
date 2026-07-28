@@ -7,8 +7,8 @@
 // 悬停行为按类型分发（5.3，2026-07-27 用户定案）：视频悬停完整播放 / 音频悬停有声播放 /
 // 动图·序列帧悬停播放（序列帧归动图范围：打包就是为了看动画效果），播放类均无按钮；
 // 查看方式菜单"自动播放动图（含序列帧）/ 自动播放视频"开关 = 网格内免悬停自动播放
-// （视频自动播放范围 = 封面帧起 10 秒循环）；图片 / 图片工程 / 动画工程有缩略图 =
-// 悬停即出大图浮层（2026-07-28 用户定：不再点击放大镜，悬停 400ms 出，移出即关），无按钮；
+// （视频自动播放范围 = 封面帧起 10 秒循环）；放大镜按钮（图片 / 图片工程 / 动画工程 /
+// 动图 / 序列帧）：**悬停到图标上**即出大图浮层（2026-07-28 用户定，动图·序列帧浮层内播放）；
 // PSD/SVG 类图片工程另有 默认应用打开；格式图标（fla/zip/AI 等无内容缩略图）=
 // 仅默认应用打开；动画工程有内容缩略图时（8.2 后）= 发送 + 默认应用打开（发送仍占位，8.5 接）。
 import { computed, onBeforeUnmount, ref, watch } from "vue";
@@ -26,8 +26,8 @@ import type { PlacementView } from "../stores/content";
 const props = withDefaults(defineProps<{ asset: PlacementView; box: Box; selected?: boolean }>(), {
   selected: false,
 });
-// 悬停浮层：图片类悬停出大图（2026-07-28 用户定：不再点击放大镜，悬停即出），
-// 关闭由 mouseleave / 组件销毁驱动（AssetGrid 统一管理）
+// 悬停浮层：放大镜按钮 hover 触发（2026-07-28 用户定：**悬停到放大镜图标上**即出大图，
+// 不点击；动图 / 序列帧同有放大镜，浮层内播放），关闭由按钮 mouseleave / 组件销毁驱动
 const emit = defineEmits<{ zoom: []; zoomClose: [] }>();
 const ui = useUiStore();
 const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
@@ -53,29 +53,29 @@ const kind = computed<HoverKind>(() => {
   if (SOURCE_EXTS.has(ext)) return "source";
   return "image";
 });
-// 悬停按钮按类型分发（DOM 顺序固定：发送 → 默认应用打开）；
-// 序列帧归动图范围（2026-07-27 用户定：打包就是为了看动画效果）——悬停 / 自动播放，无按钮；
-// 放大镜按钮已退役（2026-07-28 用户定：悬停即出大图浮层，不再点击）——图片 / 图片工程无按钮
+// 悬停按钮按类型分发（DOM 顺序固定：发送 → 默认应用打开 → 放大镜）；
+// 序列帧归动图范围（2026-07-27 用户定：打包就是为了看动画效果）——悬停 / 自动播放；
+// 放大镜：图片 / 图片工程 / 动画工程 / 动图 / 序列帧都有（2026-07-28 用户定：
+// 悬停到放大镜图标上即出大图浮层，动图·序列帧浮层内播放）；视频 / 音频 / 格式图标无
 const showSend = computed(() => kind.value === "engineering");
 const showOpenDefault = computed(
   () => kind.value === "iconOnly" || kind.value === "source" || kind.value === "engineering",
 );
+const showZoom = computed(() => kind.value !== "iconOnly" && kind.value !== "video" && kind.value !== "audio");
 
 // 悬停态：驱动播放层挂载（视频/音频）与动图播放
 const hovered = ref(false);
 
-// 悬停放大浮层（2026-07-28 用户定：悬停即出，不再点放大镜）：图片 / 图片工程 / 动画工程
-// 有缩略图时悬停 400ms 出大图（防划过闪）；移出 / 滚出（组件销毁）即关
-const ZOOMABLE = new Set(["image", "source", "engineering"]);
+// 放大镜 hover 触发（2026-07-28 用户定）：hover 按钮 150ms 出浮层（防划过闪），移出按钮即关
 let zoomTimer: ReturnType<typeof setTimeout> | undefined;
-watch(hovered, (h) => {
+function onZoomEnter(): void {
   clearTimeout(zoomTimer);
-  if (h && ZOOMABLE.has(kind.value)) {
-    zoomTimer = setTimeout(() => emit("zoom"), 400);
-  } else {
-    emit("zoomClose");
-  }
-});
+  zoomTimer = setTimeout(() => emit("zoom"), 150);
+}
+function onZoomLeave(): void {
+  clearTimeout(zoomTimer);
+  emit("zoomClose");
+}
 
 // 动图播放（5.3）：悬停或"自动播放动图"开关（序列帧同归此开关，2026-07-27 用户定）——
 // 300ms 延迟后把卡片图换成源文件（webview 原生循环，零等待），停止后还原封面
@@ -178,6 +178,16 @@ const meta = computed(() => {
         </button>
         <button v-if="showOpenDefault" class="act" v-tip="'默认应用打开'" @click.stop="openDefault">
           <AppIcon name="open-default" />
+        </button>
+        <button
+          v-if="showZoom"
+          class="act"
+          v-tip="'查看大图'"
+          @click.stop
+          @mouseenter="onZoomEnter"
+          @mouseleave="onZoomLeave"
+        >
+          <AppIcon name="magnifier" />
         </button>
       </div>
     </div>

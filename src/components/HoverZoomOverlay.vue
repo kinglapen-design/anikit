@@ -17,13 +17,49 @@ const emit = defineEmits<{ close: [] }>();
 // 秒显层 = info 缩略图（320 短边），高清图源到达后替换（Eagle 式渐进，同 4.3 预览窗口口径）
 const src = ref<string | null>(props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null);
 
+// 序列帧浮层播放（2026-07-28 用户定：动图范围悬停放大播放）：按 fps 轮播 info/frames 帧原图；
+// GIF / 动图 WEBP 由 loadFull 直给源文件（webview 原生循环），无需专门分支
+const isSequence = props.asset.frameCount != null && !props.asset.animated;
+
+interface FrameEntry {
+  name: string;
+  fullPath: string;
+  stripPath: string | null;
+  delayMs: number | null;
+}
+interface SequenceFrames {
+  fps: number | null;
+  thumbFrame: string | null;
+  frames: FrameEntry[];
+  unpacking: boolean;
+}
+
 let unlisten: (() => void) | undefined;
+let seqInterval: ReturnType<typeof setInterval> | undefined;
 let disposed = false;
 
 onMounted(() => {
-  void loadFull();
+  if (isSequence) void loadSequence();
+  else void loadFull();
   window.addEventListener("keydown", onKeydown);
 });
+
+async function loadSequence(): Promise<void> {
+  try {
+    const r = await invoke<SequenceFrames>("list_sequence_frames", { assetId: props.asset.assetId });
+    if (disposed || r.frames.length === 0) return;
+    const urls = r.frames.map((f) => convertFileSrc(f.fullPath));
+    const cover = r.thumbFrame ? r.frames.findIndex((f) => f.name === r.thumbFrame) : -1;
+    let idx = cover >= 0 ? cover : 0;
+    src.value = urls[idx];
+    seqInterval = setInterval(() => {
+      idx = (idx + 1) % urls.length;
+      src.value = urls[idx];
+    }, 1000 / (r.fps ?? 24));
+  } catch {
+    // 清单加载失败保持 info 缩略图
+  }
+}
 
 async function loadFull(): Promise<void> {
   try {
@@ -62,6 +98,7 @@ function onKeydown(e: KeyboardEvent): void {
 
 onBeforeUnmount(() => {
   disposed = true;
+  clearInterval(seqInterval);
   unlisten?.();
   window.removeEventListener("keydown", onKeydown);
 });
