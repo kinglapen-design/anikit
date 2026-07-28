@@ -52,6 +52,28 @@ pub async fn create_folder(
   }
 }
 
+/// 重命名文件夹（2026-07-29 复验三轮）：仅改数据不动磁盘；名称同库名 Windows 规则
+/// （非法 / 空名后端拒绝，业务失败 cancel + 内存重载）
+#[tauri::command]
+pub async fn rename_folder(
+  state: State<'_, AppState>,
+  folder_id: String,
+  new_name: String,
+) -> Result<(), String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin(format!("重命名文件夹为 {}", new_name.trim()));
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  match operations::rename_folder(lib, &folder_id, &new_name) {
+    Ok(()) => {
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(())
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
 /// 移动 Placement 到目标文件夹，返回实际移动条数（去重 / 原地 / 陈旧项跳过不计）；
 /// 移出 root 时清 metadata.importedFrom（摘标：移动即转正）
 #[tauri::command]

@@ -13,18 +13,6 @@ import { useUndoStore } from "../stores/undo";
 
 export type { PlacementRef };
 
-// Windows 文件夹 / 文件命名规则（同 CreateLibraryForm 即时校验口径；后端 create_folder 同规则再拦一道）
-const ILLEGAL_CHARS = /[\\/:*?"<>|]/;
-const RESERVED_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
-
-export function validateWindowsName(name: string): string {
-  if (!name) return "名称不能留空";
-  if (ILLEGAL_CHARS.test(name)) return '名称不能包含 \\ / : * ? " < > | 特殊符号';
-  if (/[. ]$/.test(name)) return "名称不能以空格或点结尾";
-  if (RESERVED_NAMES.test(name)) return "该名称为系统保留名，请换一个";
-  return "";
-}
-
 // 写操作统一收尾：刷新 + 成功 toast（带撤销）；业务失败 = 中文字符串，info 条原样展示。
 // label 惰性求值：action 完成后才拼文案，计数类（移动 N 个）拿到真实返回值
 async function runOp(action: () => Promise<void>, label: () => string): Promise<boolean> {
@@ -125,6 +113,14 @@ export async function renamePlacement(ref: PlacementRef, newName: string): Promi
   }, () => `重命名为 ${newName.trim()}`);
 }
 
+// 重命名文件夹（2026-07-29 复验三轮，第 10 条命令）：FolderCard 名称双击 / 新建后命名保存共用；
+// 非法名后端拒绝走失败 toast，调用方不保留输入态
+export async function renameFolder(folderId: string, newName: string): Promise<boolean> {
+  return await runOp(async () => {
+    await invoke("rename_folder", { folderId, newName });
+  }, () => `重命名文件夹为 ${newName.trim()}`);
+}
+
 // 删除两段式（C1）：先 lastAction=null 干跑——涉及资源最后一条 Placement 时返回
 // needConfirm 不动数据，前端弹询问窗（DeleteConfirmDialog），用户选择后 confirmDelete 再调
 export async function deletePlacements(items: PlacementRef[]): Promise<void> {
@@ -160,26 +156,26 @@ export async function confirmDelete(lastAction: "recycle" | "uncategorized"): Pr
   }
 }
 
-// 新建文件夹（C3）：确认名称后才调 create_folder（命名中节点是前端临时态，取消不入库）；
-// 返回空串 = 成功，否则为后端中文错误文案（命名行内联提示，保持输入态）
+// 新建文件夹（2026-07-29 复验三轮改"先建后命名"）：直接以默认名建库，成功返回新文件夹 id
+// （调用方据此让树新节点进命名态）；失败 = null + 中文 toast——不再有"命名中临时节点"，
+// 也就不再有命名行内报错（旧流程的取消不入库 / 行内提示一并移除）
 export async function createFolder(
   parentId: string | null,
   name: string,
   afterFolderId: string | null,
-): Promise<string> {
-  const selection = useSelectionStore();
+): Promise<string | null> {
   const content = useContentStore();
   const toast = useToastStore();
   const undo = useUndoStore();
   try {
-    await invoke("create_folder", { parentId, name, afterFolderId });
-    selection.newFolderDraft = null;
+    const folder = await invoke<{ id: string }>("create_folder", { parentId, name, afterFolderId });
     await content.refresh();
     void undo.refreshState();
     toast.notify({ message: "已新建文件夹", actionLabel: "撤销", onAction: () => void undo.undo() });
-    return "";
+    return folder.id;
   } catch (e) {
-    return String(e);
+    toast.notify({ message: String(e), icon: "info" });
+    return null;
   }
 }
 

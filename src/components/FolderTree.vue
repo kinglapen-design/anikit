@@ -2,14 +2,15 @@
 // 文件夹树（递归）：展开 / 折叠状态每层自管，选中态写入 content store（阶段 1 仅样式）。
 // 缩进线（02_左侧边栏 04）：竖线为子层容器级连续线（从子项展开占位中心 x5 贯穿整层，
 // 穿过有子项的行与 item 间距，止于最后子项中心）；横线由叶子 TreeItem 自画（x5→x9）。
-// 新建文件夹"命名中"临时节点（6.1 C3，2026-07-28 定案）：前端临时态插入——确认名称后才调
-// create_folder（后端无 rename_folder），取消则不入库；名称校验同创建库表单（Windows 规则，
-// 违规输入框描边 --error + 提示行，确认时后端也会校验）。
+// 新建文件夹"先建后命名"（2026-07-29 复验三轮，替换原"命名中临时节点"）：入口直接以默认名
+// 建库（LibraryView），成功返回的新 id 写入 selection.namingFolderId，本组件对应节点进
+// naming 输入态——Enter / Esc / 失焦一律保存：名非空且变了 → renameFolder，空或不变保留
+// 默认名；命名态节点不参与拖拽 / 右键（不挂 data-folder-id，naming 态 TreeItem 是 div 非 button）。
 // 树 item 右键（C3）：「新建同级文件夹 / 新建子文件夹」菜单宿主在 LibraryView（Teleport body）。
-import { computed, nextTick, ref } from "vue";
+import { nextTick, ref } from "vue";
 import TreeItem from "./TreeItem.vue";
 import { dragView, visibleTreeFolderIds } from "../lib/dragOperation";
-import { createFolder, validateWindowsName } from "../lib/placementOps";
+import { renameFolder } from "../lib/placementOps";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 
@@ -17,10 +18,9 @@ const props = withDefaults(
   defineProps<{
     nodes: FolderNode[];
     depth?: number;
-    parentId?: string | null; // 本级节点列表的父文件夹（根级 = null），命名节点落点判定用
     forceOpenIds?: Set<string>; // 命名节点的祖先链强制展开（新建子文件夹时父级可能折叠）
   }>(),
-  { depth: 0, parentId: null, forceOpenIds: undefined },
+  { depth: 0, forceOpenIds: undefined },
 );
 const content = useContentStore();
 const selection = useSelectionStore();
@@ -54,40 +54,20 @@ function onSelect(id: string, e: MouseEvent): void {
   void nextTick(() => selection.clickFolder(id));
 }
 
-// 树 item 右键（C3）：菜单宿主在 LibraryView（AppMenu 必须 Teleport body）
+// 树 item 右键（C3）：菜单宿主在 LibraryView（AppMenu 必须 Teleport body）；
+// 命名态节点不出菜单（2026-07-29 复验三轮）
 function onItemMenu(e: MouseEvent, node: FolderNode): void {
+  if (selection.namingFolderId === node.id) return;
   selection.treeMenu = { x: e.clientX, y: e.clientY, node };
 }
 
-// —— "命名中"临时节点（C3）：本层是草稿落点时，插在 afterFolderId 之后（null = 末尾）——
-const draftHere = computed(() =>
-  selection.newFolderDraft && selection.newFolderDraft.parentId === props.parentId
-    ? selection.newFolderDraft
-    : null,
-);
-// 命名节点插入下标（nodes 数组内，在其后渲染）；afterFolderId 未命中（陈旧）按末尾处理
-const draftIndex = computed(() => {
-  if (!draftHere.value) return -1;
-  const after = draftHere.value.afterFolderId;
-  if (after === null) return props.nodes.length - 1;
-  const i = props.nodes.findIndex((n) => n.id === after);
-  return i < 0 ? props.nodes.length - 1 : i;
-});
-const nameError = ref("");
-async function onNameCommit(name: string): Promise<void> {
-  const draft = draftHere.value;
-  if (!draft) return;
-  const msg = validateWindowsName(name);
-  if (msg) {
-    nameError.value = msg;
-    return;
-  }
-  // 后端同规则再校验一道；失败文案内联提示并保持输入态
-  nameError.value = await createFolder(draft.parentId, name, draft.afterFolderId);
-}
-function onNameCancel(): void {
-  if (draftHere.value) selection.newFolderDraft = null;
-  nameError.value = "";
+// 命名保存（先建后命名）：非空且与当前名（默认名）不同 → renameFolder；
+// 空或不变 = 保留默认名直接退出，不再有"取消新建"
+async function onNameCommit(node: FolderNode, name: string): Promise<void> {
+  if (selection.namingFolderId !== node.id) return; // Enter 提交后 blur 晚到的双触发护栏
+  selection.namingFolderId = null;
+  if (!name || name === node.name) return;
+  await renameFolder(node.id, name);
 }
 </script>
 
@@ -104,56 +84,23 @@ function onNameCancel(): void {
         :selected="content.sidebarSelected === `folder:${node.id}` || selection.isFolderSelected(node.id)"
         :dimmed="dragView.folderIds?.has(node.id) ?? false"
         :last="index === nodes.length - 1"
-        :folder-id="node.id"
+        :folder-id="selection.namingFolderId === node.id ? undefined : node.id"
         :data-drag-name="node.name"
+        :naming="selection.namingFolderId === node.id"
         guide
         @toggle="toggle(node.id)"
         @select="onSelect(node.id, $event)"
+        @name-commit="onNameCommit(node, $event)"
       />
       <div
         v-if="isOpen(node.id) && node.children.length > 0"
         class="ft-children"
         :style="{ '--guide-x': `${depth * 20 + 24}px` }"
       >
-        <FolderTree
-          :nodes="node.children"
-          :depth="depth + 1"
-          :parent-id="node.id"
-          :force-open-ids="forceOpenIds"
-        />
+        <FolderTree :nodes="node.children" :depth="depth + 1" :force-open-ids="forceOpenIds" />
       </div>
     </div>
-    <!-- "命名中"临时节点：插到 afterFolderId 兄弟之后（draftIndex 命中行尾追加） -->
-    <div v-if="draftHere && draftIndex === index" class="ft-node naming">
-      <TreeItem
-        icon="folder-closed"
-        label=""
-        :depth="depth"
-        :last="index === nodes.length - 1"
-        guide
-        naming
-        :naming-error="!!nameError"
-        @name-commit="onNameCommit"
-        @name-cancel="onNameCancel"
-      />
-      <p v-if="nameError" class="name-error">{{ nameError }}</p>
-    </div>
   </template>
-  <!-- 空文件夹的"命名中"节点（新建子文件夹进空目录：v-for 不循环也要落点） -->
-  <div v-if="draftHere && nodes.length === 0" class="ft-node naming">
-    <TreeItem
-      icon="folder-closed"
-      label=""
-      :depth="depth"
-      last
-      guide
-      naming
-      :naming-error="!!nameError"
-      @name-commit="onNameCommit"
-      @name-cancel="onNameCancel"
-    />
-    <p v-if="nameError" class="name-error">{{ nameError }}</p>
-  </div>
 </template>
 
 <style scoped>
@@ -181,14 +128,5 @@ function onNameCancel(): void {
   bottom: 14px;
   width: 1px;
   background: var(--font-icon-6);
-}
-/* 命名节点校验提示行（C3）：caption 档 / --error */
-.name-error {
-  margin: 0;
-  padding-left: var(--space-16);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--error);
-  word-break: break-all;
 }
 </style>

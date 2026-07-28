@@ -487,7 +487,9 @@ export function gridPointerDown(e: PointerEvent, onBlank: (e: PointerEvent) => v
   const t = e.target as HTMLElement;
   // 卡片信息文字区（2026-07-29 复验二轮 4，对齐 Eagle）：.card-info 视为空白——
   // 按下拖动 = 起框选，未过阈值松开 = 清空选择；左键单击不选中卡片（刻意，
-  // AssetGrid onCardClick 同拦；右键菜单 / 双击预览 / F2 重命名不受影响）
+  // AssetGrid onCardClick 同拦；右键菜单 / 双击预览 / F2 重命名不受影响）。
+  // 2026-07-29 复验三轮：名称（.title / .name）退出 card-info 回卡片本体分支
+  //（可起拖拽 / 单击选中 / 双击改名），card-info 仅剩 meta 尺寸行 / .details
   if (t.closest(".card-info")) {
     onBlank(e);
     return;

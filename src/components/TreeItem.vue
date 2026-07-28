@@ -3,8 +3,9 @@
 // 无子项时保留占位保证装饰图标列对齐。
 // 层级缩进 20px：子项展开箭头尖角（缩进 + 4）对齐父级装饰图标中心（缩进 + 24），
 // 即缩进 = 8/2 + gap 2 + padding 6 + 图标 16/2 = 20（8×8 图标无 0.5 偏差）。
-// 命名输入态（6.1 C3）：受控 naming prop——只服务"新建文件夹后的命名输入"（后端无
-// rename_folder，已存在文件夹重命名留待后续，2026-07-28 定案）；Enter 提交 / Esc·失焦取消。
+// 命名输入态（6.1 C3）：受控 naming prop——服务新建文件夹后的命名（2026-07-29 复验三轮改
+// "先建后命名"：默认名先入库，命名 = rename_folder）；Enter / Esc / 失焦一律保存退出，
+// 空或不变 = 保留默认名（父级 FolderTree 判定）。
 // 拖拽落点（6.1 C4c）：item 高度三等分——上/下 1/3 出 2px 插入线 + hover 底（仅文件夹拖拽），
 // 中间 1/3（素材任何位置）= 并入高亮（--brand-1-12 + inset 1px --brand-1）。
 import { computed, nextTick, ref, watch } from "vue";
@@ -45,21 +46,21 @@ const emit = defineEmits<{
   toggle: [];
   select: [e: MouseEvent]; // 携带修饰键（2026-07-28 复验反馈 5：Ctrl 加选 / Shift 范围选）
   nameCommit: [name: string];
-  nameCancel: [];
 }>();
 
 // 数量标签显示规则（2026-07-25 用户定）：0 不显示（去视觉噪音）；父级展开后隐藏——
 // 数量的作用是提醒"哪个文件夹里有文件"，展开后用户已在观察父级内容，折叠后重新显示
 const showCount = computed(() => props.count !== undefined && props.count > 0 && !props.open);
 
-// 命名输入（C3）：挂载聚焦全选；Enter 提交（校验在父级，违规保持输入态）/ Esc·失焦取消
-const nameDraft = ref("新建文件夹");
+// 命名输入（2026-07-29 复验三轮"先建后命名"）：初值 = 节点当前名（默认名），挂载聚焦全选；
+// Enter / Esc / 失焦一律保存退出（空或不变的判定在父级 FolderTree）
+const nameDraft = ref("");
 const nameInput = ref<HTMLInputElement>();
 watch(
   () => props.naming,
   (n) => {
     if (!n) return;
-    nameDraft.value = "新建文件夹";
+    nameDraft.value = props.label;
     void nextTick(() => {
       nameInput.value?.focus();
       nameInput.value?.select();
@@ -90,7 +91,8 @@ const dropZone = computed(() =>
     <button class="expand" :class="{ placeholder: !expandable }" @click.stop="emit('toggle')">
       <AppIcon name="tree-expand-arrow" :size="8" class="chev" :class="{ open }" />
     </button>
-    <!-- 命名态用 div（input 套 button 是非法嵌套，Chromium 虽可用但行为无保障） -->
+    <!-- 命名态用 div（input 套 button 是非法嵌套，Chromium 虽可用但行为无保障）；
+         Enter / Esc / 失焦一律保存（2026-07-29 复验三轮，不再有"取消新建"） -->
     <div v-if="naming" class="body">
       <AppIcon :name="icon" class="deco" />
       <input
@@ -99,8 +101,8 @@ const dropZone = computed(() =>
         class="name-input"
         :class="{ error: namingError }"
         @keydown.enter.prevent="emit('nameCommit', nameDraft.trim())"
-        @keydown.esc.prevent="emit('nameCancel')"
-        @blur="emit('nameCancel')"
+        @keydown.esc.prevent="emit('nameCommit', nameDraft.trim())"
+        @blur="emit('nameCommit', nameDraft.trim())"
         @click.stop
         @pointerdown.stop
       />

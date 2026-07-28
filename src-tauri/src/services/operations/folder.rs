@@ -111,6 +111,27 @@ pub fn reorder_folders(
   library::save_folders(lib).map_err(|e| e.to_string())
 }
 
+/// 文件夹重命名（2026-07-29 复验三轮）：仅改数据不动磁盘（Folder 是数据层分组，无磁盘实体）。
+/// 名称走库名同一套 Windows 命名规则（validate_library_name）；同名 = 幂等无操作
+pub fn rename_folder(lib: &mut Library, folder_id: &str, new_name: &str) -> Result<(), String> {
+  let name = new_name.trim();
+  library::validate_library_name(name).map_err(|e| e.to_string())?;
+  let folder = lib
+    .folders
+    .folders
+    .iter_mut()
+    .find(|f| f.id == folder_id)
+    .ok_or_else(|| "目标文件夹不存在，可能已被删除".to_string())?;
+  if folder.name == name {
+    return Ok(());
+  }
+  folder.name = name.to_string();
+  sync_folder_index(lib);
+  library::save_folders(lib).map_err(|e| e.to_string())?;
+  log::info!("重命名文件夹 {folder_id} 为 {name}");
+  Ok(())
+}
+
 /// Folder 数据改动后索引同步（folders.folders 为事实来源，全量重建映射）
 fn sync_folder_index(lib: &mut Library) {
   lib.index.folders = lib.folders.folders.iter().map(|f| (f.id.clone(), f.clone())).collect();
@@ -484,5 +505,62 @@ mod tests {
     assert_eq!(h.lib.index.folders["F01-1"].parent.as_deref(), Some("F01"), "undo 后回到原父级");
     assert_eq!(h.lib.index.folders["F01-1"].order, 0);
     assert_eq!(top_orders(&h.lib), vec![("F01", 0), ("F02", 1)], "顺移过的兄弟一并回滚");
+  }
+
+  /// 重命名（2026-07-29 复验三轮）：基本改名 + 落盘 + 索引同步；同名幂等
+  #[test]
+  fn rename_folder_basic_and_idempotent() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "人物", None, 0);
+    add_folder(&mut h.lib, "F01-1", "子", Some("F01"), 0);
+
+    rename_folder(&mut h.lib, "F01", "角色").unwrap();
+    assert_eq!(h.lib.index.folders["F01"].name, "角色", "索引同步");
+    assert_eq!(h.lib.index.folders["F01"].order, 0, "改名不动 order / 父级");
+    assert_eq!(h.lib.index.folders["F01"].parent, None);
+    // 落盘验证
+    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.folders.iter().find(|f| f.id == "F01").unwrap().name, "角色");
+    // 子层级互不影响；前后空白 trim；同名幂等无操作
+    assert_eq!(h.lib.index.folders["F01-1"].name, "子");
+    rename_folder(&mut h.lib, "F01-1", "  站姿  ").unwrap();
+    assert_eq!(h.lib.index.folders["F01-1"].name, "站姿");
+    rename_folder(&mut h.lib, "F01", "角色").unwrap();
+    assert_eq!(h.lib.index.folders["F01"].name, "角色");
+  }
+
+  /// 非法名 / 空名 / 不存在目标拒绝（数据不动）
+  #[test]
+  fn rename_folder_rejects_invalid_names() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "人物", None, 0);
+
+    // 注意："结尾 " trim 后为合法名（与 create_folder 同口径，先 trim 再校验）
+    for bad in ["", "   ", "坏:名", "坏/名", "结尾.", "con"] {
+      assert!(rename_folder(&mut h.lib, "F01", bad).is_err(), "应拒绝：{bad:?}");
+    }
+    assert!(rename_folder(&mut h.lib, "F-不存在", "新名").is_err());
+    assert_eq!(h.lib.index.folders["F01"].name, "人物", "拒绝后数据不动");
+  }
+
+  /// 撤销接入验证（2026-07-29 复验三轮）：begin → record_file → 业务 → commit，undo 回滚 folders.json
+  #[test]
+  fn undo_rolls_back_rename_folder() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "人物", None, 0);
+    library::save_folders(&h.lib).unwrap(); // 先落盘，撤销快照才含测试数据
+    let path = h.lib.root.join(FOLDERS_FILE);
+
+    let mut undo = UndoManager::default();
+    undo.begin("重命名文件夹为 角色");
+    undo.record_file(&path).unwrap();
+    rename_folder(&mut h.lib, "F01", "角色").unwrap();
+    undo.commit().unwrap();
+    assert!(undo.state().can_undo);
+    assert_eq!(undo.state().undo_label.as_deref(), Some("重命名文件夹为 角色"));
+
+    undo.undo().unwrap();
+    crate::core::library::reload(&mut h.lib).unwrap();
+    assert_eq!(h.lib.index.folders["F01"].name, "人物", "undo 后恢复原名");
   }
 }

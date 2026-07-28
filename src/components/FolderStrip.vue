@@ -27,6 +27,12 @@ function onSelect(id: string, e: MouseEvent): void {
   );
 }
 
+// 双击卡片（非名称区域）= 进入该文件夹（2026-07-29 复验三轮）；
+// sidebarSelected watch 会清选择，无需手动；名称双击在卡片内 stop 不会到此
+function onEnter(id: string): void {
+  content.sidebarSelected = `folder:${id}`;
+}
+
 // 列宽 = 181 × 滑块行高 / 220（基准行高 220 时列宽 181——gap 16 + 左右间距后
 // 189 一排只放得下 3 列，181 一排正好 4 列；181 也是文件夹 SVG 原生宽度，1:1 显示）
 const colWidth = computed(() => Math.max(80, Math.round((181 * ui.targetRowHeight) / 220)));
@@ -45,6 +51,7 @@ const colWidth = computed(() => Math.max(80, Math.round((181 * ui.targetRowHeigh
         :selected="selection.isFolderSelected(f.id)"
         :dimmed="dragView.folderIds?.has(f.id) ?? false"
         @select="onSelect(f.id, $event)"
+        @dblclick="onEnter(f.id)"
       />
     </div>
   </section>

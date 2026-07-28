@@ -114,6 +114,11 @@ async function commitRename(): Promise<void> {
     name,
   );
 }
+// 双击名称 = 就地重命名（2026-07-29 复验三轮，renamingKey 既有机制——
+// 双击第一下 click 已把卡片单选入域，此处仅置重命名目标）
+function startRename(): void {
+  selection.renamingKey = cardKey;
+}
 
 // 放大镜 hover 触发（2026-07-28 用户定）：hover 按钮 150ms 出浮层（防划过闪），移出按钮即关
 let zoomTimer: ReturnType<typeof setTimeout> | undefined;
@@ -241,9 +246,10 @@ const meta = computed(() => {
         </button>
       </div>
     </div>
-    <!-- 信息文字区（2026-07-29 复验二轮 4，对齐 Eagle）：card-info = 框选语义上的空白——
-         按下拖动起框选 / 单击清空选择，不选中卡片（重命名仍 F2 / 右键，输入框自停冒泡） -->
-    <div class="texts card-info">
+    <!-- 信息文字区（2026-07-29 复验三轮）：标题退出 card-info——名称区悬停文本光标、
+         可起拖拽 / 单击正常选中、双击就地重命名（stop 防触发卡片双击预览）；
+         meta 尺寸行仍是 card-info 框选空白（按下拖动起框选 / 单击清空选择） -->
+    <div class="texts">
       <input
         v-if="renaming"
         ref="renameInput"
@@ -253,10 +259,11 @@ const meta = computed(() => {
         @keydown.esc.prevent="cancelRename"
         @blur="commitRename"
         @click.stop
+        @dblclick.stop
         @pointerdown.stop
       />
-      <span v-else class="title">{{ displayName }}</span>
-      <span v-show="ui.briefMode !== 'none'" class="meta">{{ meta }}</span>
+      <span v-else class="title" @dblclick.stop="startRename">{{ displayName }}</span>
+      <span v-show="ui.briefMode !== 'none'" class="meta card-info">{{ meta }}</span>
     </div>
   </div>
 </template>
@@ -398,6 +405,8 @@ const meta = computed(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-all;
+  /* 名称区悬停文本光标（2026-07-29 复验三轮：退出 card-info，双击可改名） */
+  cursor: text;
 }
 .meta {
   font-size: var(--text-caption-size);

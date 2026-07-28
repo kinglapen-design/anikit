@@ -42,12 +42,7 @@ export interface DeletePrompt {
   lastCount: number; // 涉及"最后一条 Placement"的资源数（询问窗文案）
 }
 
-// 新建文件夹"命名中"临时节点（C3）：确认名称后才调 create_folder，取消则不入库
-// （后端无 rename_folder，故先以前端临时态插入，2026-07-28 定案）
-export interface NewFolderDraft {
-  parentId: string | null; // null = 根级
-  afterFolderId: string | null; // 插到该兄弟之后；null = 该级末尾
-}
+// （2026-07-29 复验三轮：新建文件夹改"先建后命名"，原 NewFolderDraft 命名中临时节点已移除）
 
 function keyOf(p: { assetId: string; folderId: string }): string {
   return `${p.assetId}|${p.folderId}`;
@@ -68,8 +63,9 @@ export const useSelectionStore = defineStore("selection", {
     deletePrompt: null as DeletePrompt | null, // 非空 = 删除询问窗打开（宿主 App.vue）
     // 卡片就地重命名目标 key（C2；F2 / 右键菜单设置，单选才可；滚出视口 / Esc = 取消置 null）
     renamingKey: null as string | null,
-    // 新建文件夹"命名中"临时节点（C3）与文件树右键菜单（AppMenu，宿主 LibraryView）
-    newFolderDraft: null as NewFolderDraft | null,
+    // 新建文件夹命名态目标 id（2026-07-29 复验三轮"先建后命名"：createFolder 成功返回 id 后置位，
+    // 树对应节点进 naming 输入态，保存 / 退出后清 null）与文件树右键菜单（AppMenu，宿主 LibraryView）
+    namingFolderId: null as string | null,
     treeMenu: null as { x: number; y: number; node: FolderNode } | null,
   }),
   getters: {

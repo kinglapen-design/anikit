@@ -10,7 +10,7 @@ mod placement;
 
 pub use delete::{delete_placements, DeleteReport};
 pub use duplicate::{duplicate_placements, rename_placement};
-pub use folder::{create_folder, move_folders, reorder_folders};
+pub use folder::{create_folder, move_folders, rename_folder, reorder_folders};
 pub use placement::{link_placements, move_placements, reorder_placements};
 
 use serde::{Deserialize, Serialize};

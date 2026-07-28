@@ -4,10 +4,13 @@
 // 选中 2px 品牌色——与素材卡片一致）；文字组与素材卡片一致（间距 2 / 高 60 / 标题两行截断）。
 // 有缩略图态按 06_卡片 02 分层：图层4 背面 + 子项首个静态图片（照片探出，contain 不裁切，
 // 原文件夹浅色纸底保留托住透明通道）+ 有缩略图层1 正面下沿。
-import { computed } from "vue";
+// 交互（2026-07-29 复验三轮）：双击卡片（非名称区域）= 进入该文件夹（FolderStrip 接线）；
+// 双击名称 = 就地重命名（rename_folder 命令，stop 防触发"进入"）。
+import { computed, nextTick, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getIcon } from "../lib/icons";
 import { dragView } from "../lib/dragOperation";
+import { renameFolder } from "../lib/placementOps";
 import type { FolderNode } from "../stores/content";
 
 const props = withDefaults(
@@ -35,6 +38,28 @@ const meta = computed(() => {
     ? `${files} / ${props.folder.children.length} 个子文件夹`
     : files;
 });
+
+// —— 名称就地重命名（2026-07-29 复验三轮）：双击名称进输入态（stop 防触发卡片双击"进入"）；
+// Enter / 失焦 / Esc 一律保存退出——非空且变了才调 renameFolder，空或不变直接退出不动；
+// 输入框 pointerdown 自停冒泡（FolderCard 是拖拽起点，防起拖拽 / 防头部空白清选择）
+const renaming = ref(false);
+const renameDraft = ref("");
+const renameInput = ref<HTMLInputElement>();
+function startRename(): void {
+  renameDraft.value = props.folder.name;
+  renaming.value = true;
+  void nextTick(() => {
+    renameInput.value?.focus();
+    renameInput.value?.select();
+  });
+}
+async function commitRename(): Promise<void> {
+  if (!renaming.value) return; // Enter 提交后 blur 晚到的双触发护栏
+  renaming.value = false;
+  const name = renameDraft.value.trim();
+  if (!name || name === props.folder.name) return;
+  await renameFolder(props.folder.id, name);
+}
 </script>
 
 <template>
@@ -59,7 +84,21 @@ const meta = computed(() => {
       <span v-if="dropInto" class="drop-cover" aria-hidden="true" />
     </div>
     <div class="texts">
-      <span class="title">{{ folder.name }}</span>
+      <!-- 名称（2026-07-29 复验三轮）：双击 = 就地重命名（stop 防触发卡片双击"进入"）；
+           命名态输入框样式同素材卡片 rename-input -->
+      <input
+        v-if="renaming"
+        ref="renameInput"
+        v-model="renameDraft"
+        class="rename-input"
+        @keydown.enter.prevent="commitRename"
+        @keydown.esc.prevent="commitRename"
+        @blur="commitRename"
+        @click.stop
+        @dblclick.stop
+        @pointerdown.stop
+      />
+      <span v-else class="title folder-name" @dblclick.stop="startRename">{{ folder.name }}</span>
       <span class="meta">{{ meta }}</span>
     </div>
     <!-- 同级排序间隙竖块（C4 混排护栏：文件夹只与文件夹排序；宽 16 = 卡片间距档） -->
@@ -212,6 +251,26 @@ const meta = computed(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-all;
+}
+/* 名称区悬停文本光标（2026-07-29 复验三轮：双击可改名） */
+.folder-name:hover {
+  cursor: text;
+}
+/* 名称就地重命名输入（2026-07-29 复验三轮）：C4 底 / 1px border-1 / 圆角 6
+   （输入框 token 口径，同素材卡片 rename-input） */
+.rename-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-6);
+  border: none;
+  border-radius: var(--radius-6);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-1);
+  color: var(--font-icon-1);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  text-align: center;
+  outline: none;
 }
 .meta {
   font-size: var(--text-caption-size);

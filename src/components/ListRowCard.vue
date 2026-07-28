@@ -79,6 +79,11 @@ async function commitRename(): Promise<void> {
     name,
   );
 }
+// 双击名称 = 就地重命名（2026-07-29 复验三轮，renamingKey 既有机制——
+// 双击第一下 click 已把本行单选入域，此处仅置重命名目标）
+function startRename(): void {
+  selection.renamingKey = rowKey;
+}
 </script>
 
 <template>
@@ -109,10 +114,12 @@ async function commitRename(): Promise<void> {
         @keydown.esc.prevent="cancelRename"
         @blur="commitRename"
         @click.stop
+        @dblclick.stop
         @pointerdown.stop
       />
-      <!-- 信息区（2026-07-29 复验二轮 4，对齐 Eagle）：card-info = 框选语义上的空白 -->
-      <span v-else class="name card-info">{{ displayName }}</span>
+      <!-- 名称（2026-07-29 复验三轮）：退出 card-info——悬停文本光标、可起拖拽 /
+           单击正常选中、双击就地重命名（stop 防触发行双击预览） -->
+      <span v-else class="name" @dblclick.stop="startRename">{{ displayName }}</span>
     </div>
     <div class="details card-info">
       <span class="col size">{{ size }}</span>
@@ -179,6 +186,8 @@ async function commitRename(): Promise<void> {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* 名称区悬停文本光标（2026-07-29 复验三轮：退出 card-info，双击可改名） */
+  cursor: text;
 }
 /* 就地重命名输入（6.1 C2）：C4 底 / 1px border-1 / 圆角 6（输入框 token 口径） */
 .rename-input {

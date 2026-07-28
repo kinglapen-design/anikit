@@ -133,7 +133,8 @@ function onSelectionKeys(e: KeyboardEvent): void {
 }
 
 // 操作快捷键（6.1 阶段 C，2026-07-28 用户定案，与 onSelectionKeys 同口径）：
-// F2 = 重命名当前单选项（卡片就地重命名；多选不触发；文件夹重命名不在本轮——后端无 rename_folder）；
+// F2 = 重命名当前单选素材（卡片就地重命名；多选不触发；文件夹重命名走卡片名称双击 /
+// 新建后命名态，2026-07-29 复验三轮 rename_folder 已接入）；
 // Del = 删除选中项（两段式：先干跑，needConfirm 弹询问窗「移入回收站 / 保留为未分类」）；
 // Ctrl+C / Ctrl+X = 写内部剪贴板（仅素材）；Ctrl+V 仲裁（内部非空 → copy 弹关联弹窗 / cut 移动；
 // 空 → onPaste 系统剪贴板导入）；Ctrl+Shift+V = 直接副本不弹窗（名称同源）。

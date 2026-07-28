@@ -233,6 +233,7 @@ pub fn run() {
       commands::undo::redo,
       commands::undo::get_undo_state,
       commands::operations::create_folder,
+      commands::operations::rename_folder,
       commands::operations::move_placements,
       commands::operations::reorder_placements,
       commands::operations::reorder_folders,
