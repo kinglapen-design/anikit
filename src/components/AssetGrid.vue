@@ -54,6 +54,9 @@ function openPreview(p: PlacementView): void {
 //（文件夹选择域在 selection store，clickItem 内部互斥清理，2026-07-28 复验反馈 5）
 function onCardClick(p: PlacementView, e: MouseEvent): void {
   if (dragView.suppressClick) return; // 有效拖拽结束后紧随的 click 不当选择（拖拽引擎置位）
+  // 信息文字区（.card-info）左键单击不选中卡片（2026-07-29 复验二轮 4，对齐 Eagle——
+  // 视为空白：框选未过阈值已清空选择；右键菜单 / 双击预览不受影响）
+  if ((e.target as HTMLElement).closest(".card-info")) return;
   if (e.ctrlKey || e.metaKey || e.shiftKey) {
     selection.clickItem(`${p.assetId}|${p.folderId}`, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
     content.selectedInboxName = "";
@@ -175,9 +178,10 @@ const {
   onPointerCancel: onMarqueeCancel,
 } = useMarquee({
   viewport: viewportRef,
-  // 卡片 / 头部（文件夹区块、"内容"副标题、工程文件、列表列头）/ 滚动条 / 按钮上不启动框选
-  //（卡片行 / 列间距点在 cards-layer 上，不在排除列——正确落入框选，2026-07-28 复验反馈 3）
-  ignoreSelector: ".asset-card, .list-row, .grid-header, .list-header, .grid-track, button",
+  // 头部（文件夹区块、"内容"副标题、工程文件、列表列头）/ 滚动条 / 按钮上不启动框选；
+  // 卡片本体由 gridPointerDown 先行分发去拖拽不会到此，卡片信息区 .card-info 刻意放行
+  //（2026-07-29 复验二轮 4：信息区视为空白起框选；卡片行 / 列间距点在 cards-layer 上同落入）
+  ignoreSelector: ".grid-header, .list-header, .grid-track, button",
   hitTest: makeBoxHitTest({
     boxes: () => boxes.value,
     scale: () => canvasScale.value,

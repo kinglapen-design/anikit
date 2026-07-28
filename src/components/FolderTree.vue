@@ -6,7 +6,7 @@
 // create_folder（后端无 rename_folder），取消则不入库；名称校验同创建库表单（Windows 规则，
 // 违规输入框描边 --error + 提示行，确认时后端也会校验）。
 // 树 item 右键（C3）：「新建同级文件夹 / 新建子文件夹」菜单宿主在 LibraryView（Teleport body）。
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import TreeItem from "./TreeItem.vue";
 import { dragView, visibleTreeFolderIds } from "../lib/dragOperation";
 import { createFolder, validateWindowsName } from "../lib/placementOps";
@@ -46,6 +46,12 @@ function onSelect(id: string, e: MouseEvent): void {
     return;
   }
   content.sidebarSelected = `folder:${id}`;
+  // 2026-07-29 复验二轮 2 根因：树 plain click 原先只导航、不入文件夹选择域——
+  // sidebarSelected 高亮冒充选中态，用户拖"看着选中实则不在域内"的项时引擎按
+  // "拖拽未选中项 = 单选再拖"把已有多选清成单选（树多选排序只动被拖一项）。
+  // 修为 plain click 同步单选入域；App.vue 的 sidebarSelected watch 会 selection.clear()
+  //（pre flush 先于渲染执行），nextTick 让过它再入域
+  void nextTick(() => selection.clickFolder(id));
 }
 
 // 树 item 右键（C3）：菜单宿主在 LibraryView（AppMenu 必须 Teleport body）

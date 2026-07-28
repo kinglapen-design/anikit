@@ -18,6 +18,7 @@ import HoverVideoLayer from "./HoverVideoLayer.vue";
 import HoverAudioLayer from "./HoverAudioLayer.vue";
 import HoverSequenceLayer from "./HoverSequenceLayer.vue";
 import { CARD_CAPTION_H, type Box } from "../lib/layouts";
+import { dragView } from "../lib/dragOperation";
 import { formatBadgeColor, isAudioExt, isVideoExt } from "../lib/formatBadge";
 import { formatDuration } from "../lib/formatDuration";
 import { renamePlacement } from "../lib/placementOps";
@@ -74,6 +75,9 @@ const showZoom = computed(() => kind.value !== "iconOnly" && kind.value !== "vid
 
 // 悬停态：驱动播放层挂载（视频/音频）与动图播放
 const hovered = ref(false);
+// 拖拽期间全局禁用悬停层（2026-07-29 复验二轮 5，JS 闸）：拖拽激活时视同未悬停——
+// 播放层 v-if 条件即刻转假，走既有退出路径（卸载停播 / 动图还原封面 / 序列帧停轮播）
+const hoverActive = computed(() => hovered.value && !dragView.active);
 
 // —— 就地重命名（6.1 C2，2026-07-28 定案）：标题 ↔ 输入框；
 // Enter 确认 / Esc 取消 / 失焦确认；滚出虚拟滚动销毁 = 取消（AssetGrid 先清 renamingKey，
@@ -114,6 +118,7 @@ async function commitRename(): Promise<void> {
 // 放大镜 hover 触发（2026-07-28 用户定）：hover 按钮 150ms 出浮层（防划过闪），移出按钮即关
 let zoomTimer: ReturnType<typeof setTimeout> | undefined;
 function onZoomEnter(): void {
+  if (dragView.active) return; // 拖拽期间不出悬停放大浮层（2026-07-29 复验二轮 5）
   clearTimeout(zoomTimer);
   zoomTimer = setTimeout(() => emit("zoom"), 150);
 }
@@ -126,7 +131,7 @@ function onZoomLeave(): void {
 // 300ms 延迟后把卡片图换成源文件（webview 原生循环，零等待），停止后还原封面
 const animSrc = ref<string | null>(null);
 let animTimer: ReturnType<typeof setTimeout> | undefined;
-const animPlaying = computed(() => hovered.value || ui.autoPlayGif);
+const animPlaying = computed(() => hoverActive.value || ui.autoPlayGif);
 // immediate：虚拟滚动销毁重建 / 开关已开时挂载，animPlaying 初始即 true 无"变化"不触发——
 // 挂载即评估一次（修复：自动播放滚出视口再回来 / 视口外滚入不播，2026-07-27 用户实测）
 watch(
@@ -209,12 +214,12 @@ const meta = computed(() => {
       />
       <div v-else class="img" />
       <HoverVideoLayer
-        v-if="(hovered || ui.autoPlayVideo) && kind === 'video'"
+        v-if="(hoverActive || ui.autoPlayVideo) && kind === 'video'"
         :asset="asset"
-        :auto="!hovered"
+        :auto="!hoverActive"
       />
-      <HoverAudioLayer v-else-if="hovered && kind === 'audio'" :asset="asset" />
-      <HoverSequenceLayer v-else-if="(hovered || ui.autoPlayGif) && kind === 'sequence'" :asset="asset" />
+      <HoverAudioLayer v-else-if="hoverActive && kind === 'audio'" :asset="asset" />
+      <HoverSequenceLayer v-else-if="(hoverActive || ui.autoPlayGif) && kind === 'sequence'" :asset="asset" />
       <span v-if="badgeColor && ui.showExtBadge" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
       <span v-if="asset.noteCount" class="note-badge">{{ asset.noteCount }}</span>
       <div class="actions">
@@ -236,7 +241,9 @@ const meta = computed(() => {
         </button>
       </div>
     </div>
-    <div class="texts">
+    <!-- 信息文字区（2026-07-29 复验二轮 4，对齐 Eagle）：card-info = 框选语义上的空白——
+         按下拖动起框选 / 单击清空选择，不选中卡片（重命名仍 F2 / 右键，输入框自停冒泡） -->
+    <div class="texts card-info">
       <input
         v-if="renaming"
         ref="renameInput"
@@ -352,6 +359,12 @@ const meta = computed(() => {
 }
 .asset-card:hover .actions {
   opacity: 1;
+}
+/* 拖拽期间禁用悬停控件（2026-07-29 复验二轮 5，CSS 闸）：引擎 startDrag 置 body.dragging，
+   按钮组隐藏且不可点（防拖拽中残留显示）；特异性压过上行 hover 规则 */
+:global(body.dragging) .thumb .actions {
+  opacity: 0;
+  pointer-events: none;
 }
 .act {
   display: inline-flex;

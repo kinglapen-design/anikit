@@ -19,6 +19,19 @@
 //   ② 间隙 resolver 用 layer.getBoundingClientRect() 判容差，而 cards-layer 子卡片全绝对定位、
 //      层高度塌缩为 0，rect 只剩一条线 → 容差恒失败、间隙永不命中（复验反馈 2）；
 //      容差范围改按 boxes 包围盒计算（AssetGrid 同步给层补显式高度，复验反馈 3 同因）。
+//
+// 2026-07-29 复验二轮修复（根因记录）：
+//   ① 间隙指示与鼠标错位（鼠标在右侧卡片、竖块在左侧远处）——原间隙判定
+//      y < b.top + b.height/2 对同行所有 box 恒真，循环在阅读序首个同排 box 即 break，
+//      指针在行上半部时恒插到行首；修为"先定行再定列"（makeGridResolver 内详注）。
+//   ② 树多选排序只动被拖一项——根因在 FolderTree：树 plain click 只导航不入文件夹选择域
+//     （sidebarSelected 高亮冒充选中态），拖"看着选中实则不在域内"的项时 startDrag 按
+//      "未选中 = 单选再拖"把多选清成单选；修为树 plain click 同步单选入域（FolderTree）。
+//   ③ ghost 无缩略图——elementFromPoint 命中最深元素（常是 img 自身 / 信息区文字 span），
+//      dragGhost 只 querySelector 后代恒 miss 走纸片 fallback；修为 startDrag 先 closest
+//      到卡片根、多选取首个选中项卡片，dragGhost 读 currentSrc。
+//   ④ 信息区起框选（对齐 Eagle）：.card-info 在 gridPointerDown 视为空白交框选回调。
+//   ⑤ 拖拽期间禁用悬停层：startDrag 置 body.dragging（CSS 闸）+ dragView.active（AssetCard JS 闸）。
 import { reactive } from "vue";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
@@ -76,8 +89,9 @@ export function unregisterGridResolver(): void {
 }
 
 // 间距解析器工厂（C4a；主体落 lib 控制 AssetGrid 行数 ≤500，规范第 3 条）：
-// 按 pointer 在 boxes 中的阅读序定位间隙——行中点之前或同行左中点之前 = 插到该 box 前，
-// 否则段尾；返回 cards-layer 坐标系的色块矩形（宽 = 卡片间距 16 / 高 = 行高）与间隙后项 key。
+// 先定行再定列（2026-07-29 复验二轮 1）——行底 + 半行距之上入目标行，行内按 x 中点定间隙，
+// 行内未命中 = 插到下一行行首（竖块画在指针所在行的行末，贴指针）；无目标行 = 段尾。
+// 返回 cards-layer 坐标系的色块矩形（宽 = 卡片间距 16 / 高 = 行高）与间隙后项 key。
 // 仅文件夹视图可排序（快速访问视图无"当前文件夹段"概念，不出间隙落点）
 export function makeGridResolver(ctx: {
   isFolderView: () => boolean;
@@ -104,10 +118,24 @@ export function makeGridResolver(ctx: {
     }
     const x = (clientX - r.left) / s;
     const y = (clientY - r.top) / s;
+    // 2026-07-29 复验二轮 1 根因：原判定 y < b.top + b.height/2 对同行所有 box 恒真，
+    // 循环在阅读序首个同排 box 即 break——指针在行上半部时指示恒落行首（鼠标在右侧、
+    // 竖块在左侧远处）。修为两段：先定行（底 + 半行距），行内按 x 中点定间隙
     let idx = -1;
+    let rowBreak = false; // 行内 x 未命中 = 插到下一行行首（竖块画本行行末，贴指针）
+    let rowTop = Number.NaN;
     for (let i = 0; i < bs.length; i++) {
       const b = bs[i];
-      if (y < b.top + b.height / 2 || (y < b.top + b.height && x < b.left + b.width / 2)) {
+      if (Number.isNaN(rowTop)) {
+        if (y >= b.top + b.height + GAP / 2) continue;
+        rowTop = b.top;
+      }
+      if (b.top !== rowTop) {
+        idx = i;
+        rowBreak = true;
+        break;
+      }
+      if (x < b.left + b.width / 2) {
         idx = i;
         break;
       }
@@ -118,6 +146,16 @@ export function makeGridResolver(ctx: {
     }
     const b = bs[idx];
     const prev = bs[idx - 1];
+    if (rowBreak && prev) {
+      // 行末间隙：竖块贴在指针所在行的末卡之后（beforeKey 仍是下一行行首项，语义不变）
+      return {
+        left: prev.left + prev.width,
+        top: prev.top,
+        width: GAP,
+        height: prev.height,
+        beforeKey: ctx.keyAt(b.i),
+      };
+    }
     const sameRow = prev && prev.top === b.top;
     return {
       left: sameRow ? prev.left + prev.width : Math.max(0, b.left - GAP),
@@ -335,7 +373,19 @@ function startDrag(e: PointerEvent): void {
     sess.folderIds = selection.orderedSelectedFolderIds(visibleTreeFolderIds());
     dragView.folderIds = new Set(sess.folderIds);
   }
-  const anchor = document.elementFromPoint(sess.startX, sess.startY) as HTMLElement | null;
+  // ghost 取图锚点（2026-07-29 复验二轮 3）：elementFromPoint 命中最深元素（常是 img 自身 /
+  // 信息区文字 span），原 dragGhost 只 querySelector 后代恒 miss 走纸片 fallback——
+  // 先 closest 到卡片根；多选取首个选中项的卡片（卡片已渲染缩略图涵盖 PSD 缓存图 / 波形 /
+  // 视频首帧 / 序列帧封面全部形态，最可靠）
+  const hit = document.elementFromPoint(sess.startX, sess.startY) as HTMLElement | null;
+  let anchor = hit?.closest<HTMLElement>(".asset-card, .list-row, .folder-card, .tree-item") ?? null;
+  if (sess.kind === "asset" && sess.items.length > 0) {
+    const k0 = `${sess.items[0].assetId}|${sess.items[0].folderId}`;
+    anchor =
+      document.querySelector<HTMLElement>(
+        `.asset-card[data-key="${CSS.escape(k0)}"], .list-row[data-key="${CSS.escape(k0)}"]`,
+      ) ?? anchor;
+  }
   sess.ghost = makeGhost({
     anchor,
     kind: sess.kind,
@@ -345,6 +395,7 @@ function startDrag(e: PointerEvent): void {
   dragView.active = true;
   dragView.kind = sess.kind;
   document.body.style.userSelect = "none"; // 拖拽期间禁止文本选择
+  document.body.classList.add("dragging"); // 拖拽期间禁用悬停控件（2026-07-29 复验二轮 5，CSS 闸）
 }
 
 function onMove(e: PointerEvent): void {
@@ -367,6 +418,7 @@ function endDrag(cancelled: boolean): void {
   window.removeEventListener("keydown", onKey, true);
   s.ghost?.remove();
   document.body.style.userSelect = "";
+  document.body.classList.remove("dragging");
   const drop = s.drop;
   resetIndicators();
   dragView.active = false;
@@ -426,6 +478,13 @@ export function beginAssetDrag(e: PointerEvent, key: string): void {
 // 素材卡片 → 素材拖拽；文件夹卡片 → 文件夹拖拽；其余（空白，含卡片行 / 列间距）交回调（框选）
 export function gridPointerDown(e: PointerEvent, onBlank: (e: PointerEvent) => void): void {
   const t = e.target as HTMLElement;
+  // 卡片信息文字区（2026-07-29 复验二轮 4，对齐 Eagle）：.card-info 视为空白——
+  // 按下拖动 = 起框选，未过阈值松开 = 清空选择；左键单击不选中卡片（刻意，
+  // AssetGrid onCardClick 同拦；右键菜单 / 双击预览 / F2 重命名不受影响）
+  if (t.closest(".card-info")) {
+    onBlank(e);
+    return;
+  }
   const card = t.closest(".asset-card, .list-row");
   if (card) {
     const key = card.getAttribute("data-key");

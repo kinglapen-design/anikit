@@ -12,10 +12,13 @@ export function makeGhost(opts: {
 }): HTMLElement {
   const ghost = document.createElement("div");
   ghost.style.cssText = "position:fixed;z-index:3000;pointer-events:none;opacity:var(--opacity-drag-ghost);";
+  // 取卡片已渲染 <img> 的 currentSrc（2026-07-29 复验二轮 3：anchor 已由引擎 closest 到卡片根，
+  // currentSrc 涵盖 PSD 缓存图 / 波形 / 视频首帧 / 序列帧封面全部形态；无 img 才走纸片 fallback）
   const img = opts.anchor?.querySelector("img");
-  if (img?.src) {
+  const src = img?.currentSrc || img?.src;
+  if (img && src) {
     const g = document.createElement("img");
-    g.src = img.src;
+    g.src = src;
     g.draggable = false;
     // 短边 ≈96：按源缩略图渲染宽高比缩放（布局已完成，直接读渲染尺寸免等加载）
     const r = img.getBoundingClientRect();

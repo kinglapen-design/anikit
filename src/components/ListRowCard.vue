@@ -111,9 +111,10 @@ async function commitRename(): Promise<void> {
         @click.stop
         @pointerdown.stop
       />
-      <span v-else class="name">{{ displayName }}</span>
+      <!-- 信息区（2026-07-29 复验二轮 4，对齐 Eagle）：card-info = 框选语义上的空白 -->
+      <span v-else class="name card-info">{{ displayName }}</span>
     </div>
-    <div class="details">
+    <div class="details card-info">
       <span class="col size">{{ size }}</span>
       <span class="col format">{{ format }}</span>
       <span class="col filesize">123 MB</span>
