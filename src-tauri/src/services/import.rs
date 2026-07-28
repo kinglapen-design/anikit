@@ -279,42 +279,63 @@ pub(crate) fn build_asset_with_id(
   Ok(meta)
 }
 
-/// 收件箱自动合并（PRD 01-2.3 importedFrom，2026-07-22 用户定案）：内容相同不重复存——
-/// 已有资产（同为 inbox 渠道）改名为新文件真实名：磁盘 originName 与词干缩略图一并改名
-/// （4.1 重命名语义提前落地），metadata 更新（originName / name / thumbnail / modifiedAt）；
-/// 新文件与库内内容相同（hash 一致），作为重复丢弃。全部在锁外执行（单资源单文件）；
-/// 返回（更新后的 metadata, 是否发生了改名），调用方负责锁内索引与 Placement 更新。
-pub(crate) fn merge_rename(root: &Path, file: &PendingFile, asset_id: &str) -> Result<(AssetMeta, bool), String> {
+/// 改名原语（自 merge_rename 抽出，6.1 rename_placement 复用）：磁盘 originName 与
+/// 词干缩略图（{stem}_thumbnail.webp/png）同步改名，metadata 更新（originName / name /
+/// thumbnail / modifiedAt）并写盘。全部在锁外执行（单资源单文件）；
+/// 调用方负责锁内索引同步与撤销登记（renames 成对反转即 DiskOp::Rename）。
+pub(crate) struct OriginRename {
+  pub meta: AssetMeta,
+  /// 是否发生了改名（新旧 originName 不同）
+  pub renamed: bool,
+  /// 实际执行的磁盘改名（旧路径, 新路径），按执行顺序（撤销登记用）
+  pub renames: Vec<(PathBuf, PathBuf)>,
+}
+
+pub(crate) fn rename_origin(root: &Path, asset_id: &str, new_name: &str) -> Result<OriginRename, String> {
   let info_dir = root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
   let meta_path = info_dir.join("metadata.json");
   let mut meta: AssetMeta = read_json(&meta_path).map_err(|e| e.to_string())?;
-  let new_name = file_name(&file.path);
   let renamed = meta.origin_name != new_name;
+  let mut renames = Vec::new();
   if renamed {
     let old_origin = info_dir.join(&meta.origin_name);
+    let new_origin = info_dir.join(new_name);
     if old_origin.exists() {
-      fs::rename(&old_origin, info_dir.join(&new_name)).map_err(|e| format!("文件改名失败：{e}"))?;
+      fs::rename(&old_origin, &new_origin).map_err(|e| format!("文件改名失败：{e}"))?;
+      renames.push((old_origin, new_origin));
     }
-    // 词干缩略图（{stem}_thumbnail.webp/png）同步改名并重新登记
+    // 词干缩略图同步改名并重新登记
     if let Some(thumb) = meta.thumbnail.clone() {
       let old_thumb = info_dir.join(&thumb);
       if old_thumb.exists() {
         let ext = Path::new(&thumb).extension().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "webp".into());
-        let new_thumb = format!("{}_thumbnail.{ext}", file_stem(&file.path));
-        fs::rename(&old_thumb, info_dir.join(&new_thumb)).map_err(|e| format!("缩略图改名失败：{e}"))?;
+        let stem = Path::new(new_name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let new_thumb = format!("{stem}_thumbnail.{ext}");
+        let new_thumb_path = info_dir.join(&new_thumb);
+        fs::rename(&old_thumb, &new_thumb_path).map_err(|e| format!("缩略图改名失败：{e}"))?;
+        renames.push((old_thumb, new_thumb_path));
         meta.thumbnail = Some(new_thumb);
       }
     }
-    meta.origin_name = new_name;
-    meta.name = file_stem(&file.path);
+    meta.origin_name = new_name.to_string();
+    meta.name = Path::new(new_name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
   }
   meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
   write_json(&meta_path, &meta).map_err(|e| e.to_string())?;
+  Ok(OriginRename { meta, renamed, renames })
+}
+
+/// 收件箱自动合并（PRD 01-2.3 importedFrom，2026-07-22 用户定案）：内容相同不重复存——
+/// 已有资产（同为 inbox 渠道）改名为新文件真实名（走 rename_origin 原语：磁盘 originName
+/// 与词干缩略图一并改名，metadata 更新写盘）；新文件与库内内容相同（hash 一致），作为重复丢弃。
+/// 返回（更新后的 metadata, 是否发生了改名），调用方负责锁内索引与 Placement 更新。
+pub(crate) fn merge_rename(root: &Path, file: &PendingFile, asset_id: &str) -> Result<(AssetMeta, bool), String> {
+  let result = rename_origin(root, asset_id, &file_name(&file.path))?;
   // 重复源丢弃（过境语义）；删除失败仅记日志——启动清点会再撞一次合并，幂等无害
   if let Err(e) = fs::remove_file(&file.path) {
     log::error!("收件箱重复文件丢弃失败：{e}");
   }
-  Ok((meta, renamed))
+  Ok((result.meta, result.renamed))
 }
 
 /// 实体入库：Copy 复制；Move 优先 rename（同盘零拷贝），失败回退 复制+删除源（跨盘场景）
@@ -411,7 +432,7 @@ pub(crate) fn ensure_chain(lib: &mut Library, target: &str, chain: &[String]) ->
 }
 
 /// 新建文件夹（order 取同级末尾），索引同步插入
-fn create_folder(lib: &mut Library, parent: &str, name: &str) -> String {
+pub(crate) fn create_folder(lib: &mut Library, parent: &str, name: &str) -> String {
   let parent_key = if parent == ROOT_FOLDER_ID { None } else { Some(parent.to_string()) };
   let order = lib
     .folders
@@ -489,7 +510,7 @@ pub(crate) fn sha256_file(path: &Path) -> std::io::Result<String> {
 
 /// 生成文件夹 ID：`F` + 时间戳（yyMMddHHmm，时间有序）+ 3 位随机字符（防同秒冲突）。
 /// 参照 new_asset_id 风格；假数据里的 F01/F02 是人工示例，实际生成用此规则。
-fn new_folder_id() -> String {
+pub(crate) fn new_folder_id() -> String {
   const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   use rand::Rng;
   let mut rng = rand::thread_rng();

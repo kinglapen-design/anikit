@@ -86,8 +86,9 @@ pub fn validate(path: &Path) -> Result<(), DataError> {
   read_json::<serde_json::Value>(&folders_path).map(|_| ())
 }
 
-/// 资源库名称合法性（Windows 文件夹命名规则；前端表单同规则，命令接口统一把关）
-fn validate_library_name(name: &str) -> Result<(), DataError> {
+/// 资源库名称合法性（Windows 文件夹命名规则；前端表单同规则，命令接口统一把关）。
+/// pub(crate)：6.1 新建文件夹 / 重命名 Placement 复用同一套名称规则
+pub(crate) fn validate_library_name(name: &str) -> Result<(), DataError> {
   if name.is_empty() {
     return Err(DataError::NameInvalid("名称不能留空"));
   }
@@ -210,6 +211,11 @@ fn prune_missing_placements(folders: &mut FoldersFile, assets: &[AssetMeta]) -> 
 /// folders.json 单一写点（01_开发规范 第 1 条）：全量保存文件夹树 + 全部 Placement。
 pub fn save_folders(lib: &Library) -> Result<(), DataError> {
   write_json(&lib.root.join(FOLDERS_FILE), &lib.folders)
+}
+
+/// recycle.json 单一写点（01_开发规范 第 1 条）：全量保存回收站记录（6.1 删除落地启用）。
+pub fn save_recycle(lib: &Library) -> Result<(), DataError> {
+  write_json(&lib.root.join(RECYCLE_FILE), &lib.recycle)
 }
 
 /// 撤销 / 重做回滚后重载：盘上是事实来源——重读全部数据文件 + 重建内存索引（6.0）。

@@ -2,17 +2,19 @@
 // 列表行（02_通用组件/02_item 10）：缩略图（可随滑块缩放）+ 名称 + 尺寸 / 格式 / 文件大小 / 修改日期。
 // C3 / C1 交替行底色；1px border-2（inset）/ 圆角 8 / 内边距 6 8。
 // 文件大小 / 修改日期仍是假占位：阶段 4 排序功能接真实值（后端 PlacementView 待补 size / modifiedAt）。
-import { computed } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { Box } from "../lib/layouts";
 import { isAudioExt } from "../lib/formatBadge";
 import { formatDuration } from "../lib/formatDuration";
+import { renamePlacement } from "../lib/placementOps";
+import { useSelectionStore } from "../stores/selection";
 import type { PlacementView } from "../stores/content";
 import { useUiStore } from "../stores/ui";
 
 const props = withDefaults(
-  defineProps<{ asset: PlacementView; box: Box; odd?: boolean; selected?: boolean }>(),
-  { odd: false, selected: false },
+  defineProps<{ asset: PlacementView; box: Box; odd?: boolean; selected?: boolean; renaming?: boolean }>(),
+  { odd: false, selected: false, renaming: false },
 );
 const ui = useUiStore();
 
@@ -34,7 +36,42 @@ const format = computed(() => (isSeq.value ? "序列帧" : props.asset.ext.toUpp
 const displayName = computed(() =>
   isSeq.value ? `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧` : props.asset.name,
 );
-const emit = defineEmits<{ select: [] }>();
+const emit = defineEmits<{ select: [e: MouseEvent] }>();
+
+// —— 就地重命名（6.1 C2，与 AssetCard 同口径）：Enter 确认 / Esc 取消 / 失焦确认；
+// 滚出虚拟滚动销毁 = 取消（AssetGrid 先清 renamingKey，blur 晚到按 key 失配判取消）
+const selection = useSelectionStore();
+const rowKey = `${props.asset.assetId}|${props.asset.folderId}`;
+const renameDraft = ref("");
+const renameInput = ref<HTMLInputElement>();
+watch(
+  () => props.renaming,
+  (r) => {
+    if (!r) return;
+    renameDraft.value = props.asset.name;
+    void nextTick(() => {
+      const el = renameInput.value;
+      if (!el) return;
+      el.focus();
+      const dot = props.asset.name.lastIndexOf(".");
+      el.setSelectionRange(0, dot > 0 ? dot : props.asset.name.length); // 默认选中词干
+    });
+  },
+  { immediate: true },
+);
+function cancelRename(): void {
+  if (selection.renamingKey === rowKey) selection.renamingKey = null;
+}
+async function commitRename(): Promise<void> {
+  if (selection.renamingKey !== rowKey) return;
+  const name = renameDraft.value.trim();
+  selection.renamingKey = null;
+  if (!name || name === props.asset.name) return;
+  await renamePlacement(
+    { assetId: props.asset.assetId, folderId: props.asset.folderId, origin: props.asset.origin },
+    name,
+  );
+}
 </script>
 
 <template>
@@ -42,7 +79,7 @@ const emit = defineEmits<{ select: [] }>();
     class="list-row"
     :class="{ odd, selected }"
     :style="{ left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` }"
-    @click="emit('select')"
+    @click="emit('select', $event)"
   >
     <div class="main">
       <img
@@ -56,7 +93,18 @@ const emit = defineEmits<{ select: [] }>();
         draggable="false"
       />
       <div v-else class="thumb" :style="{ width: `${thumbW}px`, height: `${thumbH}px` }" />
-      <span class="name">{{ displayName }}</span>
+      <input
+        v-if="renaming"
+        ref="renameInput"
+        v-model="renameDraft"
+        class="rename-input"
+        @keydown.enter.prevent="commitRename"
+        @keydown.esc.prevent="cancelRename"
+        @blur="commitRename"
+        @click.stop
+        @pointerdown.stop
+      />
+      <span v-else class="name">{{ displayName }}</span>
     </div>
     <div class="details">
       <span class="col size">{{ size }}</span>
@@ -116,6 +164,21 @@ const emit = defineEmits<{ select: [] }>();
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* 就地重命名输入（6.1 C2）：C4 底 / 1px border-1 / 圆角 6（输入框 token 口径） */
+.rename-input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-6);
+  border: none;
+  border-radius: var(--radius-6);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-1);
+  color: var(--font-icon-1);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  outline: none;
 }
 /* 详情容器：尺寸 / 格式 / 文件大小 / 修改日期，正文 font-icon-3，固定列宽与列头对齐 */
 .details {

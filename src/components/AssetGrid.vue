@@ -11,6 +11,7 @@ import ListHeader from "./ListHeader.vue";
 import FolderStrip from "./FolderStrip.vue";
 import InboxDiskSection from "./InboxDiskSection.vue";
 import SectionHeader from "./SectionHeader.vue";
+import AssetCardMenu from "./AssetCardMenu.vue";
 import {
   CARD_CAPTION_H,
   computeJustified,
@@ -22,7 +23,16 @@ import {
   type Row,
 } from "../lib/layouts";
 import { useVirtualScroll } from "../lib/useVirtualScroll";
+import { useMarquee, makeBoxHitTest } from "../lib/useMarquee";
+import {
+  dragView,
+  gridPointerDown,
+  makeGridResolver,
+  registerGridResolver,
+  unregisterGridResolver,
+} from "../lib/dragOperation";
 import { useContentStore } from "../stores/content";
+import { useSelectionStore } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
 import { usePreviewStore } from "../stores/preview";
 import type { PlacementView } from "../stores/content";
@@ -30,11 +40,25 @@ import type { PlacementView } from "../stores/content";
 const props = defineProps<{ items: PlacementView[] }>();
 const ui = useUiStore();
 const content = useContentStore();
+const selection = useSelectionStore();
 const preview = usePreviewStore();
 
 // 进预览（4.3）：双击卡片
 function openPreview(p: PlacementView): void {
   void preview.open(`${p.assetId}|${p.folderId}`);
+}
+
+// 卡片点击选择（6.1，2026-07-28 用户定案）：单击 = 单选 / Ctrl+单击 = 加选切换 /
+// Shift+单击 = 锚点范围选（selection store 三态）；素材卡片选中与文件夹卡片 / 收件箱条目互斥
+function onCardClick(p: PlacementView, e: MouseEvent): void {
+  if (dragView.suppressClick) return; // 有效拖拽结束后紧随的 click 不当选择（拖拽引擎置位）
+  if (e.ctrlKey || e.metaKey || e.shiftKey) {
+    selection.clickItem(`${p.assetId}|${p.folderId}`, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
+    content.selectedFolderId = "";
+    content.selectedInboxName = "";
+  } else {
+    selection.selectOnly(`${p.assetId}|${p.folderId}`);
+  }
 }
 
 // 悬停放大浮层（5.3）：卡片放大镜按钮触发，同时最多一个
@@ -49,6 +73,7 @@ const viewportRef = ref<HTMLElement>();
 const trackRef = ref<HTMLElement>();
 const thumbRef = ref<HTMLElement>();
 const headerRef = ref<HTMLElement>();
+const cardsLayerRef = ref<HTMLElement>(); // 拖拽间隙落点坐标换算（C4 resolver）
 
 const boxes = shallowRef<Box[]>([]);
 const rows = shallowRef<Row[]>([]);
@@ -139,6 +164,55 @@ function onCtrlWheel(e: WheelEvent): void {
   ui.targetRowHeight = Math.max(80, Math.min(max, next));
 }
 
+// —— 框选（6.1，2026-07-28 用户定案；手势与命中算法在 lib/useMarquee）——
+// 命中口径 = 矩形（viewport 坐标）与 Box 换算后的可视矩形相交（相交口径，非全包）
+const {
+  marquee,
+  onPointerDown: onMarqueeDown,
+  onPointerMove: onMarqueeMove,
+  onPointerUp: onMarqueeUp,
+  onPointerCancel: onMarqueeCancel,
+} = useMarquee({
+  viewport: viewportRef,
+  // 卡片 / 头部（文件夹区块、"内容"副标题、工程文件、列表列头）/ 滚动条 / 按钮上不启动框选
+  ignoreSelector: ".asset-card, .list-row, .grid-header, .list-header, .grid-track, button",
+  hitTest: makeBoxHitTest({
+    boxes: () => boxes.value,
+    scale: () => canvasScale.value,
+    offsetY: () => headerH.value + 6 + listExtra.value - pos.value,
+    keyAt: (i) => `${props.items[i].assetId}|${props.items[i].folderId}`,
+  }),
+});
+
+// —— 卡片右键菜单（6.1 C6）：右键未选中项 = 先单选它；菜单本体在 AssetCardMenu（Teleport body）
+const cardMenu = ref<{ x: number; y: number } | null>(null);
+function onCardContextMenu(e: MouseEvent): void {
+  const card = (e.target as HTMLElement).closest(".asset-card, .list-row");
+  const key = card?.getAttribute("data-key");
+  if (!key) return;
+  e.preventDefault();
+  if (!selection.isSelected(key)) selection.selectOnly(key);
+  cardMenu.value = { x: e.clientX, y: e.clientY };
+}
+
+// —— 卡片间距排序落点解析器（C4a）：注册给拖拽引擎，算法主体在 lib/dragOperation makeGridResolver
+const resolveGap = makeGridResolver({
+  isFolderView: () => content.sidebarSelected.startsWith("folder:"),
+  layer: () => cardsLayerRef.value,
+  scale: () => canvasScale.value,
+  boxes: () => boxes.value,
+  keyAt: (i) => `${props.items[i].assetId}|${props.items[i].folderId}`,
+});
+
+// 就地重命名（C2）：滚出虚拟滚动销毁 = 取消——重命名卡片离开可视渲染集时清 renamingKey
+//（卡片组件 blur 晚于本清理到达时按 key 失配判取消，见 AssetCard.commitRename）
+watch(visibleCards, (cards) => {
+  const key = selection.renamingKey;
+  if (key && !cards.some((c) => `${c.asset.assetId}|${c.asset.folderId}` === key)) {
+    selection.renamingKey = null;
+  }
+});
+
 // 拖动窗口 / 拆分条期间：卡片层按宽度差等比缩放作重排前的视觉过渡——
 // 用户拖窗口是要更多展示空间（更多列），不是放大卡片：scale 限制 ±4%（轻微补充），
 // 超出立即重排（justified 列数随宽度变化），否则停顿 240ms 精确重排。
@@ -202,6 +276,7 @@ watch(
 onMounted(() => {
   attach(viewportRef.value!, trackRef.value!, thumbRef.value!);
   viewportRef.value!.addEventListener("wheel", onCtrlWheel, { passive: false });
+  registerGridResolver(resolveGap); // 拖拽卡片间距落点解析（C4）
   lastW = viewportRef.value!.clientWidth;
   lastH = viewportRef.value!.clientHeight;
   ro.observe(viewportRef.value!);
@@ -222,6 +297,7 @@ onBeforeUnmount(() => {
   content.saveScrollPos(content.sidebarSelected, pos.value);
   clearTimeout(resizeTimer);
   viewportRef.value?.removeEventListener("wheel", onCtrlWheel);
+  unregisterGridResolver();
   detach();
   ro.disconnect();
   headerRo?.disconnect();
@@ -229,7 +305,16 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="viewportRef" class="grid-viewport" tabindex="0">
+  <div
+    ref="viewportRef"
+    class="grid-viewport"
+    tabindex="0"
+    @pointerdown="gridPointerDown($event, onMarqueeDown)"
+    @pointermove="onMarqueeMove"
+    @pointerup="onMarqueeUp"
+    @pointercancel="onMarqueeCancel"
+    @contextmenu="onCardContextMenu"
+  >
     <div class="grid-canvas" :style="{ transform: `translateY(${-pos}px)` }">
       <div ref="headerRef" class="grid-header">
         <!-- 当前视口无子文件夹时整个文件夹区块隐藏（阶段3修改定案） -->
@@ -248,6 +333,7 @@ onBeforeUnmount(() => {
       </div>
       <div
         v-show="assetsOpen"
+        ref="cardsLayerRef"
         class="cards-layer"
         :style="{ transform: `translateY(${headerH + 6 + listExtra}px) scale(${canvasScale})` }"
       >
@@ -258,12 +344,11 @@ onBeforeUnmount(() => {
             :asset="c.asset"
             :box="c.box"
             :odd="c.odd"
-            :selected="content.selectedAssetKey === `${c.asset.assetId}|${c.asset.folderId}`"
-            @select="
-              content.selectedAssetKey = `${c.asset.assetId}|${c.asset.folderId}`;
-              content.selectedFolderId = '';
-              content.selectedInboxName = '';
-            "
+            :selected="selection.isSelected(`${c.asset.assetId}|${c.asset.folderId}`)"
+            :renaming="selection.renamingKey === `${c.asset.assetId}|${c.asset.folderId}`"
+            :data-key="`${c.asset.assetId}|${c.asset.folderId}`"
+            :data-drag-name="c.asset.name"
+            @select="onCardClick(c.asset, $event)"
             @dblclick="openPreview(c.asset)"
           />
         </template>
@@ -273,17 +358,28 @@ onBeforeUnmount(() => {
             :key="`${c.asset.assetId}|${c.asset.folderId}`"
             :asset="c.asset"
             :box="c.box"
-            :selected="content.selectedAssetKey === `${c.asset.assetId}|${c.asset.folderId}`"
-            @click="
-              content.selectedAssetKey = `${c.asset.assetId}|${c.asset.folderId}`;
-              content.selectedFolderId = '';
-              content.selectedInboxName = '';
-            "
+            :selected="selection.isSelected(`${c.asset.assetId}|${c.asset.folderId}`)"
+            :renaming="selection.renamingKey === `${c.asset.assetId}|${c.asset.folderId}`"
+            :data-key="`${c.asset.assetId}|${c.asset.folderId}`"
+            :data-drag-name="c.asset.name"
+            @click="onCardClick(c.asset, $event)"
             @dblclick="openPreview(c.asset)"
             @zoom="zoomAsset = c.asset"
             @zoom-close="zoomAsset = null"
           />
         </template>
+        <!-- 拖拽卡片间距落点（C4a）：圆角竖向矩形色块填间距（--brand-1-12 + inset 1px --brand-1），
+             坐标与卡片同层同变换，事件穿透 -->
+        <div
+          v-if="dragView.gap"
+          class="drop-gap"
+          :style="{
+            left: `${dragView.gap.left}px`,
+            top: `${dragView.gap.top}px`,
+            width: `${dragView.gap.width}px`,
+            height: `${dragView.gap.height}px`,
+          }"
+        />
       </div>
     </div>
     <div v-show="scrollable" ref="trackRef" class="grid-track">
@@ -298,8 +394,21 @@ onBeforeUnmount(() => {
       v-if="ui.layoutMode === 'list' && assetsOpen"
       :style="{ top: `${Math.max(0, headerH + 6 - pos)}px` }"
     />
+    <!-- 框选矩形（6.1）：--brand-1-12 填充 + 1px --brand-1 描边，事件穿透不挡卡片 -->
+    <div
+      v-if="marquee"
+      class="marquee"
+      :style="{
+        left: `${marquee.left}px`,
+        top: `${marquee.top}px`,
+        width: `${marquee.width}px`,
+        height: `${marquee.height}px`,
+      }"
+    />
     <!-- 悬停放大浮层（5.3）：Teleport 到 body，点击任意处 / Esc 关闭 -->
     <HoverZoomOverlay v-if="zoomAsset" :asset="zoomAsset" @close="zoomAsset = null" />
+    <!-- 卡片右键菜单（6.1 C6）：组件内 Teleport body（transform 祖先坑，同 InboxDiskSection） -->
+    <AssetCardMenu v-if="cardMenu" :x="cardMenu.x" :y="cardMenu.y" @close="cardMenu = null" />
   </div>
 </template>
 
@@ -353,5 +462,23 @@ onBeforeUnmount(() => {
 }
 .grid-thumb:hover {
   background: var(--border-1);
+}
+/* 框选矩形（6.1，2026-07-28 用户定）：--brand-1-12 填充 + 1px --brand-1 描边
+   （inset shadow 模拟边框——规范第 4 条 UI 线条不用 border）；滚动条（z 10）之下、卡片之上 */
+.marquee {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--brand-1-12);
+  box-shadow: inset 0 0 0 1px var(--brand-1);
+}
+/* 拖拽卡片间距落点色块（C4a，2026-07-28 定案）：圆角竖向矩形填间距，同框选配色 */
+.drop-gap {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: var(--radius-4);
+  background: var(--brand-1-12);
+  box-shadow: inset 0 0 0 1px var(--brand-1);
 }
 </style>

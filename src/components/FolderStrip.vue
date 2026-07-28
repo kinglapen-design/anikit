@@ -5,12 +5,23 @@
 import { computed, ref } from "vue";
 import SectionHeader from "./SectionHeader.vue";
 import FolderCard from "./FolderCard.vue";
+import { dragView } from "../lib/dragOperation";
 import { useContentStore } from "../stores/content";
+import { useSelectionStore } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
 
 const content = useContentStore();
+const selection = useSelectionStore();
 const ui = useUiStore();
 const folderOpen = ref(true);
+
+// 文件夹卡片选中（与素材卡片 / 收件箱条目互斥）；有效拖拽结束后的紧随 click 不触发（C4 引擎置位）
+function onSelect(id: string): void {
+  if (dragView.suppressClick) return;
+  content.selectedFolderId = id;
+  selection.clear();
+  content.selectedInboxName = "";
+}
 
 // 列宽 = 181 × 滑块行高 / 220（基准行高 220 时列宽 181——gap 16 + 左右间距后
 // 189 一排只放得下 3 列，181 一排正好 4 列；181 也是文件夹 SVG 原生宽度，1:1 显示）
@@ -28,11 +39,7 @@ const colWidth = computed(() => Math.max(80, Math.round((181 * ui.targetRowHeigh
         :thumb-path="content.folderThumbMap.get(f.id) ?? null"
         class="cell"
         :selected="content.selectedFolderId === f.id"
-        @select="
-          content.selectedFolderId = f.id;
-          content.selectedAssetKey = '';
-          content.selectedInboxName = '';
-        "
+        @select="onSelect(f.id)"
       />
     </div>
   </section>

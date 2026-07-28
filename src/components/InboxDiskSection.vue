@@ -14,8 +14,10 @@ import MenuDivider from "./MenuDivider.vue";
 import SectionHeader from "./SectionHeader.vue";
 import { formatBadgeColor } from "../lib/formatBadge";
 import { useContentStore, type ImportEvent, type InboxDiskEntry } from "../stores/content";
+import { useSelectionStore } from "../stores/selection";
 
 const content = useContentStore();
+const selection = useSelectionStore();
 const diskOpen = ref(true);
 
 // 操作错误（打开 / 重命名 / 删除 / 导入占用拦截）：后端中文人话原样展示，5 秒自消
@@ -47,7 +49,7 @@ function sizeLabel(e: InboxDiskEntry): string {
 // 选中：与素材卡片 / 文件夹卡片互斥（content.selectedInboxName 第三态）
 function select(e: InboxDiskEntry): void {
   content.selectedInboxName = e.name;
-  content.selectedAssetKey = "";
+  selection.clear();
   content.selectedFolderId = "";
 }
 

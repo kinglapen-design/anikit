@@ -2,7 +2,7 @@
 // 主窗口（03_UI 布局/01）：C1 底 / 圆角 8 / padding 0 / 间距 0 / 外边框 2px border-1。
 // 全透明无边框窗口：最大化时去圆角与边框；resize 判定在可视边缘内 8px（startResizeDragging）。
 // 导入弹窗宿主：菜单 / 拖拽填 content.importDraft，ImportDialog 确认后刷新内容区。
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, type ResizeDirection } from "@tauri-apps/api/window";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -16,14 +16,19 @@ import ImportDialog from "./components/ImportDialog.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
 import ImportResultDialog from "./components/ImportResultDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
+import LinkDialog from "./components/LinkDialog.vue";
+import DeleteConfirmDialog from "./components/DeleteConfirmDialog.vue";
 import ToastStack from "./components/ToastStack.vue";
 import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
+import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
 import { useUndoStore } from "./stores/undo";
+import { copySelection, deletePlacements, pasteClipboard, pasteDuplicate } from "./lib/placementOps";
 
 const ui = useUiStore();
 const content = useContentStore();
+const selection = useSelectionStore();
 const preview = usePreviewStore();
 const undo = useUndoStore();
 const maximized = ref(false);
@@ -82,8 +87,11 @@ async function onDrop(paths: string[], x: number, y: number): Promise<void> {
 }
 
 // 剪贴板导入（PRD 05-01；2026-07-27 扩：图片 + 文件列表，恒 Copy）；剪贴板无图无文件属常态，静默降级
+// 6.1 仲裁（2026-07-28 定案）：内部剪贴板非空时 Ctrl+V 归 onOperationKeys（关联弹窗 / 移动），
+// 本函数只处理"内部剪贴板为空"的系统剪贴板导入；Ctrl+Shift+V = 粘贴为副本快捷键，不走导入
 async function onPaste(e: KeyboardEvent): Promise<void> {
   if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "v") return;
+  if (e.shiftKey || selection.clipboard) return;
   const t = e.target as HTMLElement;
   if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
   if (needLibrarySetup.value || content.importDraft) return;
@@ -104,6 +112,64 @@ function onUndoRedo(e: KeyboardEvent): void {
     void undo.redo();
   } else {
     void undo.undo();
+  }
+}
+
+// 选择快捷键（6.1，2026-07-28 用户定案）：Ctrl+A 全选素材卡片 / Esc 清空选择。
+// 与 onPaste / onUndoRedo 同口径：输入框内不拦截；预览打开 / 预览子窗口不抢（PreviewPanel 自行处理 Esc 等）；
+// 菜单（AppMenu）/ 悬停大图浮层（HoverZoomOverlay）打开时让位——两者各自捕获 Esc 关闭，此刻不清选择
+function onSelectionKeys(e: KeyboardEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+  if (previewParam || preview.assetKey || needLibrarySetup.value) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+    e.preventDefault();
+    selection.selectAll();
+    return;
+  }
+  if (e.key === "Escape" && !document.querySelector(".app-menu, .zoom-mask")) {
+    selection.clear();
+  }
+}
+
+// 操作快捷键（6.1 阶段 C，2026-07-28 用户定案，与 onSelectionKeys 同口径）：
+// F2 = 重命名当前单选项（卡片就地重命名；多选不触发；文件夹重命名不在本轮——后端无 rename_folder）；
+// Del = 删除选中项（两段式：先干跑，needConfirm 弹询问窗「移入回收站 / 保留为未分类」）；
+// Ctrl+C / Ctrl+X = 写内部剪贴板（仅素材）；Ctrl+V 仲裁（内部非空 → copy 弹关联弹窗 / cut 移动；
+// 空 → onPaste 系统剪贴板导入）；Ctrl+Shift+V = 直接副本不弹窗（名称同源）。
+// 快速访问视图不作粘贴目标（toast 提示）；菜单 / 浮层 / 弹窗打开时让位
+function onOperationKeys(e: KeyboardEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+  if (previewParam || preview.assetKey || needLibrarySetup.value) return;
+  if (document.querySelector(".app-menu, .zoom-mask, .link-mask, .del-mask")) return;
+  if (e.key === "F2") {
+    if (selection.count === 1) {
+      e.preventDefault();
+      selection.renamingKey = selection.first;
+    }
+    return;
+  }
+  if (e.key === "Delete") {
+    if (selection.count > 0) {
+      e.preventDefault();
+      void deletePlacements(selection.selectedRefs());
+    }
+    return;
+  }
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  if (k === "c" || k === "x") {
+    if (selection.count > 0) {
+      e.preventDefault();
+      copySelection(k === "c" ? "copy" : "cut");
+    }
+    return;
+  }
+  if (k === "v" && selection.clipboard) {
+    e.preventDefault();
+    if (e.shiftKey) void pasteDuplicate();
+    else void pasteClipboard();
   }
 }
 
@@ -140,6 +206,10 @@ onMounted(() => {
   window.addEventListener("resize", onResize);
   window.addEventListener("keydown", onPaste);
   window.addEventListener("keydown", onUndoRedo);
+  window.addEventListener("keydown", onSelectionKeys);
+  window.addEventListener("keydown", onOperationKeys);
+  // 视图切换（6.1）：左栏选中项变化即清空素材选择
+  watch(() => content.sidebarSelected, () => selection.clear());
   void content.initInboxListener(); // 收件箱自动入库（3.2），App 存活期注册一次
   void content.initFpsHealListener(); // 存量视频 fps 自愈通知（2026-07-28 复验反馈修复）
   void preview.initPreviewListener(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3）
@@ -171,6 +241,8 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", onResize);
   window.removeEventListener("keydown", onPaste);
   window.removeEventListener("keydown", onUndoRedo);
+  window.removeEventListener("keydown", onSelectionKeys);
+  window.removeEventListener("keydown", onOperationKeys);
   unlistenDragDrop?.();
   unlistenMoved?.();
   unlistenResized?.();
@@ -236,6 +308,10 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
     />
     <!-- hash 冲突逐个询问（导入完成后弹出；10_重复添加提示） -->
     <DuplicateDialog v-if="content.importConflicts && content.importConflicts.length > 0" />
+    <!-- 关联 / 副本弹窗（6.1 C5）：Ctrl+V(copy) / Ctrl+拖拽落文件夹 / 右键"粘贴"触发 -->
+    <LinkDialog v-if="selection.linkDraft" />
+    <!-- 删除两段式询问窗（6.1 C1）：needConfirm 时弹出「移入回收站 / 保留为未分类」 -->
+    <DeleteConfirmDialog v-if="selection.deletePrompt" />
   </div>
 </template>
 

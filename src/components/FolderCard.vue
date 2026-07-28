@@ -7,6 +7,7 @@
 import { computed } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getIcon } from "../lib/icons";
+import { dragView } from "../lib/dragOperation";
 import type { FolderNode } from "../stores/content";
 
 const props = withDefaults(
@@ -19,6 +20,13 @@ const backSvg = getIcon("folder-card-layer4");
 const frontThumbSvg = getIcon("folder-card-thumb-layer1");
 const thumbUrl = computed(() => (props.thumbPath ? convertFileSrc(props.thumbPath) : ""));
 
+// 拖拽落点视觉（6.1 C4b，2026-07-28 定案）：并入 = 覆盖缩略图区域的方形覆盖
+//（--brand-1-12 + inset 1px --brand-1）；同级排序 = 卡片左/右侧间隙竖块（仅文件夹拖拽）
+const dropInto = computed(() => dragView.folderCardId === props.folder.id);
+const gapSide = computed(() =>
+  dragView.folderGapId === props.folder.id ? (dragView.folderGapAfter ? "right" : "left") : null,
+);
+
 // 副文本规则：有子文件夹显示"X 个文件 / Y 个子文件夹"，没有则仅"X 个文件"（可为 0）
 const meta = computed(() => {
   const files = `${props.folder.count.toLocaleString()} 个文件`;
@@ -29,7 +37,13 @@ const meta = computed(() => {
 </script>
 
 <template>
-  <div class="folder-card" :class="{ selected }" @click="emit('select')">
+  <div
+    class="folder-card"
+    :class="{ selected }"
+    :data-folder-id="folder.id"
+    :data-drag-name="folder.name"
+    @click="emit('select')"
+  >
     <div class="icon-wrap" :class="{ thumb: !!thumbUrl }">
       <template v-if="thumbUrl">
         <span class="layer back" v-html="backSvg" />
@@ -40,21 +54,54 @@ const meta = computed(() => {
       <template v-else>
         <span class="layer plain" v-html="folderSvg" />
       </template>
+      <!-- 拖拽并入覆盖（C4b）：盖住整个缩略图区域的方形覆盖 -->
+      <span v-if="dropInto" class="drop-cover" aria-hidden="true" />
     </div>
     <div class="texts">
       <span class="title">{{ folder.name }}</span>
       <span class="meta">{{ meta }}</span>
     </div>
+    <!-- 同级排序间隙竖块（C4 混排护栏：文件夹只与文件夹排序；宽 16 = 卡片间距档） -->
+    <span v-if="gapSide" class="drop-gap" :class="gapSide" aria-hidden="true" />
   </div>
 </template>
 
 <style scoped>
 /* 总容器：间距 4；宽度由 FolderStrip 弹性控制（基准 189） */
 .folder-card {
+  position: relative; /* 拖拽间隙竖块挂点（C4） */
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   cursor: default;
+}
+/* 拖拽并入覆盖（C4b，2026-07-28 定案）：--brand-1-12 填充 + inset 1px --brand-1，
+   盖住整个缩略图区域（含分层 SVG，须在 ::after 边框层之上） */
+.drop-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: var(--radius-8);
+  background: var(--brand-1-12);
+  box-shadow: inset 0 0 0 1px var(--brand-1);
+  pointer-events: none;
+}
+/* 同级排序间隙竖块（C4）：宽 = 卡片间距 16 / 高随卡片整体，圆角竖向矩形色块 */
+.drop-gap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 16px;
+  border-radius: var(--radius-4);
+  background: var(--brand-1-12);
+  box-shadow: inset 0 0 0 1px var(--brand-1);
+  pointer-events: none;
+}
+.drop-gap.left {
+  left: -16px;
+}
+.drop-gap.right {
+  right: -16px;
 }
 /* 图标容器：padding 0 / 圆角 8（= SVG 外形圆角，裁切弧与 SVG 弧重合，常态不截断）；
    边框由 ::after 绘制（不占布局，圆角同为 8——hover/选中框外缘与 SVG 弧重合，

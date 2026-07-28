@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isStaticImageExt } from "../lib/formatBadge";
+import { useSelectionStore } from "./selection";
 
 // 与后端 commands/import.rs 输出一一对应（camelCase，07_接口文档）
 export interface PlacementView {
@@ -145,8 +146,8 @@ export const useContentStore = defineStore("content", {
     folders: markRaw([]) as FolderNode[],
     // 左栏选中项：quick:all / quick:uncategorized… / folder:{id}
     sidebarSelected: "quick:all",
-    // 选中互斥：选中素材卡片时取消文件夹卡片选中，反之亦然
-    selectedAssetKey: "", // `${assetId}|${folderId}`，空串 = 无选中
+    // 选中互斥：选中素材卡片（selection store）时取消文件夹卡片选中，反之亦然。
+    // 素材卡片选中键已迁 selection store（6.1 多选改造），selectedAssetKey 为下方派生 getter
     selectedFolderId: "",
     // 导入弹窗草稿：菜单 / 拖拽触发后填入，ImportDialog 读取；确认或取消后清空
     importDraft: null as ImportDraft | null,
@@ -170,12 +171,17 @@ export const useContentStore = defineStore("content", {
     // 收件箱磁盘实况（4.4"工程文件"区块）：磁盘为事实来源，不建档不写库；
     // inbox-fs-changed 事件（去抖 150ms）与手动操作后全量重扫替换
     inboxDisk: [] as InboxDiskEntry[],
-    // 选中互斥第三态：磁盘实况条目选中名（与 selectedAssetKey / selectedFolderId 互斥）
+    // 选中互斥第三态：磁盘实况条目选中名（与素材卡片选中（selection store）/ selectedFolderId 互斥）
     selectedInboxName: "",
     // 原导入的来源模式（冲突"保留两个"决策继承；剪贴板导入恒 move）
     lastImportSource: "copy" as "copy" | "move",
   }),
   getters: {
+    // 素材卡片选中键（6.1 多选改造，2026-07-28 用户定案）：转发 selection store 首项——
+    // 详情面板 / 预览等单资产消费方原样不动；空串 = 无选中（语义同原 state 字段）
+    selectedAssetKey(): string {
+      return useSelectionStore().first;
+    },
     // 当前视口的资源列表（最近使用 / 回收站对应阶段再接，本轮给空）
     visiblePlacements(state): PlacementView[] {
       if (state.sidebarSelected.startsWith("folder:")) {
@@ -266,6 +272,8 @@ export const useContentStore = defineStore("content", {
       // 数组保持可追踪（流式 push 触发）；元素由 Vue 惰性代理，10 万级只代理可视区
       this.placements = placements;
       this.folders = markRaw(folders);
+      // 选择态剔除已不存在的 key（6.1；refresh 后 placements 已就位）
+      useSelectionStore().prune();
     },
     async refreshFolders(): Promise<void> {
       this.folders = markRaw(await invoke<FolderNode[]>("list_folder_tree"));

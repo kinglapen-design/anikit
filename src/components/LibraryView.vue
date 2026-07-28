@@ -1,12 +1,21 @@
 <script setup lang="ts">
 // 资源库视图（PRD 04-1）：快速访问区块 + 文件树区块（03_UI 布局/02_左侧边栏 04 树形容器）。
-import { ref } from "vue";
+// 新建文件夹（6.1 C3，2026-07-28 定案）：三入口——区块头 + 按钮（跟随 sidebarSelected：
+// folder → 建兄弟插其下一行；quick:* → 根级最底部）、树 item 右键菜单（同级 / 子级）、
+// 树空白处右键（根级最底部）；统一走"命名中"临时节点（FolderTree），确认才 create_folder。
+// 树 item 拖拽起点（C4）：pointerdown 超阈值进拖拽引擎，未过阈值 = 原 click 选中语义。
+import { computed, ref } from "vue";
 import SectionHeader from "./SectionHeader.vue";
 import TreeItem from "./TreeItem.vue";
 import FolderTree from "./FolderTree.vue";
-import { useContentStore } from "../stores/content";
+import AppMenu from "./AppMenu.vue";
+import MenuItem from "./MenuItem.vue";
+import { beginFolderDrag } from "../lib/dragOperation";
+import { useContentStore, type FolderNode } from "../stores/content";
+import { useSelectionStore } from "../stores/selection";
 
 const content = useContentStore();
+const selection = useSelectionStore();
 const quickOpen = ref(true);
 const treeOpen = ref(true);
 
@@ -32,6 +41,79 @@ function quickCount(key: (typeof quickItems)[number]["key"]): number | undefined
       return undefined;
   }
 }
+
+// —— 新建文件夹（C3）——
+// 父级查找（建兄弟用）：命中顶层 = null（根级）
+function findParentId(nodes: FolderNode[], id: string, parent: string | null = null): string | null | undefined {
+  for (const n of nodes) {
+    if (n.id === id) return parent;
+    const hit = findParentId(n.children, id, n.id);
+    if (hit !== undefined) return hit;
+  }
+  return undefined;
+}
+
+// 命名节点祖先链（含 parentId 自身）：强制展开让临时节点可见
+const forceOpenIds = computed(() => {
+  const out = new Set<string>();
+  const draft = selection.newFolderDraft;
+  if (!draft?.parentId) return out;
+  const walk = (nodes: FolderNode[], trail: string[]): boolean => {
+    for (const n of nodes) {
+      if (n.id === draft.parentId) {
+        for (const id of [...trail, n.id]) out.add(id);
+        return true;
+      }
+      if (walk(n.children, [...trail, n.id])) return true;
+    }
+    return false;
+  };
+  walk(content.folders, []);
+  return out;
+});
+
+// 区块头 + 按钮（LibraryView:54 接线）：folder:{id} → 建兄弟插其下一行；quick:* → 根级最底部
+function onAddFolder(): void {
+  const sel = content.sidebarSelected;
+  if (sel.startsWith("folder:")) {
+    const id = sel.slice(7);
+    selection.newFolderDraft = {
+      parentId: findParentId(content.folders, id) ?? null,
+      afterFolderId: id,
+    };
+  } else {
+    selection.newFolderDraft = { parentId: null, afterFolderId: null };
+  }
+}
+
+// 树 item 右键菜单（AppMenu 必须 Teleport body；菜单点击不自动关，动作内手动关）
+function menuNewSibling(): void {
+  const m = selection.treeMenu;
+  selection.treeMenu = null;
+  if (!m) return;
+  selection.newFolderDraft = {
+    parentId: findParentId(content.folders, m.node.id) ?? null,
+    afterFolderId: m.node.id,
+  };
+}
+function menuNewChild(): void {
+  const m = selection.treeMenu;
+  selection.treeMenu = null;
+  if (!m) return;
+  selection.newFolderDraft = { parentId: m.node.id, afterFolderId: null };
+}
+// 树容器空白处右键 = 根级最底部新建（2026-07-28 定案）
+function onTreeBlankMenu(e: MouseEvent): void {
+  if ((e.target as HTMLElement).closest(".tree-item")) return;
+  e.preventDefault();
+  selection.newFolderDraft = { parentId: null, afterFolderId: null };
+}
+
+// 树 item 拖拽起点（C4）：文件夹同级排序；快速访问项无 data-folder-id 天然不作起点
+function onTreePointerDown(e: PointerEvent): void {
+  const item = (e.target as HTMLElement).closest(".tree-item[data-folder-id]");
+  if (item) beginFolderDrag(e, item.getAttribute("data-folder-id")!);
+}
 </script>
 
 <template>
@@ -51,11 +133,36 @@ function quickCount(key: (typeof quickItems)[number]["key"]): number | undefined
       </div>
     </section>
     <section class="block tree">
-      <SectionHeader title="文件夹" :count="content.folderTotal" addable pad="0 8px 0 16px" v-model:open="treeOpen" />
-      <div v-if="treeOpen" class="items">
-        <FolderTree :nodes="content.folders" />
+      <SectionHeader
+        title="文件夹"
+        :count="content.folderTotal"
+        addable
+        pad="0 8px 0 16px"
+        v-model:open="treeOpen"
+        @add="onAddFolder"
+      />
+      <div
+        v-if="treeOpen"
+        class="items"
+        @pointerdown="onTreePointerDown"
+        @contextmenu="onTreeBlankMenu"
+      >
+        <FolderTree :nodes="content.folders" :force-open-ids="forceOpenIds" />
       </div>
     </section>
+
+    <!-- 树 item 右键菜单（C3）：Teleport body（与卡片菜单同约，防 transform 祖先定位坑） -->
+    <Teleport to="body">
+      <AppMenu
+        v-if="selection.treeMenu"
+        :x="selection.treeMenu.x"
+        :y="selection.treeMenu.y"
+        @close="selection.treeMenu = null"
+      >
+        <MenuItem label="新建同级文件夹" @select="menuNewSibling" />
+        <MenuItem label="新建子文件夹" @select="menuNewChild" />
+      </AppMenu>
+    </Teleport>
   </div>
 </template>
 

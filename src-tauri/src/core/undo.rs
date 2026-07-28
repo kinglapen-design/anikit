@@ -2,9 +2,9 @@
 //!
 //! UndoEntry = 操作标签 + 受影响数据文件操作前 / 后快照 + 磁盘逆操作清单（成对）。
 //! 快照注入点 = 各数据文件单一写点：写操作命令按 `begin(标签)` → 写点前 `record_file(路径)`
-//! → `commit()` 三步接入（6.1 各命令落地时逐个挂）；写盘是原子写，回滚同样原子写（version
-//! 随快照原文恢复，门禁天然合法）。undo / redo = 磁盘逆操作（逆序）+ 快照写回，随后由命令层
-//! 重建内存索引并通知前端刷新。新写操作 commit 即清空 redo 栈。
+//! → `commit()` 三步接入（6.1 起由 commands::operations 各命令接入）；写盘是原子写，回滚同样
+//! 原子写（version 随快照原文恢复，门禁天然合法）。undo / redo = 磁盘逆操作（逆序）+ 快照写回，
+//! 随后由命令层重建内存索引并通知前端刷新。新写操作 commit 即清空 redo 栈。
 //! 回收站语义天然配合：删除仅数据层移动，undo 移回即可；大批量写操作前自动备份机制不变
 //! （备份防灾、撤销管操作，PRD 06-6.3）。
 
@@ -15,7 +15,6 @@ use std::path::{Path, PathBuf};
 use crate::core::json_io::{write_text_atomic, DataError};
 
 /// 双栈上限（步），超出丢最旧
-#[allow(dead_code)] // 6.0 地基：commit 随 6.1 写操作接入启用
 pub const MAX_STEPS: usize = 50;
 
 /// 数据文件快照：content = None 表示快照时文件不存在（undo = 删除该文件，redo = 按 after 重建）
@@ -25,15 +24,14 @@ pub struct FileSnapshot {
   pub content: Option<String>,
 }
 
-/// 磁盘逆操作（文件系统副作用；撤销 / 重做成对记录，随 6.1 各写操作命令落地逐个接入）
+/// 磁盘逆操作（文件系统副作用；撤销 / 重做成对记录，6.1 operations 命令接入）
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)] // 6.0 地基预留：构造方随 6.1 命令接入启用，执行语义本模块已闭环
 pub enum DiskOp {
-  /// 删除该文件（如撤销 duplicate 新建的副本；目录仅限空目录）
+  /// 删除该文件或目录（目录递归删除，如撤销 duplicate 新建的副本 info）
   Delete(PathBuf),
   /// 把 from 重命名为 to（如重命名 originName 改回；重做 = from / to 对调的同名变体）
   Rename { from: PathBuf, to: PathBuf },
-  /// 复制 from 到 to（如重做 duplicate；to 已存在则覆盖）
+  /// 复制 from 到 to（如重做 duplicate；目录递归复制，已存在文件覆盖）
   Copy { from: PathBuf, to: PathBuf },
 }
 
@@ -63,7 +61,6 @@ pub struct UndoState {
 }
 
 /// 进行中的事务（begin ~ commit 之间）
-#[allow(dead_code)] // 6.0 地基：字段由 begin / record_file / commit 读写，随 6.1 接入启用
 struct Pending {
   label: String,
   before: Vec<FileSnapshot>,
@@ -83,7 +80,6 @@ pub struct UndoManager {
 
 impl UndoManager {
   /// 开始一个事务；上一个事务未 commit 视为遗漏，丢弃并记日志（不吞错误但流程继续）
-  #[allow(dead_code)] // 6.0 地基：随 6.1 写操作接入启用
   pub fn begin(&mut self, label: impl Into<String>) {
     if let Some(old) = self.pending.take() {
       log::warn!("撤销事务“{}”未提交即被新事务覆盖，已丢弃", old.label);
@@ -98,7 +94,6 @@ impl UndoManager {
   }
 
   /// 写点前记录数据文件旧内容（事务内同路径只记首次）；无事务 = 该操作不要求可撤销，静默跳过
-  #[allow(dead_code)] // 6.0 地基：随 6.1 写点接入启用
   pub fn record_file(&mut self, path: &Path) -> Result<(), DataError> {
     let Some(p) = self.pending.as_mut() else { return Ok(()) };
     if !p.recorded.insert(path.to_path_buf()) {
@@ -114,7 +109,6 @@ impl UndoManager {
   }
 
   /// 记录磁盘逆操作（成对：撤销 / 重做）；无事务静默跳过
-  #[allow(dead_code)] // 6.0 地基预留：随 6.1 各命令接入启用
   pub fn record_disk_op(&mut self, undo_op: DiskOp, redo_op: DiskOp) {
     if let Some(p) = self.pending.as_mut() {
       p.disk_undo.push(undo_op);
@@ -123,7 +117,6 @@ impl UndoManager {
   }
 
   /// 提交事务：抓取操作后快照入 undo 栈、清空 redo 栈；无事务静默跳过
-  #[allow(dead_code)] // 6.0 地基：随 6.1 写操作接入启用
   pub fn commit(&mut self) -> Result<(), DataError> {
     let Some(p) = self.pending.take() else { return Ok(()) };
     let mut after = Vec::with_capacity(p.before.len());
@@ -145,7 +138,6 @@ impl UndoManager {
   }
 
   /// 丢弃进行中的事务（操作中途失败回滚业务后调用）
-  #[allow(dead_code)] // 6.0 地基预留：随 6.1 各命令接入启用
   pub fn cancel(&mut self) {
     self.pending = None;
   }
@@ -191,7 +183,6 @@ impl UndoManager {
 }
 
 /// 读文件文本；不存在 = None（快照语义）
-#[allow(dead_code)] // 6.0 地基：commit 抓 after 快照用，随 6.1 接入启用
 fn read_text(path: &Path) -> Result<Option<String>, DataError> {
   match fs::read_to_string(path) {
     Ok(text) => Ok(Some(text)),
@@ -223,7 +214,7 @@ fn apply_disk(ops: &[DiskOp]) -> Result<(), DataError> {
         if path.is_file() {
           fs::remove_file(path)?;
         } else if path.is_dir() {
-          fs::remove_dir(path)?;
+          fs::remove_dir_all(path)?;
         }
       }
       DiskOp::Rename { from, to } => {
@@ -234,8 +225,28 @@ fn apply_disk(ops: &[DiskOp]) -> Result<(), DataError> {
         }
       }
       DiskOp::Copy { from, to } => {
-        fs::copy(from, to)?;
+        if from.is_dir() {
+          copy_dir(from, to)?;
+        } else {
+          fs::copy(from, to)?;
+        }
       }
+    }
+  }
+  Ok(())
+}
+
+/// 递归复制目录（DiskOp::Copy 目录形态，如重做 duplicate 的 info 目录）
+fn copy_dir(from: &Path, to: &Path) -> Result<(), DataError> {
+  fs::create_dir_all(to)?;
+  for entry in fs::read_dir(from)? {
+    let entry = entry?;
+    let path = entry.path();
+    let dest = to.join(entry.file_name());
+    if path.is_dir() {
+      copy_dir(&path, &dest)?;
+    } else {
+      fs::copy(&path, &dest)?;
     }
   }
   Ok(())
@@ -372,6 +383,29 @@ mod tests {
     fs::remove_file(&new).unwrap();
     m.undo().unwrap();
     assert!(!old.exists());
+  }
+
+  /// 目录形态的磁盘逆操作（duplicate 副本 info）：undo 递归删除、redo 递归复制还原
+  #[test]
+  fn disk_copy_delete_directories_roundtrip() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("旧.info");
+    let copy = dir.path().join("新.info");
+    fs::create_dir_all(src.join("frames")).unwrap();
+    fs::write(src.join("metadata.json"), "{}").unwrap();
+    fs::write(src.join("frames/f1.png"), "x").unwrap();
+
+    let mut m = manager();
+    m.begin("创建副本");
+    copy_dir(&src, &copy).unwrap();
+    m.record_disk_op(DiskOp::Delete(copy.clone()), DiskOp::Copy { from: src.clone(), to: copy.clone() });
+    m.commit().unwrap();
+
+    m.undo().unwrap();
+    assert!(!copy.exists(), "undo 应递归删除副本目录");
+    m.redo().unwrap();
+    assert_eq!(fs::read_to_string(copy.join("metadata.json")).unwrap(), "{}");
+    assert_eq!(fs::read_to_string(copy.join("frames/f1.png")).unwrap(), "x", "redo 应递归复制还原");
   }
 
   /// 无事务时 record 静默；begin 覆盖未提交事务；clear 清空全部

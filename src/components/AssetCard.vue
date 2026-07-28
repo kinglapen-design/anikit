@@ -11,7 +11,7 @@
 // 动图 / 序列帧）：**悬停到图标上**即出大图浮层（2026-07-28 用户定，动图·序列帧浮层内播放）；
 // PSD/SVG 类图片工程另有 默认应用打开；格式图标（fla/zip/AI 等无内容缩略图）=
 // 仅默认应用打开；动画工程有内容缩略图时（8.2 后）= 发送 + 默认应用打开（发送仍占位，8.5 接）。
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import HoverVideoLayer from "./HoverVideoLayer.vue";
@@ -20,12 +20,15 @@ import HoverSequenceLayer from "./HoverSequenceLayer.vue";
 import { CARD_CAPTION_H, type Box } from "../lib/layouts";
 import { formatBadgeColor, isAudioExt, isVideoExt } from "../lib/formatBadge";
 import { formatDuration } from "../lib/formatDuration";
+import { renamePlacement } from "../lib/placementOps";
 import { useUiStore } from "../stores/ui";
+import { useSelectionStore } from "../stores/selection";
 import type { PlacementView } from "../stores/content";
 
-const props = withDefaults(defineProps<{ asset: PlacementView; box: Box; selected?: boolean }>(), {
-  selected: false,
-});
+const props = withDefaults(
+  defineProps<{ asset: PlacementView; box: Box; selected?: boolean; renaming?: boolean }>(),
+  { selected: false, renaming: false },
+);
 // 悬停浮层：放大镜按钮 hover 触发（2026-07-28 用户定：**悬停到放大镜图标上**即出大图，
 // 不点击；动图 / 序列帧同有放大镜，浮层内播放），关闭由按钮 mouseleave / 组件销毁驱动
 const emit = defineEmits<{ zoom: []; zoomClose: [] }>();
@@ -65,6 +68,42 @@ const showZoom = computed(() => kind.value !== "iconOnly" && kind.value !== "vid
 
 // 悬停态：驱动播放层挂载（视频/音频）与动图播放
 const hovered = ref(false);
+
+// —— 就地重命名（6.1 C2，2026-07-28 定案）：标题 ↔ 输入框；
+// Enter 确认 / Esc 取消 / 失焦确认；滚出虚拟滚动销毁 = 取消（AssetGrid 先清 renamingKey，
+// blur 晚于清理到达时按 key 失配判取消）；确认调 rename_placement 后 content.refresh()（在 ops 内）
+const selection = useSelectionStore();
+const cardKey = `${props.asset.assetId}|${props.asset.folderId}`;
+const renameDraft = ref("");
+const renameInput = ref<HTMLInputElement>();
+watch(
+  () => props.renaming,
+  (r) => {
+    if (!r) return;
+    renameDraft.value = props.asset.name;
+    void nextTick(() => {
+      const el = renameInput.value;
+      if (!el) return;
+      el.focus();
+      const dot = props.asset.name.lastIndexOf(".");
+      el.setSelectionRange(0, dot > 0 ? dot : props.asset.name.length); // 默认选中词干
+    });
+  },
+  { immediate: true },
+);
+function cancelRename(): void {
+  if (selection.renamingKey === cardKey) selection.renamingKey = null;
+}
+async function commitRename(): Promise<void> {
+  if (selection.renamingKey !== cardKey) return; // 已取消（滚出视口 / Esc）
+  const name = renameDraft.value.trim();
+  selection.renamingKey = null;
+  if (!name || name === props.asset.name) return;
+  await renamePlacement(
+    { assetId: props.asset.assetId, folderId: props.asset.folderId, origin: props.asset.origin },
+    name,
+  );
+}
 
 // 放大镜 hover 触发（2026-07-28 用户定）：hover 按钮 150ms 出浮层（防划过闪），移出按钮即关
 let zoomTimer: ReturnType<typeof setTimeout> | undefined;
@@ -192,7 +231,18 @@ const meta = computed(() => {
       </div>
     </div>
     <div class="texts">
-      <span class="title">{{ displayName }}</span>
+      <input
+        v-if="renaming"
+        ref="renameInput"
+        v-model="renameDraft"
+        class="rename-input"
+        @keydown.enter.prevent="commitRename"
+        @keydown.esc.prevent="cancelRename"
+        @blur="commitRename"
+        @click.stop
+        @pointerdown.stop
+      />
+      <span v-else class="title">{{ displayName }}</span>
       <span v-show="ui.briefMode !== 'none'" class="meta">{{ meta }}</span>
     </div>
   </div>
@@ -335,5 +385,20 @@ const meta = computed(() => {
   color: var(--font-icon-3);
   text-align: center;
   white-space: nowrap;
+}
+/* 就地重命名输入（6.1 C2）：C4 底 / 1px border-1 / 圆角 6（输入框 token 口径，同收件箱行内重命名） */
+.rename-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-6);
+  border: none;
+  border-radius: var(--radius-6);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--border-1);
+  color: var(--font-icon-1);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  text-align: center;
+  outline: none;
 }
 </style>
