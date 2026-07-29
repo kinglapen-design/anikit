@@ -11,7 +11,6 @@ import ListHeader from "./ListHeader.vue";
 import FolderStrip from "./FolderStrip.vue";
 import InboxDiskSection from "./InboxDiskSection.vue";
 import SectionHeader from "./SectionHeader.vue";
-import AssetCardMenu from "./AssetCardMenu.vue";
 import RecycleCardMenu from "./RecycleCardMenu.vue";
 import {
   CARD_CAPTION_H,
@@ -33,6 +32,8 @@ import {
   unregisterGridResolver,
   assetCardFade,
 } from "../lib/dragOperation";
+import { openContextMenu } from "../lib/contextMenus";
+import { assetBlankSpec, assetCardSpec, folderBlankSpec } from "../lib/menuSpecs";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
@@ -191,15 +192,35 @@ const {
   }),
 });
 
-// —— 卡片右键菜单（6.1 C6）：右键未选中项 = 先单选它；菜单本体在 AssetCardMenu（Teleport body）
+// —— 右键菜单（6.3 全量改造，设计稿 `00_修改与需求/05_右键菜单`）：
+// 卡片 = 素材菜单（全局宿主 lib/contextMenus；回收站视口维持 RecycleCardMenu 只读菜单）；
+// 空白 = 文件夹卡片区（grid-header）出"新建文件夹"，其余空白出素材空白菜单（查看 / 新建 / 粘贴）
 const cardMenu = ref<{ x: number; y: number } | null>(null);
 function onCardContextMenu(e: MouseEvent): void {
-  const card = (e.target as HTMLElement).closest(".asset-card, .list-row");
+  const t = e.target as HTMLElement;
+  const card = t.closest(".asset-card, .list-row");
   const key = card?.getAttribute("data-key");
-  if (!key) return;
+  if (key && !content.isRecycleView) {
+    e.preventDefault();
+    if (!selection.isSelected(key)) selection.selectOnly(key);
+    const p = props.items.find((it) => `${it.assetId}|${it.folderId}` === key);
+    if (p) openContextMenu(e, assetCardSpec(p));
+    return;
+  }
+  if (key) {
+    // 回收站视口：只读菜单（既有 RecycleCardMenu）
+    e.preventDefault();
+    if (!selection.isSelected(key)) selection.selectOnly(key);
+    cardMenu.value = { x: e.clientX, y: e.clientY };
+    return;
+  }
+  if (t.closest(".folder-card, button, input")) return; // 文件夹卡片自带菜单 / 按钮区不拦
   e.preventDefault();
-  if (!selection.isSelected(key)) selection.selectOnly(key);
-  cardMenu.value = { x: e.clientX, y: e.clientY };
+  if (t.closest(".grid-header")) {
+    openContextMenu(e, folderBlankSpec());
+  } else {
+    openContextMenu(e, assetBlankSpec());
+  }
 }
 
 // —— 卡片间距排序落点解析器（C4a）：注册给拖拽引擎，算法主体在 lib/dragOperation makeGridResolver
@@ -419,9 +440,8 @@ onBeforeUnmount(() => {
     />
     <!-- 悬停放大浮层（5.3）：Teleport 到 body，点击任意处 / Esc 关闭 -->
     <HoverZoomOverlay v-if="zoomAsset" :asset="zoomAsset" @close="zoomAsset = null" />
-    <!-- 卡片右键菜单（6.1 C6）：组件内 Teleport body（防 transform 祖先坑）；回收站视口换只读菜单（2026-07-29 二轮） -->
-    <AssetCardMenu v-if="cardMenu && !content.isRecycleView" :x="cardMenu.x" :y="cardMenu.y" @close="cardMenu = null" />
-    <RecycleCardMenu v-else-if="cardMenu" :x="cardMenu.x" :y="cardMenu.y" @close="cardMenu = null" />
+    <!-- 回收站视口卡片右键只读菜单（6.1 二轮；素材菜单走全局宿主 lib/contextMenus，6.3） -->
+    <RecycleCardMenu v-if="cardMenu" :x="cardMenu.x" :y="cardMenu.y" @close="cardMenu = null" />
   </div>
 </template>
 

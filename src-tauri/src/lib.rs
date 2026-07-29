@@ -249,6 +249,17 @@ pub fn run() {
       commands::recycle::clear_recycle,
       commands::preview::open_with_default_app,
       commands::preview::open_preview_window,
+      commands::asset_menu::open_with_dialog,
+      commands::asset_menu::reveal_in_explorer,
+      commands::asset_menu::set_thumbnail_from_clipboard,
+      commands::asset_menu::set_thumbnail_custom,
+      commands::asset_menu::refresh_thumbnail,
+      commands::asset_menu::export_assets,
+      commands::asset_menu::export_folder,
+      commands::asset_menu::delete_assets_permanently,
+      commands::asset_menu::delete_folder,
+      commands::asset_menu::get_asset_base64,
+      commands::asset_menu::get_asset_origin_path,
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")

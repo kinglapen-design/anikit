@@ -44,6 +44,15 @@ export interface RecyclePrompt {
   segmentRefs: number; // 被虚拟片段引用数（确认窗警示文案）
 }
 
+// 通用确认弹窗（6.3）：轻量一次性确认（警示 / 可撤销操作的前置说明 / 不可逆操作二次确认）
+export interface ConfirmPrompt {
+  title: string;
+  body: string;
+  confirmLabel?: string; // 缺省"确认"
+  danger?: boolean; // 主按钮用错误色（不可逆操作）
+  onConfirm: () => void;
+}
+
 // （2026-07-29 复验三轮：新建文件夹改"先建后命名"，原 NewFolderDraft 命名中临时节点已移除）
 
 function keyOf(p: { assetId: string; folderId: string }): string {
@@ -66,9 +75,14 @@ export const useSelectionStore = defineStore("selection", {
     // 卡片就地重命名目标 key（C2；F2 / 右键菜单设置，单选才可；滚出视口 / Esc = 取消置 null）
     renamingKey: null as string | null,
     // 新建文件夹命名态目标 id（2026-07-29 复验三轮"先建后命名"：createFolder 成功返回 id 后置位，
-    // 树对应节点进 naming 输入态，保存 / 退出后清 null）与文件树右键菜单（AppMenu，宿主 LibraryView）
+    // 树对应节点进 naming 输入态，保存 / 退出后清 null）
     namingFolderId: null as string | null,
-    treeMenu: null as { x: number; y: number; node: FolderNode } | null,
+    // 通用确认弹窗（6.3：文件管理器打开警示 / 删除文件夹 / 彻底删除素材·文件夹，宿主 App.vue）
+    confirmPrompt: null as ConfirmPrompt | null,
+    // 文件夹选择弹窗（6.3"添加至文件夹"：选定目标文件夹后回调，宿主 App.vue）
+    folderPickPrompt: null as { onPick: (folderId: string) => void } | null,
+    // 文件夹卡片就地重命名目标 id（6.3 右键"重命名"与名称双击同入口，FolderCard 读）
+    namingFolderCardId: null as string | null,
   }),
   getters: {
     // 首项（Set 插入序）：详情面板 / 预览等单资产消费口径；空 = 空串（与原 selectedAssetKey 空串语义一致）

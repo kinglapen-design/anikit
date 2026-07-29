@@ -18,6 +18,9 @@ import ImportResultDialog from "./components/ImportResultDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
 import LinkDialog from "./components/LinkDialog.vue";
 import RecycleConfirmDialog from "./components/RecycleConfirmDialog.vue";
+import ContextMenu from "./components/ContextMenu.vue";
+import AppConfirm from "./components/AppConfirm.vue";
+import FolderPickerDialog from "./components/FolderPickerDialog.vue";
 import ToastStack from "./components/ToastStack.vue";
 import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
@@ -145,11 +148,22 @@ function onOperationKeys(e: KeyboardEvent): void {
   const t = e.target as HTMLElement;
   if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
   if (previewParam || preview.assetKey || needLibrarySetup.value) return;
-  if (document.querySelector(".app-menu, .zoom-mask, .link-mask, .del-mask")) return;
+  if (document.querySelector(".app-menu, .zoom-mask, .link-mask, .del-mask, .pick-mask")) return;
   if (e.key === "F2") {
     if (selection.count === 1 && !content.isRecycleView) {
       e.preventDefault();
       selection.renamingKey = selection.first;
+    }
+    return;
+  }
+  // Shift+Enter = 默认应用打开（6.3 右键菜单同款，2026-07-29 用户设计）
+  if (e.key === "Enter" && e.shiftKey) {
+    if (selection.count === 1 && !content.isRecycleView) {
+      e.preventDefault();
+      const p = content.visiblePlacements.find((v) => `${v.assetId}|${v.folderId}` === selection.first);
+      if (p) {
+        void invoke("open_with_default_app", { assetId: p.assetId }).then(() => content.refreshRecent());
+      }
     }
     return;
   }
@@ -320,6 +334,12 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
     <LinkDialog v-if="selection.linkDraft" />
     <!-- 回收站彻底删除确认窗（6.1 二轮）：虚拟片段引用警示，不可恢复无撤销 -->
     <RecycleConfirmDialog v-if="selection.recyclePrompt" />
+    <!-- 全局右键菜单宿主（6.3：lib/contextMenus 单一实例，六上下文共用） -->
+    <ContextMenu />
+    <!-- 通用确认弹窗（6.3：警示前置 / 删除文件夹 / 彻底删除二次确认） -->
+    <AppConfirm v-if="selection.confirmPrompt" />
+    <!-- 文件夹选择弹窗（6.3"添加至文件夹"） -->
+    <FolderPickerDialog v-if="selection.folderPickPrompt" />
   </div>
 </template>
 

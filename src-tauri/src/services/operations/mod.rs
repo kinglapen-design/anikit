@@ -74,3 +74,9 @@ pub(crate) fn finish(lib: &mut Library) -> Result<(), String> {
   lib.index.rebuild_placements(&lib.folders.items);
   library::save_folders(lib).map_err(|e| e.to_string())
 }
+
+/// Folder 节点增删后的索引同步（folders.folders 为事实来源，全量重建映射）——
+/// 原 operations/folder.rs 私有辅助，delete_folder（purge.rs）同样需要，提为 pub(crate)
+pub(crate) fn sync_folder_index(lib: &mut Library) {
+  lib.index.folders = lib.folders.folders.iter().map(|f| (f.id.clone(), f.clone())).collect();
+}

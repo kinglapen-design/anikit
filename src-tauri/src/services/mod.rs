@@ -20,6 +20,7 @@
 
 pub mod anim;
 pub mod anim_unpack;
+pub mod asset_menu;
 pub mod import;
 pub mod import_task;
 pub mod inbox;
@@ -27,6 +28,7 @@ pub mod media;
 pub mod operations;
 pub mod preview_queue;
 pub mod psb;
+pub mod purge;
 pub mod recent;
 pub mod recycle;
 pub mod resolve;

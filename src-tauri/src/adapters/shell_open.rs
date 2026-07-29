@@ -8,6 +8,16 @@ pub fn open(path: &Path) -> Result<(), String> {
   imp::open(path)
 }
 
+/// 其他应用打开（6.3 右键菜单）：Windows"打开方式"对话框
+pub fn open_as(path: &Path) -> Result<(), String> {
+  imp::open_as(path)
+}
+
+/// 在文件管理器中打开并选中（6.3 右键菜单）：explorer /select
+pub fn reveal(path: &Path) -> Result<(), String> {
+  imp::reveal(path)
+}
+
 #[cfg(windows)]
 mod imp {
   use std::path::Path;
@@ -26,6 +36,26 @@ mod imp {
       Err(format!("系统默认程序打开失败（{}），错误码 {}", path.display(), result.0 as usize))
     }
   }
+
+  pub(super) fn open_as(path: &Path) -> Result<(), String> {
+    let hpath = HSTRING::from(path.as_os_str());
+    // "openas" 动词 = 系统"打开方式"对话框
+    let result = unsafe { ShellExecuteW(None, w!("openas"), PCWSTR::from_raw(hpath.as_ptr()), None, None, SW_SHOW) };
+    if (result.0 as usize) > 32 {
+      Ok(())
+    } else {
+      Err(format!("打开方式对话框调用失败（{}），错误码 {}", path.display(), result.0 as usize))
+    }
+  }
+
+  pub(super) fn reveal(path: &Path) -> Result<(), String> {
+    // explorer /select,"路径"：打开文件管理器并选中该文件
+    std::process::Command::new("explorer.exe")
+      .arg(format!("/select,{}", path.display()))
+      .spawn()
+      .map(|_| ())
+      .map_err(|e| format!("打开文件管理器失败：{e}"))
+  }
 }
 
 #[cfg(not(windows))]
@@ -33,6 +63,12 @@ mod imp {
   use std::path::Path;
 
   pub(super) fn open(_path: &Path) -> Result<(), String> {
+    Err("暂不支持".to_string())
+  }
+  pub(super) fn open_as(_path: &Path) -> Result<(), String> {
+    Err("暂不支持".to_string())
+  }
+  pub(super) fn reveal(_path: &Path) -> Result<(), String> {
     Err("暂不支持".to_string())
   }
 }

@@ -6,11 +6,12 @@
 // 原文件夹浅色纸底保留托住透明通道）+ 有缩略图层1 正面下沿。
 // 交互（2026-07-29 复验三轮）：双击卡片（非名称区域）= 进入该文件夹（FolderStrip 接线）；
 // 双击名称 = 就地重命名（rename_folder 命令，stop 防触发"进入"）。
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getIcon } from "../lib/icons";
 import { dragView } from "../lib/dragOperation";
 import { renameFolder } from "../lib/placementOps";
+import { useSelectionStore } from "../stores/selection";
 import type { FolderNode } from "../stores/content";
 
 const props = withDefaults(
@@ -45,6 +46,7 @@ const meta = computed(() => {
 const renaming = ref(false);
 const renameDraft = ref("");
 const renameInput = ref<HTMLInputElement>();
+const selection = useSelectionStore();
 function startRename(): void {
   renameDraft.value = props.folder.name;
   renaming.value = true;
@@ -53,6 +55,16 @@ function startRename(): void {
     renameInput.value?.select();
   });
 }
+// 右键菜单"重命名"（6.3）：经 selection.namingFolderCardId 触发（与名称双击同入口）
+watch(
+  () => selection.namingFolderCardId,
+  (id) => {
+    if (id === props.folder.id) {
+      selection.namingFolderCardId = null;
+      startRename();
+    }
+  },
+);
 async function commitRename(): Promise<void> {
   if (!renaming.value) return; // Enter 提交后 blur 晚到的双触发护栏
   renaming.value = false;

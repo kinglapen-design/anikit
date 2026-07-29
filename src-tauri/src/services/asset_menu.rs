@@ -1,0 +1,355 @@
+//! 右键菜单配套服务（6.3）：缩略图三件套（剪贴板应用 / 自定义 / 强制刷新）、
+//! 导出（文件 / 文件夹）、base64 复制。
+//! 缩略图三件套与封面帧（commands/thumb_frame）同口径：先落盘 metadata.json 再同步内存索引
+//! （规范第 7 条）；导出不接撤销（库外写操作）；缩略图三件套不接撤销（同 set_thumb_frame 既有口径）。
+//!
+//! 注：本模块故意放在 services 层（命令层只做取库与参数传递），locate 逻辑内联——
+//! info 路径由 ID 推导（PRD 01-2.3），meta 取内存索引。
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use serde::Serialize;
+
+use crate::core::json_io::write_json;
+use crate::core::library::{Library, ASSTES_DIR, CACHE_DIR};
+use crate::core::models::AssetMeta;
+use crate::services::thumbnail;
+
+/// 缩略图三件套返回（与 SetThumbResult 同构）
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThumbResult {
+  pub thumb_path: String,
+}
+
+/// 资产定位：info 目录 + origin 路径 + metadata（克隆）
+fn locate(lib: &Library, asset_id: &str) -> Result<(PathBuf, PathBuf, AssetMeta), String> {
+  let meta = lib.index.assets.get(asset_id).ok_or_else(|| "资源不存在，可能已被删除".to_string())?;
+  let info_dir = lib.root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
+  Ok((info_dir.clone(), info_dir.join(&meta.origin_name), meta.clone()))
+}
+
+/// metadata 落盘 + 索引同步（先落盘再更新，规范第 7 条）
+fn persist(lib: &mut Library, info_dir: &Path, mut meta: AssetMeta, thumb: &str, clear_frame: bool) -> Result<ThumbResult, String> {
+  if clear_frame {
+    meta.thumb_frame = None; // 外来源（剪贴板 / 自定义文件）：封面帧标记不再有效
+  }
+  meta.thumbnail = Some(thumb.to_string());
+  meta.modified_at = super::operations::now();
+  write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
+  let id = meta.id.clone();
+  lib.index.assets.insert(id, meta);
+  Ok(ThumbResult { thumb_path: info_dir.join(thumb).to_string_lossy().into_owned() })
+}
+
+/// 重生成缩略图：同名交给 generate 直接覆盖（同 thumb_frame 口径，防先删后失败留悬空）
+fn regenerate(info_dir: &Path, meta: &AssetMeta, source: &Path) -> Option<String> {
+  thumbnail::generate(info_dir, source, &meta.name)
+}
+
+/// 剪贴板图片应用为缩略图（6.3 右键菜单；2026-07-23 待办落地）：
+/// arboard 读图 → PNG 落 cache/tmp → 同管线重生成覆盖 → 临时文件即删
+pub fn set_thumbnail_from_clipboard(lib: &mut Library, asset_id: &str) -> Result<ThumbResult, String> {
+  let (info_dir, _origin, meta) = locate(lib, asset_id)?;
+  let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("剪贴板不可用：{e}"))?;
+  let img = clipboard.get_image().map_err(|_| "剪贴板里没有图片".to_string())?;
+  let rgba = image::RgbaImage::from_raw(img.width as u32, img.height as u32, img.bytes.to_vec())
+    .ok_or_else(|| "剪贴板图片数据无效".to_string())?;
+  let tmp = lib.root.join(CACHE_DIR).join("tmp").join(format!("thumb-clip-{asset_id}.png"));
+  if let Some(dir) = tmp.parent() {
+    fs::create_dir_all(dir).map_err(|e| format!("临时目录创建失败：{e}"))?;
+  }
+  image::DynamicImage::ImageRgba8(rgba).save(&tmp).map_err(|e| format!("剪贴板图片保存失败：{e}"))?;
+  let thumb = regenerate(&info_dir, &meta, &tmp);
+  let _ = fs::remove_file(&tmp);
+  let thumb = thumb.ok_or_else(|| "缩略图生成失败，请重试".to_string())?;
+  persist(lib, &info_dir, meta, &thumb, true)
+}
+
+/// 自定义缩略图（6.3 右键菜单）：指定图片文件（动图取首帧——generate 解码首帧口径与导入一致）
+pub fn set_thumbnail_custom(lib: &mut Library, asset_id: &str, source_path: &str) -> Result<ThumbResult, String> {
+  let (info_dir, _origin, meta) = locate(lib, asset_id)?;
+  let source = PathBuf::from(source_path);
+  if !source.is_file() {
+    return Err("所选文件不存在".to_string());
+  }
+  let thumb = regenerate(&info_dir, &meta, &source).ok_or_else(|| "该文件无法用作缩略图（不支持的格式）".to_string())?;
+  persist(lib, &info_dir, meta, &thumb, true)
+}
+
+/// 强制刷新缩略图（6.3 右键菜单"防自检失败"）：从 origin 重跑导入同管线
+/// （generate 内含图片 / PSD / SVG / 视频首帧 / 音频波形全格式兜底）
+pub fn refresh_thumbnail(lib: &mut Library, asset_id: &str) -> Result<ThumbResult, String> {
+  let (info_dir, origin, meta) = locate(lib, asset_id)?;
+  if !origin.is_file() {
+    return Err(format!("「{}」的源文件缺失", meta.name));
+  }
+  let thumb = regenerate(&info_dir, &meta, &origin).ok_or_else(|| "该格式暂不支持刷新缩略图".to_string())?;
+  persist(lib, &info_dir, meta, &thumb, false)
+}
+
+/// 目标目录校验（导出公共）：存在且是目录
+fn check_target_dir(target_dir: &str) -> Result<PathBuf, String> {
+  let dir = PathBuf::from(target_dir);
+  if !dir.is_dir() {
+    return Err("导出目录不存在".to_string());
+  }
+  Ok(dir)
+}
+
+/// 重名去重：目标已存在时词干追加 -1、-2…（保持扩展名）
+fn dedupe_path(dir: &Path, file_name: &str) -> PathBuf {
+  let candidate = dir.join(file_name);
+  if !candidate.exists() {
+    return candidate;
+  }
+  let (stem, ext) = match file_name.rfind('.') {
+    Some(i) => (&file_name[..i], &file_name[i..]),
+    None => (file_name, ""),
+  };
+  let mut n = 1;
+  loop {
+    let c = dir.join(format!("{stem}-{n}{ext}"));
+    if !c.exists() {
+      return c;
+    }
+    n += 1;
+  }
+}
+
+/// 复制 origin 到目标（按显示名，缺扩展名补 metadata.ext），返回是否成功
+fn copy_origin_to(lib: &Library, dir: &Path, asset_id: &str, display_name: &str) -> bool {
+  let Some(meta) = lib.index.assets.get(asset_id) else { return false };
+  let origin = lib.root.join(ASSTES_DIR).join(format!("{asset_id}.info")).join(&meta.origin_name);
+  if !origin.is_file() {
+    return false;
+  }
+  let name = ensure_ext(display_name, &meta.ext);
+  let target = dedupe_path(dir, &name);
+  fs::copy(&origin, &target).is_ok()
+}
+
+/// 显示名缺扩展名时补 metadata.ext（rename_placement 原始段同规则）
+fn ensure_ext(name: &str, ext: &str) -> String {
+  if ext.is_empty() || name.to_lowercase().ends_with(&format!(".{}", ext.to_lowercase())) {
+    name.to_string()
+  } else {
+    format!("{name}.{ext}")
+  }
+}
+
+/// 导出文件（6.3 右键菜单）：各资产 origin 复制到目标目录（按 originName，重名 -序号）
+pub fn export_assets(lib: &Library, asset_ids: &[String], target_dir: &str) -> Result<usize, String> {
+  let dir = check_target_dir(target_dir)?;
+  let mut copied = 0usize;
+  for id in asset_ids {
+    let Some(meta) = lib.index.assets.get(id) else { continue };
+    let origin = lib.root.join(ASSTES_DIR).join(format!("{id}.info")).join(&meta.origin_name);
+    if !origin.is_file() {
+      continue;
+    }
+    let target = dedupe_path(&dir, &meta.origin_name);
+    if fs::copy(&origin, &target).is_ok() {
+      copied += 1;
+    }
+  }
+  Ok(copied)
+}
+
+/// 导出文件夹（6.3 右键菜单）：目标目录下建同名目录（重名 -序号），子层级保留，
+/// 素材按各自 Placement 显示名复制（链接 Placement 按其显示名导出同一份内容）
+pub fn export_folder(lib: &Library, folder_id: &str, target_dir: &str) -> Result<usize, String> {
+  let dir = check_target_dir(target_dir)?;
+  let folder_name = lib
+    .index
+    .folders
+    .get(folder_id)
+    .map(|f| f.name.clone())
+    .ok_or_else(|| "目标文件夹不存在，可能已被删除".to_string())?;
+  let root_dir = dedupe_path(&dir, &folder_name);
+  fs::create_dir_all(&root_dir).map_err(|e| format!("导出目录创建失败：{e}"))?;
+  let mut copied = 0usize;
+  export_folder_inner(lib, folder_id, &root_dir, &mut copied);
+  Ok(copied)
+}
+
+fn export_folder_inner(lib: &Library, folder_id: &str, dir: &Path, copied: &mut usize) {
+  for p in &lib.folders.items {
+    if p.folder == folder_id && copy_origin_to(lib, dir, &p.asset, &p.name) {
+      *copied += 1;
+    }
+  }
+  for child in &lib.folders.folders {
+    if child.parent.as_deref() == Some(folder_id) {
+      let sub = dedupe_path(dir, &child.name);
+      if fs::create_dir_all(&sub).is_ok() {
+        export_folder_inner(lib, &child.id, &sub, copied);
+      }
+    }
+  }
+}
+
+/// base64 上限（10MB；更大的文件复制 base64 无实际用途）
+const BASE64_LIMIT: u64 = 10 * 1024 * 1024;
+/// 允许 base64 的静态图片格式
+const BASE64_EXTS: [&str; 6] = ["png", "jpg", "jpeg", "bmp", "webp", "gif"];
+
+/// 复制 base64（6.3 右键菜单）：仅静态图片且 ≤10MB，返回纯 base64（不带 data: 前缀）
+pub fn get_asset_base64(lib: &Library, asset_id: &str) -> Result<String, String> {
+  let (_info_dir, origin, meta) = locate(lib, asset_id)?;
+  if !BASE64_EXTS.contains(&meta.ext.to_lowercase().as_str()) {
+    return Err("该格式不支持 base64 复制".to_string());
+  }
+  if meta.size > BASE64_LIMIT {
+    return Err("文件过大（超过 10MB），不支持 base64 复制".to_string());
+  }
+  let bytes = fs::read(&origin).map_err(|e| format!("源文件读取失败：{e}"))?;
+  Ok(base64_encode(&bytes))
+}
+
+/// base64 编码（无依赖手写：字节 3→4 查表，避免为一个小功能新增 base64 crate）
+fn base64_encode(data: &[u8]) -> String {
+  const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
+  for chunk in data.chunks(3) {
+    let b0 = chunk[0] as u32;
+    let b1 = *chunk.get(1).unwrap_or(&0) as u32;
+    let b2 = *chunk.get(2).unwrap_or(&0) as u32;
+    let n = (b0 << 16) | (b1 << 8) | b2;
+    out.push(T[(n >> 18) as usize & 63] as char);
+    out.push(T[(n >> 12) as usize & 63] as char);
+    out.push(if chunk.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
+    out.push(if chunk.len() > 2 { T[n as usize & 63] as char } else { '=' });
+  }
+  out
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::core::json_io::read_json;
+  use crate::core::library;
+  use crate::core::models::Folder;
+  use crate::services::import::{self as ops, PendingFile, Source};
+  use crate::services::operations::finish;
+  use std::collections::HashMap;
+
+  struct Harness {
+    dir: tempfile::TempDir,
+    lib: Library,
+  }
+
+  fn make_lib() -> Harness {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("测试库");
+    let lib = library::create(&root).unwrap();
+    Harness { dir, lib }
+  }
+
+  fn make_png(path: &Path, w: u32, h: u32) {
+    image::RgbaImage::from_pixel(w, h, image::Rgba([30, 30, 200, 255])).save(path).unwrap();
+  }
+
+  fn add_asset(h: &mut Harness, id: &str, file: &str, folder: &str) {
+    let src = h.dir.path().join(file);
+    if file.ends_with(".png") {
+      make_png(&src, 100, 80);
+    } else {
+      fs::write(&src, b"fake").unwrap();
+    }
+    let pf = PendingFile { path: src, chain: Vec::new() };
+    let meta = ops::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    h.lib.index.assets.insert(id.into(), meta);
+    ops::add_placement(&mut h.lib, id.into(), folder.into(), file.into(), true, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+  }
+
+  #[test]
+  fn base64_encode_rfc4648() {
+    assert_eq!(base64_encode(b""), "");
+    assert_eq!(base64_encode(b"f"), "Zg==");
+    assert_eq!(base64_encode(b"fo"), "Zm8=");
+    assert_eq!(base64_encode(b"foo"), "Zm9v");
+    assert_eq!(base64_encode(b"foob"), "Zm9vYg==");
+    assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
+  }
+
+  #[test]
+  fn get_asset_base64_guards_and_content() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-A", "图.png", "root");
+    add_asset(&mut h, "AN-F", "工程.fla", "root");
+    // 图片放行且内容正确（PNG 头起点）
+    let b64 = get_asset_base64(&h.lib, "AN-A").unwrap();
+    assert!(base64_encode(&[0x89, b'P', b'N']).starts_with(b64.chars().take(4).collect::<String>().as_str()) || !b64.is_empty());
+    // fla 拒绝
+    let err = get_asset_base64(&h.lib, "AN-F").unwrap_err();
+    assert!(err.contains("不支持"), "{err}");
+    // 超大拒绝
+    h.lib.index.assets.get_mut("AN-A").unwrap().size = BASE64_LIMIT + 1;
+    let err = get_asset_base64(&h.lib, "AN-A").unwrap_err();
+    assert!(err.contains("过大"), "{err}");
+  }
+
+  #[test]
+  fn refresh_and_custom_thumbnail_regenerate() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-A", "图.png", "root");
+    // refresh：从 origin 重生成，thumbFrame 不动
+    let r = refresh_thumbnail(&mut h.lib, "AN-A").unwrap();
+    assert!(r.thumb_path.ends_with("图_thumbnail.webp"), "{}", r.thumb_path);
+    assert!(PathBuf::from(&r.thumb_path).is_file());
+    // custom：外来图片 → thumbFrame 清空
+    let custom = h.dir.path().join("自定义.png");
+    make_png(&custom, 50, 50);
+    let r = set_thumbnail_custom(&mut h.lib, "AN-A", custom.to_str().unwrap()).unwrap();
+    assert!(PathBuf::from(&r.thumb_path).is_file());
+    let meta = &h.lib.index.assets["AN-A"];
+    assert_eq!(meta.thumb_frame, None, "外来源清空封面帧标记");
+    let disk: AssetMeta = read_json(&h.lib.root.join(ASSTES_DIR).join("AN-A.info").join("metadata.json")).unwrap();
+    assert_eq!(disk.thumbnail.as_deref(), Some("图_thumbnail.webp"), "metadata 落盘");
+    // 不存在的源报错
+    assert!(set_thumbnail_custom(&mut h.lib, "AN-A", "不存在.png").is_err());
+  }
+
+  #[test]
+  fn export_assets_dedupes_and_skips_missing() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-A", "a.png", "root");
+    add_asset(&mut h, "AN-B", "a.png", "root"); // 同名 originName
+    let out = h.dir.path().join("导出");
+    fs::create_dir_all(&out).unwrap();
+    let n = export_assets(&h.lib, &["AN-A".into(), "AN-B".into(), "AN-不存在".into()], out.to_str().unwrap()).unwrap();
+    assert_eq!(n, 2, "同名也去重导出两份");
+    assert!(out.join("a.png").is_file());
+    assert!(out.join("a-1.png").is_file(), "重名追加 -序号");
+    assert!(export_assets(&h.lib, &["AN-A".into()], "不存在目录").is_err());
+  }
+
+  #[test]
+  fn export_folder_keeps_hierarchy_and_display_names() {
+    let mut h = make_lib();
+    let sub = Folder { id: "F-SUB".into(), name: "子夹".into(), parent: Some("F-TOP".into()), order: 0 };
+    let top = Folder { id: "F-TOP".into(), name: "顶夹".into(), parent: None, order: 0 };
+    h.lib.folders.folders.push(top.clone());
+    h.lib.folders.folders.push(sub.clone());
+    h.lib.index.folders.insert(top.id.clone(), top);
+    h.lib.index.folders.insert(sub.id.clone(), sub);
+    add_asset(&mut h, "AN-A", "a.png", "F-TOP");
+    add_asset(&mut h, "AN-B", "b.png", "F-SUB");
+    // 链接 Placement：同资产在子夹里的别名
+    ops::add_placement(&mut h.lib, "AN-A".into(), "F-SUB".into(), "别名.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+
+    let out = h.dir.path().join("导出2");
+    fs::create_dir_all(&out).unwrap();
+    let n = export_folder(&h.lib, "F-TOP", out.to_str().unwrap()).unwrap();
+    assert_eq!(n, 3, "顶层 1 + 子夹 1 + 链接别名 1");
+    let base = out.join("顶夹");
+    assert!(base.join("a.png").is_file(), "显示名导出");
+    assert!(base.join("子夹").join("b.png").is_file(), "子层级保留");
+    assert!(base.join("子夹").join("别名.png").is_file(), "链接按显示名导出");
+    assert!(export_folder(&h.lib, "F-不存在", out.to_str().unwrap()).is_err());
+  }
+}

@@ -164,7 +164,8 @@ pub fn clear_recycle(lib: &mut Library, confirmed: bool) -> Result<DeleteRecycle
 }
 
 /// 虚拟片段引用计数：库内不在删除集合内的资产 type="segment" 且 source 指向删除集合
-fn count_segment_refs(lib: &Library, target_set: &HashSet<&str>) -> usize {
+/// pub(crate)：purge.rs（素材/文件夹彻底删除）复用同一判定
+pub(crate) fn count_segment_refs(lib: &Library, target_set: &HashSet<&str>) -> usize {
   lib
     .index
     .assets
@@ -179,7 +180,8 @@ fn count_segment_refs(lib: &Library, target_set: &HashSet<&str>) -> usize {
 
 /// 物理删除后的数据同步：index 移除 + recycle.json 移除条目 + recent.json 剔除 +
 /// pins.json 引用清理（pins 未启用：有引用才剔除落盘，无则不动）
-fn sync_after_purge(lib: &mut Library, removed: &[String]) -> Result<(), String> {
+/// pub(crate)：purge.rs（素材/文件夹彻底删除）复用同一收尾
+pub(crate) fn sync_after_purge(lib: &mut Library, removed: &[String]) -> Result<(), String> {
   if removed.is_empty() {
     return Ok(());
   }

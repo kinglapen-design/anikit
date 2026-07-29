@@ -305,3 +305,142 @@ export async function pasteDuplicate(): Promise<void> {
   if (target === null) return;
   await duplicatePlacements(clip.items, target, clip.items.map(() => null));
 }
+
+// —— 6.3 右键菜单配套（2026-07-29，设计稿 `00_修改与需求/05_右键菜单`）——
+
+// 其他应用打开（系统"打开方式"对话框）：失败中文 toast
+export async function openWithDialog(assetId: string): Promise<void> {
+  try {
+    await invoke("open_with_dialog", { assetId });
+  } catch (e) {
+    useToastStore().notify({ message: String(e), icon: "info" });
+  }
+}
+
+// 在文件管理器中打开（前端先弹警示窗再调——菜单流程见 menuOps.revealWithWarning）
+export async function revealInExplorer(assetId: string): Promise<void> {
+  try {
+    await invoke("reveal_in_explorer", { assetId });
+  } catch (e) {
+    useToastStore().notify({ message: String(e), icon: "info" });
+  }
+}
+
+// 缩略图三件套：不接撤销（同设封面帧既有口径）；成功刷新 + 普通 toast
+async function runThumbOp(action: () => Promise<unknown>, okMessage: string): Promise<void> {
+  const content = useContentStore();
+  const toast = useToastStore();
+  try {
+    await action();
+    await content.refresh();
+    toast.notify({ message: okMessage, icon: "success" });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "info" });
+  }
+}
+
+// 将剪贴板应用至缩略图（2026-07-23 待办落地）
+export async function applyClipboardThumb(assetId: string): Promise<void> {
+  await runThumbOp(() => invoke("set_thumbnail_from_clipboard", { assetId }), "已将剪贴板应用至缩略图");
+}
+
+// 自定义缩略图（系统文件选择器选定后调用）
+export async function setCustomThumb(assetId: string, sourcePath: string): Promise<void> {
+  await runThumbOp(() => invoke("set_thumbnail_custom", { assetId, sourcePath }), "已自定义缩略图");
+}
+
+// 刷新缩略图（强制重生成，防自检失败）
+export async function refreshThumb(assetId: string): Promise<void> {
+  await runThumbOp(() => invoke("refresh_thumbnail", { assetId }), "已刷新缩略图");
+}
+
+// 导出（库外写操作，不接撤销）：目录由系统对话框选定（menuOps 流程），成功普通 toast
+export async function exportAssets(assetIds: string[], targetDir: string): Promise<void> {
+  const toast = useToastStore();
+  try {
+    const n = await invoke<number>("export_assets", { assetIds, targetDir });
+    toast.notify({ message: `已导出 ${n} 个文件`, icon: "success" });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "info" });
+  }
+}
+
+export async function exportFolder(folderId: string, targetDir: string): Promise<void> {
+  const toast = useToastStore();
+  try {
+    const n = await invoke<number>("export_folder", { folderId, targetDir });
+    toast.notify({ message: `已导出 ${n} 个文件`, icon: "success" });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "info" });
+  }
+}
+
+// 彻底删除素材（两段式，不经过回收站；无撤销）——干跑命中虚拟片段引用返回 null
+// （调用方弹确认窗后再调 confirmed=true）；直接成功返回 deleted
+export async function deleteAssetsPermanently(
+  assetIds: string[],
+  confirmed: boolean,
+): Promise<RecycleDeleteResult | null> {
+  try {
+    const r = await invoke<RecycleDeleteResult>("delete_assets_permanently", { assetIds, confirmed });
+    if (r.needConfirm) return r;
+    await runHardDelete(() => `彻底删除 ${r.deleted} 个项目`);
+    return null;
+  } catch (e) {
+    useToastStore().notify({ message: String(e), icon: "info" });
+    return null;
+  }
+}
+
+// 删除文件夹报告（后端 DeleteFolderReport 同构）
+export interface DeleteFolderResult {
+  needConfirm: boolean;
+  segmentRefs: number;
+  assetCount: number;
+  folderCount: number;
+  movedPlacements: number;
+  deletedFolders: number;
+  deleted: number;
+}
+
+// 删除文件夹（素材移未分类，可撤销）：成功 toast 带撤销
+export async function deleteFolder(folderId: string): Promise<boolean> {
+  let report: DeleteFolderResult | null = null;
+  return await runOp(async () => {
+    report = await invoke<DeleteFolderResult>("delete_folder", { folderId, permanent: false, confirmed: false });
+  }, () => `删除文件夹（${report?.movedPlacements ?? 0} 个素材移入未分类）`);
+}
+
+// 彻底删除文件夹（两段式，物理递归；无撤销）：needConfirm 返回报告（调用方弹确认窗），
+// 否则执行并 toast
+export async function deleteFolderPermanently(folderId: string, confirmed: boolean): Promise<DeleteFolderResult | null> {
+  try {
+    const r = await invoke<DeleteFolderResult>("delete_folder", { folderId, permanent: true, confirmed });
+    if (r.needConfirm) return r;
+    await runHardDelete(() => `彻底删除文件夹（${r.deleted} 个素材）`);
+    return null;
+  } catch (e) {
+    useToastStore().notify({ message: String(e), icon: "info" });
+    return null;
+  }
+}
+
+// 复制 base64（后端守卫：仅静态图片且 ≤10MB）
+export async function getAssetBase64(assetId: string): Promise<string | null> {
+  try {
+    return await invoke<string>("get_asset_base64", { assetId });
+  } catch (e) {
+    useToastStore().notify({ message: String(e), icon: "info" });
+    return null;
+  }
+}
+
+// 资产源文件真实绝对路径（复制文件路径用；后端恒返回 info 内 origin，与预览路径解析无关）
+export async function getAssetOriginPath(assetId: string): Promise<string | null> {
+  try {
+    return await invoke<string>("get_asset_origin_path", { assetId });
+  } catch (e) {
+    useToastStore().notify({ message: String(e), icon: "info" });
+    return null;
+  }
+}

@@ -6,6 +6,8 @@ import { computed, ref } from "vue";
 import SectionHeader from "./SectionHeader.vue";
 import FolderCard from "./FolderCard.vue";
 import { dragView } from "../lib/dragOperation";
+import { openContextMenu } from "../lib/contextMenus";
+import { folderCardSpec } from "../lib/menuSpecs";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
@@ -33,6 +35,12 @@ function onEnter(id: string): void {
   content.sidebarSelected = `folder:${id}`;
 }
 
+// 右键（6.3）：未选中项先单选（与树 item 同规则），全局菜单宿主（lib/contextMenus）
+function onMenu(f: { id: string; name: string }, e: MouseEvent): void {
+  if (!selection.isFolderSelected(f.id)) selection.clickFolder(f.id);
+  openContextMenu(e, folderCardSpec(f));
+}
+
 // 列宽 = 181 × 滑块行高 / 220（基准行高 220 时列宽 181——gap 16 + 左右间距后
 // 189 一排只放得下 3 列，181 一排正好 4 列；181 也是文件夹 SVG 原生宽度，1:1 显示）
 const colWidth = computed(() => Math.max(80, Math.round((181 * ui.targetRowHeight) / 220)));
@@ -52,6 +60,7 @@ const colWidth = computed(() => Math.max(80, Math.round((181 * ui.targetRowHeigh
         :dimmed="dragView.folderIds?.has(f.id) ?? false"
         @select="onSelect(f.id, $event)"
         @dblclick="onEnter(f.id)"
+        @contextmenu.prevent.stop="onMenu(f, $event)"
       />
     </div>
   </section>

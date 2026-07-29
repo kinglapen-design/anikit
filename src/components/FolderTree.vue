@@ -7,33 +7,46 @@
 // naming 输入态——Enter / Esc / 失焦一律保存：名非空且变了 → renameFolder，空或不变保留
 // 默认名；命名态节点不参与拖拽 / 右键（不挂 data-folder-id，naming 态 TreeItem 是 div 非 button）。
 // 树 item 右键（C3）：「新建同级文件夹 / 新建子文件夹」菜单宿主在 LibraryView（Teleport body）。
-import { nextTick, ref } from "vue";
+import { computed, nextTick } from "vue";
 import TreeItem from "./TreeItem.vue";
 import { dragView, visibleTreeFolderIds } from "../lib/dragOperation";
 import { renameFolder } from "../lib/placementOps";
+import { openContextMenu } from "../lib/contextMenus";
+import { treeItemSpec } from "../lib/menuSpecs";
+import { isTreeOpen, toggleOpen } from "../lib/treeExpansion";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
+import { useUiStore } from "../stores/ui";
 
 const props = withDefaults(
   defineProps<{
     nodes: FolderNode[];
     depth?: number;
+    parentId?: string | null; // 本层父级 id（顶层 = null）：树排序"当前层级"与右键菜单判定用
     forceOpenIds?: Set<string>; // 命名节点的祖先链强制展开（新建子文件夹时父级可能折叠）
   }>(),
-  { depth: 0, forceOpenIds: undefined },
+  { depth: 0, parentId: null, forceOpenIds: undefined },
 );
 const content = useContentStore();
 const selection = useSelectionStore();
+const ui = useUiStore();
 
-const openSet = ref(new Set<string>());
-function toggle(id: string): void {
-  const next = new Set(openSet.value);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  openSet.value = next;
-}
+// 树排序（6.3 右键菜单"查看-排序"）：custom = folders.json order 原序；
+// level* 仅锚定层级（ui.treeSortAnchor = 右键时记录的本层父级）、all* 全部层级按标题
+const sortedNodes = computed(() => {
+  const mode = ui.treeSort;
+  if (mode === "custom") return props.nodes;
+  const all = mode.startsWith("all");
+  if (!all && (props.parentId ?? null) !== ui.treeSortAnchor) return props.nodes;
+  const desc = mode.endsWith("Desc");
+  return [...props.nodes].sort((a, b) =>
+    desc ? b.name.localeCompare(a.name, "zh") : a.name.localeCompare(b.name, "zh"),
+  );
+});
+
+// 展开态：模块级共享（lib/treeExpansion，2026-07-29——原每层自管，右键"展开/折叠所有"无从着力）
 function isOpen(id: string): boolean {
-  return openSet.value.has(id) || (props.forceOpenIds?.has(id) ?? false);
+  return isTreeOpen(id) || (props.forceOpenIds?.has(id) ?? false);
 }
 
 // 选中：有效拖拽结束后的紧随 click 不触发（C4 引擎置位）；
@@ -54,11 +67,12 @@ function onSelect(id: string, e: MouseEvent): void {
   void nextTick(() => selection.clickFolder(id));
 }
 
-// 树 item 右键（C3）：菜单宿主在 LibraryView（AppMenu 必须 Teleport body）；
-// 命名态节点不出菜单（2026-07-29 复验三轮）
+// 树 item 右键（6.3）：全局菜单宿主（lib/contextMenus）；命名态节点不出菜单（2026-07-29 复验三轮）；
+// 右键未选中项先单选（文件夹选择域，与素材互斥由 clickFolder 内部做）
 function onItemMenu(e: MouseEvent, node: FolderNode): void {
   if (selection.namingFolderId === node.id) return;
-  selection.treeMenu = { x: e.clientX, y: e.clientY, node };
+  if (!selection.isFolderSelected(node.id)) selection.clickFolder(node.id);
+  openContextMenu(e, treeItemSpec(node, props.parentId ?? null));
 }
 
 // 命名保存（先建后命名）：非空且与当前名（默认名）不同 → renameFolder；
@@ -72,7 +86,7 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
 </script>
 
 <template>
-  <template v-for="(node, index) in nodes" :key="node.id">
+  <template v-for="(node, index) in sortedNodes" :key="node.id">
     <div class="ft-node" @contextmenu.prevent.stop="onItemMenu($event, node)">
       <TreeItem
         :icon="isOpen(node.id) ? 'folder-open' : 'folder-closed'"
@@ -83,12 +97,12 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
         :open="isOpen(node.id)"
         :selected="content.sidebarSelected === `folder:${node.id}` || selection.isFolderSelected(node.id)"
         :dimmed="dragView.folderIds?.has(node.id) ?? false"
-        :last="index === nodes.length - 1"
+        :last="index === sortedNodes.length - 1"
         :folder-id="selection.namingFolderId === node.id ? undefined : node.id"
         :data-drag-name="node.name"
         :naming="selection.namingFolderId === node.id"
         guide
-        @toggle="toggle(node.id)"
+        @toggle="toggleOpen(node.id)"
         @select="onSelect(node.id, $event)"
         @name-commit="onNameCommit(node, $event)"
       />
@@ -97,7 +111,7 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
         class="ft-children"
         :style="{ '--guide-x': `${depth * 20 + 24}px` }"
       >
-        <FolderTree :nodes="node.children" :depth="depth + 1" :force-open-ids="forceOpenIds" />
+        <FolderTree :nodes="node.children" :depth="depth + 1" :parent-id="node.id" :force-open-ids="forceOpenIds" />
       </div>
     </div>
   </template>

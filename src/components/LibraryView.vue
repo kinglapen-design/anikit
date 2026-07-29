@@ -10,10 +10,8 @@ import { computed, ref } from "vue";
 import SectionHeader from "./SectionHeader.vue";
 import TreeItem from "./TreeItem.vue";
 import FolderTree from "./FolderTree.vue";
-import AppMenu from "./AppMenu.vue";
-import MenuItem from "./MenuItem.vue";
 import { beginFolderDrag } from "../lib/dragOperation";
-import { createFolder } from "../lib/placementOps";
+import { createAndName, findParentId } from "../lib/menuOps";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 
@@ -51,45 +49,8 @@ function quickCount(key: (typeof quickItems)[number]["key"]): number | undefined
 }
 
 // —— 新建文件夹（先建后命名，2026-07-29 复验三轮）——
-// 父级查找（建兄弟用）：命中顶层 = null（根级）
-function findParentId(nodes: FolderNode[], id: string, parent: string | null = null): string | null | undefined {
-  for (const n of nodes) {
-    if (n.id === id) return parent;
-    const hit = findParentId(n.children, id, n.id);
-    if (hit !== undefined) return hit;
-  }
-  return undefined;
-}
-
-// 同级唯一默认名："新建文件夹"、"新建文件夹-2"…（按目标层级现有兄弟名递进）
-function uniqueFolderName(parentId: string | null): string {
-  let level = content.folders;
-  if (parentId) {
-    const walk = (nodes: FolderNode[]): FolderNode[] | null => {
-      for (const n of nodes) {
-        if (n.id === parentId) return n.children;
-        const hit = walk(n.children);
-        if (hit) return hit;
-      }
-      return null;
-    };
-    level = walk(content.folders) ?? [];
-  }
-  const names = new Set(level.map((n) => n.name));
-  if (!names.has("新建文件夹")) return "新建文件夹";
-  let i = 2;
-  while (names.has(`新建文件夹-${i}`)) i++;
-  return `新建文件夹-${i}`;
-}
-
-// 统一入口：直接以默认名建库 → 成功返回的新 id 进命名态（FolderTree 按 id 定位 naming 节点）
-async function createAndName(parentId: string | null, afterFolderId: string | null): Promise<void> {
-  const id = await createFolder(parentId, uniqueFolderName(parentId), afterFolderId);
-  if (id) selection.namingFolderId = id;
-}
-
-// 命名节点祖先链：强制展开让新节点可见（新建子文件夹时父级可能折叠）；
-// 命名态结束（namingFolderId 清空）后未手动展开的父级恢复折叠
+// 统一流程（createAndName / findParentId / uniqueFolderName 已提为 lib/menuOps 共享：
+// 树右键 / 文件夹卡片 / 添加按钮共用）；命名节点祖先链强制展开让新节点可见
 const forceOpenIds = computed(() => {
   const out = new Set<string>();
   const target = selection.namingFolderId;
@@ -119,19 +80,6 @@ function onAddFolder(): void {
   }
 }
 
-// 树 item 右键菜单（AppMenu 必须 Teleport body；菜单点击不自动关，动作内手动关）
-function menuNewSibling(): void {
-  const m = selection.treeMenu;
-  selection.treeMenu = null;
-  if (!m) return;
-  void createAndName(findParentId(content.folders, m.node.id) ?? null, m.node.id);
-}
-function menuNewChild(): void {
-  const m = selection.treeMenu;
-  selection.treeMenu = null;
-  if (!m) return;
-  void createAndName(m.node.id, null);
-}
 // 树容器空白处右键 = 根级最底部新建（2026-07-28 定案）
 function onTreeBlankMenu(e: MouseEvent): void {
   if ((e.target as HTMLElement).closest(".tree-item")) return;
@@ -180,19 +128,6 @@ function onTreePointerDown(e: PointerEvent): void {
         <FolderTree :nodes="content.folders" :force-open-ids="forceOpenIds" />
       </div>
     </section>
-
-    <!-- 树 item 右键菜单（C3）：Teleport body（与卡片菜单同约，防 transform 祖先定位坑） -->
-    <Teleport to="body">
-      <AppMenu
-        v-if="selection.treeMenu"
-        :x="selection.treeMenu.x"
-        :y="selection.treeMenu.y"
-        @close="selection.treeMenu = null"
-      >
-        <MenuItem label="新建同级文件夹" @select="menuNewSibling" />
-        <MenuItem label="新建子文件夹" @select="menuNewChild" />
-      </AppMenu>
-    </Teleport>
   </div>
 </template>
 

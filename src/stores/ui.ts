@@ -60,6 +60,11 @@ export const useUiStore = defineStore("ui", {
     // 时间显示（5.3 帧化改造，2026-07-28 用户定：帧数优先）——视频播放条 / 悬停胶囊 / 笔记
     // 按帧号显示（fps 缺失回退时间）；音频无帧概念恒时间显示
     timeDisplay: "frames" as "frames" | "timecode",
+    // 文件树排序（6.3 右键菜单，会话级）：custom = folders.json order 原序；
+    // levelAsc/levelDesc = 仅右键目标层级按标题（treeSortAnchor 记目标父级，null = 顶层）；
+    // allAsc/allDesc = 全部层级按标题
+    treeSort: "custom" as "custom" | "levelAsc" | "levelDesc" | "allAsc" | "allDesc",
+    treeSortAnchor: null as string | null,
   }),
   actions: {
     // 启动加载全局 UI 设置并订阅变更防抖写回（多预览窗口各自独立 Pinia 各自加载，
