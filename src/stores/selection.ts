@@ -36,12 +36,6 @@ export interface LinkDraft {
   targetFolder: string; // 落点文件夹 ID（"root" 或 F 开头）
 }
 
-// 删除两段式询问（C1）：第一段返回 needConfirm 时填入，询问窗选择后带 lastAction 再调
-export interface DeletePrompt {
-  items: PlacementRef[];
-  lastCount: number; // 涉及"最后一条 Placement"的资源数（询问窗文案）
-}
-
 // 回收站彻底删除两段式询问（6.1 二轮，2026-07-29）：delete_recycle / clear_recycle 干跑
 // 返回 needConfirm 时填入（携带虚拟片段引用数警示），确认后带 confirmed=true 再调——不可恢复，无撤销
 export interface RecyclePrompt {
@@ -68,7 +62,6 @@ export const useSelectionStore = defineStore("selection", {
     // —— 6.1 阶段 C 操作态（会话级，均不进持久化）——
     clipboard: null as InternalClipboard | null,
     linkDraft: null as LinkDraft | null, // 非空 = 关联弹窗打开（宿主 App.vue）
-    deletePrompt: null as DeletePrompt | null, // 非空 = 删除询问窗打开（宿主 App.vue）
     recyclePrompt: null as RecyclePrompt | null, // 非空 = 回收站彻底删除确认窗打开（宿主 App.vue，6.1 二轮）
     // 卡片就地重命名目标 key（C2；F2 / 右键菜单设置，单选才可；滚出视口 / Esc = 取消置 null）
     renamingKey: null as string | null,

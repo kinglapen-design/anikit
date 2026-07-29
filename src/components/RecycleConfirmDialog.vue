@@ -2,7 +2,7 @@
 // 回收站彻底删除确认窗（6.1 二轮，2026-07-29）：Del / 右键「彻底删除」「清空回收站」先干跑
 // （confirmed=false），needConfirm 时弹出本窗——文案含"被 N 个虚拟片段引用"警示与不可恢复
 // 说明，确认后带 confirmed=true 再调（不可恢复，toast 无撤销按钮）；
-// 右上角关闭 / 取消 = 放弃（干跑未动数据，直接关即可）。样式照 DeleteConfirmDialog；
+// 右上角关闭 / 取消 = 放弃（干跑未动数据，直接关即可）。
 // 类名沿用 del-*——App.vue 快捷键让位判定按 .del-mask 查询。宿主 App.vue。
 import { computed, onBeforeUnmount, onMounted } from "vue";
 import IconButton from "./IconButton.vue";
@@ -63,7 +63,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
 </template>
 
 <style scoped>
-/* 遮罩（同 DeleteConfirmDialog / DuplicateDialog / LinkDialog）：C1-80 */
+/* 遮罩（同 DuplicateDialog / LinkDialog）：C1-80 */
 .del-mask {
   position: absolute;
   inset: 0;
@@ -123,7 +123,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
   flex: none;
   box-shadow: inset 0 1px 0 0 var(--border-1);
 }
-/* 按钮（01_按钮#07 大标题按钮-小按钮；主要 / 次要，同 DeleteConfirmDialog） */
+/* 按钮（01_按钮#07 大标题按钮-小按钮；主要 / 次要） */
 .btn {
   display: flex;
   justify-content: center;

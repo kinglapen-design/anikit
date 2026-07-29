@@ -17,7 +17,6 @@ import SequenceDialog from "./components/SequenceDialog.vue";
 import ImportResultDialog from "./components/ImportResultDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
 import LinkDialog from "./components/LinkDialog.vue";
-import DeleteConfirmDialog from "./components/DeleteConfirmDialog.vue";
 import RecycleConfirmDialog from "./components/RecycleConfirmDialog.vue";
 import ToastStack from "./components/ToastStack.vue";
 import { useUiStore } from "./stores/ui";
@@ -136,7 +135,7 @@ function onSelectionKeys(e: KeyboardEvent): void {
 // 操作快捷键（6.1 阶段 C，2026-07-28 用户定案，与 onSelectionKeys 同口径）：
 // F2 = 重命名当前单选素材（卡片就地重命名；多选不触发；文件夹重命名走卡片名称双击 /
 // 新建后命名态，2026-07-29 复验三轮 rename_folder 已接入）；
-// Del = 删除选中项（两段式：先干跑，needConfirm 弹询问窗「移入回收站 / 保留为未分类」）；
+// Del = 删除选中项（2026-07-29 用户修订：取消两段式询问，直接移入回收站，撤销可找回）；
 // Ctrl+C / Ctrl+X = 写内部剪贴板（仅素材）；Ctrl+V 仲裁（内部非空 → copy 弹关联弹窗 / cut 移动；
 // 空 → onPaste 系统剪贴板导入）；Ctrl+Shift+V = 直接副本不弹窗（名称同源）。
 // 回收站视口（6.1 二轮，2026-07-29）：F2 不触发（只读）；Del 分流彻底删除两段式
@@ -319,8 +318,6 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
     <DuplicateDialog v-if="content.importConflicts && content.importConflicts.length > 0" />
     <!-- 关联 / 副本弹窗（6.1 C5）：Ctrl+V(copy) / Ctrl+拖拽落文件夹 / 右键"粘贴"触发 -->
     <LinkDialog v-if="selection.linkDraft" />
-    <!-- 删除两段式询问窗（6.1 C1）：needConfirm 时弹出「移入回收站 / 保留为未分类」 -->
-    <DeleteConfirmDialog v-if="selection.deletePrompt" />
     <!-- 回收站彻底删除确认窗（6.1 二轮）：虚拟片段引用警示，不可恢复无撤销 -->
     <RecycleConfirmDialog v-if="selection.recyclePrompt" />
   </div>

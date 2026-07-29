@@ -123,36 +123,14 @@ export async function renameFolder(folderId: string, newName: string): Promise<b
   }, () => `重命名文件夹为 ${newName.trim()}`);
 }
 
-// 删除两段式（C1）：先 lastAction=null 干跑——涉及资源最后一条 Placement 时返回
-// needConfirm 不动数据，前端弹询问窗（DeleteConfirmDialog），用户选择后 confirmDelete 再调
+// 删除（C1；2026-07-29 用户修订：取消两段式询问——回收站不是危险操作，素材没丢，
+// 撤销可找回，二次确认纯增操作负担）：直接 lastAction="recycle" 移入回收站，
+// 不再有"保留为未分类"选项（入口不同而已）；后端两段式机制保留（lastAction=null 干跑）
 export async function deletePlacements(items: PlacementRef[]): Promise<void> {
-  const selection = useSelectionStore();
   const toast = useToastStore();
   try {
-    const r = await invoke<{ needConfirm: boolean; lastAssets: string[] }>("delete_placements", {
-      items,
-      lastAction: null,
-    });
-    if (r.needConfirm) {
-      selection.deletePrompt = { items, lastCount: r.lastAssets.length };
-      return;
-    }
+    await invoke("delete_placements", { items, lastAction: "recycle" });
     await runOp(async () => {}, () => `删除 ${items.length} 个项目`);
-  } catch (e) {
-    toast.notify({ message: String(e), icon: "info" });
-  }
-}
-
-// 询问窗选择后执行（"recycle" = 移入回收站 / "uncategorized" = 保留为未分类）
-export async function confirmDelete(lastAction: "recycle" | "uncategorized"): Promise<void> {
-  const selection = useSelectionStore();
-  const prompt = selection.deletePrompt;
-  selection.deletePrompt = null;
-  if (!prompt) return;
-  const toast = useToastStore();
-  try {
-    await invoke("delete_placements", { items: prompt.items, lastAction });
-    await runOp(async () => {}, () => `删除 ${prompt.items.length} 个项目`);
   } catch (e) {
     toast.notify({ message: String(e), icon: "info" });
   }
