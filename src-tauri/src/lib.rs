@@ -154,7 +154,9 @@ pub fn run() {
               })
             })
             .unwrap_or(false);
-          let _ = w.set_size(tauri::PhysicalSize::new(s.width.max(400), s.height.max(300)));
+          // 最小恢复尺寸 800×500（2026-07-29 复验修复：曾恢复出 422×313 小窗——
+          // 原 400×300 下限形同虚设；写回侧已加最小化 / 小尺寸守卫，此处兜底）
+          let _ = w.set_size(tauri::PhysicalSize::new(s.width.max(800), s.height.max(500)));
           if on_monitor {
             let _ = w.set_position(tauri::PhysicalPosition::new(s.x, s.y));
           }

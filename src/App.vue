@@ -208,11 +208,16 @@ function scheduleSaveWindowState(): void {
 }
 async function saveWindowState(): Promise<void> {
   try {
+    // 2026-07-29 复验修复（窗口缩成一小块）：最小化 / 隐藏托盘等场景 outerSize 可能报退化尺寸，
+    // 写回后每轮启动都恢复小窗——最小化不写、小于最小可用尺寸（800×500）不写
+    if (await appWindow.isMinimized()) return;
     const [pos, size, maximized] = await Promise.all([
       appWindow.outerPosition(),
       appWindow.outerSize(),
       appWindow.isMaximized(),
     ]);
+    // 尺寸退化（237×39）或坐标飞去屏外（-32000）一律不写
+    if (size.width < 800 || size.height < 500 || pos.x < -10000 || pos.y < -10000) return;
     await invoke("save_window_state", {
       state: { x: pos.x, y: pos.y, width: size.width, height: size.height, maximized },
     });
