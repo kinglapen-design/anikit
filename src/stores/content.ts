@@ -4,6 +4,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isStaticImageExt } from "../lib/formatBadge";
 import { useSelectionStore } from "./selection";
+import type { RecentAssetView, RecycleEntryView } from "./quickViews";
 
 // 与后端 commands/import.rs 输出一一对应（camelCase，07_接口文档）
 export interface PlacementView {
@@ -26,18 +27,9 @@ export interface PlacementView {
   fps?: number | null; // 帧率：序列帧 = 播放帧率；视频 = 素材自身帧率（5.3 帧化：帧号显示 / 逐帧步进按 1/fps）
 }
 
-// 最近使用条目（6.1 二轮，2026-07-29；后端 list_recent_assets）：PlacementView 同构 +
-// 最近查看时间（后端按时间倒序）；元素含 PlacementView 全部字段，AssetGrid 零改动复用
-export interface RecentAssetView extends PlacementView {
-  viewedAt: string;
-}
-
-// 回收站条目（6.1 二轮；后端 list_recycle）：PlacementView 同构（folderId 恒 "recycle"、
-// origin 恒 false——key 与素材域天然独立）+ 删除时间 + 该资源现存 Placement 数
-export interface RecycleEntryView extends PlacementView {
-  deletedAt: string;
-  placementCount: number;
-}
+// 最近使用 / 回收站视图 DTO（6.1 二轮）已拆至 stores/quickViews.ts（规范第 3 条行数控制），
+// 此处 re-export 保既有引用点不动
+export type { RecentAssetView, RecycleEntryView } from "./quickViews";
 
 export interface FolderNode {
   id: string;

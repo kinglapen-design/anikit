@@ -33,7 +33,7 @@ import {
   assetCardFade,
 } from "../lib/dragOperation";
 import { openContextMenu } from "../lib/contextMenus";
-import { assetBlankSpec, assetCardSpec, folderBlankSpec } from "../lib/menuSpecs";
+import { openGridContextMenu } from "../lib/menuSpecs";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
@@ -193,33 +193,12 @@ const {
 });
 
 // —— 右键菜单（6.3 全量改造，设计稿 `00_修改与需求/05_右键菜单`）：
-// 卡片 = 素材菜单（全局宿主 lib/contextMenus；回收站视口维持 RecycleCardMenu 只读菜单）；
-// 空白 = 文件夹卡片区（grid-header）出"新建文件夹"，其余空白出素材空白菜单（查看 / 新建 / 粘贴）
+// 统一调度在 lib/menuSpecs.openGridContextMenu（素材菜单走全局宿主 lib/contextMenus）；
+// 回收站视口返回 "recycle" 由本组件出 RecycleCardMenu 只读菜单（6.1 二轮既有）
 const cardMenu = ref<{ x: number; y: number } | null>(null);
 function onCardContextMenu(e: MouseEvent): void {
-  const t = e.target as HTMLElement;
-  const card = t.closest(".asset-card, .list-row");
-  const key = card?.getAttribute("data-key");
-  if (key && !content.isRecycleView) {
-    e.preventDefault();
-    if (!selection.isSelected(key)) selection.selectOnly(key);
-    const p = props.items.find((it) => `${it.assetId}|${it.folderId}` === key);
-    if (p) openContextMenu(e, assetCardSpec(p));
-    return;
-  }
-  if (key) {
-    // 回收站视口：只读菜单（既有 RecycleCardMenu）
-    e.preventDefault();
-    if (!selection.isSelected(key)) selection.selectOnly(key);
+  if (openGridContextMenu(e, props.items) === "recycle") {
     cardMenu.value = { x: e.clientX, y: e.clientY };
-    return;
-  }
-  if (t.closest(".folder-card, button, input")) return; // 文件夹卡片自带菜单 / 按钮区不拦
-  e.preventDefault();
-  if (t.closest(".grid-header")) {
-    openContextMenu(e, folderBlankSpec());
-  } else {
-    openContextMenu(e, assetBlankSpec());
   }
 }
 

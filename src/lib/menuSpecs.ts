@@ -6,7 +6,7 @@ import { useContentStore, type FolderNode, type PlacementView } from "../stores/
 import { useSelectionStore } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
 import { usePreviewStore } from "../stores/preview";
-import { type CtxEntry } from "./contextMenus";
+import { openContextMenu, type CtxEntry } from "./contextMenus";
 import {
   copyAssetLink,
   copyAssetPath,
@@ -387,4 +387,28 @@ export function addButtonSpec(pickImport: (kind: "files" | "folder") => void): C
       ],
     },
   ];
+}
+
+// —— 网格右键统一调度（6.3，自 AssetGrid 拆出，规范第 3 条行数控制）——
+// 素材卡片 = 素材菜单（回收站视口返回 "recycle" 由调用方出 RecycleCardMenu）；
+// grid-header 空白 = 文件夹卡片空白菜单；其余空白 = 素材空白菜单；
+// 文件夹卡片 / 按钮 / 输入框上不处理（"pass"——文件夹卡片自带菜单）
+export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "recycle" | "done" | "pass" {
+  const t = e.target as HTMLElement;
+  const selection = useSelectionStore();
+  const content = useContentStore();
+  const card = t.closest(".asset-card, .list-row");
+  const key = card?.getAttribute("data-key");
+  if (key) {
+    e.preventDefault();
+    if (!selection.isSelected(key)) selection.selectOnly(key);
+    if (content.isRecycleView) return "recycle";
+    const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
+    if (p) openContextMenu(e, assetCardSpec(p));
+    return "done";
+  }
+  if (t.closest(".folder-card, button, input")) return "pass";
+  e.preventDefault();
+  openContextMenu(e, t.closest(".grid-header") ? folderBlankSpec() : assetBlankSpec());
+  return "done";
 }
