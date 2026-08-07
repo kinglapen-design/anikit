@@ -1,19 +1,19 @@
 <script setup lang="ts">
-// 单选框 / 复选框（02_通用组件/01_按钮 04）：按钮 16×16、线条 border-1、圆角 4；
-// 选中：边框品牌色-2 + 填充品牌色-1，文字品牌色-1。
-// tone：menu（默认）文字 font-icon-3/70；dialog（09 导入弹窗）文字 font-icon-2/C4，与提示文字区分。
+// 复选框（figma-css 01_按钮 1.4）：框 14×14 圆角 4；
+// 未选中 C4 底 + 暗-悬停边框（hover C5），选中品牌色底 + 亮-选中边框 + 高亮对勾（透明度过渡）；
+// 标题未选中 标签档 / 选中 常态档。
 import AppIcon from "./AppIcon.vue";
 
 const model = defineModel<boolean>({ required: true });
-withDefaults(defineProps<{ label: string; tone?: "menu" | "dialog" }>(), { tone: "menu" });
+defineProps<{ label?: string }>();
 </script>
 
 <template>
-  <button class="app-checkbox" :class="{ on: model, dialog: tone === 'dialog' }" @click="model = !model">
+  <button class="app-checkbox" :class="{ on: model }" @click="model = !model">
     <span class="box">
-      <AppIcon v-if="model" name="check" :size="16" />
+      <AppIcon v-if="model" name="check" :size="10" class="mark" />
     </span>
-    <span class="label">{{ label }}</span>
+    <span v-if="label" class="label">{{ label }}</span>
   </button>
 </template>
 
@@ -23,40 +23,39 @@ withDefaults(defineProps<{ label: string; tone?: "menu" | "dialog" }>(), { tone:
   align-items: center;
   gap: var(--space-6);
   padding: 0;
-  color: var(--font-icon-3);
+  height: 20px;
+  color: var(--text-label);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
   flex: none;
 }
+.app-checkbox.on {
+  color: var(--text-normal);
+}
 .box {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: var(--radius-4);
-  box-shadow: inset 0 0 0 1px var(--border-1);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--line-hover);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--font-icon-1);
+  color: var(--text-highlight);
   line-height: 0;
   flex: none;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .app-checkbox:hover .box {
-  box-shadow: inset 0 0 0 1px var(--font-icon-3);
+  background: var(--c5);
 }
-.app-checkbox.on {
-  color: var(--font-icon-2);
+.mark {
+  transition: opacity 0.15s ease;
 }
-/* dialog 语气（09 导入弹窗）：未选中 font-icon-2 / 选中 C4，与提示文字（font-icon-3）区分 */
-.app-checkbox.dialog {
-  color: var(--font-icon-2);
-}
-.app-checkbox.dialog.on {
-  color: var(--font-icon-1);
-}
-/* 选中：填充品牌色-1 + 边框 12% 透明白（同颜色信息色块边线，2026-07-23 用户定），对勾 80% */
 .app-checkbox.on .box {
-  box-shadow: inset 0 0 0 1px var(--font-icon-4);
-  background: var(--brand-1);
-  color: var(--font-icon-2);
+  background: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--line-active);
 }
 </style>

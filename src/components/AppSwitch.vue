@@ -1,12 +1,12 @@
 <script setup lang="ts">
-// 开关按钮（02_通用组件/01_按钮 08）：标准 50×28 圆钮 20 / 小号 40×24 圆钮 16（small prop）；
-// 未选中 font-icon-5（选中色），选中品牌色-1，圆钮 font-icon-1，滑动过渡 0.2s（2026-07-24 用户定）。
-withDefaults(defineProps<{ small?: boolean }>(), { small: false });
+// 开关按钮（figma-css 01_按钮 1.9）：34×18 圆钮 14，padding 2，胶囊圆角；
+// 关 = C4 底 + 暗-悬停边框（hover C5），开 = 品牌色底、圆钮右移（右开左关，用户注明 figma 方向画反）；
+// 圆钮 = 文字高亮色，位移动画（00_要求：切换按钮要有位移动画）。
 const model = defineModel<boolean>({ required: true });
 </script>
 
 <template>
-  <button class="app-switch" :class="{ on: model, small }" @click="model = !model">
+  <button class="app-switch" :class="{ on: model }" @click="model = !model">
     <span class="knob" />
   </button>
 </template>
@@ -15,38 +15,35 @@ const model = defineModel<boolean>({ required: true });
 .app-switch {
   display: flex;
   align-items: center;
-  width: var(--switch-w);
-  height: var(--switch-h);
-  padding: var(--space-4);
-  border-radius: 999px;
-  background: var(--font-icon-5);
-  transition: background 0.2s ease;
+  width: 34px;
+  height: 18px;
+  padding: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--line-hover);
   flex: none;
+  transition: background 0.2s ease;
 }
-.app-switch.small {
-  width: var(--switch-small-w);
-  height: var(--switch-small-h);
+.app-switch:hover {
+  background: var(--c5);
 }
 .app-switch.on {
-  background: var(--brand-1);
+  background: var(--brand);
+  box-shadow: none;
+}
+.app-switch.on:hover {
+  background: var(--brand);
 }
 .knob {
-  width: var(--switch-knob);
-  height: var(--switch-knob);
-  border-radius: 999px;
-  background: var(--font-icon-1);
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-circle);
+  background: var(--text-highlight);
   flex: none;
   transition: transform 0.2s ease;
 }
-.app-switch.small .knob {
-  width: var(--switch-small-knob);
-  height: var(--switch-small-knob);
-}
-/* 滑动：选中时圆钮平移至右端（轨道宽 - 圆钮 - 两侧内边距） */
+/* 开：圆钮平移至右端（轨道宽 - 圆钮 - 两侧 padding） */
 .app-switch.on .knob {
-  transform: translateX(calc(var(--switch-w) - var(--switch-knob) - var(--space-8)));
-}
-.app-switch.small.on .knob {
-  transform: translateX(calc(var(--switch-small-w) - var(--switch-small-knob) - var(--space-8)));
+  transform: translateX(16px);
 }
 </style>

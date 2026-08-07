@@ -130,22 +130,22 @@ function closeAll(): void {
       <div class="switch-group">
         <div class="switch-row">
           <span class="label">自动播放动图</span>
-          <AppSwitch small v-model="ui.autoPlayGif" />
+          <AppSwitch v-model="ui.autoPlayGif" />
         </div>
         <div class="switch-row">
           <span class="label">自动播放视频</span>
-          <AppSwitch small v-model="ui.autoPlayVideo" />
+          <AppSwitch v-model="ui.autoPlayVideo" />
         </div>
       </div>
 
       <div class="switch-group last">
         <div class="switch-row">
           <span class="label">显示扩展名角标</span>
-          <AppSwitch small v-model="ui.showExtBadge" />
+          <AppSwitch v-model="ui.showExtBadge" />
         </div>
         <div class="switch-row">
           <span class="label">显示子文件夹内容</span>
-          <AppSwitch small v-model="ui.showSubfolders" />
+          <AppSwitch v-model="ui.showSubfolders" />
         </div>
       </div>
     </AppMenu>

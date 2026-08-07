@@ -1,13 +1,13 @@
 <script setup lang="ts">
-// 文件树 item（02_通用组件/02_item 02）：高 28；展开按钮容器宽 8（= 图标宽，高随 item），
-// 无子项时保留占位保证装饰图标列对齐。
-// 层级缩进 20px：子项展开箭头尖角（缩进 + 4）对齐父级装饰图标中心（缩进 + 24），
-// 即缩进 = 8/2 + gap 2 + padding 6 + 图标 16/2 = 20（8×8 图标无 0.5 偏差）。
-// 命名输入态（6.1 C3）：受控 naming prop——服务新建文件夹后的命名（2026-07-29 复验三轮改
-// "先建后命名"：默认名先入库，命名 = rename_folder）；Enter / Esc / 失焦一律保存退出，
-// 空或不变 = 保留默认名（父级 FolderTree 判定）。
+// 文件树 item（figma-css 02_目录 item）：高 32、padding 6/8、radius 6；
+// variant 四形态：root = 根父级（C5 底 + 1px 亮-选中边框）/ child = 子级（C5-底色底，默认）/
+// archive = 档案（C5-底色底 + 品牌色提示圆点替代展开箭头）/ quick = 快速访问（无底）；
+// tint = 自定义色名（red/orange/...）：root 底 = custom-{tint}，child/archive 底 = custom-{tint}-bg；
+// hover 叠 暗-悬停；选中叠 亮-选中 + 1.5px 文字常态内阴影边框（不掺白，2026-08-07 用户定）。
+// 层级缩进 20px（1.3 重构 FolderTree 时按新箭头容器 12 再校准）。
+// 命名输入态（6.1 C3）：受控 naming prop——Enter / Esc / 失焦一律保存退出，空或不变 = 保留默认名。
 // 拖拽落点（6.1 C4c）：item 高度三等分——上/下 1/3 出 2px 插入线 + hover 底（仅文件夹拖拽），
-// 中间 1/3（素材任何位置）= 并入高亮（--brand-1-12 + inset 1px --brand-1）。
+// 中间 1/3（素材任何位置）= 并入高亮（品牌 12% 底 + inset 1px 品牌色）。
 import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "./AppIcon.vue";
 import { dragView } from "../lib/dragOperation";
@@ -21,6 +21,8 @@ const props = withDefaults(
     expandable?: boolean;
     open?: boolean;
     selected?: boolean;
+    variant?: "root" | "child" | "archive" | "quick";
+    tint?: string; // 自定义色名（custom-{tint} / custom-{tint}-bg）
     dimmed?: boolean; // 拖拽源半透明（2026-07-28 复验反馈 6①）
     last?: boolean;
     guide?: boolean;
@@ -34,6 +36,8 @@ const props = withDefaults(
     expandable: false,
     open: false,
     selected: false,
+    variant: "child",
+    tint: undefined,
     dimmed: false,
     last: false,
     guide: false,
@@ -73,28 +77,43 @@ watch(
 const dropZone = computed(() =>
   props.folderId && dragView.tree?.folderId === props.folderId ? dragView.tree.zone : null,
 );
+
+// 自定义色（3.3 预留）：root 底 = custom-{tint}，child/archive = custom-{tint}-bg；
+// 经 --tint-bg 注入，hover/选中罩层照常叠加（不掺白，2026-08-07 用户定）
+const tintBg = computed(() => {
+  if (!props.tint) return undefined;
+  return `var(--custom-${props.tint}${props.variant === "root" ? "" : "-bg"})`;
+});
 </script>
 
 <template>
   <div
     class="tree-item"
-    :class="{
-      leaf: guide && !expandable && depth > 0,
-      last,
-      'drop-before': dropZone === 'before',
-      'drop-after': dropZone === 'after',
-      dimmed,
-    }"
-    :style="{ paddingLeft: `${depth * 20}px` }"
+    :class="[
+      variant,
+      {
+        leaf: guide && !expandable && depth > 0,
+        last,
+        'drop-before': dropZone === 'before',
+        'drop-after': dropZone === 'after',
+        dimmed,
+      },
+      tint ? `tint-${tint}` : '',
+    ]"
+    :style="{ paddingLeft: `${depth * 20}px`, '--tint-bg': tintBg }"
     :data-folder-id="folderId"
   >
-    <button class="expand" :class="{ placeholder: !expandable }" @click.stop="emit('toggle')">
-      <AppIcon name="tree-expand-arrow" :size="8" class="chev" :class="{ open }" />
+    <!-- 档案 item：品牌色提示圆点替代展开箭头（figma 02_目录 item 3） -->
+    <span v-if="variant === 'archive'" class="expand archive-dot-slot">
+      <AppIcon name="archive-dot" :size="12" />
+    </span>
+    <button v-else class="expand" :class="{ placeholder: !expandable }" @click.stop="emit('toggle')">
+      <AppIcon name="tree-expand-arrow" :size="12" class="chev" :class="{ closed: !open }" />
     </button>
     <!-- 命名态用 div（input 套 button 是非法嵌套，Chromium 虽可用但行为无保障）；
          Enter / Esc / 失焦一律保存（2026-07-29 复验三轮，不再有"取消新建"） -->
     <div v-if="naming" class="body">
-      <AppIcon :name="icon" class="deco" />
+      <AppIcon :name="icon" :size="18" class="deco" />
       <input
         ref="nameInput"
         v-model="nameDraft"
@@ -114,7 +133,7 @@ const dropZone = computed(() =>
       @click="emit('select', $event)"
       @dblclick="expandable && emit('toggle')"
     >
-      <AppIcon :name="icon" class="deco" />
+      <AppIcon :name="icon" :size="18" class="deco" />
       <span class="label">{{ label }}</span>
       <span v-if="showCount" class="count">{{ (count ?? 0).toLocaleString() }}</span>
     </button>
@@ -127,26 +146,26 @@ const dropZone = computed(() =>
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: 28px;
+  height: 32px;
 }
 /* 拖拽源整项半透明（2026-07-28 复验反馈 6①，拖拽结束引擎清态即恢复） */
 .tree-item.dimmed {
   opacity: var(--opacity-drag-source);
 }
-/* 展开按钮容器：宽 8（= 图标宽）/ 高 28（判定高度），图标 8×8 实心三角，展开时旋转 90°；
+/* 展开按钮容器：12×12（figma 02_目录 item），高 32（判定高度）；
+   箭头源图形向下：收起 = rotate(-90) 朝右、展开 = 无旋转朝下（与 figma 导出态一致）；
    有箭头的容器铺侧栏底色——遮住穿过的缩进竖线（视觉不穿过箭头，同 Eagle） */
 .expand {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 8px;
-  height: 28px;
-  /* 展开箭头常态 font-icon-3（02_item：容器内图标），hover 提亮 font-icon-2 */
-  color: var(--font-icon-3);
+  width: 12px;
+  height: 32px;
+  color: var(--text-label);
   flex: none;
 }
-.expand:not(.placeholder) {
+.expand:not(.placeholder):not(.archive-dot-slot) {
   background: var(--c3);
 }
 /* 无子项时占位保留（藏图标不藏容器：叶子行的竖线要照常穿过） */
@@ -159,25 +178,27 @@ const dropZone = computed(() =>
 .chev {
   transition: transform 0.15s ease;
 }
-.chev.open {
-  transform: rotate(90deg);
+.chev.closed {
+  transform: rotate(-90deg);
 }
 .expand:hover .chev {
-  color: var(--font-icon-2);
+  color: var(--text-normal);
 }
-/* L 形横线：仅最后一个叶子 item，x4 → x8（竖线由 ft-children 容器级绘制、
-   止于本行中心，与此横线组成 L；竖线 1px 位于 x4-5 正中）；中间子项纯竖线，不画横线 */
+/* 档案提示圆点：品牌色（SVG 自带结构色），替代展开箭头 */
+.archive-dot-slot {
+  color: var(--brand);
+}
+/* L 形横线：仅最后一个叶子 item（竖线由 ft-children 容器级绘制，止于本行中心） */
 .tree-item.leaf.last .expand::after {
   content: "";
   position: absolute;
-  left: 4px;
+  left: 6px;
   top: 50%;
   width: 4px;
   height: 1px;
-  background: var(--font-icon-6);
+  background: var(--line-hover);
 }
-/* 拖拽排序插入线（C4c，仅文件夹拖拽上/下 1/3）：2px --brand-1 于 item 上/下沿，
-   item 本身带 hover 底（--font-icon-6） */
+/* 拖拽排序插入线（C4c，仅文件夹拖拽上/下 1/3）：2px 品牌色于 item 上/下沿 */
 .tree-item.drop-before::before,
 .tree-item.drop-after::after {
   content: "";
@@ -185,7 +206,7 @@ const dropZone = computed(() =>
   left: 0;
   right: 0;
   height: 2px;
-  background: var(--brand-1);
+  background: var(--brand);
   z-index: 1;
   pointer-events: none;
 }
@@ -197,38 +218,63 @@ const dropZone = computed(() =>
 }
 .tree-item.drop-before .body,
 .tree-item.drop-after .body {
-  background: var(--font-icon-6);
+  background: linear-gradient(var(--line-hover), var(--line-hover)), var(--tint-bg, transparent);
 }
-/* item 容器：内边距 4 6 / 圆角 6 / 间距 6 */
+/* item 容器：padding 6/8 / 圆角 6 / 间距 6（figma 02_目录 item，32 高）；
+   --tint-bg 由 tint prop 注入（root = custom-{tint}，child/archive = custom-{tint}-bg） */
 .body {
   display: flex;
   align-items: center;
   gap: var(--space-6);
   flex: 1;
   min-width: 0;
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-6) var(--space-8);
   border-radius: var(--radius-6);
-  color: var(--font-icon-1);
-  transition: background 0.12s ease;
+  color: var(--text-normal);
+  background: var(--tint-bg, transparent);
+  transition: background 0.15s ease;
 }
-.body:hover {
-  background: var(--font-icon-6);
+/* 形态底色（tint 时由 --tint-bg 覆盖） */
+.tree-item.root .body {
+  background: var(--tint-bg, var(--c5));
+  box-shadow: inset 0 0 0 1px var(--line-active);
 }
-.body.selected {
-  background: var(--font-icon-5);
+.tree-item.child .body,
+.tree-item.archive .body {
+  background: var(--tint-bg, var(--c5-base));
 }
-/* 拖拽并入高亮（C4c 中间 1/3 / 素材任何位置）：--brand-1-12 底 + inset 1px --brand-1 */
+/* hover 叠 暗-悬停 罩层（不掺白，2026-08-07 用户定） */
+.tree-item.quick .body:hover {
+  background: linear-gradient(var(--line-hover), var(--line-hover)), var(--tint-bg, transparent);
+}
+.tree-item.root .body:hover {
+  background: linear-gradient(var(--line-hover), var(--line-hover)), var(--tint-bg, var(--c5));
+}
+.tree-item.child .body:hover,
+.tree-item.archive .body:hover {
+  background: linear-gradient(var(--line-hover), var(--line-hover)), var(--tint-bg, var(--c5-base));
+}
+/* 选中：叠 亮-选中 罩层 + 1.5px 文字常态内阴影边框（figma 02_目录 item 动画效果） */
+.tree-item .body.selected {
+  background: linear-gradient(var(--line-active), var(--line-active)), var(--tint-bg, transparent);
+  box-shadow: inset 0 0 0 var(--border-strong) var(--text-normal);
+}
+.tree-item.root .body.selected {
+  background: linear-gradient(var(--line-active), var(--line-active)), var(--tint-bg, var(--c5));
+}
+.tree-item.child .body.selected,
+.tree-item.archive .body.selected {
+  background: linear-gradient(var(--line-active), var(--line-active)), var(--tint-bg, var(--c5-base));
+}
+/* 拖拽并入高亮（C4c 中间 1/3 / 素材任何位置）：品牌 12% 底 + inset 1px 品牌色 */
 .body.drop-into {
   background: var(--brand-1-12);
-  box-shadow: inset 0 0 0 1px var(--brand-1);
+  box-shadow: inset 0 0 0 1px var(--brand);
 }
-/* 装饰图标线条 font-icon-2（80%），选中提亮 font-icon-1（100%）；
-   填充层 SVG 直接引用 var(--font-icon-4)，恒 12% 不随 color、选中不变（2026-07-23 用户定） */
+/* 装饰图标 18px 常态档（figma：图标 svg = 文字/常态） */
 .deco {
-  color: var(--font-icon-2);
-}
-.body.selected .deco {
-  color: var(--font-icon-1);
+  color: var(--text-normal);
+  flex: none;
 }
 .label {
   flex: 1;
@@ -240,8 +286,8 @@ const dropZone = computed(() =>
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 命名输入（C3）：C4 底 / 1px border-1 / 圆角 6（输入框 token 口径）；违规描边 --error；
-   高度恒 20 = 字体行高（2026-07-29 用户定：不撑高 item）；聚焦描边品牌色-1（用户定） */
+/* 命名输入（C3）：高度恒 20 = 字体行高（2026-07-29 用户定：不撑高 item）；
+   C1 底 / 圆角 8（输入框 token）；聚焦品牌色 1.5px；违规描边 --error */
 .name-input {
   flex: 1;
   min-width: 0;
@@ -249,29 +295,29 @@ const dropZone = computed(() =>
   box-sizing: border-box;
   padding: 0 var(--space-6);
   border: none;
-  border-radius: var(--radius-6);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-1);
-  color: var(--font-icon-1);
+  border-radius: var(--radius-8);
+  background: var(--c1);
+  box-shadow: inset 0 0 0 1px var(--line-hover);
+  color: var(--text-normal);
   font-size: var(--text-body-size);
   line-height: 20px;
   text-align: left;
   outline: none;
 }
 .name-input:focus {
-  box-shadow: inset 0 0 0 1px var(--brand-1);
+  box-shadow:
+    inset 0 0 0 1px var(--line-hover),
+    inset 0 0 0 var(--border-strong) var(--brand);
 }
 .name-input.error,
 .name-input.error:focus {
   box-shadow: inset 0 0 0 1px var(--error);
 }
+/* 数量标签：标签档，右侧（figma 02_目录 item） */
 .count {
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
+  font-size: var(--text-label-size);
+  line-height: var(--text-label-line);
+  color: var(--text-label);
   flex: none;
-}
-.body.selected .count {
-  color: var(--font-icon-1);
 }
 </style>

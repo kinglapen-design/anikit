@@ -1,10 +1,14 @@
 <script setup lang="ts">
-// 菜单项（02_通用组件/02_item 03 右键菜单 item）：内边距 4 6 / 圆角 6 / hover font-icon-6。
-// 一级项：图标 + 标题 + 快捷键标签或二级菜单提示右箭头（8×8）；
-// 二级项（checkable）：8×8 对勾占位（选中显示，未选中隐藏但占位保证标题列对齐）。
+// 右键菜单 item（figma-css 04_右键菜单 item）：padding 6/8、gap 12、圆角 6、高 33；
+// 一级项：图标 18（常态档）+ 标题（正文常态）+ 快捷键徽章组 或 二级菜单提示箭头
+// （tree-expand-arrow 12 rotate(-90) 朝右，figma 04 第 3 节）；
+// 快捷键按 "+" 拆分为多个徽章（多字母 padding 2/4、单字母 2/6，见 KbdBadge）；无快捷键时隐藏；
+// 二级项（checkable）：对勾占位保证标题列对齐；hover 叠 暗-悬停；禁用 = 亮-选中档色不响应 hover。
+import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
+import KbdBadge from "./KbdBadge.vue";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     icon?: string;
     label: string;
@@ -12,24 +16,29 @@ withDefaults(
     arrow?: boolean;
     checkable?: boolean;
     checked?: boolean;
-    disabled?: boolean; // 禁用态（如收件箱占用条目的"导入"）：不响应 hover / 点击
+    disabled?: boolean; // 禁用态：不响应 hover / 点击
   }>(),
   { icon: undefined, shortcut: undefined, arrow: false, checkable: false, checked: false, disabled: false },
 );
 const emit = defineEmits<{ select: [] }>();
+
+// 快捷键拆分："Ctrl+Shift+N" → ["Ctrl", "Shift", "N"]
+const keys = computed(() => (props.shortcut ? props.shortcut.split("+").filter(Boolean) : []));
 </script>
 
 <template>
   <button class="menu-item" :class="{ checked }" :disabled="disabled" @click="emit('select')">
     <span class="main">
       <span v-if="checkable" class="check-slot">
-        <AppIcon v-if="checked" name="check" :size="16" />
+        <AppIcon v-if="checked" name="check" :size="12" />
       </span>
-      <AppIcon v-else-if="icon" :name="icon" class="deco" />
+      <AppIcon v-else-if="icon" :name="icon" :size="18" class="deco" />
       <span class="label">{{ label }}</span>
     </span>
-    <span v-if="shortcut" class="shortcut">{{ shortcut }}</span>
-    <AppIcon v-if="arrow" name="submenu-arrow" :size="8" class="arrow" />
+    <span v-if="keys.length" class="shortcut">
+      <KbdBadge v-for="k in keys" :key="k" :label="k" />
+    </span>
+    <AppIcon v-if="arrow" name="tree-expand-arrow" :size="12" class="arrow" />
   </button>
 </template>
 
@@ -38,19 +47,20 @@ const emit = defineEmits<{ select: [] }>();
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-16);
+  gap: var(--space-12);
   width: 100%;
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-6) var(--space-8);
   border-radius: var(--radius-6);
-  color: var(--font-icon-1);
-  transition: background 0.12s ease;
+  color: var(--text-normal);
+  transition: background 0.15s ease;
 }
+/* hover 叠 暗-悬停 罩层 */
 .menu-item:hover {
-  background: var(--font-icon-6);
+  background: linear-gradient(var(--line-hover), var(--line-hover));
 }
-/* 禁用态：降透明度、不响应 hover（暂补档位 font-icon-3 表禁用文字） */
+/* 禁用态（token：禁用 = 亮-选中档）：不响应 hover / 点击 */
 .menu-item:disabled {
-  color: var(--font-icon-3);
+  color: var(--line-active);
   cursor: default;
 }
 .menu-item:disabled:hover {
@@ -68,12 +78,12 @@ const emit = defineEmits<{ select: [] }>();
   flex: none;
 }
 .check-slot {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--font-icon-1);
+  color: var(--text-normal);
   flex: none;
 }
 .label {
@@ -84,12 +94,15 @@ const emit = defineEmits<{ select: [] }>();
   text-overflow: ellipsis;
 }
 .shortcut {
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
   flex: none;
 }
+/* 二级菜单提示：展开箭头旋转朝右（figma 04 第 3 节），标签档 */
 .arrow {
   flex: none;
+  color: var(--text-label);
+  transform: rotate(-90deg);
 }
 </style>

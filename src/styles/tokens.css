@@ -33,34 +33,27 @@
   --error: #cf4040;
   --error-bg: rgba(184, 77, 77, 0.6); /* #B84D4D / 60% */
 
-  /* 自定义颜色 10 组（目录 item 自定义色：前景 + 底色 + 选中亮边框 color-mix(自定义色, 白45%)，2026-08-06 强度阶梯定案） */
+  /* 自定义颜色 10 组（目录 item 自定义色：前景 + 底色）。
+     悬停/选中不掺白（发灰）：直接叠 --line-hover / --line-active 罩层，
+     选中边框 1.5px 文字常态色内阴影（figma-css 02_目录 item，2026-08-07 用户定） */
   --custom-red: #402122;
   --custom-red-bg: #241e1e;
-  --custom-red-border: color-mix(in srgb, var(--custom-red) 55%, #fff 45%);
   --custom-orange: #352719;
   --custom-orange-bg: #221f1c;
-  --custom-orange-border: color-mix(in srgb, var(--custom-orange) 55%, #fff 45%);
   --custom-yellow-green: #2c2b16;
   --custom-yellow-green-bg: #20201a;
-  --custom-yellow-green-border: color-mix(in srgb, var(--custom-yellow-green) 55%, #fff 45%);
   --custom-green: #1c2e20;
   --custom-green-bg: #1b211c;
-  --custom-green-border: color-mix(in srgb, var(--custom-green) 55%, #fff 45%);
   --custom-blue: #1a2c37;
   --custom-blue-bg: #1c2023;
-  --custom-blue-border: color-mix(in srgb, var(--custom-blue) 55%, #fff 45%);
   --custom-blue-violet: #252841;
   --custom-blue-violet-bg: #1e1f24;
-  --custom-blue-violet-border: color-mix(in srgb, var(--custom-blue-violet) 55%, #fff 45%);
   --custom-purple: #2f263d;
   --custom-purple-bg: #211f24;
-  --custom-purple-border: color-mix(in srgb, var(--custom-purple) 55%, #fff 45%);
   --custom-pink: #392238;
   --custom-pink-bg: #241e24;
-  --custom-pink-border: color-mix(in srgb, var(--custom-pink) 55%, #fff 45%);
   --custom-peach: #3c222a;
   --custom-peach-bg: #241e20;
-  --custom-peach-border: color-mix(in srgb, var(--custom-peach) 55%, #fff 45%);
 
   /* 格式角标（2026-07-23 降噪定案沿用：深色底 + 标签档字；静态图片不出角标） */
   --fmt-psd: #1b384d;
@@ -119,4 +112,50 @@
   --icon-15: 15px; /* 链接状态徽标 */
   --icon-14: 14px; /* 复选框 */
   --icon-12: 12px; /* 小 */
+
+  /* ===== 兼容层：旧体系变量 → 新体系近似映射（2026-08-07） =====
+     仅服务尚未重写的旧组件与 02_folder_card SVG，新组件禁用；随 1.3 主窗口重构逐步清除。 */
+  --font-icon-1: var(--text-highlight);
+  --font-icon-2: var(--text-normal);
+  --font-icon-3: var(--text-normal);
+  --font-icon-4: rgba(254, 255, 255, 0.12); /* 装饰填充层（02_folder_card SVG 引用） */
+  --font-icon-5: var(--line-active);
+  --font-icon-6: var(--line-hover);
+  --font-icon-20: var(--text-faint);
+  --font-icon-placeholder: var(--text-label);
+  --font-icon-disabled: var(--text-label);
+  --brand-1: var(--brand);
+  --brand-2: var(--brand-border);
+  --brand-1-12: color-mix(in srgb, var(--brand) 12%, transparent);
+  --border-1: var(--line-active);
+  --border-2: var(--line-hover);
+  --c1-20: color-mix(in srgb, var(--c1) 20%, transparent);
+  --c1-40: color-mix(in srgb, var(--c1) 40%, transparent);
+  --c1-80: color-mix(in srgb, var(--c1) 80%, transparent);
+  --wave-pending: color-mix(in srgb, rgb(247, 255, 252) 60%, var(--c3));
+  --folder-card-front: var(--c4);
+  --folder-card-file: #cac8cc;
+  --folder-card-back: var(--c2);
+  --text-caption-size: var(--text-label-size);
+  --text-caption-line: var(--text-label-line);
+  --text-caption-weight: var(--text-label-weight);
+  --opacity-drag-source: 0.4;
+  --opacity-drag-ghost: 0.75;
+  --opacity-cut: 0.5;
+  --sidebar-width: 260px; /* 旧布局宽度，1.3 重构时重定 */
+  --content-width: 820px;
+  --switch-w: 34px; /* 旧组件残留引用（AppSwitch 已重写为 34×18） */
+  --switch-h: 18px;
+  --switch-knob: 14px;
+  --switch-small-w: 34px;
+  --switch-small-h: 18px;
+  --switch-small-knob: 14px;
+  --radius-12: 12px;
+  --space-10: 10px;
+  --space-14: 14px;
+  --space-20: 20px;
+  --space-32: 32px;
+  --icon-large: 18px;
+  --icon-small: 12px;
+  --icon-xlarge: 24px;
 }
