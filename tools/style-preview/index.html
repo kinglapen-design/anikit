@@ -93,9 +93,9 @@ body {
   height: 900px;
   display: flex;
   background: var(--c1);
+  box-shadow: inset 0 0 0 2px var(--c4-15), var(--shadow-pop);
   border-radius: var(--radius-8);
   overflow: hidden;
-  box-shadow: var(--shadow-pop);
   flex: none;
 }
 
@@ -108,8 +108,8 @@ body {
   flex-direction: column;
   padding: var(--space-4);
 }
-.sidebar.right { border-left: 1px solid var(--c4-7); }
-.sidebar.left  { border-right: 1px solid var(--c4-7); }
+.sidebar.right { border-left: 1px solid var(--c4-15); }
+.sidebar.left  { border-right: 1px solid var(--c4-15); }
 
 .bar-row {
   display: flex;
@@ -297,7 +297,7 @@ body {
 .asset-card .thumb {
   position: relative;
   width: 100%; height: 100%;
-  border: 1px solid var(--c4-7);
+  border: 1px solid var(--c4-15);
   border-radius: var(--radius-8);
   overflow: hidden;
   display: flex; align-items: center; justify-content: center;
@@ -524,7 +524,7 @@ body {
   width: 220px;
   background: var(--c5);
   border-radius: var(--radius-8);
-  box-shadow: inset 0 0 0 1px var(--c4-15), var(--shadow-pop);
+  box-shadow: inset 0 0 0 2px var(--c4-15), var(--shadow-pop);
   padding: var(--space-4);
   display: flex; flex-direction: column; gap: var(--space-2);
 }
@@ -546,7 +546,7 @@ body {
   width: 420px;
   background: var(--c5);
   border-radius: var(--radius-8);
-  box-shadow: inset 0 0 0 1px var(--c4-15), var(--shadow-pop);
+  box-shadow: inset 0 0 0 2px var(--c4-15), var(--shadow-pop);
   display: flex; flex-direction: column;
   overflow: hidden;
 }
@@ -570,7 +570,7 @@ body {
   padding: var(--space-4) var(--space-6);
   border-radius: var(--radius-6);
   background: var(--c5);
-  box-shadow: inset 0 0 0 1px var(--c4-15), var(--shadow-pop);
+  box-shadow: inset 0 0 0 2px var(--c4-15), var(--shadow-pop);
   font-size: var(--text-caption-size);
   color: var(--c4);
 }
@@ -582,7 +582,7 @@ body {
 .swatch {
   width: 150px; height: 64px;
   border-radius: var(--radius-6);
-  border: 1px solid var(--c4-7);
+  border: 1px solid var(--c4-15);
   padding: 6px 8px;
   display: flex; flex-direction: column; justify-content: flex-end;
   font-size: 11px; line-height: 14px;
