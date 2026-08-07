@@ -287,7 +287,7 @@ const tintBg = computed(() => {
   text-overflow: ellipsis;
 }
 /* 命名输入（C3）：高度恒 20 = 字体行高（2026-07-29 用户定：不撑高 item）；
-   C1 底 / 圆角 8（输入框 token）；聚焦品牌色 1.5px；违规描边 --error */
+   C1 底 / 圆角 6（输入框 figma 口径，2026-08-07 用户定）；聚焦品牌色 1.5px；违规描边 --error */
 .name-input {
   flex: 1;
   min-width: 0;
@@ -295,7 +295,7 @@ const tintBg = computed(() => {
   box-sizing: border-box;
   padding: 0 var(--space-6);
   border: none;
-  border-radius: var(--radius-8);
+  border-radius: var(--radius-6);
   background: var(--c1);
   box-shadow: inset 0 0 0 1px var(--line-hover);
   color: var(--text-normal);

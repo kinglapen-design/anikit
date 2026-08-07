@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 搜索框（figma-css 11_输入框 3 / 04_右键菜单 1）：大输入框（C1 底、padding 8/12、36 高、圆角 8）
+// 搜索框（figma-css 11_输入框 3 / 04_右键菜单 1）：大输入框（C1 底、padding 8/12、36 高、圆角 6）
 // + 搜索图标（标签档）+ 清除按钮（有内容时显示，clear 12 标签档，hover 叠暗-悬停）；
 // 聚焦 品牌色 1.5px 边框淡入淡出；占位符极淡档。
 import AppIcon from "./AppIcon.vue";
@@ -24,7 +24,7 @@ const model = defineModel<string>({ default: "" });
   align-items: center;
   gap: var(--space-6);
   padding: var(--space-8) var(--space-12);
-  border-radius: var(--radius-8);
+  border-radius: var(--radius-6);
   background: var(--c1);
   box-shadow: inset 0 0 0 1px var(--line-hover);
   transition: box-shadow 0.2s ease;

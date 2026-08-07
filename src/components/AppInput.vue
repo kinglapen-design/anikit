@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 输入框（figma-css 11_输入框）：small = padding 4/8、C2 底、28 高；medium = padding 6/8、C1 底、32 高；
-// large = padding 8/12、C2 底、36 高；圆角 8（token：输入框归 8px 组；figma 导出值 6，以 token 为准）；
+// large = padding 8/12、C2 底、36 高；圆角 6（figma 导出值，2026-08-07 用户定：token 8px 口径作废）；
 // 边框常态 暗-悬停 1px，聚焦 品牌色 1.5px 淡入淡出（00_要求；内阴影模拟防抖动）；
 // 文本正文，占位符极淡档。
 withDefaults(
@@ -17,7 +17,7 @@ const model = defineModel<string>({ default: "" });
 <style scoped>
 .app-input {
   width: 100%;
-  border-radius: var(--radius-8);
+  border-radius: var(--radius-6);
   box-shadow: inset 0 0 0 1px var(--line-hover);
   color: var(--text-normal);
   font-size: var(--text-body-size);
