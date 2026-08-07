@@ -1,128 +1,122 @@
 /* AniKit 设计 tokens —— 由 docs/02_样式与布局/01_样式 token.md 生成，勿手改。
-   2026-07-23 新体系（用户设计 03_新token）：边框实色化（透明度线条是"脏"的来源），
-   文字/图标按 F8F5FA 透明度衍生，换文字色只改 --font-icon-base。 */
+   2026-08-07 新体系（用户设计 docs/00_修改与需求/03_新样式/02_token/01_token.md）：
+   文字四档实色化各自独立色相；线条/交互为透明度叠加色；图标线条层 currentColor 吃文字档位。 */
 
 :root {
   /* 品牌色 */
-  --brand-1: #A64CFF; /* 主要按钮 / 拆分条 / 切换素材库图标底色 / 输入框聚焦 */
-  --brand-2: #bf80ff; /* 主要按钮悬停 */
-  /* 品牌色-1 12% 透明度（2026-07-28 用户定：选择框选填充 / 拖拽并入落点填充，写法同 --c1-20） */
-  --brand-1-12: color-mix(in srgb, var(--brand-1) 12%, transparent);
+  --brand: #0a8079; /* 常态：主按钮 / 原始文件徽章 / 开关 / 复选·单选框 / 二级面板标签选中 / 进度条 */
+  --brand-border: #3dddd2; /* 边框线：卡片选中边框 / 拆分条悬停 / 选择模式窗口边框线 */
 
-  /* 语义色 */
-  --error: #eb4460;
-  --warning: #df8e32;
-  --success: #38a33d;
+  /* 底色 */
+  --c1: #101211; /* 中间面板 / 二级面板输入框 / 引导页进度轨道 */
+  --c2: #161717; /* 缩略图 / 侧边栏输入框 / 列表交替 / 二级面板 / 菜单 */
+  --c3: #181919; /* 侧边栏 / 列表交替 / 二级面板分块 */
+  --c4: #212323; /* 二级面板按钮 / 分块 */
+  --c5: #282a2a; /* 侧边栏按钮 / 默认目录 item 根父级 */
+  --c5-base: #1f2020; /* 默认目录 item 子级 */
 
-  /* 通用色 */
-  --c1: #151517; /* 中间面板（窗口底同；2026-07-23 按 Figma 吸色实测值微调，原 #15141A） */
-  --c2: #1a1a1c; /* 详情面板区块悬停底色 */
-  --c3: #1d1d1f; /* 左右侧边栏 / 二级窗口 / 模态窗口 / 菜单窗口（2026-07-23 按 Figma 吸色实测值微调，原 #1D1D21） */
-  --c4: #252527; /* 详情面板 item 底色 / 输入框 */
-  --c5: #2e2e30; /* 详情面板 item 悬停 / 通用按钮带底色（2026-07-23 按吸色实测值微调，原 #2F2E33） */
+  /* 线条 / 交互（透明度叠加色，2026-08-06 树 item 强度阶梯：hover 罩层 = 暗-悬停、选中罩层 = 亮-选中） */
+  --line-hover: rgba(221, 247, 223, 0.0784); /* 暗-悬停：C4 底色边框线 / 其他边框线 / 悬停白罩层 */
+  --line-active: rgba(230, 251, 232, 0.1412); /* 亮-选中：C5 底色边框线 / 主窗口·二级窗口·菜单边框 / 选中罩层 / 禁用 */
 
-  /* C1 透明度衍生（2026-07-23 用户定：图片上的按钮底色 / 图片悬停描边——深色透明压图不抢眼） */
-  --c1-20: color-mix(in srgb, var(--c1) 20%, transparent);
-  --c1-40: color-mix(in srgb, var(--c1) 40%, transparent);
-  /* 弹窗遮罩（原 C1-80 语义，token 重构时被误并为实色 C1，2026-07-23 恢复） */
-  --c1-80: color-mix(in srgb, var(--c1) 80%, transparent);
+  /* 文字四档（图标 currentColor 同档表达明暗） */
+  --text-highlight: rgba(254, 255, 255, 0.9294); /* 高亮 */
+  --text-normal: rgba(247, 255, 252, 0.6941); /* 常态 */
+  --text-label: rgba(234, 255, 247, 0.3412); /* 标签 */
+  --text-faint: rgba(238, 255, 248, 0.2353); /* 极淡（占位符同档） */
 
-  /* 边框线（实色，不用透明度） */
-  --border-1: #3a3a3c; /* 边框线-亮 / 通用按钮带底色悬停 / 视图切换按钮选中 */
-  --wave-pending: #3a3a3c; /* 波形进度条未播放色（font-icon-3 60% 与 C3 混合的实际色号，mask 满 alpha 下直取实色，2026-07-26 用户定） */
-  --border-2: #2a2a2c; /* 卡片常态边框（唯一暗线用途；其他边框一律 border-1，2026-07-23 用户定） */
+  /* 状态 */
+  --success: #278422;
+  --success-bg: rgba(52, 114, 49, 0.6); /* #347231 / 60% */
+  --warning: #b38427;
+  --warning-bg: rgba(159, 126, 59, 0.6); /* #9F7E3B / 60% */
+  --error: #cf4040;
+  --error-bg: rgba(184, 77, 77, 0.6); /* #B84D4D / 60% */
 
-  /* 文字 / 图标 / 交互（F8F5FA 透明度衍生） */
-  --font-icon-base: #f8f5fa;
-  --font-icon-1: var(--font-icon-base); /* 高亮 / 基础 / 侧栏标题栏图标 / 文件树 item 名称 */
-  --font-icon-2: color-mix(in srgb, var(--font-icon-base) 80%, transparent); /* 装饰图标线框 / 正文 / 中栏标题栏图标 */
-  --font-icon-3: color-mix(in srgb, var(--font-icon-base) 60%, transparent); /* 副文本 / 提示文字 / 小图标按钮 */
-  --font-icon-4: color-mix(in srgb, var(--font-icon-base) 12%, transparent); /* 装饰图标填充 */
-  --font-icon-5: color-mix(in srgb, var(--font-icon-base) 10%, transparent); /* 选中 */
-  --font-icon-6: color-mix(in srgb, var(--font-icon-base) 5%, transparent); /* 悬停 */
-  /* 占位符文字（2026-07-23 用户定：输入框 placeholder / AI 提示词常态，聚焦时提 100%） */
-  --font-icon-placeholder: color-mix(in srgb, var(--font-icon-base) 40%, transparent);
-  /* 禁用（与占位符对调定案：不可用感更弱，2026-07-23 用户定） */
-  --font-icon-disabled: color-mix(in srgb, var(--font-icon-base) 30%, transparent);
-  /* 图片悬停描边（2026-07-23 用户定） */
-  --font-icon-20: color-mix(in srgb, var(--font-icon-base) 20%, transparent);
+  /* 自定义颜色 10 组（目录 item 自定义色：前景 + 底色 + 选中亮边框 color-mix(自定义色, 白45%)，2026-08-06 强度阶梯定案） */
+  --custom-red: #402122;
+  --custom-red-bg: #241e1e;
+  --custom-red-border: color-mix(in srgb, var(--custom-red) 55%, #fff 45%);
+  --custom-orange: #352719;
+  --custom-orange-bg: #221f1c;
+  --custom-orange-border: color-mix(in srgb, var(--custom-orange) 55%, #fff 45%);
+  --custom-yellow-green: #2c2b16;
+  --custom-yellow-green-bg: #20201a;
+  --custom-yellow-green-border: color-mix(in srgb, var(--custom-yellow-green) 55%, #fff 45%);
+  --custom-green: #1c2e20;
+  --custom-green-bg: #1b211c;
+  --custom-green-border: color-mix(in srgb, var(--custom-green) 55%, #fff 45%);
+  --custom-blue: #1a2c37;
+  --custom-blue-bg: #1c2023;
+  --custom-blue-border: color-mix(in srgb, var(--custom-blue) 55%, #fff 45%);
+  --custom-blue-violet: #252841;
+  --custom-blue-violet-bg: #1e1f24;
+  --custom-blue-violet-border: color-mix(in srgb, var(--custom-blue-violet) 55%, #fff 45%);
+  --custom-purple: #2f263d;
+  --custom-purple-bg: #211f24;
+  --custom-purple-border: color-mix(in srgb, var(--custom-purple) 55%, #fff 45%);
+  --custom-pink: #392238;
+  --custom-pink-bg: #241e24;
+  --custom-pink-border: color-mix(in srgb, var(--custom-pink) 55%, #fff 45%);
+  --custom-peach: #3c222a;
+  --custom-peach-bg: #241e20;
+  --custom-peach-border: color-mix(in srgb, var(--custom-peach) 55%, #fff 45%);
 
-  /* 文件夹卡片（2026-07-23 用户定：图层1 正面 = C4 / 图层4 背面 = C2 / 图层2 文件纸 #CAC8CC；
-     图层边框：1·4 = border-1、2 = font-icon-3（60%）、3 = font-icon-20（20%）） */
-  --folder-card-front: var(--c4);
-  --folder-card-file: #cac8cc;
-  --folder-card-back: var(--c2);
-
-  /* 格式角标（2026-07-23 降噪定案：深色底 + 60% 字，静态图片不出角标；位置图片左上 4px） */
+  /* 格式角标（2026-07-23 降噪定案沿用：深色底 + 标签档字；静态图片不出角标） */
   --fmt-psd: #1b384d;
   --fmt-fla: #542822;
   --fmt-svg: #80591d; /* SVG / EPS / AI 同组 */
   --fmt-aep: #323281;
-  --fmt-anim: #4e2675; /* WEBP 动图 / 序列帧 / GIF */
-  /* 静态图片（PNG / JPG / BMP / WEBP）不出角标；其他格式用 C1-40 */
+  --fmt-anim: #4e2675; /* WEBP 动图 / 序列帧 / GIF / 视频 */
+
+  /* 投影（二级窗口 / 模态窗口 / 菜单 / 弹窗统一） */
+  --shadow-pop: 0 4px 40px rgba(0, 0, 0, 0.6);
 
   /* 文字 */
   --font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
-  --text-title-size: 16px;
-  --text-title-line: 22px;
-  --text-title-weight: 700;
+  --text-badge-size: 10px;
+  --text-badge-line: 14px;
+  --text-badge-weight: 700;
+  --text-label-size: 12px;
+  --text-label-line: 17px;
+  --text-label-weight: 400;
   --text-body-size: 14px;
   --text-body-line: 20px;
   --text-body-weight: 400;
-  --text-caption-size: 12px;
-  --text-caption-line: 18px;
-  --text-caption-weight: 400;
-  /* 格式角标文字（2026-07-23 用户定：素材卡片徽章专用，10/16 粗体） */
-  --text-badge-size: 10px;
-  --text-badge-line: 16px;
-  --text-badge-weight: 700;
+  --text-title-size: 16px;
+  --text-title-line: 22px;
+  --text-title-weight: 700;
+  --text-display-size: 32px;
+  --text-display-line: 40px;
+  --text-display-weight: 700;
 
-  /* 线框（2026-07-23 用户定案：边框一律 1px——含二级窗口 / 模态 / 菜单外边框，不设粗细层级；
-     2px 仅保留卡片悬停 / 选中描边与拆分条高亮；主窗口 = DWM 1px 边框，染 border-1） */
-  --border-thick: 2px;
-  --border-thin: 1px;
+  /* 线条 */
+  --border-strong: 1.5px; /* 主窗口 / 二级窗口 / 菜单边框 / 选中 item / 卡片选中 */
+  --border-thin: 1px; /* 其他线条 */
+
+  /* 圆角 */
+  --radius-8: 8px; /* 主窗口 / 二级窗口 / 菜单 / 输入框 */
+  --radius-6: 6px; /* 其他所有 */
+  --radius-4: 4px; /* 徽标 / 切换按钮内按钮 */
+  --radius-pill: 999px; /* 胶囊：滑块滑轨 / 进度条轨道 */
+  --radius-circle: 50%; /* 圆形：二级菜单弹窗 / 音频 item 播放暂停 */
 
   /* 间距 */
   --space-2: 2px;
   --space-4: 4px;
   --space-6: 6px;
   --space-8: 8px;
-  --space-10: 10px;
-  --space-12: 12px; /* 2026-07-23 补档：中栏标题栏 / 搜索框内边距（外层 4 + 12 = 缘 16） */
-  --space-14: 14px;
+  --space-12: 12px;
   --space-16: 16px;
-  --space-20: 20px;
-  --space-32: 32px; /* 2026-07-24 用户定：二级窗口 / 模态窗口内间距 */
-
-  /* 开关按钮（01_按钮 08：标准 50×28 圆钮 20 / 小号 40×24 圆钮 16，2026-07-24 用户定） */
-  --switch-w: 50px;
-  --switch-h: 28px;
-  --switch-knob: 20px;
-  --switch-small-w: 40px;
-  --switch-small-h: 24px;
-  --switch-small-knob: 16px;
-
-  /* 圆角 */
-  --radius-4: 4px;
-  --radius-6: 6px;
-  --radius-8: 8px;
-  --radius-12: 12px;
+  --space-24: 24px;
+  --space-48: 48px;
 
   /* 图标 */
-  --icon-large: 16px;
-  --icon-small: 8px;
-  --icon-xlarge: 24px;
-
-  /* 布局（2026-07-23 用户定）：左右侧边栏 260 / 中间面板 820 → 主窗口 1340（tauri.conf 同步） */
-  --sidebar-width: 260px;
-  --content-width: 820px;
-
-  /* 阴影（x0 y4 blur40 60%：二级窗口 / 模态窗口 / 菜单 / 弹窗） */
-  --shadow-pop: 0 4px 40px rgba(0, 0, 0, 0.6);
-
-  /* 透明度档（2026-07-28 复验反馈补档：拖拽源项 0.4 / 拖拽 ghost 0.75 / 被剪切项 0.5；
-     docs/02_样式与布局 由用户同步） */
-  --opacity-drag-source: 0.4;
-  --opacity-drag-ghost: 0.75;
-  --opacity-cut: 0.5;
+  --icon-48: 48px; /* 弹窗图标 */
+  --icon-24: 24px; /* 音频 item 播放暂停 */
+  --icon-20: 20px; /* 红色删除按钮 / 单选框 */
+  --icon-18: 18px; /* 常用 */
+  --icon-15: 15px; /* 链接状态徽标 */
+  --icon-14: 14px; /* 复选框 */
+  --icon-12: 12px; /* 小 */
 }

@@ -18,7 +18,7 @@ body {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
   font-weight: var(--text-body-weight);
-  color: var(--font-icon-1);
+  color: var(--text-highlight);
   /* 无边框透明窗口：body 透明，圆角与底色由 App 根容器绘制 */
   background: transparent;
   user-select: none;
@@ -51,22 +51,23 @@ textarea {
   height: 0;
 }
 
-/* 工具 tip（02_通用组件/09_工具tip）：fixed 定位，元素下方居中 */
+/* 工具 tip（02_通用组件/09_工具tip）：fixed 定位，元素下方居中；
+   2026-08-07 按 figma-css 06_悬停 tip：C2 底 / 亮-选中 1px 边框 / 8px 圆角 / 正文常态色 */
 .app-tip {
   position: fixed;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-4) var(--space-6);
-  border-radius: var(--radius-6);
-  background: var(--c3);
+  gap: var(--space-12);
+  padding: var(--space-6) var(--space-8);
+  border-radius: var(--radius-8);
+  background: var(--c2);
   box-shadow:
-    inset 0 0 0 1px var(--border-1),
+    inset 0 0 0 1px var(--line-active),
     var(--shadow-pop);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-1);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  color: var(--text-normal);
   white-space: nowrap;
   pointer-events: none;
   z-index: 1000;
@@ -77,5 +78,5 @@ textarea {
   opacity: 1;
 }
 .app-tip-keys {
-  color: var(--font-icon-3);
+  color: var(--text-label);
 }
