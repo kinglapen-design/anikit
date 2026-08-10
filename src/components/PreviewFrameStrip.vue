@@ -83,7 +83,7 @@ watch(
 .frames::-webkit-scrollbar {
   display: none;
 }
-/* 帧块：高 56 宽按比例 / 圆角 8 / 1px border-2；当前帧 2px 品牌紫（卡片选中语言） */
+/* 帧块：高 56 宽按比例 / 圆角 8 / 1px border-2；当前帧 1.5px 品牌色-边框线（卡片选中语言） */
 .frame {
   position: relative;
   flex: none;
