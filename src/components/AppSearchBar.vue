@@ -12,7 +12,7 @@ const model = defineModel<string>({ default: "" });
   <div class="app-search">
     <AppIcon name="search" :size="18" class="lead" />
     <input v-model="model" class="field" :placeholder="placeholder" />
-    <button v-if="model" class="clear" title="清除" @click="model = ''">
+    <button v-if="model" class="clear" v-tip="'清除'" @click="model = ''">
       <AppIcon name="clear" :size="12" />
     </button>
   </div>

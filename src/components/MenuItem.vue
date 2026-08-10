@@ -11,6 +11,7 @@ import KbdBadge from "./KbdBadge.vue";
 const props = withDefaults(
   defineProps<{
     icon?: string;
+    iconClass?: string; // 图标附加类（如 rot-90）
     label: string;
     shortcut?: string;
     arrow?: boolean;
@@ -18,7 +19,7 @@ const props = withDefaults(
     checked?: boolean;
     disabled?: boolean; // 禁用态：不响应 hover / 点击
   }>(),
-  { icon: undefined, shortcut: undefined, arrow: false, checkable: false, checked: false, disabled: false },
+  { icon: undefined, iconClass: undefined, shortcut: undefined, arrow: false, checkable: false, checked: false, disabled: false },
 );
 const emit = defineEmits<{ select: [] }>();
 
@@ -32,7 +33,7 @@ const keys = computed(() => (props.shortcut ? props.shortcut.split("+").filter(B
       <span v-if="checkable" class="check-slot">
         <AppIcon v-if="checked" name="check" :size="12" />
       </span>
-      <AppIcon v-else-if="icon" :name="icon" :size="18" class="deco" />
+      <AppIcon v-else-if="icon" :name="icon" :size="18" class="deco" :class="iconClass" />
       <span class="label">{{ label }}</span>
     </span>
     <span v-if="keys.length" class="shortcut">
@@ -76,6 +77,10 @@ const keys = computed(() => (props.shortcut ? props.shortcut.split("+").filter(B
 }
 .deco {
   flex: none;
+}
+/* 图标旋转 90°（如"上下分屏"与左右分屏同图标的语义区分） */
+.deco.rot-90 :deep(svg) {
+  transform: rotate(90deg);
 }
 .check-slot {
   width: 18px;

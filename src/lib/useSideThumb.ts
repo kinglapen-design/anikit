@@ -6,7 +6,8 @@
 import { onBeforeUnmount, onMounted, reactive, type Ref } from "vue";
 
 export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
-  const state = reactive({ show: false, top: 0, height: 30, onThumbDown });
+  // dragging：thumb 拖拽中为 true——滚动条悬停显隐（2026-08-10）的拖拽锁，拖出面板不消失
+  const state = reactive({ show: false, top: 0, height: 30, dragging: false, onThumbDown });
   let ro: ResizeObserver | undefined;
   let mo: MutationObserver | undefined;
   let observedChild: Element | null = null;
@@ -34,6 +35,7 @@ export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
     if (!el || !state.show) return;
     e.preventDefault();
     e.stopPropagation();
+    state.dragging = true;
     const startY = e.clientY;
     const startScroll = el.scrollTop;
     const ratio = (el.scrollHeight - el.clientHeight) / (el.clientHeight - state.height);
@@ -41,6 +43,7 @@ export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
       el.scrollTop = startScroll + (ev.clientY - startY) * ratio;
     };
     const onUp = (): void => {
+      state.dragging = false;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };

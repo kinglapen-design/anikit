@@ -25,6 +25,10 @@ const notesStore = usePreviewNotesStore();
 const open = ref(true);
 const notes = ref<NoteEntry[]>([]);
 
+// —— 悬停浮帧画面 ——（声明须在下方 watch 之前：watch immediate 首轮即调 closeThumb 读 thumbKey，TDZ 会炸）
+const thumbKey = ref(""); // 当前浮层服务的笔记 key（空 = 关闭）
+const thumbUrl = ref<string | null>(null); // null = 未就绪 / 取不到（C4 占位）
+
 // 当前选中的 PlacementView（无选中 = null）
 const selected = computed(
   () => content.placements.find((p) => `${p.assetId}|${p.folderId}` === content.selectedAssetKey) ?? null,
@@ -74,10 +78,7 @@ async function remove(key: string): Promise<void> {
   if (thumbKey.value === key) closeThumb();
 }
 
-// —— 悬停浮帧画面 ——
-const thumbKey = ref(""); // 当前浮层服务的笔记 key（空 = 关闭）
-const thumbUrl = ref<string | null>(null); // null = 未就绪 / 取不到（C4 占位）
-
+// —— 悬停浮帧画面 ——（thumbKey / thumbUrl 声明已上移至 watch 之前）
 async function showThumb(key: string): Promise<void> {
   const sel = selected.value;
   if (!sel) return;

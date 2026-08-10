@@ -16,9 +16,9 @@ const open = ref(true);
     <div v-if="open" class="body">
       <textarea class="prompt-text" :value="prompt" readonly rows="6" />
       <div class="actions">
-        <IconButton name="copy-prompt" filled title="复制提示词" class="action" />
+        <IconButton name="copy" filled title="复制提示词" class="action" />
         <IconButton name="open-prompt-editor" filled title="打开提示词编辑器" class="action" />
-        <IconButton name="delete-prompt" filled title="删除提示词" class="action" />
+        <IconButton name="delete-red" filled title="删除提示词" class="action" />
       </div>
     </div>
   </section>

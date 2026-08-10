@@ -44,6 +44,13 @@ textarea {
   outline: none;
 }
 
+/* 选中文字高亮：品牌色实底 + 高亮字（替换系统蓝，2026-08-10 用户定；
+   主要生效于输入框——body 全局 user-select:none） */
+::selection {
+  background: var(--brand);
+  color: var(--text-highlight);
+}
+
 /* 主列表滚动为自定义 transform 方案（踩坑 005），原生滚动条全局隐藏；
    侧栏等次要区域的原生滚动在组件内按 border-1 单独绘制 */
 ::-webkit-scrollbar {
@@ -68,7 +75,14 @@ textarea {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
   color: var(--text-normal);
-  white-space: nowrap;
+  /* 宽度 = 自然内容宽（max-content）：fixed shrink-to-fit 受 left 位置约束会被压窄
+     （2026-08-10 走查：靠右缘时"打开链接"被压成一字一行）——显式 max-content 不被压缩，
+     靠右整体左移由 tip.ts 水平钳制负责；仅超 max-width 的长名称换行 */
+  width: max-content;
+  /* 长名称 tip（2026-08-10 卡片名称悬停）：允许换行 + 限宽，防名称过长 tip 被主窗口截断 */
+  white-space: normal;
+  word-break: break-all;
+  max-width: min(520px, calc(100vw - 16px));
   pointer-events: none;
   z-index: 1000;
   opacity: 0;
@@ -79,4 +93,11 @@ textarea {
 }
 .app-tip-keys {
   color: var(--text-label);
+  flex: none; /* 简介档不被长名称挤压（2026-08-10） */
+}
+/* 两行竖排变体（2026-08-10 卡片名称 tip 用户定：名称 / 简介分两行，gap 4） */
+.app-tip.col {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
 }

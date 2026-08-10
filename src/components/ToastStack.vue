@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 通知栏（figma-css 07_通知栏）：胶囊形 C2 底 + C5-底色边框 + 投影；
-// 状态圆形图标 24（成功/失败，figma：按情况切换成功和失败图标）+ 行为文字（正文常态）
+// 状态圆形图标 24（成功 success / 失败 fail，figma：按情况切换成功和失败图标）+ 行为文字（正文常态）
 // + 可选动作（撤销，标题档高亮）+ 删除（20×20 圆角 10，clear 标签档）。
 // 挂点与层级沿用：浮于中间面板工具栏下方（top 64），z-1600 高于全屏预览。
 import AppIcon from "./AppIcon.vue";
@@ -14,11 +14,12 @@ const toast = useToastStore();
     <TransitionGroup name="toast">
       <div v-for="t in toast.items" :key="t.id" class="toast">
         <AppIcon v-if="t.icon === 'success'" name="success" :size="24" class="state-icon" />
+        <AppIcon v-else-if="t.icon === 'fail'" name="fail" :size="24" class="state-icon" />
         <span class="message">{{ t.message }}</span>
         <button v-if="t.actionLabel" class="action" @click="toast.act(t.id)">
           {{ t.actionLabel }}
         </button>
-        <button class="close" title="关闭" @click="toast.close(t.id)">
+        <button class="close" v-tip="'关闭'" @click="toast.close(t.id)">
           <AppIcon name="clear" :size="12" />
         </button>
       </div>

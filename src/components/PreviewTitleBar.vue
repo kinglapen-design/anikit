@@ -52,7 +52,7 @@ async function togglePin(): Promise<void> {
       <span class="zoom-text">{{ Math.round(preview.zoom * 100) }}%</span>
     </div>
     <div class="btn-group">
-      <IconButton name="plugin" title="插件" />
+      <IconButton name="ai-tools" title="插件" />
       <template v-if="preview.viewable">
         <IconButton v-if="!preview.isSource" name="rotate-cw" title="旋转" @click="preview.rotateCw()" />
         <IconButton v-if="!preview.isSource" name="flip-h" title="水平翻转" @click="preview.toggleFlip()" />
@@ -102,8 +102,8 @@ async function togglePin(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* 内边距 12（与 ContentTitleBar 一致） */
-  padding: var(--space-12);
+  /* 内边距 12 16（与 ContentTitleBar 一致；2026-08-10 随 42 稿外层 padding 归零补右左 16） */
+  padding: var(--space-12) var(--space-16);
   flex: none;
 }
 /* 中栏标题栏图标按钮 80%（2026-07-23 用户定） */

@@ -14,17 +14,21 @@ import { beginFolderDrag } from "../lib/dragOperation";
 import { createAndName, findParentId } from "../lib/menuOps";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
+import { useTabsStore } from "../stores/tabs";
 
 const content = useContentStore();
 const selection = useSelectionStore();
-const quickOpen = ref(true);
+const tabs = useTabsStore();
 const treeOpen = ref(true);
 
+// 快速访问（PRD 02-15 定案六项：全部 / 未分类 / 最近使用 / 自动导入 / 缩略图 / 回收站）：
+// "缩略图"视图待 hidden 资产业务（5.x）接入后放；收件箱 = PRD"自动导入"（候车区规则同口径）
 const quickItems = [
-  { key: "all", icon: "library-all", label: "全部" },
+  { key: "all", icon: "library", label: "全部" },
   { key: "uncategorized", icon: "uncategorized", label: "未分类" },
-  { key: "inbox", icon: "inbox", label: "收件箱" },
   { key: "recent", icon: "recent", label: "最近使用" },
+  { key: "inbox", icon: "auto-import", label: "自动导入" },
+  { key: "thumbnail", icon: "thumbnail", label: "缩略图" },
   { key: "recycle", icon: "trash", label: "回收站" },
 ] as const;
 
@@ -96,26 +100,28 @@ function onTreePointerDown(e: PointerEvent): void {
 
 <template>
   <div class="library-view">
+    <!-- 快速访问（1.2 新稿：无区块标题，直接 item 列表） -->
     <section class="block quick">
-      <SectionHeader title="快速访问" pad="0 8px 0 16px" v-model:open="quickOpen" />
-      <div v-if="quickOpen" class="items">
+      <div class="items">
         <TreeItem
           v-for="q in quickItems"
           :key="q.key"
+          variant="quick"
           :icon="q.icon"
           :label="q.label"
           :count="quickCount(q.key)"
           :selected="content.sidebarSelected === `quick:${q.key}`"
-          @select="content.sidebarSelected = `quick:${q.key}`"
+          @select="tabs.openView(`quick:${q.key}`)"
         />
       </div>
     </section>
     <section class="block tree">
       <SectionHeader
-        title="文件夹"
+        title="目录"
         :count="content.folderTotal"
         addable
-        pad="0 8px 0 16px"
+        grip
+        pad="0 0 0 8px"
         v-model:open="treeOpen"
         @add="onAddFolder"
       />
@@ -132,30 +138,29 @@ function onTreePointerDown(e: PointerEvent): void {
 </template>
 
 <style scoped>
+/* 1.2 新稿（01_主窗口 树容器）：两区块间距 24；容器 padding 由 SidebarLeft 承担 */
 .library-view {
   display: flex;
   flex-direction: column;
+  gap: var(--space-24);
 }
-/* 快速访问区块：内边距 8 0 / 间距 8（2026-07-23 用户定） */
+/* 快速访问区块：item 间距 4（figma 853） */
 .block.quick {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-8) 0;
+  flex: none;
 }
-/* 文件树区块：内边距 8 0 / 间距 8，填满剩余 */
+/* 文件树区块：填满剩余 */
 .block.tree {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  padding: var(--space-8) 0;
   flex: 1;
 }
-/* item 组：内边距 0 8 0 0 / 间距 2（2026-07-23 用户定，原左 4） */
+/* item 组：间距 4（figma 目录树 gap 4） */
 .items {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: 0 var(--space-8) 0 0;
+  gap: var(--space-4);
 }
 </style>

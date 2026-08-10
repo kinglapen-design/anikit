@@ -4,6 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore, type FolderNode, type PlacementView } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
+import { useTabsStore } from "../stores/tabs";
 import { useUiStore } from "../stores/ui";
 import { usePreviewStore } from "../stores/preview";
 import { openContextMenu, type CtxEntry } from "./contextMenus";
@@ -79,7 +80,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
   ].map((fid) => ({
     label: folderName(fid),
     action: () => {
-      content.sidebarSelected = `folder:${fid}`;
+      useTabsStore().openView(`folder:${fid}`);
     },
   }));
   return [
@@ -240,7 +241,7 @@ export function folderCardSpec(folder: { id: string; name: string }): CtxEntry[]
     {
       label: "打开",
       action: () => {
-        content.sidebarSelected = `folder:${folder.id}`;
+        useTabsStore().openView(`folder:${folder.id}`);
       },
     },
     "divider",
@@ -292,7 +293,7 @@ export function treeItemSpec(node: FolderNode, parentId: string | null): CtxEntr
     {
       label: "打开",
       action: () => {
-        content.sidebarSelected = `folder:${node.id}`;
+        useTabsStore().openView(`folder:${node.id}`);
       },
     },
     "divider",

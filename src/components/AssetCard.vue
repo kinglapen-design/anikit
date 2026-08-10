@@ -1,16 +1,14 @@
 <script setup lang="ts">
-// 素材卡片（02_通用组件/06_卡片 03，2026-07-23 用户定：回退图片+居中文字方案）：
-// 总容器 padding 0 / 间距 4（无卡片框）；图片圆角 8 / 1px border-2（hover 2px 40% / 选中 2px 品牌色）；
-// 格式角标：图片左上各 4px（实底格式色徽章）；按钮组：图片右下各 4px（图标按钮-小 24×24，
-// 悬停卡片显示，hover 底色 C5——图片干扰大不裸奔 16 图标）；
-// 文字组：间距 2 / 居中 / 标题最多两行截断。
-// 悬停行为按类型分发（5.3，2026-07-27 用户定案）：视频悬停完整播放 / 音频悬停有声播放 /
-// 动图·序列帧悬停播放（序列帧归动图范围：打包就是为了看动画效果），播放类均无按钮；
-// 查看方式菜单"自动播放动图（含序列帧）/ 自动播放视频"开关 = 网格内免悬停自动播放
-// （视频自动播放范围 = 封面帧起 10 秒循环）；放大镜按钮（图片 / 图片工程 / 动画工程 /
-// 动图 / 序列帧）：**悬停到图标上**即出大图浮层（2026-07-28 用户定，动图·序列帧浮层内播放）；
-// PSD/SVG 类图片工程另有 默认应用打开；格式图标（fla/zip/AI 等无内容缩略图）=
-// 仅默认应用打开；动画工程有内容缩略图时（8.2 后）= 发送 + 默认应用打开（发送仍占位，8.5 接）。
+// 素材卡片（figma-css 01_组件/14_卡片，2026-08-10 重做定稿）：
+// 整卡 1px 暗-悬停边框 / 圆角 6 / padding 0；缩略图区 C3 圆角上沿，简介区 C3 + 上边框圆角下沿
+// （padding 8 8 8 12 / 间距 4）；名称单行左对齐截断（14/20 高亮，旧两行居中作废）；
+// 格式徽标左上 6,6（padding 2 4 / 徽标档 10/14 700 常态色）；原始文件徽章右下 8,8（15×15）。
+// 状态边框 ::after 1.5px（同文件夹卡片机制）：hover 亮-选中 / 选中·重命名 品牌色-边框线
+// （重命名 = 整卡高亮提示，输入框透明底不单独描边，2026-08-10 用户定）。
+// 悬停控件（2026-08-10 用户定）：放大镜 / 默认应用打开 / 发送到按钮全删——放大预览改为
+// 空格触发（访达 Quick Look 逻辑，AssetGrid 接线）；图片类无悬停控件；
+// 视频 / 音频 / 动图 / 序列帧悬停播放保留（播放类无按钮，5.3 定案），
+// 查看方式"自动播放动图（含序列帧）/ 自动播放视频"开关 = 网格内免悬停自动播放。
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
@@ -37,9 +35,6 @@ const props = withDefaults(
   }>(),
   { selected: false, renaming: false, faded: null },
 );
-// 悬停浮层：放大镜按钮 hover 触发（2026-07-28 用户定：**悬停到放大镜图标上**即出大图，
-// 不点击；动图 / 序列帧同有放大镜，浮层内播放），关闭由按钮 mouseleave / 组件销毁驱动
-const emit = defineEmits<{ zoom: []; zoomClose: [] }>();
 const ui = useUiStore();
 const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
 const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
@@ -47,32 +42,18 @@ const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.as
 const isAnim = computed(() => props.asset.animated);
 // 序列帧（2026-07-22 用户定）：格式角标显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
 const isSeq = computed(() => props.asset.frameCount != null && !isAnim.value);
-// 图片工程（预览窗口"默认应用打开"同口径，preview.ts SOURCE_EXTS）：有内容缩略图时配放大镜
-const SOURCE_EXTS = new Set(["psd", "psb", "ai", "svg"]);
-// 动画工程（fla/aep）：8.2 伴生缩略图后才可能有内容缩略图，届时出 发送+默认应用打开+放大镜
-const ENGINEERING_EXTS = new Set(["fla", "aep"]);
 
-type HoverKind = "anim" | "sequence" | "video" | "audio" | "image" | "source" | "engineering" | "iconOnly";
+// 悬停播放分发（序列帧归动图范围，2026-07-27 用户定：打包就是为了看动画效果）；
+// 图片 / 工程 / 格式图标无悬停控件（2026-08-10 用户定：图片不用悬停）
+type HoverKind = "anim" | "sequence" | "video" | "audio" | "other";
 const kind = computed<HoverKind>(() => {
   const ext = props.asset.ext.toLowerCase();
   if (isAnim.value) return "anim";
   if (isSeq.value) return "sequence";
   if (isVideoExt(ext)) return "video";
   if (isAudioExt(ext)) return "audio";
-  if (props.asset.thumbKind !== "asset") return "iconOnly"; // 格式图标 / 无缩略图
-  if (ENGINEERING_EXTS.has(ext)) return "engineering";
-  if (SOURCE_EXTS.has(ext)) return "source";
-  return "image";
+  return "other";
 });
-// 悬停按钮按类型分发（DOM 顺序固定：发送 → 默认应用打开 → 放大镜）；
-// 序列帧归动图范围（2026-07-27 用户定：打包就是为了看动画效果）——悬停 / 自动播放；
-// 放大镜：图片 / 图片工程 / 动画工程 / 动图 / 序列帧都有（2026-07-28 用户定：
-// 悬停到放大镜图标上即出大图浮层，动图·序列帧浮层内播放）；视频 / 音频 / 格式图标无
-const showSend = computed(() => kind.value === "engineering");
-const showOpenDefault = computed(
-  () => kind.value === "iconOnly" || kind.value === "source" || kind.value === "engineering",
-);
-const showZoom = computed(() => kind.value !== "iconOnly" && kind.value !== "video" && kind.value !== "audio");
 
 // 悬停态：驱动播放层挂载（视频/音频）与动图播放
 const hovered = ref(false);
@@ -123,18 +104,6 @@ function startRename(): void {
   selection.renamingKey = cardKey;
 }
 
-// 放大镜 hover 触发（2026-07-28 用户定）：hover 按钮 150ms 出浮层（防划过闪），移出按钮即关
-let zoomTimer: ReturnType<typeof setTimeout> | undefined;
-function onZoomEnter(): void {
-  if (dragView.active) return; // 拖拽期间不出悬停放大浮层（2026-07-29 复验二轮 5）
-  clearTimeout(zoomTimer);
-  zoomTimer = setTimeout(() => emit("zoom"), 150);
-}
-function onZoomLeave(): void {
-  clearTimeout(zoomTimer);
-  emit("zoomClose");
-}
-
 // 动图播放（5.3）：悬停或"自动播放动图"开关（序列帧同归此开关，2026-07-27 用户定）——
 // 300ms 延迟后把卡片图换成源文件（webview 原生循环，零等待），停止后还原封面
 const animSrc = ref<string | null>(null);
@@ -166,17 +135,7 @@ async function loadAnim(): Promise<void> {
 }
 onBeforeUnmount(() => {
   clearTimeout(animTimer);
-  clearTimeout(zoomTimer);
-  emit("zoomClose"); // 滚出视口销毁时关浮层
 });
-
-function openDefault(): void {
-  // 成功后直接重拉最近使用（2026-07-29 复验反馈：双保险——后端 recent-changed 事件之外，
-  // 前端 invoke 成功即刷新，不依赖运行中的后端是否为最新构建）
-  void invoke("open_with_default_app", { assetId: props.asset.assetId })
-    .then(() => useContentStore().refreshRecent())
-    .catch((e) => console.warn("默认应用打开失败：", e));
-}
 
 // 角标文案：音频带 BPM 显示"格式 / BPM: 值"（Eagle 同格式，2026-07-26 用户截图定稿）
 const badge = computed(() => {
@@ -199,7 +158,7 @@ const meta = computed(() => {
 <template>
   <div
     class="asset-card"
-    :class="{ selected, 'fade-source': faded === 'source', 'fade-cut': faded === 'cut' }"
+    :class="{ selected, renaming, 'fade-source': faded === 'source', 'fade-cut': faded === 'cut' }"
     :style="{
       left: `${box.left}px`,
       top: `${box.top}px`,
@@ -232,27 +191,9 @@ const meta = computed(() => {
       <HoverSequenceLayer v-else-if="(hoverActive || ui.autoPlayGif) && kind === 'sequence'" :asset="asset" />
       <span v-if="badgeColor && ui.showExtBadge" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
       <span v-if="asset.noteCount" class="note-badge">{{ asset.noteCount }}</span>
-      <div class="actions">
-        <button v-if="showSend" class="act" v-tip="'发送至 Animate'" @click.stop>
-          <AppIcon name="send-to" />
-        </button>
-        <button v-if="showOpenDefault" class="act" v-tip="'默认应用打开'" @click.stop="openDefault">
-          <AppIcon name="open-default" />
-        </button>
-        <button
-          v-if="showZoom"
-          class="act"
-          v-tip="'查看大图'"
-          @click.stop
-          @mouseenter="onZoomEnter"
-          @mouseleave="onZoomLeave"
-        >
-          <AppIcon name="magnifier" />
-        </button>
-      </div>
     </div>
-    <!-- 信息文字区（2026-07-29 复验三轮）：标题退出 card-info——名称区悬停文本光标、
-         可起拖拽 / 单击正常选中、双击就地重命名（stop 防触发卡片双击预览）；
+    <!-- 简介区（figma 14）：C3 + 上边框 / padding 8 8 8 12 / 间距 4；
+         标题单行左对齐（双击就地重命名，stop 防触发卡片双击预览）；
          meta 尺寸行仍是 card-info 框选空白（按下拖动起框选 / 单击清空选择） -->
     <div class="texts">
       <input
@@ -267,39 +208,50 @@ const meta = computed(() => {
         @dblclick.stop
         @pointerdown.stop
       />
-      <span v-else class="title" @dblclick.stop="startRename">{{ displayName }}</span>
+      <!-- 名称悬停 tip（2026-08-10 用户定）：完整名称（限宽换行）+ 当前简介档（尺寸/文件大小等，
+           briefMode none 时无简介行）；序列帧显示名（.序列帧 后缀）与卡片一致 -->
+      <span
+        v-else
+        class="title"
+        v-tip="{ text: displayName, keys: ui.briefMode !== 'none' ? meta : undefined, column: true }"
+        @dblclick.stop="startRename"
+      >{{ displayName }}</span>
       <span v-show="ui.briefMode !== 'none'" class="meta card-info">{{ meta }}</span>
     </div>
+    <!-- 原始文件徽章（figma 14：15×15 品牌色图标，卡片右下各 8） -->
+    <AppIcon v-if="asset.origin" name="original-file-badge" :size="15" class="origin-badge" />
   </div>
 </template>
 
 <style scoped>
-/* 总容器：padding 0 / 间距 4（无卡片框） */
+/* 卡片（figma 14）：圆角 6 / padding 0 / 无间距（缩略图与简介无缝拼接）。
+   边框全部走 ::after 伪元素（最上层——缩略图 C2 / 简介 C3 整片不透明底会盖住父级
+   inset 阴影，2026-08-10 走查：外边框全消失的根因）：常态 1px 暗-悬停；
+   hover 1.5px 亮-选中；选中 / 重命名 1.5px 品牌色-边框线（重命名 = 整卡高亮提示）。
+   伪元素 border 宽变 1→1.5 向内画不占布局（同文件夹卡片机制） */
 .asset-card {
   position: absolute;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  border-radius: var(--radius-6);
   cursor: default;
 }
-/* 图片：圆角 8 / 1px border-2（真 border，inset shadow 会被图片盖住）；
-   hover 2px 40% / 选中 2px 品牌色（粗细变化由 cover 图片吸收，不动布局） */
-.thumb {
-  position: relative;
-  flex: none;
-  display: flex; /* 格式图标居中缩到 50%（2026-07-25 用户定）；内容缩略图仍 width/height 100% */
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border-2);
-  border-radius: var(--radius-8);
-  overflow: hidden;
+.asset-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--line-hover);
+  border-radius: var(--radius-6);
+  pointer-events: none;
   transition: border-color 0.12s ease;
 }
-.asset-card:hover .thumb {
-  border: 2px solid var(--border-1);
+.asset-card:hover::after {
+  border: 1.5px solid var(--line-card-hover); /* 实色 #414743（2026-08-10 用户黑底吸色定）：
+    复杂缩略图（纯黑区域）上半透明线显淡、边框断开感；实色不透明在任何内容上连贯 */
 }
-.asset-card.selected .thumb {
-  border: 2px solid var(--brand-1);
+.asset-card.selected::after,
+.asset-card.renaming::after {
+  border: 1.5px solid var(--brand-border);
 }
 /* 拖拽源 / 被剪切整体半透明（2026-07-28 复验反馈 6①/8，token 透明度档） */
 .asset-card.fade-source {
@@ -308,14 +260,23 @@ const meta = computed(() => {
 .asset-card.fade-cut {
   opacity: var(--opacity-cut);
 }
+/* 缩略图区（figma 14）：C2 底（2026-08-10 用户纠正：缩略图 C2、简介区才是 C3）/ 圆角上沿 */
+.thumb {
+  position: relative;
+  flex: none;
+  display: flex; /* 格式图标居中缩到 50%（2026-07-25 用户定）；内容缩略图仍 width/height 100% */
+  align-items: center;
+  justify-content: center;
+  background: var(--c2);
+  border-radius: var(--radius-6) var(--radius-6) 0 0;
+  overflow: hidden;
+}
 /* 网格模式固定格：contain 完整显示不裁切（cover 必裁，2026-07-24 用户定） */
 .img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* 无缩略图占位：中间面板底色 C1 */
-  background: var(--c1);
 }
 .img.contain {
   object-fit: contain;
@@ -327,22 +288,21 @@ const meta = computed(() => {
   height: 50%;
   object-fit: contain;
 }
-/* 格式角标：图片左上各 4px；深色实底（降噪）/ 内边距 0 4 / 圆角 4 / 角标文字 10/16 粗体 60% */
+/* 格式徽标（figma 14）：左上各 6 / padding 2 4 / 圆角 4 / 徽标档 10/14 700 常态色 */
 .badge {
   position: absolute;
-  top: 4px;
-  left: 4px;
-  padding: 0 var(--space-4);
+  top: var(--space-6);
+  left: var(--space-6);
+  padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-4);
   font-size: var(--text-badge-size);
   line-height: var(--text-badge-line);
   font-weight: var(--text-badge-weight);
-  color: var(--font-icon-3);
+  color: var(--text-normal);
   pointer-events: none;
 }
 /* 笔记角标（5.2，Eagle 式数字圆标）：图片右上各 4px / 直径 16 / 品牌紫实底 /
-   数字 font-icon-1（角标文字 10/16 粗体；5.4 红线修正：#fff 硬编码改 token，2026-07-28）；
-   与左上格式角标不冲突 */
+   数字 font-icon-1（角标文字 10/16 粗体；5.4 红线修正：#fff 硬编码改 token，2026-07-28） */
 .note-badge {
   position: absolute;
   top: var(--space-4);
@@ -358,97 +318,56 @@ const meta = computed(() => {
   text-align: center;
   pointer-events: none;
 }
-/* 按钮组：图片右下各 4px / 间距 4；图标按钮-小（24×24 圆角 4），
-   底色 C1-20% 压图（深色透明不抢眼），悬停卡片显示，hover 底色 C1-40% */
-.actions {
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  display: flex;
-  gap: var(--space-4);
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-.asset-card:hover .actions {
-  opacity: 1;
-}
-.act {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: var(--space-4);
-  border-radius: var(--radius-4);
-  background: var(--c1-20);
-  /* 图标常态 60%，悬停按钮 80%（2026-07-23 用户定） */
-  color: var(--font-icon-3);
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-}
-.act:hover {
-  background: var(--c1-40);
-  color: var(--font-icon-2);
-}
-/* 文字组：间距 2 / 居中 / 高 60 顶部对齐（内容一行时与图片间距恒为总容器 gap 4）；
-   标题最多两行截断 */
+/* 简介区（figma 14）：C3 / 上边框 暗-悬停（inset 模拟分割线不占位，简介区恒 57 高含线）/
+   圆角下沿 / padding 8 8 8 12 / 间距 4 */
 .texts {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  height: 60px;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
+  background: var(--c3);
+  box-shadow: inset 0 1px 0 0 var(--line-hover);
+  border-radius: 0 0 var(--radius-6) var(--radius-6);
   flex: none;
 }
+/* 名称：正文 14/20 高亮，单行左对齐截断（2026-08-10 用户定，旧两行居中作废） */
 .title {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--font-icon-1);
-  text-align: center;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  color: var(--text-highlight);
+  white-space: nowrap;
   overflow: hidden;
-  word-break: break-all;
+  text-overflow: ellipsis;
   /* 名称区悬停文本光标（2026-07-29 复验三轮：退出 card-info，双击可改名） */
   cursor: text;
 }
 .meta {
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
-  text-align: center;
+  color: var(--text-label);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-/* 就地重命名输入（6.1 C2）：C4 底 / 1px border-1 / 圆角 6（输入框 token 口径，同收件箱行内重命名）；
-   高度恒 20 = 字体行高（2026-07-29 用户定：不再撑高卡片）；聚焦描边品牌色-1（用户定） */
+/* 重命名输入：透明底不单独描边（整卡 1.5px 品牌色高亮提示，同文件夹卡片 2026-08-10 用户定）；
+   高度恒 20 = 字体行高不撑高简介区；左对齐同名称位 */
 .rename-input {
   width: 100%;
   height: 20px;
   box-sizing: border-box;
-  padding: 0 var(--space-6);
+  padding: 0;
   border: none;
-  border-radius: var(--radius-6);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-1);
-  color: var(--font-icon-1);
+  background: transparent;
+  color: var(--text-highlight);
   font-size: var(--text-body-size);
   line-height: 20px;
-  text-align: center;
   outline: none;
 }
-.rename-input:focus {
-  box-shadow: inset 0 0 0 1px var(--brand-1);
-}
-</style>
-
-<!-- 非 scoped 全局规则：拖拽期间禁用悬停控件（2026-07-29 复验二轮 5，CSS 闸）。
-     注意：曾写在 scoped 块内用 :global(body.dragging) .thumb .actions——SFC 编译把
-     后代部分吞掉，产物只剩 body.dragging{opacity:0} 导致拖拽时整窗透明黑屏（2026-07-29 用户实测）。
-     全局写法类名原样保留可匹配 scoped 编译产物，特异性 (0,4,1) 压过 .asset-card:hover .actions (0,4,0) -->
-<style>
-body.dragging .asset-card .thumb .actions {
-  opacity: 0;
+/* 原始文件徽章（figma 14）：15×15，卡片右下各 8（简介区右下） */
+.origin-badge {
+  position: absolute;
+  right: var(--space-8);
+  bottom: var(--space-8);
   pointer-events: none;
 }
 </style>

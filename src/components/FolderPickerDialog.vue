@@ -37,7 +37,7 @@ function onCancel(): void {
     <div class="pick-card">
       <header class="pick-titlebar">
         <h2 class="pick-title">添加至文件夹</h2>
-        <IconButton name="close" title="关闭" @click="onCancel" />
+        <IconButton name="window-close" title="关闭" @click="onCancel" />
       </header>
       <div class="pick-body">
         <TreeItem

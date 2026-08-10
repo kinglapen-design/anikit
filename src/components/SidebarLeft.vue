@@ -1,15 +1,17 @@
 <script setup lang="ts">
-// 左侧边栏（C3）：标题栏 / 切换资源库 / 视图内容 / 底部视图切换。
-// 视图切换：旧区块往左滑出、新区块从右滑入（03_UI 布局/02_左侧边栏 01）；
-// 切换资源库区块仅在工作空间 ↔ 其他三视图之间切换时才滑出滑入。
-// 折叠后收成窄条（保留菜单、添加与展开按钮）。
-import { computed, ref } from "vue";
+// 左侧边栏（1.2 重构，figma-css 01_主窗口 左侧边栏段）：
+// 标题栏 46（C3 + 下边框 暗-悬停：汉堡菜单 + 右对齐按钮组[新增 / 区块管理 / 收起侧边栏]）
+// 内容 row：导航栏 54（C3 + 右边框：资源库[选中] / 工作空间 / AI 对话框 + 帮助）
+// ｜ 内容区 250（C3 + 右边框：资源库切换 54 + 树容器）。
+// 无业务按钮一律 disabled（1.3 占位点亮机制统一接入）：汉堡 / 区块管理 / 工作空间 /
+// AI 对话框 / 帮助 / 切换资源库。新增 = 导入菜单（6.3 既有业务）。
+// 收起 = 整栏收掉（App.vue v-if + 滑动动画，2026-08-08 定案），
+// 展开按钮在标签页行首（SidebarExpandButton，dockview prefix actions，不占工具栏）。
+import { ref } from "vue";
 import { open } from "@tauri-apps/plugin-dialog";
 import AppIcon from "./AppIcon.vue";
 import IconButton from "./IconButton.vue";
-import ViewSwitch, { type ViewOption } from "./ViewSwitch.vue";
 import LibraryView from "./LibraryView.vue";
-import SidebarViews from "./SidebarViews.vue";
 import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
 import { addButtonSpec } from "../lib/menuSpecs";
 import { useUiStore } from "../stores/ui";
@@ -20,18 +22,10 @@ const ui = useUiStore();
 const content = useContentStore();
 const bodyRef = ref<HTMLElement>();
 const thumb = useSideThumb(bodyRef);
+// 滚动条悬停显隐（2026-08-10 用户定：悬停面板 / 拖拽 thumb 时才出现）
+const hover = ref(false);
 
-const leftOptions: ViewOption[] = [
-  { value: "library", icon: "library-view", title: "资源库视图" },
-  { value: "workspace", icon: "workspace-view", title: "工作空间视图" },
-  { value: "tags", icon: "tag-view", title: "标签视图" },
-  { value: "pins", icon: "favorites-view", title: "快捷入口" },
-];
-
-// 资源库视图 / 标签视图 / 快捷入口视图共用资源库；工作空间是另一套（03_UI 布局/02 03）
-const isWorkspace = computed(() => ui.leftView === "workspace");
-
-// 添加按钮菜单（6.3 全量改造，设计稿 `00_修改与需求/05_右键菜单"添加按钮"节）：
+// 添加按钮菜单（6.3 全量改造，设计稿 `00_修改与需求/05_右键菜单`"添加按钮"节）：
 // 全局菜单宿主（lib/contextMenus），spec 在 lib/menuSpecs（导入动作由本组件注入 pickImport）
 function toggleImportMenu(e: MouseEvent): void {
   if (menuState.entries) {
@@ -57,152 +51,203 @@ async function pickImport(kind: "files" | "folder"): Promise<void> {
 </script>
 
 <template>
-  <aside v-if="!ui.leftCollapsed" class="sidebar-left" :style="{ width: `${ui.leftWidth}px` }">
+  <aside
+    class="sidebar-left"
+    :style="{ width: ui.leftCollapsed ? '0px' : `${ui.leftWidth}px`, '--sb-w': `${ui.leftWidth}px` }"
+    @mouseenter="hover = true"
+    @mouseleave="hover = false"
+  >
     <header class="bar-title" data-tauri-drag-region>
-      <IconButton name="menu" title="菜单" />
-      <span class="spacer" />
-      <IconButton name="add-large" title="添加" @click="toggleImportMenu" />
-      <IconButton name="toggle-sidebar-left" title="收起侧边栏" @click="ui.leftCollapsed = true" />
+      <IconButton name="menu" title="菜单" disabled />
+      <div class="btn-group">
+        <IconButton name="add-large" title="新增" @click="toggleImportMenu" />
+        <IconButton name="section-manage" title="区块管理" disabled />
+        <IconButton name="collapse-sidebar" title="收起侧边栏" @click="ui.leftCollapsed = true" />
+      </div>
     </header>
 
-    <div class="switch-wrap">
-      <Transition name="slide" mode="out-in">
-        <div class="library-switch" :key="isWorkspace ? 'ws' : 'lib'">
-          <span class="badge">
-            <AppIcon :name="isWorkspace ? 'workspace-badge' : 'library-badge'" :size="16" />
-          </span>
-          <span class="lib-name">{{ isWorkspace ? "我的项目" : "动画素材库" }}</span>
-          <span class="spacer" />
-          <IconButton name="switch-library" title="切换" />
+    <div class="body">
+      <!-- 导航栏 54：常驻（收起时不消失）；视图切换（资源库选中；工作空间 / AI 对话框待对应阶段）+ 帮助 -->
+      <nav class="rail">
+        <div class="rail-views">
+          <IconButton name="library" title="资源库" :active="true" />
+          <IconButton name="workspace" title="工作空间" disabled />
+          <IconButton name="ai-chat" title="AI 对话框" disabled />
         </div>
-      </Transition>
-    </div>
+        <IconButton name="help" title="帮助" class="help-btn" disabled />
+      </nav>
 
-    <div ref="bodyRef" class="view-body">
-      <Transition name="slide" mode="out-in">
-        <!-- Transition 只包普通元素（与"切换资源库"同一稳定机制），组件作为内容渲染 -->
-        <div :key="ui.leftView" class="view-pane">
-          <LibraryView v-if="ui.leftView === 'library'" />
-          <SidebarViews v-else />
+      <!-- 内容区 250：库切换 + 树容器；收展 = 宽度动画（整栏不销毁，防抖） -->
+      <div class="side-content">
+        <div class="library-switch">
+          <span class="lib-badge"><AppIcon name="library-duotone" :size="18" /></span>
+          <span class="lib-name">动画素材库</span>
+          <IconButton name="switch-library" title="切换资源库" disabled />
         </div>
-      </Transition>
+        <div ref="bodyRef" class="tree-wrap">
+          <LibraryView />
+        </div>
+        <span
+          class="side-thumb"
+          :class="{ visible: thumb.show && (hover || thumb.dragging) }"
+          :style="{ top: `${thumb.top}px`, height: `${thumb.height}px` }"
+          @pointerdown="thumb.onThumbDown"
+        />
+      </div>
     </div>
-    <span
-      v-show="thumb.show"
-      class="side-thumb"
-      :style="{ top: `${thumb.top}px`, height: `${thumb.height}px` }"
-      @pointerdown="thumb.onThumbDown"
-    />
-
-    <footer class="bar-footer">
-      <ViewSwitch v-model="ui.leftView" :options="leftOptions" />
-    </footer>
   </aside>
 </template>
 
 <style scoped>
+/* 左侧边栏（figma 39）：column，无底色（各子块提供），宽度可拖（SplitBar，默认 304 = 54 + 250）；
+   收展 = 常驻挂载 + 宽度由 App.vue rAF 驱动逐帧写入（2026-08-08 定案 v6：dockview 的 RO 回调
+   被 rAF 包裹恒晚一帧，CSS 过渡/挂载切换必撕一帧；同帧写宽+强制 dockview 布局才零滞后）。
+   本文件禁挂 width 的 CSS transition（会与逐帧 JS 写宽打架 = 慢一帧）；
+   --sb-w 恒为展开宽、子块定宽 = 收窄时右缘裁剪不挤压；展开按钮在标签页行首（SidebarExpandButton） */
 .sidebar-left {
   position: relative;
   display: flex;
   flex-direction: column;
   flex: none;
-  background: var(--c3);
-  /* 三栏面板无圆角无边框，仅右侧 1px border-1 作视觉分割线（2026-07-23 线框定案） */
-  box-shadow: inset -1px 0 0 0 var(--border-1);
-  padding: var(--space-8);
   min-height: 0;
+  overflow: hidden;
 }
-/* 悬浮滚动条：4px 胶囊 border-1、距右 4px、不占布局 */
-.side-thumb {
-  position: absolute;
-  right: 4px;
-  width: 4px;
-  border-radius: 2px;
-  /* 常态 font-icon-5（选中色）/ hover border-1；可拖拽（z-index 101 盖过窗口边缘
-     resize 热区 100，防事件穿透误触拉伸，2026-07-23 用户定） */
-  background: var(--font-icon-5);
-  z-index: 101;
-  transition: background 0.12s ease;
-}
-.side-thumb:hover {
-  background: var(--border-1);
-}
-/* 标题栏：内边距 8 8 8 10（2026-07-23 用户定） */
+/* 标题栏（figma 58）：46（含边框，box-sizing——与中间标签栏行对齐，2026-08-08 走查修正）/
+   C3 / 下边框 暗-悬停 / padding 8 16 8 12 / space-between */
 .bar-title {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-10);
-}
-.spacer {
-  flex: 1;
-}
-/* 切换资源库：内边距 8 8 8 20 / 间距 8；图标容器 24×24 品牌色-1 圆角 6 */
-.switch-wrap {
-  /* 固定高度容器（40 = padding 8×2 + 图标 24）：out-in 中间态不塌高，文件树容器不跳帧 */
-  height: 40px;
+  justify-content: space-between;
+  gap: var(--space-12);
+  width: var(--sb-w); /* 定宽：aside 收窄时裁剪不挤压 */
+  height: 46px;
+  box-sizing: border-box;
+  padding: var(--space-8) var(--space-16) var(--space-8) var(--space-12);
   flex: none;
-  position: relative;
-  overflow: hidden;
+  background: var(--c3);
+  border-bottom: 1px solid var(--line-hover);
 }
+/* 右对齐按钮组（figma 137）：间距 4 */
+.btn-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+/* 内容（figma 312）：row 撑满剩余；定宽 --sb-w（aside 收窄时右缘裁剪不挤压） */
+.body {
+  display: flex;
+  flex: 1;
+  width: var(--sb-w);
+  min-height: 0;
+}
+/* 导航栏（figma 330）：54px / C3 / 右边框 暗-悬停 / padding 12 / space-between */
+.rail {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  width: 54px;
+  flex: none;
+  box-sizing: border-box;
+  background: var(--c3);
+  border-right: 1px solid var(--line-hover);
+}
+/* 视图切换按钮组（figma 357）：间距 8；选中态 = 亮-选中 底（IconButton active） */
+.rail-views {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+/* 帮助（figma 567）：C4 底 + 暗-悬停边框 + 图标极淡档。class 落在 IconButton 根元素（button 本身），
+   直接作用 .help-btn（单根组件根元素带本 scope id）；!important 压 IconButton disabled 复位；
+   悬停底色 C4 → C5（2026-08-08 用户定） */
+.help-btn,
+.help-btn:disabled {
+  background: var(--c4) !important;
+  box-shadow: inset 0 0 0 1px var(--line-hover) !important;
+  color: var(--text-faint);
+  opacity: 1;
+}
+.help-btn:disabled:hover {
+  background: var(--c5) !important;
+}
+/* 内容区（figma 607）：250 / C3 / 右边框 暗-悬停；拖宽时导航栏固定 54、本区弹性；
+   收起时随 aside 收窄被压至 0（flex 1 + min-width 0 + 溢出裁切，无需单独动画） */
+.side-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--c3);
+  border-right: 1px solid var(--line-hover);
+}
+/* 资源库切换按钮（figma 632）：54 / padding 12 16 / 下边框 暗-悬停 */
 .library-switch {
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  /* 内边距 8 8 8 16（2026-07-23 用户定，原左 20） */
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-16);
-  border-radius: var(--radius-6);
+  padding: var(--space-12) var(--space-16);
+  flex: none;
+  border-bottom: 1px solid var(--line-hover);
 }
-.badge {
+/* 资源库-双色徽章（figma 696）：30×30 品牌色底 + 亮-选中边框 + 圆角 6 */
+.lib-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: var(--space-4);
+  width: 30px;
+  height: 30px;
+  margin-left: var(--space-8); /* figma 标题+切换容器 padding-left 8 */
   border-radius: var(--radius-6);
-  background: var(--brand-1);
-  color: var(--font-icon-1);
+  background: var(--brand);
+  border: 1px solid var(--line-active);
+  color: var(--text-highlight);
   flex: none;
 }
-/* 切换资源库标题：大标题 16/22（2026-07-23 用户定） */
+/* 库名（figma 758）：标题 16/22 常态档 */
 .lib-name {
+  flex: 1;
+  min-width: 0;
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--font-icon-1);
+  color: var(--text-normal);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 原生条由 base.css 全局隐藏，滚动条为悬浮 side-thumb（不占位） */
-.view-body {
-  position: relative;
+/* 树容器（figma 833）：padding 12 16 0 */
+.tree-wrap {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  padding: var(--space-12) var(--space-16) 0;
 }
-.view-pane {
-  height: 100%;
-}
-/* 视图切换动画：旧区块往左滑出，新区块从右滑入（out-in 串行，无并行排列问题） */
-.slide-enter-active,
-.slide-leave-active {
+/* 悬浮滚轮条（2026-08-10 用户定二轮：6px 胶囊紧贴面板右边框 / 实色 常态 C4、悬停 C5——
+   透明色在通栏分割线上交叉叠加、4px 间距让分隔线视觉截断，均作废；不占布局）；
+   悬停显隐：默认透明不接收事件，visible（悬停面板 / 拖拽中）淡入 */
+.side-thumb {
+  position: absolute;
+  right: 0;
+  width: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--c4);
+  z-index: 101; /* 盖过窗口边缘 resize 热区 100（2026-07-23 用户定） */
+  opacity: 0;
+  pointer-events: none;
   transition:
-    transform 0.18s ease,
-    opacity 0.18s ease;
+    opacity 0.15s ease,
+    background 0.12s ease;
 }
-.slide-enter-from {
-  transform: translateX(40px);
-  opacity: 0;
+.side-thumb.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
-.slide-leave-to {
-  transform: translateX(-40px);
-  opacity: 0;
-}
-/* 视图切换总容器：内边距 4 8 8 8 */
-.bar-footer {
-  padding: var(--space-4) var(--space-8) var(--space-8) var(--space-8);
+.side-thumb:hover {
+  background: var(--c5);
 }
 </style>

@@ -14,7 +14,7 @@ const open = ref(true);
     <SectionHeader title="标签" addable grip v-model:open="open" />
     <div v-if="open" class="body">
       <div v-for="t in tags" :key="t" class="tag-item">
-        <AppIcon name="tag" class="deco" />
+        <AppIcon name="text" class="deco" />
         <span class="label">{{ t }}</span>
         <span class="spacer" />
         <IconButton name="clear" small title="删除标签" class="del" />

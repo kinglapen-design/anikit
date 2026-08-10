@@ -4,8 +4,9 @@
 // 卡片文字区（标题 + 标签）固定像素高，不参与等比缩放（justified 按行追加）。
 
 // 卡片文字区（标题容器）固定像素高，不参与等比缩放（justified 按行追加）。
-/** 素材卡片文字区高度（2026-07-23 回退方案：总容器间距 4 + 文字组 60（标题两行 40 + 间距 2 + 标签 18）= 64） */
-export const CARD_CAPTION_H = 64;
+/** 素材卡片简介区高度（figma-css 01_组件/14_卡片，2026-08-10：padding 8 8 8 12 +
+    名称单行 20 + 间距 4 + 标签 17 = 57；旧两行标题 64 作废） */
+export const CARD_CAPTION_H = 57;
 
 export interface Box {
   top: number;
@@ -28,14 +29,18 @@ export interface LayoutResult {
   totalHeight: number;
 }
 
-// 网格内边距：左 0（区块容器 padding 左 20 承担），右 20（命中区 12 + 间距 8——
-// 卡片右缘距中栏外边框 = 中栏右 4 + 20 = 24，与左侧 24 一致，2026-07-23 用户定）
-const PAD = { top: 0, right: 20, bottom: 0, left: 0 };
-// 卡片间距（2026-07-23 用户定）：列间距 16，行间距 16
-const COL_GAP = 16;
-const ROW_GAP = 16;
-/** 列表模式行间距（2026-07-24 用户定：紧凑 6px，独立于卡片 ROW_GAP） */
-const LIST_ROW_GAP = 6;
+// 网格内边距（figma-css 02_布局/42_中间面板 列表 padding 16 16 0，2026-08-10）：
+// 左 0（asset-section padding 左 16 承担），右 16（滚动条贴右边框后卡片右缘距边框恒 16，
+// 滚动条 6px 与命中区 12 均在此带内）；底 16 = 列表末行呼吸空间（2026-08-10 用户定）
+const PAD = { top: 0, right: 16, bottom: 16, left: 0 };
+// 卡片间距（figma 42 文件卡片列表 gap 12，2026-08-10）：列间距 12，行间距 12
+export const COL_GAP = 12;
+export const ROW_GAP = 12;
+/** 列表模式行高（figma-css 列表显示稿，2026-08-10：item 高 69 = padding 12×2 + 内容 45；
+    滑块联动作废——同文件夹卡片定稿先例） */
+const LIST_ROW_H = 69;
+/** 列表模式行间距（figma 列表显示稿 gap 4，2026-08-10） */
+const LIST_ROW_GAP = 4;
 
 // —— 自适应（等高不等宽）：贪心分行，行内等比拉伸填满宽度 ——
 export function computeJustified(
@@ -115,7 +120,10 @@ export function computeWaterfall(
   return { boxes: order.map((boxIdx) => boxes[boxIdx]), rows, totalHeight: Math.max(...tops, 0) + PAD.bottom };
 }
 
-// —— 网格（正方形）：格子随容器宽度自适应填充（列数由目标格宽决定，格宽弹性均分无右侧空余） ——
+// —— 网格（figma 比例，2026-08-10 用户定）：设计缩略图尺寸 260×220（缩略图区本身，
+// 非整卡）——缩略图高 = 格宽 × 220/260，整卡高 = 缩略图 + 简介 57；格子随容器宽度
+// 自适应填充（列数由目标格宽决定，格宽弹性均分无右侧空余） ——
+const GRID_THUMB_RATIO = 220 / 260;
 export function computeGrid(
   items: { w: number; h: number }[],
   containerWidth: number,
@@ -125,7 +133,8 @@ export function computeGrid(
   const contentWidth = containerWidth - PAD.left - PAD.right;
   const cols = Math.max(1, Math.floor((contentWidth + COL_GAP) / (targetCell + COL_GAP)));
   const cell = (contentWidth - COL_GAP * (cols - 1)) / cols;
-  const rowH = cell + captionHeight + ROW_GAP;
+  const thumbH = cell * GRID_THUMB_RATIO;
+  const rowH = thumbH + captionHeight + ROW_GAP;
   const boxes: Box[] = [];
   const rows: Row[] = [];
 
@@ -133,23 +142,24 @@ export function computeGrid(
     const r = Math.floor(i / cols);
     const c = i % cols;
     const top = PAD.top + r * rowH;
-    boxes.push({ top, left: PAD.left + c * (cell + COL_GAP), width: cell, height: cell + captionHeight, i });
-    if (c === 0) rows.push({ top, height: cell + captionHeight, start: i, end: i + 1 });
+    boxes.push({ top, left: PAD.left + c * (cell + COL_GAP), width: cell, height: thumbH + captionHeight, i });
+    if (c === 0) rows.push({ top, height: thumbH + captionHeight, start: i, end: i + 1 });
     else rows[rows.length - 1].end = i + 1;
   }
 
-  const totalHeight = rows.length === 0 ? 0 : rows[rows.length - 1].top + cell + captionHeight + PAD.bottom;
+  const totalHeight = rows.length === 0 ? 0 : rows[rows.length - 1].top + thumbH + captionHeight + PAD.bottom;
   return { boxes, rows, totalHeight };
 }
 
-// —— 列表（行式，02_item 10）：行高随滑块（57 基准 × 行高 / 220），item 间距 6，交替底色由渲染层处理 ——
+// —— 列表（行式，figma 列表显示稿 2026-08-10）：行高固定 69（滑块联动作废），行距 4，
+// 交替底色由渲染层处理 ——
 export function computeList(
   items: { w: number; h: number }[],
   containerWidth: number,
-  targetRowHeight: number,
+  _targetRowHeight: number,
   _captionHeight = 0,
 ): LayoutResult {
-  const rowH = Math.max(21, Math.round((57 * targetRowHeight) / 220));
+  const rowH = LIST_ROW_H;
   const gap = LIST_ROW_GAP;
   const width = containerWidth - PAD.left - PAD.right;
   const boxes: Box[] = [];

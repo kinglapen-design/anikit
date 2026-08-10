@@ -28,22 +28,24 @@ function onItemHover(entries_: CtxEntry[] | undefined, e: MouseEvent): void {
 function onItemClick(entry: CtxEntry): void {
   if (entry === "divider" || entry.disabled || entry.submenu) return;
   entry.action?.();
-  closeAll();
+  closeAll(true);
 }
 
-function closeAll(): void {
+function closeAll(executed = false): void {
   flyout.value = null;
-  closeContextMenu();
+  closeContextMenu(executed);
 }
 </script>
 
 <template>
-  <AppMenu v-if="menuState.entries" :x="menuState.x" :y="menuState.y" :group="flyoutRootRef ?? null" @close="closeAll">
+  <AppMenu v-if="menuState.entries" :x="menuState.x" :y="menuState.y" :group="flyoutRootRef ?? null" @close="closeAll(false)">
     <template v-for="(entry, i) in entries" :key="i">
       <MenuDivider v-if="entry === 'divider'" />
       <MenuItem
         v-else
         :label="entry.label"
+        :icon="entry.icon"
+        :icon-class="entry.iconClass"
         :shortcut="entry.shortcut"
         :disabled="entry.disabled"
         :arrow="!!entry.submenu"
@@ -55,13 +57,15 @@ function closeAll(): void {
     </template>
   </AppMenu>
   <!-- 级联 flyout：内容包一层 div 供根菜单 group 判定（点击 flyout 内 = 组内） -->
-  <AppMenu v-if="flyout && menuState.entries" :x="flyout.x" :y="flyout.y" @close="closeAll">
+  <AppMenu v-if="flyout && menuState.entries" :x="flyout.x" :y="flyout.y" @close="closeAll(false)">
     <div ref="flyoutRootRef" class="flyout-root">
       <template v-for="(entry, i) in flyout.entries" :key="i">
         <MenuDivider v-if="entry === 'divider'" />
         <MenuItem
           v-else
           :label="entry.label"
+          :icon="entry.icon"
+          :icon-class="entry.iconClass"
           :shortcut="entry.shortcut"
           :disabled="entry.disabled"
           :checkable="entry.checkable"

@@ -18,6 +18,9 @@
   /* 线条 / 交互（透明度叠加色，2026-08-06 树 item 强度阶梯：hover 罩层 = 暗-悬停、选中罩层 = 亮-选中） */
   --line-hover: rgba(221, 247, 223, 0.0784); /* 暗-悬停：C4 底色边框线 / 其他边框线 / 悬停白罩层 */
   --line-active: rgba(230, 251, 232, 0.1412); /* 亮-选中：C5 底色边框线 / 主窗口·二级窗口·菜单边框 / 选中罩层 / 禁用 */
+  /* 素材卡片悬停边框（实色，2026-08-10 用户黑底吸色定）：C5 / 亮-选中在黑底等效，
+     复杂缩略图（纯黑区域）上半透明线显淡断开，实色不透明保连贯 */
+  --line-card-hover: #414743;
 
   /* 文字四档（图标 currentColor 同档表达明暗） */
   --text-highlight: rgba(254, 255, 255, 0.9294); /* 高亮 */
@@ -55,12 +58,8 @@
   --custom-peach: #3c222a;
   --custom-peach-bg: #241e20;
 
-  /* 格式角标（2026-07-23 降噪定案沿用：深色底 + 标签档字；静态图片不出角标） */
-  --fmt-psd: #1b384d;
-  --fmt-fla: #542822;
-  --fmt-svg: #80591d; /* SVG / EPS / AI 同组 */
-  --fmt-aep: #323281;
-  --fmt-anim: #4e2675; /* WEBP 动图 / 序列帧 / GIF / 视频 */
+  /* 格式角标：底色取自定义颜色前景值（映射在 lib/formatBadge.ts，2026-08-10 九色化，
+     旧 --fmt-* 实色组废除）；静态图片不出角标 */
 
   /* 投影（二级窗口 / 模态窗口 / 菜单 / 弹窗统一） */
   --shadow-pop: 0 4px 40px rgba(0, 0, 0, 0.6);
@@ -126,13 +125,15 @@
   --font-icon-disabled: var(--text-label);
   --brand-1: var(--brand);
   --brand-2: var(--brand-border);
-  --brand-1-12: color-mix(in srgb, var(--brand) 12%, transparent);
+  --brand-1-12: color-mix(in srgb, var(--brand) 12%, transparent); /* 框选矩形填充 */
+  --brand-1-30: color-mix(in srgb, var(--brand) 30%, transparent); /* 拖拽并入 / 排序间隙落点填充（12% 不明显，2026-08-10 用户定） */
   --border-1: var(--line-active);
   --border-2: var(--line-hover);
   --c1-20: color-mix(in srgb, var(--c1) 20%, transparent);
   --c1-40: color-mix(in srgb, var(--c1) 40%, transparent);
+  --c1-50: color-mix(in srgb, var(--c1) 50%, transparent); /* 悬停播放胶囊底（figma-css 悬停播放稿） */
   --c1-80: color-mix(in srgb, var(--c1) 80%, transparent);
-  --wave-pending: color-mix(in srgb, rgb(247, 255, 252) 60%, var(--c3));
+  --wave-pending: #5b6261; /* 静态 / 未播放波形实色（文字/标签不透明版，2026-08-10 用户定） */
   --folder-card-front: var(--c4);
   --folder-card-file: #cac8cc;
   --folder-card-back: var(--c2);

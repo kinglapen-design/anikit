@@ -48,7 +48,7 @@ function onSubmit(): void {
   <div class="form-card">
     <div class="title-row">
       <!-- 切换资源库同款：24×24 品牌色圆角底 + 16×16 图标（CSS 实现，无需单独导出） -->
-      <span class="badge"><AppIcon name="library-badge" :size="16" /></span>
+      <span class="badge"><AppIcon name="library-duotone-small" :size="16" /></span>
       <span class="title">创建资源库</span>
     </div>
     <p class="hint">请输入资源库的名称，点击下方的选择保存路径</p>

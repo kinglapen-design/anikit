@@ -138,7 +138,7 @@ async function onConfirm(): Promise<void> {
             </div>
             <div class="texts">
               <span class="folder">{{ r.folderName }}</span>
-              <span class="name" :title="r.name">{{ r.name }}</span>
+              <span class="name" v-tip="r.name">{{ r.name }}</span>
             </div>
           </div>
           <span class="arrow">→</span>

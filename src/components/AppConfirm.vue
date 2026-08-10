@@ -22,7 +22,7 @@ function onCancel(): void {
     <div class="del-card">
       <header class="del-titlebar">
         <h2 class="del-title">{{ selection.confirmPrompt.title }}</h2>
-        <IconButton name="close" title="关闭" @click="onCancel" />
+        <IconButton name="window-close" title="关闭" @click="onCancel" />
       </header>
       <div class="del-body">
         <p class="del-text">{{ selection.confirmPrompt.body }}</p>

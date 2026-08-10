@@ -5,10 +5,13 @@
 // confirm  = 无关闭按钮（figma 08）：padding 24 gap 24、标题栏 30×30 品牌底图标、内容 gap 12、仅确认/取消；
 // alert    = 无标题栏侵入式（figma 09）：状态图标 48（error/warning）+ 标题 + 描述 + 按钮组。
 // 按钮组由 actions slot 给（AppButton primary/panel），内容区默认 slot。
+// alert 侵入式弹出配提示音（2026-08-10 用户供音频：侵入弹窗.wav，lib/sounds）。
+import { onMounted } from "vue";
 import AppIcon from "./AppIcon.vue";
 import IconButton from "./IconButton.vue";
+import { playAlert } from "../lib/sounds";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     title: string;
     icon?: string; // 标题栏图标（standard / confirm）
@@ -18,6 +21,10 @@ withDefaults(
   { icon: undefined, variant: "standard", alertIcon: "error" },
 );
 const emit = defineEmits<{ close: [] }>();
+
+onMounted(() => {
+  if (props.variant === "alert") playAlert();
+});
 </script>
 
 <template>

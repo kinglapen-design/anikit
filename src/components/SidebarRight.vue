@@ -1,135 +1,126 @@
 <script setup lang="ts">
-// 右侧边栏（C3）：标题栏（收起 / 置顶 + 窗口控制）/ 详情视图 / AI 三视图占位 / 底部视图切换。
-import { computed, ref } from "vue";
-import AppIcon from "./AppIcon.vue";
+// 右侧面板（1.2 重构，figma-css 01_主窗口 右侧面板段）：
+// 标题栏 46（C3 + 下边框：窗口控制组由 App.vue 右上角浮块呈现，本行留作窗口拖拽区）；
+// 工具栏 54（收起详情面板 + 编辑数据区块[无业务 disabled]，figma 12263 原位）；
+// 数据展示 = DetailPanel（旧件填入，详情区块随 6.x 业务逐个重写）。
+// 收展 = 常驻挂载 + 宽度由 App.vue rAF 驱动逐帧写入（v6，同 SidebarLeft）；窗口控制组在 App 层
+// 浮块恒在窗口右上角，不参与收展（2026-08-08 用户定：解决窗口控制随收展跳变）。
+import { ref } from "vue";
 import IconButton from "./IconButton.vue";
-import WindowControls from "./WindowControls.vue";
-import ViewSwitch, { type ViewOption } from "./ViewSwitch.vue";
 import DetailPanel from "./DetailPanel.vue";
-import { useUiStore, type RightView } from "../stores/ui";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useUiStore } from "../stores/ui";
 import { useSideThumb } from "../lib/useSideThumb";
 
 const ui = useUiStore();
 const bodyRef = ref<HTMLElement>();
 const thumb = useSideThumb(bodyRef);
-const appWindow = getCurrentWindow();
-
-const rightOptions: ViewOption[] = [
-  { value: "detail", icon: "detail-view", title: "详情视图" },
-  { value: "aiChat", icon: "ai-chat-view", title: "AI 对话框" },
-  { value: "aiPaint", icon: "ai-paint-view", title: "AI 绘画框" },
-  { value: "aiVideo", icon: "ai-video-view", title: "AI 视频框" },
-];
-
-const aiIcons: Record<Exclude<RightView, "detail">, string> = {
-  aiChat: "ai-chat-view",
-  aiPaint: "ai-paint-view",
-  aiVideo: "ai-video-view",
-};
-const placeholderIcon = computed(() =>
-  ui.rightView === "detail" ? "detail-view" : aiIcons[ui.rightView],
-);
-
-async function togglePin(): Promise<void> {
-  ui.alwaysOnTop = !ui.alwaysOnTop;
-  await appWindow.setAlwaysOnTop(ui.alwaysOnTop);
-}
+// 滚动条悬停显隐（2026-08-10 用户定：悬停面板 / 拖拽 thumb 时才出现）
+const hover = ref(false);
 </script>
 
 <template>
-  <aside v-if="!ui.rightCollapsed" class="sidebar-right" :style="{ width: `${ui.rightWidth}px` }">
-    <header class="bar-title" data-tauri-drag-region>
-      <IconButton name="toggle-sidebar-right" title="收起侧边栏" @click="ui.rightCollapsed = true" />
-      <IconButton
-        :name="ui.alwaysOnTop ? 'window-pin-off' : 'window-pin-on'"
-        title="窗口置顶"
-        @click="togglePin"
-      />
-      <span class="spacer" />
-      <WindowControls />
-    </header>
-
-    <div ref="bodyRef" class="view-body">
-      <DetailPanel v-if="ui.rightView === 'detail'" />
-      <div v-else class="ai-placeholder">
-        <AppIcon :name="placeholderIcon" />
-        <p>该视图为占位，后续阶段实现。</p>
-      </div>
+  <aside
+    class="sidebar-right"
+    :style="{ width: ui.rightCollapsed ? '0px' : `${ui.rightWidth}px`, '--sb-w': `${ui.rightWidth}px` }"
+    @mouseenter="hover = true"
+    @mouseleave="hover = false"
+  >
+    <!-- 标题栏 46：窗口控制组由 App.vue 右上角浮块呈现，本行仅作窗口拖拽区 -->
+    <header class="bar-title" data-tauri-drag-region />
+    <!-- 工具栏（figma 12263，54 / padding 12 16）：收起详情面板 + 编辑数据区块 -->
+    <div class="panel-toolbar">
+      <IconButton name="collapse-detail" title="收起详情面板" @click="ui.rightCollapsed = true" />
+      <IconButton name="edit-data-section" title="编辑数据区块" disabled />
     </div>
-    <span
-      v-show="thumb.show"
-      class="side-thumb"
-      :style="{ top: `${thumb.top}px`, height: `${thumb.height}px` }"
-      @pointerdown="thumb.onThumbDown"
-    />
-
-    <footer class="bar-footer">
-      <ViewSwitch v-model="ui.rightView" :options="rightOptions" />
-    </footer>
+    <div class="side-content">
+      <div ref="bodyRef" class="detail-body">
+        <DetailPanel />
+      </div>
+      <span
+        class="side-thumb"
+        :class="{ visible: thumb.show && (hover || thumb.dragging) }"
+        :style="{ top: `${thumb.top}px`, height: `${thumb.height}px` }"
+        @pointerdown="thumb.onThumbDown"
+      />
+    </div>
   </aside>
 </template>
 
 <style scoped>
+/* 右侧面板（figma 11967）：column，宽度可拖（SplitBar，默认 250）。
+   收展 = 常驻挂载 + 宽度由 App.vue rAF 驱动逐帧写入（同 SidebarLeft 的 v6 定案；
+   本文件禁挂 width 的 CSS transition）；子块定宽 --sb-w + align-end =
+   收窄时内容锚右缘、左缘裁剪（向右滑出观感），不挤压 */
 .sidebar-right {
   position: relative;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   flex: none;
-  background: var(--c3);
-  /* 三栏面板无圆角无边框，仅左侧 1px border-1 作视觉分割线（2026-07-23 线框定案）；
-     外层左右 0（通栏分割线横贯）/ 上下 8（2026-07-23 用户定），间距由各区块自身 padding 撑开 */
-  box-shadow: inset 1px 0 0 0 var(--border-1);
-  padding: var(--space-8) 0;
   min-height: 0;
+  overflow: hidden;
+  background: var(--c3);
 }
-/* 悬浮滚动条：4px 胶囊 border-1、距右 4px、不占布局 */
-.side-thumb {
-  position: absolute;
-  right: 4px;
-  width: 4px;
-  border-radius: 2px;
-  /* 常态 font-icon-5（选中色）/ hover border-1；可拖拽（z-index 101 盖过窗口边缘
-     resize 热区 100，防事件穿透误触拉伸，2026-07-23 用户定） */
-  background: var(--font-icon-5);
-  z-index: 101;
-  transition: background 0.12s ease;
-}
-.side-thumb:hover {
-  background: var(--border-1);
-}
-/* 标题栏：内边距 8 16 8 16（2026-07-23 用户定，与区块 16 对齐） */
+/* 标题栏（figma 11986）：46（含边框，box-sizing——与中间标签栏行对齐）/ 下边框 暗-悬停 /
+   padding 8 12——窗口控制组由 App.vue 右上角浮块呈现（收展不联动），本行仅作窗口拖拽区。
+   注意：标题栏行无左边框（figma 分隔线从内容区起，2026-08-08 走查修正） */
 .bar-title {
+  width: var(--sb-w); /* 定宽：aside 收窄时裁剪不挤压 */
+  height: 46px;
+  box-sizing: border-box;
+  flex: none;
+  border-bottom: 1px solid var(--line-hover);
+}
+/* 工具栏（figma 12263）：54（含边框）/ padding 12 16 / 间距 4 / 下边框 + 左边框 暗-悬停 */
+.panel-toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-8) var(--space-16);
+  width: var(--sb-w);
+  height: 54px;
+  box-sizing: border-box;
+  padding: var(--space-12) var(--space-16);
+  flex: none;
+  border-bottom: 1px solid var(--line-hover);
+  border-left: 1px solid var(--line-hover);
 }
-.spacer {
+/* 详情内容区（figma 12239 左边框 暗-悬停 = 与中间面板分隔线） */
+.side-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 1;
+  width: var(--sb-w);
+  min-height: 0;
+  border-left: 1px solid var(--line-hover);
 }
-/* 原生条由 base.css 全局隐藏，滚动条为悬浮 side-thumb（不占位） */
-.view-body {
+.detail-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
 }
-.ai-placeholder {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-8);
-  color: var(--font-icon-1);
+/* 悬浮滚轮条（2026-08-10 用户定二轮：6px 胶囊紧贴面板右边框 / 实色 常态 C4、悬停 C5——
+   透明色在通栏分割线上交叉叠加、4px 间距让分隔线视觉截断，均作废）；
+   悬停显隐：默认透明不接收事件，visible（悬停面板 / 拖拽中）淡入 */
+.side-thumb {
+  position: absolute;
+  right: 0;
+  width: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--c4);
+  z-index: 101;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.15s ease,
+    background 0.12s ease;
 }
-.ai-placeholder p {
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
+.side-thumb.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
-/* 视图切换：内边距 4 16 8 16（2026-07-23 用户定） */
-.bar-footer {
-  padding: var(--space-4) var(--space-16) var(--space-8) var(--space-16);
+.side-thumb:hover {
+  background: var(--c5);
 }
 </style>

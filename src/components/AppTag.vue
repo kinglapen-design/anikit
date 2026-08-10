@@ -10,7 +10,7 @@ defineEmits<{ remove: [] }>();
 <template>
   <span class="app-tag">
     <span class="label">{{ label }}</span>
-    <button class="remove" title="删除" @click.stop="$emit('remove')">
+    <button class="remove" v-tip="'删除'" @click.stop="$emit('remove')">
       <AppIcon name="clear" :size="12" />
     </button>
   </span>

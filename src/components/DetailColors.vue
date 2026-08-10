@@ -68,7 +68,7 @@ const colors = ["#3A6EA5", "#2B9FD9", "#7A5C3E", "#A53E3E", "#3E8A57", "#6B4F8A"
   left: 4px;
   padding: 0 var(--space-4);
   border-radius: var(--radius-4);
-  background: var(--fmt-psd);
+  background: var(--custom-blue);
   font-size: var(--text-badge-size);
   line-height: var(--text-badge-line);
   font-weight: var(--text-badge-weight);

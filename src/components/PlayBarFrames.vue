@@ -40,8 +40,8 @@ function onSeekUp(e: PointerEvent): void {
   <!-- 动图未解包兜底态（5.2 改版）：隐藏播放/进度/倍率，笔记与设封面禁用（无帧概念，后端会报错） -->
   <div v-if="preview.unpacking" class="play-bar">
     <span class="hint">解析中…</span>
-    <IconButton name="annotate" title="笔记" disabled />
-    <IconButton name="set-as-thumb" title="当前画面设为预览图" disabled />
+    <IconButton name="add-note" title="笔记" disabled />
+    <IconButton name="set-thumbnail" title="当前画面设为预览图" disabled />
     <IconButton
       name="fullscreen"
       :title="preview.fullscreen ? '退出全屏' : '全屏'"
@@ -73,8 +73,8 @@ function onSeekUp(e: PointerEvent): void {
       />
     </div>
     <RateControl :rate="preview.rate" @select="preview.setRate" />
-    <IconButton name="annotate" title="笔记" :active="notes.open" @click="notes.toggle()" />
-    <IconButton name="set-as-thumb" title="当前画面设为预览图" @click="preview.setAsThumb()" />
+    <IconButton name="add-note" title="笔记" :active="notes.open" @click="notes.toggle()" />
+    <IconButton name="set-thumbnail" title="当前画面设为预览图" @click="preview.setAsThumb()" />
     <IconButton
       name="fullscreen"
       :title="preview.fullscreen ? '退出全屏' : '全屏'"

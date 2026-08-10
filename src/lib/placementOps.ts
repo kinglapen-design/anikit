@@ -32,7 +32,7 @@ async function runOp(action: () => Promise<void>, label: () => string): Promise<
     });
     return true;
   } catch (e) {
-    toast.notify({ message: String(e), icon: "info" });
+    toast.notify({ message: String(e), icon: "fail" });
     return false;
   }
 }
@@ -132,7 +132,7 @@ export async function deletePlacements(items: PlacementRef[]): Promise<void> {
     await invoke("delete_placements", { items, lastAction: "recycle" });
     await runOp(async () => {}, () => `删除 ${items.length} 个项目`);
   } catch (e) {
-    toast.notify({ message: String(e), icon: "info" });
+    toast.notify({ message: String(e), icon: "fail" });
   }
 }
 
@@ -188,7 +188,7 @@ export async function deleteRecycle(assetIds: string[]): Promise<void> {
     }
     await runHardDelete(() => `彻底删除 ${r.deleted} 个项目`);
   } catch (e) {
-    toast.notify({ message: String(e), icon: "info" });
+    toast.notify({ message: String(e), icon: "fail" });
   }
 }
 
@@ -204,7 +204,7 @@ export async function clearRecycle(): Promise<void> {
     }
     await runHardDelete(() => `清空回收站（${r.deleted} 个项目）`);
   } catch (e) {
-    toast.notify({ message: String(e), icon: "info" });
+    toast.notify({ message: String(e), icon: "fail" });
   }
 }
 
@@ -227,7 +227,7 @@ export async function confirmRecycleDelete(): Promise<void> {
       prompt.kind === "delete" ? `彻底删除 ${r.deleted} 个项目` : `清空回收站（${r.deleted} 个项目）`,
     );
   } catch (e) {
-    toast.notify({ message: String(e), icon: "info" });
+    toast.notify({ message: String(e), icon: "fail" });
   }
 }
 
@@ -249,7 +249,7 @@ export async function createFolder(
     toast.notify({ message: "已新建文件夹", actionLabel: "撤销", onAction: () => void undo.undo() });
     return folder.id;
   } catch (e) {
-    toast.notify({ message: String(e), icon: "info" });
+    toast.notify({ message: String(e), icon: "fail" });
     return null;
   }
 }
@@ -265,7 +265,7 @@ export function copySelection(action: "copy" | "cut"): void {
   selection.clipboard = { items, action };
   useToastStore().notify({
     message: `已${action === "copy" ? "复制" : "剪切"} ${items.length} 个项目`,
-    icon: "info",
+    icon: "fail",
     duration: 3000,
   });
 }
@@ -274,7 +274,7 @@ export function copySelection(action: "copy" | "cut"): void {
 function pasteTarget(): string | null {
   const content = useContentStore();
   if (!content.sidebarSelected.startsWith("folder:")) {
-    useToastStore().notify({ message: "快速访问视图不支持粘贴", icon: "info" });
+    useToastStore().notify({ message: "快速访问视图不支持粘贴", icon: "fail" });
     return null;
   }
   return content.currentFolderId;
@@ -313,7 +313,7 @@ export async function openWithDialog(assetId: string): Promise<void> {
   try {
     await invoke("open_with_dialog", { assetId });
   } catch (e) {
-    useToastStore().notify({ message: String(e), icon: "info" });
+    useToastStore().notify({ message: String(e), icon: "fail" });
   }
 }
 
@@ -322,7 +322,7 @@ export async function revealInExplorer(assetId: string): Promise<void> {
   try {
     await invoke("reveal_in_explorer", { assetId });
   } catch (e) {
-    useToastStore().notify({ message: String(e), icon: "info" });
+    useToastStore().notify({ message: String(e), icon: "fail" });
   }
 }
 
@@ -335,7 +335,7 @@ async function runThumbOp(action: () => Promise<unknown>, okMessage: string): Pr
     await content.refresh();
     toast.notify({ message: okMessage, icon: "success" });
   } catch (e) {
-    toast.notify({ message: String(e), icon: "info" });
+    toast.notify({ message: String(e), icon: "fail" });
   }
 }
 
@@ -359,9 +359,9 @@ export async function exportAssets(assetIds: string[], targetDir: string): Promi
   const toast = useToastStore();
   try {
     const n = await invoke<number>("export_assets", { assetIds, targetDir });
-    toast.notify({ message: `已导出 ${n} 个文件`, icon: "success" });
+    toast.notify({ message: `已导出 ${n} 个文件`, icon: "success", sound: true });
   } catch (e) {
-    toast.notify({ message: String(e), icon: "info" });
+    toast.notify({ message: String(e), icon: "fail" });
   }
 }
 
@@ -369,9 +369,9 @@ export async function exportFolder(folderId: string, targetDir: string): Promise
   const toast = useToastStore();
   try {
     const n = await invoke<number>("export_folder", { folderId, targetDir });
-    toast.notify({ message: `已导出 ${n} 个文件`, icon: "success" });
+    toast.notify({ message: `已导出 ${n} 个文件`, icon: "success", sound: true });
   } catch (e) {
-    toast.notify({ message: String(e), icon: "info" });
+    toast.notify({ message: String(e), icon: "fail" });
   }
 }
 
@@ -387,7 +387,7 @@ export async function deleteAssetsPermanently(
     await runHardDelete(() => `彻底删除 ${r.deleted} 个项目`);
     return null;
   } catch (e) {
-    useToastStore().notify({ message: String(e), icon: "info" });
+    useToastStore().notify({ message: String(e), icon: "fail" });
     return null;
   }
 }
@@ -420,7 +420,7 @@ export async function deleteFolderPermanently(folderId: string, confirmed: boole
     await runHardDelete(() => `彻底删除文件夹（${r.deleted} 个素材）`);
     return null;
   } catch (e) {
-    useToastStore().notify({ message: String(e), icon: "info" });
+    useToastStore().notify({ message: String(e), icon: "fail" });
     return null;
   }
 }
@@ -430,7 +430,7 @@ export async function getAssetBase64(assetId: string): Promise<string | null> {
   try {
     return await invoke<string>("get_asset_base64", { assetId });
   } catch (e) {
-    useToastStore().notify({ message: String(e), icon: "info" });
+    useToastStore().notify({ message: String(e), icon: "fail" });
     return null;
   }
 }
@@ -440,7 +440,7 @@ export async function getAssetOriginPath(assetId: string): Promise<string | null
   try {
     return await invoke<string>("get_asset_origin_path", { assetId });
   } catch (e) {
-    useToastStore().notify({ message: String(e), icon: "info" });
+    useToastStore().notify({ message: String(e), icon: "fail" });
     return null;
   }
 }

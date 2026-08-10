@@ -202,13 +202,14 @@ const entries = computed(() => content.inboxDisk);
 </template>
 
 <style scoped>
-/* 区块容器：与文件夹区块同口径（间距 8 / 右 20 对齐网格预留） */
+/* 区块容器：与文件夹区块同口径（figma 42：padding 0 由 asset-section 承担边距 / 标题↔卡片 gap 12；
+   右 16 对齐网格 PAD.right，不与贴边滚动条重叠） */
 .disk-block {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-8) var(--space-20) var(--space-8) 0;
+  gap: var(--space-12);
+  padding-right: var(--space-16);
 }
 /* 固定提醒与操作错误：副文本档（font-icon-3 / caption），错误用语义色 --error */
 .notice {
@@ -251,10 +252,10 @@ const entries = computed(() => content.inboxDisk);
   transition: box-shadow 0.12s ease;
 }
 .disk-card:hover .icon-wrap {
-  box-shadow: inset 0 0 0 2px var(--border-1);
+  box-shadow: inset 0 0 0 1.5px var(--border-1);
 }
 .disk-card.selected .icon-wrap {
-  box-shadow: inset 0 0 0 2px var(--brand-1);
+  box-shadow: inset 0 0 0 1.5px var(--brand-border);
 }
 .folder-icon {
   color: var(--font-icon-3);

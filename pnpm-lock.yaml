@@ -11,6 +11,12 @@ importers:
       '@tauri-apps/plugin-dialog':
         specifier: ^2.7.2
         version: 2.7.2
+      dockview-core:
+        specifier: ^7.0.4
+        version: 7.0.4
+      dockview-vue:
+        specifier: ^7.0.4
+        version: 7.0.4(vue@3.5.40(typescript@7.0.2))
       pinia:
         specifier: ^4.0.2
         version: 4.0.2(@vue/devtools-api@8.1.5)(typescript@7.0.2)(vue@3.5.40(typescript@7.0.2))
@@ -429,6 +435,17 @@ packages:
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  dockview-core@7.0.4:
+    resolution: {integrity: sha512-AiIzD6ov153L/VuhqVBg5KD5oSAgJGH7L1xvzV/X+ghIEOTFfEQYEBGNd/ys+ZjQfdGRogHSeQ0v9JF/L6JrPg==}
+
+  dockview-vue@7.0.4:
+    resolution: {integrity: sha512-KbO0ojwst/cfPAHE1ioD5vGfC0h+GF/ubixQ/9fb5OAUMLddK15mtKwMPethhokuh7CXWJ6LnTo5cpwHKWM2Ig==}
+    peerDependencies:
+      vue: ^3.4.0
+
+  dockview@7.0.4:
+    resolution: {integrity: sha512-n6n9WpYZgp/WY8SgvP4hr9qh01ZXhSGIRmlhoJXxRU3f34bwxCbFyOhBArV4W8quolX8OQe1yPfAUwUUjdnZPA==}
 
   entities@7.0.1:
     resolution: {integrity: sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==}
@@ -924,6 +941,17 @@ snapshots:
   csstype@3.2.3: {}
 
   detect-libc@2.1.2: {}
+
+  dockview-core@7.0.4: {}
+
+  dockview-vue@7.0.4(vue@3.5.40(typescript@7.0.2)):
+    dependencies:
+      dockview: 7.0.4
+      vue: 3.5.40(typescript@7.0.2)
+
+  dockview@7.0.4:
+    dependencies:
+      dockview-core: 7.0.4
 
   entities@7.0.1: {}
 

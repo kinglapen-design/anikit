@@ -1,11 +1,14 @@
 // 操作通知条（6.0 地基，样式参照 Eagle 通知条截图）：中间面板工具栏下方浮层（不挡工具栏），
 // 成功反馈 + 可选动作按钮（撤销 / 重做），到时自动消失；多条竖向堆叠。
+// 2026-08-10：失败类带 fail 圆形图标（info 类型废除——原 info 调用全是失败 / 拦截语义）；
+// 成功 / 失败通知配提示音（lib/sounds）。
 import { defineStore } from "pinia";
+import { playFail, playSuccess } from "../lib/sounds";
 
 export interface ToastItem {
   id: number;
   message: string;
-  icon: "success" | "info"; // success = --success 绿圆底白勾；info 无图标（纯文字反馈）
+  icon: "success" | "fail"; // success = 成功绿圆勾 / fail = 失败圆叉（24px 通知圆形图标）
   actionLabel?: string; // 动作按钮文字（如 "撤销" / "重做"）；无则不显示按钮
   onAction?: () => void; // 点动作按钮执行（执行后通知关闭）
   duration: number; // 自动消失时长（ms）
@@ -24,20 +27,27 @@ export const useToastStore = defineStore("toast", {
   actions: {
     notify(opts: {
       message: string;
-      icon?: "success" | "info";
+      icon?: "success" | "fail";
       actionLabel?: string;
       onAction?: () => void;
       duration?: number;
+      // 成功音只配重要场合（2026-08-10 用户定：导入 / 导出等批量成果类，基础操作不响了）；
+      // 失败音恒播。调用方重要场合显式传 sound: true
+      sound?: boolean;
     }): number {
       const id = nextId++;
+      const icon = opts.icon ?? "success";
       this.items.push({
         id,
         message: opts.message,
-        icon: opts.icon ?? "success",
+        icon,
         actionLabel: opts.actionLabel,
         onAction: opts.onAction,
         duration: opts.duration ?? DEFAULT_DURATION,
       });
+      // 提示音（2026-08-10）：失败恒播；成功仅 sound: true 的重要场合
+      if (icon === "fail") playFail();
+      else if (opts.sound === true) playSuccess();
       timers.set(
         id,
         setTimeout(() => this.close(id), opts.duration ?? DEFAULT_DURATION),

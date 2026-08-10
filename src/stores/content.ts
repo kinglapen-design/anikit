@@ -3,7 +3,9 @@ import { defineStore } from "pinia";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isStaticImageExt } from "../lib/formatBadge";
+import { playFail, playSuccess } from "../lib/sounds";
 import { useSelectionStore } from "./selection";
+import { useUiStore } from "./ui";
 import type { RecentAssetView, RecycleEntryView } from "./quickViews";
 
 // 与后端 commands/import.rs 输出一一对应（camelCase，07_接口文档）
@@ -137,6 +139,17 @@ let unlistenRecent: (() => void) | undefined;
 const scrollPositions = new Map<string, number>();
 
 // 递归查文件夹节点（stripFolders / 标题栏 crumbs 共用）
+// 快速访问视口文案（1.2 多标签页：标签页标题 / 面包屑 / 本 store 视口计算共用）
+// inbox = PRD 02-15"自动导入"（收件箱渠道候车区，2026-08-08 对齐新稿命名）
+export const QUICK_LABELS: Record<string, string> = {
+  all: "全部",
+  uncategorized: "未分类",
+  inbox: "自动导入",
+  recent: "最近使用",
+  thumbnail: "缩略图", // hidden 资产业务 5.x 接（PRD 02-15），当前空视图
+  recycle: "回收站",
+};
+
 function findFolder(nodes: FolderNode[], id: string): FolderNode | null {
   for (const n of nodes) {
     if (n.id === id) return n;
@@ -192,28 +205,56 @@ export const useContentStore = defineStore("content", {
     selectedAssetKey(): string {
       return useSelectionStore().first;
     },
-    // 当前视口的资源列表（"最近使用 / 回收站"已接真实视图，6.1 二轮：元素为 PlacementView 超集，AssetGrid 零改动复用）
+    // 按视口 key 计算资源列表（1.2 多标签页：每个标签页各自视口，原 visiblePlacements 逻辑参数化；
+    // "最近使用 / 回收站"已接真实视图，6.1 二轮：元素为 PlacementView 超集，AssetGrid 零改动复用）
+    placementsFor(state) {
+      return (viewKey: string): PlacementView[] => {
+        if (viewKey.startsWith("folder:")) {
+          const id = viewKey.slice(7);
+          // 递归显示（ui.showSubfolders，2026-08-10 接入）：开 = 视口含全部后代文件夹的 Placement；
+          // 关 = 仅当前文件夹直接 Placement
+          if (!useUiStore().showSubfolders) return state.placements.filter((p) => p.folderId === id);
+          const ids = new Set<string>();
+          const collect = (n: FolderNode): void => {
+            ids.add(n.id);
+            n.children.forEach(collect);
+          };
+          const root = findFolder(state.folders, id);
+          if (root) collect(root);
+          else ids.add(id); // 失效 viewKey（文件夹已删）：退化为直接匹配
+          return state.placements.filter((p) => ids.has(p.folderId));
+        }
+        switch (viewKey) {
+          case "quick:all": // 全部 = 递归显示所有文件（2026-07-22 用户定案）
+            return state.placements;
+          case "quick:uncategorized": // 未分类 = 未归入任何文件夹（root 即未分类；收件箱新件也在此列）
+            return state.placements.filter((p) => p.folderId === "root");
+          case "quick:inbox": // 收件箱"已导入" = importedFrom=inbox 且未摘标的资产，持久显示
+            // （2026-07-25 用户定：用户没分类走就要一直在）。不限 folderId=root——手动导入 Keep
+            // 生成的层级也算未分类；摘标 = 清 importedFrom（归 6.3），清后自然消失
+            return state.placements.filter((p) => p.importedFrom === "inbox");
+          case "quick:recent": // 最近使用（后端已按时间倒序）
+            return state.recentAssets;
+          case "quick:recycle": // 回收站（folderId 恒 "recycle"，key 与素材域互不干扰）
+            return state.recycleEntries;
+          default:
+            return [];
+        }
+      };
+    },
+    // 当前视口的资源列表（激活标签页视口；操作上下文统一走这个——交互发生时所在 panel 必为激活）
     visiblePlacements(state): PlacementView[] {
-      if (state.sidebarSelected.startsWith("folder:")) {
-        const id = state.sidebarSelected.slice(7);
-        return state.placements.filter((p) => p.folderId === id);
-      }
-      switch (state.sidebarSelected) {
-        case "quick:all": // 全部 = 递归显示所有文件（2026-07-22 用户定案）
-          return state.placements;
-        case "quick:uncategorized": // 未分类 = 未归入任何文件夹（root 即未分类；收件箱新件也在此列）
-          return state.placements.filter((p) => p.folderId === "root");
-        case "quick:inbox": // 收件箱"已导入" = importedFrom=inbox 且未摘标的资产，持久显示
-          // （2026-07-25 用户定：用户没分类走就要一直在）。不限 folderId=root——手动导入 Keep
-          // 生成的层级也算未分类；摘标 = 清 importedFrom（归 6.3），清后自然消失
-          return state.placements.filter((p) => p.importedFrom === "inbox");
-        case "quick:recent": // 最近使用（后端已按时间倒序）
-          return state.recentAssets;
-        case "quick:recycle": // 回收站（folderId 恒 "recycle"，key 与素材域互不干扰）
-          return state.recycleEntries;
-        default:
-          return [];
-      }
+      return this.placementsFor(state.sidebarSelected);
+    },
+    // 视口标题（1.2 多标签页：标签页标题 / 面包屑共用）：folder → 实时文件夹名（重命名跟随）；
+    // quick 五项 → 固定文案；工作空间/标签等占位视图 → "全部"兜底（调用方可另传 fallback）
+    viewTitle(state) {
+      return (viewKey: string): string => {
+        if (viewKey.startsWith("folder:")) {
+          return findFolder(state.folders, viewKey.slice(7))?.name ?? "文件夹";
+        }
+        return QUICK_LABELS[viewKey.slice(6)] ?? "全部";
+      };
     },
     // 回收站视口判定（6.1 二轮，2026-07-29）：只读语义统一判断点——禁拖拽 / 禁重命名 / Del 分流彻底删除
     isRecycleView(state): boolean {
@@ -228,12 +269,19 @@ export const useContentStore = defineStore("content", {
       return state.placements.filter((p) => p.importedFrom === "inbox").length;
     },
     // 文件夹卡片横排（03_中间面板）：仅文件夹视图显示直接子文件夹；
-    // 快速访问视图一律不出文件夹区块（2026-07-22 用户定案；回收站保留文件夹随对应阶段另议）
+    // 快速访问视图一律不出文件夹区块（2026-07-22 用户定案；回收站保留文件夹随对应阶段另议）。
+    // 1.2 多标签页：按视口 key 参数化（每个标签页各自视口）
+    stripFoldersFor(state) {
+      return (viewKey: string): FolderNode[] => {
+        if (viewKey.startsWith("folder:")) {
+          return findFolder(state.folders, viewKey.slice(7))?.children ?? [];
+        }
+        return [];
+      };
+    },
+    // 激活视口的子文件夹（操作/显示上下文跟随激活标签页）
     stripFolders(state): FolderNode[] {
-      if (state.sidebarSelected.startsWith("folder:")) {
-        return findFolder(state.folders, state.sidebarSelected.slice(7))?.children ?? [];
-      }
-      return [];
+      return this.stripFoldersFor(state.sidebarSelected);
     },
     // 文件夹卡片缩略图（4.4）：每个文件夹的直接子项中，按 placements 顺序取第一个静态图片；
     // 排除序列帧/动图（frameCount）与 GIF/工程/矢量格式，右键自定义缩略图归 6.3
@@ -492,6 +540,9 @@ export const useContentStore = defineStore("content", {
           if (e.failed.length > 0) this.importFailed = e.failed;
           // 冲突挂起队列：导入全部完成后逐个询问（10_重复添加提示）
           if (e.conflicts.length > 0) this.importConflicts = e.conflicts;
+          // 导入完成提示音（2026-08-10 用户定：重要场合——干净完成成功音 / 有失败失败音）
+          if (e.failed.length > 0) playFail();
+          else playSuccess();
           void this.refresh(); // 兜底全量对齐（链接 / 层级 / 目标文件夹段首以最终态为准）
           break;
       }

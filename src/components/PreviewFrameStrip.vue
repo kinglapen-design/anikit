@@ -109,7 +109,7 @@ watch(
   width: auto;
 }
 .frame.active {
-  border: 2px solid var(--brand-1);
+  border: 1.5px solid var(--brand-border);
 }
 /* 帧条小图后台生成中的占位（方形 C4，就绪后按图比例替换，2026-07-25） */
 .strip-pending {

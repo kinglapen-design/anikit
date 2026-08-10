@@ -2,7 +2,10 @@
 // 视口空白处按住左键拖出矩形，实时把命中集写入 selection store；
 // 无修饰 = 替换选择，Ctrl / Shift = 在起点选择上追加；未过 4px 阈值松开 = 点击空白 = 清空选择。
 // 命中判定由调用方注入（viewport 坐标矩形 → 命中 key 清单），本模块只管手势与选择合并。
-import { ref, type Ref } from "vue";
+// 兜底（2026-08-10 用户实测 BUG）：系统截图工具 / Win11 屏幕边缘 snap 预览直接抢走指针，
+// pointerup / pointercancel 双双丢失 → 框选矩形永久残留；lostpointercapture（capture 被系统
+// 剥夺的对症事件）+ window blur 两道兜底强制取消。
+import { onBeforeUnmount, onMounted, ref, type Ref } from "vue";
 import { useSelectionStore } from "../stores/selection";
 
 export interface MarqueeRect {
@@ -62,6 +65,7 @@ export function useMarquee(opts: {
   let active = false;
   let additive = false;
   let base = new Set<string>(); // 追加模式的起点选中集（拖动期间并集运算）
+  let capturedId: number | null = null; // 当前 capture 的 pointerId（兜底取消用）
 
   function vpPoint(e: PointerEvent): { x: number; y: number } {
     const r = opts.viewport.value!.getBoundingClientRect();
@@ -79,6 +83,7 @@ export function useMarquee(opts: {
     active = false;
     additive = e.ctrlKey || e.metaKey || e.shiftKey;
     base = new Set(selection.selected);
+    capturedId = e.pointerId;
     opts.viewport.value!.setPointerCapture(e.pointerId);
   }
 
@@ -105,6 +110,7 @@ export function useMarquee(opts: {
     const vp = opts.viewport.value;
     if (!vp?.hasPointerCapture(e.pointerId)) return;
     vp.releasePointerCapture(e.pointerId);
+    capturedId = null;
     if (active) {
       marquee.value = null;
       active = false;
@@ -112,6 +118,29 @@ export function useMarquee(opts: {
       selection.clear(); // 未过阈值 = 点击空白 = 清空选择（2026-07-28 用户定）
     }
   }
+
+  // 强制取消（不依赖 pointer 事件送达）：capture 被系统剥夺（lostpointercapture）或
+  // 窗口失焦（截图工具抢焦点）时调用；手势已不可能继续，直接清矩形不碰选择集
+  function forceCancel(): void {
+    if (capturedId != null && opts.viewport.value?.hasPointerCapture(capturedId)) {
+      opts.viewport.value.releasePointerCapture(capturedId);
+    }
+    capturedId = null;
+    if (active) {
+      marquee.value = null;
+      active = false;
+    }
+  }
+
+  onMounted(() => {
+    // lostpointercapture 挂在 viewport（capture 宿主），blur 挂在 window（截图工具抢焦点）
+    opts.viewport.value?.addEventListener("lostpointercapture", forceCancel);
+    window.addEventListener("blur", forceCancel);
+  });
+  onBeforeUnmount(() => {
+    opts.viewport.value?.removeEventListener("lostpointercapture", forceCancel);
+    window.removeEventListener("blur", forceCancel);
+  });
 
   return {
     marquee,

@@ -5,6 +5,8 @@ import App from "./App.vue";
 import { vTip } from "./lib/tip";
 import "./styles/tokens.css";
 import "./styles/base.css";
+import "dockview-core/dist/styles/dockview.css";
+import "./styles/dockview-theme.css";
 
 const app = createApp(App);
 app.use(createPinia());

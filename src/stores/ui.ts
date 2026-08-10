@@ -26,24 +26,30 @@ const PERSIST_KEYS = [
   "showExtBadge",
   "showSubfolders",
   "timeDisplay",
+  "tabLayout",
 ] as const;
 
 // 变更防抖写回（500ms；模块级单例防重复订阅）
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
 let subscribed = false;
+// 加载幂等（2026-08-08：tabs 布局恢复需 await 设置就绪——DockHost onReady 可能早于
+// App.vue onMounted 的 initSettings 完成，同一 promise 保证只加载一次且可等待）
+let settingsPromise: Promise<void> | null = null;
 
 export const useUiStore = defineStore("ui", {
   state: () => ({
     leftView: "library" as LeftView,
     rightView: "detail" as RightView,
-    leftWidth: 260,
-    rightWidth: 260,
+    leftWidth: 304, // 1.2 新稿：54 导航栏 + 250 内容区
+    rightWidth: 250,
     leftCollapsed: false,
     rightCollapsed: false,
     alwaysOnTop: false,
     // 内容区滑块：自适应布局目标行高（min 80，max = gridWidth 即单张撑满）
     targetRowHeight: 220,
     gridWidth: 800,
+    // 递归显示（PRD 04-1 显示子文件夹内容）：文件夹视口含全部后代文件夹内容（2026-08-10 接入
+    // placementsFor；文件夹区块标题"递归显示"复选框与查看方式菜单开关同绑本字段）
     showSubfolders: true,
     // 查看方式（阶段 1：布局生效，排序 / 分组占位）
     layoutMode: "justified" as "justified" | "waterfall" | "grid" | "list",
@@ -65,11 +71,22 @@ export const useUiStore = defineStore("ui", {
     // allAsc/allDesc = 全部层级按标题
     treeSort: "custom" as "custom" | "levelAsc" | "levelDesc" | "allAsc" | "allDesc",
     treeSortAnchor: null as string | null,
+    // 侧栏收展动画进行中标志（会话级，不持久化）：AssetGrid 在此期间逐帧实时重排（reflow，
+    // 2026-08-08 收展定案 v3）
+    sidebarAnimating: false,
+    // 多标签页布局（1.2）：dockview toJSON 快照，tabs store 防抖写入 / 启动 fromJSON 恢复；
+    // null = 无布局（首启默认单标签页）。typeof null === "object"，PERSIST_KEYS 类型校验放行对象
+    tabLayout: null as object | null,
   }),
   actions: {
     // 启动加载全局 UI 设置并订阅变更防抖写回（多预览窗口各自独立 Pinia 各自加载，
-    // 不做跨窗口同步，2026-07-28 定）；读取失败 / 字段类型不符一律按默认值，不阻断启动
-    async initSettings(): Promise<void> {
+    // 不做跨窗口同步，2026-07-28 定）；读取失败 / 字段类型不符一律按默认值，不阻断启动。
+    // 幂等可等待：重复调用返回同一 promise（tabs 布局恢复等依赖方 await 同一份就绪）
+    initSettings(): Promise<void> {
+      settingsPromise ??= this.loadSettings();
+      return settingsPromise;
+    },
+    async loadSettings(): Promise<void> {
       try {
         const saved = await invoke<Record<string, unknown>>("get_ui_settings");
         const state = this.$state as unknown as Record<string, unknown>;

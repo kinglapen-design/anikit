@@ -46,7 +46,7 @@ export const useUndoStore = defineStore("undo", {
           onAction: () => void this.redo(),
         });
       } catch (e) {
-        toast.notify({ message: String(e), icon: "info" });
+        toast.notify({ message: String(e), icon: "fail" });
       }
     },
     async redo(): Promise<void> {
@@ -61,7 +61,7 @@ export const useUndoStore = defineStore("undo", {
           onAction: () => void this.undo(),
         });
       } catch (e) {
-        toast.notify({ message: String(e), icon: "info" });
+        toast.notify({ message: String(e), icon: "fail" });
       }
     },
   },

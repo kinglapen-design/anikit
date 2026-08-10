@@ -47,7 +47,7 @@ function onUp(e: PointerEvent): void {
 
 <style scoped>
 /* 三栏贴边（间距 0）：拆分条负 margin 重叠在 1px 分割线上、不占布局；
-   悬停 / 拖拽时 2px 品牌色-1 高亮（token 线框） */
+   悬停 / 拖拽时 2px 品牌色-边框线高亮（token：拆分条悬停） */
 .split-bar {
   width: 4px;
   margin: 0 -2px;
@@ -65,6 +65,6 @@ function onUp(e: PointerEvent): void {
 }
 .split-bar:hover .line,
 .split-bar.dragging .line {
-  background: var(--brand-1);
+  background: var(--brand-border);
 }
 </style>

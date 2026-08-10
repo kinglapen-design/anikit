@@ -9,6 +9,8 @@ export function useVirtualScroll(onUpdate: (pos: number) => void) {
   const thumbHeight = ref(30);
   // 有可滚内容才显示滚动条（用户验收：无需滚动时轨道要隐藏）
   const scrollable = ref(false);
+  // thumb 拖拽中为 true——滚动条悬停显隐（2026-08-10）的拖拽锁，拖出面板不消失
+  const dragging = ref(false);
   let viewport: HTMLElement | null = null;
   let total = 0;
 
@@ -73,6 +75,7 @@ export function useVirtualScroll(onUpdate: (pos: number) => void) {
     const onThumbDown = (e: PointerEvent) => {
       dragY = e.clientY;
       dragPos = pos.value;
+      dragging.value = true;
       thumb.setPointerCapture(e.pointerId);
       e.preventDefault();
       e.stopPropagation();
@@ -84,6 +87,7 @@ export function useVirtualScroll(onUpdate: (pos: number) => void) {
       scrollTo(dragPos + ((e.clientY - dragY) / trackH) * (total - viewH()));
     };
     const onThumbUp = (e: PointerEvent) => {
+      dragging.value = false;
       if (thumb.hasPointerCapture(e.pointerId)) thumb.releasePointerCapture(e.pointerId);
     };
     const onTrackDown = (e: PointerEvent) => {
@@ -113,5 +117,5 @@ export function useVirtualScroll(onUpdate: (pos: number) => void) {
     viewport = null;
   }
 
-  return { pos, thumbTop, thumbHeight, scrollable, scrollTo, setTotal, attach, detach };
+  return { pos, thumbTop, thumbHeight, scrollable, dragging, scrollTo, setTotal, attach, detach };
 }

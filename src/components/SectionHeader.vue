@@ -24,16 +24,18 @@ const emit = defineEmits<{ add: []; menu: [e: MouseEvent] }>();
   <div class="section-header" :class="{ grip, group }" :style="{ padding: pad }">
     <button class="fold-area" @click="open = !open">
       <span class="title">{{ title }}</span>
-      <span v-if="count !== undefined" class="count">({{ count.toLocaleString() }})</span>
+      <span v-if="count !== undefined" class="count">- {{ count.toLocaleString() }}</span>
       <span class="chev-slot">
         <AppIcon name="tree-expand-arrow" :size="12" class="chev" :class="{ closed: !open }" />
       </span>
     </button>
     <span class="spacer" />
-    <button v-if="group" class="group-menu-btn" title="分组菜单" @click.stop="emit('menu', $event)">
+    <!-- tail 插槽：标题行右侧自定义内容（figma 42 文件夹区块 = 递归显示复选框，2026-08-10） -->
+    <slot name="tail" />
+    <button v-if="group" class="group-menu-btn" v-tip="'分组菜单'" @click.stop="emit('menu', $event)">
       <AppIcon name="group-menu" :size="18" />
     </button>
-    <button v-else-if="addable" class="add-btn" title="添加" @click.stop="emit('add')">
+    <button v-else-if="addable" class="add-btn" v-tip="'添加'" @click.stop="emit('add')">
       <AppIcon name="add-small" :size="12" />
     </button>
   </div>

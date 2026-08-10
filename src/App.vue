@@ -8,8 +8,10 @@ import { getCurrentWindow, type ResizeDirection } from "@tauri-apps/api/window";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import SidebarLeft from "./components/SidebarLeft.vue";
 import SidebarRight from "./components/SidebarRight.vue";
-import ContentArea from "./components/ContentArea.vue";
+import DockHost from "./components/DockHost.vue";
 import SplitBar from "./components/SplitBar.vue";
+import IconButton from "./components/IconButton.vue";
+import WindowControls from "./components/WindowControls.vue";
 import PreviewWindow from "./components/PreviewWindow.vue";
 import LibrarySetupModal from "./components/LibrarySetupModal.vue";
 import ImportDialog from "./components/ImportDialog.vue";
@@ -27,6 +29,7 @@ import { useContentStore } from "./stores/content";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
 import { useUndoStore } from "./stores/undo";
+import { useTabsStore } from "./stores/tabs";
 import { copySelection, deletePlacements, deleteRecycle, pasteClipboard, pasteDuplicate, recycleSelectedAssetIds } from "./lib/placementOps";
 
 const ui = useUiStore();
@@ -34,6 +37,66 @@ const content = useContentStore();
 const selection = useSelectionStore();
 const preview = usePreviewStore();
 const undo = useUndoStore();
+const tabs = useTabsStore();
+
+// 侧栏收展动画驱动（锚点模型 2026-08-08 定案 v6；同步机制 2026-08-10 走查修复改 RO）：
+// 收左栏 = 中间面板右缘钉死、向左拉宽；收右栏 = 左缘钉死、向右拉宽（flex 布局天然如此）。
+// 动画不用 CSS transition，同一 rAF 回调里 JS 逐帧写侧栏宽度。
+// dockview 尺寸同步是难点：其自身 ResizeObserver 回调被 requestAnimationFrame 包裹
+// （dockview-core dom.ts watchElementResize），且回调拿到的是触发时的旧尺寸——
+// 同帧 rAF 里 forceLayout 灌当前宽，也会被紧随其后执行的 dockview 陈旧回调覆盖回上一帧
+// （2026-08-10 CDP 逐帧实测：网格渲染宽恒等于 dock 宿主上一帧宽，滞后最多 ~75px——
+// 顶栏断开露 C1、中栏右缘被往左拽再回弹，同此根因）。
+// 故改用 ResizeObserver 驱动：RO 阶段在当帧全部 rAF 之后、绘制之前，此刻读到的就是
+// 当帧最终宽，forceLayout 同步写网格——每个绘制帧侧栏 / dock / 网格严格同宽，零滞后。
+const sidebarLeftRef = ref<InstanceType<typeof SidebarLeft>>();
+const sidebarRightRef = ref<InstanceType<typeof SidebarRight>>();
+const dockHostRef = ref<InstanceType<typeof DockHost>>();
+
+const SIDEBAR_ANIM_MS = 180;
+function easeInOut(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+}
+interface SideAnim {
+  el: HTMLElement;
+  from: number;
+  to: number;
+  start: number;
+}
+let sideAnims: SideAnim[] = [];
+let sideAnimRaf = 0;
+let dockResizeObs: ResizeObserver | undefined;
+
+function sidebarAnimFrame(now: number): void {
+  let active = false;
+  for (const a of sideAnims) {
+    const t = Math.min(1, (now - a.start) / SIDEBAR_ANIM_MS);
+    a.el.style.width = `${a.from + (a.to - a.from) * easeInOut(t)}px`;
+    if (t < 1) active = true;
+  }
+  // dockview 网格宽度由 dockResizeObs 在 RO 阶段同步（见文件头注释），此处不再灌宽
+  if (active) {
+    sideAnimRaf = requestAnimationFrame(sidebarAnimFrame);
+  } else {
+    sideAnims = [];
+    ui.sidebarAnimating = false;
+  }
+}
+
+function startSidebarAnim(el: HTMLElement | undefined, collapsed: boolean, fullWidth: number): void {
+  if (!el) return;
+  sideAnims = sideAnims.filter((a) => a.el !== el);
+  // 起点 = 当前视觉宽度（动画途中反向切换从此续接，不跳变）
+  sideAnims.push({
+    el,
+    from: el.getBoundingClientRect().width,
+    to: collapsed ? 0 : fullWidth,
+    start: performance.now(),
+  });
+  ui.sidebarAnimating = true;
+  cancelAnimationFrame(sideAnimRaf);
+  sideAnimRaf = requestAnimationFrame(sidebarAnimFrame);
+}
 const maximized = ref(false);
 const appWindow = getCurrentWindow();
 const webview = getCurrentWebviewWindow();
@@ -234,8 +297,30 @@ onMounted(() => {
   window.addEventListener("keydown", onUndoRedo);
   window.addEventListener("keydown", onSelectionKeys);
   window.addEventListener("keydown", onOperationKeys);
+  // dockview 逐帧同步（机制见文件头注释）：dock 宿主尺寸变化在 RO 阶段（当帧 rAF 之后、
+  // 绘制之前）以当前帧最终宽灌给网格；侧栏收展动画、窗口拖改尺寸统一走此路径
+  const dockEl = dockHostRef.value?.$el as HTMLElement | undefined;
+  if (dockEl) {
+    dockResizeObs = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (rect) tabs.forceLayout(rect.width, rect.height);
+    });
+    dockResizeObs.observe(dockEl);
+  }
   // 视图切换（6.1）：左栏选中项变化即清空素材选择
   watch(() => content.sidebarSelected, () => selection.clear());
+  // 侧栏收展：状态翻转后由 JS 逐帧驱动宽度（见上方驱动注释）
+  watch(
+    [() => ui.leftCollapsed, () => ui.rightCollapsed],
+    ([l, r], [pl, pr]) => {
+      if (l !== pl) {
+        startSidebarAnim(sidebarLeftRef.value?.$el as HTMLElement | undefined, l, ui.leftWidth);
+      }
+      if (r !== pr) {
+        startSidebarAnim(sidebarRightRef.value?.$el as HTMLElement | undefined, r, ui.rightWidth);
+      }
+    },
+  );
   void content.initInboxListener(); // 收件箱自动入库（3.2），App 存活期注册一次
   void content.initFpsHealListener(); // 存量视频 fps 自愈通知（2026-07-28 复验反馈修复）
   void content.initRecentListener(); // 最近使用热刷新（2026-07-29 复验反馈修复）
@@ -252,11 +337,27 @@ onMounted(() => {
   }).then((fn) => {
     unlistenDragDrop = fn;
   });
-  // 查询库状态失败按"未打开"处理，让用户能经模态重试（预览窗口不弹库模态，PreviewWindow 自行拉数据）
+  // 查询库状态：未打开时自动重开最近的库（2026-08-08 用户定：不再每次弹"创建/打开资源库"
+  // 选路径）；最近列表为空（首次使用）或重开失败（路径失效等）才弹模态。
+  // 预览窗口不弹库模态（PreviewWindow 自行拉数据）
   invoke<unknown>("get_current_library")
-    .then((lib) => {
-      needLibrarySetup.value = lib === null && !previewParam;
-      if (lib !== null) void content.refresh();
+    .then(async (lib) => {
+      if (lib !== null) {
+        void content.refresh();
+        return;
+      }
+      if (previewParam) return;
+      const recent = await invoke<{ path: string }[]>("list_recent_libraries").catch(() => []);
+      if (recent.length > 0) {
+        try {
+          await invoke("open_library", { path: recent[0].path });
+          await content.refresh();
+          return;
+        } catch (e) {
+          console.warn("最近库自动重开失败，转弹窗：", e);
+        }
+      }
+      needLibrarySetup.value = true;
     })
     .catch(() => {
       needLibrarySetup.value = true;
@@ -265,6 +366,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearTimeout(resizeTimer);
   clearTimeout(winStateTimer);
+  cancelAnimationFrame(sideAnimRaf);
+  dockResizeObs?.disconnect();
   window.removeEventListener("resize", onResize);
   window.removeEventListener("keydown", onPaste);
   window.removeEventListener("keydown", onUndoRedo);
@@ -292,19 +395,40 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
   e.preventDefault();
   void appWindow.startResizeDragging(dir);
 }
+
+// 窗口置顶（右上角浮块，2026-08-08 收展定案：窗口控制组恒在窗口右上角，不随侧栏收展换宿主）
+async function togglePin(): Promise<void> {
+  ui.alwaysOnTop = !ui.alwaysOnTop;
+  await appWindow.setAlwaysOnTop(ui.alwaysOnTop);
+}
 </script>
 
 <template>
   <div class="window" :class="{ maximized }">
     <PreviewWindow v-if="previewParam" :asset-key="previewParam" />
-    <!-- 预览子窗口的通知条挂点（6.0；主窗口挂在 ContentArea 内） -->
+    <!-- 预览子窗口的通知条挂点（6.0；主窗口挂在 DockHost 内） -->
     <ToastStack v-if="previewParam" />
     <template v-else>
-      <SidebarLeft />
+      <!-- 侧栏收展（2026-08-08 定案 v6 锚点；2026-08-10 同步改 RO）：侧栏常驻挂载，收展宽度由
+           App 层 rAF 驱动逐帧写入；dockview 网格由 dockResizeObs 在 RO 阶段以当帧最终宽同步
+           （其自身 RO 回调被 rAF 包裹且持旧尺寸，同帧灌宽会被覆盖回上一帧）。
+           锚点：收左栏 = 中间面板右缘钉死向左拉宽；收右栏反之。SplitBar 负 margin 零占位，
+           v-if 瞬时不影响布局。左栏展开按钮在标签页行首（SidebarExpandButton），
+           右栏"展开详情面板"在中间面板工具栏；窗口控制组为 App 层浮块（.win-controls-overlay），
+           恒在窗口右上角、不参与收展 -->
+      <SidebarLeft ref="sidebarLeftRef" />
       <SplitBar v-if="!ui.leftCollapsed" side="left" />
-      <ContentArea />
+      <DockHost ref="dockHostRef" />
       <SplitBar v-if="!ui.rightCollapsed" side="right" />
-      <SidebarRight />
+      <SidebarRight ref="sidebarRightRef" />
+      <div v-if="!previewParam" class="win-controls-overlay">
+        <IconButton
+          :name="ui.alwaysOnTop ? 'window-pin-off' : 'window-pin-on'"
+          title="窗口置顶"
+          @click="togglePin"
+        />
+        <WindowControls />
+      </div>
     </template>
     <template v-if="!maximized">
       <div
@@ -349,9 +473,9 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
 </template>
 
 <style scoped>
-/* 不透明窗口 + 原生装饰（DWM 阴影 / DWM 默认 1px 边框）：容器贴满窗口；
-   圆角 8 与 DWM 一致。主窗口不自绘外边框（2026-07-23 实测：自绘 2px 与 DWM 1px
-   重叠成 3px、四角圆角错开有空余，放弃——2px 外边框仅二级窗口 / 模态 / 菜单） */
+/* 不透明窗口 + 原生装饰（DWM 阴影）：容器贴满窗口；圆角 8 与 DWM 一致。
+   外框 = DWM 1px 边框染 亮-选中 实色（lib.rs DWMWA_BORDER_COLOR，2026-08-08 用户定；
+   前端不自绘——自绘与 DWM 叠加变粗难看，2026-07-23 实测） */
 .window {
   position: relative;
   height: 100%;
@@ -364,6 +488,19 @@ function startResize(dir: ResizeDirection, e: MouseEvent): void {
 }
 .window.maximized {
   border-radius: 0;
+}
+/* 窗口控制浮块（2026-08-08 定案）：恒在窗口右上角（标签栏行 / 右栏标题栏同一位），
+   侧栏收展时它不参与布局变化——从根上消除窗口控制的跳变 */
+.win-controls-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-12);
+  z-index: 60;
 }
 /* 可视边缘内 8px 的 resize 判定热区（startResizeDragging 手动发起） */
 .resize-zone {

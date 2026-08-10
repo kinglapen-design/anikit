@@ -1,11 +1,12 @@
 <script setup lang="ts">
-// 文件夹选择弹窗的递归节点（6.3）：TreeItem + 子层缩进，点击选中 / 箭头展开折叠
+// 文件夹选择弹窗的递归节点（6.3）：TreeItem + 子层缩进（容器 padding-left 承担，item 无层级 padding），
+// 点击选中 / 箭头展开折叠
 import TreeItem from "./TreeItem.vue";
 import type { FolderNode } from "../stores/content";
 
-const props = defineProps<{
+defineProps<{
   node: FolderNode;
-  depth: number;
+  depth: number; // 层级（内容缩进：TreeItem padding-left；底色块满宽不缩进）
   picked: string | null;
   collapsed: Set<string>;
 }>();
@@ -44,12 +45,12 @@ const emit = defineEmits<{ pick: [id: string]; toggle: [id: string] }>();
 .pick-node {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-4);
 }
+/* 子层容器不缩进：内容缩进由 TreeItem padding-left 承担（底色满宽，与主树同口径） */
 .kids {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding-left: 20px;
+  gap: var(--space-4);
 }
 </style>

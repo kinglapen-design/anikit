@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@tauri-apps/plugin-dialog": "^2.7.2",
+    "dockview-core": "^7.0.4",
+    "dockview-vue": "^7.0.4",
     "pinia": "^4.0.2",
     "vue": "^3.5.40"
   }

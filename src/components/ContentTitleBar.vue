@@ -1,39 +1,22 @@
 <script setup lang="ts">
-// 中栏标题栏（03_UI 布局/03_中间面板 02）：导航组（返回 / 前进 + 标题 + 搜索结果容器）
-// / 滑块 / 显示子文件夹内容 / 按钮组——space-between 等距。
-// 侧边栏收起时完全隐藏，其按钮组移入本标题栏（多个图标组合在一个容器里，子项间距 4）：
-// 左收起 → 左侧放（汉堡菜单 + 展开按钮）；右收起 → 右侧放（展开 + 置顶 + 窗口控制）。
-import { computed, ref } from "vue";
+// 中间面板工具栏（1.2 重构，figma-css 02_布局/41_工具栏）：54px / padding 12 16 / space-between。
+// 左 = 后退 / 前进 + 搜索结果（仅搜索时显示——当前所在目录由标签页承担，工具栏不再显示目录名，
+// 2026-08-08 用户定；搜索业务 3.6 接入，本轮搜索结果无数据源不渲染）。
+// 左侧位置留给档案看板的收起按钮（档案业务接入时启用）；
+// 侧栏收展不再经本栏（左栏展开按钮在左栏汉堡位、右栏展开/收起到右栏顶行，2026-08-08 收展定案）。
+// 右 = 卡片尺寸滑块 + 按钮组（链接文件管理 / 添加文件链接 / 缩略图 / AI 工具集 / 分组管理
+// disabled 待 1.3 点亮 + 查看方式）+（右栏收起时：展开详情面板 + 窗口置顶 + 窗口控制——注释 6）。
+// 递归显示开关已移出（2026-08-08 用户定：归内容区区块标题行，随该区块改造时接入）。
+import { ref } from "vue";
 import IconButton from "./IconButton.vue";
 import SideSlider from "./SideSlider.vue";
-import AppCheckbox from "./AppCheckbox.vue";
-import WindowControls from "./WindowControls.vue";
 import ViewOptionsMenu from "./ViewOptionsMenu.vue";
 import { useUiStore } from "../stores/ui";
-import { useContentStore } from "../stores/content";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const ui = useUiStore();
-const content = useContentStore();
-const appWindow = getCurrentWindow();
 
-// 搜索结果容器：搜索后从左侧滑入、取消后往左滑出（阶段 1 演示——点击标题模拟搜索 / 撤销，阶段 4 接真搜索）
-const showResult = ref(false);
-
-const QUICK_LABELS: Record<string, string> = {
-  all: "全部",
-  uncategorized: "未分类",
-  inbox: "收件箱",
-  recent: "最近使用",
-  recycle: "回收站", // 2026-07-29 二轮：视图 key 由 trash 改 recycle（与后端 / 文档术语一致）
-};
-
-// 面包屑标题：当前视口名（快速访问项 / 文件夹名）
-const crumb = computed(() => {
-  const sel = content.sidebarSelected;
-  if (sel.startsWith("folder:")) return content.folderName(sel.slice(7)) ?? "文件夹";
-  return QUICK_LABELS[sel.slice(6)] ?? "全部";
-});
+// 搜索结果文案（3.6 分词搜索接入后回填："搜索结果 - 12"）；null = 常态不显示
+const searchResult = ref<string | null>(null);
 
 // 查看方式菜单：按钮右缘对齐、下方展开；再次点击按钮收起（toggle）
 const viewMenuOpen = ref(false);
@@ -48,119 +31,89 @@ function openViewMenu(e: MouseEvent): void {
   viewMenuAnchor.value = { x: rect.right - 175, y: rect.bottom + 4 };
   viewMenuOpen.value = true;
 }
-
-async function togglePin(): Promise<void> {
-  ui.alwaysOnTop = !ui.alwaysOnTop;
-  await appWindow.setAlwaysOnTop(ui.alwaysOnTop);
-}
 </script>
 
 <template>
-  <div class="content-titlebar" data-tauri-drag-region>
-    <div v-if="ui.leftCollapsed" class="btn-group">
-      <IconButton name="menu" title="菜单" />
-      <IconButton
-        name="toggle-sidebar-left"
-        title="展开侧边栏"
-        @click="ui.leftCollapsed = false"
-      />
+  <div class="panel-toolbar" data-tauri-drag-region>
+    <div class="crumb-group">
+      <!-- 后退 / 前进（figma 41：nav-history 图标，前进 rotate 180°；历史导航业务后接，先 disabled） -->
+      <IconButton name="nav-history" title="后退" disabled />
+      <IconButton name="nav-history" title="前进" class="rot-180" disabled />
+      <span v-if="searchResult" class="result-text">{{ searchResult }}</span>
     </div>
-    <div class="nav-group">
+    <div class="right-group">
+      <SideSlider v-model="ui.targetRowHeight" :min="80" :max="ui.gridWidth" />
+      <!-- 按钮组（figma 41：链接文件管理 / 添加文件链接 / 缩略图 / AI 工具集 / 分组管理 / 查看方式）；
+           前五个业务未接一律 disabled（1.3 占位点亮机制统一接入），查看方式既有业务 -->
       <div class="btn-group">
-        <IconButton name="chevron-large" title="返回" class="rot-ccw" disabled />
-        <IconButton name="chevron-large" title="前进" class="rot-cw" disabled />
+        <IconButton name="linked-file-manage" title="链接文件管理" disabled />
+        <IconButton name="add-file-link" title="添加文件链接" disabled />
+        <IconButton name="thumbnail" title="缩略图" disabled />
+        <IconButton name="ai-tools" title="AI 工具集" disabled />
+        <IconButton name="group-manage" title="分组管理" disabled />
+        <span ref="viewBtnRef" style="display: contents">
+          <IconButton name="view-options" title="查看方式" @click="openViewMenu" />
+        </span>
+        <!-- 右栏收起：仅"展开详情面板"进工具栏（窗口控制组在 App 层右上角浮块，不参与收展） -->
+        <IconButton
+          v-if="ui.rightCollapsed"
+          name="collapse-detail"
+          title="展开详情面板"
+          class="flip-h"
+          @click="ui.rightCollapsed = false"
+        />
       </div>
-      <button class="crumb-text" v-tip="'演示：点击切换搜索结果'" @click="showResult = !showResult">
-        {{ crumb }}
-      </button>
-      <Transition name="slide-x">
-        <span v-if="showResult" class="result-text">/ 搜索结果 (123)</span>
-      </Transition>
-    </div>
-    <SideSlider v-model="ui.targetRowHeight" :min="80" :max="ui.gridWidth" />
-    <AppCheckbox v-model="ui.showSubfolders" label="显示子文件夹内容" />
-    <div class="btn-group">
-      <IconButton name="plugin" title="插件" />
-      <span ref="viewBtnRef" style="display: contents">
-        <IconButton name="view-options" title="查看方式" @click="openViewMenu" />
-      </span>
-    </div>
-    <div v-if="ui.rightCollapsed" class="btn-group">
-      <IconButton
-        name="toggle-sidebar-right"
-        title="展开侧边栏"
-        @click="ui.rightCollapsed = false"
-      />
-      <IconButton
-        :name="ui.alwaysOnTop ? 'window-pin-off' : 'window-pin-on'"
-        title="窗口置顶"
-        @click="togglePin"
-      />
-      <WindowControls />
     </div>
     <ViewOptionsMenu v-if="viewMenuOpen" :anchor="viewMenuAnchor" :trigger="viewBtnRef ?? null" @close="viewMenuOpen = false" />
   </div>
 </template>
 
 <style scoped>
-/* 总容器：内边距 8 / 各组 space-between 等距；
-   中栏标题栏图标按钮 80%（2026-07-23 用户定：面板深，满亮太抢眼；左右侧栏标题栏保持 font-icon-1） */
-.content-titlebar {
+/* 工具栏（figma 9560）：54 / padding 12 16 / space-between / gap 10；无底色（随中间面板 C1） */
+.panel-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* 内边距 12（中栏外层 4 + 12 = 左右缘均 16，2026-07-23 用户定） */
-  padding: var(--space-12);
+  gap: 10px;
+  padding: var(--space-12) var(--space-16);
   flex: none;
 }
-.content-titlebar :deep(.icon-btn) {
-  color: var(--font-icon-2);
+/* 中栏工具栏图标按钮 80% 亮度（2026-07-23 用户定：面板深，满亮太抢眼） */
+.panel-toolbar :deep(.icon-btn) {
+  color: var(--text-normal);
 }
-/* 面包屑导航容器：返回前进按钮组（间距 4）+ 标题容器（间距 4） */
-.nav-group {
+/* 面包屑容器：展开按钮 + 后退/前进 + 搜索结果，间距 4 */
+.crumb-group {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-4);
   min-width: 0;
+}
+/* 搜索结果（figma 41）：正文 14/20，标签档 */
+.result-text {
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  color: var(--text-label);
+  white-space: nowrap;
+}
+/* 右对齐按钮组（figma 41）：滑块 + 按钮组，间距 12；按钮组内间距 4 */
+.right-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex: none;
 }
 .btn-group {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  flex: none;
 }
-/* chevron-large 原图标朝下：返回 = 顺时针 90°（朝左），前进 = 逆时针 90°（朝右） */
-.rot-ccw :deep(svg) {
-  transform: rotate(90deg);
+/* 收起 / 展开同图标翻转使用 */
+.flip-h :deep(svg) {
+  transform: scaleX(-1);
 }
-.rot-cw :deep(svg) {
-  transform: rotate(-90deg);
-}
-.crumb-text {
-  padding: 0 var(--space-4);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-1);
-  white-space: nowrap;
-  border-radius: var(--radius-6);
-}
-/* 搜索结果容器：/ + 搜索结果 + (数量)，正文 font-icon-3 */
-.result-text {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-3);
-  white-space: nowrap;
-}
-/* 从左侧滑入 / 往左滑出 */
-.slide-x-enter-active,
-.slide-x-leave-active {
-  transition:
-    transform 0.18s ease,
-    opacity 0.18s ease;
-}
-.slide-x-enter-from,
-.slide-x-leave-to {
-  transform: translateX(-16px);
-  opacity: 0;
+/* 前进 = nav-history rotate 180°（figma 41 口径） */
+.rot-180 :deep(svg) {
+  transform: rotate(180deg);
 }
 </style>

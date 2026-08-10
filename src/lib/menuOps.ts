@@ -67,7 +67,7 @@ async function copyText(text: string, okMessage: string): Promise<void> {
     await navigator.clipboard.writeText(text);
     toast.notify({ message: okMessage, icon: "success", duration: 3000 });
   } catch {
-    toast.notify({ message: "剪贴板写入失败", icon: "info" });
+    toast.notify({ message: "剪贴板写入失败", icon: "fail" });
   }
 }
 

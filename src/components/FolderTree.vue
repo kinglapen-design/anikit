@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 文件夹树（递归）：展开 / 折叠状态每层自管，选中态写入 content store（阶段 1 仅样式）。
-// 缩进线（02_左侧边栏 04）：竖线为子层容器级连续线（从子项展开占位中心 x5 贯穿整层，
-// 穿过有子项的行与 item 间距，止于最后子项中心）；横线由叶子 TreeItem 自画（x5→x9）。
+// 层级与缩进线（2026-08-08 用户简化定案）：item 不携带层级 padding——子层容器 padding-left 20
+// 承担缩进；缩进竖线 = 子层容器级连续线（left 14 = 父级 item 左 padding 8 + 箭头容器半宽 6，
+// 正对父级展开按钮尖角，01_主窗口注释 8），纵贯首子项顶部至末子项底部（top 0 bottom 0）。
 // 新建文件夹"先建后命名"（2026-07-29 复验三轮，替换原"命名中临时节点"）：入口直接以默认名
 // 建库（LibraryView），成功返回的新 id 写入 selection.namingFolderId，本组件对应节点进
 // naming 输入态——Enter / Esc / 失焦一律保存：名非空且变了 → renameFolder，空或不变保留
@@ -16,19 +17,21 @@ import { treeItemSpec } from "../lib/menuSpecs";
 import { isTreeOpen, toggleOpen } from "../lib/treeExpansion";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
+import { useTabsStore } from "../stores/tabs";
 import { useUiStore } from "../stores/ui";
 
 const props = withDefaults(
   defineProps<{
     nodes: FolderNode[];
-    depth?: number;
-    parentId?: string | null; // 本层父级 id（顶层 = null）：树排序"当前层级"与右键菜单判定用
+    depth?: number; // 本层层级（内容缩进与缩进线定位用；item 底色块满宽不缩进）
+    parentId?: string | null; // 本层父级 id（顶层 = null）：树排序"当前层级"与右键菜单判定、根父级形态判定用
     forceOpenIds?: Set<string>; // 命名节点的祖先链强制展开（新建子文件夹时父级可能折叠）
   }>(),
   { depth: 0, parentId: null, forceOpenIds: undefined },
 );
 const content = useContentStore();
 const selection = useSelectionStore();
+const tabs = useTabsStore();
 const ui = useUiStore();
 
 // 树排序（6.3 右键菜单"查看-排序"）：custom = folders.json order 原序；
@@ -58,7 +61,7 @@ function onSelect(id: string, e: MouseEvent): void {
     selection.clickFolder(id, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey }, visibleTreeFolderIds());
     return;
   }
-  content.sidebarSelected = `folder:${id}`;
+  tabs.openView(`folder:${id}`);
   // 2026-07-29 复验二轮 2 根因：树 plain click 原先只导航、不入文件夹选择域——
   // sidebarSelected 高亮冒充选中态，用户拖"看着选中实则不在域内"的项时引擎按
   // "拖拽未选中项 = 单选再拖"把已有多选清成单选（树多选排序只动被拖一项）。
@@ -68,10 +71,22 @@ function onSelect(id: string, e: MouseEvent): void {
 }
 
 // 树 item 右键（6.3）：全局菜单宿主（lib/contextMenus）；命名态节点不出菜单（2026-07-29 复验三轮）；
-// 右键未选中项先单选（文件夹选择域，与素材互斥由 clickFolder 内部做）
+// 右键未选中项先单选（文件夹选择域，与素材互斥由 clickFolder 内部做）；
+// 菜单取消（点外 / Esc 未执行动作）时恢复原选择（2026-08-10 用户反馈：取消后品牌色选中态残留）
 function onItemMenu(e: MouseEvent, node: FolderNode): void {
   if (selection.namingFolderId === node.id) return;
-  if (!selection.isFolderSelected(node.id)) selection.clickFolder(node.id);
+  if (!selection.isFolderSelected(node.id)) {
+    const snapshot = new Set(selection.selectedFolders);
+    const prevAnchor = selection.folderAnchor;
+    selection.clickFolder(node.id);
+    openContextMenu(e, treeItemSpec(node, props.parentId ?? null), (executed) => {
+      if (executed) return;
+      selection.selectedFolders.clear();
+      for (const id of snapshot) selection.selectedFolders.add(id);
+      selection.folderAnchor = prevAnchor;
+    });
+    return;
+  }
   openContextMenu(e, treeItemSpec(node, props.parentId ?? null));
 }
 
@@ -86,22 +101,25 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
 </script>
 
 <template>
-  <template v-for="(node, index) in sortedNodes" :key="node.id">
+  <template v-for="node in sortedNodes" :key="node.id">
     <div class="ft-node" @contextmenu.prevent.stop="onItemMenu($event, node)">
+      <!-- 当前目录（sidebarSelected）= selected 实心高亮（你在这里）；选择域成员 =
+           domain-selected 品牌色描边（文件夹卡片选中联动 / 树多选）——两态互斥，
+           当前目录优先（2026-08-10 用户定：区分双高亮，防"停在哪个目录"混淆） -->
       <TreeItem
         :icon="isOpen(node.id) ? 'folder-open' : 'folder-closed'"
         :label="node.name"
         :count="node.count"
         :depth="depth"
+        :variant="parentId === null ? 'root' : 'child'"
         :expandable="node.children.length > 0"
         :open="isOpen(node.id)"
-        :selected="content.sidebarSelected === `folder:${node.id}` || selection.isFolderSelected(node.id)"
+        :selected="content.sidebarSelected === `folder:${node.id}`"
+        :domain-selected="selection.isFolderSelected(node.id) && content.sidebarSelected !== `folder:${node.id}`"
         :dimmed="dragView.folderIds?.has(node.id) ?? false"
-        :last="index === sortedNodes.length - 1"
         :folder-id="selection.namingFolderId === node.id ? undefined : node.id"
         :data-drag-name="node.name"
         :naming="selection.namingFolderId === node.id"
-        guide
         @toggle="toggleOpen(node.id)"
         @select="onSelect(node.id, $event)"
         @name-commit="onNameCommit(node, $event)"
@@ -109,7 +127,7 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
       <div
         v-if="isOpen(node.id) && node.children.length > 0"
         class="ft-children"
-        :style="{ '--guide-x': `${depth * 20 + 24}px` }"
+        :style="{ '--guide-x': `${depth * 20 + 14}px` }"
       >
         <FolderTree :nodes="node.children" :depth="depth + 1" :parent-id="node.id" :force-open-ids="forceOpenIds" />
       </div>
@@ -118,29 +136,32 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
 </template>
 
 <style scoped>
-/* 节点：TreeItem 与展开子层之间同样 2px 间距（父级与第一个子级不紧贴） */
+/* 节点：TreeItem 与展开子层间距 4（figma 40_左侧边栏 目录树 gap 4） */
 .ft-node {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-4);
 }
+/* 子层容器：不缩进（item 底色块满宽，内容缩进由 TreeItem padding-left 承担，2026-08-08 用户定） */
 .ft-children {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-4);
 }
-/* 缩进竖线（02_左侧边栏 04）：从父级装饰图标中心（= 子项 item 容器左缘，depth×14+25）
-   贯穿整层——穿过 item 间距与嵌套子层区域（子级的子级旁父级线仍在，两条并存），
-   止于最后子项中心（L 收笔）；各层线间距 = 层级缩进 14px。
-   颜色 = 装饰图标 fill 色（font-icon-4），自定义文件夹颜色时同步 */
+/* 缩进竖线（01_主窗口注释 8）：横坐标 = 父级箭头尖角（父级 padding-left 8+depth×20 + 箭头容器
+   半宽 6，即 --guide-x = depth×20+14）；纵坐标首子项顶部 → 末子项底部（top 0 bottom 0 贯穿）。
+   z-index 1：item 底色块满宽后会盖住同层先绘制的线（2026-08-08 走查修复），线在 item 空白
+   padding 区（内容从 depth×20+28 起），不压内容 */
 .ft-children::before {
   content: "";
   position: absolute;
   left: var(--guide-x);
   top: 0;
-  bottom: 14px;
+  bottom: 0;
   width: 1px;
-  background: var(--font-icon-6);
+  background: var(--line-hover);
+  z-index: 1;
+  pointer-events: none;
 }
 </style>

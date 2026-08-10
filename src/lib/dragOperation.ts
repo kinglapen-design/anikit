@@ -37,6 +37,7 @@
 import { reactive } from "vue";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
+import { COL_GAP } from "./layouts";
 import * as ops from "./placementOps";
 import { makeGhost, moveGhost } from "./dragGhost";
 import {
@@ -102,7 +103,7 @@ export function unregisterGridResolver(): void {
 // 间距解析器工厂（C4a；主体落 lib 控制 AssetGrid 行数 ≤500，规范第 3 条）：
 // 先定行再定列（2026-07-29 复验二轮 1）——行底 + 半行距之上入目标行，行内按 x 中点定间隙，
 // 行内未命中 = 插到下一行行首（竖块画在指针所在行的行末，贴指针）；无目标行 = 段尾。
-// 返回 cards-layer 坐标系的色块矩形（宽 = 卡片间距 16 / 高 = 行高）与间隙后项 key。
+// 返回 cards-layer 坐标系的色块矩形（宽 = 卡片间距 12 / 高 = 行高）与间隙后项 key。
 // 仅文件夹视图可排序（快速访问视图无"当前文件夹段"概念，不出间隙落点）
 export function makeGridResolver(ctx: {
   isFolderView: () => boolean;
@@ -111,7 +112,7 @@ export function makeGridResolver(ctx: {
   boxes: () => { top: number; left: number; width: number; height: number; i: number }[];
   keyAt: (i: number) => string;
 }): GridResolver {
-  const GAP = 16; // 卡片间距（layouts.ts COL_GAP / ROW_GAP，2026-07-23 用户定）
+  const GAP = COL_GAP; // 卡片间距（layouts.ts COL_GAP，figma 42 文件卡片列表 gap 12）
   return (clientX, clientY) => {
     if (!ctx.isFolderView()) return null;
     const layer = ctx.layer();
@@ -364,6 +365,7 @@ function endDrag(cancelled: boolean): void {
   window.removeEventListener("pointerup", onUp);
   window.removeEventListener("pointercancel", onCancel);
   window.removeEventListener("keydown", onKey, true);
+  window.removeEventListener("blur", onWindowBlur);
   s.ghost?.remove();
   document.body.style.userSelect = "";
   document.body.classList.remove("dragging");
@@ -387,6 +389,11 @@ function onUp(e: PointerEvent): void {
   endDrag(false);
 }
 function onCancel(): void {
+  endDrag(true);
+}
+// 窗口失焦兜底（2026-08-10 用户实测：系统截图 / 分屏 snap 抢指针，pointerup·cancel 丢失，
+// 拖拽 ghost 与落点指示会残留——失焦即取消，与框选 forceCancel 同根同治）
+function onWindowBlur(): void {
   endDrag(true);
 }
 function onKey(e: KeyboardEvent): void {
@@ -413,6 +420,7 @@ function begin(e: PointerEvent, kind: DragKind, key: string): void {
   window.addEventListener("pointerup", onUp);
   window.addEventListener("pointercancel", onCancel);
   window.addEventListener("keydown", onKey, true);
+  window.addEventListener("blur", onWindowBlur);
 }
 
 // 素材卡片拖拽起点（AssetCard / ListRowCard，卡片根带 data-key；按钮 / 输入框上不启动）
@@ -426,6 +434,11 @@ export function beginAssetDrag(e: PointerEvent, key: string): void {
 // 素材卡片 → 素材拖拽；文件夹卡片 → 文件夹拖拽；其余（空白，含卡片行 / 列间距）交回调（框选）
 export function gridPointerDown(e: PointerEvent, onBlank: (e: PointerEvent) => void): void {
   const t = e.target as HTMLElement;
+  // 重命名等输入态中点击网格任意处（卡片 / 空白）= 确认提交（2026-08-10 走查：框选回调的
+  // preventDefault 会阻断焦点转移、input 永不 blur——统一在分发入口显式 blur 活跃输入框，
+  // 其 @blur 提交逻辑随之触发；重命名 input 自身 pointerdown 已 stop 冒泡不会到此）
+  const ae = document.activeElement;
+  if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement) ae.blur();
   // 卡片信息文字区（2026-07-29 复验二轮 4，对齐 Eagle）：.card-info 视为空白——
   // 按下拖动 = 起框选，未过阈值松开 = 清空选择；左键单击不选中卡片（刻意，
   // AssetGrid onCardClick 同拦；右键菜单 / 双击预览 / F2 重命名不受影响）。

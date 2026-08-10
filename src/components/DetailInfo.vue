@@ -26,7 +26,7 @@ const open = ref(true);
         <AppIcon
           v-for="i in 5"
           :key="i"
-          name="favorites-view"
+          name="archive-dot"
           :size="12"
           class="star"
           :class="{ on: i <= 2 }"

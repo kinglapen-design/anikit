@@ -85,11 +85,11 @@ function onRetry(): void {
       <div class="illustration" v-html="illustration" />
       <div class="actions">
         <button class="btn primary" :disabled="busy" @click="view = 'create'">
-          <AppIcon name="create-library-large" :size="24" />
+          <AppIcon name="library-duotone" :size="24" />
           <span>创建资源库</span>
         </button>
         <button class="btn secondary" :disabled="busy" @click="openLibraryFlow">
-          <AppIcon name="open-library-large" :size="24" />
+          <AppIcon name="folder-open" :size="24" />
           <span>打开资源库</span>
         </button>
       </div>

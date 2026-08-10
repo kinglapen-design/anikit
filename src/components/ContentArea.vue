@@ -1,8 +1,11 @@
 <script setup lang="ts">
-// 中间内容展示区（C1）：标题栏 + 卡片列表（统一滚动：文件夹区块 + 素材网格）+ 搜索框。
-// 预览模式（4.3/5.2）：preview.assetKey 非空时整栏切换——预览标题栏 / 预览画面 / 播放条+帧条+笔记浮层
-// （播放条占搜索栏位置，2026-07-25 定案；sequence/anim/audio/video 四种形态分发）；全屏时 preview-root fixed 铺满窗口、隐藏标题栏。
-import { computed } from "vue";
+// 中间内容展示区（C1）：1.2 起 = dockview panel 组件，每个标签页一个实例，按 params.viewKey
+// 渲染各自视口（标题栏 + 卡片列表（统一滚动：文件夹区块 + 素材网格）+ 搜索框）。
+// 预览模式（4.3/5.2）：preview.assetKey 非空且本 panel 激活时整栏切换——预览是全局单例状态，
+// 只在激活标签页内发生，非激活 panel 保持原视口；全屏时 preview-root fixed 铺满窗口、隐藏标题栏。
+// 通知条（ToastStack）已上移到 DockHost 单例（多 panel 下每 panel 一份会重复弹出）。
+import { computed, onBeforeUnmount, ref } from "vue";
+import type { DockviewPanelApi, IDockviewPanelProps } from "dockview-vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
 import SearchBar from "./SearchBar.vue";
@@ -12,21 +15,36 @@ import PreviewPanel from "./PreviewPanel.vue";
 import PreviewPlayBar from "./PreviewPlayBar.vue";
 import PreviewFrameStrip from "./PreviewFrameStrip.vue";
 import PreviewNotes from "./PreviewNotes.vue";
-import ToastStack from "./ToastStack.vue";
 import { useContentStore } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
 
+// props 运行时声明（rolldown 环境 SFC 编译器无法解析 node_modules 类型，defineProps 泛型须字面量）。
+// dockview-vue 传参约定（v7 源码 VueRenderer.init）：framework props 整组包在一个 params prop 里——
+// 组件实际收到 params = { params: 用户参数, api, containerApi, tabLocation }，updateParameters 后整体换新（响应式）。
+const raw = defineProps<{ params: Record<string, unknown> }>();
+const frame = computed(() => raw.params as unknown as IDockviewPanelProps);
+const panelApi = frame.value.api as DockviewPanelApi; // api 引用 init 时确定、不变
 const content = useContentStore();
 const preview = usePreviewStore();
 
-// 当前视口资源（"全部"= 全部 Placement；文件夹 = 该文件夹直接 Placement）。
-// PRD 04-1"显示子文件夹内容"开关：递归展开子文件夹内容阶段 4 接（当前两种状态同列表）。
-const items = computed(() => content.visiblePlacements);
+// 本标签页视口（frame.params = addPanel/updateParameters 的用户参数）
+const viewKey = computed(() => (frame.value.params?.viewKey as string) ?? "quick:all");
+
+// 本 panel 激活态：预览整栏切换只对激活标签页生效
+const active = ref(panelApi.isActive);
+const disposeActive = panelApi.onDidActiveChange(() => {
+  active.value = panelApi.isActive;
+});
+onBeforeUnmount(() => disposeActive.dispose());
+
+// 当前视口资源（"全部"= 全部 Placement；文件夹 = 该文件夹直接 Placement，
+// 递归显示开关 ui.showSubfolders 打开时含全部后代文件夹，2026-08-10 接入）。
+const items = computed(() => content.placementsFor(viewKey.value));
 </script>
 
 <template>
   <main class="content-area">
-    <template v-if="preview.assetKey">
+    <template v-if="preview.assetKey && active">
       <div class="preview-root" :class="{ fullscreen: preview.fullscreen }">
         <PreviewTitleBar v-if="!preview.fullscreen" />
         <section class="preview-section">
@@ -43,41 +61,39 @@ const items = computed(() => content.visiblePlacements);
       <ContentTitleBar />
       <ImportProgressBar />
       <section class="asset-section">
-        <AssetGrid :items="items" />
+        <AssetGrid :items="items" :view-key="viewKey" :panel-active="active" />
       </section>
       <footer class="search-wrap">
         <SearchBar />
       </footer>
     </template>
-    <ToastStack />
   </main>
 </template>
 
 <style scoped>
 .content-area {
-  position: relative; /* 通知条（ToastStack）锚定 */
   display: flex;
   flex-direction: column;
-  flex: 1;
+  height: 100%; /* 1.2：dockview panel 内容容器由 dock 管理尺寸，铺满即可 */
   min-width: 0;
   background: var(--c1);
-  /* 三栏面板无圆角无边框（主窗口结构调整）；padding 左右 4——标题栏 / 搜索框
-     （自身 padding 12）左右缘均为 16；滚动条可见条右缘距中栏外边框 4（2026-07-23 用户定） */
-  padding: var(--space-4);
+  /* 三栏面板无圆角无边框、外层无 padding（figma-css 02_布局/42_中间面板，2026-08-10）：
+     工具栏 / 搜索框自带 padding 12 16、列表容器 padding 16 16 0，各自承担 */
+  box-sizing: border-box;
 }
-/* 素材卡片区块：内边距 0 0 0 20（左 20 + 中栏 4 = 卡片距中栏外边框左 24；
-   右 0——滚动条可见条右缘距中栏外边框 4；卡片右缘 24 = 中栏右 4 + 里层网格预留 20） */
+/* 卡片列表（figma 42 列表 padding 16px 16px 0px）：上 16 / 左 16 / 下 0；
+   右 0——滚动条紧贴右边框（2026-08-10 用户定：4px 间距让通栏分隔线视觉截断；
+   卡片右缘距边框 16 由布局 PAD.right 16 承担） */
 .asset-section {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 0 0 0 var(--space-20);
+  padding: var(--space-16) 0 0 var(--space-16);
 }
-/* 搜索框内容容器：内边距 4 12 8 12（中栏外层 4 + 12 = 左右缘均 16，2026-07-23 用户定） */
+/* 搜索框（1.2 新稿）：通栏行（C3 + 上边框横贯中栏）——外层无 padding，自然通栏 */
 .search-wrap {
   flex: none;
-  padding: var(--space-4) var(--space-12) var(--space-12) var(--space-12);
 }
 /* 预览模式根：占满中栏；全屏时 fixed 铺满窗口（2026-07-25 定案：显示器全屏） */
 .preview-root {
@@ -106,10 +122,11 @@ const items = computed(() => content.visiblePlacements);
   flex: 1;
   min-height: 0;
 }
-/* 播放条 + 帧条容器：与搜索框容器同位置同内边距；relative 供笔记浮层（bottom:100%）锚定 */
+/* 播放条 + 帧条容器：relative 供笔记浮层（bottom:100%）锚定；内边距 8 16 16——
+   内容距中栏左右缘 16、上 8、下 16（2026-08-10 随 42 稿外层 padding 归零后保持原视觉） */
 .preview-footer {
   position: relative;
   flex: none;
-  padding: var(--space-4) var(--space-12) var(--space-12) var(--space-12);
+  padding: var(--space-8) var(--space-16) var(--space-16);
 }
 </style>

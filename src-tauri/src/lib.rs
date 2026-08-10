@@ -173,9 +173,10 @@ pub fn run() {
           use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
           if let Ok(raw) = w.hwnd() {
             let hwnd = HWND(raw.0 as _);
-            // 主窗口 DWM 1px 边框染为 border-1 #3A3940（COLORREF 0x00BBGGRR），
+            // 主窗口 DWM 1px 边框染为 亮-选中（token：主窗口边框档）叠 C1 实色 #2E332F
+            //（COLORREF 0x00BBGGRR；2026-08-08 新 token 体系换色，旧 border-1 #3A3940 作废），
             // Win11 22000+ 生效，Win10 忽略
-            let border: u32 = 0x0040_393A;
+            let border: u32 = 0x002F_332E;
             unsafe {
               let _ = DwmSetWindowAttribute(
                 hwnd,

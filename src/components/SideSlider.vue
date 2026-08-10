@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 滑块（token 10，无百分比）：滑轨 3px / 120px 胶囊 border-1，拖钮 10×10 font-icon-1。
+// 滑块（figma 41_工具栏：100×10）：滑轨 3px 暗-悬停，拖钮 10×10 文字-常态档（2026-08-08 用户定：
+// 宽固定 100、拖钮不用高亮档）。
 // 拖动中实时更新 v-model，pointerup 时 emit commit（用于触发布局重算等重操作）。
 import { computed, ref } from "vue";
 
@@ -49,10 +50,10 @@ function onUp(e: PointerEvent): void {
 </template>
 
 <style scoped>
-/* 总容器：宽 120 高 10（04_滑块）；滑轨 3px 线（top 5 居中），拖钮 10×10 */
+/* 总容器：宽 100 高 10（figma 41）；滑轨 3px 线（垂直居中），拖钮 10×10 */
 .side-slider {
   position: relative;
-  width: 120px;
+  width: 100px;
   height: 10px;
   flex: none;
   cursor: pointer;
@@ -66,7 +67,7 @@ function onUp(e: PointerEvent): void {
   height: 3px;
   transform: translateY(-50%);
   border-radius: 2px;
-  background: var(--border-1);
+  background: var(--line-hover); /* 滑轨 = 暗-悬停（figma 41） */
 }
 .thumb {
   position: absolute;
@@ -74,7 +75,7 @@ function onUp(e: PointerEvent): void {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--font-icon-1);
+  background: var(--text-normal); /* 拖钮 = 文字/常态（2026-08-08 用户定，不用高亮档） */
   transform: translate(-50%, -50%);
   pointer-events: none;
 }

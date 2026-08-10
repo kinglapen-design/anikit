@@ -21,10 +21,12 @@ const PCM_RATE: u32 = 8000;
 pub const WAVEFORM_WIDTH: u32 = 640;
 /// 波形图高（px）
 pub const WAVEFORM_HEIGHT: u32 = 272;
-/// 波形柱色 RGB（#F8F5FA）
-const BAR_RGB: [u8; 3] = [0xF8, 0xF5, 0xFA];
-/// 卡片缩略图柱 alpha（60%，2026-07-26 用户定，与 font-icon-3 同档观感）
-const THUMB_ALPHA: u8 = 153;
+/// 波形柱色 RGB（#5B6261，2026-08-10 用户定：文字/标签档的不透明实色版——
+/// 原 #F8F5FA 60% 亮灰白与新体系脱节，静态 / 未播放波形统一为此实色）
+const BAR_RGB: [u8; 3] = [0x5B, 0x62, 0x61];
+/// 卡片缩略图柱 alpha（100%——柱色本身即按黑底调好的不透明实色，2026-08-10；
+/// 原 60% 透明叠底方案随实色化作废）
+const THUMB_ALPHA: u8 = 255;
 /// 播放条 / 预览大图柱 alpha（100%——前端走 CSS mask 调色，mask 取图 alpha：
 /// 60% 会把品牌紫稀释成 60%，故 mask 用途必须满 alpha，2026-07-26 用户定）
 const MASK_ALPHA: u8 = 255;

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// 悬停放大浮层（5.3，2026-07-28 用户定：悬停即出不再点击，参考图 3）：图片类卡片悬停
-// 400ms 触发（AssetCard 驱动），居中大图浮层（max 80vw×80vh，C3 底 / inset 1px border-1 /
-// 圆角 8 / --shadow-pop）。**整体 pointer-events: none**——鼠标事件穿透到下方网格：
-// 浮层出现时鼠标仍 hover 在原卡片不触发移出，移出卡片区域（含浮层覆盖处）自然关闭；
+// 空格放大预览浮层（2026-08-10 用户定：访达 Quick Look 逻辑，取代悬停放大镜）：
+// AssetGrid 空格键驱动（单选开 / 再按关 / 选择变化跟随），居中大图浮层（max 80vw×80vh，
+// C3 底 / inset 1px border-1 / 圆角 8 / --shadow-pop）。**整体 pointer-events: none**——
+// 鼠标事件穿透到下方网格：点击其他卡片 = 选择变化（AssetGrid watch 切换 / 关闭浮层），
 // 双击等操作同样穿透（可直进预览）。Esc 兜底关闭。图源复用 get_asset_file_path：
 // 直渲格式给源路径；psd/psb 缓存命中给全尺寸解码图、未命中先显 info 缩略图（秒显层）、
 // preview-full-ready 事件到达换高清；其余（序列帧等）回退 info 缩略图。纯展示无交互。
@@ -12,7 +12,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { PlacementView } from "../stores/content";
 
 const props = defineProps<{ asset: PlacementView }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; space: [] }>();
 
 // 秒显层 = info 缩略图（320 短边），高清图源到达后替换（Eagle 式渐进，同 4.3 预览窗口口径）
 const src = ref<string | null>(props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null);
@@ -93,7 +93,15 @@ async function loadFull(): Promise<void> {
 }
 
 function onKeydown(e: KeyboardEvent): void {
+  // window 级监听（2026-08-10 用户反馈：点到侧边栏后焦点离开网格，viewport 收不到空格——
+  // Esc / 空格全局生效）；输入态（重命名等）不触发
+  const t = e.target as HTMLElement;
+  if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
   if (e.key === "Escape") emit("close");
+  else if (e.key === " ") {
+    e.preventDefault();
+    emit("space"); // 切换 / 关闭由 AssetGrid 判定（悬停对象归它管）
+  }
 }
 
 onBeforeUnmount(() => {
@@ -127,10 +135,15 @@ onBeforeUnmount(() => {
   justify-content: center;
   pointer-events: none;
 }
-/* 浮层壳：C3 底 / inset 1px border-1 / 圆角 8 / --shadow-pop（浮层统一规格），内边距 8 */
+/* 浮层壳：C3 底 / inset 1px border-1 / 圆角 8 / --shadow-pop（浮层统一规格），内边距 8。
+   固定 60vw×70vh（2026-08-10 二轮用户定：80vw×80vh 太大——下方卡片基本点不到；
+   尺寸固定不随图跳，图 contain 居中） */
 .zoom-box {
-  max-width: 80vw;
-  max-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60vw;
+  height: 70vh;
   padding: var(--space-8);
   border-radius: var(--radius-8);
   background: var(--c3);
@@ -140,8 +153,8 @@ onBeforeUnmount(() => {
 }
 .zoom-img {
   display: block;
-  max-width: calc(80vw - 16px);
-  max-height: calc(80vh - 16px);
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
 }
 </style>

@@ -122,7 +122,7 @@ function onSeekUp(e: PointerEvent): void {
   pointer-events: none;
 }
 /* 波形进度条：高 24，圆角 4；两层 div 以波形图作 CSS mask（alpha 通道，mask-size 铺满）——
-   底层 wave-pending 实色 = 未播放（font-icon-3 60% 与 C3 混合的实际色号，2026-07-26 用户定，
+   底层 wave-pending 实色 = 未播放（#5B6261 标签档不透明版，2026-08-10 用户定，
    不受 mask alpha 影响），上层紫（brand-1）clip-path 裁到进度 = 已播放；播放头 1px 品牌紫 */
 .wave-progress {
   position: relative;

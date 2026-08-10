@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
     <div class="capsule" @pointerdown.stop @pointermove.stop @pointerup.stop>
       <span class="time">{{ formatDuration(currentTime) }}</span>
       <button class="hud-btn" v-tip="playing ? '暂停' : '播放'" @click.stop="togglePlay">
-        <AppIcon :name="playing ? 'pause' : 'play'" />
+        <AppIcon :name="playing ? 'pause' : 'play'" :size="12" />
       </button>
     </div>
   </div>
@@ -176,27 +176,26 @@ onBeforeUnmount(() => {
   bottom: 4px;
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  padding: 2px 6px;
+  gap: var(--space-8);
+  padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-4);
-  background: var(--c1-40);
+  background: var(--c1-50);
 }
+/* 时间：徽标档 10/14 700 常态色（figma-css 悬停播放稿） */
 .time {
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-1);
+  font-size: var(--text-badge-size);
+  line-height: var(--text-badge-line);
+  font-weight: var(--text-badge-weight);
+  color: var(--text-normal);
   white-space: nowrap;
 }
 .hud-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  color: var(--font-icon-1);
-}
-.hud-btn :deep(svg) {
   width: 12px;
   height: 12px;
+  color: var(--text-normal);
+  line-height: 0; /* 防继承行高把图标行盒撑高（figma 悬停播放稿：文字与图标垂直居中对齐） */
 }
 </style>

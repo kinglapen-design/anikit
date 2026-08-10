@@ -1,31 +1,27 @@
 <script setup lang="ts">
-// 文件夹卡片（02_通用组件/06_卡片，2026-07-23 用户定稿；4.4 接 02 有缩略图态）：
-// 总容器间距 4；图标容器 padding 0 / 圆角 8 / 1px border-2（hover 2px font-icon-20 /
-// 选中 2px 品牌色——与素材卡片一致）；文字组与素材卡片一致（间距 2 / 高 60 / 标题两行截断）。
-// 有缩略图态按 06_卡片 02 分层：图层4 背面 + 子项首个静态图片（照片探出，contain 不裁切，
-// 原文件夹浅色纸底保留托住透明通道）+ 有缩略图层1 正面下沿。
+// 文件夹卡片（figma-css 02_布局/42_中间面板 文件夹卡片，2026-08-10 重做定稿）：
+// 横条芯片 65 高 / padding 12 24 / 间距 4 / C3 底 / 1px 暗-悬停边框（内阴影）/ 圆角 6；
+// 行1 = 文件夹-关闭图标 18（高亮）+ 名称（正文 14/20 高亮，最多一行截断——旧两行居中作废）；
+// 行2 = 数量（标签 12/17 标签档）；旧 SVG 纸卡造型与有缩略图态随新稿取消。
+// 状态：hover 边框提亮 亮-选中（figma 无稿，按 token 线档递进）；选中 = 1.5px 品牌色-边框线；
+// 双击名称重命名 = 整卡 1.5px 品牌色-边框线高亮提示（2026-08-10 用户定），输入框不再单独描边。
 // 交互（2026-07-29 复验三轮）：双击卡片（非名称区域）= 进入该文件夹（FolderStrip 接线）；
 // 双击名称 = 就地重命名（rename_folder 命令，stop 防触发"进入"）。
 import { computed, nextTick, ref, watch } from "vue";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { getIcon } from "../lib/icons";
+import AppIcon from "./AppIcon.vue";
 import { dragView } from "../lib/dragOperation";
 import { renameFolder } from "../lib/placementOps";
 import { useSelectionStore } from "../stores/selection";
 import type { FolderNode } from "../stores/content";
 
-const props = withDefaults(
-  defineProps<{ folder: FolderNode; thumbPath?: string | null; selected?: boolean; dimmed?: boolean }>(),
-  { thumbPath: null, selected: false, dimmed: false },
-);
+const props = withDefaults(defineProps<{ folder: FolderNode; selected?: boolean; dimmed?: boolean }>(), {
+  selected: false,
+  dimmed: false,
+});
 // select 携带 MouseEvent（2026-07-28 复验反馈 5：Ctrl 加选 / Shift 范围选需要修饰键）
 const emit = defineEmits<{ select: [e: MouseEvent] }>();
-const folderSvg = getIcon("folder-card");
-const backSvg = getIcon("folder-card-layer4");
-const frontThumbSvg = getIcon("folder-card-thumb-layer1");
-const thumbUrl = computed(() => (props.thumbPath ? convertFileSrc(props.thumbPath) : ""));
 
-// 拖拽落点视觉（6.1 C4b，2026-07-28 定案）：并入 = 覆盖缩略图区域的方形覆盖
+// 拖拽落点视觉（6.1 C4b，2026-07-28 定案）：并入 = 覆盖整卡的方形覆盖
 //（--brand-1-12 + inset 1px --brand-1）；同级排序 = 卡片左/右侧间隙竖块（仅文件夹拖拽）
 const dropInto = computed(() => dragView.folderCardId === props.folder.id);
 const gapSide = computed(() =>
@@ -77,27 +73,15 @@ async function commitRename(): Promise<void> {
 <template>
   <div
     class="folder-card"
-    :class="{ selected, dimmed }"
+    :class="{ selected, dimmed, renaming }"
     :data-folder-id="folder.id"
     :data-drag-name="folder.name"
     @click="emit('select', $event)"
   >
-    <div class="icon-wrap" :class="{ thumb: !!thumbUrl }">
-      <template v-if="thumbUrl">
-        <span class="layer back" v-html="backSvg" />
-        <span class="paper-back" aria-hidden="true" />
-        <img class="photo" :src="thumbUrl" alt="" draggable="false" />
-        <span class="layer front" v-html="frontThumbSvg" />
-      </template>
-      <template v-else>
-        <span class="layer plain" v-html="folderSvg" />
-      </template>
-      <!-- 拖拽并入覆盖（C4b）：盖住整个缩略图区域的方形覆盖 -->
-      <span v-if="dropInto" class="drop-cover" aria-hidden="true" />
-    </div>
-    <div class="texts">
+    <div class="row-title">
+      <AppIcon name="folder-closed" :size="18" class="f-icon" />
       <!-- 名称（2026-07-29 复验三轮）：双击 = 就地重命名（stop 防触发卡片双击"进入"）；
-           命名态输入框样式同素材卡片 rename-input -->
+           命名态整卡 1.5px 品牌色-边框线高亮提示，输入框透明底不单独描边（2026-08-10 用户定） -->
       <input
         v-if="renaming"
         ref="renameInput"
@@ -110,192 +94,133 @@ async function commitRename(): Promise<void> {
         @dblclick.stop
         @pointerdown.stop
       />
-      <span v-else class="title folder-name" @dblclick.stop="startRename">{{ folder.name }}</span>
-      <span class="meta">{{ meta }}</span>
+      <!-- 名称悬停 tip（2026-08-10 用户定）：完整名称（限宽换行）+ 简介档（数量行） -->
+      <span v-else class="title folder-name" v-tip="{ text: folder.name, keys: meta, column: true }" @dblclick.stop="startRename">{{ folder.name }}</span>
     </div>
-    <!-- 同级排序间隙竖块（C4 混排护栏：文件夹只与文件夹排序；宽 16 = 卡片间距档） -->
+    <span class="meta">{{ meta }}</span>
+    <!-- 拖拽并入覆盖（C4b）：盖住整卡的方形覆盖 -->
+    <span v-if="dropInto" class="drop-cover" aria-hidden="true" />
+    <!-- 同级排序间隙竖块（C4 混排护栏：文件夹只与文件夹排序；宽 12 = 卡片间距档） -->
     <span v-if="gapSide" class="drop-gap" :class="gapSide" aria-hidden="true" />
   </div>
 </template>
 
 <style scoped>
-/* 总容器：间距 4；宽度由 FolderStrip 弹性控制（基准 189） */
+/* 卡片（figma 42）：padding 12 24 / 间距 4 / C3 底 / 1px 暗-悬停边框（内阴影，规范第 4 条不用
+   border）/ 圆角 6；宽度由 FolderStrip grid 弹性控制（min 185）。
+   1.5px 状态边框由 ::after 伪元素 border 绘制（2026-08-10 走查两轮：inset box-shadow 1.5px
+   分数物理像素底缘渗线；outline 负 offset + 圆角角部出尖刺 artifact——均弃；
+   伪元素 border = 元素自身绘制不占布局、圆角内收、无渗线无尖角，同旧 icon-wrap::after 机制） */
 .folder-card {
-  position: relative; /* 拖拽间隙竖块挂点（C4） */
+  position: relative; /* 状态边框伪元素与拖拽间隙竖块挂点 */
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  padding: var(--space-12) var(--space-24);
+  border-radius: var(--radius-6);
+  background: var(--c3);
+  box-shadow: inset 0 0 0 1px var(--line-hover);
   cursor: default;
 }
-/* 拖拽并入覆盖（C4b，2026-07-28 定案）：--brand-1-12 填充 + inset 1px --brand-1，
-   盖住整个缩略图区域（含分层 SVG，须在 ::after 边框层之上） */
-.drop-cover {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  border-radius: var(--radius-8);
-  background: var(--brand-1-12);
-  box-shadow: inset 0 0 0 1px var(--brand-1);
-  pointer-events: none;
-}
-/* 同级排序间隙竖块（C4）：宽 = 卡片间距 16 / 高随卡片整体，圆角竖向矩形色块 */
-.drop-gap {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 16px;
-  border-radius: var(--radius-4);
-  background: var(--brand-1-12);
-  box-shadow: inset 0 0 0 1px var(--brand-1);
-  pointer-events: none;
-}
-.drop-gap.left {
-  left: -16px;
-}
-.drop-gap.right {
-  right: -16px;
-}
-/* 图标容器：padding 0 / 圆角 8（= SVG 外形圆角，裁切弧与 SVG 弧重合，常态不截断）；
-   边框由 ::after 绘制（不占布局，圆角同为 8——hover/选中框外缘与 SVG 弧重合，
-   框盖在图形上 2px，与素材卡片边框盖图片同一机制） */
-.icon-wrap {
-  position: relative;
-  width: 100%;
-  border-radius: var(--radius-8);
-  overflow: hidden;
-  line-height: 0;
-}
-.icon-wrap::after {
+.folder-card::after {
   content: "";
   position: absolute;
   inset: 0;
-  border: 2px solid transparent;
-  border-radius: var(--radius-8);
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-6);
   pointer-events: none;
   transition: border-color 0.12s ease;
 }
-.plain {
-  display: block;
-  line-height: 0;
+/* hover 1.5px 亮-选中（2026-08-10 用户定）；选中 / 重命名 1.5px 品牌色-边框线（重命名 =
+   整卡高亮提示，输入框透明底不单独描边） */
+.folder-card:hover::after {
+  border-color: var(--line-active);
 }
-/* 有缩略图态：181×150 分层定位——背面整卡；装饰纸张保留前后两层：后层纸（图层3，16,25 / 149×109）
-   只露上沿，缩略图放前层纸（图层2，8,29 / 165×113）；有缩略图层1 正面下沿（高 60，盖住照片下段；
-   06_卡片 02 图层1 top 59.49% ≈ 60/150） */
-.icon-wrap.thumb {
-  aspect-ratio: 181 / 150;
+.folder-card.selected::after,
+.folder-card.renaming::after {
+  border-color: var(--brand-border);
 }
-.icon-wrap.thumb .layer {
-  position: absolute;
-  inset: 0;
-  line-height: 0;
-  color: var(--border-1); /* 分层 SVG 线条为 currentColor 15%，对齐文件夹结构色 */
-}
-.icon-wrap.thumb .layer :deep(svg) {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-/* 分层 SVG 线条原为 currentColor 15%（图标批处理口径），文件夹卡片须与无缩略图态一致：
-   图层描边强制回 border-1 实线（2026-07-25 用户定） */
-.icon-wrap.thumb .layer :deep(path[stroke]) {
-  stroke: var(--border-1);
-  stroke-opacity: 1;
-}
-.icon-wrap.thumb .front {
-  top: auto;
-  height: 40%;
-}
-/* 后层纸（图层3）：缩略图不放在这层，只作装饰纸从后层露出 */
-.paper-back {
-  position: absolute;
-  left: 8.84%; /* 16/181 */
-  top: 16.67%; /* 25/150 */
-  width: 82.32%; /* 149/181 */
-  height: 72.67%; /* 109/150 */
-  background: var(--font-icon-3);
-  border-radius: var(--radius-4);
-  box-shadow: inset 0 0 0 1px var(--font-icon-20);
-}
-/* 缩略图 = 前层纸（图层2）：contain 不裁切，文件纸底色托透明通道 */
-.photo {
-  position: absolute;
-  left: 4.42%; /* 8/181 */
-  top: 19.33%; /* 29/150 */
-  width: 91.16%; /* 165/181 */
-  height: 75.33%; /* 113/150 */
-  object-fit: contain; /* 与网格缩略图同口径：自适应缩放不裁切（2026-07-25 用户定） */
-  background: var(--folder-card-file); /* 保留前层文件纸底色：透明通道不能漏成黑底 */
-  border-radius: var(--radius-4);
-  box-shadow: inset 0 0 0 1px var(--font-icon-3);
-  user-select: none;
-}
-/* hover 2px border-1 / 选中 2px 品牌色 */
-.folder-card:hover .icon-wrap::after {
-  border-color: var(--border-1);
-}
-.folder-card.selected .icon-wrap::after {
-  border-color: var(--brand-1);
-}
-/* 拖拽源整卡半透明（2026-07-28 复验反馈 6①，拖拽结束引擎清态即恢复） */
-.folder-card.dimmed {
-  opacity: var(--opacity-drag-source);
-}
-.icon-wrap :deep(svg) {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-/* 文字组：间距 2 / 居中 / 高度按内容自适应（单行 40，两行 60）——文件夹图标比例固定，
-   无需像素材卡片那样为布局预留定高（2026-07-23 用户定：区域紧凑）；标题最多两行截断 */
-.texts {
+/* 行1：图标 + 标题，间距 6，高 20 */
+.row-title {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-6);
+  height: 20px;
+  min-width: 0;
   flex: none;
 }
+.f-icon {
+  color: var(--text-highlight);
+  flex: none;
+}
+/* 名称：正文 14/20 高亮，最多一行截断（2026-08-10 用户定，旧两行居中作废） */
 .title {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--font-icon-1);
-  text-align: center;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  color: var(--text-highlight);
+  white-space: nowrap;
   overflow: hidden;
-  word-break: break-all;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 /* 名称区悬停文本光标（2026-07-29 复验三轮：双击可改名） */
 .folder-name:hover {
   cursor: text;
 }
-/* 名称就地重命名输入（2026-07-29 复验三轮）：C4 底 / 1px border-1 / 圆角 6
-   （输入框 token 口径，同素材卡片 rename-input）；高度恒 20 = 字体行高（不撑高卡片，用户定）；
-   聚焦描边品牌色-1（用户定） */
+/* 重命名输入：透明底不单独描边（整卡高亮提示），字号行高同名称位不撑高卡片 */
 .rename-input {
   width: 100%;
   height: 20px;
   box-sizing: border-box;
-  padding: 0 var(--space-6);
+  padding: 0;
   border: none;
-  border-radius: var(--radius-6);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-1);
-  color: var(--font-icon-1);
+  background: transparent;
+  color: var(--text-highlight);
   font-size: var(--text-body-size);
   line-height: 20px;
-  text-align: center;
   outline: none;
+  min-width: 0;
 }
-.rename-input:focus {
-  box-shadow: inset 0 0 0 1px var(--brand-1);
-}
+/* 行2：数量，标签 12/17 标签档，单行截断 */
 .meta {
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
-  text-align: center;
+  color: var(--text-label);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: none;
+}
+/* 拖拽并入覆盖（C4b）：品牌 30% 填充 + 1.5px 品牌色-边框线（2026-08-10 用户定统一口径），盖住整卡 */
+.drop-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: var(--radius-6);
+  background: var(--brand-1-30);
+  box-shadow: inset 0 0 0 1.5px var(--brand-border);
+  pointer-events: none;
+}
+/* 同级排序间隙竖块（C4）：宽 = 卡片间距 12 / 高随卡片整体，圆角竖向矩形色块；
+   填充 30%（2026-08-10 用户定：12% 不够明显，与并入填充同档） */
+.drop-gap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  border-radius: var(--radius-4);
+  background: var(--brand-1-30);
+  box-shadow: inset 0 0 0 1px var(--brand-1);
+  pointer-events: none;
+}
+.drop-gap.left {
+  left: -12px;
+}
+.drop-gap.right {
+  right: -12px;
+}
+/* 拖拽源整卡半透明（2026-07-28 复验反馈 6①，拖拽结束引擎清态即恢复） */
+.folder-card.dimmed {
+  opacity: var(--opacity-drag-source);
 }
 </style>

@@ -1,6 +1,9 @@
 <script setup lang="ts">
-// 列表行（02_通用组件/02_item 10）：缩略图（可随滑块缩放）+ 名称 + 尺寸 / 格式 / 文件大小 / 修改日期。
-// C3 / C1 交替行底色；1px border-2（inset）/ 圆角 8 / 内边距 6 8。
+// 列表行（figma-css 列表显示稿，2026-08-10 对齐）：padding 12 / 高 69（定稿，滑块联动作废）/
+// C2、C3 交替行底色 / 1px 暗-悬停边框（inset）/ 圆角 8；
+// 缩略图 80×45 圆角 6 + 名称（14/20 高亮）；基础信息列 = 尺寸 82 / 格式 64 / 文件大小 64 /
+// 修改日期 119，间距 24（14/20 标签色）——列区不再挂 card-info（2026-08-10 用户反馈：
+// 基础信息点击无法选中，整行任意处点击都应选中本行）。
 // 文件大小 / 修改日期仍是假占位：阶段 4 排序功能接真实值（后端 PlacementView 待补 size / modifiedAt）。
 import { computed, nextTick, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -11,7 +14,6 @@ import { renamePlacement } from "../lib/placementOps";
 import { useSelectionStore } from "../stores/selection";
 import { useContentStore } from "../stores/content";
 import type { PlacementView } from "../stores/content";
-import { useUiStore } from "../stores/ui";
 
 const props = withDefaults(
   defineProps<{
@@ -24,11 +26,7 @@ const props = withDefaults(
   }>(),
   { odd: false, selected: false, renaming: false, faded: null },
 );
-const ui = useUiStore();
 
-// 缩略图随滑块缩放（80×45 基准 × 行高 / 220），等高不等宽限定容器内不裁剪
-const thumbW = computed(() => Math.max(30, Math.round((80 * ui.targetRowHeight) / 220)));
-const thumbH = computed(() => Math.max(17, Math.round((45 * ui.targetRowHeight) / 220)));
 const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
 // 尺寸列：音频显示时长（metadata 宽高是波形图尺寸非内容尺寸，5.1）；其余 w×h，无尺寸显示格式
 const size = computed(() => {
@@ -92,7 +90,7 @@ function startRename(): void {
 <template>
   <div
     class="list-row"
-    :class="{ odd, selected, 'fade-source': faded === 'source', 'fade-cut': faded === 'cut' }"
+    :class="{ odd, selected, renaming, 'fade-source': faded === 'source', 'fade-cut': faded === 'cut' }"
     :style="{ left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` }"
     @click="emit('select', $event)"
   >
@@ -101,13 +99,12 @@ function startRename(): void {
         v-if="thumbUrl"
         class="thumb"
         :class="{ icon: asset.thumbKind === 'formatIcon' }"
-        :style="{ width: `${thumbW}px`, height: `${thumbH}px` }"
         :src="thumbUrl"
         :alt="asset.name"
         decoding="async"
         draggable="false"
       />
-      <div v-else class="thumb" :style="{ width: `${thumbW}px`, height: `${thumbH}px` }" />
+      <div v-else class="thumb" />
       <input
         v-if="renaming"
         ref="renameInput"
@@ -124,7 +121,9 @@ function startRename(): void {
            单击正常选中、双击就地重命名（stop 防触发行双击预览） -->
       <span v-else class="name" @dblclick.stop="startRename">{{ displayName }}</span>
     </div>
-    <div class="details card-info">
+    <!-- 基础信息列（figma 列表显示稿）：整行任意处点击都选中本行——不再挂 card-info
+         （2026-08-10 用户反馈：列区点击无法选中） -->
+    <div class="details">
       <span class="col size">{{ size }}</span>
       <span class="col format">{{ format }}</span>
       <span class="col filesize">123 MB</span>
@@ -134,28 +133,32 @@ function startRename(): void {
 </template>
 
 <style scoped>
+/* 列表行（figma 列表显示稿）：padding 12 / C2 底（奇行 C3 交替）/ 1px 暗-悬停边框（inset）/ 圆角 8 */
 .list-row {
   position: absolute;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* 上下 padding 8（2026-07-24 用户定，原 6） */
-  padding: var(--space-8);
+  padding: var(--space-12);
   border-radius: var(--radius-8);
-  background: var(--c1);
-  box-shadow: inset 0 0 0 1px var(--border-2);
+  background: var(--c2);
+  box-shadow: inset 0 0 0 1px var(--line-hover);
   cursor: default;
 }
-/* C3 / C1 交替行底色 */
+/* C2 / C3 交替行底色（figma：首行 C2、次行 C3） */
 .list-row.odd {
   background: var(--c3);
 }
-/* hover / 选中与素材卡片一致：2px 内阴影描边不用 fill；悬停 border-1，选中品牌色-1 */
+/* hover / 选中 / 重命名与文件夹卡片同口径（2026-08-10 用户定，列表不复杂无需实色专档）：
+   1.5px 内阴影描边——hover 亮-选中（border-1），选中品牌色-边框线，重命名整行高亮 */
 .list-row:hover {
-  box-shadow: inset 0 0 0 2px var(--border-1);
+  box-shadow: inset 0 0 0 1.5px var(--border-1);
 }
 .list-row.selected {
-  box-shadow: inset 0 0 0 2px var(--brand-1);
+  box-shadow: inset 0 0 0 1.5px var(--brand-border);
+}
+.list-row.renaming {
+  box-shadow: inset 0 0 0 1.5px var(--brand-border);
 }
 /* 拖拽源 / 被剪切整体半透明（2026-07-28 复验反馈 6①/8，token 透明度档） */
 .list-row.fade-source {
@@ -172,12 +175,14 @@ function startRename(): void {
   flex: 1;
   min-width: 0;
 }
+/* 缩略图（figma：80×45 圆角 6，定稿不随滑块）；contain 完整显示不裁切（行高固定 cover 必裁） */
 .thumb {
   flex: none;
   display: block;
-  border-radius: var(--radius-4);
+  width: 80px;
+  height: 45px;
+  border-radius: var(--radius-6);
   box-shadow: inset 0 0 0 1px var(--border-2);
-  /* contain 完整显示不裁切（行高固定 cover 必裁，2026-07-24 用户定；格式图标同规则） */
   object-fit: contain;
   /* 无缩略图占位：中间面板底色 C1（阶段3修改——不要 font-icon-4 灰块） */
   background: var(--c1);
@@ -185,42 +190,37 @@ function startRename(): void {
 .name {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--font-icon-1);
+  color: var(--text-highlight);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   /* 名称区悬停文本光标（2026-07-29 复验三轮：退出 card-info，双击可改名） */
   cursor: text;
 }
-/* 就地重命名输入（6.1 C2）：C4 底 / 1px border-1 / 圆角 6（输入框 token 口径）；
-   高度恒 20 = 字体行高（2026-07-29 用户定：不撑高行）；聚焦描边品牌色-1（用户定） */
+/* 重命名输入（2026-08-10 统一口径：整行 1.5px 品牌色边框高亮提示，输入框透明底不再单独
+   描边——同文件夹卡片 / 素材卡片）；高度恒 20 = 字体行高（不撑高行） */
 .rename-input {
   flex: 1;
   min-width: 0;
   height: 20px;
   box-sizing: border-box;
-  padding: 0 var(--space-6);
+  padding: 0;
   border: none;
-  border-radius: var(--radius-6);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-1);
-  color: var(--font-icon-1);
+  background: transparent;
+  color: var(--text-highlight);
   font-size: var(--text-body-size);
   line-height: 20px;
   outline: none;
 }
-.rename-input:focus {
-  box-shadow: inset 0 0 0 1px var(--brand-1);
-}
-/* 详情容器：尺寸 / 格式 / 文件大小 / 修改日期，正文 font-icon-3，固定列宽与列头对齐 */
+/* 基础信息列（figma）：间距 24 / 正文 14/20 标签色；列宽 82 / 64 / 64 / 119 与列头对齐 */
 .details {
   display: flex;
   align-items: center;
-  gap: var(--space-16);
+  gap: var(--space-24);
   flex: none;
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--font-icon-3);
+  color: var(--text-label);
 }
 .col {
   white-space: nowrap;
@@ -228,15 +228,15 @@ function startRename(): void {
   text-overflow: ellipsis;
 }
 .size {
-  width: 90px;
+  width: 82px;
 }
 .format {
-  width: 50px;
+  width: 64px;
 }
 .filesize {
-  width: 70px;
+  width: 64px;
 }
 .date {
-  width: 130px;
+  width: 119px;
 }
 </style>
