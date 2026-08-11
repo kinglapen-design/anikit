@@ -122,3 +122,49 @@ textarea {
   align-items: flex-start;
   gap: var(--space-4);
 }
+
+/* 就地重命名输入共享基座（6.1 C2/C3，2026-08-10 统一口径——透明底族：素材卡片 / 列表行 /
+   文件夹卡片 / 树 item）：整卡 / 整行 1.5px 品牌色高亮提示，输入框透明底不单独描边；
+   高度恒 20 = 字体行高不撑高容器。各组件差异（宽度 / flex / 字色 / 对齐）留局部覆盖；
+   收件箱磁盘区 C4 实底族（InboxDiskSection）是另一套，本地自管 */
+.rename-input {
+  height: 20px;
+  box-sizing: border-box;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: var(--text-body-size);
+  line-height: 20px;
+  outline: none;
+}
+
+/* 悬停播放层右下胶囊（5.3，HoverVideoLayer / HoverAudioLayer 共用）：时间 / 帧号 + 控制钮，
+   C1-50 底圆角 4；视频组件给 3px 进度条让位（bottom 7）为局部覆盖 */
+.capsule {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-4);
+  background: var(--c1-50);
+}
+/* 帧号 / 时间：徽标档 10/14 700 常态色（figma-css 悬停播放稿） */
+.capsule .time {
+  font-size: var(--text-badge-size);
+  line-height: var(--text-badge-line);
+  font-weight: var(--text-badge-weight);
+  color: var(--text-normal);
+  white-space: nowrap;
+}
+.capsule .hud-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  color: var(--text-normal);
+  line-height: 0; /* 防继承行高把图标行盒撑高（figma 悬停播放稿：文字与图标垂直居中对齐） */
+}

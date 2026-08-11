@@ -7,8 +7,10 @@
 // 直渲格式给源路径；psd/psb 缓存命中给全尺寸解码图、未命中先显 info 缩略图（秒显层）、
 // preview-full-ready 事件到达换高清；其余（序列帧等）回退 info 缩略图。纯展示无交互。
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getAssetFilePath, listSequenceFrames } from "../lib/mediaOps";
+import { isSequence } from "../lib/formatBadge";
 import type { PlacementView } from "../stores/content";
 
 const props = defineProps<{ asset: PlacementView }>();
@@ -19,34 +21,21 @@ const src = ref<string | null>(props.asset.thumbPath ? convertFileSrc(props.asse
 
 // 序列帧浮层播放（2026-07-28 用户定：动图范围悬停放大播放）：按 fps 轮播 info/frames 帧原图；
 // GIF / 动图 WEBP 由 loadFull 直给源文件（webview 原生循环），无需专门分支
-const isSequence = props.asset.frameCount != null && !props.asset.animated;
-
-interface FrameEntry {
-  name: string;
-  fullPath: string;
-  stripPath: string | null;
-  delayMs: number | null;
-}
-interface SequenceFrames {
-  fps: number | null;
-  thumbFrame: string | null;
-  frames: FrameEntry[];
-  unpacking: boolean;
-}
+const isSeq = isSequence(props.asset);
 
 let unlisten: (() => void) | undefined;
 let seqInterval: ReturnType<typeof setInterval> | undefined;
 let disposed = false;
 
 onMounted(() => {
-  if (isSequence) void loadSequence();
+  if (isSeq) void loadSequence();
   else void loadFull();
   window.addEventListener("keydown", onKeydown);
 });
 
 async function loadSequence(): Promise<void> {
   try {
-    const r = await invoke<SequenceFrames>("list_sequence_frames", { assetId: props.asset.assetId });
+    const r = await listSequenceFrames(props.asset.assetId);
     if (disposed || r.frames.length === 0) return;
     const urls = r.frames.map((f) => convertFileSrc(f.fullPath));
     const cover = r.thumbFrame ? r.frames.findIndex((f) => f.name === r.thumbFrame) : -1;
@@ -63,9 +52,7 @@ async function loadSequence(): Promise<void> {
 
 async function loadFull(): Promise<void> {
   try {
-    const r = await invoke<{ path: string | null; pending: boolean }>("get_asset_file_path", {
-      assetId: props.asset.assetId,
-    });
+    const r = await getAssetFilePath(props.asset.assetId);
     if (disposed) return;
     if (r.path) {
       src.value = convertFileSrc(r.path);

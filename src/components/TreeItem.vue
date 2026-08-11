@@ -9,9 +9,10 @@
 // 命名输入态（6.1 C3）：受控 naming prop——Enter / Esc / 失焦一律保存退出，空或不变 = 保留默认名。
 // 拖拽落点（6.1 C4c）：item 高度三等分——上/下 1/3 出 2px 插入线 + hover 底（仅文件夹拖拽），
 // 中间 1/3（素材任何位置）= 并入高亮（品牌 12% 底 + inset 1px 品牌色）。
-import { computed, nextTick, ref, watch } from "vue";
+import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
 import { dragView } from "../lib/dragOperation";
+import { useInlineRename } from "../lib/useInlineRename";
 
 const props = withDefaults(
   defineProps<{
@@ -60,20 +61,12 @@ const showCount = computed(() => props.count !== undefined && props.count > 0 &&
 
 // 命名输入（2026-07-29 复验三轮"先建后命名"）：初值 = 节点当前名（默认名），挂载聚焦全选；
 // Enter / Esc / 失焦一律保存退出（空或不变的判定在父级 FolderTree）
-const nameDraft = ref("");
-const nameInput = ref<HTMLInputElement>();
-watch(
-  () => props.naming,
-  (n) => {
-    if (!n) return;
-    nameDraft.value = props.label;
-    void nextTick(() => {
-      nameInput.value?.focus();
-      nameInput.value?.select();
-    });
-  },
-  { immediate: true },
-);
+const { draft: nameDraft, bindInput, commit: commitName } = useInlineRename({
+  active: () => props.naming,
+  initial: () => props.label,
+  escSaves: true,
+  onCommit: (name) => emit("nameCommit", name),
+});
 
 // 拖拽落点视觉（C4c）：引擎按 data-folder-id 匹配，zone 见 dragOperation
 const dropZone = computed(() =>
@@ -133,13 +126,13 @@ function onClick(e: MouseEvent): void {
     <div v-if="naming" class="body">
       <AppIcon :name="icon" :size="18" class="deco" />
       <input
-        ref="nameInput"
+        :ref="bindInput"
         v-model="nameDraft"
-        class="name-input"
+        class="rename-input"
         :class="{ error: namingError }"
-        @keydown.enter.prevent="emit('nameCommit', nameDraft.trim())"
-        @keydown.esc.prevent="emit('nameCommit', nameDraft.trim())"
-        @blur="emit('nameCommit', nameDraft.trim())"
+        @keydown.enter.prevent="commitName"
+        @keydown.esc.prevent="commitName"
+        @blur="commitName"
         @click.stop
         @pointerdown.stop
       />
@@ -316,20 +309,13 @@ function onClick(e: MouseEvent): void {
 .tree-item.naming-error {
   box-shadow: inset 0 0 0 1.5px var(--error);
 }
-/* 命名输入：透明底不单独描边（整 item 高亮提示，统一口径）；高度恒 20 = 字体行高（不撑高 item） */
-.name-input {
+/* 命名输入：透明底不单独描边（整 item 高亮提示，统一口径）；共享基座在 base.css（类名并入
+   .rename-input，原 .name-input 作废），本地差异 = 弹性占满 + 常态字色 + 左对齐 */
+.rename-input {
   flex: 1;
   min-width: 0;
-  height: 20px;
-  box-sizing: border-box;
-  padding: 0;
-  border: none;
-  background: transparent;
   color: var(--text-normal);
-  font-size: var(--text-body-size);
-  line-height: 20px;
   text-align: left;
-  outline: none;
 }
 /* 数量标签：标签档，右侧（figma 02_目录 item） */
 .count {

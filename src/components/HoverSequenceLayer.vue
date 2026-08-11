@@ -3,48 +3,32 @@
 // 悬停播放与"自动播放动图"开关同行为——按 fps（metadata.fps，缺省 24）轮播 info/frames/ 帧原图
 // （fullPath，不碰帧条小图与预览解析队列——队列"提交即清空 pending"语义会被卡片批量调用互相顶）。
 // 无控件；300ms 进入延迟防划过 / 快速滚动。
-import { onBeforeUnmount, onMounted, ref } from "vue";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { registerHoverPlayer } from "../stores/hoverPreview";
+import { ref } from "vue";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { useHoverPlayer } from "../lib/useHoverPlayer";
+import { listSequenceFrames } from "../lib/mediaOps";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
 
 const props = defineProps<{ asset: PlacementView }>();
 const ui = useUiStore();
 
-// 进入延迟（毫秒）：防快速划过 / 滚动触发帧清单加载
-const ENTER_DELAY = 300;
-
-interface FrameEntry {
-  name: string;
-  fullPath: string;
-  stripPath: string | null;
-  delayMs: number | null;
-}
-interface SequenceFrames {
-  fps: number | null;
-  thumbFrame: string | null;
-  frames: FrameEntry[];
-  unpacking: boolean;
-}
-
 const frames = ref<string[]>([]);
 const idx = ref(0);
 
-let timer: ReturnType<typeof setTimeout> | undefined;
 let interval: ReturnType<typeof setInterval> | undefined;
-let disposed = false;
-let unregister: (() => void) | undefined;
 
-onMounted(() => {
-  unregister = registerHoverPlayer(() => stop());
-  timer = setTimeout(() => void loadFrames(), ENTER_DELAY);
+// 悬停播放骨架（300ms 进入延迟 / 活跃实例注册 / disposed 护栏 / 卸载清理）收编 useHoverPlayer
+const { isDisposed } = useHoverPlayer({
+  load: loadFrames,
+  pause: stop,
+  cleanup: stop,
 });
 
 async function loadFrames(): Promise<void> {
   try {
-    const r = await invoke<SequenceFrames>("list_sequence_frames", { assetId: props.asset.assetId });
-    if (disposed || r.frames.length === 0) return;
+    const r = await listSequenceFrames(props.asset.assetId);
+    if (isDisposed() || r.frames.length === 0) return;
     frames.value = r.frames.map((f) => convertFileSrc(f.fullPath));
     // 从封面帧开始播（thumbFrame = 帧名），未设置从头
     const cover = r.thumbFrame ? r.frames.findIndex((f) => f.name === r.thumbFrame) : -1;
@@ -62,13 +46,6 @@ function stop(): void {
   clearInterval(interval);
   interval = undefined;
 }
-
-onBeforeUnmount(() => {
-  disposed = true;
-  clearTimeout(timer);
-  stop();
-  unregister?.();
-});
 </script>
 
 <template>

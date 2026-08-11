@@ -35,7 +35,7 @@ import { useUndoStore } from "./stores/undo";
 import { useTabsStore } from "./stores/tabs";
 import { copySelection, deletePlacements, deleteRecycle, pasteClipboard, pasteDuplicate, recycleSelectedAssetIds } from "./lib/placementOps";
 import { ensureDocApps } from "./lib/docApps";
-import { librarySetupState } from "./lib/libraryOps";
+import { librarySetupState, reopenLastLibrary } from "./lib/libraryOps";
 
 const ui = useUiStore();
 const content = useContentStore();
@@ -123,12 +123,10 @@ function onResize(): void {
   resizeTimer = setTimeout(() => void syncMaximized(), 150);
 }
 
-// 库进入打开状态后：关模态 + 标签页布局重置（新库 viewKey 全失效，关空补"全部"）+ 拉真实数据
-async function onLibraryReady(): Promise<void> {
+// 库进入打开状态后：关模态（标签页布局重置与全量刷新已收进 libraryOps.openLibrary/createLibrary）
+function onLibraryReady(): void {
   needLibrarySetup.value = false;
   librarySetupState.open = false;
-  tabs.closeAllTabs();
-  await content.refresh();
 }
 
 // 导入弹窗确认：关弹窗，先检测序列帧（命中追加 12_序列帧弹窗，4.1），导入走后台任务
@@ -346,7 +344,8 @@ onMounted(() => {
     unlistenDragDrop = fn;
   });
   // 查询库状态：未打开时自动重开最近的库（2026-08-08 用户定：不再每次弹"创建/打开资源库"
-  // 选路径）；最近列表为空（首次使用）或重开失败（路径失效等）才弹模态。
+  // 选路径；重开流程封装在 libraryOps.reopenLastLibrary）；最近列表为空（首次使用）
+  // 或重开失败（路径失效等）才弹模态。
   // 预览窗口不弹库模态（PreviewWindow 自行拉数据）
   invoke<unknown>("get_current_library")
     .then(async (lib) => {
@@ -355,16 +354,7 @@ onMounted(() => {
         return;
       }
       if (previewParam) return;
-      const recent = await invoke<{ path: string }[]>("list_recent_libraries").catch(() => []);
-      if (recent.length > 0) {
-        try {
-          await invoke("open_library", { path: recent[0].path });
-          await content.refresh();
-          return;
-        } catch (e) {
-          console.warn("最近库自动重开失败，转弹窗：", e);
-        }
-      }
+      if (await reopenLastLibrary()) return;
       needLibrarySetup.value = true;
     })
     .catch(() => {

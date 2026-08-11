@@ -9,12 +9,13 @@
 //   范围 = 封面帧（thumbFrame `t:{秒}`，未设置 = 0）起 10 秒封顶时长循环——
 //   "设置当前画面为预览图"后自动播放范围自动跟随该帧（无需新设置 UI）。
 // 悬停接管 / 移出在同一组件内切换（media 元素不重建）；media 元素组件自管（与 previewMedia 隔离）。
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { computed, ref, watch } from "vue";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import { formatDuration } from "../lib/formatDuration";
 import { frameOfTime, totalFrames } from "../lib/formatFrame";
-import { registerHoverPlayer } from "../stores/hoverPreview";
+import { getMediaSource } from "../lib/mediaOps";
+import { useHoverPlayer } from "../lib/useHoverPlayer";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
 
@@ -23,8 +24,6 @@ const ui = useUiStore();
 
 // 自动播放预览范围上限（秒，2026-07-27 用户定：自动播放最大只支持 10 秒）
 const RANGE_SECS = 10;
-// 进入延迟（毫秒）：防快速划过 / 快速滚动触发加载与转码
-const ENTER_DELAY = 300;
 
 const layerRef = ref<HTMLElement>();
 const videoRef = ref<HTMLVideoElement>();
@@ -63,21 +62,26 @@ const posText = computed(() => {
   return formatDuration(currentTime.value);
 });
 
-let timer: ReturnType<typeof setTimeout> | undefined;
-let disposed = false;
-let unregister: (() => void) | undefined;
-
-onMounted(() => {
-  unregister = registerHoverPlayer(() => videoRef.value?.pause());
-  timer = setTimeout(() => void loadSource(), ENTER_DELAY);
+// 悬停播放骨架（300ms 进入延迟 / 活跃实例注册 / disposed 护栏 / 卸载清理）收编 useHoverPlayer；
+// 本组件只管 media 元素、scrub 与范围循环
+const { isDisposed } = useHoverPlayer({
+  load: loadSource,
+  pause: () => videoRef.value?.pause(),
+  cleanup: () => {
+    cancelAnimationFrame(scrubRaf);
+    const v = videoRef.value;
+    if (v) {
+      v.pause();
+      v.removeAttribute("src");
+      v.load();
+    }
+  },
 });
 
 async function loadSource(): Promise<void> {
   try {
-    const r = await invoke<{ path: string; transcoded: boolean }>("get_media_source", {
-      assetId: props.asset.assetId,
-    });
-    if (disposed) return;
+    const r = await getMediaSource(props.asset.assetId);
+    if (isDisposed()) return;
     const v = videoRef.value;
     if (!v) return;
     v.src = convertFileSrc(r.path);
@@ -158,19 +162,6 @@ function toggleMute(): void {
   v.muted = !v.muted;
   muted.value = v.muted;
 }
-
-onBeforeUnmount(() => {
-  disposed = true;
-  clearTimeout(timer);
-  cancelAnimationFrame(scrubRaf);
-  unregister?.();
-  const v = videoRef.value;
-  if (v) {
-    v.pause();
-    v.removeAttribute("src");
-    v.load();
-  }
-});
 </script>
 
 <template>
@@ -226,33 +217,10 @@ onBeforeUnmount(() => {
   right: 0;
   bottom: 0;
 }
+/* 胶囊共享样式在 base.css（.capsule / .time / .hud-btn）；本地差异：bottom 7 给底部 3px
+   进度条让位（进度条 3 + 间距 4） */
 .capsule {
-  position: absolute;
-  right: 4px;
-  bottom: 7px; /* 进度条 3px + 间距 4 */
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-4);
-  background: var(--c1-50);
-}
-/* 帧号/时间：徽标档 10/14 700 常态色（figma-css 悬停播放稿） */
-.time {
-  font-size: var(--text-badge-size);
-  line-height: var(--text-badge-line);
-  font-weight: var(--text-badge-weight);
-  color: var(--text-normal);
-  white-space: nowrap;
-}
-.hud-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 12px;
-  height: 12px;
-  color: var(--text-normal);
-  line-height: 0; /* 防继承行高把图标行盒撑高（figma 悬停播放稿：文字与图标垂直居中对齐） */
+  bottom: 7px;
 }
 /* 进度条：3px 轨道 border-2（暗，压图不抢眼）+ fill 品牌紫（与 5.2 播放条同口径） */
 .progress {

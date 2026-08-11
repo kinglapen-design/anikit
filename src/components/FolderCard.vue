@@ -7,10 +7,11 @@
 // 双击名称重命名 = 整卡 1.5px 品牌色-边框线高亮提示（2026-08-10 用户定），输入框不再单独描边。
 // 交互（2026-07-29 复验三轮）：双击卡片（非名称区域）= 进入该文件夹（FolderStrip 接线）；
 // 双击名称 = 就地重命名（rename_folder 命令，stop 防触发"进入"）。
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import AppIcon from "./AppIcon.vue";
 import { dragView } from "../lib/dragOperation";
 import { renameFolder } from "../lib/placementOps";
+import { useInlineRename } from "../lib/useInlineRename";
 import { useSelectionStore } from "../stores/selection";
 import type { FolderNode } from "../stores/content";
 
@@ -40,16 +41,19 @@ const meta = computed(() => {
 // Enter / 失焦 / Esc 一律保存退出——非空且变了才调 renameFolder，空或不变直接退出不动；
 // 输入框 pointerdown 自停冒泡（FolderCard 是拖拽起点，防起拖拽 / 防头部空白清选择）
 const renaming = ref(false);
-const renameDraft = ref("");
-const renameInput = ref<HTMLInputElement>();
 const selection = useSelectionStore();
+const { draft: renameDraft, bindInput, commit: commitRename } = useInlineRename({
+  active: () => renaming.value,
+  initial: () => props.folder.name,
+  escSaves: true,
+  onCommit: async (name) => {
+    renaming.value = false;
+    if (!name || name === props.folder.name) return;
+    await renameFolder(props.folder.id, name);
+  },
+});
 function startRename(): void {
-  renameDraft.value = props.folder.name;
   renaming.value = true;
-  void nextTick(() => {
-    renameInput.value?.focus();
-    renameInput.value?.select();
-  });
 }
 // 右键菜单"重命名"（6.3）：经 selection.namingFolderCardId 触发（与名称双击同入口）
 watch(
@@ -61,13 +65,6 @@ watch(
     }
   },
 );
-async function commitRename(): Promise<void> {
-  if (!renaming.value) return; // Enter 提交后 blur 晚到的双触发护栏
-  renaming.value = false;
-  const name = renameDraft.value.trim();
-  if (!name || name === props.folder.name) return;
-  await renameFolder(props.folder.id, name);
-}
 </script>
 
 <template>
@@ -84,7 +81,7 @@ async function commitRename(): Promise<void> {
            命名态整卡 1.5px 品牌色-边框线高亮提示，输入框透明底不单独描边（2026-08-10 用户定） -->
       <input
         v-if="renaming"
-        ref="renameInput"
+        :ref="bindInput"
         v-model="renameDraft"
         class="rename-input"
         @keydown.enter.prevent="commitRename"
@@ -167,19 +164,12 @@ async function commitRename(): Promise<void> {
 .folder-name:hover {
   cursor: text;
 }
-/* 重命名输入：透明底不单独描边（整卡高亮提示），字号行高同名称位不撑高卡片 */
+/* 重命名输入：透明底不单独描边（整卡高亮提示）；共享基座在 base.css，
+   本地差异 = 满宽 + 不挤压图标 + 高亮字色 */
 .rename-input {
   width: 100%;
-  height: 20px;
-  box-sizing: border-box;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-highlight);
-  font-size: var(--text-body-size);
-  line-height: 20px;
-  outline: none;
   min-width: 0;
+  color: var(--text-highlight);
 }
 /* 行2：数量，标签 12/17 标签档，单行截断 */
 .meta {

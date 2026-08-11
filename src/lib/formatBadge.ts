@@ -2,6 +2,8 @@
 // 深色底 + 徽标档常态字；静态图片（PNG / JPG / BMP / WEBP）返回 null = 不出角标
 //（图片内容本身就是格式说明）；映射理解：Photoshop 蓝 / Animate 桃红 / Illustrator 橙 /
 // After Effects 蓝紫 / 动图组（GIF·动图·序列帧·视频）紫 / 音频绿 / 其他黄绿。
+// 附：isSequence / displayName 派生工具同驻本文件（卡片 / 列表 / 浮层 / 菜单共用口径）。
+import type { PlacementView } from "../stores/content";
 
 /** 各软件 / 动图分组（扩展名小写 → token 变量） */
 const BRAND_COLORS: Record<string, string> = {
@@ -58,4 +60,20 @@ export function formatBadgeColor(ext: string, isSeq = false, animated = false): 
   const key = ext.toLowerCase();
   if (IMAGE_EXTS.has(key)) return null;
   return BRAND_COLORS[key] ?? OTHER_COLOR;
+}
+
+/** 序列帧判定（2026-07-22 用户定）：frameCount 非空且非动图（动图同带 frameCount 字段，靠 animated 区分） */
+export function isSequence(asset: Pick<PlacementView, "frameCount" | "animated">): boolean {
+  return asset.frameCount != null && !asset.animated;
+}
+
+/** 卡片 / 列表显示名：序列帧 = 词干 + .序列帧 后缀（仅显示层，数据不动）；
+ *  28 查看方式"显示扩展名"（1.4）：关 = 名称只显示词干 */
+export function displayName(
+  asset: Pick<PlacementView, "name" | "frameCount" | "animated">,
+  showExt: boolean,
+): string {
+  const stem = asset.name.replace(/\.[^.]+$/, "");
+  if (isSequence(asset)) return `${stem}.序列帧`;
+  return showExt ? asset.name : stem;
 }

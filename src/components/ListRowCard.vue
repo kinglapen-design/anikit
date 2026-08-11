@@ -5,12 +5,13 @@
 // 修改日期 119，间距 24（14/20 标签色）——列区不再挂 card-info（2026-08-10 用户反馈：
 // 基础信息点击无法选中，整行任意处点击都应选中本行）。
 // 文件大小 / 修改日期仍是假占位：阶段 4 排序功能接真实值（后端 PlacementView 待补 size / modifiedAt）。
-import { computed, nextTick, ref, watch } from "vue";
+import { computed } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { Box } from "../lib/layouts";
-import { isAudioExt } from "../lib/formatBadge";
+import { displayName as assetDisplayName, isAudioExt, isSequence } from "../lib/formatBadge";
 import { formatDuration } from "../lib/formatDuration";
 import { renamePlacement } from "../lib/placementOps";
+import { useInlineRename } from "../lib/useInlineRename";
 import { useSelectionStore } from "../stores/selection";
 import { useContentStore } from "../stores/content";
 import { useUiStore } from "../stores/ui";
@@ -38,13 +39,9 @@ const size = computed(() => {
 });
 // 序列帧（2026-07-22 用户定）：格式列显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）；
 // 动图（5.1）同带 frameCount，按 animated 区分——格式列显示扩展名大写
-const isSeq = computed(() => props.asset.frameCount != null && !props.asset.animated);
+const isSeq = computed(() => isSequence(props.asset));
 const format = computed(() => (isSeq.value ? "序列帧" : props.asset.ext.toUpperCase()));
-const displayName = computed(() => {
-  if (isSeq.value) return `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧`;
-  // 28 查看方式"显示扩展名"（1.4，与 AssetCard 同口径）：关 = 名称只显示词干
-  return ui.showExt ? props.asset.name : props.asset.name.replace(/\.[^.]+$/, "");
-});
+const displayName = computed(() => assetDisplayName(props.asset, ui.showExt));
 const emit = defineEmits<{ select: [e: MouseEvent] }>();
 const ui = useUiStore();
 
@@ -52,36 +49,22 @@ const ui = useUiStore();
 // 滚出虚拟滚动销毁 = 取消（AssetGrid 先清 renamingKey，blur 晚到按 key 失配判取消）
 const selection = useSelectionStore();
 const rowKey = `${props.asset.assetId}|${props.asset.folderId}`;
-const renameDraft = ref("");
-const renameInput = ref<HTMLInputElement>();
-watch(
-  () => props.renaming,
-  (r) => {
-    if (!r) return;
-    renameDraft.value = props.asset.name;
-    void nextTick(() => {
-      const el = renameInput.value;
-      if (!el) return;
-      el.focus();
-      const dot = props.asset.name.lastIndexOf(".");
-      el.setSelectionRange(0, dot > 0 ? dot : props.asset.name.length); // 默认选中词干
-    });
+const { draft: renameDraft, bindInput, commit: commitRename, onEsc: cancelRename } = useInlineRename({
+  active: () => selection.renamingKey === rowKey,
+  initial: () => props.asset.name,
+  selectStem: true,
+  onCommit: async (name) => {
+    selection.renamingKey = null;
+    if (!name || name === props.asset.name) return;
+    await renamePlacement(
+      { assetId: props.asset.assetId, folderId: props.asset.folderId, origin: props.asset.origin },
+      name,
+    );
   },
-  { immediate: true },
-);
-function cancelRename(): void {
-  if (selection.renamingKey === rowKey) selection.renamingKey = null;
-}
-async function commitRename(): Promise<void> {
-  if (selection.renamingKey !== rowKey) return;
-  const name = renameDraft.value.trim();
-  selection.renamingKey = null;
-  if (!name || name === props.asset.name) return;
-  await renamePlacement(
-    { assetId: props.asset.assetId, folderId: props.asset.folderId, origin: props.asset.origin },
-    name,
-  );
-}
+  onCancel: () => {
+    selection.renamingKey = null;
+  },
+});
 // 双击名称 = 就地重命名（2026-07-29 复验三轮，renamingKey 既有机制——
 // 双击第一下 click 已把本行单选入域，此处仅置重命名目标）；
 // 回收站视口只读不可重命名（2026-07-29 二轮，与 AssetCard 同口径）
@@ -111,7 +94,7 @@ function startRename(): void {
       <div v-else class="thumb" />
       <input
         v-if="renaming"
-        ref="renameInput"
+        :ref="bindInput"
         v-model="renameDraft"
         class="rename-input"
         @keydown.enter.prevent="commitRename"
@@ -202,19 +185,11 @@ function startRename(): void {
   cursor: text;
 }
 /* 重命名输入（2026-08-10 统一口径：整行 1.5px 品牌色边框高亮提示，输入框透明底不再单独
-   描边——同文件夹卡片 / 素材卡片）；高度恒 20 = 字体行高（不撑高行） */
+   描边——同文件夹卡片 / 素材卡片）：共享基座在 base.css，本地差异 = 弹性占满 + 高亮字色 */
 .rename-input {
   flex: 1;
   min-width: 0;
-  height: 20px;
-  box-sizing: border-box;
-  padding: 0;
-  border: none;
-  background: transparent;
   color: var(--text-highlight);
-  font-size: var(--text-body-size);
-  line-height: 20px;
-  outline: none;
 }
 /* 基础信息列（figma）：间距 24 / 正文 14/20 标签色；列宽 82 / 64 / 64 / 119 与列头对齐 */
 .details {

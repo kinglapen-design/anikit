@@ -13,6 +13,11 @@ export interface NoteEntry {
   updatedAt: number;
 }
 
+// get_note_thumb 返回：path = 帧画面绝对路径（webview 直渲）；取不到为 null（前端 C4 占位）
+export interface NoteThumb {
+  path: string | null;
+}
+
 export const usePreviewNotesStore = defineStore("previewNotes", {
   state: () => ({
     open: false, // 浮层开关（笔记按钮激活态）
@@ -58,10 +63,29 @@ export const usePreviewNotesStore = defineStore("previewNotes", {
     async save(key: string, text: string): Promise<void> {
       const p = usePreviewStore().current;
       if (!p || !key) return;
-      this.notes = await invoke<NoteEntry[]>("set_note", { assetId: p.assetId, key, text });
-      // noteCount 冗余同步卡片角标（后端已落 metadata，前端按返回全量算条数）
-      useContentStore().setNoteCount(p.assetId, this.notes.length);
-      this.version += 1; // 详情面板笔记区块热刷新
+      this.notes = await this.saveNote(p.assetId, key, text);
+    },
+    // 笔记命令统一封装（DetailNotes 同走，规范第 1 条）——
+    // 详情面板拉取（无预览态也查）：失败静默降级 console.warn 返回 null
+    async loadNotes(assetId: string): Promise<NoteEntry[] | null> {
+      try {
+        return await invoke<NoteEntry[]>("get_notes", { assetId });
+      } catch (e) {
+        console.warn("笔记拉取失败（静默降级）：", e);
+        return null;
+      }
+    },
+    // 写笔记统一收尾（set_note 空文本 = 删除）：返回全量替换 + noteCount 同步卡片角标
+    //（后端已落 metadata，前端按返回全量算条数）+ 版本号热刷新详情面板笔记区块
+    async saveNote(assetId: string, key: string, text: string): Promise<NoteEntry[]> {
+      const list = await invoke<NoteEntry[]>("set_note", { assetId, key, text });
+      useContentStore().setNoteCount(assetId, list.length);
+      this.version += 1;
+      return list;
+    },
+    // 详情面板悬停浮帧画面：序列帧 / 动图直给帧原图，视频 ffmpeg 截帧（未就绪 path=null）
+    async getNoteThumb(assetId: string, key: string): Promise<NoteThumb> {
+      return await invoke<NoteThumb>("get_note_thumb", { assetId, key });
     },
     async remove(key: string): Promise<void> {
       await this.save(key, ""); // 空文本 = 删除（后端约定）

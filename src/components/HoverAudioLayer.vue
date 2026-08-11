@@ -3,19 +3,17 @@
 // 卡片缩略图即波形图（5.1），播放时叠加：已播放部分品牌紫（div 以同一波形图作 CSS mask +
 // clip-path 裁到进度，照 PlayBarAudio 方案）+ 1px 品牌紫播放头竖线；
 // 点击/拖动波形 seek；右下胶囊 = 当前时间 + 播放/暂停钮。media 元素组件自管。
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { computed, ref } from "vue";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import { formatDuration } from "../lib/formatDuration";
-import { registerHoverPlayer } from "../stores/hoverPreview";
+import { getMediaSource } from "../lib/mediaOps";
+import { useHoverPlayer } from "../lib/useHoverPlayer";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
 
 const props = defineProps<{ asset: PlacementView }>();
 const ui = useUiStore();
-
-// 悬停进入延迟（毫秒）：防快速划过触发加载
-const ENTER_DELAY = 300;
 
 const layerRef = ref<HTMLElement>();
 const mediaRef = ref<HTMLVideoElement>(); // 音频复用 video 元素（同 previewMedia 手法）
@@ -29,22 +27,26 @@ const pct = computed(() =>
   duration.value > 0 ? Math.min(100, Math.max(0, (currentTime.value / duration.value) * 100)) : 0,
 );
 
-let timer: ReturnType<typeof setTimeout> | undefined;
-let disposed = false;
-let unregister: (() => void) | undefined;
 let seeking = false;
 
-onMounted(() => {
-  unregister = registerHoverPlayer(() => mediaRef.value?.pause());
-  timer = setTimeout(() => void loadSource(), ENTER_DELAY);
+// 悬停播放骨架（300ms 进入延迟 / 活跃实例注册 / disposed 护栏 / 卸载清理）收编 useHoverPlayer
+const { isDisposed } = useHoverPlayer({
+  load: loadSource,
+  pause: () => mediaRef.value?.pause(),
+  cleanup: () => {
+    const v = mediaRef.value;
+    if (v) {
+      v.pause();
+      v.removeAttribute("src");
+      v.load();
+    }
+  },
 });
 
 async function loadSource(): Promise<void> {
   try {
-    const r = await invoke<{ path: string; transcoded: boolean }>("get_media_source", {
-      assetId: props.asset.assetId,
-    });
-    if (disposed) return;
+    const r = await getMediaSource(props.asset.assetId);
+    if (isDisposed()) return;
     const v = mediaRef.value;
     if (!v) return;
     v.src = convertFileSrc(r.path);
@@ -82,18 +84,6 @@ function onSeekUp(e: PointerEvent): void {
   seeking = false;
   layerRef.value!.releasePointerCapture(e.pointerId);
 }
-
-onBeforeUnmount(() => {
-  disposed = true;
-  clearTimeout(timer);
-  unregister?.();
-  const v = mediaRef.value;
-  if (v) {
-    v.pause();
-    v.removeAttribute("src");
-    v.load();
-  }
-});
 </script>
 
 <template>
@@ -170,32 +160,5 @@ onBeforeUnmount(() => {
   background: var(--brand-1);
   pointer-events: none;
 }
-.capsule {
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-4);
-  background: var(--c1-50);
-}
-/* 时间：徽标档 10/14 700 常态色（figma-css 悬停播放稿） */
-.time {
-  font-size: var(--text-badge-size);
-  line-height: var(--text-badge-line);
-  font-weight: var(--text-badge-weight);
-  color: var(--text-normal);
-  white-space: nowrap;
-}
-.hud-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 12px;
-  height: 12px;
-  color: var(--text-normal);
-  line-height: 0; /* 防继承行高把图标行盒撑高（figma 悬停播放稿：文字与图标垂直居中对齐） */
-}
+/* 右下胶囊（时间 + 播放/暂停钮）：共享样式在 base.css（.capsule / .time / .hud-btn） */
 </style>

@@ -7,12 +7,7 @@ import { nextTick } from "vue";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { useContentStore } from "./content";
 import { usePreviewStore } from "./preview";
-
-interface MediaSource {
-  path: string;
-  transcoded: boolean;
-  fps?: number | null; // 素材自身帧率（自愈后的准确值随响应下发，2026-07-28 复验反馈修复）
-}
+import { getMediaSource } from "../lib/mediaOps";
 
 // 媒体元素单例（模块级；store 状态响应式、元素本身不进响应式系统）
 let el: HTMLVideoElement | null = null;
@@ -77,7 +72,7 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
         if (this.transcoding) this.transcodingSlow = true;
       }, 300);
       try {
-        const r = await invoke<MediaSource>("get_media_source", { assetId });
+        const r = await getMediaSource(assetId);
         if (preview.current?.assetId !== assetId) return; // await 期间已切走
         // 响应 fps 优先（自愈后的准确值；PlacementView 参数只是开库时的旧快照，
         // 2026-07-28 复验反馈修复：存量视频播放条/笔记立即正确）

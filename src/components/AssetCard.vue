@@ -9,17 +9,25 @@
 // 空格触发（访达 Quick Look 逻辑，AssetGrid 接线）；图片类无悬停控件；
 // 视频 / 音频 / 动图 / 序列帧悬停播放保留（播放类无按钮，5.3 定案），
 // 查看方式"自动播放动图（含序列帧）/ 自动播放视频"开关 = 网格内免悬停自动播放。
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import HoverVideoLayer from "./HoverVideoLayer.vue";
 import HoverAudioLayer from "./HoverAudioLayer.vue";
 import HoverSequenceLayer from "./HoverSequenceLayer.vue";
 import { CARD_CAPTION_H, type Box } from "../lib/layouts";
 import { dragView } from "../lib/dragOperation";
-import { formatBadgeColor, isAudioExt, isVideoExt } from "../lib/formatBadge";
+import {
+  displayName as assetDisplayName,
+  formatBadgeColor,
+  isAudioExt,
+  isSequence,
+  isVideoExt,
+} from "../lib/formatBadge";
 import { formatDuration } from "../lib/formatDuration";
 import { renamePlacement } from "../lib/placementOps";
+import { getAssetFilePath } from "../lib/mediaOps";
+import { useInlineRename } from "../lib/useInlineRename";
 import { useUiStore } from "../stores/ui";
 import { useSelectionStore } from "../stores/selection";
 import { useContentStore } from "../stores/content";
@@ -41,7 +49,7 @@ const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.as
 // 动图（5.1）：GIF / WEBP 动图；与序列帧区分（序列帧同样带 frameCount）
 const isAnim = computed(() => props.asset.animated);
 // 序列帧（2026-07-22 用户定）：格式角标显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
-const isSeq = computed(() => props.asset.frameCount != null && !isAnim.value);
+const isSeq = computed(() => isSequence(props.asset));
 
 // 悬停播放分发（序列帧归动图范围，2026-07-27 用户定：打包就是为了看动画效果）；
 // 图片 / 工程 / 格式图标无悬停控件（2026-08-10 用户定：图片不用悬停）
@@ -66,36 +74,22 @@ const hoverActive = computed(() => hovered.value && !dragView.active);
 // blur 晚于清理到达时按 key 失配判取消）；确认调 rename_placement 后 content.refresh()（在 ops 内）
 const selection = useSelectionStore();
 const cardKey = `${props.asset.assetId}|${props.asset.folderId}`;
-const renameDraft = ref("");
-const renameInput = ref<HTMLInputElement>();
-watch(
-  () => props.renaming,
-  (r) => {
-    if (!r) return;
-    renameDraft.value = props.asset.name;
-    void nextTick(() => {
-      const el = renameInput.value;
-      if (!el) return;
-      el.focus();
-      const dot = props.asset.name.lastIndexOf(".");
-      el.setSelectionRange(0, dot > 0 ? dot : props.asset.name.length); // 默认选中词干
-    });
+const { draft: renameDraft, bindInput, commit: commitRename, onEsc: cancelRename } = useInlineRename({
+  active: () => selection.renamingKey === cardKey,
+  initial: () => props.asset.name,
+  selectStem: true,
+  onCommit: async (name) => {
+    selection.renamingKey = null;
+    if (!name || name === props.asset.name) return;
+    await renamePlacement(
+      { assetId: props.asset.assetId, folderId: props.asset.folderId, origin: props.asset.origin },
+      name,
+    );
   },
-  { immediate: true },
-);
-function cancelRename(): void {
-  if (selection.renamingKey === cardKey) selection.renamingKey = null;
-}
-async function commitRename(): Promise<void> {
-  if (selection.renamingKey !== cardKey) return; // 已取消（滚出视口 / Esc）
-  const name = renameDraft.value.trim();
-  selection.renamingKey = null;
-  if (!name || name === props.asset.name) return;
-  await renamePlacement(
-    { assetId: props.asset.assetId, folderId: props.asset.folderId, origin: props.asset.origin },
-    name,
-  );
-}
+  onCancel: () => {
+    selection.renamingKey = null;
+  },
+});
 // 双击名称 = 就地重命名（2026-07-29 复验三轮，renamingKey 既有机制——
 // 双击第一下 click 已把卡片单选入域，此处仅置重命名目标）；
 // 回收站视口只读不可重命名（2026-07-29 二轮，与 F2 / 菜单同口径闸）
@@ -125,9 +119,7 @@ watch(
 );
 async function loadAnim(): Promise<void> {
   try {
-    const r = await invoke<{ path: string | null; pending: boolean }>("get_asset_file_path", {
-      assetId: props.asset.assetId,
-    });
+    const r = await getAssetFilePath(props.asset.assetId);
     if (r.path && animPlaying.value) animSrc.value = convertFileSrc(r.path);
   } catch {
     // 解析失败保持静态封面
@@ -145,11 +137,7 @@ const badge = computed(() => {
 });
 // 角标徽章底色：格式实色（01_样式 token 01-6，7 组）
 const badgeColor = computed(() => formatBadgeColor(props.asset.ext, isSeq.value, isAnim.value));
-const displayName = computed(() => {
-  if (isSeq.value) return `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧`;
-  // 28 查看方式"显示扩展名"（1.4）：关 = 名称只显示词干
-  return ui.showExt ? props.asset.name : props.asset.name.replace(/\.[^.]+$/, "");
-});
+const displayName = computed(() => assetDisplayName(props.asset, ui.showExt));
 // 标签行：音视频改时长属性（mm:ss，5.1）；动图与其他按尺寸；fla 等无尺寸资源显示格式角标文案
 const meta = computed(() => {
   if (props.asset.duration != null && !isAnim.value) return formatDuration(props.asset.duration);
@@ -200,7 +188,7 @@ const meta = computed(() => {
     <div class="texts">
       <input
         v-if="renaming"
-        ref="renameInput"
+        :ref="bindInput"
         v-model="renameDraft"
         class="rename-input"
         @keydown.enter.prevent="commitRename"
@@ -352,18 +340,10 @@ const meta = computed(() => {
   text-overflow: ellipsis;
 }
 /* 重命名输入：透明底不单独描边（整卡 1.5px 品牌色高亮提示，同文件夹卡片 2026-08-10 用户定）；
-   高度恒 20 = 字体行高不撑高简介区；左对齐同名称位 */
+   共享基座在 base.css（高度恒 20 = 字体行高不撑高简介区），本地差异 = 满宽 + 高亮字色 */
 .rename-input {
   width: 100%;
-  height: 20px;
-  box-sizing: border-box;
-  padding: 0;
-  border: none;
-  background: transparent;
   color: var(--text-highlight);
-  font-size: var(--text-body-size);
-  line-height: 20px;
-  outline: none;
 }
 /* 原始文件徽章（figma 14）：15×15，卡片右下各 8（简介区右下） */
 .origin-badge {

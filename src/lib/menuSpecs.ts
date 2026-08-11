@@ -14,6 +14,7 @@ import { useUiStore } from "../stores/ui";
 import { usePreviewStore } from "../stores/preview";
 import { openContextMenu, type CtxEntry, type CtxItem } from "./contextMenus";
 import { docApp } from "./docApps";
+import { isSequence as isSequenceAsset } from "./formatBadge";
 import { requestLibrarySetup, switchLibrary, type LibraryEntry } from "./libraryOps";
 import {
   copyAssetLink,
@@ -110,7 +111,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
   const selection = useSelectionStore();
   const assetId = p.assetId;
   const assetKey = `${p.assetId}|${p.folderId}`;
-  const isSequence = p.frameCount !== null && !p.animated; // 序列帧（动图同 frameCount 字段，靠 animated 区分）
+  const isSequence = isSequenceAsset(p); // 序列帧（动图同 frameCount 字段，靠 animated 区分）
   const isLink = !p.origin;
   const hasClipboard = selection.clipboard !== null;
   // 打开文件链接所在位置：同 assetId 的全部 Placement 所在文件夹去重（含关联文件夹）

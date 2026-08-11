@@ -10,31 +10,13 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useContentStore } from "./content";
 import { usePreviewMediaStore } from "./previewMedia";
 import { usePreviewNotesStore } from "./previewNotes";
-import { isAudioExt, isVideoExt } from "../lib/formatBadge";
+import { isAudioExt, isSequence, isVideoExt } from "../lib/formatBadge";
+import { getAssetFilePath, listSequenceFrames, type FrameEntry } from "../lib/mediaOps";
 
-// 帧条目（序列帧/动图统一，5.2 改版）：delayMs 为该帧显示时长——
-// 动图 = 后端逐帧下发（info/frames.json）；序列帧 delayMs 恒 null，前端按 1000/fps 预填。
-export interface FrameEntry {
-  name: string; // 帧文件名（标题-序号.扩展名）
-  fullPath: string | null; // 播放帧绝对路径（info/frames 解包帧或序列帧原帧；null 兜底保画面）
-  stripPath: string | null; // 帧条小图绝对路径；null = 后台生成中（事件渐进填充）
+// 播放帧（5.2 改版）：命令原始结构见 lib/mediaOps（FrameEntry.delayMs 序列帧恒 null）——
+// 加载时统一预填 delayMs（动图用后端逐帧下发值；序列帧按 1000/fps），播放引擎按帧时长/rate 驱动。
+interface PlayFrame extends FrameEntry {
   delayMs: number;
-}
-
-// list_sequence_frames 返回（5.2 改版：序列帧/动图统一入口）：
-// 动图已解包 = fps null + 逐帧 delayMs；unpacking=true = 动图后台解包中（frames 空，前端原生播放兜底）；
-// 序列帧 = fps 非 null + delayMs 恒 null + unpacking 恒 false
-interface SequenceFrames {
-  fps: number | null;
-  thumbFrame: string | null;
-  frames: { name: string; fullPath: string; stripPath: string | null; delayMs: number | null }[];
-  unpacking: boolean;
-}
-
-// get_asset_file_path 返回：pending = 高清层后台解析中（preview-full-ready 到达后替换）
-interface AssetFilePath {
-  path: string | null;
-  pending: boolean;
 }
 
 // image = 可显示图；sequence = 序列帧；anim = 动图（GIF/WEBP 动图）；audio/video = 音视频；other = 格式图标保底
@@ -77,7 +59,7 @@ export const usePreviewStore = defineStore("preview", {
     rotate: 0 as 0 | 90 | 180 | 270,
     flipH: false,
     // 帧播放（序列帧/动图统一）
-    seq: null as { thumbFrame: string | null; frames: FrameEntry[] } | null,
+    seq: null as { thumbFrame: string | null; frames: PlayFrame[] } | null,
     frame: 0, // 当前帧索引（frames 数组下标，非帧号）
     playing: false,
     rate: 1,
@@ -228,9 +210,9 @@ export const usePreviewStore = defineStore("preview", {
       }
       this.filePath = p.thumbPath; // 秒显：info 缩略图（格式图标同路径，other 情形也先盖住旧图）
       const ext = p.ext.toLowerCase();
-      if (p.frameCount != null && !p.animated) {
+      if (isSequence(p)) {
         this.kind = "sequence";
-        const r = await invoke<SequenceFrames>("list_sequence_frames", { assetId: p.assetId });
+        const r = await listSequenceFrames(p.assetId);
         if (this.current?.assetId !== p.assetId) return; // await 期间已切走
         this.seq = {
           thumbFrame: r.thumbFrame,
@@ -256,7 +238,7 @@ export const usePreviewStore = defineStore("preview", {
         void notes.load();
         return;
       }
-      const r = await invoke<AssetFilePath>("get_asset_file_path", { assetId: p.assetId });
+      const r = await getAssetFilePath(p.assetId);
       if (this.current?.assetId !== p.assetId) return; // await 期间已切走
       if (r.path) {
         this.kind = "image";
@@ -272,12 +254,12 @@ export const usePreviewStore = defineStore("preview", {
     // 未解包（导入后后台解包中）→ unpacking 兜底态，原生 <img> 播源文件（webview 自动循环，零等待）；
     // 已解包 → 与序列帧完全同构（逐帧 delayMs 用后端下发值）。anim-unpacked 事件复调本函数无缝切换。
     async loadAnim(assetId: string): Promise<void> {
-      const r = await invoke<SequenceFrames>("list_sequence_frames", { assetId });
+      const r = await listSequenceFrames(assetId);
       if (this.current?.assetId !== assetId || this.kind !== "anim") return; // await 期间已切走
       this.unpacking = r.unpacking;
       if (r.unpacking) {
         this.seq = null;
-        const f = await invoke<AssetFilePath>("get_asset_file_path", { assetId });
+        const f = await getAssetFilePath(assetId);
         if (this.current?.assetId !== assetId || this.kind !== "anim") return; // await 期间已切走
         if (f.path) this.filePath = f.path; // gif/webp 直渲格式返回源路径；取不到则保持缩略图
         return;

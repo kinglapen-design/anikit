@@ -5,19 +5,12 @@
 // 创建：表单输名称 → 系统对话框选保存位置 → 在选中位置建以名称命名的库文件夹并打开；
 // 打开：系统对话框选文件夹 → 校验资源库结构直开，失败进错误态（重试 / 取消回初始）。
 import { ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import AppIcon from "./AppIcon.vue";
 import CreateLibraryForm from "./CreateLibraryForm.vue";
 import PathErrorDialog from "./PathErrorDialog.vue";
 import { getIcon } from "../lib/icons";
-
-interface LibraryInfo {
-  name: string;
-  path: string;
-  assetCount: number;
-  folderCount: number;
-}
+import { createLibrary, openLibrary, type LibraryInfo } from "../lib/libraryOps";
 
 const props = withDefaults(defineProps<{ closable?: boolean }>(), { closable: false });
 const emit = defineEmits<{ done: [info: LibraryInfo]; cancel: [] }>();
@@ -50,7 +43,7 @@ async function openLibraryFlow(): Promise<void> {
   if (!path || busy.value) return;
   busy.value = true;
   try {
-    emit("done", await invoke<LibraryInfo>("open_library", { path }));
+    emit("done", await openLibrary(path));
   } catch (e) {
     toError(e, "open");
   } finally {
@@ -63,7 +56,7 @@ async function onCreateSubmit(name: string): Promise<void> {
   if (!parent || busy.value) return;
   busy.value = true;
   try {
-    emit("done", await invoke<LibraryInfo>("create_library", { path: `${parent}/${name}` }));
+    emit("done", await createLibrary(`${parent}/${name}`));
   } catch (e) {
     toError(e, "create");
   } finally {

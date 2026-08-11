@@ -8,7 +8,7 @@
 // 圆角 8 / --shadow-pop / 内边距 4，宽 160 按比例），未就绪 C4 占位；移出 / 切选中即关闭。
 // 点击 item：打开预览并定位（序列帧/动图跳帧并暂停，视频 seek 该时间点）+ 打开笔记编辑浮层。
 import { computed, ref, watch } from "vue";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import SectionHeader from "./SectionHeader.vue";
 import IconButton from "./IconButton.vue";
 import { formatDuration } from "../lib/formatDuration";
@@ -35,6 +35,7 @@ const selected = computed(
 );
 
 // 选中变化 / 笔记数据变更（预览浮层写删、本组件删除）→ 拉取笔记 + 关浮层
+//（命令封装在 previewNotes store，失败静默降级）
 watch(
   [() => content.selectedAssetKey, () => notesStore.version],
   async ([key]) => {
@@ -42,12 +43,8 @@ watch(
     const sel = selected.value;
     notes.value = [];
     if (!sel) return;
-    try {
-      const list = await invoke<NoteEntry[]>("get_notes", { assetId: sel.assetId });
-      if (content.selectedAssetKey === key) notes.value = list; // await 期间已切走防错配
-    } catch (e) {
-      console.warn("笔记拉取失败（静默降级）：", e);
-    }
+    const list = await notesStore.loadNotes(sel.assetId);
+    if (list && content.selectedAssetKey === key) notes.value = list; // await 期间已切走防错配
   },
   { immediate: true },
 );
@@ -68,13 +65,11 @@ function label(key: string): string {
   return m ? String(parseInt(m[1], 10)) : key;
 }
 
-// × 删除：set_note 空文本（后端约定）→ 返回全量直接替换；noteCount 同步卡片角标 + 版本号热刷新
+// × 删除：set_note 空文本（后端约定）→ 返回全量直接替换；noteCount 角标同步 + 版本号热刷新在 store 收尾
 async function remove(key: string): Promise<void> {
   const sel = selected.value;
   if (!sel) return;
-  notes.value = await invoke<NoteEntry[]>("set_note", { assetId: sel.assetId, key, text: "" });
-  content.setNoteCount(sel.assetId, notes.value.length);
-  notesStore.version += 1;
+  notes.value = await notesStore.saveNote(sel.assetId, key, "");
   if (thumbKey.value === key) closeThumb();
 }
 
@@ -85,7 +80,7 @@ async function showThumb(key: string): Promise<void> {
   thumbKey.value = key;
   thumbUrl.value = null;
   try {
-    const r = await invoke<{ path: string | null }>("get_note_thumb", { assetId: sel.assetId, key });
+    const r = await notesStore.getNoteThumb(sel.assetId, key);
     if (thumbKey.value === key && r.path) thumbUrl.value = convertFileSrc(r.path);
   } catch (e) {
     console.warn("笔记帧画面获取失败（静默降级）：", e);

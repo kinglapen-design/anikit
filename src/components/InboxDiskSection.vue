@@ -6,14 +6,14 @@
 // 文件图标：优先系统格式图标缓存（iconPath，details 事件补齐），无缓存回退扩展名角标；
 // 目录恒 folder-closed。占用标记以 details 合并后为准（快层目录 occupied=false 是过渡态）。
 import { computed, nextTick, ref } from "vue";
-import { Channel, convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
-import AppMenu from "./AppMenu.vue";
-import MenuItem from "./MenuItem.vue";
-import MenuDivider from "./MenuDivider.vue";
 import SectionHeader from "./SectionHeader.vue";
 import { formatBadgeColor } from "../lib/formatBadge";
-import { useContentStore, type ImportEvent, type InboxDiskEntry } from "../stores/content";
+import { openContextMenu } from "../lib/contextMenus";
+import { inboxDiskSpec } from "../lib/menuSpecs/inboxDisk";
+import { deleteInboxEntry, importInboxEntry, openInboxEntry, renameInboxEntry } from "../lib/inboxOps";
+import { useContentStore, type InboxDiskEntry } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 
 const content = useContentStore();
@@ -53,56 +53,40 @@ function select(e: InboxDiskEntry): void {
   selection.clear();
 }
 
-// 右键菜单：打开 / 重命名 / 删除 / 导入（占用禁用导入；菜单点击不自动关，动作内手动关）
-const menu = ref<{ x: number; y: number; entry: InboxDiskEntry } | null>(null);
+// 右键菜单（1.3 归并全局宿主 ContextMenu）：打开 / 重命名 / 删除 / 导入（占用禁用导入与重命名）
 function openMenu(e: MouseEvent, entry: InboxDiskEntry): void {
   select(entry);
-  menu.value = { x: e.clientX, y: e.clientY, entry };
+  openContextMenu(e, inboxDiskSpec(entry, {
+    onOpen: () => void openEntry(entry),
+    onRename: () => startRename(entry),
+    onDelete: () => void deleteEntry(entry),
+    onImport: () => void importEntry(entry),
+  }));
 }
 
-async function openEntry(): Promise<void> {
-  const entry = menu.value?.entry;
-  menu.value = null;
-  if (!entry) return;
+async function openEntry(entry: InboxDiskEntry): Promise<void> {
   try {
-    await invoke("open_inbox_entry", { name: entry.name });
+    await openInboxEntry(entry.name);
   } catch (err) {
     showError(err);
   }
 }
 
-async function deleteEntry(): Promise<void> {
-  const entry = menu.value?.entry;
-  menu.value = null;
-  if (!entry) return;
+async function deleteEntry(entry: InboxDiskEntry): Promise<void> {
   try {
-    await invoke("delete_inbox_entry", { name: entry.name });
+    await deleteInboxEntry(entry.name);
     if (content.selectedInboxName === entry.name) content.selectedInboxName = "";
   } catch (err) {
     showError(err);
   }
-  await content.refreshInboxDisk();
 }
 
-// 手动导入 = 移走入库（Move + Keep；Channel 复用现有导入事件流，进度条 / 重复提示一致）
-async function importEntry(): Promise<void> {
-  const entry = menu.value?.entry;
-  menu.value = null;
-  if (!entry || entry.occupied) return;
-  content.lastImportSource = "move";
-  content.importProgress = { taskId: null, total: 0, done: 0, startedAt: Date.now() };
-  const onEvent = new Channel<ImportEvent>();
-  onEvent.onmessage = (e) => {
-    content.onImportEvent(e);
-    if (e.type === "finished") void content.refreshInboxDisk(); // 移走后实况剔除该条目
-  };
+// 手动导入 = 移走入库（Move + Keep；进度条 / 重复提示流与常规导入一致，Channel 组装在 inboxOps）
+async function importEntry(entry: InboxDiskEntry): Promise<void> {
+  if (entry.occupied) return;
   try {
-    const taskId = await invoke<number>("import_inbox_entry", { name: entry.name, onEvent });
-    if (content.importProgress && content.importProgress.taskId === null) {
-      content.importProgress.taskId = taskId;
-    }
+    await importInboxEntry(entry.name);
   } catch (err) {
-    content.importProgress = null;
     showError(err);
   }
 }
@@ -110,10 +94,8 @@ async function importEntry(): Promise<void> {
 // 行内重命名：名称位切 input，Enter 提交 / Esc 取消
 const renaming = ref<{ name: string; draft: string } | null>(null);
 const renameInput = ref<HTMLInputElement>();
-function startRename(): void {
-  const entry = menu.value?.entry;
-  menu.value = null;
-  if (!entry || entry.occupied) return;
+function startRename(entry: InboxDiskEntry): void {
+  if (entry.occupied) return;
   renaming.value = { name: entry.name, draft: entry.name };
   void nextTick(() => {
     renameInput.value?.focus();
@@ -127,12 +109,11 @@ async function commitRename(): Promise<void> {
   renaming.value = null;
   if (!newName || newName === r.name) return;
   try {
-    await invoke("rename_inbox_entry", { name: r.name, newName });
+    await renameInboxEntry(r.name, newName);
     if (content.selectedInboxName === r.name) content.selectedInboxName = newName;
   } catch (err) {
     showError(err);
   }
-  await content.refreshInboxDisk();
 }
 function cancelRename(): void {
   renaming.value = null;
@@ -186,18 +167,6 @@ const entries = computed(() => content.inboxDisk);
         </div>
       </div>
     </template>
-
-    <!-- 右键菜单必须 Teleport 出 AssetGrid 变换层：grid-canvas/cards-layer 带 transform，
-         position:fixed 在变换祖先内会改为相对该祖先定位，菜单就会跟着滚动偏移隔很远 -->
-    <Teleport to="body">
-      <AppMenu v-if="menu" :x="menu.x" :y="menu.y" @close="menu = null">
-        <MenuItem label="打开" @select="openEntry" />
-        <MenuItem label="重命名" :disabled="menu.entry.occupied" @select="startRename" />
-        <MenuItem label="删除" @select="deleteEntry" />
-        <MenuDivider />
-        <MenuItem label="导入" :disabled="menu.entry.occupied" @select="importEntry" />
-      </AppMenu>
-    </Teleport>
   </section>
 </template>
 
@@ -313,22 +282,17 @@ const entries = computed(() => content.inboxDisk);
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 行内重命名输入：C4 底 / 1px border-1 / 圆角 6（输入框 token 口径）；
-   高度恒 20 = 字体行高（2026-07-29 用户定：不撑高行）；聚焦描边品牌色-1（用户定） */
+/* 行内重命名输入：C4 实底族（与卡片透明底族分两套）；高度 / 字号 / 行高复用 base.css
+   .rename-input 共享基座，此处仅实底族差异——C4 底 / 1px border-1 / 圆角 6 / 居中；
+   聚焦描边品牌色-1（用户定） */
 .rename-input {
   width: 100%;
-  height: 20px;
-  box-sizing: border-box;
   padding: 0 var(--space-6);
-  border: none;
   border-radius: var(--radius-6);
   background: var(--c4);
   box-shadow: inset 0 0 0 1px var(--border-1);
   color: var(--font-icon-1);
-  font-size: var(--text-body-size);
-  line-height: 20px;
   text-align: center;
-  outline: none;
 }
 .rename-input:focus {
   box-shadow: inset 0 0 0 1px var(--brand-1);
