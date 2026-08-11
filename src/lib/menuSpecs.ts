@@ -40,7 +40,6 @@ import {
   openWithDialog,
   pasteClipboard,
   pasteDuplicate,
-  recycleSelectedAssetIds,
   refreshThumb,
   restoreRecycle,
 } from "./placementOps";
@@ -582,18 +581,9 @@ export function addButtonSpec(): CtxEntry[] {
   return entries;
 }
 
-// —— 树空白处（LibraryView，2026-08-11 用户定：只给新建文件夹 / 新建档案两项，宽 148；
-// 此前空白右键直接新建文件夹——item 间距误触即建目录，BUG 修复）——
-export function treeBlankSpec(): CtxEntry[] {
-  return [
-    { label: "新建文件夹", icon: "new-folder", shortcut: "Ctrl+Shift+N", action: () => void createAndName(null, null) },
-    { label: "新建档案", icon: "new-archive", shortcut: "Shift+N", disabled: true },
-  ];
-}
-
 // —— 13 稿 · 回收站（宽 148）——
-// 空白处 = 还原全部项目 / 清空回收站（空时禁用）；单项目右键首行加「还原文件 / 还原文档」
-//（图标同还原全部项目，稿注）——无尺寸资产（w null = 工程/文档类）为「还原文档」。
+// item 与空白处同一菜单（2026-08-11 用户定：item 右键 = 空白菜单，稿注的「还原文件/还原文档」
+// 首行不列）：还原全部项目 / 清空回收站（空时禁用）。
 // 彻底删除不入菜单（按稿；Del 快捷键与两段式确认业务保留在 placementOps）。
 export function recycleBlankSpec(): CtxEntry[] {
   const content = useContentStore();
@@ -610,18 +600,6 @@ export function recycleBlankSpec(): CtxEntry[] {
       disabled: content.recycleEntries.length === 0,
       action: () => void clearRecycle(),
     },
-  ];
-}
-
-export function recycleCardSpec(p: PlacementView): CtxEntry[] {
-  return [
-    {
-      label: p.w === null ? "还原文档" : "还原文件",
-      icon: "restore-all",
-      action: () => void restoreRecycle(recycleSelectedAssetIds()),
-    },
-    "divider",
-    ...recycleBlankSpec(),
   ];
 }
 
@@ -642,7 +620,7 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
     if (!selection.isSelected(key)) selection.selectOnly(key);
     const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
     if (p) {
-      if (content.isRecycleView) openContextMenu(e, recycleCardSpec(p), undefined, { width: 148 });
+      if (content.isRecycleView) openContextMenu(e, recycleBlankSpec(), undefined, { width: 148 });
       else openContextMenu(e, assetCardSpec(p), undefined, { width: 320, searchable: true });
     }
     return "done";
