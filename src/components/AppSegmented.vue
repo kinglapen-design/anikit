@@ -62,6 +62,8 @@ const thumbStyle = computed(() => ({
 .item {
   position: relative;
   flex: 1;
+  min-width: 0; /* 允许缩到 min-content 以下（1.4 走查：nowrap 文字把 item 撑到 52 > 均分 48，
+                   容器溢出且 thumb 仍按公式 48 计算 → 选中块与文字错位，2026-08-11 CDP 实测定位） */
   display: flex;
   align-items: center;
   justify-content: center;

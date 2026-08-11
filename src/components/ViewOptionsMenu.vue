@@ -88,32 +88,28 @@ function closeAll(): void {
       :trigger="trigger ?? null"
       @close="closeAll"
     >
-      <!-- 组 1：布局 / 排序 / 时间码 -->
-      <div class="group">
-        <div class="row">
-          <span class="label">布局方式</span>
-          <AppSegmented v-model="ui.layoutMode" :options="layouts" small style="width: 208px" />
-        </div>
-        <!-- 排序方式（占位禁用——排序业务 3.5 接） -->
-        <div class="row disabled">
-          <span class="label">排序方式</span>
-          <span class="ctrl">
-            <button class="picker" disabled>
-              <span class="val">{{ ui.sortBy || "自定义" }}</span>
-              <AppIcon name="tree-expand-arrow" :size="12" class="down" />
-            </button>
-            <AppSegmented v-model="sortOrderModel" :options="sortOrders" small style="width: 104px" class="seg-disabled" />
-          </span>
-        </div>
-        <div class="row">
-          <span class="label">时间码显示方式</span>
-          <AppSegmented v-model="ui.timeDisplay" :options="timeDisplays" small style="width: 112px" />
-        </div>
+      <!-- 组 1：布局 / 排序 / 时间码（稿：三行各 53 高 padding 12 0 + 行 border-bottom 暗-悬停） -->
+      <div class="row tall">
+        <span class="label">布局方式</span>
+        <AppSegmented v-model="ui.layoutMode" :options="layouts" small style="width: 208px" />
+      </div>
+      <!-- 排序方式（占位禁用——排序业务 3.5 接） -->
+      <div class="row tall disabled">
+        <span class="label">排序方式</span>
+        <span class="ctrl">
+          <button class="picker" disabled>
+            <span class="val">{{ ui.sortBy || "自定义" }}</span>
+            <AppIcon name="tree-expand-arrow" :size="12" class="down" />
+          </button>
+          <AppSegmented v-model="sortOrderModel" :options="sortOrders" small style="width: 104px" class="seg-disabled" />
+        </span>
+      </div>
+      <div class="row tall">
+        <span class="label">时间码显示方式</span>
+        <AppSegmented v-model="ui.timeDisplay" :options="timeDisplays" small style="width: 112px" />
       </div>
 
-      <div class="group-line" />
-
-      <!-- 组 2：显示开关 -->
+      <!-- 组 2：显示开关（稿：组容器 padding 12 0 / gap 12 / 行高 28，行间无线，组底 border-bottom） -->
       <div class="group">
         <div class="row">
           <span class="label">显示简介</span>
@@ -144,10 +140,8 @@ function closeAll(): void {
         </div>
       </div>
 
-      <div class="group-line" />
-
-      <!-- 组 3：自动播放 -->
-      <div class="group">
+      <!-- 组 3：自动播放（稿：组容器 padding 12 0 / gap 12 / 行高 28，无底线） -->
+      <div class="group last">
         <div class="row">
           <span class="label">自动播放动图</span>
           <AppSwitch v-model="ui.autoPlayGif" />
@@ -174,24 +168,34 @@ function closeAll(): void {
 </template>
 
 <style scoped>
-/* 组（28 稿）：行高 53（padding 12 0），行间无分隔；组间 1px 暗-悬停线（内容宽满） */
-.group {
-  display: flex;
-  flex-direction: column;
-}
-.group-line {
-  flex: none;
-  height: 1px;
-  background: var(--line-hover);
-}
-/* 行：标题 16/22 700（标题档，28 稿）左置，控件右置 */
-.row {
+/* 行结构（28 稿实测）：组 1 三行 = 独立行容器 53 高（padding 12 0）+ 行 border-bottom 暗-悬停；
+   开关组 = 组容器（padding 12 0 / gap 12 / 行高 28），行间无线，组底 border-bottom；末组无线 */
+.row.tall {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
   padding: var(--space-12) 0;
+  border-bottom: 1px solid var(--line-hover);
 }
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-12) 0;
+  border-bottom: 1px solid var(--line-hover);
+}
+.group.last {
+  border-bottom: none;
+}
+.group .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  height: 28px;
+}
+/* 行标题：16/22 700 标题档（28 稿），常态色 */
 .label {
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);

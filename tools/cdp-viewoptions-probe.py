@@ -125,13 +125,35 @@ async def main():
             print("汉堡菜单:", await ev("document.querySelector('.app-menu')?.textContent?.replace(/\s+/g, ' ').slice(0, 80)"))
             print("汉堡菜单宽:", await ev("document.querySelector('.app-menu')?.style.width"))
 
-            menus = await ev("""
-              [...document.querySelectorAll('.app-menu')].map((m) => ({
-                text: m.textContent.replace(/\s+/g, ' ').slice(0, 90),
-                width: m.style.width,
-              }))
+            # 点击"瀑布流"（布局方式 segmented 第 2 项），等滑动动画结束，量 thumb 与 item 对齐
+            await ev("""
+              (() => {
+                const seg = [...document.querySelectorAll('.app-menu .app-seg')][0];
+                const items = seg.querySelectorAll('.item');
+                items[1].click();
+                return true;
+              })()
             """)
-            print("菜单元素:", json.dumps(menus, ensure_ascii=False))
+            await asyncio.sleep(0.6)
+            align = await ev("""
+              (() => {
+                const seg = [...document.querySelectorAll('.app-menu .app-seg')][0];
+                const thumb = seg.querySelector('.thumb').getBoundingClientRect();
+                const item = seg.querySelectorAll('.item')[1].getBoundingClientRect();
+                const segR = seg.getBoundingClientRect();
+                const cs = getComputedStyle(seg.querySelectorAll('.item')[1]);
+                const scs = getComputedStyle(seg);
+                return {
+                  segWidth: segR.width, segPadding: scs.padding, segGap: scs.gap,
+                  thumb: { left: thumb.left, width: thumb.width },
+                  item: { left: item.left, width: item.width },
+                  dx: Math.round((thumb.left - item.left) * 10) / 10,
+                  dw: Math.round((thumb.width - item.width) * 10) / 10,
+                  minWidth: cs.minWidth, flexBasis: cs.flexBasis, shrink: cs.flexShrink, padding: cs.padding,
+                };
+              })()
+            """)
+            print("对齐测量:", json.dumps(align, ensure_ascii=False))
             shot = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
             import base64 as b64
             open("E:/01_Projects/03_Software-dev/AniKit/tools/style-preview/view-options-cdp.png", "wb").write(b64.b64decode(shot["result"]["data"]))
