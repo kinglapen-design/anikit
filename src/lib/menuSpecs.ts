@@ -632,6 +632,7 @@ export function hamburgerSpec(entries: LibraryEntry[], currentPath: string | nul
     },
     {
       label: "查找",
+      submenuWidth: 213,
       submenu: [
         { label: "扫描重复文件", icon: "scan-duplicates", disabled: true },
         { label: "扫描文件/档案链接", icon: "scan-links", disabled: true },
