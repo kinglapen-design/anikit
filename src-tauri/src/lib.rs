@@ -207,6 +207,7 @@ pub fn run() {
       commands::library::open_library,
       commands::library::get_current_library,
       commands::library::list_recent_libraries,
+      commands::doc_apps::detect_doc_apps,
       commands::settings::get_ui_settings,
       commands::settings::save_ui_settings,
       commands::settings::save_window_state,

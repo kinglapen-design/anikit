@@ -2,6 +2,7 @@
 //! UI / AI Agent / 插件统一经命令接口操作，不直接读写数据文件。
 
 pub mod asset_menu;
+pub mod doc_apps;
 pub mod import;
 pub mod inbox;
 pub mod library;

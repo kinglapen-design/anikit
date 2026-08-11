@@ -13,6 +13,7 @@ import { useTabsStore } from "../stores/tabs";
 import { useUiStore } from "../stores/ui";
 import { usePreviewStore } from "../stores/preview";
 import { openContextMenu, type CtxEntry, type CtxItem } from "./contextMenus";
+import { docApp } from "./docApps";
 import {
   copyAssetLink,
   copyAssetPath,
@@ -511,16 +512,23 @@ export function treeItemSpec(node: FolderNode, parentId: string | null): CtxEntr
 
 // —— 07 稿 · 新增菜单（宽 320 无搜索框）——
 // 三入口共用一套（2026-08-11 用户定）：侧栏"新增"按钮 / 网格空白处右键 / Ctrl+N（按钮位弹出）。
-// 新建文档组稿只有 prose 无 CSS（图标需系统检测），按通用 item 样式补、全占位；
-// Illustrator / Word / Excel / 文本文档 无图标，留空记 09 待办。
+// 上下文规则：剪贴板无文件 → 三个粘贴项不出现（同 03 稿口径，2026-08-11 用户定）；
+// 新建文档组 = 系统软件检测动态显隐（lib/docApps，每次打开 UI 监测）：已安装 → 带系统图标
+//（exe 提取，iconData）显示，未安装 → 删除对应新建项；MarkDown 文档恒显示（纯文本无需软件）；
+// 新建文档业务阶段三 3.1 接，本轮项仍 disabled 占位。
 export function addButtonSpec(): CtxEntry[] {
   const selection = useSelectionStore();
   const hasClipboard = selection.clipboard !== null;
-  return [
-    { label: "作为链接粘贴", icon: "paste-as-link", shortcut: "Ctrl+V", disabled: !hasClipboard, action: () => void pasteClipboard() },
-    { label: "作为链接粘贴并重命名", icon: "paste-as-link-rename", shortcut: "Ctrl+Shift+V", disabled: true },
-    { label: "作为副本粘贴", icon: "paste-as-copy", shortcut: "Ctrl+Alt+V", disabled: !hasClipboard, action: () => void pasteDuplicate() },
-    "divider",
+  const entries: CtxEntry[] = [];
+  if (hasClipboard) {
+    entries.push(
+      { label: "作为链接粘贴", icon: "paste-as-link", shortcut: "Ctrl+V", action: () => void pasteClipboard() },
+      { label: "作为链接粘贴并重命名", icon: "paste-as-link-rename", shortcut: "Ctrl+Shift+V", disabled: true },
+      { label: "作为副本粘贴", icon: "paste-as-copy", shortcut: "Ctrl+Alt+V", action: () => void pasteDuplicate() },
+      "divider",
+    );
+  }
+  entries.push(
     { label: "新建文件夹", icon: "new-folder", shortcut: "Ctrl+Shift+N", action: () => void createAndName(null, null) },
     { label: "新建档案", icon: "new-archive", shortcut: "Shift+N", disabled: true },
     "divider",
@@ -541,17 +549,30 @@ export function addButtonSpec(): CtxEntry[] {
       ],
     },
     { label: "扫描文件/档案链接", icon: "scan-links", disabled: true },
-    "divider",
-    { label: "Animate 文档", icon: "animate-on", disabled: true },
-    { label: "Photoshop 文档", icon: "photoshop-on", disabled: true },
-    { label: "After Effects 文档", icon: "ae-on", disabled: true },
-    { label: "Illustrator 文档", disabled: true },
-    "divider",
-    { label: "MarkDown 文档", icon: "open-markdown-editor", disabled: true },
-    { label: "文本文档", disabled: true },
-    { label: "Word 文档", disabled: true },
-    { label: "Excel 文档", disabled: true },
-  ];
+  );
+  // 新建文档组：已安装才出（图标 = 系统 exe 提取）；软件组与办公/文本组之间分组线按稿
+  const docItem = (id: string, label: string): CtxItem | null => {
+    const app = docApp(id);
+    if (!app?.installed) return null;
+    return { label, iconData: app.icon ?? undefined, disabled: true };
+  };
+  const softwareDocs = [
+    docItem("animate", "Animate 文档"),
+    docItem("photoshop", "Photoshop 文档"),
+    docItem("afterEffects", "After Effects 文档"),
+    docItem("illustrator", "Illustrator 文档"),
+  ].filter((it): it is CtxItem => it !== null);
+  const officeDocs = [
+    docItem("text", "文本文档"),
+    docItem("word", "Word 文档"),
+    docItem("excel", "Excel 文档"),
+  ].filter((it): it is CtxItem => it !== null);
+  const docGroup: CtxEntry[] = [];
+  if (softwareDocs.length > 0) docGroup.push(...softwareDocs, "divider");
+  docGroup.push({ label: "MarkDown 文档", icon: "open-markdown-editor", disabled: true });
+  if (officeDocs.length > 0) docGroup.push(...officeDocs);
+  entries.push("divider", ...docGroup);
+  return entries;
 }
 
 // —— 网格右键统一调度（6.3，自 AssetGrid 拆出，规范第 3 条行数控制）——

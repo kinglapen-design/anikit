@@ -4,14 +4,20 @@
 //! mac 端方案保留：Quick Look（QLThumbnailGenerator），暂不做（4.2 定案）。
 
 use std::path::Path;
+use std::sync::Mutex;
 
 use image::RgbaImage;
 
 /// 系统格式图标尺寸（见方，带 alpha）
 pub const FORMAT_ICON_EDGE: u32 = 256;
 
+/// Shell/COM 图标提取进程级串行化（1.3：导入管线 rayon 并发 + doc_apps 检测会并发进入，
+/// 第三方 Shell handler 在 STA 下并发调用不稳定——测试并发抖动根因，2026-08-11）
+static SHELL_ICON_LOCK: Mutex<()> = Mutex::new(());
+
 /// 取文件的系统格式图标；系统无关联图标 / 调用失败返回 None（能力探测语义，不算吞错误）
 pub fn format_icon(path: &Path, edge: u32) -> Option<RgbaImage> {
+  let _guard = SHELL_ICON_LOCK.lock().ok()?;
   imp::format_icon(path, edge)
 }
 

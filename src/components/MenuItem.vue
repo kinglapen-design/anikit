@@ -12,6 +12,7 @@ const props = withDefaults(
   defineProps<{
     icon?: string;
     iconClass?: string; // 图标附加类（如 rot-90）
+    iconData?: string; // 内联图片图标（data URL，16 居中于 18 盒——1.3 新建文档组系统软件图标）
     label: string;
     shortcut?: string;
     arrow?: boolean;
@@ -19,7 +20,7 @@ const props = withDefaults(
     checked?: boolean;
     disabled?: boolean; // 禁用态：不响应 hover / 点击
   }>(),
-  { icon: undefined, iconClass: undefined, shortcut: undefined, arrow: false, checkable: false, checked: false, disabled: false },
+  { icon: undefined, iconClass: undefined, iconData: undefined, shortcut: undefined, arrow: false, checkable: false, checked: false, disabled: false },
 );
 const emit = defineEmits<{ select: [] }>();
 
@@ -37,6 +38,7 @@ const keys = computed(() =>
       <span v-if="checkable" class="check-slot">
         <AppIcon v-if="checked" name="check" :size="12" />
       </span>
+      <span v-else-if="iconData" class="deco data-icon"><img :src="iconData" alt="" /></span>
       <AppIcon v-else-if="icon" :name="icon" :size="18" class="deco" :class="iconClass" />
       <span class="label">{{ label }}</span>
     </span>
@@ -81,6 +83,19 @@ const keys = computed(() =>
 }
 .deco {
   flex: none;
+}
+/* 内联图片图标（data URL）：16 居中于 18 盒 */
+.deco.data-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+.deco.data-icon img {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 /* 图标旋转 90°（如"上下分屏"与左右分屏同图标的语义区分） */
 .deco.rot-90 :deep(svg) {

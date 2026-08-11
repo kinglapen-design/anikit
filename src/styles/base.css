@@ -91,9 +91,30 @@ textarea {
 .app-tip.show {
   opacity: 1;
 }
+/* 快捷键徽章组（2026-08-11 用户定：与右键菜单 KbdBadge 一致——C3 底 / 暗-悬停边框 / 圆角 6 /
+   12px 标签色；多字母 padding 2 4、单字母 2 6；词键小写转换在 tip.ts） */
 .app-tip-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex: none; /* 徽章组不被长名称挤压（2026-08-10） */
+}
+.app-tip-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-6);
+  background: var(--c3);
+  box-shadow: inset 0 0 0 1px var(--line-hover);
   color: var(--text-label);
-  flex: none; /* 简介档不被长名称挤压（2026-08-10） */
+  font-family: inherit;
+  font-size: var(--text-label-size);
+  line-height: var(--text-label-line);
+  flex: none;
+}
+.app-tip-kbd.single {
+  padding: var(--space-2) var(--space-6);
 }
 /* 两行竖排变体（2026-08-10 卡片名称 tip 用户定：名称 / 简介分两行，gap 4） */
 .app-tip.col {

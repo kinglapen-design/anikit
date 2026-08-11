@@ -31,6 +31,7 @@ import { usePreviewStore } from "./stores/preview";
 import { useUndoStore } from "./stores/undo";
 import { useTabsStore } from "./stores/tabs";
 import { copySelection, deletePlacements, deleteRecycle, pasteClipboard, pasteDuplicate, recycleSelectedAssetIds } from "./lib/placementOps";
+import { ensureDocApps } from "./lib/docApps";
 
 const ui = useUiStore();
 const content = useContentStore();
@@ -292,6 +293,7 @@ async function saveWindowState(): Promise<void> {
 onMounted(() => {
   void syncMaximized();
   void ui.initSettings(); // 全局 UI 设置加载 + 变更防抖写回（2026-07-28 持久化）
+  void ensureDocApps(); // 新建文档软件检测（1.3：每次打开 UI 监测，07 新增菜单"新建文档"组驱动）
   window.addEventListener("resize", onResize);
   window.addEventListener("keydown", onPaste);
   window.addEventListener("keydown", onUndoRedo);

@@ -1,5 +1,7 @@
 // 工具 tip（02_通用组件/09_工具tip）：C3 / 圆角 6 / 2px border-1 / 内边距 4 6 / 间距 6，
-// 标题 副文本 font-icon-1 + 快捷键 副文本 font-icon-3。悬停 400ms 显示，跟随元素下方居中。
+// 标题 副文本 font-icon-1 + 快捷键徽章组（同右键菜单 KbdBadge：按 "+" 拆分多枚，
+// 词键小写 ctrl/shift/alt/enter/delete、单字母大写、中文键名原样，2026-08-11 用户定）。
+// 悬停 400ms 显示，跟随元素下方居中。
 // 用法：v-tip="'菜单'" 或 v-tip="{ text: '新建', keys: 'Ctrl+N' }"；
 // column: true = 名称 / 简介两行竖排（gap 4，卡片名称 tip，2026-08-10 用户定）。
 import type { Directive } from "vue";
@@ -30,10 +32,16 @@ function show(el: HTMLElement, value: TipValue): void {
   span.textContent = value.text;
   tip.appendChild(span);
   if (value.keys) {
-    const k = document.createElement("span");
-    k.className = "app-tip-keys";
-    k.textContent = value.keys;
-    tip.appendChild(k);
+    const group = document.createElement("span");
+    group.className = "app-tip-keys";
+    for (const raw of value.keys.split("+").filter(Boolean)) {
+      const kbd = document.createElement("kbd");
+      kbd.className = raw.length <= 1 ? "app-tip-kbd single" : "app-tip-kbd";
+      // 显示口径同菜单（MenuItem）：词键小写、单字母大写、中文原样
+      kbd.textContent = /^[A-Za-z]{2,}$/.test(raw) ? raw.toLowerCase() : raw;
+      group.appendChild(kbd);
+    }
+    tip.appendChild(group);
   }
   const rect = el.getBoundingClientRect();
   tip.classList.add("show");
