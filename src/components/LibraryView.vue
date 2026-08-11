@@ -13,6 +13,8 @@ import TreeItem from "./TreeItem.vue";
 import FolderTree from "./FolderTree.vue";
 import { beginFolderDrag } from "../lib/dragOperation";
 import { createAndName, findParentId } from "../lib/menuOps";
+import { openContextMenu } from "../lib/contextMenus";
+import { recycleBlankSpec } from "../lib/menuSpecs";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
@@ -90,6 +92,13 @@ function onTreePointerDown(e: PointerEvent): void {
   const item = (e.target as HTMLElement).closest(".tree-item[data-folder-id]");
   if (item) beginFolderDrag(e, item.getAttribute("data-folder-id")!);
 }
+// 快速访问项右键（13 稿回收站菜单，2026-08-11）：目前仅"回收站"有菜单——
+// 还原全部文件 / 清空回收站（recycleBlankSpec，宽 148）；其余快速访问项无右键
+function onQuickMenu(key: string, e: MouseEvent): void {
+  if (key !== "recycle") return;
+  e.preventDefault();
+  openContextMenu(e, recycleBlankSpec(), undefined, { width: 148 });
+}
 </script>
 
 <template>
@@ -106,6 +115,7 @@ function onTreePointerDown(e: PointerEvent): void {
           :count="quickCount(q.key)"
           :selected="content.sidebarSelected === `quick:${q.key}`"
           @select="tabs.openView(`quick:${q.key}`)"
+          @contextmenu="onQuickMenu(q.key, $event)"
         />
       </div>
     </section>
