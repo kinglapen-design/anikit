@@ -2,6 +2,8 @@
 // 数据驱动（lib/contextMenus 渲染），设计项全列 + 图标按稿配（稿里无图标的项不画蛇添足，2026-08-11 走查）——
 // 未实现的一律 disabled 置灰占位（占位点亮机制）。分组用 "divider"（组标题不出文字，Eagle 风格）。
 // 03/04/05 稿 = 宽 320 + 搜索框（openGridContextMenu / FolderStrip 调用处传 opts）；07 稿 = 宽 320 无搜索框。
+// 二级菜单宽度按稿（submenuWidth）：链接位置 320 / 缩略图·导出 213 / 资源库·AI·复制数据 180 /
+// 排序依据 184 / 扫描重复 96 / 更改封面 152（2026-08-11 二轮走查，原默认 175 文字截断）。
 // 菜单快捷键标注按新稿（重命名 ctrl+R 等，显示小写化在 MenuItem 统一做）；
 // 全局快捷键绑定另有一套，统一对齐记 09 待办。
 import { invoke } from "@tauri-apps/api/core";
@@ -138,6 +140,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     {
       label: "打开文件链接所在位置",
       icon: "reveal-file-link",
+      submenuWidth: 320,
       submenu: locations.length > 0 ? locations : [{ label: "（无）", disabled: true }],
     },
     "divider",
@@ -167,6 +170,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     {
       label: "缩略图",
       icon: "thumbnail",
+      submenuWidth: 213,
       submenu: [
         { label: "打开 Animate 生成缩略图", disabled: true },
         { label: "复制缩略图", disabled: true },
@@ -197,20 +201,22 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     {
       label: "导出文件",
       icon: "export-file",
+      submenuWidth: 213,
       submenu: [
-        { label: "导出为素材包", icon: "import-pack", disabled: true },
+        { label: "导出为素材包", icon: "library", disabled: true },
         {
           label: "导出到本地磁盘",
           icon: "export-to-disk",
           action: () => void pickExportAssets(selection.selectedRefs().map((r) => r.assetId)),
         },
-        { label: "导出提示词为 .MD 文档", icon: "open-markdown-editor", disabled: true },
+        { label: "导出提示词为 .MD 文档", icon: "set-markdown-as-prompt", disabled: true },
       ],
     },
     "divider",
     {
       label: "AI 工具集",
       icon: "ai-tools",
+      submenuWidth: 180,
       submenu: [
         { label: "以图搜图", disabled: true },
         "divider",
@@ -228,6 +234,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     {
       label: "复制数据",
       icon: "copy-data",
+      submenuWidth: 180,
       submenu: [
         { label: "复制链接", action: () => void copyAssetLink(assetId) },
         { label: "复制文件路径", action: () => void copyAssetPath(assetId) },
@@ -260,7 +267,8 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
 
 // —— 04 稿 · 档案卡片（宽 320 + 搜索框）——
 // 档案卡片形态未落地（1.2/1.4 排期，FolderNode 尚无档案标记）→ 本 spec 写好暂不挂载，挂载记 09 待办。
-// 「更改封面图」稿漏画二级箭头，按 10 稿补（二级两项，占位）。
+// 「更改封面图」稿漏画二级箭头，按 10 稿补（二级两项，宽 152，占位）；
+// 稿未画的二级（链接位置/资源库/导出/复制数据）宽度沿用 03 同项口径。
 export function archiveCardSpec(archive: { id: string; name: string }): CtxEntry[] {
   const content = useContentStore();
   const selection = useSelectionStore();
@@ -295,7 +303,7 @@ export function archiveCardSpec(archive: { id: string; name: string }): CtxEntry
     { label: "移动档案", icon: "move-file", shortcut: "Ctrl+Y", disabled: true },
     { label: "档案链接管理", icon: "linked-file-manage", shortcut: "Ctrl+J", disabled: true },
     { label: "添加文件/档案链接", icon: "add-file-link", shortcut: "Ctrl+L", action: () => pickFolderForLink() },
-    { label: "打开档案链接所在位置", icon: "reveal-archive-link", submenu: [{ label: "（无）", disabled: true }] },
+    { label: "打开档案链接所在位置", icon: "reveal-archive-link", submenuWidth: 320, submenu: [{ label: "（无）", disabled: true }] },
     "divider",
     { label: "剪切档案", icon: "cut-file", shortcut: "Ctrl+X", disabled: true },
     { label: "复制档案", icon: "copy-file", shortcut: "Ctrl+C", disabled: true },
@@ -316,6 +324,7 @@ export function archiveCardSpec(archive: { id: string; name: string }): CtxEntry
     {
       label: "更改封面图",
       icon: "edit-cover",
+      submenuWidth: 152,
       submenu: [
         { label: "从本地磁盘中选择", disabled: true },
         { label: "从资源库中选择", disabled: true },
@@ -327,10 +336,11 @@ export function archiveCardSpec(archive: { id: string; name: string }): CtxEntry
     {
       label: "导出文件",
       icon: "export-file",
+      submenuWidth: 213,
       submenu: [
-        { label: "导出为素材包", icon: "import-pack", disabled: true },
+        { label: "导出为素材包", icon: "library", disabled: true },
         { label: "导出到本地磁盘", icon: "export-to-disk", disabled: true },
-        { label: "导出提示词为 .MD 文档", icon: "open-markdown-editor", disabled: true },
+        { label: "导出提示词为 .MD 文档", icon: "set-markdown-as-prompt", disabled: true },
       ],
     },
     "divider",
@@ -338,6 +348,7 @@ export function archiveCardSpec(archive: { id: string; name: string }): CtxEntry
     {
       label: "复制数据",
       icon: "copy-data",
+      submenuWidth: 180,
       submenu: [
         { label: "复制链接", action: () => void copyFolderLink(archive.id) },
         { label: "复制名称", action: () => void copyName(archive.name) },
@@ -413,6 +424,7 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
     {
       label: "排序依据",
       icon: "sort-by",
+      submenuWidth: 184,
       submenu: [
         sortItem("当前层级 - 标题 A → Z", "levelAsc"),
         sortItem("当前层级 - 标题 Z → A", "levelDesc"),
@@ -455,8 +467,9 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
     {
       label: "导出文件",
       icon: "export-file",
+      submenuWidth: 213,
       submenu: [
-        { label: "导出为素材包", icon: "import-pack", disabled: true },
+        { label: "导出为素材包", icon: "library", disabled: true },
         { label: "导出到本地磁盘", icon: "export-to-disk", action: () => void pickExportFolder(folder.id) },
       ],
     },
@@ -585,6 +598,7 @@ export function addButtonSpec(pickImport: (kind: "files" | "folder") => void): C
     {
       label: "扫描重复文件",
       icon: "scan-duplicates",
+      submenuWidth: 96,
       submenu: [
         { label: "当前目录", disabled: true },
         { label: "全部", disabled: true },

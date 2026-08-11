@@ -4,8 +4,8 @@
 // hover 带子菜单的项时右侧飞出，右缘溢出改向左飞出（03 稿注"菜单不可超出窗口边缘"）；
 // flyout 按 key 随父项重建（2026-08-11 走查：复用实例位置滞留越偏越远）+ pop=false 不回放弹出动画。
 // 菜单结构（03/04/05 稿）：容器 padding 0——搜索区（高 44 / padding 12 / 搜索图标 18 盒 svg 15 标签色 /
-// 占位符"搜索..." 极淡 / 右侧清除钮 20 圆角 6 / border-bottom 暗-悬停 通栏分隔）与 item 组
-//（独立容器 padding 12 / gap 2）是两个容器；divider 在 item 组内负 margin 通栏。
+// 占位符"搜索..." 极淡 / 右侧清除钮 20 圆角 6 / border-bottom 暗-悬停 随容器满宽）与 item 组
+//（独立容器 padding 12 / gap 2；divider = 组内自然宽 296，稿值，不通栏，2026-08-11 二轮走查）是两个容器。
 // 搜索：打开自动聚焦，输入即过滤——一级+二级项扁平匹配 label（命中二级平铺为一级直接执行），
 // 过滤时隐藏 divider 且不出 flyout；清空恢复层级；Esc 先清空、空时再按关闭（AppMenu 豁免输入框 Esc）。
 // 组外关闭关系：根菜单的 group = flyout 根元素（flyout 内点击不关根菜单）；
@@ -119,7 +119,7 @@ function closeAll(executed = false): void {
     <!-- item 组（独立容器 padding 12 / gap 2） -->
     <div class="menu-items">
       <template v-for="(entry, i) in entries" :key="i">
-        <MenuDivider v-if="entry === 'divider'" class="full-bleed" />
+        <MenuDivider v-if="entry === 'divider'" />
         <MenuItem
           v-else
           :label="entry.label"
@@ -226,10 +226,6 @@ function closeAll(executed = false): void {
   gap: var(--space-2);
   padding: var(--space-12);
   min-height: 0;
-}
-/* divider 通栏（抵消 item 组 padding，稿线宽 = 菜单满宽） */
-.menu-items :deep(.menu-divider.full-bleed) {
-  margin: 0 calc(-1 * var(--space-12));
 }
 .menu-empty {
   padding: var(--space-6) var(--space-8);
