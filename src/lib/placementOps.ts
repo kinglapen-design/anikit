@@ -254,6 +254,27 @@ export async function createFolder(
   }
 }
 
+// 新建文本文档入库（1.3，07 新增菜单"MarkDown 文档 / 文本文档"点亮，2026-08-11 用户定）：
+// 落当前视口目录（同导入位置口径），先建后命名——成功返回 PlacementView 后 renamingKey 进重命名态
+export async function createTextDocument(kind: "md" | "txt"): Promise<void> {
+  const content = useContentStore();
+  const selection = useSelectionStore();
+  const toast = useToastStore();
+  const undo = useUndoStore();
+  try {
+    const view = await invoke<{ assetId: string; folderId: string }>("create_text_document", {
+      kind,
+      targetFolder: content.currentFolderId,
+    });
+    await content.refresh();
+    void undo.refreshState();
+    selection.renamingKey = `${view.assetId}|${view.folderId}`;
+    toast.notify({ message: "已新建文档", actionLabel: "撤销", onAction: () => void undo.undo() });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+  }
+}
+
 // —— 内部剪贴板（C1）——
 
 // Ctrl+C / Ctrl+X：写入内部剪贴板（仅素材；空选择不动作）；

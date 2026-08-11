@@ -226,6 +226,32 @@ pub async fn duplicate_placements(
   }
 }
 
+/// 新建文本文档入库（1.3，07 新增菜单"MarkDown 文档 / 文本文档"）：kind = "md" | "txt"；
+/// 撤销 = info 目录移入 cache/tmp 备份（DiskOp::Rename），重做 = 移回（Delete 会丢内容无法重做）
+#[tauri::command]
+pub async fn create_text_document(
+  state: State<'_, AppState>,
+  kind: String,
+  target_folder: Option<String>,
+) -> Result<crate::services::views::PlacementView, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin("新建文档".to_string());
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  match operations::create_text_document(lib, &kind, target_folder.as_deref()) {
+    Ok((view, info_dir, backup)) => {
+      undo.record_disk_op(
+        DiskOp::Rename { from: info_dir.clone(), to: backup.clone() },
+        DiskOp::Rename { from: backup, to: info_dir },
+      );
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(view)
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
 /// 重命名 Placement：显示名即时改；原始 Placement 追加磁盘段（originName + 词干缩略图
 /// 同步改名，成对登记 DiskOp::Rename——注意 record_disk_op(undo_op, redo_op) 参数顺序）；
 /// 链接 Placement 仅改显示名

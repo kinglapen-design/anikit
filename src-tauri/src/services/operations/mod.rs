@@ -4,11 +4,13 @@
 //! 改动 Placement 的统一经 finish() 收尾：重建内存索引 + folders.json 一次落盘。
 
 mod delete;
+mod document;
 mod duplicate;
 mod folder;
 mod placement;
 
 pub use delete::{delete_placements, DeleteReport};
+pub use document::create_text_document;
 pub use duplicate::{duplicate_placements, rename_placement};
 pub use folder::{create_folder, move_folders, rename_folder, reorder_folders};
 pub use placement::{link_placements, move_placements, reorder_placements};

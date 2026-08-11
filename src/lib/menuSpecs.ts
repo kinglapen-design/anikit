@@ -33,6 +33,7 @@ import {
 import {
   applyClipboardThumb,
   copySelection,
+  createTextDocument,
   deletePlacements,
   duplicatePlacements,
   openWithDialog,
@@ -41,6 +42,8 @@ import {
   refreshThumb,
 } from "./placementOps";
 import { collapseAll, collapseLevel, expandAll, expandLevel, toggleOpen, treeExpansion } from "./treeExpansion";
+// MarkDown 文档图标（2026-08-11 用户供 md.webp，webp 非 svg 走 iconData 内联图）
+import mdDocIcon from "../../assets/icons/01_icon-default/md.webp?url";
 
 // 默认应用打开（AssetCard / preview store 同款流程：成功后重拉最近使用）
 function openDefaultApp(assetId: string): void {
@@ -550,11 +553,12 @@ export function addButtonSpec(): CtxEntry[] {
     },
     { label: "扫描文件/档案链接", icon: "scan-links", disabled: true },
   );
-  // 新建文档组：已安装才出（图标 = 系统 exe 提取）；软件组与办公/文本组之间分组线按稿
-  const docItem = (id: string, label: string): CtxItem | null => {
+  // 新建文档组：已安装才出（图标 = 系统 exe 提取）；软件组与办公/文本组之间分组线按稿；
+  // MarkDown / 文本文档已点亮（纯文本新建入库，2026-08-11 用户定），其余新建业务 3.1 接
+  const docItem = (id: string, label: string, action?: () => void): CtxItem | null => {
     const app = docApp(id);
     if (!app?.installed) return null;
-    return { label, iconData: app.icon ?? undefined, disabled: true };
+    return { label, iconData: app.icon ?? undefined, disabled: !action, action };
   };
   const softwareDocs = [
     docItem("animate", "Animate 文档"),
@@ -563,13 +567,13 @@ export function addButtonSpec(): CtxEntry[] {
     docItem("illustrator", "Illustrator 文档"),
   ].filter((it): it is CtxItem => it !== null);
   const officeDocs = [
-    docItem("text", "文本文档"),
+    docItem("text", "文本文档", () => void createTextDocument("txt")),
     docItem("word", "Word 文档"),
     docItem("excel", "Excel 文档"),
   ].filter((it): it is CtxItem => it !== null);
   const docGroup: CtxEntry[] = [];
   if (softwareDocs.length > 0) docGroup.push(...softwareDocs, "divider");
-  docGroup.push({ label: "MarkDown 文档", icon: "open-markdown-editor", disabled: true });
+  docGroup.push({ label: "MarkDown 文档", iconData: mdDocIcon, action: () => void createTextDocument("md") });
   if (officeDocs.length > 0) docGroup.push(...officeDocs);
   entries.push("divider", ...docGroup);
   return entries;
