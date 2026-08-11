@@ -7,7 +7,7 @@
 // 建库（LibraryView），成功返回的新 id 写入 selection.namingFolderId，本组件对应节点进
 // naming 输入态——Enter / Esc / 失焦一律保存：名非空且变了 → renameFolder，空或不变保留
 // 默认名；命名态节点不参与拖拽 / 右键（不挂 data-folder-id，naming 态 TreeItem 是 div 非 button）。
-// 树 item 右键（C3）：「新建同级文件夹 / 新建子文件夹」菜单宿主在 LibraryView（Teleport body）。
+// 树 item 右键：全局菜单宿主（lib/contextMenus → App.vue <ContextMenu>），05 稿 320 宽 + 搜索框。
 import { computed, nextTick } from "vue";
 import TreeItem from "./TreeItem.vue";
 import { dragView, visibleTreeFolderIds } from "../lib/dragOperation";
@@ -75,6 +75,7 @@ function onSelect(id: string, e: MouseEvent): void {
 // 菜单取消（点外 / Esc 未执行动作）时恢复原选择（2026-08-10 用户反馈：取消后品牌色选中态残留）
 function onItemMenu(e: MouseEvent, node: FolderNode): void {
   if (selection.namingFolderId === node.id) return;
+  const opts = { width: 320, searchable: true }; // 1.3：树节点右键复用 05 文件夹稿（320 宽 + 搜索框）
   if (!selection.isFolderSelected(node.id)) {
     const snapshot = new Set(selection.selectedFolders);
     const prevAnchor = selection.folderAnchor;
@@ -84,10 +85,10 @@ function onItemMenu(e: MouseEvent, node: FolderNode): void {
       selection.selectedFolders.clear();
       for (const id of snapshot) selection.selectedFolders.add(id);
       selection.folderAnchor = prevAnchor;
-    });
+    }, opts);
     return;
   }
-  openContextMenu(e, treeItemSpec(node, props.parentId ?? null));
+  openContextMenu(e, treeItemSpec(node, props.parentId ?? null), undefined, opts);
 }
 
 // 命名保存（先建后命名）：非空且与当前名（默认名）不同 → renameFolder；

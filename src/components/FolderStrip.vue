@@ -10,8 +10,7 @@ import SectionHeader from "./SectionHeader.vue";
 import AppCheckbox from "./AppCheckbox.vue";
 import FolderCard from "./FolderCard.vue";
 import { dragView } from "../lib/dragOperation";
-import { openContextMenu } from "../lib/contextMenus";
-import { folderCardSpec } from "../lib/menuSpecs";
+import { openFolderCardMenu } from "../lib/menuSpecs";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
@@ -45,10 +44,10 @@ function onEnter(id: string): void {
   tabs.openView(`folder:${id}`);
 }
 
-// 右键（6.3）：未选中项先单选（与树 item 同规则），全局菜单宿主（lib/contextMenus）
+// 右键（6.3；1.3 一轮按 05 稿 320 宽 + 搜索框）：未选中项先单选（与树 item 同规则），全局菜单宿主
 function onMenu(f: { id: string; name: string }, e: MouseEvent): void {
   if (!selection.isFolderSelected(f.id)) selection.clickFolder(f.id);
-  openContextMenu(e, folderCardSpec(f));
+  openFolderCardMenu(e, f);
 }
 
 </script>

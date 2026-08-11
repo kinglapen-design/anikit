@@ -33,7 +33,9 @@ function toggleImportMenu(e: MouseEvent): void {
     return;
   }
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, addButtonSpec((kind) => void pickImport(kind)));
+  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, addButtonSpec((kind) => void pickImport(kind)), undefined, {
+    width: 320,
+  });
 }
 
 // 菜单触发系统对话框（PRD 05-01 导入位置：导入文件 → 当前视口目录；导入文件夹 → 根目录）
