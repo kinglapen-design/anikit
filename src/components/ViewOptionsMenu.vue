@@ -243,7 +243,7 @@ function closeAll(): void {
 }
 .picker .val {
   flex: 1;
-  text-align: right;
+  text-align: left; /* 下拉框文字一律左对齐（通用规则，2026-08-11 用户定） */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
