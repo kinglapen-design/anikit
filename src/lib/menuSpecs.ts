@@ -40,6 +40,7 @@ import {
   openWithDialog,
   pasteClipboard,
   pasteDuplicate,
+  recycleSelectedAssetIds,
   refreshThumb,
   restoreRecycle,
 } from "./placementOps";
@@ -582,14 +583,14 @@ export function addButtonSpec(): CtxEntry[] {
 }
 
 // —— 13 稿 · 回收站（宽 148）——
-// item 与空白处同一菜单（2026-08-11 用户定：item 右键 = 空白菜单，稿注的「还原文件/还原文档」
-// 首行不列）：还原全部项目 / 清空回收站（空时禁用）。
+// 空白 = 还原全部文件 / 清空回收站（空时禁用）；item 右键首行加「还原文件」（稿注单项入口，
+// 语义统一为"文件"不区分文档，2026-08-11 用户定）。
 // 彻底删除不入菜单（按稿；Del 快捷键与两段式确认业务保留在 placementOps）。
 export function recycleBlankSpec(): CtxEntry[] {
   const content = useContentStore();
   return [
     {
-      label: "还原全部项目",
+      label: "还原全部文件",
       icon: "restore-all",
       disabled: content.recycleEntries.length === 0,
       action: () => void restoreRecycle([...new Set(content.recycleEntries.map((e) => e.assetId))]),
@@ -600,6 +601,14 @@ export function recycleBlankSpec(): CtxEntry[] {
       disabled: content.recycleEntries.length === 0,
       action: () => void clearRecycle(),
     },
+  ];
+}
+
+export function recycleCardSpec(): CtxEntry[] {
+  return [
+    { label: "还原文件", icon: "restore-all", action: () => void restoreRecycle(recycleSelectedAssetIds()) },
+    "divider",
+    ...recycleBlankSpec(),
   ];
 }
 
@@ -618,11 +627,14 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
   if (key) {
     e.preventDefault();
     if (!selection.isSelected(key)) selection.selectOnly(key);
-    const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
-    if (p) {
-      if (content.isRecycleView) openContextMenu(e, recycleBlankSpec(), undefined, { width: 148 });
-      else openContextMenu(e, assetCardSpec(p), undefined, { width: 320, searchable: true });
+    // 回收站分流前置（2026-08-11 修复 item 右键调不出：键解析失败也不依赖 items 反查，
+    // 与 6.1 旧代码同构——回收站菜单不读卡片数据）
+    if (content.isRecycleView) {
+      openContextMenu(e, recycleCardSpec(), undefined, { width: 148 });
+      return "done";
     }
+    const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
+    if (p) openContextMenu(e, assetCardSpec(p), undefined, { width: 320, searchable: true });
     return "done";
   }
   if (t.closest(".folder-card, button, input")) return "pass";
