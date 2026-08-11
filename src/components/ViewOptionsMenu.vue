@@ -196,7 +196,7 @@ function closeAll(): void {
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--text-highlight);
+  color: var(--text-normal); /* 行标题用常态档（2026-08-11 用户定，不用高亮） */
   white-space: nowrap;
 }
 .ctrl {
