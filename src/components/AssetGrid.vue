@@ -11,7 +11,6 @@ import ListHeader from "./ListHeader.vue";
 import FolderStrip from "./FolderStrip.vue";
 import InboxDiskSection from "./InboxDiskSection.vue";
 import SectionHeader from "./SectionHeader.vue";
-import RecycleCardMenu from "./RecycleCardMenu.vue";
 import {
   CARD_CAPTION_H,
   computeJustified,
@@ -268,14 +267,11 @@ const {
   }),
 });
 
-// —— 右键菜单（6.3 全量改造，设计稿 `00_修改与需求/05_右键菜单`）：
-// 统一调度在 lib/menuSpecs.openGridContextMenu（素材菜单走全局宿主 lib/contextMenus）；
-// 回收站视口返回 "recycle" 由本组件出 RecycleCardMenu 只读菜单（6.1 二轮既有）
-const cardMenu = ref<{ x: number; y: number } | null>(null);
+// —— 右键菜单（6.3 全量改造；1.3 一轮按新稿 02_布局 重写）：
+// 统一调度在 lib/menuSpecs.openGridContextMenu（素材 / 回收站 13 稿 / 空白新增菜单均走全局宿主
+// lib/contextMenus；RecycleCardMenu 局部菜单 2026-08-11 废除）
 function onCardContextMenu(e: MouseEvent): void {
-  if (openGridContextMenu(e, props.items) === "recycle") {
-    cardMenu.value = { x: e.clientX, y: e.clientY };
-  }
+  openGridContextMenu(e, props.items);
 }
 
 // —— 卡片间距排序落点解析器（C4a）：注册给拖拽引擎，算法主体在 lib/dragOperation makeGridResolver
@@ -505,8 +501,6 @@ onBeforeUnmount(() => {
       @close="zoomAsset = null"
       @space="onZoomSpace"
     />
-    <!-- 回收站视口卡片右键只读菜单（6.1 二轮；素材菜单走全局宿主 lib/contextMenus，6.3） -->
-    <RecycleCardMenu v-if="cardMenu" :x="cardMenu.x" :y="cardMenu.y" @close="cardMenu = null" />
   </div>
 </template>
 

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // 资源库视图（PRD 04-1）：快速访问区块 + 文件树区块（03_UI 布局/02_左侧边栏 04 树形容器）。
-// 新建文件夹（2026-07-29 复验三轮改"先建后命名"）：三入口——区块头 + 按钮（跟随
+// 新建文件夹（2026-07-29 复验三轮改"先建后命名"）：入口——区块头 + 按钮（跟随
 // sidebarSelected：folder → 建兄弟插其下一行；quick:* → 根级最底部）、树 item 右键菜单
-//（同级 / 子级）、树空白处右键（根级最底部）；统一流程 = 直接以同级唯一默认名
-//（"新建文件夹"、"新建文件夹-2"…）调 createFolder 入库 → 成功后 selection.namingFolderId
-// 定位新节点进命名态（FolderTree / TreeItem naming），不再有"命名中临时节点 / 取消新建"。
+//（同级 / 子级）、树空白处右键菜单（treeBlankSpec 两项，2026-08-11 改——原直接新建，
+// item 间距误触即建目录）；统一流程 = 直接以同级唯一默认名调 createFolder 入库 →
+// 成功后 selection.namingFolderId 定位新节点进命名态，不再有"命名中临时节点 / 取消新建"。
 // 树 item 拖拽起点（C4）：pointerdown 超阈值进拖拽引擎，未过阈值 = 原 click 选中语义。
 import { computed, ref } from "vue";
 import SectionHeader from "./SectionHeader.vue";
@@ -12,6 +12,8 @@ import TreeItem from "./TreeItem.vue";
 import FolderTree from "./FolderTree.vue";
 import { beginFolderDrag } from "../lib/dragOperation";
 import { createAndName, findParentId } from "../lib/menuOps";
+import { openContextMenu } from "../lib/contextMenus";
+import { treeBlankSpec } from "../lib/menuSpecs";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
@@ -84,11 +86,12 @@ function onAddFolder(): void {
   }
 }
 
-// 树容器空白处右键 = 根级最底部新建（2026-07-28 定案）
+// 树容器空白处右键（2026-08-11 用户定）：弹两项菜单（新建文件夹 / 新建档案，treeBlankSpec）——
+// 此前直接新建文件夹，点在两个 item 间距上也会误建（BUG 修复）
 function onTreeBlankMenu(e: MouseEvent): void {
   if ((e.target as HTMLElement).closest(".tree-item")) return;
   e.preventDefault();
-  void createAndName(null, null);
+  openContextMenu(e, treeBlankSpec(), undefined, { width: 148 });
 }
 
 // 树 item 拖拽起点（C4）：文件夹同级排序；快速访问项无 data-folder-id 天然不作起点

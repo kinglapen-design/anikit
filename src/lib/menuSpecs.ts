@@ -32,6 +32,7 @@ import {
 } from "./menuOps";
 import {
   applyClipboardThumb,
+  clearRecycle,
   copySelection,
   createTextDocument,
   deletePlacements,
@@ -39,7 +40,9 @@ import {
   openWithDialog,
   pasteClipboard,
   pasteDuplicate,
+  recycleSelectedAssetIds,
   refreshThumb,
+  restoreRecycle,
 } from "./placementOps";
 import { collapseAll, collapseLevel, expandAll, expandLevel, toggleOpen, treeExpansion } from "./treeExpansion";
 // MarkDown 文档图标（2026-08-11 用户供 md.webp，webp 非 svg 走 iconData 内联图）
@@ -579,13 +582,56 @@ export function addButtonSpec(): CtxEntry[] {
   return entries;
 }
 
+// —— 树空白处（LibraryView，2026-08-11 用户定：只给新建文件夹 / 新建档案两项，宽 148；
+// 此前空白右键直接新建文件夹——item 间距误触即建目录，BUG 修复）——
+export function treeBlankSpec(): CtxEntry[] {
+  return [
+    { label: "新建文件夹", icon: "new-folder", shortcut: "Ctrl+Shift+N", action: () => void createAndName(null, null) },
+    { label: "新建档案", icon: "new-archive", shortcut: "Shift+N", disabled: true },
+  ];
+}
+
+// —— 13 稿 · 回收站（宽 148）——
+// 空白处 = 还原全部项目 / 清空回收站（空时禁用）；单项目右键首行加「还原文件 / 还原文档」
+//（图标同还原全部项目，稿注）——无尺寸资产（w null = 工程/文档类）为「还原文档」。
+// 彻底删除不入菜单（按稿；Del 快捷键与两段式确认业务保留在 placementOps）。
+export function recycleBlankSpec(): CtxEntry[] {
+  const content = useContentStore();
+  return [
+    {
+      label: "还原全部项目",
+      icon: "restore-all",
+      disabled: content.recycleEntries.length === 0,
+      action: () => void restoreRecycle([...new Set(content.recycleEntries.map((e) => e.assetId))]),
+    },
+    {
+      label: "清空回收站",
+      icon: "empty-trash",
+      disabled: content.recycleEntries.length === 0,
+      action: () => void clearRecycle(),
+    },
+  ];
+}
+
+export function recycleCardSpec(p: PlacementView): CtxEntry[] {
+  return [
+    {
+      label: p.w === null ? "还原文档" : "还原文件",
+      icon: "restore-all",
+      action: () => void restoreRecycle(recycleSelectedAssetIds()),
+    },
+    "divider",
+    ...recycleBlankSpec(),
+  ];
+}
+
 // —— 网格右键统一调度（6.3，自 AssetGrid 拆出，规范第 3 条行数控制）——
-// 素材卡片 = 素材菜单（回收站视口返回 "recycle" 由调用方出 RecycleCardMenu）；
+// 素材卡片 = 素材菜单（回收站视口 = 13 稿回收站菜单，1.3 归并全局宿主，RecycleCardMenu 局部菜单废除）；
 // 空白处（含 grid-header）= 07 新增菜单（2026-08-11 用户定：空白右键/新增按钮/Ctrl+N 三入口共用，
 // 旧 6.3 空白菜单 assetBlankSpec/folderBlankSpec 废除——布局方式等归 28 查看方式菜单）；
-// 文件夹卡片 / 按钮 / 输入框上不处理（"pass"——文件夹卡片自带菜单）。
+// 回收站视口空白 = 13 稿空白菜单；文件夹卡片 / 按钮 / 输入框上不处理（"pass"——文件夹卡片自带菜单）。
 // 1.3：素材 / 文件夹卡片菜单按稿出 320 宽 + 搜索框。
-export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "recycle" | "done" | "pass" {
+export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "done" | "pass" {
   const t = e.target as HTMLElement;
   const selection = useSelectionStore();
   const content = useContentStore();
@@ -594,14 +640,17 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "rec
   if (key) {
     e.preventDefault();
     if (!selection.isSelected(key)) selection.selectOnly(key);
-    if (content.isRecycleView) return "recycle";
     const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
-    if (p) openContextMenu(e, assetCardSpec(p), undefined, { width: 320, searchable: true });
+    if (p) {
+      if (content.isRecycleView) openContextMenu(e, recycleCardSpec(p), undefined, { width: 148 });
+      else openContextMenu(e, assetCardSpec(p), undefined, { width: 320, searchable: true });
+    }
     return "done";
   }
   if (t.closest(".folder-card, button, input")) return "pass";
   e.preventDefault();
-  openContextMenu(e, addButtonSpec(), undefined, { width: 320 });
+  if (content.isRecycleView) openContextMenu(e, recycleBlankSpec(), undefined, { width: 148 });
+  else openContextMenu(e, addButtonSpec(), undefined, { width: 320 });
   return "done";
 }
 
