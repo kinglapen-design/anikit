@@ -26,6 +26,7 @@ import {
   pickExportAssets,
   pickExportFolder,
   pickFolderForLink,
+  pickImportPaths,
   revealWithWarning,
 } from "./menuOps";
 import {
@@ -495,12 +496,7 @@ export function folderCardSpec(folder: { id: string; name: string }): CtxEntry[]
   }, false);
 }
 
-// —— 文件夹卡片空白处 ——
-export function folderBlankSpec(): CtxEntry[] {
-  const content = useContentStore();
-  const current = content.sidebarSelected.startsWith("folder:") ? content.sidebarSelected.slice(7) : null;
-  return [{ label: "新建文件夹", icon: "new-folder", action: () => void createAndName(current, null) }];
-}
+// —— 文件夹卡片空白处（废除，2026-08-11：空白右键统一走 07 新增菜单）——
 
 // —— 文件树（05 稿全量含排序/展开/图标/颜色；档案节点随档案业务落地后分流 04 稿，记 09 待办）——
 export function treeItemSpec(node: FolderNode, parentId: string | null): CtxEntry[] {
@@ -510,83 +506,14 @@ export function treeItemSpec(node: FolderNode, parentId: string | null): CtxEntr
   }, true);
 }
 
-// —— 素材卡片空白处（新稿无对应文档，保留 6.3 版；是否保留记 09 待办）——
-export function assetBlankSpec(): CtxEntry[] {
-  const ui = useUiStore();
-  const selection = useSelectionStore();
-  const layoutItem = (label: string, mode: typeof ui.layoutMode) => ({
-    label,
-    checkable: true,
-    checked: ui.layoutMode === mode,
-    action: () => {
-      ui.layoutMode = mode;
-    },
-  });
-  const briefItem = (label: string, mode: typeof ui.briefMode) => ({
-    label,
-    checkable: true,
-    checked: ui.briefMode === mode,
-    action: () => {
-      ui.briefMode = mode;
-    },
-  });
-  return [
-    {
-      label: "布局方式",
-      submenu: [
-        layoutItem("自适应", "justified"),
-        layoutItem("瀑布", "waterfall"),
-        layoutItem("网格", "grid"),
-        layoutItem("列表", "list"),
-      ],
-    },
-    {
-      label: "排序",
-      submenu: [
-        { label: "自定义", checkable: true, checked: true, disabled: true },
-        { label: "标题", disabled: true },
-        { label: "时间", disabled: true },
-        "divider",
-        { label: "升序", disabled: true },
-        { label: "降序", disabled: true },
-      ],
-    },
-    {
-      label: "显示简介",
-      submenu: [
-        briefItem("分辨率", "size"),
-        briefItem("大小", "fileSize"),
-        briefItem("创建日期", "createdAt"),
-        briefItem("修改日期", "modifiedAt"),
-        briefItem("无", "none"),
-      ],
-    },
-    {
-      label: "分组依据",
-      submenu: [
-        { label: "自定义", checkable: true, checked: true, disabled: true },
-        { label: "标题", disabled: true },
-      ],
-    },
-    "divider",
-    {
-      label: "新建",
-      submenu: [
-        { label: "Animate", disabled: true },
-        { label: "markdown", disabled: true },
-        { label: "AE", disabled: true },
-        { label: "photoshop", disabled: true },
-      ],
-    },
-    "divider",
-    { label: "粘贴到此处", disabled: !selection.clipboard, action: () => void pasteClipboard() },
-  ];
-}
+// —— 素材卡片空白处（废除，2026-08-11：空白右键统一走 07 新增菜单；
+// 布局方式/排序/显示简介/分组依据归 28 查看方式菜单 ViewOptionsMenu）——
 
-// —— 07 稿 · 新增按钮（SidebarLeft +，宽 320 无搜索框；导入动作由调用方注入）——
+// —— 07 稿 · 新增菜单（宽 320 无搜索框）——
+// 三入口共用一套（2026-08-11 用户定）：侧栏"新增"按钮 / 网格空白处右键 / Ctrl+N（按钮位弹出）。
 // 新建文档组稿只有 prose 无 CSS（图标需系统检测），按通用 item 样式补、全占位；
 // Illustrator / Word / Excel / 文本文档 无图标，留空记 09 待办。
-export function addButtonSpec(pickImport: (kind: "files" | "folder") => void): CtxEntry[] {
+export function addButtonSpec(): CtxEntry[] {
   const selection = useSelectionStore();
   const hasClipboard = selection.clipboard !== null;
   return [
@@ -597,8 +524,8 @@ export function addButtonSpec(pickImport: (kind: "files" | "folder") => void): C
     { label: "新建文件夹", icon: "new-folder", shortcut: "Ctrl+Shift+N", action: () => void createAndName(null, null) },
     { label: "新建档案", icon: "new-archive", shortcut: "Shift+N", disabled: true },
     "divider",
-    { label: "导入本地文件", icon: "import-file", action: () => pickImport("files") },
-    { label: "导入本地文件夹", icon: "import-folder", action: () => pickImport("folder") },
+    { label: "导入本地文件", icon: "import-file", action: () => void pickImportPaths("files") },
+    { label: "导入本地文件夹", icon: "import-folder", action: () => void pickImportPaths("folder") },
     { label: "导入素材包", icon: "import-pack", disabled: true },
     { label: "档案链接管理", icon: "linked-file-manage", shortcut: "Ctrl+J", disabled: true },
     { label: "添加文件/档案链接", icon: "add-file-link", shortcut: "Ctrl+L", action: () => pickFolderForLink() },
@@ -629,7 +556,8 @@ export function addButtonSpec(pickImport: (kind: "files" | "folder") => void): C
 
 // —— 网格右键统一调度（6.3，自 AssetGrid 拆出，规范第 3 条行数控制）——
 // 素材卡片 = 素材菜单（回收站视口返回 "recycle" 由调用方出 RecycleCardMenu）；
-// grid-header 空白 = 文件夹卡片空白菜单；其余空白 = 素材空白菜单；
+// 空白处（含 grid-header）= 07 新增菜单（2026-08-11 用户定：空白右键/新增按钮/Ctrl+N 三入口共用，
+// 旧 6.3 空白菜单 assetBlankSpec/folderBlankSpec 废除——布局方式等归 28 查看方式菜单）；
 // 文件夹卡片 / 按钮 / 输入框上不处理（"pass"——文件夹卡片自带菜单）。
 // 1.3：素材 / 文件夹卡片菜单按稿出 320 宽 + 搜索框。
 export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "recycle" | "done" | "pass" {
@@ -648,7 +576,7 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "rec
   }
   if (t.closest(".folder-card, button, input")) return "pass";
   e.preventDefault();
-  openContextMenu(e, t.closest(".grid-header") ? folderBlankSpec() : assetBlankSpec());
+  openContextMenu(e, addButtonSpec(), undefined, { width: 320 });
   return "done";
 }
 

@@ -4,52 +4,50 @@
 // 内容 row：导航栏 54（C3 + 右边框：资源库[选中] / 工作空间 / AI 对话框 + 帮助）
 // ｜ 内容区 250（C3 + 右边框：资源库切换 54 + 树容器）。
 // 无业务按钮一律 disabled（1.3 占位点亮机制统一接入）：汉堡 / 区块管理 / 工作空间 /
-// AI 对话框 / 帮助 / 切换资源库。新增 = 导入菜单（6.3 既有业务）。
+// AI 对话框 / 帮助 / 切换资源库。新增 = 07 新增菜单三入口（按钮 / 空白右键 / Ctrl+N，2026-08-11 用户定）。
 // 收起 = 整栏收掉（App.vue v-if + 滑动动画，2026-08-08 定案），
 // 展开按钮在标签页行首（SidebarExpandButton，dockview prefix actions，不占工具栏）。
-import { ref } from "vue";
-import { open } from "@tauri-apps/plugin-dialog";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import AppIcon from "./AppIcon.vue";
 import IconButton from "./IconButton.vue";
 import LibraryView from "./LibraryView.vue";
 import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
 import { addButtonSpec } from "../lib/menuSpecs";
 import { useUiStore } from "../stores/ui";
-import { useContentStore } from "../stores/content";
 import { useSideThumb } from "../lib/useSideThumb";
 
 const ui = useUiStore();
-const content = useContentStore();
 const bodyRef = ref<HTMLElement>();
 const thumb = useSideThumb(bodyRef);
 // 滚动条悬停显隐（2026-08-10 用户定：悬停面板 / 拖拽 thumb 时才出现）
 const hover = ref(false);
+const addBtnRef = ref<HTMLElement>();
 
-// 添加按钮菜单（6.3 全量改造，设计稿 `00_修改与需求/05_右键菜单`"添加按钮"节）：
-// 全局菜单宿主（lib/contextMenus），spec 在 lib/menuSpecs（导入动作由本组件注入 pickImport）
-function toggleImportMenu(e: MouseEvent): void {
+// 新增菜单（07 稿，1.3）：三入口共用一套（2026-08-11 用户定）——
+// ① 本按钮 click ② 网格空白处右键（menuSpecs.openGridContextMenu）③ Ctrl+N（下方全局监听）；
+// 菜单固定弹在按钮下方（07 稿 320 宽无搜索框），spec 在 lib/menuSpecs（导入动作走 menuOps.pickImportPaths）
+function toggleAddMenu(): void {
   if (menuState.entries) {
     closeContextMenu();
     return;
   }
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, addButtonSpec((kind) => void pickImport(kind)), undefined, {
-    width: 320,
-  });
+  const rect = addBtnRef.value?.getBoundingClientRect();
+  if (!rect) return;
+  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, addButtonSpec(), undefined, { width: 320 });
 }
 
-// 菜单触发系统对话框（PRD 05-01 导入位置：导入文件 → 当前视口目录；导入文件夹 → 根目录）
-async function pickImport(kind: "files" | "folder"): Promise<void> {
-  const picked = await open(
-    kind === "files" ? { multiple: true } : { directory: true, multiple: false },
-  );
-  if (!picked) return;
-  content.importDraft = {
-    kind,
-    paths: Array.isArray(picked) ? picked : [picked],
-    targetFolder: kind === "files" ? content.currentFolderId : null,
-  };
+// Ctrl+N 调出新增菜单（按钮位弹出）：输入态排除；Ctrl+Shift+N（菜单内"新建文件夹"）不拦截；
+// 侧栏收起时按钮不可见不响应
+function onGlobalKeydown(e: KeyboardEvent): void {
+  if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "n") return;
+  if (ui.leftCollapsed) return;
+  const t = e.target as HTMLElement;
+  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+  e.preventDefault();
+  toggleAddMenu();
 }
+onMounted(() => window.addEventListener("keydown", onGlobalKeydown));
+onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
 </script>
 
 <template>
@@ -62,7 +60,9 @@ async function pickImport(kind: "files" | "folder"): Promise<void> {
     <header class="bar-title" data-tauri-drag-region>
       <IconButton name="menu" title="菜单" disabled />
       <div class="btn-group">
-        <IconButton name="add-large" title="新增" @click="toggleImportMenu" />
+        <span ref="addBtnRef" class="add-btn-wrap">
+          <IconButton name="add-large" :title="{ text: '新增', keys: 'Ctrl+N' }" @click="toggleAddMenu" />
+        </span>
         <IconButton name="section-manage" title="区块管理" disabled />
         <IconButton name="collapse-sidebar" title="收起侧边栏" @click="ui.leftCollapsed = true" />
       </div>
@@ -134,6 +134,10 @@ async function pickImport(kind: "files" | "folder"): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--space-4);
+}
+/* 新增按钮定位壳（菜单弹位 / Ctrl+N rect 来源） */
+.add-btn-wrap {
+  display: inline-flex;
 }
 /* 内容（figma 312）：row 撑满剩余；定宽 --sb-w（aside 收窄时右缘裁剪不挤压） */
 .body {

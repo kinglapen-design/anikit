@@ -6,6 +6,7 @@
 // danger = 窗口控制关闭（hover 错误色）；deleteRed = 红色删除（20px 圆红底，hover 旋转 180°、离开逆时针恢复）。
 import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
+import type { TipValue } from "../lib/tip";
 
 const props = withDefaults(
   defineProps<{
@@ -16,7 +17,7 @@ const props = withDefaults(
     deleteRed?: boolean;
     active?: boolean;
     disabled?: boolean;
-    title?: string;
+    title?: string | TipValue; // 对象形态 = 标题 + 快捷键副文本（如 { text: "新增", keys: "Ctrl+N" }）
   }>(),
   { small: false, filled: false, danger: false, deleteRed: false, active: false, disabled: false, title: undefined },
 );

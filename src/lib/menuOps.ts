@@ -19,6 +19,19 @@ import {
   revealInExplorer,
 } from "./placementOps";
 
+// —— 导入系统对话框（1.3：新增菜单三入口共用——侧栏新增按钮 / 空白右键 / Ctrl+N）——
+// PRD 05-01 导入位置：导入文件 → 当前视口目录；导入文件夹 → 根目录
+export async function pickImportPaths(kind: "files" | "folder"): Promise<void> {
+  const picked = await open(kind === "files" ? { multiple: true } : { directory: true, multiple: false });
+  if (!picked) return;
+  const content = useContentStore();
+  content.importDraft = {
+    kind,
+    paths: Array.isArray(picked) ? picked : [picked],
+    targetFolder: kind === "files" ? content.currentFolderId : null,
+  };
+}
+
 // —— 新建文件夹（先建后命名，自 LibraryView 提为共享：树右键 / 文件夹卡片 / 添加按钮共用）——
 
 // 父级查找（建兄弟用）：命中顶层 = null（根级）
