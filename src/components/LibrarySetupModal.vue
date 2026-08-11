@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 创建/打开资源库模态（03_UI 布局/06）：未打开库时强制选择，无"稍后"（设计稿仅两按钮）。
+// 创建/打开资源库模态（03_UI 布局/06）：未打开库时强制选择，无"稍后"（设计稿仅两按钮）；
+// 菜单"新建资源库"触发时 closable = true（有库在用，点遮罩可关，1.3 二轮）。
 // 三态：initial（插画 + 创建/打开）→ create（07 名称表单）/ error（08 路径错误）。
 // 创建：表单输名称 → 系统对话框选保存位置 → 在选中位置建以名称命名的库文件夹并打开；
 // 打开：系统对话框选文件夹 → 校验资源库结构直开，失败进错误态（重试 / 取消回初始）。
@@ -18,7 +19,8 @@ interface LibraryInfo {
   folderCount: number;
 }
 
-const emit = defineEmits<{ done: [info: LibraryInfo] }>();
+const props = withDefaults(defineProps<{ closable?: boolean }>(), { closable: false });
+const emit = defineEmits<{ done: [info: LibraryInfo]; cancel: [] }>();
 
 const illustration = getIcon("create-library-illustration");
 type View = "initial" | "create" | "error";
@@ -80,7 +82,7 @@ function onRetry(): void {
 </script>
 
 <template>
-  <div class="setup-mask">
+  <div class="setup-mask" @click.self="props.closable && emit('cancel')">
     <div v-if="view === 'initial'" class="setup-card">
       <div class="illustration" v-html="illustration" />
       <div class="actions">

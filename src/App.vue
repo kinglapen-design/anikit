@@ -32,6 +32,7 @@ import { useUndoStore } from "./stores/undo";
 import { useTabsStore } from "./stores/tabs";
 import { copySelection, deletePlacements, deleteRecycle, pasteClipboard, pasteDuplicate, recycleSelectedAssetIds } from "./lib/placementOps";
 import { ensureDocApps } from "./lib/docApps";
+import { librarySetupState } from "./lib/libraryOps";
 
 const ui = useUiStore();
 const content = useContentStore();
@@ -119,9 +120,11 @@ function onResize(): void {
   resizeTimer = setTimeout(() => void syncMaximized(), 150);
 }
 
-// 库进入打开状态后：关模态 + 拉真实数据
+// 库进入打开状态后：关模态 + 标签页布局重置（新库 viewKey 全失效，关空补"全部"）+ 拉真实数据
 async function onLibraryReady(): Promise<void> {
   needLibrarySetup.value = false;
+  librarySetupState.open = false;
+  tabs.closeAllTabs();
   await content.refresh();
 }
 
@@ -441,7 +444,12 @@ async function togglePin(): Promise<void> {
         @mousedown="startResize(z.dir, $event)"
       />
     </template>
-    <LibrarySetupModal v-if="needLibrarySetup" @done="onLibraryReady" />
+    <LibrarySetupModal
+      v-if="needLibrarySetup || librarySetupState.open"
+      :closable="!needLibrarySetup && librarySetupState.closable"
+      @done="onLibraryReady"
+      @cancel="librarySetupState.open = false"
+    />
     <ImportDialog
       v-else-if="content.importDraft"
       :draft="content.importDraft"

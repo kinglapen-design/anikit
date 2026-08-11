@@ -3,8 +3,8 @@
 // 标题栏 46（C3 + 下边框 暗-悬停：汉堡菜单 + 右对齐按钮组[新增 / 区块管理 / 收起侧边栏]）
 // 内容 row：导航栏 54（C3 + 右边框：资源库[选中] / 工作空间 / AI 对话框 + 帮助）
 // ｜ 内容区 250（C3 + 右边框：资源库切换 54 + 树容器）。
-// 无业务按钮一律 disabled（1.3 占位点亮机制统一接入）：汉堡 / 区块管理 / 工作空间 /
-// AI 对话框 / 帮助 / 切换资源库。新增 = 07 新增菜单三入口（按钮 / 空白右键 / Ctrl+N，2026-08-11 用户定）。
+// 无业务按钮一律 disabled（1.3 占位点亮机制统一接入）：区块管理 / 工作空间 / AI 对话框 / 帮助。
+// 新增 = 07 新增菜单三入口；汉堡 = 14 菜单；切换资源库 = 08 菜单（2026-08-11 点亮）。
 // 收起 = 整栏收掉（App.vue v-if + 滑动动画，2026-08-08 定案），
 // 展开按钮在标签页行首（SidebarExpandButton，dockview prefix actions，不占工具栏）。
 import { onBeforeUnmount, onMounted, ref } from "vue";
@@ -12,7 +12,8 @@ import AppIcon from "./AppIcon.vue";
 import IconButton from "./IconButton.vue";
 import LibraryView from "./LibraryView.vue";
 import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
-import { addButtonSpec } from "../lib/menuSpecs";
+import { addButtonSpec, hamburgerSpec, librarySwitchSpec } from "../lib/menuSpecs";
+import { loadLibraries } from "../lib/libraryOps";
 import { useUiStore } from "../stores/ui";
 import { useSideThumb } from "../lib/useSideThumb";
 
@@ -48,6 +49,31 @@ function onGlobalKeydown(e: KeyboardEvent): void {
 }
 onMounted(() => window.addEventListener("keydown", onGlobalKeydown));
 onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
+
+// 汉堡菜单（14 稿，宽 220）/ 切换资源库（08 稿，宽 300）：toggle 模式同新增按钮；
+// 库列表为动态数据（最近列表 + 当前库），开菜单前加载
+async function toggleHamburger(e: MouseEvent): Promise<void> {
+  if (menuState.entries) {
+    closeContextMenu();
+    return;
+  }
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const { entries, currentPath } = await loadLibraries();
+  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, hamburgerSpec(entries, currentPath), undefined, {
+    width: 220,
+  });
+}
+async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
+  if (menuState.entries) {
+    closeContextMenu();
+    return;
+  }
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const { entries, currentPath } = await loadLibraries();
+  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, librarySwitchSpec(entries, currentPath), undefined, {
+    width: 300,
+  });
+}
 </script>
 
 <template>
@@ -58,7 +84,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
     @mouseleave="hover = false"
   >
     <header class="bar-title" data-tauri-drag-region>
-      <IconButton name="menu" title="菜单" disabled />
+      <IconButton name="menu" title="菜单" @click="toggleHamburger" />
       <div class="btn-group">
         <span ref="addBtnRef" class="add-btn-wrap">
           <IconButton name="add-large" :title="{ text: '新增', keys: 'Ctrl+N' }" @click="toggleAddMenu" />
@@ -84,7 +110,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
         <div class="library-switch">
           <span class="lib-badge"><AppIcon name="library-duotone" :size="18" /></span>
           <span class="lib-name">动画素材库</span>
-          <IconButton name="switch-library" title="切换资源库" disabled />
+          <IconButton name="switch-library" title="切换资源库" @click="toggleLibrarySwitch" />
         </div>
         <div ref="bodyRef" class="tree-wrap">
           <LibraryView />

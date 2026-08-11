@@ -211,6 +211,7 @@ pub fn run() {
       commands::settings::get_ui_settings,
       commands::settings::save_ui_settings,
       commands::settings::save_window_state,
+      commands::settings::exit_app,
       commands::import::classify_paths,
       commands::import::detect_sequences,
       commands::import::import_paths,

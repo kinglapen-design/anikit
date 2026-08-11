@@ -22,3 +22,10 @@ pub async fn save_ui_settings(settings: serde_json::Value) -> Result<(), String>
 pub async fn save_window_state(state: WindowState) -> Result<(), String> {
   config::save_window_state(state).map_err(|e| e.to_string())
 }
+
+/// 退出应用（1.3 汉堡菜单"退出"，2026-08-11 用户定：完全结束进程）
+#[tauri::command]
+pub async fn exit_app(app: tauri::AppHandle) -> Result<(), String> {
+  app.exit(0);
+  Ok(())
+}

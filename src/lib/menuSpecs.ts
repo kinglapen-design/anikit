@@ -14,6 +14,7 @@ import { useUiStore } from "../stores/ui";
 import { usePreviewStore } from "../stores/preview";
 import { openContextMenu, type CtxEntry, type CtxItem } from "./contextMenus";
 import { docApp } from "./docApps";
+import { requestLibrarySetup, switchLibrary, type LibraryEntry } from "./libraryOps";
 import {
   copyAssetLink,
   copyAssetPath,
@@ -516,6 +517,34 @@ export function treeItemSpec(node: FolderNode, parentId: string | null): CtxEntr
 // —— 素材卡片空白处（废除，2026-08-11：空白右键统一走 07 新增菜单；
 // 布局方式/排序/显示简介/分组依据归 28 查看方式菜单 ViewOptionsMenu）——
 
+// —— 新建文档组（07 稿 / 14 汉堡"文件"二级共用）——
+// 系统软件检测动态显隐（lib/docApps，每次打开 UI 监测）：已安装 → 带系统图标（exe 提取，iconData）
+// 显示，未安装 → 删除对应新建项；MarkDown 文档恒显示（纯文本无需软件）；
+// MarkDown / 文本文档已点亮（createTextDocument），其余新建业务 3.1 接。
+export function newDocGroupEntries(): CtxEntry[] {
+  const docItem = (id: string, label: string, action?: () => void): CtxItem | null => {
+    const app = docApp(id);
+    if (!app?.installed) return null;
+    return { label, iconData: app.icon ?? undefined, disabled: !action, action };
+  };
+  const softwareDocs = [
+    docItem("animate", "Animate 文档"),
+    docItem("photoshop", "Photoshop 文档"),
+    docItem("afterEffects", "After Effects 文档"),
+    docItem("illustrator", "Illustrator 文档"),
+  ].filter((it): it is CtxItem => it !== null);
+  const officeDocs = [
+    docItem("text", "文本文档", () => void createTextDocument("txt")),
+    docItem("word", "Word 文档"),
+    docItem("excel", "Excel 文档"),
+  ].filter((it): it is CtxItem => it !== null);
+  const docGroup: CtxEntry[] = [];
+  if (softwareDocs.length > 0) docGroup.push(...softwareDocs, "divider");
+  docGroup.push({ label: "MarkDown 文档", iconData: mdDocIcon, action: () => void createTextDocument("md") });
+  if (officeDocs.length > 0) docGroup.push(...officeDocs);
+  return docGroup;
+}
+
 // —— 07 稿 · 新增菜单（宽 320 无搜索框）——
 // 三入口共用一套（2026-08-11 用户定）：侧栏"新增"按钮 / 网格空白处右键 / Ctrl+N（按钮位弹出）。
 // 上下文规则：剪贴板无文件 → 三个粘贴项不出现（同 03 稿口径，2026-08-11 用户定）；
@@ -556,30 +585,63 @@ export function addButtonSpec(): CtxEntry[] {
     },
     { label: "扫描文件/档案链接", icon: "scan-links", disabled: true },
   );
-  // 新建文档组：已安装才出（图标 = 系统 exe 提取）；软件组与办公/文本组之间分组线按稿；
-  // MarkDown / 文本文档已点亮（纯文本新建入库，2026-08-11 用户定），其余新建业务 3.1 接
-  const docItem = (id: string, label: string, action?: () => void): CtxItem | null => {
-    const app = docApp(id);
-    if (!app?.installed) return null;
-    return { label, iconData: app.icon ?? undefined, disabled: !action, action };
-  };
-  const softwareDocs = [
-    docItem("animate", "Animate 文档"),
-    docItem("photoshop", "Photoshop 文档"),
-    docItem("afterEffects", "After Effects 文档"),
-    docItem("illustrator", "Illustrator 文档"),
-  ].filter((it): it is CtxItem => it !== null);
-  const officeDocs = [
-    docItem("text", "文本文档", () => void createTextDocument("txt")),
-    docItem("word", "Word 文档"),
-    docItem("excel", "Excel 文档"),
-  ].filter((it): it is CtxItem => it !== null);
-  const docGroup: CtxEntry[] = [];
-  if (softwareDocs.length > 0) docGroup.push(...softwareDocs, "divider");
-  docGroup.push({ label: "MarkDown 文档", iconData: mdDocIcon, action: () => void createTextDocument("md") });
-  if (officeDocs.length > 0) docGroup.push(...officeDocs);
-  entries.push("divider", ...docGroup);
+  entries.push("divider", ...newDocGroupEntries());
   return entries;
+}
+
+// —— 08 稿 · 切换资源库（宽 300；14 汉堡"资源库"二级复用同一内容）——
+// 库列表 = 最近列表动态生成（checkable 勾 = 当前库；点击切换 = libraryOps.switchLibrary）；
+// 切换储存空间 / 工作空间（阶段九）、合并资源库（2.1）、清除缓存 占位 disabled；
+// 库 item 的移动抓手 / 删除×（最近列表移除需后端命令）未做，记 09 待办。
+export function librarySwitchSpec(entries: LibraryEntry[], currentPath: string | null): CtxEntry[] {
+  const items: CtxEntry[] = entries.map((e) => ({
+    label: e.name,
+    icon: "library-duotone",
+    checkable: true,
+    checked: e.path === currentPath,
+    action: e.path === currentPath ? undefined : () => void switchLibrary(e.path),
+  }));
+  return [
+    { label: "切换储存空间", icon: "switch-space", disabled: true, submenu: [] },
+    "divider",
+    ...(items.length > 0 ? items : [{ label: "（无最近资源库）", disabled: true } as CtxItem]),
+    "divider",
+    { label: "新建资源库", icon: "library", action: () => requestLibrarySetup() },
+    { label: "合并资源库", icon: "merge-libraries", disabled: true },
+    { label: "工作空间", icon: "workspace", disabled: true, submenu: [] },
+    "divider",
+    { label: "清除缓存并重新加载", icon: "clear-cache-reload", disabled: true },
+  ];
+}
+
+// —— 14 稿 · 汉堡菜单（宽 220，一级项稿无图标）——
+// 资源库 ▸ = 08 切换资源库内容（用户定）；文件 ▸ = 新增菜单子集（导入文件/文件夹 + 新建文档组）；
+// 查找 ▸ = 扫描两项（占位）；偏好设置 / 帮助 先不管（占位 disabled）；退出 = 完全结束进程（exit_app）。
+export function hamburgerSpec(entries: LibraryEntry[], currentPath: string | null): CtxEntry[] {
+  return [
+    { label: "资源库", submenuWidth: 300, submenu: librarySwitchSpec(entries, currentPath) },
+    {
+      label: "文件",
+      submenuWidth: 213,
+      submenu: [
+        { label: "导入本地文件", icon: "import-file", action: () => void pickImportPaths("files") },
+        { label: "导入本地文件夹", icon: "import-folder", action: () => void pickImportPaths("folder") },
+        "divider",
+        ...newDocGroupEntries(),
+      ],
+    },
+    {
+      label: "查找",
+      submenu: [
+        { label: "扫描重复文件", icon: "scan-duplicates", disabled: true },
+        { label: "扫描文件/档案链接", icon: "scan-links", disabled: true },
+      ],
+    },
+    "divider",
+    { label: "偏好设置", shortcut: "Ctrl+,", disabled: true },
+    { label: "帮助", disabled: true, submenu: [] },
+    { label: "退出", shortcut: "Alt+F4", action: () => void invoke("exit_app") },
+  ];
 }
 
 // —— 13 稿 · 回收站（宽 148）——
