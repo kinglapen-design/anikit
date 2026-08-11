@@ -396,23 +396,6 @@ export async function exportFolder(folderId: string, targetDir: string): Promise
   }
 }
 
-// 彻底删除素材（两段式，不经过回收站；无撤销）——干跑命中虚拟片段引用返回 null
-// （调用方弹确认窗后再调 confirmed=true）；直接成功返回 deleted
-export async function deleteAssetsPermanently(
-  assetIds: string[],
-  confirmed: boolean,
-): Promise<RecycleDeleteResult | null> {
-  try {
-    const r = await invoke<RecycleDeleteResult>("delete_assets_permanently", { assetIds, confirmed });
-    if (r.needConfirm) return r;
-    await runHardDelete(() => `彻底删除 ${r.deleted} 个项目`);
-    return null;
-  } catch (e) {
-    useToastStore().notify({ message: String(e), icon: "fail" });
-    return null;
-  }
-}
-
 // 删除文件夹报告（后端 DeleteFolderReport 同构）
 export interface DeleteFolderResult {
   needConfirm: boolean;
@@ -430,20 +413,6 @@ export async function deleteFolder(folderId: string): Promise<boolean> {
   return await runOp(async () => {
     report = await invoke<DeleteFolderResult>("delete_folder", { folderId, permanent: false, confirmed: false });
   }, () => `删除文件夹（${report?.movedPlacements ?? 0} 个素材移入未分类）`);
-}
-
-// 彻底删除文件夹（两段式，物理递归；无撤销）：needConfirm 返回报告（调用方弹确认窗），
-// 否则执行并 toast
-export async function deleteFolderPermanently(folderId: string, confirmed: boolean): Promise<DeleteFolderResult | null> {
-  try {
-    const r = await invoke<DeleteFolderResult>("delete_folder", { folderId, permanent: true, confirmed });
-    if (r.needConfirm) return r;
-    await runHardDelete(() => `彻底删除文件夹（${r.deleted} 个素材）`);
-    return null;
-  } catch (e) {
-    useToastStore().notify({ message: String(e), icon: "fail" });
-    return null;
-  }
 }
 
 // 复制 base64（后端守卫：仅静态图片且 ≤10MB）

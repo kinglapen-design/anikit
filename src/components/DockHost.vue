@@ -5,7 +5,7 @@
 // floating groups / popout 本轮禁用（样式未适配；popout 在 Tauri webview 不可用）。
 // 窗口拖拽：标签栏不设 data-tauri-drag-region（与 dockview tab 拖拽冲突），
 // 窗口拖拽区保留在 panel 内工具栏行（ContentTitleBar 既有 drag-region，记待办后续评估）。
-import { DockviewVue, type DockviewReadyEvent } from "dockview-vue";
+import { DockviewVue, type DockviewReadyEvent, type VueComponent } from "dockview-vue";
 import { nextTick, ref } from "vue";
 import ContentArea from "./ContentArea.vue";
 import TabLabel from "./TabLabel.vue";
@@ -19,8 +19,12 @@ import { useUiStore } from "../stores/ui";
 const tabs = useTabsStore();
 const ui = useUiStore();
 
-const components = { content: ContentArea };
-const tabComponents = { tab: TabLabel };
+// dockview-vue 7.0.4 的 VueComponent = DefineComponent<T>（单泛型签名），与 Vue 3.5+ SFC
+// 编译产物的 DefineComponent 多泛型签名不可互赋——纯类型层不兼容，运行时无碍，统一断言。
+const components = { content: ContentArea as unknown as VueComponent };
+const tabComponents = { tab: TabLabel as unknown as VueComponent };
+const prefixHeaderActions = SidebarExpandButton as unknown as VueComponent;
+const leftHeaderActions = TabAddButton as unknown as VueComponent;
 
 const rootRef = ref<HTMLElement>();
 
@@ -53,8 +57,8 @@ function onReady(e: DockviewReadyEvent): void {
       class="dock-root"
       :components="components"
       :tab-components="tabComponents"
-      :prefix-header-actions-component="SidebarExpandButton"
-      :left-header-actions-component="TabAddButton"
+      :prefix-header-actions-component="prefixHeaderActions"
+      :left-header-actions-component="leftHeaderActions"
       :theme="anikitDockTheme"
       :disable-floating-groups="true"
       dnd-strategy="pointer"

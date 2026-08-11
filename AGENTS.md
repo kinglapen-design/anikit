@@ -52,7 +52,7 @@ PRD 内使用 Obsidian 双链 `[[文件名]]`，按文件名在 `docs/03_项目-
 
 - `pnpm dev` / `pnpm tauri dev` —— 启动开发
 - `cargo test` —— 后端单测
-- `pnpm tsc --noEmit` / `pnpm build` —— 前端检查 / 构建
+- `pnpm typecheck` / `pnpm build` —— 前端检查（vue-tsc，覆盖 .vue）/ 构建
 - `python tools/fetch-ffmpeg.py` —— 下载 ffmpeg/ffprobe sidecar（首次开发 / 换机必跑；音视频解码依赖，二进制不入 git）
 
 ## 术语

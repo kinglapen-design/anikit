@@ -12,8 +12,6 @@ import {
   exportAssets,
   exportFolder,
   deleteFolder,
-  deleteFolderPermanently,
-  deleteAssetsPermanently,
   getAssetBase64,
   getAssetOriginPath,
   revealInExplorer,
@@ -147,20 +145,6 @@ export async function pickExportFolder(folderId: string): Promise<void> {
 
 // —— 删除流程（确认弹窗编排）——
 
-// 彻底删除素材（6.3 素材卡片右键；两段式：虚拟片段引用先确认，不可恢复）
-export async function deleteAssetsPermanentlyFlow(assetIds: string[]): Promise<void> {
-  if (assetIds.length === 0) return;
-  const hit = await deleteAssetsPermanently(assetIds, false);
-  if (!hit) return; // 无引用直接删完（toast 已出）
-  useSelectionStore().confirmPrompt = {
-    title: "彻底删除",
-    body: `选中的 ${assetIds.length} 个素材中，有 ${hit.segmentRefs} 个被虚拟片段引用。删除后文件将从磁盘移除且无法恢复，确定继续？`,
-    confirmLabel: "彻底删除",
-    danger: true,
-    onConfirm: () => void deleteAssetsPermanently(assetIds, true),
-  };
-}
-
 // 删除文件夹（素材移未分类，可撤销）：确认弹窗文案 2026-07-29 用户定
 export function deleteFolderFlow(folderId: string, folderName: string): void {
   useSelectionStore().confirmPrompt = {
@@ -168,20 +152,6 @@ export function deleteFolderFlow(folderId: string, folderName: string): void {
     body: `文件夹「${folderName}」将被删除，素材将全部进入未分类，需重新整理。`,
     confirmLabel: "删除文件夹",
     onConfirm: () => void deleteFolder(folderId),
-  };
-}
-
-// 彻底删除文件夹（两段式：先取计数 → 确认窗带数量与引用警示）
-export async function deleteFolderPermanentlyFlow(folderId: string, folderName: string): Promise<void> {
-  const hit = await deleteFolderPermanently(folderId, false);
-  if (!hit) return;
-  const refText = hit.segmentRefs > 0 ? `其中 ${hit.segmentRefs} 个被虚拟片段引用。` : "";
-  useSelectionStore().confirmPrompt = {
-    title: "彻底删除文件夹",
-    body: `文件夹「${folderName}」及其 ${hit.folderCount} 个层级、${hit.assetCount} 个素材将被彻底删除。${refText}文件将从磁盘移除且无法恢复，确定继续？`,
-    confirmLabel: "彻底删除",
-    danger: true,
-    onConfirm: () => void deleteFolderPermanently(folderId, true),
   };
 }
 

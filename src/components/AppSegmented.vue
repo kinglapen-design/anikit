@@ -7,7 +7,7 @@ import { computed } from "vue";
 
 const model = defineModel<string>({ required: true });
 const props = withDefaults(
-  defineProps<{ options: { value: string; label: string }[]; small?: boolean }>(),
+  defineProps<{ options: readonly { value: string; label: string }[]; small?: boolean }>(),
   { small: false },
 );
 
