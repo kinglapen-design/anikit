@@ -18,25 +18,22 @@ export interface MarqueeRect {
 const MARQUEE_THRESHOLD = 4;
 
 // 网格 boxes 命中工厂（AssetGrid 注入几何；框选与卡片同套坐标换算——
-// viewport y = box.top × scale + 头部偏移 − 滚动 pos，canvas transform 同构）
+// viewport y = box.top + 头部偏移 − 滚动 pos，canvas transform 同构；scale 补偿机制已废 2026-08-10）
 export function makeBoxHitTest(ctx: {
   boxes: () => { top: number; left: number; width: number; height: number; i: number }[];
-  scale: () => number;
   offsetY: () => number; // 头部偏移（headerH + 间距 + 列头）− 滚动 pos
   keyAt: (i: number) => string;
 }): (rect: MarqueeRect) => string[] {
   return (rect) => {
     const offY = ctx.offsetY();
-    const s = ctx.scale();
     const hits: string[] = [];
     for (const b of ctx.boxes()) {
-      const bx = b.left * s;
-      const by = b.top * s + offY;
+      const by = b.top + offY;
       if (
-        bx < rect.left + rect.width &&
-        bx + b.width * s > rect.left &&
+        b.left < rect.left + rect.width &&
+        b.left + b.width > rect.left &&
         by < rect.top + rect.height &&
-        by + b.height * s > rect.top
+        by + b.height > rect.top
       ) {
         hits.push(ctx.keyAt(b.i));
       }

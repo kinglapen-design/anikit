@@ -12,8 +12,10 @@ import AppIcon from "./AppIcon.vue";
 import IconButton from "./IconButton.vue";
 import LibraryView from "./LibraryView.vue";
 import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
-import { addButtonSpec, hamburgerSpec, librarySwitchSpec } from "../lib/menuSpecs";
+import { addButtonSpec } from "../lib/menuSpecs/addMenu";
+import { hamburgerSpec, librarySwitchSpec } from "../lib/menuSpecs/libraryHamburger";
 import { loadLibraries } from "../lib/libraryOps";
+import { isEditableTarget } from "../lib/useGlobalKeys";
 import { useUiStore } from "../stores/ui";
 import { useSideThumb } from "../lib/useSideThumb";
 
@@ -42,8 +44,7 @@ function toggleAddMenu(): void {
 function onGlobalKeydown(e: KeyboardEvent): void {
   if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "n") return;
   if (ui.leftCollapsed) return;
-  const t = e.target as HTMLElement;
-  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+  if (isEditableTarget(e.target as HTMLElement)) return;
   e.preventDefault();
   toggleAddMenu();
 }

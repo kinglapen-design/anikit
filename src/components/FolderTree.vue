@@ -13,7 +13,7 @@ import TreeItem from "./TreeItem.vue";
 import { dragView, visibleTreeFolderIds } from "../lib/dragOperation";
 import { renameFolder } from "../lib/placementOps";
 import { openContextMenu } from "../lib/contextMenus";
-import { treeItemSpec } from "../lib/menuSpecs";
+import { treeItemSpec } from "../lib/menuSpecs/folder";
 import { isTreeOpen, toggleOpen } from "../lib/treeExpansion";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";

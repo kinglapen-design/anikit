@@ -14,7 +14,7 @@ import FolderTree from "./FolderTree.vue";
 import { beginFolderDrag } from "../lib/dragOperation";
 import { createAndName, findParentId } from "../lib/menuOps";
 import { openContextMenu } from "../lib/contextMenus";
-import { recycleBlankSpec } from "../lib/menuSpecs";
+import { recycleBlankSpec } from "../lib/menuSpecs/recycle";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";

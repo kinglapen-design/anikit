@@ -10,7 +10,7 @@ import SectionHeader from "./SectionHeader.vue";
 import AppCheckbox from "./AppCheckbox.vue";
 import FolderCard from "./FolderCard.vue";
 import { dragView } from "../lib/dragOperation";
-import { openFolderCardMenu } from "../lib/menuSpecs";
+import { openFolderCardMenu } from "../lib/menuSpecs/gridDispatch";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";

@@ -2,6 +2,8 @@
 // 主窗口（03_UI 布局/01）：C1 底 / 圆角 8 / padding 0 / 间距 0 / 外边框 2px border-1。
 // 全透明无边框窗口：最大化时去圆角与边框；resize 判定在可视边缘内 8px（startResizeDragging）。
 // 导入弹窗宿主：菜单 / 拖拽填 content.importDraft，ImportDialog 确认后刷新内容区。
+// 全局键盘 / 侧栏收展动画 / 窗口几何持久化已拆 lib（useGlobalKeys / useSidebarAnim /
+// windowState，2026-08-12，规范第 3 条行数控制）。
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -31,77 +33,22 @@ import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
-import { useUndoStore } from "./stores/undo";
-import { useTabsStore } from "./stores/tabs";
-import { copySelection, deletePlacements, deleteRecycle, pasteClipboard, pasteDuplicate, recycleSelectedAssetIds } from "./lib/placementOps";
 import { ensureDocApps } from "./lib/docApps";
 import { librarySetupState, reopenLastLibrary } from "./lib/libraryOps";
+import { useGlobalKeys } from "./lib/useGlobalKeys";
+import { useSidebarAnim } from "./lib/useSidebarAnim";
+import { useWindowStatePersistence } from "./lib/windowState";
 
 const ui = useUiStore();
 const content = useContentStore();
 const selection = useSelectionStore();
 const preview = usePreviewStore();
-const undo = useUndoStore();
-const tabs = useTabsStore();
 
-// 侧栏收展动画驱动（锚点模型 2026-08-08 定案 v6；同步机制 2026-08-10 走查修复改 RO）：
-// 收左栏 = 中间面板右缘钉死、向左拉宽；收右栏 = 左缘钉死、向右拉宽（flex 布局天然如此）。
-// 动画不用 CSS transition，同一 rAF 回调里 JS 逐帧写侧栏宽度。
-// dockview 尺寸同步是难点：其自身 ResizeObserver 回调被 requestAnimationFrame 包裹
-// （dockview-core dom.ts watchElementResize），且回调拿到的是触发时的旧尺寸——
-// 同帧 rAF 里 forceLayout 灌当前宽，也会被紧随其后执行的 dockview 陈旧回调覆盖回上一帧
-// （2026-08-10 CDP 逐帧实测：网格渲染宽恒等于 dock 宿主上一帧宽，滞后最多 ~75px——
-// 顶栏断开露 C1、中栏右缘被往左拽再回弹，同此根因）。
-// 故改用 ResizeObserver 驱动：RO 阶段在当帧全部 rAF 之后、绘制之前，此刻读到的就是
-// 当帧最终宽，forceLayout 同步写网格——每个绘制帧侧栏 / dock / 网格严格同宽，零滞后。
+// 侧栏 / dock 宿主引用：收展动画引擎（useSidebarAnim）逐帧写宽与灌宽的 DOM 锚点
 const sidebarLeftRef = ref<InstanceType<typeof SidebarLeft>>();
 const sidebarRightRef = ref<InstanceType<typeof SidebarRight>>();
 const dockHostRef = ref<InstanceType<typeof DockHost>>();
 
-const SIDEBAR_ANIM_MS = 180;
-function easeInOut(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
-}
-interface SideAnim {
-  el: HTMLElement;
-  from: number;
-  to: number;
-  start: number;
-}
-let sideAnims: SideAnim[] = [];
-let sideAnimRaf = 0;
-let dockResizeObs: ResizeObserver | undefined;
-
-function sidebarAnimFrame(now: number): void {
-  let active = false;
-  for (const a of sideAnims) {
-    const t = Math.min(1, (now - a.start) / SIDEBAR_ANIM_MS);
-    a.el.style.width = `${a.from + (a.to - a.from) * easeInOut(t)}px`;
-    if (t < 1) active = true;
-  }
-  // dockview 网格宽度由 dockResizeObs 在 RO 阶段同步（见文件头注释），此处不再灌宽
-  if (active) {
-    sideAnimRaf = requestAnimationFrame(sidebarAnimFrame);
-  } else {
-    sideAnims = [];
-    ui.sidebarAnimating = false;
-  }
-}
-
-function startSidebarAnim(el: HTMLElement | undefined, collapsed: boolean, fullWidth: number): void {
-  if (!el) return;
-  sideAnims = sideAnims.filter((a) => a.el !== el);
-  // 起点 = 当前视觉宽度（动画途中反向切换从此续接，不跳变）
-  sideAnims.push({
-    el,
-    from: el.getBoundingClientRect().width,
-    to: collapsed ? 0 : fullWidth,
-    start: performance.now(),
-  });
-  ui.sidebarAnimating = true;
-  cancelAnimationFrame(sideAnimRaf);
-  sideAnimRaf = requestAnimationFrame(sidebarAnimFrame);
-}
 const maximized = ref(false);
 const appWindow = getCurrentWindow();
 const webview = getCurrentWebviewWindow();
@@ -111,6 +58,17 @@ const needLibrarySetup = ref(false);
 
 // 独立预览窗口（4.3 新窗口打开）：URL ?preview={assetKey} 进入，只渲染预览布局（无三栏、无导入弹窗）
 const previewParam = new URLSearchParams(window.location.search).get("preview");
+
+// 全局键盘（lib/useGlobalKeys）：剪贴板导入 / 撤销重做 / 选择 / 操作快捷键
+useGlobalKeys({ previewParam, needLibrarySetup: () => needLibrarySetup.value });
+// 侧栏收展动画 rAF 引擎 + dockResizeObs 灌宽（lib/useSidebarAnim，机制注释随迁该文件）
+useSidebarAnim({
+  leftEl: () => sidebarLeftRef.value?.$el as HTMLElement | undefined,
+  rightEl: () => sidebarRightRef.value?.$el as HTMLElement | undefined,
+  dockEl: () => dockHostRef.value?.$el as HTMLElement | undefined,
+});
+// 主窗口几何持久化（lib/windowState；预览子窗口不记录）
+useWindowStatePersistence({ enabled: !previewParam });
 
 async function syncMaximized(): Promise<void> {
   maximized.value = await appWindow.isMaximized();
@@ -157,185 +115,19 @@ async function onDrop(paths: string[], x: number, y: number): Promise<void> {
   }
 }
 
-// 剪贴板导入（PRD 05-01；2026-07-27 扩：图片 + 文件列表，恒 Copy）；剪贴板无图无文件属常态，静默降级
-// 6.1 仲裁（2026-07-28 定案）：内部剪贴板非空时 Ctrl+V 归 onOperationKeys（关联弹窗 / 移动），
-// 本函数只处理"内部剪贴板为空"的系统剪贴板导入；Ctrl+Shift+V = 粘贴为副本快捷键，不走导入
-async function onPaste(e: KeyboardEvent): Promise<void> {
-  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "v") return;
-  if (e.shiftKey || selection.clipboard) return;
-  const t = e.target as HTMLElement;
-  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
-  if (needLibrarySetup.value || content.importDraft) return;
-  try {
-    await content.startImportClipboard(content.currentFolderId);
-  } catch (err) {
-    console.debug("剪贴板导入不可用：", err);
-  }
-}
-
-// 撤销 / 重做（6.0）：Ctrl+Z / Ctrl+Shift+Z；输入框内不拦截（保留文本编辑自身的撤销）
-function onUndoRedo(e: KeyboardEvent): void {
-  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
-  const t = e.target as HTMLElement;
-  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
-  e.preventDefault();
-  if (e.shiftKey) {
-    void undo.redo();
-  } else {
-    void undo.undo();
-  }
-}
-
-// 选择快捷键（6.1，2026-07-28 用户定案）：Ctrl+A 全选素材卡片 / Esc 清空选择。
-// 与 onPaste / onUndoRedo 同口径：输入框内不拦截；预览打开 / 预览子窗口不抢（PreviewPanel 自行处理 Esc 等）；
-// 菜单（AppMenu）/ 悬停大图浮层（HoverZoomOverlay）打开时让位——两者各自捕获 Esc 关闭，此刻不清选择
-function onSelectionKeys(e: KeyboardEvent): void {
-  const t = e.target as HTMLElement;
-  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
-  if (previewParam || preview.assetKey || needLibrarySetup.value) return;
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
-    e.preventDefault();
-    selection.selectAll();
-    return;
-  }
-  if (e.key === "Escape" && !document.querySelector(".app-menu, .zoom-mask")) {
-    selection.clear();
-  }
-}
-
-// 操作快捷键（6.1 阶段 C，2026-07-28 用户定案，与 onSelectionKeys 同口径）：
-// F2 = 重命名当前单选素材（卡片就地重命名；多选不触发；文件夹重命名走卡片名称双击 /
-// 新建后命名态，2026-07-29 复验三轮 rename_folder 已接入）；
-// Del = 删除选中项（2026-07-29 用户修订：取消两段式询问，直接移入回收站，撤销可找回）；
-// Ctrl+C / Ctrl+X = 写内部剪贴板（仅素材）；Ctrl+V 仲裁（内部非空 → copy 弹关联弹窗 / cut 移动；
-// 空 → onPaste 系统剪贴板导入）；Ctrl+Shift+V = 直接副本不弹窗（名称同源）。
-// 回收站视口（6.1 二轮，2026-07-29）：F2 不触发（只读）；Del 分流彻底删除两段式
-//（delete_recycle，虚拟片段引用确认窗，不可恢复无撤销）——delete_placements 路径不再走。
-// 快速访问视图不作粘贴目标（toast 提示）；菜单 / 浮层 / 弹窗打开时让位
-function onOperationKeys(e: KeyboardEvent): void {
-  const t = e.target as HTMLElement;
-  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
-  if (previewParam || preview.assetKey || needLibrarySetup.value) return;
-  if (document.querySelector(".app-menu, .zoom-mask, .link-mask, .del-mask, .pick-mask")) return;
-  if (e.key === "F2") {
-    if (selection.count === 1 && !content.isRecycleView) {
-      e.preventDefault();
-      selection.renamingKey = selection.first;
-    }
-    return;
-  }
-  // Shift+Enter = 默认应用打开（6.3 右键菜单同款，2026-07-29 用户设计）
-  if (e.key === "Enter" && e.shiftKey) {
-    if (selection.count === 1 && !content.isRecycleView) {
-      e.preventDefault();
-      const p = content.visiblePlacements.find((v) => `${v.assetId}|${v.folderId}` === selection.first);
-      if (p) {
-        void invoke("open_with_default_app", { assetId: p.assetId }).then(() => content.refreshRecent());
-      }
-    }
-    return;
-  }
-  if (e.key === "Delete") {
-    if (selection.count > 0) {
-      e.preventDefault();
-      if (content.isRecycleView) {
-        void deleteRecycle(recycleSelectedAssetIds()); // 回收站 = 彻底删除两段式
-      } else {
-        void deletePlacements(selection.selectedRefs());
-      }
-    }
-    return;
-  }
-  if (!(e.ctrlKey || e.metaKey)) return;
-  const k = e.key.toLowerCase();
-  if (k === "c" || k === "x") {
-    if (selection.count > 0) {
-      e.preventDefault();
-      copySelection(k === "c" ? "copy" : "cut");
-    }
-    return;
-  }
-  if (k === "v" && selection.clipboard) {
-    e.preventDefault();
-    if (e.shiftKey) void pasteDuplicate();
-    else void pasteClipboard();
-  }
-}
-
 let unlistenDragDrop: (() => void) | undefined;
-let unlistenMoved: (() => void) | undefined;
-let unlistenResized: (() => void) | undefined;
-
-// 主窗口几何持久化（2026-07-28 用户定："用户设置要持久化，包括窗口大小，位置"）：
-// resize/move 高频事件防抖 500ms 整体写回全局 config（settings.window 子树）；
-// 仅主窗口记录（预览子窗口不记录不恢复）；最大化时后端只刷标志位、几何保留还原尺寸
-let winStateTimer: ReturnType<typeof setTimeout> | undefined;
-function scheduleSaveWindowState(): void {
-  clearTimeout(winStateTimer);
-  winStateTimer = setTimeout(() => void saveWindowState(), 500);
-}
-async function saveWindowState(): Promise<void> {
-  try {
-    // 2026-07-29 复验修复（窗口缩成一小块）：最小化 / 隐藏托盘等场景 outerSize 可能报退化尺寸，
-    // 写回后每轮启动都恢复小窗——最小化不写、小于最小可用尺寸（800×500）不写
-    if (await appWindow.isMinimized()) return;
-    const [pos, size, maximized] = await Promise.all([
-      appWindow.outerPosition(),
-      appWindow.outerSize(),
-      appWindow.isMaximized(),
-    ]);
-    // 尺寸退化（237×39）或坐标飞去屏外（-32000）一律不写
-    if (size.width < 800 || size.height < 500 || pos.x < -10000 || pos.y < -10000) return;
-    await invoke("save_window_state", {
-      state: { x: pos.x, y: pos.y, width: size.width, height: size.height, maximized },
-    });
-  } catch (e) {
-    console.warn("窗口几何写回失败（静默降级）：", e);
-  }
-}
 
 onMounted(() => {
   void syncMaximized();
   void ui.initSettings(); // 全局 UI 设置加载 + 变更防抖写回（2026-07-28 持久化）
   void ensureDocApps(); // 新建文档软件检测（1.3：每次打开 UI 监测，07 新增菜单"新建文档"组驱动）
   window.addEventListener("resize", onResize);
-  window.addEventListener("keydown", onPaste);
-  window.addEventListener("keydown", onUndoRedo);
-  window.addEventListener("keydown", onSelectionKeys);
-  window.addEventListener("keydown", onOperationKeys);
-  // dockview 逐帧同步（机制见文件头注释）：dock 宿主尺寸变化在 RO 阶段（当帧 rAF 之后、
-  // 绘制之前）以当前帧最终宽灌给网格；侧栏收展动画、窗口拖改尺寸统一走此路径
-  const dockEl = dockHostRef.value?.$el as HTMLElement | undefined;
-  if (dockEl) {
-    dockResizeObs = new ResizeObserver((entries) => {
-      const rect = entries[0]?.contentRect;
-      if (rect) tabs.forceLayout(rect.width, rect.height);
-    });
-    dockResizeObs.observe(dockEl);
-  }
   // 视图切换（6.1）：左栏选中项变化即清空素材选择
   watch(() => content.sidebarSelected, () => selection.clear());
-  // 侧栏收展：状态翻转后由 JS 逐帧驱动宽度（见上方驱动注释）
-  watch(
-    [() => ui.leftCollapsed, () => ui.rightCollapsed],
-    ([l, r], [pl, pr]) => {
-      if (l !== pl) {
-        startSidebarAnim(sidebarLeftRef.value?.$el as HTMLElement | undefined, l, ui.leftWidth);
-      }
-      if (r !== pr) {
-        startSidebarAnim(sidebarRightRef.value?.$el as HTMLElement | undefined, r, ui.rightWidth);
-      }
-    },
-  );
   void content.initInboxListener(); // 收件箱自动入库（3.2），App 存活期注册一次
   void content.initFpsHealListener(); // 存量视频 fps 自愈通知（2026-07-28 复验反馈修复）
   void content.initRecentListener(); // 最近使用热刷新（2026-07-29 复验反馈修复）
   void preview.initPreviewListener(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3）
-  if (!previewParam) {
-    // 主窗口几何监听（预览子窗口不记录）
-    void appWindow.onMoved(() => scheduleSaveWindowState()).then((fn) => (unlistenMoved = fn));
-    void appWindow.onResized(() => scheduleSaveWindowState()).then((fn) => (unlistenResized = fn));
-  }
   void webview.onDragDropEvent((event) => {
     if (event.payload.type === "drop") {
       void onDrop(event.payload.paths, event.payload.position.x, event.payload.position.y);
@@ -363,17 +155,8 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   clearTimeout(resizeTimer);
-  clearTimeout(winStateTimer);
-  cancelAnimationFrame(sideAnimRaf);
-  dockResizeObs?.disconnect();
   window.removeEventListener("resize", onResize);
-  window.removeEventListener("keydown", onPaste);
-  window.removeEventListener("keydown", onUndoRedo);
-  window.removeEventListener("keydown", onSelectionKeys);
-  window.removeEventListener("keydown", onOperationKeys);
   unlistenDragDrop?.();
-  unlistenMoved?.();
-  unlistenResized?.();
 });
 
 // 可视窗口边缘 resize 判定（透明阴影带外缘的 tao 物理判定保留作补充）
@@ -532,7 +315,7 @@ async function togglePin(): Promise<void> {
   cursor: e-resize;
 }
 .resize-zone.w {
-  top: 8px;
+  top: 0;
   bottom: 8px;
   left: 0;
   width: 8px;

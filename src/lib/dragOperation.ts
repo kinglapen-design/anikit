@@ -90,7 +90,7 @@ export function assetCardFade(key: string): "source" | "cut" | null {
   return useSelectionStore().isCut(key) ? "cut" : null;
 }
 
-// 卡片间距解析器：AssetGrid 挂载时注册（它持有 boxes / 滚动 pos / scale），卸载注销
+// 卡片间距解析器：AssetGrid 挂载时注册（它持有 boxes / 滚动 pos），卸载注销
 export type GridResolver = (clientX: number, clientY: number) => GapIndicator | null;
 let gridResolver: GridResolver | null = null;
 export function registerGridResolver(fn: GridResolver): void {
@@ -108,7 +108,6 @@ export function unregisterGridResolver(): void {
 export function makeGridResolver(ctx: {
   isFolderView: () => boolean;
   layer: () => HTMLElement | undefined;
-  scale: () => number;
   boxes: () => { top: number; left: number; width: number; height: number; i: number }[];
   keyAt: (i: number) => string;
 }): GridResolver {
@@ -118,18 +117,17 @@ export function makeGridResolver(ctx: {
     const layer = ctx.layer();
     if (!layer) return null;
     const r = layer.getBoundingClientRect();
-    const s = ctx.scale();
     const bs = ctx.boxes();
     if (bs.length === 0) return null;
     // 容差范围按 boxes 包围盒（上下 24px，行间隙也能落；横向取层宽）——不读 rect.bottom：
     // 层高度塌缩时它不可信（根因②，见文件头）
     let maxBottom = 0;
     for (const b of bs) maxBottom = Math.max(maxBottom, b.top + b.height);
-    if (clientX < r.left || clientX > r.right || clientY < r.top - 24 || clientY > r.top + maxBottom * s + 24) {
+    if (clientX < r.left || clientX > r.right || clientY < r.top - 24 || clientY > r.top + maxBottom + 24) {
       return null;
     }
-    const x = (clientX - r.left) / s;
-    const y = (clientY - r.top) / s;
+    const x = clientX - r.left;
+    const y = clientY - r.top;
     // 2026-07-29 复验二轮 1 根因：原判定 y < b.top + b.height/2 对同行所有 box 恒真，
     // 循环在阅读序首个同排 box 即 break——指针在行上半部时指示恒落行首（鼠标在右侧、
     // 竖块在左侧远处）。修为两段：先定行（底 + 半行距），行内按 x 中点定间隙
