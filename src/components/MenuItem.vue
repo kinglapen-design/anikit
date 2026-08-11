@@ -23,8 +23,12 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ select: [] }>();
 
-// 快捷键拆分："Ctrl+Shift+N" → ["Ctrl", "Shift", "N"]
-const keys = computed(() => (props.shortcut ? props.shortcut.split("+").filter(Boolean) : []));
+// 快捷键拆分："Ctrl+Shift+N" → ["Ctrl", "Shift", "N"]；
+// 显示口径（新稿 02_布局 03/04/05/07，2026-08-11 走查）：词键小写（ctrl/shift/alt/enter/delete），
+// 单字母键保持大写，中文键名（"菜单"）原样
+const keys = computed(() =>
+  props.shortcut ? props.shortcut.split("+").filter(Boolean).map((k) => (/^[A-Za-z]{2,}$/.test(k) ? k.toLowerCase() : k)) : [],
+);
 </script>
 
 <template>

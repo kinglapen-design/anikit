@@ -1,11 +1,13 @@
 <script setup lang="ts">
 // 全局右键菜单渲染器（6.3；1.3 一轮 2026-08-11 升级）：宿主 App.vue 唯一实例，读 lib/contextMenus 的 menuState。
 // 渲染复用 AppMenu / MenuItem / MenuDivider（视觉口径不变）；一级级联 flyout——
-// hover 带子菜单的项时右侧飞出，右缘溢出改向左飞出（03 稿注"菜单不可超出窗口边缘"）。
-// 1.3 新增：菜单定宽（menuState.width）与菜单内搜索框（menuState.searchable，03/04/05 稿）——
-// 搜索框高 44 / 占位符"搜索" / 右侧清除钮 / 下边框分隔；输入即过滤：一级+二级项扁平匹配 label
-//（命中二级项直接平铺显示、点击执行其 action），过滤时隐藏 divider 且不出 flyout；清空恢复层级；
-// Esc 先清空、空时再按关闭（AppMenu 对菜单内输入框的 Esc 已豁免）。
+// hover 带子菜单的项时右侧飞出，右缘溢出改向左飞出（03 稿注"菜单不可超出窗口边缘"）；
+// flyout 按 key 随父项重建（2026-08-11 走查：复用实例位置滞留越偏越远）+ pop=false 不回放弹出动画。
+// 菜单结构（03/04/05 稿）：容器 padding 0——搜索区（高 44 / padding 12 / 搜索图标 18 盒 svg 15 标签色 /
+// 占位符"搜索..." 极淡 / 右侧清除钮 20 圆角 6 / border-bottom 暗-悬停 通栏分隔）与 item 组
+//（独立容器 padding 12 / gap 2）是两个容器；divider 在 item 组内负 margin 通栏。
+// 搜索：打开自动聚焦，输入即过滤——一级+二级项扁平匹配 label（命中二级平铺为一级直接执行），
+// 过滤时隐藏 divider 且不出 flyout；清空恢复层级；Esc 先清空、空时再按关闭（AppMenu 豁免输入框 Esc）。
 // 组外关闭关系：根菜单的 group = flyout 根元素（flyout 内点击不关根菜单）；
 // flyout 自身无 group，点其外部经根菜单统一关闭（closeAll 幂等）。
 import { computed, nextTick, ref, watch } from "vue";
@@ -17,6 +19,10 @@ import { closeContextMenu, menuState, type CtxEntry, type CtxItem } from "../lib
 
 const query = ref("");
 const searchInputRef = ref<HTMLInputElement>();
+
+// 级联 flyout：当前展开的子菜单（父项 top 作 key 随项重建）与位置、宽度
+const flyout = ref<{ key: number; x: number; y: number; width: number; entries: CtxEntry[] } | null>(null);
+const flyoutRootRef = ref<HTMLElement>();
 
 // 每次打开重置搜索并自动聚焦
 watch(
@@ -48,10 +54,6 @@ const entries = computed<CtxEntry[]>(() => {
   }
   return out;
 });
-
-// 级联 flyout：当前展开的子菜单（项位置作 key）与位置、宽度
-const flyout = ref<{ key: number; x: number; y: number; width: number; entries: CtxEntry[] } | null>(null);
-const flyoutRootRef = ref<HTMLElement>();
 
 function onItemHover(entry: CtxItem, e: MouseEvent): void {
   if (!entry.submenu || entry.disabled || query.value.trim()) {
@@ -92,43 +94,52 @@ function closeAll(executed = false): void {
     :x="menuState.x"
     :y="menuState.y"
     :width="menuState.width ?? 175"
+    pad="0"
+    gap="0"
     :group="flyoutRootRef ?? null"
     @close="closeAll(false)"
   >
-    <!-- 搜索框（03/04/05 稿）：高 44 / 右侧清除钮 / 下边框分隔 -->
+    <!-- 搜索区（03/04/05 稿独立容器）：搜索图标 + 输入框 + 清除钮，border-bottom 通栏分隔 -->
     <div v-if="menuState.searchable" class="menu-search">
-      <input
-        ref="searchInputRef"
-        v-model="query"
-        type="text"
-        placeholder="搜索"
-        spellcheck="false"
-        @keydown="onSearchKeydown"
-      />
+      <span class="lead">
+        <span class="search-icon"><AppIcon name="search" :size="15" /></span>
+        <input
+          ref="searchInputRef"
+          v-model="query"
+          type="text"
+          placeholder="搜索..."
+          spellcheck="false"
+          @keydown="onSearchKeydown"
+        />
+      </span>
       <button v-if="query" class="clear" @click="query = ''">
         <AppIcon name="clear" :size="12" />
       </button>
     </div>
-    <template v-for="(entry, i) in entries" :key="i">
-      <MenuDivider v-if="entry === 'divider'" />
-      <MenuItem
-        v-else
-        :label="entry.label"
-        :icon="entry.icon"
-        :icon-class="entry.iconClass"
-        :shortcut="entry.shortcut"
-        :disabled="entry.disabled"
-        :arrow="!!entry.submenu"
-        :checkable="entry.checkable"
-        :checked="entry.checked"
-        @select="onItemClick(entry)"
-        @mouseenter="onItemHover(entry, $event)"
-      />
-    </template>
-    <div v-if="query && entries.length === 0" class="menu-empty">无匹配项</div>
+    <!-- item 组（独立容器 padding 12 / gap 2） -->
+    <div class="menu-items">
+      <template v-for="(entry, i) in entries" :key="i">
+        <MenuDivider v-if="entry === 'divider'" class="full-bleed" />
+        <MenuItem
+          v-else
+          :label="entry.label"
+          :icon="entry.icon"
+          :icon-class="entry.iconClass"
+          :shortcut="entry.shortcut"
+          :disabled="entry.disabled"
+          :arrow="!!entry.submenu"
+          :checkable="entry.checkable"
+          :checked="entry.checked"
+          @select="onItemClick(entry)"
+          @mouseenter="onItemHover(entry, $event)"
+        />
+      </template>
+      <div v-if="query && entries.length === 0" class="menu-empty">无匹配项</div>
+    </div>
   </AppMenu>
-  <!-- 级联 flyout：内容包一层 div 供根菜单 group 判定（点击 flyout 内 = 组内） -->
-  <AppMenu v-if="flyout && menuState.entries" :x="flyout.x" :y="flyout.y" :width="flyout.width" @close="closeAll(false)">
+  <!-- 级联 flyout：key 随父项重建（防实例复用位置滞留）；pop=false 不回放动画；
+       内容包一层 div 供根菜单 group 判定（点击 flyout 内 = 组内） -->
+  <AppMenu v-if="flyout && menuState.entries" :key="flyout.key" :x="flyout.x" :y="flyout.y" :width="flyout.width" :pop="false" @close="closeAll(false)">
     <div ref="flyoutRootRef" class="flyout-root">
       <template v-for="(entry, i) in flyout.entries" :key="i">
         <MenuDivider v-if="entry === 'divider'" />
@@ -152,19 +163,37 @@ function closeAll(executed = false): void {
 .flyout-root {
   display: contents;
 }
-/* 搜索框（03/04/05 稿）：高 44，下边框分隔；输入框透明底吃菜单 C2 */
+/* 搜索区（03 稿）：高 44 / padding 12 / gap 6 / 下边框 暗-悬停（容器 padding 0 → 通栏） */
 .menu-search {
-  position: relative;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
   height: 44px;
+  padding: 0 var(--space-12);
   flex: none;
   border-bottom: 1px solid var(--line-hover);
-  margin-bottom: var(--space-2);
+}
+.menu-search .lead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex: 1;
+  min-width: 0;
+}
+/* 搜索图标 18 盒（svg 15），标签色 */
+.search-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--text-label);
 }
 .menu-search input {
-  width: 100%;
-  height: 100%;
+  flex: 1;
+  min-width: 0;
   background: none;
   border: none;
   outline: none;
@@ -175,20 +204,32 @@ function closeAll(executed = false): void {
 .menu-search input::placeholder {
   color: var(--text-faint);
 }
+/* 清除钮 20×20 圆角 6（图标 12，标签色） */
 .menu-search .clear {
-  position: absolute;
-  right: var(--space-4);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 20px;
   height: 20px;
-  border-radius: var(--radius-4);
+  border-radius: var(--radius-6);
+  flex: none;
   color: var(--text-label);
 }
 .menu-search .clear:hover {
   background: linear-gradient(var(--line-hover), var(--line-hover));
   color: var(--text-normal);
+}
+/* item 组容器（03 稿）：padding 12 / gap 2 */
+.menu-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-12);
+  min-height: 0;
+}
+/* divider 通栏（抵消 item 组 padding，稿线宽 = 菜单满宽） */
+.menu-items :deep(.menu-divider.full-bleed) {
+  margin: 0 calc(-1 * var(--space-12));
 }
 .menu-empty {
   padding: var(--space-6) var(--space-8);

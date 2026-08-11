@@ -1,8 +1,9 @@
 // 上下文菜单 spec（1.3 一轮 2026-08-11 按新稿 `02_布局` 03/04/05/07 重写；旧 6.3 版基于 `05_右键菜单` 废止）：
-// 数据驱动（lib/contextMenus 渲染），设计项全列 + 图标配齐——未实现的一律 disabled 置灰占位
-//（占位点亮机制），图标缺口用相近图标顶替并记 09 待办。分组用 "divider"（组标题不出文字，Eagle 风格）。
+// 数据驱动（lib/contextMenus 渲染），设计项全列 + 图标按稿配（稿里无图标的项不画蛇添足，2026-08-11 走查）——
+// 未实现的一律 disabled 置灰占位（占位点亮机制）。分组用 "divider"（组标题不出文字，Eagle 风格）。
 // 03/04/05 稿 = 宽 320 + 搜索框（openGridContextMenu / FolderStrip 调用处传 opts）；07 稿 = 宽 320 无搜索框。
-// 菜单快捷键标注按新稿（重命名 ctrl+R 等）；全局快捷键绑定另有一套，统一对齐记 09 待办。
+// 菜单快捷键标注按新稿（重命名 ctrl+R 等，显示小写化在 MenuItem 统一做）；
+// 全局快捷键绑定另有一套，统一对齐记 09 待办。
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore, type FolderNode, type PlacementView } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
@@ -90,7 +91,8 @@ function findChildrenList(nodes: FolderNode[], id: string): FolderNode[] | null 
 
 // —— 03 稿 · 素材卡片（右键未选中项调用方已先单选；批量项对全部选中项执行）——
 // 上下文规则（稿原文）：无复制/剪切 → 三个粘贴项不出现；非序列帧 → 序列帧两项不出现；
-// 链接文件删除组只出「从文件夹中移除文件链接」，非链接出「从文件夹中移除 / 去到未分类 / 丢到回收站」；
+// 链接文件删除组只出「从文件夹中移除文件链接」，非链接出「从文件夹中移除 / 丢到回收站」
+//（稿 prose 另提及"去到未分类"，2026-08-11 用户确认无此项，不列）；
 // 无提示词 → 「打开提示词编辑器」改「保存提示词」（提示词数据未落地，恒显示保存提示词占位，记 09 待办）
 export function assetCardSpec(p: PlacementView): CtxEntry[] {
   const content = useContentStore();
@@ -166,25 +168,23 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       label: "缩略图",
       icon: "thumbnail",
       submenu: [
-        { label: "打开 Animate 生成缩略图", icon: "animate-on", disabled: true },
-        { label: "复制缩略图", icon: "copy", disabled: true },
-        { label: "转换为缩略图链接并复制", icon: "copy-link", disabled: true },
-        { label: "将「xx」设置为缩略图", icon: "set-thumbnail", disabled: true },
+        { label: "打开 Animate 生成缩略图", disabled: true },
+        { label: "复制缩略图", disabled: true },
+        { label: "转换为缩略图链接并复制", disabled: true },
+        { label: "将「xx」设置为缩略图", disabled: true },
         "divider",
         {
           label: "自定义缩略图 - 从剪贴板",
-          icon: "set-thumbnail",
           disabled: selection.count !== 1,
           action: () => void applyClipboardThumb(assetId),
         },
         {
           label: "自定义缩略图 - 选择文件",
-          icon: "set-thumbnail",
           disabled: selection.count !== 1,
           action: () => void pickCustomThumb(assetId),
         },
         "divider",
-        { label: "刷新缩略图", icon: "rotate-cw", action: () => void refreshThumb(assetId) },
+        { label: "刷新缩略图", action: () => void refreshThumb(assetId) },
       ],
     },
     "divider",
@@ -212,7 +212,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       label: "AI 工具集",
       icon: "ai-tools",
       submenu: [
-        { label: "以图搜图", icon: "search", disabled: true },
+        { label: "以图搜图", disabled: true },
         "divider",
         { label: "超清放大", disabled: true },
         { label: "自动抠图", disabled: true },
@@ -220,7 +220,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
         "divider",
         { label: "分析文件向量", disabled: true },
         "divider",
-        { label: "引用至 AI 对话框", icon: "ai-chat", disabled: true },
+        { label: "引用至 AI 对话框", disabled: true },
       ],
     },
     "divider",
@@ -229,25 +229,24 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       label: "复制数据",
       icon: "copy-data",
       submenu: [
-        { label: "复制链接", icon: "copy-link", action: () => void copyAssetLink(assetId) },
-        { label: "复制文件路径", icon: "copy-file", action: () => void copyAssetPath(assetId) },
+        { label: "复制链接", action: () => void copyAssetLink(assetId) },
+        { label: "复制文件路径", action: () => void copyAssetPath(assetId) },
         "divider",
-        { label: "复制名称", icon: "copy", action: () => void copyName(p.name) },
-        { label: "复制 base64", icon: "copy-data", action: () => void copyBase64(assetId) },
-        { label: "复制提示词", icon: "copy-data", disabled: true },
+        { label: "复制名称", action: () => void copyName(p.name) },
+        { label: "复制 base64", action: () => void copyBase64(assetId) },
+        { label: "复制提示词", disabled: true },
       ],
     },
     "divider",
     { label: "置顶", icon: "window-pin-on", disabled: true },
     "divider",
   );
-  // 删除组：链接 / 非链接两套（稿上下文规则）；「从文件夹中移除 / 去到未分类」业务归属未确认，占位（09 待办）
+  // 删除组：链接 / 非链接两套（稿上下文规则）；「从文件夹中移除」业务归属未确认，占位（09 待办）
   if (isLink) {
     entries.push({ label: "从文件夹中移除文件链接", icon: "remove-from-folder", shortcut: "Shift+Delete", disabled: true });
   } else {
     entries.push(
       { label: "从文件夹中移除", icon: "remove-from-folder", shortcut: "Shift+Delete", disabled: true },
-      { label: "去到未分类", icon: "uncategorized", disabled: true },
       {
         label: "丢到回收站",
         icon: "drop-to-trash",
@@ -340,8 +339,8 @@ export function archiveCardSpec(archive: { id: string; name: string }): CtxEntry
       label: "复制数据",
       icon: "copy-data",
       submenu: [
-        { label: "复制链接", icon: "copy-link", action: () => void copyFolderLink(archive.id) },
-        { label: "复制名称", icon: "copy", action: () => void copyName(archive.name) },
+        { label: "复制链接", action: () => void copyFolderLink(archive.id) },
+        { label: "复制名称", action: () => void copyName(archive.name) },
       ],
     },
     "divider",
@@ -565,7 +564,7 @@ export function assetBlankSpec(): CtxEntry[] {
 
 // —— 07 稿 · 新增按钮（SidebarLeft +，宽 320 无搜索框；导入动作由调用方注入）——
 // 新建文档组稿只有 prose 无 CSS（图标需系统检测），按通用 item 样式补、全占位；
-// Illustrator / Word / Excel 无图标，留空记 09 待办。
+// Illustrator / Word / Excel / 文本文档 无图标，留空记 09 待办。
 export function addButtonSpec(pickImport: (kind: "files" | "folder") => void): CtxEntry[] {
   const selection = useSelectionStore();
   const hasClipboard = selection.clipboard !== null;
