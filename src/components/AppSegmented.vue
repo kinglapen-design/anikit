@@ -70,6 +70,7 @@ const thumbStyle = computed(() => ({
   color: var(--text-label);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
+  white-space: nowrap; /* 防换行（1.4 查看方式"自适应"三字在 48 宽稿值内换行，2026-08-11 走查） */
   transition:
     color 0.15s ease,
     background 0.15s ease;

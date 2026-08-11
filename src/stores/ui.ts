@@ -23,7 +23,9 @@ const PERSIST_KEYS = [
   "groupBy",
   "autoPlayGif",
   "autoPlayVideo",
-  "showExtBadge",
+  "showBadge",
+  "showExt",
+  "showBrief",
   "showSubfolders",
   "timeDisplay",
   "tabLayout",
@@ -62,7 +64,11 @@ export const useUiStore = defineStore("ui", {
     groupBy: "自定义",
     autoPlayGif: false,
     autoPlayVideo: false,
-    showExtBadge: true,
+    // 28 查看方式新稿（1.4，2026-08-11）：显示徽标（格式角标显隐）/ 显示扩展名（名称带不带
+    // 扩展名）/ 显示简介开关（与 briefMode 内容选择独立）——旧 showExtBadge（徽标语义）废除
+    showBadge: true,
+    showExt: true,
+    showBrief: true,
     // 时间显示（5.3 帧化改造，2026-07-28 用户定：帧数优先）——视频播放条 / 悬停胶囊 / 笔记
     // 按帧号显示（fps 缺失回退时间）；音频无帧概念恒时间显示
     timeDisplay: "frames" as "frames" | "timecode",

@@ -145,9 +145,11 @@ const badge = computed(() => {
 });
 // 角标徽章底色：格式实色（01_样式 token 01-6，7 组）
 const badgeColor = computed(() => formatBadgeColor(props.asset.ext, isSeq.value, isAnim.value));
-const displayName = computed(() =>
-  isSeq.value ? `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧` : props.asset.name,
-);
+const displayName = computed(() => {
+  if (isSeq.value) return `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧`;
+  // 28 查看方式"显示扩展名"（1.4）：关 = 名称只显示词干
+  return ui.showExt ? props.asset.name : props.asset.name.replace(/\.[^.]+$/, "");
+});
 // 标签行：音视频改时长属性（mm:ss，5.1）；动图与其他按尺寸；fla 等无尺寸资源显示格式角标文案
 const meta = computed(() => {
   if (props.asset.duration != null && !isAnim.value) return formatDuration(props.asset.duration);
@@ -189,7 +191,7 @@ const meta = computed(() => {
       />
       <HoverAudioLayer v-else-if="hoverActive && kind === 'audio'" :asset="asset" />
       <HoverSequenceLayer v-else-if="(hoverActive || ui.autoPlayGif) && kind === 'sequence'" :asset="asset" />
-      <span v-if="badgeColor && ui.showExtBadge" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
+      <span v-if="badgeColor && ui.showBadge" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
       <span v-if="asset.noteCount" class="note-badge">{{ asset.noteCount }}</span>
     </div>
     <!-- 简介区（figma 14）：C3 + 上边框 / padding 8 8 8 12 / 间距 4；
@@ -209,14 +211,14 @@ const meta = computed(() => {
         @pointerdown.stop
       />
       <!-- 名称悬停 tip（2026-08-10 用户定）：完整名称（限宽换行）+ 当前简介档（尺寸/文件大小等，
-           briefMode none 时无简介行）；序列帧显示名（.序列帧 后缀）与卡片一致 -->
+           简介关闭或 briefMode none 时无简介行）；序列帧显示名（.序列帧 后缀）与卡片一致 -->
       <span
         v-else
         class="title"
-        v-tip="{ text: displayName, keys: ui.briefMode !== 'none' ? meta : undefined, column: true }"
+        v-tip="{ text: displayName, keys: ui.showBrief && ui.briefMode !== 'none' ? meta : undefined, column: true }"
         @dblclick.stop="startRename"
       >{{ displayName }}</span>
-      <span v-show="ui.briefMode !== 'none'" class="meta card-info">{{ meta }}</span>
+      <span v-show="ui.showBrief && ui.briefMode !== 'none'" class="meta card-info">{{ meta }}</span>
     </div>
     <!-- 原始文件徽章（figma 14：15×15 品牌色图标，卡片右下各 8） -->
     <AppIcon v-if="asset.origin" name="original-file-badge" :size="15" class="origin-badge" />

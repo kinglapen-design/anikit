@@ -1,14 +1,18 @@
 <script setup lang="ts">
-// 查看方式（03_UI 布局/05_查看方式，2026-07-23 用户定：级联菜单改二级窗口模式）：
-// 行 item（名称 + 下拉选择器）×6：查看范围（全局/当前目录）/ 布局方式 / 排序方式（含升降序）/
-// 显示简介（尺寸已实现，其余随 7.x 接线）/ 分组方式（占位）/
-// 时间显示（5.3 帧化改造，2026-07-28 用户定：帧数优先——帧数/时间码切换，仅影响视频）；
-// 分割线 + 开关组（自动播放动图/视频——5.3 接功能，先存状态）；
-// 分割线 + 开关组（显示扩展名角标 / 显示子文件夹内容）。
+// 查看方式（28_展开菜单 - 查看方式，1.4 2026-08-11 全量重写；旧 03_UI 布局/05 稿 picker 行模式作废）：
+// 面板式展开菜单——宽 404 / padding 12 24 / 行高 53 / 行标题 16/22 700（标题档）；
+// 布局方式 = 切换按钮组（自适应/瀑布流/网格/列表，AppSegmented 点亮）；
+// 排序方式 = 下拉「自定义」+ 升/降切换（**占位禁用**——排序业务 3.5 接）；
+// 时间码显示方式 = 帧数/时长切换（点亮，播放条/悬停胶囊/笔记同值联动）；
+// 显示简介 = 下拉选内容 + 开关（ui.showBrief，与 briefMode 独立）；
+// 显示扩展名（名称词干）/ 显示徽标（格式角标）/ 显示子文件夹内容 = 开关点亮；
+// 显示自定义数据（占位——6.1）；自动播放动图 / 自动播放视频预览 = 开关点亮（5.3 已接）。
+// 稿无"查看范围 / 分组方式"行——旧行移除（ui.useGlobalView / groupBy 字段保留不删）。
 import { computed, ref } from "vue";
 import AppMenu from "./AppMenu.vue";
 import MenuItem from "./MenuItem.vue";
 import AppSwitch from "./AppSwitch.vue";
+import AppSegmented from "./AppSegmented.vue";
 import AppIcon from "./AppIcon.vue";
 import { useUiStore } from "../stores/ui";
 
@@ -17,7 +21,7 @@ const props = defineProps<{ anchor: { x: number; y: number }; trigger?: HTMLElem
 const emit = defineEmits<{ close: [] }>();
 const groupRef = ref<HTMLElement>();
 
-const WINDOW_W = 296;
+const WINDOW_W = 404;
 // 原级联菜单宽 175：窗口加宽后右缘与原位置对齐（不超出窗口右缘）
 const winX = computed(() => props.anchor.x - (WINDOW_W - 175));
 
@@ -27,7 +31,6 @@ const layouts = [
   { value: "grid", label: "网格" },
   { value: "list", label: "列表" },
 ] as const;
-const sorts = ["自定义", "标题", "扩展名", "文件大小", "尺寸", "时长", "添加日期", "创建日期", "修改日期"];
 const briefs = [
   { value: "size", label: "尺寸" },
   { value: "fileSize", label: "文件大小" },
@@ -36,25 +39,28 @@ const briefs = [
   { value: "tags", label: "标签" },
   { value: "none", label: "无显示" },
 ] as const;
-// 时间显示（5.3 帧化改造，2026-07-28 用户定：默认帧数）
 const timeDisplays = [
   { value: "frames", label: "帧数" },
-  { value: "timecode", label: "时间码" },
+  { value: "timecode", label: "时长" },
+] as const;
+const sortOrders = [
+  { value: "asc", label: "升序" },
+  { value: "desc", label: "降序" },
 ] as const;
 
-const layoutLabel = computed(() => layouts.find((l) => l.value === ui.layoutMode)?.label ?? "自适应");
 const briefLabel = computed(() => briefs.find((b) => b.value === ui.briefMode)?.label ?? "尺寸");
-const timeDisplayLabel = computed(() => timeDisplays.find((t) => t.value === ui.timeDisplay)?.label ?? "帧数");
-const sortLabel = computed(() => ui.sortBy || "自定义");
+const sortOrderModel = computed({
+  get: () => (ui.sortAsc ? "asc" : "desc"),
+  set: (v) => {
+    ui.sortAsc = v === "asc";
+  },
+});
 
-// 下拉选择器：记录当前打开的行、锚点与触发按钮（trigger 用于"再点同一按钮关闭"，
-// 防止"组外先关、click 又开"反复弹）；选项菜单独立于主窗口——点主窗口空白即可收起
-type PickerKind = "scope" | "layout" | "sort" | "brief" | "group" | "timeDisplay";
-const picker = ref<{ kind: PickerKind; x: number; y: number } | null>(null);
+// 下拉选择器（显示简介一项；排序方式占位禁用不出 picker）
+const picker = ref<{ kind: "brief"; x: number; y: number } | null>(null);
 const pickerTrigger = ref<HTMLElement | null>(null);
 
-function openPicker(kind: PickerKind, e: MouseEvent): void {
-  // 再点同一按钮 = 收起
+function openPicker(kind: "brief", e: MouseEvent): void {
   if (picker.value?.kind === kind) {
     picker.value = null;
     return;
@@ -76,107 +82,84 @@ function closeAll(): void {
       :x="winX"
       :y="anchor.y"
       :width="WINDOW_W"
-      pad="0"
+      pad="var(--space-12) var(--space-24)"
       gap="0"
       :group="groupRef ?? null"
       :trigger="trigger ?? null"
       @close="closeAll"
     >
-      <div class="rows">
-        <div class="row">
-          <span class="label">查看范围</span>
-          <button class="picker" @click="openPicker('scope', $event)">
-            <span class="val">{{ ui.useGlobalView ? "全局" : "当前目录" }}</span>
-            <AppIcon name="chevron-small" :size="16" class="down" />
-          </button>
-        </div>
+      <!-- 组 1：布局 / 排序 / 时间码 -->
+      <div class="group">
         <div class="row">
           <span class="label">布局方式</span>
-          <button class="picker" @click="openPicker('layout', $event)">
-            <span class="val">{{ layoutLabel }}</span>
-            <AppIcon name="chevron-small" :size="16" class="down" />
-          </button>
+          <AppSegmented v-model="ui.layoutMode" :options="layouts" small style="width: 208px" />
+        </div>
+        <!-- 排序方式（占位禁用——排序业务 3.5 接） -->
+        <div class="row disabled">
+          <span class="label">排序方式</span>
+          <span class="ctrl">
+            <button class="picker" disabled>
+              <span class="val">{{ ui.sortBy || "自定义" }}</span>
+              <AppIcon name="tree-expand-arrow" :size="12" class="down" />
+            </button>
+            <AppSegmented v-model="sortOrderModel" :options="sortOrders" small style="width: 104px" class="seg-disabled" />
+          </span>
         </div>
         <div class="row">
-          <span class="label">排序方式</span>
-          <button class="picker" @click="openPicker('sort', $event)">
-            <span class="val">{{ sortLabel }}</span>
-            <AppIcon name="chevron-small" :size="16" class="down" />
-          </button>
+          <span class="label">时间码显示方式</span>
+          <AppSegmented v-model="ui.timeDisplay" :options="timeDisplays" small style="width: 112px" />
         </div>
+      </div>
+
+      <div class="group-line" />
+
+      <!-- 组 2：显示开关 -->
+      <div class="group">
         <div class="row">
           <span class="label">显示简介</span>
-          <button class="picker" @click="openPicker('brief', $event)">
-            <span class="val">{{ briefLabel }}</span>
-            <AppIcon name="chevron-small" :size="16" class="down" />
-          </button>
+          <span class="ctrl">
+            <button class="picker" @click="openPicker('brief', $event)">
+              <span class="val">{{ briefLabel }}</span>
+              <AppIcon name="tree-expand-arrow" :size="12" class="down" />
+            </button>
+            <AppSwitch v-model="ui.showBrief" />
+          </span>
         </div>
         <div class="row">
-          <span class="label">分组方式</span>
-          <button class="picker" @click="openPicker('group', $event)">
-            <span class="val">{{ ui.groupBy }}</span>
-            <AppIcon name="chevron-small" :size="16" class="down" />
-          </button>
+          <span class="label">显示扩展名</span>
+          <AppSwitch v-model="ui.showExt" />
         </div>
         <div class="row">
-          <span class="label">时间显示</span>
-          <button class="picker" @click="openPicker('timeDisplay', $event)">
-            <span class="val">{{ timeDisplayLabel }}</span>
-            <AppIcon name="chevron-small" :size="16" class="down" />
-          </button>
+          <span class="label">显示徽标</span>
+          <AppSwitch v-model="ui.showBadge" />
         </div>
-      </div>
-
-      <div class="switch-group">
-        <div class="switch-row">
-          <span class="label">自动播放动图</span>
-          <AppSwitch v-model="ui.autoPlayGif" />
+        <!-- 显示自定义数据（占位——6.1 自定义数据业务） -->
+        <div class="row disabled">
+          <span class="label">显示自定义数据</span>
+          <AppSwitch :model-value="false" disabled />
         </div>
-        <div class="switch-row">
-          <span class="label">自动播放视频</span>
-          <AppSwitch v-model="ui.autoPlayVideo" />
-        </div>
-      </div>
-
-      <div class="switch-group last">
-        <div class="switch-row">
-          <span class="label">显示扩展名角标</span>
-          <AppSwitch v-model="ui.showExtBadge" />
-        </div>
-        <div class="switch-row">
+        <div class="row">
           <span class="label">显示子文件夹内容</span>
           <AppSwitch v-model="ui.showSubfolders" />
         </div>
       </div>
+
+      <div class="group-line" />
+
+      <!-- 组 3：自动播放 -->
+      <div class="group">
+        <div class="row">
+          <span class="label">自动播放动图</span>
+          <AppSwitch v-model="ui.autoPlayGif" />
+        </div>
+        <div class="row">
+          <span class="label">自动播放视频预览</span>
+          <AppSwitch v-model="ui.autoPlayVideo" />
+        </div>
+      </div>
     </AppMenu>
 
-    <!-- 选项菜单（与主窗口同组） -->
-    <AppMenu v-if="picker?.kind === 'scope'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
-      <MenuItem label="全局" checkable :checked="ui.useGlobalView" @select="ui.useGlobalView = true; picker = null" />
-      <MenuItem label="当前目录" checkable :checked="!ui.useGlobalView" @select="ui.useGlobalView = false; picker = null" />
-    </AppMenu>
-    <AppMenu v-if="picker?.kind === 'layout'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
-      <MenuItem
-        v-for="l in layouts"
-        :key="l.value"
-        :label="l.label"
-        checkable
-        :checked="ui.layoutMode === l.value"
-        @select="ui.layoutMode = l.value; picker = null"
-      />
-    </AppMenu>
-    <AppMenu v-if="picker?.kind === 'sort'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
-      <MenuItem
-        v-for="s in sorts"
-        :key="s"
-        :label="s"
-        checkable
-        :checked="sortLabel === s"
-        @select="ui.sortBy = s === '自定义' ? '' : s; picker = null"
-      />
-      <MenuItem label="升序" checkable :checked="ui.sortAsc" @select="ui.sortAsc = true; picker = null" />
-      <MenuItem label="降序" checkable :checked="!ui.sortAsc" @select="ui.sortAsc = false; picker = null" />
-    </AppMenu>
+    <!-- 显示简介选项菜单（与主窗口同组） -->
     <AppMenu v-if="picker?.kind === 'brief'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
       <MenuItem
         v-for="b in briefs"
@@ -187,47 +170,52 @@ function closeAll(): void {
         @select="ui.briefMode = b.value; picker = null"
       />
     </AppMenu>
-    <AppMenu v-if="picker?.kind === 'group'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
-      <MenuItem label="自定义" checkable :checked="true" @select="ui.groupBy = '自定义'; picker = null" />
-    </AppMenu>
-    <AppMenu v-if="picker?.kind === 'timeDisplay'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
-      <MenuItem
-        v-for="t in timeDisplays"
-        :key="t.value"
-        :label="t.label"
-        checkable
-        :checked="ui.timeDisplay === t.value"
-        @select="ui.timeDisplay = t.value; picker = null"
-      />
-    </AppMenu>
   </div>
 </template>
 
 <style scoped>
-/* 区块结构（2026-07-24 用户定，替代通栏/divider 方案）：窗口 padding 0，
-   三个区块各自 padding 16 / gap 8，组间用 inset 顶部分割线（border-2，同详情面板）；
-   衔接处 16+16=32 自然形成区块感 */
-.rows {
+/* 组（28 稿）：行高 53（padding 12 0），行间无分隔；组间 1px 暗-悬停线（内容宽满） */
+.group {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-16);
 }
-/* 行：裸（无底色无边框，2026-07-24 用户定） */
+.group-line {
+  flex: none;
+  height: 1px;
+  background: var(--line-hover);
+}
+/* 行：标题 16/22 700（标题档，28 稿）左置，控件右置 */
 .row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
-  padding: 0 var(--space-4);
+  padding: var(--space-12) 0;
 }
 .label {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-1);
+  font-size: var(--text-title-size);
+  line-height: var(--text-title-line);
+  font-weight: var(--text-title-weight);
+  color: var(--text-highlight);
   white-space: nowrap;
 }
-/* 下拉选择器：C4 底 / 1px border-1 / 圆角 6（2026-07-24 用户定）；hover C5 */
+.ctrl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex: none;
+}
+/* 占位禁用行（业务未接）：标题与控件统一降档不响应 */
+.row.disabled {
+  pointer-events: none;
+}
+.row.disabled .label {
+  color: var(--line-active);
+}
+.seg-disabled {
+  opacity: 0.5;
+}
+/* 下拉选择器（28 稿：C4 底 / 1px 暗-悬停边框 / 圆角 6）；disabled 不降 hover */
 .picker {
   display: flex;
   align-items: center;
@@ -236,8 +224,8 @@ function closeAll(): void {
   padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-6);
   background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-1);
-  color: var(--font-icon-2);
+  box-shadow: inset 0 0 0 1px var(--line-hover);
+  color: var(--text-normal);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
   flex: none;
@@ -245,6 +233,13 @@ function closeAll(): void {
 }
 .picker:hover {
   background: var(--c5);
+}
+.picker:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.picker:disabled:hover {
+  background: var(--c4);
 }
 .picker .val {
   flex: 1;
@@ -254,23 +249,6 @@ function closeAll(): void {
   text-overflow: ellipsis;
 }
 .picker .down {
-  color: var(--font-icon-3);
-  transition: color 0.12s ease;
-}
-.picker:hover .down {
-  color: var(--font-icon-1);
-}
-.switch-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-16);
-  box-shadow: inset 0 1px 0 0 var(--border-2);
-}
-.switch-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--space-4);
+  color: var(--text-label);
 }
 </style>

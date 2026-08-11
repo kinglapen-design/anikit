@@ -13,6 +13,7 @@ import { formatDuration } from "../lib/formatDuration";
 import { renamePlacement } from "../lib/placementOps";
 import { useSelectionStore } from "../stores/selection";
 import { useContentStore } from "../stores/content";
+import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
 
 const props = withDefaults(
@@ -39,10 +40,13 @@ const size = computed(() => {
 // 动图（5.1）同带 frameCount，按 animated 区分——格式列显示扩展名大写
 const isSeq = computed(() => props.asset.frameCount != null && !props.asset.animated);
 const format = computed(() => (isSeq.value ? "序列帧" : props.asset.ext.toUpperCase()));
-const displayName = computed(() =>
-  isSeq.value ? `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧` : props.asset.name,
-);
+const displayName = computed(() => {
+  if (isSeq.value) return `${props.asset.name.replace(/\.[^.]+$/, "")}.序列帧`;
+  // 28 查看方式"显示扩展名"（1.4，与 AssetCard 同口径）：关 = 名称只显示词干
+  return ui.showExt ? props.asset.name : props.asset.name.replace(/\.[^.]+$/, "");
+});
 const emit = defineEmits<{ select: [e: MouseEvent] }>();
+const ui = useUiStore();
 
 // —— 就地重命名（6.1 C2，与 AssetCard 同口径）：Enter 确认 / Esc 取消 / 失焦确认；
 // 滚出虚拟滚动销毁 = 取消（AssetGrid 先清 renamingKey，blur 晚到按 key 失配判取消）
