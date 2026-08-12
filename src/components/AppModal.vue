@@ -31,12 +31,11 @@ onMounted(() => {
 <template>
   <div class="modal-mask" @pointerdown.self="emit('close')">
     <div class="app-modal" :class="[variant]" role="dialog" :aria-label="title">
-      <!-- alert（figma 09 侵入式）：内容行横排——48 圆形状态图标 + 右侧标题/描述竖排 -->
+      <!-- alert（figma 09 侵入式）：内容行横排——48 状态徽章（warning / error-large SVG 自带
+           圆形状态色底与边框，完整图形直接使用）+ 右侧标题/描述竖排 -->
       <template v-if="variant === 'alert'">
         <div class="alert-row">
-          <span class="alert-badge" :class="alertIcon">
-            <AppIcon :name="alertIcon === 'error' ? 'error-large' : 'warning'" :size="18" />
-          </span>
+          <AppIcon :name="alertIcon === 'error' ? 'error-large' : 'warning'" :size="48" class="alert-badge" />
           <div class="alert-text">
             <h2 class="title">{{ title }}</h2>
             <div class="desc"><slot /></div>
@@ -159,23 +158,9 @@ onMounted(() => {
   align-items: flex-start;
   gap: var(--space-12);
 }
-/* 状态徽章：48×48 圆形 / 状态色底 / 1px 亮-选中边框（inset，规范 4）/ 图标 18 常态色 */
+/* 状态徽章：48×48（SVG 自带圆形状态色底与边框——warning / error-large 为完整图形，不另给底色） */
 .alert-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-circle);
-  box-shadow: inset 0 0 0 1px var(--line-active);
-  color: var(--text-normal);
   flex: none;
-}
-.alert-badge.error {
-  background: var(--error);
-}
-.alert-badge.warning {
-  background: var(--warning);
 }
 .alert-text {
   display: flex;
