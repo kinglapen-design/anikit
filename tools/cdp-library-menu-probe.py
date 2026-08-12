@@ -124,6 +124,11 @@ async def main():
             await asyncio.sleep(0.6)
             print("菜单已关:", await ev("!document.querySelector('.app-menu')"))
             print("确认弹窗:", await ev("document.querySelector('.app-modal.alert .title')?.textContent ?? null"))
+            import base64
+            r = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
+            with open("tools/style-preview/delete-library-alert.png", "wb") as f:
+                f.write(base64.b64decode(r["result"]["data"]))
+            print("截图: delete-library-alert")
             # 确认删除
             btn = await ev("(() => { const b = [...document.querySelectorAll('.app-modal .app-btn')].find((x) => x.textContent.includes('删除')).getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()")
             await mouse("mousePressed", btn["x"], btn["y"]); await mouse("mouseReleased", btn["x"], btn["y"])

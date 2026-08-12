@@ -93,6 +93,7 @@ function closeAll(executed = false): void {
 const ITEM_STEP = 35; // 库 item 高 33 + 组 gap 2
 const libDrag = reactive({ idx: -1, startY: 0, dy: 0, target: -1 });
 let dragMoved = false; // 拖动超阈值：松手后的 click 误触发抑制
+const settling = ref(false); // 松手归位帧：禁 .lib-item transform 过渡（松手即到位）
 
 // entries 中库条目的索引（08 稿连续段）
 const libIdxs = computed(() =>
@@ -132,6 +133,12 @@ function onDragEnd(): void {
     arr.splice(target, 0, moved);
     const order = arr.filter((e): e is CtxItem => e !== "divider" && !!e.library).map((e) => e.label);
     void reorderLibraries(order); // 失败 toast 在封装内，顺序以后端为准（下次开菜单重拉）
+    // 松手即到位（2026-08-12 走查）：让位项视觉本已在目标位，清 transform 必须禁过渡，
+    // 否则 DOM 重排 + 清除的过程会再放一遍交换动画（"弹回去"观感）
+    settling.value = true;
+    setTimeout(() => {
+      settling.value = false;
+    }, 50);
   }
   libDrag.idx = -1;
   libDrag.target = -1;
@@ -201,8 +208,8 @@ function onLibraryRemove(entry: CtxItem): void {
       </button>
     </div>
     <!-- item 组（独立容器 padding 12 / gap 2） -->
-    <div class="menu-items">
-      <template v-for="(entry, i) in entries" :key="i">
+    <div class="menu-items" :class="{ settling }">
+      <template v-for="(entry, i) in entries" :key="entry !== 'divider' && entry.library ? `lib:${entry.label}` : i">
         <MenuDivider v-if="entry === 'divider'" />
         <LibraryMenuItem
           v-else-if="entry.library && !query.trim()"
@@ -321,6 +328,10 @@ function onLibraryRemove(entry: CtxItem): void {
   gap: var(--space-2);
   padding: var(--space-12);
   min-height: 0;
+}
+/* 库排序松手归位帧：禁 transform 过渡（让位项视觉本已在目标位，2026-08-12 走查） */
+.menu-items.settling :deep(.lib-item) {
+  transition: none;
 }
 .menu-empty {
   padding: var(--space-6) var(--space-8);
