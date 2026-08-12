@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // 文件夹选择弹窗（6.3"添加至文件夹"）：文件夹树单选目标 → 确认回调（关联 / 副本弹窗前置）。
+// 无根目录"未分类"项（PRD 02-15，2.5：候车区禁止链接落点）。
 // 由 selection.folderPickPrompt 驱动，宿主 App.vue；展开态本组件自管（默认全展开）。
 import { computed, ref } from "vue";
 import IconButton from "./IconButton.vue";
-import TreeItem from "./TreeItem.vue";
 import FolderPickNode from "./FolderPickNode.vue";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
@@ -40,12 +40,7 @@ function onCancel(): void {
         <IconButton name="window-close" title="关闭" @click="onCancel" />
       </header>
       <div class="pick-body">
-        <TreeItem
-          icon="folder-closed"
-          label="未分类"
-          :selected="pickedId === 'root'"
-          @select="pickedId = 'root'"
-        />
+        <!-- 无"未分类"根目录项（PRD 02-15，2.5）：候车区禁止链接落点，先分类好才允许复制链接 -->
         <FolderPickNode
           v-for="node in content.folders"
           :key="node.id"

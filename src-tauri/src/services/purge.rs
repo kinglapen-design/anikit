@@ -1,8 +1,9 @@
 //! 彻底删除服务（6.3 右键菜单）：素材直接彻底删除（不经过回收站）、删除文件夹两形态。
 //! - delete_assets_permanently：两段式（虚拟片段引用拦截）→ 移除全部 Placement + 物理删 info
 //!   + 四处同步清理（index / recycle / recent / pins，复用 recycle.rs 同收尾）；**不接撤销**。
-//! - delete_folder(permanent=false)："删除文件夹"——子树 Placement 全部改挂 root（素材进未分类，
-//!   2026-07-29 用户定）+ 子树文件夹节点删除；仅改数据，**撤销三步由命令层接入**。
+//! - delete_folder(permanent=false)："删除文件夹"——子树 origin Placement 改挂 root（素材进未分类，
+//!   2026-07-29 用户定）+ 链接 Placement 随文件夹直接删除（不进回收站，2026-08-12 用户定案，
+//!   PRD 02-15）+ 子树文件夹节点删除；仅改数据，**撤销三步由命令层接入**。
 //! - delete_folder(permanent=true)："彻底删除文件夹"——两段式 → 子树资产物理全删 + 节点删除；
 //!   **不接撤销**。两形态执行前均 backup_library 兜底（失败仅警告不阻断）。
 
@@ -109,24 +110,34 @@ pub fn delete_folder(lib: &mut Library, folder_id: &str, permanent: bool, confir
   let folder_count = subtree.len();
 
   if !permanent {
-    // "删除文件夹"：子树 Placement 全部改挂 root（素材进未分类，重名唯一化）+ 节点删除
+    // "删除文件夹"：子树 origin Placement 改挂 root（素材进未分类，重名唯一化）+ 节点删除；
+    // 链接 Placement（origin = false）随文件夹直接删除——链接删除不进回收站，链接存在时
+    // 资产必有 origin 在别处或同批回 root（2026-08-12 用户定案，PRD 02-15 候车区规则）
     let mut root_names: HashSet<String> =
       lib.folders.items.iter().filter(|p| p.folder == ROOT_FOLDER_ID).map(|p| p.name.clone()).collect();
     let mut moved = 0usize;
-    for p in &mut lib.folders.items {
+    let mut links = 0usize;
+    let mut kept = Vec::with_capacity(lib.folders.items.len());
+    for mut p in std::mem::take(&mut lib.folders.items) {
       if subtree_set.contains(p.folder.as_str()) {
+        if !p.origin {
+          links += 1;
+          continue; // 链接随文件夹直接删除
+        }
         let name = library::unique_name(&root_names, &p.name);
         root_names.insert(name.clone());
         p.name = name;
         p.folder = ROOT_FOLDER_ID.to_string();
         moved += 1;
       }
+      kept.push(p);
     }
+    lib.folders.items = kept;
     lib.folders.folders.retain(|f| !subtree_set.contains(f.id.as_str()));
     sync_folder_index(lib);
     rewrite_orders(lib, ROOT_FOLDER_ID);
     finish(lib)?;
-    log::info!("删除文件夹 {folder_id}（{moved} 个素材移入未分类，{folder_count} 个文件夹节点）");
+    log::info!("删除文件夹 {folder_id}（{moved} 个素材移入未分类，{links} 条链接随删，{folder_count} 个文件夹节点）");
     return Ok(DeleteFolderReport { moved_placements: moved, deleted_folders: folder_count, ..empty_report() });
   }
 
@@ -273,6 +284,39 @@ mod tests {
     assert_eq!(orders, vec![0, 1], "root 段 order 重写连续");
     // 目标不存在报错
     assert!(delete_folder(&mut h.lib, "F-不存在", false, false).is_err());
+  }
+
+  /// PRD 02-15 / 2026-08-12 定案：删除文件夹（非永久）——子树 origin 回 root，链接随文件夹
+  /// 直接删除（不进回收站）；资产在别处还有 origin 的链接也删，origin 本体不动
+  #[test]
+  fn delete_folder_recycle_mode_drops_links() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F-TOP", None);
+    add_folder(&mut h.lib, "F-SUB", Some("F-TOP"));
+    add_folder(&mut h.lib, "F-OUT", None);
+    add_asset(&mut h, "AN-A", "a.png", "F-SUB"); // 子树内 origin → 回 root
+    add_asset(&mut h, "AN-B", "b.png", "F-OUT"); // origin 在子树外
+    add_asset(&mut h, "AN-C", "c.png", "F-SUB"); // origin 与链接同在子树内
+    // 链接：AN-B（origin 在别处）与 AN-C（origin 同批回 root）各挂一条进子树
+    ops::add_placement(&mut h.lib, "AN-B".into(), "F-SUB".into(), "b.png".into(), false, &mut HashMap::new());
+    ops::add_placement(&mut h.lib, "AN-C".into(), "F-SUB".into(), "c.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+    assert_eq!(h.lib.folders.items.len(), 5, "3 origin + 2 链接");
+
+    let rep = delete_folder(&mut h.lib, "F-TOP", false, false).unwrap();
+    assert_eq!((rep.moved_placements, rep.deleted_folders), (2, 2), "仅 origin 计入移入未分类");
+    let a = h.lib.folders.items.iter().find(|p| p.asset == "AN-A").unwrap();
+    assert_eq!((a.folder.as_str(), a.origin), (ROOT_FOLDER_ID, true), "AN-A origin 回 root");
+    let b: Vec<_> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-B").collect();
+    assert_eq!(b.len(), 1, "AN-B 子树链接随删");
+    assert_eq!((b[0].folder.as_str(), b[0].origin), ("F-OUT", true), "AN-B 别处的 origin 不动");
+    let c: Vec<_> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-C").collect();
+    assert_eq!(c.len(), 1, "AN-C 同文件夹链接随删，只剩 origin");
+    assert_eq!((c[0].folder.as_str(), c[0].origin), (ROOT_FOLDER_ID, true), "AN-C origin 回 root");
+    // 落盘一致：3 条 origin，无链接残留
+    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.items.len(), 3);
+    assert!(disk.items.iter().all(|p| p.origin), "folders.json 无链接残留");
   }
 
   #[test]

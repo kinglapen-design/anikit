@@ -15,6 +15,8 @@ import {
   getAssetBase64,
   getAssetOriginPath,
   revealInExplorer,
+  hasWaitingAsset,
+  notifyWaitingAssetLink,
 } from "./placementOps";
 
 // —— 导入系统对话框（1.3：新增菜单三入口共用——侧栏新增按钮 / 空白右键 / Ctrl+N）——
@@ -160,6 +162,11 @@ export function pickFolderForLink(): void {
   const selection = useSelectionStore();
   const items = selection.selectedRefs();
   if (items.length === 0) return;
+  // 候车区资产禁发起链接（PRD 02-15，2.5）
+  if (hasWaitingAsset(items)) {
+    notifyWaitingAssetLink();
+    return;
+  }
   selection.folderPickPrompt = {
     onPick: (folderId) => {
       selection.linkDraft = { items, targetFolder: folderId };

@@ -70,7 +70,7 @@ const quickItems = [
 function quickCount(key: (typeof quickItems)[number]["key"]): number | undefined {
   switch (key) {
     case "all":
-      return content.placements.length;
+      return content.allCount;
     case "uncategorized":
       return content.uncategorizedCount;
     case "inbox":

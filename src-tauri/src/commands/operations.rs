@@ -106,7 +106,8 @@ pub async fn move_placements(
   }
 }
 
-/// 段内排序：items（须同属一个文件夹）移到 targetFolder 段内 beforeItem 之前（null = 段尾）
+/// 段内排序：items（须同属一个文件夹）移到 targetFolder 段内 beforeItem 之前（null = 段尾）；
+/// 跨文件夹移出 root 时清 metadata.importedFrom（摘标口径与 move_placements 一致）
 #[tauri::command]
 pub async fn reorder_placements(
   state: State<'_, AppState>,
@@ -119,6 +120,14 @@ pub async fn reorder_placements(
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin("调整顺序");
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  // 摘标候选（root → 非 root）的 metadata 写点前快照（与 move_placements 同口径）
+  if target_folder != ROOT_FOLDER_ID {
+    for it in &items {
+      if it.folder_id == ROOT_FOLDER_ID {
+        undo.record_file(&meta_path(lib, &it.asset_id)).map_err(|e| e.to_string())?;
+      }
+    }
+  }
   match operations::reorder_placements(lib, &items, &target_folder, before_item.as_ref()) {
     Ok(()) => {
       undo.commit().map_err(|e| e.to_string())?;
