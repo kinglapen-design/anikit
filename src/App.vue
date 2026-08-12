@@ -20,6 +20,8 @@ import WindowControls from "./components/WindowControls.vue";
 import PreviewWindow from "./components/PreviewWindow.vue";
 import SetupWizard from "./components/SetupWizard.vue";
 import CreateLibraryModal from "./components/CreateLibraryModal.vue";
+import AppModal from "./components/AppModal.vue";
+import AppButton from "./components/AppButton.vue";
 import ImportDialog from "./components/ImportDialog.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
 import ImportResultDialog from "./components/ImportResultDialog.vue";
@@ -35,7 +37,7 @@ import { useContentStore } from "./stores/content";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
 import { ensureDocApps } from "./lib/docApps";
-import { wizardState, reopenLastSession, createLibraryModalState } from "./lib/libraryOps";
+import { wizardState, reopenLastSession, createLibraryModalState, deleteLibraryState, confirmDeleteLibrary } from "./lib/libraryOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
 import { useSidebarAnim } from "./lib/useSidebarAnim";
 import { useWindowStatePersistence } from "./lib/windowState";
@@ -233,6 +235,22 @@ async function togglePin(): Promise<void> {
     />
     <!-- 菜单"新建资源库"（16 稿独立弹窗） -->
     <CreateLibraryModal v-if="createLibraryModalState.open" @close="createLibraryModalState.open = false" />
+    <!-- 删除资源库确认（08 稿 item 删除×；alert 侵入式配提示音） -->
+    <AppModal
+      v-if="deleteLibraryState.name"
+      variant="alert"
+      alert-icon="warning"
+      title="删除资源库"
+      @close="deleteLibraryState.name = null"
+    >
+      <p class="del-lib-text">
+        删除资源库「{{ deleteLibraryState.name }}」？库内文件夹、标签等数据将被删除且不可恢复；素材文件保留在素材库中。
+      </p>
+      <template #actions>
+        <AppButton label="取消" @click="deleteLibraryState.name = null" />
+        <AppButton label="删除" variant="primary" @click="confirmDeleteLibrary" />
+      </template>
+    </AppModal>
     <ImportDialog
       v-else-if="content.importDraft"
       :draft="content.importDraft"
@@ -266,6 +284,14 @@ async function togglePin(): Promise<void> {
 </template>
 
 <style scoped>
+/* 删除资源库确认文案：正文常态色，限宽换行 */
+.del-lib-text {
+  margin: 0;
+  max-width: 320px;
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  color: var(--text-normal);
+}
 /* 不透明窗口 + 原生装饰（DWM 阴影）：容器贴满窗口；圆角 8 与 DWM 一致。
    外框 = DWM 1px 边框染 亮-选中 实色（lib.rs DWMWA_BORDER_COLOR，2026-08-08 用户定；
    前端不自绘——自绘与 DWM 叠加变粗难看，2026-07-23 实测） */

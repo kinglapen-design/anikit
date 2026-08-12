@@ -144,6 +144,45 @@ export function requestLibrarySetup(): void {
   createLibraryModalState.open = true;
 }
 
+// 库列表拖动排序持久化（08 稿，space.json libraryOrder 单写点）；失败 toast，顺序以后端为准（下次开菜单重拉）
+export async function reorderLibraries(order: string[]): Promise<void> {
+  try {
+    await invoke<string[]>("reorder_libraries", { order });
+  } catch (e) {
+    useToastStore().notify({ message: String(e), icon: "fail" });
+  }
+}
+
+// 删除资源库（08 稿 item 删除×）：确认弹窗状态 + 执行。
+// 删当前打开的库 → 切剩余第一个 / 无剩余回第二步向导（PRD 01_储存空间 3.2）
+export const deleteLibraryState = reactive<{ name: string | null }>({ name: null });
+
+export function requestDeleteLibrary(name: string): void {
+  deleteLibraryState.name = name;
+}
+
+export async function confirmDeleteLibrary(): Promise<void> {
+  const name = deleteLibraryState.name;
+  if (!name) return;
+  const toast = useToastStore();
+  try {
+    const rest = await invoke<string[]>("delete_library", { name });
+    deleteLibraryState.name = null;
+    toast.notify({ message: `资源库「${name}」已删除`, icon: "success", duration: 3000 });
+    if (currentLibrary.name === name) {
+      currentLibrary.name = null;
+      if (rest.length > 0) await switchLibrary(rest[0]);
+      else {
+        wizardState.open = true;
+        wizardState.closable = false;
+        wizardState.startStep = 2;
+      }
+    }
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+  }
+}
+
 // 开关自动导入（快速访问"自动导入"确认弹窗，2026-08-12 用户定）：
 // 空间级设置（space.json 单写点）+ 启停收件箱（盘符挂载 / 卸载、监听启停）；失败 toast 恒音，返回是否成功
 export async function setAutoImport(enabled: boolean): Promise<boolean> {

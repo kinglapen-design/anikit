@@ -17,6 +17,7 @@ export interface CtxItem {
   disabled?: boolean;
   checkable?: boolean;
   checked?: boolean;
+  library?: boolean; // 资源库条目（08 稿：抓手拖动排序 + 品牌徽章 + 右勾 + 删除×，LibraryMenuItem 渲染）
   submenu?: CtxEntry[];
   submenuWidth?: number;
   action?: () => void;

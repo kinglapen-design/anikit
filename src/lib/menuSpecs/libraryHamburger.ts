@@ -13,7 +13,8 @@ import { newDocGroupEntries } from "./addMenu";
 export function librarySwitchSpec(names: string[], currentName: string | null): CtxEntry[] {
   const items: CtxEntry[] = names.map((name) => ({
     label: name,
-    icon: "library-duotone",
+    icon: "library-duotone", // 搜索平铺态的退化渲染用；常态走 LibraryMenuItem 品牌徽章
+    library: true,
     checkable: true,
     checked: name === currentName,
     action: name === currentName ? undefined : () => void switchLibrary(name),

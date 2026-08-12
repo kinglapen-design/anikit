@@ -10,12 +10,14 @@
 // 过滤时隐藏 divider 且不出 flyout；清空恢复层级；Esc 先清空、空时再按关闭（AppMenu 豁免输入框 Esc）。
 // 组外关闭关系：根菜单的 group = flyout 根元素（flyout 内点击不关根菜单）；
 // flyout 自身无 group，点其外部经根菜单统一关闭（closeAll 幂等）。
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import AppIcon from "./AppIcon.vue";
 import AppMenu from "./AppMenu.vue";
 import MenuItem from "./MenuItem.vue";
 import MenuDivider from "./MenuDivider.vue";
+import LibraryMenuItem from "./LibraryMenuItem.vue";
 import { closeContextMenu, menuState, type CtxEntry, type CtxItem } from "../lib/contextMenus";
+import { reorderLibraries, requestDeleteLibrary } from "../lib/libraryOps";
 
 const query = ref("");
 const searchInputRef = ref<HTMLInputElement>();
@@ -86,6 +88,88 @@ function closeAll(executed = false): void {
   flyout.value = null;
   closeContextMenu(executed);
 }
+
+// —— 库条目拖动排序（08 稿：抓手拖动、其他 item 让位移动动画、落点持久化 space.json libraryOrder）——
+const ITEM_STEP = 35; // 库 item 高 33 + 组 gap 2
+const libDrag = reactive({ idx: -1, startY: 0, dy: 0, target: -1 });
+let dragMoved = false; // 拖动超阈值：松手后的 click 误触发抑制
+
+// entries 中库条目的索引（08 稿连续段）
+const libIdxs = computed(() =>
+  entries.value.map((e, i) => (e !== "divider" && e.library ? i : -1)).filter((i) => i >= 0),
+);
+
+// 让位位移：拖动项跟随指针；被跨越的项反向让出一步（transition 在 LibraryMenuItem 根样式）
+function libItemStyle(i: number): string {
+  if (libDrag.idx < 0) return "";
+  const pos = libIdxs.value;
+  const from = pos.indexOf(libDrag.idx);
+  const to = pos.indexOf(libDrag.target);
+  const me = pos.indexOf(i);
+  if (i === libDrag.idx) return `transform: translateY(${libDrag.dy}px); transition: none; position: relative; z-index: 1;`;
+  if (me < 0) return "";
+  if (from < to && me > from && me <= to) return "transform: translateY(-35px)";
+  if (to < from && me >= to && me < from) return "transform: translateY(35px)";
+  return "";
+}
+
+function onDragMove(e: PointerEvent): void {
+  if (libDrag.idx < 0) return;
+  libDrag.dy = e.clientY - libDrag.startY;
+  if (Math.abs(libDrag.dy) > 3) dragMoved = true;
+  const pos = libIdxs.value;
+  const from = pos.indexOf(libDrag.idx);
+  const to = Math.max(0, Math.min(pos.length - 1, from + Math.round(libDrag.dy / ITEM_STEP)));
+  libDrag.target = pos[to];
+}
+
+function onDragEnd(): void {
+  window.removeEventListener("pointermove", onDragMove);
+  const { idx, target } = libDrag;
+  if (idx >= 0 && target !== idx && target >= 0 && menuState.entries) {
+    const arr = menuState.entries;
+    const [moved] = arr.splice(idx, 1);
+    arr.splice(target, 0, moved);
+    const order = arr.filter((e): e is CtxItem => e !== "divider" && !!e.library).map((e) => e.label);
+    void reorderLibraries(order); // 失败 toast 在封装内，顺序以后端为准（下次开菜单重拉）
+  }
+  libDrag.idx = -1;
+  libDrag.target = -1;
+}
+
+// 系统抢指针兜底（规范第 4 条：blur 强制取消，不提交）
+function onDragCancel(): void {
+  window.removeEventListener("pointermove", onDragMove);
+  libDrag.idx = -1;
+  libDrag.target = -1;
+}
+
+function onGripDown(i: number, e: PointerEvent): void {
+  libDrag.idx = i;
+  libDrag.startY = e.clientY;
+  libDrag.dy = 0;
+  libDrag.target = i;
+  dragMoved = false;
+  window.addEventListener("pointermove", onDragMove);
+  window.addEventListener("pointerup", onDragEnd, { once: true });
+  window.addEventListener("blur", onDragCancel, { once: true });
+}
+
+// 库条目点击：拖动松手后的 click 抑制；否则切库（action 同普通项）
+function onLibrarySelect(entry: CtxItem): void {
+  if (dragMoved) {
+    dragMoved = false;
+    return;
+  }
+  onItemClick(entry);
+}
+
+// 删除×：关菜单弹确认（确认模态在 App.vue，libraryOps.deleteLibraryState）
+function onLibraryRemove(entry: CtxItem): void {
+  const name = entry.label;
+  closeAll(false);
+  requestDeleteLibrary(name);
+}
 </script>
 
 <template>
@@ -120,6 +204,15 @@ function closeAll(executed = false): void {
     <div class="menu-items">
       <template v-for="(entry, i) in entries" :key="i">
         <MenuDivider v-if="entry === 'divider'" />
+        <LibraryMenuItem
+          v-else-if="entry.library && !query.trim()"
+          :label="entry.label"
+          :current="entry.checked"
+          :style="libItemStyle(i)"
+          @select="onLibrarySelect(entry)"
+          @remove="onLibraryRemove(entry)"
+          @grip-down="onGripDown(i, $event)"
+        />
         <MenuItem
           v-else
           :label="entry.label"
