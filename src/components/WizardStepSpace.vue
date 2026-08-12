@@ -64,13 +64,15 @@ const emit = defineEmits<{ pick: [] }>();
   line-height: var(--text-label-line);
   color: var(--text-label);
 }
-/* 步骤内联错误行（Eagle 式，同 CreateLibraryForm 口径）：绝对定位不挤压稿内布局 */
+/* 步骤内联错误行（Eagle 式，同 CreateLibraryForm 口径）：绝对定位不挤压稿内布局；
+   pointer-events none——元素盒横跨内容区与按钮行重叠，纯展示不吃点击（2026-08-12 走查） */
 .step-error {
   position: absolute;
   left: var(--space-48);
   right: var(--space-48);
   bottom: var(--space-8);
   margin: 0;
+  pointer-events: none;
   text-align: center;
   font-size: var(--text-label-size);
   line-height: var(--text-label-line);

@@ -39,13 +39,14 @@ defineProps<{ error: string }>();
   line-height: var(--text-body-line);
   color: var(--text-normal);
 }
-/* 步骤内联错误行（同 WizardStepSpace 口径） */
+/* 步骤内联错误行（同 WizardStepSpace 口径）：absolute 横跨内容区，pointer-events none 防挡点击 */
 .step-error {
   position: absolute;
   left: var(--space-48);
   right: var(--space-48);
   bottom: var(--space-8);
   margin: 0;
+  pointer-events: none;
   text-align: center;
   font-size: var(--text-label-size);
   line-height: var(--text-label-line);
