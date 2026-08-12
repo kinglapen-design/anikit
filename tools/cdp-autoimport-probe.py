@@ -19,9 +19,11 @@ STUB = r"""
 window.__TAURI_INTERNALS__ = {
   metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
   invoke: (cmd, args) => {
-    const LIB = { name: "测试库", path: "E:/AniKitTest/测试空间/测试库", assetCount: 0, folderCount: 0, autoImport: false };
+    const LIB = { name: "测试库", path: "E:/AniKitTest/测试空间/测试库", assetCount: 0, folderCount: 0 };
+    const SPACE = { name: "测试空间", path: "E:/AniKitTest/测试空间", autoImport: false };
     const R = {
       get_current_library: LIB,
+      get_current_space: SPACE,
       get_ui_settings: {},
       detect_doc_apps: [],
       list_placements: [],
@@ -32,7 +34,7 @@ window.__TAURI_INTERNALS__ = {
     };
     if (cmd === "set_auto_import") {
       console.warn("[stub] set_auto_import", JSON.stringify(args));
-      return Promise.resolve({ ...LIB, autoImport: args?.enabled ?? true });
+      return Promise.resolve({ ...SPACE, autoImport: args?.enabled ?? true });
     }
     return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
   },

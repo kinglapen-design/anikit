@@ -20,12 +20,12 @@ export interface LibraryInfo {
   path: string;
   assetCount: number;
   folderCount: number;
-  autoImport: boolean; // 自动导入开关（库级 settings.json）：关 = 无盘符无监听
 }
 
 export interface SpaceInfo {
   name: string;
   path: string;
+  autoImport: boolean; // 自动导入（空间级设置，inbox 空间级共用，2026-08-12 用户定）
 }
 
 // 向导共享态：open = 显示；closable = 有库在用（菜单触发）点遮罩可关；startStep = 起始步骤
@@ -52,8 +52,9 @@ export async function loadLibraries(): Promise<{ names: string[]; currentName: s
   return { names, currentName: current?.name ?? null };
 }
 
-// 当前库状态（侧栏库名 / 自动导入开关显示判定等）：afterOpen / 启动兜底更新，唯一数据源
-export const currentLibrary = reactive<{ name: string | null; autoImport: boolean }>({
+// 当前库 / 空间状态（侧栏库名、自动导入开关判定等）：开库/开空间/启动兜底更新，唯一数据源
+export const currentLibrary = reactive<{ name: string | null }>({ name: null });
+export const currentSpace = reactive<{ name: string | null; autoImport: boolean }>({
   name: null,
   autoImport: false,
 });
@@ -64,28 +65,34 @@ async function afterOpen(info: LibraryInfo): Promise<LibraryInfo> {
   const content = useContentStore();
   const undo = useUndoStore();
   currentLibrary.name = info.name;
-  currentLibrary.autoImport = info.autoImport;
   tabs.closeAllTabs();
   await content.refresh();
   void undo.refreshState();
   return info;
 }
 
-export async function createSpace(parentPath: string, name: string): Promise<SpaceInfo> {
-  return await invoke<SpaceInfo>("create_space", { parentPath, name });
+export async function createSpace(parentPath: string, name: string, autoImport: boolean): Promise<SpaceInfo> {
+  const info = await invoke<SpaceInfo>("create_space", { parentPath, name, autoImport });
+  currentSpace.name = info.name;
+  currentSpace.autoImport = info.autoImport;
+  return info;
 }
 
 export async function openSpace(path: string): Promise<SpaceInfo> {
-  return await invoke<SpaceInfo>("open_space", { path });
+  const info = await invoke<SpaceInfo>("open_space", { path });
+  currentSpace.name = info.name;
+  currentSpace.autoImport = info.autoImport;
+  return info;
 }
 
 export async function listSpaceLibraries(): Promise<string[]> {
   return await invoke<string[]>("list_space_libraries").catch(() => [] as string[]);
 }
 
-// 创建资源库（向导第二步 / 菜单"新建资源库"）：建库即打开，收尾同 openLibrary
-export async function createLibrary(name: string, autoImport: boolean): Promise<LibraryInfo> {
-  return await afterOpen(await invoke<LibraryInfo>("create_library", { name, autoImport }));
+// 创建资源库（16 稿弹窗 / 向导 standalone）：建库即打开，收尾同 openLibrary；
+// 自动导入是空间级设置，建库不带该参数（2026-08-12 空间级 inbox 定案）
+export async function createLibrary(name: string): Promise<LibraryInfo> {
+  return await afterOpen(await invoke<LibraryInfo>("create_library", { name }));
 }
 
 // 打开资源库：当前空间内按名打开
@@ -105,12 +112,11 @@ export async function reopenLastSession(): Promise<"ok" | "need-library" | "need
     const parts = last.path.split(/[\\/]/).filter(Boolean);
     parts.pop();
     if (parts.length === 0) return "need-wizard";
-    await invoke<SpaceInfo>("open_space", { path: parts.join("\\") });
+    await openSpace(parts.join("\\"));
     const libs = await listSpaceLibraries();
     if (libs.length === 0) return "need-library";
     await invoke<LibraryInfo>("open_library", { name: libs.includes(last.name) ? last.name : libs[0] }).then((info) => {
       currentLibrary.name = info.name;
-      currentLibrary.autoImport = info.autoImport;
     });
     await useContentStore().refresh();
     return "ok";
@@ -139,12 +145,12 @@ export function requestLibrarySetup(): void {
 }
 
 // 开关自动导入（快速访问"自动导入"确认弹窗，2026-08-12 用户定）：
-// 写库级 settings.json + 启停收件箱（盘符挂载 / 卸载、监听启停）；失败 toast 恒音，返回是否成功
+// 空间级设置（space.json 单写点）+ 启停收件箱（盘符挂载 / 卸载、监听启停）；失败 toast 恒音，返回是否成功
 export async function setAutoImport(enabled: boolean): Promise<boolean> {
   const toast = useToastStore();
   try {
-    const info = await invoke<LibraryInfo>("set_auto_import", { enabled });
-    currentLibrary.autoImport = info.autoImport;
+    const info = await invoke<SpaceInfo>("set_auto_import", { enabled });
+    currentSpace.autoImport = info.autoImport;
     return true;
   } catch (e) {
     toast.notify({ message: String(e), icon: "fail" });

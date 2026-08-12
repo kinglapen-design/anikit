@@ -31,7 +31,7 @@ async function onConfirm(): Promise<void> {
   }
   busy.value = true;
   try {
-    const info = await createLibrary(trimmed, false); // 菜单新建默认不开自动导入（库内可再开，PRD 3.1 弹窗链）
+    const info = await createLibrary(trimmed); // 自动导入 = 空间级设置，建库不带（2026-08-12 定案）
     toast.notify({ message: `资源库「${info.name}」创建完成`, icon: "success", sound: true, duration: 3000 });
     emit("close");
   } catch (e) {

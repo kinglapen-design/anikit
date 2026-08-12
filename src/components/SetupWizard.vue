@@ -24,7 +24,9 @@ import {
   listSpaceLibraries,
   createLibrary,
   openLibrary,
+  setAutoImport,
   validateAssetName,
+  currentSpace,
   type LibraryEntry,
 } from "../lib/libraryOps";
 
@@ -99,6 +101,7 @@ async function openSpaceFlow(): Promise<void> {
   try {
     const space = await openSpace(path);
     spaceReady.value = true;
+    autoImport.value = space.autoImport; // 第二步开关回显空间当前设置（空间级，2026-08-12）
     const libs = await listSpaceLibraries();
     if (libs.length === 0) {
       step.value = 2;
@@ -163,17 +166,20 @@ async function finish(): Promise<void> {
   try {
     if (!spaceReady.value) {
       try {
-        await createSpace(parentPath.value, spaceName.value.trim());
+        await createSpace(parentPath.value, spaceName.value.trim(), autoImport.value);
         spaceReady.value = true;
       } catch (e) {
         stepError.value = String(e);
         step.value = 1;
         return;
       }
+    } else if (autoImport.value !== currentSpace.autoImport) {
+      // 空间已开（打开已有空间 / standalone）：开关变更写空间级设置
+      if (!(await setAutoImport(autoImport.value))) return;
     }
     const name = libName.value.trim();
     try {
-      await createLibrary(name, autoImport.value);
+      await createLibrary(name);
     } catch (e) {
       stepError.value = String(e);
       step.value = 2;

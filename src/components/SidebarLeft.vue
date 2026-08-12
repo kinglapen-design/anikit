@@ -14,7 +14,7 @@ import LibraryView from "./LibraryView.vue";
 import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
 import { addButtonSpec } from "../lib/menuSpecs/addMenu";
 import { hamburgerSpec, librarySwitchSpec } from "../lib/menuSpecs/libraryHamburger";
-import { loadLibraries, currentLibrary, type LibraryInfo } from "../lib/libraryOps";
+import { loadLibraries, currentLibrary, currentSpace, type LibraryInfo, type SpaceInfo } from "../lib/libraryOps";
 import { invoke } from "@tauri-apps/api/core";
 import { isEditableTarget } from "../lib/useGlobalKeys";
 import { useUiStore } from "../stores/ui";
@@ -51,12 +51,19 @@ function onGlobalKeydown(e: KeyboardEvent): void {
 }
 onMounted(() => {
   window.addEventListener("keydown", onGlobalKeydown);
-  // 库名兜底（2.1）：启动直开分支不经 libraryOps.afterOpen，此处补拉一次
+  // 库名 / 空间设置兜底（2.1）：启动直开分支不经 libraryOps 封装，此处补拉一次
   if (currentLibrary.name === null) {
     void invoke<LibraryInfo | null>("get_current_library")
       .then((lib) => {
         currentLibrary.name = lib?.name ?? null;
-        currentLibrary.autoImport = lib?.autoImport ?? false;
+      })
+      .catch(() => {});
+  }
+  if (currentSpace.name === null) {
+    void invoke<SpaceInfo | null>("get_current_space")
+      .then((space) => {
+        currentSpace.name = space?.name ?? null;
+        currentSpace.autoImport = space?.autoImport ?? false;
       })
       .catch(() => {});
   }

@@ -17,7 +17,7 @@ import { beginFolderDrag } from "../lib/dragOperation";
 import { createAndName, findParentId } from "../lib/menuOps";
 import { openContextMenu } from "../lib/contextMenus";
 import { recycleBlankSpec } from "../lib/menuSpecs/recycle";
-import { currentLibrary, setAutoImport } from "../lib/libraryOps";
+import { currentSpace, setAutoImport } from "../lib/libraryOps";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
@@ -33,7 +33,7 @@ const autoImportPrompt = ref(false);
 const autoImportBusy = ref(false);
 
 function onQuickSelect(key: string): void {
-  if (key === "inbox" && !currentLibrary.autoImport) {
+  if (key === "inbox" && !currentSpace.autoImport) {
     autoImportPrompt.value = true;
     return;
   }
