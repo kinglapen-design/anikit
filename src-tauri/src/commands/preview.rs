@@ -34,6 +34,10 @@ pub struct AssetFilePath {
   pub path: Option<String>,
   /// true = 解析中（psd/psb 已进预览解析队列），完成经 preview-full-ready 事件推送
   pub pending: bool,
+  /// 动图小动画播放缓存（2.3，info/{stem}_anim.webp，短边 320 animated webp）：已生成给绝对路径，
+  /// 前端卡片播放优先于 path；未生成提交后台懒生成后给 null（前端回退 path 播原文件，下次命中）；
+  /// 非动图恒 null
+  pub anim_preview: Option<String>,
 }
 
 /// 预览文件路径解析：webview 可直渲格式返回源文件绝对路径；psd / psb 缓存命中直给、
@@ -51,22 +55,40 @@ fn asset_file_path(lib: &Library, asset_id: &str) -> Result<AssetFilePath, Strin
   let (_info_dir, origin, meta) = locate_asset(lib, asset_id)?;
   let ext = meta.ext.to_lowercase();
   if is_webview_direct(&ext) {
-    return Ok(AssetFilePath { path: Some(origin.to_string_lossy().into_owned()), pending: false });
+    // 动图（gif/webp 多帧）：小动画缓存命中直给；未命中提交后台懒生成（存量旧动图首次播放
+    // 回退原文件、下次命中）。cfg(not(test)) 同 sequence_frames 自愈——单测共享全局 worker，
+    // submit 会与测试手动生成并发写同一临时库（偶发竞态）；懒生成是薄包装，队列与生成各有独立测试
+    let anim_preview = if crate::services::anim::is_anim(&meta) {
+      match crate::services::anim_preview::fresh_anim_preview(&lib.assets_dir, asset_id, &meta.origin_name) {
+        Some(p) => Some(p),
+        None => {
+          #[cfg(not(test))]
+          crate::services::unpack_queue::global().submit(crate::services::unpack_queue::UnpackTask {
+            assets_dir: lib.assets_dir.clone(),
+            asset_id: asset_id.to_string(),
+          });
+          None
+        }
+      }
+    } else {
+      None
+    };
+    return Ok(AssetFilePath { path: Some(origin.to_string_lossy().into_owned()), pending: false, anim_preview });
   }
   if matches!(ext.as_str(), "psd" | "psb") {
     // 渐进加载高清层（Eagle 式，2026-07-25 用户定）：全尺寸缓存 cache/previews（持久、按源文件失效）。
     // 只判存在不解码——generate_full_preview 未命中会同步解码 1-2s，命令层直接调会堵线程池
     if let Some(path) = thumbnail::full_preview_path(&lib.root, &origin, asset_id) {
-      return Ok(AssetFilePath { path: Some(path), pending: false });
+      return Ok(AssetFilePath { path: Some(path), pending: false, anim_preview: None });
     }
     preview_queue::global().submit(PreviewTask::FullPreview {
       root: lib.root.clone(),
       asset_id: asset_id.to_string(),
       origin,
     });
-    return Ok(AssetFilePath { path: None, pending: true });
+    return Ok(AssetFilePath { path: None, pending: true, anim_preview: None });
   }
-  Ok(AssetFilePath { path: None, pending: false })
+  Ok(AssetFilePath { path: None, pending: false, anim_preview: None })
 }
 
 // ---------- 序列帧 / 动图帧清单 ----------
@@ -322,7 +344,10 @@ mod tests {
     add_file(&mut h, "AN-PNG", "参考图.png");
     let result = asset_file_path(&h.lib, "AN-PNG").unwrap();
     let expected = h.lib.info_dir("AN-PNG").join("参考图.png");
-    assert_eq!(result, AssetFilePath { path: Some(expected.to_string_lossy().into_owned()), pending: false });
+    assert_eq!(
+      result,
+      AssetFilePath { path: Some(expected.to_string_lossy().into_owned()), pending: false, anim_preview: None }
+    );
   }
 
   #[test]
@@ -330,9 +355,30 @@ mod tests {
     let mut h = make_lib();
     add_file(&mut h, "AN-FLA", "工程.fla");
     // 不可直渲也不走解码的格式：path=null 且不入队（前端格式图标兜底）
-    assert_eq!(asset_file_path(&h.lib, "AN-FLA").unwrap(), AssetFilePath { path: None, pending: false });
+    assert_eq!(asset_file_path(&h.lib, "AN-FLA").unwrap(), AssetFilePath { path: None, pending: false, anim_preview: None });
     // 不存在的资源报错
     assert!(asset_file_path(&h.lib, "AN-不存在").is_err());
+  }
+
+  /// 动图：小动画缓存未生成时 animPreview=null（cfg(test) 不提交懒生成队列），
+  /// 生成后命中直给绝对路径；path 恒为源文件（前端回退用）
+  #[test]
+  fn get_asset_file_path_anim_preview_lazy() {
+    if !crate::adapters::ffmpeg::ffmpeg_available() {
+      eprintln!("ffmpeg sidecar 缺失，跳过小动画命中验证");
+      return;
+    }
+    let mut h = make_lib();
+    add_anim(&mut h, "AN-GIF3");
+    let origin = h.lib.info_dir("AN-GIF3").join("anim3.gif");
+
+    let r = asset_file_path(&h.lib, "AN-GIF3").unwrap();
+    assert_eq!(r.path.as_deref(), Some(origin.to_string_lossy().as_ref()));
+    assert_eq!(r.anim_preview, None, "未生成时 animPreview=null（前端回退原文件）");
+
+    let p = crate::services::anim_preview::ensure_anim_preview(&h.lib.assets_dir, "AN-GIF3").unwrap();
+    let r = asset_file_path(&h.lib, "AN-GIF3").unwrap();
+    assert_eq!(r.anim_preview.as_deref(), Some(p.to_string_lossy().as_ref()), "生成后命中直给");
   }
 
   // psd / psb 分支：缓存命中走 full_preview_path 直给（thumbnail.rs 已测），未命中进队列

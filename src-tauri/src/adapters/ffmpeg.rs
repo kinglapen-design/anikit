@@ -128,6 +128,50 @@ pub fn transcode_for_webview(path: &Path, out_path: &Path, is_audio: bool) -> bo
   }
 }
 
+/// 动图转码为小动画播放缓存（2.3）：短边 short_edge 等比 animated webp（短边不足不放大），
+/// 保留原逐帧时长（-fps_mode passthrough 不动帧率，webp muxer 按 pts 差写逐帧 delay）、
+/// 无限循环（-loop 0，webp muxer 选项）、libwebp q80（同缩略图档）。
+/// scale 条件式横竖图同规则——横图 h=e w=-2、竖图 w=e h=-2、短边 ≤ e 恒等（iw:ih 不放大），
+/// -2 兜底偶数像素；表达式含逗号，单引号由 ffmpeg filter 解析器消化（无 shell 不经 argv 拆分）。
+/// 显式 `-f webp`：业务层输出先落 .tmp 临时文件再 rename（防半文件），扩展名推断不了封装格式。
+/// 二进制缺失 / 非零退出 / 产物未生成均 false + warn（同 transcode_for_webview 能力降级语义）
+pub fn transcode_anim_preview(path: &Path, out_path: &Path, short_edge: u32) -> bool {
+  let e = short_edge.to_string();
+  let vf =
+    format!("scale='if(gt(min(iw,ih),{e}),if(gt(iw,ih),-2,{e}),iw)':'if(gt(min(iw,ih),{e}),if(gt(iw,ih),{e},-2),ih)'");
+  let args = vec![
+    "-v".into(),
+    "error".into(),
+    "-y".into(),
+    "-i".into(),
+    path.to_string_lossy().into_owned(),
+    "-map".into(),
+    "0:v:0".into(),
+    "-vf".into(),
+    vf,
+    "-fps_mode".into(),
+    "passthrough".into(),
+    "-loop".into(),
+    "0".into(),
+    "-c:v".into(),
+    "libwebp".into(),
+    "-quality".into(),
+    "80".into(),
+    "-f".into(),
+    "webp".into(),
+    out_path.to_string_lossy().into_owned(),
+  ];
+  if !run_status("ffmpeg", &args) {
+    return false;
+  }
+  if out_path.is_file() {
+    true
+  } else {
+    log::warn!("小动画转码产物未生成：{}", out_path.display());
+    false
+  }
+}
+
 /// ffprobe 元数据（format + streams，JSON）；解析失败返回 None
 pub fn probe_json(path: &Path) -> Option<serde_json::Value> {
   let args = vec![

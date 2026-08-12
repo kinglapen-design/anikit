@@ -5,10 +5,13 @@
 import { invoke } from "@tauri-apps/api/core";
 
 // get_asset_file_path 返回：path = webview 可渲染文件绝对路径（直渲格式 = 源路径；
-// psd/psb = 已缓存的解码预览；暂不可得为 null）；pending = 高清层后台解析中（完成经 preview-full-ready 推送）
+// psd/psb = 已缓存的解码预览；暂不可得为 null）；pending = 高清层后台解析中（完成经 preview-full-ready 推送）；
+// animPreview = 动图小动画播放缓存（info 内短边 320 animated webp，2.3）——非动图恒 null；
+// 动图缓存缺失时为 null 并由后端懒生成（本次回退 path 源文件播放，下次命中）
 export interface AssetFilePath {
   path: string | null;
   pending: boolean;
+  animPreview: string | null;
 }
 
 // get_media_source 返回：transcoded = 返回的是后端转码产物（mp4/wav，false = 源文件）；

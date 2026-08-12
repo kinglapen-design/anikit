@@ -491,6 +491,7 @@ fn register_one(
   let name = unit_name(files, groups, item.unit);
   let asset_id = asset.id.clone();
   // 动图（2026-07-26 定案）：注册成功后提交解包队列——逐帧高清图持久化 info/frames/
+  // （2.3 起同一队列顺带生成小动画播放缓存 info/{stem}_anim.webp，见 unpack_queue::execute）
   let unpack = crate::services::anim::is_anim(&asset);
   let result = with_lib(lib, state, move |l| {
     if let Some(ext) = icon {

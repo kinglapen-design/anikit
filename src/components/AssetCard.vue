@@ -27,6 +27,7 @@ import {
 import { formatDuration } from "../lib/formatDuration";
 import { renamePlacement } from "../lib/placementOps";
 import { getAssetFilePath } from "../lib/mediaOps";
+import { acquireAutoplay, releaseAutoplay } from "../lib/autoplayGate";
 import { useInlineRename } from "../lib/useInlineRename";
 import { useUiStore } from "../stores/ui";
 import { useSelectionStore } from "../stores/selection";
@@ -102,7 +103,33 @@ function startRename(): void {
 // 300ms 延迟后把卡片图换成源文件（webview 原生循环，零等待），停止后还原封面
 const animSrc = ref<string | null>(null);
 let animTimer: ReturnType<typeof setTimeout> | undefined;
-const animPlaying = computed(() => hoverActive.value || ui.autoPlayGif);
+// 自动播放数量闸（2.3）：开关驱动的自动播放申请名额（满员排队 FIFO 唤醒），悬停播放直通——
+// 小卡片高密度时窗口内 200+ 卡片同时解码致全局卡顿（hover 目录树滞后），上限 16 与密度解耦；
+// 动图 / 视频 / 序列帧三处自动播放共用本卡 gateRequested/autoGranted（一卡同时至多一种 kind）
+const autoGranted = ref(false);
+let gateRequested = false;
+const wantAutoplay = computed(() => {
+  if (kind.value === "anim" || kind.value === "sequence") return ui.autoPlayGif;
+  if (kind.value === "video") return ui.autoPlayVideo;
+  return false;
+});
+watch(
+  wantAutoplay,
+  (want) => {
+    if (want && !gateRequested) {
+      gateRequested = true;
+      autoGranted.value = acquireAutoplay(cardKey, () => {
+        autoGranted.value = true;
+      });
+    } else if (!want && gateRequested) {
+      gateRequested = false;
+      releaseAutoplay(cardKey);
+      autoGranted.value = false;
+    }
+  },
+  { immediate: true },
+);
+const animPlaying = computed(() => hoverActive.value || autoGranted.value);
 // immediate：虚拟滚动销毁重建 / 开关已开时挂载，animPlaying 初始即 true 无"变化"不触发——
 // 挂载即评估一次（修复：自动播放滚出视口再回来 / 视口外滚入不播，2026-07-27 用户实测）
 watch(
@@ -120,13 +147,20 @@ watch(
 async function loadAnim(): Promise<void> {
   try {
     const r = await getAssetFilePath(props.asset.assetId);
-    if (r.path && animPlaying.value) animSrc.value = convertFileSrc(r.path);
+    // 2.3：优先短边 320 小动画缓存（animPreview，解码像素量降一个量级）；
+    // 缺失时回退源文件（存量旧动图首次播放由后端懒生成，下次命中）
+    const path = r.animPreview ?? r.path;
+    if (path && animPlaying.value) animSrc.value = convertFileSrc(path);
   } catch {
     // 解析失败保持静态封面
   }
 }
 onBeforeUnmount(() => {
   clearTimeout(animTimer);
+  if (gateRequested) {
+    gateRequested = false;
+    releaseAutoplay(cardKey);
+  }
 });
 
 // 角标文案：音频带 BPM 显示"格式 / BPM: 值"（Eagle 同格式，2026-07-26 用户截图定稿）
@@ -173,12 +207,12 @@ const meta = computed(() => {
       />
       <div v-else class="img" />
       <HoverVideoLayer
-        v-if="(hoverActive || ui.autoPlayVideo) && kind === 'video'"
+        v-if="(hoverActive || autoGranted) && kind === 'video'"
         :asset="asset"
         :auto="!hoverActive"
       />
       <HoverAudioLayer v-else-if="hoverActive && kind === 'audio'" :asset="asset" />
-      <HoverSequenceLayer v-else-if="(hoverActive || ui.autoPlayGif) && kind === 'sequence'" :asset="asset" />
+      <HoverSequenceLayer v-else-if="(hoverActive || autoGranted) && kind === 'sequence'" :asset="asset" />
       <span v-if="badgeColor && ui.showBadge" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
       <span v-if="asset.noteCount" class="note-badge">{{ asset.noteCount }}</span>
     </div>
