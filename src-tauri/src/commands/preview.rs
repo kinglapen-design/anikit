@@ -13,7 +13,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::adapters::shell_open;
 use crate::commands::library::AppState;
 use crate::core::json_io::read_json;
-use crate::core::library::{Library, ASSTES_DIR};
+use crate::core::library::Library;
 use crate::core::models::AssetMeta;
 use crate::services::preview_queue::{self, PreviewTask};
 use crate::services::sequence::DEFAULT_FPS;
@@ -128,7 +128,7 @@ fn sequence_frames(lib: &Library, asset_id: &str) -> Result<SequenceFrames, Stri
       // 自愈是薄包装，队列与解包本身各有独立测试覆盖
       #[cfg(not(test))]
       crate::services::unpack_queue::global().submit(crate::services::unpack_queue::UnpackTask {
-        root: lib.root.clone(),
+        assets_dir: lib.assets_dir.clone(),
         asset_id: asset_id.to_string(),
       });
       return Ok(SequenceFrames { fps: None, thumb_frame: None, frames: Vec::new(), unpacking: true });
@@ -242,7 +242,7 @@ pub async fn open_preview_window(app: tauri::AppHandle, asset_key: String) -> Re
 /// 定位资源：读 metadata + 推导 info 目录与源文件绝对路径（PRD 01-2.3：真实路径不存绝对路径，由 ID 推导）
 /// pub(crate)：thumb_frame / anim 等预览系命令共用
 pub(crate) fn locate_asset(lib: &Library, asset_id: &str) -> Result<(PathBuf, PathBuf, AssetMeta), String> {
-  let info_dir = lib.root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
+  let info_dir = lib.info_dir(asset_id);
   if !info_dir.is_dir() {
     return Err(format!("资源不存在：{asset_id}"));
   }
@@ -276,8 +276,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { dir, lib }
   }
 
@@ -297,7 +296,7 @@ mod tests {
       })
       .collect();
     let meta =
-      sequence::build_sequence_asset(&h.lib.root, "走路", "png", 3, &frames, "sha256:t", id, Source::Copy, None)
+      sequence::build_sequence_asset(&h.lib.assets_dir, "走路", "png", 3, &frames, "sha256:t", id, Source::Copy, None)
         .unwrap();
     h.lib.index.assets.insert(id.to_string(), meta.clone());
     meta
@@ -312,7 +311,7 @@ mod tests {
       fs::write(&src, b"fake").unwrap();
     }
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = import::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    let meta = import::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
     h.lib.index.assets.insert(id.to_string(), meta.clone());
     meta
   }
@@ -322,7 +321,7 @@ mod tests {
     let mut h = make_lib();
     add_file(&mut h, "AN-PNG", "参考图.png");
     let result = asset_file_path(&h.lib, "AN-PNG").unwrap();
-    let expected = h.lib.root.join(ASSTES_DIR).join("AN-PNG.info").join("参考图.png");
+    let expected = h.lib.info_dir("AN-PNG").join("参考图.png");
     assert_eq!(result, AssetFilePath { path: Some(expected.to_string_lossy().into_owned()), pending: false });
   }
 
@@ -356,7 +355,7 @@ mod tests {
     assert!(list.frames.iter().all(|f| f.delay_ms.is_none()));
 
     // 立即返回：帧条未缓存时 stripPath=null（后台队列异步生成）；语义：Some 时文件必须存在
-    let info = h.lib.root.join(ASSTES_DIR).join("AN-SEQ.info");
+    let info = h.lib.info_dir("AN-SEQ");
     let strips: Vec<PathBuf> = list
       .frames
       .iter()
@@ -397,7 +396,7 @@ mod tests {
     let mut meta = add_sequence(&mut h, "AN-SEQ2");
     // metadata 无 fps 字段（历史数据 / 手改）→ 缺省 24
     meta.fps = None;
-    let info = h.lib.root.join(ASSTES_DIR).join("AN-SEQ2.info");
+    let info = h.lib.info_dir("AN-SEQ2");
     write_json(&info.join("metadata.json"), &meta).unwrap();
     assert_eq!(sequence_frames(&h.lib, "AN-SEQ2").unwrap().fps, Some(24.0));
 
@@ -411,7 +410,7 @@ mod tests {
   fn add_anim(h: &mut Harness, id: &str) -> AssetMeta {
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tools/test-assets/anim3.gif");
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = import::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    let meta = import::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
     h.lib.index.assets.insert(id.to_string(), meta.clone());
     meta
   }
@@ -430,7 +429,7 @@ mod tests {
     assert!(pending.frames.is_empty());
 
     // 已解包：与序列帧同路径（info/frames/ 归一名），frames.json 逐帧 delayMs 下发，fps 恒 null
-    crate::services::anim_unpack::unpack_frames(&h.lib.root, "AN-GIF").unwrap();
+    crate::services::anim_unpack::unpack_frames(&h.lib.assets_dir, "AN-GIF").unwrap();
     let list = sequence_frames(&h.lib, "AN-GIF").unwrap();
     assert!(!list.unpacking);
     assert_eq!(list.fps, None);
@@ -449,7 +448,7 @@ mod tests {
     let _lock = TEST_LOCK.lock().unwrap();
     let mut h = make_lib();
     add_anim(&mut h, "AN-GIF2");
-    let info = h.lib.root.join(ASSTES_DIR).join("AN-GIF2.info");
+    let info = h.lib.info_dir("AN-GIF2");
     let frames_dir = info.join("frames");
     fs::create_dir_all(&frames_dir).unwrap();
     fs::write(frames_dir.join("anim3-00001.webp"), b"partial").unwrap();

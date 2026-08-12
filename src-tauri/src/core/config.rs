@@ -13,6 +13,9 @@ use crate::core::models::DATA_VERSION;
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
   pub version: u32,
+  /// 储存空间列表（名称、路径、最近打开时间），最近打开在前
+  #[serde(default)]
+  pub spaces: Vec<SpaceEntry>,
   /// 资源库列表（名称、路径、最近打开时间），最近打开在前
   #[serde(default)]
   pub libraries: Vec<LibraryEntry>,
@@ -27,11 +30,20 @@ impl Default for AppConfig {
   fn default() -> Self {
     Self {
       version: DATA_VERSION,
+      spaces: Vec::new(),
       libraries: Vec::new(),
       workspaces: Vec::new(),
       settings: serde_json::json!({}),
     }
   }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpaceEntry {
+  pub name: String,
+  pub path: String,
+  pub last_opened_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -85,6 +97,26 @@ fn upsert_library(cfg: &mut AppConfig, name: &str, path: &str) {
   cfg.libraries.insert(
     0,
     LibraryEntry {
+      name: name.to_string(),
+      path: path.to_string(),
+      last_opened_at: chrono::Local::now().to_rfc3339(),
+    },
+  );
+}
+
+/// 记录一次储存空间打开：去重、置顶、刷新最近打开时间
+pub fn record_space_open(name: &str, path: &str) -> Result<(), DataError> {
+  let p = config_path()?;
+  let mut cfg = load_from(&p);
+  upsert_space(&mut cfg, name, path);
+  save_to(&p, &cfg)
+}
+
+fn upsert_space(cfg: &mut AppConfig, name: &str, path: &str) {
+  cfg.spaces.retain(|e| e.path != path);
+  cfg.spaces.insert(
+    0,
+    SpaceEntry {
       name: name.to_string(),
       path: path.to_string(),
       last_opened_at: chrono::Local::now().to_rfc3339(),
@@ -167,6 +199,33 @@ mod tests {
     assert_eq!(cfg.libraries.len(), 2);
     assert_eq!(cfg.libraries[0].name, "库A改");
     assert_eq!(cfg.libraries[1].name, "库B");
+  }
+
+  #[test]
+  fn upsert_space_dedupes_and_prepends() {
+    let mut cfg = AppConfig::default();
+    upsert_space(&mut cfg, "空间A", "D:/sa");
+    upsert_space(&mut cfg, "空间B", "D:/sb");
+    upsert_space(&mut cfg, "空间A改", "D:/sa"); // 重复路径：去重置顶并更新名称
+    assert_eq!(cfg.spaces.len(), 2);
+    assert_eq!(cfg.spaces[0].name, "空间A改");
+    assert_eq!(cfg.spaces[1].name, "空间B");
+  }
+
+  #[test]
+  fn old_config_without_spaces_loads() {
+    // 旧版 config.json 无 spaces 字段（serde default 兼容），其余字段不丢
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    std::fs::write(
+      &path,
+      r#"{ "version": 1, "libraries": [ { "name": "库", "path": "E:/库", "lastOpenedAt": "2026-08-01T00:00:00+08:00" } ] }"#,
+    )
+    .unwrap();
+    let cfg = load_from(&path);
+    assert!(cfg.spaces.is_empty());
+    assert_eq!(cfg.libraries.len(), 1);
+    assert_eq!(cfg.libraries[0].name, "库");
   }
 
   #[test]

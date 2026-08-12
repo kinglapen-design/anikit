@@ -159,8 +159,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { dir, lib }
   }
 
@@ -168,7 +167,7 @@ mod tests {
     let src = h.dir.path().join(name);
     fs::write(&src, b"fake").unwrap();
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = import::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    let meta = import::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
     h.lib.index.assets.insert(id.to_string(), meta.clone());
     meta
   }
@@ -204,7 +203,7 @@ mod tests {
   fn set_note_syncs_note_count_to_meta_and_index() {
     let mut h = make_lib();
     add_file(&mut h, "AN-VID", "片段.mp4");
-    let info = h.lib.root.join(library::ASSTES_DIR).join("AN-VID.info");
+    let info = h.lib.info_dir("AN-VID");
 
     apply_set(&mut h.lib, "AN-VID", "t:01.000", "a").unwrap();
     apply_set(&mut h.lib, "AN-VID", "t:02.000", "b").unwrap();
@@ -233,7 +232,7 @@ mod tests {
   fn note_thumb_routes_frame_video_and_cache() {
     let mut h = make_lib();
     add_file(&mut h, "AN-SEQ", "走路.fla");
-    let info = h.lib.root.join(library::ASSTES_DIR).join("AN-SEQ.info");
+    let info = h.lib.info_dir("AN-SEQ");
     fs::create_dir_all(info.join("frames")).unwrap();
     fs::write(info.join("frames").join("走路-00001.webp"), b"fake").unwrap();
 

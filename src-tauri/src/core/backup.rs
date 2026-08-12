@@ -5,6 +5,7 @@
 //! - 滚动 10 份，超出删最旧；缓存与向量库不备份（可重建）。
 //!
 //! 备份对象 = library::data_files() 清单：库根数据文件 + 全部 info 内 metadata.json / annotation.json / notes.json / frames.json。
+//! info 数据文件在空间级 assets/ 池，备份快照内归置在 assets/ 前缀下（库根相对路径不变）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,11 +15,12 @@ use chrono::{Local, TimeZone};
 use crate::core::json_io::DataError;
 use crate::core::library::{data_files, BACKUP_DIR};
 use crate::core::models::DATA_VERSION;
+use crate::core::paths::ASSETS_DIR;
 
 const MAX_BACKUPS: usize = 10;
 
 /// 执行一次备份，返回新备份文件夹路径。
-pub fn backup_library(root: &Path) -> Result<PathBuf, DataError> {
+pub fn backup_library(root: &Path, assets_dir: &Path) -> Result<PathBuf, DataError> {
   let backup_root = root.join(BACKUP_DIR);
   fs::create_dir_all(&backup_root)?;
 
@@ -27,8 +29,13 @@ pub fn backup_library(root: &Path) -> Result<PathBuf, DataError> {
 
   let previous = latest_backup(&backup_root).filter(|p| *p != dest);
   let mut copied = 0usize;
-  for file in data_files(root)? {
-    let rel = file.strip_prefix(root).expect("数据文件必须在库根内").to_path_buf();
+  for file in data_files(root, assets_dir)? {
+    // 库根文件保持相对路径；assets 池文件（空间级，库根的兄弟）归置到 assets/ 前缀下
+    let rel = match file.strip_prefix(root) {
+      Ok(rel) => rel.to_path_buf(),
+      Err(_) => Path::new(ASSETS_DIR)
+        .join(file.strip_prefix(assets_dir).expect("数据文件必须在库根或 assets 池内")),
+    };
     let target = dest.join(&rel);
     if let Some(parent) = target.parent() {
       fs::create_dir_all(parent)?;
@@ -53,13 +60,13 @@ pub fn backup_library(root: &Path) -> Result<PathBuf, DataError> {
 
 /// 距上次备份超过 24 小时则备份（PRD 06-04 备份时机：启动时）；从未备份过立即备份。
 /// 备份失败不阻断库打开，只记错误日志。
-pub fn backup_if_stale(root: &Path) {
+pub fn backup_if_stale(root: &Path, assets_dir: &Path) {
   let stale = match latest_backup(&root.join(BACKUP_DIR)) {
     None => true,
     Some(p) => backup_time(&p).map(|t| Local::now().signed_duration_since(t).num_hours() >= 24).unwrap_or(true),
   };
   if stale {
-    if let Err(e) = backup_library(root) {
+    if let Err(e) = backup_library(root, assets_dir) {
       log::error!("定时备份失败（不阻断打开）：{e}");
     }
   }
@@ -127,16 +134,16 @@ mod tests {
   #[test]
   fn backup_copies_changed_and_links_unchanged() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
-    library::create(root).unwrap();
+    let lib = library::create_test(dir.path());
+    let root = lib.root.clone();
 
-    let first = backup_library(root).unwrap();
+    let first = backup_library(&root, &lib.assets_dir).unwrap();
     assert!(first.join("folders.json").is_file());
 
     // 改动一个数据文件后再备份
     let new_tags = r#"{ "version": 1, "tags": [ { "id": "T01", "name": "男人", "group": null } ], "groups": [] }"#;
     fs::write(root.join("tags.json"), new_tags).unwrap();
-    let second = backup_library(root).unwrap();
+    let second = backup_library(&root, &lib.assets_dir).unwrap();
 
     // 第二份里变动文件是新内容（与库根一致、与第一份不同），未变动文件与上一份内容一致
     assert_eq!(fs::read_to_string(second.join("tags.json")).unwrap(), new_tags);
@@ -148,8 +155,8 @@ mod tests {
       fs::read(first.join("folders.json")).unwrap(),
       fs::read(second.join("folders.json")).unwrap()
     );
-    // 两份备份各自是完整快照（库根五个数据文件齐全）
-    for name in ["folders.json", "tags.json", "pins.json", "recycle.json", "recent.json"] {
+    // 两份备份各自是完整快照（库根数据文件齐全）
+    for name in library::ROOT_DATA_FILES {
       assert!(first.join(name).is_file(), "第一份缺 {name}");
       assert!(second.join(name).is_file(), "第二份缺 {name}");
     }
@@ -158,28 +165,27 @@ mod tests {
   #[test]
   fn backup_covers_info_metadata() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
-    library::create(root).unwrap();
-    let info = root.join("asstes/AN2607211305-X7K2Q.info");
+    let lib = library::create_test(dir.path());
+    let info = lib.info_dir("AN2607211305-X7K2Q");
     fs::create_dir_all(&info).unwrap();
     fs::write(info.join("metadata.json"), r#"{ "version": 1 }"#).unwrap();
     fs::write(info.join("notes.json"), r#"{ "version": 1, "notes": [] }"#).unwrap();
 
-    let backup = backup_library(root).unwrap();
-    assert!(backup.join("asstes/AN2607211305-X7K2Q.info/metadata.json").is_file());
-    assert!(backup.join("asstes/AN2607211305-X7K2Q.info/notes.json").is_file());
+    // assets 池在空间级，备份快照内归置到 assets/ 前缀下
+    let backup = backup_library(&lib.root, &lib.assets_dir).unwrap();
+    assert!(backup.join("assets/AN2607211305-X7K2Q.info/metadata.json").is_file());
+    assert!(backup.join("assets/AN2607211305-X7K2Q.info/notes.json").is_file());
   }
 
   #[test]
   fn prunes_to_ten_backups() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
-    library::create(root).unwrap();
+    let lib = library::create_test(dir.path());
 
     for _ in 0..MAX_BACKUPS + 1 {
-      backup_library(root).unwrap();
+      backup_library(&lib.root, &lib.assets_dir).unwrap();
     }
-    let backups: Vec<_> = fs::read_dir(root.join(BACKUP_DIR))
+    let backups: Vec<_> = fs::read_dir(lib.root.join(BACKUP_DIR))
       .unwrap()
       .filter_map(|e| e.ok())
       .filter(|e| e.path().is_dir())

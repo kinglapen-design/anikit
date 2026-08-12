@@ -7,8 +7,9 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::library::{self, Library, ASSTES_DIR};
+use crate::core::library::{self, Library};
 use crate::core::models::new_asset_id;
+use crate::core::paths;
 use crate::services::import as ops;
 use crate::services::import::{FailedItem, Source, ROOT_FOLDER_ID};
 use crate::services::sequence;
@@ -167,6 +168,7 @@ fn use_existing(lib: &mut Library, item: &ConflictResolution) -> Result<(), Stri
 fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Result<(), String> {
   check_target(lib, &item.target_folder)?;
   let root = lib.root.clone();
+  let assets_dir = lib.assets_dir.clone();
   match &item.sequence {
     Some(seq) => {
       let frames: Vec<(PathBuf, u32)> = seq.frames.iter().map(|f| (f.path.clone(), f.number)).collect();
@@ -176,7 +178,7 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
       }
       let hash = sequence::group_hash(&hashes.iter().map(String::as_str).collect::<Vec<_>>());
       let asset = sequence::build_sequence_asset(
-        &root,
+        &assets_dir,
         &seq.name,
         &seq.ext,
         seq.width as usize,
@@ -193,11 +195,11 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
     None => {
       let pending = ops::PendingFile { path: item.source_path.clone(), chain: Vec::new() };
       let hash = ops::sha256_file(&pending.path).map_err(|e| format!("文件读取失败：{e}"))?;
-      let asset = ops::build_asset(&root, &pending, &hash, source)?;
+      let asset = ops::build_asset(&assets_dir, &pending, &hash, source)?;
       let name = ops::file_name(&pending.path);
       // 4.2：无内容缩略图补系统格式图标缓存（cache/thumbs，不进 info）并登记内存集
       if asset.thumbnail.is_none() {
-        let origin = root.join(ASSTES_DIR).join(format!("{}.info", asset.id)).join(&asset.origin_name);
+        let origin = paths::origin_file(&assets_dir, &asset.id, &asset.origin_name);
         if thumbnail::ensure_format_icon(&root, &origin, &asset.ext) {
           lib.format_icons.insert(asset.ext.clone());
         }
@@ -212,7 +214,7 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::library::ASSTES_DIR;
+  use crate::core::library;
   use crate::core::models::{Folder, Placement};
   use crate::services::import::{ImportOptions, SequenceMode, Structure};
   use crate::services::import_task::run_import;
@@ -223,13 +225,15 @@ mod tests {
     _dir: tempfile::TempDir,
     lib: Mutex<Option<Library>>,
     root: PathBuf,
+    assets_dir: PathBuf,
   }
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
-    Harness { _dir: dir, lib: Mutex::new(Some(lib)), root }
+    let lib = library::create_test(dir.path());
+    let root = lib.root.clone();
+    let assets_dir = lib.assets_dir.clone();
+    Harness { _dir: dir, lib: Mutex::new(Some(lib)), root, assets_dir }
   }
 
   fn with_lib<R>(h: &Harness, f: impl FnOnce(&mut Library) -> R) -> R {
@@ -287,7 +291,7 @@ mod tests {
       imported_from: None,
       sequence_mode: SequenceMode::Scatter,
     };
-    run_import(&h.lib, h.root.clone(), opts, |_| {}, &AtomicBool::new(false))
+    run_import(&h.lib, h.root.clone(), h.assets_dir.clone(), opts, |_| {}, &AtomicBool::new(false))
   }
 
   /// 手动加文件夹（返回 ID）
@@ -357,7 +361,7 @@ mod tests {
     assert_eq!((report.resolved, report.failed.len()), (1, 0));
     assert!(conflict.source_path.exists(), "copy 模式源文件应保留");
     assert_eq!(with_lib(&h, |l| l.index.assets.len()), 2);
-    assert_eq!(std::fs::read_dir(h.root.join(ASSTES_DIR)).unwrap().count(), 2);
+    assert_eq!(std::fs::read_dir(&h.assets_dir).unwrap().count(), 2);
 
     // 继承 move：源文件消失（再造一个冲突）
     let conflict2 = make_conflict(&h, "基准2.png", "副本2.png", None);
@@ -458,7 +462,7 @@ mod tests {
       imported_from: None,
       sequence_mode: SequenceMode::Scatter,
     };
-    let outcome = run_import(&h.lib, h.root.clone(), opts, |_| {}, &AtomicBool::new(false));
+    let outcome = run_import(&h.lib, h.root.clone(), h.assets_dir.clone(), opts, |_| {}, &AtomicBool::new(false));
     assert_eq!(outcome.conflicts.len(), 1);
     let leaf = &outcome.conflicts[0].target_folder;
     with_lib(&h, |l| {
@@ -481,7 +485,7 @@ mod tests {
       imported_from: None,
       sequence_mode: SequenceMode::Pack,
     };
-    run_import(&h.lib, h.root.clone(), opts, |_| {}, &AtomicBool::new(false))
+    run_import(&h.lib, h.root.clone(), h.assets_dir.clone(), opts, |_| {}, &AtomicBool::new(false))
   }
 
   #[test]
@@ -513,7 +517,7 @@ mod tests {
       l.index.assets.values().find(|a| a.id != c.existing_asset_id).unwrap().clone()
     });
     assert_eq!((new_meta.fps, new_meta.frame_count), (Some(24.0), Some(3)));
-    let frames_dir = h.root.join(ASSTES_DIR).join(format!("{}.info", new_meta.id)).join("frames");
+    let frames_dir = crate::core::paths::frames_dir(&h.assets_dir, &new_meta.id);
     for n in 1..=3 {
       assert!(frames_dir.join(format!("走路-{n}.png")).is_file());
     }

@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::core::json_io::{read_json, write_json};
-use crate::core::library::{self, Library, ASSTES_DIR};
+use crate::core::library::{self, Library};
 use crate::core::models::{new_asset_id, AssetMeta};
 use crate::services::import as ops;
 
@@ -70,8 +70,8 @@ fn duplicate_one(
     return Err("资源数据异常：缺少元数据".to_string());
   }
   let new_id = new_asset_id();
-  let old_info = lib.root.join(ASSTES_DIR).join(format!("{}.info", item.asset_id));
-  let new_info = lib.root.join(ASSTES_DIR).join(format!("{new_id}.info"));
+  let old_info = lib.info_dir(&item.asset_id);
+  let new_info = lib.info_dir(&new_id);
   copy_dir(&old_info, &new_info)?;
 
   let meta_path = new_info.join("metadata.json");
@@ -126,7 +126,7 @@ pub fn rename_placement(
   let mut renames = Vec::new();
   if origin {
     let old_origin = old_meta.as_ref().map(|m| m.origin_name.clone()).unwrap_or_default();
-    let result = ops::rename_origin(&lib.root, asset_id, &effective).map_err(|e| rename_fail(e, &old_origin))?;
+    let result = ops::rename_origin(&lib.assets_dir, asset_id, &effective).map_err(|e| rename_fail(e, &old_origin))?;
     lib.index.assets.insert(asset_id.to_string(), result.meta);
     renames = result.renames;
   }
@@ -149,7 +149,7 @@ pub fn rename_placement(
     if let Some(meta) = old_meta {
       if origin {
         // 磁盘改名尽力改回（含 metadata 复原）
-        if let Err(re) = ops::rename_origin(&lib.root, asset_id, &meta.origin_name) {
+        if let Err(re) = ops::rename_origin(&lib.assets_dir, asset_id, &meta.origin_name) {
           log::error!("重命名落盘失败后磁盘回滚失败：{re}");
         }
       }
@@ -216,8 +216,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { dir, lib }
   }
 
@@ -226,7 +225,7 @@ mod tests {
     let src = h.dir.path().join(file);
     image::RgbaImage::from_pixel(4, 4, image::Rgba([0, 0, 0, 255])).save(&src).unwrap();
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = ops::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    let meta = ops::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
     h.lib.index.assets.insert(id.into(), meta);
     ops::add_placement(&mut h.lib, id.into(), "root".into(), file.into(), true, &mut HashMap::new());
     finish(&mut h.lib).unwrap();
@@ -249,7 +248,7 @@ mod tests {
     assert_ne!(new_id, "AN-A");
 
     // info 目录整体复制（源文件 + 缩略图 + metadata）
-    let new_info = h.lib.root.join(ASSTES_DIR).join(format!("{new_id}.info"));
+    let new_info = h.lib.info_dir(new_id);
     assert!(new_info.join("原图.png").is_file());
     assert_eq!(out.copies.len(), 1);
     // metadata：新 ID、时间刷新、hash 保留、缩略图登记保留
@@ -284,7 +283,7 @@ mod tests {
   fn rename_origin_placement_renames_disk_and_thumb() {
     let mut h = make_lib();
     add_png(&mut h, "AN-A", "原图.png");
-    let info = h.lib.root.join(ASSTES_DIR).join("AN-A.info");
+    let info = h.lib.info_dir("AN-A");
     assert!(info.join("原图_thumbnail.webp").is_file());
 
     let renames = rename_placement(&mut h.lib, "AN-A", "root", true, "新图").unwrap();
@@ -311,7 +310,7 @@ mod tests {
     add_png(&mut h, "AN-A", "原图.png");
     ops::add_placement(&mut h.lib, "AN-A".into(), "root".into(), "快捷.png".into(), false, &mut HashMap::new());
     finish(&mut h.lib).unwrap();
-    let info = h.lib.root.join(ASSTES_DIR).join("AN-A.info");
+    let info = h.lib.info_dir("AN-A");
 
     let renames = rename_placement(&mut h.lib, "AN-A", "root", false, "别名.png").unwrap();
     assert!(renames.is_empty(), "链接 Placement 无磁盘段");

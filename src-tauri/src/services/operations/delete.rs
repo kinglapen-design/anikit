@@ -66,7 +66,7 @@ pub fn delete_placements(lib: &mut Library, items: &[PlacementRef], last_action:
 
   // 大批量写前备份（防灾；备份失败仅警告不阻断）
   if matched.len() >= DELETE_BACKUP_THRESHOLD {
-    if let Err(e) = backup::backup_library(&lib.root) {
+    if let Err(e) = backup::backup_library(&lib.root, &lib.assets_dir) {
       log::warn!("删除前备份失败（不阻断删除）：{e}");
     }
   }
@@ -139,8 +139,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { dir, lib }
   }
 
@@ -154,7 +153,7 @@ mod tests {
     let src = h.dir.path().join(file);
     std::fs::write(&src, b"fake").unwrap();
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = ops::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    let meta = ops::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
     h.lib.index.assets.insert(id.into(), meta);
     ops::add_placement(&mut h.lib, id.into(), folder.into(), file.into(), true, &mut HashMap::new());
     finish(&mut h.lib).unwrap();
@@ -206,7 +205,7 @@ mod tests {
     assert_eq!(h.lib.recycle.items[0].placements.len(), 1);
     let disk: RecycleFile = read_json(&h.lib.root.join(RECYCLE_FILE)).unwrap();
     assert_eq!(disk.items.len(), 1, "recycle.json 落盘");
-    assert!(h.lib.root.join(crate::core::library::ASSTES_DIR).join("AN-A.info").is_dir(), "info 原地不动");
+    assert!(h.lib.info_dir("AN-A").is_dir(), "info 原地不动");
     let folders: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
     assert!(folders.items.is_empty(), "folders.json 落盘清理");
   }
@@ -227,7 +226,7 @@ mod tests {
     let orders: Vec<i32> = h.lib.folders.items.iter().filter(|p| p.folder == "root").map(|p| p.order).collect();
     assert_eq!(orders, vec![0, 1], "root 段 order 重写连续");
     assert!(h.lib.recycle.items.is_empty(), "不进回收站");
-    let meta: AssetMeta = read_json(&h.lib.root.join(crate::core::library::ASSTES_DIR).join("AN-A.info/metadata.json")).unwrap();
+    let meta: AssetMeta = read_json(&h.lib.info_dir("AN-A").join("metadata.json")).unwrap();
     assert_eq!(meta.id, "AN-A", "资源实体不受影响");
   }
 }

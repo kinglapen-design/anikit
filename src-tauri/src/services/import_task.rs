@@ -18,7 +18,8 @@ use std::time::{Duration, Instant};
 
 use rayon::prelude::*;
 
-use crate::core::library::{self, Library, ASSTES_DIR};
+use crate::core::library::{self, Library};
+use crate::core::paths;
 use crate::core::models::{new_asset_id, AssetMeta};
 use crate::services::import as ops;
 use crate::services::import::{
@@ -116,9 +117,11 @@ enum Phase3Msg {
 }
 
 /// 导入执行体（工作线程调；单测同步直调）。四阶段并行流水线，语义与串行版一致。
+/// root = 库目录（cache 等库级路径）；assets_dir = 空间级 assets 池（info 路径按 ID 推导）
 pub fn run_import(
   lib: &Mutex<Option<Library>>,
   root: PathBuf,
+  assets_dir: PathBuf,
   opts: ImportOptions,
   on_event: impl Fn(ImportEvent) + Sync,
   cancel: &AtomicBool,
@@ -148,10 +151,22 @@ pub fn run_import(
     };
 
   // 自动合并（inbox 渠道撞 hash）：改名 + 丢弃重复源，先于管线发 Asset 事件
-  apply_merges(&mut state, lib, &root, &files, std::mem::take(&mut phase2.merges), &on_event);
+  apply_merges(&mut state, lib, &assets_dir, &files, std::mem::take(&mut phase2.merges), &on_event);
 
   // 阶段 3+4：并行建档 → 消费者串行注册 + 事件
-  pipeline(&mut state, lib, &root, opts.source, opts.imported_from.as_deref(), &files, &groups, phase2, &on_event, cancel);
+  pipeline(
+    &mut state,
+    lib,
+    &root,
+    &assets_dir,
+    opts.source,
+    opts.imported_from.as_deref(),
+    &files,
+    &groups,
+    phase2,
+    &on_event,
+    cancel,
+  );
   finish(state, lib, &on_event)
 }
 
@@ -277,7 +292,7 @@ fn dedup_phase(
     let mut batch: HashMap<String, String> = HashMap::new(); // hash → 同批次 twin asset id
     for (unit, hash) in units {
       let chain = unit_chain(files, groups, *unit);
-      match classify_one(l, &by_hash, &mut batch, &root_buf, target, chain, *unit, hash, merge_mark) {
+      match classify_one(l, &by_hash, &mut batch, target, chain, *unit, hash, merge_mark) {
         Classified::Conflict(u, c) => immediate.push((u, *c)),
         Classified::Merge(i, id) => phase.merges.push(MergeItem { file_idx: i, asset_id: id }),
         Classified::Deferred(d) => phase.deferred.push(d),
@@ -316,7 +331,6 @@ fn classify_one(
   l: &Library,
   by_hash: &HashMap<&str, &AssetMeta>,
   batch: &mut HashMap<String, String>,
-  root: &Path,
   target: &str,
   chain: &[String],
   unit: Unit,
@@ -333,7 +347,7 @@ fn classify_one(
         return Classified::Merge(idx, meta.id.clone());
       }
     }
-    Classified::Conflict(unit, Box::new(conflict_of(l, root, meta, folder_id)))
+    Classified::Conflict(unit, Box::new(conflict_of(l, meta, folder_id)))
   } else if let Some(twin) = batch.get(hash) {
     Classified::Deferred(DeferredConflict { unit, target_folder: folder_id, twin_id: twin.clone() })
   } else {
@@ -349,6 +363,7 @@ fn pipeline(
   state: &mut TaskState,
   lib: &Mutex<Option<Library>>,
   root: &Path,
+  assets_dir: &Path,
   source: Source,
   imported_from: Option<&str>,
   files: &[PendingFile],
@@ -366,7 +381,7 @@ fn pipeline(
       for msg in rx {
         match msg {
           Phase3Msg::Built { item, asset, icon } => {
-            register_one(state, lib, root, files, groups, item, *asset, icon, &mut deferred, &mut front_anchor, on_event)
+            register_one(state, lib, root, assets_dir, files, groups, item, *asset, icon, &mut deferred, &mut front_anchor, on_event)
           }
           Phase3Msg::Broken { unit, reason } => state.outcome.failed.push(FailedItem {
             path: unit_path(files, groups, unit).to_string_lossy().into_owned(),
@@ -376,7 +391,7 @@ fn pipeline(
       }
       drain_orphan_deferred(state, files, groups, deferred);
     });
-    produce(phase2.work, root, source, imported_from, files, groups, &tx, cancel);
+    produce(phase2.work, root, assets_dir, source, imported_from, files, groups, &tx, cancel);
     drop(tx); // 关闭通道，消费者收完尾部结果后退出
     if consumer.join().is_err() {
       log::error!("导入注册线程异常（panic）");
@@ -389,6 +404,7 @@ fn pipeline(
 fn produce(
   work: Vec<WorkItem>,
   root: &Path,
+  assets_dir: &Path,
   source: Source,
   imported_from: Option<&str>,
   files: &[PendingFile],
@@ -400,7 +416,7 @@ fn produce(
     if cancel.load(Ordering::Relaxed) {
       return;
     }
-    let msg = match build_one(root, source, imported_from, files, groups, &item) {
+    let msg = match build_one(root, assets_dir, source, imported_from, files, groups, &item) {
       Ok((asset, icon)) => Phase3Msg::Built { item, asset: Box::new(asset), icon },
       Err(reason) => Phase3Msg::Broken { unit: item.unit, reason },
     };
@@ -414,6 +430,7 @@ fn produce(
 /// 返回（元数据, 格式图标就绪的扩展名）：无内容缩略图的单元锁外补 shell 格式图标缓存（4.2）
 fn build_one(
   root: &Path,
+  assets_dir: &Path,
   source: Source,
   imported_from: Option<&str>,
   files: &[PendingFile],
@@ -421,13 +438,13 @@ fn build_one(
   item: &WorkItem,
 ) -> Result<(AssetMeta, Option<String>), String> {
   let asset = match item.unit {
-    Unit::Solo(idx) => ops::build_asset_with_id(root, &files[idx], &item.hash, &item.asset_id, source, imported_from)?,
+    Unit::Solo(idx) => ops::build_asset_with_id(assets_dir, &files[idx], &item.hash, &item.asset_id, source, imported_from)?,
     Unit::Group(gi) => {
       let g = &groups[gi];
       let frames: Vec<(PathBuf, u32)> =
         g.frames.iter().map(|f| (files[f.file_idx].path.clone(), f.number)).collect();
       sequence::build_sequence_asset(
-        root,
+        assets_dir,
         &g.name,
         &g.ext,
         g.num_width,
@@ -439,17 +456,17 @@ fn build_one(
       )?
     }
   };
-  let icon = ensure_unit_icon(root, &asset);
+  let icon = ensure_unit_icon(root, assets_dir, &asset);
   Ok((asset, icon))
 }
 
 /// 无内容缩略图的单元：补系统格式图标缓存（按格式一份，cache/thumbs，**不进 info**）。
 /// 图标取自 info 内已入库文件（剪切语义下源文件已移走）；就绪返回扩展名交消费者登记内存集
-fn ensure_unit_icon(root: &Path, asset: &AssetMeta) -> Option<String> {
+fn ensure_unit_icon(root: &Path, assets_dir: &Path, asset: &AssetMeta) -> Option<String> {
   if asset.thumbnail.is_some() {
     return None;
   }
-  let origin = root.join(ASSTES_DIR).join(format!("{}.info", asset.id)).join(&asset.origin_name);
+  let origin = paths::origin_file(assets_dir, &asset.id, &asset.origin_name);
   thumbnail::ensure_format_icon(root, &origin, &asset.ext).then(|| asset.ext.clone())
 }
 
@@ -460,6 +477,7 @@ fn register_one(
   state: &mut TaskState,
   lib: &Mutex<Option<Library>>,
   root: &Path,
+  assets_dir: &Path,
   files: &[PendingFile],
   groups: &[SequenceGroup],
   item: WorkItem,
@@ -470,7 +488,6 @@ fn register_one(
   on_event: &impl Fn(ImportEvent),
 ) {
   state.dirty = true; // Placement 必改 folders.json，先标脏让节流落盘生效
-  let root_buf = root.to_path_buf();
   let name = unit_name(files, groups, item.unit);
   let asset_id = asset.id.clone();
   // 动图（2026-07-26 定案）：注册成功后提交解包队列——逐帧高清图持久化 info/frames/
@@ -480,16 +497,16 @@ fn register_one(
       l.format_icons.insert(ext);
     }
     let placement = ops::add_placement(l, asset_id.clone(), item.target_folder.clone(), name, true, front_anchor);
-    let view = placement_view(&root_buf, &asset, &placement, &l.format_icons);
+    let view = placement_view(l, &asset, &placement, &l.format_icons);
     let twins = deferred.remove(&asset_id).unwrap_or_default();
     let conflicts =
-      twins.into_iter().map(|d| (d.unit, conflict_of(l, &root_buf, &asset, d.target_folder))).collect::<Vec<_>>();
+      twins.into_iter().map(|d| (d.unit, conflict_of(l, &asset, d.target_folder))).collect::<Vec<_>>();
     l.index.assets.insert(asset_id, asset);
     (view, conflicts)
   });
   if unpack && result.is_ok() {
     crate::services::unpack_queue::global()
-      .submit(crate::services::unpack_queue::UnpackTask { root: root.to_path_buf(), asset_id: item.asset_id.clone() });
+      .submit(crate::services::unpack_queue::UnpackTask { assets_dir: assets_dir.to_path_buf(), asset_id: item.asset_id.clone() });
   }
   collect_registered(state, root, files, groups, item.unit, result, on_event);
 }
@@ -551,14 +568,14 @@ fn group_deferred(list: Vec<DeferredConflict>) -> HashMap<String, Vec<DeferredCo
 fn apply_merges(
   state: &mut TaskState,
   lib: &Mutex<Option<Library>>,
-  root: &Path,
+  assets_dir: &Path,
   files: &[PendingFile],
   merges: Vec<MergeItem>,
   on_event: &impl Fn(ImportEvent),
 ) {
   for m in merges {
     let path = files[m.file_idx].path.to_string_lossy().into_owned();
-    let meta = match ops::merge_rename(root, &files[m.file_idx], &m.asset_id) {
+    let meta = match ops::merge_rename(assets_dir, &files[m.file_idx], &m.asset_id) {
       Ok((meta, renamed)) => {
         if !renamed {
           continue;
@@ -571,10 +588,9 @@ fn apply_merges(
       }
     };
     state.dirty = true; // origin Placement 改名改 folders.json
-    let root_buf = root.to_path_buf();
     let view = with_lib(lib, state, |l| {
       l.index.assets.insert(m.asset_id.clone(), meta.clone());
-      rename_origin_placement(l, &m.asset_id, &meta.origin_name).map(|p| placement_view(&root_buf, &meta, &p, &l.format_icons))
+      rename_origin_placement(l, &m.asset_id, &meta.origin_name).map(|p| placement_view(l, &meta, &p, &l.format_icons))
     });
     match view {
       Ok(Some(v)) => {
@@ -607,7 +623,7 @@ fn rename_origin_placement(l: &mut Library, asset_id: &str, new_name: &str) -> O
 }
 
 /// 锁内组装冲突项的库侧数据（已有资源 + 落点）；源文件侧字段留空由 fill_source_side 补
-fn conflict_of(l: &Library, root: &Path, meta: &AssetMeta, folder_id: String) -> ConflictItem {
+fn conflict_of(l: &Library, meta: &AssetMeta, folder_id: String) -> ConflictItem {
   // 显示名与所在文件夹：优先 origin Placement，无则任一 Placement（正常数据必有 origin）
   let placements = l.index.placements_by_asset.get(&meta.id).map(Vec::as_slice).unwrap_or(&[]);
   let chosen = placements.iter().find(|p| p.origin).or_else(|| placements.first());
@@ -626,7 +642,7 @@ fn conflict_of(l: &Library, root: &Path, meta: &AssetMeta, folder_id: String) ->
     existing_h: meta.height,
     existing_size: meta.size,
     existing_ext: meta.ext.clone(),
-    existing_thumb_path: thumb_path(root, meta, &l.format_icons),
+    existing_thumb_path: thumb_path(l, meta, &l.format_icons),
     existing_folder_name: chosen.map(|p| folder_display_name(l, &p.folder)).unwrap_or_default(),
     sequence: None, // 源侧信息由 fill_source_side 补（序列帧组覆盖为组信息）
   }

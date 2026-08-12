@@ -113,7 +113,7 @@ pub fn import_paths(
   let structure = parse_structure(&structure)?;
   let source = parse_source(&source)?;
   let sequence_mode = parse_sequence_mode(&sequence_mode)?;
-  let root = current_root(&app)?;
+  let (root, assets_dir) = current_paths(&app)?;
   ensure_target(&app, &target_folder)?;
   let opts = ImportOptions {
     structure,
@@ -123,7 +123,7 @@ pub fn import_paths(
     imported_from: None,
     sequence_mode,
   };
-  Ok(spawn_import(app, root, opts, on_event, None))
+  Ok(spawn_import(app, root, assets_dir, opts, on_event, None))
 }
 
 /// 剪贴板导入：先读图片（截图场景 → PNG 落 cache/ 临时文件），无图再读文件列表
@@ -137,7 +137,7 @@ pub fn import_clipboard(
   on_event: Channel<ImportEvent>,
 ) -> Result<u64, String> {
   let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("剪贴板不可用：{e}"))?;
-  let root = current_root(&app)?;
+  let (root, assets_dir) = current_paths(&app)?;
   ensure_target(&app, &target_folder)?;
 
   // 图片分支：截图 / 剪贴板图片 → PNG 落 cache/ 走管线（临时文件导入后清理）
@@ -154,7 +154,7 @@ pub fn import_clipboard(
       imported_from: None,
       sequence_mode: SequenceMode::Scatter, // 剪贴板只有单张 PNG，永不打包
     };
-    return Ok(spawn_import(app, root, opts, on_event, Some(tmp)));
+    return Ok(spawn_import(app, root, assets_dir, opts, on_event, Some(tmp)));
   }
 
   // 文件列表分支：资源管理器复制的文件 / 文件夹（CF_HDROP）
@@ -170,7 +170,7 @@ pub fn import_clipboard(
     imported_from: None,
     sequence_mode: SequenceMode::Scatter, // 剪贴板恒分散（4.1 定案）
   };
-  Ok(spawn_import(app, root, opts, on_event, None))
+  Ok(spawn_import(app, root, assets_dir, opts, on_event, None))
 }
 
 /// 取消导入任务：置位取消标记，工作线程在下一个文件处理前中断（数量如实进 Finished）
@@ -200,11 +200,11 @@ pub fn resolve_conflicts(
   Ok(crate::services::resolve::resolve_conflicts(lib, &items, source))
 }
 
-/// 短锁拿库 root 并校验库存在（命令唯一需要的共享状态）
-pub(crate) fn current_root(app: &AppHandle) -> Result<PathBuf, String> {
+/// 短锁拿库 root 与 assets 池目录并校验库存在（命令唯一需要的共享状态）
+pub(crate) fn current_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
   let state = app.state::<AppState>();
   let guard = state.library.lock().map_err(|e| e.to_string())?;
-  guard.as_ref().map(|l| l.root.clone()).ok_or_else(|| "请先打开素材库再导入".to_string())
+  guard.as_ref().map(|l| (l.root.clone(), l.assets_dir.clone())).ok_or_else(|| "请先打开素材库再导入".to_string())
 }
 
 /// 短锁校验目标文件夹存在（None / "root" 直接放行），失败在 spawn 前即时报错
@@ -227,6 +227,7 @@ fn ensure_target(app: &AppHandle, target_folder: &Option<String>) -> Result<(), 
 pub(crate) fn spawn_import(
   app: AppHandle,
   root: PathBuf,
+  assets_dir: PathBuf,
   opts: ImportOptions,
   on_event: Channel<ImportEvent>,
   cleanup: Option<PathBuf>,
@@ -241,7 +242,7 @@ pub(crate) fn spawn_import(
   }
   std::thread::spawn(move || {
     let state = app.state::<AppState>();
-    run_import(&state.library, root, opts, move |ev| {
+    run_import(&state.library, root, assets_dir, opts, move |ev| {
       if let Err(e) = on_event.send(ev) {
         log::debug!("导入事件推送失败（前端可能已关闭）：{e}");
       }
@@ -352,7 +353,7 @@ fn placement_views(lib: &Library, folder: Option<&str>) -> Vec<PlacementView> {
     Some(id) => lib.index.placements_by_folder.get(id).map(|v| v.iter().collect()).unwrap_or_default(),
     None => lib.folders.items.iter().collect(),
   };
-  items.into_iter().filter_map(|p| lib.index.assets.get(&p.asset).map(|m| placement_view(&lib.root, m, p, &lib.format_icons))).collect()
+  items.into_iter().filter_map(|p| lib.index.assets.get(&p.asset).map(|m| placement_view(lib, m, p, &lib.format_icons))).collect()
 }
 
 #[cfg(test)]
@@ -365,13 +366,15 @@ mod tests {
     _dir: tempfile::TempDir,
     lib: Mutex<Option<Library>>,
     root: PathBuf,
+    assets_dir: PathBuf,
   }
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
-    Harness { _dir: dir, lib: Mutex::new(Some(lib)), root }
+    let lib = library::create_test(dir.path());
+    let root = lib.root.clone();
+    let assets_dir = lib.assets_dir.clone();
+    Harness { _dir: dir, lib: Mutex::new(Some(lib)), root, assets_dir }
   }
 
   /// 同步跑导入（事件丢弃）
@@ -384,7 +387,7 @@ mod tests {
       imported_from: None,
       sequence_mode: SequenceMode::Scatter,
     };
-    run_import(&h.lib, h.root.clone(), opts, |_| {}, &AtomicBool::new(false));
+    run_import(&h.lib, h.root.clone(), h.assets_dir.clone(), opts, |_| {}, &AtomicBool::new(false));
   }
 
   fn with_lib<R>(h: &Harness, f: impl FnOnce(&Library) -> R) -> R {
@@ -477,7 +480,8 @@ mod tests {
     assert!(h.root.join("cache/thumbs/fla.webp").is_file());
     assert!(with_lib(&h, |l| l.format_icons.contains("fla")));
     // 重开库后内存集从缓存扫描恢复
-    let reopened = library::open(&h.root).unwrap();
+    let space_root = h.root.parent().unwrap().to_path_buf();
+    let reopened = library::open(&space_root, &h.root).unwrap();
     assert!(reopened.format_icons.contains("fla"));
   }
 

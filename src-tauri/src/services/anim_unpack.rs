@@ -14,8 +14,9 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::core::json_io::{read_json, write_json};
-use crate::core::library::{Library, ASSTES_DIR};
+use crate::core::library::Library;
 use crate::core::models::{AssetMeta, DATA_VERSION};
+use crate::core::paths;
 use crate::services::{anim, sequence, thumbnail};
 
 /// info 内逐帧 delay 清单文件名（备份对象，INFO_DATA_FILES 已收录）
@@ -51,13 +52,13 @@ pub fn read_delays(info_dir: &Path) -> Option<Vec<u32>> {
 /// 动图解包（纯磁盘，不持库锁）：定位 info 与 origin → decode_frames 流式逐帧落盘
 /// info/frames/ → 写 frames.json。已解包（帧数与 frameCount 一致且 frames.json 在）幂等跳过；
 /// 解码失败清理半成品 frames/ 并返回中文错误（资产仍可用，维持原生播放兜底）。
-pub fn unpack_frames(root: &Path, asset_id: &str) -> Result<UnpackOutcome, String> {
-  let info_dir = root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
+pub fn unpack_frames(assets_dir: &Path, asset_id: &str) -> Result<UnpackOutcome, String> {
+  let info_dir = paths::info_dir(assets_dir, asset_id);
   let meta: AssetMeta = read_json(&info_dir.join("metadata.json")).map_err(|e| e.to_string())?;
   if !anim::is_anim(&meta) {
     return Ok(UnpackOutcome::Skipped);
   }
-  let frames_dir = info_dir.join("frames");
+  let frames_dir = paths::frames_dir(assets_dir, asset_id);
   if already_unpacked(&info_dir, &frames_dir, meta.frame_count.unwrap_or(0)) {
     return Ok(UnpackOutcome::Skipped);
   }
@@ -117,7 +118,7 @@ fn decode_to_frames(info_dir: &Path, frames_dir: &Path, meta: &AssetMeta) -> Res
 /// 解包完成后 metadata 同步（短锁阶段，unpack_queue worker 调）：thumbFrame 原本为空则记
 /// 首帧文件名，刷新 modifiedAt，先落盘再同步内存索引（规范第 7 条）
 pub fn apply_meta(lib: &mut Library, asset_id: &str, first_frame: &str) -> Result<(), String> {
-  let info_dir = lib.root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
+  let info_dir = lib.info_dir(asset_id);
   let mut meta: AssetMeta = read_json(&info_dir.join("metadata.json")).map_err(|e| e.to_string())?;
   if meta.thumb_frame.is_none() {
     meta.thumb_frame = Some(first_frame.to_string());
@@ -143,8 +144,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { _dir: dir, lib }
   }
 
@@ -152,13 +152,13 @@ mod tests {
   fn add_anim(h: &Harness, sample: &str, asset_id: &str) -> AssetMeta {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tools/test-assets").join(sample);
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = import::build_asset_with_id(&h.lib.root, &pf, "sha256:t", asset_id, Source::Copy, None).unwrap();
+    let meta = import::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", asset_id, Source::Copy, None).unwrap();
     assert!(anim::is_anim(&meta), "{sample} 应判定为动图资产");
     meta
   }
 
   fn frames_dir(h: &Harness, asset_id: &str) -> PathBuf {
-    h.lib.root.join(ASSTES_DIR).join(format!("{asset_id}.info")).join("frames")
+    paths::frames_dir(&h.lib.assets_dir, asset_id)
   }
 
   #[test]
@@ -167,7 +167,7 @@ mod tests {
       let h = make_lib();
       let meta = add_anim(&h, sample, asset_id);
 
-      let outcome = unpack_frames(&h.lib.root, asset_id).unwrap();
+      let outcome = unpack_frames(&h.lib.assets_dir, asset_id).unwrap();
       let UnpackOutcome::Unpacked { first_frame, frames } = outcome else { panic!("应新解包：{outcome:?}") };
       assert_eq!(frames, 3);
       assert_eq!(first_frame, format!("{}-00001.webp", meta.name));
@@ -184,7 +184,7 @@ mod tests {
 
       // 幂等跳过：帧数与 frameCount 一致不重复解包（mtime 不变）
       let mtime = fs::metadata(dir.join(format!("{}-00001.webp", meta.name))).unwrap().modified().unwrap();
-      assert_eq!(unpack_frames(&h.lib.root, asset_id).unwrap(), UnpackOutcome::Skipped);
+      assert_eq!(unpack_frames(&h.lib.assets_dir, asset_id).unwrap(), UnpackOutcome::Skipped);
       assert_eq!(fs::metadata(dir.join(format!("{}-00001.webp", meta.name))).unwrap().modified().unwrap(), mtime);
     }
   }
@@ -196,12 +196,12 @@ mod tests {
     let src = h._dir.path().join("坏.gif");
     fs::write(&src, b"not a gif").unwrap();
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let mut meta = import::build_asset_with_id(&h.lib.root, &pf, "sha256:t", "AN-BAD", Source::Copy, None).unwrap();
+    let mut meta = import::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", "AN-BAD", Source::Copy, None).unwrap();
     meta.frame_count = Some(3);
-    let info = h.lib.root.join(ASSTES_DIR).join("AN-BAD.info");
+    let info = h.lib.info_dir("AN-BAD");
     write_json(&info.join("metadata.json"), &meta).unwrap();
 
-    let err = unpack_frames(&h.lib.root, "AN-BAD").unwrap_err();
+    let err = unpack_frames(&h.lib.assets_dir, "AN-BAD").unwrap_err();
     assert!(err.contains("动图解码失败"), "{err}");
     assert!(!info.join("frames").exists(), "失败应清理半成品 frames/");
     assert!(!info.join(FRAMES_FILE).exists(), "失败不应留 frames.json");
@@ -214,7 +214,7 @@ mod tests {
     assert_eq!(meta.thumb_frame, None, "导入时 thumbFrame 为空");
     // 与建档时间区分（同秒刷新无法断言"已刷新"），先落一个哨兵时间
     meta.modified_at = "2020-01-01T00:00:00+08:00".to_string();
-    let info = h.lib.root.join(ASSTES_DIR).join("AN-GIF.info");
+    let info = h.lib.info_dir("AN-GIF");
     write_json(&info.join("metadata.json"), &meta).unwrap();
     h.lib.index.assets.insert("AN-GIF".to_string(), meta);
 
@@ -222,7 +222,7 @@ mod tests {
     let indexed = &h.lib.index.assets["AN-GIF"];
     assert_eq!(indexed.thumb_frame.as_deref(), Some("动图-00001.webp"));
     assert_ne!(indexed.modified_at, "2020-01-01T00:00:00+08:00", "modifiedAt 应刷新");
-    let disk: AssetMeta = read_json(&h.lib.root.join(ASSTES_DIR).join("AN-GIF.info/metadata.json")).unwrap();
+    let disk: AssetMeta = read_json(&h.lib.info_dir("AN-GIF").join("metadata.json")).unwrap();
     assert_eq!(disk, *indexed, "先落盘再同步内存索引");
 
     // 已有 thumbFrame 不覆盖

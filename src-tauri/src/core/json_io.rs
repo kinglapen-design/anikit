@@ -29,6 +29,10 @@ pub enum DataError {
   NotEmpty,
   /// 资源库名称不合法（Windows 文件夹命名规则）
   NameInvalid(&'static str),
+  /// 该文件夹不是 AniKit 储存空间（space.json 缺失 / 损坏，打开准入校验）
+  NotASpace,
+  /// 旧版库结构（库根自含 asstes/ 或空间缺 space.json）：不迁移，引导新建（2026-08-12 定案）
+  LegacyLibrary,
 }
 
 impl std::fmt::Display for DataError {
@@ -44,6 +48,8 @@ impl std::fmt::Display for DataError {
       DataError::AlreadyLibrary => write!(f, "该文件夹已是 AniKit 资源库，请改用打开资源库"),
       DataError::NotEmpty => write!(f, "目标文件夹不是空文件夹，请选择空文件夹创建资源库"),
       DataError::NameInvalid(msg) => write!(f, "{msg}"),
+      DataError::NotASpace => write!(f, "该文件夹不是 AniKit 储存空间"),
+      DataError::LegacyLibrary => write!(f, "旧版库结构，请新建资源库"),
     }
   }
 }

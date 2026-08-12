@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use sha2::Digest;
 
 use crate::core::json_io::write_json;
-use crate::core::library::{self, Library, ASSTES_DIR, CACHE_DIR};
+use crate::core::library::{self, Library, CACHE_DIR};
 use crate::core::models::{new_asset_id, AssetMeta, DATA_VERSION};
 use crate::services::import::{add_placement, ROOT_FOLDER_ID};
 use crate::services::operations::{check_folder, finish, now};
@@ -46,7 +46,7 @@ pub fn create_text_document(
   let stem = name.strip_suffix(&format!(".{ext}")).unwrap_or(DOC_STEM).to_string();
 
   let id = new_asset_id();
-  let info_dir = lib.root.join(ASSTES_DIR).join(format!("{id}.info"));
+  let info_dir = lib.info_dir(&id);
   fs::create_dir_all(&info_dir).map_err(|e| format!("info 文件夹创建失败：{e}"))?;
   let dest = info_dir.join(&name);
   if let Err(e) = fs::write(&dest, b"") {
@@ -101,7 +101,7 @@ pub fn create_text_document(
   let backup_dir = lib.root.join(CACHE_DIR).join("tmp");
   fs::create_dir_all(&backup_dir).map_err(|e| format!("临时目录创建失败：{e}"))?;
   let backup = backup_dir.join(format!("undo-{id}.info"));
-  Ok((placement_view(&lib.root, &meta, &placement, &lib.format_icons), info_dir, backup))
+  Ok((placement_view(lib, &meta, &placement, &lib.format_icons), info_dir, backup))
 }
 
 /// 小写 hex（不引 hex crate，摘要仅 32 字节）
@@ -123,8 +123,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { _dir: dir, lib }
   }
 

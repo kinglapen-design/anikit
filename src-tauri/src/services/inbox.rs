@@ -351,10 +351,17 @@ fn dispatch_loop(app: AppHandle, root: PathBuf, rx: mpsc::Receiver<Vec<PathBuf>>
       sequence_mode: SequenceMode::Scatter,
     };
     let app_ev = app.clone();
+    // assets 池目录随当前库取（短锁；库已关闭则本批跳过，保持与 with_lib 报错同义的"不导入"）
+    let assets_dir = state.library.lock().ok().and_then(|g| g.as_ref().map(|l| l.assets_dir.clone()));
+    let Some(assets_dir) = assets_dir else {
+      log::warn!("收件箱自动导入跳过：当前无打开的素材库");
+      continue;
+    };
     // 收件箱导入无 UI 取消入口（批次通常很小），cancel 恒 false
     let outcome = run_import(
       &state.library,
       root.clone(),
+      assets_dir,
       opts,
       move |ev| {
         if let Err(e) = app_ev.emit(EVENT_NAME, &ev) {

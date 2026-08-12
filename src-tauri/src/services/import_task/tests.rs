@@ -1,7 +1,8 @@
   use super::*;
   use crate::core::json_io::read_json;
-  use crate::core::library::{ASSTES_DIR, FOLDERS_FILE};
+  use crate::core::library::FOLDERS_FILE;
   use crate::core::models::{AssetMeta, FoldersFile};
+  use crate::core::paths;
   use crate::services::import::Source;
   use std::fs;
 
@@ -9,13 +10,15 @@
     _dir: tempfile::TempDir,
     lib: Mutex<Option<Library>>,
     root: PathBuf,
+    assets_dir: PathBuf,
   }
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
-    Harness { _dir: dir, lib: Mutex::new(Some(lib)), root }
+    let lib = library::create_test(dir.path());
+    let root = lib.root.clone();
+    let assets_dir = lib.assets_dir.clone();
+    Harness { _dir: dir, lib: Mutex::new(Some(lib)), root, assets_dir }
   }
 
   fn opts(structure: Structure, source: Source, paths: Vec<PathBuf>) -> ImportOptions {
@@ -38,7 +41,7 @@
   fn run(h: &Harness, opts: ImportOptions) -> (ImportOutcome, Vec<ImportEvent>) {
     let events = Mutex::new(Vec::new());
     let cancel = AtomicBool::new(false);
-    let outcome = run_import(&h.lib, h.root.clone(), opts, |e| events.lock().unwrap().push(e), &cancel);
+    let outcome = run_import(&h.lib, h.root.clone(), h.assets_dir.clone(), opts, |e| events.lock().unwrap().push(e), &cancel);
     (outcome, events.into_inner().unwrap())
   }
 
@@ -60,7 +63,7 @@
   }
 
   fn info_dir_count(h: &Harness) -> usize {
-    fs::read_dir(h.root.join(ASSTES_DIR)).unwrap().count()
+    fs::read_dir(&h.assets_dir).unwrap().count()
   }
 
   /// 造两文件源树：素材/a.txt + 素材/子目录/b.txt
@@ -246,7 +249,7 @@
       let asset = l.index.assets.values().next().unwrap();
       assert_eq!(asset.ext, "png");
       assert!(asset.hash.starts_with("sha256:"));
-      let info = h.root.join(ASSTES_DIR).join(format!("{}.info", asset.id));
+      let info = paths::info_dir(&h.assets_dir, &asset.id);
       assert!(info.join("metadata.json").is_file());
       assert!(info.join(asset.thumbnail.as_ref().unwrap()).is_file());
     });
@@ -273,6 +276,7 @@
     let outcome = run_import(
       &h.lib,
       h.root.clone(),
+      h.assets_dir.clone(),
       opts(Structure::Flatten, Source::Copy, paths),
       |e| events.lock().unwrap().push(e),
       &cancel,
@@ -305,6 +309,7 @@
     let outcome = run_import(
       &h.lib,
       h.root.clone(),
+      h.assets_dir.clone(),
       opts(Structure::Flatten, Source::Copy, vec![dup.clone(), n1, n2]),
       |e| {
         if matches!(e, ImportEvent::Asset { .. }) {
@@ -382,7 +387,7 @@
     let heavy = |p: &PathBuf, tag: &str| {
       let file = PendingFile { path: p.clone(), chain: Vec::new() };
       let hash = ops::sha256_file(&file.path).unwrap();
-      ops::build_asset_with_id(&h.root, &file, &hash, tag, Source::Copy, None).unwrap();
+      ops::build_asset_with_id(&h.assets_dir, &file, &hash, tag, Source::Copy, None).unwrap();
     };
 
     let t = Instant::now();
@@ -415,7 +420,7 @@
 
   /// 唯一资源的 info 目录（单资源场景）
   fn only_info_dir(h: &Harness) -> PathBuf {
-    fs::read_dir(h.root.join(ASSTES_DIR)).unwrap().next().unwrap().unwrap().path()
+    fs::read_dir(&h.assets_dir).unwrap().next().unwrap().unwrap().path()
   }
 
   /// 自动合并：RECOVER 快照先入、真实文件后入撞 hash——已有资产静默改名为真实名
@@ -550,7 +555,7 @@
     assert_eq!(meta.thumb_frame.as_deref(), Some("走路-001.png"));
     assert_eq!((meta.width, meta.height), (Some(16), Some(12)));
     // frames/ 归一重命名（位宽 3），缩略图复用图片管线
-    let info_dir = h.root.join(ASSTES_DIR).join(format!("{}.info", meta.id));
+    let info_dir = paths::info_dir(&h.assets_dir, &meta.id);
     for n in 1..=4 {
       assert!(info_dir.join("frames").join(format!("走路-{n:03}.png")).is_file());
     }
@@ -648,7 +653,7 @@
     let meta = with_lib(&h, |l| l.index.assets.values().find(|a| a.ext == "gif").unwrap().clone());
     assert_eq!(meta.frame_count, Some(3), "probe 应写 frameCount");
 
-    let info = h.root.join(ASSTES_DIR).join(format!("{}.info", meta.id));
+    let info = paths::info_dir(&h.assets_dir, &meta.id);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     // frames.json 在帧图之后写，一起等防竞态
     while !((1..=3).all(|n| info.join("frames").join(format!("{}-{n:05}.webp", meta.name)).is_file())

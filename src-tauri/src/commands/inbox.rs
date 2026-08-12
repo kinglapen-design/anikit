@@ -9,7 +9,7 @@ use tauri::ipc::Channel;
 use tauri::AppHandle;
 
 use crate::adapters::{inbox_watch, shell_open};
-use crate::commands::import::{current_root, spawn_import};
+use crate::commands::import::{current_paths, spawn_import};
 use crate::services::import::{ImportEvent, ImportOptions, SequenceMode, Source, Structure};
 use crate::services::inbox::{self, InboxEntry, INBOX_DIR};
 
@@ -18,7 +18,7 @@ use crate::services::inbox::{self, InboxEntry, INBOX_DIR};
 /// "inbox-disk-details" 事件补齐（前端收到后整体替换）
 #[tauri::command]
 pub fn list_inbox_snapshot(app: AppHandle) -> Result<Vec<InboxEntry>, String> {
-  let root = current_root(&app)?;
+  let root = current_paths(&app)?.0;
   Ok(inbox::snapshot_fast(&root))
 }
 
@@ -27,7 +27,7 @@ pub fn list_inbox_snapshot(app: AppHandle) -> Result<Vec<InboxEntry>, String> {
 /// Channel 复用现有导入事件流（11_导入进度条 / 10_重复添加提示）
 #[tauri::command]
 pub fn import_inbox_entry(app: AppHandle, name: String, on_event: Channel<ImportEvent>) -> Result<u64, String> {
-  let root = current_root(&app)?;
+  let (root, assets_dir) = current_paths(&app)?;
   let path = resolve_entry(&root.join(INBOX_DIR), &name)?;
   if !path.exists() {
     return Err(format!("「{name}」已不在收件箱，可能刚被移走或删除"));
@@ -43,13 +43,13 @@ pub fn import_inbox_entry(app: AppHandle, name: String, on_event: Channel<Import
     imported_from: Some("inbox".to_string()),
     sequence_mode: SequenceMode::Scatter,
   };
-  Ok(spawn_import(app, root, opts, on_event, None))
+  Ok(spawn_import(app, root, assets_dir, opts, on_event, None))
 }
 
 /// 用系统默认程序打开条目（工程中查看 / 继续编辑）
 #[tauri::command]
 pub fn open_inbox_entry(app: AppHandle, name: String) -> Result<(), String> {
-  let root = current_root(&app)?;
+  let root = current_paths(&app)?.0;
   let path = resolve_entry(&root.join(INBOX_DIR), &name)?;
   if !path.exists() {
     return Err(format!("「{name}」已不在收件箱，可能刚被移走或删除"));
@@ -60,7 +60,7 @@ pub fn open_inbox_entry(app: AppHandle, name: String) -> Result<(), String> {
 /// 重命名条目（仅 inbox 下一级；同名冲突 / 占用返回中文人话）
 #[tauri::command]
 pub fn rename_inbox_entry(app: AppHandle, name: String, new_name: String) -> Result<(), String> {
-  let root = current_root(&app)?;
+  let root = current_paths(&app)?.0;
   let dir = root.join(INBOX_DIR);
   let from = resolve_entry(&dir, &name)?;
   let to = resolve_entry(&dir, &new_name)?;
@@ -79,7 +79,7 @@ pub fn rename_inbox_entry(app: AppHandle, name: String, new_name: String) -> Res
 /// 删除条目（文件 remove_file / 目录 remove_dir_all；占用等系统错误原样透传）
 #[tauri::command]
 pub fn delete_inbox_entry(app: AppHandle, name: String) -> Result<(), String> {
-  let root = current_root(&app)?;
+  let root = current_paths(&app)?.0;
   let path = resolve_entry(&root.join(INBOX_DIR), &name)?;
   if !path.exists() {
     return Ok(()); // 实况滞后、条目已不在磁盘，视作已删除

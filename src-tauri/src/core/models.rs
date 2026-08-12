@@ -22,7 +22,7 @@ fn is_false(v: &bool) -> bool {
   !*v
 }
 
-// ---------- metadata.json（asstes/{ID}.info/，单资源元数据） ----------
+// ---------- metadata.json（assets/{ID}.info/，单资源元数据） ----------
 
 /// 只存资源固有属性；放置位置（Placement）在 folders.json，不冗余（PRD 01-2.3）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -31,7 +31,7 @@ pub struct AssetMeta {
   pub version: u32,
   pub id: String,
   pub name: String,
-  /// 磁盘原始文件名（含拓展名）；真实路径不存绝对路径，由 ID 推导：asstes/{ID}.info/{originName}
+  /// 磁盘原始文件名（含拓展名）；真实路径不存绝对路径，由 ID 推导：assets/{ID}.info/{originName}
   pub origin_name: String,
   pub ext: String,
   pub size: u64,
@@ -87,6 +87,46 @@ pub struct AssetMeta {
   pub start: Option<f64>,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub end: Option<f64>,
+}
+
+// ---------- space.json（储存空间标志与元数据，PRD 01_储存空间-02） ----------
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpaceFile {
+  pub version: u32,
+  pub name: String,
+  /// 创建时间（RFC3339 本地时区，与 config 的 lastOpenedAt 同格式）
+  pub created_at: String,
+}
+
+impl SpaceFile {
+  pub fn new(name: &str) -> Self {
+    Self { version: DATA_VERSION, name: name.to_string(), created_at: chrono::Local::now().to_rfc3339() }
+  }
+}
+
+// ---------- settings.json（库级设置，PRD 01_储存空间-02；实际行为 2.6 接） ----------
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibrarySettingsFile {
+  pub version: u32,
+  /// 开启自动导入（初次打开向导第二步开关）
+  #[serde(default)]
+  pub auto_import: bool,
+}
+
+impl LibrarySettingsFile {
+  pub fn new(auto_import: bool) -> Self {
+    Self { version: DATA_VERSION, auto_import }
+  }
+}
+
+impl Default for LibrarySettingsFile {
+  fn default() -> Self {
+    Self::new(false)
+  }
 }
 
 // ---------- folders.json（文件夹树 + 全部 Placement） ----------

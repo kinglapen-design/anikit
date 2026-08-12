@@ -18,8 +18,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::core::json_io::{read_json, write_json};
-use crate::core::library::{self, Library, ASSTES_DIR};
+use crate::core::library::{self, Library};
 use crate::core::models::{new_asset_id, AssetMeta, Folder, Placement, DATA_VERSION};
+use crate::core::paths;
 use crate::services::thumbnail;
 use crate::services::views::PlacementView;
 
@@ -229,22 +230,22 @@ fn walk(
 }
 
 /// 单文件建档（锁外重活）：建 info 文件夹 → 实体入库 → 探测宽高 → 缩略图 → 写 metadata.json。
-/// 路径全由新 ID 推导，不依赖共享状态。
-pub(crate) fn build_asset(root: &Path, file: &PendingFile, hash: &str, source: Source) -> Result<AssetMeta, String> {
-  build_asset_with_id(root, file, hash, &new_asset_id(), source, None)
+/// 路径全由新 ID 推导（core::paths 单点），不依赖共享状态。
+pub(crate) fn build_asset(assets_dir: &Path, file: &PendingFile, hash: &str, source: Source) -> Result<AssetMeta, String> {
+  build_asset_with_id(assets_dir, file, hash, &new_asset_id(), source, None)
 }
 
 /// 同 build_asset，但使用预分配的 asset id（并行管线在阶段 2 查重时统一分配）
 /// 并携带导入渠道标记（inbox 导入写 metadata.importedFrom）
 pub(crate) fn build_asset_with_id(
-  root: &Path,
+  assets_dir: &Path,
   file: &PendingFile,
   hash: &str,
   asset_id: &str,
   source: Source,
   imported_from: Option<&str>,
 ) -> Result<AssetMeta, String> {
-  let info_dir = root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
+  let info_dir = paths::info_dir(assets_dir, asset_id);
   fs::create_dir_all(&info_dir).map_err(|e| format!("info 文件夹创建失败：{e}"))?;
 
   let origin_name = file_name(&file.path);
@@ -291,8 +292,8 @@ pub(crate) struct OriginRename {
   pub renames: Vec<(PathBuf, PathBuf)>,
 }
 
-pub(crate) fn rename_origin(root: &Path, asset_id: &str, new_name: &str) -> Result<OriginRename, String> {
-  let info_dir = root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
+pub(crate) fn rename_origin(assets_dir: &Path, asset_id: &str, new_name: &str) -> Result<OriginRename, String> {
+  let info_dir = paths::info_dir(assets_dir, asset_id);
   let meta_path = info_dir.join("metadata.json");
   let mut meta: AssetMeta = read_json(&meta_path).map_err(|e| e.to_string())?;
   let renamed = meta.origin_name != new_name;
@@ -329,8 +330,8 @@ pub(crate) fn rename_origin(root: &Path, asset_id: &str, new_name: &str) -> Resu
 /// 已有资产（同为 inbox 渠道）改名为新文件真实名（走 rename_origin 原语：磁盘 originName
 /// 与词干缩略图一并改名，metadata 更新写盘）；新文件与库内内容相同（hash 一致），作为重复丢弃。
 /// 返回（更新后的 metadata, 是否发生了改名），调用方负责锁内索引与 Placement 更新。
-pub(crate) fn merge_rename(root: &Path, file: &PendingFile, asset_id: &str) -> Result<(AssetMeta, bool), String> {
-  let result = rename_origin(root, asset_id, &file_name(&file.path))?;
+pub(crate) fn merge_rename(assets_dir: &Path, file: &PendingFile, asset_id: &str) -> Result<(AssetMeta, bool), String> {
+  let result = rename_origin(assets_dir, asset_id, &file_name(&file.path))?;
   // 重复源丢弃（过境语义）；删除失败仅记日志——启动清点会再撞一次合并，幂等无害
   if let Err(e) = fs::remove_file(&file.path) {
     log::error!("收件箱重复文件丢弃失败：{e}");
@@ -535,7 +536,7 @@ mod tests {
   #[test]
   fn add_placement_inserts_front_with_batch_order() {
     let dir = tempfile::tempdir().unwrap();
-    let mut lib = library::create(dir.path()).unwrap();
+    let mut lib = library::create_test(dir.path());
     let mut anchor = HashMap::new();
     // 同批三个：批内保序（到达顺序即显示顺序）
     add_placement(&mut lib, "A1".into(), "root".into(), "a.png".into(), true, &mut anchor);

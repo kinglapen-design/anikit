@@ -10,15 +10,16 @@ use std::path::PathBuf;
 use tauri::State;
 
 use crate::commands::library::AppState;
-use crate::core::library::{self, Library, ASSTES_DIR, FOLDERS_FILE, RECYCLE_FILE};
+use crate::core::library::{self, Library, FOLDERS_FILE, RECYCLE_FILE};
 use crate::core::models::Folder;
+use crate::core::paths;
 use crate::core::undo::{DiskOp, UndoManager};
 use crate::services::import::ROOT_FOLDER_ID;
 use crate::services::operations::{self, DeleteReport, PlacementRef};
 
 /// metadata.json 路径（由 ID 推导，PRD 01-2.3）
 fn meta_path(lib: &Library, asset_id: &str) -> PathBuf {
-  lib.root.join(ASSTES_DIR).join(format!("{asset_id}.info")).join("metadata.json")
+  paths::metadata_file(&lib.assets_dir, asset_id)
 }
 
 /// 业务失败收尾：丢弃撤销事务 + 内存从盘重载（防半截内存态），返回错误文案

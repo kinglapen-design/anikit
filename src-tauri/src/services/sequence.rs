@@ -14,8 +14,8 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 
 use crate::core::json_io::write_json;
-use crate::core::library::ASSTES_DIR;
 use crate::core::models::{AssetMeta, DATA_VERSION};
+use crate::core::paths;
 use crate::services::import::{self, PendingFile, Source};
 use crate::services::thumbnail;
 
@@ -147,7 +147,7 @@ pub fn frame_name(name: &str, number: u32, num_width: usize, ext: &str) -> Strin
 /// 路径全由新 ID 推导，不依赖共享状态。
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_sequence_asset(
-  root: &Path,
+  assets_dir: &Path,
   name: &str,
   ext: &str,
   num_width: usize,
@@ -157,8 +157,8 @@ pub(crate) fn build_sequence_asset(
   source: Source,
   imported_from: Option<&str>,
 ) -> Result<AssetMeta, String> {
-  let info_dir = root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
-  let frames_dir = info_dir.join("frames");
+  let info_dir = paths::info_dir(assets_dir, asset_id);
+  let frames_dir = paths::frames_dir(assets_dir, asset_id);
   fs::create_dir_all(&frames_dir).map_err(|e| format!("info 文件夹创建失败：{e}"))?;
 
   let mut size = 0u64;
@@ -306,8 +306,8 @@ mod tests {
   #[test]
   fn build_sequence_asset_normalizes_frames_and_meta() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
+    let assets_dir = lib.assets_dir.clone();
     drop(lib);
 
     // 源：标题_1 / 标题_2 / 标题_3（位宽 3 入库补齐）
@@ -322,10 +322,10 @@ mod tests {
       .collect();
     let hash = group_hash(&["sha256:x"]);
     let meta =
-      build_sequence_asset(&root, "标题", "png", 3, &frames, &hash, "AN-TEST", Source::Move, None).unwrap();
+      build_sequence_asset(&assets_dir, "标题", "png", 3, &frames, &hash, "AN-TEST", Source::Move, None).unwrap();
 
     // frames/ 归一重命名（序号补齐位宽），剪切整组移走
-    let info = root.join(ASSTES_DIR).join("AN-TEST.info");
+    let info = paths::info_dir(&assets_dir, "AN-TEST");
     for n in 1..=3 {
       let name = format!("标题-00{n}.png");
       assert!(info.join("frames").join(&name).is_file(), "缺帧 {name}");
@@ -349,13 +349,12 @@ mod tests {
   #[test]
   fn build_sequence_asset_copy_keeps_sources() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    drop(library::create(&root).unwrap());
+    let lib = library::create_test(dir.path());
     let p1 = dir.path().join("走 (1).png");
     make_png(&p1, 10, 10);
     let frames = vec![(p1.clone(), 1), (dir.path().join("走 (2).png"), 2)];
     make_png(&frames[1].0, 10, 10);
-    build_sequence_asset(&root, "走", "png", 1, &frames, "sha256:y", "AN-COPY", Source::Copy, None).unwrap();
+    build_sequence_asset(&lib.assets_dir, "走", "png", 1, &frames, "sha256:y", "AN-COPY", Source::Copy, None).unwrap();
     assert!(p1.exists(), "复制后源帧应保留");
   }
 }

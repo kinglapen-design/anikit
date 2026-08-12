@@ -21,15 +21,15 @@ type Migration = fn(&mut Value) -> Result<(), String>;
 static MIGRATIONS: &[Migration] = &[];
 
 /// 库级迁移检查：任一数据文件版本过低 → 先自动备份一次 → 逐个逐级迁移（PRD 06-05）。
-pub fn migrate_library_if_needed(root: &Path) -> Result<(), DataError> {
-  let files = data_files(root)?;
+pub fn migrate_library_if_needed(root: &Path, assets_dir: &Path) -> Result<(), DataError> {
+  let files = data_files(root, assets_dir)?;
   let needs = files
     .iter()
     .any(|p| file_version(p).map(|v| v < DATA_VERSION).unwrap_or(false));
   if !needs {
     return Ok(());
   }
-  crate::core::backup::backup_library(root)?; // 迁移前自动备份
+  crate::core::backup::backup_library(root, assets_dir)?; // 迁移前自动备份
   for p in files {
     migrate_json_file(&p)?;
   }

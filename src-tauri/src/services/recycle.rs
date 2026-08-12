@@ -11,7 +11,7 @@ use std::fs;
 use serde::Serialize;
 
 use crate::core::backup;
-use crate::core::library::{self, Library, ASSTES_DIR};
+use crate::core::library::{self, Library};
 use crate::core::models::{Placement, RecycleItem};
 use crate::services::import::ROOT_FOLDER_ID;
 use crate::services::operations::{finish, rewrite_orders};
@@ -45,7 +45,7 @@ fn entry_view(lib: &Library, item: &RecycleItem) -> Option<RecycleEntryView> {
   let pseudo =
     Placement { asset: item.asset.clone(), folder: RECYCLE_FOLDER_ID.to_string(), name, order: 0, origin: false };
   Some(RecycleEntryView {
-    view: placement_view(&lib.root, meta, &pseudo, &lib.format_icons),
+    view: placement_view(lib, meta, &pseudo, &lib.format_icons),
     deleted_at: item.deleted_at.clone(),
     placement_count: item.placements.len() as u32,
   })
@@ -136,12 +136,12 @@ pub fn delete_recycle(lib: &mut Library, asset_ids: &[String], confirmed: bool) 
     return Ok(DeleteRecycleReport { need_confirm: true, segment_refs, deleted: 0 });
   }
   // 物理不可逆：操作前强制备份兜底（失败仅警告不阻断）
-  if let Err(e) = backup::backup_library(&lib.root) {
+  if let Err(e) = backup::backup_library(&lib.root, &lib.assets_dir) {
     log::warn!("彻底删除前备份失败（不阻断删除）：{e}");
   }
   let mut removed: Vec<String> = Vec::new();
   for id in &targets {
-    let info = lib.root.join(ASSTES_DIR).join(format!("{id}.info"));
+    let info = lib.info_dir(id);
     if info.exists() {
       if let Err(e) = fs::remove_dir_all(&info) {
         // 半途失败：已删的部分先同步数据文件保持一致，再报错
@@ -218,8 +218,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { dir, lib }
   }
 
@@ -233,7 +232,7 @@ mod tests {
     let src = h.dir.path().join(file);
     fs::write(&src, b"fake").unwrap();
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = ops::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    let meta = ops::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
     h.lib.index.assets.insert(id.into(), meta);
     ops::add_placement(&mut h.lib, id.into(), folder.into(), file.into(), true, &mut HashMap::new());
     finish(&mut h.lib).unwrap();
@@ -247,7 +246,7 @@ mod tests {
   }
 
   fn info_dir(h: &Harness, id: &str) -> std::path::PathBuf {
-    h.lib.root.join(ASSTES_DIR).join(format!("{id}.info"))
+    h.lib.info_dir(id)
   }
 
   #[test]

@@ -3,8 +3,9 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::core::json_io::write_json;
-use crate::core::library::{self, Library, ASSTES_DIR};
+use crate::core::library::{self, Library};
 use crate::core::models::Placement;
+use crate::core::paths;
 use crate::services::import as ops;
 use crate::services::import::ROOT_FOLDER_ID;
 
@@ -55,7 +56,7 @@ fn clear_imported_from(lib: &mut Library, asset_id: &str) -> Result<(), String> 
     return Ok(());
   }
   meta.imported_from = None;
-  let meta_path = lib.root.join(ASSTES_DIR).join(format!("{asset_id}.info")).join("metadata.json");
+  let meta_path = paths::metadata_file(&lib.assets_dir, asset_id);
   write_json(&meta_path, &meta).map_err(|e| e.to_string())?;
   lib.index.assets.insert(asset_id.to_string(), meta);
   Ok(())
@@ -186,8 +187,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { dir, lib, anchor: HashMap::new() }
   }
 
@@ -202,7 +202,7 @@ mod tests {
     let src = h.dir.path().join(file);
     std::fs::write(&src, b"fake").unwrap();
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = ops::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, imported_from).unwrap();
+    let meta = ops::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, imported_from).unwrap();
     h.lib.index.assets.insert(id.into(), meta);
     let mut anchor = std::mem::take(&mut h.anchor);
     ops::add_placement(&mut h.lib, id.into(), folder.into(), file.into(), true, &mut anchor);
@@ -252,7 +252,7 @@ mod tests {
 
     move_placements(&mut h.lib, &[pref("AN-IN", "root", true)], "F01").unwrap();
     assert_eq!(h.lib.index.assets["AN-IN"].imported_from, None, "摘标：移动即转正");
-    let meta_path = h.lib.root.join(ASSTES_DIR).join("AN-IN.info/metadata.json");
+    let meta_path = h.lib.info_dir("AN-IN").join("metadata.json");
     let disk: AssetMeta = read_json(&meta_path).unwrap();
     assert_eq!(disk.imported_from, None, "metadata.json 落盘同步");
   }

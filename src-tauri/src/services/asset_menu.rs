@@ -12,8 +12,9 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::core::json_io::write_json;
-use crate::core::library::{Library, ASSTES_DIR, CACHE_DIR};
+use crate::core::library::{Library, CACHE_DIR};
 use crate::core::models::AssetMeta;
+use crate::core::paths;
 use crate::services::thumbnail;
 
 /// 缩略图三件套返回（与 SetThumbResult 同构）
@@ -26,7 +27,7 @@ pub struct ThumbResult {
 /// 资产定位：info 目录 + origin 路径 + metadata（克隆）
 fn locate(lib: &Library, asset_id: &str) -> Result<(PathBuf, PathBuf, AssetMeta), String> {
   let meta = lib.index.assets.get(asset_id).ok_or_else(|| "资源不存在，可能已被删除".to_string())?;
-  let info_dir = lib.root.join(ASSTES_DIR).join(format!("{asset_id}.info"));
+  let info_dir = lib.info_dir(asset_id);
   Ok((info_dir.clone(), info_dir.join(&meta.origin_name), meta.clone()))
 }
 
@@ -121,7 +122,7 @@ fn dedupe_path(dir: &Path, file_name: &str) -> PathBuf {
 /// 复制 origin 到目标（按显示名，缺扩展名补 metadata.ext），返回是否成功
 fn copy_origin_to(lib: &Library, dir: &Path, asset_id: &str, display_name: &str) -> bool {
   let Some(meta) = lib.index.assets.get(asset_id) else { return false };
-  let origin = lib.root.join(ASSTES_DIR).join(format!("{asset_id}.info")).join(&meta.origin_name);
+  let origin = paths::origin_file(&lib.assets_dir, asset_id, &meta.origin_name);
   if !origin.is_file() {
     return false;
   }
@@ -145,7 +146,7 @@ pub fn export_assets(lib: &Library, asset_ids: &[String], target_dir: &str) -> R
   let mut copied = 0usize;
   for id in asset_ids {
     let Some(meta) = lib.index.assets.get(id) else { continue };
-    let origin = lib.root.join(ASSTES_DIR).join(format!("{id}.info")).join(&meta.origin_name);
+    let origin = paths::origin_file(&lib.assets_dir, id, &meta.origin_name);
     if !origin.is_file() {
       continue;
     }
@@ -242,8 +243,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { dir, lib }
   }
 
@@ -259,7 +259,7 @@ mod tests {
       fs::write(&src, b"fake").unwrap();
     }
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = ops::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    let meta = ops::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
     h.lib.index.assets.insert(id.into(), meta);
     ops::add_placement(&mut h.lib, id.into(), folder.into(), file.into(), true, &mut HashMap::new());
     finish(&mut h.lib).unwrap();
@@ -307,7 +307,7 @@ mod tests {
     assert!(PathBuf::from(&r.thumb_path).is_file());
     let meta = &h.lib.index.assets["AN-A"];
     assert_eq!(meta.thumb_frame, None, "外来源清空封面帧标记");
-    let disk: AssetMeta = read_json(&h.lib.root.join(ASSTES_DIR).join("AN-A.info").join("metadata.json")).unwrap();
+    let disk: AssetMeta = read_json(&h.lib.info_dir("AN-A").join("metadata.json")).unwrap();
     assert_eq!(disk.thumbnail.as_deref(), Some("图_thumbnail.webp"), "metadata 落盘");
     // 不存在的源报错
     assert!(set_thumbnail_custom(&mut h.lib, "AN-A", "不存在.png").is_err());

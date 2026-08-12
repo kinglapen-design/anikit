@@ -47,7 +47,7 @@ fn recent_view(lib: &Library, item: RecentItem) -> Option<RecentAssetView> {
     return None;
   }
   let p = placements.iter().find(|p| p.origin).unwrap_or(&placements[0]);
-  Some(RecentAssetView { view: placement_view(&lib.root, meta, p, &lib.format_icons), viewed_at: item.viewed_at })
+  Some(RecentAssetView { view: placement_view(lib, meta, p, &lib.format_icons), viewed_at: item.viewed_at })
 }
 
 /// 剔除指定资源的最近使用记录，有剔除才落盘（delete_recycle 彻底删除时同步清理）
@@ -77,8 +77,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { dir, lib }
   }
 
@@ -87,7 +86,7 @@ mod tests {
     let src = h.dir.path().join(file);
     std::fs::write(&src, b"fake").unwrap();
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = ops::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    let meta = ops::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
     h.lib.index.assets.insert(id.into(), meta);
     ops::add_placement(&mut h.lib, id.into(), folder.into(), file.into(), origin, &mut HashMap::new());
     finish(&mut h.lib).unwrap();

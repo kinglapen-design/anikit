@@ -128,7 +128,7 @@ fn persist(
 mod tests {
   use super::*;
   use crate::core::json_io::read_json;
-  use crate::core::library::{self, ASSTES_DIR};
+  use crate::core::library;
   use crate::services::import::{self, PendingFile, Source};
   use crate::services::sequence;
 
@@ -139,8 +139,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { dir, lib }
   }
 
@@ -160,7 +159,7 @@ mod tests {
       })
       .collect();
     let meta =
-      sequence::build_sequence_asset(&h.lib.root, "走路", "png", 3, &frames, "sha256:t", id, Source::Copy, None)
+      sequence::build_sequence_asset(&h.lib.assets_dir, "走路", "png", 3, &frames, "sha256:t", id, Source::Copy, None)
         .unwrap();
     h.lib.index.assets.insert(id.to_string(), meta.clone());
     meta
@@ -175,7 +174,7 @@ mod tests {
       fs::write(&src, b"fake").unwrap();
     }
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = import::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    let meta = import::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
     h.lib.index.assets.insert(id.to_string(), meta.clone());
     meta
   }
@@ -184,7 +183,7 @@ mod tests {
   fn add_anim(h: &mut Harness, id: &str) -> AssetMeta {
     let mut meta = add_file(h, id, "动图.gif");
     meta.frame_count = Some(3);
-    let info = h.lib.root.join(ASSTES_DIR).join(format!("{id}.info"));
+    let info = h.lib.info_dir(id);
     write_json(&info.join("metadata.json"), &meta).unwrap();
     h.lib.index.assets.insert(id.to_string(), meta.clone());
     meta
@@ -194,7 +193,7 @@ mod tests {
   fn set_thumb_frame_sequence_branch_regenerates_and_syncs_index() {
     let mut h = make_lib();
     let before = add_sequence(&mut h, "AN-SEQ3");
-    let info = h.lib.root.join(ASSTES_DIR).join("AN-SEQ3.info");
+    let info = h.lib.info_dir("AN-SEQ3");
 
     let result = apply_thumb_frame(&mut h.lib, "AN-SEQ3", "走路-002.png").unwrap();
     // 新缩略图沿用导入命名（词干 = 资源名），绝对路径指向 info 内文件
@@ -223,7 +222,7 @@ mod tests {
   fn set_thumb_frame_anim_branch_uses_info_frames() {
     let mut h = make_lib();
     add_anim(&mut h, "AN-GIF");
-    let info = h.lib.root.join(ASSTES_DIR).join("AN-GIF.info");
+    let info = h.lib.info_dir("AN-GIF");
 
     // 未解包（frames/ 未就绪）→ 中文错误文案，不动 metadata
     let err = apply_thumb_frame(&mut h.lib, "AN-GIF", "动图-00002.webp").unwrap_err();

@@ -1,7 +1,7 @@
 //! 动图解包队列（2026-07-26 用户定案：动图 = 导入时自动解包的序列帧，持久化 info/frames/）。
 //! 仿 preview_queue 结构（单 worker 线程 + Condvar），但**无代际作废语义**——解包是建档的
 //! 一部分（丢了资产就永远没有帧图），不是"当前停留素材"的预览解析，任务排队直到完成；
-//! 库切换时清空 pending（任务绑定库 root，切库后无意义，进行中的任务落盘幂等无害）。
+//! 库切换时清空 pending（任务绑定 assets 池目录，切库后无意义，进行中的任务落盘幂等无害）。
 //!
 //! 挂钩：import_task 单元注册完成且资产为动图（anim::is_anim）时 submit（手动导入 / 收件箱
 //! 同一管线）。库打开时不自动补解包（本轮新导入才有；5.1 期间存量动图归 5.4 查缺补漏评估）。
@@ -34,8 +34,8 @@ pub const EVENT_UNPACK_FAILED: &str = "anim-unpack-failed";
 /// 动图解包任务
 #[derive(Debug)]
 pub struct UnpackTask {
-  /// 库根目录
-  pub root: PathBuf,
+  /// 空间级 assets 池目录（info 路径由 ID 推导）
+  pub assets_dir: PathBuf,
   pub asset_id: String,
 }
 
@@ -181,7 +181,7 @@ fn worker_loop(shared: &Shared) {  loop {
 }
 
 fn execute(shared: &Shared, task: UnpackTask) {
-  match anim_unpack::unpack_frames(&task.root, &task.asset_id) {
+  match anim_unpack::unpack_frames(&task.assets_dir, &task.asset_id) {
     Ok(UnpackOutcome::Unpacked { first_frame, .. }) => {
       shared.apply_meta(&task.asset_id, &first_frame);
       shared.emit(EVENT_UNPACKED, &task.asset_id);
@@ -200,7 +200,8 @@ mod tests {
   use std::path::Path;
   use std::time::{Duration, Instant};
 
-  use crate::core::library::{self, ASSTES_DIR};
+  use crate::core::library;
+  use crate::core::paths;
   use crate::services::import::{self, PendingFile, Source};
 
   /// 轮询等待条件成立（10s 超时判定失败），不裸 sleep 长等
@@ -214,31 +215,31 @@ mod tests {
 
   struct Harness {
     _dir: tempfile::TempDir,
-    root: PathBuf,
+    assets_dir: PathBuf,
   }
 
   /// 建库并把真实样本入库（gif/webp 各一，build_asset_with_id 会 probe 写 frameCount）
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
+    let assets_dir = lib.assets_dir.clone();
     drop(lib);
     for (sample, asset_id) in [("anim3.gif", "AN-GIF"), ("anim3.webp", "AN-WEBP")] {
       let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tools/test-assets").join(sample);
       let pf = PendingFile { path: src, chain: Vec::new() };
-      import::build_asset_with_id(&root, &pf, "sha256:t", asset_id, Source::Copy, None).unwrap();
+      import::build_asset_with_id(&assets_dir, &pf, "sha256:t", asset_id, Source::Copy, None).unwrap();
     }
-    Harness { _dir: dir, root }
+    Harness { _dir: dir, assets_dir }
   }
 
   fn frame(h: &Harness, asset_id: &str, name: &str, n: u32) -> PathBuf {
-    h.root.join(ASSTES_DIR).join(format!("{asset_id}.info")).join("frames").join(format!("{name}-{n:05}.webp"))
+    paths::frames_dir(&h.assets_dir, asset_id).join(format!("{name}-{n:05}.webp"))
   }
 
   /// 解包全部落盘判定：3 帧 + frames.json（frames.json 在帧图之后写，必须一起等防竞态）
   fn unpacked(h: &Harness, asset_id: &str, name: &str) -> bool {
     (1..=3).all(|n| frame(h, asset_id, name, n).is_file())
-      && h.root.join(ASSTES_DIR).join(format!("{asset_id}.info")).join(anim_unpack::FRAMES_FILE).is_file()
+      && paths::info_dir(&h.assets_dir, asset_id).join(anim_unpack::FRAMES_FILE).is_file()
   }
 
   /// 无代际作废语义：连提两任务都执行（对比 preview_queue：submit 会顶替旧任务）
@@ -246,13 +247,13 @@ mod tests {
   fn queue_runs_all_submitted_tasks_no_invalidation() {
     let h = make_lib();
     let queue = UnpackQueue::start(None);
-    queue.submit(UnpackTask { root: h.root.clone(), asset_id: "AN-GIF".to_string() });
-    queue.submit(UnpackTask { root: h.root.clone(), asset_id: "AN-WEBP".to_string() });
+    queue.submit(UnpackTask { assets_dir: h.assets_dir.clone(), asset_id: "AN-GIF".to_string() });
+    queue.submit(UnpackTask { assets_dir: h.assets_dir.clone(), asset_id: "AN-WEBP".to_string() });
 
     wait_until(|| unpacked(&h, "AN-GIF", "anim3") && unpacked(&h, "AN-WEBP", "anim3"), "两个解包任务全部完成");
     // 各自的 frames.json 也都落盘
     for id in ["AN-GIF", "AN-WEBP"] {
-      let info = h.root.join(ASSTES_DIR).join(format!("{id}.info"));
+      let info = paths::info_dir(&h.assets_dir, id);
       assert_eq!(anim_unpack::read_delays(&info).unwrap(), [200, 200, 200], "{id} delays");
     }
   }
@@ -262,11 +263,11 @@ mod tests {
   fn clear_drops_pending_and_queue_still_works() {
     let h = make_lib();
     let queue = UnpackQueue::start(None);
-    queue.submit(UnpackTask { root: h.root.clone(), asset_id: "AN-GIF".to_string() });
+    queue.submit(UnpackTask { assets_dir: h.assets_dir.clone(), asset_id: "AN-GIF".to_string() });
     queue.clear();
     assert!(queue.shared.pending.lock().unwrap().is_empty(), "clear 应清空 pending");
     // 已被 worker 取走的任务落盘幂等无害；clear 后提交的任务照常执行
-    queue.submit(UnpackTask { root: h.root.clone(), asset_id: "AN-WEBP".to_string() });
+    queue.submit(UnpackTask { assets_dir: h.assets_dir.clone(), asset_id: "AN-WEBP".to_string() });
     wait_until(|| unpacked(&h, "AN-WEBP", "anim3"), "clear 后新任务照常执行");
   }
 
@@ -274,7 +275,7 @@ mod tests {
   #[test]
   fn push_dedup_skips_same_asset() {
     let mut q = VecDeque::new();
-    let t = |id: &str| UnpackTask { root: PathBuf::from("/r"), asset_id: id.to_string() };
+    let t = |id: &str| UnpackTask { assets_dir: PathBuf::from("/r"), asset_id: id.to_string() };
     assert!(push_dedup(&mut q, t("A")));
     assert!(!push_dedup(&mut q, t("A")), "同资产重复提交应被去重");
     assert!(push_dedup(&mut q, t("B")));

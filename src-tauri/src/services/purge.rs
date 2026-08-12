@@ -12,7 +12,7 @@ use std::fs;
 use serde::Serialize;
 
 use crate::core::backup;
-use crate::core::library::{self, Library, ASSTES_DIR};
+use crate::core::library::{self, Library};
 use crate::services::import::ROOT_FOLDER_ID;
 use crate::services::operations::{finish, rewrite_orders, sync_folder_index};
 use crate::services::recycle::{count_segment_refs, sync_after_purge, DeleteRecycleReport};
@@ -29,7 +29,7 @@ pub fn delete_assets_permanently(lib: &mut Library, asset_ids: &[String], confir
   if segment_refs > 0 && !confirmed {
     return Ok(DeleteRecycleReport { need_confirm: true, segment_refs, deleted: 0 });
   }
-  if let Err(e) = backup::backup_library(&lib.root) {
+  if let Err(e) = backup::backup_library(&lib.root, &lib.assets_dir) {
     log::warn!("彻底删除前备份失败（不阻断删除）：{e}");
   }
   // 数据段：移除全部 Placement（资产随之从各文件夹消失，与回收站流入路径殊途同归）
@@ -38,7 +38,7 @@ pub fn delete_assets_permanently(lib: &mut Library, asset_ids: &[String], confir
   // 物理段：半途失败先把已删部分同步一致再报错（recycle.rs 同策略）
   let mut removed: Vec<String> = Vec::new();
   for id in &targets {
-    let info = lib.root.join(ASSTES_DIR).join(format!("{id}.info"));
+    let info = lib.info_dir(id);
     if info.exists() {
       if let Err(e) = fs::remove_dir_all(&info) {
         sync_after_purge(lib, &removed)?;
@@ -142,7 +142,7 @@ pub fn delete_folder(lib: &mut Library, folder_id: &str, permanent: bool, confir
   if segment_refs > 0 && !confirmed {
     return Ok(DeleteFolderReport { need_confirm: true, segment_refs, asset_count: asset_set.len(), folder_count, ..empty_report() });
   }
-  if let Err(e) = backup::backup_library(&lib.root) {
+  if let Err(e) = backup::backup_library(&lib.root, &lib.assets_dir) {
     log::warn!("彻底删除文件夹前备份失败（不阻断删除）：{e}");
   }
   // 数据段：子树 Placement 与文件夹节点移除
@@ -153,7 +153,7 @@ pub fn delete_folder(lib: &mut Library, folder_id: &str, permanent: bool, confir
   // 物理段
   let mut removed: Vec<String> = Vec::new();
   for id in &asset_set {
-    let info = lib.root.join(ASSTES_DIR).join(format!("{id}.info"));
+    let info = lib.info_dir(id);
     if info.exists() {
       if let Err(e) = fs::remove_dir_all(&info) {
         sync_after_purge(lib, &removed)?;
@@ -192,8 +192,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { dir, lib }
   }
 
@@ -207,14 +206,14 @@ mod tests {
     let src = h.dir.path().join(file);
     fs::write(&src, b"fake").unwrap();
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = ops::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    let meta = ops::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
     h.lib.index.assets.insert(id.into(), meta);
     ops::add_placement(&mut h.lib, id.into(), folder.into(), file.into(), true, &mut HashMap::new());
     finish(&mut h.lib).unwrap();
   }
 
   fn info_dir(h: &Harness, id: &str) -> std::path::PathBuf {
-    h.lib.root.join(ASSTES_DIR).join(format!("{id}.info"))
+    h.lib.info_dir(id)
   }
 
   #[test]

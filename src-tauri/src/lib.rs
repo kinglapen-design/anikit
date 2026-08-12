@@ -51,6 +51,7 @@ pub fn run() {
     .plugin(tauri_plugin_global_shortcut::Builder::new().build())
     .plugin(tauri_plugin_dialog::init())
     .manage(commands::library::AppState {
+      space: std::sync::Mutex::new(None),
       library: std::sync::Mutex::new(None),
       imports: std::sync::Mutex::new(std::collections::HashMap::new()),
       inbox: std::sync::Mutex::new(None),
@@ -203,6 +204,10 @@ pub fn run() {
     })
     .invoke_handler(tauri::generate_handler![
       drag_files,
+      commands::library::create_space,
+      commands::library::open_space,
+      commands::library::get_current_space,
+      commands::library::list_space_libraries,
       commands::library::create_library,
       commands::library::open_library,
       commands::library::get_current_library,

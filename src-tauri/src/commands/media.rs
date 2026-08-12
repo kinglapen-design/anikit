@@ -217,7 +217,7 @@ fn read_stamp(stamp: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::library::{self, ASSTES_DIR};
+  use crate::core::library;
   use crate::services::import::{self, PendingFile, Source};
 
   struct Harness {
@@ -227,8 +227,7 @@ mod tests {
 
   fn make_lib() -> Harness {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("测试库");
-    let lib = library::create(&root).unwrap();
+    let lib = library::create_test(dir.path());
     Harness { dir, lib }
   }
 
@@ -237,7 +236,7 @@ mod tests {
     let src = h.dir.path().join(name);
     fs::write(&src, b"fake").unwrap();
     let pf = PendingFile { path: src, chain: Vec::new() };
-    let meta = import::build_asset_with_id(&h.lib.root, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    let meta = import::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
     h.lib.index.assets.insert(id.to_string(), meta);
   }
 
@@ -327,7 +326,7 @@ mod tests {
     // mp3 不看内容直渲（假字节也直给源路径）
     add_file(&mut h, "AN-AU", "配乐.mp3");
     let src = media_source(&mut h.lib, "AN-AU", None).unwrap();
-    let origin = h.lib.root.join(ASSTES_DIR).join("AN-AU.info").join("配乐.mp3");
+    let origin = h.lib.info_dir("AN-AU").join("配乐.mp3");
     assert_eq!(src, MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps: None });
   }
 
@@ -337,7 +336,7 @@ mod tests {
     // 播放源解析照常走通（不阻塞播放，下次播放再试）
     let mut h = make_lib();
     add_file(&mut h, "AN-VID2", "片段.mp4");
-    let origin = h.lib.root.join(ASSTES_DIR).join("AN-VID2.info").join("片段.mp4");
+    let origin = h.lib.info_dir("AN-VID2").join("片段.mp4");
     let out = h.lib.root.join(CACHE_DIR).join("tmp").join("media-AN-VID2.mp4");
     fs::create_dir_all(out.parent().unwrap()).unwrap();
     fs::write(&out, b"transcoded").unwrap();
@@ -345,7 +344,7 @@ mod tests {
     let src = media_source(&mut h.lib, "AN-VID2", None).unwrap();
     assert!(src.transcoded);
     let disk: crate::core::models::AssetMeta =
-      crate::core::json_io::read_json(&h.lib.root.join(ASSTES_DIR).join("AN-VID2.info/metadata.json")).unwrap();
+      crate::core::json_io::read_json(&h.lib.info_dir("AN-VID2").join("metadata.json")).unwrap();
     assert_eq!(disk.fps, None, "探测失败不应写入 fps");
   }
 
@@ -353,7 +352,7 @@ mod tests {
   fn transcode_reuses_stamped_product_and_fails_gracefully() {
     let mut h = make_lib();
     add_file(&mut h, "AN-VID", "片段.mp4");
-    let origin = h.lib.root.join(ASSTES_DIR).join("AN-VID.info").join("片段.mp4");
+    let origin = h.lib.info_dir("AN-VID").join("片段.mp4");
 
     // 预置产物 + 匹配戳：无 ffmpeg 也直接复用（复用判定先于二进制检查）
     let out = h.lib.root.join(CACHE_DIR).join("tmp").join("media-AN-VID.mp4");
