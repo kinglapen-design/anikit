@@ -97,17 +97,28 @@ async def main():
                 await asyncio.sleep(0.7)
                 return True
 
-            state = lambda: ev("({ menuOpen: !!document.querySelector('.app-menu'), current: document.querySelector('.app-menu .lib-item.current .label')?.textContent ?? null })")
+            state = lambda: ev("({ menuOpen: !!document.querySelector('.app-menu'), current: window.__current, checked: document.querySelector('.app-menu .lib-item.current .label')?.textContent ?? null })")
 
             # 打开切换资源库菜单
             await click("document.querySelector('.library-switch .icon-btn')")
             print("开菜单:", json.dumps(await state(), ensure_ascii=False))
-            # 点设计资产 → 仍开 + 勾移动
+            # 点设计资产 → 仍开 + 实际切到设计资产
             await click("[...document.querySelectorAll('.app-menu .lib-item')].find((it) => it.textContent.includes('设计资产'))")
             print("切设计资产:", json.dumps(await state(), ensure_ascii=False))
-            # 点动画资产切回 → 仍开 + 勾回
+            # 点动画资产切回 → 必须真正切回（2026-08-12 走查 bug：静态 action 快照失效）
             await click("[...document.querySelectorAll('.app-menu .lib-item')].find((it) => it.textContent.includes('动画资产'))")
-            print("切回动画资产:", json.dumps(await state(), ensure_ascii=False))
+            s = await state()
+            print("切回动画资产:", json.dumps(s, ensure_ascii=False))
+            if s.get("current") != "动画资产":
+                print("FAIL：切回未生效")
+                return 3
+            # 再切一次设计资产（第三轮，确认可反复）
+            await click("[...document.querySelectorAll('.app-menu .lib-item')].find((it) => it.textContent.includes('设计资产'))")
+            s = await state()
+            print("再切设计资产:", json.dumps(s, ensure_ascii=False))
+            if s.get("current") != "设计资产":
+                print("FAIL：第三轮切换未生效")
+                return 3
             # 对照：点"新建资源库"（一次性任务类）→ 菜单关 + 16 稿弹窗出
             await click("[...document.querySelectorAll('.app-menu .menu-item')].find((m) => m.textContent.includes('新建资源库'))")
             await asyncio.sleep(0.5)

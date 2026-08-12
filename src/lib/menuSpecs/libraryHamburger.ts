@@ -2,7 +2,7 @@
 // 汉堡"资源库"二级复用 librarySwitchSpec 同一内容，两 spec 同文件。
 import { invoke } from "@tauri-apps/api/core";
 import type { CtxEntry, CtxItem } from "../contextMenus";
-import { requestLibrarySetup, switchLibrary } from "../libraryOps";
+import { requestLibrarySetup } from "../libraryOps";
 import { pickImportPaths } from "../menuOps";
 import { newDocGroupEntries } from "./addMenu";
 
@@ -14,11 +14,10 @@ export function librarySwitchSpec(names: string[], currentName: string | null): 
   const items: CtxEntry[] = names.map((name) => ({
     label: name,
     icon: "library-duotone", // 搜索平铺态的退化渲染用；常态走 LibraryMenuItem 品牌徽章
-    library: true,
+    library: true, // 点击行为在 ContextMenu 动态判定（不配 action——静态快照会让 keepOpen 期间"切回去"失效）
     keepOpen: true, // 切库是状态切换类：执行后菜单保持（用户可切过去看一眼切回来，2026-08-12 用户定）
     checkable: true,
-    checked: name === currentName,
-    action: name === currentName ? undefined : () => void switchLibrary(name),
+    checked: name === currentName, // 搜索平铺态 MenuItem 的勾；常态 LibraryMenuItem 动态绑定 currentLibrary
   }));
   return [
     { label: "切换储存空间", icon: "switch-space", disabled: true, submenu: [] },

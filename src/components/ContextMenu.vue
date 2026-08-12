@@ -17,7 +17,7 @@ import MenuItem from "./MenuItem.vue";
 import MenuDivider from "./MenuDivider.vue";
 import LibraryMenuItem from "./LibraryMenuItem.vue";
 import { closeContextMenu, menuState, type CtxEntry, type CtxItem } from "../lib/contextMenus";
-import { reorderLibraries, requestDeleteLibrary, currentLibrary } from "../lib/libraryOps";
+import { reorderLibraries, requestDeleteLibrary, currentLibrary, switchLibrary } from "../lib/libraryOps";
 
 const query = ref("");
 const searchInputRef = ref<HTMLInputElement>();
@@ -71,6 +71,13 @@ function onItemHover(entry: CtxItem, e: MouseEvent): void {
 
 function onItemClick(entry: CtxEntry): void {
   if (entry === "divider" || entry.disabled || entry.submenu) return;
+  // 库条目点击动态判定（2026-08-12 走查：菜单 keepOpen 期间可能已切库，
+  // 静态 action 快照会让"切回去"失效——当前库跳过，其余直接按名切）
+  if (entry.library) {
+    if (entry.label !== currentLibrary.name) void switchLibrary(entry.label);
+    if (!entry.keepOpen) closeAll(true);
+    return;
+  }
   entry.action?.();
   if (!entry.keepOpen) closeAll(true); // keepOpen = 状态切换类：执行后菜单保持（切库/排序等）
 }
