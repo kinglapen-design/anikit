@@ -17,7 +17,7 @@ import MenuItem from "./MenuItem.vue";
 import MenuDivider from "./MenuDivider.vue";
 import LibraryMenuItem from "./LibraryMenuItem.vue";
 import { closeContextMenu, menuState, type CtxEntry, type CtxItem } from "../lib/contextMenus";
-import { reorderLibraries, requestDeleteLibrary } from "../lib/libraryOps";
+import { reorderLibraries, requestDeleteLibrary, currentLibrary } from "../lib/libraryOps";
 
 const query = ref("");
 const searchInputRef = ref<HTMLInputElement>();
@@ -72,7 +72,7 @@ function onItemHover(entry: CtxItem, e: MouseEvent): void {
 function onItemClick(entry: CtxEntry): void {
   if (entry === "divider" || entry.disabled || entry.submenu) return;
   entry.action?.();
-  closeAll(true);
+  if (!entry.keepOpen) closeAll(true); // keepOpen = 状态切换类：执行后菜单保持（切库/排序等）
 }
 
 function onSearchKeydown(e: KeyboardEvent): void {
@@ -214,7 +214,7 @@ function onLibraryRemove(entry: CtxItem): void {
         <LibraryMenuItem
           v-else-if="entry.library && !query.trim()"
           :label="entry.label"
-          :current="entry.checked"
+          :current="entry.label === currentLibrary.name"
           :style="libItemStyle(i)"
           @select="onLibrarySelect(entry)"
           @remove="onLibraryRemove(entry)"

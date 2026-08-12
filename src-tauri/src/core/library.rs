@@ -359,7 +359,7 @@ mod tests {
     let dir = tempfile::tempdir().unwrap();
     let (mut space, space_root) = make_space(dir.path());
     // 特殊符号 / 结尾点 / 系统保留名（Windows 文件夹命名规则）/ 空间级保留目录名
-    for name in ["bad:name", "bad|name", "lib.", "lib ", "CON", "com1", "Lpt9", "assets", "workspace", "inbox"] {
+    for name in ["bad:name", "bad|name", "lib.", "lib ", "CON", "com1", "Lpt9", "assets", "workspace", "自动导入"] {
       let result = create(&mut space, name);
       assert!(matches!(result, Err(DataError::NameInvalid(_))), "名称 {name} 应被拒绝");
       assert!(!space_root.join(name).join(FOLDERS_FILE).exists(), "名称 {name} 不应建出库");

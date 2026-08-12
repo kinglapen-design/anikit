@@ -15,8 +15,9 @@ use crate::core::paths;
 
 pub const SPACE_FILE: &str = "space.json";
 pub const WORKSPACE_DIR: &str = "workspace";
-/// 收件箱（空间级共用：盘符挂载恒定指向它、不随切库变化；自动导入目标 = 当前打开的库）
-pub const INBOX_DIR: &str = "inbox";
+/// 收件箱（空间级共用：盘符挂载恒定指向它、不随切库变化；自动导入目标 = 当前打开的库）。
+/// 目录名即盘符显示名（subst 机制：资源管理器显示目标目录名）——"自动导入"与 UI 语义同步（2026-08-12 用户定）
+pub const INBOX_DIR: &str = "自动导入";
 
 /// 打开状态的储存空间
 #[derive(Debug, Clone)]
@@ -67,11 +68,17 @@ pub fn validate(path: &Path) -> Result<(), DataError> {
   Ok(())
 }
 
-/// 打开储存空间：校验 space.json → assets/、inbox/ 缺失自愈补建 → 读空间元数据
+/// 打开储存空间：校验 space.json → assets/、自动导入/ 缺失自愈补建（旧 inbox/ 迁移正名）→ 读空间元数据
 pub fn open(path: &Path) -> Result<Space, DataError> {
   validate(path)?;
   fs::create_dir_all(paths::assets_dir(path))?;
-  fs::create_dir_all(path.join(INBOX_DIR))?;
+  // 旧 inbox/ 迁移（2026-08-12 目录正名"自动导入"，盘符显示名与 UI 语义同步）
+  let legacy = path.join("inbox");
+  let inbox_dir = path.join(INBOX_DIR);
+  if legacy.is_dir() && !inbox_dir.exists() {
+    fs::rename(&legacy, &inbox_dir)?;
+  }
+  fs::create_dir_all(inbox_dir)?;
   let file: SpaceFile = read_json(&path.join(SPACE_FILE))?;
   Ok(Space {
     root: path.to_path_buf(),
@@ -238,7 +245,24 @@ mod tests {
     let space = open(&root).unwrap();
     assert!(!space.auto_import, "旧 space.json 缺 autoImport 应按默认 false 读取");
     assert!(space.library_order.is_empty(), "旧 space.json 缺 libraryOrder 应按默认空列表读取");
-    assert!(root.join(INBOX_DIR).is_dir(), "inbox/ 缺失应自愈补建");
+  assert!(root.join(INBOX_DIR).is_dir(), "inbox/ 缺失应自愈补建（迁移正名后为 自动导入/）");
+  }
+
+  #[test]
+  fn open_migrates_legacy_inbox_dir() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("空间");
+    fs::create_dir_all(paths::assets_dir(&root)).unwrap();
+    fs::create_dir_all(root.join("inbox")).unwrap();
+    fs::write(root.join("inbox").join("遗留.txt"), "hi").unwrap();
+    fs::write(
+      root.join(SPACE_FILE),
+      r#"{ "version": 1, "name": "空间", "createdAt": "2026-08-01T00:00:00+08:00" }"#,
+    )
+    .unwrap();
+    let space = open(&root).unwrap();
+    assert!(space.root.join(INBOX_DIR).join("遗留.txt").is_file(), "旧 inbox/ 内容应迁入 自动导入/");
+    assert!(!space.root.join("inbox").exists(), "旧 inbox/ 应已被正名");
   }
 
   #[test]

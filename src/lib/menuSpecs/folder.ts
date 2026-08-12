@@ -84,6 +84,7 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
     const hasChildren = (node?.children.length ?? 0) > 0;
     const sortItem = (label: string, mode: typeof ui.treeSort): CtxItem => ({
       label,
+      keepOpen: true, // 状态切换类：用户可能连续试几种排序（2026-08-12 判定口径）
       action: () => {
         ui.treeSort = mode;
         ui.treeSortAnchor = parentId;
@@ -106,11 +107,13 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
         label: "展开/收起文件夹",
         icon: "expand-folder",
         disabled: !hasChildren,
+        keepOpen: true, // 状态切换类
         action: () => toggleOpen(folder.id),
       },
       {
         label: "展开/收起同阶层文件夹",
         icon: "expand-siblings",
+        keepOpen: true, // 状态切换类
         action: () => {
           // 同层级已全开则折叠，否则展开
           const level = parentId === null ? content.folders : (findChildrenList(content.folders, parentId) ?? []);
@@ -124,6 +127,7 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
         label: "展开/收起所有文件夹",
         icon: "expand-all",
         shortcut: "/",
+        keepOpen: true, // 状态切换类
         action: () => {
           if (treeExpansion.openSet.size > 0) collapseAll();
           else expandAll(content.folders);

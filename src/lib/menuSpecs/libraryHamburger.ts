@@ -15,6 +15,7 @@ export function librarySwitchSpec(names: string[], currentName: string | null): 
     label: name,
     icon: "library-duotone", // 搜索平铺态的退化渲染用；常态走 LibraryMenuItem 品牌徽章
     library: true,
+    keepOpen: true, // 切库是状态切换类：执行后菜单保持（用户可切过去看一眼切回来，2026-08-12 用户定）
     checkable: true,
     checked: name === currentName,
     action: name === currentName ? undefined : () => void switchLibrary(name),

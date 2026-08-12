@@ -55,8 +55,10 @@ const emit = defineEmits<{ select: []; remove: []; gripDown: [e: PointerEvent] }
   flex: 1;
   min-width: 0;
 }
-/* 移动抓手：12 盒标签色，抓取光标 */
+/* 移动抓手：12 盒标签色，抓取光标；热区外扩（树 item 展开箭头同款伪元素法，2026-08-12 走查：
+   上/下各 10 吃满行 padding、左 8 吃到行左 padding、右 6 吃抓手与徽章间距——布局零影响） */
 .grip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -66,6 +68,11 @@ const emit = defineEmits<{ select: []; remove: []; gripDown: [e: PointerEvent] }
   cursor: grab;
   flex: none;
   touch-action: none; /* 指针捕获拖拽，禁浏览器滚动手势 */
+}
+.grip::after {
+  content: "";
+  position: absolute;
+  inset: -10px -6px -10px -8px;
 }
 /* 品牌徽章（稿：20×20 品牌底 / 亮-选中边框 / 圆角 4 / 双色小图标高亮） */
 .badge {

@@ -3,8 +3,8 @@
 // variant：primary = 重要（品牌色底 + 亮-选中边框 + 高亮标题）/ panel = 二级窗口（C4 底，默认）/ sidebar = 侧边栏（C5 底）；
 // size：large（padding 8/12）/ small（padding 4/8，带图标时 6/8 + 图标 12 + 标签字）；
 // 字档规则（figma）：大且无图标 = 标题档 700；小且有图标 = 标签档；其余 = 正文档；
-// hover：panel/primary 叠 暗-悬停（panel 实为 C5，按 figma 2.1/2.2 hover background C5）、sidebar 叠 暗-悬停，
-// 整个按钮下移 3px / 0.1s（2026-08-12 用户改定：整钮下移；过慢的过渡走亚像素渲染文字抖动，加快 + 加距）。
+// hover：panel/primary/sidebar 均叠罩层变色（2026-08-12 用户改定：整钮下移动画取消，回归罩层变色——
+// panel 实为 C5（按 figma 2.1/2.2 hover background C5）；primary 叠亮-选中（暗-悬停在品牌色上过淡，走查反馈）。
 import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
 
@@ -52,13 +52,7 @@ const fontTier = computed(() => {
   justify-content: center;
   border-radius: var(--radius-6);
   flex: none;
-  transition:
-    background 0.15s ease,
-    transform 0.1s ease;
-}
-/* hover：整个按钮下移 3px / 0.1s（2026-08-12 用户改定：快 + 多几像素，慢过渡文字抖动） */
-.app-btn:hover {
-  transform: translateY(3px);
+  transition: background 0.15s ease;
 }
 .app-btn.large {
   padding: var(--space-8) var(--space-12);
@@ -107,14 +101,12 @@ const fontTier = computed(() => {
   box-shadow: inset 0 0 0 1px var(--line-active);
   color: var(--text-highlight);
 }
+/* primary hover 叠 亮-选中（暗-悬停 7.84% 在品牌色上过淡，2026-08-12 走查） */
 .app-btn.primary:hover {
-  background: linear-gradient(var(--line-hover), var(--line-hover)), var(--brand);
+  background: linear-gradient(var(--line-active), var(--line-active)), var(--brand);
 }
 .app-btn:disabled {
   cursor: default;
   opacity: 0.5;
-}
-.app-btn:disabled:hover {
-  transform: none;
 }
 </style>

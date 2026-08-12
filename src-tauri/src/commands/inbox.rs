@@ -126,7 +126,7 @@ mod tests {
 
   fn harness() -> (tempfile::TempDir, PathBuf) {
     let tmp = tempfile::tempdir().unwrap();
-    let dir = tmp.path().join("inbox");
+    let dir = tmp.path().join(crate::core::space::INBOX_DIR);
     std::fs::create_dir_all(&dir).unwrap();
     (tmp, dir)
   }
