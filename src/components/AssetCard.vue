@@ -9,7 +9,7 @@
 // 空格触发（访达 Quick Look 逻辑，AssetGrid 接线）；图片类无悬停控件；
 // 视频 / 音频 / 动图 / 序列帧悬停播放保留（播放类无按钮，5.3 定案），
 // 查看方式"自动播放动图（含序列帧）/ 自动播放视频"开关 = 网格内免悬停自动播放。
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import HoverVideoLayer from "./HoverVideoLayer.vue";
@@ -27,7 +27,7 @@ import {
 import { formatDuration } from "../lib/formatDuration";
 import { renamePlacement } from "../lib/placementOps";
 import { getAssetFilePath } from "../lib/mediaOps";
-import { acquireAutoplay, releaseAutoplay } from "../lib/autoplayGate";
+import { acquireAutoplay, releaseAutoplay, type AutoplayPool } from "../lib/autoplayGate";
 import { useInlineRename } from "../lib/useInlineRename";
 import { useUiStore } from "../stores/ui";
 import { useSelectionStore } from "../stores/selection";
@@ -104,11 +104,18 @@ function startRename(): void {
 const animSrc = ref<string | null>(null);
 let animTimer: ReturnType<typeof setTimeout> | undefined;
 // 自动播放数量闸（2.3）：开关驱动的自动播放申请名额（满员排队 FIFO 唤醒），悬停播放直通——
-// 小卡片高密度时窗口内 200+ 卡片同时解码致全局卡顿（hover 目录树滞后），上限 16 与密度解耦；
-// 动图 / 视频 / 序列帧三处自动播放共用本卡 gateRequested/autoGranted（一卡同时至多一种 kind）
+// 小卡片高密度时窗口内 200+ 卡片同时解码致全局卡顿（hover 目录树滞后）；
+// 动图 / 视频 / 序列帧三处自动播放共用本卡 gateRequested/autoGranted（一卡同时至多一种 kind）。
+// 可见性联动（2026-08-12 用户实机：纯 FIFO 名额被缓冲区不可见卡占住、头尾可见卡排队等死）——
+// IntersectionObserver 判定真实可见，仅可见才申请、滚出视口立即释放（视口外暂停的落地）
 const autoGranted = ref(false);
 let gateRequested = false;
+const cardVisible = ref(false);
+const rootEl = ref<HTMLElement>();
+let visibilityObs: IntersectionObserver | undefined;
+const gatePool = computed<AutoplayPool>(() => (kind.value === "video" ? "video" : "anim"));
 const wantAutoplay = computed(() => {
+  if (!cardVisible.value) return false;
   if (kind.value === "anim" || kind.value === "sequence") return ui.autoPlayGif;
   if (kind.value === "video") return ui.autoPlayVideo;
   return false;
@@ -118,12 +125,12 @@ watch(
   (want) => {
     if (want && !gateRequested) {
       gateRequested = true;
-      autoGranted.value = acquireAutoplay(cardKey, () => {
+      autoGranted.value = acquireAutoplay(cardKey, gatePool.value, () => {
         autoGranted.value = true;
       });
     } else if (!want && gateRequested) {
       gateRequested = false;
-      releaseAutoplay(cardKey);
+      releaseAutoplay(cardKey, gatePool.value);
       autoGranted.value = false;
     }
   },
@@ -155,11 +162,19 @@ async function loadAnim(): Promise<void> {
     // 解析失败保持静态封面
   }
 }
+onMounted(() => {
+  // root null = webview 视口：网格 BUFFER 缓冲区内但视口外的卡判不可见不占名额
+  visibilityObs = new IntersectionObserver((entries) => {
+    cardVisible.value = entries[0]?.isIntersecting ?? false;
+  });
+  if (rootEl.value) visibilityObs.observe(rootEl.value);
+});
 onBeforeUnmount(() => {
+  visibilityObs?.disconnect();
   clearTimeout(animTimer);
   if (gateRequested) {
     gateRequested = false;
-    releaseAutoplay(cardKey);
+    releaseAutoplay(cardKey, gatePool.value);
   }
 });
 
@@ -181,6 +196,7 @@ const meta = computed(() => {
 
 <template>
   <div
+    ref="rootEl"
     class="asset-card"
     :class="{ selected, renaming, 'fade-source': faded === 'source', 'fade-cut': faded === 'cut' }"
     :style="{

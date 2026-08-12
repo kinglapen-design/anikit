@@ -1,8 +1,9 @@
-# CDP 实测：2.3 自动播放数量闸 + 小动画播放源（2026-08-12）
+# CDP 实测：2.3 自动播放数量闸 + 小动画播放源 + 可见性联动（2026-08-12 二轮）
 # 桩 40 张动图卡片 + autoPlayGif 开 + get_asset_file_path 返回 animPreview：
-# ① 播放中卡片（img src 含 anim_cache.webp）≤ 16（闸门上限，与密度解耦）；
-# ② 播放源指向 animPreview（小动画），不指源文件 src.gif；
-# ③ 滚动到底部：滚出卡片释放名额、新滚入获得，播放总数仍 ≤ 16。
+# ① 播放卡 == 真实可见卡（IO 联动：可见才配持有名额，不触闸时可见全播——修"头尾可见卡排队等死"）；
+# ② 播放数 ≤ 50（anim 池上限，2026-08-12 用户定 6列×7行=42 也能看）；
+# ③ 播放源指向 animPreview（小动画），不指源文件 src.gif；
+# ④ 滚动到底部：原可见区滚出即停播释放，新可见区全播（无残留死名额）。
 import asyncio
 import json
 import subprocess
@@ -99,51 +100,47 @@ async def main():
 
             STATS = """({
               cards: document.querySelectorAll('.asset-card').length,
+              visible: [...document.querySelectorAll('.asset-card')].filter((c) => { const r = c.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; }).length,
               playing: [...document.querySelectorAll('.asset-card .thumb img')].filter((i) => i.src.includes('anim_cache.webp')).length,
+              playingVisible: [...document.querySelectorAll('.asset-card')].filter((c) => { const r = c.getBoundingClientRect(); const vis = r.bottom > 0 && r.top < innerHeight; const img = c.querySelector('.thumb img'); return vis && img && img.src.includes('anim_cache.webp'); }).length,
+              playingHidden: [...document.querySelectorAll('.asset-card')].filter((c) => { const r = c.getBoundingClientRect(); const vis = r.bottom > 0 && r.top < innerHeight; const img = c.querySelector('.thumb img'); return !vis && img && img.src.includes('anim_cache.webp'); }).length,
               srcLeaks: [...document.querySelectorAll('.asset-card .thumb img')].filter((i) => i.src.includes('src.gif')).length,
             })"""
 
-            # ①② 初始：等 300ms 延迟 + loadAnim 异步
-            await asyncio.sleep(2.0)
-            diag = await ev("""({
-              wizard: !!document.querySelector('.wizard-card'),
-              dockHost: !!document.querySelector('.dock-host'),
-              dockview: !!document.querySelector('.dv-dockview'),
-              appLen: document.querySelector('#app')?.innerHTML?.length ?? -1,
-              appHead: (document.querySelector('#app')?.innerHTML ?? '').slice(0, 300),
-              viewport: !!document.querySelector('.grid-viewport'),
-              cards: document.querySelectorAll('.asset-card').length,
-            })""")
-            print("诊断:", json.dumps(diag, ensure_ascii=False))
-            s1 = json.loads(json.dumps(await ev(STATS)))
-            print("初始:", json.dumps(s1, ensure_ascii=False))
-            fails = []
-            if s1["cards"] < 17:
-                print("!! 挂载卡片数不足（虚拟窗口比预期小），无法验证上限")
-                fails.append("样本不足")
-            if s1["playing"] > 16:
-                fails.append(f"播放数超闸 {s1['playing']}")
-            if s1["playing"] == 0:
-                fails.append("无播放（链路未通）")
-            if s1["srcLeaks"] > 0:
-                fails.append(f"{s1['srcLeaks']} 张播放源指源文件未走小动画")
+            async def check(tag):
+                s = json.loads(json.dumps(await ev(STATS)))
+                print(tag, json.dumps(s, ensure_ascii=False))
+                fails = []
+                if s["visible"] == 0 or s["playing"] == 0:
+                    fails.append("无可见/无播放（链路未通）")
+                if s["playing"] != s["playingVisible"] or s["playingHidden"] > 0:
+                    fails.append(f"有不可见卡在播（{s['playingHidden']}）")
+                if s["playingVisible"] != s["visible"]:
+                    fails.append(f"可见卡未全播（可见 {s['visible']} 播 {s['playingVisible']}）")
+                if s["playing"] > 50:
+                    fails.append(f"播放数超闸 {s['playing']}")
+                if s["srcLeaks"] > 0:
+                    fails.append(f"{s['srcLeaks']} 张播放源指源文件未走小动画")
+                return fails
 
-            # ③ 滚动到底部：滚出释放、新滚入获得，总数仍 ≤16
-            await ev("(() => { const v = document.querySelector('.grid-viewport'); v.scrollTop = v.scrollHeight; return true; })()")
+            # ①②③ 初始（顶部）：等 IO 回调 + 300ms 延迟 + loadAnim 异步
             await asyncio.sleep(2.0)
-            s2 = json.loads(json.dumps(await ev(STATS)))
-            print("滚底:", json.dumps(s2, ensure_ascii=False))
-            if s2["playing"] > 16:
-                fails.append(f"滚底播放数超闸 {s2['playing']}")
-            if s2["playing"] == 0:
-                fails.append("滚底无播放（名额未释放唤醒）")
-            if s2["srcLeaks"] > 0:
-                fails.append(f"滚底 {s2['srcLeaks']} 张播放源指源文件")
+            fails = await check("顶部:")
+
+            # ④ 滚动到底部：原可见区停播释放，新可见区全播。
+            # 注意：虚拟滚动由内部 pos 状态驱动 canvas transform，直接设 scrollTop 只移视觉不动状态
+            # （首轮 FAIL 根因）——必须派真实 wheel 事件走 AssetGrid 的滚动链路
+            grid_xy = await ev("(() => { const v = document.querySelector('.grid-viewport'); const b = v.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()")
+            for _ in range(30):
+                await send(ws, "Input.dispatchMouseEvent", {"type": "mouseWheel", "x": grid_xy["x"], "y": grid_xy["y"], "deltaX": 0, "deltaY": 600}, session=sess)
+                await asyncio.sleep(0.05)
+            await asyncio.sleep(2.0)
+            fails += await check("滚底:")
 
             if fails:
-                print("FAIL:", "; ".join(fails))
+                print("FAIL:", "; ".join(dict.fromkeys(fails)))
                 return 3
-            print("PASS: 闸门 ≤16 两态成立、播放源全走小动画、滚动释放唤醒正常")
+            print("PASS: 可见即播/滚出即停两态成立、≤50 闸、播放源全走小动画")
             return 0
     finally:
         proc.terminate()
