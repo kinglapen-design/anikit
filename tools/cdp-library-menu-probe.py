@@ -21,7 +21,8 @@ window.__TAURI_INTERNALS__ = {
   metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
   invoke: (cmd, args) => {
     if (cmd === "reorder_libraries") window.__calls.reorder_libraries.push(args.order);
-    if (cmd === "delete_library") { window.__calls.delete_library.push(args.name); return Promise.resolve(["设计资产"]); }
+    if (cmd === "delete_library") { window.__calls.delete_library.push(args); return Promise.resolve(["设计资产"]); }
+    if (cmd === "count_library_orphans") return Promise.resolve(2);
     const LIB = { name: "动画资产", path: "E:/T/S/动画资产", assetCount: 0, folderCount: 0 };
     const R = {
       get_current_library: LIB,
@@ -124,6 +125,7 @@ async def main():
             await asyncio.sleep(0.6)
             print("菜单已关:", await ev("!document.querySelector('.app-menu')"))
             print("确认弹窗:", await ev("document.querySelector('.app-modal.alert .title')?.textContent ?? null"))
+            print("孤儿复选框:", await ev("document.querySelector('.app-modal .app-checkbox')?.textContent?.trim() ?? null"))
             import base64
             r = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
             with open("tools/style-preview/delete-library-alert.png", "wb") as f:

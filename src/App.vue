@@ -22,6 +22,7 @@ import SetupWizard from "./components/SetupWizard.vue";
 import CreateLibraryModal from "./components/CreateLibraryModal.vue";
 import AppModal from "./components/AppModal.vue";
 import AppButton from "./components/AppButton.vue";
+import AppCheckbox from "./components/AppCheckbox.vue";
 import ImportDialog from "./components/ImportDialog.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
 import ImportResultDialog from "./components/ImportResultDialog.vue";
@@ -235,7 +236,7 @@ async function togglePin(): Promise<void> {
     />
     <!-- 菜单"新建资源库"（16 稿独立弹窗） -->
     <CreateLibraryModal v-if="createLibraryModalState.open" @close="createLibraryModalState.open = false" />
-    <!-- 删除资源库确认（08 稿 item 删除×；09 稿 alert 侵入式配提示音） -->
+    <!-- 删除资源库确认（08 稿 item 删除×；09 稿 alert 侵入式配提示音；孤儿素材复选清理） -->
     <AppModal
       v-if="deleteLibraryState.name"
       variant="alert"
@@ -243,7 +244,13 @@ async function togglePin(): Promise<void> {
       :title="`删除资源库「${deleteLibraryState.name}」`"
       @close="deleteLibraryState.name = null"
     >
-      <p class="del-lib-text">库内文件夹、标签等数据将被删除且不可恢复；素材文件保留在素材库中。</p>
+      <p class="del-lib-text">库内文件夹、标签等数据将被删除且不可恢复。</p>
+      <AppCheckbox
+        v-if="deleteLibraryState.orphans > 0"
+        v-model="deleteLibraryState.includeOrphans"
+        :label="`同时删除 ${deleteLibraryState.orphans} 个仅该库引用的素材文件`"
+      />
+      <p v-else class="del-lib-text">素材文件保留在素材库中。</p>
       <template #actions>
         <AppButton label="取消" @click="deleteLibraryState.name = null" />
         <AppButton label="删除" variant="primary" @click="confirmDeleteLibrary" />

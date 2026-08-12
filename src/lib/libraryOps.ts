@@ -154,11 +154,25 @@ export async function reorderLibraries(order: string[]): Promise<void> {
 }
 
 // 删除资源库（08 稿 item 删除×）：确认弹窗状态 + 执行。
+// 孤儿清理（2026-08-12 用户定案：统一池保留 + 引用计数清理）——弹窗前统计"仅该库引用"的素材数，
+// 复选框勾选（默认勾）则删库时一并删除这些素材实体（info 文件夹），共享素材保留。
 // 删当前打开的库 → 切剩余第一个 / 无剩余回第二步向导（PRD 01_储存空间 3.2）
-export const deleteLibraryState = reactive<{ name: string | null }>({ name: null });
+export const deleteLibraryState = reactive<{ name: string | null; orphans: number; includeOrphans: boolean }>({
+  name: null,
+  orphans: 0,
+  includeOrphans: true,
+});
 
 export function requestDeleteLibrary(name: string): void {
   deleteLibraryState.name = name;
+  deleteLibraryState.orphans = 0;
+  deleteLibraryState.includeOrphans = true;
+  // 统计失败不阻塞弹窗（复选框隐藏 = 不删实体）
+  void invoke<number>("count_library_orphans", { name })
+    .then((n) => {
+      if (deleteLibraryState.name === name) deleteLibraryState.orphans = n;
+    })
+    .catch(() => {});
 }
 
 export async function confirmDeleteLibrary(): Promise<void> {
@@ -166,7 +180,8 @@ export async function confirmDeleteLibrary(): Promise<void> {
   if (!name) return;
   const toast = useToastStore();
   try {
-    const rest = await invoke<string[]>("delete_library", { name });
+    const deleteOrphans = deleteLibraryState.orphans > 0 && deleteLibraryState.includeOrphans;
+    const rest = await invoke<string[]>("delete_library", { name, deleteOrphans });
     deleteLibraryState.name = null;
     toast.notify({ message: `资源库「${name}」已删除`, icon: "success", duration: 3000 });
     if (currentLibrary.name === name) {
