@@ -3,9 +3,10 @@
 //（C2 底 / 亮-选中 1.5px 边框 / 投影 / 圆角 8，标题栏 46 右侧 X）。
 // 帧 0 入口（新建 / 打开储存空间）→ 第一步 配置储存空间 → 第二步 创建资源库（含自动导入开关）
 // → 第三 / 四步 浏览器扩展、桥接插件占位（后续版本，PRD 01_储存空间 3.1）。
-// startStep：0 = 初次打开完整流程；2 = 菜单"新建资源库"直进第二步（standalone：第二步完成即关，
-// 无后续占位步）。打开已有空间：非空间结构进 error 态（PathErrorDialog 复用）；有库直开最近库，
-// 无库进第二步。空间创建后端幂等（已是空间视为打开）；库回退重进同名不重建（createdLibName 记录）。
+// startStep：0 = 初次打开完整流程；2 = 菜单"新建资源库"直进第二步（standalone：第二步"完成"即落库）。
+// 打开已有空间：非空间结构进 error 态（PathErrorDialog 复用）；有库直开最近库，无库进第二步。
+// 落盘时机（2026-08-12 用户走查定案）：前两步"下一步"仅校验暂存，第四步"完成"才
+// create_space → create_library——中途关闭 = 什么都没建，重启再弹向导。
 import { computed, ref } from "vue";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
@@ -48,7 +49,8 @@ const spaceName = ref("");
 const parentPath = ref("");
 const libName = ref("");
 const autoImport = ref(false);
-let createdLibName = "";
+// 空间是否已就绪（打开已有空间 / standalone 菜单新建库场景 = true）：finish 时跳过建空间只建库
+const spaceReady = ref(props.startStep >= 2);
 
 const STEP_TITLES = ["", "配置储存空间", "创建资源库", "安装浏览器插件", "安装桥接插件"];
 const STEP_NO = ["", "一", "二", "三", "四"];
@@ -96,6 +98,7 @@ async function openSpaceFlow(): Promise<void> {
   busy.value = true;
   try {
     const space = await openSpace(path);
+    spaceReady.value = true;
     const libs = await listSpaceLibraries();
     if (libs.length === 0) {
       step.value = 2;
@@ -114,9 +117,10 @@ async function openSpaceFlow(): Promise<void> {
   }
 }
 
-async function submitSpace(): Promise<void> {
-  const name = spaceName.value.trim();
-  const msg = validateAssetName(name);
+// 第一步"下一步"：仅校验暂存不落盘（2026-08-12 用户走查定案：向导点"完成"才真正创建，
+// 中途关闭 = 什么都没建、重启再弹向导）
+function submitSpace(): void {
+  const msg = validateAssetName(spaceName.value.trim());
   if (msg) {
     stepError.value = msg;
     return;
@@ -125,44 +129,25 @@ async function submitSpace(): Promise<void> {
     stepError.value = "请点击下方按钮选择保存路径";
     return;
   }
-  busy.value = true;
-  try {
-    await createSpace(parentPath.value, name);
-    step.value = 2;
-  } catch (e) {
-    stepError.value = String(e);
-  } finally {
-    busy.value = false;
-  }
+  step.value = 2;
 }
 
-async function submitLibrary(): Promise<void> {
-  const name = libName.value.trim();
-  const msg = validateAssetName(name);
+// 第二步"下一步"：完整流程仅校验暂存；standalone（菜单新建资源库）= 完成即落库
+function submitLibrary(): void {
+  const msg = validateAssetName(libName.value.trim());
   if (msg) {
     stepError.value = msg;
     return;
   }
-  busy.value = true;
-  try {
-    if (createdLibName !== name) {
-      const info = await createLibrary(name, autoImport.value);
-      createdLibName = info.name;
-    }
-    if (standalone) finish();
-    else step.value = 3;
-  } catch (e) {
-    stepError.value = String(e);
-  } finally {
-    busy.value = false;
-  }
+  if (standalone) void finish();
+  else step.value = 3;
 }
 
 function onNext(): void {
   stepError.value = "";
-  if (step.value === 1) void submitSpace();
-  else if (step.value === 2) void submitLibrary();
-  else if (isLastStep.value) finish();
+  if (step.value === 1) submitSpace();
+  else if (step.value === 2) submitLibrary();
+  else if (isLastStep.value) void finish();
   else step.value += 1;
 }
 
@@ -171,9 +156,34 @@ function onPrev(): void {
   if (prevVisible.value) step.value -= 1;
 }
 
-function finish(): void {
-  toast.notify({ message: `资源库「${createdLibName}」创建完成`, icon: "success", sound: true, duration: 3000 });
-  emit("done");
+// "完成"：此处才真正落盘——建空间（未就绪时）→ 建库；失败回对应步骤显示错误行
+async function finish(): Promise<void> {
+  if (busy.value) return;
+  busy.value = true;
+  try {
+    if (!spaceReady.value) {
+      try {
+        await createSpace(parentPath.value, spaceName.value.trim());
+        spaceReady.value = true;
+      } catch (e) {
+        stepError.value = String(e);
+        step.value = 1;
+        return;
+      }
+    }
+    const name = libName.value.trim();
+    try {
+      await createLibrary(name, autoImport.value);
+    } catch (e) {
+      stepError.value = String(e);
+      step.value = 2;
+      return;
+    }
+    toast.notify({ message: `资源库「${name}」创建完成`, icon: "success", sound: true, duration: 3000 });
+    emit("done");
+  } finally {
+    busy.value = false;
+  }
 }
 
 // error 态重试：回向导并直接再弹系统目录选择
