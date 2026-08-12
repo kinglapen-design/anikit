@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// 模态窗口骨架（figma-css 08 无关闭按钮 / 09 无标题栏 + 布局稿标准标题栏型）：
+// 模态窗口骨架（figma-css 08 无关闭按钮 / 09 无标题栏 + 布局稿标准标题栏型 + 27_导入 纯标题型）：
 // 统一 C2 底 + 1.5px 亮-选中边框 + 投影 + 圆角 8，遮罩 C1-80；
 // standard = 标题栏（图标 + 标题 + 关闭 X）→ 内容 → 按钮组；
 // confirm  = 无关闭按钮（figma 08）：padding 24 gap 24、标题栏 30×30 品牌底图标、内容 gap 12、仅确认/取消；
+// plain    = 纯标题（figma 27_导入）：无图标无徽章无关闭 X，标题用常态色（稿 = 文字/常态），关闭走遮罩点击；
 // alert    = 无标题栏侵入式（figma 09）：内容行横排——48 圆形状态图标（error/warning 状态色底）+
 // 右侧标题 + 描述（竖排 gap 8），按钮组右对齐；**2026-08-12 修正：初版做成居中竖排与 09 稿不符**。
 // 按钮组由 actions slot 给（AppButton primary/panel），内容区默认 slot。
@@ -16,7 +17,7 @@ const props = withDefaults(
   defineProps<{
     title: string;
     icon?: string; // 标题栏图标（standard / confirm）
-    variant?: "standard" | "confirm" | "alert";
+    variant?: "standard" | "confirm" | "alert" | "plain";
     alertIcon?: "error" | "warning"; // alert 形态状态图标
   }>(),
   { icon: undefined, variant: "standard", alertIcon: "error" },
@@ -50,6 +51,10 @@ onMounted(() => {
           </span>
           <h2 class="title">{{ title }}</h2>
         </div>
+      </template>
+      <!-- plain（figma 27_导入）：纯标题，无图标无关闭 X，标题常态色 -->
+      <template v-else-if="variant === 'plain'">
+        <h2 class="title">{{ title }}</h2>
       </template>
       <!-- standard：标题栏 + 关闭 X -->
       <template v-else>
@@ -133,6 +138,10 @@ onMounted(() => {
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
   color: var(--text-highlight);
+}
+/* plain 标题用常态色（figma 27_导入：标题 = 文字/常态） */
+.app-modal.plain .title {
+  color: var(--text-normal);
 }
 .spacer {
   flex: 1;

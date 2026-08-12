@@ -1,10 +1,12 @@
 <script setup lang="ts">
-// 导入弹窗（03_UI 布局/09_导入弹窗）：三态标题（导入文件 / 导入文件夹 / 导入文件 / 文件夹）
-// + 层级单选组（仅含文件夹时显示）+ 来源单选组 + 按钮组；默认剔除层级 + 复制。
-// 选中"剪切原始文件"时提示文字变警示（PRD 05-01：弹窗文案必须明示"源文件将被移走"）。
+// 导入弹窗（figma 27_导入 §1 导入文件 / §2 导入文件夹）：AppModal plain 壳（320 宽 / padding 24 / gap 24），
+// 来源组（复制/剪切）在上、层级组（保留/剔除层级，仅含文件夹时显示）在下，双组时来源组带下分隔线。
+// 默认按稿选中态：复制 + 保留层级；提示文案"剪切导入有风险，谨慎选择"为稿定静态文案（含风险明示）。
 // 确认只发事件：导入走后台任务 + Channel 流式（异步不阻塞 UI），弹窗立即关闭。
 import { computed, ref } from "vue";
-import AppCheckbox from "./AppCheckbox.vue";
+import AppModal from "./AppModal.vue";
+import AppRadio from "./AppRadio.vue";
+import AppButton from "./AppButton.vue";
 import type { ImportDraft } from "../stores/content";
 
 const props = defineProps<{ draft: ImportDraft }>();
@@ -13,156 +15,71 @@ const emit = defineEmits<{
   cancel: [];
 }>();
 
-const structure = ref<"flatten" | "keep">("flatten");
+const structure = ref<"flatten" | "keep">("keep");
 const source = ref<"copy" | "move">("copy");
 
 const title = computed(
   () => ({ files: "导入文件", folder: "导入文件夹", mixed: "导入文件 / 文件夹" })[props.draft.kind],
 );
-const sourceTip = computed(() =>
-  source.value === "move"
-    ? "源文件将被移走，导入后原位置不再保留"
-    : "选择复制一份文件导入，或者剪切原始文件导入",
-);
+const showStructure = computed(() => props.draft.kind !== "files");
 </script>
 
 <template>
-  <div class="import-mask">
-    <!-- 选项态（09：368 宽 / padding 16 / gap 16；files 态去层级组高度自收缩） -->
-    <div class="import-card">
-      <h2 class="title">{{ title }}</h2>
-      <template v-if="draft.kind !== 'files'">
-        <p class="tip">剔除原始层级导入所有文件，或者保留层级导入</p>
-        <div class="radio-row">
-          <AppCheckbox
-            tone="dialog"
-            label="剔除原始层级"
-            :model-value="structure === 'flatten'"
-            @update:model-value="structure = 'flatten'"
-          />
-          <AppCheckbox
-            tone="dialog"
-            label="保留原始层级"
-            :model-value="structure === 'keep'"
-            @update:model-value="structure = 'keep'"
-          />
-        </div>
-      </template>
-      <p class="tip" :class="{ warn: source === 'move' }">{{ sourceTip }}</p>
+  <AppModal variant="plain" :title="title" class="import-dialog" @close="emit('cancel')">
+    <!-- 来源组（figma 27：标签 12 标签档 + 单选行 gap 24；双组时带下分隔线） -->
+    <div class="option-group" :class="{ divided: showStructure }">
+      <p class="tip">剪切导入有风险，谨慎选择</p>
       <div class="radio-row">
-        <AppCheckbox
-          tone="dialog"
-          label="复制一份文件"
-          :model-value="source === 'copy'"
-          @update:model-value="source = 'copy'"
-        />
-        <AppCheckbox
-          tone="dialog"
-          label="剪切原始文件"
-          :model-value="source === 'move'"
-          @update:model-value="source = 'move'"
-        />
-      </div>
-      <div class="actions">
-        <button class="btn primary" @click="emit('confirm', { structure, source })">确认导入</button>
-        <button class="btn secondary" @click="emit('cancel')">取消</button>
+        <AppRadio v-model="source" value="copy" label="复制" />
+        <AppRadio v-model="source" value="move" label="剪切" />
       </div>
     </div>
-  </div>
+    <!-- 层级组（仅含文件夹时显示） -->
+    <div v-if="showStructure" class="option-group">
+      <p class="tip">是否保留层级导入</p>
+      <div class="radio-row">
+        <AppRadio v-model="structure" value="keep" label="保留层级" />
+        <AppRadio v-model="structure" value="flatten" label="剔除层级" />
+      </div>
+    </div>
+    <template #actions>
+      <AppButton variant="primary" label="确认" @click="emit('confirm', { structure, source })" />
+      <AppButton variant="panel" label="取消" @click="emit('cancel')" />
+    </template>
+  </AppModal>
 </template>
 
 <style scoped>
-/* 遮罩：与 SetupWizard 一致（C1） */
-.import-mask {
-  position: absolute;
-  inset: 0;
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--c1-80);
+/* 内容定宽 272（figma 27：弹窗 320 = 272 + padding 24×2），撑出弹窗定宽 */
+.import-dialog :deep(.content) {
+  width: 272px;
 }
-/* 总容器（08_二级窗口通用规则）：宽度随最宽子项、上限 368，超出文字换行；
-   C3 / 1px border-1（inset）/ 圆角 8 / --shadow-pop */
-.import-card {
-  box-sizing: border-box;
-  width: fit-content;
-  max-width: 368px;
+/* 选项组：标签 + 单选行，组内 gap 12 */
+.option-group {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  padding: var(--space-32);
-  gap: var(--space-16);
-  background: var(--c3);
-  box-shadow:
-    var(--shadow-pop),
-    inset 0 0 0 1px var(--border-1);
-  border-radius: var(--radius-8);
+  gap: var(--space-12);
 }
-.title {
-  margin: 0;
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--font-icon-1);
+/* 双组时来源组带下分隔线（figma 27 §2：padding-bottom 12 + 1px 暗-悬停） */
+.option-group.divided {
+  padding-bottom: var(--space-12);
+  border-bottom: 1px solid var(--line-hover);
 }
-/* 提示文字：副文本 font-icon-3；超 368 上限换行（08 通用规则）；剪切选中时警示（--warning） */
+/* 提示标签：12 标签档 / 文字-标签色 */
 .tip {
   margin: 0;
-  max-width: 100%;
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
-  word-break: break-all;
+  font-size: var(--text-label-size);
+  line-height: var(--text-label-line);
+  color: var(--text-label);
 }
-.tip.warn {
-  color: var(--warning);
-}
-/* 单选框容器（09）：横向 / 间距 16 */
+/* 单选行：横向 gap 24 */
 .radio-row {
   display: flex;
   flex-direction: row;
-  gap: var(--space-16);
+  gap: var(--space-24);
 }
-/* 按钮组（09）：确认导入（主要）/ 取消（非主要），各 160×34，间距 16 */
-/* 按钮组（08 通用规则：右对齐） */
-.actions {
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-end;
-  gap: var(--space-16);
-  width: 100%;
-}
-.btn {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: var(--space-8) var(--space-16);
-  gap: var(--space-6);
-  height: 38px;
-  border: none;
-  border-radius: var(--radius-6);
-  cursor: pointer;
-  font-family: var(--font-family);
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--font-icon-1);
-}
-.btn.primary {
-  background: var(--brand-1);
-}
-.btn.primary:hover {
-  background: var(--brand-2);
-}
-.btn.secondary {
-  background: var(--c5);
-}
-.btn.secondary:hover {
-  background: var(--border-1);
-}
-.btn:disabled {
-  cursor: default;
-  opacity: 0.6;
+/* 按钮定宽 88（figma 27：确认/取消均 88×38，38 高由 AppButton large 保证） */
+.import-dialog :deep(.actions) .app-btn {
+  width: 88px;
 }
 </style>
