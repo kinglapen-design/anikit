@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 单选框（figma-css 01_按钮 1.5）：外圈 20×20 圆形（C4 底 + 暗-悬停边框，hover C5）；
-// 选中圆形 16×16 品牌色 + 亮-选中边框，中心缩放、带轻微过冲回弹（00_要求）；
+// 选中圆形 16×16 品牌色 + 亮-选中边框，中心缩放——弹出带轻微过冲回弹（00_要求）；
+// 收回（取消选中）不回弹、纯缓入快收（2026-08-12 用户：回弹缩小到一个点收得不干脆）。
 // 标题 常态档。v-model 值不等时点击选中（成组使用，每组一个 v-model 值）。
 import { computed } from "vue";
 
@@ -52,9 +53,12 @@ const checked = computed(() => model.value === props.value);
   background: var(--brand);
   box-shadow: inset 0 0 0 1px var(--line-active);
   transform: scale(0);
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* 收回（取消选中）：纯缓入、缩短时长，收得干脆不回弹 */
+  transition: transform 0.15s cubic-bezier(0.42, 0, 1, 1);
 }
 .app-radio.on .dot {
   transform: scale(1);
+  /* 弹出（选中）：过冲回弹（00_要求） */
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 </style>
