@@ -215,6 +215,7 @@ pub fn run() {
       commands::library::set_auto_import,
       commands::library::reorder_libraries,
       commands::library::delete_library,
+      commands::library::count_library_orphans,
       commands::doc_apps::detect_doc_apps,
       commands::settings::get_ui_settings,
       commands::settings::save_ui_settings,

@@ -185,17 +185,39 @@ pub async fn reorder_libraries(state: State<'_, AppState>, order: Vec<String>) -
   space::reorder_libraries(space, order).map_err(|e| e.to_string())
 }
 
-/// 删除资源库（3.2 删除×；确认弹窗在前端）：返回删除后剩余库名列表（按 libraryOrder 序），
-/// 前端据此决定切到剩余第一个库或回创建流程
+/// 统计库内孤儿素材数（2026-08-12 定案：删库确认弹窗提示"仅被该库引用的素材"数量用）。
+/// 孤儿 = 仅被该库引用的资产（引用口径见 core::space::library_orphans）；库不存在报中文错
 #[tauri::command]
-pub async fn delete_library(_app: AppHandle, state: State<'_, AppState>, name: String) -> Result<Vec<String>, String> {
-  apply_delete_library(&state, &name)
+pub async fn count_library_orphans(state: State<'_, AppState>, name: String) -> Result<u64, String> {
+  apply_count_orphans(&state, &name)
+}
+
+/// 统计实现（命令层薄壳，便于单测）：编排在命令层，孤儿判定在 core::space
+fn apply_count_orphans(state: &AppState, name: &str) -> Result<u64, String> {
+  let space =
+    state.space.lock().map_err(|e| e.to_string())?.clone().ok_or_else(|| "请先打开储存空间".to_string())?;
+  let orphans = space::library_orphans(&space.root, name).map_err(|e| e.to_string())?;
+  Ok(orphans.len() as u64)
+}
+
+/// 删除资源库（3.2 删除×；确认弹窗在前端）：返回删除后剩余库名列表（按 libraryOrder 序），
+/// 前端据此决定切到剩余第一个库或回创建流程。delete_orphans = true 时一并删除仅被该库引用
+/// 的孤儿素材实体（2026-08-12 定案：统一 assets 池默认保留，可选清理）
+#[tauri::command]
+pub async fn delete_library(
+  _app: AppHandle,
+  state: State<'_, AppState>,
+  name: String,
+  delete_orphans: bool,
+) -> Result<Vec<String>, String> {
+  apply_delete_library(&state, &name, delete_orphans)
 }
 
 /// 删除资源库的实现（命令层薄壳，便于单测）：删的是当前打开的库时先做关库收尾——
 /// 清动图解包队列 pending、清撤销双栈、state.library 置 None（收件箱不动，空间级共用）；
-/// 再整目录递归删除。库内数据文件删除不可恢复；素材实体保留在空间级 assets 池
-fn apply_delete_library(state: &AppState, name: &str) -> Result<Vec<String>, String> {
+/// 再整目录递归删除。库内数据文件删除不可恢复；素材实体默认保留在空间级 assets 池，
+/// delete_orphans = true 时孤儿素材实体的 info 文件夹一并从 assets 池递归删除
+fn apply_delete_library(state: &AppState, name: &str, delete_orphans: bool) -> Result<Vec<String>, String> {
   let is_current = state
     .library
     .lock()
@@ -211,7 +233,7 @@ fn apply_delete_library(state: &AppState, name: &str) -> Result<Vec<String>, Str
   }
   let mut guard = state.space.lock().map_err(|e| e.to_string())?;
   let space = guard.as_mut().ok_or_else(|| "请先打开储存空间".to_string())?;
-  space::delete_library(space, name).map_err(|e| e.to_string())
+  space::delete_library(space, name, delete_orphans).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -246,7 +268,7 @@ mod tests {
     }
     assert!(state.undo.lock().unwrap().state().can_undo, "删除前撤销栈非空");
 
-    let remaining = apply_delete_library(&state, "库A").unwrap();
+    let remaining = apply_delete_library(&state, "库A", false).unwrap();
     assert_eq!(remaining, vec!["库B"]);
     assert!(state.library.lock().unwrap().is_none(), "删当前库后 state.library 应置 None");
     assert!(!state.undo.lock().unwrap().state().can_undo, "删当前库应清撤销栈");
@@ -261,7 +283,7 @@ mod tests {
   #[test]
   fn delete_other_library_keeps_current() {
     let (_dir, state) = make_state();
-    let remaining = apply_delete_library(&state, "库B").unwrap();
+    let remaining = apply_delete_library(&state, "库B", false).unwrap();
     assert_eq!(remaining, vec!["库A"]);
     assert!(state.library.lock().unwrap().is_some(), "删非当前库不应动 state.library");
   }
@@ -270,7 +292,100 @@ mod tests {
   #[test]
   fn delete_missing_library_errors() {
     let (_dir, state) = make_state();
-    assert!(apply_delete_library(&state, "不存在").is_err());
+    assert!(apply_delete_library(&state, "不存在", false).is_err());
     assert!(state.library.lock().unwrap().is_some(), "删除失败不应动 state.library");
+  }
+
+  /// 造库引用关系辅助：写 folders.json items + recycle.json items，并在 assets 池建对应 info
+  /// （含原始文件，验证删除是递归的）。返回 assets 池路径便于断言
+  fn seed_library(
+    state: &AppState,
+    lib: &str,
+    folder_items: &[&str],
+    recycle_items: &[&str],
+  ) -> std::path::PathBuf {
+    use crate::core::models::*;
+    use crate::core::paths;
+    let guard = state.space.lock().unwrap();
+    let space = guard.as_ref().unwrap();
+    let lib_dir = space.root.join(lib);
+    let folders = FoldersFile {
+      version: DATA_VERSION,
+      folders: vec![Folder { id: "F01".into(), name: "夹".into(), parent: None, order: 0 }],
+      items: folder_items
+        .iter()
+        .map(|id| Placement { asset: id.to_string(), folder: "F01".into(), name: format!("{id}.fla"), order: 0, origin: true })
+        .collect(),
+    };
+    crate::core::json_io::write_json(&lib_dir.join(crate::core::library::FOLDERS_FILE), &folders).unwrap();
+    let recycle = RecycleFile {
+      version: DATA_VERSION,
+      items: recycle_items
+        .iter()
+        .map(|id| RecycleItem { asset: id.to_string(), placements: Vec::new(), deleted_at: "2026-08-12T00:00:00+08:00".into() })
+        .collect(),
+    };
+    crate::core::json_io::write_json(&lib_dir.join(crate::core::library::RECYCLE_FILE), &recycle).unwrap();
+    let assets = paths::assets_dir(&space.root);
+    for id in folder_items.iter().chain(recycle_items) {
+      let info = paths::info_dir(&assets, id);
+      std::fs::create_dir_all(&info).unwrap();
+      std::fs::write(info.join("原始.fla"), b"x").unwrap();
+    }
+    assets
+  }
+
+  /// 孤儿清理（2026-08-12 定案）：delete_orphans=true 删库后，共享资产 info 保留、
+  /// 仅被该库引用的孤儿 info 从 assets 池递归删除
+  #[test]
+  fn delete_orphans_removes_unique_keeps_shared() {
+    let (_dir, state) = make_state();
+    let assets = seed_library(&state, "库A", &["SHARED", "ONLY-A"], &[]);
+    seed_library(&state, "库B", &["SHARED"], &[]);
+
+    let remaining = apply_delete_library(&state, "库A", true).unwrap();
+    assert_eq!(remaining, vec!["库B"]);
+    assert!(!crate::core::paths::info_dir(&assets, "ONLY-A").exists(), "孤儿 info 应递归删除");
+    assert!(crate::core::paths::info_dir(&assets, "SHARED").is_dir(), "共享 info 应保留");
+  }
+
+  /// delete_orphans=false：保持现状，assets 池一概不动
+  #[test]
+  fn delete_without_orphans_keeps_all_info() {
+    let (_dir, state) = make_state();
+    let assets = seed_library(&state, "库A", &["SHARED", "ONLY-A"], &[]);
+    seed_library(&state, "库B", &["SHARED"], &[]);
+
+    apply_delete_library(&state, "库A", false).unwrap();
+    assert!(crate::core::paths::info_dir(&assets, "ONLY-A").is_dir(), "false 时孤儿 info 也不动");
+    assert!(crate::core::paths::info_dir(&assets, "SHARED").is_dir());
+  }
+
+  /// 回收站算引用：资产仅在被删库的 folders，但在另一库 recycle → 保留；
+  /// 被删库自己 recycle 里独有的 → 孤儿，一并删除
+  #[test]
+  fn recycle_reference_counts_as_reference() {
+    let (_dir, state) = make_state();
+    let assets = seed_library(&state, "库A", &["IN-OTHER-RECYCLE"], &["OWN-RECYCLE-ONLY"]);
+    seed_library(&state, "库B", &[], &["IN-OTHER-RECYCLE"]);
+
+    assert_eq!(apply_count_orphans(&state, "库A").unwrap(), 1, "他库回收站引用的不算孤儿");
+    apply_delete_library(&state, "库A", true).unwrap();
+    assert!(crate::core::paths::info_dir(&assets, "IN-OTHER-RECYCLE").is_dir(), "另一库回收站引用应保留");
+    assert!(!crate::core::paths::info_dir(&assets, "OWN-RECYCLE-ONLY").exists(), "本库回收站独有应删除");
+  }
+
+  /// 孤儿计数：差集口径（folders ∪ recycle − 其余库 folders ∪ recycle 并集）
+  #[test]
+  fn count_orphans_matches_difference_set() {
+    let (_dir, state) = make_state();
+    seed_library(&state, "库A", &["SHARED", "ONLY-1", "ONLY-2"], &["ONLY-3"]);
+    seed_library(&state, "库B", &["SHARED"], &[]);
+
+    assert_eq!(apply_count_orphans(&state, "库A").unwrap(), 3);
+    assert_eq!(apply_count_orphans(&state, "库B").unwrap(), 0, "库B 引用全是共享，无孤儿");
+    // 库不存在报中文错
+    let err = apply_count_orphans(&state, "不存在").unwrap_err();
+    assert!(err.contains("资源库"), "应报中文错：{err}");
   }
 }

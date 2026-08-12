@@ -6,9 +6,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use std::collections::HashSet;
+
 use crate::core::json_io::{read_json, write_json, DataError};
-use crate::core::library::{self, FOLDERS_FILE};
-use crate::core::models::SpaceFile;
+use crate::core::library::{self, FOLDERS_FILE, RECYCLE_FILE};
+use crate::core::models::{FoldersFile, RecycleFile, SpaceFile};
 use crate::core::paths;
 
 pub const SPACE_FILE: &str = "space.json";
@@ -136,15 +138,56 @@ pub fn reorder_libraries(space: &mut Space, order: Vec<String>) -> Result<Vec<St
   ordered_libraries(space)
 }
 
+/// 库引用的资产 ID 集（孤儿判定口径，2026-08-12 定案）：
+/// folders.json items[].asset ∪ recycle.json items[].asset —— 回收站里的条目也算引用
+/// （回收站资产实体未删，彻底删除才删 info）。recycle.json 缺失按空集读
+fn referenced_assets(lib_dir: &Path) -> Result<HashSet<String>, DataError> {
+  let folders: FoldersFile = read_json(&lib_dir.join(FOLDERS_FILE))?;
+  let mut ids: HashSet<String> = folders.items.iter().map(|p| p.asset.clone()).collect();
+  let recycle_path = lib_dir.join(RECYCLE_FILE);
+  if recycle_path.is_file() {
+    let recycle: RecycleFile = read_json(&recycle_path)?;
+    ids.extend(recycle.items.iter().map(|i| i.asset.clone()));
+  }
+  Ok(ids)
+}
+
+/// 孤儿资产集：仅被该库引用的资产 = 该库引用集 − 空间内其余库引用集并集（2026-08-12 定案）。
+/// 只读各库数据文件，不枚举 assets/（热路径纪律）；库不存在报 NotALibrary
+pub fn library_orphans(space_root: &Path, name: &str) -> Result<HashSet<String>, DataError> {
+  let lib_dir = space_root.join(name);
+  if !(lib_dir.is_dir() && lib_dir.join(FOLDERS_FILE).is_file()) {
+    return Err(DataError::NotALibrary);
+  }
+  let own = referenced_assets(&lib_dir)?;
+  let mut others: HashSet<String> = HashSet::new();
+  for other in list_libraries(space_root)? {
+    if other != name {
+      others.extend(referenced_assets(&space_root.join(other))?);
+    }
+  }
+  Ok(own.difference(&others).cloned().collect())
+}
+
 /// 删除资源库（3.2 删除×；确认弹窗在前端）：整个库目录递归删除，库内数据文件删除不可恢复；
-/// 素材实体保留在空间级 assets 池（本函数不碰 assets/）。从 library_order 移除后落盘（save_space 单写点），
-/// 返回删除后剩余库名列表（按 library_order 序）
-pub fn delete_library(space: &mut Space, name: &str) -> Result<Vec<String>, DataError> {
+/// 素材实体保留在空间级 assets 池。delete_orphans = true 时一并删除仅被该库引用的孤儿素材实体
+/// （2026-08-12 定案：必须先算孤儿集再删库目录——删后读不到该库的 folders.json / recycle.json；
+/// info 删除按 ID 经 core::paths 单点推导，不枚举 assets/）。
+/// 从 library_order 移除后落盘（save_space 单写点），返回删除后剩余库名列表（按 library_order 序）
+pub fn delete_library(space: &mut Space, name: &str, delete_orphans: bool) -> Result<Vec<String>, DataError> {
   let path = space.root.join(name);
   if !(path.is_dir() && path.join(FOLDERS_FILE).is_file()) {
     return Err(DataError::NotALibrary);
   }
+  let orphans = if delete_orphans { library_orphans(&space.root, name)? } else { HashSet::new() };
   fs::remove_dir_all(&path)?;
+  let assets = paths::assets_dir(&space.root);
+  for id in &orphans {
+    let info = paths::info_dir(&assets, id);
+    if info.is_dir() {
+      fs::remove_dir_all(&info)?;
+    }
+  }
   space.library_order.retain(|n| n != name);
   save_space(space)?;
   ordered_libraries(space)
@@ -329,7 +372,7 @@ mod tests {
     }
     space.library_order = vec!["库C".into(), "库A".into(), "库B".into()];
 
-    let remaining = delete_library(&mut space, "库A").unwrap();
+    let remaining = delete_library(&mut space, "库A", false).unwrap();
     assert_eq!(remaining, vec!["库C", "库B"]);
     assert!(!space.root.join("库A").exists(), "库目录应整体消失");
     assert_eq!(space.library_order, vec!["库C", "库B"]);
@@ -337,8 +380,8 @@ mod tests {
     assert_eq!(disk.library_order, vec!["库C", "库B"], "order 移除应落盘");
     assert!(paths::assets_dir(&space.root).is_dir(), "素材实体保留在 assets 池，不随删库动");
     // 不存在的库 / 普通目录都报错
-    assert!(matches!(delete_library(&mut space, "不存在"), Err(DataError::NotALibrary)));
+    assert!(matches!(delete_library(&mut space, "不存在", false), Err(DataError::NotALibrary)));
     fs::create_dir_all(space.root.join("普通目录")).unwrap();
-    assert!(matches!(delete_library(&mut space, "普通目录"), Err(DataError::NotALibrary)));
+    assert!(matches!(delete_library(&mut space, "普通目录", false), Err(DataError::NotALibrary)));
   }
 }
