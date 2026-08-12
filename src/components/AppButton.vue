@@ -4,7 +4,7 @@
 // size：large（padding 8/12）/ small（padding 4/8，带图标时 6/8 + 图标 12 + 标签字）；
 // 字档规则（figma）：大且无图标 = 标题档 700；小且有图标 = 标签档；其余 = 正文档；
 // hover：panel/primary 叠 暗-悬停（panel 实为 C5，按 figma 2.1/2.2 hover background C5）、sidebar 叠 暗-悬停，
-// 整个按钮下移 1px（2026-08-12 用户改定：原"标题/图标轻微下移"观感不佳作废；区分分块与按钮的意图不变）。
+// 整个按钮下移 3px / 0.1s（2026-08-12 用户改定：整钮下移；过慢的过渡走亚像素渲染文字抖动，加快 + 加距）。
 import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
 
@@ -54,11 +54,11 @@ const fontTier = computed(() => {
   flex: none;
   transition:
     background 0.15s ease,
-    transform 0.15s ease;
+    transform 0.1s ease;
 }
-/* hover：整个按钮下移 1px（2026-08-12 用户改定，原为 inner 下移） */
+/* hover：整个按钮下移 3px / 0.1s（2026-08-12 用户改定：快 + 多几像素，慢过渡文字抖动） */
 .app-btn:hover {
-  transform: translateY(1px);
+  transform: translateY(3px);
 }
 .app-btn.large {
   padding: var(--space-8) var(--space-12);
