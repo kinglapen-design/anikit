@@ -1,6 +1,6 @@
 //! 素材库结构：创建 / 校验 / 打开（PRD 01_储存空间、06-01）。
-//! 库目录布局：folders/tags/pins/recycle/recent 五个数据文件 + settings.json（库级设置）
-//! + backup/ cache/ vectors/ inbox/；素材实体在空间级 assets/ 池（{ID}.info 平铺，多库共池）。
+//! 库目录布局：folders/tags/pins/recycle/recent 五个数据文件 + backup/ cache/ vectors/；
+//! 素材实体在空间级 assets/ 池（{ID}.info 平铺，多库共池）；收件箱 inbox/ 为空间级共用（2026-08-12 用户定）。
 //! 内部路径全部相对化，整个空间可整体搬迁、换盘符不影响使用（PRD 06-01.1）。
 
 use std::collections::HashSet;
@@ -18,19 +18,14 @@ use crate::core::space::{self, Space};
 pub const BACKUP_DIR: &str = "backup";
 pub const CACHE_DIR: &str = "cache";
 pub const VECTORS_DIR: &str = "vectors";
-/// 收件箱（PRD 05-5.1：自动导入目录，过境语义、常态为空；subst 挂载与 notify 监听在阶段 3 实现）
-pub const INBOX_DIR: &str = "inbox";
 pub const FOLDERS_FILE: &str = "folders.json";
 pub const TAGS_FILE: &str = "tags.json";
 pub const PINS_FILE: &str = "pins.json";
 pub const RECYCLE_FILE: &str = "recycle.json";
 pub const RECENT_FILE: &str = "recent.json";
-/// 库级设置（PRD 01_储存空间-02：autoImport 等；单一写点 = 本模块）
-pub const SETTINGS_FILE: &str = "settings.json";
 
 /// 库根数据文件（均为备份对象，PRD 06-04）
-pub const ROOT_DATA_FILES: &[&str] =
-  &[FOLDERS_FILE, TAGS_FILE, PINS_FILE, RECYCLE_FILE, RECENT_FILE, SETTINGS_FILE];
+pub const ROOT_DATA_FILES: &[&str] = &[FOLDERS_FILE, TAGS_FILE, PINS_FILE, RECYCLE_FILE, RECENT_FILE];
 
 /// info 文件夹内的数据文件（备份对象；缩略图/波形图是缓存可重建，不备份；
 /// frames.json = 动图解包的逐帧 delay 清单，2026-07-26 定案持久化）
@@ -39,7 +34,7 @@ const INFO_DATA_FILES: &[&str] = &["metadata.json", "annotation.json", "notes.js
 /// 打开状态的素材库：数据 + 内存索引（运行期查询走内存，写操作先落盘再更新内存，PRD 06-03）
 #[allow(dead_code)] // tags / space_root 字段随阶段 7 标签业务 / 后续空间能力启用
 pub struct Library {
-  /// 库目录自身（5 数据文件 + settings.json + backup/cache/vectors/inbox）
+  /// 库目录自身（5 数据文件 + backup/cache/vectors）
   pub root: PathBuf,
   /// 所属储存空间根
   pub space_root: PathBuf,
@@ -50,7 +45,6 @@ pub struct Library {
   pub pins: PinsFile,
   pub recycle: RecycleFile,
   pub recent: RecentFile,
-  pub settings: LibrarySettingsFile,
   pub index: LibraryIndex,
   /// 已缓存系统格式图标的扩展名集（cache/thumbs/{ext}.webp，4.2）——视图层回退查内存集，免逐卡片 stat
   pub format_icons: HashSet<String>,
@@ -127,12 +121,12 @@ pub(crate) fn validate_library_name(name: &str) -> Result<(), DataError> {
 }
 
 /// 在储存空间内创建资源库（库目录名即资源库名）。要求空间根下无同名冲突；
-/// 已是资源库则提示改用打开。auto_import 写库级 settings.json（实际行为 2.6 接）。
-pub fn create(space: &Space, name: &str, auto_import: bool) -> Result<Library, DataError> {
+/// 已是资源库则提示改用打开。
+pub fn create(space: &Space, name: &str) -> Result<Library, DataError> {
   // 名称校验在 mkdir 之前，避免建出非法 / 半截目录
   validate_library_name(name)?;
-  // 库目录与空间级目录同名会撞结构（assets/workspace），直接拒绝
-  if [paths::ASSETS_DIR, space::WORKSPACE_DIR].contains(&name.to_ascii_lowercase().as_str()) {
+  // 库目录与空间级目录同名会撞结构（assets/workspace/inbox），直接拒绝
+  if [paths::ASSETS_DIR, space::WORKSPACE_DIR, space::INBOX_DIR].contains(&name.to_ascii_lowercase().as_str()) {
     return Err(DataError::NameInvalid("该名称为储存空间保留名，请换一个"));
   }
   let path = space.root.join(name);
@@ -143,7 +137,7 @@ pub fn create(space: &Space, name: &str, auto_import: bool) -> Result<Library, D
   if fs::read_dir(&path)?.next().is_some() {
     return Err(DataError::NotEmpty);
   }
-  for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR, INBOX_DIR] {
+  for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR] {
     fs::create_dir_all(path.join(dir))?;
   }
   write_json(&path.join(FOLDERS_FILE), &FoldersFile::new())?;
@@ -151,7 +145,6 @@ pub fn create(space: &Space, name: &str, auto_import: bool) -> Result<Library, D
   write_json(&path.join(PINS_FILE), &PinsFile::new())?;
   write_json(&path.join(RECYCLE_FILE), &RecycleFile::new())?;
   write_json(&path.join(RECENT_FILE), &RecentFile::new())?;
-  write_json(&path.join(SETTINGS_FILE), &LibrarySettingsFile::new(auto_import))?;
   log::info!("素材库已创建：{}", path.display());
   open(&space.root, &path)
 }
@@ -166,7 +159,7 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   validate(path)?;
   let assets_dir = paths::assets_dir(space_root);
   fs::create_dir_all(&assets_dir)?; // assets/ 缺失自愈补建（space::open 已补，此处双保险）
-  for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR, INBOX_DIR] {
+  for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR] {
     fs::create_dir_all(path.join(dir))?;
   }
   // 会话级缓存（2026-07-25 用户定）：tmp（冲突弹窗预览）/ previews（PSD 高清层）/ frames（序列帧+动图帧条小图）
@@ -187,7 +180,6 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   let pins: PinsFile = read_json(&path.join(PINS_FILE))?;
   let recycle: RecycleFile = read_json(&path.join(RECYCLE_FILE))?;
   let recent: RecentFile = read_json(&path.join(RECENT_FILE))?;
-  let settings = load_settings(path)?;
   let assets = load_assets(&assets_dir)?;
   // 打开自检（2026-07-25 用户反馈：手动删 assets/{ID}.info 后数量成永久错误）：
   // 剔除指向缺失 info 的 Placement（内存与磁盘同清，数量统计随索引重建归零）。
@@ -211,22 +203,9 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
     pins,
     recycle,
     recent,
-    settings,
     index,
     format_icons: scan_format_icons(path),
   })
-}
-
-/// 读库级 settings.json；文件缺失按默认值自愈补写（新结构 create 必写，缺失只可能来自手动删除）
-fn load_settings(root: &Path) -> Result<LibrarySettingsFile, DataError> {
-  let path = root.join(SETTINGS_FILE);
-  if path.is_file() {
-    return read_json(&path);
-  }
-  log::warn!("库级 settings.json 缺失，按默认值自愈补写：{}", root.display());
-  let settings = LibrarySettingsFile::default();
-  write_json(&path, &settings)?;
-  Ok(settings)
 }
 
 /// 扫描 cache/thumbs/*.webp 建格式图标内存集（4.2；缓存可重建，目录缺失 / 读取失败按空集处理）
@@ -284,12 +263,6 @@ pub fn save_pins(lib: &Library) -> Result<(), DataError> {
   write_json(&lib.root.join(PINS_FILE), &lib.pins)
 }
 
-/// settings.json 单一写点（01_开发规范 第 1 条）：全量保存库级设置（autoImport 等）
-#[allow(dead_code)] // 设置项命令随自动导入行为接入（2.6）启用
-pub fn save_settings(lib: &Library) -> Result<(), DataError> {
-  write_json(&lib.root.join(SETTINGS_FILE), &lib.settings)
-}
-
 /// 撤销 / 重做回滚后重载：盘上是事实来源——重读全部数据文件 + 重建内存索引（6.0）。
 /// 不触发备份 / 迁移 / 缓存清理（与 open 区分：回滚只是把内存同步回盘上现状）。
 pub fn reload(lib: &mut Library) -> Result<(), DataError> {
@@ -299,7 +272,6 @@ pub fn reload(lib: &mut Library) -> Result<(), DataError> {
   lib.pins = read_json(&root.join(PINS_FILE))?;
   lib.recycle = read_json(&root.join(RECYCLE_FILE))?;
   lib.recent = read_json(&root.join(RECENT_FILE))?;
-  lib.settings = load_settings(&root)?;
   let assets = load_assets(&lib.assets_dir)?;
   lib.index = LibraryIndex::build(&lib.folders, assets);
   Ok(())
@@ -329,8 +301,8 @@ pub fn unique_name(existing: &HashSet<String>, name: &str) -> String {
 /// 测试辅助：在 base 下建测试空间（测试空间/）+ 测试库（测试空间/测试库），返回打开状态的库
 #[cfg(test)]
 pub(crate) fn create_test(base: &Path) -> Library {
-  let space = space::create(base, "测试空间").unwrap();
-  create(&space, "测试库", false).unwrap()
+  let space = space::create(base, "测试空间", false).unwrap();
+  create(&space, "测试库").unwrap()
 }
 
 #[cfg(test)]
@@ -339,7 +311,7 @@ mod tests {
 
   /// 建测试空间并返回（空间, 空间根路径）
   fn make_space(dir: &Path) -> (Space, PathBuf) {
-    let space = space::create(dir, "空间").unwrap();
+    let space = space::create(dir, "空间", false).unwrap();
     let root = space.root.clone();
     (space, root)
   }
@@ -348,14 +320,16 @@ mod tests {
   fn create_initializes_full_structure() {
     let dir = tempfile::tempdir().unwrap();
     let (space, space_root) = make_space(dir.path());
-    let lib = create(&space, "我的素材库", false).unwrap();
+    let lib = create(&space, "我的素材库").unwrap();
     let root = space_root.join("我的素材库");
 
-    // 库目录 = 纯数据 + backup/cache/vectors/inbox（asstes 已上移空间级 assets/）
-    for d in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR, INBOX_DIR] {
+    // 库目录 = 纯数据 + backup/cache/vectors（assets/ 与 inbox/ 均在空间级）
+    for d in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR] {
       assert!(root.join(d).is_dir(), "缺目录 {d}");
     }
     assert!(!root.join("asstes").exists(), "库目录不应再有 asstes/");
+    assert!(!root.join("inbox").exists(), "库目录不应再有 inbox/（空间级共用）");
+    assert!(!root.join("settings.json").exists(), "库目录不应再有 settings.json（autoImport 已上移空间级）");
     for f in ROOT_DATA_FILES {
       assert!(root.join(f).is_file(), "缺数据文件 {f}");
     }
@@ -367,40 +341,13 @@ mod tests {
   }
 
   #[test]
-  fn create_writes_settings_with_auto_import() {
-    let dir = tempfile::tempdir().unwrap();
-    let (space, space_root) = make_space(dir.path());
-    let lib = create(&space, "库", true).unwrap();
-    assert!(lib.settings.auto_import);
-    let disk: LibrarySettingsFile = read_json(&space_root.join("库").join(SETTINGS_FILE)).unwrap();
-    assert_eq!(disk, LibrarySettingsFile::new(true));
-    // 单写点改写后落盘
-    let mut lib = lib;
-    lib.settings.auto_import = false;
-    save_settings(&lib).unwrap();
-    let disk: LibrarySettingsFile = read_json(&space_root.join("库").join(SETTINGS_FILE)).unwrap();
-    assert!(!disk.auto_import);
-  }
-
-  #[test]
-  fn open_heals_missing_settings_with_default() {
-    let dir = tempfile::tempdir().unwrap();
-    let (space, space_root) = make_space(dir.path());
-    create(&space, "库", true).unwrap();
-    fs::remove_file(space_root.join("库").join(SETTINGS_FILE)).unwrap();
-    let lib = open(&space_root, &space_root.join("库")).unwrap();
-    assert!(!lib.settings.auto_import, "缺失的 settings.json 按默认值自愈");
-    assert!(space_root.join("库").join(SETTINGS_FILE).is_file(), "自愈补写落盘");
-  }
-
-  #[test]
   fn create_rejects_non_empty_folder() {
     let dir = tempfile::tempdir().unwrap();
     let (space, space_root) = make_space(dir.path());
     let lib_dir = space_root.join("库");
     fs::create_dir_all(&lib_dir).unwrap();
     fs::write(lib_dir.join("随便一个文件.txt"), "hi").unwrap();
-    assert!(matches!(create(&space, "库", false), Err(DataError::NotEmpty)));
+    assert!(matches!(create(&space, "库"), Err(DataError::NotEmpty)));
   }
 
   #[test]
@@ -408,21 +355,21 @@ mod tests {
     let dir = tempfile::tempdir().unwrap();
     let (space, space_root) = make_space(dir.path());
     // 特殊符号 / 结尾点 / 系统保留名（Windows 文件夹命名规则）/ 空间级保留目录名
-    for name in ["bad:name", "bad|name", "lib.", "lib ", "CON", "com1", "Lpt9", "assets", "workspace"] {
-      let result = create(&space, name, false);
+    for name in ["bad:name", "bad|name", "lib.", "lib ", "CON", "com1", "Lpt9", "assets", "workspace", "inbox"] {
+      let result = create(&space, name);
       assert!(matches!(result, Err(DataError::NameInvalid(_))), "名称 {name} 应被拒绝");
       assert!(!space_root.join(name).join(FOLDERS_FILE).exists(), "名称 {name} 不应建出库");
     }
     // 合法中文名可用
-    assert!(create(&space, "我的素材", false).is_ok());
+    assert!(create(&space, "我的素材").is_ok());
   }
 
   #[test]
   fn create_rejects_existing_library() {
     let dir = tempfile::tempdir().unwrap();
     let (space, _) = make_space(dir.path());
-    create(&space, "库", false).unwrap();
-    assert!(matches!(create(&space, "库", false), Err(DataError::AlreadyLibrary)));
+    create(&space, "库").unwrap();
+    assert!(matches!(create(&space, "库"), Err(DataError::AlreadyLibrary)));
   }
 
   #[test]

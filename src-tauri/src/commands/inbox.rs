@@ -6,29 +6,39 @@
 use std::path::{Path, PathBuf};
 
 use tauri::ipc::Channel;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::adapters::{inbox_watch, shell_open};
 use crate::commands::import::{current_paths, spawn_import};
+use crate::commands::library::AppState;
 use crate::services::import::{ImportEvent, ImportOptions, SequenceMode, Source, Structure};
 use crate::services::inbox::{self, InboxEntry, INBOX_DIR};
+
+/// 短锁取当前空间根（收件箱目录锚点：inbox 空间级共用，2026-08-12 用户定）；无空间中文报错
+fn current_space_root(app: &AppHandle) -> Result<PathBuf, String> {
+  let state = app.state::<AppState>();
+  let guard = state.space.lock().map_err(|e| e.to_string())?;
+  guard.as_ref().map(|s| s.root.clone()).ok_or_else(|| "请先打开储存空间".to_string())
+}
 
 /// 磁盘实况快层快照（"工程文件"区块数据源；读失败按空列降级，不让单个坏条目拖垮整列）。
 /// 必须快：目录递归大小 / 占用先给 0 / false 占位，由后台 detail worker 经
 /// "inbox-disk-details" 事件补齐（前端收到后整体替换）
 #[tauri::command]
 pub fn list_inbox_snapshot(app: AppHandle) -> Result<Vec<InboxEntry>, String> {
-  let root = current_paths(&app)?.0;
+  let root = current_space_root(&app)?;
   Ok(inbox::snapshot_fast(&root))
 }
 
 /// 手动导入单个条目：移走入库（Move + Keep 层级；imported_from = "inbox" 维持渠道标记，
 /// 撞 hash 自动合并口径与自动导入一致）。占用条目禁止导入，返回中文人话；
-/// Channel 复用现有导入事件流（11_导入进度条 / 10_重复添加提示）
+/// Channel 复用现有导入事件流（11_导入进度条 / 10_重复添加提示）。
+/// 条目路径按空间根推导（收件箱空间级），导入目标仍是当前打开的库
 #[tauri::command]
 pub fn import_inbox_entry(app: AppHandle, name: String, on_event: Channel<ImportEvent>) -> Result<u64, String> {
+  let space_root = current_space_root(&app)?;
   let (root, assets_dir) = current_paths(&app)?;
-  let path = resolve_entry(&root.join(INBOX_DIR), &name)?;
+  let path = resolve_entry(&space_root.join(INBOX_DIR), &name)?;
   if !path.exists() {
     return Err(format!("「{name}」已不在收件箱，可能刚被移走或删除"));
   }
@@ -49,7 +59,7 @@ pub fn import_inbox_entry(app: AppHandle, name: String, on_event: Channel<Import
 /// 用系统默认程序打开条目（工程中查看 / 继续编辑）
 #[tauri::command]
 pub fn open_inbox_entry(app: AppHandle, name: String) -> Result<(), String> {
-  let root = current_paths(&app)?.0;
+  let root = current_space_root(&app)?;
   let path = resolve_entry(&root.join(INBOX_DIR), &name)?;
   if !path.exists() {
     return Err(format!("「{name}」已不在收件箱，可能刚被移走或删除"));
@@ -60,7 +70,7 @@ pub fn open_inbox_entry(app: AppHandle, name: String) -> Result<(), String> {
 /// 重命名条目（仅 inbox 下一级；同名冲突 / 占用返回中文人话）
 #[tauri::command]
 pub fn rename_inbox_entry(app: AppHandle, name: String, new_name: String) -> Result<(), String> {
-  let root = current_paths(&app)?.0;
+  let root = current_space_root(&app)?;
   let dir = root.join(INBOX_DIR);
   let from = resolve_entry(&dir, &name)?;
   let to = resolve_entry(&dir, &new_name)?;
@@ -79,7 +89,7 @@ pub fn rename_inbox_entry(app: AppHandle, name: String, new_name: String) -> Res
 /// 删除条目（文件 remove_file / 目录 remove_dir_all；占用等系统错误原样透传）
 #[tauri::command]
 pub fn delete_inbox_entry(app: AppHandle, name: String) -> Result<(), String> {
-  let root = current_paths(&app)?.0;
+  let root = current_space_root(&app)?;
   let path = resolve_entry(&root.join(INBOX_DIR), &name)?;
   if !path.exists() {
     return Ok(()); // 实况滞后、条目已不在磁盘，视作已删除

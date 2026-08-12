@@ -98,34 +98,15 @@ pub struct SpaceFile {
   pub name: String,
   /// 创建时间（RFC3339 本地时区，与 config 的 lastOpenedAt 同格式）
   pub created_at: String,
-}
-
-impl SpaceFile {
-  pub fn new(name: &str) -> Self {
-    Self { version: DATA_VERSION, name: name.to_string(), created_at: chrono::Local::now().to_rfc3339() }
-  }
-}
-
-// ---------- settings.json（库级设置，PRD 01_储存空间-02；实际行为 2.6 接） ----------
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LibrarySettingsFile {
-  pub version: u32,
-  /// 开启自动导入（初次打开向导第二步开关）
+  /// 自动导入开关（空间级设置，2026-08-12 用户定：inbox 空间级共用）；
+  /// default 保证旧 space.json（无此字段）可读
   #[serde(default)]
   pub auto_import: bool,
 }
 
-impl LibrarySettingsFile {
-  pub fn new(auto_import: bool) -> Self {
-    Self { version: DATA_VERSION, auto_import }
-  }
-}
-
-impl Default for LibrarySettingsFile {
-  fn default() -> Self {
-    Self::new(false)
+impl SpaceFile {
+  pub fn new(name: &str, auto_import: bool) -> Self {
+    Self { version: DATA_VERSION, name: name.to_string(), created_at: chrono::Local::now().to_rfc3339(), auto_import }
   }
 }
 

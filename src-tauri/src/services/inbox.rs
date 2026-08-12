@@ -1,9 +1,11 @@
-//! 收件箱服务（PRD 05-01，阶段 3.2 落地；2026-07-25 语义重定 4.4）：库内 inbox/ 目录的完整
-//! 生命周期——库打开 / 切换时 start（盘符挂载 + 文件监听 + 存量清点），库切换 / 退出时 stop。
+//! 收件箱服务（PRD 05-01，阶段 3.2 落地；2026-07-25 语义重定 4.4）：空间级 inbox/ 目录的完整
+//! 生命周期（2026-08-12 用户定：inbox 空间级共用，盘符挂载恒定不随切库变化）——
+//! 空间打开 / 自动导入开启时 start（盘符挂载 + 文件监听 + 存量清点），开关关闭 / 退出时 stop。
 //! Inbox = 工作中素材/模板快速入口，不是工程收纳器：**自动导入只放行白名单可视素材扩展名**
 //! （AUTO_IMPORT_EXTS，不反向枚举工程格式——枚举不完）；白名单以外留在磁盘不自动导入，
 //! 由"工程文件"区块做磁盘实况展示（snapshot，不建档不写库），用户右键手动导入（移走入库）。
-//! 就绪批次串行复用 3.1 导入管线：Keep（丢入的文件夹保留层级）+ Move（过境语义：
+//! 自动导入目标 = 当前打开的库（dispatch_loop 取库逻辑）：就绪批次串行复用 3.1 导入管线：
+//! Keep（丢入的文件夹保留层级）+ Move（过境语义：
 //! 导入后即移走、目录常态为空）；hash 冲突走"导入即建档"既有规则——挂起收集，
 //! 经 app.emit("inbox-import") 推给前端复用 11_导入进度条 / 10_重复添加提示。
 //! 磁盘实况热刷新：watcher 任何路径事件 → app.emit("inbox-fs-changed")（前端去抖重扫）。
@@ -12,7 +14,7 @@
 //! （递归大小、占用、shell 格式图标）由后台 detail worker 延迟 200ms 合并连发后计算，
 //! 经 app.emit("inbox-disk-details") 推前端整体替换。自动导入 failed 残留（move 阶段探测后又被锁住）
 //! 经 requeue_failed 重投监听等待队列，放手后自动重试。
-//! 全部失败（目录创建失败、盘符挂载失败、监听启动失败）记日志降级，不影响库打开。
+//! 全部失败（目录创建失败、盘符挂载失败、监听启动失败）记日志降级，不影响空间打开。
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -29,8 +31,8 @@ use crate::services::import::{FailedItem, ImportOptions, SequenceMode, Source, S
 use crate::services::import_task::run_import;
 use crate::services::thumbnail;
 
-/// 库内收件箱目录名
-pub const INBOX_DIR: &str = "inbox";
+/// 空间级收件箱目录名（单点在 core::space，创建 / 自愈与盘符挂载同锚点）
+pub use crate::core::space::INBOX_DIR;
 /// 前端监听事件名（负载 = ImportEvent，与导入 Channel 同一形状）
 pub const EVENT_NAME: &str = "inbox-import";
 /// 磁盘实况热刷新事件名（负载 = ()，watcher 任何路径事件触发，前端去抖重扫）
@@ -174,7 +176,7 @@ fn cached_icon_path(root: &Path, path: &Path) -> Option<String> {
 }
 
 /// 慢层用：生成 / 命中格式图标缓存（shell 调用只允许出现在 detail worker）；
-/// 缓存写在库 cache/thumbs 下，不在 inbox 监听范围内，天然不会递归触发 fs-changed
+/// 缓存写在空间根 cache/thumbs 下（收件箱空间级，图标缓存同锚点），不在 inbox 监听范围内，天然不会递归触发 fs-changed
 fn ensure_icon_path(root: &Path, path: &Path) -> Option<String> {
   let ext = ext_lower(path);
   thumbnail::ensure_format_icon(root, path, &ext)
@@ -201,7 +203,7 @@ fn schedule_details(app: &AppHandle, root: &Path) {
   });
 }
 
-/// 收件箱运行实例（存 AppState.inbox，随库打开 / 切换 / 退出重建）
+/// 收件箱运行实例（存 AppState.inbox，随空间打开 / 自动导入开关 / 退出启停）
 pub struct InboxHandle {
   stop: Arc<AtomicBool>,
   watch: Option<inbox_watch::WatchHandle>,
@@ -219,7 +221,7 @@ impl InboxHandle {
   }
 }
 
-/// 启动收件箱（库打开 / 切换后调用）：先停旧实例；任一部件失败记日志降级继续
+/// 启动收件箱（空间打开 / 自动导入开启后调用，root = 空间根）：先停旧实例；任一部件失败记日志降级继续
 pub fn start(app: &AppHandle, root: &Path) {
   stop(app);
   let dir = root.join(INBOX_DIR);
@@ -278,7 +280,7 @@ pub fn start(app: &AppHandle, root: &Path) {
   log::info!("收件箱已启动：{}（盘符 {:?}）", dir.display(), drive);
 }
 
-/// 停止收件箱（库切换 / 应用退出）：停监听 → 等派发线程排空 → 卸载盘符（幂等）
+/// 停止收件箱（自动导入关闭 / 应用退出）：停监听 → 等派发线程排空 → 卸载盘符（幂等）
 pub fn stop(app: &AppHandle) {
   let handle = app.state::<AppState>().inbox.lock().ok().and_then(|mut slot| slot.take());
   if let Some(mut h) = handle {
@@ -298,11 +300,11 @@ pub fn stop(app: &AppHandle) {
   sync_tray(app);
 }
 
-/// 托盘开关：已挂载 → 卸载；未挂载且有打开的库 → 重挂（用户手动卸过的场景）
+/// 托盘开关：已挂载 → 卸载；未挂载且有打开的空间 → 重挂（用户手动卸过的场景）
 pub fn toggle_drive(app: &AppHandle) {
   let state = app.state::<AppState>();
-  // 先取库 root（短锁），再动 inbox 锁，避免嵌套
-  let root = state.library.lock().ok().and_then(|g| g.as_ref().map(|l| l.root.clone()));
+  // 先取空间 root（短锁，收件箱空间级共用），再动 inbox 锁，避免嵌套
+  let root = state.space.lock().ok().and_then(|g| g.as_ref().map(|s| s.root.clone()));
   if let Ok(mut slot) = state.inbox.lock() {
     if let Some(h) = slot.as_mut() {
       match h.drive {
@@ -318,7 +320,7 @@ pub fn toggle_drive(app: &AppHandle) {
             Ok(letter) => h.drive = Some(letter),
             Err(e) => log::error!("收件箱盘符挂载失败：{e}"),
           },
-          None => log::debug!("未打开素材库，收件箱盘符开关忽略"),
+          None => log::debug!("未打开储存空间，收件箱盘符开关忽略"),
         },
       }
     }
@@ -326,7 +328,8 @@ pub fn toggle_drive(app: &AppHandle) {
   sync_tray(app);
 }
 
-/// 派发循环：逐批跑导入；stop 置位或通道关闭即退出。
+/// 派发循环：逐批跑导入；stop 置位或通道关闭即退出。root = 空间根（收件箱锚点，failed 重投判定用）；
+/// 导入目标 = 当前打开的库（库 root / assets 池逐批短锁取）。
 /// 白名单过滤（2026-07-25 语义重定）：就绪条目逐个判定——文件仅白名单扩展名、
 /// 目录仅递归全部文件白名单才进导入；其余跳过留在磁盘，由"工程文件"实况区块展示等手动导入
 fn dispatch_loop(app: AppHandle, root: PathBuf, rx: mpsc::Receiver<Vec<PathBuf>>, stop: Arc<AtomicBool>) {
@@ -351,16 +354,16 @@ fn dispatch_loop(app: AppHandle, root: PathBuf, rx: mpsc::Receiver<Vec<PathBuf>>
       sequence_mode: SequenceMode::Scatter,
     };
     let app_ev = app.clone();
-    // assets 池目录随当前库取（短锁；库已关闭则本批跳过，保持与 with_lib 报错同义的"不导入"）
-    let assets_dir = state.library.lock().ok().and_then(|g| g.as_ref().map(|l| l.assets_dir.clone()));
-    let Some(assets_dir) = assets_dir else {
+    // 库 root（cache 等库级路径）与 assets 池目录随当前库取（短锁；库已关闭则本批跳过，保持与 with_lib 报错同义的"不导入"）
+    let lib_paths = state.library.lock().ok().and_then(|g| g.as_ref().map(|l| (l.root.clone(), l.assets_dir.clone())));
+    let Some((lib_root, assets_dir)) = lib_paths else {
       log::warn!("收件箱自动导入跳过：当前无打开的素材库");
       continue;
     };
     // 收件箱导入无 UI 取消入口（批次通常很小），cancel 恒 false
     let outcome = run_import(
       &state.library,
-      root.clone(),
+      lib_root,
       assets_dir,
       opts,
       move |ev| {
@@ -401,7 +404,7 @@ pub fn requeue_failed(app: &AppHandle, root: &Path, failed: &[FailedItem]) {
   };
 }
 
-/// 同步托盘菜单项：勾选态 + 盘符标注（无库 / 未挂载显示"未挂载"）
+/// 同步托盘菜单项：勾选态 + 盘符标注（收件箱未启动 / 未挂载显示"未挂载"）
 fn sync_tray(app: &AppHandle) {
   let drive = app.state::<AppState>().inbox.lock().ok().and_then(|slot| slot.as_ref().and_then(|h| h.drive));
   let Some(items) = app.try_state::<crate::TrayItems>() else { return };

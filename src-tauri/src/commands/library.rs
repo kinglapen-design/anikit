@@ -17,7 +17,7 @@ pub struct AppState {
   pub library: Mutex<Option<Library>>,
   /// 导入任务取消标记：task_id → 置位即取消（任务结束从表中移除）
   pub imports: Mutex<std::collections::HashMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>>>,
-  /// 收件箱运行实例（3.2）：随库打开 / 切换 / 退出由 services::inbox 重建
+  /// 收件箱运行实例（3.2）：空间级共用，随空间打开 / 自动导入开关 / 退出由 services::inbox 启停
   pub inbox: Mutex<Option<crate::services::inbox::InboxHandle>>,
   /// 撤销 / 重做双栈（6.0）：会话级不持久化，库切换清空
   pub undo: Mutex<crate::core::undo::UndoManager>,
@@ -28,10 +28,12 @@ pub struct AppState {
 pub struct SpaceInfo {
   pub name: String,
   pub path: String,
+  /// 自动导入开关（空间级设置 space.json，2026-08-12 用户定）：关 = 不启动收件箱（不挂载盘符、不监听）
+  pub auto_import: bool,
 }
 
 fn space_info(space: &Space) -> SpaceInfo {
-  SpaceInfo { name: space.name.clone(), path: space.root.to_string_lossy().into_owned() }
+  SpaceInfo { name: space.name.clone(), path: space.root.to_string_lossy().into_owned(), auto_import: space.auto_import }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -41,8 +43,6 @@ pub struct LibraryInfo {
   pub path: String,
   pub asset_count: usize,
   pub folder_count: usize,
-  /// 自动导入开关（库级 settings.json，2.1）：关 = 不启动收件箱（不挂载盘符、不监听）
-  pub auto_import: bool,
 }
 
 fn to_info(lib: &Library) -> LibraryInfo {
@@ -51,35 +51,35 @@ fn to_info(lib: &Library) -> LibraryInfo {
     path: lib.root.to_string_lossy().into_owned(),
     asset_count: lib.index.assets.len(),
     folder_count: lib.index.folders.len(),
-    auto_import: lib.settings.auto_import,
   }
 }
 
-/// 空间进入打开状态：更新应用状态 + 记录到全局配置最近列表
-fn activate_space(state: &State<AppState>, space: Space) -> Result<SpaceInfo, String> {
+/// 空间进入打开状态：更新应用状态 + 记录到全局配置最近列表 + 按空间级 autoImport 启停收件箱
+/// （2026-08-12 用户定：inbox 空间级共用，盘符挂载恒定指向空间 inbox/、不随切库变化；
+/// 关 = 防御性停止，换掉开着收件箱的旧空间时卸干净）
+fn activate_space(app: &AppHandle, state: &State<AppState>, space: Space) -> Result<SpaceInfo, String> {
   let info = space_info(&space);
+  let root = space.root.clone();
+  let auto_import = space.auto_import;
   *state.space.lock().map_err(|e| e.to_string())? = Some(space);
   config::record_space_open(&info.name, &info.path).map_err(|e| e.to_string())?;
-  Ok(info)
-}
-
-/// 库进入打开状态：更新应用状态 + 记录到全局配置最近列表 + 按库级设置启停收件箱（3.2 / 2.1：
-/// auto_import 关 = 不挂载盘符、不监听；切到关闭的库时停掉旧库收件箱）；
-/// 库切换清空动图解包队列 pending（任务绑定 assets 池，切库后无意义，2026-07-26）
-/// 与撤销双栈（6.0：会话级不持久化，栈内快照绑定旧库路径）
-fn activate(app: &AppHandle, state: &State<AppState>, lib: Library) -> Result<LibraryInfo, String> {
-  crate::services::unpack_queue::clear_pending();
-  state.undo.lock().map_err(|e| e.to_string())?.clear();
-  let info = to_info(&lib);
-  let root = lib.root.clone();
-  let auto_import = lib.settings.auto_import;
-  *state.library.lock().map_err(|e| e.to_string())? = Some(lib);
-  config::record_library_open(&info.name, &info.path).map_err(|e| e.to_string())?;
   if auto_import {
     crate::services::inbox::start(app, &root);
   } else {
     crate::services::inbox::stop(app);
   }
+  Ok(info)
+}
+
+/// 库进入打开状态：更新应用状态 + 记录到全局配置最近列表（切库不动收件箱——空间级共用）；
+/// 库切换清空动图解包队列 pending（任务绑定 assets 池，切库后无意义，2026-07-26）
+/// 与撤销双栈（6.0：会话级不持久化，栈内快照绑定旧库路径）
+fn activate(state: &State<AppState>, lib: Library) -> Result<LibraryInfo, String> {
+  crate::services::unpack_queue::clear_pending();
+  state.undo.lock().map_err(|e| e.to_string())?.clear();
+  let info = to_info(&lib);
+  *state.library.lock().map_err(|e| e.to_string())? = Some(lib);
+  config::record_library_open(&info.name, &info.path).map_err(|e| e.to_string())?;
   Ok(info)
 }
 
@@ -89,18 +89,24 @@ fn current_space(state: &State<AppState>) -> Result<Space, String> {
 }
 
 /// 在选定位置创建储存空间（前端系统对话框选定父目录后调用；文件夹名即空间名）。
-/// 同名位置已是合法空间则视为打开（PRD 01_储存空间-3.1）
+/// 同名位置已是合法空间则视为打开（PRD 01_储存空间-3.1）。auto_import 写 space.json（空间级设置）
 #[tauri::command]
-pub async fn create_space(state: State<'_, AppState>, parent_path: String, name: String) -> Result<SpaceInfo, String> {
-  let space = space::create(Path::new(&parent_path), &name).map_err(|e| e.to_string())?;
-  activate_space(&state, space)
+pub async fn create_space(
+  app: AppHandle,
+  state: State<'_, AppState>,
+  parent_path: String,
+  name: String,
+  auto_import: bool,
+) -> Result<SpaceInfo, String> {
+  let space = space::create(Path::new(&parent_path), &name, auto_import).map_err(|e| e.to_string())?;
+  activate_space(&app, &state, space)
 }
 
 /// 打开储存空间（打开前校验 space.json，不是 AniKit 储存空间的文件夹会被拒绝）
 #[tauri::command]
-pub async fn open_space(state: State<'_, AppState>, path: String) -> Result<SpaceInfo, String> {
+pub async fn open_space(app: AppHandle, state: State<'_, AppState>, path: String) -> Result<SpaceInfo, String> {
   let space = space::open(Path::new(&path)).map_err(|e| e.to_string())?;
-  activate_space(&state, space)
+  activate_space(&app, &state, space)
 }
 
 /// 当前打开的储存空间；未打开返回 null（前端据此决定是否进入初次打开向导）
@@ -119,25 +125,20 @@ pub async fn list_space_libraries(state: State<'_, AppState>) -> Result<Vec<Stri
   }
 }
 
-/// 在当前储存空间内创建资源库（文件夹名即资源库名）；auto_import 写库级 settings.json
+/// 在当前储存空间内创建资源库（文件夹名即资源库名）
 #[tauri::command]
-pub async fn create_library(
-  app: AppHandle,
-  state: State<'_, AppState>,
-  name: String,
-  auto_import: bool,
-) -> Result<LibraryInfo, String> {
+pub async fn create_library(state: State<'_, AppState>, name: String) -> Result<LibraryInfo, String> {
   let space = current_space(&state)?;
-  let lib = library::create(&space, &name, auto_import).map_err(|e| e.to_string())?;
-  activate(&app, &state, lib)
+  let lib = library::create(&space, &name).map_err(|e| e.to_string())?;
+  activate(&state, lib)
 }
 
 /// 在当前储存空间内按名打开资源库（打开前校验结构；旧版库结构明确报错引导新建）
 #[tauri::command]
-pub async fn open_library(app: AppHandle, state: State<'_, AppState>, name: String) -> Result<LibraryInfo, String> {
+pub async fn open_library(state: State<'_, AppState>, name: String) -> Result<LibraryInfo, String> {
   let space = current_space(&state)?;
   let lib = library::open(&space.root, &space.root.join(&name)).map_err(|e| e.to_string())?;
-  activate(&app, &state, lib)
+  activate(&state, lib)
 }
 
 /// 当前打开的素材库；未打开返回 null
@@ -147,16 +148,17 @@ pub fn get_current_library(state: State<AppState>) -> Option<LibraryInfo> {
 }
 
 /// 开关自动导入（2.1：向导第二步初值 / 快速访问"自动导入"确认弹窗开启）：
-/// 库级 settings.json 单写点；开 = 启动收件箱（盘符挂载 + 监听），关 = 停止收件箱（卸载盘符）
+/// 空间级设置（space.json 单写点，2026-08-12 用户定：inbox 空间级共用）；
+/// 开 = 启动收件箱（盘符挂载 + 监听空间 inbox/），关 = 停止收件箱（卸载盘符）
 #[tauri::command]
-pub async fn set_auto_import(app: AppHandle, state: State<'_, AppState>, enabled: bool) -> Result<LibraryInfo, String> {
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开资源库".to_string())?;
-  lib.settings.auto_import = enabled;
-  library::save_settings(lib).map_err(|e| e.to_string())?;
-  let info = to_info(lib);
-  let root = lib.root.clone();
-  drop(guard); // 收件箱启停走 AppState 锁，先放库锁防交叉
+pub async fn set_auto_import(app: AppHandle, state: State<'_, AppState>, enabled: bool) -> Result<SpaceInfo, String> {
+  let mut guard = state.space.lock().map_err(|e| e.to_string())?;
+  let space = guard.as_mut().ok_or_else(|| "请先打开储存空间".to_string())?;
+  space.auto_import = enabled;
+  space::save_space(space).map_err(|e| e.to_string())?;
+  let info = space_info(space);
+  let root = space.root.clone();
+  drop(guard); // 收件箱启停走 AppState 锁，先放空间锁防交叉
   if enabled {
     crate::services::inbox::start(&app, &root);
   } else {
