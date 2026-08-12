@@ -93,8 +93,8 @@ pub struct InboxEntry {
   /// 是否被占用（与自动入库同口径的可移走探测；占用条目禁止手动导入；
   /// 快层快照中目录先给 false 过渡态，以 details 事件合并后为准）
   pub occupied: bool,
-  /// 系统格式图标缓存绝对路径（cache/thumbs/{ext}.webp；目录恒 None，
-  /// 快层只命中已缓存、details 层现场生成；None 时前端回退扩展名角标）
+  /// 系统格式图标缓存绝对路径（库级 cache/thumbs/{ext}.webp，与导入管线共用同一份缓存；
+  /// 目录恒 None，快层只命中已缓存、details 层现场生成；无当前库或 None 时前端回退扩展名角标）
   pub icon_path: Option<String>,
 }
 
@@ -102,8 +102,9 @@ pub struct InboxEntry {
 /// 文件大小直接取元数据、占用做单文件探测（都便宜）；目录的递归大小 / 占用探测贵，
 /// 先给 0 / false 占位，由后台 details 补齐（前端收到 inbox-disk-details 后整体替换）。
 /// 目录 auto_importable 仍按"递归扩展名全白名单"判定（只读目录项，不打开文件内容、不递归算大小）。
-/// iconPath 只命中已缓存的格式图标（只判存在，绝不触发 shell——shell 调用只允许在 detail worker）。
-pub fn snapshot_fast(root: &Path) -> Vec<InboxEntry> {
+/// iconPath 只命中已缓存的格式图标（只判存在，绝不触发 shell——shell 调用只允许在 detail worker）；
+/// 缓存在库级 cache/thumbs，cache_root = 当前库 root（无当前库时图标恒 None，前端回退扩展名角标）。
+pub fn snapshot_fast(root: &Path, cache_root: Option<&Path>) -> Vec<InboxEntry> {
   let dir = root.join(INBOX_DIR);
   let mut out = Vec::new();
   let Ok(entries) = std::fs::read_dir(&dir) else { return out };
@@ -118,7 +119,7 @@ pub fn snapshot_fast(root: &Path) -> Vec<InboxEntry> {
       modified_at: modified_millis(&meta),
       auto_importable: entry_auto_importable(&path),
       occupied: !is_dir && !inbox_watch::entry_movable(&path),
-      icon_path: if is_dir { None } else { cached_icon_path(root, &path) },
+      icon_path: if is_dir { None } else { cached_icon_path(cache_root, &path) },
     });
   }
   sort_entries(&mut out);
@@ -126,8 +127,9 @@ pub fn snapshot_fast(root: &Path) -> Vec<InboxEntry> {
 }
 
 /// 慢层完整快照（detail worker 后台算）：递归大小 + 全部文件占用探测 + 格式图标
-/// 现场生成（复用 4.2 按格式缓存，shell 取系统图标只写 cache/thumbs 不写 info）。
-pub fn snapshot_details(root: &Path) -> Vec<InboxEntry> {
+/// 现场生成（复用 4.2 按格式缓存，shell 取系统图标只写库级 cache/thumbs 不写 info；
+/// cache_root = 当前库 root，无当前库时不生成、图标恒 None）。
+pub fn snapshot_details(root: &Path, cache_root: Option<&Path>) -> Vec<InboxEntry> {
   let dir = root.join(INBOX_DIR);
   let mut out = Vec::new();
   let Ok(entries) = std::fs::read_dir(&dir) else { return out };
@@ -142,7 +144,7 @@ pub fn snapshot_details(root: &Path) -> Vec<InboxEntry> {
       modified_at: modified_millis(&meta),
       auto_importable: entry_auto_importable(&path),
       occupied: !inbox_watch::entry_movable(&path),
-      icon_path: if is_dir { None } else { ensure_icon_path(root, &path) },
+      icon_path: if is_dir { None } else { ensure_icon_path(cache_root, &path) },
     });
   }
   sort_entries(&mut out);
@@ -169,16 +171,18 @@ fn ext_lower(path: &Path) -> String {
   path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase()
 }
 
-/// 快层用：格式图标已缓存才给路径（只判存在，不触发 shell）
-fn cached_icon_path(root: &Path, path: &Path) -> Option<String> {
-  let dest = thumbnail::format_icon_path(root, &ext_lower(path));
+/// 快层用：格式图标已缓存才给路径（只判存在，不触发 shell）；无当前库（cache_root None）恒 None
+fn cached_icon_path(cache_root: Option<&Path>, path: &Path) -> Option<String> {
+  let dest = thumbnail::format_icon_path(cache_root?, &ext_lower(path));
   dest.is_file().then(|| dest.to_string_lossy().into_owned())
 }
 
 /// 慢层用：生成 / 命中格式图标缓存（shell 调用只允许出现在 detail worker）；
-/// 缓存写在空间根 cache/thumbs 下（收件箱空间级，图标缓存同锚点），不在 inbox 监听范围内，天然不会递归触发 fs-changed
-fn ensure_icon_path(root: &Path, path: &Path) -> Option<String> {
+/// 缓存写在库级 cache/thumbs 下（与导入管线共用同一份缓存，cache_root = 当前库 root；
+/// 无当前库不生成恒 None），不在 inbox 监听范围内，天然不会递归触发 fs-changed
+fn ensure_icon_path(cache_root: Option<&Path>, path: &Path) -> Option<String> {
   let ext = ext_lower(path);
+  let root = cache_root?;
   thumbnail::ensure_format_icon(root, path, &ext)
     .then(|| thumbnail::format_icon_path(root, &ext).to_string_lossy().into_owned())
 }
@@ -194,7 +198,10 @@ fn schedule_details(app: &AppHandle, root: &Path) {
   let root = root.to_path_buf();
   std::thread::spawn(move || {
     std::thread::sleep(DETAIL_DELAY);
-    let details = snapshot_details(&root);
+    // 图标缓存锚点 = 当前库 root（计算时短锁取；无当前库则本拍图标恒 None，不生成缓存）
+    let cache_root =
+      app.state::<AppState>().library.lock().ok().and_then(|g| g.as_ref().map(|l| l.root.clone()));
+    let details = snapshot_details(&root, cache_root.as_deref());
     // 先放行标记再推事件：计算期间的变化靠下一次 fs-changed 再起一拍
     DETAIL_RUNNING.store(false, Ordering::SeqCst);
     if let Err(e) = app.emit(DETAILS_EVENT, details) {

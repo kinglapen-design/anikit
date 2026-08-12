@@ -27,7 +27,10 @@ fn current_space_root(app: &AppHandle) -> Result<PathBuf, String> {
 #[tauri::command]
 pub fn list_inbox_snapshot(app: AppHandle) -> Result<Vec<InboxEntry>, String> {
   let root = current_space_root(&app)?;
-  Ok(inbox::snapshot_fast(&root))
+  // 格式图标缓存锚点 = 当前库 root（短锁取；无当前库时图标恒 None，前端回退扩展名角标）
+  let cache_root =
+    app.state::<AppState>().library.lock().ok().and_then(|g| g.as_ref().map(|l| l.root.clone()));
+  Ok(inbox::snapshot_fast(&root, cache_root.as_deref()))
 }
 
 /// 手动导入单个条目：移走入库（Move + Keep 层级；imported_from = "inbox" 维持渠道标记，
@@ -155,7 +158,7 @@ mod tests {
     std::fs::write(dir.join("混夹/a.png"), "1").unwrap();
     std::fs::write(dir.join("混夹/工程.fla"), "2").unwrap();
 
-    let list = inbox::snapshot_fast(dir.parent().unwrap());
+    let list = inbox::snapshot_fast(dir.parent().unwrap(), None);
     let by_name = |n: &str| list.iter().find(|e| e.name == n).unwrap();
     assert!(by_name("图.PNG").auto_importable);
     assert!(!by_name("工程.fla").auto_importable);
@@ -182,7 +185,7 @@ mod tests {
     std::fs::write(dir.join("夹/a.png"), "1").unwrap();
     std::fs::write(dir.join("夹/子/b.psd"), "12").unwrap();
 
-    let list = inbox::snapshot_details(dir.parent().unwrap());
+    let list = inbox::snapshot_details(dir.parent().unwrap(), None);
     let by_name = |n: &str| list.iter().find(|e| e.name == n).unwrap();
     assert_eq!(by_name("夹").size, 3);
     assert!(by_name("夹").is_dir);
@@ -190,22 +193,31 @@ mod tests {
   }
 
   /// 格式图标分层：快层只命中已缓存（不触发 shell，未缓存 None）；
-  /// details 生成缓存后快层再扫即命中（shell 仅 Windows 可用，测试同）
+  /// details 生成缓存后快层再扫即命中（shell 仅 Windows 可用，测试同）；
+  /// 缓存锚点 = 库级 cache/thumbs（cache_root），无当前库（None）不生成、不污染空间目录
   #[cfg(windows)]
   #[test]
   fn snapshot_icon_path_fast_cached_only_details_generates() {
     let (_tmp, dir) = harness();
     let root = dir.parent().unwrap();
+    let lib = root.join("库");
+    std::fs::create_dir_all(&lib).unwrap();
     std::fs::write(dir.join("图.png"), "1234").unwrap();
 
-    let list = inbox::snapshot_fast(root);
+    // 无当前库：details 不生成图标缓存，空间根不出 cache/
+    let no_lib = inbox::snapshot_details(root, None);
+    assert!(no_lib.iter().all(|e| e.icon_path.is_none()), "无当前库时图标恒 None");
+    assert!(!root.join("cache").exists(), "无当前库不应在空间根建 cache/");
+
+    let list = inbox::snapshot_fast(root, Some(&lib));
     assert!(list.iter().all(|e| e.icon_path.is_none()), "未缓存时快层不触发 shell");
 
-    let details = inbox::snapshot_details(root);
+    let details = inbox::snapshot_details(root, Some(&lib));
     let icon = details.iter().find(|e| e.name == "图.png").unwrap().icon_path.as_ref().unwrap();
     assert!(std::path::Path::new(icon).is_file(), "details 应生成格式图标缓存");
+    assert!(icon.starts_with(&lib.to_string_lossy().to_string()), "图标缓存应落在库级 cache/thumbs");
 
-    let list2 = inbox::snapshot_fast(root);
+    let list2 = inbox::snapshot_fast(root, Some(&lib));
     let hit = list2.iter().find(|e| e.name == "图.png").unwrap().icon_path.as_ref().unwrap();
     assert_eq!(hit, icon, "缓存生成后快层应命中同一路径");
   }
