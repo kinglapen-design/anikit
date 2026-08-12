@@ -31,21 +31,3 @@ export async function ensureDocApps(): Promise<void> {
     console.warn("新建文档软件检测失败", e);
   }
 }
-
-// 浏览器检测（2.1 向导第三步占位图标，2026-08-12 用户定）：固定安装路径探测 + exe 图标提取
-export const browsers = reactive({
-  loaded: false,
-  apps: [] as DocAppInfo[], // id ∈ chrome / firefox / edge
-});
-
-// 幂等加载（向导第三步进入时调用一次）
-export async function ensureBrowsers(): Promise<void> {
-  if (browsers.loaded) return;
-  browsers.loaded = true;
-  try {
-    browsers.apps = await invoke<DocAppInfo[]>("detect_browsers");
-  } catch (e) {
-    browsers.loaded = false;
-    console.warn("浏览器检测失败", e);
-  }
-}

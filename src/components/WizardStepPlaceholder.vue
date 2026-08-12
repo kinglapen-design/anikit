@@ -1,25 +1,24 @@
 <script setup lang="ts">
 // 向导第三 / 四步（38 稿）：浏览器扩展 / 桥接插件安装——后续版本（PRD 01_储存空间 3.1）。
-// 占位图标真实化（2026-08-12 用户定）：系统提取的浏览器 / Adobe 主程序图标（PNG data URL），
-// 默认压暗（grayscale + brightness），悬停变彩色，点击无反应（功能后续版本）；
-// 未安装 / 提取失败回退 C1 占位块。文字提示行保留。
-export interface PlaceholderItem {
-  id: string;
-  icon: string | null;
+// 图标 = 用户导出的 on/off 双态 SVG（01_icon-default）：默认 off 暗态，悬停 on 彩色
+//（2026-08-12 用户定），点击无反应（功能后续版本）。
+import AppIcon from "./AppIcon.vue";
+
+export interface PlaceholderIcon {
+  off: string;
+  on: string;
 }
 
-withDefaults(defineProps<{ text: string; items?: PlaceholderItem[] }>(), { items: undefined });
+withDefaults(defineProps<{ text: string; icons?: PlaceholderIcon[] }>(), { icons: undefined });
 </script>
 
 <template>
   <div class="step-placeholder">
     <div class="blocks">
-      <template v-if="items && items.length > 0">
-        <span v-for="it in items" :key="it.id" class="block" :class="{ real: it.icon }">
-          <img v-if="it.icon" :src="it.icon" class="icon" :alt="it.id" draggable="false" />
-        </span>
-      </template>
-      <span v-else v-for="i in 3" :key="i" class="block" />
+      <span v-for="it in icons ?? []" :key="it.off" class="block">
+        <AppIcon :name="it.off" :size="48" class="ic off" />
+        <AppIcon :name="it.on" :size="48" class="ic on" />
+      </span>
     </div>
     <span class="hint">{{ text }}</span>
   </div>
@@ -44,28 +43,27 @@ withDefaults(defineProps<{ text: string; items?: PlaceholderItem[] }>(), { items
   flex-direction: row;
   gap: var(--space-24);
 }
-/* 图标位（38 稿未选中态规格）：48×48 / C1 底 / 圆角 6 */
+/* 双态图标位：48×48 无底（SVG 自带完整图形）；点击无反应（占位） */
 .block {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
   width: var(--icon-48);
   height: var(--icon-48);
-  background: var(--c1);
-  border-radius: var(--radius-6);
-}
-/* 真实图标：默认压暗近稿内未选中观感，悬停还原彩色；点击无反应（占位） */
-.block .icon {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  filter: grayscale(1) brightness(0.55);
-  transition: filter 0.2s ease;
   cursor: default;
   user-select: none;
 }
-.block:hover .icon {
-  filter: none;
+.ic {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.2s ease;
+}
+.ic.on {
+  opacity: 0;
+}
+.block:hover .ic.on {
+  opacity: 1;
+}
+.block:hover .ic.off {
+  opacity: 0;
 }
 .hint {
   font-size: var(--text-label-size);

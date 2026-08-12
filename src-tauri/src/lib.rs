@@ -214,7 +214,6 @@ pub fn run() {
       commands::library::list_recent_libraries,
       commands::library::set_auto_import,
       commands::doc_apps::detect_doc_apps,
-      commands::doc_apps::detect_browsers,
       commands::settings::get_ui_settings,
       commands::settings::save_ui_settings,
       commands::settings::save_window_state,

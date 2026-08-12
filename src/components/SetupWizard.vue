@@ -6,7 +6,7 @@
 // startStep：0 = 初次打开完整流程；2 = 菜单"新建资源库"直进第二步（standalone：第二步完成即关，
 // 无后续占位步）。打开已有空间：非空间结构进 error 态（PathErrorDialog 复用）；有库直开最近库，
 // 无库进第二步。空间创建后端幂等（已是空间视为打开）；库回退重进同名不重建（createdLibName 记录）。
-import { computed, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import IconButton from "./IconButton.vue";
@@ -14,10 +14,9 @@ import AppButton from "./AppButton.vue";
 import PathErrorDialog from "./PathErrorDialog.vue";
 import WizardStepSpace from "./WizardStepSpace.vue";
 import WizardStepLibrary from "./WizardStepLibrary.vue";
-import WizardStepPlaceholder, { type PlaceholderItem } from "./WizardStepPlaceholder.vue";
+import WizardStepPlaceholder, { type PlaceholderIcon } from "./WizardStepPlaceholder.vue";
 import { getIcon } from "../lib/icons";
 import { useToastStore } from "../stores/toast";
-import { browsers, docApp, ensureBrowsers, ensureDocApps } from "../lib/docApps";
 import {
   createSpace,
   openSpace,
@@ -56,18 +55,25 @@ const STEP_NO = ["", "一", "二", "三", "四"];
 const isLastStep = computed(() => (standalone ? step.value === 2 : step.value === 4));
 const prevVisible = computed(() => step.value > (standalone ? 2 : 1));
 
-// 第三 / 四步占位图标（系统提取，2026-08-12 用户定）：浏览器 = detect_browsers；
-// 桥接 = 复用 detect_doc_apps 的 An / Ps / Ae（按稿序）
-const browserItems = computed<PlaceholderItem[]>(() =>
-  browsers.apps.map((b) => ({ id: b.id, icon: b.icon })),
-);
-const bridgeItems = computed<PlaceholderItem[]>(() =>
-  ["animate", "photoshop", "afterEffects"].map((id) => ({ id, icon: docApp(id)?.icon ?? null })),
-);
-onMounted(() => {
-  void ensureBrowsers();
-  void ensureDocApps(); // App.vue 已调，幂等兜底（向导可能早于其完成）
-});
+// 第三 / 四步占位图标（用户导出的 on/off 双态 SVG，2026-08-12）：第三步 chrome/firefox/edge，
+// 第四步 An / Ps / Ae（稿序）
+const BROWSER_ICONS: PlaceholderIcon[] = [
+  { off: "chrome-off", on: "chrome-on" },
+  { off: "firefox-off", on: "firefox-on" },
+  { off: "edge-off", on: "edge-on" },
+];
+const BRIDGE_ICONS: PlaceholderIcon[] = [
+  { off: "animate-off", on: "animate-on" },
+  { off: "photoshop-off", on: "photoshop-on" },
+  { off: "ae-off", on: "ae-on" },
+];
+
+// 关闭（2026-08-12 用户定）：closable（菜单触发，有库在用）= 关向导回主界面；
+// 强制场景（无空间无库）= 直接退出程序——没完成连储存空间都没有，打开软件也没意义
+function onClose(): void {
+  if (props.closable) emit("cancel");
+  else void invoke("exit_app");
+}
 
 async function pickDir(): Promise<string | null> {
   const picked = await open({ directory: true, multiple: false });
@@ -188,7 +194,7 @@ function onErrorRetry(): void {
     />
     <div v-else class="wizard-card">
       <div class="titlebar">
-        <IconButton name="window-close" title="关闭" @click="emit('cancel')" />
+        <IconButton name="window-close" title="关闭" @click="onClose" />
       </div>
       <div class="logo-area">
         <div class="logo" v-html="logo" />
@@ -220,7 +226,7 @@ function onErrorRetry(): void {
       />
       <WizardStepPlaceholder
         v-else
-        :items="step === 3 ? browserItems : bridgeItems"
+        :icons="step === 3 ? BROWSER_ICONS : BRIDGE_ICONS"
         :text="step === 3 ? '浏览器扩展安装将在后续版本提供' : '桥接插件安装将在后续版本提供'"
       />
       <!-- 步骤区：上一步 / 步骤标题 / 下一步·完成 + 进度条（帧 0 无） -->
@@ -255,7 +261,7 @@ function onErrorRetry(): void {
 </template>
 
 <style scoped>
-/* 遮罩：挡住主界面交互（同 LibrarySetupModal 口径） */
+/* 遮罩：向导期间不显示主窗口（2026-08-12 用户定），纯色 C1 不透明 */
 .wizard-mask {
   position: absolute;
   inset: 0;
@@ -263,7 +269,7 @@ function onErrorRetry(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c1-80);
+  background: var(--c1);
 }
 /* 卡片（38 稿）：600×559 / C2 / 亮-选中 1.5px（inset 模拟，规范 4）/ 投影 / 圆角 8 */
 .wizard-card {
