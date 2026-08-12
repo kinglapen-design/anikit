@@ -25,6 +25,8 @@ pub struct Space {
   pub created_at: String,
   /// 自动导入开关（space.json，空间级设置）
   pub auto_import: bool,
+  /// 资源库自定义顺序（菜单抓手拖动排序，PRD 01_储存空间-3.2）：新库排尾，列表按此返回
+  pub library_order: Vec<String>,
 }
 
 /// 在 parent 下创建储存空间（文件夹名即空间名）。auto_import 写 space.json（空间级设置）。
@@ -69,16 +71,23 @@ pub fn open(path: &Path) -> Result<Space, DataError> {
   fs::create_dir_all(paths::assets_dir(path))?;
   fs::create_dir_all(path.join(INBOX_DIR))?;
   let file: SpaceFile = read_json(&path.join(SPACE_FILE))?;
-  Ok(Space { root: path.to_path_buf(), name: file.name, created_at: file.created_at, auto_import: file.auto_import })
+  Ok(Space {
+    root: path.to_path_buf(),
+    name: file.name,
+    created_at: file.created_at,
+    auto_import: file.auto_import,
+    library_order: file.library_order,
+  })
 }
 
-/// space.json 单一写点（01_开发规范 第 1 条）：全量保存空间元数据（autoImport 等）
+/// space.json 单一写点（01_开发规范 第 1 条）：全量保存空间元数据（autoImport / libraryOrder 等）
 pub fn save_space(space: &Space) -> Result<(), DataError> {
   let file = SpaceFile {
     version: crate::core::models::DATA_VERSION,
     name: space.name.clone(),
     created_at: space.created_at.clone(),
     auto_import: space.auto_import,
+    library_order: space.library_order.clone(),
   };
   write_json(&space.root.join(SPACE_FILE), &file)
 }
@@ -94,6 +103,51 @@ pub fn list_libraries(space_root: &Path) -> Result<Vec<String>, DataError> {
     .collect();
   names.sort();
   Ok(names)
+}
+
+/// 库列表按 library_order 排序返回（PRD 01_储存空间-3.2 拖动排序）：
+/// 在 order 内的按 order 序；不在 order 内的（用户手动建的目录）排尾、按名字典序
+pub fn ordered_libraries(space: &Space) -> Result<Vec<String>, DataError> {
+  let mut names = list_libraries(&space.root)?;
+  let order = &space.library_order;
+  names.sort_by(|a, b| {
+    match (order.iter().position(|n| n == a), order.iter().position(|n| n == b)) {
+      (Some(i), Some(j)) => i.cmp(&j),
+      (Some(_), None) => std::cmp::Ordering::Less,
+      (None, Some(_)) => std::cmp::Ordering::Greater,
+      (None, None) => a.cmp(b),
+    }
+  });
+  Ok(names)
+}
+
+/// 持久化库列表自定义顺序（3.2 菜单抓手拖动排序，save_space 单写点）：
+/// order 必须与空间内实际库名集合一致，多 / 少都拒绝；返回按新顺序排好的最新库名列表
+pub fn reorder_libraries(space: &mut Space, order: Vec<String>) -> Result<Vec<String>, DataError> {
+  let mut actual = list_libraries(&space.root)?;
+  actual.sort();
+  let mut incoming = order.clone();
+  incoming.sort();
+  if incoming != actual {
+    return Err(DataError::NameInvalid("资源库列表与实际不一致，请刷新后重试"));
+  }
+  space.library_order = order;
+  save_space(space)?;
+  ordered_libraries(space)
+}
+
+/// 删除资源库（3.2 删除×；确认弹窗在前端）：整个库目录递归删除，库内数据文件删除不可恢复；
+/// 素材实体保留在空间级 assets 池（本函数不碰 assets/）。从 library_order 移除后落盘（save_space 单写点），
+/// 返回删除后剩余库名列表（按 library_order 序）
+pub fn delete_library(space: &mut Space, name: &str) -> Result<Vec<String>, DataError> {
+  let path = space.root.join(name);
+  if !(path.is_dir() && path.join(FOLDERS_FILE).is_file()) {
+    return Err(DataError::NotALibrary);
+  }
+  fs::remove_dir_all(&path)?;
+  space.library_order.retain(|n| n != name);
+  save_space(space)?;
+  ordered_libraries(space)
 }
 
 #[cfg(test)]
@@ -127,7 +181,7 @@ mod tests {
     assert_eq!(disk.created_at, file.created_at);
   }
 
-  /// 旧版 space.json（无 autoImport 字段，2026-08-12 前创建）可读，auto_import 默认 false
+  /// 旧版 space.json（无 autoImport / libraryOrder 字段，2026-08-12 前创建）可读，缺字段按默认读
   #[test]
   fn open_reads_legacy_space_file_without_auto_import() {
     let dir = tempfile::tempdir().unwrap();
@@ -140,6 +194,7 @@ mod tests {
     .unwrap();
     let space = open(&root).unwrap();
     assert!(!space.auto_import, "旧 space.json 缺 autoImport 应按默认 false 读取");
+    assert!(space.library_order.is_empty(), "旧 space.json 缺 libraryOrder 应按默认空列表读取");
     assert!(root.join(INBOX_DIR).is_dir(), "inbox/ 缺失应自愈补建");
   }
 
@@ -217,5 +272,73 @@ mod tests {
     fs::write(info.join(FOLDERS_FILE), "{}").unwrap();
 
     assert_eq!(list_libraries(&root).unwrap(), vec!["库A".to_string(), "库B".to_string()]);
+  }
+
+  /// 造库辅助：空间根下建含 folders.json 的库目录
+  fn make_lib_dir(root: &Path, name: &str) {
+    fs::create_dir_all(root.join(name)).unwrap();
+    fs::write(root.join(name).join(FOLDERS_FILE), r#"{ "version": 1, "folders": [], "items": [] }"#).unwrap();
+  }
+
+  /// libraryOrder 排序（PRD 3.2）：在 order 内的按 order 序；不在 order 内的外来目录排尾、按名字典序
+  #[test]
+  fn ordered_libraries_follows_library_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut space = create(dir.path(), "空间", false).unwrap();
+    for lib in ["库A", "库B", "库C", "外来乙", "外来甲"] {
+      make_lib_dir(&space.root, lib);
+    }
+    // order 里混一条已不存在的陈旧条目（删库未清 order 的遗留），应被容忍
+    space.library_order = vec!["库C".into(), "陈旧库".into(), "库A".into(), "库B".into()];
+    let ordered = ordered_libraries(&space).unwrap();
+    assert_eq!(&ordered[..3], ["库C", "库A", "库B"], "order 内的按 order 序");
+    assert_eq!(&ordered[3..], ["外来乙", "外来甲"], "不在 order 内的排尾、按名字典序");
+    // 无 order（旧空间）= 全部按名字典序（码点序：外 U+5916 < 库 U+5E93）
+    space.library_order = Vec::new();
+    assert_eq!(ordered_libraries(&space).unwrap(), vec!["外来乙", "外来甲", "库A", "库B", "库C"]);
+  }
+
+  /// reorder：order 与实际库集合不一致（多 / 少）拒绝；一致则落盘并返回新序
+  #[test]
+  fn reorder_libraries_validates_and_persists() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut space = create(dir.path(), "空间", false).unwrap();
+    for lib in ["库A", "库B"] {
+      make_lib_dir(&space.root, lib);
+    }
+    // 少一个 / 多一个都报中文错
+    assert!(reorder_libraries(&mut space, vec!["库A".into()]).is_err());
+    assert!(reorder_libraries(&mut space, vec!["库A".into(), "库B".into(), "库C".into()]).is_err());
+    assert_eq!(space.library_order, Vec::<String>::new(), "校验失败不应改动 order");
+
+    let sorted = reorder_libraries(&mut space, vec!["库B".into(), "库A".into()]).unwrap();
+    assert_eq!(sorted, vec!["库B", "库A"]);
+    // 落盘 + 重开不丢
+    let disk: SpaceFile = read_json(&space.root.join(SPACE_FILE)).unwrap();
+    assert_eq!(disk.library_order, vec!["库B", "库A"]);
+    assert_eq!(open(&space.root).unwrap().library_order, vec!["库B", "库A"]);
+  }
+
+  /// delete：库目录递归删除 + order 移除落盘 + 返回剩余列表（按 order 序）；assets 池不动
+  #[test]
+  fn delete_library_removes_dir_and_order_entry() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut space = create(dir.path(), "空间", false).unwrap();
+    for lib in ["库A", "库B", "库C"] {
+      make_lib_dir(&space.root, lib);
+    }
+    space.library_order = vec!["库C".into(), "库A".into(), "库B".into()];
+
+    let remaining = delete_library(&mut space, "库A").unwrap();
+    assert_eq!(remaining, vec!["库C", "库B"]);
+    assert!(!space.root.join("库A").exists(), "库目录应整体消失");
+    assert_eq!(space.library_order, vec!["库C", "库B"]);
+    let disk: SpaceFile = read_json(&space.root.join(SPACE_FILE)).unwrap();
+    assert_eq!(disk.library_order, vec!["库C", "库B"], "order 移除应落盘");
+    assert!(paths::assets_dir(&space.root).is_dir(), "素材实体保留在 assets 池，不随删库动");
+    // 不存在的库 / 普通目录都报错
+    assert!(matches!(delete_library(&mut space, "不存在"), Err(DataError::NotALibrary)));
+    fs::create_dir_all(space.root.join("普通目录")).unwrap();
+    assert!(matches!(delete_library(&mut space, "普通目录"), Err(DataError::NotALibrary)));
   }
 }

@@ -115,21 +115,24 @@ pub fn get_current_space(state: State<AppState>) -> Option<SpaceInfo> {
   state.space.lock().ok()?.as_ref().map(space_info)
 }
 
-/// 当前空间内的资源库名列表（只扫空间根一级，含 folders.json 的目录即库）；无当前空间返回空列表
+/// 当前空间内的资源库名列表，按 space.json libraryOrder 排序返回（3.2 拖动排序持久化；
+/// 不在 order 内的外来目录排尾、按名字典序）；无当前空间返回空列表
 #[tauri::command]
 pub async fn list_space_libraries(state: State<'_, AppState>) -> Result<Vec<String>, String> {
   let space = state.space.lock().map_err(|e| e.to_string())?.clone();
   match space {
-    Some(space) => space::list_libraries(&space.root).map_err(|e| e.to_string()),
+    Some(space) => space::ordered_libraries(&space).map_err(|e| e.to_string()),
     None => Ok(Vec::new()),
   }
 }
 
-/// 在当前储存空间内创建资源库（文件夹名即资源库名）
+/// 在当前储存空间内创建资源库（文件夹名即资源库名）；新库名自动排尾进 libraryOrder（3.2）
 #[tauri::command]
 pub async fn create_library(state: State<'_, AppState>, name: String) -> Result<LibraryInfo, String> {
-  let space = current_space(&state)?;
-  let lib = library::create(&space, &name).map_err(|e| e.to_string())?;
+  let mut guard = state.space.lock().map_err(|e| e.to_string())?;
+  let space = guard.as_mut().ok_or_else(|| "请先打开储存空间".to_string())?;
+  let lib = library::create(space, &name).map_err(|e| e.to_string())?;
+  drop(guard); // activate 走 AppState 其他锁，先放空间锁（与 set_auto_import 同风格）
   activate(&state, lib)
 }
 
@@ -171,4 +174,103 @@ pub async fn set_auto_import(app: AppHandle, state: State<'_, AppState>, enabled
 #[tauri::command]
 pub fn list_recent_libraries() -> Result<Vec<LibraryEntry>, String> {
   config::load().map(|c| c.libraries).map_err(|e| e.to_string())
+}
+
+/// 持久化库列表自定义顺序（3.2 菜单抓手拖动排序）：order 必须与空间内实际库名集合一致，
+/// 多 / 少都报中文错；落盘后返回按新顺序排好的最新库名列表
+#[tauri::command]
+pub async fn reorder_libraries(state: State<'_, AppState>, order: Vec<String>) -> Result<Vec<String>, String> {
+  let mut guard = state.space.lock().map_err(|e| e.to_string())?;
+  let space = guard.as_mut().ok_or_else(|| "请先打开储存空间".to_string())?;
+  space::reorder_libraries(space, order).map_err(|e| e.to_string())
+}
+
+/// 删除资源库（3.2 删除×；确认弹窗在前端）：返回删除后剩余库名列表（按 libraryOrder 序），
+/// 前端据此决定切到剩余第一个库或回创建流程
+#[tauri::command]
+pub async fn delete_library(_app: AppHandle, state: State<'_, AppState>, name: String) -> Result<Vec<String>, String> {
+  apply_delete_library(&state, &name)
+}
+
+/// 删除资源库的实现（命令层薄壳，便于单测）：删的是当前打开的库时先做关库收尾——
+/// 清动图解包队列 pending、清撤销双栈、state.library 置 None（收件箱不动，空间级共用）；
+/// 再整目录递归删除。库内数据文件删除不可恢复；素材实体保留在空间级 assets 池
+fn apply_delete_library(state: &AppState, name: &str) -> Result<Vec<String>, String> {
+  let is_current = state
+    .library
+    .lock()
+    .map_err(|e| e.to_string())?
+    .as_ref()
+    .and_then(|l| l.root.file_name().map(|n| n.to_string_lossy().into_owned()))
+    .as_deref()
+    == Some(name);
+  if is_current {
+    crate::services::unpack_queue::clear_pending();
+    state.undo.lock().map_err(|e| e.to_string())?.clear();
+    *state.library.lock().map_err(|e| e.to_string())? = None;
+  }
+  let mut guard = state.space.lock().map_err(|e| e.to_string())?;
+  let space = guard.as_mut().ok_or_else(|| "请先打开储存空间".to_string())?;
+  space::delete_library(space, name).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  /// 建测试 AppState：空间 + 两个库（库A 为当前打开），返回 (临时目录, AppState)
+  fn make_state() -> (tempfile::TempDir, AppState) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut space = space::create(dir.path(), "空间", false).unwrap();
+    let lib_a = library::create(&mut space, "库A").unwrap();
+    library::create(&mut space, "库B").unwrap();
+    let state = AppState {
+      space: Mutex::new(Some(space)),
+      library: Mutex::new(Some(lib_a)),
+      imports: Mutex::new(std::collections::HashMap::new()),
+      inbox: Mutex::new(None),
+      undo: Mutex::new(crate::core::undo::UndoManager::default()),
+    };
+    (dir, state)
+  }
+
+  /// 删当前打开的库：先关库收尾（解包队列 / 撤销栈 / library 置 None），目录消失，返回剩余列表
+  #[test]
+  fn delete_current_library_closes_state() {
+    let (_dir, state) = make_state();
+    // 撤销栈里压一条，验证清栈
+    {
+      let mut undo = state.undo.lock().unwrap();
+      undo.begin("测试事务");
+      undo.commit().unwrap();
+    }
+    assert!(state.undo.lock().unwrap().state().can_undo, "删除前撤销栈非空");
+
+    let remaining = apply_delete_library(&state, "库A").unwrap();
+    assert_eq!(remaining, vec!["库B"]);
+    assert!(state.library.lock().unwrap().is_none(), "删当前库后 state.library 应置 None");
+    assert!(!state.undo.lock().unwrap().state().can_undo, "删当前库应清撤销栈");
+    let space = state.space.lock().unwrap();
+    let space = space.as_ref().unwrap();
+    assert!(!space.root.join("库A").exists(), "库目录应整体消失");
+    assert_eq!(space.library_order, vec!["库B"], "order 应移除被删库");
+    assert!(space.root.join("库B").is_dir(), "其余库不动");
+  }
+
+  /// 删非当前库：state.library 不动
+  #[test]
+  fn delete_other_library_keeps_current() {
+    let (_dir, state) = make_state();
+    let remaining = apply_delete_library(&state, "库B").unwrap();
+    assert_eq!(remaining, vec!["库A"]);
+    assert!(state.library.lock().unwrap().is_some(), "删非当前库不应动 state.library");
+  }
+
+  /// 删不存在的库：中文报错，状态不动
+  #[test]
+  fn delete_missing_library_errors() {
+    let (_dir, state) = make_state();
+    assert!(apply_delete_library(&state, "不存在").is_err());
+    assert!(state.library.lock().unwrap().is_some(), "删除失败不应动 state.library");
+  }
 }

@@ -102,11 +102,21 @@ pub struct SpaceFile {
   /// default 保证旧 space.json（无此字段）可读
   #[serde(default)]
   pub auto_import: bool,
+  /// 资源库自定义顺序（菜单抓手拖动排序持久化，PRD 01_储存空间-3.2：新库排尾）；
+  /// default 保证旧 space.json（无此字段）可读
+  #[serde(default)]
+  pub library_order: Vec<String>,
 }
 
 impl SpaceFile {
   pub fn new(name: &str, auto_import: bool) -> Self {
-    Self { version: DATA_VERSION, name: name.to_string(), created_at: chrono::Local::now().to_rfc3339(), auto_import }
+    Self {
+      version: DATA_VERSION,
+      name: name.to_string(),
+      created_at: chrono::Local::now().to_rfc3339(),
+      auto_import,
+      library_order: Vec::new(),
+    }
   }
 }
 

@@ -213,6 +213,8 @@ pub fn run() {
       commands::library::get_current_library,
       commands::library::list_recent_libraries,
       commands::library::set_auto_import,
+      commands::library::reorder_libraries,
+      commands::library::delete_library,
       commands::doc_apps::detect_doc_apps,
       commands::settings::get_ui_settings,
       commands::settings::save_ui_settings,

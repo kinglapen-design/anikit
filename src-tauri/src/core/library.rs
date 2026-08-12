@@ -121,8 +121,9 @@ pub(crate) fn validate_library_name(name: &str) -> Result<(), DataError> {
 }
 
 /// 在储存空间内创建资源库（库目录名即资源库名）。要求空间根下无同名冲突；
-/// 已是资源库则提示改用打开。
-pub fn create(space: &Space, name: &str) -> Result<Library, DataError> {
+/// 已是资源库则提示改用打开。创建成功把新库名 append 进 library_order（新库排尾，PRD 3.2），
+/// 经 save_space 单写点落盘
+pub fn create(space: &mut Space, name: &str) -> Result<Library, DataError> {
   // 名称校验在 mkdir 之前，避免建出非法 / 半截目录
   validate_library_name(name)?;
   // 库目录与空间级目录同名会撞结构（assets/workspace/inbox），直接拒绝
@@ -145,6 +146,9 @@ pub fn create(space: &Space, name: &str) -> Result<Library, DataError> {
   write_json(&path.join(PINS_FILE), &PinsFile::new())?;
   write_json(&path.join(RECYCLE_FILE), &RecycleFile::new())?;
   write_json(&path.join(RECENT_FILE), &RecentFile::new())?;
+  // 新库排尾：登记进 library_order 并落盘（save_space 单写点；失败不吞，库已建出会按外来目录排尾显示）
+  space.library_order.push(name.to_string());
+  space::save_space(space)?;
   log::info!("素材库已创建：{}", path.display());
   open(&space.root, &path)
 }
@@ -301,8 +305,8 @@ pub fn unique_name(existing: &HashSet<String>, name: &str) -> String {
 /// 测试辅助：在 base 下建测试空间（测试空间/）+ 测试库（测试空间/测试库），返回打开状态的库
 #[cfg(test)]
 pub(crate) fn create_test(base: &Path) -> Library {
-  let space = space::create(base, "测试空间", false).unwrap();
-  create(&space, "测试库").unwrap()
+  let mut space = space::create(base, "测试空间", false).unwrap();
+  create(&mut space, "测试库").unwrap()
 }
 
 #[cfg(test)]
@@ -319,8 +323,8 @@ mod tests {
   #[test]
   fn create_initializes_full_structure() {
     let dir = tempfile::tempdir().unwrap();
-    let (space, space_root) = make_space(dir.path());
-    let lib = create(&space, "我的素材库").unwrap();
+    let (mut space, space_root) = make_space(dir.path());
+    let lib = create(&mut space, "我的素材库").unwrap();
     let root = space_root.join("我的素材库");
 
     // 库目录 = 纯数据 + backup/cache/vectors（assets/ 与 inbox/ 均在空间级）
@@ -343,33 +347,48 @@ mod tests {
   #[test]
   fn create_rejects_non_empty_folder() {
     let dir = tempfile::tempdir().unwrap();
-    let (space, space_root) = make_space(dir.path());
+    let (mut space, space_root) = make_space(dir.path());
     let lib_dir = space_root.join("库");
     fs::create_dir_all(&lib_dir).unwrap();
     fs::write(lib_dir.join("随便一个文件.txt"), "hi").unwrap();
-    assert!(matches!(create(&space, "库"), Err(DataError::NotEmpty)));
+    assert!(matches!(create(&mut space, "库"), Err(DataError::NotEmpty)));
   }
 
   #[test]
   fn create_rejects_invalid_names() {
     let dir = tempfile::tempdir().unwrap();
-    let (space, space_root) = make_space(dir.path());
+    let (mut space, space_root) = make_space(dir.path());
     // 特殊符号 / 结尾点 / 系统保留名（Windows 文件夹命名规则）/ 空间级保留目录名
     for name in ["bad:name", "bad|name", "lib.", "lib ", "CON", "com1", "Lpt9", "assets", "workspace", "inbox"] {
-      let result = create(&space, name);
+      let result = create(&mut space, name);
       assert!(matches!(result, Err(DataError::NameInvalid(_))), "名称 {name} 应被拒绝");
       assert!(!space_root.join(name).join(FOLDERS_FILE).exists(), "名称 {name} 不应建出库");
     }
     // 合法中文名可用
-    assert!(create(&space, "我的素材").is_ok());
+    assert!(create(&mut space, "我的素材").is_ok());
   }
 
   #[test]
   fn create_rejects_existing_library() {
     let dir = tempfile::tempdir().unwrap();
-    let (space, _) = make_space(dir.path());
-    create(&space, "库").unwrap();
-    assert!(matches!(create(&space, "库"), Err(DataError::AlreadyLibrary)));
+    let (mut space, _) = make_space(dir.path());
+    create(&mut space, "库").unwrap();
+    assert!(matches!(create(&mut space, "库"), Err(DataError::AlreadyLibrary)));
+  }
+
+  /// 新库排尾（PRD 3.2）：创建成功 append 进 library_order 并经 save_space 落盘
+  #[test]
+  fn create_appends_to_library_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut space, space_root) = make_space(dir.path());
+    create(&mut space, "库A").unwrap();
+    create(&mut space, "库B").unwrap();
+    assert_eq!(space.library_order, vec!["库A", "库B"]);
+    let disk: SpaceFile = read_json(&space_root.join(space::SPACE_FILE)).unwrap();
+    assert_eq!(disk.library_order, vec!["库A", "库B"], "libraryOrder 应随创建落盘");
+    // 创建失败（重名）不入 order
+    assert!(create(&mut space, "库A").is_err());
+    assert_eq!(space.library_order, vec!["库A", "库B"]);
   }
 
   #[test]
