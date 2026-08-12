@@ -41,6 +41,8 @@ pub struct LibraryInfo {
   pub path: String,
   pub asset_count: usize,
   pub folder_count: usize,
+  /// 自动导入开关（库级 settings.json，2.1）：关 = 不启动收件箱（不挂载盘符、不监听）
+  pub auto_import: bool,
 }
 
 fn to_info(lib: &Library) -> LibraryInfo {
@@ -49,6 +51,7 @@ fn to_info(lib: &Library) -> LibraryInfo {
     path: lib.root.to_string_lossy().into_owned(),
     asset_count: lib.index.assets.len(),
     folder_count: lib.index.folders.len(),
+    auto_import: lib.settings.auto_import,
   }
 }
 
@@ -60,7 +63,8 @@ fn activate_space(state: &State<AppState>, space: Space) -> Result<SpaceInfo, St
   Ok(info)
 }
 
-/// 库进入打开状态：更新应用状态 + 记录到全局配置最近列表 + 启动收件箱（3.2）；
+/// 库进入打开状态：更新应用状态 + 记录到全局配置最近列表 + 按库级设置启停收件箱（3.2 / 2.1：
+/// auto_import 关 = 不挂载盘符、不监听；切到关闭的库时停掉旧库收件箱）；
 /// 库切换清空动图解包队列 pending（任务绑定 assets 池，切库后无意义，2026-07-26）
 /// 与撤销双栈（6.0：会话级不持久化，栈内快照绑定旧库路径）
 fn activate(app: &AppHandle, state: &State<AppState>, lib: Library) -> Result<LibraryInfo, String> {
@@ -68,9 +72,14 @@ fn activate(app: &AppHandle, state: &State<AppState>, lib: Library) -> Result<Li
   state.undo.lock().map_err(|e| e.to_string())?.clear();
   let info = to_info(&lib);
   let root = lib.root.clone();
+  let auto_import = lib.settings.auto_import;
   *state.library.lock().map_err(|e| e.to_string())? = Some(lib);
   config::record_library_open(&info.name, &info.path).map_err(|e| e.to_string())?;
-  crate::services::inbox::start(app, &root);
+  if auto_import {
+    crate::services::inbox::start(app, &root);
+  } else {
+    crate::services::inbox::stop(app);
+  }
   Ok(info)
 }
 
@@ -135,6 +144,25 @@ pub async fn open_library(app: AppHandle, state: State<'_, AppState>, name: Stri
 #[tauri::command]
 pub fn get_current_library(state: State<AppState>) -> Option<LibraryInfo> {
   state.library.lock().ok()?.as_ref().map(to_info)
+}
+
+/// 开关自动导入（2.1：向导第二步初值 / 快速访问"自动导入"确认弹窗开启）：
+/// 库级 settings.json 单写点；开 = 启动收件箱（盘符挂载 + 监听），关 = 停止收件箱（卸载盘符）
+#[tauri::command]
+pub async fn set_auto_import(app: AppHandle, state: State<'_, AppState>, enabled: bool) -> Result<LibraryInfo, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开资源库".to_string())?;
+  lib.settings.auto_import = enabled;
+  library::save_settings(lib).map_err(|e| e.to_string())?;
+  let info = to_info(lib);
+  let root = lib.root.clone();
+  drop(guard); // 收件箱启停走 AppState 锁，先放库锁防交叉
+  if enabled {
+    crate::services::inbox::start(&app, &root);
+  } else {
+    crate::services::inbox::stop(&app);
+  }
+  Ok(info)
 }
 
 /// 全局配置中的资源库最近列表

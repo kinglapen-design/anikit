@@ -56,6 +56,7 @@ onMounted(() => {
     void invoke<LibraryInfo | null>("get_current_library")
       .then((lib) => {
         currentLibrary.name = lib?.name ?? null;
+        currentLibrary.autoImport = lib?.autoImport ?? false;
       })
       .catch(() => {});
   }

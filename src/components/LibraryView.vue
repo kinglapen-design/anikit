@@ -11,10 +11,13 @@ import { computed, ref } from "vue";
 import SectionHeader from "./SectionHeader.vue";
 import TreeItem from "./TreeItem.vue";
 import FolderTree from "./FolderTree.vue";
+import AppModal from "./AppModal.vue";
+import AppButton from "./AppButton.vue";
 import { beginFolderDrag } from "../lib/dragOperation";
 import { createAndName, findParentId } from "../lib/menuOps";
 import { openContextMenu } from "../lib/contextMenus";
 import { recycleBlankSpec } from "../lib/menuSpecs/recycle";
+import { currentLibrary, setAutoImport } from "../lib/libraryOps";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
@@ -23,6 +26,32 @@ const content = useContentStore();
 const selection = useSelectionStore();
 const tabs = useTabsStore();
 const treeOpen = ref(true);
+
+// 自动导入关闭时点击"自动导入"项：确认弹窗（2026-08-12 用户定）——开启 = 写库级设置 +
+// 挂载收件箱盘符 + 启动监听后进入视图；取消 = 停留当前视图
+const autoImportPrompt = ref(false);
+const autoImportBusy = ref(false);
+
+function onQuickSelect(key: string): void {
+  if (key === "inbox" && !currentLibrary.autoImport) {
+    autoImportPrompt.value = true;
+    return;
+  }
+  tabs.openView(`quick:${key}`);
+}
+
+async function onEnableAutoImport(): Promise<void> {
+  if (autoImportBusy.value) return;
+  autoImportBusy.value = true;
+  try {
+    if (await setAutoImport(true)) {
+      autoImportPrompt.value = false;
+      tabs.openView("quick:inbox");
+    }
+  } finally {
+    autoImportBusy.value = false;
+  }
+}
 
 // 快速访问（PRD 02-15 定案六项：全部 / 未分类 / 最近使用 / 自动导入 / 缩略图 / 回收站）：
 // "缩略图"视图待 hidden 资产业务（5.x）接入后放；收件箱 = PRD"自动导入"（候车区规则同口径）
@@ -114,7 +143,7 @@ function onQuickMenu(key: string, e: MouseEvent): void {
           :label="q.label"
           :count="quickCount(q.key)"
           :selected="content.sidebarSelected === `quick:${q.key}`"
-          @select="tabs.openView(`quick:${q.key}`)"
+          @select="onQuickSelect(q.key)"
           @contextmenu="onQuickMenu(q.key, $event)"
         />
       </div>
@@ -133,10 +162,34 @@ function onQuickMenu(key: string, e: MouseEvent): void {
         <FolderTree :nodes="content.folders" :force-open-ids="forceOpenIds" />
       </div>
     </section>
+    <!-- 自动导入未开启确认弹窗（confirm 形态：无 X，点遮罩 / 取消关闭） -->
+    <AppModal
+      v-if="autoImportPrompt"
+      variant="confirm"
+      icon="auto-import"
+      title="开启自动导入"
+      @close="autoImportPrompt = false"
+    >
+      <p class="prompt-text">
+        当前资源库未开启自动导入。开启后将挂载收件箱盘符，复制进收件箱的文件会自动导入资源库。
+      </p>
+      <template #actions>
+        <AppButton label="取消" :disabled="autoImportBusy" @click="autoImportPrompt = false" />
+        <AppButton label="开启" variant="primary" :disabled="autoImportBusy" @click="onEnableAutoImport" />
+      </template>
+    </AppModal>
   </div>
 </template>
 
 <style scoped>
+/* 自动导入确认弹窗：正文常态色，限宽换行 */
+.prompt-text {
+  margin: 0;
+  max-width: 320px;
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  color: var(--text-normal);
+}
 /* 1.2 新稿（01_主窗口 树容器）：两区块间距 24；容器 padding 由 SidebarLeft 承担 */
 .library-view {
   display: flex;

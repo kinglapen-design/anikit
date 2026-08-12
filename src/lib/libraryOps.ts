@@ -20,6 +20,7 @@ export interface LibraryInfo {
   path: string;
   assetCount: number;
   folderCount: number;
+  autoImport: boolean; // 自动导入开关（库级 settings.json）：关 = 无盘符无监听
 }
 
 export interface SpaceInfo {
@@ -51,8 +52,11 @@ export async function loadLibraries(): Promise<{ names: string[]; currentName: s
   return { names, currentName: current?.name ?? null };
 }
 
-// 当前库名（侧栏库名显示等）：afterOpen / 启动兜底更新，唯一数据源
-export const currentLibrary = reactive<{ name: string | null }>({ name: null });
+// 当前库状态（侧栏库名 / 自动导入开关显示判定等）：afterOpen / 启动兜底更新，唯一数据源
+export const currentLibrary = reactive<{ name: string | null; autoImport: boolean }>({
+  name: null,
+  autoImport: false,
+});
 
 // 开库统一收尾：旧库 viewKey 全失效——标签页布局重置（关空自动补"全部"），再全量刷新；错误抛出由调用方处理
 async function afterOpen(info: LibraryInfo): Promise<LibraryInfo> {
@@ -60,6 +64,7 @@ async function afterOpen(info: LibraryInfo): Promise<LibraryInfo> {
   const content = useContentStore();
   const undo = useUndoStore();
   currentLibrary.name = info.name;
+  currentLibrary.autoImport = info.autoImport;
   tabs.closeAllTabs();
   await content.refresh();
   void undo.refreshState();
@@ -103,8 +108,10 @@ export async function reopenLastSession(): Promise<"ok" | "need-library" | "need
     await invoke<SpaceInfo>("open_space", { path: parts.join("\\") });
     const libs = await listSpaceLibraries();
     if (libs.length === 0) return "need-library";
-    await invoke<LibraryInfo>("open_library", { name: libs.includes(last.name) ? last.name : libs[0] });
-    currentLibrary.name = libs.includes(last.name) ? last.name : libs[0];
+    await invoke<LibraryInfo>("open_library", { name: libs.includes(last.name) ? last.name : libs[0] }).then((info) => {
+      currentLibrary.name = info.name;
+      currentLibrary.autoImport = info.autoImport;
+    });
     await useContentStore().refresh();
     return "ok";
   } catch (e) {
@@ -129,4 +136,18 @@ export function requestLibrarySetup(): void {
   wizardState.open = true;
   wizardState.closable = true;
   wizardState.startStep = 2;
+}
+
+// 开关自动导入（快速访问"自动导入"确认弹窗，2026-08-12 用户定）：
+// 写库级 settings.json + 启停收件箱（盘符挂载 / 卸载、监听启停）；失败 toast 恒音，返回是否成功
+export async function setAutoImport(enabled: boolean): Promise<boolean> {
+  const toast = useToastStore();
+  try {
+    const info = await invoke<LibraryInfo>("set_auto_import", { enabled });
+    currentLibrary.autoImport = info.autoImport;
+    return true;
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+    return false;
+  }
 }
