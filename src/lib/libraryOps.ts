@@ -131,11 +131,11 @@ export async function switchLibrary(name: string): Promise<void> {
   }
 }
 
-// 新建资源库（菜单触发）：向导直进第二步（有库时点遮罩 / X 可关）
+// 新建资源库（菜单触发，16_创建资源库稿）：独立轻量弹窗（初次打开 / 无库场景走 38 向导）
+export const createLibraryModalState = reactive({ open: false });
+
 export function requestLibrarySetup(): void {
-  wizardState.open = true;
-  wizardState.closable = true;
-  wizardState.startStep = 2;
+  createLibraryModalState.open = true;
 }
 
 // 开关自动导入（快速访问"自动导入"确认弹窗，2026-08-12 用户定）：

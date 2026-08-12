@@ -19,6 +19,7 @@ import IconButton from "./components/IconButton.vue";
 import WindowControls from "./components/WindowControls.vue";
 import PreviewWindow from "./components/PreviewWindow.vue";
 import SetupWizard from "./components/SetupWizard.vue";
+import CreateLibraryModal from "./components/CreateLibraryModal.vue";
 import ImportDialog from "./components/ImportDialog.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
 import ImportResultDialog from "./components/ImportResultDialog.vue";
@@ -34,7 +35,7 @@ import { useContentStore } from "./stores/content";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
 import { ensureDocApps } from "./lib/docApps";
-import { wizardState, reopenLastSession } from "./lib/libraryOps";
+import { wizardState, reopenLastSession, createLibraryModalState } from "./lib/libraryOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
 import { useSidebarAnim } from "./lib/useSidebarAnim";
 import { useWindowStatePersistence } from "./lib/windowState";
@@ -230,6 +231,8 @@ async function togglePin(): Promise<void> {
       @done="onWizardDone"
       @cancel="wizardState.open = false"
     />
+    <!-- 菜单"新建资源库"（16 稿独立弹窗） -->
+    <CreateLibraryModal v-if="createLibraryModalState.open" @close="createLibraryModalState.open = false" />
     <ImportDialog
       v-else-if="content.importDraft"
       :draft="content.importDraft"
