@@ -1,0 +1,388 @@
+<script setup lang="ts">
+// 初次打开向导（38_向导稿，2.1）：主窗口内全屏层 + 600×559 卡片
+//（C2 底 / 亮-选中 1.5px 边框 / 投影 / 圆角 8，标题栏 46 右侧 X）。
+// 帧 0 入口（新建 / 打开储存空间）→ 第一步 配置储存空间 → 第二步 创建资源库（含自动导入开关）
+// → 第三 / 四步 浏览器扩展、桥接插件占位（后续版本，PRD 01_储存空间 3.1）。
+// startStep：0 = 初次打开完整流程；2 = 菜单"新建资源库"直进第二步（standalone：第二步完成即关，
+// 无后续占位步）。打开已有空间：非空间结构进 error 态（PathErrorDialog 复用）；有库直开最近库，
+// 无库进第二步。空间创建后端幂等（已是空间视为打开）；库回退重进同名不重建（createdLibName 记录）。
+import { computed, ref } from "vue";
+import { open } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
+import IconButton from "./IconButton.vue";
+import AppButton from "./AppButton.vue";
+import PathErrorDialog from "./PathErrorDialog.vue";
+import WizardStepSpace from "./WizardStepSpace.vue";
+import WizardStepLibrary from "./WizardStepLibrary.vue";
+import WizardStepPlaceholder from "./WizardStepPlaceholder.vue";
+import { getIcon } from "../lib/icons";
+import { useToastStore } from "../stores/toast";
+import {
+  createSpace,
+  openSpace,
+  listSpaceLibraries,
+  createLibrary,
+  openLibrary,
+  validateAssetName,
+  type LibraryEntry,
+} from "../lib/libraryOps";
+
+const props = withDefaults(defineProps<{ closable?: boolean; startStep?: number }>(), {
+  closable: false,
+  startStep: 0,
+});
+const emit = defineEmits<{ done: []; cancel: [] }>();
+
+const logo = getIcon("LOGO"); // 临时 LOGO（2026-08-12 用户：后续更换，仅此一处引用）
+const toast = useToastStore();
+
+const standalone = props.startStep >= 2; // 菜单"新建资源库"模式：仅第二步
+const step = ref(props.startStep);
+const view = ref<"wizard" | "error">("wizard");
+const busy = ref(false);
+const errorMsg = ref(""); // error 态（打开空间失败）文案
+const stepError = ref(""); // 步骤内联错误行（Eagle 式红字）
+
+// 步骤数据（上一步回退不丢）
+const spaceName = ref("");
+const parentPath = ref("");
+const libName = ref("");
+const autoImport = ref(false);
+let createdLibName = "";
+
+const STEP_TITLES = ["", "配置储存空间", "创建资源库", "安装浏览器插件", "安装桥接插件"];
+const STEP_NO = ["", "一", "二", "三", "四"];
+const isLastStep = computed(() => (standalone ? step.value === 2 : step.value === 4));
+const prevVisible = computed(() => step.value > (standalone ? 2 : 1));
+
+async function pickDir(): Promise<string | null> {
+  const picked = await open({ directory: true, multiple: false });
+  return typeof picked === "string" ? picked : null;
+}
+
+// 第一步：选择保存路径（父目录）
+async function pickParent(): Promise<void> {
+  const dir = await pickDir();
+  if (dir) {
+    parentPath.value = dir;
+    stepError.value = "";
+  }
+}
+
+// 帧 0：打开储存空间——有库开最近库，无库进第二步
+async function openSpaceFlow(): Promise<void> {
+  const path = await pickDir();
+  if (!path || busy.value) return;
+  busy.value = true;
+  try {
+    const space = await openSpace(path);
+    const libs = await listSpaceLibraries();
+    if (libs.length === 0) {
+      step.value = 2;
+      return;
+    }
+    const recent = await invoke<LibraryEntry[]>("list_recent_libraries").catch(() => [] as LibraryEntry[]);
+    const hit = recent.find((r) => r.path.startsWith(space.path) && libs.includes(r.name));
+    const info = await openLibrary(hit?.name ?? libs[0]);
+    toast.notify({ message: `已打开资源库「${info.name}」`, icon: "success", duration: 3000 });
+    emit("done");
+  } catch (e) {
+    errorMsg.value = String(e); // 后端中文文案（"该文件夹不是 AniKit 储存空间" 等）
+    view.value = "error";
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function submitSpace(): Promise<void> {
+  const name = spaceName.value.trim();
+  const msg = validateAssetName(name);
+  if (msg) {
+    stepError.value = msg;
+    return;
+  }
+  if (!parentPath.value) {
+    stepError.value = "请点击下方按钮选择保存路径";
+    return;
+  }
+  busy.value = true;
+  try {
+    await createSpace(parentPath.value, name);
+    step.value = 2;
+  } catch (e) {
+    stepError.value = String(e);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function submitLibrary(): Promise<void> {
+  const name = libName.value.trim();
+  const msg = validateAssetName(name);
+  if (msg) {
+    stepError.value = msg;
+    return;
+  }
+  busy.value = true;
+  try {
+    if (createdLibName !== name) {
+      const info = await createLibrary(name, autoImport.value);
+      createdLibName = info.name;
+    }
+    if (standalone) finish();
+    else step.value = 3;
+  } catch (e) {
+    stepError.value = String(e);
+  } finally {
+    busy.value = false;
+  }
+}
+
+function onNext(): void {
+  stepError.value = "";
+  if (step.value === 1) void submitSpace();
+  else if (step.value === 2) void submitLibrary();
+  else if (isLastStep.value) finish();
+  else step.value += 1;
+}
+
+function onPrev(): void {
+  stepError.value = "";
+  if (prevVisible.value) step.value -= 1;
+}
+
+function finish(): void {
+  toast.notify({ message: `资源库「${createdLibName}」创建完成`, icon: "success", sound: true, duration: 3000 });
+  emit("done");
+}
+
+// error 态重试：回向导并直接再弹系统目录选择
+function onErrorRetry(): void {
+  view.value = "wizard";
+  void openSpaceFlow();
+}
+</script>
+
+<template>
+  <div class="wizard-mask" @click.self="props.closable && emit('cancel')">
+    <PathErrorDialog
+      v-if="view === 'error'"
+      :message="errorMsg"
+      :busy="busy"
+      @retry="onErrorRetry"
+      @cancel="view = 'wizard'"
+    />
+    <div v-else class="wizard-card">
+      <div class="titlebar">
+        <IconButton name="window-close" title="关闭" @click="emit('cancel')" />
+      </div>
+      <div class="logo-area">
+        <div class="logo" v-html="logo" />
+        <div class="app-text">
+          <span class="app-name">AniKit</span>
+          <span class="app-sub">动画资产管理工具</span>
+        </div>
+      </div>
+      <!-- 帧 0：入口（无步骤区） -->
+      <div v-if="step === 0" class="content entry">
+        <div class="entry-actions">
+          <AppButton label="新建储存空间" variant="primary" :disabled="busy" @click="step = 1" />
+          <AppButton label="打开储存空间" :disabled="busy" @click="openSpaceFlow" />
+        </div>
+      </div>
+      <WizardStepSpace
+        v-else-if="step === 1"
+        v-model:name="spaceName"
+        v-model:parent="parentPath"
+        :busy="busy"
+        :error="stepError"
+        @pick="pickParent"
+      />
+      <WizardStepLibrary
+        v-else-if="step === 2"
+        v-model:name="libName"
+        v-model:auto-import="autoImport"
+        :error="stepError"
+      />
+      <WizardStepPlaceholder
+        v-else
+        :text="step === 3 ? '浏览器扩展安装将在后续版本提供' : '桥接插件安装将在后续版本提供'"
+      />
+      <!-- 步骤区：上一步 / 步骤标题 / 下一步·完成 + 进度条（帧 0 无） -->
+      <div v-if="step > 0" class="step-area">
+        <div class="step-row">
+          <AppButton
+            label="上一步"
+            size="small"
+            class="prev-btn"
+            :class="{ ghost: !prevVisible }"
+            :disabled="busy"
+            @click="onPrev"
+          />
+          <span class="step-title">
+            <span class="step-no">第{{ STEP_NO[step] }}步：</span>
+            <span class="step-name">{{ STEP_TITLES[step] }}</span>
+          </span>
+          <AppButton
+            :label="isLastStep ? '完成' : '下一步'"
+            variant="primary"
+            size="small"
+            :disabled="busy"
+            @click="onNext"
+          />
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" :style="{ width: `${(step / 4) * 100}%` }" />
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+/* 遮罩：挡住主界面交互（同 LibrarySetupModal 口径） */
+.wizard-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c1-80);
+}
+/* 卡片（38 稿）：600×559 / C2 / 亮-选中 1.5px（inset 模拟，规范 4）/ 投影 / 圆角 8 */
+.wizard-card {
+  box-sizing: border-box;
+  width: 600px;
+  height: 559px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--c2);
+  box-shadow:
+    var(--shadow-pop),
+    inset 0 0 0 var(--border-strong) var(--line-active);
+  border-radius: var(--radius-8);
+}
+/* 标题栏：46 高，右对齐关闭钮 */
+.titlebar {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: var(--space-8);
+  width: 100%;
+  height: 46px;
+  flex: none;
+}
+/* LOGO 区：271 高 / padding 24 / gap 12 */
+.logo-area {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--space-24);
+  gap: var(--space-12);
+  width: 100%;
+  height: 271px;
+  flex: none;
+}
+.logo {
+  width: 167px;
+  height: 145px;
+  flex: none;
+}
+.logo :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.app-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+}
+.app-name {
+  font-size: var(--text-display-size);
+  line-height: var(--text-display-line);
+  font-weight: var(--text-display-weight);
+  color: var(--text-highlight);
+}
+.app-sub {
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  color: var(--text-label);
+}
+/* 帧 0 内容区：撑满剩余，按钮组居中（gap 12） */
+.content {
+  flex: 1;
+  width: 100%;
+}
+.entry {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--space-24);
+  box-sizing: border-box;
+}
+.entry-actions {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-12);
+}
+/* 步骤区：146 高 / padding 48 / gap 12（上行 28 + 进度条 10） */
+.step-area {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-48);
+  gap: var(--space-12);
+  width: 100%;
+  height: 146px;
+  flex: none;
+}
+.step-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 28px;
+}
+/* 第一步 / standalone 无上一步：opacity 0 占位保布局（38 稿） */
+.prev-btn.ghost {
+  opacity: 0;
+  pointer-events: none;
+}
+.step-title {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-4);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+}
+.step-no {
+  color: var(--text-label);
+}
+.step-name {
+  color: var(--text-highlight);
+}
+/* 进度条：504 通栏 × 10 / C1 轨道 / C5-底色填充，按 当前步/4 递增 */
+.progress-track {
+  width: 100%;
+  height: 10px;
+  background: var(--c1);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--c5-base);
+  border-radius: var(--radius-pill);
+  transition: width 0.2s ease;
+}
+</style>

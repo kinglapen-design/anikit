@@ -14,7 +14,8 @@ import LibraryView from "./LibraryView.vue";
 import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
 import { addButtonSpec } from "../lib/menuSpecs/addMenu";
 import { hamburgerSpec, librarySwitchSpec } from "../lib/menuSpecs/libraryHamburger";
-import { loadLibraries } from "../lib/libraryOps";
+import { loadLibraries, currentLibrary, type LibraryInfo } from "../lib/libraryOps";
+import { invoke } from "@tauri-apps/api/core";
 import { isEditableTarget } from "../lib/useGlobalKeys";
 import { useUiStore } from "../stores/ui";
 import { useSideThumb } from "../lib/useSideThumb";
@@ -48,19 +49,29 @@ function onGlobalKeydown(e: KeyboardEvent): void {
   e.preventDefault();
   toggleAddMenu();
 }
-onMounted(() => window.addEventListener("keydown", onGlobalKeydown));
+onMounted(() => {
+  window.addEventListener("keydown", onGlobalKeydown);
+  // 库名兜底（2.1）：启动直开分支不经 libraryOps.afterOpen，此处补拉一次
+  if (currentLibrary.name === null) {
+    void invoke<LibraryInfo | null>("get_current_library")
+      .then((lib) => {
+        currentLibrary.name = lib?.name ?? null;
+      })
+      .catch(() => {});
+  }
+});
 onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
 
 // 汉堡菜单（14 稿，宽 220）/ 切换资源库（08 稿，宽 300）：toggle 模式同新增按钮；
-// 库列表为动态数据（最近列表 + 当前库），开菜单前加载
+// 库列表为动态数据（当前空间内库 + 当前库名，2.1 空间化），开菜单前加载
 async function toggleHamburger(e: MouseEvent): Promise<void> {
   if (menuState.entries) {
     closeContextMenu();
     return;
   }
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  const { entries, currentPath } = await loadLibraries();
-  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, hamburgerSpec(entries, currentPath), undefined, {
+  const { names, currentName } = await loadLibraries();
+  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, hamburgerSpec(names, currentName), undefined, {
     width: 220,
   });
 }
@@ -70,8 +81,8 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
     return;
   }
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  const { entries, currentPath } = await loadLibraries();
-  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, librarySwitchSpec(entries, currentPath), undefined, {
+  const { names, currentName } = await loadLibraries();
+  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, librarySwitchSpec(names, currentName), undefined, {
     width: 300,
   });
 }
@@ -110,7 +121,7 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
       <div class="side-content">
         <div class="library-switch">
           <span class="lib-badge"><AppIcon name="library-duotone" :size="18" /></span>
-          <span class="lib-name">动画素材库</span>
+          <span class="lib-name">{{ currentLibrary.name ?? "未打开资源库" }}</span>
           <IconButton name="switch-library" title="切换资源库" @click="toggleLibrarySwitch" />
         </div>
         <div ref="bodyRef" class="tree-wrap">

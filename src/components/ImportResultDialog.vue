@@ -29,7 +29,7 @@ function fileName(p: string): string {
 </template>
 
 <style scoped>
-/* 遮罩：与 LibrarySetupModal 一致（C1） */
+/* 遮罩：与 SetupWizard 一致（C1） */
 .result-mask {
   position: absolute;
   inset: 0;

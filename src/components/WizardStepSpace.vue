@@ -1,0 +1,79 @@
+<script setup lang="ts">
+// 向导第一步（38 稿）：输入储存空间名称 + 选择保存路径（选定后路径显示在按钮左侧，标签档截断）。
+import AppInput from "./AppInput.vue";
+import AppButton from "./AppButton.vue";
+
+const name = defineModel<string>("name", { required: true });
+const parent = defineModel<string>("parent", { required: true });
+defineProps<{ busy: boolean; error: string }>();
+const emit = defineEmits<{ pick: [] }>();
+</script>
+
+<template>
+  <div class="step-space">
+    <div class="row">
+      <span class="field-label">输入储存空间名称：</span>
+      <AppInput v-model="name" placeholder="输入储存空间名称..." />
+    </div>
+    <div class="row path-row">
+      <span v-if="parent" class="chosen-path" :title="parent">{{ parent }}</span>
+      <AppButton label="选择保存路径" variant="primary" :disabled="busy" @click="emit('pick')" />
+    </div>
+    <p v-if="error" class="step-error">{{ error }}</p>
+  </div>
+</template>
+
+<style scoped>
+/* 内容区（38 稿）：column / justify center / padding 0 48 / gap 12 */
+.step-space {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 var(--space-48);
+  gap: var(--space-12);
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+}
+.field-label {
+  flex: none;
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  color: var(--text-normal);
+}
+.path-row {
+  justify-content: flex-end;
+}
+/* 已选路径：标签档截断（稿无此元素，样式全取稿内档位） */
+.chosen-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-label-size);
+  line-height: var(--text-label-line);
+  color: var(--text-label);
+}
+/* 步骤内联错误行（Eagle 式，同 CreateLibraryForm 口径）：绝对定位不挤压稿内布局 */
+.step-error {
+  position: absolute;
+  left: var(--space-48);
+  right: var(--space-48);
+  bottom: var(--space-8);
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-label-size);
+  line-height: var(--text-label-line);
+  color: var(--error);
+}
+</style>

@@ -18,7 +18,7 @@ import SplitBar from "./components/SplitBar.vue";
 import IconButton from "./components/IconButton.vue";
 import WindowControls from "./components/WindowControls.vue";
 import PreviewWindow from "./components/PreviewWindow.vue";
-import LibrarySetupModal from "./components/LibrarySetupModal.vue";
+import SetupWizard from "./components/SetupWizard.vue";
 import ImportDialog from "./components/ImportDialog.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
 import ImportResultDialog from "./components/ImportResultDialog.vue";
@@ -34,7 +34,7 @@ import { useContentStore } from "./stores/content";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
 import { ensureDocApps } from "./lib/docApps";
-import { librarySetupState, reopenLastLibrary } from "./lib/libraryOps";
+import { wizardState, reopenLastSession } from "./lib/libraryOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
 import { useSidebarAnim } from "./lib/useSidebarAnim";
 import { useWindowStatePersistence } from "./lib/windowState";
@@ -53,14 +53,14 @@ const maximized = ref(false);
 const appWindow = getCurrentWindow();
 const webview = getCurrentWebviewWindow();
 
-// 启动时未打开任何素材库 → 强制弹"创建/打开资源库"模态（PRD 01-1）
-const needLibrarySetup = ref(false);
+// 启动时未打开任何素材库 → 强制弹初次打开向导（38_向导稿，2.1；状态在 libraryOps.wizardState）
+const wizardOpen = () => wizardState.open;
 
 // 独立预览窗口（4.3 新窗口打开）：URL ?preview={assetKey} 进入，只渲染预览布局（无三栏、无导入弹窗）
 const previewParam = new URLSearchParams(window.location.search).get("preview");
 
 // 全局键盘（lib/useGlobalKeys）：剪贴板导入 / 撤销重做 / 选择 / 操作快捷键
-useGlobalKeys({ previewParam, needLibrarySetup: () => needLibrarySetup.value });
+useGlobalKeys({ previewParam, needLibrarySetup: wizardOpen });
 // 侧栏收展动画 rAF 引擎 + dockResizeObs 灌宽（lib/useSidebarAnim，机制注释随迁该文件）
 useSidebarAnim({
   leftEl: () => sidebarLeftRef.value?.$el as HTMLElement | undefined,
@@ -81,10 +81,9 @@ function onResize(): void {
   resizeTimer = setTimeout(() => void syncMaximized(), 150);
 }
 
-// 库进入打开状态后：关模态（标签页布局重置与全量刷新已收进 libraryOps.openLibrary/createLibrary）
-function onLibraryReady(): void {
-  needLibrarySetup.value = false;
-  librarySetupState.open = false;
+// 向导完成后：关向导（标签页布局重置与全量刷新已收进 libraryOps.openLibrary/createLibrary）
+function onWizardDone(): void {
+  wizardState.open = false;
 }
 
 // 导入弹窗确认：关弹窗，先检测序列帧（命中追加 12_序列帧弹窗，4.1），导入走后台任务
@@ -97,7 +96,7 @@ function onImportConfirm(opts: { structure: "flatten" | "keep"; source: "copy" |
 
 // 拖拽导入（PRD 05-01）：webview 拖放事件拿文件路径，落点在文件树 item 上则导入至该文件夹
 async function onDrop(paths: string[], x: number, y: number): Promise<void> {
-  if (needLibrarySetup.value || paths.length === 0 || content.importDraft) return;
+  if (wizardState.open || paths.length === 0 || content.importDraft) return;
   try {
     const { kind } = await invoke<{ kind: "files" | "folder" | "mixed"; fileCount: number }>(
       "classify_paths",
@@ -135,10 +134,9 @@ onMounted(() => {
   }).then((fn) => {
     unlistenDragDrop = fn;
   });
-  // 查询库状态：未打开时自动重开最近的库（2026-08-08 用户定：不再每次弹"创建/打开资源库"
-  // 选路径；重开流程封装在 libraryOps.reopenLastLibrary）；最近列表为空（首次使用）
-  // 或重开失败（路径失效等）才弹模态。
-  // 预览窗口不弹库模态（PreviewWindow 自行拉数据）
+  // 查询库状态：未打开时自动重开最近空间与库（2.1 空间化：reopenLastSession 三态——
+  // ok 直接进；need-library 空间已开但无库，向导直进第二步；need-wizard 首次使用 / 重开失败，向导入口帧）。
+  // 预览窗口不弹向导（PreviewWindow 自行拉数据）
   invoke<unknown>("get_current_library")
     .then(async (lib) => {
       if (lib !== null) {
@@ -146,11 +144,16 @@ onMounted(() => {
         return;
       }
       if (previewParam) return;
-      if (await reopenLastLibrary()) return;
-      needLibrarySetup.value = true;
+      const r = await reopenLastSession();
+      if (r === "ok") return;
+      wizardState.open = true;
+      wizardState.closable = false;
+      wizardState.startStep = r === "need-library" ? 2 : 0;
     })
     .catch(() => {
-      needLibrarySetup.value = true;
+      wizardState.open = true;
+      wizardState.closable = false;
+      wizardState.startStep = 0;
     });
 });
 onBeforeUnmount(() => {
@@ -220,11 +223,12 @@ async function togglePin(): Promise<void> {
         @mousedown="startResize(z.dir, $event)"
       />
     </template>
-    <LibrarySetupModal
-      v-if="needLibrarySetup || librarySetupState.open"
-      :closable="!needLibrarySetup && librarySetupState.closable"
-      @done="onLibraryReady"
-      @cancel="librarySetupState.open = false"
+    <SetupWizard
+      v-if="wizardState.open"
+      :closable="wizardState.closable"
+      :start-step="wizardState.startStep"
+      @done="onWizardDone"
+      @cancel="wizardState.open = false"
     />
     <ImportDialog
       v-else-if="content.importDraft"

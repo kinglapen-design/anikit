@@ -223,7 +223,7 @@ function onSkip(): void {
 </template>
 
 <style scoped>
-/* 遮罩（同 LibrarySetupModal）：C1 */
+/* 遮罩（同 SetupWizard）：C1 */
 .dup-mask {
   position: absolute;
   inset: 0;

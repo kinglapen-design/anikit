@@ -72,7 +72,7 @@ const sourceTip = computed(() =>
 </template>
 
 <style scoped>
-/* 遮罩：与 LibrarySetupModal 一致（C1） */
+/* 遮罩：与 SetupWizard 一致（C1） */
 .import-mask {
   position: absolute;
   inset: 0;
