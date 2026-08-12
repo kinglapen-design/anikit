@@ -7,3 +7,9 @@ use crate::services::doc_apps::{detect_doc_apps as detect, DocAppInfo};
 pub async fn detect_doc_apps() -> Result<Vec<DocAppInfo>, String> {
   Ok(detect())
 }
+
+/// 检测常见浏览器是否安装（固定安装路径）并提取主程序图标（2.1 向导第三步占位图标）
+#[tauri::command]
+pub async fn detect_browsers() -> Result<Vec<DocAppInfo>, String> {
+  Ok(crate::services::doc_apps::detect_browsers())
+}

@@ -119,6 +119,40 @@ mod imp {
   }
 }
 
+/// 浏览器检测（2.1，向导第三步占位图标，2026-08-12 用户定：占位图标做进去、悬停变彩色、点击无反应）：
+/// 常见浏览器固定安装路径探测（含 Chrome 用户级安装 LOCALAPPDATA）+ exe 图标提取。
+const BROWSER_ICON_EDGE: u32 = 96; // 向导 48 盒 2x 屏
+
+fn browser_candidates(name: &str) -> Vec<std::path::PathBuf> {
+  let mut v = vec![
+    std::path::PathBuf::from(format!(r"C:\Program Files\{name}")),
+    std::path::PathBuf::from(format!(r"C:\Program Files (x86)\{name}")),
+  ];
+  if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+    v.push(std::path::Path::new(&local).join(name));
+  }
+  v
+}
+
+pub fn detect_browsers() -> Vec<DocAppInfo> {
+  const PROBES: [(&str, &str); 3] = [
+    ("chrome", r"Google\Chrome\Application\chrome.exe"),
+    ("firefox", r"Mozilla Firefox\firefox.exe"),
+    ("edge", r"Microsoft\Edge\Application\msedge.exe"),
+  ];
+  PROBES
+    .iter()
+    .map(|(id, rel)| {
+      let exe = browser_candidates(rel).into_iter().find(|p| p.is_file());
+      let icon = exe
+        .as_deref()
+        .and_then(|p| crate::adapters::shell_thumb::format_icon(p, BROWSER_ICON_EDGE))
+        .and_then(png_data_url);
+      DocAppInfo { id, installed: exe.is_some(), icon }
+    })
+    .collect()
+}
+
 #[cfg(all(test, windows))]
 mod tests {
   use super::*;
@@ -136,5 +170,14 @@ mod tests {
   fn unknown_ext_has_no_association() {
     // 未知扩展名关联到 OpenWith.exe 占位程序，应判为无关联
     assert!(imp::associated_exe(".anikit-nonexistent-ext").is_none());
+  }
+
+  #[test]
+  fn edge_always_present_on_windows() {
+    // Edge 是 Windows 系统组件：固定路径必然存在且图标可提取
+    let browsers = detect_browsers();
+    let edge = browsers.iter().find(|b| b.id == "edge").unwrap();
+    assert!(edge.installed, "Edge 应有固定安装路径");
+    assert!(edge.icon.is_some(), "Edge 图标应可提取");
   }
 }

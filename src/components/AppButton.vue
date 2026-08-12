@@ -3,7 +3,8 @@
 // variant：primary = 重要（品牌色底 + 亮-选中边框 + 高亮标题）/ panel = 二级窗口（C4 底，默认）/ sidebar = 侧边栏（C5 底）；
 // size：large（padding 8/12）/ small（padding 4/8，带图标时 6/8 + 图标 12 + 标签字）；
 // 字档规则（figma）：大且无图标 = 标题档 700；小且有图标 = 标签档；其余 = 正文档；
-// hover：panel/primary 叠 暗-悬停（panel 实为 C5，按 figma 2.1/2.2 hover background C5）、sidebar 叠 暗-悬停，标题/图标轻微下移（00_要求：区分分块与按钮）。
+// hover：panel/primary 叠 暗-悬停（panel 实为 C5，按 figma 2.1/2.2 hover background C5）、sidebar 叠 暗-悬停，
+// 整个按钮下移 1px（2026-08-12 用户改定：原"标题/图标轻微下移"观感不佳作废；区分分块与按钮的意图不变）。
 import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
 
@@ -51,7 +52,13 @@ const fontTier = computed(() => {
   justify-content: center;
   border-radius: var(--radius-6);
   flex: none;
-  transition: background 0.15s ease;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+/* hover：整个按钮下移 1px（2026-08-12 用户改定，原为 inner 下移） */
+.app-btn:hover {
+  transform: translateY(1px);
 }
 .app-btn.large {
   padding: var(--space-8) var(--space-12);
@@ -63,11 +70,6 @@ const fontTier = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--space-6);
-  transition: transform 0.15s ease;
-}
-/* hover：标题/图标轻微下移（00_要求：与分块区分） */
-.app-btn:hover .inner {
-  transform: translateY(1px);
 }
 /* 字档 */
 .font-title {
@@ -112,7 +114,7 @@ const fontTier = computed(() => {
   cursor: default;
   opacity: 0.5;
 }
-.app-btn:disabled .inner {
+.app-btn:disabled:hover {
   transform: none;
 }
 </style>
