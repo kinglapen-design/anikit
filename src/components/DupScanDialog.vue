@@ -62,8 +62,8 @@ function thumbUrl(a: DupAsset): string | null {
     :class="{ confirm: dupScanState.step === 'confirm' }"
     @close="closeScan"
   >
-    <!-- 屏 1：结果列表（35 稿） -->
-    <div v-if="dupScanState.step === 'groups'" class="groups-body">
+    <!-- 屏 1：结果列表（35 稿）；kit-scroll = 统一可见滚轮 + gutter 恒占不挤压 -->
+    <div v-if="dupScanState.step === 'groups'" class="groups-body kit-scroll">
       <DupScanGroupRow
         v-for="g in dupScanState.groups"
         :key="g.hash"
@@ -74,7 +74,7 @@ function thumbUrl(a: DupAsset): string | null {
 
     <!-- 屏 2：合并前确认（Eagle 式：左组列表 + 右保留者单选） -->
     <div v-else class="confirm-body">
-      <aside class="group-list">
+      <aside class="group-list kit-scroll">
         <button
           v-for="g in confirmGroups"
           :key="g.hash"
@@ -98,7 +98,7 @@ function thumbUrl(a: DupAsset): string | null {
           </span>
         </button>
       </aside>
-      <section v-if="currentGroup" class="keeper-list">
+      <section v-if="currentGroup" class="keeper-list kit-scroll">
         <div
           v-for="a in currentGroup.assets"
           :key="a.assetId"
@@ -188,11 +188,10 @@ function thumbUrl(a: DupAsset): string | null {
   flex: none;
 }
 
-/* —— 屏 1：内容自适应 + 上限自滚（弹窗纵向滚动条隐藏可滚，同 36 稿 DuplicateDialog 口径——
-   自绘 6px 条会占宽把卡片行压成 660，两张卡 666 微溢出恒出横向条，与 35 稿">2 张才出横条"不符）—— */
+/* —— 屏 1：内容自适应 + 上限自滚（滚轮走 base.css .kit-scroll 统一类：
+   恒可见 + gutter 恒占防挤压；组行右 padding 已同步减 6 补偿，见 DupScanGroupRow）—— */
 .groups-body {
   max-height: calc(100vh - 280px);
-  overflow-y: auto;
 }
 
 /* —— 屏 2：双栏 —— */
@@ -200,37 +199,37 @@ function thumbUrl(a: DupAsset): string | null {
   display: flex;
   height: min(560px, calc(100vh - 300px));
 }
-/* 左列：250 组列表，右分隔线，自滚；容器 padding 8 + gap 4、item 圆角 6（2026-08-13 走查定） */
+/* 左列：250 组列表，右分隔线；容器 padding 12（2026-08-13 用户定，给滚轮留空间）
+   + gap 4 + item 圆角 6；滚轮走 .kit-scroll 统一类（gutter 恒占，item 宽恒定不跳动） */
 .group-list {
   width: 250px;
   flex: none;
-  overflow-y: auto;
   box-shadow: inset -1px 0 0 0 var(--line-hover);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  padding: var(--space-8);
+  padding: var(--space-12);
 }
-.group-list::-webkit-scrollbar {
-  width: 6px;
-}
-.group-list::-webkit-scrollbar-thumb {
-  background: var(--line-hover);
-  border-radius: 3px;
-}
-/* 组列表项：56 高 = 40×40 缩略图 + 名称 / N 个文件竖排；当前组 C4 实心高亮 */
+/* 组列表项：56 高 = 40×40 缩略图 + 名称 / N 个文件竖排，padding 四周 8（2026-08-13 用户定）；
+   hover 叠 暗-悬停 罩层；当前组 = 亮-选中 罩层 + 暗-悬停 1px 线条（树 item 强度阶梯同口径） */
 .group-item {
   display: flex;
   align-items: center;
   gap: var(--space-12);
   height: 56px;
-  padding: var(--space-8) var(--space-12);
+  padding: var(--space-8);
   border-radius: var(--radius-6);
   flex: none;
   text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.group-item:hover {
+  background: var(--line-hover);
 }
 .group-item.cur {
-  background: var(--c4);
+  background: var(--line-active);
+  box-shadow: inset 0 0 0 1px var(--line-hover);
 }
 .group-thumb {
   width: 40px;
@@ -276,22 +275,15 @@ function thumbUrl(a: DupAsset): string | null {
   line-height: var(--text-label-line);
   color: var(--text-label);
 }
-/* 右列：保留者单选列表（item = 35 稿卡片横条化：缩略图 + 名称 + 大小 + 所在文件夹标签） */
+/* 右列：保留者单选列表（item = 35 稿卡片横条化：缩略图 + 名称 + 大小 + 所在文件夹标签）；
+   滚轮走 .kit-scroll 统一类（gutter 恒占 6px，右 padding 18 补偿保持视觉右距 24） */
 .keeper-list {
   flex: 1;
   min-width: 0;
-  overflow-y: auto;
-  padding: var(--space-16) var(--space-24);
+  padding: var(--space-16) calc(var(--space-24) - 6px) var(--space-16) var(--space-24);
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-}
-.keeper-list::-webkit-scrollbar {
-  width: 6px;
-}
-.keeper-list::-webkit-scrollbar-thumb {
-  background: var(--line-hover);
-  border-radius: 3px;
 }
 .keeper-item {
   display: flex;
@@ -300,9 +292,14 @@ function thumbUrl(a: DupAsset): string | null {
   height: 52px;
   padding: var(--space-6) var(--space-12);
   border-radius: var(--radius-6);
-  background: var(--c3);
+  background: var(--c2); /* 弹窗内 item 底色与二级窗口一致（2026-08-13 用户定：原 C3 改 C2） */
   box-shadow: inset 0 0 0 1px var(--line-hover);
   flex: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.keeper-item:hover {
+  background: var(--line-hover);
 }
 /* 选中行 = 品牌色描边（选中框统一 --brand-border，1.2 走查口径） */
 .keeper-item.on {

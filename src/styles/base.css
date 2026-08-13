@@ -58,6 +58,37 @@ textarea {
   height: 0;
 }
 
+/* 统一滚动条（2026-08-13 用户定：滚动区域必须恒可见滚轮——滚轮/触摸板失灵时仍可用；
+   且滚轮出现不得挤压内容）：6px 胶囊 thumb（暗-悬停 / 悬停亮-选中）+ 透明轨道；
+   .kit-scroll = 纵向：scrollbar-gutter 恒占防内容跳动（无滚动时透明 gutter，容器右 padding
+   需为 gutter 减 6 保持视觉边距，见 DupScanDialog）；.kit-scroll-x = 横向：无 gutter
+   属性可用，容器自行预留 padding 容纳（如 .cards padding-bottom 6） */
+.kit-scroll {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.kit-scroll-x {
+  overflow-x: auto;
+}
+.kit-scroll::-webkit-scrollbar,
+.kit-scroll-x::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.kit-scroll::-webkit-scrollbar-thumb,
+.kit-scroll-x::-webkit-scrollbar-thumb {
+  background: var(--line-hover);
+  border-radius: 3px;
+}
+.kit-scroll::-webkit-scrollbar-thumb:hover,
+.kit-scroll-x::-webkit-scrollbar-thumb:hover {
+  background: var(--line-active);
+}
+.kit-scroll::-webkit-scrollbar-track,
+.kit-scroll-x::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* 工具 tip（02_通用组件/09_工具tip）：fixed 定位，元素下方居中；
    2026-08-07 按 figma-css 06_悬停 tip：C2 底 / 亮-选中 1px 边框 / 8px 圆角 / 正文常态色 */
 .app-tip {

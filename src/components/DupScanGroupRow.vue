@@ -19,7 +19,7 @@ const emit = defineEmits<{ remove: [] }>();
       <IconButton name="delete-red" delete-red title="从列表移除该组" @click="emit('remove')" />
     </div>
     <!-- 卡片横排（35 稿：gap 12；>2 张横向滚动） -->
-    <div class="cards">
+    <div class="cards kit-scroll-x">
       <DupScanCard v-for="a in group.assets" :key="a.assetId" :asset="a" />
     </div>
   </div>
@@ -27,12 +27,13 @@ const emit = defineEmits<{ remove: [] }>();
 
 <style scoped>
 /* item（35 稿）：padding 24 / gap 12 / 下分隔线（暗-悬停）；
-   最后一组不出底线——否则与底部按钮栏上分隔线重叠成双线（2026-08-13 走查） */
+   右 padding 减 6 补偿 .groups-body 滚动条 gutter 恒占（保卡片行恒 666：两卡恰好不横滚、
+   三卡才出横条，35 稿口径）；最后一组不出底线——否则与底部按钮栏上分隔线重叠成双线（2026-08-13 走查） */
 .scan-group {
   display: flex;
   flex-direction: column;
   gap: var(--space-12);
-  padding: var(--space-24);
+  padding: var(--space-24) calc(var(--space-24) - 6px) var(--space-24) var(--space-24);
   box-shadow: inset 0 -1px 0 0 var(--line-hover);
   flex: none;
 }
@@ -47,22 +48,11 @@ const emit = defineEmits<{ remove: [] }>();
   flex: none;
 }
 /* 卡片行：横向滚动（35 稿注明：单行卡片超过两个时横向滚动条）；
-   原生滚动条全局隐藏（base.css），此处按侧栏口径 6px 胶囊自绘横向条 */
+   滚轮走 base.css .kit-scroll-x 统一类（6px 胶囊），padding-bottom 6 预留高度容纳 */
 .cards {
   display: flex;
   gap: var(--space-12);
   align-items: center;
-  overflow-x: auto;
-  padding-bottom: var(--space-6); /* 给横向滚动条留呼吸 */
-}
-.cards::-webkit-scrollbar {
-  height: 6px;
-}
-.cards::-webkit-scrollbar-thumb {
-  background: var(--line-hover);
-  border-radius: 3px;
-}
-.cards::-webkit-scrollbar-thumb:hover {
-  background: var(--line-active);
+  padding-bottom: var(--space-6);
 }
 </style>

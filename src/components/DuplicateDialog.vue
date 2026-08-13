@@ -81,7 +81,7 @@ function onCancel(): void {
         <span class="col">已存在文件</span>
         <span class="col">新的文件</span>
       </div>
-      <div class="dup-scroll">
+      <div class="dup-scroll kit-scroll">
         <DuplicateRow
           v-for="(c, i) in conflicts"
           :key="c.sourcePath"
@@ -157,7 +157,7 @@ function onCancel(): void {
 .dup-scroll {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  /* 滚轮走 base.css .kit-scroll 统一类（2026-08-13 用户定：滚动区域恒可见滚轮、gutter 恒占不挤压） */
 }
 /* 底部按钮行（36 稿）：62 高 / 上分隔线 / padding 12 12 12 24，右对齐；
    flex: 1 占满 actions 主轴（row flex 项宽默认内容宽——不撑满上边框线会断在内容左缘，2026-08-13 走查） */

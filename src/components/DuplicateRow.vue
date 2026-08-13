@@ -99,13 +99,14 @@ function setAction(action: DupAction): void {
 </template>
 
 <style scoped>
-/* item（36 稿）：C3 底 + 下分隔线，padding 24 0，gap 12 */
+/* item（36 稿）：下分隔线，padding 24 0，gap 12；
+   底色与二级窗口一致 C2（2026-08-13 用户定，推翻 36 稿 C3——弹窗内 item 不显底色靠线条分层） */
 .dup-row {
   display: flex;
   flex-direction: column;
   gap: var(--space-12);
   padding: var(--space-24) 0;
-  background: var(--c3);
+  background: var(--c2);
   box-shadow: inset 0 -1px 0 0 var(--line-hover);
   transition: opacity 0.2s ease;
 }

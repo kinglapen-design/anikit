@@ -200,6 +200,22 @@ async def main():
             if not scroll or scroll["sw"] <= scroll["cw"]:
                 fails.append(f"组 C 无横向滚动 {scroll}")
 
+            # ②b 滚轮统一（2026-08-13 用户定）：屏 1 纵向溢出且滚动条/gutter 恒占（offsetWidth-clientWidth ≥ 6
+            #     = 可见滚轮）；两卡组（内容恰 666）不出横向条（gutter 已由组行右 padding 补偿）
+            sb = await ev("""(() => {
+              const b = document.querySelector('.groups-body');
+              const rowA = document.querySelectorAll('.scan-group')[0]?.querySelector('.cards');
+              return b ? { sh: b.scrollHeight, ch: b.clientHeight, ow: b.offsetWidth, cw: b.clientWidth,
+                           aSw: rowA?.scrollWidth ?? 0, aCw: rowA?.clientWidth ?? 0 } : null;
+            })()""")
+            print("屏1滚轮:", sb)
+            if not sb or sb["sh"] <= sb["ch"]:
+                fails.append(f"屏 1 未溢出（桩数据应可滚）{sb}")
+            elif sb["ow"] - sb["cw"] < 6:
+                fails.append(f"屏 1 滚轮不可见/未占位 {sb}")
+            if sb and sb["aSw"] > sb["aCw"] + 1:
+                fails.append(f"两卡组误出横向条 {sb}")
+
             await shot("scan-duplicates")
 
             # ③ 组 B 红钮移除 → 剩 2 组 5 文件
