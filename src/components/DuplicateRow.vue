@@ -22,6 +22,7 @@ const props = defineProps<{
   decision: DupDecision;
   newName: string | null; // 批量重命名预览（仅 copy / link 会给；null = 用源文件名）
   waitingArea?: boolean; // 候车区（落点 = 未分类 root）：radio 收窄只留"作为新文件导入"
+  findText?: string; // 替换命名模式的查找文本（非空时右卡显示源名 + 命中段高亮）
 }>();
 const emit = defineEmits<{ change: [patch: Partial<DupDecision>] }>();
 
@@ -47,6 +48,33 @@ const existingUrl = computed(() =>
 
 // 右卡显示名：改名预览优先，否则源文件名
 const displayName = computed(() => props.newName ?? props.item.sourceName);
+
+// 查找命中高亮（2026-08-13 用户定，参考 Eagle：查找时原始名称命中片段品牌色高亮）——
+// 替换模式且查找文本非空时，右卡显示源名并高亮命中段（新名预览让位：此刻要确认的是命中对不对）；
+// 规则只作用词干，扩展名段恒不高亮
+const hlParts = computed(() => {
+  const find = props.findText ?? "";
+  if (!find) return null;
+  const name = props.item.sourceName;
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : "";
+  if (!stem.includes(find)) return null;
+  const parts: { text: string; hit: boolean }[] = [];
+  let i = 0;
+  while (i < stem.length) {
+    const j = stem.indexOf(find, i);
+    if (j < 0) {
+      parts.push({ text: stem.slice(i), hit: false });
+      break;
+    }
+    if (j > i) parts.push({ text: stem.slice(i, j), hit: false });
+    parts.push({ text: find, hit: true });
+    i = j + find.length;
+  }
+  if (ext) parts.push({ text: ext, hit: false });
+  return parts;
+});
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -86,7 +114,12 @@ function setAction(action: DupAction): void {
           />
           <span v-else class="ext">{{ extOf(item.sourceName).toUpperCase() }}</span>
         </div>
-        <span class="fname" :title="displayName">{{ displayName }}</span>
+        <span class="fname" :title="displayName">
+          <template v-if="hlParts">
+            <span v-for="(p, k) in hlParts" :key="k" :class="{ hl: p.hit }">{{ p.text }}</span>
+          </template>
+          <template v-else>{{ displayName }}</template>
+        </span>
         <div class="meta">
           <span class="size">{{ formatSize(item.sourceSize) }}</span>
           <span class="chip" :title="item.targetFolderName">{{ item.targetFolderName }}</span>
@@ -191,6 +224,10 @@ function setAction(action: DupAction): void {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* 查找命中段：品牌色高亮（Eagle 参考，2026-08-13 用户定） */
+.fname .hl {
+  color: var(--brand-border);
 }
 /* 右侧：大小 + 所在位置标签，gap 12 */
 .meta {

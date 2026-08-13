@@ -290,7 +290,8 @@ const entries = computed(() => content.inboxDisk);
   box-shadow: inset 0 1px 0 0 var(--line-hover);
   border-radius: 0 0 var(--radius-6) var(--radius-6);
 }
-/* 名称：正文 14/20 高亮，单行左对齐截断（14 稿口径，旧两行居中作废） */
+/* 名称：正文 14/20 高亮，单行左对齐截断（14 稿口径，旧两行居中作废）；
+   悬停文本光标（双击就地重命名，同素材卡片口径） */
 .title {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
@@ -298,6 +299,7 @@ const entries = computed(() => content.inboxDisk);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: text;
 }
 .meta {
   font-size: var(--text-caption-size);

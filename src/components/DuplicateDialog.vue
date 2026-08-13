@@ -141,6 +141,7 @@ function onCancel(): void {
           :decision="rows[i] ?? defaultDecision(c)"
           :new-name="previews[i] ?? null"
           :waiting-area="c.targetFolder === 'root'"
+          :find-text="renameMode === 'replace' ? renameFind : ''"
           @change="onRowChange(i, $event)"
         />
       </div>
