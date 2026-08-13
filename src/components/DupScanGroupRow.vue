@@ -26,19 +26,28 @@ const emit = defineEmits<{ remove: [] }>();
 </template>
 
 <style scoped>
-/* item（35 稿）：padding 24 / gap 12 / 下分隔线（暗-悬停）；
-   右 padding 减 6 补偿 .groups-body 滚动条 gutter 恒占（保卡片行恒 666：两卡恰好不横滚、
-   三卡才出横条，35 稿口径）；最后一组不出底线——否则与底部按钮栏上分隔线重叠成双线（2026-08-13 走查） */
+/* item（35 稿）：padding 24 / gap 12；底线走 ::after 两端留 1.5px
+   （不到弹窗 inset 竖框——横竖半透明线十字交叉双倍叠色，2026-08-13 走查）；
+   最后一组不出底线——否则与底部按钮栏顶线重叠成双线（2026-08-13 走查） */
 .scan-group {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-12);
-  padding: var(--space-24) calc(var(--space-24) - 6px) var(--space-24) var(--space-24);
-  box-shadow: inset 0 -1px 0 0 var(--line-hover);
+  padding: var(--space-24);
   flex: none;
 }
-.scan-group:last-child {
-  box-shadow: none;
+.scan-group::after {
+  content: "";
+  position: absolute;
+  left: 1.5px;
+  right: 1.5px;
+  bottom: 0;
+  height: 1px;
+  background: var(--line-hover);
+}
+.scan-group:last-child::after {
+  display: none;
 }
 .row-head {
   display: flex;

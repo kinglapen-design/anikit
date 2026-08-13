@@ -4,12 +4,13 @@
 // 屏 2（confirm，970 宽）= 合并前确认：左列组列表 + 右列保留者 radio 单选
 //（默认导入最早 = 后端排序 assets[0]），底部确认合并 / 上一步（回屏 1）。
 // 取消 / 关闭 = 全部不处理（纯前端清状态）；合并经 dupScanOps.confirmMerge 一次 delete_placements。
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppModal from "./AppModal.vue";
 import AppButton from "./AppButton.vue";
 import AppRadio from "./AppRadio.vue";
 import DupScanGroupRow from "./DupScanGroupRow.vue";
+import ScrollThumb from "./ScrollThumb.vue";
 import { formatSize } from "../lib/formatSize";
 import {
   dupScanState,
@@ -30,6 +31,11 @@ const selectedFileCount = computed(() =>
 const savedBytes = computed(() =>
   selectedGroups().reduce((sum, g) => sum + (g.assets.length - 1) * g.size, 0),
 );
+
+// 悬浮滚轮容器锚点（ScrollThumb：滚动容器须为包裹层直接子元素）
+const groupsBody = ref<HTMLElement>();
+const groupListEl = ref<HTMLElement>();
+const keeperListEl = ref<HTMLElement>();
 
 // —— 屏 2 ——
 const confirmGroups = computed(() => selectedGroups());
@@ -62,71 +68,80 @@ function thumbUrl(a: DupAsset): string | null {
     :class="{ confirm: dupScanState.step === 'confirm' }"
     @close="closeScan"
   >
-    <!-- 屏 1：结果列表（35 稿）；kit-scroll = 统一可见滚轮 + gutter 恒占不挤压 -->
-    <div v-if="dupScanState.step === 'groups'" class="groups-body kit-scroll">
-      <DupScanGroupRow
-        v-for="g in dupScanState.groups"
-        :key="g.hash"
-        :group="g"
-        @remove="removeGroup(g.hash)"
-      />
+    <!-- 屏 1：结果列表（35 稿）；悬浮滚轮悬停显隐（主窗口统一交互） -->
+    <div v-if="dupScanState.step === 'groups'" class="scroll-wrap">
+      <div ref="groupsBody" class="groups-body kit-scroll">
+        <DupScanGroupRow
+          v-for="g in dupScanState.groups"
+          :key="g.hash"
+          :group="g"
+          @remove="removeGroup(g.hash)"
+        />
+      </div>
+      <ScrollThumb :body="groupsBody" />
     </div>
 
     <!-- 屏 2：合并前确认（Eagle 式：左组列表 + 右保留者单选） -->
     <div v-else class="confirm-body">
-      <aside class="group-list kit-scroll">
-        <button
-          v-for="g in confirmGroups"
-          :key="g.hash"
-          class="group-item"
-          :class="{ cur: g.hash === currentGroup?.hash }"
-          @click="selectGroup(g.hash)"
-        >
-          <span class="group-thumb">
-            <img
-              v-if="g.assets[0] && thumbUrl(g.assets[0])"
-              :class="{ icon: g.assets[0].thumbKind === 'formatIcon' }"
-              :src="thumbUrl(g.assets[0])!"
-              :alt="g.assets[0].name"
-              draggable="false"
+      <div class="list-wrap">
+        <aside ref="groupListEl" class="group-list kit-scroll">
+          <button
+            v-for="g in confirmGroups"
+            :key="g.hash"
+            class="group-item"
+            :class="{ cur: g.hash === currentGroup?.hash }"
+            @click="selectGroup(g.hash)"
+          >
+            <span class="group-thumb">
+              <img
+                v-if="g.assets[0] && thumbUrl(g.assets[0])"
+                :class="{ icon: g.assets[0].thumbKind === 'formatIcon' }"
+                :src="thumbUrl(g.assets[0])!"
+                :alt="g.assets[0].name"
+                draggable="false"
+              />
+              <span v-else class="ext">{{ g.assets[0]?.ext.toUpperCase() }}</span>
+            </span>
+            <span class="group-text">
+              <span class="group-name" :title="g.assets[0]?.name">{{ g.assets[0]?.name }}</span>
+              <span class="group-count">{{ g.assets.length }} 个文件</span>
+            </span>
+          </button>
+        </aside>
+        <ScrollThumb :body="groupListEl" />
+      </div>
+      <section v-if="currentGroup" class="keeper-wrap">
+        <div ref="keeperListEl" class="keeper-list kit-scroll">
+          <div
+            v-for="a in currentGroup.assets"
+            :key="a.assetId"
+            class="keeper-item"
+            :class="{ on: keeperOf(currentGroup.hash) === a.assetId }"
+            @click="setKeeper(currentGroup.hash, a.assetId)"
+          >
+            <AppRadio
+              :model-value="keeperOf(currentGroup.hash)"
+              :value="a.assetId"
+              @update:model-value="setKeeper(currentGroup.hash!, String($event))"
             />
-            <span v-else class="ext">{{ g.assets[0]?.ext.toUpperCase() }}</span>
-          </span>
-          <span class="group-text">
-            <span class="group-name" :title="g.assets[0]?.name">{{ g.assets[0]?.name }}</span>
-            <span class="group-count">{{ g.assets.length }} 个文件</span>
-          </span>
-        </button>
-      </aside>
-      <section v-if="currentGroup" class="keeper-list kit-scroll">
-        <div
-          v-for="a in currentGroup.assets"
-          :key="a.assetId"
-          class="keeper-item"
-          :class="{ on: keeperOf(currentGroup.hash) === a.assetId }"
-          @click="setKeeper(currentGroup.hash, a.assetId)"
-        >
-          <AppRadio
-            :model-value="keeperOf(currentGroup.hash)"
-            :value="a.assetId"
-            @update:model-value="setKeeper(currentGroup.hash!, String($event))"
-          />
-          <span class="keeper-thumb">
-            <img
-              v-if="thumbUrl(a)"
-              :class="{ icon: a.thumbKind === 'formatIcon' }"
-              :src="thumbUrl(a)!"
-              :alt="a.name"
-              draggable="false"
-            />
-            <span v-else class="ext">{{ a.ext.toUpperCase() }}</span>
-          </span>
-          <span class="keeper-name" :title="a.name">{{ a.name }}</span>
-          <span class="keeper-meta">
-            <span class="size">{{ formatSize(a.size) }}</span>
-            <span class="chip" :title="a.folderName">{{ a.folderName }}</span>
-          </span>
+            <span class="keeper-thumb">
+              <img
+                v-if="thumbUrl(a)"
+                :class="{ icon: a.thumbKind === 'formatIcon' }"
+                :src="thumbUrl(a)!"
+                :alt="a.name"
+                draggable="false"
+              />
+              <span v-else class="ext">{{ a.ext.toUpperCase() }}</span>
+            </span>
+            <span class="keeper-name" :title="a.name">{{ a.name }}</span>
+            <span class="keeper-meta">
+              <span class="size">{{ formatSize(a.size) }}</span>
+              <span class="chip" :title="a.folderName">{{ a.folderName }}</span>
+            </span>
+          </div>
         </div>
+        <ScrollThumb :body="keeperListEl" />
       </section>
     </div>
 
@@ -167,12 +182,22 @@ function thumbUrl(a: DupAsset): string | null {
 .scan-dialog.confirm :deep(.app-modal) {
   width: 970px;
 }
-/* 标题栏（35 稿）：54 高 / padding 12 12 12 24 / 下分隔线；标题 = 文字/常态（通用弹窗同口径） */
+/* 标题栏（35 稿）：54 高 / padding 12 12 12 24；底线走 ::after 两端留 1.5px
+   （不到弹窗 inset 竖框——横竖两条半透明线十字交叉会双倍叠色，2026-08-13 走查） */
 .scan-dialog :deep(.titlebar) {
+  position: relative;
   height: 54px;
   padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  box-shadow: inset 0 -1px 0 0 var(--line-hover);
   flex: none;
+}
+.scan-dialog :deep(.titlebar)::after {
+  content: "";
+  position: absolute;
+  left: 1.5px;
+  right: 1.5px;
+  bottom: 0;
+  height: 1px;
+  background: var(--line-hover);
 }
 .scan-dialog :deep(.title) {
   color: var(--text-normal);
@@ -188,8 +213,28 @@ function thumbUrl(a: DupAsset): string | null {
   flex: none;
 }
 
-/* —— 屏 1：内容自适应 + 上限自滚（滚轮走 base.css .kit-scroll 统一类：
-   恒可见 + gutter 恒占防挤压；组行右 padding 已同步减 6 补偿，见 DupScanGroupRow）—— */
+/* 滚动包裹层：relative 锚 ScrollThumb（悬浮滚轮悬停显隐，主窗口统一交互） */
+.scroll-wrap,
+.list-wrap,
+.keeper-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.scroll-wrap {
+  flex: 1;
+}
+.list-wrap {
+  width: 250px;
+  flex: none;
+}
+.keeper-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+/* —— 屏 1：内容自适应 + 上限自滚（原生条隐藏，滚轮 = ScrollThumb 悬浮件）—— */
 .groups-body {
   max-height: calc(100vh - 280px);
 }
@@ -199,17 +244,16 @@ function thumbUrl(a: DupAsset): string | null {
   display: flex;
   height: min(560px, calc(100vh - 300px));
 }
-/* 左列：250 组列表，右分隔线；容器 padding 12（2026-08-13 用户定，给滚轮留空间；右 6
-   补偿 gutter 恒占——item 左右视觉边距对称 12，2026-08-13 走查）+ gap 4 + item 圆角 6；
-   滚轮走 .kit-scroll 统一类（gutter 恒占，item 宽恒定不跳动） */
+/* 左列：250 组列表，右分隔线；容器 padding 12 全边（2026-08-13 用户定）+ gap 4 + item 圆角 6；
+   滚轮 = ScrollThumb 悬浮件（不占布局，边距即纯 padding，无需凑 gutter） */
 .group-list {
-  width: 250px;
-  flex: none;
+  flex: 1;
+  min-height: 0;
   box-shadow: inset -1px 0 0 0 var(--line-hover);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  padding: var(--space-12) var(--space-6) var(--space-12) var(--space-12);
+  padding: var(--space-12);
 }
 /* 组列表项：56 高 = 40×40 缩略图 + 名称 / N 个文件竖排，padding 四周 8（2026-08-13 用户定）；
    hover 叠 暗-悬停 罩层；当前组 = 亮-选中 罩层 + 暗-悬停 1px 线条（树 item 强度阶梯同口径） */
@@ -279,11 +323,11 @@ function thumbUrl(a: DupAsset): string | null {
   color: var(--text-label);
 }
 /* 右列：保留者单选列表（item = 35 稿卡片横条化：缩略图 + 名称 + 大小 + 所在文件夹标签）；
-   滚轮走 .kit-scroll 统一类（gutter 恒占 6px，右 padding 18 补偿保持视觉右距 24） */
+   滚轮 = ScrollThumb 悬浮件，padding 恢复纯 24（无 gutter 补偿） */
 .keeper-list {
   flex: 1;
-  min-width: 0;
-  padding: var(--space-16) calc(var(--space-24) - 6px) var(--space-16) var(--space-24);
+  min-height: 0;
+  padding: var(--space-16) var(--space-24);
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
@@ -373,9 +417,11 @@ function thumbUrl(a: DupAsset): string | null {
   text-overflow: ellipsis;
 }
 
-/* 底部（35 稿）：62 高 / 上分隔线 / padding 12 12 12 24；flex: 1 撑满 actions 通栏
-   （不撑满上边框线会断在内容左缘，DuplicateDialog 走查同口径） */
+/* 底部（35 稿）：62 高 / padding 12 12 12 24；flex: 1 撑满 actions 通栏
+   （不撑满上边框线会断在内容左缘，DuplicateDialog 走查同口径）；
+   顶线走 ::after 两端留 1.5px（同标题栏——避开弹窗竖框十字叠色） */
 .scan-bottom {
+  position: relative;
   display: flex;
   flex: 1;
   align-items: center;
@@ -383,7 +429,15 @@ function thumbUrl(a: DupAsset): string | null {
   gap: var(--space-12);
   padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
   height: 62px;
-  box-shadow: inset 0 1px 0 0 var(--line-hover);
+}
+.scan-bottom::after {
+  content: "";
+  position: absolute;
+  left: 1.5px;
+  right: 1.5px;
+  top: 0;
+  height: 1px;
+  background: var(--line-hover);
 }
 .scan-bottom.end {
   justify-content: flex-end;

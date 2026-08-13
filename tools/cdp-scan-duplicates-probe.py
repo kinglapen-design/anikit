@@ -200,21 +200,32 @@ async def main():
             if not scroll or scroll["sw"] <= scroll["cw"]:
                 fails.append(f"组 C 无横向滚动 {scroll}")
 
-            # ②b 滚轮统一（2026-08-13 用户定）：屏 1 纵向溢出且滚动条/gutter 恒占（offsetWidth-clientWidth ≥ 6
-            #     = 可见滚轮）；两卡组（内容恰 666）不出横向条（gutter 已由组行右 padding 补偿）
+            # ②b 悬浮滚轮（2026-08-13 定稿，主窗口统一交互）：屏 1 可滚 + ScrollThumb 存在 +
+            #     hover 包裹层后可见 + 无 gutter 挤压（两卡组内容恰 666 不出横条）
             sb = await ev("""(() => {
               const b = document.querySelector('.groups-body');
               const rowA = document.querySelectorAll('.scan-group')[0]?.querySelector('.cards');
               return b ? { sh: b.scrollHeight, ch: b.clientHeight, ow: b.offsetWidth, cw: b.clientWidth,
+                           thumbs: document.querySelectorAll('.scroll-thumb').length,
                            aSw: rowA?.scrollWidth ?? 0, aCw: rowA?.clientWidth ?? 0 } : null;
             })()""")
             print("屏1滚轮:", sb)
             if not sb or sb["sh"] <= sb["ch"]:
                 fails.append(f"屏 1 未溢出（桩数据应可滚）{sb}")
-            elif sb["ow"] - sb["cw"] < 6:
-                fails.append(f"屏 1 滚轮不可见/未占位 {sb}")
+            if not sb or sb["thumbs"] < 1:
+                fails.append(f"ScrollThumb 缺失 {sb}")
             if sb and sb["aSw"] > sb["aCw"] + 1:
                 fails.append(f"两卡组误出横向条 {sb}")
+            # hover 屏 1 包裹层 → 悬浮滚轮显形
+            await hover("document.querySelector('.scroll-wrap')")
+            await asyncio.sleep(0.4)  # 原生 mouseenter → 响应式 hover → visible 类需一个渲染周期
+            tb = await ev("""(() => {
+              const t = document.querySelector('.scroll-wrap .scroll-thumb');
+              return t ? { visible: t.classList.contains('visible'), h: t.getBoundingClientRect().height } : null;
+            })()""")
+            print("悬浮滚轮:", tb)
+            if not tb or not tb["visible"] or tb["h"] < 20:
+                fails.append(f"悬浮滚轮 hover 未显 {tb}")
 
             await shot("scan-duplicates")
 

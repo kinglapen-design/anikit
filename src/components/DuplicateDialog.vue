@@ -12,10 +12,12 @@ import AppModal from "./AppModal.vue";
 import AppButton from "./AppButton.vue";
 import AppSwitch from "./AppSwitch.vue";
 import DuplicateRow, { type DupDecision } from "./DuplicateRow.vue";
+import ScrollThumb from "./ScrollThumb.vue";
 import { useContentStore, type ConflictItem, type ConflictResolution } from "../stores/content";
 
 const content = useContentStore();
 const conflicts = computed(() => content.importConflicts ?? []);
+const dupScrollEl = ref<HTMLElement>();
 
 // 默认决策：作为新链接导入（36 稿默认，不设落点收窄——2026-08-13 用户定案）
 function defaultDecision(_c: ConflictItem): DupDecision {
@@ -81,14 +83,17 @@ function onCancel(): void {
         <span class="col">已存在文件</span>
         <span class="col">新的文件</span>
       </div>
-      <div class="dup-scroll kit-scroll">
-        <DuplicateRow
-          v-for="(c, i) in conflicts"
-          :key="c.sourcePath"
-          :item="c"
-          :decision="rows[i] ?? defaultDecision(c)"
-          @change="onRowChange(i, $event)"
-        />
+      <div class="dup-wrap">
+        <div ref="dupScrollEl" class="dup-scroll kit-scroll">
+          <DuplicateRow
+            v-for="(c, i) in conflicts"
+            :key="c.sourcePath"
+            :item="c"
+            :decision="rows[i] ?? defaultDecision(c)"
+            @change="onRowChange(i, $event)"
+          />
+        </div>
+        <ScrollThumb :body="dupScrollEl" />
       </div>
     </div>
     <template #actions>
@@ -154,10 +159,17 @@ function onCancel(): void {
   font-weight: var(--text-title-weight);
   color: var(--text-label);
 }
+.dup-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
 .dup-scroll {
   flex: 1;
   min-height: 0;
-  /* 滚轮走 base.css .kit-scroll 统一类（2026-08-13 用户定：滚动区域恒可见滚轮、gutter 恒占不挤压） */
+  /* 滚轮 = ScrollThumb 悬浮件（悬停显隐，主窗口统一交互，2026-08-13 定稿） */
 }
 /* 底部按钮行（36 稿）：62 高 / 上分隔线 / padding 12 12 12 24，右对齐；
    flex: 1 占满 actions 主轴（row flex 项宽默认内容宽——不撑满上边框线会断在内容左缘，2026-08-13 走查） */
