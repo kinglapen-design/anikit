@@ -8,7 +8,7 @@
 // 目录恒 folder-closed。占用标记以 details 合并后为准（快层目录 occupied=false 是过渡态）。
 // 卡片样式 2026-08-13 同步素材卡片 14 稿（整卡圆角 6 + ::after 状态边框 + 图标区 C2 /
 // 简介区 C3 名称单行左对齐）；右键 @contextmenu.stop 拦冒泡（gridDispatch 空白新增菜单会覆盖，同日修复）。
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, type ComponentPublicInstance } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import SectionHeader from "./SectionHeader.vue";
@@ -87,7 +87,12 @@ async function deleteEntry(entry: InboxDiskEntry): Promise<void> {
 
 // 行内重命名：名称位切 input，Enter 提交 / Esc 取消
 const renaming = ref<{ name: string; draft: string } | null>(null);
+// v-for 内字符串 ref 会收集为数组（.focus 非函数静默失败=菜单重命名"没反应"，2026-08-13 修复）：
+// 函数 ref 直取元素——v-if 保证同时只有一个重命名 input 渲染
 const renameInput = ref<HTMLInputElement>();
+function bindRenameInput(el: Element | ComponentPublicInstance | null): void {
+  renameInput.value = (el as HTMLInputElement | null) ?? undefined;
+}
 function startRename(entry: InboxDiskEntry): void {
   if (entry.occupied) return;
   renaming.value = { name: entry.name, draft: entry.name };
@@ -147,7 +152,7 @@ const entries = computed(() => content.inboxDisk);
           <div class="texts">
             <input
               v-if="renaming?.name === e.name"
-              ref="renameInput"
+              :ref="bindRenameInput"
               v-model="renaming.draft"
               class="rename-input"
               @keydown.enter.prevent="commitRename"
@@ -188,10 +193,10 @@ const entries = computed(() => content.inboxDisk);
   color: var(--error);
   word-break: break-all;
 }
-/* 卡片列表：与文件夹卡片同 grid 口径（auto-fill 同宽，列间距 16） */
+/* 卡片列表：与素材网格视图同宽（260，2026-08-13 用户：120 太窄名称五字就截断） */
 .flow {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   column-gap: var(--space-16);
   row-gap: var(--space-16);
 }

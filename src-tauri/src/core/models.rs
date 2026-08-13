@@ -7,6 +7,11 @@ use serde::{Deserialize, Serialize};
 /// 文件版本低于它则逐级迁移，高于它则拒绝写入（防止新版写过的库被旧版破坏）。
 pub const DATA_VERSION: u32 = 1;
 
+/// 根目录的保留文件夹 ID：Placement.folder 用它表示根，Folder 列表不放 root 节点
+///（2026-08-13 自 services/import.rs 上移 core——core/library.rs 开库自检清 root 链接需要用，
+/// core 不反向依赖 services；services/import.rs 以 pub use 转出口径不变）
+pub const ROOT_FOLDER_ID: &str = "root";
+
 /// 生成资源 ID：`AN` + 时间戳（yyMMddHHmm，时间有序）+ 5 位随机字符（防同秒冲突）。
 /// ID 不承载语义，语义全部在 metadata（PRD 01-2.1）。
 pub fn new_asset_id() -> String {

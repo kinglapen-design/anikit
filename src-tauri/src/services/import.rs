@@ -24,8 +24,8 @@ use crate::core::paths;
 use crate::services::thumbnail;
 use crate::services::views::PlacementView;
 
-/// 根目录的保留文件夹 ID：Placement.folder 用它表示根，Folder 列表不放 root 节点
-pub const ROOT_FOLDER_ID: &str = "root";
+/// 根目录的保留文件夹 ID（定义在 core/models.rs，此处转出保既有引用路径）
+pub use crate::core::models::ROOT_FOLDER_ID;
 
 /// 层级模式：Flatten 剔除层级平铺；Keep 保留源目录层级建文件夹节点
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
