@@ -189,6 +189,8 @@ interface Session {
   folderIds: string[]; // folder 拖拽组（多选 = 全部选中文件夹，2026-07-28 复验反馈 5）
   ghost: HTMLElement | null;
   drop: (() => Promise<void>) | null; // 最后一次 move 算出的落点动作（入参已捕获，不读 sess）
+  pointerId: number; // pointer capture 用（2026-08-13 僵尸会话修复）
+  capEl: HTMLElement | null; // capture 元素（按下的卡片 / 树 item 根），endDrag 释放
 }
 
 let sess: Session | null = null;
@@ -347,6 +349,13 @@ function startDrag(e: PointerEvent): void {
 
 function onMove(e: PointerEvent): void {
   if (!sess) return;
+  // 僵尸会话自清（2026-08-13 用户实机"点不动 / 双选中"根因）：指针已非按下态（buttons 无左键）
+  // 说明 pointerup 曾丢失（窗口外松手等）——立即取消旧会话，否则旧 sess 会被后续按下静默复用，
+  // 移动超阈值误 startDrag：吞 click（点不动、双击才行）+ clickFolder 误入域（双选中残留）+ 误执行 drop
+  if ((e.buttons & 1) === 0) {
+    endDrag(true);
+    return;
+  }
   if (!sess.started) {
     if (Math.hypot(e.clientX - sess.startX, e.clientY - sess.startY) < START_THRESHOLD) return;
     startDrag(e);
@@ -364,6 +373,14 @@ function endDrag(cancelled: boolean): void {
   window.removeEventListener("pointercancel", onCancel);
   window.removeEventListener("keydown", onKey, true);
   window.removeEventListener("blur", onWindowBlur);
+  // 释放 pointer capture（元素已卸载等情况 capture 已自动释放，吞异常）
+  if (s.capEl) {
+    try {
+      s.capEl.releasePointerCapture(s.pointerId);
+    } catch {
+      /* 已自动释放 */
+    }
+  }
   s.ghost?.remove();
   document.body.style.userSelect = "";
   document.body.classList.remove("dragging");
@@ -402,7 +419,10 @@ function onKey(e: KeyboardEvent): void {
 }
 
 function begin(e: PointerEvent, kind: DragKind, key: string): void {
-  if (e.button !== 0 || sess) return;
+  if (e.button !== 0) return;
+  // 僵尸会话不复用（2026-08-13 修复第二道防线，原 `if (sess) return` 静默复用是卡死帮凶）：
+  // 新左键按下时旧会话必然已残缺（其 pointerup 丢失），先取消再建新
+  if (sess) endDrag(true);
   sess = {
     kind,
     key,
@@ -413,7 +433,20 @@ function begin(e: PointerEvent, kind: DragKind, key: string): void {
     folderIds: [],
     ghost: null,
     drop: null,
+    pointerId: e.pointerId,
+    capEl: null,
   };
+  // pointer capture 挂按下的卡片 / 树 item 根（治本：窗口外松手 pointerup 也能派发到 webview，
+  // 僵尸会话不再产生；capture 到自身根元素不影响 click 派发——down/up 共同祖先仍是他）
+  const capEl = (e.target as HTMLElement).closest<HTMLElement>(".tree-item, .asset-card, .list-row, .folder-card");
+  if (capEl) {
+    try {
+      capEl.setPointerCapture(e.pointerId);
+      sess.capEl = capEl;
+    } catch {
+      /* capture 失败靠 onMove buttons 自清兜底 */
+    }
+  }
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
   window.addEventListener("pointercancel", onCancel);

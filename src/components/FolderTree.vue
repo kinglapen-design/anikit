@@ -66,8 +66,12 @@ function onSelect(id: string, e: MouseEvent): void {
   // sidebarSelected 高亮冒充选中态，用户拖"看着选中实则不在域内"的项时引擎按
   // "拖拽未选中项 = 单选再拖"把已有多选清成单选（树多选排序只动被拖一项）。
   // 修为 plain click 同步单选入域；App.vue 的 sidebarSelected watch 会 selection.clear()
-  //（pre flush 先于渲染执行），nextTick 让过它再入域
-  void nextTick(() => selection.clickFolder(id));
+  //（pre flush 先于渲染执行），nextTick 让过它再入域；
+  // 守卫（2026-08-13）：连点"树 item → 快速访问"同 tick 内切走时 sidebarSelected 已非本项，
+  // 不入域——否则已切走的文件夹 domain 描边残留（双选中观感的次要路径）
+  void nextTick(() => {
+    if (content.sidebarSelected === `folder:${id}`) selection.clickFolder(id);
+  });
 }
 
 // 树 item 右键（6.3）：全局菜单宿主（lib/contextMenus）；命名态节点不出菜单（2026-07-29 复验三轮）；
