@@ -120,10 +120,21 @@ fn check_asset(lib: &Library, asset_id: &str) -> Result<(), String> {
   Ok(())
 }
 
+/// 候车区护栏（PRD 02-15：未分类只收原始文件，2026-08-13 定案）——link 在候车区建链接
+/// 绕过 link_placements 双护栏、useExisting 把已分类资产的 origin 拽回候车区（反分类），
+/// 均破坏该语义；前端弹窗已收窄（候车区只留"作为新文件导入"），此处后端兜底
+fn check_not_root(target_folder: &str) -> Result<(), String> {
+  if target_folder == ROOT_FOLDER_ID {
+    return Err("未分类是候车区，不能作为该决策的目标位置".to_string());
+  }
+  Ok(())
+}
+
 /// link：目标文件夹建链接 Placement（显示名 = newName 或源文件原名，unique_name），源文件不动
 fn link(lib: &mut Library, item: &ConflictResolution) -> Result<(), String> {
   check_target(lib, &item.target_folder)?;
   check_asset(lib, &item.existing_asset_id)?;
+  check_not_root(&item.target_folder)?;
   let name = item
     .new_name
     .clone()
@@ -138,6 +149,7 @@ fn link(lib: &mut Library, item: &ConflictResolution) -> Result<(), String> {
 fn use_existing(lib: &mut Library, item: &ConflictResolution) -> Result<(), String> {
   check_target(lib, &item.target_folder)?;
   check_asset(lib, &item.existing_asset_id)?;
+  check_not_root(&item.target_folder)?;
   // 去重：删掉目标文件夹里该资源的链接 Placement（先删再定位 origin，避免索引位移）
   lib.folders.items.retain(|p| {
     !(p.asset == item.existing_asset_id && p.folder == item.target_folder && !p.origin)
@@ -394,8 +406,9 @@ mod tests {
   #[test]
   fn link_action_honors_custom_and_default_names() {
     let h = make_lib();
-    let c1 = make_conflict(&h, "原图.png", "副本.png", None);
-    let c2 = make_conflict(&h, "基准2.png", "走路.fla", None);
+    let folder_id = add_folder(&h, "F01", "人物");
+    let c1 = make_conflict(&h, "原图.png", "副本.png", Some(folder_id.clone()));
+    let c2 = make_conflict(&h, "基准2.png", "走路.fla", Some(folder_id));
 
     let report = resolve(
       &h,
@@ -433,8 +446,9 @@ mod tests {
   #[test]
   fn failed_item_does_not_block_others() {
     let h = make_lib();
+    let folder_id = add_folder(&h, "F01", "人物");
     let c1 = make_conflict(&h, "原图.png", "副本.png", None);
-    let c2 = make_conflict(&h, "基准2.png", "副本2.png", None);
+    let c2 = make_conflict(&h, "基准2.png", "副本2.png", Some(folder_id));
     // c1 的源文件删掉 → copy 必失败；c2 正常
     std::fs::remove_file(&c1.source_path).unwrap();
 
@@ -461,6 +475,29 @@ mod tests {
     assert_eq!(report.failed.len(), 2);
     assert!(report.failed[0].reason.contains("目标文件夹不存在"));
     assert!(report.failed[1].reason.contains("库内资源不存在"));
+  }
+
+  /// 候车区护栏（PRD 02-15，2026-08-13 定案）：link / useExisting 落点为 root 一律拒绝，
+  /// 前端弹窗已收窄，后端兜底
+  #[test]
+  fn link_and_use_existing_reject_root_target() {
+    let h = make_lib();
+    // 导入目标为 None → 冲突落点即候车区（root）
+    let c1 = make_conflict(&h, "原图.png", "副本.png", None);
+    let c2 = make_conflict(&h, "基准2.png", "副本2.png", None);
+
+    let report = resolve(
+      &h,
+      vec![to_resolution(&c1, ResolveAction::Link, None), to_resolution(&c2, ResolveAction::UseExisting, None)],
+      Source::Copy,
+    );
+    assert_eq!((report.resolved, report.failed.len()), (0, 2));
+    assert!(report.failed.iter().all(|f| f.reason.contains("候车区")), "中文原因：{:?}", report.failed);
+    // 数据未动：c1 没有建出链接；c2 的 origin 仍留在 root（未被拽动）
+    assert_eq!(placements_of(&h, &c1.existing_asset_id).len(), 1);
+    let p2 = placements_of(&h, &c2.existing_asset_id);
+    assert_eq!(p2.len(), 1);
+    assert!(p2[0].origin && p2[0].folder == ROOT_FOLDER_ID);
   }
 
   #[test]

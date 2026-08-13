@@ -3,6 +3,8 @@
 //! needConfirm + lastAssets 不动数据；前端弹询问后带 lastAction 再调——
 //! "recycle" = 全部 Placement 移除 + recycle.json 记录（info 原地不动，PRD 06-06）；
 //! "uncategorized" = 这些资源的 Placement 改挂 root（未分类）；非最后一条的直接移除。
+//! 删到 origin Placement 而资产仍有剩余 Placement 时，origin 转给剩余中顺序最前的一条
+//! （PRD 01 边界规则 8）。
 
 use std::collections::{HashMap, HashSet};
 
@@ -73,6 +75,10 @@ pub fn delete_placements(lib: &mut Library, items: &[PlacementRef], last_action:
 
   let matched_set: HashSet<usize> = matched.iter().copied().collect();
   let last_set: HashSet<&str> = last_assets.iter().map(String::as_str).collect();
+  // origin 转移候选：本次涉及但非"最后一条"的资产（last_set 资产删完进回收站，无剩余不涉及）。
+  // 所有权化——retain 之后 items 变动，借用不可再持有
+  let transfer_candidates: HashSet<String> =
+    matched.iter().map(|&i| lib.folders.items[i].asset.clone()).filter(|a| !last_set.contains(a.as_str())).collect();
   let mut keep_in_root: HashSet<usize> = HashSet::new();
   let mut recycled = false;
   match last_action {
@@ -112,6 +118,29 @@ pub fn delete_placements(lib: &mut Library, items: &[PlacementRef], last_action:
     i += 1;
     keep
   });
+  // origin 转移（PRD 01 边界规则 8，2026-08-04 定 / 2026-08-13 落地）：本次删掉了某资产的
+  // origin Placement 且该资产仍有剩余 Placement 时，origin 转给剩余中顺序最前的一条。
+  // "顺序最前"定义：同文件夹内 items vec 顺序即 order 升序（add_placement 追加 /
+  // rewrite_orders 重写维护该不变量），跨文件夹无全局顺序，故统一取 items vec 顺序最前者
+  if !transfer_candidates.is_empty() {
+    let has_origin: HashSet<String> = lib
+      .folders
+      .items
+      .iter()
+      .filter(|p| p.origin && transfer_candidates.contains(p.asset.as_str()))
+      .map(|p| p.asset.clone())
+      .collect();
+    let mut transferred: HashSet<String> = HashSet::new();
+    for p in &mut lib.folders.items {
+      if !p.origin
+        && transfer_candidates.contains(p.asset.as_str())
+        && !has_origin.contains(p.asset.as_str())
+        && transferred.insert(p.asset.clone())
+      {
+        p.origin = true;
+      }
+    }
+  }
   if !keep_in_root.is_empty() {
     rewrite_orders(lib, ROOT_FOLDER_ID);
   }
@@ -188,6 +217,62 @@ mod tests {
     assert_eq!(count(&h.lib, "AN-B"), 1);
     // 未知删除方式拒绝
     assert!(delete_placements(&mut h.lib, &[pref("AN-B", "root", true)], Some("销毁")).is_err());
+  }
+
+  /// origin 转移（PRD 01 边界规则 8）：删 origin 剩一条链接 → 链接转 origin
+  #[test]
+  fn delete_origin_transfers_to_single_remaining_link() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01");
+    add_folder(&mut h.lib, "F02");
+    add_asset(&mut h, "AN-A", "a.png", "F01"); // origin
+    ops::add_placement(&mut h.lib, "AN-A".into(), "F02".into(), "链接.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+
+    // 删 origin（还有链接，非最后一条，无需确认）
+    let rep = delete_placements(&mut h.lib, &[pref("AN-A", "F01", true)], None).unwrap();
+    assert!(!rep.need_confirm);
+    let remaining: Vec<&Placement> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-A").collect();
+    assert_eq!(remaining.len(), 1);
+    assert!(remaining[0].origin, "唯一剩余链接转 origin");
+    assert_eq!(remaining[0].folder, "F02");
+    // 索引反查同步（finish 重建）
+    assert_eq!(h.lib.index.placements_by_asset["AN-A"].iter().filter(|p| p.origin).count(), 1);
+  }
+
+  /// origin 转移：剩多条 → 顺序最前（items vec 顺序）者转 origin
+  #[test]
+  fn delete_origin_transfers_to_frontmost_of_multiple() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01");
+    add_folder(&mut h.lib, "F02");
+    add_asset(&mut h, "AN-A", "a.png", "F01"); // origin
+    ops::add_placement(&mut h.lib, "AN-A".into(), "F02".into(), "链接1.png".into(), false, &mut HashMap::new());
+    ops::add_placement(&mut h.lib, "AN-A".into(), "root".into(), "链接2.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+
+    let rep = delete_placements(&mut h.lib, &[pref("AN-A", "F01", true)], None).unwrap();
+    assert!(!rep.need_confirm);
+    let remaining: Vec<&Placement> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-A").collect();
+    assert_eq!(remaining.len(), 2);
+    assert_eq!(remaining[0].folder, "F02");
+    assert!(remaining[0].origin, "vec 顺序最前者转 origin");
+    assert!(!remaining[1].origin, "origin 唯一");
+    assert!(h.lib.recycle.items.is_empty(), "不进回收站");
+  }
+
+  /// 删除最后一条（origin）→ 进回收站，无剩余不转移；recycle.json 记 origin = true
+  #[test]
+  fn delete_last_origin_recycles_without_transfer() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01");
+    add_asset(&mut h, "AN-A", "a.png", "F01");
+
+    let rep = delete_placements(&mut h.lib, &[pref("AN-A", "F01", true)], Some("recycle")).unwrap();
+    assert!(!rep.need_confirm);
+    assert_eq!(count(&h.lib, "AN-A"), 0);
+    assert_eq!(h.lib.recycle.items.len(), 1);
+    assert!(h.lib.recycle.items[0].placements[0].origin, "回收站快照保留 origin 标记");
   }
 
   #[test]
