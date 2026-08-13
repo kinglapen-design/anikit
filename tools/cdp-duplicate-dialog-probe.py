@@ -2,8 +2,9 @@
 # 桩有库进主界面 → 新增菜单"导入本地文件" → 导入弹窗确认 → import_paths 桩经 Channel 回调
 # 推 finished（3 条冲突桩数据）→ DuplicateDialog 出现。
 # 校验：standard 壳 970×878 / 表头双列 / 行数 / 默认 radio=作为新链接导入 / 全部跟随（开=改一行全跟随，
-# 关=逐行独立）/ 跳过压暗且该项 action=skip / 序号命名实时预览 / 确认提交 items（含 newName）/
-# 取消 = 全部跳过不调 resolve_conflicts。截图留档 tools/style-preview/duplicate-dialog.png。
+# 关=逐行独立）/ 跳过压暗且该项 action=skip / 内嵌重命名区已废除（2026-08-13 用户定过度设计）/
+# 确认提交 items（无 newName）/ 取消 = 全部跳过不调 resolve_conflicts。
+# 截图留档 tools/style-preview/duplicate-dialog.png。
 import asyncio
 import base64
 import json
@@ -62,9 +63,12 @@ window.__TAURI_INTERNALS__ = {
       setTimeout(() => {
         const cb = window.__cbs[chId];
         if (!cb) return;
+        // 落点按 __target 切换（第一轮文件夹 F01 = 三选一；第二轮 root = 候车区收窄，2026-08-13）
+        const t = window.__target ?? "F01";
+        const conflicts = window.__conflicts.map((c) => ({ ...c, targetFolder: t, targetFolderName: t === "root" ? "根目录" : "人物" }));
         // Channel 消息包装形状：{ index, message }（@tauri-apps/api core.js Channel）
         cb({ index: 0, message: { type: "started", total: 3 } });
-        cb({ index: 1, message: { type: "finished", imported: 0, conflicts: window.__conflicts, failed: [] } });
+        cb({ index: 1, message: { type: "finished", imported: 0, conflicts, failed: [] } });
         window.__pushed = (window.__pushed || 0) + 1;
       }, 300);
       return Promise.resolve(1);
@@ -170,7 +174,7 @@ async def main():
               onLabels: [...document.querySelectorAll('.dup-row')].map((r) => r.querySelector('.app-radio.on')?.textContent.trim() ?? null),
               newNames: [...document.querySelectorAll('.dup-row .file-card.new .fname')].map((n) => n.textContent.trim()),
               chips: [...document.querySelectorAll('.dup-row')[0]?.querySelectorAll('.chip') ?? []].map((c) => c.textContent.trim()),
-              segmented: [...document.querySelectorAll('.dup-bottom .app-seg .item')].map((i) => i.textContent.trim()),
+              noRenameBar: !document.querySelector('.rename-bar') && !document.querySelector('.dup-bottom .app-seg'),
               followOn: document.querySelector('.dup-bottom .app-switch')?.classList.contains('on') ?? null,
               buttons: [...document.querySelectorAll('.dup-bottom .app-btn')].map((b) => b.textContent.trim()),
             })"""
@@ -189,11 +193,12 @@ async def main():
             if info["radiosPerRow"] != 3 or info["onLabels"] != ["作为新链接导入"] * 3:
                 fails.append(f"默认 radio {info['onLabels']}")
             if info["newNames"] != ["场景A.png", "场景B.png", "参考C.psd"]:
-                fails.append(f"初始新名 {info['newNames']}")
-            if info["chips"] != ["人物", "根目录"]:
+                fails.append(f"右卡源名 {info['newNames']}")
+            if info["chips"] != ["人物", "人物"]:
                 fails.append(f"位置标签 {info['chips']}")
-            if info["segmented"] != ["序号命名", "替换命名"]:
-                fails.append(f"分段 {info['segmented']}")
+            # 2026-08-13 用户定：内嵌批量重命名过度设计废除——底部不应再有重命名区/分段选择器
+            if not info["noRenameBar"]:
+                fails.append("重命名区仍在（应已废除）")
             if info["followOn"] is not True:
                 fails.append("全部跟随默认应开")
             if info["buttons"] != ["确认", "取消"]:
@@ -222,16 +227,10 @@ async def main():
             if skipped != [False, False, True] or opacity != "0.3":
                 fails.append(f"跳过压暗 {skipped} {opacity}")
 
-            # ④ 序号命名：名称"场景" → 实时预览（第 1 行 useExisting 不预览改名；第 3 行跳过不预览）
-            await ev("(() => { const el = document.querySelector('.rename-bar .app-input'); el.value = '场景'; el.dispatchEvent(new Event('input')); })()")
-            await asyncio.sleep(0.5)
-            names = await ev("[...document.querySelectorAll('.dup-row .file-card.new .fname')].map((n) => n.textContent.trim())")
-            print("改名预览:", names)
-            if names != ["场景A.png", "场景-2.png", "参考C.psd"]:
-                fails.append(f"序号预览 {names}")
+            # ④ 截图留档（重命名区已废除，无改名预览步骤）
             await shot("duplicate-dialog")
 
-            # ⑤ 确认：resolve_conflicts 收到 3 项——行1 useExisting 无 newName / 行2 copy 带 newName / 行3 skip
+            # ⑤ 确认：resolve_conflicts 收到 3 项——行1 useExisting / 行2 copy / 行3 skip（newName 已废除）
             await click("[...document.querySelectorAll('.dup-bottom .app-btn')].find((b) => b.textContent.includes('确认'))")
             await asyncio.sleep(1.0)
             calls = await ev("window.__resolvedCalls")
@@ -243,9 +242,10 @@ async def main():
                 items = calls[0]["items"]
                 ok = (
                     len(items) == 3
-                    and items[0]["action"] == "useExisting" and items[0].get("newName") is None
-                    and items[1]["action"] == "copy" and items[1].get("newName") == "场景-2.png"
-                    and items[2]["action"] == "skip" and items[2].get("newName") is None
+                    and items[0]["action"] == "useExisting"
+                    and items[1]["action"] == "copy"
+                    and items[2]["action"] == "skip"
+                    and all("newName" not in it for it in items)
                     and calls[0]["source"] == "copy"
                 )
                 if not ok:
@@ -253,13 +253,22 @@ async def main():
             if not closed:
                 fails.append("确认后弹窗未关闭")
 
-            # ⑥ 再次触发 → 取消 = 全部跳过（不调 resolve_conflicts，弹窗关闭）
+            # ⑥ 候车区收窄（2026-08-13 用户定：落点 root 只留"作为新文件导入"）：
+            # 重开（__target=root）→ 断言每行 1 radio 且默认 copy → 取消 = 全部跳过
+            await ev("window.__target = 'root'")
             await click("document.querySelector('.add-btn-wrap .icon-btn')")
             await click("[...document.querySelectorAll('.app-menu .menu-item')].find((m) => m.textContent.includes('导入本地文件'))")
             await asyncio.sleep(0.8)
             await click("[...document.querySelectorAll('.app-modal .app-btn')].find((b) => b.textContent.includes('确认'))")
             await asyncio.sleep(1.5)
             reopened = await ev("!!document.querySelector('.dup-dialog .app-modal')")
+            wa = await ev("""({
+              radiosPerRow: document.querySelectorAll('.dup-row')[0]?.querySelectorAll('.app-radio').length ?? 0,
+              onLabels: [...document.querySelectorAll('.dup-row')].map((r) => r.querySelector('.app-radio.on')?.textContent.trim() ?? null),
+            })""")
+            print("候车区收窄:", json.dumps(wa, ensure_ascii=False))
+            if wa["radiosPerRow"] != 1 or wa["onLabels"] != ["作为新文件导入"] * 3:
+                fails.append(f"候车区收窄 {json.dumps(wa, ensure_ascii=False)}")
             await click("[...document.querySelectorAll('.dup-bottom .app-btn')].find((b) => b.textContent.includes('取消'))")
             await asyncio.sleep(0.8)
             calls2 = await ev("window.__resolvedCalls.length")
@@ -271,7 +280,7 @@ async def main():
             if fails:
                 print("FAIL:", "; ".join(fails))
                 return 3
-            print("PASS: 布局/默认态/跟随/跳过/改名预览/提交/取消均贴稿")
+            print("PASS: 布局/默认态/跟随/跳过/候车区收窄/提交/取消均贴稿")
             return 0
     finally:
         proc.terminate()

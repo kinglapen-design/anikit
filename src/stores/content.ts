@@ -105,7 +105,6 @@ export interface ConflictResolution {
   existingAssetId: string;
   targetFolder: string;
   action: "useExisting" | "copy" | "link" | "skip";
-  newName?: string | null; // 批量重命名后的导入显示名（copy / link 生效；只影响显示名不动 hash，36 稿）
   sequence?: SequenceSource | null; // 序列帧冲突原样回传（4.1）
   sourceThumbPath?: string | null; // 预览缓存原样回传（决策完成后后端删除，4.2）
   importedFrom?: string | null; // 批次渠道原样回传（copy 新资产继承该标记，2026-08-13）

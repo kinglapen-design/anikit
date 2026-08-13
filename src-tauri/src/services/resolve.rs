@@ -29,8 +29,9 @@ pub enum ResolveAction {
   Skip,
 }
 
-/// 单项决策（前端弹窗结果；newName = 批量重命名后的导入显示名，action = "copy" / "link" 时生效，
-/// 只影响导入后 Placement 显示名，不影响 hash 判定；36_重复文件提示稿内嵌批量重命名，2026-08-13）
+/// 单项决策（前端弹窗结果）。2026-08-13 用户定：弹窗内嵌批量重命名属过度设计废除
+///（newName 字段同步删除）——"导入就是导入，只选择怎么导入；要命名导进来再说"
+///（批量重命名归独立弹窗，阶段三，37 稿）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConflictResolution {
@@ -38,8 +39,6 @@ pub struct ConflictResolution {
   pub existing_asset_id: String,
   pub target_folder: String,
   pub action: ResolveAction,
-  #[serde(default)]
-  pub new_name: Option<String>,
   /// 序列帧组信息（冲突项原样回传；action = "copy" 时按此重新打包建档，4.1）
   #[serde(default)]
   pub sequence: Option<ops::SequenceSource>,
@@ -134,16 +133,12 @@ fn check_not_root(target_folder: &str) -> Result<(), String> {
   Ok(())
 }
 
-/// link：目标文件夹建链接 Placement（显示名 = newName 或源文件原名，unique_name），源文件不动
+/// link：目标文件夹建链接 Placement（显示名 = 源文件原名，unique_name），源文件不动
 fn link(lib: &mut Library, item: &ConflictResolution) -> Result<(), String> {
   check_target(lib, &item.target_folder)?;
   check_asset(lib, &item.existing_asset_id)?;
   check_not_root(&item.target_folder)?;
-  let name = item
-    .new_name
-    .clone()
-    .filter(|n| !n.trim().is_empty())
-    .unwrap_or_else(|| ops::file_name(&item.source_path));
+  let name = ops::file_name(&item.source_path);
   ops::add_placement(lib, item.existing_asset_id.clone(), item.target_folder.clone(), name, false, &mut HashMap::new());
   Ok(())
 }
@@ -181,16 +176,14 @@ fn use_existing(lib: &mut Library, item: &ConflictResolution) -> Result<(), Stri
 }
 
 /// copy：源走标准建档（新 ID 新实体 + origin Placement），继承原导入的 source；
-/// 序列帧冲突按回传的组信息重新打包（frames/ 归一，组 hash 重算）；
-/// newName 给定则作为导入后显示名（序列帧分支同时替换重新打包的标题词干）
+/// 序列帧冲突按回传的组信息重新打包（frames/ 归一，组 hash 重算）
 fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Result<(), String> {
   check_target(lib, &item.target_folder)?;
   let root = lib.root.clone();
   let assets_dir = lib.assets_dir.clone();
   match &item.sequence {
     Some(seq) => {
-      // 新名词干（剥掉与序列帧同扩展名的后缀）；未给沿用原标题
-      let stem = new_name_stem(item, &seq.ext).unwrap_or_else(|| seq.name.clone());
+      let stem = seq.name.clone();
       let frames: Vec<(PathBuf, u32)> = seq.frames.iter().map(|f| (f.path.clone(), f.number)).collect();
       let mut hashes = Vec::with_capacity(frames.len());
       for (path, _) in &frames {
@@ -217,12 +210,8 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
       let hash = ops::sha256_file(&pending.path).map_err(|e| format!("文件读取失败：{e}"))?;
       // build_asset_with_id：携带批次渠道标记（新资产进"已导入"视图，2026-08-13）
       let asset = ops::build_asset_with_id(&assets_dir, &pending, &hash, &new_asset_id(), source, item.imported_from.as_deref())?;
-      // 显示名 = newName（含扩展名，前端已补全）或源文件原名；hash 判定不受影响
-      let name = item
-        .new_name
-        .clone()
-        .filter(|n| !n.trim().is_empty())
-        .unwrap_or_else(|| ops::file_name(&pending.path));
+      // 显示名 = 源文件原名；hash 判定不受影响
+      let name = ops::file_name(&pending.path);
       // 4.2：无内容缩略图补系统格式图标缓存（cache/thumbs，不进 info）并登记内存集
       if asset.thumbnail.is_none() {
         let origin = paths::origin_file(&assets_dir, &asset.id, &asset.origin_name);
@@ -235,16 +224,6 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
       Ok(())
     }
   }
-}
-
-/// 取 newName 的词干：剥掉 `.{ext}` 后缀（前端带扩展名回传）；空 / 纯空白视为未给
-fn new_name_stem(item: &ConflictResolution, ext: &str) -> Option<String> {
-  let name = item.new_name.as_ref()?.trim();
-  if name.is_empty() {
-    return None;
-  }
-  let suffix = format!(".{ext}");
-  Some(name.strip_suffix(&suffix).unwrap_or(name).to_string())
 }
 
 #[cfg(test)]
@@ -292,7 +271,6 @@ mod tests {
           existing_asset_id: "AN-X".into(),
           target_folder: ROOT_FOLDER_ID.into(),
           action: ResolveAction::Skip,
-          new_name: None,
           sequence: None,
           source_thumb_path: Some(cache.to_string_lossy().into_owned()),
           imported_from: None,
@@ -345,13 +323,12 @@ mod tests {
     with_lib(h, |l| resolve_conflicts(l, &items, source))
   }
 
-  fn to_resolution(c: &ops::ConflictItem, action: ResolveAction, new_name: Option<&str>) -> ConflictResolution {
+  fn to_resolution(c: &ops::ConflictItem, action: ResolveAction) -> ConflictResolution {
     ConflictResolution {
       source_path: c.source_path.clone(),
       existing_asset_id: c.existing_asset_id.clone(),
       target_folder: c.target_folder.clone(),
       action,
-      new_name: new_name.map(|s| s.into()),
       sequence: c.sequence.clone(),
       source_thumb_path: c.source_thumb_path.clone(),
       imported_from: c.imported_from.clone(),
@@ -371,7 +348,7 @@ mod tests {
     c.imported_from = Some("inbox".into());
     let old_id = c.existing_asset_id.clone();
 
-    let report = resolve(&h, vec![to_resolution(&c, ResolveAction::Copy, None)], Source::Copy);
+    let report = resolve(&h, vec![to_resolution(&c, ResolveAction::Copy)], Source::Copy);
     assert_eq!((report.resolved, report.failed.len()), (1, 0));
 
     with_lib(&h, |l| {
@@ -391,7 +368,7 @@ mod tests {
       ops::add_placement(l, asset_id.clone(), folder_id.clone(), "快捷.png".into(), false, &mut HashMap::new());
     });
 
-    let report = resolve(&h, vec![to_resolution(&conflict, ResolveAction::UseExisting, None)], Source::Copy);
+    let report = resolve(&h, vec![to_resolution(&conflict, ResolveAction::UseExisting)], Source::Copy);
     assert_eq!((report.resolved, report.failed.len()), (1, 0));
 
     let placements = placements_of(&h, &asset_id);
@@ -413,7 +390,7 @@ mod tests {
     let old_asset = conflict.existing_asset_id.clone();
 
     // 继承 copy：源文件保留，实体两份
-    let report = resolve(&h, vec![to_resolution(&conflict, ResolveAction::Copy, None)], Source::Copy);
+    let report = resolve(&h, vec![to_resolution(&conflict, ResolveAction::Copy)], Source::Copy);
     assert_eq!((report.resolved, report.failed.len()), (1, 0));
     assert!(conflict.source_path.exists(), "copy 模式源文件应保留");
     assert_eq!(with_lib(&h, |l| l.index.assets.len()), 2);
@@ -421,7 +398,7 @@ mod tests {
 
     // 继承 move：源文件消失（再造一个冲突）
     let conflict2 = make_conflict(&h, "基准2.png", "副本2.png", None);
-    let report2 = resolve(&h, vec![to_resolution(&conflict2, ResolveAction::Copy, None)], Source::Move);
+    let report2 = resolve(&h, vec![to_resolution(&conflict2, ResolveAction::Copy)], Source::Move);
     assert_eq!(report2.resolved, 1);
     assert!(!conflict2.source_path.exists(), "move 模式源文件应移入库");
     // 旧资源的 origin Placement 不受新实体影响
@@ -429,7 +406,7 @@ mod tests {
   }
 
   #[test]
-  fn link_action_honors_custom_and_default_names() {
+  fn link_action_uses_source_file_names() {
     let h = make_lib();
     let folder_id = add_folder(&h, "F01", "人物");
     let c1 = make_conflict(&h, "原图.png", "副本.png", Some(folder_id.clone()));
@@ -438,8 +415,8 @@ mod tests {
     let report = resolve(
       &h,
       vec![
-        to_resolution(&c1, ResolveAction::Link, Some("自定义名.png")),
-        to_resolution(&c2, ResolveAction::Link, None),
+        to_resolution(&c1, ResolveAction::Link),
+        to_resolution(&c2, ResolveAction::Link),
       ],
       Source::Copy,
     );
@@ -447,7 +424,7 @@ mod tests {
 
     let names: Vec<String> =
       placements_of(&h, &c1.existing_asset_id).iter().map(|p| p.name.clone()).collect();
-    assert!(names.contains(&"自定义名.png".to_string()), "link 用用户输入名：{names:?}");
+    assert!(names.contains(&"副本.png".to_string()), "link 用源文件原名：{names:?}");
     let names2: Vec<String> =
       placements_of(&h, &c2.existing_asset_id).iter().map(|p| p.name.clone()).collect();
     assert!(names2.contains(&"走路.fla".to_string()), "link 默认源文件原名：{names2:?}");
@@ -461,7 +438,7 @@ mod tests {
     let h = make_lib();
     let conflict = make_conflict(&h, "原图.png", "副本.png", None);
 
-    let report = resolve(&h, vec![to_resolution(&conflict, ResolveAction::Skip, None)], Source::Move);
+    let report = resolve(&h, vec![to_resolution(&conflict, ResolveAction::Skip)], Source::Move);
     assert_eq!((report.resolved, report.failed.len()), (1, 0));
     // 什么都不做：Placement 仍只有原资源一条，源文件保留（即使 source 是剪切）
     assert_eq!(placements_of(&h, &conflict.existing_asset_id).len(), 1);
@@ -479,7 +456,7 @@ mod tests {
 
     let report = resolve(
       &h,
-      vec![to_resolution(&c1, ResolveAction::Copy, None), to_resolution(&c2, ResolveAction::Link, None)],
+      vec![to_resolution(&c1, ResolveAction::Copy), to_resolution(&c2, ResolveAction::Link)],
       Source::Copy,
     );
     assert_eq!((report.resolved, report.failed.len()), (1, 1));
@@ -491,9 +468,9 @@ mod tests {
   fn rejects_missing_target_or_asset() {
     let h = make_lib();
     let c = make_conflict(&h, "原图.png", "副本.png", None);
-    let mut bad_target = to_resolution(&c, ResolveAction::Link, None);
+    let mut bad_target = to_resolution(&c, ResolveAction::Link);
     bad_target.target_folder = "F-不存在".into();
-    let mut bad_asset = to_resolution(&c, ResolveAction::UseExisting, None);
+    let mut bad_asset = to_resolution(&c, ResolveAction::UseExisting);
     bad_asset.existing_asset_id = "AN-不存在".into();
 
     let report = resolve(&h, vec![bad_target, bad_asset], Source::Copy);
@@ -513,7 +490,7 @@ mod tests {
 
     let report = resolve(
       &h,
-      vec![to_resolution(&c1, ResolveAction::Link, None), to_resolution(&c2, ResolveAction::UseExisting, None)],
+      vec![to_resolution(&c1, ResolveAction::Link), to_resolution(&c2, ResolveAction::UseExisting)],
       Source::Copy,
     );
     assert_eq!((report.resolved, report.failed.len()), (0, 2));
@@ -551,7 +528,7 @@ mod tests {
       assert_eq!(folder.name, "人物", "冲突落点应为目录链末级");
     });
     // link 决策落在末级文件夹
-    let report = resolve(&h, vec![to_resolution(&outcome.conflicts[0], ResolveAction::Link, None)], Source::Copy);
+    let report = resolve(&h, vec![to_resolution(&outcome.conflicts[0], ResolveAction::Link)], Source::Copy);
     assert_eq!(report.failed.len(), 0);
     assert_eq!(with_lib(&h, |l| l.index.placements_by_folder[leaf.as_str()].len()), 1);
   }
@@ -591,7 +568,7 @@ mod tests {
     assert!(c.sequence.is_some(), "冲突项应携带组信息");
 
     // "保留两个"：按回传组信息重新打包（新 ID、frames/ 归一、fps/frameCount 元数据）
-    let report = resolve(&h, vec![to_resolution(&c, ResolveAction::Copy, None)], Source::Copy);
+    let report = resolve(&h, vec![to_resolution(&c, ResolveAction::Copy)], Source::Copy);
     assert_eq!((report.resolved, report.failed.len()), (1, 0));
     assert_eq!(with_lib(&h, |l| l.index.assets.len()), 2);
     let new_meta = with_lib(&h, |l| {
@@ -605,50 +582,5 @@ mod tests {
     assert_eq!(placements_of(&h, &new_meta.id)[0].name, "走路-1.png", "同文件夹显示名唯一化（原标题已占用）");
     // 源帧保留（继承 copy）
     assert!(paths.iter().all(|p| p.exists()));
-  }
-
-  #[test]
-  fn copy_action_uses_new_name_as_display_name() {
-    let h = make_lib();
-    let conflict = make_conflict(&h, "原图.png", "副本.png", None);
-
-    let report = resolve(&h, vec![to_resolution(&conflict, ResolveAction::Copy, Some("改名后.png"))], Source::Copy);
-    assert_eq!((report.resolved, report.failed.len()), (1, 0));
-    // 新实体 origin Placement 显示名 = newName；磁盘存储名（origin_name）不受影响
-    let new_id = with_lib(&h, |l| {
-      l.index.assets.keys().find(|id| **id != conflict.existing_asset_id).unwrap().clone()
-    });
-    let placements = placements_of(&h, &new_id);
-    assert_eq!(placements[0].name, "改名后.png");
-    let origin_name = with_lib(&h, |l| l.index.assets[&new_id].origin_name.clone());
-    assert_eq!(origin_name, "副本.png", "hash / 磁盘存储按源文件原名，newName 只影响显示名");
-  }
-
-  #[test]
-  fn copy_sequence_uses_new_name_stem() {
-    let h = make_lib();
-    let src = h._dir.path().join("序列2");
-    std::fs::create_dir_all(&src).unwrap();
-    let mut paths = Vec::new();
-    for n in 1..=3u8 {
-      let p = src.join(format!("跑步_{n}.png"));
-      image::RgbaImage::from_pixel(8, 8, image::Rgba([0, n, 0, 255])).save(&p).unwrap();
-      paths.push(p);
-    }
-    assert_eq!(import_pack(&h, paths.clone()).imported, 1);
-    let out = import_pack(&h, paths.clone());
-    let c = out.conflicts[0].clone();
-
-    // 序列帧 copy + newName：重新打包的标题词干与 Placement 显示名都用新名
-    let report = resolve(&h, vec![to_resolution(&c, ResolveAction::Copy, Some("冲刺.png"))], Source::Copy);
-    assert_eq!((report.resolved, report.failed.len()), (1, 0));
-    let new_meta = with_lib(&h, |l| {
-      l.index.assets.values().find(|a| a.id != c.existing_asset_id).unwrap().clone()
-    });
-    let frames_dir = crate::core::paths::frames_dir(&h.assets_dir, &new_meta.id);
-    for n in 1..=3 {
-      assert!(frames_dir.join(format!("冲刺-{n}.png")).is_file(), "帧文件按新词干归一命名");
-    }
-    assert_eq!(placements_of(&h, &new_meta.id)[0].name, "冲刺.png");
   }
 }
