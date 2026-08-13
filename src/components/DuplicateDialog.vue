@@ -160,9 +160,11 @@ function onCancel(): void {
   min-height: 0;
   overflow-y: auto;
 }
-/* 底部按钮行（36 稿）：62 高 / 上分隔线 / padding 12 12 12 24，右对齐 */
+/* 底部按钮行（36 稿）：62 高 / 上分隔线 / padding 12 12 12 24，右对齐；
+   flex: 1 占满 actions 主轴（row flex 项宽默认内容宽——不撑满上边框线会断在内容左缘，2026-08-13 走查） */
 .dup-bottom {
   display: flex;
+  flex: 1;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-12);
