@@ -31,7 +31,8 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
     if (p) openContextMenu(e, assetCardSpec(p), undefined, { width: 320, searchable: true });
     return "done";
   }
-  if (t.closest(".folder-card, button, input")) return "pass";
+  // .disk-card = 收件箱工程文件卡片（自带 inboxDiskSpec 菜单，InboxDiskSection @contextmenu.stop 已拦冒泡）
+  if (t.closest(".folder-card, .disk-card, button, input")) return "pass";
   e.preventDefault();
   if (content.isRecycleView) openContextMenu(e, recycleBlankSpec(), undefined, { width: 148 });
   else openContextMenu(e, addButtonSpec(), undefined, { width: 320 });

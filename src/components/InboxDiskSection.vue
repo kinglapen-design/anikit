@@ -6,6 +6,8 @@
 // 占用条目：仅实况展示（"被占用"标记），导入 / 重命名禁用，后端同口径再拦一道。
 // 文件图标：优先系统格式图标缓存（iconPath，details 事件补齐），无缓存回退扩展名角标；
 // 目录恒 folder-closed。占用标记以 details 合并后为准（快层目录 occupied=false 是过渡态）。
+// 卡片样式 2026-08-13 同步素材卡片 14 稿（整卡圆角 6 + ::after 状态边框 + 图标区 C2 /
+// 简介区 C3 名称单行左对齐）；右键 @contextmenu.stop 拦冒泡（gridDispatch 空白新增菜单会覆盖，同日修复）。
 import { computed, nextTick, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
@@ -30,7 +32,7 @@ function showError(e: unknown): void {
   errorTimer = setTimeout(() => (errorMsg.value = ""), 5000);
 }
 
-// 扩展名角标：复用格式角标色映射（静态图组无底色时回退 C1-40——实况区无缩略图，角标必须可见）
+// 扩展名角标：复用格式角标色映射（静态图组无底色时回退 C4——实况区无缩略图，角标必须可见）
 function extOf(e: InboxDiskEntry): string {
   const i = e.name.lastIndexOf(".");
   return i > 0 ? e.name.slice(i + 1) : "";
@@ -39,7 +41,7 @@ function extLabel(e: InboxDiskEntry): string {
   return extOf(e).toUpperCase();
 }
 function badgeColor(e: InboxDiskEntry): string {
-  return formatBadgeColor(extOf(e)) ?? "var(--c1-40)";
+  return formatBadgeColor(extOf(e)) ?? "var(--c4)";
 }
 function sizeLabel(e: InboxDiskEntry): string {
   const kb = e.size / 1024;
@@ -128,7 +130,7 @@ const entries = computed(() => content.inboxDisk);
           class="disk-card"
           :class="{ selected: content.selectedInboxName === e.name }"
           @click="select(e)"
-          @contextmenu.prevent="openMenu($event, e)"
+          @contextmenu.prevent.stop="openMenu($event, e)"
         >
           <div class="icon-wrap">
             <AppIcon v-if="e.isDir" name="folder-closed" :size="40" class="folder-icon" />
@@ -153,7 +155,7 @@ const entries = computed(() => content.inboxDisk);
               @blur="cancelRename"
               @click.stop
             />
-            <span v-else class="title">{{ e.name }}</span>
+            <span v-else class="title" v-tip="e.name">{{ e.name }}</span>
             <span class="meta">{{ e.isDir ? "文件夹" : sizeLabel(e) }}</span>
           </div>
         </div>
@@ -172,12 +174,12 @@ const entries = computed(() => content.inboxDisk);
   gap: var(--space-12);
   padding-right: var(--space-16);
 }
-/* 固定提醒与操作错误：副文本档（font-icon-3 / caption），错误用语义色 --error */
+/* 固定提醒与操作错误：标签档（text-label / caption），错误用语义色 --error */
 .notice {
   margin: 0;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
+  color: var(--text-label);
 }
 .error-line {
   margin: 0;
@@ -193,33 +195,45 @@ const entries = computed(() => content.inboxDisk);
   column-gap: var(--space-16);
   row-gap: var(--space-16);
 }
+/* 卡片（同步素材卡片 14 稿，2026-08-13）：整卡圆角 6 / 状态边框走 ::after 伪元素
+   （常态 1px 暗-悬停；hover 1.5px 实色 line-card-hover；选中 1.5px 品牌色-边框线）——
+   图标区 C2 / 简介区 C3 整片不透明底会盖住父级 inset 阴影，边框必须在最上层伪元素 */
 .disk-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
   min-width: 0;
+  border-radius: var(--radius-6);
   cursor: default;
 }
-/* 图标容器：正方形（2026-07-25 用户定）/ 圆角 8 / 1px border-2
-   （hover border-1 / 选中品牌色——与素材、文件夹卡片一致） */
+.disk-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--line-hover);
+  border-radius: var(--radius-6);
+  pointer-events: none;
+  transition: border-color 0.12s ease;
+}
+.disk-card:hover::after {
+  border: 1.5px solid var(--line-card-hover);
+}
+.disk-card.selected::after {
+  border: 1.5px solid var(--brand-border);
+}
+/* 图标区（14 稿缩略图区口径）：C2 底 / 圆角上沿 / 正方形（2026-07-25 用户定） */
 .icon-wrap {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   aspect-ratio: 1 / 1;
-  border-radius: var(--radius-8);
-  box-shadow: inset 0 0 0 1px var(--border-2);
-  transition: box-shadow 0.12s ease;
-}
-.disk-card:hover .icon-wrap {
-  box-shadow: inset 0 0 0 1.5px var(--border-1);
-}
-.disk-card.selected .icon-wrap {
-  box-shadow: inset 0 0 0 1.5px var(--brand-border);
+  background: var(--c2);
+  border-radius: var(--radius-6) var(--radius-6) 0 0;
+  overflow: hidden;
 }
 .folder-icon {
-  color: var(--font-icon-3);
+  color: var(--text-label);
 }
 /* 系统格式图标：缓存源图 256px，最大边 = 正方形图标位 50%（与素材卡片 / 列表行同一口径，
    shell 小一点给内容缩略图让视觉噪音，2026-07-25 用户定） */
@@ -228,13 +242,14 @@ const entries = computed(() => content.inboxDisk);
   max-height: 50%;
   object-fit: contain;
 }
-/* 扩展名角标文本：实底白字（格式角标 7 组实色映射，01 样式 token 01-6） */
+/* 扩展名角标文本：实底白字（格式角标 7 组实色映射，01 样式 token 01-6）；
+   静态图组无底色时回退 C4——实况区无缩略图，角标必须可见 */
 .ext-badge {
   padding: var(--space-2) var(--space-6);
   border-radius: var(--radius-4);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--font-icon-1);
+  color: var(--text-highlight);
 }
 /* 被占用标记：右上小标签（警告色——占用 = 暂不可操作态） */
 .occupied-tag {
@@ -248,45 +263,45 @@ const entries = computed(() => content.inboxDisk);
   line-height: var(--text-caption-line);
   color: var(--warning);
 }
-/* 文字组：与文件夹卡片一致（间距 2 / 居中 / 标题两行截断） */
+/* 简介区（14 稿）：C3 / 上分割线（inset 不占位）/ 圆角下沿 / padding 8 8 8 12 / 间距 4 */
 .texts {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
+  background: var(--c3);
+  box-shadow: inset 0 1px 0 0 var(--line-hover);
+  border-radius: 0 0 var(--radius-6) var(--radius-6);
 }
+/* 名称：正文 14/20 高亮，单行左对齐截断（14 稿口径，旧两行居中作废） */
 .title {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--font-icon-1);
-  text-align: center;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  color: var(--text-highlight);
+  white-space: nowrap;
   overflow: hidden;
-  word-break: break-all;
+  text-overflow: ellipsis;
 }
 .meta {
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
-  text-align: center;
+  color: var(--text-label);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 /* 行内重命名输入：C4 实底族（与卡片透明底族分两套）；高度 / 字号 / 行高复用 base.css
-   .rename-input 共享基座，此处仅实底族差异——C4 底 / 1px border-1 / 圆角 6 / 居中；
-   聚焦描边品牌色-1（用户定） */
+   .rename-input 共享基座，此处仅实底族差异——C4 底 / 1px 暗-悬停 / 圆角 6 / 左对齐同名称位；
+   聚焦描边品牌色-边框线 */
 .rename-input {
   width: 100%;
   padding: 0 var(--space-6);
   border-radius: var(--radius-6);
   background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-1);
-  color: var(--font-icon-1);
-  text-align: center;
+  box-shadow: inset 0 0 0 1px var(--line-hover);
+  color: var(--text-highlight);
 }
 .rename-input:focus {
-  box-shadow: inset 0 0 0 1px var(--brand-1);
+  box-shadow: inset 0 0 0 1px var(--brand-border);
 }
 </style>
