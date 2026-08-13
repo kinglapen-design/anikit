@@ -1,10 +1,12 @@
 // 07 稿 · 新增菜单 spec（自 menuSpecs.ts 拆出，规范第 3 条行数控制）：宽 320 无搜索框。
 // 新建文档组（newDocGroupEntries）与 14 汉堡"文件"二级共用，故同文件导出。
 import { useSelectionStore } from "../../stores/selection";
+import { useContentStore } from "../../stores/content";
 import type { CtxEntry, CtxItem } from "../contextMenus";
 import { docApp } from "../docApps";
 import { createAndName, pickFolderForLink, pickImportPaths } from "../menuOps";
 import { createTextDocument, pasteClipboard, pasteDuplicate } from "../placementOps";
+import { openScan } from "../dupScanOps";
 // MarkDown 文档图标（2026-08-11 用户供 md.webp，webp 非 svg 走 iconData 内联图）
 import mdDocIcon from "../../../assets/icons/01_icon-default/md.webp?url";
 
@@ -47,7 +49,11 @@ export function newDocGroupEntries(): CtxEntry[] {
 // 新建文档业务阶段三 3.1 接，本轮项仍 disabled 占位。
 export function addButtonSpec(): CtxEntry[] {
   const selection = useSelectionStore();
+  const content = useContentStore();
   const hasClipboard = selection.clipboard !== null;
+  // 扫描重复文件范围上下文（2.7 二轮点亮）：当前目录 = 文件夹视图才有；所选文件 = 选中资产去重集
+  const scanFolderId = content.currentFolderId;
+  const scanAssetIds = [...new Set(selection.selectedRefs().map((r) => r.assetId))];
   const entries: CtxEntry[] = [];
   if (hasClipboard) {
     entries.push(
@@ -72,9 +78,19 @@ export function addButtonSpec(): CtxEntry[] {
       icon: "scan-duplicates",
       submenuWidth: 96,
       submenu: [
-        { label: "当前目录", disabled: true },
-        { label: "全部", disabled: true },
-        { label: "所选文件", disabled: true },
+        // 三范围（锚点过滤：组内任一资产命中整组返回，PRD 03_查找文件-03）；
+        // 快速访问视图无当前文件夹 / 无选中素材时对应项禁用
+        {
+          label: "当前目录",
+          disabled: scanFolderId === null,
+          action: scanFolderId === null ? undefined : () => void openScan({ kind: "folder", folderId: scanFolderId }),
+        },
+        { label: "全部", action: () => void openScan({ kind: "all" }) },
+        {
+          label: "所选文件",
+          disabled: scanAssetIds.length === 0,
+          action: scanAssetIds.length === 0 ? undefined : () => void openScan({ kind: "assets", assetIds: scanAssetIds }),
+        },
       ],
     },
     { label: "扫描文件/档案链接", icon: "scan-links", disabled: true },

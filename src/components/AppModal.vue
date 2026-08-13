@@ -58,9 +58,10 @@ onMounted(() => {
       <template v-else-if="variant === 'plain'">
         <h2 class="title">{{ title }}</h2>
       </template>
-      <!-- standard：标题栏 + 关闭 X -->
+      <!-- standard：标题栏 + 关闭 X；titlebar-start 插槽 = 标题左侧前置位（2.7 合并前确认返回箭头） -->
       <template v-else>
         <div class="titlebar">
+          <slot name="titlebar-start" />
           <AppIcon v-if="icon" :name="icon" :size="18" class="title-icon" />
           <h2 class="title">{{ title }}</h2>
           <span class="spacer" />

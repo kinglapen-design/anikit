@@ -27,6 +27,7 @@ import ImportDialog from "./components/ImportDialog.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
 import ImportResultDialog from "./components/ImportResultDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
+import DupScanDialog from "./components/DupScanDialog.vue";
 import LinkDialog from "./components/LinkDialog.vue";
 import RecycleConfirmDialog from "./components/RecycleConfirmDialog.vue";
 import ContextMenu from "./components/ContextMenu.vue";
@@ -39,6 +40,7 @@ import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
 import { ensureDocApps } from "./lib/docApps";
 import { wizardState, reopenLastSession, createLibraryModalState, deleteLibraryState, confirmDeleteLibrary } from "./lib/libraryOps";
+import { dupScanState } from "./lib/dupScanOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
 import { useSidebarAnim } from "./lib/useSidebarAnim";
 import { useWindowStatePersistence } from "./lib/windowState";
@@ -276,6 +278,8 @@ async function togglePin(): Promise<void> {
     />
     <!-- hash 冲突逐个询问（导入完成后弹出；10_重复添加提示） -->
     <DuplicateDialog v-if="content.importConflicts && content.importConflicts.length > 0" />
+    <!-- 扫描重复文件（2.7 二轮，35 稿 + 合并前确认）：汉堡"查找" / 新增菜单触发 -->
+    <DupScanDialog v-if="dupScanState.groups" />
     <!-- 关联 / 副本弹窗（6.1 C5）：Ctrl+V(copy) / Ctrl+拖拽落文件夹 / 右键"粘贴"触发 -->
     <LinkDialog v-if="selection.linkDraft" />
     <!-- 回收站彻底删除确认窗（6.1 二轮）：虚拟片段引用警示，不可恢复无撤销 -->

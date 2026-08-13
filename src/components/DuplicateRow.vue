@@ -15,6 +15,7 @@ import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppRadio from "./AppRadio.vue";
 import AppSwitch from "./AppSwitch.vue";
+import { formatSize } from "../lib/formatSize";
 import type { ConflictItem } from "../stores/content";
 
 const props = defineProps<{
@@ -42,13 +43,6 @@ const sourceUrl = computed(() => {
 const existingUrl = computed(() =>
   props.item.existingThumbPath ? convertFileSrc(props.item.existingThumbPath) : null,
 );
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
-}
 
 function setAction(action: DupAction): void {
   emit("change", { action });

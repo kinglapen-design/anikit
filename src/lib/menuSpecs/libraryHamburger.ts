@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { CtxEntry, CtxItem } from "../contextMenus";
 import { requestLibrarySetup } from "../libraryOps";
 import { pickImportPaths } from "../menuOps";
+import { openScan } from "../dupScanOps";
 import { newDocGroupEntries } from "./addMenu";
 
 // —— 08 稿 · 切换资源库（宽 300；14 汉堡"资源库"二级复用同一内容）——
@@ -52,7 +53,8 @@ export function hamburgerSpec(names: string[], currentName: string | null): CtxE
       label: "查找",
       submenuWidth: 213,
       submenu: [
-        { label: "扫描重复文件", icon: "scan-duplicates", disabled: true },
+        // 扫描重复文件已点亮（2.7 二轮，35 稿）：汉堡入口 = 全部范围；扫描链接仍占位
+        { label: "扫描重复文件", icon: "scan-duplicates", action: () => void openScan({ kind: "all" }) },
         { label: "扫描文件/档案链接", icon: "scan-links", disabled: true },
       ],
     },

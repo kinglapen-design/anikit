@@ -17,6 +17,7 @@
 //! - operations：素材基础操作（6.1 选择态：新建文件夹 / 移动 / 排序 / 关联 / 副本 / 重命名 / 删除）
 //! - recent：最近使用（6.1 第二轮，recent.json LRU 500；唯一启用入口 = 默认程序打开成功）
 //! - recycle：回收站（6.1 第二轮：视图 / 还原 / 彻底删除 / 清空）
+//! - scan：重复文件扫描（只读，按存量 hash 分组）
 //! - views：Placement 列表视图（中间面板与导入事件共用）
 
 pub mod anim;
@@ -35,6 +36,7 @@ pub mod purge;
 pub mod recent;
 pub mod recycle;
 pub mod resolve;
+pub mod scan;
 pub mod sequence;
 pub mod thumb_formats;
 pub mod thumbnail;
