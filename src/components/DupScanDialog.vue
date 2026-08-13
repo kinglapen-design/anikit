@@ -1,15 +1,14 @@
 <script setup lang="ts">
 // 扫描重复文件弹窗（35_扫描重复文件稿 + Eagle 式合并前确认，2.7 二轮 2026-08-13，PRD 03_查找文件-03）。
 // 屏 1（groups，714 宽）= 35 稿结果列表：组行（复选默认全选 / 红钮移除）+ 底部计数与合并/取消；
-// 屏 2（confirm，970 宽）= 合并前确认：标题栏返回箭头回屏 1，左列组列表 + 右列保留者 radio 单选
-//（默认导入最早 = 后端排序 assets[0]），底部确认合并 / 上一步。
+// 屏 2（confirm，970 宽）= 合并前确认：左列组列表 + 右列保留者 radio 单选
+//（默认导入最早 = 后端排序 assets[0]），底部确认合并 / 上一步（回屏 1）。
 // 取消 / 关闭 = 全部不处理（纯前端清状态）；合并经 dupScanOps.confirmMerge 一次 delete_placements。
 import { computed } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppModal from "./AppModal.vue";
 import AppButton from "./AppButton.vue";
 import AppRadio from "./AppRadio.vue";
-import IconButton from "./IconButton.vue";
 import DupScanGroupRow from "./DupScanGroupRow.vue";
 import { formatSize } from "../lib/formatSize";
 import {
@@ -63,10 +62,6 @@ function thumbUrl(a: DupAsset): string | null {
     :class="{ confirm: dupScanState.step === 'confirm' }"
     @close="closeScan"
   >
-    <template v-if="dupScanState.step === 'confirm'" #titlebar-start>
-      <IconButton name="chevron-large" title="上一步" class="back-btn" @click="backToGroups" />
-    </template>
-
     <!-- 屏 1：结果列表（35 稿） -->
     <div v-if="dupScanState.step === 'groups'" class="groups-body">
       <DupScanGroupRow
@@ -172,12 +167,15 @@ function thumbUrl(a: DupAsset): string | null {
 .scan-dialog.confirm :deep(.app-modal) {
   width: 970px;
 }
-/* 标题栏（35 稿）：54 高 / padding 12 12 12 24 / 下分隔线 */
+/* 标题栏（35 稿）：54 高 / padding 12 12 12 24 / 下分隔线；标题 = 文字/常态（通用弹窗同口径） */
 .scan-dialog :deep(.titlebar) {
   height: 54px;
   padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
   box-shadow: inset 0 -1px 0 0 var(--line-hover);
   flex: none;
+}
+.scan-dialog :deep(.title) {
+  color: var(--text-normal);
 }
 .scan-dialog :deep(.content) {
   flex: 1;
@@ -188,10 +186,6 @@ function thumbUrl(a: DupAsset): string | null {
 }
 .scan-dialog :deep(.actions) {
   flex: none;
-}
-/* 返回箭头（屏 2 标题栏左）：chevron-large 为右箭头，旋转 180° 作返回 */
-.back-btn :deep(svg) {
-  transform: rotate(180deg);
 }
 
 /* —— 屏 1：内容自适应 + 上限自滚（弹窗纵向滚动条隐藏可滚，同 36 稿 DuplicateDialog 口径——
@@ -206,7 +200,7 @@ function thumbUrl(a: DupAsset): string | null {
   display: flex;
   height: min(560px, calc(100vh - 300px));
 }
-/* 左列：250 组列表，右分隔线，自滚 */
+/* 左列：250 组列表，右分隔线，自滚；容器 padding 8 + gap 4、item 圆角 6（2026-08-13 走查定） */
 .group-list {
   width: 250px;
   flex: none;
@@ -214,6 +208,8 @@ function thumbUrl(a: DupAsset): string | null {
   box-shadow: inset -1px 0 0 0 var(--line-hover);
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-8);
 }
 .group-list::-webkit-scrollbar {
   width: 6px;
@@ -229,6 +225,7 @@ function thumbUrl(a: DupAsset): string | null {
   gap: var(--space-12);
   height: 56px;
   padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-6);
   flex: none;
   text-align: left;
 }

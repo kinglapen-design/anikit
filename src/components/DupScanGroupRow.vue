@@ -26,7 +26,8 @@ const emit = defineEmits<{ remove: [] }>();
 </template>
 
 <style scoped>
-/* item（35 稿）：padding 24 / gap 12 / 下分隔线（暗-悬停） */
+/* item（35 稿）：padding 24 / gap 12 / 下分隔线（暗-悬停）；
+   最后一组不出底线——否则与底部按钮栏上分隔线重叠成双线（2026-08-13 走查） */
 .scan-group {
   display: flex;
   flex-direction: column;
@@ -34,6 +35,9 @@ const emit = defineEmits<{ remove: [] }>();
   padding: var(--space-24);
   box-shadow: inset 0 -1px 0 0 var(--line-hover);
   flex: none;
+}
+.scan-group:last-child {
+  box-shadow: none;
 }
 .row-head {
   display: flex;
