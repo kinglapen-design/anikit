@@ -46,6 +46,10 @@ pub struct ConflictResolution {
   /// 预览缓存路径（冲突项原样回传；决策完成后删除——cache/tmp 会话级临时，4.2）
   #[serde(default)]
   pub source_thumb_path: Option<String>,
+  /// 本批次导入渠道（冲突项原样回传，2026-08-13）：copy 建档的新资产继承该标记
+  ///（自动导入冲突"保留两个"的新资产带 inbox 标 → 进"已导入"视图，否则用户以为文件丢失）
+  #[serde(default)]
+  pub imported_from: Option<String>,
 }
 
 /// 决策执行汇总（skip 也计入 resolved——用户已决策、无需动作）
@@ -202,7 +206,7 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
         &hash,
         &new_asset_id(),
         source,
-        None,
+        item.imported_from.as_deref(), // 继承批次渠道标记（2026-08-13）
       )?;
       ops::add_placement(lib, asset.id.clone(), item.target_folder.clone(), format!("{stem}.{}", seq.ext), true, &mut HashMap::new());
       lib.index.assets.insert(asset.id.clone(), asset);
@@ -211,7 +215,8 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
     None => {
       let pending = ops::PendingFile { path: item.source_path.clone(), chain: Vec::new() };
       let hash = ops::sha256_file(&pending.path).map_err(|e| format!("文件读取失败：{e}"))?;
-      let asset = ops::build_asset(&assets_dir, &pending, &hash, source)?;
+      // build_asset_with_id：携带批次渠道标记（新资产进"已导入"视图，2026-08-13）
+      let asset = ops::build_asset_with_id(&assets_dir, &pending, &hash, &new_asset_id(), source, item.imported_from.as_deref())?;
       // 显示名 = newName（含扩展名，前端已补全）或源文件原名；hash 判定不受影响
       let name = item
         .new_name
@@ -290,6 +295,7 @@ mod tests {
           new_name: None,
           sequence: None,
           source_thumb_path: Some(cache.to_string_lossy().into_owned()),
+          imported_from: None,
         }],
         Source::Copy,
       )
@@ -348,11 +354,30 @@ mod tests {
       new_name: new_name.map(|s| s.into()),
       sequence: c.sequence.clone(),
       source_thumb_path: c.source_thumb_path.clone(),
+      imported_from: c.imported_from.clone(),
     }
   }
 
   fn placements_of(h: &Harness, asset_id: &str) -> Vec<Placement> {
     with_lib(h, |l| l.folders.items.iter().filter(|p| p.asset == asset_id).cloned().collect())
+  }
+
+  /// 批次渠道继承（2026-08-13 用户实测：自动导入冲突"保留两个"的新资产丢标，
+  /// 不进"已导入"视图以为文件丢失）：copy 决策的新资产 metadata.imported_from = 批次渠道
+  #[test]
+  fn copy_inherits_batch_imported_from() {
+    let h = make_lib();
+    let mut c = make_conflict(&h, "原图.png", "副本.png", None);
+    c.imported_from = Some("inbox".into());
+    let old_id = c.existing_asset_id.clone();
+
+    let report = resolve(&h, vec![to_resolution(&c, ResolveAction::Copy, None)], Source::Copy);
+    assert_eq!((report.resolved, report.failed.len()), (1, 0));
+
+    with_lib(&h, |l| {
+      let new = l.index.assets.values().find(|a| a.id != old_id).expect("新资产已建档");
+      assert_eq!(new.imported_from.as_deref(), Some("inbox"), "新资产继承批次渠道标记");
+    });
   }
 
   #[test]

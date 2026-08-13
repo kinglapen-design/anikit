@@ -136,7 +136,7 @@ pub fn run_import(
     }
     on_event(ImportEvent::Folders);
   }
-  let phase2 = match dedup_phase(&mut state, lib, &root, &target, &units, &files, &groups) {
+  let phase2 = match dedup_phase(&mut state, lib, &root, &target, &units, &files, &groups, opts.imported_from.as_deref()) {
     Ok(p) => p,
     Err(reason) => return abort(state, lib, &on_event, &files, &groups, &units, reason, "导入查重失败"),
   };
@@ -268,6 +268,7 @@ fn dedup_phase(
   units: &[(Unit, String)],
   files: &[PendingFile],
   groups: &[SequenceGroup],
+  imported_from: Option<&str>,
 ) -> Result<Phase2, String> {
   let root_buf = root.to_path_buf();
   let mut phase = Phase2 { work: Vec::new(), deferred: Vec::new() };
@@ -278,7 +279,7 @@ fn dedup_phase(
     let mut batch: HashMap<String, String> = HashMap::new(); // hash → 同批次 twin asset id
     for (unit, hash) in units {
       let chain = unit_chain(files, groups, *unit);
-      match classify_one(l, &by_hash, &mut batch, target, chain, *unit, hash) {
+      match classify_one(l, &by_hash, &mut batch, target, chain, *unit, hash, imported_from) {
         Classified::Conflict(u, c) => immediate.push((u, *c)),
         Classified::Deferred(d) => phase.deferred.push(d),
         Classified::Work(w) => phase.work.push(w),
@@ -319,12 +320,13 @@ fn classify_one(
   chain: &[String],
   unit: Unit,
   hash: &str,
+  imported_from: Option<&str>,
 ) -> Classified {
   let Some(folder_id) = ops::find_folder(l, target, chain) else {
     return Classified::NoFolder(unit);
   };
   if let Some(meta) = by_hash.get(hash) {
-    Classified::Conflict(unit, Box::new(conflict_of(l, meta, folder_id)))
+    Classified::Conflict(unit, Box::new(conflict_of(l, meta, folder_id, imported_from)))
   } else if let Some(twin) = batch.get(hash) {
     Classified::Deferred(DeferredConflict { unit, target_folder: folder_id, twin_id: twin.clone() })
   } else {
@@ -477,8 +479,9 @@ fn register_one(
     let placement = ops::add_placement(l, asset_id.clone(), item.target_folder.clone(), name, true, front_anchor);
     let view = placement_view(l, &asset, &placement, &l.format_icons);
     let twins = deferred.remove(&asset_id).unwrap_or_default();
+    // twin 冲突的渠道 = 刚建档资产自带的批次标记（与冲突对象同源）
     let conflicts =
-      twins.into_iter().map(|d| (d.unit, conflict_of(l, &asset, d.target_folder))).collect::<Vec<_>>();
+      twins.into_iter().map(|d| (d.unit, conflict_of(l, &asset, d.target_folder, asset.imported_from.as_deref()))).collect::<Vec<_>>();
     l.index.assets.insert(asset_id, asset);
     (view, conflicts)
   });
@@ -540,8 +543,9 @@ fn group_deferred(list: Vec<DeferredConflict>) -> HashMap<String, Vec<DeferredCo
   map
 }
 
-/// 锁内组装冲突项的库侧数据（已有资源 + 落点）；源文件侧字段留空由 fill_source_side 补
-fn conflict_of(l: &Library, meta: &AssetMeta, folder_id: String) -> ConflictItem {
+/// 锁内组装冲突项的库侧数据（已有资源 + 落点）；源文件侧字段留空由 fill_source_side 补。
+/// imported_from = 本批次渠道（冲突回传后"保留两个"的新资产继承该标记）
+fn conflict_of(l: &Library, meta: &AssetMeta, folder_id: String, imported_from: Option<&str>) -> ConflictItem {
   // 显示名与所在文件夹：优先 origin Placement，无则任一 Placement（正常数据必有 origin）
   let placements = l.index.placements_by_asset.get(&meta.id).map(Vec::as_slice).unwrap_or(&[]);
   let chosen = placements.iter().find(|p| p.origin).or_else(|| placements.first());
@@ -563,6 +567,7 @@ fn conflict_of(l: &Library, meta: &AssetMeta, folder_id: String) -> ConflictItem
     existing_thumb_path: thumb_path(l, meta, &l.format_icons),
     existing_folder_name: chosen.map(|p| folder_display_name(l, &p.folder)).unwrap_or_default(),
     sequence: None, // 源侧信息由 fill_source_side 补（序列帧组覆盖为组信息）
+    imported_from: imported_from.map(|s| s.to_string()),
   }
 }
 

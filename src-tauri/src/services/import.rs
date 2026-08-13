@@ -139,6 +139,10 @@ pub struct ConflictItem {
   /// 序列帧冲突的组信息（普通文件冲突无此字段；前端原样回传供"保留两个"重新打包）
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub sequence: Option<SequenceSource>,
+  /// 本批次的导入渠道标记（inbox 等；前端原样回传——"保留两个"建档的新资产继承该标记，
+  /// 否则自动导入冲突的新资产丢标不进"已导入"视图，2026-08-13 用户实测"以为文件丢失"）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub imported_from: Option<String>,
 }
 
 /// 导入结果汇总：新导入数、冲突挂起、失败明细
@@ -603,6 +607,7 @@ mod tests {
         existing_thumb_path: None,
         existing_folder_name: "根目录".into(),
         sequence: None,
+        imported_from: None,
       }],
       failed: vec![FailedItem { path: "q".into(), reason: "r".into() }],
     })

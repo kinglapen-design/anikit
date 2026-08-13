@@ -100,6 +100,7 @@ function buildResolutions(): ConflictResolution[] {
       newName: d.skipped || d.action === "useExisting" ? null : newNameFor(c, i),
       sequence: c.sequence ?? null, // 序列帧组信息原样回传（copy 重新打包用，4.1）
       sourceThumbPath: c.sourceThumbPath ?? null, // 预览缓存原样回传（决策完成后后端删除，4.2）
+      importedFrom: c.importedFrom ?? null, // 批次渠道原样回传（copy 新资产继承，2026-08-13）
     };
   });
 }

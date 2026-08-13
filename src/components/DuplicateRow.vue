@@ -49,9 +49,9 @@ const existingUrl = computed(() =>
 // 右卡显示名：改名预览优先，否则源文件名
 const displayName = computed(() => props.newName ?? props.item.sourceName);
 
-// 查找命中高亮（2026-08-13 用户定，参考 Eagle：查找时原始名称命中片段品牌色高亮）——
-// 替换模式且查找文本非空时，右卡显示源名并高亮命中段（新名预览让位：此刻要确认的是命中对不对）；
-// 规则只作用词干，扩展名段恒不高亮
+// 查找命中高亮（2026-08-13 用户定，Eagle 参考"原名称高亮 + 新名称实时更新"双列同显）——
+// 替换模式且查找文本命中词干时，右卡名称区两行：上 = 源名（命中段品牌色高亮），下 = 新名预览；
+// 未命中 / 非替换模式 = 单行现状。规则只作用词干，扩展名段恒不高亮
 const hlParts = computed(() => {
   const find = props.findText ?? "";
   if (!find) return null;
@@ -114,12 +114,16 @@ function setAction(action: DupAction): void {
           />
           <span v-else class="ext">{{ extOf(item.sourceName).toUpperCase() }}</span>
         </div>
-        <span class="fname" :title="displayName">
+        <div class="fname" :title="displayName">
           <template v-if="hlParts">
-            <span v-for="(p, k) in hlParts" :key="k" :class="{ hl: p.hit }">{{ p.text }}</span>
+            <!-- 两行同显（Eagle 参考）：上 = 源名命中高亮，下 = 新名预览 -->
+            <span class="origin-line">
+              <span v-for="(p, k) in hlParts" :key="k" :class="{ hl: p.hit }">{{ p.text }}</span>
+            </span>
+            <span class="new-line">{{ displayName }}</span>
           </template>
           <template v-else>{{ displayName }}</template>
-        </span>
+        </div>
         <div class="meta">
           <span class="size">{{ formatSize(item.sourceSize) }}</span>
           <span class="chip" :title="item.targetFolderName">{{ item.targetFolderName }}</span>
@@ -214,7 +218,7 @@ function setAction(action: DupAction): void {
   font-weight: var(--text-title-weight);
   color: var(--c3);
 }
-/* 名称：正文 / 高亮，超出省略 */
+/* 名称：正文 / 高亮，超出省略；替换查找命中时竖排两行（源名高亮 + 新名预览） */
 .fname {
   flex: 1;
   min-width: 0;
@@ -224,6 +228,19 @@ function setAction(action: DupAction): void {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* 两行态：源名行继承正文档；新名行标签档（12/17 常态色）区分主次 */
+.origin-line,
+.new-line {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.new-line {
+  font-size: var(--text-label-size);
+  line-height: var(--text-label-line);
+  color: var(--text-normal);
 }
 /* 查找命中段：品牌色高亮（Eagle 参考，2026-08-13 用户定） */
 .fname .hl {
