@@ -65,10 +65,14 @@ pub struct ImportOptions {
   pub target_folder: Option<String>,
   #[serde(default)]
   pub paths: Vec<PathBuf>,
-  /// 导入渠道标记（写入 metadata.importedFrom）："inbox" = 收件箱自动导入；
-  /// 携带标记的导入撞 hash 且已有资产同渠道时自动合并（PRD 01-2.3 注）
+  /// 导入渠道标记（写入 metadata.importedFrom）："inbox" = 收件箱导入；
+  /// 携带标记的导入撞 hash 且已有资产同渠道时自动合并（PRD 01-2.3 注；仅自动导入生效，manual=true 关闭）
   #[serde(default)]
   pub imported_from: Option<String>,
+  /// 手动导入（true 时关闭同渠道自动合并，撞 hash 一律走正常重复提示）：
+  /// 仅收件箱"工程文件"手动导入置 true；自动导入恒 false（PRD 05，2026-08-13 定案）
+  #[serde(default)]
+  pub manual: bool,
   /// 序列帧处理模式（仅 UI 导入弹窗给 Pack；收件箱 / 剪贴板恒 Scatter）
   #[serde(default)]
   pub sequence_mode: SequenceMode,
@@ -329,6 +333,7 @@ pub(crate) fn rename_origin(assets_dir: &Path, asset_id: &str, new_name: &str) -
 /// 收件箱自动合并（PRD 01-2.3 importedFrom，2026-07-22 用户定案）：内容相同不重复存——
 /// 已有资产（同为 inbox 渠道）改名为新文件真实名（走 rename_origin 原语：磁盘 originName
 /// 与词干缩略图一并改名，metadata 更新写盘）；新文件与库内内容相同（hash 一致），作为重复丢弃。
+/// 仅自动导入触发（ImportOptions.manual=false；手动导入撞 hash 走正常重复提示，2026-08-13 定案）。
 /// 返回（更新后的 metadata, 是否发生了改名），调用方负责锁内索引与 Placement 更新。
 pub(crate) fn merge_rename(assets_dir: &Path, file: &PendingFile, asset_id: &str) -> Result<(AssetMeta, bool), String> {
   let result = rename_origin(assets_dir, asset_id, &file_name(&file.path))?;

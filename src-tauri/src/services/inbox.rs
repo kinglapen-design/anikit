@@ -355,8 +355,10 @@ fn dispatch_loop(app: AppHandle, root: PathBuf, rx: mpsc::Receiver<Vec<PathBuf>>
       source: Source::Move,
       target_folder: None,
       paths,
-      // 收件箱渠道标记：撞 hash 且已有资产同渠道时自动合并（PRD 01-2.3 注）
+      // 收件箱渠道标记：撞 hash 且已有资产同渠道时自动合并（PRD 01-2.3 注）。
+      // manual 恒 false：自动导入永远零打扰，撞"手动导入进来的资产"（同标 inbox 渠道）也照合并
       imported_from: Some("inbox".to_string()),
+      manual: false,
       // 收件箱无弹窗交互，序列帧维持逐文件导入（4.1 留待，见 05_项目进度）
       sequence_mode: SequenceMode::Scatter,
     };

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 收件箱"工程文件"磁盘实况区块（4.4，PRD 05-01 2026-07-25 语义重定）：
 // 磁盘为事实来源——不建档不写库，热刷新由 content.inboxDisk 全量替换驱动；
-// 白名单以外不自动导入，右键手动"导入"= 移走入库（剪切语义，进度条 / 重复提示流与常规导入一致）。
+// 白名单以外不自动导入，右键手动"导入"= 移走入库（剪切语义；先弹确认明示"源文件将从收件箱移走"，
+// PRD 05-01 硬性要求，2.6；确认后进度条 / 重复提示流与常规导入一致）。
 // 占用条目：仅实况展示（"被占用"标记），导入 / 重命名禁用，后端同口径再拦一道。
 // 文件图标：优先系统格式图标缓存（iconPath，details 事件补齐），无缓存回退扩展名角标；
 // 目录恒 folder-closed。占用标记以 details 合并后为准（快层目录 occupied=false 是过渡态）。
@@ -12,7 +13,7 @@ import SectionHeader from "./SectionHeader.vue";
 import { formatBadgeColor } from "../lib/formatBadge";
 import { openContextMenu } from "../lib/contextMenus";
 import { inboxDiskSpec } from "../lib/menuSpecs/inboxDisk";
-import { deleteInboxEntry, importInboxEntry, openInboxEntry, renameInboxEntry } from "../lib/inboxOps";
+import { deleteInboxEntry, confirmImportInboxEntry, openInboxEntry, renameInboxEntry } from "../lib/inboxOps";
 import { useContentStore, type InboxDiskEntry } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 
@@ -60,7 +61,8 @@ function openMenu(e: MouseEvent, entry: InboxDiskEntry): void {
     onOpen: () => void openEntry(entry),
     onRename: () => startRename(entry),
     onDelete: () => void deleteEntry(entry),
-    onImport: () => void importEntry(entry),
+    // 2.6：手动导入先弹确认（PRD 05-01 硬性：入口必须明示"源文件将从收件箱移走"），确认后执行
+    onImport: () => confirmImportInboxEntry(entry.name, showError),
   }));
 }
 
@@ -76,16 +78,6 @@ async function deleteEntry(entry: InboxDiskEntry): Promise<void> {
   try {
     await deleteInboxEntry(entry.name);
     if (content.selectedInboxName === entry.name) content.selectedInboxName = "";
-  } catch (err) {
-    showError(err);
-  }
-}
-
-// 手动导入 = 移走入库（Move + Keep；进度条 / 重复提示流与常规导入一致，Channel 组装在 inboxOps）
-async function importEntry(entry: InboxDiskEntry): Promise<void> {
-  if (entry.occupied) return;
-  try {
-    await importInboxEntry(entry.name);
   } catch (err) {
     showError(err);
   }

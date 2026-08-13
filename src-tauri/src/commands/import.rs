@@ -121,6 +121,7 @@ pub fn import_paths(
     target_folder,
     paths: paths.iter().map(PathBuf::from).collect(),
     imported_from: None,
+    manual: false,
     sequence_mode,
   };
   Ok(spawn_import(app, root, assets_dir, opts, on_event, None))
@@ -152,6 +153,7 @@ pub fn import_clipboard(
       target_folder,
       paths: vec![tmp.clone()],
       imported_from: None,
+      manual: false,
       sequence_mode: SequenceMode::Scatter, // 剪贴板只有单张 PNG，永不打包
     };
     return Ok(spawn_import(app, root, assets_dir, opts, on_event, Some(tmp)));
@@ -168,6 +170,7 @@ pub fn import_clipboard(
     target_folder,
     paths: files,
     imported_from: None,
+    manual: false,
     sequence_mode: SequenceMode::Scatter, // 剪贴板恒分散（4.1 定案）
   };
   Ok(spawn_import(app, root, assets_dir, opts, on_event, None))
@@ -385,6 +388,7 @@ mod tests {
       target_folder: None,
       paths,
       imported_from: None,
+      manual: false,
       sequence_mode: SequenceMode::Scatter,
     };
     run_import(&h.lib, h.root.clone(), h.assets_dir.clone(), opts, |_| {}, &AtomicBool::new(false));

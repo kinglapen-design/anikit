@@ -96,8 +96,8 @@ struct DeferredConflict {
   twin_id: String,
 }
 
-/// 自动合并项（PRD 01-2.3 importedFrom）：inbox 渠道导入撞 hash 且已有资产同渠道，
-/// 不建冲突、不改名弹窗——已有资产改名为新文件真实名，新文件作为重复丢弃
+/// 自动合并项（PRD 01-2.3 importedFrom）：自动导入（manual=false）的 inbox 渠道导入撞 hash
+/// 且已有资产同渠道，不建冲突、不改名弹窗——已有资产改名为新文件真实名，新文件作为重复丢弃
 struct MergeItem {
   file_idx: usize,
   asset_id: String,
@@ -145,12 +145,13 @@ pub fn run_import(
     on_event(ImportEvent::Folders);
   }
   let mut phase2 =
-    match dedup_phase(&mut state, lib, &root, &target, &units, &files, &groups, opts.imported_from.as_deref()) {
+    match dedup_phase(&mut state, lib, &root, &target, &units, &files, &groups, opts.imported_from.as_deref(), opts.manual)
+    {
       Ok(p) => p,
       Err(reason) => return abort(state, lib, &on_event, &files, &groups, &units, reason, "导入查重失败"),
     };
 
-  // 自动合并（inbox 渠道撞 hash）：改名 + 丢弃重复源，先于管线发 Asset 事件
+  // 自动合并（自动导入的 inbox 渠道撞 hash；手动导入已在上游转冲突）：改名 + 丢弃重复源，先于管线发 Asset 事件
   apply_merges(&mut state, lib, &assets_dir, &files, std::mem::take(&mut phase2.merges), &on_event);
 
   // 阶段 3+4：并行建档 → 消费者串行注册 + 事件
@@ -270,8 +271,9 @@ fn prepare_folders(
   Ok(())
 }
 
-/// 阶段 2（一次短锁）：全量查重。命中库内 → 同渠道（inbox）自动合并（仅单文件单元），
-/// 否则立即组装冲突（源侧锁外补）；命中同批次 → 延后冲突；未命中 → 预分配 ID + 解析落点生成工作项
+/// 阶段 2（一次短锁）：全量查重。命中库内 → 同渠道（inbox）自动合并（仅单文件单元，
+/// 手动导入 manual=true 时关闭、一律冲突），否则立即组装冲突（源侧锁外补）；
+/// 命中同批次 → 延后冲突；未命中 → 预分配 ID + 解析落点生成工作项
 #[allow(clippy::too_many_arguments)]
 fn dedup_phase(
   state: &mut TaskState,
@@ -282,6 +284,7 @@ fn dedup_phase(
   files: &[PendingFile],
   groups: &[SequenceGroup],
   merge_mark: Option<&str>,
+  manual: bool,
 ) -> Result<Phase2, String> {
   let root_buf = root.to_path_buf();
   let mut phase = Phase2 { work: Vec::new(), deferred: Vec::new(), merges: Vec::new() };
@@ -292,7 +295,7 @@ fn dedup_phase(
     let mut batch: HashMap<String, String> = HashMap::new(); // hash → 同批次 twin asset id
     for (unit, hash) in units {
       let chain = unit_chain(files, groups, *unit);
-      match classify_one(l, &by_hash, &mut batch, target, chain, *unit, hash, merge_mark) {
+      match classify_one(l, &by_hash, &mut batch, target, chain, *unit, hash, merge_mark, manual) {
         Classified::Conflict(u, c) => immediate.push((u, *c)),
         Classified::Merge(i, id) => phase.merges.push(MergeItem { file_idx: i, asset_id: id }),
         Classified::Deferred(d) => phase.deferred.push(d),
@@ -325,7 +328,9 @@ enum Classified {
 }
 
 /// 查重分类单项：命中库内 → 单文件单元且同渠道（inbox）自动合并，否则冲突；命中同批次 → 延后冲突；
-/// 未命中 → 预分配 ID 建工作项。序列帧组永不自动合并（打包模式不带渠道标记，双保险）
+/// 未命中 → 预分配 ID 建工作项。序列帧组永不自动合并（打包模式不带渠道标记，双保险）；
+/// 手动导入（manual=true，收件箱"工程文件"手动入口）永不自动合并——撞 hash 一律走正常重复提示
+///（2026-08-13 定案：自动合并只属自动导入的零打扰口径，手动操作必须给用户冲突弹窗）
 #[allow(clippy::too_many_arguments)]
 fn classify_one(
   l: &Library,
@@ -336,15 +341,19 @@ fn classify_one(
   unit: Unit,
   hash: &str,
   merge_mark: Option<&str>,
+  manual: bool,
 ) -> Classified {
   let Some(folder_id) = ops::find_folder(l, target, chain) else {
     return Classified::NoFolder(unit);
   };
   if let Some(meta) = by_hash.get(hash) {
-    // 自动合并判定：本次导入与已有资产同为 inbox 渠道（正式资产绝不被自动改名）
-    if let (Unit::Solo(idx), Some(mark)) = (unit, merge_mark) {
-      if meta.imported_from.as_deref() == Some(mark) {
-        return Classified::Merge(idx, meta.id.clone());
+    // 自动合并判定：仅自动导入（manual=false）且本次导入与已有资产同为 inbox 渠道
+    //（正式资产绝不被自动改名；手动导入永远走冲突）
+    if !manual {
+      if let (Unit::Solo(idx), Some(mark)) = (unit, merge_mark) {
+        if meta.imported_from.as_deref() == Some(mark) {
+          return Classified::Merge(idx, meta.id.clone());
+        }
       }
     }
     Classified::Conflict(unit, Box::new(conflict_of(l, meta, folder_id)))

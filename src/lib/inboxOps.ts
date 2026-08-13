@@ -6,6 +6,7 @@
 // 失败原样抛出：错误条 / 选中态同步等 UI 反馈留在组件。
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { useContentStore, type ImportEvent } from "../stores/content";
+import { useSelectionStore } from "../stores/selection";
 
 // 系统默认方式打开条目（占用 / 失败后端中文人话原样抛出）
 export async function openInboxEntry(name: string): Promise<void> {
@@ -22,6 +23,17 @@ export async function deleteInboxEntry(name: string): Promise<void> {
 export async function renameInboxEntry(name: string, newName: string): Promise<void> {
   await invoke("rename_inbox_entry", { name, newName });
   await useContentStore().refreshInboxDisk();
+}
+
+// 手动导入前置确认（PRD 05-01，2.6）：入口必须明示"源文件将从收件箱移走"——
+// 先弹确认（AppConfirm），确认才执行；onError 由组件侧错误条处理
+export function confirmImportInboxEntry(name: string, onError: (e: unknown) => void): void {
+  useSelectionStore().confirmPrompt = {
+    title: "导入到资源库",
+    body: `「${name}」将从收件箱移走入库，原位置不再保留。`,
+    confirmLabel: "导入",
+    onConfirm: () => void importInboxEntry(name).catch(onError),
+  };
 }
 
 // 手动导入 = 移走入库：进度初值 / Channel 事件转发 / taskId 回填与 content.startImport 同口径；

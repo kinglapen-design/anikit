@@ -289,6 +289,7 @@ mod tests {
       target_folder: target,
       paths,
       imported_from: None,
+      manual: false,
       sequence_mode: SequenceMode::Scatter,
     };
     run_import(&h.lib, h.root.clone(), h.assets_dir.clone(), opts, |_| {}, &AtomicBool::new(false))
@@ -460,6 +461,7 @@ mod tests {
       target_folder: None,
       paths: vec![tree],
       imported_from: None,
+      manual: false,
       sequence_mode: SequenceMode::Scatter,
     };
     let outcome = run_import(&h.lib, h.root.clone(), h.assets_dir.clone(), opts, |_| {}, &AtomicBool::new(false));
@@ -483,6 +485,7 @@ mod tests {
       target_folder: None,
       paths,
       imported_from: None,
+      manual: false,
       sequence_mode: SequenceMode::Pack,
     };
     run_import(&h.lib, h.root.clone(), h.assets_dir.clone(), opts, |_| {}, &AtomicBool::new(false))
