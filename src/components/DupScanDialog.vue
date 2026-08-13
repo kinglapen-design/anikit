@@ -199,8 +199,9 @@ function thumbUrl(a: DupAsset): string | null {
   display: flex;
   height: min(560px, calc(100vh - 300px));
 }
-/* 左列：250 组列表，右分隔线；容器 padding 12（2026-08-13 用户定，给滚轮留空间）
-   + gap 4 + item 圆角 6；滚轮走 .kit-scroll 统一类（gutter 恒占，item 宽恒定不跳动） */
+/* 左列：250 组列表，右分隔线；容器 padding 12（2026-08-13 用户定，给滚轮留空间；右 6
+   补偿 gutter 恒占——item 左右视觉边距对称 12，2026-08-13 走查）+ gap 4 + item 圆角 6；
+   滚轮走 .kit-scroll 统一类（gutter 恒占，item 宽恒定不跳动） */
 .group-list {
   width: 250px;
   flex: none;
@@ -208,7 +209,7 @@ function thumbUrl(a: DupAsset): string | null {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  padding: var(--space-12);
+  padding: var(--space-12) var(--space-6) var(--space-12) var(--space-12);
 }
 /* 组列表项：56 高 = 40×40 缩略图 + 名称 / N 个文件竖排，padding 四周 8（2026-08-13 用户定）；
    hover 叠 暗-悬停 罩层；当前组 = 亮-选中 罩层 + 暗-悬停 1px 线条（树 item 强度阶梯同口径） */
@@ -227,9 +228,10 @@ function thumbUrl(a: DupAsset): string | null {
 .group-item:hover {
   background: var(--line-hover);
 }
+/* 当前组：与目录树 item 选中同款（2026-08-13 用户定）——亮-选中罩层 + 1.5px 文字常态内阴影 */
 .group-item.cur {
   background: var(--line-active);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
+  box-shadow: inset 0 0 0 1.5px var(--text-normal);
 }
 .group-thumb {
   width: 40px;

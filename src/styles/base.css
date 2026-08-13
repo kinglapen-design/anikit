@@ -79,9 +79,9 @@ textarea {
 .kit-scroll-x::-webkit-scrollbar-thumb {
   background: var(--line-hover);
   border-radius: 3px;
-  /* 右侧 1.5px 透明让位（2026-08-13 走查）：弹窗 1.5px inset 边框（亮-选中）画在容器最右缘，
-     会盖住滚轮右缘——thumb 背景裁到 padding-box，右 1.5px 透明带让边框线穿过 */
-  border-right: 1.5px solid transparent;
+  /* 滚轮距边框留 1px（2026-08-13 用户定，不占布局）：thumb 右 1px 透明让位——
+     遇 1px inset 边框（面板分隔线）刚好落空；遇 1.5px 边框（弹窗亮-选中）只盖 0.5px 不明显 */
+  border-right: 1px solid transparent;
   background-clip: padding-box;
 }
 .kit-scroll::-webkit-scrollbar-thumb:hover,

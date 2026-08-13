@@ -354,11 +354,15 @@ async function togglePin(): Promise<void> {
   height: 8px;
   cursor: s-resize;
 }
+/* 右缘热区收窄 8 → 3（2026-08-13 用户实机"详情面板滚轮无法选中"根因）：
+   详情面板悬浮滚轮贴窗口右缘（与 8px 热区几乎全重叠）——鼠标从右缘外够滚轮时命中测试
+   落在热区上，aside 的 mouseenter 不触发 → 滚轮保持透明 pointer-events:none →
+   按下被热区抢走变窗口拉伸；收窄后滚轮左 3px 露出，hover 激活链恢复 */
 .resize-zone.e {
   top: 8px;
   bottom: 8px;
   right: 0;
-  width: 8px;
+  width: 3px;
   cursor: e-resize;
 }
 .resize-zone.w {
