@@ -19,7 +19,7 @@ use sha2::{Digest, Sha256};
 
 use crate::core::json_io::{read_json, write_json};
 use crate::core::library::{self, Library};
-use crate::core::models::{new_asset_id, AssetMeta, Folder, Placement, DATA_VERSION};
+use crate::core::models::{AssetMeta, Folder, Placement, DATA_VERSION};
 use crate::core::paths;
 use crate::services::thumbnail;
 use crate::services::views::PlacementView;
@@ -236,13 +236,8 @@ fn walk(
 }
 
 /// 单文件建档（锁外重活）：建 info 文件夹 → 实体入库 → 探测宽高 → 缩略图 → 写 metadata.json。
-/// 路径全由新 ID 推导（core::paths 单点），不依赖共享状态。
-pub(crate) fn build_asset(assets_dir: &Path, file: &PendingFile, hash: &str, source: Source) -> Result<AssetMeta, String> {
-  build_asset_with_id(assets_dir, file, hash, &new_asset_id(), source, None)
-}
-
-/// 同 build_asset，但使用预分配的 asset id（并行管线在阶段 2 查重时统一分配）
-/// 并携带导入渠道标记（inbox 导入写 metadata.importedFrom）
+/// 路径全由新 ID 推导（core::paths 单点），不依赖共享状态；
+/// 使用预分配的 asset id（并行管线在阶段 2 查重时统一分配），并携带导入渠道标记（inbox 导入写 metadata.importedFrom）
 pub(crate) fn build_asset_with_id(
   assets_dir: &Path,
   file: &PendingFile,

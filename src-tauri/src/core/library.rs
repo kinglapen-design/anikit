@@ -187,9 +187,8 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   let assets = load_assets(&assets_dir)?;
   // 打开自检（2026-07-25 用户反馈：手动删 assets/{ID}.info 后数量成永久错误）：
   // 剔除指向缺失 info 的 Placement（内存与磁盘同清，数量统计随索引重建归零）。
-  // 同挂点清 root 链接（候车区不变量，2026-08-13：2.5 前旧行为残留，UI 无删除入口）。
   // 落盘前先强制备份一份含脏数据的快照；备份失败则不写盘（只内存清理，防误删无可回滚）。
-  let removed = prune_missing_placements(&mut folders, &assets) + prune_root_links(&mut folders);
+  let removed = prune_missing_placements(&mut folders, &assets);
   if removed > 0 {
     log::warn!("打开自检剔除 {removed} 条指向缺失 info 的 Placement");
     match backup::backup_library(path, &assets_dir) {
@@ -244,15 +243,6 @@ fn prune_missing_placements(folders: &mut FoldersFile, assets: &[AssetMeta]) -> 
   let ids: HashSet<&str> = assets.iter().map(|a| a.id.as_str()).collect();
   let before = folders.items.len();
   folders.items.retain(|p| ids.contains(p.asset.as_str()));
-  before - folders.items.len()
-}
-
-/// 打开自检（2026-08-13，候车区不变量）：剔除 root 下的链接 Placement（origin = false）——
-/// 候车区只收原始文件（PRD 02-15）；2.5 前旧行为（删文件夹把链接改挂 root）残留的脏数据
-/// 在 UI 无删除入口（链接删除组仅"从文件夹中移除"），开库顺手清掉，返回剔除条数
-fn prune_root_links(folders: &mut FoldersFile) -> usize {
-  let before = folders.items.len();
-  folders.items.retain(|p| !(p.folder == ROOT_FOLDER_ID && !p.origin));
   before - folders.items.len()
 }
 
@@ -508,10 +498,10 @@ mod tests {
     assert_eq!(persisted.items[0].asset, "AN-REAL");
   }
 
-  /// 打开自检（2026-08-13，候车区不变量）：root 下的链接 Placement（旧行为残留——
-  /// 2.5 前删文件夹把链接改挂 root）开库剔除并落盘；origin 在 root 不受影响
+  /// 打开自检不剔 root 链接（2026-08-13 用户定案：候车区不做内容限制，
+  /// 原 prune_root_links 自检废除——root 下的链接 Placement 是合法数据，照常进索引）
   #[test]
-  fn open_prunes_root_links() {
+  fn open_keeps_root_links() {
     let dir = tempfile::tempdir().unwrap();
     let lib = create_test(dir.path());
     let root = lib.root.clone();
@@ -541,11 +531,10 @@ mod tests {
     write_json(&root.join(FOLDERS_FILE), &folders).unwrap();
 
     let lib = open(&lib.space_root, &root).unwrap();
-    assert!(lib.index.placements_by_folder.get("root").map_or(true, |v| v.is_empty()), "root 链接不进索引");
+    assert_eq!(lib.index.placements_by_folder["root"].len(), 1, "root 链接照常进索引");
     assert_eq!(lib.index.placements_by_folder["F01"].len(), 1, "文件夹内 origin 不动");
     let persisted: FoldersFile = read_json(&root.join(FOLDERS_FILE)).unwrap();
-    assert_eq!(persisted.items.len(), 1, "root 链接应落盘清理");
-    assert!(persisted.items[0].origin);
+    assert_eq!(persisted.items.len(), 2, "root 链接保留不落盘清理");
   }
 
   #[test]

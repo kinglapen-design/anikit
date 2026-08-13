@@ -2,8 +2,8 @@
 // 重复文件提示（36_重复文件提示稿，2026-08-13 全量重写）：导入完成后 hash 冲突统一询问。
 // 行 = 左右对照卡片 + radio 三选一（作为新链接导入，默认 / 作为新文件导入 / 用已存在文件导入）
 // + 行尾"跳过此文件"开关（可逆，跳过行 30% 压暗）+「全部跟随」开关（默认开：改一行决策全部行跟随）。
-// 候车区收窄（2026-08-13 用户定）：落点 = 未分类（root）时只留"作为新文件导入"（默认选中）——
-// 候车区不是分类位置，建链接 / 移入既有资产对候车区无意义。
+// 决策与落点不设限（2026-08-13 用户定：不替用户做整理决定——落点未分类同样三选一恒出，
+// 原"候车区收窄只留作为新文件导入"废除）。
 // 2026-08-13 用户定：内嵌批量重命名属过度设计，整个废除——"导入就是导入，只选择怎么导入；
 // 要命名导进来再说"（批量重命名归独立弹窗，阶段三，37 稿）。
 // 确认 = 按各行决策执行；取消 / 关闭（含遮罩点击）= 全部跳过——源文件从未被动过，纯前端清队列即可。
@@ -17,9 +17,9 @@ import { useContentStore, type ConflictItem, type ConflictResolution } from "../
 const content = useContentStore();
 const conflicts = computed(() => content.importConflicts ?? []);
 
-// 默认决策：候车区（落点 root）= 作为新文件导入；否则 = 作为新链接导入
-function defaultDecision(c: ConflictItem): DupDecision {
-  return { action: c.targetFolder === "root" ? "copy" : "link", skipped: false };
+// 默认决策：作为新链接导入（36 稿默认，不设落点收窄——2026-08-13 用户定案）
+function defaultDecision(_c: ConflictItem): DupDecision {
+  return { action: "link", skipped: false };
 }
 
 // 每行决策；弹窗挂载时队列已就位，初始化一次即可
@@ -87,7 +87,6 @@ function onCancel(): void {
           :key="c.sourcePath"
           :item="c"
           :decision="rows[i] ?? defaultDecision(c)"
-          :waiting-area="c.targetFolder === 'root'"
           @change="onRowChange(i, $event)"
         />
       </div>

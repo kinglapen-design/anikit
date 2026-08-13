@@ -12,8 +12,12 @@
 //! 实况快照分两层防卡（2026-07-25 用户批准）：快层 snapshot_fast 供 list_inbox_snapshot 同步返回
 //! （文件大小取元数据、单文件占用探测；目录大小 / 占用先给 0 / false 占位）；慢层 snapshot_details
 //! （递归大小、占用、shell 格式图标）由后台 detail worker 延迟 200ms 合并连发后计算，
-//! 经 app.emit("inbox-disk-details") 推前端整体替换。自动导入 failed 残留（move 阶段探测后又被锁住）
-//! 经 requeue_failed 重投监听等待队列，放手后自动重试。
+//! 经 app.emit("inbox-disk-details") 推前端整体替换。**自动导入取消 / 失败不再自动重试**
+//! （2026-08-13 用户定案，二轮）：跑过导入管线的 failed / 冲突项记入**搁置清单**
+//! （空间根 `inbox_blocked.json`，本模块单一写点；按 顶层条目名 + 大小 + 修改时间 精确标识
+//! "那个文件对象"——同名新文件 mtime 不同不拦，改名经 blocked_rename 平移记录保持拦截），
+//! dispatch_loop 放行前过滤——重启存量清点 / 改名 fs 事件都不得再触发自动导入，
+//! 由用户在"工程文件"区块右键手动入库。
 //! 全部失败（目录创建失败、盘符挂载失败、监听启动失败）记日志降级，不影响空间打开。
 
 use std::path::{Path, PathBuf};
@@ -22,12 +26,13 @@ use std::sync::{mpsc, Arc};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::adapters::{inbox_drive, inbox_watch};
 use crate::commands::library::AppState;
-use crate::services::import::{FailedItem, ImportOptions, SequenceMode, Source, Structure};
+use crate::core::json_io;
+use crate::services::import::{ImportOptions, ImportOutcome, SequenceMode, Source, Structure};
 use crate::services::import_task::run_import;
 use crate::services::thumbnail;
 
@@ -75,6 +80,133 @@ pub fn entry_auto_importable(path: &Path) -> bool {
 /// 条目内全部文件（文件夹递归）；目录读取失败的条目按空计
 fn files_of(path: &Path) -> Vec<PathBuf> {
   inbox_watch::files_of(path)
+}
+
+// ===== 自动导入搁置清单（2026-08-13 用户定案：取消 / 失败不再自动重试）=====
+// 跑过导入管线的 failed / 冲突（含用户在重复提示里取消）源条目记录在此，dispatch_loop
+// 放行前过滤——重启存量清点、改名 / 内容 fs 事件都不得再触发自动导入，只能手动入库。
+// 标识 = 顶层条目名 + 大小 + 修改时间（精确到"那个文件对象"：同名新文件 mtime 不同不拦）；
+// 改名经 blocked_rename 平移记录保持拦截，删除经 blocked_remove 清记录。
+// 持久化在空间根 inbox_blocked.json（本模块单一写点）；记录随条目移走 / 删除变陈旧，
+// 因 mtime + 大小不匹配新文件而无害，无需主动清理。
+
+/// 搁置清单文件名（空间根，非库级——inbox 空间级共用同锚点）
+const BLOCKED_FILE: &str = "inbox_blocked.json";
+
+/// 搁置清单文件（json_io 统一出入口要求 version 门禁字段）
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BlockedFile {
+  version: u32,
+  blocked: Vec<BlockedEntry>,
+}
+
+/// 搁置记录：顶层条目名 + 大小 + 修改时间（Unix 毫秒）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BlockedEntry {
+  name: String,
+  size: u64,
+  mtime_ms: u64,
+}
+
+fn blocked_path(root: &Path) -> PathBuf {
+  root.join(BLOCKED_FILE)
+}
+
+/// 读搁置清单（缺文件 / 解析失败按空清单降级——不拦任何条目，宁可多导入一次不可丢用户文件）
+fn blocked_load(root: &Path) -> Vec<BlockedEntry> {
+  json_io::read_json::<BlockedFile>(&blocked_path(root)).map(|f| f.blocked).unwrap_or_default()
+}
+
+/// 写搁置清单（失败仅记日志——下次启动清单缺失回到"不拦"，不会卡死导入）
+fn blocked_save(root: &Path, list: &[BlockedEntry]) {
+  let file = BlockedFile { version: crate::core::models::DATA_VERSION, blocked: list.to_vec() };
+  if let Err(e) = json_io::write_json(&blocked_path(root), &file) {
+    log::error!("收件箱搁置清单写入失败：{e}");
+  }
+}
+
+/// 取条目的搁置标识（文件 = 大小 + mtime；目录 = 自身 mtime、大小记 0——
+/// 增删直接子项会改变目录 mtime，内容变了视作新条目放行，与"取消的是那一次"语义一致）
+fn entry_record(path: &Path) -> Option<BlockedEntry> {
+  let meta = std::fs::metadata(path).ok()?;
+  Some(BlockedEntry {
+    name: path.file_name()?.to_string_lossy().into_owned(),
+    size: if meta.is_dir() { 0 } else { meta.len() },
+    mtime_ms: modified_millis(&meta),
+  })
+}
+
+/// 条目是否在搁置清单内（名 + 大小 + mtime 三项全中才拦）
+fn is_blocked(blocked: &[BlockedEntry], path: &Path) -> bool {
+  let Some(rec) = entry_record(path) else { return false };
+  blocked.iter().any(|b| b == &rec)
+}
+
+/// 导入结果落搁置清单：conflicts（用户取消 = 全部跳过；即使后续 resolve 移走源，
+/// 记录陈旧无害）与 failed 的源路径归并到顶层条目，同名替换后整体写回
+fn block_outcome(root: &Path, outcome: &ImportOutcome) {
+  let inbox_root = root.join(INBOX_DIR);
+  let mut tops: Vec<PathBuf> = Vec::new();
+  for c in &outcome.conflicts {
+    if let Some(t) = top_entry(&inbox_root, &c.source_path) {
+      tops.push(t);
+    }
+  }
+  for f in &outcome.failed {
+    if let Some(t) = top_entry(&inbox_root, Path::new(&f.path)) {
+      tops.push(t);
+    }
+  }
+  if tops.is_empty() {
+    return;
+  }
+  let mut list = blocked_load(root);
+  let mut added = 0u32;
+  for t in tops {
+    let Some(rec) = entry_record(&t) else { continue }; // 已移走（resolve copy/link）跳过
+    list.retain(|b| b.name != rec.name); // 同名旧记录替换（内容可能已覆写）
+    list.push(rec);
+    added += 1;
+  }
+  if added > 0 {
+    log::info!("收件箱自动导入搁置 {added} 项（取消 / 失败不再自动重试，可手动入库）");
+    blocked_save(root, &list);
+  }
+}
+
+/// 重命名平移搁置记录（条目名变、大小与 mtime 不变，保持拦截——改名不等于重新丢入）；
+/// 命令层 rename_inbox_entry 成功后调用
+pub fn blocked_rename(root: &Path, old_name: &str, new_name: &str) {
+  let mut list = blocked_load(root);
+  let mut hit = false;
+  for b in &mut list {
+    if b.name == old_name {
+      b.name = new_name.to_string();
+      hit = true;
+    }
+  }
+  if hit {
+    blocked_save(root, &list);
+  }
+}
+
+/// 删除清搁置记录（命令层 delete_inbox_entry 成功后调用；手动导入不移记录——
+/// 条目移走后记录自然陈旧无害）
+pub fn blocked_remove(root: &Path, name: &str) {
+  let mut list = blocked_load(root);
+  let before = list.len();
+  list.retain(|b| b.name != name);
+  if list.len() != before {
+    blocked_save(root, &list);
+  }
+}
+
+/// 顶层条目：p 相对 inbox 目录的第一级（文件本身 / 被丢入的文件夹）；目录外路径 None
+fn top_entry(inbox_root: &Path, p: &Path) -> Option<PathBuf> {
+  let first = p.strip_prefix(inbox_root).ok()?.components().next()?;
+  Some(inbox_root.join(first.as_os_str()))
 }
 
 /// 收件箱磁盘实况条目（"工程文件"区块展示用；事实来源 = 磁盘，不建档不写库）
@@ -219,15 +351,6 @@ pub struct InboxHandle {
   drive: Option<char>,
 }
 
-impl InboxHandle {
-  /// 重投路径进监听等待队列（自动导入 failed 残留重投；监听已停则静默丢弃）
-  fn requeue(&self, paths: Vec<PathBuf>) {
-    if let Some(w) = &self.watch {
-      w.requeue(paths);
-    }
-  }
-}
-
 /// 启动收件箱（空间打开 / 自动导入开启后调用，root = 空间根）：先停旧实例；任一部件失败记日志降级继续
 pub fn start(app: &AppHandle, root: &Path) {
   stop(app);
@@ -249,7 +372,7 @@ pub fn start(app: &AppHandle, root: &Path) {
   let stop = Arc::new(AtomicBool::new(false));
   let dispatcher = {
     let app = app.clone();
-    let root = root.to_path_buf();
+    let root = root.to_path_buf(); // 搁置清单锚点（空间根）
     let stop = stop.clone();
     std::thread::spawn(move || dispatch_loop(app, root, rx, stop))
   };
@@ -335,7 +458,7 @@ pub fn toggle_drive(app: &AppHandle) {
   sync_tray(app);
 }
 
-/// 派发循环：逐批跑导入；stop 置位或通道关闭即退出。root = 空间根（收件箱锚点，failed 重投判定用）；
+/// 派发循环：逐批跑导入；stop 置位或通道关闭即退出。root = 空间根（搁置清单锚点）；
 /// 导入目标 = 当前打开的库（库 root / assets 池逐批短锁取）。
 /// 白名单过滤（2026-07-25 语义重定）：就绪条目逐个判定——文件仅白名单扩展名、
 /// 目录仅递归全部文件白名单才进导入；其余跳过留在磁盘，由"工程文件"实况区块展示等手动导入
@@ -348,6 +471,21 @@ fn dispatch_loop(app: AppHandle, root: PathBuf, rx: mpsc::Receiver<Vec<PathBuf>>
     let paths: Vec<PathBuf> = paths.into_iter().filter(|p| entry_auto_importable(p)).collect();
     if paths.is_empty() {
       continue; // 整批都是白名单以外（工程文件等），留在磁盘不自动导入
+    }
+    // 搁置过滤（2026-08-13 用户定案）：取消冲突 / 失败过的条目不再自动重试——
+    // 重启存量清点、改名 / 内容 fs 事件都拦在这里，只能"工程文件"区块右键手动入库
+    let blocked = blocked_load(&root);
+    let paths: Vec<PathBuf> = if blocked.is_empty() {
+      paths
+    } else {
+      let (skip, keep): (Vec<PathBuf>, Vec<PathBuf>) = paths.into_iter().partition(|p| is_blocked(&blocked, p));
+      if !skip.is_empty() {
+        log::info!("收件箱自动导入跳过已搁置 {} 项", skip.len());
+      }
+      keep
+    };
+    if paths.is_empty() {
+      continue;
     }
     let state = app.state::<AppState>();
     let opts = ImportOptions {
@@ -380,35 +518,9 @@ fn dispatch_loop(app: AppHandle, root: PathBuf, rx: mpsc::Receiver<Vec<PathBuf>>
       },
       &AtomicBool::new(false),
     );
-    // failed 残留重投：move 阶段失败（探测后软件又锁住）的源文件留在 inbox 不会再自动重试，
-    // 重投监听等待队列，放手后走常规就绪判定自动入库；conflicts 不重投（用户决策，源保留属预期）
-    requeue_failed(&app, &root, &outcome.failed);
+    // 取消冲突 / 失败条目落搁置清单：不再自动重试（2026-08-13 用户定案），手动入库除外
+    block_outcome(&root, &outcome);
   }
-}
-
-/// 自动导入 failed 残留重投：取仍存在且位于 inbox 根内的 failed 源路径，
-/// 从 AppState 取监听实例重投等待队列。手动 import_inbox_entry 的失败不调本函数
-/// （用户显式动作，错误已回前端），但函数本身与触发来源无关，后续要统一可直接复用
-pub fn requeue_failed(app: &AppHandle, root: &Path, failed: &[FailedItem]) {
-  let inbox_root = root.join(INBOX_DIR);
-  let paths: Vec<PathBuf> = failed
-    .iter()
-    .map(|f| PathBuf::from(&f.path))
-    .filter(|p| p.starts_with(&inbox_root) && p.exists())
-    .collect();
-  if paths.is_empty() {
-    return;
-  }
-  log::info!("收件箱 failed 残留重投 {} 项", paths.len());
-  let state = app.state::<AppState>();
-  match state.inbox.lock() {
-    Ok(slot) => {
-      if let Some(h) = slot.as_ref() {
-        h.requeue(paths);
-      }
-    }
-    Err(_) => log::error!("收件箱 failed 重投失败（锁冲突）"),
-  };
 }
 
 /// 同步托盘菜单项：勾选态 + 盘符标注（收件箱未启动 / 未挂载显示"未挂载"）
@@ -421,4 +533,132 @@ fn sync_tray(app: &AppHandle) {
   };
   let _ = items.inbox.set_text(label);
   let _ = items.inbox.set_checked(checked);
+}
+
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::services::import::{ConflictItem, FailedItem};
+
+  fn harness() -> (tempfile::TempDir, PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join(INBOX_DIR);
+    std::fs::create_dir_all(&dir).unwrap();
+    (tmp, dir)
+  }
+
+  fn conflict_at(path: &Path) -> ConflictItem {
+    ConflictItem {
+      source_path: path.to_path_buf(),
+      source_name: path.file_name().unwrap().to_string_lossy().into_owned(),
+      source_size: 0,
+      source_w: None,
+      source_h: None,
+      source_thumb_path: None,
+      target_folder: "root".to_string(),
+      target_folder_name: "根目录".to_string(),
+      existing_asset_id: "AN-X".to_string(),
+      existing_name: "已有".to_string(),
+      existing_w: None,
+      existing_h: None,
+      existing_size: 0,
+      existing_ext: "png".to_string(),
+      existing_thumb_path: None,
+      existing_folder_name: "根目录".to_string(),
+      sequence: None,
+      imported_from: None,
+    }
+  }
+
+  /// 冲突 / 失败源归并顶层条目落搁置清单；已移走的源（resolve copy/link 后）跳过；
+  /// 清单外条目不拦
+  #[test]
+  fn block_outcome_records_conflict_and_failed_top_entries() {
+    let (tmp, dir) = harness();
+    let root = tmp.path();
+    let f1 = dir.join("图.png");
+    let f2 = dir.join("档.psd");
+    let other = dir.join("别的.png");
+    std::fs::write(&f1, "123").unwrap();
+    std::fs::write(&f2, "12").unwrap();
+    std::fs::write(&other, "x").unwrap();
+    let outcome = ImportOutcome {
+      imported: 0,
+      conflicts: vec![conflict_at(&f1), conflict_at(&dir.join("已移走.png"))],
+      failed: vec![FailedItem { path: f2.to_string_lossy().into_owned(), reason: "占用".to_string() }],
+    };
+    block_outcome(root, &outcome);
+    let list = blocked_load(root);
+    assert_eq!(list.len(), 2, "已移走的源不落清单：{list:?}");
+    assert!(is_blocked(&list, &f1), "冲突源应搁置");
+    assert!(is_blocked(&list, &f2), "失败源应搁置");
+    assert!(!is_blocked(&list, &other), "清单外条目不拦");
+  }
+
+  /// 文件夹批的冲突源归并到顶层目录（目录记 size 0 + 自身 mtime）
+  #[test]
+  fn block_outcome_maps_nested_source_to_top_dir() {
+    let (tmp, dir) = harness();
+    let root = tmp.path();
+    let sub = dir.join("夹");
+    std::fs::create_dir_all(&sub).unwrap();
+    std::fs::write(sub.join("a.png"), "1").unwrap();
+    let outcome = ImportOutcome { imported: 0, conflicts: vec![conflict_at(&sub.join("a.png"))], failed: vec![] };
+    block_outcome(root, &outcome);
+    let list = blocked_load(root);
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].name, "夹");
+    assert!(is_blocked(&list, &sub), "顶层目录应整体搁置");
+  }
+
+  /// 拦截口径 = 名 + 大小 + mtime 三项全中：同名新文件（mtime / 大小不同）不拦
+  #[test]
+  fn is_blocked_requires_same_size_and_mtime() {
+    let (_tmp, dir) = harness();
+    let f = dir.join("图.png");
+    std::fs::write(&f, "123").unwrap();
+    let rec = entry_record(&f).unwrap();
+    assert!(is_blocked(&[rec.clone()], &f), "原记录应命中");
+    let diff_mtime = BlockedEntry { mtime_ms: rec.mtime_ms + 1, ..rec.clone() };
+    assert!(!is_blocked(&[diff_mtime], &f), "mtime 不同不拦（同名新文件）");
+    let diff_size = BlockedEntry { size: rec.size + 1, ..rec };
+    assert!(!is_blocked(&[diff_size], &f), "大小不同不拦");
+  }
+
+  /// 重命名平移记录（新名仍拦、旧名记录不再存在）；删除清记录
+  #[test]
+  fn blocked_rename_carries_and_remove_clears() {
+    let (tmp, dir) = harness();
+    let root = tmp.path();
+    let f = dir.join("图.png");
+    std::fs::write(&f, "123").unwrap();
+    let outcome = ImportOutcome {
+      imported: 0,
+      conflicts: vec![],
+      failed: vec![FailedItem { path: f.to_string_lossy().into_owned(), reason: "占用".to_string() }],
+    };
+    block_outcome(root, &outcome);
+
+    let new = dir.join("新名.png");
+    std::fs::rename(&f, &new).unwrap();
+    blocked_rename(root, "图.png", "新名.png");
+    let list = blocked_load(root);
+    assert!(is_blocked(&list, &new), "改名后新名仍应搁置");
+    assert!(list.iter().all(|b| b.name != "图.png"), "旧名记录应平移不残留");
+
+    blocked_remove(root, "新名.png");
+    assert!(blocked_load(root).is_empty(), "删除后记录应清除");
+    assert!(root.join(BLOCKED_FILE).is_file(), "清单应持久化在空间根");
+  }
+
+  /// 清单缺文件 / 内容损坏按空清单降级（不拦任何条目）
+  #[test]
+  fn blocked_load_degrades_to_empty_on_missing_or_bad_json() {
+    let (tmp, _dir) = harness();
+    let root = tmp.path();
+    assert!(blocked_load(root).is_empty(), "缺文件应为空清单");
+    std::fs::write(root.join(BLOCKED_FILE), "不是 json").unwrap();
+    assert!(blocked_load(root).is_empty(), "坏 JSON 应为空清单");
+  }
 }

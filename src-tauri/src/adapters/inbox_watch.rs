@@ -36,20 +36,6 @@ impl WatchHandle {
       let _ = j.join();
     }
   }
-
-  /// 重投路径进等待队列（自动导入 failed 残留重投，4.4）：经 wake 通道发带路径的
-  /// synthetic 事件，watch_loop 的 Some(Ok(ev)) 分支会把对应顶层条目入 pending hot，
-  /// 走常规就绪判定（静默期满 + 可移走 + 大小稳定）后照常回调——不绕开占用探测
-  pub fn requeue(&self, paths: Vec<PathBuf>) {
-    if paths.is_empty() {
-      return;
-    }
-    let mut ev = Event::new(notify::event::EventKind::Other);
-    for p in paths {
-      ev = ev.add_path(p);
-    }
-    let _ = self.wake.send(Ok(ev));
-  }
 }
 
 impl Drop for WatchHandle {

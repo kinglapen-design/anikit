@@ -54,7 +54,7 @@ async function onEnableAutoImport(): Promise<void> {
 }
 
 // 快速访问（PRD 02-15 定案六项：全部 / 未分类 / 最近使用 / 自动导入 / 缩略图 / 回收站）：
-// "缩略图"视图待 hidden 资产业务（5.x）接入后放；收件箱 = PRD"自动导入"（候车区规则同口径）
+// "缩略图"视图待 hidden 资产业务（5.x）接入后放；收件箱 = PRD"自动导入"
 const quickItems = [
   { key: "all", icon: "library", label: "全部" },
   { key: "uncategorized", icon: "uncategorized", label: "未分类" },
@@ -174,8 +174,8 @@ function onQuickMenu(key: string, e: MouseEvent): void {
         当前资源库未开启自动导入。开启后将挂载收件箱盘符，复制进收件箱的文件会自动导入资源库。
       </p>
       <template #actions>
-        <AppButton label="取消" :disabled="autoImportBusy" @click="autoImportPrompt = false" />
         <AppButton label="开启" variant="primary" :disabled="autoImportBusy" @click="onEnableAutoImport" />
+        <AppButton label="取消" :disabled="autoImportBusy" @click="autoImportPrompt = false" />
       </template>
     </AppModal>
   </div>

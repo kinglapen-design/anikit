@@ -46,17 +46,6 @@ export interface ImportDraft {
   targetFolder: string | null; // null = 根目录
 }
 
-// 资产级去重（PRD 02-15，2.5）：快速访问"全部 / 未分类 / 自动导入"视图按资产显示一次——
-// 取 origin Placement（候车区只收原始文件的口径同源满足），无 origin 的异常数据取第一条兜底
-function originOnly(list: PlacementView[]): PlacementView[] {
-  const seen = new Map<string, PlacementView>();
-  for (const p of list) {
-    const prev = seen.get(p.assetId);
-    if (!prev || (!prev.origin && p.origin)) seen.set(p.assetId, p);
-  }
-  return [...seen.values()];
-}
-
 export interface FailedItem {
   path: string;
   reason: string;
@@ -237,18 +226,16 @@ export const useContentStore = defineStore("content", {
           return state.placements.filter((p) => ids.has(p.folderId));
         }
         switch (viewKey) {
-          case "quick:all": // 全部 = 递归显示所有文件（2026-07-22 用户定案）；
-            // 资产级去重（PRD 02-15，2.5）：同一资产的多条链接不重复铺，只显 origin Placement
-            return originOnly(state.placements);
-          case "quick:uncategorized": // 未分类 = 未归入任何文件夹（root 即未分类）；
-            // 候车区只收原始文件（PRD 02-15，2.5）：origin 过滤——2.5 前旧行为（删文件夹链接改挂
-            // root）残留的链接 Placement 不得显形（2026-08-13 用户实机：链接卡在未分类且无删除入口）
-            return originOnly(state.placements.filter((p) => p.folderId === "root" && p.origin));
+          // 2026-08-13 用户定案：快速访问不做内容限制——按实际 Placement 显示，
+          // 链接不再隐藏（原 originOnly 资产级去重 + origin 过滤整体废除）
+          case "quick:all": // 全部 = 递归显示所有文件（2026-07-22 用户定案）
+            return state.placements;
+          case "quick:uncategorized": // 未分类 = 未归入任何文件夹（root 即未分类）
+            return state.placements.filter((p) => p.folderId === "root");
           case "quick:inbox": // 收件箱"已导入" = importedFrom=inbox 且未摘标的资产，持久显示
             // （2026-07-25 用户定：用户没分类走就要一直在）。不限 folderId=root——手动导入 Keep
-            // 生成的层级也算未分类；摘标 = 清 importedFrom（归 6.3），清后自然消失；
-            // 候车区同口径只显 origin（2.5）
-            return originOnly(state.placements.filter((p) => p.importedFrom === "inbox" && p.origin));
+            // 生成的层级也算未分类；摘标 = 清 importedFrom（归 6.3），清后自然消失
+            return state.placements.filter((p) => p.importedFrom === "inbox");
           case "quick:recent": // 最近使用（后端已按时间倒序）
             return state.recentAssets;
           case "quick:recycle": // 回收站（folderId 恒 "recycle"，key 与素材域互不干扰）
@@ -278,16 +265,15 @@ export const useContentStore = defineStore("content", {
     },
     // 快速访问 item 数量（4.4 查缺补漏）：全部 / 未分类 / 收件箱接真实统计；
     // 最近使用 / 回收站留 6.1，工作空间 / 标签 / 快捷入口占位视图不接（对应阶段未开工）；
-    // 2.5 起与视图同口径：资产级去重（origin Placement 计一次）；
-    // 2026-08-13 补 origin 过滤——旧行为残留的 root 链接不计入候车区
+    // 2026-08-13 起与视图同口径：按实际 Placement 计数（链接不再隐藏）
     allCount(state): number {
-      return originOnly(state.placements).length;
+      return state.placements.length;
     },
     uncategorizedCount(state): number {
-      return originOnly(state.placements.filter((p) => p.folderId === "root" && p.origin)).length;
+      return state.placements.filter((p) => p.folderId === "root").length;
     },
     inboxCount(state): number {
-      return originOnly(state.placements.filter((p) => p.importedFrom === "inbox" && p.origin)).length;
+      return state.placements.filter((p) => p.importedFrom === "inbox").length;
     },
     // 文件夹卡片横排（03_中间面板）：仅文件夹视图显示直接子文件夹；
     // 快速访问视图一律不出文件夹区块（2026-07-22 用户定案；回收站保留文件夹随对应阶段另议）。

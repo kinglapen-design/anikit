@@ -51,10 +51,11 @@ function sizeLabel(e: InboxDiskEntry): string {
 }
 
 // 选中：与素材 / 文件夹选中互斥（content.selectedInboxName 第三态；
-// selection.clear() 内部已清素材与文件夹两域，2026-07-28 复验反馈 5）
+// selection.clear() 2026-08-13 起连收件箱条目一并清——先清后写名，顺序不可颠倒；
+// 点空白（headerBlankClear / 框选未过阈值）经同一 clear 反选本域卡片）
 function select(e: InboxDiskEntry): void {
-  content.selectedInboxName = e.name;
   selection.clear();
+  content.selectedInboxName = e.name;
 }
 
 // 右键菜单（1.3 归并全局宿主 ContextMenu）：打开 / 重命名 / 删除 / 导入（占用禁用导入与重命名）

@@ -11,7 +11,9 @@ defineProps<{ label?: string }>();
 <template>
   <button class="app-checkbox" :class="{ on: model }" @click="model = !model">
     <span class="box">
-      <AppIcon v-if="model" name="check" :size="10" class="mark" />
+      <!-- 对勾常驻 DOM、opacity 切换（2026-08-13 修抖动：v-if 移除图标会让 .box 变空 flex 容器，
+           基线推导变化 → 行盒高度差 1px，弹窗内容整体上移一跳，踩坑 026） -->
+      <AppIcon name="check" :size="10" class="mark" :class="{ off: !model }" />
     </span>
     <span v-if="label" class="label">{{ label }}</span>
   </button>
@@ -52,7 +54,11 @@ defineProps<{ label?: string }>();
   background: var(--c5);
 }
 .mark {
+  opacity: 1;
   transition: opacity 0.15s ease;
+}
+.mark.off {
+  opacity: 0;
 }
 .app-checkbox.on .box {
   background: var(--brand);

@@ -16,7 +16,7 @@ const mode = ref<"pack" | "scatter">("pack");
 </script>
 
 <template>
-  <AppModal variant="plain" title="检测到序列帧" :mask-close="false" class="sequence-dialog" @close="emit('cancel')">
+  <AppModal variant="plain" title="检测到序列帧" class="sequence-dialog" @close="emit('cancel')">
     <div class="option-group">
       <p class="tip">是否将序列帧打包为动态缩略图</p>
       <div class="radio-row">

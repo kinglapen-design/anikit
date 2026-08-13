@@ -248,12 +248,13 @@ async function togglePin(): Promise<void> {
       <AppCheckbox
         v-if="deleteLibraryState.orphans > 0"
         v-model="deleteLibraryState.includeOrphans"
+        class="del-lib-check"
         :label="`同时删除 ${deleteLibraryState.orphans} 个仅该库引用的素材文件`"
       />
       <p v-else class="del-lib-text">素材文件保留在素材库中。</p>
       <template #actions>
-        <AppButton label="取消" @click="deleteLibraryState.name = null" />
         <AppButton label="删除" variant="primary" @click="confirmDeleteLibrary" />
+        <AppButton label="取消" @click="deleteLibraryState.name = null" />
       </template>
     </AppModal>
     <ImportDialog
@@ -296,6 +297,10 @@ async function togglePin(): Promise<void> {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
   color: var(--text-normal);
+}
+/* 孤儿素材复选框：与警示正文拉开 12（2026-08-13 用户：挨太近注意不到） */
+.del-lib-check {
+  margin-top: var(--space-12);
 }
 /* 不透明窗口 + 原生装饰（DWM 阴影）：容器贴满窗口；圆角 8 与 DWM 一致。
    外框 = DWM 1px 边框染 亮-选中 实色（lib.rs DWMWA_BORDER_COLOR，2026-08-08 用户定；

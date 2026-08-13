@@ -174,8 +174,8 @@ async function onConfirm(): Promise<void> {
 
       <!-- 底栏：取消 / 确认（主按钮） -->
       <footer class="link-footer">
-        <button class="btn secondary" :disabled="busy" @click="onCancel">取消</button>
         <button class="btn primary" :disabled="busy || total === 0" @click="onConfirm">确认</button>
+        <button class="btn secondary" :disabled="busy" @click="onCancel">取消</button>
       </footer>
     </div>
   </div>

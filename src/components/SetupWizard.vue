@@ -200,7 +200,7 @@ function onErrorRetry(): void {
 </script>
 
 <template>
-  <div class="wizard-mask" @click.self="props.closable && emit('cancel')">
+  <div class="wizard-mask">
     <PathErrorDialog
       v-if="view === 'error'"
       :message="errorMsg"

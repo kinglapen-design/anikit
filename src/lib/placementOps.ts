@@ -15,21 +15,6 @@ import { useUndoStore } from "../stores/undo";
 
 export type { PlacementRef };
 
-// 候车区资产判定（PRD 02-15，2.5）：origin Placement 位于 root（未分类）的资产——
-// 禁止作为链接发起端（先分类好才允许复制链接，防"分好类的全是链接、原始文件滞留未分类"）；
-// 无 origin 记录的异常数据按选中项自身 folderId 兜底。后端 link_placements 同口径兜底拒
-export function hasWaitingAsset(items: PlacementRef[]): boolean {
-  const content = useContentStore();
-  const originFolder = new Map<string, string>();
-  for (const p of content.placements) if (p.origin) originFolder.set(p.assetId, p.folderId);
-  return items.some((i) => (originFolder.get(i.assetId) ?? i.folderId) === "root");
-}
-
-// 候车区发起链接的拒绝反馈（menuOps / 本层粘贴入口统一文案）
-export function notifyWaitingAssetLink(): void {
-  useToastStore().notify({ message: "未分类是候车区，请先移动到文件夹再创建链接", icon: "fail" });
-}
-
 // 写操作统一收尾：刷新 + 成功 toast（带撤销）；业务失败 = 中文字符串，info 条原样展示。
 // label 惰性求值：action 完成后才拼文案，计数类（移动 N 个）拿到真实返回值
 async function runOp(action: () => Promise<void>, label: () => string): Promise<boolean> {
@@ -325,11 +310,7 @@ export async function pasteClipboard(): Promise<void> {
   const target = pasteTarget();
   if (target === null) return;
   if (clip.action === "copy") {
-    // 候车区资产禁发起链接（PRD 02-15，2.5；落点护栏在后端，此处拦发起端）
-    if (hasWaitingAsset(clip.items)) {
-      notifyWaitingAssetLink();
-      return;
-    }
+    // 链接发起不设限（2026-08-13 用户定案：不替用户做整理决定，候车区拦截废除）
     selection.linkDraft = { items: clip.items, targetFolder: target };
     return;
   }

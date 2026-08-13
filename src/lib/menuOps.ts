@@ -15,8 +15,6 @@ import {
   getAssetBase64,
   getAssetOriginPath,
   revealInExplorer,
-  hasWaitingAsset,
-  notifyWaitingAssetLink,
 } from "./placementOps";
 
 // —— 导入系统对话框（1.3：新增菜单三入口共用——侧栏新增按钮 / 空白右键 / Ctrl+N）——
@@ -108,13 +106,15 @@ export function copyName(name: string): Promise<void> {
   return copyText(name, "已复制名称");
 }
 
-// —— 在文件管理器中打开（警示弹窗前置，2026-07-29 用户设计文案）——
+// —— 在文件管理器中打开（警示弹窗前置，2026-07-29 用户设计文案；
+// 2026-08-13 用户定：高危操作走 alert 危险弹出模板——48 警告徽章 + 提示音）——
 export function revealWithWarning(assetId: string): void {
   const selection = useSelectionStore();
   selection.confirmPrompt = {
     title: "在文件管理器中打开",
     body: "素材保存在 AniKit，请勿移动、删除、重命名任何资源，否则会导致数据丢失。",
     confirmLabel: "继续",
+    alert: "warning",
     onConfirm: () => void revealInExplorer(assetId),
   };
 }
@@ -162,11 +162,7 @@ export function pickFolderForLink(): void {
   const selection = useSelectionStore();
   const items = selection.selectedRefs();
   if (items.length === 0) return;
-  // 候车区资产禁发起链接（PRD 02-15，2.5）
-  if (hasWaitingAsset(items)) {
-    notifyWaitingAssetLink();
-    return;
-  }
+  // 发起不设限（2026-08-13 用户定案：不替用户做整理决定，候车区资产拦截废除）
   selection.folderPickPrompt = {
     onPick: (folderId) => {
       selection.linkDraft = { items, targetFolder: folderId };

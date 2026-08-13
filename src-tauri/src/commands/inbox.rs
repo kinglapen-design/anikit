@@ -71,7 +71,8 @@ pub fn open_inbox_entry(app: AppHandle, name: String) -> Result<(), String> {
   shell_open::open(&path)
 }
 
-/// 重命名条目（仅 inbox 下一级；同名冲突 / 占用返回中文人话）
+/// 重命名条目（仅 inbox 下一级；同名冲突 / 占用返回中文人话）。
+/// 搁置记录随名平移（2026-08-13：改名不等于重新丢入，取消 / 失败过的条目改名后仍不自动导入）
 #[tauri::command]
 pub fn rename_inbox_entry(app: AppHandle, name: String, new_name: String) -> Result<(), String> {
   let root = current_space_root(&app)?;
@@ -87,10 +88,15 @@ pub fn rename_inbox_entry(app: AppHandle, name: String, new_name: String) -> Res
   if !inbox_watch::entry_movable(&from) {
     return Err(format!("「{name}」正被其他软件占用，请先在对应软件里关闭它再重命名"));
   }
-  std::fs::rename(&from, &to).map_err(|e| format!("重命名失败：{e}"))
+  std::fs::rename(&from, &to).map_err(|e| format!("重命名失败：{e}"))?;
+  if name != new_name {
+    inbox::blocked_rename(&root, &name, &new_name);
+  }
+  Ok(())
 }
 
-/// 删除条目（文件 remove_file / 目录 remove_dir_all；占用等系统错误原样透传）
+/// 删除条目（文件 remove_file / 目录 remove_dir_all；占用等系统错误原样透传）；
+/// 搁置记录随删清掉（2026-08-13：同名新文件按新 mtime 本就不拦，这里保持清单干净）
 #[tauri::command]
 pub fn delete_inbox_entry(app: AppHandle, name: String) -> Result<(), String> {
   let root = current_space_root(&app)?;
@@ -99,7 +105,9 @@ pub fn delete_inbox_entry(app: AppHandle, name: String) -> Result<(), String> {
     return Ok(()); // 实况滞后、条目已不在磁盘，视作已删除
   }
   let result = if path.is_dir() { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
-  result.map_err(|e| format!("删除「{name}」失败：{e}"))
+  result.map_err(|e| format!("删除「{name}」失败：{e}"))?;
+  inbox::blocked_remove(&root, &name);
+  Ok(())
 }
 
 /// 校验条目名并解析为 inbox 下一级路径：拒绝路径分隔符与 Windows 非法字符（防路径穿越）；

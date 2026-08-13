@@ -25,7 +25,7 @@ const showStructure = computed(() => props.draft.kind !== "files");
 </script>
 
 <template>
-  <AppModal variant="plain" :title="title" :mask-close="false" class="import-dialog" @close="emit('cancel')">
+  <AppModal variant="plain" :title="title" class="import-dialog" @close="emit('cancel')">
     <!-- 来源组（figma 27：标签 12 标签档 + 单选行 gap 24；双组时带下分隔线） -->
     <div class="option-group" :class="{ divided: showStructure }">
       <p class="tip">剪切导入有风险，谨慎选择</p>

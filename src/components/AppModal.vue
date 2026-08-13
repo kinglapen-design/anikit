@@ -4,8 +4,8 @@
 // standard = 标题栏（图标 + 标题 + 关闭 X）→ 内容 → 按钮组；
 // confirm  = 无关闭按钮（figma 08）：padding 24 gap 24、标题栏 30×30 品牌底图标、内容 gap 12、仅确认/取消；
 // plain    = 纯标题（figma 27_导入）：无图标无徽章无关闭 X，标题用常态色（稿 = 文字/常态）；
-//            导入链路弹窗 maskClose=false（2026-08-12 用户：文件已选好，点歪丢上下文成本高——
-//            遮罩点击不取消，放弃只能点"取消"按钮）；
+// 遮罩点击一律不关闭（2026-08-13 用户定案：所有模态框禁点空白退出——点歪丢上下文成本高，
+// 关闭只能走 X / 取消按钮）；
 // alert    = 无标题栏侵入式（figma 09）：内容行横排——48 圆形状态图标（error/warning 状态色底）+
 // 右侧标题 + 描述（竖排 gap 8），按钮组右对齐；**2026-08-12 修正：初版做成居中竖排与 09 稿不符**。
 // 按钮组由 actions slot 给（AppButton primary/panel），内容区默认 slot。
@@ -21,23 +21,18 @@ const props = withDefaults(
     icon?: string; // 标题栏图标（standard / confirm）
     variant?: "standard" | "confirm" | "alert" | "plain";
     alertIcon?: "error" | "warning"; // alert 形态状态图标
-    maskClose?: boolean; // 遮罩点击是否关闭（默认 true；任务型弹窗传 false 防点歪丢失）
   }>(),
-  { icon: undefined, variant: "standard", alertIcon: "error", maskClose: true },
+  { icon: undefined, variant: "standard", alertIcon: "error" },
 );
 const emit = defineEmits<{ close: [] }>();
 
 onMounted(() => {
   if (props.variant === "alert") playAlert();
 });
-
-function onMaskPointerDown(): void {
-  if (props.maskClose) emit("close");
-}
 </script>
 
 <template>
-  <div class="modal-mask" @pointerdown.self="onMaskPointerDown">
+  <div class="modal-mask">
     <div class="app-modal" :class="[variant]" role="dialog" :aria-label="title">
       <!-- alert（figma 09 侵入式）：内容行横排——48 状态徽章（warning / error-large SVG 自带
            圆形状态色底与边框，完整图形直接使用）+ 右侧标题/描述竖排 -->

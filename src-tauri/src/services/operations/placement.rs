@@ -148,9 +148,8 @@ pub fn reorder_placements(
 
 /// 关联：目标文件夹逐条建链接 Placement（origin = false），返回关联条数；
 /// 显示名 = names[i] 非空 ? 自定义 : 源 Placement 名，同文件夹 unique_name（add_placement 内部处理）。
-/// 候车区双护栏（PRD 02-15，候车区 = 未分类 root，只收原始文件、禁止链接）：
-/// ① 落点禁：目标文件夹 = root 直接拒绝；② 发起端禁：资产 origin Placement 还在 root 时
-/// 拒绝发起链接（先分类好才允许复制链接），预检全量通过再动手，避免半途部分关联
+/// 链接不设限（2026-08-13 用户定案：不替用户做整理决定——落点允许 root、任意资产可发起、
+/// 同文件夹允许重复链接；原"候车区双护栏"废除）
 pub fn link_placements(
   lib: &mut Library,
   items: &[PlacementRef],
@@ -158,20 +157,6 @@ pub fn link_placements(
   names: &[Option<String>],
 ) -> Result<usize, String> {
   check_folder(lib, target_folder)?;
-  // 护栏①：落点禁——候车区不收链接
-  if target_folder == ROOT_FOLDER_ID {
-    return Err("未分类是候车区，不能放链接，请把链接创建到具体文件夹".to_string());
-  }
-  // 护栏②：发起端禁——origin 还在候车区的资产先分类再链接
-  for item in items {
-    if let Some(pos) = find_placement(lib, item) {
-      let asset = lib.folders.items[pos].asset.clone();
-      if lib.folders.items.iter().any(|p| p.asset == asset && p.origin && p.folder == ROOT_FOLDER_ID) {
-        let name = lib.index.assets.get(&asset).map(|m| m.name.clone()).unwrap_or(asset);
-        return Err(format!("「{name}」还在未分类（候车区），请先移动到文件夹再创建链接"));
-      }
-    }
-  }
   let mut anchor = HashMap::new();
   let mut linked = 0usize;
   for (i, item) in items.iter().enumerate() {
@@ -354,7 +339,7 @@ mod tests {
     let mut h = make_lib();
     add_folder(&mut h.lib, "F01");
     add_folder(&mut h.lib, "F02");
-    // 候车区护栏②：origin 在 root 的资产禁发起链接，源 Placement 放 F02
+    // 源 Placement 放 F02（链接落点 / 发起均不设限，2026-08-13 用户定案）
     add_asset(&mut h, "AN-A", "图.png", "F02", None);
     add_asset(&mut h, "AN-B", "片.png", "F02", None);
 
@@ -377,37 +362,25 @@ mod tests {
     assert!(names.contains("片-1.png"), "重名追加 -序号：{names:?}");
   }
 
-  /// 候车区护栏①（PRD 02-15）：落点 = root（未分类）拒绝创建链接
+  /// 链接不设限（2026-08-13 用户定案）：落点 root（未分类）允许建链接；
+  /// origin 还在 root 的资产也可发起（含批量混合，不再预检拦截）
   #[test]
-  fn link_rejects_root_target() {
+  fn link_allows_root_target_and_waiting_origin() {
     let mut h = make_lib();
+    add_asset(&mut h, "AN-WAIT", "候.png", "root", None); // origin 滞留未分类
+
+    // 落点 = root：允许（同文件夹重复链接显示名唯一化）
+    let linked = link_placements(&mut h.lib, &[pref("AN-WAIT", "root", true)], "root", &[]).unwrap();
+    assert_eq!(linked, 1);
+    let names: HashSet<&str> =
+      h.lib.folders.items.iter().filter(|p| p.folder == "root").map(|p| p.name.as_str()).collect();
+    assert!(names.contains("候-1.png"), "同文件夹重复链接唯一化：{names:?}");
+
+    // 发起端 = 候车区资产落文件夹：同样放行
     add_folder(&mut h.lib, "F01");
-    add_asset(&mut h, "AN-A", "图.png", "F01", None);
-
-    let err = link_placements(&mut h.lib, &[pref("AN-A", "F01", true)], "root", &[]).unwrap_err();
-    assert!(err.contains("候车区"), "落点禁文案：{err}");
-    assert!(placement(&h.lib, "AN-A", "root").is_none(), "未建任何链接");
-  }
-
-  /// 候车区护栏②：origin 还在 root 的资产拒绝发起链接；批量含违规项预检整体拒绝不半途
-  #[test]
-  fn link_rejects_origin_in_waiting_area() {
-    let mut h = make_lib();
-    add_folder(&mut h.lib, "F01");
-    add_folder(&mut h.lib, "F02");
-    add_asset(&mut h, "AN-WAIT", "候.png", "root", None); // origin 滞留候车区
-    add_asset(&mut h, "AN-OK", "好.png", "F02", None);
-
-    let err =
-      link_placements(&mut h.lib, &[pref("AN-OK", "F02", true), pref("AN-WAIT", "root", true)], "F01", &[]).unwrap_err();
-    assert!(err.contains("候车区") && err.contains("候"), "发起端禁文案：{err}");
-    assert!(placement(&h.lib, "AN-OK", "F01").is_none(), "预检不过不动手，合规项也不建链接");
-
-    // 历史遗留数据：源是别处的链接，origin 仍在候车区同样禁（护栏看资产不看源 Placement）
-    ops::add_placement(&mut h.lib, "AN-WAIT".into(), "F02".into(), "候.png".into(), false, &mut HashMap::new());
-    finish(&mut h.lib).unwrap();
-    let err = link_placements(&mut h.lib, &[pref("AN-WAIT", "F02", false)], "F01", &[]).unwrap_err();
-    assert!(err.contains("候车区"), "从链接发起也禁：{err}");
+    let linked = link_placements(&mut h.lib, &[pref("AN-WAIT", "root", true)], "F01", &[]).unwrap();
+    assert_eq!(linked, 1);
+    assert!(placement(&h.lib, "AN-WAIT", "F01").is_some());
   }
 
   /// 撤销接入验证：begin → record_file → 业务 → commit 后 undo 栈有一条，undo 回滚 folders.json

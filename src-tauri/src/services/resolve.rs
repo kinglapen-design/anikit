@@ -123,21 +123,11 @@ fn check_asset(lib: &Library, asset_id: &str) -> Result<(), String> {
   Ok(())
 }
 
-/// 候车区护栏（PRD 02-15：未分类只收原始文件，2026-08-13 定案）——link 在候车区建链接
-/// 绕过 link_placements 双护栏、useExisting 把已分类资产的 origin 拽回候车区（反分类），
-/// 均破坏该语义；前端弹窗已收窄（候车区只留"作为新文件导入"），此处后端兜底
-fn check_not_root(target_folder: &str) -> Result<(), String> {
-  if target_folder == ROOT_FOLDER_ID {
-    return Err("未分类是候车区，不能作为该决策的目标位置".to_string());
-  }
-  Ok(())
-}
-
-/// link：目标文件夹建链接 Placement（显示名 = 源文件原名，unique_name），源文件不动
+/// link：目标文件夹建链接 Placement（显示名 = 源文件原名，unique_name），源文件不动；
+/// 落点不设限（2026-08-13 用户定案：允许落未分类，原 check_not_root 候车区护栏废除）
 fn link(lib: &mut Library, item: &ConflictResolution) -> Result<(), String> {
   check_target(lib, &item.target_folder)?;
   check_asset(lib, &item.existing_asset_id)?;
-  check_not_root(&item.target_folder)?;
   let name = ops::file_name(&item.source_path);
   ops::add_placement(lib, item.existing_asset_id.clone(), item.target_folder.clone(), name, false, &mut HashMap::new());
   Ok(())
@@ -148,7 +138,6 @@ fn link(lib: &mut Library, item: &ConflictResolution) -> Result<(), String> {
 fn use_existing(lib: &mut Library, item: &ConflictResolution) -> Result<(), String> {
   check_target(lib, &item.target_folder)?;
   check_asset(lib, &item.existing_asset_id)?;
-  check_not_root(&item.target_folder)?;
   // 去重：删掉目标文件夹里该资源的链接 Placement（先删再定位 origin，避免索引位移）
   lib.folders.items.retain(|p| {
     !(p.asset == item.existing_asset_id && p.folder == item.target_folder && !p.origin)
@@ -479,12 +468,11 @@ mod tests {
     assert!(report.failed[1].reason.contains("库内资源不存在"));
   }
 
-  /// 候车区护栏（PRD 02-15，2026-08-13 定案）：link / useExisting 落点为 root 一律拒绝，
-  /// 前端弹窗已收窄，后端兜底
+  /// 决策落点不设限（2026-08-13 用户定案）：link / useExisting 落点为 root（未分类）照常执行
   #[test]
-  fn link_and_use_existing_reject_root_target() {
+  fn link_and_use_existing_allow_root_target() {
     let h = make_lib();
-    // 导入目标为 None → 冲突落点即候车区（root）
+    // 导入目标为 None → 冲突落点即未分类（root）
     let c1 = make_conflict(&h, "原图.png", "副本.png", None);
     let c2 = make_conflict(&h, "基准2.png", "副本2.png", None);
 
@@ -493,13 +481,11 @@ mod tests {
       vec![to_resolution(&c1, ResolveAction::Link), to_resolution(&c2, ResolveAction::UseExisting)],
       Source::Copy,
     );
-    assert_eq!((report.resolved, report.failed.len()), (0, 2));
-    assert!(report.failed.iter().all(|f| f.reason.contains("候车区")), "中文原因：{:?}", report.failed);
-    // 数据未动：c1 没有建出链接；c2 的 origin 仍留在 root（未被拽动）
-    assert_eq!(placements_of(&h, &c1.existing_asset_id).len(), 1);
-    let p2 = placements_of(&h, &c2.existing_asset_id);
-    assert_eq!(p2.len(), 1);
-    assert!(p2[0].origin && p2[0].folder == ROOT_FOLDER_ID);
+    assert_eq!((report.resolved, report.failed.len()), (2, 0), "落点 root 应照常执行：{:?}", report.failed);
+    // c1 在 root 建出链接；c2 的 origin 仍在 root（本就落在 root，幂等）
+    let p1 = placements_of(&h, &c1.existing_asset_id);
+    assert_eq!(p1.len(), 2);
+    assert!(p1.iter().any(|p| !p.origin && p.folder == ROOT_FOLDER_ID), "root 应多出链接");
   }
 
   #[test]

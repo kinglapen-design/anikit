@@ -112,7 +112,8 @@ pub fn delete_folder(lib: &mut Library, folder_id: &str, permanent: bool, confir
   if !permanent {
     // "删除文件夹"：子树 origin Placement 改挂 root（素材进未分类，重名唯一化）+ 节点删除；
     // 链接 Placement（origin = false）随文件夹直接删除——链接删除不进回收站，链接存在时
-    // 资产必有 origin 在别处或同批回 root（2026-08-12 用户定案，PRD 02-15 候车区规则）
+    // 资产必有 origin 在别处或同批回 root（2026-08-12 用户定案，PRD 02-15；本条保留，
+    // 2026-08-13 链接限制废除不影响"删文件夹时链接随之删"的去向语义）
     let mut root_names: HashSet<String> =
       lib.folders.items.iter().filter(|p| p.folder == ROOT_FOLDER_ID).map(|p| p.name.clone()).collect();
     let mut moved = 0usize;

@@ -63,7 +63,7 @@ window.__TAURI_INTERNALS__ = {
       setTimeout(() => {
         const cb = window.__cbs[chId];
         if (!cb) return;
-        // 落点按 __target 切换（第一轮文件夹 F01 = 三选一；第二轮 root = 候车区收窄，2026-08-13）
+        // 落点按 __target 切换（第一轮文件夹 F01；第二轮 root——落点不设限，三选一恒出，2026-08-13）
         const t = window.__target ?? "F01";
         const conflicts = window.__conflicts.map((c) => ({ ...c, targetFolder: t, targetFolderName: t === "root" ? "根目录" : "人物" }));
         // Channel 消息包装形状：{ index, message }（@tauri-apps/api core.js Channel）
@@ -253,8 +253,8 @@ async def main():
             if not closed:
                 fails.append("确认后弹窗未关闭")
 
-            # ⑥ 候车区收窄（2026-08-13 用户定：落点 root 只留"作为新文件导入"）：
-            # 重开（__target=root）→ 断言每行 1 radio 且默认 copy → 取消 = 全部跳过
+            # ⑥ 落点不设限（2026-08-13 用户定案：落点 root 同样三选一恒出，默认新链接——
+            # 候车区收窄废除）：重开（__target=root）→ 断言每行 3 radio 且默认 link → 取消 = 全部跳过
             await ev("window.__target = 'root'")
             await click("document.querySelector('.add-btn-wrap .icon-btn')")
             await click("[...document.querySelectorAll('.app-menu .menu-item')].find((m) => m.textContent.includes('导入本地文件'))")
@@ -266,9 +266,9 @@ async def main():
               radiosPerRow: document.querySelectorAll('.dup-row')[0]?.querySelectorAll('.app-radio').length ?? 0,
               onLabels: [...document.querySelectorAll('.dup-row')].map((r) => r.querySelector('.app-radio.on')?.textContent.trim() ?? null),
             })""")
-            print("候车区收窄:", json.dumps(wa, ensure_ascii=False))
-            if wa["radiosPerRow"] != 1 or wa["onLabels"] != ["作为新文件导入"] * 3:
-                fails.append(f"候车区收窄 {json.dumps(wa, ensure_ascii=False)}")
+            print("落点不设限:", json.dumps(wa, ensure_ascii=False))
+            if wa["radiosPerRow"] != 3 or wa["onLabels"] != ["作为新链接导入"] * 3:
+                fails.append(f"落点不设限 {json.dumps(wa, ensure_ascii=False)}")
             await click("[...document.querySelectorAll('.dup-bottom .app-btn')].find((b) => b.textContent.includes('取消'))")
             await asyncio.sleep(0.8)
             calls2 = await ev("window.__resolvedCalls.length")
@@ -280,7 +280,7 @@ async def main():
             if fails:
                 print("FAIL:", "; ".join(fails))
                 return 3
-            print("PASS: 布局/默认态/跟随/跳过/候车区收窄/提交/取消均贴稿")
+            print("PASS: 布局/默认态/跟随/跳过/落点不设限/提交/取消均贴稿")
             return 0
     finally:
         proc.terminate()

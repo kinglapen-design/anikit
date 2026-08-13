@@ -4,6 +4,8 @@
 // 由 selection.confirmPrompt 驱动，宿主 App.vue。
 // 2026-08-13 用户定：统一 AppModal plain 壳（无 X 纯标题，同 27_导入 弹窗族），
 // 按钮序主左次右（确认/导入在左、取消在右），旧 del-* 手写卡片废除。
+// 2026-08-13 用户定：高危操作走 AppModal alert 危险模板（figma 09：48 状态徽章横排 + 提示音）——
+// confirmPrompt.alert 设置即切换（首个用例 = 文件管理器打开警示）。
 import AppModal from "./AppModal.vue";
 import AppButton from "./AppButton.vue";
 import { useSelectionStore } from "../stores/selection";
@@ -23,7 +25,8 @@ function onCancel(): void {
 <template>
   <AppModal
     v-if="selection.confirmPrompt"
-    variant="plain"
+    :variant="selection.confirmPrompt.alert ? 'alert' : 'plain'"
+    :alert-icon="selection.confirmPrompt.alert ?? 'warning'"
     :title="selection.confirmPrompt.title"
     class="app-confirm"
     @close="onCancel"

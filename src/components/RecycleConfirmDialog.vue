@@ -53,10 +53,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
         <p class="del-text">{{ bodyText }}</p>
       </div>
       <footer class="del-footer">
-        <button class="btn secondary" @click="onCancel">取消</button>
         <button class="btn primary" @click="onConfirm">
           {{ isClear ? "清空回收站" : "彻底删除" }}
         </button>
+        <button class="btn secondary" @click="onCancel">取消</button>
       </footer>
     </div>
   </div>

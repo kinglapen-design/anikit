@@ -50,6 +50,7 @@ export interface ConfirmPrompt {
   body: string;
   confirmLabel?: string; // 缺省"确认"
   danger?: boolean; // 主按钮用错误色（不可逆操作）
+  alert?: "warning" | "error"; // 危险弹出模板（figma 09 侵入式 alert：48 状态徽章 + 提示音，2026-08-13 用户定）
   onConfirm: () => void;
 }
 
@@ -203,6 +204,9 @@ export const useSelectionStore = defineStore("selection", {
       this.anchor = null;
       this.renamingKey = null; // 选择清空 = 重命名输入态一并取消
       this.clearFolders();
+      // 收件箱"工程文件"条目选中一并清（2026-08-13 用户：空白反选对第三域同样生效——
+      // 选中卡片后点空白可取消；InboxDiskSection.select 先 clear 再写名，顺序不可颠倒）
+      useContentStore().selectedInboxName = "";
     },
 
     // 选中项三元组清单（6.1 命令入参）：按当前视口顺序输出（稳定、与可见顺序一致），
