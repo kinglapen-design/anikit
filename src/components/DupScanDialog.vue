@@ -246,6 +246,7 @@ function thumbUrl(a: DupAsset): string | null {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: var(--radius-6); /* 双保险：容器 overflow 裁剪之外 img 显式圆角（2026-08-13 走查核对 = 6） */
 }
 .group-thumb img.icon {
   object-fit: contain;
@@ -298,7 +299,9 @@ function thumbUrl(a: DupAsset): string | null {
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.keeper-item:hover {
+/* hover 叠 暗-悬停 罩层；选中行（.on）悬停不再变色——选中态由品牌色描边表达，
+   叠罩会稀释描边观感（2026-08-13 走查） */
+.keeper-item:not(.on):hover {
   background: var(--line-hover);
 }
 /* 选中行 = 品牌色描边（选中框统一 --brand-border，1.2 走查口径） */
@@ -320,6 +323,7 @@ function thumbUrl(a: DupAsset): string | null {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: var(--radius-6);
 }
 .keeper-thumb img.icon {
   object-fit: contain;

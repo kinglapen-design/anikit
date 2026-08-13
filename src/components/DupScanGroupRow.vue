@@ -12,7 +12,7 @@ const emit = defineEmits<{ remove: [] }>();
 </script>
 
 <template>
-  <div class="scan-group">
+  <div class="scan-group" :class="{ off: !group.checked }">
     <!-- 行头（35 稿：复选框 + 红色删除，两端分布） -->
     <div class="row-head">
       <AppCheckbox v-model="group.checked" :label="`${group.assets.length} 个相同文件`" />
@@ -47,6 +47,11 @@ const emit = defineEmits<{ remove: [] }>();
   height: 20px;
   flex: none;
 }
+/* 取消勾选：卡片行压暗 30%（库内"跳过/压暗"统一口径，同 DuplicateRow skipped / 35 稿注释）；
+   行头复选框保持常态可操作（可逆勾回） */
+.scan-group.off .cards {
+  opacity: 0.3;
+}
 /* 卡片行：横向滚动（35 稿注明：单行卡片超过两个时横向滚动条）；
    滚轮走 base.css .kit-scroll-x 统一类（6px 胶囊），padding-bottom 6 预留高度容纳 */
 .cards {
@@ -54,5 +59,6 @@ const emit = defineEmits<{ remove: [] }>();
   gap: var(--space-12);
   align-items: center;
   padding-bottom: var(--space-6);
+  transition: opacity 0.15s ease;
 }
 </style>

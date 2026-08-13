@@ -82,6 +82,7 @@ const metaText = computed(() =>
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: var(--radius-6) var(--radius-6) 0 0; /* 双保险：容器 overflow 裁剪之外显式圆角 */
 }
 /* 格式图标：方形 contain 不裁切（2026-07-22 用户定） */
 .thumb img.icon {
