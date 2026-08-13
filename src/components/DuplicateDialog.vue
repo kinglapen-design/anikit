@@ -3,6 +3,8 @@
 // 行 = 左右对照卡片 + radio 三选一（作为新链接导入，默认 / 作为新文件导入 / 用已存在文件导入）
 // + 行尾"跳过此文件"开关（可逆，跳过行 30% 压暗）；底部内嵌批量重命名（37 稿：序号 / 替换命名）
 // + 「全部跟随」开关（默认开：改一行决策全部行跟随，关掉逐行精调；重命名规则为全局面板不参与跟随）。
+// 候车区收窄（2026-08-13 用户定）：落点 = 未分类（root）时只留"作为新文件导入"（默认选中）——
+// 候车区不是分类位置，建链接 / 移入既有资产对候车区无意义。
 // 确认 = 按各行决策执行（改名只影响导入后显示名，不影响 hash 判定）；
 // 取消 / 关闭（含遮罩点击）= 全部跳过——源文件从未被动过，纯前端清队列即可。
 import { computed, ref } from "vue";
@@ -17,8 +19,13 @@ import { useContentStore, type ConflictItem, type ConflictResolution } from "../
 const content = useContentStore();
 const conflicts = computed(() => content.importConflicts ?? []);
 
-// 每行决策（默认：作为新链接导入 + 不跳过）；弹窗挂载时队列已就位，初始化一次即可
-const rows = ref<DupDecision[]>(conflicts.value.map(() => ({ action: "link", skipped: false })));
+// 默认决策：候车区（落点 root）= 作为新文件导入；否则 = 作为新链接导入
+function defaultDecision(c: ConflictItem): DupDecision {
+  return { action: c.targetFolder === "root" ? "copy" : "link", skipped: false };
+}
+
+// 每行决策；弹窗挂载时队列已就位，初始化一次即可
+const rows = ref<DupDecision[]>(conflicts.value.map(defaultDecision));
 const followAll = ref(true);
 const busy = ref(false);
 
@@ -84,7 +91,7 @@ function onRowChange(index: number, patch: Partial<DupDecision>): void {
 
 function buildResolutions(): ConflictResolution[] {
   return conflicts.value.map((c, i) => {
-    const d = rows.value[i] ?? { action: "link" as const, skipped: false };
+    const d = rows.value[i] ?? defaultDecision(c);
     return {
       sourcePath: c.sourcePath,
       existingAssetId: c.existingAssetId,
@@ -131,8 +138,9 @@ function onCancel(): void {
           v-for="(c, i) in conflicts"
           :key="c.sourcePath"
           :item="c"
-          :decision="rows[i] ?? { action: 'link', skipped: false }"
+          :decision="rows[i] ?? defaultDecision(c)"
           :new-name="previews[i] ?? null"
+          :waiting-area="c.targetFolder === 'root'"
           @change="onRowChange(i, $event)"
         />
       </div>

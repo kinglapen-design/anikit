@@ -8,7 +8,7 @@
 // 目录恒 folder-closed。占用标记以 details 合并后为准（快层目录 occupied=false 是过渡态）。
 // 卡片样式 2026-08-13 同步素材卡片 14 稿（整卡圆角 6 + ::after 状态边框 + 图标区 C2 /
 // 简介区 C3 名称单行左对齐）；右键 @contextmenu.stop 拦冒泡（gridDispatch 空白新增菜单会覆盖，同日修复）。
-import { computed, nextTick, ref, type ComponentPublicInstance } from "vue";
+import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import SectionHeader from "./SectionHeader.vue";
@@ -16,6 +16,7 @@ import { formatBadgeColor } from "../lib/formatBadge";
 import { openContextMenu } from "../lib/contextMenus";
 import { inboxDiskSpec } from "../lib/menuSpecs/inboxDisk";
 import { deleteInboxEntry, confirmImportInboxEntry, openInboxEntry, renameInboxEntry } from "../lib/inboxOps";
+import { useInlineRename } from "../lib/useInlineRename";
 import { useContentStore, type InboxDiskEntry } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 
@@ -85,37 +86,44 @@ async function deleteEntry(entry: InboxDiskEntry): Promise<void> {
   }
 }
 
-// 行内重命名：名称位切 input，Enter 提交 / Esc 取消
-const renaming = ref<{ name: string; draft: string } | null>(null);
-// v-for 内字符串 ref 会收集为数组（.focus 非函数静默失败=菜单重命名"没反应"，2026-08-13 修复）：
-// 函数 ref 直取元素——v-if 保证同时只有一个重命名 input 渲染
-const renameInput = ref<HTMLInputElement>();
-function bindRenameInput(el: Element | ComponentPublicInstance | null): void {
-  renameInput.value = (el as HTMLInputElement | null) ?? undefined;
-}
+// 行内重命名（2026-08-13 接入 useInlineRename 统一语义，原散装实现废除——blur 取消离群
+// 导致"输入后返回旧名"、全选含后缀、无双击）：selectStem 选区只到词干（扩展名不入选）；
+// Enter / 失焦恒提交，Esc 取消；双击名称进入
+const renaming = ref<string | null>(null); // 目标条目名（当前原名）
+const {
+  draft: renameDraft,
+  bindInput: bindRenameInput,
+  commit: commitRename,
+  onEsc: onRenameEsc,
+} = useInlineRename({
+  active: () => renaming.value !== null,
+  initial: () => renaming.value ?? "",
+  selectStem: true,
+  onCommit: (name) => {
+    const old = renaming.value;
+    renaming.value = null;
+    if (!old || !name || name === old) return;
+    void doRename(old, name);
+  },
+  onCancel: () => {
+    renaming.value = null;
+  },
+});
 function startRename(entry: InboxDiskEntry): void {
   if (entry.occupied) return;
-  renaming.value = { name: entry.name, draft: entry.name };
-  void nextTick(() => {
-    renameInput.value?.focus();
-    renameInput.value?.select();
-  });
+  renaming.value = entry.name;
 }
-async function commitRename(): Promise<void> {
-  const r = renaming.value;
-  if (!r) return;
-  const newName = r.draft.trim();
-  renaming.value = null;
-  if (!newName || newName === r.name) return;
+async function doRename(oldName: string, newName: string): Promise<void> {
+  // 扩展名不动（Eagle 口径：改名只编词干）——draft 被改成无后缀/异后缀时补回原扩展名
+  const dot = oldName.lastIndexOf(".");
+  const ext = dot > 0 ? oldName.slice(dot) : "";
+  if (ext && !newName.toLowerCase().endsWith(ext.toLowerCase())) newName += ext;
   try {
-    await renameInboxEntry(r.name, newName);
-    if (content.selectedInboxName === r.name) content.selectedInboxName = newName;
+    await renameInboxEntry(oldName, newName);
+    if (content.selectedInboxName === oldName) content.selectedInboxName = newName;
   } catch (err) {
     showError(err);
   }
-}
-function cancelRename(): void {
-  renaming.value = null;
 }
 
 const entries = computed(() => content.inboxDisk);
@@ -133,7 +141,7 @@ const entries = computed(() => content.inboxDisk);
           v-for="e in entries"
           :key="e.name"
           class="disk-card"
-          :class="{ selected: content.selectedInboxName === e.name, renaming: renaming?.name === e.name }"
+          :class="{ selected: content.selectedInboxName === e.name, renaming: renaming === e.name }"
           @click="select(e)"
           @contextmenu.prevent.stop="openMenu($event, e)"
         >
@@ -151,16 +159,16 @@ const entries = computed(() => content.inboxDisk);
           </div>
           <div class="texts">
             <input
-              v-if="renaming?.name === e.name"
+              v-if="renaming === e.name"
               :ref="bindRenameInput"
-              v-model="renaming.draft"
+              v-model="renameDraft"
               class="rename-input"
               @keydown.enter.prevent="commitRename"
-              @keydown.esc.prevent="cancelRename"
-              @blur="cancelRename"
+              @keydown.esc.prevent="onRenameEsc"
+              @blur="commitRename"
               @click.stop
             />
-            <span v-else class="title" v-tip="e.name">{{ e.name }}</span>
+            <span v-else class="title" v-tip="e.name" @dblclick.stop="startRename(e)">{{ e.name }}</span>
             <span class="meta">{{ e.isDir ? "文件夹" : sizeLabel(e) }}</span>
           </div>
         </div>

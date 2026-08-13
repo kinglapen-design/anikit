@@ -21,6 +21,7 @@ const props = defineProps<{
   item: ConflictItem;
   decision: DupDecision;
   newName: string | null; // 批量重命名预览（仅 copy / link 会给；null = 用源文件名）
+  waitingArea?: boolean; // 候车区（落点 = 未分类 root）：radio 收窄只留"作为新文件导入"
 }>();
 const emit = defineEmits<{ change: [patch: Partial<DupDecision>] }>();
 
@@ -92,12 +93,18 @@ function setAction(action: DupAction): void {
         </div>
       </div>
     </div>
-    <!-- 决策行：radio 三选一（36 稿序：新链接 / 新文件 / 已存在）+ 行尾跳过开关 -->
+    <!-- 决策行：radio 三选一（36 稿序：新链接 / 新文件 / 已存在）+ 行尾跳过开关；
+         候车区收窄（2026-08-13 用户定）：落点 = 未分类时只留"作为新文件导入"——
+         候车区不是分类位置，建链接 / 移入既有资产对候车区无意义（后端 resolve 同口径拒 root） -->
     <div class="controls">
       <div class="radios">
-        <AppRadio :model-value="decision.action" value="link" label="作为新链接导入" @update:model-value="setAction('link')" />
+        <template v-if="!waitingArea">
+          <AppRadio :model-value="decision.action" value="link" label="作为新链接导入" @update:model-value="setAction('link')" />
+        </template>
         <AppRadio :model-value="decision.action" value="copy" label="作为新文件导入" @update:model-value="setAction('copy')" />
-        <AppRadio :model-value="decision.action" value="useExisting" label="用已存在文件导入" @update:model-value="setAction('useExisting')" />
+        <template v-if="!waitingArea">
+          <AppRadio :model-value="decision.action" value="useExisting" label="用已存在文件导入" @update:model-value="setAction('useExisting')" />
+        </template>
       </div>
       <div class="skip">
         <AppSwitch :model-value="decision.skipped" @update:model-value="emit('change', { skipped: $event })" />

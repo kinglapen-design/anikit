@@ -3,7 +3,7 @@
 // Enter / 失焦恒提交，Esc 由 escSaves 决定保存或取消（素材卡片 Esc 取消 / 文件夹与树 Esc 保存）。
 // 提交前的"空或不变不动"与实际改名调用在 onCommit 内（各调用方业务不同）；commit/cancel 自带
 // active 护栏——Enter 提交后 blur 晚到 / 滚出虚拟滚动先清状态再 blur 晚到的双触发在此挡掉。
-// InboxDiskSection 语义离群（blur 取消）不接入本 composable。
+// InboxDiskSection 2026-08-13 接入（原 blur 取消离群语义废除，统一 blur 提交）。
 import { nextTick, ref, watch, type Ref } from "vue";
 
 export function useInlineRename(opts: {
