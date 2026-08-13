@@ -111,7 +111,7 @@ function onCancel(): void {
 <style scoped>
 /* 36 稿总容器：970×878，padding 0（标题栏 / 按钮行贴边，区块内边距自控） */
 .dup-dialog :deep(.app-modal) {
-  width: 970px;
+  width: 973px; /* 36 稿内容 970 + 真 border 3 补偿（2026-08-13 二级窗口外框改真 border） */
   height: 878px;
   padding: 0;
   gap: 0;
@@ -166,6 +166,8 @@ function onCancel(): void {
   flex: 1;
   min-height: 0;
 }
+/* 注：本弹窗 .content 有 0 24 padding，滚轮距弹窗 inset 边框 24px 不压线，
+   无需像 DupScanDialog 那样 ::after 补画右缘线 */
 .dup-scroll {
   flex: 1;
   min-height: 0;

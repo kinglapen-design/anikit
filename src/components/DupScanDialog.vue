@@ -172,18 +172,19 @@ function thumbUrl(a: DupAsset): string | null {
 </template>
 
 <style scoped>
-/* 35 稿壳：714 宽，padding 0（标题栏 / 按钮行贴边）；屏 2 过渡为 970 双栏 */
+/* 35 稿壳：内容宽 714 + 真 border 3 补偿 = 717，padding 0（标题栏 / 按钮行贴边）；
+   屏 2 过渡为 973（内容 970）双栏 */
 .scan-dialog :deep(.app-modal) {
-  width: 714px;
+  width: 717px;
   padding: 0;
   gap: 0;
   transition: width 0.2s ease;
 }
 .scan-dialog.confirm :deep(.app-modal) {
-  width: 970px;
+  width: 973px;
 }
-/* 标题栏（35 稿）：54 高 / padding 12 12 12 24；底线走 ::after 两端留 1.5px
-   （不到弹窗 inset 竖框——横竖两条半透明线十字交叉会双倍叠色，2026-08-13 走查） */
+/* 标题栏（35 稿）：54 高 / padding 12 12 12 24 / 底线通栏（真 border 后横线与竖框不重叠——
+   边框占盒模型在内容区外侧，叠色根因已除，2026-08-13） */
 .scan-dialog :deep(.titlebar) {
   position: relative;
   height: 54px;
@@ -193,8 +194,8 @@ function thumbUrl(a: DupAsset): string | null {
 .scan-dialog :deep(.titlebar)::after {
   content: "";
   position: absolute;
-  left: 1.5px;
-  right: 1.5px;
+  left: 0;
+  right: 0;
   bottom: 0;
   height: 1px;
   background: var(--line-hover);
@@ -213,7 +214,10 @@ function thumbUrl(a: DupAsset): string | null {
   flex: none;
 }
 
-/* 滚动包裹层：relative 锚 ScrollThumb（悬浮滚轮悬停显隐，主窗口统一交互） */
+/* 滚动包裹层：relative 锚 ScrollThumb（悬浮滚轮悬停显隐，主窗口统一交互）。
+   真 border（2026-08-13 用户定）后弹窗边框占盒模型——滚轮贴内容区右缘与边框贴邻不重叠，
+   无需补画右缘线（原 box-shadow inset 时代的 ::after 补线已撤）；左列分隔线仍在内容区内，
+   滚轮会压，由 .list-wrap::after 上层补画 */
 .scroll-wrap,
 .list-wrap,
 .keeper-wrap {
@@ -233,6 +237,18 @@ function thumbUrl(a: DupAsset): string | null {
   flex: 1;
   min-width: 0;
 }
+/* 左列：与右列的 1px 分隔线（暗-悬停）补画在上层（z-index 11 > 滚轮 10，事件穿透） */
+.list-wrap::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line-hover);
+  z-index: 11;
+  pointer-events: none;
+}
 
 /* —— 屏 1：内容自适应 + 上限自滚（原生条隐藏，滚轮 = ScrollThumb 悬浮件）—— */
 .groups-body {
@@ -244,12 +260,12 @@ function thumbUrl(a: DupAsset): string | null {
   display: flex;
   height: min(560px, calc(100vh - 300px));
 }
-/* 左列：250 组列表，右分隔线；容器 padding 12 全边（2026-08-13 用户定）+ gap 4 + item 圆角 6；
+/* 左列：250 组列表；容器 padding 12 全边（2026-08-13 用户定）+ gap 4 + item 圆角 6；
+   与右列的 1px 分隔线由 .list-wrap::after 上层补画（滚轮贴边不压线），此处不再自画；
    滚轮 = ScrollThumb 悬浮件（不占布局，边距即纯 padding，无需凑 gutter） */
 .group-list {
   flex: 1;
   min-height: 0;
-  box-shadow: inset -1px 0 0 0 var(--line-hover);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -418,8 +434,7 @@ function thumbUrl(a: DupAsset): string | null {
 }
 
 /* 底部（35 稿）：62 高 / padding 12 12 12 24；flex: 1 撑满 actions 通栏
-   （不撑满上边框线会断在内容左缘，DuplicateDialog 走查同口径）；
-   顶线走 ::after 两端留 1.5px（同标题栏——避开弹窗竖框十字叠色） */
+   （不撑满上边框线会断在内容左缘，DuplicateDialog 走查同口径）；顶线 ::after 通栏 */
 .scan-bottom {
   position: relative;
   display: flex;
@@ -433,8 +448,8 @@ function thumbUrl(a: DupAsset): string | null {
 .scan-bottom::after {
   content: "";
   position: absolute;
-  left: 1.5px;
-  right: 1.5px;
+  left: 0;
+  right: 0;
   top: 0;
   height: 1px;
   background: var(--line-hover);

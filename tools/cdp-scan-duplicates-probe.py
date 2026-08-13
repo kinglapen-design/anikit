@@ -185,7 +185,7 @@ async def main():
             print("屏 1:", json.dumps(info, ensure_ascii=False))
             if info["title"] != "扫描重复文件":
                 fails.append(f"屏1标题 {info['title']}")
-            if info["width"] != 714:
+            if info["width"] != 717:  # 内容 714 + 真 border 3（2026-08-13 二级窗口外框改真 border）
                 fails.append(f"屏1宽 {info['width']}")
             if info["groups"] != 3:
                 fails.append(f"组数 {info['groups']}")
@@ -254,7 +254,7 @@ async def main():
             print("屏 2:", json.dumps(info3, ensure_ascii=False))
             if info3["title"] != "合并前确认":
                 fails.append(f"屏2标题 {info3['title']}")
-            if info3["width"] != 970:
+            if info3["width"] != 973:  # 内容 970 + 真 border 3
                 fails.append(f"屏2宽 {info3['width']}")
             if info3["groupItems"] != 2:
                 fails.append(f"屏2组数 {info3['groupItems']}")

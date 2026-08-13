@@ -26,8 +26,7 @@ const emit = defineEmits<{ remove: [] }>();
 </template>
 
 <style scoped>
-/* item（35 稿）：padding 24 / gap 12；底线走 ::after 两端留 1.5px
-   （不到弹窗 inset 竖框——横竖半透明线十字交叉双倍叠色，2026-08-13 走查）；
+/* item（35 稿）：padding 24 / gap 12；底线 ::after 通栏（真 border 后与竖框不重叠）；
    最后一组不出底线——否则与底部按钮栏顶线重叠成双线（2026-08-13 走查） */
 .scan-group {
   position: relative;
@@ -40,8 +39,8 @@ const emit = defineEmits<{ remove: [] }>();
 .scan-group::after {
   content: "";
   position: absolute;
-  left: 1.5px;
-  right: 1.5px;
+  left: 0;
+  right: 0;
   bottom: 0;
   height: 1px;
   background: var(--line-hover);

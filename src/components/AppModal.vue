@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 模态窗口骨架（figma-css 08 无关闭按钮 / 09 无标题栏 + 布局稿标准标题栏型 + 27_导入 纯标题型）：
-// 统一 C2 底 + 1.5px 亮-选中边框 + 投影 + 圆角 8，遮罩 C1-80；
+// 统一 C2 底 + 1.5px 亮-选中真 border（2026-08-13 用户定：二级窗口外框统一真 border，
+// 盒模型内缩滚轮不压线，原 inset box-shadow 作废）+ 投影 + 圆角 8，遮罩 C1-80；
 // standard = 标题栏（图标 + 标题 + 关闭 X）→ 内容 → 按钮组；
 // confirm  = 无关闭按钮（figma 08）：padding 24 gap 24、标题栏 30×30 品牌底图标、内容 gap 12、仅确认/取消；
 // plain    = 纯标题（figma 27_导入）：无图标无徽章无关闭 X，标题用常态色（稿 = 文字/常态）；
@@ -87,17 +88,20 @@ onMounted(() => {
   justify-content: center;
   background: var(--c1-80);
 }
-/* 骨架：C2 底 + 1.5px 亮-选中边框 + 投影 + 圆角 8（figma 08/09 与布局稿统一） */
+/* 骨架：C2 底 + 投影 + 圆角 8（figma 08/09 与布局稿统一）；
+   外框 = **真 border**（2026-08-13 用户定，二级窗口 1.5 外框统一改真 border）——
+   占盒模型让内容区天然内缩 1.5px：悬浮滚轮（ScrollThumb）贴内容区右缘也碰不到边框线，
+   与主窗口同机制；原 inset box-shadow 方案（画在内容层）滚轮贴边必压线，作废。
+   定宽弹窗（DuplicateDialog / DupScanDialog）width 已 +3 补偿保持内容宽不变 */
 .app-modal {
   display: flex;
   flex-direction: column;
   gap: var(--space-24);
   padding: var(--space-24);
+  border: var(--border-strong) solid var(--line-active);
   border-radius: var(--radius-8);
   background: var(--c2);
-  box-shadow:
-    inset 0 0 0 var(--border-strong) var(--line-active),
-    var(--shadow-pop);
+  box-shadow: var(--shadow-pop);
   max-width: calc(100vw - 96px);
   max-height: calc(100vh - 96px);
   /* 弹出动画：缩放 + 透明度（00_要求：窗口需要放大和缩小） */
