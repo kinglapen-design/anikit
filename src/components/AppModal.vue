@@ -139,14 +139,12 @@ onMounted(() => {
   color: var(--text-normal);
   flex: none;
 }
+/* 标题一律常态色（2026-08-13 用户定案：通用弹窗标题不用高亮——原默认高亮是错源，
+   每个新弹窗要记覆盖，忘覆盖就犯；plain 特化随之冗余删除） */
 .title {
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--text-highlight);
-}
-/* plain 标题用常态色（figma 27_导入：标题 = 文字/常态） */
-.app-modal.plain .title {
   color: var(--text-normal);
 }
 .spacer {

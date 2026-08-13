@@ -200,9 +200,6 @@ function thumbUrl(a: DupAsset): string | null {
   height: 1px;
   background: var(--line-hover);
 }
-.scan-dialog :deep(.title) {
-  color: var(--text-normal);
-}
 .scan-dialog :deep(.content) {
   flex: 1;
   min-height: 0;

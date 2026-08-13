@@ -123,9 +123,6 @@ function onCancel(): void {
   box-shadow: inset 0 -1px 0 0 var(--line-hover);
   flex: none;
 }
-.dup-dialog :deep(.title) {
-  color: var(--text-normal);
-}
 /* 区块展示：吃满剩余高，padding 0 24，内部自滚 */
 .dup-dialog :deep(.content) {
   flex: 1;
