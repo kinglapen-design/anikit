@@ -96,17 +96,9 @@ struct DeferredConflict {
   twin_id: String,
 }
 
-/// 自动合并项（PRD 01-2.3 importedFrom）：自动导入（manual=false）的 inbox 渠道导入撞 hash
-/// 且已有资产同渠道，不建冲突、不改名弹窗——已有资产改名为新文件真实名，新文件作为重复丢弃
-struct MergeItem {
-  file_idx: usize,
-  asset_id: String,
-}
-
 struct Phase2 {
   work: Vec<WorkItem>,
   deferred: Vec<DeferredConflict>,
-  merges: Vec<MergeItem>,
 }
 
 /// 阶段 3 → 4 的消息：建档成功（工作项 + 元数据 + 格式图标就绪的扩展名）/ 失败（原因）
@@ -144,15 +136,10 @@ pub fn run_import(
     }
     on_event(ImportEvent::Folders);
   }
-  let mut phase2 =
-    match dedup_phase(&mut state, lib, &root, &target, &units, &files, &groups, opts.imported_from.as_deref(), opts.manual)
-    {
-      Ok(p) => p,
-      Err(reason) => return abort(state, lib, &on_event, &files, &groups, &units, reason, "导入查重失败"),
-    };
-
-  // 自动合并（自动导入的 inbox 渠道撞 hash；手动导入已在上游转冲突）：改名 + 丢弃重复源，先于管线发 Asset 事件
-  apply_merges(&mut state, lib, &assets_dir, &files, std::mem::take(&mut phase2.merges), &on_event);
+  let phase2 = match dedup_phase(&mut state, lib, &root, &target, &units, &files, &groups) {
+    Ok(p) => p,
+    Err(reason) => return abort(state, lib, &on_event, &files, &groups, &units, reason, "导入查重失败"),
+  };
 
   // 阶段 3+4：并行建档 → 消费者串行注册 + 事件
   pipeline(
@@ -271,10 +258,8 @@ fn prepare_folders(
   Ok(())
 }
 
-/// 阶段 2（一次短锁）：全量查重。命中库内 → 同渠道（inbox）自动合并（仅单文件单元，
-/// 手动导入 manual=true 时关闭、一律冲突），否则立即组装冲突（源侧锁外补）；
-/// 命中同批次 → 延后冲突；未命中 → 预分配 ID + 解析落点生成工作项
-#[allow(clippy::too_many_arguments)]
+/// 阶段 2（一次短锁）：全量查重。命中库内 → 立即组装冲突挂起（源侧锁外补；不分渠道，
+/// 同渠道静默合并 2026-08-13 定案废除）；命中同批次 → 延后冲突；未命中 → 预分配 ID + 解析落点生成工作项
 fn dedup_phase(
   state: &mut TaskState,
   lib: &Mutex<Option<Library>>,
@@ -283,11 +268,9 @@ fn dedup_phase(
   units: &[(Unit, String)],
   files: &[PendingFile],
   groups: &[SequenceGroup],
-  merge_mark: Option<&str>,
-  manual: bool,
 ) -> Result<Phase2, String> {
   let root_buf = root.to_path_buf();
-  let mut phase = Phase2 { work: Vec::new(), deferred: Vec::new(), merges: Vec::new() };
+  let mut phase = Phase2 { work: Vec::new(), deferred: Vec::new() };
   let mut immediate: Vec<(Unit, ConflictItem)> = Vec::new();
   let mut no_folder: Vec<Unit> = Vec::new();
   with_lib(lib, state, |l| {
@@ -295,9 +278,8 @@ fn dedup_phase(
     let mut batch: HashMap<String, String> = HashMap::new(); // hash → 同批次 twin asset id
     for (unit, hash) in units {
       let chain = unit_chain(files, groups, *unit);
-      match classify_one(l, &by_hash, &mut batch, target, chain, *unit, hash, merge_mark, manual) {
+      match classify_one(l, &by_hash, &mut batch, target, chain, *unit, hash) {
         Classified::Conflict(u, c) => immediate.push((u, *c)),
-        Classified::Merge(i, id) => phase.merges.push(MergeItem { file_idx: i, asset_id: id }),
         Classified::Deferred(d) => phase.deferred.push(d),
         Classified::Work(w) => phase.work.push(w),
         Classified::NoFolder(u) => no_folder.push(u),
@@ -321,17 +303,14 @@ fn dedup_phase(
 enum Classified {
   // ConflictItem 体积大，装箱压低 enum 判别成本（clippy large_enum_variant）
   Conflict(Unit, Box<ConflictItem>),
-  Merge(usize, String),
   Deferred(DeferredConflict),
   Work(WorkItem),
   NoFolder(Unit),
 }
 
-/// 查重分类单项：命中库内 → 单文件单元且同渠道（inbox）自动合并，否则冲突；命中同批次 → 延后冲突；
-/// 未命中 → 预分配 ID 建工作项。序列帧组永不自动合并（打包模式不带渠道标记，双保险）；
-/// 手动导入（manual=true，收件箱"工程文件"手动入口）永不自动合并——撞 hash 一律走正常重复提示
-///（2026-08-13 定案：自动合并只属自动导入的零打扰口径，手动操作必须给用户冲突弹窗）
-#[allow(clippy::too_many_arguments)]
+/// 查重分类单项：命中库内 → 冲突挂起（2026-08-13 定案：撞 hash 一律走正常重复提示，
+/// 不分渠道——同渠道静默合并随工程文件不自动导入而废除）；命中同批次 → 延后冲突；
+/// 未命中 → 预分配 ID 建工作项
 fn classify_one(
   l: &Library,
   by_hash: &HashMap<&str, &AssetMeta>,
@@ -340,22 +319,11 @@ fn classify_one(
   chain: &[String],
   unit: Unit,
   hash: &str,
-  merge_mark: Option<&str>,
-  manual: bool,
 ) -> Classified {
   let Some(folder_id) = ops::find_folder(l, target, chain) else {
     return Classified::NoFolder(unit);
   };
   if let Some(meta) = by_hash.get(hash) {
-    // 自动合并判定：仅自动导入（manual=false）且本次导入与已有资产同为 inbox 渠道
-    //（正式资产绝不被自动改名；手动导入永远走冲突）
-    if !manual {
-      if let (Unit::Solo(idx), Some(mark)) = (unit, merge_mark) {
-        if meta.imported_from.as_deref() == Some(mark) {
-          return Classified::Merge(idx, meta.id.clone());
-        }
-      }
-    }
     Classified::Conflict(unit, Box::new(conflict_of(l, meta, folder_id)))
   } else if let Some(twin) = batch.get(hash) {
     Classified::Deferred(DeferredConflict { unit, target_folder: folder_id, twin_id: twin.clone() })
@@ -570,66 +538,6 @@ fn group_deferred(list: Vec<DeferredConflict>) -> HashMap<String, Vec<DeferredCo
     map.entry(d.twin_id.clone()).or_default().push(d);
   }
   map
-}
-
-/// 自动合并（PRD 01-2.3 importedFrom）：锁外改名 + 丢弃重复源 → 短锁更新索引与
-/// origin Placement 显示名（同文件夹唯一化）→ 发 Asset 事件（收件箱视图与进度照常流入）。
-/// 同名纯重复过境：merge_rename 已静默丢弃，无可见变化、不发事件。
-fn apply_merges(
-  state: &mut TaskState,
-  lib: &Mutex<Option<Library>>,
-  assets_dir: &Path,
-  files: &[PendingFile],
-  merges: Vec<MergeItem>,
-  on_event: &impl Fn(ImportEvent),
-) {
-  for m in merges {
-    let path = files[m.file_idx].path.to_string_lossy().into_owned();
-    let meta = match ops::merge_rename(assets_dir, &files[m.file_idx], &m.asset_id) {
-      Ok((meta, renamed)) => {
-        if !renamed {
-          continue;
-        }
-        meta
-      }
-      Err(reason) => {
-        state.outcome.failed.push(FailedItem { path, reason });
-        continue;
-      }
-    };
-    state.dirty = true; // origin Placement 改名改 folders.json
-    let view = with_lib(lib, state, |l| {
-      l.index.assets.insert(m.asset_id.clone(), meta.clone());
-      rename_origin_placement(l, &m.asset_id, &meta.origin_name).map(|p| placement_view(l, &meta, &p, &l.format_icons))
-    });
-    match view {
-      Ok(Some(v)) => {
-        state.outcome.imported += 1;
-        on_event(ImportEvent::Asset { placement: Box::new(v) });
-      }
-      // 异常数据（缺 origin Placement）：metadata 已改名，仅记日志不中断
-      Ok(None) => log::error!("自动合并：资源 {} 缺少 origin Placement", m.asset_id),
-      Err(reason) => state.outcome.failed.push(FailedItem { path, reason }),
-    }
-  }
-}
-
-/// origin Placement 显示名改为新文件名（同文件夹唯一化），重建 Placement 索引；
-/// 返回改名后的 Placement（缺 origin 为 None，异常数据防御）
-fn rename_origin_placement(l: &mut Library, asset_id: &str, new_name: &str) -> Option<crate::core::models::Placement> {
-  let pos = l.folders.items.iter().position(|p| p.asset == asset_id && p.origin)?;
-  let folder = l.folders.items[pos].folder.clone();
-  let existing: HashSet<String> = l
-    .folders
-    .items
-    .iter()
-    .enumerate()
-    .filter(|(i, p)| *i != pos && p.folder == folder)
-    .map(|(_, p)| p.name.clone())
-    .collect();
-  l.folders.items[pos].name = library::unique_name(&existing, new_name);
-  l.index.rebuild_placements(&l.folders.items);
-  Some(l.folders.items[pos].clone())
 }
 
 /// 锁内组装冲突项的库侧数据（已有资源 + 落点）；源文件侧字段留空由 fill_source_side 补

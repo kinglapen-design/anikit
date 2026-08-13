@@ -28,7 +28,6 @@
       target_folder: None,
       paths,
       imported_from: None,
-      manual: false,
       sequence_mode: SequenceMode::Scatter,
     }
   }
@@ -405,9 +404,9 @@
     println!(">>> 串行: {serial:.2?}  并行: {parallel:.2?}  加速比: {speedup:.2}x");
   }
 
-  // ---------- 收件箱自动合并（PRD 01-2.3 importedFrom，2026-07-22 用户定案 A） ----------
+  // ---------- 收件箱撞 hash 冲突（2026-08-13 用户定案：同渠道静默合并废除，一律走正常重复提示） ----------
 
-  /// inbox 渠道导入辅助（自动导入口径，manual=false）：携带 importedFrom 标记 + Move 过境
+  /// inbox 渠道导入辅助：携带 importedFrom 标记 + Move 过境（自动 / 手动同口径，不再区分）
   fn inbox_opts(paths: Vec<PathBuf>) -> ImportOptions {
     ImportOptions {
       structure: Structure::Flatten,
@@ -415,15 +414,8 @@
       target_folder: None,
       paths,
       imported_from: Some("inbox".into()),
-      manual: false,
       sequence_mode: SequenceMode::Scatter,
     }
-  }
-
-  /// inbox 渠道手动导入辅助（"工程文件"手动入口口径）：渠道标记照旧，manual=true
-  /// —— 撞 hash 一律走正常重复提示（冲突挂起），不静默合并（2026-08-13 定案）
-  fn inbox_manual_opts(paths: Vec<PathBuf>) -> ImportOptions {
-    ImportOptions { manual: true, ..inbox_opts(paths) }
   }
 
   /// 唯一资源的 info 目录（单资源场景）
@@ -431,10 +423,10 @@
     fs::read_dir(&h.assets_dir).unwrap().next().unwrap().unwrap().path()
   }
 
-  /// 自动合并：RECOVER 快照先入、真实文件后入撞 hash——已有资产静默改名为真实名
-  ///（磁盘 + metadata + Placement + Asset 事件），新文件作为重复丢弃，无冲突
+  /// 撞同渠道（inbox）资产同 hash：冲突挂起走重复提示，不静默合并——已有资产不改名
+  ///（磁盘实体 / metadata.json / 索引 / Placement 全不动），源文件保留待决策，不发 Asset 事件
   #[test]
-  fn inbox_merge_renames_existing_asset_silently() {
+  fn inbox_hash_collision_suspends_conflict_without_rename() {
     let h = make_lib();
     let recover = h._dir.path().join("RECOVER_无标题.fla");
     fs::write(&recover, "相同内容").unwrap();
@@ -444,45 +436,44 @@
     let real = h._dir.path().join("无标题.fla");
     fs::write(&real, "相同内容").unwrap();
     let (out2, ev2) = run(&h, inbox_opts(vec![real.clone()]));
-    assert_eq!(out2.conflicts.len(), 0, "同渠道撞 hash 应自动合并，无冲突弹窗");
-    assert_eq!(out2.failed.len(), 0);
-    assert_eq!(out2.imported, 1, "合并改名计一次流入");
-    assert!(!real.exists(), "重复源应被丢弃");
+    assert_eq!((out2.imported, out2.conflicts.len(), out2.failed.len()), (0, 1, 0), "同渠道撞 hash 应冲突挂起，不静默合并");
+    assert!(real.exists(), "冲突未决策源文件保留");
+    assert_eq!(out2.conflicts[0].existing_name, "RECOVER_无标题.fla");
 
     assert_eq!(info_dir_count(&h), 1, "资产唯一");
-    let (origin_name, name, ifrom, placement_name) = with_lib(&h, |l| {
+    let (origin_name, ifrom, placement_name) = with_lib(&h, |l| {
       let meta = l.index.assets.values().next().unwrap();
-      (meta.origin_name.clone(), meta.name.clone(), meta.imported_from.clone(), l.folders.items[0].name.clone())
+      (meta.origin_name.clone(), meta.imported_from.clone(), l.folders.items[0].name.clone())
     });
-    assert_eq!((origin_name.as_str(), name.as_str()), ("无标题.fla", "无标题"));
-    assert_eq!(ifrom.as_deref(), Some("inbox"), "渠道标记保留");
-    assert_eq!(placement_name, "无标题.fla", "origin Placement 显示名同步");
+    assert_eq!(origin_name, "RECOVER_无标题.fla", "已有资产不被改名");
+    assert_eq!(placement_name, "RECOVER_无标题.fla", "Placement 显示名不动");
+    assert_eq!(ifrom.as_deref(), Some("inbox"), "渠道标记保留（已导入区块口径不变）");
 
     let info_dir = only_info_dir(&h);
     let meta: AssetMeta = read_json(&info_dir.join("metadata.json")).unwrap();
-    assert_eq!(meta.origin_name, "无标题.fla", "metadata.json 落盘同步");
-    assert!(info_dir.join("无标题.fla").exists(), "磁盘实体已改名");
-    assert!(ev2.iter().any(|e| matches!(e, ImportEvent::Asset { .. })), "合并发 Asset 事件");
+    assert_eq!(meta.origin_name, "RECOVER_无标题.fla", "metadata.json 不动");
+    assert!(info_dir.join("RECOVER_无标题.fla").exists(), "磁盘实体名不动");
+    assert!(!ev2.iter().any(|e| matches!(e, ImportEvent::Asset { .. })), "冲突挂起不发 Asset 事件");
   }
 
-  /// 同名同内容的纯重复过境：静默丢弃，无改名、不计入、不发 Asset 事件
+  /// 同名同内容的纯重复过境同样冲突挂起（原静默丢弃一并废除）：源保留待用户决策
   #[test]
-  fn inbox_pure_duplicate_discards_quietly() {
+  fn inbox_pure_duplicate_also_conflicts() {
     let h = make_lib();
     let a = h._dir.path().join("a.txt");
     fs::write(&a, "x").unwrap();
     run(&h, inbox_opts(vec![a.clone()]));
     fs::write(&a, "x").unwrap(); // 同名同内容再来一次
     let (out, ev) = run(&h, inbox_opts(vec![a.clone()]));
-    assert_eq!((out.imported, out.conflicts.len(), out.failed.len()), (0, 0, 0));
-    assert!(!a.exists(), "重复源应被丢弃");
+    assert_eq!((out.imported, out.conflicts.len(), out.failed.len()), (0, 1, 0));
+    assert!(a.exists(), "冲突未决策源文件保留");
     assert_eq!(info_dir_count(&h), 1);
-    assert!(!ev.iter().any(|e| matches!(e, ImportEvent::Asset { .. })), "纯重复不发 Asset 事件");
+    assert!(!ev.iter().any(|e| matches!(e, ImportEvent::Asset { .. })), "冲突挂起不发 Asset 事件");
   }
 
-  /// 合并门禁：已有资产非 inbox 渠道（正式资产）→ 照常冲突询问，绝不被自动改名
+  /// 已有资产非 inbox 渠道（正式资产）：照常冲突询问，源保留待决策
   #[test]
-  fn merge_never_touches_formal_assets() {
+  fn inbox_import_conflicts_against_formal_asset() {
     let h = make_lib();
     let formal = h._dir.path().join("正式.fla");
     fs::write(&formal, "相同内容").unwrap();
@@ -497,7 +488,7 @@
     assert_eq!(origin, "正式.fla", "正式资产名不受影响");
   }
 
-  /// 反向门禁：inbox 渠道的已有资产被常规导入撞 hash → 照常冲突（自动合并是收件箱专属）
+  /// 反向：常规导入撞 inbox 渠道资产 → 照常冲突（合并废除后双向同口径）
   #[test]
   fn normal_import_still_conflicts_against_inbox_asset() {
     let h = make_lib();
@@ -509,69 +500,6 @@
     fs::write(&b, "相同内容").unwrap();
     let (out, _) = run(&h, opts(Structure::Flatten, Source::Copy, vec![b]));
     assert_eq!(out.conflicts.len(), 1, "常规导入撞 inbox 资产仍应询问");
-  }
-
-  /// 手动导入门禁（2026-08-13 定案）：撞同渠道 inbox 资产同 hash 也走正常重复提示
-  ///（冲突挂起，不静默合并）；已有资产名不受影响，源文件保留待决策
-  #[test]
-  fn manual_inbox_import_conflicts_instead_of_merging() {
-    let h = make_lib();
-    let recover = h._dir.path().join("RECOVER_无标题.fla");
-    fs::write(&recover, "相同内容").unwrap();
-    let (out1, _) = run(&h, inbox_opts(vec![recover]));
-    assert_eq!(out1.imported, 1);
-
-    let real = h._dir.path().join("无标题.fla");
-    fs::write(&real, "相同内容").unwrap();
-    let (out2, ev2) = run(&h, inbox_manual_opts(vec![real.clone()]));
-    assert_eq!(out2.conflicts.len(), 1, "手动导入撞 hash 应走冲突挂起，不自动合并");
-    assert_eq!((out2.imported, out2.failed.len()), (0, 0));
-    assert!(real.exists(), "冲突未决策源文件保留");
-    assert_eq!(info_dir_count(&h), 1, "资产唯一");
-    let origin = with_lib(&h, |l| l.index.assets.values().next().unwrap().origin_name.clone());
-    assert_eq!(origin, "RECOVER_无标题.fla", "已有资产不被改名");
-    assert!(!ev2.iter().any(|e| matches!(e, ImportEvent::Asset { .. })), "挂起不发 Asset 事件");
-  }
-
-  /// 手动导入进来的资产仍标 inbox 渠道（"已导入"区块口径）：后续自动导入撞上 → 仍静默合并
-  ///（自动导入永远零打扰，不因资产来自手动导入而弹冲突）
-  #[test]
-  fn auto_import_merges_against_manually_imported_asset() {
-    let h = make_lib();
-    let recover = h._dir.path().join("RECOVER_无标题.fla");
-    fs::write(&recover, "相同内容").unwrap();
-    let (out1, _) = run(&h, inbox_manual_opts(vec![recover]));
-    assert_eq!(out1.imported, 1, "手动导入首个文件正常入库");
-    assert_eq!(with_lib(&h, |l| l.index.assets.values().next().unwrap().imported_from.clone()).as_deref(), Some("inbox"));
-
-    let real = h._dir.path().join("无标题.fla");
-    fs::write(&real, "相同内容").unwrap();
-    let (out2, _) = run(&h, inbox_opts(vec![real.clone()]));
-    assert_eq!(out2.conflicts.len(), 0, "自动导入撞手动导入的资产仍应静默合并");
-    assert_eq!(out2.imported, 1, "合并改名计一次流入");
-    assert!(!real.exists(), "重复源应被丢弃");
-    let origin = with_lib(&h, |l| l.index.assets.values().next().unwrap().origin_name.clone());
-    assert_eq!(origin, "无标题.fla", "已有资产静默改名为真实名");
-  }
-
-  /// 合并时词干缩略图一并改名并重新登记（4.1 重命名语义）
-  #[test]
-  fn inbox_merge_renames_stem_thumbnail() {
-    let h = make_lib();
-    let recover = h._dir.path().join("RECOVER_图.png");
-    image::RgbaImage::from_pixel(8, 8, image::Rgba([1, 2, 3, 255])).save(&recover).unwrap();
-    run(&h, inbox_opts(vec![recover]));
-
-    let real = h._dir.path().join("图.png");
-    image::RgbaImage::from_pixel(8, 8, image::Rgba([1, 2, 3, 255])).save(&real).unwrap(); // 同字节同 hash
-    let (out, _) = run(&h, inbox_opts(vec![real]));
-    assert_eq!(out.imported, 1);
-
-    let thumb = with_lib(&h, |l| l.index.assets.values().next().unwrap().thumbnail.clone());
-    assert_eq!(thumb.as_deref(), Some("图_thumbnail.webp"), "缩略图登记同步改名");
-    let info_dir = only_info_dir(&h);
-    assert!(info_dir.join("图_thumbnail.webp").exists());
-    assert!(!info_dir.join("RECOVER_图_thumbnail.webp").exists());
   }
 
   // ---------- 序列帧打包（PRD 01-2.5，4.1） ----------

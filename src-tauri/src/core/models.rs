@@ -54,8 +54,9 @@ pub struct AssetMeta {
   #[serde(default)]
   pub links: Vec<String>,
   pub imported_at: String,
-  /// 导入渠道（"inbox" = 收件箱导入，含自动与手动；常规导入 None）——自动导入撞 hash 自动合并的
-  /// 判定依据（PRD 01-2.3 注）；手动导入虽同标 inbox 渠道，但 manual=true 关闭合并、走正常重复提示
+  /// 导入渠道（"inbox" = 收件箱导入，含自动与手动；常规导入 None）——服务快速访问
+  /// "已导入"区块口径与摘标语义（移动出根目录即摘标转正）；撞 hash 一律走正常重复提示，
+  /// 同渠道静默合并 2026-08-13 用户定案废除（原服务 RECOVER 场景，随工程文件不自动导入消解）
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub imported_from: Option<String>,
   pub modified_at: String,

@@ -34,8 +34,8 @@ pub fn list_inbox_snapshot(app: AppHandle) -> Result<Vec<InboxEntry>, String> {
 }
 
 /// 手动导入单个条目：移走入库（Move + Keep 层级；imported_from = "inbox" 维持渠道标记，
-/// "已导入"区块口径不变）。manual = true：撞 hash 一律走正常重复提示（冲突挂起弹窗），
-/// 不做自动导入的静默合并（2026-08-13 定案，PRD 05）。占用条目禁止导入，返回中文人话；
+/// "已导入"区块口径不变）。撞 hash 与常规导入同口径走正常重复提示（冲突挂起弹窗）——
+/// 同渠道静默合并 2026-08-13 用户定案废除（PRD 05）。占用条目禁止导入，返回中文人话；
 /// Channel 复用现有导入事件流（11_导入进度条 / 10_重复添加提示）。
 /// 条目路径按空间根推导（收件箱空间级），导入目标仍是当前打开的库
 #[tauri::command]
@@ -55,8 +55,6 @@ pub fn import_inbox_entry(app: AppHandle, name: String, on_event: Channel<Import
     target_folder: None,
     paths: vec![path],
     imported_from: Some("inbox".to_string()),
-    // 手动导入：撞 hash 走正常重复提示（冲突挂起），不静默合并
-    manual: true,
     sequence_mode: SequenceMode::Scatter,
   };
   Ok(spawn_import(app, root, assets_dir, opts, on_event, None))

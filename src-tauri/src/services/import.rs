@@ -65,14 +65,12 @@ pub struct ImportOptions {
   pub target_folder: Option<String>,
   #[serde(default)]
   pub paths: Vec<PathBuf>,
-  /// 导入渠道标记（写入 metadata.importedFrom）："inbox" = 收件箱导入；
-  /// 携带标记的导入撞 hash 且已有资产同渠道时自动合并（PRD 01-2.3 注；仅自动导入生效，manual=true 关闭）
+  /// 导入渠道标记（写入 metadata.importedFrom）："inbox" = 收件箱导入（含自动与手动），
+  /// 服务快速访问"已导入"区块口径与摘标语义；撞 hash 一律走正常重复提示（冲突挂起），
+  /// 不再区分渠道——同渠道静默合并 2026-08-13 用户定案废除（原服务 RECOVER 场景，已随
+  /// 工程文件不自动导入而消解）
   #[serde(default)]
   pub imported_from: Option<String>,
-  /// 手动导入（true 时关闭同渠道自动合并，撞 hash 一律走正常重复提示）：
-  /// 仅收件箱"工程文件"手动导入置 true；自动导入恒 false（PRD 05，2026-08-13 定案）
-  #[serde(default)]
-  pub manual: bool,
   /// 序列帧处理模式（仅 UI 导入弹窗给 Pack；收件箱 / 剪贴板恒 Scatter）
   #[serde(default)]
   pub sequence_mode: SequenceMode,
@@ -284,15 +282,13 @@ pub(crate) fn build_asset_with_id(
   Ok(meta)
 }
 
-/// 改名原语（自 merge_rename 抽出，6.1 rename_placement 复用）：磁盘 originName 与
+/// 改名原语（6.1 rename_placement 用，operations/duplicate.rs）：磁盘 originName 与
 /// 词干缩略图（{stem}_thumbnail.webp/png）同步改名，metadata 更新（originName / name /
 /// thumbnail / modifiedAt）并写盘。全部在锁外执行（单资源单文件）；
 /// 调用方负责锁内索引同步与撤销登记（renames 成对反转即 DiskOp::Rename）。
 pub(crate) struct OriginRename {
   pub meta: AssetMeta,
-  /// 是否发生了改名（新旧 originName 不同）
-  pub renamed: bool,
-  /// 实际执行的磁盘改名（旧路径, 新路径），按执行顺序（撤销登记用）
+  /// 实际执行的磁盘改名（旧路径, 新路径），按执行顺序（撤销登记用；空 = 新旧同名未改）
   pub renames: Vec<(PathBuf, PathBuf)>,
 }
 
@@ -327,21 +323,7 @@ pub(crate) fn rename_origin(assets_dir: &Path, asset_id: &str, new_name: &str) -
   }
   meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
   write_json(&meta_path, &meta).map_err(|e| e.to_string())?;
-  Ok(OriginRename { meta, renamed, renames })
-}
-
-/// 收件箱自动合并（PRD 01-2.3 importedFrom，2026-07-22 用户定案）：内容相同不重复存——
-/// 已有资产（同为 inbox 渠道）改名为新文件真实名（走 rename_origin 原语：磁盘 originName
-/// 与词干缩略图一并改名，metadata 更新写盘）；新文件与库内内容相同（hash 一致），作为重复丢弃。
-/// 仅自动导入触发（ImportOptions.manual=false；手动导入撞 hash 走正常重复提示，2026-08-13 定案）。
-/// 返回（更新后的 metadata, 是否发生了改名），调用方负责锁内索引与 Placement 更新。
-pub(crate) fn merge_rename(assets_dir: &Path, file: &PendingFile, asset_id: &str) -> Result<(AssetMeta, bool), String> {
-  let result = rename_origin(assets_dir, asset_id, &file_name(&file.path))?;
-  // 重复源丢弃（过境语义）；删除失败仅记日志——启动清点会再撞一次合并，幂等无害
-  if let Err(e) = fs::remove_file(&file.path) {
-    log::error!("收件箱重复文件丢弃失败：{e}");
-  }
-  Ok((result.meta, result.renamed))
+  Ok(OriginRename { meta, renames })
 }
 
 /// 实体入库：Copy 复制；Move 优先 rename（同盘零拷贝），失败回退 复制+删除源（跨盘场景）
