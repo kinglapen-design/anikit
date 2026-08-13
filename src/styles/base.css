@@ -59,18 +59,17 @@ textarea {
 }
 
 /* 统一滚动条（2026-08-13 用户定：滚动区域必须恒可见滚轮——滚轮/触摸板失灵时仍可用；
-   且滚轮出现不得挤压内容）：6px 胶囊 thumb（暗-悬停 / 悬停亮-选中）+ 透明轨道；
+   且滚轮出现不得挤压内容）：6px 胶囊 thumb + 透明轨道；
    .kit-scroll = 纵向：scrollbar-gutter 恒占防内容跳动（无滚动时透明 gutter，容器右 padding
    需为 gutter 减 6 保持视觉边距，见 DupScanDialog）；.kit-scroll-x = 横向：无 gutter
    属性可用，容器自行预留 padding 容纳（如 .cards padding-bottom 6）。
-   border-right 1px 透明 = 滚轮距边框留 1px（2026-08-13 用户定）：滚动条位于 border 内侧
-  （盒模型保证），1px inset 边框（面板分隔线）恰好落空、1.5px 边框（弹窗亮-选中）只盖
-   滚轮 0.5px 不明显；thumb 的 border-right 让位 hack 在 WebView2 不可靠已弃用
-  （Edge headless 实证有效、用户实机无效，2026-08-13 红色染色实证） */
+   thumb 用**实色** C4 / 悬停 C5（主窗口悬浮滚轮 side-thumb 同色，2026-08-10 用户定案口径：
+   透明色在通栏分割线上交叉叠加作废）——贴边被 inset 边框盖住只是实色变窄，
+   不产生两个半透明叠加变新色；border-right 占位间隔与 thumb 让位 hack 两案均弃
+  （占位顶断通栏分隔线 1px；hack WebView2 不可靠，2026-08-13 用户实机走查定稿） */
 .kit-scroll {
   overflow-y: auto;
   scrollbar-gutter: stable;
-  border-right: 1px solid transparent;
 }
 .kit-scroll-x {
   overflow-x: auto;
@@ -82,12 +81,12 @@ textarea {
 }
 .kit-scroll::-webkit-scrollbar-thumb,
 .kit-scroll-x::-webkit-scrollbar-thumb {
-  background: var(--line-hover);
+  background: var(--c4);
   border-radius: 3px;
 }
 .kit-scroll::-webkit-scrollbar-thumb:hover,
 .kit-scroll-x::-webkit-scrollbar-thumb:hover {
-  background: var(--line-active);
+  background: var(--c5);
 }
 .kit-scroll::-webkit-scrollbar-track,
 .kit-scroll-x::-webkit-scrollbar-track {
