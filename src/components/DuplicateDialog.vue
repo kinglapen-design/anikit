@@ -1,38 +1,34 @@
 <script setup lang="ts">
-// 重复添加提示（03_UI 布局/10_重复添加提示）：导入完成后逐个询问 hash 冲突项。
-// 左：已存在（库内）/ 右：新的文件（默认 50% 透明）；选项：用已存在文件导入 / 保留两个 / 关联文件夹；
-// "全部应用"开关把当前选项批量应用到剩余全部；关闭 = 跳过当前（不导入，源文件保留），自动弹下一个。
-import { computed, ref, watch } from "vue";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import AppCheckbox from "./AppCheckbox.vue";
-import IconButton from "./IconButton.vue";
-import { useContentStore, type ConflictResolution } from "../stores/content";
+// 重复文件提示（36_重复文件提示稿，2026-08-13 全量重写）：导入完成后 hash 冲突统一询问。
+// 行 = 左右对照卡片 + radio 三选一（作为新链接导入，默认 / 作为新文件导入 / 用已存在文件导入）
+// + 行尾"跳过此文件"开关（可逆，跳过行 30% 压暗）；底部内嵌批量重命名（37 稿：序号 / 替换命名）
+// + 「全部跟随」开关（默认开：改一行决策全部行跟随，关掉逐行精调；重命名规则为全局面板不参与跟随）。
+// 确认 = 按各行决策执行（改名只影响导入后显示名，不影响 hash 判定）；
+// 取消 / 关闭（含遮罩点击）= 全部跳过——源文件从未被动过，纯前端清队列即可。
+import { computed, ref } from "vue";
+import AppModal from "./AppModal.vue";
+import AppButton from "./AppButton.vue";
+import AppSegmented from "./AppSegmented.vue";
+import AppSwitch from "./AppSwitch.vue";
+import DuplicateRow, { type DupDecision } from "./DuplicateRow.vue";
+import DuplicateRenameBar from "./DuplicateRenameBar.vue";
+import { useContentStore, type ConflictItem, type ConflictResolution } from "../stores/content";
 
 const content = useContentStore();
+const conflicts = computed(() => content.importConflicts ?? []);
 
-const current = computed(() => content.importConflicts?.[0] ?? null);
-const total = computed(() => content.importConflicts?.length ?? 0);
-
-const action = ref<"useExisting" | "copy" | "link">("useExisting");
-const linkName = ref("");
-const applyAll = ref(false);
-const seqStart = ref("1");
+// 每行决策（默认：作为新链接导入 + 不跳过）；弹窗挂载时队列已就位，初始化一次即可
+const rows = ref<DupDecision[]>(conflicts.value.map(() => ({ action: "link", skipped: false })));
+const followAll = ref(true);
 const busy = ref(false);
-const imgError = ref(false);
 
-// 每换一项重置选择状态
-watch(
-  () => current.value?.sourcePath,
-  () => {
-    action.value = "useExisting";
-    linkName.value = "";
-    applyAll.value = false;
-    seqStart.value = "1";
-    imgError.value = false;
-  },
-);
+// 批量重命名（37 稿：分段选择器单显一行输入）
+const renameMode = ref<"sequence" | "replace">("sequence");
+const renameName = ref("");
+const renameStart = ref("1");
+const renameFind = ref("");
+const renameReplace = ref("");
 
-const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp"]);
 function extOf(name: string): string {
   const i = name.lastIndexOf(".");
   return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
@@ -41,443 +37,219 @@ function stemOf(name: string): string {
   return name.replace(/\.[^.]+$/, "");
 }
 
-// 新文件预览：后端预览缓存（PSD/PSB/SVG 等）优先；图片格式直读源文件（asset 协议）；非图片显示格式占位
-const sourceUrl = computed(() => {
-  const c = current.value;
-  if (!c || imgError.value) return null;
-  if (c.sourceThumbPath) return convertFileSrc(c.sourceThumbPath);
-  if (!IMAGE_EXTS.has(extOf(c.sourceName))) return null;
-  return convertFileSrc(c.sourcePath);
-});
-const existingUrl = computed(() =>
-  current.value?.existingThumbPath ? convertFileSrc(current.value.existingThumbPath) : null,
+// 序号命名：名称-序号，位宽自动 = 最大编号（起始值 + 行数 - 1）的位数
+function seqName(base: string, index: number, ext: string): string {
+  const start = Number.parseInt(renameStart.value, 10) || 1;
+  const width = String(start + rows.value.length - 1).length;
+  const num = String(start + index).padStart(width, "0");
+  return `${base}-${num}${ext ? `.${ext}` : ""}`;
+}
+
+// 行新名（规则只作用词干，扩展名保留；规则不产生变化 = null 沿用源文件名）。
+// 序号按行序编号（含跳过行——切换跳过不重排他行预览，稳定优先）
+function newNameFor(item: ConflictItem, index: number): string | null {
+  const ext = extOf(item.sourceName);
+  const stem = stemOf(item.sourceName);
+  let next: string | null = null;
+  if (renameMode.value === "sequence") {
+    const base = renameName.value.trim();
+    if (base) next = seqName(base, index, ext);
+  } else {
+    const find = renameFind.value;
+    if (find && stem.includes(find)) {
+      const replaced = stem.split(find).join(renameReplace.value).trim();
+      if (replaced) next = `${replaced}${ext ? `.${ext}` : ""}`;
+    }
+  }
+  return next && next !== item.sourceName ? next : null;
+}
+
+// 新名预览：仅 copy / link 决策会按新名导入；useExisting / 跳过行不预览改名
+const previews = computed(() =>
+  conflicts.value.map((c, i) => {
+    const d = rows.value[i];
+    return d && !d.skipped && d.action !== "useExisting" ? newNameFor(c, i) : null;
+  }),
 );
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
-}
-// 尺寸 / 文件大小；没有尺寸就只显示文件大小（10_重复添加提示）
-function metaText(w: number | null, h: number | null, size: number): string {
-  const s = formatSize(size);
-  return w != null && h != null ? `${w} x ${h} / ${s}` : s;
-}
-// 链接显示名：用户输入不带扩展名时按源文件追加
-function withExt(base: string, sourceName: string): string {
-  const ext = extOf(sourceName);
-  if (ext === "" || base.toLowerCase().endsWith(`.${ext}`)) return base;
-  return `${base}.${ext}`;
-}
-// 批量命名（关联 + 全部应用）：基名-序号递增，序号取输入框起始值
-function batchLinkName(base: string, sourceName: string, i: number, start: number): string {
-  const ext = extOf(sourceName);
-  const stem = stemOf(base || sourceName);
-  return `${stem}-${start + i}${ext ? `.${ext}` : ""}`;
+// 全部跟随：开时改任一行 radio / 跳过 → 全部行跟随；关掉后逐行独立
+function onRowChange(index: number, patch: Partial<DupDecision>): void {
+  if (followAll.value) {
+    rows.value = rows.value.map((r) => ({ ...r, ...patch }));
+  } else {
+    const cur = rows.value[index];
+    if (cur) rows.value[index] = { ...cur, ...patch };
+  }
 }
 
 function buildResolutions(): ConflictResolution[] {
-  const queue = content.importConflicts ?? [];
-  const targets = applyAll.value ? queue : queue.slice(0, 1);
-  const base = linkName.value.trim();
-  const start = Number.parseInt(seqStart.value, 10) || 1;
-  return targets.map((c, i) => ({
-    sourcePath: c.sourcePath,
-    existingAssetId: c.existingAssetId,
-    targetFolder: c.targetFolder,
-    action: action.value,
-    linkName:
-      action.value !== "link"
-        ? null
-        : applyAll.value
-          ? batchLinkName(base, c.sourceName, i, start)
-          : base
-            ? withExt(base, c.sourceName)
-            : null, // 未输入：后端用源文件原名
-    sequence: c.sequence ?? null, // 序列帧组信息原样回传（"保留两个"重新打包用，4.1）
-    sourceThumbPath: c.sourceThumbPath ?? null, // 预览缓存原样回传（决策完成后后端删除，4.2）
-  }));
+  return conflicts.value.map((c, i) => {
+    const d = rows.value[i] ?? { action: "link" as const, skipped: false };
+    return {
+      sourcePath: c.sourcePath,
+      existingAssetId: c.existingAssetId,
+      targetFolder: c.targetFolder,
+      action: d.skipped ? ("skip" as const) : d.action,
+      newName: d.skipped || d.action === "useExisting" ? null : newNameFor(c, i),
+      sequence: c.sequence ?? null, // 序列帧组信息原样回传（copy 重新打包用，4.1）
+      sourceThumbPath: c.sourceThumbPath ?? null, // 预览缓存原样回传（决策完成后后端删除，4.2）
+    };
+  });
 }
 
+// 确认 = 按各行决策执行（逐项提交，单项失败不阻塞；失败项走 ImportResultDialog）
 async function onConfirm(): Promise<void> {
-  if (busy.value || !current.value) return;
+  if (busy.value) return;
   busy.value = true;
   try {
     const report = await content.resolveConflicts(buildResolutions());
     if (report.failed.length > 0) content.importFailed = report.failed;
-    const queue = content.importConflicts ?? [];
-    content.importConflicts = applyAll.value ? null : queue.slice(1);
-    if (!content.importConflicts || content.importConflicts.length === 0) {
-      content.importConflicts = null;
-      await content.refresh();
-    }
+    content.importConflicts = null;
+    await content.refresh();
   } finally {
     busy.value = false;
   }
 }
 
-// 关闭 = 跳过当前（不导入，源文件保留），自动弹下一个（纯前端出队，后端无需动作）
-function onSkip(): void {
-  const queue = content.importConflicts ?? [];
-  content.importConflicts = queue.length > 1 ? queue.slice(1) : null;
-  if (!content.importConflicts) void content.refresh();
+// 取消 / 关闭 = 全部跳过（源文件保留；临时预览缓存 cache/tmp 会话级自清）
+function onCancel(): void {
+  if (busy.value) return;
+  content.importConflicts = null;
 }
 </script>
 
 <template>
-  <div v-if="current" class="dup-mask">
-    <div class="dup-card">
-      <!-- 标题栏（08_二级窗口#带关闭按钮标题栏）：标题居中 + 关闭（跳过当前） -->
-      <header class="dup-titlebar">
-        <h2 class="dup-title">重复文件</h2>
-        <IconButton name="window-close" title="跳过这个文件" @click="onSkip" />
-      </header>
-
-      <!-- 图片对照区：已存在 / 新的文件 -->
-      <div class="compare">
-        <div class="side">
-          <div class="img-box">
-            <img v-if="existingUrl" :src="existingUrl" :alt="current.existingName" draggable="false" />
-            <span v-else class="no-img">{{ current.existingExt.toUpperCase() }}</span>
-            <span class="tag exists">已存在</span>
-          </div>
-          <span class="name">{{ current.existingName }}</span>
-          <span class="meta">{{ metaText(current.existingW, current.existingH, current.existingSize) }}</span>
-          <span class="folder">{{ current.existingFolderName }}</span>
-        </div>
-        <div class="side">
-          <div class="img-box">
-            <img
-              v-if="sourceUrl"
-              class="new-img"
-              :class="{ solid: action === 'copy' }"
-              :src="sourceUrl"
-              :alt="current.sourceName"
-              draggable="false"
-              @error="imgError = true"
-            />
-            <span v-else class="no-img">{{ extOf(current.sourceName).toUpperCase() }}</span>
-            <span class="tag new">新的文件</span>
-          </div>
-          <span class="name">{{ current.sourceName }}</span>
-          <span class="meta">{{ metaText(current.sourceW, current.sourceH, current.sourceSize) }}</span>
-          <span class="folder">{{ current.targetFolderName }}</span>
+  <AppModal variant="standard" title="重复文件提示" class="dup-dialog" @close="onCancel">
+    <div class="dup-body">
+      <!-- 表头双列（36 稿：46 高 + 下分隔线，标题档文字-标签色） -->
+      <div class="dup-head">
+        <span class="col">已存在文件</span>
+        <span class="col">新的文件</span>
+      </div>
+      <div class="dup-scroll">
+        <DuplicateRow
+          v-for="(c, i) in conflicts"
+          :key="c.sourcePath"
+          :item="c"
+          :decision="rows[i] ?? { action: 'link', skipped: false }"
+          :new-name="previews[i] ?? null"
+          @change="onRowChange(i, $event)"
+        />
+      </div>
+    </div>
+    <template #actions>
+      <!-- 批量重命名输入行（37 稿：随分段模式单显一行） -->
+      <DuplicateRenameBar
+        v-model:name="renameName"
+        v-model:start="renameStart"
+        v-model:find="renameFind"
+        v-model:replace="renameReplace"
+        :mode="renameMode"
+      />
+      <!-- 底部按钮行（36 稿）：左 = 分段选择器；右 = 全部跟随 + 确认（主，左）/ 取消（次，右） -->
+      <div class="dup-bottom">
+        <AppSegmented
+          v-model="renameMode"
+          :options="[
+            { value: 'sequence', label: '序号命名' },
+            { value: 'replace', label: '替换命名' },
+          ]"
+        />
+        <div class="bottom-right">
+          <span class="follow-label">全部跟随</span>
+          <AppSwitch v-model="followAll" />
+          <AppButton variant="primary" label="确认" :disabled="busy" @click="onConfirm" />
+          <AppButton variant="panel" label="取消" :disabled="busy" @click="onCancel" />
         </div>
       </div>
-
-      <!-- 底栏：单选项组合 + 导入按钮组 -->
-      <footer class="dup-footer">
-        <div class="options">
-          <AppCheckbox
-            tone="dialog"
-            label="用已存在文件导入"
-            :model-value="action === 'useExisting'"
-            @update:model-value="action = 'useExisting'"
-          />
-          <AppCheckbox
-            tone="dialog"
-            label="保留两个"
-            :model-value="action === 'copy'"
-            @update:model-value="action = 'copy'"
-          />
-          <AppCheckbox
-            tone="dialog"
-            label="关联文件夹"
-            :model-value="action === 'link'"
-            @update:model-value="action = 'link'"
-          />
-          <Transition name="fade">
-            <input
-              v-if="action === 'link'"
-              v-model="linkName"
-              class="name-input"
-              type="text"
-              placeholder="留空默认"
-            />
-          </Transition>
-          <Transition name="fade">
-            <span v-if="applyAll && action === 'link'" class="seq-label">序号</span>
-          </Transition>
-          <Transition name="fade">
-            <input
-              v-if="applyAll && action === 'link'"
-              v-model="seqStart"
-              class="name-input seq"
-              type="text"
-              inputmode="numeric"
-            />
-          </Transition>
-        </div>
-        <div class="actions">
-          <!-- 全部应用（01_按钮#08 开关按钮 + 文字）：平移动画 -->
-          <button class="apply-all" :class="{ on: applyAll }" @click="applyAll = !applyAll">
-            <span class="switch"><span class="dot" /></span>
-            <span class="apply-text">全部应用 ({{ total }})</span>
-          </button>
-          <button class="btn primary" :disabled="busy" @click="onConfirm">确认导入</button>
-        </div>
-      </footer>
-    </div>
-  </div>
+    </template>
+  </AppModal>
 </template>
 
 <style scoped>
-/* 遮罩（同 SetupWizard）：C1 */
-.dup-mask {
-  position: absolute;
-  inset: 0;
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--c1-80);
+/* 36 稿总容器：970×878，padding 0（标题栏 / 按钮行贴边，区块内边距自控） */
+.dup-dialog :deep(.app-modal) {
+  width: 970px;
+  height: 878px;
+  padding: 0;
+  gap: 0;
 }
-/* 总容器（10）：1052×732 / C3 / 1px border-1（inset，窗口级边框）/ 圆角 8 / --shadow-pop */
-.dup-card {
-  box-sizing: border-box;
-  width: 1052px;
-  height: 732px;
-  display: flex;
-  flex-direction: column;
-  background: var(--c3);
-  box-shadow:
-    var(--shadow-pop),
-    inset 0 0 0 1px var(--border-1);
-  border-radius: var(--radius-8);
-  overflow: hidden;
-}
-/* 标题栏：高 44 / 内边距 8 8 8 16 / 下分割线 border-1（inset，规范禁 border） */
-.dup-titlebar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-16);
-  height: 44px;
+/* 标题栏（36 稿）：54 高 / padding 12 12 12 24 / 下分隔线；标题 = 文字/常态 */
+.dup-dialog :deep(.titlebar) {
+  height: 54px;
+  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
+  box-shadow: inset 0 -1px 0 0 var(--line-hover);
   flex: none;
-  box-shadow: inset 0 -1px 0 0 var(--border-1);
 }
-.dup-title {
-  margin: 0; /* 左对齐（用户验收：模态窗标题不要居中） */
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--font-icon-1);
+.dup-dialog :deep(.title) {
+  color: var(--text-normal);
 }
-/* 图片对照区：内边距 16 / 间距 20 */
-.compare {
+/* 区块展示：吃满剩余高，padding 0 24，内部自滚 */
+.dup-dialog :deep(.content) {
   flex: 1;
   min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  padding: var(--space-32);
+  padding: 0 var(--space-24);
+  gap: 0;
+  overflow: hidden;
 }
-.side {
-  width: 500px;
+/* actions 槽改为竖排容器：重命名输入行 + 底部按钮行 */
+.dup-dialog :deep(.actions) {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  flex: none;
+}
+.dup-body {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--space-8);
+  flex: 1;
+  min-height: 0;
 }
-/* 图片容器：500×500 内图片按比例（最大不超过 500） */
-.img-box {
-  position: relative;
-  width: 500px;
-  height: 500px;
+/* 表头（36 稿）：46 高 / padding 12 0 / gap 24 / 下分隔线 */
+.dup-head {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  gap: var(--space-24);
+  padding: var(--space-12) 0;
+  box-shadow: inset 0 -1px 0 0 var(--line-hover);
+  flex: none;
 }
-.img-box img {
-  max-width: 500px;
-  max-height: 500px;
-  border-radius: var(--radius-8);
-  box-shadow: inset 0 0 0 1px var(--border-1); /* 两侧图片统一带边框 */
-}
-/* 新的文件：图片 30% 透明（用户验收：50% 与已存在拉不开）+ 1px border-1（选"保留两个"后 100%，透明度过渡动画） */
-.new-img {
-  opacity: 0.3;
-  transition: opacity 0.3s ease;
-}
-.new-img.solid {
-  opacity: 1;
-}
-/* 标签提示：内边距 2 4 / 圆角 6 / 图片上居中 */
-.tag {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-6);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-1);
-}
-.tag.exists {
-  background: var(--success);
-}
-.tag.new {
-  background: var(--warning); /* 警告色（用户验收：与已存在成功色区分） */
-}
-.no-img {
+.dup-head .col {
+  flex: 1;
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--font-icon-3);
+  color: var(--text-label);
 }
-.name {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-1);
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.dup-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
-.meta {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-3);
-}
-.folder {
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--font-icon-1);
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* 底栏：高 70 / 内边距 16 / 上分割线 border-1（inset） */
-.dup-footer {
+/* 底部按钮行（36 稿）：62 高 / 上分隔线 / padding 12 12 12 24 */
+.dup-bottom {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-16);
-  padding: var(--space-32);
-  height: 70px;
-  flex: none;
-  box-shadow: inset 0 1px 0 0 var(--border-1);
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
+  height: 62px;
+  box-shadow: inset 0 1px 0 0 var(--line-hover);
 }
-/* 单选项组合：间距 14 */
-.options {
+.bottom-right {
   display: flex;
   align-items: center;
-  gap: var(--space-14);
-  min-width: 0;
+  gap: var(--space-12);
 }
-/* 输入框（03_输入框#01 通用）：高 32 / 内边距 6 8 / C4 底 + 1px border-1 / 圆角 8 */
-.name-input {
-  width: 111px;
-  height: 32px;
-  padding: var(--space-6) var(--space-8);
-  border: none;
-  outline: none;
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-1);
-  border-radius: var(--radius-8);
-  font-family: var(--font-family);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-1);
-}
-.name-input:focus {
-  box-shadow: inset 0 0 0 1px var(--brand-1);
-}
-.name-input.seq {
-  width: 33px;
-  text-align: center;
-  padding: var(--space-6) 0;
-}
-.seq-label {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-1);
-}
-/* 透明度出入动画（关联输入框 / 序号组） */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.25s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-/* 导入按钮组：间距 16 */
-.actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-16);
-  flex: none;
-}
-/* 全部应用：开关按钮 50×28（01_按钮#08）+ 文字；圆点平移动画 */
-.apply-all {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  padding: 0;
-}
-.switch {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  width: 50px;
-  height: 28px;
-  padding: var(--space-4);
-  border-radius: 14px;
-  background: var(--font-icon-5);
-  transition: background 0.2s ease;
-}
-.dot {
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  background: var(--font-icon-1);
-  transition: transform 0.2s ease;
-}
-.apply-all.on .switch {
-  background: var(--brand-1);
-}
-.apply-all.on .dot {
-  transform: translateX(22px);
-}
-.apply-text {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-3);
-}
-.apply-all.on .apply-text {
-  color: var(--font-icon-1);
-}
-/* 确认导入（01_按钮#07 大标题按钮-小按钮 / 主要） */
-.btn {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: var(--space-8) var(--space-16);
-  gap: var(--space-6);
-  height: 38px;
-  border: none;
-  border-radius: var(--radius-6);
-  cursor: pointer;
-  font-family: var(--font-family);
+/* 全部跟随标签（36 稿：标题档 / 文字-常态） */
+.follow-label {
   font-size: var(--text-title-size);
   line-height: var(--text-title-line);
   font-weight: var(--text-title-weight);
-  color: var(--font-icon-1);
+  color: var(--text-normal);
 }
-.btn.primary {
-  background: var(--brand-1);
-}
-.btn.primary:hover {
-  background: var(--brand-2);
-}
-.btn:disabled {
-  cursor: default;
-  opacity: 0.6;
+/* 确认 / 取消 88 定宽（36 稿：88×38） */
+.dup-bottom :deep(.app-btn) {
+  width: 88px;
 }
 </style>

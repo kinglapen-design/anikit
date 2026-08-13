@@ -104,7 +104,7 @@ export interface ConflictResolution {
   existingAssetId: string;
   targetFolder: string;
   action: "useExisting" | "copy" | "link" | "skip";
-  linkName?: string | null;
+  newName?: string | null; // 批量重命名后的导入显示名（copy / link 生效；只影响显示名不动 hash，36 稿）
   sequence?: SequenceSource | null; // 序列帧冲突原样回传（4.1）
   sourceThumbPath?: string | null; // 预览缓存原样回传（决策完成后后端删除，4.2）
 }
