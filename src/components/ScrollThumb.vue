@@ -2,7 +2,7 @@
 // 悬浮滚轮（主窗口统一交互，2026-08-10 用户定案"持久存在视觉噪音"→ 悬停显隐）：
 // 封装 useSideThumb——宿主用法：relative 包裹层内放滚动容器（ref 传入 body）+ 本组件即可；
 // hover 态自管（监听父包裹层 mouseenter/leave），拖拽中锁显；实色 C4 / 悬停 C5，
-// absolute 距右 2px 不占布局（不挤压内容、不挡 inset 边框线）。
+// absolute 贴右（right: 0，与主窗口 side-thumb 统一）不占布局。
 // 纵向滚动区统一走本组件（见 base.css .kit-scroll 注释）；横向滚动区仍原生 6px（.kit-scroll-x）。
 import { onBeforeUnmount, onMounted, ref, toRef } from "vue";
 import { useSideThumb } from "../lib/useSideThumb";
@@ -45,10 +45,10 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* 与主窗口 side-thumb 同款：6px 胶囊 / 实色 C4 常态 C5 悬停（透明色交叉叠加作废，2026-08-10 定案）；
-   距右 2px（悬浮不占布局，避开 inset 边框线与通栏分隔线端点） */
+   贴右（right: 0，2026-08-13 用户定与主窗口统一——实色盖分隔线/边框线一小段可接受，同主窗口外框） */
 .scroll-thumb {
   position: absolute;
-  right: 2px;
+  right: 0;
   width: 6px;
   border-radius: var(--radius-pill);
   background: var(--c4);
