@@ -128,7 +128,7 @@ const entries = computed(() => content.inboxDisk);
           v-for="e in entries"
           :key="e.name"
           class="disk-card"
-          :class="{ selected: content.selectedInboxName === e.name }"
+          :class="{ selected: content.selectedInboxName === e.name, renaming: renaming?.name === e.name }"
           @click="select(e)"
           @contextmenu.prevent.stop="openMenu($event, e)"
         >
@@ -218,16 +218,18 @@ const entries = computed(() => content.inboxDisk);
 .disk-card:hover::after {
   border: 1.5px solid var(--line-card-hover);
 }
-.disk-card.selected::after {
+.disk-card.selected::after,
+.disk-card.renaming::after {
   border: 1.5px solid var(--brand-border);
 }
-/* 图标区（14 稿缩略图区口径）：C2 底 / 圆角上沿 / 正方形（2026-07-25 用户定） */
+/* 图标区（14 稿缩略图区口径）：C2 底 / 圆角上沿；
+   比例按网格视图格子 260×220（2026-08-13 用户定）：简介区恒 57，图标区 260:163 */
 .icon-wrap {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 260 / 163;
   background: var(--c2);
   border-radius: var(--radius-6) var(--radius-6) 0 0;
   overflow: hidden;
@@ -263,11 +265,13 @@ const entries = computed(() => content.inboxDisk);
   line-height: var(--text-caption-line);
   color: var(--warning);
 }
-/* 简介区（14 稿）：C3 / 上分割线（inset 不占位）/ 圆角下沿 / padding 8 8 8 12 / 间距 4 */
+/* 简介区（14 稿）：C3 / 上分割线（inset 不占位）/ 圆角下沿 / padding 8 8 8 12 / 间距 4 / 恒 57 高 */
 .texts {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  height: 57px;
+  box-sizing: border-box;
   padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
   background: var(--c3);
   box-shadow: inset 0 1px 0 0 var(--line-hover);
@@ -290,18 +294,6 @@ const entries = computed(() => content.inboxDisk);
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 行内重命名输入：C4 实底族（与卡片透明底族分两套）；高度 / 字号 / 行高复用 base.css
-   .rename-input 共享基座，此处仅实底族差异——C4 底 / 1px 暗-悬停 / 圆角 6 / 左对齐同名称位；
-   聚焦描边品牌色-边框线 */
-.rename-input {
-  width: 100%;
-  padding: 0 var(--space-6);
-  border-radius: var(--radius-6);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
-  color: var(--text-highlight);
-}
-.rename-input:focus {
-  box-shadow: inset 0 0 0 1px var(--brand-border);
-}
+/* 行内重命名：不额外给输入框（2026-08-13 用户定，同素材卡片透明族）——
+   直接用 base.css .rename-input 共享基座（透明底无描边），整卡 ::after 品牌色边框提示重命名态 */
 </style>
