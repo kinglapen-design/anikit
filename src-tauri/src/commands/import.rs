@@ -127,9 +127,10 @@ pub fn import_paths(
 }
 
 /// 剪贴板导入：先读图片（截图场景 → PNG 落 cache/ 临时文件），无图再读文件列表
-/// （资源管理器 Ctrl+C 的文件，CF_HDROP）；两者皆无报错"剪贴板里没有图片或文件"。
+/// （资源管理器 Ctrl+C 的文件，CF_HDROP），再读 base64 文本（2026-08-14 用户定：
+/// data URI / 裸 base64 解码按魔数定扩展名落临时文件）；三者皆无报错。
 /// 来源恒 Copy（2026-07-27 定：剪贴板复制的文件绝不能 Move 走用户原文件；
-/// 临时 PNG 由工作线程导入结束后清理，Copy 与 Move 等价且更安全）；Flatten + Scatter。
+/// 临时文件由工作线程导入结束后清理，Copy 与 Move 等价且更安全）；Flatten + Scatter。
 #[tauri::command]
 pub fn import_clipboard(
   app: AppHandle,
@@ -144,7 +145,7 @@ pub fn import_clipboard(
   if let Ok(img) = clipboard.get_image() {
     let cache_dir = root.join(CACHE_DIR);
     std::fs::create_dir_all(&cache_dir).map_err(|e| format!("缓存目录创建失败：{e}"))?;
-    let tmp = cache_dir.join(clipboard_png_name(&cache_dir));
+    let tmp = cache_dir.join(clipboard_temp_name(&cache_dir, "png"));
     save_clipboard_png(&img, &tmp)?;
     let opts = ImportOptions {
       structure: Structure::Flatten,
@@ -159,18 +160,43 @@ pub fn import_clipboard(
 
   // 文件列表分支：资源管理器复制的文件 / 文件夹（CF_HDROP）
   let files = clipboard.get().file_list().unwrap_or_default();
-  if files.is_empty() {
-    return Err("剪贴板里没有图片或文件".to_string());
+  if !files.is_empty() {
+    let opts = ImportOptions {
+      structure: Structure::Flatten,
+      source: Source::Copy,
+      target_folder,
+      paths: files,
+      imported_from: None,
+      sequence_mode: SequenceMode::Scatter, // 剪贴板恒分散（4.1 定案）
+    };
+    return Ok(spawn_import(app, root, assets_dir, opts, on_event, None));
   }
-  let opts = ImportOptions {
-    structure: Structure::Flatten,
-    source: Source::Copy,
-    target_folder,
-    paths: files,
-    imported_from: None,
-    sequence_mode: SequenceMode::Scatter, // 剪贴板恒分散（4.1 定案）
-  };
-  Ok(spawn_import(app, root, assets_dir, opts, on_event, None))
+
+  // base64 文本分支：别处复制的文件 base64（data URI / 裸 base64）→ 魔数定扩展名
+  // → 落 cache/ 临时文件走管线（命名与清理同 PNG 分支口径）
+  if let Ok(text) = clipboard.get_text() {
+    match parse_base64_payload(&text) {
+      Ok(Some((ext, bytes))) => {
+        let cache_dir = root.join(CACHE_DIR);
+        std::fs::create_dir_all(&cache_dir).map_err(|e| format!("缓存目录创建失败：{e}"))?;
+        let tmp = cache_dir.join(clipboard_temp_name(&cache_dir, ext));
+        std::fs::write(&tmp, &bytes).map_err(|e| format!("剪贴板文件保存失败：{e}"))?;
+        let opts = ImportOptions {
+          structure: Structure::Flatten,
+          source: Source::Copy,
+          target_folder,
+          paths: vec![tmp.clone()],
+          imported_from: None,
+          sequence_mode: SequenceMode::Scatter, // 单文件，永不打包
+        };
+        return Ok(spawn_import(app, root, assets_dir, opts, on_event, Some(tmp)));
+      }
+      Ok(None) => return Err("剪贴板里没有可导入的内容".to_string()),
+      Err(e) => return Err(e),
+    }
+  }
+
+  Err("剪贴板里没有图片或文件".to_string())
 }
 
 /// 取消导入任务：置位取消标记，工作线程在下一个文件处理前中断（数量如实进 Finished）
@@ -257,13 +283,13 @@ pub(crate) fn spawn_import(
   task_id
 }
 
-/// 剪贴板临时文件名：剪贴板-yyyyMMdd-HHmm.png，重名追加 -序号
-fn clipboard_png_name(cache_dir: &Path) -> String {
+/// 剪贴板临时文件名：剪贴板-yyyyMMdd-HHmm.扩展名，重名追加 -序号
+fn clipboard_temp_name(cache_dir: &Path, ext: &str) -> String {
   let base = format!("剪贴板-{}", chrono::Local::now().format("%Y%m%d-%H%M"));
-  let mut name = format!("{base}.png");
+  let mut name = format!("{base}.{ext}");
   let mut n = 1;
   while cache_dir.join(&name).exists() {
-    name = format!("{base}-{n}.png");
+    name = format!("{base}-{n}.{ext}");
     n += 1;
   }
   name
@@ -274,6 +300,76 @@ fn save_clipboard_png(img: &arboard::ImageData, path: &Path) -> Result<(), Strin
   let rgba = image::RgbaImage::from_raw(img.width as u32, img.height as u32, img.bytes.to_vec())
     .ok_or_else(|| "剪贴板图片数据无效".to_string())?;
   image::DynamicImage::ImageRgba8(rgba).save(path).map_err(|e| format!("剪贴板图片保存失败：{e}"))
+}
+
+/// 剪贴板 base64 单文件上限（512MB）：更大请先存成文件再导入
+const CLIPBOARD_BASE64_MAX: usize = 512 * 1024 * 1024;
+
+/// base64 文本 → (扩展名, 字节)：data URI（去 `data:...;base64,` 头）与裸 base64 都认，
+/// 容忍空白换行；解码后按魔数定扩展名，魔数不在表内一律不认（Ok(None)）——
+/// 普通文本可能是合法 base64 字符集，靠魔数兜底防误判入库
+fn parse_base64_payload(text: &str) -> Result<Option<(&'static str, Vec<u8>)>, String> {
+  use base64::Engine;
+  let t = text.trim();
+  let body = match t.strip_prefix("data:") {
+    Some(rest) => rest.split_once(',').map(|(_, b)| b).unwrap_or(rest),
+    None => t,
+  };
+  let compact: String = body.chars().filter(|c| !c.is_whitespace()).collect();
+  if compact.len() < 16 {
+    return Ok(None);
+  }
+  let bytes = base64::engine::general_purpose::STANDARD
+    .decode(&compact)
+    .or_else(|_| base64::engine::general_purpose::STANDARD_NO_PAD.decode(&compact))
+    .ok()
+    .filter(|b| !b.is_empty());
+  let Some(bytes) = bytes else { return Ok(None) };
+  if bytes.len() > CLIPBOARD_BASE64_MAX {
+    return Err("base64 内容超过 512MB，请先存成文件再导入".to_string());
+  }
+  Ok(sniff_ext(&bytes).map(|ext| (ext, bytes)))
+}
+
+/// 文件魔数 → 扩展名（剪贴板 base64 落盘定名用；只收白名单内魔数可靠的格式）
+fn sniff_ext(b: &[u8]) -> Option<&'static str> {
+  if b.starts_with(b"8BPS") {
+    return Some("psd");
+  }
+  if b.starts_with(b"8BPB") {
+    return Some("psb");
+  }
+  if b.starts_with(b"\x89PNG\r\n\x1a\n") {
+    return Some("png");
+  }
+  if b.starts_with(b"\xff\xd8\xff") {
+    return Some("jpg");
+  }
+  if b.starts_with(b"GIF87a") || b.starts_with(b"GIF89a") {
+    return Some("gif");
+  }
+  if b.starts_with(b"BM") {
+    return Some("bmp");
+  }
+  if b.len() >= 12 && b.starts_with(b"RIFF") && &b[8..12] == b"WEBP" {
+    return Some("webp");
+  }
+  if b.len() >= 12 && b.starts_with(b"RIFF") && &b[8..12] == b"WAVE" {
+    return Some("wav");
+  }
+  if b.len() >= 12 && &b[4..8] == b"ftyp" {
+    // QuickTime 品牌给 mov，其余品牌（isom / avc1 / M4V 等）统一 mp4
+    return Some(if &b[8..12] == b"qt  " { "mov" } else { "mp4" });
+  }
+  if b.starts_with(b"ID3") || (b.len() >= 2 && b[0] == 0xff && b[1] & 0xe0 == 0xe0) {
+    return Some("mp3");
+  }
+  // SVG 是文本格式：开头即 <svg，或 XML 声明后前 256 字节内出现 <svg
+  let head = &b[..b.len().min(256)];
+  if head.starts_with(b"<svg") || (head.starts_with(b"<?xml") && head.windows(4).any(|w| w == b"<svg")) {
+    return Some("svg");
+  }
+  None
 }
 
 fn parse_structure(s: &str) -> Result<Structure, String> {
@@ -523,12 +619,67 @@ mod tests {
   }
 
   #[test]
-  fn clipboard_png_name_dedupes_with_counter() {
+  fn clipboard_temp_name_dedupes_with_counter() {
     let dir = tempfile::tempdir().unwrap();
-    let first = clipboard_png_name(dir.path());
+    let first = clipboard_temp_name(dir.path(), "png");
     std::fs::write(dir.path().join(&first), "x").unwrap();
-    let second = clipboard_png_name(dir.path());
+    let second = clipboard_temp_name(dir.path(), "png");
     assert_ne!(first, second);
     assert!(second.ends_with("-1.png"));
+    // 扩展名透传（base64 分支按魔数定名）
+    assert!(clipboard_temp_name(dir.path(), "psd").ends_with(".psd"));
+  }
+
+  #[test]
+  fn base64_payload_psd_magic() {
+    use base64::Engine;
+    let raw = b"8BPS\x00\x01\x00\x00\x00\x00\x00\x00 fake psd bytes".to_vec();
+    let text = base64::engine::general_purpose::STANDARD.encode(&raw);
+    let (ext, bytes) = parse_base64_payload(&text).unwrap().unwrap();
+    assert_eq!(ext, "psd");
+    assert_eq!(bytes, raw);
+  }
+
+  #[test]
+  fn base64_payload_data_uri_and_whitespace() {
+    use base64::Engine;
+    // data URI 前缀 + 换行折叠都认
+    let raw = b"\x89PNG\r\n\x1a\n\x00\x00 fake png".to_vec();
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&raw);
+    let text = format!("data:image/png;base64,{}", &b64[..b64.len() / 2]) + "\n" + &b64[b64.len() / 2..];
+    let (ext, bytes) = parse_base64_payload(&text).unwrap().unwrap();
+    assert_eq!(ext, "png");
+    assert_eq!(bytes, raw);
+  }
+
+  #[test]
+  fn base64_payload_rejects_plain_text() {
+    // 普通文本（含非法字符）→ 不认
+    assert!(parse_base64_payload("hello world, 这不是 base64").unwrap().is_none());
+  }
+
+  #[test]
+  fn base64_payload_rejects_unknown_magic() {
+    use base64::Engine;
+    // 合法 base64 但魔数不在表内 → 不认（防普通文本解码出垃圾入库）
+    let b64 = base64::engine::general_purpose::STANDARD.encode(b"just some random text bytes!!");
+    assert!(parse_base64_payload(&b64).unwrap().is_none());
+  }
+
+  #[test]
+  fn sniff_ext_covers_whitelist_magics() {
+    assert_eq!(sniff_ext(b"8BPS\x00\x01...."), Some("psd"));
+    assert_eq!(sniff_ext(b"8BPB\x00\x02...."), Some("psb"));
+    assert_eq!(sniff_ext(b"\xff\xd8\xff\xe0...."), Some("jpg"));
+    assert_eq!(sniff_ext(b"GIF89a...."), Some("gif"));
+    assert_eq!(sniff_ext(b"BMxxxx...."), Some("bmp"));
+    assert_eq!(sniff_ext(b"RIFF....WEBP"), Some("webp"));
+    assert_eq!(sniff_ext(b"RIFF....WAVE"), Some("wav"));
+    assert_eq!(sniff_ext(b"\x00\x00\x00\x18ftypqt  "), Some("mov"));
+    assert_eq!(sniff_ext(b"\x00\x00\x00\x18ftypisom"), Some("mp4"));
+    assert_eq!(sniff_ext(b"ID3\x04\x00\x00\x00"), Some("mp3"));
+    assert_eq!(sniff_ext(b"<svg xmlns=\"http://www.w3.org/2000/svg\">"), Some("svg"));
+    assert_eq!(sniff_ext(b"<?xml version=\"1.0\"?>\n<svg></svg>"), Some("svg"));
+    assert_eq!(sniff_ext(b"not a known format"), None);
   }
 }
