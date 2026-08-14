@@ -453,12 +453,43 @@ pub(crate) fn add_placement(
   origin: bool,
   front_anchor: &mut HashMap<String, usize>,
 ) -> Placement {
-  let existing: HashSet<String> = lib
-    .index
-    .placements_by_folder
-    .get(&folder_id)
-    .map(|v| v.iter().map(|p| p.name.clone()).collect())
-    .unwrap_or_default();
+  add_placement_impl(lib, asset_id, folder_id, name, origin, front_anchor, true)
+}
+
+/// 同 add_placement 但**不做同名单一化**（2026-08-14 用户定：冲突"保留两个"允许同名——
+/// 库本就允许同名文件存在，自动加序号删除，要什么名字用户自己改）
+pub(crate) fn add_placement_keep_name(
+  lib: &mut Library,
+  asset_id: String,
+  folder_id: String,
+  name: String,
+  origin: bool,
+  front_anchor: &mut HashMap<String, usize>,
+) -> Placement {
+  add_placement_impl(lib, asset_id, folder_id, name, origin, front_anchor, false)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn add_placement_impl(
+  lib: &mut Library,
+  asset_id: String,
+  folder_id: String,
+  name: String,
+  origin: bool,
+  front_anchor: &mut HashMap<String, usize>,
+  unique: bool,
+) -> Placement {
+  let display = if unique {
+    let existing: HashSet<String> = lib
+      .index
+      .placements_by_folder
+      .get(&folder_id)
+      .map(|v| v.iter().map(|p| p.name.clone()).collect())
+      .unwrap_or_default();
+    library::unique_name(&existing, &name)
+  } else {
+    name
+  };
   let batch = front_anchor.entry(folder_id.clone()).or_insert(0);
   let order = lib
     .index
@@ -467,8 +498,7 @@ pub(crate) fn add_placement(
     .and_then(|v| v.first())
     .map(|f| f.order - 1)
     .unwrap_or(0);
-  let placement =
-    Placement { asset: asset_id, folder: folder_id.clone(), name: library::unique_name(&existing, &name), order, origin };
+  let placement = Placement { asset: asset_id, folder: folder_id.clone(), name: display, order, origin };
   // items 前插：该文件夹段首 + 本批已插数（无同文件夹项时追加末尾）
   let pos = lib
     .folders

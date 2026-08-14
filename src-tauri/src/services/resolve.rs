@@ -190,7 +190,7 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
         source,
         item.imported_from.as_deref(), // 继承批次渠道标记（2026-08-13）
       )?;
-      ops::add_placement(lib, asset.id.clone(), item.target_folder.clone(), format!("{stem}.{}", seq.ext), true, &mut HashMap::new());
+      ops::add_placement_keep_name(lib, asset.id.clone(), item.target_folder.clone(), format!("{stem}.{}", seq.ext), true, &mut HashMap::new());
       lib.index.assets.insert(asset.id.clone(), asset);
       Ok(())
     }
@@ -208,7 +208,8 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
           lib.format_icons.insert(asset.ext.clone());
         }
       }
-      ops::add_placement(lib, asset.id.clone(), item.target_folder.clone(), name, true, &mut HashMap::new());
+      // "保留两个"允许同名（2026-08-14 用户定：不自动加序号，要改名用户自己改）
+      ops::add_placement_keep_name(lib, asset.id.clone(), item.target_folder.clone(), name, true, &mut HashMap::new());
       lib.index.assets.insert(asset.id.clone(), asset);
       Ok(())
     }
@@ -369,6 +370,29 @@ mod tests {
     assert!(conflict.source_path.exists());
     // 索引反查同步
     assert_eq!(with_lib(&h, |l| l.index.placements_by_folder["F01"].len()), 1);
+  }
+
+  #[test]
+  fn copy_action_keeps_same_name_without_counter() {
+    let h = make_lib();
+    // 同名冲突（不同目录、同名同内容）：库内已有"场景.png"（root），再导入同名文件 → 冲突
+    let d1 = h._dir.path().join("d1");
+    let d2 = h._dir.path().join("d2");
+    std::fs::create_dir_all(&d1).unwrap();
+    std::fs::create_dir_all(&d2).unwrap();
+    std::fs::write(d1.join("场景.png"), "同内容").unwrap();
+    std::fs::write(d2.join("场景.png"), "同内容").unwrap();
+    assert_eq!(import(&h, vec![d1.join("场景.png")], None).imported, 1);
+    let outcome = import(&h, vec![d2.join("场景.png")], None);
+    assert_eq!(outcome.conflicts.len(), 1);
+    let c = outcome.conflicts[0].clone();
+
+    let report = resolve(&h, vec![to_resolution(&c, ResolveAction::Copy)], Source::Copy);
+    assert_eq!((report.resolved, report.failed.len()), (1, 0));
+    let names: Vec<String> = with_lib(&h, |l| {
+      l.folders.items.iter().filter(|p| p.folder == ROOT_FOLDER_ID).map(|p| p.name.clone()).collect()
+    });
+    assert_eq!(names.iter().filter(|n| n.as_str() == "场景.png").count(), 2, "保留两个不自动加序号（2026-08-14 用户定）");
   }
 
   #[test]
@@ -565,7 +589,7 @@ mod tests {
     for n in 1..=3 {
       assert!(frames_dir.join(format!("走路-{n}.png")).is_file());
     }
-    assert_eq!(placements_of(&h, &new_meta.id)[0].name, "走路-1.png", "同文件夹显示名唯一化（原标题已占用）");
+    assert_eq!(placements_of(&h, &new_meta.id)[0].name, "走路.png", "保留两个不自动加序号——同名允许（2026-08-14 用户定）");
     // 源帧保留（继承 copy）
     assert!(paths.iter().all(|p| p.exists()));
   }
