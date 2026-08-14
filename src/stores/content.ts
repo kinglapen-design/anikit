@@ -215,6 +215,13 @@ export const useContentStore = defineStore("content", {
     selectedInboxName: "",
     // 原导入的来源模式（冲突"保留两个"决策继承；剪贴板导入恒 move）
     lastImportSource: "copy" as "copy" | "move",
+    // 原导入的完整参数（导入失败弹窗"重试"按原参数重投失败项，2026-08-14 用户定）；
+    // 仅 startImport 记录（剪贴板 / 收件箱手动导入不记，重试回退 keep + scatter + 当前目录）
+    lastImportParams: null as {
+      structure: "flatten" | "keep";
+      sequenceMode: "pack" | "scatter";
+      targetFolder: string | null;
+    } | null,
   }),
   getters: {
     // 素材卡片选中键（6.1 多选改造，2026-07-28 用户定案）：转发 selection store 首项——
@@ -422,6 +429,7 @@ export const useContentStore = defineStore("content", {
       sequenceMode: "pack" | "scatter",
     ): Promise<void> {
       this.lastImportSource = source;
+      this.lastImportParams = { structure, sequenceMode, targetFolder: draft.targetFolder };
       this.importProgress = { taskId: null, total: 0, done: 0, startedAt: Date.now() };
       const onEvent = new Channel<ImportEvent>();
       onEvent.onmessage = (e) => this.onImportEvent(e);
@@ -504,6 +512,22 @@ export const useContentStore = defineStore("content", {
       items: ConflictResolution[],
     ): Promise<{ resolved: number; failed: FailedItem[] }> {
       return await invoke("resolve_conflicts", { items, source: this.lastImportSource });
+    },
+
+    // 重试导入失败项（失败弹窗主按钮，2026-08-14 用户定）：按原导入参数重投失败路径；
+    // 失败清单也可能来自冲突决策（DuplicateDialog），重投后撞 hash 会再走重复提示，语义自洽。
+    // 无有效路径 = 纯关闭；剪贴板 / 收件箱渠道未记参数，回退 keep + scatter + 当前目录
+    retryFailedImport(): void {
+      const paths = (this.importFailed ?? []).map((f) => f.path).filter((p) => p.length > 0);
+      this.importFailed = null;
+      if (paths.length === 0) return;
+      const params = this.lastImportParams ?? { structure: "keep" as const, sequenceMode: "scatter" as const, targetFolder: null };
+      void this.startImport(
+        { kind: "files", paths, targetFolder: params.targetFolder },
+        params.structure,
+        this.lastImportSource,
+        params.sequenceMode,
+      );
     },
 
     // 收件箱后台导入（PRD 05-01，3.2）：后端监听 inbox 目录自动入库，

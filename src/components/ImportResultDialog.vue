@@ -1,116 +1,62 @@
 <script setup lang="ts">
-// 导入结果弹窗：后台导入任务结束后，有失败项时列出清单（不吞错误，规范第 6 条）。
-// 壳与零件沿用 09 导入弹窗（C3 / padding 16 / gap 16 / --shadow-pop）。
-import type { FailedItem } from "../stores/content";
+// 导入失败弹窗（2026-08-14 用户定，替掉旧手写壳）：AppModal alert 错误模板
+// （48 error 徽章 + 侵入式提示音，figma 09），描述 = 失败文件名依次竖排、间距 8；
+// 主按钮"重试"（按原导入参数重投失败项，content.retryFailedImport）/ 次按钮"退出"（主左次右）。
+// 旧"文件名 —— 原因"双段废除（用户定：描述只写文件名）；path 缺失项回退显示原因防空行。
+import { ref } from "vue";
+import AppModal from "./AppModal.vue";
+import AppButton from "./AppButton.vue";
+import ScrollThumb from "./ScrollThumb.vue";
+import { useContentStore, type FailedItem } from "../stores/content";
 
 defineProps<{ failed: FailedItem[] }>();
 const emit = defineEmits<{ close: [] }>();
+const content = useContentStore();
 
 function fileName(p: string): string {
   return p.split(/[\\/]/).pop() ?? p;
 }
+
+function retry(): void {
+  content.retryFailedImport();
+  emit("close");
+}
+
+// 悬浮滚轮容器锚点（ScrollThumb：滚动容器须为包裹层直接子元素）
+const listEl = ref<HTMLElement>();
 </script>
 
 <template>
-  <div class="result-mask">
-    <div class="result-card">
-      <h2 class="title">导入未完成</h2>
-      <p class="tip">{{ failed.length }} 个未导入：</p>
-      <div class="fail-list">
-        <p v-for="(f, i) in failed" :key="i" class="fail-item">
-          <template v-if="f.path">{{ fileName(f.path) }} —— </template>{{ f.reason }}
-        </p>
+  <AppModal variant="alert" alert-icon="error" title="导入未完成" @close="emit('close')">
+    <div class="scroll-wrap">
+      <div ref="listEl" class="fail-list kit-scroll">
+        <p v-for="(f, i) in failed" :key="i" class="fail-item">{{ f.path ? fileName(f.path) : f.reason }}</p>
       </div>
-      <div class="actions">
-        <button class="btn primary" @click="emit('close')">知道了</button>
-      </div>
+      <ScrollThumb :body="listEl" />
     </div>
-  </div>
+    <template #actions>
+      <AppButton variant="primary" label="重试" @click="retry" />
+      <AppButton variant="panel" label="退出" @click="emit('close')" />
+    </template>
+  </AppModal>
 </template>
 
 <style scoped>
-/* 遮罩：与 SetupWizard 一致（C1） */
-.result-mask {
-  position: absolute;
-  inset: 0;
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--c1-80);
+/* 滚动包裹层：relative 锚 ScrollThumb（悬浮滚轮悬停显隐，主窗口统一交互）；
+   限宽 372（同 AppConfirm 正文口径），长文件名换行 */
+.scroll-wrap {
+  position: relative;
+  max-width: 372px;
 }
-/* 总容器（08_二级窗口通用规则）：宽度随最宽子项、上限 368，失败清单长文本换行 */
-.result-card {
-  box-sizing: border-box;
-  width: fit-content;
-  max-width: 368px;
-  min-width: 320px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: var(--space-32);
-  gap: var(--space-16);
-  background: var(--c3);
-  box-shadow:
-    var(--shadow-pop),
-    inset 0 0 0 1px var(--border-1);
-  border-radius: var(--radius-8);
-}
-.title {
-  margin: 0;
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--font-icon-1);
-}
-.tip {
-  margin: 0;
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
-}
-/* 失败清单：副文本 font-icon-3，超高滚动 */
+/* 失败清单：文件名竖排间距 8（用户定）；超高自滚（上限 = 旧弹窗 160 沿用） */
 .fail-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  width: 100%;
+  gap: var(--space-8);
   max-height: 160px;
-  overflow-y: auto;
 }
 .fail-item {
   margin: 0;
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
   word-break: break-all;
-}
-.actions {
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-end; /* 08 通用规则：按钮组右对齐 */
-  gap: var(--space-16);
-  width: 100%;
-}
-.btn {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: var(--space-8) var(--space-16); /* 01_按钮#07 修订：宽度按标题自适应 */
-  height: 38px;
-  border: none;
-  border-radius: var(--radius-6);
-  cursor: pointer;
-  font-family: var(--font-family);
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--font-icon-1);
-}
-.btn.primary {
-  background: var(--brand-1);
-}
-.btn.primary:hover {
-  background: var(--brand-2);
 }
 </style>
