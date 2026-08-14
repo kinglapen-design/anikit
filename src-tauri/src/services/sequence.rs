@@ -142,6 +142,79 @@ pub fn frame_name(name: &str, number: u32, num_width: usize, ext: &str) -> Strin
   format!("{name}-{number:0>num_width$}.{ext}")
 }
 
+/// 序列帧资产判定（导出 / 重命名共用）：origin 不在 info 根（指向 frames/ 内帧），frames/ 目录存在。
+/// 动图解包同写 frames/，但其 origin 在 info 根是实体文件 → 不误判
+pub(crate) fn frames_dir_if_sequence(assets_dir: &Path, asset_id: &str, meta: &AssetMeta) -> Option<PathBuf> {
+  if paths::info_dir(assets_dir, asset_id).join(&meta.origin_name).is_file() {
+    return None;
+  }
+  let dir = paths::frames_dir(assets_dir, asset_id);
+  if dir.is_dir() { Some(dir) } else { None }
+}
+
+/// 序列帧整组改词干（rename_origin 序列帧分支，2026-08-14 用户定：序列帧重命名帧文件跟着改）：
+/// frames/ 内帧按"新词干-序号"改名（保留序号尾与扩展名），thumb_frame / origin_name / name 同步；
+/// 磁盘改名成对入 renames（撤销登记用）。重取词干靠"末尾 -序号"解析，不依赖旧词干匹配——
+/// 历史遗留（此功能前改名只改了 metadata）的脱钩状态也能归位，originName 无帧匹配时回退指到封面帧
+pub(crate) fn rename_frames(
+  frames_dir: &Path,
+  meta: &mut AssetMeta,
+  new_name: &str,
+  renames: &mut Vec<(PathBuf, PathBuf)>,
+) -> Result<(), String> {
+  let new_stem = Path::new(new_name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+  if new_stem.is_empty() {
+    return Ok(());
+  }
+  let old_origin = meta.origin_name.clone();
+  let old_thumb_frame = meta.thumb_frame.clone();
+  let mut names: Vec<String> = fs::read_dir(frames_dir)
+    .map_err(|e| format!("帧目录读取失败：{e}"))?
+    .flatten()
+    .filter(|e| e.path().is_file())
+    .map(|e| e.file_name().to_string_lossy().into_owned())
+    .collect();
+  names.sort(); // 确定性顺序（撤销按序成对反转）
+  let mut origin_matched = false;
+  for fname in names {
+    let Some(new_fname) = restem_frame(&fname, &new_stem) else { continue };
+    if new_fname == fname {
+      origin_matched = origin_matched || fname == old_origin;
+      continue;
+    }
+    let old = frames_dir.join(&fname);
+    let new = frames_dir.join(&new_fname);
+    fs::rename(&old, &new).map_err(|e| format!("帧文件改名失败：{e}"))?;
+    renames.push((old, new));
+    if fname == old_origin {
+      meta.origin_name = new_fname.clone();
+      origin_matched = true;
+    }
+    if old_thumb_frame.as_deref() == Some(fname.as_str()) {
+      meta.thumb_frame = Some(new_fname);
+    }
+  }
+  if !origin_matched {
+    // 旧 originName 已与帧脱钩（2026-08-14 前改名遗留）：回退指到封面帧
+    if let Some(tf) = meta.thumb_frame.clone() {
+      meta.origin_name = tf;
+    }
+  }
+  meta.name = new_stem;
+  Ok(())
+}
+
+/// 帧文件改词干：`{词干}-{序号}.{扩展名}` → 保留序号尾与扩展名换词干；不合帧格式返回 None
+fn restem_frame(file_name: &str, new_stem: &str) -> Option<String> {
+  let (stem, ext) = file_name.rsplit_once('.')?;
+  let dash = stem.rfind('-')?;
+  let digits = &stem[dash + 1..];
+  if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+    return None;
+  }
+  Some(format!("{new_stem}-{digits}.{ext}"))
+}
+
 /// 序列帧打包建档（锁外重活，与 build_asset_with_id 同纪律）：建 `{ID}.info/frames/` →
 /// 逐帧入库并归一重命名 → 首帧探测宽高 → 首帧生成缩略图（复用图片管线）→ 写 metadata.json。
 /// 路径全由新 ID 推导，不依赖共享状态。

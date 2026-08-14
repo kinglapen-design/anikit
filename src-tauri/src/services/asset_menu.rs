@@ -142,13 +142,9 @@ pub enum ExportEvent {
 
 /// 序列帧判定：origin 指向 frames/ 内帧（info 根无该实体），整组帧在 frames/ 目录。
 /// 动图解包同样写 frames/，但其 origin 在 info 根是实体文件 → 不误判。
-/// （rename_origin 对序列帧只改 metadata 不改帧文件名，origin_name 可能已不与任何帧同名，故按"根无实体"判）
+/// （rename_origin 2026-08-14 前对序列帧只改 metadata 不改帧名，存量 origin_name 可能已与所有帧脱钩，故按"根无实体"判）
 fn sequence_frames(src: &ExportSource, asset_id: &str, meta: &AssetMeta) -> Option<PathBuf> {
-  if paths::info_dir(&src.assets_dir, asset_id).join(&meta.origin_name).is_file() {
-    return None;
-  }
-  let dir = paths::frames_dir(&src.assets_dir, asset_id);
-  if dir.is_dir() { Some(dir) } else { None }
+  crate::services::sequence::frames_dir_if_sequence(&src.assets_dir, asset_id, meta)
 }
 
 /// 序列帧整组导出：目标目录下建 `{folder_name}/` 文件夹（重名 -序号），frames/ 内全部帧拷入

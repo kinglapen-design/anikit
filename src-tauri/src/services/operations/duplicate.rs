@@ -77,7 +77,14 @@ fn duplicate_one(
   let meta_path = new_info.join("metadata.json");
   let mut meta: AssetMeta = read_json(&meta_path).map_err(|e| e.to_string())?;
   meta.id = new_id.clone();
-  meta.name = custom.map(stem_of).unwrap_or_else(|| stem_of(&meta.origin_name));
+  // 序列帧 originName 是帧名（"走路-1.png"），词干当资产名会带出 "-1"——副本沿用源资产名（2026-08-14）
+  meta.name = custom.map(stem_of).unwrap_or_else(|| {
+    if crate::services::sequence::frames_dir_if_sequence(&lib.assets_dir, &item.asset_id, &meta).is_some() {
+      meta.name.clone()
+    } else {
+      stem_of(&meta.origin_name)
+    }
+  });
   let stamp = now();
   meta.imported_at = stamp.clone();
   meta.modified_at = stamp;
@@ -148,8 +155,14 @@ pub fn rename_placement(
     lib.index.rebuild_placements(&lib.folders.items);
     if let Some(meta) = old_meta {
       if origin {
-        // 磁盘改名尽力改回（含 metadata 复原）
-        if let Err(re) = ops::rename_origin(&lib.assets_dir, asset_id, &meta.origin_name) {
+        // 磁盘改名尽力改回（含 metadata 复原）；
+        // 序列帧 originName 是帧名（非改名输入口径），回滚名用 词干.扩展名（2026-08-14）
+        let rollback_name = if crate::services::sequence::frames_dir_if_sequence(&lib.assets_dir, asset_id, &meta).is_some() {
+          format!("{}.{}", meta.name, meta.ext)
+        } else {
+          meta.origin_name.clone()
+        };
+        if let Err(re) = ops::rename_origin(&lib.assets_dir, asset_id, &rollback_name) {
           log::error!("重命名落盘失败后磁盘回滚失败：{re}");
         }
       }
@@ -334,5 +347,84 @@ mod tests {
     rename_placement(&mut h.lib, "AN-B", "root", true, "原图.png").unwrap();
     let b = h.lib.folders.items.iter().find(|p| p.asset == "AN-B").unwrap();
     assert_eq!(b.name, "原图-1.png", "显示名同文件夹唯一化");
+  }
+
+  /// 序列帧资产入库（3 帧 png 打包 frames/ + origin Placement 到 root）
+  fn add_sequence(h: &mut Harness, id: &str, name: &str) {
+    let src_dir = h.dir.path().join(format!("{id}-源"));
+    fs::create_dir_all(&src_dir).unwrap();
+    let mut frames = Vec::new();
+    for n in 1..=3u32 {
+      let p = src_dir.join(format!("{name}{n}.png"));
+      image::RgbaImage::from_pixel(4, 4, image::Rgba([0, 0, 0, 255])).save(&p).unwrap();
+      frames.push((p, n));
+    }
+    let meta =
+      crate::services::sequence::build_sequence_asset(&h.lib.assets_dir, name, "png", 1, &frames, "sha256:seq", id, Source::Copy, None)
+        .unwrap();
+    h.lib.index.assets.insert(id.into(), meta);
+    ops::add_placement(&mut h.lib, id.into(), "root".into(), format!("{name}.png"), true, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+  }
+
+  #[test]
+  fn rename_sequence_origin_renames_frames() {
+    let mut h = make_lib();
+    add_sequence(&mut h, "AN-S", "走路");
+    let frames_dir = crate::core::paths::frames_dir(&h.lib.assets_dir, "AN-S");
+    assert!(h.lib.info_dir("AN-S").join("走路_thumbnail.webp").is_file());
+
+    let renames = rename_placement(&mut h.lib, "AN-S", "root", true, "跑步").unwrap();
+    for f in ["跑步-1.png", "跑步-2.png", "跑步-3.png"] {
+      assert!(frames_dir.join(f).is_file(), "{f} 应改词干");
+    }
+    assert!(!frames_dir.join("走路-1.png").exists(), "旧词干帧已改");
+    let meta = &h.lib.index.assets["AN-S"];
+    assert_eq!(meta.name, "跑步");
+    assert_eq!(meta.origin_name, "跑步-1.png", "originName 跟随封面帧");
+    assert_eq!(meta.thumb_frame.as_deref(), Some("跑步-1.png"));
+    assert_eq!(meta.thumbnail.as_deref(), Some("跑步_thumbnail.webp"), "词干缩略图同步");
+    assert!(h.lib.info_dir("AN-S").join("跑步_thumbnail.webp").is_file());
+    assert_eq!(renames.len(), 4, "3 帧 + 缩略图四对磁盘改名");
+    let disk: AssetMeta = read_json(&h.lib.info_dir("AN-S").join("metadata.json")).unwrap();
+    assert_eq!(disk.origin_name, "跑步-1.png", "metadata.json 落盘");
+
+    // 二次改名：重取词干靠序号尾解析，不依赖旧词干匹配
+    rename_placement(&mut h.lib, "AN-S", "root", true, "跳跃").unwrap();
+    assert!(frames_dir.join("跳跃-2.png").is_file());
+    assert_eq!(h.lib.index.assets["AN-S"].thumb_frame.as_deref(), Some("跳跃-1.png"));
+    assert_eq!(h.lib.index.assets["AN-S"].origin_name, "跳跃-1.png");
+  }
+
+  #[test]
+  fn rename_anim_origin_keeps_unpacked_frames() {
+    // 动图解包 frames/ 不是序列帧：origin 正常改名、解包帧目录不动
+    let mut h = make_lib();
+    let src = h.dir.path().join("动图.gif");
+    fs::write(&src, b"fake").unwrap();
+    let pf = PendingFile { path: src, chain: Vec::new() };
+    let meta = ops::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:g", "AN-G", Source::Copy, None).unwrap();
+    h.lib.index.assets.insert("AN-G".into(), meta);
+    ops::add_placement(&mut h.lib, "AN-G".into(), "root".into(), "动图.gif".into(), true, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+    let unpack = crate::core::paths::frames_dir(&h.lib.assets_dir, "AN-G");
+    fs::create_dir_all(&unpack).unwrap();
+    fs::write(unpack.join("动图-00001.webp"), b"f").unwrap();
+
+    rename_placement(&mut h.lib, "AN-G", "root", true, "新动图").unwrap();
+    assert!(h.lib.info_dir("AN-G").join("新动图.gif").is_file(), "origin 正常改名");
+    assert_eq!(h.lib.index.assets["AN-G"].origin_name, "新动图.gif");
+    assert!(unpack.join("动图-00001.webp").is_file(), "解包帧目录不动");
+  }
+
+  #[test]
+  fn duplicate_sequence_keeps_asset_name() {
+    let mut h = make_lib();
+    add_sequence(&mut h, "AN-S", "走路");
+    let out = duplicate_placements(&mut h.lib, &[pref("AN-S", "root", true)], "root", &[None]).unwrap();
+    let new_id = &out.new_ids[0];
+    assert_eq!(h.lib.index.assets[new_id].name, "走路", "序列帧副本名不取 originName 词干");
+    let new_frames = crate::core::paths::frames_dir(&h.lib.assets_dir, new_id);
+    assert!(new_frames.join("走路-1.png").is_file(), "帧目录整体复制");
   }
 }

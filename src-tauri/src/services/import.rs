@@ -283,7 +283,9 @@ pub(crate) fn build_asset_with_id(
 
 /// 改名原语（6.1 rename_placement 用，operations/duplicate.rs）：磁盘 originName 与
 /// 词干缩略图（{stem}_thumbnail.webp/png）同步改名，metadata 更新（originName / name /
-/// thumbnail / modifiedAt）并写盘。全部在锁外执行（单资源单文件）；
+/// thumbnail / modifiedAt）并写盘。**序列帧资产**：origin 是 frames/ 内封面帧（根无实体），
+/// 改走 sequence::rename_frames 整组帧文件改词干（thumb_frame / origin_name 同步）。
+/// 全部在锁外执行（单资源单文件）；
 /// 调用方负责锁内索引同步与撤销登记（renames 成对反转即 DiskOp::Rename）。
 pub(crate) struct OriginRename {
   pub meta: AssetMeta,
@@ -295,30 +297,32 @@ pub(crate) fn rename_origin(assets_dir: &Path, asset_id: &str, new_name: &str) -
   let info_dir = paths::info_dir(assets_dir, asset_id);
   let meta_path = info_dir.join("metadata.json");
   let mut meta: AssetMeta = read_json(&meta_path).map_err(|e| e.to_string())?;
-  let renamed = meta.origin_name != new_name;
   let mut renames = Vec::new();
-  if renamed {
+  if let Some(frames_dir) = crate::services::sequence::frames_dir_if_sequence(assets_dir, asset_id, &meta) {
+    // 序列帧：origin 是 frames/ 内封面帧（info 根无实体），整组帧文件同步改词干
+    crate::services::sequence::rename_frames(&frames_dir, &mut meta, new_name, &mut renames)?;
+  } else if meta.origin_name != new_name {
     let old_origin = info_dir.join(&meta.origin_name);
     let new_origin = info_dir.join(new_name);
     if old_origin.exists() {
       fs::rename(&old_origin, &new_origin).map_err(|e| format!("文件改名失败：{e}"))?;
       renames.push((old_origin, new_origin));
     }
-    // 词干缩略图同步改名并重新登记
-    if let Some(thumb) = meta.thumbnail.clone() {
-      let old_thumb = info_dir.join(&thumb);
-      if old_thumb.exists() {
-        let ext = Path::new(&thumb).extension().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "webp".into());
-        let stem = Path::new(new_name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-        let new_thumb = format!("{stem}_thumbnail.{ext}");
-        let new_thumb_path = info_dir.join(&new_thumb);
-        fs::rename(&old_thumb, &new_thumb_path).map_err(|e| format!("缩略图改名失败：{e}"))?;
-        renames.push((old_thumb, new_thumb_path));
-        meta.thumbnail = Some(new_thumb);
-      }
-    }
     meta.origin_name = new_name.to_string();
     meta.name = Path::new(new_name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+  }
+  // 词干缩略图同步改名并重新登记（普通 / 序列帧共用；新旧同名自动跳过）
+  if let Some(thumb) = meta.thumbnail.clone() {
+    let stem = Path::new(new_name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let ext = Path::new(&thumb).extension().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "webp".into());
+    let new_thumb = format!("{stem}_thumbnail.{ext}");
+    let old_thumb = info_dir.join(&thumb);
+    if thumb != new_thumb && old_thumb.exists() {
+      let new_thumb_path = info_dir.join(&new_thumb);
+      fs::rename(&old_thumb, &new_thumb_path).map_err(|e| format!("缩略图改名失败：{e}"))?;
+      renames.push((old_thumb, new_thumb_path));
+      meta.thumbnail = Some(new_thumb);
+    }
   }
   meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
   write_json(&meta_path, &meta).map_err(|e| e.to_string())?;
