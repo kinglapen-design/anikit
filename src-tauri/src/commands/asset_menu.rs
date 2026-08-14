@@ -13,27 +13,26 @@ use crate::adapters::shell_open;
 use crate::commands::import::NEXT_TASK_ID;
 use crate::commands::library::AppState;
 use crate::commands::operations::fail;
-use crate::commands::preview::locate_asset;
 use crate::core::library::FOLDERS_FILE;
 use crate::services::{asset_menu, purge};
 use crate::services::purge::DeleteFolderReport;
 use crate::services::recycle::DeleteRecycleReport;
 
-/// 其他应用打开（系统"打开方式"对话框）
+/// 其他应用打开（系统"打开方式"对话框）；序列帧 = frames/ 封面帧（real_origin_file 特判）
 #[tauri::command]
 pub async fn open_with_dialog(state: State<'_, AppState>, asset_id: String) -> Result<(), String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  let (_info_dir, origin, _meta) = locate_asset(lib, &asset_id)?;
+  let origin = asset_menu::real_origin_file(lib, &asset_id)?;
   shell_open::open_as(&origin)
 }
 
-/// 在文件管理器中打开并选中（前端先弹警示窗再调）
+/// 在文件管理器中打开并选中（前端先弹警示窗再调）；序列帧 = frames/ 封面帧
 #[tauri::command]
 pub async fn reveal_in_explorer(state: State<'_, AppState>, asset_id: String) -> Result<(), String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  let (_info_dir, origin, _meta) = locate_asset(lib, &asset_id)?;
+  let origin = asset_menu::real_origin_file(lib, &asset_id)?;
   shell_open::reveal(&origin)
 }
 
@@ -210,11 +209,12 @@ pub async fn get_asset_base64(state: State<'_, AppState>, asset_id: String) -> R
   asset_menu::get_asset_base64(lib, &asset_id)
 }
 
-/// 资产源文件真实绝对路径（6.3 右键"复制文件路径"；与预览路径解析无关，恒为 info 内 origin）
+/// 资产源文件真实绝对路径（6.3 右键"复制文件路径"；与预览路径解析无关，恒为 info 内实体；
+/// 序列帧 = frames/ 封面帧——info 根路径不存在，2026-08-14 修复）
 #[tauri::command]
 pub async fn get_asset_origin_path(state: State<'_, AppState>, asset_id: String) -> Result<String, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  let (_info_dir, origin, _meta) = locate_asset(lib, &asset_id)?;
+  let origin = asset_menu::real_origin_file(lib, &asset_id)?;
   Ok(origin.to_string_lossy().into_owned())
 }

@@ -32,6 +32,17 @@ fn locate(lib: &Library, asset_id: &str) -> Result<(PathBuf, PathBuf, AssetMeta)
   Ok((info_dir.clone(), info_dir.join(&meta.origin_name), meta.clone()))
 }
 
+/// 用户可见的真实实体路径（复制文件路径 / 文件管理器定位 / 打开方式共用，2026-08-14 修复）：
+/// 普通资产 = info/originName；**序列帧 = frames/ 封面帧**——originName 指向 frames/ 内帧，
+/// info 根路径不存在（重命名跟随后 originName 恒为某帧名，见 sequence::rename_frames）
+pub fn real_origin_file(lib: &Library, asset_id: &str) -> Result<PathBuf, String> {
+  let meta = lib.index.assets.get(asset_id).ok_or_else(|| "资源不存在，可能已被删除".to_string())?;
+  if crate::services::sequence::frames_dir_if_sequence(&lib.assets_dir, asset_id, meta).is_some() {
+    return Ok(paths::frames_dir(&lib.assets_dir, asset_id).join(&meta.origin_name));
+  }
+  Ok(paths::origin_file(&lib.assets_dir, asset_id, &meta.origin_name))
+}
+
 /// metadata 落盘 + 索引同步（先落盘再更新，规范第 7 条）
 fn persist(lib: &mut Library, info_dir: &Path, mut meta: AssetMeta, thumb: &str, clear_frame: bool) -> Result<ThumbResult, String> {
   if clear_frame {
@@ -653,6 +664,19 @@ mod tests {
     let out0 = export_assets(&src, &["AN-A".into(), "AN-B".into()], out.to_str().unwrap(), &mut sink, &cancelled).unwrap();
     assert_eq!(out0.copied, 0, "取消置位即中断");
     assert!(!out.join("a.png").exists());
+  }
+
+  #[test]
+  fn real_origin_file_points_into_frames_for_sequence() {
+    let mut h = make_lib();
+    add_sequence(&mut h, "AN-S", "走路", "root");
+    add_asset(&mut h, "AN-A", "a.png", "root");
+    let seq = real_origin_file(&h.lib, "AN-S").unwrap();
+    assert!(seq.is_file(), "序列帧 = frames/ 封面帧（真实存在）");
+    assert!(seq.ends_with("走路-1.png"), "{seq:?}");
+    let normal = real_origin_file(&h.lib, "AN-A").unwrap();
+    assert!(normal.is_file() && normal.ends_with("a.png"));
+    assert!(real_origin_file(&h.lib, "AN-不存在").is_err());
   }
 
   #[test]
