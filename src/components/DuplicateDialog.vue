@@ -54,7 +54,7 @@ function buildResolutions(): ConflictResolution[] {
   });
 }
 
-// 确认 = 按各行决策执行（逐项提交，单项失败不阻塞；失败项走 ImportResultDialog）
+// 确认 = 按各行决策执行（逐项提交，单项失败不阻塞；失败项走 FailedListDialog）
 async function onConfirm(): Promise<void> {
   if (busy.value) return;
   busy.value = true;

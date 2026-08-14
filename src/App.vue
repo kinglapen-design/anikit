@@ -25,7 +25,7 @@ import AppButton from "./components/AppButton.vue";
 import AppCheckbox from "./components/AppCheckbox.vue";
 import ImportDialog from "./components/ImportDialog.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
-import ImportResultDialog from "./components/ImportResultDialog.vue";
+import FailedListDialog from "./components/FailedListDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
 import DupScanDialog from "./components/DupScanDialog.vue";
 import LinkDialog from "./components/LinkDialog.vue";
@@ -271,10 +271,19 @@ async function togglePin(): Promise<void> {
       @confirm="content.confirmSequenceImport"
       @cancel="content.sequencePrompt = null"
     />
-    <ImportResultDialog
+    <FailedListDialog
       v-if="content.importFailed"
+      title="导入未完成"
       :failed="content.importFailed"
       @close="content.importFailed = null"
+      @retry="content.retryFailedImport()"
+    />
+    <FailedListDialog
+      v-if="content.exportFailed"
+      title="导出未完成"
+      :failed="content.exportFailed"
+      @close="content.exportFailed = null"
+      @retry="content.retryFailedExport()"
     />
     <!-- hash 冲突逐个询问（导入完成后弹出；10_重复添加提示） -->
     <DuplicateDialog v-if="content.importConflicts && content.importConflicts.length > 0" />

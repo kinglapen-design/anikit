@@ -108,11 +108,19 @@ export type ImportEvent =
   | { type: "finished"; imported: number; conflicts: ConflictItem[]; failed: FailedItem[] };
 
 // 导出任务事件（后端 services/asset_menu.rs ExportEvent，serde tag="type" camelCase）：
-// 单位 = 文件（序列帧按帧计）；finished.error = 业务失败（目录不可写等）
+// 单位 = 文件（序列帧按帧计）；finished.error = 整体失败（目录不可写等），finished.failed = 失败清单
 export type ExportEvent =
   | { type: "started"; total: number }
   | { type: "item" } // 每处理一个文件推一个（成败皆推，进度恒走完）
-  | { type: "finished"; copied: number; error: string | null };
+  | { type: "finished"; copied: number; failed: ExportFailedItem[]; error: string | null };
+
+// 导出失败项（后端 ExportFailedItem）：path = 源文件（弹窗展示取文件名）；
+// target = 首跑实际尝试的完整目标路径（重试原路覆盖用，原样回传）
+export interface ExportFailedItem {
+  path: string;
+  target: string;
+  reason: string;
+}
 
 // 收件箱磁盘实况条目（后端 services/inbox.rs InboxEntry；"工程文件"区块数据源，
 // 磁盘为事实来源——不建档不写库，热刷新 = 全量重扫替换）
@@ -205,8 +213,10 @@ export const useContentStore = defineStore("content", {
       done: number;
       startedAt: number;
     } | null,
-    // 失败清单（ImportResultDialog）与冲突挂起队列（DuplicateDialog 逐个询问）
+    // 失败清单（FailedListDialog）与冲突挂起队列（DuplicateDialog 逐个询问）
     importFailed: null as FailedItem[] | null,
+    // 导出失败清单（FailedListDialog，2026-08-14 用户定：导出也有失败弹窗 + 重试）
+    exportFailed: null as ExportFailedItem[] | null,
     importConflicts: null as ConflictItem[] | null,
     // 收件箱磁盘实况（4.4"工程文件"区块）：磁盘为事实来源，不建档不写库；
     // inbox-fs-changed 事件（去抖 150ms）与手动操作后全量重扫替换
@@ -479,7 +489,33 @@ export const useContentStore = defineStore("content", {
       }
     },
 
-    // 导出进度事件（placementOps 的 Channel 推入）：finished 收尾 toast——
+    // 导出任务编排（placementOps 两入口与失败重试共用）：进度初值 + Channel 事件流 +
+    // taskId 回填；起动失败复位进度条 + 失败 toast（防卡"清点中"）
+    async runExportTask(start: (onEvent: Channel<ExportEvent>) => Promise<number>): Promise<void> {
+      this.exportProgress = { taskId: null, total: 0, done: 0, startedAt: Date.now() };
+      const onEvent = new Channel<ExportEvent>();
+      onEvent.onmessage = (e) => this.onExportEvent(e);
+      try {
+        const taskId = await start(onEvent);
+        if (this.exportProgress && this.exportProgress.taskId === null) {
+          this.exportProgress.taskId = taskId;
+        }
+      } catch (e) {
+        this.exportProgress = null;
+        useToastStore().notify({ message: String(e), icon: "fail" });
+      }
+    },
+
+    // 重试导出失败项（失败弹窗主按钮，2026-08-14 用户定）：failed 原样回传 export_retry——
+    // 后端按首跑记录的 源→目标 原路覆盖，成功项不重导、不撞无关文件；再失败弹窗再现
+    retryFailedExport(): void {
+      const items = this.exportFailed ?? [];
+      this.exportFailed = null;
+      if (items.length === 0) return;
+      void this.runExportTask((onEvent) => invoke<number>("export_retry", { items, onEvent }));
+    },
+
+    // 导出进度事件（placementOps 的 Channel 推入）：finished 收尾 toast / 失败弹窗——
     // 取消后的 finished 不再提示（进度条已隐藏，exportProgress 为 null 即取消标记）
     onExportEvent(e: ExportEvent): void {
       switch (e.type) {
@@ -496,11 +532,12 @@ export const useContentStore = defineStore("content", {
           const wasCancelled = this.exportProgress === null;
           this.exportProgress = null;
           if (wasCancelled) break;
-          const toast = useToastStore();
           if (e.error) {
-            toast.notify({ message: e.error, icon: "fail" });
+            useToastStore().notify({ message: e.error, icon: "fail" });
+          } else if (e.failed.length > 0) {
+            this.exportFailed = e.failed; // 有失败项 → 失败弹窗（alert 模板自带提示音）
           } else {
-            toast.notify({ message: `已导出 ${e.copied} 个文件`, icon: "success", sound: true });
+            useToastStore().notify({ message: `已导出 ${e.copied} 个文件`, icon: "success", sound: true });
           }
           break;
         }

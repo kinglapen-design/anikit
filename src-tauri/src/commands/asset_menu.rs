@@ -79,10 +79,10 @@ fn export_snapshot(app: &AppHandle) -> Result<asset_menu::ExportSource, String> 
 }
 
 /// 导出任务 spawn：注册取消标记（与导入任务共用注册表与 id 命名空间）→ 工作线程执行 →
-/// 推 Finished（业务失败进 error 字段）→ 注册表移除
+/// 推 Finished（含失败清单；业务失败进 error 字段）→ 注册表移除
 fn spawn_export<F>(app: &AppHandle, on_event: Channel<asset_menu::ExportEvent>, job: F) -> u64
 where
-  F: FnOnce(&AtomicBool, &mut dyn FnMut(asset_menu::ExportEvent)) -> Result<usize, String> + Send + 'static,
+  F: FnOnce(&AtomicBool, &mut dyn FnMut(asset_menu::ExportEvent)) -> Result<asset_menu::ExportOutcome, String> + Send + 'static,
 {
   let task_id = NEXT_TASK_ID.fetch_add(1, Ordering::Relaxed);
   let cancel = Arc::new(AtomicBool::new(false));
@@ -99,11 +99,11 @@ where
         log::debug!("导出事件推送失败（前端可能已关闭）：{err}");
       }
     };
-    let (copied, error) = match job(&cancel, &mut report) {
-      Ok(n) => (n as u32, None),
-      Err(e) => (0, Some(e)),
+    let (copied, failed, error) = match job(&cancel, &mut report) {
+      Ok(o) => (o.copied as u32, o.failed, None),
+      Err(e) => (0, Vec::new(), Some(e)),
     };
-    report(asset_menu::ExportEvent::Finished { copied, error });
+    report(asset_menu::ExportEvent::Finished { copied, failed, error });
     if let Ok(mut registry) = app_handle.state::<AppState>().imports.lock() {
       registry.remove(&task_id);
     }
@@ -138,6 +138,16 @@ pub fn export_folder(
   Ok(spawn_export(&app, on_event, move |cancel, report| {
     asset_menu::export_folder(&src, &folder_id, &target_dir, report, cancel)
   }))
+}
+
+/// 导出失败重试：items = 首跑 Finished.failed 原样回传（源→目标原路覆盖，不读库无需快照）
+#[tauri::command]
+pub fn export_retry(
+  app: AppHandle,
+  items: Vec<asset_menu::ExportFailedItem>,
+  on_event: Channel<asset_menu::ExportEvent>,
+) -> Result<u64, String> {
+  Ok(spawn_export(&app, on_event, move |cancel, report| Ok(asset_menu::retry_export(&items, report, cancel))))
 }
 
 /// 取消导出任务：置位取消标记（与导入共用注册表），工作线程当前文件拷完后中断

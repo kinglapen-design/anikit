@@ -128,6 +128,24 @@ pub struct ExportSource {
   pub folders: crate::core::models::FoldersFile,
 }
 
+/// 导出失败项（Finished.failed 推前端 / export_retry 入参原样回传）：
+/// path = 源文件绝对路径（弹窗展示取其文件名）；target = **首跑实际尝试的完整目标路径**
+///（已含重名去重——重试按 源→目标 原路覆盖，不再撞无关文件、已成功项也不重复导出）
+#[derive(Debug, Clone, PartialEq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportFailedItem {
+  pub path: String,
+  pub target: String,
+  pub reason: String,
+}
+
+/// 导出结果：copied = 实际拷出文件数；failed = 失败清单（导出失败弹窗 + 重试数据源）
+#[derive(Debug, Default)]
+pub struct ExportOutcome {
+  pub copied: usize,
+  pub failed: Vec<ExportFailedItem>,
+}
+
 /// 导出进度事件（命令层 Channel → 前端；serde tag="type" 小驼峰，同 ImportEvent 约定）
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -136,8 +154,8 @@ pub enum ExportEvent {
   Started { total: u32 },
   /// 每处理一个文件推一个（成功失败都推，进度恒走完）
   Item,
-  /// 结束（含取消中断）：copied = 实际拷出文件数；error = 中途失败（如目录不可写）
-  Finished { copied: u32, error: Option<String> },
+  /// 结束（含取消中断）：copied = 实际拷出文件数；failed = 失败清单；error = 整体失败（如目录不可写）
+  Finished { copied: u32, failed: Vec<ExportFailedItem>, error: Option<String> },
 }
 
 /// 序列帧判定：origin 指向 frames/ 内帧（info 根无该实体），整组帧在 frames/ 目录。
@@ -149,19 +167,21 @@ fn sequence_frames(src: &ExportSource, asset_id: &str, meta: &AssetMeta) -> Opti
 
 /// 序列帧整组导出：目标目录下建 `{folder_name}/` 文件夹（重名 -序号），frames/ 内全部帧拷入
 /// （2026-08-14 用户定：序列帧用一个文件夹装起来，文件夹名称用文件名）。
-/// 返回拷出帧数；每帧（成败皆然）推一个 Item；cancel 置位时当前帧拷完后中断
+/// 拷出帧数计入 out.copied；失败帧逐条进 out.failed（源帧路径 + 实际目标路径）；
+/// 每帧（成败皆然）推一个 Item；cancel 置位时当前帧拷完后中断
 fn copy_sequence_to(
   dir: &Path,
   frames: &Path,
   folder_name: &str,
+  out: &mut ExportOutcome,
   report: &mut dyn FnMut(ExportEvent),
   cancel: &AtomicBool,
-) -> usize {
+) {
   let target = dedupe_path(dir, folder_name);
   if fs::create_dir_all(&target).is_err() {
-    return 0;
+    return;
   }
-  let Ok(entries) = fs::read_dir(frames) else { return 0 };
+  let Ok(entries) = fs::read_dir(frames) else { return };
   let mut copied = 0usize;
   for entry in entries.flatten() {
     if cancel.load(Ordering::Relaxed) {
@@ -171,42 +191,56 @@ fn copy_sequence_to(
     if !path.is_file() {
       continue;
     }
-    if fs::copy(&path, target.join(entry.file_name())).is_ok() {
-      copied += 1;
+    let dest = target.join(entry.file_name());
+    match fs::copy(&path, &dest) {
+      Ok(_) => copied += 1,
+      Err(e) => out.failed.push(ExportFailedItem {
+        path: path.to_string_lossy().into_owned(),
+        target: dest.to_string_lossy().into_owned(),
+        reason: e.to_string(),
+      }),
     }
     report(ExportEvent::Item);
   }
+  out.copied += copied;
   if copied == 0 {
     let _ = fs::remove_dir(&target); // 一帧未出（含取消）不留空壳文件夹
   }
-  copied
 }
 
-/// 复制 origin 到目标（按显示名，缺扩展名补 metadata.ext），返回拷出文件数（0/1）；
-/// 序列帧资产改走整组导出：显示名去扩展名建文件夹，frames/ 全部帧拷入（返回帧数）
+/// 复制 origin 到目标（按显示名，缺扩展名补 metadata.ext）；
+/// 序列帧资产改走整组导出：显示名去扩展名建文件夹，frames/ 全部帧拷入
 fn copy_origin_to(
   src: &ExportSource,
   dir: &Path,
   asset_id: &str,
   display_name: &str,
+  out: &mut ExportOutcome,
   report: &mut dyn FnMut(ExportEvent),
   cancel: &AtomicBool,
-) -> usize {
-  let Some(meta) = src.assets.get(asset_id) else { return 0 };
+) {
+  let Some(meta) = src.assets.get(asset_id) else { return };
   if let Some(frames) = sequence_frames(src, asset_id, meta) {
     let name = ensure_ext(display_name, &meta.ext);
     let stem = Path::new(&name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or(name);
-    return copy_sequence_to(dir, &frames, &stem, report, cancel);
+    copy_sequence_to(dir, &frames, &stem, out, report, cancel);
+    return;
   }
   let origin = paths::origin_file(&src.assets_dir, asset_id, &meta.origin_name);
   if !origin.is_file() {
-    return 0;
+    return;
   }
   let name = ensure_ext(display_name, &meta.ext);
   let target = dedupe_path(dir, &name);
-  let ok = fs::copy(&origin, &target).is_ok();
+  match fs::copy(&origin, &target) {
+    Ok(_) => out.copied += 1,
+    Err(e) => out.failed.push(ExportFailedItem {
+      path: origin.to_string_lossy().into_owned(),
+      target: target.to_string_lossy().into_owned(),
+      reason: e.to_string(),
+    }),
+  }
   report(ExportEvent::Item);
-  usize::from(ok)
 }
 
 /// 显示名缺扩展名时补 metadata.ext（rename_placement 原始段同规则）
@@ -231,30 +265,30 @@ fn export_file_count(src: &ExportSource, asset_id: &str) -> usize {
 /// 导出文件（6.3 右键菜单）：各资产 origin 复制到目标目录（按 originName，重名 -序号）；
 /// 序列帧资产 = 建 `{资产名}/` 文件夹装全部帧（文件夹重名同样 -序号）。
 /// 进度：先推 Started（总数 = 文件数），逐文件推 Item；cancel 置位时当前文件拷完后中断。
-/// 返回实际拷出文件数（序列帧按帧计）
+/// 返回 ExportOutcome（copied 文件数 + failed 失败清单，失败弹窗与重试用）
 pub fn export_assets(
   src: &ExportSource,
   asset_ids: &[String],
   target_dir: &str,
   report: &mut dyn FnMut(ExportEvent),
   cancel: &AtomicBool,
-) -> Result<usize, String> {
+) -> Result<ExportOutcome, String> {
   let dir = check_target_dir(target_dir)?;
   let total: usize = asset_ids.iter().map(|id| export_file_count(src, id)).sum();
   report(ExportEvent::Started { total: total as u32 });
-  let mut copied = 0usize;
+  let mut out = ExportOutcome::default();
   for id in asset_ids {
     if cancel.load(Ordering::Relaxed) {
       break;
     }
     let Some(meta) = src.assets.get(id) else { continue };
-    if let Some(frames) = sequence_frames(src, id, meta) {
-      copied += copy_sequence_to(&dir, &frames, &meta.name, report, cancel);
+    if sequence_frames(src, id, meta).is_some() {
+      copy_origin_to(src, &dir, id, &meta.name.clone(), &mut out, report, cancel);
       continue;
     }
-    copied += copy_origin_to(src, &dir, id, &meta.origin_name.clone(), report, cancel);
+    copy_origin_to(src, &dir, id, &meta.origin_name.clone(), &mut out, report, cancel);
   }
-  Ok(copied)
+  Ok(out)
 }
 
 /// 导出文件夹（6.3 右键菜单）：目标目录下建同名目录（重名 -序号），子层级保留，
@@ -266,7 +300,7 @@ pub fn export_folder(
   target_dir: &str,
   report: &mut dyn FnMut(ExportEvent),
   cancel: &AtomicBool,
-) -> Result<usize, String> {
+) -> Result<ExportOutcome, String> {
   let dir = check_target_dir(target_dir)?;
   let folder_name = src
     .folders
@@ -279,9 +313,9 @@ pub fn export_folder(
   let root_dir = dedupe_path(&dir, &folder_name);
   fs::create_dir_all(&root_dir).map_err(|e| format!("导出目录创建失败：{e}"))?;
   report(ExportEvent::Started { total: total as u32 });
-  let mut copied = 0usize;
-  export_folder_inner(src, folder_id, &root_dir, &mut copied, report, cancel);
-  Ok(copied)
+  let mut out = ExportOutcome::default();
+  export_folder_inner(src, folder_id, &root_dir, &mut out, report, cancel);
+  Ok(out)
 }
 
 /// 子树将导出的文件总数（含全部后代文件夹，与拷贝循环同口径）
@@ -304,7 +338,7 @@ fn export_folder_inner(
   src: &ExportSource,
   folder_id: &str,
   dir: &Path,
-  copied: &mut usize,
+  out: &mut ExportOutcome,
   report: &mut dyn FnMut(ExportEvent),
   cancel: &AtomicBool,
 ) {
@@ -313,7 +347,7 @@ fn export_folder_inner(
       return;
     }
     if p.folder == folder_id {
-      *copied += copy_origin_to(src, dir, &p.asset, &p.name, report, cancel);
+      copy_origin_to(src, dir, &p.asset, &p.name, out, report, cancel);
     }
   }
   for child in &src.folders.folders {
@@ -323,10 +357,35 @@ fn export_folder_inner(
     if child.parent.as_deref() == Some(folder_id) {
       let sub = dedupe_path(dir, &child.name);
       if fs::create_dir_all(&sub).is_ok() {
-        export_folder_inner(src, &child.id, &sub, copied, report, cancel);
+        export_folder_inner(src, &child.id, &sub, out, report, cancel);
       }
     }
   }
+}
+
+/// 导出失败重试（导出失败弹窗"重试"，2026-08-14 用户定）：items = 首跑 Finished.failed
+/// 原样回传，按记录的 源→目标 原路覆盖拷贝（目标父目录补建）——成功的项不重导、
+/// 重名去重已在首跑计入 target，不会撞开无关文件。再失败原样回新清单（原因刷新）
+pub fn retry_export(items: &[ExportFailedItem], report: &mut dyn FnMut(ExportEvent), cancel: &AtomicBool) -> ExportOutcome {
+  report(ExportEvent::Started { total: items.len() as u32 });
+  let mut out = ExportOutcome::default();
+  for item in items {
+    if cancel.load(Ordering::Relaxed) {
+      break;
+    }
+    let dest = Path::new(&item.target);
+    let result = dest
+      .parent()
+      .map(|p| fs::create_dir_all(p).map_err(|e| e.to_string()))
+      .unwrap_or(Ok(()))
+      .and_then(|_| fs::copy(Path::new(&item.path), dest).map_err(|e| e.to_string()));
+    match result {
+      Ok(_) => out.copied += 1,
+      Err(e) => out.failed.push(ExportFailedItem { path: item.path.clone(), target: item.target.clone(), reason: e }),
+    }
+    report(ExportEvent::Item);
+  }
+  out
 }
 
 /// base64 上限（10MB；更大的文件复制 base64 无实际用途）
@@ -470,8 +529,9 @@ mod tests {
     let src = src(&h);
     let mut sink = |_e: ExportEvent| {};
     let no = AtomicBool::new(false);
-    let n = export_assets(&src, &["AN-A".into(), "AN-B".into(), "AN-不存在".into()], out.to_str().unwrap(), &mut sink, &no).unwrap();
-    assert_eq!(n, 2, "同名也去重导出两份");
+    let out0 = export_assets(&src, &["AN-A".into(), "AN-B".into(), "AN-不存在".into()], out.to_str().unwrap(), &mut sink, &no).unwrap();
+    assert_eq!(out0.copied, 2, "同名也去重导出两份");
+    assert!(out0.failed.is_empty());
     assert!(out.join("a.png").is_file());
     assert!(out.join("a-1.png").is_file(), "重名追加 -序号");
     assert!(export_assets(&src, &["AN-A".into()], "不存在目录", &mut sink, &no).is_err());
@@ -497,7 +557,7 @@ mod tests {
     let src = src(&h);
     let mut sink = |_e: ExportEvent| {};
     let no = AtomicBool::new(false);
-    let n = export_folder(&src, "F-TOP", out.to_str().unwrap(), &mut sink, &no).unwrap();
+    let n = export_folder(&src, "F-TOP", out.to_str().unwrap(), &mut sink, &no).unwrap().copied;
     assert_eq!(n, 3, "顶层 1 + 子夹 1 + 链接别名 1");
     let base = out.join("顶夹");
     assert!(base.join("a.png").is_file(), "显示名导出");
@@ -536,7 +596,7 @@ mod tests {
     let no = AtomicBool::new(false);
     let n = {
       let mut sink = |e: ExportEvent| events.push(e);
-      export_assets(&src, &["AN-S".into(), "AN-A".into()], out.to_str().unwrap(), &mut sink, &no).unwrap()
+      export_assets(&src, &["AN-S".into(), "AN-A".into()], out.to_str().unwrap(), &mut sink, &no).unwrap().copied
     };
     assert_eq!(n, 4, "序列帧按帧计 3 + 普通文件 1");
     assert_eq!(events.first(), Some(&ExportEvent::Started { total: 4 }), "清点事件先行，总数 = 文件数");
@@ -571,7 +631,7 @@ mod tests {
     let src = src(&h);
     let mut sink = |_e: ExportEvent| {};
     let no = AtomicBool::new(false);
-    let n = export_folder(&src, "F-TOP", out.to_str().unwrap(), &mut sink, &no).unwrap();
+    let n = export_folder(&src, "F-TOP", out.to_str().unwrap(), &mut sink, &no).unwrap().copied;
     assert_eq!(n, 7, "序列帧 2 条 Placement × 3 帧 + 动图 1");
     let base = out.join("顶夹");
     assert!(base.join("走路").join("走路-1.png").is_file(), "origin 显示名建文件夹");
@@ -590,8 +650,42 @@ mod tests {
     let src = src(&h);
     let mut sink = |_e: ExportEvent| {};
     let cancelled = AtomicBool::new(true); // 预置取消：一个文件都不应拷出
-    let n = export_assets(&src, &["AN-A".into(), "AN-B".into()], out.to_str().unwrap(), &mut sink, &cancelled).unwrap();
-    assert_eq!(n, 0, "取消置位即中断");
+    let out0 = export_assets(&src, &["AN-A".into(), "AN-B".into()], out.to_str().unwrap(), &mut sink, &cancelled).unwrap();
+    assert_eq!(out0.copied, 0, "取消置位即中断");
     assert!(!out.join("a.png").exists());
+  }
+
+  #[test]
+  fn retry_export_recopies_and_keeps_failures() {
+    let h = make_lib();
+    let src_file = h.dir.path().join("源.png");
+    make_png(&src_file, 8, 8);
+    let out = h.dir.path().join("重试输出");
+    let good_target = out.join("子目录").join("a.png"); // 父目录不存在 → 重试自动补建
+    let items = vec![
+      ExportFailedItem {
+        path: src_file.to_string_lossy().into_owned(),
+        target: good_target.to_string_lossy().into_owned(),
+        reason: "首跑失败".into(),
+      },
+      ExportFailedItem {
+        path: h.dir.path().join("不存在.png").to_string_lossy().into_owned(),
+        target: out.join("b.png").to_string_lossy().into_owned(),
+        reason: "源丢失".into(),
+      },
+    ];
+    let mut events = Vec::new();
+    let no = AtomicBool::new(false);
+    let out0 = {
+      let mut sink = |e: ExportEvent| events.push(e);
+      retry_export(&items, &mut sink, &no)
+    };
+    assert_eq!(out0.copied, 1);
+    assert!(good_target.is_file(), "成功项原路拷出（父目录补建）");
+    assert_eq!(out0.failed.len(), 1, "再失败项留清单");
+    assert!(out0.failed[0].path.ends_with("不存在.png"));
+    assert_eq!(out0.failed[0].target, items[1].target, "目标路径原样保留供下次重试");
+    assert_eq!(events.first(), Some(&ExportEvent::Started { total: 2 }));
+    assert_eq!(events.iter().filter(|e| matches!(e, ExportEvent::Item)).count(), 2);
   }
 }

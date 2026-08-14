@@ -1,6 +1,6 @@
 # CDP 实测：导入失败弹窗 = AppModal alert 错误模板（2026-08-14 用户定，替掉旧手写壳）
 # 桩有库进主界面 → 新增菜单"导入本地文件" → 导入弹窗确认 → import_paths 桩经 Channel 回调
-# 推 finished（3 条失败）→ ImportResultDialog 出现。
+# 推 finished（3 条失败）→ FailedListDialog 出现。
 # 校验：alert 壳 + 48 error 徽章 / 标题"导入未完成"常态色 / 文件名竖排 3 行 gap 8px /
 # 按钮序主左次右（重试 / 退出）/ 重试 = 按原参数重投失败路径（import_paths 二次调用带原 structure/source）
 # / 退出 = 纯关闭不重投。截图留档 tools/style-preview/import-failed.png。
