@@ -53,8 +53,8 @@ fn new_block_id() -> String {
 /// 对齐 reorder_folders 做法）；deleted = 待删区块 id。
 /// deleted 含非空区块（存在 Folder.block 指向它的顶级文件夹）且 confirmed = false 时返回
 /// needConfirm 报告、不执行任何写入；confirmed = true 时这些区块的顶级文件夹 block 置 None
-/// （移入「目录」）再删。默认区块「目录」禁删可改名；新建区块名不做唯一化（库允许同名，
-/// 2026-08-14 用户定同类口径）
+/// （移入「目录」）再删。默认区块「目录」禁删、名称与图标锁死（排序允许，2026-08-14 用户定）；
+/// 新建区块名不做唯一化（库允许同名，2026-08-14 用户定同类口径）
 pub fn apply_block_changes(
   lib: &mut Library,
   blocks: Vec<BlockInput>,
@@ -92,6 +92,13 @@ pub fn apply_block_changes(
     let kept = blocks.iter().any(|i| i.id.as_deref() == Some(b.id.as_str()));
     if !kept && !deleted.contains(&b.id) {
       return Err(format!("区块「{}」既不在保留列表也不在删除列表", b.name));
+    }
+  }
+  // 默认区块「目录」：名称 / 图标不可改（2026-08-14 用户定——排序允许，原"可改名"作废）
+  if let Some(input) = blocks.iter().find(|i| i.id.as_deref() == Some(DEFAULT_BLOCK_ID)) {
+    let cur = lib.folders.blocks.iter().find(|b| b.id == DEFAULT_BLOCK_ID).expect("默认区块缺失");
+    if input.name.trim() != cur.name || input.icon != cur.icon {
+      return Err("默认区块「目录」的名称与图标不可修改".to_string());
     }
   }
   // 非空待删区块（有顶级文件夹引用）
@@ -221,7 +228,7 @@ mod tests {
     assert_eq!(disk.blocks.len(), 3);
   }
 
-  /// 改名 / 换图标 / 排序（数组序即最终 order）；默认区块可改名
+  /// 改名 / 换图标 / 排序（数组序即最终 order）；默认区块「目录」可排序但名称 / 图标锁死
   #[test]
   fn apply_renames_reicons_and_reorders_existing() {
     let mut h = make_lib();
@@ -230,17 +237,25 @@ mod tests {
 
     let rep = apply_block_changes(
       &mut h.lib,
-      vec![input(Some(&new_id), "角色动画", Some("icon-role")), input(Some(DEFAULT_BLOCK_ID), "素材目录", None)],
+      vec![input(Some(&new_id), "角色动画", Some("icon-role")), dir_input()],
       vec![],
       false,
     )
     .unwrap();
     assert!(!rep.need_confirm);
     let blocks = &h.lib.folders.blocks;
-    assert_eq!(blocks.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(), vec![new_id.as_str(), DEFAULT_BLOCK_ID], "排序生效");
+    assert_eq!(blocks.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(), vec![new_id.as_str(), DEFAULT_BLOCK_ID], "排序生效（目录可让位）");
     assert_eq!((blocks[0].name.as_str(), blocks[0].order), ("角色动画", 0));
     assert_eq!(blocks[0].icon.as_deref(), Some("icon-role"), "换图标");
-    assert_eq!((blocks[1].name.as_str(), blocks[1].order), ("素材目录", 1), "默认区块可改名");
+    assert_eq!((blocks[1].name.as_str(), blocks[1].order), ("目录", 1));
+
+    // 默认区块改名 / 换图标 → 报错不动数据（2026-08-14 用户定）
+    assert!(apply_block_changes(&mut h.lib, vec![dir_input(), input(Some(&new_id), "角色动画", Some("icon-role"))], vec![], false).is_ok());
+    let renamed = apply_block_changes(&mut h.lib, vec![input(Some(DEFAULT_BLOCK_ID), "素材目录", None), input(Some(&new_id), "角色动画", Some("icon-role"))], vec![], false);
+    assert!(renamed.is_err(), "目录改名拒绝");
+    let reicon = apply_block_changes(&mut h.lib, vec![input(Some(DEFAULT_BLOCK_ID), "目录", Some("scene")), input(Some(&new_id), "角色动画", Some("icon-role"))], vec![], false);
+    assert!(reicon.is_err(), "目录换图标拒绝");
+    assert_eq!(h.lib.folders.blocks.iter().find(|b| b.id == DEFAULT_BLOCK_ID).unwrap().name, "目录", "报错不动数据");
   }
 
   /// 删空区块直接执行；删非空区块 confirmed = false → needConfirm 不动任何数据
