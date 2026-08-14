@@ -49,9 +49,9 @@ mod imp {
   }
 
   pub(super) fn reveal(path: &Path) -> Result<(), String> {
-    // explorer /select,"路径"：打开文件管理器并选中该文件
+    // explorer /select,"路径"：打开文件管理器并选中该文件；路径加引号（含空格/逗号时裸路径会断，explorer 回退到"文档"）
     std::process::Command::new("explorer.exe")
-      .arg(format!("/select,{}", path.display()))
+      .arg(format!("/select,\"{}\"", path.display()))
       .spawn()
       .map(|_| ())
       .map_err(|e| format!("打开文件管理器失败：{e}"))

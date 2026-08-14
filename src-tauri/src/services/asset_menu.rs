@@ -34,11 +34,26 @@ fn locate(lib: &Library, asset_id: &str) -> Result<(PathBuf, PathBuf, AssetMeta)
 
 /// 用户可见的真实实体路径（复制文件路径 / 文件管理器定位 / 打开方式共用，2026-08-14 修复）：
 /// 普通资产 = info/originName；**序列帧 = frames/ 封面帧**——originName 指向 frames/ 内帧，
-/// info 根路径不存在（重命名跟随后 originName 恒为某帧名，见 sequence::rename_frames）
+/// info 根路径不存在（重命名跟随后 originName 恒为某帧名，见 sequence::rename_frames）。
+/// 存量脱钩兜底：封面帧路径不存在（2026-08-14 前改名遗留 originName 与帧脱钩）→
+/// thumb_frame → frames/ 内任一文件，保证落点是真实文件
 pub fn real_origin_file(lib: &Library, asset_id: &str) -> Result<PathBuf, String> {
   let meta = lib.index.assets.get(asset_id).ok_or_else(|| "资源不存在，可能已被删除".to_string())?;
-  if crate::services::sequence::frames_dir_if_sequence(&lib.assets_dir, asset_id, meta).is_some() {
-    return Ok(paths::frames_dir(&lib.assets_dir, asset_id).join(&meta.origin_name));
+  if let Some(frames) = crate::services::sequence::frames_dir_if_sequence(&lib.assets_dir, asset_id, meta) {
+    let cover = frames.join(&meta.origin_name);
+    if cover.is_file() {
+      return Ok(cover);
+    }
+    if let Some(tf) = &meta.thumb_frame {
+      let p = frames.join(tf);
+      if p.is_file() {
+        return Ok(p);
+      }
+    }
+    if let Some(entry) = fs::read_dir(&frames).ok().and_then(|mut rd| rd.find_map(|e| e.ok())) {
+      return Ok(entry.path());
+    }
+    return Ok(cover); // 帧目录空：原样返回（调用方报错）
   }
   Ok(paths::origin_file(&lib.assets_dir, asset_id, &meta.origin_name))
 }
@@ -677,6 +692,17 @@ mod tests {
     let normal = real_origin_file(&h.lib, "AN-A").unwrap();
     assert!(normal.is_file() && normal.ends_with("a.png"));
     assert!(real_origin_file(&h.lib, "AN-不存在").is_err());
+  }
+
+  #[test]
+  fn real_origin_file_legacy_desync_falls_back() {
+    // 存量脱钩（2026-08-14 前改名遗留：originName = 显示名.png，与所有帧不同名）→ 回退真实帧
+    let mut h = make_lib();
+    add_sequence(&mut h, "AN-S", "走路", "root");
+    h.lib.index.assets.get_mut("AN-S").unwrap().origin_name = "跑步.png".into();
+    let p = real_origin_file(&h.lib, "AN-S").unwrap();
+    assert!(p.is_file(), "脱钩也要落到真实帧：{p:?}");
+    assert!(p.parent().unwrap().ends_with("frames"));
   }
 
   #[test]
