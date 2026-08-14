@@ -3,7 +3,8 @@
 // 标题栏 46（C3 + 下边框 暗-悬停：汉堡菜单 + 右对齐按钮组[新增 / 区块管理 / 收起侧边栏]）
 // 内容 row：导航栏 54（C3 + 右边框：资源库[选中] / 工作空间 / AI 对话框 + 帮助）
 // ｜ 内容区 250（C3 + 右边框：资源库切换 54 + 树容器）。
-// 无业务按钮一律 disabled（1.3 占位点亮机制统一接入）：区块管理 / 工作空间 / AI 对话框 / 帮助。
+// 无业务按钮一律 disabled（1.3 占位点亮机制统一接入）：工作空间 / AI 对话框 / 帮助。
+// 区块管理 = 30 稿弹窗（3.1 一轮点亮，ui.blockManageOpen → App.vue 宿主 BlockManageDialog）。
 // 新增 = 07 新增菜单三入口；汉堡 = 14 菜单；切换资源库 = 08 菜单（2026-08-11 点亮）。
 // 收起 = 整栏收掉（App.vue v-if + 滑动动画，2026-08-08 定案），
 // 展开按钮在标签页行首（SidebarExpandButton，dockview prefix actions，不占工具栏）。
@@ -109,7 +110,7 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
         <span ref="addBtnRef" class="add-btn-wrap">
           <IconButton name="add-large" :title="{ text: '新增', keys: 'Ctrl+N' }" @click="toggleAddMenu" />
         </span>
-        <IconButton name="section-manage" title="区块管理" disabled />
+        <IconButton name="section-manage" title="区块管理" @click="ui.blockManageOpen = true" />
         <IconButton name="collapse-sidebar" title="收起侧边栏" @click="ui.leftCollapsed = true" />
       </div>
     </header>

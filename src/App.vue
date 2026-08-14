@@ -30,6 +30,7 @@ import DuplicateDialog from "./components/DuplicateDialog.vue";
 import DupScanDialog from "./components/DupScanDialog.vue";
 import LinkDialog from "./components/LinkDialog.vue";
 import RecycleConfirmDialog from "./components/RecycleConfirmDialog.vue";
+import BlockManageDialog from "./components/BlockManageDialog.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import AppConfirm from "./components/AppConfirm.vue";
 import FolderPickerDialog from "./components/FolderPickerDialog.vue";
@@ -293,6 +294,8 @@ async function togglePin(): Promise<void> {
     <LinkDialog v-if="selection.linkDraft" />
     <!-- 回收站彻底删除确认窗（6.1 二轮）：虚拟片段引用警示，不可恢复无撤销 -->
     <RecycleConfirmDialog v-if="selection.recyclePrompt" />
+    <!-- 区块管理弹窗（2026-08-14 区块子系统，30 稿）：SidebarLeft section-manage 按钮触发 -->
+    <BlockManageDialog v-if="ui.blockManageOpen" @close="ui.blockManageOpen = false" />
     <!-- 全局右键菜单宿主（6.3：lib/contextMenus 单一实例，六上下文共用） -->
     <ContextMenu />
     <!-- 通用确认弹窗（6.3：警示前置 / 删除文件夹 / 彻底删除二次确认） -->

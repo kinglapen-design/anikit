@@ -69,15 +69,18 @@ export async function reorderFolders(
 // 移动文件夹层级（2026-07-28 复验反馈 5）：targetParent null 或 "root" = 顶层；
 // beforeFolderId 给了 = 插到该兄弟（targetParent 直接子级）之前——跨父级上/下 1/3 落点定位
 // （2026-07-29 复验：嵌套文件夹拖出），null = 同级末尾；
+// targetBlock（2026-08-14 区块子系统）三态：null = 保持原区块；落根级时给区块 id 写入归属
+// （"dir" = 移回「目录」）；落进文件夹内（targetParent 非空）必须不传（后端拒绝）；
 // 循环护栏与同父跳过在后端（撤销标签「移动 N 个文件夹」）；树 item 中间 1/3 与文件夹卡片并入走此
 export async function moveFolders(
   folderIds: string[],
   targetParent: string | null,
   beforeFolderId: string | null = null,
+  targetBlock: string | null = null,
 ): Promise<boolean> {
   let moved = 0;
   return await runOp(async () => {
-    moved = await invoke<number>("move_folders", { folderIds, targetParent, beforeFolderId });
+    moved = await invoke<number>("move_folders", { folderIds, targetParent, beforeFolderId, targetBlock });
   }, () => `移动 ${moved} 个文件夹`);
 }
 
@@ -233,17 +236,20 @@ export async function confirmRecycleDelete(): Promise<void> {
 
 // 新建文件夹（2026-07-29 复验三轮改"先建后命名"）：直接以默认名建库，成功返回新文件夹 id
 // （调用方据此让树新节点进命名态）；失败 = null + 中文 toast——不再有"命名中临时节点"，
-// 也就不再有命名行内报错（旧流程的取消不入库 / 行内提示一并移除）
+// 也就不再有命名行内报错（旧流程的取消不入库 / 行内提示一并移除）。
+// blockId（2026-08-14 区块子系统）：仅顶级新建（parentId null）生效——写入区块归属并继承
+// 区块默认图标；非顶级新建忽略（传 "dir" = 「目录」，与后端缺省同语义）
 export async function createFolder(
   parentId: string | null,
   name: string,
   afterFolderId: string | null,
+  blockId: string | null = null,
 ): Promise<string | null> {
   const content = useContentStore();
   const toast = useToastStore();
   const undo = useUndoStore();
   try {
-    const folder = await invoke<{ id: string }>("create_folder", { parentId, name, afterFolderId });
+    const folder = await invoke<{ id: string }>("create_folder", { parentId, name, afterFolderId, blockId });
     await content.refresh();
     void undo.refreshState();
     toast.notify({ message: "已新建文件夹", actionLabel: "撤销", onAction: () => void undo.undo() });

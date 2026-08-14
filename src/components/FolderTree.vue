@@ -58,7 +58,9 @@ function isOpen(id: string): boolean {
 function onSelect(id: string, e: MouseEvent): void {
   if (dragView.suppressClick) return;
   if (e.ctrlKey || e.metaKey || e.shiftKey) {
-    selection.clickFolder(id, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey }, visibleTreeFolderIds());
+    // 范围选顺序按所在区块容器收窄（2026-08-14 多区块：跨区块范围选无意义）
+    const scope = (e.target as HTMLElement | null)?.closest(".block-tree") ?? null;
+    selection.clickFolder(id, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey }, visibleTreeFolderIds(scope));
     return;
   }
   tabs.openView(`folder:${id}`);
@@ -112,7 +114,7 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
            domain-selected 品牌色描边（文件夹卡片选中联动 / 树多选）——两态互斥，
            当前目录优先（2026-08-10 用户定：区分双高亮，防"停在哪个目录"混淆） -->
       <TreeItem
-        :icon="isOpen(node.id) ? 'folder-open' : 'folder-closed'"
+        :icon="node.icon ?? (isOpen(node.id) ? 'folder-open' : 'folder-closed')"
         :label="node.name"
         :count="node.count"
         :depth="depth"

@@ -38,7 +38,34 @@ export interface FolderNode {
   id: string;
   name: string;
   count: number; // 该文件夹递归 Placement 总数（含全部子文件夹，2026-07-25 用户定）
+  // 所属区块 id（2026-08-14 区块子系统）：仅顶级节点有值语义，null/缺省 = 默认区块「目录」
+  block?: string | null;
+  // 自定义图标名（assets/icons/05_custom-icon 文件干；顶级文件夹新建时继承区块默认图标）；
+  // 后端 list_folder_tree 暂未输出本字段（3.1 一轮已知缺口），缺省 = 默认文件夹图标
+  icon?: string | null;
   children: FolderNode[];
+}
+
+// 默认区块「目录」id（后端 core/models.rs DEFAULT_BLOCK_ID；禁删可改名）
+export const DEFAULT_BLOCK_ID = "dir";
+
+// 区块视图（后端 commands/import.rs BlockView；list_folder_tree 按 order 排序输出）
+export interface BlockView {
+  id: string;
+  name: string;
+  icon: string | null; // 区块默认图标（自定义图标名），null = 无
+}
+
+// list_folder_tree 返回（2026-08-14 区块子系统 breaking：原直接返回 FolderNode[]）
+export interface FolderTreeView {
+  blocks: BlockView[];
+  nodes: FolderNode[];
+}
+
+// 区块 + 其顶级文件夹节点（侧栏 / 文件夹选择弹窗分段渲染用）
+export interface BlockSection {
+  block: BlockView;
+  nodes: FolderNode[];
 }
 
 export interface ImportDraft {
@@ -181,6 +208,8 @@ export const useContentStore = defineStore("content", {
     // 10 万级：全量赋值一次完成（元素 markRaw 追加），数组保持可追踪以便流式 push 触发
     placements: [] as PlacementView[],
     folders: markRaw([]) as FolderNode[],
+    // 区块表（2026-08-14 区块子系统）：list_folder_tree 一并返回，按 order 排序；空兜底默认区块
+    blocks: markRaw([]) as BlockView[],
     // 快速访问"最近使用 / 回收站"（6.1 二轮，2026-07-29）：refresh 一并拉取，失败静默降级
     recentAssets: [] as RecentAssetView[],
     recycleEntries: [] as RecycleEntryView[],
@@ -341,6 +370,18 @@ export const useContentStore = defineStore("content", {
         nodes.reduce((sum, n) => sum + 1 + walk(n.children), 0);
       return walk(state.folders);
     },
+    // 按区块分组的顶级节点（2026-08-14 区块子系统）：block null/"dir"/失效引用均归默认区块「目录」；
+    // 后端开库自检保证 blocks 非空且含 dir，空数组兜底合成默认区块（并行开发期降级）
+    blockSections(state): BlockSection[] {
+      const blocks: BlockView[] =
+        state.blocks.length > 0 ? state.blocks : [{ id: DEFAULT_BLOCK_ID, name: "目录", icon: null }];
+      const known = new Set(blocks.map((b) => b.id));
+      const ofBlock = (n: FolderNode): string => {
+        const b = n.block ?? DEFAULT_BLOCK_ID;
+        return known.has(b) ? b : DEFAULT_BLOCK_ID;
+      };
+      return blocks.map((block) => ({ block, nodes: state.folders.filter((n) => ofBlock(n) === block.id) }));
+    },
     // 当前视口对应的导入目标文件夹（菜单触发导入用；"全部"= 根目录 null）
     currentFolderId(state): string | null {
       return state.sidebarSelected.startsWith("folder:")
@@ -371,13 +412,14 @@ export const useContentStore = defineStore("content", {
 
     // 库打开后 / 导入完成后全量刷新（增量刷新随阶段 4 任务队列再做）
     async refresh(): Promise<void> {
-      const [placements, folders] = await Promise.all([
+      const [placements, tree] = await Promise.all([
         invoke<PlacementView[]>("list_placements", { folder: null }),
-        invoke<FolderNode[]>("list_folder_tree"),
+        invoke<FolderTreeView>("list_folder_tree"),
       ]);
       // 数组保持可追踪（流式 push 触发）；元素由 Vue 惰性代理，10 万级只代理可视区
       this.placements = placements;
-      this.folders = markRaw(folders);
+      this.folders = markRaw(tree.nodes);
+      this.blocks = markRaw(tree.blocks);
       // 最近使用 / 回收站一并拉（6.1 二轮）：保持简单——操作后 refresh 即全量对齐
       await Promise.all([this.refreshRecent(), this.refreshRecycle()]);
       // 选择态剔除已不存在的 key（三域就位后统一 prune——回收站 key 存活以 recycleEntries 为准）
@@ -400,7 +442,9 @@ export const useContentStore = defineStore("content", {
       }
     },
     async refreshFolders(): Promise<void> {
-      this.folders = markRaw(await invoke<FolderNode[]>("list_folder_tree"));
+      const tree = await invoke<FolderTreeView>("list_folder_tree");
+      this.folders = markRaw(tree.nodes);
+      this.blocks = markRaw(tree.blocks);
     },
 
     // 09 导入弹窗确认后（4.1）：先经后端检测所选路径中的序列帧——

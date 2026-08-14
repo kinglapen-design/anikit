@@ -15,7 +15,7 @@ use crate::core::models::Folder;
 use crate::core::paths;
 use crate::core::undo::{DiskOp, UndoManager};
 use crate::services::import::ROOT_FOLDER_ID;
-use crate::services::operations::{self, DeleteReport, PlacementRef};
+use crate::services::operations::{self, ApplyBlockReport, BlockInput, DeleteReport, PlacementRef};
 
 /// metadata.json 路径（由 ID 推导，PRD 01-2.3）
 fn meta_path(lib: &Library, asset_id: &str) -> PathBuf {
@@ -32,20 +32,22 @@ pub(crate) fn fail(lib: &mut Library, undo: &mut UndoManager, e: String) -> Stri
   e
 }
 
-/// 新建文件夹：parentId = null / "root" 为顶层；afterFolderId 给了就插到该兄弟之后，否则末尾
+/// 新建文件夹：parentId = null / "root" 为顶层；afterFolderId 给了就插到该兄弟之后，否则末尾；
+/// blockId 仅顶层新建生效（写入 Folder.block 并继承区块默认图标，2026-08-14 区块子系统）
 #[tauri::command]
 pub async fn create_folder(
   state: State<'_, AppState>,
   parent_id: Option<String>,
   name: String,
   after_folder_id: Option<String>,
+  block_id: Option<String>,
 ) -> Result<Folder, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin("新建文件夹");
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  match operations::create_folder(lib, parent_id.as_deref(), &name, after_folder_id.as_deref()) {
+  match operations::create_folder(lib, parent_id.as_deref(), &name, after_folder_id.as_deref(), block_id.as_deref()) {
     Ok(folder) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(folder)
@@ -162,6 +164,8 @@ pub async fn reorder_folders(
 /// 文件夹重设父级（仅改数据不动磁盘）：targetParent = null / "root" 为顶层；
 /// beforeFolderId 给了 = 插到该兄弟（targetParent 直接子级）之前（跨父级上/下 1/3 落点定位，
 /// 2026-07-29 复验：嵌套文件夹拖出），null = 同级末尾；
+/// targetBlock（2026-08-14 区块子系统）：null = 保持原区块；落根级时给值 = 写入 Folder.block
+/// （移回「目录」传 "dir"）；落进文件夹内时必须为 null；
 /// 循环（移入自身或子孙）整条报错，同父 / 陈旧 ID 跳过，返回实际移动数
 #[tauri::command]
 pub async fn move_folders(
@@ -169,13 +173,14 @@ pub async fn move_folders(
   folder_ids: Vec<String>,
   target_parent: Option<String>,
   before_folder_id: Option<String>,
+  target_block: Option<String>,
 ) -> Result<usize, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin(format!("移动 {} 个文件夹", folder_ids.len()));
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  match operations::move_folders(lib, &folder_ids, target_parent.as_deref(), before_folder_id.as_deref()) {
+  match operations::move_folders(lib, &folder_ids, target_parent.as_deref(), before_folder_id.as_deref(), target_block.as_deref()) {
     Ok(moved) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(moved)
@@ -322,6 +327,52 @@ pub async fn delete_placements(
     Ok(report) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(report)
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
+/// 区块管理草稿一次提交（2026-08-14 区块子系统，30 稿确认/取消）：blocks = 保留列表
+/// （数组序 = 显示顺序，id = null 为新建），deleted = 待删区块 id；
+/// deleted 含非空区块且 confirmed = false 时返回 needConfirm 不动数据（询问段不进撤销栈）
+#[tauri::command]
+pub async fn apply_block_changes(
+  state: State<'_, AppState>,
+  blocks: Vec<BlockInput>,
+  deleted: Vec<String>,
+  confirmed: bool,
+) -> Result<ApplyBlockReport, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin("区块管理");
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  match operations::apply_block_changes(lib, blocks, deleted, confirmed) {
+    // 询问段未动数据：丢弃事务，不进撤销栈
+    Ok(report) if report.need_confirm => {
+      undo.cancel();
+      Ok(report)
+    }
+    Ok(report) => {
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(report)
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
+/// 区块拖拽排序即时提交（2026-08-14 区块子系统）：ids 须恰好覆盖现有全部区块
+#[tauri::command]
+pub async fn reorder_blocks(state: State<'_, AppState>, ids: Vec<String>) -> Result<(), String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin("排序区块");
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  match operations::reorder_blocks(lib, ids) {
+    Ok(()) => {
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(())
     }
     Err(e) => Err(fail(lib, &mut undo, e)),
   }

@@ -253,6 +253,8 @@ pub fn run() {
       commands::operations::reorder_placements,
       commands::operations::reorder_folders,
       commands::operations::move_folders,
+      commands::operations::apply_block_changes,
+      commands::operations::reorder_blocks,
       commands::operations::link_placements,
       commands::operations::duplicate_placements,
       commands::operations::rename_placement,

@@ -3,12 +3,14 @@
 //! （锁序 library → undo），本模块只拿 &mut Library 做业务；
 //! 改动 Placement 的统一经 finish() 收尾：重建内存索引 + folders.json 一次落盘。
 
+mod block;
 mod delete;
 mod document;
 mod duplicate;
 mod folder;
 mod placement;
 
+pub use block::{apply_block_changes, reorder_blocks, ApplyBlockReport, BlockInput};
 pub use delete::{delete_placements, DeleteReport};
 pub use document::create_text_document;
 pub use duplicate::{duplicate_placements, rename_placement};

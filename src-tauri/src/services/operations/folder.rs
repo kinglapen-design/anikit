@@ -11,12 +11,15 @@ use crate::services::import::ROOT_FOLDER_ID;
 use super::{check_folder, parent_key};
 
 /// 新建文件夹：after_folder_id 给了就插到该兄弟之后（同级后续 order 顺移 +1），否则末尾。
-/// 名称走库名同一套 Windows 命名规则（前后端同规则，命令接口统一把关）
+/// 名称走库名同一套 Windows 命名规则（前后端同规则，命令接口统一把关）。
+/// block_id 仅顶级新建（parent = None / "root"）生效（2026-08-14 区块子系统）：写入 Folder.block，
+/// 且所在区块有默认图标时继承到 Folder.icon；非顶级新建忽略该参数
 pub fn create_folder(
   lib: &mut Library,
   parent: Option<&str>,
   name: &str,
   after_folder_id: Option<&str>,
+  block_id: Option<&str>,
 ) -> Result<Folder, String> {
   let name = name.trim();
   library::validate_library_name(name).map_err(|e| e.to_string())?;
@@ -26,7 +29,20 @@ pub fn create_folder(
       return Err("父文件夹不存在，可能已被删除".to_string());
     }
   }
-  let folder = match after_folder_id {
+  // 区块归属与默认图标继承（仅顶级；block_id 指向不存在区块报错）
+  let (block, icon) = match (&parent_key, block_id) {
+    (None, Some(b)) => {
+      let blk = lib
+        .folders
+        .blocks
+        .iter()
+        .find(|x| x.id == b)
+        .ok_or_else(|| "目标区块不存在，可能已被删除".to_string())?;
+      (Some(b.to_string()), blk.icon.clone())
+    }
+    _ => (None, None),
+  };
+  let mut folder = match after_folder_id {
     None => {
       let id = ops::create_folder(lib, parent.unwrap_or(ROOT_FOLDER_ID), name);
       lib.index.folders[&id].clone()
@@ -44,12 +60,23 @@ pub fn create_folder(
           f.order += 1;
         }
       }
-      let folder = Folder { id: ops::new_folder_id(), name: name.to_string(), parent: parent_key, order: insert_order };
+      let folder =
+        Folder { id: ops::new_folder_id(), name: name.to_string(), parent: parent_key, block: None, icon: None, order: insert_order };
       lib.folders.folders.push(folder.clone());
       lib.index.folders.insert(folder.id.clone(), folder.clone());
       folder
     }
   };
+  // 区块归属写回（两条创建路径统一在此落 block/icon；均为 None 时无操作）
+  if block.is_some() || icon.is_some() {
+    folder.block = block;
+    folder.icon = icon;
+    if let Some(f) = lib.folders.folders.iter_mut().find(|f| f.id == folder.id) {
+      f.block = folder.block.clone();
+      f.icon = folder.icon.clone();
+    }
+    lib.index.folders.insert(folder.id.clone(), folder.clone());
+  }
   sync_folder_index(lib); // 顺移过 order 的兄弟同步进索引
   library::save_folders(lib).map_err(|e| e.to_string())?;
   log::info!("新建文件夹：{}（{:?} 下）", folder.name, folder.parent);
@@ -143,15 +170,26 @@ fn sync_folder_index(lib: &mut Library) {
 ///       同级 order >= 锚点的兄弟顺移 +移动数，移动组从锚点 order 起按传入顺序连续分配
 ///       （跨父级的上/下 1/3 落点定位，2026-07-29 复验：嵌套文件夹拖出）；
 ///       None = 排到目标父级现有子文件夹末尾（同级 max+1 起连续分配）
+/// target_block（2026-08-14 区块子系统）三态：None = 保持原区块不动；Some(id) = 落根级时
+/// 写入 Folder.block（移回「目录」传 Some("dir")）；落进文件夹内（target_parent 有值）时必须为 None
 pub fn move_folders(
   lib: &mut Library,
   folder_ids: &[String],
   target_parent: Option<&str>,
   before_folder_id: Option<&str>,
+  target_block: Option<&str>,
 ) -> Result<usize, String> {
   let target_key = parent_key(target_parent);
   if let Some(t) = &target_key {
     check_folder(lib, t)?;
+    if target_block.is_some() {
+      return Err("移入文件夹内不能同时指定目标区块".to_string());
+    }
+  }
+  if let Some(b) = target_block {
+    if !lib.folders.blocks.iter().any(|x| x.id == b) {
+      return Err("目标区块不存在，可能已被删除".to_string());
+    }
   }
   // 锚点校验先于落点（先全量验证后落点）：须为 target_parent 的直接子级
   let anchor_order = match before_folder_id {
@@ -177,7 +215,12 @@ pub fn move_folders(
       None => continue, // 陈旧 ID 跳过
     };
     if folder.parent == target_key {
-      continue; // 原地移动跳过
+      // 原地移动跳过；但落根级且指定了不同目标区块时不算原地——拖到区块标题 =
+      // 移入该区块根级末尾（2026-08-14 区块子系统），照常走落点改区块归属
+      let block_change = target_key.is_none() && target_block.is_some() && folder.block.as_deref() != target_block;
+      if !block_change {
+        continue;
+      }
     }
     if is_self_or_descendant(lib, id, target_key.as_deref()) {
       return Err("不能移动到自身或其子文件夹内".to_string());
@@ -188,6 +231,16 @@ pub fn move_folders(
     return Ok(0);
   }
   place_moved(lib, &moving, &target_key, anchor_order);
+  // 落根级且指定目标区块 → 写入 Folder.block（2026-08-14 区块子系统）
+  if target_key.is_none() {
+    if let Some(b) = target_block {
+      for f in &mut lib.folders.folders {
+        if moving.contains(&f.id) {
+          f.block = Some(b.to_string());
+        }
+      }
+    }
+  }
   sync_folder_index(lib);
   library::save_folders(lib).map_err(|e| e.to_string())?;
   log::info!("移动 {} 个文件夹到 {:?}", moving.len(), target_key);
@@ -236,7 +289,7 @@ mod tests {
   use super::*;
   use crate::core::json_io::read_json;
   use crate::core::library::{FOLDERS_FILE};
-  use crate::core::models::FoldersFile;
+  use crate::core::models::{Block, FoldersFile, DEFAULT_BLOCK_ID};
   use crate::core::undo::UndoManager;
 
   struct Harness {
@@ -251,7 +304,7 @@ mod tests {
   }
 
   fn add_folder(lib: &mut Library, id: &str, name: &str, parent: Option<&str>, order: i32) {
-    let folder = Folder { id: id.into(), name: name.into(), parent: parent.map(|s| s.into()), order };
+    let folder = Folder { id: id.into(), name: name.into(), parent: parent.map(|s| s.into()), block: None, icon: None, order };
     lib.folders.folders.push(folder.clone());
     lib.index.folders.insert(id.into(), folder);
   }
@@ -272,12 +325,12 @@ mod tests {
   fn create_folder_appends_at_end() {
     let mut h = make_lib();
     add_folder(&mut h.lib, "F01", "人物", None, 0);
-    let f = create_folder(&mut h.lib, None, "动画", None).unwrap();
+    let f = create_folder(&mut h.lib, None, "动画", None, None).unwrap();
     assert!(f.id.starts_with('F'));
     assert_eq!((f.parent, f.order), (None, 1), "末尾 order = 同级 max+1");
     assert!(h.lib.index.folders.contains_key(&f.id), "索引同步");
     // "root" 视为顶层；落盘验证
-    let f2 = create_folder(&mut h.lib, Some("root"), "参考", None).unwrap();
+    let f2 = create_folder(&mut h.lib, Some("root"), "参考", None, None).unwrap();
     assert_eq!((f2.parent, f2.order), (None, 2));
     let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
     assert_eq!(disk.folders.len(), 3);
@@ -289,18 +342,18 @@ mod tests {
     add_folder(&mut h.lib, "F01", "甲", None, 0);
     add_folder(&mut h.lib, "F02", "乙", None, 1);
     add_folder(&mut h.lib, "F03", "丙", None, 2);
-    let f = create_folder(&mut h.lib, None, "新", Some("F01")).unwrap();
+    let f = create_folder(&mut h.lib, None, "新", Some("F01"), None).unwrap();
     assert_eq!(f.order, 1, "插到 F01 之后");
     assert_eq!(top_orders(&h.lib), vec![("F01", 0), (f.id.as_str(), 1), ("F02", 2), ("F03", 3)], "后续兄弟顺移 +1");
     // 子层级互不影响
     add_folder(&mut h.lib, "F01-1", "子", Some("F01"), 0);
-    let child = create_folder(&mut h.lib, Some("F01"), "子2", Some("F01-1")).unwrap();
+    let child = create_folder(&mut h.lib, Some("F01"), "子2", Some("F01-1"), None).unwrap();
     assert_eq!(child.parent.as_deref(), Some("F01"));
     // 兄弟不存在 / 父不存在 / 非法名称
-    assert!(create_folder(&mut h.lib, None, "x", Some("F-不存在")).is_err());
-    assert!(create_folder(&mut h.lib, Some("F-不存在"), "x", None).is_err());
-    assert!(create_folder(&mut h.lib, None, "坏:名", None).is_err());
-    assert!(create_folder(&mut h.lib, None, "   ", None).is_err());
+    assert!(create_folder(&mut h.lib, None, "x", Some("F-不存在"), None).is_err());
+    assert!(create_folder(&mut h.lib, Some("F-不存在"), "x", None, None).is_err());
+    assert!(create_folder(&mut h.lib, None, "坏:名", None, None).is_err());
+    assert!(create_folder(&mut h.lib, None, "   ", None, None).is_err());
   }
 
   #[test]
@@ -334,18 +387,18 @@ mod tests {
     add_folder(&mut h.lib, "F01-1", "子", Some("F01"), 0);
 
     // 顶层 → 子级
-    let n = move_folders(&mut h.lib, &["F02".into()], Some("F01"), None).unwrap();
+    let n = move_folders(&mut h.lib, &["F02".into()], Some("F01"), None, None).unwrap();
     assert_eq!(n, 1);
     assert_eq!(h.lib.index.folders["F02"].parent.as_deref(), Some("F01"), "索引同步");
     assert_eq!(h.lib.index.folders["F02"].order, 1, "排到目标子级末尾");
 
     // 子级 → 顶层（None = 顶层）
-    let n = move_folders(&mut h.lib, &["F02".into()], None, None).unwrap();
+    let n = move_folders(&mut h.lib, &["F02".into()], None, None, None).unwrap();
     assert_eq!(n, 1);
     assert_eq!((h.lib.index.folders["F02"].parent.clone(), h.lib.index.folders["F02"].order), (None, 1));
 
     // 跨父级 + "root" 视为顶层
-    let n = move_folders(&mut h.lib, &["F01-1".into()], Some("root"), None).unwrap();
+    let n = move_folders(&mut h.lib, &["F01-1".into()], Some("root"), None, None).unwrap();
     assert_eq!(n, 1);
     assert_eq!(h.lib.index.folders["F01-1"].parent, None);
     // 落盘验证
@@ -363,7 +416,7 @@ mod tests {
     add_folder(&mut h.lib, "F-C1", "子1", Some("F-T"), 0);
     add_folder(&mut h.lib, "F-C2", "子2", Some("F-T"), 1);
 
-    let n = move_folders(&mut h.lib, &["F-B".into(), "F-A".into()], Some("F-T"), None).unwrap();
+    let n = move_folders(&mut h.lib, &["F-B".into(), "F-A".into()], Some("F-T"), None, None).unwrap();
     assert_eq!(n, 2);
     assert_eq!(h.lib.index.folders["F-B"].order, 2, "同级 max+1 起");
     assert_eq!(h.lib.index.folders["F-A"].order, 3, "按传入顺序连续分配");
@@ -381,7 +434,7 @@ mod tests {
     add_folder(&mut h.lib, "F-C3", "子3", Some("F-T"), 2);
 
     // F-X、F-Y 跨父级插到 F-C2 之前：锚点及后续兄弟顺移 +移动数，移动组从锚点 order 起连续分配
-    let n = move_folders(&mut h.lib, &["F-X".into(), "F-Y".into()], Some("F-T"), Some("F-C2")).unwrap();
+    let n = move_folders(&mut h.lib, &["F-X".into(), "F-Y".into()], Some("F-T"), Some("F-C2"), None).unwrap();
     assert_eq!(n, 2);
     assert_eq!(h.lib.index.folders["F-X"].order, 1, "从锚点 order 起");
     assert_eq!(h.lib.index.folders["F-Y"].order, 2, "按传入顺序连续分配");
@@ -401,12 +454,12 @@ mod tests {
     add_folder(&mut h.lib, "F02", "乙", None, 1);
 
     // 锚点不是 target_parent 直接子级：报错且不动数据
-    let e = move_folders(&mut h.lib, &["F02".into()], None, Some("F01-1")).unwrap_err();
+    let e = move_folders(&mut h.lib, &["F02".into()], None, Some("F01-1"), None).unwrap_err();
     assert!(e.contains("插入位置无效"), "{e}");
     assert_eq!(h.lib.index.folders["F02"].order, 1, "数据未被半截改动");
     // 锚点自身不在目标父级（F02 是顶层）/ 锚点不存在
-    assert!(move_folders(&mut h.lib, &["F02".into()], Some("F01"), Some("F02")).is_err());
-    assert!(move_folders(&mut h.lib, &["F02".into()], Some("F01"), Some("F-不存在")).is_err());
+    assert!(move_folders(&mut h.lib, &["F02".into()], Some("F01"), Some("F02"), None).is_err());
+    assert!(move_folders(&mut h.lib, &["F02".into()], Some("F01"), Some("F-不存在"), None).is_err());
   }
 
   /// 2026-07-29 复验：嵌套文件夹拖出——跨父级落顶层某文件夹之前
@@ -417,7 +470,7 @@ mod tests {
     add_folder(&mut h.lib, "F02", "乙", None, 1);
     add_folder(&mut h.lib, "F01-1", "子", Some("F01"), 0);
 
-    let n = move_folders(&mut h.lib, &["F01-1".into()], None, Some("F02")).unwrap();
+    let n = move_folders(&mut h.lib, &["F01-1".into()], None, Some("F02"), None).unwrap();
     assert_eq!(n, 1);
     assert_eq!(h.lib.index.folders["F01-1"].parent, None, "拖回顶层");
     assert_eq!(top_orders(&h.lib), vec![("F01", 0), ("F01-1", 1), ("F02", 2)], "插到 F02 之前、F02 顺移");
@@ -432,12 +485,12 @@ mod tests {
     add_folder(&mut h.lib, "F01-1-1", "孙", Some("F01-1"), 0);
 
     // 移入自身 / 子孙：整条报错且不动数据
-    let e = move_folders(&mut h.lib, &["F01".into()], Some("F01"), None).unwrap_err();
+    let e = move_folders(&mut h.lib, &["F01".into()], Some("F01"), None, None).unwrap_err();
     assert!(e.contains("不能移动到自身或其子文件夹内"), "{e}");
-    let e = move_folders(&mut h.lib, &["F01".into()], Some("F01-1-1"), None).unwrap_err();
+    let e = move_folders(&mut h.lib, &["F01".into()], Some("F01-1-1"), None, None).unwrap_err();
     assert!(e.contains("不能移动到自身或其子文件夹内"), "{e}");
     // 批量中一条循环 → 整条失败，先验证后落点（F02 不被半截移动）
-    assert!(move_folders(&mut h.lib, &["F02".into(), "F01".into()], Some("F01-1"), None).is_err());
+    assert!(move_folders(&mut h.lib, &["F02".into(), "F01".into()], Some("F01-1"), None, None).is_err());
     assert_eq!(h.lib.index.folders["F02"].parent, None);
     assert_eq!(h.lib.index.folders["F01"].parent, None);
   }
@@ -449,15 +502,67 @@ mod tests {
     add_folder(&mut h.lib, "F01-1", "子", Some("F01"), 0);
 
     // 同父跳过不计数，数据不变
-    let n = move_folders(&mut h.lib, &["F01-1".into()], Some("F01"), None).unwrap();
+    let n = move_folders(&mut h.lib, &["F01-1".into()], Some("F01"), None, None).unwrap();
     assert_eq!(n, 0);
     assert_eq!((h.lib.index.folders["F01-1"].parent.clone(), h.lib.index.folders["F01-1"].order), (Some("F01".into()), 0));
     // 陈旧 ID 跳过；重复 ID 只计一次
-    let n = move_folders(&mut h.lib, &["F-不存在".into(), "F01-1".into(), "F01-1".into()], None, None).unwrap();
+    let n = move_folders(&mut h.lib, &["F-不存在".into(), "F01-1".into(), "F01-1".into()], None, None, None).unwrap();
     assert_eq!(n, 1);
     assert_eq!(h.lib.index.folders["F01-1"].parent, None);
     // 目标父级不存在 → 报错
-    assert!(move_folders(&mut h.lib, &["F01".into()], Some("F-不存在"), None).is_err());
+    assert!(move_folders(&mut h.lib, &["F01".into()], Some("F-不存在"), None, None).is_err());
+  }
+
+  /// 区块参数（2026-08-14 区块子系统）：顶级新建带 block_id 写入 Folder.block 并继承区块默认图标；
+  /// 区块无默认图标则 icon 不写；block_id 指向不存在区块报错；非顶级新建忽略该参数
+  #[test]
+  fn create_folder_with_block_inherits_icon() {
+    let mut h = make_lib();
+    h.lib.folders.blocks.push(Block { id: "B01".into(), name: "角色".into(), icon: Some("icon-role".into()), order: 1 });
+    h.lib.folders.blocks.push(Block { id: "B02".into(), name: "场景".into(), icon: None, order: 2 });
+    add_folder(&mut h.lib, "F01", "甲", None, 0);
+
+    let f = create_folder(&mut h.lib, None, "乙", None, Some("B01")).unwrap();
+    assert_eq!(f.block.as_deref(), Some("B01"));
+    assert_eq!(f.icon.as_deref(), Some("icon-role"), "继承区块默认图标");
+    assert_eq!(h.lib.index.folders[&f.id].block.as_deref(), Some("B01"), "索引同步");
+    // 区块无默认图标 → Folder.icon 保持 None
+    let f2 = create_folder(&mut h.lib, None, "丙", None, Some("B02")).unwrap();
+    assert_eq!((f2.block.as_deref(), f2.icon.clone()), (Some("B02"), None));
+    // 落盘验证
+    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.folders.iter().find(|x| x.id == f.id).unwrap().icon.as_deref(), Some("icon-role"));
+    // 不存在区块报错；非顶级忽略 block_id（即使 id 无效也不报）
+    assert!(create_folder(&mut h.lib, None, "x", None, Some("B-不存在")).is_err());
+    let child = create_folder(&mut h.lib, Some("F01"), "子", None, Some("B-不存在")).unwrap();
+    assert_eq!((child.block.clone(), child.icon.clone()), (None, None), "非顶级忽略区块参数");
+  }
+
+  /// target_block 三态（2026-08-14 区块子系统）：落根级 Some(id) 写入 Folder.block；Some("dir") 移回
+  /// 「目录」；None 保持原区块不动；落进文件夹内传 target_block 报错；指向不存在区块报错
+  #[test]
+  fn move_folders_target_block() {
+    let mut h = make_lib();
+    h.lib.folders.blocks.push(Block { id: "B01".into(), name: "角色".into(), icon: None, order: 1 });
+    add_folder(&mut h.lib, "F01", "甲", None, 0);
+    add_folder(&mut h.lib, "F02", "乙", None, 1);
+    add_folder(&mut h.lib, "F01-1", "子", Some("F01"), 0);
+
+    // 落根级设置区块（子级拖出到区块根级）
+    let n = move_folders(&mut h.lib, &["F01-1".into()], None, None, Some("B01")).unwrap();
+    assert_eq!(n, 1);
+    assert_eq!(h.lib.index.folders["F01-1"].block.as_deref(), Some("B01"), "索引同步");
+    // None = 不动原区块
+    move_folders(&mut h.lib, &["F01-1".into()], Some("F02"), None, None).unwrap();
+    let n = move_folders(&mut h.lib, &["F01-1".into()], None, None, None).unwrap();
+    assert_eq!(n, 1);
+    assert_eq!(h.lib.index.folders["F01-1"].block.as_deref(), Some("B01"), "不传 target_block 保持原区块");
+    // Some("dir") = 移回「目录」
+    move_folders(&mut h.lib, &["F01-1".into()], None, None, Some(DEFAULT_BLOCK_ID)).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1"].block.as_deref(), Some(DEFAULT_BLOCK_ID));
+    // 落进文件夹内传 target_block → 报错；不存在区块 → 报错
+    assert!(move_folders(&mut h.lib, &["F02".into()], Some("F01"), None, Some("B01")).is_err());
+    assert!(move_folders(&mut h.lib, &["F02".into()], None, None, Some("B-不存在")).is_err());
   }
 
   /// 撤销接入验证：begin → record_file → 业务 → commit 后 undo 栈有一条，undo 回滚 folders.json
@@ -472,7 +577,7 @@ mod tests {
     let mut undo = UndoManager::default();
     undo.begin("移动 1 个文件夹");
     undo.record_file(&path).unwrap();
-    move_folders(&mut h.lib, &["F02".into()], Some("F01"), None).unwrap();
+    move_folders(&mut h.lib, &["F02".into()], Some("F01"), None, None).unwrap();
     undo.commit().unwrap();
     assert!(undo.state().can_undo);
     assert_eq!(undo.state().undo_label.as_deref(), Some("移动 1 个文件夹"));
@@ -496,7 +601,7 @@ mod tests {
     let mut undo = UndoManager::default();
     undo.begin("移动 1 个文件夹");
     undo.record_file(&path).unwrap();
-    move_folders(&mut h.lib, &["F01-1".into()], None, Some("F02")).unwrap();
+    move_folders(&mut h.lib, &["F01-1".into()], None, Some("F02"), None).unwrap();
     undo.commit().unwrap();
 
     undo.undo().unwrap();

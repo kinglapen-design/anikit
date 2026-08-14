@@ -44,13 +44,15 @@ import {
   dropFolderBeside,
   dropFolderCardBeside,
   dropFoldersInto,
+  dropFoldersIntoBlock,
+  dropBlockBeside,
   visibleTreeFolderIds,
 } from "./dragFolderOps";
 
 // 自 dragFolderOps 转出（规范第 3 条行数控制，2026-07-29）；re-export 保既有引用点不动
 export { visibleTreeFolderIds };
 
-export type DragKind = "asset" | "folder";
+export type DragKind = "asset" | "folder" | "block";
 
 // 卡片间距落点（cards-layer 坐标系，AssetGrid 渲染色块；beforeKey = 间隙后项 key，null = 段尾）
 export interface GapIndicator {
@@ -77,6 +79,9 @@ export const dragView = reactive({
   folderGapId: null as string | null, // 文件夹卡片间隙排序目标（FolderCard 渲染竖块）
   folderGapAfter: false,
   tree: null as TreeIndicator | null, // 文件树落点（TreeItem 渲染）
+  // 区块标题落点（2026-08-14 区块子系统，LibraryView .block-head 渲染）：
+  // into = 文件夹拖入该区块根级（并入高亮）；before/after = 区块拖拽排序上/下半插入线
+  block: null as { id: string; zone: "before" | "after" | "into" } | null,
   // 拖拽源项（2026-07-28 复验反馈 6①：源卡片 / 源项原地半透明 var(--opacity-drag-source)，结束恢复）
   assetKeys: null as Set<string> | null, // 素材拖拽源 key 集（AssetCard / ListRowCard 读）
   folderIds: null as Set<string> | null, // 文件夹拖拽源 id 集（FolderCard / TreeItem 读）
@@ -200,6 +205,7 @@ function resetIndicators(): void {
   dragView.folderCardId = null;
   dragView.folderGapId = null;
   dragView.tree = null;
+  dragView.block = null;
   if (sess) sess.drop = null;
 }
 
@@ -213,6 +219,21 @@ function updateDropTarget(e: PointerEvent): void {
   const items = sess.items;
   const folderIds = sess.folderIds;
   const ctrl = e.ctrlKey || e.metaKey;
+
+  // 区块标题拖拽排序（2026-08-14 区块子系统）：落点 = 其他区块标题上/下半（插入线指示），
+  // 不与任何其他落点叠加（区块标题只与区块排序）
+  if (sess.kind === "block") {
+    const head = el.closest<HTMLElement>(".block-head[data-block-id]");
+    if (!head) return;
+    const id = head.getAttribute("data-block-id")!;
+    const draggedId = sess.key; // 落点动作入参当场捕获（不读 sess，防 endDrag 先清会话的老坑）
+    if (id === draggedId) return; // 拖到自身 = 无操作
+    const r = head.getBoundingClientRect();
+    const zone = (e.clientY - r.top) / Math.max(1, r.height) < 0.5 ? ("before" as const) : ("after" as const);
+    dragView.block = { id, zone };
+    sess.drop = async () => dropBlockBeside(draggedId, id, zone);
+    return;
+  }
 
   // 文件树 item（TreeItem 根带 data-folder-id；快速访问项无此属性天然不作落点）
   const treeItem = el.closest<HTMLElement>(".tree-item[data-folder-id]");
@@ -261,6 +282,18 @@ function updateDropTarget(e: PointerEvent): void {
       }
     }
     return;
+  }
+
+  // 文件夹拖到区块标题（2026-08-14 区块子系统）：移入该区块根级（move_folders targetBlock），
+  // 并入高亮同树 item 中间 1/3 口径；素材拖区块标题无意义（素材落点 = 文件夹），不作落点
+  if (sess.kind === "folder") {
+    const head = el.closest<HTMLElement>(".block-head[data-block-id]");
+    if (head) {
+      const id = head.getAttribute("data-block-id")!;
+      dragView.block = { id, zone: "into" };
+      sess.drop = async () => dropFoldersIntoBlock(folderIds, id);
+      return;
+    }
   }
 
   // 素材卡片间隙排序（仅素材拖拽；网格 resolver 由 AssetGrid 注册）
@@ -315,19 +348,22 @@ function startDrag(e: PointerEvent): void {
     if (!selection.isSelected(sess.key)) selection.clickItem(sess.key);
     sess.items = selection.selectedRefs();
     dragView.assetKeys = new Set(selection.selected);
-  } else {
+  } else if (sess.kind === "folder") {
     // 文件夹整组拖拽（2026-07-28 复验反馈 5）：拖拽未选中文件夹 = 先单选它再拖；
-    // 多选拖拽 = 对全部选中文件夹执行（顺序按树可见展开态）
+    // 多选拖拽 = 对全部选中文件夹执行（顺序按树可见展开态，2026-08-14 多区块：按源区块容器收窄）
     if (!selection.isFolderSelected(sess.key)) selection.clickFolder(sess.key);
-    sess.folderIds = selection.orderedSelectedFolderIds(visibleTreeFolderIds());
+    const srcScope =
+      (document.elementFromPoint(sess.startX, sess.startY) as HTMLElement | null)?.closest(".block-tree") ?? null;
+    sess.folderIds = selection.orderedSelectedFolderIds(visibleTreeFolderIds(srcScope));
     dragView.folderIds = new Set(sess.folderIds);
   }
+  // 区块标题拖拽（kind === "block"）：无选择域语义，sess.key 即被拖区块 id，下方 ghost 纸片走名称
   // ghost 取图锚点（2026-07-29 复验二轮 3）：elementFromPoint 命中最深元素（常是 img 自身 /
   // 信息区文字 span），原 dragGhost 只 querySelector 后代恒 miss 走纸片 fallback——
   // 先 closest 到卡片根；多选取首个选中项的卡片（卡片已渲染缩略图涵盖 PSD 缓存图 / 波形 /
   // 视频首帧 / 序列帧封面全部形态，最可靠）
   const hit = document.elementFromPoint(sess.startX, sess.startY) as HTMLElement | null;
-  let anchor = hit?.closest<HTMLElement>(".asset-card, .list-row, .folder-card, .tree-item") ?? null;
+  let anchor = hit?.closest<HTMLElement>(".asset-card, .list-row, .folder-card, .tree-item, .block-head") ?? null;
   if (sess.kind === "asset" && sess.items.length > 0) {
     const k0 = `${sess.items[0].assetId}|${sess.items[0].folderId}`;
     anchor =
@@ -337,8 +373,9 @@ function startDrag(e: PointerEvent): void {
   }
   sess.ghost = makeGhost({
     anchor,
-    kind: sess.kind,
-    count: sess.kind === "asset" ? sess.items.length : sess.folderIds.length,
+    // 区块拖拽 ghost = 名称纸片（block-head 挂 data-drag-name = 区块名），与文件夹同走纸片 fallback
+    kind: sess.kind === "block" ? "folder" : sess.kind,
+    count: sess.kind === "asset" ? sess.items.length : sess.kind === "folder" ? sess.folderIds.length : 1,
   });
   moveGhost(sess.ghost, e.clientX, e.clientY);
   dragView.active = true;
@@ -373,6 +410,7 @@ function endDrag(cancelled: boolean): void {
   window.removeEventListener("pointercancel", onCancel);
   window.removeEventListener("keydown", onKey, true);
   window.removeEventListener("blur", onWindowBlur);
+  document.removeEventListener("mouseleave", onDocLeave);
   // 释放 pointer capture（元素已卸载等情况 capture 已自动释放，吞异常）
   if (s.capEl) {
     try {
@@ -411,6 +449,11 @@ function onCancel(): void {
 function onWindowBlur(): void {
   endDrag(true);
 }
+// 未挂 capture 的拖拽（区块标题，2026-08-14 走查"品牌色像素点残留"）：指针划出窗口即取消——
+// 窗外松手 pointerup 丢失、onMove 不再触发，buttons 僵尸自清失去兜底机会，落点指示残留
+function onDocLeave(): void {
+  endDrag(true);
+}
 function onKey(e: KeyboardEvent): void {
   if (e.key === "Escape") {
     e.stopPropagation();
@@ -437,9 +480,15 @@ function begin(e: PointerEvent, kind: DragKind, key: string): void {
     capEl: null,
   };
   // pointer capture 挂按下的卡片 / 树 item 根（治本：窗口外松手 pointerup 也能派发到 webview，
-  // 僵尸会话不再产生；capture 到自身根元素不影响 click 派发——down/up 共同祖先仍是他）
-  const capEl = (e.target as HTMLElement).closest<HTMLElement>(".tree-item, .asset-card, .list-row, .folder-card");
-  if (capEl) {
+  // 僵尸会话不再产生；capture 到自身根元素不影响 click 派发——down/up 共同祖先仍是他）。
+  // 区块标题（block）例外不挂 capture（2026-08-14）：其折叠按钮（SectionHeader fold-area）是
+  // 内层 button 非 capture 根——capture 重定向后 click 落在共同祖先 .block-head 上，
+  // 按钮 @click 永不触发（树 item 无碍是因为 click 挂在 capture 根本身）；
+  // 不挂 capture 靠 onMove buttons 僵尸自清兜底，纯点击语义零影响
+  const capEl = (e.target as HTMLElement).closest<HTMLElement>(
+    ".tree-item, .asset-card, .list-row, .folder-card, .block-head",
+  );
+  if (capEl && kind !== "block") {
     try {
       capEl.setPointerCapture(e.pointerId);
       sess.capEl = capEl;
@@ -452,6 +501,10 @@ function begin(e: PointerEvent, kind: DragKind, key: string): void {
   window.addEventListener("pointercancel", onCancel);
   window.addEventListener("keydown", onKey, true);
   window.addEventListener("blur", onWindowBlur);
+  // 未挂 capture 的拖拽（区块标题）：划出窗口即取消兜底（窗外松手 pointerup 丢失 → 指示残留）
+  if (!sess.capEl) {
+    document.addEventListener("mouseleave", onDocLeave);
+  }
 }
 
 // 素材卡片拖拽起点（AssetCard / ListRowCard，卡片根带 data-key；按钮 / 输入框上不启动）
@@ -503,4 +556,12 @@ export function beginFolderDrag(e: PointerEvent, folderId: string): void {
   const t = e.target as HTMLElement;
   if (t.closest(".expand")) return;
   begin(e, "folder", folderId);
+}
+
+// 区块标题拖拽起点（2026-08-14 区块子系统，LibraryView .block-head）：添加按钮上不启动；
+// 折叠区（fold-area）与树 item 同范式——按下未过阈值松开 = 原 click 折叠语义不动
+export function beginBlockDrag(e: PointerEvent, blockId: string): void {
+  const t = e.target as HTMLElement;
+  if (t.closest(".add-btn")) return;
+  begin(e, "block", blockId);
 }

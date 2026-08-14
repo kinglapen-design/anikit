@@ -311,7 +311,8 @@ mod tests {
     let lib_dir = space.root.join(lib);
     let folders = FoldersFile {
       version: DATA_VERSION,
-      folders: vec![Folder { id: "F01".into(), name: "夹".into(), parent: None, order: 0 }],
+      blocks: Vec::new(),
+      folders: vec![Folder { id: "F01".into(), name: "夹".into(), parent: None, block: None, icon: None, order: 0 }],
       items: folder_items
         .iter()
         .map(|id| Placement { asset: id.to_string(), folder: "F01".into(), name: format!("{id}.fla"), order: 0, origin: true })

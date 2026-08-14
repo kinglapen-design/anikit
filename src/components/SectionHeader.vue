@@ -4,6 +4,7 @@
 // 整行（标题/数量/箭头）为折叠判定区；添加按钮独立；pad 由布局处给；
 // grip 变体（详情面板）：折叠区整行 hover 抓手 + 标题提亮，为拖拽排序准备。
 import AppIcon from "./AppIcon.vue";
+import { dragView } from "../lib/dragOperation";
 
 withDefaults(
   defineProps<{
@@ -18,11 +19,18 @@ withDefaults(
 );
 const open = defineModel<boolean>("open", { default: true });
 const emit = defineEmits<{ add: []; menu: [e: MouseEvent] }>();
+
+// 折叠切换：有效拖拽结束后的紧随 click 不触发（2026-08-14 区块子系统——区块标题可拖拽排序，
+// 拖完松手的 click 落在 fold-area 上会误折叠；与树 item suppressClick 同口径）
+function onFold(): void {
+  if (dragView.suppressClick) return;
+  open.value = !open.value;
+}
 </script>
 
 <template>
   <div class="section-header" :class="{ grip, group }" :style="{ padding: pad }">
-    <button class="fold-area" @click="open = !open">
+    <button class="fold-area" @click="onFold">
       <span class="title">{{ title }}</span>
       <span v-if="count !== undefined" class="count">- {{ count.toLocaleString() }}</span>
       <span class="chev-slot">

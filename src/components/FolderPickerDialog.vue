@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // 文件夹选择弹窗（6.3"添加至文件夹"）：文件夹树单选目标 → 确认回调（关联 / 副本弹窗前置）。
 // 顶部带"未分类"根级项（2026-08-13 用户定案：落点不设限，原"候车区禁止链接落点"废除）。
+// 多区块（2026-08-14 区块子系统）：顶级文件夹按区块分段，区块标题行不可选
+//（简化标题行 = 05 稿区块标题文字样式，无加号无折叠）；单默认区块时不渲染标题行（与原布局一致）。
 // 由 selection.folderPickPrompt 驱动，宿主 App.vue；展开态本组件自管（默认全展开）。
 import { computed, ref } from "vue";
 import IconButton from "./IconButton.vue";
@@ -22,6 +24,8 @@ function toggle(id: string): void {
 }
 
 const prompt = computed(() => selection.folderPickPrompt);
+// 多区块才分段渲染标题行（2026-08-14）：单默认区块 = 原布局零变化
+const showBlockHeaders = computed(() => content.blockSections.length > 1);
 
 function onConfirm(): void {
   const p = prompt.value;
@@ -49,16 +53,23 @@ function onCancel(): void {
           :selected="pickedId === 'root'"
           @select="pickedId = 'root'"
         />
-        <FolderPickNode
-          v-for="node in content.folders"
-          :key="node.id"
-          :node="node"
-          :depth="0"
-          :picked="pickedId"
-          :collapsed="collapsed"
-          @pick="pickedId = $event"
-          @toggle="toggle"
-        />
+        <!-- 顶级文件夹按区块分段（2026-08-14 区块子系统）：区块标题行不可选；
+             空区块段不渲染（无顶级文件夹无可选内容） -->
+        <template v-for="sec in content.blockSections" :key="sec.block.id">
+          <template v-if="sec.nodes.length > 0">
+            <div v-if="showBlockHeaders" class="pick-block-title">{{ sec.block.name }}</div>
+            <FolderPickNode
+              v-for="node in sec.nodes"
+              :key="node.id"
+              :node="node"
+              :depth="0"
+              :picked="pickedId"
+              :collapsed="collapsed"
+              @pick="pickedId = $event"
+              @toggle="toggle"
+            />
+          </template>
+        </template>
       </div>
       <footer class="pick-footer">
         <button class="btn primary" :disabled="!pickedId" @click="onConfirm">确认</button>
@@ -111,6 +122,18 @@ function onCancel(): void {
   min-height: 0;
   overflow-y: auto;
   padding: 0 var(--space-8) var(--space-8);
+}
+/* 区块标题行（05 稿区块标题文字样式：标签档 12 标签色，左 padding 8 对齐 item 内容）；
+   不可选不响应 hover，仅作分段标识 */
+.pick-block-title {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  padding-left: var(--space-8);
+  font-size: var(--text-label-size);
+  line-height: var(--text-label-line);
+  color: var(--text-label);
+  flex: none;
 }
 .pick-footer {
   display: flex;

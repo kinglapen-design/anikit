@@ -405,19 +405,42 @@ pub struct FolderNode {
   pub name: String,
   /// 该文件夹递归 Placement 总数（含全部子文件夹；2026-07-25 用户定：整洁层级下直接数会大面积为 0）
   pub count: u32,
+  /// 所属区块 ID（2026-08-14 区块子系统：仅顶级节点有值语义，None = 「目录」；子节点恒 None 不写字段）
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub block: Option<String>,
+  /// 自定义图标（2026-08-14 区块子系统：新建顶级文件夹继承区块默认图标；None 不写字段）
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub icon: Option<String>,
   pub children: Vec<FolderNode>,
+}
+
+/// 区块视图（侧栏分组依据），按 Block.order 排序输出
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockView {
+  pub id: String,
+  pub name: String,
+  pub icon: Option<String>,
+}
+
+/// 文件夹树返回（2026-08-14 区块子系统）：blocks = 区块表（order 序）；nodes = 文件夹树
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderTreeView {
+  pub blocks: Vec<BlockView>,
+  pub nodes: Vec<FolderNode>,
 }
 
 /// 文件夹树（导入弹窗选目标文件夹用），按 Folder.order 排序
 #[tauri::command]
-pub fn list_folder_tree(state: State<AppState>) -> Result<Vec<FolderNode>, String> {
+pub fn list_folder_tree(state: State<AppState>) -> Result<FolderTreeView, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
   Ok(folder_tree(lib))
 }
 
-/// 组装文件夹树：parent=None 为顶层，递归子级
-fn folder_tree(lib: &Library) -> Vec<FolderNode> {
+/// 组装文件夹树：parent=None 为顶层，递归子级；区块表按 order 排序一并输出
+fn folder_tree(lib: &Library) -> FolderTreeView {
   fn children_of(lib: &Library, parent: Option<&str>) -> Vec<FolderNode> {
     let mut folders: Vec<&crate::core::models::Folder> =
       lib.folders.folders.iter().filter(|f| f.parent.as_deref() == parent).collect();
@@ -428,11 +451,18 @@ fn folder_tree(lib: &Library) -> Vec<FolderNode> {
         let children = children_of(lib, Some(&f.id));
         let direct = lib.index.placements_by_folder.get(&f.id).map(|v| v.len()).unwrap_or(0) as u32;
         let recursive = direct + children.iter().map(|c| c.count).sum::<u32>();
-        FolderNode { id: f.id.clone(), name: f.name.clone(), count: recursive, children }
+        // block / icon 仅顶级节点输出（子节点不持区块语义；icon 继承自区块默认图标）
+        let (block, icon) = if parent.is_none() { (f.block.clone(), f.icon.clone()) } else { (None, None) };
+        FolderNode { id: f.id.clone(), name: f.name.clone(), count: recursive, block, icon, children }
       })
       .collect()
   }
-  children_of(lib, None)
+  let mut blocks: Vec<&crate::core::models::Block> = lib.folders.blocks.iter().collect();
+  blocks.sort_by_key(|b| b.order);
+  FolderTreeView {
+    blocks: blocks.into_iter().map(|b| BlockView { id: b.id.clone(), name: b.name.clone(), icon: b.icon.clone() }).collect(),
+    nodes: children_of(lib, None),
+  }
 }
 
 /// 列出 Placement：folder=None 全部；Some(id) 指定文件夹（"root" 表示根目录）
@@ -519,10 +549,56 @@ mod tests {
     import(&h, vec![src], Structure::Keep);
 
     let tree = with_lib(&h, folder_tree);
-    assert_eq!(tree.len(), 1);
+    assert_eq!(tree.nodes.len(), 1);
     // count = 递归总数：父级"参考"= 自身 a.txt 1 + 子文件夹"人物" b.txt 1
-    assert_eq!((tree[0].name.as_str(), tree[0].count), ("参考", 2));
-    assert_eq!((tree[0].children[0].name.as_str(), tree[0].children[0].count), ("人物", 1));
+    assert_eq!((tree.nodes[0].name.as_str(), tree.nodes[0].count), ("参考", 2));
+    assert_eq!((tree.nodes[0].children[0].name.as_str(), tree.nodes[0].children[0].count), ("人物", 1));
+  }
+
+  /// 区块输出（2026-08-14 区块子系统）：blocks 按 order 排序；顶级节点带 block，子节点不带
+  #[test]
+  fn folder_tree_outputs_blocks_ordered_and_top_level_block() {
+    let h = make_lib();
+    {
+      let mut guard = h.lib.lock().unwrap();
+      let lib = guard.as_mut().unwrap();
+      // 默认区块「目录」order 0；插入两个自定义区块，order 故意乱序
+      lib.folders.blocks.push(crate::core::models::Block { id: "B01".into(), name: "角色".into(), icon: Some("icon-role".into()), order: 2 });
+      lib.folders.blocks.push(crate::core::models::Block { id: "B02".into(), name: "场景".into(), icon: None, order: 1 });
+      let top = crate::core::models::Folder {
+        id: "F01".into(),
+        name: "顶夹".into(),
+        parent: None,
+        block: Some("B01".into()),
+        icon: None,
+        order: 0,
+      };
+      let child = crate::core::models::Folder {
+        id: "F01-1".into(),
+        name: "子夹".into(),
+        parent: Some("F01".into()),
+        block: Some("B02".into()), // 脏数据：子节点即使带值也不输出
+        icon: None,
+        order: 0,
+      };
+      lib.folders.folders.push(top.clone());
+      lib.folders.folders.push(child.clone());
+      lib.index.folders.insert(top.id.clone(), top);
+      lib.index.folders.insert(child.id.clone(), child);
+    }
+
+    let tree = with_lib(&h, folder_tree);
+    assert_eq!(
+      tree.blocks.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(),
+      vec!["dir", "B02", "B01"],
+      "blocks 按 order 排序"
+    );
+    assert_eq!(tree.blocks[2].icon.as_deref(), Some("icon-role"));
+    assert_eq!(tree.nodes[0].block.as_deref(), Some("B01"), "顶级节点带 block");
+    assert_eq!(tree.nodes[0].children[0].block, None, "子节点不带 block");
+    // 序列化：子节点不输出 block 字段（skip_serializing_if）
+    let text = serde_json::to_string(&tree.nodes[0].children[0]).unwrap();
+    assert!(!text.contains("block"));
   }
 
   #[test]

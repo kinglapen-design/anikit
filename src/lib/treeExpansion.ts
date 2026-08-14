@@ -65,3 +65,23 @@ export function expandLevel(nodes: FolderNode[], parentId: string | null): void 
 export function collapseLevel(nodes: FolderNode[], parentId: string | null): void {
   setOpen(levelIds(nodes, parentId), false);
 }
+
+// —— 区块展开态（2026-08-14 区块子系统，与本模块 openSet 同范式：模块级会话态）——
+// 语义默认开，故记录的是折叠集（新区块天然展开，无需种子初始化）
+export const blockExpansion = reactive({
+  closedSet: new Set<string>(),
+});
+
+export function isBlockOpen(blockId: string): boolean {
+  return !blockExpansion.closedSet.has(blockId);
+}
+
+export function toggleBlockOpen(blockId: string): void {
+  if (blockExpansion.closedSet.has(blockId)) blockExpansion.closedSet.delete(blockId);
+  else blockExpansion.closedSet.add(blockId);
+}
+
+// 强制展开（区块内新建文件夹进命名态时保证新节点可见）
+export function openBlock(blockId: string): void {
+  blockExpansion.closedSet.delete(blockId);
+}

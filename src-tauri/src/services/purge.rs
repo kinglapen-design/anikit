@@ -209,7 +209,7 @@ mod tests {
   }
 
   fn add_folder(lib: &mut Library, id: &str, parent: Option<&str>) {
-    let folder = Folder { id: id.into(), name: id.into(), parent: parent.map(|p| p.to_string()), order: 0 };
+    let folder = Folder { id: id.into(), name: id.into(), parent: parent.map(|p| p.to_string()), block: None, icon: None, order: 0 };
     lib.folders.folders.push(folder.clone());
     lib.index.folders.insert(id.into(), folder);
   }

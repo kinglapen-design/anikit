@@ -16,7 +16,7 @@ const emit = defineEmits<{ pick: [id: string]; toggle: [id: string] }>();
 <template>
   <div class="pick-node">
     <TreeItem
-      :icon="!collapsed.has(node.id) ? 'folder-open' : 'folder-closed'"
+      :icon="node.icon ?? (!collapsed.has(node.id) ? 'folder-open' : 'folder-closed')"
       :label="node.name"
       :count="node.count"
       :depth="depth"

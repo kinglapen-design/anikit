@@ -614,8 +614,8 @@ mod tests {
   #[test]
   fn export_folder_keeps_hierarchy_and_display_names() {
     let mut h = make_lib();
-    let sub = Folder { id: "F-SUB".into(), name: "子夹".into(), parent: Some("F-TOP".into()), order: 0 };
-    let top = Folder { id: "F-TOP".into(), name: "顶夹".into(), parent: None, order: 0 };
+    let sub = Folder { id: "F-SUB".into(), name: "子夹".into(), parent: Some("F-TOP".into()), block: None, icon: None, order: 0 };
+    let top = Folder { id: "F-TOP".into(), name: "顶夹".into(), parent: None, block: None, icon: None, order: 0 };
     h.lib.folders.folders.push(top.clone());
     h.lib.folders.folders.push(sub.clone());
     h.lib.index.folders.insert(top.id.clone(), top);
@@ -687,7 +687,7 @@ mod tests {
   #[test]
   fn export_folder_sequence_and_anim_unpack_regression() {
     let mut h = make_lib();
-    let top = Folder { id: "F-TOP".into(), name: "顶夹".into(), parent: None, order: 0 };
+    let top = Folder { id: "F-TOP".into(), name: "顶夹".into(), parent: None, block: None, icon: None, order: 0 };
     h.lib.folders.folders.push(top.clone());
     h.lib.index.folders.insert(top.id.clone(), top);
     add_sequence(&mut h, "AN-S", "走路", "F-TOP");

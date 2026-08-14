@@ -1,10 +1,11 @@
 // 07 稿 · 新增菜单 spec（自 menuSpecs.ts 拆出，规范第 3 条行数控制）：宽 320 无搜索框。
 // 新建文档组（newDocGroupEntries）与 14 汉堡"文件"二级共用，故同文件导出。
 import { useSelectionStore } from "../../stores/selection";
-import { useContentStore } from "../../stores/content";
+import { useContentStore, DEFAULT_BLOCK_ID } from "../../stores/content";
 import type { CtxEntry, CtxItem } from "../contextMenus";
 import { docApp } from "../docApps";
 import { createAndName, pickFolderForLink, pickImportPaths } from "../menuOps";
+import { openBlock } from "../treeExpansion";
 import { createTextDocument, pasteClipboard, pasteDuplicate } from "../placementOps";
 import { openScan } from "../dupScanOps";
 // MarkDown 文档图标（2026-08-11 用户供 md.webp，webp 非 svg 走 iconData 内联图）
@@ -64,7 +65,17 @@ export function addButtonSpec(): CtxEntry[] {
     );
   }
   entries.push(
-    { label: "新建文件夹", icon: "new-folder", shortcut: "Ctrl+Shift+N", action: () => void createAndName(null, null) },
+    // 新建文件夹入口 = 默认区块「目录」根级（2026-08-14 区块子系统：保持原语义——根级最底部）；
+    // 区块折叠时先强制展开让新节点可见（与侧栏区块头 + 按钮同口径）
+    {
+      label: "新建文件夹",
+      icon: "new-folder",
+      shortcut: "Ctrl+Shift+N",
+      action: () => {
+        openBlock(DEFAULT_BLOCK_ID);
+        void createAndName(null, null, DEFAULT_BLOCK_ID);
+      },
+    },
     { label: "新建档案", icon: "new-archive", shortcut: "Shift+N", disabled: true },
     "divider",
     { label: "导入本地文件", icon: "import-file", action: () => void pickImportPaths("files") },

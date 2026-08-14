@@ -191,6 +191,14 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   let removed = prune_missing_placements(&mut folders, &assets);
   if removed > 0 {
     log::warn!("打开自检剔除 {removed} 条指向缺失 info 的 Placement");
+  }
+  // 区块表自检（2026-08-14 区块子系统）：blocks 缺默认区块 → 注入「目录」；
+  // Folder.block 指向不存在的区块 → 置 None（存量自愈）
+  let blocks_fixed = fix_blocks(&mut folders);
+  if blocks_fixed {
+    log::info!("打开自检修复区块表（注入默认区块 / 失效区块引用置空）");
+  }
+  if removed > 0 || blocks_fixed {
     match backup::backup_library(path, &assets_dir) {
       Ok(_) => write_json(&path.join(FOLDERS_FILE), &folders)?,
       Err(e) => log::error!("自检清理前备份失败，folders.json 保持原样（仅本会话内存清理）：{e}"),
@@ -244,6 +252,25 @@ fn prune_missing_placements(folders: &mut FoldersFile, assets: &[AssetMeta]) -> 
   let before = folders.items.len();
   folders.items.retain(|p| ids.contains(p.asset.as_str()));
   before - folders.items.len()
+}
+
+/// 打开自检（2026-08-14 区块子系统）：区块表自愈——默认区块「目录」缺失（含 blocks 为空）→
+/// 注入队首；Folder.block 指向不存在的区块 → 置 None。返回是否有改动
+fn fix_blocks(folders: &mut FoldersFile) -> bool {
+  let mut changed = false;
+  if !folders.blocks.iter().any(|b| b.id == DEFAULT_BLOCK_ID) {
+    folders.blocks.insert(0, Block { id: DEFAULT_BLOCK_ID.to_string(), name: "目录".to_string(), icon: None, order: 0 });
+    changed = true;
+  }
+  let ids: HashSet<&str> = folders.blocks.iter().map(|b| b.id.as_str()).collect();
+  for f in &mut folders.folders {
+    let dangling = matches!(&f.block, Some(b) if !ids.contains(b.as_str()));
+    if dangling {
+      f.block = None;
+      changed = true;
+    }
+  }
+  changed
 }
 
 /// folders.json 单一写点（01_开发规范 第 1 条）：全量保存文件夹树 + 全部 Placement。
@@ -569,11 +596,72 @@ mod tests {
     assert!(thumbs.join("fla.webp").exists(), "格式图标缓存应保留");
   }
 
+  /// 区块自检（2026-08-14 区块子系统）：旧版 folders.json（无 blocks 字段、Folder 无 block/icon）
+  /// 开库注入默认区块「目录」并按惯例落盘（备份后写）
+  #[test]
+  fn open_injects_default_block_into_legacy_folders_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let root = lib.root.clone();
+
+    fs::write(
+      root.join(FOLDERS_FILE),
+      r#"{
+        "version": 1,
+        "folders": [ { "id": "F01", "name": "人物", "parent": null, "order": 0 } ],
+        "items": []
+      }"#,
+    )
+    .unwrap();
+
+    let lib = open(&lib.space_root, &root).unwrap();
+    assert_eq!(lib.folders.blocks.len(), 1, "blocks 为空注入默认区块");
+    assert_eq!(
+      (lib.folders.blocks[0].id.as_str(), lib.folders.blocks[0].name.as_str(), lib.folders.blocks[0].order),
+      (DEFAULT_BLOCK_ID, "目录", 0)
+    );
+    assert_eq!((lib.folders.folders[0].block.clone(), lib.folders.folders[0].icon.clone()), (None, None));
+    let disk: FoldersFile = read_json(&root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.blocks.len(), 1, "自检改动落盘");
+  }
+
+  /// 区块自检：默认区块缺失（已有其他区块）→ 补注队首；Folder.block 指向不存在的区块 → 置 None 自愈
+  #[test]
+  fn open_heals_missing_default_block_and_dangling_refs() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let root = lib.root.clone();
+
+    fs::write(
+      root.join(FOLDERS_FILE),
+      r#"{
+        "version": 1,
+        "blocks": [ { "id": "B01", "name": "角色", "order": 5 } ],
+        "folders": [
+          { "id": "F01", "name": "甲", "parent": null, "block": "B01", "order": 0 },
+          { "id": "F02", "name": "乙", "parent": null, "block": "B-不存在", "order": 1 }
+        ],
+        "items": []
+      }"#,
+    )
+    .unwrap();
+
+    let lib = open(&lib.space_root, &root).unwrap();
+    assert_eq!(lib.folders.blocks.len(), 2, "补注默认区块");
+    assert_eq!(lib.folders.blocks[0].id, DEFAULT_BLOCK_ID, "默认区块注在队首");
+    let f01 = lib.folders.folders.iter().find(|f| f.id == "F01").unwrap();
+    assert_eq!(f01.block.as_deref(), Some("B01"), "有效引用保留");
+    let f02 = lib.folders.folders.iter().find(|f| f.id == "F02").unwrap();
+    assert_eq!(f02.block, None, "失效引用置 None");
+    let disk: FoldersFile = read_json(&root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.folders.iter().find(|f| f.id == "F02").unwrap().block, None, "自愈落盘");
+  }
+
   #[test]
   fn save_folders_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
     let mut lib = create_test(dir.path());
-    lib.folders.folders.push(Folder { id: "F01".into(), name: "人物".into(), parent: None, order: 0 });
+    lib.folders.folders.push(Folder { id: "F01".into(), name: "人物".into(), parent: None, block: None, icon: None, order: 0 });
     save_folders(&lib).unwrap();
     let back: FoldersFile = read_json(&lib.root.join(FOLDERS_FILE)).unwrap();
     assert_eq!(back.folders.len(), 1);

@@ -12,6 +12,10 @@ pub const DATA_VERSION: u32 = 1;
 /// core 不反向依赖 services；services/import.rs 以 pub use 转出口径不变）
 pub const ROOT_FOLDER_ID: &str = "root";
 
+/// 默认区块「目录」的保留 ID：不可删（可改名）；Folder.block = None 语义上即属「目录」根级，
+/// 未分类（root Placement）同在「目录」区块根级——零数据迁移（2026-08-14 区块子系统）
+pub const DEFAULT_BLOCK_ID: &str = "dir";
+
 /// 生成资源 ID：`AN` + 时间戳（yyMMddHHmm，时间有序）+ 5 位随机字符（防同秒冲突）。
 /// ID 不承载语义，语义全部在 metadata（PRD 01-2.1）。
 pub fn new_asset_id() -> String {
@@ -132,6 +136,10 @@ impl SpaceFile {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FoldersFile {
   pub version: u32,
+  /// 区块表（2026-08-14 区块子系统）：侧栏顶级文件夹的分组；default 保证旧 folders.json（无此字段）可读，
+  /// 开库自检（core/library.rs fix_blocks）负责注入默认区块「目录」
+  #[serde(default)]
+  pub blocks: Vec<Block>,
   #[serde(default)]
   pub folders: Vec<Folder>,
   #[serde(default)]
@@ -140,8 +148,26 @@ pub struct FoldersFile {
 
 impl FoldersFile {
   pub fn new() -> Self {
-    Self { version: DATA_VERSION, folders: Vec::new(), items: Vec::new() }
+    Self {
+      version: DATA_VERSION,
+      // 新库自带默认区块（与开库自检同一口径，省一次自愈落盘）
+      blocks: vec![Block { id: DEFAULT_BLOCK_ID.to_string(), name: "目录".to_string(), icon: None, order: 0 }],
+      folders: Vec::new(),
+      items: Vec::new(),
+    }
   }
+}
+
+/// 区块（2026-08-14 区块子系统）：侧栏顶级文件夹的分组；order 为显示顺序（排序时连续重写 0..n）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Block {
+  pub id: String,
+  pub name: String,
+  /// 默认图标（自定义图标名）：新建顶级文件夹继承到 Folder.icon；None = 无默认图标，不写字段
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub icon: Option<String>,
+  #[serde(default)]
+  pub order: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -150,6 +176,12 @@ pub struct Folder {
   pub name: String,
   #[serde(default)]
   pub parent: Option<String>,
+  /// 所属区块 ID（仅顶级文件夹有意义；None / "dir" = 默认区块「目录」，2026-08-14 区块子系统）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub block: Option<String>,
+  /// 自定义图标（新建顶级文件夹时继承所在区块默认图标；None = 默认文件夹图标，不写字段）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub icon: Option<String>,
   #[serde(default)]
   pub order: i32,
 }
@@ -338,6 +370,9 @@ mod tests {
     assert_eq!(file.folders.len(), 2);
     assert!(file.items[0].origin);
     assert!(!file.items[1].origin);
+    // 旧版 folders.json（无 blocks / Folder 无 block、icon 字段）serde default 读入（2026-08-14 区块子系统）
+    assert!(file.blocks.is_empty());
+    assert_eq!((file.folders[0].block.clone(), file.folders[0].icon.clone()), (None, None));
     // 链接 Placement 序列化不出 origin 字段，保持文件干净
     let text = serde_json::to_string(&file.items[1]).unwrap();
     assert!(!text.contains("origin"));

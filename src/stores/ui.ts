@@ -80,6 +80,9 @@ export const useUiStore = defineStore("ui", {
     // 侧栏收展动画进行中标志（会话级，不持久化）：AssetGrid 在此期间逐帧实时重排（reflow，
     // 2026-08-08 收展定案 v3）
     sidebarAnimating: false,
+    // 区块管理弹窗开关（2026-08-14 区块子系统，会话级）：SidebarLeft section-manage 按钮置位，
+    // 弹窗宿主 App.vue（同 FailedListDialog 惯例）
+    blockManageOpen: false,
     // 多标签页布局（1.2）：dockview toJSON 快照，tabs store 防抖写入 / 启动 fromJSON 恢复；
     // null = 无布局（首启默认单标签页）。typeof null === "object"，PERSIST_KEYS 类型校验放行对象
     tabLayout: null as object | null,

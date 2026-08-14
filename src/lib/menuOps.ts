@@ -64,9 +64,14 @@ export function uniqueFolderName(parentId: string | null): string {
   return `新建文件夹-${i}`;
 }
 
-// 统一入口：直接以默认名建库 → 成功返回的新 id 进命名态（FolderTree 按 id 定位 naming 节点）
-export async function createAndName(parentId: string | null, afterFolderId: string | null): Promise<void> {
-  const id = await createFolder(parentId, uniqueFolderName(parentId), afterFolderId);
+// 统一入口：直接以默认名建库 → 成功返回的新 id 进命名态（FolderTree 按 id 定位 naming 节点）。
+// blockId（2026-08-14 区块子系统）：顶级新建（parentId null）时落入的区块；非顶级新建无效
+export async function createAndName(
+  parentId: string | null,
+  afterFolderId: string | null,
+  blockId: string | null = null,
+): Promise<void> {
+  const id = await createFolder(parentId, uniqueFolderName(parentId), afterFolderId, blockId);
   if (id) useSelectionStore().namingFolderId = id;
 }
 
