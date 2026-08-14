@@ -49,12 +49,18 @@ mod imp {
   }
 
   pub(super) fn reveal(path: &Path) -> Result<(), String> {
-    // explorer /select,"路径"：打开文件管理器并选中该文件；路径加引号（含空格/逗号时裸路径会断，explorer 回退到"文档"）
-    std::process::Command::new("explorer.exe")
-      .arg(format!("/select,\"{}\"", path.display()))
-      .spawn()
-      .map(|_| ())
-      .map_err(|e| format!("打开文件管理器失败：{e}"))
+    // explorer /select,"路径"：经 ShellExecuteW 传 lpParameters（原样传递）。
+    // **不能用 std::process::Command**——arg 含空格 / 引号时 Rust 自动加外层引号并把内层引号
+    // 转义为 \"，而 explorer 不按 CommandLineToArgvW 解析（吃原始命令行），转义后路径断 →
+    // 回退打开"文档"（2026-08-14 实机两轮踩坑：裸路径空格断 / 手写引号被再转义）
+    let params = HSTRING::from(format!("/select,\"{}\"", path.display()));
+    let result =
+      unsafe { ShellExecuteW(None, w!("open"), w!("explorer.exe"), PCWSTR::from_raw(params.as_ptr()), None, SW_SHOW) };
+    if (result.0 as usize) > 32 {
+      Ok(())
+    } else {
+      Err(format!("打开文件管理器失败（{}），错误码 {}", path.display(), result.0 as usize))
+    }
   }
 }
 

@@ -33,6 +33,7 @@ pub async fn reveal_in_explorer(state: State<'_, AppState>, asset_id: String) ->
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let origin = asset_menu::real_origin_file(lib, &asset_id)?;
+  log::info!("文件管理器定位：{}", origin.display());
   shell_open::reveal(&origin)
 }
 
