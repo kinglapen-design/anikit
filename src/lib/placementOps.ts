@@ -7,8 +7,8 @@
 // 新增 move_folders 入口（第 9 条命令，文件夹移动层级，替换原"暂不支持移动文件夹层级"toast）。
 // 2026-07-29 二轮：回收站操作入口（restore_recycle 带撤销；delete_recycle / clear_recycle
 // 两段式确认、不可恢复无撤销；后端契约并行开发，UI 直接 invoke）。
-import { invoke } from "@tauri-apps/api/core";
-import { useContentStore } from "../stores/content";
+import { Channel, invoke } from "@tauri-apps/api/core";
+import { useContentStore, type ExportEvent } from "../stores/content";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
 import { useToastStore } from "../stores/toast";
 import { useUndoStore } from "../stores/undo";
@@ -376,25 +376,32 @@ export async function refreshThumb(assetId: string): Promise<void> {
   await runThumbOp(() => invoke("refresh_thumbnail", { assetId }), "已刷新缩略图");
 }
 
-// 导出（库外写操作，不接撤销）：目录由系统对话框选定（menuOps 流程），成功普通 toast
-export async function exportAssets(assetIds: string[], targetDir: string): Promise<void> {
+// 导出（库外写操作，不接撤销）：目录由系统对话框选定（menuOps 流程）。
+// 任务化（2026-08-14 用户定：导出用导入的进度条样式与位置）——命令立即返回 taskId，
+// 进度经 Channel 推 content.onExportEvent，完成 / 失败 toast 也在事件收尾（取消后不提示）
+async function runExport(start: (onEvent: Channel<ExportEvent>) => Promise<number>): Promise<void> {
+  const content = useContentStore();
   const toast = useToastStore();
+  content.exportProgress = { taskId: null, total: 0, done: 0, startedAt: Date.now() };
+  const onEvent = new Channel<ExportEvent>();
+  onEvent.onmessage = (e) => content.onExportEvent(e);
   try {
-    const n = await invoke<number>("export_assets", { assetIds, targetDir });
-    toast.notify({ message: `已导出 ${n} 个文件`, icon: "success", sound: true });
+    const taskId = await start(onEvent);
+    if (content.exportProgress && content.exportProgress.taskId === null) {
+      content.exportProgress.taskId = taskId;
+    }
   } catch (e) {
+    content.exportProgress = null; // 起动失败复位进度条（未打开库等，防卡"清点中"）
     toast.notify({ message: String(e), icon: "fail" });
   }
 }
 
+export async function exportAssets(assetIds: string[], targetDir: string): Promise<void> {
+  await runExport((onEvent) => invoke<number>("export_assets", { assetIds, targetDir, onEvent }));
+}
+
 export async function exportFolder(folderId: string, targetDir: string): Promise<void> {
-  const toast = useToastStore();
-  try {
-    const n = await invoke<number>("export_folder", { folderId, targetDir });
-    toast.notify({ message: `已导出 ${n} 个文件`, icon: "success", sound: true });
-  } catch (e) {
-    toast.notify({ message: String(e), icon: "fail" });
-  }
+  await runExport((onEvent) => invoke<number>("export_folder", { folderId, targetDir, onEvent }));
 }
 
 // 删除文件夹报告（后端 DeleteFolderReport 同构）

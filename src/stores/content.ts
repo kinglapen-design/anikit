@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { isStaticImageExt } from "../lib/formatBadge";
 import { playFail, playSuccess } from "../lib/sounds";
 import { useSelectionStore } from "./selection";
+import { useToastStore } from "./toast";
 import { useUiStore } from "./ui";
 import type { RecentAssetView, RecycleEntryView } from "./quickViews";
 
@@ -106,6 +107,13 @@ export type ImportEvent =
   | { type: "asset"; placement: PlacementView } // 到一个显示一个
   | { type: "finished"; imported: number; conflicts: ConflictItem[]; failed: FailedItem[] };
 
+// 导出任务事件（后端 services/asset_menu.rs ExportEvent，serde tag="type" camelCase）：
+// 单位 = 文件（序列帧按帧计）；finished.error = 业务失败（目录不可写等）
+export type ExportEvent =
+  | { type: "started"; total: number }
+  | { type: "item" } // 每处理一个文件推一个（成败皆推，进度恒走完）
+  | { type: "finished"; copied: number; error: string | null };
+
 // 收件箱磁盘实况条目（后端 services/inbox.rs InboxEntry；"工程文件"区块数据源，
 // 磁盘为事实来源——不建档不写库，热刷新 = 全量重扫替换）
 export interface InboxDiskEntry {
@@ -184,6 +192,14 @@ export const useContentStore = defineStore("content", {
     } | null,
     // 后台导入进度（11_导入进度条）；total=0 表示仍在扫描（总数未知）
     importProgress: null as {
+      taskId: number | null;
+      total: number;
+      done: number;
+      startedAt: number;
+    } | null,
+    // 后台导出进度（2026-08-14 用户定：复用导入进度条样式与位置，ImportProgressBar 双态）；
+    // total=0 表示仍在清点（Started 未到）
+    exportProgress: null as {
       taskId: number | null;
       total: number;
       done: number;
@@ -443,6 +459,43 @@ export const useContentStore = defineStore("content", {
       this.importProgress = null;
       if (p?.taskId != null) {
         await invoke("cancel_import", { taskId: p.taskId }).catch(() => {});
+      }
+    },
+
+    // 取消导出（同导入口径）：进度条立即隐藏；后台把当前文件拷完后真实停止
+    async cancelExport(): Promise<void> {
+      const p = this.exportProgress;
+      this.exportProgress = null;
+      if (p?.taskId != null) {
+        await invoke("cancel_export", { taskId: p.taskId }).catch(() => {});
+      }
+    },
+
+    // 导出进度事件（placementOps 的 Channel 推入）：finished 收尾 toast——
+    // 取消后的 finished 不再提示（进度条已隐藏，exportProgress 为 null 即取消标记）
+    onExportEvent(e: ExportEvent): void {
+      switch (e.type) {
+        case "started":
+          if (this.exportProgress) {
+            this.exportProgress.total = e.total;
+            this.exportProgress.startedAt = Date.now(); // ETA 从清点结束起算
+          }
+          break;
+        case "item":
+          if (this.exportProgress) this.exportProgress.done += 1;
+          break;
+        case "finished": {
+          const wasCancelled = this.exportProgress === null;
+          this.exportProgress = null;
+          if (wasCancelled) break;
+          const toast = useToastStore();
+          if (e.error) {
+            toast.notify({ message: e.error, icon: "fail" });
+          } else {
+            toast.notify({ message: `已导出 ${e.copied} 个文件`, icon: "success", sound: true });
+          }
+          break;
+        }
       }
     },
 

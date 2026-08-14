@@ -15,7 +15,7 @@ use crate::core::space::{self, Space};
 pub struct AppState {
   pub space: Mutex<Option<Space>>,
   pub library: Mutex<Option<Library>>,
-  /// 导入任务取消标记：task_id → 置位即取消（任务结束从表中移除）
+  /// 导入 / 导出任务取消标记：task_id → 置位即取消（任务结束从表中移除）
   pub imports: Mutex<std::collections::HashMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>>>,
   /// 收件箱运行实例（3.2）：空间级共用，随空间打开 / 自动导入开关 / 退出由 services::inbox 启停
   pub inbox: Mutex<Option<crate::services::inbox::InboxHandle>>,

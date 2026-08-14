@@ -8,6 +8,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 
@@ -119,54 +120,97 @@ fn dedupe_path(dir: &Path, file_name: &str) -> PathBuf {
   }
 }
 
+/// 导出数据源：库索引只读快照（assets_dir + 资产表 + folders 文件）。
+/// 命令层锁内克隆、工作线程持快照拷贝——导出 IO 不占用库锁，UI 不被长拷贝阻塞。
+pub struct ExportSource {
+  pub assets_dir: PathBuf,
+  pub assets: std::collections::HashMap<String, AssetMeta>,
+  pub folders: crate::core::models::FoldersFile,
+}
+
+/// 导出进度事件（命令层 Channel → 前端；serde tag="type" 小驼峰，同 ImportEvent 约定）
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum ExportEvent {
+  /// 清点完成，总数已知（单位 = 文件，序列帧按帧计）
+  Started { total: u32 },
+  /// 每处理一个文件推一个（成功失败都推，进度恒走完）
+  Item,
+  /// 结束（含取消中断）：copied = 实际拷出文件数；error = 中途失败（如目录不可写）
+  Finished { copied: u32, error: Option<String> },
+}
+
 /// 序列帧判定：origin 指向 frames/ 内帧（info 根无该实体），整组帧在 frames/ 目录。
 /// 动图解包同样写 frames/，但其 origin 在 info 根是实体文件 → 不误判。
 /// （rename_origin 对序列帧只改 metadata 不改帧文件名，origin_name 可能已不与任何帧同名，故按"根无实体"判）
-fn sequence_frames(lib: &Library, asset_id: &str, meta: &AssetMeta) -> Option<PathBuf> {
-  if lib.info_dir(asset_id).join(&meta.origin_name).is_file() {
+fn sequence_frames(src: &ExportSource, asset_id: &str, meta: &AssetMeta) -> Option<PathBuf> {
+  if paths::info_dir(&src.assets_dir, asset_id).join(&meta.origin_name).is_file() {
     return None;
   }
-  let dir = paths::frames_dir(&lib.assets_dir, asset_id);
+  let dir = paths::frames_dir(&src.assets_dir, asset_id);
   if dir.is_dir() { Some(dir) } else { None }
 }
 
 /// 序列帧整组导出：目标目录下建 `{folder_name}/` 文件夹（重名 -序号），frames/ 内全部帧拷入
-/// （2026-08-14 用户定：序列帧用一个文件夹装起来，文件夹名称用文件名）
-fn copy_sequence_to(dir: &Path, frames: &Path, folder_name: &str) -> bool {
+/// （2026-08-14 用户定：序列帧用一个文件夹装起来，文件夹名称用文件名）。
+/// 返回拷出帧数；每帧（成败皆然）推一个 Item；cancel 置位时当前帧拷完后中断
+fn copy_sequence_to(
+  dir: &Path,
+  frames: &Path,
+  folder_name: &str,
+  report: &mut dyn FnMut(ExportEvent),
+  cancel: &AtomicBool,
+) -> usize {
   let target = dedupe_path(dir, folder_name);
   if fs::create_dir_all(&target).is_err() {
-    return false;
+    return 0;
   }
-  let Ok(entries) = fs::read_dir(frames) else { return false };
-  let mut copied = false;
+  let Ok(entries) = fs::read_dir(frames) else { return 0 };
+  let mut copied = 0usize;
   for entry in entries.flatten() {
-    let path = entry.path();
-    if path.is_file() && fs::copy(&path, target.join(entry.file_name())).is_ok() {
-      copied = true;
+    if cancel.load(Ordering::Relaxed) {
+      break;
     }
+    let path = entry.path();
+    if !path.is_file() {
+      continue;
+    }
+    if fs::copy(&path, target.join(entry.file_name())).is_ok() {
+      copied += 1;
+    }
+    report(ExportEvent::Item);
   }
-  if !copied {
-    let _ = fs::remove_dir(&target); // 空帧目录不留空壳文件夹
+  if copied == 0 {
+    let _ = fs::remove_dir(&target); // 一帧未出（含取消）不留空壳文件夹
   }
   copied
 }
 
-/// 复制 origin 到目标（按显示名，缺扩展名补 metadata.ext），返回是否成功；
-/// 序列帧资产改走整组导出：显示名去扩展名建文件夹，frames/ 全部帧拷入
-fn copy_origin_to(lib: &Library, dir: &Path, asset_id: &str, display_name: &str) -> bool {
-  let Some(meta) = lib.index.assets.get(asset_id) else { return false };
-  if let Some(frames) = sequence_frames(lib, asset_id, meta) {
+/// 复制 origin 到目标（按显示名，缺扩展名补 metadata.ext），返回拷出文件数（0/1）；
+/// 序列帧资产改走整组导出：显示名去扩展名建文件夹，frames/ 全部帧拷入（返回帧数）
+fn copy_origin_to(
+  src: &ExportSource,
+  dir: &Path,
+  asset_id: &str,
+  display_name: &str,
+  report: &mut dyn FnMut(ExportEvent),
+  cancel: &AtomicBool,
+) -> usize {
+  let Some(meta) = src.assets.get(asset_id) else { return 0 };
+  if let Some(frames) = sequence_frames(src, asset_id, meta) {
     let name = ensure_ext(display_name, &meta.ext);
     let stem = Path::new(&name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or(name);
-    return copy_sequence_to(dir, &frames, &stem);
+    return copy_sequence_to(dir, &frames, &stem, report, cancel);
   }
-  let origin = paths::origin_file(&lib.assets_dir, asset_id, &meta.origin_name);
+  let origin = paths::origin_file(&src.assets_dir, asset_id, &meta.origin_name);
   if !origin.is_file() {
-    return false;
+    return 0;
   }
   let name = ensure_ext(display_name, &meta.ext);
   let target = dedupe_path(dir, &name);
-  fs::copy(&origin, &target).is_ok()
+  let ok = fs::copy(&origin, &target).is_ok();
+  report(ExportEvent::Item);
+  usize::from(ok)
 }
 
 /// 显示名缺扩展名时补 metadata.ext（rename_placement 原始段同规则）
@@ -178,60 +222,112 @@ fn ensure_ext(name: &str, ext: &str) -> String {
   }
 }
 
+/// 单资产将导出的文件数（Started 清点用，与拷贝循环同口径）：
+/// 序列帧 = frames/ 内文件数；普通 = origin 在则 1
+fn export_file_count(src: &ExportSource, asset_id: &str) -> usize {
+  let Some(meta) = src.assets.get(asset_id) else { return 0 };
+  if let Some(frames) = sequence_frames(src, asset_id, meta) {
+    return fs::read_dir(frames).map(|rd| rd.flatten().filter(|e| e.path().is_file()).count()).unwrap_or(0);
+  }
+  usize::from(paths::origin_file(&src.assets_dir, asset_id, &meta.origin_name).is_file())
+}
+
 /// 导出文件（6.3 右键菜单）：各资产 origin 复制到目标目录（按 originName，重名 -序号）；
-/// 序列帧资产 = 建 `{资产名}/` 文件夹装全部帧（文件夹重名同样 -序号）
-pub fn export_assets(lib: &Library, asset_ids: &[String], target_dir: &str) -> Result<usize, String> {
+/// 序列帧资产 = 建 `{资产名}/` 文件夹装全部帧（文件夹重名同样 -序号）。
+/// 进度：先推 Started（总数 = 文件数），逐文件推 Item；cancel 置位时当前文件拷完后中断。
+/// 返回实际拷出文件数（序列帧按帧计）
+pub fn export_assets(
+  src: &ExportSource,
+  asset_ids: &[String],
+  target_dir: &str,
+  report: &mut dyn FnMut(ExportEvent),
+  cancel: &AtomicBool,
+) -> Result<usize, String> {
   let dir = check_target_dir(target_dir)?;
+  let total: usize = asset_ids.iter().map(|id| export_file_count(src, id)).sum();
+  report(ExportEvent::Started { total: total as u32 });
   let mut copied = 0usize;
   for id in asset_ids {
-    let Some(meta) = lib.index.assets.get(id) else { continue };
-    if let Some(frames) = sequence_frames(lib, id, meta) {
-      if copy_sequence_to(&dir, &frames, &meta.name) {
-        copied += 1;
-      }
+    if cancel.load(Ordering::Relaxed) {
+      break;
+    }
+    let Some(meta) = src.assets.get(id) else { continue };
+    if let Some(frames) = sequence_frames(src, id, meta) {
+      copied += copy_sequence_to(&dir, &frames, &meta.name, report, cancel);
       continue;
     }
-    let origin = paths::origin_file(&lib.assets_dir, id, &meta.origin_name);
-    if !origin.is_file() {
-      continue;
-    }
-    let target = dedupe_path(&dir, &meta.origin_name);
-    if fs::copy(&origin, &target).is_ok() {
-      copied += 1;
-    }
+    copied += copy_origin_to(src, &dir, id, &meta.origin_name.clone(), report, cancel);
   }
   Ok(copied)
 }
 
 /// 导出文件夹（6.3 右键菜单）：目标目录下建同名目录（重名 -序号），子层级保留，
 /// 素材按各自 Placement 显示名复制（链接 Placement 按其显示名导出同一份内容）；
-/// 序列帧 = 显示名去扩展名建文件夹装全部帧
-pub fn export_folder(lib: &Library, folder_id: &str, target_dir: &str) -> Result<usize, String> {
+/// 序列帧 = 显示名去扩展名建文件夹装全部帧。进度与取消同 export_assets
+pub fn export_folder(
+  src: &ExportSource,
+  folder_id: &str,
+  target_dir: &str,
+  report: &mut dyn FnMut(ExportEvent),
+  cancel: &AtomicBool,
+) -> Result<usize, String> {
   let dir = check_target_dir(target_dir)?;
-  let folder_name = lib
-    .index
+  let folder_name = src
     .folders
-    .get(folder_id)
+    .folders
+    .iter()
+    .find(|f| f.id == folder_id)
     .map(|f| f.name.clone())
     .ok_or_else(|| "目标文件夹不存在，可能已被删除".to_string())?;
+  let total = count_folder_files(src, folder_id);
   let root_dir = dedupe_path(&dir, &folder_name);
   fs::create_dir_all(&root_dir).map_err(|e| format!("导出目录创建失败：{e}"))?;
+  report(ExportEvent::Started { total: total as u32 });
   let mut copied = 0usize;
-  export_folder_inner(lib, folder_id, &root_dir, &mut copied);
+  export_folder_inner(src, folder_id, &root_dir, &mut copied, report, cancel);
   Ok(copied)
 }
 
-fn export_folder_inner(lib: &Library, folder_id: &str, dir: &Path, copied: &mut usize) {
-  for p in &lib.folders.items {
-    if p.folder == folder_id && copy_origin_to(lib, dir, &p.asset, &p.name) {
-      *copied += 1;
+/// 子树将导出的文件总数（含全部后代文件夹，与拷贝循环同口径）
+fn count_folder_files(src: &ExportSource, folder_id: &str) -> usize {
+  let mut n = 0;
+  for p in &src.folders.items {
+    if p.folder == folder_id {
+      n += export_file_count(src, &p.asset);
     }
   }
-  for child in &lib.folders.folders {
+  for child in &src.folders.folders {
+    if child.parent.as_deref() == Some(folder_id) {
+      n += count_folder_files(src, &child.id);
+    }
+  }
+  n
+}
+
+fn export_folder_inner(
+  src: &ExportSource,
+  folder_id: &str,
+  dir: &Path,
+  copied: &mut usize,
+  report: &mut dyn FnMut(ExportEvent),
+  cancel: &AtomicBool,
+) {
+  for p in &src.folders.items {
+    if cancel.load(Ordering::Relaxed) {
+      return;
+    }
+    if p.folder == folder_id {
+      *copied += copy_origin_to(src, dir, &p.asset, &p.name, report, cancel);
+    }
+  }
+  for child in &src.folders.folders {
+    if cancel.load(Ordering::Relaxed) {
+      return;
+    }
     if child.parent.as_deref() == Some(folder_id) {
       let sub = dedupe_path(dir, &child.name);
       if fs::create_dir_all(&sub).is_ok() {
-        export_folder_inner(lib, &child.id, &sub, copied);
+        export_folder_inner(src, &child.id, &sub, copied, report, cancel);
       }
     }
   }
@@ -359,6 +455,15 @@ mod tests {
     assert!(set_thumbnail_custom(&mut h.lib, "AN-A", "不存在.png").is_err());
   }
 
+  /// 导出数据源快照（命令层锁内克隆的同形物）
+  fn src(h: &Harness) -> ExportSource {
+    ExportSource {
+      assets_dir: h.lib.assets_dir.clone(),
+      assets: h.lib.index.assets.clone(),
+      folders: h.lib.folders.clone(),
+    }
+  }
+
   #[test]
   fn export_assets_dedupes_and_skips_missing() {
     let mut h = make_lib();
@@ -366,11 +471,14 @@ mod tests {
     add_asset(&mut h, "AN-B", "a.png", "root"); // 同名 originName
     let out = h.dir.path().join("导出");
     fs::create_dir_all(&out).unwrap();
-    let n = export_assets(&h.lib, &["AN-A".into(), "AN-B".into(), "AN-不存在".into()], out.to_str().unwrap()).unwrap();
+    let src = src(&h);
+    let mut sink = |_e: ExportEvent| {};
+    let no = AtomicBool::new(false);
+    let n = export_assets(&src, &["AN-A".into(), "AN-B".into(), "AN-不存在".into()], out.to_str().unwrap(), &mut sink, &no).unwrap();
     assert_eq!(n, 2, "同名也去重导出两份");
     assert!(out.join("a.png").is_file());
     assert!(out.join("a-1.png").is_file(), "重名追加 -序号");
-    assert!(export_assets(&h.lib, &["AN-A".into()], "不存在目录").is_err());
+    assert!(export_assets(&src, &["AN-A".into()], "不存在目录", &mut sink, &no).is_err());
   }
 
   #[test]
@@ -390,13 +498,16 @@ mod tests {
 
     let out = h.dir.path().join("导出2");
     fs::create_dir_all(&out).unwrap();
-    let n = export_folder(&h.lib, "F-TOP", out.to_str().unwrap()).unwrap();
+    let src = src(&h);
+    let mut sink = |_e: ExportEvent| {};
+    let no = AtomicBool::new(false);
+    let n = export_folder(&src, "F-TOP", out.to_str().unwrap(), &mut sink, &no).unwrap();
     assert_eq!(n, 3, "顶层 1 + 子夹 1 + 链接别名 1");
     let base = out.join("顶夹");
     assert!(base.join("a.png").is_file(), "显示名导出");
     assert!(base.join("子夹").join("b.png").is_file(), "子层级保留");
     assert!(base.join("子夹").join("别名.png").is_file(), "链接按显示名导出");
-    assert!(export_folder(&h.lib, "F-不存在", out.to_str().unwrap()).is_err());
+    assert!(export_folder(&src, "F-不存在", out.to_str().unwrap(), &mut sink, &no).is_err());
   }
 
   /// 序列帧资产入库（3 帧 png，打包进 frames/ + origin Placement）
@@ -424,8 +535,16 @@ mod tests {
     add_asset(&mut h, "AN-A", "a.png", "root");
     let out = h.dir.path().join("导出序列");
     fs::create_dir_all(&out).unwrap();
-    let n = export_assets(&h.lib, &["AN-S".into(), "AN-A".into()], out.to_str().unwrap()).unwrap();
-    assert_eq!(n, 2, "序列帧整组计 1");
+    let src = src(&h);
+    let mut events = Vec::new();
+    let no = AtomicBool::new(false);
+    let n = {
+      let mut sink = |e: ExportEvent| events.push(e);
+      export_assets(&src, &["AN-S".into(), "AN-A".into()], out.to_str().unwrap(), &mut sink, &no).unwrap()
+    };
+    assert_eq!(n, 4, "序列帧按帧计 3 + 普通文件 1");
+    assert_eq!(events.first(), Some(&ExportEvent::Started { total: 4 }), "清点事件先行，总数 = 文件数");
+    assert_eq!(events.iter().filter(|e| matches!(e, ExportEvent::Item)).count(), 4, "逐文件推 Item");
     assert!(out.join("a.png").is_file());
     let dir = out.join("走路");
     assert!(dir.is_dir(), "序列帧导出为资产名文件夹");
@@ -453,12 +572,30 @@ mod tests {
 
     let out = h.dir.path().join("导出夹");
     fs::create_dir_all(&out).unwrap();
-    let n = export_folder(&h.lib, "F-TOP", out.to_str().unwrap()).unwrap();
-    assert_eq!(n, 3, "序列帧 2 条 Placement + 动图 1");
+    let src = src(&h);
+    let mut sink = |_e: ExportEvent| {};
+    let no = AtomicBool::new(false);
+    let n = export_folder(&src, "F-TOP", out.to_str().unwrap(), &mut sink, &no).unwrap();
+    assert_eq!(n, 7, "序列帧 2 条 Placement × 3 帧 + 动图 1");
     let base = out.join("顶夹");
     assert!(base.join("走路").join("走路-1.png").is_file(), "origin 显示名建文件夹");
     assert!(base.join("别名").join("走路-2.png").is_file(), "链接别名建文件夹装同组帧");
     assert!(base.join("动图.gif").is_file(), "动图解包 frames/ 不误判，单文件导出");
     assert!(!base.join("动图").exists(), "动图不建文件夹");
+  }
+
+  #[test]
+  fn export_cancel_stops_before_next_asset() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-A", "a.png", "root");
+    add_asset(&mut h, "AN-B", "b.png", "root");
+    let out = h.dir.path().join("导出取消");
+    fs::create_dir_all(&out).unwrap();
+    let src = src(&h);
+    let mut sink = |_e: ExportEvent| {};
+    let cancelled = AtomicBool::new(true); // 预置取消：一个文件都不应拷出
+    let n = export_assets(&src, &["AN-A".into(), "AN-B".into()], out.to_str().unwrap(), &mut sink, &cancelled).unwrap();
+    assert_eq!(n, 0, "取消置位即中断");
+    assert!(!out.join("a.png").exists());
   }
 }

@@ -18,7 +18,7 @@ use crate::services::import_task::run_import;
 use crate::services::views::{placement_view, PlacementView};
 
 /// 导入任务 ID 自增源
-static NEXT_TASK_ID: AtomicU64 = AtomicU64::new(1);
+pub(crate) static NEXT_TASK_ID: AtomicU64 = AtomicU64::new(1);
 
 // ---------- 导入前预估 ----------
 

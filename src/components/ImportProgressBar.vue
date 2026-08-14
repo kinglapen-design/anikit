@@ -1,13 +1,16 @@
 <script setup lang="ts">
-// 导入进度条（03_UI 布局/11_导入进度条）：插在中间面板标题栏与卡片容器之间。
-// 构造：进度条（胶囊 6px，占剩余空间）+ 标签（正在导入文件 x/y）+ 预计剩余 + 关闭按钮。
-// 关闭 = 取消：进度条立即隐藏，后台把当前文件写完后真实停止（cancel 语义，见 11 文档注）。
+// 导入 / 导出进度条（03_UI 布局/11_导入进度条）：插在中间面板标题栏与卡片容器之间。
+// 构造：进度条（胶囊 6px，占剩余空间）+ 标签（正在导入/导出文件 x/y）+ 预计剩余 + 关闭按钮。
+// 关闭 = 取消：进度条立即隐藏，后台把当前文件处理完后真实停止（cancel 语义，见 11 文档注）。
+// 2026-08-14 用户定：导出复用本组件样式与位置——导入优先（同跑时先显导入），
+// 导出总数 = 文件数（序列帧按帧计），清点期（total=0）不定态同"扫描中"。
 import { computed } from "vue";
 import IconButton from "./IconButton.vue";
 import { useContentStore } from "../stores/content";
 
 const content = useContentStore();
-const p = computed(() => content.importProgress);
+const isExport = computed(() => !content.importProgress && !!content.exportProgress);
+const p = computed(() => content.importProgress ?? content.exportProgress);
 
 const scanning = computed(() => (p.value ? p.value.total === 0 : false));
 const ratio = computed(() => {
@@ -16,11 +19,12 @@ const ratio = computed(() => {
 });
 const label = computed(() => {
   if (!p.value) return "";
-  return p.value.total === 0
-    ? "正在扫描文件…"
+  if (p.value.total === 0) return isExport.value ? "正在清点文件…" : "正在扫描文件…";
+  return isExport.value
+    ? `正在导出文件 (${p.value.done} / ${p.value.total})`
     : `正在导入文件 (${p.value.done} / ${p.value.total})`;
 });
-// 预计剩余：按已导入速率估算（done 变化即重算）
+// 预计剩余：按已处理速率估算（done 变化即重算）
 const eta = computed(() => {
   if (!p.value || p.value.done === 0 || p.value.total === 0) return "";
   const elapsed = (Date.now() - p.value.startedAt) / 1000;
@@ -30,6 +34,11 @@ const eta = computed(() => {
   if (remain < 3600) return `预计剩余约 ${Math.ceil(remain / 60)} 分钟`;
   return `预计剩余约 ${Math.floor(remain / 3600)} 小时`;
 });
+
+function cancel(): void {
+  if (isExport.value) void content.cancelExport();
+  else void content.cancelImport();
+}
 </script>
 
 <template>
@@ -39,7 +48,7 @@ const eta = computed(() => {
     </div>
     <span class="label">{{ label }}</span>
     <span v-if="eta" class="eta">{{ eta }}</span>
-    <IconButton name="window-close" title="取消导入" @click="content.cancelImport()" />
+    <IconButton name="window-close" :title="isExport ? '取消导出' : '取消导入'" @click="cancel" />
   </div>
 </template>
 

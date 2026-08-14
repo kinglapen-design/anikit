@@ -3,9 +3,14 @@
 //! 仅 delete_folder（permanent=false，"删除文件夹"素材移未分类）接撤销三步（锁序 library → undo）；
 //! 彻底删除两命令不接撤销（物理不可逆，删前 backup_library 兜底）；其余为只读或库外写。
 
-use tauri::State;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use tauri::ipc::Channel;
+use tauri::{AppHandle, Manager, State};
 
 use crate::adapters::shell_open;
+use crate::commands::import::NEXT_TASK_ID;
 use crate::commands::library::AppState;
 use crate::commands::operations::fail;
 use crate::commands::preview::locate_asset;
@@ -60,20 +65,92 @@ pub async fn refresh_thumbnail(state: State<'_, AppState>, asset_id: String) -> 
   asset_menu::refresh_thumbnail(lib, &asset_id)
 }
 
-/// 导出文件：origin 复制到目标目录（重名 -序号），返回导出数；不接撤销（库外写）
-#[tauri::command]
-pub async fn export_assets(state: State<'_, AppState>, asset_ids: Vec<String>, target_dir: String) -> Result<usize, String> {
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  asset_menu::export_assets(lib, &asset_ids, &target_dir)
+/// 导出数据源快照：锁内克隆（资产索引 + folders 文件），工作线程只持快照——
+/// 导出 IO 不占用库锁，长拷贝不阻塞 UI 其他命令
+fn export_snapshot(app: &AppHandle) -> Result<asset_menu::ExportSource, String> {
+  let state = app.state::<AppState>();
+  let guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+  Ok(asset_menu::ExportSource {
+    assets_dir: lib.assets_dir.clone(),
+    assets: lib.index.assets.clone(),
+    folders: lib.folders.clone(),
+  })
 }
 
-/// 导出文件夹：层级保留，素材按 Placement 显示名复制；不接撤销（库外写）
+/// 导出任务 spawn：注册取消标记（与导入任务共用注册表与 id 命名空间）→ 工作线程执行 →
+/// 推 Finished（业务失败进 error 字段）→ 注册表移除
+fn spawn_export<F>(app: &AppHandle, on_event: Channel<asset_menu::ExportEvent>, job: F) -> u64
+where
+  F: FnOnce(&AtomicBool, &mut dyn FnMut(asset_menu::ExportEvent)) -> Result<usize, String> + Send + 'static,
+{
+  let task_id = NEXT_TASK_ID.fetch_add(1, Ordering::Relaxed);
+  let cancel = Arc::new(AtomicBool::new(false));
+  match app.state::<AppState>().imports.lock() {
+    Ok(mut registry) => {
+      registry.insert(task_id, cancel.clone());
+    }
+    Err(_) => log::error!("导出任务 {task_id} 注册失败（锁冲突），该任务将无法取消"),
+  }
+  let app_handle = app.clone();
+  std::thread::spawn(move || {
+    let mut report = |e: asset_menu::ExportEvent| {
+      if let Err(err) = on_event.send(e) {
+        log::debug!("导出事件推送失败（前端可能已关闭）：{err}");
+      }
+    };
+    let (copied, error) = match job(&cancel, &mut report) {
+      Ok(n) => (n as u32, None),
+      Err(e) => (0, Some(e)),
+    };
+    report(asset_menu::ExportEvent::Finished { copied, error });
+    if let Ok(mut registry) = app_handle.state::<AppState>().imports.lock() {
+      registry.remove(&task_id);
+    }
+  });
+  task_id
+}
+
+/// 导出文件：任务化——立即返回 task_id，进度经 Channel（Started / Item / Finished）；
+/// 序列帧 = 文件夹装全部帧；库外写不接撤销；cancel_export 中断（当前文件拷完后停）
 #[tauri::command]
-pub async fn export_folder(state: State<'_, AppState>, folder_id: String, target_dir: String) -> Result<usize, String> {
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  asset_menu::export_folder(lib, &folder_id, &target_dir)
+pub fn export_assets(
+  app: AppHandle,
+  asset_ids: Vec<String>,
+  target_dir: String,
+  on_event: Channel<asset_menu::ExportEvent>,
+) -> Result<u64, String> {
+  let src = export_snapshot(&app)?;
+  Ok(spawn_export(&app, on_event, move |cancel, report| {
+    asset_menu::export_assets(&src, &asset_ids, &target_dir, report, cancel)
+  }))
+}
+
+/// 导出文件夹：任务化同 export_assets；层级保留，素材按 Placement 显示名
+#[tauri::command]
+pub fn export_folder(
+  app: AppHandle,
+  folder_id: String,
+  target_dir: String,
+  on_event: Channel<asset_menu::ExportEvent>,
+) -> Result<u64, String> {
+  let src = export_snapshot(&app)?;
+  Ok(spawn_export(&app, on_event, move |cancel, report| {
+    asset_menu::export_folder(&src, &folder_id, &target_dir, report, cancel)
+  }))
+}
+
+/// 取消导出任务：置位取消标记（与导入共用注册表），工作线程当前文件拷完后中断
+#[tauri::command]
+pub fn cancel_export(state: State<'_, AppState>, task_id: u64) -> Result<(), String> {
+  let registry = state.imports.lock().map_err(|e| e.to_string())?;
+  match registry.get(&task_id) {
+    Some(flag) => {
+      flag.store(true, Ordering::Relaxed);
+      Ok(())
+    }
+    None => Err("导出任务不存在或已结束".to_string()),
+  }
 }
 
 /// 素材直接彻底删除（两段式；不经过回收站，不接撤销）
