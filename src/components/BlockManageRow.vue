@@ -79,11 +79,12 @@ function openIconMenu(e: MouseEvent): void {
   transform: rotate(180deg);
 }
 /* 排序箭头（2026-08-14 用户定）：可用态 = 常态亮一点（高亮档）；禁用态 = 状态/禁用（--line-active）
-   原样呈现（取消 IconButton 自带的半透明，避免双重变淡） */
-.sort-arrow {
+   原样呈现（取消 IconButton 自带的半透明，避免双重变淡）。
+   选择器需压过 IconButton 自带 .icon-btn.small / .icon-btn:disabled（同(0,2,0)级会被组件内样式盖掉） */
+.bm-row .icon-btn.sort-arrow {
   color: var(--text-highlight);
 }
-.sort-arrow:disabled {
+.bm-row .icon-btn.sort-arrow:disabled {
   color: var(--line-active);
   opacity: 1;
 }
