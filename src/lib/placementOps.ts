@@ -406,7 +406,7 @@ export async function deleteFolder(folderId: string): Promise<boolean> {
   }, () => `删除文件夹（${report?.movedPlacements ?? 0} 个素材移入未分类）`);
 }
 
-// 复制 base64（后端守卫：仅静态图片且 ≤10MB）
+// 复制 base64（后端守卫：静态图片原字节 ≤10MB；psd/psb/svg 解码 PNG ≤10MB）
 export async function getAssetBase64(assetId: string): Promise<string | null> {
   try {
     return await invoke<string>("get_asset_base64", { assetId });

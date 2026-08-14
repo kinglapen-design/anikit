@@ -202,12 +202,16 @@ pub async fn delete_folder(
   }
 }
 
-/// 复制 base64（仅静态图片且 ≤10MB，纯 base64 不带 data: 前缀）
+/// 复制 base64（静态图片读原字节 ≤10MB；psd/psb/svg 解码合成图 → 长边 ≤4096 PNG ≤10MB；
+/// 纯 base64 不带 data: 前缀。锁内只定位，解码 / 编码重活在锁外——123MB 级 PSD 解码秒级，不占库锁）
 #[tauri::command]
 pub async fn get_asset_base64(state: State<'_, AppState>, asset_id: String) -> Result<String, String> {
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  asset_menu::get_asset_base64(lib, &asset_id)
+  let (origin, ext, size) = {
+    let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+    let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+    asset_menu::locate_base64_source(lib, &asset_id)?
+  };
+  asset_menu::base64_from_origin(&origin, &ext, size)
 }
 
 /// 资产源文件真实绝对路径（6.3 右键"复制文件路径"；与预览路径解析无关，恒为 info 内实体；

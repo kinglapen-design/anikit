@@ -17,6 +17,7 @@ use crate::core::library::{Library, CACHE_DIR};
 use crate::core::models::AssetMeta;
 use crate::core::paths;
 use crate::services::thumbnail;
+use crate::services::thumb_formats;
 
 /// 缩略图三件套返回（与 SetThumbResult 同构）
 #[derive(Debug, Serialize)]
@@ -414,22 +415,43 @@ pub fn retry_export(items: &[ExportFailedItem], report: &mut dyn FnMut(ExportEve
   out
 }
 
-/// base64 上限（10MB；更大的文件复制 base64 无实际用途）
+/// base64 上限（10MB；更大的内容复制 base64 无实际用途）
 const BASE64_LIMIT: u64 = 10 * 1024 * 1024;
-/// 允许 base64 的静态图片格式
+/// 允许 base64 的静态图片格式（读原文件字节）
 const BASE64_EXTS: [&str; 6] = ["png", "jpg", "jpeg", "bmp", "webp", "gif"];
+/// 允许 base64 的解码格式（2026-08-14 用户定）：合成图解码 → 长边 ≤4096 PNG 编码，
+/// 贴给 AI / 网页可用（原字节 PSD 对方不认；10MB 上限对编码后 PNG 判定）
+const DECODE_BASE64_EXTS: [&str; 3] = ["psd", "psb", "svg"];
 
-/// 复制 base64（6.3 右键菜单）：仅静态图片且 ≤10MB，返回纯 base64（不带 data: 前缀）
-pub fn get_asset_base64(lib: &Library, asset_id: &str) -> Result<String, String> {
+/// base64 复制定位（命令层锁内取数）：origin 路径 + 小写扩展名 + 文件大小；
+/// 重活（PSD 解码 / PNG 编码）走 base64_from_origin 在锁外执行
+pub fn locate_base64_source(lib: &Library, asset_id: &str) -> Result<(PathBuf, String, u64), String> {
   let (_info_dir, origin, meta) = locate(lib, asset_id)?;
-  if !BASE64_EXTS.contains(&meta.ext.to_lowercase().as_str()) {
-    return Err("该格式不支持 base64 复制".to_string());
+  Ok((origin, meta.ext.to_lowercase(), meta.size))
+}
+
+/// 复制 base64（6.3 右键菜单）：静态图片读原字节（≤10MB）；psd / psb / svg 解码合成图
+/// → 长边 ≤4096 PNG 编码（≤10MB）；返回纯 base64（不带 data: 前缀）
+pub fn base64_from_origin(origin: &Path, ext: &str, size: u64) -> Result<String, String> {
+  if BASE64_EXTS.contains(&ext) {
+    if size > BASE64_LIMIT {
+      return Err("文件过大（超过 10MB），不支持 base64 复制".to_string());
+    }
+    let bytes = fs::read(origin).map_err(|e| format!("源文件读取失败：{e}"))?;
+    return Ok(base64_encode(&bytes));
   }
-  if meta.size > BASE64_LIMIT {
-    return Err("文件过大（超过 10MB），不支持 base64 复制".to_string());
+  if DECODE_BASE64_EXTS.contains(&ext) {
+    let img = thumb_formats::decode(origin).ok_or_else(|| "解码失败（PSD 可能未存合成图）".to_string())?;
+    let img = thumbnail::shrink_long_edge(image::DynamicImage::ImageRgba8(img), thumbnail::FULL_PREVIEW_LONG_EDGE);
+    let mut buf = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut buf, image::ImageFormat::Png).map_err(|e| format!("PNG 编码失败：{e}"))?;
+    let bytes = buf.into_inner();
+    if bytes.len() as u64 > BASE64_LIMIT {
+      return Err("解码后图片过大（超过 10MB），不支持 base64 复制".to_string());
+    }
+    return Ok(base64_encode(&bytes));
   }
-  let bytes = fs::read(&origin).map_err(|e| format!("源文件读取失败：{e}"))?;
-  Ok(base64_encode(&bytes))
+  Err("该格式不支持 base64 复制".to_string())
 }
 
 /// base64 编码（无依赖手写：字节 3→4 查表，避免为一个小功能新增 base64 crate）
@@ -499,20 +521,46 @@ mod tests {
   }
 
   #[test]
-  fn get_asset_base64_guards_and_content() {
+  fn base64_guards_and_content() {
     let mut h = make_lib();
     add_asset(&mut h, "AN-A", "图.png", "root");
     add_asset(&mut h, "AN-F", "工程.fla", "root");
     // 图片放行且内容正确（PNG 头起点）
-    let b64 = get_asset_base64(&h.lib, "AN-A").unwrap();
+    let (origin, ext, size) = locate_base64_source(&h.lib, "AN-A").unwrap();
+    let b64 = base64_from_origin(&origin, &ext, size).unwrap();
     assert!(base64_encode(&[0x89, b'P', b'N']).starts_with(b64.chars().take(4).collect::<String>().as_str()) || !b64.is_empty());
     // fla 拒绝
-    let err = get_asset_base64(&h.lib, "AN-F").unwrap_err();
+    let (origin, ext, size) = locate_base64_source(&h.lib, "AN-F").unwrap();
+    let err = base64_from_origin(&origin, &ext, size).unwrap_err();
     assert!(err.contains("不支持"), "{err}");
-    // 超大拒绝
-    h.lib.index.assets.get_mut("AN-A").unwrap().size = BASE64_LIMIT + 1;
-    let err = get_asset_base64(&h.lib, "AN-A").unwrap_err();
+    // 超大拒绝（静态图片分支按文件大小判定）
+    let (origin, ext, _) = locate_base64_source(&h.lib, "AN-A").unwrap();
+    let err = base64_from_origin(&origin, &ext, BASE64_LIMIT + 1).unwrap_err();
     assert!(err.contains("过大"), "{err}");
+  }
+
+  #[test]
+  fn base64_svg_decodes_to_png() {
+    // 解码格式分支：svg 走适配器解码 → PNG 编码（解码回字节应为 PNG 魔数）
+    use base64::Engine;
+    let dir = tempfile::tempdir().unwrap();
+    let svg = dir.path().join("图.svg");
+    fs::write(&svg, r#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="red"/></svg>"#).unwrap();
+    let size = fs::metadata(&svg).unwrap().len();
+    let b64 = base64_from_origin(&svg, "svg", size).unwrap();
+    let bytes = base64::engine::general_purpose::STANDARD.decode(&b64).unwrap();
+    assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"), "应为 PNG 编码输出");
+  }
+
+  #[test]
+  fn base64_fake_psd_decode_failure() {
+    // 假 PSD 解码失败 → 明确报错（未存合成图的 PSD 同路）
+    let dir = tempfile::tempdir().unwrap();
+    let psd = dir.path().join("假.psd");
+    fs::write(&psd, b"not a psd").unwrap();
+    let size = fs::metadata(&psd).unwrap().len();
+    let err = base64_from_origin(&psd, "psd", size).unwrap_err();
+    assert!(err.contains("解码失败"), "{err}");
   }
 
   #[test]
