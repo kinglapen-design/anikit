@@ -119,9 +119,47 @@ fn dedupe_path(dir: &Path, file_name: &str) -> PathBuf {
   }
 }
 
-/// 复制 origin 到目标（按显示名，缺扩展名补 metadata.ext），返回是否成功
+/// 序列帧判定：origin 指向 frames/ 内帧（info 根无该实体），整组帧在 frames/ 目录。
+/// 动图解包同样写 frames/，但其 origin 在 info 根是实体文件 → 不误判。
+/// （rename_origin 对序列帧只改 metadata 不改帧文件名，origin_name 可能已不与任何帧同名，故按"根无实体"判）
+fn sequence_frames(lib: &Library, asset_id: &str, meta: &AssetMeta) -> Option<PathBuf> {
+  if lib.info_dir(asset_id).join(&meta.origin_name).is_file() {
+    return None;
+  }
+  let dir = paths::frames_dir(&lib.assets_dir, asset_id);
+  if dir.is_dir() { Some(dir) } else { None }
+}
+
+/// 序列帧整组导出：目标目录下建 `{folder_name}/` 文件夹（重名 -序号），frames/ 内全部帧拷入
+/// （2026-08-14 用户定：序列帧用一个文件夹装起来，文件夹名称用文件名）
+fn copy_sequence_to(dir: &Path, frames: &Path, folder_name: &str) -> bool {
+  let target = dedupe_path(dir, folder_name);
+  if fs::create_dir_all(&target).is_err() {
+    return false;
+  }
+  let Ok(entries) = fs::read_dir(frames) else { return false };
+  let mut copied = false;
+  for entry in entries.flatten() {
+    let path = entry.path();
+    if path.is_file() && fs::copy(&path, target.join(entry.file_name())).is_ok() {
+      copied = true;
+    }
+  }
+  if !copied {
+    let _ = fs::remove_dir(&target); // 空帧目录不留空壳文件夹
+  }
+  copied
+}
+
+/// 复制 origin 到目标（按显示名，缺扩展名补 metadata.ext），返回是否成功；
+/// 序列帧资产改走整组导出：显示名去扩展名建文件夹，frames/ 全部帧拷入
 fn copy_origin_to(lib: &Library, dir: &Path, asset_id: &str, display_name: &str) -> bool {
   let Some(meta) = lib.index.assets.get(asset_id) else { return false };
+  if let Some(frames) = sequence_frames(lib, asset_id, meta) {
+    let name = ensure_ext(display_name, &meta.ext);
+    let stem = Path::new(&name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or(name);
+    return copy_sequence_to(dir, &frames, &stem);
+  }
   let origin = paths::origin_file(&lib.assets_dir, asset_id, &meta.origin_name);
   if !origin.is_file() {
     return false;
@@ -140,12 +178,19 @@ fn ensure_ext(name: &str, ext: &str) -> String {
   }
 }
 
-/// 导出文件（6.3 右键菜单）：各资产 origin 复制到目标目录（按 originName，重名 -序号）
+/// 导出文件（6.3 右键菜单）：各资产 origin 复制到目标目录（按 originName，重名 -序号）；
+/// 序列帧资产 = 建 `{资产名}/` 文件夹装全部帧（文件夹重名同样 -序号）
 pub fn export_assets(lib: &Library, asset_ids: &[String], target_dir: &str) -> Result<usize, String> {
   let dir = check_target_dir(target_dir)?;
   let mut copied = 0usize;
   for id in asset_ids {
     let Some(meta) = lib.index.assets.get(id) else { continue };
+    if let Some(frames) = sequence_frames(lib, id, meta) {
+      if copy_sequence_to(&dir, &frames, &meta.name) {
+        copied += 1;
+      }
+      continue;
+    }
     let origin = paths::origin_file(&lib.assets_dir, id, &meta.origin_name);
     if !origin.is_file() {
       continue;
@@ -159,7 +204,8 @@ pub fn export_assets(lib: &Library, asset_ids: &[String], target_dir: &str) -> R
 }
 
 /// 导出文件夹（6.3 右键菜单）：目标目录下建同名目录（重名 -序号），子层级保留，
-/// 素材按各自 Placement 显示名复制（链接 Placement 按其显示名导出同一份内容）
+/// 素材按各自 Placement 显示名复制（链接 Placement 按其显示名导出同一份内容）；
+/// 序列帧 = 显示名去扩展名建文件夹装全部帧
 pub fn export_folder(lib: &Library, folder_id: &str, target_dir: &str) -> Result<usize, String> {
   let dir = check_target_dir(target_dir)?;
   let folder_name = lib
@@ -351,5 +397,68 @@ mod tests {
     assert!(base.join("子夹").join("b.png").is_file(), "子层级保留");
     assert!(base.join("子夹").join("别名.png").is_file(), "链接按显示名导出");
     assert!(export_folder(&h.lib, "F-不存在", out.to_str().unwrap()).is_err());
+  }
+
+  /// 序列帧资产入库（3 帧 png，打包进 frames/ + origin Placement）
+  fn add_sequence(h: &mut Harness, id: &str, name: &str, folder: &str) {
+    let src_dir = h.dir.path().join(format!("{id}-源"));
+    fs::create_dir_all(&src_dir).unwrap();
+    let mut frames = Vec::new();
+    for n in 1..=3u32 {
+      let p = src_dir.join(format!("{name}{n}.png"));
+      make_png(&p, 10 + n, 10);
+      frames.push((p, n));
+    }
+    let meta =
+      crate::services::sequence::build_sequence_asset(&h.lib.assets_dir, name, "png", 1, &frames, "sha256:seq", id, Source::Copy, None)
+        .unwrap();
+    h.lib.index.assets.insert(id.into(), meta);
+    ops::add_placement(&mut h.lib, id.into(), folder.into(), format!("{name}.png"), true, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+  }
+
+  #[test]
+  fn export_assets_sequence_packs_frames_into_named_folder() {
+    let mut h = make_lib();
+    add_sequence(&mut h, "AN-S", "走路", "root");
+    add_asset(&mut h, "AN-A", "a.png", "root");
+    let out = h.dir.path().join("导出序列");
+    fs::create_dir_all(&out).unwrap();
+    let n = export_assets(&h.lib, &["AN-S".into(), "AN-A".into()], out.to_str().unwrap()).unwrap();
+    assert_eq!(n, 2, "序列帧整组计 1");
+    assert!(out.join("a.png").is_file());
+    let dir = out.join("走路");
+    assert!(dir.is_dir(), "序列帧导出为资产名文件夹");
+    for f in ["走路-1.png", "走路-2.png", "走路-3.png"] {
+      assert!(dir.join(f).is_file(), "{f} 应拷入");
+    }
+    assert!(!out.join("走路-1.png").is_file(), "帧不散落到目标根");
+  }
+
+  #[test]
+  fn export_folder_sequence_and_anim_unpack_regression() {
+    let mut h = make_lib();
+    let top = Folder { id: "F-TOP".into(), name: "顶夹".into(), parent: None, order: 0 };
+    h.lib.folders.folders.push(top.clone());
+    h.lib.index.folders.insert(top.id.clone(), top);
+    add_sequence(&mut h, "AN-S", "走路", "F-TOP");
+    // 链接 Placement：同资产别名 → 别名为名的文件夹装同一组帧
+    ops::add_placement(&mut h.lib, "AN-S".into(), "F-TOP".into(), "别名.png".into(), false, &mut HashMap::new());
+    // 动图解包回归：origin 在 info 根 + frames/ 有解包帧 → 仍按单文件导出
+    add_asset(&mut h, "AN-G", "动图.gif", "F-TOP");
+    let unpack = paths::frames_dir(&h.lib.assets_dir, "AN-G");
+    fs::create_dir_all(&unpack).unwrap();
+    fs::write(unpack.join("动图-00001.webp"), b"f").unwrap();
+    finish(&mut h.lib).unwrap();
+
+    let out = h.dir.path().join("导出夹");
+    fs::create_dir_all(&out).unwrap();
+    let n = export_folder(&h.lib, "F-TOP", out.to_str().unwrap()).unwrap();
+    assert_eq!(n, 3, "序列帧 2 条 Placement + 动图 1");
+    let base = out.join("顶夹");
+    assert!(base.join("走路").join("走路-1.png").is_file(), "origin 显示名建文件夹");
+    assert!(base.join("别名").join("走路-2.png").is_file(), "链接别名建文件夹装同组帧");
+    assert!(base.join("动图.gif").is_file(), "动图解包 frames/ 不误判，单文件导出");
+    assert!(!base.join("动图").exists(), "动图不建文件夹");
   }
 }
