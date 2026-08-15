@@ -2,7 +2,7 @@
 // 确认弹窗（selection.confirmPrompt / folderPickPrompt）、剪贴板写入、新建文件夹共享入口。
 // 命令调用一律走 placementOps（UI 唯一入口），本层只做流程编排。
 import { open } from "@tauri-apps/plugin-dialog";
-import { useContentStore, type FolderNode } from "../stores/content";
+import { useContentStore, DEFAULT_BLOCK_ID, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useToastStore } from "../stores/toast";
 import {
@@ -42,8 +42,9 @@ export function findParentId(nodes: FolderNode[], id: string, parent: string | n
   return undefined;
 }
 
-// 同级唯一默认名："新建文件夹"、"新建文件夹-2"…（按目标层级现有兄弟名递进）
-export function uniqueFolderName(parentId: string | null): string {
+// 同级唯一默认名："新建文件夹"、"新建文件夹-2"…（按目标层级现有兄弟名递进；
+// 2026-08-14 多区块：顶级排重池收窄到同区块——"同级" = 同区块根级）
+export function uniqueFolderName(parentId: string | null, blockId: string | null = null): string {
   const content = useContentStore();
   let level = content.folders;
   if (parentId) {
@@ -56,12 +57,21 @@ export function uniqueFolderName(parentId: string | null): string {
       return null;
     };
     level = walk(content.folders) ?? [];
+  } else {
+    const b = blockId ?? DEFAULT_BLOCK_ID;
+    level = level.filter((n) => (n.block ?? DEFAULT_BLOCK_ID) === b);
   }
   const names = new Set(level.map((n) => n.name));
   if (!names.has("新建文件夹")) return "新建文件夹";
   let i = 2;
   while (names.has(`新建文件夹-${i}`)) i++;
   return `新建文件夹-${i}`;
+}
+
+// 同级新建的区块归属（2026-08-14 区块子系统）：目标为顶级文件夹时跟随其所在区块——
+// 否则在非默认区块的顶级文件夹旁建同级会落进「目录」；子级新建不需要（区块不继承）
+export function topLevelBlockId(nodes: FolderNode[], id: string): string | null {
+  return nodes.find((n) => n.id === id)?.block ?? null;
 }
 
 // 统一入口：直接以默认名建库 → 成功返回的新 id 进命名态（FolderTree 按 id 定位 naming 节点）。
@@ -71,7 +81,7 @@ export async function createAndName(
   afterFolderId: string | null,
   blockId: string | null = null,
 ): Promise<void> {
-  const id = await createFolder(parentId, uniqueFolderName(parentId), afterFolderId, blockId);
+  const id = await createFolder(parentId, uniqueFolderName(parentId, blockId), afterFolderId, blockId);
   if (id) useSelectionStore().namingFolderId = id;
 }
 

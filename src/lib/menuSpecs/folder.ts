@@ -12,6 +12,7 @@ import {
   findParentId,
   pickExportFolder,
   pickFolderForLink,
+  topLevelBlockId,
 } from "../menuOps";
 import { collapseAll, collapseLevel, expandAll, expandLevel, toggleOpen, treeExpansion } from "../treeExpansion";
 
@@ -57,7 +58,14 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
         useTabsStore().openView(`folder:${folder.id}`);
       },
     },
-    { label: "新建文件夹", icon: "new-folder", shortcut: "Ctrl+Shift+N", action: () => void createAndName(parentId, folder.id) },
+    {
+      label: "新建文件夹",
+      icon: "new-folder",
+      shortcut: "Ctrl+Shift+N",
+      // 同级新建（2026-08-14 区块子系统）：目标为顶级文件夹时带上其所在区块，否则落错「目录」
+      action: () =>
+        void createAndName(parentId, folder.id, parentId === null ? topLevelBlockId(content.folders, folder.id) : null),
+    },
     {
       label: "新建子文件夹",
       icon: "new-subfolder",

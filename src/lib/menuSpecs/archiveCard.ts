@@ -10,6 +10,7 @@ import {
   deleteFolderFlow,
   findParentId,
   pickFolderForLink,
+  topLevelBlockId,
 } from "../menuOps";
 
 // —— 04 稿 · 档案卡片（宽 320 + 搜索框）——
@@ -39,7 +40,14 @@ export function archiveCardSpec(archive: { id: string; name: string }): CtxEntry
     },
     { label: "新建档案", icon: "new-archive", shortcut: "Shift+N", disabled: true },
     { label: "解散档案为文件夹", icon: "folder-open", disabled: true },
-    { label: "新建文件夹", icon: "new-folder", shortcut: "Ctrl+Shift+N", action: () => void createAndName(parentId, archive.id) },
+    {
+      label: "新建文件夹",
+      icon: "new-folder",
+      shortcut: "Ctrl+Shift+N",
+      // 同级新建（2026-08-14 区块子系统）：目标为顶级时跟随其所在区块，否则落错「目录」
+      action: () =>
+        void createAndName(parentId, archive.id, parentId === null ? topLevelBlockId(content.folders, archive.id) : null),
+    },
     {
       label: "新建子文件夹",
       icon: "new-subfolder",

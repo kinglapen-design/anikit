@@ -364,12 +364,6 @@ export const useContentStore = defineStore("content", {
       }
       return map;
     },
-    // 文件夹区块标题计数（全树节点总数）
-    folderTotal(state): number {
-      const walk = (nodes: FolderNode[]): number =>
-        nodes.reduce((sum, n) => sum + 1 + walk(n.children), 0);
-      return walk(state.folders);
-    },
     // 按区块分组的顶级节点（2026-08-14 区块子系统）：block null/"dir"/失效引用均归默认区块「目录」；
     // 后端开库自检保证 blocks 非空且含 dir，空数组兜底合成默认区块（并行开发期降级）
     blockSections(state): BlockSection[] {
