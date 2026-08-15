@@ -114,11 +114,11 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
            domain-selected 品牌色描边（文件夹卡片选中联动 / 树多选）——两态互斥，
            当前目录优先（2026-08-10 用户定：区分双高亮，防"停在哪个目录"混淆） -->
       <TreeItem
-        :icon="node.icon ?? (isOpen(node.id) ? 'folder-open' : 'folder-closed')"
+        :icon="node.kind === 'archive' ? 'archive' : node.icon ?? (isOpen(node.id) ? 'folder-open' : 'folder-closed')"
         :label="node.name"
         :count="node.count"
         :depth="depth"
-        :variant="parentId === null ? 'root' : 'child'"
+        :variant="node.kind === 'archive' ? 'archive' : parentId === null ? 'root' : 'child'"
         :expandable="node.children.length > 0"
         :open="isOpen(node.id)"
         :selected="content.sidebarSelected === `folder:${node.id}`"

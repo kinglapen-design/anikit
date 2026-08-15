@@ -7,17 +7,21 @@ import {
   copyFolderLink,
   copyName,
   createAndName,
+  createArchiveAndName,
   deleteFolderFlow,
+  dissolveArchiveFlow,
   findParentId,
   pickFolderForLink,
   topLevelBlockId,
 } from "../menuOps";
 
 // —— 04 稿 · 档案卡片（宽 320 + 搜索框）——
-// 档案卡片形态未落地（1.2/1.4 排期，FolderNode 尚无档案标记）→ 本 spec 写好暂不挂载，挂载记 09 待办。
+// 2026-08-15 一轮挂载：档案卡片（ArchiveStrip）右键 + 树档案节点（folder.ts treeItemSpec 分流）共用；
+// rename（树节点分流用）：树档案节点的重命名入口走树命名态 namingFolderId，
+// 缺省 = 卡片命名态 namingFolderCardId。
 // 「更改封面图」稿漏画二级箭头，按 10 稿补（二级两项，宽 152，占位）；
 // 稿未画的二级（链接位置/资源库/导出/复制数据）宽度沿用 03 同项口径。
-export function archiveCardSpec(archive: { id: string; name: string }): CtxEntry[] {
+export function archiveCardSpec(archive: { id: string; name: string }, rename?: () => void): CtxEntry[] {
   const content = useContentStore();
   const selection = useSelectionStore();
   const parentId = findParentId(content.folders, archive.id) ?? null;
@@ -38,8 +42,20 @@ export function archiveCardSpec(archive: { id: string; name: string }): CtxEntry
         useTabsStore().openView(`folder:${archive.id}`);
       },
     },
-    { label: "新建档案", icon: "new-archive", shortcut: "Shift+N", disabled: true },
-    { label: "解散档案为文件夹", icon: "folder-open", disabled: true },
+    {
+      label: "新建档案",
+      icon: "new-archive",
+      shortcut: "Shift+N",
+      // 同级新建档案（3.2 一轮点亮，同新建文件夹口径）：目标为顶级时跟随其所在区块
+      action: () =>
+        void createArchiveAndName(parentId, archive.id, parentId === null ? topLevelBlockId(content.folders, archive.id) : null),
+    },
+    {
+      label: "解散档案为文件夹",
+      icon: "folder-open",
+      // 摘 kind 标记 + 清档案数据记录（3.2 一轮点亮，后端幂等）
+      action: () => dissolveArchiveFlow(archive.id),
+    },
     {
       label: "新建文件夹",
       icon: "new-folder",
@@ -70,7 +86,8 @@ export function archiveCardSpec(archive: { id: string; name: string }): CtxEntry
       icon: "rename",
       shortcut: "Ctrl+R",
       action: () => {
-        selection.namingFolderCardId = archive.id;
+        if (rename) rename(); // 树档案节点：树命名态（folder.ts treeItemSpec 分流传入）
+        else selection.namingFolderCardId = archive.id;
       },
     },
     "divider",

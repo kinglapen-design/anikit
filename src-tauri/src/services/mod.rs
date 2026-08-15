@@ -15,6 +15,7 @@
 //! - unpack_queue：动图解包队列（单 worker 无代际作废，导入完成挂钩；事件 anim-unpacked/-failed）
 //! - media：音视频元数据与预览图（5.1，ffprobe/ffmpeg sidecar；视频首帧 / 音频波形）
 //! - operations：素材基础操作（6.1 选择态：新建文件夹 / 移动 / 排序 / 关联 / 副本 / 重命名 / 删除）
+//! - archive：档案文件夹（3.2 一轮骨架：新建档案 / 文件夹 ⇄ 档案转换 / 档案数据清单）
 //! - recent：最近使用（6.1 第二轮，recent.json LRU 500；唯一启用入口 = 默认程序打开成功）
 //! - recycle：回收站（6.1 第二轮：视图 / 还原 / 彻底删除 / 清空）
 //! - scan：重复文件扫描（只读，按存量 hash 分组）
@@ -23,6 +24,7 @@
 pub mod anim;
 pub mod anim_preview;
 pub mod anim_unpack;
+pub mod archive;
 pub mod asset_menu;
 pub mod import;
 pub mod import_task;

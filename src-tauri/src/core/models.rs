@@ -16,6 +16,10 @@ pub const ROOT_FOLDER_ID: &str = "root";
 /// 未分类（root Placement）同在「目录」区块根级——零数据迁移（2026-08-14 区块子系统）
 pub const DEFAULT_BLOCK_ID: &str = "dir";
 
+/// 档案形态标记（2026-08-15 档案子系统一轮，PRD 02_文件整理 03）：Folder.kind = Some(ARCHIVE_KIND)
+/// 即档案文件夹（文件夹 + 详细数据，数据存库级 archives.json）；档案内不允许子级文件夹
+pub const ARCHIVE_KIND: &str = "archive";
+
 /// 生成资源 ID：`AN` + 时间戳（yyMMddHHmm，时间有序）+ 5 位随机字符（防同秒冲突）。
 /// ID 不承载语义，语义全部在 metadata（PRD 01-2.1）。
 pub fn new_asset_id() -> String {
@@ -182,6 +186,9 @@ pub struct Folder {
   /// 自定义图标（新建顶级文件夹时继承所在区块默认图标；None = 默认文件夹图标，不写字段）
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub icon: Option<String>,
+  /// 节点形态（2026-08-15 档案子系统一轮）：Some("archive") = 档案文件夹；None = 普通文件夹，不写字段
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub kind: Option<String>,
   #[serde(default)]
   pub order: i32,
 }
@@ -197,6 +204,78 @@ pub struct Placement {
   /// 导入时创建的第一条 Placement 为原始（PRD 01-3.6）；链接 Placement 无此字段
   #[serde(default, skip_serializing_if = "is_false")]
   pub origin: bool,
+}
+
+// ---------- archives.json（档案数据，2026-08-15 档案子系统一轮，PRD 03_数据链接 06） ----------
+// 档案节点在 folders.json 标记形态（Folder.kind = "archive"）；头像 / 徽标 / 属性 / 描述存本文件（单一写点）
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ArchivesFile {
+  pub version: u32,
+  #[serde(default)]
+  pub archives: Vec<ArchiveData>,
+}
+
+impl ArchivesFile {
+  pub fn new() -> Self {
+    Self { version: DATA_VERSION, archives: Vec::new() }
+  }
+}
+
+/// 一个档案的详细数据（folder_id 对应 folders.json 中 kind = "archive" 的 Folder）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveData {
+  pub folder_id: String,
+  /// 徽标（档案卡片左上角；None = 不设置，不写字段）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub badge: Option<Badge>,
+  /// 头像（即档案卡片封面，二者同步；None = 默认索引子项第一张图，不写字段）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub avatar: Option<Avatar>,
+  /// 属性（短文本并列，"打词"能力，PRD 03_数据链接 02）
+  #[serde(default)]
+  pub props: Vec<String>,
+  /// 描述（标题 + 内容组合，逐条添加）
+  #[serde(default)]
+  pub descriptions: Vec<DescItem>,
+}
+
+impl ArchiveData {
+  /// 默认空记录（get_archive_data 无记录时返回）
+  pub fn new(folder_id: &str) -> Self {
+    Self { folder_id: folder_id.to_string(), badge: None, avatar: None, props: Vec::new(), descriptions: Vec::new() }
+  }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Badge {
+  pub text: String,
+  pub color: String,
+}
+
+/// 头像 = 源资产 ID + 取景框参数（据此生成封面缓存，PRD 03_数据链接 03）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Avatar {
+  pub asset_id: String,
+  /// 取景框参数（三轮头像编辑用，一轮先立结构；None = 未调整，不写字段）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub crop: Option<Crop>,
+}
+
+/// 取景框参数：图片在框内的偏移与缩放
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Crop {
+  pub x: f64,
+  pub y: f64,
+  pub scale: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DescItem {
+  pub title: String,
+  pub content: String,
 }
 
 // ---------- tags.json（标签定义与群组，结构随阶段 4 细化） ----------
@@ -376,5 +455,44 @@ mod tests {
     // 链接 Placement 序列化不出 origin 字段，保持文件干净
     let text = serde_json::to_string(&file.items[1]).unwrap();
     assert!(!text.contains("origin"));
+    // 旧版 Folder（无 kind 字段）serde default 读入；None 不写字段（2026-08-15 档案子系统）
+    assert_eq!(file.folders[0].kind, None);
+    assert!(!serde_json::to_string(&file.folders[0]).unwrap().contains("kind"));
+  }
+
+  /// 档案结构（2026-08-15 档案子系统一轮）：camelCase 序列化（踩坑 031 防线）、
+  /// badge / avatar None 不写字段、缺省字段 default 读入、往返不丢
+  #[test]
+  fn archives_file_camel_case_and_defaults() {
+    let file = ArchivesFile {
+      version: 1,
+      archives: vec![
+        ArchiveData {
+          folder_id: "F01".into(),
+          badge: Some(Badge { text: "主角".into(), color: "#FF0000".into() }),
+          avatar: Some(Avatar { asset_id: "AN-A".into(), crop: Some(Crop { x: 1.5, y: -2.0, scale: 2.0 }) }),
+          props: vec!["走路".into()],
+          descriptions: vec![DescItem { title: "设定".into(), content: "长文".into() }],
+        },
+        ArchiveData::new("F02"),
+      ],
+    };
+    let text = serde_json::to_string(&file).unwrap();
+    assert!(text.contains("folderId"), "rename_all camelCase 生效：{text}");
+    assert!(text.contains("assetId"), "Avatar 同口径：{text}");
+    // 空记录：badge / avatar 不写字段，props / descriptions 空数组照常写
+    let bare = serde_json::to_string(&file.archives[1]).unwrap();
+    assert_eq!(bare, r#"{"folderId":"F02","props":[],"descriptions":[]}"#);
+    // 缺省字段 default 读入（一轮旧数据 / 手编最小记录）
+    let min: ArchiveData = serde_json::from_str(r#"{ "folderId": "F03" }"#).unwrap();
+    assert_eq!(min, ArchiveData::new("F03"));
+    // 往返不丢字段
+    let back: ArchivesFile = serde_json::from_str(&text).unwrap();
+    assert_eq!(file, back);
+    // 档案 Folder：kind 写字段
+    let folder: Folder =
+      serde_json::from_str(r#"{ "id": "F01", "name": "雪牧", "parent": null, "kind": "archive", "order": 0 }"#).unwrap();
+    assert_eq!(folder.kind.as_deref(), Some(ARCHIVE_KIND));
+    assert!(serde_json::to_string(&folder).unwrap().contains(r#""kind":"archive""#));
   }
 }

@@ -187,7 +187,7 @@ async function jump(key: string): Promise<void> {
   text-overflow: ellipsis;
 }
 /* × 删除：常态不占位隐藏（宽度 0 留给文本），悬停 item 展开 24px 露出（02_item 06 同款）；
-   选择器带 .item 提权，覆盖 IconButton.small 的固定 width 24（同 DetailLinks 既有处理） */
+   选择器带 .item 提权，覆盖 IconButton.small 的固定 width 24（同链接区块 item 既有处理） */
 .item .del {
   width: 0;
   padding-left: 0;

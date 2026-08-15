@@ -1,16 +1,17 @@
 <script setup lang="ts">
 // 属性标签（figma-css 01_按钮 2.3）：C4 底 + 暗-悬停边框 radius 6，padding 4/8 gap 6，标签字 常态档；
 // 常态隐藏删除按钮，hover：background C5 / 删除按钮右至左滑入（clear 12px 标签档）。
+// readonly = 纯展示（详情区块一轮只读口径）：不出删除按钮、hover 不变色。
 import AppIcon from "./AppIcon.vue";
 
-defineProps<{ label: string }>();
+withDefaults(defineProps<{ label: string; readonly?: boolean }>(), { readonly: false });
 defineEmits<{ remove: [] }>();
 </script>
 
 <template>
-  <span class="app-tag">
+  <span class="app-tag" :class="{ readonly }">
     <span class="label">{{ label }}</span>
-    <button class="remove" v-tip="'删除'" @click.stop="$emit('remove')">
+    <button v-if="!readonly" class="remove" v-tip="'删除'" @click.stop="$emit('remove')">
       <AppIcon name="clear" :size="12" />
     </button>
   </span>
@@ -32,6 +33,10 @@ defineEmits<{ remove: [] }>();
 }
 .app-tag:hover {
   background: var(--c5);
+}
+/* 只读：hover 不变色（纯展示无交互） */
+.app-tag.readonly:hover {
+  background: var(--c4);
 }
 /* 删除按钮右至左滑入：宽度 0→18px（12 图标 + 6 间隙） */
 .remove {

@@ -8,6 +8,9 @@ import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
 import {
   createFolder,
+  createArchive,
+  convertToArchive,
+  convertToFolder,
   applyClipboardThumb,
   setCustomThumb,
   exportAssets,
@@ -45,8 +48,9 @@ export function findParentId(nodes: FolderNode[], id: string, parent: string | n
 }
 
 // 同级唯一默认名："新建文件夹"、"新建文件夹-2"…（按目标层级现有兄弟名递进；
-// 2026-08-14 多区块：顶级排重池收窄到同区块——"同级" = 同区块根级）
-export function uniqueFolderName(parentId: string | null, blockId: string | null = null): string {
+// 2026-08-14 多区块：顶级排重池收窄到同区块——"同级" = 同区块根级）；
+// base（2026-08-15 档案子系统一轮）：档案新建用"新建档案"基座
+export function uniqueFolderName(parentId: string | null, blockId: string | null = null, base = "新建文件夹"): string {
   const content = useContentStore();
   let level = content.folders;
   if (parentId) {
@@ -64,10 +68,10 @@ export function uniqueFolderName(parentId: string | null, blockId: string | null
     level = level.filter((n) => (n.block ?? DEFAULT_BLOCK_ID) === b);
   }
   const names = new Set(level.map((n) => n.name));
-  if (!names.has("新建文件夹")) return "新建文件夹";
+  if (!names.has(base)) return base;
   let i = 2;
-  while (names.has(`新建文件夹-${i}`)) i++;
-  return `新建文件夹-${i}`;
+  while (names.has(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
 }
 
 // 同级新建的区块归属（2026-08-14 区块子系统）：目标为顶级文件夹时跟随其所在区块——
@@ -101,6 +105,50 @@ export async function createAndName(
   selection.clickFolder(id); // 单选新文件夹（clickFolder 内已互斥清素材/收件箱域）
   useTabsStore().openView(`folder:${id}`);
   selection.namingFolderId = id;
+}
+
+// 新建档案（2026-08-15 档案子系统一轮）：流程同 createAndName（排序物化 → 先建后命名 →
+// 选中清理 → 命名态），默认名基座"新建档案"
+export async function createArchiveAndName(
+  parentId: string | null,
+  afterFolderId: string | null,
+  blockId: string | null = null,
+): Promise<void> {
+  if (levelDisplaySorted(parentId)) {
+    try {
+      await materializeLevelOrder(parentId, blockId);
+    } catch (e) {
+      useToastStore().notify({ message: String(e), icon: "fail" });
+      return;
+    }
+  }
+  const id = await createArchive(parentId, uniqueFolderName(parentId, blockId, "新建档案"), afterFolderId, blockId);
+  if (!id) return;
+  const selection = useSelectionStore();
+  selection.clickFolder(id);
+  useTabsStore().openView(`folder:${id}`);
+  selection.namingFolderId = id;
+}
+
+// 转换为档案（3.2 一轮两段式）：有子文件夹先弹警告确认（figma 25_警告 - 转换为档案，
+// AppModal alert warning 变体）——确认后剔除层级转换；失败 toast 归 convertToArchive
+export function convertToArchiveFlow(folderId: string): void {
+  void (async () => {
+    const r = await convertToArchive(folderId, false);
+    if (r !== "need_confirm") return;
+    useSelectionStore().confirmPrompt = {
+      title: "该文件夹内有子文件夹存在，是否剔除层级转换！",
+      body: "档案下不允许出现子级文件夹，可保留全部文件剔除层级转换。",
+      confirmLabel: "剔除转换",
+      alert: "warning",
+      onConfirm: () => void convertToArchive(folderId, true),
+    };
+  })();
+}
+
+// 解散档案为文件夹（3.2 一轮）：直转，失败 toast 归 convertToFolder
+export function dissolveArchiveFlow(folderId: string): void {
+  void convertToFolder(folderId);
 }
 
 // —— 剪贴板写入（复制链接 / 路径 / base64 / 名称）——

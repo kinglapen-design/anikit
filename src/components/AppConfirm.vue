@@ -54,6 +54,11 @@ function onCancel(): void {
   color: var(--text-normal);
   word-break: break-all;
 }
+/* 按钮 88×38（速查表按钮组定宽口径，2026-08-15 探针实证「取消」两字钮塌到 56 宽）；
+   min-width 不压长标签（删除文件夹等超 88 按内容撑开） */
+.app-confirm :deep(.actions) .app-btn {
+  min-width: 88px;
+}
 /* danger（不可逆操作二次确认）：主按钮错误色 */
 .app-confirm :deep(.app-btn.danger) {
   background: var(--error);

@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 
 use crate::core::library::{self, Library};
-use crate::core::models::Folder;
+use crate::core::models::{Folder, ARCHIVE_KIND};
 use crate::services::import as ops;
 use crate::services::import::ROOT_FOLDER_ID;
 
@@ -25,8 +25,11 @@ pub fn create_folder(
   library::validate_library_name(name).map_err(|e| e.to_string())?;
   let parent_key = parent_key(parent);
   if let Some(p) = &parent_key {
-    if !lib.index.folders.contains_key(p) {
-      return Err("父文件夹不存在，可能已被删除".to_string());
+    match lib.index.folders.get(p) {
+      None => return Err("父文件夹不存在，可能已被删除".to_string()),
+      // 档案层级约束（2026-08-15 档案子系统，PRD 02_文件整理 03）：档案内不允许子级文件夹
+      Some(f) if f.kind.as_deref() == Some(ARCHIVE_KIND) => return Err("档案下不允许出现子级文件夹".to_string()),
+      _ => {}
     }
   }
   // 区块归属与默认图标继承（仅顶级；block_id 指向不存在区块报错）
@@ -61,7 +64,7 @@ pub fn create_folder(
         }
       }
       let folder =
-        Folder { id: ops::new_folder_id(), name: name.to_string(), parent: parent_key, block: None, icon: None, order: insert_order };
+        Folder { id: ops::new_folder_id(), name: name.to_string(), parent: parent_key, block: None, icon: None, kind: None, order: insert_order };
       lib.folders.folders.push(folder.clone());
       lib.index.folders.insert(folder.id.clone(), folder.clone());
       folder
@@ -182,6 +185,10 @@ pub fn move_folders(
   let target_key = parent_key(target_parent);
   if let Some(t) = &target_key {
     check_folder(lib, t)?;
+    // 档案层级约束（2026-08-15 档案子系统）：档案不作为父级并入；档案自身当移动 / 排序对象不受限
+    if lib.index.folders.get(t).map(|f| f.kind.as_deref()) == Some(Some(ARCHIVE_KIND)) {
+      return Err("档案下不允许出现子级文件夹".to_string());
+    }
     if target_block.is_some() {
       return Err("移入文件夹内不能同时指定目标区块".to_string());
     }
@@ -304,7 +311,7 @@ mod tests {
   }
 
   fn add_folder(lib: &mut Library, id: &str, name: &str, parent: Option<&str>, order: i32) {
-    let folder = Folder { id: id.into(), name: name.into(), parent: parent.map(|s| s.into()), block: None, icon: None, order };
+    let folder = Folder { id: id.into(), name: name.into(), parent: parent.map(|s| s.into()), block: None, icon: None, kind: None, order };
     lib.folders.folders.push(folder.clone());
     lib.index.folders.insert(id.into(), folder);
   }
@@ -563,6 +570,33 @@ mod tests {
     // 落进文件夹内传 target_block → 报错；不存在区块 → 报错
     assert!(move_folders(&mut h.lib, &["F02".into()], Some("F01"), None, Some("B01")).is_err());
     assert!(move_folders(&mut h.lib, &["F02".into()], None, None, Some("B-不存在")).is_err());
+  }
+
+  /// 档案层级约束（2026-08-15 档案子系统，PRD 02_文件整理 03）：档案不作为父级——
+  /// create_folder / move_folders 目标父级是 archive 报错；档案自身当移动 / 排序对象不受限
+  #[test]
+  fn archive_rejects_child_folders() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F-A", "档案", None, 0);
+    add_folder(&mut h.lib, "F-B", "普通", None, 1);
+    // 置 F-A 为档案形态
+    h.lib.folders.folders.iter_mut().find(|f| f.id == "F-A").unwrap().kind = Some(ARCHIVE_KIND.into());
+    h.lib.index.folders.get_mut("F-A").unwrap().kind = Some(ARCHIVE_KIND.into());
+
+    let e = create_folder(&mut h.lib, Some("F-A"), "子", None, None).unwrap_err();
+    assert!(e.contains("档案下不允许出现子级文件夹"), "{e}");
+    let e = move_folders(&mut h.lib, &["F-B".into()], Some("F-A"), None, None).unwrap_err();
+    assert!(e.contains("档案下不允许出现子级文件夹"), "{e}");
+    assert_eq!(h.lib.index.folders["F-B"].parent, None, "拒绝后数据不动");
+
+    // 档案自身当移动对象不受限（移入普通文件夹 / 拖回顶层 / 同级排序）
+    let n = move_folders(&mut h.lib, &["F-A".into()], Some("F-B"), None, None).unwrap();
+    assert_eq!(n, 1);
+    assert_eq!(h.lib.index.folders["F-A"].parent.as_deref(), Some("F-B"));
+    let n = move_folders(&mut h.lib, &["F-A".into()], None, None, None).unwrap();
+    assert_eq!(n, 1);
+    reorder_folders(&mut h.lib, &["F-A".into()], None, Some("F-B")).unwrap();
+    assert_eq!(top_orders(&h.lib), vec![("F-A", 0), ("F-B", 1)]);
   }
 
   /// 撤销接入验证：begin → record_file → 业务 → commit 后 undo 栈有一条，undo 回滚 folders.json

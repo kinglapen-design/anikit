@@ -260,6 +260,60 @@ export async function createFolder(
   }
 }
 
+// 新建档案（2026-08-15 档案子系统一轮，同 createFolder 先建后命名口径）：kind = archive 的
+// 文件夹，afterFolderId / blockId 口径同 create_folder；成功返回新 id 供调用方进命名态
+export async function createArchive(
+  parentId: string | null,
+  name: string,
+  afterFolderId: string | null,
+  blockId: string | null = null,
+): Promise<string | null> {
+  const content = useContentStore();
+  const toast = useToastStore();
+  const undo = useUndoStore();
+  try {
+    const folder = await invoke<{ id: string }>("create_archive", { parentId, name, afterFolderId, blockId });
+    await content.refresh();
+    void undo.refreshState();
+    toast.notify({ message: "已新建档案", actionLabel: "撤销", onAction: () => void undo.undo() });
+    return folder.id;
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+    return null;
+  }
+}
+
+// 文件夹转换为档案（3.2 一轮两段式）：confirmed = false 为询问段——有子文件夹返回
+// "need_confirm"（后端未动数据，确认弹窗编排在 menuOps 流程层）；"done" = 已转换
+// （refresh + 成功 toast）；失败 = null + 失败 toast
+export async function convertToArchive(
+  folderId: string,
+  confirmed: boolean,
+): Promise<"done" | "need_confirm" | null> {
+  const content = useContentStore();
+  const toast = useToastStore();
+  const undo = useUndoStore();
+  try {
+    const r = await invoke<"done" | "need_confirm">("convert_to_archive", { folderId, confirmed });
+    if (r === "done") {
+      await content.refresh();
+      void undo.refreshState();
+      toast.notify({ message: "已转换为档案", actionLabel: "撤销", onAction: () => void undo.undo() });
+    }
+    return r;
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+    return null;
+  }
+}
+
+// 解散档案为文件夹（3.2 一轮）：摘 kind 标记 + 清档案数据记录（后端幂等）
+export async function convertToFolder(folderId: string): Promise<boolean> {
+  return await runOp(async () => {
+    await invoke("convert_to_folder", { folderId });
+  }, () => "解散档案为文件夹");
+}
+
 // 新建文档入库（3.1 二轮通用化，2026-08-15 用户定：固定七类 md/txt/fla/psd/ai/docx/xlsx，
 // 二进制类以后端内嵌空白模板建档）：
 // 落当前视口目录（同导入位置口径），先建后命名——成功返回 PlacementView 后 renamingKey 进重命名态

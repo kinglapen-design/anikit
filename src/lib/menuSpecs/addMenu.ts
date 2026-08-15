@@ -3,7 +3,7 @@
 import { useSelectionStore } from "../../stores/selection";
 import { useContentStore, DEFAULT_BLOCK_ID } from "../../stores/content";
 import type { CtxEntry } from "../contextMenus";
-import { createAndName, pickFolderForLink, pickImportPaths } from "../menuOps";
+import { createAndName, createArchiveAndName, pickFolderForLink, pickImportPaths } from "../menuOps";
 import { openBlock } from "../treeExpansion";
 import { createDocument, pasteClipboard, pasteDuplicate, type NewDocKind } from "../placementOps";
 import { openScan } from "../dupScanOps";
@@ -70,7 +70,16 @@ export function addButtonSpec(): CtxEntry[] {
         void createAndName(null, null, DEFAULT_BLOCK_ID);
       },
     },
-    { label: "新建档案", icon: "new-archive", shortcut: "Shift+N", disabled: true },
+    {
+      label: "新建档案",
+      icon: "new-archive",
+      shortcut: "Shift+N",
+      // 3.2 一轮点亮：同新建文件夹口径——默认区块「目录」根级，区块折叠先强制展开
+      action: () => {
+        openBlock(DEFAULT_BLOCK_ID);
+        void createArchiveAndName(null, null, DEFAULT_BLOCK_ID);
+      },
+    },
     "divider",
     { label: "导入本地文件", icon: "import-file", action: () => void pickImportPaths("files") },
     { label: "导入本地文件夹", icon: "import-folder", action: () => void pickImportPaths("folder") },

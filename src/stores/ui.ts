@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
+import { mergeDetailSections, type DetailSectionPref } from "../lib/detailSections";
 
 export type LeftView = "library" | "workspace" | "tags" | "pins";
 export type RightView = "detail" | "aiChat" | "aiPaint" | "aiVideo";
@@ -29,6 +30,7 @@ const PERSIST_KEYS = [
   "showSubfolders",
   "timeDisplay",
   "tabLayout",
+  "detailSections",
 ] as const;
 
 // 变更防抖写回（500ms；模块级单例防重复订阅）
@@ -86,8 +88,29 @@ export const useUiStore = defineStore("ui", {
     // 多标签页布局（1.2）：dockview toJSON 快照，tabs store 防抖写入 / 启动 fromJSON 恢复；
     // null = 无布局（首启默认单标签页）。typeof null === "object"，PERSIST_KEYS 类型校验放行对象
     tabLayout: null as object | null,
+    // 详情面板 8 区块排序 / 显隐（2026-08-15 区块体系一轮，22 稿「编辑数据区块」面板）：
+    // 默认 = 注册表全 visible；加载后经注册表兜底合并（新增补位 / 已删忽略）。
+    // 数组 typeof "object"，PERSIST_KEYS 类型校验放行（同 tabLayout 先例），形状由合并函数校验
+    detailSections: mergeDetailSections(null) as DetailSectionPref[],
+    // 22 稿「编辑数据区块」面板开关（会话级，同 blockManageOpen 口径）：SidebarRight 工具栏
+    // edit-data-section 按钮置位，面板宿主 SidebarRight（机制同 ViewOptionsMenu）
+    sectionEditOpen: false,
   }),
   actions: {
+    // 详情区块排序（22 稿面板箭头）：相邻交换，越界不动
+    moveDetailSection(id: string, dir: 1 | -1): void {
+      const list = this.detailSections;
+      const i = list.findIndex((s) => s.id === id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= list.length) return;
+      const [row] = list.splice(i, 1);
+      list.splice(j, 0, row);
+    },
+    // 详情区块显隐（22 稿面板眼睛）
+    toggleDetailSection(id: string): void {
+      const s = this.detailSections.find((s) => s.id === id);
+      if (s) s.visible = !s.visible;
+    },
     // 启动加载全局 UI 设置并订阅变更防抖写回（多预览窗口各自独立 Pinia 各自加载，
     // 不做跨窗口同步，2026-07-28 定）；读取失败 / 字段类型不符一律按默认值，不阻断启动。
     // 幂等可等待：重复调用返回同一 promise（tabs 布局恢复等依赖方 await 同一份就绪）
@@ -104,6 +127,8 @@ export const useUiStore = defineStore("ui", {
           // 类型对照默认值校验：config 手改 / 旧版本字段变形不污染 store
           if (v !== undefined && typeof v === typeof state[k]) state[k] = v;
         }
+        // 区块配置兜底合并：注册表新增补位 / 配置里已删 id 忽略（lib/detailSections）
+        this.detailSections = mergeDetailSections(this.detailSections);
       } catch (e) {
         console.warn("UI 设置读取失败（用默认值）：", e);
       }

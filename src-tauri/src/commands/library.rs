@@ -312,7 +312,7 @@ mod tests {
     let folders = FoldersFile {
       version: DATA_VERSION,
       blocks: Vec::new(),
-      folders: vec![Folder { id: "F01".into(), name: "夹".into(), parent: None, block: None, icon: None, order: 0 }],
+      folders: vec![Folder { id: "F01".into(), name: "夹".into(), parent: None, block: None, icon: None, kind: None, order: 0 }],
       items: folder_items
         .iter()
         .map(|id| Placement { asset: id.to_string(), folder: "F01".into(), name: format!("{id}.fla"), order: 0, origin: true })

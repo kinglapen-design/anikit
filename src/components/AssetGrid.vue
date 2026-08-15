@@ -10,6 +10,7 @@ import HoverZoomOverlay from "./HoverZoomOverlay.vue";
 import ListRowCard from "./ListRowCard.vue";
 import ListHeader from "./ListHeader.vue";
 import FolderStrip from "./FolderStrip.vue";
+import ArchiveStrip from "./ArchiveStrip.vue";
 import InboxDiskSection from "./InboxDiskSection.vue";
 import SectionHeader from "./SectionHeader.vue";
 import { useGridLayout } from "../lib/useGridLayout";
@@ -182,13 +183,15 @@ onBeforeUnmount(() => {
       <div ref="headerRef" class="grid-header" @pointerdown="headerBlankClear">
         <!-- 当前视口无子文件夹时整个文件夹区块隐藏（阶段3修改定案；1.2 按本标签页 viewKey 取子文件夹） -->
         <FolderStrip v-if="content.stripFoldersFor(viewKey).length > 0" :view-key="viewKey" />
+        <!-- 档案区（3.2 一轮，PRD 02-03 三区：文件夹 / 档案 / 文件）：无档案整块不渲染（同文件夹区口径） -->
+        <ArchiveStrip v-if="content.stripArchivesFor(viewKey).length > 0" :view-key="viewKey" />
         <!-- 收件箱视口（4.4）：磁盘实况"工程文件"区块在 FolderStrip 同位（快速访问不出文件夹区块） -->
         <InboxDiskSection v-if="isInbox && content.inboxDisk.length > 0" />
-        <!-- "内容"副标题：无子文件夹时隐藏（无需区分）；有子文件夹但无文件时同样隐藏（2026-07-24 用户定）。
+        <!-- "内容"副标题：无子文件夹（含档案）时隐藏（无需区分）；有子文件夹但无文件时同样隐藏（2026-07-24 用户定）。
              收件箱视口改题"已导入"（4.4）：无文件夹区块概念，只要有已导入内容就显示。
              padding 统一 0（2026-08-08 用户定：仅目录树区块标题 left 8）；标题↔卡片间距 12（下方 translateY） -->
         <SectionHeader
-          v-if="items.length > 0 && (isInbox || content.stripFoldersFor(viewKey).length > 0)"
+          v-if="items.length > 0 && (isInbox || content.stripFoldersFor(viewKey).length > 0 || content.stripArchivesFor(viewKey).length > 0)"
           :title="isInbox ? '已导入' : '内容'"
           :count="items.length"
           v-model:open="assetsOpen"

@@ -38,6 +38,8 @@ export interface FolderNode {
   id: string;
   name: string;
   count: number; // 该文件夹递归 Placement 总数（含全部子文件夹，2026-07-25 用户定）
+  // 节点形态（2026-08-15 档案子系统一轮）："archive" = 档案；缺省 = 普通文件夹（所有层级都带）
+  kind?: string | null;
   // 所属区块 id（2026-08-14 区块子系统）：仅顶级节点有值语义，null/缺省 = 默认区块「目录」
   block?: string | null;
   // 自定义图标名（assets/icons/05_custom-icon 文件干；顶级文件夹新建时继承区块默认图标）；
@@ -48,6 +50,27 @@ export interface FolderNode {
 
 // 默认区块「目录」id（后端 core/models.rs DEFAULT_BLOCK_ID；禁删可改名）
 export const DEFAULT_BLOCK_ID = "dir";
+
+// 档案详细数据（2026-08-15 档案子系统一轮，后端 core/models.rs ArchiveData）：
+// 一轮消费 = 档案卡片徽标（badge）；头像（avatar = 封面，随 22 稿编辑面板）与
+// 属性 / 描述（props / descriptions，随详情面板区块体系）后续任务接入
+export interface ArchiveBadge {
+  text: string;
+  color: string; // 徽标底色（自定义色值，芯片 background 直用）
+}
+
+export interface ArchiveAvatar {
+  assetId: string;
+  crop?: { x: number; y: number; scale: number } | null;
+}
+
+export interface ArchiveData {
+  folderId: string;
+  badge?: ArchiveBadge | null;
+  avatar?: ArchiveAvatar | null;
+  props: string[];
+  descriptions: { title: string; content: string }[];
+}
 
 // 区块视图（后端 commands/import.rs BlockView；list_folder_tree 按 order 排序输出）
 export interface BlockView {
@@ -213,6 +236,8 @@ export const useContentStore = defineStore("content", {
     // 快速访问"最近使用 / 回收站"（6.1 二轮，2026-07-29）：refresh 一并拉取，失败静默降级
     recentAssets: [] as RecentAssetView[],
     recycleEntries: [] as RecycleEntryView[],
+    // 档案详细数据（2026-08-15 档案子系统一轮）：folderId → ArchiveData，refresh 一并拉取装配
+    archives: {} as Record<string, ArchiveData>,
     // 左栏选中项：quick:all / quick:uncategorized… / folder:{id}
     sidebarSelected: "quick:all",
     // 选中互斥：素材卡片选中（selection store）与收件箱条目选中互斥。
@@ -339,14 +364,33 @@ export const useContentStore = defineStore("content", {
     },
     // 文件夹卡片横排（03_中间面板）：仅文件夹视图显示直接子文件夹；
     // 快速访问视图一律不出文件夹区块（2026-07-22 用户定案；回收站保留文件夹随对应阶段另议）。
-    // 1.2 多标签页：按视口 key 参数化（每个标签页各自视口）
+    // 1.2 多标签页：按视口 key 参数化（每个标签页各自视口）；
+    // 档案（kind = archive，3.2 一轮）从文件夹区摘出——档案区独立区块（stripArchivesFor）
     stripFoldersFor(state) {
       return (viewKey: string): FolderNode[] => {
         if (viewKey.startsWith("folder:")) {
-          return findFolder(state.folders, viewKey.slice(7))?.children ?? [];
+          return (findFolder(state.folders, viewKey.slice(7))?.children ?? []).filter(
+            (n) => n.kind !== "archive",
+          );
         }
         return [];
       };
+    },
+    // 档案区（3.2 一轮，PRD 02-03 中间面板三区：文件夹 / 档案 / 文件）：仅文件夹视图的直接子级档案；
+    // 快速访问视图同文件夹区口径一律不出
+    stripArchivesFor(state) {
+      return (viewKey: string): FolderNode[] => {
+        if (viewKey.startsWith("folder:")) {
+          return (findFolder(state.folders, viewKey.slice(7))?.children ?? []).filter(
+            (n) => n.kind === "archive",
+          );
+        }
+        return [];
+      };
+    },
+    // 激活视口的子级档案（操作/显示上下文跟随激活标签页）
+    stripArchives(state): FolderNode[] {
+      return this.stripArchivesFor(state.sidebarSelected);
     },
     // 激活视口的子文件夹（操作/显示上下文跟随激活标签页）
     stripFolders(state): FolderNode[] {
@@ -414,8 +458,8 @@ export const useContentStore = defineStore("content", {
       this.placements = placements;
       this.folders = markRaw(tree.nodes);
       this.blocks = markRaw(tree.blocks);
-      // 最近使用 / 回收站一并拉（6.1 二轮）：保持简单——操作后 refresh 即全量对齐
-      await Promise.all([this.refreshRecent(), this.refreshRecycle()]);
+      // 最近使用 / 回收站 / 档案数据一并拉（6.1 二轮 / 3.2 一轮）：保持简单——操作后 refresh 即全量对齐
+      await Promise.all([this.refreshRecent(), this.refreshRecycle(), this.refreshArchives()]);
       // 选择态剔除已不存在的 key（三域就位后统一 prune——回收站 key 存活以 recycleEntries 为准）
       useSelectionStore().prune();
     },
@@ -433,6 +477,18 @@ export const useContentStore = defineStore("content", {
         this.recycleEntries = await invoke<RecycleEntryView[]>("list_recycle");
       } catch (e) {
         console.warn("回收站刷新失败（静默降级）：", e);
+      }
+    },
+    // 档案详细数据（3.2 一轮）：list_archives 装配成 folderId → ArchiveData map；
+    // 同 refreshRecent 静默降级口径——徽标等是增强展示，不阻断主流程
+    async refreshArchives(): Promise<void> {
+      try {
+        const list = await invoke<ArchiveData[]>("list_archives");
+        const map: Record<string, ArchiveData> = {};
+        for (const a of list) map[a.folderId] = a;
+        this.archives = map;
+      } catch (e) {
+        console.warn("档案数据刷新失败（静默降级）：", e);
       }
     },
     async refreshFolders(): Promise<void> {

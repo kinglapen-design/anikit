@@ -23,9 +23,10 @@ pub const TAGS_FILE: &str = "tags.json";
 pub const PINS_FILE: &str = "pins.json";
 pub const RECYCLE_FILE: &str = "recycle.json";
 pub const RECENT_FILE: &str = "recent.json";
+pub const ARCHIVES_FILE: &str = "archives.json";
 
 /// 库根数据文件（均为备份对象，PRD 06-04）
-pub const ROOT_DATA_FILES: &[&str] = &[FOLDERS_FILE, TAGS_FILE, PINS_FILE, RECYCLE_FILE, RECENT_FILE];
+pub const ROOT_DATA_FILES: &[&str] = &[FOLDERS_FILE, TAGS_FILE, PINS_FILE, RECYCLE_FILE, RECENT_FILE, ARCHIVES_FILE];
 
 /// info 文件夹内的数据文件（备份对象；缩略图/波形图是缓存可重建，不备份；
 /// frames.json = 动图解包的逐帧 delay 清单，2026-07-26 定案持久化）
@@ -45,6 +46,8 @@ pub struct Library {
   pub pins: PinsFile,
   pub recycle: RecycleFile,
   pub recent: RecentFile,
+  /// 档案数据（2026-08-15 档案子系统一轮，PRD 03_数据链接 06）：旧库无 archives.json 按空表加载
+  pub archives: ArchivesFile,
   pub index: LibraryIndex,
   /// 已缓存系统格式图标的扩展名集（cache/thumbs/{ext}.webp，4.2）——视图层回退查内存集，免逐卡片 stat
   pub format_icons: HashSet<String>,
@@ -146,6 +149,7 @@ pub fn create(space: &mut Space, name: &str) -> Result<Library, DataError> {
   write_json(&path.join(PINS_FILE), &PinsFile::new())?;
   write_json(&path.join(RECYCLE_FILE), &RecycleFile::new())?;
   write_json(&path.join(RECENT_FILE), &RecentFile::new())?;
+  write_json(&path.join(ARCHIVES_FILE), &ArchivesFile::new())?;
   // 新库排尾：登记进 library_order 并落盘（save_space 单写点；失败不吞，库已建出会按外来目录排尾显示）
   space.library_order.push(name.to_string());
   space::save_space(space)?;
@@ -184,6 +188,8 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   let pins: PinsFile = read_json(&path.join(PINS_FILE))?;
   let recycle: RecycleFile = read_json(&path.join(RECYCLE_FILE))?;
   let recent: RecentFile = read_json(&path.join(RECENT_FILE))?;
+  // archives.json 是 3.2 新增文件：旧库无此文件按空表加载（不算损坏，同 PRD 06-04 口径的例外）
+  let mut archives = read_archives(&path.join(ARCHIVES_FILE))?;
   let assets = load_assets(&assets_dir)?;
   // 打开自检（2026-07-25 用户反馈：手动删 assets/{ID}.info 后数量成永久错误）：
   // 剔除指向缺失 info 的 Placement（内存与磁盘同清，数量统计随索引重建归零）。
@@ -198,10 +204,23 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   if blocks_fixed {
     log::info!("打开自检修复区块表（注入默认区块 / 失效区块引用置空）");
   }
-  if removed > 0 || blocks_fixed {
+  // 档案数据自检（2026-08-15 档案子系统）：剔除指向不存在 folder / folder 非档案形态的记录
+  let archives_fixed = fix_archives(&mut archives, &folders);
+  if archives_fixed {
+    log::info!("打开自检修复 archives.json（剔除失效档案记录）");
+  }
+  let folders_changed = removed > 0 || blocks_fixed;
+  if folders_changed || archives_fixed {
     match backup::backup_library(path, &assets_dir) {
-      Ok(_) => write_json(&path.join(FOLDERS_FILE), &folders)?,
-      Err(e) => log::error!("自检清理前备份失败，folders.json 保持原样（仅本会话内存清理）：{e}"),
+      Ok(_) => {
+        if folders_changed {
+          write_json(&path.join(FOLDERS_FILE), &folders)?;
+        }
+        if archives_fixed {
+          write_json(&path.join(ARCHIVES_FILE), &archives)?;
+        }
+      }
+      Err(e) => log::error!("自检清理前备份失败，数据文件保持原样（仅本会话内存清理）：{e}"),
     }
   }
   let index = LibraryIndex::build(&folders, assets);
@@ -215,6 +234,7 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
     pins,
     recycle,
     recent,
+    archives,
     index,
     format_icons: scan_format_icons(path),
   })
@@ -273,9 +293,33 @@ fn fix_blocks(folders: &mut FoldersFile) -> bool {
   changed
 }
 
+/// archives.json 读取（2026-08-15 档案子系统）：文件不存在 = 空表（3.2 新增文件，旧库无此文件不算损坏）
+fn read_archives(path: &Path) -> Result<ArchivesFile, DataError> {
+  if path.is_file() {
+    read_json(path)
+  } else {
+    Ok(ArchivesFile::new())
+  }
+}
+
+/// 打开自检（2026-08-15 档案子系统）：archives.json 记录自愈——指向不存在 folder 或
+/// folder 非档案形态（kind != "archive"）的记录剔除。返回是否有改动
+fn fix_archives(archives: &mut ArchivesFile, folders: &FoldersFile) -> bool {
+  let before = archives.archives.len();
+  archives
+    .archives
+    .retain(|a| folders.folders.iter().any(|f| f.id == a.folder_id && f.kind.as_deref() == Some(ARCHIVE_KIND)));
+  before != archives.archives.len()
+}
+
 /// folders.json 单一写点（01_开发规范 第 1 条）：全量保存文件夹树 + 全部 Placement。
 pub fn save_folders(lib: &Library) -> Result<(), DataError> {
   write_json(&lib.root.join(FOLDERS_FILE), &lib.folders)
+}
+
+/// archives.json 单一写点（01_开发规范 第 1 条）：全量保存档案数据（3.2 一轮骨架）
+pub fn save_archives(lib: &Library) -> Result<(), DataError> {
+  write_json(&lib.root.join(ARCHIVES_FILE), &lib.archives)
 }
 
 /// recycle.json 单一写点（01_开发规范 第 1 条）：全量保存回收站记录（6.1 删除落地启用）。
@@ -303,6 +347,7 @@ pub fn reload(lib: &mut Library) -> Result<(), DataError> {
   lib.pins = read_json(&root.join(PINS_FILE))?;
   lib.recycle = read_json(&root.join(RECYCLE_FILE))?;
   lib.recent = read_json(&root.join(RECENT_FILE))?;
+  lib.archives = read_archives(&root.join(ARCHIVES_FILE))?;
   let assets = load_assets(&lib.assets_dir)?;
   lib.index = LibraryIndex::build(&lib.folders, assets);
   Ok(())
@@ -657,11 +702,64 @@ mod tests {
     assert_eq!(disk.folders.iter().find(|f| f.id == "F02").unwrap().block, None, "自愈落盘");
   }
 
+  /// 档案自检（2026-08-15 档案子系统）：指向不存在 folder / folder 非档案形态的记录剔除并落盘
+  #[test]
+  fn open_heals_archives_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let root = lib.root.clone();
+
+    fs::write(
+      root.join(FOLDERS_FILE),
+      r#"{
+        "version": 1,
+        "folders": [
+          { "id": "F01", "name": "雪牧", "parent": null, "kind": "archive", "order": 0 },
+          { "id": "F02", "name": "普通", "parent": null, "order": 1 }
+        ],
+        "items": []
+      }"#,
+    )
+    .unwrap();
+    fs::write(
+      root.join(ARCHIVES_FILE),
+      r#"{
+        "version": 1,
+        "archives": [
+          { "folderId": "F01", "props": ["主角"] },
+          { "folderId": "F-不存在" },
+          { "folderId": "F02" }
+        ]
+      }"#,
+    )
+    .unwrap();
+
+    let lib = open(&lib.space_root, &root).unwrap();
+    assert_eq!(lib.archives.archives.len(), 1, "失效记录剔除");
+    assert_eq!(lib.archives.archives[0].folder_id, "F01");
+    assert_eq!(lib.archives.archives[0].props, vec!["主角"]);
+    let disk: ArchivesFile = read_json(&root.join(ARCHIVES_FILE)).unwrap();
+    assert_eq!(disk.archives.len(), 1, "自愈落盘");
+  }
+
+  /// 旧库无 archives.json（3.2 新增文件）：开库按空表加载不报错；无改动不补建文件
+  #[test]
+  fn open_without_archives_file_loads_empty() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let root = lib.root.clone();
+    fs::remove_file(root.join(ARCHIVES_FILE)).unwrap();
+
+    let lib = open(&lib.space_root, &root).unwrap();
+    assert!(lib.archives.archives.is_empty());
+    assert!(!root.join(ARCHIVES_FILE).exists(), "无改动不补建文件");
+  }
+
   #[test]
   fn save_folders_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
     let mut lib = create_test(dir.path());
-    lib.folders.folders.push(Folder { id: "F01".into(), name: "人物".into(), parent: None, block: None, icon: None, order: 0 });
+    lib.folders.folders.push(Folder { id: "F01".into(), name: "人物".into(), parent: None, block: None, icon: None, kind: None, order: 0 });
     save_folders(&lib).unwrap();
     let back: FoldersFile = read_json(&lib.root.join(FOLDERS_FILE)).unwrap();
     assert_eq!(back.folders.len(), 1);

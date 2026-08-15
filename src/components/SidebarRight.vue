@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // 右侧面板（1.2 重构，figma-css 01_主窗口 右侧面板段）：
 // 标题栏 46（C3 + 下边框：窗口控制组由 App.vue 右上角浮块呈现，本行留作窗口拖拽区）；
-// 工具栏 54（收起详情面板 + 编辑数据区块[无业务 disabled]，figma 12263 原位）；
-// 数据展示 = DetailPanel（旧件填入，详情区块随 6.x 业务逐个重写）。
+// 工具栏 54（收起详情面板 + 编辑数据区块[22 稿面板，2026-08-15 点亮]，figma 12263 原位）；
+// 数据展示 = DetailPanel（8 区块体系，2026-08-15 一轮）。
 // 收展 = 常驻挂载 + 宽度由 App.vue rAF 驱动逐帧写入（v6，同 SidebarLeft）；窗口控制组在 App 层
 // 浮块恒在窗口右上角，不参与收展（2026-08-08 用户定：解决窗口控制随收展跳变）。
 import { ref } from "vue";
 import IconButton from "./IconButton.vue";
 import DetailPanel from "./DetailPanel.vue";
+import SectionEditPanel from "./SectionEditPanel.vue";
 import { useUiStore } from "../stores/ui";
 import { useSideThumb } from "../lib/useSideThumb";
 
@@ -16,6 +17,19 @@ const bodyRef = ref<HTMLElement>();
 const thumb = useSideThumb(bodyRef);
 // 滚动条悬停显隐（2026-08-10 用户定：悬停面板 / 拖拽 thumb 时才出现）
 const hover = ref(false);
+
+// 22 稿「编辑数据区块」面板：按钮右缘对齐、下方展开；再次点击按钮收起（toggle，同 ViewOptionsMenu 口径）
+const sectionAnchor = ref({ x: 0, y: 0 });
+const sectionBtnRef = ref<HTMLElement>();
+function toggleSectionEdit(e: MouseEvent): void {
+  if (ui.sectionEditOpen) {
+    ui.sectionEditOpen = false;
+    return;
+  }
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  sectionAnchor.value = { x: rect.right - 175, y: rect.bottom + 4 };
+  ui.sectionEditOpen = true;
+}
 </script>
 
 <template>
@@ -30,7 +44,9 @@ const hover = ref(false);
     <!-- 工具栏（figma 12263，54 / padding 12 16）：收起详情面板 + 编辑数据区块 -->
     <div class="panel-toolbar">
       <IconButton name="collapse-detail" title="收起详情面板" @click="ui.rightCollapsed = true" />
-      <IconButton name="edit-data-section" title="编辑数据区块" disabled />
+      <span ref="sectionBtnRef" style="display: contents">
+        <IconButton name="edit-data-section" title="编辑数据区块" @click="toggleSectionEdit" />
+      </span>
     </div>
     <div class="side-content">
       <div ref="bodyRef" class="detail-body">
@@ -43,6 +59,13 @@ const hover = ref(false);
         @pointerdown="thumb.onThumbDown"
       />
     </div>
+    <!-- 22 稿「编辑数据区块」面板（会话级 ui.sectionEditOpen，机制同 ViewOptionsMenu） -->
+    <SectionEditPanel
+      v-if="ui.sectionEditOpen"
+      :anchor="sectionAnchor"
+      :trigger="sectionBtnRef ?? null"
+      @close="ui.sectionEditOpen = false"
+    />
   </aside>
 </template>
 

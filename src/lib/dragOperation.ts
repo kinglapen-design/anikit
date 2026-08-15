@@ -45,6 +45,7 @@ import {
   dropFolderCardBeside,
   dropFoldersInto,
   dropFoldersIntoBlock,
+  isArchiveFolder,
   visibleTreeFolderIds,
 } from "./dragFolderOps";
 
@@ -232,20 +233,22 @@ function updateDropTarget(e: PointerEvent): void {
       sess.drop = async () => dropAssetsInto(items, id, ctrl);
     } else {
       if (folderIds.includes(id)) return; // 拖到自身组 = 无操作
-      if (rel < 1 / 3 || rel > 2 / 3) {
-        const zone = rel < 1 / 3 ? "before" : "after";
-        dragView.tree = { folderId: id, zone };
-        sess.drop = async () => dropFolderBeside(folderIds, id, zone);
-      } else {
+      // 档案节点禁止并入（2026-08-15 档案子系统一轮：档案下不允许子级文件夹，后端护栏）——
+      // 中间 1/3 并入落点降级为排序落点（按半高定前/后）；素材拖入档案不受限（档案可含文件）
+      if (!isArchiveFolder(id) && rel >= 1 / 3 && rel <= 2 / 3) {
         dragView.tree = { folderId: id, zone: "into" };
         sess.drop = async () => dropFoldersInto(folderIds, id);
+      } else {
+        const zone = rel < 0.5 ? "before" : "after";
+        dragView.tree = { folderId: id, zone };
+        sess.drop = async () => dropFolderBeside(folderIds, id, zone);
       }
     }
     return;
   }
 
-  // 文件夹卡片（FolderCard 根带 data-folder-id）
-  const folderCard = el.closest<HTMLElement>(".folder-card[data-folder-id]");
+  // 文件夹卡片 / 档案卡片（根带 data-folder-id）；档案卡片不作文件夹并入落点（同树档案护栏）
+  const folderCard = el.closest<HTMLElement>(".folder-card[data-folder-id], .archive-card[data-folder-id]");
   if (folderCard) {
     const id = folderCard.getAttribute("data-folder-id")!;
     if (sess.kind === "asset") {
@@ -253,7 +256,7 @@ function updateDropTarget(e: PointerEvent): void {
       sess.drop = async () => dropAssetsInto(items, id, ctrl);
       return;
     }
-    if (!folderIds.includes(id)) {
+    if (!folderIds.includes(id) && !isArchiveFolder(id)) {
       const r = folderCard.getBoundingClientRect();
       const relX = (e.clientX - r.left) / Math.max(1, r.width);
       if (sameStripSiblings(id) && (relX < 0.3 || relX > 0.7)) {
@@ -347,7 +350,7 @@ function startDrag(e: PointerEvent): void {
   // 先 closest 到卡片根；多选取首个选中项的卡片（卡片已渲染缩略图涵盖 PSD 缓存图 / 波形 /
   // 视频首帧 / 序列帧封面全部形态，最可靠）
   const hit = document.elementFromPoint(sess.startX, sess.startY) as HTMLElement | null;
-  let anchor = hit?.closest<HTMLElement>(".asset-card, .list-row, .folder-card, .tree-item") ?? null;
+  let anchor = hit?.closest<HTMLElement>(".asset-card, .list-row, .folder-card, .archive-card, .tree-item") ?? null;
   if (sess.kind === "asset" && sess.items.length > 0) {
     const k0 = `${sess.items[0].assetId}|${sess.items[0].folderId}`;
     anchor =
@@ -467,7 +470,7 @@ function begin(e: PointerEvent, kind: DragKind, key: string): void {
   // 区块标题排序不走引擎（LibraryView 本地让位式拖拽），引擎内全部拖类均挂 capture；
   // 未挂上的边缘情况靠 onMove buttons 僵尸自清 + document mouseleave 划出取消双兜底
   const capEl = (e.target as HTMLElement).closest<HTMLElement>(
-    ".tree-item, .asset-card, .list-row, .folder-card, .block-head",
+    ".tree-item, .asset-card, .list-row, .folder-card, .archive-card, .block-head",
   );
   if (capEl) {
     try {
@@ -524,7 +527,7 @@ export function gridPointerDown(e: PointerEvent, onBlank: (e: PointerEvent) => v
     if (key) beginAssetDrag(e, key);
     return;
   }
-  const folderCard = t.closest(".folder-card[data-folder-id]");
+  const folderCard = t.closest(".folder-card[data-folder-id], .archive-card[data-folder-id]");
   if (folderCard) {
     beginFolderDrag(e, folderCard.getAttribute("data-folder-id")!);
     return;

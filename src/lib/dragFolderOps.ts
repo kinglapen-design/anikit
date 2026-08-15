@@ -24,6 +24,20 @@ export function findParentAndNext(
   return null;
 }
 
+// 档案节点判定（2026-08-15 档案子系统一轮）：档案下不允许子级文件夹（后端护栏），
+// 拖拽引擎据此对档案落点禁止并入（仅允许排序落点）
+export function isArchiveFolder(id: string): boolean {
+  const walk = (nodes: FolderNode[]): FolderNode | null => {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      const hit = walk(n.children);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  return walk(useContentStore().folders)?.kind === "archive";
+}
+
 // 树可见文件夹 id（2026-07-28 复验反馈 5）：可见展开态扁平化顺序——Shift 范围选与整组排序的
 // 顺序依据；DOM 顺序即视觉顺序（命名中临时节点无 data-folder-id 天然排除）。
 // scope（2026-08-14 区块子系统）：多区块后按区块容器（.block-tree）收窄——跨区块 Shift 范围选 /

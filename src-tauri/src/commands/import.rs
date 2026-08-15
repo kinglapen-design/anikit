@@ -411,6 +411,9 @@ pub struct FolderNode {
   /// 自定义图标（2026-08-14 区块子系统：新建顶级文件夹继承区块默认图标；None 不写字段）
   #[serde(skip_serializing_if = "Option::is_none")]
   pub icon: Option<String>,
+  /// 节点形态（2026-08-15 档案子系统一轮：Some("archive") = 档案；所有层级都带；None 不写字段）
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub kind: Option<String>,
   pub children: Vec<FolderNode>,
 }
 
@@ -453,7 +456,7 @@ fn folder_tree(lib: &Library) -> FolderTreeView {
         let recursive = direct + children.iter().map(|c| c.count).sum::<u32>();
         // block / icon 仅顶级节点输出（子节点不持区块语义；icon 继承自区块默认图标）
         let (block, icon) = if parent.is_none() { (f.block.clone(), f.icon.clone()) } else { (None, None) };
-        FolderNode { id: f.id.clone(), name: f.name.clone(), count: recursive, block, icon, children }
+        FolderNode { id: f.id.clone(), name: f.name.clone(), count: recursive, block, icon, kind: f.kind.clone(), children }
       })
       .collect()
   }
@@ -571,6 +574,7 @@ mod tests {
         parent: None,
         block: Some("B01".into()),
         icon: None,
+        kind: None,
         order: 0,
       };
       let child = crate::core::models::Folder {
@@ -579,6 +583,7 @@ mod tests {
         parent: Some("F01".into()),
         block: Some("B02".into()), // 脏数据：子节点即使带值也不输出
         icon: None,
+        kind: None,
         order: 0,
       };
       lib.folders.folders.push(top.clone());
@@ -599,6 +604,44 @@ mod tests {
     // 序列化：子节点不输出 block 字段（skip_serializing_if）
     let text = serde_json::to_string(&tree.nodes[0].children[0]).unwrap();
     assert!(!text.contains("block"));
+  }
+
+  /// 档案形态输出（2026-08-15 档案子系统一轮）：kind 所有层级都带；普通节点 None 不写字段
+  #[test]
+  fn folder_tree_outputs_kind_at_all_levels() {
+    let h = make_lib();
+    {
+      let mut guard = h.lib.lock().unwrap();
+      let lib = guard.as_mut().unwrap();
+      let top = crate::core::models::Folder {
+        id: "F01".into(),
+        name: "档案".into(),
+        parent: None,
+        block: None,
+        icon: None,
+        kind: Some("archive".into()),
+        order: 0,
+      };
+      let child = crate::core::models::Folder {
+        id: "F01-1".into(),
+        name: "子夹".into(),
+        parent: Some("F01".into()),
+        block: None,
+        icon: None,
+        kind: Some("archive".into()), // 脏数据（档案不许子级）也不拦输出：树如实反映数据
+        order: 0,
+      };
+      lib.folders.folders.push(top.clone());
+      lib.folders.folders.push(child.clone());
+      lib.index.folders.insert(top.id.clone(), top);
+      lib.index.folders.insert(child.id.clone(), child);
+    }
+
+    let tree = with_lib(&h, folder_tree);
+    assert_eq!(tree.nodes[0].kind.as_deref(), Some("archive"), "顶级节点带 kind");
+    assert_eq!(tree.nodes[0].children[0].kind.as_deref(), Some("archive"), "子节点同样带 kind");
+    let text = serde_json::to_string(&tree.nodes[0]).unwrap();
+    assert!(text.contains(r#""kind":"archive""#));
   }
 
   #[test]

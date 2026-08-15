@@ -302,7 +302,7 @@ mod tests {
   /// 手动加文件夹（返回 ID）
   fn add_folder(h: &Harness, id: &str, name: &str) -> String {
     with_lib(h, |l| {
-      let folder = Folder { id: id.into(), name: name.into(), parent: None, block: None, icon: None, order: 0 };
+      let folder = Folder { id: id.into(), name: name.into(), parent: None, block: None, icon: None, kind: None, order: 0 };
       l.folders.folders.push(folder.clone());
       l.index.folders.insert(id.into(), folder);
       id.into()

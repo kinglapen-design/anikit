@@ -7,14 +7,17 @@ import { useUiStore } from "../../stores/ui";
 import type { CtxEntry, CtxItem } from "../contextMenus";
 import { menuState } from "../contextMenus";
 import {
+  convertToArchiveFlow,
   copyFolderLink,
   createAndName,
+  createArchiveAndName,
   deleteFolderFlow,
   findParentId,
   pickExportFolder,
   pickFolderForLink,
   topLevelBlockId,
 } from "../menuOps";
+import { archiveCardSpec } from "./archiveCard";
 import { collapseAll, collapseLevel, expandAll, expandLevel, toggleOpen, treeExpansion } from "../treeExpansion";
 
 function findNode(nodes: FolderNode[], id: string): FolderNode | null {
@@ -74,8 +77,21 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
       shortcut: "Ctrl+Shift+Alt+N",
       action: () => void createAndName(folder.id, null),
     },
-    { label: "新建档案", icon: "new-archive", shortcut: "Shift+N", disabled: true },
-    { label: "转换为档案", icon: "archive", shortcut: "菜单+N", disabled: true },
+    {
+      label: "新建档案",
+      icon: "new-archive",
+      shortcut: "Shift+N",
+      // 同级新建档案（3.2 一轮，同新建文件夹口径）：目标为顶级时跟随其所在区块
+      action: () =>
+        void createArchiveAndName(parentId, folder.id, parentId === null ? topLevelBlockId(content.folders, folder.id) : null),
+    },
+    {
+      label: "转换为档案",
+      icon: "archive",
+      shortcut: "菜单+N",
+      // 两段式（3.2 一轮）：有子文件夹先弹警告确认，确认后剔除层级转换
+      action: () => convertToArchiveFlow(folder.id),
+    },
     "divider",
     { label: "移动文件夹", icon: "move-file", shortcut: "Ctrl+Y", disabled: true },
     { label: "添加文件/档案链接", icon: "add-file-link", shortcut: "Ctrl+L", action: () => pickFolderForLink() },
@@ -197,9 +213,15 @@ export function folderCardSpec(folder: { id: string; name: string }): CtxEntry[]
 
 // —— 文件夹卡片空白处（废除，2026-08-11：空白右键统一走 07 新增菜单）——
 
-// —— 文件树（05 稿全量含排序/展开/图标/颜色；档案节点随档案业务落地后分流 04 稿，记 09 待办）——
+// —— 文件树（05 稿全量含排序/展开/图标/颜色；档案节点分流 04 稿档案菜单，2026-08-15 一轮）——
 export function treeItemSpec(node: FolderNode, parentId: string | null): CtxEntry[] {
   const selection = useSelectionStore();
+  // 档案节点：04 稿档案菜单；重命名入口换树命名态（卡片命名态 namingFolderCardId 在树上无效）
+  if (node.kind === "archive") {
+    return archiveCardSpec(node, () => {
+      selection.namingFolderId = node.id;
+    });
+  }
   return folderMenuEntries(node, parentId, () => {
     selection.namingFolderId = node.id;
   }, true);
