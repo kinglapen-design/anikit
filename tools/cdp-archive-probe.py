@@ -9,9 +9,11 @@
 #    25 稿 AppModal alert warning（标题/按钮序主左次右/取消零转换）→ 剔除转换 confirmed=true
 #    → 剔除层级（子文件夹消失、文件并入）；无子级直接转（无弹窗）；
 # ⑤ 解散档案为文件夹：convert_to_folder → 摘 kind（圆点消失）+ 档案区无内容整块不渲染；
-# ⑥ 详情面板 8 区块：选中文件 → get_asset_detail 实数据（缩略图 contain + 徽标 6,6 /
-#    颜色 bar 7 占位块 / 名称+链接输入框 / chips 行 + 钮 / 编辑描述钮 / 基础信息 §1 C4 双列 /
-#    链接区块 §2 两行卡 × 0 宽 / 归属档案 §3 36 高），副本/关系/音频/提示词空态标题照常；
+# ⑥ 详情面板 8 区块：选中文件 → get_asset_detail 实数据（缩略图组 padding 16/gap 8 +
+#    框 contain/圆角 8/C2 + 徽标 7,7 / 自定义数据段 border-top / 颜色 bar 7 占位块 /
+#    输入框 36 高 C2 padding 贴稿 / chips 行 gap 6 chip 25 标签色 / 编辑描述钮 36 C5 /
+#    基础信息 §1 C4 双列 / 链接区块 §2 两行卡 × 0 宽 / 归属档案 §3 36 高 /
+#    空区块展开折叠零高度变化），副本/关系/音频/提示词空态标题照常；
 #    选中档案卡片 → 档案形态（徽标/名称输入框/属性/描述/编辑描述/文件数）；点空白 = 空面板；
 # ⑦ 22 稿编辑数据区块面板：404 宽 / 8 行 / 首行禁上移末行禁下移（禁用色 --line-active）/
 #    眼睛切换 → 标题禁用色 + 详情面板区块显隐联动 / 排序箭头即时反映 / save_ui_settings 持久化 /
@@ -524,8 +526,15 @@ async def main():
               const pair = {};
               ks.forEach((k, i) => (pair[k] = vs[i]));
               const thumbImg = custom?.querySelector('.thumb img');
+              const thumbEl = custom?.querySelector('.thumb');
+              const thumbGroup = custom?.querySelector('.thumb-group');
+              const customBody = custom?.querySelector('.custom-body');
               const swatches = [...(custom?.querySelectorAll('.swatches .swatch') ?? [])];
+              const fieldEls = [...(custom?.querySelectorAll('.field') ?? [])];
               const fields = [...(custom?.querySelectorAll('.field input') ?? [])];
+              const chip = custom?.querySelector('.chips .app-tag');
+              const chipsRow = custom?.querySelector('.chips');
+              const probeColor = (v) => { const p2 = document.createElement('div'); p2.style.color = v; document.body.appendChild(p2); const c = getComputedStyle(p2).color; p2.remove(); return c; };
               const linkItem = p.querySelector('.section-links .link-item');
               const archItem = p.querySelector('.section-archive .archive-item');
               const editDesc = custom?.querySelector('.edit-desc');
@@ -533,7 +542,11 @@ async def main():
                 titles: blocks.map((b) => b.querySelector('.section-header .title')?.textContent ?? '(pinned)'),
                 pinned: blocks[0]?.classList.contains('pinned') ?? null,
                 thumbFit: thumbImg ? getComputedStyle(thumbImg).objectFit : null,
-                thumbBg: custom ? getComputedStyle(custom.querySelector('.thumb')).backgroundColor : null,
+                thumbBg: thumbEl ? getComputedStyle(thumbEl).backgroundColor : null,
+                thumbRadius: thumbEl ? getComputedStyle(thumbEl).borderTopLeftRadius : null,
+                thumbGroup: thumbGroup ? { padding: getComputedStyle(thumbGroup).padding, gap: getComputedStyle(thumbGroup).gap } : null,
+                bodyBorder: customBody ? { w: getComputedStyle(customBody).borderTopWidth, c: getComputedStyle(customBody).borderTopColor } : null,
+                lineHover: probeColor('var(--line-hover)'),
                 swatches: {
                   count: swatches.length,
                   w: swatches[0] ? Math.round(swatches[0].getBoundingClientRect().width) : 0,
@@ -543,9 +556,19 @@ async def main():
                 nameVal: fields[0]?.value ?? null,
                 linkVal: fields[1]?.value ?? null,
                 linkPh: fields[1]?.placeholder ?? null,
-                openLinkDisabled: !!custom?.querySelector('.field.with-btn .icon-btn:disabled'),
+                fieldH: fieldEls[0] ? Math.round(fieldEls[0].getBoundingClientRect().height) : 0,
+                fieldBg: fieldEls[0] ? getComputedStyle(fieldEls[0]).backgroundColor : null,
+                namePad: fieldEls[0] ? getComputedStyle(fieldEls[0]).padding : null,
+                linkPad: fieldEls[1] ? getComputedStyle(fieldEls[1]).padding : null,
+                linkColor: fields[1] ? getComputedStyle(fields[1]).color : null,
+                faintColor: probeColor('var(--text-faint)'),
+                openLinkDisabled: !!custom?.querySelector('.field.link .icon-btn:disabled'),
                 chips: [...(custom?.querySelectorAll('.chips .app-tag') ?? [])].map((t) => t.textContent.trim()),
                 chipAdd: !!custom?.querySelector('.chips .icon-btn:disabled'),
+                chipsGap: chipsRow ? getComputedStyle(chipsRow).gap : null,
+                chipH: chip ? Math.round(chip.getBoundingClientRect().height) : 0,
+                chipColor: chip ? getComputedStyle(chip).color : null,
+                labelColor: probeColor('var(--text-label)'),
                 editDesc: editDesc ? { disabled: editDesc.disabled, h: Math.round(editDesc.getBoundingClientRect().height), label: editDesc.textContent.trim() } : null,
                 infoBg: info ? getComputedStyle(info).backgroundColor : null,
                 infoCols: info ? info.children.length : 0,
@@ -569,9 +592,17 @@ async def main():
             check("⑥ 8 区块标题序（自定义数据 pinned 在前）",
                   bool(detail and detail["pinned"] and detail["titles"] == ["(pinned)", "基础信息", "副本", "链接区块", "归属档案", "关系", "音频", "提示词"]),
                   json.dumps(detail and detail["titles"], ensure_ascii=False))
-            check("⑥-1 缩略图 contain + C2 底",
-                  bool(detail and detail["thumbFit"] == "contain" and detail["thumbBg"] == "rgb(22, 23, 23)"),
-                  json.dumps(detail and {"fit": detail["thumbFit"], "bg": detail["thumbBg"]}))
+            check("⑥-1 缩略图 contain + C2 底 + 圆角 8",
+                  bool(detail and detail["thumbFit"] == "contain" and detail["thumbBg"] == "rgb(22, 23, 23)" and detail["thumbRadius"] == "8px"),
+                  json.dumps(detail and {"fit": detail["thumbFit"], "bg": detail["thumbBg"], "r": detail["thumbRadius"]}))
+            tg = (detail or {}).get("thumbGroup") or {}
+            check("⑥-1 缩略图组 padding 16 / gap 8",
+                  tg.get("padding") == "16px" and tg.get("gap") == "8px",
+                  json.dumps(tg))
+            bb = (detail or {}).get("bodyBorder") or {}
+            check("⑥-2 自定义数据段 border-top 1px 暗-悬停",
+                  bb.get("w") == "1px" and bb.get("c") == (detail or {}).get("lineHover"),
+                  json.dumps(bb))
             sw = (detail or {}).get("swatches") or {}
             check("⑥-2 颜色 bar 恒显 7 占位块（16 圆 + 1px 描边）",
                   sw.get("count") == 7 and sw.get("w") == 16 and sw.get("radius") == "50%" and sw.get("border") == "1px",
@@ -579,12 +610,18 @@ async def main():
             check("⑥-3 名称/链接输入框（值 + placeholder http:// + open-link disabled）",
                   bool(detail and detail["nameVal"] == "主角-立绘.webp" and detail["linkVal"] == "https://example.com/ref" and detail["linkPh"] == "http://" and detail["openLinkDisabled"]),
                   json.dumps(detail and {"n": detail["nameVal"], "l": detail["linkVal"], "ph": detail["linkPh"]}, ensure_ascii=False))
-            check("⑥-4 chips 行恒显（主角 + 行尾 disabled 添加钮）",
-                  bool(detail and detail["chips"] == ["主角"] and detail["chipAdd"]),
-                  json.dumps(detail and detail["chips"], ensure_ascii=False))
+            check("⑥-4 输入框 36 高 + C2 底 + padding（名称 8 12 / 链接 3 3 3 12）+ 链接文字极淡",
+                  bool(detail and detail["fieldH"] == 36 and detail["fieldBg"] == "rgb(22, 23, 23)"
+                       and detail["namePad"] == "8px 12px" and detail["linkPad"] == "3px 3px 3px 12px"
+                       and detail["linkColor"] == detail["faintColor"]),
+                  json.dumps(detail and {"h": detail["fieldH"], "bg": detail["fieldBg"], "np": detail["namePad"], "lp": detail["linkPad"], "lc": detail["linkColor"]}))
+            check("⑥-4 chips 行恒显（主角 + 行尾 disabled 添加钮 + gap 6 + chip 25 高标签色）",
+                  bool(detail and detail["chips"] == ["主角"] and detail["chipAdd"]
+                       and detail["chipsGap"] == "6px" and detail["chipH"] == 25 and detail["chipColor"] == detail["labelColor"]),
+                  json.dumps(detail and {"c": detail["chips"], "gap": detail["chipsGap"], "h": detail["chipH"], "color": detail["chipColor"]}, ensure_ascii=False))
             ed = (detail or {}).get("editDesc") or {}
-            check("⑥-5 编辑描述通栏钮（38 高 disabled）",
-                  ed.get("disabled") is True and ed.get("h") == 38 and ed.get("label") == "编辑描述",
+            check("⑥-5 编辑描述通栏钮（36 高 disabled）",
+                  ed.get("disabled") is True and ed.get("h") == 36 and ed.get("label") == "编辑描述",
                   json.dumps(ed, ensure_ascii=False))
             info = (detail or {}).get("info") or {}
             check("⑥-6 基础信息 §1 C4 容器双列",
@@ -609,6 +646,23 @@ async def main():
                   json.dumps(detail and detail["emptyAdds"], ensure_ascii=False))
             await shot("archive-detail-file")
 
+            # —— ⑥-9 空区块展开/折叠零高度变化（根文件.webp 无归属档案）——
+            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('根文件'))")
+            await asyncio.sleep(1.0)
+            h_open = await ev("""(() => {
+              const sec = document.querySelector('.detail-panel .section-archive');
+              return sec ? { h: sec.getBoundingClientRect().height, items: sec.querySelectorAll('.archive-item').length, body: !!sec.querySelector('.body'), sh: sec.scrollHeight } : null;
+            })()""")
+            await click("document.querySelector('.detail-panel .section-archive .section-header .fold-area')")
+            await asyncio.sleep(0.4)
+            h_closed = await ev("(() => { const sec = document.querySelector('.detail-panel .section-archive'); return sec ? { h: sec.getBoundingClientRect().height, sh: sec.scrollHeight } : null; })()")
+            await click("document.querySelector('.detail-panel .section-archive .section-header .fold-area')")
+            await asyncio.sleep(0.4)
+            print("空区块折叠:", json.dumps({"open": h_open, "closed": h_closed}))
+            check("⑥-9 空归属档案：无 item 不渲染容器 + 展开/折叠零高度变化",
+                  bool(h_open and h_open["items"] == 0 and not h_open["body"] and h_closed and h_open["h"] == h_closed["h"] and h_open["sh"] == h_closed["sh"]),
+                  json.dumps({"open": h_open, "closed": h_closed}))
+
             # 选中档案卡片 → 档案形态
             await click("document.querySelector('.archive-card[data-folder-id=\"F-ARC\"]')")
             await asyncio.sleep(0.8)
@@ -622,7 +676,7 @@ async def main():
               const pair = {};
               ks.forEach((k, i) => (pair[k] = vs[i]));
               const badge = custom?.querySelector('.fmt-badge');
-              const desc = custom?.querySelector('.desc-item');
+              const desc = custom?.querySelector('.desc-row');
               const editDesc = custom?.querySelector('.edit-desc');
               return {
                 badge: badge ? { text: badge.textContent, top: getComputedStyle(badge).top, left: getComputedStyle(badge).left } : null,
@@ -630,17 +684,17 @@ async def main():
                 props: [...(custom?.querySelectorAll('.chips .app-tag') ?? [])].map((t) => t.textContent.trim()),
                 chipAdd: !!custom?.querySelector('.chips .icon-btn:disabled'),
                 swatches: custom?.querySelectorAll('.swatches').length ?? 0,
-                desc: desc ? { title: desc.querySelector('.desc-title')?.textContent, content: desc.querySelector('.desc-content')?.textContent } : null,
+                desc: desc ? { title: desc.querySelector('.d-label')?.textContent, content: desc.querySelector('.d-content')?.textContent } : null,
                 editDesc: editDesc ? { disabled: editDesc.disabled, h: Math.round(editDesc.getBoundingClientRect().height) } : null,
                 info: pair,
               };
             })()""")
             print("详情面板(档案):", json.dumps(adetail, ensure_ascii=False))
-            check("⑥ 档案形态（徽标 6,6 / 名称输入框 / 属性 chips + 钮 / 描述标题+内容 / 编辑描述钮）",
-                  bool(adetail and adetail["badge"] and adetail["badge"]["text"] == "设定" and adetail["badge"]["top"] == "6px" and adetail["badge"]["left"] == "6px"
+            check("⑥ 档案形态（徽标 7,7 / 名称输入框 / 属性 chips + 钮 / 描述标签+内容 / 编辑描述钮 36）",
+                  bool(adetail and adetail["badge"] and adetail["badge"]["text"] == "设定" and adetail["badge"]["top"] == "7px" and adetail["badge"]["left"] == "7px"
                        and adetail["nameVal"] == "设定集" and adetail["props"] == ["奇幻"] and adetail["chipAdd"]
-                       and adetail["desc"] and adetail["desc"]["title"] == "来源" and adetail["desc"]["content"] == "官方设定集"
-                       and adetail["editDesc"] and adetail["editDesc"]["disabled"] and adetail["editDesc"]["h"] == 38),
+                       and adetail["desc"] and adetail["desc"]["title"] == "来源:" and adetail["desc"]["content"] == "官方设定集"
+                       and adetail["editDesc"] and adetail["editDesc"]["disabled"] and adetail["editDesc"]["h"] == 36),
                   json.dumps(adetail, ensure_ascii=False))
             check("⑥ 档案无颜色 bar / 无链接输入框", bool(adetail and adetail["swatches"] == 0))
             check("⑥ 档案基础信息（文件数 2 / 名称 设定集）",

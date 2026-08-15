@@ -35,7 +35,9 @@ function placementOf(a: ArchiveRef): PlacementLink | null {
 <template>
   <section class="section-archive detail-block">
     <SectionHeader :title="title" grip v-model:open="open" />
-    <div v-if="open" class="body">
+    <!-- 空数据不渲染容器（2026-08-15 走查：父级 detail-block gap 会让空 .body 也撑出 8px，
+         展开/折叠必须零高度变化） -->
+    <div v-if="open && items.length > 0" class="body">
       <div v-for="a in items" :key="a.folderId" class="archive-item">
         <AppIcon name="archive" :size="18" class="deco" />
         <span class="label">{{ a.name }}</span>
