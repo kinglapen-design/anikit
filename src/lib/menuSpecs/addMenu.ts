@@ -30,6 +30,7 @@ export function newDocGroupEntries(): CtxEntry[] {
     doc("Animate 文档", "fla", "animate-on"),
     doc("Photoshop 文档", "psd", "photoshop-on"),
     doc("Illustrator 文档", "ai", "illustrator"),
+    "divider", // 工程文档 / 文本·办公文档分组线（2026-08-15 用户定）
     doc("MarkDown 文档", "md", undefined, mdDocIcon),
     doc("文本文档", "txt", undefined, txtDocIcon),
     doc("Word 文档", "docx", "word"),
