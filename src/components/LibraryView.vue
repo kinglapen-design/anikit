@@ -164,8 +164,13 @@ function onBlockDragMove(e: PointerEvent): void {
   const c = (blockSpans[blockDrag.from]?.mid ?? 0) + blockDrag.dy;
   let to = blockDrag.from;
   for (let i = 0; i < blockSpans.length; i++) {
-    if (i > blockDrag.from && c > blockSpans[i].mid) to = i; // 下移
-    if (i < blockDrag.from && c < blockSpans[i].mid) to = i; // 上移
+    if (i > blockDrag.from && c > blockSpans[i].mid) to = i; // 下移：越过几个中线落几位
+    // 上移：首个被越过的中线即落点（须 break——不 break 时更大的 i 也会命中并把 to 盖回去，
+    // 大步跨越多段上移会少落一位；DetailPanel 区块拖拽 2026-08-15 实机踩中同款）
+    if (i < blockDrag.from && c < blockSpans[i].mid) {
+      to = i;
+      break;
+    }
   }
   blockDrag.to = to;
 }

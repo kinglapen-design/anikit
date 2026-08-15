@@ -9,13 +9,15 @@ export interface DetailSectionDef {
   title: string;
 }
 
-/** 固定 8 区块注册表（顺序 = 22 稿「编辑数据区块」面板行序） */
+/** 固定 7 区块注册表（顺序 = 22 稿「编辑数据区块」面板行序）：
+ *  2026-08-15 定案：缩略图区块（pinned 缩略图+颜色 bar+名称/链接输入框）独立永远置顶，
+ *  不进注册表（不可隐藏/排序，DetailPanel 固定渲染）；"custom" 语义 = 纯自定义数据区块
+ *  （带标题：属性 chips + 描述 + 编辑描述）；归属档案区块整体删除（存量配置 id 合并时忽略） */
 export const DETAIL_SECTIONS: DetailSectionDef[] = [
   { id: "custom", title: "自定义数据" },
   { id: "info", title: "基础信息" },
   { id: "copies", title: "副本" },
   { id: "links", title: "链接区块" },
-  { id: "archive", title: "归属档案" },
   { id: "relations", title: "关系" },
   { id: "audio", title: "音频" },
   { id: "prompt", title: "提示词" },
@@ -112,4 +114,14 @@ export function formatDetailDate(s: string): string {
   if (Number.isNaN(d.getTime())) return s;
   const p = (n: number): string => String(n).padStart(2, "0");
   return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** 递归查文件夹节点（DetailPanel 档案判定 / SectionLinks 档案目录后缀共用） */
+export function findFolderNode(nodes: FolderNode[], id: string): FolderNode | null {
+  for (const n of nodes) {
+    if (n.id === id) return n;
+    const hit = findFolderNode(n.children, id);
+    if (hit) return hit;
+  }
+  return null;
 }

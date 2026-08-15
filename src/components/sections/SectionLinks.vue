@@ -1,26 +1,34 @@
 <script setup lang="ts">
-// 区块 · 链接区块（3.2 一轮，只读；figma 数据 item §2 链接区块/副本，2026-08-15 走查贴稿）：
+// 区块 · 链接区块（3.2 一轮，只读；figma 数据 item §2 链接区块/副本，2026-08-15 定案两段化）：
 // 两行卡（C4 / padding 8 8 8 12 / 圆角 6 / gap 8 / 1px 暗-悬停，hover C5）——
-// 行1 = 文件夹图标 18 + 路径（区块名 14 常态 / 根父级 标签色 / 所在目录 极淡，`/` 分隔，
-// 分隔符色随前段）+ ×（hover 从右往左滑入平时不占位，DetailNotes .del 同款；点击业务 6.2，
-// disabled 占位）；行2 = 文件显示名 12/17 标签色。
+// 行1 = 文件夹图标 18 + 区块名（14 常态）/ 所属目录（14 标签色，`/` 分隔符色随前段）
+// + ×（hover 从右往左滑入平时不占位，DetailNotes .del 同款；点击业务 6.2，disabled 占位）；
+// 行2 = 文件显示名 12/17 标签色 + 原始文件徽章 15px（origin=true 才出）。
+// 所属目录 = PlacementLink.path 末段；未分类 = 「目录 / 未分类」；目录是档案（folderId 查
+// content.folders 树 kind === "archive"，不改后端）→ 显示「名称.档案」（如 目录 / 人物.档案）。
 // 档案形态 / 无 Placement = 空内容（标题照常，2026-08-15 定案：无内容区块不隐藏）。
 import { computed, ref } from "vue";
 import SectionHeader from "../SectionHeader.vue";
 import AppIcon from "../AppIcon.vue";
 import IconButton from "../IconButton.vue";
-import type { DetailTarget, PlacementLink } from "../../lib/detailSections";
+import { findFolderNode, type DetailTarget, type PlacementLink } from "../../lib/detailSections";
+import { useContentStore } from "../../stores/content";
 
 const props = defineProps<{ target: DetailTarget; title: string }>();
+const content = useContentStore();
 const open = ref(true);
 
 const items = computed<PlacementLink[]>(() =>
   props.target.kind === "file" ? props.target.detail.placements : [],
 );
 
-// 路径段色档（§2：根父级 = 标签色，所在目录 = 极淡；多于两段时中间段同标签色）
-function segClass(p: PlacementLink, j: number): string {
-  return j === p.path.length - 1 ? "faint" : "label";
+// 所属目录显示名：path 末段；所在目录是档案 → 「名称.档案」（2026-08-15 定案，前端树判定）
+function dirName(p: PlacementLink): string {
+  const name = p.path[p.path.length - 1] ?? "";
+  if (p.folderId && findFolderNode(content.folders, p.folderId)?.kind === "archive") {
+    return `${name}.档案`;
+  }
+  return name;
 }
 </script>
 
@@ -34,10 +42,8 @@ function segClass(p: PlacementLink, j: number): string {
         <div class="row1">
           <AppIcon name="folder-closed" :size="18" class="deco" />
           <span class="seg block">{{ p.blockName }}</span>
-          <template v-for="(seg, j) in p.path" :key="j">
-            <span class="sep" :class="j === 0 ? 'normal' : 'label'">/</span>
-            <span class="seg" :class="segClass(p, j)">{{ seg }}</span>
-          </template>
+          <span class="sep">/</span>
+          <span class="seg dir" v-tip="dirName(p)">{{ dirName(p) }}</span>
           <span class="spacer" />
           <IconButton name="clear" small disabled title="移除链接" class="del" />
         </div>
@@ -76,7 +82,7 @@ function segClass(p: PlacementLink, j: number): string {
 .link-item:hover {
   background: var(--c5);
 }
-/* 行1：图标 18 + 路径三段 + ×（高 20，间距 4） */
+/* 行1（2026-08-15 定案两段化）：图标 18 + 区块名 14 常态 / 所属目录 14 标签色 + ×（高 20，间距 4） */
 .row1 {
   display: flex;
   align-items: center;
@@ -94,15 +100,11 @@ function segClass(p: PlacementLink, j: number): string {
   white-space: nowrap;
 }
 .seg.block,
-.sep.normal {
+.sep {
   color: var(--text-normal);
 }
-.seg.label,
-.sep.label {
+.seg.dir {
   color: var(--text-label);
-}
-.seg.faint {
-  color: var(--text-faint);
 }
 .seg {
   overflow: hidden;
