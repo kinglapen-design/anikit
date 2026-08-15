@@ -20,6 +20,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { isEditableTarget } from "../lib/useGlobalKeys";
 import { useUiStore } from "../stores/ui";
 import { useSideThumb } from "../lib/useSideThumb";
+import { sidebarShowWidths } from "../lib/useSidebarAnim";
 
 const ui = useUiStore();
 const bodyRef = ref<HTMLElement>();
@@ -100,7 +101,7 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
 <template>
   <aside
     class="sidebar-left"
-    :style="{ width: ui.leftCollapsed ? '0px' : `${ui.leftWidth}px`, '--sb-w': `${ui.leftWidth}px` }"
+    :style="{ width: `${sidebarShowWidths.left}px`, '--sb-w': `${ui.leftWidth}px` }"
     @mouseenter="hover = true"
     @mouseleave="hover = false"
   >

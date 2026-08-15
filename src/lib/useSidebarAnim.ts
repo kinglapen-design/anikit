@@ -9,7 +9,14 @@
 // 顶栏断开露 C1、中栏右缘被往左拽再回弹，同此根因）。
 // 故改用 ResizeObserver 驱动：RO 阶段在当帧全部 rAF 之后、绘制之前，此刻读到的就是
 // 当帧最终宽，forceLayout 同步写网格——每个绘制帧侧栏 / dock / 网格严格同宽，零滞后。
-import { onBeforeUnmount, onMounted, watch } from "vue";
+//
+// 显示宽度单一持有（2026-08-15 闪帧根治，任务 B）：模板只绑 sidebarShowWidths，
+// 禁绑 collapsed 布尔——旧写法 `:style width: collapsed ? 0 : fullWidth` 在 toggle 当帧
+// 模板立即跳全宽（展开）/ 跳 0（收起），rAF 引擎又从另一端逐帧灌宽，双写打架 =
+// 首帧全宽 → 下一帧 0 → 再展开的闪帧（收起对称：首帧 0 → 弹回全宽 → 再收）。
+// 现：toggle 只翻布尔，watch 起动画，rAF 逐帧写 sidebarShowWidths（当前宽 → 目标宽），
+// 模板随它走，任何时刻只有一个写点，无跳变帧。
+import { onBeforeUnmount, onMounted, reactive, watch } from "vue";
 import { useTabsStore } from "../stores/tabs";
 import { useUiStore } from "../stores/ui";
 
@@ -17,7 +24,16 @@ const SIDEBAR_ANIM_MS = 180;
 function easeInOut(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 }
+
+/** 档案二级侧边栏宽（250，同右栏） */
+export const ARCHIVE_PANEL_W = 250;
+
+/** 各侧栏实际显示宽度（px）：模板唯一绑定源，rAF 引擎逐帧写，禁其他写点（见文件头注释） */
+export const sidebarShowWidths = reactive({ left: 0, right: 0, archive: 0 });
+
+type SideKey = keyof typeof sidebarShowWidths;
 interface SideAnim {
+  key: SideKey;
   el: HTMLElement;
   from: number;
   to: number;
@@ -28,6 +44,7 @@ export function useSidebarAnim(opts: {
   leftEl: () => HTMLElement | undefined;
   rightEl: () => HTMLElement | undefined;
   dockEl: () => HTMLElement | undefined;
+  archiveEl?: () => HTMLElement | undefined;
 }): void {
   const ui = useUiStore();
   const tabs = useTabsStore();
@@ -35,11 +52,18 @@ export function useSidebarAnim(opts: {
   let sideAnimRaf = 0;
   let dockResizeObs: ResizeObserver | undefined;
 
+  // 初始显示宽度（模板首帧即正确，不经过 0/全宽跳变）
+  sidebarShowWidths.left = ui.leftCollapsed ? 0 : ui.leftWidth;
+  sidebarShowWidths.right = ui.rightCollapsed ? 0 : ui.rightWidth;
+  sidebarShowWidths.archive = ui.archivePanelOpen ? ARCHIVE_PANEL_W : 0;
+
   function sidebarAnimFrame(now: number): void {
     let active = false;
     for (const a of sideAnims) {
       const t = Math.min(1, (now - a.start) / SIDEBAR_ANIM_MS);
-      a.el.style.width = `${a.from + (a.to - a.from) * easeInOut(t)}px`;
+      const w = a.from + (a.to - a.from) * easeInOut(t);
+      sidebarShowWidths[a.key] = w; // 单一写点：模板绑定随帧更新
+      a.el.style.width = `${w}px`; // 直写兜底（防帧内其他原因触发的重渲染读到旧值）
       if (t < 1) active = true;
     }
     // dockview 网格宽度由 dockResizeObs 在 RO 阶段同步（见文件头注释），此处不再灌宽
@@ -51,11 +75,12 @@ export function useSidebarAnim(opts: {
     }
   }
 
-  function startSidebarAnim(el: HTMLElement | undefined, collapsed: boolean, fullWidth: number): void {
+  function startSidebarAnim(key: SideKey, el: HTMLElement | undefined, collapsed: boolean, fullWidth: number): void {
     if (!el) return;
-    sideAnims = sideAnims.filter((a) => a.el !== el);
+    sideAnims = sideAnims.filter((a) => a.key !== key);
     // 起点 = 当前视觉宽度（动画途中反向切换从此续接，不跳变）
     sideAnims.push({
+      key,
       el,
       from: el.getBoundingClientRect().width,
       to: collapsed ? 0 : fullWidth,
@@ -79,16 +104,18 @@ export function useSidebarAnim(opts: {
     }
     // 侧栏收展：状态翻转后由 JS 逐帧驱动宽度（见文件头注释）
     watch(
-      [() => ui.leftCollapsed, () => ui.rightCollapsed],
-      ([l, r], [pl, pr]) => {
-        if (l !== pl) {
-          startSidebarAnim(opts.leftEl(), l, ui.leftWidth);
-        }
-        if (r !== pr) {
-          startSidebarAnim(opts.rightEl(), r, ui.rightWidth);
-        }
+      [() => ui.leftCollapsed, () => ui.rightCollapsed, () => ui.archivePanelOpen],
+      ([l, r, a], [pl, pr, pa]) => {
+        if (l !== pl) startSidebarAnim("left", opts.leftEl(), l, ui.leftWidth);
+        if (r !== pr) startSidebarAnim("right", opts.rightEl(), r, ui.rightWidth);
+        if (a !== pa && opts.archiveEl) startSidebarAnim("archive", opts.archiveEl(), !a, ARCHIVE_PANEL_W);
       },
     );
+    // SplitBar 拖改全宽：非动画期间显示宽度即时跟随（Collapsed 时不跟随，保持 0）
+    watch([() => ui.leftWidth, () => ui.rightWidth], ([lw, rw]) => {
+      if (!ui.leftCollapsed && !sideAnims.some((a) => a.key === "left")) sidebarShowWidths.left = lw;
+      if (!ui.rightCollapsed && !sideAnims.some((a) => a.key === "right")) sidebarShowWidths.right = rw;
+    });
   });
   onBeforeUnmount(() => {
     cancelAnimationFrame(sideAnimRaf);

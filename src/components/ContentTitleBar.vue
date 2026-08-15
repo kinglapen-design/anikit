@@ -7,13 +7,24 @@
 // 右 = 卡片尺寸滑块 + 按钮组（链接文件管理 / 添加文件链接 / 缩略图 / AI 工具集 / 分组管理
 // disabled 待 1.3 点亮 + 查看方式）+（右栏收起时：展开详情面板 + 窗口置顶 + 窗口控制——注释 6）。
 // 递归显示开关已移出（2026-08-08 用户定：归内容区区块标题行，随该区块改造时接入）。
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import IconButton from "./IconButton.vue";
 import SideSlider from "./SideSlider.vue";
 import ViewOptionsMenu from "./ViewOptionsMenu.vue";
 import { useUiStore } from "../stores/ui";
+import { useContentStore, type FolderNode } from "../stores/content";
+import { findFolderNode } from "../lib/detailSections";
 
 const ui = useUiStore();
+const content = useContentStore();
+
+// 档案二级侧边栏切换钮（2026-08-15 任务 A）：仅档案视口显示，面包屑返回按钮左边
+const archiveViewportNode = computed<FolderNode | null>(() => {
+  const sel = content.sidebarSelected;
+  if (!sel.startsWith("folder:")) return null;
+  const n = findFolderNode(content.folders, sel.slice(7));
+  return n?.kind === "archive" ? n : null;
+});
 
 // 搜索结果文案（3.6 分词搜索接入后回填："搜索结果 - 12"）；null = 常态不显示
 const searchResult = ref<string | null>(null);
@@ -36,6 +47,16 @@ function openViewMenu(e: MouseEvent): void {
 <template>
   <div class="panel-toolbar" data-tauri-drag-region>
     <div class="crumb-group">
+      <!-- 档案二级侧边栏切换（2026-08-15 任务 A：仅档案视口显示，面包屑返回左边；
+           图标暂用 collapse-sidebar 同族，走查可换） -->
+      <IconButton
+        v-if="archiveViewportNode"
+        name="collapse-sidebar"
+        title="档案面板"
+        class="archive-panel-toggle"
+        :active="ui.archivePanelOpen"
+        @click="ui.archivePanelOpen = !ui.archivePanelOpen"
+      />
       <!-- 后退 / 前进（figma 41：nav-history 图标，前进 rotate 180°；历史导航业务后接，先 disabled） -->
       <IconButton name="nav-history" title="后退" disabled />
       <IconButton name="nav-history" title="前进" class="rot-180" disabled />

@@ -95,6 +95,9 @@ export const useUiStore = defineStore("ui", {
     // 22 稿「编辑数据区块」面板开关（会话级，同 blockManageOpen 口径）：SidebarRight 工具栏
     // edit-data-section 按钮置位，面板宿主 SidebarRight（机制同 ViewOptionsMenu）
     sectionEditOpen: false,
+    // 档案二级侧边栏开关（2026-08-15 任务 A，会话级）：仅档案视口显示，默认展开；
+    // 收展宽度由 useSidebarAnim 逐帧驱动（同左右栏机制）
+    archivePanelOpen: true,
   }),
   actions: {
     // 详情区块排序（22 稿面板箭头）：相邻交换，越界不动

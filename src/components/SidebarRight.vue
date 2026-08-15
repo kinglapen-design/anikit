@@ -11,6 +11,7 @@ import DetailPanel from "./DetailPanel.vue";
 import SectionEditPanel from "./SectionEditPanel.vue";
 import { useUiStore } from "../stores/ui";
 import { useSideThumb } from "../lib/useSideThumb";
+import { sidebarShowWidths } from "../lib/useSidebarAnim";
 
 const ui = useUiStore();
 const bodyRef = ref<HTMLElement>();
@@ -35,7 +36,7 @@ function toggleSectionEdit(e: MouseEvent): void {
 <template>
   <aside
     class="sidebar-right"
-    :style="{ width: ui.rightCollapsed ? '0px' : `${ui.rightWidth}px`, '--sb-w': `${ui.rightWidth}px` }"
+    :style="{ width: `${sidebarShowWidths.right}px`, '--sb-w': `${ui.rightWidth}px` }"
     @mouseenter="hover = true"
     @mouseleave="hover = false"
   >
