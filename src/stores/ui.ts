@@ -106,6 +106,14 @@ export const useUiStore = defineStore("ui", {
       const [row] = list.splice(i, 1);
       list.splice(j, 0, row);
     },
+    // 详情区块拖拽落点排序（22 稿面板让位式拖拽）：直接移到目标位（与逐次 moveDetailSection 等效）
+    moveDetailSectionTo(id: string, to: number): void {
+      const list = this.detailSections;
+      const from = list.findIndex((s) => s.id === id);
+      if (from < 0 || to < 0 || to >= list.length || to === from) return;
+      const [row] = list.splice(from, 1);
+      list.splice(to, 0, row);
+    },
     // 详情区块显隐（22 稿面板眼睛）
     toggleDetailSection(id: string): void {
       const s = this.detailSections.find((s) => s.id === id);

@@ -9,13 +9,16 @@
 #    25 稿 AppModal alert warning（标题/按钮序主左次右/取消零转换）→ 剔除转换 confirmed=true
 #    → 剔除层级（子文件夹消失、文件并入）；无子级直接转（无弹窗）；
 # ⑤ 解散档案为文件夹：convert_to_folder → 摘 kind（圆点消失）+ 档案区无内容整块不渲染；
-# ⑥ 详情面板 8 区块：选中文件 → get_asset_detail 实数据（基础信息尺寸/大小/格式/日期、
-#    链接区块反查、归属档案），副本/关系/音频/提示词空态标题照常；选中档案卡片 → 档案形态
-#   （徽标/属性/描述/文件数）；点空白 = 空面板；
+# ⑥ 详情面板 8 区块：选中文件 → get_asset_detail 实数据（缩略图 contain + 徽标 6,6 /
+#    颜色 bar 7 占位块 / 名称+链接输入框 / chips 行 + 钮 / 编辑描述钮 / 基础信息 §1 C4 双列 /
+#    链接区块 §2 两行卡 × 0 宽 / 归属档案 §3 36 高），副本/关系/音频/提示词空态标题照常；
+#    选中档案卡片 → 档案形态（徽标/名称输入框/属性/描述/编辑描述/文件数）；点空白 = 空面板；
 # ⑦ 22 稿编辑数据区块面板：404 宽 / 8 行 / 首行禁上移末行禁下移（禁用色 --line-active）/
-#    眼睛切换 → 标题禁用色 + 详情面板区块显隐联动 / 排序箭头即时反映 / save_ui_settings 持久化。
+#    眼睛切换 → 标题禁用色 + 详情面板区块显隐联动 / 排序箭头即时反映 / save_ui_settings 持久化 /
+#    行让位式拖拽排序落点（LibraryView blockDrag 同款）。
 # 截图留档 tools/style-preview/：archive-sections / archive-card / archive-card-menu /
-# archive-convert-warning / archive-detail-file / archive-detail-archive / archive-section-edit。
+# archive-convert-warning / archive-detail-file / archive-detail-archive / archive-section-edit /
+# archive-section-edit-drag。
 import asyncio
 import base64
 import json
@@ -514,16 +517,51 @@ async def main():
               const p = document.querySelector('.detail-panel');
               if (!p) return null;
               const blocks = [...p.querySelectorAll('.detail-block')];
-              const info = p.querySelector('.section-info');
-              const rows = info ? [...info.querySelectorAll('.detail-table > span')].map((s) => s.textContent) : [];
+              const custom = p.querySelector('.section-custom');
+              const info = p.querySelector('.section-info .info-card');
+              const ks = info ? [...info.querySelectorAll('.col:first-child .k')].map((s) => s.textContent) : [];
+              const vs = info ? [...info.querySelectorAll('.col.vals .v')].map((s) => [...s.children].map((c) => c.textContent).join(' ')) : [];
               const pair = {};
-              for (let i = 0; i + 1 < rows.length; i += 2) pair[rows[i]] = rows[i + 1];
+              ks.forEach((k, i) => (pair[k] = vs[i]));
+              const thumbImg = custom?.querySelector('.thumb img');
+              const swatches = [...(custom?.querySelectorAll('.swatches .swatch') ?? [])];
+              const fields = [...(custom?.querySelectorAll('.field input') ?? [])];
+              const linkItem = p.querySelector('.section-links .link-item');
+              const archItem = p.querySelector('.section-archive .archive-item');
+              const editDesc = custom?.querySelector('.edit-desc');
               return {
                 titles: blocks.map((b) => b.querySelector('.section-header .title')?.textContent ?? '(pinned)'),
                 pinned: blocks[0]?.classList.contains('pinned') ?? null,
+                thumbFit: thumbImg ? getComputedStyle(thumbImg).objectFit : null,
+                thumbBg: custom ? getComputedStyle(custom.querySelector('.thumb')).backgroundColor : null,
+                swatches: {
+                  count: swatches.length,
+                  w: swatches[0] ? Math.round(swatches[0].getBoundingClientRect().width) : 0,
+                  radius: swatches[0] ? getComputedStyle(swatches[0]).borderTopLeftRadius : null,
+                  border: swatches[0] ? getComputedStyle(swatches[0]).borderTopWidth : null,
+                },
+                nameVal: fields[0]?.value ?? null,
+                linkVal: fields[1]?.value ?? null,
+                linkPh: fields[1]?.placeholder ?? null,
+                openLinkDisabled: !!custom?.querySelector('.field.with-btn .icon-btn:disabled'),
+                chips: [...(custom?.querySelectorAll('.chips .app-tag') ?? [])].map((t) => t.textContent.trim()),
+                chipAdd: !!custom?.querySelector('.chips .icon-btn:disabled'),
+                editDesc: editDesc ? { disabled: editDesc.disabled, h: Math.round(editDesc.getBoundingClientRect().height), label: editDesc.textContent.trim() } : null,
+                infoBg: info ? getComputedStyle(info).backgroundColor : null,
+                infoCols: info ? info.children.length : 0,
                 info: pair,
-                links: [...p.querySelectorAll('.section-links .link-item')].map((it) => ({ name: it.querySelector('.label')?.textContent, sub: it.querySelector('.sub')?.textContent })),
-                archives: [...p.querySelectorAll('.section-archive .archive-item .label')].map((s) => s.textContent),
+                arch: archItem ? {
+                  h: Math.round(archItem.getBoundingClientRect().height),
+                  name: archItem.querySelector('.label')?.textContent,
+                  fileName: archItem.querySelector('.file-name')?.textContent,
+                  delW: Math.round(archItem.querySelector('.del').getBoundingClientRect().width),
+                } : null,
+                link: linkItem ? {
+                  rows: linkItem.children.length,
+                  segs: [...linkItem.querySelectorAll('.row1 .seg')].map((s) => s.textContent),
+                  row2: linkItem.querySelector('.row2')?.textContent,
+                  delW: Math.round(linkItem.querySelector('.del').getBoundingClientRect().width),
+                } : null,
                 emptyAdds: [...p.querySelectorAll('.section-empty')].map((s) => ({ title: s.querySelector('.section-header .title')?.textContent, disabled: !!s.querySelector('.icon-btn:disabled') })),
               };
             })()""")
@@ -531,18 +569,41 @@ async def main():
             check("⑥ 8 区块标题序（自定义数据 pinned 在前）",
                   bool(detail and detail["pinned"] and detail["titles"] == ["(pinned)", "基础信息", "副本", "链接区块", "归属档案", "关系", "音频", "提示词"]),
                   json.dumps(detail and detail["titles"], ensure_ascii=False))
+            check("⑥-1 缩略图 contain + C2 底",
+                  bool(detail and detail["thumbFit"] == "contain" and detail["thumbBg"] == "rgb(22, 23, 23)"),
+                  json.dumps(detail and {"fit": detail["thumbFit"], "bg": detail["thumbBg"]}))
+            sw = (detail or {}).get("swatches") or {}
+            check("⑥-2 颜色 bar 恒显 7 占位块（16 圆 + 1px 描边）",
+                  sw.get("count") == 7 and sw.get("w") == 16 and sw.get("radius") == "50%" and sw.get("border") == "1px",
+                  json.dumps(sw))
+            check("⑥-3 名称/链接输入框（值 + placeholder http:// + open-link disabled）",
+                  bool(detail and detail["nameVal"] == "主角-立绘.webp" and detail["linkVal"] == "https://example.com/ref" and detail["linkPh"] == "http://" and detail["openLinkDisabled"]),
+                  json.dumps(detail and {"n": detail["nameVal"], "l": detail["linkVal"], "ph": detail["linkPh"]}, ensure_ascii=False))
+            check("⑥-4 chips 行恒显（主角 + 行尾 disabled 添加钮）",
+                  bool(detail and detail["chips"] == ["主角"] and detail["chipAdd"]),
+                  json.dumps(detail and detail["chips"], ensure_ascii=False))
+            ed = (detail or {}).get("editDesc") or {}
+            check("⑥-5 编辑描述通栏钮（38 高 disabled）",
+                  ed.get("disabled") is True and ed.get("h") == 38 and ed.get("label") == "编辑描述",
+                  json.dumps(ed, ensure_ascii=False))
             info = (detail or {}).get("info") or {}
-            check("⑥ 基础信息实数据（尺寸 800 x 600 / 200.0 KB / WEBP）",
+            check("⑥-6 基础信息 §1 C4 容器双列",
+                  bool(detail and detail["infoBg"] == "rgb(33, 35, 35)" and detail["infoCols"] == 2),
+                  json.dumps(detail and {"bg": detail["infoBg"], "cols": detail["infoCols"]}))
+            check("⑥-6 基础信息实数据（尺寸 800 x 600 / 200.0 KB / WEBP）",
                   info.get("尺寸") == "800 x 600" and info.get("文件大小") == "200.0 KB" and info.get("格式") == "WEBP",
                   json.dumps(info, ensure_ascii=False))
-            check("⑥ 基础信息日期（YYYY/MM/DD HH:mm）",
+            check("⑥-6 基础信息日期（YYYY/MM/DD HH:mm）",
                   info.get("添加日期") == "2026/08/15 10:20" and info.get("修改日期") == "2026/08/15 11:22",
                   json.dumps(info, ensure_ascii=False))
-            links = (detail or {}).get("links") or []
-            check("⑥ 链接区块反查（目录 / 素材 / 设定集）",
-                  len(links) == 1 and links[0]["name"] == "主角-立绘.webp" and links[0]["sub"] == "目录 / 素材 / 设定集",
-                  json.dumps(links, ensure_ascii=False))
-            check("⑥ 归属档案（设定集）", (detail or {}).get("archives") == ["设定集"], json.dumps(detail and detail["archives"], ensure_ascii=False))
+            arc = (detail or {}).get("arch") or {}
+            check("⑥-7 归属档案 item（36 高 / 设定集 / 文件显示名 / × 初始 0 宽）",
+                  arc.get("h") == 36 and arc.get("name") == "设定集" and arc.get("fileName") == "主角-立绘.webp" and arc.get("delW") == 0,
+                  json.dumps(arc, ensure_ascii=False))
+            lk = (detail or {}).get("link") or {}
+            check("⑥-8 链接区块两行卡（路径三段 目录/素材/设定集 + 行2 显示名 + × 初始 0 宽）",
+                  lk.get("rows") == 2 and lk.get("segs") == ["目录", "素材", "设定集"] and lk.get("row2") == "主角-立绘.webp" and lk.get("delW") == 0,
+                  json.dumps(lk, ensure_ascii=False))
             check("⑥ 空态区块标题照常 + 禁用添加钮（副本/关系/音频/提示词）",
                   bool(detail and [e["title"] for e in detail["emptyAdds"]] == ["副本", "关系", "音频", "提示词"] and all(e["disabled"] for e in detail["emptyAdds"])),
                   json.dumps(detail and detail["emptyAdds"], ensure_ascii=False))
@@ -555,22 +616,33 @@ async def main():
               const p = document.querySelector('.detail-panel');
               if (!p) return null;
               const custom = p.querySelector('.section-custom');
-              const info = p.querySelector('.section-info');
-              const rows = info ? [...info.querySelectorAll('.detail-table > span')].map((s) => s.textContent) : [];
+              const info = p.querySelector('.section-info .info-card');
+              const ks = info ? [...info.querySelectorAll('.col:first-child .k')].map((s) => s.textContent) : [];
+              const vs = info ? [...info.querySelectorAll('.col.vals .v')].map((s) => s.textContent) : [];
               const pair = {};
-              for (let i = 0; i + 1 < rows.length; i += 2) pair[rows[i]] = rows[i + 1];
+              ks.forEach((k, i) => (pair[k] = vs[i]));
+              const badge = custom?.querySelector('.fmt-badge');
+              const desc = custom?.querySelector('.desc-item');
+              const editDesc = custom?.querySelector('.edit-desc');
               return {
-                badge: custom?.querySelector('.fmt-badge')?.textContent ?? null,
-                name: custom?.querySelector('.name')?.textContent ?? null,
+                badge: badge ? { text: badge.textContent, top: getComputedStyle(badge).top, left: getComputedStyle(badge).left } : null,
+                nameVal: custom?.querySelector('.field input')?.value ?? null,
                 props: [...(custom?.querySelectorAll('.chips .app-tag') ?? [])].map((t) => t.textContent.trim()),
-                desc: custom?.querySelector('.desc-content')?.textContent ?? null,
+                chipAdd: !!custom?.querySelector('.chips .icon-btn:disabled'),
+                swatches: custom?.querySelectorAll('.swatches').length ?? 0,
+                desc: desc ? { title: desc.querySelector('.desc-title')?.textContent, content: desc.querySelector('.desc-content')?.textContent } : null,
+                editDesc: editDesc ? { disabled: editDesc.disabled, h: Math.round(editDesc.getBoundingClientRect().height) } : null,
                 info: pair,
               };
             })()""")
             print("详情面板(档案):", json.dumps(adetail, ensure_ascii=False))
-            check("⑥ 档案形态（徽标 / 名称 / 属性 / 描述）",
-                  bool(adetail and adetail["badge"] == "设定" and adetail["name"] == "设定集" and adetail["props"] == ["奇幻"] and adetail["desc"] == "官方设定集"),
+            check("⑥ 档案形态（徽标 6,6 / 名称输入框 / 属性 chips + 钮 / 描述标题+内容 / 编辑描述钮）",
+                  bool(adetail and adetail["badge"] and adetail["badge"]["text"] == "设定" and adetail["badge"]["top"] == "6px" and adetail["badge"]["left"] == "6px"
+                       and adetail["nameVal"] == "设定集" and adetail["props"] == ["奇幻"] and adetail["chipAdd"]
+                       and adetail["desc"] and adetail["desc"]["title"] == "来源" and adetail["desc"]["content"] == "官方设定集"
+                       and adetail["editDesc"] and adetail["editDesc"]["disabled"] and adetail["editDesc"]["h"] == 38),
                   json.dumps(adetail, ensure_ascii=False))
+            check("⑥ 档案无颜色 bar / 无链接输入框", bool(adetail and adetail["swatches"] == 0))
             check("⑥ 档案基础信息（文件数 2 / 名称 设定集）",
                   bool(adetail and adetail["info"].get("文件数") == "2" and adetail["info"].get("名称") == "设定集"),
                   json.dumps(adetail and adetail["info"], ensure_ascii=False))
@@ -658,6 +730,35 @@ async def main():
             check("⑦ save_ui_settings 持久化 detailSections（排序 + 显隐）",
                   bool(isinstance(last_save, list) and [s.get("id") for s in last_save][:2] == ["info", "custom"] and rel and rel.get("visible") is False),
                   json.dumps(last_save, ensure_ascii=False))
+            # 行让位式拖拽排序：首行「基础信息」下拖两行（~110px）→ 落第 3 位
+            drag_rect = await rect_of("document.querySelector('.section-edit .se-row')")
+            if drag_rect:
+                await mouse("mousePressed", drag_rect["x"], drag_rect["y"])
+                await asyncio.sleep(0.1)
+                for dy in (30, 70, 110):
+                    await mouse("mouseMoved", drag_rect["x"], drag_rect["y"] + dy)
+                    await asyncio.sleep(0.1)
+                await asyncio.sleep(0.3)  # 让位动画中途留截图
+                await shot("archive-section-edit-drag")
+                await mouse("mouseReleased", drag_rect["x"], drag_rect["y"] + 110)
+                await asyncio.sleep(0.6)
+            dragged = await ev("""({
+              panel: [...document.querySelectorAll('.section-edit .se-row .row-title')].map((t) => t.textContent),
+              detail: [...document.querySelectorAll('.detail-panel .detail-block .section-header .title')].map((t) => t.textContent),
+            })""")
+            print("拖拽后:", json.dumps(dragged, ensure_ascii=False))
+            check("⑦ 行拖拽排序落点（基础信息 → 第 3 位）",
+                  bool(dragged and dragged["panel"][:3] == ["自定义数据", "副本", "基础信息"]),
+                  json.dumps(dragged and dragged["panel"], ensure_ascii=False))
+            check("⑦ 拖拽联动详情面板（副本提前于基础信息）",
+                  bool(dragged and dragged["detail"][:2] == ["副本", "基础信息"]),
+                  json.dumps(dragged and dragged["detail"], ensure_ascii=False))
+            await asyncio.sleep(1.0)  # 防抖 500ms 后读最后一次写回
+            saves2 = await ev("window.__calls.save_ui_settings.map((s) => JSON.parse(JSON.stringify(s.detailSections)))")
+            last_save2 = saves2[-1] if saves2 else None
+            check("⑦ 拖拽落点持久化（custom / copies / info）",
+                  bool(isinstance(last_save2, list) and [s.get("id") for s in last_save2][:3] == ["custom", "copies", "info"]),
+                  json.dumps(last_save2, ensure_ascii=False))
             # 关面板（Esc）
             await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
             await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
@@ -681,7 +782,7 @@ async def main():
             if fails:
                 print("FAIL:", "; ".join(fails))
                 return 3
-            print("PASS: 树档案形态 / 三区 + 档案卡片 / 04 稿菜单 + 新建档案先建后命名 / 25 稿两段式转换（取消+确认+直接转）/ 解散 + 档案区空不渲染 / 详情 8 区块实数据 + 档案形态 + 空面板 / 22 稿面板布局与联动持久化 全部通过")
+            print("PASS: 树档案形态 / 三区 + 档案卡片 / 04 稿菜单 + 新建档案先建后命名 / 25 稿两段式转换（取消+确认+直接转）/ 解散 + 档案区空不渲染 / 详情 8 区块实数据 + 贴稿 9 项（contain/颜色 bar/输入框/chips/编辑描述/§1/§2/§3）+ 档案形态 + 空面板 / 22 稿面板布局联动持久化 + 行拖拽排序落点 全部通过")
             return 0
     finally:
         proc.terminate()
