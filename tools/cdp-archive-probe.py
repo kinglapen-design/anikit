@@ -16,7 +16,8 @@
 #    分隔线通栏 + 无横向溢出 + 面板内拖拽标题排序；选中档案卡片 → 档案形态；点空白 = 空面板；
 # ⑦ 22 稿编辑数据区块面板：404 宽 / 7 行 / 首行禁上移末行禁下移（禁用色 --line-active）/
 #    眼睛切换 → 标题禁用色 + 详情面板区块显隐联动 / 排序箭头即时反映 / save_ui_settings 持久化 /
-#    行让位式拖拽排序落点（LibraryView blockDrag 同款）。
+#    行不可拖起（2026-08-15 定案拆除）+ 箭头交换动画（TransitionGroup se-swap-move 0.18s）/
+#    详情面板内拖拽标题排序落点 + 面板同步。
 # 截图留档 tools/style-preview/：archive-sections / archive-card / archive-card-menu /
 # archive-convert-warning / archive-detail-file / archive-detail-archive / archive-section-edit /
 # archive-section-edit-drag。
@@ -814,35 +815,43 @@ async def main():
             check("⑦ save_ui_settings 持久化 detailSections（排序 + 显隐）",
                   bool(isinstance(last_save, list) and [s.get("id") for s in last_save][:2] == ["info", "custom"] and rel and rel.get("visible") is False),
                   json.dumps(last_save, ensure_ascii=False))
-            # 行让位式拖拽排序：首行「基础信息」下拖两行（~110px）→ 落第 3 位
+            # 行不可拖起（2026-08-15 用户定：面板内行拖拽拆除）：pointerdown 拖动后顺序不变
             drag_rect = await rect_of("document.querySelector('.section-edit .se-row')")
+            before_rows = await ev("[...document.querySelectorAll('.section-edit .se-row .row-title')].map((t) => t.textContent)")
             if drag_rect:
                 await mouse("mousePressed", drag_rect["x"], drag_rect["y"])
                 await asyncio.sleep(0.1)
                 for dy in (30, 70, 110):
                     await mouse("mouseMoved", drag_rect["x"], drag_rect["y"] + dy)
                     await asyncio.sleep(0.1)
-                await asyncio.sleep(0.3)  # 让位动画中途留截图
-                await shot("archive-section-edit-drag")
                 await mouse("mouseReleased", drag_rect["x"], drag_rect["y"] + 110)
-                await asyncio.sleep(0.6)
-            dragged = await ev("""({
-              panel: [...document.querySelectorAll('.section-edit .se-row .row-title')].map((t) => t.textContent),
-              detail: [...document.querySelectorAll('.detail-panel .detail-block .section-header .title')].map((t) => t.textContent),
-            })""")
-            print("拖拽后:", json.dumps(dragged, ensure_ascii=False))
-            check("⑦ 行拖拽排序落点（基础信息 → 第 3 位）",
-                  bool(dragged and dragged["panel"][:3] == ["自定义数据", "副本", "基础信息"]),
-                  json.dumps(dragged and dragged["panel"], ensure_ascii=False))
-            check("⑦ 拖拽联动详情面板（副本提前于基础信息）",
-                  bool(dragged and dragged["detail"][1:3] == ["副本", "基础信息"]),
-                  json.dumps(dragged and dragged["detail"], ensure_ascii=False))
-            await asyncio.sleep(1.0)  # 防抖 500ms 后读最后一次写回
-            saves2 = await ev("window.__calls.save_ui_settings.map((s) => JSON.parse(JSON.stringify(s.detailSections)))")
-            last_save2 = saves2[-1] if saves2 else None
-            check("⑦ 拖拽落点持久化（custom / copies / info）",
-                  bool(isinstance(last_save2, list) and [s.get("id") for s in last_save2][:3] == ["custom", "copies", "info"]),
-                  json.dumps(last_save2, ensure_ascii=False))
+                await asyncio.sleep(0.5)
+            after_rows = await ev("[...document.querySelectorAll('.section-edit .se-row .row-title')].map((t) => t.textContent)")
+            check("⑦ 行不可拖起（pointerdown 拖动后顺序不变）",
+                  before_rows == after_rows,
+                  json.dumps({"before": before_rows, "after": after_rows}, ensure_ascii=False))
+            # 交换动画（30 稿同款 TransitionGroup）：规则存在 + 箭头排序时行带 se-swap-move 且过渡非 0
+            anim_rule = await ev("""(() => {
+              for (const sh of document.styleSheets) {
+                try { for (const r of sh.cssRules) { if (r.selectorText && r.selectorText.startsWith('.se-swap-move') && r.style.transitionDuration && r.style.transitionDuration !== '0s') return r.style.transitionDuration; } } catch (e) {}
+              }
+              return null;
+            })()""")
+            # 手动点首行下移箭头（不用 click()——其内置 0.5s sleep 会错过 0.18s 动画窗口）
+            ar = await rect_of("document.querySelector('.section-edit .se-row .sort-arrow.arrow-down')")
+            if ar:
+                await mouse("mousePressed", ar["x"], ar["y"]); await mouse("mouseReleased", ar["x"], ar["y"])
+                await asyncio.sleep(0.05)
+            anim_live = await ev("""(() => {
+              const rows = [...document.querySelectorAll('.section-edit .se-row')];
+              const moving = rows.filter((r) => r.className.includes('se-swap-move'));
+              return { moving: moving.length, dur: moving[0] ? getComputedStyle(moving[0]).transitionDuration : null };
+            })()""")
+            print("交换动画:", json.dumps({"rule": anim_rule, "live": anim_live}))
+            check("⑦ 箭头交换动画（.se-swap-move 规则 0.18s + 排序时行带 move 类过渡非 0）",
+                  anim_rule == "0.18s" and bool(anim_live) and anim_live["moving"] > 0 and anim_live["dur"] not in (None, "0s"),
+                  json.dumps({"rule": anim_rule, "live": anim_live}))
+            await asyncio.sleep(0.5)  # 动画归位
             # 关面板（Esc）
             await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
             await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
@@ -870,14 +879,14 @@ async def main():
             })""")
             print("面板内拖拽后:", json.dumps(inpanel, ensure_ascii=False))
             check("⑦-B 面板内拖拽标题排序落点（提示词 → 链接区块之前）",
-                  bool(inpanel and inpanel["detail"] == ["自定义数据", "副本", "基础信息", "提示词", "链接区块", "音频"]),
+                  bool(inpanel and inpanel["detail"] == ["自定义数据", "基础信息", "副本", "提示词", "链接区块", "音频"]),
                   json.dumps(inpanel, ensure_ascii=False))
             # 22 稿面板同步：重开面板，行序 = 面板内拖拽后的全量序（含隐藏的关系）
             await click("[...document.querySelectorAll('.sidebar-right .panel-toolbar .icon-btn')][1]")
             await asyncio.sleep(0.6)
             sync = await ev("[...document.querySelectorAll('.section-edit .se-row .row-title')].map((t) => t.textContent)")
             check("⑦-B 22 稿面板同步面板内拖拽序",
-                  sync == ["自定义数据", "副本", "基础信息", "提示词", "链接区块", "关系", "音频"],
+                  sync == ["自定义数据", "基础信息", "副本", "提示词", "链接区块", "关系", "音频"],
                   json.dumps(sync, ensure_ascii=False))
             await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
             await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
@@ -901,7 +910,7 @@ async def main():
             if fails:
                 print("FAIL:", "; ".join(fails))
                 return 3
-            print("PASS: 树档案形态 / 三区 + 档案卡片 / 04 稿菜单 + 新建档案先建后命名 / 25 稿两段式转换（取消+确认+直接转）/ 解散 + 档案区空不渲染 / 详情区块体系（pinned 缩略图独立置顶 + 注册表 7 区块 + 两段化链接 + 空态折叠零高度 + 通栏）+ 档案形态 + 空面板 / 22 稿面板 7 行布局联动持久化 + 面板行拖拽 + 面板内拖拽排序 全部通过")
+            print("PASS: 树档案形态 / 三区 + 档案卡片 / 04 稿菜单 + 新建档案先建后命名 / 25 稿两段式转换（取消+确认+直接转）/ 解散 + 档案区空不渲染 / 详情区块体系（pinned 缩略图独立置顶 + 注册表 7 区块 + 两段化链接 + 空态折叠零高度 + 通栏）+ 档案形态 + 空面板 / 22 稿面板 7 行布局联动持久化 + 行不可拖 + 箭头交换动画 + 面板内拖拽排序 全部通过")
             return 0
     finally:
         proc.terminate()
