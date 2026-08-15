@@ -75,6 +75,14 @@ export async function applyBlockChanges(
 
 // 侧栏区块标题拖拽排序即时提交：ids 必须恰好覆盖全部区块（前端按当前 blocks 组装全量序）
 export async function reorderBlocks(ids: string[]): Promise<boolean> {
+  const content = useContentStore();
+  // 乐观重排（2026-08-14 走查"松手闪一帧"）：松手帧本地先排——让位拖拽的 transform 清除与
+  // DOM 重排必须同帧，等后端往返会先以旧序渲染一帧（闪烁）；后端提交与 refresh 异步对齐
+  const byId = new Map(content.blocks.map((b) => [b.id, b]));
+  const optimistic = ids.map((id) => byId.get(id)).filter((b): b is NonNullable<typeof b> => !!b);
+  if (optimistic.length === content.blocks.length && optimistic.length > 0) {
+    content.blocks = optimistic;
+  }
   return await runOp(async () => {
     await invoke("reorder_blocks", { ids });
   }, () => "调整区块顺序");
