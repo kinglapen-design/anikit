@@ -35,10 +35,14 @@ window.__TAURI_INTERNALS__ = {
     const R = {
       get_current_library: { name: "测试库", path: "E:/test-lib", assetCount: 0, folderCount: 2 },
       get_ui_settings: {},
-      list_folder_tree: [
-        { id: "f1", name: "项目文件夹", count: 0, children: [] },
-        { id: "f2", name: "素材", count: 0, children: [] },
-      ],
+      // 2026-08-14 区块子系统 breaking：list_folder_tree 改返回 { blocks, nodes }
+      list_folder_tree: {
+        blocks: [{ id: "dir", name: "目录", icon: null }],
+        nodes: [
+          { id: "f1", name: "项目文件夹", count: 0, children: [] },
+          { id: "f2", name: "素材", count: 0, children: [] },
+        ],
+      },
       list_placements: [],
       list_recycle: [],
       list_recent_assets: [],

@@ -4,6 +4,7 @@
 // 均不读拖拽会话（入参在 pointermove 算出时捕获，与 dragOperation 的 drop 语义一致）。
 import * as ops from "./placementOps";
 import { useContentStore, DEFAULT_BLOCK_ID, type FolderNode } from "../stores/content";
+import { useUiStore } from "../stores/ui";
 
 // 树查找辅助（文件夹拖拽排序用：同级 parent / 下一兄弟）
 export function findParentAndNext(
@@ -87,6 +88,29 @@ export async function dropFolderBeside(
     return hit.parentId !== null || topBlockOf(content, id) === targetBlock;
   });
   if (sameParent) {
+    // 名称排序显示下拖拽（2026-08-14 用户实机"显示排序成功但实际没变"）：该层显示序 ≠ 存储序时，
+    // 先把可见顺序物化为自定义顺序（全层按落点后序列整体重写）并切回"自定义"排序——
+    // 否则 refresh 后名称排序盖回去，拖拽等于没执行
+    const ui = useUiStore();
+    const levelSorted =
+      ui.treeSort !== "custom" && (ui.treeSort.startsWith("all") || hit.parentId === ui.treeSortAnchor);
+    if (levelSorted) {
+      const levelIds = scopeIds.filter((id) => {
+        const h = findParentAndNext(content.folders, id);
+        if (h?.parentId !== hit.parentId) return false;
+        return hit.parentId !== null || topBlockOf(content, id) === targetBlock;
+      });
+      const rest = levelIds.filter((id) => !ordered.includes(id));
+      const at = rest.indexOf(targetId); // 目标恒不在移动组内（引擎已拦拖到自身组）
+      if (at >= 0) {
+        const insert = zone === "before" ? at : at + 1;
+        const seq = [...rest.slice(0, insert), ...ordered, ...rest.slice(insert)];
+        await ops.reorderFolders(seq, hit.parentId, null); // 全层序列整体重写（锚点 null = 末尾）
+        ui.treeSort = "custom";
+        ui.treeSortAnchor = null;
+        return;
+      }
+    }
     await ops.reorderFolders(ordered, hit.parentId, zone === "before" ? targetId : hit.nextId);
     return;
   }
