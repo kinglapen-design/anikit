@@ -23,12 +23,13 @@ const hover = ref(false);
 const sectionAnchor = ref({ x: 0, y: 0 });
 const sectionBtnRef = ref<HTMLElement>();
 function toggleSectionEdit(e: MouseEvent): void {
-  if (ui.sectionEditOpen) {
+  if (ui.sectionEditOpen && ui.sectionEditHost === "right") {
     ui.sectionEditOpen = false;
     return;
   }
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
   sectionAnchor.value = { x: rect.right - 175, y: rect.bottom + 4 };
+  ui.sectionEditHost = "right";
   ui.sectionEditOpen = true;
 }
 </script>
@@ -60,9 +61,10 @@ function toggleSectionEdit(e: MouseEvent): void {
         @pointerdown="thumb.onThumbDown"
       />
     </div>
-    <!-- 22 稿「编辑数据区块」面板（会话级 ui.sectionEditOpen，机制同 ViewOptionsMenu） -->
+    <!-- 22 稿「编辑数据区块」面板（会话级 ui.sectionEditOpen，机制同 ViewOptionsMenu；
+         档案侧栏工具行铅笔同开此面板（host = archive 时归那边渲染） -->
     <SectionEditPanel
-      v-if="ui.sectionEditOpen"
+      v-if="ui.sectionEditOpen && ui.sectionEditHost === 'right'"
       :anchor="sectionAnchor"
       :trigger="sectionBtnRef ?? null"
       @close="ui.sectionEditOpen = false"

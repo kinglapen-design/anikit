@@ -49,14 +49,14 @@ function openViewMenu(e: MouseEvent): void {
 <template>
   <div class="panel-toolbar" data-tauri-drag-region>
     <div class="crumb-group">
-      <!-- 档案二级侧边栏切换（仅本视口为档案时显示，面包屑返回左边；per-folder 开关态，
-           图标暂用 collapse-sidebar 同族，走查可换） -->
+      <!-- 档案面板展开钮（2026-08-15 走查修正，照右栏"展开详情面板"归位中栏工具栏的现成模式）：
+           仅本视口为档案且面板已收起时出现；collapse-detail 图标、无 active/选中底色；
+           面板展开时此处不放任何按钮 -->
       <IconButton
-        v-if="archiveViewportNode"
-        name="collapse-sidebar"
-        title="档案面板"
+        v-if="archiveViewportNode && !ui.archivePanelOpenFor(archiveViewportNode.id)"
+        name="collapse-detail"
+        title="展开档案面板"
         class="archive-panel-toggle"
-        :active="ui.archivePanelOpenFor(archiveViewportNode.id)"
         @click="ui.toggleArchivePanel(archiveViewportNode.id)"
       />
       <!-- 后退 / 前进（figma 41：nav-history 图标，前进 rotate 180°；历史导航业务后接，先 disabled） -->

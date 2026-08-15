@@ -221,14 +221,16 @@ async def main():
             ap = await ev("""(() => {
               const el = document.querySelector('.archive-side');
               const btn = document.querySelector('.archive-panel-toggle');
-              if (!el || !btn) return { el: !!el, btn: !!btn };
+              if (!el) return { el: false };
               const r = el.getBoundingClientRect();
               const view = el.closest('.content-area')?.getBoundingClientRect();
               const toolbar = document.querySelector('.panel-toolbar')?.getBoundingClientRect();
               const search = document.querySelector('.search-bar')?.getBoundingClientRect();
               const tools = [...el.querySelectorAll('.as-tools .icon-btn')];
+              const toolsEl = el.querySelector('.as-tools');
               return {
-                el: true, btn: true,
+                el: true,
+                expandBtnWhenOpen: !!btn, // 任务 3：面板展开时中栏不放钮
                 w: Math.round(r.width),
                 inViewport: !!view && r.left >= view.left - 1 && r.top >= view.top - 1 && r.bottom <= view.bottom + 1,
                 top: Math.round(r.top), toolbarTop: toolbar ? Math.round(toolbar.top) : -1,
@@ -236,13 +238,12 @@ async def main():
                 bg: getComputedStyle(el).backgroundColor,
                 borderR: getComputedStyle(el.querySelector('.as-inner')).borderRightWidth,
                 noTitle: !el.querySelector('.as-title'),
-                toolsH: Math.round(el.querySelector('.as-tools').getBoundingClientRect().height),
-                editDisabled: tools[0]?.disabled ?? null,
+                toolsH: Math.round(toolsEl.getBoundingClientRect().height),
+                toolsPad: getComputedStyle(toolsEl).padding,
+                toolsBorderB: getComputedStyle(toolsEl).borderBottomWidth,
+                pencilEnabled: tools[0] ? !tools[0].disabled : null,
                 collapseEnabled: tools[1] ? !tools[1].disabled : null,
-                btnBeforeBack: (() => {
-                  const back = [...document.querySelectorAll('.panel-toolbar .crumb-group .icon-btn')].find((b) => b !== btn);
-                  return btn.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING ? true : false;
-                })(),
+                collapseFlip: tools[1]?.classList.contains('flip-h') ?? null,
               };
             })()""")
             print("档案面板:", json.dumps(ap, ensure_ascii=False))
@@ -250,10 +251,11 @@ async def main():
                   bool(ap.get("el") and ap["inViewport"] and ap["top"] == ap["toolbarTop"] and ap["bottom"] == ap["searchTop"]
                        and ap["w"] == 250 and ap["bg"] == "rgb(24, 25, 25)" and ap["borderR"] == "1px"),
                   json.dumps(ap, ensure_ascii=False))
-            check("A 顶部工具行（54 高 / 无档案名标题 / 编辑 disabled + 收起可点 / 切换钮在返回钮左边）",
-                  bool(ap.get("btn") and ap["toolsH"] == 54 and ap["noTitle"] and ap["editDisabled"] is True and ap["collapseEnabled"] is True and ap["btnBeforeBack"]),
+            check("A 顶部工具行（54 / padding 12 16 / 下边框 / 无标题 / 铅笔可点 + 收起镜像可点 / 展开时中栏无钮）",
+                  bool(ap.get("el") and ap["toolsH"] == 54 and ap["toolsPad"] == "12px 16px" and ap["toolsBorderB"] == "1px"
+                       and ap["noTitle"] and ap["pencilEnabled"] is True and ap["collapseEnabled"] is True and ap["collapseFlip"] is True
+                       and ap["expandBtnWhenOpen"] is False),
                   json.dumps(ap, ensure_ascii=False))
-            # —— 侧栏内容 = 档案详情区块栈（pinned + 7 区块，与详情面板同一套）——
             stack = await ev("""(() => {
               const p = document.querySelector('.archive-side .detail-panel');
               if (!p) return null;
@@ -265,9 +267,17 @@ async def main():
               const pair = {};
               ks.forEach((k, i) => (pair[k] = vs[i]));
               const fields = [...(pinned?.querySelectorAll('.field input') ?? [])];
+              // 通栏分隔线（任务 1）：除首块外每块 inset 1px 线 + 左右 x 通栏
+              const bodyR = p.getBoundingClientRect();
+              const shadows = blocks.map((b) => ({
+                shadow: getComputedStyle(b).boxShadow !== 'none',
+                l: Math.round(b.getBoundingClientRect().left), r: Math.round(b.getBoundingClientRect().right),
+              }));
               return {
                 count: blocks.length,
                 titles: blocks.map((b) => b.querySelector('.section-header .title')?.textContent ?? '(pinned)'),
+                shadows,
+                bodyL: Math.round(bodyR.left), bodyR: Math.round(bodyR.right),
                 cover: !!pinned?.querySelector('.thumb img'),
                 badge: pinned?.querySelector('.fmt-badge')?.textContent ?? null,
                 nameVal: fields[0]?.value ?? null,
@@ -288,16 +298,62 @@ async def main():
             check("A 基础信息三行（文件数 1 / 占用空间 200.0 KB / 创建日期 2026/08/15 09:00）",
                   bool(stack and stack["info"].get("文件数") == "1" and stack["info"].get("占用空间") == "200.0 KB" and stack["info"].get("创建日期") == "2026/08/15 09:00"),
                   json.dumps(stack and stack["info"], ensure_ascii=False))
+            # 任务 1：通栏分隔线（除首块外 inset 1px 线 + 块左右 x 通栏）；对照右侧详情面板同断言
+            sh = (stack or {}).get("shadows") or []
+            side_div_ok = bool(sh) and all(s["shadow"] for s in sh[1:]) and all(
+                s["l"] == stack["bodyL"] and s["r"] == stack["bodyR"] for s in sh)
+            right_div = await ev("""(() => {
+              const p = document.querySelector('.sidebar-right .detail-panel');
+              if (!p) return null;
+              const blocks = [...p.querySelectorAll('.detail-block')];
+              const bodyR = p.getBoundingClientRect();
+              const l = Math.round(bodyR.left), r = Math.round(bodyR.right);
+              const shadows = blocks.map((b) => ({
+                shadow: getComputedStyle(b).boxShadow !== 'none',
+                l: Math.round(b.getBoundingClientRect().left), r: Math.round(b.getBoundingClientRect().right),
+              }));
+              return { n: blocks.length, ok: shadows.slice(1).every((s) => s.shadow) && shadows.every((s) => s.l === l && s.r === r) };
+            })()""")
+            check("A 通栏分隔线：侧栏区块栈各块 inset 线 + 左右通栏（右侧详情面板同断言对照）",
+                  side_div_ok and bool(right_div) and right_div["ok"],
+                  json.dumps({"side": sh, "right": right_div}))
             await shot("archive-side-panel")
-            # 收展逐帧单调（面板内收起钮 → 工具栏切换钮再展开）
+            # 任务 2：铅笔开同一个 22 稿编辑数据区块面板
+            await click("[...document.querySelectorAll('.archive-side .as-tools .icon-btn')][0]")
+            await asyncio.sleep(0.6)
+            sec_edit = await ev("""(() => {
+              const m = document.querySelector('.section-edit.app-menu');
+              return m ? { open: true, rows: m.querySelectorAll('.se-row').length } : { open: false };
+            })()""")
+            check("A 铅笔开 22 稿编辑数据区块面板（7 行）",
+                  sec_edit.get("open") is True and sec_edit.get("rows") == 7,
+                  json.dumps(sec_edit))
+            await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await asyncio.sleep(0.5)
+            # —— 侧栏内容 = 档案详情区块栈（pinned + 7 区块，与详情面板同一套）——
+            # 收展逐帧单调（面板内收起钮 → 中栏展开钮再展开；任务 3：收起时中栏才出展开钮且无 active 底色）
             seq = await record_toggle("document.querySelector('.archive-side')", "document.querySelector('.archive-side .as-collapse')")
             check("A 档案面板收起（面板内收起钮）：单调递减无弹回",
                   bool(seq) and seq[0] > 200 and monotonic_down(seq) and seq[-1] <= 1,
                   json.dumps(seq))
+            exp_btn = await ev("""(() => {
+              const btn = document.querySelector('.archive-panel-toggle');
+              if (!btn) return null;
+              const back = [...document.querySelectorAll('.panel-toolbar .crumb-group .icon-btn')].find((b) => b !== btn);
+              return {
+                active: btn.classList.contains('active'),
+                beforeBack: back ? !!(btn.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING) : null,
+              };
+            })()""")
+            check("A 收起时中栏出展开钮（返回钮左边，无 active 选中底色）",
+                  bool(exp_btn) and exp_btn["active"] is False and exp_btn["beforeBack"] is True,
+                  json.dumps(exp_btn))
             seq = await record_toggle("document.querySelector('.archive-side')", "document.querySelector('.archive-panel-toggle')")
-            check("A 档案面板展开（工具栏切换钮）：单调递增无回退",
+            check("A 档案面板展开（中栏展开钮）：单调递增无回退",
                   bool(seq) and seq[0] <= 1 and monotonic_up(seq) and seq[-1] >= 249,
                   json.dumps(seq))
+            check("A 展开后中栏展开钮消失", not await ev("!!document.querySelector('.archive-panel-toggle')"))
             # —— 多标签：一档案一普通 ——
             # 新建标签页（quick:all，激活）→ 档案面板随标签页隐藏；标签栏 x 不变
             await click("[...document.querySelectorAll('.dv-tabs-and-actions-container .icon-btn')].find((b) => !b.classList.contains('flip-h'))")

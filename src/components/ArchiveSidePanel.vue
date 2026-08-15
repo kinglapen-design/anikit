@@ -2,17 +2,18 @@
 // 档案二级侧边栏（2026-08-15 迁入标签页视口，PRD 02-03）：视口内部组成——当前标签页视口
 // 为档案（folder kind === "archive"）时由 ContentArea 渲染在视口内容区最左；标签栏不被推挤，
 // 分屏 / 多标签各管各；搜索栏行在视口内通栏（面板不占其高度）。
-// 顶部工具行（54，与中栏工具栏同高对齐，视觉上一行）：右侧对齐 = 编辑铅笔（disabled，
-// 阶段六）+ 收起面板钮（点击 = 收起，同 ContentTitleBar 切换钮语义，按本档案读写）。
-// 收展：宽绑 sidebarShowWidths.archive（animateArchivePanel 逐帧，与左右栏同参数无闪帧；
-// 多档案标签页共享宽度可接受）；开关态 per-folder 会话级（ui.archivePanelOpen map，默认开）。
-// 内容 = 档案详情区块栈（共享组合 DetailSections，与右侧详情面板同一套：pinned + 7 排序区块，
-// 只读一轮）；数据源 get_archive_data（ArchiveDetailView：数据 + 统计，失败/无记录用默认空）。
+// 顶部工具行（54，照抄右侧详情面板工具栏 SidebarRight .panel-toolbar：54 高 /
+// padding 12 16 / gap 4 / border-bottom 暗-悬停 / C3）：收起钮（collapse-detail 同款图标，
+// 面板在左侧收起朝左 = 水平镜像）+ 编辑数据区块铅笔（edit-data-section，开同一个 22 稿
+// SectionEditPanel，host = archive）。
+// 展开入口照右栏现成模式：面板展开时中栏工具栏不放钮，收起时"展开面板"钮归位中栏工具栏
+// （ContentTitleBar，collapse-detail 无镜像无 active 底色）。
 import { computed, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import IconButton from "./IconButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import DetailSections from "./DetailSections.vue";
+import SectionEditPanel from "./SectionEditPanel.vue";
 import { ARCHIVE_PANEL_W, animateArchivePanel, sidebarShowWidths } from "../lib/useSidebarAnim";
 import { emptyArchiveData, type DetailTarget } from "../lib/detailSections";
 import { useUiStore } from "../stores/ui";
@@ -22,6 +23,20 @@ const props = defineProps<{ node: FolderNode; panelActive?: boolean }>();
 const ui = useUiStore();
 const rootRef = ref<HTMLElement>();
 const bodyRef = ref<HTMLElement>();
+
+// 22 稿「编辑数据区块」面板（host = archive；按钮右缘对齐、下方展开，同 SidebarRight 口径）
+const sectionAnchor = ref({ x: 0, y: 0 });
+const sectionBtnRef = ref<HTMLElement>();
+function toggleSectionEdit(e: MouseEvent): void {
+  if (ui.sectionEditOpen && ui.sectionEditHost === "archive") {
+    ui.sectionEditOpen = false;
+    return;
+  }
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  sectionAnchor.value = { x: rect.right - 175, y: rect.bottom + 4 };
+  ui.sectionEditHost = "archive";
+  ui.sectionEditOpen = true;
+}
 
 // 本档案开关态（per-folder map，缺省 true）
 const open = computed(() => ui.archivePanelOpenFor(props.node.id));
@@ -72,10 +87,13 @@ const target = computed<DetailTarget>(() => ({
 <template>
   <aside ref="rootRef" class="archive-side" :style="{ width: `${sidebarShowWidths.archive}px` }">
     <div class="as-inner">
-      <!-- 顶部工具行（54，与中栏工具栏同高对齐）：右侧 = 编辑铅笔（disabled 阶段六）+ 收起面板 -->
+      <!-- 顶部工具行（54，右侧详情面板工具栏同款）：右 = 收起（collapse-detail 镜像朝左）+
+           编辑数据区块铅笔（edit-data-section，开 22 稿面板 host=archive） -->
       <div class="as-tools">
-        <IconButton name="edit-description" title="编辑档案" disabled />
-        <IconButton name="collapse-sidebar" title="收起档案面板" class="as-collapse" @click="ui.toggleArchivePanel(node.id)" />
+        <span ref="sectionBtnRef" style="display: contents">
+          <IconButton name="edit-data-section" title="编辑数据区块" @click="toggleSectionEdit" />
+        </span>
+        <IconButton name="collapse-detail" title="收起档案面板" class="as-collapse flip-h" @click="ui.toggleArchivePanel(node.id)" />
       </div>
       <!-- 内容滚动区：档案详情区块栈（DetailSections 共享组合；ScrollThumb 口径） -->
       <div class="scroll-wrap">
@@ -85,6 +103,13 @@ const target = computed<DetailTarget>(() => ({
         <ScrollThumb :body="bodyRef" />
       </div>
     </div>
+    <!-- 22 稿「编辑数据区块」面板（与右栏工具栏同一个，host 分流） -->
+    <SectionEditPanel
+      v-if="ui.sectionEditOpen && ui.sectionEditHost === 'archive'"
+      :anchor="sectionAnchor"
+      :trigger="sectionBtnRef ?? null"
+      @close="ui.sectionEditOpen = false"
+    />
   </aside>
 </template>
 
@@ -109,7 +134,8 @@ const target = computed<DetailTarget>(() => ({
   flex: 1;
   border-right: 1px solid var(--line-hover);
 }
-/* 顶部工具行：54 高（与中栏工具栏同值）/ padding 12 16 / 间距 4 / 右对齐 */
+/* 顶部工具行（照抄右侧详情面板工具栏 .panel-toolbar）：54 高 / padding 12 16 / 间距 4 /
+   右对齐 / 下边框 暗-悬停 / C3（面板底色） */
 .as-tools {
   display: flex;
   align-items: center;
@@ -119,6 +145,11 @@ const target = computed<DetailTarget>(() => ({
   box-sizing: border-box;
   padding: var(--space-12) var(--space-16);
   flex: none;
+  border-bottom: 1px solid var(--line-hover);
+}
+/* 收起钮：collapse-detail 源图形朝右，面板在左侧收起朝左 = 水平镜像（同 ContentTitleBar flip-h） */
+.flip-h :deep(svg) {
+  transform: scaleX(-1);
 }
 .scroll-wrap {
   position: relative;

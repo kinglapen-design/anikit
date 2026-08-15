@@ -92,9 +92,11 @@ export const useUiStore = defineStore("ui", {
     // 默认 = 注册表全 visible；加载后经注册表兜底合并（新增补位 / 已删忽略）。
     // 数组 typeof "object"，PERSIST_KEYS 类型校验放行（同 tabLayout 先例），形状由合并函数校验
     detailSections: mergeDetailSections(null) as DetailSectionPref[],
-    // 22 稿「编辑数据区块」面板开关（会话级，同 blockManageOpen 口径）：SidebarRight 工具栏
-    // edit-data-section 按钮置位，面板宿主 SidebarRight（机制同 ViewOptionsMenu）
+    // 22 稿「编辑数据区块」面板开关（会话级，同 blockManageOpen 口径）：右栏工具栏与档案侧栏
+    // 工具行两处入口（2026-08-15 走查修正：档案面板铅笔开同一个面板），host 记打开来源
+    // （两处各自带 anchor/trigger 渲染，同一时刻只一处弹出）
     sectionEditOpen: false,
+    sectionEditHost: "right" as "right" | "archive",
     // 档案二级侧边栏开关（2026-08-15 迁入标签页视口）：per-folder 会话级 map
     //（folderId → 是否展开，默认 true）——两个档案标签页各自独立互不干扰
     archivePanelOpen: {} as Record<string, boolean>,
