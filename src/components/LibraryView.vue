@@ -11,17 +11,18 @@
 // 树空白右键 2026-08-11 用户定废除（判定范围只有 4px item 间距，无实用价值；
 // 后期多区块后"在哪个区块新建"难判定）。
 // 树 item 拖拽起点（C4）：pointerdown 超阈值进拖拽引擎，未过阈值 = 原 click 选中语义。
-import { computed, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import SectionHeader from "./SectionHeader.vue";
 import TreeItem from "./TreeItem.vue";
 import FolderTree from "./FolderTree.vue";
 import AppModal from "./AppModal.vue";
 import AppButton from "./AppButton.vue";
-import { beginFolderDrag, beginBlockDrag, dragView } from "../lib/dragOperation";
+import { beginFolderDrag, dragView } from "../lib/dragOperation";
 import { createAndName } from "../lib/menuOps";
 import { openContextMenu } from "../lib/contextMenus";
 import { recycleBlankSpec } from "../lib/menuSpecs/recycle";
 import { currentSpace, setAutoImport } from "../lib/libraryOps";
+import { reorderBlocks } from "../lib/blockOps";
 import { isBlockOpen, openBlock, toggleBlockOpen } from "../lib/treeExpansion";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
@@ -115,9 +116,101 @@ function onAddFolder(blockId: string): void {
   void createAndName(null, null, blockId);
 }
 
-// 区块标题拖拽起点（区块排序；添加按钮在 beginBlockDrag 内排除）
+// 区块标题拖拽排序（2026-08-14 用户定：与切换资源库同款让位机制——拖动段跟随指针无过渡、
+// 被跨越段反向让位 0.18s 过渡；松手提交 reorder_blocks，归位帧禁过渡防"弹回去"）。
+// 不走拖拽引擎：区块段高不定（头 + 展开的树），引擎的间隙/插入线模型不适配；
+// 本地 pointer 追踪与库菜单（ContextMenu libDrag）同范式。不挂 pointer capture（折叠 click 保留），
+// 僵尸兜底 = buttons 自清 + 划出窗口取消（与引擎同口径）
+const BLOCK_GAP = 24; // .library-view 段间距 --space-24
+const blockDrag = reactive({ id: "", startY: 0, dy: 0, from: -1, to: -1 });
+const blockSettling = ref(false); // 松手归位帧：禁段 transform 过渡
+let blockMoved = false; // 超阈值视为拖动：松手后抑制折叠 click
+let blockSpans: { mid: number }[] = []; // 各段中线（拖动起时 DOM 快照，含 gap 累计）
+let blockStep = 0; // 被拖段高 + gap（让位位移量）
+
 function onBlockHeadPointerDown(blockId: string, e: PointerEvent): void {
-  beginBlockDrag(e, blockId);
+  if (e.button !== 0) return;
+  if ((e.target as HTMLElement).closest(".add-btn")) return; // 加号不启动
+  const secs = content.blockSections;
+  const from = secs.findIndex((s) => s.block.id === blockId);
+  if (from < 0) return;
+  // 各段高度快照（含折叠态——折叠段只有头高）；段序 = blockSections 序
+  const els = [...document.querySelectorAll<HTMLElement>(".library-view .block.tree")];
+  let acc = 0;
+  blockSpans = els.map((el) => {
+    const h = el.offsetHeight;
+    const span = { mid: acc + h / 2 };
+    acc += h + BLOCK_GAP;
+    return span;
+  });
+  blockStep = (els[from]?.offsetHeight ?? 0) + BLOCK_GAP;
+  Object.assign(blockDrag, { id: blockId, startY: e.clientY, dy: 0, from, to: from });
+  blockMoved = false;
+  window.addEventListener("pointermove", onBlockDragMove);
+  window.addEventListener("pointerup", onBlockDragEnd, { once: true });
+  window.addEventListener("blur", onBlockDragCancel, { once: true });
+  document.addEventListener("mouseleave", onBlockDragCancel, { once: true });
+}
+
+// 拖动段中线越过邻段中线 → 目标位迁移（让位动画由 blockSectionStyle 驱动）
+function onBlockDragMove(e: PointerEvent): void {
+  if (!blockDrag.id) return;
+  if ((e.buttons & 1) === 0) {
+    onBlockDragCancel(); // 僵尸自清：pointerup 丢失（窗外松手等）
+    return;
+  }
+  blockDrag.dy = e.clientY - blockDrag.startY;
+  if (Math.abs(blockDrag.dy) > 3) blockMoved = true;
+  const c = (blockSpans[blockDrag.from]?.mid ?? 0) + blockDrag.dy;
+  let to = blockDrag.from;
+  for (let i = 0; i < blockSpans.length; i++) {
+    if (i > blockDrag.from && c > blockSpans[i].mid) to = i; // 下移
+    if (i < blockDrag.from && c < blockSpans[i].mid) to = i; // 上移
+  }
+  blockDrag.to = to;
+}
+
+function onBlockDragEnd(): void {
+  offBlockDrag();
+  const { from, to } = blockDrag;
+  const moved = blockMoved;
+  blockDrag.id = "";
+  if (!moved || from < 0 || to === from) return;
+  const ids = content.blockSections.map((s) => s.block.id);
+  const [m] = ids.splice(from, 1);
+  ids.splice(to, 0, m);
+  void reorderBlocks(ids); // 后端全集校验 + undo 快照 + refresh 在封装内
+  // 抑制紧随 click 误折叠（与引擎 suppressClick 同口径）
+  dragView.suppressClick = true;
+  setTimeout(() => (dragView.suppressClick = false), 0);
+  // 松手即到位：让位段视觉本已在目标位，清 transform 必须禁过渡（库菜单 2026-08-12 走查同坑）
+  blockSettling.value = true;
+  setTimeout(() => (blockSettling.value = false), 50);
+}
+
+function onBlockDragCancel(): void {
+  offBlockDrag();
+  blockDrag.id = "";
+}
+
+function offBlockDrag(): void {
+  window.removeEventListener("pointermove", onBlockDragMove);
+  window.removeEventListener("pointerup", onBlockDragEnd);
+  window.removeEventListener("blur", onBlockDragCancel);
+  document.removeEventListener("mouseleave", onBlockDragCancel);
+}
+
+// 让位位移：拖动段跟随指针（无过渡、置顶）；被跨越段反向让出一步（transition 在 .block.tree 根样式）
+function blockSectionStyle(i: number): string {
+  if (!blockDrag.id) return "";
+  if (i === blockDrag.from) {
+    return `transform: translateY(${blockDrag.dy}px); transition: none; position: relative; z-index: 2;`;
+  }
+  if (blockSettling.value) return "";
+  const { from, to } = blockDrag;
+  if (from < to && i > from && i <= to) return `transform: translateY(${-blockStep}px)`;
+  if (to < from && i >= to && i < from) return `transform: translateY(${blockStep}px)`;
+  return "";
 }
 
 // 树 item 拖拽起点（C4）：文件夹同级排序；快速访问项无 data-folder-id 天然不作起点
@@ -135,7 +228,7 @@ function onQuickMenu(key: string, e: MouseEvent): void {
 </script>
 
 <template>
-  <div class="library-view">
+  <div class="library-view" :class="{ settling: blockSettling }">
     <!-- 快速访问（1.2 新稿：无区块标题，直接 item 列表） -->
     <section class="block quick">
       <div class="items">
@@ -153,15 +246,18 @@ function onQuickMenu(key: string, e: MouseEvent): void {
       </div>
     </section>
     <!-- 区块段（2026-08-14 区块子系统）：每区块 = 标题行 + 该区块顶级文件夹树；
-         区块头挂 data-block-id——文件夹拖入 = 移入该区块根级（并入高亮），
-         区块互拖 = 排序（上/下半插入线，与树 item 排序视觉同口径） -->
-    <section v-for="sec in content.blockSections" :key="sec.block.id" class="block tree">
+         区块头挂 data-block-id——文件夹拖入 = 移入该区块根级（并入高亮，引擎）；
+         区块互拖 = 让位式排序（本地 pointer 追踪，库菜单同款动画） -->
+    <section
+      v-for="(sec, i) in content.blockSections"
+      :key="sec.block.id"
+      class="block tree"
+      :style="blockSectionStyle(i)"
+    >
       <div
         class="block-head"
         :class="{
-          'drop-into': dragView.block?.id === sec.block.id && dragView.block.zone === 'into',
-          'drop-before': dragView.block?.id === sec.block.id && dragView.block.zone === 'before',
-          'drop-after': dragView.block?.id === sec.block.id && dragView.block.zone === 'after',
+          'drop-into': dragView.block?.id === sec.block.id,
         }"
         :data-block-id="sec.block.id"
         :data-drag-name="sec.block.name"
@@ -227,15 +323,20 @@ function onQuickMenu(key: string, e: MouseEvent): void {
   flex-direction: column;
   flex: none;
 }
-/* 文件树区块段（2026-08-14 多区块）：每区块独立成段自然堆叠（原单区块 flex:1 撑满作废） */
+/* 文件树区块段（2026-08-14 多区块）：每区块独立成段自然堆叠（原单区块 flex:1 撑满作废）；
+   transform 过渡 = 区块拖拽让位动画（库菜单同款；拖动段 inline 禁过渡跟随指针） */
 .block.tree {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
   flex: none;
+  transition: transform 0.18s ease;
 }
-/* 区块标题行落点视觉（与 TreeItem 同口径）：into = 品牌 30% 罩层 + 1.5px 品牌边框线；
-   before/after = 2px 品牌插入线于上/下沿 */
+/* 松手归位帧：让位段视觉本已在目标位，清 transform 禁过渡防"弹回去" */
+.library-view.settling .block.tree {
+  transition: none;
+}
+/* 区块标题行落点视觉（与 TreeItem 同口径）：into = 品牌 30% 罩层 + 1.5px 品牌边框线 */
 .block-head {
   position: relative;
   border-radius: var(--radius-6);
@@ -253,23 +354,6 @@ function onQuickMenu(key: string, e: MouseEvent): void {
   border-radius: var(--radius-6);
   pointer-events: none;
   z-index: 1;
-}
-.block-head.drop-before::before,
-.block-head.drop-after::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--brand);
-  z-index: 1;
-  pointer-events: none;
-}
-.block-head.drop-before::before {
-  top: 0;
-}
-.block-head.drop-after::after {
-  bottom: 0;
 }
 /* item 组：间距 4（figma 目录树 gap 4） */
 .items {

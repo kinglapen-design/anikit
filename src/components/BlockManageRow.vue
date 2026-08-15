@@ -3,8 +3,8 @@
 // 排序箭头 20×20（IconButton small，图标 = 箭头-小 chevron-small：下移在前、上移旋转 180；
 // 可用态高亮档 / 禁用态 状态-禁用色）+「区块名称：」标签 + 输入框 28 高（AppInput small，
 // 稿定 C1 底覆盖）+「默认图标：」标签 + 下拉 58×28 + 红色圆减号删除。
-// 「目录」行（isDefault，2026-08-14 用户定）：名称 / 图标**不可改**（禁用态去框 = 稿"item-默认目录"
-// 无底色无边框形态），删除 opacity 0 占位不可点；排序与其他行无异（目录不恒首行）。
+// 「目录」行（isDefault，2026-08-14 用户定）：仅删除 opacity 0 占位不可点（目录是各兜底落点）；
+// 名称 / 图标 / 排序全部放开——锚定常量 id "dir"，改名无影响。
 // 草稿式：行编辑只改草稿对象（AppInput v-model / setIcon 直改 row 属性，提交由弹窗统一组装）。
 // 图标下拉本轮从简 = openContextMenu 列表（每项带图标预览 + 当前勾；3.3 换 05 稿网格面板时
 // 仅需替换 openIconMenu 一处）。
@@ -41,20 +41,14 @@ function openIconMenu(e: MouseEvent): void {
 
 <template>
   <div class="bm-row" :class="{ default: isDefault }">
-    <!-- 排序箭头（30 稿：图标 = 箭头-小 chevron-small，源图形朝下；下移在前、上移旋转 180） -->
-    <IconButton small name="chevron-small" class="sort-arrow" :disabled="isLast" title="下移" @click="emit('moveDown')" />
-    <IconButton
-      small
-      name="chevron-small"
-      class="sort-arrow arrow-up"
-      :disabled="isFirst"
-      title="上移"
-      @click="emit('moveUp')"
-    />
+    <!-- 排序箭头（30 稿：图标 = 箭头-小 chevron-small；下移在前、上移在后。
+         chevron-small 源图形朝上（实机渲染核对）——上移不旋转、下移旋转 180） -->
+    <IconButton small name="chevron-small" class="sort-arrow arrow-down" :disabled="isLast" title="下移" @click="emit('moveDown')" />
+    <IconButton small name="chevron-small" class="sort-arrow arrow-up" :disabled="isFirst" title="上移" @click="emit('moveUp')" />
     <span class="row-label">区块名称：</span>
-    <AppInput v-model="row.name" size="small" class="name-input" placeholder="区块名称" :disabled="isDefault" />
+    <AppInput v-model="row.name" size="small" class="name-input" placeholder="区块名称" />
     <span class="row-label">默认图标：</span>
-    <button class="icon-pick" :disabled="isDefault" @click="openIconMenu">
+    <button class="icon-pick" @click="openIconMenu">
       <AppIcon :name="row.icon ?? 'folder-closed'" :size="18" />
       <AppIcon name="tree-expand-arrow" :size="12" class="pick-chev" />
     </button>
@@ -74,8 +68,8 @@ function openIconMenu(e: MouseEvent): void {
   border-bottom: 1px solid var(--line-hover);
   flex: none;
 }
-/* 上箭头：源图形朝下，旋转 180 朝上 */
-.arrow-up :deep(svg) {
+/* 下箭头：chevron-small 源图形朝上，旋转 180 朝下 */
+.arrow-down :deep(svg) {
   transform: rotate(180deg);
 }
 /* 排序箭头（2026-08-14 用户定）：可用态 = 常态亮一点（高亮档）；禁用态 = 状态/禁用（--line-active）
@@ -88,24 +82,9 @@ function openIconMenu(e: MouseEvent): void {
   color: var(--line-active);
   opacity: 1;
 }
-/* 「目录」行（30 稿 item-默认目录）：名称 / 图标不可改（2026-08-14 用户定——禁用态去框：
-   无底色无边框、下拉箭头隐藏，文字保持常态色不压淡），删除钮 opacity 0 占位不可点；
-   排序箭头与其他行无异（目录不恒首行，可参与排序） */
-.bm-row.default .name-input {
-  background: transparent;
-  box-shadow: none;
-}
-.bm-row.default .name-input:disabled {
-  color: var(--text-normal);
-}
-.bm-row.default .icon-pick {
-  background: transparent;
-  box-shadow: none;
-  cursor: default;
-}
-.bm-row.default .pick-chev {
-  opacity: 0;
-}
+/* 「目录」行（2026-08-14 用户定）：仅删除钮 opacity 0 占位不可点（目录是各兜底落点，禁删）；
+   名称 / 图标 / 排序与其他行无异（改名无影响——内部锚定常量 id "dir"，非名称） */
+
 /* 「目录」行占位隐藏（稿定 opacity 0 不可点，布局不动） */
 .ghost {
   opacity: 0;

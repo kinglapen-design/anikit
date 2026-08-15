@@ -3,8 +3,9 @@
 #    SectionHeader（标题/计数）+ 各自树；FolderNode.icon 有值时树 item 渲染自定义图标
 #    （assets/icons/05_custom-icon）；区块标题加号 → create_folder 带 blockId。
 # ② 区块管理弹窗（30 稿）：侧栏 section-manage 点亮 → AppModal standard 559 宽 / 标题常态色 /
-#    行 = 排序箭头（箭头-小 chevron-small：下移在前、上移旋转 180；可用高亮档 / 禁用 --line-active）
-#    + 名称输入 28 + 图标下拉 58×28 + 红删除；「目录」行名称/图标锁死（禁用去框）、删除 opacity 0；
+#    行 = 排序箭头（箭头-小 chevron-small：下移在前旋转 180、上移在后；可用高亮档 / 禁用 --line-active）
+#    + 名称输入 28 + 图标下拉 58×28 + 红删除；「目录」行仅删除 opacity 0（名称/图标/排序放开——
+#    锚定常量 id "dir"，2026-08-14 用户定）；
 #    底部 确认 primary/取消 panel 88×38 主左次右；添加区块按钮 104×36。
 # ③ 弹窗行为：添加区块加行 → 改名 → 箭头上移 → 删除「场景库」→ 确认 → apply_block_changes
 #    （断言 blocks 数组序 / deleted / confirmed=false）→ 桩回 needConfirm → 26 稿 alert warning
@@ -254,11 +255,9 @@ async def main():
                 fails.append(f"图标下拉 {info['pickW']}x{info['pickH']}（应 58x28）")
             if info["dirDelOpacity"] != "0" or info["dirDelPE"] != "none":
                 fails.append(f"「目录」行删除未禁 {info['dirDelOpacity']}/{info['dirDelPE']}")
-            # 「目录」行锁死（2026-08-14 用户定）：名称输入 / 图标下拉禁用、输入框去框透明
-            if info["dirInputDisabled"] is not True or info["dirPickDisabled"] is not True:
-                fails.append(f"「目录」行名称/图标未锁 {info['dirInputDisabled']}/{info['dirPickDisabled']}")
-            if info["dirInputBg"] not in ("rgba(0, 0, 0, 0)", "transparent"):
-                fails.append(f"「目录」行输入框未去框 {info['dirInputBg']}")
+            # 「目录」行（2026-08-14 用户定）：仅删除隐藏；名称 / 图标放开可改（锚定 id "dir" 非名称）
+            if info["dirInputDisabled"] is not False or info["dirPickDisabled"] is not False:
+                fails.append(f"「目录」行名称/图标应可改 {info['dirInputDisabled']}/{info['dirPickDisabled']}")
             # 排序箭头：下移在前、上移在后；可用态 = 高亮档
             if info["arrowOrder"] != ["down", "up"]:
                 fails.append(f"箭头顺序 {info['arrowOrder']}（应 下移/上移）")

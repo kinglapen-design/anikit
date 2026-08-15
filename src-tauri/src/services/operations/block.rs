@@ -53,8 +53,8 @@ fn new_block_id() -> String {
 /// 对齐 reorder_folders 做法）；deleted = 待删区块 id。
 /// deleted 含非空区块（存在 Folder.block 指向它的顶级文件夹）且 confirmed = false 时返回
 /// needConfirm 报告、不执行任何写入；confirmed = true 时这些区块的顶级文件夹 block 置 None
-/// （移入「目录」）再删。默认区块「目录」禁删、名称与图标锁死（排序允许，2026-08-14 用户定）；
-/// 新建区块名不做唯一化（库允许同名，2026-08-14 用户定同类口径）
+/// （移入「目录」）再删。默认区块「目录」仅禁删——名称 / 图标 / 排序均放开（锚定常量 id，
+/// 改名无影响，2026-08-14 用户定）；新建区块名不做唯一化（库允许同名，2026-08-14 用户定同类口径）
 pub fn apply_block_changes(
   lib: &mut Library,
   blocks: Vec<BlockInput>,
@@ -94,13 +94,8 @@ pub fn apply_block_changes(
       return Err(format!("区块「{}」既不在保留列表也不在删除列表", b.name));
     }
   }
-  // 默认区块「目录」：名称 / 图标不可改（2026-08-14 用户定——排序允许，原"可改名"作废）
-  if let Some(input) = blocks.iter().find(|i| i.id.as_deref() == Some(DEFAULT_BLOCK_ID)) {
-    let cur = lib.folders.blocks.iter().find(|b| b.id == DEFAULT_BLOCK_ID).expect("默认区块缺失");
-    if input.name.trim() != cur.name || input.icon != cur.icon {
-      return Err("默认区块「目录」的名称与图标不可修改".to_string());
-    }
-  }
+  // 默认区块「目录」仅禁删（名称 / 图标 / 排序均放开，2026-08-14 用户定——
+  // 兜底落点锚定常量 id "dir" 而非名称，改名无影响）
   // 非空待删区块（有顶级文件夹引用）
   let mut conflicts: Vec<BlockDeleteConflict> = Vec::new();
   for id in &deleted {
@@ -249,13 +244,10 @@ mod tests {
     assert_eq!(blocks[0].icon.as_deref(), Some("icon-role"), "换图标");
     assert_eq!((blocks[1].name.as_str(), blocks[1].order), ("目录", 1));
 
-    // 默认区块改名 / 换图标 → 报错不动数据（2026-08-14 用户定）
-    assert!(apply_block_changes(&mut h.lib, vec![dir_input(), input(Some(&new_id), "角色动画", Some("icon-role"))], vec![], false).is_ok());
-    let renamed = apply_block_changes(&mut h.lib, vec![input(Some(DEFAULT_BLOCK_ID), "素材目录", None), input(Some(&new_id), "角色动画", Some("icon-role"))], vec![], false);
-    assert!(renamed.is_err(), "目录改名拒绝");
-    let reicon = apply_block_changes(&mut h.lib, vec![input(Some(DEFAULT_BLOCK_ID), "目录", Some("scene")), input(Some(&new_id), "角色动画", Some("icon-role"))], vec![], false);
-    assert!(reicon.is_err(), "目录换图标拒绝");
-    assert_eq!(h.lib.folders.blocks.iter().find(|b| b.id == DEFAULT_BLOCK_ID).unwrap().name, "目录", "报错不动数据");
+    // 默认区块改名 / 换图标放开（2026-08-14 用户定：锚定 id "dir" 非名称，改名无影响）
+    apply_block_changes(&mut h.lib, vec![input(Some(DEFAULT_BLOCK_ID), "素材目录", Some("scene")), input(Some(&new_id), "角色动画", Some("icon-role"))], vec![], false).unwrap();
+    let dir = h.lib.folders.blocks.iter().find(|b| b.id == DEFAULT_BLOCK_ID).unwrap();
+    assert_eq!((dir.name.as_str(), dir.icon.as_deref()), ("素材目录", Some("scene")), "目录改名/换图标生效");
   }
 
   /// 删空区块直接执行；删非空区块 confirmed = false → needConfirm 不动任何数据

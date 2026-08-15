@@ -1,9 +1,8 @@
 // 文件夹拖拽落点动作（6.3 自 dragOperation 拆出，规范第 3 条行数控制——dragOperation 超 500）：
 // 树 item 上/下 1/3 同级排序、中间 1/3 与文件夹卡片并入（move_folders）、文件夹卡片间隙同级排序；
-// 2026-08-14 区块子系统：文件夹落区块标题（dropFoldersIntoBlock）与区块标题互拖排序（dropBlockBeside）。
+// 2026-08-14 区块子系统：文件夹落区块标题（dropFoldersIntoBlock）。
 // 均不读拖拽会话（入参在 pointermove 算出时捕获，与 dragOperation 的 drop 语义一致）。
 import * as ops from "./placementOps";
-import { reorderBlocks } from "./blockOps";
 import { useContentStore, DEFAULT_BLOCK_ID, type FolderNode } from "../stores/content";
 
 // 树查找辅助（文件夹拖拽排序用：同级 parent / 下一兄弟）
@@ -56,29 +55,11 @@ export async function dropFoldersInto(folderIds: string[], targetId: string): Pr
 }
 
 // 文件夹落区块标题（2026-08-14 区块子系统）：移入该区块根级末尾——
-// targetParent = null + targetBlock = 区块 id（"dir" = 移回「目录」）
+// targetParent = null + targetBlock = 区块 id（"dir" = 移回「目录」）。
+// 区块标题互拖排序不在此——LibraryView 本地让位式拖拽直调 blockOps.reorderBlocks
 export async function dropFoldersIntoBlock(folderIds: string[], blockId: string): Promise<void> {
   if (folderIds.length === 0) return;
   await ops.moveFolders(folderIds, null, null, blockId);
-}
-
-// 区块标题拖拽排序（2026-08-14 区块子系统）：按当前 blocks 组装全量 id 序——
-// 抽出被拖区块插到目标前/后；相邻原位 = 无操作（reorder_blocks 要求恰好覆盖全部区块）
-export async function dropBlockBeside(
-  draggedId: string,
-  targetId: string,
-  zone: "before" | "after",
-): Promise<void> {
-  const content = useContentStore();
-  const ids = content.blocks.map((b) => b.id);
-  const from = ids.indexOf(draggedId);
-  const to = ids.indexOf(targetId);
-  if (from < 0 || to < 0) return;
-  ids.splice(from, 1);
-  let insertAt = ids.indexOf(targetId) + (zone === "after" ? 1 : 0);
-  if (insertAt === from) return; // 原位（目标本就是相邻项的对应侧）
-  ids.splice(insertAt, 0, draggedId);
-  await reorderBlocks(ids);
 }
 
 // 文件夹落树 item 上/下 1/3：reorder_folders 同级排序（before = 插到目标前 / after = 目标下一兄弟前）；
