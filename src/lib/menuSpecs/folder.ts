@@ -5,6 +5,7 @@ import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
 import { useUiStore } from "../../stores/ui";
 import type { CtxEntry, CtxItem } from "../contextMenus";
+import { menuState } from "../contextMenus";
 import {
   copyFolderLink,
   createAndName,
@@ -35,7 +36,8 @@ function findChildrenList(nodes: FolderNode[], id: string): FolderNode[] | null 
 }
 
 // —— 05 稿 · 文件夹（卡片与树节点共用主体；差异：重命名入口 + 树专属段）——
-// 排序依据项按稿无对勾列（checkable 的 18px 占位会把 184 宽稿值挤到截断，2026-08-11 三轮走查）；
+// 排序依据带当前模式对勾 + "自定义"首项（2026-08-14 用户定，显示简介下拉同款；原"无对勾列防截断"
+// 口径推翻，二级宽 184 → 226 容纳对勾列 + 长标签；keepOpen 期间经 menuState reactive 回写 checked）；
 // 展开收起三项沿用 treeExpansion 业务；
 // 排序依据/展开收起/更改图标/更改颜色 = 树节点专属（文件夹卡片不支持，用户定）；
 // 更改图标/颜色网格二级面板随第二轮或 3.3 落地（一级占位）。
@@ -90,12 +92,35 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
     const ui = useUiStore();
     const node = findNode(content.folders, folder.id);
     const hasChildren = (node?.children.length ?? 0) > 0;
-    const sortItem = (label: string, mode: typeof ui.treeSort): CtxItem => ({
+    // 排序依据（2026-08-14 用户定：加"自定义"首项 + 当前模式对勾，显示简介下拉同款）——
+    // 对勾口径：自定义 = treeSort custom；level* 仅锚定层级命中；all* 全局。
+    // keepOpen 期间 spec 静态快照不刷新——action 里经 menuState（reactive）回写 checked
+    const sortModes = [
+      ["自定义", "custom"],
+      ["当前层级 - 标题 A → Z", "levelAsc"],
+      ["当前层级 - 标题 Z → A", "levelDesc"],
+      ["全部 - 标题 A → Z", "allAsc"],
+      ["全部 - 标题 Z → A", "allDesc"],
+    ] as const;
+    const isCurrentSort = (mode: (typeof sortModes)[number][1]): boolean =>
+      mode === "custom"
+        ? ui.treeSort === "custom"
+        : ui.treeSort === mode && (mode.startsWith("all") || ui.treeSortAnchor === parentId);
+    const syncSortChecks = (): void => {
+      const entry = menuState.entries?.find((e): e is CtxItem => e !== "divider" && e.label === "排序依据");
+      entry?.submenu?.forEach((it, i) => {
+        if (it !== "divider") it.checked = isCurrentSort(sortModes[i][1]); // 二级无分隔线，索引对齐
+      });
+    };
+    const sortItem = (label: string, mode: (typeof sortModes)[number][1]): CtxItem => ({
       label,
       keepOpen: true, // 状态切换类：用户可能连续试几种排序（2026-08-12 判定口径）
+      checkable: true,
+      checked: isCurrentSort(mode),
       action: () => {
         ui.treeSort = mode;
-        ui.treeSortAnchor = parentId;
+        ui.treeSortAnchor = mode === "custom" ? null : parentId;
+        syncSortChecks();
       },
     });
     entries.push(
@@ -103,23 +128,10 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
       {
         label: "排序依据",
         icon: "sort-by",
-        submenuWidth: 184,
-        submenu: [
-          {
-            // 自定义（2026-08-14 用户定）：切回存储序（folders.json order）——名称排序下
-            // 拖拽 / 新建等手动操作会自动物化并切回此项；菜单提供随时手动切回的入口
-            label: "自定义",
-            keepOpen: true,
-            action: () => {
-              ui.treeSort = "custom";
-              ui.treeSortAnchor = null;
-            },
-          },
-          sortItem("当前层级 - 标题 A → Z", "levelAsc"),
-          sortItem("当前层级 - 标题 Z → A", "levelDesc"),
-          sortItem("全部 - 标题 A → Z", "allAsc"),
-          sortItem("全部 - 标题 Z → A", "allDesc"),
-        ],
+        // 对勾列 18px 加入后 184 稿宽会截断（原"无对勾列"口径 2026-08-14 被用户推翻）→ 226
+        //（202 实测"当前层级 - 标题 A → Z"仍截断，探针 S7 走查补到 226）
+        submenuWidth: 226,
+        submenu: sortModes.map(([label, mode]) => sortItem(label, mode)),
       },
       {
         label: "展开/收起文件夹",

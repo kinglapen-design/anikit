@@ -18,6 +18,9 @@
 #      （parentId null、afterFolderId="f2"）；② refresh 后显示序 = [二甲, 新建文件夹, 三乙, 一丙]
 #      （落点 = 选中项下一行，custom 不再盖回）；③ 单选新文件夹（selected+domain 合计 1 且是
 #      新项——用户实机双高亮问题回归）；④ 新项命名输入态（.rename-input 可见，默认名）
+#   S7 排序依据对勾（2026-08-15：5 项 checkable + menuState 回写实时刷新 + 二级宽 226）：
+#      初始 custom 态首项"自定义"有勾其余无；keepOpen 点 A→Z 后 flyout 不重开对勾实时移动；
+#      点"全部 Z→A"对勾再移；Esc 关菜单重开对勾仍在（持久态）；flyout 宽 = 226
 # 命名注记：FolderTree 排序用 localeCompare(zh) = 拼音序，"甲乙丙" 拼音序 丙<甲<乙 与存储序
 # 相同无法区分排序生效与否，故用"一丙/二甲/三乙"前缀（拼音 二<三<一）让排序真实改变显示序。
 # 用法：先起 pnpm dev（5373；探针检测到未监听会自起并在结束时杀掉），再
@@ -39,6 +42,7 @@ PORT = 9355
 URL = "http://localhost:5373"
 SHOT = "tools/style-preview/tree-sort-drag.png"
 SHOT2 = "tools/style-preview/tree-sort-create.png"
+SHOT3 = "tools/style-preview/tree-sort-check.png"
 SLEEP = 0.3
 
 # 桩：单区块「目录」三顶级文件夹，存储序 f1一丙 / f2二甲 / f3三乙（zh 拼音序 = 二<三<一，
@@ -486,6 +490,67 @@ async def main():
             with open(SHOT2, "wb") as f:
                 f.write(base64.b64decode(shot["result"]["data"]))
             print("截图已存:", SHOT2)
+
+            # ── S7：排序依据对勾（checkable + menuState 回写实时刷新 + 二级宽 226）──
+            # 对勾渲染口径：MenuItem checkable → .check-slot 占位，checked 时内有 svg（check 图标）
+            print("S7 排序依据对勾（初始=自定义 / keepOpen 实时移动 / 重开持久）")
+
+            async def flyout_checks():
+                return await ev("[...document.querySelectorAll('.flyout-root .menu-item')].map((m) => ({ label: m.querySelector('.label')?.textContent, checked: !!m.querySelector('.check-slot svg') }))")
+
+            def checks_of(fl):
+                return [bool(i["checked"]) for i in (fl or [])]
+
+            # 初始（S6 物化已切回 custom）：右键 f1 → hover 排序依据
+            await right_click("f1")
+            check("S7 右键菜单出现", bool(await ev("!!document.querySelector('.app-menu')")))
+            if not await hover_sort_by():
+                check("S7 hover「排序依据」开 flyout", False)
+            else:
+                w = await ev("(() => { const r = document.querySelector('.flyout-root')?.closest('.app-menu'); return r ? Math.round(r.getBoundingClientRect().width) : null; })()")
+                check("S7 二级菜单宽 = 226", w == 226, str(w))
+                fl = await flyout_checks()
+                print("  初始对勾:", json.dumps(fl, ensure_ascii=False))
+                check(
+                    "S7 初始对勾 = 自定义（其余四项无勾）",
+                    [i["label"] for i in (fl or [])] == ["自定义", "当前层级 - 标题 A → Z", "当前层级 - 标题 Z → A", "全部 - 标题 A → Z", "全部 - 标题 Z → A"]
+                    and checks_of(fl) == [True, False, False, False, False],
+                    json.dumps(fl, ensure_ascii=False),
+                )
+                # keepOpen 点 A→Z：flyout 不关不重开，对勾实时移动（menuState 回写机制）
+                if not await click_menu("当前层级 - 标题 A → Z"):
+                    check("S7 点「当前层级 - 标题 A → Z」", False)
+                fl = await flyout_checks()  # 不重新 hover，直接读当前 flyout
+                print("  A→Z 后对勾:", json.dumps(fl, ensure_ascii=False))
+                check(
+                    "S7 对勾实时移到「当前层级 - 标题 A → Z」（flyout 未重开，自定义无勾）",
+                    checks_of(fl) == [False, True, False, False, False],
+                    json.dumps(fl, ensure_ascii=False),
+                )
+                ls = await labels_all()
+                check("S7 A→Z 显示 [二甲, 三乙, 新建文件夹, 一丙]", ls == ["二甲", "三乙", "新建文件夹", "一丙"], str(ls))
+                # 点 全部 Z→A：对勾再移
+                if not await click_menu("全部 - 标题 Z → A"):
+                    check("S7 点「全部 - 标题 Z → A」", False)
+                fl = await flyout_checks()
+                print("  全部 Z→A 后对勾:", json.dumps(fl, ensure_ascii=False))
+                check(
+                    "S7 对勾移到「全部 - 标题 Z → A」",
+                    checks_of(fl) == [False, False, False, False, True],
+                    json.dumps(fl, ensure_ascii=False),
+                )
+                shot = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
+                with open(SHOT3, "wb") as f:
+                    f.write(base64.b64decode(shot["result"]["data"]))
+                print("截图已存:", SHOT3)
+            check("S7 菜单已关闭", bool(await close_menu()))
+            # Esc 重开：对勾持久（spec 静态快照按 ui.treeSort 计算）
+            await right_click("f1")
+            await hover_sort_by()
+            fl = await flyout_checks()
+            print("  重开后对勾:", json.dumps(fl, ensure_ascii=False))
+            check("S7 重开菜单对勾仍停在「全部 - 标题 Z → A」（持久态）", checks_of(fl) == [False, False, False, False, True], json.dumps(fl, ensure_ascii=False))
+            check("S7 菜单已关闭(2)", bool(await close_menu()))
 
             print()
             if fails:
