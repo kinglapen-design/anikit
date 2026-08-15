@@ -29,6 +29,7 @@ window.__TAURI_INTERNALS__ = {
       { id: "F-DIR", name: "素材", parent: null, kind: null },
       { id: "F-SUB", name: "子文件夹", parent: "F-DIR", kind: null },
       { id: "F-ARC", name: "设定集", parent: "F-DIR", kind: "archive" },
+      { id: "F-ARC2", name: "设定集乙", parent: "F-DIR", kind: "archive" },
     ];
     const placements = [
       { assetId: "A1", folderId: "F-ARC", name: "主角-立绘.webp", w: 800, h: 600, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
@@ -206,28 +207,38 @@ async def main():
                   bool(seq) and seq[0] <= 1 and monotonic_up(seq) and seq[-1] >= 303,
                   json.dumps(seq))
 
-            # —— 任务 A：档案二级侧边栏 ——
-            # 非档案视口：按钮与面板都不在
+            # —— 任务 A：档案二级侧边栏（视口内部组成） ——
+            # 非档案视口：按钮与面板都不在；记录标签栏 x（核心回归基准：进/出档案视口不得推挤）
+            strip0 = await ev("Math.round(document.querySelector('.dv-tabs-and-actions-container').getBoundingClientRect().left)")
             pre = await ev("({ btn: !!document.querySelector('.archive-panel-toggle'), panel: !!document.querySelector('.archive-side') })")
             check("A 非档案视口：切换钮与面板均不出现", pre == {"btn": False, "panel": False}, json.dumps(pre))
             # 进入档案视口（展开素材 → 点设定集树节点）
             await click("document.querySelector('.tree-item[data-folder-id=\"F-DIR\"] .expand')")
             await click("document.querySelector('.tree-item[data-folder-id=\"F-ARC\"] .body')")
             await asyncio.sleep(0.8)
+            strip1 = await ev("Math.round(document.querySelector('.dv-tabs-and-actions-container').getBoundingClientRect().left)")
+            check("A 标签栏 x 进档案视口不变（不被面板推挤）", strip1 == strip0, f"{strip0} → {strip1}")
             ap = await ev("""(() => {
               const el = document.querySelector('.archive-side');
               const btn = document.querySelector('.archive-panel-toggle');
               if (!el || !btn) return { el: !!el, btn: !!btn };
-              const cs = getComputedStyle(el);
-              const main = el.querySelector('.as-main');
-              const bcs = getComputedStyle(main);
+              const r = el.getBoundingClientRect();
+              const view = el.closest('.content-area')?.getBoundingClientRect();
+              const toolbar = document.querySelector('.panel-toolbar')?.getBoundingClientRect();
+              const search = document.querySelector('.search-bar')?.getBoundingClientRect();
+              const tools = [...el.querySelectorAll('.as-tools .icon-btn')];
               return {
                 el: true, btn: true,
-                w: Math.round(el.getBoundingClientRect().width),
-                bg: cs.backgroundColor,
-                borderR: bcs.borderRightWidth + ' ' + bcs.borderRightColor,
-                title: el.querySelector('.as-title')?.textContent ?? null,
-                // 切换钮在面包屑返回（后退）按钮左边
+                w: Math.round(r.width),
+                inViewport: !!view && r.left >= view.left - 1 && r.top >= view.top - 1 && r.bottom <= view.bottom + 1,
+                top: Math.round(r.top), toolbarTop: toolbar ? Math.round(toolbar.top) : -1,
+                bottom: Math.round(r.bottom), searchTop: search ? Math.round(search.top) : -1,
+                bg: getComputedStyle(el).backgroundColor,
+                borderR: getComputedStyle(el.querySelector('.as-inner')).borderRightWidth,
+                noTitle: !el.querySelector('.as-title'),
+                toolsH: Math.round(el.querySelector('.as-tools').getBoundingClientRect().height),
+                editDisabled: tools[0]?.disabled ?? null,
+                collapseEnabled: tools[1] ? !tools[1].disabled : null,
                 btnBeforeBack: (() => {
                   const back = [...document.querySelectorAll('.panel-toolbar .crumb-group .icon-btn')].find((b) => b !== btn);
                   return btn.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING ? true : false;
@@ -235,27 +246,13 @@ async def main():
               };
             })()""")
             print("档案面板:", json.dumps(ap, ensure_ascii=False))
-            check("A 档案视口：切换钮（返回钮左边）+ 面板 250 宽 C3 1px 右边框",
-                  bool(ap.get("el") and ap.get("btn") and ap["w"] == 250 and ap["bg"] == "rgb(24, 25, 25)" and ap["borderR"].startswith("1px") and ap["btnBeforeBack"] and ap["title"] == "设定集"),
+            check("A 面板在视口内（top=工具栏行顶 / bottom=搜索栏顶 / 250 宽 C3 1px 右边框）",
+                  bool(ap.get("el") and ap["inViewport"] and ap["top"] == ap["toolbarTop"] and ap["bottom"] == ap["searchTop"]
+                       and ap["w"] == 250 and ap["bg"] == "rgb(24, 25, 25)" and ap["borderR"] == "1px"),
                   json.dumps(ap, ensure_ascii=False))
-            # —— 布局修正（2026-08-15 红框）：标签栏 / 搜索栏横贯，面板只存在于两行之间 ——
-            align = await ev("""(() => {
-              const strip = document.querySelector('.dv-tabs-and-actions-container').getBoundingClientRect();
-              const search = document.querySelector('.search-bar').getBoundingClientRect();
-              const main = document.querySelector('.archive-side .as-main').getBoundingClientRect();
-              const ft = document.querySelector('.archive-side .as-filler.top').getBoundingClientRect();
-              const fb = document.querySelector('.archive-side .as-filler.bottom').getBoundingClientRect();
-              const r = (v) => Math.round(v);
-              return { mainTop: r(main.top), stripB: r(strip.bottom), mainB: r(main.bottom), searchT: r(search.top),
-                       ftT: r(ft.top), stripT: r(strip.top), fbB: r(fb.bottom), searchB: r(search.bottom),
-                       ftH: r(ft.height), fbH: r(fb.height) };
-            })()""")
-            print("布局对齐:", json.dumps(align))
-            check("A 布局：面板 top=标签栏底 / bottom=搜索栏顶，填充条与两行对齐（46/47）",
-                  align["mainTop"] == align["stripB"] and align["mainB"] == align["searchT"]
-                  and align["ftT"] == align["stripT"] and align["fbB"] == align["searchB"]
-                  and align["ftH"] == 46 and align["fbH"] == 47,
-                  json.dumps(align))
+            check("A 顶部工具行（54 高 / 无档案名标题 / 编辑 disabled + 收起可点 / 切换钮在返回钮左边）",
+                  bool(ap.get("btn") and ap["toolsH"] == 54 and ap["noTitle"] and ap["editDisabled"] is True and ap["collapseEnabled"] is True and ap["btnBeforeBack"]),
+                  json.dumps(ap, ensure_ascii=False))
             # —— 侧栏内容 = 档案详情区块栈（pinned + 7 区块，与详情面板同一套）——
             stack = await ev("""(() => {
               const p = document.querySelector('.archive-side .detail-panel');
@@ -292,25 +289,63 @@ async def main():
                   bool(stack and stack["info"].get("文件数") == "1" and stack["info"].get("占用空间") == "200.0 KB" and stack["info"].get("创建日期") == "2026/08/15 09:00"),
                   json.dumps(stack and stack["info"], ensure_ascii=False))
             await shot("archive-side-panel")
-            # 收展逐帧单调
-            seq = await record_toggle("document.querySelector('.archive-side')", "document.querySelector('.archive-panel-toggle')")
-            check("A 档案面板收起：单调递减无弹回",
+            # 收展逐帧单调（面板内收起钮 → 工具栏切换钮再展开）
+            seq = await record_toggle("document.querySelector('.archive-side')", "document.querySelector('.archive-side .as-collapse')")
+            check("A 档案面板收起（面板内收起钮）：单调递减无弹回",
                   bool(seq) and seq[0] > 200 and monotonic_down(seq) and seq[-1] <= 1,
                   json.dumps(seq))
             seq = await record_toggle("document.querySelector('.archive-side')", "document.querySelector('.archive-panel-toggle')")
-            check("A 档案面板展开：单调递增无回退",
+            check("A 档案面板展开（工具栏切换钮）：单调递增无回退",
                   bool(seq) and seq[0] <= 1 and monotonic_up(seq) and seq[-1] >= 249,
                   json.dumps(seq))
-            # 切出档案视口：面板与按钮同消失
+            # —— 多标签：一档案一普通 ——
+            # 新建标签页（quick:all，激活）→ 档案面板随标签页隐藏；标签栏 x 不变
+            await click("[...document.querySelectorAll('.dv-tabs-and-actions-container .icon-btn')].find((b) => !b.classList.contains('flip-h'))")
+            await asyncio.sleep(0.8)
+            strip2 = await ev("Math.round(document.querySelector('.dv-tabs-and-actions-container').getBoundingClientRect().left)")
+            tab2 = await ev("""({
+              panelHidden: (() => { const el = document.querySelector('.archive-side'); if (!el) return 'gone'; const r = el.getBoundingClientRect(); return r.width === 0 && r.height === 0; })(),
+            })""")
+            check("A 多标签：普通标签页激活时档案面板隐藏（卸载或不可见）+ 标签栏 x 不变",
+                  (tab2.get("panelHidden") is True or tab2.get("panelHidden") == "gone") and strip2 == strip0,
+                  json.dumps({"tab2": tab2, "strip": [strip0, strip2]}))
+            # per-folder：回档案标签页收起（设定集 关）→ 第二个档案标签页（设定集乙）默认开
+            await click("[...document.querySelectorAll('.dv-tab')].find((t) => t.textContent.includes('设定集'))")
+            await asyncio.sleep(0.6)
+            await click("document.querySelector('.archive-side .as-collapse')")
+            await asyncio.sleep(0.6)
+            w_closed = await ev("Math.round(document.querySelector('.archive-side').getBoundingClientRect().width)")
+            await click("[...document.querySelectorAll('.dv-tab')].find((t) => t.textContent.includes('全部'))")
+            await asyncio.sleep(0.5)
+            await click("document.querySelector('.tree-item[data-folder-id=\"F-ARC2\"] .body')")
+            await asyncio.sleep(0.8)
+            arc2 = await ev("""(() => {
+              const el = document.querySelector('.archive-side');
+              if (!el) return null;
+              const fields = [...el.querySelectorAll('.section-pinned .field input')];
+              return { w: Math.round(el.getBoundingClientRect().width), name: fields[0]?.value ?? null };
+            })()""")
+            check("A per-folder：设定集收起不影响设定集乙（默认开 250）",
+                  w_closed == 0 and bool(arc2) and arc2["w"] == 250 and arc2["name"] == "设定集乙",
+                  json.dumps({"closed": w_closed, "arc2": arc2}, ensure_ascii=False))
+            # 切回设定集标签页：仍收起（激活时按本档案开关态快照）
+            await click("[...document.querySelectorAll('.dv-tab')].find((t) => t.textContent.includes('设定集'))")
+            await asyncio.sleep(0.6)
+            w_back = await ev("(() => { const el = document.querySelector('.archive-side'); return el ? Math.round(el.getBoundingClientRect().width) : -1; })()")
+            check("A per-folder：切回设定集仍收起（0）", w_back == 0, str(w_back))
+            # 切出档案视口：面板与按钮同消失 + 标签栏 x 不变
             await click("document.querySelector('.tree-item[data-folder-id=\"F-DIR\"] .body')")
             await asyncio.sleep(0.8)
+            strip3 = await ev("Math.round(document.querySelector('.dv-tabs-and-actions-container').getBoundingClientRect().left)")
             post = await ev("({ btn: !!document.querySelector('.archive-panel-toggle'), panel: !!document.querySelector('.archive-side') })")
-            check("A 切出档案视口：面板与按钮同消失", post == {"btn": False, "panel": False}, json.dumps(post))
+            check("A 切出档案视口：面板与按钮同消失 + 标签栏 x 不变",
+                  post == {"btn": False, "panel": False} and strip3 == strip0,
+                  json.dumps({"post": post, "strip": [strip0, strip3]}))
 
             if fails:
                 print("FAIL:", "; ".join(fails))
                 return 3
-            print("PASS: 侧栏收展闪帧根治（左右栏展开无首帧全宽 / 收起无首帧 0，逐帧单调）+ 档案二级侧边栏（档案视口才出 / 250 C3 右边框 / 收展单调 / 切出即消）全部通过")
+            print("PASS: 侧栏收展闪帧根治（左右栏展开无首帧全宽 / 收起无首帧 0，逐帧单调）+ 档案二级侧边栏（视口内部组成 / 标签栏 x 不变 / 工具行 54 两钮 / 区块栈实数据 / 收展单调 / 多标签 per-folder / 切出即消）全部通过")
             return 0
     finally:
         proc.terminate()

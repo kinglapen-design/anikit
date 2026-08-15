@@ -4,7 +4,7 @@
 // 导入弹窗宿主：菜单 / 拖拽填 content.importDraft，ImportDialog 确认后刷新内容区。
 // 全局键盘 / 侧栏收展动画 / 窗口几何持久化已拆 lib（useGlobalKeys / useSidebarAnim /
 // windowState，2026-08-12，规范第 3 条行数控制）。
-import { onBeforeUnmount, onMounted, computed, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -14,7 +14,6 @@ type ResizeDirection = "East" | "North" | "NorthEast" | "NorthWest" | "South" | 
 import SidebarLeft from "./components/SidebarLeft.vue";
 import SidebarRight from "./components/SidebarRight.vue";
 import DockHost from "./components/DockHost.vue";
-import ArchiveSidePanel from "./components/ArchiveSidePanel.vue";
 import SplitBar from "./components/SplitBar.vue";
 import IconButton from "./components/IconButton.vue";
 import WindowControls from "./components/WindowControls.vue";
@@ -37,14 +36,13 @@ import AppConfirm from "./components/AppConfirm.vue";
 import FolderPickerDialog from "./components/FolderPickerDialog.vue";
 import ToastStack from "./components/ToastStack.vue";
 import { useUiStore } from "./stores/ui";
-import { useContentStore, type FolderNode } from "./stores/content";
+import { useContentStore } from "./stores/content";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
 import { wizardState, reopenLastSession, createLibraryModalState, deleteLibraryState, confirmDeleteLibrary } from "./lib/libraryOps";
 import { dupScanState } from "./lib/dupScanOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
 import { useSidebarAnim } from "./lib/useSidebarAnim";
-import { findFolderNode } from "./lib/detailSections";
 import { useWindowStatePersistence } from "./lib/windowState";
 
 const ui = useUiStore();
@@ -56,15 +54,6 @@ const preview = usePreviewStore();
 const sidebarLeftRef = ref<InstanceType<typeof SidebarLeft>>();
 const sidebarRightRef = ref<InstanceType<typeof SidebarRight>>();
 const dockHostRef = ref<InstanceType<typeof DockHost>>();
-const archivePanelRef = ref<InstanceType<typeof ArchiveSidePanel>>();
-
-// 档案二级侧边栏（2026-08-15 任务 A）：当前视口 = 档案文件夹（folder kind === "archive"）时挂载
-const archiveViewportNode = computed<FolderNode | null>(() => {
-  const sel = content.sidebarSelected;
-  if (!sel.startsWith("folder:")) return null;
-  const n = findFolderNode(content.folders, sel.slice(7));
-  return n?.kind === "archive" ? n : null;
-});
 
 const maximized = ref(false);
 const appWindow = getCurrentWindow();
@@ -83,7 +72,6 @@ useSidebarAnim({
   leftEl: () => sidebarLeftRef.value?.$el as HTMLElement | undefined,
   rightEl: () => sidebarRightRef.value?.$el as HTMLElement | undefined,
   dockEl: () => dockHostRef.value?.$el as HTMLElement | undefined,
-  archiveEl: () => archivePanelRef.value?.$el as HTMLElement | undefined,
 });
 // 主窗口几何持久化（lib/windowState；预览子窗口不记录）
 useWindowStatePersistence({ enabled: !previewParam });
@@ -219,8 +207,7 @@ async function togglePin(): Promise<void> {
            恒在窗口右上角、不参与收展 -->
       <SidebarLeft ref="sidebarLeftRef" />
       <SplitBar v-if="!ui.leftCollapsed" side="left" />
-      <!-- 档案二级侧边栏（2026-08-15 任务 A，空壳）：仅档案视口挂载，宽 250 / C3 / 右边框 -->
-      <ArchiveSidePanel v-if="archiveViewportNode" ref="archivePanelRef" :node="archiveViewportNode" />
+      <!-- 档案二级侧边栏已迁入标签页视口（ContentArea 内，2026-08-15 修正：标签栏不被推挤） -->
       <DockHost ref="dockHostRef" />
       <SplitBar v-if="!ui.rightCollapsed" side="right" />
       <SidebarRight ref="sidebarRightRef" />

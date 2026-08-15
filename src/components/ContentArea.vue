@@ -8,6 +8,7 @@ import { computed, onBeforeUnmount, ref } from "vue";
 import type { DockviewPanelApi, IDockviewPanelProps } from "dockview-vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
+import ArchiveSidePanel from "./ArchiveSidePanel.vue";
 import SearchBar from "./SearchBar.vue";
 import ImportProgressBar from "./ImportProgressBar.vue";
 import PreviewTitleBar from "./PreviewTitleBar.vue";
@@ -15,7 +16,8 @@ import PreviewPanel from "./PreviewPanel.vue";
 import PreviewPlayBar from "./PreviewPlayBar.vue";
 import PreviewFrameStrip from "./PreviewFrameStrip.vue";
 import PreviewNotes from "./PreviewNotes.vue";
-import { useContentStore } from "../stores/content";
+import { findFolderNode } from "../lib/detailSections";
+import { useContentStore, type FolderNode } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
 
 // props 运行时声明（rolldown 环境 SFC 编译器无法解析 node_modules 类型，defineProps 泛型须字面量）。
@@ -40,6 +42,15 @@ onBeforeUnmount(() => disposeActive.dispose());
 // 当前视口资源（"全部"= 全部 Placement；文件夹 = 该文件夹直接 Placement，
 // 递归显示开关 ui.showSubfolders 打开时含全部后代文件夹，2026-08-10 接入）。
 const items = computed(() => content.placementsFor(viewKey.value));
+
+// 档案二级侧边栏（2026-08-15 迁入视口）：本标签页视口 = 档案文件夹时，渲染在视口内容区最左
+// （标签栏不被推挤；分屏 / 多标签各管各）
+const archiveNode = computed<FolderNode | null>(() => {
+  const k = viewKey.value;
+  if (!k.startsWith("folder:")) return null;
+  const n = findFolderNode(content.folders, k.slice(7));
+  return n?.kind === "archive" ? n : null;
+});
 </script>
 
 <template>
@@ -58,11 +69,17 @@ const items = computed(() => content.placementsFor(viewKey.value));
       </div>
     </template>
     <template v-else>
-      <ContentTitleBar />
-      <ImportProgressBar />
-      <section class="asset-section">
-        <AssetGrid :items="items" :view-key="viewKey" :panel-active="active" />
-      </section>
+      <!-- 视口主体行：档案视口时面板插最左（视口内部组成，标签栏不被推挤）；搜索栏通栏在其下 -->
+      <div class="viewport-body">
+        <ArchiveSidePanel v-if="archiveNode" :node="archiveNode" :panel-active="active" />
+        <div class="viewport-main">
+          <ContentTitleBar :view-key="viewKey" />
+          <ImportProgressBar />
+          <section class="asset-section">
+            <AssetGrid :items="items" :view-key="viewKey" :panel-active="active" />
+          </section>
+        </div>
+      </div>
       <footer class="search-wrap">
         <SearchBar />
       </footer>
@@ -80,6 +97,18 @@ const items = computed(() => content.placementsFor(viewKey.value));
   /* 三栏面板无圆角无边框、外层无 padding（figma-css 02_布局/42_中间面板，2026-08-10）：
      工具栏 / 搜索框自带 padding 12 16、列表容器 padding 16 16 0，各自承担 */
   box-sizing: border-box;
+}
+/* 视口主体行（2026-08-15 档案面板迁入）：面板 + 内容列横向排，行占满工具栏与搜索栏之间 */
+.viewport-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.viewport-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 /* 卡片列表（figma 42 列表 padding 16px 16px 0px）：上 16 / 左 16 / 下 0；
    右 0——滚动条紧贴右边框（2026-08-10 用户定：4px 间距让通栏分隔线视觉截断；

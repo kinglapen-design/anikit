@@ -31,6 +31,40 @@ export const ARCHIVE_PANEL_W = 250;
 /** 各侧栏实际显示宽度（px）：模板唯一绑定源，rAF 引擎逐帧写，禁其他写点（见文件头注释） */
 export const sidebarShowWidths = reactive({ left: 0, right: 0, archive: 0 });
 
+// —— 档案二级侧边栏收展动画（2026-08-15 迁入标签页视口：面板在视口内自驱动，不走上方引擎；
+// 多档案标签页共享宽度可接受）——
+let archiveAnim: { el: HTMLElement; from: number; to: number; start: number } | null = null;
+let archiveRaf = 0;
+
+function archiveAnimFrame(now: number): void {
+  const a = archiveAnim;
+  if (!a) return;
+  const t = Math.min(1, (now - a.start) / SIDEBAR_ANIM_MS);
+  const w = a.from + (a.to - a.from) * easeInOut(t);
+  sidebarShowWidths.archive = w; // 单一写点（同左右栏口径）
+  a.el.style.width = `${w}px`; // 直写兜底
+  if (t < 1) {
+    archiveRaf = requestAnimationFrame(archiveAnimFrame);
+  } else {
+    archiveAnim = null;
+    useUiStore().sidebarAnimating = false;
+  }
+}
+
+/** 档案面板收展：rAF 逐帧从当前宽到目标宽（参数与左右栏引擎一致；起点 = 当前视觉宽） */
+export function animateArchivePanel(el: HTMLElement, to: number): void {
+  const from = el.getBoundingClientRect().width;
+  if (from === to) {
+    sidebarShowWidths.archive = to;
+    el.style.width = `${to}px`;
+    return;
+  }
+  archiveAnim = { el, from, to, start: performance.now() };
+  useUiStore().sidebarAnimating = true;
+  cancelAnimationFrame(archiveRaf);
+  archiveRaf = requestAnimationFrame(archiveAnimFrame);
+}
+
 type SideKey = keyof typeof sidebarShowWidths;
 interface SideAnim {
   key: SideKey;
@@ -44,7 +78,6 @@ export function useSidebarAnim(opts: {
   leftEl: () => HTMLElement | undefined;
   rightEl: () => HTMLElement | undefined;
   dockEl: () => HTMLElement | undefined;
-  archiveEl?: () => HTMLElement | undefined;
 }): void {
   const ui = useUiStore();
   const tabs = useTabsStore();
@@ -55,7 +88,6 @@ export function useSidebarAnim(opts: {
   // 初始显示宽度（模板首帧即正确，不经过 0/全宽跳变）
   sidebarShowWidths.left = ui.leftCollapsed ? 0 : ui.leftWidth;
   sidebarShowWidths.right = ui.rightCollapsed ? 0 : ui.rightWidth;
-  sidebarShowWidths.archive = ui.archivePanelOpen ? ARCHIVE_PANEL_W : 0;
 
   function sidebarAnimFrame(now: number): void {
     let active = false;
@@ -104,11 +136,10 @@ export function useSidebarAnim(opts: {
     }
     // 侧栏收展：状态翻转后由 JS 逐帧驱动宽度（见文件头注释）
     watch(
-      [() => ui.leftCollapsed, () => ui.rightCollapsed, () => ui.archivePanelOpen],
-      ([l, r, a], [pl, pr, pa]) => {
+      [() => ui.leftCollapsed, () => ui.rightCollapsed],
+      ([l, r], [pl, pr]) => {
         if (l !== pl) startSidebarAnim("left", opts.leftEl(), l, ui.leftWidth);
         if (r !== pr) startSidebarAnim("right", opts.rightEl(), r, ui.rightWidth);
-        if (a !== pa && opts.archiveEl) startSidebarAnim("archive", opts.archiveEl(), !a, ARCHIVE_PANEL_W);
       },
     );
     // SplitBar 拖改全宽：非动画期间显示宽度即时跟随（Collapsed 时不跟随，保持 0）

@@ -18,11 +18,13 @@ import { findFolderNode } from "../lib/detailSections";
 const ui = useUiStore();
 const content = useContentStore();
 
-// 档案二级侧边栏切换钮（2026-08-15 任务 A）：仅档案视口显示，面包屑返回按钮左边
+// 本标签页视口（ContentArea 传入；档案切换钮按本视口档案读写，2026-08-15 迁入视口）
+const props = defineProps<{ viewKey: string }>();
+
+// 档案二级侧边栏切换钮（仅本视口 = 档案文件夹时显示，面包屑返回按钮左边）
 const archiveViewportNode = computed<FolderNode | null>(() => {
-  const sel = content.sidebarSelected;
-  if (!sel.startsWith("folder:")) return null;
-  const n = findFolderNode(content.folders, sel.slice(7));
+  if (!props.viewKey.startsWith("folder:")) return null;
+  const n = findFolderNode(content.folders, props.viewKey.slice(7));
   return n?.kind === "archive" ? n : null;
 });
 
@@ -47,15 +49,15 @@ function openViewMenu(e: MouseEvent): void {
 <template>
   <div class="panel-toolbar" data-tauri-drag-region>
     <div class="crumb-group">
-      <!-- 档案二级侧边栏切换（2026-08-15 任务 A：仅档案视口显示，面包屑返回左边；
+      <!-- 档案二级侧边栏切换（仅本视口为档案时显示，面包屑返回左边；per-folder 开关态，
            图标暂用 collapse-sidebar 同族，走查可换） -->
       <IconButton
         v-if="archiveViewportNode"
         name="collapse-sidebar"
         title="档案面板"
         class="archive-panel-toggle"
-        :active="ui.archivePanelOpen"
-        @click="ui.archivePanelOpen = !ui.archivePanelOpen"
+        :active="ui.archivePanelOpenFor(archiveViewportNode.id)"
+        @click="ui.toggleArchivePanel(archiveViewportNode.id)"
       />
       <!-- 后退 / 前进（figma 41：nav-history 图标，前进 rotate 180°；历史导航业务后接，先 disabled） -->
       <IconButton name="nav-history" title="后退" disabled />
