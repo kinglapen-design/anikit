@@ -206,6 +206,25 @@ fn asset_detail(lib: &Library, asset_id: &str) -> Result<AssetDetail, String> {
     }
     placements.push(link);
   }
+  // 回收站资产（无存活 Placement）：按 PRD 02-15 链接区块显示「回收站（原位置：区块 / 路径）」——
+  // recycle.json 记录删除前全部 Placement，取首条原位置合成兜底条目
+  //（folderId = null 标识伪条目，前端不做档案后缀判定；2026-08-16 用户拍板）
+  if placements.is_empty() {
+    if let Some(item) = lib.recycle.items.iter().find(|i| i.asset == asset_id) {
+      if let Some(p) = item.placements.first() {
+        if let Some(link) = placement_link(lib, p) {
+          let orig = format!("{} / {}", link.block_name, link.path.join(" / "));
+          placements.push(PlacementLink {
+            folder_id: None,
+            block_name: "回收站".to_string(),
+            path: vec![orig],
+            name: link.name,
+            origin: link.origin,
+          });
+        }
+      }
+    }
+  }
   Ok(AssetDetail {
     asset_id: meta.id.clone(),
     origin_name: meta.origin_name.clone(),
@@ -433,5 +452,33 @@ mod tests {
     for key in obj.keys() {
       assert!(!key.contains('_'), "出现 snake_case 键 {key}");
     }
+  }
+
+  /// 回收站资产：无存活 Placement 时链接区块兜底「回收站（原位置：区块 / 路径）」（PRD 02-15）
+  #[test]
+  fn asset_detail_recycle_fallback_entry() {
+    let mut h = make_lib();
+    h.lib.folders.blocks.push(Block { id: "B01".into(), name: "角色".into(), icon: None, order: 1 });
+    add_folder(&mut h.lib, "F-TOP", "顶级", None, Some("B01"), 0);
+    add_folder(&mut h.lib, "F-LEAF", "所在", Some("F-TOP"), None, 0);
+    add_asset(&mut h.lib, "AN-R");
+    // 无存活 Placement，recycle.json 记录删除前位置（F-LEAF 一条 + root 一条取首条）
+    h.lib.recycle.items.push(crate::core::models::RecycleItem {
+      asset: "AN-R".into(),
+      placements: vec![
+        Placement { asset: "AN-R".into(), folder: "F-LEAF".into(), name: "男人.fla".into(), order: 0, origin: true },
+        Placement { asset: "AN-R".into(), folder: "root".into(), name: "人物.fla".into(), order: 1, origin: false },
+      ],
+      deleted_at: "2026-08-16T00:00:00+08:00".into(),
+    });
+
+    let d = asset_detail(&h.lib, "AN-R").unwrap();
+    assert_eq!(d.placements.len(), 1, "兜底一条回收站条目");
+    let link = &d.placements[0];
+    assert_eq!(link.block_name, "回收站");
+    assert_eq!(link.path, vec!["角色 / 顶级 / 所在"], "原位置 = 区块 / 路径");
+    assert_eq!(link.folder_id, None, "伪条目不做档案后缀判定");
+    assert!(link.origin);
+    assert!(d.archives.is_empty(), "回收站资产不做归属档案反查");
   }
 }

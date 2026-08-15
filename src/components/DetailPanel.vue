@@ -65,11 +65,15 @@ watch(
   { immediate: true },
 );
 
-// 当前展示目标（素材 / 文件夹两选择域互斥，实际只会中一个）
+// 当前展示目标（素材 / 文件夹两选择域互斥，实际只会中一个）；
+// 回收站选中（2026-08-16 用户拍板）：Placement 不在 content.placements（folderId 恒 "recycle"），
+// 回退 recycleEntries 取缩略图/显示数据（get_asset_detail 按 assetId 不依赖 Placement）
 const target = computed<DetailTarget | null>(() => {
   const key = content.selectedAssetKey;
   if (key && detail.value) {
-    const p = content.placements.find((pl) => `${pl.assetId}|${pl.folderId}` === key);
+    const p =
+      content.placements.find((pl) => `${pl.assetId}|${pl.folderId}` === key) ??
+      content.recycleEntries.find((e) => `${e.assetId}|${e.folderId}` === key);
     if (p) return { kind: "file", placement: p, detail: detail.value };
   }
   const node = archiveNode.value;

@@ -65,7 +65,10 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       selection.selectAll();
       return;
     }
-    if (e.key === "Escape" && !document.querySelector(".app-menu, .zoom-mask")) {
+    // 让位判定读"Esc 按下时刻"快照（2026-08-16 用户拍板根治）：AppMenu capture 关菜单后
+    // DOM 同步移除，bubble 再查 .app-menu 已失效（误清选择实锤）——capture 早序监听先打标，
+    // 此处只读标记：本次 Esc 被菜单吃掉就不清选择；无菜单时维持原语义（清选择）
+    if (e.key === "Escape" && !escHadOverlay) {
       selection.clear();
     }
   }
@@ -128,13 +131,25 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     }
   }
 
+  // Esc 按下时刻的浮层快照（2026-08-16 根治"Esc 关菜单误清选择"）：
+  // capture 阶段早序记录（本监听随 App 挂载注册，恒早于任何菜单的 capture 关闭处理），
+  // bubble 的 onSelectionKeys 只读此标记，不再查实时 DOM（菜单关闭后 DOM 已同步移除，
+  // 实时查询必失效）。覆盖全部 AppMenu 系弹层（.app-menu）与悬停大图浮层（.zoom-mask）；
+  // AppModal 不吃 Esc（既定口径），不参与。
+  let escHadOverlay = false;
+  function onEscCapture(e: KeyboardEvent): void {
+    if (e.key === "Escape") escHadOverlay = !!document.querySelector(".app-menu, .zoom-mask");
+  }
+
   onMounted(() => {
+    window.addEventListener("keydown", onEscCapture, true);
     window.addEventListener("keydown", onPaste);
     window.addEventListener("keydown", onUndoRedo);
     window.addEventListener("keydown", onSelectionKeys);
     window.addEventListener("keydown", onOperationKeys);
   });
   onBeforeUnmount(() => {
+    window.removeEventListener("keydown", onEscCapture, true);
     window.removeEventListener("keydown", onPaste);
     window.removeEventListener("keydown", onUndoRedo);
     window.removeEventListener("keydown", onSelectionKeys);

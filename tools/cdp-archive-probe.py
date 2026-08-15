@@ -17,7 +17,9 @@
 # ⑦ 22 稿编辑数据区块面板：404 宽 / 7 行 / 首行禁上移末行禁下移（禁用色 --line-active）/
 #    眼睛切换 → 标题禁用色 + 详情面板区块显隐联动 / 排序箭头即时反映 / save_ui_settings 持久化 /
 #    行不可拖起（2026-08-15 定案拆除）+ 箭头交换动画（TransitionGroup se-swap-move 0.18s）/
-#    详情面板内拖拽标题排序落点 + 面板同步。
+#    详情面板内拖拽标题排序落点 + 面板同步；
+# ⑧ Esc 关菜单不清选择（2026-08-16 根治：右键菜单 / 22 稿面板两路径，再按 Esc 原语义清选择）；
+# ⑨ 回收站视口选中详情（pinned + 基础信息实数据 + 链接区块「回收站 / 原位置」兜底条目）。
 # 截图留档 tools/style-preview/：archive-sections / archive-card / archive-card-menu /
 # archive-convert-warning / archive-detail-file / archive-detail-archive / archive-section-edit /
 # archive-section-edit-drag。
@@ -61,6 +63,7 @@ window.__cbId = 0;
       A2: { id: "A2", originName: "场景-黄昏.webp", ext: "webp", size: 102400, width: 640, height: 360, duration: null, importedAt: "2026-08-14T09:00:00+08:00", modifiedAt: "2026-08-14T09:00:00+08:00", tags: [], links: [], note: "" },
       A3: { id: "A3", originName: "内层素材.webp", ext: "webp", size: 51200, width: 320, height: 240, duration: null, importedAt: "2026-08-13T08:00:00+08:00", modifiedAt: "2026-08-13T08:00:00+08:00", tags: [], links: [], note: "" },
       A4: { id: "A4", originName: "根文件.webp", ext: "webp", size: 4096, width: 100, height: 100, duration: null, importedAt: "2026-08-12T08:00:00+08:00", modifiedAt: "2026-08-12T08:00:00+08:00", tags: [], links: [], note: "" },
+      AREC: { id: "AREC", originName: "废弃稿.webp", ext: "webp", size: 51200, width: 320, height: 240, duration: null, importedAt: "2026-08-10T08:00:00+08:00", modifiedAt: "2026-08-10T08:00:00+08:00", tags: [], links: [], note: "" },
     },
     placements: [
       { assetId: "A1", folderId: "F-ARC", name: "主角-立绘.webp", w: 800, h: 600, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
@@ -68,6 +71,10 @@ window.__cbId = 0;
       { assetId: "A2", folderId: "F-ARC", name: "场景-黄昏.webp", w: 640, h: 360, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
       { assetId: "A3", folderId: "F-CONV-SUB", name: "内层素材.webp", w: 320, h: 240, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
       { assetId: "A4", folderId: "F-DIR", name: "根文件.webp", w: 100, h: 100, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
+    ],
+    // 回收站（2026-08-16）：AREC 已删除（无存活 Placement），recycle.json 记录删除前位置（F-ARC）
+    recycle: [
+      { asset: "AREC", placements: [{ asset: "AREC", folder: "F-ARC", name: "废弃稿.webp", order: 0, origin: true }], deletedAt: "2026-08-16T08:00:00+08:00" },
     ],
     archives: {
       "F-ARC": { folderId: "F-ARC", badge: { text: "设定", color: "#B38427" }, avatar: null, props: ["奇幻"], descriptions: [{ title: "来源", content: "官方设定集" }], links: ["https://archive.ref"], createdAt: "2026-08-15T09:00:00+08:00" },
@@ -120,6 +127,22 @@ window.__cbId = 0;
         if (f.kind === "archive" && !archives.some((a) => a.folderId === f.id)) archives.push({ folderId: f.id, name: f.name });
       }
     }
+    // 回收站资产兜底（2026-08-16 同后端）：无存活 Placement →「回收站（原位置：区块 / 路径）」
+    if (placements.length === 0) {
+      const item = DB.recycle.find((i) => i.asset === assetId);
+      const rp = item?.placements[0];
+      if (rp) {
+        const chain = [];
+        let cur = rp.folder;
+        while (cur) {
+          const f = byId(cur);
+          if (!f) break;
+          chain.unshift(f);
+          cur = f.parent;
+        }
+        placements.push({ folderId: null, blockName: "回收站", path: [`目录 / ${chain.map((f) => f.name).join(" / ")}`], name: rp.name, origin: rp.origin });
+      }
+    }
     return {
       assetId: meta.id, originName: meta.originName, ext: meta.ext, size: meta.size,
       width: meta.width, height: meta.height, duration: meta.duration,
@@ -139,7 +162,16 @@ window.__cbId = 0;
         list_placements: () => DB.placements,
         list_folder_tree: () => tree(),
         list_archives: () => Object.values(DB.archives),
-        list_recycle: [], list_recent_assets: [], list_inbox_snapshot: [],
+        list_recycle: () => DB.recycle.map((i) => {
+          const meta = DB.assets[i.asset];
+          return {
+            assetId: i.asset, folderId: "recycle", name: i.placements[0]?.name ?? meta.originName,
+            w: meta.width, h: meta.height, ext: meta.ext, thumbPath: STILL, thumbKind: "asset",
+            origin: false, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null,
+            deletedAt: i.deletedAt, placementCount: i.placements.length,
+          };
+        }),
+        list_recent_assets: [], list_inbox_snapshot: [],
         get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
         list_space_libraries: ["动画资产"],
         list_recent_libraries: [],
@@ -903,6 +935,80 @@ async def main():
             await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
             await asyncio.sleep(0.5)
 
+            # —— Esc 关菜单不清选择（2026-08-16 根治：capture 打标 / bubble 读标记）——
+            # 选中文件卡片 → 右键菜单 → Esc（菜单关、选择保留）→ 再 Esc（无菜单原语义清选择）
+            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('主角-立绘'))")
+            await asyncio.sleep(0.8)
+            await rclick("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('主角-立绘'))")
+            await asyncio.sleep(0.6)
+            assert await ev("!!document.querySelector('.app-menu')"), "右键菜单未打开"
+            await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await asyncio.sleep(0.5)
+            esc1 = await ev("""({
+              menu: !!document.querySelector('.app-menu'),
+              selected: [...document.querySelectorAll('.asset-card.selected')].length,
+              panel: !!document.querySelector('.detail-panel'),
+            })""")
+            check("Esc 关右键菜单不清选择（菜单关 + 选择保留）",
+                  esc1["menu"] is False and esc1["selected"] >= 1 and esc1["panel"] is True,
+                  json.dumps(esc1))
+            await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await asyncio.sleep(0.5)
+            esc2 = await ev("({ selected: [...document.querySelectorAll('.asset-card.selected')].length, panel: !!document.querySelector('.detail-panel') })")
+            check("Esc 再按清选择（无菜单维持原语义）",
+                  esc2["selected"] == 0 and esc2["panel"] is False,
+                  json.dumps(esc2))
+            # 22 稿编辑数据区块面板同路径
+            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('主角-立绘'))")
+            await asyncio.sleep(0.8)
+            await click("[...document.querySelectorAll('.sidebar-right .panel-toolbar .icon-btn')][1]")
+            await asyncio.sleep(0.6)
+            await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await asyncio.sleep(0.5)
+            esc3 = await ev("({ menu: !!document.querySelector('.app-menu'), selected: [...document.querySelectorAll('.asset-card.selected')].length, panel: !!document.querySelector('.detail-panel') })")
+            check("Esc 关 22 稿面板不清选择（菜单关 + 选择保留）",
+                  esc3["menu"] is False and esc3["selected"] >= 1 and esc3["panel"] is True,
+                  json.dumps(esc3))
+            await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await asyncio.sleep(0.5)
+
+            # —— 回收站视口选中详情（2026-08-16 用户拍板）——
+            await click("[...document.querySelectorAll('.tree-item')].find((t) => t.textContent.includes('回收站'))?.querySelector('.body')")
+            await asyncio.sleep(0.8)
+            # JS click（回收站卡片矮，中心点落在 .card-info 不选中区——Eagle 口径文字区不选中）
+            await ev("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('废弃稿'))?.click()")
+            await asyncio.sleep(1.0)
+            rec = await ev("""(() => {
+              const p = document.querySelector('.detail-panel');
+              if (!p) return null;
+              const pinned = p.querySelector('.section-pinned');
+              const info = p.querySelector('.section-info .info-card');
+              const ks = info ? [...info.querySelectorAll('.col:first-child .k')].map((s) => s.textContent) : [];
+              const vs = info ? [...info.querySelectorAll('.col.vals .v')].map((s) => [...s.children].map((c) => c.textContent).join(' ')) : [];
+              const pair = {};
+              ks.forEach((k, i) => (pair[k] = vs[i]));
+              const linkItem = p.querySelector('.section-links .link-item');
+              return {
+                thumb: !!pinned?.querySelector('.thumb img'),
+                name: pinned?.querySelector('.field input')?.value ?? null,
+                info: pair,
+                linkSegs: linkItem ? [...linkItem.querySelectorAll('.row1 .seg')].map((s) => s.textContent) : null,
+                linkRow2: linkItem?.querySelector('.row2')?.textContent.trim() ?? null,
+              };
+            })()""")
+            print("回收站详情:", json.dumps(rec, ensure_ascii=False))
+            check("回收站选中详情（pinned 缩略图 + 名称 + 基础信息实数据）",
+                  bool(rec and rec["thumb"] and rec["name"] == "废弃稿.webp"
+                       and rec["info"].get("尺寸") == "320 x 240" and rec["info"].get("文件大小") == "50.0 KB" and rec["info"].get("格式") == "WEBP"),
+                  json.dumps(rec, ensure_ascii=False))
+            check("回收站链接区块（回收站 / 原位置 区块·路径，PRD 02-15）",
+                  bool(rec and rec["linkSegs"] == ["回收站", "目录 / 素材 / 设定集"] and rec["linkRow2"] == "废弃稿.webp"),
+                  json.dumps(rec and {"segs": rec["linkSegs"], "row2": rec["linkRow2"]}, ensure_ascii=False))
+
             # 点空白 = 空面板（grid-viewport 中下部空白区，避开右侧滚动条轨）
             grid_rect = await ev("(() => { const g = document.querySelector('.grid-viewport'); if (!g) return null; const b = g.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.bottom - 40 }; })()")
             if grid_rect:
@@ -912,6 +1018,9 @@ async def main():
             check("⑥ 无选中 = 空面板", empty)
 
             # —— ⑤b 解散设定集（最后一个档案）→ 档案区无内容整块不渲染 ——
+            # 先回「素材」视口（回收站详情测试停在回收站视口）
+            await click("document.querySelector('.tree-item[data-folder-id=\"F-DIR\"] .body')")
+            await asyncio.sleep(0.8)
             await rclick("document.querySelector('.archive-card[data-folder-id=\"F-ARC\"]')")
             await click_menu("解散档案为文件夹")
             await asyncio.sleep(0.8)
@@ -921,7 +1030,7 @@ async def main():
             if fails:
                 print("FAIL:", "; ".join(fails))
                 return 3
-            print("PASS: 树档案形态 / 三区 + 档案卡片 / 04 稿菜单 + 新建档案先建后命名 / 25 稿两段式转换（取消+确认+直接转）/ 解散 + 档案区空不渲染 / 详情区块体系（pinned 缩略图独立置顶 + 注册表 7 区块 + 两段化链接 + 空态折叠零高度 + 通栏）+ 档案形态 + 空面板 / 22 稿面板 7 行布局联动持久化 + 行不可拖 + 箭头交换动画 + 面板内拖拽排序 全部通过")
+            print("PASS: 树档案形态 / 三区 + 档案卡片 / 04 稿菜单 + 新建档案先建后命名 / 25 稿两段式转换（取消+确认+直接转）/ 解散 + 档案区空不渲染 / 详情区块体系（pinned 缩略图独立置顶 + 注册表 7 区块 + 两段化链接 + 空态折叠零高度 + 通栏）+ 档案形态 + 空面板 / 22 稿面板 7 行布局联动持久化 + 行不可拖 + 箭头交换动画 + 面板内拖拽排序 / Esc 关菜单不清选择 + 回收站选中详情 全部通过")
             return 0
     finally:
         proc.terminate()
