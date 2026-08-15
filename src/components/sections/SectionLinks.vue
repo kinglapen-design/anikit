@@ -41,7 +41,12 @@ function segClass(p: PlacementLink, j: number): string {
           <span class="spacer" />
           <IconButton name="clear" small disabled title="移除链接" class="del" />
         </div>
-        <div class="row2">{{ p.name }}</div>
+        <!-- 行2（稿：名称 + 链接状态徽章，justify-between / padding 0 4 0 0 / gap 10）：
+             原始文件徽章 15px 品牌色，origin=true 才出；链接 Placement 不出 -->
+        <div class="row2">
+          <span class="file-name">{{ p.name }}</span>
+          <AppIcon v-if="p.origin" name="original-file-badge" :size="15" class="origin-badge" />
+        </div>
       </div>
     </div>
   </section>
@@ -111,14 +116,26 @@ function segClass(p: PlacementLink, j: number): string {
   flex: 1;
   min-width: var(--space-4);
 }
-/* 行2：文件显示名 12/17 标签色，单行省略 */
+/* 行2（稿：名称 + 链接状态徽章）：justify-between / padding 0 4 0 0 / gap 10；
+   文件显示名 12/17 标签色单行省略；原始文件徽章 15px（品牌色，SVG 自带） */
 .row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-right: var(--space-4);
+}
+.file-name {
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   color: var(--text-label);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+.origin-badge {
+  flex: none;
 }
 /* ×：常态不占位隐藏（宽度 0），悬停 item 展开 24px 露出（DetailNotes .del 同款机制）；
    选择器带 .link-item 提权，覆盖 IconButton.small 的固定 width 24 */

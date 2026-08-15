@@ -13,7 +13,8 @@
 #    框 contain/圆角 8/C2 + 徽标 7,7 / 自定义数据段 border-top / 颜色 bar 7 占位块 /
 #    输入框 36 高 C2 padding 贴稿 / chips 行 gap 6 chip 25 标签色 / 编辑描述钮 36 C5 /
 #    基础信息 §1 C4 双列 / 链接区块 §2 两行卡 × 0 宽 / 归属档案 §3 36 高 /
-#    空区块展开折叠零高度变化），副本/关系/音频/提示词空态标题照常；
+#    空区块展开折叠零高度变化 / 分隔线通栏（各块左右 x = 面板内容区）+ root padding 归零 +
+#    缩略图框宽 = 面板宽-32 + 无横向溢出 / 链接区块行2 原始文件徽章 origin=true 出），副本/关系/音频/提示词空态标题照常；
 #    选中档案卡片 → 档案形态（徽标/名称输入框/属性/描述/编辑描述/文件数）；点空白 = 空面板；
 # ⑦ 22 稿编辑数据区块面板：404 宽 / 8 行 / 首行禁上移末行禁下移（禁用色 --line-active）/
 #    眼睛切换 → 标题禁用色 + 详情面板区块显隐联动 / 排序箭头即时反映 / save_ui_settings 持久化 /
@@ -64,6 +65,7 @@ window.__cbId = 0;
     },
     placements: [
       { assetId: "A1", folderId: "F-ARC", name: "主角-立绘.webp", w: 800, h: 600, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
+      { assetId: "A1", folderId: "F-SUB", name: "主角-立绘.webp", w: 800, h: 600, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: false, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
       { assetId: "A2", folderId: "F-ARC", name: "场景-黄昏.webp", w: 640, h: 360, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
       { assetId: "A3", folderId: "F-CONV-SUB", name: "内层素材.webp", w: 320, h: 240, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
       { assetId: "A4", folderId: "F-DIR", name: "根文件.webp", w: 100, h: 100, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
@@ -538,6 +540,9 @@ async def main():
               const linkItem = p.querySelector('.section-links .link-item');
               const archItem = p.querySelector('.section-archive .archive-item');
               const editDesc = custom?.querySelector('.edit-desc');
+              const body = document.querySelector('.detail-body');
+              const bbr = body.getBoundingClientRect();
+              const bx = { l: Math.round(bbr.left), r: Math.round(bbr.right) };
               return {
                 titles: blocks.map((b) => b.querySelector('.section-header .title')?.textContent ?? '(pinned)'),
                 pinned: blocks[0]?.classList.contains('pinned') ?? null,
@@ -582,10 +587,22 @@ async def main():
                 link: linkItem ? {
                   rows: linkItem.children.length,
                   segs: [...linkItem.querySelectorAll('.row1 .seg')].map((s) => s.textContent),
-                  row2: linkItem.querySelector('.row2')?.textContent,
+                  row2: linkItem.querySelector('.row2')?.textContent.trim(),
                   delW: Math.round(linkItem.querySelector('.del').getBoundingClientRect().width),
                 } : null,
                 emptyAdds: [...p.querySelectorAll('.section-empty')].map((s) => ({ title: s.querySelector('.section-header .title')?.textContent, disabled: !!s.querySelector('.icon-btn:disabled') })),
+                // 通栏 / padding 硬断言（2026-08-15 走查：线两端到边 + root padding 归零）
+                bodyBox: { ...bx, sw: body.scrollWidth, cw: body.clientWidth },
+                blockBoxes: blocks.map((b) => { const r = b.getBoundingClientRect(); return Math.round(r.left) + ',' + Math.round(r.right); }),
+                tgBox: (() => { const r = thumbGroup.getBoundingClientRect(); return { l: Math.round(r.left), r: Math.round(r.right) }; })(),
+                cbBox: (() => { const r = customBody.getBoundingClientRect(); return { l: Math.round(r.left), r: Math.round(r.right) }; })(),
+                thumbW: Math.round(thumbEl.getBoundingClientRect().width),
+                rootPad: getComputedStyle(p.querySelector('.section-custom')).padding,
+                linkBadges: [...p.querySelectorAll('.section-links .link-item')].map((it) => {
+                  const badge = it.querySelector('.row2 .origin-badge');
+                  const r2 = it.querySelector('.row2');
+                  return { badge: !!badge, size: badge ? Math.round(badge.getBoundingClientRect().width) : 0, justify: getComputedStyle(r2).justifyContent, padR: getComputedStyle(r2).paddingRight };
+                }),
               };
             })()""")
             print("详情面板(文件):", json.dumps(detail, ensure_ascii=False))
@@ -641,13 +658,33 @@ async def main():
             check("⑥-8 链接区块两行卡（路径三段 目录/素材/设定集 + 行2 显示名 + × 初始 0 宽）",
                   lk.get("rows") == 2 and lk.get("segs") == ["目录", "素材", "设定集"] and lk.get("row2") == "主角-立绘.webp" and lk.get("delW") == 0,
                   json.dumps(lk, ensure_ascii=False))
+            lb = (detail or {}).get("linkBadges") or []
+            check("⑥-8b 行2 徽章（origin=true 出 15px / 链接不出）+ justify-between + 右 padding 4",
+                  len(lb) == 2 and lb[0]["badge"] and lb[0]["size"] == 15 and not lb[1]["badge"]
+                  and all(x["justify"] == "space-between" and x["padR"] == "4px" for x in lb),
+                  json.dumps(lb))
+            bx = (detail or {}).get("bodyBox") or {}
+            want = f"{bx.get('l')},{bx.get('r')}"
+            check("⑥-A 分隔线通栏（各块 + 缩略图组 + 自定义数据段左右 x = 面板内容区）",
+                  bool(detail and all(b == want for b in detail["blockBoxes"])
+                       and detail["tgBox"] == {"l": bx["l"], "r": bx["r"]} and detail["cbBox"] == {"l": bx["l"], "r": bx["r"]}),
+                  json.dumps({"body": bx, "blocks": detail and detail["blockBoxes"], "tg": detail and detail["tgBox"], "cb": detail and detail["cbBox"]}))
+            check("⑥-A section-custom root padding 归零（稿为准，不残留 pinned 旧口径）",
+                  bool(detail and detail["rootPad"] == "0px"), str(detail and detail["rootPad"]))
+            check("⑥-A 缩略图框宽 = 面板内容区宽 - 32（组 padding 16×2）",
+                  bool(detail and bx and detail["thumbW"] == bx["r"] - bx["l"] - 32),
+                  json.dumps({"thumb": detail and detail["thumbW"], "body": bx}))
+            check("⑥-A 详情内容区无横向溢出（scrollWidth ≤ clientWidth）",
+                  bool(bx and bx.get("sw") is not None and bx["sw"] <= bx["cw"]),
+                  json.dumps(bx))
             check("⑥ 空态区块标题照常 + 禁用添加钮（副本/关系/音频/提示词）",
                   bool(detail and [e["title"] for e in detail["emptyAdds"]] == ["副本", "关系", "音频", "提示词"] and all(e["disabled"] for e in detail["emptyAdds"])),
                   json.dumps(detail and detail["emptyAdds"], ensure_ascii=False))
             await shot("archive-detail-file")
 
             # —— ⑥-9 空区块展开/折叠零高度变化（根文件.webp 无归属档案）——
-            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('根文件'))")
+            # JS click（卡片可能滚出视口，鼠标坐标法不可靠；选择语义同单击）
+            await ev("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('根文件'))?.click()")
             await asyncio.sleep(1.0)
             h_open = await ev("""(() => {
               const sec = document.querySelector('.detail-panel .section-archive');

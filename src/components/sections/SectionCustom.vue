@@ -122,9 +122,11 @@ const firstLink = computed(() => file.value?.detail.links[0] ?? "");
 </template>
 
 <style scoped>
-/* root：detail-block 公共规则与稿冲突处以稿为准——padding/gap 归零，两段组自带间距
-   （叠类提权压过 DetailPanel 的 .detail-panel .detail-block.pinned 规则） */
-.section-custom.detail-block.pinned {
+/* root：detail-block 公共规则与稿冲突处以稿为准——padding/gap 归零，两段组自带间距。
+   叠类提权（2026-08-15 实测：单组 (0,3,0) 与 DetailPanel 的 .detail-panel .detail-block.pinned
+   平级拼加载序会输，root 残留 pinned padding 8 16 12 → 缩略图组内缩 16、custom-body
+   border-top 两端不到边；叠成双类 (0,4,0) 稳赢，与加载序无关） */
+.section-custom.section-custom.detail-block.pinned {
   padding: 0;
   gap: 0;
 }
