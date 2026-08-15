@@ -238,11 +238,14 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
   background: var(--c3);
   border-right: 1px solid var(--line-hover);
 }
-/* 资源库切换按钮（figma 632）：54 / padding 12 16 / 下边框 暗-悬停 */
+/* 资源库切换按钮（figma 632；2026-08-15 顶行三栏对齐定案）：54 含边框 / padding 12 16 /
+   下边框 暗-悬停——原无 height，border 外加成 55（与档案/详情工具栏 54 含边框错 1px） */
 .library-switch {
   display: flex;
   align-items: center;
   gap: var(--space-8);
+  height: 54px;
+  box-sizing: border-box;
   padding: var(--space-12) var(--space-16);
   flex: none;
   border-bottom: 1px solid var(--line-hover);

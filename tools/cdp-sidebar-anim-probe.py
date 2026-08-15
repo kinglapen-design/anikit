@@ -331,7 +331,34 @@ async def main():
             await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
             await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
             await asyncio.sleep(0.5)
-            # —— 侧栏内容 = 档案详情区块栈（pinned + 7 区块，与详情面板同一套）——
+            # —— 顶行三工具栏对齐（2026-08-15 用户定案：高 54 / padding 12 16 / 按钮 30×30 同 y 中线）——
+            bars = await ev("""(() => {
+              const grab = (el) => {
+                if (!el) return null;
+                const cs = getComputedStyle(el);
+                const r = el.getBoundingClientRect();
+                const btns = [...el.querySelectorAll('.icon-btn')].map((b) => {
+                  const br = b.getBoundingClientRect();
+                  return { w: Math.round(br.width), h: Math.round(br.height), cy: Math.round((br.top + br.height / 2) * 10) / 10 };
+                });
+                return { h: Math.round(r.height * 10) / 10, padding: cs.padding, btns };
+              };
+              return {
+                libSwitch: grab(document.querySelector('.sidebar-left .library-switch')),
+                archiveTools: grab(document.querySelector('.archive-side .as-tools')),
+                rightToolbar: grab(document.querySelector('.sidebar-right .panel-toolbar')),
+                midToolbar: grab(document.querySelector('.panel-toolbar')),
+              };
+            })()""")
+            print("顶行工具栏:", json.dumps(bars, ensure_ascii=False))
+            def bar_ok(b):
+                if not b or b["h"] != 54 or b["padding"] != "12px 16px":
+                    return False
+                return all(x["w"] == 30 and x["h"] == 30 for x in b["btns"]) and len(b["btns"]) > 0
+            cys = [b["btns"][0]["cy"] for b in bars.values() if b and b["btns"]]
+            check("顶行三工具栏 + 中栏：高 54 / padding 12 16 / 按钮 30×30 / 按钮中心 y 互差 ≤1px",
+                  all(bar_ok(b) for b in bars.values()) and cys and max(cys) - min(cys) <= 1,
+                  json.dumps(bars, ensure_ascii=False))
             # 收展逐帧单调（面板内收起钮 → 中栏展开钮再展开；任务 3：收起时中栏才出展开钮且无 active 底色）
             seq = await record_toggle("document.querySelector('.archive-side')", "document.querySelector('.archive-side .as-collapse')")
             check("A 档案面板收起（面板内收起钮）：单调递减无弹回",
