@@ -11,6 +11,13 @@
 #      = [三乙, 二甲, 一丙]（不被名称排序盖回）；③ toast "已调整"类成功提示
 #   S4 对照基线（custom 态）：拖"一丙"到"三乙"前 → reorder_folders 旧路径参数
 #      folderIds=["f1"]、beforeFolderId="f3"，证明正常路径未破坏
+#   S5 排序依据二级菜单首项"自定义"（2026-08-14 用户定）：断言首项文本，点它 →
+#      treeSort 回 custom、显示回存储序
+#   S6 名称排序下新建文件夹（createAndName 先物化再建）：A→Z 排序态右键"二甲"→ 新建文件夹。
+#      断言：① 先 reorder_folders（物化全层 ["f2","f3","f1"]，静默无 toast）后 create_folder
+#      （parentId null、afterFolderId="f2"）；② refresh 后显示序 = [二甲, 新建文件夹, 三乙, 一丙]
+#      （落点 = 选中项下一行，custom 不再盖回）；③ 单选新文件夹（selected+domain 合计 1 且是
+#      新项——用户实机双高亮问题回归）；④ 新项命名输入态（.rename-input 可见，默认名）
 # 命名注记：FolderTree 排序用 localeCompare(zh) = 拼音序，"甲乙丙" 拼音序 丙<甲<乙 与存储序
 # 相同无法区分排序生效与否，故用"一丙/二甲/三乙"前缀（拼音 二<三<一）让排序真实改变显示序。
 # 用法：先起 pnpm dev（5373；探针检测到未监听会自起并在结束时杀掉），再
@@ -31,14 +38,18 @@ EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 PORT = 9355
 URL = "http://localhost:5373"
 SHOT = "tools/style-preview/tree-sort-drag.png"
+SHOT2 = "tools/style-preview/tree-sort-create.png"
 SLEEP = 0.3
 
 # 桩：单区块「目录」三顶级文件夹，存储序 f1一丙 / f2二甲 / f3三乙（zh 拼音序 = 二<三<一，
 # 与存储序不同）。reorder_folders 真实模拟重排（refresh 会重拉 list_folder_tree）：
 # folderIds 覆盖全层 → 直接作顶层新序（物化路径）；否则锚点语义 = 移到 beforeFolderId 前，
-# null = 末尾。全部写操作留痕 __calls 供断言。
+# null = 末尾。create_folder 真实建档：新节点 f9 插到 afterFolderId 后（null = 顶层末尾），
+# 返回 Folder 结构 {id, name, parent, order}（前端只用 id）。写操作留痕 __calls + __opLog
+# （调用先后序断言用：S6 物化 reorder 必须先于 create_folder）。
 STUB = r"""
-window.__calls = { reorder_folders: [], move_folders: [] };
+window.__calls = { reorder_folders: [], move_folders: [], create_folder: [] };
+window.__opLog = [];
 const TREE = {
   blocks: [{ id: "dir", name: "目录", icon: null }],
   nodes: [
@@ -53,7 +64,9 @@ window.__TAURI_INTERNALS__ = {
     const R = {
       get_current_library: { name: "测试库", path: "E:/test-lib", assetCount: 0, folderCount: 3 },
       get_ui_settings: {},
-      list_folder_tree: TREE,
+      // 深拷贝返回：真实后端 invoke 每次反序列化出新对象；原地改 TREE 直接返回同引用会让
+      // content.folders 同引用赋值不触发响应式 → blockSections getter 缓存旧快照（S6 新文件夹不渲染）
+      list_folder_tree: JSON.parse(JSON.stringify(TREE)),
       list_placements: [],
       list_recycle: [],
       list_recent_assets: [],
@@ -61,11 +74,14 @@ window.__TAURI_INTERNALS__ = {
       list_inbox_snapshot: [],
       detect_doc_apps: [],
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
+      undo: null,
+      redo: null,
     };
     if (cmd === "reorder_folders") {
       window.__calls.reorder_folders.push({
         folderIds: args.folderIds, parentId: args.parentId, beforeFolderId: args.beforeFolderId,
       });
+      window.__opLog.push("reorder_folders");
       if (args.parentId === null || args.parentId === "root") {
         const allIds = TREE.nodes.map((n) => n.id);
         const coversAll = args.folderIds.length === allIds.length && allIds.every((id) => args.folderIds.includes(id));
@@ -86,6 +102,27 @@ window.__TAURI_INTERNALS__ = {
     if (cmd === "move_folders") {
       window.__calls.move_folders.push(JSON.parse(JSON.stringify(args)));
       return Promise.resolve(1);
+    }
+    if (cmd === "create_folder") {
+      window.__calls.create_folder.push({
+        parentId: args.parentId, name: args.name, afterFolderId: args.afterFolderId, blockId: args.blockId,
+      });
+      window.__opLog.push("create_folder");
+      const node = { id: "f9", name: args.name, count: 0, children: [] };
+      if (args.blockId) node.block = args.blockId;
+      if (args.parentId === null || args.parentId === "root") {
+        const at = args.afterFolderId ? TREE.nodes.findIndex((n) => n.id === args.afterFolderId) : -1;
+        if (at < 0) TREE.nodes.push(node);
+        else TREE.nodes.splice(at + 1, 0, node);
+      } else {
+        const parent = TREE.nodes.find((n) => n.id === args.parentId);
+        if (parent) {
+          const at = args.afterFolderId ? parent.children.findIndex((n) => n.id === args.afterFolderId) : -1;
+          if (at < 0) parent.children.push(node);
+          else parent.children.splice(at + 1, 0, node);
+        }
+      }
+      return Promise.resolve({ id: "f9", name: args.name, parent: args.parentId ?? null, order: 0 });
     }
     return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
   },
@@ -338,6 +375,117 @@ async def main():
             ls = await labels()
             print("  落点刷新后显示序:", ls)
             check("S4 显示序 = [一丙, 三乙, 二甲]", ls == ["一丙", "三乙", "二甲"], str(ls))
+
+            # ── 共用：右键开菜单 / hover 排序依据 / 点菜单项 / 关菜单（S5/S6 复用）──
+            async def right_click(fid):
+                c = await item_rect(fid)
+                await mouse("mousePressed", c["x"], c["y"], 2, button="right")
+                await mouse("mouseReleased", c["x"], c["y"], 0, button="right")
+                await asyncio.sleep(0.6)
+
+            async def hover_sort_by():
+                sb = await menu_item_center("排序依据")
+                if not sb:
+                    return False
+                await mouse("mouseMoved", sb["x"], sb["y"], 0, button="none")
+                await asyncio.sleep(0.5)  # flyout hover 展开
+                return True
+
+            async def click_menu(text):
+                it = await menu_item_center(text)
+                if not it:
+                    return False
+                await mouse("mousePressed", it["x"], it["y"], 1)
+                await mouse("mouseReleased", it["x"], it["y"], 0)
+                await asyncio.sleep(0.5)
+                return True
+
+            async def close_menu():
+                await key("rawKeyDown", "Escape", "Escape", 27)
+                await key("keyUp", "Escape", "Escape", 27)
+                await asyncio.sleep(0.4)
+                if await ev("!!document.querySelector('.app-menu')"):
+                    await mouse("mousePressed", 900, 700, 1)
+                    await mouse("mouseReleased", 900, 700, 0)
+                    await asyncio.sleep(0.4)
+                return await ev("!document.querySelector('.app-menu')")
+
+            # 命名中新项无 data-folder-id 且 label 换成 .rename-input（FolderTree 命名态口径），
+            # S6 显示序断言用宽松版：label 文本 ?? 输入框值
+            async def labels_all():
+                return await ev("[...document.querySelectorAll('.block-tree[data-block-id=\"dir\"] .tree-item')].map((el) => el.querySelector('.label')?.textContent ?? el.querySelector('.rename-input')?.value ?? null)")
+
+            # ── S5：排序依据二级菜单首项「自定义」──
+            print("S5 排序依据 flyout 首项「自定义」→ 切回存储序")
+            await right_click("f1")
+            check("S5 右键菜单出现", bool(await ev("!!document.querySelector('.app-menu')")))
+            if not await hover_sort_by():
+                check("S5 hover「排序依据」开 flyout", False)
+            else:
+                fl = await ev("[...document.querySelectorAll('.flyout-root .menu-item .label')].map((l) => l.textContent)")
+                print("  flyout 项:", fl)
+                check("S5 flyout 首项 = 自定义", bool(fl) and fl[0] == "自定义", str(fl))
+                # 先切 A→Z 进入名称排序显示（否则「自定义」无可观测量）
+                if not await click_menu("当前层级 - 标题 A → Z"):
+                    check("S5 点「当前层级 - 标题 A → Z」", False)
+                ls = await labels()
+                check("S5 切 A→Z 后显示 [二甲, 三乙, 一丙]", ls == ["二甲", "三乙", "一丙"], str(ls))
+                # keepOpen 菜单未关：再 hover 开 flyout 点「自定义」
+                await hover_sort_by()
+                if not await click_menu("自定义"):
+                    check("S5 点「自定义」", False)
+                ls = await labels()
+                print("  切回自定义后显示序:", ls)
+                check("S5 「自定义」切回存储序 [一丙, 三乙, 二甲]", ls == ["一丙", "三乙", "二甲"], str(ls))
+            check("S5 菜单已关闭", bool(await close_menu()))
+
+            # ── S6：名称排序下新建文件夹（createAndName 先物化再建）──
+            print("S6 A→Z 排序态右键 f2(二甲) → 新建文件夹")
+            # 前置：切 A→Z（显示 [二甲, 三乙, 一丙]）
+            await right_click("f2")
+            await hover_sort_by()
+            await click_menu("当前层级 - 标题 A → Z")
+            ls = await labels()
+            check("S6 前置 A→Z 显示 [二甲, 三乙, 一丙]", ls == ["二甲", "三乙", "一丙"], str(ls))
+            await close_menu()
+            # 右键"二甲"→ 新建文件夹（一次性任务类：执行后菜单自关）
+            ops_before = await ev("window.__opLog.length")
+            await right_click("f2")
+            if not await click_menu("新建文件夹"):
+                check("S6 菜单项「新建文件夹」可点", False)
+            await asyncio.sleep(1.2)  # 物化 → create → refresh + 命名态
+            ops = (await ev("window.__opLog") or [])[ops_before:]
+            rc = await ev("window.__calls.reorder_folders.slice(-1)[0] ?? null")
+            cf = await ev("window.__calls.create_folder.slice(-1)[0] ?? null")
+            print("  opLog 新增:", ops, " reorder:", json.dumps(rc, ensure_ascii=False), " create:", json.dumps(cf, ensure_ascii=False))
+            check("S6 先 reorder_folders 后 create_folder", ops == ["reorder_folders", "create_folder"], str(ops))
+            check(
+                "S6 物化 reorder_folders([f2,f3,f1], null, null)",
+                bool(rc) and rc["folderIds"] == ["f2", "f3", "f1"] and rc["parentId"] is None and rc["beforeFolderId"] is None,
+                json.dumps(rc, ensure_ascii=False),
+            )
+            check(
+                "S6 create_folder(parentId=null, afterFolderId=\"f2\")",
+                bool(cf) and cf["parentId"] is None and cf["afterFolderId"] == "f2",
+                json.dumps(cf, ensure_ascii=False),
+            )
+            ls = await labels_all()
+            print("  新建后显示序:", ls)
+            check("S6 显示序 = [二甲, 新建文件夹, 三乙, 一丙]（custom 不再盖回）", ls == ["二甲", "新建文件夹", "三乙", "一丙"], str(ls))
+            sel = await ev("""(() => {
+              const sel = [...document.querySelectorAll('.block-tree .tree-item.selected, .block-tree .tree-item.domain-selected')];
+              return { total: sel.length, naming: sel.length === 1 && !!sel[0].querySelector('.rename-input'), cls: sel.map((el) => el.className) };
+            })()""")
+            print("  选中态:", json.dumps(sel, ensure_ascii=False))
+            check("S6 单选新文件夹（selected+domain 合计 1 且为命名中新项）", bool(sel) and sel["total"] == 1 and sel["naming"], json.dumps(sel, ensure_ascii=False))
+            inp = await ev("(() => { const i = document.querySelector('.block-tree .tree-item.naming .rename-input'); return i ? { value: i.value, visible: i.getBoundingClientRect().width > 0 } : null; })()")
+            print("  命名输入:", inp)
+            check("S6 新项命名输入态（.rename-input 可见，默认名）", bool(inp) and inp["visible"] and inp["value"] == "新建文件夹", str(inp))
+
+            shot = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
+            with open(SHOT2, "wb") as f:
+                f.write(base64.b64decode(shot["result"]["data"]))
+            print("截图已存:", SHOT2)
 
             print()
             if fails:

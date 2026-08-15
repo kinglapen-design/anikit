@@ -3,8 +3,10 @@
 // 2026-08-14 区块子系统：文件夹落区块标题（dropFoldersIntoBlock）。
 // 均不读拖拽会话（入参在 pointermove 算出时捕获，与 dragOperation 的 drop 语义一致）。
 import * as ops from "./placementOps";
+import { invoke } from "@tauri-apps/api/core";
 import { useContentStore, DEFAULT_BLOCK_ID, type FolderNode } from "../stores/content";
 import { useUiStore } from "../stores/ui";
+import { useUndoStore } from "../stores/undo";
 
 // 树查找辅助（文件夹拖拽排序用：同级 parent / 下一兄弟）
 export function findParentAndNext(
@@ -55,6 +57,40 @@ export async function dropFoldersInto(folderIds: string[], targetId: string): Pr
   await ops.moveFolders(ids, targetId);
 }
 
+// 该层是否处于名称排序显示（显示序 ≠ 存储序）：all* = 全部层级；level* = 仅锚定层级（null = 顶层）
+export function levelDisplaySorted(parentId: string | null): boolean {
+  const ui = useUiStore();
+  return ui.treeSort !== "custom" && (ui.treeSort.startsWith("all") || parentId === ui.treeSortAnchor);
+}
+
+// 该层可见兄弟 id（DOM 序）：顶级按区块收窄（不同区块的顶级文件夹 parent 同为 null，必须分区块）
+export function visibleLevelFolderIds(parentId: string | null, blockId: string | null): string[] {
+  const content = useContentStore();
+  const scope =
+    parentId === null
+      ? document.querySelector(`.block-tree[data-block-id="${blockId ?? DEFAULT_BLOCK_ID}"]`)
+      : null;
+  return visibleTreeFolderIds(scope).filter((id) => {
+    const h = findParentAndNext(content.folders, id);
+    if (h?.parentId !== parentId) return false;
+    return parentId !== null || topBlockOf(content, id) === (blockId ?? DEFAULT_BLOCK_ID);
+  });
+}
+
+// 名称排序显示下手动结构操作的前置（2026-08-14 用户定：排序依据加"自定义"，拖拽 / 新建自动切回）：
+// 该层可见顺序物化为存储序 + 切回"自定义"——否则 refresh 后名称排序盖回，操作看起来没执行。
+// 静默（不弹"已调整文件夹顺序"toast——顺序变化是主操作的附带，toast 归主操作；后端 undo 快照仍在）
+export async function materializeLevelOrder(parentId: string | null, blockId: string | null): Promise<void> {
+  const ids = visibleLevelFolderIds(parentId, blockId);
+  if (ids.length === 0) return;
+  await invoke("reorder_folders", { folderIds: ids, parentId, beforeFolderId: null }); // 全层原序重写 = 物化
+  const ui = useUiStore();
+  ui.treeSort = "custom";
+  ui.treeSortAnchor = null;
+  await useContentStore().refresh();
+  void useUndoStore().refreshState();
+}
+
 // 文件夹落区块标题（2026-08-14 区块子系统）：移入该区块根级末尾——
 // targetParent = null + targetBlock = 区块 id（"dir" = 移回「目录」）。
 // 区块标题互拖排序不在此——LibraryView 本地让位式拖拽直调 blockOps.reorderBlocks
@@ -91,21 +127,15 @@ export async function dropFolderBeside(
     // 名称排序显示下拖拽（2026-08-14 用户实机"显示排序成功但实际没变"）：该层显示序 ≠ 存储序时，
     // 先把可见顺序物化为自定义顺序（全层按落点后序列整体重写）并切回"自定义"排序——
     // 否则 refresh 后名称排序盖回去，拖拽等于没执行
-    const ui = useUiStore();
-    const levelSorted =
-      ui.treeSort !== "custom" && (ui.treeSort.startsWith("all") || hit.parentId === ui.treeSortAnchor);
-    if (levelSorted) {
-      const levelIds = scopeIds.filter((id) => {
-        const h = findParentAndNext(content.folders, id);
-        if (h?.parentId !== hit.parentId) return false;
-        return hit.parentId !== null || topBlockOf(content, id) === targetBlock;
-      });
+    if (levelDisplaySorted(hit.parentId)) {
+      const levelIds = visibleLevelFolderIds(hit.parentId, targetBlock);
       const rest = levelIds.filter((id) => !ordered.includes(id));
       const at = rest.indexOf(targetId); // 目标恒不在移动组内（引擎已拦拖到自身组）
       if (at >= 0) {
         const insert = zone === "before" ? at : at + 1;
         const seq = [...rest.slice(0, insert), ...ordered, ...rest.slice(insert)];
         await ops.reorderFolders(seq, hit.parentId, null); // 全层序列整体重写（锚点 null = 末尾）
+        const ui = useUiStore();
         ui.treeSort = "custom";
         ui.treeSortAnchor = null;
         return;

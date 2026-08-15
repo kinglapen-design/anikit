@@ -105,6 +105,16 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
         icon: "sort-by",
         submenuWidth: 184,
         submenu: [
+          {
+            // 自定义（2026-08-14 用户定）：切回存储序（folders.json order）——名称排序下
+            // 拖拽 / 新建等手动操作会自动物化并切回此项；菜单提供随时手动切回的入口
+            label: "自定义",
+            keepOpen: true,
+            action: () => {
+              ui.treeSort = "custom";
+              ui.treeSortAnchor = null;
+            },
+          },
           sortItem("当前层级 - 标题 A → Z", "levelAsc"),
           sortItem("当前层级 - 标题 Z → A", "levelDesc"),
           sortItem("全部 - 标题 A → Z", "allAsc"),

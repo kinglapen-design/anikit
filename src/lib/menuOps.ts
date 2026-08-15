@@ -4,6 +4,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useContentStore, DEFAULT_BLOCK_ID, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
+import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
 import {
   createFolder,
@@ -16,6 +17,7 @@ import {
   getAssetOriginPath,
   revealInExplorer,
 } from "./placementOps";
+import { levelDisplaySorted, materializeLevelOrder } from "./dragFolderOps";
 
 // —— 导入系统对话框（1.3：新增菜单三入口共用——侧栏新增按钮 / 空白右键 / Ctrl+N）——
 // PRD 05-01 导入位置：导入文件 → 当前视口目录；导入文件夹 → 根目录
@@ -75,14 +77,30 @@ export function topLevelBlockId(nodes: FolderNode[], id: string): string | null 
 }
 
 // 统一入口：直接以默认名建库 → 成功返回的新 id 进命名态（FolderTree 按 id 定位 naming 节点）。
-// blockId（2026-08-14 区块子系统）：顶级新建（parentId null）时落入的区块；非顶级新建无效
+// blockId（2026-08-14 区块子系统）：顶级新建（parentId null）时落入的区块；非顶级新建无效。
+// 建后清理（2026-08-14 用户定）：其他选中一律清掉单选新文件夹 + 跳转其视图——
+// 否则旧选中域与新项双高亮并存，一眼无法命中新建项
 export async function createAndName(
   parentId: string | null,
   afterFolderId: string | null,
   blockId: string | null = null,
 ): Promise<void> {
+  // 名称排序显示下新建（2026-08-14 用户定：排序依据加"自定义"项，手动操作自动切回并物化可见序）——
+  // 先物化该层再建，新文件夹才落在"选中项下一行"（否则被名称排序盖回，落点看起来乱跑）
+  if (levelDisplaySorted(parentId)) {
+    try {
+      await materializeLevelOrder(parentId, blockId);
+    } catch (e) {
+      useToastStore().notify({ message: String(e), icon: "fail" });
+      return;
+    }
+  }
   const id = await createFolder(parentId, uniqueFolderName(parentId, blockId), afterFolderId, blockId);
-  if (id) useSelectionStore().namingFolderId = id;
+  if (!id) return;
+  const selection = useSelectionStore();
+  selection.clickFolder(id); // 单选新文件夹（clickFolder 内已互斥清素材/收件箱域）
+  useTabsStore().openView(`folder:${id}`);
+  selection.namingFolderId = id;
 }
 
 // —— 剪贴板写入（复制链接 / 路径 / base64 / 名称）——
