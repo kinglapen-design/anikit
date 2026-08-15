@@ -18,7 +18,7 @@ pub enum ConvertOutcome {
 }
 
 /// 新建档案：复用新建文件夹全链路（命名校验 / 插入定位 / 区块继承，operations::create_folder
-/// 内部已含档案父级护栏），落盘后补 kind 标记
+/// 内部已含档案父级护栏），落盘后补 kind 标记 + 建 archives.json 记录（created_at = 当前时间）
 pub fn create_archive(
   lib: &mut Library,
   parent: Option<&str>,
@@ -28,9 +28,22 @@ pub fn create_archive(
 ) -> Result<Folder, String> {
   let folder = operations::create_folder(lib, parent, name, after_folder_id, block_id)?;
   set_kind(lib, &folder.id, Some(ARCHIVE_KIND));
+  ensure_archive_record(lib, &folder.id);
   library::save_folders(lib).map_err(|e| e.to_string())?;
+  library::save_archives(lib).map_err(|e| e.to_string())?;
   log::info!("新建档案：{}（{:?} 下）", folder.name, folder.parent);
   Ok(lib.index.folders[&folder.id].clone())
+}
+
+/// 档案记录存在性保障（created_at 只在新建 / 转换当次写入；已有记录不动——
+/// 解散重建场景下"创建时间"以最近一次转换为准）
+fn ensure_archive_record(lib: &mut Library, folder_id: &str) {
+  if lib.archives.archives.iter().any(|a| a.folder_id == folder_id) {
+    return;
+  }
+  let mut rec = ArchiveData::new(folder_id);
+  rec.created_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
+  lib.archives.archives.push(rec);
 }
 
 /// 文件夹转换为档案：已是档案幂等返回 Done；有子文件夹且未确认返回 NeedConfirm（不动任何数据）；
@@ -49,10 +62,13 @@ pub fn convert_to_archive(lib: &mut Library, folder_id: &str, confirmed: bool) -
   }
   let archives_changed = if descendants.is_empty() { false } else { flatten(lib, folder_id, &descendants) };
   set_kind(lib, folder_id, Some(ARCHIVE_KIND));
+  // 转换当次建档记录（created_at = 当前时间；幂等已是档案已在上方提前返回，不会覆盖）
+  let record_created = !lib.archives.archives.iter().any(|a| a.folder_id == folder_id);
+  ensure_archive_record(lib, folder_id);
   operations::sync_folder_index(lib);
   lib.index.rebuild_placements(&lib.folders.items);
   library::save_folders(lib).map_err(|e| e.to_string())?;
-  if archives_changed {
+  if archives_changed || record_created {
     library::save_archives(lib).map_err(|e| e.to_string())?;
   }
   log::info!("文件夹转换为档案：{folder_id}（解散 {} 个子文件夹）", descendants.len());
@@ -190,8 +206,27 @@ mod tests {
     assert_eq!(h.lib.index.folders[&f.id].kind.as_deref(), Some(ARCHIVE_KIND), "索引同步");
     let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
     assert_eq!(disk.folders.iter().find(|x| x.id == f.id).unwrap().kind.as_deref(), Some(ARCHIVE_KIND), "落盘");
+    // 建档记录：created_at 当次写入（RFC3339 非空）且落盘
+    let rec = h.lib.archives.archives.iter().find(|a| a.folder_id == f.id).expect("新建即建档");
+    assert!(!rec.created_at.is_empty(), "created_at 当次写入");
     // 档案下新建文件夹被护栏拒绝（operations::create_folder 全链路复用）
     assert!(create_archive(&mut h.lib, Some(f.id.as_str()), "子", None, None).is_err());
+  }
+
+  /// 转换为档案：当次建档记录 created_at；幂等再转不覆盖既有记录
+  #[test]
+  fn convert_to_archive_creates_record_with_created_at() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F-CVT", "待转", None, 0);
+    convert_to_archive(&mut h.lib, "F-CVT", false).unwrap();
+    let rec = h.lib.archives.archives.iter().find(|a| a.folder_id == "F-CVT").expect("转换即建档");
+    assert!(!rec.created_at.is_empty(), "created_at 当次写入");
+    let first = rec.created_at.clone();
+    // 幂等再转：记录不重建、created_at 不覆盖
+    convert_to_archive(&mut h.lib, "F-CVT", false).unwrap();
+    let rec2 = h.lib.archives.archives.iter().find(|a| a.folder_id == "F-CVT").unwrap();
+    assert_eq!(rec2.created_at, first, "幂等不覆盖 created_at");
+    assert_eq!(h.lib.archives.archives.iter().filter(|a| a.folder_id == "F-CVT").count(), 1, "不重复建档");
   }
 
   /// undo 还原新建档案（begin → record_file → 业务 → commit 三步口径）
@@ -273,7 +308,15 @@ mod tests {
       vec![("AN-A", 0), ("AN-B", 1), ("AN-C", 2), ("AN-E", 3), ("AN-D", 4)],
       "Placement 平移追加在后重排"
     );
-    assert!(h.lib.archives.archives.is_empty(), "子级档案记录清除");
+    assert!(
+      h.lib.archives.archives.iter().all(|a| a.folder_id != "F01-1"),
+      "子级档案记录清除"
+    );
+    assert_eq!(
+      h.lib.archives.archives.iter().filter(|a| a.folder_id == "F01").count(),
+      1,
+      "转换当次为 F01 建档（created_at）"
+    );
     assert_eq!(h.lib.index.placements_of("AN-D").len(), 1, "索引重建");
     assert_eq!(h.lib.index.placements_of("AN-D")[0].folder, "F01");
     // 落盘验证
@@ -281,7 +324,7 @@ mod tests {
     assert_eq!(disk.folders.len(), 1);
     assert_eq!(disk.items.iter().filter(|p| p.folder == "F01").count(), 5);
     let adisk: ArchivesFile = read_json(&h.lib.root.join(ARCHIVES_FILE)).unwrap();
-    assert!(adisk.archives.is_empty(), "archives.json 落盘");
+    assert!(adisk.archives.iter().all(|a| a.folder_id != "F01-1"), "archives.json 落盘：子级记录清除");
   }
 
   #[test]

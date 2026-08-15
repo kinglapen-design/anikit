@@ -2,7 +2,7 @@
 // 自定义数据 / 基础信息 / 副本 / 链接区块 / 归属档案 / 关系 / 音频 / 提示词（顺序 = 22 稿）。
 // 无内容区块 = 显示空数据（不隐藏，标题照常）；排序 + 显隐在 22 稿「编辑数据区块」面板操作，
 // 配置持久化在 ui store（detailSections）；一轮全部区块只读（编辑态归二轮）。
-import type { ArchiveData, FolderNode, PlacementView } from "../stores/content";
+import type { ArchiveDetailView, FolderNode, PlacementView } from "../stores/content";
 
 export interface DetailSectionDef {
   id: string;
@@ -101,11 +101,21 @@ export interface AssetDetail {
 /** 详情面板展示目标：选中文件卡片 / 选中档案卡片（无选中 = null，空面板不渲染区块） */
 export type DetailTarget =
   | { kind: "file"; placement: PlacementView; detail: AssetDetail }
-  | { kind: "archive"; node: FolderNode; data: ArchiveData };
+  | { kind: "archive"; node: FolderNode; data: ArchiveDetailView };
 
-/** 档案无记录时的默认空数据（与后端 ArchiveData::new 同形） */
-export function emptyArchiveData(folderId: string): ArchiveData {
-  return { folderId, badge: null, avatar: null, props: [], descriptions: [] };
+/** 档案无记录 / 未拉取时的默认空数据（与后端 ArchiveData::new + 零统计同形） */
+export function emptyArchiveData(folderId: string): ArchiveDetailView {
+  return {
+    folderId,
+    badge: null,
+    avatar: null,
+    props: [],
+    descriptions: [],
+    links: [],
+    createdAt: "",
+    fileCount: 0,
+    totalSize: 0,
+  };
 }
 
 /** 基础信息日期格式（与既有基础信息稿一致）：RFC3339 → YYYY/MM/DD HH:mm；解析失败原样返回 */

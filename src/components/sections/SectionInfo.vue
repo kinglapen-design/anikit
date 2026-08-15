@@ -3,7 +3,7 @@
 // C4 容器卡（padding 12 / gap 16 / 圆角 6 / 1px 暗-悬停）双列——左列标签 12/17 极淡、
 // 右列值 12/17 标签色右对齐（列内行距 4；日期值 = 日期 + 时间两截 gap 4，贴稿）。
 // 文件 = 尺寸（无则不显示该行）/ 文件大小 / 格式 / 添加日期 / 修改日期（创建日期 metadata 无字段，不加）；
-// 档案 = 文件数 / 名称。
+// 档案（2026-08-15 用户定案）= 文件数 / 占用空间 / 创建日期（createdAt 有则显示；名称行删除——pinned 已有）。
 import { computed, ref } from "vue";
 import SectionHeader from "../SectionHeader.vue";
 import { formatDetailDate, type DetailTarget } from "../../lib/detailSections";
@@ -24,11 +24,13 @@ const rows = computed<{ k: string; parts: string[] }[]>(() => {
     out.push({ k: "修改日期", parts: formatDetailDate(d.modifiedAt).split(" ") });
     return out;
   }
-  const n = props.target.node;
-  return [
-    { k: "文件数", parts: [n.count.toLocaleString()] },
-    { k: "名称", parts: [n.name] },
+  const d = props.target.data;
+  const out: { k: string; parts: string[] }[] = [
+    { k: "文件数", parts: [d.fileCount.toLocaleString()] },
+    { k: "占用空间", parts: [formatSize(d.totalSize)] },
   ];
+  if (d.createdAt) out.push({ k: "创建日期", parts: formatDetailDate(d.createdAt).split(" ") });
+  return out;
 });
 </script>
 

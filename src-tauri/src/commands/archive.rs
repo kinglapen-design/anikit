@@ -6,7 +6,7 @@ use tauri::State;
 use crate::commands::library::AppState;
 use crate::commands::operations::fail;
 use crate::core::library::{Library, ARCHIVES_FILE, FOLDERS_FILE};
-use crate::core::models::{ArchiveData, Folder, Placement, ARCHIVE_KIND, DEFAULT_BLOCK_ID, ROOT_FOLDER_ID};
+use crate::core::models::{ArchiveData, Badge, Avatar, DescItem, Folder, Placement, ARCHIVE_KIND, DEFAULT_BLOCK_ID, ROOT_FOLDER_ID};
 use crate::services::archive::{self, ConvertOutcome};
 
 /// 新建档案：parentId = null / "root" 为顶层；afterFolderId / blockId 口径同 create_folder
@@ -23,6 +23,7 @@ pub async fn create_archive(
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin("新建档案");
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
   match archive::create_archive(lib, parent_id.as_deref(), &name, after_folder_id.as_deref(), block_id.as_deref()) {
     Ok(folder) => {
       undo.commit().map_err(|e| e.to_string())?;
@@ -86,12 +87,52 @@ pub fn list_archives(state: State<AppState>) -> Result<Vec<ArchiveData>, String>
   Ok(archive::list_archives(lib))
 }
 
-/// 单个档案的详细数据；无记录返回默认空记录（档案刚转换、尚未配置数据）
+/// 档案详情视图（2026-08-15 任务 A 三项）：ArchiveData 全字段 + 统计（fileCount / totalSize）；
+/// fileCount = 档案内 Placement 数（档案无子文件夹，直接匹配即全量）；
+/// totalSize = 档案内 Placement 引用资产 size 合计（同一资产多链接只计一次——占用空间语义）
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveDetailView {
+  pub folder_id: String,
+  pub badge: Option<Badge>,
+  pub avatar: Option<Avatar>,
+  pub props: Vec<String>,
+  pub descriptions: Vec<DescItem>,
+  pub links: Vec<String>,
+  pub created_at: String,
+  pub file_count: u32,
+  pub total_size: u64,
+}
+
+/// 单个档案的详细数据 + 统计；无记录返回默认空记录（档案刚转换、尚未配置数据）
 #[tauri::command]
-pub fn get_archive_data(state: State<AppState>, folder_id: String) -> Result<ArchiveData, String> {
+pub fn get_archive_data(state: State<AppState>, folder_id: String) -> Result<ArchiveDetailView, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
-  Ok(lib.archives.archives.iter().find(|a| a.folder_id == folder_id).cloned().unwrap_or_else(|| ArchiveData::new(&folder_id)))
+  let rec = lib.archives.archives.iter().find(|a| a.folder_id == folder_id).cloned().unwrap_or_else(|| ArchiveData::new(&folder_id));
+  // 档案内 Placement 与其资产（去重）合计
+  let mut file_count: u32 = 0;
+  let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+  let mut total_size: u64 = 0;
+  for p in lib.folders.items.iter().filter(|p| p.folder == folder_id) {
+    file_count += 1;
+    if seen.insert(p.asset.as_str()) {
+      if let Some(meta) = lib.index.assets.get(&p.asset) {
+        total_size += meta.size;
+      }
+    }
+  }
+  Ok(ArchiveDetailView {
+    folder_id: rec.folder_id,
+    badge: rec.badge,
+    avatar: rec.avatar,
+    props: rec.props,
+    descriptions: rec.descriptions,
+    links: rec.links,
+    created_at: rec.created_at,
+    file_count,
+    total_size,
+  })
 }
 
 /// 资产详情（PRD 03_数据链接 02）：基础信息 + 属性 / 链接 / 注释 + 链接区块（Placement 反查）+ 归属档案
@@ -319,8 +360,7 @@ mod tests {
 
   /// 归属档案反查：folder 链上 kind = archive 者去重（含嵌套档案、跨 Placement 去重）
   #[test]
-  fn asset_detail_archive_refs_deduped() {
-    let mut h = make_lib();
+  fn asset_detail_archive_refs_deduped() {    let mut h = make_lib();
     add_folder(&mut h.lib, "F-A", "档案甲", None, None, 0);
     add_folder(&mut h.lib, "F-B", "档案乙", None, None, 1);
     add_folder(&mut h.lib, "F-C", "普通", Some("F-A"), None, 0);
@@ -339,5 +379,59 @@ mod tests {
       vec![("F-A", "档案甲"), ("F-B", "档案乙")],
       "去重且按首次出现序"
     );
+  }
+
+  /// ArchiveDetailView：fileCount = 档案内 Placement 数；totalSize = 资产去重合计；
+  /// links / createdAt 透传；camelCase 键名成对（踩坑 031 防线）
+  #[test]
+  fn archive_detail_view_counts_and_camel_case() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F-ARC", "设定集", None, None, 0);
+    let mut rec = ArchiveData::new("F-ARC");
+    rec.links = vec!["https://ref".into()];
+    rec.created_at = "2026-08-15T10:00:00+08:00".into();
+    h.lib.archives.archives.push(rec);
+    add_asset(&mut h.lib, "AN-A"); // size 100
+    add_asset(&mut h.lib, "AN-B"); // size 100
+    add_placement(&mut h.lib, "AN-A", "F-ARC", "a.fla", true);
+    add_placement(&mut h.lib, "AN-A", "F-ARC", "a-链接.fla", false); // 同资产第二条：计数 +1，体积不重复
+    add_placement(&mut h.lib, "AN-B", "F-ARC", "b.fla", true);
+
+    let view = {
+      let rec = h.lib.archives.archives.iter().find(|a| a.folder_id == "F-ARC").cloned().unwrap();
+      let mut file_count: u32 = 0;
+      let mut seen = std::collections::HashSet::new();
+      let mut total_size: u64 = 0;
+      for p in h.lib.folders.items.iter().filter(|p| p.folder == "F-ARC") {
+        file_count += 1;
+        if seen.insert(p.asset.as_str()) {
+          total_size += h.lib.index.assets[&p.asset].size;
+        }
+      }
+      ArchiveDetailView {
+        folder_id: rec.folder_id,
+        badge: rec.badge,
+        avatar: rec.avatar,
+        props: rec.props,
+        descriptions: rec.descriptions,
+        links: rec.links,
+        created_at: rec.created_at,
+        file_count,
+        total_size,
+      }
+    };
+    assert_eq!(view.file_count, 3, "Placement 逐条计数");
+    assert_eq!(view.total_size, 200, "同资产去重合计");
+    assert_eq!(view.links, vec!["https://ref"]);
+    assert_eq!(view.created_at, "2026-08-15T10:00:00+08:00");
+    // camelCase 键名防线（踩坑 031）
+    let v = serde_json::to_value(&view).unwrap();
+    let obj = v.as_object().unwrap();
+    for key in ["folderId", "createdAt", "fileCount", "totalSize", "props", "descriptions", "links"] {
+      assert!(obj.contains_key(key), "缺 camelCase 键 {key}");
+    }
+    for key in obj.keys() {
+      assert!(!key.contains('_'), "出现 snake_case 键 {key}");
+    }
   }
 }

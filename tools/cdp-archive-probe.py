@@ -70,7 +70,7 @@ window.__cbId = 0;
       { assetId: "A4", folderId: "F-DIR", name: "根文件.webp", w: 100, h: 100, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
     ],
     archives: {
-      "F-ARC": { folderId: "F-ARC", badge: { text: "设定", color: "#B38427" }, avatar: null, props: ["奇幻"], descriptions: [{ title: "来源", content: "官方设定集" }] },
+      "F-ARC": { folderId: "F-ARC", badge: { text: "设定", color: "#B38427" }, avatar: null, props: ["奇幻"], descriptions: [{ title: "来源", content: "官方设定集" }], links: ["https://archive.ref"], createdAt: "2026-08-15T09:00:00+08:00" },
     },
     newId: 0,
   };
@@ -178,7 +178,12 @@ window.__cbId = 0;
         return Promise.resolve(null);
       }
       if (cmd === "get_archive_data") {
-        return Promise.resolve(DB.archives[args.folderId] ?? { folderId: args.folderId, badge: null, avatar: null, props: [], descriptions: [] });
+        const rec = DB.archives[args.folderId];
+        const inFolder = DB.placements.filter((p) => p.folderId === args.folderId);
+        const uniq = new Set(inFolder.map((p) => p.assetId));
+        const totalSize = [...uniq].reduce((s, a) => s + (DB.assets[a]?.size ?? 0), 0);
+        const base = rec ?? { folderId: args.folderId, badge: null, avatar: null, props: [], descriptions: [], links: [], createdAt: "" };
+        return Promise.resolve({ ...base, fileCount: inFolder.length, totalSize });
       }
       if (cmd === "get_asset_detail") {
         const d = assetDetail(args.assetId);
@@ -685,19 +690,23 @@ async def main():
               const custom = p.querySelector('.section-custom');
               const info = p.querySelector('.section-info .info-card');
               const ks = info ? [...info.querySelectorAll('.col:first-child .k')].map((s) => s.textContent) : [];
-              const vs = info ? [...info.querySelectorAll('.col.vals .v')].map((s) => s.textContent) : [];
+              const vs = info ? [...info.querySelectorAll('.col.vals .v')].map((s) => [...s.children].map((c) => c.textContent).join(' ')) : [];
               const pair = {};
               ks.forEach((k, i) => (pair[k] = vs[i]));
               const badge = pinned?.querySelector('.fmt-badge');
               const desc = custom?.querySelector('.desc-row');
               const editDesc = custom?.querySelector('.edit-desc');
+              const fields = [...(pinned?.querySelectorAll('.field input') ?? [])];
               return {
                 badge: badge ? { text: badge.textContent, top: getComputedStyle(badge).top, left: getComputedStyle(badge).left } : null,
-                nameVal: pinned?.querySelector('.field input')?.value ?? null,
+                cover: !!pinned?.querySelector('.thumb img'),
+                nameVal: fields[0]?.value ?? null,
+                linkVal: fields[1]?.value ?? null,
+                linkPh: fields[1]?.placeholder ?? null,
+                openLinkDisabled: !!pinned?.querySelector('.field.link .icon-btn:disabled'),
                 props: [...(custom?.querySelectorAll('.chips .app-tag') ?? [])].map((t) => t.textContent.trim()),
                 chipAdd: !!custom?.querySelector('.chips .icon-btn:disabled'),
                 swatches: pinned?.querySelectorAll('.swatches').length ?? 0,
-                linkField: pinned?.querySelectorAll('.field.link').length ?? 0,
                 customTitle: custom?.querySelector('.section-header .title')?.textContent ?? null,
                 desc: desc ? { title: desc.querySelector('.d-label')?.textContent, content: desc.querySelector('.d-content')?.textContent } : null,
                 editDesc: editDesc ? { disabled: editDesc.disabled, h: Math.round(editDesc.getBoundingClientRect().height) } : null,
@@ -705,16 +714,18 @@ async def main():
               };
             })()""")
             print("详情面板(档案):", json.dumps(adetail, ensure_ascii=False))
-            check("⑥ 档案形态（徽标 7,7 / 名称输入框 / 属性 chips + 钮 / 描述标签+内容 / 编辑描述钮 36 / 自定义数据带标题）",
-                  bool(adetail and adetail["badge"] and adetail["badge"]["text"] == "设定" and adetail["badge"]["top"] == "7px" and adetail["badge"]["left"] == "7px"
-                       and adetail["nameVal"] == "设定集" and adetail["props"] == ["奇幻"] and adetail["chipAdd"]
+            check("⑥ 档案形态 = 文件详情同款（封面图 + 徽标 7,7 / 名称输入框 / 链接输入框 / 属性 chips + 钮 / 描述 / 编辑描述钮 36 / 自定义数据带标题）",
+                  bool(adetail and adetail["cover"] and adetail["badge"] and adetail["badge"]["text"] == "设定" and adetail["badge"]["top"] == "7px" and adetail["badge"]["left"] == "7px"
+                       and adetail["nameVal"] == "设定集" and adetail["linkVal"] == "https://archive.ref" and adetail["linkPh"] == "http://" and adetail["openLinkDisabled"]
+                       and adetail["props"] == ["奇幻"] and adetail["chipAdd"]
                        and adetail["desc"] and adetail["desc"]["title"] == "来源:" and adetail["desc"]["content"] == "官方设定集"
                        and adetail["editDesc"] and adetail["editDesc"]["disabled"] and adetail["editDesc"]["h"] == 36
                        and adetail["customTitle"] == "自定义数据"),
                   json.dumps(adetail, ensure_ascii=False))
-            check("⑥ 档案无颜色 bar / 无链接输入框", bool(adetail and adetail["swatches"] == 0 and adetail["linkField"] == 0))
-            check("⑥ 档案基础信息（文件数 2 / 名称 设定集）",
-                  bool(adetail and adetail["info"].get("文件数") == "2" and adetail["info"].get("名称") == "设定集"),
+            check("⑥ 档案无颜色 bar（其余与文件 pinned 同款）", bool(adetail and adetail["swatches"] == 0))
+            check("⑥ 档案基础信息三行（文件数 2 / 占用空间 300.0 KB / 创建日期 2026/08/15 09:00；无名称行）",
+                  bool(adetail and adetail["info"].get("文件数") == "2" and adetail["info"].get("占用空间") == "300.0 KB"
+                       and adetail["info"].get("创建日期") == "2026/08/15 09:00" and "名称" not in adetail["info"]),
                   json.dumps(adetail and adetail["info"], ensure_ascii=False))
             await shot("archive-detail-archive")
 

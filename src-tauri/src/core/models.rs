@@ -239,12 +239,27 @@ pub struct ArchiveData {
   /// 描述（标题 + 内容组合，逐条添加）
   #[serde(default)]
   pub descriptions: Vec<DescItem>,
+  /// 链接（详情 pinned 链接输入框数据源，2026-08-15 任务 A 三项；default 空数组）
+  #[serde(default)]
+  pub links: Vec<String>,
+  /// 创建时间（RFC3339 本地时间，同 AssetMeta 口径；create_archive / convert_to_archive 写入；
+  /// 旧数据缺省 = 空串不写字段，基础信息"创建日期"行不显示）
+  #[serde(default, skip_serializing_if = "String::is_empty")]
+  pub created_at: String,
 }
 
 impl ArchiveData {
   /// 默认空记录（get_archive_data 无记录时返回）
   pub fn new(folder_id: &str) -> Self {
-    Self { folder_id: folder_id.to_string(), badge: None, avatar: None, props: Vec::new(), descriptions: Vec::new() }
+    Self {
+      folder_id: folder_id.to_string(),
+      badge: None,
+      avatar: None,
+      props: Vec::new(),
+      descriptions: Vec::new(),
+      links: Vec::new(),
+      created_at: String::new(),
+    }
   }
 }
 
@@ -473,6 +488,8 @@ mod tests {
           avatar: Some(Avatar { asset_id: "AN-A".into(), crop: Some(Crop { x: 1.5, y: -2.0, scale: 2.0 }) }),
           props: vec!["走路".into()],
           descriptions: vec![DescItem { title: "设定".into(), content: "长文".into() }],
+          links: vec!["https://ref".into()],
+          created_at: "2026-08-15T10:00:00+08:00".into(),
         },
         ArchiveData::new("F02"),
       ],
@@ -480,9 +497,9 @@ mod tests {
     let text = serde_json::to_string(&file).unwrap();
     assert!(text.contains("folderId"), "rename_all camelCase 生效：{text}");
     assert!(text.contains("assetId"), "Avatar 同口径：{text}");
-    // 空记录：badge / avatar 不写字段，props / descriptions 空数组照常写
+    // 空记录：badge / avatar / createdAt 不写字段，props / descriptions / links 空数组照常写
     let bare = serde_json::to_string(&file.archives[1]).unwrap();
-    assert_eq!(bare, r#"{"folderId":"F02","props":[],"descriptions":[]}"#);
+    assert_eq!(bare, r#"{"folderId":"F02","props":[],"descriptions":[],"links":[]}"#);
     // 缺省字段 default 读入（一轮旧数据 / 手编最小记录）
     let min: ArchiveData = serde_json::from_str(r#"{ "folderId": "F03" }"#).unwrap();
     assert_eq!(min, ArchiveData::new("F03"));

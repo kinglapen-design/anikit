@@ -9,22 +9,32 @@
 // 圆角 6 / 14/20 常态）+ 链接输入框（36 高 / C2 / padding 3 3 3 12 / 文字极淡 +
 // 打开链接钮 30×30 图标 18 disabled）——2026-08-15 定案从自定义数据段上移入本组。
 // 一轮只读：输入框 readonly、打开链接 disabled 占位。
-// 档案形态：封面占位（头像三轮）+ 徽标 + 名称输入框（档案不出颜色 bar / 链接输入框，维持原口径）。
+// 档案形态（2026-08-15 任务 A 三项，与文件详情一模一样只无颜色 bar）：封面 =
+// folderThumbMap 子项首图（真实数据；无图浅色块占位）+ 徽标 chip + 名称输入框 +
+// 链接输入框（数据 = archives.json links，http:// + open-link disabled）。
 import { computed } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import IconButton from "../IconButton.vue";
 import { displayName, formatBadgeColor, isSequence } from "../../lib/formatBadge";
 import type { DetailTarget } from "../../lib/detailSections";
+import { useContentStore } from "../../stores/content";
 import { useUiStore } from "../../stores/ui";
 
 const props = defineProps<{ target: DetailTarget }>();
 const ui = useUiStore();
+const content = useContentStore();
 
 const file = computed(() => (props.target.kind === "file" ? props.target : null));
 const archive = computed(() => (props.target.kind === "archive" ? props.target : null));
 
 const thumbUrl = computed(() => {
   const p = file.value?.placement.thumbPath;
+  return p ? convertFileSrc(p) : null;
+});
+// 档案封面：子项第一张静态图（folderThumbMap 既有口径，真实数据）；无图 = 浅色块占位
+const archiveCover = computed(() => {
+  const id = archive.value?.node.id;
+  const p = id ? content.folderThumbMap.get(id) : null;
   return p ? convertFileSrc(p) : null;
 });
 // 缩略图高按图比例（aspect-ratio），无尺寸回退 4:3；上限 220 由 CSS max-height 控制
@@ -42,8 +52,11 @@ const name = computed(() => {
   if (file.value) return displayName(file.value.placement, ui.showExt);
   return archive.value?.node.name ?? "";
 });
-// 链接输入框：有 links 填首条，无则空（placeholder http://）
-const firstLink = computed(() => file.value?.detail.links[0] ?? "");
+// 链接输入框：文件 = detail.links 首条；档案 = archives.json links 首条；无则空（placeholder http://）
+const firstLink = computed(() => {
+  if (file.value) return file.value.detail.links[0] ?? "";
+  return archive.value?.data.links[0] ?? "";
+});
 </script>
 
 <template>
@@ -70,15 +83,20 @@ const firstLink = computed(() => file.value?.detail.links[0] ?? "");
         </div>
       </template>
       <template v-else-if="archive">
-        <!-- 封面占位：头像业务三轮，一轮浅色块占位（同无图口径，无扩展名文字） -->
+        <!-- 封面：子项首图（folderThumbMap）；无图浅色块占位（头像业务三轮，自定义封面后接） -->
         <div class="thumb">
-          <span class="ext" />
+          <img v-if="archiveCover" :src="archiveCover" alt="" draggable="false" />
+          <span v-else class="ext" />
           <span v-if="archive.data.badge" class="fmt-badge" :style="{ background: archive.data.badge.color }">
             {{ archive.data.badge.text }}
           </span>
         </div>
         <div class="field">
           <input type="text" :value="archive.node.name" readonly />
+        </div>
+        <div class="field link">
+          <input type="text" :value="firstLink" placeholder="http://" readonly />
+          <IconButton name="open-link" title="打开链接" disabled />
         </div>
       </template>
     </div>

@@ -40,12 +40,21 @@ window.__TAURI_INTERNALS__ = {
       get_ui_settings: {},
       list_placements: () => placements,
       list_folder_tree: () => ({ blocks: [{ id: "dir", name: "目录", icon: null }], nodes: folders.filter((f) => f.parent === null).map(nodeOf) }),
-      list_archives: () => [{ folderId: "F-ARC", badge: { text: "设定", color: "#B38427" }, avatar: null, props: ["奇幻"], descriptions: [{ title: "来源", content: "官方设定集" }] }],
+      list_archives: () => [{ folderId: "F-ARC", badge: { text: "设定", color: "#B38427" }, avatar: null, props: ["奇幻"], descriptions: [{ title: "来源", content: "官方设定集" }], links: ["https://archive.ref"], createdAt: "2026-08-15T09:00:00+08:00" }],
       list_recycle: [], list_recent_assets: [], list_inbox_snapshot: [],
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
       list_space_libraries: ["动画资产"], list_recent_libraries: [],
     };
     if (cmd === "save_ui_settings") return Promise.resolve(null);
+    if (cmd === "get_archive_data") {
+      const rec = { folderId: "F-ARC", badge: { text: "设定", color: "#B38427" }, avatar: null, props: ["奇幻"], descriptions: [{ title: "来源", content: "官方设定集" }], links: ["https://archive.ref"], createdAt: "2026-08-15T09:00:00+08:00" };
+      const inFolder = placements.filter((p) => p.folderId === args.folderId);
+      const sizes = { A1: 204800 };
+      const uniq = new Set(inFolder.map((p) => p.assetId));
+      return Promise.resolve(args.folderId === "F-ARC"
+        ? { ...rec, fileCount: inFolder.length, totalSize: [...uniq].reduce((s, a) => s + (sizes[a] ?? 0), 0) }
+        : { folderId: args.folderId, badge: null, avatar: null, props: [], descriptions: [], links: [], createdAt: "", fileCount: 0, totalSize: 0 });
+    }
     if (cmd === "get_asset_detail") {
       return Promise.resolve({
         assetId: "A1", originName: "主角-立绘.webp", ext: "webp", size: 204800, width: 800, height: 600, duration: null,
@@ -210,8 +219,8 @@ async def main():
               const btn = document.querySelector('.archive-panel-toggle');
               if (!el || !btn) return { el: !!el, btn: !!btn };
               const cs = getComputedStyle(el);
-              const inner = el.querySelector('.as-inner');
-              const bcs = getComputedStyle(inner);
+              const main = el.querySelector('.as-main');
+              const bcs = getComputedStyle(main);
               return {
                 el: true, btn: true,
                 w: Math.round(el.getBoundingClientRect().width),
@@ -229,6 +238,59 @@ async def main():
             check("A 档案视口：切换钮（返回钮左边）+ 面板 250 宽 C3 1px 右边框",
                   bool(ap.get("el") and ap.get("btn") and ap["w"] == 250 and ap["bg"] == "rgb(24, 25, 25)" and ap["borderR"].startswith("1px") and ap["btnBeforeBack"] and ap["title"] == "设定集"),
                   json.dumps(ap, ensure_ascii=False))
+            # —— 布局修正（2026-08-15 红框）：标签栏 / 搜索栏横贯，面板只存在于两行之间 ——
+            align = await ev("""(() => {
+              const strip = document.querySelector('.dv-tabs-and-actions-container').getBoundingClientRect();
+              const search = document.querySelector('.search-bar').getBoundingClientRect();
+              const main = document.querySelector('.archive-side .as-main').getBoundingClientRect();
+              const ft = document.querySelector('.archive-side .as-filler.top').getBoundingClientRect();
+              const fb = document.querySelector('.archive-side .as-filler.bottom').getBoundingClientRect();
+              const r = (v) => Math.round(v);
+              return { mainTop: r(main.top), stripB: r(strip.bottom), mainB: r(main.bottom), searchT: r(search.top),
+                       ftT: r(ft.top), stripT: r(strip.top), fbB: r(fb.bottom), searchB: r(search.bottom),
+                       ftH: r(ft.height), fbH: r(fb.height) };
+            })()""")
+            print("布局对齐:", json.dumps(align))
+            check("A 布局：面板 top=标签栏底 / bottom=搜索栏顶，填充条与两行对齐（46/47）",
+                  align["mainTop"] == align["stripB"] and align["mainB"] == align["searchT"]
+                  and align["ftT"] == align["stripT"] and align["fbB"] == align["searchB"]
+                  and align["ftH"] == 46 and align["fbH"] == 47,
+                  json.dumps(align))
+            # —— 侧栏内容 = 档案详情区块栈（pinned + 7 区块，与详情面板同一套）——
+            stack = await ev("""(() => {
+              const p = document.querySelector('.archive-side .detail-panel');
+              if (!p) return null;
+              const blocks = [...p.querySelectorAll('.detail-block')];
+              const pinned = p.querySelector('.section-pinned');
+              const info = p.querySelector('.section-info .info-card');
+              const ks = info ? [...info.querySelectorAll('.col:first-child .k')].map((s) => s.textContent) : [];
+              const vs = info ? [...info.querySelectorAll('.col.vals .v')].map((s) => [...s.children].map((c) => c.textContent).join(' ')) : [];
+              const pair = {};
+              ks.forEach((k, i) => (pair[k] = vs[i]));
+              const fields = [...(pinned?.querySelectorAll('.field input') ?? [])];
+              return {
+                count: blocks.length,
+                titles: blocks.map((b) => b.querySelector('.section-header .title')?.textContent ?? '(pinned)'),
+                cover: !!pinned?.querySelector('.thumb img'),
+                badge: pinned?.querySelector('.fmt-badge')?.textContent ?? null,
+                nameVal: fields[0]?.value ?? null,
+                linkVal: fields[1]?.value ?? null,
+                linkPh: fields[1]?.placeholder ?? null,
+                swatches: pinned?.querySelectorAll('.swatches').length ?? -1,
+                info: pair,
+              };
+            })()""")
+            print("侧栏区块栈:", json.dumps(stack, ensure_ascii=False))
+            check("A 侧栏区块栈渲染（pinned + 注册表 7 区块）",
+                  bool(stack and stack["count"] == 8 and stack["titles"] == ["(pinned)", "自定义数据", "基础信息", "副本", "链接区块", "关系", "音频", "提示词"]),
+                  json.dumps(stack and stack["titles"], ensure_ascii=False))
+            check("A pinned 档案形态（封面图 + 徽标 + 名称/链接输入框，无颜色 bar）",
+                  bool(stack and stack["cover"] and stack["badge"] == "设定" and stack["nameVal"] == "设定集"
+                       and stack["linkVal"] == "https://archive.ref" and stack["linkPh"] == "http://" and stack["swatches"] == 0),
+                  json.dumps(stack, ensure_ascii=False))
+            check("A 基础信息三行（文件数 1 / 占用空间 200.0 KB / 创建日期 2026/08/15 09:00）",
+                  bool(stack and stack["info"].get("文件数") == "1" and stack["info"].get("占用空间") == "200.0 KB" and stack["info"].get("创建日期") == "2026/08/15 09:00"),
+                  json.dumps(stack and stack["info"], ensure_ascii=False))
             await shot("archive-side-panel")
             # 收展逐帧单调
             seq = await record_toggle("document.querySelector('.archive-side')", "document.querySelector('.archive-panel-toggle')")
