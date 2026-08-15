@@ -12,7 +12,7 @@ mod placement;
 
 pub use block::{apply_block_changes, reorder_blocks, ApplyBlockReport, BlockInput};
 pub use delete::{delete_placements, DeleteReport};
-pub use document::create_text_document;
+pub use document::create_document;
 pub use duplicate::{duplicate_placements, rename_placement};
 pub use folder::{create_folder, move_folders, rename_folder, reorder_folders};
 pub use placement::{link_placements, move_placements, reorder_placements};

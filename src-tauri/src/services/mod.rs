@@ -24,7 +24,6 @@ pub mod anim;
 pub mod anim_preview;
 pub mod anim_unpack;
 pub mod asset_menu;
-pub mod doc_apps;
 pub mod import;
 pub mod import_task;
 pub mod inbox;

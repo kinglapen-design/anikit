@@ -241,10 +241,10 @@ pub async fn duplicate_placements(
   }
 }
 
-/// 新建文本文档入库（1.3，07 新增菜单"MarkDown 文档 / 文本文档"）：kind = "md" | "txt"；
+/// 新建文档入库（3.1 二轮，07 新增菜单"新建文档"组固定七类）：kind = md/txt/fla/psd/ai/docx/xlsx；
 /// 撤销 = info 目录移入 cache/tmp 备份（DiskOp::Rename），重做 = 移回（Delete 会丢内容无法重做）
 #[tauri::command]
-pub async fn create_text_document(
+pub async fn create_document(
   state: State<'_, AppState>,
   kind: String,
   target_folder: Option<String>,
@@ -254,7 +254,7 @@ pub async fn create_text_document(
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin("新建文档".to_string());
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  match operations::create_text_document(lib, &kind, target_folder.as_deref()) {
+  match operations::create_document(lib, &kind, target_folder.as_deref()) {
     Ok((view, info_dir, backup)) => {
       undo.record_disk_op(
         DiskOp::Rename { from: info_dir.clone(), to: backup.clone() },

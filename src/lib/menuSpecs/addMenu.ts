@@ -2,52 +2,45 @@
 // 新建文档组（newDocGroupEntries）与 14 汉堡"文件"二级共用，故同文件导出。
 import { useSelectionStore } from "../../stores/selection";
 import { useContentStore, DEFAULT_BLOCK_ID } from "../../stores/content";
-import type { CtxEntry, CtxItem } from "../contextMenus";
-import { docApp } from "../docApps";
+import type { CtxEntry } from "../contextMenus";
 import { createAndName, pickFolderForLink, pickImportPaths } from "../menuOps";
 import { openBlock } from "../treeExpansion";
-import { createTextDocument, pasteClipboard, pasteDuplicate } from "../placementOps";
+import { createDocument, pasteClipboard, pasteDuplicate, type NewDocKind } from "../placementOps";
 import { openScan } from "../dupScanOps";
-// MarkDown 文档图标（2026-08-11 用户供 md.webp，webp 非 svg 走 iconData 内联图）
+// 文档图标（本地资源：md.webp 2026-08-11 用户供；txt.png 2026-08-15 系统记事本图标一次性提取留存；
+// 非 svg 走 iconData 内联图，svg 走 getIcon 按名引用）
 import mdDocIcon from "../../../assets/icons/01_icon-default/md.webp?url";
+import txtDocIcon from "../../../assets/icons/01_icon-default/txt.png?url";
 
 // —— 素材卡片空白处（废除，2026-08-11：空白右键统一走 07 新增菜单；
 // 布局方式/排序/显示简介/分组依据归 28 查看方式菜单 ViewOptionsMenu）——
 
 // —— 新建文档组（07 稿 / 14 汉堡"文件"二级共用）——
-// 系统软件检测动态显隐（lib/docApps，每次打开 UI 监测）：已安装 → 带系统图标（exe 提取，iconData）
-// 显示，未安装 → 删除对应新建项；MarkDown 文档恒显示（纯文本无需软件）；
-// MarkDown / 文本文档已点亮（createTextDocument），其余新建业务 3.1 接。
+// 2026-08-15 用户定案：放弃 shell 检测模式（detect_doc_apps 废除），固定七项恒显 + 本地图标：
+// Animate / Photoshop / Illustrator / MarkDown / 文本 / Word / Excel；
+// AE 不建档（工程素材为链接路径、需打包工程，属工作空间而非资源库）。
 export function newDocGroupEntries(): CtxEntry[] {
-  const docItem = (id: string, label: string, action?: () => void): CtxItem | null => {
-    const app = docApp(id);
-    if (!app?.installed) return null;
-    return { label, iconData: app.icon ?? undefined, disabled: !action, action };
-  };
-  const softwareDocs = [
-    docItem("animate", "Animate 文档"),
-    docItem("photoshop", "Photoshop 文档"),
-    docItem("afterEffects", "After Effects 文档"),
-    docItem("illustrator", "Illustrator 文档"),
-  ].filter((it): it is CtxItem => it !== null);
-  const officeDocs = [
-    docItem("text", "文本文档", () => void createTextDocument("txt")),
-    docItem("word", "Word 文档"),
-    docItem("excel", "Excel 文档"),
-  ].filter((it): it is CtxItem => it !== null);
-  const docGroup: CtxEntry[] = [];
-  if (softwareDocs.length > 0) docGroup.push(...softwareDocs, "divider");
-  docGroup.push({ label: "MarkDown 文档", iconData: mdDocIcon, action: () => void createTextDocument("md") });
-  if (officeDocs.length > 0) docGroup.push(...officeDocs);
-  return docGroup;
+  const doc = (label: string, kind: NewDocKind, icon?: string, iconData?: string): CtxEntry => ({
+    label,
+    icon,
+    iconData,
+    action: () => void createDocument(kind),
+  });
+  return [
+    doc("Animate 文档", "fla", "animate-on"),
+    doc("Photoshop 文档", "psd", "photoshop-on"),
+    doc("Illustrator 文档", "ai", "illustrator"),
+    doc("MarkDown 文档", "md", undefined, mdDocIcon),
+    doc("文本文档", "txt", undefined, txtDocIcon),
+    doc("Word 文档", "docx", "word"),
+    doc("Excel 文档", "xlsx", "excel"),
+  ];
 }
 
 // —— 07 稿 · 新增菜单（宽 320 无搜索框）——
 // 三入口共用一套（2026-08-11 用户定）：侧栏"新增"按钮 / 网格空白处右键 / Ctrl+N（按钮位弹出）。
 // 上下文规则：剪贴板无文件 → 三个粘贴项不出现（同 03 稿口径，2026-08-11 用户定）；
-// 新建文档组 = 系统软件检测动态显隐（lib/docApps，每次打开 UI 监测）：已安装 → 带系统图标
-//（exe 提取，iconData）显示，未安装 → 删除对应新建项；MarkDown 文档恒显示（纯文本无需软件）；
-// 新建文档业务阶段三 3.1 接，本轮项仍 disabled 占位。
+// 新建文档组 = 固定七项恒显（2026-08-15 用户定案放弃 shell 检测动态显隐，见 newDocGroupEntries）。
 export function addButtonSpec(): CtxEntry[] {
   const selection = useSelectionStore();
   const content = useContentStore();

@@ -12,7 +12,7 @@ export interface CtxItem {
   label: string;
   icon?: string;
   iconClass?: string; // 图标附加类（如 rot-90 旋转，1.2 标签页菜单"上下分屏"用）
-  iconData?: string; // 内联图片图标 data URL（1.3 新建文档组：系统提取的软件图标，优先于 icon）
+  iconData?: string; // 内联图片图标 data URL / 图片文件 URL（非 svg 图标用，如新建文档组 md.webp / txt.png，优先于 icon）
   shortcut?: string;
   disabled?: boolean;
   checkable?: boolean;

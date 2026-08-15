@@ -11,7 +11,7 @@ use image::RgbaImage;
 /// 系统格式图标尺寸（见方，带 alpha）
 pub const FORMAT_ICON_EDGE: u32 = 256;
 
-/// Shell/COM 图标提取进程级串行化（1.3：导入管线 rayon 并发 + doc_apps 检测会并发进入，
+/// Shell/COM 图标提取进程级串行化（1.3：导入管线 rayon 并发会同时进入，
 /// 第三方 Shell handler 在 STA 下并发调用不稳定——测试并发抖动根因，2026-08-11）
 static SHELL_ICON_LOCK: Mutex<()> = Mutex::new(());
 

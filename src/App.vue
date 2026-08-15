@@ -39,7 +39,6 @@ import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
-import { ensureDocApps } from "./lib/docApps";
 import { wizardState, reopenLastSession, createLibraryModalState, deleteLibraryState, confirmDeleteLibrary } from "./lib/libraryOps";
 import { dupScanState } from "./lib/dupScanOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
@@ -126,7 +125,6 @@ let unlistenDragDrop: (() => void) | undefined;
 onMounted(() => {
   void syncMaximized();
   void ui.initSettings(); // 全局 UI 设置加载 + 变更防抖写回（2026-07-28 持久化）
-  void ensureDocApps(); // 新建文档软件检测（1.3：每次打开 UI 监测，07 新增菜单"新建文档"组驱动）
   window.addEventListener("resize", onResize);
   // 视图切换（6.1）：左栏选中项变化即清空素材选择
   watch(() => content.sidebarSelected, () => selection.clear());

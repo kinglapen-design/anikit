@@ -12,7 +12,7 @@ const props = withDefaults(
   defineProps<{
     icon?: string;
     iconClass?: string; // 图标附加类（如 rot-90）
-    iconData?: string; // 内联图片图标（data URL，16 居中于 18 盒——1.3 新建文档组系统软件图标）
+    iconData?: string; // 内联图片图标（data URL / 文件 URL，16 居中于 18 盒——新建文档组 md.webp / txt.png）
     label: string;
     shortcut?: string;
     arrow?: boolean;

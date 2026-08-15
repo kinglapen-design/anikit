@@ -260,15 +260,17 @@ export async function createFolder(
   }
 }
 
-// 新建文本文档入库（1.3，07 新增菜单"MarkDown 文档 / 文本文档"点亮，2026-08-11 用户定）：
+// 新建文档入库（3.1 二轮通用化，2026-08-15 用户定：固定七类 md/txt/fla/psd/ai/docx/xlsx，
+// 二进制类以后端内嵌空白模板建档）：
 // 落当前视口目录（同导入位置口径），先建后命名——成功返回 PlacementView 后 renamingKey 进重命名态
-export async function createTextDocument(kind: "md" | "txt"): Promise<void> {
+export type NewDocKind = "md" | "txt" | "fla" | "psd" | "ai" | "docx" | "xlsx";
+export async function createDocument(kind: NewDocKind): Promise<void> {
   const content = useContentStore();
   const selection = useSelectionStore();
   const toast = useToastStore();
   const undo = useUndoStore();
   try {
-    const view = await invoke<{ assetId: string; folderId: string }>("create_text_document", {
+    const view = await invoke<{ assetId: string; folderId: string }>("create_document", {
       kind,
       targetFolder: content.currentFolderId,
     });
