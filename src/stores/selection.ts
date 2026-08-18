@@ -51,11 +51,19 @@ export interface RecyclePrompt {
 export interface ConfirmPrompt {
   title: string;
   body: string;
+  // 富文本正文（3.4 移动确认，29 稿：发起名与目标名品牌色-常态高亮）——给了它就不读 body
+  bodySegments?: { text: string; accent?: boolean }[];
   confirmLabel?: string; // 缺省"确认"
   danger?: boolean; // 主按钮用错误色（不可逆操作）
   alert?: "warning" | "error"; // 危险弹出模板（figma 09 侵入式 alert：48 状态徽章 + 提示音，2026-08-13 用户定）
   onConfirm: () => void;
 }
+
+// 移动面板草稿（3.4，29 稿）：菜单 / Ctrl+Y 触发时自选择域快照——
+// assets = 移动文件（move_placements）；folders = 移动文件夹/档案（move_folders，含护栏）
+export type MoveDraft =
+  | { kind: "assets"; refs: PlacementRef[] }
+  | { kind: "folders"; ids: string[] };
 
 // （2026-07-29 复验三轮：新建文件夹改"先建后命名"，原 NewFolderDraft 命名中临时节点已移除）
 
@@ -83,6 +91,8 @@ export const useSelectionStore = defineStore("selection", {
     namingFolderId: null as string | null,
     // 通用确认弹窗（6.3：文件管理器打开警示 / 删除文件夹 / 彻底删除素材·文件夹，宿主 App.vue）
     confirmPrompt: null as ConfirmPrompt | null,
+    // 移动面板草稿（3.4，29 稿移动面板宿主 App.vue）：非空 = 移动面板打开
+    moveDraft: null as MoveDraft | null,
     // 文件夹选择弹窗（6.3"添加至文件夹"：选定目标文件夹后回调，宿主 App.vue）
     folderPickPrompt: null as { onPick: (folderId: string) => void } | null,
     // 文件夹卡片就地重命名目标 id（6.3 右键"重命名"与名称双击同入口，FolderCard 读）

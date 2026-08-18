@@ -14,6 +14,7 @@ import {
   cutFoldersFlow,
   deleteFolderFlow,
   findParentId,
+  moveFoldersFlow,
   pickExportFolder,
   pickFolderForLink,
   topLevelBlockId,
@@ -96,7 +97,7 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
       action: () => convertToArchiveFlow(folder.id),
     },
     "divider",
-    { label: "移动文件夹", icon: "move-file", shortcut: "Ctrl+Y", disabled: true },
+    { label: "移动文件夹", icon: "move-file", shortcut: "Ctrl+Y", action: () => moveFoldersFlow(folder.id) },
     { label: "添加文件/档案链接", icon: "add-file-link", shortcut: "Ctrl+L", action: () => pickFolderForLink() },
     "divider",
     // 剪切文件夹（3.4 点亮）：触发项在多选域内 → 剪切整个选中集（cutFoldersFlow 分流）

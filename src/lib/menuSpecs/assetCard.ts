@@ -14,6 +14,7 @@ import {
   copyAssetPath,
   copyBase64,
   copyName,
+  moveAssetsFlow,
   pickCustomThumb,
   pickExportAssets,
   revealWithWarning,
@@ -92,7 +93,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     { label: "发送至 Animate", icon: "send-to-animate", shortcut: "Ctrl+E", disabled: true },
     { label: "在资源管理器打开", icon: "open-in-explorer", action: () => revealWithWarning(assetId) },
     "divider",
-    { label: "移动文件", icon: "move-file", shortcut: "Ctrl+Y", disabled: true },
+    { label: "移动文件", icon: "move-file", shortcut: "Ctrl+Y", action: () => moveAssetsFlow() },
     { label: "文件链接管理", icon: "file-link-manage", shortcut: "Ctrl+J", disabled: true },
     {
       label: "打开文件链接所在位置",

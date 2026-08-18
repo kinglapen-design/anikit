@@ -31,7 +31,15 @@ function onCancel(): void {
     class="app-confirm"
     @close="onCancel"
   >
-    <p class="text">{{ selection.confirmPrompt.body }}</p>
+    <p class="text">
+      <template v-if="selection.confirmPrompt.bodySegments">
+        <template v-for="(seg, i) in selection.confirmPrompt.bodySegments" :key="i">
+          <span v-if="seg.accent" class="accent">{{ seg.text }}</span>
+          <template v-else>{{ seg.text }}</template>
+        </template>
+      </template>
+      <template v-else>{{ selection.confirmPrompt.body }}</template>
+    </p>
     <template #actions>
       <AppButton
         variant="primary"
@@ -62,5 +70,9 @@ function onCancel(): void {
 /* danger（不可逆操作二次确认）：主按钮错误色 */
 .app-confirm :deep(.app-btn.danger) {
   background: var(--error);
+}
+/* 正文高亮段（3.4 移动确认，29 稿：发起名 / 目标父级名品牌色-常态） */
+.text .accent {
+  color: var(--brand);
 }
 </style>

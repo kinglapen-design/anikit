@@ -12,6 +12,7 @@ import {
   deleteFolderFlow,
   dissolveArchiveFlow,
   findParentId,
+  moveFoldersFlow,
   pickFolderForLink,
   topLevelBlockId,
 } from "../menuOps";
@@ -72,7 +73,7 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
       action: () => void createAndName(archive.id, null),
     },
     "divider",
-    { label: "移动档案", icon: "move-file", shortcut: "Ctrl+Y", disabled: true },
+    { label: "移动档案", icon: "move-file", shortcut: "Ctrl+Y", action: () => moveFoldersFlow(archive.id) },
     { label: "档案链接管理", icon: "linked-file-manage", shortcut: "Ctrl+J", disabled: true },
     { label: "添加文件/档案链接", icon: "add-file-link", shortcut: "Ctrl+L", action: () => pickFolderForLink() },
     { label: "打开档案链接所在位置", icon: "reveal-archive-link", submenuWidth: 320, submenu: [{ label: "（无）", disabled: true }] },

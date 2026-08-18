@@ -17,7 +17,7 @@ import {
   pasteDuplicate,
   recycleSelectedAssetIds,
 } from "./placementOps";
-import { deleteFoldersFlow } from "./menuOps";
+import { deleteFoldersFlow, moveAssetsFlow, moveFoldersFlow } from "./menuOps";
 
 // 输入框豁免判定：文本输入态（input / textarea / contenteditable）不拦截全局快捷键
 export function isEditableTarget(t: HTMLElement): boolean {
@@ -150,6 +150,18 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       if (selection.count > 0 && !content.isRecycleView) {
         e.preventDefault();
         void duplicateSelected();
+      }
+      return;
+    }
+    // Ctrl+Y = 移动面板（3.4，29 稿）：文件夹域 → 移动文件夹/档案；素材域 → 移动文件（回收站只读不开）
+    if (k === "y") {
+      if (selection.selectedFolders.size > 0) {
+        e.preventDefault();
+        const first = selection.orderedSelectedFolderIds()[0];
+        if (first) moveFoldersFlow(first); // 触发项在域内 → 批量分流整个选中集
+      } else if (selection.count > 0 && !content.isRecycleView) {
+        e.preventDefault();
+        moveAssetsFlow();
       }
       return;
     }

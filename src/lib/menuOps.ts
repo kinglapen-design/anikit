@@ -241,6 +241,26 @@ export function cutFoldersFlow(folderId: string): void {
   cutFolders(ids);
 }
 
+// —— 移动面板（3.4，29 稿）：打开 = 自选择域快照进 moveDraft（宿主 App.vue MovePanel）——
+
+// 移动文件（素材卡片菜单 / Ctrl+Y）：对当前素材选中集
+export function moveAssetsFlow(): void {
+  const selection = useSelectionStore();
+  const refs = selection.selectedRefs();
+  if (refs.length === 0) return;
+  selection.moveDraft = { kind: "assets", refs };
+}
+
+// 移动文件夹 / 档案（菜单 / Ctrl+Y）：批量分流同 deleteFolderFlow
+export function moveFoldersFlow(folderId: string): void {
+  const selection = useSelectionStore();
+  const ids =
+    selection.selectedFolders.size > 1 && selection.selectedFolders.has(folderId)
+      ? selection.orderedSelectedFolderIds()
+      : [folderId];
+  selection.moveDraft = { kind: "folders", ids };
+}
+
 // 删除文件夹（素材移未分类，可撤销）：确认弹窗文案 2026-07-29 用户定；
 // 批量分流（3.4，2026-08-18）：触发项在文件夹多选域内（卡片 / 树右键已保有多选）→
 // 整个选中集走批量流程，不再只删被右键的一个

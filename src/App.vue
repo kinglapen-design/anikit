@@ -34,6 +34,7 @@ import BlockManageDialog from "./components/BlockManageDialog.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import AppConfirm from "./components/AppConfirm.vue";
 import FolderPickerDialog from "./components/FolderPickerDialog.vue";
+import MovePanel from "./components/MovePanel.vue";
 import ToastStack from "./components/ToastStack.vue";
 import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
@@ -295,6 +296,9 @@ async function togglePin(): Promise<void> {
     <RecycleConfirmDialog v-if="selection.recyclePrompt" />
     <!-- 区块管理弹窗（2026-08-14 区块子系统，30 稿）：SidebarLeft section-manage 按钮触发 -->
     <BlockManageDialog v-if="ui.blockManageOpen" @close="ui.blockManageOpen = false" />
+    <!-- 移动面板（3.4，29 稿）：移动文件 / 文件夹 / 档案共用，菜单 / Ctrl+Y 触发；
+         须在 AppConfirm 之前——面板点击落点后弹确认窗，同 z-index 后渲染者在上 -->
+    <MovePanel v-if="selection.moveDraft" />
     <!-- 全局右键菜单宿主（6.3：lib/contextMenus 单一实例，六上下文共用） -->
     <ContextMenu />
     <!-- 通用确认弹窗（6.3：警示前置 / 删除文件夹 / 彻底删除二次确认） -->

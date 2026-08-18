@@ -31,6 +31,9 @@ const props = withDefaults(
     tint?: string; // 自定义色名（custom-{tint} / custom-{tint}-bg）
     dimmed?: boolean; // 拖拽源半透明（2026-07-28 复验反馈 6①）
     cut?: boolean; // 剪切中半透明（3.4，--opacity-cut 档）
+    // 落点视觉覆盖（3.4 移动面板：本地 hover 三分判定驱动，不走拖拽引擎 dragView）；
+    // 缺省 undefined = 维持引擎驱动（主窗口拖拽）
+    dropZoneOverride?: "before" | "after" | "into" | null;
     folderId?: string; // 拖拽导入落点判定（App.vue elementFromPoint → closest）
     naming?: boolean; // 命名输入态（C3 新建文件夹临时节点）
     namingError?: boolean; // 名称校验违规：输入框描边 --error
@@ -46,6 +49,7 @@ const props = withDefaults(
     tint: undefined,
     dimmed: false,
     cut: false,
+    dropZoneOverride: undefined,
     folderId: undefined,
     naming: false,
     namingError: false,
@@ -70,9 +74,12 @@ const { draft: nameDraft, bindInput, commit: commitName } = useInlineRename({
   onCommit: (name) => emit("nameCommit", name),
 });
 
-// 拖拽落点视觉（C4c）：引擎按 data-folder-id 匹配，zone 见 dragOperation
-const dropZone = computed(() =>
-  props.folderId && dragView.tree?.folderId === props.folderId ? dragView.tree.zone : null,
+// 拖拽落点视觉（C4c）：引擎按 data-folder-id 匹配，zone 见 dragOperation；
+// dropZoneOverride 优先（3.4 移动面板本地 hover 驱动，不经引擎）
+const dropZone = computed(
+  () =>
+    props.dropZoneOverride ??
+    (props.folderId && dragView.tree?.folderId === props.folderId ? dragView.tree.zone : null),
 );
 
 // 自定义色（3.3 预留）：root 底 = custom-{tint}，child/archive = custom-{tint}-bg；
