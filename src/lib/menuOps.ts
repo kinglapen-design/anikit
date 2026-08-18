@@ -16,6 +16,7 @@ import {
   exportAssets,
   exportFolder,
   deleteFolder,
+  deleteFolders,
   getAssetBase64,
   getAssetOriginPath,
   revealInExplorer,
@@ -228,13 +229,43 @@ export async function pickExportFolder(folderId: string): Promise<void> {
 
 // —— 删除流程（确认弹窗编排）——
 
-// 删除文件夹（素材移未分类，可撤销）：确认弹窗文案 2026-07-29 用户定
+// 删除文件夹（素材移未分类，可撤销）：确认弹窗文案 2026-07-29 用户定；
+// 批量分流（3.4，2026-08-18）：触发项在文件夹多选域内（卡片 / 树右键已保有多选）→
+// 整个选中集走批量流程，不再只删被右键的一个
 export function deleteFolderFlow(folderId: string, folderName: string): void {
-  useSelectionStore().confirmPrompt = {
+  const selection = useSelectionStore();
+  if (selection.selectedFolders.size > 1 && selection.selectedFolders.has(folderId)) {
+    deleteFoldersFlow(selection.orderedSelectedFolderIds());
+    return;
+  }
+  selection.confirmPrompt = {
     title: "删除文件夹",
     body: `文件夹「${folderName}」将被删除，素材将全部进入未分类，需重新整理。`,
     confirmLabel: "删除文件夹",
     onConfirm: () => void deleteFolder(folderId),
+  };
+}
+
+// 批量删除文件夹（3.4）：一次确认 + 后端 delete_folders 单撤销步；
+// 单元素时回退单删文案（键盘 Delete 分流入口不分单复数，统一走这里）
+export function deleteFoldersFlow(folderIds: string[]): void {
+  if (folderIds.length === 0) return;
+  const selection = useSelectionStore();
+  if (folderIds.length === 1) {
+    const name = useContentStore().folderName(folderIds[0]) ?? folderIds[0];
+    selection.confirmPrompt = {
+      title: "删除文件夹",
+      body: `文件夹「${name}」将被删除，素材将全部进入未分类，需重新整理。`,
+      confirmLabel: "删除文件夹",
+      onConfirm: () => void deleteFolder(folderIds[0]),
+    };
+    return;
+  }
+  selection.confirmPrompt = {
+    title: "删除文件夹",
+    body: `已选中的 ${folderIds.length} 个文件夹将被删除，素材将全部进入未分类，需重新整理。`,
+    confirmLabel: "删除文件夹",
+    onConfirm: () => void deleteFolders(folderIds),
   };
 }
 

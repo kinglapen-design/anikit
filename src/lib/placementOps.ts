@@ -483,6 +483,15 @@ export async function deleteFolder(folderId: string): Promise<boolean> {
   }, () => `删除文件夹（${report?.movedPlacements ?? 0} 个素材移入未分类）`);
 }
 
+// 批量删除文件夹（3.4，2026-08-18）：一次确认单命令单撤销步（后端 delete_folders 单趟，
+// 祖先同批入选的后代去重、陈旧 id 容错）；报告聚合，toast 计数与单删同口径
+export async function deleteFolders(folderIds: string[]): Promise<boolean> {
+  let report: DeleteFolderResult | null = null;
+  return await runOp(async () => {
+    report = await invoke<DeleteFolderResult>("delete_folders", { folderIds });
+  }, () => `删除 ${folderIds.length} 个文件夹（${report?.movedPlacements ?? 0} 个素材移入未分类）`);
+}
+
 // 复制 base64（后端守卫：静态图片原字节 ≤10MB；psd/psb/svg 解码 PNG ≤10MB）
 export async function getAssetBase64(assetId: string): Promise<string | null> {
   try {

@@ -15,6 +15,7 @@ import {
   pasteDuplicate,
   recycleSelectedAssetIds,
 } from "./placementOps";
+import { deleteFoldersFlow } from "./menuOps";
 
 // 输入框豁免判定：文本输入态（input / textarea / contenteditable）不拦截全局快捷键
 export function isEditableTarget(t: HTMLElement): boolean {
@@ -105,6 +106,13 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       return;
     }
     if (e.key === "Delete") {
+      // 文件夹域分流（3.4 批量删除，2026-08-18）：与素材域互斥，优先判定——
+      // 原实现只读素材域，多选文件夹按 Delete 无反应（右键菜单也只删被右键的一个）
+      if (selection.selectedFolders.size > 0) {
+        e.preventDefault();
+        deleteFoldersFlow(selection.orderedSelectedFolderIds());
+        return;
+      }
       if (selection.count > 0) {
         e.preventDefault();
         if (content.isRecycleView) {

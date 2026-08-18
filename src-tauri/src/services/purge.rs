@@ -100,49 +100,20 @@ fn subtree_ids(lib: &Library, folder_id: &str) -> Vec<String> {
   out
 }
 
-/// 删除文件夹两形态（见文件头注释）
+/// 删除文件夹两形态（见文件头注释）；非 permanent 单例 = delete_folders 特例（委托）
 pub fn delete_folder(lib: &mut Library, folder_id: &str, permanent: bool, confirmed: bool) -> Result<DeleteFolderReport, String> {
   if !lib.index.folders.contains_key(folder_id) {
     return Err("目标文件夹不存在，可能已被删除".to_string());
   }
+  if !permanent {
+    return delete_folders(lib, std::slice::from_ref(&folder_id.to_string()));
+  }
+
+  // "彻底删除文件夹"：子树资产物理全删（两段式）
   let subtree = subtree_ids(lib, folder_id);
   let subtree_set: HashSet<&str> = subtree.iter().map(String::as_str).collect();
   let folder_count = subtree.len();
 
-  if !permanent {
-    // "删除文件夹"：子树 origin Placement 改挂 root（素材进未分类，重名唯一化）+ 节点删除；
-    // 链接 Placement（origin = false）随文件夹直接删除——链接删除不进回收站，链接存在时
-    // 资产必有 origin 在别处或同批回 root（2026-08-12 用户定案，PRD 02-15；本条保留，
-    // 2026-08-13 链接限制废除不影响"删文件夹时链接随之删"的去向语义）
-    let mut root_names: HashSet<String> =
-      lib.folders.items.iter().filter(|p| p.folder == ROOT_FOLDER_ID).map(|p| p.name.clone()).collect();
-    let mut moved = 0usize;
-    let mut links = 0usize;
-    let mut kept = Vec::with_capacity(lib.folders.items.len());
-    for mut p in std::mem::take(&mut lib.folders.items) {
-      if subtree_set.contains(p.folder.as_str()) {
-        if !p.origin {
-          links += 1;
-          continue; // 链接随文件夹直接删除
-        }
-        let name = library::unique_name(&root_names, &p.name);
-        root_names.insert(name.clone());
-        p.name = name;
-        p.folder = ROOT_FOLDER_ID.to_string();
-        moved += 1;
-      }
-      kept.push(p);
-    }
-    lib.folders.items = kept;
-    lib.folders.folders.retain(|f| !subtree_set.contains(f.id.as_str()));
-    sync_folder_index(lib);
-    rewrite_orders(lib, ROOT_FOLDER_ID);
-    finish(lib)?;
-    log::info!("删除文件夹 {folder_id}（{moved} 个素材移入未分类，{links} 条链接随删，{folder_count} 个文件夹节点）");
-    return Ok(DeleteFolderReport { moved_placements: moved, deleted_folders: folder_count, ..empty_report() });
-  }
-
-  // "彻底删除文件夹"：子树资产物理全删（两段式）
   let mut asset_set: HashSet<String> = HashSet::new();
   for p in &lib.folders.items {
     if subtree_set.contains(p.folder.as_str()) {
@@ -185,6 +156,80 @@ pub fn delete_folder(lib: &mut Library, folder_id: &str, permanent: bool, confir
     deleted: removed.len(),
     ..empty_report()
   })
+}
+
+/// 批量删除文件夹（3.4，2026-08-18，仅非 permanent 形态）：一次确认单趟执行——
+/// 选中集先剔除"祖先同批入选"的后代（删祖先已连带子树，再删后代必报不存在），
+/// 并集子树一趟改完只 finish 一次（命令层单撤销步的对应物）；
+/// 陈旧 id（选中后已被删）剔除容错，全部不存在才报错（单例委托本函数，语义与原版一致）。
+/// 业务口径同原单删：子树 origin Placement 改挂 root（素材进未分类，重名唯一化）+ 节点删除；
+/// 链接 Placement（origin = false）随文件夹直接删除——链接删除不进回收站，链接存在时
+/// 资产必有 origin 在别处或同批回 root（2026-08-12 用户定案，PRD 02-15；本条保留，
+/// 2026-08-13 链接限制废除不影响"删文件夹时链接随之删"的去向语义）
+pub fn delete_folders(lib: &mut Library, folder_ids: &[String]) -> Result<DeleteFolderReport, String> {
+  // 存在性过滤 + 保序去重
+  let mut ids: Vec<&str> = Vec::new();
+  for id in folder_ids {
+    if lib.index.folders.contains_key(id.as_str()) && !ids.contains(&id.as_str()) {
+      ids.push(id.as_str());
+    }
+  }
+  if ids.is_empty() {
+    return Err("目标文件夹不存在，可能已被删除".to_string());
+  }
+  // 根级去重：任意祖先同批入选 → 剔除（沿 parent 链上溯命中集合即后代）
+  let parent_of = |id: &str| -> Option<String> {
+    lib.folders.folders.iter().find(|f| f.id == id).and_then(|f| f.parent.clone())
+  };
+  let id_set: HashSet<&str> = ids.iter().copied().collect();
+  let roots: Vec<&str> = ids
+    .iter()
+    .copied()
+    .filter(|id| {
+      let mut cur = parent_of(id);
+      while let Some(p) = cur {
+        if id_set.contains(p.as_str()) {
+          return false;
+        }
+        cur = parent_of(&p);
+      }
+      true
+    })
+    .collect();
+  // 并集子树（含各根级自身）
+  let mut subtree_set: HashSet<String> = HashSet::new();
+  for id in &roots {
+    subtree_set.extend(subtree_ids(lib, id));
+  }
+  let folder_count = subtree_set.len();
+  let subtree_ref: HashSet<&str> = subtree_set.iter().map(String::as_str).collect();
+
+  let mut root_names: HashSet<String> =
+    lib.folders.items.iter().filter(|p| p.folder == ROOT_FOLDER_ID).map(|p| p.name.clone()).collect();
+  let mut moved = 0usize;
+  let mut links = 0usize;
+  let mut kept = Vec::with_capacity(lib.folders.items.len());
+  for mut p in std::mem::take(&mut lib.folders.items) {
+    if subtree_ref.contains(p.folder.as_str()) {
+      if !p.origin {
+        links += 1;
+        continue; // 链接随文件夹直接删除
+      }
+      let name = library::unique_name(&root_names, &p.name);
+      root_names.insert(name.clone());
+      p.name = name;
+      p.folder = ROOT_FOLDER_ID.to_string();
+      moved += 1;
+    }
+    kept.push(p);
+  }
+  lib.folders.items = kept;
+  lib.folders.folders.retain(|f| !subtree_ref.contains(f.id.as_str()));
+  sync_folder_index(lib);
+  rewrite_orders(lib, ROOT_FOLDER_ID);
+  finish(lib)?;
+  log::info!("删除 {} 个文件夹（{moved} 个素材移入未分类，{links} 条链接随删，{folder_count} 个文件夹节点）", roots.len());
+  Ok(DeleteFolderReport { moved_placements: moved, deleted_folders: folder_count, ..empty_report() })
 }
 
 #[cfg(test)]
@@ -318,6 +363,51 @@ mod tests {
     let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
     assert_eq!(disk.items.len(), 3);
     assert!(disk.items.iter().all(|p| p.origin), "folders.json 无链接残留");
+  }
+
+  /// 3.4 批量删除（2026-08-18）：多选兄弟一趟删，素材分别回 root，链接随删，报告聚合
+  #[test]
+  fn delete_folders_batch_siblings_single_pass() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F-A", None);
+    add_folder(&mut h.lib, "F-B", None);
+    add_folder(&mut h.lib, "F-B-SUB", Some("F-B"));
+    add_folder(&mut h.lib, "F-KEEP", None);
+    add_asset(&mut h, "AN-A", "a.png", "F-A");
+    add_asset(&mut h, "AN-B", "b.png", "F-B-SUB");
+    add_asset(&mut h, "AN-K", "k.png", "F-KEEP");
+    // F-A 内一条链接（origin 在 F-KEEP）随文件夹删
+    ops::add_placement(&mut h.lib, "AN-K".into(), "F-A".into(), "k.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+
+    let rep = delete_folders(&mut h.lib, &["F-A".into(), "F-B".into()]).unwrap();
+    assert_eq!((rep.moved_placements, rep.deleted_folders), (2, 3), "2 origin 回 root + 3 节点");
+    let keep: Vec<_> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-K").collect();
+    assert_eq!(keep.len(), 1, "链接随删只剩 origin");
+    assert_eq!(keep[0].folder, "F-KEEP");
+    assert_eq!(h.lib.folders.folders.len(), 1, "只剩 F-KEEP 节点");
+    assert_eq!(h.lib.folders.folders[0].id, "F-KEEP");
+    for (asset, name) in [("AN-A", "a.png"), ("AN-B", "b.png")] {
+      let p = h.lib.folders.items.iter().find(|p| p.asset == asset).unwrap();
+      assert_eq!((p.folder.as_str(), p.name.as_str()), (ROOT_FOLDER_ID, name), "{asset} 回 root");
+    }
+    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.items.len(), 3, "落盘一致（2 回 root + 1 保留）");
+  }
+
+  /// 3.4 批量删除：祖先与后代同批入选时后代去重（删祖先已连带子树，不再对后代报不存在）；
+  /// 部分陈旧 id（选中后已被删）剔除容错，全部不存在才报错
+  #[test]
+  fn delete_folders_skips_descendant_when_ancestor_in_batch() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F-TOP", None);
+    add_folder(&mut h.lib, "F-SUB", Some("F-TOP"));
+    add_asset(&mut h, "AN-A", "a.png", "F-SUB");
+
+    let rep = delete_folders(&mut h.lib, &["F-SUB".into(), "F-不存在".into(), "F-TOP".into()]).unwrap();
+    assert_eq!((rep.moved_placements, rep.deleted_folders), (1, 2), "子树只删一趟不重复计数，陈旧 id 容错");
+    assert!(h.lib.folders.folders.is_empty());
+    assert!(delete_folders(&mut h.lib, &["F-不存在".into()]).is_err(), "全部不存在报错");
   }
 
   #[test]

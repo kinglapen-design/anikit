@@ -202,6 +202,31 @@ pub async fn delete_folder(
   }
 }
 
+/// 批量删除文件夹（3.4，2026-08-18）：一次确认单命令——撤销三步与 delete_folder 同约
+///（单撤销步，标签按传入计数）；业务 = purge::delete_folders（非 permanent 同语义单趟，
+/// 祖先同批入选的后代去重、陈旧 id 容错）
+#[tauri::command]
+pub async fn delete_folders(state: State<'_, AppState>, folder_ids: Vec<String>) -> Result<DeleteFolderReport, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let label = if folder_ids.len() == 1 {
+    let name = lib.index.folders.get(folder_ids[0].as_str()).map(|f| f.name.clone()).unwrap_or_else(|| folder_ids[0].clone());
+    format!("删除文件夹 {name}")
+  } else {
+    format!("删除 {} 个文件夹", folder_ids.len())
+  };
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin(label);
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  match purge::delete_folders(lib, &folder_ids) {
+    Ok(report) => {
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(report)
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
 /// 复制 base64（静态图片读原字节 ≤10MB；psd/psb/svg 解码合成图 → 长边 ≤4096 PNG ≤10MB；
 /// 纯 base64 不带 data: 前缀。锁内只定位，解码 / 编码重活在锁外——123MB 级 PSD 解码秒级，不占库锁）
 #[tauri::command]

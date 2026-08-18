@@ -285,6 +285,7 @@ pub fn run() {
       commands::asset_menu::cancel_export,
       commands::asset_menu::delete_assets_permanently,
       commands::asset_menu::delete_folder,
+      commands::asset_menu::delete_folders,
       commands::asset_menu::get_asset_base64,
       commands::asset_menu::get_asset_origin_path,
     ])
