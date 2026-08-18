@@ -100,6 +100,18 @@ async def send(ws, method, params=None, session=None):
             return raw
 
 
+def kill_listening_port(port):
+    """按端口找 LISTENING PID 强杀（2026-08-19 踩坑：vite node 进程脱离 pnpm 壳的进程树，
+    taskkill /T 杀壳后 5373 仍被占——端口直杀兜底）"""
+    try:
+        out = subprocess.run(["netstat", "-ano"], capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            if f":{port}" in line and "LISTENING" in line:
+                subprocess.run(["taskkill", "/PID", line.split()[-1], "/F"], capture_output=True)
+    except Exception:
+        pass
+
+
 async def main():
     fails = []
 
@@ -212,9 +224,9 @@ async def main():
             print("S1 查看方式菜单")
             btn = await ev("""
               (() => {
-                // 工具栏按钮组：前五个占位 disabled，查看方式 = 组内唯一可用按钮
-                //（限定 .panel-toolbar——侧栏"新增"等同款可用按钮在其他 .btn-group）
-                const b = document.querySelector('.panel-toolbar .btn-group .icon-btn:not([disabled])');
+                // 查看方式钮 = 工具栏按钮组里被 span 包裹的那个（3.5 二轮后分组管理钮已点亮，
+                // :not([disabled]) 会先命中它——锚 span 包裹结构）
+                const b = document.querySelector('.panel-toolbar .btn-group span .icon-btn');
                 if (!b) return null;
                 const r = b.getBoundingClientRect();
                 return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
@@ -461,7 +473,10 @@ async def main():
     finally:
         edge.terminate()
         if spawned:
-            spawned.terminate()
+            # Windows：shell=True 的 pnpm 壳 terminate 只杀壳、node/vite 子树存活（2026-08-19 踩坑）；
+            # taskkill /T 杀树 + 按端口直杀兜底（vite node 会脱离 cmd 壳进程树，实测 /T 后 5373 仍占）
+            subprocess.run(["taskkill", "/PID", str(spawned.pid), "/T", "/F"], capture_output=True)
+            kill_listening_port(5373)
 
     print()
     if fails:

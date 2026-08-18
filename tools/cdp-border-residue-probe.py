@@ -91,6 +91,18 @@ def brand_pixels(img: Image.Image):
     return out
 
 
+def kill_listening_port(port):
+    """按端口找 LISTENING PID 强杀（2026-08-19 踩坑：vite node 进程脱离 pnpm 壳的进程树，
+    taskkill /T 杀壳后 5373 仍被占——端口直杀兜底）"""
+    try:
+        out = subprocess.run(["netstat", "-ano"], capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            if f":{port}" in line and "LISTENING" in line:
+                subprocess.run(["taskkill", "/PID", line.split()[-1], "/F"], capture_output=True)
+    except Exception:
+        pass
+
+
 async def main():
     spawned = None
     try:
@@ -222,7 +234,10 @@ async def main():
     finally:
         edge.terminate()
         if spawned:
-            spawned.terminate()
+            # Windows：shell=True 的 pnpm 壳 terminate 只杀壳、node/vite 子树存活（2026-08-19 踩坑）；
+            # taskkill /T 杀树 + 按端口直杀兜底（vite node 会脱离 cmd 壳进程树，实测 /T 后 5373 仍占）
+            subprocess.run(["taskkill", "/PID", str(spawned.pid), "/T", "/F"], capture_output=True)
+            kill_listening_port(5373)
 
 
 sys.exit(asyncio.run(main()))
