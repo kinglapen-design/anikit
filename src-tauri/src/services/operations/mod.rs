@@ -13,7 +13,7 @@ mod placement;
 
 pub use block::{apply_block_changes, reorder_blocks, ApplyBlockReport, BlockInput};
 pub use clone::clone_folders;
-pub use delete::{delete_placements, DeleteReport};
+pub use delete::delete_placements;
 pub use document::create_document;
 pub use duplicate::{duplicate_placements, rename_placement, rename_placements, BatchRenameFailed};
 pub use folder::{create_folder, move_folders, rename_folder, reorder_folders, set_folder_color, set_folder_icon};

@@ -51,17 +51,17 @@ fn entry_view(lib: &Library, item: &RecycleItem) -> Option<RecycleEntryView> {
   })
 }
 
-/// 还原：写回记录的全部 Placement 并从回收站移除，返回还原的资源数（陈旧 ID 跳过不计）
+/// 还原：写回记录的全部 Placement 并从回收站移除，返回还原的资源数（陈旧 ID 跳过不计）；
+/// 显示名原样写回不唯一化（2026-08-19 撞名放开）
 pub fn restore_recycle(lib: &mut Library, asset_ids: &[String]) -> Result<usize, String> {
   let want: HashSet<&str> = asset_ids.iter().map(String::as_str).collect();
-  let mut names: HashMap<String, HashSet<String>> = HashMap::new();
   let mut orders: HashMap<String, i32> = HashMap::new();
   let mut affected: HashSet<String> = HashSet::new();
   let mut remaining = Vec::new();
   let mut restored = 0usize;
   for item in std::mem::take(&mut lib.recycle.items) {
     if want.contains(item.asset.as_str()) && lib.index.assets.contains_key(&item.asset) {
-      restore_one(lib, &item, &mut names, &mut orders, &mut affected);
+      restore_one(lib, &item, &mut orders, &mut affected);
       restored += 1;
     } else {
       remaining.push(item);
@@ -80,12 +80,12 @@ pub fn restore_recycle(lib: &mut Library, asset_ids: &[String]) -> Result<usize,
   Ok(restored)
 }
 
-/// 单条 RecycleItem 的 Placement 写回：目标文件夹已不存在挂 root；同文件夹显示名唯一化；
-/// 追加到目标文件夹段尾（names / orders 按需懒建，跨条目累计保证同批互不重名）
+/// 单条 RecycleItem 的 Placement 写回：目标文件夹已不存在挂 root；**显示名原样写回不唯一化**
+///（撞名放开，2026-08-19 用户定"护栏拆干净"——旧同文件夹 unique_name 废除）；
+/// 追加到目标文件夹段尾（orders 按需懒建，跨条目累计保持段尾连续）
 fn restore_one(
   lib: &mut Library,
   item: &RecycleItem,
-  names: &mut HashMap<String, HashSet<String>>,
   orders: &mut HashMap<String, i32>,
   affected: &mut HashSet<String>,
 ) {
@@ -95,23 +95,19 @@ fn restore_one(
     } else {
       ROOT_FOLDER_ID.to_string()
     };
-    let existing = names
-      .entry(folder.clone())
-      .or_insert_with(|| lib.folders.items.iter().filter(|q| q.folder == folder).map(|q| q.name.clone()).collect());
-    let name = library::unique_name(existing, &p.name);
-    existing.insert(name.clone());
     let next = orders.entry(folder.clone()).or_insert_with(|| {
       lib.folders.items.iter().filter(|q| q.folder == folder).map(|q| q.order).max().map_or(0, |m| m + 1)
     });
     let order = *next;
     *next += 1;
-    lib.folders.items.push(Placement { asset: item.asset.clone(), folder: folder.clone(), name, order, origin: p.origin });
+    lib.folders.items.push(Placement { asset: item.asset.clone(), folder: folder.clone(), name: p.name.clone(), order, origin: p.origin });
     affected.insert(folder);
   }
 }
 
 /// 彻底删除结果：needConfirm = true 时未动任何数据，segmentRefs 为引用被删集合的虚拟片段数，
-/// linkRefs 为快照内链接 Placement 数（2026-08-18 用户定：彻底清除前提示"关联链接将一并清除"）
+/// linkRefs 为库内**活链接**数（2026-08-19 位置级模型：本体在回收站时链接可以活着挂在目录树，
+/// 物理删除本体即全部随清——用户定"彻底清除前提示关联链接一并清除"）
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteRecycleReport {
@@ -124,49 +120,70 @@ pub struct DeleteRecycleReport {
   pub deleted: usize,
 }
 
-/// 彻底删除（两段式）：库内"其他"资产有 type="segment" 且 source 指向被删集合，或快照内
-/// 含链接 Placement 时，未确认只返回 needConfirm + segmentRefs/linkRefs 不动数据；
-/// 确认后物理删 info 目录并同步清理引用
+/// 彻底删除（两段式；2026-08-19 位置级模型分级）：
+/// - 快照含 origin 的条目 = 资产本体在回收站 → 物理删 info + 库内该资产全部活位置（含链接）清除
+///   + index / recycle / recent / pins 同步；本体在库内的活链接必随之死，故计数进 linkRefs；
+/// - 纯链接位置记录（无 origin 快照）= 只删回收站条目，物理不动、无需确认。
+/// 未确认只返回 needConfirm + 计数不动数据（仅"本体在回收站且有引用/活链接"时才需要确认）
 pub fn delete_recycle(lib: &mut Library, asset_ids: &[String], confirmed: bool) -> Result<DeleteRecycleReport, String> {
   let want: HashSet<&str> = asset_ids.iter().map(String::as_str).collect();
-  let targets: Vec<String> =
-    lib.recycle.items.iter().filter(|i| want.contains(i.asset.as_str())).map(|i| i.asset.clone()).collect();
+  let targets: Vec<RecycleItem> = lib.recycle.items.iter().filter(|i| want.contains(i.asset.as_str())).cloned().collect();
   if targets.is_empty() {
     return Ok(DeleteRecycleReport { need_confirm: false, segment_refs: 0, link_refs: 0, deleted: 0 });
   }
-  let target_set: HashSet<&str> = targets.iter().map(String::as_str).collect();
-  let segment_refs = count_segment_refs(lib, &target_set);
-  // 关联链接计数 = 回收站快照内 origin=false 的 Placement（彻底删除即随资产一并清除、不可恢复）
+  let target_set: HashSet<&str> = targets.iter().map(|i| i.asset.as_str()).collect();
+  // 本体在回收站的资产集（快照含 origin）；纯位置记录不进物理段
+  let purge_set: HashSet<&str> = targets
+    .iter()
+    .filter(|i| i.placements.iter().any(|p| p.origin))
+    .map(|i| i.asset.as_str())
+    .collect();
+  let segment_refs = count_segment_refs(lib, &purge_set);
+  // 活链接 = 库内 folders.items 里本体将删资产的 origin=false 位置（物理删后必随清）
   let link_refs: usize = lib
-    .recycle
+    .folders
     .items
     .iter()
-    .filter(|i| target_set.contains(i.asset.as_str()))
-    .map(|i| i.placements.iter().filter(|p| !p.origin).count())
-    .sum();
+    .filter(|p| !p.origin && purge_set.contains(p.asset.as_str()))
+    .count();
   if (segment_refs > 0 || link_refs > 0) && !confirmed {
     return Ok(DeleteRecycleReport { need_confirm: true, segment_refs, link_refs, deleted: 0 });
   }
   // 物理不可逆：操作前强制备份兜底（失败仅警告不阻断）
-  if let Err(e) = backup::backup_library(&lib.root, &lib.assets_dir) {
-    log::warn!("彻底删除前备份失败（不阻断删除）：{e}");
+  if !purge_set.is_empty() {
+    if let Err(e) = backup::backup_library(&lib.root, &lib.assets_dir) {
+      log::warn!("彻底删除前备份失败（不阻断删除）：{e}");
+    }
   }
   let mut removed: Vec<String> = Vec::new();
-  for id in &targets {
+  for &id in &purge_set {
     let info = lib.info_dir(id);
     if info.exists() {
       if let Err(e) = fs::remove_dir_all(&info) {
         // 半途失败：已删的部分先同步数据文件保持一致，再报错
-        sync_after_purge(lib, &removed)?;
-        let name = lib.index.assets.get(id).map(|m| m.name.clone()).unwrap_or_else(|| id.clone());
+        partial_sync(lib, &target_set, &removed)?;
+        let name = lib.index.assets.get(id).map(|m| m.name.clone()).unwrap_or_else(|| id.to_string());
         return Err(format!("删除「{name}」的文件失败：{e}"));
       }
     }
-    removed.push(id.clone());
+    removed.push(id.to_string());
   }
-  sync_after_purge(lib, &removed)?;
-  log::info!("彻底删除 {} 个回收站项目（虚拟片段引用 {segment_refs}，链接 {link_refs}）", removed.len());
-  Ok(DeleteRecycleReport { need_confirm: false, segment_refs, link_refs, deleted: removed.len() })
+  partial_sync(lib, &target_set, &removed)?;
+  log::info!("彻底删除 {} 个回收站项目（物理删除 {}，虚拟片段引用 {segment_refs}，活链接 {link_refs}）", targets.len(), removed.len());
+  Ok(DeleteRecycleReport { need_confirm: false, segment_refs, link_refs, deleted: targets.len() })
+}
+
+/// 删除后同步：库内活位置清除（本体被物理删的资产，其链接随清）+ 回收站条目移除 +
+/// index / recent / pins 收尾（sync_after_purge）
+fn partial_sync(lib: &mut Library, target_set: &HashSet<&str>, removed: &[String]) -> Result<(), String> {
+  if !removed.is_empty() {
+    let purge_set: HashSet<&str> = removed.iter().map(String::as_str).collect();
+    lib.folders.items.retain(|p| !purge_set.contains(p.asset.as_str()));
+    finish(lib)?;
+  }
+  lib.recycle.items.retain(|i| !target_set.contains(i.asset.as_str()));
+  library::save_recycle(lib).map_err(|e| e.to_string())?;
+  sync_after_purge(lib, removed)
 }
 
 /// 清空回收站：等价于对全部条目执行 delete_recycle（segmentRefs 对全集汇总）
@@ -250,11 +267,11 @@ mod tests {
     finish(&mut h.lib).unwrap();
   }
 
-  /// 把资源最后一条 Placement 删进回收站（走 6.1 删除的 recycle 分支，数据与线上一致）
+  /// 把资源 origin Placement 删进回收站（走删除的 recycle 分支，数据与线上一致；
+  /// 2026-08-19 位置级模型：无"最后一条"判定，origin 单独删即进回收站）
   fn recycle_asset(h: &mut Harness, id: &str, folder: &str) {
     let pref = PlacementRef { asset_id: id.into(), folder_id: folder.into(), origin: true };
-    let rep = delete_placements(&mut h.lib, &[pref], Some("recycle")).unwrap();
-    assert!(!rep.need_confirm);
+    delete_placements(&mut h.lib, &[pref], Some("recycle")).unwrap();
   }
 
   fn info_dir(h: &Harness, id: &str) -> std::path::PathBuf {
@@ -268,13 +285,12 @@ mod tests {
     add_asset(&mut h, "AN-A", "a.png", "F01");
     ops::add_placement(&mut h.lib, "AN-A".into(), "root".into(), "a链接.png".into(), false, &mut HashMap::new());
     finish(&mut h.lib).unwrap();
-    // 两条 Placement 一次调用删除：同属"最后一条"判定，进同一条回收站记录
+    // 两条 Placement 一次调用删除：位置级模型进同一条回收站记录（按资产聚合）
     let prefs = vec![
       PlacementRef { asset_id: "AN-A".into(), folder_id: "F01".into(), origin: true },
       PlacementRef { asset_id: "AN-A".into(), folder_id: "root".into(), origin: false },
     ];
-    let rep = delete_placements(&mut h.lib, &prefs, Some("recycle")).unwrap();
-    assert!(!rep.need_confirm);
+    delete_placements(&mut h.lib, &prefs, Some("recycle")).unwrap();
 
     let list = list_recycle(&h.lib);
     assert_eq!(list.len(), 1);
@@ -323,7 +339,7 @@ mod tests {
   }
 
   #[test]
-  fn restore_recycle_missing_folder_falls_back_to_root_and_unique_name() {
+  fn restore_recycle_missing_folder_falls_back_to_root_keeps_name() {
     let mut h = make_lib();
     add_folder(&mut h.lib, "F01");
     add_asset(&mut h, "AN-A", "a.png", "F01");
@@ -331,14 +347,14 @@ mod tests {
     // 目标文件夹已不存在 → 挂 root
     h.lib.folders.folders.retain(|f| f.id != "F01");
     h.lib.index.folders.remove("F01");
-    // root 已有同名（不同资源）→ 显示名唯一化
+    // root 已有同名（不同资源）→ 撞名放开，原名写回（2026-08-19 用户定"护栏拆干净"）
     add_asset(&mut h, "AN-B", "a.png", "root");
 
     let n = restore_recycle(&mut h.lib, &["AN-A".to_string()]).unwrap();
     assert_eq!(n, 1);
     let p = h.lib.folders.items.iter().find(|p| p.asset == "AN-A").unwrap();
     assert_eq!(p.folder, ROOT_FOLDER_ID, "文件夹缺失挂 root");
-    assert_eq!(p.name, "a-1.png", "同文件夹显示名唯一化");
+    assert_eq!(p.name, "a.png", "撞名不追加序号（显示名放开）");
     let orders: Vec<i32> = h.lib.folders.items.iter().filter(|p| p.folder == "root").map(|p| p.order).collect();
     assert_eq!(orders, vec![0, 1], "root 段 order 重写连续");
     // 陈旧 ID（不在回收站）跳过不计
@@ -399,34 +415,54 @@ mod tests {
     assert_eq!(rep.deleted, 0);
   }
 
-  /// 链接警示（2026-08-18 用户定）：快照含链接 Placement → 未确认拦截带 linkRefs；确认后一并清除
+  /// 链接警示（2026-08-19 位置级模型）：本体（origin）进回收站、链接留库内活着——
+  /// 彻底删除 = 物理删本体 + 活链接随清；未确认拦截带 linkRefs（活链接计数）
   #[test]
-  fn delete_recycle_warns_link_refs() {
+  fn delete_recycle_warns_live_link_refs() {
     let mut h = make_lib();
-    add_asset(&mut h, "AN-A", "a.png", "root");
+    add_folder(&mut h.lib, "F01");
+    add_asset(&mut h, "AN-A", "a.png", "F01"); // origin
     ops::add_placement(&mut h.lib, "AN-A".into(), "root".into(), "链接.png".into(), false, &mut HashMap::new());
     finish(&mut h.lib).unwrap();
-    // 两条一起删 = 最后一条进回收站（快照含 origin + 链接）
-    let rep = delete_placements(
-      &mut h.lib,
-      &[
-        PlacementRef { asset_id: "AN-A".into(), folder_id: "root".into(), origin: true },
-        PlacementRef { asset_id: "AN-A".into(), folder_id: "root".into(), origin: false },
-      ],
-      Some("recycle"),
-    )
-    .unwrap();
-    assert!(!rep.need_confirm);
-    assert_eq!(h.lib.recycle.items[0].placements.len(), 2, "快照含链接");
+    // origin 单独丢回收站（链接留库内活着，不转移）
+    recycle_asset(&mut h, "AN-A", "F01");
+    assert_eq!(h.lib.folders.items.len(), 1, "链接还活着");
 
     let rep = delete_recycle(&mut h.lib, &["AN-A".to_string()], false).unwrap();
     assert!(rep.need_confirm);
-    assert_eq!((rep.segment_refs, rep.link_refs), (0, 1), "无片段引用、1 条链接");
-    assert_eq!(h.lib.recycle.items.len(), 1, "未确认不动数据");
+    assert_eq!((rep.segment_refs, rep.link_refs), (0, 1), "无片段引用、1 条活链接");
+    assert!(info_dir(&h, "AN-A").is_dir(), "未确认不动物理文件");
     let rep = delete_recycle(&mut h.lib, &["AN-A".to_string()], true).unwrap();
     assert!(!rep.need_confirm);
     assert_eq!(rep.deleted, 1);
+    assert!(!info_dir(&h, "AN-A").exists(), "物理删除");
+    assert!(h.lib.folders.items.is_empty(), "活链接随清");
+    assert!(!h.lib.index.assets.contains_key("AN-A"), "index 移除");
     assert!(h.lib.recycle.items.is_empty());
+  }
+
+  /// 纯链接位置记录（本体在库内活着）：彻底删除只删记录，物理不动、无需确认
+  #[test]
+  fn delete_recycle_link_only_entry_is_record_only() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-A", "a.png", "root"); // origin 活着在库内
+    ops::add_placement(&mut h.lib, "AN-A".into(), "root".into(), "链接.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+    // 链接单独丢回收站 = 纯位置记录（无 origin 快照）
+    delete_placements(
+      &mut h.lib,
+      &[PlacementRef { asset_id: "AN-A".into(), folder_id: "root".into(), origin: false }],
+      Some("recycle"),
+    )
+    .unwrap();
+    assert_eq!(h.lib.recycle.items.len(), 1);
+
+    let rep = delete_recycle(&mut h.lib, &["AN-A".to_string()], false).unwrap();
+    assert!(!rep.need_confirm, "纯位置记录不需确认");
+    assert_eq!((rep.link_refs, rep.deleted), (0, 1));
+    assert!(info_dir(&h, "AN-A").is_dir(), "物理不动");
+    assert_eq!(h.lib.folders.items.len(), 1, "库内 origin 不动");
+    assert!(h.lib.recycle.items.is_empty(), "记录移除");
   }
 
   #[test]

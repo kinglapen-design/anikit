@@ -144,9 +144,9 @@ export async function setFolderColor(folderId: string, color: string | null): Pr
 // 删除（C1；2026-07-29 用户修订：取消两段式询问——回收站不是危险操作，素材没丢，
 // 撤销可找回，二次确认纯增操作负担）：直接 lastAction="recycle" 移入回收站，
 // 不再有"保留为未分类"选项（入口不同而已）；后端两段式机制保留（lastAction=null 干跑）
-// 删除分流（3.4 八轮，2026-08-18 用户定）：action "recycle" = 丢到回收站（Delete）/
-// "uncategorized" = 从文件夹中移除（Shift+Delete，最后一条 origin 改挂未分类）；
-// 链接 Placement 两种都直接移除记录（不进回收站不去未分类——链接必非资产最后一条，见后端不变量）
+// 删除分流（3.4 八轮 2026-08-18 两项化 + 2026-08-19 位置级模型"护栏拆干净"）：
+// action "recycle" = 丢到回收站（Del）/ "uncategorized" = 从文件夹中移除（Shift+Del，挪未分类不删记录）；
+// origin / 链接一视同仁同路径——无"最后一条"概念、无 origin 自动转移（手动转移归阶段六「设为原始文件」）
 export async function deletePlacements(items: PlacementRef[], action: "recycle" | "uncategorized" = "recycle"): Promise<void> {
   const toast = useToastStore();
   try {

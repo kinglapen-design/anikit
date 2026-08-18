@@ -1,14 +1,14 @@
-//! 删除 Placement（6.1，两段式）：
-//! 第一次调用（lastAction = None）若涉及"资源最后一条 Placement"则只返回
-//! needConfirm + lastAssets 不动数据；前端弹询问后带 lastAction 再调——
-//! "recycle" = 全部 Placement 移除 + recycle.json 记录（info 原地不动，PRD 06-06）；
-//! "uncategorized" = 这些资源的 Placement 改挂 root（未分类）；非最后一条的直接移除。
-//! 删到 origin Placement 而资产仍有剩余 Placement 时，origin 转给剩余中顺序最前的一条
-//! （PRD 01 边界规则 8）。
+//! 删除 Placement（6.1；2026-08-19 用户定"护栏拆干净"大简化）：
+//! **位置级语义，无"最后一条"概念、无 origin 自动转移**——链接与原始文件同路径对待：
+//! - "uncategorized"（从文件夹中移除，Shift+Del）：Placement 挪未分类（folder 改 root），
+//!   不删记录、不改 origin 标记、显示名不动（显示名放开 PRD 01 规则 7）；
+//! - "recycle"（丢到回收站，Del）：Placement 从 folders.json 移除并进 recycle.json
+//!   （按资产聚合条目——同资产已有条目则追加 placements，无则新建）；origin 标记随记录走
+//!   （origin 进回收站后资产可以只剩活链接，不主动转移——手动转移归阶段六「设为原始文件」）。
+//! 物理删除只在回收站彻底清除（recycle.rs）发生，本模块不动磁盘。
+//! 原两段式（needConfirm / lastAssets）与 origin 转移随旧模型废除（2026-08-19）。
 
-use std::collections::{HashMap, HashSet};
-
-use serde::Serialize;
+use std::collections::HashSet;
 
 use crate::core::backup;
 use crate::core::library::{self, Library};
@@ -20,20 +20,11 @@ use super::{find_placement, finish, now, rewrite_orders, PlacementRef};
 /// 大批量删除阈值：达到先 backup_library（失败仅警告不阻断，参照 library.rs 打开自检策略）
 pub const DELETE_BACKUP_THRESHOLD: usize = 50;
 
-/// 删除结果：needConfirm = true 时未动任何数据，lastAssets 为"删的是其最后一条 Placement"的资源
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeleteReport {
-  pub need_confirm: bool,
-  #[serde(default)]
-  pub last_assets: Vec<String>,
-}
-
-pub fn delete_placements(lib: &mut Library, items: &[PlacementRef], last_action: Option<&str>) -> Result<DeleteReport, String> {
-  match last_action {
-    None | Some("recycle") | Some("uncategorized") => {}
-    Some(other) => return Err(format!("未知的删除方式：{other}（可选 recycle / uncategorized）")),
-  }
+pub fn delete_placements(lib: &mut Library, items: &[PlacementRef], last_action: Option<&str>) -> Result<(), String> {
+  let action = match last_action {
+    Some(a @ ("recycle" | "uncategorized")) => a,
+    other => return Err(format!("未知的删除方式：{}（可选 recycle / uncategorized）", other.unwrap_or("（空）"))),
+  };
   // 匹配下标（陈旧三元组跳过，重复选择去重）
   let mut matched: Vec<usize> = Vec::new();
   let mut seen = HashSet::new();
@@ -45,27 +36,8 @@ pub fn delete_placements(lib: &mut Library, items: &[PlacementRef], last_action:
     }
   }
   if matched.is_empty() {
-    return Ok(DeleteReport { need_confirm: false, last_assets: Vec::new() });
+    return Ok(());
   }
-  // "本次删除的是其最后一条 Placement"的资源集合
-  let mut total: HashMap<&str, usize> = HashMap::new();
-  for p in &lib.folders.items {
-    *total.entry(p.asset.as_str()).or_default() += 1;
-  }
-  let mut deleting: HashMap<&str, usize> = HashMap::new();
-  for &i in &matched {
-    *deleting.entry(lib.folders.items[i].asset.as_str()).or_default() += 1;
-  }
-  let mut last_assets: Vec<String> = deleting
-    .iter()
-    .filter(|(a, n)| total.get(**a).copied().unwrap_or(0) == **n)
-    .map(|(a, _)| a.to_string())
-    .collect();
-  last_assets.sort();
-  if last_action.is_none() && !last_assets.is_empty() {
-    return Ok(DeleteReport { need_confirm: true, last_assets });
-  }
-
   // 大批量写前备份（防灾；备份失败仅警告不阻断）
   if matched.len() >= DELETE_BACKUP_THRESHOLD {
     if let Err(e) = backup::backup_library(&lib.root, &lib.assets_dir) {
@@ -73,83 +45,45 @@ pub fn delete_placements(lib: &mut Library, items: &[PlacementRef], last_action:
     }
   }
 
-  let matched_set: HashSet<usize> = matched.iter().copied().collect();
-  let last_set: HashSet<&str> = last_assets.iter().map(String::as_str).collect();
-  // origin 转移候选：本次涉及但非"最后一条"的资产（last_set 资产删完进回收站，无剩余不涉及）。
-  // 所有权化——retain 之后 items 变动，借用不可再持有
-  let transfer_candidates: HashSet<String> =
-    matched.iter().map(|&i| lib.folders.items[i].asset.clone()).filter(|a| !last_set.contains(a.as_str())).collect();
-  let mut keep_in_root: HashSet<usize> = HashSet::new();
-  let mut recycled = false;
-  match last_action {
-    Some("recycle") => {
-      for asset in &last_assets {
-        let placements: Vec<Placement> =
-          lib.folders.items.iter().filter(|p| p.asset == *asset).cloned().collect();
-        lib.recycle.items.push(RecycleItem { asset: asset.clone(), placements, deleted_at: now() });
-      }
-      recycled = !last_assets.is_empty();
-    }
-    Some("uncategorized") => {
-      // 最后一条 Placement 不删，改挂 root（未分类）；root 内显示名唯一化
-      let mut existing: HashSet<String> = lib
-        .folders
-        .items
-        .iter()
-        .enumerate()
-        .filter(|(i, p)| !matched_set.contains(i) && p.folder == ROOT_FOLDER_ID)
-        .map(|(_, p)| p.name.clone())
-        .collect();
+  match action {
+    "uncategorized" => {
+      // 挪未分类：folder 改 root，名称 / origin 标记不动；root 段 order 重写连续
       for &i in &matched {
-        if last_set.contains(lib.folders.items[i].asset.as_str()) {
-          keep_in_root.insert(i);
-          let p = &mut lib.folders.items[i];
-          p.folder = ROOT_FOLDER_ID.to_string();
-          p.name = library::unique_name(&existing, &p.name);
-          existing.insert(p.name.clone());
+        lib.folders.items[i].folder = ROOT_FOLDER_ID.to_string();
+      }
+      rewrite_orders(lib, ROOT_FOLDER_ID);
+    }
+    "recycle" => {
+      // 进回收站：按资产聚合条目（已有同资产条目追加 placements）；matched 按 vec 正序逐个转移
+      let matched_set: HashSet<usize> = matched.iter().copied().collect();
+      let stamp = now();
+      let mut moved: Vec<Placement> = Vec::new();
+      let mut i = 0;
+      lib.folders.items.retain(|p| {
+        let hit = matched_set.contains(&i);
+        i += 1;
+        if hit {
+          moved.push(p.clone());
+        }
+        !hit
+      });
+      for p in moved {
+        match lib.recycle.items.iter_mut().find(|r| r.asset == p.asset) {
+          Some(entry) => entry.placements.push(p),
+          None => lib.recycle.items.push(RecycleItem {
+            asset: p.asset.clone(),
+            placements: vec![p],
+            deleted_at: stamp.clone(),
+          }),
         }
       }
+      library::save_recycle(lib).map_err(|e| e.to_string())?;
     }
-    _ => {}
-  }
-  let mut i = 0;
-  lib.folders.items.retain(|_| {
-    let keep = !matched_set.contains(&i) || keep_in_root.contains(&i);
-    i += 1;
-    keep
-  });
-  // origin 转移（PRD 01 边界规则 8，2026-08-04 定 / 2026-08-13 落地）：本次删掉了某资产的
-  // origin Placement 且该资产仍有剩余 Placement 时，origin 转给剩余中顺序最前的一条。
-  // "顺序最前"定义：同文件夹内 items vec 顺序即 order 升序（add_placement 追加 /
-  // rewrite_orders 重写维护该不变量），跨文件夹无全局顺序，故统一取 items vec 顺序最前者
-  if !transfer_candidates.is_empty() {
-    let has_origin: HashSet<String> = lib
-      .folders
-      .items
-      .iter()
-      .filter(|p| p.origin && transfer_candidates.contains(p.asset.as_str()))
-      .map(|p| p.asset.clone())
-      .collect();
-    let mut transferred: HashSet<String> = HashSet::new();
-    for p in &mut lib.folders.items {
-      if !p.origin
-        && transfer_candidates.contains(p.asset.as_str())
-        && !has_origin.contains(p.asset.as_str())
-        && transferred.insert(p.asset.clone())
-      {
-        p.origin = true;
-      }
-    }
-  }
-  if !keep_in_root.is_empty() {
-    rewrite_orders(lib, ROOT_FOLDER_ID);
-  }
-  if recycled {
-    library::save_recycle(lib).map_err(|e| e.to_string())?;
+    _ => unreachable!(),
   }
   finish(lib)?;
-  log::info!("删除 {} 个项目（回收站 {recycled}）", matched_set.len());
-  Ok(DeleteReport { need_confirm: false, last_assets: Vec::new() })
+  log::info!("删除 {} 个项目（{action}）", matched.len());
+  Ok(())
 }
 
 #[cfg(test)]
@@ -157,9 +91,10 @@ mod tests {
   use super::*;
   use crate::core::json_io::read_json;
   use crate::core::library::{FOLDERS_FILE, RECYCLE_FILE};
-  use crate::core::models::{AssetMeta, Folder, FoldersFile, RecycleFile};
+  use crate::core::models::{Folder, FoldersFile, RecycleFile};
   use crate::services::import as ops;
   use crate::services::import::{PendingFile, Source};
+  use std::collections::HashMap;
 
   struct Harness {
     dir: tempfile::TempDir,
@@ -196,32 +131,41 @@ mod tests {
     lib.folders.items.iter().filter(|p| p.asset == asset).count()
   }
 
-  /// 两段式：无 lastAction 且涉及最后一条 → needConfirm 不动数据
+  /// 从文件夹中移除 = 挪未分类：origin / 链接同路径（folder 改 root，origin 标记与名称不动）
   #[test]
-  fn delete_two_phase_need_confirm() {
+  fn delete_uncategorized_moves_to_root_asis() {
     let mut h = make_lib();
     add_folder(&mut h.lib, "F01");
-    add_asset(&mut h, "AN-A", "a.png", "F01"); // 仅一条 Placement
-    add_asset(&mut h, "AN-B", "b.png", "root");
+    add_asset(&mut h, "AN-A", "a.png", "F01");
+    add_asset(&mut h, "AN-B", "b.png", "F01");
+    // AN-B 的链接也挂 F01（移除它 = 挪 root；AN-B origin 留 F01 不动）
     ops::add_placement(&mut h.lib, "AN-B".into(), "F01".into(), "b链接.png".into(), false, &mut HashMap::new());
     finish(&mut h.lib).unwrap();
 
-    let rep = delete_placements(&mut h.lib, &[pref("AN-A", "F01", true), pref("AN-B", "root", true)], None).unwrap();
-    assert!(rep.need_confirm);
-    assert_eq!(rep.last_assets, vec!["AN-A"], "AN-B 在 F01 还有一条，不算最后");
-    assert_eq!((count(&h.lib, "AN-A"), count(&h.lib, "AN-B")), (1, 2), "未动数据");
-
-    // 非最后一条：不需确认直接删
-    let rep2 = delete_placements(&mut h.lib, &[pref("AN-B", "F01", false)], None).unwrap();
-    assert!(!rep2.need_confirm);
-    assert_eq!(count(&h.lib, "AN-B"), 1);
-    // 未知删除方式拒绝
-    assert!(delete_placements(&mut h.lib, &[pref("AN-B", "root", true)], Some("销毁")).is_err());
+    delete_placements(
+      &mut h.lib,
+      &[pref("AN-A", "F01", true), pref("AN-B", "F01", false)],
+      Some("uncategorized"),
+    )
+    .unwrap();
+    let a = h.lib.folders.items.iter().find(|p| p.asset == "AN-A").unwrap();
+    assert_eq!((a.folder.as_str(), a.origin, a.name.as_str()), (ROOT_FOLDER_ID, true, "a.png"), "origin 挪 root 原样");
+    let b: Vec<_> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-B").collect();
+    assert_eq!(b.len(), 2, "链接挪 root 是移动不是删除——origin 留 F01 + 链接在 root");
+    let link = b.iter().find(|p| !p.origin).unwrap();
+    assert_eq!((link.folder.as_str(), link.name.as_str()), (ROOT_FOLDER_ID, "b链接.png"), "链接记录原样（名称不动）");
+    assert_eq!(b.iter().find(|p| p.origin).unwrap().folder, "F01", "origin 不动");
+    assert!(h.lib.recycle.items.is_empty(), "不进回收站");
+    let orders: Vec<i32> = h.lib.folders.items.iter().filter(|p| p.folder == "root").map(|p| p.order).collect();
+    assert_eq!(orders, vec![0, 1], "root 段 order 重写连续");
+    // 落盘一致
+    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.items.iter().filter(|p| p.folder == "root").count(), 2);
   }
 
-  /// origin 转移（PRD 01 边界规则 8）：删 origin 剩一条链接 → 链接转 origin
+  /// 丢到回收站 = 位置级：origin 单独进回收站，链接留库内活着（不转移）；快照按资产聚合
   #[test]
-  fn delete_origin_transfers_to_single_remaining_link() {
+  fn delete_recycle_position_level_no_transfer() {
     let mut h = make_lib();
     add_folder(&mut h.lib, "F01");
     add_folder(&mut h.lib, "F02");
@@ -229,89 +173,24 @@ mod tests {
     ops::add_placement(&mut h.lib, "AN-A".into(), "F02".into(), "链接.png".into(), false, &mut HashMap::new());
     finish(&mut h.lib).unwrap();
 
-    // 删 origin（还有链接，非最后一条，无需确认）
-    let rep = delete_placements(&mut h.lib, &[pref("AN-A", "F01", true)], None).unwrap();
-    assert!(!rep.need_confirm);
-    let remaining: Vec<&Placement> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-A").collect();
-    assert_eq!(remaining.len(), 1);
-    assert!(remaining[0].origin, "唯一剩余链接转 origin");
-    assert_eq!(remaining[0].folder, "F02");
-    // 索引反查同步（finish 重建）
-    assert_eq!(h.lib.index.placements_by_asset["AN-A"].iter().filter(|p| p.origin).count(), 1);
-  }
-
-  /// origin 转移：剩多条 → 顺序最前（items vec 顺序）者转 origin
-  #[test]
-  fn delete_origin_transfers_to_frontmost_of_multiple() {
-    let mut h = make_lib();
-    add_folder(&mut h.lib, "F01");
-    add_folder(&mut h.lib, "F02");
-    add_asset(&mut h, "AN-A", "a.png", "F01"); // origin
-    ops::add_placement(&mut h.lib, "AN-A".into(), "F02".into(), "链接1.png".into(), false, &mut HashMap::new());
-    ops::add_placement(&mut h.lib, "AN-A".into(), "root".into(), "链接2.png".into(), false, &mut HashMap::new());
-    finish(&mut h.lib).unwrap();
-
-    let rep = delete_placements(&mut h.lib, &[pref("AN-A", "F01", true)], None).unwrap();
-    assert!(!rep.need_confirm);
-    let remaining: Vec<&Placement> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-A").collect();
-    assert_eq!(remaining.len(), 2);
-    assert_eq!(remaining[0].folder, "F02");
-    assert!(remaining[0].origin, "vec 顺序最前者转 origin");
-    assert!(!remaining[1].origin, "origin 唯一");
-    assert!(h.lib.recycle.items.is_empty(), "不进回收站");
-  }
-
-  /// 删除最后一条（origin）→ 进回收站，无剩余不转移；recycle.json 记 origin = true
-  #[test]
-  fn delete_last_origin_recycles_without_transfer() {
-    let mut h = make_lib();
-    add_folder(&mut h.lib, "F01");
-    add_asset(&mut h, "AN-A", "a.png", "F01");
-
-    let rep = delete_placements(&mut h.lib, &[pref("AN-A", "F01", true)], Some("recycle")).unwrap();
-    assert!(!rep.need_confirm);
-    assert_eq!(count(&h.lib, "AN-A"), 0);
+    // origin 单独丢回收站：链接活着、不转移、资产不进回收站视图以外的任何处理
+    delete_placements(&mut h.lib, &[pref("AN-A", "F01", true)], Some("recycle")).unwrap();
+    let remaining: Vec<_> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-A").collect();
+    assert_eq!(remaining.len(), 1, "链接留在库内");
+    assert!(!remaining[0].origin, "origin 不主动转移（用户自主设置，归阶段六）");
     assert_eq!(h.lib.recycle.items.len(), 1);
-    assert!(h.lib.recycle.items[0].placements[0].origin, "回收站快照保留 origin 标记");
-  }
-
-  #[test]
-  fn delete_recycle_moves_to_recycle_json() {
-    let mut h = make_lib();
-    add_folder(&mut h.lib, "F01");
-    add_asset(&mut h, "AN-A", "a.png", "F01");
-
-    let rep = delete_placements(&mut h.lib, &[pref("AN-A", "F01", true)], Some("recycle")).unwrap();
-    assert!(!rep.need_confirm);
-    assert_eq!(count(&h.lib, "AN-A"), 0, "Placement 移除");
-    // recycle.json 记录删除前全部 Placement（还原依据）；info 原地不动
-    assert_eq!(h.lib.recycle.items.len(), 1);
-    assert_eq!(h.lib.recycle.items[0].asset, "AN-A");
     assert_eq!(h.lib.recycle.items[0].placements.len(), 1);
+    assert!(h.lib.recycle.items[0].placements[0].origin, "origin 标记随记录进快照");
     let disk: RecycleFile = read_json(&h.lib.root.join(RECYCLE_FILE)).unwrap();
     assert_eq!(disk.items.len(), 1, "recycle.json 落盘");
-    assert!(h.lib.info_dir("AN-A").is_dir(), "info 原地不动");
-    let folders: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
-    assert!(folders.items.is_empty(), "folders.json 落盘清理");
-  }
 
-  #[test]
-  fn delete_uncategorized_keeps_as_root() {
-    let mut h = make_lib();
-    add_folder(&mut h.lib, "F01");
-    add_asset(&mut h, "AN-A", "a.png", "F01");
-    // root 已有同名（不同资源）→ 移入时唯一化
-    add_asset(&mut h, "AN-B", "a.png", "root");
-
-    let rep = delete_placements(&mut h.lib, &[pref("AN-A", "F01", true)], Some("uncategorized")).unwrap();
-    assert!(!rep.need_confirm);
-    let p = h.lib.folders.items.iter().find(|p| p.asset == "AN-A").unwrap();
-    assert_eq!(p.folder, "root", "保留为未分类");
-    assert_eq!(p.name, "a-1.png", "root 内显示名唯一化");
-    let orders: Vec<i32> = h.lib.folders.items.iter().filter(|p| p.folder == "root").map(|p| p.order).collect();
-    assert_eq!(orders, vec![0, 1], "root 段 order 重写连续");
-    assert!(h.lib.recycle.items.is_empty(), "不进回收站");
-    let meta: AssetMeta = read_json(&h.lib.info_dir("AN-A").join("metadata.json")).unwrap();
-    assert_eq!(meta.id, "AN-A", "资源实体不受影响");
+    // 链接再丢回收站：同资产条目聚合追加（不新建条目）
+    delete_placements(&mut h.lib, &[pref("AN-A", "F02", false)], Some("recycle")).unwrap();
+    assert_eq!(h.lib.recycle.items.len(), 1, "同资产聚合");
+    assert_eq!(h.lib.recycle.items[0].placements.len(), 2);
+    assert_eq!(count(&h.lib, "AN-A"), 0, "库内无剩余位置");
+    // 未知 / 空删除方式拒绝
+    assert!(delete_placements(&mut h.lib, &[], Some("销毁")).is_err());
+    assert!(delete_placements(&mut h.lib, &[], None).is_err());
   }
 }

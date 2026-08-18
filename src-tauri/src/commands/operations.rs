@@ -15,7 +15,7 @@ use crate::core::models::Folder;
 use crate::core::paths;
 use crate::core::undo::{DiskOp, UndoManager};
 use crate::services::import::ROOT_FOLDER_ID;
-use crate::services::operations::{self, ApplyBlockReport, BatchRenameFailed, BlockInput, DeleteReport, PlacementRef, RenameItem};
+use crate::services::operations::{self, ApplyBlockReport, BatchRenameFailed, BlockInput, PlacementRef, RenameItem};
 
 /// metadata.json 路径（由 ID 推导，PRD 01-2.3）
 fn meta_path(lib: &Library, asset_id: &str) -> PathBuf {
@@ -425,15 +425,16 @@ pub async fn rename_placements(state: State<'_, AppState>, items: Vec<RenameItem
   }
 }
 
-/// 删除 Placement（两段式）：lastAction = null 且涉及资源最后一条 Placement 时
-/// 返回 needConfirm + lastAssets 不动数据；"recycle" = 移入回收站（recycle.json 记录，
-/// info 原地不动）；"uncategorized" = 保留为未分类（改挂 root）；非最后一条直接移除
+/// 删除 Placement（3.4 八轮语义简化，2026-08-19 用户定"护栏拆干净"）：**位置级**——
+/// "uncategorized" = 从文件夹中移除（挪未分类，不删记录）/ "recycle" = 丢到回收站
+/// （recycle.json 按资产聚合记录，info 原地不动）；origin / 链接同路径，无"最后一条"两段式、
+/// 无 origin 自动转移（手动转移归阶段六「设为原始文件」）。撤销标签按 action 分流
 #[tauri::command]
 pub async fn delete_placements(
   state: State<'_, AppState>,
   items: Vec<PlacementRef>,
   last_action: Option<String>,
-) -> Result<DeleteReport, String> {
+) -> Result<(), String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
@@ -448,14 +449,9 @@ pub async fn delete_placements(
     undo.record_file(&lib.root.join(RECYCLE_FILE)).map_err(|e| e.to_string())?;
   }
   match operations::delete_placements(lib, &items, last_action.as_deref()) {
-    // 询问段未动数据：丢弃事务，不进撤销栈
-    Ok(report) if report.need_confirm => {
-      undo.cancel();
-      Ok(report)
-    }
-    Ok(report) => {
+    Ok(()) => {
       undo.commit().map_err(|e| e.to_string())?;
-      Ok(report)
+      Ok(())
     }
     Err(e) => Err(fail(lib, &mut undo, e)),
   }
