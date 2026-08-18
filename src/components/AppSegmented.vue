@@ -7,9 +7,15 @@ import { computed } from "vue";
 
 const model = defineModel<string>({ required: true });
 const props = withDefaults(
-  defineProps<{ options: readonly { value: string; label: string }[]; small?: boolean }>(),
-  { small: false },
+  defineProps<{ options: readonly { value: string; label: string }[]; small?: boolean; disabled?: boolean }>(),
+  { small: false, disabled: false },
 );
+
+// 禁用态（3.5：排序"自定义"时升降切换禁用）：整体降档 + 不响应，选中滑块保留当前位
+function pick(value: string): void {
+  if (props.disabled) return;
+  model.value = value;
+}
 
 const index = computed(() => Math.max(0, props.options.findIndex((o) => o.value === model.value)));
 const n = computed(() => Math.max(1, props.options.length));
@@ -21,7 +27,7 @@ const thumbStyle = computed(() => ({
 </script>
 
 <template>
-  <div class="app-seg" :class="{ small }" role="tablist">
+  <div class="app-seg" :class="{ small, disabled }" role="tablist">
     <span class="thumb" :style="thumbStyle" />
     <button
       v-for="o in options"
@@ -29,7 +35,8 @@ const thumbStyle = computed(() => ({
       class="item"
       :class="{ on: o.value === model }"
       role="tab"
-      @click="model = o.value"
+      :disabled="disabled"
+      @click="pick(o.value)"
     >
       {{ o.label }}
     </button>
@@ -81,6 +88,16 @@ const thumbStyle = computed(() => ({
   padding: var(--space-4) var(--space-8);
   font-size: var(--text-label-size);
   line-height: var(--text-label-line);
+}
+/* 禁用态：整体降档不响应（hover 不再出 C3） */
+.app-seg.disabled {
+  opacity: 0.5;
+}
+.app-seg.disabled .item {
+  cursor: default;
+}
+.app-seg.disabled .item:hover {
+  background: transparent;
 }
 .item:hover {
   background: var(--c3);

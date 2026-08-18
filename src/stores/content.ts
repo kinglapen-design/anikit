@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isStaticImageExt } from "../lib/formatBadge";
+import { isDisplaySorted, sortPlacements } from "../lib/sortPlacements";
 import { playFail, playSuccess } from "../lib/sounds";
 import { useSelectionStore } from "./selection";
 import { useToastStore } from "./toast";
@@ -25,6 +26,11 @@ export interface PlacementView {
   duration: number | null; // 音视频 / 动图时长（秒，5.1）；无时长资源为 null——卡片标签显示 mm:ss
   bpm: number | null; // 音频 BPM（只读内嵌标签，5.1）；无标签为 null
   importedFrom: string | null; // 导入渠道标记；"inbox" 且未摘标（root）= 收件箱"已导入"持久显示
+  // —— 以下四项服务 3.5 排序（后端 views.rs 自 metadata 带出）——
+  size: number; // 文件大小（字节）
+  createdAt: string | null; // 源文件磁盘创建时间 RFC3339；存量数据为 null（排序排尾）
+  modifiedAt: string; // 库内数据最后变更时刻 RFC3339
+  importedAt: string; // 导入时刻 RFC3339
   noteCount?: number | null; // 逐帧笔记条数冗余（5.2 展示层：卡片笔记角标据此显隐）；无笔记为 null
   thumbFrame?: string | null; // 封面帧：序列帧/动图 = 帧名；视频 = `t:{秒}`（5.2 写入，5.3 悬停播放范围起点）
   fps?: number | null; // 帧率：序列帧 = 播放帧率；视频 = 素材自身帧率（5.3 帧化：帧号显示 / 逐帧步进按 1/fps）
@@ -223,6 +229,9 @@ let unlistenRecent: (() => void) | undefined;
 // 预览返回不跳顶（设缩略图后可直接确认），对比两个文件夹不用重新翻
 const scrollPositions = new Map<string, number>();
 
+// 新增区到达序号（3.5）：单调递增计数器，区内先来在前
+let arrivalSeq = 0;
+
 // 递归查文件夹节点（stripFolders / 标题栏 crumbs 共用）
 // 快速访问视口文案（1.2 多标签页：标签页标题 / 面包屑 / 本 store 视口计算共用）
 // inbox = PRD 02-15"自动导入"（收件箱渠道候车区，2026-08-08 对齐新稿命名）
@@ -256,6 +265,10 @@ export const useContentStore = defineStore("content", {
     recycleEntries: [] as RecycleEntryView[],
     // 档案详细数据（2026-08-15 档案子系统一轮）：folderId → ArchiveData，refresh 一并拉取装配
     archives: {} as Record<string, ArchiveData>,
+    // 3.5 排序新增区（2026-08-19 用户定）：排序状态下新增 / 导入的项不按排序键分散、集中置顶
+    // （先来在前）——用户要能找到新建文件、确认导入数量；切视图（sidebarSelected 变化）/ 切库 /
+    // 拖拽物化时归位清空。key = `${assetId}|${folderId}`（与选择 / 拖拽键同口径），value = 到达序号
+    newArrivals: new Map<string, number>(),
     // 左栏选中项：quick:all / quick:uncategorized… / folder:{id}
     sidebarSelected: "quick:all",
     // 选中互斥：素材卡片选中（selection store）与收件箱条目选中互斥。
@@ -315,11 +328,29 @@ export const useContentStore = defineStore("content", {
     // "最近使用 / 回收站"已接真实视图，6.1 二轮：元素为 PlacementView 超集，AssetGrid 零改动复用）
     placementsFor(state) {
       return (viewKey: string): PlacementView[] => {
+        // 3.5 排序（28 稿）：显示层排序不动存储序——自定义原样返回，其余键全局统一排序；
+        // 素材区全视图生效（含快速访问，2026-08-19 用户定）；文件夹/档案卡片不参与。
+        // 新增区（2026-08-19 用户定）：排序状态下新增/导入项集中置顶（按到达序）——切视图归位
+        const sort = (list: PlacementView[]): PlacementView[] => {
+          const ui = useUiStore();
+          const sorted = sortPlacements(list, ui.sortBy, ui.sortAsc);
+          if (!isDisplaySorted(ui.sortBy) || state.newArrivals.size === 0) return sorted;
+          const fresh: { p: PlacementView; seq: number }[] = [];
+          const rest: PlacementView[] = [];
+          for (const p of sorted) {
+            const seq = state.newArrivals.get(`${p.assetId}|${p.folderId}`);
+            if (seq === undefined) rest.push(p);
+            else fresh.push({ p, seq });
+          }
+          if (fresh.length === 0) return sorted;
+          fresh.sort((a, b) => a.seq - b.seq);
+          return [...fresh.map((f) => f.p), ...rest];
+        };
         if (viewKey.startsWith("folder:")) {
           const id = viewKey.slice(7);
           // 递归显示（ui.showSubfolders，2026-08-10 接入）：开 = 视口含全部后代文件夹的 Placement；
           // 关 = 仅当前文件夹直接 Placement
-          if (!useUiStore().showSubfolders) return state.placements.filter((p) => p.folderId === id);
+          if (!useUiStore().showSubfolders) return sort(state.placements.filter((p) => p.folderId === id));
           const ids = new Set<string>();
           const collect = (n: FolderNode): void => {
             ids.add(n.id);
@@ -328,23 +359,23 @@ export const useContentStore = defineStore("content", {
           const root = findFolder(state.folders, id);
           if (root) collect(root);
           else ids.add(id); // 失效 viewKey（文件夹已删）：退化为直接匹配
-          return state.placements.filter((p) => ids.has(p.folderId));
+          return sort(state.placements.filter((p) => ids.has(p.folderId)));
         }
         switch (viewKey) {
           // 2026-08-13 用户定案：快速访问不做内容限制——按实际 Placement 显示，
           // 链接不再隐藏（原 originOnly 资产级去重 + origin 过滤整体废除）
           case "quick:all": // 全部 = 递归显示所有文件（2026-07-22 用户定案）
-            return state.placements;
+            return sort(state.placements);
           case "quick:uncategorized": // 未分类 = 未归入任何文件夹（root 即未分类）
-            return state.placements.filter((p) => p.folderId === "root");
+            return sort(state.placements.filter((p) => p.folderId === "root"));
           case "quick:inbox": // 收件箱"已导入" = importedFrom=inbox 且未摘标的资产，持久显示
             // （2026-07-25 用户定：用户没分类走就要一直在）。不限 folderId=root——手动导入 Keep
             // 生成的层级也算未分类；摘标 = 清 importedFrom（归 6.3），清后自然消失
-            return state.placements.filter((p) => p.importedFrom === "inbox");
-          case "quick:recent": // 最近使用（后端已按时间倒序）
-            return state.recentAssets;
+            return sort(state.placements.filter((p) => p.importedFrom === "inbox"));
+          case "quick:recent": // 最近使用（后端已按时间倒序；3.5 排序开启后按排序键覆盖）
+            return sort(state.recentAssets);
           case "quick:recycle": // 回收站（folderId 恒 "recycle"，key 与素材域互不干扰）
-            return state.recycleEntries;
+            return sort(state.recycleEntries);
           default:
             return [];
         }
@@ -464,6 +495,17 @@ export const useContentStore = defineStore("content", {
       for (const p of this.placements) {
         if (p.assetId === assetId) p.noteCount = v;
       }
+    },
+
+    // 3.5 新增区登记（排序状态下置顶）：导入 / 粘贴 / 新建 / 副本完成后调用；重复登记原位不动
+    markArrivals(keys: string[]): void {
+      for (const k of keys) {
+        if (!this.newArrivals.has(k)) this.newArrivals.set(k, ++arrivalSeq);
+      }
+    },
+    // 新增区归位清空：切视图（sidebarSelected 变化，App.vue watch）/ 切库 / 拖拽物化时调用
+    clearArrivals(): void {
+      if (this.newArrivals.size > 0) this.newArrivals.clear();
     },
 
     // 库打开后 / 导入完成后全量刷新（增量刷新随阶段 4 任务队列再做）
@@ -760,6 +802,8 @@ export const useContentStore = defineStore("content", {
                 } else {
                   this.placements.push(...batch);
                 }
+                // 3.5 新增区：导入项登记置顶（排序状态下集中顶部，便于确认导入数量）
+                this.markArrivals(batch.map((p) => `${p.assetId}|${p.folderId}`));
               }
             }, FLUSH_MS);
           }

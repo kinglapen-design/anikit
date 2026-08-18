@@ -66,6 +66,7 @@ async function afterOpen(info: LibraryInfo): Promise<LibraryInfo> {
   const undo = useUndoStore();
   currentLibrary.name = info.name;
   tabs.closeAllTabs();
+  content.clearArrivals(); // 3.5 新增区：切库即归位
   await content.refresh();
   void undo.refreshState();
   return info;

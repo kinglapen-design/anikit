@@ -236,6 +236,8 @@ pub(crate) fn build_sequence_asset(
 
   let mut size = 0u64;
   let mut thumb_frame = String::new();
+  // 创建时间 = 首帧源文件磁盘创建时间（store_file 的 Move 分支会删源，须在循环前读）
+  let created_at = frames.first().and_then(|(src, _)| import::source_created_at(src));
   for (src, number) in frames {
     let dest_name = frame_name(name, *number, num_width, ext);
     size += fs::metadata(src).map(|m| m.len()).unwrap_or(0);
@@ -265,6 +267,7 @@ pub(crate) fn build_sequence_asset(
     links: Vec::new(),
     imported_at: now.clone(),
     imported_from: imported_from.map(|s| s.to_string()),
+    created_at,
     modified_at: now,
     tags: Vec::new(),
     note: String::new(),

@@ -2,7 +2,7 @@
 // 查看方式（28_展开菜单 - 查看方式，1.4 2026-08-11 全量重写；旧 03_UI 布局/05 稿 picker 行模式作废）：
 // 面板式展开菜单——宽 404 / padding 12 24 / 行高 53 / 行标题 16/22 700（标题档）；
 // 布局方式 = 切换按钮组（自适应/瀑布流/网格/列表，AppSegmented 点亮）；
-// 排序方式 = 下拉「自定义」+ 升/降切换（**占位禁用**——排序业务 3.5 接）；
+// 排序方式 = 下拉 8 项 + 升/降切换（3.5 点亮：自定义 = 存储序且升降禁用；全局应用级，全视图素材区生效）；
 // 时间码显示方式 = 帧数/时长切换（点亮，播放条/悬停胶囊/笔记同值联动）；
 // 显示简介 = 下拉选内容 + 开关（ui.showBrief，与 briefMode 独立）；
 // 显示扩展名（名称词干）/ 显示徽标（格式角标）/ 显示子文件夹内容 = 开关点亮；
@@ -15,6 +15,7 @@ import AppSwitch from "./AppSwitch.vue";
 import AppSegmented from "./AppSegmented.vue";
 import AppIcon from "./AppIcon.vue";
 import { useUiStore } from "../stores/ui";
+import { isDisplaySorted, type SortKey } from "../lib/sortPlacements";
 
 const ui = useUiStore();
 const props = defineProps<{ anchor: { x: number; y: number }; trigger?: HTMLElement | null }>();
@@ -43,24 +44,38 @@ const timeDisplays = [
   { value: "frames", label: "帧数" },
   { value: "timecode", label: "时长" },
 ] as const;
+// 排序键 8 项（3.5 用户定：含时长；04 预览 06 节口径补"自定义"首项）
+const sortKeys: readonly { value: SortKey; label: string }[] = [
+  { value: "", label: "自定义" },
+  { value: "name", label: "名称" },
+  { value: "size", label: "文件大小" },
+  { value: "duration", label: "时长" },
+  { value: "ext", label: "扩展名" },
+  { value: "createdAt", label: "创建时间" },
+  { value: "modifiedAt", label: "修改时间" },
+  { value: "importedAt", label: "导入时间" },
+];
 const sortOrders = [
   { value: "asc", label: "升序" },
   { value: "desc", label: "降序" },
 ] as const;
 
 const briefLabel = computed(() => briefs.find((b) => b.value === ui.briefMode)?.label ?? "尺寸");
+const sortLabel = computed(() => sortKeys.find((s) => s.value === ui.sortBy)?.label ?? "自定义");
 const sortOrderModel = computed({
   get: () => (ui.sortAsc ? "asc" : "desc"),
   set: (v) => {
     ui.sortAsc = v === "asc";
   },
 });
+// 自定义 = 存储序，无升降语义——升降切换禁用（3.5 定）
+const sorted = computed(() => isDisplaySorted(ui.sortBy));
 
-// 下拉选择器（显示简介一项；排序方式占位禁用不出 picker）
-const picker = ref<{ kind: "brief"; x: number; y: number } | null>(null);
+// 下拉选择器（显示简介 / 排序方式两项）
+const picker = ref<{ kind: "brief" | "sort"; x: number; y: number } | null>(null);
 const pickerTrigger = ref<HTMLElement | null>(null);
 
-function openPicker(kind: "brief", e: MouseEvent): void {
+function openPicker(kind: "brief" | "sort", e: MouseEvent): void {
   if (picker.value?.kind === kind) {
     picker.value = null;
     return;
@@ -93,15 +108,15 @@ function closeAll(): void {
         <span class="label">布局方式</span>
         <AppSegmented v-model="ui.layoutMode" :options="layouts" small style="width: 208px" />
       </div>
-      <!-- 排序方式（占位禁用——排序业务 3.5 接） -->
-      <div class="row tall disabled">
+      <!-- 排序方式（3.5 点亮）：下拉 8 项 + 升/降切换（自定义 = 存储序，升降禁用） -->
+      <div class="row tall">
         <span class="label">排序方式</span>
         <span class="ctrl">
-          <button class="picker" disabled>
-            <span class="val">{{ ui.sortBy || "自定义" }}</span>
+          <button class="picker" @click="openPicker('sort', $event)">
+            <span class="val">{{ sortLabel }}</span>
             <AppIcon name="tree-expand-arrow" :size="12" class="down" />
           </button>
-          <AppSegmented v-model="sortOrderModel" :options="sortOrders" small style="width: 104px" class="seg-disabled" />
+          <AppSegmented v-model="sortOrderModel" :options="sortOrders" small :disabled="!sorted" style="width: 104px" />
         </span>
       </div>
       <div class="row tall">
@@ -164,6 +179,18 @@ function closeAll(): void {
         @select="ui.briefMode = b.value; picker = null"
       />
     </AppMenu>
+
+    <!-- 排序方式选项菜单（8 项，当前键对勾） -->
+    <AppMenu v-if="picker?.kind === 'sort'" :x="picker.x" :y="picker.y" :trigger="pickerTrigger" @close="picker = null">
+      <MenuItem
+        v-for="s in sortKeys"
+        :key="s.value || 'custom'"
+        :label="s.label"
+        checkable
+        :checked="ui.sortBy === s.value"
+        @select="ui.sortBy = s.value; picker = null"
+      />
+    </AppMenu>
   </div>
 </template>
 
@@ -216,10 +243,7 @@ function closeAll(): void {
 .row.disabled .label {
   color: var(--line-active);
 }
-.seg-disabled {
-  opacity: 0.5;
-}
-/* 下拉选择器（28 稿：C4 底 / 1px 暗-悬停边框 / 圆角 6）；disabled 不降 hover */
+/* 下拉选择器（28 稿：C4 底 / 1px 暗-悬停边框 / 圆角 6） */
 .picker {
   display: flex;
   align-items: center;
@@ -237,13 +261,6 @@ function closeAll(): void {
 }
 .picker:hover {
   background: var(--c5);
-}
-.picker:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-.picker:disabled:hover {
-  background: var(--c4);
 }
 .picker .val {
   flex: 1;

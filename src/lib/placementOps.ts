@@ -92,6 +92,8 @@ export async function linkPlacements(
   let linked = 0;
   return await runOp(async () => {
     linked = await invoke<number>("link_placements", { items, targetFolder, names });
+    // 3.5 新增区：新链接登记置顶（排序状态下可见）
+    if (linked > 0) useContentStore().markArrivals(items.map((it) => `${it.assetId}|${targetFolder}`));
   }, () => `关联 ${linked} 个项目`);
 }
 
@@ -104,6 +106,7 @@ export async function duplicatePlacements(
   return await runOp(async () => {
     const ids = await invoke<string[]>("duplicate_placements", { items, targetFolder, names });
     created = ids.length;
+    if (created > 0) useContentStore().markArrivals(ids.map((id) => `${id}|${targetFolder}`));
   }, () => `创建 ${created} 个副本`);
 }
 
@@ -349,6 +352,7 @@ export async function createDocument(kind: NewDocKind): Promise<void> {
       kind,
       targetFolder: content.currentFolderId,
     });
+    content.markArrivals([`${view.assetId}|${view.folderId}`]); // 3.5 新增区：新建文档置顶可见
     await content.refresh();
     void undo.refreshState();
     selection.renamingKey = `${view.assetId}|${view.folderId}`;

@@ -190,6 +190,7 @@ mod tests {
         links: Vec::new(),
         imported_at: imported_at.into(),
         imported_from: None,
+        created_at: None,
         modified_at: imported_at.into(),
         tags: Vec::new(),
         note: String::new(),

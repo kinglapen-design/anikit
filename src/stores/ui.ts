@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
 import { mergeDetailSections, type DetailSectionPref } from "../lib/detailSections";
+import type { SortKey } from "../lib/sortPlacements";
 
 export type LeftView = "library" | "workspace" | "tags" | "pins";
 export type RightView = "detail" | "aiChat" | "aiPaint" | "aiVideo";
@@ -58,7 +59,8 @@ export const useUiStore = defineStore("ui", {
     // 查看方式（阶段 1：布局生效，排序 / 分组占位）
     layoutMode: "justified" as "justified" | "waterfall" | "grid" | "list",
     useGlobalView: true,
-    sortBy: "",
+    // 3.5 排序（28 稿）："" = 自定义（存储序）；其余键 = 显示层排序（lib/sortPlacements）
+    sortBy: "" as SortKey,
     sortAsc: true,
     // 查看方式二级窗口（2026-07-23）：显示简介（尺寸已实现，其余随 7.x 接线）/ 角标开关；
     // 自动播放（5.3 已接，2026-07-27）：动图开关含序列帧（用户定：序列帧也是动图范围）

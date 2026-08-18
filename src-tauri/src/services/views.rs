@@ -41,6 +41,15 @@ pub struct PlacementView {
   pub bpm: Option<f64>,
   /// 导入渠道标记（PRD 01-2.3）："inbox" = 收件箱渠道；快速访问"已导入"据此持久显示未摘标资产
   pub imported_from: Option<String>,
+  // —— 以下四项服务 3.5 排序（名称 / 大小 / 时长 / 扩展名外的时间与大小键）；名称等既有字段同用 ——
+  /// 文件大小（字节）
+  pub size: u64,
+  /// 源文件磁盘创建时间（RFC3339）；存量数据 / 读取失败为 null——前端排序排尾
+  pub created_at: Option<String>,
+  /// 库内数据最后变更时刻（RFC3339）
+  pub modified_at: String,
+  /// 导入时刻（RFC3339）
+  pub imported_at: String,
   /// 逐帧笔记条数冗余（5.2 展示层：卡片笔记角标据此显隐）；无笔记为 null
   pub note_count: Option<u32>,
   /// 封面帧（PRD 01）：序列帧/动图 = frames/ 内帧名；视频 = `t:{秒}`（5.2 set_video_thumb 写入，
@@ -92,6 +101,10 @@ pub fn placement_view(lib: &Library, meta: &AssetMeta, p: &Placement, icons: &Ha
     duration: meta.duration,
     bpm: meta.bpm,
     imported_from: meta.imported_from.clone(),
+    size: meta.size,
+    created_at: meta.created_at.clone(),
+    modified_at: meta.modified_at.clone(),
+    imported_at: meta.imported_at.clone(),
     note_count: meta.note_count,
     thumb_frame: meta.thumb_frame.clone(),
     fps: meta.fps,

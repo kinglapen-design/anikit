@@ -84,6 +84,7 @@ pub fn create_document(
     links: Vec::new(),
     imported_at: now.clone(),
     imported_from: None,
+    created_at: Some(now.clone()), // 新建文档无源文件，建档时刻即创建时间
     modified_at: now,
     tags: Vec::new(),
     note: String::new(),

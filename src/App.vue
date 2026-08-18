@@ -128,8 +128,12 @@ onMounted(() => {
   void syncMaximized();
   void ui.initSettings(); // 全局 UI 设置加载 + 变更防抖写回（2026-07-28 持久化）
   window.addEventListener("resize", onResize);
-  // 视图切换（6.1）：左栏选中项变化即清空素材选择
-  watch(() => content.sidebarSelected, () => selection.clear());
+  // 视图切换（6.1）：左栏选中项变化即清空素材选择；
+  // 3.5 新增区同口径归位（2026-08-19 用户定：切视图再回来 = 新增项并入排序流）
+  watch(() => content.sidebarSelected, () => {
+    selection.clear();
+    content.clearArrivals();
+  });
   void content.initInboxListener(); // 收件箱自动入库（3.2），App 存活期注册一次
   void content.initFpsHealListener(); // 存量视频 fps 自愈通知（2026-07-28 复验反馈修复）
   void content.initRecentListener(); // 最近使用热刷新（2026-07-29 复验反馈修复）

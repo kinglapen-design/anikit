@@ -38,8 +38,10 @@
 //   ⑥ 双击名称变打开（2026-08-18 修复）：begin 即 pointer capture 会把双击第二击与 dblclick
 //      重定向到卡片根元素，名称区 @dblclick.stop 收不到；capture 后移到 startDrag（拖拽全程仍有效）。
 import { reactive } from "vue";
-import { useContentStore } from "../stores/content";
+import { useContentStore, type PlacementView } from "../stores/content";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
+import { useUiStore } from "../stores/ui";
+import { isDisplaySorted } from "./sortPlacements";
 import { COL_GAP } from "./layouts";
 import * as ops from "./placementOps";
 import { makeGhost, moveGhost } from "./dragGhost";
@@ -326,6 +328,34 @@ async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator): Promis
   if (target === null) return;
   const items = dragged.filter((it) => it.folderId === target);
   if (items.length === 0) return;
+  const ui = useUiStore();
+  if (isDisplaySorted(ui.sortBy)) {
+    // 显示排序下拖拽排序（3.5，02 整理"物化 + 切回自定义"口径的素材侧延伸）：把该层可见序
+    // （新增区置顶段 + 排序流）物化为存储序、拖拽组按落点并入，整层一次重写并切回自定义——
+    // 否则 refresh 后排序键盖回，拖拽等于没执行。物化静默（不单独 toast，undo 快照仍在）
+    if (gap.beforeKey && items.some((it) => `${it.assetId}|${it.folderId}` === gap.beforeKey)) return; // 插到自身前 = 无操作
+    const visible = content.placementsFor(`folder:${target}`).filter((p) => p.folderId === target);
+    const inDrag = (p: PlacementView): boolean =>
+      items.some((it) => it.assetId === p.assetId && it.folderId === p.folderId && it.origin === p.origin);
+    const rest = visible.filter((p) => !inDrag(p));
+    let insert = rest.length;
+    if (gap.beforeKey) {
+      const at = rest.findIndex((p) => `${p.assetId}|${p.folderId}` === gap.beforeKey);
+      if (at >= 0) insert = at;
+    }
+    const ordered = visible.filter(inDrag); // 拖拽组保持可见序中的相对顺序
+    const seq = [...rest.slice(0, insert), ...ordered, ...rest.slice(insert)];
+    const ok = await ops.reorderPlacements(
+      seq.map((p) => ({ assetId: p.assetId, folderId: p.folderId, origin: p.origin })),
+      target,
+      null, // 整层序列全传 + 段尾锚点 = 全层重写（reorder_folders 物化同模式）
+    );
+    if (ok) {
+      ui.sortBy = "";
+      content.clearArrivals(); // 可见序（含新增区位置）已物化进存储序，新增区概念由自定义序承接
+    }
+    return;
+  }
   let beforeItem: PlacementRef | null = null;
   if (gap.beforeKey) {
     if (items.some((it) => `${it.assetId}|${it.folderId}` === gap.beforeKey)) return; // 插到自身前 = 无操作

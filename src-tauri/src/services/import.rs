@@ -345,6 +345,13 @@ pub(crate) fn store_file(src: &Path, dest: &Path, source: Source) -> Result<(), 
   Ok(())
 }
 
+/// 源文件磁盘创建时间（RFC3339 本地秒，与 imported_at 同格式）：读取失败 / 平台不支持为 None。
+/// 须在入库（store_file 复制）前对源路径调用——池内副本的 birth time 是复制时刻，无意义
+pub(crate) fn source_created_at(path: &Path) -> Option<String> {
+  let t = fs::metadata(path).ok()?.created().ok()?;
+  Some(chrono::DateTime::<chrono::Local>::from(t).to_rfc3339_opts(chrono::SecondsFormat::Secs, false))
+}
+
 /// 组装 metadata.json 内容（PRD 01-2.3：只存资源固有属性，位置信息在 folders.json）
 #[allow(clippy::too_many_arguments)]
 fn make_meta(
@@ -376,6 +383,8 @@ fn make_meta(
     links: Vec::new(),
     imported_at: now.clone(),
     imported_from: imported_from.map(|s| s.to_string()),
+    // 剪贴板导入的源 = cache/ 临时文件（刚创建），created 即建档时刻，语义自洽
+    created_at: source_created_at(&file.path),
     modified_at: now,
     tags: Vec::new(),
     note: String::new(),
@@ -598,6 +607,10 @@ mod tests {
       duration: None,
       bpm: None,
       imported_from: None,
+      size: 0,
+      created_at: None,
+      modified_at: "2026-08-19T00:00:00+08:00".into(),
+      imported_at: "2026-08-19T00:00:00+08:00".into(),
       note_count: None,
       thumb_frame: None,
       fps: None,
@@ -611,6 +624,8 @@ mod tests {
           "assetId": "AN-X", "folderId": "root", "name": "a.png",
           "w": 1, "h": null, "ext": "png", "thumbPath": null, "thumbKind": null, "origin": true,
           "frameCount": null, "animated": false, "duration": null, "bpm": null, "importedFrom": null,
+          "size": 0, "createdAt": null,
+          "modifiedAt": "2026-08-19T00:00:00+08:00", "importedAt": "2026-08-19T00:00:00+08:00",
           "noteCount": null, "thumbFrame": null, "fps": null
         }
       })

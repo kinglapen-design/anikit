@@ -72,6 +72,13 @@ pub struct AssetMeta {
   /// 同渠道静默合并 2026-08-13 用户定案废除（原服务 RECOVER 场景，随工程文件不自动导入消解）
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub imported_from: Option<String>,
+  /// 源文件磁盘创建时间（RFC3339，3.5 排序键）：导入时记源文件 birth time（池内复制会刷新
+  /// 文件自身时间，故须在入库前读源）；剪贴板临时文件 / 新建文档 = 建档时刻；副本 / 克隆继承
+  /// 源资产不刷新；存量数据 None（前端排序排尾）。不升 DATA_VERSION
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub created_at: Option<String>,
+  /// 库内数据最后变更时刻（导入 / 解包 / 设封面 / 重命名等写操作刷新；3.5 排序"修改时间"取此——
+  /// 2026-08-19 用户定：用库内变更时刻，非源文件 mtime 冻结值）
   pub modified_at: String,
   #[serde(default)]
   pub tags: Vec<String>,

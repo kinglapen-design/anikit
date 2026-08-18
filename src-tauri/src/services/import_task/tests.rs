@@ -244,11 +244,15 @@
     assert_eq!((placement.w, placement.h), (Some(64), Some(32)));
     assert!(placement.thumb_path.as_ref().unwrap().ends_with("_thumbnail.webp"));
     assert!(placement.origin);
+    // 3.5 排序字段：大小 / 三个时间键随视图带出
+    assert!(placement.size > 0 && !placement.imported_at.is_empty() && !placement.modified_at.is_empty());
 
     with_lib(&h, |l| {
       let asset = l.index.assets.values().next().unwrap();
       assert_eq!(asset.ext, "png");
       assert!(asset.hash.starts_with("sha256:"));
+      // 3.5：导入时记源文件磁盘创建时间（NTFS birth time）
+      assert!(asset.created_at.is_some(), "导入时记源文件创建时间");
       let info = paths::info_dir(&h.assets_dir, &asset.id);
       assert!(info.join("metadata.json").is_file());
       assert!(info.join(asset.thumbnail.as_ref().unwrap()).is_file());
