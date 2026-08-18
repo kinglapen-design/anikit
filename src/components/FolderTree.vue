@@ -142,11 +142,7 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
       <div
         v-if="isOpen(node.id) && node.children.length > 0"
         class="ft-children"
-        :style="{
-          '--guide-x': `${depth * 20 + 14}px`,
-          // 缩进线随父级自定义色（2026-08-18，3.3 / PRD 02-46「一处改色多处生效」）
-          '--guide-color': nodeTint(node) ? `var(--custom-${nodeTint(node)})` : undefined,
-        }"
+        :style="{ '--guide-x': `${depth * 20 + 14}px` }"
       >
         <FolderTree
           :nodes="node.children"
@@ -185,7 +181,8 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: var(--guide-color, var(--line-hover)); /* 父级自定义色时随色（3.3），否则暗-悬停 */
+  /* 半透明暗-悬停线：叠在带色 item 上自然叠出略带颜色的线条（2026-08-18 用户定，不变色） */
+  background: var(--line-hover);
   z-index: 1;
   pointer-events: none;
 }

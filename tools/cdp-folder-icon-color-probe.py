@@ -1,16 +1,17 @@
-# CDP 回归探针：3.3 自定义文件夹图标颜色（2026-08-18）
+# CDP 回归探针：3.3 自定义文件夹图标颜色（2026-08-18，同步语义二轮修订）
 # 05 稿 §3 更改图标 / §4 更改颜色网格面板（CtxItem.panel + ContextMenu flyout 分流渲染）：
-#   S1 右键 f1 → hover「更改图标」→ 面板结构：.folder-icon-panel 20 格 / 宽 230 /
-#      首格 cur（无自定义图标时默认格选中）/ 有「应用至子级」复选框
-#   S2 点 animal 格 → set_folder_icon{f1, animal, false} + 菜单关闭 + f1 图标 svg 变化
-#   S3 重开勾选「应用至子级」点 scene 格 → applyToChildren=true；展开 f1 后 f1-1 图标同步换
-#      （桩递归生效，f1 与 f1-1 deco svg 一致）
+#   S1 右键 f1 → hover「更改图标」→ 面板结构：.icon-grid 20 格 / 宽 230 / 首格 cur / 无复选框
+#   S2 点 animal 格 → set_folder_icon{f1, animal}（无 applyToChildren 参数）+ 菜单关闭 + svg 变化
+#   S3 f1 点 scene → 默认影响子级：f1-1 / f1-1-1 跟随（同步语义：一致跟随，无复选框）
+#   S3b f1-1 单独 animal → f1 换 weapon：f1-1 不跟随（已区分阻断）
 #   S4 右键 f2 → hover「更改颜色」→ 面板结构：.color-grid 10 格 / 宽 235 / 无复选框 / 首格 cur
 #   S5 点红色格 → set_folder_color{f2, red} + f2(root) --tint-bg = var(--custom-red)
-#   S6 f1 设蓝色（末位格）→ f1(root) --tint-bg = var(--custom-blue)；f1-1(child 继承)
-#      --tint-bg = var(--custom-blue-bg)；缩进线容器 --guide-color = var(--custom-blue)；
-#      f2 红不受影响
+#   S6 f1 设蓝色（末位格）→ f1(root) = custom-blue；f1-1/f1-1-1(child 继承) = custom-blue-bg；
+#      缩进线无 --guide-color（2026-08-18 用户定：不变色，半透明线自然叠色）；f2 红不受影响
+#   S6b 颜色同步（用户场景 2）：f1-1 单独 red → f1 改 green 不跟随；f1-1 改回 green 后
+#      f1 改 red → f1-1 重新跟随（孙级视觉 red-bg）
 #   S7 f2 颜色回默认（首格）：重开时 cells[1](红) cur → 点首格 → color:null → f2 无 --tint-bg
+#   S8 区块管理行「默认图标」下拉 = 网格面板（openPanelMenu 整体面板菜单）
 # 用法：先起 pnpm dev（5373；探针检测到未监听会自起并在结束时杀掉），再
 #   tools/.venv/Scripts/python.exe tools/cdp-folder-icon-color-probe.py
 import asyncio
@@ -74,13 +75,18 @@ window.__TAURI_INTERNALS__ = {
       redo: null,
     };
     if (cmd === "set_folder_icon") {
-      window.__calls.set_folder_icon.push({ folderId: args.folderId, icon: args.icon, applyToChildren: args.applyToChildren });
+      window.__calls.set_folder_icon.push({ folderId: args.folderId, icon: args.icon });
       const node = findNode(TREE.nodes, args.folderId);
       if (node) {
-        node.icon = args.icon;
-        if (args.applyToChildren) {
-          const apply = (n) => { n.icon = args.icon; n.children.forEach(apply); };
-          node.children.forEach(apply);
+        // 同步语义（与后端一致）：后代图标 == 本节点旧图标 → 跟随写入并下钻；!= → 阻断
+        const oldChain = node.icon ?? null;
+        const stack = [node];
+        while (stack.length) {
+          const p = stack.pop();
+          p.icon = args.icon;
+          for (const c of p.children) {
+            if ((c.icon ?? null) === oldChain) stack.push(c);
+          }
         }
       }
       return Promise.resolve(null);
@@ -89,8 +95,20 @@ window.__TAURI_INTERNALS__ = {
       window.__calls.set_folder_color.push({ folderId: args.folderId, color: args.color });
       const node = findNode(TREE.nodes, args.folderId);
       if (node) {
-        if (args.color) node.color = args.color;
-        else delete node.color;
+        // 同步语义（与后端一致）：无色后代穿透不写；显式 == 旧链路色 → 跟随写入；!= → 阻断
+        //（桩节点均为 f1 后代、无更上祖先，oldChain = 本节点色即可，不模拟上溯）
+        const oldChain = node.color ?? null;
+        const apply = (n) => { if (args.color) n.color = args.color; else delete n.color; };
+        apply(node);
+        const stack = [node];
+        while (stack.length) {
+          const p = stack.pop();
+          for (const c of p.children) {
+            const v = c.color ?? null;
+            if (v === null) stack.push(c);
+            else if (v === oldChain) { apply(c); stack.push(c); }
+          }
+        }
       }
       return Promise.resolve(null);
     }
@@ -280,25 +298,25 @@ async def main():
             print("S1 右键 f1 → hover「更改图标」面板结构")
             check("S1 右键菜单出现", await right_click("f1"))
             check("S1 hover「更改图标」", await hover_menu("更改图标"))
-            panel = await ev("!!document.querySelector('.folder-icon-panel')")
+            panel = await ev("!!document.querySelector('.app-menu .icon-grid')")
             check("S1 图标面板出现", bool(panel))
-            cells = await ev("document.querySelectorAll('.folder-icon-panel .cell').length")
+            cells = await ev("document.querySelectorAll('.app-menu .icon-grid .cell').length")
             check("S1 图标格 = 20（默认 + 19 自定义）", cells == 20, str(cells))
-            w = await panel_width(".folder-icon-panel")
+            w = await panel_width(".icon-grid")
             check("S1 面板宽 = 230", w == 230, str(w))
-            cur = await ev("[...document.querySelectorAll('.folder-icon-panel .cell')].findIndex((c) => c.classList.contains('cur'))")
+            cur = await ev("[...document.querySelectorAll('.app-menu .icon-grid .cell')].findIndex((c) => c.classList.contains('cur'))")
             check("S1 首格 cur（无自定义图标 = 默认格选中）", cur == 0, str(cur))
-            cb = await ev("!!document.querySelector('.folder-icon-panel .app-checkbox')")
-            check("S1 有「应用至子级」复选框", bool(cb))
+            cb = await ev("!!document.querySelector('.app-menu .icon-grid')?.closest('.app-menu')?.querySelector('.app-checkbox')")
+            check("S1 无复选框（同步语义：默认影响子级）", not cb)
             shot = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
             with open(SHOT, "wb") as f:
                 f.write(base64.b64decode(shot["result"]["data"]))
             print("截图已存:", SHOT)
 
-            # ── S2：点 animal 格（不勾子级）──
-            print("S2 点 animal 格 → 单点换图标 + 菜单关闭")
+            # ── S2：点 animal 格 ──
+            print("S2 点 animal 格 → 换图标 + 菜单关闭")
             svg_before = await deco_svg("f1")
-            c = await cell_center(".folder-icon-panel .cell", 1)
+            c = await cell_center(".app-menu .icon-grid .cell", 1)
             check("S2 animal 格可点", bool(c))
             if c:
                 await click_xy(c["x"], c["y"])
@@ -306,43 +324,26 @@ async def main():
             call = await ev("window.__calls.set_folder_icon.slice(-1)[0] ?? null")
             print("  调用:", json.dumps(call, ensure_ascii=False))
             check(
-                "S2 set_folder_icon(f1, animal, false)",
-                bool(call) and call["folderId"] == "f1" and call["icon"] == "animal" and call["applyToChildren"] is False,
+                "S2 set_folder_icon(f1, animal)（无 applyToChildren 参数）",
+                bool(call) and call["folderId"] == "f1" and call["icon"] == "animal" and "applyToChildren" not in call,
                 json.dumps(call, ensure_ascii=False),
             )
             check("S2 菜单已关闭", not await ev("!!document.querySelector('.app-menu')"))
             svg_after = await deco_svg("f1")
             check("S2 f1 图标已换（svg 变化）", bool(svg_before) and bool(svg_after) and svg_before != svg_after)
 
-            # ── S3：勾「应用至子级」点 scene 格 ──
-            print("S3 勾「应用至子级」点 scene 格 → 递归换图标")
+            # ── S3：默认传播（无复选框，子级一致即跟随）──
+            print("S3 f1 点 scene 格 → 默认影响子级（f1-1/f1-1-1 跟随）")
             check("S3 右键菜单出现", await right_click("f1"))
             check("S3 hover「更改图标」", await hover_menu("更改图标"))
-            cbc = await ev("""
-              (() => {
-                const cb = document.querySelector('.folder-icon-panel .app-checkbox');
-                if (!cb) return null;
-                const b = cb.getBoundingClientRect();
-                return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) };
-              })()
-            """)
-            if cbc:
-                await click_xy(cbc["x"], cbc["y"])
-                await asyncio.sleep(0.3)
-            on = await ev("document.querySelector('.folder-icon-panel .app-checkbox')?.classList.contains('on') ?? false")
-            check("S3 复选框已勾选", bool(on))
-            c = await cell_center(".folder-icon-panel .cell", 14)  # scene = CUSTOM_ICONS 第 13 位（cells[14]）
+            c = await cell_center(".app-menu .icon-grid .cell", 14)  # scene
             if c:
                 await click_xy(c["x"], c["y"])
                 await asyncio.sleep(0.8)
             call = await ev("window.__calls.set_folder_icon.slice(-1)[0] ?? null")
             print("  调用:", json.dumps(call, ensure_ascii=False))
-            check(
-                "S3 set_folder_icon(f1, scene, true)",
-                bool(call) and call["folderId"] == "f1" and call["icon"] == "scene" and call["applyToChildren"] is True,
-                json.dumps(call, ensure_ascii=False),
-            )
-            # 展开 f1 / f1-1 看子级、孙级同步
+            check("S3 set_folder_icon(f1, scene)", bool(call) and call["icon"] == "scene", json.dumps(call, ensure_ascii=False))
+            # 展开 f1 / f1-1 看子级、孙级跟随
             async def expand(fid):
                 ex = await ev(f"""
                   (() => {{
@@ -359,8 +360,30 @@ async def main():
             await expand("f1")
             svg_f1 = await deco_svg("f1")
             svg_sub = await deco_svg("f1-1")
-            check("S3 f1-1 图标同步换（与 f1 同 svg）", bool(svg_f1) and svg_f1 == svg_sub)
-            await expand("f1-1")  # 孙级 f1-1-1 渲染出来（S6 继承断言用）
+            check("S3 f1-1 图标跟随（与 f1 同 svg）", bool(svg_f1) and svg_f1 == svg_sub)
+            await expand("f1-1")
+            svg_g = await deco_svg("f1-1-1")
+            check("S3 f1-1-1 孙级跟随（与 f1 同 svg）", bool(svg_f1) and svg_f1 == svg_g)
+
+            # ── S3b：子级单独区分后，父级再改不跟随 ──
+            print("S3b f1-1 单独换 animal → f1 换 weapon，f1-1 不跟随")
+            check("S3b 右键 f1-1 菜单出现", await right_click("f1-1"))
+            check("S3b hover「更改图标」", await hover_menu("更改图标"))
+            c = await cell_center(".app-menu .icon-grid .cell", 1)  # animal
+            if c:
+                await click_xy(c["x"], c["y"])
+                await asyncio.sleep(0.8)
+            check("S3b 右键 f1 菜单出现", await right_click("f1"))
+            check("S3b hover「更改图标」", await hover_menu("更改图标"))
+            c = await cell_center(".app-menu .icon-grid .cell", 19)  # weapon 末位
+            if c:
+                await click_xy(c["x"], c["y"])
+                await asyncio.sleep(0.8)
+            svg_f1 = await deco_svg("f1")
+            svg_sub = await deco_svg("f1-1")
+            svg_g = await deco_svg("f1-1-1")
+            check("S3b f1 已换 weapon（svg 变化）", bool(svg_f1) and svg_f1 != svg_sub)
+            check("S3b f1-1 保持 animal（已区分不跟随）", bool(svg_sub) and svg_sub == svg_g, "f1-1 与其孙级一致支不受影响")
 
             # ── S4：更改颜色面板结构 ──
             print("S4 右键 f2 → hover「更改颜色」面板结构")
@@ -420,13 +443,55 @@ async def main():
             check("S6 f1(root) --tint-bg = var(--custom-blue)", tb1 == "var(--custom-blue)", str(tb1))
             check("S6 f1-1(child 继承) --tint-bg = var(--custom-blue-bg)", tb11 == "var(--custom-blue-bg)", str(tb11))
             check("S6 f1-1-1(孙级继承) --tint-bg = var(--custom-blue-bg)", tb111 == "var(--custom-blue-bg)", str(tb111))
-            check("S6 缩进线 --guide-color = var(--custom-blue)", gc == "var(--custom-blue)", str(gc))
+            check("S6 缩进线不变色（无 --guide-color，半透明线自然叠色）", not gc, str(gc))
             tb2 = await tint_bg("f2")
             check("S6 f2 红不受影响", tb2 == "var(--custom-red)", str(tb2))
             shot = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
             with open(SHOT3, "wb") as f:
                 f.write(base64.b64decode(shot["result"]["data"]))
             print("截图已存:", SHOT3)
+
+            # ── S6b：颜色同步——已区分不跟随 / 改回一致重新跟随（用户场景 2）──
+            print("S6b f1-1 单独设 red → f1 改 green 不跟随；f1-1 改回一致后 f1 再改重新跟随")
+            # 此时 f1 = blue（S6），f1-1 无色（视觉跟随 blue）
+            check("S6b 右键 f1-1 菜单出现", await right_click("f1-1"))
+            check("S6b hover「更改颜色」", await hover_menu("更改颜色"))
+            c = await cell_center(".color-grid .cell", 1)  # red
+            if c:
+                await click_xy(c["x"], c["y"])
+                await asyncio.sleep(0.8)
+            tb11 = await tint_bg("f1-1")
+            check("S6b f1-1 单独设 red", tb11 == "var(--custom-red-bg)", str(tb11))
+            check("S6b 右键 f1 菜单出现", await right_click("f1"))
+            check("S6b hover「更改颜色」", await hover_menu("更改颜色"))
+            c = await cell_center(".color-grid .cell", 4)  # green
+            if c:
+                await click_xy(c["x"], c["y"])
+                await asyncio.sleep(0.8)
+            tb1 = await tint_bg("f1")
+            tb11 = await tint_bg("f1-1")
+            check("S6b f1 改 green", tb1 == "var(--custom-green)", str(tb1))
+            check("S6b f1-1 已区分不跟随（保持 red）", tb11 == "var(--custom-red-bg)", str(tb11))
+            # f1-1 改回与 f1 一致（green）→ f1 再改 red → f1-1 重新跟随
+            check("S6b 右键 f1-1 菜单出现(2)", await right_click("f1-1"))
+            check("S6b hover「更改颜色」(2)", await hover_menu("更改颜色"))
+            c = await cell_center(".color-grid .cell", 4)  # green
+            if c:
+                await click_xy(c["x"], c["y"])
+                await asyncio.sleep(0.8)
+            check("S6b 右键 f1 菜单出现(2)", await right_click("f1"))
+            check("S6b hover「更改颜色」(2)", await hover_menu("更改颜色"))
+            c = await cell_center(".color-grid .cell", 1)  # red
+            if c:
+                await click_xy(c["x"], c["y"])
+                await asyncio.sleep(0.8)
+            tb1 = await tint_bg("f1")
+            tb11 = await tint_bg("f1-1")
+            tb111 = await tint_bg("f1-1-1")
+            print("  f1:", tb1, " f1-1:", tb11, " f1-1-1:", tb111)
+            check("S6b f1 改 red", tb1 == "var(--custom-red)", str(tb1))
+            check("S6b f1-1 改回一致后重新跟随（red）", tb11 == "var(--custom-red-bg)", str(tb11))
+            check("S6b f1-1-1 孙级视觉跟随（red-bg）", tb111 == "var(--custom-red-bg)", str(tb111))
 
             # ── S7：f2 颜色回默认 ──
             print("S7 f2 重开颜色面板 → 红格 cur → 点首格恢复默认")

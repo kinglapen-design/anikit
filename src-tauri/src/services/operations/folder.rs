@@ -168,14 +168,21 @@ fn sync_folder_index(lib: &mut Library) {
 }
 
 /// 更改文件夹图标（2026-08-18，3.3 / 05 稿 §3）：icon None = 恢复默认文件夹图标。
-/// apply_to_children = 面板「应用至子级」复选框：全部后代文件夹统一换同值（PRD 02-45 已定语义）；
-/// 档案后代跳过——档案图标强制 archive（PRD 02-54），且档案无子级不再下钻
-pub fn set_folder_icon(lib: &mut Library, folder_id: &str, icon: Option<&str>, apply_to_children: bool) -> Result<(), String> {
-  if !lib.index.folders.contains_key(folder_id) {
-    return Err("目标文件夹不存在，可能已被删除".to_string());
-  }
-  let targets = icon_apply_targets(lib, folder_id, apply_to_children);
+/// 同步语义（2026-08-18 用户定，与颜色同口径——默认影响子级，无「应用至子级」复选框）：
+/// 后代图标与本节点当前图标一致的跟随调整（含默认图标 None == None——未区分子级首次统一即靠此）；
+/// 不一致的（用户单独区分过）不动且不再下钻（其子树链路已被它接管）；
+/// 档案后代恒跳过（图标强制 archive，PRD 02-54）
+pub fn set_folder_icon(lib: &mut Library, folder_id: &str, icon: Option<&str>) -> Result<(), String> {
+  let old_chain = lib
+    .index
+    .folders
+    .get(folder_id)
+    .ok_or_else(|| "目标文件夹不存在，可能已被删除".to_string())?
+    .icon
+    .clone();
   let value = icon.map(|s| s.to_string());
+  // 图标无视觉跟随（无图标 = 默认图标，与有色父级即"不一样"）：None 不穿透；档案跳过
+  let targets = sync_follow_targets(lib, folder_id, &old_chain, |f| &f.icon, false, true);
   for f in &mut lib.folders.folders {
     if targets.contains(&f.id) {
       f.icon = value.clone();
@@ -183,36 +190,69 @@ pub fn set_folder_icon(lib: &mut Library, folder_id: &str, icon: Option<&str>, a
   }
   sync_folder_index(lib);
   library::save_folders(lib).map_err(|e| e.to_string())?;
-  log::info!("更改文件夹图标 {folder_id} → {icon:?}（应用至子级 {apply_to_children}）");
+  log::info!("更改文件夹图标 {folder_id} → {icon:?}（链路一致后代跟随）");
   Ok(())
 }
 
-/// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：仅写本节点（color None = 恢复默认）。
-/// 子级跟随 = 该色底色版本（--custom-{色}-bg）由前端树渲染承担，不写子级数据（2026-08-18 用户定）
+/// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：color None = 恢复默认。
+/// 同步语义（2026-08-18 用户定）：默认影响子级——后代颜色与本节点旧链路色一致的跟随调整
+///（用户：子级改回与父级一致后要能重新跟随），不一致的不动且不再下钻；
+/// 无色后代不写数据（视觉自动跟随底色版本 --custom-{色}-bg）但链路穿透继续下钻
 pub fn set_folder_color(lib: &mut Library, folder_id: &str, color: Option<&str>) -> Result<(), String> {
   let folder = lib
+    .index
     .folders
-    .folders
-    .iter_mut()
-    .find(|f| f.id == folder_id)
+    .get(folder_id)
     .ok_or_else(|| "目标文件夹不存在，可能已被删除".to_string())?;
-  folder.color = color.map(|s| s.to_string());
+  // 旧链路色 = 本节点色 ?? 祖先链最近色（本节点无色时显示的是祖先色）
+  let mut old_chain = folder.color.clone();
+  let mut cur = folder.parent.clone();
+  while old_chain.is_none() {
+    match cur.and_then(|id| lib.index.folders.get(&id).cloned()) {
+      Some(f) => {
+        old_chain = f.color.clone();
+        cur = f.parent.clone();
+      }
+      None => break,
+    }
+  }
+  let value = color.map(|s| s.to_string());
+  let targets = sync_follow_targets(lib, folder_id, &old_chain, |f| &f.color, true, false);
+  for f in &mut lib.folders.folders {
+    if targets.contains(&f.id) {
+      f.color = value.clone();
+    }
+  }
   sync_folder_index(lib);
   library::save_folders(lib).map_err(|e| e.to_string())?;
-  log::info!("更改文件夹颜色 {folder_id} → {color:?}");
+  log::info!("更改文件夹颜色 {folder_id} → {color:?}（链路一致后代跟随）");
   Ok(())
 }
 
-/// 图标应用目标集：本节点 +（apply 时）全部非档案后代文件夹（DFS 下钻）
-fn icon_apply_targets(lib: &Library, folder_id: &str, apply_to_children: bool) -> HashSet<String> {
+/// 链路一致跟随目标集（含本节点）：DFS——子级字段值 == old_chain 则跟随（入集）并继续下钻；
+/// != 则整支跳过（用户单独区分过，链路被它接管）。
+/// penetrate_none = true 时无色（None）后代**不入集**（不写数据，视觉自动跟随）但继续下钻
+///（颜色专用——图标无视觉跟随，None = 默认图标与有色父级即"不一样"，无穿透）；
+/// skip_archive = true 时档案后代整支跳过（图标专用——档案图标强制 archive，写入无意义）
+fn sync_follow_targets(
+  lib: &Library,
+  folder_id: &str,
+  old_chain: &Option<String>,
+  field: for<'a> fn(&'a Folder) -> &'a Option<String>,
+  penetrate_none: bool,
+  skip_archive: bool,
+) -> HashSet<String> {
   let mut set = HashSet::from([folder_id.to_string()]);
-  if apply_to_children {
-    let mut stack = vec![folder_id.to_string()];
-    while let Some(pid) = stack.pop() {
-      for f in lib.folders.folders.iter().filter(|f| f.parent.as_deref() == Some(pid.as_str())) {
-        if f.kind.as_deref() == Some(ARCHIVE_KIND) {
-          continue; // 档案图标强制 archive（PRD 02-54）；档案无子级（层级约束），不再下钻
-        }
+  let mut stack = vec![folder_id.to_string()];
+  while let Some(pid) = stack.pop() {
+    for f in lib.folders.folders.iter().filter(|f| f.parent.as_deref() == Some(pid.as_str())) {
+      if skip_archive && f.kind.as_deref() == Some(ARCHIVE_KIND) {
+        continue;
+      }
+      let v = field(f);
+      if penetrate_none && v.is_none() {
+        stack.push(f.id.clone()); // 无色穿透：不写数据（视觉自动跟随），链路继续下钻
+      } else if *v == *old_chain {
         set.insert(f.id.clone());
         stack.push(f.id.clone());
       }
@@ -756,10 +796,10 @@ mod tests {
     assert_eq!(h.lib.index.folders["F01"].name, "人物", "undo 后恢复原名");
   }
 
-  /// 更改图标（2026-08-18，3.3）：单点设置只写本节点；「应用至子级」递归全部后代统一换；
-  /// 档案后代跳过（图标强制 archive，PRD 02-54）；None + 递归 = 整支恢复默认
+  /// 更改图标（2026-08-18，3.3，同步语义）：默认影响子级——后代图标与本节点当前图标一致的
+  /// 跟随调整（None == None 首次统一靠此）；不一致的不动且不再下钻；档案后代恒跳过
   #[test]
-  fn set_folder_icon_single_and_recursive() {
+  fn set_folder_icon_syncs_matching_descendants() {
     let mut h = make_lib();
     add_folder(&mut h.lib, "F01", "顶", None, 0);
     add_folder(&mut h.lib, "F01-1", "子", Some("F01"), 0);
@@ -768,48 +808,106 @@ mod tests {
     h.lib.folders.folders.iter_mut().find(|f| f.id == "F01-A").unwrap().kind = Some(ARCHIVE_KIND.into());
     h.lib.index.folders.get_mut("F01-A").unwrap().kind = Some(ARCHIVE_KIND.into());
 
-    // 单点：只写本节点
-    set_folder_icon(&mut h.lib, "F01", Some("animal"), false).unwrap();
-    assert_eq!(h.lib.index.folders["F01"].icon.as_deref(), Some("animal"), "索引同步");
-    assert_eq!(h.lib.index.folders["F01-1"].icon, None, "子级不受影响");
+    // 首次统一（全默认 None == None）：整支跟随；档案跳过
+    set_folder_icon(&mut h.lib, "F01", Some("animal")).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1"].icon.as_deref(), Some("animal"), "子级跟随");
+    assert_eq!(h.lib.index.folders["F01-1-1"].icon.as_deref(), Some("animal"), "多层后代一并跟随");
+    assert_eq!(h.lib.index.folders["F01-A"].icon, None, "档案后代跳过");
     // 落盘验证
     let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
-    assert_eq!(disk.folders.iter().find(|f| f.id == "F01").unwrap().icon.as_deref(), Some("animal"));
+    assert_eq!(disk.folders.iter().find(|f| f.id == "F01-1-1").unwrap().icon.as_deref(), Some("animal"));
 
-    // 应用至子级：全部非档案后代统一换；档案后代跳过
-    set_folder_icon(&mut h.lib, "F01", Some("scene"), true).unwrap();
+    // 子级单独区分（F01-1 → scene；其旧值 animal 与孙一致 → 孙跟随 scene）
+    set_folder_icon(&mut h.lib, "F01-1", Some("scene")).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1-1"].icon.as_deref(), Some("scene"), "孙与子级旧链路一致，跟随");
+
+    // 父级再改（F01 → weapon）：F01-1(scene != animal 旧链) 不动、不再下钻（孙保持 scene）
+    set_folder_icon(&mut h.lib, "F01", Some("weapon")).unwrap();
+    assert_eq!(h.lib.index.folders["F01"].icon.as_deref(), Some("weapon"));
+    assert_eq!(h.lib.index.folders["F01-1"].icon.as_deref(), Some("scene"), "已区分子级不跟随");
+    assert_eq!(h.lib.index.folders["F01-1-1"].icon.as_deref(), Some("scene"), "阻断分支不下钻");
+
+    // 恢复默认（F01 → None）：F01-1 分支仍阻断（scene != weapon）
+    set_folder_icon(&mut h.lib, "F01", None).unwrap();
+    assert_eq!(h.lib.index.folders["F01"].icon, None);
     assert_eq!(h.lib.index.folders["F01-1"].icon.as_deref(), Some("scene"));
-    assert_eq!(h.lib.index.folders["F01-1-1"].icon.as_deref(), Some("scene"), "多层后代一并换");
-    assert_eq!(h.lib.index.folders["F01-A"].icon, None, "档案后代跳过");
-
-    // None + 递归 = 整支恢复默认
-    set_folder_icon(&mut h.lib, "F01", None, true).unwrap();
-    assert!(h.lib.folders.folders.iter().all(|f| f.icon.is_none()));
     // 不存在目标报错
-    assert!(set_folder_icon(&mut h.lib, "F-不存在", Some("animal"), false).is_err());
+    assert!(set_folder_icon(&mut h.lib, "F-不存在", Some("animal")).is_err());
   }
 
-  /// 更改颜色（2026-08-18，3.3）：仅写本节点（子级视觉跟随是前端底色档，不写数据）；None 清除
+  /// 图标同步（2026-08-18 用户场景）：子级改回与父级一致后，父级再改子级重新跟随
   #[test]
-  fn set_folder_color_single_node_only() {
+  fn set_folder_icon_follows_after_realigned() {
     let mut h = make_lib();
     add_folder(&mut h.lib, "F01", "顶", None, 0);
     add_folder(&mut h.lib, "F01-1", "子", Some("F01"), 0);
 
+    set_folder_icon(&mut h.lib, "F01", Some("scene")).unwrap(); // 全跟随 scene
+    set_folder_icon(&mut h.lib, "F01-1", Some("animal")).unwrap(); // 子级单独区分
+    set_folder_icon(&mut h.lib, "F01", Some("weapon")).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1"].icon.as_deref(), Some("animal"), "已区分不跟随");
+    // 子级改回与父级一致（weapon）→ 父级再改，子级重新跟随
+    set_folder_icon(&mut h.lib, "F01-1", Some("weapon")).unwrap();
+    set_folder_icon(&mut h.lib, "F01", Some("game")).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1"].icon.as_deref(), Some("game"), "改回一致后重新跟随");
+  }
+
+  /// 更改颜色（2026-08-18，3.3，同步语义）：默认影响子级——显式与旧链路色一致的跟随调整；
+  /// 无色后代不写数据（视觉自动跟随）但链路穿透；不一致的不动且不再下钻
+  #[test]
+  fn set_folder_color_syncs_matching_keeps_divergent() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "顶", None, 0);
+    add_folder(&mut h.lib, "F01-1", "子", Some("F01"), 0);
+    add_folder(&mut h.lib, "F01-1-1", "孙", Some("F01-1"), 0);
+
+    // P 设红：子级无色不写数据（视觉自动跟随，穿透）
     set_folder_color(&mut h.lib, "F01", Some("red")).unwrap();
     assert_eq!(h.lib.index.folders["F01"].color.as_deref(), Some("red"), "索引同步");
-    assert_eq!(h.lib.index.folders["F01-1"].color, None, "子级不写数据");
-    // 落盘验证（None 不写字段）
-    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
-    assert_eq!(disk.folders.iter().find(|f| f.id == "F01").unwrap().color.as_deref(), Some("red"));
-    // 换色 / 清除
+    assert_eq!(h.lib.index.folders["F01-1"].color, None, "无色子级不写数据");
+    // 孙显式设红（与链路一致）→ P 改绿：孙跟随绿，子级仍无色
+    set_folder_color(&mut h.lib, "F01-1-1", Some("red")).unwrap();
+    set_folder_color(&mut h.lib, "F01", Some("green")).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1-1"].color.as_deref(), Some("green"), "与旧链路一致的显式后代跟随");
+    assert_eq!(h.lib.index.folders["F01-1-1"].color.as_deref(), Some("green"));
+    assert_eq!(h.lib.index.folders["F01-1"].color, None, "无色穿透不写");
+
+    // 子级单独区分（F01-1 → yellow-green）：其旧链路 = P 的绿 → 孙（绿）跟随变黄绿
+    set_folder_color(&mut h.lib, "F01-1", Some("yellow-green")).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1-1"].color.as_deref(), Some("yellow-green"), "孙与子级旧链路一致，跟随");
+
+    // P 改蓝：F01-1(yellow-green != green 旧链) 不动、不下钻（孙保持黄绿）
     set_folder_color(&mut h.lib, "F01", Some("blue")).unwrap();
-    assert_eq!(h.lib.index.folders["F01"].color.as_deref(), Some("blue"));
+    assert_eq!(h.lib.index.folders["F01-1"].color.as_deref(), Some("yellow-green"), "已区分子级不跟随");
+    assert_eq!(h.lib.index.folders["F01-1-1"].color.as_deref(), Some("yellow-green"), "阻断分支不下钻");
+
+    // 子级改回与父级一致（blue）→ P 改红：子级重新跟随（用户场景 2 修复）
+    set_folder_color(&mut h.lib, "F01-1", Some("blue")).unwrap();
+    set_folder_color(&mut h.lib, "F01", Some("red")).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1"].color.as_deref(), Some("red"), "改回一致后重新跟随");
+
+    // P 恢复默认：跟随支清 None
     set_folder_color(&mut h.lib, "F01", None).unwrap();
     assert_eq!(h.lib.index.folders["F01"].color, None);
-    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
-    assert!(!disk.folders.iter().any(|f| f.color.is_some()), "清除后盘上无 color 字段");
+    assert_eq!(h.lib.index.folders["F01-1"].color, None, "跟随的后代一并恢复默认");
     // 不存在目标报错
     assert!(set_folder_color(&mut h.lib, "F-不存在", Some("red")).is_err());
+  }
+
+  /// 颜色同步的旧链路上溯（2026-08-18）：本节点无色时旧链路色 = 祖先链最近色——
+  /// 后代显式与祖先链路一致的同样跟随
+  #[test]
+  fn set_folder_color_old_chain_falls_back_to_ancestor() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "祖", None, 0);
+    add_folder(&mut h.lib, "F01-1", "父", Some("F01"), 0);
+    add_folder(&mut h.lib, "F01-1-1", "子", Some("F01-1"), 0);
+
+    set_folder_color(&mut h.lib, "F01", Some("red")).unwrap(); // 祖设红，父无色视觉跟随
+    set_folder_color(&mut h.lib, "F01-1-1", Some("red")).unwrap(); // 子显式红（与祖链路一致）
+    // 父（无色，旧链路 = 祖的红）设绿：子显式红 == 旧链路 → 跟随绿
+    set_folder_color(&mut h.lib, "F01-1", Some("green")).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1-1"].color.as_deref(), Some("green"), "与祖先链路一致的后代跟随");
+    assert_eq!(h.lib.index.folders["F01"].color.as_deref(), Some("red"), "祖不受影响");
   }
 }

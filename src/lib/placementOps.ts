@@ -127,14 +127,14 @@ export async function renameFolder(folderId: string, newName: string): Promise<b
 }
 
 // 更改文件夹图标（2026-08-18，3.3 / 05 稿 §3）：icon = null 恢复默认；
-// applyToChildren = 面板「应用至子级」（全部非档案后代统一换）
-export async function setFolderIcon(folderId: string, icon: string | null, applyToChildren: boolean): Promise<boolean> {
+// 同步语义（用户定，与颜色同口径）：链路一致的后代跟随调整，不一致的不动
+export async function setFolderIcon(folderId: string, icon: string | null): Promise<boolean> {
   return await runOp(async () => {
-    await invoke("set_folder_icon", { folderId, icon, applyToChildren });
+    await invoke("set_folder_icon", { folderId, icon });
   }, () => "更改文件夹图标");
 }
 
-// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：color = null 恢复默认；仅写本节点
+// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：color = null 恢复默认；同步语义同图标
 export async function setFolderColor(folderId: string, color: string | null): Promise<boolean> {
   return await runOp(async () => {
     await invoke("set_folder_color", { folderId, color });

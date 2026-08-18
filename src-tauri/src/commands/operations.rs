@@ -79,20 +79,19 @@ pub async fn rename_folder(
 }
 
 /// 更改文件夹图标（2026-08-18，3.3 / 05 稿 §3）：icon = null 恢复默认；
-/// applyToChildren = 面板「应用至子级」（全部非档案后代统一换）
+/// 同步语义（用户定，与颜色同口径、无复选框）：链路一致的后代跟随调整，不一致的不动
 #[tauri::command]
 pub async fn set_folder_icon(
   state: State<'_, AppState>,
   folder_id: String,
   icon: Option<String>,
-  apply_to_children: bool,
 ) -> Result<(), String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin("更改文件夹图标");
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  match operations::set_folder_icon(lib, &folder_id, icon.as_deref(), apply_to_children) {
+  match operations::set_folder_icon(lib, &folder_id, icon.as_deref()) {
     Ok(()) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(())
@@ -101,8 +100,8 @@ pub async fn set_folder_icon(
   }
 }
 
-/// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：color = null 恢复默认；仅写本节点
-///（子级跟随 = 底色版本，前端树渲染承担）
+/// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：color = null 恢复默认；
+/// 同步语义（用户定）：链路一致的后代跟随调整（无色后代不写数据、视觉自动跟随），不一致的不动
 #[tauri::command]
 pub async fn set_folder_color(
   state: State<'_, AppState>,

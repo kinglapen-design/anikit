@@ -180,8 +180,9 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
         },
       },
       "divider",
-      // 更改图标/颜色网格面板（2026-08-18，3.3 点亮）：05 稿 §3=230（20 格 + 应用至子级复选框）
-      // / §4=235（10 格无复选框，颜色仅写本节点）；panel 形态由 ContextMenu flyout 渲染对应组件
+      // 更改图标/颜色网格面板（2026-08-18，3.3 点亮）：05 稿 §3=230（20 格）/ §4=235（10 格）；
+      // 同步语义（用户定）：默认影响子级——链路一致的后代跟随，不一致的不动；
+      // panel 形态由 ContextMenu flyout 渲染对应组件
       { label: "更改图标", icon: "edit-icon", submenuWidth: 230, panel: { kind: "folderIcon", folderId: folder.id } },
       { label: "更改颜色", icon: "edit-color", submenuWidth: 235, panel: { kind: "folderColor", folderId: folder.id } },
     );
