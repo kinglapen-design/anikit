@@ -3,8 +3,9 @@
 // + CUSTOM_COLORS 9 色，5 列网格（item 31×31 圆角 4，列 gap 8 行 gap 12）；
 // 当前项选中 = 2px 文字/常态 border（border-box 内缩不撑布局，稿首格即选中样例）；
 // hover 叠暗-悬停（保留色底，--cell-bg 机制同 TreeItem --tint-bg），选中项 hover 不再变色。
-// 颜色仅写本节点——子级视觉跟随 = 该色底色版本（--custom-{色}-bg）由树渲染承担，
-// 不写子级数据（2026-08-18 用户定）——故面板无「应用至子级」（与图标面板不同）。
+// 同步语义（2026-08-18 用户定，与图标同口径、无复选框）：父级改色默认影响子级——
+// 后代颜色与本节点旧链路色一致的跟随调整，不一致的（用户单独区分过）不动；
+// 无色后代不写数据（视觉自动跟随 = 该色底色版本 --custom-{色}-bg，由树渲染承担）。
 // 点击格 = 一次性任务类：执行后关菜单（done 由 ContextMenu 收口）。
 import { computed } from "vue";
 import { CUSTOM_COLORS } from "../lib/customColors";
