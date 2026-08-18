@@ -379,7 +379,8 @@ function pasteTarget(): string | null {
 }
 
 // Ctrl+V 仲裁（内部剪贴板非空分支；空 → App.vue 走系统剪贴板导入）：
-// copy = 弹关联弹窗（C5）；cut = 直接移动到当前文件夹（粘贴一次后清空剪贴板）
+// copy = 静默链接粘贴（2026-08-18 用户定：不弹窗——高频整理打扰；命名导入后手动 F2 / 批量重命名，
+// 原"关联弹窗 / 选择性粘贴清单弹窗"设计整体废除）；cut = 直接移动到当前文件夹（粘贴一次后清空剪贴板）
 export async function pasteClipboard(): Promise<void> {
   const selection = useSelectionStore();
   const clip = selection.clipboard;
@@ -388,7 +389,7 @@ export async function pasteClipboard(): Promise<void> {
   if (target === null) return;
   if (clip.action === "copy") {
     // 链接发起不设限（2026-08-13 用户定案：不替用户做整理决定，候车区拦截废除）
-    selection.linkDraft = { items: clip.items, targetFolder: target };
+    await linkPlacements(clip.items, target, clip.items.map(() => null));
     return;
   }
   const ok = await movePlacements(clip.items, target);
@@ -403,6 +404,21 @@ export async function pasteDuplicate(): Promise<void> {
   const target = pasteTarget();
   if (target === null) return;
   await duplicatePlacements(clip.items, target, clip.items.map(() => null));
+}
+
+// 创建副本（素材卡片右键 / Ctrl+D，2026-08-18 自 assetCard spec 提为共用）：各选中项复制进其
+// 自身所在文件夹（副本紧随原件，名称同源 = names 全 null）；跨文件夹选中按文件夹分组逐组执行
+export async function duplicateSelected(): Promise<void> {
+  const selection = useSelectionStore();
+  const byFolder = new Map<string, PlacementRef[]>();
+  for (const ref of selection.selectedRefs()) {
+    const list = byFolder.get(ref.folderId) ?? [];
+    list.push(ref);
+    byFolder.set(ref.folderId, list);
+  }
+  for (const [folderId, items] of byFolder) {
+    await duplicatePlacements(items, folderId, items.map(() => null));
+  }
 }
 
 // —— 6.3 右键菜单配套（2026-07-29，设计稿 `00_修改与需求/05_右键菜单`）——

@@ -11,6 +11,7 @@ import {
   copySelection,
   deletePlacements,
   deleteRecycle,
+  duplicateSelected,
   pasteClipboard,
   pasteDuplicate,
   recycleSelectedAssetIds,
@@ -29,8 +30,9 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   const undo = useUndoStore();
 
   // 剪贴板导入（PRD 05-01；2026-07-27 扩：图片 + 文件列表，恒 Copy）；剪贴板无图无文件属常态，静默降级
-  // 6.1 仲裁（2026-07-28 定案）：内部剪贴板非空时 Ctrl+V 归 onOperationKeys（关联弹窗 / 移动），
-  // 本函数只处理"内部剪贴板为空"的系统剪贴板导入；Ctrl+Shift+V = 粘贴为副本快捷键，不走导入
+  // 6.1 仲裁（2026-07-28 定案）：内部剪贴板非空时 Ctrl+V 归 onOperationKeys（链接粘贴 / 移动，
+  // 2026-08-18 起链接粘贴静默不弹窗），本函数只处理"内部剪贴板为空"的系统剪贴板导入；
+  // Ctrl+Shift+V = 粘贴为副本快捷键，不走导入
   async function onPaste(e: KeyboardEvent): Promise<void> {
     if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "v") return;
     if (e.shiftKey || selection.clipboard) return;
@@ -78,8 +80,9 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   // F2 = 重命名当前单选素材（卡片就地重命名；多选不触发；文件夹重命名走卡片名称双击 /
   // 新建后命名态，2026-07-29 复验三轮 rename_folder 已接入）；
   // Del = 删除选中项（2026-07-29 用户修订：取消两段式询问，直接移入回收站，撤销可找回）；
-  // Ctrl+C / Ctrl+X = 写内部剪贴板（仅素材）；Ctrl+V 仲裁（内部非空 → copy 弹关联弹窗 / cut 移动；
-  // 空 → onPaste 系统剪贴板导入）；Ctrl+Shift+V = 直接副本不弹窗（名称同源）。
+  // Ctrl+C / Ctrl+X = 写内部剪贴板（仅素材）；Ctrl+V 仲裁（内部非空 → copy 静默链接粘贴 /
+  // cut 移动；空 → onPaste 系统剪贴板导入）；Ctrl+Shift+V = 直接副本不弹窗（名称同源）；
+  // Ctrl+D = 创建副本（2026-08-18 补绑）。
   // 回收站视口（6.1 二轮，2026-07-29）：F2 不触发（只读）；Del 分流彻底删除两段式
   //（delete_recycle，虚拟片段引用确认窗，不可恢复无撤销）——delete_placements 路径不再走。
   // 快速访问视图不作粘贴目标（toast 提示）；菜单 / 浮层 / 弹窗打开时让位
@@ -132,7 +135,17 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       }
       return;
     }
+    // Ctrl+D = 创建副本（3.4，2026-08-18 补绑：菜单项早已点亮，键盘缺失）
+    if (k === "d") {
+      if (selection.count > 0 && !content.isRecycleView) {
+        e.preventDefault();
+        void duplicateSelected();
+      }
+      return;
+    }
+    // 粘贴两键（2026-08-18 定案）：Ctrl+V 链接 / Ctrl+Shift+V 副本；Ctrl+Alt+V 键位废除不响应
     if (k === "v" && selection.clipboard) {
+      if (e.altKey) return;
       e.preventDefault();
       if (e.shiftKey) void pasteDuplicate();
       else void pasteClipboard();

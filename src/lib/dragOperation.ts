@@ -301,11 +301,12 @@ function sameStripSiblings(targetId: string): boolean {
   return stripIds.has(targetId) && sess.folderIds.some((id) => stripIds.has(id));
 }
 
-// 素材落文件夹（树 / 文件夹卡片）：Ctrl = 弹关联弹窗（C5）；否则移动
+// 素材落文件夹（树 / 文件夹卡片）：Ctrl = 直接建链接不弹窗（2026-08-18 用户定，与 Ctrl+V 同语义，
+// 原"弹关联弹窗"废除——高频整理打扰）；否则移动
 async function dropAssetsInto(items: PlacementRef[], folderId: string, ctrl: boolean): Promise<void> {
   if (items.length === 0) return;
   if (ctrl) {
-    useSelectionStore().linkDraft = { items, targetFolder: folderId };
+    await ops.linkPlacements(items, folderId, items.map(() => null));
     return;
   }
   await ops.movePlacements(items, folderId);

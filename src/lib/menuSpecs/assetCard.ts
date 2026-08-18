@@ -22,7 +22,7 @@ import {
   applyClipboardThumb,
   copySelection,
   deletePlacements,
-  duplicatePlacements,
+  duplicateSelected,
   openWithDialog,
   pasteClipboard,
   pasteDuplicate,
@@ -32,20 +32,6 @@ import {
 // 默认应用打开（AssetCard / preview store 同款流程：成功后重拉最近使用）
 function openDefaultApp(assetId: string): void {
   void invoke("open_with_default_app", { assetId }).then(() => useContentStore().refreshRecent());
-}
-
-// 创建副本（素材卡片右键）：各选中项复制进其自身所在文件夹（副本紧随原件，名称同源）
-async function duplicateSelected(): Promise<void> {
-  const selection = useSelectionStore();
-  const byFolder = new Map<string, ReturnType<typeof selection.selectedRefs>>();
-  for (const ref of selection.selectedRefs()) {
-    const list = byFolder.get(ref.folderId) ?? [];
-    list.push(ref);
-    byFolder.set(ref.folderId, list);
-  }
-  for (const [folderId, items] of byFolder) {
-    await duplicatePlacements(items, folderId, items.map(() => null));
-  }
 }
 
 // 文件夹名（id → 名称；root = 未分类）
@@ -121,8 +107,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
   if (hasClipboard) {
     entries.push(
       { label: "作为链接粘贴", icon: "paste-as-link", shortcut: "Ctrl+V", action: () => void pasteClipboard() },
-      { label: "作为链接粘贴并重命名", icon: "paste-as-link-rename", shortcut: "Ctrl+Shift+V", disabled: true },
-      { label: "作为副本粘贴", icon: "paste-as-copy", shortcut: "Ctrl+Alt+V", action: () => void pasteDuplicate() },
+      { label: "作为副本粘贴", icon: "paste-as-copy", shortcut: "Ctrl+Shift+V", action: () => void pasteDuplicate() },
     );
   }
   entries.push(

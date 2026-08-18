@@ -79,8 +79,7 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
     { label: "剪切档案", icon: "cut-file", shortcut: "Ctrl+X", disabled: true },
     { label: "复制档案", icon: "copy-file", shortcut: "Ctrl+C", disabled: true },
     { label: "作为链接粘贴", icon: "paste-as-link", shortcut: "Ctrl+V", disabled: true },
-    { label: "作为链接粘贴并重命名", icon: "paste-as-link-rename", shortcut: "Ctrl+Shift+V", disabled: true },
-    { label: "作为副本粘贴", icon: "paste-as-copy", shortcut: "Ctrl+Alt+V", disabled: true },
+    { label: "作为副本粘贴", icon: "paste-as-copy", shortcut: "Ctrl+Shift+V", disabled: true },
     {
       label: "重命名",
       icon: "rename",
@@ -91,10 +90,7 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
       },
     },
     "divider",
-    { label: "克隆", icon: "clone", shortcut: "Ctrl+D", disabled: true },
-    "divider",
-    {
-      label: "更改封面图",
+    { label: "更改封面图",
       icon: "edit-cover",
       submenuWidth: 152,
       submenu: [

@@ -53,8 +53,7 @@ export function addButtonSpec(): CtxEntry[] {
   if (hasClipboard) {
     entries.push(
       { label: "作为链接粘贴", icon: "paste-as-link", shortcut: "Ctrl+V", action: () => void pasteClipboard() },
-      { label: "作为链接粘贴并重命名", icon: "paste-as-link-rename", shortcut: "Ctrl+Shift+V", disabled: true },
-      { label: "作为副本粘贴", icon: "paste-as-copy", shortcut: "Ctrl+Alt+V", action: () => void pasteDuplicate() },
+      { label: "作为副本粘贴", icon: "paste-as-copy", shortcut: "Ctrl+Shift+V", action: () => void pasteDuplicate() },
       "divider",
     );
   }
