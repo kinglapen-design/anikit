@@ -144,7 +144,7 @@ async function submit(): Promise<void> {
   flex: 1;
   min-width: 0;
 }
-input.name-input {
+.name-input {
   background: var(--c1);
 }
 .err-desc {

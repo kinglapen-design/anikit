@@ -209,8 +209,9 @@ const entries = computed(() => content.inboxDisk);
   column-gap: var(--space-16);
   row-gap: var(--space-16);
 }
-/* 卡片（同步素材卡片 14 稿，2026-08-13）：整卡圆角 6 / 状态边框走 ::after 伪元素
-   （常态 1px 暗-悬停；hover 1.5px 实色 line-card-hover；选中 1.5px 品牌色-边框线）——
+/* 卡片（同步素材卡片 14 稿，2026-08-13）：整卡圆角 6 / 状态边框双伪元素分层
+   （::after = 常态 1px 暗-悬停无过渡；::before = 状态层 1.5px hover 实色 line-card-hover /
+   选中品牌色-边框线，opacity 过渡——2026-08-19 残留修复，踩坑 036）——
    图标区 C2 / 简介区 C3 整片不透明底会盖住父级 inset 阴影，边框必须在最上层伪元素 */
 .disk-card {
   position: relative;
@@ -227,14 +228,26 @@ const entries = computed(() => content.inboxDisk);
   border: 1px solid var(--line-hover);
   border-radius: var(--radius-6);
   pointer-events: none;
-  transition: border-color 0.12s ease;
 }
-.disk-card:hover::after {
-  border: 1.5px solid var(--line-card-hover);
+.disk-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: var(--border-strong) solid transparent;
+  border-radius: var(--radius-6);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
-.disk-card.selected::after,
-.disk-card.renaming::after {
-  border: 1.5px solid var(--brand-border);
+.disk-card:hover::before {
+  opacity: 1;
+  border-color: var(--line-card-hover);
+}
+.disk-card.selected::before,
+.disk-card.renaming::before {
+  opacity: 1;
+  border-color: var(--brand-border);
 }
 /* 图标区（14 稿缩略图区口径）：C2 底 / 圆角上沿；
    比例按网格视图格子 260×220（2026-08-13 用户定）：简介区恒 57，图标区 260:163 */

@@ -138,14 +138,18 @@ watch(
   border: 1.5px solid transparent;
   border-radius: var(--radius-6);
   pointer-events: none;
-  transition: border-color 0.12s ease;
+  /* 2026-08-19 残留修复（踩坑 036）：颜色过渡改 opacity 过渡（GPU 损伤区漏覆盖致残留） */
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
 /* hover 1.5px 亮-选中；选中 / 重命名 1.5px 品牌色-边框线（同 FolderCard 口径） */
 .archive-card:hover::after {
+  opacity: 1;
   border-color: var(--line-active);
 }
 .archive-card.selected::after,
 .archive-card.renaming::after {
+  opacity: 1;
   border-color: var(--brand-border);
 }
 /* 背景纸张（figma：258×298 旋转 ±1° 微露卡片边缘）：currentColor 吃 color 档——

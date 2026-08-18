@@ -246,13 +246,7 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
 .name-input {
   flex: 1;
   min-width: 0;
-}
-/* 弹窗内输入框 token = C1（30 稿口径） */
-.name-input :deep(.app-input) {
-  background: var(--c1);
-}
-/* 名称输入框非 AppInput shell 时直接是 input 根 */
-input.name-input {
+  /* 弹窗内输入框 token = C1（30 稿口径；AppInput 壳化后 class 落壳——底色在壳上覆盖） */
   background: var(--c1);
 }
 /* 添加新规则（33 稿：C5 底 / 1px 亮-选中 / 圆角 6 / padding 6 12 / gap 6 / 标签档） */

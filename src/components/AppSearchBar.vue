@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 搜索框（figma-css 11_输入框 3 / 04_右键菜单 1）：大输入框（C1 底、padding 8/12、36 高、圆角 6）
 // + 搜索图标（标签档）+ 清除按钮（有内容时显示，clear 12 标签档，hover 叠暗-悬停）；
-// 聚焦 品牌色 1.5px 边框淡入淡出；占位符极淡档。
+// 聚焦 品牌色 1.5px 边框 = ::after 状态层 opacity 淡入淡出（2026-08-19 残留修复，踩坑 036：
+// box-shadow 颜色过渡是重绘型动画，GPU 损伤区偶发漏覆盖致失焦后品牌色像素残留）；占位符极淡档。
 import AppIcon from "./AppIcon.vue";
 
 withDefaults(defineProps<{ placeholder?: string }>(), { placeholder: "搜索" });
@@ -20,6 +21,7 @@ const model = defineModel<string>({ default: "" });
 
 <style scoped>
 .app-search {
+  position: relative; /* 聚焦层挂点 */
   display: flex;
   align-items: center;
   gap: var(--space-6);
@@ -27,13 +29,20 @@ const model = defineModel<string>({ default: "" });
   border-radius: var(--radius-6);
   background: var(--c1);
   box-shadow: inset 0 0 0 1px var(--line-hover);
-  transition: box-shadow 0.2s ease;
 }
-/* 聚焦：品牌色 1.5px 边框淡入（内阴影模拟防抖动） */
-.app-search:focus-within {
-  box-shadow:
-    inset 0 0 0 1px var(--line-hover),
-    inset 0 0 0 var(--border-strong) var(--brand);
+/* 聚焦：品牌色 1.5px 边框淡入（::after 状态层 opacity 过渡，踩坑 036） */
+.app-search::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: var(--border-strong) solid var(--brand);
+  border-radius: var(--radius-6);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.app-search:focus-within::after {
+  opacity: 1;
 }
 .lead {
   color: var(--text-label);

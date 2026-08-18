@@ -83,7 +83,9 @@ watch(
 .frames::-webkit-scrollbar {
   display: none;
 }
-/* 帧块：高 56 宽按比例 / 圆角 8 / 1px border-2；当前帧 1.5px 品牌色-边框线（卡片选中语言） */
+/* 帧块：高 56 宽按比例 / 圆角 8 / 1px border-2；当前帧 1.5px 品牌色-边框线（卡片选中语言）。
+   当前帧边框 = ::after 状态层 opacity 过渡（2026-08-19 残留修复，踩坑 036：元素 border
+   换色过渡是重绘型动画，圆角 + 1.5px 分数像素下合成损伤区偶发漏覆盖致品牌色残留） */
 .frame {
   position: relative;
   flex: none;
@@ -91,7 +93,19 @@ watch(
   border: 1px solid var(--border-2);
   border-radius: var(--radius-8);
   overflow: hidden;
-  transition: border-color 0.12s ease;
+}
+.frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--brand-border);
+  border-radius: var(--radius-8);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.frame.active::after {
+  opacity: 1;
 }
 /* 有笔记的帧：右上角品牌紫小圆点（5.2） */
 .note-dot {
@@ -107,9 +121,6 @@ watch(
   display: block;
   height: 100%;
   width: auto;
-}
-.frame.active {
-  border: 1.5px solid var(--brand-border);
 }
 /* 帧条小图后台生成中的占位（方形 C4，就绪后按图比例替换，2026-07-25） */
 .strip-pending {

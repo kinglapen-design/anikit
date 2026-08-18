@@ -18,7 +18,8 @@ const error = ref("");
 const busy = ref(false);
 const inputRef = ref<InstanceType<typeof AppInput>>();
 onMounted(() => {
-  void nextTick(() => (inputRef.value?.$el as HTMLInputElement | undefined)?.focus());
+  // AppInput 2026-08-19 统一壳化（踩坑 036）：$el 是壳 div 不可 focus——用组件 expose 的 focus()
+  void nextTick(() => inputRef.value?.focus());
 });
 
 async function onConfirm(): Promise<void> {

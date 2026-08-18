@@ -124,15 +124,20 @@ watch(
   border: 1.5px solid transparent;
   border-radius: var(--radius-6);
   pointer-events: none;
-  transition: border-color 0.12s ease;
+  /* 2026-08-19 残留修复（踩坑 036）：border-color 过渡改 opacity 过渡——颜色过渡是重绘型
+     动画，圆角 + 1.5px 分数像素下 GPU 合成损伤区偶发漏覆盖，取消状态后品牌色像素残留 */
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
 /* hover 1.5px 亮-选中（2026-08-10 用户定）；选中 / 重命名 1.5px 品牌色-边框线（重命名 =
-   整卡高亮提示，输入框透明底不单独描边） */
+   整卡高亮提示，输入框透明底不单独描边）；换色瞬时 + 透明度淡入淡出 */
 .folder-card:hover::after {
+  opacity: 1;
   border-color: var(--line-active);
 }
 .folder-card.selected::after,
 .folder-card.renaming::after {
+  opacity: 1;
   border-color: var(--brand-border);
 }
 /* 行1：图标 + 标题，间距 6，高 20 */

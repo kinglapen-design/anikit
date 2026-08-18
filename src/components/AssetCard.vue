@@ -265,9 +265,10 @@ const meta = computed(() => {
 
 <style scoped>
 /* 卡片（figma 14）：圆角 6 / padding 0 / 无间距（缩略图与简介无缝拼接）。
-   边框全部走 ::after 伪元素（最上层——缩略图 C2 / 简介 C3 整片不透明底会盖住父级
-   inset 阴影，2026-08-10 走查：外边框全消失的根因）：常态 1px 暗-悬停；
-   hover 1.5px 亮-选中；选中 / 重命名 1.5px 品牌色-边框线（重命名 = 整卡高亮提示）。
+   边框双伪元素分层（2026-08-19 残留修复——踩坑 036）：::after = 常态 1px 暗-悬停（无过渡）；
+   ::before = 状态层 1.5px（hover 亮-选中 / 选中·重命名 品牌色-边框线），**opacity 过渡**——
+   border-color / box-shadow 的颜色过渡是重绘型动画，圆角 + 1.5px 分数像素下 GPU 合成损伤区
+   偶发漏覆盖 → 取消状态后品牌色像素残留（用户实机多次复现）；opacity 走合成器无光栅损伤。
    伪元素 border 宽变 1→1.5 向内画不占布局（同文件夹卡片机制） */
 .asset-card {
   position: absolute;
@@ -283,15 +284,28 @@ const meta = computed(() => {
   border: 1px solid var(--line-hover);
   border-radius: var(--radius-6);
   pointer-events: none;
-  transition: border-color 0.12s ease;
 }
-.asset-card:hover::after {
-  border: 1.5px solid var(--line-card-hover); /* 实色 #414743（2026-08-10 用户黑底吸色定）：
+/* 状态层：常态 opacity 0 不占渲染；hover / 选中换色瞬时 + 透明度淡入淡出 */
+.asset-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1; /* 盖常态层与缩略图 / 简介底（::after 同层叠序上的最上） */
+  border: var(--border-strong) solid transparent;
+  border-radius: var(--radius-6);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.asset-card:hover::before {
+  opacity: 1;
+  border-color: var(--line-card-hover); /* 实色 #414743（2026-08-10 用户黑底吸色定）：
     复杂缩略图（纯黑区域）上半透明线显淡、边框断开感；实色不透明在任何内容上连贯 */
 }
-.asset-card.selected::after,
-.asset-card.renaming::after {
-  border: 1.5px solid var(--brand-border);
+.asset-card.selected::before,
+.asset-card.renaming::before {
+  opacity: 1;
+  border-color: var(--brand-border);
 }
 /* 拖拽源 / 被剪切整体半透明（2026-07-28 复验反馈 6①/8，token 透明度档） */
 .asset-card.fade-source {

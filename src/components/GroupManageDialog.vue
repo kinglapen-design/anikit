@@ -268,8 +268,8 @@ async function submit(): Promise<void> {
   flex: 1;
   min-width: 0;
 }
-/* 弹窗内输入框 token = C1（30 稿口径；AppInput 非 clearable 时根即 input） */
-input.name-input {
+/* 弹窗内输入框 token = C1（30 稿口径；AppInput 壳化后 class 落壳——底色在壳上覆盖） */
+.name-input {
   background: var(--c1);
 }
 /* 添加分组容器（33 稿：60 高 / 按钮居中 104×36） */
