@@ -60,7 +60,6 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
   const assetId = p.assetId;
   const assetKey = `${p.assetId}|${p.folderId}`;
   const isSequence = isSequenceAsset(p); // 序列帧（动图同 frameCount 字段，靠 animated 区分）
-  const isLink = !p.origin;
   const hasClipboard = selection.clipboard !== null;
   // 打开文件链接所在位置：同 assetId 的全部 Placement 所在文件夹去重（含关联文件夹）
   const locations: CtxEntry[] = [
@@ -206,19 +205,21 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     { label: "置顶", icon: "window-pin-on", disabled: true },
     "divider",
   );
-  // 删除组：链接 / 非链接两套（稿上下文规则）；「从文件夹中移除」业务归属未确认，占位（09 待办）
-  if (isLink) {
-    entries.push({ label: "从文件夹中移除文件链接", icon: "remove-from-folder", shortcut: "Shift+Delete", disabled: true });
-  } else {
-    entries.push(
-      { label: "从文件夹中移除", icon: "remove-from-folder", shortcut: "Shift+Delete", disabled: true },
-      {
-        label: "丢到回收站",
-        icon: "drop-to-trash",
-        shortcut: "Delete",
-        action: () => void deletePlacements(selection.selectedRefs()),
-      },
-    );
-  }
+  // 删除组两项恒显（3.4 八轮，2026-08-18 用户定：废除链接分流项——链接删除本就只移除记录，
+  // 不进回收站不去未分类；从文件夹中移除 = 去未分类（"uncategorized"），丢到回收站 = "recycle"）
+  entries.push(
+    {
+      label: "从文件夹中移除",
+      icon: "remove-from-folder",
+      shortcut: "Shift+Delete",
+      action: () => void deletePlacements(selection.selectedRefs(), "uncategorized"),
+    },
+    {
+      label: "丢到回收站",
+      icon: "drop-to-trash",
+      shortcut: "Delete",
+      action: () => void deletePlacements(selection.selectedRefs()),
+    },
+  );
   return entries;
 }

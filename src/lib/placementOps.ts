@@ -144,11 +144,16 @@ export async function setFolderColor(folderId: string, color: string | null): Pr
 // 删除（C1；2026-07-29 用户修订：取消两段式询问——回收站不是危险操作，素材没丢，
 // 撤销可找回，二次确认纯增操作负担）：直接 lastAction="recycle" 移入回收站，
 // 不再有"保留为未分类"选项（入口不同而已）；后端两段式机制保留（lastAction=null 干跑）
-export async function deletePlacements(items: PlacementRef[]): Promise<void> {
+// 删除分流（3.4 八轮，2026-08-18 用户定）：action "recycle" = 丢到回收站（Delete）/
+// "uncategorized" = 从文件夹中移除（Shift+Delete，最后一条 origin 改挂未分类）；
+// 链接 Placement 两种都直接移除记录（不进回收站不去未分类——链接必非资产最后一条，见后端不变量）
+export async function deletePlacements(items: PlacementRef[], action: "recycle" | "uncategorized" = "recycle"): Promise<void> {
   const toast = useToastStore();
   try {
-    await invoke("delete_placements", { items, lastAction: "recycle" });
-    await runOp(async () => {}, () => `删除 ${items.length} 个项目`);
+    await invoke("delete_placements", { items, lastAction: action });
+    await runOp(async () => {}, () =>
+      action === "uncategorized" ? `从文件夹中移除 ${items.length} 个项目` : `丢到回收站 ${items.length} 个项目`,
+    );
   } catch (e) {
     toast.notify({ message: String(e), icon: "fail" });
   }
@@ -156,10 +161,11 @@ export async function deletePlacements(items: PlacementRef[]): Promise<void> {
 
 // —— 回收站（6.1 二轮，2026-07-29；后端契约并行开发：restore_recycle / delete_recycle / clear_recycle）——
 
-// 彻底删除返回（delete_recycle / clear_recycle 同构）：needConfirm = 有虚拟片段引用需确认
+// 彻底删除返回（delete_recycle / clear_recycle 同构）：needConfirm = 有虚拟片段引用或快照链接需确认
 interface RecycleDeleteResult {
   needConfirm: boolean;
   segmentRefs: number;
+  linkRefs: number; // 快照内链接 Placement 数（2026-08-18 警示口径）
   deleted: number;
 }
 
@@ -201,7 +207,7 @@ export async function deleteRecycle(assetIds: string[]): Promise<void> {
   try {
     const r = await invoke<RecycleDeleteResult>("delete_recycle", { assetIds, confirmed: false });
     if (r.needConfirm) {
-      selection.recyclePrompt = { kind: "delete", assetIds, segmentRefs: r.segmentRefs };
+      selection.recyclePrompt = { kind: "delete", assetIds, segmentRefs: r.segmentRefs, linkRefs: r.linkRefs };
       return;
     }
     await runHardDelete(() => `彻底删除 ${r.deleted} 个项目`);
@@ -217,7 +223,7 @@ export async function clearRecycle(): Promise<void> {
   try {
     const r = await invoke<RecycleDeleteResult>("clear_recycle", { confirmed: false });
     if (r.needConfirm) {
-      selection.recyclePrompt = { kind: "clear", assetIds: [], segmentRefs: r.segmentRefs };
+      selection.recyclePrompt = { kind: "clear", assetIds: [], segmentRefs: r.segmentRefs, linkRefs: r.linkRefs };
       return;
     }
     await runHardDelete(() => `清空回收站（${r.deleted} 个项目）`);

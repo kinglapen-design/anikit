@@ -110,7 +110,8 @@ fn restore_one(
   }
 }
 
-/// 彻底删除结果：needConfirm = true 时未动任何数据，segmentRefs 为引用被删集合的虚拟片段数
+/// 彻底删除结果：needConfirm = true 时未动任何数据，segmentRefs 为引用被删集合的虚拟片段数，
+/// linkRefs 为快照内链接 Placement 数（2026-08-18 用户定：彻底清除前提示"关联链接将一并清除"）
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteRecycleReport {
@@ -118,22 +119,33 @@ pub struct DeleteRecycleReport {
   #[serde(default)]
   pub segment_refs: usize,
   #[serde(default)]
+  pub link_refs: usize,
+  #[serde(default)]
   pub deleted: usize,
 }
 
-/// 彻底删除（两段式）：库内"其他"资产有 type="segment" 且 source 指向被删集合时，
-/// 未确认只返回 needConfirm + segmentRefs 不动数据；确认后物理删 info 目录并同步清理引用
+/// 彻底删除（两段式）：库内"其他"资产有 type="segment" 且 source 指向被删集合，或快照内
+/// 含链接 Placement 时，未确认只返回 needConfirm + segmentRefs/linkRefs 不动数据；
+/// 确认后物理删 info 目录并同步清理引用
 pub fn delete_recycle(lib: &mut Library, asset_ids: &[String], confirmed: bool) -> Result<DeleteRecycleReport, String> {
   let want: HashSet<&str> = asset_ids.iter().map(String::as_str).collect();
   let targets: Vec<String> =
     lib.recycle.items.iter().filter(|i| want.contains(i.asset.as_str())).map(|i| i.asset.clone()).collect();
   if targets.is_empty() {
-    return Ok(DeleteRecycleReport { need_confirm: false, segment_refs: 0, deleted: 0 });
+    return Ok(DeleteRecycleReport { need_confirm: false, segment_refs: 0, link_refs: 0, deleted: 0 });
   }
   let target_set: HashSet<&str> = targets.iter().map(String::as_str).collect();
   let segment_refs = count_segment_refs(lib, &target_set);
-  if segment_refs > 0 && !confirmed {
-    return Ok(DeleteRecycleReport { need_confirm: true, segment_refs, deleted: 0 });
+  // 关联链接计数 = 回收站快照内 origin=false 的 Placement（彻底删除即随资产一并清除、不可恢复）
+  let link_refs: usize = lib
+    .recycle
+    .items
+    .iter()
+    .filter(|i| target_set.contains(i.asset.as_str()))
+    .map(|i| i.placements.iter().filter(|p| !p.origin).count())
+    .sum();
+  if (segment_refs > 0 || link_refs > 0) && !confirmed {
+    return Ok(DeleteRecycleReport { need_confirm: true, segment_refs, link_refs, deleted: 0 });
   }
   // 物理不可逆：操作前强制备份兜底（失败仅警告不阻断）
   if let Err(e) = backup::backup_library(&lib.root, &lib.assets_dir) {
@@ -153,8 +165,8 @@ pub fn delete_recycle(lib: &mut Library, asset_ids: &[String], confirmed: bool) 
     removed.push(id.clone());
   }
   sync_after_purge(lib, &removed)?;
-  log::info!("彻底删除 {} 个回收站项目（虚拟片段引用 {segment_refs}）", removed.len());
-  Ok(DeleteRecycleReport { need_confirm: false, segment_refs, deleted: removed.len() })
+  log::info!("彻底删除 {} 个回收站项目（虚拟片段引用 {segment_refs}，链接 {link_refs}）", removed.len());
+  Ok(DeleteRecycleReport { need_confirm: false, segment_refs, link_refs, deleted: removed.len() })
 }
 
 /// 清空回收站：等价于对全部条目执行 delete_recycle（segmentRefs 对全集汇总）
@@ -385,6 +397,36 @@ mod tests {
     // 回收站已空：幂等返回 0
     let rep = delete_recycle(&mut h.lib, &["AN-A".to_string()], false).unwrap();
     assert_eq!(rep.deleted, 0);
+  }
+
+  /// 链接警示（2026-08-18 用户定）：快照含链接 Placement → 未确认拦截带 linkRefs；确认后一并清除
+  #[test]
+  fn delete_recycle_warns_link_refs() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-A", "a.png", "root");
+    ops::add_placement(&mut h.lib, "AN-A".into(), "root".into(), "链接.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+    // 两条一起删 = 最后一条进回收站（快照含 origin + 链接）
+    let rep = delete_placements(
+      &mut h.lib,
+      &[
+        PlacementRef { asset_id: "AN-A".into(), folder_id: "root".into(), origin: true },
+        PlacementRef { asset_id: "AN-A".into(), folder_id: "root".into(), origin: false },
+      ],
+      Some("recycle"),
+    )
+    .unwrap();
+    assert!(!rep.need_confirm);
+    assert_eq!(h.lib.recycle.items[0].placements.len(), 2, "快照含链接");
+
+    let rep = delete_recycle(&mut h.lib, &["AN-A".to_string()], false).unwrap();
+    assert!(rep.need_confirm);
+    assert_eq!((rep.segment_refs, rep.link_refs), (0, 1), "无片段引用、1 条链接");
+    assert_eq!(h.lib.recycle.items.len(), 1, "未确认不动数据");
+    let rep = delete_recycle(&mut h.lib, &["AN-A".to_string()], true).unwrap();
+    assert!(!rep.need_confirm);
+    assert_eq!(rep.deleted, 1);
+    assert!(h.lib.recycle.items.is_empty());
   }
 
   #[test]

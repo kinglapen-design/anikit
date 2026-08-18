@@ -40,11 +40,13 @@ export interface LinkDraft {
 }
 
 // 回收站彻底删除两段式询问（6.1 二轮，2026-07-29）：delete_recycle / clear_recycle 干跑
-// 返回 needConfirm 时填入（携带虚拟片段引用数警示），确认后带 confirmed=true 再调——不可恢复，无撤销
+// 返回 needConfirm 时填入（携带虚拟片段引用数 + 快照内链接数警示——2026-08-18 用户定：
+// 彻底清除前提示"所有关联的链接文件都将被清除"），确认后带 confirmed=true 再调——不可恢复，无撤销
 export interface RecyclePrompt {
   kind: "delete" | "clear"; // delete = 彻底删除选中项 / clear = 清空回收站
   assetIds: string[];
   segmentRefs: number; // 被虚拟片段引用数（确认窗警示文案）
+  linkRefs: number; // 快照内链接 Placement 数（确认窗警示文案）
 }
 
 // 通用确认弹窗（6.3）：轻量一次性确认（警示 / 可撤销操作的前置说明 / 不可逆操作二次确认）

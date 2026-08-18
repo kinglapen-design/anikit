@@ -133,8 +133,11 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
         e.preventDefault();
         if (content.isRecycleView) {
           void deleteRecycle(recycleSelectedAssetIds()); // 回收站 = 彻底删除两段式
+        } else if (e.shiftKey) {
+          // Shift+Delete = 从文件夹中移除（3.4 八轮：去未分类；链接记录直接移除）
+          void deletePlacements(selection.selectedRefs(), "uncategorized");
         } else {
-          void deletePlacements(selection.selectedRefs());
+          void deletePlacements(selection.selectedRefs()); // Delete = 丢到回收站
         }
       }
       return;

@@ -437,7 +437,12 @@ pub async fn delete_placements(
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
-  undo.begin(format!("删除 {} 个项目", items.len()));
+  // 撤销标签分流（3.4 八轮，2026-08-18）：从文件夹中移除（去未分类）/ 丢到回收站
+  let label = match last_action.as_deref() {
+    Some("uncategorized") => format!("从文件夹中移除 {} 个项目", items.len()),
+    _ => format!("丢到回收站 {} 个项目", items.len()),
+  };
+  undo.begin(label);
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
   if last_action.as_deref() == Some("recycle") {
     undo.record_file(&lib.root.join(RECYCLE_FILE)).map_err(|e| e.to_string())?;

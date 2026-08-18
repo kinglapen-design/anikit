@@ -1,7 +1,7 @@
 //! 副本与重命名（6.1）：duplicate = info 目录整体复制 + 新 ID + 链接 Placement；
 //! rename = 显示名即时改，原始 Placement 追加磁盘段（originName + 词干缩略图同步改名）。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -110,10 +110,12 @@ fn rollback_copies(lib: &mut Library, out: &DuplicateOutcome) {
   }
 }
 
-/// 重命名 Placement：显示名即时改（同文件夹 unique_name + rebuild + save_folders）；
+/// 重命名 Placement：显示名即时改（rebuild + save_folders；**撞名不唯一化**——显示名放开，
+/// PRD 01 边界规则 7，2026-08-18 用户定"护栏全拆"，单条与批量统一口径）；
 /// 原始 Placement 追加磁盘段——rename_origin 原语改 originName + 词干缩略图 + meta 写盘 +
 /// 索引同步，返回磁盘改名清单（旧路径, 新路径）（命令层登记 DiskOp::Rename；链接 Placement 为空）。
-/// 原始 Placement 改名补扩展名（用户只改词干不丢 .fla，Windows 资源管理器同行为）。
+/// 原始 Placement 改名补扩展名（用户只改词干不丢 .fla，Windows 资源管理器同行为）；
+/// 磁盘物理约束仍在：origin 撞名致改名失败中文报错整体回滚。
 /// 磁盘段先行（更易失败：fla 被 Animate 占用）；folders.json 落盘失败时磁盘改名尽力改回
 pub fn rename_placement(
   lib: &mut Library,
@@ -122,17 +124,57 @@ pub fn rename_placement(
   origin: bool,
   new_name: &str,
 ) -> Result<Vec<(PathBuf, PathBuf)>, String> {
-  rename_impl(lib, asset_id, folder_id, origin, new_name, true)
+  let trimmed = new_name.trim();
+  library::validate_library_name(trimmed).map_err(|e| e.to_string())?;
+  let item = PlacementRef { asset_id: asset_id.into(), folder_id: folder_id.into(), origin };
+  let pos = find_placement(lib, &item).ok_or_else(|| "项目不存在，可能已被移动或删除".to_string())?;
+  let effective = effective_name(lib, asset_id, origin, trimmed);
+
+  // 磁盘段先行（originName + 词干缩略图 + meta 写盘）
+  let old_meta = lib.index.assets.get(asset_id).cloned();
+  let mut renames = Vec::new();
+  if origin {
+    let old_origin = old_meta.as_ref().map(|m| m.origin_name.clone()).unwrap_or_default();
+    let result = ops::rename_origin(&lib.assets_dir, asset_id, &effective).map_err(|e| rename_fail(e, &old_origin))?;
+    lib.index.assets.insert(asset_id.to_string(), result.meta);
+    renames = result.renames;
+  }
+
+  // 显示名（撞名不拦截：显示名放开）
+  let old_name = lib.folders.items[pos].name.clone();
+  lib.folders.items[pos].name = effective.clone();
+  lib.index.rebuild_placements(&lib.folders.items);
+  if let Err(e) = library::save_folders(lib) {
+    lib.folders.items[pos].name = old_name;
+    lib.index.rebuild_placements(&lib.folders.items);
+    if let Some(meta) = old_meta {
+      if origin {
+        // 磁盘改名尽力改回（含 metadata 复原）；
+        // 序列帧 originName 是帧名（非改名输入口径），回滚名用 词干.扩展名（2026-08-14）
+        let rollback_name = if crate::services::sequence::frames_dir_if_sequence(&lib.assets_dir, asset_id, &meta).is_some() {
+          format!("{}.{}", meta.name, meta.ext)
+        } else {
+          meta.origin_name.clone()
+        };
+        if let Err(re) = ops::rename_origin(&lib.assets_dir, asset_id, &rollback_name) {
+          log::error!("重命名落盘失败后磁盘回滚失败：{re}");
+        }
+      }
+      lib.index.assets.insert(asset_id.to_string(), meta);
+    }
+    return Err(e.to_string());
+  }
+  log::info!("重命名为 {effective}");
+  Ok(renames)
 }
 
-/// 批量重命名（3.4，37 稿 / PRD 02-14，2026-08-18）：逐条改名（语义同 rename_placement），
-/// **撞名不拦截**（显示名放开，PRD 01 边界规则 7——不做同文件夹唯一化；原始 Placement 的磁盘
-/// 物理约束仍在，撞名致改名失败的项计入失败清单）；**失败项跳过不整体回滚**，汇总报告。
+/// 批量重命名（3.4，37 稿 / PRD 02-14，2026-08-18）：逐条改名（语义同 rename_placement，
+/// 撞名不拦截——显示名放开）；**失败项跳过不整体回滚**，汇总报告。
 /// renames = 全部成功项的磁盘改名对汇总（命令层登记 DiskOp 用）
 pub fn rename_placements(lib: &mut Library, items: &[RenameItem]) -> Result<BatchRenameOutcome, String> {
   let mut out = BatchRenameOutcome::default();
   for it in items {
-    match rename_impl(lib, &it.asset_id, &it.folder_id, it.origin, &it.new_name, false) {
+    match rename_placement(lib, &it.asset_id, &it.folder_id, it.origin, &it.new_name) {
       Ok(rs) => {
         out.renames.extend(rs);
         out.renamed += 1;
@@ -158,68 +200,6 @@ pub struct BatchRenameOutcome {
 pub struct BatchRenameFailed {
   pub name: String,
   pub reason: String,
-}
-
-/// 重命名实现（unique = 同文件夹显示名唯一化：单条重命名保持；批量重命名 PRD 撞名不拦截关掉）
-fn rename_impl(
-  lib: &mut Library,
-  asset_id: &str,
-  folder_id: &str,
-  origin: bool,
-  new_name: &str,
-  unique: bool,
-) -> Result<Vec<(PathBuf, PathBuf)>, String> {
-  let trimmed = new_name.trim();
-  library::validate_library_name(trimmed).map_err(|e| e.to_string())?;
-  let item = PlacementRef { asset_id: asset_id.into(), folder_id: folder_id.into(), origin };
-  let pos = find_placement(lib, &item).ok_or_else(|| "项目不存在，可能已被移动或删除".to_string())?;
-  let effective = effective_name(lib, asset_id, origin, trimmed);
-
-  // 磁盘段先行（originName + 词干缩略图 + meta 写盘）
-  let old_meta = lib.index.assets.get(asset_id).cloned();
-  let mut renames = Vec::new();
-  if origin {
-    let old_origin = old_meta.as_ref().map(|m| m.origin_name.clone()).unwrap_or_default();
-    let result = ops::rename_origin(&lib.assets_dir, asset_id, &effective).map_err(|e| rename_fail(e, &old_origin))?;
-    lib.index.assets.insert(asset_id.to_string(), result.meta);
-    renames = result.renames;
-  }
-
-  // 显示名（批量 unique=false = 撞名不拦截，显示名放开 PRD 01 边界规则 7；
-  // 单条 unique=true = 同文件夹唯一化，排除自身）
-  let existing: HashSet<String> = lib
-    .folders
-    .items
-    .iter()
-    .enumerate()
-    .filter(|(i, p)| *i != pos && p.folder == folder_id)
-    .map(|(_, p)| p.name.clone())
-    .collect();
-  let old_name = lib.folders.items[pos].name.clone();
-  lib.folders.items[pos].name = if unique { library::unique_name(&existing, &effective) } else { effective.clone() };
-  lib.index.rebuild_placements(&lib.folders.items);
-  if let Err(e) = library::save_folders(lib) {
-    lib.folders.items[pos].name = old_name;
-    lib.index.rebuild_placements(&lib.folders.items);
-    if let Some(meta) = old_meta {
-      if origin {
-        // 磁盘改名尽力改回（含 metadata 复原）；
-        // 序列帧 originName 是帧名（非改名输入口径），回滚名用 词干.扩展名（2026-08-14）
-        let rollback_name = if crate::services::sequence::frames_dir_if_sequence(&lib.assets_dir, asset_id, &meta).is_some() {
-          format!("{}.{}", meta.name, meta.ext)
-        } else {
-          meta.origin_name.clone()
-        };
-        if let Err(re) = ops::rename_origin(&lib.assets_dir, asset_id, &rollback_name) {
-          log::error!("重命名落盘失败后磁盘回滚失败：{re}");
-        }
-      }
-      lib.index.assets.insert(asset_id.to_string(), meta);
-    }
-    return Err(e.to_string());
-  }
-  log::info!("重命名为 {effective}");
-  Ok(renames)
 }
 
 /// 磁盘段失败文案：提示可能被占用（fla 在 Animate 中打开是常见场景）
@@ -390,11 +370,11 @@ mod tests {
       assert!(rename_placement(&mut h.lib, "AN-A", "root", true, bad).is_err(), "应拒绝：{bad:?}");
     }
     assert!(rename_placement(&mut h.lib, "AN-A", "root", false, "幽灵").is_err(), "链接三元组不匹配");
-    // 同文件夹重名唯一化
+    // 同文件夹撞名不追加序号（显示名放开，2026-08-18 用户定"护栏全拆"）
     add_png(&mut h, "AN-B", "另图.png");
     rename_placement(&mut h.lib, "AN-B", "root", true, "原图.png").unwrap();
     let b = h.lib.folders.items.iter().find(|p| p.asset == "AN-B").unwrap();
-    assert_eq!(b.name, "原图-1.png", "显示名同文件夹唯一化");
+    assert_eq!(b.name, "原图.png", "显示名放开不唯一化");
   }
 
   /// 序列帧资产入库（3 帧 png 打包 frames/ + origin Placement 到 root）

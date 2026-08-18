@@ -13,16 +13,18 @@ const selection = useSelectionStore();
 
 const isClear = computed(() => selection.recyclePrompt?.kind === "clear");
 
-// 警示文案：虚拟片段引用数 >0 时前置引用警示；尾句恒带不可恢复说明
+// 警示文案：虚拟片段引用数 >0 时前置引用警示；快照链接数 >0 时提示链接一并清除
+//（2026-08-18 用户定）；尾句恒带不可恢复说明
 const bodyText = computed(() => {
   const p = selection.recyclePrompt;
   if (!p) return "";
   const seg =
     p.segmentRefs > 0 ? `，其中素材被 ${p.segmentRefs} 个虚拟片段引用，删除后引用将失效` : "";
+  const link = p.linkRefs > 0 ? `，其关联的 ${p.linkRefs} 条链接将一并清除` : "";
   if (isClear.value) {
-    return `将清空回收站中的全部素材${seg}。彻底删除不可恢复，确定继续吗？`;
+    return `将清空回收站中的全部素材${seg}${link}。彻底删除不可恢复，确定继续吗？`;
   }
-  return `将彻底删除选中的 ${p.assetIds.length} 个素材${seg}。彻底删除不可恢复，确定继续吗？`;
+  return `将彻底删除选中的 ${p.assetIds.length} 个素材${seg}${link}。彻底删除不可恢复，确定继续吗？`;
 });
 
 function onConfirm(): void {

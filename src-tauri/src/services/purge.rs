@@ -23,12 +23,12 @@ use crate::services::recycle::{count_segment_refs, sync_after_purge, DeleteRecyc
 pub fn delete_assets_permanently(lib: &mut Library, asset_ids: &[String], confirmed: bool) -> Result<DeleteRecycleReport, String> {
   let targets: Vec<String> = asset_ids.iter().filter(|id| lib.index.assets.contains_key(id.as_str())).cloned().collect();
   if targets.is_empty() {
-    return Ok(DeleteRecycleReport { need_confirm: false, segment_refs: 0, deleted: 0 });
+    return Ok(DeleteRecycleReport { need_confirm: false, segment_refs: 0, link_refs: 0, deleted: 0 });
   }
   let target_set: HashSet<&str> = targets.iter().map(String::as_str).collect();
   let segment_refs = count_segment_refs(lib, &target_set);
   if segment_refs > 0 && !confirmed {
-    return Ok(DeleteRecycleReport { need_confirm: true, segment_refs, deleted: 0 });
+    return Ok(DeleteRecycleReport { need_confirm: true, segment_refs, link_refs: 0, deleted: 0 });
   }
   if let Err(e) = backup::backup_library(&lib.root, &lib.assets_dir) {
     log::warn!("彻底删除前备份失败（不阻断删除）：{e}");
@@ -51,7 +51,7 @@ pub fn delete_assets_permanently(lib: &mut Library, asset_ids: &[String], confir
   }
   sync_after_purge(lib, &removed)?;
   log::info!("彻底删除 {} 个素材（虚拟片段引用 {segment_refs}）", removed.len());
-  Ok(DeleteRecycleReport { need_confirm: false, segment_refs, deleted: removed.len() })
+  Ok(DeleteRecycleReport { need_confirm: false, segment_refs, link_refs: 0, deleted: removed.len() })
 }
 
 /// 删除文件夹报告（两分支各取所需字段）
