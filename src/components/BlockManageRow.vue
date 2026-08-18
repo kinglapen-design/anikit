@@ -6,13 +6,11 @@
 // 「目录」行（isDefault，2026-08-14 用户定）：仅删除 opacity 0 占位不可点（目录是各兜底落点）；
 // 名称 / 图标 / 排序全部放开——锚定常量 id "dir"，改名无影响。
 // 草稿式：行编辑只改草稿对象（AppInput v-model / setIcon 直改 row 属性，提交由弹窗统一组装）。
-// 图标下拉本轮从简 = openContextMenu 列表（每项带图标预览 + 当前勾；3.3 换 05 稿网格面板时
-// 仅需替换 openIconMenu 一处）。
+// 图标下拉 = 05 稿 §3 网格面板（2026-08-18，3.3：openPanelMenu 整体面板菜单，FolderIconGrid 共用）。
 import AppIcon from "./AppIcon.vue";
 import AppInput from "./AppInput.vue";
 import IconButton from "./IconButton.vue";
-import { openContextMenu, type CtxEntry } from "../lib/contextMenus";
-import { CUSTOM_ICONS } from "../lib/customIcons";
+import { openPanelMenu } from "../lib/contextMenus";
 import type { BlockDraft } from "../lib/blockOps";
 
 const props = defineProps<{
@@ -23,19 +21,15 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ moveUp: []; moveDown: []; remove: [] }>();
 
-// 默认图标下拉（58×28）：点击弹列表——"默认"（无图标，folder-closed 预览）+ 19 个自定义图标
+// 默认图标下拉（58×28）：点击弹 05 稿 §3 图标网格（2026-08-18，3.3 换网格面板落地——
+// 整体面板菜单 openPanelMenu，230 宽 20 格，选中即写草稿并关菜单）
 function openIconMenu(e: MouseEvent): void {
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  const entries: CtxEntry[] = [
-    { label: "默认", icon: "folder-closed", checked: props.row.icon === null, action: () => (props.row.icon = null) },
-    ...CUSTOM_ICONS.map((ic) => ({
-      label: ic.label,
-      icon: ic.name,
-      checked: props.row.icon === ic.name,
-      action: () => (props.row.icon = ic.name),
-    })),
-  ];
-  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, entries);
+  openPanelMenu(
+    { clientX: rect.left, clientY: rect.bottom + 4 },
+    { kind: "iconPicker", current: props.row.icon, onPick: (name) => (props.row.icon = name) },
+    { width: 230 },
+  );
 }
 </script>
 

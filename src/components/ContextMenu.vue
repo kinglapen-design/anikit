@@ -16,14 +16,25 @@ import AppMenu from "./AppMenu.vue";
 import MenuItem from "./MenuItem.vue";
 import MenuDivider from "./MenuDivider.vue";
 import LibraryMenuItem from "./LibraryMenuItem.vue";
+import FolderIconPanel from "./FolderIconPanel.vue";
+import FolderColorPanel from "./FolderColorPanel.vue";
+import FolderIconGrid from "./FolderIconGrid.vue";
 import { closeContextMenu, menuState, type CtxEntry, type CtxItem } from "../lib/contextMenus";
 import { reorderLibraries, requestDeleteLibrary, currentLibrary, switchLibrary } from "../lib/libraryOps";
 
 const query = ref("");
 const searchInputRef = ref<HTMLInputElement>();
 
-// 级联 flyout：当前展开的子菜单（父项 top 作 key 随项重建）与位置、宽度
-const flyout = ref<{ key: number; x: number; y: number; width: number; entries: CtxEntry[] } | null>(null);
+// 级联 flyout：当前展开的子菜单（父项 top 作 key 随项重建）与位置、宽度；
+// panel（2026-08-18，3.3 / 05 稿 §3§4）= 自定义网格面板形态（图标/颜色），不走条目列表
+const flyout = ref<{
+  key: number;
+  x: number;
+  y: number;
+  width: number;
+  entries: CtxEntry[];
+  panel?: { kind: "folderIcon" | "folderColor"; folderId: string };
+} | null>(null);
 const flyoutRootRef = ref<HTMLElement>();
 
 // 每次打开重置搜索并自动聚焦
@@ -47,7 +58,7 @@ const entries = computed<CtxEntry[]>(() => {
   const out: CtxItem[] = [];
   for (const e of all) {
     if (e === "divider") continue;
-    if (e.label.toLowerCase().includes(q)) out.push(e.submenu ? { ...e, submenu: undefined } : e);
+    if (e.label.toLowerCase().includes(q)) out.push(e.submenu || e.panel ? { ...e, submenu: undefined, panel: undefined } : e);
     else if (e.submenu) {
       for (const s of e.submenu) {
         if (s !== "divider" && s.label.toLowerCase().includes(q)) out.push(s);
@@ -58,7 +69,7 @@ const entries = computed<CtxEntry[]>(() => {
 });
 
 function onItemHover(entry: CtxItem, e: MouseEvent): void {
-  if (!entry.submenu || entry.disabled || query.value.trim()) {
+  if ((!entry.submenu && !entry.panel) || entry.disabled || query.value.trim()) {
     flyout.value = null;
     return;
   }
@@ -66,11 +77,11 @@ function onItemHover(entry: CtxItem, e: MouseEvent): void {
   const width = entry.submenuWidth ?? 175;
   // 右缘溢出 → 向左飞出（父项左缘 - 二级宽 - 2）
   const x = r.right + 2 + width > window.innerWidth - 4 ? r.left - width - 2 : r.right + 2;
-  flyout.value = { key: r.top, x, y: r.top - 8, width, entries: entry.submenu };
+  flyout.value = { key: r.top, x, y: r.top - 8, width, entries: entry.submenu ?? [], panel: entry.panel };
 }
 
 function onItemClick(entry: CtxEntry): void {
-  if (entry === "divider" || entry.disabled || entry.submenu) return;
+  if (entry === "divider" || entry.disabled || entry.submenu || entry.panel) return;
   // 库条目点击动态判定（2026-08-12 走查：菜单 keepOpen 期间可能已切库，
   // 静态 action 快照会让"切回去"失效——当前库跳过，其余直接按名切）
   if (entry.library) {
@@ -94,6 +105,13 @@ function onSearchKeydown(e: KeyboardEvent): void {
 function closeAll(executed = false): void {
   flyout.value = null;
   closeContextMenu(executed);
+}
+
+// 整体面板菜单（openPanelMenu）：选中回调 + 关菜单（一次性选择器，executed = true）
+function onPanelPick(name: string | null): void {
+  const panel = menuState.panel;
+  closeAll(true);
+  panel?.onPick(name);
 }
 
 // —— 库条目拖动排序（08 稿：抓手拖动、其他 item 让位移动动画、落点持久化 space.json libraryOrder）——
@@ -192,13 +210,16 @@ function onLibraryRemove(entry: CtxItem): void {
     :x="menuState.x"
     :y="menuState.y"
     :width="menuState.width ?? 175"
-    pad="0"
-    gap="0"
+    :pad="menuState.panel ? '24px' : '0'"
+    :gap="menuState.panel ? '12px' : '0'"
     :group="flyoutRootRef ?? null"
     @close="closeAll(false)"
   >
-    <!-- 搜索区（03/04/05 稿独立容器）：搜索图标 + 输入框 + 清除钮，border-bottom 通栏分隔 -->
-    <div v-if="menuState.searchable" class="menu-search">
+    <!-- 整体面板菜单（openPanelMenu）：一级内容 = 面板组件，无搜索区无条目列表 -->
+    <FolderIconGrid v-if="menuState.panel?.kind === 'iconPicker'" :current="menuState.panel.current" @select="onPanelPick" />
+    <template v-else>
+      <!-- 搜索区（03/04/05 稿独立容器）：搜索图标 + 输入框 + 清除钮，border-bottom 通栏分隔 -->
+      <div v-if="menuState.searchable" class="menu-search">
       <span class="lead">
         <span class="search-icon"><AppIcon name="search" :size="15" /></span>
         <input
@@ -235,7 +256,7 @@ function onLibraryRemove(entry: CtxItem): void {
           :icon-data="entry.iconData"
           :shortcut="entry.shortcut"
           :disabled="entry.disabled"
-          :arrow="!!entry.submenu"
+          :arrow="!!(entry.submenu || entry.panel)"
           :checkable="entry.checkable"
           :checked="entry.checked"
           @select="onItemClick(entry)"
@@ -244,25 +265,41 @@ function onLibraryRemove(entry: CtxItem): void {
       </template>
       <div v-if="query && entries.length === 0" class="menu-empty">无匹配项</div>
     </div>
+    </template>
   </AppMenu>
   <!-- 级联 flyout：key 随父项重建（防实例复用位置滞留）；pop=false 不回放动画；
-       内容包一层 div 供根菜单 group 判定（点击 flyout 内 = 组内） -->
-  <AppMenu v-if="flyout && menuState.entries" :key="flyout.key" :x="flyout.x" :y="flyout.y" :width="flyout.width" :pop="false" @close="closeAll(false)">
+       内容包一层 div 供根菜单 group 判定（点击 flyout 内 = 组内）；
+       panel 形态（3.3 网格面板）padding/gap 按 05 稿 §3§4 = 24 / 12，条目形态保持默认 12 / 2 -->
+  <AppMenu
+    v-if="flyout && menuState.entries"
+    :key="flyout.key"
+    :x="flyout.x"
+    :y="flyout.y"
+    :width="flyout.width"
+    :pad="flyout.panel ? '24px' : 'var(--space-12)'"
+    :gap="flyout.panel ? '12px' : 'var(--space-2)'"
+    :pop="false"
+    @close="closeAll(false)"
+  >
     <div ref="flyoutRootRef" class="flyout-root">
-      <template v-for="(entry, i) in flyout.entries" :key="i">
-        <MenuDivider v-if="entry === 'divider'" />
-        <MenuItem
-          v-else
-          :label="entry.label"
-          :icon="entry.icon"
-          :icon-class="entry.iconClass"
-          :icon-data="entry.iconData"
-          :shortcut="entry.shortcut"
-          :disabled="entry.disabled"
-          :checkable="entry.checkable"
-          :checked="entry.checked"
-          @select="onItemClick(entry)"
-        />
+      <FolderIconPanel v-if="flyout.panel?.kind === 'folderIcon'" :folder-id="flyout.panel.folderId" @done="closeAll(true)" />
+      <FolderColorPanel v-else-if="flyout.panel?.kind === 'folderColor'" :folder-id="flyout.panel.folderId" @done="closeAll(true)" />
+      <template v-else>
+        <template v-for="(entry, i) in flyout.entries" :key="i">
+          <MenuDivider v-if="entry === 'divider'" />
+          <MenuItem
+            v-else
+            :label="entry.label"
+            :icon="entry.icon"
+            :icon-class="entry.iconClass"
+            :icon-data="entry.iconData"
+            :shortcut="entry.shortcut"
+            :disabled="entry.disabled"
+            :checkable="entry.checkable"
+            :checked="entry.checked"
+            @select="onItemClick(entry)"
+          />
+        </template>
       </template>
     </div>
   </AppMenu>

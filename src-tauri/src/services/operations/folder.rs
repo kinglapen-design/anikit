@@ -64,7 +64,7 @@ pub fn create_folder(
         }
       }
       let folder =
-        Folder { id: ops::new_folder_id(), name: name.to_string(), parent: parent_key, block: None, icon: None, kind: None, order: insert_order };
+        Folder { id: ops::new_folder_id(), name: name.to_string(), parent: parent_key, block: None, icon: None, kind: None, color: None, order: insert_order };
       lib.folders.folders.push(folder.clone());
       lib.index.folders.insert(folder.id.clone(), folder.clone());
       folder
@@ -165,6 +165,60 @@ pub fn rename_folder(lib: &mut Library, folder_id: &str, new_name: &str) -> Resu
 /// Folder 数据改动后索引同步（folders.folders 为事实来源，全量重建映射）
 fn sync_folder_index(lib: &mut Library) {
   lib.index.folders = lib.folders.folders.iter().map(|f| (f.id.clone(), f.clone())).collect();
+}
+
+/// 更改文件夹图标（2026-08-18，3.3 / 05 稿 §3）：icon None = 恢复默认文件夹图标。
+/// apply_to_children = 面板「应用至子级」复选框：全部后代文件夹统一换同值（PRD 02-45 已定语义）；
+/// 档案后代跳过——档案图标强制 archive（PRD 02-54），且档案无子级不再下钻
+pub fn set_folder_icon(lib: &mut Library, folder_id: &str, icon: Option<&str>, apply_to_children: bool) -> Result<(), String> {
+  if !lib.index.folders.contains_key(folder_id) {
+    return Err("目标文件夹不存在，可能已被删除".to_string());
+  }
+  let targets = icon_apply_targets(lib, folder_id, apply_to_children);
+  let value = icon.map(|s| s.to_string());
+  for f in &mut lib.folders.folders {
+    if targets.contains(&f.id) {
+      f.icon = value.clone();
+    }
+  }
+  sync_folder_index(lib);
+  library::save_folders(lib).map_err(|e| e.to_string())?;
+  log::info!("更改文件夹图标 {folder_id} → {icon:?}（应用至子级 {apply_to_children}）");
+  Ok(())
+}
+
+/// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：仅写本节点（color None = 恢复默认）。
+/// 子级跟随 = 该色底色版本（--custom-{色}-bg）由前端树渲染承担，不写子级数据（2026-08-18 用户定）
+pub fn set_folder_color(lib: &mut Library, folder_id: &str, color: Option<&str>) -> Result<(), String> {
+  let folder = lib
+    .folders
+    .folders
+    .iter_mut()
+    .find(|f| f.id == folder_id)
+    .ok_or_else(|| "目标文件夹不存在，可能已被删除".to_string())?;
+  folder.color = color.map(|s| s.to_string());
+  sync_folder_index(lib);
+  library::save_folders(lib).map_err(|e| e.to_string())?;
+  log::info!("更改文件夹颜色 {folder_id} → {color:?}");
+  Ok(())
+}
+
+/// 图标应用目标集：本节点 +（apply 时）全部非档案后代文件夹（DFS 下钻）
+fn icon_apply_targets(lib: &Library, folder_id: &str, apply_to_children: bool) -> HashSet<String> {
+  let mut set = HashSet::from([folder_id.to_string()]);
+  if apply_to_children {
+    let mut stack = vec![folder_id.to_string()];
+    while let Some(pid) = stack.pop() {
+      for f in lib.folders.folders.iter().filter(|f| f.parent.as_deref() == Some(pid.as_str())) {
+        if f.kind.as_deref() == Some(ARCHIVE_KIND) {
+          continue; // 档案图标强制 archive（PRD 02-54）；档案无子级（层级约束），不再下钻
+        }
+        set.insert(f.id.clone());
+        stack.push(f.id.clone());
+      }
+    }
+  }
+  set
 }
 
 /// 文件夹重设父级（仅改数据不动磁盘）：target_parent None / "root" = 顶层。
@@ -311,7 +365,7 @@ mod tests {
   }
 
   fn add_folder(lib: &mut Library, id: &str, name: &str, parent: Option<&str>, order: i32) {
-    let folder = Folder { id: id.into(), name: name.into(), parent: parent.map(|s| s.into()), block: None, icon: None, kind: None, order };
+    let folder = Folder { id: id.into(), name: name.into(), parent: parent.map(|s| s.into()), block: None, icon: None, kind: None, color: None, order };
     lib.folders.folders.push(folder.clone());
     lib.index.folders.insert(id.into(), folder);
   }
@@ -700,5 +754,62 @@ mod tests {
     undo.undo().unwrap();
     crate::core::library::reload(&mut h.lib).unwrap();
     assert_eq!(h.lib.index.folders["F01"].name, "人物", "undo 后恢复原名");
+  }
+
+  /// 更改图标（2026-08-18，3.3）：单点设置只写本节点；「应用至子级」递归全部后代统一换；
+  /// 档案后代跳过（图标强制 archive，PRD 02-54）；None + 递归 = 整支恢复默认
+  #[test]
+  fn set_folder_icon_single_and_recursive() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "顶", None, 0);
+    add_folder(&mut h.lib, "F01-1", "子", Some("F01"), 0);
+    add_folder(&mut h.lib, "F01-1-1", "孙", Some("F01-1"), 0);
+    add_folder(&mut h.lib, "F01-A", "档案子", Some("F01"), 1);
+    h.lib.folders.folders.iter_mut().find(|f| f.id == "F01-A").unwrap().kind = Some(ARCHIVE_KIND.into());
+    h.lib.index.folders.get_mut("F01-A").unwrap().kind = Some(ARCHIVE_KIND.into());
+
+    // 单点：只写本节点
+    set_folder_icon(&mut h.lib, "F01", Some("animal"), false).unwrap();
+    assert_eq!(h.lib.index.folders["F01"].icon.as_deref(), Some("animal"), "索引同步");
+    assert_eq!(h.lib.index.folders["F01-1"].icon, None, "子级不受影响");
+    // 落盘验证
+    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.folders.iter().find(|f| f.id == "F01").unwrap().icon.as_deref(), Some("animal"));
+
+    // 应用至子级：全部非档案后代统一换；档案后代跳过
+    set_folder_icon(&mut h.lib, "F01", Some("scene"), true).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1"].icon.as_deref(), Some("scene"));
+    assert_eq!(h.lib.index.folders["F01-1-1"].icon.as_deref(), Some("scene"), "多层后代一并换");
+    assert_eq!(h.lib.index.folders["F01-A"].icon, None, "档案后代跳过");
+
+    // None + 递归 = 整支恢复默认
+    set_folder_icon(&mut h.lib, "F01", None, true).unwrap();
+    assert!(h.lib.folders.folders.iter().all(|f| f.icon.is_none()));
+    // 不存在目标报错
+    assert!(set_folder_icon(&mut h.lib, "F-不存在", Some("animal"), false).is_err());
+  }
+
+  /// 更改颜色（2026-08-18，3.3）：仅写本节点（子级视觉跟随是前端底色档，不写数据）；None 清除
+  #[test]
+  fn set_folder_color_single_node_only() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "顶", None, 0);
+    add_folder(&mut h.lib, "F01-1", "子", Some("F01"), 0);
+
+    set_folder_color(&mut h.lib, "F01", Some("red")).unwrap();
+    assert_eq!(h.lib.index.folders["F01"].color.as_deref(), Some("red"), "索引同步");
+    assert_eq!(h.lib.index.folders["F01-1"].color, None, "子级不写数据");
+    // 落盘验证（None 不写字段）
+    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.folders.iter().find(|f| f.id == "F01").unwrap().color.as_deref(), Some("red"));
+    // 换色 / 清除
+    set_folder_color(&mut h.lib, "F01", Some("blue")).unwrap();
+    assert_eq!(h.lib.index.folders["F01"].color.as_deref(), Some("blue"));
+    set_folder_color(&mut h.lib, "F01", None).unwrap();
+    assert_eq!(h.lib.index.folders["F01"].color, None);
+    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    assert!(!disk.folders.iter().any(|f| f.color.is_some()), "清除后盘上无 color 字段");
+    // 不存在目标报错
+    assert!(set_folder_color(&mut h.lib, "F-不存在", Some("red")).is_err());
   }
 }

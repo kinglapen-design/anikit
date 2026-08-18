@@ -126,6 +126,21 @@ export async function renameFolder(folderId: string, newName: string): Promise<b
   }, () => `重命名文件夹为 ${newName.trim()}`);
 }
 
+// 更改文件夹图标（2026-08-18，3.3 / 05 稿 §3）：icon = null 恢复默认；
+// applyToChildren = 面板「应用至子级」（全部非档案后代统一换）
+export async function setFolderIcon(folderId: string, icon: string | null, applyToChildren: boolean): Promise<boolean> {
+  return await runOp(async () => {
+    await invoke("set_folder_icon", { folderId, icon, applyToChildren });
+  }, () => "更改文件夹图标");
+}
+
+// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：color = null 恢复默认；仅写本节点
+export async function setFolderColor(folderId: string, color: string | null): Promise<boolean> {
+  return await runOp(async () => {
+    await invoke("set_folder_color", { folderId, color });
+  }, () => "更改文件夹颜色");
+}
+
 // 删除（C1；2026-07-29 用户修订：取消两段式询问——回收站不是危险操作，素材没丢，
 // 撤销可找回，二次确认纯增操作负担）：直接 lastAction="recycle" 移入回收站，
 // 不再有"保留为未分类"选项（入口不同而已）；后端两段式机制保留（lastAction=null 干跑）

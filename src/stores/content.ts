@@ -43,8 +43,11 @@ export interface FolderNode {
   // 所属区块 id（2026-08-14 区块子系统）：仅顶级节点有值语义，null/缺省 = 默认区块「目录」
   block?: string | null;
   // 自定义图标名（assets/icons/05_custom-icon 文件干；顶级文件夹新建时继承区块默认图标）；
-  // 后端 list_folder_tree 暂未输出本字段（3.1 一轮已知缺口），缺省 = 默认文件夹图标
+  // 全层级都带（2026-08-18，3.3 起子级也可持自定义图标），缺省 = 默认文件夹图标
   icon?: string | null;
+  // 自定义颜色档名（2026-08-18，3.3：--custom-{色} token 名）；仅本节点持有——
+  // 子级视觉跟随 = 该色底色版本（FolderTree tint 传递承担），缺省 = 未自定义
+  color?: string | null;
   children: FolderNode[];
 }
 

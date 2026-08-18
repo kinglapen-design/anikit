@@ -43,7 +43,7 @@ function findChildrenList(nodes: FolderNode[], id: string): FolderNode[] | null 
 // 口径推翻，二级宽 184 → 226 容纳对勾列 + 长标签；keepOpen 期间经 menuState reactive 回写 checked）；
 // 展开收起三项沿用 treeExpansion 业务；
 // 排序依据/展开收起/更改图标/更改颜色 = 树节点专属（文件夹卡片不支持，用户定）；
-// 更改图标/颜色网格二级面板随第二轮或 3.3 落地（一级占位）。
+// 更改图标/颜色 = 网格面板形态（2026-08-18，3.3 点亮：CtxItem.panel + ContextMenu flyout 分流渲染）。
 function folderMenuEntries(folder: { id: string; name: string }, parentId: string | null, rename: () => void, treeOps: boolean): CtxEntry[] {
   const content = useContentStore();
   const entries: CtxEntry[] = [
@@ -180,8 +180,10 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
         },
       },
       "divider",
-      { label: "更改图标", icon: "edit-icon", disabled: true, submenu: [] },
-      { label: "更改颜色", icon: "edit-color", disabled: true, submenu: [] },
+      // 更改图标/颜色网格面板（2026-08-18，3.3 点亮）：05 稿 §3=230（20 格 + 应用至子级复选框）
+      // / §4=235（10 格无复选框，颜色仅写本节点）；panel 形态由 ContextMenu flyout 渲染对应组件
+      { label: "更改图标", icon: "edit-icon", submenuWidth: 230, panel: { kind: "folderIcon", folderId: folder.id } },
+      { label: "更改颜色", icon: "edit-color", submenuWidth: 235, panel: { kind: "folderColor", folderId: folder.id } },
     );
   }
   entries.push(

@@ -759,7 +759,7 @@ mod tests {
   fn save_folders_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
     let mut lib = create_test(dir.path());
-    lib.folders.folders.push(Folder { id: "F01".into(), name: "人物".into(), parent: None, block: None, icon: None, kind: None, order: 0 });
+    lib.folders.folders.push(Folder { id: "F01".into(), name: "人物".into(), parent: None, block: None, icon: None, kind: None, color: None, order: 0 });
     save_folders(&lib).unwrap();
     let back: FoldersFile = read_json(&lib.root.join(FOLDERS_FILE)).unwrap();
     assert_eq!(back.folders.len(), 1);

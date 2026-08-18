@@ -189,6 +189,11 @@ pub struct Folder {
   /// 节点形态（2026-08-15 档案子系统一轮）：Some("archive") = 档案文件夹；None = 普通文件夹，不写字段
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub kind: Option<String>,
+  /// 自定义颜色（2026-08-18，3.3）：色档名（red/orange/...，对应前端 token --custom-{色}）；
+  /// 仅本节点持有——子级视觉跟随 = 该色底色版本（--custom-{色}-bg），不写子级数据（用户定）；
+  /// None = 未自定义，不写字段
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub color: Option<String>,
   #[serde(default)]
   pub order: i32,
 }
@@ -473,6 +478,9 @@ mod tests {
     // 旧版 Folder（无 kind 字段）serde default 读入；None 不写字段（2026-08-15 档案子系统）
     assert_eq!(file.folders[0].kind, None);
     assert!(!serde_json::to_string(&file.folders[0]).unwrap().contains("kind"));
+    // 旧版 Folder（无 color 字段）serde default 读入；None 不写字段（2026-08-18，3.3）
+    assert_eq!(file.folders[0].color, None);
+    assert!(!serde_json::to_string(&file.folders[0]).unwrap().contains("color"));
   }
 
   /// 档案结构（2026-08-15 档案子系统一轮）：camelCase 序列化（踩坑 031 防线）、

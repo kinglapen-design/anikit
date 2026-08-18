@@ -26,8 +26,9 @@ const props = withDefaults(
     depth?: number; // 本层层级（内容缩进与缩进线定位用；item 底色块满宽不缩进）
     parentId?: string | null; // 本层父级 id（顶层 = null）：树排序"当前层级"与右键菜单判定、根父级形态判定用
     forceOpenIds?: Set<string>; // 命名节点的祖先链强制展开（新建子文件夹时父级可能折叠）
+    inheritTint?: string; // 祖先链最近自定义色（2026-08-18，3.3）：子级视觉跟随 = 该色底色版本（TreeItem tint）
   }>(),
-  { depth: 0, parentId: null, forceOpenIds: undefined },
+  { depth: 0, parentId: null, forceOpenIds: undefined, inheritTint: undefined },
 );
 const content = useContentStore();
 const selection = useSelectionStore();
@@ -50,6 +51,12 @@ const sortedNodes = computed(() => {
 // 展开态：模块级共享（lib/treeExpansion，2026-07-29——原每层自管，右键"展开/折叠所有"无从着力）
 function isOpen(id: string): boolean {
   return isTreeOpen(id) || (props.forceOpenIds?.has(id) ?? false);
+}
+
+// 自定义色（2026-08-18，3.3）：本节点色 ?? 祖先链最近色（子级视觉跟随 = 底色版本，
+// TreeItem 按 variant 查 --custom-{tint} / --custom-{tint}-bg）；子孙层经 inheritTint 续传
+function nodeTint(node: FolderNode): string | undefined {
+  return node.color ?? props.inheritTint;
 }
 
 // 选中：有效拖拽结束后的紧随 click 不触发（C4 引擎置位）；
@@ -119,6 +126,7 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
         :count="node.count"
         :depth="depth"
         :variant="node.kind === 'archive' ? 'archive' : parentId === null ? 'root' : 'child'"
+        :tint="nodeTint(node)"
         :expandable="node.children.length > 0"
         :open="isOpen(node.id)"
         :selected="content.sidebarSelected === `folder:${node.id}`"
@@ -134,9 +142,19 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
       <div
         v-if="isOpen(node.id) && node.children.length > 0"
         class="ft-children"
-        :style="{ '--guide-x': `${depth * 20 + 14}px` }"
+        :style="{
+          '--guide-x': `${depth * 20 + 14}px`,
+          // 缩进线随父级自定义色（2026-08-18，3.3 / PRD 02-46「一处改色多处生效」）
+          '--guide-color': nodeTint(node) ? `var(--custom-${nodeTint(node)})` : undefined,
+        }"
       >
-        <FolderTree :nodes="node.children" :depth="depth + 1" :parent-id="node.id" :force-open-ids="forceOpenIds" />
+        <FolderTree
+          :nodes="node.children"
+          :depth="depth + 1"
+          :parent-id="node.id"
+          :force-open-ids="forceOpenIds"
+          :inherit-tint="nodeTint(node)"
+        />
       </div>
     </div>
   </template>
@@ -167,7 +185,7 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: var(--line-hover);
+  background: var(--guide-color, var(--line-hover)); /* 父级自定义色时随色（3.3），否则暗-悬停 */
   z-index: 1;
   pointer-events: none;
 }

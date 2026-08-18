@@ -248,6 +248,8 @@ pub fn run() {
       commands::operations::create_folder,
       commands::operations::create_document,
       commands::operations::rename_folder,
+      commands::operations::set_folder_icon,
+      commands::operations::set_folder_color,
       commands::operations::move_placements,
       commands::operations::reorder_placements,
       commands::operations::reorder_folders,

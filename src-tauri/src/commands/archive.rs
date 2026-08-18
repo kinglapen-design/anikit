@@ -309,6 +309,7 @@ mod tests {
       block: block.map(|s| s.into()),
       icon: None,
       kind: None,
+      color: None,
       order,
     };
     lib.folders.folders.push(folder.clone());

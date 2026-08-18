@@ -434,7 +434,7 @@ pub(crate) fn create_folder(lib: &mut Library, parent: &str, name: &str) -> Stri
     .max()
     .map(|m| m + 1)
     .unwrap_or(0);
-  let folder = Folder { id: new_folder_id(), name: name.to_string(), parent: parent_key, block: None, icon: None, kind: None, order };
+  let folder = Folder { id: new_folder_id(), name: name.to_string(), parent: parent_key, block: None, icon: None, kind: None, color: None, order };
   let id = folder.id.clone();
   lib.folders.folders.push(folder.clone());
   lib.index.folders.insert(id.clone(), folder);

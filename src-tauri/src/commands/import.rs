@@ -408,12 +408,15 @@ pub struct FolderNode {
   /// 所属区块 ID（2026-08-14 区块子系统：仅顶级节点有值语义，None = 「目录」；子节点恒 None 不写字段）
   #[serde(skip_serializing_if = "Option::is_none")]
   pub block: Option<String>,
-  /// 自定义图标（2026-08-14 区块子系统：新建顶级文件夹继承区块默认图标；None 不写字段）
+  /// 自定义图标（2026-08-14 区块子系统起顶级继承区块默认图标；2026-08-18 3.3 起全层级可持，None 不写字段）
   #[serde(skip_serializing_if = "Option::is_none")]
   pub icon: Option<String>,
   /// 节点形态（2026-08-15 档案子系统一轮：Some("archive") = 档案；所有层级都带；None 不写字段）
   #[serde(skip_serializing_if = "Option::is_none")]
   pub kind: Option<String>,
+  /// 自定义颜色（2026-08-18，3.3）：色档名，所有层级都带；子级视觉跟随由前端底色档承担，None 不写字段
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub color: Option<String>,
   pub children: Vec<FolderNode>,
 }
 
@@ -433,7 +436,6 @@ pub struct FolderTreeView {
   pub blocks: Vec<BlockView>,
   pub nodes: Vec<FolderNode>,
 }
-
 /// 文件夹树（导入弹窗选目标文件夹用），按 Folder.order 排序
 #[tauri::command]
 pub fn list_folder_tree(state: State<AppState>) -> Result<FolderTreeView, String> {
@@ -454,9 +456,19 @@ fn folder_tree(lib: &Library) -> FolderTreeView {
         let children = children_of(lib, Some(&f.id));
         let direct = lib.index.placements_by_folder.get(&f.id).map(|v| v.len()).unwrap_or(0) as u32;
         let recursive = direct + children.iter().map(|c| c.count).sum::<u32>();
-        // block / icon 仅顶级节点输出（子节点不持区块语义；icon 继承自区块默认图标）
-        let (block, icon) = if parent.is_none() { (f.block.clone(), f.icon.clone()) } else { (None, None) };
-        FolderNode { id: f.id.clone(), name: f.name.clone(), count: recursive, block, icon, kind: f.kind.clone(), children }
+        // block 仅顶级节点输出（子节点不持区块语义）；icon / kind / color 全层级如实输出
+        //（icon 2026-08-14 区块默认图标继承 → 3.3 起子级也可持自定义图标）
+        let block = if parent.is_none() { f.block.clone() } else { None };
+        FolderNode {
+          id: f.id.clone(),
+          name: f.name.clone(),
+          count: recursive,
+          block,
+          icon: f.icon.clone(),
+          kind: f.kind.clone(),
+          color: f.color.clone(),
+          children,
+        }
       })
       .collect()
   }
@@ -575,6 +587,7 @@ mod tests {
         block: Some("B01".into()),
         icon: None,
         kind: None,
+        color: None,
         order: 0,
       };
       let child = crate::core::models::Folder {
@@ -584,6 +597,7 @@ mod tests {
         block: Some("B02".into()), // 脏数据：子节点即使带值也不输出
         icon: None,
         kind: None,
+        color: None,
         order: 0,
       };
       lib.folders.folders.push(top.clone());
@@ -620,6 +634,7 @@ mod tests {
         block: None,
         icon: None,
         kind: Some("archive".into()),
+        color: None,
         order: 0,
       };
       let child = crate::core::models::Folder {
@@ -629,6 +644,7 @@ mod tests {
         block: None,
         icon: None,
         kind: Some("archive".into()), // 脏数据（档案不许子级）也不拦输出：树如实反映数据
+        color: None,
         order: 0,
       };
       lib.folders.folders.push(top.clone());
