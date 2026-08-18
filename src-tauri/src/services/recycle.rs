@@ -1,9 +1,10 @@
 //! 回收站（6.1 第二轮）：视图 / 还原 / 彻底删除 / 清空。
 //! - 还原：RecycleItem.placements 写回 folders.json（目标文件夹已不存在挂 root、
-//!   同文件夹显示名 unique_name）+ recycle.json 移除条目；撤销三步由命令层接入。
-//! - 彻底删除 / 清空：物理删 {ID}.info 整目录，不可逆——**不接撤销**，
+//!   显示名原样写回不唯一化——2026-08-19 撞名放开）+ recycle.json 移除条目；撤销三步由命令层接入。
+//! - 彻底删除 / 清空（2026-08-19 位置级模型分级）：快照含 origin 的条目 = 资产本体在站——
+//!   物理删 {ID}.info 整目录 + 库内该资产全部活位置（含链接）随清，不可逆——**不接撤销**，
 //!   操作前 backup_library 兜底（失败仅警告不阻断，参照 delete.rs 大批量删除策略）；
-//!   同步清理 index / recycle.json / recent.json / pins.json 引用。
+//!   纯位置记录条目只删记录、物理不动、无需确认。同步清理 index / recycle.json / recent.json / pins.json。
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
