@@ -171,6 +171,15 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       }
       return;
     }
+    // Ctrl+R = 重命名（3.4 补绑，菜单标注已久）：单选就地重命名 / 多选批量重命名弹窗（37 稿）
+    if (k === "r") {
+      if (selection.count > 0 && !content.isRecycleView) {
+        e.preventDefault();
+        if (selection.count > 1) selection.renameDraft = selection.selectedRefs();
+        else selection.renamingKey = selection.first;
+      }
+      return;
+    }
     // 粘贴两键（2026-08-18 定案）：Ctrl+V 链接 / Ctrl+Shift+V 副本；Ctrl+Alt+V 键位废除不响应
     if (k === "v" && selection.clipboard) {
       if (e.altKey) return;

@@ -15,7 +15,7 @@ pub use block::{apply_block_changes, reorder_blocks, ApplyBlockReport, BlockInpu
 pub use clone::{clone_folders, CloneOutcome};
 pub use delete::{delete_placements, DeleteReport};
 pub use document::create_document;
-pub use duplicate::{duplicate_placements, rename_placement};
+pub use duplicate::{duplicate_placements, rename_placement, rename_placements, BatchRenameFailed, BatchRenameOutcome};
 pub use folder::{create_folder, move_folders, rename_folder, reorder_folders, set_folder_color, set_folder_icon};
 pub use placement::{link_placements, move_placements, reorder_placements};
 
@@ -32,6 +32,17 @@ pub struct PlacementRef {
   pub folder_id: String,
   #[serde(default)]
   pub origin: bool,
+}
+
+/// 批量重命名单项（3.4，37 稿）：定位三元组 + 新显示名（词干规则由前端组装，含扩展名）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameItem {
+  pub asset_id: String,
+  pub folder_id: String,
+  #[serde(default)]
+  pub origin: bool,
+  pub new_name: String,
 }
 
 /// RFC3339 本地时间（精确到秒），与 metadata / recycle 时间字段格式一致

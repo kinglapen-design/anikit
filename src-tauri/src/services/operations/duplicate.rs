@@ -10,7 +10,7 @@ use crate::core::library::{self, Library};
 use crate::core::models::{new_asset_id, AssetMeta};
 use crate::services::import as ops;
 
-use super::{check_folder, find_placement, finish, now, PlacementRef};
+use super::{check_folder, find_placement, finish, now, PlacementRef, RenameItem};
 
 /// duplicate 结果：新资源 ID 清单 + 每条副本的（源 info, 新 info）目录对（命令层登记 DiskOp 用）
 #[derive(Debug, Default)]
@@ -122,6 +122,53 @@ pub fn rename_placement(
   origin: bool,
   new_name: &str,
 ) -> Result<Vec<(PathBuf, PathBuf)>, String> {
+  rename_impl(lib, asset_id, folder_id, origin, new_name, true)
+}
+
+/// 批量重命名（3.4，37 稿 / PRD 02-14，2026-08-18）：逐条改名（语义同 rename_placement），
+/// **撞名不拦截**（显示名放开，PRD 01 边界规则 7——不做同文件夹唯一化；原始 Placement 的磁盘
+/// 物理约束仍在，撞名致改名失败的项计入失败清单）；**失败项跳过不整体回滚**，汇总报告。
+/// renames = 全部成功项的磁盘改名对汇总（命令层登记 DiskOp 用）
+pub fn rename_placements(lib: &mut Library, items: &[RenameItem]) -> Result<BatchRenameOutcome, String> {
+  let mut out = BatchRenameOutcome::default();
+  for it in items {
+    match rename_impl(lib, &it.asset_id, &it.folder_id, it.origin, &it.new_name, false) {
+      Ok(rs) => {
+        out.renames.extend(rs);
+        out.renamed += 1;
+      }
+      Err(e) => out.failed.push(BatchRenameFailed { name: it.new_name.clone(), reason: e }),
+    }
+  }
+  log::info!("批量重命名 {} 个（失败 {}）", out.renamed, out.failed.len());
+  Ok(out)
+}
+
+/// 批量重命名结果：成功计数 + 失败清单 + 磁盘改名对汇总
+#[derive(Debug, Default)]
+pub struct BatchRenameOutcome {
+  pub renamed: usize,
+  pub failed: Vec<BatchRenameFailed>,
+  pub renames: Vec<(PathBuf, PathBuf)>,
+}
+
+/// 批量重命名失败项（前端汇总提示用）
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchRenameFailed {
+  pub name: String,
+  pub reason: String,
+}
+
+/// 重命名实现（unique = 同文件夹显示名唯一化：单条重命名保持；批量重命名 PRD 撞名不拦截关掉）
+fn rename_impl(
+  lib: &mut Library,
+  asset_id: &str,
+  folder_id: &str,
+  origin: bool,
+  new_name: &str,
+  unique: bool,
+) -> Result<Vec<(PathBuf, PathBuf)>, String> {
   let trimmed = new_name.trim();
   library::validate_library_name(trimmed).map_err(|e| e.to_string())?;
   let item = PlacementRef { asset_id: asset_id.into(), folder_id: folder_id.into(), origin };
@@ -138,7 +185,8 @@ pub fn rename_placement(
     renames = result.renames;
   }
 
-  // 显示名（同文件夹唯一，排除自身）
+  // 显示名（批量 unique=false = 撞名不拦截，显示名放开 PRD 01 边界规则 7；
+  // 单条 unique=true = 同文件夹唯一化，排除自身）
   let existing: HashSet<String> = lib
     .folders
     .items
@@ -148,7 +196,7 @@ pub fn rename_placement(
     .map(|(_, p)| p.name.clone())
     .collect();
   let old_name = lib.folders.items[pos].name.clone();
-  lib.folders.items[pos].name = library::unique_name(&existing, &effective);
+  lib.folders.items[pos].name = if unique { library::unique_name(&existing, &effective) } else { effective.clone() };
   lib.index.rebuild_placements(&lib.folders.items);
   if let Err(e) = library::save_folders(lib) {
     lib.folders.items[pos].name = old_name;
@@ -426,5 +474,40 @@ mod tests {
     assert_eq!(h.lib.index.assets[new_id].name, "走路", "序列帧副本名不取 originName 词干");
     let new_frames = crate::core::paths::frames_dir(&h.lib.assets_dir, new_id);
     assert!(new_frames.join("走路-1.png").is_file(), "帧目录整体复制");
+  }
+
+  /// 批量重命名（3.4）：逐条生效 + 撞名不唯一化（显示名放开）+ 失败项跳过不整体回滚
+  #[test]
+  fn rename_placements_batch_no_unique_and_partial_failure() {
+    let mut h = make_lib();
+    add_png(&mut h, "AN-A", "原图A.png");
+    add_png(&mut h, "AN-B", "原图B.png");
+    // 链接 Placement：批量改名仅改显示名
+    ops::add_placement(&mut h.lib, "AN-A".into(), "root".into(), "快捷.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+    let item = |asset: &str, origin: bool, name: &str| RenameItem {
+      asset_id: asset.into(),
+      folder_id: "root".into(),
+      origin,
+      new_name: name.into(),
+    };
+
+    let out = rename_placements(
+      &mut h.lib,
+      &[
+        item("AN-A", true, "同名.png"),   // origin：磁盘同步
+        item("AN-A", false, "同名.png"),  // 链接：撞名不拦截（显示名放开）
+        item("AN-幽灵", true, "幽灵.png"), // 陈旧项：失败收集继续
+      ],
+    )
+    .unwrap();
+    assert_eq!(out.renamed, 2);
+    assert_eq!(out.failed.len(), 1);
+    assert!(out.failed[0].reason.contains("不存在"), "失败原因人话");
+    let names: Vec<&str> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-A").map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["同名.png", "同名.png"], "撞名不追加序号");
+    assert!(h.lib.info_dir("AN-A").join("同名.png").is_file(), "origin 磁盘同步改名");
+    assert_eq!(out.renames.len(), 2, "origin + 词干缩略图两对磁盘改名（失败项无磁盘段）");
+    assert_eq!(h.lib.folders.items.iter().find(|p| p.asset == "AN-B").unwrap().name, "原图B.png", "无关项不动");
   }
 }

@@ -15,7 +15,7 @@ use crate::core::models::Folder;
 use crate::core::paths;
 use crate::core::undo::{DiskOp, UndoManager};
 use crate::services::import::ROOT_FOLDER_ID;
-use crate::services::operations::{self, ApplyBlockReport, BlockInput, DeleteReport, PlacementRef};
+use crate::services::operations::{self, ApplyBlockReport, BatchRenameFailed, BlockInput, DeleteReport, PlacementRef, RenameItem};
 
 /// metadata.json 路径（由 ID 推导，PRD 01-2.3）
 fn meta_path(lib: &Library, asset_id: &str) -> PathBuf {
@@ -383,6 +383,43 @@ pub async fn rename_placement(
       }
       undo.commit().map_err(|e| e.to_string())?;
       Ok(())
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
+/// 批量重命名报告（3.4，37 稿）：成功计数 + 失败清单（新名 + 原因）——失败项跳过不整体回滚（PRD 02-14）
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchRenameReport {
+  pub renamed: usize,
+  pub failed: Vec<BatchRenameFailed>,
+}
+
+/// 批量重命名（3.4）：逐条改名（撞名不唯一化——显示名放开 / 失败跳过汇总），单撤销步
+///（folders.json + 各 origin 项 metadata.json 快照 + 磁盘改名对成对登记，同单条 rename 口径）
+#[tauri::command]
+pub async fn rename_placements(state: State<'_, AppState>, items: Vec<RenameItem>) -> Result<BatchRenameReport, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin(format!("批量重命名 {} 个项目", items.len()));
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  for it in &items {
+    if it.origin {
+      undo.record_file(&meta_path(lib, &it.asset_id)).map_err(|e| e.to_string())?;
+    }
+  }
+  match operations::rename_placements(lib, &items) {
+    Ok(out) => {
+      for (old_path, new_path) in &out.renames {
+        undo.record_disk_op(
+          DiskOp::Rename { from: new_path.clone(), to: old_path.clone() },
+          DiskOp::Rename { from: old_path.clone(), to: new_path.clone() },
+        );
+      }
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(BatchRenameReport { renamed: out.renamed, failed: out.failed })
     }
     Err(e) => Err(fail(lib, &mut undo, e)),
   }

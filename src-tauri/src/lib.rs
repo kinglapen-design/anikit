@@ -259,6 +259,7 @@ pub fn run() {
       commands::operations::link_placements,
       commands::operations::duplicate_placements,
       commands::operations::clone_folders,
+      commands::operations::rename_placements,
       commands::operations::rename_placement,
       commands::operations::delete_placements,
       commands::archive::create_archive,

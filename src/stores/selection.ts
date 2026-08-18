@@ -93,6 +93,9 @@ export const useSelectionStore = defineStore("selection", {
     confirmPrompt: null as ConfirmPrompt | null,
     // 移动面板草稿（3.4，29 稿移动面板宿主 App.vue）：非空 = 移动面板打开
     moveDraft: null as MoveDraft | null,
+    // 批量重命名草稿（3.4，37 稿批量重命名弹窗宿主 App.vue）：多选「重命名」/ Ctrl+R 触发，
+    // 非空 = 弹窗打开；内容为打开时刻的选中 Placement 快照
+    renameDraft: null as PlacementRef[] | null,
     // 文件夹选择弹窗（6.3"添加至文件夹"：选定目标文件夹后回调，宿主 App.vue）
     folderPickPrompt: null as { onPick: (folderId: string) => void } | null,
     // 文件夹卡片就地重命名目标 id（6.3 右键"重命名"与名称双击同入口，FolderCard 读）

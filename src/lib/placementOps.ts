@@ -540,6 +540,48 @@ export async function deleteFolders(folderIds: string[]): Promise<boolean> {
   }, () => `删除 ${folderIds.length} 个文件夹（${report?.movedPlacements ?? 0} 个素材移入未分类）`);
 }
 
+// 批量重命名（3.4，37 稿）：逐条改名（链接仅显示名 / 原始同步磁盘 originName），
+// 撞名不拦截（后端不唯一化）、失败项跳过不整体回滚（toast 汇总）——runOp 不适用：
+// 部分失败要换 fail 图标文案，toast 自组（refresh / 撤销入口同 runOp 口径）
+export interface BatchRenameReport {
+  renamed: number;
+  failed: { name: string; reason: string }[];
+}
+export interface RenameItemInput {
+  assetId: string;
+  folderId: string;
+  origin: boolean;
+  newName: string;
+}
+export async function renamePlacementsBatch(items: RenameItemInput[]): Promise<boolean> {
+  const content = useContentStore();
+  const toast = useToastStore();
+  const undo = useUndoStore();
+  try {
+    const r = await invoke<BatchRenameReport>("rename_placements", { items });
+    await content.refresh();
+    void undo.refreshState();
+    if (r.failed.length > 0) {
+      toast.notify({
+        message: `已重命名 ${r.renamed} 个项目，${r.failed.length} 个失败（${r.failed[0].reason}）`,
+        icon: "fail",
+        actionLabel: "撤销",
+        onAction: () => void undo.undo(),
+      });
+    } else {
+      toast.notify({
+        message: `已批量重命名 ${r.renamed} 个项目`,
+        actionLabel: "撤销",
+        onAction: () => void undo.undo(),
+      });
+    }
+    return true;
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+    return false;
+  }
+}
+
 // 克隆文件夹报告（后端 CloneReport 同构）
 export interface CloneFoldersResult {
   folderIds: string[];
