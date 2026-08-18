@@ -417,6 +417,10 @@ pub struct FolderNode {
   /// 自定义颜色（2026-08-18，3.3）：色档名，所有层级都带；子级视觉跟随由前端底色档承担，None 不写字段
   #[serde(skip_serializing_if = "Option::is_none")]
   pub color: Option<String>,
+  /// 分组规则（2026-08-19，3.5 二轮）：所有层级都带（档案与普通文件夹通用，PRD 02-04）；
+  /// 空 / None 不写字段——分组计算在前端（显示层）
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub groups: Option<Vec<crate::core::models::GroupDef>>,
   pub children: Vec<FolderNode>,
 }
 
@@ -467,6 +471,7 @@ fn folder_tree(lib: &Library) -> FolderTreeView {
           icon: f.icon.clone(),
           kind: f.kind.clone(),
           color: f.color.clone(),
+          groups: f.groups.clone().filter(|g| !g.is_empty()), // 空组不输出（写回统一 None 口径）
           children,
         }
       })
@@ -588,6 +593,7 @@ mod tests {
         icon: None,
         kind: None,
         color: None,
+        groups: None,
         order: 0,
       };
       let child = crate::core::models::Folder {
@@ -598,6 +604,7 @@ mod tests {
         icon: None,
         kind: None,
         color: None,
+        groups: None,
         order: 0,
       };
       lib.folders.folders.push(top.clone());
@@ -635,6 +642,7 @@ mod tests {
         icon: None,
         kind: Some("archive".into()),
         color: None,
+        groups: None,
         order: 0,
       };
       let child = crate::core::models::Folder {
@@ -645,6 +653,7 @@ mod tests {
         icon: None,
         kind: Some("archive".into()), // 脏数据（档案不许子级）也不拦输出：树如实反映数据
         color: None,
+        groups: None,
         order: 0,
       };
       lib.folders.folders.push(top.clone());

@@ -310,6 +310,7 @@ mod tests {
       icon: None,
       kind: None,
       color: None,
+      groups: None,
       order,
     };
     lib.folders.folders.push(folder.clone());

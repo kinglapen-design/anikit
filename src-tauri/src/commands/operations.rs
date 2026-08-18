@@ -122,6 +122,28 @@ pub async fn set_folder_color(
   }
 }
 
+/// 设置文件夹分组（2026-08-19，3.5 二轮 / PRD 02-04）：草稿式一次提交单撤销步；
+/// 校验失败（完全相同 / 空规则）前端弹 23 稿错误窗
+#[tauri::command]
+pub async fn set_folder_groups(
+  state: State<'_, AppState>,
+  folder_id: String,
+  groups: Vec<crate::core::models::GroupDef>,
+) -> Result<(), String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin("设置分组");
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  match operations::set_folder_groups(lib, &folder_id, groups) {
+    Ok(()) => {
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(())
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
 /// 移动 Placement 到目标文件夹，返回实际移动条数（去重 / 原地 / 陈旧项跳过不计）；
 /// 移出 root 时清 metadata.importedFrom（摘标：移动即转正）
 #[tauri::command]

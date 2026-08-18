@@ -101,6 +101,10 @@ const keys = computed(() =>
 .deco.rot-90 :deep(svg) {
   transform: rotate(90deg);
 }
+/* 图标旋转 180°（3.5 分组菜单"下移"：chevron-small 源图形朝上，旋转朝下） */
+.deco.rot-180 :deep(svg) {
+  transform: rotate(180deg);
+}
 .check-slot {
   width: 18px;
   height: 18px;

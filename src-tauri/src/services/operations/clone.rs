@@ -117,6 +117,7 @@ fn clone_node(
     icon: src.icon.clone(),
     kind: src.kind.clone(),
     color: src.color.clone(),
+    groups: src.groups.clone(), // 分组规则随迁（3.5：分组是文件夹整理配置，克隆保留）
     order,
   };
   lib.folders.folders.push(folder.clone());
@@ -202,7 +203,7 @@ mod tests {
   }
 
   fn add_folder(lib: &mut Library, id: &str, parent: Option<&str>, order: i32) {
-    let folder = Folder { id: id.into(), name: id.into(), parent: parent.map(|p| p.to_string()), block: None, icon: None, kind: None, color: None, order };
+    let folder = Folder { id: id.into(), name: id.into(), parent: parent.map(|p| p.to_string()), block: None, icon: None, kind: None, color: None, groups: None, order };
     lib.folders.folders.push(folder.clone());
     lib.index.folders.insert(id.into(), folder);
   }

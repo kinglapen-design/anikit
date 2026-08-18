@@ -1,6 +1,8 @@
 // 网格布局 composable（2026-08-12 自 AssetGrid 拆出，规范第 3 条行数控制）：
 // 虚拟滚动接线（useVirtualScroll + updateRange）+ 四布局重排（重排锚点 / 滚动位置恢复）+
 // 可见卡片窗口（visibleCards）+ 尺寸观察（视口 / 头部 RO）与重排触发 watch 编排。
+// 2026-08-19（3.5 二轮）分组支持：sections 非空时逐组独立布局拼全局坐标（组标题 30 + 间距 12 累加偏移），
+// groupHeaders 输出各组标题位置供模板渲染（sticky 置顶在 AssetGrid 悬浮层做——transform 容器内 sticky 无效）。
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from "vue";
 import {
   CARD_CAPTION_H,
@@ -10,15 +12,35 @@ import {
   computeList,
   lowerBound,
   type Box,
+  type LayoutResult,
   type Row,
 } from "./layouts";
 import { useVirtualScroll } from "./useVirtualScroll";
 import { useContentStore, type PlacementView } from "../stores/content";
 import { useUiStore } from "../stores/ui";
 
+/** 分组段（3.5 二轮）：displayItems 扁平数组上的 [start, end) 区间 + 组信息 */
+export interface GridSection {
+  groupId: string | null; // null = 未分组
+  name: string;
+  start: number;
+  end: number;
+  collapsed: boolean;
+}
+
+/** 组标题（模板渲染用）：top = 组标题在 cards-layer 坐标系的 y */
+export interface GroupHeaderInfo {
+  groupId: string | null;
+  name: string;
+  count: number;
+  top: number;
+}
+
 export function useGridLayout(opts: {
   items: () => PlacementView[];
   viewKey: () => string;
+  // 3.5 二轮分组：非空 = 分组模式（items 须与 sections 区间一致）；null/缺省 = 单段网格
+  sections?: () => GridSection[] | null;
   viewportRef: Ref<HTMLElement | undefined>;
   trackRef: Ref<HTMLElement | undefined>;
   thumbRef: Ref<HTMLElement | undefined>;
@@ -39,6 +61,8 @@ export function useGridLayout(opts: {
   const headerH = ref(0);
   const gridTotal = ref(0);
   const assetsOpen = ref(true);
+  // 分组标题（3.5 二轮）：空 = 不分组
+  const groupHeaders = shallowRef<GroupHeaderInfo[]>([]);
 
   // 总高 = 头部（文件夹区块 + 内容副标题 + 间距 12）+ 网格高（折叠"内容"时不计）。
   // 偏移恒为 headerH + 12（与 cards-layer translateY 严格一致，2026-08-10 走查：
@@ -109,17 +133,49 @@ export function useGridLayout(opts: {
       }
     }
     // 四种布局（PRD 04）：自适应 / 瀑布流 / 网格 / 列表
-    const result =
+    const computeOne = (list: { w: number; h: number }[]): LayoutResult =>
       ui.layoutMode === "waterfall"
-        ? computeWaterfall(layoutItems.value, vp.clientWidth, rowH, CARD_CAPTION_H)
+        ? computeWaterfall(list, vp.clientWidth, rowH, CARD_CAPTION_H)
         : ui.layoutMode === "grid"
-          ? computeGrid(layoutItems.value, vp.clientWidth, rowH, CARD_CAPTION_H)
+          ? computeGrid(list, vp.clientWidth, rowH, CARD_CAPTION_H)
           : ui.layoutMode === "list"
-            ? computeList(layoutItems.value, vp.clientWidth, rowH, CARD_CAPTION_H)
-            : computeJustified(layoutItems.value, vp.clientWidth, rowH, CARD_CAPTION_H);
-    boxes.value = result.boxes;
-    rows.value = result.rows;
-    gridTotal.value = result.totalHeight;
+            ? computeList(list, vp.clientWidth, rowH, CARD_CAPTION_H)
+            : computeJustified(list, vp.clientWidth, rowH, CARD_CAPTION_H);
+    // 分组模式（3.5 二轮）：逐组独立布局拼全局坐标——组标题 30 + 标题↔内容 12 + 组间 12
+    //（05_区块标题：相邻间距均 12）；折叠组只计标题；每组剥掉布局自带底部留白（PAD.bottom 16），
+    // 末组保留；rows.start/end 是 boxes 下标、box.i 是 items 下标，均按组基址偏移
+    const secs = opts.sections?.() ?? null;
+    if (secs && secs.length > 0) {
+      const li = layoutItems.value;
+      let y = 0;
+      const allBoxes: Box[] = [];
+      const allRows: Row[] = [];
+      const headers: GroupHeaderInfo[] = [];
+      secs.forEach((s) => {
+        headers.push({ groupId: s.groupId, name: s.name, count: s.end - s.start, top: y });
+        y += 30;
+        if (!s.collapsed && s.end > s.start) {
+          y += 12;
+          const sub = computeOne(li.slice(s.start, s.end));
+          const boxBase = allBoxes.length;
+          for (const b of sub.boxes) allBoxes.push({ ...b, top: b.top + y, i: b.i + s.start });
+          for (const r of sub.rows) allRows.push({ ...r, top: r.top + y, start: r.start + boxBase, end: r.end + boxBase });
+          y += sub.totalHeight - 16; // 剥单组底部留白，组间距统一 12（末组补回）
+        }
+        y += 12;
+      });
+      if (allRows.length > 0) y += 4; // 末组补回底部留白（12 组间 + 4 = 16，与单段 PAD.bottom 对齐）
+      boxes.value = allBoxes;
+      rows.value = allRows;
+      gridTotal.value = y;
+      groupHeaders.value = headers;
+    } else {
+      const result = computeOne(layoutItems.value);
+      boxes.value = result.boxes;
+      rows.value = result.rows;
+      gridTotal.value = result.totalHeight;
+      groupHeaders.value = [];
+    }
     setTotal(currentTotal());
     // 滚动位置：恢复（进出预览 / 切换目录）优先；否则回锚点；锚点卡已消失（被删等）维持重夹
     if (restorePos !== null) {
@@ -172,6 +228,10 @@ export function useGridLayout(opts: {
     restorePos = content.getScrollPos(newKey) ?? 0;
   });
   watch(opts.items, () => relayout());
+  // 分组规则 / 折叠态变化（3.5 二轮）：sections 引用变化即重排
+  if (opts.sections) {
+    watch(opts.sections, () => relayout());
+  }
   watch(
     () => ui.targetRowHeight,
     () => relayout(),
@@ -221,5 +281,7 @@ export function useGridLayout(opts: {
     assetsOpen,
     listExtra,
     visibleCards,
+    groupHeaders,
+    scrollTo, // 12 稿分组菜单「跳转」：滚动到组标题
   };
 }

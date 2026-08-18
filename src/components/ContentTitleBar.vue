@@ -44,6 +44,15 @@ function openViewMenu(e: MouseEvent): void {
   viewMenuAnchor.value = { x: rect.right - 175, y: rect.bottom + 4 };
   viewMenuOpen.value = true;
 }
+
+// 分组管理（3.5 二轮点亮）：仅文件夹/档案视口可用（快速访问无分组——规则无存放节点，用户定）；
+// 打开时锁定当前文件夹 id（弹窗打开后切视口不漂移）
+const canGroup = computed(() => props.viewKey.startsWith("folder:"));
+function openGroupManage(): void {
+  if (!canGroup.value) return;
+  ui.groupDialogFolder = props.viewKey.slice(7);
+  ui.groupManageOpen = true;
+}
 </script>
 
 <template>
@@ -67,13 +76,13 @@ function openViewMenu(e: MouseEvent): void {
     <div class="right-group">
       <SideSlider v-model="ui.targetRowHeight" :min="80" :max="ui.gridWidth" />
       <!-- 按钮组（figma 41：链接文件管理 / 添加文件链接 / 缩略图 / AI 工具集 / 分组管理 / 查看方式）；
-           前五个业务未接一律 disabled（1.3 占位点亮机制统一接入），查看方式既有业务 -->
+           前四个业务未接一律 disabled（1.3 占位点亮机制统一接入）；分组管理 3.5 二轮点亮（仅文件夹/档案视口） -->
       <div class="btn-group">
         <IconButton name="linked-file-manage" title="链接文件管理" disabled />
         <IconButton name="add-file-link" title="添加文件链接" disabled />
         <IconButton name="thumbnail" title="缩略图" disabled />
         <IconButton name="ai-tools" title="AI 工具集" disabled />
-        <IconButton name="group-manage" title="分组管理" disabled />
+        <IconButton name="group-manage" title="分组管理" :disabled="!canGroup" @click="openGroupManage" />
         <span ref="viewBtnRef" style="display: contents">
           <IconButton name="view-options" title="查看方式" @click="openViewMenu" />
         </span>

@@ -13,7 +13,8 @@ import FolderStrip from "./FolderStrip.vue";
 import ArchiveStrip from "./ArchiveStrip.vue";
 import InboxDiskSection from "./InboxDiskSection.vue";
 import SectionHeader from "./SectionHeader.vue";
-import { useGridLayout } from "../lib/useGridLayout";
+import { useGridLayout, type GridSection } from "../lib/useGridLayout";
+import { groupPlacements } from "../lib/grouping";
 import { useSpaceZoom } from "../lib/useSpaceZoom";
 import { useMarquee, makeBoxHitTest, headerBlankClear } from "../lib/useMarquee";
 import {
@@ -25,6 +26,8 @@ import {
   assetCardFade,
 } from "../lib/dragOperation";
 import { openGridContextMenu } from "../lib/menuSpecs/gridDispatch";
+import { groupHeaderSpec } from "../lib/menuSpecs/groupHeader";
+import { openContextMenu } from "../lib/contextMenus";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
@@ -65,6 +68,36 @@ const thumbRef = ref<HTMLElement>();
 const headerRef = ref<HTMLElement>();
 const cardsLayerRef = ref<HTMLElement>(); // 拖拽间隙落点坐标换算（C4 resolver）
 
+// —— 分组（3.5 二轮，PRD 02-04）：仅文件夹/档案视图；分组 = 显示层归组（不改数据）——
+// displayItems = 组拼接扁平序（未分组在头 + 定义序，组内保持 placementsFor 相对序——
+// 新增区置顶 / 排序键效果自然带入组内）；gridSections = 组段边界 + 折叠态（布局偏移用）
+const gridFolderId = computed(() => (props.viewKey.startsWith("folder:") ? props.viewKey.slice(7) : null));
+const groupSections = computed(() => {
+  if (!gridFolderId.value) return null;
+  const defs = content.folderGroupsFor(props.viewKey);
+  return defs ? groupPlacements(props.items, defs) : null;
+});
+const displayItems = computed(() =>
+  groupSections.value ? groupSections.value.flatMap((s) => s.items) : props.items,
+);
+const gridSections = computed<GridSection[] | null>(() => {
+  const secs = groupSections.value;
+  const fid = gridFolderId.value;
+  if (!secs || !fid) return null;
+  let at = 0;
+  return secs.map((s) => {
+    const sec: GridSection = {
+      groupId: s.groupId,
+      name: s.name,
+      start: at,
+      end: at + s.items.length,
+      collapsed: content.isGroupCollapsed(fid, s.groupId),
+    };
+    at += s.items.length;
+    return sec;
+  });
+});
+
 // 布局 / 虚拟滚动 / 重排编排（lib/useGridLayout）：boxes / 可见窗口 / 滚动态均由此供模板与框选、拖拽接线
 const {
   pos,
@@ -78,8 +111,11 @@ const {
   assetsOpen,
   listExtra,
   visibleCards,
+  groupHeaders,
+  scrollTo, // 12 稿分组菜单「跳转」
 } = useGridLayout({
-  items: () => props.items,
+  items: () => displayItems.value,
+  sections: () => gridSections.value,
   viewKey: () => props.viewKey,
   viewportRef,
   trackRef,
@@ -87,12 +123,52 @@ const {
   headerRef,
 });
 
+// 分组标题折叠 / 菜单（12 稿）：折叠态在 content store（会话级）；菜单由 groupHeaderSpec 出
+function onGroupFold(groupId: string | null): void {
+  if (gridFolderId.value) content.toggleGroupCollapsed(gridFolderId.value, groupId);
+}
+// 12 稿「跳转」：滚动到目标组标题（组标题层顶 = headerH + 12 + listExtra + h.top）
+function scrollToGroup(groupId: string | null): void {
+  const h = groupHeaders.value.find((x) => x.groupId === groupId);
+  if (!h) return;
+  scrollTo(h.top + headerH.value + 12 + listExtra.value);
+}
+// 12 稿分组菜单（150 宽；未分组 = 简化菜单——spec 内分流）
+function onGroupMenu(h: { groupId: string | null }, e: MouseEvent): void {
+  const fid = gridFolderId.value;
+  if (!fid) return;
+  openContextMenu(e, groupHeaderSpec({ folderId: fid, groupId: h.groupId, scrollToGroup }), undefined, { width: 150 });
+}
+// sticky 置顶分组标题（05_区块标题：滚到容器顶部停留，下一组接替）：transform 容器内 sticky 无效，
+// 悬浮层手动实现——当前组 = 最后滚过视口顶的组；下一组标题接近 30 内时上移让位（顶走动画）
+const stickyGroup = computed(() => {
+  const hs = groupHeaders.value;
+  if (hs.length === 0) return null;
+  const off = headerH.value + 12 + listExtra.value;
+  let cur: (typeof hs)[number] | null = null;
+  let next: (typeof hs)[number] | null = null;
+  for (let i = 0; i < hs.length; i++) {
+    if (hs[i].top + off <= pos.value) cur = hs[i];
+    else {
+      next = hs[i];
+      break;
+    }
+  }
+  if (!cur) return null; // 第一组标题还在视口内——原位标题可见，不叠悬浮
+  let shift = 0;
+  if (next) {
+    const nextY = next.top + off - pos.value;
+    if (nextY < 30) shift = nextY - 30;
+  }
+  return { ...cur, shift, open: !content.isGroupCollapsed(gridFolderId.value ?? "", cur.groupId) };
+});
+
 // 收件箱视口（quick:inbox，4.4）：头部出"工程文件"磁盘实况区块，"内容"副标题改题"已导入"
 const isInbox = computed(() => props.viewKey === "quick:inbox");
 
 // 空格放大预览（lib/useSpaceZoom）：浮层态 + 悬停追踪；panelHover 滚动条悬停显隐共用
 const { zoomAsset, panelHover, trackPointer, onGridMouseLeave, onZoomSpace } = useSpaceZoom({
-  items: () => props.items,
+  items: () => displayItems.value,
   panelActive: () => props.panelActive,
 });
 function onGridPointerMove(e: PointerEvent): void {
@@ -119,14 +195,15 @@ const {
   onPointerCancel: onMarqueeCancel,
 } = useMarquee({
   viewport: viewportRef,
-  // 头部（文件夹区块、"内容"副标题、工程文件、列表列头）/ 滚动条 / 按钮上不启动框选；
+  // 头部（文件夹区块、"内容"副标题、工程文件、列表列头）/ 分组标题（原位 + sticky 悬浮层）/
+  // 滚动条 / 按钮上不启动框选；
   // 卡片本体（含名称 / 简介区，整卡）由 gridPointerDown 先行分发去拖拽不会到此
   //（2026-08-18 用户定：card-info 空白口径退役，简介区不作框选起点）
-  ignoreSelector: ".grid-header, .list-header, .grid-track, button",
+  ignoreSelector: ".grid-header, .list-header, .grid-track, button, .group-header, .sticky-group-header",
   hitTest: makeBoxHitTest({
     boxes: () => boxes.value,
     offsetY: () => headerH.value + 12 + listExtra.value - pos.value,
-    keyAt: (i) => `${props.items[i].assetId}|${props.items[i].folderId}`,
+    keyAt: (i) => `${displayItems.value[i].assetId}|${displayItems.value[i].folderId}`,
   }),
 });
 
@@ -138,11 +215,12 @@ function onCardContextMenu(e: MouseEvent): void {
 }
 
 // —— 卡片间距排序落点解析器（C4a）：注册给拖拽引擎，算法主体在 lib/dragOperation makeGridResolver
+// 分组模式下禁用排序落点（2026-08-19 用户定：组归属由规则定，拖拽排序无意义——拖入别组不改变归组）
 const resolveGap = makeGridResolver({
-  isFolderView: () => props.viewKey.startsWith("folder:"),
+  isFolderView: () => props.viewKey.startsWith("folder:") && !gridSections.value,
   layer: () => cardsLayerRef.value,
   boxes: () => boxes.value,
-  keyAt: (i) => `${props.items[i].assetId}|${props.items[i].folderId}`,
+  keyAt: (i) => `${displayItems.value[i].assetId}|${displayItems.value[i].folderId}`,
 });
 
 // 间隙竖块 client 坐标（Teleport body 渲染）：layer 坐标 + 层 rect 实时换算；
@@ -198,9 +276,10 @@ onBeforeUnmount(() => {
         <InboxDiskSection v-if="isInbox && content.inboxDisk.length > 0" />
         <!-- "内容"副标题：无子文件夹（含档案）时隐藏（无需区分）；有子文件夹但无文件时同样隐藏（2026-07-24 用户定）。
              收件箱视口改题"已导入"（4.4）：无文件夹区块概念，只要有已导入内容就显示。
+             3.5 分组模式下恒显示（有内容即出）——分组标题是其子层级，区块折叠 = 全部组随折。
              padding 统一 0（2026-08-08 用户定：仅目录树区块标题 left 8）；标题↔卡片间距 12（下方 translateY） -->
         <SectionHeader
-          v-if="items.length > 0 && (isInbox || content.stripFoldersFor(viewKey).length > 0 || content.stripArchivesFor(viewKey).length > 0)"
+          v-if="items.length > 0 && (isInbox || gridSections !== null || content.stripFoldersFor(viewKey).length > 0 || content.stripArchivesFor(viewKey).length > 0)"
           :title="isInbox ? '已导入' : '内容'"
           :count="items.length"
           v-model:open="assetsOpen"
@@ -249,7 +328,38 @@ onBeforeUnmount(() => {
         <!-- 拖拽卡片间距落点（C4a）：Teleport 到 body 按 client 坐标画（2026-08-18 修复
              "首列前插提示线不可见 / 盖住卡片"——grid-viewport overflow 裁剪会把行首间隙
              （负 layer-x = 容器 16 留白区）整条裁掉，原 Math.max(0,…) 钳位又拉回盖住卡片） -->
+        <!-- 分组标题（3.5 二轮）：canvas 内随滚动的原位标题（absolute 于 cards-layer 坐标系） -->
+        <div
+          v-for="h in groupHeaders"
+          :key="h.groupId ?? '__ungrouped'"
+          class="group-header"
+          :style="{ top: `${h.top}px` }"
+        >
+          <SectionHeader
+            group
+            :title="h.name"
+            :count="h.count"
+            :open="!content.isGroupCollapsed(gridFolderId ?? '', h.groupId)"
+            @update:open="onGroupFold(h.groupId)"
+            @menu="onGroupMenu(h, $event)"
+          />
+        </div>
       </div>
+    </div>
+    <!-- sticky 置顶分组标题（05_区块标题：滚过顶后停留，下一组接替顶走）；C1 实底盖卡片 -->
+    <div
+      v-if="stickyGroup && assetsOpen"
+      class="sticky-group-header"
+      :style="{ top: `${headerH + 12 + listExtra}px`, transform: `translateY(${stickyGroup.shift}px)` }"
+    >
+      <SectionHeader
+        group
+        :title="stickyGroup.name"
+        :count="stickyGroup.count"
+        :open="stickyGroup.open"
+        @update:open="onGroupFold(stickyGroup.groupId)"
+        @menu="onGroupMenu(stickyGroup, $event)"
+      />
     </div>
     <Teleport to="body">
       <div
@@ -337,6 +447,24 @@ onBeforeUnmount(() => {
   right: 0;
   transform-origin: 0 0;
   will-change: transform;
+}
+/* 分组标题（3.5 二轮）：canvas 内原位标题——absolute 于 cards-layer 坐标系（top 由 groupHeaders 给），
+   右缘 16 与卡片右缘对齐（布局 PAD.right）；随 canvas 滚动 */
+.group-header {
+  position: absolute;
+  left: 0;
+  right: 16px;
+  height: 30px;
+}
+/* sticky 置顶分组标题（05_区块标题：滚到容器顶部停留，该组滚完下一组接替）：
+   viewport 内绝对定位（不随 canvas transform）+ C1 实底盖滚过卡片；shift 位移 = 下一组顶走 */
+.sticky-group-header {
+  position: absolute;
+  left: 0;
+  right: 16px;
+  height: 30px;
+  background: var(--c1);
+  z-index: 5;
 }
 /* border-1：滚动条 6px 胶囊、贴 viewport 右缘、不影响布局；命中区 12px。
    悬停显隐（2026-08-10 用户定）：默认透明且不接收事件（不挡卡片右缘），visible 淡入 */

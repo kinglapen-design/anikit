@@ -183,6 +183,7 @@ mod tests {
       icon: None,
       kind: None,
       color: None,
+      groups: None,
       order: lib.folders.folders.len() as i32,
     };
     lib.folders.folders.push(folder.clone());
@@ -279,7 +280,7 @@ mod tests {
     let role = h.lib.folders.blocks[1].id.clone();
     add_folder(&mut h.lib, "F01", Some(&role));
     // 子文件夹不持区块引用，确认删除不受影响
-    let child = Folder { id: "F01-1".into(), name: "子".into(), parent: Some("F01".into()), block: None, icon: None, kind: None, color: None, order: 0 };
+    let child = Folder { id: "F01-1".into(), name: "子".into(), parent: Some("F01".into()), block: None, icon: None, kind: None, color: None, groups: None, order: 0 };
     h.lib.folders.folders.push(child.clone());
     h.lib.index.folders.insert(child.id.clone(), child);
 

@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 
 use crate::core::library::{self, Library};
-use crate::core::models::{Folder, ARCHIVE_KIND};
+use crate::core::models::{Folder, GroupDef, GroupRule, ARCHIVE_KIND};
 use crate::services::import as ops;
 use crate::services::import::ROOT_FOLDER_ID;
 
@@ -64,7 +64,7 @@ pub fn create_folder(
         }
       }
       let folder =
-        Folder { id: ops::new_folder_id(), name: name.to_string(), parent: parent_key, block: None, icon: None, kind: None, color: None, order: insert_order };
+        Folder { id: ops::new_folder_id(), name: name.to_string(), parent: parent_key, block: None, icon: None, kind: None, color: None, groups: None, order: insert_order };
       lib.folders.folders.push(folder.clone());
       lib.index.folders.insert(folder.id.clone(), folder.clone());
       folder
@@ -226,6 +226,58 @@ pub fn set_folder_color(lib: &mut Library, folder_id: &str, color: Option<&str>)
   sync_folder_index(lib);
   library::save_folders(lib).map_err(|e| e.to_string())?;
   log::info!("更改文件夹颜色 {folder_id} → {color:?}（链路一致后代跟随）");
+  Ok(())
+}
+
+/// 设置文件夹分组（2026-08-19，3.5 二轮 / PRD 02-04，33 稿管理 / 34 稿新建 / 12 稿菜单统一写点）：
+/// 草稿式一次提交；空数组 = 不分组（存 None 不写字段）。校验：组至少一条规则、规则范围非空、
+/// 规则集合完全相同的两组禁止保存（23 稿"无法保存，存在完全相同的分组"；名称不查重——2026-08-19 用户定）；
+/// 单规则组互斥转移由前端草稿内完成（确认前取消全恢复），后端不再处理
+pub fn set_folder_groups(lib: &mut Library, folder_id: &str, groups: Vec<GroupDef>) -> Result<(), String> {
+  if !lib.index.folders.contains_key(folder_id) {
+    return Err("目标文件夹不存在，可能已被删除".to_string());
+  }
+  for g in &groups {
+    if g.rules.is_empty() {
+      return Err(format!("分组「{}」至少需要一条规则", g.name));
+    }
+    for r in &g.rules {
+      if r.values.is_empty() {
+        return Err(format!("分组「{}」存在未选择范围的规则", g.name));
+      }
+    }
+  }
+  // 完全相同判定：规则集合（kind + 排序后 values，组序 / 规则序无关；名称不查重）
+  let norm = |rules: &[GroupRule]| {
+    let mut v: Vec<(String, Vec<String>)> = rules
+      .iter()
+      .map(|r| {
+        let mut vals = r.values.clone();
+        vals.sort();
+        (r.kind.clone(), vals)
+      })
+      .collect();
+    v.sort();
+    v
+  };
+  for i in 0..groups.len() {
+    for j in (i + 1)..groups.len() {
+      if norm(&groups[i].rules) == norm(&groups[j].rules) {
+        return Err("无法保存，存在完全相同的分组".to_string());
+      }
+    }
+  }
+  let count = groups.len();
+  let value = if groups.is_empty() { None } else { Some(groups) };
+  for f in &mut lib.folders.folders {
+    if f.id == folder_id {
+      f.groups = value;
+      break;
+    }
+  }
+  sync_folder_index(lib);
+  library::save_folders(lib).map_err(|e| e.to_string())?;
+  log::info!("设置文件夹分组 {folder_id}（{count} 组）");
   Ok(())
 }
 
@@ -405,7 +457,7 @@ mod tests {
   }
 
   fn add_folder(lib: &mut Library, id: &str, name: &str, parent: Option<&str>, order: i32) {
-    let folder = Folder { id: id.into(), name: name.into(), parent: parent.map(|s| s.into()), block: None, icon: None, kind: None, color: None, order };
+    let folder = Folder { id: id.into(), name: name.into(), parent: parent.map(|s| s.into()), block: None, icon: None, kind: None, color: None, groups: None, order };
     lib.folders.folders.push(folder.clone());
     lib.index.folders.insert(id.into(), folder);
   }
@@ -909,5 +961,72 @@ mod tests {
     set_folder_color(&mut h.lib, "F01-1", Some("green")).unwrap();
     assert_eq!(h.lib.index.folders["F01-1-1"].color.as_deref(), Some("green"), "与祖先链路一致的后代跟随");
     assert_eq!(h.lib.index.folders["F01"].color.as_deref(), Some("red"), "祖不受影响");
+  }
+
+  // ---------- 分组（2026-08-19，3.5 二轮 / PRD 02-04）----------
+
+  fn group(id: &str, name: &str, rules: &[(&str, &[&str])]) -> GroupDef {
+    GroupDef {
+      id: id.into(),
+      name: name.into(),
+      rules: rules
+        .iter()
+        .map(|(k, vs)| GroupRule { kind: k.to_string(), values: vs.iter().map(|v| v.to_string()).collect() })
+        .collect(),
+    }
+  }
+
+  /// 设置 + 读回 + 清空（folders.json 持久化；空数组存 None 不写字段）
+  #[test]
+  fn set_folder_groups_roundtrip_and_clear() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "角色", None, 0);
+    let groups = vec![
+      group("g1", "动画", &[("ext", &["fla", "gif"])]),
+      group("g2", "图", &[("type", &["image"]), ("name", &["主角"])]),
+    ];
+    set_folder_groups(&mut h.lib, "F01", groups.clone()).unwrap();
+    assert_eq!(h.lib.index.folders["F01"].groups.as_ref().unwrap().len(), 2);
+    // 持久化读回
+    let back: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    let f = back.folders.iter().find(|f| f.id == "F01").unwrap();
+    assert_eq!(f.groups.as_ref().unwrap()[1].rules.len(), 2, "多规则组读回");
+    // 名称不查重：同名不同规则允许
+    set_folder_groups(&mut h.lib, "F01", vec![
+      group("g1", "同名", &[("ext", &["fla"])]),
+      group("g2", "同名", &[("ext", &["png"])]),
+    ])
+    .unwrap();
+    // 清空 = None（不写字段）
+    set_folder_groups(&mut h.lib, "F01", vec![]).unwrap();
+    assert_eq!(h.lib.index.folders["F01"].groups, None);
+    let back: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    let f = back.folders.iter().find(|f| f.id == "F01").unwrap();
+    assert!(f.groups.is_none());
+    // 目标不存在报错
+    assert!(set_folder_groups(&mut h.lib, "F-X", vec![]).is_err());
+  }
+
+  /// 完全相同判定（23 稿）：规则集合相同（组序 / 规则序 / 值序无关）禁止保存；名称不参与
+  #[test]
+  fn set_folder_groups_rejects_identical_rules() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "角色", None, 0);
+    // 完全相同（值序不同也算相同）
+    let dup = set_folder_groups(&mut h.lib, "F01", vec![
+      group("g1", "A", &[("ext", &["fla", "gif"])]),
+      group("g2", "B", &[("ext", &["gif", "fla"])]),
+    ]);
+    assert!(dup.is_err(), "规则集合相同应报错");
+    assert!(dup.unwrap_err().contains("完全相同"));
+    // 规则数不同不算相同
+    set_folder_groups(&mut h.lib, "F01", vec![
+      group("g1", "A", &[("ext", &["fla"])]),
+      group("g2", "B", &[("ext", &["fla"]), ("type", &["image"])]),
+    ])
+    .unwrap();
+    // 空规则 / 空范围报错
+    assert!(set_folder_groups(&mut h.lib, "F01", vec![group("g1", "A", &[])]).is_err());
+    assert!(set_folder_groups(&mut h.lib, "F01", vec![group("g1", "A", &[("ext", &[])])]).is_err());
   }
 }

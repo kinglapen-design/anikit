@@ -201,8 +201,33 @@ pub struct Folder {
   /// None = 未自定义，不写字段
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub color: Option<String>,
+  /// 分组规则（2026-08-19，3.5 二轮，PRD 02-04）：按文件夹各自生效的内容区分组显示；
+  /// 数组序 = 定义顺序（内容区组间序）；None / 空 = 不分组（不写字段，不升 DATA_VERSION）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub groups: Option<Vec<GroupDef>>,
   #[serde(default)]
   pub order: i32,
+}
+
+/// 分组定义（PRD 02-04）：名称 + 规则集；组内多规则 AND 全命中才算归入
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupDef {
+  pub id: String,
+  pub name: String,
+  #[serde(default)]
+  pub rules: Vec<GroupRule>,
+}
+
+/// 分组规则：kind = "ext"（扩展名多选）/ "type"（类型多选）/ "name"（分词列表，词间 AND）/
+/// "importDate" / "modifyDate"（日期分档，多档 = OR）——均存值集合；类型清单前端口径
+///（图片 / 动图 / 视频 / 音频 / 文本 / 文档 / 工程 / 其他，2026-08-19 用户定 8 类）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupRule {
+  pub kind: String,
+  #[serde(default)]
+  pub values: Vec<String>,
 }
 
 /// Placement：哪个资源、在哪个文件夹、显示什么名称、排在第几（PRD 01-2.4）。

@@ -31,6 +31,8 @@ import DupScanDialog from "./components/DupScanDialog.vue";
 import LinkDialog from "./components/LinkDialog.vue";
 import RecycleConfirmDialog from "./components/RecycleConfirmDialog.vue";
 import BlockManageDialog from "./components/BlockManageDialog.vue";
+import GroupManageDialog from "./components/GroupManageDialog.vue";
+import GroupEditDialog from "./components/GroupEditDialog.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import AppConfirm from "./components/AppConfirm.vue";
 import FolderPickerDialog from "./components/FolderPickerDialog.vue";
@@ -301,6 +303,18 @@ async function togglePin(): Promise<void> {
     <RecycleConfirmDialog v-if="selection.recyclePrompt" />
     <!-- 区块管理弹窗（2026-08-14 区块子系统，30 稿）：SidebarLeft section-manage 按钮触发 -->
     <BlockManageDialog v-if="ui.blockManageOpen" @close="ui.blockManageOpen = false" />
+    <!-- 分组弹窗（3.5 二轮）：33 稿分组管理（工具栏分组管理钮 / 12 稿菜单「编辑分组」）/
+         34 稿新建分组（12 稿菜单「新建分组」）；目标文件夹 = 打开时锁定的 groupDialogFolder -->
+    <GroupManageDialog
+      v-if="ui.groupManageOpen && ui.groupDialogFolder"
+      :folder-id="ui.groupDialogFolder"
+      @close="ui.groupManageOpen = false"
+    />
+    <GroupEditDialog
+      v-if="ui.groupEditOpen && ui.groupDialogFolder"
+      :folder-id="ui.groupDialogFolder"
+      @close="ui.groupEditOpen = false"
+    />
     <!-- 移动面板（3.4，29 稿）：移动文件 / 文件夹 / 档案共用，菜单 / Ctrl+Y 触发；
          须在 AppConfirm 之前——面板点击落点后弹确认窗，同 z-index 后渲染者在上 -->
     <MovePanel v-if="selection.moveDraft" />

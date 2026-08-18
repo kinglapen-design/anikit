@@ -54,6 +54,9 @@ export interface FolderNode {
   // 自定义颜色档名（2026-08-18，3.3：--custom-{色} token 名）；仅本节点持有——
   // 子级视觉跟随 = 该色底色版本（FolderTree tint 传递承担），缺省 = 未自定义
   color?: string | null;
+  // 分组规则（2026-08-19，3.5 二轮 / PRD 02-04）：内容区分组显示配置，档案与普通文件夹通用；
+  // 缺省 / 空 = 不分组。归组计算 = lib/grouping.ts（显示层，不改数据）
+  groups?: import("../lib/grouping").GroupDef[] | null;
   children: FolderNode[];
 }
 
@@ -269,6 +272,9 @@ export const useContentStore = defineStore("content", {
     // （先来在前）——用户要能找到新建文件、确认导入数量；切视图（sidebarSelected 变化）/ 切库 /
     // 拖拽物化时归位清空。key = `${assetId}|${folderId}`（与选择 / 拖拽键同口径），value = 到达序号
     newArrivals: new Map<string, number>(),
+    // 3.5 分组折叠态（会话级）：folderId → 折叠组 id 列表（"__ungrouped" = 未分组组）；
+    // 与树展开态同口径（会话级不持久化，lib/treeExpansion 先例）
+    groupCollapsed: {} as Record<string, string[]>,
     // 左栏选中项：quick:all / quick:uncategorized… / folder:{id}
     sidebarSelected: "quick:all",
     // 选中互斥：素材卡片选中（selection store）与收件箱条目选中互斥。
@@ -437,6 +443,19 @@ export const useContentStore = defineStore("content", {
         return [];
       };
     },
+    // 视口分组规则（3.5 二轮 / PRD 02-04）：仅文件夹/档案视图（folder: 前缀）有配置位；
+    // 快速访问恒 null（无分组，2026-08-19 用户定）
+    folderGroupsFor(state) {
+      return (viewKey: string): import("../lib/grouping").GroupDef[] | null => {
+        if (!viewKey.startsWith("folder:")) return null;
+        const g = findFolder(state.folders, viewKey.slice(7))?.groups;
+        return g && g.length > 0 ? g : null;
+      };
+    },
+    // 激活视口的分组规则（分组渲染 / 弹窗上下文用）
+    activeFolderGroups(state): import("../lib/grouping").GroupDef[] | null {
+      return this.folderGroupsFor(state.sidebarSelected);
+    },
     // 激活视口的子级档案（操作/显示上下文跟随激活标签页）
     stripArchives(state): FolderNode[] {
       return this.stripArchivesFor(state.sidebarSelected);
@@ -506,6 +525,27 @@ export const useContentStore = defineStore("content", {
     // 新增区归位清空：切视图（sidebarSelected 变化，App.vue watch）/ 切库 / 拖拽物化时调用
     clearArrivals(): void {
       if (this.newArrivals.size > 0) this.newArrivals.clear();
+    },
+
+    // 3.5 分组折叠切换（会话级）：groupId null = 未分组组（存 "__ungrouped"）
+    toggleGroupCollapsed(folderId: string, groupId: string | null): void {
+      const key = groupId ?? "__ungrouped";
+      const list = this.groupCollapsed[folderId] ?? [];
+      const i = list.indexOf(key);
+      if (i >= 0) list.splice(i, 1);
+      else list.push(key);
+      this.groupCollapsed[folderId] = list;
+    },
+    // 分组折叠判定（模板直读）
+    isGroupCollapsed(folderId: string, groupId: string | null): boolean {
+      return (this.groupCollapsed[folderId] ?? []).includes(groupId ?? "__ungrouped");
+    },
+    // 12 稿展开/折叠二级批量操作：全展开 = 清空折叠集；排除当前展开全部 = 折叠集只留当前组
+    expandAllGroups(folderId: string): void {
+      if (this.groupCollapsed[folderId]?.length) this.groupCollapsed[folderId] = [];
+    },
+    expandGroupsExcept(folderId: string, keepId: string | null, allGroupIds: (string | null)[]): void {
+      this.groupCollapsed[folderId] = allGroupIds.filter((id) => id !== keepId).map((id) => id ?? "__ungrouped");
     },
 
     // 库打开后 / 导入完成后全量刷新（增量刷新随阶段 4 任务队列再做）

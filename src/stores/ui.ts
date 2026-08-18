@@ -87,6 +87,12 @@ export const useUiStore = defineStore("ui", {
     // 区块管理弹窗开关（2026-08-14 区块子系统，会话级）：SidebarLeft section-manage 按钮置位，
     // 弹窗宿主 App.vue（同 FailedListDialog 惯例）
     blockManageOpen: false,
+    // 分组弹窗（3.5 二轮，会话级）：groupManageOpen = 33 稿分组管理 / groupEditOpen = 34 稿新建分组；
+    // groupDialogFolder = 打开时锁定的目标文件夹（打开后切视口不漂移）；工具栏分组管理钮 /
+    // 12 稿分组菜单「新建分组 / 编辑分组」置位，宿主 App.vue
+    groupManageOpen: false,
+    groupEditOpen: false,
+    groupDialogFolder: null as string | null,
     // 多标签页布局（1.2）：dockview toJSON 快照，tabs store 防抖写入 / 启动 fromJSON 恢复；
     // null = 无布局（首启默认单标签页）。typeof null === "object"，PERSIST_KEYS 类型校验放行对象
     tabLayout: null as object | null,
