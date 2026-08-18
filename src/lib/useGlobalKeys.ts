@@ -17,7 +17,7 @@ import {
   pasteDuplicate,
   recycleSelectedAssetIds,
 } from "./placementOps";
-import { deleteFoldersFlow, moveAssetsFlow, moveFoldersFlow } from "./menuOps";
+import { cloneFolderFlow, deleteFoldersFlow, moveAssetsFlow, moveFoldersFlow } from "./menuOps";
 
 // 输入框豁免判定：文本输入态（input / textarea / contenteditable）不拦截全局快捷键
 export function isEditableTarget(t: HTMLElement): boolean {
@@ -145,8 +145,14 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       }
       return;
     }
-    // Ctrl+D = 创建副本（3.4，2026-08-18 补绑：菜单项早已点亮，键盘缺失）
+    // Ctrl+D = 创建副本（素材域）/ 克隆文件夹（文件夹域，3.4 四轮复制克隆）
     if (k === "d") {
+      if (selection.selectedFolders.size > 0) {
+        e.preventDefault();
+        const first = selection.orderedSelectedFolderIds()[0];
+        if (first) cloneFolderFlow(first); // 触发项在域内 → 批量分流整个选中集
+        return;
+      }
       if (selection.count > 0 && !content.isRecycleView) {
         e.preventDefault();
         void duplicateSelected();

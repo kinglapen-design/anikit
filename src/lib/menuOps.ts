@@ -15,6 +15,7 @@ import {
   setCustomThumb,
   exportAssets,
   exportFolder,
+  cloneFolders,
   cutFolders,
   deleteFolder,
   deleteFolders,
@@ -239,6 +240,17 @@ export function cutFoldersFlow(folderId: string): void {
       ? selection.orderedSelectedFolderIds()
       : [folderId];
   cutFolders(ids);
+}
+
+// 克隆文件夹（3.4，2026-08-18）：复制克隆无弹窗（用户定：没有链接克隆——文件夹没有链接语义）；
+// 批量分流同 deleteFolderFlow（多选域内触发 → 整个选中集逐棵克隆，单命令单撤销步）
+export function cloneFolderFlow(folderId: string): void {
+  const selection = useSelectionStore();
+  const ids =
+    selection.selectedFolders.size > 1 && selection.selectedFolders.has(folderId)
+      ? selection.orderedSelectedFolderIds()
+      : [folderId];
+  void cloneFolders(ids);
 }
 
 // —— 移动面板（3.4，29 稿）：打开 = 自选择域快照进 moveDraft（宿主 App.vue MovePanel）——

@@ -13,6 +13,7 @@ import {
   createArchiveAndName,
   cutFoldersFlow,
   deleteFolderFlow,
+  cloneFolderFlow,
   findParentId,
   moveFoldersFlow,
   pickExportFolder,
@@ -112,7 +113,8 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
     },
     { label: "重命名", icon: "rename", shortcut: "Ctrl+R", action: rename },
     "divider",
-    { label: "克隆", icon: "clone", shortcut: "Ctrl+D", disabled: true },
+    // 克隆（3.4 四轮点亮）：复制克隆无弹窗；多选域内触发 → 批量克隆整个选中集
+    { label: "克隆", icon: "clone", shortcut: "Ctrl+D", action: () => cloneFolderFlow(folder.id) },
     "divider",
     { label: "复制链接", icon: "copy-link", action: () => void copyFolderLink(folder.id) },
   ];

@@ -199,8 +199,8 @@ fn stem_of(name: &str) -> String {
   Path::new(name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
-/// 递归复制目录（duplicate 的 info 目录整体复制）
-fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
+/// 递归复制目录（duplicate 的 info 目录整体复制；pub(crate)：clone.rs 克隆资产同管线复用）
+pub(crate) fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
   fs::create_dir_all(to).map_err(|e| format!("目录创建失败：{e}"))?;
   let entries = fs::read_dir(from).map_err(|e| format!("目录读取失败：{e}"))?;
   for entry in entries.filter_map(|e| e.ok()) {

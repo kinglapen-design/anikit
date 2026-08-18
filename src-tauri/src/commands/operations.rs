@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use tauri::State;
 
 use crate::commands::library::AppState;
-use crate::core::library::{self, Library, FOLDERS_FILE, RECYCLE_FILE};
+use crate::core::library::{self, Library, ARCHIVES_FILE, FOLDERS_FILE, RECYCLE_FILE};
 use crate::core::models::Folder;
 use crate::core::paths;
 use crate::core::undo::{DiskOp, UndoManager};
@@ -280,6 +280,49 @@ pub async fn duplicate_placements(
       }
       undo.commit().map_err(|e| e.to_string())?;
       Ok(out.new_ids)
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
+/// 克隆文件夹报告（3.4）：新根 id 清单 + 节点/资产计数（前端 toast 计数用）
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloneReport {
+  pub folder_ids: Vec<String>,
+  pub folder_count: usize,
+  pub asset_count: usize,
+}
+
+/// 克隆文件夹（3.4，PRD 02-13 复制克隆；批量克隆 = folder_ids 多棵，2026-08-18 用户定）：
+/// 递归复制子树（结构 / 资产物理副本 / 档案记录），单撤销步；
+/// 撤销磁盘段 = 新 info 目录 Delete（重做 = 从源再 Copy，源不动可重放——同 duplicate 口径）
+#[tauri::command]
+pub async fn clone_folders(
+  state: State<'_, AppState>,
+  folder_ids: Vec<String>,
+) -> Result<CloneReport, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  if folder_ids.len() == 1 {
+    let name = lib.index.folders.get(folder_ids[0].as_str()).map(|f| f.name.clone()).unwrap_or_else(|| folder_ids[0].clone());
+    undo.begin(format!("克隆文件夹 {name}"));
+  } else {
+    undo.begin(format!("克隆 {} 个文件夹", folder_ids.len()));
+  }
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
+  match operations::clone_folders(lib, &folder_ids) {
+    Ok(out) => {
+      for (old_info, new_info) in &out.copies {
+        undo.record_disk_op(
+          DiskOp::Delete(new_info.clone()),
+          DiskOp::Copy { from: old_info.clone(), to: new_info.clone() },
+        );
+      }
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(CloneReport { folder_ids: out.folder_ids, folder_count: out.folder_count, asset_count: out.asset_count })
     }
     Err(e) => Err(fail(lib, &mut undo, e)),
   }

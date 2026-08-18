@@ -540,6 +540,26 @@ export async function deleteFolders(folderIds: string[]): Promise<boolean> {
   }, () => `删除 ${folderIds.length} 个文件夹（${report?.movedPlacements ?? 0} 个素材移入未分类）`);
 }
 
+// 克隆文件夹报告（后端 CloneReport 同构）
+export interface CloneFoldersResult {
+  folderIds: string[];
+  folderCount: number;
+  assetCount: number;
+}
+
+// 克隆文件夹（3.4，2026-08-18）：复制克隆无弹窗——子树结构 + 资产物理副本（新 ID）+ 档案记录随迁，
+// 后端 clone_folders 单命令单撤销步；批量 = ids 多棵
+export async function cloneFolders(folderIds: string[]): Promise<boolean> {
+  let report: CloneFoldersResult | null = null;
+  return await runOp(async () => {
+    report = await invoke<CloneFoldersResult>("clone_folders", { folderIds });
+  }, () =>
+    folderIds.length > 1
+      ? `克隆 ${folderIds.length} 个文件夹（${report?.assetCount ?? 0} 个素材生成副本）`
+      : `克隆文件夹（${report?.assetCount ?? 0} 个素材生成副本）`,
+  );
+}
+
 // 复制 base64（后端守卫：静态图片原字节 ≤10MB；psd/psb/svg 解码 PNG ≤10MB）
 export async function getAssetBase64(assetId: string): Promise<string | null> {
   try {
