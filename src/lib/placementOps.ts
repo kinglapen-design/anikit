@@ -378,7 +378,18 @@ function pasteTarget(): string | null {
   return content.currentFolderId;
 }
 
+// 剪切文件夹（3.4，2026-08-18）：写内部剪贴板（folders 分支，与素材互斥由选择域保证）；
+// 粘贴 = move_folders 移动（一次性，粘贴后清空）；剪切期间源项半透明（selection.isFolderCut）
+export function cutFolders(folderIds: string[]): void {
+  if (folderIds.length === 0) return;
+  const selection = useSelectionStore();
+  selection.clipboard = { items: [], action: "cut", folders: folderIds };
+  useToastStore().notify({ message: `已剪切 ${folderIds.length} 个文件夹`, duration: 3000 });
+}
+
 // Ctrl+V 仲裁（内部剪贴板非空分支；空 → App.vue 走系统剪贴板导入）：
+// 文件夹剪切 = move_folders 落当前视口文件夹（复用后端护栏：禁入自身/子级、档案不作父级——
+// 失败后端中文 toast 直出）；源失效预检 toast（PRD 02-13）；
 // copy = 静默链接粘贴（2026-08-18 用户定：不弹窗——高频整理打扰；命名导入后手动 F2 / 批量重命名，
 // 原"关联弹窗 / 选择性粘贴清单弹窗"设计整体废除）；cut = 直接移动到当前文件夹（粘贴一次后清空剪贴板）
 export async function pasteClipboard(): Promise<void> {
@@ -387,12 +398,33 @@ export async function pasteClipboard(): Promise<void> {
   if (!clip) return;
   const target = pasteTarget();
   if (target === null) return;
+  if (clip.folders && clip.folders.length > 0) {
+    await pasteFoldersInto(target);
+    return;
+  }
   if (clip.action === "copy") {
     // 链接发起不设限（2026-08-13 用户定案：不替用户做整理决定，候车区拦截废除）
     await linkPlacements(clip.items, target, clip.items.map(() => null));
     return;
   }
   const ok = await movePlacements(clip.items, target);
+  if (ok) selection.clipboard = null;
+}
+
+// 文件夹剪切粘贴落点执行（3.4）：源失效预检 toast（PRD 02-13）；复用 move_folders 护栏
+//（禁入自身/子级、档案不作父级——失败后端中文 toast 直出）；成功清剪贴板（一次性）
+export async function pasteFoldersInto(target: string): Promise<void> {
+  const selection = useSelectionStore();
+  const clip = selection.clipboard;
+  if (!clip?.folders?.length) return;
+  const content = useContentStore();
+  const alive = clip.folders.filter((id) => content.folderName(id) !== null);
+  if (alive.length === 0) {
+    selection.clipboard = null; // 源全部失效：清剪贴板并提示
+    useToastStore().notify({ message: "剪切的文件夹已不存在", icon: "fail" });
+    return;
+  }
+  const ok = await moveFolders(alive, target);
   if (ok) selection.clipboard = null;
 }
 

@@ -132,6 +132,7 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
         :selected="content.sidebarSelected === `folder:${node.id}`"
         :domain-selected="selection.isFolderSelected(node.id) && content.sidebarSelected !== `folder:${node.id}`"
         :dimmed="dragView.folderIds?.has(node.id) ?? false"
+        :cut="selection.isFolderCut(node.id)"
         :folder-id="selection.namingFolderId === node.id ? undefined : node.id"
         :data-drag-name="node.name"
         :naming="selection.namingFolderId === node.id"

@@ -9,6 +9,7 @@ import { useSelectionStore } from "../stores/selection";
 import { useUndoStore } from "../stores/undo";
 import {
   copySelection,
+  cutFolders,
   deletePlacements,
   deleteRecycle,
   duplicateSelected,
@@ -129,6 +130,15 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     if (!(e.ctrlKey || e.metaKey)) return;
     const k = e.key.toLowerCase();
     if (k === "c" || k === "x") {
+      // 文件夹域（3.4 剪切粘贴）：Ctrl+X 剪切文件夹（= 移动，粘贴走 move_folders 护栏）；
+      // Ctrl+C 对文件夹无语义（文件夹复制 = 克隆，走 Ctrl+D 克隆）
+      if (selection.selectedFolders.size > 0) {
+        if (k === "x") {
+          e.preventDefault();
+          cutFolders(selection.orderedSelectedFolderIds());
+        }
+        return;
+      }
       if (selection.count > 0) {
         e.preventDefault();
         copySelection(k === "c" ? "copy" : "cut");

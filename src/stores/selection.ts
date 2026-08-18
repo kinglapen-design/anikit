@@ -24,10 +24,13 @@ export interface PlacementRef {
 }
 
 // 内部剪贴板（6.1，2026-07-28 用户定案）：仅素材 Placement，文件夹不进；
-// copy = 粘贴时弹关联弹窗 / cut = 粘贴时直接移动到当前文件夹（粘贴一次后清空）
+// copy = 粘贴时静默建链接（2026-08-18 定案废除关联弹窗）/ cut = 粘贴时直接移动到当前文件夹（粘贴一次后清空）。
+// folders（3.4 文件夹剪切粘贴，2026-08-18）：与 items 互斥（选择域互斥，一次只剪切一类）；
+// 文件夹只有剪切（= 移动，move_folders 护栏），复制语义 = 克隆（Ctrl+D）
 export interface InternalClipboard {
   items: PlacementRef[];
   action: "copy" | "cut";
+  folders?: string[];
 }
 
 // 关联弹窗草稿（C5）：触发源 Ctrl+V(copy) / Ctrl+拖拽落文件夹 / 右键菜单"粘贴"
@@ -246,6 +249,12 @@ export const useSelectionStore = defineStore("selection", {
     isCut(key: string): boolean {
       const c = this.clipboard;
       return !!c && c.action === "cut" && c.items.some((it) => keyOf(it) === key);
+    },
+
+    // 被剪切文件夹（3.4，2026-08-18）：cut 期间树 item / 文件夹·档案卡片半透明（--opacity-cut），同素材口径
+    isFolderCut(id: string): boolean {
+      const c = this.clipboard;
+      return !!c && c.action === "cut" && (c.folders?.includes(id) ?? false);
     },
 
     // content.refresh() 全量替换 placements 后调用：剔除已不存在的 key（链接被删 / 移动后 folderId 变等）；

@@ -54,6 +54,7 @@ function onMenu(f: { id: string; name: string }, e: MouseEvent): void {
         class="cell"
         :selected="selection.isFolderSelected(f.id)"
         :dimmed="dragView.folderIds?.has(f.id) ?? false"
+        :cut="selection.isFolderCut(f.id)"
         @select="onSelect(f.id, $event)"
         @dblclick="onEnter(f.id)"
         @contextmenu.prevent.stop="onMenu(f, $event)"

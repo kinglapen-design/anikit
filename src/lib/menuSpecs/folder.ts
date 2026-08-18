@@ -11,12 +11,14 @@ import {
   copyFolderLink,
   createAndName,
   createArchiveAndName,
+  cutFoldersFlow,
   deleteFolderFlow,
   findParentId,
   pickExportFolder,
   pickFolderForLink,
   topLevelBlockId,
 } from "../menuOps";
+import { pasteFoldersInto } from "../placementOps";
 import { archiveCardSpec } from "./archiveCard";
 import { collapseAll, collapseLevel, expandAll, expandLevel, toggleOpen, treeExpansion } from "../treeExpansion";
 
@@ -46,6 +48,7 @@ function findChildrenList(nodes: FolderNode[], id: string): FolderNode[] | null 
 // 更改图标/颜色 = 网格面板形态（2026-08-18，3.3 点亮：CtxItem.panel + ContextMenu flyout 分流渲染）。
 function folderMenuEntries(folder: { id: string; name: string }, parentId: string | null, rename: () => void, treeOps: boolean): CtxEntry[] {
   const content = useContentStore();
+  const selection = useSelectionStore();
   const entries: CtxEntry[] = [
     {
       label: "打开文件夹",
@@ -96,8 +99,16 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
     { label: "移动文件夹", icon: "move-file", shortcut: "Ctrl+Y", disabled: true },
     { label: "添加文件/档案链接", icon: "add-file-link", shortcut: "Ctrl+L", action: () => pickFolderForLink() },
     "divider",
-    { label: "剪切文件夹", icon: "cut-file", shortcut: "Ctrl+X", disabled: true },
-    { label: "粘贴文件夹", icon: "paste-folder", shortcut: "Ctrl+V", disabled: true },
+    // 剪切文件夹（3.4 点亮）：触发项在多选域内 → 剪切整个选中集（cutFoldersFlow 分流）
+    { label: "剪切文件夹", icon: "cut-file", shortcut: "Ctrl+X", action: () => cutFoldersFlow(folder.id) },
+    // 粘贴文件夹（3.4 点亮）：落点 = 被右键的本文件夹；剪贴板无文件夹时禁用
+    {
+      label: "粘贴文件夹",
+      icon: "paste-folder",
+      shortcut: "Ctrl+V",
+      disabled: !(selection.clipboard?.folders?.length),
+      action: () => void pasteFoldersInto(folder.id),
+    },
     { label: "重命名", icon: "rename", shortcut: "Ctrl+R", action: rename },
     "divider",
     { label: "克隆", icon: "clone", shortcut: "Ctrl+D", disabled: true },

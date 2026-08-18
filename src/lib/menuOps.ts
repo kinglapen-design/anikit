@@ -15,6 +15,7 @@ import {
   setCustomThumb,
   exportAssets,
   exportFolder,
+  cutFolders,
   deleteFolder,
   deleteFolders,
   getAssetBase64,
@@ -228,6 +229,17 @@ export async function pickExportFolder(folderId: string): Promise<void> {
 }
 
 // —— 删除流程（确认弹窗编排）——
+
+// 剪切文件夹（3.4，2026-08-18）：批量分流同 deleteFolderFlow——触发项在多选域内 → 剪切整个选中集；
+// 粘贴 = move_folders 移动（pasteClipboard folders 分支）
+export function cutFoldersFlow(folderId: string): void {
+  const selection = useSelectionStore();
+  const ids =
+    selection.selectedFolders.size > 1 && selection.selectedFolders.has(folderId)
+      ? selection.orderedSelectedFolderIds()
+      : [folderId];
+  cutFolders(ids);
+}
 
 // 删除文件夹（素材移未分类，可撤销）：确认弹窗文案 2026-07-29 用户定；
 // 批量分流（3.4，2026-08-18）：触发项在文件夹多选域内（卡片 / 树右键已保有多选）→

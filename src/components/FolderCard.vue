@@ -15,9 +15,10 @@ import { useInlineRename } from "../lib/useInlineRename";
 import { useSelectionStore } from "../stores/selection";
 import type { FolderNode } from "../stores/content";
 
-const props = withDefaults(defineProps<{ folder: FolderNode; selected?: boolean; dimmed?: boolean }>(), {
+const props = withDefaults(defineProps<{ folder: FolderNode; selected?: boolean; dimmed?: boolean; cut?: boolean }>(), {
   selected: false,
   dimmed: false,
+  cut: false,
 });
 // select 携带 MouseEvent（2026-07-28 复验反馈 5：Ctrl 加选 / Shift 范围选需要修饰键）
 const emit = defineEmits<{ select: [e: MouseEvent] }>();
@@ -70,7 +71,7 @@ watch(
 <template>
   <div
     class="folder-card"
-    :class="{ selected, dimmed, renaming }"
+    :class="{ selected, dimmed, cut, renaming }"
     :data-folder-id="folder.id"
     :data-drag-name="folder.name"
     @click="emit('select', $event)"
@@ -212,5 +213,9 @@ watch(
 /* 拖拽源整卡半透明（2026-07-28 复验反馈 6①，拖拽结束引擎清态即恢复） */
 .folder-card.dimmed {
   opacity: var(--opacity-drag-source);
+}
+/* 剪切中整卡半透明（3.4，--opacity-cut 档；粘贴 / 覆盖 / 清空后 clipboard 变化自动恢复） */
+.folder-card.cut {
+  opacity: var(--opacity-cut);
 }
 </style>

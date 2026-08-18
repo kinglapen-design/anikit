@@ -30,6 +30,7 @@ const props = withDefaults(
     variant?: "root" | "child" | "archive" | "quick";
     tint?: string; // 自定义色名（custom-{tint} / custom-{tint}-bg）
     dimmed?: boolean; // 拖拽源半透明（2026-07-28 复验反馈 6①）
+    cut?: boolean; // 剪切中半透明（3.4，--opacity-cut 档）
     folderId?: string; // 拖拽导入落点判定（App.vue elementFromPoint → closest）
     naming?: boolean; // 命名输入态（C3 新建文件夹临时节点）
     namingError?: boolean; // 名称校验违规：输入框描边 --error
@@ -44,6 +45,7 @@ const props = withDefaults(
     variant: "child",
     tint: undefined,
     dimmed: false,
+    cut: false,
     folderId: undefined,
     naming: false,
     namingError: false,
@@ -101,6 +103,7 @@ function onClick(e: MouseEvent): void {
         'drop-after': dropZone === 'after',
         'drop-into': dropZone === 'into',
         dimmed,
+        cut,
       },
       tint ? `tint-${tint}` : '',
     ]"
@@ -206,6 +209,10 @@ function onClick(e: MouseEvent): void {
 /* 拖拽源整项半透明（2026-07-28 复验反馈 6①，拖拽结束引擎清态即恢复） */
 .tree-item.dimmed {
   opacity: var(--opacity-drag-source);
+}
+/* 剪切中整项半透明（3.4，--opacity-cut 档） */
+.tree-item.cut {
+  opacity: var(--opacity-cut);
 }
 /* 拖拽排序插入线（C4c，仅文件夹拖拽上/下 1/3）：2px 品牌色于 item 上/下沿 */
 .tree-item.drop-before::before,
