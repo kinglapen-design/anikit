@@ -74,7 +74,8 @@ function onSeekDown(e: PointerEvent): void {
   seeking = true;
   layerRef.value!.setPointerCapture(e.pointerId);
   seek(e);
-  e.preventDefault();
+  // 不可 preventDefault（2026-08-18 修复"音频卡片缩略图点击不选中"）：
+  // pointerdown preventDefault 会抑制兼容鼠标事件，click 不派发 → 卡片永远选不中
 }
 function onSeekMove(e: PointerEvent): void {
   if (seeking) seek(e);

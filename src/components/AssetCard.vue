@@ -234,7 +234,7 @@ const meta = computed(() => {
     </div>
     <!-- 简介区（figma 14）：C3 + 上边框 / padding 8 8 8 12 / 间距 4；
          标题单行左对齐（双击就地重命名，stop 防触发卡片双击预览）；
-         meta 尺寸行仍是 card-info 框选空白（按下拖动起框选 / 单击清空选择） -->
+         整卡（含 meta 行）点击 = 选中、按下拖动 = 起拖拽（2026-08-18 用户定，card-info 空白口径退役） -->
     <div class="texts">
       <input
         v-if="renaming"
@@ -256,7 +256,7 @@ const meta = computed(() => {
         v-tip="{ text: displayName, keys: ui.showBrief && ui.briefMode !== 'none' ? meta : undefined, column: true }"
         @dblclick.stop="startRename"
       >{{ displayName }}</span>
-      <span v-show="ui.showBrief && ui.briefMode !== 'none'" class="meta card-info">{{ meta }}</span>
+      <span v-show="ui.showBrief && ui.briefMode !== 'none'" class="meta">{{ meta }}</span>
     </div>
     <!-- 原始文件徽章（figma 14：15×15 品牌色图标，卡片右下各 8） -->
     <AppIcon v-if="asset.origin" name="original-file-badge" :size="15" class="origin-badge" />

@@ -24,11 +24,9 @@ const props = withDefaults(defineProps<{ folder: FolderNode; selected?: boolean;
 const emit = defineEmits<{ select: [e: MouseEvent] }>();
 
 // 拖拽落点视觉（6.1 C4b，2026-07-28 定案）：并入 = 覆盖整卡的方形覆盖
-//（--brand-1-12 + inset 1px --brand-1）；同级排序 = 卡片左/右侧间隙竖块（仅文件夹拖拽）
+//（--brand-1-12 + inset 1px --brand-1）；同级排序间隙竖块由 FolderStrip 单件 Teleport 渲染
+//（2026-08-18：卡片内 left:-12 会被 grid-viewport overflow 裁剪，首列前插不可见——上移修复）
 const dropInto = computed(() => dragView.folderCardId === props.folder.id);
-const gapSide = computed(() =>
-  dragView.folderGapId === props.folder.id ? (dragView.folderGapAfter ? "right" : "left") : null,
-);
 
 // 副文本规则：有子文件夹显示"X 个文件 / Y 个子文件夹"，没有则仅"X 个文件"（可为 0）
 const meta = computed(() => {
@@ -98,8 +96,7 @@ watch(
     <span class="meta">{{ meta }}</span>
     <!-- 拖拽并入覆盖（C4b）：盖住整卡的方形覆盖 -->
     <span v-if="dropInto" class="drop-cover" aria-hidden="true" />
-    <!-- 同级排序间隙竖块（C4 混排护栏：文件夹只与文件夹排序；宽 12 = 卡片间距档） -->
-    <span v-if="gapSide" class="drop-gap" :class="gapSide" aria-hidden="true" />
+    <!-- 同级排序间隙竖块在 FolderStrip 单件渲染（Teleport body；卡片内方案被 viewport 裁剪废除） -->
   </div>
 </template>
 
@@ -192,24 +189,8 @@ watch(
   box-shadow: inset 0 0 0 1.5px var(--brand-border);
   pointer-events: none;
 }
-/* 同级排序间隙竖块（C4）：宽 = 卡片间距 12 / 高随卡片整体，圆角竖向矩形色块；
-   填充 30%（2026-08-10 用户定：12% 不够明显，与并入填充同档） */
-.drop-gap {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 12px;
-  border-radius: var(--radius-4);
-  background: var(--brand-1-30);
-  box-shadow: inset 0 0 0 1px var(--brand-1);
-  pointer-events: none;
-}
-.drop-gap.left {
-  left: -12px;
-}
-.drop-gap.right {
-  right: -12px;
-}
+/* 同级排序间隙竖块已上移 FolderStrip（Teleport body，2026-08-18——卡片内 left:-12 被 viewport
+   裁剪，首列前插提示线不可见）；样式在 FolderStrip（.folder-drop-gap） */
 /* 拖拽源整卡半透明（2026-07-28 复验反馈 6①，拖拽结束引擎清态即恢复） */
 .folder-card.dimmed {
   opacity: var(--opacity-drag-source);

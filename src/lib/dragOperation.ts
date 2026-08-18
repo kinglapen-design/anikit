@@ -32,8 +32,11 @@
 //   ③ ghost 无缩略图——elementFromPoint 命中最深元素（常是 img 自身 / 信息区文字 span），
 //      dragGhost 只 querySelector 后代恒 miss 走纸片 fallback；修为 startDrag 先 closest
 //      到卡片根、多选取首个选中项卡片，dragGhost 读 currentSrc。
-//   ④ 信息区起框选（对齐 Eagle）：.card-info 在 gridPointerDown 视为空白交框选回调。
+//   ④ ~~信息区起框选~~（2026-08-18 用户定废除：card-info 退役——简介区有底色框后整卡可点
+//      可选中、不作框选起点；卡片本体含名称 / 简介统一起拖拽）。
 //   ⑤ 拖拽期间禁用悬停层：startDrag 置 body.dragging（CSS 闸）+ dragView.active（AssetCard JS 闸）。
+//   ⑥ 双击名称变打开（2026-08-18 修复）：begin 即 pointer capture 会把双击第二击与 dblclick
+//      重定向到卡片根元素，名称区 @dblclick.stop 收不到；capture 后移到 startDrag（拖拽全程仍有效）。
 import { reactive } from "vue";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
@@ -110,7 +113,10 @@ export function unregisterGridResolver(): void {
 // 先定行再定列（2026-07-29 复验二轮 1）——行底 + 半行距之上入目标行，行内按 x 中点定间隙，
 // 行内未命中 = 插到下一行行首（竖块画在指针所在行的行末，贴指针）；无目标行 = 段尾。
 // 返回 cards-layer 坐标系的色块矩形（宽 = 卡片间距 12 / 高 = 行高）与间隙后项 key。
-// 仅文件夹视图可排序（快速访问视图无"当前文件夹段"概念，不出间隙落点）
+// 仅文件夹视图可排序（快速访问视图无"当前文件夹段"概念，不出间隙落点）。
+// 2026-08-18 修复"第一列前插竖块盖住卡片"：原 Math.max(0, b.left - GAP) 钳位把行首间隙
+// 拉回卡片左缘（盖住卡片 12px）——行首间隙 = 卡片左侧容器留白区，允许负 left（渲染侧
+// 已 Teleport 到 body 按 client 坐标画，不再受 grid-viewport overflow 裁剪）
 export function makeGridResolver(ctx: {
   isFolderView: () => boolean;
   layer: () => HTMLElement | undefined;
@@ -174,7 +180,7 @@ export function makeGridResolver(ctx: {
     }
     const sameRow = prev && prev.top === b.top;
     return {
-      left: sameRow ? prev.left + prev.width : Math.max(0, b.left - GAP),
+      left: sameRow ? prev.left + prev.width : b.left - GAP,
       top: b.top,
       width: GAP,
       height: b.height,
@@ -196,7 +202,8 @@ interface Session {
   ghost: HTMLElement | null;
   drop: (() => Promise<void>) | null; // 最后一次 move 算出的落点动作（入参已捕获，不读 sess）
   pointerId: number; // pointer capture 用（2026-08-13 僵尸会话修复）
-  capEl: HTMLElement | null; // capture 元素（按下的卡片 / 树 item 根），endDrag 释放
+  capEl: HTMLElement | null; // capture 候选根元素（按下的卡片 / 树 item 根，begin 时记）
+  captured: boolean; // 是否已实际 capture（startDrag 才挂，2026-08-18——begin 即挂会把双击第二击重定向到卡片根）
 }
 
 let sess: Session | null = null;
@@ -331,6 +338,19 @@ async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator): Promis
 function startDrag(e: PointerEvent): void {
   if (!sess || sess.started) return;
   sess.started = true;
+  // pointer capture 在拖拽真正启动时才挂（2026-08-18 修复"双击名称变打开"：begin 即 capture 会把
+  // 双击序列的第二击与 dblclick 重定向到卡片根元素，名称区 @dblclick.stop 永远收不到——
+  // click 仍派发到卡片根所以单击无碍，dblclick 被子元素 .stop 的链路被 capture 截断）。
+  // 拖到窗外松手 pointerup 仍能派发（capture 拖拽全程有效）；按下即划出窗口的窗口期由
+  // begin 先取消旧会话 + onMove buttons 自清 + docLeave 划出取消三兜底
+  if (sess.capEl) {
+    try {
+      sess.capEl.setPointerCapture(sess.pointerId);
+      sess.captured = true;
+    } catch {
+      /* capture 失败靠 onMove buttons 自清兜底 */
+    }
+  }
   const selection = useSelectionStore();
   if (sess.kind === "asset") {
     // 拖拽未选中项 = 先单选它再拖（2026-07-28 定案）；多选拖拽 = 对全部选中项执行
@@ -399,7 +419,7 @@ function endDrag(cancelled: boolean): void {
   window.removeEventListener("blur", onWindowBlur);
   document.removeEventListener("mouseleave", onDocLeave);
   // 释放 pointer capture（元素已卸载等情况 capture 已自动释放，吞异常）
-  if (s.capEl) {
+  if (s.capEl && s.captured) {
     try {
       s.capEl.releasePointerCapture(s.pointerId);
     } catch {
@@ -436,9 +456,11 @@ function onCancel(): void {
 function onWindowBlur(): void {
   endDrag(true);
 }
-// 未挂 capture 的拖拽（区块标题，2026-08-14 走查"品牌色像素点残留"）：指针划出窗口即取消——
-// 窗外松手 pointerup 丢失、onMove 不再触发，buttons 僵尸自清失去兜底机会，落点指示残留
+// 未 capture 阶段（按下未起拖）划出窗口即取消——窗外松手 pointerup 丢失、onMove 不再触发，
+// buttons 僵尸自清失去兜底机会，落点指示/悬挂会话残留；capture 生效后（拖拽中）划出不动
+//（2026-08-14 走查"品牌色像素点残留"；2026-08-18 随 capture 后移到 startDrag 改恒挂 + captured 判定）
 function onDocLeave(): void {
+  if (sess?.captured) return;
   endDrag(true);
 }
 function onKey(e: KeyboardEvent): void {
@@ -465,31 +487,21 @@ function begin(e: PointerEvent, kind: DragKind, key: string): void {
     drop: null,
     pointerId: e.pointerId,
     capEl: null,
+    captured: false,
   };
-  // pointer capture 挂按下的卡片 / 树 item 根（治本：窗口外松手 pointerup 也能派发到 webview，
-  // 僵尸会话不再产生；capture 到自身根元素不影响 click 派发——down/up 共同祖先仍是他）。
-  // 区块标题排序不走引擎（LibraryView 本地让位式拖拽），引擎内全部拖类均挂 capture；
-  // 未挂上的边缘情况靠 onMove buttons 僵尸自清 + document mouseleave 划出取消双兜底
-  const capEl = (e.target as HTMLElement).closest<HTMLElement>(
+  // capture 候选根元素只记不挂（capture 后移到 startDrag，2026-08-18——begin 即挂会把
+  // 双击序列第二击与 dblclick 重定向到卡片根，名称区双击改名被吞成"打开"，见 startDrag 注释）；
+  // 僵尸窗口期（按下未起拖就划出/窗外松手）靠三道兜底：begin 先取消旧会话 + onMove buttons
+  // 自清 + docLeave 划出取消（恒挂）
+  sess.capEl = (e.target as HTMLElement).closest<HTMLElement>(
     ".tree-item, .asset-card, .list-row, .folder-card, .archive-card, .block-head",
   );
-  if (capEl) {
-    try {
-      capEl.setPointerCapture(e.pointerId);
-      sess.capEl = capEl;
-    } catch {
-      /* capture 失败靠 onMove buttons 自清兜底 */
-    }
-  }
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
   window.addEventListener("pointercancel", onCancel);
   window.addEventListener("keydown", onKey, true);
   window.addEventListener("blur", onWindowBlur);
-  // 未挂 capture 的拖拽（区块标题）：划出窗口即取消兜底（窗外松手 pointerup 丢失 → 指示残留）
-  if (!sess.capEl) {
-    document.addEventListener("mouseleave", onDocLeave);
-  }
+  document.addEventListener("mouseleave", onDocLeave);
 }
 
 // 素材卡片拖拽起点（AssetCard / ListRowCard，卡片根带 data-key；按钮 / 输入框上不启动）
@@ -500,7 +512,9 @@ export function beginAssetDrag(e: PointerEvent, key: string): void {
 }
 
 // 网格 pointerdown 分发（AssetGrid 模板一行接线，控制组件行数 ≤500，规范第 3 条）：
-// 素材卡片 → 素材拖拽；文件夹卡片 → 文件夹拖拽；其余（空白，含卡片行 / 列间距）交回调（框选）
+// 素材卡片（含名称 / 简介区，整卡）→ 素材拖拽；文件夹卡片 → 文件夹拖拽；其余（空白，
+// 含卡片行 / 列间距）交回调（框选）。简介区 2026-08-18 起不再视为空白（card-info 退役）：
+// 名称+简介有底色框后用户预期整卡可点可选中、且不作框选起点（用户定）
 export function gridPointerDown(e: PointerEvent, onBlank: (e: PointerEvent) => void): void {
   const t = e.target as HTMLElement;
   // 重命名等输入态中点击网格任意处（卡片 / 空白）= 确认提交（2026-08-10 走查：框选回调的
@@ -508,15 +522,6 @@ export function gridPointerDown(e: PointerEvent, onBlank: (e: PointerEvent) => v
   // 其 @blur 提交逻辑随之触发；重命名 input 自身 pointerdown 已 stop 冒泡不会到此）
   const ae = document.activeElement;
   if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement) ae.blur();
-  // 卡片信息文字区（2026-07-29 复验二轮 4，对齐 Eagle）：.card-info 视为空白——
-  // 按下拖动 = 起框选，未过阈值松开 = 清空选择；左键单击不选中卡片（刻意，
-  // AssetGrid onCardClick 同拦；右键菜单 / 双击预览 / F2 重命名不受影响）。
-  // 2026-07-29 复验三轮：名称（.title / .name）退出 card-info 回卡片本体分支
-  //（可起拖拽 / 单击选中 / 双击改名），card-info 仅剩 meta 尺寸行 / .details
-  if (t.closest(".card-info")) {
-    onBlank(e);
-    return;
-  }
   const card = t.closest(".asset-card, .list-row");
   if (card) {
     // 回收站视口（6.1 二轮，2026-07-29）：卡片只读不可拖拽，按下交空白回调（框选 / 清空选择）

@@ -46,12 +46,11 @@ function openPreview(p: PlacementView): void {
 
 // 卡片点击选择（6.1，2026-07-28 用户定案）：单击 = 单选 / Ctrl+单击 = 加选切换 /
 // Shift+单击 = 锚点范围选（selection store 三态）；素材卡片选中与文件夹 / 收件箱条目互斥
-//（文件夹选择域在 selection store，clickItem 内部互斥清理，2026-07-28 复验反馈 5）
+//（文件夹选择域在 selection store，clickItem 内部互斥清理，2026-07-28 复验反馈 5）。
+// 2026-08-18 用户定：简介区（含 meta 行）点击 = 选中——名称+简介有底色框后用户预期整卡可点，
+// 原".card-info 视为空白"（2026-07-29 对齐 Eagle 旧口径）废除，card-info 分类整体退役
 function onCardClick(p: PlacementView, e: MouseEvent): void {
   if (dragView.suppressClick) return; // 有效拖拽结束后紧随的 click 不当选择（拖拽引擎置位）
-  // 信息文字区（.card-info）左键单击不选中卡片（2026-07-29 复验二轮 4，对齐 Eagle——
-  // 视为空白：框选未过阈值已清空选择；右键菜单 / 双击预览不受影响）
-  if ((e.target as HTMLElement).closest(".card-info")) return;
   if (e.ctrlKey || e.metaKey || e.shiftKey) {
     selection.clickItem(`${p.assetId}|${p.folderId}`, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
     content.selectedInboxName = "";
@@ -121,8 +120,8 @@ const {
 } = useMarquee({
   viewport: viewportRef,
   // 头部（文件夹区块、"内容"副标题、工程文件、列表列头）/ 滚动条 / 按钮上不启动框选；
-  // 卡片本体由 gridPointerDown 先行分发去拖拽不会到此，卡片信息区 .card-info 刻意放行
-  //（2026-07-29 复验二轮 4：信息区视为空白起框选；卡片行 / 列间距点在 cards-layer 上同落入）
+  // 卡片本体（含名称 / 简介区，整卡）由 gridPointerDown 先行分发去拖拽不会到此
+  //（2026-08-18 用户定：card-info 空白口径退役，简介区不作框选起点）
   ignoreSelector: ".grid-header, .list-header, .grid-track, button",
   hitTest: makeBoxHitTest({
     boxes: () => boxes.value,
@@ -144,6 +143,16 @@ const resolveGap = makeGridResolver({
   layer: () => cardsLayerRef.value,
   boxes: () => boxes.value,
   keyAt: (i) => `${props.items[i].assetId}|${props.items[i].folderId}`,
+});
+
+// 间隙竖块 client 坐标（Teleport body 渲染）：layer 坐标 + 层 rect 实时换算；
+// 拖拽中指针持续 move → resolver 每次重算 gap → 本 computed 随之刷新（滚动瞬间的短滞后随下一次 move 自愈）
+const gapClient = computed(() => {
+  const g = dragView.gap;
+  if (!g) return null;
+  const r = cardsLayerRef.value?.getBoundingClientRect();
+  if (!r) return null;
+  return { left: r.left + g.left, top: r.top + g.top, width: g.width, height: g.height };
 });
 
 // 就地重命名（C2）：滚出虚拟滚动销毁 = 取消——重命名卡片离开可视渲染集时清 renamingKey
@@ -237,20 +246,23 @@ onBeforeUnmount(() => {
             @dblclick="openPreview(c.asset)"
           />
         </template>
-        <!-- 拖拽卡片间距落点（C4a）：圆角竖向矩形色块填间距（--brand-1-12 + inset 1px --brand-1），
-             坐标与卡片同层同变换，事件穿透 -->
-        <div
-          v-if="dragView.gap"
-          class="drop-gap"
-          :style="{
-            left: `${dragView.gap.left}px`,
-            top: `${dragView.gap.top}px`,
-            width: `${dragView.gap.width}px`,
-            height: `${dragView.gap.height}px`,
-          }"
-        />
+        <!-- 拖拽卡片间距落点（C4a）：Teleport 到 body 按 client 坐标画（2026-08-18 修复
+             "首列前插提示线不可见 / 盖住卡片"——grid-viewport overflow 裁剪会把行首间隙
+             （负 layer-x = 容器 16 留白区）整条裁掉，原 Math.max(0,…) 钳位又拉回盖住卡片） -->
       </div>
     </div>
+    <Teleport to="body">
+      <div
+        v-if="gapClient"
+        class="drop-gap"
+        :style="{
+          left: `${gapClient.left}px`,
+          top: `${gapClient.top}px`,
+          width: `${gapClient.width}px`,
+          height: `${gapClient.height}px`,
+        }"
+      />
+    </Teleport>
     <!-- 滚动条悬停显隐（2026-08-10 用户定：只在悬停面板 / 拖拽 thumb 时出现，持久存在视觉噪音） -->
     <div
       ref="trackRef"
@@ -366,9 +378,10 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 0 0 1px var(--brand-1);
 }
 /* 拖拽卡片间距落点色块（C4a，2026-07-28 定案）：圆角竖向矩形填间距，同框选配色；
-   填充 30%（2026-08-10 用户定：12% 不够明显，与并入填充同档） */
+   填充 30%（2026-08-10 用户定：12% 不够明显，与并入填充同档）；
+   Teleport 到 body 后 fixed 定位（2026-08-18，脱离 grid-viewport 裁剪） */
 .drop-gap {
-  position: absolute;
+  position: fixed;
   z-index: 5;
   pointer-events: none;
   border-radius: var(--radius-4);

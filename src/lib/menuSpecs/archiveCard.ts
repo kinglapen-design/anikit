@@ -85,7 +85,7 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
     {
       label: "重命名",
       icon: "rename",
-      shortcut: "Ctrl+R",
+      shortcut: "F2",
       action: () => {
         if (rename) rename(); // 树档案节点：树命名态（folder.ts treeItemSpec 分流传入）
         else selection.namingFolderCardId = archive.id;

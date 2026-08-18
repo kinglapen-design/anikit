@@ -116,7 +116,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       // 多选分流批量重命名（3.4，37 稿）：弹窗逐条改名；单选 = 卡片就地重命名（F2 同径）
       label: selection.count > 1 ? "批量重命名" : "重命名",
       icon: "rename",
-      shortcut: "Ctrl+R",
+      shortcut: "F2",
       action: () => {
         if (selection.count > 1) selection.renameDraft = selection.selectedRefs();
         else selection.renamingKey = assetKey;

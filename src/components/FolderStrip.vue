@@ -50,6 +50,18 @@ function onMenu(f: { id: string; name: string }, e: MouseEvent): void {
   openFolderCardMenu(e, f);
 }
 
+// 同级排序间隙竖块（2026-08-18 修复"首列前插提示线不可见"：卡片内 left:-12 的竖块会被
+// grid-viewport overflow 整条裁掉——改由 FolderStrip 单件 Teleport 到 body 按 client 坐标画；
+// 拖拽中 folderGapId 随指针 move 变更 → 本 computed 逐次重取 rect）
+const gapBar = computed(() => {
+  const id = dragView.folderGapId;
+  if (!id) return null;
+  const el = document.querySelector<HTMLElement>(`.folder-card[data-folder-id="${CSS.escape(id)}"]`);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { left: dragView.folderGapAfter ? r.right : r.left - 12, top: r.top, height: r.height };
+});
+
 </script>
 
 <template>
@@ -74,6 +86,15 @@ function onMenu(f: { id: string; name: string }, e: MouseEvent): void {
         @contextmenu.prevent.stop="onMenu(f, $event)"
       />
     </div>
+    <!-- 同级排序间隙竖块（Teleport body / client 坐标，2026-08-18——首列前插不被 viewport 裁剪） -->
+    <Teleport to="body">
+      <span
+        v-if="gapBar"
+        class="folder-drop-gap"
+        :style="{ left: `${gapBar.left}px`, top: `${gapBar.top}px`, height: `${gapBar.height}px` }"
+        aria-hidden="true"
+      />
+    </Teleport>
   </section>
 </template>
 
@@ -103,5 +124,17 @@ function onMenu(f: { id: string; name: string }, e: MouseEvent): void {
 }
 .cell {
   min-width: 0;
+}
+/* 同级排序间隙竖块（Teleport 到 body，fixed 定位）：宽 12 = 卡片间距档 / 高随目标卡片，
+   圆角竖向矩形色块；填充 30%（2026-08-10 用户定档）——原卡片内 left:-12 方案被 viewport
+   裁剪废除（2026-08-18，首列前插提示线不可见的根因） */
+.folder-drop-gap {
+  position: fixed;
+  z-index: 5;
+  width: 12px;
+  border-radius: var(--radius-4);
+  background: var(--brand-1-30);
+  box-shadow: inset 0 0 0 1px var(--brand-1);
+  pointer-events: none;
 }
 </style>

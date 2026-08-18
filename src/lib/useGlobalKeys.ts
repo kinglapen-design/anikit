@@ -17,7 +17,7 @@ import {
   pasteDuplicate,
   recycleSelectedAssetIds,
 } from "./placementOps";
-import { cloneFolderFlow, deleteFoldersFlow, moveAssetsFlow, moveFoldersFlow } from "./menuOps";
+import { cloneFolderFlow, deleteFoldersFlow, findParentId, moveAssetsFlow, moveFoldersFlow } from "./menuOps";
 
 // 输入框豁免判定：文本输入态（input / textarea / contenteditable）不拦截全局快捷键
 export function isEditableTarget(t: HTMLElement): boolean {
@@ -78,8 +78,8 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   }
 
   // 操作快捷键（6.1 阶段 C，2026-07-28 用户定案，与 onSelectionKeys 同口径）：
-  // F2 = 重命名当前单选素材（卡片就地重命名；多选不触发；文件夹重命名走卡片名称双击 /
-  // 新建后命名态，2026-07-29 复验三轮 rename_folder 已接入）；
+  // F2 = 重命名单选项（素材卡片就地重命名；文件夹域 = 文件夹重命名——条带可见走卡片命名态，
+  // 否则树命名态，3.4 七轮接入；Ctrl+R 废除 = WebView2 刷新键吞掉防误刷，2026-08-18 用户定）；
   // Del = 删除选中项（2026-07-29 用户修订：取消两段式询问，直接移入回收站，撤销可找回）；
   // Ctrl+C / Ctrl+X = 写内部剪贴板（仅素材）；Ctrl+V 仲裁（内部非空 → copy 静默链接粘贴 /
   // cut 移动；空 → onPaste 系统剪贴板导入）；Ctrl+Shift+V = 直接副本不弹窗（名称同源）；
@@ -91,8 +91,20 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     if (isEditableTarget(e.target as HTMLElement)) return;
     if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
     if (document.querySelector(".app-menu, .zoom-mask, .link-mask, .del-mask, .pick-mask")) return;
+    // F2 = 重命名（单选生效）：素材卡片就地重命名；文件夹域 = 文件夹重命名（3.4 七轮接入——
+    // 当前视口条带含该项走卡片命名态（用户视线在卡片），否则树命名态；档案同径）
     if (e.key === "F2") {
-      if (selection.count === 1 && !content.isRecycleView) {
+      if (content.isRecycleView) return;
+      if (selection.selectedFolders.size === 1) {
+        e.preventDefault();
+        const id = selection.orderedSelectedFolderIds()[0];
+        const parent = findParentId(content.folders, id) ?? null;
+        const cur = content.currentFolderId;
+        if (cur !== null && parent === cur) selection.namingFolderCardId = id;
+        else selection.namingFolderId = id;
+        return;
+      }
+      if (selection.selectedFolders.size === 0 && selection.count === 1) {
         e.preventDefault();
         selection.renamingKey = selection.first;
       }
@@ -171,13 +183,10 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       }
       return;
     }
-    // Ctrl+R = 重命名（3.4 补绑，菜单标注已久）：单选就地重命名 / 多选批量重命名弹窗（37 稿）
+    // Ctrl+R 废除（2026-08-18 用户定：WebView2 默认刷新页面快捷键，吞掉防误刷；重命名统一 F2；
+    // 批量重命名入口 = 多选右键「批量重命名」菜单项）
     if (k === "r") {
-      if (selection.count > 0 && !content.isRecycleView) {
-        e.preventDefault();
-        if (selection.count > 1) selection.renameDraft = selection.selectedRefs();
-        else selection.renamingKey = selection.first;
-      }
+      e.preventDefault();
       return;
     }
     // 粘贴两键（2026-08-18 定案）：Ctrl+V 链接 / Ctrl+Shift+V 副本；Ctrl+Alt+V 键位废除不响应

@@ -111,7 +111,7 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
       disabled: !(selection.clipboard?.folders?.length),
       action: () => void pasteFoldersInto(folder.id),
     },
-    { label: "重命名", icon: "rename", shortcut: "Ctrl+R", action: rename },
+    { label: "重命名", icon: "rename", shortcut: "F2", action: rename },
     "divider",
     // 克隆（3.4 四轮点亮）：复制克隆无弹窗；多选域内触发 → 批量克隆整个选中集
     { label: "克隆", icon: "clone", shortcut: "Ctrl+D", action: () => cloneFolderFlow(folder.id) },
