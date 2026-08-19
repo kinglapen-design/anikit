@@ -12,6 +12,8 @@ export interface CtxItem {
   label: string;
   icon?: string;
   iconClass?: string; // 图标附加类（如 rot-90 旋转，1.2 标签页菜单"上下分屏"用）
+  trailingIcon?: string; // 标题右侧小图标 12（3.5 分组菜单「上移/下移」稿口径）
+  trailingIconClass?: string; // 尾图标附加类（rot-180）
   iconData?: string; // 内联图片图标 data URL / 图片文件 URL（非 svg 图标用，如新建文档组 md.webp / txt.png，优先于 icon）
   shortcut?: string;
   disabled?: boolean;

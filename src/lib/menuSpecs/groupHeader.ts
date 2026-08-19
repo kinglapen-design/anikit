@@ -86,7 +86,7 @@ export function groupHeaderSpec(ctx: GroupMenuCtx): CtxEntry[] {
     foldItem,
     {
       label: "上移",
-      icon: "chevron-small",
+      trailingIcon: "chevron-small",
       disabled: index <= 0,
       action: () => {
         if (index <= 0) return;
@@ -97,8 +97,8 @@ export function groupHeaderSpec(ctx: GroupMenuCtx): CtxEntry[] {
     },
     {
       label: "下移",
-      icon: "chevron-small",
-      iconClass: "rot-180",
+      trailingIcon: "chevron-small",
+      trailingIconClass: "rot-180",
       disabled: index >= defs.length - 1,
       action: () => {
         if (index >= defs.length - 1) return;

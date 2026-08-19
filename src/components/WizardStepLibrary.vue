@@ -10,7 +10,7 @@ defineProps<{ error: string }>();
 
 <template>
   <div class="step-library">
-    <span class="field-label">输入资源库名称：</span>
+    <span class="field-label">输入资源库名称:</span>
     <AppInput v-model="name" placeholder="资源库名称" />
     <span class="field-label">开启自动导入</span>
     <AppSwitch v-model="autoImport" />

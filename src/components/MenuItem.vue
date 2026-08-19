@@ -13,6 +13,8 @@ const props = withDefaults(
     icon?: string;
     iconClass?: string; // 图标附加类（如 rot-90）
     iconData?: string; // 内联图片图标（data URL / 文件 URL，16 居中于 18 盒——新建文档组 md.webp / txt.png）
+    trailingIcon?: string; // 标题右侧小图标 12（3.5 分组菜单「上移/下移」稿口径：箭头-小跟文字右）
+    trailingIconClass?: string; // 尾图标附加类（rot-180 = 源图形朝上转朝下）
     label: string;
     shortcut?: string;
     arrow?: boolean;
@@ -20,7 +22,7 @@ const props = withDefaults(
     checked?: boolean;
     disabled?: boolean; // 禁用态：不响应 hover / 点击
   }>(),
-  { icon: undefined, iconClass: undefined, iconData: undefined, shortcut: undefined, arrow: false, checkable: false, checked: false, disabled: false },
+  { icon: undefined, iconClass: undefined, iconData: undefined, trailingIcon: undefined, trailingIconClass: undefined, shortcut: undefined, arrow: false, checkable: false, checked: false, disabled: false },
 );
 const emit = defineEmits<{ select: [] }>();
 
@@ -41,6 +43,7 @@ const keys = computed(() =>
       <span v-else-if="iconData" class="deco data-icon"><img :src="iconData" alt="" /></span>
       <AppIcon v-else-if="icon" :name="icon" :size="18" class="deco" :class="iconClass" />
       <span class="label">{{ label }}</span>
+      <AppIcon v-if="trailingIcon" :name="trailingIcon" :size="12" class="trail" :class="trailingIconClass" />
     </span>
     <span v-if="keys.length" class="shortcut">
       <KbdBadge v-for="k in keys" :key="k" :label="k" />
@@ -103,6 +106,17 @@ const keys = computed(() =>
 }
 /* 图标旋转 180°（3.5 分组菜单"下移"：chevron-small 源图形朝上，旋转朝下） */
 .deco.rot-180 :deep(svg) {
+  transform: rotate(180deg);
+}
+/* 标题右侧小图标（12，标签档色；禁用态随父色） */
+.trail {
+  flex: none;
+  color: var(--text-label);
+}
+.menu-item:disabled .trail {
+  color: inherit;
+}
+.trail.rot-180 :deep(svg) {
   transform: rotate(180deg);
 }
 .check-slot {

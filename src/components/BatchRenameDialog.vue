@@ -166,15 +166,15 @@ const listRef = ref<HTMLElement>();
     <!-- 输入区（同一时刻只显示当前模式一行；PRD 02-14） -->
     <div class="rd-fields">
       <template v-if="mode === 'sequence'">
-        <span class="lbl">名称：</span>
+        <span class="lbl">名称:</span>
         <AppInput v-model="seqName" size="medium" clearable class="grow" placeholder="输入名称" />
-        <span class="lbl">起始编号：</span>
+        <span class="lbl">起始编号:</span>
         <AppInput v-model="seqStart" size="medium" clearable class="narrow" placeholder="1" />
       </template>
       <template v-else>
-        <span class="lbl">查找文本：</span>
+        <span class="lbl">查找文本:</span>
         <AppInput v-model="findText" size="medium" clearable class="grow" placeholder="输入查找文本" />
-        <span class="lbl">替换为：</span>
+        <span class="lbl">替换为:</span>
         <AppInput v-model="replaceText" size="medium" clearable class="grow" placeholder="输入替换文本" />
       </template>
     </div>

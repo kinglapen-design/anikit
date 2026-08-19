@@ -61,7 +61,7 @@ async function submit(): Promise<void> {
     <div class="ge-body">
       <div class="group-block">
         <div class="group-title">
-          <span class="row-label">分组名称：</span>
+          <span class="row-label">分组名称:</span>
           <AppInput v-model="name" size="small" class="name-input" placeholder="未命名分组" />
         </div>
         <GroupRulesEditor v-model="rules" :items="items" />

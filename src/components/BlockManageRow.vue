@@ -39,9 +39,9 @@ function openIconMenu(e: MouseEvent): void {
          chevron-small 源图形朝上（实机渲染核对）——上移不旋转、下移旋转 180） -->
     <IconButton small name="chevron-small" class="sort-arrow arrow-down" :disabled="isLast" title="下移" @click="emit('moveDown')" />
     <IconButton small name="chevron-small" class="sort-arrow arrow-up" :disabled="isFirst" title="上移" @click="emit('moveUp')" />
-    <span class="row-label">区块名称：</span>
+    <span class="row-label">区块名称:</span>
     <AppInput v-model="row.name" size="small" class="name-input" placeholder="区块名称" />
-    <span class="row-label">默认图标：</span>
+    <span class="row-label">默认图标:</span>
     <button class="icon-pick" @click="openIconMenu">
       <AppIcon :name="row.icon ?? 'folder-closed'" :size="18" />
       <AppIcon name="tree-expand-arrow" :size="12" class="pick-chev" />

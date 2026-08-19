@@ -47,7 +47,7 @@ async function onConfirm(): Promise<void> {
   <AppModal variant="confirm" icon="library-duotone" title="创建资源库" @close="emit('close')">
     <div class="create-library">
       <div class="field-row">
-        <span class="field-label">输入资源库名称：</span>
+        <span class="field-label">输入资源库名称:</span>
         <AppInput
           ref="inputRef"
           v-model="name"

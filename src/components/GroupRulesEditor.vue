@@ -1,16 +1,17 @@
 <script setup lang="ts">
 // 分组规则编辑器（33 稿分组管理 / 34 稿新建分组共用）：
-// 规则行 = C3 容器 44 高圆角 6（删除× + 「规则：」+ 规则下拉 96 + 「范围：」+ 范围区）；
+// 规则行 = C3 容器（min 44 高 圆角 6 + 暗-悬停边框，2026-08-19 复验补）：头段（删除× + 「规则:」+
+// 规则下拉 96 +「范围:」，恒 28 居首行）+ 范围区（chips 多行向下排）；
 // 范围区形态：ext / type / 日期 = chips 多选（选中 = 品牌色底；候选按当前文件夹实际存在动态出——33 稿注释），
-// 名称 = AppInput small（空格分隔分词，词间 AND）；
-// 底部「添加新规则」钮（C5 底 102×29）。
+// 名称 = 分词 chips 输入（TermChipsInput：回车/空格/+/失焦提交，词间 AND——2026-08-19 复验由单输入框改）；
+// 底部「添加新规则」钮（C5 底 102×29）。标签冒号 = 英文「:」（2026-08-19 用户定，全库统一）。
 // 单规则组互斥转移（PRD 02-04 条款 2）由父级经 pickValue 事件处理（编辑器不感知其他组）。
 import { computed, ref } from "vue";
 import AppIcon from "./AppIcon.vue";
-import AppInput from "./AppInput.vue";
 import AppMenu from "./AppMenu.vue";
 import IconButton from "./IconButton.vue";
 import MenuItem from "./MenuItem.vue";
+import TermChipsInput from "./TermChipsInput.vue";
 import {
   DATE_BUCKET_LABELS,
   DATE_BUCKET_ORDER,
@@ -67,12 +68,16 @@ function toggleValue(rule: GroupRule, value: string): void {
   }
 }
 
-// —— 名称规则：分词输入（空格分隔，词间 AND；PRD 02-04） ——
-function nameInput(rule: GroupRule): string {
-  return rule.values.join(" ");
+// —— 名称规则：分词 chips（TermChipsInput；词间 AND；提交走 pickValue 互斥转移，同 chips 口径） ——
+function addTerm(rule: GroupRule, value: string): void {
+  const v = value.trim();
+  if (!v || rule.values.includes(v)) return;
+  emit("pickValue", rule, v); // 父级先做互斥转移（从其他单规则组摘除）
+  if (!rule.values.includes(v)) rule.values.push(v); // 转移后仍不在本组才补（防御）
 }
-function setNameInput(rule: GroupRule, text: string): void {
-  rule.values = text.split(/\s+/).filter(Boolean);
+function removeTerm(rule: GroupRule, value: string): void {
+  const i = rule.values.indexOf(value);
+  if (i >= 0) rule.values.splice(i, 1);
 }
 
 function addRule(): void {
@@ -88,52 +93,56 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
 <template>
   <div class="rules-editor">
     <div v-for="(rule, i) in rules" :key="i" class="rule-row">
-      <IconButton small name="clear" title="删除规则" class="rule-del" @click="removeRule(i)" />
-      <span class="row-label">规则：</span>
-      <button class="kind-pick" @click="openKindPicker(rule, $event)">
-        <span class="val">{{ kindLabel(rule.kind) }}</span>
-        <AppIcon name="tree-expand-arrow" :size="12" class="chev" />
-      </button>
-      <span class="row-label">范围：</span>
-      <!-- 扩展名：当前文件夹实际存在的扩展名 chips -->
-      <div v-if="rule.kind === 'ext'" class="chips">
-        <button
-          v-for="ext in extCandidates"
-          :key="ext"
-          class="chip"
-          :class="{ on: rule.values.includes(ext) }"
-          @click="toggleValue(rule, ext)"
-        >{{ ext }}</button>
+      <!-- 头段（× + 规则 + 下拉 + 范围）：恒 28 高居首行——chips 换行使行变高时标签保持首行垂直居中 -->
+      <div class="row-head">
+        <IconButton small name="clear" title="删除规则" class="rule-del" @click="removeRule(i)" />
+        <span class="row-label">规则:</span>
+        <button class="kind-pick" @click="openKindPicker(rule, $event)">
+          <span class="val">{{ kindLabel(rule.kind) }}</span>
+          <AppIcon name="tree-expand-arrow" :size="12" class="chev" />
+        </button>
+        <span class="row-label">范围:</span>
       </div>
-      <!-- 类型：8 类按实际存在 -->
-      <div v-else-if="rule.kind === 'type'" class="chips">
-        <button
-          v-for="t in typeCandidates"
-          :key="t"
-          class="chip"
-          :class="{ on: rule.values.includes(t) }"
-          @click="toggleValue(rule, t)"
-        >{{ typeLabel(t) }}</button>
+      <!-- 范围区：chips 多行向下排 / 名称 = 分词 chips 输入 -->
+      <div class="row-body">
+        <!-- 扩展名：当前文件夹实际存在的扩展名 chips -->
+        <div v-if="rule.kind === 'ext'" class="chips">
+          <button
+            v-for="ext in extCandidates"
+            :key="ext"
+            class="chip"
+            :class="{ on: rule.values.includes(ext) }"
+            @click="toggleValue(rule, ext)"
+          >{{ ext }}</button>
+        </div>
+        <!-- 类型：8 类按实际存在 -->
+        <div v-else-if="rule.kind === 'type'" class="chips">
+          <button
+            v-for="t in typeCandidates"
+            :key="t"
+            class="chip"
+            :class="{ on: rule.values.includes(t) }"
+            @click="toggleValue(rule, t)"
+          >{{ typeLabel(t) }}</button>
+        </div>
+        <!-- 日期：六档（档间对文件互斥，多档 = OR） -->
+        <div v-else-if="rule.kind === 'importDate' || rule.kind === 'modifyDate'" class="chips">
+          <button
+            v-for="d in DATE_BUCKET_ORDER"
+            :key="d"
+            class="chip"
+            :class="{ on: rule.values.includes(d) }"
+            @click="toggleValue(rule, d)"
+          >{{ DATE_BUCKET_LABELS[d] }}</button>
+        </div>
+        <!-- 名称：分词 chips（回车/空格/+/失焦提交，词间 AND） -->
+        <TermChipsInput
+          v-else
+          :terms="rule.values"
+          @add="addTerm(rule, $event)"
+          @remove="removeTerm(rule, $event)"
+        />
       </div>
-      <!-- 日期：六档（档间对文件互斥，多档 = OR） -->
-      <div v-else-if="rule.kind === 'importDate' || rule.kind === 'modifyDate'" class="chips">
-        <button
-          v-for="d in DATE_BUCKET_ORDER"
-          :key="d"
-          class="chip"
-          :class="{ on: rule.values.includes(d) }"
-          @click="toggleValue(rule, d)"
-        >{{ DATE_BUCKET_LABELS[d] }}</button>
-      </div>
-      <!-- 名称：分词输入（空格分隔，词间 AND） -->
-      <AppInput
-        v-else
-        size="small"
-        class="name-input"
-        placeholder="输入关键词，空格分隔（全部命中才归组）"
-        :model-value="nameInput(rule)"
-        @update:model-value="setNameInput(rule, $event)"
-      />
     </div>
     <!-- 添加新规则（33/34 稿：C5 底 102×29，add 图标 12 + 标签档文字） -->
     <button class="add-rule" @click="addRule">
@@ -161,17 +170,34 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
   flex-direction: column;
   gap: var(--space-12);
 }
-/* 规则行（33 稿：C3 底 44 高 圆角 6 / padding 8 12 / gap 8） */
+/* 规则行（33 稿：C3 底 44 高 圆角 6 / padding 8 12 / gap 8）；
+   2026-08-19 复验：补 暗-悬停边框（稿口径）；chips 换行时行高自适应（min-height），
+   头段（row-head 28）居首行保持垂直居中——标签不随多行内容整体居中 */
 .rule-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-8);
-  height: 44px;
+  min-height: 44px;
   box-sizing: border-box;
   padding: var(--space-8) var(--space-12);
   border-radius: var(--radius-6);
   background: var(--c3);
+  box-shadow: inset 0 0 0 1px var(--line-hover);
   flex: none;
+}
+/* 头段（× 规则 下拉 范围）：恒 28 高与首行 chips 同高居中 */
+.row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  height: 28px;
+  flex: none;
+}
+/* 范围区：chips 多行向下排（flex-wrap），首行与头段同线 */
+.row-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
 }
 .row-label {
   font-size: var(--text-body-size);
@@ -242,12 +268,6 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
   background: var(--brand);
   box-shadow: inset 0 0 0 1px var(--line-active);
   color: var(--text-highlight);
-}
-.name-input {
-  flex: 1;
-  min-width: 0;
-  /* 弹窗内输入框 token = C1（30 稿口径；AppInput 壳化后 class 落壳——底色在壳上覆盖） */
-  background: var(--c1);
 }
 /* 添加新规则（33 稿：C5 底 / 1px 亮-选中 / 圆角 6 / padding 6 12 / gap 6 / 标签档） */
 .add-rule {

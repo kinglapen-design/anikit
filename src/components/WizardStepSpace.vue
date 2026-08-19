@@ -12,7 +12,7 @@ const emit = defineEmits<{ pick: [] }>();
 <template>
   <div class="step-space">
     <div class="row">
-      <span class="field-label">输入储存空间名称：</span>
+      <span class="field-label">输入储存空间名称:</span>
       <AppInput v-model="name" placeholder="输入储存空间名称..." />
     </div>
     <div class="row path-row">

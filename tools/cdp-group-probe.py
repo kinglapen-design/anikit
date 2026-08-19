@@ -627,15 +627,19 @@ async def main():
                 named = await ev("""
                   (() => {
                     const b = document.querySelectorAll('.group-manage .group-block')[0];
-                    const inp = b?.querySelector('.rule-row .name-input input');
+                    const inp = b?.querySelector('.rule-row .term-input');
                     if (!inp) return false;
                     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
                     setter.call(inp, 'zzz');
                     inp.dispatchEvent(new Event('input', { bubbles: true }));
+                    // 分词 chips 化（2026-08-19）：值进 draft，须回车提交成 chip
+                    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
                     return true;
                   })()
                 """)
-                print("  名称规则输入:", named)
+                await asyncio.sleep(0.3) # chip DOM 等 Vue 下一 tick 再数
+                chip_n = await ev("document.querySelectorAll('.group-manage .group-block')[0]?.querySelectorAll('.term-chip').length")
+                print("  名称分词输入:", named, "chip 数（应 1）:", chip_n)
                 # 删组块 1（图片组）
                 pos = await ev("""
                   (() => {

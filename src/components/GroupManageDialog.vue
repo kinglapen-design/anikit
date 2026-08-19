@@ -141,7 +141,7 @@ async function submit(): Promise<void> {
               <div class="group-title">
                 <IconButton small name="chevron-small" class="sort-arrow arrow-down" :disabled="i === draft.length - 1" title="下移" @click="moveGroup(i, 1)" />
                 <IconButton small name="chevron-small" class="sort-arrow" :disabled="i === 0" title="上移" @click="moveGroup(i, -1)" />
-                <span class="row-label">分组名称：</span>
+                <span class="row-label">分组名称:</span>
                 <AppInput v-model="g.name" size="small" class="name-input" placeholder="未命名分组" />
                 <IconButton name="delete-red" delete-red title="删除分组" @click="removeGroup(i)" />
               </div>

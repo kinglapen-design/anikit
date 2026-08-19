@@ -276,10 +276,11 @@ onBeforeUnmount(() => {
         <InboxDiskSection v-if="isInbox && content.inboxDisk.length > 0" />
         <!-- "内容"副标题：无子文件夹（含档案）时隐藏（无需区分）；有子文件夹但无文件时同样隐藏（2026-07-24 用户定）。
              收件箱视口改题"已导入"（4.4）：无文件夹区块概念，只要有已导入内容就显示。
-             3.5 分组模式下恒显示（有内容即出）——分组标题是其子层级，区块折叠 = 全部组随折。
+             分组不再强制出内容标题（2026-08-19 复验定：无文件夹视图里"内容"与组标题叠着多余；
+             有文件夹/档案区块时保留——分隔文件夹区与内容区）。
              padding 统一 0（2026-08-08 用户定：仅目录树区块标题 left 8）；标题↔卡片间距 12（下方 translateY） -->
         <SectionHeader
-          v-if="items.length > 0 && (isInbox || gridSections !== null || content.stripFoldersFor(viewKey).length > 0 || content.stripArchivesFor(viewKey).length > 0)"
+          v-if="items.length > 0 && (isInbox || content.stripFoldersFor(viewKey).length > 0 || content.stripArchivesFor(viewKey).length > 0)"
           :title="isInbox ? '已导入' : '内容'"
           :count="items.length"
           v-model:open="assetsOpen"
@@ -346,11 +347,13 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
-    <!-- sticky 置顶分组标题（05_区块标题：滚过顶后停留，下一组接替顶走）；C1 实底盖卡片 -->
+    <!-- sticky 置顶分组标题（05_区块标题：滚过顶后停留，下一组接替顶走）；C1 实底盖卡片；
+         贴 viewport 顶（2026-08-19 复验：原 top=headerH+12 悬在视口中部截断首行卡片）；
+         列表模式让开钉顶列头（46+6=listExtra） -->
     <div
       v-if="stickyGroup && assetsOpen"
       class="sticky-group-header"
-      :style="{ top: `${headerH + 12 + listExtra}px`, transform: `translateY(${stickyGroup.shift}px)` }"
+      :style="{ top: `${listExtra}px`, transform: `translateY(${stickyGroup.shift}px)` }"
     >
       <SectionHeader
         group
