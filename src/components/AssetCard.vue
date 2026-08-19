@@ -195,15 +195,18 @@ const badge = computed(() => {
 const badgeColor = computed(() => formatBadgeColor(props.asset.ext, isSeq.value, isAnim.value));
 const displayName = computed(() => assetDisplayName(props.asset, ui.showExt));
 // 简介行内容按查看方式「显示简介」下拉分流（2026-08-19 接入；标签档占位禁用，待后端数据通道）：
-// 尺寸 = 音视频时长（mm:ss，5.1）/ 动图与其他按 w×h / 无尺寸回退格式角标文案；
-// 空值兜底（2026-08-19 用户定）：档内无数据（存量创建日期 null）回退文件大小——文件大小恒有
+// 尺寸 = 音视频时长（mm:ss，5.1）/ 动图与其他按 w×h；
+// 空值兜底（2026-08-19 用户定）：档内无数据一律回退文件大小（恒有）——存量创建日期 null、
+// 尺寸档无尺寸资源（fla 等；旧"回退格式角标文案"废除：角标/名称/简介三处重复同一格式词，信息浪费）
 const meta = computed(() => {
   if (ui.briefMode === "fileSize") return formatSize(props.asset.size);
   if (ui.briefMode === "createdAt")
     return props.asset.createdAt ? formatDetailDate(props.asset.createdAt) : formatSize(props.asset.size);
   if (ui.briefMode === "modifiedAt") return formatDetailDate(props.asset.modifiedAt);
   if (props.asset.duration != null && !isAnim.value) return formatDuration(props.asset.duration);
-  return props.asset.w != null && props.asset.h != null ? `${props.asset.w} x ${props.asset.h}` : badge.value;
+  return props.asset.w != null && props.asset.h != null
+    ? `${props.asset.w} x ${props.asset.h}`
+    : formatSize(props.asset.size);
 });
 </script>
 

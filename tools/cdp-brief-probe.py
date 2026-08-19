@@ -1,6 +1,7 @@
 # CDP 探针：3.5 二轮 · 显示简介接入实证（2026-08-19）
 #   S1 菜单结构：显示简介 picker = 尺寸/文件大小/创建日期/修改日期/标签 5 项，无「无显示」，标签 disabled
-#   S2 简介开（默认）：卡高 = thumb + 57；.meta 可见；图片卡 "1920 x 1080"；视频卡 "02:05"；无尺寸回退角标
+#   S2 简介开（默认）：卡高 = thumb + 57；.meta 可见；图片卡 "1920 x 1080"；视频卡 "02:05"；
+#      无尺寸卡回退文件大小（2026-08-19 用户定：全档空值兜底统一回退 formatSize，旧角标文案回退废除）
 #   S3 简介关：卡高减恰好 21；.meta 隐藏；.texts = 36；卡底与 .texts 底差 ≤ 1px；origin-badge 在名称行右侧
 #   S4 下拉分流：文件大小 "1.5 MB" / 创建日期 YYYY/MM/DD HH:mm（null 卡回退文件大小 "512 B"，
 #      2026-08-19 用户定：档内无数据回退文件大小，不显示 "—"）/ 修改日期 / 切回尺寸还原
@@ -31,7 +32,7 @@ SLEEP = 0.35
 
 # 桩：f1 角色（4 素材，全 origin=true，thumbPath null 显占位底色——不影响高度断言）。
 # AN-IMG 普通图（尺寸/大小/双时间非空）；AN-VID 视频 duration 125.4（→ 02:05）；
-# AN-FLA 无尺寸（w/h null + formatIcon → 简介回退角标 "FLA"）；
+# AN-FLA 无尺寸（w/h null + formatIcon → 尺寸档回退 formatSize(3145728) = "3.0 MB"）；
 # AN-OLD createdAt null（→ 创建日期档回退 formatSize(512) = "512 B"）。
 STUB = r"""
 const TREE = {
@@ -278,7 +279,7 @@ async def main():
             print("  meta:", m_img, "/", m_vid, "/", m_fla)
             check("S2c 图片卡 meta = 1920 x 1080", m_img == "1920 x 1080", repr(m_img))
             check("S2d 视频卡 meta = 02:05（duration 125.4）", m_vid == "02:05", repr(m_vid))
-            check("S2e 无尺寸卡回退角标 FLA", m_fla == "FLA", repr(m_fla))
+            check("S2e 无尺寸卡回退文件大小 3.0 MB", m_fla == "3.0 MB", repr(m_fla))
 
             # 简介开截图（关菜单后拍）
             await key("Escape", "Escape", 27)
