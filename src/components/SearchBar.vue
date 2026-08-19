@@ -1,9 +1,12 @@
 <script setup lang="ts">
-// 搜索框（1.2 重构，figma-css 01_主窗口 11648 搜索框段）：通栏 46 / C3 / 上边框 暗-悬停——
-// 搜索按钮 + 范围 chip + 占位文案（快捷键引导）+ 快捷键徽章组（/ 筛选 · // 搜索 · ~ 全局）+ 历史下拉按钮。
-// 3.6 一轮点亮分词搜索：输入即搜（防抖 150ms，search store → search_assets 命令），
-// 范围 chip 点击切默认范围（kbd 徽章样式，2026-08-19 用户定）/ `~` 前缀本条强制全局 / Ctrl+F 聚焦。
-// 搜索按钮与历史下拉无业务保持占位（`/` 筛选归 3.6 二轮）。
+// 搜索框（1.2 重构，figma-css 01_主窗口 11648 搜索框段）：通栏 / C3 / 上边框 暗-悬停。
+// 3.6 一轮点亮分词搜索（2026-08-19 用户定 tag 化交互）：
+// - 输入区 = chips + 内联草稿（交互口径同 TermChipsInput：空格/回车提交 chip、IME 守卫、
+//   空草稿 Backspace 删尾 chip、× 删、失焦提交草稿）；草稿未提交也即时参与搜索
+// - 前缀 tag：`~` →「~ 全局搜索」（全局范围，无范围按钮——tag 即范围）、`//` →「// 搜索」（显式分词，
+//   与直接输入等效）、`/` →「/ 筛选」（占位不参与搜索，3.6 二轮点亮）
+// - kbd 徽章组 = 未聚焦且无内容时的提示；聚焦或有内容隐藏、输入区贯穿（用户定，类 ctrl+f 提示口径）
+// - Ctrl+F 聚焦（useGlobalKeys → search.requestFocus）；搜索按钮 / 历史下拉无业务保持占位
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import AppIcon from "./AppIcon.vue";
 import { useSearchStore } from "../stores/search";
@@ -13,11 +16,14 @@ const props = defineProps<{ panelId: string; viewKey: string }>();
 const search = useSearchStore();
 const ui = useUiStore();
 
-// 初始回读（面板热重载 / 布局恢复残留 query 不丢字）；变更经防抖驱动后端搜索
-const text = ref(search.queryFor(props.panelId));
+// 初始回读（面板热重载 / 布局恢复残留不丢字）；chips 直接读 store（响应式数组引用）
+const draft = ref(search.draftFor(props.panelId));
 const inputRef = ref<HTMLInputElement>();
+const focused = ref(false);
 
-watch(text, (v) => search.setQuery(props.panelId, props.viewKey, v));
+const chips = computed(() => search.chipsFor(props.panelId));
+
+watch(draft, (v) => search.setDraft(props.panelId, props.viewKey, v));
 
 // 视图 / 递归开关变化：搜索保持并按新范围重搜（2026-08-19 定案）
 watch([() => props.viewKey, () => ui.showSubfolders], () => {
@@ -30,25 +36,66 @@ watch(
   () => {
     if (search.focusPanelId === props.panelId) {
       inputRef.value?.focus();
-      inputRef.value?.select();
     }
   },
 );
 
-// Esc = 清空并失焦（清空经 watch text → setQuery 即时退出搜索态）
-function onEsc(): void {
-  text.value = "";
-  inputRef.value?.blur();
+/** chip 显示文本：前缀 tag 带语义文案，关键字原样 */
+function chipText(c: string): string {
+  if (c === "~") return "~ 全局搜索";
+  if (c === "//") return "// 搜索";
+  if (c === "/") return "/ 筛选";
+  return c;
 }
 
-function onToggleScope(): void {
-  search.toggleGlobal(props.panelId, props.viewKey);
+/** 提交草稿为 chip（TermChipsInput 口径）：`~` / `//` 前缀剥落为独立 tag 后剩余为关键字
+   （`~人物` →「~ 全局搜索」+「人物」，可叠加 `~//人物`）；纯 `/` = 筛选占位 tag（3.6 二轮点亮） */
+function commit(): void {
+  let v = draft.value.trim();
+  if (!v) return;
+  draft.value = "";
+  for (;;) {
+    if (v.startsWith("//")) {
+      search.addChip(props.panelId, props.viewKey, "//");
+      v = v.slice(2).trimStart();
+    } else if (v.startsWith("~")) {
+      search.addChip(props.panelId, props.viewKey, "~");
+      v = v.slice(1).trimStart();
+    } else break;
+  }
+  if (v === "/") {
+    search.addChip(props.panelId, props.viewKey, "/");
+    return;
+  }
+  if (v) search.addChip(props.panelId, props.viewKey, v);
 }
 
-const chipLabel = computed(() => search.chipLabel(props.panelId, props.viewKey));
+function onKeydown(e: KeyboardEvent): void {
+  if (e.isComposing) return; // IME 组合期：回车/空格是选词，不提交
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    commit();
+    return;
+  }
+  if (e.key === "Backspace" && draft.value === "" && chips.value.length > 0) {
+    search.popChip(props.panelId, props.viewKey);
+    return;
+  }
+  // Esc = 清空全部（chips + 草稿）并失焦
+  if (e.key === "Escape") {
+    draft.value = "";
+    search.clear(props.panelId, props.viewKey);
+    inputRef.value?.blur();
+  }
+}
+
+function onBlur(): void {
+  focused.value = false;
+  commit(); // 失焦提交草稿（TermChipsInput 口径）
+}
 
 onMounted(() => {
-  // 热重载 / 布局恢复：残留 query 命中可能已失效，补搜一次恢复结果态
+  // 热重载 / 布局恢复：残留内容命中可能已失效，补搜一次恢复结果态
   search.rerun(props.panelId, props.viewKey);
 });
 
@@ -60,18 +107,27 @@ onBeforeUnmount(() => search.removePanel(props.panelId));
     <button class="search-btn" v-tip="'搜索'">
       <AppIcon name="search" :size="18" />
     </button>
-    <!-- 范围 chip（PRD 03_查找文件 01：搜索框左侧，点击与 ~ 前缀等效切换）；样式 = kbd 徽章（用户定） -->
-    <button class="kbd scope-chip" v-tip="'点击切换搜索范围'" @click="onToggleScope">
-      {{ chipLabel }}
-    </button>
-    <input
-      ref="inputRef"
-      v-model="text"
-      type="text"
-      placeholder="/ 筛选看板    // 分词搜索    ~ 搜索全局"
-      @keydown.esc="onEsc"
-    />
-    <div class="kbd-group">
+    <!-- 输入区（chips + 草稿）：点击空白聚焦草稿框 -->
+    <div class="chips-wrap" @click="inputRef?.focus()">
+      <span v-for="(c, i) in chips" :key="i" class="chip">
+        <span class="chip-text">{{ chipText(c) }}</span>
+        <button class="chip-del" v-tip="'删除'" @click.stop="search.removeChip(props.panelId, props.viewKey, c)">
+          <AppIcon name="clear" :size="12" />
+        </button>
+      </span>
+      <input
+        ref="inputRef"
+        v-model="draft"
+        class="draft-input"
+        type="text"
+        :placeholder="chips.length === 0 ? '/ 筛选看板    // 分词搜索    ~ 搜索全局' : ''"
+        @keydown="onKeydown"
+        @focus="focused = true"
+        @blur="onBlur"
+      />
+    </div>
+    <!-- 快捷键徽章组 = 未聚焦且无内容时的提示（聚焦 / 有内容隐藏，输入区贯穿） -->
+    <div v-if="!focused && chips.length === 0 && !draft" class="kbd-group">
       <span class="kbd">/ 筛选</span>
       <span class="kbd">// 搜索</span>
       <span class="kbd">~ 全局</span>
@@ -83,12 +139,15 @@ onBeforeUnmount(() => search.removePanel(props.panelId));
 </template>
 
 <style scoped>
-/* 总容器（figma 11648）：通栏 46 / padding 8 16 / 间距 6 / C3 / 上边框 暗-悬停 */
+/* 总容器（figma 11648）：通栏 min-height 46 / padding 8 16 / 间距 6 / C3 / 上边框 暗-悬停；
+   chips 换行时向上撑高（min-height，内容区 flex 自适应让位） */
 .search-bar {
   display: flex;
   align-items: center;
   gap: var(--space-6);
   padding: var(--space-8) var(--space-16);
+  min-height: 46px;
+  box-sizing: border-box;
   flex: none;
   background: var(--c3);
   border-top: 1px solid var(--line-hover);
@@ -115,15 +174,57 @@ onBeforeUnmount(() => search.removePanel(props.panelId));
 .rot {
   transform: rotate(90deg);
 }
-input {
+/* 输入区：chips + 草稿横排换行，点击任意处聚焦草稿框 */
+.chips-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
   flex: 1;
   min-width: 0;
+  cursor: text;
+}
+/* 已提交 chip（TermChipsInput 口径：品牌色底 + 1px 亮-选中 + 高亮字 + × 删） */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  height: 28px;
+  box-sizing: border-box;
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-6);
+  background: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--line-active);
+  color: var(--text-highlight);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  white-space: nowrap;
+  flex: none;
+}
+.chip-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-highlight);
+  opacity: 0.7;
+  transition: opacity 0.12s ease;
+}
+.chip-del:hover {
+  opacity: 1;
+}
+/* 草稿输入：裸形（透明底无边框），高度与 chip 行平齐 */
+.draft-input {
+  flex: 1;
+  min-width: 72px;
+  height: 28px;
+  background: transparent;
   color: var(--text-normal);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  background: transparent;
 }
-input::placeholder {
+.draft-input::placeholder {
   color: var(--text-faint);
 }
 /* 快捷键徽章组（figma 11808 等）：高 25 / padding 4 8 / C3 + 暗-悬停边框 / 圆角 6 / 极淡档 */
@@ -146,15 +247,5 @@ input::placeholder {
   line-height: var(--text-label-line);
   color: var(--text-faint);
   white-space: nowrap;
-}
-/* 范围 chip = kbd 徽章可点击形态（2026-08-19 用户定样式参照）；文案常态档可辨，hover 同 search-btn 罩层 */
-.scope-chip {
-  flex: none;
-  color: var(--text-label);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.scope-chip:hover {
-  background: var(--line-hover);
 }
 </style>

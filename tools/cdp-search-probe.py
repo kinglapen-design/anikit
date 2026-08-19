@@ -270,8 +270,9 @@ async def main():
                 return await ev("document.querySelector('.search-bar input') !== null")
 
             async def set_input(text):
-                """清空后插入（value 赋值 + input 事件驱动 v-model），随后轮询等待防抖 + invoke 完成
+                """先清空（chips + 草稿，Esc 口径）再设草稿文本，随后轮询等待防抖 + invoke 完成
                 （headless 下 setTimeout 防抖触发延迟漂移——固定 sleep 断言不可靠，2026-08-19 复验实证）"""
+                await clear_all()
                 await ev(f"""
                   (() => {{ const i = document.querySelector('.search-bar input');
                     i.focus(); i.value = {json.dumps(text)}; i.dispatchEvent(new Event('input', {{ bubbles: true }})); return i.value; }})()
@@ -283,11 +284,12 @@ async def main():
                         if last == text:
                             break
                         await asyncio.sleep(0.2)
-                    await asyncio.sleep(0.4)  # hits 写入后渲染一拍
+                    await asyncio.sleep(1.0)  # hits 写入 + 渲染（headless 偶发慢，0.4s 不够——S8 实测）
                 else:
                     await asyncio.sleep(0.5)
 
-            async def clear_query():
+            async def clear_draft():
+                """只清草稿（不动 chips）"""
                 await ev("""
                   (() => { const i = document.querySelector('.search-bar input');
                     i.focus(); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()
@@ -300,8 +302,45 @@ async def main():
             async def archive_names():
                 return await ev("[...document.querySelectorAll('.archive-card .archive-name')].map((el) => el.textContent.trim())")
 
-            async def chip_label():
-                return await ev("document.querySelector('.search-bar .scope-chip')?.textContent.trim() ?? null")
+            # tag 化（2026-08-19 二轮）：chips 区读 .chip 文本；范围 = `~` tag（无按钮）
+            async def chips_texts():
+                return await ev("[...document.querySelectorAll('.search-bar .chip .chip-text')].map((el) => el.textContent.trim())")
+
+            async def kbd_visible():
+                return await ev("document.querySelector('.search-bar .kbd-group') !== null")
+
+            async def press_key(key, code, vk):
+                await send(ws, "Input.dispatchKeyEvent", {"type": "keyDown", "key": key, "code": code, "windowsVirtualKeyCode": vk}, session=sess)
+                await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": key, "code": code, "windowsVirtualKeyCode": vk}, session=sess)
+                await asyncio.sleep(0.3)
+
+            async def press_space():
+                await press_key(" ", "Space", 32)
+
+            async def press_backspace():
+                await press_key("Backspace", "Backspace", 8)
+
+            # Esc 清空全部（chips + 草稿）并失焦（SearchBar 口径）
+            async def clear_all():
+                await ev("(() => { const i = document.querySelector('.search-bar input'); i.focus(); return true; })()")
+                await asyncio.sleep(0.1)
+                await press_key("Escape", "Escape", 27)
+                await asyncio.sleep(0.4)
+
+            # 追加草稿（不清空现有内容）
+            async def append_input(text, wait_query=None):
+                await ev(f"""
+                  (() => {{ const i = document.querySelector('.search-bar input');
+                    i.focus(); i.value += {json.dumps(text)}; i.dispatchEvent(new Event('input', {{ bubbles: true }})); return i.value; }})()
+                """)
+                if wait_query is not None:
+                    deadline = time.time() + 5
+                    while time.time() < deadline:
+                        last = await ev("window.__calls.search_assets.length ? window.__calls.search_assets.at(-1).query : null")
+                        if last == wait_query:
+                            break
+                        await asyncio.sleep(0.2)
+                await asyncio.sleep(0.5)
 
             async def tree_click(fid):
                 pos = await ev(f"""
@@ -328,16 +367,31 @@ async def main():
                 print("搜索框未渲染，探针无法执行")
                 return 2
 
-            # ── S1：AND 分词 ──
+            # ── S1：AND 分词（草稿即时参与）──
             await set_input("人物 走路")
             cards = await card_names()
             print("S1 「人物 走路」:", cards)
             check("S1 AND 分词命中两卡", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
 
-            # ── S2：清空恢复 ──
-            await clear_query()
+            # ── S1b：空格提交成 chip（tag 化）──
+            await clear_all()
+            await append_input("人物", wait_query="人物")
+            await press_space()
+            chips = await chips_texts()
+            check("S1b-1 空格提交「人物」chip", chips == ["人物"], str(chips))
+            await append_input("走路")
             cards = await card_names()
-            check("S2 清空恢复 6 卡", bool(cards) and len(cards) == 6, str(cards))
+            check("S1b-2 chip+草稿 AND 命中两卡", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
+            await press_space()
+            chips = await chips_texts()
+            check("S1b-3 第二词提交成 chip", chips == ["人物", "走路"], str(chips))
+            cards = await card_names()
+            check("S1b-4 两 chips 命中保持", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
+
+            # ── S2：Esc 清空恢复 ──
+            await clear_all()
+            cards = await card_names()
+            check("S2 Esc 清空恢复 6 卡", bool(cards) and len(cards) == 6, str(cards))
 
             # ── S3：扩展名大小写不敏感 ──
             await set_input("GIF")
@@ -366,44 +420,46 @@ async def main():
             archs = await archive_names()
             check("S6b quick 视图不出档案区", archs == [], str(archs))
 
-            # ── S7：f1 视图 chip + 递归口径 + 切全局 ──
-            await clear_query()
+            # ── S7：f1 视图 tag 化范围（~ tag 生成 / 生效 / 删除）──
+            await clear_all()
             await tree_click("f1")
-            label = await chip_label()
-            check("S7a f1 视图 chip =「当前目录」", label == "当前目录", str(label))
+            chips = await chips_texts()
+            check("S7a f1 视图无前缀 tag", chips == [], str(chips))
             # 递归显示默认开（ui.showSubfolders）→ 当前目录搜索含后代（跟随递归开关口径）
             await set_input("场景")
             cards = await card_names()
             check("S7b 递归开：当前目录搜「场景」命中后代", cards == ["场景-日.png"], str(cards))
-            # chip 点击切全局
-            chip_pos = await ev("""
-              (() => { const el = document.querySelector('.search-bar .scope-chip');
-                const b = el.getBoundingClientRect();
-                return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }; })()
-            """)
-            await click(chip_pos["x"], chip_pos["y"])
-            await asyncio.sleep(0.6)
+            # 前缀剥落：改输「~场景」空格 →「~ 全局搜索」tag +「场景」chip
+            await set_input("~场景")
+            await press_space()
+            chips = await chips_texts()
+            check("S7c 「~场景」空格剥落 = 全局 tag + 关键字 chip", chips == ["~ 全局搜索", "场景"], str(chips))
             cards = await card_names()
-            label = await chip_label()
-            check("S7c chip 切全局后仍命中（全库唯一）", cards == ["场景-日.png"], str(cards))
-            check("S7d chip 文案变「全局」", label == "全局", str(label))
-            # 切回当前目录（供后续场景）
-            await click(chip_pos["x"], chip_pos["y"])
-            await asyncio.sleep(0.5)
-            label = await chip_label()
-            check("S7e chip 切回「当前目录」", label == "当前目录", str(label))
+            check("S7d ~ tag 全局搜索保持命中", cards == ["场景-日.png"], str(cards))
+            # 空草稿 Backspace 删尾 chip：先删「场景」（回当前目录+无 tag），再删「~ 全局搜索」
+            await press_backspace()
+            chips = await chips_texts()
+            check("S7e Backspace 删尾 chip（场景）", chips == ["~ 全局搜索"], str(chips))
+            await press_backspace()
+            chips = await chips_texts()
+            check("S7f 再删「~ 全局搜索」回当前范围", chips == [], str(chips))
+            cards = await card_names()
+            check("S7g 无 tag 无关键字 = 退出搜索态（f1 递归 5 卡）", bool(cards) and len(cards) == 5, str(cards))
 
-            # ── S8：~ 前缀强制全局 ──
+            # ── S8：草稿 ~ 前缀即时全局（未提交也生效）──
             await set_input("~场景")
             cards = await card_names()
-            label = await chip_label()
-            check("S8a 「~场景」强制全局命中", cards == ["场景-日.png"], str(cards))
-            check("S8b chip 显示「全局」（前缀生效）", label == "全局", str(label))
+            check("S8 草稿「~场景」即时全局命中", cards == ["场景-日.png"], str(cards))
 
-            # ── S9：// 前缀 ──
+            # ── S9：// 前缀（草稿 + tag 两态）──
             await set_input("//人物")
             cards = await card_names()
-            check("S9 「//人物」显式分词命中两卡", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
+            check("S9a 草稿「//人物」显式分词命中两卡", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
+            await press_space()
+            chips = await chips_texts()
+            check("S9b 「//人物」空格剥落 = 搜索 tag + 关键字 chip", chips == ["// 搜索", "人物"], str(chips))
+            cards = await card_names()
+            check("S9c 命中保持", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
 
             # ── S10：档案名命中 → 档案区 + 档案内素材（递归开：fa 在范围集内）──
             await set_input("分镜")
@@ -420,7 +476,7 @@ async def main():
             check("S11 徽标「进行中」命中档案区", archs == ["分镜档案"] and cards == [], f"cards={cards} archs={archs}")
 
             # ── S12：分组平铺（先关递归——递归口径恒不分组，3.5 复验定案）──
-            await clear_query()
+            await clear_all()
             cb_pos = await ev("""
               (() => { const el = document.querySelector('.recursive-cb');
                 if (!el) return null;
@@ -439,7 +495,7 @@ async def main():
             cards = await card_names()
             check("S12b 搜索态组标题消失（平铺）", grp2 == 0, f"group-headers={grp2}")
             check("S12c 搜索态命中保持", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
-            await clear_query()
+            await clear_all()
             grp3 = await ev("document.querySelectorAll('.group-header').length")
             check("S12d 清空后分组恢复", bool(grp3) and grp3 >= 1, f"group-headers={grp3}")
 
@@ -459,12 +515,40 @@ async def main():
             await set_input("~人物")
             cards = await card_names()
             check("S14b 空文件夹 ~ 全局命中视口外素材", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
-            label = await chip_label()
-            check("S14c chip 显示「全局」", label == "全局", str(label))
-            await clear_query()
-            await tree_click("f1")  # 回 f1 供截图
+            await press_space()
+            chips = await chips_texts()
+            check("S14c 空格剥落 = 全局 tag + 关键字 chip", chips == ["~ 全局搜索", "人物"], str(chips))
 
-            # 截图留档（搜索态「分镜」：档案区 + 素材 + chip）
+            # ── S15：/ 筛选占位 tag（3.6 二轮点亮；不参与搜索）──
+            await clear_all()
+            await tree_click("f1")
+            await set_input("/")
+            await press_space()
+            chips = await chips_texts()
+            check("S15a 「/」空格生成「/ 筛选」占位 tag", chips == ["/ 筛选"], str(chips))
+            await append_input("人物", wait_query="人物")
+            cards = await card_names()
+            check("S15b 占位 tag 不参与搜索（人物正常命中）", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
+
+            # ── S16：kbd 徽章 = 未聚焦且无内容时的提示（聚焦 / 有内容隐藏）──
+            await clear_all()  # 含 blur
+            vis0 = await kbd_visible()
+            check("S16a 未聚焦且无内容：徽章组显示", vis0 is True, str(vis0))
+            await ev("document.querySelector('.search-bar input').focus(); true")
+            await asyncio.sleep(0.2)
+            vis1 = await kbd_visible()
+            check("S16b 聚焦后徽章隐藏", vis1 is False, str(vis1))
+            await append_input("人")
+            await ev("document.activeElement?.blur(); true")
+            await asyncio.sleep(0.5)  # blur 触发 commit（失焦提交草稿成 chip）
+            vis2 = await kbd_visible()
+            chips = await chips_texts()
+            check("S16c 失焦提交草稿成 chip 且徽章保持隐藏（有内容）", vis2 is False and chips == ["人"], f"vis={vis2} chips={chips}")
+
+            await clear_all()
+            await tree_click("f1")  # 回 f1 供截图（递归此时已关——先开回）
+
+            # 截图留档（搜索态「分镜」：档案区 + 素材 + chips）
             await set_input("分镜")
             shot = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
             import base64
