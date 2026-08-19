@@ -1,0 +1,32 @@
+[package]
+name = "decode-shell"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+name = "decode_shell_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.3", features = [] }
+ffmpeg-next = "8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# WS 通道：独立 ws server 推二进制帧
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+
+[patch.crates-io]
+ffmpeg-next = { path = "../patches/ffmpeg-next" }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2

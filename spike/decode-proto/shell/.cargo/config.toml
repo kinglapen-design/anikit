@@ -1,0 +1,4 @@
+# 与上级 .cargo/config.toml 相同口径（相对本文件父目录 spike/decode-proto/shell/）
+[env]
+LIBCLANG_PATH = { value = "../../../tools/libclang/clang/native", relative = true }
+FFMPEG_DIR = { value = "../vendor/ffmpeg", relative = true }

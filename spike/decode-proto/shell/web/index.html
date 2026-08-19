@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>decode-shell spike</title>
+<style>
+  body { background: #111; color: #eee; font: 12px monospace; margin: 8px; }
+  #stats { position: sticky; top: 0; background: #222; padding: 6px 10px; margin-bottom: 8px; font-size: 14px; }
+  canvas { width: 160px; height: 90px; background: #000; margin: 2px; }
+</style>
+</head>
+<body>
+<div id="stats">启动中…</div>
+<div id="grid"></div>
+<script>
+const qs = new URLSearchParams(location.search);
+const LANES = +(qs.get('lanes') || 16);
+const CH = qs.get('ch') || 'ws';
+const stats = document.getElementById('stats');
+const grid = document.getElementById('grid');
+const invoke = window.__TAURI__.core.invoke;
+
+function parseFrame(buf) {
+  if (buf instanceof Uint8Array) buf = buf.buffer;
+  const dv = new DataView(buf);
+  const w = dv.getUint32(0, true), h = dv.getUint32(4, true);
+  const seq = Number(dv.getBigUint64(8, true));
+  return { w, h, seq, rgba: new Uint8ClampedArray(buf, 16) };
+}
+
+const cards = [];
+for (let i = 0; i < LANES; i++) {
+  const c = document.createElement('canvas');
+  grid.appendChild(c);
+  cards.push({ c, ctx: c.getContext('2d'), seq: 0, frames: 0, lane: i });
+}
+
+function draw(card, f) {
+  if (card.c.width !== f.w || card.c.height !== f.h) { card.c.width = f.w; card.c.height = f.h; }
+  card.ctx.putImageData(new ImageData(f.rgba, f.w, f.h), 0, 0);
+  card.seq = f.seq;
+  card.frames++;
+}
+
+async function pullLoop(card) {
+  for (;;) {
+    try {
+      let buf;
+      if (CH === 'invoke') {
+        buf = await invoke('pull_frame', { lane: card.lane, afterSeq: card.seq });
+      } else {
+        const r = await fetch(`http://frame.localhost/${card.lane}?after=${card.seq}`);
+        buf = await r.arrayBuffer();
+      }
+      const f = parseFrame(buf);
+      if (f.seq > card.seq) draw(card, f);
+    } catch (e) {
+      console.error(e);
+      await new Promise(r => setTimeout(r, 300));
+    }
+  }
+}
+
+if (CH === 'ws') {
+  cards.forEach(card => {
+    const ws = new WebSocket(`ws://127.0.0.1:9357/${card.lane}`);
+    ws.binaryType = 'arraybuffer';
+    ws.onmessage = ev => {
+      const f = parseFrame(ev.data);
+      if (f.seq > card.seq) draw(card, f);
+    };
+    ws.onerror = e => console.error('ws err lane', card.lane, e);
+  });
+} else {
+  cards.forEach(card => pullLoop(card));
+}
+
+setInterval(() => {
+  const total = cards.reduce((s, c) => s + c.frames, 0);
+  stats.textContent = `ch=${CH} lanes=${LANES}  总fps=${total}  每路=${(total / LANES).toFixed(1)}`;
+  cards.forEach(c => c.frames = 0);
+}, 1000);
+</script>
+</body>
+</html>

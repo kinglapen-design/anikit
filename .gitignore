@@ -14,6 +14,14 @@ __pycache__/
 
 # spike 输出（剪贴板数据等，可能含隐私）
 spike/**/out/
+# spike 工具链与依赖（ffmpeg dev 库、cargo 构建产物，tools/fetch 脚本可重建）
+spike/**/vendor/
+spike/**/target/
+# spike 测试素材（二进制，fetch/生成脚本可重建）
+spike/**/testdata/
+
+# 编译期工具链（pip libclang，阶段四 ffmpeg-next 的 bindgen 依赖）
+tools/libclang/
 
 # 系统
 .DS_Store

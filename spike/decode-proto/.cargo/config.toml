@@ -1,0 +1,6 @@
+# 编译期环境（relative = 相对本文件所在目录的父目录，即 spike/decode-proto/）
+# libclang：ffmpeg-sys-next 的 bindgen 依赖（tools/libclang = pip install --target，重装系统不影响）
+# FFMPEG_DIR：BtbN lgpl-shared dev 库（vendor/ffmpeg，fetch 脚本可重建）
+[env]
+LIBCLANG_PATH = { value = "../../tools/libclang/clang/native", relative = true }
+FFMPEG_DIR = { value = "vendor/ffmpeg", relative = true }

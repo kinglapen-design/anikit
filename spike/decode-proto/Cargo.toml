@@ -1,0 +1,25 @@
+[package]
+name = "decode-proto"
+version = "0.1.0"
+edition = "2021"
+
+# 显式隔离：防被上层目录的 workspace 吞并（spike 纪律：不进主线）
+[workspace]
+
+[dependencies]
+ffmpeg-next = "8"
+
+# spike 本地补丁（2026-08-20）：ffmpeg-next 8.1.0 的 EXIF frame side data 门控门槛
+#（avcodec minor>=28 才开 ffmpeg_8_1）滞后于实际合入时间（avutil 60.10 / avcodec 62.13 已含
+# AV_FRAME_DATA_EXIF）→ bindgen 产物含枚举但 arm 被 cfg 掉，match 缺臂编译失败。
+# 补丁 = 本副本 src/util/frame/side_data.rs 三处 cfg 由 ffmpeg_8_1 改 ffmpeg_8_0（仅此文件，
+# 其余 8_1 门控项在本头文件不存在，保持原样）。
+[patch.crates-io]
+ffmpeg-next = { path = "patches/ffmpeg-next" }
+
+# 与主仓 src-tauri 同口径：纯 debug 下解码慢 10-30 倍（2026-07-26 实测教训）
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
