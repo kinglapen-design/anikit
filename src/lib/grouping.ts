@@ -140,8 +140,10 @@ export interface GroupSection<T> {
 }
 
 /**
- * 列表分组：返回 null = 不分组（无规则配置）；否则 = 未分组（在头，非空才出）+ 各组（定义序，空组不出）。
+ * 列表分组：返回 null = 不分组；否则 = 未分组（在头，非空才出）+ 各组（定义序，空组不出）。
  * 组内保持输入流相对序（stable——新增区置顶 / 排序键效果自然带入）。
+ * 两种 null 情形：① 无规则配置；② 没有任何组命中（只剩"未分组"一段——2026-08-19 复验定案：
+ * 0 命中组仍在管理窗口可见可编，但内容区不挂"未分组"孤标题，视觉回到平铺）。
  */
 export function groupPlacements<T extends PlacementView>(list: T[], groups: readonly GroupDef[] | null | undefined): GroupSection<T>[] | null {
   if (!groups || groups.length === 0) return null;
@@ -163,5 +165,5 @@ export function groupPlacements<T extends PlacementView>(list: T[], groups: read
     const items = byGroup.get(g.id);
     if (items && items.length > 0) out.push({ groupId: g.id, name: g.name, items });
   }
-  return out;
+  return out.some((s) => s.groupId !== null) ? out : null;
 }

@@ -446,10 +446,12 @@ export const useContentStore = defineStore("content", {
       };
     },
     // 视口分组规则（3.5 二轮 / PRD 02-04）：仅文件夹/档案视图（folder: 前缀）有配置位；
-    // 快速访问恒 null（无分组，2026-08-19 用户定）
+    // 快速访问恒 null（无分组，2026-08-19 用户定）；递归显示开启时恒 null（递归不分组，
+    // 2026-08-19 复验定案：配置仅对直接子项生效——递归下为后代素材建的组在非递归视图成幽灵配置）
     folderGroupsFor(state) {
       return (viewKey: string): import("../lib/grouping").GroupDef[] | null => {
         if (!viewKey.startsWith("folder:")) return null;
+        if (useUiStore().showSubfolders) return null;
         const g = findFolder(state.folders, viewKey.slice(7))?.groups;
         return g && g.length > 0 ? g : null;
       };

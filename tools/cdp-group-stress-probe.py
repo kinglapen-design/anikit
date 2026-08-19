@@ -68,7 +68,7 @@ window.__TAURI_INTERNALS__ = {
   invoke: (cmd, args) => {
     const R = {
       get_current_library: { name: "测试库", path: "E:/test-lib", assetCount: 36, folderCount: 3 },
-      get_ui_settings: {},
+      get_ui_settings: { showSubfolders: false }, // 2026-08-19 定案：递归不分组——探针分组流程须非递归态
       list_folder_tree: JSON.parse(JSON.stringify(TREE)),
       list_placements: JSON.parse(JSON.stringify(PLACEMENTS)),
       list_recycle: [], list_recent_assets: [], list_recent_libraries: [],
@@ -377,17 +377,23 @@ async def main():
                 await asyncio.sleep(0.2)
             check("M1 点树 f2 → 1s 内选中切换", switched, f"耗时 {round((time.perf_counter() - t0) * 1000)}ms")
 
-            # 回 f1 切递归开关：卡片数应变化（90 → 60 直项）
+            # 回 f1 切递归开关：递归开 = 分组消失 + 管理钮禁用（2026-08-19 定案递归不分组），关 = 恢复
             await click_js("document.querySelector('.tree-item[data-folder-id=\"f1\"]')", "回 f1")
             await asyncio.sleep(0.5)
-            await click_js("document.querySelector('.recursive-cb input') ?? document.querySelector('.recursive-cb')", "递归开关")
+            gh_before = await ev("document.querySelectorAll('.group-header').length")
+            await click_js("document.querySelector('.recursive-cb input') ?? document.querySelector('.recursive-cb')", "递归开关开")
             await asyncio.sleep(0.8)
-            rec_off = await ev("window.__lastCards = document.querySelectorAll('.asset-card').length")
-            await click_js("document.querySelector('.recursive-cb input') ?? document.querySelector('.recursive-cb')", "递归开关还原")
+            gh_rec = await ev("document.querySelectorAll('.group-header').length")
+            cards_rec = await ev("document.querySelectorAll('.asset-card').length")
+            gm_dis = await ev("(() => { const b = [...document.querySelectorAll('.panel-toolbar .btn-group button.icon-btn')]; const gm = b[b.length - 2]; return gm?.disabled ?? null; })()")
+            await click_js("document.querySelector('.recursive-cb input') ?? document.querySelector('.recursive-cb')", "递归开关关")
             await asyncio.sleep(0.8)
-            rec_on = await ev("document.querySelectorAll('.asset-card').length")
-            print(f"  递归关卡片 {rec_off} / 递归开卡片 {rec_on}")
-            check("M2 递归开关可点且内容区随之变化", rec_off != rec_on, f"off={rec_off} on={rec_on}")
+            gh_back = await ev("document.querySelectorAll('.group-header').length")
+            print(f"  组标题：基态 {gh_before} / 递归开 {gh_rec}（卡片 {cards_rec}，管理钮 disabled={gm_dis}）/ 递归关 {gh_back}")
+            check("M2 递归开 = 分组消失+管理钮禁用，关 = 恢复",
+                  bool(gh_before) and gh_before > 0 and gh_rec == 0 and bool(cards_rec) and cards_rec > 0
+                  and gm_dis is True and gh_back == gh_before,
+                  f"{gh_before} → {gh_rec} → {gh_back}")
 
             # 趋势判定：后 5 轮均值 vs 前 5 轮均值
             if len(rounds_ms) >= 10:

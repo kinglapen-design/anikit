@@ -66,7 +66,7 @@ window.__TAURI_INTERNALS__ = {
   invoke: (cmd, args) => {
     const R = {
       get_current_library: { name: "测试库", path: "E:/test-lib", assetCount: 4, folderCount: 2 },
-      get_ui_settings: {},
+      get_ui_settings: { showSubfolders: false }, // 2026-08-19 定案：递归不分组——探针分组流程须非递归态
       list_folder_tree: JSON.parse(JSON.stringify(TREE)),
       list_placements: JSON.parse(JSON.stringify(PLACEMENTS)),
       list_recycle: [], list_recent_assets: [], list_recent_libraries: [],
@@ -591,6 +591,83 @@ async def main():
             with open(SHOT, "wb") as f:
                 f.write(base64.b64decode(shot["result"]["data"]))
             print("截图:", SHOT)
+
+            # ── S11：递归显示 = 不分组（2026-08-19 复验定案）：开递归组标题消失 + 管理钮禁用；关恢复 ──
+            print("S11 递归不分组")
+            # S4 滚动过 800——先滚回顶让递归开关（FolderStrip 头部）进视口
+            await send(ws, "Input.dispatchMouseEvent", {
+                "type": "mouseWheel", "x": 700, "y": 500, "deltaX": 0, "deltaY": -2000,
+            }, session=sess)
+            await asyncio.sleep(0.5)
+            gh_base = await ev("document.querySelectorAll('.group-header').length")
+            if await click_sel(".recursive-cb input", "递归开关开") or await click_sel(".recursive-cb", "递归开关开"):
+                await asyncio.sleep(0.8)
+                gh_rec = await ev("document.querySelectorAll('.group-header').length")
+                cards_rec = await ev("document.querySelectorAll('.asset-card').length")
+                gm_dis = await ev("(() => { const b = [...document.querySelectorAll('.panel-toolbar .btn-group button.icon-btn')]; return b[b.length - 2]?.disabled ?? null; })()")
+                print(f"  递归开：组标题 {gh_base} → {gh_rec}，卡片 {cards_rec}，管理钮 disabled={gm_dis}")
+                check("S11 递归开 = 组标题消失 + 管理钮禁用（内容仍在）",
+                      gh_base == 3 and gh_rec == 0 and cards_rec == 4 and gm_dis is True,
+                      f"{gh_base}→{gh_rec} cards={cards_rec} disabled={gm_dis}")
+                if await click_sel(".recursive-cb input", "递归开关关") or await click_sel(".recursive-cb", "递归开关关"):
+                    await asyncio.sleep(0.8)
+                    gh_back = await ev("document.querySelectorAll('.group-header').length")
+                    check("S11b 递归关 = 组标题恢复", gh_back == 3, str(gh_back))
+            else:
+                check("S11 递归开关可见", False, "未找到")
+
+            # ── S12：0 命中组 = 平铺（不挂"未分组"孤标题，2026-08-19 复验定案） ──
+            # 组块 0（动图组）规则改「名称」输 zzz（0 命中）+ 删组块 1（图片组）→ 确认 → 无组标题、卡片平铺
+            print("S12 0 命中组平铺")
+            await click_sel(".panel-toolbar .btn-group .icon-btn:nth-last-child(2)", "分组管理钮")
+            await asyncio.sleep(0.6)
+            if await ev("!!document.querySelector('.group-manage')"):
+                await pick_kind(0, "名称")
+                await asyncio.sleep(0.3)
+                named = await ev("""
+                  (() => {
+                    const b = document.querySelectorAll('.group-manage .group-block')[0];
+                    const inp = b?.querySelector('.rule-row .name-input input');
+                    if (!inp) return false;
+                    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                    setter.call(inp, 'zzz');
+                    inp.dispatchEvent(new Event('input', { bubbles: true }));
+                    return true;
+                  })()
+                """)
+                print("  名称规则输入:", named)
+                # 删组块 1（图片组）
+                pos = await ev("""
+                  (() => {
+                    const b = document.querySelectorAll('.group-manage .group-block')[1];
+                    const btn = b?.querySelector('.icon-btn.delete-red');
+                    if (!btn) return null;
+                    const r = btn.getBoundingClientRect();
+                    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+                  })()
+                """)
+                if pos:
+                    await click(pos["x"], pos["y"])
+                pos = await ev("""
+                  (() => {
+                    const btns = [...(document.querySelector('.group-manage')?.querySelectorAll('.actions .app-btn') ?? [])];
+                    const c = btns.find((el) => el.textContent.trim() === '确认');
+                    if (!c) return null;
+                    const r = c.getBoundingClientRect();
+                    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+                  })()
+                """)
+                if pos:
+                    await click(pos["x"], pos["y"])
+                await asyncio.sleep(0.6)
+                gh_none = await ev("document.querySelectorAll('.group-header').length")
+                cards_flat = await ev("[...document.querySelectorAll('.asset-card .title')].map((el) => el.textContent.trim())")
+                print("  0 命中后组标题:", gh_none, "卡片:", cards_flat)
+                check("S12 0 命中组 = 无组标题平铺（4 卡全在）",
+                      gh_none == 0 and cards_flat == ["图一.png", "动图.gif", "文本文档.md", "图2.png"],
+                      f"headers={gh_none} cards={cards_flat}")
+            else:
+                check("S12 管理弹窗打开", False, "未打开")
     finally:
         edge.terminate()
         if spawned:

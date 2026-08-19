@@ -46,8 +46,9 @@ function openViewMenu(e: MouseEvent): void {
 }
 
 // 分组管理（3.5 二轮点亮）：仅文件夹/档案视口可用（快速访问无分组——规则无存放节点，用户定）；
+// 递归显示时禁用（2026-08-19 复验定案：递归不分组——配置仅对直接子项生效）；
 // 打开时锁定当前文件夹 id（弹窗打开后切视口不漂移）
-const canGroup = computed(() => props.viewKey.startsWith("folder:"));
+const canGroup = computed(() => props.viewKey.startsWith("folder:") && !ui.showSubfolders);
 function openGroupManage(): void {
   if (!canGroup.value) return;
   ui.groupDialogFolder = props.viewKey.slice(7);
@@ -82,7 +83,12 @@ function openGroupManage(): void {
         <IconButton name="add-file-link" title="添加文件链接" disabled />
         <IconButton name="thumbnail" title="缩略图" disabled />
         <IconButton name="ai-tools" title="AI 工具集" disabled />
-        <IconButton name="group-manage" title="分组管理" :disabled="!canGroup" @click="openGroupManage" />
+        <IconButton
+          name="group-manage"
+          :title="viewKey.startsWith('folder:') && ui.showSubfolders ? '分组管理（递归显示时不分组）' : '分组管理'"
+          :disabled="!canGroup"
+          @click="openGroupManage"
+        />
         <span ref="viewBtnRef" style="display: contents">
           <IconButton name="view-options" title="查看方式" @click="openViewMenu" />
         </span>
