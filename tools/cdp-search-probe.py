@@ -46,6 +46,7 @@ const TREE = {
         { id: "f2", name: "走路参考", count: 1, children: [] },
         { id: "fa", name: "分镜档案", kind: "archive", count: 1, children: [] },
       ] },
+    { id: "f3", name: "空文件夹", count: 0, children: [] },
   ],
 };
 const mk = (assetId, folderId, name, ext) => ({
@@ -269,12 +270,22 @@ async def main():
                 return await ev("document.querySelector('.search-bar input') !== null")
 
             async def set_input(text):
-                """清空后插入（value 赋值 + input 事件驱动 v-model；insertText 追加不可靠）"""
+                """清空后插入（value 赋值 + input 事件驱动 v-model），随后轮询等待防抖 + invoke 完成
+                （headless 下 setTimeout 防抖触发延迟漂移——固定 sleep 断言不可靠，2026-08-19 复验实证）"""
                 await ev(f"""
                   (() => {{ const i = document.querySelector('.search-bar input');
                     i.focus(); i.value = {json.dumps(text)}; i.dispatchEvent(new Event('input', {{ bubbles: true }})); return i.value; }})()
                 """)
-                await asyncio.sleep(0.7)  # 防抖 150ms + invoke 往返
+                if text.strip():
+                    deadline = time.time() + 5
+                    while time.time() < deadline:
+                        last = await ev("window.__calls.search_assets.length ? window.__calls.search_assets.at(-1).query : null")
+                        if last == text:
+                            break
+                        await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.4)  # hits 写入后渲染一拍
+                else:
+                    await asyncio.sleep(0.5)
 
             async def clear_query():
                 await ev("""
@@ -439,6 +450,19 @@ async def main():
             await asyncio.sleep(0.3)
             focused = await ev("document.activeElement === document.querySelector('.search-bar input')")
             check("S13 Ctrl+F 聚焦搜索框", focused is True, str(focused))
+
+            # ── S14：空文件夹视图 + ~ 全局搜命中视口外素材（2026-08-19 复验修复回归钉：
+            #    原前端过滤基底恒取本视口，空基底把全库命中键滤光）──
+            await tree_click("f3")
+            cards = await card_names()
+            check("S14a 空文件夹视口零卡", cards == [], str(cards))
+            await set_input("~人物")
+            cards = await card_names()
+            check("S14b 空文件夹 ~ 全局命中视口外素材", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
+            label = await chip_label()
+            check("S14c chip 显示「全局」", label == "全局", str(label))
+            await clear_query()
+            await tree_click("f1")  # 回 f1 供截图
 
             # 截图留档（搜索态「分镜」：档案区 + 素材 + chip）
             await set_input("分镜")

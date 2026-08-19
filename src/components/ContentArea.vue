@@ -44,12 +44,16 @@ onBeforeUnmount(() => disposeActive.dispose());
 // 当前视口资源（"全部"= 全部 Placement；文件夹 = 该文件夹直接 Placement，
 // 递归显示开关 ui.showSubfolders 打开时含全部后代文件夹，2026-08-10 接入）。
 // 3.6 搜索态（用户定：结果替换素材区，清空恢复；排序由 placementsFor 带入保持生效）：
-// placementsFor 已含范围 + 排序，命中键过滤叠加即可（recent / recycle 视图键同口径天然兼容）
+// 命中键过滤叠加在范围基底上——全局范围（chip / ~ 前缀）基底 = 全库（quick:all 不过滤即全量，
+// 回收站本就不在 placements 内），当前范围基底 = 本视口（placementsFor 已含递归 / quick 口径）。
+//（复验修复：原恒取本视口基底——空文件夹全局搜索时命中键在基底外被滤光，探针 S14 钉）
 const searching = computed(() => search.isActive(panelApi.id));
 const items = computed(() => {
-  const base = content.placementsFor(viewKey.value);
-  if (!searching.value) return base;
+  if (!searching.value) return content.placementsFor(viewKey.value);
   const hits = search.hitsFor(panelApi.id);
+  const base = search.effectiveGlobal(panelApi.id)
+    ? content.placementsFor("quick:all")
+    : content.placementsFor(viewKey.value);
   return base.filter((p) => hits.has(`${p.assetId}|${p.folderId}`));
 });
 // 搜索态命中档案节点列表（AssetGrid 档案区数据源；无效 id 兜底剔除）
