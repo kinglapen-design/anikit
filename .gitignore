@@ -6,6 +6,8 @@ dist/
 src-tauri/target/
 # ffmpeg sidecar 二进制（tools/fetch-ffmpeg.py 下载，不入库）
 src-tauri/binaries/
+# ffmpeg dev 库（tools/fetch-ffmpeg.py --dev-lib 下载，阶段四；不入库）
+src-tauri/vendor/
 
 # Python
 **/.venv/

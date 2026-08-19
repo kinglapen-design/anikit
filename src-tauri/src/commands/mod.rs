@@ -3,6 +3,7 @@
 
 pub mod archive;
 pub mod asset_menu;
+pub mod anim_stream;
 pub mod import;
 pub mod inbox;
 pub mod library;

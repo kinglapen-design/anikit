@@ -32,13 +32,6 @@ pub fn origin_file(assets_dir: &Path, id: &str, origin_name: &str) -> PathBuf {
   info_dir(assets_dir, id).join(origin_name)
 }
 
-/// 资源 ID + 磁盘原始文件名 → info 内动图小动画播放缓存（`assets/{ID}.info/{stem}_anim.webp`，2.3：
-/// 卡片播放用短边 320 animated webp 替代原尺寸 GIF；stem 取 originName 词干，规则同 {stem}_thumbnail.webp）
-pub fn anim_preview_file(assets_dir: &Path, id: &str, origin_name: &str) -> PathBuf {
-  let stem = Path::new(origin_name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-  info_dir(assets_dir, id).join(format!("{stem}_anim.webp"))
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -54,6 +47,5 @@ mod tests {
     );
     assert_eq!(frames_dir(assets, "AN-1"), assets.join("AN-1.info").join("frames"));
     assert_eq!(origin_file(assets, "AN-1", "人物.fla"), assets.join("AN-1.info").join("人物.fla"));
-    assert_eq!(anim_preview_file(assets, "AN-1", "动图.gif"), assets.join("AN-1.info").join("动图_anim.webp"));
   }
 }

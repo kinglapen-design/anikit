@@ -20,7 +20,7 @@ window.__TAURI_INTERNALS__ = {
   invoke: (cmd, args) => {
     const R = {
       get_current_library: null, get_ui_settings: {}, detect_doc_apps: [],
-      list_recent_libraries: [], list_placements: [], list_folder_tree: [],
+      list_recent_libraries: [], list_placements: [], list_folder_tree: { blocks: [], nodes: [] },
       list_recycle: [], list_recent_assets: [], detect_browsers: [],
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
     };

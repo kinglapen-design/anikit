@@ -27,7 +27,7 @@ window.__TAURI_INTERNALS__ = {
     const R = {
       get_current_library: { name: "测试库", path: "E:/test-lib", assetCount: 1, folderCount: 0 },
       get_ui_settings: {},
-      list_folder_tree: [],
+      list_folder_tree: { blocks: [], nodes: [] },
       list_placements: [],
       list_recycle: [entry],
       list_recent_assets: [],

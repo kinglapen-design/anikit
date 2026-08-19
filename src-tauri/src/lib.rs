@@ -74,6 +74,11 @@ pub fn run() {
       // 逐帧高清图持久化 info/frames/，完成发 anim-unpacked 事件
       services::unpack_queue::init(app.handle().clone());
 
+      // 动图帧流服务（阶段四·自研解码器）：WS server 推帧，动图卡播放源
+      // cfg(not(test))：init 内部持 AppHandle + 起 WS server，测试构建编译不出该函数（踩坑 014）
+      #[cfg(not(test))]
+      services::frame_stream::init(app.handle().clone());
+
       // 全局热键 alt+`：呼出 / 隐藏主窗口（后续用于快捷搜索框）
       // 注册失败（热键被他方占用）只记日志降级，不阻断启动
       if let Err(e) = app.global_shortcut().on_shortcut(
@@ -235,6 +240,8 @@ pub fn run() {
       commands::inbox::delete_inbox_entry,
       commands::preview::get_asset_file_path,
       commands::preview::list_sequence_frames,
+      commands::anim_stream::start_anim_stream,
+      commands::anim_stream::stop_anim_stream,
       commands::thumb_frame::set_thumb_frame,
       commands::thumb_frame::set_video_thumb,
       commands::media::get_media_source,

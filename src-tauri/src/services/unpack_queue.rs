@@ -5,8 +5,8 @@
 //!
 //! 挂钩：import_task 单元注册完成且资产为动图（anim::is_anim）时 submit（手动导入 / 收件箱
 //! 同一管线）。库打开时不自动补解包（本轮新导入才有；5.1 期间存量动图归 5.4 查缺补漏评估）。
-//! 2.3 起 worker 同时生成小动画播放缓存（services/anim_preview，info/{stem}_anim.webp，
-//! ffmpeg 独立转码、幂等）——get_asset_file_path 的存量动图懒生成也复用本队列补提交。
+//! （2.3 起曾由 worker 同时生成小动画播放缓存 services/anim_preview；阶段四一轮摘除——
+//! 自研解码帧流替代，生成链全线停止，存量文件留盘待清理口径。）
 //! （2026-07-28 注：曾扩展 QueueTask::Scrub 做视频 scrub 帧导入期预抽，随帧图方案废弃回退。）
 //!
 //! 事件（app 为 None 时不发，仅执行落盘——单测用）：
@@ -194,11 +194,7 @@ fn execute(shared: &Shared, task: UnpackTask) {
       shared.emit(EVENT_UNPACK_FAILED, &task.asset_id);
     }
   }
-  // 小动画播放缓存（2.3）：与解包共用本队列——ffmpeg 独立转码，解包成败不影响；
-  // 幂等（已新鲜跳过），get_asset_file_path 懒生成补提交也走这里（Skipped 分支同样执行到）
-  if crate::services::anim_preview::ensure_anim_preview(&task.assets_dir, &task.asset_id).is_none() {
-    log::debug!("小动画缓存未生成（非动图 / sidecar 缺失 / 转码失败，前端回退原文件播放）：{}", task.asset_id);
-  }
+  // （阶段四一轮：小动画缓存生成已摘除——自研解码帧流替代 anim_preview，服务本体暂存待清理）
 }
 
 #[cfg(test)]

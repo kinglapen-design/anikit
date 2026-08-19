@@ -40,7 +40,7 @@ window.__TAURI_INTERNALS__ = {
       list_placements: [{ assetId: "AN-A", folderId: "root", name: "图A.png", w: 800, h: 600, ext: "png",
         thumbPath: null, thumbKind: null, origin: true, frameCount: null, animated: false,
         duration: null, bpm: null, importedFrom: null, noteCount: null }],
-      list_folder_tree: [], list_recycle: [], list_recent_assets: [],
+      list_folder_tree: { blocks: [], nodes: [] }, list_recycle: [], list_recent_assets: [],
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
       list_space_libraries: ["旧库"],
       list_recent_libraries: [{ name: "旧库", path: "E:/T/S/旧库", lastOpenedAt: "" }],

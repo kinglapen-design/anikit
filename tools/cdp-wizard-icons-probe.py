@@ -23,7 +23,7 @@ window.__TAURI_INTERNALS__ = {
     if (cmd === "exit_app") { console.warn("[stub] exit_app called"); return Promise.resolve(null); }
     const R = {
       get_current_library: null, get_ui_settings: {}, detect_doc_apps: [],
-      list_recent_libraries: [], list_placements: [], list_folder_tree: [],
+      list_recent_libraries: [], list_placements: [], list_folder_tree: { blocks: [], nodes: [] },
       list_recycle: [], list_recent_assets: [],
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
       list_space_libraries: [],

@@ -76,6 +76,7 @@ fn activate_space(app: &AppHandle, state: &State<AppState>, space: Space) -> Res
 /// 与撤销双栈（6.0：会话级不持久化，栈内快照绑定旧库路径）
 fn activate(state: &State<AppState>, lib: Library) -> Result<LibraryInfo, String> {
   crate::services::unpack_queue::clear_pending();
+  crate::services::frame_stream::stop_all(); // 帧流会话绑定旧库 assets 池（阶段四）
   state.undo.lock().map_err(|e| e.to_string())?.clear();
   let info = to_info(&lib);
   *state.library.lock().map_err(|e| e.to_string())? = Some(lib);
@@ -228,6 +229,7 @@ fn apply_delete_library(state: &AppState, name: &str, delete_orphans: bool) -> R
     == Some(name);
   if is_current {
     crate::services::unpack_queue::clear_pending();
+    crate::services::frame_stream::stop_all();
     state.undo.lock().map_err(|e| e.to_string())?.clear();
     *state.library.lock().map_err(|e| e.to_string())? = None;
   }

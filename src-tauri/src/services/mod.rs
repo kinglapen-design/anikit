@@ -11,7 +11,7 @@
 //! - thumbnail：缩略图与图片宽高探测（缓存，可重建）
 //! - anim：动图（GIF / WEBP 动图）探测与逐帧解码（5.1，纯 Rust；probe 为字节级扫描 2026-07-26）
 //! - anim_unpack：动图解包（逐帧高清图持久化 info/frames/ + frames.json，2026-07-26 用户定案）
-//! - anim_preview：动图小动画播放缓存（info/{stem}_anim.webp，短边 320 animated webp，2.3）
+//! - frame_stream：动图帧流（阶段四·自研解码器：解码线程会话 + WS 推帧，动图卡播放源）
 //! - unpack_queue：动图解包队列（单 worker 无代际作废，导入完成挂钩；事件 anim-unpacked/-failed）
 //! - media：音视频元数据与预览图（5.1，ffprobe/ffmpeg sidecar；视频首帧 / 音频波形）
 //! - operations：素材基础操作（6.1 选择态：新建文件夹 / 移动 / 排序 / 关联 / 副本 / 重命名 / 删除）
@@ -23,10 +23,10 @@
 //! - views：Placement 列表视图（中间面板与导入事件共用）
 
 pub mod anim;
-pub mod anim_preview;
 pub mod anim_unpack;
 pub mod archive;
 pub mod asset_menu;
+pub mod frame_stream;
 pub mod import;
 pub mod import_task;
 pub mod inbox;

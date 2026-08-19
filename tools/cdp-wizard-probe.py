@@ -26,7 +26,7 @@ window.__TAURI_INTERNALS__ = {
       detect_doc_apps: [],
       list_recent_libraries: [],
       list_placements: [],
-      list_folder_tree: [],
+      list_folder_tree: { blocks: [], nodes: [] },
       list_recycle: [],
       list_recent_assets: [],
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },

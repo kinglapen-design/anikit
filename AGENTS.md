@@ -55,6 +55,7 @@ PRD 内使用 Obsidian 双链 `[[文件名]]`，按文件名在 `docs/03_项目-
 - `cargo test` —— 后端单测
 - `pnpm typecheck` / `pnpm build` —— 前端检查（vue-tsc，覆盖 .vue）/ 构建
 - `python tools/fetch-ffmpeg.py` —— 下载 ffmpeg/ffprobe sidecar（首次开发 / 换机必跑；音视频解码依赖，二进制不入 git）
+- `python tools/fetch-ffmpeg.py --dev-lib` —— 下载 ffmpeg dev 库到 `src-tauri/vendor/ffmpeg`（阶段四自研解码器编译前置；另需 libclang：`tools/.venv/Scripts/python.exe -m pip install --target tools/libclang libclang`，ffmpeg-sys-next 的 bindgen 依赖）
 
 ## 术语
 

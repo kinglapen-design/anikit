@@ -28,7 +28,7 @@ window.__TAURI_INTERNALS__ = {
       get_current_library: LIB,
       get_current_space: { name: "S", path: "E:/T/S", autoImport: true },
       get_ui_settings: {}, detect_doc_apps: [],
-      list_placements: [], list_folder_tree: [], list_recycle: [], list_recent_assets: [],
+      list_placements: [], list_folder_tree: { blocks: [], nodes: [] }, list_recycle: [], list_recent_assets: [],
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
       list_space_libraries: ["动画资产", "设计资产"],
       list_recent_libraries: [],

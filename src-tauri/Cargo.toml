@@ -59,6 +59,20 @@ resvg = "0.47"
 # 阶段 5.1：WEBP 动图逐帧解码（image crate 的门面未暴露动画 API，直接用其底层实现；
 # 纯 Rust 无 C 依赖，is_animated / num_frames / duration_ms / read_frame）
 image-webp = "0.2"
+# 阶段四：自研解码器（GIF/视频帧流；动图 webp 归 image-webp——lgpl 构建无 libwebp decoder）
+# 编译前置：tools/libclang（pip）+ src-tauri/vendor/ffmpeg（tools/fetch-ffmpeg.py --dev-lib）
+ffmpeg-next = "8"
+# 阶段四：帧流 WS 推（tokio-tungstenite；tokio 运行时复用 tauri async_runtime）
+tokio = { version = "1", features = ["net", "sync", "macros", "rt-multi-thread", "time"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+
+# 阶段四 spike 同款补丁：ffmpeg-next 8.1.0 的 EXIF frame side data 门控门槛
+#（avcodec minor>=28 才开 ffmpeg_8_1）滞后于实际合入（avutil 60.10 / avcodec 62.13 已含
+# AV_FRAME_DATA_EXIF）→ bindgen 产物含枚举但 arm 被 cfg 掉，match 缺臂编译失败。
+# 补丁 = 本副本 src/util/frame/side_data.rs 三处 cfg 由 ffmpeg_8_1 改 ffmpeg_8_0（踩坑 038）。
+[patch.crates-io]
+ffmpeg-next = { path = "patches/ffmpeg-next" }
 
 [dev-dependencies]
 tempfile = "3"

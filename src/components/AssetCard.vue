@@ -18,6 +18,7 @@ import AppIcon from "./AppIcon.vue";
 import HoverVideoLayer from "./HoverVideoLayer.vue";
 import HoverAudioLayer from "./HoverAudioLayer.vue";
 import HoverSequenceLayer from "./HoverSequenceLayer.vue";
+import AnimCanvasLayer from "./AnimCanvasLayer.vue";
 import { CARD_CAPTION_H, CARD_CAPTION_COMPACT_H, type Box } from "../lib/layouts";
 import { dragView } from "../lib/dragOperation";
 import {
@@ -31,7 +32,6 @@ import { formatDuration } from "../lib/formatDuration";
 import { formatSize } from "../lib/formatSize";
 import { formatDetailDate } from "../lib/detailSections";
 import { renamePlacement } from "../lib/placementOps";
-import { getAssetFilePath } from "../lib/mediaOps";
 import { acquireAutoplay, releaseAutoplay, type AutoplayPool } from "../lib/autoplayGate";
 import { useInlineRename } from "../lib/useInlineRename";
 import { useUiStore } from "../stores/ui";
@@ -106,10 +106,8 @@ function startRename(): void {
   selection.renamingKey = cardKey;
 }
 
-// 动图播放（5.3）：悬停或"自动播放动图"开关（序列帧同归此开关，2026-07-27 用户定）——
-// 300ms 延迟后把卡片图换成源文件（webview 原生循环，零等待），停止后还原封面
-const animSrc = ref<string | null>(null);
-let animTimer: ReturnType<typeof setTimeout> | undefined;
+// 动图播放（5.3）：悬停或"自动播放动图"开关（序列帧同归此开关，2026-07-27 用户定）；
+// 阶段四起由 AnimCanvasLayer 帧流渲染（300ms 进入延迟收编 useHoverPlayer）
 // 自动播放数量闸（2.3）：开关驱动的自动播放申请名额（满员排队 FIFO 唤醒），悬停播放直通——
 // 小卡片高密度时窗口内 200+ 卡片同时解码致全局卡顿（hover 目录树滞后）；
 // 动图 / 视频 / 序列帧三处自动播放共用本卡 gateRequested/autoGranted（一卡同时至多一种 kind）。
@@ -144,31 +142,8 @@ watch(
   { immediate: true },
 );
 const animPlaying = computed(() => hoverActive.value || autoGranted.value);
-// immediate：虚拟滚动销毁重建 / 开关已开时挂载，animPlaying 初始即 true 无"变化"不触发——
-// 挂载即评估一次（修复：自动播放滚出视口再回来 / 视口外滚入不播，2026-07-27 用户实测）
-watch(
-  animPlaying,
-  (p) => {
-    clearTimeout(animTimer);
-    if (p && kind.value === "anim") {
-      animTimer = setTimeout(() => void loadAnim(), 300);
-    } else {
-      animSrc.value = null;
-    }
-  },
-  { immediate: true },
-);
-async function loadAnim(): Promise<void> {
-  try {
-    const r = await getAssetFilePath(props.asset.assetId);
-    // 2.3：优先短边 320 小动画缓存（animPreview，解码像素量降一个量级）；
-    // 缺失时回退源文件（存量旧动图首次播放由后端懒生成，下次命中）
-    const path = r.animPreview ?? r.path;
-    if (path && animPlaying.value) animSrc.value = convertFileSrc(path);
-  } catch {
-    // 解析失败保持静态封面
-  }
-}
+// 动图播放（阶段四）：animPlaying 且 kind==='anim' 时模板挂载 AnimCanvasLayer——
+// WS 帧流 canvas 渲染（自研解码器，替代 2.3 小动画缓存 img 换源）；序列帧归 HoverSequenceLayer。
 onMounted(() => {
   // root null = webview 视口：网格 BUFFER 缓冲区内但视口外的卡判不可见不占名额
   visibilityObs = new IntersectionObserver((entries) => {
@@ -178,7 +153,6 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   visibilityObs?.disconnect();
-  clearTimeout(animTimer);
   if (gateRequested) {
     gateRequested = false;
     releaseAutoplay(cardKey, gatePool.value);
@@ -232,19 +206,20 @@ const meta = computed(() => {
         v-if="thumbUrl"
         class="img"
         :class="{ icon: asset.thumbKind === 'formatIcon', contain: ui.layoutMode === 'grid' }"
-        :src="animSrc ?? thumbUrl"
+        :src="thumbUrl"
         :alt="asset.name"
         decoding="async"
         draggable="false"
       />
       <div v-else class="img" />
       <HoverVideoLayer
-        v-if="(hoverActive || autoGranted) && kind === 'video'"
+        v-if="animPlaying && kind === 'video'"
         :asset="asset"
         :auto="!hoverActive"
       />
+      <AnimCanvasLayer v-else-if="animPlaying && kind === 'anim'" :asset="asset" />
       <HoverAudioLayer v-else-if="hoverActive && kind === 'audio'" :asset="asset" />
-      <HoverSequenceLayer v-else-if="(hoverActive || autoGranted) && kind === 'sequence'" :asset="asset" />
+      <HoverSequenceLayer v-else-if="animPlaying && kind === 'sequence'" :asset="asset" />
       <span v-if="badgeColor && ui.showBadge" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
       <span v-if="asset.noteCount" class="note-badge">{{ asset.noteCount }}</span>
     </div>
