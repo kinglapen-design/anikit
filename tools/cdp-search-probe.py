@@ -448,7 +448,13 @@ async def main():
 
             # ── S8：草稿 ~ 前缀即时全局（未提交也生效）──
             await set_input("~场景")
-            cards = await card_names()
+            # 时序敏感场景（草稿前缀 + 全局基底切换）：轮询等渲染结果，不赌固定 sleep
+            cards = []
+            for _ in range(25):
+                cards = await card_names()
+                if cards == ["场景-日.png"]:
+                    break
+                await asyncio.sleep(0.2)
             check("S8 草稿「~场景」即时全局命中", cards == ["场景-日.png"], str(cards))
 
             # ── S9：// 前缀（草稿 + tag 两态）──
@@ -548,8 +554,9 @@ async def main():
             await clear_all()
             await tree_click("f1")  # 回 f1 供截图（递归此时已关——先开回）
 
-            # 截图留档（搜索态「分镜」：档案区 + 素材 + chips）
-            await set_input("分镜")
+            # 截图留档（chip 形态目验：「~人物」剥落两 chip + 档案区「分镜」命中——分两次截）
+            await set_input("~人物")
+            await press_space()
             shot = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
             import base64
             with open(SHOT, "wb") as f:

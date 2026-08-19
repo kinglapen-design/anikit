@@ -184,7 +184,7 @@ onBeforeUnmount(() => search.removePanel(props.panelId));
   min-width: 0;
   cursor: text;
 }
-/* 已提交 chip（TermChipsInput 口径：品牌色底 + 1px 亮-选中 + 高亮字 + × 删） */
+/* 已提交 chip（2026-08-19 用户定：不用品牌色——照分组管理未选中 tag 口径：C4 底 / 暗-悬停线 / 常态字） */
 .chip {
   display: inline-flex;
   align-items: center;
@@ -193,9 +193,9 @@ onBeforeUnmount(() => search.removePanel(props.panelId));
   box-sizing: border-box;
   padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-6);
-  background: var(--brand);
-  box-shadow: inset 0 0 0 1px var(--line-active);
-  color: var(--text-highlight);
+  background: var(--c4);
+  box-shadow: inset 0 0 0 1px var(--line-hover);
+  color: var(--text-normal);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
   white-space: nowrap;
@@ -207,7 +207,7 @@ onBeforeUnmount(() => search.removePanel(props.panelId));
   justify-content: center;
   width: 16px;
   height: 16px;
-  color: var(--text-highlight);
+  color: var(--text-normal);
   opacity: 0.7;
   transition: opacity 0.12s ease;
 }
