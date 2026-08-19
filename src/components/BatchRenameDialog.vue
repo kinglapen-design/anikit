@@ -241,7 +241,7 @@ const listRef = ref<HTMLElement>();
   display: flex;
   gap: var(--space-24);
   padding: var(--space-24) 0;
-  background: var(--c3);
+  background: var(--c2); /* 2026-08-19 用户定：item 底色 C3 → C2 */
   border-bottom: 1px solid var(--line-hover);
 }
 /* 名称卡（37 稿：449×69 / C4 底 / 1px 暗-悬停 border / 圆角 8 / padding 12 / gap 8） */

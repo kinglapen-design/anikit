@@ -6,7 +6,7 @@
 // 名称 = 分词 chips 输入（TermChipsInput：回车/空格/+/失焦提交，词间 AND——2026-08-19 复验由单输入框改）；
 // 底部「添加新规则」钮（C5 底 102×29）。标签冒号 = 英文「:」（2026-08-19 用户定，全库统一）。
 // 单规则组互斥转移（PRD 02-04 条款 2）由父级经 pickValue 事件处理（编辑器不感知其他组）。
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import AppIcon from "./AppIcon.vue";
 import AppMenu from "./AppMenu.vue";
 import IconButton from "./IconButton.vue";
@@ -42,6 +42,7 @@ const typeCandidates = computed(() => {
 // —— 规则下拉（picker + AppMenu，同 28 稿排序下拉形态） ——
 const kindPicker = ref<{ rule: GroupRule; x: number; y: number } | null>(null);
 const kindPickerTrigger = ref<HTMLElement | null>(null);
+const rootEl = ref<HTMLElement>();
 function openKindPicker(rule: GroupRule, e: MouseEvent): void {
   const el = e.currentTarget as HTMLElement;
   const rect = el.getBoundingClientRect();
@@ -53,6 +54,16 @@ function pickKind(kind: GroupRuleKind): void {
   if (rule && rule.kind !== kind) {
     rule.kind = kind;
     rule.values = []; // 换规则类型清空范围（值域不同）
+    // 选中「名称」= 自动聚焦分词输入框（2026-08-19 用户定）
+    if (kind === "name") {
+      const idx = rules.value.indexOf(rule);
+      void nextTick(() => {
+        rootEl.value
+          ?.querySelectorAll(".rule-row")[idx]
+          ?.querySelector<HTMLElement>(".term-input")
+          ?.focus();
+      });
+    }
   }
   kindPicker.value = null;
 }
@@ -91,7 +102,7 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
 </script>
 
 <template>
-  <div class="rules-editor">
+  <div ref="rootEl" class="rules-editor">
     <div v-for="(rule, i) in rules" :key="i" class="rule-row">
       <!-- 头段（× + 规则 + 下拉 + 范围）：恒 28 高居首行——chips 换行使行变高时标签保持首行垂直居中 -->
       <div class="row-head">
