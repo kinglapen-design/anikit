@@ -98,7 +98,9 @@ export function useGridLayout(opts: {
     const to = Math.min(r1.value, rs.length);
     for (let r = from; r < to; r++) {
       for (let i = rs[r].start; i < rs[r].end; i++) {
-        out.push({ asset: items[bs[i].i], box: bs[i], odd: r % 2 === 1 });
+        const asset = items[bs[i].i];
+        if (!asset) continue; // 窗口期防御：items 已更新、旧 boxes 未重排（watch 异步）——跳过待 relayout
+        out.push({ asset, box: bs[i], odd: r % 2 === 1 });
       }
     }
     return out;
@@ -127,9 +129,13 @@ export function useGridLayout(opts: {
         const rs = rows.value;
         const ri = Math.max(0, lowerBound(rs, layerY) - 1);
         const row = rs[ri];
-        const first = items[boxes.value[row.start].i];
-        anchorKey = `${first.assetId}|${first.folderId}`;
-        anchorRatio = row.height > 0 ? (layerY - row.top) / row.height : 0;
+        // 窗口期防御（2026-08-19 复验）：watch 异步 flush——items 已变短、boxes 还是旧布局时
+        // box.i 可能越界（items 里无此下标），取不到卡就不锚定，等下一轮一致化
+        const first = items[boxes.value[row.start]?.i ?? -1];
+        if (first) {
+          anchorKey = `${first.assetId}|${first.folderId}`;
+          anchorRatio = row.height > 0 ? (layerY - row.top) / row.height : 0;
+        }
       }
     }
     // 四种布局（PRD 04）：自适应 / 瀑布流 / 网格 / 列表

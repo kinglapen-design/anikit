@@ -34,7 +34,11 @@ window.__calls = { set_folder_groups: [] };
 const TREE = {
   blocks: [{ id: "dir", name: "目录", icon: null }],
   nodes: [
-    { id: "f1", name: "角色", count: 4, children: [], groups: [
+    { id: "f1", name: "角色", count: 4, children: [
+      { id: "f1a", name: "子夹", count: 0, children: [], groups: [
+        { id: "g1a", name: "子夹组", rules: [{ kind: "ext", values: ["md"] }] },
+      ] },
+    ], groups: [
       { id: "g1", name: "图片组", rules: [{ kind: "ext", values: ["png"] }] },
       { id: "g2", name: "动图组", rules: [{ kind: "type", values: ["anim"] }] },
     ] },
@@ -72,8 +76,11 @@ window.__TAURI_INTERNALS__ = {
     };
     if (cmd === "set_folder_groups") {
       window.__calls.set_folder_groups.push(JSON.parse(JSON.stringify(args ?? {})));
-      const f = TREE.nodes.find((n) => n.id === args.folderId);
-      if (f) f.groups = args.groups.length ? args.groups : undefined;
+      const walk = (ns) => ns.forEach((n) => {
+        if (n.id === args.folderId) n.groups = args.groups.length ? args.groups : undefined;
+        walk(n.children ?? []);
+      });
+      walk(TREE.nodes);
       return Promise.resolve(null);
     }
     return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
@@ -511,6 +518,54 @@ async def main():
               })()
             """)
             check("S8 快速访问视图分组管理钮禁用", disabled is True, str(disabled))
+
+            # ── S10：子文件夹分组配置读取（2026-08-19 复验反馈：平铺 find 只命中顶层，
+            #    子夹弹窗恒空 / 新建覆盖丢组——回归钉：子夹预置 1 组，弹窗应读出） ──
+            print("S10 子文件夹分组读取")
+            # f1 可能折叠：先确保 f1a 树项可见（点 f1 展开箭头）
+            if not await ev("!!document.querySelector('.tree-item[data-folder-id=\"f1a\"]')"):
+                pos = await ev("""
+                  (() => {
+                    const el = document.querySelector('.tree-item[data-folder-id="f1"] .expand');
+                    if (!el) return null;
+                    const r = el.getBoundingClientRect();
+                    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+                  })()
+                """)
+                if pos:
+                    await click(pos["x"], pos["y"])
+                await asyncio.sleep(0.4)
+            if await click_sel('.tree-item[data-folder-id="f1a"]', "f1a"):
+                await asyncio.sleep(0.5)
+                await click_sel(".panel-toolbar .btn-group .icon-btn:nth-last-child(2)", "分组管理钮")
+                await asyncio.sleep(0.5)
+                sub = await ev("""
+                  (() => {
+                    const m = document.querySelector('.group-manage');
+                    if (!m) return null;
+                    return {
+                      blocks: m.querySelectorAll('.group-block').length,
+                      name: m.querySelector('.name-input input')?.value ?? null,
+                    };
+                  })()
+                """)
+                print("  子夹弹窗:", sub)
+                check("S10 子文件夹分组配置读出（1 组「子夹组」）",
+                      bool(sub) and sub.get("blocks") == 1 and sub.get("name") == "子夹组", str(sub))
+                # 取消关弹窗
+                pos = await ev("""
+                  (() => {
+                    const btns = [...(document.querySelector('.group-manage')?.querySelectorAll('.actions .app-btn') ?? [])];
+                    const c = btns.find((el) => el.textContent.trim() === '取消');
+                    if (!c) return null;
+                    const r = c.getBoundingClientRect();
+                    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+                  })()
+                """)
+                if pos:
+                    await click(pos["x"], pos["y"])
+            else:
+                check("S10 子文件夹树项可见", False, "f1a 未渲染")
 
             # ── S4：sticky 置顶（滚动后悬浮标题出现；transform 容器内 sticky 无效 → 悬浮层实现） ──
             print("S4 sticky 置顶")

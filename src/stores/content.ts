@@ -247,7 +247,9 @@ export const QUICK_LABELS: Record<string, string> = {
   recycle: "回收站",
 };
 
-function findFolder(nodes: FolderNode[], id: string): FolderNode | null {
+// 2026-08-19 导出：分组弹窗等按 id 取节点统一走递归（平铺 find 只能命中顶层——
+// 子文件夹分组配置读不回 / 新建分组覆盖旧组，复验反馈）
+export function findFolder(nodes: FolderNode[], id: string): FolderNode | null {
   for (const n of nodes) {
     if (n.id === id) return n;
     const hit = findFolder(n.children, id);

@@ -17,7 +17,7 @@ import ScrollThumb from "./ScrollThumb.vue";
 import GroupRulesEditor from "./GroupRulesEditor.vue";
 import { setFolderGroups } from "../lib/groupOps";
 import { RULE_KIND_LABELS, type GroupDef, type GroupRule } from "../lib/grouping";
-import { useContentStore } from "../stores/content";
+import { findFolder, useContentStore } from "../stores/content";
 import { useToastStore } from "../stores/toast";
 
 const props = defineProps<{ folderId: string }>();
@@ -34,7 +34,8 @@ interface GroupDraft {
 }
 let seq = 0;
 const draft = ref<GroupDraft[]>(
-  (content.folders.find((f) => f.id === props.folderId)?.groups ?? []).map((g) => ({
+  // 递归查（2026-08-19 修复：平铺 find 只命中顶层，子文件夹分组配置读不回）
+  (findFolder(content.folders, props.folderId)?.groups ?? []).map((g) => ({
     key: g.id,
     id: g.id,
     name: g.name,

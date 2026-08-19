@@ -11,7 +11,7 @@ import AppInput from "./AppInput.vue";
 import GroupRulesEditor from "./GroupRulesEditor.vue";
 import { setFolderGroups } from "../lib/groupOps";
 import type { GroupDef, GroupRule } from "../lib/grouping";
-import { useContentStore } from "../stores/content";
+import { findFolder, useContentStore } from "../stores/content";
 
 const props = defineProps<{ folderId: string }>();
 const emit = defineEmits<{ close: [] }>();
@@ -31,7 +31,9 @@ async function submit(): Promise<void> {
     saveError.value = { title: "无法保存，分组规则不完整", desc: "至少需要一条规则并选择范围。请补全或删除后再保存。" };
     return;
   }
-  const existing = content.folders.find((f) => f.id === props.folderId)?.groups ?? [];
+  // 递归查（2026-08-19 修复：平铺 find 只命中顶层——子文件夹上 existing 恒空，
+  // 查重失效且提交会把已有组整体覆盖丢光）
+  const existing = findFolder(content.folders, props.folderId)?.groups ?? [];
   const norm = (rs: GroupRule[]): string => JSON.stringify(rs.map((r) => [r.kind, [...r.values].sort()] as const).sort());
   const mine = norm(rules.value);
   if (existing.some((g) => norm(g.rules) === mine)) {
