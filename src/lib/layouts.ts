@@ -7,6 +7,9 @@
 /** 素材卡片简介区高度（figma-css 01_组件/14_卡片，2026-08-10：padding 8 8 8 12 +
     名称单行 20 + 间距 4 + 标签 17 = 57；旧两行标题 64 作废） */
 export const CARD_CAPTION_H = 57;
+/** 简介关闭时的紧凑简介区高度（2026-08-19 显示简介接入：关 = 隐藏简介行并缩短卡片——
+    padding 8 8 8 12 + 名称单行 20 = 36），与 AssetCard .texts 实际高度严格一致 */
+export const CARD_CAPTION_COMPACT_H = 36;
 
 export interface Box {
   top: number;

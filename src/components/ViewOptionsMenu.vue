@@ -32,13 +32,14 @@ const layouts = [
   { value: "grid", label: "网格" },
   { value: "list", label: "列表" },
 ] as const;
+// 显示简介档（2026-08-19 接入）：「无显示」档删除（与右侧开关语义重复，用户定）；
+// 标签档占位禁用——卡片数据无 tags（PlacementView 未带出），待后端数据通道随 3.2 二轮补
 const briefs = [
-  { value: "size", label: "尺寸" },
-  { value: "fileSize", label: "文件大小" },
-  { value: "createdAt", label: "创建日期" },
-  { value: "modifiedAt", label: "修改日期" },
-  { value: "tags", label: "标签" },
-  { value: "none", label: "无显示" },
+  { value: "size", label: "尺寸", disabled: false },
+  { value: "fileSize", label: "文件大小", disabled: false },
+  { value: "createdAt", label: "创建日期", disabled: false },
+  { value: "modifiedAt", label: "修改日期", disabled: false },
+  { value: "tags", label: "标签", disabled: true },
 ] as const;
 const timeDisplays = [
   { value: "frames", label: "帧数" },
@@ -176,6 +177,7 @@ function closeAll(): void {
         :label="b.label"
         checkable
         :checked="ui.briefMode === b.value"
+        :disabled="b.disabled"
         @select="ui.briefMode = b.value; picker = null"
       />
     </AppMenu>

@@ -3,6 +3,9 @@
 // 整卡 1px 暗-悬停边框 / 圆角 6 / padding 0；缩略图区 C3 圆角上沿，简介区 C3 + 上边框圆角下沿
 // （padding 8 8 8 12 / 间距 4）；名称单行左对齐截断（14/20 高亮，旧两行居中作废）；
 // 格式徽标左上 6,6（padding 2 4 / 徽标档 10/14 700 常态色）；原始文件徽章右下 8,8（15×15）。
+// 显示简介（2026-08-19 接入）：关 = 隐藏简介行（.meta）且布局层简介区高 57→36 缩短卡片
+// （useGridLayout 同步重排）；徽章为整卡 absolute 定位不随简介隐藏，自动落名称行右侧；
+// 简介内容按 ui.briefMode 分流（尺寸/文件大小/创建日期/修改日期，标签档待后端数据通道）。
 // 状态边框 ::after 1.5px（同文件夹卡片机制）：hover 亮-选中 / 选中·重命名 品牌色-边框线
 // （重命名 = 整卡高亮提示，输入框透明底不单独描边，2026-08-10 用户定）。
 // 悬停控件（2026-08-10 用户定）：放大镜 / 默认应用打开 / 发送到按钮全删——放大预览改为
@@ -15,7 +18,7 @@ import AppIcon from "./AppIcon.vue";
 import HoverVideoLayer from "./HoverVideoLayer.vue";
 import HoverAudioLayer from "./HoverAudioLayer.vue";
 import HoverSequenceLayer from "./HoverSequenceLayer.vue";
-import { CARD_CAPTION_H, type Box } from "../lib/layouts";
+import { CARD_CAPTION_H, CARD_CAPTION_COMPACT_H, type Box } from "../lib/layouts";
 import { dragView } from "../lib/dragOperation";
 import {
   displayName as assetDisplayName,
@@ -25,6 +28,8 @@ import {
   isVideoExt,
 } from "../lib/formatBadge";
 import { formatDuration } from "../lib/formatDuration";
+import { formatSize } from "../lib/formatSize";
+import { formatDetailDate } from "../lib/detailSections";
 import { renamePlacement } from "../lib/placementOps";
 import { getAssetFilePath } from "../lib/mediaOps";
 import { acquireAutoplay, releaseAutoplay, type AutoplayPool } from "../lib/autoplayGate";
@@ -45,7 +50,9 @@ const props = withDefaults(
   { selected: false, renaming: false, faded: null },
 );
 const ui = useUiStore();
-const imgH = computed(() => Math.max(20, props.box.height - CARD_CAPTION_H));
+// 简介区高度跟随「显示简介」开关（2026-08-19 接入：关 = 紧凑 36，隐藏简介行并缩短卡片）
+const captionH = computed(() => (ui.showBrief ? CARD_CAPTION_H : CARD_CAPTION_COMPACT_H));
+const imgH = computed(() => Math.max(20, props.box.height - captionH.value));
 const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
 // 动图（5.1）：GIF / WEBP 动图；与序列帧区分（序列帧同样带 frameCount）
 const isAnim = computed(() => props.asset.animated);
@@ -187,8 +194,14 @@ const badge = computed(() => {
 // 角标徽章底色：格式实色（01_样式 token 01-6，7 组）
 const badgeColor = computed(() => formatBadgeColor(props.asset.ext, isSeq.value, isAnim.value));
 const displayName = computed(() => assetDisplayName(props.asset, ui.showExt));
-// 标签行：音视频改时长属性（mm:ss，5.1）；动图与其他按尺寸；fla 等无尺寸资源显示格式角标文案
+// 简介行内容按查看方式「显示简介」下拉分流（2026-08-19 接入；标签档占位禁用，待后端数据通道）：
+// 尺寸 = 音视频时长（mm:ss，5.1）/ 动图与其他按 w×h / 无尺寸回退格式角标文案；
+// 空值兜底（2026-08-19 用户定）：档内无数据（存量创建日期 null）回退文件大小——文件大小恒有
 const meta = computed(() => {
+  if (ui.briefMode === "fileSize") return formatSize(props.asset.size);
+  if (ui.briefMode === "createdAt")
+    return props.asset.createdAt ? formatDetailDate(props.asset.createdAt) : formatSize(props.asset.size);
+  if (ui.briefMode === "modifiedAt") return formatDetailDate(props.asset.modifiedAt);
   if (props.asset.duration != null && !isAnim.value) return formatDuration(props.asset.duration);
   return props.asset.w != null && props.asset.h != null ? `${props.asset.w} x ${props.asset.h}` : badge.value;
 });
@@ -248,15 +261,15 @@ const meta = computed(() => {
         @dblclick.stop
         @pointerdown.stop
       />
-      <!-- 名称悬停 tip（2026-08-10 用户定）：完整名称（限宽换行）+ 当前简介档（尺寸/文件大小等，
-           简介关闭或 briefMode none 时无简介行）；序列帧显示名（.序列帧 后缀）与卡片一致 -->
+      <!-- 名称悬停 tip（2026-08-10 用户定）：完整名称（限宽换行）+ 当前简介档内容（尺寸/文件大小
+           等，简介开关关闭时无简介行）；序列帧显示名（.序列帧 后缀）与卡片一致 -->
       <span
         v-else
         class="title"
-        v-tip="{ text: displayName, keys: ui.showBrief && ui.briefMode !== 'none' ? meta : undefined, column: true }"
+        v-tip="{ text: displayName, keys: ui.showBrief ? meta : undefined, column: true }"
         @dblclick.stop="startRename"
       >{{ displayName }}</span>
-      <span v-show="ui.showBrief && ui.briefMode !== 'none'" class="meta">{{ meta }}</span>
+      <span v-show="ui.showBrief" class="meta">{{ meta }}</span>
     </div>
     <!-- 原始文件徽章（figma 14：15×15 品牌色图标，卡片右下各 8） -->
     <AppIcon v-if="asset.origin" name="original-file-badge" :size="15" class="origin-badge" />

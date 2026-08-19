@@ -63,8 +63,10 @@ export const useUiStore = defineStore("ui", {
     sortBy: "" as SortKey,
     sortAsc: true,
     // 查看方式二级窗口（2026-07-23）：显示简介（尺寸已实现，其余随 7.x 接线）/ 角标开关；
-    // 自动播放（5.3 已接，2026-07-27）：动图开关含序列帧（用户定：序列帧也是动图范围）
-    briefMode: "size" as "size" | "fileSize" | "createdAt" | "modifiedAt" | "tags" | "none",
+    // 自动播放（5.3 已接，2026-07-27）：动图开关含序列帧（用户定：序列帧也是动图范围）；
+    // 2026-08-19 显示简介接入：「无显示」档废除（与 showBrief 开关语义重复，用户定），
+    // 旧配置残留 "none" 由 loadSettings 迁移为 "size"
+    briefMode: "size" as "size" | "fileSize" | "createdAt" | "modifiedAt" | "tags",
     groupBy: "自定义",
     autoPlayGif: false,
     autoPlayVideo: false,
@@ -157,6 +159,9 @@ export const useUiStore = defineStore("ui", {
         }
         // 区块配置兜底合并：注册表新增补位 / 配置里已删 id 忽略（lib/detailSections）
         this.detailSections = mergeDetailSections(this.detailSections);
+        // 「无显示」档废除迁移（2026-08-19）：旧配置 briefMode "none" 回退尺寸档（赋值循环只校验
+        // typeof 不校验枚举值，运行态可能已被 "none" 覆盖，此处纠正）
+        if (saved.briefMode === "none") this.briefMode = "size";
       } catch (e) {
         console.warn("UI 设置读取失败（用默认值）：", e);
       }
