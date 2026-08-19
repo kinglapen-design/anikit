@@ -13,6 +13,7 @@ pub mod preview;
 pub mod recent;
 pub mod recycle;
 pub mod scan;
+pub mod search;
 pub mod settings;
 pub mod thumb_frame;
 pub mod undo;

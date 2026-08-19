@@ -19,6 +19,7 @@ import PreviewNotes from "./PreviewNotes.vue";
 import { findFolderNode } from "../lib/detailSections";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
+import { useSearchStore } from "../stores/search";
 
 // props 运行时声明（rolldown 环境 SFC 编译器无法解析 node_modules 类型，defineProps 泛型须字面量）。
 // dockview-vue 传参约定（v7 源码 VueRenderer.init）：framework props 整组包在一个 params prop 里——
@@ -28,6 +29,7 @@ const frame = computed(() => raw.params as unknown as IDockviewPanelProps);
 const panelApi = frame.value.api as DockviewPanelApi; // api 引用 init 时确定、不变
 const content = useContentStore();
 const preview = usePreviewStore();
+const search = useSearchStore();
 
 // 本标签页视口（frame.params = addPanel/updateParameters 的用户参数）
 const viewKey = computed(() => (frame.value.params?.viewKey as string) ?? "quick:all");
@@ -41,7 +43,25 @@ onBeforeUnmount(() => disposeActive.dispose());
 
 // 当前视口资源（"全部"= 全部 Placement；文件夹 = 该文件夹直接 Placement，
 // 递归显示开关 ui.showSubfolders 打开时含全部后代文件夹，2026-08-10 接入）。
-const items = computed(() => content.placementsFor(viewKey.value));
+// 3.6 搜索态（用户定：结果替换素材区，清空恢复；排序由 placementsFor 带入保持生效）：
+// placementsFor 已含范围 + 排序，命中键过滤叠加即可（recent / recycle 视图键同口径天然兼容）
+const searching = computed(() => search.isActive(panelApi.id));
+const items = computed(() => {
+  const base = content.placementsFor(viewKey.value);
+  if (!searching.value) return base;
+  const hits = search.hitsFor(panelApi.id);
+  return base.filter((p) => hits.has(`${p.assetId}|${p.folderId}`));
+});
+// 搜索态命中档案节点列表（AssetGrid 档案区数据源；无效 id 兜底剔除）
+const searchArchiveNodes = computed<FolderNode[]>(() => {
+  if (!searching.value) return [];
+  const out: FolderNode[] = [];
+  for (const id of search.hitArchivesFor(panelApi.id)) {
+    const n = findFolderNode(content.folders, id);
+    if (n) out.push(n);
+  }
+  return out;
+});
 
 // 档案二级侧边栏（2026-08-15 迁入视口）：本标签页视口 = 档案文件夹时，渲染在视口内容区最左
 // （标签栏不被推挤；分屏 / 多标签各管各）
@@ -76,12 +96,18 @@ const archiveNode = computed<FolderNode | null>(() => {
           <ContentTitleBar :view-key="viewKey" />
           <ImportProgressBar />
           <section class="asset-section">
-            <AssetGrid :items="items" :view-key="viewKey" :panel-active="active" />
+            <AssetGrid
+              :items="items"
+              :view-key="viewKey"
+              :panel-active="active"
+              :searching="searching"
+              :search-archives="searchArchiveNodes"
+            />
           </section>
         </div>
       </div>
       <footer class="search-wrap">
-        <SearchBar />
+        <SearchBar :panel-id="panelApi.id" :view-key="viewKey" />
       </footer>
     </template>
   </main>

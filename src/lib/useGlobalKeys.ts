@@ -5,7 +5,9 @@ import { onBeforeUnmount, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
+import { useSearchStore } from "../stores/search";
 import { useSelectionStore } from "../stores/selection";
+import { useTabsStore } from "../stores/tabs";
 import { useUndoStore } from "../stores/undo";
 import {
   copySelection,
@@ -29,6 +31,8 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   const selection = useSelectionStore();
   const preview = usePreviewStore();
   const undo = useUndoStore();
+  const search = useSearchStore();
+  const tabs = useTabsStore();
 
   // 剪贴板导入（PRD 05-01；2026-07-27 扩：图片 + 文件列表，恒 Copy）；剪贴板无图无文件属常态，静默降级
   // 6.1 仲裁（2026-07-28 定案）：内部剪贴板非空时 Ctrl+V 归 onOperationKeys（链接粘贴 / 移动，
@@ -201,6 +205,15 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     }
   }
 
+  // Ctrl+F = 聚焦搜索框（PRD 03_查找文件 01，3.6 一轮）：输入框内也生效（任何输入态一步跳回搜索框）；
+  // 预览态 / 向导态不抢（搜索框不可见）；preventDefault 吞掉 WebView2 页面内查找
+  function onSearchFocus(e: KeyboardEvent): void {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "f") return;
+    if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
+    e.preventDefault();
+    search.requestFocus(tabs.activeTabId);
+  }
+
   // Esc 按下时刻的浮层快照（2026-08-16 根治"Esc 关菜单误清选择"）：
   // capture 阶段早序记录（本监听随 App 挂载注册，恒早于任何菜单的 capture 关闭处理），
   // bubble 的 onSelectionKeys 只读此标记，不再查实时 DOM（菜单关闭后 DOM 已同步移除，
@@ -217,6 +230,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     window.addEventListener("keydown", onUndoRedo);
     window.addEventListener("keydown", onSelectionKeys);
     window.addEventListener("keydown", onOperationKeys);
+    window.addEventListener("keydown", onSearchFocus);
   });
   onBeforeUnmount(() => {
     window.removeEventListener("keydown", onEscCapture, true);
@@ -224,5 +238,6 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     window.removeEventListener("keydown", onUndoRedo);
     window.removeEventListener("keydown", onSelectionKeys);
     window.removeEventListener("keydown", onOperationKeys);
+    window.removeEventListener("keydown", onSearchFocus);
   });
 }

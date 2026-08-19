@@ -8,18 +8,19 @@ import SectionHeader from "./SectionHeader.vue";
 import ArchiveCard from "./ArchiveCard.vue";
 import { dragView } from "../lib/dragOperation";
 import { openArchiveCardMenu } from "../lib/menuSpecs/gridDispatch";
-import { useContentStore } from "../stores/content";
+import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
 
-const props = defineProps<{ viewKey: string }>();
+const props = defineProps<{ viewKey: string; nodes?: FolderNode[] }>();
 const content = useContentStore();
 const selection = useSelectionStore();
 const tabs = useTabsStore();
 const archiveOpen = ref(true);
 
-// 本标签页视口的直接子级档案（1.2 per-view 参数化）
-const stripArchives = computed(() => content.stripArchivesFor(props.viewKey));
+// 本标签页视口的直接子级档案（1.2 per-view 参数化）；
+// nodes 传入时取而代之（3.6 搜索态：命中档案列表由 ContentArea 按 search store 装配）
+const stripArchives = computed(() => props.nodes ?? content.stripArchivesFor(props.viewKey));
 
 // 选中口径同 FolderStrip（文件夹选择域；单击单选 / Ctrl 加选 / Shift 按条带顺序范围选）
 function onSelect(id: string, e: MouseEvent): void {

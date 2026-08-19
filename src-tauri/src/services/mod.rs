@@ -19,6 +19,7 @@
 //! - recent：最近使用（6.1 第二轮，recent.json LRU 500；唯一启用入口 = 默认程序打开成功）
 //! - recycle：回收站（6.1 第二轮：视图 / 还原 / 彻底删除 / 清空）
 //! - scan：重复文件扫描（只读，按存量 hash 分组）
+//! - search：分词搜索（只读，3.6 一轮：空格分词 AND / 子串包含 / 链接 URL decode / 路径链）
 //! - views：Placement 列表视图（中间面板与导入事件共用）
 
 pub mod anim;
@@ -38,6 +39,7 @@ pub mod recent;
 pub mod recycle;
 pub mod resolve;
 pub mod scan;
+pub mod search;
 pub mod sequence;
 pub mod thumb_formats;
 pub mod thumbnail;

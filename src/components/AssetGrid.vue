@@ -28,15 +28,22 @@ import {
 import { openGridContextMenu } from "../lib/menuSpecs/gridDispatch";
 import { groupHeaderSpec } from "../lib/menuSpecs/groupHeader";
 import { openContextMenu } from "../lib/contextMenus";
-import { useContentStore } from "../stores/content";
+import { useContentStore, type FolderNode, type PlacementView } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
 import { usePreviewStore } from "../stores/preview";
-import type { PlacementView } from "../stores/content";
 
-const props = withDefaults(defineProps<{ items: PlacementView[]; viewKey: string; panelActive?: boolean }>(), {
-  panelActive: false,
-});
+const props = withDefaults(
+  defineProps<{
+    items: PlacementView[];
+    viewKey: string;
+    panelActive?: boolean;
+    // 3.6 搜索态（ContentArea 判定传入）：分组失效平铺 / 文件夹区块隐藏 / 档案区显示命中档案
+    searching?: boolean;
+    searchArchives?: FolderNode[];
+  }>(),
+  { panelActive: false, searching: false, searchArchives: () => [] },
+);
 const ui = useUiStore();
 const content = useContentStore();
 const selection = useSelectionStore();
@@ -73,6 +80,7 @@ const cardsLayerRef = ref<HTMLElement>(); // 拖拽间隙落点坐标换算（C4
 // 新增区置顶 / 排序键效果自然带入组内）；gridSections = 组段边界 + 折叠态（布局偏移用）
 const gridFolderId = computed(() => (props.viewKey.startsWith("folder:") ? props.viewKey.slice(7) : null));
 const groupSections = computed(() => {
+  if (props.searching) return null; // 3.6 搜索态：分组失效平铺（2026-08-19 用户定）
   if (!gridFolderId.value) return null;
   const defs = content.folderGroupsFor(props.viewKey);
   return defs ? groupPlacements(props.items, defs) : null;
@@ -165,6 +173,22 @@ const stickyGroup = computed(() => {
 
 // 收件箱视口（quick:inbox，4.4）：头部出"工程文件"磁盘实况区块，"内容"副标题改题"已导入"
 const isInbox = computed(() => props.viewKey === "quick:inbox");
+
+// "内容"副标题显隐（3.6 搜索态分支：文件夹区隐藏，命中档案区在时有档案才出标题作分隔）
+const showContentHeader = computed(() => {
+  if (props.items.length === 0) return false;
+  if (props.searching) return isInbox.value || props.searchArchives.length > 0;
+  return (
+    isInbox.value ||
+    content.stripFoldersFor(props.viewKey).length > 0 ||
+    content.stripArchivesFor(props.viewKey).length > 0
+  );
+});
+
+// 搜索空态（3.6，用户定）：搜索态且素材与档案皆无命中 → 中央「无搜索结果」
+const searchEmpty = computed(
+  () => props.searching && props.items.length === 0 && props.searchArchives.length === 0,
+);
 
 // 空格放大预览（lib/useSpaceZoom）：浮层态 + 悬停追踪；panelHover 滚动条悬停显隐共用
 const { zoomAsset, panelHover, trackPointer, onGridMouseLeave, onZoomSpace } = useSpaceZoom({
@@ -268,19 +292,26 @@ onBeforeUnmount(() => {
   >
     <div class="grid-canvas" :style="{ transform: `translateY(${-pos}px)` }">
       <div ref="headerRef" class="grid-header" @pointerdown="headerBlankClear">
-        <!-- 当前视口无子文件夹时整个文件夹区块隐藏（阶段3修改定案；1.2 按本标签页 viewKey 取子文件夹） -->
-        <FolderStrip v-if="content.stripFoldersFor(viewKey).length > 0" :view-key="viewKey" />
-        <!-- 档案区（3.2 一轮，PRD 02-03 三区：文件夹 / 档案 / 文件）：无档案整块不渲染（同文件夹区口径） -->
-        <ArchiveStrip v-if="content.stripArchivesFor(viewKey).length > 0" :view-key="viewKey" />
-        <!-- 收件箱视口（4.4）：磁盘实况"工程文件"区块在 FolderStrip 同位（快速访问不出文件夹区块） -->
-        <InboxDiskSection v-if="isInbox && content.inboxDisk.length > 0" />
+        <!-- 当前视口无子文件夹时整个文件夹区块隐藏（阶段3修改定案；1.2 按本标签页 viewKey 取子文件夹）；
+             搜索态（3.6）隐藏文件夹区块（命中只出素材与档案，2026-08-19 用户定） -->
+        <FolderStrip v-if="!searching && content.stripFoldersFor(viewKey).length > 0" :view-key="viewKey" />
+        <!-- 档案区（3.2 一轮，PRD 02-03 三区：文件夹 / 档案 / 文件）：无档案整块不渲染（同文件夹区口径）；
+             搜索态 = 命中档案列表（nodes 数据源切换，快速访问视图后端不返回档案命中——档案区仅文件夹视图出） -->
+        <ArchiveStrip
+          v-if="searching ? searchArchives.length > 0 : content.stripArchivesFor(viewKey).length > 0"
+          :view-key="viewKey"
+          :nodes="searching ? searchArchives : undefined"
+        />
+        <!-- 收件箱视口（4.4）：磁盘实况"工程文件"区块在 FolderStrip 同位（快速访问不出文件夹区块）；
+             搜索态隐藏（磁盘实况不入搜索范围——搜索搜库内素材） -->
+        <InboxDiskSection v-if="isInbox && !searching && content.inboxDisk.length > 0" />
         <!-- "内容"副标题：无子文件夹（含档案）时隐藏（无需区分）；有子文件夹但无文件时同样隐藏（2026-07-24 用户定）。
              收件箱视口改题"已导入"（4.4）：无文件夹区块概念，只要有已导入内容就显示。
              分组不再强制出内容标题（2026-08-19 复验定：无文件夹视图里"内容"与组标题叠着多余；
-             有文件夹/档案区块时保留——分隔文件夹区与内容区）。
+             有文件夹/档案区块时保留——分隔文件夹区与内容区）；搜索态 = 有命中档案时才出（分隔档案区与内容区）。
              padding 统一 0（2026-08-08 用户定：仅目录树区块标题 left 8）；标题↔卡片间距 12（下方 translateY） -->
         <SectionHeader
-          v-if="items.length > 0 && (isInbox || content.stripFoldersFor(viewKey).length > 0 || content.stripArchivesFor(viewKey).length > 0)"
+          v-if="showContentHeader"
           :title="isInbox ? '已导入' : '内容'"
           :count="items.length"
           v-model:open="assetsOpen"
@@ -347,6 +378,8 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+    <!-- 搜索空态（3.6，用户定：中央「无搜索结果」极淡档；pointer-events none 不挡空白右键 / 框选） -->
+    <div v-if="searchEmpty" class="search-empty">无搜索结果</div>
     <!-- sticky 置顶分组标题（05_区块标题：滚过顶后停留，下一组接替顶走）；C1 实底盖卡片；
          贴 viewport 顶（2026-08-19 复验：原 top=headerH+12 悬在视口中部截断首行卡片）；
          列表模式让开钉顶列头（46+6=listExtra） -->
@@ -425,6 +458,17 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: hidden;
   outline: none;
+}
+/* 搜索空态（3.6）：absolute 居中于 viewport（内容为空无滚动，天然居中） */
+.search-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  font-size: var(--text-body-size);
+  pointer-events: none;
 }
 .grid-canvas {
   position: absolute;

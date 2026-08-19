@@ -275,6 +275,7 @@ pub fn run() {
       commands::recycle::delete_recycle,
       commands::recycle::clear_recycle,
       commands::scan::scan_duplicates,
+      commands::search::search_assets,
       commands::preview::open_with_default_app,
       commands::preview::open_preview_window,
       commands::asset_menu::open_with_dialog,
