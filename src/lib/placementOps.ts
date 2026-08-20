@@ -637,3 +637,54 @@ export async function getAssetOriginPath(assetId: string): Promise<string | null
     return null;
   }
 }
+
+// —— 序列帧包（5.2 包内视图，PRD 04-序列帧 / 05-序列帧打包）——
+
+// 解散序列帧包导入（危险操作，不可撤销——确认弹窗编排在 menuOps.dissolveSequenceFlow）：
+// 每帧移动出库为独立素材、原包整体删除（逐帧笔记随之删除）；后端不进 undo，硬删除收尾（无撤销按钮）
+export async function dissolveSequence(assetId: string): Promise<void> {
+  const toast = useToastStore();
+  try {
+    const count = await invoke<number>("dissolve_sequence", { assetId });
+    await runHardDelete(() => `解散序列帧包为 ${count} 个独立素材`);
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+  }
+}
+
+// 删除序列帧包的帧（抽帧调节奏）：帧移 cache/seq-trash 暂存，会话内可撤销（toast 带撤销按钮）；
+// 封面帧被删改指剩余首帧并重建缩略图；至少保留 1 帧（后端护栏）。
+// 不走 runOp：0 删除（全陈旧名）时后端不登记 undo 事务，toast 带撤销按钮会误关联到别的历史操作
+export async function deleteSequenceFrames(assetId: string, frameNames: string[]): Promise<void> {
+  if (frameNames.length === 0) return;
+  const toast = useToastStore();
+  try {
+    const deleted = await invoke<number>("delete_sequence_frames", { assetId, frameNames });
+    if (deleted === 0) return;
+    await useContentStore().refresh();
+    const undo = useUndoStore();
+    void undo.refreshState();
+    toast.notify({ message: `已删除 ${deleted} 张序列帧`, actionLabel: "撤销", onAction: () => void undo.undo() });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+  }
+}
+
+// 重排序号：剩余帧按当前顺序重排连续序号（词干-001..N），帧笔记 key 随迁移；可撤销。
+// 不走 runOp 同上：0 改名（序号已连续）时无 undo 事务，提示语也不带撤销按钮
+export async function renumberSequenceFrames(assetId: string): Promise<void> {
+  const toast = useToastStore();
+  try {
+    const renamed = await invoke<number>("renumber_sequence_frames", { assetId });
+    if (renamed === 0) {
+      toast.notify({ message: "序号已连续，无需重排" });
+      return;
+    }
+    await useContentStore().refresh();
+    const undo = useUndoStore();
+    void undo.refreshState();
+    toast.notify({ message: `已重排 ${renamed} 张序列帧序号`, actionLabel: "撤销", onAction: () => void undo.undo() });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+  }
+}

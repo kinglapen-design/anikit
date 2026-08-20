@@ -14,6 +14,7 @@ import {
   copyAssetPath,
   copyBase64,
   copyName,
+  dissolveSequenceFlow,
   moveAssetsFlow,
   pickCustomThumb,
   pickExportAssets,
@@ -75,8 +76,18 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
   ];
   if (isSequence) {
     entries.push(
-      { label: "打开序列帧包", icon: "open-sequence-pack", disabled: true },
-      { label: "解散序列帧包导入", icon: "import-sequence-unpack", disabled: true },
+      // 打开序列帧包（5.2 包内视图）：视口切到包内卡片列表（seq:{assetId}），面包屑后退可返回；
+      // 进包前清全局选择域——包内视口无素材卡片，残留选中会让全局 Delete 误删素材/文件夹
+      {
+        label: "打开序列帧包",
+        icon: "open-sequence-pack",
+        action: () => {
+          selection.clear();
+          useTabsStore().openView(`seq:${assetId}`);
+        },
+      },
+      // 解散序列帧包导入（5.2）：危险操作，alert warning 弹窗明示不可撤销（流程在 menuOps）
+      { label: "解散序列帧包导入", icon: "import-sequence-unpack", action: () => dissolveSequenceFlow(p) },
     );
   }
   entries.push(

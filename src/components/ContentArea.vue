@@ -8,6 +8,7 @@ import { computed, onBeforeUnmount, ref } from "vue";
 import type { DockviewPanelApi, IDockviewPanelProps } from "dockview-vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
+import SequencePackView from "./SequencePackView.vue";
 import ArchiveSidePanel from "./ArchiveSidePanel.vue";
 import SearchBar from "./SearchBar.vue";
 import ImportProgressBar from "./ImportProgressBar.vue";
@@ -33,6 +34,10 @@ const search = useSearchStore();
 
 // 本标签页视口（frame.params = addPanel/updateParameters 的用户参数）
 const viewKey = computed(() => (frame.value.params?.viewKey as string) ?? "quick:all");
+
+// 序列帧包内视图（5.2）：viewKey = seq:{assetId}——素材区整区换包内帧卡片列表
+//（数据不走 placementsFor：帧不是 Placement；搜索/排序/分组对包内不适用，组件内自管）
+const seqPackAssetId = computed(() => (viewKey.value.startsWith("seq:") ? viewKey.value.slice(4) : null));
 
 // 本 panel 激活态：预览整栏切换只对激活标签页生效
 const active = ref(panelApi.isActive);
@@ -100,7 +105,9 @@ const archiveNode = computed<FolderNode | null>(() => {
           <ContentTitleBar :view-key="viewKey" :panel-id="panelApi.id" />
           <ImportProgressBar />
           <section class="asset-section">
+            <SequencePackView v-if="seqPackAssetId" :asset-id="seqPackAssetId" :panel-active="active" />
             <AssetGrid
+              v-else
               :items="items"
               :view-key="viewKey"
               :panel-active="active"

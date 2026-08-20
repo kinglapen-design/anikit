@@ -10,6 +10,7 @@ mod document;
 mod duplicate;
 mod folder;
 mod placement;
+mod sequence;
 
 pub use block::{apply_block_changes, reorder_blocks, ApplyBlockReport, BlockInput};
 pub use clone::clone_folders;
@@ -18,6 +19,7 @@ pub use document::create_document;
 pub use duplicate::{duplicate_placements, rename_placement, rename_placements, BatchRenameFailed};
 pub use folder::{create_folder, move_folders, rename_folder, reorder_folders, set_folder_color, set_folder_groups, set_folder_icon};
 pub use placement::{link_placements, move_placements, reorder_placements};
+pub use sequence::{delete_frames, dissolve_sequence, renumber_frames, DeleteFramesOutcome, DissolveOutcome, RenumberOutcome};
 
 use serde::{Deserialize, Serialize};
 

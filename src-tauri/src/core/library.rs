@@ -172,9 +172,10 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   }
   // 会话级缓存（2026-07-25 用户定）：tmp（冲突弹窗预览）/ previews（PSD 高清层）/ frames（序列帧+动图帧条小图）
   // / waveforms（按需重采样波形图，2026-07-26）/ note-thumbs（详情面板笔记悬停帧画面，5.2）
+  // / seq-trash（序列帧删帧暂存——支撑撤销，2026-08-21，5.2 包内视图）
   // 打开库时清空上一轮遗留——点开过的素材缓存不留到下一会话，防容量膨胀；cache/thumbs 格式图标按格式跨会话保留。
-  // 动图逐帧高清图持久化在 info/frames/（2026-07-26 用户定案），不进 cache 不清空
-  for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs"] {
+  // seq-trash 清空 = 删帧会话结束真删（undo 栈同为会话级，重启后无从撤销）；序列帧帧图持久化在 info/frames/，不进 cache 不清空
+  for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs", "seq-trash"] {
     let dir = path.join(CACHE_DIR).join(sub);
     if dir.is_dir() {
       if let Err(e) = fs::remove_dir_all(&dir) {
@@ -624,8 +625,9 @@ mod tests {
     let dir = tempfile::tempdir().unwrap();
     let lib = create_test(dir.path());
     let root = lib.root.clone();
-    // 会话级缓存（2026-07-25 用户定）：tmp / previews / frames / waveforms / note-thumbs 打开库时整目录清空
-    for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs"] {
+    // 会话级缓存（2026-07-25 用户定）：tmp / previews / frames / waveforms / note-thumbs
+    // / seq-trash（序列帧删帧暂存，2026-08-21）打开库时整目录清空
+    for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs", "seq-trash"] {
       let d = root.join("cache").join(sub);
       fs::create_dir_all(&d).unwrap();
       fs::write(d.join("a.webp"), b"x").unwrap();
@@ -635,7 +637,7 @@ mod tests {
     fs::create_dir_all(&thumbs).unwrap();
     fs::write(thumbs.join("fla.webp"), b"x").unwrap();
     open(&lib.space_root, &root).unwrap();
-    for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs"] {
+    for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs", "seq-trash"] {
       assert!(!root.join("cache").join(sub).exists(), "打开库应清空 cache/{sub}");
     }
     assert!(thumbs.join("fla.webp").exists(), "格式图标缓存应保留");

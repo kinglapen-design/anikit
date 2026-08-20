@@ -37,6 +37,10 @@ const frameLabel = computed(() => {
     }
     return formatDuration(media.currentTime);
   }
+  // 动图（2026-08-21 补，解包废除漏适配）：seq 恒 null，帧号/总数取帧流状态
+  if (preview.kind === "anim") {
+    return preview.animTotal > 0 ? `帧 ${preview.frame + 1} / ${preview.animTotal}` : "";
+  }
   const n = preview.seq?.frames.length ?? 0;
   return n > 0 ? `帧 ${preview.frame + 1} / ${n}` : "";
 });
@@ -75,7 +79,8 @@ function onKeydown(e: KeyboardEvent): void {
     e.preventDefault();
   }
 }
-// 列表条目标识：t:{秒} → 帧号（帧数模式且 fps 可用，5.3）或 mm:ss；帧名 → 帧号
+// 列表条目标识：t:{秒} → 帧号（帧数模式且 fps 可用，5.3）或 mm:ss；
+// f:{索引}（动图，2026-08-21 补，解包废除漏适配）→ 帧号；帧名（序列帧）→ 帧号
 function itemLabel(key: string): string {
   if (key.startsWith("t:")) {
     const secs = Number(key.slice(2));
@@ -84,6 +89,10 @@ function itemLabel(key: string): string {
       return `帧 ${frameOfTime(secs, media.fps, total)}`;
     }
     return formatDuration(secs);
+  }
+  if (key.startsWith("f:")) {
+    const i = Number(key.slice(2));
+    return Number.isFinite(i) ? `帧 ${i + 1}` : key;
   }
   const i = preview.seq?.frames.findIndex((f) => f.name === key) ?? -1;
   return i >= 0 ? `帧 ${i + 1}` : key;

@@ -50,7 +50,8 @@ watch(
 );
 
 // item 左侧标识：视频 t:{秒} → 帧号（帧数模式且素材 fps 可用，5.3 帧化；底层 key 仍 `t:{秒}` 不变）
-// 或 mm:ss（时间码模式 / fps 缺失 / 音频）；序列帧/动图帧名（标题-00001.webp）→ 帧号数字
+// 或 mm:ss（时间码模式 / fps 缺失 / 音频）；动图 f:{索引}（2026-08-21 补，解包废除漏适配）与
+// 序列帧帧名（标题-00001.webp）→ 帧号数字
 function label(key: string): string {
   if (key.startsWith("t:")) {
     const secs = Number(key.slice(2)) || 0;
@@ -60,6 +61,10 @@ function label(key: string): string {
       return String(frameOfTime(secs, fps, total));
     }
     return formatDuration(secs);
+  }
+  if (key.startsWith("f:")) {
+    const i = Number(key.slice(2));
+    return Number.isFinite(i) ? String(i + 1) : key;
   }
   const m = key.match(/-(\d+)\.[^.]+$/);
   return m ? String(parseInt(m[1], 10)) : key;
@@ -98,7 +103,17 @@ async function jump(key: string): Promise<void> {
   if (!sel) return;
   const preview = usePreviewStore();
   await preview.open(`${sel.assetId}|${sel.folderId}`);
-  if (preview.kind === "sequence" || preview.kind === "anim") {
+  // 动图（2026-08-21 修，解包废除漏适配）：seq 恒 null，按 f:{索引} 直接定位
+  //（previewNotes store 的 jump 本就是此口径，本组件这份是旧拷贝）
+  if (preview.kind === "anim") {
+    if (key.startsWith("f:")) {
+      const i = Number(key.slice(2));
+      if (Number.isFinite(i) && i >= 0) {
+        preview.pause();
+        preview.setFrame(i);
+      }
+    }
+  } else if (preview.kind === "sequence") {
     const i = preview.seq?.frames.findIndex((f) => f.name === key) ?? -1;
     if (i >= 0) {
       preview.pause();

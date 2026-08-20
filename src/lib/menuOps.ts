@@ -2,7 +2,7 @@
 // 确认弹窗（selection.confirmPrompt / folderPickPrompt）、剪贴板写入、新建文件夹共享入口。
 // 命令调用一律走 placementOps（UI 唯一入口），本层只做流程编排。
 import { open } from "@tauri-apps/plugin-dialog";
-import { useContentStore, DEFAULT_BLOCK_ID, type FolderNode } from "../stores/content";
+import { useContentStore, DEFAULT_BLOCK_ID, type FolderNode, type PlacementView } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
@@ -19,6 +19,7 @@ import {
   cutFolders,
   deleteFolder,
   deleteFolders,
+  dissolveSequence,
   getAssetBase64,
   getAssetOriginPath,
   revealInExplorer,
@@ -205,6 +206,25 @@ export function revealWithWarning(assetId: string): void {
     confirmLabel: "继续",
     alert: "warning",
     onConfirm: () => void revealInExplorer(assetId),
+  };
+}
+
+// —— 解散序列帧包导入（5.2，PRD 05-序列帧打包）：危险操作（改变物理磁盘、不可撤销）——
+// alert warning 弹窗明示：帧各自成独立素材（落至原包所在文件夹）、原包删除、逐帧笔记随删、不可撤销
+export function dissolveSequenceFlow(p: PlacementView): void {
+  const frames = p.frameCount ?? 0;
+  const notes = p.noteCount ?? 0;
+  const body =
+    `「${p.name}」的 ${frames} 张序列帧将各自解散为独立素材（落至原包所在文件夹），` +
+    `原序列帧包将一并删除。` +
+    (notes > 0 ? `包的 ${notes} 条逐帧笔记将随之删除。` : "") +
+    `此操作不可撤销。`;
+  useSelectionStore().confirmPrompt = {
+    title: "解散序列帧包导入",
+    body,
+    confirmLabel: "解散导入",
+    alert: "warning",
+    onConfirm: () => void dissolveSequence(p.assetId),
   };
 }
 

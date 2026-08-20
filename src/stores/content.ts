@@ -396,11 +396,17 @@ export const useContentStore = defineStore("content", {
       return this.placementsFor(state.sidebarSelected);
     },
     // 视口标题（1.2 多标签页：标签页标题 / 面包屑共用）：folder → 实时文件夹名（重命名跟随）；
-    // quick 五项 → 固定文案；工作空间/标签等占位视图 → "全部"兜底（调用方可另传 fallback）
+    // quick 五项 → 固定文案；seq（5.2 包内视图）→ 序列帧包名（资产已删/已解散兜底"序列帧包"）；
+    // 工作空间/标签等占位视图 → "全部"兜底（调用方可另传 fallback）
     viewTitle(state) {
       return (viewKey: string): string => {
         if (viewKey.startsWith("folder:")) {
           return findFolder(state.folders, viewKey.slice(7))?.name ?? "文件夹";
+        }
+        if (viewKey.startsWith("seq:")) {
+          const id = viewKey.slice(4);
+          const p = state.placements.find((x) => x.assetId === id);
+          return p ? p.name.replace(/\.[^.]+$/, "") : "序列帧包";
         }
         return QUICK_LABELS[viewKey.slice(6)] ?? "全部";
       };
