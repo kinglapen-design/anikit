@@ -42,7 +42,7 @@ async function togglePin(): Promise<void> {
   <div class="preview-titlebar" data-tauri-drag-region>
     <div class="nav-group">
       <template v-if="!window">
-        <IconButton name="chevron-large" title="返回" class="rot-ccw" @click="preview.close()" />
+        <IconButton name="chevron-large" title="返回" class="rot-180" @click="preview.close()" />
         <span class="index-text">{{ preview.index + 1 }} / {{ preview.total }}</span>
       </template>
       <span v-else class="index-text">{{ preview.current?.name ?? "预览" }}</span>
@@ -71,17 +71,17 @@ async function togglePin(): Promise<void> {
         title="新窗口打开"
         @click="openInNewWindow"
       />
+      <!-- 上一个 / 下一个 = nav-history，与面包屑后退 / 前进同款（2026-08-20 用户定） -->
       <IconButton
-        name="chevron-large"
+        name="nav-history"
         title="上一个"
-        class="rot-ccw"
         :disabled="preview.index <= 0"
         @click="preview.step(-1)"
       />
       <IconButton
-        name="chevron-large"
+        name="nav-history"
         title="下一个"
-        class="rot-cw"
+        class="rot-180"
         :disabled="preview.index >= preview.total - 1"
         @click="preview.step(1)"
       />
@@ -128,12 +128,12 @@ async function togglePin(): Promise<void> {
   gap: var(--space-6);
   flex: none;
 }
-/* chevron-large 原图标朝下：返回 / 上一个 = 顺时针 90°（朝左），下一个 = 逆时针 90°（朝右）（2026-07-25 用户定：上/下一个用左右方向） */
-.rot-ccw :deep(svg) {
-  transform: rotate(90deg);
-}
-.rot-cw :deep(svg) {
-  transform: rotate(-90deg);
+/* chevron-large 原图标朝右（18px 箭头）：返回 = 旋转 180° 朝左；
+   上/下一个 = nav-history 与面包屑后退/前进同款，下一个旋转 180° 朝右（figma 41 口径）。
+   2026-08-20 修：1.1 图标换血后 chevron-large 由朝下变朝右，旧 rot-ccw/rot-cw（±90°）约定
+   失效——返回曾显示朝下、上/下一个曾显示 ↓↑。 */
+.rot-180 :deep(svg) {
+  transform: rotate(180deg);
 }
 .index-text {
   font-size: var(--text-body-size);
