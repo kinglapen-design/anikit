@@ -29,8 +29,8 @@ pub const ARCHIVES_FILE: &str = "archives.json";
 pub const ROOT_DATA_FILES: &[&str] = &[FOLDERS_FILE, TAGS_FILE, PINS_FILE, RECYCLE_FILE, RECENT_FILE, ARCHIVES_FILE];
 
 /// info 文件夹内的数据文件（备份对象；缩略图/波形图是缓存可重建，不备份；
-/// frames.json = 动图解包的逐帧 delay 清单，2026-07-26 定案持久化）
-const INFO_DATA_FILES: &[&str] = &["metadata.json", "annotation.json", "notes.json", "frames.json"];
+/// frames.json 已随动图解包废除移除（2026-08-20，播放走自研解码帧流，逐帧 delay 运行时读取源文件）
+const INFO_DATA_FILES: &[&str] = &["metadata.json", "annotation.json", "notes.json"];
 
 /// 打开状态的素材库：数据 + 内存索引（运行期查询走内存，写操作先落盘再更新内存，PRD 06-03）
 #[allow(dead_code)] // tags / space_root 字段随阶段 7 标签业务 / 后续空间能力启用

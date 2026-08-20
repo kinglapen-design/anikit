@@ -72,10 +72,9 @@ fn activate_space(app: &AppHandle, state: &State<AppState>, space: Space) -> Res
 }
 
 /// 库进入打开状态：更新应用状态 + 记录到全局配置最近列表（切库不动收件箱——空间级共用）；
-/// 库切换清空动图解包队列 pending（任务绑定 assets 池，切库后无意义，2026-07-26）
-/// 与撤销双栈（6.0：会话级不持久化，栈内快照绑定旧库路径）
+/// 库切换停止全部帧流会话（会话绑定旧库 assets 池）与撤销双栈（6.0：会话级不持久化，
+/// 栈内快照绑定旧库路径）
 fn activate(state: &State<AppState>, lib: Library) -> Result<LibraryInfo, String> {
-  crate::services::unpack_queue::clear_pending();
   crate::services::frame_stream::stop_all(); // 帧流会话绑定旧库 assets 池（阶段四）
   state.undo.lock().map_err(|e| e.to_string())?.clear();
   let info = to_info(&lib);
@@ -228,7 +227,6 @@ fn apply_delete_library(state: &AppState, name: &str, delete_orphans: bool) -> R
     .as_deref()
     == Some(name);
   if is_current {
-    crate::services::unpack_queue::clear_pending();
     crate::services::frame_stream::stop_all();
     state.undo.lock().map_err(|e| e.to_string())?.clear();
     *state.library.lock().map_err(|e| e.to_string())? = None;

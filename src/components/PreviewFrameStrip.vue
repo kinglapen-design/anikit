@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// 序列帧帧条（4.3；动图 5.2 完全复用）：常驻，播放条下方。
-// 上/下帧按钮 + 逐帧预览块（后端预生成的 cache 小图）；点击定位帧；
-// 切换帧时高亮块先移至可见区两端，顶头后帧列表按需滑动（scrollIntoView nearest，2026-07-25 定案）。
-import { nextTick, ref, watch } from "vue";
+// 序列帧 / 动图帧条（4.3；动图 2026-08-20 解包废除后改帧索引渲染）：常驻，播放条下方。
+// 上/下帧按钮 + 逐帧预览块（cache/frames 会话级小图：序列帧从磁盘帧图缩放，动图 origin 按需解码）；
+// 点击定位帧；切换帧时高亮块先移至可见区两端，顶头后帧列表按需滑动（scrollIntoView nearest，2026-07-25 定案）。
+// 动图分支：帧索引 0..animTotal-1，小图 key = `f:{i}`（animStrips 渐进填充），笔记圆点同 key。
+import { computed, nextTick, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import IconButton from "./IconButton.vue";
 import { usePreviewStore } from "../stores/preview";
@@ -11,6 +12,18 @@ import { usePreviewNotesStore } from "../stores/previewNotes";
 const preview = usePreviewStore();
 const notes = usePreviewNotesStore();
 const listRef = ref<HTMLElement>();
+
+// 帧条出现条件：序列帧有帧清单；动图帧流活着（animTotal > 0。回退态不显示）
+const show = computed(() => !!preview.seq || (preview.kind === "anim" && preview.animTotal > 0));
+// 总帧数：序列帧 = 清单长度；动图 = animTotal
+const count = computed(() => (preview.kind === "anim" ? preview.animTotal : (preview.seq?.frames.length ?? 0)));
+// 动图帧块数据（索引驱动；stripPath 渐进填充，未就绪占位）
+const animFrames = computed(() =>
+  Array.from({ length: preview.animTotal }, (_, i) => ({
+    key: `f:${i}`,
+    stripPath: preview.animStrips[`f:${i}`] ?? null,
+  })),
+);
 
 // 高亮块确保可见（nearest：可见区外才滑动，正好实现"先移到两端、顶头后按需滑动"）
 watch(
@@ -24,11 +37,27 @@ watch(
 </script>
 
 <template>
-  <div v-if="preview.seq" class="frame-strip">
+  <div v-if="show" class="frame-strip">
     <IconButton name="chevron-small" title="上一帧" class="rot-l" :disabled="preview.frame <= 0" @click="preview.stepFrame(-1)" />
     <div ref="listRef" class="frames">
+      <!-- 动图分支（帧索引驱动） -->
+      <template v-if="preview.kind === 'anim'">
+        <button
+          v-for="f in animFrames"
+          :key="f.key"
+          class="frame"
+          :class="{ active: Number(f.key.slice(2)) === preview.frame }"
+          @click="preview.setFrame(Number(f.key.slice(2)))"
+        >
+          <img v-if="f.stripPath" :src="convertFileSrc(f.stripPath)" :alt="f.key" draggable="false" loading="lazy" />
+          <span v-else class="strip-pending" />
+          <span v-if="notes.keySet.has(f.key)" class="note-dot" />
+        </button>
+      </template>
+      <!-- 序列帧分支（帧清单驱动） -->
       <button
-        v-for="(f, i) in preview.seq.frames"
+        v-else
+        v-for="(f, i) in preview.seq!.frames"
         :key="f.name"
         class="frame"
         :class="{ active: i === preview.frame }"
@@ -43,7 +72,7 @@ watch(
       name="chevron-small"
       title="下一帧"
       class="rot-r"
-      :disabled="preview.frame >= preview.seq.frames.length - 1"
+      :disabled="preview.frame >= count - 1"
       @click="preview.stepFrame(1)"
     />
   </div>

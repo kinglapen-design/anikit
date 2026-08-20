@@ -1,10 +1,10 @@
-# CDP 实测：预览窗口动图帧流对接（2026-08-20，阶段四·预览对接）
-# 用户场景回归：frames/ 解包产物缺失（桩 list_sequence_frames 恒 unpacking=true 空清单）时——
-# ① 预览播放走 WS 帧流照常出帧（不再"1/0 无法播放"，播放不依赖解包产物）；
-# ② 播放条帧号/总帧数（metadata frameCount 撑分母）且帧号随播放推进；
+# CDP 实测：预览窗口动图帧流 + 解包废除（2026-08-20，阶段四）
+# 口径：动图全链路不依赖磁盘帧图（frames/ 导入解包已废除）——
+# ① 预览播放走 WS 帧流出帧；② 播放条帧号/总帧数（metadata frameCount 撑）且帧号推进；
 # ③ 暂停/恢复（set_anim_stream_playing）；④ 播放条拖动定位（seek_anim_stream）；
-# ⑤ 无帧清单 → 笔记/设封面禁用（unpacking 降级口径）。
-# 前端链路全真（preview store / PlayBarFrames / PreviewAnimCanvas），帧源由 python WS 桩供给。
+# ⑤ 设封面 / 笔记不再禁用——设封面调 set_thumb_frame 传 `f:{索引}`（origin 抽帧）；
+# ⑥ 帧条按帧索引渲染（24 帧块，prepare_anim_strips 供给 stripPath）。
+# 前端链路全真（preview store / PlayBarFrames / PreviewFrameStrip / PreviewAnimCanvas），帧源 python WS 桩。
 import asyncio
 import json
 import subprocess
@@ -42,8 +42,8 @@ window.__TAURI_INTERNALS__ = {
       list_space_libraries: ["旧库"],
       list_recent_libraries: [{ name: "旧库", path: "E:/T/S/旧库", lastOpenedAt: "" }],
       get_asset_file_path: { path: "E:/T/src.gif", pending: false, animPreview: null },
-      // 用户场景：frames/ 解包产物缺失 → 空清单 + unpacking=true
-      list_sequence_frames: { fps: null, thumbFrame: null, frames: [], unpacking: true },
+      get_notes: [],
+      prepare_anim_strips: { items: [] }, // 首调缓存为空，事件渐进（桩不补，帧块占位即可）
     };
     if (cmd === "start_anim_stream") {
       window.__starts++;
@@ -68,6 +68,11 @@ window.__TAURI_INTERNALS__ = {
     if (cmd === "seek_anim_stream") {
       window.__seeks.push(args.frameIndex);
       return Promise.resolve(null);
+    }
+    if (cmd === "set_thumb_frame") {
+      window.__thumbKeys = window.__thumbKeys || [];
+      window.__thumbKeys.push(args.frameName);
+      return Promise.resolve({ thumbPath: "E:/T/thumb.webp" });
     }
     return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
   },
@@ -161,21 +166,30 @@ async def main():
             await ev("document.querySelector('.asset-card').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))")
             await asyncio.sleep(2.5)  # 预览加载 + start_anim_stream + WS 连接 + 首帧
 
-            # ① 预览 canvas 出帧（frames/ 缺失下帧流照常播放）
+            # ① 预览 canvas 出帧 + 播放条 + 帧条（帧索引渲染 24 块）+ 无禁用钮
             s1 = await ev("""({
               stage: !!document.querySelector('.preview-stage'),
               canvas: (() => { const c = document.querySelector('.preview-stage canvas'); return c ? { w: c.width, h: c.height } : null; })(),
               barText: document.querySelector('.play-bar .frame-text')?.textContent?.trim() ?? null,
               disabledBtns: document.querySelectorAll('.play-bar button[disabled]').length,
+              stripFrames: document.querySelectorAll('.frame-strip .frame').length,
               starts: window.__starts,
             })""")
             print("预览打开:", json.dumps(s1, ensure_ascii=False))
             if not s1 or not s1["stage"]:
                 fails.append("预览模式未打开（无 .preview-stage）")
             if not s1 or not s1["canvas"] or s1["canvas"]["w"] != 160:
-                fails.append(f"预览 canvas 未出帧（{s1 and s1['canvas']}）——frames/ 缺失下帧流播放链路断")
+                fails.append(f"预览 canvas 未出帧（{s1 and s1['canvas']}）——帧流播放链路断")
             if not s1 or not s1["barText"] or not s1["barText"].endswith("/ 24"):
                 fails.append(f"播放条总帧数不是 24（{s1 and s1['barText']}）——frameCount 撑分母失效")
+            if s1 and s1["stripFrames"] != 24:
+                diag = await ev("""(() => {
+                  const s = document.querySelector('.frame-strip');
+                  const btns = [...document.querySelectorAll('.play-bar .icon-btn')].length;
+                  return { strip: s ? s.outerHTML.slice(0, 200) : null, iconBtns: btns };
+                })()""")
+                print("帧条诊断:", json.dumps(diag, ensure_ascii=False))
+                fails.append(f"帧条帧块数 {s1 and s1['stripFrames']}（期望 24）——帧索引渲染失效")
 
             # ② 帧号随播放推进（两次采样分子不同）
             t1 = (await ev("document.querySelector('.play-bar .frame-text')?.textContent?.trim()")) or ""
@@ -206,14 +220,21 @@ async def main():
             if not seeks or not all(0 <= v <= 23 for v in seeks):
                 fails.append(f"播放条拖动未产生合法 seek（{seeks}）")
 
-            # ⑤ 无帧清单：笔记 / 设封面禁用（其余钮可用）
-            if s1 and s1["disabledBtns"] != 2:
-                fails.append(f"禁用钮数 {s1 and s1['disabledBtns']}（期望 2 = 笔记 + 设封面）")
+            # ⑤ 设封面不再禁用：点设封面钮（.icon-btn 第 3 个：play/笔记/设封面/全屏）→ set_thumb_frame 传 `f:{索引}`
+            await ev("document.querySelectorAll('.play-bar .icon-btn')[2]?.click()")
+            await asyncio.sleep(0.3)
+            thumb_keys = await ev("window.__thumbKeys || []")
+            print("设封面调用:", thumb_keys)
+            if not thumb_keys or not all(str(k).startswith("f:") for k in thumb_keys):
+                fails.append(f"设封面未传 f: 帧索引（{thumb_keys}）——抽帧分支未接")
+            # 无禁用钮（解包废除后设封面/笔记恒可用）
+            if s1 and s1["disabledBtns"] != 0:
+                fails.append(f"禁用钮数 {s1 and s1['disabledBtns']}（期望 0——解包废除后恒可用）")
 
             if fails:
                 print("FAIL:", "; ".join(dict.fromkeys(fails)))
                 return 3
-            print("PASS: 预览动图帧流对接成立（frames/ 缺失照常出帧 / 播放条帧号推进 / 暂停恢复 / 拖动定位 / 降级禁用）")
+            print("PASS: 预览动图解包废除成立（帧流出帧 / 帧号推进 / 暂停恢复 / 拖动定位 / 设封面 f: 抽帧 / 帧条 24 块）")
             return 0
     finally:
         proc.terminate()

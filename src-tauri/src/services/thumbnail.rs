@@ -1,9 +1,9 @@
 //! 缩略图服务：图片宽高探测 + 缩略图生成 + 格式图标缓存（4.2）。
 //! 缩略图存 info 文件夹（{名}_thumbnail.webp），是缓存可重建、不进备份（PRD 06-04）。
 //! 格式图标（shell 保底）按格式存 cache/thumbs/{ext}.webp，不进 info（2026-07-22 用户定案）。
-//! 序列帧 / 动图帧条小图按资源存 cache/frames/{asset_id}/{帧名}.webp，不进 info（会话级，打开库清空）。
+//! 序列帧 / 动图帧条小图按资源存 cache/frames/{asset_id}/{帧名}.webp，不进 info（会话级，打开库清空；
+//! 动图帧名 = `f-{索引:05}`，origin 运行时解码生成——2026-08-20 解包废除后无磁盘帧图）。
 //! cache 下的会话级目录（tmp / previews / frames）打开库时统一清空（2026-07-25 用户定）；thumbs 格式图标跨会话保留。
-//! 动图逐帧高清图持久化在 info/frames/（2026-07-26 用户定案，解包走 services/anim_unpack），不进 cache。
 //! 探测 / 解码失败返回 None 属"能力探测"语义（不是图片），不算吞错误。
 
 use std::fs;
@@ -193,14 +193,28 @@ pub fn generate_frame_strip(root: &Path, origin: &Path, asset_id: &str, frame_na
     return Some(dest.to_string_lossy().into_owned());
   }
   let img = load_origin(origin)?;
+  write_frame_strip(&dest, img, &origin.display().to_string())
+}
+
+/// 内存版帧条生成（动图：origin 运行时解码帧直接喂入，无磁盘帧图——2026-08-20 解包废除后
+/// 动图帧条由 preview_queue::AnimStrips 单趟流式解码生成，帧名 = `f-{索引:05}`）
+pub fn generate_frame_strip_mem(root: &Path, img: DynamicImage, asset_id: &str, frame_name: &str) -> Option<String> {
+  let dest = frame_strip_dest(root, asset_id, frame_name);
+  if dest.is_file() {
+    return Some(dest.to_string_lossy().into_owned());
+  }
+  write_frame_strip(&dest, img, "anim-stream")
+}
+
+fn write_frame_strip(dest: &Path, img: DynamicImage, src_desc: &str) -> Option<String> {
   let strip = shrink_to_edge(img, STRIP_SHORT_EDGE);
   let parent = dest.parent()?;
   if let Err(e) = fs::create_dir_all(parent) {
     log::error!("帧条缓存目录创建失败：{e}");
     return None;
   }
-  if let Err(e) = save_webp(&strip, &dest) {
-    log::error!("帧条缓存落盘失败（{}）：{e}", origin.display());
+  if let Err(e) = save_webp(&strip, dest) {
+    log::error!("帧条缓存落盘失败（{src_desc}）：{e}");
     return None;
   }
   Some(dest.to_string_lossy().into_owned())
@@ -231,7 +245,7 @@ pub(crate) fn shrink_to_edge(img: DynamicImage, short_edge: u32) -> DynamicImage
 }
 
 /// 长边缩到 long_edge、短边等比；原图长边不足不放大
-/// pub(crate)：动图解包（anim_unpack）复用同一缩放规格（长边 ≤ 4096）
+/// pub(crate)：预览全尺寸缓存（generate_full_preview 长边 ≤ 4096）复用同一缩放规格
 pub(crate) fn shrink_long_edge(img: DynamicImage, long_edge: u32) -> DynamicImage {
   let (w, h) = (img.width(), img.height());
   if w.max(h) <= long_edge {
@@ -247,7 +261,7 @@ pub(crate) fn shrink_long_edge(img: DynamicImage, long_edge: u32) -> DynamicImag
 }
 
 /// 有损 webp 编码落盘（libwebp 官方绑定；image crate 的 WebPEncoder 只支持无损故不用）
-/// pub(crate)：动图解包（anim_unpack）复用同一编码规格（q80）
+/// pub(crate)：笔记帧画面缓存 / 帧条小图（q80）复用同一编码规格
 pub(crate) fn save_webp(img: &DynamicImage, path: &Path) -> std::io::Result<()> {
   let rgba = img.to_rgba8();
   let mem = webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height()).encode(WEBP_QUALITY);

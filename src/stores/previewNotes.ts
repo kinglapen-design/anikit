@@ -1,5 +1,6 @@
 // 逐帧笔记（5.2）：sequence/anim/video 播放条的笔记浮层状态。
-// key 约定：序列帧/动图 = 帧名（frame-00001），视频 = t:{currentTime.toFixed(3)}；
+// key 约定：序列帧 = 帧名（frame-00001）；**动图 = `f:{帧索引0起}`**（2026-08-20 解包废除，
+// 不再依赖帧文件名；存量帧名 key 由后端 get_notes 一次性迁移）；视频 = t:{currentTime.toFixed(3)}；
 // set_note 的 text 去空白后为空 = 删除；两条命令统一返回按 key 排序全量，前端直接替换。
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
@@ -33,7 +34,10 @@ export const usePreviewNotesStore = defineStore("previewNotes", {
     // 当前帧/当前时间点 key（video 播放中随时间变化；浮层打开即暂停，编辑期稳定）
     currentKey(): string | null {
       const preview = usePreviewStore();
-      if (preview.kind === "sequence" || preview.kind === "anim") {
+      if (preview.kind === "anim") {
+        return `f:${preview.frame}`;
+      }
+      if (preview.kind === "sequence") {
         return preview.seq?.frames[preview.frame]?.name ?? null;
       }
       if (preview.kind === "video") {
@@ -83,7 +87,7 @@ export const usePreviewNotesStore = defineStore("previewNotes", {
       this.version += 1;
       return list;
     },
-    // 详情面板悬停浮帧画面：序列帧 / 动图直给帧原图，视频 ffmpeg 截帧（未就绪 path=null）
+    // 详情面板悬停浮帧画面：序列帧直给帧原图，动图 `f:{索引}` 抽帧，视频 ffmpeg 截帧（未就绪 path=null）
     async getNoteThumb(assetId: string, key: string): Promise<NoteThumb> {
       return await invoke<NoteThumb>("get_note_thumb", { assetId, key });
     },
@@ -93,7 +97,9 @@ export const usePreviewNotesStore = defineStore("previewNotes", {
     // 列表点击跳转：sequence/anim 跳帧，video 跳到该时间点
     jump(key: string): void {
       const preview = usePreviewStore();
-      if (preview.kind === "sequence" || preview.kind === "anim") {
+      if (preview.kind === "anim") {
+        if (key.startsWith("f:")) preview.setFrame(Number(key.slice(2)));
+      } else if (preview.kind === "sequence") {
         const i = preview.seq?.frames.findIndex((f) => f.name === key) ?? -1;
         if (i >= 0) preview.setFrame(i);
       } else if (preview.kind === "video" && key.startsWith("t:")) {

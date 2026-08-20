@@ -70,10 +70,6 @@ pub fn run() {
       // 提交新任务作废旧任务（快速切换素材不堆积），须在命令可达前初始化
       services::preview_queue::init(app.handle().clone());
 
-      // 动图解包队列（2026-07-26 定案）：单 worker 无代际作废，导入完成的动图资产
-      // 逐帧高清图持久化 info/frames/，完成发 anim-unpacked 事件
-      services::unpack_queue::init(app.handle().clone());
-
       // 动图帧流服务（阶段四·自研解码器）：WS server 推帧，动图卡播放源
       // cfg(not(test))：init 内部持 AppHandle + 起 WS server，测试构建编译不出该函数（踩坑 014）
       #[cfg(not(test))]
@@ -240,6 +236,7 @@ pub fn run() {
       commands::inbox::delete_inbox_entry,
       commands::preview::get_asset_file_path,
       commands::preview::list_sequence_frames,
+      commands::preview::prepare_anim_strips,
       commands::anim_stream::start_anim_stream,
       commands::anim_stream::stop_anim_stream,
       commands::anim_stream::set_anim_stream_size,

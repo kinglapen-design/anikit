@@ -47,6 +47,7 @@ fn clamp_edge(edge: u32) -> u32 {
 }
 
 /// 帧二进制头长度（w u32 + h u32 + idx u32 + seq u64）
+#[cfg(not(test))] // 仅 WS server 路径使用（测试构建不起 server，踩坑 014）
 pub const FRAME_HEADER: usize = 20;
 
 #[derive(Debug, Clone, Serialize)]
@@ -187,6 +188,7 @@ async fn serve_ws(
 }
 
 /// [w u32le][h u32le][idx u32le][seq u64le][rgba...]
+#[cfg(not(test))] // 仅 WS server 路径使用
 fn frame_bytes(f: &Latest) -> Vec<u8> {
   let mut out = Vec::with_capacity(FRAME_HEADER + f.rgba.len());
   out.extend_from_slice(&f.w.to_le_bytes());

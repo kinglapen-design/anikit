@@ -1,6 +1,8 @@
 //! 逐帧笔记 notes.json（5.2）：info 内单资源数据文件，单一写点 = 本模块（规范第 1 条）。
 //! 结构 `{ "version": 1, "notes": [{ key, text, updatedAt }] }`（camelCase）；
-//! key 语义约定：序列帧 / 动图 = 帧名（归一名，如 标题-001.png / 标题-00001.webp），视频 = `t:{秒:.3}`（如 t:12.500）。
+//! key 语义约定：序列帧 = 帧名（归一名，如 标题-001.png），**动图 = `f:{帧索引0起}`**（如 f:41——
+//! 2026-08-20 解包废除后不再依赖帧文件名，旧帧名 key 由 commands/notes::get_notes 一次性迁移），
+//! 视频 = `t:{秒:.3}`（如 t:12.500）。
 //! 读写复用 json_io 原子写 + version 门禁；文件不存在 = 空列表（不算错误）。
 
 use std::path::{Path, PathBuf};
@@ -68,6 +70,12 @@ pub fn remove(info_dir: &Path, key: &str) -> Result<Vec<NoteEntry>, DataError> {
   }
   let mut notes = load(info_dir)?;
   notes.retain(|n| n.key != key);
+  persist(info_dir, notes)
+}
+
+/// 全量替换（pub(crate)：commands/notes::get_notes 的动图旧 key 迁移专用——
+/// 逐条 upsert 会刷新 updatedAt，迁移必须保留原时间与文本）。返回排序后列表
+pub(crate) fn replace_all(info_dir: &Path, notes: Vec<NoteEntry>) -> Result<Vec<NoteEntry>, DataError> {
   persist(info_dir, notes)
 }
 

@@ -1,7 +1,7 @@
 //! 命令 API：封面帧切换（4.3 序列帧起，5.2 扩展动图 / 视频）。
-//! 帧来源两路：序列帧 / 动图 = info/frames/ 帧原图（动图 2026-07-26 定案：解包持久化后与序列帧
-//! 同构同路径，未解包完成报"动图解析中，请稍后重试"）；视频 = ffmpeg 任意时间点截帧。
-//! 两路共用同一条缩略图再生成管线（thumbnail::generate，
+//! 帧来源三路：序列帧 = info/frames/ 帧原图；**动图 = origin 运行时解码抽帧**（`f:{索引}`，
+//! 2026-08-20 解包废除后无磁盘帧图，anim::decode_frame 单帧解码）；视频 = ffmpeg 任意时间点截帧。
+//! 三路共用同一条缩略图再生成管线（thumbnail::generate，
 //! 与导入同参数同命名 {资源名}_thumbnail.webp），先落盘 metadata.json 再同步内存索引（规范第 7 条）。
 
 use std::fs;
@@ -27,7 +27,8 @@ pub struct SetThumbResult {
 }
 
 /// 切换序列帧 / 动图封面帧：用指定帧重新生成缩略图 → metadata 落盘（thumbFrame / thumbnail /
-/// modifiedAt）→ 同步内存索引。动图未解包完成（frames/ 未就绪）报"动图解析中，请稍后重试"。
+/// modifiedAt）→ 同步内存索引。
+/// frame_name：序列帧 = frames/ 内帧文件名；**动图 = `f:{帧索引0起}`**（如 f:41——origin 解码抽帧）。
 /// async：涉及 IO（缩略图再生成），一律走线程池（规范第 2 条）
 #[tauri::command]
 pub async fn set_thumb_frame(
@@ -41,10 +42,34 @@ pub async fn set_thumb_frame(
 }
 
 fn apply_thumb_frame(lib: &mut Library, asset_id: &str, frame_name: &str) -> Result<SetThumbResult, String> {
-  let (info_dir, _origin, meta) = locate_asset(lib, asset_id)?;
+  let (info_dir, origin, meta) = locate_asset(lib, asset_id)?;
+  // 动图分支（解包废除）：`f:{索引}` → origin 解码抽帧，thumbFrame 同格式记录
+  if crate::services::anim::is_anim(&meta) {
+    let idx = parse_anim_frame_key(frame_name)?;
+    let (img, _delay) = crate::services::anim::decode_frame(&origin, idx)
+      .ok_or_else(|| format!("第 {} 帧解码失败，请重试", idx + 1))?;
+    // thumbnail::generate 需要文件路径：抽帧先落 cache/tmp 临时 png，生成完即删（同视频分支套路）
+    let tmp = lib.root.join(CACHE_DIR).join("tmp").join(format!("anim-thumb-{asset_id}.png"));
+    if let Some(dir) = tmp.parent() {
+      fs::create_dir_all(dir).map_err(|e| format!("临时目录创建失败：{e}"))?;
+    }
+    img.save(&tmp).map_err(|e| format!("临时文件写入失败：{e}"))?;
+    let thumb = regenerate(&info_dir, &meta, &tmp);
+    let _ = fs::remove_file(&tmp);
+    let thumb = thumb.ok_or_else(|| "封面帧缩略图生成失败，请重试".to_string())?;
+    return persist(lib, info_dir, meta, asset_id, thumb, frame_name.to_string());
+  }
   let frame_path = resolve_frame_path(&info_dir, &meta, frame_name)?;
   let thumb = regenerate(&info_dir, &meta, &frame_path).ok_or_else(|| format!("帧图片解码失败：{frame_name}"))?;
   persist(lib, info_dir, meta, asset_id, thumb, frame_name.to_string())
+}
+
+/// 动图封面帧 key 解析：`f:{帧索引0起}`（如 f:41）。非法格式 / 非数字报中文错
+fn parse_anim_frame_key(key: &str) -> Result<u32, String> {
+  let Some(num) = key.strip_prefix("f:") else {
+    return Err(format!("动图封面帧定位应为 f:帧序号（收到：{key}）"));
+  };
+  num.parse::<u32>().map_err(|_| format!("动图封面帧序号不合法：{key}"))
 }
 
 /// 视频设封面：ffmpeg 截取 at_secs 秒画面 → 临时 PNG 走同管线再生成缩略图 →
@@ -80,14 +105,10 @@ fn apply_video_thumb(lib: &mut Library, asset_id: &str, at_secs: f64) -> Result<
   persist(lib, info_dir, meta, asset_id, thumb, format!("t:{at_secs:.3}"))
 }
 
-/// 帧文件定位：序列帧 / 动图统一取 info/frames/ 帧原图（动图解包持久化后与序列帧同路径，
-/// 2026-07-26 定案）；动图未解包完成（frames/ 未就绪）报"动图解析中，请稍后重试"
+/// 帧文件定位：序列帧取 info/frames/ 帧原图（动图走 `f:{索引}` 抽帧分支，不进此函数）
 fn resolve_frame_path(info_dir: &Path, meta: &AssetMeta, frame_name: &str) -> Result<PathBuf, String> {
   let frames_dir = info_dir.join("frames");
   if !frames_dir.is_dir() {
-    if crate::services::anim::is_anim(meta) {
-      return Err("动图解析中，请稍后重试".to_string());
-    }
     return Err(format!("「{}」不是序列帧资源", meta.name));
   }
   let path = frames_dir.join(frame_name);
@@ -179,12 +200,11 @@ mod tests {
     meta
   }
 
-  /// 造一个动图资源（gif + frame_count）并登记进内存索引
+  /// 造一个动图资源（真实样本 anim3.gif 入库，3 帧）并登记进内存索引
   fn add_anim(h: &mut Harness, id: &str) -> AssetMeta {
-    let mut meta = add_file(h, id, "动图.gif");
-    meta.frame_count = Some(3);
-    let info = h.lib.info_dir(id);
-    write_json(&info.join("metadata.json"), &meta).unwrap();
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tools/test-assets/anim3.gif");
+    let pf = PendingFile { path: src, chain: Vec::new() };
+    let meta = import::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
     h.lib.index.assets.insert(id.to_string(), meta.clone());
     meta
   }
@@ -218,28 +238,27 @@ mod tests {
     assert!(err.contains("不是序列帧"), "{err}");
   }
 
+  /// 动图封面帧（2026-08-20 解包废除）：`f:{索引}` → origin 运行时解码抽帧，thumbFrame 同格式记录
   #[test]
-  fn set_thumb_frame_anim_branch_uses_info_frames() {
+  fn set_thumb_frame_anim_branch_decodes_origin() {
     let mut h = make_lib();
     add_anim(&mut h, "AN-GIF");
     let info = h.lib.info_dir("AN-GIF");
 
-    // 未解包（frames/ 未就绪）→ 中文错误文案，不动 metadata
-    let err = apply_thumb_frame(&mut h.lib, "AN-GIF", "动图-00002.webp").unwrap_err();
-    assert!(err.contains("动图解析中，请稍后重试"), "{err}");
-
-    // 解包后帧在 info/frames/（与序列帧同路径；内容为 PNG，image 按内容嗅探）
-    let frame = info.join("frames").join("动图-00002.webp");
-    fs::create_dir_all(frame.parent().unwrap()).unwrap();
-    make_png(&frame, 64, 48);
-
-    let result = apply_thumb_frame(&mut h.lib, "AN-GIF", "动图-00002.webp").unwrap();
-    assert!(result.thumb_path.ends_with("动图_thumbnail.webp"), "{}", result.thumb_path);
+    // f:1（第 2 帧）抽帧成功：缩略图生成 + thumbFrame 记 f:1 + 索引同步
+    let result = apply_thumb_frame(&mut h.lib, "AN-GIF", "f:1").unwrap();
+    assert!(result.thumb_path.ends_with("anim3_thumbnail.webp"), "{}", result.thumb_path);
     assert!(PathBuf::from(&result.thumb_path).is_file());
     let disk: AssetMeta = read_json(&info.join("metadata.json")).unwrap();
-    assert_eq!(disk.thumb_frame.as_deref(), Some("动图-00002.webp"));
-    assert_eq!(disk.thumbnail.as_deref(), Some("动图_thumbnail.webp"));
-    assert_eq!(h.lib.index.assets["AN-GIF"].thumb_frame.as_deref(), Some("动图-00002.webp"));
+    assert_eq!(disk.thumb_frame.as_deref(), Some("f:1"));
+    assert_eq!(h.lib.index.assets["AN-GIF"].thumb_frame.as_deref(), Some("f:1"));
+
+    // 越界索引 / 非法 key → 中文报错，不动 metadata
+    assert!(apply_thumb_frame(&mut h.lib, "AN-GIF", "f:99").is_err());
+    let err = apply_thumb_frame(&mut h.lib, "AN-GIF", "anim3-00002.webp").unwrap_err();
+    assert!(err.contains("f:帧序号"), "{err}");
+    let after: AssetMeta = read_json(&info.join("metadata.json")).unwrap();
+    assert_eq!(after.thumb_frame.as_deref(), Some("f:1"), "报错不应改动 metadata");
   }
 
   #[test]

@@ -12,7 +12,7 @@ import { useContentStore } from "./content";
 import { usePreviewMediaStore } from "./previewMedia";
 import { usePreviewNotesStore } from "./previewNotes";
 import { isAudioExt, isSequence, isVideoExt } from "../lib/formatBadge";
-import { getAssetFilePath, listSequenceFrames, type FrameEntry } from "../lib/mediaOps";
+import { getAssetFilePath, listSequenceFrames, prepareAnimStrips, type FrameEntry } from "../lib/mediaOps";
 import { AnimStreamSession, type AnimFrame } from "../lib/animStream";
 
 // 播放帧（5.2 改版）：命令原始结构见 lib/mediaOps（FrameEntry.delayMs 序列帧恒 null）——
@@ -52,11 +52,20 @@ function streamEdge(naturalW: number, naturalH: number, viewW: number, viewH: nu
   return Math.min(4096, Math.max(16, e || 320));
 }
 
+// 动图封面帧索引解析：新格式 `f:{索引0起}`；存量帧名（{标题}-00042.webp，序号 1 起）按尾号兼容；
+// 其余（null / 视频 t: / 序列帧帧名）返回 null
+function animCoverIndex(thumbFrame: string | null | undefined): number | null {
+  if (!thumbFrame) return null;
+  const f = thumbFrame.match(/^f:(\d+)$/);
+  if (f) return Number(f[1]);
+  const legacy = thumbFrame.match(/-(\d{5})\.webp$/);
+  if (legacy) return Math.max(0, Number(legacy[1]) - 1);
+  return null;
+}
+
 // 预览就绪事件监听（App 存活期注册一次；多窗口各自注册，事件广播按 assetId 匹配生效）
 let unlistenFull: (() => void) | undefined;
 let unlistenStrips: (() => void) | undefined;
-let unlistenUnpacked: (() => void) | undefined;
-let unlistenUnpackFailed: (() => void) | undefined;
 let unlistenHidden: (() => void) | undefined;
 
 export const usePreviewStore = defineStore("preview", {
@@ -85,11 +94,12 @@ export const usePreviewStore = defineStore("preview", {
     rate: 1,
     fullscreen: false,
     // 动图帧流当前帧（PreviewAnimCanvas 渲染用；markRaw 赋值防深度代理）与总帧数
-    // （max(metadata frameCount, 已见 idx+1)——播放条分母，不依赖 frames/ 解包产物）
+    // （max(metadata frameCount, 已见 idx+1)——播放条分母，不依赖磁盘帧图）
     animFrame: null as AnimFrame | null,
     animTotal: 0,
-    // 动图后台解包中（5.2 改版）：播放已走帧流不受影响；此标记仅禁用设封面/笔记（帧清单缺失）
-    unpacking: false,
+    // 动图帧条小图（key = `f:{索引}` → stripPath；prepare_anim_strips 已缓存清单 +
+    // preview-strips-ready 事件渐进填充）
+    animStrips: {} as Record<string, string>,
   }),
   getters: {
     // 当前预览的 PlacementView（按 key 在当前视口列表里找）
@@ -148,9 +158,9 @@ export const usePreviewStore = defineStore("preview", {
     },
   },
   actions: {
-    // 预览就绪事件监听（App 启动注册一次）：PSD 高清 / 帧条小图渐进 / 动图解包完成与失败
+    // 预览就绪事件监听（App 启动注册一次）：PSD 高清 / 帧条小图渐进（序列帧与动图共用事件）
     async initPreviewListener(): Promise<void> {
-      if (unlistenFull && unlistenStrips && unlistenUnpacked && unlistenUnpackFailed && unlistenHidden) return;
+      if (unlistenFull && unlistenStrips && unlistenHidden) return;
       unlistenFull = await listen<{ assetId: string; path: string }>("preview-full-ready", (e) => {
         if (this.current?.assetId === e.payload.assetId && this.kind === "image") {
           this.filePath = e.payload.path; // onImageLoad 按像素比换算保持视觉
@@ -159,26 +169,21 @@ export const usePreviewStore = defineStore("preview", {
       unlistenStrips = await listen<{ assetId: string; items: { name: string; stripPath: string }[] }>(
         "preview-strips-ready",
         (e) => {
-          if (!this.seq || this.current?.assetId !== e.payload.assetId) return;
+          if (this.current?.assetId !== e.payload.assetId) return;
+          if (this.kind === "anim") {
+            // 动图：name = `f:{索引}`，渐进填充帧条缓存
+            for (const item of e.payload.items) {
+              this.animStrips[item.name] = item.stripPath;
+            }
+            return;
+          }
+          if (!this.seq) return;
           for (const item of e.payload.items) {
             const f = this.seq.frames.find((x) => x.name === item.name);
             if (f) f.stripPath = item.stripPath;
           }
         },
       );
-      // 动图解包完成：重跑加载填帧清单（设封面 / 帧条 / 笔记解锁；播放走帧流本就不受影响，
-      // loadAnim 会重起会话——画面从头播，属低频事件可接受）
-      unlistenUnpacked = await listen<{ assetId: string }>("anim-unpacked", (e) => {
-        if (this.kind === "anim" && this.unpacking && this.current?.assetId === e.payload.assetId) {
-          void this.loadAnim(e.payload.assetId);
-        }
-      });
-      // 解包失败：设封面 / 帧条 / 笔记保持禁用（播放走帧流不受影响）
-      unlistenUnpackFailed = await listen<{ assetId: string }>("anim-unpack-failed", (e) => {
-        if (this.kind === "anim" && this.unpacking && this.current?.assetId === e.payload.assetId) {
-          console.warn(`动图解包失败，设封面/帧条/笔记不可用：${e.payload.assetId}`);
-        }
-      });
       // 主窗口隐藏到托盘（关闭按钮 / 全局热键）：暂停双引擎播放
       // （2026-07-27 用户定：最小化保持播放，隐藏到托盘停止；重新显示后手动再播）
       unlistenHidden = await listen("main-window-hidden", () => {
@@ -202,9 +207,9 @@ export const usePreviewStore = defineStore("preview", {
       this.assetKey = null;
       this.seq = null;
       this.playing = false;
-      this.unpacking = false;
       this.animFrame = null;
       this.animTotal = 0;
+      this.animStrips = {};
     },
     // 上/下一个素材（当前视口顺序，到头停）
     async step(delta: number): Promise<void> {
@@ -229,9 +234,9 @@ export const usePreviewStore = defineStore("preview", {
       this.seq = null;
       this.frame = 0;
       this.error = null;
-      this.unpacking = false;
       this.animFrame = null;
       this.animTotal = 0;
+      this.animStrips = {};
       this.resetView();
       const p = this.current;
       if (!p) {
@@ -246,7 +251,7 @@ export const usePreviewStore = defineStore("preview", {
         if (this.current?.assetId !== p.assetId) return; // await 期间已切走
         this.seq = {
           thumbFrame: r.thumbFrame,
-          frames: r.frames.map((f) => ({ ...f, delayMs: f.delayMs ?? 1000 / (r.fps ?? 24) })),
+          frames: r.frames.map((f) => ({ ...f, delayMs: 1000 / (r.fps ?? 24) })),
         };
         this.initFrame();
         void notes.load();
@@ -280,14 +285,15 @@ export const usePreviewStore = defineStore("preview", {
         this.filePath = null;
       }
     },
-    // 动图加载（阶段四·预览对接帧流，2026-08-20）：播放 = WS 帧流渲染 canvas（对 origin 运行时解码，
-    // 不依赖 frames/ 解包产物——删除解包产物后照常播放）；list_sequence_frames 帧清单仅为
-    // 设封面 / 帧条小图 / 逐帧笔记服务（已解包才有，未解包禁用这三项、播放不受影响）。
-    // 帧流失败回退原生 <img> 播源文件（无播放条）。anim-unpacked 事件复调本函数（重起会话 + 填清单解锁）。
+    // 动图加载（阶段四·预览对接帧流 + 解包废除，2026-08-20 用户定案）：
+    // 播放 = WS 帧流渲染 canvas（对 origin 运行时解码）；帧条 = prepare_anim_strips 按需解码
+    // （cache/frames 会话级，事件渐进补齐）；设封面 / 笔记帧画面 = 后端 `f:{索引}` 抽帧。
+    // 全部不依赖磁盘帧图（frames/ 导入解包已废除）。帧流失败回退原生 <img> 播源文件（无播放条）。
     async loadAnim(assetId: string): Promise<void> {
       stopAnimStream();
       this.animFrame = null;
       this.animTotal = 0;
+      this.animStrips = {};
       const edge = streamEdge(this.naturalW, this.naturalH, this.viewW, this.viewH, this.zoom);
       const s = await AnimStreamSession.start(assetId, edge, (f) => this.onAnimFrame(f));
       if (this.current?.assetId !== assetId || this.kind !== "anim") {
@@ -299,6 +305,10 @@ export const usePreviewStore = defineStore("preview", {
         this.playing = true; // 会话默认即播（进入自动播放，同 2026-07-25 用户定）
         s.setRate(this.rate); // 倍速跨素材保持，同步进新会话
         this.animTotal = this.current?.frameCount ?? 0;
+        // 封面帧定位（对齐原 initFrame 行为：封面帧为初始帧，播放中 seek 后继续播）：
+        // thumbFrame 新格式 = `f:{索引}`；存量帧名（{标题}-00042.webp）按尾号兼容解析
+        const cover = animCoverIndex(this.current?.thumbFrame);
+        if (cover !== null && cover > 0) this.setFrame(cover);
       } else {
         // 帧流失败回退：原生 <img> 播源文件（gif/webp 直渲格式返回源路径；取不到则保持缩略图）
         this.playing = false;
@@ -306,22 +316,16 @@ export const usePreviewStore = defineStore("preview", {
         if (this.current?.assetId !== assetId || this.kind !== "anim") return;
         if (f.path) this.filePath = f.path;
       }
-      const r = await listSequenceFrames(assetId);
-      if (this.current?.assetId !== assetId || this.kind !== "anim") return;
-      this.unpacking = r.unpacking;
-      if (r.unpacking) {
-        this.seq = null;
-        return;
-      }
-      this.seq = {
-        thumbFrame: r.thumbFrame,
-        frames: r.frames.map((f) => ({ ...f, delayMs: f.delayMs ?? 1000 / (r.fps ?? 24) })),
-      };
+      // 帧条与逐帧笔记不依赖帧清单：帧条按需解码渐进，笔记 key = f:{索引}（后端 get_notes 附带旧 key 迁移）
       void usePreviewNotesStore().load();
-      // 封面帧定位（对齐原 initFrame 行为：封面帧为初始帧，播放中 seek 后继续播）
-      if (animStream && this.seq.thumbFrame) {
-        const cover = this.seq.frames.findIndex((f) => f.name === this.seq!.thumbFrame);
-        if (cover > 0) this.setFrame(cover);
+      try {
+        const r = await prepareAnimStrips(assetId);
+        if (this.current?.assetId !== assetId || this.kind !== "anim") return;
+        for (const item of r.items) {
+          this.animStrips[item.name] = item.stripPath;
+        }
+      } catch (e) {
+        console.warn("动图帧条准备失败（帧条暂缺，播放不受影响）：", e);
       }
     },
     // 帧流帧到达（会话 onFrame 回调）：更新画面帧 / 帧号 / 总帧数 / natural（尺寸热更新时换算保视觉）
@@ -501,11 +505,13 @@ export const usePreviewStore = defineStore("preview", {
       this.rate = r;
       if (this.kind === "anim") animStream?.setRate(r);
     },
-    // 当前帧设为预览图（序列帧/动图通用，5.2）：后端重建缩略图 + 记封面帧，前端即时换卡片图
+    // 当前帧设为预览图（序列帧 / 动图通用，5.2）：后端重建缩略图 + 记封面帧，前端即时换卡片图。
+    // 动图传 `f:{索引}`（origin 解码抽帧，2026-08-20 解包废除）；序列帧传 frames/ 内帧名
     async setAsThumb(): Promise<void> {
       const p = this.current;
-      if (!p || !this.seq) return;
-      const frameName = this.seq.frames[this.frame]?.name;
+      if (!p) return;
+      const frameName =
+        this.kind === "anim" ? `f:${this.frame}` : this.seq ? this.seq.frames[this.frame]?.name : undefined;
       if (!frameName) return;
       const r = await invoke<{ thumbPath: string }>("set_thumb_frame", {
         assetId: p.assetId,

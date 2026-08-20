@@ -1,5 +1,6 @@
 //! 预览解析队列（4.3 预览窗口）：单 worker 线程串行执行 PSD/PSB 全尺寸解码与序列帧 / 动图
-//! 帧条生成（cache/frames，动图 2026-07-26 定案后帧原图 = 解包持久化的 info/frames/，帧条仍会话级）。
+//! 帧条生成（cache/frames 会话级；序列帧从磁盘帧图缩放，**动图 = origin 单趟流式解码**
+//! ——2026-08-20 解包废除后无磁盘帧图，帧名 = `f-{索引:05}`、事件 key = `f:{索引}`）。
 //!
 //! 解决的问题（2026-07-25）：预览窗口快速切换素材时，解析命令在 tokio 线程池堆积且不取消，
 //! 当前停留素材要等前面全部解析完；序列帧要等帧条全部生成完才能播放。
@@ -60,6 +61,15 @@ pub enum PreviewTask {
     asset_id: String,
     /// (帧名, 帧原图绝对路径)，按播放顺序
     frames: Vec<(String, PathBuf)>,
+  },
+  /// 动图帧条生成（cache/frames）：origin 单趟流式解码逐帧缩放（解包废除后无磁盘帧图）；
+  /// 已缓存帧跳过（幂等），事件 key = `f:{索引}`
+  AnimStrips {
+    /// 库根目录
+    root: PathBuf,
+    asset_id: String,
+    /// 动图源文件绝对路径
+    origin: PathBuf,
   },
 }
 
@@ -238,6 +248,32 @@ fn execute(shared: &Shared, gen: u64, task: PreviewTask) {
           }
           shared.emit_strips_ready(&asset_id, std::mem::take(&mut items));
         }
+      }
+    }
+    PreviewTask::AnimStrips { root, asset_id, origin } => {
+      let mut items: Vec<StripItem> = Vec::with_capacity(STRIP_BATCH);
+      // 单趟流式解码：每帧查代际（false = 中止）；已缓存帧跳过（幂等）；每 8 帧推一批
+      crate::services::anim::decode_frames(&origin, |i, img, _delay| {
+        if !shared.is_current(gen) {
+          return false;
+        }
+        let file_name = format!("f-{i:05}");
+        if thumbnail::frame_strip_path(&root, &asset_id, &file_name).is_none() {
+          if let Some(p) = thumbnail::generate_frame_strip_mem(&root, image::DynamicImage::ImageRgba8(img), &asset_id, &file_name) {
+            items.push(StripItem { name: format!("f:{i}"), strip_path: p });
+          }
+        }
+        if items.len() >= STRIP_BATCH {
+          if !shared.is_current(gen) {
+            return false;
+          }
+          shared.emit_strips_ready(&asset_id, std::mem::take(&mut items));
+        }
+        true
+      });
+      // 收尾一批（不足 8 帧的余量）
+      if !items.is_empty() && shared.is_current(gen) {
+        shared.emit_strips_ready(&asset_id, items);
       }
     }
   }

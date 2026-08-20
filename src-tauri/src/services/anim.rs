@@ -1,8 +1,9 @@
 //! 动图（GIF / WEBP 动图）探测与逐帧解码：纯 Rust，无 ffmpeg 依赖。
 //! probe：GIF 走自研字节级扫描（2026-07-26：image crate into_frames 全量解码像素数帧，
 //! 大 GIF 导入等半天——字节扫描只读块结构不解像素，微秒级返回）；WEBP 走 image-webp 元数据。
-//! decode_frames 流式逐帧回调：单趟解码供动图解包（anim_unpack，持久化 info/frames/，
-//! 2026-07-26 用户定案）。静态 gif/webp（单帧）按静态图片处理。
+//! decode_frames 流式逐帧回调：单趟解码供**帧流 webp 桥（frame_stream）与动图帧条
+//! （preview_queue::AnimStrips）**；decode_frame 单帧解码供设封面 / 笔记帧画面抽帧
+//! （2026-08-20 解包废除后，三者全部对 origin 运行时解码）。静态 gif/webp（单帧）按静态图片处理。
 
 use std::path::Path;
 
@@ -29,13 +30,13 @@ pub fn probe(path: &Path) -> Option<AnimInfo> {
 }
 
 /// 动图资产判定：gif/webp 且已 probe 出多帧（frame_count 有值，导入时 probe 写入）。
-/// 解包挂钩（import_task）/ list_sequence_frames 路由 / 封面帧分支共用同一口径
+/// 帧流路由 / list_sequence_frames 拒绝分支 / 封面帧抽帧分支 / 笔记抽帧分支共用同一口径
 pub fn is_anim(meta: &AssetMeta) -> bool {
   meta.frame_count.is_some() && matches!(meta.ext.to_lowercase().as_str(), "gif" | "webp")
 }
 
 /// 流式解码全部帧：逐帧回调（帧序号 0 起、RGBA 完整帧、该帧显示时长 ms），回调返回 false 中止。
-/// 单趟解码（替代 decode_frame 每帧全量重解码的 O(n²)，动图解包 anim_unpack 消费）。
+/// 单趟解码（替代 decode_frame 每帧全量重解码的 O(n²)）。
 /// GIF 迭代器内部已完成 disposal/画布合成（image 0.25 GifFrameIterator 直接产完整画面），
 /// 与 decode_frame 的 collect_frames 语义一致；单帧解码失败跳过并 warn（序号仍占位），不整体失败。
 /// 非 gif/webp / 打开失败返回 None。
@@ -47,8 +48,8 @@ pub fn decode_frames(path: &Path, mut on_frame: impl FnMut(u32, RgbaImage, u32) 
   }
 }
 
-/// 解码第 index 帧（0 起）与其显示时长（ms）；越界 / 非动图 / 失败返回 None
-#[allow(dead_code)] // 单帧按需解码入口（5.1 起的服务层 API，主链路走 decode_frames）
+/// 解码第 index 帧（0 起）与其显示时长（ms）；越界 / 非动图 / 失败返回 None。
+/// 设封面（thumb_frame）与笔记帧画面（commands/notes）抽帧入口
 pub fn decode_frame(path: &Path, index: u32) -> Option<(RgbaImage, u32)> {
   let mut hit = None;
   decode_frames(path, |i, img, delay| {

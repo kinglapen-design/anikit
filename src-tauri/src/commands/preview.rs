@@ -77,18 +77,15 @@ fn asset_file_path(lib: &Library, asset_id: &str) -> Result<AssetFilePath, Strin
 
 // ---------- 序列帧 / 动图帧清单 ----------
 
-/// 序列帧 / 动图帧清单（预览窗口播放条）
+/// 序列帧帧清单（预览窗口播放条）
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SequenceFrames {
-  /// 播放帧率（metadata.fps，缺省 24）；动图无固定帧率（逐帧 delayMs 驱动），恒为 null
+  /// 播放帧率（metadata.fps，缺省 24）
   pub fps: Option<f64>,
   /// 封面帧文件名（frames/ 内归一名；metadata 未记时为 null）
   pub thumb_frame: Option<String>,
   pub frames: Vec<FrameEntry>,
-  /// true = 动图解包进行中（frames/ 未就绪），完成经 anim-unpacked 事件通知后重调本命令；
-  /// 序列帧恒 false
-  pub unpacking: bool,
 }
 
 /// 单帧条目
@@ -103,17 +100,13 @@ pub struct FrameEntry {
   /// null = 未缓存（已进预览解析队列后台生成，批次完成经 preview-strips-ready 推送；
   /// 生成失败维持 null，前端小尺寸直渲 fullPath 兜底）
   pub strip_path: Option<String>,
-  /// 该帧显示时长（ms）：动图从 frames.json 逐帧下发；序列帧无 frames.json 恒为 null
-  /// （前端按 1000/fps 预填的现状兼容）
-  pub delay_ms: Option<u32>,
 }
 
-/// 序列帧 / 动图帧清单：扫 frames/ 按文件名排序（帧可能缺号，不按序号推导）；**立即返回**——
+/// 序列帧帧清单：扫 frames/ 按文件名排序（帧可能缺号，不按序号推导）；**立即返回**——
 /// 帧条不再同步生成：已缓存的填 stripPath，未缓存帧收集进预览解析队列后台生成
 /// （存 cache/frames 不进 info，批次完成经 preview-strips-ready 推送）。
-/// 动图（gif/webp 且 frameCount 有值，2026-07-26 定案）走同一命令：已解包照常返回帧清单 +
-/// frames.json 逐帧 delayMs（fps 为 null）；未解包返回空清单 + unpacking=true（完成经
-/// anim-unpacked 事件通知）。非序列帧非动图资源（无 frames 目录）报错。
+/// **动图不走此命令（2026-08-20 解包废除）**：播放 / 帧条 / 设封面全部对 origin 运行时解码
+/// （帧流 / prepare_anim_strips / set_thumb_frame 抽帧），调用报"动图无序列帧清单"。
 #[tauri::command]
 pub async fn list_sequence_frames(state: State<'_, AppState>, asset_id: String) -> Result<SequenceFrames, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
@@ -123,40 +116,76 @@ pub async fn list_sequence_frames(state: State<'_, AppState>, asset_id: String) 
 
 fn sequence_frames(lib: &Library, asset_id: &str) -> Result<SequenceFrames, String> {
   let (info_dir, _origin, meta) = locate_asset(lib, asset_id)?;
-  let frames_dir = info_dir.join("frames");
-  // 动图分支（与序列帧同构，帧原图 = 解包持久化的 info/frames/）
   if crate::services::anim::is_anim(&meta) {
-    // 解包完成标记 = frames.json（解包最后一步原子落盘）——frames/ 逐帧写入，目录存在不代表解完
-    // （曾用 frames_dir.is_dir() 判定：解包中途进预览误返"已解包共 1 帧"，前端卡 1/1 且不在兜底态收不到热切换）
-    if !info_dir.join("frames.json").is_file() {
-      // 自愈：导入挂钩遗漏 / 解包失败 / 库重启中断遗留的，进预览即补提交（队列去重 + 落盘幂等）。
-      // cfg(not(test))：单测共享全局 worker，submit 会与测试手动解包并发写同一临时库（偶发竞态失败）；
-      // 自愈是薄包装，队列与解包本身各有独立测试覆盖
-      #[cfg(not(test))]
-      crate::services::unpack_queue::global().submit(crate::services::unpack_queue::UnpackTask {
-        assets_dir: lib.assets_dir.clone(),
-        asset_id: asset_id.to_string(),
-      });
-      return Ok(SequenceFrames { fps: None, thumb_frame: None, frames: Vec::new(), unpacking: true });
-    }
-    let delays = crate::services::anim_unpack::read_delays(&info_dir).unwrap_or_default();
-    let frames = scan_frames(lib, asset_id, &frames_dir, |idx, _| delays.get(idx).copied());
-    return Ok(SequenceFrames { fps: None, thumb_frame: meta.thumb_frame, frames, unpacking: false });
+    return Err(format!("「{}」是动图资源，无序列帧清单（播放/帧条走帧流）", meta.name));
   }
+  let frames_dir = info_dir.join("frames");
   if !frames_dir.is_dir() {
     return Err(format!("「{}」不是序列帧资源", meta.name));
   }
-  let frames = scan_frames(lib, asset_id, &frames_dir, |_, _| None);
-  Ok(SequenceFrames { fps: Some(meta.fps.unwrap_or(DEFAULT_FPS)), thumb_frame: meta.thumb_frame, frames, unpacking: false })
+  let frames = scan_frames(lib, asset_id, &frames_dir);
+  Ok(SequenceFrames { fps: Some(meta.fps.unwrap_or(DEFAULT_FPS)), thumb_frame: meta.thumb_frame, frames })
+}
+
+/// 动图帧条清单（阶段四·解包废除，2026-08-20）：返回已缓存帧条（cache/frames/{id}/f-*.webp，
+/// key = `f:{索引}`），同时提交预览解析队列单趟流式解码补齐未缓存帧（批次经 preview-strips-ready
+/// 渐进推送，与序列帧帧条同一事件）。**立即返回**（不阻塞解码）。
+#[tauri::command]
+pub async fn prepare_anim_strips(state: State<'_, AppState>, asset_id: String) -> Result<AnimStrips, String> {
+  let guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+  prepare_anim_strips_inner(lib, &asset_id)
+}
+
+fn prepare_anim_strips_inner(lib: &Library, asset_id: &str) -> Result<AnimStrips, String> {
+  let (_info_dir, origin, meta) = locate_asset(lib, asset_id)?;
+  if !crate::services::anim::is_anim(&meta) {
+    return Err(format!("「{}」不是动图资源", meta.name));
+  }
+  // 已缓存清单（扫目录而非按 frameCount 推导——探测帧数与实际帧数可能出入）
+  let dir = lib.root.join(crate::core::library::CACHE_DIR).join("frames").join(asset_id);
+  let mut items: Vec<AnimStripItem> = fs::read_dir(&dir)
+    .map(|rd| {
+      rd.filter_map(|e| e.ok())
+        .filter_map(|e| {
+          let name = e.file_name().to_string_lossy().into_owned();
+          let idx = name.strip_prefix("f-")?.strip_suffix(".webp")?.parse::<u32>().ok()?;
+          Some(AnimStripItem { name: format!("f:{idx}"), strip_path: e.path().to_string_lossy().into_owned() })
+        })
+        .collect()
+    })
+    .unwrap_or_default();
+  items.sort_by_key(|it| it.name.clone());
+  // 提交后台补齐（worker 内幂等跳过已缓存帧）
+  preview_queue::global().submit(PreviewTask::AnimStrips {
+    root: lib.root.clone(),
+    asset_id: asset_id.to_string(),
+    origin,
+  });
+  Ok(AnimStrips { items })
+}
+
+/// 动图帧条单条结果（name = `f:{索引}`，与 preview-strips-ready 事件 items 同构）
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnimStripItem {
+  pub name: String,
+  pub strip_path: String,
+}
+
+/// prepare_anim_strips 返回
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnimStrips {
+  pub items: Vec<AnimStripItem>,
 }
 
 /// 扫 frames/ 按文件名组装帧清单（帧可能缺号，不按序号推导）；未缓存帧条收集进预览解析队列
-/// 后台生成。delay_of 按清单下标取逐帧时长（动图 = frames.json，序列帧恒 None）
+/// 后台生成
 fn scan_frames(
   lib: &Library,
   asset_id: &str,
   frames_dir: &std::path::Path,
-  delay_of: impl Fn(usize, &str) -> Option<u32>,
 ) -> Vec<FrameEntry> {
   let mut names: Vec<String> = fs::read_dir(frames_dir)
     .map(|rd| {
@@ -171,15 +200,13 @@ fn scan_frames(
   let mut uncached: Vec<(String, PathBuf)> = Vec::new();
   let frames = names
     .into_iter()
-    .enumerate()
-    .map(|(idx, name)| {
+    .map(|name| {
       let full = frames_dir.join(&name);
       let strip_path = thumbnail::frame_strip_path(&lib.root, asset_id, &name);
       if strip_path.is_none() {
         uncached.push((name.clone(), full.clone()));
       }
-      let delay_ms = delay_of(idx, &name);
-      FrameEntry { name, full_path: full.to_string_lossy().into_owned(), strip_path, delay_ms }
+      FrameEntry { name, full_path: full.to_string_lossy().into_owned(), strip_path }
     })
     .collect();
   if !uncached.is_empty() {
@@ -368,13 +395,11 @@ mod tests {
     add_sequence(&mut h, "AN-SEQ");
     let list = sequence_frames(&h.lib, "AN-SEQ").unwrap();
 
-    // 按文件名排序，fps 取 metadata（建档默认 24），thumbFrame 取 metadata；序列帧 delayMs 恒 null
+    // 按文件名排序，fps 取 metadata（建档默认 24），thumbFrame 取 metadata
     assert_eq!(list.fps, Some(24.0));
-    assert!(!list.unpacking);
     assert_eq!(list.thumb_frame.as_deref(), Some("走路-001.png"));
     let names: Vec<&str> = list.frames.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(names, ["走路-001.png", "走路-002.png", "走路-003.png"]);
-    assert!(list.frames.iter().all(|f| f.delay_ms.is_none()));
 
     // 立即返回：帧条未缓存时 stripPath=null（后台队列异步生成）；语义：Some 时文件必须存在
     let info = h.lib.info_dir("AN-SEQ");
@@ -437,46 +462,63 @@ mod tests {
     meta
   }
 
+  /// 动图不走帧清单命令（2026-08-20 解包废除：播放/帧条/设封面对 origin 运行时解码）；
+  /// 存量解包产物（frames/）不再被误当序列帧返回
   #[test]
-  fn list_sequence_frames_anim_unpacking_then_unpacked() {
+  fn list_sequence_frames_rejects_anim() {
     let _lock = TEST_LOCK.lock().unwrap();
     let mut h = make_lib();
     add_anim(&mut h, "AN-GIF");
+    let err = sequence_frames(&h.lib, "AN-GIF").unwrap_err();
+    assert!(err.contains("动图"), "{err}");
 
-    // 未解包：空清单 + unpacking=true（前端原生 <img> 兜底，等 anim-unpacked 事件后重拉）
-    let pending = sequence_frames(&h.lib, "AN-GIF").unwrap();
-    assert!(pending.unpacking);
-    assert_eq!(pending.fps, None);
-    assert_eq!(pending.thumb_frame, None);
-    assert!(pending.frames.is_empty());
-
-    // 已解包：与序列帧同路径（info/frames/ 归一名），frames.json 逐帧 delayMs 下发，fps 恒 null
-    crate::services::anim_unpack::unpack_frames(&h.lib.assets_dir, "AN-GIF").unwrap();
-    let list = sequence_frames(&h.lib, "AN-GIF").unwrap();
-    assert!(!list.unpacking);
-    assert_eq!(list.fps, None);
-    let names: Vec<&str> = list.frames.iter().map(|f| f.name.as_str()).collect();
-    assert_eq!(names, ["anim3-00001.webp", "anim3-00002.webp", "anim3-00003.webp"]);
-    assert_eq!(list.frames.iter().map(|f| f.delay_ms).collect::<Vec<_>>(), [Some(200), Some(200), Some(200)]);
-    for f in &list.frames {
-      assert!(PathBuf::from(&f.full_path).is_file(), "帧原图缺失：{}", f.full_path);
-    }
+    // 存量 frames/ 目录在场同判（历史解包产物）
+    let info = h.lib.info_dir("AN-GIF");
+    fs::create_dir_all(info.join("frames")).unwrap();
+    fs::write(info.join("frames").join("anim3-00001.webp"), b"legacy").unwrap();
+    let err = sequence_frames(&h.lib, "AN-GIF").unwrap_err();
+    assert!(err.contains("动图"), "{err}");
   }
 
-  /// 回归：解包中途（frames/ 已写入部分帧、frames.json 未落盘）必须仍判 unpacking——
-  /// 目录存在 ≠ 解完（曾误返"已解包共 1 帧"：前端卡 1/1 静止，且不在兜底态收不到热切换）
+  /// 动图帧条：prepare_anim_strips 立即返回（空缓存）+ 队列单趟流式解码补齐（f-0000N.webp，
+  /// 短边 128 会话级）；二次调用命中缓存直给；幂等（mtime 不变）
   #[test]
-  fn list_sequence_frames_anim_partial_frames_still_unpacking() {
+  fn prepare_anim_strips_decodes_origin_into_cache() {
     let _lock = TEST_LOCK.lock().unwrap();
     let mut h = make_lib();
-    add_anim(&mut h, "AN-GIF2");
-    let info = h.lib.info_dir("AN-GIF2");
-    let frames_dir = info.join("frames");
-    fs::create_dir_all(&frames_dir).unwrap();
-    fs::write(frames_dir.join("anim3-00001.webp"), b"partial").unwrap();
+    add_anim(&mut h, "AN-GIF3");
 
-    let r = sequence_frames(&h.lib, "AN-GIF2").unwrap();
-    assert!(r.unpacking, "frames.json 未落盘 = 解包未完，必须 unpacking");
-    assert!(r.frames.is_empty(), "半成品帧不下发");
+    let first = prepare_anim_strips_inner(&h.lib, "AN-GIF3").unwrap();
+    assert!(first.items.is_empty(), "首次缓存为空：{:?}", first.items.len());
+
+    // 队列后台生成（cache/frames/{id}/f-00000..2.webp，anim3.gif 共 3 帧，索引 0 起）
+    let strip_dir = h.lib.root.join(CACHE_DIR).join("frames").join("AN-GIF3");
+    wait_until(
+      || (0..=2).all(|i| strip_dir.join(format!("f-{i:05}.webp")).is_file()),
+      "动图帧条后台生成",
+    );
+    for i in 0..=2u32 {
+      let (w, hh) = image::image_dimensions(strip_dir.join(format!("f-{i:05}.webp"))).unwrap();
+      // anim3.gif 源 64×48 短边不足 128 不放大（shrink_to_edge 口径）
+      assert_eq!((w, hh), (64, 48), "帧条应保持原尺寸不放大：{w}x{hh}");
+    }
+
+    // 二次调用：命中缓存直给（key = f:{索引}，按名排序）
+    let second = prepare_anim_strips_inner(&h.lib, "AN-GIF3").unwrap();
+    let keys: Vec<&str> = second.items.iter().map(|it| it.name.as_str()).collect();
+    assert_eq!(keys, ["f:0", "f:1", "f:2"]);
+    for it in &second.items {
+      assert!(PathBuf::from(&it.strip_path).is_file(), "stripPath 文件必须存在：{}", it.strip_path);
+    }
+
+    // 幂等：已存在不重复生成（mtime 不变）
+    let mtime = fs::metadata(strip_dir.join("f-00000.webp")).unwrap().modified().unwrap();
+    prepare_anim_strips_inner(&h.lib, "AN-GIF3").unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(200)); // 等队列跑完一趟（全跳过）
+    assert_eq!(fs::metadata(strip_dir.join("f-00000.webp")).unwrap().modified().unwrap(), mtime);
+
+    // 非动图资源报错
+    add_file(&mut h, "AN-PIC", "单张.png");
+    assert!(prepare_anim_strips_inner(&h.lib, "AN-PIC").is_err());
   }
 }

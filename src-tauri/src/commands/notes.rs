@@ -1,8 +1,10 @@
 //! 命令 API：逐帧笔记（5.2）。命令层只做资源定位与 key 校验，读写走 core::notes（单一写点）。
 //! get_notes / set_note 统一返回全量列表（按 key 排序），前端直接替换；set_note 空文本 = 删除该条。
 //! set_note 同步维护 metadata.noteCount 冗余（先落盘 metadata.json 再同步内存索引，规范第 7 条）。
-//! get_note_thumb = 详情面板悬停帧画面（5.2 展示层）：序列帧 / 动图直给帧原图路径，
+//! get_note_thumb = 详情面板悬停帧画面（5.2 展示层）：序列帧直给帧原图路径，**动图 `f:{索引}`
+//! = origin 运行时解码抽帧**（2026-08-20 解包废除）存 cache/note-thumbs 幂等；
 //! 视频按 key 时间点 ffmpeg 截帧存 cache/note-thumbs（会话级缓存，幂等）。
+//! get_notes 对动图资产附带**旧 key 一次性迁移**（解包时代帧名 key `{标题}-00042.webp` → `f:41`）。
 
 use std::fs;
 
@@ -23,14 +25,53 @@ const MAX_KEY_CHARS: usize = 64;
 /// 笔记帧画面缓存子目录（cache/note-thumbs/{assetId}_{安全化key}.webp；会话级，打开库清空）
 const NOTE_THUMBS_DIR: &str = "note-thumbs";
 
-/// 读某资源全部逐帧笔记（无 notes.json = 空列表）
+/// 读某资源全部逐帧笔记（无 notes.json = 空列表）。
+/// 动图资产附带旧 key 一次性迁移：解包时代帧名 key（`{标题}-00042.webp`，序号 1 起）→
+/// `f:{索引0起}`；有迁移即落盘（replace_all 保留原文本与时间）。
 /// async：涉及磁盘 IO，一律走线程池（规范第 2 条）
 #[tauri::command]
 pub async fn get_notes(state: State<'_, AppState>, asset_id: String) -> Result<Vec<NoteEntry>, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
-  let (info_dir, _origin, _meta) = locate_asset(lib, &asset_id)?;
-  notes::load(&info_dir).map_err(|e| e.to_string())
+  let (info_dir, _origin, meta) = locate_asset(lib, &asset_id)?;
+  let list = notes::load(&info_dir).map_err(|e| e.to_string())?;
+  if crate::services::anim::is_anim(&meta) && list.iter().any(|n| legacy_anim_frame_index(&n.key).is_some()) {
+    let migrated = migrate_anim_keys(list);
+    return notes::replace_all(&info_dir, migrated).map_err(|e| e.to_string());
+  }
+  Ok(list)
+}
+
+/// 旧动图帧名 key 解析（`{标题}-{序号5位}.webp` → 索引 0 起）：标题含连字符不误判（只看末段 5 位数字）
+fn legacy_anim_frame_index(key: &str) -> Option<u32> {
+  let stem = key.strip_suffix(".webp")?;
+  let dash = stem.rfind('-')?;
+  let num = stem.get(dash + 1..)?;
+  if num.len() != 5 || !num.bytes().all(|b| b.is_ascii_digit()) {
+    return None;
+  }
+  let n: u32 = num.parse().ok()?;
+  (n >= 1).then(|| n - 1)
+}
+
+/// 旧 key 全量迁移：帧名 → `f:{索引}`；目标 key 冲突时保留 updatedAt 较新的一条
+fn migrate_anim_keys(list: Vec<NoteEntry>) -> Vec<NoteEntry> {
+  let mut out: Vec<NoteEntry> = Vec::with_capacity(list.len());
+  for mut n in list {
+    if let Some(idx) = legacy_anim_frame_index(&n.key) {
+      n.key = format!("f:{idx}");
+    }
+    match out.iter_mut().find(|x| x.key == n.key) {
+      // 目标已存在：保留时间较新者（RFC3339 同格式可字典序比较）
+      Some(x) => {
+        if n.updated_at > x.updated_at {
+          *x = n;
+        }
+      }
+      None => out.push(n),
+    }
+  }
+  out
 }
 
 /// 写一条逐帧笔记：text 去空白后为空 = 删除该条；否则新增 / 覆盖（同 key 刷新 updatedAt）。
@@ -84,10 +125,11 @@ pub struct NoteThumb {
   pub path: Option<String>,
 }
 
-/// 取笔记对应帧画面：序列帧 / 动图 key = 帧名，直给 info/frames/{key}（不存在返回 null）；
+/// 取笔记对应帧画面：序列帧 key = 帧名，直给 info/frames/{key}（不存在返回 null）；
+/// 动图 key = `f:{索引}`，origin 解码抽帧 → cache/note-thumbs/{assetId}_f-{索引5位}.webp（幂等）；
 /// 视频 key = `t:{秒}`，ffmpeg 截帧 → cache/note-thumbs/{assetId}_{安全化key}.webp（幂等，
 /// 已存在直给；截帧失败返回 null 不报错——悬停预览是辅助展示，不打扰用户）。
-/// async：视频分支涉及 ffmpeg sidecar IO 重活，一律走线程池（规范第 2 条）
+/// async：视频 / 动图分支涉及解码 IO 重活，一律走线程池（规范第 2 条）
 #[tauri::command]
 pub async fn get_note_thumb(state: State<'_, AppState>, asset_id: String, key: String) -> Result<NoteThumb, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
@@ -96,15 +138,43 @@ pub async fn get_note_thumb(state: State<'_, AppState>, asset_id: String, key: S
 }
 
 fn note_thumb(lib: &Library, asset_id: &str, key: &str) -> Result<NoteThumb, String> {
-  // key 安全化：帧名 / t:{秒} 两种形态都不含路径分隔符，拒路径穿越
+  // key 安全化：帧名 / f:{索引} / t:{秒} 三种形态都不含路径分隔符，拒路径穿越
   if key.is_empty() || key.contains(['/', '\\']) || key.contains("..") {
     return Err("笔记定位（key）不合法".to_string());
   }
-  let (info_dir, origin, _meta) = locate_asset(lib, asset_id)?;
+  let (info_dir, origin, meta) = locate_asset(lib, asset_id)?;
   if let Some(secs) = key.strip_prefix("t:") {
     return video_thumb(lib, &origin, asset_id, key, secs);
   }
-  // 序列帧 / 动图：帧原图已在 info/frames/（动图解包持久化后与序列帧同路径）
+  // 动图 `f:{索引}`：origin 运行时解码抽帧 → cache/note-thumbs 幂等（解包废除后无磁盘帧图）
+  if let Some(idx) = key.strip_prefix("f:") {
+    if !crate::services::anim::is_anim(&meta) {
+      return Ok(NoteThumb { path: None }); // f: key 挂在非动图上：静默 null（占位）
+    }
+    let idx: u32 = idx.parse().map_err(|_| "笔记定位（key）不合法".to_string())?;
+    let dest = lib.root.join(CACHE_DIR).join(NOTE_THUMBS_DIR).join(format!("{asset_id}_f-{idx:05}.webp"));
+    if dest.is_file() {
+      return Ok(NoteThumb { path: Some(dest.to_string_lossy().into_owned()) });
+    }
+    let Some((img, _delay)) = crate::services::anim::decode_frame(&origin, idx) else {
+      return Ok(NoteThumb { path: None });
+    };
+    let thumb = thumbnail::shrink_to_thumb(image::DynamicImage::ImageRgba8(img));
+    if let Some(dir) = dest.parent() {
+      if let Err(e) = fs::create_dir_all(dir) {
+        log::warn!("笔记帧画面缓存目录创建失败：{e}");
+        return Ok(NoteThumb { path: None });
+      }
+    }
+    return match thumbnail::save_webp(&thumb, &dest) {
+      Ok(_) => Ok(NoteThumb { path: Some(dest.to_string_lossy().into_owned()) }),
+      Err(e) => {
+        log::warn!("笔记帧画面缓存落盘失败（{}）：{e}", origin.display());
+        Ok(NoteThumb { path: None })
+      }
+    };
+  }
+  // 序列帧：帧原图已在 info/frames/
   let frame = info_dir.join("frames").join(key);
   Ok(NoteThumb { path: frame.is_file().then(|| frame.to_string_lossy().into_owned()) })
 }

@@ -3,8 +3,8 @@
 // 放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8）。
 // 播放/暂停、当前帧/总帧数、进度条（拖动定位帧）、倍率（RateControl 悬停竖排弹窗）、
 // 笔记（5.2 浮层，开着时品牌紫激活态）、当前帧设为预览图、显示器全屏（Esc 退出）。
-// 动图播放 = 帧流（不依赖 frames/ 解包）；未解包时帧清单缺失——笔记 / 设封面禁用（播放不受影响）；
-// 帧流失败回退态（animTotal=0）不出播放条（原生 img 兜底播放，无法控制）。
+// 动图播放 = 帧流，设封面 / 笔记 / 帧条 = 后端 `f:{索引}` 抽帧——全链路不依赖磁盘帧图
+// （2026-08-20 解包废除）；帧流失败回退态（animTotal=0）不出播放条（原生 img 兜底播放，无法控制）。
 import { computed, ref } from "vue";
 import IconButton from "./IconButton.vue";
 import RateControl from "./RateControl.vue";
@@ -22,8 +22,6 @@ const frameCount = computed(() =>
 );
 // 播放条出现条件：序列帧有帧清单；动图帧流活着（animTotal>0。回退态 0 不显示）
 const barReady = computed(() => frameCount.value > 0);
-// 无帧清单（动图未解包）：笔记 / 设封面禁用（后端需要 frames/ 帧名，会报错）
-const noFrameList = computed(() => preview.kind === "anim" && !preview.seq);
 
 function seek(e: PointerEvent): void {
   const rect = trackRef.value!.getBoundingClientRect();
@@ -72,19 +70,8 @@ function onSeekUp(e: PointerEvent): void {
       />
     </div>
     <RateControl :rate="preview.rate" @select="preview.setRate" />
-    <IconButton
-      name="add-note"
-      title="笔记"
-      :active="notes.open"
-      :disabled="noFrameList"
-      @click="notes.toggle()"
-    />
-    <IconButton
-      name="set-thumbnail"
-      title="当前画面设为预览图"
-      :disabled="noFrameList"
-      @click="preview.setAsThumb()"
-    />
+    <IconButton name="add-note" title="笔记" :active="notes.open" @click="notes.toggle()" />
+    <IconButton name="set-thumbnail" title="当前画面设为预览图" @click="preview.setAsThumb()" />
     <IconButton
       name="fullscreen"
       :title="preview.fullscreen ? '退出全屏' : '全屏'"
