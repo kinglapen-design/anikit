@@ -114,6 +114,10 @@ function onSeekUp(e: PointerEvent): void {
 .play-bar :deep(.icon-btn) {
   color: var(--text-label);
 }
+/* hover 提亮到常态（2026-08-20 用户定）；激活（品牌紫）/ 禁用态不提亮 */
+.play-bar :deep(.icon-btn:hover:not(.active):not(:disabled)) {
+  color: var(--text-normal);
+}
 .play-bar :deep(.icon-btn.active) {
   color: var(--brand-1);
 }

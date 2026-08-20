@@ -40,7 +40,7 @@ watch(
 
 <template>
   <div v-if="show" class="frame-strip">
-    <IconButton name="chevron-small" title="上一帧" class="rot-l" :disabled="preview.frame <= 0" @click="preview.stepFrame(-1)" />
+    <IconButton name="nav-history" title="上一帧" :disabled="preview.frame <= 0" @click="preview.stepFrame(-1)" />
     <div ref="listRef" class="frames">
       <!-- 动图分支（帧索引驱动） -->
       <template v-if="preview.kind === 'anim'">
@@ -71,9 +71,9 @@ watch(
       </button>
     </div>
     <IconButton
-      name="chevron-small"
+      name="nav-history"
       title="下一帧"
-      class="rot-r"
+      class="rot-180"
       :disabled="preview.frame >= count - 1"
       @click="preview.stepFrame(1)"
     />
@@ -92,18 +92,18 @@ watch(
   background: var(--c3);
   border-top: 1px solid var(--line-hover);
 }
-/* chevron-small 源图形朝上（BlockManageRow 实机核对口径）：上一帧 = 逆时针 90°（朝左），
-   下一帧 = 顺时针 90°（朝右）。2026-08-20 修：旧注释误记"原图标朝下"（1.1 换血前朝向），
-   ±90° 写反致两端按钮方向互逆——与 PreviewTitleBar 返回钮同根因 */
-.rot-l :deep(svg) {
-  transform: rotate(-90deg);
-}
-.rot-r :deep(svg) {
-  transform: rotate(90deg);
+/* 上/下帧 = nav-history 与面包屑后退/前进同款（2026-08-20 用户定，弃用 chevron-small 旋转箭头）：
+   上一帧不旋转（朝左），下一帧 rotate(180°) 朝右 */
+.rot-180 :deep(svg) {
+  transform: rotate(180deg);
 }
 /* 播放条系图标 = 标签档（13 稿 Vector 文字/标签，与播放条统一） */
 .frame-strip :deep(.icon-btn) {
   color: var(--text-label);
+}
+/* hover 提亮到常态（同播放条口径）；禁用态不提亮 */
+.frame-strip :deep(.icon-btn:hover:not(:disabled)) {
+  color: var(--text-normal);
 }
 .frames {
   display: flex;

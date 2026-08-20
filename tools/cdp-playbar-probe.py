@@ -130,9 +130,19 @@ STRIP_STYLE_JS = """(() => {
     borderRadius: cs.borderRadius, borderTopWidth: cs.borderTopWidth, boxShadow: cs.boxShadow,
     background: cs.backgroundColor, padding: cs.padding,
     btnTransforms: btns, btnCount: btns.length,
+    btnDs: [...strip.querySelectorAll('.icon-btn svg path')].map((p) => p.getAttribute('d')?.slice(0, 20) ?? null),
     frameRadius: (() => { const f = strip.querySelector('.frame'); return f ? getComputedStyle(f).borderRadius : null; })(),
   };
 })()"""
+
+# 视频左组按钮朝向断言（2026-08-20 修：seek 原样 ◀◀ = 快退 / flip-h = 快进；step-frame-vertical
+# 原样 ◀| = 上一帧 / flip-h = 下一帧）——读 svg computed transform 序列比对
+VIDEO_LEFT_JS = """(() => {
+  const group = document.querySelector('.preview-footer .play-bar .btn-group');
+  if (!group) return null;
+  return [...group.querySelectorAll('.icon-btn svg')].map((s) => getComputedStyle(s).transform);
+})()"""
+FLIP = "matrix(-1, 0, 0, 1, 0, 0)"  # scaleX(-1)
 
 C3_RGB = "rgb(24, 25, 25)"  # #181919
 LABEL_RGBA = "rgba(234, 255, 247, 0.341)"  # 文字/标签 0.3412（浏览器舍入）
@@ -253,9 +263,13 @@ async def main():
                     fails.append(f"[动图] 帧条边框/画框不符（top {strip['borderTopWidth']} / shadow {strip['boxShadow']}）")
                 if strip["padding"] != "8px 16px":
                     fails.append(f"[动图] 帧条内边距 {strip['padding']}（期望 8px 16px）")
+                # 两端按钮 = nav-history 面包屑同款：上一帧不旋转（朝左）/ 下一帧 rotate(180°)
+                ds = strip.get("btnDs") or []
+                if not all(d and d.startswith("M11.6251 2.5") for d in ds):
+                    fails.append(f"[动图] 帧条两端图标 ≠ nav-history（{ds}）")
                 rots = [rot_deg(t) for t in strip["btnTransforms"]]
-                if len(rots) != 2 or rots[0] != -90 or rots[1] != 90:
-                    fails.append(f"[动图] 帧条两端按钮方向错（{rots}，期望 [-90, 90] 即 ← →）")
+                if len(rots) != 2 or rots[0] is not None or rots[1] != 180:
+                    fails.append(f"[动图] 帧条两端按钮方向错（{rots}，期望 [不旋转, 180] 即 ‹ ›）")
             # 帧数文本色 = 常态档
             ft = await ev("(() => { const t = document.querySelector('.play-bar .frame-text'); return t ? getComputedStyle(t).color : null; })()")
             print("[动图] 帧数文本色:", ft)
@@ -271,6 +285,27 @@ async def main():
             print("[视频] 左组按钮数:", left_n)
             if left_n != 6:
                 fails.append(f"[视频] 左组 {left_n} 件（期望 6：播放/快退/快进/上帧/下帧/音量）")
+            # 左组朝向序列：播放 none / 快退 none（◀◀）/ 快进 flip / 上帧 none（◀|）/ 下帧 flip / 音量 none
+            transforms = await ev(VIDEO_LEFT_JS)
+            print("[视频] 左组 transform:", transforms)
+            if transforms:
+                expect = ["none", "none", FLIP, "none", FLIP, "none"]
+                if transforms != expect:
+                    fails.append(f"[视频] 左组朝向序列不符（{transforms}，期望 {expect}）")
+            # hover 提亮 + tip tag 化（下一帧钮：非禁用）：真鼠标悬停 → 图标色提亮常态 + 400ms 出 tag 化 tip
+            btn_rect = await ev("(() => { const b = document.querySelectorAll('.preview-footer .play-bar .btn-group .icon-btn')[4]; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()")
+            color0 = await ev("getComputedStyle(document.querySelectorAll('.preview-footer .play-bar .btn-group .icon-btn')[4]).color")
+            await send(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": btn_rect["x"], "y": btn_rect["y"]}, session=sess)
+            await asyncio.sleep(0.2)
+            color1 = await ev("getComputedStyle(document.querySelectorAll('.preview-footer .play-bar .btn-group .icon-btn')[4]).color")
+            print("[视频] 下一帧 hover 色:", color0, "→", color1)
+            if color1 == color0 or not (color1 or "").startswith("rgba(247, 255, 252, 0.694"):
+                fails.append(f"[视频] hover 未提亮到常态（{color0} → {color1}）")
+            await asyncio.sleep(0.6)  # v-tip 400ms 延迟
+            tip = await ev("(() => { const t = document.querySelector('.app-tip.show'); return t ? { text: t.textContent, kbd: [...t.querySelectorAll('kbd')].map((k) => k.textContent) } : null; })()")
+            print("[视频] 下一帧 tip:", json.dumps(tip, ensure_ascii=False))
+            if not tip or "下一帧" not in tip["text"] or tip["kbd"] != ["."]:
+                fails.append(f"[视频] 下一帧 tip 未 tag 化（{tip}，期望 文本「下一帧」+ kbd [.]）")
             await shot_footer("playbar-video")
             await close_preview()
 

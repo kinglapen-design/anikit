@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 视频播放条（5.2）：样式 = 13_播放条稿（2026-08-20 用户定，与搜索栏同位同尺寸）——46 高 /
 // padding 8 16 / C3 / border-top 暗-悬停 / 直角通栏；左组 = 播放/快退/快进/上帧/下帧/音量（稿全量件）。
-// 播放/暂停、快退/快进（∓5 秒）、上/下一帧（step-frame 图标左右翻转，步进即暂停，快捷键 , . 的实体入口）、
+// 播放/暂停、快退/快进（∓5 秒；seek 原样 ◀◀ = 快退、flip-h = 快进——2026-08-20 修：翻转归属原写反）、
+// 上/下一帧（step-frame-vertical 原样 ◀| = 上一帧、flip-h |▶ = 下一帧；步进即暂停，快捷键 , . 的实体入口）、
 // 音量（VolumeControl）、当前帧/总帧数（TimeDisplayControl：5.3 帧化，查看方式"时间显示 = 帧数"且
 // fps 可用，回退 当前时间/总时长；悬停出帧数/时间码就地切换弹窗，2026-07-28 用户定）、
 // 进度条（3px 轨道 暗-悬停 + 品牌紫填充 + 10px 常态色拖钮，13 稿口径）、
@@ -76,11 +77,12 @@ function stepFrame(delta: number): void {
         :disabled="media.transcodingSlow"
         @click="media.togglePlay()"
       />
-      <IconButton class="flip-h" name="seek" title="快退 5 秒" :disabled="media.transcodingSlow" @click="media.seekBy(-5)" />
-      <IconButton name="seek" title="快进 5 秒" :disabled="media.transcodingSlow" @click="media.seekBy(5)" />
-      <!-- 上下帧（逐帧步进即暂停；step-frame-vertical 图标左右翻转使用，快捷键 , . 的实体入口） -->
-      <IconButton class="flip-h" name="step-frame-vertical" title="上一帧（,）" :disabled="media.transcodingSlow" @click="stepFrame(-1)" />
-      <IconButton name="step-frame-vertical" title="下一帧（.）" :disabled="media.transcodingSlow" @click="stepFrame(1)" />
+      <IconButton name="seek" title="快退 5 秒" :disabled="media.transcodingSlow" @click="media.seekBy(-5)" />
+      <IconButton class="flip-h" name="seek" title="快进 5 秒" :disabled="media.transcodingSlow" @click="media.seekBy(5)" />
+      <!-- 上下帧（逐帧步进即暂停；step-frame-vertical 原样 ◀| = 上一帧、flip-h |▶ = 下一帧；
+           快捷键 , . 的实体入口，tip tag 化同"新增"口径） -->
+      <IconButton name="step-frame-vertical" :title="{ text: '上一帧', keys: ',' }" :disabled="media.transcodingSlow" @click="stepFrame(-1)" />
+      <IconButton class="flip-h" name="step-frame-vertical" :title="{ text: '下一帧', keys: '.' }" :disabled="media.transcodingSlow" @click="stepFrame(1)" />
       <VolumeControl />
     </div>
     <TimeDisplayControl :text="posText" />
@@ -136,6 +138,10 @@ function stepFrame(delta: number): void {
 /* 播放条图标 = 标签档（13 稿 Vector 文字/标签） */
 .play-bar :deep(.icon-btn) {
   color: var(--text-label);
+}
+/* hover 提亮到常态（2026-08-20 用户定）；激活（品牌紫）/ 禁用态不提亮 */
+.play-bar :deep(.icon-btn:hover:not(.active):not(:disabled)) {
+  color: var(--text-normal);
 }
 .play-bar :deep(.icon-btn.active) {
   color: var(--brand-1);
