@@ -75,7 +75,11 @@ onMounted(async () => {
   window.addEventListener("keydown", onKeydown);
 });
 onBeforeUnmount(() => {
-  unlistenStrips?.();
+  try {
+    unlistenStrips?.();
+  } catch {
+    /* 退订失败不阻断卸载（探针桩环境无回调表会抛 TypeError） */
+  }
   window.removeEventListener("keydown", onKeydown);
 });
 
@@ -115,7 +119,7 @@ async function openFramePreview(name: string): Promise<void> {
   if (idx >= 0) preview.setFrame(idx);
 }
 
-// —— 右键菜单（宽 213：删除项 + delete 徽章在默认 175 下裁切，2026-08-21 用户实机报）——
+// —— 右键菜单（宽 320 = 素材卡片右键菜单同宽，2026-08-21 用户定：快捷键徽章也占空间，213 仍裁切）——
 function frameMenu(e: MouseEvent, name: string, idx: number): void {
   // 右键未选中项先单选（全库惯例）；已在多选域内保持选择
   if (!selected.value.has(name)) clickFrame(e, name, idx);
@@ -139,7 +143,7 @@ function frameMenu(e: MouseEvent, name: string, idx: number): void {
       action: () => void deleteSequenceFrames(props.assetId, targets),
     },
   ];
-  openContextMenu(e, entries, undefined, { width: 213 });
+  openContextMenu(e, entries, undefined, { width: 320 });
 }
 
 function blankMenu(e: MouseEvent): void {

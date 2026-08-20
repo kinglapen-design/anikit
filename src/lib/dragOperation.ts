@@ -591,11 +591,11 @@ export function gridPointerDown(e: PointerEvent, onBlank: (e: PointerEvent) => v
   if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement) ae.blur();
   const card = t.closest(".asset-card, .list-row");
   if (card) {
-    // 回收站视口（6.1 二轮，2026-07-29）：卡片只读不可拖拽，按下交空白回调（框选 / 清空选择）
-    if (useContentStore().isRecycleView) {
-      onBlank(e);
-      return;
-    }
+    // 回收站视口（6.1 二轮，2026-07-29）：卡片只读不可拖拽——按下不启动任何手势直接放行：
+    // 原实现交空白回调（框选），其 preventDefault 会吞掉 click 合成、未过阈值松开又按
+    //"点击空白"清空选择——回收站卡片单击选中 / 双击预览全灭（2026-08-21 用户实机报修）。
+    // 框选不受影响：空白处按下照常起框选（onBlank 只在非卡片命中时调用）
+    if (useContentStore().isRecycleView) return;
     const key = card.getAttribute("data-key");
     if (key) beginAssetDrag(e, key);
     return;
