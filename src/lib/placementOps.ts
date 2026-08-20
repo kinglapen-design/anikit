@@ -12,6 +12,7 @@ import { useContentStore } from "../stores/content";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
 import { useToastStore } from "../stores/toast";
 import { useUndoStore } from "../stores/undo";
+import { treeExpansion } from "./treeExpansion";
 
 export type { PlacementRef };
 
@@ -79,9 +80,14 @@ export async function moveFolders(
   targetBlock: string | null = null,
 ): Promise<boolean> {
   let moved = 0;
-  return await runOp(async () => {
+  const ok = await runOp(async () => {
     moved = await invoke<number>("move_folders", { folderIds, targetParent, beforeFolderId, targetBlock });
   }, () => `移动 ${moved} 个文件夹`);
+  // 并入子项后默认展开目标父级（2026-08-20 用户定：让用户直接看到移动结果，而不是折叠起来）
+  if (ok && moved > 0 && targetParent && targetParent !== "root") {
+    treeExpansion.openSet.add(targetParent);
+  }
+  return ok;
 }
 
 export async function linkPlacements(
@@ -106,7 +112,7 @@ export async function duplicatePlacements(
   return await runOp(async () => {
     const ids = await invoke<string[]>("duplicate_placements", { items, targetFolder, names });
     created = ids.length;
-    if (created > 0) useContentStore().markArrivals(ids.map((id) => `${id}|${targetFolder}`));
+    // 副本不进新增区（2026-08-20 用户定）：后端已紧随原件落点，置顶反而把副本拽回第一行第一列
   }, () => `创建 ${created} 个副本`);
 }
 
@@ -365,7 +371,8 @@ export async function createDocument(kind: NewDocKind): Promise<void> {
 // —— 内部剪贴板（C1）——
 
 // Ctrl+C / Ctrl+X：写入内部剪贴板（仅素材；空选择不动作）；
-// 复制 / 剪切即时反馈（2026-07-28 复验反馈 7）：info 型、无动作按钮、3 秒
+// 复制 / 剪切即时反馈（2026-07-28 复验反馈 7）：成功型、无动作按钮、3 秒
+//（2026-08-20 修复：原 icon:"fail" 是 info 型废除时的误改——成功操作用失败提示，用户实机报）
 export function copySelection(action: "copy" | "cut"): void {
   const selection = useSelectionStore();
   const items = selection.selectedRefs();
@@ -373,7 +380,6 @@ export function copySelection(action: "copy" | "cut"): void {
   selection.clipboard = { items, action };
   useToastStore().notify({
     message: `已${action === "copy" ? "复制" : "剪切"} ${items.length} 个项目`,
-    icon: "fail",
     duration: 3000,
   });
 }

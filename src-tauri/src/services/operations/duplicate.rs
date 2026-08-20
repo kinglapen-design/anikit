@@ -1,16 +1,16 @@
 //! 副本与重命名（6.1）：duplicate = info 目录整体复制 + 新 ID + 链接 Placement；
 //! rename = 显示名即时改，原始 Placement 追加磁盘段（originName + 词干缩略图同步改名）。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::core::json_io::{read_json, write_json};
 use crate::core::library::{self, Library};
-use crate::core::models::{new_asset_id, AssetMeta};
+use crate::core::models::{new_asset_id, AssetMeta, Placement};
 use crate::services::import as ops;
 
-use super::{check_folder, find_placement, finish, now, PlacementRef, RenameItem};
+use super::{check_folder, find_placement, finish, now, rewrite_orders, PlacementRef, RenameItem};
 
 /// duplicate 结果：新资源 ID 清单 + 每条副本的（源 info, 新 info）目录对（命令层登记 DiskOp 用）
 #[derive(Debug, Default)]
@@ -21,7 +21,10 @@ pub struct DuplicateOutcome {
 
 /// 创建副本：每条 = copy_dir `{旧ID}.info` → `{新ID}.info`（保留原 hash，利于导入查重命中）
 /// → 改 metadata（id / name / importedAt / modifiedAt）写盘 → 索引 insert
-/// → add_placement（origin = false，显示名 = names[i] 非空 ? 自定义 : 源 Placement 名）。
+/// → 副本 Placement 落点（2026-08-20 用户定，替换原统一"段首前插"）：
+///   源在目标文件夹内 = **紧随原件**（克隆后不用回顶部找——原段首前插会把副本顶到第一行第一列；
+///   恒插源后第一位，连续副本时新副本贴原件、旧副本顺后移）；
+///   跨文件夹副本粘贴（Ctrl+Shift+V 落他处）= 段首前插（新项顶部可见，导入同语义）。
 /// 任一条失败整体 Err，已创建的副本全部回滚（目录删除 + 索引 / Placement 清理）
 pub fn duplicate_placements(
   lib: &mut Library,
@@ -31,10 +34,10 @@ pub fn duplicate_placements(
 ) -> Result<DuplicateOutcome, String> {
   check_folder(lib, target_folder)?;
   let mut out = DuplicateOutcome::default();
-  let mut anchor = HashMap::new();
+  let mut front_anchor: HashMap<String, usize> = HashMap::new(); // 跨文件夹 add_placement 段首批次锚点
   for (i, item) in items.iter().enumerate() {
     let custom = names.get(i).and_then(|n| n.as_ref()).map(|n| n.trim()).filter(|n| !n.is_empty());
-    match duplicate_one(lib, item, target_folder, custom, &mut anchor) {
+    match duplicate_one(lib, item, target_folder, custom, &mut front_anchor) {
       Ok(Some((new_id, pair))) => {
         out.new_ids.push(new_id);
         out.copies.push(pair);
@@ -47,6 +50,7 @@ pub fn duplicate_placements(
     }
   }
   if !out.new_ids.is_empty() {
+    rewrite_orders(lib, target_folder); // 紧随插入后 order 连续化（finish 重建索引 + 落盘）
     finish(lib)?;
     log::info!("创建 {} 个副本至 {target_folder}", out.new_ids.len());
   }
@@ -62,7 +66,7 @@ fn duplicate_one(
   item: &PlacementRef,
   target_folder: &str,
   custom: Option<&str>,
-  anchor: &mut HashMap<String, usize>,
+  front_anchor: &mut HashMap<String, usize>,
 ) -> Result<Option<OneCopy>, String> {
   let Some(pos) = find_placement(lib, item) else { return Ok(None) };
   let source_name = lib.folders.items[pos].name.clone();
@@ -91,8 +95,26 @@ fn duplicate_one(
   write_json(&meta_path, &meta).map_err(|e| e.to_string())?;
   lib.index.assets.insert(new_id.clone(), meta); // 先落盘再同步内存（规范第 7 条）
 
-  let display = custom.unwrap_or(&source_name).to_string();
-  ops::add_placement(lib, new_id.clone(), target_folder.to_string(), display, false, anchor);
+  if item.folder_id == target_folder {
+    // 同文件夹：紧随原件（2026-08-20 用户定）。恒插源后第一位——连续副本时新副本贴原件、
+    // 旧副本顺后移；显示名唯一化读 items 实时数组（本批已插副本尚未入索引——finish 才 rebuild）；
+    // order 由调用方 rewrite_orders 统一连续化
+    let existing: HashSet<String> =
+      lib.folders.items.iter().filter(|p| p.folder == target_folder).map(|p| p.name.clone()).collect();
+    let display = library::unique_name(&existing, custom.unwrap_or(&source_name));
+    let placement = Placement {
+      asset: new_id.clone(),
+      folder: target_folder.to_string(),
+      name: display,
+      order: 0,
+      origin: false,
+    };
+    lib.folders.items.insert(pos + 1, placement);
+  } else {
+    // 跨文件夹副本粘贴：段首前插（导入同语义，新项顶部可见）；add_placement 内部唯一化 + 索引同步
+    let display = custom.unwrap_or(&source_name).to_string();
+    ops::add_placement(lib, new_id.clone(), target_folder.to_string(), display, false, front_anchor);
+  }
   Ok(Some((new_id, (old_info, new_info))))
 }
 
@@ -454,6 +476,36 @@ mod tests {
     assert_eq!(h.lib.index.assets[new_id].name, "走路", "序列帧副本名不取 originName 词干");
     let new_frames = crate::core::paths::frames_dir(&h.lib.assets_dir, new_id);
     assert!(new_frames.join("走路-1.png").is_file(), "帧目录整体复制");
+  }
+
+  /// 副本落点（2026-08-20 用户定）：同文件夹紧随原件（新副本恒贴原件、旧副本顺后移），跨文件夹段首前插
+  #[test]
+  fn duplicate_inserts_after_source() {
+    let mut h = make_lib();
+    add_png(&mut h, "AN-A", "甲.png");
+    add_png(&mut h, "AN-B", "乙.png");
+    add_png(&mut h, "AN-C", "丙.png");
+    // add_png 每条前插段首 → 初始 items 序：丙, 乙, 甲
+    let out = duplicate_placements(&mut h.lib, &[pref("AN-B", "root", true)], "root", &[None]).unwrap();
+    let names: Vec<&str> = h.lib.folders.items.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["丙.png", "乙.png", "乙-1.png", "甲.png"], "副本紧随原件");
+    assert_eq!(h.lib.folders.items[2].asset, out.new_ids[0]);
+    // 同原件再副本：新副本贴原件、旧副本后移
+    duplicate_placements(&mut h.lib, &[pref("AN-B", "root", true)], "root", &[None]).unwrap();
+    let names: Vec<&str> = h.lib.folders.items.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["丙.png", "乙.png", "乙-2.png", "乙-1.png", "甲.png"], "新副本恒贴原件");
+    // 跨文件夹副本：段首前插（导入同语义）
+    let fid = crate::services::import::new_folder_id();
+    h.lib
+      .folders
+      .folders
+      .push(crate::core::models::Folder { id: fid.clone(), name: "夹子".into(), parent: None, block: None, icon: None, kind: None, color: None, groups: None, order: 0 });
+    h.lib.index.folders.insert(fid.clone(), h.lib.folders.folders.last().unwrap().clone());
+    ops::add_placement(&mut h.lib, "AN-C".into(), fid.clone(), "丙.png".into(), true, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+    duplicate_placements(&mut h.lib, &[pref("AN-B", "root", true)], &fid, &[None]).unwrap();
+    let seg: Vec<&str> = h.lib.folders.items.iter().filter(|p| p.folder == fid).map(|p| p.name.as_str()).collect();
+    assert_eq!(seg, ["乙.png", "丙.png"], "跨文件夹副本段首前插");
   }
 
   /// 批量重命名（3.4）：逐条生效 + 撞名不唯一化（显示名放开）+ 失败项跳过不整体回滚

@@ -13,13 +13,20 @@ import SideSlider from "./SideSlider.vue";
 import ViewOptionsMenu from "./ViewOptionsMenu.vue";
 import { useUiStore } from "../stores/ui";
 import { useContentStore, type FolderNode } from "../stores/content";
+import { useTabsStore } from "../stores/tabs";
 import { findFolderNode } from "../lib/detailSections";
 
 const ui = useUiStore();
 const content = useContentStore();
+const tabs = useTabsStore();
 
-// 本标签页视口（ContentArea 传入；档案切换钮按本视口档案读写，2026-08-15 迁入视口）
-const props = defineProps<{ viewKey: string }>();
+// 本标签页视口（ContentArea 传入；档案切换钮按本视口档案读写，2026-08-15 迁入视口）；
+// panelId（2026-08-20 面包屑接入）：导航历史 per-panel，按钮按本页历史栈禁用/触发
+const props = defineProps<{ viewKey: string; panelId?: string }>();
+
+// 面包屑后退 / 前进按钮态（本页历史栈；无历史禁用）
+const canBack = computed(() => (props.panelId ? (tabs.navCan[props.panelId]?.back ?? false) : false));
+const canFwd = computed(() => (props.panelId ? (tabs.navCan[props.panelId]?.fwd ?? false) : false));
 
 // 档案二级侧边栏切换钮（仅本视口 = 档案文件夹时显示，面包屑返回按钮左边）
 const archiveViewportNode = computed<FolderNode | null>(() => {
@@ -69,9 +76,21 @@ function openGroupManage(): void {
         class="archive-panel-toggle"
         @click="ui.toggleArchivePanel(archiveViewportNode.id)"
       />
-      <!-- 后退 / 前进（figma 41：nav-history 图标，前进 rotate 180°；历史导航业务后接，先 disabled） -->
-      <IconButton name="nav-history" title="后退" disabled />
-      <IconButton name="nav-history" title="前进" class="rot-180" disabled />
+      <!-- 后退 / 前进（figma 41：nav-history 图标，前进 rotate 180°；2026-08-20 接入：
+           per-panel 导航历史——openView 替换视口入栈，锁定页新开不入栈） -->
+      <IconButton
+        name="nav-history"
+        title="后退"
+        :disabled="!canBack"
+        @click="panelId && tabs.goHistory(panelId, -1)"
+      />
+      <IconButton
+        name="nav-history"
+        title="前进"
+        class="rot-180"
+        :disabled="!canFwd"
+        @click="panelId && tabs.goHistory(panelId, 1)"
+      />
       <span v-if="searchResult" class="result-text">{{ searchResult }}</span>
     </div>
     <div class="right-group">

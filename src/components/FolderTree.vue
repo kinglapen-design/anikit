@@ -124,6 +124,7 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
         :icon="node.kind === 'archive' ? 'archive' : node.icon ?? (isOpen(node.id) ? 'folder-open' : 'folder-closed')"
         :label="node.name"
         :count="node.count"
+        :direct-count="content.directCounts.get(node.id) ?? 0"
         :depth="depth"
         :variant="node.kind === 'archive' ? 'archive' : parentId === null ? 'root' : 'child'"
         :tint="nodeTint(node)"

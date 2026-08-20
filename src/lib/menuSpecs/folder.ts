@@ -64,8 +64,9 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
       label: "新标签页打开",
       icon: "open-in-new-tab",
       shortcut: "Ctrl+Enter",
+      // 恒新开标签页（2026-08-20 修复：原误用 openView——未锁定页只替换视口，没开新页）
       action: () => {
-        useTabsStore().openView(`folder:${folder.id}`);
+        useTabsStore().openInNewTab(`folder:${folder.id}`);
       },
     },
     {

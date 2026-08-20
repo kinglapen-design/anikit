@@ -11,7 +11,7 @@
 // 树空白右键 2026-08-11 用户定废除（判定范围只有 4px item 间距，无实用价值；
 // 后期多区块后"在哪个区块新建"难判定）。
 // 树 item 拖拽起点（C4）：pointerdown 超阈值进拖拽引擎，未过阈值 = 原 click 选中语义。
-import { computed, reactive, ref } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import SectionHeader from "./SectionHeader.vue";
 import TreeItem from "./TreeItem.vue";
 import FolderTree from "./FolderTree.vue";
@@ -23,7 +23,7 @@ import { openContextMenu } from "../lib/contextMenus";
 import { recycleBlankSpec } from "../lib/menuSpecs/recycle";
 import { currentSpace, setAutoImport } from "../lib/libraryOps";
 import { reorderBlocks } from "../lib/blockOps";
-import { isBlockOpen, openBlock, toggleBlockOpen } from "../lib/treeExpansion";
+import { isBlockOpen, openBlock, toggleBlockOpen, treeExpansion } from "../lib/treeExpansion";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
@@ -31,6 +31,41 @@ import { useTabsStore } from "../stores/tabs";
 const content = useContentStore();
 const selection = useSelectionStore();
 const tabs = useTabsStore();
+
+// 树定位跟随（2026-08-20 用户定）：导航进文件夹视口（双击文件夹卡片 / 树外任何入口）时——
+// 展开祖先链 + 所在区块，并滚动到该节点；原仅 sidebarSelected 高亮，父级折叠时当前文件夹
+// 在树上看不见（视觉焦点丢失）。自身不展开（定位语义 = 看到它）；树上点击导航时节点本可见，
+// scrollIntoView(nearest) 不位移，天然无副作用。folders 就绪前（启动恢复期）找不到节点则跳过，
+// folders 到达后补定位一次（watch 第二源）
+watch(
+  [() => content.sidebarSelected, () => content.folders],
+  async ([key]) => {
+    if (!key.startsWith("folder:")) return;
+    const id = key.slice(7);
+    // 祖先链（顶级在前）：找不到 = 数据未就绪或已删除，跳过
+    const trail: string[] = [];
+    const walk = (nodes: FolderNode[], acc: string[]): boolean => {
+      for (const n of nodes) {
+        if (n.id === id) {
+          trail.push(...acc);
+          return true;
+        }
+        if (walk(n.children, [...acc, n.id])) return true;
+      }
+      return false;
+    };
+    if (!walk(content.folders, [])) return;
+    for (const aid of trail) treeExpansion.openSet.add(aid);
+    // 所在区块折叠时展开（折叠区块内节点 DOM 不渲染，不展开滚动不到）
+    const topId = trail.length > 0 ? trail[0] : id;
+    const topNode = content.folders.find((n) => n.id === topId);
+    if (topNode?.block) openBlock(topNode.block);
+    await nextTick();
+    document
+      .querySelector(`.library-view .tree-item[data-folder-id="${CSS.escape(id)}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  },
+);
 
 // 自动导入关闭时点击"自动导入"项：确认弹窗（2026-08-12 用户定）——开启 = 写库级设置 +
 // 挂载收件箱盘符 + 启动监听后进入视图；取消 = 停留当前视图

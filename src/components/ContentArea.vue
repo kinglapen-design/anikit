@@ -97,7 +97,7 @@ const archiveNode = computed<FolderNode | null>(() => {
       <div class="viewport-body">
         <ArchiveSidePanel v-if="archiveNode" :node="archiveNode" :panel-active="active" />
         <div class="viewport-main">
-          <ContentTitleBar :view-key="viewKey" />
+          <ContentTitleBar :view-key="viewKey" :panel-id="panelApi.id" />
           <ImportProgressBar />
           <section class="asset-section">
             <AssetGrid

@@ -101,14 +101,19 @@ export function assetCardFade(key: string): "source" | "cut" | null {
   return useSelectionStore().isCut(key) ? "cut" : null;
 }
 
-// 卡片间距解析器：AssetGrid 挂载时注册（它持有 boxes / 滚动 pos），卸载注销
-export type GridResolver = (clientX: number, clientY: number) => GapIndicator | null;
+// 卡片间距解析器：AssetGrid 挂载时注册（它持有 boxes / 滚动 pos），卸载注销。
+// draggedKeys = 拖拽组 key 集（组约束判定用，2026-08-20 组内排序放开）；visibleKeys =
+// 网格当前可见序（displayItems）key 序列——分组模式的物化可见序 = 组拼接序，非 placementsFor 原序
+export type GridResolver = (clientX: number, clientY: number, draggedKeys: readonly string[]) => GapIndicator | null;
 let gridResolver: GridResolver | null = null;
-export function registerGridResolver(fn: GridResolver): void {
+let gridVisibleKeys: (() => string[]) | null = null;
+export function registerGridResolver(fn: GridResolver, visibleKeys?: () => string[]): void {
   gridResolver = fn;
+  gridVisibleKeys = visibleKeys ?? null;
 }
 export function unregisterGridResolver(): void {
   gridResolver = null;
+  gridVisibleKeys = null;
 }
 
 // 间距解析器工厂（C4a；主体落 lib 控制 AssetGrid 行数 ≤500，规范第 3 条）：
@@ -119,14 +124,18 @@ export function unregisterGridResolver(): void {
 // 2026-08-18 修复"第一列前插竖块盖住卡片"：原 Math.max(0, b.left - GAP) 钳位把行首间隙
 // 拉回卡片左缘（盖住卡片 12px）——行首间隙 = 卡片左侧容器留白区，允许负 left（渲染侧
 // 已 Teleport 到 body 按 client 坐标画，不再受 grid-viewport overflow 裁剪）
+// 组约束（2026-08-20 用户定，替换 2026-08-19"分组模式整体禁排"）：ctx.groupOfKey 存在时
+// 按组判定——同组内允许互相排序；跨分组（落点与拖拽组不同组、或多选跨组）禁止出落点，
+// 因为组归属由规则定，拖过去也不改变归组，给落点是误导
 export function makeGridResolver(ctx: {
   isFolderView: () => boolean;
   layer: () => HTMLElement | undefined;
   boxes: () => { top: number; left: number; width: number; height: number; i: number }[];
   keyAt: (i: number) => string;
+  groupOfKey?: (key: string) => string | null | undefined; // 分组模式：key → 组 id（null = 未分组组）；非分组 = undefined
 }): GridResolver {
   const GAP = COL_GAP; // 卡片间距（layouts.ts COL_GAP，figma 42 文件卡片列表 gap 12）
-  return (clientX, clientY) => {
+  return (clientX, clientY, draggedKeys) => {
     if (!ctx.isFolderView()) return null;
     const layer = ctx.layer();
     if (!layer) return null;
@@ -164,30 +173,46 @@ export function makeGridResolver(ctx: {
         break;
       }
     }
+    let gap: GapIndicator;
     if (idx < 0) {
       const last = bs[bs.length - 1];
-      return { left: last.left + last.width, top: last.top, width: GAP, height: last.height, beforeKey: null };
+      gap = { left: last.left + last.width, top: last.top, width: GAP, height: last.height, beforeKey: null };
+    } else {
+      const b = bs[idx];
+      const prev = bs[idx - 1];
+      if (rowBreak && prev) {
+        // 行末间隙：竖块贴在指针所在行的末卡之后（beforeKey 仍是下一行行首项，语义不变）
+        gap = {
+          left: prev.left + prev.width,
+          top: prev.top,
+          width: GAP,
+          height: prev.height,
+          beforeKey: ctx.keyAt(b.i),
+        };
+      } else {
+        const sameRow = prev && prev.top === b.top;
+        gap = {
+          left: sameRow ? prev.left + prev.width : b.left - GAP,
+          top: b.top,
+          width: GAP,
+          height: b.height,
+          beforeKey: ctx.keyAt(b.i),
+        };
+      }
     }
-    const b = bs[idx];
-    const prev = bs[idx - 1];
-    if (rowBreak && prev) {
-      // 行末间隙：竖块贴在指针所在行的末卡之后（beforeKey 仍是下一行行首项，语义不变）
-      return {
-        left: prev.left + prev.width,
-        top: prev.top,
-        width: GAP,
-        height: prev.height,
-        beforeKey: ctx.keyAt(b.i),
-      };
+    // 组约束：分组模式下（groupOfKey 有定义）拖拽组与落点须同组
+    if (ctx.groupOfKey && draggedKeys.length > 0) {
+      const g0 = ctx.groupOfKey(draggedKeys[0]);
+      if (g0 !== undefined) {
+        for (const k of draggedKeys) {
+          if (ctx.groupOfKey(k) !== g0) return null; // 多选跨组：禁止
+        }
+        // 落点组 = 间隙后项的组；段尾（beforeKey null）= 最末可见项的组
+        const anchorKey = gap.beforeKey ?? ctx.keyAt(bs[bs.length - 1].i);
+        if (ctx.groupOfKey(anchorKey) !== g0) return null;
+      }
     }
-    const sameRow = prev && prev.top === b.top;
-    return {
-      left: sameRow ? prev.left + prev.width : b.left - GAP,
-      top: b.top,
-      width: GAP,
-      height: b.height,
-      beforeKey: ctx.keyAt(b.i),
-    };
+    return gap;
   };
 }
 
@@ -295,7 +320,7 @@ function updateDropTarget(e: PointerEvent): void {
 
   // 素材卡片间隙排序（仅素材拖拽；网格 resolver 由 AssetGrid 注册）
   if (sess.kind === "asset" && gridResolver) {
-    const gap = gridResolver(e.clientX, e.clientY);
+    const gap = gridResolver(e.clientX, e.clientY, items.map((it) => `${it.assetId}|${it.folderId}`));
     if (gap) {
       dragView.gap = gap;
       sess.drop = async () => dropAssetsGap(items, gap);
@@ -332,9 +357,21 @@ async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator): Promis
   if (isDisplaySorted(ui.sortBy)) {
     // 显示排序下拖拽排序（3.5，02 整理"物化 + 切回自定义"口径的素材侧延伸）：把该层可见序
     // （新增区置顶段 + 排序流）物化为存储序、拖拽组按落点并入，整层一次重写并切回自定义——
-    // 否则 refresh 后排序键盖回，拖拽等于没执行。物化静默（不单独 toast，undo 快照仍在）
+    // 否则 refresh 后排序键盖回，拖拽等于没执行。物化静默（不单独 toast，undo 快照仍在）。
+    // 可见序以网格注册序为准（2026-08-20 组内排序放开：分组模式 = 组拼接序 displayItems，
+    // 非 placementsFor 原序——物化组拼接序才能切回自定义后屏幕位置不变）；无注册序退回 placementsFor
     if (gap.beforeKey && items.some((it) => `${it.assetId}|${it.folderId}` === gap.beforeKey)) return; // 插到自身前 = 无操作
-    const visible = content.placementsFor(`folder:${target}`).filter((p) => p.folderId === target);
+    const base = content.placementsFor(`folder:${target}`).filter((p) => p.folderId === target);
+    let visible = base;
+    const keys = gridVisibleKeys?.();
+    if (keys) {
+      const order = new Map(keys.map((k, i) => [k, i] as const));
+      visible = [...base].sort(
+        (a, b) =>
+          (order.get(`${a.assetId}|${a.folderId}`) ?? Number.MAX_SAFE_INTEGER) -
+          (order.get(`${b.assetId}|${b.folderId}`) ?? Number.MAX_SAFE_INTEGER),
+      );
+    }
     const inDrag = (p: PlacementView): boolean =>
       items.some((it) => it.assetId === p.assetId && it.folderId === p.folderId && it.origin === p.origin);
     const rest = visible.filter((p) => !inDrag(p));

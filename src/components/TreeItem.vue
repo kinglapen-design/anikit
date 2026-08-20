@@ -19,6 +19,7 @@ const props = withDefaults(
     icon: string;
     label: string;
     count?: number;
+    directCount?: number; // 直接子项文件数（2026-08-20：展开态显示此值，折叠态显示 count 递归总数）
     depth?: number; // 层级（内容缩进：padding-left = 8 + depth×20；底色块满宽不缩进，2026-08-08 用户定）
     expandable?: boolean;
     open?: boolean;
@@ -40,6 +41,7 @@ const props = withDefaults(
   }>(),
   {
     count: undefined,
+    directCount: undefined,
     depth: 0,
     expandable: false,
     open: false,
@@ -61,9 +63,13 @@ const emit = defineEmits<{
   nameCommit: [name: string];
 }>();
 
-// 数量标签显示规则（2026-07-25 用户定）：0 不显示（去视觉噪音）；父级展开后隐藏——
-// 数量的作用是提醒"哪个文件夹里有文件"，展开后用户已在观察父级内容，折叠后重新显示
-const showCount = computed(() => props.count !== undefined && props.count > 0 && !props.open);
+// 数量标签显示规则（2026-08-20 用户修订，替换 2026-07-25"父级展开后隐藏"——展开后父级数量消失，
+// 用户实机误判"显示有问题"：其实文件直接在父级下、子文件夹是空的）：
+// 折叠 = 递归总数（含全部子文件夹，提醒"哪个文件夹里有文件"）；
+// 展开 = 直接子项文件数（子文件夹的归属已各自成行，父级数量只算自己的文件）；
+// 当前档位为 0 不显示（去视觉噪音）
+const displayCount = computed(() => (props.open ? (props.directCount ?? 0) : (props.count ?? 0)));
+const showCount = computed(() => displayCount.value > 0);
 
 // 命名输入（2026-07-29 复验三轮"先建后命名"）：初值 = 节点当前名（默认名），挂载聚焦全选；
 // Enter / Esc / 失焦一律保存退出（空或不变的判定在父级 FolderTree）
@@ -150,7 +156,7 @@ function onClick(e: MouseEvent): void {
     <button v-else class="body">
       <AppIcon :name="icon" :size="18" class="deco" />
       <span class="label">{{ label }}</span>
-      <span v-if="showCount" class="count">{{ (count ?? 0).toLocaleString() }}</span>
+      <span v-if="showCount" class="count">{{ displayCount.toLocaleString() }}</span>
     </button>
   </div>
 </template>

@@ -239,12 +239,24 @@ function onCardContextMenu(e: MouseEvent): void {
 }
 
 // —— 卡片间距排序落点解析器（C4a）：注册给拖拽引擎，算法主体在 lib/dragOperation makeGridResolver
-// 分组模式下禁用排序落点（2026-08-19 用户定：组归属由规则定，拖拽排序无意义——拖入别组不改变归组）
+// 分组模式（2026-08-20 用户定，替换 2026-08-19"分组整体禁排"）：组内允许互相排序——落点经
+// groupOfKey 组约束（同组才出落点；跨分组禁止，组归属由规则定、拖过去不改变归组）
+const keyGroupMap = computed(() => {
+  const m = new Map<string, string | null>();
+  const secs = groupSections.value;
+  if (secs) {
+    for (const s of secs) {
+      for (const p of s.items) m.set(`${p.assetId}|${p.folderId}`, s.groupId);
+    }
+  }
+  return m;
+});
 const resolveGap = makeGridResolver({
-  isFolderView: () => props.viewKey.startsWith("folder:") && !gridSections.value,
+  isFolderView: () => props.viewKey.startsWith("folder:"),
   layer: () => cardsLayerRef.value,
   boxes: () => boxes.value,
   keyAt: (i) => `${displayItems.value[i].assetId}|${displayItems.value[i].folderId}`,
+  groupOfKey: (key) => (groupSections.value ? keyGroupMap.value.get(key) : undefined),
 });
 
 // 间隙竖块 client 坐标（Teleport body 渲染）：layer 坐标 + 层 rect 实时换算；
@@ -268,7 +280,8 @@ watch(visibleCards, (cards) => {
 
 onMounted(() => {
   viewportRef.value!.addEventListener("wheel", onCtrlWheel, { passive: false });
-  registerGridResolver(resolveGap); // 拖拽卡片间距落点解析（C4）
+  // 拖拽卡片间距落点解析（C4）；visibleKeys = 网格可见序（组拼接序）——显示排序物化以它为准
+  registerGridResolver(resolveGap, () => displayItems.value.map((p) => `${p.assetId}|${p.folderId}`));
 });
 
 onBeforeUnmount(() => {

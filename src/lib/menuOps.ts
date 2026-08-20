@@ -24,6 +24,7 @@ import {
   revealInExplorer,
 } from "./placementOps";
 import { levelDisplaySorted, materializeLevelOrder } from "./dragFolderOps";
+import { treeExpansion } from "./treeExpansion";
 
 // —— 导入系统对话框（1.3：新增菜单三入口共用——侧栏新增按钮 / 空白右键 / Ctrl+N）——
 // PRD 05-01 导入位置：导入文件 → 当前视口目录；导入文件夹 → 根目录
@@ -104,6 +105,9 @@ export async function createAndName(
   }
   const id = await createFolder(parentId, uniqueFolderName(parentId, blockId), afterFolderId, blockId);
   if (!id) return;
+  // 新建子文件夹默认展开父级（2026-08-20 用户定：让用户直接看到新建结果——forceOpenIds 只是
+  // 命名期强制展开，命名结束后会随父级原折叠态收回去；写入 openSet 才真正保持展开）
+  if (parentId) treeExpansion.openSet.add(parentId);
   const selection = useSelectionStore();
   selection.clickFolder(id); // 单选新文件夹（clickFolder 内已互斥清素材/收件箱域）
   useTabsStore().openView(`folder:${id}`);
@@ -127,6 +131,7 @@ export async function createArchiveAndName(
   }
   const id = await createArchive(parentId, uniqueFolderName(parentId, blockId, "新建档案"), afterFolderId, blockId);
   if (!id) return;
+  if (parentId) treeExpansion.openSet.add(parentId); // 同 createAndName：新建子级默认展开父级
   const selection = useSelectionStore();
   selection.clickFolder(id);
   useTabsStore().openView(`folder:${id}`);

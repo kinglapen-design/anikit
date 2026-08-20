@@ -42,10 +42,26 @@ mod imp {
     // "openas" 动词 = 系统"打开方式"对话框
     let result = unsafe { ShellExecuteW(None, w!("openas"), PCWSTR::from_raw(hpath.as_ptr()), None, None, SW_SHOW) };
     if (result.0 as usize) > 32 {
-      Ok(())
-    } else {
-      Err(format!("打开方式对话框调用失败（{}），错误码 {}", path.display(), result.0 as usize))
+      return Ok(());
     }
+    // 兜底（2026-08-20 用户实机报错误码 31 = SE_ERR_NOASSOC：该文件类型未注册 openas 动词，
+    // 动词缺失时系统对话框根本调不起）——rundll32 shell32.dll,OpenAs_RunDLL 不依赖动词注册，
+    // 弹出同一个"打开方式"对话框；rundll32 按 CommandLineToArgvW 正常解析参数（与 explorer 不同，
+    // std::process::Command 可用，含空格路径由 Rust 自动加引号）
+    if open_as_rundll(path).is_ok() {
+      return Ok(());
+    }
+    Err(format!("打开方式对话框调用失败（{}），错误码 {}", path.display(), result.0 as usize))
+  }
+
+  /// openas 动词缺失时的兜底：rundll32 调起系统"打开方式"对话框（spawn 即返，不等待对话框关闭）
+  fn open_as_rundll(path: &Path) -> Result<(), String> {
+    std::process::Command::new("rundll32.exe")
+      .arg("shell32.dll,OpenAs_RunDLL")
+      .arg(path.as_os_str())
+      .spawn()
+      .map(|_| ())
+      .map_err(|e| format!("rundll32 调起失败：{e}"))
   }
 
   pub(super) fn reveal(path: &Path) -> Result<(), String> {

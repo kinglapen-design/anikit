@@ -3,7 +3,7 @@ import { defineStore } from "pinia";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isStaticImageExt } from "../lib/formatBadge";
-import { isDisplaySorted, sortPlacements } from "../lib/sortPlacements";
+import { sortPlacements } from "../lib/sortPlacements";
 import { playFail, playSuccess } from "../lib/sounds";
 import { useSelectionStore } from "./selection";
 import { useToastStore } from "./toast";
@@ -338,11 +338,13 @@ export const useContentStore = defineStore("content", {
       return (viewKey: string): PlacementView[] => {
         // 3.5 排序（28 稿）：显示层排序不动存储序——自定义原样返回，其余键全局统一排序；
         // 素材区全视图生效（含快速访问，2026-08-19 用户定）；文件夹/档案卡片不参与。
-        // 新增区（2026-08-19 用户定）：排序状态下新增/导入项集中置顶（按到达序）——切视图归位
+        // 新增区（2026-08-19 用户定；2026-08-20 放开到自定义排序——用户实机报"全部"视图新导入
+        // 沉底：自定义序下存储序按文件夹段组织，root 段靠前/靠后不定）：新增/导入项集中置顶
+        // （按到达序），所有排序模式生效——切视图归位
         const sort = (list: PlacementView[]): PlacementView[] => {
           const ui = useUiStore();
           const sorted = sortPlacements(list, ui.sortBy, ui.sortAsc);
-          if (!isDisplaySorted(ui.sortBy) || state.newArrivals.size === 0) return sorted;
+          if (state.newArrivals.size === 0) return sorted;
           const fresh: { p: PlacementView; seq: number }[] = [];
           const rest: PlacementView[] = [];
           for (const p of sorted) {
@@ -500,6 +502,13 @@ export const useContentStore = defineStore("content", {
     },
     folderName: (state) => {
       return (id: string): string | null => findFolder(state.folders, id)?.name ?? null;
+    },
+    // 各文件夹直接 Placement 数（2026-08-20 树数量口径）：展开态的树节点显示直接子项文件数——
+    // 递归总数（FolderNode.count）含全部后代，展开后子文件夹已各自成行，父级数量只算自己的文件
+    directCounts(state): Map<string, number> {
+      const m = new Map<string, number>();
+      for (const p of state.placements) m.set(p.folderId, (m.get(p.folderId) ?? 0) + 1);
+      return m;
     },
   },
   actions: {

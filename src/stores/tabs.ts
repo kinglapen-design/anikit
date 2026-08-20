@@ -29,6 +29,23 @@ export const useTabsStore = defineStore("tabs", () => {
   const tabs = ref<TabInfo[]>([]);
   const activeTabId = ref("");
 
+  // 导航历史（2026-08-20，工具栏面包屑后退/前进接入）：per-panel 双栈——openView 替换视口时
+  // 旧 key 入 back 并清 fwd；后退/前进在两栈间移动当前 key。新开页 / 布局恢复 = 空历史；
+  // 锁定页导航新开（Eagle 式）不经本栈。会话级不持久化
+  const histories = new Map<string, { back: string[]; fwd: string[] }>();
+  // 按钮态响应式镜像（ContentTitleBar disabled 绑定）：panelId → 可后退 / 可前进
+  const navCan = ref<Record<string, { back: boolean; fwd: boolean }>>({});
+
+  function syncNavCan(): void {
+    if (!api) return;
+    const next: Record<string, { back: boolean; fwd: boolean }> = {};
+    for (const p of api.panels) {
+      const h = histories.get(p.id);
+      next[p.id] = { back: (h?.back.length ?? 0) > 0, fwd: (h?.fwd.length ?? 0) > 0 };
+    }
+    navCan.value = next;
+  }
+
   function panelInfo(p: IDockviewPanel): TabInfo {
     return {
       id: p.id,
@@ -40,6 +57,11 @@ export const useTabsStore = defineStore("tabs", () => {
   // 镜像刷新 + 激活视口回写（侧边栏高亮跟随激活标签页）
   function syncMirror(): void {
     if (!api) return;
+    // 已关闭 panel 的历史顺手清理（会话级，防 Map 只增不减）
+    const alive = new Set(api.panels.map((p) => p.id));
+    for (const id of [...histories.keys()]) {
+      if (!alive.has(id)) histories.delete(id);
+    }
     tabs.value = api.panels.map(panelInfo);
     const active = api.activePanel;
     activeTabId.value = active?.id ?? "";
@@ -47,6 +69,7 @@ export const useTabsStore = defineStore("tabs", () => {
       const vk = panelInfo(active).viewKey;
       if (content.sidebarSelected !== vk) content.sidebarSelected = vk;
     }
+    syncNavCan();
   }
 
   // ---- 布局持久化（防抖 500ms，走 ui store 既有 subscribe 写回通道）----
@@ -72,9 +95,32 @@ export const useTabsStore = defineStore("tabs", () => {
       return;
     }
     if (panelInfo(active).viewKey === viewKey) return;
+    // 导航历史：旧视口入后退栈、清前进栈（2026-08-20 面包屑接入）
+    const h = histories.get(active.id) ?? { back: [], fwd: [] };
+    h.back.push(panelInfo(active).viewKey);
+    h.fwd = [];
+    histories.set(active.id, h);
     active.api.updateParameters({ viewKey });
     active.api.setTitle(content.viewTitle(viewKey));
     content.sidebarSelected = viewKey; // 即时回写（onDidLayoutChange 再核对一遍）
+    syncNavCan();
+  }
+
+  // 面包屑后退 / 前进（2026-08-20 接入）：历史导航 = 本标签页内部行为，直接替换视口——
+  // 不走 openView 的"锁定页新开"语义（历史是本页自己走过的路径，新开页反而迷失）
+  function goHistory(panelId: string, dir: -1 | 1): void {
+    if (!api) return;
+    const panel = api.getPanel(panelId);
+    const h = histories.get(panelId);
+    if (!panel || !h) return;
+    const [from, to] = dir === -1 ? [h.back, h.fwd] : [h.fwd, h.back];
+    const target = from.pop();
+    if (target === undefined) return;
+    to.push(panelInfo(panel).viewKey);
+    panel.api.updateParameters({ viewKey: target });
+    panel.api.setTitle(content.viewTitle(target));
+    if (api.activePanel?.id === panelId) content.sidebarSelected = target;
+    syncNavCan();
   }
 
   function addTab(viewKey = "quick:all", referenceGroupId?: string): void {
@@ -89,6 +135,16 @@ export const useTabsStore = defineStore("tabs", () => {
         ? { position: { referenceGroup: referenceGroupId, direction: "within" as const } }
         : {}),
     });
+  }
+
+  // 新标签页打开（文件夹/档案菜单"新标签页打开"，2026-08-20 接入）：不管当前页锁定与否恒新开——
+  // 原实现误用 openView（未锁定页只替换视口，等于没开新页）
+  function openInNewTab(viewKey: string): void {
+    if (!api) {
+      content.sidebarSelected = viewKey;
+      return;
+    }
+    addTab(viewKey);
   }
 
   function closeTab(id: string): void {
@@ -195,5 +251,5 @@ export const useTabsStore = defineStore("tabs", () => {
     api?.layout(width, height, true);
   }
 
-  return { tabs, activeTabId, bind, openView, addTab, closeTab, closeAllTabs, closeOtherTabs, toggleLock, splitTab, forceLayout };
+  return { tabs, activeTabId, navCan, bind, openView, openInNewTab, goHistory, addTab, closeTab, closeAllTabs, closeOtherTabs, toggleLock, splitTab, forceLayout };
 });
