@@ -2,7 +2,9 @@
 # 口径（PRD 04-序列帧 包内视图定案 / 05-序列帧打包 解散条）：
 # ① 素材卡片右键：打开序列帧包 / 解散序列帧包导入 两项点亮（不再 disabled）；
 # ② 打开序列帧包 → 视口切 seq:{assetId}，帧卡片列表渲染（3 帧 + 封面标记），标签页标题 = 包名；
-# ③ 帧右键菜单 = 打开预览 / 重排序号 / 删除此张序列图；多选 → 删除 N 张序列图；
+# ③ 帧右键菜单 = 打开预览 / 将当前帧设为预览图 / 重排序号 / 删除此张序列图（宽 213 防裁切）；
+#    多选 → 删除 N 张序列图；设为预览图调 set_thumb_frame 传帧名（播放条同款业务）；
+# ③b 包内视图详情面板停留该序列帧包详情（selectedAssetKey 回退，不为空）；
 # ④ 删除调 delete_sequence_frames（多选集入参）；空白右键重排序号调 renumber_sequence_frames；
 # ⑤ 解散 → alert warning 弹窗（文案含帧数 / 笔记数 / 不可撤销）→ 确认调 dissolve_sequence。
 # 前端链路全真（menuSpecs / SequencePackView / placementOps / AppConfirm），invoke 桩计数。
@@ -46,6 +48,11 @@ window.__TAURI_INTERNALS__ = {
       list_space_libraries: ["旧库"],
       list_recent_libraries: [{ name: "旧库", path: "E:/T/S/旧库", lastOpenedAt: "" }],
       get_asset_file_path: { path: "E:/T/src.png", pending: false, animPreview: null },
+      get_asset_detail: {
+        assetId: "S1", originName: "走路-001.png", ext: "png", size: 3000, width: 640, height: 480,
+        duration: null, importedAt: "2026-08-21T10:00:00+08:00", modifiedAt: "2026-08-21T10:00:00+08:00",
+        tags: [], links: [], note: "", placements: [], archives: [],
+      },
       get_notes: [],
       list_sequence_frames: {
         fps: 24, thumbFrame: "走路-001.png",
@@ -56,10 +63,13 @@ window.__TAURI_INTERNALS__ = {
         })),
       },
     };
-    if (["dissolve_sequence", "delete_sequence_frames", "renumber_sequence_frames"].includes(cmd)) {
+    if (["dissolve_sequence", "delete_sequence_frames", "renumber_sequence_frames", "set_thumb_frame"].includes(cmd)) {
       window.__calls.push(JSON.parse(JSON.stringify({ cmd, args })));
       if (cmd === "dissolve_sequence") return Promise.resolve(3);
       if (cmd === "delete_sequence_frames") return Promise.resolve((args.frameNames ?? []).length);
+      if (cmd === "set_thumb_frame") {
+        return Promise.resolve({ thumbPath: "E:/T/thumb.webp", modifiedAt: "2026-08-21T12:00:00+08:00" });
+      }
       return Promise.resolve(2);
     }
     return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
@@ -194,7 +204,7 @@ async def main():
             if not any(c["cmd"] == "dissolve_sequence" and c["args"].get("assetId") == "S1" for c in (calls or [])):
                 fails.append(f"dissolve_sequence 未调用或入参错（{calls}）")
 
-            # ② 打开序列帧包 → 包内卡片列表
+            # ② 打开序列帧包 → 包内卡片列表 + 详情面板停留包详情（2026-08-21 用户定：不为空）
             await card_ctx(".asset-card")
             await click_menu("打开序列帧包")
             await asyncio.sleep(1.0)
@@ -203,6 +213,7 @@ async def main():
               covers: document.querySelectorAll('.frame-card .cover-tag').length,
               title: document.querySelector('.tab-label.active .tab-title')?.textContent?.trim()
                      ?? document.querySelector('.tab-title')?.textContent?.trim() ?? null,
+              detailBlocks: document.querySelectorAll('.detail-panel .detail-block').length,
             })""")
             print("包内视图:", json.dumps(pack, ensure_ascii=False))
             if pack is None or pack["cards"] != ["走路-001.png", "走路-002.png", "走路-003.png"]:
@@ -211,16 +222,29 @@ async def main():
                 fails.append(f"封面标记数 {pack['covers']}（期望 1）")
             if pack and pack["title"] != "走路":
                 fails.append(f"标签页标题不是包名（{pack['title']}）")
+            if pack is not None and pack["detailBlocks"] < 1:
+                fails.append("包内视图详情面板为空（期望停留序列帧包详情）")
 
-            # ③ 帧右键菜单三项
+            # ③ 帧右键菜单四项（含将当前帧设为预览图，2026-08-21 用户定）
             await card_ctx(".frame-card")
             fitems = await menu_items()
             print("帧菜单:", json.dumps(fitems, ensure_ascii=False))
             labels = [i["label"] for i in (fitems or [])]
-            for needle in ["打开预览", "重排序号", "删除此张序列图"]:
+            for needle in ["打开预览", "将当前帧设为预览图", "重排序号", "删除此张序列图"]:
                 hit = next((i for i in (fitems or []) if needle in i["label"]), None)
                 if not hit or hit["disabled"]:
                     fails.append(f"帧菜单「{needle}」缺失或禁用（{labels}）")
+
+            # ③b 将当前帧设为预览图 → set_thumb_frame 传帧名（播放条同款业务）
+            if await click_menu("将当前帧设为预览图"):
+                await asyncio.sleep(0.5)
+                calls = await ev("window.__calls")
+                hit = [c for c in (calls or []) if c["cmd"] == "set_thumb_frame"]
+                args = hit and hit[-1]["args"]
+                if not args or args.get("assetId") != "S1" or args.get("frameName") != "走路-001.png":
+                    fails.append(f"set_thumb_frame 入参不符（{args}）")
+            else:
+                fails.append("帧菜单「将当前帧设为预览图」点击失败")
             await close_menu()
 
             # ④ ctrl 多选第二帧 → 右键 → 删除 2 张 → delete_sequence_frames 入参
@@ -268,7 +292,7 @@ async def main():
             if fails:
                 print("FAIL:", "; ".join(dict.fromkeys(fails)))
                 return 3
-            print("PASS: 序列帧包内视图成立（菜单点亮 / 包内卡片列表 / 帧菜单三项 / 多选删除入参 / 空白重排 / 解散警告弹窗 + 调用）")
+            print("PASS: 序列帧包内视图成立（菜单点亮 / 包内卡片列表 / 详情停留包详情 / 帧菜单四项 / 设为预览图入参 / 多选删除入参 / 空白重排 / 解散警告弹窗 + 调用）")
             return 0
     finally:
         proc.terminate()

@@ -328,9 +328,21 @@ export const useContentStore = defineStore("content", {
   }),
   getters: {
     // 素材卡片选中键（6.1 多选改造，2026-07-28 用户定案）：转发 selection store 首项——
-    // 详情面板 / 预览等单资产消费方原样不动；空串 = 无选中（语义同原 state 字段）
+    // 详情面板 / 预览等单资产消费方原样不动；空串 = 无选中（语义同原 state 字段）。
+    // 序列帧包内视图（5.2，2026-08-21 用户定：详情面板停留序列帧的详情不为空）：
+    // 选择域进包时已清空（防全局 Delete 误伤），此处回退 placements 内该包资产（origin 优先；
+    // 包已解散 = 空串空面板）——消费方仅 DetailPanel / DetailNotes，两者据此显示包的详情与笔记
     selectedAssetKey(): string {
-      return useSelectionStore().first;
+      const first = useSelectionStore().first;
+      if (first) return first;
+      if (this.sidebarSelected.startsWith("seq:")) {
+        const id = this.sidebarSelected.slice(4);
+        const p =
+          this.placements.find((x) => x.assetId === id && x.origin) ??
+          this.placements.find((x) => x.assetId === id);
+        return p ? `${p.assetId}|${p.folderId}` : "";
+      }
+      return "";
     },
     // 按视口 key 计算资源列表（1.2 多标签页：每个标签页各自视口，原 visiblePlacements 逻辑参数化；
     // "最近使用 / 回收站"已接真实视图，6.1 二轮：元素为 PlacementView 超集，AssetGrid 零改动复用）

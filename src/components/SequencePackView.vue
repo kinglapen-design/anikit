@@ -14,7 +14,7 @@ import { listen } from "@tauri-apps/api/event";
 import ScrollThumb from "./ScrollThumb.vue";
 import { listSequenceFrames, type FrameEntry } from "../lib/mediaOps";
 import { openContextMenu, type CtxEntry } from "../lib/contextMenus";
-import { deleteSequenceFrames, renumberSequenceFrames } from "../lib/placementOps";
+import { deleteSequenceFrames, renumberSequenceFrames, setSequenceFrameThumb } from "../lib/placementOps";
 import { useContentStore } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
 import { useTabsStore } from "../stores/tabs";
@@ -115,13 +115,20 @@ async function openFramePreview(name: string): Promise<void> {
   if (idx >= 0) preview.setFrame(idx);
 }
 
-// —— 右键菜单 ——
+// —— 右键菜单（宽 213：删除项 + delete 徽章在默认 175 下裁切，2026-08-21 用户实机报）——
 function frameMenu(e: MouseEvent, name: string, idx: number): void {
   // 右键未选中项先单选（全库惯例）；已在多选域内保持选择
   if (!selected.value.has(name)) clickFrame(e, name, idx);
   const targets = [...selected.value];
   const entries: CtxEntry[] = [
     { label: "打开预览", icon: "open-preview", action: () => void openFramePreview(name) },
+    // 将当前帧设为预览图（2026-08-21 用户定）：直复用播放条同款 set_thumb_frame 业务；
+    // 单帧语义——多选时恒对被右键帧生效
+    {
+      label: "将当前帧设为预览图",
+      icon: "thumbnail",
+      action: () => void setSequenceFrameThumb(props.assetId, name),
+    },
     // 重排图标 = 清除缓存并重新加载同款刷新图标（2026-08-21 用户定）
     { label: "重排序号", icon: "clear-cache-reload", action: () => void renumberSequenceFrames(props.assetId) },
     "divider",
@@ -132,7 +139,7 @@ function frameMenu(e: MouseEvent, name: string, idx: number): void {
       action: () => void deleteSequenceFrames(props.assetId, targets),
     },
   ];
-  openContextMenu(e, entries);
+  openContextMenu(e, entries, undefined, { width: 213 });
 }
 
 function blankMenu(e: MouseEvent): void {

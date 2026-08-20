@@ -688,3 +688,17 @@ export async function renumberSequenceFrames(assetId: string): Promise<void> {
     toast.notify({ message: String(e), icon: "fail" });
   }
 }
+
+// 将当前帧设为预览图（包内视图帧卡片菜单，2026-08-21 用户定）：直复用播放条同款 set_thumb_frame
+//（序列帧分支传 frames/ 内帧名）；refresh 全量重拉——modifiedAt 版本戳驱动卡片缩略图热刷新；
+// toast 反馈与播放条同款（已设为预览图 / 错误文案）
+export async function setSequenceFrameThumb(assetId: string, frameName: string): Promise<void> {
+  const toast = useToastStore();
+  try {
+    await invoke("set_thumb_frame", { assetId, frameName });
+    await useContentStore().refresh();
+    toast.notify({ message: "已设为预览图", icon: "success" });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+  }
+}

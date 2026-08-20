@@ -103,12 +103,16 @@ export const usePreviewStore = defineStore("preview", {
     animStrips: {} as Record<string, string>,
   }),
   getters: {
-    // 当前预览的 PlacementView（按 key 在当前视口列表里找）
+    // 当前预览的 PlacementView（按 key 在当前视口列表里找）；
+    // 包内视图（5.2，2026-08-21）：visiblePlacements 恒空——回退全量 placements 按 key 精确匹配，
+    // 详情面板笔记跳帧在包内可直接开预览定位（index/total 仍按视口 = 空，上/下一个自然无效）
     current(): import("./content").PlacementView | null {
       const content = useContentStore();
       if (!this.assetKey) return null;
       return (
-        content.visiblePlacements.find((p) => `${p.assetId}|${p.folderId}` === this.assetKey) ?? null
+        content.visiblePlacements.find((p) => `${p.assetId}|${p.folderId}` === this.assetKey) ??
+        content.placements.find((p) => `${p.assetId}|${p.folderId}` === this.assetKey) ??
+        null
       );
     },
     // 索引 x/y（当前视口顺序）
