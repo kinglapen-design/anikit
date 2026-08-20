@@ -46,14 +46,14 @@ function pick(m: "frames" | "timecode"): void {
   display: inline-flex;
   flex: none;
 }
-/* 触发按钮：原时间文本观感不变（24 高文字按钮，悬停 font-icon-6 底——同 rate-btn） */
+/* 触发按钮（13_播放条稿时间码位：30 高 padding 0 6、14/20 常态色；悬停 font-icon-6 底——同 rate-btn） */
 .tdc-btn {
-  padding: 0 var(--space-4);
-  height: 24px;
-  border-radius: var(--radius-4);
+  padding: 0 var(--space-6);
+  height: 30px;
+  border-radius: var(--radius-6);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--font-icon-1);
+  color: var(--text-normal);
   white-space: nowrap;
   transition: background 0.12s ease;
 }

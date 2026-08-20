@@ -43,14 +43,14 @@ function pick(r: number): void {
   display: inline-flex;
   flex: none;
 }
-/* 按钮本体：原 rate-btn 观感不变（24 高文字按钮，悬停 font-icon-6 底） */
+/* 按钮本体（13_播放条稿速率钮：30×30 padding 6、14/20 标签档；悬停 font-icon-6 底） */
 .rate-btn {
-  padding: 0 var(--space-4);
-  height: 24px;
-  border-radius: var(--radius-4);
+  padding: 0 var(--space-6);
+  height: 30px;
+  border-radius: var(--radius-6);
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--font-icon-1);
+  color: var(--text-label);
   white-space: nowrap;
   transition: background 0.12s ease;
 }

@@ -50,11 +50,12 @@ onMounted(async () => {
   flex: 1;
   min-height: 0;
 }
-/* 播放条 + 帧条：与主窗口搜索框容器同内边距；relative 供笔记浮层（bottom:100%）锚定 */
+/* 播放条 + 帧条：通栏贴底（13_播放条稿 2026-08-20 用户定）——负 margin 拉出窗口 4px 内边距；
+   relative 供笔记浮层（bottom:100%）锚定 */
 .pw-footer {
   position: relative;
   flex: none;
-  padding: var(--space-4) var(--space-12) var(--space-12) var(--space-12);
+  margin: 0 calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
 }
 /* 全屏：去窗口内边距，播放条/帧条脱离文档流浮在画面底部（画面按整个窗口铺满，2026-07-26 用户定） */
 .preview-window.fullscreen {
@@ -66,5 +67,6 @@ onMounted(async () => {
   right: 0;
   bottom: 0;
   z-index: 1;
+  margin: 0; /* 全屏窗口 padding 已归零，负 margin 拉通取消（防拉出窗口外） */
 }
 </style>

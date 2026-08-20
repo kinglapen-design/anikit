@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 帧播放条（4.3 序列帧；5.2 动图复用 → 阶段四动图改帧流驱动，2026-08-20）：
-// 放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8）。
+// 样式 = 13_播放条稿（2026-08-20 用户定，与搜索栏同位同尺寸）——46 高 / padding 8 16 / C3 /
+// border-top 暗-悬停 / 直角通栏；图标按实际删减（动图无音量/快进快退，上·下帧不补——帧条两端已有）。
 // 播放/暂停、当前帧/总帧数、进度条（拖动定位帧）、倍率（RateControl 悬停竖排弹窗）、
 // 笔记（5.2 浮层，开着时品牌紫激活态）、当前帧设为预览图、显示器全屏（Esc 退出）。
 // 动图播放 = 帧流，设封面 / 笔记 / 帧条 = 后端 `f:{索引}` 抽帧——全链路不依赖磁盘帧图
@@ -46,11 +47,13 @@ function onSeekUp(e: PointerEvent): void {
 
 <template>
   <div v-if="barReady" class="play-bar">
-    <IconButton
-      :name="preview.playing ? 'pause' : 'play'"
-      :title="preview.playing ? '暂停' : '播放'"
-      @click="preview.togglePlay()"
-    />
+    <div class="btn-group">
+      <IconButton
+        :name="preview.playing ? 'pause' : 'play'"
+        :title="preview.playing ? '暂停' : '播放'"
+        @click="preview.togglePlay()"
+      />
+    </div>
     <span class="frame-text">{{ preview.frame + 1 }} / {{ frameCount }}</span>
     <div
       ref="trackRef"
@@ -69,44 +72,57 @@ function onSeekUp(e: PointerEvent): void {
         :style="{ left: `${(preview.frame / Math.max(1, frameCount - 1)) * 100}%` }"
       />
     </div>
-    <RateControl :rate="preview.rate" @select="preview.setRate" />
-    <IconButton name="add-note" title="笔记" :active="notes.open" @click="notes.toggle()" />
-    <IconButton name="set-thumbnail" title="当前画面设为预览图" @click="preview.setAsThumb()" />
-    <IconButton
-      name="fullscreen"
-      :title="preview.fullscreen ? '退出全屏' : '全屏'"
-      @click="preview.setFullscreen(!preview.fullscreen)"
-    />
+    <div class="btn-group">
+      <RateControl :rate="preview.rate" @select="preview.setRate" />
+      <IconButton name="add-note" title="笔记" :active="notes.open" @click="notes.toggle()" />
+      <IconButton name="set-thumbnail" title="当前画面设为预览图" @click="preview.setAsThumb()" />
+      <IconButton
+        name="fullscreen"
+        :title="preview.fullscreen ? '退出全屏' : '全屏'"
+        @click="preview.setFullscreen(!preview.fullscreen)"
+      />
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* 总容器：照搜索框（C3 底 / inset 1px border-1 / 圆角 8 / 内边距 4 / 间距 6） */
+/* 总容器（13_播放条稿，与搜索栏同口径）：46 高 / padding 8 16 / gap 8 / C3 / border-top 暗-悬停 /
+   直角通栏（2026-08-20 用户定——原"照搜索框圆角 8 inset 边框"口径作废） */
 .play-bar {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-4);
-  border-radius: var(--radius-8);
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-16);
+  height: 46px;
+  box-sizing: border-box;
   background: var(--c3);
-  box-shadow: inset 0 0 0 1px var(--border-1);
+  border-top: 1px solid var(--line-hover);
 }
+/* 左 / 右按钮组：组内 gap 4（13 稿） */
+.btn-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: none;
+}
+/* 时间码位（13 稿：72 宽 14/20 文字/常态——min-width 防长帧号溢出） */
 .frame-text {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--font-icon-1);
+  color: var(--text-normal);
+  min-width: 72px;
   white-space: nowrap;
   flex: none;
 }
-/* 中栏工具栏图标按钮 80%（2026-07-23 用户定，同预览标题栏） */
+/* 播放条图标 = 标签档（13 稿 Vector 文字/标签） */
 .play-bar :deep(.icon-btn) {
-  color: var(--font-icon-2);
+  color: var(--text-label);
 }
-/* 激活态优先于 80% 档（笔记开着 = 品牌紫） */
+/* 激活态优先于标签档（笔记开着 = 品牌紫） */
 .play-bar :deep(.icon-btn.active) {
   color: var(--brand-1);
 }
-/* 进度条：3px 轨道 border-1 底，品牌紫填充，10px 拖钮（SideSlider 语言） */
+/* 进度条（13 稿）：3px 轨道 暗-悬停底，品牌紫填充（已播放表达保留），10px 常态色拖钮 */
 .progress {
   position: relative;
   flex: 1;
@@ -123,7 +139,7 @@ function onSeekUp(e: PointerEvent): void {
   height: 3px;
   transform: translateY(-50%);
   border-radius: 2px;
-  background: var(--border-1);
+  background: var(--line-hover);
 }
 .fill {
   position: absolute;
@@ -141,7 +157,7 @@ function onSeekUp(e: PointerEvent): void {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--font-icon-1);
+  background: var(--text-normal);
   transform: translate(-50%, -50%);
   pointer-events: none;
 }

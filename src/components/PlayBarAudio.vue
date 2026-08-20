@@ -1,10 +1,11 @@
 <script setup lang="ts">
-// 音频播放条（5.2）：放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8 / 内边距 4 / 间距 6）。
+// 音频播放条（5.2）：样式 = 13_播放条稿（2026-08-20 用户定，与搜索栏同位同尺寸）——46 高 /
+// padding 8 16 / C3 / border-top 暗-悬停 / 直角通栏；按实际删减：音频无笔记/设封面/全屏。
 // 播放/暂停、音量（VolumeControl）、当前时间/总时长（mm:ss 同 formatDuration 口径）、
 // 波形进度条（波形按轨道实际像素后端重采样渲染，任意宽度 1px 级清晰；两层 div 以波形图作 CSS
 // mask：底层 wave-pending 实色 = 未播放（与 C3 混合后的实际色号，不受 mask alpha 影响）、
 // 已播放层 brand-1 紫 clip-path 裁到进度，播放头 1px 品牌紫竖线；
-// 点击/拖动 seek）、倍率（RateControl 悬停竖排弹窗）、循环。转码中显示加载提示。音频无笔记/全屏。
+// 点击/拖动 seek）、倍率（RateControl 悬停竖排弹窗）、循环。转码中显示加载提示。
 import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import IconButton from "./IconButton.vue";
@@ -56,13 +57,15 @@ function onSeekUp(e: PointerEvent): void {
 <template>
   <div class="play-bar">
     <!-- 转码中保持播放条结构（高度不跳变防闪烁，2026-07-26 用户）：控件禁用，提示放波形区 -->
-    <IconButton
-      :name="media.playing ? 'pause' : 'play'"
-      :title="media.playing ? '暂停' : '播放'"
-      :disabled="media.transcodingSlow"
-      @click="media.togglePlay()"
-    />
-    <VolumeControl />
+    <div class="btn-group">
+      <IconButton
+        :name="media.playing ? 'pause' : 'play'"
+        :title="media.playing ? '暂停' : '播放'"
+        :disabled="media.transcodingSlow"
+        @click="media.togglePlay()"
+      />
+      <VolumeControl />
+    </div>
     <span class="time-text">{{ formatDuration(media.currentTime) }} / {{ formatDuration(media.duration) }}</span>
     <div
       ref="trackRef"
@@ -80,32 +83,46 @@ function onSeekUp(e: PointerEvent): void {
       </template>
       <span v-if="!media.transcodingSlow" class="head" :style="{ left: `${pct}%` }" />
     </div>
-    <RateControl :rate="media.rate" @select="media.setRate" />
-    <IconButton name="loop" title="循环播放" :active="media.loop" @click="media.toggleLoop()" />
+    <div class="btn-group">
+      <RateControl :rate="media.rate" @select="media.setRate" />
+      <IconButton name="loop" title="循环播放" :active="media.loop" @click="media.toggleLoop()" />
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* 总容器：照搜索框（C3 底 / inset 1px border-1 / 圆角 8 / 内边距 4 / 间距 6） */
+/* 总容器（13_播放条稿，与搜索栏同口径）：46 高 / padding 8 16 / gap 8 / C3 / border-top 暗-悬停 /
+   直角通栏（2026-08-20 用户定——原"照搜索框圆角 8 inset 边框"口径作废） */
 .play-bar {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-4);
-  border-radius: var(--radius-8);
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-16);
+  height: 46px;
+  box-sizing: border-box;
   background: var(--c3);
-  box-shadow: inset 0 0 0 1px var(--border-1);
+  border-top: 1px solid var(--line-hover);
 }
+/* 左 / 右按钮组：组内 gap 4（13 稿） */
+.btn-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: none;
+}
+/* 播放条图标 = 标签档（13 稿 Vector 文字/标签） */
 .play-bar :deep(.icon-btn) {
-  color: var(--font-icon-2);
+  color: var(--text-label);
 }
 .play-bar :deep(.icon-btn.active) {
   color: var(--brand-1);
 }
+/* 时间码（13 稿：72 宽 14/20 文字/常态——min-width 防溢出） */
 .time-text {
   font-size: var(--text-body-size);
   line-height: var(--text-body-line);
-  color: var(--font-icon-1);
+  color: var(--text-normal);
+  min-width: 72px;
   white-space: nowrap;
   flex: none;
 }

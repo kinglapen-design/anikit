@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// 视频播放条（5.2）：放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8 / 内边距 4 / 间距 6）。
+// 视频播放条（5.2）：样式 = 13_播放条稿（2026-08-20 用户定，与搜索栏同位同尺寸）——46 高 /
+// padding 8 16 / C3 / border-top 暗-悬停 / 直角通栏；左组 = 播放/快退/快进/上帧/下帧/音量（稿全量件）。
 // 播放/暂停、快退/快进（∓5 秒）、上/下一帧（step-frame 图标左右翻转，步进即暂停，快捷键 , . 的实体入口）、
 // 音量（VolumeControl）、当前帧/总帧数（TimeDisplayControl：5.3 帧化，查看方式"时间显示 = 帧数"且
 // fps 可用，回退 当前时间/总时长；悬停出帧数/时间码就地切换弹窗，2026-07-28 用户定）、
-// 进度条（3px 轨道 border-1 + 品牌紫填充 + 10px 拖钮，同帧播放条自绘样式）、
+// 进度条（3px 轨道 暗-悬停 + 品牌紫填充 + 10px 常态色拖钮，13 稿口径）、
 // 倍率（RateControl 悬停竖排弹窗）、循环、
 // 笔记（浮层）、当前画面设为预览图（set_video_thumb）、显示器全屏。转码中显示加载提示。
 import { computed, ref } from "vue";
@@ -68,18 +69,20 @@ function stepFrame(delta: number): void {
 <template>
   <div class="play-bar">
     <!-- 转码中保持播放条结构（高度不跳变防闪烁，2026-07-26 用户）：控件禁用，提示放进度条区 -->
-    <IconButton
-      :name="media.playing ? 'pause' : 'play'"
-      :title="media.playing ? '暂停' : '播放'"
-      :disabled="media.transcodingSlow"
-      @click="media.togglePlay()"
-    />
-    <IconButton class="flip-h" name="seek" title="快退 5 秒" :disabled="media.transcodingSlow" @click="media.seekBy(-5)" />
-    <IconButton name="seek" title="快进 5 秒" :disabled="media.transcodingSlow" @click="media.seekBy(5)" />
-    <!-- 上下帧（逐帧步进即暂停；step-frame 图标左右翻转使用，快捷键 , . 的实体入口） -->
-    <IconButton class="flip-h" name="step-frame" title="上一帧（,）" :disabled="media.transcodingSlow" @click="stepFrame(-1)" />
-    <IconButton name="step-frame" title="下一帧（.）" :disabled="media.transcodingSlow" @click="stepFrame(1)" />
-    <VolumeControl />
+    <div class="btn-group">
+      <IconButton
+        :name="media.playing ? 'pause' : 'play'"
+        :title="media.playing ? '暂停' : '播放'"
+        :disabled="media.transcodingSlow"
+        @click="media.togglePlay()"
+      />
+      <IconButton class="flip-h" name="seek" title="快退 5 秒" :disabled="media.transcodingSlow" @click="media.seekBy(-5)" />
+      <IconButton name="seek" title="快进 5 秒" :disabled="media.transcodingSlow" @click="media.seekBy(5)" />
+      <!-- 上下帧（逐帧步进即暂停；step-frame-vertical 图标左右翻转使用，快捷键 , . 的实体入口） -->
+      <IconButton class="flip-h" name="step-frame-vertical" title="上一帧（,）" :disabled="media.transcodingSlow" @click="stepFrame(-1)" />
+      <IconButton name="step-frame-vertical" title="下一帧（.）" :disabled="media.transcodingSlow" @click="stepFrame(1)" />
+      <VolumeControl />
+    </div>
     <TimeDisplayControl :text="posText" />
     <div
       ref="trackRef"
@@ -96,31 +99,43 @@ function stepFrame(delta: number): void {
         <span class="knob" :style="{ left: `${pct}%` }" />
       </template>
     </div>
-    <RateControl :rate="media.rate" @select="media.setRate" />
-    <IconButton name="loop" title="循环播放" :active="media.loop" @click="media.toggleLoop()" />
-    <IconButton name="add-note" title="笔记" :active="notes.open" :disabled="media.transcodingSlow" @click="notes.toggle()" />
-    <IconButton name="set-thumbnail" title="当前画面设为预览图" :disabled="media.transcodingSlow" @click="media.setVideoThumb()" />
-    <IconButton
-      name="fullscreen"
-      :title="preview.fullscreen ? '退出全屏' : '全屏'"
-      @click="preview.setFullscreen(!preview.fullscreen)"
-    />
+    <div class="btn-group">
+      <RateControl :rate="media.rate" @select="media.setRate" />
+      <IconButton name="loop" title="循环播放" :active="media.loop" @click="media.toggleLoop()" />
+      <IconButton name="add-note" title="笔记" :active="notes.open" :disabled="media.transcodingSlow" @click="notes.toggle()" />
+      <IconButton name="set-thumbnail" title="当前画面设为预览图" :disabled="media.transcodingSlow" @click="media.setVideoThumb()" />
+      <IconButton
+        name="fullscreen"
+        :title="preview.fullscreen ? '退出全屏' : '全屏'"
+        @click="preview.setFullscreen(!preview.fullscreen)"
+      />
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* 总容器：照搜索框（C3 底 / inset 1px border-1 / 圆角 8 / 内边距 4 / 间距 6） */
+/* 总容器（13_播放条稿，与搜索栏同口径）：46 高 / padding 8 16 / gap 8 / C3 / border-top 暗-悬停 /
+   直角通栏（2026-08-20 用户定——原"照搜索框圆角 8 inset 边框"口径作废） */
 .play-bar {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-4);
-  border-radius: var(--radius-8);
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-16);
+  height: 46px;
+  box-sizing: border-box;
   background: var(--c3);
-  box-shadow: inset 0 0 0 1px var(--border-1);
+  border-top: 1px solid var(--line-hover);
 }
+/* 左 / 右按钮组：组内 gap 4（13 稿） */
+.btn-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: none;
+}
+/* 播放条图标 = 标签档（13 稿 Vector 文字/标签） */
 .play-bar :deep(.icon-btn) {
-  color: var(--font-icon-2);
+  color: var(--text-label);
 }
 .play-bar :deep(.icon-btn.active) {
   color: var(--brand-1);
@@ -137,7 +152,7 @@ function stepFrame(delta: number): void {
   color: var(--font-icon-3);
   pointer-events: none;
 }
-/* 进度条：3px 轨道 border-1 底，品牌紫填充，10px 拖钮（SideSlider 语言，同帧播放条） */
+/* 进度条（13 稿）：3px 轨道 暗-悬停底，品牌紫填充（已播放表达保留），10px 常态色拖钮 */
 .progress {
   position: relative;
   flex: 1;
@@ -154,7 +169,7 @@ function stepFrame(delta: number): void {
   height: 3px;
   transform: translateY(-50%);
   border-radius: 2px;
-  background: var(--border-1);
+  background: var(--line-hover);
 }
 /* 转码中：轨道隐藏（防与"转码中…"文字交叠，2026-07-26 用户定） */
 .progress.transcoding::before {
@@ -176,7 +191,7 @@ function stepFrame(delta: number): void {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--font-icon-1);
+  background: var(--text-normal);
   transform: translate(-50%, -50%);
   pointer-events: none;
 }

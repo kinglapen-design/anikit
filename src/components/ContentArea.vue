@@ -181,11 +181,10 @@ const archiveNode = computed<FolderNode | null>(() => {
   flex: 1;
   min-height: 0;
 }
-/* 播放条 + 帧条容器：relative 供笔记浮层（bottom:100%）锚定；内边距 8 16 16——
-   内容距中栏左右缘 16、上 8、下 16（2026-08-10 随 42 稿外层 padding 归零后保持原视觉） */
+/* 播放条 + 帧条容器：通栏贴底无内边距（13_播放条稿 2026-08-20 用户定：播放条与搜索栏同位同尺寸，
+   直角 border-top 通栏——原 8 16 16 浮条内边距作废）；relative 供笔记浮层（bottom:100%）锚定 */
 .preview-footer {
   position: relative;
   flex: none;
-  padding: var(--space-8) var(--space-16) var(--space-16);
 }
 </style>

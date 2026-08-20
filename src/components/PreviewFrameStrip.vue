@@ -1,5 +1,7 @@
 <script setup lang="ts">
-// 序列帧 / 动图帧条（4.3；动图 2026-08-20 解包废除后改帧索引渲染）：常驻，播放条下方。
+// 序列帧 / 动图帧条（4.3；动图 2026-08-20 解包废除后改帧索引渲染）：常驻贴底，播放条下方。
+// 容器样式同 13_播放条稿总容器（2026-08-20 用户定"帧选择统一成这种样式"）：直角 / C3 /
+// border-top 暗-悬停 / padding 8 16——原"圆角 8 inset 边框浮条"口径作废。
 // 上/下帧按钮 + 逐帧预览块（cache/frames 会话级小图：序列帧从磁盘帧图缩放，动图 origin 按需解码）；
 // 点击定位帧；切换帧时高亮块先移至可见区两端，顶头后帧列表按需滑动（scrollIntoView nearest，2026-07-25 定案）。
 // 动图分支：帧索引 0..animTotal-1，小图 key = `f:{i}`（animStrips 渐进填充），笔记圆点同 key。
@@ -79,27 +81,29 @@ watch(
 </template>
 
 <style scoped>
-/* 总容器：照播放条（C3 / inset border-1 / 圆角 8 / 内边距 8 / 间距 8） */
+/* 总容器（13_播放条稿"逐帧栏样式和播放条总容器差不多，直角 border-top"，2026-08-20 用户定）：
+   直角 / C3 / border-top 暗-悬停 / padding 8 16（左右与播放条对齐）——原圆角 8 inset 边框 +
+   margin-top 4 浮条口径作废 */
 .frame-strip {
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  padding: var(--space-8);
-  border-radius: var(--radius-8);
+  padding: var(--space-8) var(--space-16);
   background: var(--c3);
-  box-shadow: inset 0 0 0 1px var(--border-1);
-  margin-top: var(--space-4);
+  border-top: 1px solid var(--line-hover);
 }
-/* chevron-small 原图标朝下：上一帧 = 顺时针 90°（朝左），下一帧 = 逆时针 90°（朝右） */
+/* chevron-small 源图形朝上（BlockManageRow 实机核对口径）：上一帧 = 逆时针 90°（朝左），
+   下一帧 = 顺时针 90°（朝右）。2026-08-20 修：旧注释误记"原图标朝下"（1.1 换血前朝向），
+   ±90° 写反致两端按钮方向互逆——与 PreviewTitleBar 返回钮同根因 */
 .rot-l :deep(svg) {
-  transform: rotate(90deg);
-}
-.rot-r :deep(svg) {
   transform: rotate(-90deg);
 }
-/* 中栏工具栏图标按钮 80%（2026-07-23 用户定，同预览标题栏） */
+.rot-r :deep(svg) {
+  transform: rotate(90deg);
+}
+/* 播放条系图标 = 标签档（13 稿 Vector 文字/标签，与播放条统一） */
 .frame-strip :deep(.icon-btn) {
-  color: var(--font-icon-2);
+  color: var(--text-label);
 }
 .frames {
   display: flex;
