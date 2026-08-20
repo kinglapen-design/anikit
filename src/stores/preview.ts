@@ -11,6 +11,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useContentStore } from "./content";
 import { usePreviewMediaStore } from "./previewMedia";
 import { usePreviewNotesStore } from "./previewNotes";
+import { useToastStore } from "./toast";
 import { isAudioExt, isSequence, isVideoExt } from "../lib/formatBadge";
 import { getAssetFilePath, listSequenceFrames, prepareAnimStrips, type FrameEntry } from "../lib/mediaOps";
 import { AnimStreamSession, type AnimFrame } from "../lib/animStream";
@@ -506,26 +507,37 @@ export const usePreviewStore = defineStore("preview", {
       if (this.kind === "anim") animStream?.setRate(r);
     },
     // 当前帧设为预览图（序列帧 / 动图通用，5.2）：后端重建缩略图 + 记封面帧，前端即时换卡片图。
-    // 动图传 `f:{索引}`（origin 解码抽帧，2026-08-20 解包废除）；序列帧传 frames/ 内帧名
+    // 动图传 `f:{索引}`（origin 解码抽帧，2026-08-20 解包废除）；序列帧传 frames/ 内帧名。
+    // 结果 toast 反馈（2026-08-20 用户：点击无反馈）；target.modifiedAt 同步 = 缩略图 URL 版本戳
+    //（asset 协议同 URL 启发式缓存致静帧不热刷新，用户实机报）；视图外资产兜底全量 refresh
     async setAsThumb(): Promise<void> {
       const p = this.current;
       if (!p) return;
       const frameName =
         this.kind === "anim" ? `f:${this.frame}` : this.seq ? this.seq.frames[this.frame]?.name : undefined;
       if (!frameName) return;
-      const r = await invoke<{ thumbPath: string }>("set_thumb_frame", {
-        assetId: p.assetId,
-        frameName,
-      });
-      // 即时更新卡片缩略图：路径不变（同词干重建），置空再还原迫使 <img> 重载（asset 协议不走 HTTP 缓存）
-      const content = useContentStore();
-      const target = content.placements.find(
-        (x) => x.assetId === p.assetId && x.folderId === p.folderId,
-      );
-      if (target) {
-        target.thumbPath = null;
-        await nextTick();
-        target.thumbPath = r.thumbPath;
+      const toast = useToastStore();
+      try {
+        const r = await invoke<{ thumbPath: string; modifiedAt: string }>("set_thumb_frame", {
+          assetId: p.assetId,
+          frameName,
+        });
+        // 即时更新卡片缩略图：路径不变（同词干重建），置空再还原迫使 <img> 重载（asset 协议不走 HTTP 缓存）
+        const content = useContentStore();
+        const target = content.placements.find(
+          (x) => x.assetId === p.assetId && x.folderId === p.folderId,
+        );
+        if (target) {
+          target.modifiedAt = r.modifiedAt; // URL 版本戳（AssetCard / ListRowCard thumbUrl ?v=）
+          target.thumbPath = null;
+          await nextTick();
+          target.thumbPath = r.thumbPath;
+        } else {
+          await content.refresh(); // 视图外资产（回收站等）兜底：全量重拉
+        }
+        toast.notify({ message: "已设为预览图", icon: "success" });
+      } catch (e) {
+        toast.notify({ message: String(e), icon: "fail" });
       }
     },
     // 显示器全屏（2026-07-25 定案）：预览区 fixed 铺满 + 窗口 fullscreen，Esc 退出

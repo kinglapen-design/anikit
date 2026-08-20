@@ -72,7 +72,7 @@ window.__TAURI_INTERNALS__ = {
     if (cmd === "set_thumb_frame") {
       window.__thumbKeys = window.__thumbKeys || [];
       window.__thumbKeys.push(args.frameName);
-      return Promise.resolve({ thumbPath: "E:/T/thumb.webp" });
+      return Promise.resolve({ thumbPath: "E:/T/thumb.webp", modifiedAt: "2026-08-20T18:30:00+08:00" });
     }
     return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
   },
@@ -162,6 +162,11 @@ async def main():
 
             fails = []
 
+            # 版本戳机制存在性（网格态）：首卡缩略图 src 应带 ?v=
+            thumb_src0 = await ev("document.querySelector('.asset-card .thumb img')?.src ?? null")
+            if not thumb_src0 or "?v=" not in thumb_src0:
+                fails.append(f"卡片缩略图 URL 无 ?v= 版本戳（{thumb_src0 and thumb_src0[:80]}）")
+
             # 双击第一张卡 → 预览模式
             await ev("document.querySelector('.asset-card').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))")
             await asyncio.sleep(2.5)  # 预览加载 + start_anim_stream + WS 连接 + 首帧
@@ -227,6 +232,19 @@ async def main():
             print("设封面调用:", thumb_keys)
             if not thumb_keys or not all(str(k).startswith("f:") for k in thumb_keys):
                 fails.append(f"设封面未传 f: 帧索引（{thumb_keys}）——抽帧分支未接")
+            # toast 反馈（2026-08-20 用户：点击无反馈）
+            await asyncio.sleep(0.3)
+            toasts = await ev("[...document.querySelectorAll('.toast-stack .toast .message')].map((t) => t.textContent.trim())")
+            print("toast:", toasts)
+            if not any("已设为预览图" in t for t in (toasts or [])):
+                fails.append(f"设封面成功无 toast 反馈（{toasts}）")
+            # modifiedAt 同步驱动 URL 版本戳变化：Esc 关预览回首卡 src（v 参数应为桩返回的时刻）
+            await ev("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))")
+            await asyncio.sleep(1.0)
+            thumb_src1 = await ev("document.querySelector('.asset-card .thumb img')?.src ?? null")
+            print("设封面前后 src:", (thumb_src0 or "")[:70], "→", (thumb_src1 or "")[:70])
+            if not thumb_src1 or "2026-08-20" not in thumb_src1:
+                fails.append(f"设封面后版本戳未更新（{thumb_src1 and thumb_src1[:90]}）——modifiedAt 同步失效")
             # 无禁用钮（解包废除后设封面/笔记恒可用）
             if s1 and s1["disabledBtns"] != 0:
                 fails.append(f"禁用钮数 {s1 and s1['disabledBtns']}（期望 0——解包废除后恒可用）")
@@ -234,7 +252,7 @@ async def main():
             if fails:
                 print("FAIL:", "; ".join(dict.fromkeys(fails)))
                 return 3
-            print("PASS: 预览动图解包废除成立（帧流出帧 / 帧号推进 / 暂停恢复 / 拖动定位 / 设封面 f: 抽帧 / 帧条 24 块）")
+            print("PASS: 预览动图解包废除成立（帧流出帧 / 帧号推进 / 暂停恢复 / 拖动定位 / 设封面 f: 抽帧 + toast + 版本戳 / 帧条 24 块）")
             return 0
     finally:
         proc.terminate()

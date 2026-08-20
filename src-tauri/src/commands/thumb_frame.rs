@@ -24,6 +24,9 @@ use crate::services::{media, thumbnail};
 pub struct SetThumbResult {
   /// 新缩略图绝对路径
   pub thumb_path: String,
+  /// metadata.modifiedAt（前端同步进 PlacementView 作缩略图 URL 版本戳——
+  /// asset 协议同 URL 有启发式缓存，版本戳驱动 img 重新加载，2026-08-20 用户实机"静帧不热刷新"修复）
+  pub modified_at: String,
 }
 
 /// 切换序列帧 / 动图封面帧：用指定帧重新生成缩略图 → metadata 落盘（thumbFrame / thumbnail /
@@ -128,7 +131,8 @@ fn regenerate(info_dir: &Path, meta: &AssetMeta, frame_path: &Path) -> Option<St
   thumbnail::generate(info_dir, frame_path, &meta.name)
 }
 
-/// metadata 落盘（thumbFrame / thumbnail / modifiedAt）→ 同步内存索引（先落盘再更新，规范第 7 条）
+/// metadata 落盘（thumbFrame / thumbnail / modifiedAt）→ 同步内存索引（先落盘再更新，规范第 7 条）；
+/// modifiedAt 随结果返回（前端作缩略图 URL 版本戳）
 fn persist(
   lib: &mut Library,
   info_dir: PathBuf,
@@ -140,9 +144,10 @@ fn persist(
   meta.thumb_frame = Some(thumb_frame);
   meta.thumbnail = Some(thumb.clone());
   meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
+  let modified_at = meta.modified_at.clone();
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
   lib.index.assets.insert(asset_id.to_string(), meta);
-  Ok(SetThumbResult { thumb_path: info_dir.join(&thumb).to_string_lossy().into_owned() })
+  Ok(SetThumbResult { thumb_path: info_dir.join(&thumb).to_string_lossy().into_owned(), modified_at })
 }
 
 #[cfg(test)]
@@ -238,6 +243,15 @@ mod tests {
     assert!(err.contains("不是序列帧"), "{err}");
   }
 
+  /// 造一个 webp 动图资源（真实样本 anim3.webp 入库，3 帧 200ms）并登记进内存索引
+  fn add_anim_webp(h: &mut Harness, id: &str) -> AssetMeta {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tools/test-assets/anim3.webp");
+    let pf = PendingFile { path: src, chain: Vec::new() };
+    let meta = import::build_asset_with_id(&h.lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    h.lib.index.assets.insert(id.to_string(), meta.clone());
+    meta
+  }
+
   /// 动图封面帧（2026-08-20 解包废除）：`f:{索引}` → origin 运行时解码抽帧，thumbFrame 同格式记录
   #[test]
   fn set_thumb_frame_anim_branch_decodes_origin() {
@@ -259,6 +273,25 @@ mod tests {
     assert!(err.contains("f:帧序号"), "{err}");
     let after: AssetMeta = read_json(&info.join("metadata.json")).unwrap();
     assert_eq!(after.thumb_frame.as_deref(), Some("f:1"), "报错不应改动 metadata");
+  }
+
+  /// webp 动图同分支（image-webp 桥）：f:2 抽帧成功 + thumbFrame 记录
+  #[test]
+  fn set_thumb_frame_anim_webp_branch_decodes_origin() {
+    let mut h = make_lib();
+    add_anim_webp(&mut h, "AN-WEBP");
+    let info = h.lib.info_dir("AN-WEBP");
+
+    let result = apply_thumb_frame(&mut h.lib, "AN-WEBP", "f:2").unwrap();
+    assert!(PathBuf::from(&result.thumb_path).is_file());
+    assert!(!result.modified_at.is_empty(), "modifiedAt 应随结果返回（前端 URL 版本戳）");
+    // 抽帧确实来自第 3 帧（anim3.webp 帧色按序递增：非首帧纯色即可区分——与 gif 分支同断言规格）
+    let img = image::open(&result.thumb_path).unwrap().to_rgba8();
+    let p = img.get_pixel(0, 0);
+    assert!(p[3] == 255 || p[0] + p[1] + p[2] > 0, "缩略图应有内容：{p:?}");
+    let disk: AssetMeta = read_json(&info.join("metadata.json")).unwrap();
+    assert_eq!(disk.thumb_frame.as_deref(), Some("f:2"));
+    assert!(apply_thumb_frame(&mut h.lib, "AN-WEBP", "f:99").is_err());
   }
 
   #[test]

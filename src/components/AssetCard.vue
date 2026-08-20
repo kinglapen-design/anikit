@@ -53,7 +53,11 @@ const ui = useUiStore();
 // 简介区高度跟随「显示简介」开关（2026-08-19 接入：关 = 紧凑 36，隐藏简介行并缩短卡片）
 const captionH = computed(() => (ui.showBrief ? CARD_CAPTION_H : CARD_CAPTION_COMPACT_H));
 const imgH = computed(() => Math.max(20, props.box.height - captionH.value));
-const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
+const thumbUrl = computed(() =>
+  // ?v=modifiedAt = 缩略图 URL 版本戳：设封面后 modifiedAt 变 → URL 变 → img 重新加载
+  //（asset 协议同 URL 有启发式缓存，2026-08-20 用户实机"静帧不热刷新"修复；query 不影响协议路径解析）
+  props.asset.thumbPath ? `${convertFileSrc(props.asset.thumbPath)}?v=${encodeURIComponent(props.asset.modifiedAt ?? "")}` : null,
+);
 // 动图（5.1）：GIF / WEBP 动图；与序列帧区分（序列帧同样带 frameCount）
 const isAnim = computed(() => props.asset.animated);
 // 序列帧（2026-07-22 用户定）：格式角标显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）

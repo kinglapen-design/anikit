@@ -29,7 +29,10 @@ const props = withDefaults(
   { odd: false, selected: false, renaming: false, faded: null },
 );
 
-const thumbUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
+// ?v=modifiedAt = 缩略图 URL 版本戳（同 AssetCard：设封面后 URL 变强制 img 重载，asset 协议缓存修复）
+const thumbUrl = computed(() =>
+  props.asset.thumbPath ? `${convertFileSrc(props.asset.thumbPath)}?v=${encodeURIComponent(props.asset.modifiedAt ?? "")}` : null,
+);
 // 尺寸列：音频显示时长（metadata 宽高是波形图尺寸非内容尺寸，5.1）；其余 w×h，无尺寸显示格式
 const size = computed(() => {
   if (props.asset.duration != null && isAudioExt(props.asset.ext)) return formatDuration(props.asset.duration);

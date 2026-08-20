@@ -7,6 +7,7 @@ import { nextTick } from "vue";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { useContentStore } from "./content";
 import { usePreviewStore } from "./preview";
+import { useToastStore } from "./toast";
 import { getMediaSource } from "../lib/mediaOps";
 
 // 媒体元素单例（模块级；store 状态响应式、元素本身不进响应式系统）
@@ -154,22 +155,32 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       this.loop = !this.loop;
       this.getEl().loop = this.loop;
     },
-    // 当前画面设为预览图（5.2 视频）：ffmpeg 截帧走缩略图管线，前端即时换卡片图（同 setAsThumb 技巧）
+    // 当前画面设为预览图（5.2 视频）：ffmpeg 截帧走缩略图管线，前端即时换卡片图（同 setAsThumb 技巧）；
+    // toast 反馈 + modifiedAt URL 版本戳 + 视图外兜底 refresh（2026-08-20 与动图侧同修复）
     async setVideoThumb(): Promise<void> {
       const p = usePreviewStore().current;
       if (!p) return;
-      const r = await invoke<{ thumbPath: string }>("set_video_thumb", {
-        assetId: p.assetId,
-        atSecs: this.currentTime,
-      });
-      const content = useContentStore();
-      const target = content.placements.find(
-        (x) => x.assetId === p.assetId && x.folderId === p.folderId,
-      );
-      if (target) {
-        target.thumbPath = null;
-        await nextTick();
-        target.thumbPath = r.thumbPath;
+      const toast = useToastStore();
+      try {
+        const r = await invoke<{ thumbPath: string; modifiedAt: string }>("set_video_thumb", {
+          assetId: p.assetId,
+          atSecs: this.currentTime,
+        });
+        const content = useContentStore();
+        const target = content.placements.find(
+          (x) => x.assetId === p.assetId && x.folderId === p.folderId,
+        );
+        if (target) {
+          target.modifiedAt = r.modifiedAt; // URL 版本戳（AssetCard / ListRowCard thumbUrl ?v=）
+          target.thumbPath = null;
+          await nextTick();
+          target.thumbPath = r.thumbPath;
+        } else {
+          await content.refresh();
+        }
+        toast.notify({ message: "已设为预览图", icon: "success" });
+      } catch (e) {
+        toast.notify({ message: String(e), icon: "fail" });
       }
     },
   },
