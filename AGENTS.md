@@ -24,14 +24,14 @@ PRD 内使用 Obsidian 双链 `[[文件名]]`，按文件名在 `docs/03_项目-
 
 ``` text
 ├── docs/                 全部文档（01_开发规范、02_样式与布局、03_项目-PRD/、04-07 开发文档）
-├── src/                  前端（TS，脚手架搭建后生成）
-├── src-tauri/            Rust 后端（脚手架搭建后生成）
+├── src/                  前端（TS 严格模式 + Vue 3 + pinia）
+├── src-tauri/            Rust 后端
 │   └── src/
 │       ├── commands/     命令 API 层（Tauri commands，规范第 1 条业务层）
 │       ├── core/         数据层（JSON 读写、迁移、备份；每个数据文件单一写点）
-│       ├── services/     业务服务（导入、缩略图、搜索……）
-│       ├── adapters/     适配器（剪贴板、Shell、全局热键、文件监听……）
-│       └── server/       WebSocket 服务（动画软件通信通道）
+│       ├── services/     业务服务（导入、缩略图、搜索、帧流 WS（frame_stream，阶段四）……）
+│       └── adapters/     适配器（剪贴板、Shell、全局热键、文件监听、ffmpeg 解码……）
+│       （动画软件通信通道的 WS 服务随阶段七插件落地时再建，现无 server/ 目录）
 ├── plugins/              动画软件插件（CEP 等，如 plugins/animate-cep/）
 ├── spike/                阶段 0 技术验证代码（验证完归档，不进主线）
 ├── tools/                开发辅助工具（假数据生成、打包脚本等）
