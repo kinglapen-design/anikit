@@ -84,7 +84,8 @@ async def send(ws, method, params=None, session=None):
 
 
 async def frame_server():
-    """假帧流 server：每连接 20fps 推 160x90 RGBA 彩帧（格式同后端 frame_stream）。
+    """假帧流 server：每连接 20fps 推 160x90 RGBA 彩帧（格式同后端 frame_stream，
+    20 字节头 [w][h][idx][seq]，idx = 源帧索引 0 起 24 帧循环）。
     160x90 而非 320x180：9 连接 × 20fps × 230KB 会把单线程事件循环压垮（CDP 客户端
     recv 饿死、探针卡死，2026-08-20 实测）；1/4 数据量后 CDP 与推流共存。"""
     async def handler(ws):
@@ -93,7 +94,11 @@ async def frame_server():
         try:
             while True:
                 seq += 1
-                header = w.to_bytes(4, "little") + h.to_bytes(4, "little") + seq.to_bytes(8, "little")
+                idx = (seq - 1) % 24
+                header = (
+                    w.to_bytes(4, "little") + h.to_bytes(4, "little")
+                    + idx.to_bytes(4, "little") + seq.to_bytes(8, "little")
+                )
                 rgba = bytes([seq % 256, 100, 200, 255]) * (w * h)
                 await ws.send(header + rgba)
                 await asyncio.sleep(0.05)

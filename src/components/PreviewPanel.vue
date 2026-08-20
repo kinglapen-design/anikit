@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 预览画面区（4.3/5.2）：image/sequence/anim 走 <img>（filePath 由 store 维护，切帧即换 src）；
+// 预览画面区（4.3/5.2）：image/sequence 走 <img>（filePath 由 store 维护，切帧即换 src）；
+// anim = 阶段四帧流（PreviewAnimCanvas 渲染 canvas，占位缩略图 / 回退 img 在下层）；
 // video 把 previewMedia 的 <video> 元素挂进画面区（缩放/平移/旋转/翻转复用图片那套数学，
 // 尺寸经 loadedmetadata → onImageLoad 喂入）；audio 显示波形大图（按画面区实际像素后端重采样，
 // 未就绪回退 info 波形缩略图 contain），无缩放平移。
@@ -9,6 +10,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import PreviewNavigator from "./PreviewNavigator.vue";
+import PreviewAnimCanvas from "./PreviewAnimCanvas.vue";
 import { useHiresWaveform } from "../lib/useHiresWaveform";
 import { usePreviewStore } from "../stores/preview";
 import { usePreviewMediaStore } from "../stores/previewMedia";
@@ -65,6 +67,14 @@ watch(
 watchEffect(() => {
   if (preview.kind !== "video") return;
   media.getEl().style.transform = imgStyle.value.transform;
+});
+
+// 动图帧流出帧尺寸跟随显示尺寸（视口变化 / 滚轮缩放 → 帧短边 × zoom，防抖由后端 clamp 幂等兜底）
+watchEffect(() => {
+  void preview.viewW;
+  void preview.viewH;
+  void preview.zoom;
+  preview.syncAnimSize();
 });
 
 function onLoad(e: Event): void {
@@ -184,6 +194,8 @@ watch(
   >
     <div v-if="showImg" class="img-wrap" :style="wrapStyle">
       <img :src="url!" :style="imgStyle" draggable="false" @load="onLoad" />
+      <!-- 动图 = 帧流 canvas（叠于占位缩略图 / 回退 img 之上，旋转翻转转 imgStyle 同款 transform） -->
+      <PreviewAnimCanvas v-if="preview.kind === 'anim'" :style="imgStyle" />
     </div>
     <div v-else-if="preview.kind === 'video'" ref="videoWrapRef" class="img-wrap" :style="wrapStyle" />
     <div v-else-if="waveUrl" class="wave-large" :style="{ '--wave-url': `url(&quot;${waveUrl}&quot;)` }" />

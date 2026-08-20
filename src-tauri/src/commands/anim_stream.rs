@@ -39,3 +39,24 @@ pub async fn set_anim_stream_size(session: u64, short_edge: u32) -> Result<(), S
   frame_stream::set_size(session, short_edge);
   Ok(())
 }
+
+/// 播放 / 暂停（预览窗口）：暂停 = 解码线程推完当前帧阻塞，恢复无缝续播
+#[tauri::command]
+pub async fn set_anim_stream_playing(session: u64, playing: bool) -> Result<(), String> {
+  frame_stream::set_playing(session, playing);
+  Ok(())
+}
+
+/// 倍速（预览窗口播放条 RateControl）：delay = delay_ms / rate
+#[tauri::command]
+pub async fn set_anim_stream_rate(session: u64, rate: f32) -> Result<(), String> {
+  frame_stream::set_rate(session, rate);
+  Ok(())
+}
+
+/// 定位到目标帧（预览播放条拖动 / 逐帧步进）：快进 / 回退重开由服务层处理
+#[tauri::command]
+pub async fn seek_anim_stream(session: u64, frame_index: u32) -> Result<(), String> {
+  frame_stream::seek(session, frame_index);
+  Ok(())
+}

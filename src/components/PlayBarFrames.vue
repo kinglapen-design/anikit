@@ -1,9 +1,11 @@
 <script setup lang="ts">
-// 帧播放条（4.3 序列帧；5.2 动图完全复用）：放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8）。
+// 帧播放条（4.3 序列帧；5.2 动图复用 → 阶段四动图改帧流驱动，2026-08-20）：
+// 放搜索栏位置，样式照搜索框（C3 / inset border-1 / 圆角 8）。
 // 播放/暂停、当前帧/总帧数、进度条（拖动定位帧）、倍率（RateControl 悬停竖排弹窗）、
 // 笔记（5.2 浮层，开着时品牌紫激活态）、当前帧设为预览图、显示器全屏（Esc 退出）。
-// 动图未解包兜底态（unpacking）：只显示"解析中…" + 禁用的笔记/设封面 + 全屏。
-import { ref } from "vue";
+// 动图播放 = 帧流（不依赖 frames/ 解包）；未解包时帧清单缺失——笔记 / 设封面禁用（播放不受影响）；
+// 帧流失败回退态（animTotal=0）不出播放条（原生 img 兜底播放，无法控制）。
+import { computed, ref } from "vue";
 import IconButton from "./IconButton.vue";
 import RateControl from "./RateControl.vue";
 import { usePreviewStore } from "../stores/preview";
@@ -14,11 +16,19 @@ const notes = usePreviewNotesStore();
 const trackRef = ref<HTMLElement>();
 let seeking = false;
 
+// 总帧数：序列帧 = 帧清单长度；动图 = 帧流总帧数（metadata frameCount 与已见帧索引取大）
+const frameCount = computed(() =>
+  preview.kind === "anim" ? preview.animTotal : (preview.seq?.frames.length ?? 0),
+);
+// 播放条出现条件：序列帧有帧清单；动图帧流活着（animTotal>0。回退态 0 不显示）
+const barReady = computed(() => frameCount.value > 0);
+// 无帧清单（动图未解包）：笔记 / 设封面禁用（后端需要 frames/ 帧名，会报错）
+const noFrameList = computed(() => preview.kind === "anim" && !preview.seq);
+
 function seek(e: PointerEvent): void {
   const rect = trackRef.value!.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  const n = preview.seq?.frames.length ?? 1;
-  preview.setFrame(Math.round(ratio * (n - 1)));
+  preview.setFrame(Math.round(ratio * (frameCount.value - 1)));
 }
 function onSeekDown(e: PointerEvent): void {
   seeking = true;
@@ -37,24 +47,13 @@ function onSeekUp(e: PointerEvent): void {
 </script>
 
 <template>
-  <!-- 动图未解包兜底态（5.2 改版）：隐藏播放/进度/倍率，笔记与设封面禁用（无帧概念，后端会报错） -->
-  <div v-if="preview.unpacking" class="play-bar">
-    <span class="hint">解析中…</span>
-    <IconButton name="add-note" title="笔记" disabled />
-    <IconButton name="set-thumbnail" title="当前画面设为预览图" disabled />
-    <IconButton
-      name="fullscreen"
-      :title="preview.fullscreen ? '退出全屏' : '全屏'"
-      @click="preview.setFullscreen(!preview.fullscreen)"
-    />
-  </div>
-  <div v-else-if="preview.seq" class="play-bar">
+  <div v-if="barReady" class="play-bar">
     <IconButton
       :name="preview.playing ? 'pause' : 'play'"
       :title="preview.playing ? '暂停' : '播放'"
       @click="preview.togglePlay()"
     />
-    <span class="frame-text">{{ preview.frame + 1 }} / {{ preview.seq.frames.length }}</span>
+    <span class="frame-text">{{ preview.frame + 1 }} / {{ frameCount }}</span>
     <div
       ref="trackRef"
       class="progress"
@@ -65,16 +64,27 @@ function onSeekUp(e: PointerEvent): void {
     >
       <span
         class="fill"
-        :style="{ width: `${(preview.frame / Math.max(1, preview.seq.frames.length - 1)) * 100}%` }"
+        :style="{ width: `${(preview.frame / Math.max(1, frameCount - 1)) * 100}%` }"
       />
       <span
         class="knob"
-        :style="{ left: `${(preview.frame / Math.max(1, preview.seq.frames.length - 1)) * 100}%` }"
+        :style="{ left: `${(preview.frame / Math.max(1, frameCount - 1)) * 100}%` }"
       />
     </div>
     <RateControl :rate="preview.rate" @select="preview.setRate" />
-    <IconButton name="add-note" title="笔记" :active="notes.open" @click="notes.toggle()" />
-    <IconButton name="set-thumbnail" title="当前画面设为预览图" @click="preview.setAsThumb()" />
+    <IconButton
+      name="add-note"
+      title="笔记"
+      :active="notes.open"
+      :disabled="noFrameList"
+      @click="notes.toggle()"
+    />
+    <IconButton
+      name="set-thumbnail"
+      title="当前画面设为预览图"
+      :disabled="noFrameList"
+      @click="preview.setAsThumb()"
+    />
     <IconButton
       name="fullscreen"
       :title="preview.fullscreen ? '退出全屏' : '全屏'"
@@ -100,15 +110,6 @@ function onSeekUp(e: PointerEvent): void {
   color: var(--font-icon-1);
   white-space: nowrap;
   flex: none;
-}
-/* 动图解包中提示（说明文字档，同 PlayBarAudio 转码提示）；flex:1 把右侧按钮顶到尾部 */
-.hint {
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
-  padding: 0 var(--space-4);
-  flex: 1;
-  min-width: 0;
 }
 /* 中栏工具栏图标按钮 80%（2026-07-23 用户定，同预览标题栏） */
 .play-bar :deep(.icon-btn) {

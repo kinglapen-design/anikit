@@ -1,15 +1,21 @@
-//! 动图帧流服务（阶段四一轮·自研解码器铺量：动图卡播放源）。
+//! 动图帧流服务（阶段四·自研解码器：动图卡播放源 + 预览窗口动图播放）。
 //! 会话 = 解码线程（循环播 origin 源文件、按源帧 delay 节奏）+ 帧槽（恒持最新帧）；
-//! WS server（127.0.0.1 动态端口）按会话推二进制帧 `[w u32le][h u32le][seq u64le][rgba]`。
+//! WS server（127.0.0.1 动态端口）按会话推二进制帧 `[w u32le][h u32le][idx u32le][seq u64le][rgba]`
+//! （idx = 源帧索引 0 起、循环回绕归 0——预览播放条帧号 / 进度用；seq 单调递增推送序号）。
 //!
 //! 路由：gif → adapters/decoder（ffmpeg-next）；webp → services/anim（image-webp 纯 Rust——
 //! lgpl 构建无 libwebp decoder，踩坑 039）。缩放 = 真短边等比不足不放大（thumbnail::shrink_to_edge
-//! 同口径）；目标短边 = 卡片显示尺寸（2026-08-20 用户定：缩小省资源、放大跟清晰），会话级 AtomicU32
-//! 热更新（set_size 不重启解码、不回第一帧）。
+//! 同口径）；目标短边 = 调用方显示尺寸（卡片 = 卡片实测短边 clamp 1024；预览 = 视口×zoom clamp 4096），
+//! 会话级 AtomicU32 热更新（set_size 不重启解码、不回第一帧）。
 //! 节奏：生产者按源帧 delay 睡眠（Windows 15.6ms 粒度坑 = 踩坑 040——动图 delay 普遍 ≥40ms 影响小；
 //! 25.6/30fps 实测观感已流畅，后续要精确节奏可换"消费端 rAF"模型）。
 //!
-//! 会话上限 MAX_SESSIONS = 泄漏兜底（正常由前端 autoplayGate anim 池 50 调度）；
+//! 播放控制（预览窗口对接，2026-08-20；卡片恒默认态 = 播放 / 1x / 无 seek 不受影响）：
+//! playing 暂停 = publish 后阻塞轮询（5ms，stop/seek 可唤醒）；rate = delay/rate；
+//! seek = 目标帧索引写入 seek_to——GIF/WEBP 无索引只能顺序解码：目标在当前之后 = 快进（不推帧不睡眠
+//! 纯解码），目标已过 = 中止本趟重开从头快进；到位后按播放态继续或停在该帧（逐帧步进 = 暂停 + seek±1）。
+//!
+//! 会话上限 MAX_SESSIONS = 泄漏兜底（正常由前端 autoplayGate anim 池 50 调度 + 预览单实例）；
 //! 会话线程 detach（stop 标记退出，不 join）；库切换 stop_all（会话绑定 assets 池路径）。
 //! cfg(test) 不起 WS server（tauri GUI 依赖链拖垮测试 exe，踩坑 014），会话逻辑可单测。
 
@@ -25,20 +31,23 @@ use crate::core::models::AssetMeta;
 use crate::core::paths;
 use crate::services::{anim, thumbnail};
 
-/// 会话上限（前端 anim 池 50 之上留余量，防泄漏打爆 CPU）
+/// 会话上限（前端 anim 池 50 + 预览单实例之上留余量，防泄漏打爆 CPU）
 const MAX_SESSIONS: usize = 64;
 
-/// 目标短边 clamp 范围：下限防 0/异常尺寸，上限对齐卡片最大显示尺寸余量
-/// （卡片缩放到最大档列宽也不过数百 px；预览对接走更高档时另行放开）
+/// 目标短边 clamp 范围：下限防 0/异常尺寸；上限对齐全尺寸预览档（FULL_PREVIEW_LONG_EDGE），
+/// 卡片前端自行 clamp 1024（AnimCanvasLayer），预览按视口×zoom 传（4096 封顶）
 const MIN_EDGE: u32 = 16;
-const MAX_EDGE: u32 = 1024;
+const MAX_EDGE: u32 = 4096;
+
+/// seek_to 空标记（无待定位请求）
+const NO_SEEK: u64 = u64::MAX;
 
 fn clamp_edge(edge: u32) -> u32 {
   edge.clamp(MIN_EDGE, MAX_EDGE)
 }
 
-/// 帧二进制头长度（w u32 + h u32 + seq u64）
-pub const FRAME_HEADER: usize = 16;
+/// 帧二进制头长度（w u32 + h u32 + idx u32 + seq u64）
+pub const FRAME_HEADER: usize = 20;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,6 +60,7 @@ pub struct StreamStart {
 struct Latest {
   w: u32,
   h: u32,
+  idx: u32, // 源帧索引（0 起，循环回绕归 0）
   seq: u64,
   rgba: Arc<Vec<u8>>,
 }
@@ -59,6 +69,12 @@ struct Session {
   stop: AtomicBool,
   /// 目标短边（出帧尺寸热更新：解码循环每帧读取，卡片 ResizeObserver 驱动）
   target: AtomicU32,
+  /// 播放态（预览；卡片恒 true）：false = publish 后阻塞轮询
+  playing: AtomicBool,
+  /// 倍速（f32 bits，预览；卡片恒 1.0）：delay 睡眠 = delay_ms / rate
+  rate: AtomicU32,
+  /// 待定位目标帧索引（NO_SEEK = 无）：快进 / 回退重开见模块头注释
+  seek_to: AtomicU64,
   slot: Mutex<Latest>,
   tx: tokio::sync::watch::Sender<u64>,
 }
@@ -69,6 +85,9 @@ impl Session {
     Arc::new(Session {
       stop: AtomicBool::new(false),
       target: AtomicU32::new(clamp_edge(short_edge)),
+      playing: AtomicBool::new(true),
+      rate: AtomicU32::new(1.0f32.to_bits()),
+      seek_to: AtomicU64::new(NO_SEEK),
       slot: Mutex::new(Latest::default()),
       tx,
     })
@@ -167,11 +186,12 @@ async fn serve_ws(
   Ok(())
 }
 
-/// [w u32le][h u32le][seq u64le][rgba...]
+/// [w u32le][h u32le][idx u32le][seq u64le][rgba...]
 fn frame_bytes(f: &Latest) -> Vec<u8> {
   let mut out = Vec::with_capacity(FRAME_HEADER + f.rgba.len());
   out.extend_from_slice(&f.w.to_le_bytes());
   out.extend_from_slice(&f.h.to_le_bytes());
+  out.extend_from_slice(&f.idx.to_le_bytes());
   out.extend_from_slice(&f.seq.to_le_bytes());
   out.extend_from_slice(&f.rgba);
   out
@@ -217,6 +237,31 @@ pub fn set_size(session: u64, short_edge: u32) {
   }
 }
 
+/// 播放/暂停（预览）：暂停 = publish 后阻塞轮询（stop/seek 可唤醒）。会话不存在静默忽略。
+pub fn set_playing(session: u64, playing: bool) {
+  if let Some(sess) = global().sessions.lock().unwrap().get(&session) {
+    sess.playing.store(playing, Ordering::Relaxed);
+  }
+}
+
+/// 倍速（预览）：delay 睡眠 = delay_ms / rate；非法值（≤0 / NaN / 无穷）忽略。
+pub fn set_rate(session: u64, rate: f32) {
+  if !rate.is_finite() || rate <= 0.0 {
+    return;
+  }
+  if let Some(sess) = global().sessions.lock().unwrap().get(&session) {
+    sess.rate.store(rate.to_bits(), Ordering::Relaxed);
+  }
+}
+
+/// 定位到目标帧（预览播放条拖动 / 逐帧步进）：GIF/WEBP 无索引只能顺序解码——
+/// 目标在当前之后 = 快进（不推帧不睡眠）；已过 = 中止本趟重开从头快进。会话不存在静默忽略。
+pub fn seek(session: u64, frame_index: u32) {
+  if let Some(sess) = global().sessions.lock().unwrap().get(&session) {
+    sess.seek_to.store(frame_index as u64, Ordering::Relaxed);
+  }
+}
+
 /// 停止会话（幂等）：标记停止 + 移出会话表；线程下一轮循环退出
 pub fn stop(session: u64) {
   if let Some(sess) = global().sessions.lock().unwrap().remove(&session) {
@@ -247,36 +292,99 @@ fn run_session(sess: Arc<Session>, origin: PathBuf, ext: String) {
   }
 }
 
-/// gif 桥（ffmpeg）：单趟解码循环播放；Ok(true)= 自然到底继续循环，false = 停止/失败
-/// 目标短边由 decode_once 每帧读 sess.target（热更新）
+/// 每帧推送前的统一闸门（两桥共用）：seek 快进（目标在 idx 之后 = 不推不睡纯解码）/ 到位清请求 / 已过回退
+enum Gate {
+  Deliver, // 正常推帧
+  Skip,    // seek 快进中：本帧不推不停
+  Abort,   // seek 目标已过：中止本趟（seek_to 保留），外层重开从头快进
+}
+
+fn gate(sess: &Arc<Session>, idx: u32) -> Gate {
+  let t = sess.seek_to.load(Ordering::Relaxed);
+  if t == NO_SEEK {
+    return Gate::Deliver;
+  }
+  if (idx as u64) < t {
+    return Gate::Skip;
+  }
+  if (idx as u64) == t {
+    sess.seek_to.store(NO_SEEK, Ordering::Relaxed); // 到位：本帧正常推
+    return Gate::Deliver;
+  }
+  Gate::Abort
+}
+
+/// publish 后节奏：pause 阻塞轮询（stop / 恢复 / seek 唤醒）+ delay/rate 睡眠
+/// （seek 待处理时不睡——逐帧步进 / 播放条拖动响应不拖一个帧时长）
+fn pace(sess: &Arc<Session>, delay_ms: u32) {
+  while !sess.playing.load(Ordering::Relaxed)
+    && !sess.stop.load(Ordering::Relaxed)
+    && sess.seek_to.load(Ordering::Relaxed) == NO_SEEK
+  {
+    std::thread::sleep(std::time::Duration::from_millis(5));
+  }
+  if sess.seek_to.load(Ordering::Relaxed) != NO_SEEK {
+    return;
+  }
+  let rate = f32::from_bits(sess.rate.load(Ordering::Relaxed));
+  let ms = (delay_ms as f32 / rate).max(0.0) as u64;
+  if ms > 0 {
+    std::thread::sleep(std::time::Duration::from_millis(ms));
+  }
+}
+
+/// gif 桥（ffmpeg）：单趟解码循环播放；Ok(true)= 自然到底 / seek 回退重开，false = 停止/失败
+/// 目标短边由 decode_once 每帧读 sess.target（热更新）；idx = 本趟帧序号（源帧索引）
 fn run_ffmpeg_once(sess: &Arc<Session>, origin: &Path) -> bool {
+  let mut idx: u32 = 0;
   let r = crate::adapters::decoder::decode_once(origin, &sess.target, &mut |f| {
     if sess.stop.load(Ordering::Relaxed) {
       return false;
     }
-    publish(sess, f.w, f.h, f.rgba);
-    if f.delay_ms > 0 {
-      std::thread::sleep(std::time::Duration::from_millis(f.delay_ms as u64));
+    let i = idx;
+    idx += 1;
+    match gate(sess, i) {
+      Gate::Skip => return true,
+      Gate::Abort => return false,
+      Gate::Deliver => {}
     }
+    publish(sess, f.w, f.h, i, f.rgba);
+    pace(sess, f.delay_ms);
     true
   });
-  matches!(r, Ok(())) && !sess.stop.load(Ordering::Relaxed)
+  if sess.stop.load(Ordering::Relaxed) {
+    return false;
+  }
+  if sess.seek_to.load(Ordering::Relaxed) != NO_SEEK {
+    return true; // seek 回退中止 → 重开一趟从头快进
+  }
+  matches!(r, Ok(()))
 }
 
 /// webp 桥（image-webp 纯 Rust）：单趟流式逐帧 + 缩放（每帧读 sess.target 热更新），循环播放
+/// （decode_frames 回调 false = 主动提前结束返回 Some，stop 与 seek 回退靠 atomic 区分）
 fn run_webp_once(sess: &Arc<Session>, origin: &Path) -> bool {
-  let r = anim::decode_frames(origin, |_i, img, delay| {
+  let r = anim::decode_frames(origin, |i, img, delay| {
     if sess.stop.load(Ordering::Relaxed) {
       return false;
     }
-    let (w, h, rgba) = scale_to_thumb(img, sess.target.load(Ordering::Relaxed));
-    publish(sess, w, h, rgba);
-    if delay > 0 {
-      std::thread::sleep(std::time::Duration::from_millis(delay as u64));
+    match gate(sess, i) {
+      Gate::Skip => return true,
+      Gate::Abort => return false,
+      Gate::Deliver => {}
     }
+    let (w, h, rgba) = scale_to_thumb(img, sess.target.load(Ordering::Relaxed));
+    publish(sess, w, h, i, rgba);
+    pace(sess, delay);
     true
   });
-  r.is_some() && !sess.stop.load(Ordering::Relaxed)
+  if sess.stop.load(Ordering::Relaxed) {
+    return false;
+  }
+  if sess.seek_to.load(Ordering::Relaxed) != NO_SEEK {
+    return true;
+  }
+  r.is_some()
 }
 
 /// 真短边等比不足不放大（复用 thumbnail::shrink_to_edge，与缩略图 / gif 桥口径严格一致），输出紧凑 RGBA
@@ -286,11 +394,11 @@ fn scale_to_thumb(img: image::RgbaImage, short_edge: u32) -> (u32, u32, Vec<u8>)
   (w, h, out.into_raw())
 }
 
-fn publish(sess: &Arc<Session>, w: u32, h: u32, rgba: Vec<u8>) {
+fn publish(sess: &Arc<Session>, w: u32, h: u32, idx: u32, rgba: Vec<u8>) {
   let seq = {
     let mut g = sess.slot.lock().unwrap();
     let s = g.seq + 1;
-    *g = Latest { w, h, seq: s, rgba: Arc::new(rgba) };
+    *g = Latest { w, h, idx, seq: s, rgba: Arc::new(rgba) };
     s
   };
   sess.tx.send_replace(seq);
@@ -412,6 +520,65 @@ mod tests {
       assert!(Instant::now() < deadline, "等待超时：帧尺寸未变为 64×48（当前 {}x{}）", f.w, f.h);
       std::thread::sleep(Duration::from_millis(5));
     }
+    stop(st.session);
+  }
+
+  /// 暂停 / 恢复（预览播放控制）：暂停后帧序号冻结，恢复后续播
+  #[test]
+  fn pause_and_resume() {
+    let _g = TEST_LOCK.lock().unwrap();
+    let h = make_lib();
+    add_gif(&h, "AN-PR");
+    let st = start(&h.assets_dir, "AN-PR", 320).unwrap();
+    wait_frame(st.session, "出帧");
+    set_playing(st.session, false);
+    std::thread::sleep(Duration::from_millis(120)); // 等解码线程进入阻塞（当前帧推完）
+    let frozen = cur_frame(st.session).unwrap().seq;
+    std::thread::sleep(Duration::from_millis(200)); // 50ms/帧：若未暂停必涨
+    assert_eq!(cur_frame(st.session).unwrap().seq, frozen, "暂停后帧序号应冻结");
+    set_playing(st.session, true);
+    wait_seq(st.session, frozen + 1, "恢复后续播");
+    stop(st.session);
+  }
+
+  /// seek（预览播放条 / 逐帧步进）：暂停态定位推一帧停住；回退目标重开快进
+  #[test]
+  fn seek_positions_frame() {
+    let _g = TEST_LOCK.lock().unwrap();
+    let h = make_lib();
+    add_gif(&h, "AN-SK");
+    let st = start(&h.assets_dir, "AN-SK", 320).unwrap();
+    wait_frame(st.session, "出帧");
+    set_playing(st.session, false);
+    std::thread::sleep(Duration::from_millis(120));
+    // 定位到第 2 帧：暂停态推一帧后冻结
+    seek(st.session, 2);
+    let s0 = cur_frame(st.session).unwrap().seq;
+    wait_seq(st.session, s0 + 1, "seek 到位推帧");
+    assert_eq!(cur_frame(st.session).unwrap().idx, 2, "seek 后应停在第 2 帧");
+    let frozen = cur_frame(st.session).unwrap().seq;
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(cur_frame(st.session).unwrap().seq, frozen, "seek 后暂停态应保持");
+    // 回退到第 0 帧（当前 idx=2，目标已过 → 重开快进）
+    seek(st.session, 0);
+    wait_seq(st.session, frozen + 1, "回退 seek 到位");
+    assert_eq!(cur_frame(st.session).unwrap().idx, 0, "回退 seek 应停在第 0 帧");
+    stop(st.session);
+  }
+
+  /// 倍速（预览 RateControl）：8x 下 400ms 推进帧数显著超 1x 上限（50ms/帧 1x 约 8 帧）
+  #[test]
+  fn rate_accelerates() {
+    let _g = TEST_LOCK.lock().unwrap();
+    let h = make_lib();
+    add_gif(&h, "AN-RT");
+    let st = start(&h.assets_dir, "AN-RT", 320).unwrap();
+    wait_frame(st.session, "出帧");
+    set_rate(st.session, 8.0);
+    let s0 = cur_frame(st.session).unwrap().seq;
+    std::thread::sleep(Duration::from_millis(400));
+    let gained = cur_frame(st.session).unwrap().seq - s0;
+    assert!(gained >= 12, "8x 倍速 400ms 应推进 ≥12 帧（实际 {gained}）");
     stop(st.session);
   }
 

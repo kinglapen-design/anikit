@@ -1,9 +1,10 @@
 // 预览会话（4.3/5.2）：中栏预览模式的状态与行为。assetKey 非空 = 预览模式（ContentArea 据此切换）。
-// 图片查看器（缩放/平移/旋转/翻转）与帧播放（序列帧/动图统一 rAF 引擎，按帧时长/rate 驱动）共用本 store；
+// 图片查看器（缩放/平移/旋转/翻转）与帧播放（序列帧 rAF 引擎按帧时长/rate 驱动；
+// 动图 = 阶段四帧流：AnimStreamSession 收帧渲染 canvas，播放/暂停/倍速/定位由会话命令控制）共用本 store；
 // 音视频播放状态在 previewMedia、逐帧笔记在 previewNotes（本 store 负责进入/退出时的接线与复位）。
 // 容器尺寸由 PreviewPanel 的 ResizeObserver 写入，缩放瞄点数学集中在 zoomAt。
 import { defineStore } from "pinia";
-import { nextTick } from "vue";
+import { markRaw, nextTick } from "vue";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -12,6 +13,7 @@ import { usePreviewMediaStore } from "./previewMedia";
 import { usePreviewNotesStore } from "./previewNotes";
 import { isAudioExt, isSequence, isVideoExt } from "../lib/formatBadge";
 import { getAssetFilePath, listSequenceFrames, type FrameEntry } from "../lib/mediaOps";
+import { AnimStreamSession, type AnimFrame } from "../lib/animStream";
 
 // 播放帧（5.2 改版）：命令原始结构见 lib/mediaOps（FrameEntry.delayMs 序列帧恒 null）——
 // 加载时统一预填 delayMs（动图用后端逐帧下发值；序列帧按 1000/fps），播放引擎按帧时长/rate 驱动。
@@ -32,6 +34,24 @@ export const RATES = [8, 4, 3, 2, 1.75, 1.5, 1.25, 1, 0.75, 0.5, 0.25];
 let rafId = 0;
 let lastT = 0;
 let acc = 0;
+// 动图帧流会话（模块级单例：预览同时至多一个；播放控制命令透传，帧渲染经 state.animFrame 暴露）
+let animStream: AnimStreamSession | null = null;
+// seek 拖动目标帧（非 null 时忽略在途旧帧——防播放条帧号被 seek 前的旧帧拉回跳动）
+let seekTarget: number | null = null;
+
+function stopAnimStream(): void {
+  animStream?.stop();
+  animStream = null;
+  seekTarget = null;
+}
+
+// 出帧短边 = 显示短边（帧短边 × zoom；无帧时视口短边兜底），clamp [16,4096]（同后端口径）
+function streamEdge(naturalW: number, naturalH: number, viewW: number, viewH: number, zoom: number): number {
+  const base = naturalW > 0 ? Math.min(naturalW, naturalH) : Math.min(viewW, viewH);
+  const e = Math.ceil(base * zoom);
+  return Math.min(4096, Math.max(16, e || 320));
+}
+
 // 预览就绪事件监听（App 存活期注册一次；多窗口各自注册，事件广播按 assetId 匹配生效）
 let unlistenFull: (() => void) | undefined;
 let unlistenStrips: (() => void) | undefined;
@@ -58,13 +78,17 @@ export const usePreviewStore = defineStore("preview", {
     fitMode: false,
     rotate: 0 as 0 | 90 | 180 | 270,
     flipH: false,
-    // 帧播放（序列帧/动图统一）
+    // 帧播放（序列帧 rAF 引擎 / 动图帧流共用状态：frame = 当前帧索引，playing/rate 双向同步会话）
     seq: null as { thumbFrame: string | null; frames: PlayFrame[] } | null,
-    frame: 0, // 当前帧索引（frames 数组下标，非帧号）
+    frame: 0, // 当前帧索引（frames 数组下标 / 动图源帧索引，非帧号）
     playing: false,
     rate: 1,
     fullscreen: false,
-    // 动图后台解包中（5.2 改版）：原生 <img> 播源文件兜底，anim-unpacked 事件到达后切帧驱动
+    // 动图帧流当前帧（PreviewAnimCanvas 渲染用；markRaw 赋值防深度代理）与总帧数
+    // （max(metadata frameCount, 已见 idx+1)——播放条分母，不依赖 frames/ 解包产物）
+    animFrame: null as AnimFrame | null,
+    animTotal: 0,
+    // 动图后台解包中（5.2 改版）：播放已走帧流不受影响；此标记仅禁用设封面/笔记（帧清单缺失）
     unpacking: false,
   }),
   getters: {
@@ -142,17 +166,17 @@ export const usePreviewStore = defineStore("preview", {
           }
         },
       );
-      // 动图解包完成（5.2 改版）：当前预览正处于兜底态 → 重跑加载切帧驱动
-      // （不动视图状态；同尺寸帧 onImageLoad 早退，缩放/平移保持）
+      // 动图解包完成：重跑加载填帧清单（设封面 / 帧条 / 笔记解锁；播放走帧流本就不受影响，
+      // loadAnim 会重起会话——画面从头播，属低频事件可接受）
       unlistenUnpacked = await listen<{ assetId: string }>("anim-unpacked", (e) => {
         if (this.kind === "anim" && this.unpacking && this.current?.assetId === e.payload.assetId) {
           void this.loadAnim(e.payload.assetId);
         }
       });
-      // 解包失败：维持原生播放兜底（资产保持未解包态）
+      // 解包失败：设封面 / 帧条 / 笔记保持禁用（播放走帧流不受影响）
       unlistenUnpackFailed = await listen<{ assetId: string }>("anim-unpack-failed", (e) => {
         if (this.kind === "anim" && this.unpacking && this.current?.assetId === e.payload.assetId) {
-          console.warn(`动图解包失败，维持原生播放：${e.payload.assetId}`);
+          console.warn(`动图解包失败，设封面/帧条/笔记不可用：${e.payload.assetId}`);
         }
       });
       // 主窗口隐藏到托盘（关闭按钮 / 全局热键）：暂停双引擎播放
@@ -171,6 +195,7 @@ export const usePreviewStore = defineStore("preview", {
     // 退出预览
     close(): void {
       this.stopEngine();
+      stopAnimStream();
       usePreviewMediaStore().release();
       usePreviewNotesStore().reset();
       if (this.fullscreen) void this.setFullscreen(false);
@@ -178,6 +203,8 @@ export const usePreviewStore = defineStore("preview", {
       this.seq = null;
       this.playing = false;
       this.unpacking = false;
+      this.animFrame = null;
+      this.animTotal = 0;
     },
     // 上/下一个素材（当前视口顺序，到头停）
     async step(delta: number): Promise<void> {
@@ -193,6 +220,7 @@ export const usePreviewStore = defineStore("preview", {
     // 其余走 get_asset_file_path（image/other）。渐进加载（Eagle 式）：先秒显 info 缩略图，就绪后替换。
     async loadAsset(): Promise<void> {
       this.stopEngine();
+      stopAnimStream();
       const media = usePreviewMediaStore();
       media.release();
       const notes = usePreviewNotesStore();
@@ -202,6 +230,8 @@ export const usePreviewStore = defineStore("preview", {
       this.frame = 0;
       this.error = null;
       this.unpacking = false;
+      this.animFrame = null;
+      this.animTotal = 0;
       this.resetView();
       const p = this.current;
       if (!p) {
@@ -250,26 +280,67 @@ export const usePreviewStore = defineStore("preview", {
         this.filePath = null;
       }
     },
-    // 动图加载（5.2 改版：与序列帧同走 list_sequence_frames）：
-    // 未解包（导入后后台解包中）→ unpacking 兜底态，原生 <img> 播源文件（webview 自动循环，零等待）；
-    // 已解包 → 与序列帧完全同构（逐帧 delayMs 用后端下发值）。anim-unpacked 事件复调本函数无缝切换。
+    // 动图加载（阶段四·预览对接帧流，2026-08-20）：播放 = WS 帧流渲染 canvas（对 origin 运行时解码，
+    // 不依赖 frames/ 解包产物——删除解包产物后照常播放）；list_sequence_frames 帧清单仅为
+    // 设封面 / 帧条小图 / 逐帧笔记服务（已解包才有，未解包禁用这三项、播放不受影响）。
+    // 帧流失败回退原生 <img> 播源文件（无播放条）。anim-unpacked 事件复调本函数（重起会话 + 填清单解锁）。
     async loadAnim(assetId: string): Promise<void> {
+      stopAnimStream();
+      this.animFrame = null;
+      this.animTotal = 0;
+      const edge = streamEdge(this.naturalW, this.naturalH, this.viewW, this.viewH, this.zoom);
+      const s = await AnimStreamSession.start(assetId, edge, (f) => this.onAnimFrame(f));
+      if (this.current?.assetId !== assetId || this.kind !== "anim") {
+        s?.stop(); // await 期间已切走
+        return;
+      }
+      animStream = s;
+      if (s) {
+        this.playing = true; // 会话默认即播（进入自动播放，同 2026-07-25 用户定）
+        s.setRate(this.rate); // 倍速跨素材保持，同步进新会话
+        this.animTotal = this.current?.frameCount ?? 0;
+      } else {
+        // 帧流失败回退：原生 <img> 播源文件（gif/webp 直渲格式返回源路径；取不到则保持缩略图）
+        this.playing = false;
+        const f = await getAssetFilePath(assetId);
+        if (this.current?.assetId !== assetId || this.kind !== "anim") return;
+        if (f.path) this.filePath = f.path;
+      }
       const r = await listSequenceFrames(assetId);
-      if (this.current?.assetId !== assetId || this.kind !== "anim") return; // await 期间已切走
+      if (this.current?.assetId !== assetId || this.kind !== "anim") return;
       this.unpacking = r.unpacking;
       if (r.unpacking) {
         this.seq = null;
-        const f = await getAssetFilePath(assetId);
-        if (this.current?.assetId !== assetId || this.kind !== "anim") return; // await 期间已切走
-        if (f.path) this.filePath = f.path; // gif/webp 直渲格式返回源路径；取不到则保持缩略图
         return;
       }
       this.seq = {
         thumbFrame: r.thumbFrame,
         frames: r.frames.map((f) => ({ ...f, delayMs: f.delayMs ?? 1000 / (r.fps ?? 24) })),
       };
-      this.initFrame();
       void usePreviewNotesStore().load();
+      // 封面帧定位（对齐原 initFrame 行为：封面帧为初始帧，播放中 seek 后继续播）
+      if (animStream && this.seq.thumbFrame) {
+        const cover = this.seq.frames.findIndex((f) => f.name === this.seq!.thumbFrame);
+        if (cover > 0) this.setFrame(cover);
+      }
+    },
+    // 帧流帧到达（会话 onFrame 回调）：更新画面帧 / 帧号 / 总帧数 / natural（尺寸热更新时换算保视觉）
+    onAnimFrame(f: AnimFrame): void {
+      if (this.kind !== "anim") return;
+      // seek 期间忽略在途旧帧（帧号不被拉回跳动；目标帧到达后恢复）
+      if (seekTarget !== null) {
+        if (f.frameIndex !== seekTarget) return;
+        seekTarget = null;
+      }
+      this.animFrame = markRaw(f);
+      this.frame = f.frameIndex;
+      if (f.frameIndex + 1 > this.animTotal) this.animTotal = f.frameIndex + 1;
+      if (this.naturalW !== f.w || this.naturalH !== f.h) this.onImageLoad(f.w, f.h, true);
+    },
+    // 出帧尺寸跟随显示尺寸（帧短边 × zoom；PreviewPanel watchEffect 驱动：viewW/H/zoom 变化）
+    syncAnimSize(): void {
+      if (!animStream || this.kind !== "anim") return;
+      animStream.setSize(streamEdge(this.naturalW, this.naturalH, this.viewW, this.viewH, this.zoom));
     },
     // 帧播放进入点（序列帧/动图共用）：封面帧为初始帧，进入自动播放（2026-07-25 用户定）
     initFrame(): void {
@@ -292,8 +363,10 @@ export const usePreviewStore = defineStore("preview", {
       this.naturalH = 0;
     },
     // img onload / video loadedmetadata：记录显示图实际尺寸，初始化为适合窗口（同尺寸帧切换不重置视图）。
-    // 渐进替换（缩略图 → 高清，同比例）：按新旧像素比换算 zoom，视觉尺寸不动、pan 不动（容器坐标系）
-    onImageLoad(w: number, h: number): void {
+    // 渐进替换（缩略图 → 高清，同比例）：按新旧像素比换算 zoom，视觉尺寸不动、pan 不动（容器坐标系）。
+    // fromStream = 动图帧流帧：帧流活着时占位 img 的 onload 不喂尺寸（320 缩略图会抢 natural）
+    onImageLoad(w: number, h: number, fromStream = false): void {
+      if (this.kind === "anim" && animStream && !fromStream) return;
       if (this.naturalW === w && this.naturalH === h) return;
       if (this.naturalW > 0 && this.naturalH > 0) {
         this.zoom = this.zoom * (this.naturalW / w);
@@ -334,8 +407,16 @@ export const usePreviewStore = defineStore("preview", {
     toggleFlip(): void {
       this.flipH = !this.flipH;
     },
-    // —— 帧播放（序列帧/动图统一，5.2：按当前帧时长/rate 驱动）——
+    // —— 帧播放（序列帧 rAF 引擎；动图 = 帧流会话命令，5.2 交互语义不变）——
     setFrame(i: number): void {
+      if (this.kind === "anim" && animStream) {
+        const n = Math.max(1, this.animTotal);
+        const t = Math.min(n - 1, Math.max(0, i));
+        this.frame = t; // 乐观更新帧号；目标帧到达前忽略在途旧帧
+        seekTarget = t;
+        animStream.seek(t);
+        return;
+      }
       if (!this.seq || this.seq.frames.length === 0) return;
       this.frame = Math.min(this.seq.frames.length - 1, Math.max(0, i));
       const f = this.seq.frames[this.frame];
@@ -343,13 +424,23 @@ export const usePreviewStore = defineStore("preview", {
       this.preloadAround();
     },
     stepFrame(delta: number): void {
+      if (this.kind === "anim" && animStream) {
+        if (this.playing) this.pause(); // 逐帧步进即暂停（2026-07-26 用户定）；步进到头停（clamp）
+        this.setFrame(this.frame + delta);
+        return;
+      }
       if (!this.seq) return;
       const n = this.seq.frames.length;
-      // 逐帧步进即暂停（2026-07-26 用户：不该多一道手动暂停）；步进到头停（播放中才循环）
       if (this.playing) this.pause();
       this.setFrame(Math.min(n - 1, Math.max(0, this.frame + delta)));
     },
     play(): void {
+      if (this.kind === "anim") {
+        if (!animStream || this.playing) return;
+        this.playing = true;
+        animStream.setPlaying(true);
+        return;
+      }
       if (!this.seq || this.seq.frames.length < 2 || this.playing) return;
       this.playing = true;
       lastT = performance.now();
@@ -378,6 +469,11 @@ export const usePreviewStore = defineStore("preview", {
       rafId = requestAnimationFrame(tick);
     },
     pause(): void {
+      if (this.kind === "anim") {
+        this.playing = false;
+        animStream?.setPlaying(false);
+        return;
+      }
       this.playing = false;
       this.stopEngine();
     },
@@ -403,6 +499,7 @@ export const usePreviewStore = defineStore("preview", {
     },
     setRate(r: number): void {
       this.rate = r;
+      if (this.kind === "anim") animStream?.setRate(r);
     },
     // 当前帧设为预览图（序列帧/动图通用，5.2）：后端重建缩略图 + 记封面帧，前端即时换卡片图
     async setAsThumb(): Promise<void> {
