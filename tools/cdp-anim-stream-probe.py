@@ -1,7 +1,8 @@
 # CDP 实测：阶段四动图卡帧流播放（2026-08-20）
-# 桩 40 张动图卡 + autoPlayGif 开；start_anim_stream 桩返回假会话（python WS server 推 320p 彩帧）：
-# ① 可见动图卡 canvas 出帧（320×180）；② thumb img 不换源（恒缩略图，旧 img 播放路径已拆）；
-# ③ 滚出视口停会话（stop_anim_stream 被调）+ 新可见卡出帧；④ 在播 canvas 数 ≤ 50（闸口径不变）。
+# 桩 40 张动图卡 + autoPlayGif 开；start_anim_stream 桩返回假会话（python WS server 推 160×90 彩帧）：
+# ① 可见动图卡 canvas 出帧（160×90）；② thumb img 不换源（恒缩略图，旧 img 播放路径已拆）；
+# ③ 滚出视口停会话（stop_anim_stream 被调）+ 新可见卡出帧；④ 在播 canvas 数 ≤ 50（闸口径不变）；
+# ⑤ 卡片尺寸变化 → set_anim_stream_size 热更新（2026-08-20 尺寸跟随：ResizeObserver → 防抖 → invoke）。
 # 前端链路全真（AnimStreamSession / AnimCanvasLayer / 闸门），帧源由 python WS 桩供给。
 import asyncio
 import json
@@ -19,7 +20,7 @@ WS_PORT = 9363
 URL = "http://localhost:5373"
 
 STUB = r"""
-window.__starts = 0; window.__stops = 0; window.__sid = 0;
+window.__starts = 0; window.__stops = 0; window.__sid = 0; window.__resizes = 0;
 window.__TAURI_INTERNALS__ = {
   metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
   invoke: (cmd, args) => {
@@ -46,6 +47,10 @@ window.__TAURI_INTERNALS__ = {
     }
     if (cmd === "stop_anim_stream") {
       window.__stops++;
+      return Promise.resolve(null);
+    }
+    if (cmd === "set_anim_stream_size") {
+      window.__resizes++;
       return Promise.resolve(null);
     }
     return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
@@ -170,10 +175,28 @@ async def main():
             await asyncio.sleep(2.5)
             fails += await check("滚底:", expect_stops=True)
 
+            # ⑤ 尺寸跟随：改可见在播卡 .thumb 高度 → ResizeObserver → 防抖 150ms → set_anim_stream_size
+            resized = await ev("""(() => {
+              const vis = [...document.querySelectorAll('.asset-card')].filter((c) => {
+                const r = c.getBoundingClientRect();
+                return r.bottom > 0 && r.top < innerHeight && c.querySelector('canvas.anim-canvas');
+              });
+              for (const c of vis) {
+                const t = c.querySelector('.thumb');
+                t.style.height = (t.getBoundingClientRect().height / 2) + 'px';
+              }
+              return vis.length;
+            })()""")
+            await asyncio.sleep(1.5)  # 布局重排 + ResizeObserver + 150ms 防抖 + invoke
+            resizes = await ev("window.__resizes")
+            print(f"尺寸跟随: 改动卡 {resized} 张, set_anim_stream_size 调用 {resizes} 次")
+            if resized > 0 and resizes == 0:
+                fails.append("卡片尺寸变化未触发 set_anim_stream_size（尺寸跟随链路断）")
+
             if fails:
                 print("FAIL:", "; ".join(dict.fromkeys(fails)))
                 return 3
-            print("PASS: 帧流播放全链路成立（canvas 出帧 / img 不换源 / 滚出停会话 / ≤50 闸）")
+            print("PASS: 帧流播放全链路成立（canvas 出帧 / img 不换源 / 滚出停会话 / ≤50 闸 / 尺寸跟随热更新）")
             return 0
     finally:
         proc.terminate()

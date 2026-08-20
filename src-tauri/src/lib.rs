@@ -242,6 +242,7 @@ pub fn run() {
       commands::preview::list_sequence_frames,
       commands::anim_stream::start_anim_stream,
       commands::anim_stream::stop_anim_stream,
+      commands::anim_stream::set_anim_stream_size,
       commands::thumb_frame::set_thumb_frame,
       commands::thumb_frame::set_video_thumb,
       commands::media::get_media_source,

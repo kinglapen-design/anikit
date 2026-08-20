@@ -3,6 +3,7 @@
 //! 链路口径与 spike/decode-proto 一致（已实测：GIF 50 路 3110fps / H264 50 路 7740fps @320p）。
 
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use ffmpeg_next as ffmpeg;
 
@@ -16,9 +17,11 @@ pub struct DecodedFrame {
 
 /// 单趟解码：逐帧回调，返回 false 中止；解码/打开失败返回 Err。
 /// 多线程并发安全（各线程独立 demuxer/decoder；spike bench 50 线程实证）。
+/// short_edge = 目标短边（真短边口径，thumbnail::shrink_to_edge 同语义；不足不放大）——
+/// 每帧读取，调用方可运行期改值热更新输出尺寸（帧流卡片尺寸跟随，2026-08-20 用户定）。
 pub fn decode_once(
   path: &Path,
-  short_edge: u32,
+  short_edge: &AtomicU32,
   on_frame: &mut impl FnMut(DecodedFrame) -> bool,
 ) -> Result<(), String> {
   ffmpeg::init().map_err(|e| format!("ffmpeg init 失败: {e:?}"))?;
@@ -78,29 +81,34 @@ fn drain(
   dims: &mut (u32, u32),
   frame: &mut ffmpeg::frame::Video,
   rgb: &mut ffmpeg::frame::Video,
-  short_edge: u32,
+  short_edge: &AtomicU32,
   tb: (f64, f64),
   on_frame: &mut impl FnMut(DecodedFrame) -> bool,
 ) -> bool {
   while dec.receive_frame(frame).is_ok() {
-    if scaler.is_none() {
-      let (mut w, mut h) = (frame.width(), frame.height());
-      if w >= h {
-        h = (h * short_edge / w) & !1;
-        w = short_edge;
-      } else {
-        w = (w * short_edge / h) & !1;
-        h = short_edge;
-      }
-      *dims = (w.max(2), h.max(2));
+    // 目标短边每帧读取（热更新）；真短边等比 + 不足不放大（shrink_to_edge 同口径）
+    let edge = short_edge.load(Ordering::Relaxed);
+    let (sw, sh) = (frame.width(), frame.height());
+    let nd = if sw.min(sh) <= edge {
+      (sw, sh)
+    } else if sw <= sh {
+      (edge, (sh as u64 * edge as u64 / sw as u64) as u32)
+    } else {
+      ((sw as u64 * edge as u64 / sh as u64) as u32, edge)
+    };
+    let nd = (nd.0.max(2), nd.1.max(2));
+    if *dims != nd || scaler.is_none() {
+      *dims = nd;
+      // 输出帧一并重建：旧 buffer 尺寸与新 scaler 目标不符会让 run 报错丢帧
+      *rgb = ffmpeg::frame::Video::empty();
       *scaler = Some(
         ffmpeg::software::scaling::Context::get(
           frame.format(),
-          frame.width(),
-          frame.height(),
+          sw,
+          sh,
           ffmpeg::format::Pixel::RGBA,
-          dims.0,
-          dims.1,
+          nd.0,
+          nd.1,
           ffmpeg::software::scaling::Flags::BILINEAR,
         )
         .expect("创建 scaler 失败"),
@@ -150,23 +158,63 @@ mod tests {
     drop(out);
 
     let mut frames = Vec::new();
-    decode_once(&path, 32, &mut |f| {
+    decode_once(&path, &AtomicU32::new(32), &mut |f| {
       frames.push((f.w, f.h, f.delay_ms, f.rgba.len()));
       true
     })
     .unwrap();
     assert_eq!(frames.len(), 2);
-    assert_eq!(frames[0].0, 32); // 短边缩放：64x48 → 32x24
-    assert_eq!(frames[0].1, 24);
+    assert_eq!(frames[0].0, 42); // 真短边缩放：64x48 → 42x32（64*32/48=42）
+    assert_eq!(frames[0].1, 32);
     assert_eq!(frames[0].2, 100); // delay 100ms
-    assert_eq!(frames[0].3, 32 * 24 * 4);
+    assert_eq!(frames[0].3, 42 * 32 * 4);
     // 中止：第一帧返回 false 应只收 1 帧
     let mut n = 0;
-    decode_once(&path, 32, &mut |_f| {
+    decode_once(&path, &AtomicU32::new(32), &mut |_f| {
       n += 1;
       false
     })
     .unwrap();
     assert_eq!(n, 1);
+  }
+
+  /// 不足不放大：源 64x48 目标 320 → 原尺寸输出；运行期改目标短边 → 下一帧即按新尺寸
+  #[test]
+  fn no_upscale_and_live_resize() {
+    use image::codecs::gif::{GifEncoder, Repeat};
+    use image::{Frame as GifFrame, ImageBuffer, Rgba, RgbaImage};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.gif");
+    let mut out = std::fs::File::create(&path).unwrap();
+    let mut enc = GifEncoder::new(&mut out);
+    enc.set_repeat(Repeat::Infinite).unwrap();
+    for i in 0..2u8 {
+      let img: RgbaImage =
+        ImageBuffer::from_fn(64, 48, |x, _y| Rgba([i * 100, x as u8, 0, 255]));
+      let f = GifFrame::from_parts(img, 0, 0, image::Delay::from_numer_denom_ms(100, 1));
+      enc.encode_frame(f).unwrap();
+    }
+    drop(enc);
+    drop(out);
+
+    // 不足不放大
+    let mut dims = Vec::new();
+    decode_once(&path, &AtomicU32::new(320), &mut |f| {
+      dims.push((f.w, f.h));
+      true
+    })
+    .unwrap();
+    assert_eq!(dims, vec![(64, 48), (64, 48)]);
+
+    // 热更新：首帧回调改 320 → 16，第二帧按新尺寸（64x48 → 21x16）
+    let edge = AtomicU32::new(320);
+    let mut dims = Vec::new();
+    decode_once(&path, &edge, &mut |f| {
+      dims.push((f.w, f.h));
+      edge.store(16, Ordering::Relaxed);
+      true
+    })
+    .unwrap();
+    assert_eq!(dims, vec![(64, 48), (21, 16)]);
   }
 }

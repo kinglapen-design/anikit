@@ -3,7 +3,9 @@
 //! WS server（127.0.0.1 动态端口）按会话推二进制帧 `[w u32le][h u32le][seq u64le][rgba]`。
 //!
 //! 路由：gif → adapters/decoder（ffmpeg-next）；webp → services/anim（image-webp 纯 Rust——
-//! lgpl 构建无 libwebp decoder，踩坑 039）。缩放 = THUMB_SHORT_EDGE 短边等比不足不放大（双桥同口径）。
+//! lgpl 构建无 libwebp decoder，踩坑 039）。缩放 = 真短边等比不足不放大（thumbnail::shrink_to_edge
+//! 同口径）；目标短边 = 卡片显示尺寸（2026-08-20 用户定：缩小省资源、放大跟清晰），会话级 AtomicU32
+//! 热更新（set_size 不重启解码、不回第一帧）。
 //! 节奏：生产者按源帧 delay 睡眠（Windows 15.6ms 粒度坑 = 踩坑 040——动图 delay 普遍 ≥40ms 影响小；
 //! 25.6/30fps 实测观感已流畅，后续要精确节奏可换"消费端 rAF"模型）。
 //!
@@ -13,7 +15,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
@@ -25,6 +27,15 @@ use crate::services::{anim, thumbnail};
 
 /// 会话上限（前端 anim 池 50 之上留余量，防泄漏打爆 CPU）
 const MAX_SESSIONS: usize = 64;
+
+/// 目标短边 clamp 范围：下限防 0/异常尺寸，上限对齐卡片最大显示尺寸余量
+/// （卡片缩放到最大档列宽也不过数百 px；预览对接走更高档时另行放开）
+const MIN_EDGE: u32 = 16;
+const MAX_EDGE: u32 = 1024;
+
+fn clamp_edge(edge: u32) -> u32 {
+  edge.clamp(MIN_EDGE, MAX_EDGE)
+}
 
 /// 帧二进制头长度（w u32 + h u32 + seq u64）
 pub const FRAME_HEADER: usize = 16;
@@ -46,14 +57,21 @@ struct Latest {
 
 struct Session {
   stop: AtomicBool,
+  /// 目标短边（出帧尺寸热更新：解码循环每帧读取，卡片 ResizeObserver 驱动）
+  target: AtomicU32,
   slot: Mutex<Latest>,
   tx: tokio::sync::watch::Sender<u64>,
 }
 
 impl Session {
-  fn new() -> Arc<Self> {
+  fn new(short_edge: u32) -> Arc<Self> {
     let (tx, _rx) = tokio::sync::watch::channel(0u64);
-    Arc::new(Session { stop: AtomicBool::new(false), slot: Mutex::new(Latest::default()), tx })
+    Arc::new(Session {
+      stop: AtomicBool::new(false),
+      target: AtomicU32::new(clamp_edge(short_edge)),
+      slot: Mutex::new(Latest::default()),
+      tx,
+    })
   }
 }
 
@@ -160,8 +178,9 @@ fn frame_bytes(f: &Latest) -> Vec<u8> {
 }
 
 /// 开启动图帧流会话：读 metadata 判动图 → 路由解码桥 → 起会话线程。
+/// short_edge = 目标短边（卡片显示尺寸，clamp [MIN_EDGE, MAX_EDGE]；不足不放大）。
 /// 非动图 / metadata 缺失 / 超上限返回 Err（前端回退静态缩略图）。
-pub fn start(assets_dir: &Path, asset_id: &str) -> Result<StreamStart, String> {
+pub fn start(assets_dir: &Path, asset_id: &str, short_edge: u32) -> Result<StreamStart, String> {
   let meta: AssetMeta = read_json(&paths::info_dir(assets_dir, asset_id).join("metadata.json"))
     .map_err(|e| format!("metadata 读取失败: {e}"))?;
   if !anim::is_anim(&meta) {
@@ -178,7 +197,7 @@ pub fn start(assets_dir: &Path, asset_id: &str) -> Result<StreamStart, String> {
   if !origin.is_file() {
     return Err("origin 文件不存在".to_string());
   }
-  let sess = Session::new();
+  let sess = Session::new(short_edge);
   let id = gs.next.fetch_add(1, Ordering::Relaxed);
   let runner = Arc::clone(&sess);
   let ext = meta.ext.to_lowercase();
@@ -188,6 +207,14 @@ pub fn start(assets_dir: &Path, asset_id: &str) -> Result<StreamStart, String> {
     .map_err(|e| format!("会话线程启动失败: {e}"))?;
   gs.sessions.lock().unwrap().insert(id, sess);
   Ok(StreamStart { session: id, port: gs.port.load(Ordering::Relaxed) as u16 })
+}
+
+/// 热更新目标短边（卡片尺寸跟随）：只改 atomic，解码循环下一帧按新尺寸出帧——
+/// 不重启解码、不回第一帧（对齐 2026-08-20 用户"随实际大小跟随"要求）。会话不存在静默忽略。
+pub fn set_size(session: u64, short_edge: u32) {
+  if let Some(sess) = global().sessions.lock().unwrap().get(&session) {
+    sess.target.store(clamp_edge(short_edge), Ordering::Relaxed);
+  }
 }
 
 /// 停止会话（幂等）：标记停止 + 移出会话表；线程下一轮循环退出
@@ -221,8 +248,9 @@ fn run_session(sess: Arc<Session>, origin: PathBuf, ext: String) {
 }
 
 /// gif 桥（ffmpeg）：单趟解码循环播放；Ok(true)= 自然到底继续循环，false = 停止/失败
+/// 目标短边由 decode_once 每帧读 sess.target（热更新）
 fn run_ffmpeg_once(sess: &Arc<Session>, origin: &Path) -> bool {
-  let r = crate::adapters::decoder::decode_once(origin, thumbnail::THUMB_SHORT_EDGE, &mut |f| {
+  let r = crate::adapters::decoder::decode_once(origin, &sess.target, &mut |f| {
     if sess.stop.load(Ordering::Relaxed) {
       return false;
     }
@@ -235,13 +263,13 @@ fn run_ffmpeg_once(sess: &Arc<Session>, origin: &Path) -> bool {
   matches!(r, Ok(())) && !sess.stop.load(Ordering::Relaxed)
 }
 
-/// webp 桥（image-webp 纯 Rust）：单趟流式逐帧 + 缩放，循环播放
+/// webp 桥（image-webp 纯 Rust）：单趟流式逐帧 + 缩放（每帧读 sess.target 热更新），循环播放
 fn run_webp_once(sess: &Arc<Session>, origin: &Path) -> bool {
   let r = anim::decode_frames(origin, |_i, img, delay| {
     if sess.stop.load(Ordering::Relaxed) {
       return false;
     }
-    let (w, h, rgba) = scale_to_thumb(img);
+    let (w, h, rgba) = scale_to_thumb(img, sess.target.load(Ordering::Relaxed));
     publish(sess, w, h, rgba);
     if delay > 0 {
       std::thread::sleep(std::time::Duration::from_millis(delay as u64));
@@ -251,19 +279,11 @@ fn run_webp_once(sess: &Arc<Session>, origin: &Path) -> bool {
   r.is_some() && !sess.stop.load(Ordering::Relaxed)
 }
 
-/// 短边等比缩到 THUMB_SHORT_EDGE、不足不放大（thumbnail::shrink 同口径），输出紧凑 RGBA
-fn scale_to_thumb(img: image::RgbaImage) -> (u32, u32, Vec<u8>) {
-  let (w, h) = img.dimensions();
-  let edge = thumbnail::THUMB_SHORT_EDGE.min(w.min(h));
-  if edge == 0 {
-    return (w, h, img.into_raw());
-  }
-  let (nw, nh) = if w >= h { (edge, (h * edge / w).max(1)) } else { ((w * edge / h).max(1), edge) };
-  if nw == w && nh == h {
-    return (w, h, img.into_raw());
-  }
-  let small = image::imageops::resize(&img, nw, nh, image::imageops::FilterType::Triangle);
-  (nw, nh, small.into_raw())
+/// 真短边等比不足不放大（复用 thumbnail::shrink_to_edge，与缩略图 / gif 桥口径严格一致），输出紧凑 RGBA
+fn scale_to_thumb(img: image::RgbaImage, short_edge: u32) -> (u32, u32, Vec<u8>) {
+  let out = thumbnail::shrink_to_edge(image::DynamicImage::ImageRgba8(img), short_edge).to_rgba8();
+  let (w, h) = out.dimensions();
+  (w, h, out.into_raw())
 }
 
 fn publish(sess: &Arc<Session>, w: u32, h: u32, rgba: Vec<u8>) {
@@ -284,6 +304,9 @@ mod tests {
   use crate::core::library;
   use crate::services::import::{self, PendingFile, Source};
 
+  /// 会话类测试共享全局 sessions 表（stop_all / is_empty 断言会互踩）——串行执行
+  static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
   struct Harness {
     _dir: tempfile::TempDir,
     assets_dir: PathBuf,
@@ -297,7 +320,7 @@ mod tests {
     Harness { _dir: dir, assets_dir }
   }
 
-  /// 造 3 帧 gif 入库（红/绿/蓝各 50ms）
+  /// 造 3 帧 gif 入库（红/绿/蓝各 50ms，128×96——set_size 用例需要缩放空间）
   fn add_gif(h: &Harness, asset_id: &str) {
     let colors = [[220, 40, 40, 255], [40, 200, 40, 255], [40, 40, 220, 255]];
     let src = h._dir.path().join("动.gif");
@@ -308,7 +331,7 @@ mod tests {
       .iter()
       .map(|c| {
         image::Frame::from_parts(
-          image::RgbaImage::from_pixel(64, 48, image::Rgba(*c)),
+          image::RgbaImage::from_pixel(128, 96, image::Rgba(*c)),
           0,
           0,
           image::Delay::from_numer_denom_ms(50, 1),
@@ -328,10 +351,15 @@ mod tests {
   }
 
   fn wait_frame(id: u64, what: &str) {
+    wait_seq(id, 1, what);
+  }
+
+  /// 等会话帧序号 ≥ at_least（set_size 后等新尺寸帧：传当前 seq+1）
+  fn wait_seq(id: u64, at_least: u64, what: &str) {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
       let seq = global().sessions.lock().unwrap().get(&id).map(|s| s.slot.lock().unwrap().seq);
-      if seq.unwrap_or(0) > 0 {
+      if seq.unwrap_or(0) >= at_least {
         return;
       }
       assert!(Instant::now() < deadline, "等待超时：{what}");
@@ -339,19 +367,22 @@ mod tests {
     }
   }
 
-  /// gif 会话：出帧（短边缩放 + 逐帧 delay）→ stop 后帧序号不再涨
+  fn cur_frame(id: u64) -> Option<Latest> {
+    global().sessions.lock().unwrap().get(&id).map(|s| s.slot.lock().unwrap().clone())
+  }
+
+  /// gif 会话：出帧（128×96 源目标 320 不足不放大出原尺寸）→ stop 后会话移出表
   #[test]
   fn gif_session_streams_and_stops() {
+    let _g = TEST_LOCK.lock().unwrap();
     let h = make_lib();
     add_gif(&h, "AN-S1");
-    let st = start(&h.assets_dir, "AN-S1").unwrap();
+    let st = start(&h.assets_dir, "AN-S1", 320).unwrap();
     wait_frame(st.session, "gif 会话出帧");
     {
-      let sessions = global().sessions.lock().unwrap();
-      let f = sessions.get(&st.session).unwrap().slot.lock().unwrap().clone();
-      assert!(f.w > 0 && f.h > 0);
+      let f = cur_frame(st.session).unwrap();
+      assert_eq!((f.w, f.h), (128, 96));
       assert!(f.rgba.len() == (f.w * f.h * 4) as usize);
-      assert!(f.w <= thumbnail::THUMB_SHORT_EDGE || f.h <= thumbnail::THUMB_SHORT_EDGE);
     }
     stop(st.session);
     let s1 = {
@@ -361,12 +392,36 @@ mod tests {
     assert!(s1.is_none(), "stop 后会话应移出表");
   }
 
+  /// set_size 热更新：128×96 源 320 档出 128×96 → 改 48 → 下一帧起 64×48（真短边等比）
+  #[test]
+  fn set_size_resizes_live() {
+    let _g = TEST_LOCK.lock().unwrap();
+    let h = make_lib();
+    add_gif(&h, "AN-SZ");
+    let st = start(&h.assets_dir, "AN-SZ", 320).unwrap();
+    wait_frame(st.session, "出帧");
+    let seq = cur_frame(st.session).unwrap().seq;
+    set_size(st.session, 48);
+    wait_seq(st.session, seq + 1, "新尺寸帧");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+      let f = cur_frame(st.session).unwrap();
+      if (f.w, f.h) == (64, 48) {
+        break;
+      }
+      assert!(Instant::now() < deadline, "等待超时：帧尺寸未变为 64×48（当前 {}x{}）", f.w, f.h);
+      std::thread::sleep(Duration::from_millis(5));
+    }
+    stop(st.session);
+  }
+
   /// webp 会话：image-webp 桥出帧 → stop
   #[test]
   fn webp_session_streams_and_stops() {
+    let _g = TEST_LOCK.lock().unwrap();
     let h = make_lib();
     add_webp(&h, "AN-S2");
-    let st = start(&h.assets_dir, "AN-S2").unwrap();
+    let st = start(&h.assets_dir, "AN-S2", 320).unwrap();
     wait_frame(st.session, "webp 会话出帧");
     stop(st.session);
   }
@@ -374,22 +429,24 @@ mod tests {
   /// 非动图 / 不存在资产：start 返回 Err 不起会话
   #[test]
   fn start_rejects_non_anim() {
+    let _g = TEST_LOCK.lock().unwrap();
     let h = make_lib();
     let src = h._dir.path().join("静.png");
     image::RgbaImage::from_pixel(64, 48, image::Rgba([1, 2, 3, 255])).save(&src).unwrap();
     let pf = PendingFile { path: src, chain: Vec::new() };
     import::build_asset_with_id(&h.assets_dir, &pf, "sha256:t", "AN-PNG", Source::Copy, None).unwrap();
-    assert!(start(&h.assets_dir, "AN-PNG").is_err());
-    assert!(start(&h.assets_dir, "AN-不存在").is_err());
+    assert!(start(&h.assets_dir, "AN-PNG", 320).is_err());
+    assert!(start(&h.assets_dir, "AN-不存在", 320).is_err());
     assert!(global().sessions.lock().unwrap().is_empty());
   }
 
   /// stop_all 清空（库切换语义）
   #[test]
   fn stop_all_drains_sessions() {
+    let _g = TEST_LOCK.lock().unwrap();
     let h = make_lib();
     add_gif(&h, "AN-S3");
-    let st = start(&h.assets_dir, "AN-S3").unwrap();
+    let st = start(&h.assets_dir, "AN-S3", 320).unwrap();
     wait_frame(st.session, "出帧");
     stop_all();
     assert!(global().sessions.lock().unwrap().is_empty());

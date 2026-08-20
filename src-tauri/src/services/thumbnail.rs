@@ -213,7 +213,9 @@ pub(crate) fn shrink_to_thumb(img: DynamicImage) -> DynamicImage {
 }
 
 /// 短边缩到 short_edge、长边等比（整数除法 floor）；原图短边不足不放大
-fn shrink_to_edge(img: DynamicImage, short_edge: u32) -> DynamicImage {
+/// pub(crate)：帧流 webp 桥（frame_stream::scale_to_thumb）复用同一缩放规格——
+/// 缩略图 / 动图卡帧流出帧尺寸口径严格一致（2026-08-20 卡片尺寸跟随改造统一）
+pub(crate) fn shrink_to_edge(img: DynamicImage, short_edge: u32) -> DynamicImage {
   let (w, h) = (img.width(), img.height());
   if w.min(h) <= short_edge {
     return img;

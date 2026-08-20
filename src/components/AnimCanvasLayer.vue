@@ -1,9 +1,11 @@
 <script setup lang="ts">
 // 动图卡片播放层（阶段四·自研解码器）：WS 帧流渲染 canvas——替代 2.3 小动画缓存
-// （anim_preview 已退役）。后端解码线程按源帧 delay 节奏推 320p RGBA，putImageData 直渲；
+// （anim_preview 已退役）。后端解码线程按源帧 delay 节奏推 RGBA，putImageData 直渲；
 // 会话失败（非动图 / 上限 / 解码失败）不出帧，下层静态封面自然兜底。
+// 出帧尺寸跟随卡片显示短边（2026-08-20 用户定：缩小省资源、放大跟清晰）——
+// 开流时按实际尺寸起，ResizeObserver 监听 .thumb 尺寸变化（缩放布局）防抖 150ms setSize 热更新。
 // 骨架（300ms 进入延迟 / 主窗口隐藏暂停 / disposed 护栏）收编 useHoverPlayer。
-import { ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useHoverPlayer } from "../lib/useHoverPlayer";
 import { AnimStreamSession, type AnimFrame } from "../lib/animStream";
 import { useUiStore } from "../stores/ui";
@@ -12,9 +14,17 @@ import type { PlacementView } from "../stores/content";
 const props = defineProps<{ asset: PlacementView }>();
 const ui = useUiStore();
 
+// 目标短边口径与后端一致（clamp [16,1024]）；布局未就绪兜底 320（缩略图档）
+const MIN_EDGE = 16;
+const MAX_EDGE = 1024;
+const FALLBACK_EDGE = 320;
+const RESIZE_DEBOUNCE = 150;
+
 const cv = ref<HTMLCanvasElement>();
 const hasFrame = ref(false);
 let session: AnimStreamSession | null = null;
+let resizeObs: ResizeObserver | null = null;
+let resizeTimer = 0;
 
 const { isDisposed } = useHoverPlayer({
   load: start,
@@ -22,8 +32,15 @@ const { isDisposed } = useHoverPlayer({
   cleanup: stopSession,
 });
 
+// 卡片显示短边：canvas 未出帧时 display:none 读不到尺寸，读父元素 .thumb（inset-0 同尺寸）
+function shortEdge(): number {
+  const r = cv.value?.parentElement?.getBoundingClientRect();
+  const e = r ? Math.round(Math.min(r.width, r.height)) : 0;
+  return e > 0 ? Math.min(MAX_EDGE, Math.max(MIN_EDGE, e)) : FALLBACK_EDGE;
+}
+
 async function start(): Promise<void> {
-  const s = await AnimStreamSession.start(props.asset.assetId, draw);
+  const s = await AnimStreamSession.start(props.asset.assetId, shortEdge(), draw);
   if (isDisposed()) {
     s?.stop();
     return;
@@ -46,6 +63,21 @@ function stopSession(): void {
   session?.stop();
   session = null;
 }
+
+onMounted(() => {
+  const box = cv.value?.parentElement;
+  if (!box) return;
+  resizeObs = new ResizeObserver(() => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => session?.setSize(shortEdge()), RESIZE_DEBOUNCE);
+  });
+  resizeObs.observe(box);
+});
+
+onBeforeUnmount(() => {
+  resizeObs?.disconnect();
+  window.clearTimeout(resizeTimer);
+});
 </script>
 
 <template>

@@ -1,5 +1,6 @@
 // 动图帧流客户端（阶段四·自研解码器）：start_anim_stream 拿会话 → WS 收帧 → 组件渲染。
-// 帧格式 = [w u32le][h u32le][seq u64le][rgba...]（services/frame_stream 推送，320p RGBA）。
+// 帧格式 = [w u32le][h u32le][seq u64le][rgba...]（services/frame_stream 推送，RGBA）。
+// 出帧尺寸 = 卡片显示短边（真短边等比、不足不放大）；setSize 热更新（不重启会话、不回第一帧）。
 // 一卡一会话；失败（非动图 / 上限 / 解码失败 / WS 不通）一律 null——调用方回退静态封面。
 import { invoke } from "@tauri-apps/api/core";
 
@@ -19,11 +20,15 @@ export class AnimStreamSession {
     private readonly onFrame: (f: AnimFrame) => void,
   ) {}
 
-  /** 启动会话并连 WS；失败返回 null（回退静态封面，不报错打扰） */
-  static async start(assetId: string, onFrame: (f: AnimFrame) => void): Promise<AnimStreamSession | null> {
+  /** 启动会话并连 WS；shortEdge = 卡片显示短边（后端 clamp）。失败返回 null（回退静态封面，不报错打扰） */
+  static async start(
+    assetId: string,
+    shortEdge: number,
+    onFrame: (f: AnimFrame) => void,
+  ): Promise<AnimStreamSession | null> {
     let info: { session: number; port: number };
     try {
-      info = await invoke<{ session: number; port: number }>("start_anim_stream", { assetId });
+      info = await invoke<{ session: number; port: number }>("start_anim_stream", { assetId, shortEdge });
     } catch {
       return null;
     }
@@ -31,6 +36,12 @@ export class AnimStreamSession {
     const s = new AnimStreamSession(info.session, onFrame);
     s.connect(info.port);
     return s;
+  }
+
+  /** 热更新出帧尺寸（卡片缩放跟随）：幂等，失败静默（会话可能已消亡） */
+  setSize(shortEdge: number): void {
+    if (this.stopped) return;
+    void invoke("set_anim_stream_size", { session: this.session, shortEdge }).catch(() => {});
   }
 
   private connect(port: number): void {
