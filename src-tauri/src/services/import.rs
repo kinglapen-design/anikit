@@ -450,9 +450,12 @@ pub(crate) fn create_folder(lib: &mut Library, parent: &str, name: &str) -> Stri
   id
 }
 
-/// 加 Placement（**前插**，2026-07-25 用户定：新导入的素材排在文件夹最前，不用下拉滚轮找）：
+/// 加 Placement（**前插**，2026-07-25 用户定：新导入的素材排在最前，不用下拉滚轮找）：
 /// 同文件夹显示名唯一化（冲突追加 -序号）；front_anchor 记录各文件夹本批已前插数——
-/// 批内按到达顺序从段首依次后移（保序），新批次锚点从 0 起排在旧批次之前；
+/// 文件夹视图（placements_by_folder）按锚点段首前插、批内保序；
+/// 全部视图（folders.items）全局前插：插入位 = 本批已插总数（各文件夹锚点之和），
+/// 异文件夹混批也按到达序从头部依次后移（2026-08-20 复验修复：原按目标文件夹段首定位，
+/// 目标段不在头部时全部视图呈中间插入）；新批次锚点从 0 起排在旧批次之前；
 /// order 向负生长（仅作相对键、当前无消费者，7.1 排序落地时统一重排），索引同步
 pub(crate) fn add_placement(
   lib: &mut Library,
@@ -499,6 +502,9 @@ fn add_placement_impl(
   } else {
     name
   };
+  // items 全局前插（全部视图 = items 顺序）：插入位 = 本批此前已插总数（各文件夹锚点之和），
+  // 异文件夹混批也按到达序从头部依次后移；新批次锚点清零、整批排在旧批次之前
+  let pos: usize = front_anchor.values().sum();
   let batch = front_anchor.entry(folder_id.clone()).or_insert(0);
   let order = lib
     .index
@@ -508,14 +514,6 @@ fn add_placement_impl(
     .map(|f| f.order - 1)
     .unwrap_or(0);
   let placement = Placement { asset: asset_id, folder: folder_id.clone(), name: display, order, origin };
-  // items 前插：该文件夹段首 + 本批已插数（无同文件夹项时追加末尾）
-  let pos = lib
-    .folders
-    .items
-    .iter()
-    .position(|p| p.folder == folder_id)
-    .map(|i| i + *batch)
-    .unwrap_or(lib.folders.items.len());
   lib.folders.items.insert(pos, placement.clone());
   lib.index.placements_by_asset.entry(placement.asset.clone()).or_default().push(placement.clone());
   lib.index.placements_by_folder.entry(folder_id).or_default().insert(*batch, placement.clone());
@@ -582,6 +580,29 @@ mod tests {
     let names: Vec<&str> =
       lib.index.placements_by_folder["root"].iter().map(|p| p.name.as_str()).collect();
     assert_eq!(names, ["z.png", "a.png", "b.png", "c.png"], "新批次排最前");
+  }
+
+  #[test]
+  fn add_placement_all_view_front_regardless_of_segment_position() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut lib = library::create_test(dir.path());
+    // 批1 导入 FY，批2 导入 FX（全局前插把 FY 段挤到后面），批3 再导入 FY——
+    // 旧实现按"FY 段首"定位把 y2 插到全部视图中间；修后任何批次都排视图最前
+    add_placement(&mut lib, "Y1".into(), "FY".into(), "y1.png".into(), true, &mut HashMap::new());
+    let mut anchor = HashMap::new();
+    add_placement(&mut lib, "X1".into(), "FX".into(), "x1.png".into(), true, &mut anchor);
+    add_placement(&mut lib, "X2".into(), "FX".into(), "x2.png".into(), true, &mut anchor);
+    add_placement(&mut lib, "Y2".into(), "FY".into(), "y2.png".into(), true, &mut HashMap::new());
+    let items: Vec<&str> = lib.folders.items.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(items, ["y2.png", "x1.png", "x2.png", "y1.png"], "全部视图：新批次排视图最前");
+    let fy: Vec<&str> = lib.index.placements_by_folder["FY"].iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(fy, ["y2.png", "y1.png"], "文件夹视图：段内新批次在前（语义不变）");
+    // 异文件夹混批：同一锚点跨文件夹也按到达序从头部依次后移
+    let mut anchor3 = HashMap::new();
+    add_placement(&mut lib, "M1".into(), "FX".into(), "m1.png".into(), true, &mut anchor3);
+    add_placement(&mut lib, "M2".into(), "FY".into(), "m2.png".into(), true, &mut anchor3);
+    let items: Vec<&str> = lib.folders.items.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(&items[..2], ["m1.png", "m2.png"], "混批按到达序全局保序");
   }
 
   #[test]

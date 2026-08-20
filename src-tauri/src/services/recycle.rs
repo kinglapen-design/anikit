@@ -298,7 +298,7 @@ mod tests {
     let v = &list[0];
     assert_eq!(v.view.folder_id, RECYCLE_FOLDER_ID, "folderId 恒伪值");
     assert!(!v.view.origin, "origin 恒 false");
-    assert_eq!(v.view.name, "a.png", "name 取 placements[0].name");
+    assert_eq!(v.view.name, "a链接.png", "name 取 placements[0].name——快照按 items 正序收集，第一条 = 全部视图最靠前项（2026-08-20 定：回收站显示名不特殊对待，被删位置叫什么就显示什么）");
     assert_eq!(v.placement_count, 2, "删除前全部 Placement 计数");
     assert!(!v.deleted_at.is_empty());
   }
