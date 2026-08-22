@@ -111,7 +111,7 @@ function startRename(): void {
 }
 
 // 动图播放（5.3）：悬停或"自动播放动图"开关（序列帧同归此开关，2026-07-27 用户定）；
-// 阶段四起由 AnimCanvasLayer 帧流渲染（300ms 进入延迟收编 useHoverPlayer）
+// 阶段四起由 AnimCanvasLayer 帧流渲染（进入延迟分档收编 useHoverPlayer：悬停 300 / 自动播放 100）
 // 自动播放数量闸（2.3）：开关驱动的自动播放申请名额（满员排队 FIFO 唤醒），悬停播放直通——
 // 小卡片高密度时窗口内 200+ 卡片同时解码致全局卡顿（hover 目录树滞后）；
 // 动图 / 视频 / 序列帧三处自动播放共用本卡 gateRequested/autoGranted（一卡同时至多一种 kind）。
@@ -221,9 +221,9 @@ const meta = computed(() => {
         :asset="asset"
         :auto="!hoverActive"
       />
-      <AnimCanvasLayer v-else-if="animPlaying && kind === 'anim'" :asset="asset" />
+      <AnimCanvasLayer v-else-if="animPlaying && kind === 'anim'" :asset="asset" :auto="!hoverActive" />
       <HoverAudioLayer v-else-if="hoverActive && kind === 'audio'" :asset="asset" />
-      <HoverSequenceLayer v-else-if="animPlaying && kind === 'sequence'" :asset="asset" />
+      <HoverSequenceLayer v-else-if="animPlaying && kind === 'sequence'" :asset="asset" :auto="!hoverActive" />
       <span v-if="badgeColor && ui.showBadge" class="badge" :style="{ background: badgeColor }">{{ badge }}</span>
       <span v-if="asset.noteCount" class="note-badge">{{ asset.noteCount }}</span>
     </div>

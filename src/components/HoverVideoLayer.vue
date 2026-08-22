@@ -17,7 +17,7 @@ import AppIcon from "./AppIcon.vue";
 import { formatDuration } from "../lib/formatDuration";
 import { frameOfTime, totalFrames } from "../lib/formatFrame";
 import { getMediaSource } from "../lib/mediaOps";
-import { useHoverPlayer } from "../lib/useHoverPlayer";
+import { AUTOPLAY_ENTER_DELAY, HOVER_ENTER_DELAY, useHoverPlayer } from "../lib/useHoverPlayer";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
 
@@ -64,8 +64,10 @@ const posText = computed(() => {
   return formatDuration(currentTime.value);
 });
 
-// 悬停播放骨架（300ms 进入延迟 / 活跃实例注册 / disposed 护栏 / 卸载清理）收编 useHoverPlayer；
-// 本组件只管 media 元素、scrub 与范围循环
+// 悬停播放骨架（进入延迟 / 活跃实例注册 / disposed 护栏 / 卸载清理）收编 useHoverPlayer；
+// 本组件只管 media 元素、scrub 与范围循环。
+// 进入延迟按触发路径分档（2026-08-23）：自动播放（视口可见性驱动）100ms 提速滚回恢复；
+// 悬停（鼠标意图）300ms 防划过。挂载瞬间 props.auto 已定型（悬停接管只切 prop 不重建组件）。
 const { isDisposed } = useHoverPlayer({
   load: loadSource,
   pause: () => videoRef.value?.pause(),
@@ -81,6 +83,7 @@ const { isDisposed } = useHoverPlayer({
       v.load();
     }
   },
+  enterDelay: props.auto ? AUTOPLAY_ENTER_DELAY : HOVER_ENTER_DELAY,
 });
 
 async function loadSource(): Promise<void> {
