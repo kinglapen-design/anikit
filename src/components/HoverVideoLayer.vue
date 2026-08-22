@@ -69,6 +69,10 @@ const posText = computed(() => {
 const { isDisposed } = useHoverPlayer({
   load: loadSource,
   pause: () => videoRef.value?.pause(),
+  resume: () => {
+    const v = videoRef.value;
+    if (v && ready.value) void v.play().catch(() => {});
+  },
   cleanup: () => {
     const v = videoRef.value;
     if (v) {

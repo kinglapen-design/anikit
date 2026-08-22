@@ -33,6 +33,7 @@ let seeking = false;
 const { isDisposed } = useHoverPlayer({
   load: loadSource,
   pause: () => mediaRef.value?.pause(),
+  resume: () => void mediaRef.value?.play().catch(() => {}),
   cleanup: () => {
     const v = mediaRef.value;
     if (v) {

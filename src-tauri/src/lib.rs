@@ -93,6 +93,8 @@ pub fn run() {
             } else {
               let _ = w.show();
               let _ = w.set_focus();
+              // 重新显示即通知前端恢复悬停/自动播放（2026-08-23 用户实机报修：隐藏再开不恢复）
+              let _ = w.emit("main-window-shown", ());
             }
           }
         },
@@ -115,6 +117,7 @@ pub fn run() {
             if let Some(w) = app.get_webview_window("main") {
               let _ = w.show();
               let _ = w.set_focus();
+              let _ = w.emit("main-window-shown", ());
             }
           }
           "inbox-drive" => services::inbox::toggle_drive(app),
@@ -135,6 +138,7 @@ pub fn run() {
               if let Some(w) = tray.app_handle().get_webview_window("main") {
                 let _ = w.show();
                 let _ = w.set_focus();
+                let _ = w.emit("main-window-shown", ());
               }
             }
           }

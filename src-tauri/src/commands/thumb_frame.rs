@@ -27,6 +27,9 @@ pub struct SetThumbResult {
   /// metadata.modifiedAt（前端同步进 PlacementView 作缩略图 URL 版本戳——
   /// asset 协议同 URL 有启发式缓存，版本戳驱动 img 重新加载，2026-08-20 用户实机"静帧不热刷新"修复）
   pub modified_at: String,
+  /// 新封面帧标记（视频 = `t:{秒}`；前端同步进 PlacementView.thumbFrame——自动播放范围起点
+  /// 即时跟随，2026-08-23 用户实机"设封面后范围要重启 APP 才生效"修复）
+  pub thumb_frame: String,
 }
 
 /// 切换序列帧 / 动图封面帧：用指定帧重新生成缩略图 → metadata 落盘（thumbFrame / thumbnail /
@@ -141,13 +144,13 @@ fn persist(
   thumb: String,
   thumb_frame: String,
 ) -> Result<SetThumbResult, String> {
-  meta.thumb_frame = Some(thumb_frame);
+  meta.thumb_frame = Some(thumb_frame.clone());
   meta.thumbnail = Some(thumb.clone());
   meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
   let modified_at = meta.modified_at.clone();
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
   lib.index.assets.insert(asset_id.to_string(), meta);
-  Ok(SetThumbResult { thumb_path: info_dir.join(&thumb).to_string_lossy().into_owned(), modified_at })
+  Ok(SetThumbResult { thumb_path: info_dir.join(&thumb).to_string_lossy().into_owned(), modified_at, thumb_frame })
 }
 
 #[cfg(test)]

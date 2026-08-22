@@ -28,7 +28,10 @@ let resizeTimer = 0;
 
 const { isDisposed } = useHoverPlayer({
   load: start,
-  pause: stopSession, // 主窗口隐藏：停会话省 CPU（对齐"隐藏停止"语义，重悬停重建）
+  pause: stopSession, // 主窗口隐藏：停会话省 CPU（对齐"隐藏停止"语义）
+  resume: () => {
+    if (!session) void start(); // 重新显示：会话已被 pause 停掉则重建（组件仍在 = 悬停/自动播放态存活）
+  },
   cleanup: stopSession,
 });
 

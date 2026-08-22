@@ -172,7 +172,7 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       if (!p) return;
       const toast = useToastStore();
       try {
-        const r = await invoke<{ thumbPath: string; modifiedAt: string }>("set_video_thumb", {
+        const r = await invoke<{ thumbPath: string; modifiedAt: string; thumbFrame: string }>("set_video_thumb", {
           assetId: p.assetId,
           atSecs: this.currentTime,
         });
@@ -182,6 +182,8 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
         );
         if (target) {
           target.modifiedAt = r.modifiedAt; // URL 版本戳（AssetCard / ListRowCard thumbUrl ?v=）
+          // 封面帧标记同步（2026-08-23 修复）：自动播放范围起点 = thumbFrame，此前不更新要重启才生效
+          target.thumbFrame = r.thumbFrame;
           target.thumbPath = null;
           await nextTick();
           target.thumbPath = r.thumbPath;

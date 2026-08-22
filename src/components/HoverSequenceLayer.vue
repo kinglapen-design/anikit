@@ -17,11 +17,15 @@ const frames = ref<string[]>([]);
 const idx = ref(0);
 
 let interval: ReturnType<typeof setInterval> | undefined;
+let fps = 24; // loadFrames 载入后记录（resume 重启轮播复用）
 
 // 悬停播放骨架（300ms 进入延迟 / 活跃实例注册 / disposed 护栏 / 卸载清理）收编 useHoverPlayer
 const { isDisposed } = useHoverPlayer({
   load: loadFrames,
   pause: stop,
+  resume: () => {
+    if (frames.value.length > 0) start();
+  },
   cleanup: stop,
 });
 
@@ -33,13 +37,18 @@ async function loadFrames(): Promise<void> {
     // 从封面帧开始播（thumbFrame = 帧名），未设置从头
     const cover = r.thumbFrame ? r.frames.findIndex((f) => f.name === r.thumbFrame) : -1;
     idx.value = cover >= 0 ? cover : 0;
-    const fps = r.fps ?? 24;
-    interval = setInterval(() => {
-      idx.value = (idx.value + 1) % frames.value.length;
-    }, 1000 / fps);
+    fps = r.fps ?? 24;
+    start();
   } catch (e) {
     console.warn("序列帧清单加载失败：", e);
   }
+}
+
+function start(): void {
+  stop();
+  interval = setInterval(() => {
+    idx.value = (idx.value + 1) % frames.value.length;
+  }, 1000 / fps);
 }
 
 function stop(): void {
