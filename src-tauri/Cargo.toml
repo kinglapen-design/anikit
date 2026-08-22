@@ -32,7 +32,8 @@ tauri-plugin-dialog = "2"
 # + 4.2 格式图标保底（IShellItemImageFactory 取系统图标 → GetDIBits 转 RGBA；COM 初始化为 STA）
 # + 预览窗口"默认程序打开"（ShellExecuteW；SW_SHOW 在 Win32_UI_WindowsAndMessaging）
 # + 5.3 帧流节奏（timeBeginPeriod(1) 定时粒度提升，踩坑 040；Win32_Media）
-windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_Media"] }
+# + 5.6 字体安装（HKCU 注册表 Fonts 项读写，Win32_System_Registry）
+windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_Media", "Win32_System_Registry"] }
 # 数据层：时间戳（ID / importedAt / 备份命名）
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 # 数据层：ID 随机字符
@@ -67,6 +68,11 @@ ffmpeg-next = "8"
 tokio = { version = "1", features = ["net", "sync", "macros", "rt-multi-thread", "time"] }
 tokio-tungstenite = "0.26"
 futures-util = "0.3"
+# 5.6：字体元数据解析（name 表 / cmap / num_glyphs / ttc 枚举）+ 缩略图样张光栅化（fontdue 纯 Rust）
+ttf-parser = "0.25"
+fontdue = "0.9"
+# 5.6：文本资产读取 GBK 回退（Windows 中文用户 txt 常态 ANSI；读 UTF-8 优先、写恒 UTF-8）
+encoding_rs = "0.8"
 
 # 阶段四 spike 同款补丁：ffmpeg-next 8.1.0 的 EXIF frame side data 门控门槛
 #（avcodec minor>=28 才开 ffmpeg_8_1）滞后于实际合入（avutil 60.10 / avcodec 62.13 已含

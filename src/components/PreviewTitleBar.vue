@@ -3,6 +3,7 @@
 // 布局模式照 ContentTitleBar（space-between 等距、中栏图标 80%）。
 // image/sequence/anim/video：缩放组 + 适合窗口 + 原图大小（源文件 PSD·AI·SVG 去旋转翻转、加默认应用打开；
 // anim/video 无默认应用打开）；audio：仅返回、索引、插件、新窗口打开、上/下一个；
+// font/text（5.6）：同 other 组（含默认应用打开；字体安装/卸载在字体预览「其它」页内，不占标题栏）；
 // other：返回、索引、插件、默认应用打开、新窗口打开、上/下一个。
 // window 模式（新窗口打开）：返回 + 索引替换为文件名标题，加置顶与完整窗口控制按钮（PRD 4.3）。
 import { computed } from "vue";
@@ -60,7 +61,7 @@ async function togglePin(): Promise<void> {
         <IconButton name="original-size" title="原图大小" @click="preview.actual()" />
       </template>
       <IconButton
-        v-if="preview.isSource || preview.kind === 'other'"
+        v-if="preview.isSource || preview.kind === 'other' || preview.kind === 'font' || preview.kind === 'text'"
         name="open-default"
         title="默认应用打开"
         @click="preview.openDefaultApp()"

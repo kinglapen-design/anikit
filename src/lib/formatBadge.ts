@@ -39,6 +39,12 @@ const AUDIO_EXTS = new Set(["mp3", "wav", "wma"]);
 /** 视频格式（5.1/5.2，PRD 05-01 MVP 口径）：预览走 <video> 播放 */
 const VIDEO_EXTS = new Set(["mp4", "mov", "avi", "mpeg4", "m4v"]);
 
+/** 字体格式（5.6）：预览走字体页（演示文本 + 元数据 + 系统级安装） */
+const FONT_EXTS = new Set(["ttf", "otf", "ttc"]);
+
+/** 纯文本格式（5.6）：预览走文本页（txt = APP 内编辑，md = markdown-it 只读渲染） */
+const TEXT_EXTS = new Set(["txt", "md"]);
+
 /** 音频判定（5.1，PRD 05-01 MVP 口径） */
 export function isAudioExt(ext: string): boolean {
   return AUDIO_EXTS.has(ext.toLowerCase());
@@ -47,6 +53,16 @@ export function isAudioExt(ext: string): boolean {
 /** 视频判定（5.2 预览 kind 分派） */
 export function isVideoExt(ext: string): boolean {
   return VIDEO_EXTS.has(ext.toLowerCase());
+}
+
+/** 字体判定（5.6 预览 kind 分派） */
+export function isFontExt(ext: string): boolean {
+  return FONT_EXTS.has(ext.toLowerCase());
+}
+
+/** 纯文本判定（5.6 预览 kind 分派：txt/md） */
+export function isTextExt(ext: string): boolean {
+  return TEXT_EXTS.has(ext.toLowerCase());
 }
 
 /** 静态图片判定（4.4 文件夹卡片缩略图取子项同口径：排除 GIF / 序列帧 / 工程与矢量格式） */

@@ -3,7 +3,8 @@
 // anim = 阶段四帧流（PreviewStreamCanvas 渲染 canvas，占位缩略图 / 回退 img 在下层）；
 // video 把 previewMedia 的 <video> 元素挂进画面区（缩放/平移/旋转/翻转复用图片那套数学，
 // 尺寸经 loadedmetadata → onImageLoad 喂入）；audio 显示波形大图（按画面区实际像素后端重采样，
-// 未就绪回退 info 波形缩略图 contain），无缩放平移。
+// 未就绪回退 info 波形缩略图 contain），无缩放平移；
+// font / text（5.6）= PreviewFont / PreviewText 组件自管（无缩放平移）。
 // 交互：滚轮缩放（瞄点跟鼠标）、左键拖动平移、双击 适合窗口⇄原图大小；
 // ←/→ 上/下一个素材；,/ . sequence/anim=上/下帧 video=逐帧步进；
 // 空格 sequence/anim/audio/video=播放暂停；Esc 退出全屏/预览。
@@ -11,6 +12,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "v
 import { convertFileSrc } from "@tauri-apps/api/core";
 import PreviewNavigator from "./PreviewNavigator.vue";
 import PreviewStreamCanvas from "./PreviewStreamCanvas.vue";
+import PreviewFont from "./PreviewFont.vue";
+import PreviewText from "./PreviewText.vue";
 import { useHiresWaveform } from "../lib/useHiresWaveform";
 import { usePreviewStore } from "../stores/preview";
 import { usePreviewMediaStore } from "../stores/previewMedia";
@@ -22,9 +25,15 @@ const videoWrapRef = ref<HTMLElement>();
 let ro: ResizeObserver | undefined;
 
 const url = computed(() => (preview.filePath ? convertFileSrc(preview.filePath) : null));
-// <img> 渲染的 kind（video 走元素挂载，audio 走波形大图）
+// <img> 渲染的 kind（video 走元素挂载，audio 走波形大图，font/text 走各自组件）
 const showImg = computed(
-  () => url.value && preview.kind !== "video" && preview.kind !== "audio" && preview.kind !== "other",
+  () =>
+    url.value &&
+    preview.kind !== "video" &&
+    preview.kind !== "audio" &&
+    preview.kind !== "font" &&
+    preview.kind !== "text" &&
+    preview.kind !== "other",
 );
 // other 保底：格式图标大图
 const iconUrl = computed(() => {
@@ -199,6 +208,8 @@ watch(
       <PreviewStreamCanvas v-if="preview.kind === 'anim'" :style="imgStyle" />
     </div>
     <div v-else-if="preview.kind === 'video'" ref="videoWrapRef" class="img-wrap" :style="wrapStyle" />
+    <PreviewFont v-else-if="preview.kind === 'font'" />
+    <PreviewText v-else-if="preview.kind === 'text'" />
     <div v-else-if="waveUrl" class="wave-large" :style="{ '--wave-url': `url(&quot;${waveUrl}&quot;)` }" />
     <img v-else-if="iconUrl" class="format-icon" :src="iconUrl" draggable="false" />
     <span v-if="preview.error" class="error-text">{{ preview.error }}</span>

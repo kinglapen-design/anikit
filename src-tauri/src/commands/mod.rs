@@ -4,6 +4,7 @@
 pub mod archive;
 pub mod asset_menu;
 pub mod anim_stream;
+pub mod font;
 pub mod import;
 pub mod inbox;
 pub mod library;
@@ -17,5 +18,6 @@ pub mod scan;
 pub mod search;
 pub mod sequence;
 pub mod settings;
+pub mod text;
 pub mod thumb_frame;
 pub mod undo;

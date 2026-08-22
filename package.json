@@ -12,6 +12,7 @@
   "devDependencies": {
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/cli": "^2.11.4",
+    "@types/markdown-it": "^14.2.0",
     "@vitejs/plugin-vue": "^6.0.8",
     "typescript": "^5.9.3",
     "vite": "^8.1.5",
@@ -21,6 +22,7 @@
     "@tauri-apps/plugin-dialog": "^2.7.2",
     "dockview-core": "^7.0.4",
     "dockview-vue": "^7.0.4",
+    "markdown-it": "^15.0.0",
     "pinia": "^4.0.2",
     "vue": "^3.5.40"
   }

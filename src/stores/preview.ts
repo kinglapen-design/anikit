@@ -12,7 +12,7 @@ import { useContentStore } from "./content";
 import { usePreviewMediaStore } from "./previewMedia";
 import { usePreviewNotesStore } from "./previewNotes";
 import { useToastStore } from "./toast";
-import { isAudioExt, isSequence, isVideoExt } from "../lib/formatBadge";
+import { isAudioExt, isFontExt, isSequence, isTextExt, isVideoExt } from "../lib/formatBadge";
 import { getAssetFilePath, listSequenceFrames, prepareAnimStrips, type FrameEntry } from "../lib/mediaOps";
 import { StreamSession, type StreamFrame } from "../lib/streamClient";
 
@@ -22,8 +22,9 @@ interface PlayFrame extends FrameEntry {
   delayMs: number;
 }
 
-// image = 可显示图；sequence = 序列帧；anim = 动图（GIF/WEBP 动图）；audio/video = 音视频；other = 格式图标保底
-export type PreviewKind = "image" | "sequence" | "anim" | "audio" | "video" | "other";
+// image = 可显示图；sequence = 序列帧；anim = 动图（GIF/WEBP 动图）；audio/video = 音视频；
+// font = 字体（5.6）；text = 纯文本（5.6，txt 编辑 / md 渲染）；other = 格式图标保底
+export type PreviewKind = "image" | "sequence" | "anim" | "audio" | "video" | "font" | "text" | "other";
 // 带图片源文件（psd/psb/ai/svg）：工具栏去旋转翻转、加默认应用打开
 const SOURCE_EXTS = ["psd", "psb", "ai", "svg"];
 
@@ -279,6 +280,16 @@ export const usePreviewStore = defineStore("preview", {
         this.kind = "video";
         await media.load(p.assetId, "video", p.fps ?? null); // fps 随 PlacementView 透传（5.3 帧化）
         void notes.load();
+        return;
+      }
+      // 字体（5.6）：预览页演示文本（@font-face 组件内加载）+ 其它页元数据与系统级安装
+      if (isFontExt(ext)) {
+        this.kind = "font";
+        return;
+      }
+      // 纯文本（5.6）：txt = APP 内编辑（防抖自动保存）；md = markdown-it 只读渲染（编辑归 6.2）
+      if (isTextExt(ext)) {
+        this.kind = "text";
         return;
       }
       const r = await getAssetFilePath(p.assetId);

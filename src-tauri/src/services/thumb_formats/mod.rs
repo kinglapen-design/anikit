@@ -11,6 +11,7 @@ use image::RgbaImage;
 
 mod photoshop;
 mod svg;
+mod font;
 
 /// 格式适配器：声明扩展名 + 宽高探测 + 解码 RGBA（缩略图管线统一入口）
 pub struct FormatAdapter {
@@ -20,7 +21,7 @@ pub struct FormatAdapter {
 }
 
 /// 内置适配器注册表：新格式只在这里加一行（文件放同目录）
-static ADAPTERS: &[FormatAdapter] = &[photoshop::ADAPTER, svg::ADAPTER];
+static ADAPTERS: &[FormatAdapter] = &[photoshop::ADAPTER, svg::ADAPTER, font::ADAPTER];
 
 /// 探测宽高；未注册格式 / 解析失败返回 None
 pub fn probe(path: &Path) -> Option<(u32, u32)> {

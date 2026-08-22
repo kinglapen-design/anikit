@@ -18,11 +18,14 @@
 //! - recycle：回收站（6.1 第二轮：视图 / 还原 / 彻底删除 / 清空）
 //! - scan：重复文件扫描（只读，按存量 hash 分组）
 //! - search：分词搜索（只读，3.6 一轮：空格分词 AND / 子串包含 / 链接 URL decode / 路径链）
+//! - font：字体元数据与样张渲染（5.6，ttf-parser / fontdue 纯 Rust）+ 系统级安装卸载（用户级注册表）
+//! - text：文本资产读写（5.6，txt/md；读 UTF-8 优先 GBK 回退，写恒 UTF-8，2MB 上限）
 //! - views：Placement 列表视图（中间面板与导入事件共用）
 
 pub mod anim;
 pub mod archive;
 pub mod asset_menu;
+pub mod font;
 pub mod frame_stream;
 pub mod import;
 pub mod import_task;
@@ -38,6 +41,7 @@ pub mod resolve;
 pub mod scan;
 pub mod search;
 pub mod sequence;
+pub mod text;
 pub mod thumb_formats;
 pub mod thumbnail;
 pub mod views;
