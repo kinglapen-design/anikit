@@ -15,7 +15,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
-import HoverVideoLayer from "./HoverVideoLayer.vue";
+import VideoCanvasLayer from "./VideoCanvasLayer.vue";
 import HoverAudioLayer from "./HoverAudioLayer.vue";
 import HoverSequenceLayer from "./HoverSequenceLayer.vue";
 import AnimCanvasLayer from "./AnimCanvasLayer.vue";
@@ -216,7 +216,7 @@ const meta = computed(() => {
         draggable="false"
       />
       <div v-else class="img" />
-      <HoverVideoLayer
+      <VideoCanvasLayer
         v-if="animPlaying && kind === 'video'"
         :asset="asset"
         :auto="!hoverActive"

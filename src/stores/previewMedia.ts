@@ -1,13 +1,11 @@
-// 音视频播放（5.2）：<video> 元素模块级持有（非响应式，音频也复用 video 元素免双实现），
-// 播放状态（playing/currentTime/duration/volume/rate/loop）经元素事件同步进 store。
+// 音频播放（5.2；5.3 收窄音频专用——视频已全面接入自研帧流，见 preview store loadVideo）：
+// <video> 元素模块级持有（非响应式；音频复用 video 元素免双实现），播放状态
+//（playing/currentTime/duration/volume/rate/loop）经元素事件同步进 store。
 // get_media_source 解析播放源（WebView2 不可直播格式后端已转码 cache/tmp，转码期 transcoding 加载态）；
 // 解析失败降级：preview.kind 落 other + 中文报错文案（preview.error 画面提示）。
 import { defineStore } from "pinia";
-import { nextTick } from "vue";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { useContentStore } from "./content";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { usePreviewStore } from "./preview";
-import { useToastStore } from "./toast";
 import { getMediaSource } from "../lib/mediaOps";
 
 // 媒体元素单例（模块级；store 状态响应式、元素本身不进响应式系统）
@@ -23,7 +21,6 @@ function errText(e: unknown): string {
 
 export const usePreviewMediaStore = defineStore("previewMedia", {
   state: () => ({
-    kind: null as "audio" | "video" | null,
     srcPath: null as string | null, // 播放源绝对路径（源文件或转码产物）
     transcoding: false, // get_media_source 解析/转码中（内部真实状态）
     // UI 显示用（2026-07-26 用户：切换素材时直渲解析一瞬会闪"转码中…"）——
@@ -32,22 +29,19 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
     playing: false,
     currentTime: 0,
     duration: 0,
-    // 视频帧率（5.3 帧化改造，2026-07-28 用户定：帧数优先）：load 时由 PlacementView.fps 传入，
-    // 音频 / 未知为 null（帧显示与逐帧步进回退时间口径）；切素材 release 复位
-    fps: null as number | null,
     volume: 1,
     muted: false,
     rate: 1,
     loop: false,
   }),
   actions: {
-    // 取媒体元素（不存在则创建并接事件同步；PreviewPanel 把它挂进画面区）
+    // 取媒体元素（不存在则创建并接事件同步；预览画面不挂载——音频无画面，波形大图走 PreviewPanel）
     getEl(): HTMLVideoElement {
       if (el) return el;
       el = document.createElement("video");
       el.preload = "auto";
       el.controls = false;
-      el.style.cssText = "display:block;width:100%;height:100%;object-fit:contain;";
+      el.style.cssText = "display:none;";
       el.addEventListener("play", () => (this.playing = true));
       el.addEventListener("pause", () => (this.playing = false));
       el.addEventListener("ended", () => (this.playing = false));
@@ -55,17 +49,13 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       el.addEventListener("durationchange", () => (this.duration = el?.duration || 0));
       el.addEventListener("loadedmetadata", () => {
         this.duration = el?.duration || 0;
-        // 视频尺寸喂给查看器（fit/缩放数学与图片同一套）
-        if (this.kind === "video" && el) usePreviewStore().onImageLoad(el.videoWidth, el.videoHeight);
       });
       return el;
     },
     // 解析播放源并装载（转码可能数十秒，期间 transcoding=true）；
     // 装载完成即自动播放（2026-07-26 用户定：打开预览的目的就是播放，同动图/序列帧口径）
-    async load(assetId: string, kind: "audio" | "video", fps: number | null = null): Promise<void> {
+    async load(assetId: string): Promise<void> {
       const preview = usePreviewStore();
-      this.kind = kind;
-      this.fps = kind === "video" ? fps : null;
       this.transcoding = true;
       this.transcodingSlow = false;
       clearTimeout(slowTimer);
@@ -75,9 +65,6 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       try {
         const r = await getMediaSource(assetId);
         if (preview.current?.assetId !== assetId) return; // await 期间已切走
-        // 响应 fps 优先（自愈后的准确值；PlacementView 参数只是开库时的旧快照，
-        // 2026-07-28 复验反馈修复：存量视频播放条/笔记立即正确）
-        if (kind === "video" && r.fps != null) this.fps = r.fps;
         this.srcPath = r.path;
         const v = this.getEl();
         v.src = convertFileSrc(r.path);
@@ -85,7 +72,7 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
         this.play();
       } catch (e) {
         if (preview.current?.assetId !== assetId) return;
-        console.error("音视频源解析失败：", e);
+        console.error("音频源解析失败：", e);
         preview.kind = "other"; // 降级：格式图标/缩略图静态 + 报错文案
         preview.error = errText(e);
       } finally {
@@ -101,7 +88,6 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
         el.removeAttribute("src");
         el.load();
       }
-      this.kind = null;
       this.srcPath = null;
       clearTimeout(slowTimer);
       this.transcoding = false;
@@ -109,7 +95,6 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       this.playing = false;
       this.currentTime = 0;
       this.duration = 0;
-      this.fps = null;
       this.rate = 1;
       this.loop = false;
     },
@@ -154,34 +139,6 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
     toggleLoop(): void {
       this.loop = !this.loop;
       this.getEl().loop = this.loop;
-    },
-    // 当前画面设为预览图（5.2 视频）：ffmpeg 截帧走缩略图管线，前端即时换卡片图（同 setAsThumb 技巧）；
-    // toast 反馈 + modifiedAt URL 版本戳 + 视图外兜底 refresh（2026-08-20 与动图侧同修复）
-    async setVideoThumb(): Promise<void> {
-      const p = usePreviewStore().current;
-      if (!p) return;
-      const toast = useToastStore();
-      try {
-        const r = await invoke<{ thumbPath: string; modifiedAt: string }>("set_video_thumb", {
-          assetId: p.assetId,
-          atSecs: this.currentTime,
-        });
-        const content = useContentStore();
-        const target = content.placements.find(
-          (x) => x.assetId === p.assetId && x.folderId === p.folderId,
-        );
-        if (target) {
-          target.modifiedAt = r.modifiedAt; // URL 版本戳（AssetCard / ListRowCard thumbUrl ?v=）
-          target.thumbPath = null;
-          await nextTick();
-          target.thumbPath = r.thumbPath;
-        } else {
-          await content.refresh();
-        }
-        toast.notify({ message: "已设为预览图", icon: "success" });
-      } catch (e) {
-        toast.notify({ message: String(e), icon: "fail" });
-      }
     },
   },
 });

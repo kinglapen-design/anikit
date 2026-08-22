@@ -6,6 +6,7 @@
 # 前端链路全真（AnimStreamSession / AnimCanvasLayer / 闸门），帧源由 python WS 桩供给。
 import asyncio
 import json
+import struct
 import subprocess
 import sys
 import tempfile
@@ -39,7 +40,7 @@ window.__TAURI_INTERNALS__ = {
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
       list_space_libraries: ["旧库"],
       list_recent_libraries: [{ name: "旧库", path: "E:/T/S/旧库", lastOpenedAt: "" }],
-      get_asset_file_path: { path: "E:/T/src.gif", pending: false, animPreview: null },
+      get_asset_file_path: { path: "E:/T/src.gif", pending: false },
     };
     if (cmd === "start_anim_stream") {
       window.__starts++;
@@ -84,8 +85,9 @@ async def send(ws, method, params=None, session=None):
 
 
 async def frame_server():
-    """假帧流 server：每连接 20fps 推 160x90 RGBA 彩帧（格式同后端 frame_stream，
-    20 字节头 [w][h][idx][seq]，idx = 源帧索引 0 起 24 帧循环）。
+    """假帧流 server：每连接 20fps 推 160x90 RGBA 彩帧（协议 v2，同后端 frame_stream，
+    29 字节头 [tag=0][w][h][idx][pts_ms f64][seq]，idx = 源帧索引 0 起 24 帧循环，
+    pts = idx×50ms——动图前端忽略 pts，视频探针才有 pts 语义）。
     160x90 而非 320x180：9 连接 × 20fps × 230KB 会把单线程事件循环压垮（CDP 客户端
     recv 饿死、探针卡死，2026-08-20 实测）；1/4 数据量后 CDP 与推流共存。"""
     async def handler(ws):
@@ -96,8 +98,11 @@ async def frame_server():
                 seq += 1
                 idx = (seq - 1) % 24
                 header = (
-                    w.to_bytes(4, "little") + h.to_bytes(4, "little")
-                    + idx.to_bytes(4, "little") + seq.to_bytes(8, "little")
+                    b"\x00"
+                    + w.to_bytes(4, "little") + h.to_bytes(4, "little")
+                    + idx.to_bytes(4, "little")
+                    + struct.pack("<d", idx * 50.0)
+                    + seq.to_bytes(8, "little")
                 )
                 rgba = bytes([seq % 256, 100, 200, 255]) * (w * h)
                 await ws.send(header + rgba)

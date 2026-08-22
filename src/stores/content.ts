@@ -818,9 +818,9 @@ export const useContentStore = defineStore("content", {
       });
     },
 
-    // 存量视频 fps 自愈通知（2026-07-28 复验反馈修复）：get_media_source 补探测写回后广播，
-    // 同步该资产全部 Placement 的 fps（同 setNoteCount 多 Placement 口径）——
-    // 卡片悬停胶囊（HoverVideoLayer 读 PlacementView.fps）与详情笔记即时正确，免重开窗口重拉；
+    // 存量视频 fps 自愈通知（2026-07-28 复验反馈修复）：start_video_stream / get_media_source 补探测
+    // 写回后广播，同步该资产全部 Placement 的 fps（同 setNoteCount 多 Placement 口径）——
+    // 卡片悬停胶囊（VideoCanvasLayer 读 PlacementView.fps）与详情笔记即时正确，免重开窗口重拉；
     // 同一资产只自愈一次（写回后 metadata.fps 非空不再命中），天然不刷屏
     async initFpsHealListener(): Promise<void> {
       if (unlistenFpsHeal) return;

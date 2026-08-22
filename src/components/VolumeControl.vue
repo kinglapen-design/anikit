@@ -6,22 +6,23 @@
 // 同播放进度条自绘口径转 90°，SideSlider 为横向缩放滑块专用不复用）。
 // 拖/点设音量 0-1：静音时滑块归 0 联动显示，拖离 0 经 setVolume 自动解除静音。
 // 弹层底部 4px 透明桥接区（padding）保证指针从按钮滑入弹层不断开。
+// 5.3 参数化：状态与行为改 props/emits（音频 = previewMedia，视频 = preview store 帧流会话）。
 import { computed, ref } from "vue";
 import IconButton from "./IconButton.vue";
-import { usePreviewMediaStore } from "../stores/previewMedia";
 
-const media = usePreviewMediaStore();
+const props = defineProps<{ volume: number; muted: boolean }>();
+const emit = defineEmits<{ setVolume: [ratio: number]; toggleMute: [] }>();
 const open = ref(false);
 const trackRef = ref<HTMLElement>();
 let dragging = false;
 
-// 静音时滑块显示 0（联动），实际音量保留在 media.volume 供取消静音恢复
-const pct = computed(() => (media.muted ? 0 : media.volume) * 100);
+// 静音时滑块显示 0（联动），实际音量保留在 props.volume 供取消静音恢复
+const pct = computed(() => (props.muted ? 0 : props.volume) * 100);
 
 function apply(e: PointerEvent): void {
   const rect = trackRef.value!.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, 1 - (e.clientY - rect.top) / rect.height));
-  media.setVolume(ratio);
+  emit("setVolume", ratio);
 }
 function onDown(e: PointerEvent): void {
   dragging = true;
@@ -42,9 +43,9 @@ function onUp(e: PointerEvent): void {
 <template>
   <div class="volume" @pointerenter="open = true" @pointerleave="open = false">
     <IconButton
-      :name="media.muted || media.volume === 0 ? 'mute' : 'volume'"
-      :title="media.muted ? '取消静音' : '静音'"
-      @click="media.toggleMute()"
+      :name="muted || volume === 0 ? 'mute' : 'volume'"
+      :title="muted ? '取消静音' : '静音'"
+      @click="emit('toggleMute')"
     />
     <div v-if="open" class="vol-pop-wrap">
       <div class="vol-pop">

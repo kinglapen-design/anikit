@@ -7,7 +7,7 @@
 // 骨架（300ms 进入延迟 / 主窗口隐藏暂停 / disposed 护栏）收编 useHoverPlayer。
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useHoverPlayer } from "../lib/useHoverPlayer";
-import { AnimStreamSession, type AnimFrame } from "../lib/animStream";
+import { StreamSession, type StreamFrame } from "../lib/streamClient";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
 
@@ -22,7 +22,7 @@ const RESIZE_DEBOUNCE = 150;
 
 const cv = ref<HTMLCanvasElement>();
 const hasFrame = ref(false);
-let session: AnimStreamSession | null = null;
+let session: StreamSession | null = null;
 let resizeObs: ResizeObserver | null = null;
 let resizeTimer = 0;
 
@@ -40,7 +40,7 @@ function shortEdge(): number {
 }
 
 async function start(): Promise<void> {
-  const s = await AnimStreamSession.start(props.asset.assetId, shortEdge(), draw);
+  const s = await StreamSession.start(props.asset.assetId, shortEdge(), draw);
   if (isDisposed()) {
     s?.stop();
     return;
@@ -48,7 +48,7 @@ async function start(): Promise<void> {
   session = s;
 }
 
-function draw(f: AnimFrame): void {
+function draw(f: StreamFrame): void {
   const c = cv.value;
   if (!c) return;
   if (c.width !== f.w || c.height !== f.h) {

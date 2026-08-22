@@ -64,7 +64,12 @@ function onSeekUp(e: PointerEvent): void {
         :disabled="media.transcodingSlow"
         @click="media.togglePlay()"
       />
-      <VolumeControl />
+      <VolumeControl
+        :volume="media.volume"
+        :muted="media.muted"
+        @set-volume="media.setVolume"
+        @toggle-mute="media.toggleMute()"
+      />
     </div>
     <span class="time-text">{{ formatDuration(media.currentTime) }} / {{ formatDuration(media.duration) }}</span>
     <div

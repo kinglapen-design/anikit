@@ -2,23 +2,20 @@
 // list_sequence_frames / prepare_anim_strips 命令统一出口——store 与组件一律走本层，不再裸 invoke。
 // 类型以后端序列化结构为唯一来源（src-tauri/src/commands/preview.rs、media.rs；
 // serde camelCase，Option ↔ TS null）。本层不吞错：失败原样抛出，各调用点按原有 try/catch 处理。
+// 5.3：视频播放整体切自研帧流（lib/streamClient），get_media_source 收窄音频专用。
 import { invoke } from "@tauri-apps/api/core";
 
 // get_asset_file_path 返回：path = webview 可渲染文件绝对路径（直渲格式 = 源路径；
-// psd/psb = 已缓存的解码预览；暂不可得为 null）；pending = 高清层后台解析中（完成经 preview-full-ready 推送）；
-// animPreview 阶段四一轮起恒 null（2.3 小动画播放缓存已随自研解码帧流退役，字段待下轮移除）
+// psd/psb = 已缓存的解码预览；暂不可得为 null）；pending = 高清层后台解析中（完成经 preview-full-ready 推送）
 export interface AssetFilePath {
   path: string | null;
   pending: boolean;
-  animPreview: string | null;
 }
 
-// get_media_source 返回：transcoded = 返回的是后端转码产物（mp4/wav，false = 源文件）；
-// fps = 素材自身帧率（视频，自愈后的准确值随响应下发；音频 / 未知为 null）
+// get_media_source 返回（音频专用，5.3 收窄）：transcoded = 返回的是后端转码产物（wav，false = 源文件）
 export interface MediaSource {
   path: string;
   transcoded: boolean;
-  fps: number | null;
 }
 
 // 单帧条目：fullPath = 帧原图绝对路径；stripPath = 帧条小图（null = 后台生成中，
@@ -48,7 +45,8 @@ export async function getAssetFilePath(assetId: string): Promise<AssetFilePath> 
   return await invoke<AssetFilePath>("get_asset_file_path", { assetId });
 }
 
-// 播放源解析：可直播格式直给源路径；其余后端转码兜底（transcoded=true，转码可能数十秒）
+// 音频播放源解析（5.3 收窄：视频走自研帧流不经此）：可直播格式（mp3/wav）直给源路径；
+// 其余（wma 等）后端转码 wav 兜底（transcoded=true，转码可能数十秒）
 export async function getMediaSource(assetId: string): Promise<MediaSource> {
   return await invoke<MediaSource>("get_media_source", { assetId });
 }

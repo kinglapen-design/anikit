@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 预览窗口动图帧流画面（阶段四·预览对接，2026-08-20）：watch 预览 store 当前帧 → putImageData。
+// 预览窗口帧流画面（阶段四·预览对接；5.3 拓宽：动图 / 视频共用）——watch 预览 store 当前帧 → putImageData。
 // 铺满父容器 .img-wrap（尺寸 = 帧 natural × zoom，缩放/平移随 wrap 体系；旋转/翻转 transform 由
 // PreviewPanel 经 style 绑定透传）。未出帧时透明（下层缩略图占位可见），出帧后盖住。
 import { ref, watch } from "vue";
@@ -25,11 +25,11 @@ watch(
 </script>
 
 <template>
-  <canvas v-show="hasFrame" ref="cv" class="anim-stage" />
+  <canvas v-show="hasFrame" ref="cv" class="stream-stage" />
 </template>
 
 <style scoped>
-.anim-stage {
+.stream-stage {
   position: absolute;
   inset: 0;
   width: 100%;

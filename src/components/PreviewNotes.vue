@@ -10,12 +10,10 @@ import { formatDuration } from "../lib/formatDuration";
 import { frameOfTime, totalFrames } from "../lib/formatFrame";
 import { useUiStore } from "../stores/ui";
 import { usePreviewStore } from "../stores/preview";
-import { usePreviewMediaStore } from "../stores/previewMedia";
 import { usePreviewNotesStore } from "../stores/previewNotes";
 
 const ui = useUiStore();
 const preview = usePreviewStore();
-const media = usePreviewMediaStore();
 const notes = usePreviewNotesStore();
 
 const draft = ref("");
@@ -25,17 +23,18 @@ const inputRef = ref<HTMLTextAreaElement>();
 const dirty = ref(false);
 
 // 视频帧显示（5.3 帧化改造，2026-07-28 用户定：帧号显示，底层 key 仍 `t:{秒}` 不变）：
-// 查看方式"时间显示 = 帧数"且 fps 可用；音频无 fps 天然回退时间显示
-const videoFrames = computed(() => ui.timeDisplay === "frames" && media.fps != null && media.fps > 0);
+// 查看方式"时间显示 = 帧数"且 fps 可用；音频无 fps 天然回退时间显示（5.3 帧流：fps/时长/时刻
+// 全取 preview store 视频态——帧 pts 驱动）
+const videoFrames = computed(() => ui.timeDisplay === "frames" && preview.vFps != null && preview.vFps > 0);
 
 // 当前帧标识：sequence/anim = 帧 x/y；video = 帧 x/y（帧数模式）或当前时间 mm:ss
 const frameLabel = computed(() => {
   if (preview.kind === "video") {
-    if (videoFrames.value && media.fps) {
-      const total = totalFrames(media.duration, media.fps);
-      return `帧 ${frameOfTime(media.currentTime, media.fps, total)} / ${total}`;
+    if (videoFrames.value && preview.vFps) {
+      const total = totalFrames(preview.vDuration, preview.vFps);
+      return `帧 ${frameOfTime(preview.vSecs, preview.vFps, total)} / ${total}`;
     }
-    return formatDuration(media.currentTime);
+    return formatDuration(preview.vSecs);
   }
   // 动图（2026-08-21 补，解包废除漏适配）：seq 恒 null，帧号/总数取帧流状态
   if (preview.kind === "anim") {
@@ -84,9 +83,9 @@ function onKeydown(e: KeyboardEvent): void {
 function itemLabel(key: string): string {
   if (key.startsWith("t:")) {
     const secs = Number(key.slice(2));
-    if (videoFrames.value && media.fps) {
-      const total = totalFrames(media.duration, media.fps);
-      return `帧 ${frameOfTime(secs, media.fps, total)}`;
+    if (videoFrames.value && preview.vFps) {
+      const total = totalFrames(preview.vDuration, preview.vFps);
+      return `帧 ${frameOfTime(secs, preview.vFps, total)}`;
     }
     return formatDuration(secs);
   }

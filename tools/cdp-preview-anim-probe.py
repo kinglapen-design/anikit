@@ -7,6 +7,7 @@
 # 前端链路全真（preview store / PlayBarFrames / PreviewFrameStrip / PreviewAnimCanvas），帧源 python WS 桩。
 import asyncio
 import json
+import struct
 import subprocess
 import sys
 import tempfile
@@ -41,7 +42,7 @@ window.__TAURI_INTERNALS__ = {
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
       list_space_libraries: ["旧库"],
       list_recent_libraries: [{ name: "旧库", path: "E:/T/S/旧库", lastOpenedAt: "" }],
-      get_asset_file_path: { path: "E:/T/src.gif", pending: false, animPreview: null },
+      get_asset_file_path: { path: "E:/T/src.gif", pending: false },
       get_notes: [],
       prepare_anim_strips: { items: [] }, // 首调缓存为空，事件渐进（桩不补，帧块占位即可）
     };
@@ -105,8 +106,8 @@ async def send(ws, method, params=None, session=None):
 
 
 async def frame_server():
-    """假帧流 server（同 cdp-anim-stream-probe 口径）：每连接 20fps 推 160x90 RGBA 彩帧，
-    20 字节头 [w][h][idx][seq]，idx = 源帧索引 0 起 24 帧循环（对齐桩 frameCount=24）。"""
+    """假帧流 server（协议 v2，同 cdp-anim-stream-probe 口径）：每连接 20fps 推 160x90 RGBA 彩帧，
+    29 字节头 [tag=0][w][h][idx][pts_ms f64][seq]，idx 24 帧循环（对齐桩 frameCount），pts = idx×50ms。"""
     async def handler(ws):
         seq = 0
         w, h = 160, 90
@@ -115,8 +116,11 @@ async def frame_server():
                 seq += 1
                 idx = (seq - 1) % 24
                 header = (
-                    w.to_bytes(4, "little") + h.to_bytes(4, "little")
-                    + idx.to_bytes(4, "little") + seq.to_bytes(8, "little")
+                    b"\x00"
+                    + w.to_bytes(4, "little") + h.to_bytes(4, "little")
+                    + idx.to_bytes(4, "little")
+                    + struct.pack("<d", idx * 50.0)
+                    + seq.to_bytes(8, "little")
                 )
                 rgba = bytes([seq % 256, 100, 200, 255]) * (w * h)
                 await ws.send(header + rgba)
