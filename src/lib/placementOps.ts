@@ -502,6 +502,17 @@ async function runThumbOp(action: () => Promise<unknown>, okMessage: string): Pr
   }
 }
 
+// 复制缩略图（5.4）：缩略图位图进剪贴板，全类型含 shell 格式图标——纯读不改数据，不 refresh
+export async function copyThumb(assetId: string): Promise<void> {
+  const toast = useToastStore();
+  try {
+    await invoke("copy_thumbnail_to_clipboard", { assetId });
+    toast.notify({ message: "已复制缩略图", icon: "success" });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+  }
+}
+
 // 将剪贴板应用至缩略图（2026-07-23 待办落地）
 export async function applyClipboardThumb(assetId: string): Promise<void> {
   await runThumbOp(() => invoke("set_thumbnail_from_clipboard", { assetId }), "已将剪贴板应用至缩略图");

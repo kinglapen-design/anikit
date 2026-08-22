@@ -59,21 +59,24 @@ pub fn real_origin_file(lib: &Library, asset_id: &str) -> Result<PathBuf, String
   Ok(paths::origin_file(&lib.assets_dir, asset_id, &meta.origin_name))
 }
 
-/// metadata 落盘 + 索引同步（先落盘再更新，规范第 7 条）
-fn persist(lib: &mut Library, info_dir: &Path, mut meta: AssetMeta, thumb: &str, clear_frame: bool) -> Result<ThumbResult, String> {
+/// metadata 落盘 + 索引同步（先落盘再更新，规范第 7 条）；
+/// thumb_width/height 同步刷新（5.4：布局比例跟缩略图走——自定义后自适应，刷新缩略图回退）
+fn persist(lib: &mut Library, info_dir: &Path, mut meta: AssetMeta, thumb: &thumbnail::ThumbOut, clear_frame: bool) -> Result<ThumbResult, String> {
   if clear_frame {
     meta.thumb_frame = None; // 外来源（剪贴板 / 自定义文件）：封面帧标记不再有效
   }
-  meta.thumbnail = Some(thumb.to_string());
+  meta.thumbnail = Some(thumb.name.clone());
+  meta.thumb_width = Some(thumb.width);
+  meta.thumb_height = Some(thumb.height);
   meta.modified_at = super::operations::now();
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
   let id = meta.id.clone();
   lib.index.assets.insert(id, meta);
-  Ok(ThumbResult { thumb_path: info_dir.join(thumb).to_string_lossy().into_owned() })
+  Ok(ThumbResult { thumb_path: info_dir.join(&thumb.name).to_string_lossy().into_owned() })
 }
 
 /// 重生成缩略图：同名交给 generate 直接覆盖（同 thumb_frame 口径，防先删后失败留悬空）
-fn regenerate(info_dir: &Path, meta: &AssetMeta, source: &Path) -> Option<String> {
+fn regenerate(info_dir: &Path, meta: &AssetMeta, source: &Path) -> Option<thumbnail::ThumbOut> {
   thumbnail::generate(info_dir, source, &meta.name)
 }
 
@@ -116,6 +119,37 @@ pub fn refresh_thumbnail(lib: &mut Library, asset_id: &str) -> Result<ThumbResul
   }
   let thumb = regenerate(&info_dir, &meta, &origin).ok_or_else(|| "该格式暂不支持刷新缩略图".to_string())?;
   persist(lib, &info_dir, meta, &thumb, false)
+}
+
+/// 复制缩略图位图到剪贴板（5.4；2026-08-22 用户定：全类型统一复制各自缩略图——
+/// 静态图 / 视频封面 / 序列帧封面 / 动图首帧 / 音频波形均可，shell 格式图标也放开不拦，
+/// 用途 = 配「自定义缩略图 - 从剪贴板」把本资产缩略图设给其他资产）。纯读操作不改库数据。
+pub fn copy_thumbnail_to_clipboard(lib: &Library, asset_id: &str) -> Result<(), String> {
+  let src = thumbnail_source(lib, asset_id)?;
+  let img = image::open(&src).map_err(|e| format!("缩略图解码失败：{e}"))?.to_rgba8();
+  let (width, height) = (img.width() as usize, img.height() as usize);
+  let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("剪贴板不可用：{e}"))?;
+  clipboard
+    .set_image(arboard::ImageData { width, height, bytes: img.into_raw().into() })
+    .map_err(|e| format!("剪贴板写入失败：{e}"))
+}
+
+/// 缩略图源路径定位（拆出供单测——arboard 写入薄壳不测，防测试污染用户剪贴板）：
+/// info 缩略图优先；无内容缩略图（meta.thumbnail = None）回退格式图标缓存
+/// （cache/thumbs/{ext}.webp，ensure_format_icon 幂等——无缓存现场 shell 提取）
+fn thumbnail_source(lib: &Library, asset_id: &str) -> Result<PathBuf, String> {
+  let (info_dir, origin, meta) = locate(lib, asset_id)?;
+  if let Some(name) = &meta.thumbnail {
+    let p = info_dir.join(name);
+    if p.is_file() {
+      return Ok(p);
+    }
+    return Err("缩略图文件缺失，请刷新缩略图后重试".to_string());
+  }
+  if thumbnail::ensure_format_icon(&lib.root, &origin, &meta.ext) {
+    return Ok(thumbnail::format_icon_path(&lib.root, &meta.ext));
+  }
+  Err("该格式的系统图标不可用".to_string())
 }
 
 /// 目标目录校验（导出公共）：存在且是目录
@@ -582,6 +616,29 @@ mod tests {
     assert_eq!(disk.thumbnail.as_deref(), Some("图_thumbnail.webp"), "metadata 落盘");
     // 不存在的源报错
     assert!(set_thumbnail_custom(&mut h.lib, "AN-A", "不存在.png").is_err());
+  }
+
+  #[cfg(windows)]
+  #[test]
+  fn copy_thumbnail_source_locates_thumb_and_format_icon() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-A", "图.png", "root");
+    // info 缩略图存在 → 源 = info 缩略图
+    refresh_thumbnail(&mut h.lib, "AN-A").unwrap();
+    let src = thumbnail_source(&h.lib, "AN-A").unwrap();
+    assert!(src.ends_with("图_thumbnail.webp"), "{}", src.display());
+    assert!(src.is_file());
+    // 缩略图文件缺失 → 明确报错（提示刷新）
+    fs::remove_file(&src).unwrap();
+    let err = thumbnail_source(&h.lib, "AN-A").unwrap_err();
+    assert!(err.contains("缩略图文件缺失"), "{err}");
+    // 无内容缩略图（fla）→ 回退格式图标缓存（无缓存现场 shell 提取）
+    add_asset(&mut h, "AN-B", "工程.fla", "root");
+    let icon = thumbnail_source(&h.lib, "AN-B").unwrap();
+    assert_eq!(icon, h.lib.root.join("cache/thumbs/fla.webp"));
+    assert!(icon.is_file());
+    // 资产不存在 → 报错
+    assert!(thumbnail_source(&h.lib, "AN-不存在").is_err());
   }
 
   /// 导出数据源快照（命令层锁内克隆的同形物）

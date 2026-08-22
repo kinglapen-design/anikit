@@ -233,7 +233,9 @@ pub fn delete_frames(lib: &mut Library, asset_id: &str, frame_names: &[String]) 
   if cover_deleted {
     // 封面帧被删：按新封面帧重建缩略图（同词干覆盖写）
     if let Some(thumb) = thumbnail::generate(&info_dir, &frames_dir.join(&first), &meta.name) {
-      meta.thumbnail = Some(thumb);
+      meta.thumbnail = Some(thumb.name);
+      meta.thumb_width = Some(thumb.width);
+      meta.thumb_height = Some(thumb.height);
     }
   }
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;

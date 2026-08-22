@@ -78,6 +78,8 @@ pub fn create_document(
     hash: format!("sha256:{}", hex_lower(&sha2::Sha256::digest(content))),
     width: None,
     height: None,
+    thumb_width: None,
+    thumb_height: None,
     duration: None,
     bpm: None,
     rating: 0,

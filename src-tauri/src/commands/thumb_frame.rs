@@ -30,6 +30,9 @@ pub struct SetThumbResult {
   /// 新封面帧标记（视频 = `t:{秒}`；前端同步进 PlacementView.thumbFrame——自动播放范围起点
   /// 即时跟随，2026-08-23 用户实机"设封面后范围要重启 APP 才生效"修复）
   pub thumb_frame: String,
+  /// 新缩略图实际尺寸（5.4：前端同步 PlacementView.thumbW/thumbH——布局比例跟缩略图走，即时跟随）
+  pub thumb_width: u32,
+  pub thumb_height: u32,
 }
 
 /// 切换序列帧 / 动图封面帧：用指定帧重新生成缩略图 → metadata 落盘（thumbFrame / thumbnail /
@@ -123,7 +126,7 @@ fn resolve_frame_path(info_dir: &Path, meta: &AssetMeta, frame_name: &str) -> Re
 
 /// 重新生成缩略图：词干 = 资源名，与导入同管线同命名（{资源名}_thumbnail.webp）。
 /// 同名交给 generate 直接覆盖（避免先删后生成失败留下悬空引用），仅不同名（改名遗留）才先删
-fn regenerate(info_dir: &Path, meta: &AssetMeta, frame_path: &Path) -> Option<String> {
+fn regenerate(info_dir: &Path, meta: &AssetMeta, frame_path: &Path) -> Option<thumbnail::ThumbOut> {
   if let Some(old) = meta.thumbnail.as_deref() {
     if old != format!("{}_thumbnail.webp", meta.name) && old != format!("{}_thumbnail.png", meta.name) {
       if let Err(e) = fs::remove_file(info_dir.join(old)) {
@@ -134,23 +137,31 @@ fn regenerate(info_dir: &Path, meta: &AssetMeta, frame_path: &Path) -> Option<St
   thumbnail::generate(info_dir, frame_path, &meta.name)
 }
 
-/// metadata 落盘（thumbFrame / thumbnail / modifiedAt）→ 同步内存索引（先落盘再更新，规范第 7 条）；
-/// modifiedAt 随结果返回（前端作缩略图 URL 版本戳）
+/// metadata 落盘（thumbFrame / thumbnail / thumb 尺寸 / modifiedAt）→ 同步内存索引（先落盘再更新，规范第 7 条）；
+/// modifiedAt 随结果返回（前端作缩略图 URL 版本戳）；thumb_width/height 同步刷新（5.4：布局跟缩略图走）
 fn persist(
   lib: &mut Library,
   info_dir: PathBuf,
   mut meta: AssetMeta,
   asset_id: &str,
-  thumb: String,
+  thumb: thumbnail::ThumbOut,
   thumb_frame: String,
 ) -> Result<SetThumbResult, String> {
   meta.thumb_frame = Some(thumb_frame.clone());
-  meta.thumbnail = Some(thumb.clone());
+  meta.thumbnail = Some(thumb.name.clone());
+  meta.thumb_width = Some(thumb.width);
+  meta.thumb_height = Some(thumb.height);
   meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
   let modified_at = meta.modified_at.clone();
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
   lib.index.assets.insert(asset_id.to_string(), meta);
-  Ok(SetThumbResult { thumb_path: info_dir.join(&thumb).to_string_lossy().into_owned(), modified_at, thumb_frame })
+  Ok(SetThumbResult {
+    thumb_path: info_dir.join(&thumb.name).to_string_lossy().into_owned(),
+    modified_at,
+    thumb_frame,
+    thumb_width: thumb.width,
+    thumb_height: thumb.height,
+  })
 }
 
 #[cfg(test)]

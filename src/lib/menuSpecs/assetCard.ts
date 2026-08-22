@@ -23,6 +23,7 @@ import {
 import {
   applyClipboardThumb,
   copySelection,
+  copyThumb,
   deletePlacements,
   duplicateSelected,
   openWithDialog,
@@ -141,7 +142,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       submenuWidth: 213,
       submenu: [
         { label: "打开 Animate 生成缩略图", disabled: true },
-        { label: "复制缩略图", disabled: true },
+        { label: "复制缩略图", disabled: selection.count !== 1, action: () => void copyThumb(assetId) },
         { label: "转换为缩略图链接并复制", disabled: true },
         { label: "将「xx」设置为缩略图", disabled: true },
         "divider",

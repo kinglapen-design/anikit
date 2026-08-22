@@ -271,7 +271,9 @@ pub(crate) fn build_asset_with_id(
     thumbnail::probe(&dest).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None))
   };
   let thumb = thumbnail::generate(&info_dir, &dest, file_stem(&file.path).as_str());
-  let mut meta = make_meta(asset_id, file, &origin_name, size, hash, width, height, thumb, imported_from);
+  let mut meta = make_meta(asset_id, file, &origin_name, size, hash, width, height, thumb.as_ref().map(|t| t.name.clone()), imported_from);
+  meta.thumb_width = thumb.as_ref().map(|t| t.width);
+  meta.thumb_height = thumb.as_ref().map(|t| t.height);
   meta.duration = anim.map(|a| a.duration_secs).or(video.map(|v| v.duration)).or(audio.map(|a| a.duration));
   meta.frame_count = anim.map(|a| a.frame_count);
   meta.bpm = audio.and_then(|a| a.bpm);
@@ -377,6 +379,8 @@ fn make_meta(
     hash: hash.to_string(),
     width,
     height,
+    thumb_width: None,
+    thumb_height: None,
     duration: None,
     bpm: None,
     rating: 0,
@@ -619,6 +623,8 @@ mod tests {
       name: "a.png".into(),
       w: Some(1),
       h: None,
+      thumb_w: None,
+      thumb_h: None,
       ext: "png".into(),
       thumb_path: None,
       thumb_kind: None,
@@ -643,7 +649,7 @@ mod tests {
         "type": "asset",
         "placement": {
           "assetId": "AN-X", "folderId": "root", "name": "a.png",
-          "w": 1, "h": null, "ext": "png", "thumbPath": null, "thumbKind": null, "origin": true,
+          "w": 1, "h": null, "thumbW": null, "thumbH": null, "ext": "png", "thumbPath": null, "thumbKind": null, "origin": true,
           "frameCount": null, "animated": false, "duration": null, "bpm": null, "importedFrom": null,
           "size": 0, "createdAt": null,
           "modifiedAt": "2026-08-19T00:00:00+08:00", "importedAt": "2026-08-19T00:00:00+08:00",

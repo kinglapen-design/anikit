@@ -56,6 +56,13 @@ pub struct AssetMeta {
   pub width: Option<u32>,
   #[serde(default)]
   pub height: Option<u32>,
+  /// 缩略图实际像素尺寸（5.4，2026-08-23 用户定）：卡片自适应/瀑布流布局比例跟缩略图走——
+  /// 自定义缩略图后布局按新图比例自适应，width/height 恒为源文件尺寸不动；刷新缩略图从 origin
+  /// 重生成即回退。生成缩略图时写入；存量数据 None（前端回退 width/height，比例一致无感知）。不升 DATA_VERSION
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub thumb_width: Option<u32>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub thumb_height: Option<u32>,
   #[serde(default)]
   pub duration: Option<f64>,
   /// 音频 BPM（只读文件内嵌标签 TBPM/bpm，无标签为 null——不做自动节拍检测，2026-07-26 用户定）

@@ -25,6 +25,10 @@ pub struct PlacementView {
   pub name: String,
   pub w: Option<u32>,
   pub h: Option<u32>,
+  /// 缩略图实际像素尺寸（5.4，2026-08-23 用户定）：布局比例跟缩略图走——自定义缩略图后自适应；
+  /// null（存量数据 / 无缩略图）前端回退 w/h（导入时二者比例一致，无感知）
+  pub thumb_w: Option<u32>,
+  pub thumb_h: Option<u32>,
   pub ext: String,
   /// 缩略图绝对路径（info 内缩略图优先，无则系统格式图标缓存；皆无为 null）
   pub thumb_path: Option<String>,
@@ -92,6 +96,8 @@ pub fn placement_view(lib: &Library, meta: &AssetMeta, p: &Placement, icons: &Ha
     name: p.name.clone(),
     w: meta.width,
     h: meta.height,
+    thumb_w: meta.thumb_width,
+    thumb_h: meta.thumb_height,
     ext: meta.ext.clone(),
     thumb_path: thumb_path(lib, meta, icons),
     thumb_kind,

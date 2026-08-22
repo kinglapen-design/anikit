@@ -15,8 +15,10 @@ export interface PlacementView {
   assetId: string;
   folderId: string;
   name: string;
-  w: number | null; // fla 等无尺寸为 null，布局按 1:1 默认比例（4.2：无尺寸资产显示方形格式图标）
+  w: number | null; // 源文件尺寸（fla 等无尺寸为 null）；布局不用它——见 thumbW
   h: number | null;
+  thumbW?: number | null; // 缩略图实际尺寸（5.4）：布局比例跟缩略图走——自定义缩略图后自适应，刷新缩略图回退；null 回退 w/h
+  thumbH?: number | null;
   ext: string;
   thumbPath: string | null; // 缩略图绝对路径，无则卡片显示占位底色
   thumbKind: "asset" | "formatIcon" | null; // 缩略图来源：格式图标为方形，卡片 contain 显示不裁切（4.2）

@@ -184,6 +184,8 @@ mod tests {
         hash: hash.into(),
         width: None,
         height: None,
+        thumb_width: None,
+        thumb_height: None,
         duration: None,
         bpm: None,
         rating: 0,

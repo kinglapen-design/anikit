@@ -298,6 +298,7 @@ pub fn run() {
       commands::asset_menu::set_thumbnail_from_clipboard,
       commands::asset_menu::set_thumbnail_custom,
       commands::asset_menu::refresh_thumbnail,
+      commands::asset_menu::copy_thumbnail_to_clipboard,
       commands::asset_menu::export_assets,
       commands::asset_menu::export_folder,
       commands::asset_menu::export_retry,

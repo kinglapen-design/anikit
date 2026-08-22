@@ -332,6 +332,8 @@ mod tests {
       hash: format!("sha256:{id}"),
       width: None,
       height: None,
+      thumb_width: None,
+      thumb_height: None,
       duration: None,
       bpm: None,
       rating: 0,

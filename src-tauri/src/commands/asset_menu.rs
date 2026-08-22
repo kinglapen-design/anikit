@@ -65,6 +65,14 @@ pub async fn refresh_thumbnail(state: State<'_, AppState>, asset_id: String) -> 
   asset_menu::refresh_thumbnail(lib, &asset_id)
 }
 
+/// 复制缩略图位图到剪贴板（5.4；全类型含 shell 格式图标，2026-08-22 用户定）
+#[tauri::command]
+pub async fn copy_thumbnail_to_clipboard(state: State<'_, AppState>, asset_id: String) -> Result<(), String> {
+  let guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+  asset_menu::copy_thumbnail_to_clipboard(lib, &asset_id)
+}
+
 /// 导出数据源快照：锁内克隆（资产索引 + folders 文件），工作线程只持快照——
 /// 导出 IO 不占用库锁，长拷贝不阻塞 UI 其他命令
 fn export_snapshot(app: &AppHandle) -> Result<asset_menu::ExportSource, String> {

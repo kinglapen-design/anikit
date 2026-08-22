@@ -525,7 +525,7 @@ export const usePreviewStore = defineStore("preview", {
       if (!frameName) return;
       const toast = useToastStore();
       try {
-        const r = await invoke<{ thumbPath: string; modifiedAt: string }>("set_thumb_frame", {
+        const r = await invoke<{ thumbPath: string; modifiedAt: string; thumbWidth: number; thumbHeight: number }>("set_thumb_frame", {
           assetId: p.assetId,
           frameName,
         });
@@ -536,6 +536,8 @@ export const usePreviewStore = defineStore("preview", {
         );
         if (target) {
           target.modifiedAt = r.modifiedAt; // URL 版本戳（AssetCard / ListRowCard thumbUrl ?v=）
+          target.thumbW = r.thumbWidth; // 布局比例跟缩略图走（5.4）
+          target.thumbH = r.thumbHeight;
           target.thumbPath = null;
           await nextTick();
           target.thumbPath = r.thumbPath;

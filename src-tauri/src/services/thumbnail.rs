@@ -31,32 +31,53 @@ const WEBP_QUALITY: f32 = 80.0;
 
 /// 探测图片宽高；非图片 / 探测失败返回 None（PSD/SVG 走 thumb_formats 补充探测）
 pub fn probe(path: &Path) -> Option<(u32, u32)> {
-  image::image_dimensions(path).ok().or_else(|| thumb_formats::probe(path))
+  probe_by_signature(path).or_else(|| thumb_formats::probe(path))
+}
+
+/// 按内容魔数探测宽高（不认扩展名）：image crate 0.25 的 open / image_dimensions 按扩展名预设格式，
+/// 扩展名撒谎（壁纸站常见：.png 实为 JPEG）即 InvalidSignature——2026-08-23 实机报障，5.4 修
+fn probe_by_signature(path: &Path) -> Option<(u32, u32)> {
+  let file = fs::File::open(path).ok()?;
+  image::ImageReader::new(std::io::BufReader::new(file)).with_guessed_format().ok()?.into_dimensions().ok()
+}
+
+/// 按内容魔数解码（缘由同 probe_by_signature）
+fn decode_by_signature(path: &Path) -> Option<DynamicImage> {
+  let file = fs::File::open(path).ok()?;
+  image::ImageReader::new(std::io::BufReader::new(file)).with_guessed_format().ok()?.decode().ok()
+}
+
+/// 缩略图生成产物（5.4）：文件名 + 实际像素尺寸——布局比例跟缩略图走（见 models thumb_width 注释）
+pub struct ThumbOut {
+  pub name: String,
+  pub width: u32,
+  pub height: u32,
 }
 
 /// 生成缩略图：短边缩到 320、长边等比（原图短边不足 320 不放大），
-/// 优先存有损 webp，失败退回 PNG。gif 取首帧（image::open 行为即首帧）。
-/// 返回缩略图文件名；非图片 / 解码失败返回 None。
-pub fn generate(info_dir: &Path, origin: &Path, stem: &str) -> Option<String> {
+/// 优先存有损 webp，失败退回 PNG。gif 取首帧（按内容魔数解码行为即首帧）。
+/// 返回缩略图文件名与实际尺寸；非图片 / 解码失败返回 None。
+pub fn generate(info_dir: &Path, origin: &Path, stem: &str) -> Option<ThumbOut> {
   let img = load_origin(origin)?;
   let thumb = shrink_to_thumb(img);
+  let (width, height) = (thumb.width(), thumb.height());
 
   let webp_name = format!("{stem}_thumbnail.webp");
   if save_webp(&thumb, &info_dir.join(&webp_name)).is_ok() {
-    return Some(webp_name);
+    return Some(ThumbOut { name: webp_name, width, height });
   }
   log::warn!("webp 缩略图编码失败，退回 PNG：{}", origin.display());
   let png_name = format!("{stem}_thumbnail.png");
   if thumb.save(info_dir.join(&png_name)).is_ok() {
-    return Some(png_name);
+    return Some(ThumbOut { name: png_name, width, height });
   }
   None
 }
 
-/// 原图解码：image crate（jpg/png/gif/webp/bmp）→ PSD/SVG 解码补充（thumb_formats，4.2）
-/// → 视频首帧 / 音频波形（media，5.1 ffmpeg sidecar；缺失返回 None 退格式图标）
+/// 原图解码：按内容魔数（jpg/png/gif/webp/bmp，扩展名撒谎也能识别）→ PSD/SVG 解码补充
+/// （thumb_formats，4.2）→ 视频首帧 / 音频波形（media，5.1 ffmpeg sidecar；缺失返回 None 退格式图标）
 fn load_origin(origin: &Path) -> Option<DynamicImage> {
-  if let Ok(img) = image::open(origin) {
+  if let Some(img) = decode_by_signature(origin) {
     return Some(img);
   }
   if let Some(img) = thumb_formats::decode(origin) {
@@ -347,10 +368,11 @@ mod tests {
     // 横向 800x600 → 426x320（高缩到 320、宽等比）
     let land = dir.path().join("land.png");
     make_png(&land, 800, 600);
-    let name = generate(dir.path(), &land, "land").unwrap();
-    let out = dir.path().join(&name);
-    assert_eq!(name, "land_thumbnail.webp");
+    let thumb = generate(dir.path(), &land, "land").unwrap();
+    let out = dir.path().join(&thumb.name);
+    assert_eq!(thumb.name, "land_thumbnail.webp");
     assert!(out.is_file());
+    assert_eq!((thumb.width, thumb.height), (426, 320), "ThumbOut 尺寸 = 产物实际尺寸（5.4 布局数据源）");
     // 产物可再解码为 webp
     assert_eq!(image::image_dimensions(&out).unwrap(), (426, 320));
     // 有损压缩体积量级：纯色图应只有几 KB（无损 webp 同图为数十 KB 起）
@@ -359,14 +381,14 @@ mod tests {
     // 竖向 600x800 → 320x426（宽缩到 320、高等比）
     let port = dir.path().join("port.png");
     make_png(&port, 600, 800);
-    let name = generate(dir.path(), &port, "port").unwrap();
-    assert_eq!(image::image_dimensions(dir.path().join(&name)).unwrap(), (320, 426));
+    let thumb = generate(dir.path(), &port, "port").unwrap();
+    assert_eq!((thumb.width, thumb.height), (320, 426));
 
     // 方形 500x500 → 320x320
     let square = dir.path().join("square.png");
     make_png(&square, 500, 500);
-    let name = generate(dir.path(), &square, "square").unwrap();
-    assert_eq!(image::image_dimensions(dir.path().join(&name)).unwrap(), (320, 320));
+    let thumb = generate(dir.path(), &square, "square").unwrap();
+    assert_eq!((thumb.width, thumb.height), (320, 320));
   }
 
   #[test]
@@ -375,9 +397,8 @@ mod tests {
     let src = dir.path().join("small.png");
     make_png(&src, 100, 50);
 
-    let name = generate(dir.path(), &src, "small").unwrap();
-    let (w, h) = image::image_dimensions(dir.path().join(&name)).unwrap();
-    assert_eq!((w, h), (100, 50));
+    let thumb = generate(dir.path(), &src, "small").unwrap();
+    assert_eq!((thumb.width, thumb.height), (100, 50));
   }
 
   #[test]
@@ -385,7 +406,7 @@ mod tests {
     let dir = tempfile::tempdir().unwrap();
     let txt = dir.path().join("工程.fla");
     std::fs::write(&txt, "fake fla bytes").unwrap();
-    assert_eq!(generate(dir.path(), &txt, "工程"), None);
+    assert!(generate(dir.path(), &txt, "工程").is_none());
   }
 
   #[test]
@@ -498,6 +519,23 @@ mod tests {
     std::fs::write(&noext, "bytes").unwrap();
     assert!(ensure_format_icon(root, &noext, ""));
     assert!(root.join("cache/thumbs/file.webp").is_file());
+  }
+
+  /// 假扩展名回归（2026-08-23 实机报障，5.4）：壁纸站下载的 .png 实为 JPEG——
+  /// image crate 按扩展名预设格式会 InvalidSignature，探测/生成须按内容魔数识别
+  #[test]
+  fn fake_extension_decodes_by_content_signature() {
+    let dir = tempfile::tempdir().unwrap();
+    let real = dir.path().join("真.jpg");
+    DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(64, 48, image::Rgba([200, 30, 30, 255])))
+      .to_rgb8()
+      .save_with_format(&real, image::ImageFormat::Jpeg)
+      .unwrap();
+    let fake = dir.path().join("假图.png");
+    std::fs::copy(&real, &fake).unwrap();
+    assert_eq!(probe(&fake), Some((64, 48)), "探测按内容识别 JPEG 尺寸");
+    let out = generate(dir.path(), &fake, "测试").expect("假扩展名 JPEG 应可生成缩略图");
+    assert_eq!((out.width, out.height), (64, 48), "短边 48 < 320 不放大");
   }
 }
 

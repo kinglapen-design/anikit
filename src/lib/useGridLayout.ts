@@ -51,8 +51,9 @@ export function useGridLayout(opts: {
   const ui = useUiStore();
   const content = useContentStore();
 
-  // 布局算法只认数值宽高：fla 等无尺寸资源按 1:1 方形（4.2 用户定——格式图标为方形，容器随方不裁切）
-  const layoutItems = computed(() => opts.items().map((it) => ({ w: it.w ?? 300, h: it.h ?? 300 })));
+  // 布局算法只认数值宽高：比例跟缩略图实际尺寸走（5.4——自定义缩略图后自适应，刷新回退）；
+  // 回退链 thumbW → w（源文件尺寸，导入时与缩略图同比例）→ 300 方盒（fla 等无尺寸资源，4.2 用户定）
+  const layoutItems = computed(() => opts.items().map((it) => ({ w: it.thumbW ?? it.w ?? 300, h: it.thumbH ?? it.h ?? 300 })));
 
   const BUFFER = 800;
 
