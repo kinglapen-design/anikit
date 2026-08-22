@@ -1,10 +1,11 @@
 <script setup lang="ts">
-// 预览画面区（4.3/5.2/5.3）：image/sequence 走 <img>（filePath 由 store 维护，切帧即换 src）；
-// anim/video = 帧流（PreviewStreamCanvas 渲染 canvas，占位缩略图在下层——视频 5.3 起自研帧流，
-// 无 <video> 元素）；audio 显示波形大图（按画面区实际像素后端重采样，未就绪回退 info 波形缩略图
-// contain），无缩放平移。
+// 预览画面区（4.3/5.2）：image/sequence 走 <img>（filePath 由 store 维护，切帧即换 src）；
+// anim = 阶段四帧流（PreviewStreamCanvas 渲染 canvas，占位缩略图 / 回退 img 在下层）；
+// video 把 previewMedia 的 <video> 元素挂进画面区（缩放/平移/旋转/翻转复用图片那套数学，
+// 尺寸经 loadedmetadata → onImageLoad 喂入）；audio 显示波形大图（按画面区实际像素后端重采样，
+// 未就绪回退 info 波形缩略图 contain），无缩放平移。
 // 交互：滚轮缩放（瞄点跟鼠标）、左键拖动平移、双击 适合窗口⇄原图大小；
-// ←/→ 上/下一个素材；,/ . sequence/anim/video=逐帧步进（视频 = 真逐帧 idx±1）；
+// ←/→ 上/下一个素材；,/ . sequence/anim=上/下帧 video=逐帧步进；
 // 空格 sequence/anim/audio/video=播放暂停；Esc 退出全屏/预览。
 import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -17,11 +18,14 @@ import { usePreviewMediaStore } from "../stores/previewMedia";
 const preview = usePreviewStore();
 const media = usePreviewMediaStore();
 const stageRef = ref<HTMLElement>();
+const videoWrapRef = ref<HTMLElement>();
 let ro: ResizeObserver | undefined;
 
 const url = computed(() => (preview.filePath ? convertFileSrc(preview.filePath) : null));
-// <img> 渲染的 kind（video 帧流后同 anim：占位缩略图在下层；audio 走波形大图）
-const showImg = computed(() => url.value && preview.kind !== "audio" && preview.kind !== "other");
+// <img> 渲染的 kind（video 走元素挂载，audio 走波形大图）
+const showImg = computed(
+  () => url.value && preview.kind !== "video" && preview.kind !== "audio" && preview.kind !== "other",
+);
 // other 保底：格式图标大图
 const iconUrl = computed(() => {
   const p = preview.current;
@@ -48,7 +52,24 @@ const imgStyle = computed(() => ({
   transform: `${preview.flipH ? "scaleX(-1) " : ""}rotate(${preview.rotate}deg)`,
 }));
 
-// 帧流出帧尺寸跟随显示尺寸（视口变化 / 滚轮缩放 → 帧短边 × zoom，防抖由后端 clamp 幂等兜底）
+// video：元素挂进画面区（模块级单例，kind 切入时 append；切走随 v-if 脱离 DOM，store 仍持有）
+watch(
+  [() => preview.kind, videoWrapRef],
+  ([k]) => {
+    if (k === "video" && videoWrapRef.value) {
+      const v = media.getEl();
+      if (v.parentElement !== videoWrapRef.value) videoWrapRef.value.appendChild(v);
+    }
+  },
+  { immediate: true, flush: "post" },
+);
+// video 旋转/翻转同步到元素（wrap 定位/pan/zoom 数学不受影响）
+watchEffect(() => {
+  if (preview.kind !== "video") return;
+  media.getEl().style.transform = imgStyle.value.transform;
+});
+
+// 动图帧流出帧尺寸跟随显示尺寸（视口变化 / 滚轮缩放 → 帧短边 × zoom，防抖由后端 clamp 幂等兜底）
 watchEffect(() => {
   void preview.viewW;
   void preview.viewH;
@@ -97,10 +118,13 @@ function onDblClick(): void {
 }
 
 // 逐帧步进（, 和 . = YouTube / mpv / Premiere / Animate 同约定，2026-07-26 用户定）：
-// 序列帧/动图/视频统一 preview.stepFrame（步进即暂停；视频 = 真逐帧 idx±1，5.3 帧流）；其他类型无逐帧
+// 序列帧/动图步一帧（stepFrame 内含步进即暂停）；视频暂停后按素材帧率步进（fps 缺失回退 ±1/24s）；
+// 其他类型无逐帧
 function stepOneFrame(delta: number): void {
-  if (preview.kind === "sequence" || preview.kind === "anim" || preview.kind === "video") {
-    preview.stepFrame(delta);
+  if (preview.kind === "sequence" || preview.kind === "anim") preview.stepFrame(delta);
+  else if (preview.kind === "video") {
+    media.pause();
+    media.seekBy(delta / (media.fps != null && media.fps > 0 ? media.fps : 24));
   }
 }
 
@@ -125,11 +149,9 @@ function onKeydown(e: KeyboardEvent): void {
       stepOneFrame(1);
       break;
     case " ":
-      if (preview.kind === "sequence" || preview.kind === "anim" || preview.kind === "video") {
-        preview.togglePlay();
-      } else if (preview.kind === "audio") {
-        media.togglePlay();
-      } else break;
+      if (preview.kind === "sequence" || preview.kind === "anim") preview.togglePlay();
+      else if (preview.kind === "audio" || preview.kind === "video") media.togglePlay();
+      else break;
       e.preventDefault();
       break;
   }
@@ -173,9 +195,10 @@ watch(
   >
     <div v-if="showImg" class="img-wrap" :style="wrapStyle">
       <img :src="url!" :style="imgStyle" draggable="false" @load="onLoad" />
-      <!-- 动图 / 视频 = 帧流 canvas（叠于占位缩略图 / 回退 img 之上，旋转翻转转 imgStyle 同款 transform） -->
-      <PreviewStreamCanvas v-if="preview.kind === 'anim' || preview.kind === 'video'" :style="imgStyle" />
+      <!-- 动图 = 帧流 canvas（叠于占位缩略图 / 回退 img 之上，旋转翻转转 imgStyle 同款 transform） -->
+      <PreviewStreamCanvas v-if="preview.kind === 'anim'" :style="imgStyle" />
     </div>
+    <div v-else-if="preview.kind === 'video'" ref="videoWrapRef" class="img-wrap" :style="wrapStyle" />
     <div v-else-if="waveUrl" class="wave-large" :style="{ '--wave-url': `url(&quot;${waveUrl}&quot;)` }" />
     <img v-else-if="iconUrl" class="format-icon" :src="iconUrl" draggable="false" />
     <span v-if="preview.error" class="error-text">{{ preview.error }}</span>

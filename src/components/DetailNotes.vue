@@ -16,6 +16,7 @@ import { frameOfTime, totalFrames } from "../lib/formatFrame";
 import { useContentStore } from "../stores/content";
 import { useUiStore } from "../stores/ui";
 import { usePreviewStore } from "../stores/preview";
+import { usePreviewMediaStore } from "../stores/previewMedia";
 import { usePreviewNotesStore, type NoteEntry } from "../stores/previewNotes";
 
 const content = useContentStore();
@@ -119,8 +120,8 @@ async function jump(key: string): Promise<void> {
       preview.setFrame(i);
     }
   } else if (preview.kind === "video" && key.startsWith("t:")) {
-    preview.pause(); // 暂停定位（5.3 帧流：秒定位真 seek 停目标帧）
-    preview.videoSeek(Number(key.slice(2)));
+    usePreviewMediaStore().pause();
+    usePreviewMediaStore().seek(Number(key.slice(2)));
   }
   // 打开笔记编辑浮层（toggle 内含暂停与懒加载；已打开则不动）
   if (!notesStore.open) notesStore.toggle();

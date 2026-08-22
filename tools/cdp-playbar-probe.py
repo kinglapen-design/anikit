@@ -6,7 +6,6 @@ import asyncio
 import base64
 import json
 import re
-import struct
 import subprocess
 import sys
 import tempfile
@@ -53,13 +52,10 @@ window.__TAURI_INTERNALS__ = {
     };
     if (cmd === "get_asset_file_path") {
       const ext = { A0: "gif", A1: "mp4", A2: "mp3" }[args.assetKey ?? ""] ?? "gif";
-      return Promise.resolve({ path: `E:/T/src.${ext}`, pending: false });
+      return Promise.resolve({ path: `E:/T/src.${ext}`, pending: false, animPreview: null });
     }
     if (cmd === "start_anim_stream") return Promise.resolve({ session: 1, port: WS_PORT });
-    // 视频 = 自研帧流（5.3：不再有 get_media_source 视频转码）；hasAudio=true 出音量钮（左组 6 件）
-    if (cmd === "start_video_stream")
-      return Promise.resolve({ session: 2, port: WS_PORT, hasAudio: true, fps: 24, duration: 10 });
-    if (cmd === "get_media_source") return Promise.resolve({ path: "E:/T/src.mp3", transcoded: false });
+    if (cmd === "get_media_source") return Promise.resolve({ path: "E:/T/src.mp4", transcoded: false, fps: 24 });
     return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
   },
   transformCallback: () => 0,
@@ -91,8 +87,7 @@ async def send(ws, method, params=None, session=None):
 
 
 async def frame_server():
-    """假帧流 server（协议 v2）：每连接 20fps 推 160x90 RGBA 彩帧，29 字节头
-    [tag=0][w][h][idx][pts_ms f64][seq]，idx 24 帧循环（pts = idx×50ms）。"""
+    """假帧流 server：每连接 20fps 推 160x90 RGBA 彩帧，20 字节头 idx 24 帧循环（对齐 frameCount）。"""
     async def handler(ws):
         seq = 0
         w, h = 160, 90
@@ -101,11 +96,8 @@ async def frame_server():
                 seq += 1
                 idx = (seq - 1) % 24
                 header = (
-                    b"\x00"
-                    + w.to_bytes(4, "little") + h.to_bytes(4, "little")
-                    + idx.to_bytes(4, "little")
-                    + struct.pack("<d", idx * 50.0)
-                    + seq.to_bytes(8, "little")
+                    w.to_bytes(4, "little") + h.to_bytes(4, "little")
+                    + idx.to_bytes(4, "little") + seq.to_bytes(8, "little")
                 )
                 rgba = bytes([seq % 256, 100, 200, 255]) * (w * h)
                 await ws.send(header + rgba)

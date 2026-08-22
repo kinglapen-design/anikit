@@ -1,5 +1,5 @@
 // 悬停播放层骨架 composable（5.3，自 HoverVideoLayer / HoverAudioLayer / HoverSequenceLayer
-// 三份逐字相同骨架收编；视频层 2026-08-22 起为 VideoCanvasLayer（帧流），骨架口径不变）：300ms 进入延迟（防快速划过 / 快速滚动触发加载与转码）、
+// 三份逐字相同骨架收编）：300ms 进入延迟（防快速划过 / 快速滚动触发加载与转码）、
 // hoverPreview 活跃实例注册（主窗口隐藏到托盘时暂停全部活跃悬停播放）、disposed 护栏
 // （异步加载返回时组件已卸载则不碰 media 元素）、卸载统一清理。
 // 差异逻辑（media 元素挂载 / scrub 范围循环 / 波形 seek / 序列帧轮播）留各组件。

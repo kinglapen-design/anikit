@@ -1,7 +1,6 @@
 // 逐帧笔记（5.2）：sequence/anim/video 播放条的笔记浮层状态。
 // key 约定：序列帧 = 帧名（frame-00001）；**动图 = `f:{帧索引0起}`**（2026-08-20 解包废除，
-// 不再依赖帧文件名；存量帧名 key 由后端 get_notes 一次性迁移）；视频 = t:{秒}
-//（5.3 帧流化：取自 preview.vSecs——帧 pts 驱动，暂停 / 逐帧定位后精确到当前帧）。
+// 不再依赖帧文件名；存量帧名 key 由后端 get_notes 一次性迁移）；视频 = t:{currentTime.toFixed(3)}；
 // set_note 的 text 去空白后为空 = 删除；两条命令统一返回按 key 排序全量，前端直接替换。
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
@@ -42,7 +41,7 @@ export const usePreviewNotesStore = defineStore("previewNotes", {
         return preview.seq?.frames[preview.frame]?.name ?? null;
       }
       if (preview.kind === "video") {
-        return `t:${preview.vSecs.toFixed(3)}`;
+        return `t:${usePreviewMediaStore().currentTime.toFixed(3)}`;
       }
       return null;
     },
@@ -104,7 +103,7 @@ export const usePreviewNotesStore = defineStore("previewNotes", {
         const i = preview.seq?.frames.findIndex((f) => f.name === key) ?? -1;
         if (i >= 0) preview.setFrame(i);
       } else if (preview.kind === "video" && key.startsWith("t:")) {
-        preview.videoSeek(Number(key.slice(2))); // 5.3 帧流：秒定位（后端真 seek）
+        usePreviewMediaStore().seek(Number(key.slice(2)));
       }
     },
     reset(): void {

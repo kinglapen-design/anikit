@@ -1,8 +1,7 @@
-// 预览会话（4.3/5.2/5.3）：中栏预览模式的状态与行为。assetKey 非空 = 预览模式（ContentArea 据此切换）。
+// 预览会话（4.3/5.2）：中栏预览模式的状态与行为。assetKey 非空 = 预览模式（ContentArea 据此切换）。
 // 图片查看器（缩放/平移/旋转/翻转）与帧播放（序列帧 rAF 引擎按帧时长/rate 驱动；
-// 动图 / 视频 = 帧流：StreamSession 收帧渲染 canvas，播放/暂停/倍速/定位/循环由会话命令控制；
-// 视频 5.3 起同通道（真 seek / 音轨 PCM WebAudio / 真逐帧），视频播放态在本 store（v* 字段））共用本 store；
-// 音频播放状态在 previewMedia（5.3 收窄音频专用）、逐帧笔记在 previewNotes（本 store 负责进入/退出时的接线与复位）。
+// 动图 = 阶段四帧流（协议 v2）：StreamSession 收帧渲染 canvas，播放/暂停/倍速/定位由会话命令控制）共用本 store；
+// 音视频播放状态在 previewMedia（<video> 元素驱动）、逐帧笔记在 previewNotes（本 store 负责进入/退出时的接线与复位）。
 // 容器尺寸由 PreviewPanel 的 ResizeObserver 写入，缩放瞄点数学集中在 zoomAt。
 import { defineStore } from "pinia";
 import { markRaw, nextTick } from "vue";
@@ -36,32 +35,20 @@ export const RATES = [8, 4, 3, 2, 1.75, 1.5, 1.25, 1, 0.75, 0.5, 0.25];
 let rafId = 0;
 let lastT = 0;
 let acc = 0;
-// 帧流会话（模块级单例：预览同时至多一个；动图 / 视频共用。播放控制命令透传，帧渲染经 state.animFrame 暴露）
+// 动图帧流会话（模块级单例：预览同时至多一个；播放控制命令透传，帧渲染经 state.animFrame 暴露）
 let streamSession: StreamSession | null = null;
-// seek 拖动目标帧（动图；非 null 时忽略在途旧帧——防播放条帧号被 seek 前的旧帧拉回跳动）
+// seek 拖动目标帧（非 null 时忽略在途旧帧——防播放条帧号被 seek 前的旧帧拉回跳动）
 let seekTarget: number | null = null;
-// 视频 seek 在途标记（true = 丢弃全部到帧，直至后端 flush 到达——WS 有序，flush 之前的帧必为 seek 前旧帧）
-let videoSeeking = false;
-// videoSeeking 看门狗（2026-08-22 实机冻结案）：flush 丢失（广播 Lag / 会话死亡）时丢帧标记会永久卡死
-// 画面——1.5s 无 flush 强制自清（在途旧帧可能闪一帧旧画面，可恢复性优先）
-let videoSeekTimer: ReturnType<typeof setTimeout> | undefined;
-
-function clearVideoSeekWatchdog(): void {
-  clearTimeout(videoSeekTimer);
-  videoSeekTimer = undefined;
-}
 
 function stopStream(): void {
   streamSession?.stop();
   streamSession = null;
   seekTarget = null;
-  videoSeeking = false;
-  clearVideoSeekWatchdog();
 }
 
 // 出帧短边 = 显示短边（帧短边 × zoom × DPR——2026-08-22 用户实机"模糊"修复：CSS 像素未计 DPR，
 // 4K/150% 屏 1.5 倍欠采样；DPR >2 不追，收益边际）；无帧时视口短边兜底，clamp [16,2048]
-//（上限收紧 4096→2048：大源高帧率下 WS 吞吐 / putImageData 主线程预算有限，4K 源 60fps 已顶格）
+//（上限收紧 4096→2048：大源高帧率下 WS 吞吐 / putImageData 主线程预算有限）
 function streamEdge(naturalW: number, naturalH: number, viewW: number, viewH: number, zoom: number): number {
   const base = naturalW > 0 ? Math.min(naturalW, naturalH) : Math.min(viewW, viewH);
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -110,23 +97,13 @@ export const usePreviewStore = defineStore("preview", {
     playing: false,
     rate: 1,
     fullscreen: false,
-    // 帧流当前帧（PreviewStreamCanvas 渲染用——动图 / 视频共用；markRaw 赋值防深度代理）与总帧数
-    // （max(metadata frameCount, 已见 idx+1)——动图播放条分母，不依赖磁盘帧图）
+    // 动图帧流当前帧（PreviewStreamCanvas 渲染用；markRaw 赋值防深度代理）与总帧数
+    // （max(metadata frameCount, 已见 idx+1)——播放条分母，不依赖磁盘帧图）
     animFrame: null as StreamFrame | null,
     animTotal: 0,
     // 动图帧条小图（key = `f:{索引}` → stripPath；prepare_anim_strips 已缓存清单 +
     // preview-strips-ready 事件渐进填充）
     animStrips: {} as Record<string, string>,
-    // —— 视频帧流（5.3 全面接入自研解码器；渲染与动图共用 animFrame 通道，播放条状态在本 store）——
-    vSecs: 0, // 当前播放时刻（秒，帧 pts 驱动——笔记 t: key / 设封面 / 时间码显示用）
-    vDuration: 0, // 总时长（秒；会话响应优先，PlacementView 兜底）
-    vFps: null as number | null, // 素材自身帧率（帧号显示 / 逐帧步进换算；会话响应优先）
-    vHasAudio: false, // 有音轨（音量钮显隐）
-    vEnded: false, // loop=false 自然到底（播放键 = seek(0) 重开）
-    vStreamLive: false, // 帧流会话已建立（false = 启动失败：播放条禁用，画面保持缩略图 + 报错）
-    vMuted: false, // 音量态跨素材保持（同 previewMedia 既有"音量/静音保留用户设置"语义）
-    vVolume: 1,
-    vLoop: false, // 循环钮（切素材复位，对齐旧 <video> release 语义）
   }),
   getters: {
     // 当前预览的 PlacementView（按 key 在当前视口列表里找）；
@@ -241,14 +218,6 @@ export const usePreviewStore = defineStore("preview", {
       this.animFrame = null;
       this.animTotal = 0;
       this.animStrips = {};
-      // 视频态复位（vMuted / vVolume 保留用户设置，跨素材跨会话）
-      this.vSecs = 0;
-      this.vDuration = 0;
-      this.vFps = null;
-      this.vHasAudio = false;
-      this.vEnded = false;
-      this.vStreamLive = false;
-      this.vLoop = false;
     },
     // 上/下一个素材（当前视口顺序，到头停）
     async step(delta: number): Promise<void> {
@@ -276,13 +245,6 @@ export const usePreviewStore = defineStore("preview", {
       this.animFrame = null;
       this.animTotal = 0;
       this.animStrips = {};
-      this.vSecs = 0;
-      this.vDuration = 0;
-      this.vFps = null;
-      this.vHasAudio = false;
-      this.vEnded = false;
-      this.vStreamLive = false;
-      this.vLoop = false;
       this.resetView();
       const p = this.current;
       if (!p) {
@@ -310,12 +272,13 @@ export const usePreviewStore = defineStore("preview", {
       }
       if (isAudioExt(ext)) {
         this.kind = "audio";
-        await media.load(p.assetId); // 音频专用（5.3 收窄；视频走 loadVideo 帧流）
+        await media.load(p.assetId, "audio");
         return;
       }
       if (isVideoExt(ext)) {
         this.kind = "video";
-        await this.loadVideo(p.assetId); // 帧流（5.3 自研解码器）；笔记加载在 loadVideo 内
+        await media.load(p.assetId, "video", p.fps ?? null); // fps 随 PlacementView 透传（5.3 帧化）
+        void notes.load();
         return;
       }
       const r = await getAssetFilePath(p.assetId);
@@ -373,82 +336,22 @@ export const usePreviewStore = defineStore("preview", {
         console.warn("动图帧条准备失败（帧条暂缺，播放不受影响）：", e);
       }
     },
-    // 视频加载（5.3 全面接入自研解码器）：播放 = WS 帧流渲染 canvas（对 origin 运行时解码；
-    // 音轨 PCM 块经 WebAudio 播放——音量 / 静音纯前端 GainNode）；定位 = 秒（后端 ffmpeg 真 seek）；
-    // 设封面 = set_video_thumb（sidecar 任意时间点截帧，与播放链无关）；逐帧笔记 key = t:{秒}。
-    // 帧流失败：保持静态缩略图 + 报错文案（kind 维持 video，播放条禁用态——vStreamLive 闸）
-    async loadVideo(assetId: string): Promise<void> {
-      stopStream();
-      this.animFrame = null;
-      const edge = streamEdge(this.naturalW, this.naturalH, this.viewW, this.viewH, this.zoom);
-      const s = await StreamSession.startVideo(
-        assetId,
-        { shortEdge: edge, startSecs: 0, loop: this.vLoop },
-        {
-          onFrame: (f) => this.onStreamFrame(f),
-          onControl: (c) => {
-            if (c === "flush") {
-              videoSeeking = false; // seek 到位：恢复收帧
-              clearVideoSeekWatchdog();
-            }
-            if (c === "ended") {
-              this.playing = false;
-              this.vEnded = true;
-            }
-            if (c === "error") {
-              // 会话线程死亡（解码错误等）：降级报错 + 播放条禁用（防静默冻结）
-              videoSeeking = false;
-              clearVideoSeekWatchdog();
-              this.playing = false;
-              this.vStreamLive = false;
-              this.error = "视频解码会话中断，请重新打开预览";
-            }
-          },
-        },
-      );
-      if (this.current?.assetId !== assetId || this.kind !== "video") {
-        s?.stop(); // await 期间已切走
-        return;
-      }
-      streamSession = s;
-      this.vFps = s?.fps ?? this.current?.fps ?? null;
-      this.vDuration = s?.durationSec ?? this.current?.duration ?? 0;
-      if (s) {
-        this.playing = true; // 会话默认即播（进入自动播放，同动图口径）
-        s.setRate(this.rate); // 倍速跨素材保持
-        s.setMuted(this.vMuted); // 音量态跨素材保持
-        s.setVolume(this.vVolume);
-        this.vHasAudio = s.hasAudio;
-        this.vStreamLive = true;
-      } else {
-        this.playing = false;
-        this.error = "视频解码会话启动失败";
-      }
-      void usePreviewNotesStore().load();
-    },
-    // 帧流帧到达（会话 onFrame 回调，动图 / 视频共用）：更新画面帧 / 帧号 / 总帧数 / natural
-    //（尺寸热更新时换算保视觉）；视频另驱动 vSecs（笔记 t: key / 播放条时间码）
+    // 帧流帧到达（会话 onFrame 回调）：更新画面帧 / 帧号 / 总帧数 / natural（尺寸热更新时换算保视觉）
     onStreamFrame(f: StreamFrame): void {
-      if (this.kind === "anim") {
-        // seek 期间忽略在途旧帧（帧号不被拉回跳动；目标帧到达后恢复）
-        if (seekTarget !== null) {
-          if (f.frameIndex !== seekTarget) return;
-          seekTarget = null;
-        }
-      } else if (this.kind === "video") {
-        if (videoSeeking) return; // seek 在途：丢旧帧（后端 flush 到达恢复——WS 有序保证）
-        this.vSecs = f.ptsMs / 1000;
-      } else {
-        return;
+      if (this.kind !== "anim") return;
+      // seek 期间忽略在途旧帧（帧号不被拉回跳动；目标帧到达后恢复）
+      if (seekTarget !== null) {
+        if (f.frameIndex !== seekTarget) return;
+        seekTarget = null;
       }
       this.animFrame = markRaw(f);
       this.frame = f.frameIndex;
-      if (this.kind === "anim" && f.frameIndex + 1 > this.animTotal) this.animTotal = f.frameIndex + 1;
+      if (f.frameIndex + 1 > this.animTotal) this.animTotal = f.frameIndex + 1;
       if (this.naturalW !== f.w || this.naturalH !== f.h) this.onImageLoad(f.w, f.h, true);
     },
     // 出帧尺寸跟随显示尺寸（帧短边 × zoom；PreviewPanel watchEffect 驱动：viewW/H/zoom 变化）
     syncAnimSize(): void {
-      if (!streamSession || (this.kind !== "anim" && this.kind !== "video")) return;
+      if (!streamSession || this.kind !== "anim") return;
       streamSession.setSize(streamEdge(this.naturalW, this.naturalH, this.viewW, this.viewH, this.zoom));
     },
     // 帧播放进入点（序列帧/动图共用）：封面帧为初始帧，进入自动播放（2026-07-25 用户定）
@@ -471,11 +374,11 @@ export const usePreviewStore = defineStore("preview", {
       this.naturalW = 0;
       this.naturalH = 0;
     },
-    // img onload：记录显示图实际尺寸，初始化为适合窗口（同尺寸帧切换不重置视图）。
+    // img onload / video loadedmetadata：记录显示图实际尺寸，初始化为适合窗口（同尺寸帧切换不重置视图）。
     // 渐进替换（缩略图 → 高清，同比例）：按新旧像素比换算 zoom，视觉尺寸不动、pan 不动（容器坐标系）。
-    // fromStream = 帧流帧（动图 / 视频）：帧流活着时占位 img 的 onload 不喂尺寸（320 缩略图会抢 natural）
+    // fromStream = 动图帧流帧：帧流活着时占位 img 的 onload 不喂尺寸（320 缩略图会抢 natural）
     onImageLoad(w: number, h: number, fromStream = false): void {
-      if ((this.kind === "anim" || this.kind === "video") && streamSession && !fromStream) return;
+      if (this.kind === "anim" && streamSession && !fromStream) return;
       if (this.naturalW === w && this.naturalH === h) return;
       if (this.naturalW > 0 && this.naturalH > 0) {
         this.zoom = this.zoom * (this.naturalW / w);
@@ -516,7 +419,7 @@ export const usePreviewStore = defineStore("preview", {
     toggleFlip(): void {
       this.flipH = !this.flipH;
     },
-    // —— 帧播放（序列帧 rAF 引擎；动图 / 视频 = 帧流会话命令，交互语义不变）——
+    // —— 帧播放（序列帧 rAF 引擎；动图 = 帧流会话命令，5.2 交互语义不变）——
     setFrame(i: number): void {
       if (this.kind === "anim" && streamSession) {
         const n = Math.max(1, this.animTotal);
@@ -538,67 +441,14 @@ export const usePreviewStore = defineStore("preview", {
         this.setFrame(this.frame + delta);
         return;
       }
-      // 视频真逐帧（5.3 帧流：idx±1 → 秒换算，后端定位到目标帧画面停住；步进即暂停同口径）
-      if (this.kind === "video" && this.vStreamLive) {
-        if (this.playing) this.pause();
-        const fps = this.vFps != null && this.vFps > 0 ? this.vFps : 24;
-        const total = Math.max(1, Math.round(this.vDuration * fps));
-        const target = Math.min(total - 1, Math.max(0, this.frame + delta));
-        this.videoSeek(target / fps);
-        return;
-      }
       if (!this.seq) return;
       const n = this.seq.frames.length;
       if (this.playing) this.pause();
       this.setFrame(Math.min(n - 1, Math.max(0, this.frame + delta)));
     },
-    // 视频定位（秒；播放条拖动 / 笔记跳帧 / ±5s / 逐帧换算共用）：后端真 seek。
-    // 暂停态定位 = 停在目标帧；播放中定位后续播；在途旧帧丢弃（flush 到达恢复收帧）
-    videoSeek(secs: number): void {
-      if (this.kind !== "video" || !streamSession) return;
-      const max = this.vDuration > 0 ? this.vDuration : Number.MAX_SAFE_INTEGER;
-      const t = Math.min(max, Math.max(0, secs));
-      videoSeeking = true;
-      // 看门狗：flush 正常 ~立即到达；丢失（广播 Lag / 会话死亡）1.5s 后强制恢复收帧
-      clearVideoSeekWatchdog();
-      videoSeekTimer = setTimeout(() => {
-        videoSeeking = false;
-      }, 1500);
-      this.vSecs = t; // 乐观更新（播放条 / 笔记 key 立即正确）
-      this.vEnded = false;
-      streamSession.seekVideo(t);
-    },
-    videoSeekBy(delta: number): void {
-      this.videoSeek(this.vSecs + delta);
-    },
-    // 视频循环钮（自然到底发 ended 停末帧 / 循环重开）
-    videoToggleLoop(): void {
-      this.vLoop = !this.vLoop;
-      streamSession?.setLoop(this.vLoop);
-    },
-    // 视频静音 / 音量（GainNode 纯前端；vMuted / vVolume 跨素材保持）
-    videoToggleMuted(): void {
-      this.videoSetMuted(!this.vMuted);
-    },
-    videoSetMuted(muted: boolean): void {
-      this.vMuted = muted;
-      streamSession?.setMuted(muted);
-    },
-    videoSetVolume(v: number): void {
-      this.vVolume = Math.min(1, Math.max(0, v));
-      if (this.vVolume > 0) this.vMuted = false; // 拖离 0 自动解除静音（对齐既有语义）
-      streamSession?.setVolume(this.vVolume);
-    },
     play(): void {
       if (this.kind === "anim") {
         if (!streamSession || this.playing) return;
-        this.playing = true;
-        streamSession.setPlaying(true);
-        return;
-      }
-      if (this.kind === "video") {
-        if (!streamSession || this.playing) return;
-        if (this.vEnded) this.videoSeek(0); // 到底后重播 = 从头（seek 唤醒后端重开趟）
         this.playing = true;
         streamSession.setPlaying(true);
         return;
@@ -631,7 +481,7 @@ export const usePreviewStore = defineStore("preview", {
       rafId = requestAnimationFrame(tick);
     },
     pause(): void {
-      if (this.kind === "anim" || this.kind === "video") {
+      if (this.kind === "anim") {
         this.playing = false;
         streamSession?.setPlaying(false);
         return;
@@ -661,35 +511,7 @@ export const usePreviewStore = defineStore("preview", {
     },
     setRate(r: number): void {
       this.rate = r;
-      if (this.kind === "anim" || this.kind === "video") streamSession?.setRate(r);
-    },
-    // 当前画面设为预览图（视频，5.3 帧流版）：vSecs（帧 pts 驱动，精确到当前帧）→ set_video_thumb
-    // sidecar 截帧 → 同缩略图管线重建。toast 反馈 + modifiedAt URL 版本戳（同 setAsThumb 机制）
-    async setVideoThumb(): Promise<void> {
-      const p = this.current;
-      if (!p || this.kind !== "video") return;
-      const toast = useToastStore();
-      try {
-        const r = await invoke<{ thumbPath: string; modifiedAt: string }>("set_video_thumb", {
-          assetId: p.assetId,
-          atSecs: this.vSecs,
-        });
-        const content = useContentStore();
-        const target = content.placements.find(
-          (x) => x.assetId === p.assetId && x.folderId === p.folderId,
-        );
-        if (target) {
-          target.modifiedAt = r.modifiedAt; // URL 版本戳（AssetCard / ListRowCard thumbUrl ?v=）
-          target.thumbPath = null;
-          await nextTick();
-          target.thumbPath = r.thumbPath;
-        } else {
-          await content.refresh();
-        }
-        toast.notify({ message: "已设为预览图", icon: "success" });
-      } catch (e) {
-        toast.notify({ message: String(e), icon: "fail" });
-      }
+      if (this.kind === "anim") streamSession?.setRate(r);
     },
     // 当前帧设为预览图（序列帧 / 动图通用，5.2）：后端重建缩略图 + 记封面帧，前端即时换卡片图。
     // 动图传 `f:{索引}`（origin 解码抽帧，2026-08-20 解包废除）；序列帧传 frames/ 内帧名。

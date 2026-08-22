@@ -19,4 +19,3 @@ pub mod sequence;
 pub mod settings;
 pub mod thumb_frame;
 pub mod undo;
-pub mod video_stream;

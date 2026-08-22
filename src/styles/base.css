@@ -165,7 +165,7 @@ textarea {
   outline: none;
 }
 
-/* 悬停播放层右下胶囊（5.3，VideoCanvasLayer / HoverAudioLayer 共用）：时间 / 帧号 + 控制钮，
+/* 悬停播放层右下胶囊（5.3，HoverVideoLayer / HoverAudioLayer 共用）：时间 / 帧号 + 控制钮，
    C1-50 底圆角 4；视频组件给 3px 进度条让位（bottom 7）为局部覆盖 */
 .capsule {
   position: absolute;
