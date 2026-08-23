@@ -34,9 +34,10 @@ const paperSvg1 = getIcon("archive-paper-01");
 const paperSvg2 = getIcon("archive-paper-02");
 const clipSvg = getIcon("paperclip");
 
-// 封面：子项第一张静态图（folderThumbMap 既有口径）；无图 = 封面区透明露背景纸张
+// 封面：自定义封面优先（6.1 封面设置产物 covers/，头像即档案卡片封面二者同步，PRD 03_数据链接 03）；
+// 无自定义 = 子项第一张静态图（folderThumbMap 既有口径）；无图 = 封面区透明露背景纸张
 const cover = computed(() => {
-  const p = content.folderThumbMap.get(props.folder.id);
+  const p = content.archives[props.folder.id]?.coverPath ?? content.folderThumbMap.get(props.folder.id);
   return p ? convertFileSrc(p) : null;
 });
 

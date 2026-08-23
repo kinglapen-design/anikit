@@ -89,6 +89,9 @@ pub struct AssetMeta {
   pub modified_at: String,
   #[serde(default)]
   pub tags: Vec<String>,
+  /// 描述（标题 + 内容组合，逐条添加，6.1，PRD 03_数据链接 02/06）；default 空数组，不升 DATA_VERSION
+  #[serde(default)]
+  pub descriptions: Vec<DescItem>,
   #[serde(default)]
   pub note: String,
   /// 逐帧笔记条数冗余（5.2 展示层：卡片角标 / 详情区块免读 notes.json）；
@@ -313,12 +316,16 @@ pub struct Badge {
   pub color: String,
 }
 
-/// 头像 = 源资产 ID + 取景框参数（据此生成封面缓存，PRD 03_数据链接 03）
+/// 头像（即档案卡片封面，二者同步）：covers/ 目录内独立存的烘培封面文件 + 取景框参数
+///（2026-08-23 用户定：本地选图独立存**不入库**为资产，偏离原「源资产 ID」口径——
+/// 资产引用变体随主窗口选择模式落地时再扩；None = 默认索引子项第一张图，不写字段）
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Avatar {
-  pub asset_id: String,
-  /// 取景框参数（三轮头像编辑用，一轮先立结构；None = 未调整，不写字段）
+  /// 封面文件名（库根 covers/ 内；带时间戳生成不覆盖写——undo 回滚 archives.json 即恢复旧封面显示，
+  /// 旧文件留盘待清理，见 09 待办）
+  pub file: String,
+  /// 取景框参数（封面设置面板：滑块缩放 + 拖动位移；None = 未调整，不写字段）
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub crop: Option<Crop>,
 }
@@ -532,7 +539,7 @@ mod tests {
         ArchiveData {
           folder_id: "F01".into(),
           badge: Some(Badge { text: "主角".into(), color: "#FF0000".into() }),
-          avatar: Some(Avatar { asset_id: "AN-A".into(), crop: Some(Crop { x: 1.5, y: -2.0, scale: 2.0 }) }),
+          avatar: Some(Avatar { file: "F01-20260823120000.webp".into(), crop: Some(Crop { x: 1.5, y: -2.0, scale: 2.0 }) }),
           props: vec!["走路".into()],
           descriptions: vec![DescItem { title: "设定".into(), content: "长文".into() }],
           links: vec!["https://ref".into()],
@@ -543,7 +550,7 @@ mod tests {
     };
     let text = serde_json::to_string(&file).unwrap();
     assert!(text.contains("folderId"), "rename_all camelCase 生效：{text}");
-    assert!(text.contains("assetId"), "Avatar 同口径：{text}");
+    assert!(text.contains("file"), "Avatar 同口径：{text}");
     // 空记录：badge / avatar / createdAt 不写字段，props / descriptions / links 空数组照常写
     let bare = serde_json::to_string(&file.archives[1]).unwrap();
     assert_eq!(bare, r#"{"folderId":"F02","props":[],"descriptions":[],"links":[]}"#);

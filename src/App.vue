@@ -33,6 +33,8 @@ import RecycleConfirmDialog from "./components/RecycleConfirmDialog.vue";
 import BlockManageDialog from "./components/BlockManageDialog.vue";
 import GroupManageDialog from "./components/GroupManageDialog.vue";
 import GroupEditDialog from "./components/GroupEditDialog.vue";
+import PropsDialog from "./components/PropsDialog.vue";
+import DescEditDialog from "./components/DescEditDialog.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import AppConfirm from "./components/AppConfirm.vue";
 import FolderPickerDialog from "./components/FolderPickerDialog.vue";
@@ -320,6 +322,10 @@ async function togglePin(): Promise<void> {
     <MovePanel v-if="selection.moveDraft" />
     <!-- 批量重命名弹窗（3.4，37 稿）：多选「重命名」/ Ctrl+R 触发 -->
     <BatchRenameDialog v-if="selection.renameDraft" />
+    <!-- 属性标签弹窗（6.1，32 稿）/ 编辑描述弹窗（31 稿）：详情面板自定义数据区块入口，
+         文件与档案同做；须在 AppConfirm 之前——池内 × 删除弹确认窗，后渲染者在上 -->
+    <PropsDialog v-if="ui.propsEdit" />
+    <DescEditDialog v-if="ui.descEdit" />
     <!-- 全局右键菜单宿主（6.3：lib/contextMenus 单一实例，六上下文共用） -->
     <ContextMenu />
     <!-- 通用确认弹窗（6.3：警示前置 / 删除文件夹 / 彻底删除二次确认） -->

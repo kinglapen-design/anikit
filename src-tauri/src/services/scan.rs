@@ -196,6 +196,7 @@ mod tests {
         modified_at: imported_at.into(),
         tags: Vec::new(),
         note: String::new(),
+        descriptions: Vec::new(),
         note_count: None,
         thumbnail: None,
         fps: None,

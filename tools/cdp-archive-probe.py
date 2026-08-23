@@ -147,7 +147,7 @@ window.__cbId = 0;
       assetId: meta.id, originName: meta.originName, ext: meta.ext, size: meta.size,
       width: meta.width, height: meta.height, duration: meta.duration,
       importedAt: meta.importedAt, modifiedAt: meta.modifiedAt,
-      tags: meta.tags, links: meta.links, note: meta.note, placements, archives,
+      tags: meta.tags, descriptions: meta.descriptions ?? [], links: meta.links, note: meta.note, placements, archives,
     };
   };
   window.__TAURI_INTERNALS__ = {
@@ -663,13 +663,13 @@ async def main():
             check("⑥-5 自定义数据带标题 + 区块 gap 8 + 内容容器 gap 12",
                   bool(detail and detail["customTitle"] == "自定义数据" and detail["customGap"] == "8px" and detail["bodyGap"] == "12px"),
                   json.dumps(detail and {"t": detail["customTitle"], "g": detail["customGap"], "bg": detail["bodyGap"]}, ensure_ascii=False))
-            check("⑥-5 chips 行恒显（主角 + 行尾 disabled 添加钮 + gap 6 + chip 25 高标签色）",
-                  bool(detail and detail["chips"] == ["主角"] and detail["chipAdd"]
+            check("⑥-5 chips 行恒显（主角 + 行尾添加钮（6.1 已点亮，不再 disabled）+ gap 6 + chip 25 高标签色）",
+                  bool(detail and detail["chips"] == ["主角"] and not detail["chipAdd"]
                        and detail["chipsGap"] == "6px" and detail["chipH"] == 25 and detail["chipColor"] == detail["labelColor"]),
                   json.dumps(detail and {"c": detail["chips"], "gap": detail["chipsGap"], "h": detail["chipH"], "color": detail["chipColor"]}, ensure_ascii=False))
             ed = (detail or {}).get("editDesc") or {}
-            check("⑥-5 编辑描述通栏钮（36 高 disabled）",
-                  ed.get("disabled") is True and ed.get("h") == 36 and ed.get("label") == "编辑描述",
+            check("⑥-5 编辑描述通栏钮（36 高，6.1 已点亮）",
+                  ed.get("disabled") is False and ed.get("h") == 36 and ed.get("label") == "编辑描述",
                   json.dumps(ed, ensure_ascii=False))
             info = (detail or {}).get("info") or {}
             check("⑥-6 基础信息 §1 C4 容器双列",
@@ -746,12 +746,12 @@ async def main():
               };
             })()""")
             print("详情面板(档案):", json.dumps(adetail, ensure_ascii=False))
-            check("⑥ 档案形态 = 文件详情同款（封面图 + 徽标 7,7 / 名称输入框 / 链接输入框 / 属性 chips + 钮 / 描述 / 编辑描述钮 36 / 自定义数据带标题）",
+            check("⑥ 档案形态 = 文件详情同款（封面图 + 徽标 7,7 / 名称输入框 / 链接输入框 / 属性 chips + 钮 / 描述 / 编辑描述钮 36 / 自定义数据带标题；两钮 6.1 已点亮）",
                   bool(adetail and adetail["cover"] and adetail["badge"] and adetail["badge"]["text"] == "设定" and adetail["badge"]["top"] == "7px" and adetail["badge"]["left"] == "7px"
                        and adetail["nameVal"] == "设定集" and adetail["linkVal"] == "https://archive.ref" and adetail["linkPh"] == "http://" and adetail["openLinkDisabled"]
-                       and adetail["props"] == ["奇幻"] and adetail["chipAdd"]
+                       and adetail["props"] == ["奇幻"] and not adetail["chipAdd"]
                        and adetail["desc"] and adetail["desc"]["title"] == "来源:" and adetail["desc"]["content"] == "官方设定集"
-                       and adetail["editDesc"] and adetail["editDesc"]["disabled"] and adetail["editDesc"]["h"] == 36
+                       and adetail["editDesc"] and not adetail["editDesc"]["disabled"] and adetail["editDesc"]["h"] == 36
                        and adetail["customTitle"] == "自定义数据"),
                   json.dumps(adetail, ensure_ascii=False))
             check("⑥ 档案无颜色 bar（其余与文件 pinned 同款）", bool(adetail and adetail["swatches"] == 0))

@@ -92,6 +92,7 @@ export interface AssetDetail {
   importedAt: string; // RFC3339 本地时间
   modifiedAt: string;
   tags: string[]; // 属性词
+  descriptions: { title: string; content: string }[]; // 描述（6.1）
   links: string[];
   note: string;
   placements: PlacementLink[];
@@ -115,6 +116,7 @@ export function emptyArchiveData(folderId: string): ArchiveDetailView {
     createdAt: "",
     fileCount: 0,
     totalSize: 0,
+    coverPath: null,
   };
 }
 

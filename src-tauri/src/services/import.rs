@@ -392,6 +392,7 @@ fn make_meta(
     modified_at: now,
     tags: Vec::new(),
     note: String::new(),
+    descriptions: Vec::new(),
     note_count: None,
     thumbnail,
     fps: None,

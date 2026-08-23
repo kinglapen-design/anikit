@@ -90,6 +90,7 @@ pub fn create_document(
     modified_at: now,
     tags: Vec::new(),
     note: String::new(),
+    descriptions: Vec::new(),
     note_count: None,
     thumbnail: None,
     fps: None,

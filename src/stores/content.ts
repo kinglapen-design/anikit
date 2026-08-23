@@ -74,7 +74,7 @@ export interface ArchiveBadge {
 }
 
 export interface ArchiveAvatar {
-  assetId: string;
+  file: string; // 封面文件名（库根 covers/ 内，6.1 独立存不入库；展示用 coverPath 绝对路径）
   crop?: { x: number; y: number; scale: number } | null;
 }
 
@@ -86,6 +86,7 @@ export interface ArchiveData {
   descriptions: { title: string; content: string }[];
   links: string[]; // 链接（详情 pinned 链接输入框数据源，2026-08-15 任务 A 三项）
   createdAt: string; // 创建时间 RFC3339；旧数据 / 未建档 = 空串
+  coverPath?: string | null; // 封面图绝对路径（6.1 list_archives 输出；无自定义封面 = null 回退子项首图）
 }
 
 /** 档案详情视图（get_archive_data，2026-08-15 任务 A 三项）：ArchiveData 全字段 + 统计 */
@@ -99,6 +100,7 @@ export interface ArchiveDetailView {
   createdAt: string;
   fileCount: number; // 档案内 Placement 数
   totalSize: number; // 档案内资产 size 合计（同资产去重）
+  coverPath?: string | null; // 封面图绝对路径（6.1）
 }
 
 // 区块视图（后端 commands/import.rs BlockView；list_folder_tree 按 order 排序输出）
@@ -272,6 +274,10 @@ export const useContentStore = defineStore("content", {
     recycleEntries: [] as RecycleEntryView[],
     // 档案详细数据（2026-08-15 档案子系统一轮）：folderId → ArchiveData，refresh 一并拉取装配
     archives: {} as Record<string, ArchiveData>,
+    // 详情数据版本号（6.1）：属性 / 描述 / 封面设置等详情编辑成功后 bump，
+    // DetailPanel / ArchiveSidePanel watch 重拉 get_asset_detail / get_archive_data
+    //（selectedAssetKey 不变时 watch 不触发，编辑落盘后的刷新信号）
+    detailRev: 0,
     // 3.5 排序新增区（2026-08-19 用户定）：排序状态下新增 / 导入的项不按排序键分散、集中置顶
     // （先来在前）——用户要能找到新建文件、确认导入数量；切视图（sidebarSelected 变化）/ 切库 /
     // 拖拽物化时归位清空。key = `${assetId}|${folderId}`（与选择 / 拖拽键同口径），value = 到达序号
@@ -623,6 +629,11 @@ export const useContentStore = defineStore("content", {
       } catch (e) {
         console.warn("档案数据刷新失败（静默降级）：", e);
       }
+    },
+    // 详情编辑落盘信号（6.1）：属性 / 描述 / 封面设置等写命令成功后 bump，
+    // DetailPanel / ArchiveSidePanel watch detailRev 重拉当前详情（选中未变时 watch 不触发）
+    bumpDetailRev(): void {
+      this.detailRev++;
     },
     async refreshFolders(): Promise<void> {
       const tree = await invoke<FolderTreeView>("list_folder_tree");

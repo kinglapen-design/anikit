@@ -9,12 +9,15 @@
 // 圆角 6 / 14/20 常态）+ 链接输入框（36 高 / C2 / padding 3 3 3 12 / 文字极淡 +
 // 打开链接钮 30×30 图标 18 disabled）——2026-08-15 定案从自定义数据段上移入本组。
 // 一轮只读：输入框 readonly、打开链接 disabled 占位。
-// 档案形态（2026-08-15 任务 A 三项，与文件详情一模一样只无颜色 bar）：封面 =
-// folderThumbMap 子项首图（真实数据；无图浅色块占位）+ 徽标 chip + 名称输入框 +
-// 链接输入框（数据 = archives.json links，http:// + open-link disabled）。
-import { computed } from "vue";
+// 档案形态（2026-08-15 任务 A 三项，与文件详情一模一样只无颜色 bar）：封面 + 徽标 chip +
+// 名称输入框 + 链接输入框（数据 = archives.json links，http:// + open-link disabled）。
+// 封面（6.1，43 稿）：自定义封面（covers/ 烘培图）优先，回退子项首图（folderThumbMap）；
+// 常态只有封面图，点击封面展开封面设置组（CoverSettings：取景 / 更换封面 / 徽标 / 颜色），
+// 确认 / 取消退回常态——文件不做本面板（2026-08-23 用户定）。
+import { computed, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import IconButton from "../IconButton.vue";
+import CoverSettings from "./CoverSettings.vue";
 import { displayName, formatBadgeColor, isSequence } from "../../lib/formatBadge";
 import type { DetailTarget } from "../../lib/detailSections";
 import { useContentStore } from "../../stores/content";
@@ -27,14 +30,24 @@ const content = useContentStore();
 const file = computed(() => (props.target.kind === "file" ? props.target : null));
 const archive = computed(() => (props.target.kind === "archive" ? props.target : null));
 
+// 封面设置编辑态（6.1，43 稿；仅档案）：点击封面图展开，确认 / 取消（done）退回常态；
+// 切换展示目标（别的档案 / 文件）时复位退出
+const coverEditing = ref(false);
+watch(
+  () => (archive.value ? archive.value.node.id : null),
+  () => (coverEditing.value = false),
+);
+
 const thumbUrl = computed(() => {
   const p = file.value?.placement.thumbPath;
   return p ? convertFileSrc(p) : null;
 });
-// 档案封面：子项第一张静态图（folderThumbMap 既有口径，真实数据）；无图 = 浅色块占位
+// 档案封面：自定义封面优先（6.1 封面设置产物 covers/，coverPath 绝对路径）；
+// 无自定义 = 子项第一张静态图（folderThumbMap 既有口径）；无图 = 浅色块占位
 const archiveCover = computed(() => {
   const id = archive.value?.node.id;
-  const p = id ? content.folderThumbMap.get(id) : null;
+  if (!id) return null;
+  const p = archive.value?.data.coverPath ?? content.folderThumbMap.get(id) ?? null;
   return p ? convertFileSrc(p) : null;
 });
 // 缩略图高按图比例（aspect-ratio），无尺寸回退 4:3；上限 220 由 CSS max-height 控制
@@ -61,7 +74,14 @@ const firstLink = computed(() => {
 
 <template>
   <section class="section-pinned detail-block pinned">
-    <div class="thumb-group">
+    <!-- 封面设置编辑态（6.1，43 稿；仅档案）：整组替换，脱离 thumb-group（组件自带 padding 16 / gap 12） -->
+    <CoverSettings
+      v-if="archive && coverEditing"
+      :node="archive.node"
+      :data="archive.data"
+      @done="coverEditing = false"
+    />
+    <div v-else class="thumb-group">
       <template v-if="file">
         <div class="thumb" :style="thumbStyle">
           <img v-if="thumbUrl" :src="thumbUrl" alt="" draggable="false" />
@@ -83,8 +103,8 @@ const firstLink = computed(() => {
         </div>
       </template>
       <template v-else-if="archive">
-        <!-- 封面：子项首图（folderThumbMap）；无图浅色块占位（头像业务三轮，自定义封面后接） -->
-        <div class="thumb">
+        <!-- 封面：自定义封面优先 / 子项首图（无图浅色块占位）；点击进入封面设置（43 稿） -->
+        <div class="thumb cover-btn" v-tip="'封面设置'" @click="coverEditing = true">
           <img v-if="archiveCover" :src="archiveCover" alt="" draggable="false" />
           <span v-else class="ext" />
           <span v-if="archive.data.badge" class="fmt-badge" :style="{ background: archive.data.badge.color }">
@@ -142,6 +162,10 @@ const firstLink = computed(() => {
   height: 100%;
   object-fit: contain;
   display: block;
+}
+/* 档案封面 = 封面设置入口（6.1，43 稿）：常态只有封面图，点击展开封面设置组 */
+.thumb.cover-btn {
+  cursor: pointer;
 }
 /* 无图占位（速查表 §6）：浅色块 #C6C7CC + 扩展名文字 */
 .thumb .ext {

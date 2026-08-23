@@ -8,6 +8,7 @@ use crate::commands::operations::fail;
 use crate::core::library::{Library, ARCHIVES_FILE, FOLDERS_FILE};
 use crate::core::models::{ArchiveData, Badge, Avatar, DescItem, Folder, Placement, ARCHIVE_KIND, DEFAULT_BLOCK_ID, ROOT_FOLDER_ID};
 use crate::services::archive::{self, ConvertOutcome};
+use crate::services::custom_data;
 
 /// 新建档案：parentId = null / "root" 为顶层；afterFolderId / blockId 口径同 create_folder
 #[tauri::command]
@@ -79,12 +80,41 @@ pub async fn convert_to_folder(state: State<'_, AppState>, folder_id: String) ->
   }
 }
 
-/// 全部档案数据（克隆全量，量小）
+/// 档案清单项（list_archives 输出）：ArchiveData 全字段 + 封面图绝对路径（前端 convertFileSrc 直用；
+/// 无自定义封面 / 文件缺失 = null，前端回退子项首图）
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveListItem {
+  pub folder_id: String,
+  pub badge: Option<Badge>,
+  pub avatar: Option<Avatar>,
+  pub props: Vec<String>,
+  pub descriptions: Vec<DescItem>,
+  pub links: Vec<String>,
+  pub created_at: String,
+  pub cover_path: Option<String>,
+}
+
+/// 全部档案数据 + 封面路径
 #[tauri::command]
-pub fn list_archives(state: State<AppState>) -> Result<Vec<ArchiveData>, String> {
+pub fn list_archives(state: State<AppState>) -> Result<Vec<ArchiveListItem>, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
-  Ok(archive::list_archives(lib))
+  Ok(
+    archive::list_archives(lib)
+      .into_iter()
+      .map(|a| ArchiveListItem {
+        cover_path: archive::cover_file_path(lib, &a.folder_id),
+        folder_id: a.folder_id,
+        badge: a.badge,
+        avatar: a.avatar,
+        props: a.props,
+        descriptions: a.descriptions,
+        links: a.links,
+        created_at: a.created_at,
+      })
+      .collect(),
+  )
 }
 
 /// 档案详情视图（2026-08-15 任务 A 三项）：ArchiveData 全字段 + 统计（fileCount / totalSize）；
@@ -102,6 +132,8 @@ pub struct ArchiveDetailView {
   pub created_at: String,
   pub file_count: u32,
   pub total_size: u64,
+  /// 封面图绝对路径（6.1；无自定义封面 / 文件缺失 = null，前端回退子项首图）
+  pub cover_path: Option<String>,
 }
 
 /// 单个档案的详细数据 + 统计；无记录返回默认空记录（档案刚转换、尚未配置数据）
@@ -132,7 +164,69 @@ pub fn get_archive_data(state: State<AppState>, folder_id: String) -> Result<Arc
     created_at: rec.created_at,
     file_count,
     total_size,
+    cover_path: archive::cover_file_path(lib, &folder_id),
   })
+}
+
+/// 编辑档案属性（6.1，archives.json 单写点）
+#[tauri::command]
+pub async fn set_archive_props(state: State<'_, AppState>, folder_id: String, props: Vec<String>) -> Result<(), String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin("编辑属性");
+  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
+  match custom_data::set_archive_props(lib, &folder_id, &props) {
+    Ok(true) => undo.commit().map_err(|e| e.to_string()),
+    Ok(false) => {
+      undo.cancel();
+      Ok(())
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
+/// 编辑档案描述（6.1）
+#[tauri::command]
+pub async fn set_archive_descriptions(state: State<'_, AppState>, folder_id: String, descriptions: Vec<DescItem>) -> Result<(), String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin("编辑描述");
+  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
+  match custom_data::set_archive_descriptions(lib, &folder_id, &descriptions) {
+    Ok(true) => undo.commit().map_err(|e| e.to_string()),
+    Ok(false) => {
+      undo.cancel();
+      Ok(())
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
+/// 档案封面设置（6.1，43 稿确认）：徽标三角（null/省略 = 不动……serde Option<Option<Badge>>：
+/// 缺省 = 不动、null = 清除、对象 = 设置）+ 封面（缺省 = 不动、给 = 本地选图按取景参数烘培）。
+/// 封面图独立存库根 covers/（不入库为资产，2026-08-23 用户定），时间戳命名不覆盖（undo 回滚即恢复旧封面）
+#[tauri::command]
+pub async fn set_archive_cover_settings(
+  state: State<'_, AppState>,
+  folder_id: String,
+  badge: Option<Option<Badge>>,
+  cover: Option<archive::CoverInput>,
+) -> Result<(), String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin("设置档案封面");
+  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
+  match archive::set_archive_cover_settings(lib, &folder_id, badge, cover) {
+    Ok(true) => undo.commit().map_err(|e| e.to_string()),
+    Ok(false) => {
+      undo.cancel();
+      Ok(())
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
 }
 
 /// 资产详情（PRD 03_数据链接 02）：基础信息 + 属性 / 链接 / 注释 + 链接区块（Placement 反查）+ 归属档案
@@ -150,6 +244,8 @@ pub struct AssetDetail {
   pub modified_at: String,
   /// 属性词（复用原 tags 字段，2026-08-04 标签体系取消后语义转为属性，PRD 03_数据链接 06）
   pub tags: Vec<String>,
+  /// 描述（标题 + 内容，6.1）
+  pub descriptions: Vec<DescItem>,
   pub links: Vec<String>,
   pub note: String,
   /// 链接区块：该资产全部 Placement 反查
@@ -236,6 +332,7 @@ fn asset_detail(lib: &Library, asset_id: &str) -> Result<AssetDetail, String> {
     imported_at: meta.imported_at.clone(),
     modified_at: meta.modified_at.clone(),
     tags: meta.tags.clone(),
+    descriptions: meta.descriptions.clone(),
     links: meta.links.clone(),
     note: meta.note.clone(),
     placements,
@@ -439,6 +536,7 @@ mod tests {
         created_at: rec.created_at,
         file_count,
         total_size,
+        cover_path: None,
       }
     };
     assert_eq!(view.file_count, 3, "Placement 逐条计数");

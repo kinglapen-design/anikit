@@ -96,6 +96,105 @@ pub fn list_archives(lib: &Library) -> Vec<ArchiveData> {
   lib.archives.archives.clone()
 }
 
+/// 档案封面图绝对路径（avatar.file → 库根 covers/；文件缺失视为无封面，回退子项首图）
+pub fn cover_file_path(lib: &Library, folder_id: &str) -> Option<String> {
+  let avatar = lib.archives.archives.iter().find(|a| a.folder_id == folder_id)?.avatar.as_ref()?;
+  let p = lib.root.join(library::COVERS_DIR).join(&avatar.file);
+  p.is_file().then(|| p.to_string_lossy().into_owned())
+}
+
+/// 封面设置入参（43 稿「更换封面 - 从本地磁盘中选择」）：本地图片路径 + 取景框参数
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoverInput {
+  pub source_path: String,
+  pub crop: crate::core::models::Crop,
+}
+
+/// 封面烘培输出规格（43 稿封面框 218:168 = 13:10，短边取缩略图同档 320 → 416×320）
+pub const COVER_OUT_W: u32 = 416;
+pub const COVER_OUT_H: u32 = 320;
+
+/// 封面设置（43 稿，6.1）：徽标三角语义（None = 不动 / Some(None) = 清除 / Some(Some) = 设置）+
+/// 封面（None = 不动 / Some = 选图按取景参数烘培新封面）。记录懒建；返回是否有改动。
+/// 封面文件带时间戳命名不覆盖写：undo 回滚 archives.json 后旧封面文件仍在即恢复显示；
+/// 旧文件留盘（孤儿清理记 09 待办，不随换封面即删——即删会破坏 undo 恢复）
+pub fn set_archive_cover_settings(
+  lib: &mut Library,
+  folder_id: &str,
+  badge: Option<Option<crate::core::models::Badge>>,
+  cover: Option<CoverInput>,
+) -> Result<bool, String> {
+  if !lib.index.folders.contains_key(folder_id) {
+    return Err("目标档案不存在，可能已被删除".to_string());
+  }
+  let mut changed = false;
+  let mut new_avatar: Option<crate::core::models::Avatar> = None;
+  if let Some(input) = cover {
+    let file = bake_cover(lib, folder_id, &input.source_path, input.crop)?;
+    new_avatar = Some(crate::core::models::Avatar { file, crop: Some(input.crop) });
+  }
+  if lib.archives.archives.iter().all(|a| a.folder_id == folder_id) {
+    lib.archives.archives.push(ArchiveData::new(folder_id));
+  }
+  let rec = lib.archives.archives.iter_mut().find(|a| a.folder_id == folder_id).expect("懒建后必有");
+  if let Some(b) = badge {
+    if rec.badge != b {
+      rec.badge = b;
+      changed = true;
+    }
+  }
+  if let Some(avatar) = new_avatar {
+    rec.avatar = Some(avatar);
+    changed = true;
+  }
+  if changed {
+    library::save_archives(lib).map_err(|e| e.to_string())?;
+    log::info!("档案封面设置：{folder_id}");
+  }
+  Ok(changed)
+}
+
+/// 封面烘培：源图按内容魔数解码（假扩展名防护，踩坑 052）→ 按取景参数裁切缩放 →
+/// webp 存库根 covers/（编码失败退 PNG）。返回封面文件名
+fn bake_cover(lib: &Library, folder_id: &str, source_path: &str, crop: crate::core::models::Crop) -> Result<String, String> {
+  use crate::services::thumbnail;
+  let source = std::path::PathBuf::from(source_path);
+  if !source.is_file() {
+    return Err("所选文件不存在".to_string());
+  }
+  let img = thumbnail::decode_by_signature(&source).ok_or_else(|| "该文件无法用作封面（不支持的格式）".to_string())?;
+  let (iw, ih) = (img.width() as f64, img.height() as f64);
+  if iw < 1.0 || ih < 1.0 {
+    return Err("该文件无法用作封面（图片尺寸无效）".to_string());
+  }
+  // 取景模型（与前端预览同一约定）：scale ≥ 1，1 = 图片 cover 铺满框；
+  // x / y = 图片中心相对框中心的偏移（框宽 / 框高的分数，右下为正）——
+  // 源图可见窗口中心 = 图中心 − 偏移/缩放（视图右偏 = 看到图的左侧），窗口 clamp 在图内（不露底）
+  let scale = crop.scale.max(1.0);
+  let z = (COVER_OUT_W as f64 / iw).max(COVER_OUT_H as f64 / ih) * scale; // 输出像素 / 源像素
+  let (sw, sh) = (COVER_OUT_W as f64 / z, COVER_OUT_H as f64 / z); // 源图可见窗口尺寸
+  let cx = iw / 2.0 - (crop.x * COVER_OUT_W as f64) / z;
+  let cy = ih / 2.0 - (crop.y * COVER_OUT_H as f64) / z;
+  let left = (cx - sw / 2.0).clamp(0.0, (iw - sw).max(0.0)).round() as u32;
+  let top = (cy - sh / 2.0).clamp(0.0, (ih - sh).max(0.0)).round() as u32;
+  let (swu, shu) = ((sw.round() as u32).max(1).min(img.width()), (sh.round() as u32).max(1).min(img.height()));
+  let out = img
+    .crop_imm(left, top, swu, shu)
+    .resize_exact(COVER_OUT_W, COVER_OUT_H, image::imageops::FilterType::Triangle);
+  let dir = lib.root.join(library::COVERS_DIR);
+  std::fs::create_dir_all(&dir).map_err(|e| format!("封面目录创建失败：{e}"))?;
+  let stamp = chrono::Local::now().format("%Y%m%d%H%M%S%3f");
+  let webp_name = format!("{folder_id}-{stamp}.webp");
+  if thumbnail::save_webp(&out, &dir.join(&webp_name)).is_ok() {
+    return Ok(webp_name);
+  }
+  let png_name = format!("{folder_id}-{stamp}.png");
+  out.save(dir.join(&png_name)).map_err(|e| format!("封面保存失败：{e}"))?;
+  Ok(png_name)
+}
+
+
 /// 写 Folder.kind（内存：folders.folders 与索引同步；落盘由调用方负责）
 fn set_kind(lib: &mut Library, folder_id: &str, kind: Option<&str>) {
   if let Some(f) = lib.folders.folders.iter_mut().find(|f| f.id == folder_id) {
@@ -377,5 +476,82 @@ mod tests {
     let all = list_archives(&h.lib);
     assert_eq!(all.len(), 2);
     assert_eq!(all[0].folder_id, "F01");
+  }
+
+  /// 封面设置：徽标三角语义（不动 / 设置 / 清除）+ 落盘；无记录档案懒建
+  #[test]
+  fn cover_settings_badge_tri_state() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F-A", "雪牧", None, 0);
+    mark_archive(&mut h.lib, "F-A");
+    let badge = crate::core::models::Badge { text: "主角".into(), color: "#402122".into() };
+    // 设置徽标（无记录懒建）
+    assert!(set_archive_cover_settings(&mut h.lib, "F-A", Some(Some(badge.clone())), None).unwrap());
+    assert_eq!(h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().badge, Some(badge));
+    // 不动徽标（None）= 无改动
+    assert!(!set_archive_cover_settings(&mut h.lib, "F-A", None, None).unwrap());
+    // 清除徽标
+    assert!(set_archive_cover_settings(&mut h.lib, "F-A", Some(None), None).unwrap());
+    assert_eq!(h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().badge, None);
+    let disk: crate::core::models::ArchivesFile = read_json(&h.lib.root.join(ARCHIVES_FILE)).unwrap();
+    assert_eq!(disk.archives.iter().find(|a| a.folder_id == "F-A").unwrap().badge, None, "落盘");
+    // 不存在报错
+    assert!(set_archive_cover_settings(&mut h.lib, "F-不存在", None, None).is_err());
+  }
+
+  /// 封面烘培：左红右蓝测试图按取景偏移裁切——x>0 视图右偏看到图左侧（红），x<0 看到右侧（蓝）；
+  /// 输出恒 416×320，avatar.file 记录且 covers/ 内文件存在；时间戳命名不覆盖
+  #[test]
+  fn cover_bake_crops_by_crop_params() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F-A", "雪牧", None, 0);
+    // 400×200 左半红右半蓝
+    let src = h.lib.root.join("cover-src.png");
+    let mut img = image::RgbaImage::new(400, 200);
+    for (x, _y, p) in img.enumerate_pixels_mut() {
+      *p = if x < 200 { image::Rgba([220, 30, 30, 255]) } else { image::Rgba([30, 30, 220, 255]) };
+    }
+    img.save(&src).unwrap();
+
+    let crop = crate::core::models::Crop { x: 0.2, y: 0.0, scale: 1.0 };
+    assert!(set_archive_cover_settings(
+      &mut h.lib,
+      "F-A",
+      None,
+      Some(CoverInput { source_path: src.to_string_lossy().into_owned(), crop }),
+    )
+    .unwrap());
+    let avatar = h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().avatar.clone().unwrap();
+    let out_path = h.lib.root.join(crate::core::library::COVERS_DIR).join(&avatar.file);
+    assert!(out_path.is_file(), "封面文件落盘");
+    assert_eq!(crate::services::thumbnail::probe(&out_path), Some((416, 320)), "输出恒 416×320");
+    let baked = crate::services::thumbnail::decode_by_signature(&out_path).unwrap().to_rgba8();
+    let center = baked.get_pixel(208, 160);
+    assert!(center[0] > center[2], "x>0 看到图左侧（红）：{center:?}");
+    // cover_file_path 输出绝对路径；换一张不覆盖旧文件
+    assert_eq!(cover_file_path(&h.lib, "F-A").as_deref(), Some(out_path.to_string_lossy().as_ref()));
+    let crop2 = crate::core::models::Crop { x: -0.2, y: 0.0, scale: 1.0 };
+    set_archive_cover_settings(
+      &mut h.lib,
+      "F-A",
+      None,
+      Some(CoverInput { source_path: src.to_string_lossy().into_owned(), crop: crop2 }),
+    )
+    .unwrap();
+    let avatar2 = h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().avatar.clone().unwrap();
+    assert_ne!(avatar.file, avatar2.file, "时间戳命名不覆盖（undo 回滚可恢复旧封面）");
+    let baked2 = crate::services::thumbnail::decode_by_signature(&h.lib.root.join(crate::core::library::COVERS_DIR).join(&avatar2.file))
+      .unwrap()
+      .to_rgba8();
+    let center2 = baked2.get_pixel(208, 160);
+    assert!(center2[2] > center2[0], "x<0 看到图右侧（蓝）：{center2:?}");
+    // 不存在的源文件报错
+    assert!(set_archive_cover_settings(
+      &mut h.lib,
+      "F-A",
+      None,
+      Some(CoverInput { source_path: "不存在.png".into(), crop: crate::core::models::Crop { x: 0.0, y: 0.0, scale: 1.0 } }),
+    )
+    .is_err());
   }
 }

@@ -22,21 +22,21 @@ const selection = useSelectionStore();
 
 // 资产详情（选中文件卡片驱动；切换即清空，拉到后校验选中未变再落）
 const detail = ref<AssetDetail | null>(null);
-watch(
-  () => content.selectedAssetKey,
-  async (key) => {
-    detail.value = null;
-    if (!key) return;
-    const assetId = key.split("|")[0];
-    try {
-      const d = await invoke<AssetDetail>("get_asset_detail", { assetId });
-      if (content.selectedAssetKey === key) detail.value = d; // await 期间已切走防错配
-    } catch (e) {
-      console.warn("资产详情拉取失败（静默降级）：", e);
-    }
-  },
-  { immediate: true },
-);
+async function loadDetail(clear: boolean): Promise<void> {
+  const key = content.selectedAssetKey;
+  if (clear) detail.value = null;
+  if (!key) return;
+  const assetId = key.split("|")[0];
+  try {
+    const d = await invoke<AssetDetail>("get_asset_detail", { assetId });
+    if (content.selectedAssetKey === key) detail.value = d; // await 期间已切走防错配
+  } catch (e) {
+    console.warn("资产详情拉取失败（静默降级）：", e);
+  }
+}
+watch(() => content.selectedAssetKey, () => void loadDetail(true), { immediate: true });
+// 6.1：属性 / 描述等详情编辑落盘后 bumpDetailRev 重拉（不清空防闪烁）
+watch(() => content.detailRev, () => void loadDetail(false));
 
 // 选中档案节点：文件夹选择域首项（ArchiveCard 复用 FolderCard 选择机制）；
 // 仅 kind = archive 进档案形态，普通文件夹选中 = 空面板
@@ -48,22 +48,22 @@ const archiveNode = computed<FolderNode | null>(() => {
   return null;
 });
 
-// 档案详情（ArchiveDetailView：数据 + 文件数/占用空间统计；切换即清空，防 await 错配同资产）
+// 档案详情（ArchiveDetailView：数据 + 文件数/占用空间统计；防 await 错配同资产）
 const archiveDetail = ref<ArchiveDetailView | null>(null);
-watch(
-  () => archiveNode.value?.id,
-  async (id) => {
-    archiveDetail.value = null;
-    if (!id) return;
-    try {
-      const d = await invoke<ArchiveDetailView>("get_archive_data", { folderId: id });
-      if (archiveNode.value?.id === id) archiveDetail.value = d;
-    } catch (e) {
-      console.warn("档案详情拉取失败（静默降级）：", e);
-    }
-  },
-  { immediate: true },
-);
+async function loadArchiveDetail(clear: boolean): Promise<void> {
+  const id = archiveNode.value?.id;
+  if (clear) archiveDetail.value = null;
+  if (!id) return;
+  try {
+    const d = await invoke<ArchiveDetailView>("get_archive_data", { folderId: id });
+    if (archiveNode.value?.id === id) archiveDetail.value = d;
+  } catch (e) {
+    console.warn("档案详情拉取失败（静默降级）：", e);
+  }
+}
+watch(() => archiveNode.value?.id, () => void loadArchiveDetail(true), { immediate: true });
+// 6.1：档案属性 / 描述 / 封面设置落盘后 bumpDetailRev 重拉（不清空防闪烁）
+watch(() => content.detailRev, () => void loadArchiveDetail(false));
 
 // 当前展示目标（素材 / 文件夹两选择域互斥，实际只会中一个）；
 // 回收站选中（2026-08-16 用户拍板）：Placement 不在 content.placements（folderId 恒 "recycle"），

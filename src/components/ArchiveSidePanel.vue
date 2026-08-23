@@ -17,7 +17,7 @@ import SectionEditPanel from "./SectionEditPanel.vue";
 import { ARCHIVE_PANEL_W, animateArchivePanel, sidebarShowWidths } from "../lib/useSidebarAnim";
 import { emptyArchiveData, type DetailTarget } from "../lib/detailSections";
 import { useUiStore } from "../stores/ui";
-import type { ArchiveDetailView, FolderNode } from "../stores/content";
+import { useContentStore, type ArchiveDetailView, type FolderNode } from "../stores/content";
 
 const props = defineProps<{ node: FolderNode; panelActive?: boolean }>();
 const ui = useUiStore();
@@ -63,19 +63,21 @@ watch(open, (isOpen, was) => {
 
 // 档案详情（ArchiveDetailView：数据 + 文件数/占用空间统计；防 await 错配同 DetailPanel 口径）
 const detail = ref<ArchiveDetailView | null>(null);
-watch(
-  () => props.node.id,
-  async (id) => {
-    detail.value = null;
-    try {
-      const d = await invoke<ArchiveDetailView>("get_archive_data", { folderId: id });
-      if (props.node.id === id) detail.value = d;
-    } catch (e) {
-      console.warn("档案详情拉取失败（静默降级）：", e);
-    }
-  },
-  { immediate: true },
-);
+const content = useContentStore();
+async function loadDetail(clear: boolean): Promise<void> {
+  const id = props.node.id;
+  if (clear) detail.value = null;
+  if (!id) return;
+  try {
+    const d = await invoke<ArchiveDetailView>("get_archive_data", { folderId: id });
+    if (props.node.id === id) detail.value = d;
+  } catch (e) {
+    console.warn("档案详情拉取失败（静默降级）：", e);
+  }
+}
+watch(() => props.node.id, () => void loadDetail(true), { immediate: true });
+// 6.1：档案属性 / 描述 / 封面设置落盘后 bumpDetailRev 重拉（不清空防闪烁）
+watch(() => content.detailRev, () => void loadDetail(false));
 
 const target = computed<DetailTarget>(() => ({
   kind: "archive",

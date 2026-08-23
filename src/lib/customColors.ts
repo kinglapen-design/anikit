@@ -5,16 +5,17 @@
 export interface CustomColorDef {
   tint: string; // --custom-{tint}（Folder.color 存储值）
   label: string; // 中文名（token 1.6 节命名）
+  hex: string; // 主档色值（tokens.css --custom-{tint}；6.1 档案徽标底色 = 本档直存 hex，Badge.color CSS 直用）
 }
 
 export const CUSTOM_COLORS: CustomColorDef[] = [
-  { tint: "red", label: "红色" },
-  { tint: "orange", label: "橙色" },
-  { tint: "yellow-green", label: "黄绿" },
-  { tint: "green", label: "绿色" },
-  { tint: "blue-violet", label: "蓝紫色" },
-  { tint: "purple", label: "紫色" },
-  { tint: "pink", label: "粉色" },
-  { tint: "peach", label: "桃红" },
-  { tint: "blue", label: "蓝色" },
+  { tint: "red", label: "红色", hex: "#402122" },
+  { tint: "orange", label: "橙色", hex: "#352719" },
+  { tint: "yellow-green", label: "黄绿", hex: "#2c2b16" },
+  { tint: "green", label: "绿色", hex: "#1c2e20" },
+  { tint: "blue-violet", label: "蓝紫色", hex: "#252841" },
+  { tint: "purple", label: "紫色", hex: "#2f263d" },
+  { tint: "pink", label: "粉色", hex: "#392238" },
+  { tint: "peach", label: "桃红", hex: "#3c222a" },
+  { tint: "blue", label: "蓝色", hex: "#1a2c37" },
 ];

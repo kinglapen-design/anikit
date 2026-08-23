@@ -42,7 +42,8 @@ fn probe_by_signature(path: &Path) -> Option<(u32, u32)> {
 }
 
 /// 按内容魔数解码（缘由同 probe_by_signature）
-fn decode_by_signature(path: &Path) -> Option<DynamicImage> {
+/// pub(crate)：档案封面烘培（archive::bake_cover）复用同一解码入口（6.1）
+pub(crate) fn decode_by_signature(path: &Path) -> Option<DynamicImage> {
   let file = fs::File::open(path).ok()?;
   image::ImageReader::new(std::io::BufReader::new(file)).with_guessed_format().ok()?.decode().ok()
 }

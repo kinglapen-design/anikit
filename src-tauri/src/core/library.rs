@@ -24,6 +24,8 @@ pub const PINS_FILE: &str = "pins.json";
 pub const RECYCLE_FILE: &str = "recycle.json";
 pub const RECENT_FILE: &str = "recent.json";
 pub const ARCHIVES_FILE: &str = "archives.json";
+/// 档案封面目录（库根 covers/，6.1：独立存的烘培封面图，不入库为资产；惰性创建，无封面不建目录）
+pub const COVERS_DIR: &str = "covers";
 
 /// 库根数据文件（均为备份对象，PRD 06-04）
 pub const ROOT_DATA_FILES: &[&str] = &[FOLDERS_FILE, TAGS_FILE, PINS_FILE, RECYCLE_FILE, RECENT_FILE, ARCHIVES_FILE];

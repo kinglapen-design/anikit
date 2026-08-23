@@ -271,6 +271,7 @@ pub(crate) fn build_sequence_asset(
     modified_at: now,
     tags: Vec::new(),
     note: String::new(),
+    descriptions: Vec::new(),
     note_count: None,
     thumbnail: thumb.as_ref().map(|t| t.name.clone()),
     thumb_width: thumb.as_ref().map(|t| t.width),

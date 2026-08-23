@@ -119,13 +119,21 @@ fn path_text<'a>(lib: &'a Library, folder_id: &str) -> Option<String> {
   Some(text)
 }
 
-/// 资产可搜文本集（小写化）：资产名 / 扩展名 / 链接（decode）/ 各 Placement 显示名 + 路径链
+/// 资产可搜文本集（小写化）：资产名 / 扩展名 / 链接（decode）/ 各 Placement 显示名 + 路径链 /
+/// 属性 + 描述（标题 + 内容——资产侧属性·描述 6.1 就位纳入，PRD 03_查找文件 01 节）
 fn asset_texts(lib: &Library, meta: &AssetMeta, placements: &[Placement]) -> Vec<String> {
-  let mut texts = Vec::with_capacity(4 + placements.len() * 2);
+  let mut texts = Vec::with_capacity(6 + placements.len() * 2);
   texts.push(meta.name.to_lowercase());
   texts.push(meta.ext.to_lowercase());
   for link in &meta.links {
     texts.push(percent_decode(link).to_lowercase());
+  }
+  for t in &meta.tags {
+    texts.push(t.to_lowercase());
+  }
+  for d in &meta.descriptions {
+    texts.push(d.title.to_lowercase());
+    texts.push(d.content.to_lowercase());
   }
   for p in placements {
     texts.push(p.name.to_lowercase());
@@ -343,6 +351,7 @@ mod tests {
       created_at: None,
       modified_at: "2026-08-01T10:00:00+08:00".into(),
       tags: Vec::new(),
+      descriptions: Vec::new(),
       note: String::new(),
       note_count: None,
       thumbnail: None,
@@ -416,6 +425,21 @@ mod tests {
     // 链接显示名命中
     let hits = search(&h.lib, "显示名乙", &scope("quick:all"));
     assert_eq!(hit_keys(&hits), ["AN-A|F01", "AN-A|root"]);
+  }
+
+  /// 资产侧属性 / 描述命中（6.1 就位纳入，PRD 03_查找文件 01「阶段六纳入」）
+  #[test]
+  fn asset_tags_and_descriptions_searchable() {
+    let mut h = make_lib();
+    add_asset(&mut h.lib, "AN-A", "图甲", "root");
+    add_asset(&mut h.lib, "AN-B", "图乙", "root");
+    h.lib.index.assets.get_mut("AN-A").unwrap().tags = vec!["拔剑".into()];
+    h.lib.index.assets.get_mut("AN-B").unwrap().descriptions =
+      vec![crate::core::models::DescItem { title: "身份".into(), content: "沙雕动画的御用主角".into() }];
+
+    assert_eq!(hit_keys(&search(&h.lib, "拔剑", &scope("quick:all"))), ["AN-A|root"], "属性命中");
+    assert_eq!(hit_keys(&search(&h.lib, "御用主角", &scope("quick:all"))), ["AN-B|root"], "描述内容命中");
+    assert_eq!(hit_keys(&search(&h.lib, "身份", &scope("quick:all"))), ["AN-B|root"], "描述标题命中");
   }
 
   #[test]
