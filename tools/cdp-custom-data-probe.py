@@ -14,6 +14,8 @@
 #    滑块解禁 → 拖动 20px → 确认 cover { sourcePath, crop } 断言
 # S7 档案卡封面 = coverPath 优先（6.1：头像即档案卡片封面）
 # S8 取消零写入
+# S9 数据区块独立设置（文件 / 档案各一套）
+# S10 颜色 bar 真色（6.1 颜色解析）：A1 三色块按序渲染；无颜色资产（fla）= 7 占位色块恒显
 # 截图留档 tools/style-preview/：props-dialog / desc-dialog / cover-settings / cover-framing。
 import asyncio
 import base64
@@ -44,11 +46,13 @@ window.__cbId = 0;
       { id: "F-ARC", name: "设定集", parent: "F-DIR", kind: "archive" },
     ],
     assets: {
-      A1: { id: "A1", originName: "主角-立绘.webp", ext: "webp", size: 204800, width: 800, height: 600, duration: null, importedAt: "2026-08-15T10:20:30+08:00", modifiedAt: "2026-08-15T11:22:33+08:00", tags: ["主角"], descriptions: [{ title: "身份", content: "沙雕动画的御用主角，第一行内容第二行内容第三行内容第四行内容——超三行截断测试用的长文本，继续加长确保超过三行显示高度，再加一点。" }], links: [], note: "" },
+      A1: { id: "A1", originName: "主角-立绘.webp", ext: "webp", size: 204800, width: 800, height: 600, duration: null, importedAt: "2026-08-15T10:20:30+08:00", modifiedAt: "2026-08-15T11:22:33+08:00", tags: ["主角"], descriptions: [{ title: "身份", content: "沙雕动画的御用主角，第一行内容第二行内容第三行内容第四行内容——超三行截断测试用的长文本，继续加长确保超过三行显示高度，再加一点。" }], colors: ["#C81E1E", "#1E1EC8", "#E8E8E8"], links: [], note: "" },
+      A2: { id: "A2", originName: "场景源文件.fla", ext: "fla", size: 3145728, width: null, height: null, duration: null, importedAt: "2026-08-15T10:20:30+08:00", modifiedAt: "2026-08-15T11:22:33+08:00", tags: [], descriptions: [], links: [], note: "" },
     },
     placements: [
       { assetId: "A1", folderId: "F-SUB", name: "主角-立绘.webp", w: 800, h: 600, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
       { assetId: "A1", folderId: "F-ARC", name: "主角-立绘.webp", w: 800, h: 600, ext: "webp", thumbPath: STILL, thumbKind: "asset", origin: false, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
+      { assetId: "A2", folderId: "F-SUB", name: "场景源文件.fla", w: null, h: null, ext: "fla", thumbPath: null, thumbKind: null, origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
     ],
     archives: {
       "F-ARC": { folderId: "F-ARC", badge: { text: "设定", color: "#B38427" }, avatar: null, props: ["奇幻"], descriptions: [{ title: "来源", content: "官方设定集" }], links: [], createdAt: "2026-08-15T09:00:00+08:00", coverPath: STILL },
@@ -104,7 +108,7 @@ window.__cbId = 0;
           assetId: meta.id, originName: meta.originName, ext: meta.ext, size: meta.size,
           width: meta.width, height: meta.height, duration: meta.duration,
           importedAt: meta.importedAt, modifiedAt: meta.modifiedAt,
-          tags: meta.tags, descriptions: meta.descriptions, links: meta.links, note: meta.note,
+          tags: meta.tags, descriptions: meta.descriptions, colors: meta.colors ?? [], links: meta.links, note: meta.note,
           placements: [{ folderId: "F-SUB", blockName: "目录", path: ["素材", "子文件夹"], name: meta.originName, origin: true }],
           archives: [],
         });
@@ -589,6 +593,24 @@ async def main():
             await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
             await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
             await asyncio.sleep(0.4)
+
+            # —— S10 颜色 bar 真色（6.1 颜色解析）：当前上下文 = F-SUB 视口 A1 已选中 ——
+            sw = await ev("""(() => {
+              const els = [...document.querySelectorAll('.detail-panel .swatches .swatch')];
+              return els.map((el) => getComputedStyle(el).backgroundColor);
+            })()""")
+            print("A1 色块:", json.dumps(sw))
+            check("S10 颜色 bar 真色（A1 三色，存 10 显 7 之前 7 槽按实际数渲染）",
+                  bool(sw == ["rgb(200, 30, 30)", "rgb(30, 30, 200)", "rgb(232, 232, 232)"]), json.dumps(sw))
+            # 无颜色资产（fla 工程文件）→ 恒显 bar 7 个占位色块（透明底）
+            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('场景源文件'))")
+            await asyncio.sleep(0.8)
+            sw2 = await ev("""(() => {
+              const els = [...document.querySelectorAll('.detail-panel .swatches .swatch')];
+              return els.map((el) => getComputedStyle(el).backgroundColor);
+            })()""")
+            check("S10 无颜色资产 = 7 占位色块（透明底恒显）",
+                  bool(sw2 and len(sw2) == 7 and all(c == "rgba(0, 0, 0, 0)" for c in sw2)), json.dumps(sw2))
     finally:
         proc.kill()
         if dev_proc:

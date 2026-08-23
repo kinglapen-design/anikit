@@ -199,6 +199,7 @@ mod tests {
         descriptions: Vec::new(),
         note_count: None,
         thumbnail: None,
+        colors: Vec::new(),
         fps: None,
         frame_count: None,
         thumb_frame: None,

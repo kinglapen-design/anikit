@@ -93,6 +93,7 @@ export interface AssetDetail {
   modifiedAt: string;
   tags: string[]; // 属性词
   descriptions: { title: string; content: string }[]; // 描述（6.1）
+  colors: string[]; // 主色（6.1 颜色解析）：#RRGGBB 按占比降序，最多存 10，bar 显示前 7
   links: string[];
   note: string;
   placements: PlacementLink[];

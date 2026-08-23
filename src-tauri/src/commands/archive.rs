@@ -246,6 +246,8 @@ pub struct AssetDetail {
   pub tags: Vec<String>,
   /// 描述（标题 + 内容，6.1）
   pub descriptions: Vec<DescItem>,
+  /// 主色（6.1 颜色解析）：metadata.colors，#RRGGBB 按占比降序（最多 10，bar 显示前 7）
+  pub colors: Vec<String>,
   pub links: Vec<String>,
   pub note: String,
   /// 链接区块：该资产全部 Placement 反查
@@ -276,11 +278,14 @@ pub struct ArchiveRef {
   pub name: String,
 }
 
-/// 资产详情（只读）；资产不存在报中文错
+/// 资产详情（只读）；资产不存在报中文错。
+/// 6.1 颜色解析：返回前对存量资产懒回填主色（ensure_asset_colors：colors 空 + 有缩略图才触发，
+/// 被动补数不刷 modifiedAt、不进撤销，失败静默下回重试）——读命令带这一处维护性写副作用
 #[tauri::command]
 pub fn get_asset_detail(state: State<AppState>, asset_id: String) -> Result<AssetDetail, String> {
-  let guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  crate::services::color::ensure_asset_colors(lib, &asset_id);
   asset_detail(lib, &asset_id)
 }
 
@@ -333,6 +338,7 @@ fn asset_detail(lib: &Library, asset_id: &str) -> Result<AssetDetail, String> {
     modified_at: meta.modified_at.clone(),
     tags: meta.tags.clone(),
     descriptions: meta.descriptions.clone(),
+    colors: meta.colors.clone(),
     links: meta.links.clone(),
     note: meta.note.clone(),
     placements,

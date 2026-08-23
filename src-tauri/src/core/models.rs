@@ -101,6 +101,11 @@ pub struct AssetMeta {
   /// 缩略图文件名（与 metadata 同目录）
   #[serde(default)]
   pub thumbnail: Option<String>,
+  /// 主色（6.1 颜色解析，PRD 04_文件预览 05-1）：缩略图提取最多 10 个 #RRGGBB（按占比降序；
+  /// alpha < 16 透明像素不计——2026-08-23 用户定：透明通道颜色不混入）。生成 / 重生成缩略图时
+  /// 写入；存量打开详情时懒回填（services::color::ensure_asset_colors）。default 空数组，不升 DATA_VERSION
+  #[serde(default)]
+  pub colors: Vec<String>,
   // 序列帧（PRD 01-2.5）与视频（5.3 帧化改造：导入探测 / get_media_source 存量自愈写入）；
   // 其他普通资源无此三字段
   #[serde(default, skip_serializing_if = "Option::is_none")]

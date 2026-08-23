@@ -151,6 +151,7 @@ fn persist(
   meta.thumbnail = Some(thumb.name.clone());
   meta.thumb_width = Some(thumb.width);
   meta.thumb_height = Some(thumb.height);
+  meta.colors = thumb.colors.clone(); // 主色随缩略图刷新（6.1 颜色解析）
   meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
   let modified_at = meta.modified_at.clone();
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;

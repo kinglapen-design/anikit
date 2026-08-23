@@ -49,10 +49,12 @@ pub(crate) fn decode_by_signature(path: &Path) -> Option<DynamicImage> {
 }
 
 /// 缩略图生成产物（5.4）：文件名 + 实际像素尺寸——布局比例跟缩略图走（见 models thumb_width 注释）
+/// + 主色（6.1 颜色解析：生成时从缩略图提取，调用方写 metadata.colors）
 pub struct ThumbOut {
   pub name: String,
   pub width: u32,
   pub height: u32,
+  pub colors: Vec<String>,
 }
 
 /// 生成缩略图：短边缩到 320、长边等比（原图短边不足 320 不放大），
@@ -62,15 +64,16 @@ pub fn generate(info_dir: &Path, origin: &Path, stem: &str) -> Option<ThumbOut> 
   let img = load_origin(origin)?;
   let thumb = shrink_to_thumb(img);
   let (width, height) = (thumb.width(), thumb.height());
+  let colors = crate::services::color::extract(&thumb);
 
   let webp_name = format!("{stem}_thumbnail.webp");
   if save_webp(&thumb, &info_dir.join(&webp_name)).is_ok() {
-    return Some(ThumbOut { name: webp_name, width, height });
+    return Some(ThumbOut { name: webp_name, width, height, colors });
   }
   log::warn!("webp 缩略图编码失败，退回 PNG：{}", origin.display());
   let png_name = format!("{stem}_thumbnail.png");
   if thumb.save(info_dir.join(&png_name)).is_ok() {
-    return Some(ThumbOut { name: png_name, width, height });
+    return Some(ThumbOut { name: png_name, width, height, colors });
   }
   None
 }

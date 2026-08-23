@@ -68,6 +68,7 @@ fn persist(lib: &mut Library, info_dir: &Path, mut meta: AssetMeta, thumb: &thum
   meta.thumbnail = Some(thumb.name.clone());
   meta.thumb_width = Some(thumb.width);
   meta.thumb_height = Some(thumb.height);
+  meta.colors = thumb.colors.clone(); // 主色随缩略图刷新（6.1 颜色解析）
   meta.modified_at = super::operations::now();
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
   let id = meta.id.clone();

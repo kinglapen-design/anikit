@@ -4,8 +4,8 @@
 // 权威稿 = figma-css 02_布局/01_主窗口.md「缩略图 - 颜色信息」组：容器 padding 16 / gap 12 /
 // align center——缩略图框全宽 contain / C2 底 / 1px 暗-悬停 / 圆角 8（高按图比例上限 220，
 // 无尺寸回退 4:3），格式徽标 absolute 7,7 / padding 2 4 / 圆角 4 / 10/14 700 常态色；
-// 颜色 bar 恒显（C4 胶囊圆角 14 / padding 4 / gap 4，7 个占位色块 16×16 圆形透明底 +
-// 亮-选中 1px 描边——色块业务 6.1 接入后替换真色）；名称输入框（36 高 / C2 / padding 8 12 /
+// 颜色 bar 恒显（C4 胶囊圆角 14 / padding 4 / gap 4，色块 16×16 圆形 + 亮-选中 1px 描边——
+// 6.1 颜色解析已接入：真色 = detail.colors 前 7（透明像素不计，存 10 显 7），空 = 7 个占位色块）；名称输入框（36 高 / C2 / padding 8 12 /
 // 圆角 6 / 14/20 常态）+ 链接输入框（36 高 / C2 / padding 3 3 3 12 / 文字极淡 +
 // 打开链接钮 30×30 图标 18 disabled）——2026-08-15 定案从自定义数据段上移入本组。
 // 一轮只读：输入框 readonly、打开链接 disabled 占位。
@@ -70,6 +70,9 @@ const firstLink = computed(() => {
   if (file.value) return file.value.detail.links[0] ?? "";
   return archive.value?.data.links[0] ?? "";
 });
+// 颜色 bar 真色（6.1 颜色解析）：detail.colors 前 7（稿槽位 7 个，存储上限 10）；
+// 空（非图片 / 无缩略图）= 7 个占位色块（恒显口径不变）
+const swatchColors = computed(() => (file.value?.detail.colors ?? []).slice(0, 7));
 </script>
 
 <template>
@@ -90,9 +93,12 @@ const firstLink = computed(() => {
             {{ file.placement.ext.toUpperCase() }}
           </span>
         </div>
-        <!-- 颜色 bar（恒显）：7 个占位色块——色块业务 6.1 未做，真色接入后替换 -->
+        <!-- 颜色 bar（恒显）：真色块 = detail.colors 前 7（6.1 颜色解析已接入）；空 = 7 个占位色块 -->
         <div class="swatches">
-          <span v-for="i in 7" :key="i" class="swatch" />
+          <template v-if="swatchColors.length">
+            <span v-for="c in swatchColors" :key="c" class="swatch" :style="{ background: c }" />
+          </template>
+          <span v-for="i in 7" v-else :key="i" class="swatch" />
         </div>
         <div class="field">
           <input type="text" :value="name" readonly />
@@ -207,7 +213,7 @@ const firstLink = computed(() => {
   background: var(--c4);
   box-shadow: inset 0 0 0 1px var(--line-hover);
 }
-/* 占位色块：16×16 圆形，透明底 + 亮-选中 1px 描边（稿的描边样式；6.1 真色接入后替换） */
+/* 色块（稿）：16×16 圆形 + 亮-选中 1px 描边（真色块描边保留，浅色色块靠描边出形） */
 .swatch {
   width: 16px;
   height: 16px;

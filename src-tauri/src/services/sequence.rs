@@ -276,6 +276,7 @@ pub(crate) fn build_sequence_asset(
     thumbnail: thumb.as_ref().map(|t| t.name.clone()),
     thumb_width: thumb.as_ref().map(|t| t.width),
     thumb_height: thumb.as_ref().map(|t| t.height),
+    colors: thumb.map(|t| t.colors).unwrap_or_default(),
     fps: Some(DEFAULT_FPS),
     frame_count: Some(frames.len() as u32),
     thumb_frame: Some(thumb_frame),

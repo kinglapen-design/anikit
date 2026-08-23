@@ -274,6 +274,7 @@ pub(crate) fn build_asset_with_id(
   let mut meta = make_meta(asset_id, file, &origin_name, size, hash, width, height, thumb.as_ref().map(|t| t.name.clone()), imported_from);
   meta.thumb_width = thumb.as_ref().map(|t| t.width);
   meta.thumb_height = thumb.as_ref().map(|t| t.height);
+  meta.colors = thumb.map(|t| t.colors).unwrap_or_default();
   meta.duration = anim.map(|a| a.duration_secs).or(video.map(|v| v.duration)).or(audio.map(|a| a.duration));
   meta.frame_count = anim.map(|a| a.frame_count);
   meta.bpm = audio.and_then(|a| a.bpm);
@@ -395,6 +396,7 @@ fn make_meta(
     descriptions: Vec::new(),
     note_count: None,
     thumbnail,
+    colors: Vec::new(),
     fps: None,
     frame_count: None,
     thumb_frame: None,

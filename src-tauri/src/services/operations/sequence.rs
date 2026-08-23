@@ -236,6 +236,7 @@ pub fn delete_frames(lib: &mut Library, asset_id: &str, frame_names: &[String]) 
       meta.thumbnail = Some(thumb.name);
       meta.thumb_width = Some(thumb.width);
       meta.thumb_height = Some(thumb.height);
+      meta.colors = thumb.colors;
     }
   }
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
