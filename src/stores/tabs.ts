@@ -7,10 +7,12 @@
 // - 数据共享：所有标签页共用全局 content / selection store，标签页只记自己的 viewKey。
 // 布局持久化：onDidLayoutChange 防抖 500ms → ui.tabLayout（settings.ui 子树，ui store 既有写回通道）。
 import { defineStore } from "pinia";
-import { markRaw, ref } from "vue";
+import { markRaw, nextTick, ref } from "vue";
 import type { DockviewApi, IDockviewPanel, SerializedDockview } from "dockview-vue";
 import { useContentStore } from "./content";
+import { useSelectionStore } from "./selection";
 import { useUiStore } from "./ui";
+import { findFolderNode } from "../lib/detailSections";
 
 export interface TabInfo {
   id: string;
@@ -31,8 +33,44 @@ export const useTabsStore = defineStore("tabs", () => {
 
   // 导航历史（2026-08-20，工具栏面包屑后退/前进接入）：per-panel 双栈——openView 替换视口时
   // 旧 key 入 back 并清 fwd；后退/前进在两栈间移动当前 key。新开页 / 布局恢复 = 空历史；
-  // 锁定页导航新开（Eagle 式）不经本栈。会话级不持久化
-  const histories = new Map<string, { back: string[]; fwd: string[] }>();
+  // 锁定页导航新开（Eagle 式）不经本栈。会话级不持久化。
+  // 条目带选中快照（2026-08-24 用户定："返回的时候默认选中卡片"）——openView 压栈记当前选中、
+  // goHistory 弹出恢复（详情面板不空，"回到触发处"语义贯通到历史导航）
+  interface NavSel {
+    asset?: string; // Placement key（assetId|folderId）
+    folder?: string; // 文件夹选择域 folderId
+  }
+  interface NavEntry {
+    key: string;
+    sel: NavSel;
+  }
+  const histories = new Map<string, { back: NavEntry[]; fwd: NavEntry[] }>();
+
+  // 当前选中快照（首项口径——详情面板单资产消费同 selection.first）
+  function currentSel(): NavSel {
+    const selection = useSelectionStore();
+    if (selection.first) return { asset: selection.first };
+    for (const id of selection.selectedFolders) return { folder: id };
+    return {};
+  }
+
+  // 恢复选中：目标已不存在（期间被删）跳过；nextTick 让过 sidebarSelected watch 的清选择
+  //（pre flush 先执行，FolderTree 入域同口径）
+  function restoreSel(sel: NavSel): void {
+    if (!sel.asset && !sel.folder) return;
+    void nextTick(() => {
+      const selection = useSelectionStore();
+      if (sel.asset) {
+        const k = sel.asset;
+        const exists =
+          content.placements.some((p) => `${p.assetId}|${p.folderId}` === k) ||
+          content.recycleEntries.some((p) => `${p.assetId}|${p.folderId}` === k);
+        if (exists) selection.selectOnly(k);
+      } else if (sel.folder && findFolderNode(content.folders, sel.folder)) {
+        selection.clickFolder(sel.folder);
+      }
+    });
+  }
   // 按钮态响应式镜像（ContentTitleBar disabled 绑定）：panelId → 可后退 / 可前进
   const navCan = ref<Record<string, { back: boolean; fwd: boolean }>>({});
 
@@ -95,9 +133,9 @@ export const useTabsStore = defineStore("tabs", () => {
       return;
     }
     if (panelInfo(active).viewKey === viewKey) return;
-    // 导航历史：旧视口入后退栈、清前进栈（2026-08-20 面包屑接入）
+    // 导航历史：旧视口（带选中快照）入后退栈、清前进栈（2026-08-20 面包屑接入；2026-08-24 快照）
     const h = histories.get(active.id) ?? { back: [], fwd: [] };
-    h.back.push(panelInfo(active).viewKey);
+    h.back.push({ key: panelInfo(active).viewKey, sel: currentSel() });
     h.fwd = [];
     histories.set(active.id, h);
     active.api.updateParameters({ viewKey });
@@ -107,7 +145,8 @@ export const useTabsStore = defineStore("tabs", () => {
   }
 
   // 面包屑后退 / 前进（2026-08-20 接入）：历史导航 = 本标签页内部行为，直接替换视口——
-  // 不走 openView 的"锁定页新开"语义（历史是本页自己走过的路径，新开页反而迷失）
+  // 不走 openView 的"锁定页新开"语义（历史是本页自己走过的路径，新开页反而迷失）；
+  // 弹出条目的选中快照恢复（2026-08-24 用户定：返回默认选中卡片）
   function goHistory(panelId: string, dir: -1 | 1): void {
     if (!api) return;
     const panel = api.getPanel(panelId);
@@ -116,10 +155,11 @@ export const useTabsStore = defineStore("tabs", () => {
     const [from, to] = dir === -1 ? [h.back, h.fwd] : [h.fwd, h.back];
     const target = from.pop();
     if (target === undefined) return;
-    to.push(panelInfo(panel).viewKey);
-    panel.api.updateParameters({ viewKey: target });
-    panel.api.setTitle(content.viewTitle(target));
-    if (api.activePanel?.id === panelId) content.sidebarSelected = target;
+    to.push({ key: panelInfo(panel).viewKey, sel: currentSel() });
+    panel.api.updateParameters({ viewKey: target.key });
+    panel.api.setTitle(content.viewTitle(target.key));
+    if (api.activePanel?.id === panelId) content.sidebarSelected = target.key;
+    restoreSel(target.sel);
     syncNavCan();
   }
 

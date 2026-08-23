@@ -397,6 +397,22 @@ async def main():
             check("S6 点文件卡跳回雪牧（详情 = 雪牧的 2 条关系）",
                   bool(s6b and s6b["items"] == 2), json.dumps(s6b, ensure_ascii=False))
 
+            # —— S6c 面包屑后退恢复选中（2026-08-24 用户定"返回默认选中卡片"）——
+            # 链路：F-DIR(雪牧选中) → 跳雪天档案 → 跳雪牧(F-SUB)；后退两次应逐站恢复选中
+            await click("document.querySelector('.crumb-group .icon-btn:not(.rot-180):not(.archive-panel-toggle)')")
+            await asyncio.sleep(0.7)
+            s6c = await ev("document.querySelector('.detail-panel .pinned input')?.value ?? null")
+            check("S6c 后退一站 = 雪天档案视口 + 档案选中恢复（详情雪天）", s6c == "雪天", str(s6c))
+            await click("document.querySelector('.crumb-group .icon-btn:not(.rot-180):not(.archive-panel-toggle)')")
+            await asyncio.sleep(0.7)
+            s6d = await ev("""(() => ({
+              name: document.querySelector('.detail-panel .pinned input')?.value ?? null,
+              items: document.querySelectorAll('.detail-panel .section-relations .rel-item').length,
+            }))()""")
+            check("S6d 再后退 = 雪牧选中恢复（详情雪牧.fla + 关系 2 条）",
+                  bool(s6d and s6d["name"] == "雪牧.fla" and s6d["items"] == 2),
+                  json.dumps(s6d, ensure_ascii=False))
+
             # —— S7 × 删除（2 → 1） ——
             await ev("[...document.querySelectorAll('.detail-panel .section-relations .rel-item')].find((it) => it.textContent.includes('雪天'))?.querySelector('.del')?.click()")
             await asyncio.sleep(0.6)
