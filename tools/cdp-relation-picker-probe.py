@@ -1,15 +1,17 @@
-# CDP 实测：6.2 一轮 · 主窗口选择模式 + 关系（2026-08-23）
-# 桩带可变 relations 表（add/update/remove 真改数据，UI 跟变）：
-# S1 进入选择模式四重标识：picking 类 + 1.5px 品牌边框伪元素 + 横幅文案 + 备选区替换详情面板 + 选择域清空
-# S2 单选行为：点卡加入（大勾 picked 态）→ 点另一张选新换旧 → 点已选移出；发起文件自身不可选
-# S3 称谓输入 + 确认：add_relation 全参数断言（from/to/label/reverseLabel）+ 退出 + 详情关系 item 出现
-# S4 二次修改称谓：点称谓框 → C2 输入框 → Enter 提交 update_relation（label 字段）
-# S5 换绑对方：点文件卡 → retarget 预填 → 选档案卡 → update_relation newToKind/Id 断言
-# S6 双向显示：档案（to 侧）详情显示反向称谓「儿子」+ 对方快照名
-# S7 × 删除：remove_relation + item 消失
-# S8 Esc 取消：零调用退出
-# S9 右键仅查看类：picker 下素材卡右键无编辑项（重命名/移动等），有「打开预览」
-# 截图留档 tools/style-preview/：picker-mode / relation-items。
+# CDP 实测：6.2 主窗口选择模式 + 关系（2026-08-23 一轮 / 2026-08-24 二轮修订）
+# 二轮口径：关系 = 多选累积（整组竖排复制，批量写入单撤销步）；换绑废除，点文件卡 = 跳转定位
+# （面包屑返回）；发起文件自身剪切档半透明禁选；白名单收窄（汉堡禁 / 档案侧栏隐藏 / 收件箱·包内守卫）。
+# 桩带可变 relations 表（add_relations/update/remove 真改数据，list 深拷贝斩断共享引用，踩坑 053）：
+# S1 四重标识 + 进入清选择域 + 发起文件 item
+# S2 多选累积：点卡追加组 → 再点第二张再追加（非切换）→ 点已选移除该组；自身半透明禁选
+# S3 两组称谓 + 确认：add_relations 批量全参数断言 + 退出回触发处 + 详情 2 item + toast 计数
+# S4 二次修改称谓：点称谓框 → C2 输入框 → Enter 提交 update_relation（参数收窄无换绑字段）
+# S5 跳转：点文件卡（档案）→ 档案视口 + 选中档案卡出详情 + 面包屑可后退；后退回原视口
+# S6 双向显示：档案（to 侧）详情显示反向称谓；文件卡跳回文件（asset 跳转）
+# S7 × 删除：remove_relation + item 2 → 1
+# S8 Esc 取消：零写入 + picked 清空退出
+# S9 右键仅查看类 + 白名单（汉堡 / 新增钮 disabled）
+# 截图留档 tools/style-preview/：picker-mode-multi / relation-jump。
 import asyncio
 import base64
 import json
@@ -26,7 +28,7 @@ URL = "http://localhost:5373"
 
 STILL = "E:/01_Projects/03_Software-dev/AniKit/tools/test-assets/still.webp"
 STUB = r"""
-window.__calls = { add_relation: [], update_relation: [], remove_relation: [] };
+window.__calls = { add_relations: [], update_relation: [], remove_relation: [] };
 window.__relId = 0;
 window.__cbs = {};
 window.__cbId = 0;
@@ -94,8 +96,7 @@ window.__cbId = 0;
         list_space_libraries: ["动画资产"],
         list_recent_libraries: [],
         list_prop_pool: [],
-        // 深拷贝斩断共享引用——原样返回 DB 数组会让前端 state 与桩共享同一数组对象：
-        // 桩写绕过响应式、前端 list 赋值同引用不 trigger（2026-08-23 S4 双 item/不刷新攻关实锤）
+        // 深拷贝斩断共享引用（踩坑 053：原样返回 = 前端 state 与桩共享，绕过响应式）
         list_relations: () => JSON.parse(JSON.stringify(DB.relations)),
       };
       if (cmd === "get_archive_data") return Promise.resolve(archiveView(args.folderId));
@@ -111,11 +112,11 @@ window.__cbId = 0;
           archives: [],
         });
       }
-      if (cmd === "add_relation") {
-        window.__calls.add_relation.push(JSON.parse(JSON.stringify(args)));
-        const rel = { id: "RL-" + (++window.__relId), from: refOf(args.fromKind, args.fromId), to: refOf(args.toKind, args.toId), kind: "free", label: args.label, reverseLabel: args.reverseLabel ?? null };
-        DB.relations.push(rel);
-        return Promise.resolve(JSON.parse(JSON.stringify(rel)));
+      if (cmd === "add_relations") {
+        window.__calls.add_relations.push(JSON.parse(JSON.stringify(args)));
+        const rels = args.items.map((it) => ({ id: "RL-" + (++window.__relId), from: refOf(args.fromKind, args.fromId), to: refOf(it.toKind, it.toId), kind: "free", label: it.label, reverseLabel: it.reverseLabel ?? null }));
+        DB.relations.push(...rels);
+        return Promise.resolve(JSON.parse(JSON.stringify(rels)));
       }
       if (cmd === "update_relation") {
         window.__calls.update_relation.push(JSON.parse(JSON.stringify(args)));
@@ -123,8 +124,6 @@ window.__cbId = 0;
         if (!rel) return Promise.reject("关系不存在，可能已被删除");
         rel.label = args.label;
         rel.reverseLabel = args.reverseLabel ?? null;
-        if (args.newToKind && args.newToId) rel.to = refOf(args.newToKind, args.newToId);
-        if (args.newFromKind && args.newFromId) rel.from = refOf(args.newFromKind, args.newFromId);
         return Promise.resolve(null);
       }
       if (cmd === "remove_relation") {
@@ -247,104 +246,105 @@ async def main():
                     f.write(base64.b64decode(r["result"]["data"]))
                 print("截图:", name)
 
-            # —— 进 F-SUB 视口（两张素材卡）——
-            await click("document.querySelector('.tree-item[data-folder-id=\"F-SUB\"] .body')")
-            await asyncio.sleep(0.6)
-            # 选中 A1（雪牧.fla）出详情
+            # 备选区已选组名清单（占位组返回 []；占位文字的 .name 带 .placeholder 类须排除；
+            # 发起文件"雪牧.fla"每组重复显示，滤掉只留选中文件）
+            PICKED = "[...document.querySelectorAll('.picker-panel .rel-row .rel-item .name:not(.placeholder)')].map((n) => n.textContent).filter((n) => n !== '雪牧.fla')"
+
+            # —— 初始视口 quick:all（两张素材卡），点雪牧出详情 ——
             await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('雪牧'))")
             await asyncio.sleep(0.8)
 
-            # —— S1 进入选择模式：详情关系区块添加钮 ——
+            # —— S1 进入选择模式 ——
             await click("document.querySelector('.detail-panel .section-relations .icon-btn')")
             await asyncio.sleep(0.6)
             s1 = await ev("""(() => {
               const w = document.querySelector('.window');
-              const picking = w.classList.contains('picking');
               const bd = getComputedStyle(w, '::after');
-              const banner = document.querySelector('.banner .text')?.textContent ?? null;
-              const panel = !!document.querySelector('.picker-panel');
-              const detail = !!document.querySelector('.sidebar-right .detail-panel');
-              const selectedCards = document.querySelectorAll('.asset-card.selected').length;
-              const origin = document.querySelector('.picker-panel .rel-box .rel-item:last-child .name')?.textContent ?? null;
-              return { picking, bw: bd.borderTopWidth, bc: bd.borderTopColor, banner, panel, detail, selectedCards, origin };
+              return {
+                picking: w.classList.contains('picking'), bw: bd.borderTopWidth, bc: bd.borderTopColor,
+                banner: document.querySelector('.banner .text')?.textContent ?? null,
+                panel: !!document.querySelector('.picker-panel'),
+                detail: !!document.querySelector('.sidebar-right .detail-panel'),
+                selectedCards: document.querySelectorAll('.asset-card.selected').length,
+                origin: document.querySelector('.picker-panel .rel-row .rel-box .rel-item:last-child .name')?.textContent ?? null,
+                placeholder: document.querySelector('.picker-panel .placeholder')?.textContent ?? null,
+              };
             })()""")
-            print("S1:", json.dumps(s1, ensure_ascii=False))
-            check("S1 四重标识：picking 类 + 品牌边框 + 横幅（为 雪牧.fla 添加关系）+ 备选区替换详情",
+            check("S1 四重标识 + 进入清选择域 + 空态占位组（发起文件雪牧.fla 在组内）",
                   bool(s1 and s1["picking"] and s1["bw"] in ("1px", "1.5px") and s1["bc"] == "rgb(61, 221, 210)"
                        and s1["banner"] == "选择文件/档案 - 为 雪牧.fla 添加关系"
-                       and s1["panel"] and not s1["detail"]),
+                       and s1["panel"] and not s1["detail"] and s1["selectedCards"] == 0
+                       and s1["origin"] == "雪牧.fla" and s1["placeholder"] == "点击卡片选择"),
                   json.dumps(s1, ensure_ascii=False))
-            check("S1 进入清选择域 + 发起文件 item（雪牧.fla）",
-                  bool(s1 and s1["selectedCards"] == 0 and s1["origin"] == "雪牧.fla"),
-                  json.dumps(s1, ensure_ascii=False))
-
-            # —— S2 单选行为 ——
-            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('雪牧'))")
-            s2a = await ev("document.querySelector('.picker-panel .rel-box .rel-item .placeholder')?.textContent ?? '已选'")
-            check("S2 发起文件自身不可选（仍为占位态）", s2a == "点击卡片选择", str(s2a))
-            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('阿拉蕾'))")
-            s2b = await ev("""(() => ({
-              name: document.querySelector('.picker-panel .rel-box .rel-item .name')?.textContent ?? null,
-              pickedCards: [...document.querySelectorAll('.asset-card.picked')].length,
-              check: !!document.querySelector('.asset-card.picked .pick-check'),
+            # 白名单：汉堡 / 新增钮 disabled
+            # 白名单：汉堡 / 新增钮 disabled（v-tip 指令不落 title 属性，按结构位置取）
+            s1b = await ev("""(() => ({
+              hamburger: document.querySelector('.sidebar-left .bar-title > .icon-btn')?.disabled,
+              add: document.querySelector('.sidebar-left .add-btn-wrap .icon-btn')?.disabled,
             }))()""")
-            check("S2 点卡加入备选（阿拉蕾.fla）+ 卡片 picked 压暗大勾",
-                  bool(s2b and s2b["name"] == "阿拉蕾.fla" and s2b["pickedCards"] == 1 and s2b["check"]),
-                  json.dumps(s2b, ensure_ascii=False))
-            # 选新换旧：点档案卡前先去 F-DIR；此处再点雪牧无效（自身），改点已选移出
-            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('阿拉蕾'))")
-            s2c = await ev("document.querySelector('.picker-panel .rel-box .rel-item .placeholder')?.textContent ?? null")
-            check("S2 点已选 = 移出（回占位态）", s2c == "点击卡片选择", str(s2c))
+            check("S1 白名单：汉堡 + 新增钮 disabled", bool(s1b and s1b["hamburger"] and s1b["add"]), json.dumps(s1b))
 
-            # —— S3 选档案（换目标类型）+ 称谓 + 确认 ——
+            # —— S2 多选累积 + 自身禁选 ——
+            self_state = await ev("""(() => {
+              const c = [...document.querySelectorAll('.asset-card')].find((x) => x.textContent.includes('雪牧'));
+              return c ? { cls: c.className, op: getComputedStyle(c).opacity, cursor: getComputedStyle(c).cursor } : null;
+            })()""")
+            check("S2 发起文件自身 = picker-self 半透明（0.5）+ 禁选光标",
+                  bool(self_state and "picker-self" in self_state["cls"] and self_state["op"] == "0.5" and self_state["cursor"] == "not-allowed"),
+                  json.dumps(self_state))
+            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('雪牧'))")
+            s2a = await ev(PICKED)
+            check("S2 点自身不加组（仍空）", s2a == [], json.dumps(s2a))
+            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('阿拉蕾'))")
             await click("document.querySelector('.tree-item[data-folder-id=\"F-DIR\"] .body')")
-            await asyncio.sleep(0.6)
+            await asyncio.sleep(0.5)
             await click("document.querySelector('.archive-card[data-folder-id=\"F-ARC\"]')")
-            s3a = await ev("document.querySelector('.picker-panel .rel-box .rel-item .name')?.textContent ?? null")
-            check("S3 点档案卡加入备选（雪天）", s3a == "雪天", str(s3a))
-            # 输入双框称谓（左 = 父亲：雪天对雪牧；右 = 儿子：雪牧对雪天）
+            s2b = await ev(PICKED)
+            check("S2 多选累积（阿拉蕾.fla + 雪天两组，非切换）+ 跨视口导航模式保持",
+                  bool(s2b and s2b == ["阿拉蕾.fla", "雪天"]), json.dumps(s2b, ensure_ascii=False))
+            await click("document.querySelector('.archive-card[data-folder-id=\"F-ARC\"]')")
+            s2c = await ev(PICKED)
+            check("S2 点已选 = 移除该组（剩阿拉蕾.fla）", bool(s2c and s2c == ["阿拉蕾.fla"]), json.dumps(s2c, ensure_ascii=False))
+            await click("document.querySelector('.archive-card[data-folder-id=\"F-ARC\"]')")
+            await asyncio.sleep(0.4)
+
+            # —— S3 两组称谓 + 批量确认 ——
             await ev("""(() => {
-              const inputs = [...document.querySelectorAll('.picker-panel .rel-input input')];
-              for (const [i, v] of [[0, '父亲'], [1, '儿子']]) {
-                const el = inputs[i];
-                el.value = v;
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-              }
-              return inputs.length;
+              const rows = [...document.querySelectorAll('.picker-panel .rel-row')];
+              const vals = [['父亲', '儿子'], ['偶像', '歌迷']];
+              rows.forEach((row, i) => {
+                const inputs = row.querySelectorAll('.rel-input input');
+                inputs.forEach((el, j) => { el.value = vals[i][j]; el.dispatchEvent(new Event('input', { bubbles: true })); });
+              });
+              return rows.length;
             })()""")
             await asyncio.sleep(0.3)
-            disabled = await ev("document.querySelector('.picker-panel .pick-actions .app-btn.primary')?.disabled")
-            check("S3 已选 + 称谓非空 → 确认可用", disabled is False, str(disabled))
-            await shot("picker-mode")
+            s3a = await ev("document.querySelector('.picker-panel .pick-actions .app-btn.primary')?.textContent")
+            check("S3 确认钮带数量（确认 (2)）", s3a == "确认 (2)", str(s3a))
+            await shot("picker-mode-multi")
             await click("document.querySelector('.picker-panel .pick-actions .app-btn.primary')")
             await asyncio.sleep(0.8)
-            calls = await ev("window.__calls.add_relation")
             s3b = await ev("""(() => ({
+              calls: window.__calls.add_relations,
               picking: document.querySelector('.window').classList.contains('picking'),
-              item: !!document.querySelector('.detail-panel .section-relations .rel-item'),
-              items: document.querySelectorAll('.detail-panel .section-relations .rel-item').length,
-              label: document.querySelector('.detail-panel .section-relations .rel-item .label-text')?.textContent ?? null,
-              other: document.querySelector('.detail-panel .section-relations .rel-item .file-chip .name')?.textContent ?? null,
+              items: [...document.querySelectorAll('.detail-panel .section-relations .rel-item')].map((it) => ({
+                label: it.querySelector('.label-text')?.textContent, other: it.querySelector('.file-chip .name')?.textContent })),
             }))()""")
-            check("S3 确认 → add_relation(asset A1 → archive F-ARC, 父亲/儿子)",
-                  bool(calls and len(calls) == 1 and calls[0]["fromKind"] == "asset" and calls[0]["fromId"] == "A1"
-                       and calls[0]["toKind"] == "archive" and calls[0]["toId"] == "F-ARC"
-                       and calls[0]["label"] == "父亲" and calls[0]["reverseLabel"] == "儿子"),
-                  json.dumps(calls, ensure_ascii=False))
-            check("S3 确认后退模式 + 详情关系 item（父亲 ← 雪天）",
-                  bool(s3b and not s3b["picking"] and s3b["item"] and s3b["label"] == "父亲" and s3b["other"] == "雪天"),
-                  json.dumps(s3b, ensure_ascii=False))
+            c0 = s3b and s3b["calls"] and s3b["calls"][0]
+            check("S3 确认 → add_relations 批量（from A1，items 两条全参数）",
+                  bool(c0 and len(s3b["calls"]) == 1 and c0["fromKind"] == "asset" and c0["fromId"] == "A1"
+                       and len(c0["items"]) == 2
+                       and c0["items"][0]["toId"] == "A2" and c0["items"][0]["label"] == "父亲" and c0["items"][0]["reverseLabel"] == "儿子"
+                       and c0["items"][1]["toKind"] == "archive" and c0["items"][1]["toId"] == "F-ARC" and c0["items"][1]["label"] == "偶像"),
+                  json.dumps(c0, ensure_ascii=False))
+            check("S3 退出回触发处（雪牧详情 2 item：父亲←阿拉蕾 / 偶像←雪天）",
+                  bool(s3b and not s3b["picking"] and len(s3b["items"]) == 2
+                       and s3b["items"][0]["label"] == "父亲" and s3b["items"][0]["other"] == "阿拉蕾.fla"
+                       and s3b["items"][1]["label"] == "偶像" and s3b["items"][1]["other"] == "雪天"),
+                  json.dumps(s3b["items"] if s3b else None, ensure_ascii=False))
 
-            # —— S4 二次修改称谓（点称谓框 → C2 输入框 → 改「老爸」Enter） ——
+            # —— S4 二次修改称谓（参数收窄：无换绑字段） ——
             await click("document.querySelector('.detail-panel .section-relations .rel-item .label-chip')")
-            s4a = await ev("""(() => {
-              const chip = document.querySelector('.detail-panel .section-relations .rel-item .label-chip');
-              const input = chip.querySelector('input');
-              return input ? { editing: chip.classList.contains('editing'), bg: getComputedStyle(chip).backgroundColor, val: input.value } : null;
-            })()""")
-            check("S4 点称谓框进编辑态（C2 底输入框，初值 父亲）",
-                  bool(s4a and s4a["editing"] and s4a["val"] == "父亲" and s4a["bg"] == "rgb(22, 23, 23)"),
-                  json.dumps(s4a))
             await ev("""(() => {
               const input = document.querySelector('.detail-panel .section-relations .rel-item .label-chip input');
               input.value = '老爸';
@@ -352,99 +352,87 @@ async def main():
               input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
               return true;
             })()""")
-            await asyncio.sleep(0.6)
-            # 提交链 = update + refreshRelations 两趟 invoke + 重渲染，headless 下轮询等 UI 落定
-            s4b = None
+            s4 = None
             for _ in range(12):
-                s4b = await ev("""(() => ({
+                await asyncio.sleep(0.3)
+                s4 = await ev("""(() => ({
                   calls: window.__calls.update_relation,
                   label: document.querySelector('.detail-panel .section-relations .rel-item .label-text')?.textContent ?? null,
                 }))()""")
-                if s4b and s4b["label"] == "老爸":
+                if s4 and s4["label"] == "老爸":
                     break
-                await asyncio.sleep(0.3)
-            check("S4 提交 → update_relation(label 老爸 / reverse 儿子保留 / 不换绑)",
-                  bool(s4b and len(s4b["calls"]) == 1 and s4b["calls"][0]["label"] == "老爸"
-                       and s4b["calls"][0]["reverseLabel"] == "儿子" and s4b["calls"][0]["newToId"] is None
-                       and s4b["label"] == "老爸"),
-                  json.dumps(s4b, ensure_ascii=False))
+            c4 = s4 and s4["calls"] and s4["calls"][0]
+            check("S4 称谓二次修改 → update_relation（label 老爸 / reverse 保留 / 无换绑字段）",
+                  bool(c4 and c4["id"] == "RL-1" and c4["label"] == "老爸" and c4["reverseLabel"] == "儿子"
+                       and "newToId" not in (c4 or {}) and s4["label"] == "老爸"),
+                  json.dumps(s4, ensure_ascii=False))
 
-            # —— S5 换绑对方（点文件卡 → 预填 → 改选 A2 阿拉蕾） ——
-            await click("document.querySelector('.tree-item[data-folder-id=\"F-SUB\"] .body')")
-            await asyncio.sleep(0.5)
-            await click("document.querySelector('.detail-panel .section-relations .rel-item .file-chip')")
-            await asyncio.sleep(0.5)
-            s5a = await ev("""(() => ({
-              banner: document.querySelector('.banner .text')?.textContent ?? null,
-              picked: document.querySelector('.picker-panel .rel-box .rel-item .name')?.textContent ?? null,
-              inputs: [...document.querySelectorAll('.picker-panel .rel-input input')].map((i) => i.value),
-            }))()""")
-            check("S5 点文件卡进换绑模式（横幅更换关系对象；预填 雪天 + 老爸/儿子）",
-                  bool(s5a and "更换关系对象" in (s5a["banner"] or "") and s5a["picked"] == "雪天"
-                       and s5a["inputs"] == ["老爸", "儿子"]),
-                  json.dumps(s5a, ensure_ascii=False))
-            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('阿拉蕾'))")
-            await click("document.querySelector('.picker-panel .pick-actions .app-btn.primary')")
+            # —— S5 跳转（档案）：点文件卡 → 档案视口 + 选中出详情 + 面包屑可后退 ——
+            await click("[...document.querySelectorAll('.detail-panel .section-relations .rel-item')].find((it) => it.textContent.includes('雪天'))?.querySelector('.file-chip')")
             await asyncio.sleep(0.8)
-            s5b = await ev("""(() => ({
-              calls: window.__calls.update_relation,
-              other: document.querySelector('.detail-panel .section-relations .rel-item .file-chip .name')?.textContent ?? null,
+            s5 = await ev("""(() => ({
+              archivePanel: !!document.querySelector('.archive-side-panel, .archive-panel, .detail-panel .section-custom'),
+              detailName: document.querySelector('.detail-panel .pinned .name-input, .detail-panel .detail-block.pinned input')?.value ?? null,
+              backBtns: [...document.querySelectorAll('.content-title-bar .icon-btn, .title-bar .icon-btn')].map((b) => ({ t: b.title, d: b.disabled })),
             }))()""")
-            check("S5 换绑确认 → update_relation(newTo asset A2) + item 对方 = 阿拉蕾.fla",
-                  bool(s5b and len(s5b["calls"]) == 2 and s5b["calls"][1]["newToKind"] == "asset"
-                       and s5b["calls"][1]["newToId"] == "A2" and s5b["other"] == "阿拉蕾.fla"),
-                  json.dumps(s5b, ensure_ascii=False))
+            print("S5 跳转后:", json.dumps(s5, ensure_ascii=False))
+            check("S5 跳转档案视口（档案详情显示雪天）",
+                  bool(s5 and s5["detailName"] == "雪天"), json.dumps(s5, ensure_ascii=False))
 
-            # —— S6 双向显示（to 侧 = A2 阿拉蕾：显示反向称谓「儿子」） ——
-            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('阿拉蕾'))")
-            await asyncio.sleep(0.8)
+            # —— S6 双向显示（to 侧反向称谓）+ 文件卡跳回文件 ——
             s6 = await ev("""(() => {
-              const item = document.querySelector('.detail-panel .section-relations .rel-item');
-              return item ? { label: item.querySelector('.label-text')?.textContent, other: item.querySelector('.file-chip .name')?.textContent } : null;
+              const it = document.querySelector('.detail-panel .section-relations .rel-item');
+              return it ? { label: it.querySelector('.label-text')?.textContent, other: it.querySelector('.file-chip .name')?.textContent } : null;
             })()""")
-            check("S6 双向显示：阿拉蕾详情 = 儿子 ← 雪牧.fla（reverseLabel）",
-                  bool(s6 and s6["label"] == "儿子" and s6["other"] == "雪牧.fla"),
+            check("S6 双向显示：雪天详情 = 歌迷 ← 雪牧.fla（reverseLabel）",
+                  bool(s6 and s6["label"] == "歌迷" and s6["other"] == "雪牧.fla"),
                   json.dumps(s6, ensure_ascii=False))
-            await shot("relation-items")
+            await shot("relation-jump")
+            await click("document.querySelector('.detail-panel .section-relations .rel-item .file-chip')")
+            await asyncio.sleep(0.8)
+            s6b = await ev("""(() => ({
+              first: document.querySelector('.detail-panel .section-relations .rel-item .file-chip .name')?.textContent ?? null,
+              items: document.querySelectorAll('.detail-panel .section-relations .rel-item').length,
+            }))()""")
+            check("S6 点文件卡跳回雪牧（详情 = 雪牧的 2 条关系）",
+                  bool(s6b and s6b["items"] == 2), json.dumps(s6b, ensure_ascii=False))
 
-            # —— S7 × 删除（hover 滑入，JS click） ——
-            await ev("document.querySelector('.detail-panel .section-relations .rel-item .file-chip .del')?.click()")
+            # —— S7 × 删除（2 → 1） ——
+            await ev("[...document.querySelectorAll('.detail-panel .section-relations .rel-item')].find((it) => it.textContent.includes('雪天'))?.querySelector('.del')?.click()")
             await asyncio.sleep(0.6)
             s7 = await ev("""(() => ({
               calls: window.__calls.remove_relation,
               items: document.querySelectorAll('.detail-panel .section-relations .rel-item').length,
             }))()""")
-            check("S7 × → remove_relation(RL-1) + item 消失",
-                  bool(s7 and s7["calls"] == [{"id": "RL-1"}] and s7["items"] == 0),
+            check("S7 × → remove_relation(RL-2) + item 2 → 1",
+                  bool(s7 and s7["calls"] == [{"id": "RL-2"}] and s7["items"] == 1),
                   json.dumps(s7, ensure_ascii=False))
 
-            # —— S8 Esc 取消（零调用） ——
+            # —— S8 Esc 取消（零写入 + picked 清空） ——
             await click("document.querySelector('.detail-panel .section-relations .icon-btn')")
             await asyncio.sleep(0.5)
+            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('阿拉蕾'))")
             await key("Escape")
             s8 = await ev("""(() => ({
               picking: document.querySelector('.window').classList.contains('picking'),
-              adds: window.__calls.add_relation.length,
+              adds: window.__calls.add_relations.length,
+              rows: document.querySelectorAll('.picker-panel .rel-row').length,
             }))()""")
-            check("S8 Esc = 取消模式全部放弃（零写入）",
-                  bool(s8 and not s8["picking"] and s8["adds"] == 1), json.dumps(s8))
+            check("S8 Esc = 取消全部放弃（零写入）", bool(s8 and not s8["picking"] and s8["adds"] == 1), json.dumps(s8))
 
-            # —— S9 右键仅查看类 ——
+            # —— S9 右键仅查看类（选择模式重进） ——
             await click("document.querySelector('.detail-panel .section-relations .icon-btn')")
             await asyncio.sleep(0.5)
             r = await rect_of("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('阿拉蕾'))")
             await mouse("mousePressed", r["x"], r["y"], "right"); await mouse("mouseReleased", r["x"], r["y"], "right")
             await asyncio.sleep(0.6)
             s9 = await ev("[...document.querySelectorAll('.app-menu .menu-item')].map((m) => m.textContent.trim())")
-            print("S9 菜单:", json.dumps(s9, ensure_ascii=False))
             check("S9 选择模式右键仅查看类（有打开预览，无重命名/移动/删除）",
                   bool(s9 and any("打开预览" in x for x in s9) and not any("重命名" in x for x in s9)
                        and not any("移动文件" in x for x in s9) and not any("回收站" in x for x in s9)),
                   json.dumps(s9, ensure_ascii=False))
-            await key("Escape")  # 关菜单
-            await key("Escape")  # 退模式
-            s9b = await ev("document.querySelector('.window').classList.contains('picking')")
-            check("S9 Esc 关菜单后第二个 Esc 退模式", s9b is False, str(s9b))
+            await key("Escape")
+            await key("Escape")
 
             await send(ws, "Target.closeTarget", {"targetId": tid})
     finally:

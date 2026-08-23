@@ -18,6 +18,7 @@ import { inboxDiskSpec } from "../lib/menuSpecs/inboxDisk";
 import { deleteInboxEntry, confirmImportInboxEntry, openInboxEntry, renameInboxEntry } from "../lib/inboxOps";
 import { useInlineRename } from "../lib/useInlineRename";
 import { useContentStore, type InboxDiskEntry } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 
 const content = useContentStore();
@@ -54,12 +55,14 @@ function sizeLabel(e: InboxDiskEntry): string {
 // selection.clear() 2026-08-13 起连收件箱条目一并清——先清后写名，顺序不可颠倒；
 // 点空白（headerBlankClear / 框选未过阈值）经同一 clear 反选本域卡片）
 function select(e: InboxDiskEntry): void {
+  if (usePickerStore().active) return; // 选择模式（6.2，白名单收窄）：收件箱条目不可选（非库内资产）
   selection.clear();
   content.selectedInboxName = e.name;
 }
 
 // 右键菜单（1.3 归并全局宿主 ContextMenu）：打开 / 重命名 / 删除 / 导入（占用禁用导入与重命名）
 function openMenu(e: MouseEvent, entry: InboxDiskEntry): void {
+  if (usePickerStore().active) return; // 选择模式（6.2，白名单收窄）：收件箱菜单全是编辑类，不出
   select(entry);
   openContextMenu(e, inboxDiskSpec(entry, {
     onOpen: () => void openEntry(entry),

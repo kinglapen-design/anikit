@@ -65,39 +65,33 @@ export function relationsForTarget(
   return out;
 }
 
-/** 建立关系（选择模式备选区确认）；返回完整记录（含 id 与快照，前端就地插入） */
-export async function addRelation(
-  from: PickerTarget,
-  to: PickerTarget,
-  label: string,
-  reverseLabel: string,
-): Promise<Relation> {
-  return invoke<Relation>("add_relation", {
+/** 备选区一组（多选累积，2026-08-24 用户定）：选中文件 + 双框称谓（左 = to 对 from，右 = from 对 to 可空） */
+export interface PickedRelation {
+  target: PickerTarget;
+  label: string;
+  reverseLabel: string;
+}
+
+/** 批量建立关系（选择模式确认；任一失败全不写，单撤销步）；返回完整记录组（前端就地插入） */
+export async function addRelations(from: PickerTarget, items: PickedRelation[]): Promise<Relation[]> {
+  return invoke<Relation[]>("add_relations", {
     fromKind: from.kind,
     fromId: from.id,
-    toKind: to.kind,
-    toId: to.id,
-    label,
-    reverseLabel: reverseLabel || null,
+    items: items.map((i) => ({
+      toKind: i.target.kind,
+      toId: i.target.id,
+      label: i.label.trim(),
+      reverseLabel: i.reverseLabel.trim() || null,
+    })),
   });
 }
 
-/** 编辑关系：改称谓；newTo / newFrom 二选一 = 换绑对方（详情关系 item 点文件进选择模式二次修改） */
-export async function updateRelation(
-  id: string,
-  label: string,
-  reverseLabel: string,
-  newTo?: PickerTarget,
-  newFrom?: PickerTarget,
-): Promise<void> {
+/** 编辑关系称谓（详情关系 item 点称谓框二次修改；换绑 2026-08-24 用户定废除——要换就重新添加） */
+export async function updateRelation(id: string, label: string, reverseLabel: string): Promise<void> {
   await invoke("update_relation", {
     id,
     label,
     reverseLabel: reverseLabel || null,
-    newToKind: newTo?.kind ?? null,
-    newToId: newTo?.id ?? null,
-    newFromKind: newFrom?.kind ?? null,
-    newFromId: newFrom?.id ?? null,
   });
 }
 

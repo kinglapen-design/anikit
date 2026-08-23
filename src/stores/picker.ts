@@ -1,66 +1,47 @@
-// 主窗口选择模式（6.2 一轮，PRD 03_数据链接 04：资产选择器 = 主窗口就地选择，不弹窗）：
+// 主窗口选择模式（6.2，PRD 03_数据链接 04：资产选择器 = 主窗口就地选择，不弹窗）：
 // 四重标识 = 窗口整圈品牌色边框 + 顶部目的横幅 + 右侧详情栏临时替换备选区 + 已选卡片压暗大勾；
-// 交互变化 = 单击卡片加入/移出备选（不再是选中）、双击仍预览（返回后模式保持）、右键仅查看类、
-// 拖拽禁用、树仅导航；Esc / 取消 = 全部放弃，确认 = 退出模式回到触发处按用途执行。
-// 本轮用途 = 关系（单选：备选恒一条选新换旧）；备选区两模板 = relation（关系容器）/ file（文件清单，
-// 多选累积——文件选择用途入口随后续轮接入，模板与多选模型框架就位）。
+// 交互变化（2026-08-24 用户收窄白名单）= 只放行：树 / 快速访问导航、搜索、查看方式、挑选文件
+//（点选 + 双击预览）、面包屑后退前进；其余全禁（编辑类 / 汉堡 / 切库 / 预览内编辑等）。
+// 单击卡片 = 加入/移出备选（不再是选中）；Esc / 取消 = 全部放弃，确认 = 按用途执行后退出回触发处。
+// 关系 = **多选累积**（2026-08-24 用户定：选一个 = 追加一条而非切换——一次为发起方加
+// 父亲/儿子/母亲/专武多条，每条自带双框称谓，确认批量写入单撤销步）。
 import { defineStore } from "pinia";
 import { nextTick } from "vue";
 import { useContentStore } from "./content";
 import { useSelectionStore } from "./selection";
 import { useToastStore } from "./toast";
 import { useUiStore } from "./ui";
-import { addRelation, updateRelation, type PickerTarget } from "../lib/relationOps";
+import { addRelations, type PickerTarget, type PickedRelation } from "../lib/relationOps";
 
-export type PickerPurpose = "relation-add" | "relation-retarget";
 export type PickerTemplate = "file" | "relation";
 
 export const usePickerStore = defineStore("picker", {
   state: () => ({
     active: false,
-    purpose: "relation-add" as PickerPurpose,
     template: "relation" as PickerTemplate,
-    multiple: false, // 关系 = 单选（PRD：备选区恒一条，选新换旧）
     origin: null as PickerTarget | null, // 发起文件/档案（from）
-    picked: [] as PickerTarget[], // 备选清单（单选 = 至多一条）
-    label: "", // 关系左框：选中文件 对 发起文件 的称谓
-    reverseLabel: "", // 关系右框：发起文件 对 选中文件 的称谓（手动填写，可空）
-    editingRelationId: null as string | null, // 换绑用途的关系 id
-    retargetSide: "to" as "from" | "to", // 换绑被换端（详情目标在 from 侧 → 换 to；在 to 侧 → 换 from）
+    picked: [] as PickedRelation[], // 备选组（多选累积，每组带双框称谓；file 模板只用 target）
     confirming: false, // 确认在途防重入（连点确认 = 重复建关系，2026-08-23 探针实证）
   }),
   getters: {
-    // 确认可用：关系模板 = 已选 + 左框称谓非空；文件模板 = 已选（多选带数量文案）
+    // 确认可用：关系模板 = 有备选 + 每组左框称谓非空；文件模板 = 有备选
     canConfirm(state): boolean {
       if (state.picked.length === 0) return false;
-      if (state.template === "relation") return state.label.trim() !== "";
+      if (state.template === "relation") return state.picked.every((p) => p.label.trim() !== "");
       return true;
     },
-    // 顶部横幅文案（目的 + 发起名；PRD 例："选择文件：为 雪牧 添加关系"，稿格式带"选择文件/档案"）
+    // 顶部横幅文案（目的 + 发起名）
     bannerText(state): string {
-      const name = state.origin?.name ?? "";
-      return state.purpose === "relation-retarget"
-        ? `选择文件/档案 - 为 ${name} 更换关系对象`
-        : `选择文件/档案 - 为 ${name} 添加关系`;
+      return `选择文件/档案 - 为 ${state.origin?.name ?? ""} 添加关系`;
     },
   },
   actions: {
-    /** 进入关系选择模式：relationId 给了 = 换绑用途（详情关系 item 点文件二次修改，预填现状；
-     *  side = 被换端——当前详情目标在 from 侧则对方是 to（换 to），反之换 from） */
-    enterRelation(
-      origin: PickerTarget,
-      opts?: { relationId?: string; side?: "from" | "to"; picked?: PickerTarget; label?: string; reverseLabel?: string },
-    ): void {
+    /** 进入关系选择模式（详情关系区块添加钮） */
+    enterRelation(origin: PickerTarget): void {
       this.active = true;
-      this.purpose = opts?.relationId ? "relation-retarget" : "relation-add";
       this.template = "relation";
-      this.multiple = false;
       this.origin = origin;
-      this.picked = opts?.picked ? [opts.picked] : [];
-      this.label = opts?.label ?? "";
-      this.reverseLabel = opts?.reverseLabel ?? "";
-      this.editingRelationId = opts?.relationId ?? null;
-      this.retargetSide = opts?.side ?? "to";
+      this.picked = [];
       // 进入即清全局选择：单击语义已变为加入/移出备选，残留选中只会误导
       useSelectionStore().clear();
       // 备选区在右侧栏：收起态进入选择模式时强制展开（否则四重标识缺一，用户无处确认）
@@ -76,10 +57,6 @@ export const usePickerStore = defineStore("picker", {
       this.active = false;
       this.origin = null;
       this.picked = [];
-      this.label = "";
-      this.reverseLabel = "";
-      this.editingRelationId = null;
-      this.retargetSide = "to";
       if (origin) {
         void nextTick(() => {
           const selection = useSelectionStore();
@@ -89,47 +66,37 @@ export const usePickerStore = defineStore("picker", {
       }
     },
 
-    /** 单击卡片 = 加入/移出备选：单选选新换旧；发起文件自身不可选（后端同拦） */
+    /** 单击卡片 = 加入/移出备选（多选累积：点新卡追加一组、点已选移除该组）；
+     *  发起文件自身不可选（卡片半透明禁选态，后端同拦） */
     togglePick(target: PickerTarget): void {
       if (this.origin && this.origin.kind === target.kind && this.origin.id === target.id) return;
-      const i = this.picked.findIndex((p) => p.kind === target.kind && p.id === target.id);
+      const i = this.picked.findIndex((p) => p.target.kind === target.kind && p.target.id === target.id);
       if (i >= 0) {
         this.picked.splice(i, 1);
         return;
       }
-      if (this.multiple) this.picked.push(target);
-      else this.picked = [target];
+      this.picked.push({ target, label: "", reverseLabel: "" });
     },
 
     isPicked(kind: "asset" | "archive", id: string): boolean {
-      return this.picked.some((p) => p.kind === kind && p.id === id);
+      return this.picked.some((p) => p.target.kind === kind && p.target.id === id);
     },
 
-    /** 确认 = 按用途执行后退出：添加关系（就地插入清单）/ 换绑更新（重拉对齐快照）。
-     *  confirming 防重入：连点确认钮只执行一次（连点 = 重复建关系，探针实证风险） */
+    /** 确认 = 批量写入（单撤销步）后退模式：成功组就地插入清单 */
     async confirm(): Promise<void> {
       if (!this.canConfirm || !this.origin || this.confirming) return;
       const content = useContentStore();
       const toast = useToastStore();
-      const picked = this.picked[0];
       this.confirming = true;
       try {
-        if (this.purpose === "relation-add") {
-          const rel = await addRelation(this.origin, picked, this.label.trim(), this.reverseLabel.trim());
-          // 幂等插入：刷新交错 / 重入下按 id 查重（同一条不重复进清单）
+        const rels = await addRelations(this.origin, this.picked);
+        // 幂等插入：刷新交错 / 重入下按 id 查重（同一条不重复进清单）
+        for (const rel of rels) {
           if (!content.relations.some((r) => r.id === rel.id)) content.relations.push(rel);
-          toast.notify({ message: `已添加关系：${rel.to.name} 是 ${rel.from.name} 的 ${rel.label}` });
-        } else if (this.editingRelationId) {
-          await updateRelation(
-            this.editingRelationId,
-            this.label.trim(),
-            this.reverseLabel.trim(),
-            this.retargetSide === "to" ? picked : undefined,
-            this.retargetSide === "from" ? picked : undefined,
-          );
-          await content.refreshRelations();
-          toast.notify({ message: "已更新关系" });
         }
+        toast.notify({
+          message: rels.length > 1 ? `已添加 ${rels.length} 条关系` : `已添加关系：${rels[0].to.name} 是 ${rels[0].from.name} 的 ${rels[0].label}`,
+        });
         this.exit();
       } catch (e) {
         toast.notify({ message: String(e), icon: "fail" });

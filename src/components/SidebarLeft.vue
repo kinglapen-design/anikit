@@ -78,6 +78,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
 // 汉堡菜单（14 稿，宽 220）/ 切换资源库（08 稿，宽 300）：toggle 模式同新增按钮；
 // 库列表为动态数据（当前空间内库 + 当前库名，2.1 空间化），开菜单前加载
 async function toggleHamburger(e: MouseEvent): Promise<void> {
+  if (usePickerStore().active) return; // 选择模式（6.2，2026-08-24 白名单收窄）：汉堡整体禁用（含切库——跨库挑选以后再说）
   if (menuState.entries) {
     closeContextMenu();
     return;
@@ -109,7 +110,8 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
     @mouseleave="hover = false"
   >
     <header class="bar-title" data-tauri-drag-region>
-      <IconButton name="menu" title="菜单" @click="toggleHamburger" />
+      <!-- 选择模式（6.2，2026-08-24 白名单收窄）：汉堡禁用（切库也不许——跨库挑选后置） -->
+      <IconButton name="menu" title="菜单" :disabled="picker.active" @click="toggleHamburger" />
       <div class="btn-group">
         <!-- 选择模式（6.2）：新增 / 区块管理是编辑类，禁用（视觉随 IconButton disabled 态） -->
         <span ref="addBtnRef" class="add-btn-wrap">

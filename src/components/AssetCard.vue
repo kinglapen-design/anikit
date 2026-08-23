@@ -90,6 +90,8 @@ const picker = usePickerStore();
 const cardKey = `${props.asset.assetId}|${props.asset.folderId}`;
 // 选择模式（6.2 一轮，PRD 03_数据链接 04 四重标识之四）：已选卡片压暗（30% 档）+ 品牌绿大勾
 const picked = computed(() => picker.active && picker.isPicked("asset", props.asset.assetId));
+// 发起文件自身（2026-08-24 用户定）：剪切档半透明 + 禁选（togglePick 同拦），视觉明确"不可选"
+const pickerSelf = computed(() => picker.active && picker.origin?.kind === "asset" && picker.origin.id === props.asset.assetId);
 const { draft: renameDraft, bindInput, commit: commitRename, onEsc: cancelRename } = useInlineRename({
   active: () => selection.renamingKey === cardKey,
   initial: () => props.asset.name,
@@ -196,7 +198,7 @@ const meta = computed(() => {
   <div
     ref="rootEl"
     class="asset-card"
-    :class="{ selected, renaming, picked, 'fade-source': faded === 'source', 'fade-cut': faded === 'cut' }"
+    :class="{ selected, renaming, picked, 'picker-self': pickerSelf, 'fade-source': faded === 'source', 'fade-cut': faded === 'cut' }"
     :style="{
       left: `${box.left}px`,
       top: `${box.top}px`,
@@ -424,6 +426,11 @@ const meta = computed(() => {
 .asset-card.picked .texts,
 .asset-card.picked .origin-badge {
   opacity: 0.3;
+}
+/* 选择模式发起文件自身（2026-08-24 用户定）：剪切档半透明 + 禁选光标（不可选的视觉信号） */
+.asset-card.picker-self {
+  opacity: var(--opacity-cut);
+  cursor: not-allowed;
 }
 /* 已选大勾（2026-08-23 用户贴稿：绿圆白勾居中于缩略图区）：成功色圆底 44 + check 22 白 */
 .pick-check {

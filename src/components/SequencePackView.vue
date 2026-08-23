@@ -16,6 +16,7 @@ import { listSequenceFrames, type FrameEntry } from "../lib/mediaOps";
 import { openContextMenu, type CtxEntry } from "../lib/contextMenus";
 import { deleteSequenceFrames, renumberSequenceFrames, setSequenceFrameThumb } from "../lib/placementOps";
 import { useContentStore } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { usePreviewStore } from "../stores/preview";
 import { useTabsStore } from "../stores/tabs";
 import { useUiStore } from "../stores/ui";
@@ -89,6 +90,7 @@ function thumbUrl(f: FrameEntry): string {
 
 // —— 选择（click 单选 / ctrl 切换 / shift 范围；点空白清空）——
 function clickFrame(e: MouseEvent, name: string, idx: number): void {
+  if (usePickerStore().active) return; // 选择模式（6.2）：帧不是可选目标，帧选择禁用
   if (e.shiftKey && anchorIdx >= 0) {
     const [a, b] = [Math.min(anchorIdx, idx), Math.max(anchorIdx, idx)];
     const range = frames.value.slice(a, b + 1).map((f) => f.name);
@@ -121,6 +123,11 @@ async function openFramePreview(name: string): Promise<void> {
 
 // —— 右键菜单（宽 320 = 素材卡片右键菜单同宽，2026-08-21 用户定：快捷键徽章也占空间，213 仍裁切）——
 function frameMenu(e: MouseEvent, name: string, idx: number): void {
+  // 选择模式（6.2，2026-08-24 白名单收窄）：帧不是可选目标，菜单仅留查看类「打开预览」
+  if (usePickerStore().active) {
+    openContextMenu(e, [{ label: "打开预览", icon: "open-preview", action: () => void openFramePreview(name) }], undefined, { width: 320 });
+    return;
+  }
   // 右键未选中项先单选（全库惯例）；已在多选域内保持选择
   if (!selected.value.has(name)) clickFrame(e, name, idx);
   const targets = [...selected.value];
@@ -147,6 +154,7 @@ function frameMenu(e: MouseEvent, name: string, idx: number): void {
 }
 
 function blankMenu(e: MouseEvent): void {
+  if (usePickerStore().active) return; // 选择模式（6.2）：重排序号是编辑类，不出
   openContextMenu(e, [
     { label: "重排序号", icon: "clear-cache-reload", action: () => void renumberSequenceFrames(props.assetId) },
   ]);
@@ -155,6 +163,7 @@ function blankMenu(e: MouseEvent): void {
 // Delete = 删除选中帧（全局 Delete 对本视口无操作——打开时全局选择域已清空）；
 // 输入态（重命名等）不触发；仅本 panel 激活时响应
 function onKeydown(e: KeyboardEvent): void {
+  if (usePickerStore().active) return; // 选择模式（6.2）：删帧是编辑类，禁用
   if (!props.panelActive || e.key !== "Delete" || selected.value.size === 0) return;
   const t = e.target as HTMLElement;
   if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;

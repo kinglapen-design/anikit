@@ -19,6 +19,7 @@ import PreviewFrameStrip from "./PreviewFrameStrip.vue";
 import PreviewNotes from "./PreviewNotes.vue";
 import { findFolderNode } from "../lib/detailSections";
 import { useContentStore, type FolderNode } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { usePreviewStore } from "../stores/preview";
 import { useSearchStore } from "../stores/search";
 
@@ -29,6 +30,7 @@ const raw = defineProps<{ params: Record<string, unknown> }>();
 const frame = computed(() => raw.params as unknown as IDockviewPanelProps);
 const panelApi = frame.value.api as DockviewPanelApi; // api 引用 init 时确定、不变
 const content = useContentStore();
+const picker = usePickerStore();
 const preview = usePreviewStore();
 const search = useSearchStore();
 
@@ -100,7 +102,8 @@ const archiveNode = computed<FolderNode | null>(() => {
     <template v-else>
       <!-- 视口主体行：档案视口时面板插最左（视口内部组成，标签栏不被推挤）；搜索栏通栏在其下 -->
       <div class="viewport-body">
-        <ArchiveSidePanel v-if="archiveNode" :node="archiveNode" :panel-active="active" />
+        <!-- 选择模式（6.2，2026-08-24 白名单收窄）：档案二级侧栏含数据编辑入口，本模式不渲染 -->
+        <ArchiveSidePanel v-if="archiveNode && !picker.active" :node="archiveNode" :panel-active="active" />
         <div class="viewport-main">
           <ContentTitleBar :view-key="viewKey" :panel-id="panelApi.id" />
           <ImportProgressBar />

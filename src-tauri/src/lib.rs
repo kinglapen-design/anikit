@@ -297,7 +297,7 @@ pub fn run() {
       commands::custom_data::list_prop_pool,
       commands::custom_data::delete_props_globally,
       commands::relations::list_relations,
-      commands::relations::add_relation,
+      commands::relations::add_relations,
       commands::relations::update_relation,
       commands::relations::remove_relation,
       commands::recent::list_recent_assets,

@@ -1,9 +1,10 @@
-//! 命令 API：关系（6.2 选择模式一轮，PRD 03_数据链接 02/06）——文件与档案之间关系的
-//! 查询 / 建立 / 编辑 / 删除。数据落空间根 relations.json（core::relations 单一写点）；
+//! 命令 API：关系（6.2 选择模式，PRD 03_数据链接 02/06）——文件与档案之间关系的
+//! 查询 / 批量建立 / 改称谓 / 删除。数据落空间根 relations.json（core::relations 单一写点）；
 //! 写命令走撤销三步（record_file 快照任意路径，空间级文件天然支持）。
 //! 锁序约定：library → space → undo（本组命令为三者同持的唯一处，固定同序防死锁）；
 //! 服务失败 = 未落盘（校验全前置、原子写最后一步），undo.cancel() 收尾即可，无需库重载。
 
+use serde::Deserialize;
 use tauri::State;
 
 use crate::commands::library::AppState;
@@ -23,31 +24,42 @@ pub async fn list_relations(state: State<'_, AppState>) -> Result<Vec<Relation>,
   Ok(load_relations(&space.root).map_err(|e| e.to_string())?.relations)
 }
 
-/// 建立关系（选择模式备选区确认）：from = 发起文件/档案，to = 选中文件/档案（kind = asset/archive）；
-/// label = to 对 from 的称谓（必填），reverse_label = from 对 to 的称谓（可空，手动填写）。
-/// 返回写入的完整记录（含生成 id 与显示名快照，前端就地插入免重拉）
+/// 批量建立入参一条（选择模式备选区一组：选中文件 + 双框称谓）
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewRelationInput {
+  pub to_kind: String,
+  pub to_id: String,
+  pub label: String,
+  pub reverse_label: Option<String>,
+}
+
+/// 批量建立关系（选择模式确认，2026-08-24 用户定多选累积：一次为发起方添加多条）：
+/// from = 发起文件/档案（kind = asset/archive，archive 的 id = folderId）；
+/// 任一校验失败全不写（批量原子）；返回完整记录组（前端就地插入免重拉）。
+/// 撤销标签：1 条 = "添加关系"，多条 = "添加 N 条关系"
 #[tauri::command]
-pub async fn add_relation(
+pub async fn add_relations(
   state: State<'_, AppState>,
   from_kind: String,
   from_id: String,
-  to_kind: String,
-  to_id: String,
-  label: String,
-  reverse_label: Option<String>,
-) -> Result<Relation, String> {
+  items: Vec<NewRelationInput>,
+) -> Result<Vec<Relation>, String> {
   let lib_guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = lib_guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
   let space_guard = state.space.lock().map_err(|e| e.to_string())?;
   let space = space_guard.as_ref().ok_or_else(|| "请先打开储存空间".to_string())?;
+  let label = if items.len() > 1 { format!("添加 {} 条关系", items.len()) } else { "添加关系".to_string() };
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
-  undo.begin("添加关系");
+  undo.begin(&label);
   undo.record_file(&relations_file(&space.root)).map_err(|e| e.to_string())?;
-  match relations::add(&space.root, lib, (&from_kind, &from_id), (&to_kind, &to_id), &label, reverse_label.as_deref()) {
-    Ok(rel) => {
+  let items: Vec<(&str, &str, &str, Option<&str>)> =
+    items.iter().map(|i| (i.to_kind.as_str(), i.to_id.as_str(), i.label.as_str(), i.reverse_label.as_deref())).collect();
+  match relations::add_batch(&space.root, lib, (&from_kind, &from_id), items) {
+    Ok(rels) => {
       undo.commit().map_err(|e| e.to_string())?;
-      log::info!("已添加关系：{} → {}", rel.from.name, rel.to.name);
-      Ok(rel)
+      log::info!("{label}：{} → {} 个目标", rels[0].from.name, rels.len());
+      Ok(rels)
     }
     Err(e) => {
       undo.cancel();
@@ -56,44 +68,25 @@ pub async fn add_relation(
   }
 }
 
-/// 编辑关系（详情关系 item 二次修改）：改称谓（label / reverse_label）+ 可选换绑端点
-///（new_to_* / new_from_* 二选一，成对给才生效——被换端 = 当前详情目标的对方）。
-/// 无改动 = 取消事务不进撤销栈（同 custom_data 口径）
+/// 编辑关系称谓（详情关系 item 点称谓框二次修改；换绑 2026-08-24 用户定废除——
+/// "要换就重新再添加"）。无改动 = 取消事务不进撤销栈（同 custom_data 口径）
 #[tauri::command]
 pub async fn update_relation(
   state: State<'_, AppState>,
   id: String,
   label: String,
   reverse_label: Option<String>,
-  new_to_kind: Option<String>,
-  new_to_id: Option<String>,
-  new_from_kind: Option<String>,
-  new_from_id: Option<String>,
 ) -> Result<(), String> {
   let lib_guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = lib_guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+  if lib_guard.is_none() {
+    return Err("请先打开素材库".to_string());
+  }
   let space_guard = state.space.lock().map_err(|e| e.to_string())?;
   let space = space_guard.as_ref().ok_or_else(|| "请先打开储存空间".to_string())?;
-  let new_to = match (new_to_kind, new_to_id) {
-    (Some(k), Some(i)) => Some((k, i)),
-    _ => None,
-  };
-  let new_from = match (new_from_kind, new_from_id) {
-    (Some(k), Some(i)) => Some((k, i)),
-    _ => None,
-  };
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin("编辑关系");
   undo.record_file(&relations_file(&space.root)).map_err(|e| e.to_string())?;
-  match relations::update(
-    &space.root,
-    lib,
-    &id,
-    &label,
-    reverse_label.as_deref(),
-    new_to.as_ref().map(|(k, i)| (k.as_str(), i.as_str())),
-    new_from.as_ref().map(|(k, i)| (k.as_str(), i.as_str())),
-  ) {
+  match relations::update(&space.root, &id, &label, reverse_label.as_deref()) {
     Ok(true) => undo.commit().map_err(|e| e.to_string()),
     Ok(false) => {
       undo.cancel();

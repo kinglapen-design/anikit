@@ -1,11 +1,12 @@
 <script setup lang="ts">
-// 备选区（6.2 选择模式一轮，figma-css 02_布局/02_主窗口选择模式 + 2026-08-23 用户贴稿）：
+// 备选区（6.2 选择模式，figma-css 02_布局/02_主窗口选择模式 + 2026-08-23/24 用户定案）：
 // 选择模式下临时替换右侧详情栏（SidebarRight 内分流）。结构 = 标题栏 54（「备选区」）+
-// 文件列表（C3，两模板）+ 按钮栏 62（确认主左 / 取消次右，flex 均分）。
-// 模板一 relation（关系模式，本轮用途）：选中文件 item + 关系输入框×2（左 = 选中文件对发起文件
-// 的称谓、右 = 反向称谓，均手填）+ 发起文件 item（固定不可删），红删 = 移出备选；
-// 模板二 file（文件选择模式，框架就位、用途入口随后续轮）：名称 + 链接状态徽章 + 红删，多选累积。
-import { computed } from "vue";
+// 文件列表（C3，两模板）+ 按钮栏 62（确认主左 / 取消次右，flex 均分，带数量）。
+// 模板一 relation（关系模式）：**多选累积**（2026-08-24 用户定"选一个 = 追加一条而非切换"）——
+// 选中文件 item + 关系输入框×2（左 = 选中文件对发起文件、右 = 反向可空）+ 发起文件 item +
+// 红删为一组，整组竖排复制（用户定"把整个 item 复制就行了"）；未选 = 占位组（双框禁用）。
+// 模板二 file（文件选择模式，框架就位、用途入口随后续轮）：名称 + 链接状态徽章 + 红删。
+import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
@@ -13,15 +14,12 @@ import IconButton from "./IconButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { usePickerStore } from "../stores/picker";
 import type { PickerTarget } from "../lib/relationOps";
-import { ref } from "vue";
 
 const picker = usePickerStore();
 const bodyRef = ref<HTMLElement>();
 
-// 确认文案：多选带数量（PRD：确认 (3)）；单选恒「确认」
-const confirmLabel = computed(() =>
-  picker.multiple && picker.picked.length > 0 ? `确认 (${picker.picked.length})` : "确认",
-);
+// 确认文案：带数量（PRD 多选口径：确认 (3)）
+const confirmLabel = computed(() => (picker.picked.length > 0 ? `确认 (${picker.picked.length})` : "确认"));
 // item 左标小图（15px）：缩略图 / 档案封面路径 → 协议 URL；无图回退由模板分（扩展名文字 / archive 图标）
 function targetThumb(t: PickerTarget): string | null {
   return t.thumb ? convertFileSrc(t.thumb) : null;
@@ -35,50 +33,74 @@ function targetThumb(t: PickerTarget): string | null {
     <!-- 文件列表（C3 通栏；悬浮滚轮 ScrollThumb 同右栏口径） -->
     <div class="pick-scroll-wrap">
       <div ref="bodyRef" class="pick-body kit-scroll">
-        <!-- 模板一：关系模式（选中文件 + 关系输入框×2 + 发起文件 + 红删） -->
-        <div v-if="picker.template === 'relation'" class="rel-row">
-          <div class="rel-box">
-            <!-- 选中文件 item（36 高 C4；未选 = 占位提示） -->
-            <div class="rel-item" :class="{ empty: !picker.picked[0] }">
-              <template v-if="picker.picked[0]">
-                <img v-if="targetThumb(picker.picked[0])" class="mini" :src="targetThumb(picker.picked[0])!" alt="" />
-                <AppIcon v-else-if="picker.picked[0].kind === 'archive'" name="archive" :size="15" class="deco" />
-                <span v-else class="ext">{{ (picker.picked[0].ext ?? "").toUpperCase() }}</span>
-                <span class="name">{{ picker.picked[0].name }}</span>
-              </template>
-              <span v-else class="name placeholder">点击卡片选择</span>
-            </div>
-            <!-- 关系输入框（C2 底 36 高：左 = 选中文件→发起文件 ↓，右 = 发起文件→选中文件 ↑） -->
-            <div class="rel-inputs">
-              <div class="rel-input">
-                <input v-model="picker.label" class="rel-field" placeholder="关系" maxlength="20" />
-                <AppIcon name="chevron-small" :size="13" class="arrow down" />
+        <!-- 模板一：关系模式（多选整组竖排） -->
+        <template v-if="picker.template === 'relation'">
+          <!-- 空态占位组（未选：引导占位 + 双框禁用 + 发起文件；无红删） -->
+          <div v-if="picker.picked.length === 0" class="rel-row">
+            <div class="rel-box">
+              <div class="rel-item empty">
+                <span class="name placeholder">点击卡片选择</span>
               </div>
-              <div class="rel-input">
-                <input v-model="picker.reverseLabel" class="rel-field" placeholder="关系" maxlength="20" />
-                <AppIcon name="chevron-small" :size="13" class="arrow" />
+              <div class="rel-inputs">
+                <div class="rel-input">
+                  <input class="rel-field" placeholder="关系" disabled />
+                  <AppIcon name="chevron-small" :size="13" class="arrow down" />
+                </div>
+                <div class="rel-input">
+                  <input class="rel-field" placeholder="关系" disabled />
+                  <AppIcon name="chevron-small" :size="13" class="arrow" />
+                </div>
               </div>
-            </div>
-            <!-- 发起文件 item（固定，不可删） -->
-            <div v-if="picker.origin" class="rel-item">
-              <img v-if="targetThumb(picker.origin)" class="mini" :src="targetThumb(picker.origin)!" alt="" />
-              <AppIcon v-else-if="picker.origin.kind === 'archive'" name="archive" :size="15" class="deco" />
-              <span v-else class="ext">{{ (picker.origin.ext ?? "").toUpperCase() }}</span>
-              <span class="name">{{ picker.origin.name }}</span>
+              <div v-if="picker.origin" class="rel-item">
+                <img v-if="targetThumb(picker.origin)" class="mini" :src="targetThumb(picker.origin)!" alt="" />
+                <AppIcon v-else-if="picker.origin.kind === 'archive'" name="archive" :size="15" class="deco" />
+                <span v-else class="ext">{{ (picker.origin.ext ?? "").toUpperCase() }}</span>
+                <span class="name">{{ picker.origin.name }}</span>
+              </div>
             </div>
           </div>
-          <!-- 红色删除 = 移出备选（清选中，两框保留；稿：右侧整行垂直居中） -->
-          <div class="del-slot">
-            <IconButton v-if="picker.picked.length > 0" name="delete-red" deleteRed title="移出备选" @click="picker.picked = []" />
+          <!-- 已选组 × N（整组竖排复制，2026-08-24 用户定；发起文件 item 每组同显） -->
+          <div v-for="(p, i) in picker.picked" :key="`${p.target.kind}|${p.target.id}`" class="rel-row">
+            <div class="rel-box">
+              <!-- 选中文件 item -->
+              <div class="rel-item">
+                <img v-if="targetThumb(p.target)" class="mini" :src="targetThumb(p.target)!" alt="" />
+                <AppIcon v-else-if="p.target.kind === 'archive'" name="archive" :size="15" class="deco" />
+                <span v-else class="ext">{{ (p.target.ext ?? "").toUpperCase() }}</span>
+                <span class="name">{{ p.target.name }}</span>
+              </div>
+              <!-- 关系输入框（左 = 选中文件→发起文件 ↓；右 = 发起文件→选中文件 ↑，可空） -->
+              <div class="rel-inputs">
+                <div class="rel-input">
+                  <input v-model="p.label" class="rel-field" placeholder="关系" maxlength="20" />
+                  <AppIcon name="chevron-small" :size="13" class="arrow down" />
+                </div>
+                <div class="rel-input">
+                  <input v-model="p.reverseLabel" class="rel-field" placeholder="关系" maxlength="20" />
+                  <AppIcon name="chevron-small" :size="13" class="arrow" />
+                </div>
+              </div>
+              <!-- 发起文件 item（每组同显，整组复制口径） -->
+              <div v-if="picker.origin" class="rel-item">
+                <img v-if="targetThumb(picker.origin)" class="mini" :src="targetThumb(picker.origin)!" alt="" />
+                <AppIcon v-else-if="picker.origin.kind === 'archive'" name="archive" :size="15" class="deco" />
+                <span v-else class="ext">{{ (picker.origin.ext ?? "").toUpperCase() }}</span>
+                <span class="name">{{ picker.origin.name }}</span>
+              </div>
+            </div>
+            <!-- 红删 = 移出该组（稿：右侧整行垂直居中） -->
+            <div class="del-slot">
+              <IconButton name="delete-red" deleteRed title="移出备选" @click="picker.picked.splice(i, 1)" />
+            </div>
           </div>
-        </div>
+        </template>
         <!-- 模板二：文件选择模式（名称 + 链接状态徽章 + 红删，多选累积） -->
-        <div v-for="p in picker.template === 'file' ? picker.picked : []" :key="`${p.kind}|${p.id}`" class="file-row">
+        <div v-for="p in picker.template === 'file' ? picker.picked : []" :key="`${p.target.kind}|${p.target.id}`" class="file-row">
           <div class="file-item">
-            <span class="name">{{ p.name }}</span>
-            <AppIcon v-if="p.origin === false" name="linked-file-badge" :size="13" class="link-badge" />
+            <span class="name">{{ p.target.name }}</span>
+            <AppIcon v-if="p.target.origin === false" name="linked-file-badge" :size="13" class="link-badge" />
           </div>
-          <IconButton name="delete-red" deleteRed title="移出备选" @click="picker.togglePick(p)" />
+          <IconButton name="delete-red" deleteRed title="移出备选" @click="picker.togglePick(p.target)" />
         </div>
       </div>
       <ScrollThumb :body="bodyRef" />
@@ -134,7 +156,7 @@ function targetThumb(t: PickerTarget): string | null {
   overflow-y: auto;
   overflow-x: hidden;
 }
-/* —— 关系模式（稿：行 = 关系容器 186 + 红删 20，gap 12） —— */
+/* —— 关系模式（稿：行 = 关系容器 186 + 红删 20，gap 12；组间 8） —— */
 .rel-row {
   display: flex;
   align-items: flex-start;
@@ -192,9 +214,6 @@ function targetThumb(t: PickerTarget): string | null {
   text-overflow: ellipsis;
 }
 /* 未选占位（稿无空态，占位文案标签色——2026-08-23 实现定） */
-.rel-item.empty {
-  box-shadow: inset 0 0 0 1px var(--line-hover);
-}
 .placeholder {
   color: var(--text-label);
 }
@@ -231,6 +250,9 @@ function targetThumb(t: PickerTarget): string | null {
 }
 .rel-field::placeholder {
   color: var(--text-faint);
+}
+.rel-field:disabled {
+  cursor: default;
 }
 /* 箭头 13px 标签档（稿 svg 文字/标签）：chevron-small 源图形朝上（5.1 踩坑实证）——
    左框 ↓ = 旋转 180，右框 ↑ = 原样 */

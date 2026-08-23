@@ -34,6 +34,8 @@ const picker = usePickerStore();
 
 // 选择模式（6.2 一轮）：已选档案卡压暗 + 大勾（同 AssetCard 口径，PRD 03_数据链接 04 四重标识之四）
 const picked = computed(() => picker.active && picker.isPicked("archive", props.folder.id));
+// 发起档案自身（2026-08-24 用户定）：剪切档半透明 + 禁选（同 AssetCard picker-self 口径）
+const pickerSelf = computed(() => picker.active && picker.origin?.kind === "archive" && picker.origin.id === props.folder.id);
 
 // 背景纸张 SVG（04_archive_card）：currentColor 填充，颜色由 .paper 的 color 档控制
 const paperSvg1 = getIcon("archive-paper-01");
@@ -88,7 +90,7 @@ watch(
 <template>
   <div
     class="archive-card"
-    :class="{ selected, dimmed, cut, renaming, picked }"
+    :class="{ selected, dimmed, cut, renaming, picked, 'picker-self': pickerSelf }"
     :data-folder-id="folder.id"
     :data-drag-name="folder.name"
     @click="emit('select', $event)"
@@ -297,6 +299,11 @@ watch(
 /* 选择模式已选（6.2 一轮）：卡片本体压暗 30% 档（大勾在其外不压） */
 .archive-card.picked .card-body {
   opacity: 0.3;
+}
+/* 选择模式发起档案自身（2026-08-24 用户定）：剪切档半透明 + 禁选光标 */
+.archive-card.picker-self {
+  opacity: var(--opacity-cut);
+  cursor: not-allowed;
 }
 /* 已选大勾（同 AssetCard 口径）：成功色圆底 44 + check 22，居中于封面区（flex 220/298 上段） */
 .pick-check {

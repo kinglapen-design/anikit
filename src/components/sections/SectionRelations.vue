@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 区块 · 关系（6.2 选择模式一轮点亮，figma 03_数据 item §4 关系 item；PRD 03_数据链接 02）：
-// item = 称谓框（点击 → C2 底输入框二次修改，稿注）+ 朝左箭头 + 对方文件卡（点击进入选择模式
-// 换绑，稿注）+ ×（hover 从右往左滑入，DetailNotes .del 同款）；
+// item = 称谓框（点击 → C2 底输入框二次修改，稿注）+ 朝左箭头 + 对方文件卡（点击 = **跳转定位**，
+// 2026-08-24 用户定——导航到对方所在位置并选中，面包屑后退返回；稿注"进选择模式换绑"废除：
+// 要换就删了重新添加）+ ×（hover 从右往左滑入，DetailNotes .del 同款）；
 // 添加钮（#tail add-small）= 进入选择模式（PRD 03_数据链接 04：主窗口就地选择不弹窗）。
 // 双向显示 = 同一条记录两视角：当前目标是 from 显 label、是 to 显 reverseLabel ?? label
 //（relationOps.relationsForTarget）；文件与档案同做（DetailSections 共用，档案侧栏同渲染）。
@@ -13,6 +14,8 @@ import { relationsForTarget, removeRelation, updateRelation, type PickerTarget, 
 import { currentLibrary } from "../../lib/libraryOps";
 import { useContentStore } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
+import { useSelectionStore } from "../../stores/selection";
+import { useTabsStore } from "../../stores/tabs";
 import { useToastStore } from "../../stores/toast";
 import type { DetailTarget } from "../../lib/detailSections";
 
@@ -87,15 +90,32 @@ async function commitEdit(v: RelationView): Promise<void> {
   }
 }
 
-// —— 换绑对方（稿注：点击文件进入选择模式）：预填现状（对方 / 双框称谓），确认 = update ——
-function retarget(v: RelationView): void {
-  picker.enterRelation(originOf(), {
-    relationId: v.relation.id,
-    side: v.role === "from" ? "to" : "from", // 被换端 = 对方
-    picked: { kind: v.other.kind, id: v.other.id, name: v.other.name },
-    label: v.relation.label,
-    reverseLabel: v.relation.reverseLabel ?? "",
-  });
+// —— 跳转定位（2026-08-24 用户定：点文件卡 = 跳过去——"光显示在那是没用的"）——
+// 文件 = 定位其 Placement 所在文件夹视口（origin 优先）+ 选中卡片；档案 = 打开档案视口 + 选中档案卡；
+// 均经 tabs.openView 入面包屑历史（后退即返回，5.1 既有设施）；目标失效 / 跨库给提示
+function jumpTo(v: RelationView): void {
+  const other = v.other;
+  if (other.lib !== (currentLibrary.name ?? "")) {
+    toast.notify({ message: `「${other.name}」在资源库 ${other.lib} 中（跨库跳转随后续轮）`, icon: "fail" });
+    return;
+  }
+  const tabs = useTabsStore();
+  const selection = useSelectionStore();
+  if (other.kind === "archive") {
+    tabs.openView(`folder:${other.id}`);
+    // openView 触发 sidebarSelected watch 清选择——nextTick 让过再入域（FolderTree 同口径）
+    void nextTick(() => selection.clickFolder(other.id));
+    return;
+  }
+  const p =
+    content.placements.find((pl) => pl.assetId === other.id && pl.origin) ??
+    content.placements.find((pl) => pl.assetId === other.id);
+  if (!p) {
+    toast.notify({ message: "目标文件不在本库任何文件夹中（可能在回收站）", icon: "fail" });
+    return;
+  }
+  tabs.openView(p.folderId === "root" ? "quick:uncategorized" : `folder:${p.folderId}`);
+  void nextTick(() => selection.selectOnly(`${p.assetId}|${p.folderId}`));
 }
 
 // 删除（×，hover 滑入）
@@ -139,8 +159,8 @@ async function remove(v: RelationView): Promise<void> {
         </div>
         <!-- 箭头朝左（对方 → 称谓：对方是我的 label）：chevron-large 朝右（速查表 §6）rotate(180) -->
         <AppIcon name="chevron-large" :size="13" class="arrow" />
-        <!-- 对方文件卡（点击 = 换绑进选择模式；档案带 archive 图标，文件名称自带扩展名可辨） -->
-        <div class="file-chip" @click="retarget(v)">
+        <!-- 对方文件卡（点击 = 跳转定位；档案带 archive 图标，文件名称自带扩展名可辨） -->
+        <div class="file-chip" v-tip="{ text: '跳转到文件' }" @click="jumpTo(v)">
           <AppIcon v-if="v.other.kind === 'archive'" name="archive" :size="15" class="deco" />
           <span class="name" v-tip="v.other.name">{{ v.other.name }}</span>
           <IconButton name="clear" small title="删除关系" class="del" @click.stop="remove(v)" />
