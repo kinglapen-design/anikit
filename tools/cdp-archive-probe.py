@@ -849,9 +849,10 @@ async def main():
             check("⑦ 排序即时反映详情面板（基础信息提前）",
                   moved and moved["panel"][:3] == ["基础信息", "自定义数据", "副本"] and moved["detail"][:2] == ["基础信息", "自定义数据"],
                   json.dumps(moved, ensure_ascii=False))
-            # 持久化：save_ui_settings 防抖 500ms 写回 detailSections
+            # 持久化：save_ui_settings 防抖 500ms 写回——本段选中档案卡片，
+            # 面板编辑 = 档案套 detailSectionsArchive（2026-08-23 文件/档案各一套独立设置）
             await asyncio.sleep(1.0)
-            saves = await ev("window.__calls.save_ui_settings.map((s) => JSON.parse(JSON.stringify(s.detailSections)))")
+            saves = await ev("window.__calls.save_ui_settings.map((s) => JSON.parse(JSON.stringify(s.detailSectionsArchive ?? s.detailSections)))")
             print("持久化:", json.dumps(saves, ensure_ascii=False))
             last_save = saves[-1] if saves else None
             rel = next((s for s in last_save if s.get("id") == "relations"), None) if isinstance(last_save, list) else None

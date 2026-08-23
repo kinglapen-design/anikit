@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // 详情区块栈共享组合（2026-08-15 任务 A 三项，自 DetailPanel 抽出）：
 // pinned 缩略图区块（恒第一，体系外）+ DetailNotes（可选，仅文件）+ 注册表 7 区块按
-// ui.detailSections 排序显隐渲染。DetailPanel（右侧详情面板）与 ArchiveSidePanel
-// （档案二级侧边栏内容区）复用同一套，避免两套拷贝。
+// 配置排序显隐渲染（**文件 / 档案各一套**：ui.detailSections / detailSectionsArchive，
+// 2026-08-23 用户定独立设置，按 target.kind 分流）。DetailPanel（右侧详情面板）与
+// ArchiveSidePanel（档案二级侧边栏内容区）复用同一套，避免两套拷贝。
 // 面板内拖拽排序（2026-08-15 定案）：拖区块标题行重排，让位动画 = 侧栏区块标题拖拽
 //（LibraryView blockDrag）同款本地 pointer 追踪；pinned / DetailNotes 不参与；松手写
 // ui.moveDetailSectionTo；拖出面板取消兜底 = buttons 自清 + blur/mouseleave（侧栏范式）。
@@ -31,9 +32,12 @@ const SECTION_COMPS: Record<string, Component> = {
   prompt: SectionEmpty,
 };
 
-// 可见区块（ui.detailSections 顺序，visible 过滤；标题取注册表）
+// 可见区块（当前目标套配置顺序，visible 过滤；标题取注册表）：
+// 文件与档案各一套独立配置（2026-08-23 用户定，ui.detailSections / detailSectionsArchive）——
+// 排序 / 显隐按 target.kind 分流，档案侧改动不再串到文件详情
+const sectionHost = computed(() => (props.target.kind === "archive" ? ("archive" as const) : ("file" as const)));
 const sections = computed(() =>
-  ui.detailSections.filter((s) => s.visible).map((s) => ({ id: s.id, title: detailSectionTitle(s.id) })),
+  ui.sectionsFor(sectionHost.value).filter((s) => s.visible).map((s) => ({ id: s.id, title: detailSectionTitle(s.id) })),
 );
 
 // —— 面板内拖拽排序（LibraryView blockDrag 同款让位范式；区块高不定，DOM 快照中线判定） ——
@@ -107,12 +111,12 @@ function onSecDragEnd(): void {
   const moved = secMoved;
   secDrag.id = "";
   if (!moved || from < 0 || to === from) return;
-  // 可见序 → 全量序映射（隐藏区块不渲染，落点按目标可见块的全量 index 写）
+  // 可见序 → 全量序映射（隐藏区块不渲染，落点按目标可见块的全量 index 写；host = 当前目标套）
   const draggedId = sections.value[from]?.id;
   const targetId = sections.value[to]?.id;
   if (draggedId && targetId) {
-    const fullTo = ui.detailSections.findIndex((s) => s.id === targetId);
-    ui.moveDetailSectionTo(draggedId, fullTo);
+    const fullTo = ui.sectionsFor(sectionHost.value).findIndex((s) => s.id === targetId);
+    ui.moveDetailSectionTo(draggedId, fullTo, sectionHost.value);
   }
   // 抑制紧随 click 误折叠（与引擎 suppressClick 同口径，SectionHeader.onFold 已消费）
   dragView.suppressClick = true;

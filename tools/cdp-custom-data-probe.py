@@ -31,7 +31,7 @@ URL = "http://localhost:5373"
 
 STILL = "E:/01_Projects/03_Software-dev/AniKit/tools/test-assets/still.webp"
 STUB = r"""
-window.__calls = { set_asset_props: [], set_archive_props: [], set_asset_descriptions: [], set_archive_descriptions: [], delete_props_globally: [], set_archive_cover_settings: [] };
+window.__calls = { set_asset_props: [], set_archive_props: [], set_asset_descriptions: [], set_archive_descriptions: [], delete_props_globally: [], set_archive_cover_settings: [], save_ui_settings: [] };
 window.__cbs = {};
 window.__cbId = 0;
 (function () {
@@ -95,6 +95,7 @@ window.__cbId = 0;
         list_prop_pool: () => ["主角", "二维", "拔剑", "奇幻"],
       };
       if (cmd === "plugin:dialog|open") return Promise.resolve(STILL); // 从本地磁盘中选择
+      if (cmd === "save_ui_settings") { window.__calls.save_ui_settings.push(JSON.parse(JSON.stringify(args.settings))); return Promise.resolve(null); }
       if (cmd === "get_archive_data") return Promise.resolve(archiveView(args.folderId));
       if (cmd === "get_asset_detail") {
         const meta = DB.assets[args.assetId];
@@ -539,6 +540,55 @@ async def main():
             check("S2 档案确认 → set_archive_props(F-ARC, [奇幻,二维])",
                   bool(acalls and len(acalls) == 1 and acalls[0]["folderId"] == "F-ARC" and acalls[0]["props"] == ["奇幻", "二维"]),
                   json.dumps(acalls, ensure_ascii=False))
+
+            # —— S9 数据区块独立设置（2026-08-23 用户定：文件 / 档案各一套，不再联动）——
+            # 当前上下文 = F-DIR 视口选中档案卡 F-ARC → 右栏 22 稿面板编辑档案套
+            await click("[...document.querySelectorAll('.sidebar-right .panel-toolbar .icon-btn')][1]")
+            await asyncio.sleep(0.6)
+            # 眼睛隐藏「音频」（档案套）
+            await click("[...document.querySelectorAll('.section-edit .se-row')].find((r) => r.querySelector('.row-title')?.textContent === '音频').querySelector('.icon-btn.eye')")
+            await asyncio.sleep(1.2)  # 等 500ms 防抖持久化
+            indep = await ev("""(() => {
+              const saves = window.__calls.save_ui_settings.map((s) => s);
+              const last = saves[saves.length - 1] ?? {};
+              const arc = last.detailSectionsArchive ?? [];
+              const fil = last.detailSections ?? [];
+              const titles = [...document.querySelectorAll('.detail-panel .detail-block .section-header .title')].map((t) => t.textContent);
+              return {
+                arcAudio: arc.find((s) => s.id === 'audio')?.visible,
+                filAudio: fil.find((s) => s.id === 'audio')?.visible,
+                detailTitles: titles,
+              };
+            })()""")
+            print("独立设置:", json.dumps(indep, ensure_ascii=False))
+            check("S9 档案套隐藏音频：detailSectionsArchive.audio=false 且文件套 detailSections 不动",
+                  bool(indep and indep["arcAudio"] is False and indep["filAudio"] is not False),
+                  json.dumps(indep, ensure_ascii=False))
+            check("S9 档案详情联动（音频区块消失）",
+                  bool(indep and "音频" not in indep["detailTitles"] and "关系" in indep["detailTitles"]),
+                  json.dumps(indep and indep["detailTitles"], ensure_ascii=False))
+            # 关面板 → 切文件卡（F-SUB 视口 A1）：文件详情音频区块仍在（文件套不受影响）
+            await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await asyncio.sleep(0.4)
+            await click("document.querySelector('.tree-item[data-folder-id=\"F-SUB\"] .body')")
+            await asyncio.sleep(0.6)
+            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('主角-立绘'))")
+            await asyncio.sleep(0.8)
+            file_titles = await ev("[...document.querySelectorAll('.detail-panel .detail-block .section-header .title')].map((t) => t.textContent)")
+            check("S9 文件详情不受档案套改动影响（音频区块仍在）",
+                  bool(file_titles and "音频" in file_titles), json.dumps(file_titles, ensure_ascii=False))
+            # 右栏再开面板（选中文件 → 文件套）：音频行眼睛为开（两套互不影响）
+            await click("[...document.querySelectorAll('.sidebar-right .panel-toolbar .icon-btn')][1]")
+            await asyncio.sleep(0.6)
+            feye = await ev("""(() => {
+              const row = [...document.querySelectorAll('.section-edit .se-row')].find((r) => r.querySelector('.row-title')?.textContent === '音频');
+              return row ? { off: row.classList.contains('off') } : null;
+            })()""")
+            check("S9 文件套面板行态独立（音频未隐藏）", bool(feye and feye["off"] is False), json.dumps(feye))
+            await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await asyncio.sleep(0.4)
     finally:
         proc.kill()
         if dev_proc:

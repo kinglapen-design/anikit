@@ -11,19 +11,37 @@
 // 箭头交换动画 = TransitionGroup move 钩子（30 稿 BlockManageDialog 同款 0.18s 位移过渡，
 // 行高 52 恒定同参数）。
 // 操作即时生效（写 ui store，防抖持久化既有机制自动覆盖）。
+// 文件 / 档案各一套配置（2026-08-23 用户定，原共用一份联动改动互串）：本面板编辑哪套 =
+// 档案侧栏入口（host=archive）恒档案套；右栏入口跟随当前选中——选中档案卡片 = 档案套，
+// 选中文件 / 无选中 = 文件套（与 DetailPanel 档案判定同逻辑：文件夹选择域首项 kind=archive）
 import { computed } from "vue";
 import AppMenu from "./AppMenu.vue";
 import IconButton from "./IconButton.vue";
-import { detailSectionTitle } from "../lib/detailSections";
+import { detailSectionTitle, findFolderNode } from "../lib/detailSections";
 import { useUiStore } from "../stores/ui";
+import { useContentStore } from "../stores/content";
+import { useSelectionStore } from "../stores/selection";
 
 const ui = useUiStore();
+const content = useContentStore();
+const selection = useSelectionStore();
 const props = defineProps<{ anchor: { x: number; y: number }; trigger?: HTMLElement | null }>();
 const emit = defineEmits<{ close: [] }>();
 
 const WINDOW_W = 404;
 // 原级联菜单宽 175：窗口加宽后右缘与原位置对齐（不超出窗口右缘，同 ViewOptionsMenu 口径）
 const winX = computed(() => props.anchor.x - (WINDOW_W - 175));
+
+// 本面板编辑的配置套（文件 / 档案独立，2026-08-23）
+const host = computed<"file" | "archive">(() => {
+  if (ui.sectionEditHost === "archive") return "archive";
+  for (const id of selection.selectedFolders) {
+    const n = findFolderNode(content.folders, id);
+    return n?.kind === "archive" ? "archive" : "file";
+  }
+  return "file";
+});
+const rows = computed(() => ui.sectionsFor(host.value));
 </script>
 
 <template>
@@ -40,7 +58,7 @@ const winX = computed(() => props.anchor.x - (WINDOW_W - 175));
     <!-- TransitionGroup：箭头排序时两行交换位置给 0.18s 位移过渡（30 稿 BlockManageDialog 同款） -->
     <TransitionGroup name="se-swap" tag="div" class="se-rows">
       <div
-        v-for="(s, i) in ui.detailSections"
+        v-for="(s, i) in rows"
         :key="s.id"
         class="se-row"
         :class="{ off: !s.visible }"
@@ -50,9 +68,9 @@ const winX = computed(() => props.anchor.x - (WINDOW_W - 175));
           small
           name="chevron-small"
           class="sort-arrow arrow-down"
-          :disabled="i === ui.detailSections.length - 1"
+          :disabled="i === rows.length - 1"
           title="下移"
-          @click="ui.moveDetailSection(s.id, 1)"
+          @click="ui.moveDetailSection(s.id, 1, host)"
         />
         <IconButton
           small
@@ -60,14 +78,14 @@ const winX = computed(() => props.anchor.x - (WINDOW_W - 175));
           class="sort-arrow arrow-up"
           :disabled="i === 0"
           title="上移"
-          @click="ui.moveDetailSection(s.id, -1)"
+          @click="ui.moveDetailSection(s.id, -1, host)"
         />
         <span class="row-title">{{ detailSectionTitle(s.id) }}</span>
         <IconButton
           :name="s.visible ? 'eye-open' : 'eye-closed'"
           :title="s.visible ? '隐藏区块' : '显示区块'"
           class="eye"
-          @click="ui.toggleDetailSection(s.id)"
+          @click="ui.toggleDetailSection(s.id, host)"
         />
       </div>
     </TransitionGroup>

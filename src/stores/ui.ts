@@ -32,6 +32,7 @@ const PERSIST_KEYS = [
   "timeDisplay",
   "tabLayout",
   "detailSections",
+  "detailSectionsArchive",
 ] as const;
 
 // 变更防抖写回（500ms；模块级单例防重复订阅）
@@ -100,8 +101,11 @@ export const useUiStore = defineStore("ui", {
     tabLayout: null as object | null,
     // 详情面板 8 区块排序 / 显隐（2026-08-15 区块体系一轮，22 稿「编辑数据区块」面板）：
     // 默认 = 注册表全 visible；加载后经注册表兜底合并（新增补位 / 已删忽略）。
-    // 数组 typeof "object"，PERSIST_KEYS 类型校验放行（同 tabLayout 先例），形状由合并函数校验
+    // 数组 typeof "object"，PERSIST_KEYS 类型校验放行（同 tabLayout 先例），形状由合并函数校验。
+    // **文件与档案各一套（2026-08-23 用户定：原共用 detailSections 应用级一份，档案侧改序/隐藏
+    // 会串到文件详情）**——detailSections = 文件套（存量配置无缝保留），detailSectionsArchive = 档案套
     detailSections: mergeDetailSections(null) as DetailSectionPref[],
+    detailSectionsArchive: mergeDetailSections(null) as DetailSectionPref[],
     // 22 稿「编辑数据区块」面板开关（会话级，同 blockManageOpen 口径）：右栏工具栏与档案侧栏
     // 工具行两处入口（2026-08-15 走查修正：档案面板铅笔开同一个面板），host 记打开来源
     // （两处各自带 anchor/trigger 渲染，同一时刻只一处弹出）
@@ -124,9 +128,13 @@ export const useUiStore = defineStore("ui", {
     toggleArchivePanel(folderId: string): void {
       this.archivePanelOpen[folderId] = !this.archivePanelOpenFor(folderId);
     },
+    // 详情区块配置按 host 取套（2026-08-23：文件 / 档案各一套独立设置）：archive = 档案套，file = 文件套
+    sectionsFor(host: "file" | "archive"): DetailSectionPref[] {
+      return host === "archive" ? this.detailSectionsArchive : this.detailSections;
+    },
     // 详情区块排序（22 稿面板箭头）：相邻交换，越界不动
-    moveDetailSection(id: string, dir: 1 | -1): void {
-      const list = this.detailSections;
+    moveDetailSection(id: string, dir: 1 | -1, host: "file" | "archive" = "file"): void {
+      const list = this.sectionsFor(host);
       const i = list.findIndex((s) => s.id === id);
       const j = i + dir;
       if (i < 0 || j < 0 || j >= list.length) return;
@@ -134,16 +142,16 @@ export const useUiStore = defineStore("ui", {
       list.splice(j, 0, row);
     },
     // 详情区块拖拽落点排序（22 稿面板让位式拖拽）：直接移到目标位（与逐次 moveDetailSection 等效）
-    moveDetailSectionTo(id: string, to: number): void {
-      const list = this.detailSections;
+    moveDetailSectionTo(id: string, to: number, host: "file" | "archive" = "file"): void {
+      const list = this.sectionsFor(host);
       const from = list.findIndex((s) => s.id === id);
       if (from < 0 || to < 0 || to >= list.length || to === from) return;
       const [row] = list.splice(from, 1);
       list.splice(to, 0, row);
     },
     // 详情区块显隐（22 稿面板眼睛）
-    toggleDetailSection(id: string): void {
-      const s = this.detailSections.find((s) => s.id === id);
+    toggleDetailSection(id: string, host: "file" | "archive" = "file"): void {
+      const s = this.sectionsFor(host).find((s) => s.id === id);
       if (s) s.visible = !s.visible;
     },
     // 启动加载全局 UI 设置并订阅变更防抖写回（多预览窗口各自独立 Pinia 各自加载，
@@ -162,8 +170,9 @@ export const useUiStore = defineStore("ui", {
           // 类型对照默认值校验：config 手改 / 旧版本字段变形不污染 store
           if (v !== undefined && typeof v === typeof state[k]) state[k] = v;
         }
-        // 区块配置兜底合并：注册表新增补位 / 配置里已删 id 忽略（lib/detailSections）
+        // 区块配置兜底合并：注册表新增补位 / 配置里已删 id 忽略（lib/detailSections；文件 / 档案两套同口径）
         this.detailSections = mergeDetailSections(this.detailSections);
+        this.detailSectionsArchive = mergeDetailSections(this.detailSectionsArchive);
         // 「无显示」档废除迁移（2026-08-19）：旧配置 briefMode "none" 回退尺寸档（赋值循环只校验
         // typeof 不校验枚举值，运行态可能已被 "none" 覆盖，此处纠正）
         if (saved.briefMode === "none") this.briefMode = "size";
