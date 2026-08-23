@@ -25,6 +25,7 @@ import { currentSpace, setAutoImport } from "../lib/libraryOps";
 import { reorderBlocks } from "../lib/blockOps";
 import { isBlockOpen, openBlock, toggleBlockOpen, treeExpansion } from "../lib/treeExpansion";
 import { useContentStore, type FolderNode } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
 
@@ -147,6 +148,7 @@ const forceOpenIds = computed(() => {
 
 // 区块头 + 按钮（2026-08-14 多区块）：该区块根级最底部新建；区块折叠时先强制展开让新节点可见
 function onAddFolder(blockId: string): void {
+  if (usePickerStore().active) return; // 选择模式（6.2）：树仅导航，新建禁用
   openBlock(blockId);
   void createAndName(null, null, blockId);
 }
@@ -166,6 +168,7 @@ let blockStep = 0; // 被拖段高 + gap（让位位移量）
 function onBlockHeadPointerDown(blockId: string, e: PointerEvent): void {
   if (e.button !== 0) return;
   if ((e.target as HTMLElement).closest(".add-btn")) return; // 加号不启动
+  if (usePickerStore().active) return; // 选择模式（6.2）：排序禁用（折叠 click 保留——导航类）
   const secs = content.blockSections;
   const from = secs.findIndex((s) => s.block.id === blockId);
   if (from < 0) return;

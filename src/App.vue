@@ -24,6 +24,7 @@ import AppModal from "./components/AppModal.vue";
 import AppButton from "./components/AppButton.vue";
 import AppCheckbox from "./components/AppCheckbox.vue";
 import ImportDialog from "./components/ImportDialog.vue";
+import PickerBanner from "./components/PickerBanner.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
 import FailedListDialog from "./components/FailedListDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
@@ -43,6 +44,7 @@ import BatchRenameDialog from "./components/BatchRenameDialog.vue";
 import ToastStack from "./components/ToastStack.vue";
 import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
+import { usePickerStore } from "./stores/picker";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
 import { wizardState, reopenLastSession, createLibraryModalState, deleteLibraryState, confirmDeleteLibrary } from "./lib/libraryOps";
@@ -53,6 +55,7 @@ import { useWindowStatePersistence } from "./lib/windowState";
 
 const ui = useUiStore();
 const content = useContentStore();
+const picker = usePickerStore();
 const selection = useSelectionStore();
 const preview = usePreviewStore();
 
@@ -203,11 +206,13 @@ async function togglePin(): Promise<void> {
 </script>
 
 <template>
-  <div class="window" :class="{ maximized }">
+  <div class="window" :class="{ maximized, picking: picker.active }">
     <PreviewWindow v-if="previewParam" :asset-key="previewParam" />
     <!-- 预览子窗口的通知条挂点（6.0；主窗口挂在 DockHost 内） -->
     <ToastStack v-if="previewParam" />
     <template v-else>
+      <!-- 选择模式目的横幅（6.2 一轮：品牌底胶囊，滑入 + 循环浮动；pointer-events none 不挡操作） -->
+      <PickerBanner v-if="picker.active" />
       <!-- 侧栏收展（2026-08-08 定案 v6 锚点；2026-08-10 同步改 RO）：侧栏常驻挂载，收展宽度由
            App 层 rAF 驱动逐帧写入；dockview 网格由 dockResizeObs 在 RO 阶段以当帧最终宽同步
            （其自身 RO 回调被 rAF 包裹且持旧尺寸，同帧灌宽会被覆盖回上一帧）。
@@ -362,6 +367,21 @@ async function togglePin(): Promise<void> {
   border-radius: var(--radius-8);
 }
 .window.maximized {
+  border-radius: 0;
+}
+/* 选择模式整圈品牌色外边框（6.2 一轮，PRD 03_数据链接 04 四重标识之一；figma 02 稿：
+   1.5px 品牌色-边框线 = --brand-border，token 注释既定预留）。伪元素不遮交互；
+   z-index 55：盖三栏内容（win-controls 浮块 60 与弹窗仍在其上） */
+.window.picking::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: var(--border-strong) solid var(--brand-border);
+  border-radius: var(--radius-8);
+  pointer-events: none;
+  z-index: 55;
+}
+.window.maximized.picking::after {
   border-radius: 0;
 }
 /* 窗口控制浮块（2026-08-08 定案）：恒在窗口右上角（标签栏行 / 右栏标题栏同一位），

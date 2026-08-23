@@ -5,6 +5,7 @@
 // 回收站视口空白 = 13 稿空白菜单；文件夹卡片 / 档案卡片 / 按钮 / 输入框上不处理（"pass"——卡片自带菜单）。
 // 1.3：素材 / 文件夹卡片菜单按稿出 320 宽 + 搜索框。
 import { useContentStore, type PlacementView } from "../../stores/content";
+import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { openContextMenu } from "../contextMenus";
 import { assetCardSpec } from "./assetCard";
@@ -21,6 +22,13 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
   const key = card?.getAttribute("data-key");
   if (key) {
     e.preventDefault();
+    // 选择模式（6.2）：不入选择域；素材卡出查看类精简集（spec 内分流），回收站卡无可出项
+    if (usePickerStore().active) {
+      if (content.isRecycleView) return "done";
+      const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
+      if (p) openContextMenu(e, assetCardSpec(p), undefined, { width: 320, searchable: true });
+      return "done";
+    }
     if (!selection.isSelected(key)) selection.selectOnly(key);
     // 回收站分流前置（2026-08-11 修复 item 右键调不出：键解析失败也不依赖 items 反查，
     // 与 6.1 旧代码同构——回收站菜单不读卡片数据）
@@ -35,6 +43,8 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
   // .disk-card = 收件箱工程文件卡片（自带 inboxDiskSpec 菜单，InboxDiskSection @contextmenu.stop 已拦冒泡）
   if (t.closest(".folder-card, .archive-card, .disk-card, button, input")) return "pass";
   e.preventDefault();
+  // 选择模式（6.2）：空白处新增菜单是编辑类，不出
+  if (usePickerStore().active) return "done";
   if (content.isRecycleView) openContextMenu(e, recycleBlankSpec(), undefined, { width: 148 });
   else openContextMenu(e, addButtonSpec(), undefined, { width: 320 });
   return "done";

@@ -12,6 +12,7 @@ import FolderCard from "./FolderCard.vue";
 import { dragView } from "../lib/dragOperation";
 import { openFolderCardMenu } from "../lib/menuSpecs/gridDispatch";
 import { useContentStore } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
 import { useUiStore } from "../stores/ui";
@@ -31,6 +32,7 @@ const stripFolders = computed(() => content.stripFoldersFor(props.viewKey));
 // 互斥清理由 clickFolder 内部统一做）；有效拖拽结束后的紧随 click 不触发（C4 引擎置位）
 function onSelect(id: string, e: MouseEvent): void {
   if (dragView.suppressClick) return;
+  if (usePickerStore().active) return; // 选择模式（6.2）：文件夹不是可选目标，单击无操作（双击导航保留）
   selection.clickFolder(
     id,
     { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey },
@@ -45,7 +47,12 @@ function onEnter(id: string): void {
 }
 
 // 右键（6.3；1.3 一轮按 05 稿 320 宽 + 搜索框）：未选中项先单选（与树 item 同规则），全局菜单宿主
+// 选择模式（6.2）：不入选择域，直接出菜单（spec 内精简为查看类）
 function onMenu(f: { id: string; name: string }, e: MouseEvent): void {
+  if (usePickerStore().active) {
+    openFolderCardMenu(e, f);
+    return;
+  }
   if (!selection.isFolderSelected(f.id)) selection.clickFolder(f.id);
   openFolderCardMenu(e, f);
 }

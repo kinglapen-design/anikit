@@ -4,6 +4,7 @@
 //（2026-08-11 二轮走查，原默认 175 文字截断）。
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore, type FolderNode, type PlacementView } from "../../stores/content";
+import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
 import { usePreviewStore } from "../../stores/preview";
@@ -57,6 +58,8 @@ function folderName(id: string): string {
 //（稿 prose 另提及"去到未分类"，2026-08-11 用户确认无此项，不列）；
 // 无提示词 → 「打开提示词编辑器」改「保存提示词」（提示词数据未落地，恒显示保存提示词占位，记 09 待办）
 export function assetCardSpec(p: PlacementView): CtxEntry[] {
+  // 选择模式（6.2 一轮，PRD 03_数据链接 04）：右键仅留查看类操作，编辑类不出现
+  if (usePickerStore().active) return pickerAssetCardSpec(p);
   const content = useContentStore();
   const selection = useSelectionStore();
   const assetId = p.assetId;
@@ -231,6 +234,68 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       icon: "drop-to-trash",
       shortcut: "Delete",
       action: () => void deletePlacements(selection.selectedRefs()),
+    },
+  );
+  return entries;
+}
+
+// 打开文件链接所在位置（子菜单条目组）：同 assetId 全部 Placement 所在文件夹去重——
+// assetCardSpec 与选择模式精简集共用
+function linkLocationEntries(assetId: string): CtxEntry[] {
+  const locations: CtxEntry[] = [
+    ...new Set(useContentStore().placements.filter((q) => q.assetId === assetId).map((q) => q.folderId)),
+  ].map((fid) => ({
+    label: folderName(fid),
+    action: () => {
+      useTabsStore().openView(`folder:${fid}`);
+    },
+  }));
+  return locations.length > 0 ? locations : [{ label: "（无）", disabled: true }];
+}
+
+// 选择模式精简集（6.2 一轮，PRD 03_数据链接 04"右键仅留查看类操作，编辑类禁用"）：
+// 预览 / 打开类 / 导航 / 复制（缩略图 / 数据）——均只读，不写库不动选择域
+function pickerAssetCardSpec(p: PlacementView): CtxEntry[] {
+  const assetId = p.assetId;
+  const assetKey = `${p.assetId}|${p.folderId}`;
+  const entries: CtxEntry[] = [
+    { label: "打开预览", icon: "open-preview", action: () => void usePreviewStore().open(assetKey) },
+  ];
+  if (isSequenceAsset(p)) {
+    entries.push({
+      label: "打开序列帧包",
+      icon: "open-sequence-pack",
+      action: () => {
+        useSelectionStore().clear();
+        useTabsStore().openView(`seq:${assetId}`);
+      },
+    });
+  }
+  entries.push(
+    { label: "新窗口打开", icon: "open-new-window", action: () => void invoke("open_preview_window", { assetKey }) },
+    { label: "在默认应用打开", icon: "open-default", action: () => openDefaultApp(assetId) },
+    { label: "在其他应用打开", icon: "open-in-other-app", action: () => void openWithDialog(assetId) },
+    { label: "在资源管理器打开", icon: "open-in-explorer", action: () => revealWithWarning(assetId) },
+    "divider",
+    {
+      label: "打开文件链接所在位置",
+      icon: "reveal-file-link",
+      submenuWidth: 320,
+      submenu: linkLocationEntries(assetId),
+    },
+    "divider",
+    { label: "复制缩略图", action: () => void copyThumb(assetId) },
+    {
+      label: "复制数据",
+      icon: "copy-data",
+      submenuWidth: 180,
+      submenu: [
+        { label: "复制链接", action: () => void copyAssetLink(assetId) },
+        { label: "复制文件路径", action: () => void copyAssetPath(assetId) },
+        "divider",
+        { label: "复制名称", action: () => void copyName(p.name) },
+        { label: "复制 base64", action: () => void copyBase64(assetId) },
+      ],
     },
   );
   return entries;

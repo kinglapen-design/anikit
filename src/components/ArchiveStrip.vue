@@ -9,11 +9,13 @@ import ArchiveCard from "./ArchiveCard.vue";
 import { dragView } from "../lib/dragOperation";
 import { openArchiveCardMenu } from "../lib/menuSpecs/gridDispatch";
 import { useContentStore, type FolderNode } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
 
 const props = defineProps<{ viewKey: string; nodes?: FolderNode[] }>();
 const content = useContentStore();
+const picker = usePickerStore();
 const selection = useSelectionStore();
 const tabs = useTabsStore();
 const archiveOpen = ref(true);
@@ -23,8 +25,21 @@ const archiveOpen = ref(true);
 const stripArchives = computed(() => props.nodes ?? content.stripArchivesFor(props.viewKey));
 
 // 选中口径同 FolderStrip（文件夹选择域；单击单选 / Ctrl 加选 / Shift 按条带顺序范围选）
+// 选择模式（6.2 一轮）：单击档案卡 = 加入/移出备选（档案可作关系目标），不再选中
 function onSelect(id: string, e: MouseEvent): void {
   if (dragView.suppressClick) return;
+  if (picker.active) {
+    const node = stripArchives.value.find((f) => f.id === id);
+    if (node) {
+      picker.togglePick({
+        kind: "archive",
+        id,
+        name: node.name,
+        thumb: content.archives[id]?.coverPath ?? content.folderThumbMap.get(id) ?? null,
+      });
+    }
+    return;
+  }
   selection.clickFolder(
     id,
     { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey },
@@ -37,9 +52,10 @@ function onEnter(id: string): void {
   tabs.openView(`folder:${id}`);
 }
 
-// 右键（3.2 一轮，04 稿档案菜单 320 宽 + 搜索框）：未选中项先单选（与树 item 同规则），全局菜单宿主
+// 右键（3.2 一轮，04 稿档案菜单 320 宽 + 搜索框）：未选中项先单选（与树 item 同规则），全局菜单宿主；
+// 选择模式（6.2）：不入选择域，直接出菜单（spec 内已分流精简集）
 function onMenu(f: { id: string; name: string }, e: MouseEvent): void {
-  if (!selection.isFolderSelected(f.id)) selection.clickFolder(f.id);
+  if (!picker.active && !selection.isFolderSelected(f.id)) selection.clickFolder(f.id);
   openArchiveCardMenu(e, f);
 }
 </script>

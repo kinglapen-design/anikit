@@ -1,6 +1,7 @@
 // 05 稿 · 文件夹右键菜单 spec（自 menuSpecs.ts 拆出，规范第 3 条行数控制）：
 // 卡片与树节点共用主体（folderMenuEntries），差异 = 重命名入口 + 树专属段；05 稿一体不可拆。
 import { useContentStore, type FolderNode } from "../../stores/content";
+import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
 import { useUiStore } from "../../stores/ui";
@@ -222,6 +223,8 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
 
 // —— 文件夹卡片（FolderStrip；无排序/展开/图标/颜色——卡片不支持，用户 2026-08-11 定）——
 export function folderCardSpec(folder: { id: string; name: string }): CtxEntry[] {
+  // 选择模式（6.2 一轮，PRD 03_数据链接 04）：右键仅留查看/导航类
+  if (usePickerStore().active) return pickerFolderEntries(folder, null, false);
   const selection = useSelectionStore();
   const parentId = findParentId(useContentStore().folders, folder.id) ?? null;
   return folderMenuEntries(folder, parentId, () => {
@@ -229,11 +232,72 @@ export function folderCardSpec(folder: { id: string; name: string }): CtxEntry[]
   }, false);
 }
 
+// 选择模式精简集（6.2 一轮）：文件夹卡片 / 树节点共用——打开与新标签页（导航）+ 树加展开收起三项，
+// 复制链接（只读）；新建 / 重命名 / 排序 / 移动 / 删除等编辑类不出现
+function pickerFolderEntries(folder: { id: string; name: string }, parentId: string | null, treeOps: boolean): CtxEntry[] {
+  const content = useContentStore();
+  const entries: CtxEntry[] = [
+    {
+      label: "打开文件夹",
+      icon: "folder-open",
+      action: () => {
+        useTabsStore().openView(`folder:${folder.id}`);
+      },
+    },
+    {
+      label: "新标签页打开",
+      icon: "open-in-new-tab",
+      action: () => {
+        useTabsStore().openInNewTab(`folder:${folder.id}`);
+      },
+    },
+  ];
+  if (treeOps) {
+    const node = findNode(content.folders, folder.id);
+    const hasChildren = (node?.children.length ?? 0) > 0;
+    entries.push(
+      "divider",
+      {
+        label: "展开/收起文件夹",
+        icon: "expand-folder",
+        disabled: !hasChildren,
+        keepOpen: true,
+        action: () => toggleOpen(folder.id),
+      },
+      {
+        label: "展开/收起同阶层文件夹",
+        icon: "expand-siblings",
+        keepOpen: true,
+        action: () => {
+          const level = parentId === null ? content.folders : (findChildrenList(content.folders, parentId) ?? []);
+          const ids = level.filter((n) => n.children.length > 0).map((n) => n.id);
+          const allOpen = ids.length > 0 && ids.every((id) => treeExpansion.openSet.has(id));
+          if (allOpen) collapseLevel(content.folders, parentId);
+          else expandLevel(content.folders, parentId);
+        },
+      },
+      {
+        label: "展开/收起所有文件夹",
+        icon: "expand-all",
+        keepOpen: true,
+        action: () => {
+          if (treeExpansion.openSet.size > 0) collapseAll();
+          else expandAll(content.folders);
+        },
+      },
+    );
+  }
+  entries.push("divider", { label: "复制链接", icon: "copy-link", action: () => void copyFolderLink(folder.id) });
+  return entries;
+}
+
 // —— 文件夹卡片空白处（废除，2026-08-11：空白右键统一走 07 新增菜单）——
 
 // —— 文件树（05 稿全量含排序/展开/图标/颜色；档案节点分流 04 稿档案菜单，2026-08-15 一轮）——
 export function treeItemSpec(node: FolderNode, parentId: string | null): CtxEntry[] {
   const selection = useSelectionStore();
+  // 选择模式（6.2 一轮）：左侧树仅导航——普通文件夹走精简集；档案节点由 archiveCardSpec 自分流
+  if (usePickerStore().active && node.kind !== "archive") return pickerFolderEntries(node, parentId, true);
   // 档案节点：04 稿档案菜单；重命名入口换树命名态（卡片命名态 namingFolderCardId 在树上无效）
   if (node.kind === "archive") {
     return archiveCardSpec(node, () => {

@@ -16,6 +16,7 @@ import { openContextMenu } from "../lib/contextMenus";
 import { treeItemSpec } from "../lib/menuSpecs/folder";
 import { isTreeOpen, toggleOpen } from "../lib/treeExpansion";
 import { useContentStore, type FolderNode } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
 import { useUiStore } from "../stores/ui";
@@ -64,6 +65,12 @@ function nodeTint(node: FolderNode): string | undefined {
 //（文件夹选择域在 selection store，与素材互斥由 clickFolder 内部做）——多选不切换当前文件夹视图
 function onSelect(id: string, e: MouseEvent): void {
   if (dragView.suppressClick) return;
+  // 选择模式（6.2 一轮，PRD 03_数据链接 04）：左侧树仅导航——plain click 只切换视口，
+  // 不入选择域、不多选（选择域本模式无意义）
+  if (usePickerStore().active) {
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey) tabs.openView(`folder:${id}`);
+    return;
+  }
   if (e.ctrlKey || e.metaKey || e.shiftKey) {
     // 范围选顺序按所在区块容器收窄（2026-08-14 多区块：跨区块范围选无意义）
     const scope = (e.target as HTMLElement | null)?.closest(".block-tree") ?? null;
@@ -89,6 +96,11 @@ function onSelect(id: string, e: MouseEvent): void {
 function onItemMenu(e: MouseEvent, node: FolderNode): void {
   if (selection.namingFolderId === node.id) return;
   const opts = { width: 320, searchable: true }; // 1.3：树节点右键复用 05 文件夹稿（320 宽 + 搜索框）
+  // 选择模式（6.2）：不入选择域直接出菜单（spec 内已分流"仅导航"精简集）
+  if (usePickerStore().active) {
+    openContextMenu(e, treeItemSpec(node, props.parentId ?? null), undefined, opts);
+    return;
+  }
   if (!selection.isFolderSelected(node.id)) {
     const snapshot = new Set(selection.selectedFolders);
     const prevAnchor = selection.folderAnchor;

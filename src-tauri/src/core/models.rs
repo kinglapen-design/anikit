@@ -456,6 +456,62 @@ pub struct RecentItem {
   pub viewed_at: String,
 }
 
+// ---------- relations.json（关系 / 音色，空间级，6.2 选择模式一轮，PRD 03_数据链接 06） ----------
+// 关系可跨库（库 A 的角色配库 B 的音频）故存空间根而非库内；ref 携库名 + 显示名快照
+//（跨库目标未打开 / 目标失效时兜底显示）。单一写点 = services/relations.rs。
+
+/// 关系 kind：free = 自由关系（6.2 一轮）；voice = 音色（6.2 链接音频轮预留，PRD 03 数据链接 02）
+pub const RELATION_KIND_FREE: &str = "free";
+
+/// 生成关系 ID：`RL` + 时间戳（yyMMddHHmm）+ 5 位随机字符（同 new_asset_id 口径，ID 不承载语义）
+pub fn new_relation_id() -> String {
+  const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  use rand::Rng;
+  let mut rng = rand::thread_rng();
+  let suffix: String = (0..5).map(|_| ALPHABET[rng.gen_range(0..ALPHABET.len())] as char).collect();
+  format!("RL{}-{suffix}", chrono::Local::now().format("%y%m%d%H%M"))
+}
+
+/// 关系端点引用：lib = 库名；kind = "asset"（id = 资产 ID）/ "archive"（id = 档案 folderId）；
+/// name = 显示名快照（写入时刻的资产名 / 档案名——跨库目标未打开或目标失效时兜底显示）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RelationRef {
+  pub lib: String,
+  pub kind: String,
+  pub id: String,
+  pub name: String,
+}
+
+/// 一条关系（双向显示 = 同一条记录的两个视角，PRD 03_数据链接 02）：
+/// label = **to 对 from** 的称谓（雪牧.from 发起选雪天.to 输入"父亲" → 雪牧详情显示"雪天是父亲"）；
+/// reverse_label = **from 对 to** 的称谓（"儿子"——选择模式备选区右框手动填写，2026-08-23 用户定：
+/// 不做词典自动推导）；None / 空串 = 未填写（反向显示回退 label），不写字段
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Relation {
+  pub id: String,
+  pub from: RelationRef,
+  pub to: RelationRef,
+  pub kind: String,
+  pub label: String,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub reverse_label: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RelationsFile {
+  pub version: u32,
+  #[serde(default)]
+  pub relations: Vec<Relation>,
+}
+
+impl RelationsFile {
+  pub fn new() -> Self {
+    Self { version: DATA_VERSION, relations: Vec::new() }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

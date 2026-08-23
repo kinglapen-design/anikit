@@ -29,6 +29,7 @@ import { openGridContextMenu } from "../lib/menuSpecs/gridDispatch";
 import { groupHeaderSpec } from "../lib/menuSpecs/groupHeader";
 import { openContextMenu } from "../lib/contextMenus";
 import { useContentStore, type FolderNode, type PlacementView } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
 import { usePreviewStore } from "../stores/preview";
@@ -46,6 +47,7 @@ const props = withDefaults(
 );
 const ui = useUiStore();
 const content = useContentStore();
+const picker = usePickerStore();
 const selection = useSelectionStore();
 const preview = usePreviewStore();
 
@@ -59,8 +61,14 @@ function openPreview(p: PlacementView): void {
 //（文件夹选择域在 selection store，clickItem 内部互斥清理，2026-07-28 复验反馈 5）。
 // 2026-08-18 用户定：简介区（含 meta 行）点击 = 选中——名称+简介有底色框后用户预期整卡可点，
 // 原".card-info 视为空白"（2026-07-29 对齐 Eagle 旧口径）废除，card-info 分类整体退役
+// 选择模式（6.2 一轮）：单击 = 加入/移出备选（不再是选中，PRD 03_数据链接 04 交互变化）
 function onCardClick(p: PlacementView, e: MouseEvent): void {
   if (dragView.suppressClick) return; // 有效拖拽结束后紧随的 click 不当选择（拖拽引擎置位）
+  if (picker.active) {
+    if (content.isRecycleView) return; // 回收站文件不可加入备选（已删除资产不该建关系）
+    picker.togglePick({ kind: "asset", id: p.assetId, name: p.name, ext: p.ext, thumb: p.thumbPath, origin: p.origin });
+    return;
+  }
   if (e.ctrlKey || e.metaKey || e.shiftKey) {
     selection.clickItem(`${p.assetId}|${p.folderId}`, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
     content.selectedInboxName = "";

@@ -4,6 +4,7 @@
 import { onBeforeUnmount, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { usePreviewStore } from "../stores/preview";
 import { useSearchStore } from "../stores/search";
 import { useSelectionStore } from "../stores/selection";
@@ -28,6 +29,7 @@ export function isEditableTarget(t: HTMLElement): boolean {
 
 export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySetup: () => boolean }): void {
   const content = useContentStore();
+  const picker = usePickerStore();
   const selection = useSelectionStore();
   const preview = usePreviewStore();
   const undo = useUndoStore();
@@ -43,6 +45,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     if (e.shiftKey || selection.clipboard) return;
     if (isEditableTarget(e.target as HTMLElement)) return;
     if (opts.needLibrarySetup() || content.importDraft) return;
+    if (usePickerStore().active) return; // 选择模式（6.2）：导入是编辑类，禁用
     try {
       await content.startImportClipboard(content.currentFolderId);
     } catch (err) {
@@ -69,6 +72,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     if (isEditableTarget(e.target as HTMLElement)) return;
     if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+      if (picker.active) return; // 选择模式：全选是选择操作，禁用
       e.preventDefault();
       selection.selectAll();
       return;
@@ -77,6 +81,11 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     // DOM 同步移除，bubble 再查 .app-menu 已失效（误清选择实锤）——capture 早序监听先打标，
     // 此处只读标记：本次 Esc 被菜单吃掉就不清选择；无菜单时维持原语义（清选择）
     if (e.key === "Escape" && !escHadOverlay) {
+      // 选择模式（6.2）：Esc = 取消模式全部放弃（PRD 03_数据链接 04），优先于清选择
+      if (picker.active) {
+        picker.exit();
+        return;
+      }
       selection.clear();
     }
   }
@@ -95,6 +104,9 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     if (isEditableTarget(e.target as HTMLElement)) return;
     if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
     if (document.querySelector(".app-menu, .zoom-mask, .link-mask, .del-mask, .pick-mask")) return;
+    // 选择模式（6.2）：编辑类快捷键全禁（单击已不入选择域，本守卫双保险）；查看类（Shift+Enter
+    // 默认应用打开）因选择域恒空天然无效，不单独放行
+    if (picker.active) return;
     // F2 = 重命名（单选生效）：素材卡片就地重命名；文件夹域 = 文件夹重命名（3.4 七轮接入——
     // 当前视口条带含该项走卡片命名态（用户视线在卡片），否则树命名态；档案同径）
     if (e.key === "F2") {

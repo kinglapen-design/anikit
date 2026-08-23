@@ -8,12 +8,15 @@
 import { ref } from "vue";
 import IconButton from "./IconButton.vue";
 import DetailPanel from "./DetailPanel.vue";
+import PickerPanel from "./PickerPanel.vue";
 import SectionEditPanel from "./SectionEditPanel.vue";
+import { usePickerStore } from "../stores/picker";
 import { useUiStore } from "../stores/ui";
 import { useSideThumb } from "../lib/useSideThumb";
 import { sidebarShowWidths } from "../lib/useSidebarAnim";
 
 const ui = useUiStore();
+const picker = usePickerStore();
 const bodyRef = ref<HTMLElement>();
 const thumb = useSideThumb(bodyRef);
 // 滚动条悬停显隐（2026-08-10 用户定：悬停面板 / 拖拽 thumb 时才出现）
@@ -43,32 +46,37 @@ function toggleSectionEdit(e: MouseEvent): void {
   >
     <!-- 标题栏 46：窗口控制组由 App.vue 右上角浮块呈现，本行仅作窗口拖拽区 -->
     <header class="bar-title" data-tauri-drag-region />
-    <!-- 工具栏（figma 12263，54 / padding 12 16）：收起详情面板 + 编辑数据区块 -->
-    <div class="panel-toolbar">
-      <IconButton name="collapse-detail" title="收起详情面板" @click="ui.rightCollapsed = true" />
-      <span ref="sectionBtnRef" style="display: contents">
-        <IconButton name="edit-data-section" title="编辑数据区块" @click="toggleSectionEdit" />
-      </span>
-    </div>
-    <div class="side-content">
-      <div ref="bodyRef" class="detail-body">
-        <DetailPanel />
+    <!-- 选择模式（6.2 一轮）：右侧详情栏整体临时替换为备选区（PRD 03_数据链接 04 四重标识之一）；
+         工具栏 / 详情面板 / 22 稿面板本模式不渲染（编辑类，与"右键仅查看类"同口径） -->
+    <PickerPanel v-if="picker.active" />
+    <template v-else>
+      <!-- 工具栏（figma 12263，54 / padding 12 16）：收起详情面板 + 编辑数据区块 -->
+      <div class="panel-toolbar">
+        <IconButton name="collapse-detail" title="收起详情面板" @click="ui.rightCollapsed = true" />
+        <span ref="sectionBtnRef" style="display: contents">
+          <IconButton name="edit-data-section" title="编辑数据区块" @click="toggleSectionEdit" />
+        </span>
       </div>
-      <span
-        class="side-thumb"
-        :class="{ visible: thumb.show && (hover || thumb.dragging) }"
-        :style="{ top: `${thumb.top}px`, height: `${thumb.height}px` }"
-        @pointerdown="thumb.onThumbDown"
+      <div class="side-content">
+        <div ref="bodyRef" class="detail-body">
+          <DetailPanel />
+        </div>
+        <span
+          class="side-thumb"
+          :class="{ visible: thumb.show && (hover || thumb.dragging) }"
+          :style="{ top: `${thumb.top}px`, height: `${thumb.height}px` }"
+          @pointerdown="thumb.onThumbDown"
+        />
+      </div>
+      <!-- 22 稿「编辑数据区块」面板（会话级 ui.sectionEditOpen，机制同 ViewOptionsMenu；
+           档案侧栏工具行铅笔同开此面板（host = archive 时归那边渲染） -->
+      <SectionEditPanel
+        v-if="ui.sectionEditOpen && ui.sectionEditHost === 'right'"
+        :anchor="sectionAnchor"
+        :trigger="sectionBtnRef ?? null"
+        @close="ui.sectionEditOpen = false"
       />
-    </div>
-    <!-- 22 稿「编辑数据区块」面板（会话级 ui.sectionEditOpen，机制同 ViewOptionsMenu；
-         档案侧栏工具行铅笔同开此面板（host = archive 时归那边渲染） -->
-    <SectionEditPanel
-      v-if="ui.sectionEditOpen && ui.sectionEditHost === 'right'"
-      :anchor="sectionAnchor"
-      :trigger="sectionBtnRef ?? null"
-      @close="ui.sectionEditOpen = false"
-    />
+    </template>
   </aside>
 </template>
 

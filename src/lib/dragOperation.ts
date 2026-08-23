@@ -39,6 +39,7 @@
 //      重定向到卡片根元素，名称区 @dblclick.stop 收不到；capture 后移到 startDrag（拖拽全程仍有效）。
 import { reactive } from "vue";
 import { useContentStore, type PlacementView } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
 import { isDisplaySorted } from "./sortPlacements";
@@ -589,6 +590,9 @@ export function gridPointerDown(e: PointerEvent, onBlank: (e: PointerEvent) => v
   // 其 @blur 提交逻辑随之触发；重命名 input 自身 pointerdown 已 stop 冒泡不会到此）
   const ae = document.activeElement;
   if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement) ae.blur();
+  // 选择模式（6.2 一轮，PRD 03_数据链接 04：拖拽禁用）——卡片按下不启动手势（同回收站守卫口径：
+  // 交框选会吞 click 合成）；框选同为选择操作本模式无意义。单击加入备选走 click 链不受影响
+  if (usePickerStore().active) return;
   const card = t.closest(".asset-card, .list-row");
   if (card) {
     // 回收站视口（6.1 二轮，2026-07-29）：卡片只读不可拖拽——按下不启动任何手势直接放行：
@@ -610,6 +614,7 @@ export function gridPointerDown(e: PointerEvent, onBlank: (e: PointerEvent) => v
 
 // 文件夹拖拽起点（FolderCard / 文件树 TreeItem；树展开按钮上不启动）
 export function beginFolderDrag(e: PointerEvent, folderId: string): void {
+  if (usePickerStore().active) return; // 选择模式（6.2）：拖拽禁用（树 item 直调本函数，双保险）
   const t = e.target as HTMLElement;
   if (t.closest(".expand")) return;
   begin(e, "folder", folderId);

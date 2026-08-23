@@ -1,5 +1,6 @@
 // 04 稿 · 档案卡片右键菜单 spec（自 menuSpecs.ts 拆出，规范第 3 条行数控制）：宽 320 + 搜索框。
 import { useContentStore } from "../../stores/content";
+import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
 import type { CtxEntry } from "../contextMenus";
@@ -24,6 +25,35 @@ import {
 // 「更改封面图」稿漏画二级箭头，按 10 稿补（二级两项，宽 152，占位）；
 // 稿未画的二级（链接位置/资源库/导出/复制数据）宽度沿用 03 同项口径。
 export function archiveCardSpec(archive: { id: string; name: string }, rename?: () => void): CtxEntry[] {
+  // 选择模式（6.2 一轮，PRD 03_数据链接 04）：右键仅留查看类操作，编辑类不出现
+  if (usePickerStore().active) {
+    return [
+      {
+        label: "打开档案",
+        icon: "archive",
+        action: () => {
+          useTabsStore().openView(`folder:${archive.id}`);
+        },
+      },
+      {
+        label: "新标签页打开",
+        icon: "open-in-new-tab",
+        action: () => {
+          useTabsStore().openInNewTab(`folder:${archive.id}`);
+        },
+      },
+      "divider",
+      {
+        label: "复制数据",
+        icon: "copy-data",
+        submenuWidth: 180,
+        submenu: [
+          { label: "复制链接", action: () => void copyFolderLink(archive.id) },
+          { label: "复制名称", action: () => void copyName(archive.name) },
+        ],
+      },
+    ];
+  }
   const content = useContentStore();
   const selection = useSelectionStore();
   const parentId = findParentId(content.folders, archive.id) ?? null;

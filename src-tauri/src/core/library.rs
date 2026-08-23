@@ -13,6 +13,7 @@ use crate::core::json_io::{read_json, write_json, DataError};
 use crate::core::migrate;
 use crate::core::models::*;
 use crate::core::paths;
+use crate::core::relations;
 use crate::core::space::{self, Space};
 
 pub const BACKUP_DIR: &str = "backup";
@@ -211,6 +212,23 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   let archives_fixed = fix_archives(&mut archives, &folders);
   if archives_fixed {
     log::info!("打开自检修复 archives.json（剔除失效档案记录）");
+  }
+  // 关系自检（6.2 选择模式一轮，PRD 03_数据链接 06）：空间级 relations.json——剔除 from/to
+  // 端点指向本库已失效目标的关系（跨库端点无法校验，保留）。空间级文件不在库备份清单，
+  // 剔除项均为失效引用，有改动直接原子写回（不随下方库文件备份门禁段）
+  {
+    let lib_name = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    match relations::load_relations(space_root) {
+      Ok(mut rels) => {
+        if relations::prune_relations(&mut rels, &lib_name, &folders, &assets) {
+          match relations::save_relations(space_root, &rels) {
+            Ok(()) => log::info!("打开自检修复 relations.json（剔除本库失效端点的关系）"),
+            Err(e) => log::error!("关系自检落盘失败（数据文件保持原样）：{e}"),
+          }
+        }
+      }
+      Err(e) => log::error!("关系自检读取失败（跳过）：{e}"),
+    }
   }
   let folders_changed = removed > 0 || blocks_fixed;
   if folders_changed || archives_fixed {

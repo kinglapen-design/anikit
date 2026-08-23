@@ -11,11 +11,13 @@
 // 入口 = 名称双击 / 右键菜单（selection.namingFolderCardId，与 FolderCard 同机制）。
 import { computed, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import AppIcon from "./AppIcon.vue";
 import { dragView } from "../lib/dragOperation";
 import { getIcon } from "../lib/icons";
 import { renameFolder } from "../lib/placementOps";
 import { useInlineRename } from "../lib/useInlineRename";
 import { useContentStore, type FolderNode } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 
 const props = withDefaults(defineProps<{ folder: FolderNode; selected?: boolean; dimmed?: boolean; cut?: boolean }>(), {
@@ -28,6 +30,10 @@ const emit = defineEmits<{ select: [e: MouseEvent] }>();
 
 const content = useContentStore();
 const selection = useSelectionStore();
+const picker = usePickerStore();
+
+// 选择模式（6.2 一轮）：已选档案卡压暗 + 大勾（同 AssetCard 口径，PRD 03_数据链接 04 四重标识之四）
+const picked = computed(() => picker.active && picker.isPicked("archive", props.folder.id));
 
 // 背景纸张 SVG（04_archive_card）：currentColor 填充，颜色由 .paper 的 color 档控制
 const paperSvg1 = getIcon("archive-paper-01");
@@ -82,7 +88,7 @@ watch(
 <template>
   <div
     class="archive-card"
-    :class="{ selected, dimmed, cut, renaming }"
+    :class="{ selected, dimmed, cut, renaming, picked }"
     :data-folder-id="folder.id"
     :data-drag-name="folder.name"
     @click="emit('select', $event)"
@@ -120,6 +126,10 @@ watch(
     </div>
     <!-- 素材拖拽并入覆盖：盖住整卡的方形覆盖（同 FolderCard drop-cover 口径） -->
     <span v-if="dropInto" class="drop-cover" aria-hidden="true" />
+    <!-- 选择模式已选大勾（6.2 一轮）：绿圆白勾居中于封面区；不随压暗（在 card-body 外） -->
+    <span v-if="picked" class="pick-check" aria-hidden="true">
+      <AppIcon name="check" :size="22" />
+    </span>
   </div>
 </template>
 
@@ -283,5 +293,26 @@ watch(
 /* 剪切中整卡半透明（3.4，--opacity-cut 档，同 FolderCard） */
 .archive-card.cut {
   opacity: var(--opacity-cut);
+}
+/* 选择模式已选（6.2 一轮）：卡片本体压暗 30% 档（大勾在其外不压） */
+.archive-card.picked .card-body {
+  opacity: 0.3;
+}
+/* 已选大勾（同 AssetCard 口径）：成功色圆底 44 + check 22，居中于封面区（flex 220/298 上段） */
+.pick-check {
+  position: absolute;
+  left: 50%;
+  top: calc(50% * (220 / 298));
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--success);
+  color: var(--text-highlight);
+  pointer-events: none;
 }
 </style>

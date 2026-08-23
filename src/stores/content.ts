@@ -9,6 +9,7 @@ import { useSelectionStore } from "./selection";
 import { useToastStore } from "./toast";
 import { useUiStore } from "./ui";
 import type { RecentAssetView, RecycleEntryView } from "./quickViews";
+import type { Relation } from "../lib/relationOps";
 
 // 与后端 commands/import.rs 输出一一对应（camelCase，07_接口文档）
 export interface PlacementView {
@@ -274,6 +275,9 @@ export const useContentStore = defineStore("content", {
     recycleEntries: [] as RecycleEntryView[],
     // 档案详细数据（2026-08-15 档案子系统一轮）：folderId → ArchiveData，refresh 一并拉取装配
     archives: {} as Record<string, ArchiveData>,
+    // 关系清单（6.2 选择模式一轮，空间级 relations.json）：refresh 一并拉取（undo 链同径对齐），
+    // 显示侧按当前库过滤（lib/relationOps.relationsForTarget）
+    relations: [] as Relation[],
     // 详情数据版本号（6.1）：属性 / 描述 / 封面设置等详情编辑成功后 bump，
     // DetailPanel / ArchiveSidePanel watch 重拉 get_asset_detail / get_archive_data
     //（selectedAssetKey 不变时 watch 不触发，编辑落盘后的刷新信号）
@@ -598,7 +602,7 @@ export const useContentStore = defineStore("content", {
       this.folders = markRaw(tree.nodes);
       this.blocks = markRaw(tree.blocks);
       // 最近使用 / 回收站 / 档案数据一并拉（6.1 二轮 / 3.2 一轮）：保持简单——操作后 refresh 即全量对齐
-      await Promise.all([this.refreshRecent(), this.refreshRecycle(), this.refreshArchives()]);
+      await Promise.all([this.refreshRecent(), this.refreshRecycle(), this.refreshArchives(), this.refreshRelations()]);
       // 选择态剔除已不存在的 key（三域就位后统一 prune——回收站 key 存活以 recycleEntries 为准）
       useSelectionStore().prune();
     },
@@ -634,6 +638,14 @@ export const useContentStore = defineStore("content", {
     // DetailPanel / ArchiveSidePanel watch detailRev 重拉当前详情（选中未变时 watch 不触发）
     bumpDetailRev(): void {
       this.detailRev++;
+    },
+    // 关系清单（6.2 选择模式一轮）：空间级 relations.json 全量拉取；同 refreshArchives 静默降级口径
+    async refreshRelations(): Promise<void> {
+      try {
+        this.relations = await invoke<Relation[]>("list_relations");
+      } catch (e) {
+        console.warn("关系清单刷新失败（静默降级）：", e);
+      }
     },
     async refreshFolders(): Promise<void> {
       const tree = await invoke<FolderTreeView>("list_folder_tree");

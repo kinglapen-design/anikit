@@ -19,6 +19,7 @@
 //! - scan：重复文件扫描（只读，按存量 hash 分组）
 //! - search：分词搜索（只读，3.6 一轮：空格分词 AND / 子串包含 / 链接 URL decode / 路径链）
 //! - custom_data：自定义数据（6.1：文件与档案的属性 / 描述编辑、属性池聚合与全局删除）
+//! - relations：关系（6.2 选择模式一轮：文件与档案间的关系建立 / 编辑 / 删除，空间级 relations.json）
 //! - color：颜色提取（6.1 颜色解析：缩略图主色存 metadata.colors，详情颜色 bar 数据源；存量懒回填）
 //! - font：字体元数据与样张渲染（5.6，ttf-parser / fontdue 纯 Rust）+ 系统级安装卸载（用户级注册表）
 //! - text：文本资产读写（5.6，txt/md；读 UTF-8 优先 GBK 回退，写恒 UTF-8，2MB 上限）
@@ -41,6 +42,7 @@ pub mod psb;
 pub mod purge;
 pub mod recent;
 pub mod recycle;
+pub mod relations;
 pub mod resolve;
 pub mod scan;
 pub mod search;

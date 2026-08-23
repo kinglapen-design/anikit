@@ -13,6 +13,7 @@ import SectionPinned from "./sections/SectionPinned.vue";
 import SectionCustom from "./sections/SectionCustom.vue";
 import SectionInfo from "./sections/SectionInfo.vue";
 import SectionLinks from "./sections/SectionLinks.vue";
+import SectionRelations from "./sections/SectionRelations.vue";
 import SectionEmpty from "./sections/SectionEmpty.vue";
 import { detailSectionTitle, type DetailTarget } from "../lib/detailSections";
 import { dragView } from "../lib/dragOperation";
@@ -21,13 +22,13 @@ import { useUiStore } from "../stores/ui";
 const props = withDefaults(defineProps<{ target: DetailTarget; notes?: boolean }>(), { notes: false });
 const ui = useUiStore();
 
-// 区块 id → 组件（副本 / 关系 / 音频 / 提示词一轮空态共用 SectionEmpty）
+// 区块 id → 组件（副本 / 音频 / 提示词空态共用 SectionEmpty；关系 6.2 一轮点亮 SectionRelations）
 const SECTION_COMPS: Record<string, Component> = {
   custom: SectionCustom,
   info: SectionInfo,
   copies: SectionEmpty,
   links: SectionLinks,
-  relations: SectionEmpty,
+  relations: SectionRelations,
   audio: SectionEmpty,
   prompt: SectionEmpty,
 };

@@ -19,5 +19,6 @@ pub mod migrate;
 pub mod models;
 pub mod notes;
 pub mod paths;
+pub mod relations;
 pub mod space;
 pub mod undo;

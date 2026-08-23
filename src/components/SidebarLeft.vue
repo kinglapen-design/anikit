@@ -18,11 +18,13 @@ import { hamburgerSpec, librarySwitchSpec } from "../lib/menuSpecs/libraryHambur
 import { loadLibraries, currentLibrary, currentSpace, type LibraryInfo, type SpaceInfo } from "../lib/libraryOps";
 import { invoke } from "@tauri-apps/api/core";
 import { isEditableTarget } from "../lib/useGlobalKeys";
+import { usePickerStore } from "../stores/picker";
 import { useUiStore } from "../stores/ui";
 import { useSideThumb } from "../lib/useSideThumb";
 import { sidebarShowWidths } from "../lib/useSidebarAnim";
 
 const ui = useUiStore();
+const picker = usePickerStore();
 const bodyRef = ref<HTMLElement>();
 const thumb = useSideThumb(bodyRef);
 // 滚动条悬停显隐（2026-08-10 用户定：悬停面板 / 拖拽 thumb 时才出现）
@@ -33,6 +35,7 @@ const addBtnRef = ref<HTMLElement>();
 // ① 本按钮 click ② 网格空白处右键（menuSpecs.openGridContextMenu）③ Ctrl+N（下方全局监听）；
 // 菜单固定弹在按钮下方（07 稿 320 宽无搜索框），spec 在 lib/menuSpecs（导入动作走 menuOps.pickImportPaths）
 function toggleAddMenu(): void {
+  if (usePickerStore().active) return; // 选择模式（6.2）：新增是编辑类，禁用
   if (menuState.entries) {
     closeContextMenu();
     return;
@@ -108,10 +111,11 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
     <header class="bar-title" data-tauri-drag-region>
       <IconButton name="menu" title="菜单" @click="toggleHamburger" />
       <div class="btn-group">
+        <!-- 选择模式（6.2）：新增 / 区块管理是编辑类，禁用（视觉随 IconButton disabled 态） -->
         <span ref="addBtnRef" class="add-btn-wrap">
-          <IconButton name="add-large" :title="{ text: '新增', keys: 'Ctrl+N' }" @click="toggleAddMenu" />
+          <IconButton name="add-large" :title="{ text: '新增', keys: 'Ctrl+N' }" :disabled="picker.active" @click="toggleAddMenu" />
         </span>
-        <IconButton name="section-manage" title="区块管理" @click="ui.blockManageOpen = true" />
+        <IconButton name="section-manage" title="区块管理" :disabled="picker.active" @click="ui.blockManageOpen = true" />
         <IconButton name="collapse-sidebar" title="收起侧边栏" @click="ui.leftCollapsed = true" />
       </div>
     </header>

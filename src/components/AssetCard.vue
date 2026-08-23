@@ -35,6 +35,7 @@ import { renamePlacement } from "../lib/placementOps";
 import { acquireAutoplay, releaseAutoplay, type AutoplayPool } from "../lib/autoplayGate";
 import { useInlineRename } from "../lib/useInlineRename";
 import { useUiStore } from "../stores/ui";
+import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useContentStore } from "../stores/content";
 import type { PlacementView } from "../stores/content";
@@ -85,7 +86,10 @@ const hoverActive = computed(() => hovered.value && !dragView.active);
 // Enter 确认 / Esc 取消 / 失焦确认；滚出虚拟滚动销毁 = 取消（AssetGrid 先清 renamingKey，
 // blur 晚于清理到达时按 key 失配判取消）；确认调 rename_placement 后 content.refresh()（在 ops 内）
 const selection = useSelectionStore();
+const picker = usePickerStore();
 const cardKey = `${props.asset.assetId}|${props.asset.folderId}`;
+// 选择模式（6.2 一轮，PRD 03_数据链接 04 四重标识之四）：已选卡片压暗（30% 档）+ 品牌绿大勾
+const picked = computed(() => picker.active && picker.isPicked("asset", props.asset.assetId));
 const { draft: renameDraft, bindInput, commit: commitRename, onEsc: cancelRename } = useInlineRename({
   active: () => selection.renamingKey === cardKey,
   initial: () => props.asset.name,
@@ -192,7 +196,7 @@ const meta = computed(() => {
   <div
     ref="rootEl"
     class="asset-card"
-    :class="{ selected, renaming, 'fade-source': faded === 'source', 'fade-cut': faded === 'cut' }"
+    :class="{ selected, renaming, picked, 'fade-source': faded === 'source', 'fade-cut': faded === 'cut' }"
     :style="{
       left: `${box.left}px`,
       top: `${box.top}px`,
@@ -255,6 +259,10 @@ const meta = computed(() => {
     </div>
     <!-- 原始文件徽章（figma 14：15×15 品牌色图标，卡片右下各 8） -->
     <AppIcon v-if="asset.origin" name="original-file-badge" :size="15" class="origin-badge" />
+    <!-- 选择模式已选大勾（6.2 一轮）：绿圆白勾居中于缩略图区；不随压暗（在根层级、opacity 作用域外） -->
+    <span v-if="picked" class="pick-check" :style="{ top: `${imgH / 2}px` }">
+      <AppIcon name="check" :size="22" />
+    </span>
   </div>
 </template>
 
@@ -409,6 +417,28 @@ const meta = computed(() => {
   position: absolute;
   right: var(--space-8);
   bottom: var(--space-8);
+  pointer-events: none;
+}
+/* 选择模式已选（6.2 一轮）：缩略图区 / 简介区 / 徽章压暗 30% 档（速查表 §5），大勾不压 */
+.asset-card.picked .thumb,
+.asset-card.picked .texts,
+.asset-card.picked .origin-badge {
+  opacity: 0.3;
+}
+/* 已选大勾（2026-08-23 用户贴稿：绿圆白勾居中于缩略图区）：成功色圆底 44 + check 22 白 */
+.pick-check {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--success);
+  color: var(--text-highlight);
   pointer-events: none;
 }
 </style>

@@ -15,6 +15,7 @@ pub mod operations;
 pub mod preview;
 pub mod recent;
 pub mod recycle;
+pub mod relations;
 pub mod scan;
 pub mod search;
 pub mod sequence;
