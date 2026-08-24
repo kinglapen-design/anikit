@@ -463,7 +463,9 @@ async def main():
     finally:
         proc.terminate()
         if dev_proc:
-            dev_proc.terminate()
+            # Windows shell=True：terminate 只杀 cmd 壳，node/vite 子进程存活占 5373——taskkill 整树
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(dev_proc.pid)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     print()
     if fails:
