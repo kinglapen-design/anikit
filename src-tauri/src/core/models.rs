@@ -460,7 +460,8 @@ pub struct RecentItem {
 // 关系可跨库（库 A 的角色配库 B 的音频）故存空间根而非库内；ref 携库名 + 显示名快照
 //（跨库目标未打开 / 目标失效时兜底显示）。单一写点 = services/relations.rs。
 
-/// 关系 kind：free = 自由关系（6.2 一轮）；voice = 音色（6.2 链接音频轮，PRD 03 数据链接 02）
+/// 关系 kind：free = 自由关系（6.2 一轮）；voice = 音色（6.2 链接音频轮，PRD 03 数据链接 02；
+/// 恒单向 使用者→音频，from 不得为音频 asset——2026-08-24 用户定方案 1，防"音频的音频"递归）
 pub const RELATION_KIND_FREE: &str = "free";
 pub const RELATION_KIND_VOICE: &str = "voice";
 

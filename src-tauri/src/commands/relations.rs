@@ -37,7 +37,8 @@ pub struct NewRelationInput {
 /// 批量建立关系（选择模式确认，2026-08-24 用户定多选累积：一次为发起方添加多条）：
 /// from = 发起文件/档案（kind = asset/archive，archive 的 id = folderId）；
 /// 任一校验失败全不写（批量原子）；返回完整记录组（前端就地插入免重拉）。
-/// kind 缺省 free（自由关系）；voice = 链接音频（6.2 三轮：无称谓，to 必须音频 asset）。
+/// kind 缺省 free（自由关系）；voice = 链接音频（6.2 三轮：无称谓，to 必须音频 asset，
+/// from 不得音频——恒单向 使用者→音频，2026-08-24 用户定方案 1）。
 /// 撤销标签：free 1 条 = "添加关系"，多条 = "添加 N 条关系"；voice = "链接音频" / "链接 N 条音频"
 #[tauri::command]
 pub async fn add_relations(

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// 区块 · 音频（6.2 三轮链接音频点亮，figma 03_数据 item §5 音频 item；PRD 03_数据链接 02 音色）：
-// 数据 = relation kind=voice（from = 使用方文件/档案，to = 音频 asset），双向显示——
-// 当前目标是使用方（role from）→ 音频 item（绿圆播放钮 24 + 名称 + 波形 49×18：稿"点击播放
-// 可以播放音频，切换音频 item 播放暂停"——组件内单例元素同时只播一条，点它条即切换）；
-// 当前目标是音频（role to）→ 使用方文件卡（图标 + 名称）。
+// 区块 · 音频 / 使用者（6.2 三轮链接音频点亮，figma 03_数据 item §5 音频 item；PRD 03_数据链接 02 音色）：
+// 数据 = relation kind=voice，**恒单向：from = 使用方文件/档案 → to = 音频 asset**（2026-08-24
+// 用户定方案 1：音频不能作使用方——"音频的音频"递归起来没完没了；要挂音频跳到使用方上加，后端同校验）。
+// 当前目标是使用方（role from）→ 标题「音频」+ 音频 item（绿圆播放钮 24 + 名称 + 波形 49×18：
+// 稿"点击播放可以播放音频，切换音频 item 播放暂停"——组件内单例元素同时只播一条，点它条即切换）+ 添加钮；
+// 当前目标是音频（role to）→ 标题「使用者」+ 使用方文件卡（图标 + 名称），**无添加钮**（只展示 + 跳转）。
 // 点名称 / 文件卡 = 跳转定位（relationOps.jumpToRelationTarget，同关系 item 口径）；
 // × = 删除（hover 滑入，DetailNotes .del 同款）；添加钮 = 选择模式文件模板**过滤非音频**（02 稿）。
 import { computed, onBeforeUnmount, ref } from "vue";
@@ -12,6 +13,7 @@ import SectionHeader from "../SectionHeader.vue";
 import AppIcon from "../AppIcon.vue";
 import IconButton from "../IconButton.vue";
 import { getMediaSource } from "../../lib/mediaOps";
+import { isAudioExt } from "../../lib/formatBadge";
 import {
   jumpToRelationTarget,
   relationsForTarget,
@@ -37,6 +39,9 @@ const targetRef = computed<{ kind: "asset" | "archive"; id: string }>(() =>
     ? { kind: "asset", id: props.target.placement.assetId }
     : { kind: "archive", id: props.target.node.id },
 );
+
+// 当前目标 = 音频文件 → 区块变「使用者」：只展示使用方 + 跳转，无添加钮（方案 1 单向语义）
+const isAudioTarget = computed(() => props.target.kind === "file" && isAudioExt(props.target.placement.ext));
 
 // 音色关系清单（relations 在 content store，undo / 增删后自动响应；kind = voice 过滤）
 const views = computed(() =>
@@ -128,9 +133,9 @@ async function remove(v: RelationView): Promise<void> {
 
 <template>
   <section class="section-audio detail-block">
-    <SectionHeader :title="title" grip v-model:open="open">
+    <SectionHeader :title="isAudioTarget ? '使用者' : title" grip v-model:open="open">
       <template #tail>
-        <IconButton name="add-small" small title="链接音频" @click="addVoice" />
+        <IconButton v-if="!isAudioTarget" name="add-small" small title="链接音频" @click="addVoice" />
       </template>
     </SectionHeader>
     <!-- 空数据不渲染容器（空区块展开/折叠零高度变化，2026-08-15 走查口径） -->

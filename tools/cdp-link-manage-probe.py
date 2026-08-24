@@ -10,7 +10,7 @@
 # L6 仅显示已选项过滤
 # L7 Esc 取消零写入
 # V1 链接音频：详情音频区块添加钮 → 选择模式过滤非音频（fla 卡与档案区不渲染）→ 确认 add_relations kind=voice
-# V2 音频区块双向显示（使用方 = 音频 item 播放钮；音频侧 = 使用方文件卡）
+# V2 音频区块双向显示（使用方 = 音频 item 播放钮；音频侧 = 使用方文件卡 + 标题「使用者」无添加钮，方案 1 单向）
 # V3 × 删除链接音频
 # 截图留档 tools/style-preview/：link-manage / voice-picker。
 import asyncio
@@ -442,6 +442,8 @@ async def main():
             v1c = await ev("""(() => ({
               calls: window.__calls.add_relations,
               picking: document.querySelector('.window').classList.contains('picking'),
+              secTitle: document.querySelector('.detail-panel .section-audio .section-header .title')?.textContent ?? null,
+              addBtn: !!document.querySelector('.detail-panel .section-audio .section-header .icon-btn'),
               audioItems: [...document.querySelectorAll('.detail-panel .section-audio .audio-item')].map((it) => ({
                 play: !!it.querySelector('.play-btn'), name: it.querySelector('.name')?.textContent, wave: !!it.querySelector('.wave') })),
             }))()""")
@@ -455,18 +457,26 @@ async def main():
             check("V1 详情音频区块 = 音频 item（播放钮 + 名称 主题曲 + 波形位）",
                   bool(v1c and len(v1c["audioItems"]) == 1 and v1c["audioItems"][0]["play"] and v1c["audioItems"][0]["name"] == "主题曲"),
                   json.dumps(v1c["audioItems"] if v1c else None, ensure_ascii=False))
+            check("V1 使用方视角：标题「音频」+ 有添加钮",
+                  bool(v1c and v1c["secTitle"] == "音频" and v1c["addBtn"]),
+                  json.dumps({"title": v1c and v1c["secTitle"], "addBtn": v1c and v1c["addBtn"]}, ensure_ascii=False))
 
-            # —— V2 双向显示：选主题曲卡 → 音频区块 = 使用方文件卡 ——
+            # —— V2 双向显示：选主题曲卡 → 音频区块 = 使用方文件卡；音频视角标题「使用者」+ 无添加钮（方案 1）——
             await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('主题曲'))")
             await asyncio.sleep(0.8)
             v2 = await ev("""(() => ({
               chip: document.querySelector('.detail-panel .section-audio .file-chip .name')?.textContent ?? null,
               audioItem: !!document.querySelector('.detail-panel .section-audio .audio-item'),
               relItems: document.querySelectorAll('.detail-panel .section-relations .rel-item').length,
+              secTitle: document.querySelector('.detail-panel .section-audio .section-header .title')?.textContent ?? null,
+              addBtn: !!document.querySelector('.detail-panel .section-audio .section-header .icon-btn'),
             }))()""")
             check("V2 双向显示：主题曲详情 = 使用方文件卡 雪牧（ref 名快照，非音频 item）",
                   bool(v2 and v2["chip"] == "雪牧" and not v2["audioItem"]),
                   json.dumps(v2, ensure_ascii=False))
+            check("V2 音频视角：标题「使用者」+ 无添加钮（方案 1 单向，防『音频的音频』递归）",
+                  bool(v2 and v2["secTitle"] == "使用者" and not v2["addBtn"]),
+                  json.dumps({"title": v2 and v2["secTitle"], "addBtn": v2 and v2["addBtn"]}, ensure_ascii=False))
             check("W1 voice 不泄漏关系区块（voice 存在时关系区块 0 item）",
                   bool(v2 and v2["relItems"] == 0), json.dumps(v2, ensure_ascii=False))
 
@@ -544,19 +554,23 @@ async def main():
             # W5 徽章悬停出链接列表浮层 + 点行跳转
             # 坑：CDP Input.dispatchMouseEvent mouseMoved（含 buttons 0）不触发 Vue mouseenter（W4 子菜单
             # hover 属侥幸）——悬停类交互改 JS 直接 dispatch MouseEvent('mouseenter') 到目标元素
-            w5a = await ev("""(() => {
-              const b = [...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('雪牧-改'))?.querySelector('.card-badges');
-              if (!b) return { badge: false };
-              b.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-              return { badge: true };
-            })()""")
-            await asyncio.sleep(0.7)
-            w5 = await ev("""(() => {
-              const pop = document.querySelector('.link-pop');
-              if (!pop) return null;
-              return { rows: [...pop.querySelectorAll('.row')].map((r) => ({
-                path: r.querySelector('.path')?.textContent, name: r.querySelector('.name')?.textContent })) };
-            })()""")
+            w5 = None
+            # flake 治理（2026-08-24 三连 FAIL 后实证）：固定 sleep 在 CDP 负载漂移下等不到浮层渲染——
+            # 改轮询（重复 dispatch + 查 .link-pop，openLinkList 幂等无害，上限 8×0.4s）
+            for _ in range(8):
+                await ev("""(() => {
+                  const b = [...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('雪牧-改'))?.querySelector('.card-badges');
+                  if (b) b.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+                  return !!b;
+                })()""")
+                await asyncio.sleep(0.4)
+                w5 = await ev("""(() => {
+                  const pop = document.querySelector('.link-pop');
+                  if (!pop) return null;
+                  return { rows: [...pop.querySelectorAll('.row')].map((r) => ({
+                    path: r.querySelector('.path')?.textContent, name: r.querySelector('.name')?.textContent })) };
+                })()""")
+                if w5: break
             check("W5 徽章悬停出浮层：全部位置 2 行（目录/…/雪天.档案 + 项目/工程，顺序无关）",
                   bool(w5 and len(w5["rows"]) == 2
                        and any("雪天.档案" in (r["path"] or "") and "雪牧-改.fla" in (r["name"] or "") for r in w5["rows"])

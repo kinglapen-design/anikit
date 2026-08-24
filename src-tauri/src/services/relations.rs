@@ -47,7 +47,8 @@ fn same_ref(a: (&str, &str), b: (&str, &str)) -> bool {
 /// 一次为同一发起方加父亲/儿子/母亲/专武多条）。**任一失败全不写**（批量原子：校验全前置，一次落盘）。
 /// kind = free：label（to 对 from 的称谓）trim 必填、to ≠ from；
 /// kind = voice（6.2 链接音频轮，PRD 03 数据链接 02 音色）：无称谓——label 不校验、规整后空存空串，
-/// to 必须是音频 asset（mp3/wav/wma），from 可是 asset / archive（档案也能链音频，区块体系共用）。
+/// to 必须是音频 asset（mp3/wav/wma），from 可是 asset / archive（档案也能链音频，区块体系共用），
+/// 但 from 不得为音频 asset（2026-08-24 用户定方案 1：voice 恒单向 使用者→音频，防"音频的音频"递归）。
 /// 返回写入的完整记录组（含生成 id 与显示名快照，前端就地插入免重拉）
 pub fn add_batch(
   space_root: &Path,
@@ -64,6 +65,14 @@ pub fn add_batch(
   }
   let lib_name = lib.root.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
   let from_ref = resolve_ref(lib, &lib_name, from.0, from.1)?;
+  // 方案 1（2026-08-24 用户定）：voice 恒单向 使用者→音频——from 是音频 asset 即"音频的音频"递归，拒
+  if kind == RELATION_KIND_VOICE && from.0 == "asset" {
+    if let Some(meta) = lib.index.assets.get(from.1) {
+      if AUDIO_EXTS.contains(&meta.ext.to_lowercase().as_str()) {
+        return Err(format!("「{}」是音频文件，不能作为使用方", meta.name));
+      }
+    }
+  }
   let mut rels: Vec<Relation> = Vec::with_capacity(items.len());
   for (to_kind, to_id, label, reverse) in items {
     let label = if kind == RELATION_KIND_VOICE {
@@ -273,6 +282,8 @@ mod tests {
     assert_eq!(rels[0].label, "", "voice 无称谓存空串");
     assert_eq!(rels[0].reverse_label, None, "voice reverse 恒 None");
     assert_eq!(rels[0].from.kind, "archive");
+    // from = 音频 asset 报错（方案 1 单向：音频不能作使用方，防"音频的音频"递归）
+    assert!(add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-V"), RELATION_KIND_VOICE, vec![("asset", "AN-W", "", None)]).is_err(), "音频作 from");
     // to = 非音频 asset / 档案 / 自身 全报错；整批不落盘
     assert!(add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), RELATION_KIND_VOICE, vec![("asset", "AN-A", "", None)]).is_err(), "自身");
     assert!(add_batch(&h.lib.space_root, &h.lib, ("archive", "F-B"), RELATION_KIND_VOICE, vec![("archive", "F-B", "", None)]).is_err(), "档案作 to");
