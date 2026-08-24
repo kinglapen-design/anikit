@@ -20,7 +20,7 @@ import {
   pasteDuplicate,
   recycleSelectedAssetIds,
 } from "./placementOps";
-import { cloneFolderFlow, deleteFoldersFlow, findParentId, moveAssetsFlow, moveFoldersFlow } from "./menuOps";
+import { cloneFolderFlow, currentLinkTarget, deleteFoldersFlow, enterLinkPicker, findParentId, moveAssetsFlow, moveFoldersFlow } from "./menuOps";
 
 // 输入框豁免判定：文本输入态（input / textarea / contenteditable）不拦截全局快捷键
 export function isEditableTarget(t: HTMLElement): boolean {
@@ -103,7 +103,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   function onOperationKeys(e: KeyboardEvent): void {
     if (isEditableTarget(e.target as HTMLElement)) return;
     if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
-    if (document.querySelector(".app-menu, .zoom-mask, .link-mask, .del-mask, .pick-mask")) return;
+    if (document.querySelector(".app-menu, .zoom-mask, .modal-mask, .del-mask, .pick-mask")) return;
     // 选择模式（6.2）：编辑类快捷键全禁（单击已不入选择域，本守卫双保险）；查看类（Shift+Enter
     // 默认应用打开）因选择域恒空天然无效，不单独放行
     if (picker.active) return;
@@ -199,6 +199,25 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       } else if (selection.count > 0 && !content.isRecycleView) {
         e.preventDefault();
         moveAssetsFlow();
+      }
+      return;
+    }
+    // Ctrl+J = 文件链接管理（17 稿，6.2 三轮）：单选素材打开链接管理弹窗（回收站只读不开；
+    // 档案链接管理随档案多位置立项，文件夹域不响应）
+    if (k === "j") {
+      if (selection.selectedFolders.size === 0 && selection.count === 1 && !content.isRecycleView) {
+        e.preventDefault();
+        const p = content.visiblePlacements.find((v) => `${v.assetId}|${v.folderId}` === selection.first);
+        if (p) selection.linkManageDraft = { assetId: p.assetId, name: p.name };
+      }
+      return;
+    }
+    // Ctrl+L = 添加文件/档案链接（6.2 三轮）：进选择模式文件模板，落点 = 当前文件夹视口
+    if (k === "l") {
+      const t = currentLinkTarget();
+      if (t && !content.isRecycleView) {
+        e.preventDefault();
+        enterLinkPicker(t);
       }
       return;
     }

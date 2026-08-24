@@ -5,7 +5,8 @@
 // 模板一 relation（关系模式）：**多选累积**（2026-08-24 用户定"选一个 = 追加一条而非切换"）——
 // 选中文件 item + 关系输入框×2（左 = 选中文件对发起文件、右 = 反向可空）+ 发起文件 item +
 // 红删为一组，整组竖排复制（用户定"把整个 item 复制就行了"）；未选 = 占位组（双框禁用）。
-// 模板二 file（文件选择模式，框架就位、用途入口随后续轮）：名称 + 链接状态徽章 + 红删。
+// 模板二 file（文件选择模式，2026-08-24 接入用途）：名称输入框（默认源名可改，确认按行写入）+
+// 链接状态徽章 + 红删；用途 = link 添加文件链接（落点文件夹）/ voice 链接音频（过滤非音频）。
 import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppButton from "./AppButton.vue";
@@ -94,14 +95,23 @@ function targetThumb(t: PickerTarget): string | null {
             </div>
           </div>
         </template>
-        <!-- 模板二：文件选择模式（名称 + 链接状态徽章 + 红删，多选累积） -->
-        <div v-for="p in picker.template === 'file' ? picker.picked : []" :key="`${p.target.kind}|${p.target.id}`" class="file-row">
-          <div class="file-item">
-            <span class="name">{{ p.target.name }}</span>
-            <AppIcon v-if="p.target.origin === false" name="linked-file-badge" :size="13" class="link-badge" />
+        <!-- 模板二：文件选择模式（多选累积；行 = 名称输入框（默认源名可改，确认按行写入）+ 链接状态徽章 + 红删；
+             2026-08-24 用户定"稿的名称框本身就是输入框"；用途 = link 添加文件链接 / voice 链接音频） -->
+        <template v-if="picker.template === 'file'">
+          <!-- 空态占位行（稿无空态，实现定：占位文案标签色 + 输入框禁用，同 relation 空态口径） -->
+          <div v-if="picker.picked.length === 0" class="file-row">
+            <div class="file-item">
+              <input class="name-field placeholder" placeholder="点击卡片选择" disabled />
+            </div>
           </div>
-          <IconButton name="delete-red" deleteRed title="移出备选" @click="picker.togglePick(p.target)" />
-        </div>
+          <div v-for="p in picker.picked" :key="`${p.target.kind}|${p.target.id}`" class="file-row">
+            <div class="file-item">
+              <input v-model="p.name" class="name-field" :placeholder="p.target.name" maxlength="100" />
+              <AppIcon v-if="p.target.origin === false" name="linked-file-badge" :size="13" class="link-badge" />
+            </div>
+            <IconButton name="delete-red" deleteRed title="移出备选" @click="picker.togglePick(p.target)" />
+          </div>
+        </template>
       </div>
       <ScrollThumb :body="bodyRef" />
     </div>
@@ -291,6 +301,24 @@ function targetThumb(t: PickerTarget): string | null {
   border-radius: var(--radius-6);
   background: var(--c4);
   box-shadow: inset 0 0 0 1px var(--line-hover);
+}
+/* 名称输入框（2026-08-24 用户定"稿的名称框本身就是输入框"：默认源名可改，确认按行写入） */
+.name-field {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  color: var(--text-normal);
+}
+.name-field::placeholder {
+  color: var(--text-faint);
+}
+.name-field:disabled {
+  cursor: default;
 }
 .link-badge {
   flex: none;

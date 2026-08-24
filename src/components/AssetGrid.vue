@@ -15,6 +15,7 @@ import InboxDiskSection from "./InboxDiskSection.vue";
 import SectionHeader from "./SectionHeader.vue";
 import { useGridLayout, type GridSection } from "../lib/useGridLayout";
 import { groupPlacements } from "../lib/grouping";
+import { isAudioExt } from "../lib/formatBadge";
 import { useSpaceZoom } from "../lib/useSpaceZoom";
 import { useMarquee, makeBoxHitTest, headerBlankClear } from "../lib/useMarquee";
 import {
@@ -66,7 +67,8 @@ function onCardClick(p: PlacementView, e: MouseEvent): void {
   if (dragView.suppressClick) return; // 有效拖拽结束后紧随的 click 不当选择（拖拽引擎置位）
   if (picker.active) {
     if (content.isRecycleView) return; // 回收站文件不可加入备选（已删除资产不该建关系）
-    picker.togglePick({ kind: "asset", id: p.assetId, name: p.name, ext: p.ext, thumb: p.thumbPath, origin: p.origin });
+    // folderId 随三元组定位源 Placement（link 用途确认时 link_placements 入参）
+    picker.togglePick({ kind: "asset", id: p.assetId, name: p.name, ext: p.ext, thumb: p.thumbPath, folderId: p.folderId, origin: p.origin });
     return;
   }
   if (e.ctrlKey || e.metaKey || e.shiftKey) {
@@ -93,9 +95,11 @@ const groupSections = computed(() => {
   const defs = content.folderGroupsFor(props.viewKey);
   return defs ? groupPlacements(props.items, defs) : null;
 });
-const displayItems = computed(() =>
-  groupSections.value ? groupSections.value.flatMap((s) => s.items) : props.items,
-);
+const displayItems = computed(() => {
+  const items = groupSections.value ? groupSections.value.flatMap((s) => s.items) : props.items;
+  // 选择模式链接音频（6.2 三轮）：过滤非音频（02 稿"过滤掉非音频文件，去掉噪音，加快选择"）
+  return picker.filterAudio ? items.filter((p) => isAudioExt(p.ext)) : items;
+});
 const gridSections = computed<GridSection[] | null>(() => {
   const secs = groupSections.value;
   const fid = gridFolderId.value;
@@ -317,9 +321,10 @@ onBeforeUnmount(() => {
              搜索态（3.6）隐藏文件夹区块（命中只出素材与档案，2026-08-19 用户定） -->
         <FolderStrip v-if="!searching && content.stripFoldersFor(viewKey).length > 0" :view-key="viewKey" />
         <!-- 档案区（3.2 一轮，PRD 02-03 三区：文件夹 / 档案 / 文件）：无档案整块不渲染（同文件夹区口径）；
-             搜索态 = 命中档案列表（nodes 数据源切换，快速访问视图后端不返回档案命中——档案区仅文件夹视图出） -->
+             搜索态 = 命中档案列表（nodes 数据源切换，快速访问视图后端不返回档案命中——档案区仅文件夹视图出）；
+             选择模式链接音频（6.2 三轮）档案区不渲染（voice 目标只能是音频 asset，过滤噪音） -->
         <ArchiveStrip
-          v-if="searching ? searchArchives.length > 0 : content.stripArchivesFor(viewKey).length > 0"
+          v-if="!picker.filterAudio && (searching ? searchArchives.length > 0 : content.stripArchivesFor(viewKey).length > 0)"
           :view-key="viewKey"
           :nodes="searching ? searchArchives : undefined"
         />

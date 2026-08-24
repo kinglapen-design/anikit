@@ -4,8 +4,8 @@
 // 2026-08-08 用户定；搜索业务 3.6 接入，本轮搜索结果无数据源不渲染）。
 // 左侧位置留给档案看板的收起按钮（档案业务接入时启用）；
 // 侧栏收展不再经本栏（左栏展开按钮在左栏汉堡位、右栏展开/收起到右栏顶行，2026-08-08 收展定案）。
-// 右 = 卡片尺寸滑块 + 按钮组（链接文件管理 / 添加文件链接 / 缩略图 / AI 工具集 / 分组管理
-// disabled 待 1.3 点亮 + 查看方式）+（右栏收起时：展开详情面板 + 窗口置顶 + 窗口控制——注释 6）。
+// 右 = 卡片尺寸滑块 + 按钮组（添加文件链接（6.2 三轮点亮）/ 缩略图 / AI 工具集（占位）/ 分组管理
+// / 查看方式）+（右栏收起时：展开详情面板 + 窗口置顶 + 窗口控制——注释 6）。
 // 递归显示开关已移出（2026-08-08 用户定：归内容区区块标题行，随该区块改造时接入）。
 import { ref, computed } from "vue";
 import IconButton from "./IconButton.vue";
@@ -13,11 +13,14 @@ import SideSlider from "./SideSlider.vue";
 import ViewOptionsMenu from "./ViewOptionsMenu.vue";
 import { useUiStore } from "../stores/ui";
 import { useContentStore, type FolderNode } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { useTabsStore } from "../stores/tabs";
 import { findFolderNode } from "../lib/detailSections";
+import { currentLinkTarget, enterLinkPicker } from "../lib/menuOps";
 
 const ui = useUiStore();
 const content = useContentStore();
+const picker = usePickerStore();
 const tabs = useTabsStore();
 
 // 本标签页视口（ContentArea 传入；档案切换钮按本视口档案读写，2026-08-15 迁入视口）；
@@ -61,6 +64,13 @@ function openGroupManage(): void {
   ui.groupDialogFolder = props.viewKey.slice(7);
   ui.groupManageOpen = true;
 }
+
+// 添加文件链接（6.2 三轮点亮）：落点 = 本标签页文件夹视口（快速访问全部/回收站/收件箱不可添加禁用）；
+// 选择模式进行中禁用（白名单只放行查看类，2026-08-24 收窄口径）
+const linkTarget = computed(() => (picker.active ? null : currentLinkTarget(props.viewKey)));
+function addFileLink(): void {
+  if (linkTarget.value) enterLinkPicker(linkTarget.value);
+}
 </script>
 
 <template>
@@ -95,11 +105,12 @@ function openGroupManage(): void {
     </div>
     <div class="right-group">
       <SideSlider v-model="ui.targetRowHeight" :min="80" :max="ui.gridWidth" />
-      <!-- 按钮组（figma 41：链接文件管理 / 添加文件链接 / 缩略图 / AI 工具集 / 分组管理 / 查看方式）；
-           前四个业务未接一律 disabled（1.3 占位点亮机制统一接入）；分组管理 3.5 二轮点亮（仅文件夹/档案视口） -->
+      <!-- 按钮组（figma 41：添加文件链接 / 缩略图 / AI 工具集 / 分组管理 / 查看方式）；
+           「链接文件管理」钮删除（2026-08-24 用户定：链接管理针对单个文件，入口 = 右键菜单 + 详情面板）；
+           添加文件链接 6.2 三轮点亮 = 进选择模式，落点当前文件夹视口（无视口禁用）；
+           缩略图 / AI 业务未接占位；分组管理 3.5 二轮点亮（仅文件夹/档案视口） -->
       <div class="btn-group">
-        <IconButton name="linked-file-manage" title="链接文件管理" disabled />
-        <IconButton name="add-file-link" title="添加文件链接" disabled />
+        <IconButton name="add-file-link" title="添加文件链接" :disabled="!linkTarget" @click="addFileLink" />
         <IconButton name="thumbnail" title="缩略图" disabled />
         <IconButton name="ai-tools" title="AI 工具集" disabled />
         <IconButton

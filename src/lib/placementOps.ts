@@ -127,6 +127,39 @@ export async function renamePlacement(ref: PlacementRef, newName: string): Promi
   }, () => `重命名为 ${newName.trim()}`);
 }
 
+// —— 链接管理（17 稿，6.2 三轮）：一个资产的位置增 / 删 / 改一次提交（单撤销步）——
+// 详情链接区块 × 移除 = removes 单条即时提交；LinkManageDialog 确认 = 草稿 diff 三组
+export interface SyncLinkAdd {
+  folderId: string;
+  name: string;
+}
+// 删除 / 改名定位带可选 name：同文件夹同 origin 的重复链接（2026-08-13 放开）精确到行，
+// 缺省 = 三元组第一条（Placement 无自身 ID）
+export interface SyncLinkRemove {
+  folderId: string;
+  origin: boolean;
+  name?: string | null;
+}
+export interface SyncLinkRename {
+  folderId: string;
+  origin: boolean;
+  oldName?: string | null;
+  newName: string;
+}
+export async function syncAssetLinks(
+  assetId: string,
+  adds: SyncLinkAdd[],
+  removes: SyncLinkRemove[],
+  renames: SyncLinkRename[],
+): Promise<boolean> {
+  const ok = await runOp(async () => {
+    await invoke("sync_asset_links", { assetId, adds, removes, renames });
+  }, () => "完成链接管理");
+  // 详情面板链接区块数据源 = get_asset_detail 反查，随 placements 变化重拉（bumpDetailRev 信号）
+  if (ok) useContentStore().bumpDetailRev();
+  return ok;
+}
+
 // 重命名文件夹（2026-07-29 复验三轮，第 10 条命令）：FolderCard 名称双击 / 新建后命名保存共用；
 // 非法名后端拒绝走失败 toast，调用方不保留输入态
 export async function renameFolder(folderId: string, newName: string): Promise<boolean> {

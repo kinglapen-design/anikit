@@ -10,12 +10,10 @@ import { computed, nextTick, ref } from "vue";
 import SectionHeader from "../SectionHeader.vue";
 import AppIcon from "../AppIcon.vue";
 import IconButton from "../IconButton.vue";
-import { relationsForTarget, removeRelation, updateRelation, type PickerTarget, type RelationView } from "../../lib/relationOps";
+import { jumpToRelationTarget, relationsForTarget, removeRelation, updateRelation, type PickerTarget, type RelationView } from "../../lib/relationOps";
 import { currentLibrary } from "../../lib/libraryOps";
 import { useContentStore } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
-import { useSelectionStore } from "../../stores/selection";
-import { useTabsStore } from "../../stores/tabs";
 import { useToastStore } from "../../stores/toast";
 import type { DetailTarget } from "../../lib/detailSections";
 
@@ -91,31 +89,9 @@ async function commitEdit(v: RelationView): Promise<void> {
 }
 
 // —— 跳转定位（2026-08-24 用户定：点文件卡 = 跳过去——"光显示在那是没用的"）——
-// 文件 = 定位其 Placement 所在文件夹视口（origin 优先）+ 选中卡片；档案 = 打开档案视口 + 选中档案卡；
-// 均经 tabs.openView 入面包屑历史（后退即返回，5.1 既有设施）；目标失效 / 跨库给提示
+// 实现 = relationOps.jumpToRelationTarget（音频区块共用；openView 入面包屑历史，后退即返回）
 function jumpTo(v: RelationView): void {
-  const other = v.other;
-  if (other.lib !== (currentLibrary.name ?? "")) {
-    toast.notify({ message: `「${other.name}」在资源库 ${other.lib} 中（跨库跳转随后续轮）`, icon: "fail" });
-    return;
-  }
-  const tabs = useTabsStore();
-  const selection = useSelectionStore();
-  if (other.kind === "archive") {
-    tabs.openView(`folder:${other.id}`);
-    // openView 触发 sidebarSelected watch 清选择——nextTick 让过再入域（FolderTree 同口径）
-    void nextTick(() => selection.clickFolder(other.id));
-    return;
-  }
-  const p =
-    content.placements.find((pl) => pl.assetId === other.id && pl.origin) ??
-    content.placements.find((pl) => pl.assetId === other.id);
-  if (!p) {
-    toast.notify({ message: "目标文件不在本库任何文件夹中（可能在回收站）", icon: "fail" });
-    return;
-  }
-  tabs.openView(p.folderId === "root" ? "quick:uncategorized" : `folder:${p.folderId}`);
-  void nextTick(() => selection.selectOnly(`${p.assetId}|${p.folderId}`));
+  jumpToRelationTarget(v.other);
 }
 
 // 删除（×，hover 滑入）

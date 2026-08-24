@@ -12,9 +12,9 @@ import {
   cutFoldersFlow,
   deleteFolderFlow,
   dissolveArchiveFlow,
+  enterLinkPicker,
   findParentId,
   moveFoldersFlow,
-  pickFolderForLink,
   topLevelBlockId,
 } from "../menuOps";
 
@@ -105,8 +105,9 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
     },
     "divider",
     { label: "移动档案", icon: "move-file", shortcut: "Ctrl+Y", action: () => moveFoldersFlow(archive.id) },
+    // 档案链接管理：随档案多位置立项（2026-08-24 用户定——角色档案整体链接到其他项目，数据模型级改动）
     { label: "档案链接管理", icon: "linked-file-manage", shortcut: "Ctrl+J", disabled: true },
-    { label: "添加文件/档案链接", icon: "add-file-link", shortcut: "Ctrl+L", action: () => pickFolderForLink() },
+    { label: "添加文件/档案链接", icon: "add-file-link", shortcut: "Ctrl+L", action: () => enterLinkPicker({ id: archive.id, name: archive.name }) },
     { label: "打开档案链接所在位置", icon: "reveal-archive-link", submenuWidth: 320, submenu: [{ label: "（无）", disabled: true }] },
     "divider",
     { label: "剪切档案", icon: "cut-file", shortcut: "Ctrl+X", action: () => cutFoldersFlow(archive.id) },

@@ -9,7 +9,7 @@ use crate::core::paths;
 use crate::services::import as ops;
 use crate::services::import::ROOT_FOLDER_ID;
 
-use super::{check_folder, find_placement, finish, rewrite_orders, PlacementRef};
+use super::{check_folder, find_placement, find_placement_named, finish, rewrite_orders, PlacementRef, SyncLinkAdd, SyncLinkRemove, SyncLinkRename};
 
 /// 移动 Placement 到目标文件夹，返回实际移动条数：
 /// - 目标文件夹已有同资源 Placement 则去重跳过（resolve.rs use_existing 语义）；
@@ -177,6 +177,83 @@ pub fn link_placements(
     log::info!("关联 {linked} 个项目至 {target_folder}");
   }
   Ok(linked)
+}
+
+/// 删除行定位（sync_asset_links）：三元组 + 可选 name（闭包形式会在跨可变借用时撞 E0502，独立 fn）
+fn locate_remove(lib: &Library, asset_id: &str, r: &SyncLinkRemove) -> Option<usize> {
+  let item = PlacementRef { asset_id: asset_id.into(), folder_id: r.folder_id.clone(), origin: r.origin };
+  find_placement_named(lib, &item, r.name.as_deref())
+}
+
+/// 链接管理（17 稿，6.2 三轮）：一个资产的位置增 / 删 / 改三组一次提交（命令层单撤销步）。
+/// - renames 先行（rename_placement 语义：链接仅改显示名、origin 同步磁盘 originName 段，
+///   返回磁盘改名清单供命令层登记 DiskOp）；oldName 给了 = 同文件夹重复链接精确到行；
+/// - removes = 直接删 Placement 记录（用户定：管理面板取消勾选不进回收站）；
+///   name 给了精确到行，缺省三元组第一条；陈旧项跳过；
+/// - adds = 链接 Placement（origin = false，add_placement 前插 + 同文件夹唯一化），
+///   name trim 空 = 资产名；
+/// - 护栏：执行后该资产位置数不能归 0（防孤儿资产——全部位置删除请走「丢到回收站」）；
+/// - 三组全空 = 无操作直接返回（命令层不进撤销栈）。
+pub fn sync_asset_links(
+  lib: &mut Library,
+  asset_id: &str,
+  adds: &[SyncLinkAdd],
+  removes: &[SyncLinkRemove],
+  renames: &[SyncLinkRename],
+) -> Result<Vec<(std::path::PathBuf, std::path::PathBuf)>, String> {
+  if adds.is_empty() && removes.is_empty() && renames.is_empty() {
+    return Ok(Vec::new());
+  }
+  let source_name =
+    lib.index.assets.get(asset_id).map(|m| m.name.clone()).ok_or_else(|| "文件不存在，可能已被删除".to_string())?;
+  // 校验全前置：落点文件夹存在 + 改名定位有效（删除定位 = 陈旧跳过不报错）
+  for a in adds {
+    check_folder(lib, &a.folder_id)?;
+  }
+  for r in renames {
+    let item = PlacementRef { asset_id: asset_id.into(), folder_id: r.folder_id.clone(), origin: r.origin };
+    if find_placement_named(lib, &item, r.old_name.as_deref()).is_none() {
+      return Err("项目不存在，可能已被移动或删除".to_string());
+    }
+  }
+  // 护栏：位置归 0 拦截（现有数 − 有效删除数 + 新增数）
+  let current = lib.folders.items.iter().filter(|p| p.asset == asset_id).count();
+  let valid_removes = removes.iter().filter(|r| locate_remove(lib, asset_id, r).is_some()).count();
+  if current + adds.len() <= valid_removes {
+    return Err("不能移除该文件的全部位置（需要删除文件请用「丢到回收站」）".to_string());
+  }
+  let mut disk_renames = Vec::new();
+  for r in renames {
+    let item = PlacementRef { asset_id: asset_id.into(), folder_id: r.folder_id.clone(), origin: r.origin };
+    let pos = find_placement_named(lib, &item, r.old_name.as_deref())
+      .ok_or_else(|| "项目不存在，可能已被移动或删除".to_string())?;
+    if r.origin {
+      // origin 每资产恒一条（无重复歧义）：rename_placement 全语义（校验 + 磁盘 originName 段）
+      let mut pairs = super::duplicate::rename_placement(lib, asset_id, &r.folder_id, r.origin, &r.new_name)?;
+      disk_renames.append(&mut pairs);
+    } else {
+      // 链接行：仅改显示名（撞名不拦截——显示名放开），按精确定位改防重复链接命中错行
+      let trimmed = r.new_name.trim();
+      library::validate_library_name(trimmed).map_err(|e| e.to_string())?;
+      lib.folders.items[pos].name = trimmed.to_string();
+    }
+  }
+  for r in removes {
+    if let Some(pos) = locate_remove(lib, asset_id, r) {
+      lib.folders.items.remove(pos);
+    }
+  }
+  let mut anchor = HashMap::new();
+  for a in adds {
+    let name = {
+      let t = a.name.trim();
+      if t.is_empty() { source_name.clone() } else { t.to_string() }
+    };
+    ops::add_placement(lib, asset_id.into(), a.folder_id.clone(), name, false, &mut anchor);
+  }
+  finish(lib)?;
+  log::info!("链接管理 {asset_id}：增 {} / 删 {} / 改 {}", adds.len(), valid_removes, renames.len());
+  Ok(disk_renames)
 }
 
 #[cfg(test)]
@@ -403,5 +480,79 @@ mod tests {
     crate::core::library::reload(&mut h.lib).unwrap();
     assert!(placement(&h.lib, "AN-A", "root").is_some(), "undo 后 Placement 回到 root");
     assert!(placement(&h.lib, "AN-A", "F01").is_none());
+  }
+
+  /// 链接管理（6.2 三轮）：增 / 删 / 改一次提交——链接改名仅显示名、链接删除直接删记录、
+  /// 新增唯一化前插；陈旧删除项跳过；三组全空 = 无操作
+  #[test]
+  fn sync_asset_links_add_remove_rename() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01");
+    add_folder(&mut h.lib, "F02");
+    add_folder(&mut h.lib, "F03");
+    add_asset(&mut h, "AN-A", "图.png", "F01", None);
+    // 已有一条链接在 F02
+    ops::add_placement(&mut h.lib, "AN-A".into(), "F02".into(), "图-链.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+
+    let renames = vec![SyncLinkRename { folder_id: "F02".into(), origin: false, old_name: Some("图-链.png".into()), new_name: " 改名.png ".into() }];
+    let removes = vec![
+      SyncLinkRemove { folder_id: "F01".into(), origin: true, name: Some("图.png".into()) },
+      SyncLinkRemove { folder_id: "F99".into(), origin: false, name: None }, // 陈旧跳过
+    ];
+    let adds = vec![
+      SyncLinkAdd { folder_id: "F03".into(), name: "  ".into() }, // 空名 = 资产名
+      SyncLinkAdd { folder_id: "F03".into(), name: "图.png".into() }, // 撞名唯一化
+    ];
+    let disk = sync_asset_links(&mut h.lib, "AN-A", &adds, &removes, &renames).unwrap();
+    assert!(disk.is_empty(), "链接改名无磁盘段");
+    assert!(placement(&h.lib, "AN-A", "F01").is_none(), "origin 记录被移除（位置级模型允许）");
+    let f03: Vec<&str> = h.lib.folders.items.iter().filter(|p| p.folder == "F03").map(|p| p.name.as_str()).collect();
+    assert_eq!(f03, vec!["图", "图.png"], "空名回退资产名（meta 词干）+ 不撞名原样（前插批内保序）");
+    assert_eq!(placement(&h.lib, "AN-A", "F02").unwrap().name, "改名.png", "链接改名 trim 生效");
+
+    // 三组全空 = 无操作
+    assert!(sync_asset_links(&mut h.lib, "AN-A", &[], &[], &[]).unwrap().is_empty());
+    // 位置归 0 护栏：F02/F03 共 3 条全删报错
+    let all = vec![
+      SyncLinkRemove { folder_id: "F02".into(), origin: false, name: None },
+      SyncLinkRemove { folder_id: "F03".into(), origin: false, name: Some("图".into()) },
+      SyncLinkRemove { folder_id: "F03".into(), origin: false, name: Some("图.png".into()) },
+    ];
+    let e = sync_asset_links(&mut h.lib, "AN-A", &[], &all, &[]).unwrap_err();
+    assert!(e.contains("全部位置"), "{e}");
+    // 误删不存在资产
+    assert!(sync_asset_links(&mut h.lib, "AN-X", &[], &[], &[]).is_ok(), "空组先返回不校验资产");
+    assert!(sync_asset_links(&mut h.lib, "AN-X", &[SyncLinkAdd { folder_id: "F03".into(), name: "x".into() }], &[], &[]).is_err());
+    // 落点文件夹不存在 / 改名定位不存在 = 校验前置报错
+    assert!(sync_asset_links(&mut h.lib, "AN-A", &[SyncLinkAdd { folder_id: "F-X".into(), name: "x".into() }], &[], &[]).is_err());
+    let bad_rename = vec![SyncLinkRename { folder_id: "F-X".into(), origin: false, old_name: None, new_name: "x.png".into() }];
+    assert!(sync_asset_links(&mut h.lib, "AN-A", &[], &[], &bad_rename).is_err());
+    // oldName 不匹配 = 定位失败
+    let bad_rename2 = vec![SyncLinkRename { folder_id: "F02".into(), origin: false, old_name: Some("不存在.png".into()), new_name: "x.png".into() }];
+    assert!(sync_asset_links(&mut h.lib, "AN-A", &[], &[], &bad_rename2).is_err());
+  }
+
+  /// 重复链接精确到行（2026-08-13 重复放开后弹窗平铺多行）：同文件夹同 origin 两条链接，
+  /// 删 / 改带 name 只命中目标行
+  #[test]
+  fn sync_asset_links_duplicate_rows_precise() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01");
+    add_asset(&mut h, "AN-A", "图.png", "F01", None);
+    // 同文件夹再来两条重复链接
+    ops::add_placement(&mut h.lib, "AN-A".into(), "F01".into(), "图-链A.png".into(), false, &mut HashMap::new());
+    ops::add_placement(&mut h.lib, "AN-A".into(), "F01".into(), "图-链B.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+
+    // 删 链A（不动 链B）；改 链B → 新名（不动 origin 图.png）
+    let removes = vec![SyncLinkRemove { folder_id: "F01".into(), origin: false, name: Some("图-链A.png".into()) }];
+    let renames = vec![SyncLinkRename { folder_id: "F01".into(), origin: false, old_name: Some("图-链B.png".into()), new_name: "新名.png".into() }];
+    sync_asset_links(&mut h.lib, "AN-A", &[], &removes, &renames).unwrap();
+    let names: Vec<&str> = h.lib.folders.items.iter().filter(|p| p.folder == "F01").map(|p| p.name.as_str()).collect();
+    assert!(names.contains(&"图.png"), "origin 行不动");
+    assert!(!names.contains(&"图-链A.png"), "链A 被精确移除");
+    assert!(names.contains(&"新名.png"), "链B 精确改名");
+    assert!(!names.contains(&"图-链B.png"));
   }
 }

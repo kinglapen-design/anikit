@@ -108,7 +108,16 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     { label: "在资源管理器打开", icon: "open-in-explorer", action: () => revealWithWarning(assetId) },
     "divider",
     { label: "移动文件", icon: "move-file", shortcut: "Ctrl+Y", action: () => moveAssetsFlow() },
-    { label: "文件链接管理", icon: "file-link-manage", shortcut: "Ctrl+J", disabled: true },
+    // 文件链接管理（17 稿，6.2 三轮点亮）：单选才可（面板 = 管理一个文件的链接分布）
+    {
+      label: "文件链接管理",
+      icon: "file-link-manage",
+      shortcut: "Ctrl+J",
+      disabled: selection.count !== 1,
+      action: () => {
+        selection.linkManageDraft = { assetId, name: p.name };
+      },
+    },
     {
       label: "打开文件链接所在位置",
       icon: "reveal-file-link",

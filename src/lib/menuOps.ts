@@ -1,8 +1,9 @@
 // 右键菜单流程层（6.3，2026-07-29 用户设计）：菜单项的动作流程——系统对话框、
-// 确认弹窗（selection.confirmPrompt / folderPickPrompt）、剪贴板写入、新建文件夹共享入口。
+// 确认弹窗（selection.confirmPrompt）、剪贴板写入、新建文件夹共享入口。
 // 命令调用一律走 placementOps（UI 唯一入口），本层只做流程编排。
 import { open } from "@tauri-apps/plugin-dialog";
 import { useContentStore, DEFAULT_BLOCK_ID, type FolderNode, type PlacementView } from "../stores/content";
+import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
@@ -338,15 +339,22 @@ export function deleteFoldersFlow(folderIds: string[]): void {
   };
 }
 
-// —— 添加至文件夹（关联或副本）：文件夹选择弹窗 → 关联弹窗（LinkDialog）——
-export function pickFolderForLink(): void {
-  const selection = useSelectionStore();
-  const items = selection.selectedRefs();
-  if (items.length === 0) return;
-  // 发起不设限（2026-08-13 用户定案：不替用户做整理决定，候车区资产拦截废除）
-  selection.folderPickPrompt = {
-    onPick: (folderId) => {
-      selection.linkDraft = { items, targetFolder: folderId };
-    },
-  };
+// —— 添加文件/档案链接（6.2 三轮，PRD 03_数据链接 04）：主窗口选择模式文件模板——
+// 文件夹/档案右键 Ctrl+L = 落点为被右键项；工具栏 / 新增菜单钮 = 落点当前文件夹视口
+//（旧流程 = 文件夹选择弹窗 + LinkDialog 关联弹窗，2026-08-24 用户定随选择模式废弃）
+export function enterLinkPicker(folder: { id: string; name: string }): void {
+  usePickerStore().enterLink(folder);
+}
+
+/** 指定视口的链接落点（缺省 = 全局当前视口 sidebarSelected；工具栏传本标签页 viewKey）：
+ *  folder 视口 = 该文件夹/档案；未分类 = root；其余视口（全部 / 回收站 / 收件箱 / 最近使用）
+ *  = null（不可添加，菜单 / 工具栏钮禁用） */
+export function currentLinkTarget(viewKey?: string): { id: string; name: string } | null {
+  const content = useContentStore();
+  const vk = viewKey ?? content.sidebarSelected;
+  if (vk.startsWith("folder:")) {
+    return { id: vk.slice(7), name: content.viewTitle(vk) };
+  }
+  if (vk === "quick:uncategorized") return { id: "root", name: content.viewTitle("quick:uncategorized") };
+  return null;
 }

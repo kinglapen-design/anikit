@@ -15,7 +15,7 @@ use crate::core::models::Folder;
 use crate::core::paths;
 use crate::core::undo::{DiskOp, UndoManager};
 use crate::services::import::ROOT_FOLDER_ID;
-use crate::services::operations::{self, ApplyBlockReport, BatchRenameFailed, BlockInput, PlacementRef, RenameItem};
+use crate::services::operations::{self, ApplyBlockReport, BatchRenameFailed, BlockInput, PlacementRef, RenameItem, SyncLinkAdd, SyncLinkRemove, SyncLinkRename};
 
 /// metadata.json 路径（由 ID 推导，PRD 01-2.3）
 fn meta_path(lib: &Library, asset_id: &str) -> PathBuf {
@@ -273,6 +273,43 @@ pub async fn link_placements(
     Ok(linked) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(linked)
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
+/// 链接管理（17 稿，6.2 三轮）：一个资产的位置增 / 删 / 改一次提交（单撤销步，标签「链接管理」）；
+/// origin 改名含磁盘段（登记 DiskOp::Rename + metadata.json 快照）；返回实际变更条数
+#[tauri::command]
+pub async fn sync_asset_links(
+  state: State<'_, AppState>,
+  asset_id: String,
+  adds: Vec<SyncLinkAdd>,
+  removes: Vec<SyncLinkRemove>,
+  renames: Vec<SyncLinkRename>,
+) -> Result<usize, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin("链接管理");
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  if renames.iter().any(|r| r.origin) {
+    undo.record_file(&meta_path(lib, &asset_id)).map_err(|e| e.to_string())?;
+  }
+  match operations::sync_asset_links(lib, &asset_id, &adds, &removes, &renames) {
+    Ok(disk_renames) => {
+      if adds.is_empty() && removes.is_empty() && renames.is_empty() {
+        undo.cancel();
+        return Ok(0);
+      }
+      for (old_path, new_path) in &disk_renames {
+        undo.record_disk_op(
+          DiskOp::Rename { from: new_path.clone(), to: old_path.clone() },
+          DiskOp::Rename { from: old_path.clone(), to: new_path.clone() },
+        );
+      }
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(adds.len() + removes.len() + renames.len())
     }
     Err(e) => Err(fail(lib, &mut undo, e)),
   }

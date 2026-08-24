@@ -18,7 +18,15 @@ pub use delete::delete_placements;
 pub use document::create_document;
 pub use duplicate::{duplicate_placements, rename_placement, rename_placements, BatchRenameFailed};
 pub use folder::{create_folder, move_folders, rename_folder, reorder_folders, set_folder_color, set_folder_groups, set_folder_icon};
-pub use placement::{link_placements, move_placements, reorder_placements};
+pub use placement::{link_placements, move_placements, reorder_placements, sync_asset_links};
+
+/// 按三元组 + 可选显示名定位 Placement（name 给了 = 精确到行：同文件夹同 origin 的重复链接
+/// 可区分；缺省 = 三元组第一条，sync_asset_links 删除 / 改名定位用）
+pub(crate) fn find_placement_named(lib: &Library, item: &PlacementRef, name: Option<&str>) -> Option<usize> {
+  lib.folders.items.iter().position(|p| {
+    p.asset == item.asset_id && p.folder == item.folder_id && p.origin == item.origin && name.map_or(true, |n| p.name == n)
+  })
+}
 pub use sequence::{delete_frames, dissolve_sequence, renumber_frames, DeleteFramesOutcome, DissolveOutcome, RenumberOutcome};
 
 use serde::{Deserialize, Serialize};
@@ -44,6 +52,36 @@ pub struct RenameItem {
   pub folder_id: String,
   #[serde(default)]
   pub origin: bool,
+  pub new_name: String,
+}
+
+/// 链接管理（17 稿，6.2 三轮）新增链接一条：目标文件夹 + 显示名（空 = 用资产名）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncLinkAdd {
+  pub folder_id: String,
+  pub name: String,
+}
+
+/// 链接管理删除一条：定位（folderId + origin；同文件夹同 origin 重复链接时 name 精确到行——
+/// Placement 无自身 ID，三元组只能命中第一条，2026-08-13 重复链接放开后弹窗平铺多行需要）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncLinkRemove {
+  pub folder_id: String,
+  #[serde(default)]
+  pub origin: bool,
+  pub name: Option<String>,
+}
+
+/// 链接管理改名一条：定位（folderId + origin，重复链接时 oldName 精确到行）+ 新显示名
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncLinkRename {
+  pub folder_id: String,
+  #[serde(default)]
+  pub origin: bool,
+  pub old_name: Option<String>,
   pub new_name: String,
 }
 

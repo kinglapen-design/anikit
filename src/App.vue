@@ -29,7 +29,7 @@ import SequenceDialog from "./components/SequenceDialog.vue";
 import FailedListDialog from "./components/FailedListDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
 import DupScanDialog from "./components/DupScanDialog.vue";
-import LinkDialog from "./components/LinkDialog.vue";
+import LinkManageDialog from "./components/LinkManageDialog.vue";
 import RecycleConfirmDialog from "./components/RecycleConfirmDialog.vue";
 import BlockManageDialog from "./components/BlockManageDialog.vue";
 import GroupManageDialog from "./components/GroupManageDialog.vue";
@@ -38,7 +38,6 @@ import PropsDialog from "./components/PropsDialog.vue";
 import DescEditDialog from "./components/DescEditDialog.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import AppConfirm from "./components/AppConfirm.vue";
-import FolderPickerDialog from "./components/FolderPickerDialog.vue";
 import MovePanel from "./components/MovePanel.vue";
 import BatchRenameDialog from "./components/BatchRenameDialog.vue";
 import ToastStack from "./components/ToastStack.vue";
@@ -304,8 +303,8 @@ async function togglePin(): Promise<void> {
     <DuplicateDialog v-if="content.importConflicts && content.importConflicts.length > 0" />
     <!-- 扫描重复文件（2.7 二轮，35 稿 + 合并前确认）：汉堡"查找" / 新增菜单触发 -->
     <DupScanDialog v-if="dupScanState.groups" />
-    <!-- 关联 / 副本弹窗（6.1 C5）：Ctrl+V(copy) / Ctrl+拖拽落文件夹 / 右键"粘贴"触发 -->
-    <LinkDialog v-if="selection.linkDraft" />
+    <!-- 链接管理弹窗（17 稿，6.2 三轮）：文件右键 Ctrl+J / 详情链接区块添加钮触发 -->
+    <LinkManageDialog v-if="selection.linkManageDraft" />
     <!-- 回收站彻底删除确认窗（6.1 二轮）：虚拟片段引用警示，不可恢复无撤销 -->
     <RecycleConfirmDialog v-if="selection.recyclePrompt" />
     <!-- 区块管理弹窗（2026-08-14 区块子系统，30 稿）：SidebarLeft section-manage 按钮触发 -->
@@ -335,8 +334,6 @@ async function togglePin(): Promise<void> {
     <ContextMenu />
     <!-- 通用确认弹窗（6.3：警示前置 / 删除文件夹 / 彻底删除二次确认） -->
     <AppConfirm v-if="selection.confirmPrompt" />
-    <!-- 文件夹选择弹窗（6.3"添加至文件夹"） -->
-    <FolderPickerDialog v-if="selection.folderPickPrompt" />
   </div>
 </template>
 

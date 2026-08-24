@@ -3,7 +3,7 @@
 import { useSelectionStore } from "../../stores/selection";
 import { useContentStore, DEFAULT_BLOCK_ID } from "../../stores/content";
 import type { CtxEntry } from "../contextMenus";
-import { createAndName, createArchiveAndName, pickFolderForLink, pickImportPaths } from "../menuOps";
+import { createAndName, createArchiveAndName, currentLinkTarget, enterLinkPicker, pickImportPaths } from "../menuOps";
 import { openBlock } from "../treeExpansion";
 import { createDocument, pasteClipboard, pasteDuplicate, type NewDocKind } from "../placementOps";
 import { openScan } from "../dupScanOps";
@@ -83,8 +83,18 @@ export function addButtonSpec(): CtxEntry[] {
     { label: "导入本地文件", icon: "import-file", action: () => void pickImportPaths("files") },
     { label: "导入本地文件夹", icon: "import-folder", action: () => void pickImportPaths("folder") },
     { label: "导入素材包", icon: "import-pack", disabled: true },
-    { label: "档案链接管理", icon: "linked-file-manage", shortcut: "Ctrl+J", disabled: true },
-    { label: "添加文件/档案链接", icon: "add-file-link", shortcut: "Ctrl+L", action: () => pickFolderForLink() },
+    // 添加文件/档案链接（6.2 三轮点亮）：进选择模式文件模板，落点 = 当前文件夹视口（无文件夹视口禁用）；
+    // 「档案链接管理」项删除（2026-08-24 用户定：链接管理针对单个文件，入口 = 右键菜单 + 详情面板）
+    {
+      label: "添加文件/档案链接",
+      icon: "add-file-link",
+      shortcut: "Ctrl+L",
+      disabled: currentLinkTarget() === null,
+      action: () => {
+        const t = currentLinkTarget();
+        if (t) enterLinkPicker(t);
+      },
+    },
     "divider",
     {
       label: "扫描重复文件",

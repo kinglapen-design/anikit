@@ -33,10 +33,11 @@ export interface InternalClipboard {
   folders?: string[];
 }
 
-// 关联弹窗草稿（C5）：触发源 Ctrl+V(copy) / Ctrl+拖拽落文件夹 / 右键菜单"粘贴"
-export interface LinkDraft {
-  items: PlacementRef[];
-  targetFolder: string; // 落点文件夹 ID（"root" 或 F 开头）
+// 链接管理弹窗草稿（17 稿，6.2 三轮）：文件右键「文件链接管理」Ctrl+J / 详情链接区块添加钮，
+// 非空 = 弹窗打开（宿主 App.vue LinkManageDialog）；档案链接管理随档案多位置立项（2026-08-24 用户定）
+export interface LinkManageDraft {
+  assetId: string;
+  name: string; // 显示名快照（弹窗标题栏副标 / 兜底显示）
 }
 
 // 回收站彻底删除两段式询问（6.1 二轮，2026-07-29）：delete_recycle / clear_recycle 干跑
@@ -84,7 +85,7 @@ export const useSelectionStore = defineStore("selection", {
     folderAnchor: null as string | null,
     // —— 6.1 阶段 C 操作态（会话级，均不进持久化）——
     clipboard: null as InternalClipboard | null,
-    linkDraft: null as LinkDraft | null, // 非空 = 关联弹窗打开（宿主 App.vue）
+    linkManageDraft: null as LinkManageDraft | null, // 非空 = 链接管理弹窗打开（宿主 App.vue，6.2 三轮）
     recyclePrompt: null as RecyclePrompt | null, // 非空 = 回收站彻底删除确认窗打开（宿主 App.vue，6.1 二轮）
     // 卡片就地重命名目标 key（C2；F2 / 右键菜单设置，单选才可；滚出视口 / Esc = 取消置 null）
     renamingKey: null as string | null,
@@ -98,8 +99,6 @@ export const useSelectionStore = defineStore("selection", {
     // 批量重命名草稿（3.4，37 稿批量重命名弹窗宿主 App.vue）：多选「重命名」/ Ctrl+R 触发，
     // 非空 = 弹窗打开；内容为打开时刻的选中 Placement 快照
     renameDraft: null as PlacementRef[] | null,
-    // 文件夹选择弹窗（6.3"添加至文件夹"：选定目标文件夹后回调，宿主 App.vue）
-    folderPickPrompt: null as { onPick: (folderId: string) => void } | null,
     // 文件夹卡片就地重命名目标 id（6.3 右键"重命名"与名称双击同入口，FolderCard 读）
     namingFolderCardId: null as string | null,
   }),

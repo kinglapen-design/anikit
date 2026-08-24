@@ -460,8 +460,9 @@ pub struct RecentItem {
 // 关系可跨库（库 A 的角色配库 B 的音频）故存空间根而非库内；ref 携库名 + 显示名快照
 //（跨库目标未打开 / 目标失效时兜底显示）。单一写点 = services/relations.rs。
 
-/// 关系 kind：free = 自由关系（6.2 一轮）；voice = 音色（6.2 链接音频轮预留，PRD 03 数据链接 02）
+/// 关系 kind：free = 自由关系（6.2 一轮）；voice = 音色（6.2 链接音频轮，PRD 03 数据链接 02）
 pub const RELATION_KIND_FREE: &str = "free";
+pub const RELATION_KIND_VOICE: &str = "voice";
 
 /// 生成关系 ID：`RL` + 时间戳（yyMMddHHmm）+ 5 位随机字符（同 new_asset_id 口径，ID 不承载语义）
 pub fn new_relation_id() -> String {

@@ -37,25 +37,34 @@ pub struct NewRelationInput {
 /// 批量建立关系（选择模式确认，2026-08-24 用户定多选累积：一次为发起方添加多条）：
 /// from = 发起文件/档案（kind = asset/archive，archive 的 id = folderId）；
 /// 任一校验失败全不写（批量原子）；返回完整记录组（前端就地插入免重拉）。
-/// 撤销标签：1 条 = "添加关系"，多条 = "添加 N 条关系"
+/// kind 缺省 free（自由关系）；voice = 链接音频（6.2 三轮：无称谓，to 必须音频 asset）。
+/// 撤销标签：free 1 条 = "添加关系"，多条 = "添加 N 条关系"；voice = "链接音频" / "链接 N 条音频"
 #[tauri::command]
 pub async fn add_relations(
   state: State<'_, AppState>,
   from_kind: String,
   from_id: String,
+  kind: Option<String>,
   items: Vec<NewRelationInput>,
 ) -> Result<Vec<Relation>, String> {
   let lib_guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = lib_guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
   let space_guard = state.space.lock().map_err(|e| e.to_string())?;
   let space = space_guard.as_ref().ok_or_else(|| "请先打开储存空间".to_string())?;
-  let label = if items.len() > 1 { format!("添加 {} 条关系", items.len()) } else { "添加关系".to_string() };
+  let kind = kind.as_deref().unwrap_or(crate::core::models::RELATION_KIND_FREE);
+  let label = if kind == crate::core::models::RELATION_KIND_VOICE {
+    if items.len() > 1 { format!("链接 {} 条音频", items.len()) } else { "链接音频".to_string() }
+  } else if items.len() > 1 {
+    format!("添加 {} 条关系", items.len())
+  } else {
+    "添加关系".to_string()
+  };
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin(&label);
   undo.record_file(&relations_file(&space.root)).map_err(|e| e.to_string())?;
   let items: Vec<(&str, &str, &str, Option<&str>)> =
     items.iter().map(|i| (i.to_kind.as_str(), i.to_id.as_str(), i.label.as_str(), i.reverse_label.as_deref())).collect();
-  match relations::add_batch(&space.root, lib, (&from_kind, &from_id), items) {
+  match relations::add_batch(&space.root, lib, (&from_kind, &from_id), kind, items) {
     Ok(rels) => {
       undo.commit().map_err(|e| e.to_string())?;
       log::info!("{label}：{} → {} 个目标", rels[0].from.name, rels.len());

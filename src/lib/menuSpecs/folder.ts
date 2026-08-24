@@ -15,10 +15,10 @@ import {
   cutFoldersFlow,
   deleteFolderFlow,
   cloneFolderFlow,
+  enterLinkPicker,
   findParentId,
   moveFoldersFlow,
   pickExportFolder,
-  pickFolderForLink,
   topLevelBlockId,
 } from "../menuOps";
 import { pasteFoldersInto } from "../placementOps";
@@ -101,7 +101,7 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
     },
     "divider",
     { label: "移动文件夹", icon: "move-file", shortcut: "Ctrl+Y", action: () => moveFoldersFlow(folder.id) },
-    { label: "添加文件/档案链接", icon: "add-file-link", shortcut: "Ctrl+L", action: () => pickFolderForLink() },
+    { label: "添加文件/档案链接", icon: "add-file-link", shortcut: "Ctrl+L", action: () => enterLinkPicker({ id: folder.id, name: folder.name }) },
     "divider",
     // 剪切文件夹（3.4 点亮）：触发项在多选域内 → 剪切整个选中集（cutFoldersFlow 分流）
     { label: "剪切文件夹", icon: "cut-file", shortcut: "Ctrl+X", action: () => cutFoldersFlow(folder.id) },

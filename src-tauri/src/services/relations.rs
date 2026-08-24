@@ -8,9 +8,10 @@ use std::path::Path;
 
 use crate::core::library::Library;
 use crate::core::models::{
-  new_relation_id, Relation, RelationRef, ARCHIVE_KIND, RELATION_KIND_FREE,
+  new_relation_id, Relation, RelationRef, ARCHIVE_KIND, RELATION_KIND_FREE, RELATION_KIND_VOICE,
 };
 use crate::core::relations::{load_relations, save_relations};
+use crate::services::media::AUDIO_EXTS;
 
 /// 端点校验 + 显示名快照：asset → 资产元数据名；archive → 档案文件夹名。
 /// 目标不存在给中文人话（规范第 6 条）
@@ -43,34 +44,50 @@ fn same_ref(a: (&str, &str), b: (&str, &str)) -> bool {
 }
 
 /// 批量建立关系（选择模式多选确认，2026-08-24 用户定：选一个 = 追加一条而非切换——
-/// 一次为同一发起方加父亲/儿子/母亲/专武多条）。label（to 对 from 的称谓）trim 必填、
-/// to ≠ from；**任一失败全不写**（批量原子：校验全前置，一次落盘）。
+/// 一次为同一发起方加父亲/儿子/母亲/专武多条）。**任一失败全不写**（批量原子：校验全前置，一次落盘）。
+/// kind = free：label（to 对 from 的称谓）trim 必填、to ≠ from；
+/// kind = voice（6.2 链接音频轮，PRD 03 数据链接 02 音色）：无称谓——label 不校验、规整后空存空串，
+/// to 必须是音频 asset（mp3/wav/wma），from 可是 asset / archive（档案也能链音频，区块体系共用）。
 /// 返回写入的完整记录组（含生成 id 与显示名快照，前端就地插入免重拉）
 pub fn add_batch(
   space_root: &Path,
   lib: &Library,
   from: (&str, &str),
+  kind: &str,
   items: Vec<(&str, &str, &str, Option<&str>)>, // (to_kind, to_id, label, reverse_label)
 ) -> Result<Vec<Relation>, String> {
   if items.is_empty() {
     return Err("请先选择文件".to_string());
   }
+  if kind != RELATION_KIND_FREE && kind != RELATION_KIND_VOICE {
+    return Err("未知的关系类型".to_string());
+  }
   let lib_name = lib.root.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
   let from_ref = resolve_ref(lib, &lib_name, from.0, from.1)?;
   let mut rels: Vec<Relation> = Vec::with_capacity(items.len());
-  for (kind, id, label, reverse) in items {
-    let label = normalize_label(label).ok_or_else(|| "请填写关系称谓".to_string())?;
-    if same_ref(from, (kind, id)) {
+  for (to_kind, to_id, label, reverse) in items {
+    let label = if kind == RELATION_KIND_VOICE {
+      String::new() // 音色无称谓（PRD：双向显示"使用的音频 / 在哪些文件里使用过"）
+    } else {
+      normalize_label(label).ok_or_else(|| "请填写关系称谓".to_string())?
+    };
+    if same_ref(from, (to_kind, to_id)) {
       return Err("不能和自身建立关系".to_string());
     }
-    let to_ref = resolve_ref(lib, &lib_name, kind, id)?;
+    if kind == RELATION_KIND_VOICE {
+      let meta = lib.index.assets.get(to_id).ok_or_else(|| "目标文件不存在，可能已被删除".to_string())?;
+      if to_kind != "asset" || !AUDIO_EXTS.contains(&meta.ext.to_lowercase().as_str()) {
+        return Err(format!("「{}」不是音频文件", meta.name));
+      }
+    }
+    let to_ref = resolve_ref(lib, &lib_name, to_kind, to_id)?;
     rels.push(Relation {
       id: new_relation_id(),
       from: from_ref.clone(),
       to: to_ref,
-      kind: RELATION_KIND_FREE.to_string(),
+      kind: kind.to_string(),
       label,
-      reverse_label: reverse.and_then(normalize_label),
+      reverse_label: if kind == RELATION_KIND_VOICE { None } else { reverse.and_then(normalize_label) },
     });
   }
   let mut file = load_relations(space_root).map_err(|e| e.to_string())?;
@@ -134,8 +151,9 @@ mod tests {
   }
 
   fn add_asset(lib: &mut Library, id: &str, name: &str) {
+    let ext = name.rsplit('.').next().unwrap_or_default().to_lowercase();
     let meta: AssetMeta = serde_json::from_value(serde_json::json!({
-      "version": 1, "id": id, "name": name, "originName": format!("{name}.png"), "ext": "png", "size": 100,
+      "version": 1, "id": id, "name": name, "originName": format!("{name}.png"), "ext": ext, "size": 100,
       "importedAt": "2026-08-23T00:00:00+08:00", "modifiedAt": "2026-08-23T00:00:00+08:00"
     }))
     .unwrap();
@@ -172,6 +190,7 @@ mod tests {
       &h.lib.space_root,
       &h.lib,
       ("asset", "AN-A"),
+      RELATION_KIND_FREE,
       vec![("archive", "F-B", " 父亲 ", Some("儿子")), ("asset", "AN-C", "专武", Some("  "))],
     )
     .unwrap();
@@ -196,15 +215,16 @@ mod tests {
     let mut h = make_lib();
     add_asset(&mut h.lib, "AN-A", "雪牧.fla");
     add_archive(&mut h.lib, "F-B", "雪天");
-    assert!(add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), vec![]).is_err(), "空清单");
-    assert!(add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), vec![("archive", "F-B", "  ", None)]).is_err(), "空称谓");
-    assert!(add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), vec![("asset", "AN-A", "x", None)]).is_err(), "自身");
+    assert!(add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), RELATION_KIND_FREE, vec![]).is_err(), "空清单");
+    assert!(add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), RELATION_KIND_FREE, vec![("archive", "F-B", "  ", None)]).is_err(), "空称谓");
+    assert!(add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), RELATION_KIND_FREE, vec![("asset", "AN-A", "x", None)]).is_err(), "自身");
     // 第二条失效 → 整批不落盘
     assert!(
       add_batch(
         &h.lib.space_root,
         &h.lib,
         ("asset", "AN-A"),
+        RELATION_KIND_FREE,
         vec![("archive", "F-B", "父亲", None), ("asset", "AN-不存在", "儿子", None)],
       )
       .is_err()
@@ -223,9 +243,46 @@ mod tests {
     };
     h.lib.folders.folders.push(plain.clone());
     h.lib.index.folders.insert("F-P".into(), plain);
-    assert!(add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), vec![("archive", "F-P", "x", None)]).is_err());
+    assert!(add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), RELATION_KIND_FREE, vec![("archive", "F-P", "x", None)]).is_err());
+    // 未知 kind 报错
+    assert!(add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), "unknown", vec![("archive", "F-B", "x", None)]).is_err());
     // 全部失败 = 不落盘（文件都不存在）
     assert!(!h.lib.space_root.join(RELATIONS_FILE).exists());
+  }
+
+  /// 音色（voice，6.2 链接音频轮）：无称谓——label 不校验存空串、reverse 恒 None；
+  /// to 必须音频 asset（非音频 / 档案作 to 报错），from 可以是档案；批量原子同 free
+  #[test]
+  fn add_batch_voice() {
+    let mut h = make_lib();
+    add_asset(&mut h.lib, "AN-A", "雪牧.fla");
+    add_asset(&mut h.lib, "AN-V", "主题曲.mp3");
+    add_asset(&mut h.lib, "AN-W", "插曲.WMA"); // 扩展名大写也认（小写比较）
+    add_archive(&mut h.lib, "F-B", "雪天");
+    // from = 档案也合法（区块体系共用）；label 传了也忽略
+    let rels = add_batch(
+      &h.lib.space_root,
+      &h.lib,
+      ("archive", "F-B"),
+      RELATION_KIND_VOICE,
+      vec![("asset", "AN-V", "某称谓", Some("反向")), ("asset", "AN-W", "", None)],
+    )
+    .unwrap();
+    assert_eq!(rels.len(), 2);
+    assert_eq!(rels[0].kind, RELATION_KIND_VOICE);
+    assert_eq!(rels[0].label, "", "voice 无称谓存空串");
+    assert_eq!(rels[0].reverse_label, None, "voice reverse 恒 None");
+    assert_eq!(rels[0].from.kind, "archive");
+    // to = 非音频 asset / 档案 / 自身 全报错；整批不落盘
+    assert!(add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), RELATION_KIND_VOICE, vec![("asset", "AN-A", "", None)]).is_err(), "自身");
+    assert!(add_batch(&h.lib.space_root, &h.lib, ("archive", "F-B"), RELATION_KIND_VOICE, vec![("archive", "F-B", "", None)]).is_err(), "档案作 to");
+    assert!(
+      add_batch(&h.lib.space_root, &h.lib, ("archive", "F-B"), RELATION_KIND_VOICE, vec![("asset", "AN-V", "", None), ("asset", "AN-A", "", None)]).is_err(),
+      "混入非音频整批失败"
+    );
+    // 已有的 2 条不受影响，失败批未追加
+    let disk: RelationsFile = read_json(&h.lib.space_root.join(RELATIONS_FILE)).unwrap();
+    assert_eq!(disk.relations.len(), 2);
   }
 
   /// 编辑称谓：label / reverse 修改与清空；无改动 = false 不落盘
@@ -234,7 +291,7 @@ mod tests {
     let mut h = make_lib();
     add_asset(&mut h.lib, "AN-A", "雪牧.fla");
     add_archive(&mut h.lib, "F-B", "雪天");
-    let rels = add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), vec![("archive", "F-B", "父亲", Some("儿子"))]).unwrap();
+    let rels = add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), RELATION_KIND_FREE, vec![("archive", "F-B", "父亲", Some("儿子"))]).unwrap();
     let id = &rels[0].id;
 
     // 无改动 = false
@@ -255,7 +312,7 @@ mod tests {
     let mut h = make_lib();
     add_asset(&mut h.lib, "AN-A", "雪牧.fla");
     add_archive(&mut h.lib, "F-B", "雪天");
-    let rels = add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), vec![("archive", "F-B", "父亲", None)]).unwrap();
+    let rels = add_batch(&h.lib.space_root, &h.lib, ("asset", "AN-A"), RELATION_KIND_FREE, vec![("archive", "F-B", "父亲", None)]).unwrap();
     remove(&h.lib.space_root, &rels[0].id).unwrap();
     let disk: RelationsFile = read_json(&h.lib.space_root.join(RELATIONS_FILE)).unwrap();
     assert!(disk.relations.is_empty());
