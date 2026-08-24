@@ -110,6 +110,15 @@ export async function removeRelation(id: string): Promise<void> {
   await invoke("remove_relation", { id });
 }
 
+/** 跳转到指定位置（6.2 四轮走查②④⑤：链接区块 item / 打开文件链接所在位置 / 徽章悬停链接列表
+ *  共用）：目标文件夹视口 + 选中该卡片；openView 入面包屑历史（后退即返回） */
+export function jumpToAssetPlacement(assetId: string, folderId: string): void {
+  const tabs = useTabsStore();
+  const selection = useSelectionStore();
+  tabs.openView(folderId === "root" ? "quick:uncategorized" : `folder:${folderId}`);
+  void nextTick(() => selection.selectOnly(`${assetId}|${folderId}`));
+}
+
 /** 跳转定位（2026-08-24 用户定：详情数据 item 点文件卡 = 跳过去——"光显示在那是没用的"）：
  *  asset → origin Placement 所在文件夹视口 + 选中卡片；archive → 档案视口 + 选中档案卡；
  *  均经 tabs.openView 入面包屑历史（后退即返回）；跨库 / 目标失效给提示。

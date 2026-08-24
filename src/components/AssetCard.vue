@@ -19,6 +19,7 @@ import HoverVideoLayer from "./HoverVideoLayer.vue";
 import HoverAudioLayer from "./HoverAudioLayer.vue";
 import HoverSequenceLayer from "./HoverSequenceLayer.vue";
 import AnimCanvasLayer from "./AnimCanvasLayer.vue";
+import LinkListPopover from "./LinkListPopover.vue";
 import { CARD_CAPTION_H, CARD_CAPTION_COMPACT_H, type Box } from "../lib/layouts";
 import { dragView } from "../lib/dragOperation";
 import {
@@ -87,6 +88,7 @@ const hoverActive = computed(() => hovered.value && !dragView.active);
 // blur 晚于清理到达时按 key 失配判取消）；确认调 rename_placement 后 content.refresh()（在 ops 内）
 const selection = useSelectionStore();
 const picker = usePickerStore();
+const content = useContentStore();
 const cardKey = `${props.asset.assetId}|${props.asset.folderId}`;
 // 选择模式（6.2 一轮，PRD 03_数据链接 04 四重标识之四）：已选卡片压暗（30% 档）+ 品牌绿大勾
 const picked = computed(() => picker.active && picker.isPicked("asset", props.asset.assetId));
@@ -177,6 +179,27 @@ const badge = computed(() => {
 });
 // 角标徽章底色：格式实色（01_样式 token 01-6，7 组）
 const badgeColor = computed(() => formatBadgeColor(props.asset.ext, isSeq.value, isAnim.value));
+// —— 位置徽章（6.2 四轮走查③：「有链接」（活位置 > 1）才上徽章——origin ★ / 链接 icon，
+//    单位置文件无徽章；⑤悬停 = LinkListPopover 全部链接列表）——
+const linkCount = computed(() => content.placementCountByAsset.get(props.asset.assetId) ?? 0);
+const showOriginBadge = computed(() => props.asset.origin && linkCount.value > 1);
+const showLinkBadge = computed(() => !props.asset.origin && linkCount.value > 1);
+const badgeAnchorRef = ref<HTMLElement>();
+const linkListOpen = ref(false);
+let linkListCloseTimer = 0;
+function openLinkList(): void {
+  window.clearTimeout(linkListCloseTimer);
+  linkListOpen.value = true;
+}
+function closeLinkListSoon(): void {
+  // hover 桥 120ms 容错：徽章 → 浮层间移动不闪关（浮层 mouseenter 回调再取消）
+  linkListCloseTimer = window.setTimeout(() => (linkListOpen.value = false), 120);
+}
+function onPopoverHover(inside: boolean): void {
+  if (inside) window.clearTimeout(linkListCloseTimer);
+  else closeLinkListSoon();
+}
+onBeforeUnmount(() => window.clearTimeout(linkListCloseTimer));
 const displayName = computed(() => assetDisplayName(props.asset, ui.showExt));
 // 简介行内容按查看方式「显示简介」下拉分流（2026-08-19 接入；标签档占位禁用，待后端数据通道）：
 // 尺寸 = 音视频时长（mm:ss，5.1）/ 动图与其他按 w×h；
@@ -259,8 +282,26 @@ const meta = computed(() => {
       >{{ displayName }}</span>
       <span v-show="ui.showBrief" class="meta">{{ meta }}</span>
     </div>
-    <!-- 原始文件徽章（figma 14：15×15 品牌色图标，卡片右下各 8） -->
-    <AppIcon v-if="asset.origin" name="original-file-badge" :size="15" class="origin-badge" />
+    <!-- 位置徽章（6.2 四轮走查③⑤）：origin ★ / 链接 icon（活位置 > 1 才上）；
+         悬停 = 全部链接列表浮层（LinkListPopover，可点行跳转） -->
+    <span
+      v-if="showOriginBadge || showLinkBadge"
+      ref="badgeAnchorRef"
+      class="card-badges"
+      :data-badge="showOriginBadge ? 'origin' : 'link'"
+      @mouseenter="openLinkList"
+      @mouseleave="closeLinkListSoon"
+    >
+      <AppIcon v-if="showOriginBadge" name="original-file-badge" :size="15" />
+      <AppIcon v-else name="linked-file-badge" :size="15" class="link-badge-icon" />
+    </span>
+    <LinkListPopover
+      v-if="linkListOpen"
+      :asset="asset"
+      :anchor="badgeAnchorRef"
+      @close="linkListOpen = false"
+      @hover="onPopoverHover"
+    />
     <!-- 选择模式已选大勾（6.2 一轮）：绿圆白勾居中于缩略图区；不随压暗（在根层级、opacity 作用域外） -->
     <span v-if="picked" class="pick-check" :style="{ top: `${imgH / 2}px` }">
       <AppIcon name="check" :size="22" />
@@ -414,17 +455,21 @@ const meta = computed(() => {
   width: 100%;
   color: var(--text-highlight);
 }
-/* 原始文件徽章（figma 14）：15×15，卡片右下各 8（简介区右下） */
-.origin-badge {
+/* 位置徽章（figma 14：15×15，卡片右下各 8；可悬停出链接列表浮层） */
+.card-badges {
   position: absolute;
   right: var(--space-8);
   bottom: var(--space-8);
-  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  color: var(--text-label);
 }
 /* 选择模式已选（6.2 一轮）：缩略图区 / 简介区 / 徽章压暗 30% 档（速查表 §5），大勾不压 */
 .asset-card.picked .thumb,
 .asset-card.picked .texts,
-.asset-card.picked .origin-badge {
+.asset-card.picked .card-badges {
   opacity: 0.3;
 }
 /* 选择模式发起文件自身（2026-08-24 用户定）：剪切档半透明 + 禁选光标（不可选的视觉信号） */

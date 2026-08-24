@@ -127,6 +127,18 @@ export async function renamePlacement(ref: PlacementRef, newName: string): Promi
   }, () => `重命名为 ${newName.trim()}`);
 }
 
+// 将此文件设为原始文件（6.2 四轮走查③，PRD 01 边界规则 8 手动 origin 转移）：
+// 目标 Placement 置 origin、原 origin 摘标（库内 origin 恒 ≤ 1）；仅标记不动磁盘；
+// name 可选 = 同文件夹重复链接精确到行
+export async function setPlacementOrigin(assetId: string, folderId: string, name?: string | null): Promise<boolean> {
+  const ok = await runOp(async () => {
+    await invoke("set_placement_origin", { assetId, folderId, name: name ?? null });
+  }, () => "设为原始文件");
+  // 详情链接区块（origin 徽章所在行）随 refresh 重拉
+  if (ok) useContentStore().bumpDetailRev();
+  return ok;
+}
+
 // —— 链接管理（17 稿，6.2 三轮）：一个资产的位置增 / 删 / 改一次提交（单撤销步）——
 // 详情链接区块 × 移除 = removes 单条即时提交；LinkManageDialog 确认 = 草稿 diff 三组
 export interface SyncLinkAdd {

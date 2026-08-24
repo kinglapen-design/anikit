@@ -185,6 +185,43 @@ fn locate_remove(lib: &Library, asset_id: &str, r: &SyncLinkRemove) -> Option<us
   find_placement_named(lib, &item, r.name.as_deref())
 }
 
+/// 将此文件设为原始文件（6.2 四轮走查③，PRD 01 边界规则 8 手动 origin 转移——"原始文件标识
+/// 的空缺由用户自主决定"）：目标 Placement 置 origin = true，原 origin 行（若存在）同时置 false
+/// （库内同一时刻 origin 恒 ≤ 1）；**仅标记转移不动磁盘**（originName 磁盘文件名不随链接显示名改，
+/// 之后重命名 origin 才按同步语义改磁盘）；name 给了 = 同文件夹重复链接精确到行；
+/// 目标已是 origin = 无操作 false（命令层不进撤销栈）
+pub fn set_placement_origin(
+  lib: &mut Library,
+  asset_id: &str,
+  folder_id: &str,
+  name: Option<&str>,
+) -> Result<bool, String> {
+  if !lib.index.assets.contains_key(asset_id) {
+    return Err("文件不存在，可能已被删除".to_string());
+  }
+  let item = PlacementRef { asset_id: asset_id.into(), folder_id: folder_id.into(), origin: false };
+  // 先按 origin=false 找；找不到再按 true 找（幂等判定）
+  let pos = find_placement_named(lib, &item, name).or_else(|| {
+    let item_origin = PlacementRef { asset_id: asset_id.into(), folder_id: folder_id.into(), origin: true };
+    find_placement_named(lib, &item_origin, name)
+  });
+  let Some(pos) = pos else {
+    return Err("项目不存在，可能已被移动或删除".to_string());
+  };
+  if lib.folders.items[pos].origin {
+    return Ok(false); // 已是原始文件
+  }
+  for p in &mut lib.folders.items {
+    if p.asset == asset_id && p.origin {
+      p.origin = false;
+    }
+  }
+  lib.folders.items[pos].origin = true;
+  finish(lib)?;
+  log::info!("设为原始文件 {asset_id} @ {folder_id}");
+  Ok(true)
+}
+
 /// 链接管理（17 稿，6.2 三轮）：一个资产的位置增 / 删 / 改三组一次提交（命令层单撤销步）。
 /// - renames 先行（rename_placement 语义：链接仅改显示名、origin 同步磁盘 originName 段，
 ///   返回磁盘改名清单供命令层登记 DiskOp）；oldName 给了 = 同文件夹重复链接精确到行；
@@ -554,5 +591,30 @@ mod tests {
     assert!(!names.contains(&"图-链A.png"), "链A 被精确移除");
     assert!(names.contains(&"新名.png"), "链B 精确改名");
     assert!(!names.contains(&"图-链B.png"));
+  }
+
+  /// 将此文件设为原始文件（6.2 四轮走查③）：链接行置 origin，原 origin 摘标（origin 恒 ≤ 1）；
+  /// 仅标记不动磁盘；幂等（已是 origin = false）；重复链接带 name 精确到行
+  #[test]
+  fn set_placement_origin_transfers_flag() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01");
+    add_folder(&mut h.lib, "F02");
+    add_asset(&mut h, "AN-A", "图.png", "F01", None);
+    ops::add_placement(&mut h.lib, "AN-A".into(), "F02".into(), "图-链.png".into(), false, &mut HashMap::new());
+    ops::add_placement(&mut h.lib, "AN-A".into(), "F02".into(), "图-链2.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+
+    // 重复链接不带 name 也能定位（三元组第一条），带 name 精确到行
+    assert!(set_placement_origin(&mut h.lib, "AN-A", "F02", Some("图-链2.png")).unwrap());
+    let origins: Vec<&str> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-A" && p.origin).map(|p| p.name.as_str()).collect();
+    assert_eq!(origins, vec!["图-链2.png"], "origin 恒 ≤ 1 且为指定行");
+    assert!(placement(&h.lib, "AN-A", "F01").is_some_and(|p| !p.origin), "原 origin 行摘标保留");
+    // 幂等：目标行已是 origin = false（不带 name 时三元组优先命中其余 false 行，会再转移——
+    // 调用方（链接卡右键）恒对 origin=false 卡片操作，无此路径）
+    assert!(!set_placement_origin(&mut h.lib, "AN-A", "F02", Some("图-链2.png")).unwrap());
+    // 目标不存在报错
+    assert!(set_placement_origin(&mut h.lib, "AN-A", "F99", None).is_err());
+    assert!(set_placement_origin(&mut h.lib, "AN-X", "F02", None).is_err());
   }
 }

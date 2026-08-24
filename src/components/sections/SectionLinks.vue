@@ -16,6 +16,7 @@ import AppIcon from "../AppIcon.vue";
 import IconButton from "../IconButton.vue";
 import { findFolderNode, type DetailTarget, type PlacementLink } from "../../lib/detailSections";
 import { syncAssetLinks } from "../../lib/placementOps";
+import { jumpToAssetPlacement } from "../../lib/relationOps";
 import { useContentStore } from "../../stores/content";
 import { useSelectionStore } from "../../stores/selection";
 
@@ -24,9 +25,15 @@ const content = useContentStore();
 const selection = useSelectionStore();
 const open = ref(true);
 
-const items = computed<PlacementLink[]>(() =>
-  props.target.kind === "file" ? props.target.detail.placements : [],
-);
+const items = computed<PlacementLink[]>(() => {
+  if (props.target.kind !== "file") return [];
+  const list = props.target.detail.placements;
+  // 当前目录的 item 永远第一行（6.2 四轮走查②：多了之后难分辨）——当前查看的这条
+  // Placement（folderId + name 双键匹配，重复链接不错位）置顶，其余保持反查原序
+  const cur = props.target.placement;
+  const i = list.findIndex((p) => (p.folderId ?? "root") === cur.folderId && p.name === cur.name);
+  return i > 0 ? [list[i], ...list.slice(0, i), ...list.slice(i + 1)] : list;
+});
 
 // 所属目录显示名：path 末段；所在目录是档案 → 「名称.档案」（2026-08-15 定案，前端树判定）
 function dirName(p: PlacementLink): string {
@@ -50,6 +57,12 @@ async function removeLink(p: PlacementLink): Promise<void> {
   const assetId = props.target.placement.assetId;
   await syncAssetLinks(assetId, [], [{ folderId: p.folderId ?? "root", origin: p.origin, name: p.name }], []);
 }
+
+// 点 item = 跳转定位（6.2 四轮走查②：该位置视口 + 选中卡片，面包屑后退返回——同关系 item 口径）
+function jumpTo(p: PlacementLink): void {
+  if (props.target.kind !== "file") return;
+  jumpToAssetPlacement(props.target.placement.assetId, p.folderId ?? "root");
+}
 </script>
 
 <template>
@@ -63,14 +76,20 @@ async function removeLink(p: PlacementLink): Promise<void> {
     <!-- 空数据不渲染容器（2026-08-15 走查：父级 detail-block gap 会让空 .body 也撑出 8px，
          展开/折叠必须零高度变化） -->
     <div v-if="open && items.length > 0" class="body">
-      <div v-for="(p, i) in items" :key="`${p.folderId ?? 'root'}|${p.name}|${i}`" class="link-item">
+      <div
+        v-for="(p, i) in items"
+        :key="`${p.folderId ?? 'root'}|${p.name}|${i}`"
+        class="link-item"
+        v-tip="{ text: '跳转到该位置' }"
+        @click="jumpTo(p)"
+      >
         <div class="row1">
           <AppIcon name="folder-closed" :size="18" class="deco" />
           <span class="seg block">{{ p.blockName }}</span>
           <span class="sep">/</span>
           <span class="seg dir" v-tip="dirName(p)">{{ dirName(p) }}</span>
           <span class="spacer" />
-          <IconButton name="clear" small title="移除链接" class="del" @click="removeLink(p)" />
+          <IconButton name="clear" small title="移除链接" class="del" @click.stop="removeLink(p)" />
         </div>
         <!-- 行2（稿：名称 + 链接状态徽章，justify-between / padding 0 4 0 0 / gap 10）：
              原始文件徽章 15px 品牌色，origin=true 才出；链接 Placement 不出 -->
@@ -106,6 +125,9 @@ async function removeLink(p: PlacementLink): Promise<void> {
 }
 .link-item:hover {
   background: var(--c5);
+}
+.link-item {
+  cursor: pointer;
 }
 /* 行1（2026-08-15 定案两段化）：图标 18 + 区块名 14 常态 / 所属目录 14 标签色 + ×（高 20，间距 4） */
 .row1 {

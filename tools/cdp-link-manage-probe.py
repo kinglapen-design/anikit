@@ -28,7 +28,7 @@ PORT = 9366
 URL = "http://localhost:5373"
 
 STUB = r"""
-window.__calls = { sync_asset_links: [], add_relations: [], remove_relation: [] };
+window.__calls = { sync_asset_links: [], add_relations: [], remove_relation: [], set_placement_origin: [] };
 window.__relId = 0;
 window.__cbs = {};
 window.__cbId = 0;
@@ -52,6 +52,7 @@ window.__cbId = 0;
       { assetId: "A1", folderId: "F-ARC", name: "雪牧-链.fla", w: null, h: null, ext: "fla", thumbPath: null, thumbKind: null, origin: false, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
       { assetId: "A2", folderId: "F-SUB", name: "主题曲.mp3", w: 640, h: 272, ext: "mp3", thumbPath: null, thumbKind: null, origin: true, frameCount: null, animated: false, duration: 12.5, bpm: null, importedFrom: null },
       { assetId: "A3", folderId: "F-SUB", name: "阿拉蕾.fla", w: null, h: null, ext: "fla", thumbPath: null, thumbKind: null, origin: true, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
+      { assetId: "A3", folderId: "F-DIR", name: "阿拉蕾-链.fla", w: null, h: null, ext: "fla", thumbPath: null, thumbKind: null, origin: false, frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null },
     ],
     archives: {
       "F-ARC": { folderId: "F-ARC", badge: null, avatar: null, props: [], descriptions: [], links: [], createdAt: "", coverPath: null },
@@ -157,6 +158,13 @@ window.__cbId = 0;
         return Promise.resolve(null);
       }
       if (cmd === "get_media_source") return Promise.resolve({ path: "E:/T/S/动画资产/assets/A2.info/主题曲.mp3", kind: "origin" });
+      if (cmd === "set_placement_origin") {
+        window.__calls.set_placement_origin.push(JSON.parse(JSON.stringify(args)));
+        for (const p of DB.placements) if (p.assetId === args.assetId) p.origin = false;
+        const t = DB.placements.find((p) => p.assetId === args.assetId && p.folderId === args.folderId && (!args.name || p.name === args.name));
+        if (t) t.origin = true;
+        return Promise.resolve(null);
+      }
       const v = Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null;
       return Promise.resolve(typeof v === "function" ? v() : v);
     },
@@ -250,6 +258,10 @@ async def main():
             async def mouse(t, x, y, button="left", clicks=1):
                 await send(ws, "Input.dispatchMouseEvent", {"type": t, "button": button, "buttons": 1 if button == "left" else 2, "x": x, "y": y, "clickCount": clicks}, session=sess)
 
+            async def hover(x, y):
+                # 纯悬停（buttons 0）：左键按住移动 = 拖拽，不触发 mouseenter（W5 实证）
+                await send(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "button": "none", "buttons": 0, "x": x, "y": y}, session=sess)
+
             async def rect_of(expr):
                 return await ev(f"(() => {{ const el = {expr}; if (!el) return null; const b = el.getBoundingClientRect(); return {{ x: Math.min(b.left + b.width / 2, window.innerWidth - 8), y: Math.min(b.top + b.height / 2, window.innerHeight - 8) }}; }})()")
 
@@ -319,13 +331,20 @@ async def main():
 
             # —— L3 名称框点击 = 编辑态 → 改名（雪天行 雪牧-链.fla → 雪牧-改.fla） ——
             await click("[...document.querySelectorAll('.line')].find((l) => l.querySelector('.folder-cell .fname')?.textContent === '雪天').querySelector('.link-cell .lname')")
-            await ev("""(() => {
+            l3a = await ev("""(() => {
+              const l = [...document.querySelectorAll('.line')].find((l) => l.querySelector('.folder-cell .fname')?.textContent === '雪天');
+              return { editing: !!l?.querySelector('.link-cell.editing'), hasInput: !!l?.querySelector('.name-edit') };
+            })()""")
+            print("L3 点击后现场:", l3a)
+            l3e = await ev("""(() => {
               const input = [...document.querySelectorAll('.line')].find((l) => l.querySelector('.folder-cell .fname')?.textContent === '雪天').querySelector('.name-edit');
+              if (!input) return { err: 'no-input' };
               input.value = '雪牧-改.fla';
               input.dispatchEvent(new Event('input', { bubbles: true }));
               input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-              return true;
+              return { ok: true };
             })()""")
+            print("L3 dispatch:", l3e)
             await asyncio.sleep(0.4)
             l3 = await ev("""(() => {
               const l = [...document.querySelectorAll('.line')].find((l) => l.querySelector('.folder-cell .fname')?.textContent === '雪天');
@@ -443,10 +462,13 @@ async def main():
             v2 = await ev("""(() => ({
               chip: document.querySelector('.detail-panel .section-audio .file-chip .name')?.textContent ?? null,
               audioItem: !!document.querySelector('.detail-panel .section-audio .audio-item'),
+              relItems: document.querySelectorAll('.detail-panel .section-relations .rel-item').length,
             }))()""")
             check("V2 双向显示：主题曲详情 = 使用方文件卡 雪牧（ref 名快照，非音频 item）",
                   bool(v2 and v2["chip"] == "雪牧" and not v2["audioItem"]),
                   json.dumps(v2, ensure_ascii=False))
+            check("W1 voice 不泄漏关系区块（voice 存在时关系区块 0 item）",
+                  bool(v2 and v2["relItems"] == 0), json.dumps(v2, ensure_ascii=False))
 
             # —— V3 × 删除链接音频 ——
             await ev("document.querySelector('.detail-panel .section-audio .audio-row .del')?.click()")
@@ -458,6 +480,132 @@ async def main():
             check("V3 × → remove_relation(RL-1) + 音频区块空",
                   bool(v3 and v3["calls"] == [{"id": "RL-1"}] and v3["rows"] == 0),
                   json.dumps(v3, ensure_ascii=False))
+
+            # —— 走查五笔（6.2 四轮，2026-08-24 用户实机反馈）——
+            # W2 链接区块：当前目录 item 恒第一行 + 点 item 跳转（L5 后 A1 = F-ARC 雪牧-改 + F-P2 雪牧.fla）
+            await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('雪牧-改'))")
+            await asyncio.sleep(0.8)
+            w2 = await ev("""(() => [...document.querySelectorAll('.detail-panel .section-links .link-item')].map((it) => ({
+              dir: it.querySelector('.seg.dir')?.textContent, name: it.querySelector('.file-name')?.textContent })))()""")
+            check("W2 链接区块当前目录 item 恒第一行（雪天.档案 在上）",
+                  bool(w2 and len(w2) == 2 and w2[0]["dir"] == "雪天.档案" and w2[0]["name"] == "雪牧-改.fla" and w2[1]["dir"] == "工程"),
+                  json.dumps(w2, ensure_ascii=False))
+            await click("[...document.querySelectorAll('.detail-panel .section-links .link-item')].find((it) => it.textContent.includes('工程'))")
+            await asyncio.sleep(0.8)
+            w2b = await ev("""(() => ({
+              pinned: document.querySelector('.detail-panel .pinned input')?.value ?? null,
+              selected: [...document.querySelectorAll('.asset-card.selected')].map((c) => c.textContent),
+            }))()""")
+            check("W2 点 item 跳转：工程视口 + 选中 雪牧.fla 卡出详情",
+                  bool(w2b and w2b["pinned"] == "雪牧.fla" and len(w2b["selected"]) > 0 and "雪牧.fla" in w2b["selected"][0]),
+                  json.dumps(w2b, ensure_ascii=False))
+
+            # 面包屑后退回 quick:all（W2 跳转经 openView 入历史）
+            await click("document.querySelector('.crumb-group .icon-btn:not(.rot-180):not(.archive-panel-toggle)')")
+            await asyncio.sleep(0.7)
+
+            # W3 徽章规则：多位置 origin ★ / 链接 icon；单位置无徽章
+            w3 = await ev("""(() => {
+              const badgeOf = (txt) => {
+                const c = [...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes(txt));
+                if (!c) return null;
+                const b = c.querySelector('.card-badges');
+                return { has: !!b, kind: b?.dataset?.badge ?? null };
+              };
+              return { a3origin: badgeOf('阿拉蕾.fla'), a3link: badgeOf('阿拉蕾-链.fla'), a2: badgeOf('主题曲') };
+            })()""")
+            check("W3 徽章规则：阿拉蕾 origin 卡 ★ / 阿拉蕾-链 链接卡 icon / 主题曲单位置无徽章",
+                  bool(w3 and w3["a3origin"] and w3["a3origin"]["has"] and w3["a3origin"]["kind"] == "origin"
+                       and w3["a3link"] and w3["a3link"]["has"] and w3["a3link"]["kind"] == "link"
+                       and w3["a2"] and not w3["a2"]["has"]),
+                  json.dumps(w3, ensure_ascii=False))
+
+            # W4 右键菜单「打开文件链接所在位置」→ 子菜单点工程 → 跳转 + 选中
+            r = await rect_of("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('雪牧-改'))")
+            await mouse("mousePressed", r["x"], r["y"], "right"); await mouse("mouseReleased", r["x"], r["y"], "right")
+            await asyncio.sleep(0.6)
+            r2 = await rect_of("[...document.querySelectorAll('.app-menu .menu-item')].find((m) => m.textContent.includes('打开文件链接所在位置'))")
+            if r2:
+                await hover(r2["x"], r2["y"])
+                await asyncio.sleep(0.7)
+                await click("[...document.querySelectorAll('.app-menu .menu-item')].find((m) => m.textContent.trim() === '工程')")
+                await asyncio.sleep(0.8)
+            w4 = await ev("""(() => ({
+              pinned: document.querySelector('.detail-panel .pinned input')?.value ?? null,
+              selected: [...document.querySelectorAll('.asset-card.selected')].map((c) => c.textContent),
+            }))()""")
+            check("W4 打开文件链接所在位置 → 工程视口 + 选中 雪牧.fla",
+                  bool(w4 and w4["pinned"] == "雪牧.fla" and len(w4["selected"]) > 0 and "雪牧.fla" in w4["selected"][0]),
+                  json.dumps(w4, ensure_ascii=False))
+            # 回 quick:all
+            await click("document.querySelector('.crumb-group .icon-btn:not(.rot-180):not(.archive-panel-toggle)')")
+            await asyncio.sleep(0.7)
+
+            # W5 徽章悬停出链接列表浮层 + 点行跳转
+            # 坑：CDP Input.dispatchMouseEvent mouseMoved（含 buttons 0）不触发 Vue mouseenter（W4 子菜单
+            # hover 属侥幸）——悬停类交互改 JS 直接 dispatch MouseEvent('mouseenter') 到目标元素
+            w5a = await ev("""(() => {
+              const b = [...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('雪牧-改'))?.querySelector('.card-badges');
+              if (!b) return { badge: false };
+              b.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+              return { badge: true };
+            })()""")
+            await asyncio.sleep(0.7)
+            w5 = await ev("""(() => {
+              const pop = document.querySelector('.link-pop');
+              if (!pop) return null;
+              return { rows: [...pop.querySelectorAll('.row')].map((r) => ({
+                path: r.querySelector('.path')?.textContent, name: r.querySelector('.name')?.textContent })) };
+            })()""")
+            check("W5 徽章悬停出浮层：全部位置 2 行（目录/…/雪天.档案 + 项目/工程，顺序无关）",
+                  bool(w5 and len(w5["rows"]) == 2
+                       and any("雪天.档案" in (r["path"] or "") and "雪牧-改.fla" in (r["name"] or "") for r in w5["rows"])
+                       and any("工程" in (r["path"] or "") and "雪牧.fla" in (r["name"] or "") for r in w5["rows"])),
+                  json.dumps(w5, ensure_ascii=False))
+            await shot("link-list-popover")
+            await click("[...document.querySelectorAll('.link-pop .row')].find((r) => r.textContent.includes('工程'))")
+            await asyncio.sleep(0.8)
+            w5b = await ev("""(() => ({
+              pinned: document.querySelector('.detail-panel .pinned input')?.value ?? null,
+              pop: !!document.querySelector('.link-pop'),
+            }))()""")
+            check("W5 点行 = 跳转工程视口 + 浮层关闭",
+                  bool(w5b and w5b["pinned"] == "雪牧.fla" and not w5b["pop"]),
+                  json.dumps(w5b, ensure_ascii=False))
+
+            # W6 将此文件设为原始文件（右键链接卡 → 菜单项 → ★ 转移；origin 卡该项禁用）
+            r6 = await rect_of("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('雪牧.fla'))")
+            await mouse("mousePressed", r6["x"], r6["y"], "right"); await mouse("mouseReleased", r6["x"], r6["y"], "right")
+            await asyncio.sleep(0.6)
+            await click("[...document.querySelectorAll('.app-menu .menu-item')].find((m) => m.textContent.includes('将此文件设为原始文件'))")
+            await asyncio.sleep(0.8)
+            # 回 quick:all 再查两卡徽章（工程视口只有 F-P2 内容，雪牧-改 不在场）
+            await click("document.querySelector('.crumb-group .icon-btn:not(.rot-180):not(.archive-panel-toggle)')")
+            await asyncio.sleep(0.7)
+            w6 = await ev("""(() => {
+              const badgeOf = (txt) => {
+                const c = [...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes(txt));
+                return c?.querySelector('.card-badges')?.dataset?.badge ?? null;
+              };
+              return {
+                calls: window.__calls.set_placement_origin,
+                fp2: badgeOf('雪牧.fla'), arc: badgeOf('雪牧-改'),
+              };
+            })()""")
+            check("W6 设为原始文件 → set_placement_origin（F-P2 雪牧.fla 带 name）+ ★ 转移（雪牧-改 回链接 icon）",
+                  bool(w6 and len(w6["calls"]) == 1 and w6["calls"][0]["assetId"] == "A1"
+                       and w6["calls"][0]["folderId"] == "F-P2" and w6["calls"][0]["name"] == "雪牧.fla"
+                       and w6["fp2"] == "origin" and w6["arc"] == "link"),
+                  json.dumps(w6, ensure_ascii=False))
+            # origin 卡该项禁用
+            await mouse("mousePressed", r6["x"], r6["y"], "right"); await mouse("mouseReleased", r6["x"], r6["y"], "right")
+            await asyncio.sleep(0.6)
+            w6b = await ev("""(() => {
+              const m = [...document.querySelectorAll('.app-menu .menu-item')].find((m) => m.textContent.includes('将此文件设为原始文件'));
+              return m ? { disabled: m.disabled === true } : null;
+            })()""")
+            await ev("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))")
+            check("W6 origin 卡「将此文件设为原始文件」禁用", bool(w6b and w6b["disabled"]), json.dumps(w6b, ensure_ascii=False))
 
             await send(ws, "Target.closeTarget", {"targetId": tid})
     finally:

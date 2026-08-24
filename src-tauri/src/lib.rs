@@ -279,6 +279,7 @@ pub fn run() {
       commands::operations::reorder_blocks,
       commands::operations::link_placements,
       commands::operations::sync_asset_links,
+      commands::operations::set_placement_origin,
       commands::operations::duplicate_placements,
       commands::operations::clone_folders,
       commands::operations::rename_placements,

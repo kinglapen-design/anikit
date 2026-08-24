@@ -500,6 +500,13 @@ export const useContentStore = defineStore("content", {
     stripFolders(state): FolderNode[] {
       return this.stripFoldersFor(state.sidebarSelected);
     },
+    // 资产活位置计数（6.2 四轮走查③徽章规则：origin ★ / 链接 icon 只在"有链接"（活位置 > 1）时上，
+    // 单位置文件无徽章；AssetCard 徽章与徽章悬停链接列表共用）
+    placementCountByAsset(state): Map<string, number> {
+      const map = new Map<string, number>();
+      for (const p of state.placements) map.set(p.assetId, (map.get(p.assetId) ?? 0) + 1);
+      return map;
+    },
     // 文件夹卡片缩略图（4.4）：每个文件夹的直接子项中，按 placements 顺序取第一个静态图片；
     // 排除序列帧/动图（frameCount）与 GIF/工程/矢量格式，右键自定义缩略图归 6.3
     folderThumbMap(state): Map<string, string> {

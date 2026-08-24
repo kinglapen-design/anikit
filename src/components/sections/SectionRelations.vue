@@ -30,8 +30,13 @@ const targetRef = computed<{ kind: "asset" | "archive"; id: string }>(() =>
     : { kind: "archive", id: props.target.node.id },
 );
 
-// 关系视图清单（relations 在 content store，undo / 增删后自动响应）
-const views = computed(() => relationsForTarget(content.relations, currentLibrary.name ?? "", targetRef.value));
+// 关系视图清单（relations 在 content store，undo / 增删后自动响应）；
+// **kind = free 过滤**（voice 音色归音频区块——6.2 四轮走查：链接音频曾联动泄漏进关系区块）
+const views = computed(() =>
+  relationsForTarget(content.relations, currentLibrary.name ?? "", targetRef.value).filter(
+    (v) => v.relation.kind === "free",
+  ),
+);
 
 // 发起文件（选择模式 origin）：文件 = 当前 Placement；档案 = 当前档案节点（封面快照供备选区左标）
 function originOf(): PickerTarget {

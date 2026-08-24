@@ -315,6 +315,31 @@ pub async fn sync_asset_links(
   }
 }
 
+/// 将此文件设为原始文件（6.2 四轮走查③，PRD 01 边界规则 8 手动 origin 转移）：
+/// 目标 Placement 置 origin，原 origin 行同时摘标（库内 origin 恒 ≤ 1）；仅标记不动磁盘；
+/// name 可选 = 同文件夹重复链接精确到行；已是 origin = 无操作不进撤销栈。撤销标签"设为原始文件"
+#[tauri::command]
+pub async fn set_placement_origin(
+  state: State<'_, AppState>,
+  asset_id: String,
+  folder_id: String,
+  name: Option<String>,
+) -> Result<(), String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin("设为原始文件");
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  match operations::set_placement_origin(lib, &asset_id, &folder_id, name.as_deref()) {
+    Ok(true) => undo.commit().map_err(|e| e.to_string()),
+    Ok(false) => {
+      undo.cancel();
+      Ok(())
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
 /// 创建副本：info 目录整体复制 + 新资源实体，返回新 assetId 清单；
 /// 磁盘副作用成对登记（undo = 删除新 info 目录 / redo = 复制还原）
 #[tauri::command]

@@ -10,6 +10,7 @@ import { useTabsStore } from "../../stores/tabs";
 import { usePreviewStore } from "../../stores/preview";
 import type { CtxEntry } from "../contextMenus";
 import { isSequence as isSequenceAsset } from "../formatBadge";
+import { jumpToAssetPlacement } from "../relationOps";
 import {
   copyAssetLink,
   copyAssetPath,
@@ -31,6 +32,7 @@ import {
   pasteClipboard,
   pasteDuplicate,
   refreshThumb,
+  setPlacementOrigin,
 } from "../placementOps";
 
 // 默认应用打开（AssetCard / preview store 同款流程：成功后重拉最近使用）
@@ -66,14 +68,13 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
   const assetKey = `${p.assetId}|${p.folderId}`;
   const isSequence = isSequenceAsset(p); // 序列帧（动图同 frameCount 字段，靠 animated 区分）
   const hasClipboard = selection.clipboard !== null;
-  // 打开文件链接所在位置：同 assetId 的全部 Placement 所在文件夹去重（含关联文件夹）
+  // 打开文件链接所在位置（6.2 四轮走查④接入）：同 assetId 的全部 Placement 所在文件夹去重
+  //（含关联文件夹）；点击 = 跳转该位置视口 + 选中该卡片（同链接区块 item 跳转口径）
   const locations: CtxEntry[] = [
     ...new Set(content.placements.filter((q) => q.assetId === assetId).map((q) => q.folderId)),
   ].map((fid) => ({
     label: folderName(fid),
-    action: () => {
-      useTabsStore().openView(`folder:${fid}`);
-    },
+    action: () => jumpToAssetPlacement(assetId, fid),
   }));
   const entries: CtxEntry[] = [
     { label: "打开预览", icon: "open-preview", shortcut: "Enter", action: () => void usePreviewStore().open(assetKey) },
@@ -117,6 +118,13 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       action: () => {
         selection.linkManageDraft = { assetId, name: p.name };
       },
+    },
+    // 将此文件设为原始文件（6.2 四轮走查③，PRD 01 边界规则 8 手动 origin 转移）：
+    // 仅链接卡片（origin=false）可点——origin 卡已是原始文件；单选才可；稿无此项不配图标（速查表 §6）
+    {
+      label: "将此文件设为原始文件",
+      disabled: selection.count !== 1 || p.origin,
+      action: () => void setPlacementOrigin(assetId, p.folderId, p.name),
     },
     {
       label: "打开文件链接所在位置",
