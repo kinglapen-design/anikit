@@ -105,6 +105,25 @@
   margin-top: var(--n-space-12);
 }
 
+/* 组件展区：演示行 / 单元格 / 说明文字 */
+.pv-demo-row {
+  display: flex;
+  gap: var(--n-space-16);
+  flex-wrap: wrap;
+  align-items: flex-start;
+  margin-top: var(--n-space-12);
+}
+.pv-demo-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-8);
+}
+.pv-cap {
+  color: var(--n-l3);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+}
+
 /* TokenVar：变量实际计算值（getComputedStyle 读 :root） */
 .pv-var {
   font-family: var(--n-font-mono);

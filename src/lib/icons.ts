@@ -21,3 +21,13 @@ export function getIcon(name: string): string {
   if (!svg) throw new Error(`图标不存在: ${name}（检查 assets/icons/命名对照.md）`);
   return svg;
 }
+
+// 双色调结构图标（folder-closed / archive / image / warning-small 等，文件保留 Figma 原值：
+// 亮层 #BFBFBF / 暗层 #666666）——此处换 CSS 变量通道（fill 的 presentation attribute 不吃 var()，
+// 必须内联 style），组件经 --tone-1 / --tone-2 注入：默认 --n-custom-1 / --n-custom-2，
+// 文件夹自定义九色对（--n-custom-{色}-1/-2）在组件侧覆盖。2026-08-28 用户定案。
+export function getTwoToneIcon(name: string): string {
+  return getIcon(name)
+    .replaceAll('fill="#BFBFBF"', 'style="fill:var(--tone-1)"')
+    .replaceAll('fill="#666666"', 'style="fill:var(--tone-2)"');
+}

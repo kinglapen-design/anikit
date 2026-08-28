@@ -1,0 +1,60 @@
+/* item 族共享样式（阶段七新体系，docs/UI 重构/Design Token/组件/item/）。
+   只引 --n- token；hover 换 1px 中性描边瞬时切换（颜色过渡禁用于描边，速查表 §7），仅背景过渡。 */
+
+/* 详情面板 / 选择模式卡片壳：通用三级底 + 通用五级 1px 描边 + 圆角 8；
+   hover = 通用四级底 + 通用六级描边 */
+.ni-card {
+  box-sizing: border-box;
+  position: relative;
+  background: var(--n-g3);
+  border: 1px solid var(--n-g5);
+  border-radius: var(--n-radius-8);
+  transition: background var(--n-dur-100) var(--n-ease-in-out);
+}
+.ni-card:hover,
+.ni-card.force-hover {
+  background: var(--n-g4);
+  border-color: var(--n-g6);
+}
+
+/* hover 滑入动作区（关闭钮 / 按钮组）：常态零宽不占位（不产生视觉噪音），
+   hover 右至左滑入——grid 0fr→1fr 自适应内容宽，配透明度淡入 */
+.ni-slide {
+  display: grid;
+  grid-template-columns: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-columns var(--n-dur-150) var(--n-ease-in-out),
+    opacity var(--n-dur-150) var(--n-ease-in-out);
+}
+.ni-hover:hover .ni-slide,
+.ni-hover.force-hover .ni-slide {
+  grid-template-columns: 1fr;
+  opacity: 1;
+}
+.ni-slide-inner {
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--n-space-8);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* 关闭-小钮（14×14）：常态 亮色/四级，hover 提亮 亮色/二级 */
+.ni-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  padding: 0;
+  color: var(--n-l4);
+  cursor: pointer;
+  transition: color var(--n-dur-100) var(--n-ease-in-out);
+}
+.ni-close:hover {
+  color: var(--n-l2);
+}
