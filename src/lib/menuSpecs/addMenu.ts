@@ -8,9 +8,10 @@ import { openBlock } from "../treeExpansion";
 import { createDocument, pasteClipboard, pasteDuplicate, type NewDocKind } from "../placementOps";
 import { openScan } from "../dupScanOps";
 // 文档图标（本地资源：md.webp 2026-08-11 用户供；txt.png 2026-08-15 系统记事本图标一次性提取留存；
-// 非 svg 走 iconData 内联图，svg 走 getIcon 按名引用）
-import mdDocIcon from "../../../assets/icons/01_icon-default/md.webp?url";
-import txtDocIcon from "../../../assets/icons/01_icon-default/txt.png?url";
+// 非 svg 走 iconData 内联图，svg 走 getIcon 按名引用；
+// 2026-08-28 旧图标整体归档 assets/icons/旧版/，本组图片暂沿用旧版资源，阶段七重设计时替换）
+import mdDocIcon from "../../../assets/icons/旧版/01_icon-default/md.webp?url";
+import txtDocIcon from "../../../assets/icons/旧版/01_icon-default/txt.png?url";
 
 // —— 素材卡片空白处（废除，2026-08-11：空白右键统一走 07 新增菜单；
 // 布局方式/排序/显示简介/分组依据归 28 查看方式菜单 ViewOptionsMenu）——

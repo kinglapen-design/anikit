@@ -2,6 +2,8 @@
 // 文件 = assets/icons/05_custom-icon/*.svg，引用值 = 文件干（lib/icons.ts glob 自动注册，
 // AppIcon/getIcon 直接按名引用）；中文标签出自 assets/icons/命名对照.md。
 // 3.3 更改图标网格面板（05 稿 §3/§4）复用本清单。
+// 2026-08-28：05_custom-icon 已随旧图标归档 assets/icons/旧版/ 并退出 glob，
+// 本清单文件干暂不可解析（报"图标不存在"）；阶段七按新 02自定义 集重写 + 存量存储值迁移。
 export interface CustomIconDef {
   name: string; // 文件干（Folder.icon / Block.icon 存储值）
   label: string; // 中文名（下拉列表显示）
