@@ -1,8 +1,162 @@
-/* AniKit 设计 tokens —— 由 docs/02_样式与布局/01_样式 token.md 生成，勿手改。
-   2026-08-07 新体系（用户设计 docs/00_修改与需求/03_新样式/02_token/01_token.md）：
-   文字四档实色化各自独立色相；线条/交互为透明度叠加色；图标线条层 currentColor 吃文字档位。 */
+/* AniKit 设计 tokens
+   阶段七（2026-08-28 起，样式定稿）：新体系唯一源头 = docs/UI 重构/Design Token/Token.md。
+   过渡策略：新 token 一律 --n- 前缀，与旧体系变量并存零碰撞——旧组件按新稿重写一个迁移一个，
+   旧块随最后的旧组件清零后整体删除、新块去前缀归位（旧块禁新增引用）。
+   换算口径：背景模糊 = figma 值减半（250→125，经主窗口稿 figma-css 导出值实证）；
+   投影/内阴影照 figma-css 导出原值（主窗口稿 box-shadow 与 Token.md 一致，不转换）。
+   Fira Mono 非 Windows 系统字体：项目未内嵌，--n-font-mono 先带 Consolas 兜底，待补字体文件。 */
 
 :root {
+  /* ================= 新体系（Token.md） ================= */
+
+  /* 1.1 品牌 */
+  --n-brand: #0f89ec; /* 常态 */
+  --n-brand-bright: #37a5ff; /* 提亮（hover 等） */
+  --n-brand-50: rgba(15, 137, 236, 0.5); /* 半透明 */
+
+  /* 1.2 通用（暗色阶：窗口 / 容器底色） */
+  --n-g1: hsl(0, 0%, 9%);
+  --n-g2: hsl(0, 0%, 11%);
+  --n-g3: hsl(0, 0%, 14%);
+  --n-g4: hsl(0, 0%, 16%);
+  --n-g5: hsl(0, 0%, 18%);
+  --n-g6: hsl(0, 0%, 20%);
+  --n-g-a1: hsla(0, 0%, 12%, 0.93); /* 半透明-1：主窗口底 */
+  --n-g-a2: hsla(0, 0%, 16%, 0.5); /* 半透明-2 */
+  /* 渐变角度稿未注明，暂按 180deg（上→下），验收时纠正 */
+  --n-g-grad-1: linear-gradient(180deg, hsl(0, 0%, 20%) 0%, hsl(0, 0%, 11%) 100%); /* 渐变-1 */
+  --n-g-grad-2: linear-gradient(180deg, hsla(0, 0%, 9%, 0) 0%, hsla(0, 0%, 9%, 0.8) 100%); /* 渐变-2：同色 0%→80% 渐隐罩 */
+
+  /* 1.3 亮色（文字 / 图标 / 线条叠加） */
+  --n-l1: hsl(0, 0%, 95%);
+  --n-l2: hsl(0, 0%, 75%);
+  --n-l3: hsl(0, 0%, 50%);
+  --n-l4: hsl(0, 0%, 30%);
+  --n-l-disabled: hsl(0, 0%, 25%); /* 禁用 */
+  --n-l-a1: hsla(0, 0%, 95%, 0.18); /* 半透明-1 */
+  --n-l-a2: hsla(0, 0%, 95%, 0.14); /* 半透明-2 */
+  --n-l-a3: hsla(0, 0%, 95%, 0.06); /* 半透明-3 */
+  --n-l-grad-1: linear-gradient(180deg, hsl(0, 0%, 75%) 0%, hsl(0, 0%, 30%) 100%); /* 渐变-1 */
+
+  /* 1.4 状态 */
+  --n-success: #07a71f; /* 成功 */
+  --n-warning: #db880c; /* 警告 */
+  --n-danger: #dc3939; /* 禁止 */
+
+  /* 1.5 MarkDown */
+  --n-md-title: hsl(0, 0%, 75%); /* 标题 */
+  --n-md-body: hsl(0, 0%, 60%); /* 正文 */
+  --n-md-other: hsl(0, 0%, 40%); /* 其他 */
+
+  /* 1.6 自定义（-1 亮档 / -2 暗档） */
+  --n-custom-1: hsl(0, 0%, 80%); /* 常态-1 */
+  --n-custom-2: hsl(0, 0%, 40%); /* 常态-2 */
+  --n-custom-red-1: #ff6566;
+  --n-custom-red-2: #783b3b;
+  --n-custom-blue-1: #2f9bfa;
+  --n-custom-blue-2: #255076;
+  --n-custom-yellow-1: #e7ac1b;
+  --n-custom-yellow-2: #6e571d;
+  --n-custom-yellowgreen-1: #87ca1e;
+  --n-custom-yellowgreen-2: #48631e;
+  --n-custom-green-1: #22c643;
+  --n-custom-green-2: #20612d;
+  --n-custom-cyan-1: #19c5c0;
+  --n-custom-cyan-2: #1c615f;
+  --n-custom-purple-1: #816aff;
+  --n-custom-purple-2: #453c78;
+  --n-custom-pink-1: #d069f5;
+  --n-custom-pink-2: #653c74;
+  --n-custom-peach-1: #d25591;
+  --n-custom-peach-2: #66344c;
+
+  /* 1.7 黑白 */
+  --n-white: #ffffff;
+  --n-black: #000000;
+
+  /* 2 字体 */
+  --n-font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  --n-font-mono: "Fira Mono", Consolas, monospace; /* Fira Mono 未内嵌，先走兜底，待补字体文件 */
+
+  /* 2.1 通用（字号 / 行高成组；加粗档 = 同组 + --n-fw-bold） */
+  --n-fs-body: 13px; /* 正文 / 正文-加粗 */
+  --n-lh-body: 18px;
+  --n-fs-secondary: 12px; /* 次要文字 / 次要文字-加粗 */
+  --n-lh-secondary: 16px;
+  --n-fs-num: 12px; /* 数字（Fira Mono 中） */
+  --n-lh-num: 16px;
+  --n-fs-num-lg: 13px; /* 数字-大 */
+  --n-lh-num-lg: 18px;
+  --n-fs-btn: 15px; /* 按钮文字 */
+  --n-lh-btn: 20px;
+  --n-fs-btn-lg: 16px; /* 按钮文字-大（Bold） */
+  --n-lh-btn-lg: 22px;
+  --n-fs-title: 18px; /* 标题（Bold） */
+  --n-lh-title: 26px;
+  --n-fs-display: 36px; /* 超大标题（Bold） */
+  --n-lh-display: 46px;
+
+  /* 2.2 MarkDown（H1-H4 Bold；H4-H6 同档） */
+  --n-fs-md-h1: 30px;
+  --n-lh-md-h1: 40px;
+  --n-fs-md-h2: 26px;
+  --n-lh-md-h2: 36px;
+  --n-fs-md-h3: 22px;
+  --n-lh-md-h3: 32px;
+  --n-fs-md-h4: 18px;
+  --n-lh-md-h4: 28px;
+  --n-fs-md-body: 15px;
+  --n-lh-md-body: 25px;
+  --n-fs-md-code: 14px;
+  --n-lh-md-code: 24px;
+
+  --n-fw-regular: 400;
+  --n-fw-medium: 500; /* Fira Mono 中 */
+  --n-fw-bold: 700;
+
+  /* 3 效果（box-shadow 组合整条存；模糊变量配 backdrop-filter 使用） */
+  --n-effect-raised: inset 0 1px 1px rgba(255, 255, 255, 0.2), 0 2px 1px rgba(0, 0, 0, 0.2); /* 立体感-通用 */
+  --n-effect-raised-primary: inset 0 1px 1px rgba(255, 255, 255, 0.4), 0 2px 1px rgba(0, 0, 0, 0.2); /* 立体感-主要按钮 */
+  --n-effect-raised-blur: inset 0 1px 1px rgba(255, 255, 255, 0.2), 0 4px 20px rgba(0, 0, 0, 0.4); /* 立体感-背景模糊-大阴影（阴影部分） */
+  --n-shadow-lg: 0 4px 40px rgba(0, 0, 0, 0.6); /* 大阴影 */
+  --n-shadow-sm: 0 4px 20px rgba(0, 0, 0, 0.4); /* 小阴影 */
+  --n-blur-sm: 40px; /* 背景模糊-小（figma 80 减半） */
+  --n-blur-lg: 125px; /* 背景模糊-大（figma 250 减半，主窗口稿导出实证） */
+  /* 组合口径：立体感-背景模糊 = --n-effect-raised + backdrop-filter: blur(var(--n-blur-sm))；
+     立体感-背景模糊-大阴影 = --n-effect-raised-blur + blur(var(--n-blur-sm))。
+     主窗口级模糊正式方案 = Windows 云母（主窗口稿备注），backdrop-filter 仅作预览/兜底。 */
+
+  /* 4 圆角 */
+  --n-radius-4: 4px;
+  --n-radius-6: 6px;
+  --n-radius-8: 8px;
+  --n-radius-16: 16px;
+
+  /* 5 间距 */
+  --n-space-2: 2px;
+  --n-space-4: 4px;
+  --n-space-6: 6px;
+  --n-space-8: 8px;
+  --n-space-12: 12px;
+  --n-space-16: 16px;
+  --n-space-24: 24px;
+  --n-space-36: 36px;
+  --n-space-72: 72px;
+
+  /* 6 动画 */
+  --n-dur-100: 100ms; /* 快速反馈 */
+  --n-dur-150: 150ms; /* 通用 */
+  --n-dur-250: 250ms; /* 小位移 */
+  --n-dur-300: 300ms; /* 形态切换 */
+  --n-dur-400: 400ms; /* 大幅度位移 */
+  --n-ease-in-out: cubic-bezier(0.32, 0.08, 0.1, 1); /* 缓入缓出 */
+  --n-ease-in: cubic-bezier(0, 0, 0.1, 1); /* 缓入 */
+  --n-ease-out: cubic-bezier(0.7, 0, 1, 1); /* 缓出 */
+
+  /* ================= 旧体系（legacy，随组件重写逐步清除，禁新增引用） =================
+     2026-08-07 新体系（用户设计 docs/00_修改与需求/03_新样式/02_token/01_token.md）：
+     文字四档实色化各自独立色相；线条/交互为透明度叠加色；图标线条层 currentColor 吃文字档位。 */
+
   /* 品牌色 */
   --brand: #0a8079; /* 常态：主按钮 / 原始文件徽章 / 开关 / 复选·单选框 / 二级面板标签选中 / 进度条 */
   --brand-border: #3dddd2; /* 边框线：卡片选中边框 / 拆分条悬停 / 选择模式窗口边框线 */
