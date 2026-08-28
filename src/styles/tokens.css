@@ -4,7 +4,7 @@
    旧块随最后的旧组件清零后整体删除、新块去前缀归位（旧块禁新增引用）。
    换算口径：背景模糊 = figma 值减半（250→125，经主窗口稿 figma-css 导出值实证）；
    投影/内阴影照 figma-css 导出原值（主窗口稿 box-shadow 与 Token.md 一致，不转换）。
-   Fira Mono 非 Windows 系统字体：项目未内嵌，--n-font-mono 先带 Consolas 兜底，待补字体文件。 */
+   Fira Mono 已内嵌（fonts.css @font-face ← assets/fonts/，OFL 许可），Consolas 仅兜底。 */
 
 :root {
   /* ================= 新体系（Token.md） ================= */
@@ -76,7 +76,7 @@
 
   /* 2 字体 */
   --n-font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
-  --n-font-mono: "Fira Mono", Consolas, monospace; /* Fira Mono 未内嵌，先走兜底，待补字体文件 */
+  --n-font-mono: "Fira Mono", Consolas, monospace; /* Fira Mono 已内嵌（fonts.css），Consolas 兜底 */
 
   /* 2.1 通用（字号 / 行高成组；加粗档 = 同组 + --n-fw-bold） */
   --n-fs-body: 13px; /* 正文 / 正文-加粗 */

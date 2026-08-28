@@ -42,7 +42,7 @@ const markdown: TypeRow[] = [
   <section id="design-system-type" class="pv-section">
     <h2 class="pv-sec-title">字体</h2>
     <p class="pv-sec-desc">
-      Token.md 第 2 节；Fira Mono 未内嵌（非 Windows 系统字体），当前走 Consolas 兜底，待补字体文件。
+      Token.md 第 2 节；Fira Mono 已内嵌（assets/fonts/，OFL 许可），Consolas 仅兜底。
     </p>
     <div class="pv-group">
       <h3 class="pv-group-title">2.1 通用</h3>

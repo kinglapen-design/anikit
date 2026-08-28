@@ -3,6 +3,7 @@ import { createApp } from "vue";
 import { createPinia } from "pinia";
 import App from "./App.vue";
 import { vTip } from "./lib/tip";
+import "./styles/fonts.css";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "dockview-core/dist/styles/dockview.css";

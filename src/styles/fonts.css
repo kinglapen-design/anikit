@@ -1,0 +1,19 @@
+/* Fira Mono 内嵌（2026-08-28 入库，源 = google/fonts 官方仓库，SIL OFL 许可随附 assets/fonts/OFL.txt）：
+   数字档（中 = Medium 500）与 MarkDown 代码块档（Regular 400）用，经 --n-font-mono 引用。
+   非 Windows 系统字体，Consolas 仅作字体文件缺失时的兜底。 */
+
+@font-face {
+  font-family: "Fira Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../assets/fonts/FiraMono-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Fira Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../../assets/fonts/FiraMono-Medium.ttf") format("truetype");
+}
