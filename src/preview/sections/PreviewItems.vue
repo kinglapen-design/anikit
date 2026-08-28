@@ -68,6 +68,10 @@ const tints = ["", "red", "blue", "yellow", "yellowgreen", "green", "cyan", "pur
           <span class="pv-cap">自动导入</span>
         </div>
         <div class="pv-demo-cell">
+          <TreeRowItem kind="quick" icon="thumbnail" name="缩略图" :count="8" />
+          <span class="pv-cap">缩略图</span>
+        </div>
+        <div class="pv-demo-cell">
           <TreeRowItem kind="quick" icon="trash" name="回收站" :count="5" />
           <span class="pv-cap">回收站</span>
         </div>
@@ -186,6 +190,10 @@ const tints = ["", "red", "blue", "yellow", "yellowgreen", "green", "cyan", "pur
         <div class="pv-demo-cell">
           <LinkRelationItem relation="父亲" target="雪牧_自动.fla" />
           <span class="pv-cap">链接关系 · 常态</span>
+        </div>
+        <div class="pv-demo-cell">
+          <LinkRelationItem relation="父亲" target="雪牧_自动.fla" force-state="hover" />
+          <span class="pv-cap">整卡 hover（四级底 + 关闭钮滑入）</span>
         </div>
         <div class="pv-demo-cell">
           <LinkRelationItem relation="父亲" target="雪牧_自动.fla" force-state="chip-hover" />

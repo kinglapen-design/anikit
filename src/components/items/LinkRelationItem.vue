@@ -34,12 +34,10 @@ const emit = defineEmits<{ click: []; close: []; editRelation: [] }>();
       <template v-else>{{ relation }}</template>
     </span>
     <span class="tgt">{{ target }}</span>
-    <span class="ni-slide">
-      <span class="ni-slide-inner">
-        <button class="ni-close" @click.stop="emit('close')">
-          <AppIcon name="close-small" :size="14" />
-        </button>
-      </span>
+    <span class="ni-act">
+      <button class="ni-close" @click.stop="emit('close')">
+        <AppIcon name="close-small" :size="14" />
+      </button>
     </span>
   </div>
 </template>
@@ -99,7 +97,10 @@ const emit = defineEmits<{ click: []; close: []; editRelation: [] }>();
 .tgt {
   flex: 1;
   min-width: 0;
-  text-align: center;
+  /* 名称右对齐（2026-08-28 走查定）；padding-right 20 = 关闭钮 14 + 间距 6 预留，
+     关闭钮覆盖式滑入时名称不被压也不挪位 */
+  padding-right: calc(var(--n-space-8) + 14px);
+  text-align: right;
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
   color: var(--n-l2);

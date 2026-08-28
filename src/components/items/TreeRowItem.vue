@@ -78,6 +78,7 @@ const emit = defineEmits<{ toggle: []; click: [] }>();
   min-width: 0;
 }
 .exp {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -87,6 +88,13 @@ const emit = defineEmits<{ toggle: []; click: [] }>();
   padding: 0;
   color: var(--n-l4);
   transition: transform var(--n-dur-100) var(--n-ease-in-out);
+}
+/* 点击热区外扩（2026-08-28 走查通用问题，旧 TreeItem 同款机制）：
+   上/下 -4 吃满 item padding、左 -6 吃到 item 左缘、右 -3 吃箭头与图标间距一半 */
+.exp::after {
+  content: "";
+  position: absolute;
+  inset: -4px -3px -4px -6px;
 }
 .exp:not(.open) {
   transform: rotate(-90deg); /* 收起 = >，展开 = ∨（expand.svg 源图形朝下） */

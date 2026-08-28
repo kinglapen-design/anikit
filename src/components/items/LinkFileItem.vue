@@ -91,13 +91,13 @@ const emit = defineEmits<{ click: []; close: [] }>();
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 关闭钮：绝对定位右上，常态不显示，hover 右至左滑入（位移 + 透明度） */
+/* 关闭钮：绝对定位右上，常态不显示，hover 右至左滑入（位移 14px + 透明度，2026-08-28 走查修订加大位移） */
 .lf-close {
   position: absolute;
   right: var(--n-space-12);
   top: var(--n-space-12);
   opacity: 0;
-  transform: translateX(4px);
+  transform: translateX(14px);
   transition:
     opacity var(--n-dur-150) var(--n-ease-in-out),
     transform var(--n-dur-150) var(--n-ease-in-out),

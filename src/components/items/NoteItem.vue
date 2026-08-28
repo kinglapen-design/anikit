@@ -26,18 +26,17 @@ const emit = defineEmits<{ click: []; close: [] }>();
   >
     <span class="tc">{{ time }}</span>
     <span class="txt">{{ text }}</span>
-    <span class="ni-slide">
-      <span class="ni-slide-inner">
-        <button class="ni-close" @click.stop="emit('close')">
-          <AppIcon name="close-small" :size="14" />
-        </button>
-      </span>
+    <span class="ni-act" style="--ni-act-right: 6px">
+      <button class="ni-close" @click.stop="emit('close')">
+        <AppIcon name="close-small" :size="14" />
+      </button>
     </span>
   </div>
 </template>
 
 <style scoped>
 .note {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--n-space-6);

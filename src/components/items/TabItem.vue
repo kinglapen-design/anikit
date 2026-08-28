@@ -91,7 +91,8 @@ const emit = defineEmits<{ click: []; close: [] }>();
 .tab.force-hover .x {
   opacity: 1;
 }
-/* 选中：通用/一级底与中间面板同色无缝；底部两侧反弧肩膀（8px 反圆角方块，圆心朝外上角） */
+/* 选中：通用/一级底与中间面板同色无缝；底部两侧反弧肩膀（4px 反圆角方块——
+   2026-08-28 走查定：弧径 = 标签间隙 4，hover 罩层（四周 4px 内缩）右下间距才能统一为 4） */
 .tab.selected,
 .tab.force-selected {
   background: var(--n-g1);
@@ -104,19 +105,19 @@ const emit = defineEmits<{ click: []; close: [] }>();
   content: "";
   position: absolute;
   bottom: 0;
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
   pointer-events: none;
 }
 .tab.selected::before,
 .tab.force-selected::before {
-  left: -8px;
-  background: radial-gradient(circle at 0 0, transparent 7.5px, var(--n-g1) 8px);
+  left: -4px;
+  background: radial-gradient(circle at 0 0, transparent 3.5px, var(--n-g1) 4px);
 }
 .tab.selected::after,
 .tab.force-selected::after {
-  right: -8px;
-  background: radial-gradient(circle at 100% 0, transparent 7.5px, var(--n-g1) 8px);
+  right: -4px;
+  background: radial-gradient(circle at 100% 0, transparent 3.5px, var(--n-g1) 4px);
 }
 .tab.selected .x,
 .tab.force-selected .x {

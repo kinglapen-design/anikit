@@ -56,8 +56,8 @@ const emit = defineEmits<{ toggle: []; more: []; add: []; link: [] }>();
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* 稿值 gap 10 不在间距 token 档（2/4/6/8/12…），space-between 下仅为最小间距，
-     取最近 token 档 8 兜底（自由空间由 space-between 分配，视觉无差）——待用户定是否补 10 档 */
+  /* 稿值 gap 10 = figma 默认自动占位（2026-08-28 用户确认：space-between 下仅为最小间距、
+     视觉无差），按间距 token 档用 8 */
   gap: var(--n-space-8);
   padding-left: var(--n-space-8);
   cursor: default;
@@ -98,6 +98,7 @@ const emit = defineEmits<{ toggle: []; more: []; add: []; link: [] }>();
   text-overflow: ellipsis;
 }
 .chev {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -111,7 +112,19 @@ const emit = defineEmits<{ toggle: []; more: []; add: []; link: [] }>();
   visibility: hidden;
   transition:
     transform var(--n-dur-100) var(--n-ease-in-out),
-    opacity var(--n-dur-100) var(--n-ease-in-out);
+    opacity var(--n-dur-100) var(--n-ease-in-out),
+    color var(--n-dur-100) var(--n-ease-in-out);
+}
+/* 点击热区外扩（2026-08-28 走查：小钮判定太小，缝隙跳抓手/指针光标抖动）——
+   伪元素参与命中判定、布局零影响（旧 TreeItem 展开钮同款机制）；
+   左 -6 吃满名称与展开的间距，其余 -4；hover 提亮二级（走查定） */
+.chev::after {
+  content: "";
+  position: absolute;
+  inset: -4px -4px -4px -6px;
+}
+.chev:hover {
+  color: var(--n-l2);
 }
 .st:hover .chev,
 .st.force-hover .chev {
@@ -146,6 +159,7 @@ const emit = defineEmits<{ toggle: []; more: []; add: []; link: [] }>();
   visibility: visible;
 }
 .act {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -161,6 +175,15 @@ const emit = defineEmits<{ toggle: []; more: []; add: []; link: [] }>();
 .group .act {
   width: 18px;
   height: 18px;
+}
+/* 点击热区外扩：钮间距两半各吃（block gap 8 → -4 / group gap 12 → -6），缝隙不再落空 */
+.act::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+.group .act::after {
+  inset: -6px;
 }
 .act:hover {
   color: var(--n-l2);

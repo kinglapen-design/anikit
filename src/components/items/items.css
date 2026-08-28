@@ -17,33 +17,36 @@
   border-color: var(--n-g6);
 }
 
-/* hover 滑入动作区（关闭钮 / 按钮组）：常态零宽不占位（不产生视觉噪音），
-   hover 右至左滑入——grid 0fr→1fr 自适应内容宽，配透明度淡入 */
-.ni-slide {
-  display: grid;
-  grid-template-columns: 0fr;
-  opacity: 0;
-  transition:
-    grid-template-columns var(--n-dur-150) var(--n-ease-in-out),
-    opacity var(--n-dur-150) var(--n-ease-in-out);
-}
-.ni-hover:hover .ni-slide,
-.ni-hover.force-hover .ni-slide {
-  grid-template-columns: 1fr;
-  opacity: 1;
-}
-.ni-slide-inner {
-  overflow: hidden;
+/* hover 滑入动作区（关闭钮 / 按钮组）：常态隐藏不占位（不产生视觉噪音），
+   hover 右至左滑入——绝对定位覆盖右缘，位移 + 透明度（2026-08-28 走查修订：
+   弃用 grid 0fr→1fr 宽度过渡（视觉上把内容往左挤），改覆盖式位移 14px）。
+   右侧偏移经 --ni-act-right 按容器 padding 传（卡片 12 / 笔记 6） */
+.ni-act {
+  position: absolute;
+  right: var(--ni-act-right, var(--n-space-12));
+  top: 50%;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: var(--n-space-8);
-  min-width: 0;
-  white-space: nowrap;
+  transform: translate(14px, -50%);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--n-dur-150) var(--n-ease-in-out),
+    opacity var(--n-dur-150) var(--n-ease-in-out);
+  z-index: 1;
+}
+.ni-hover:hover .ni-act,
+.ni-hover.force-hover .ni-act {
+  transform: translate(0, -50%);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* 关闭-小钮（14×14）：常态 亮色/四级，hover 提亮 亮色/二级 */
 .ni-close {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -57,4 +60,10 @@
 }
 .ni-close:hover {
   color: var(--n-l2);
+}
+/* 点击热区外扩（伪元素参与命中判定，布局零影响——旧 TreeItem 展开钮同款机制） */
+.ni-close::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
 }
