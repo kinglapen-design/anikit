@@ -66,12 +66,11 @@ function nodeTint(node: FolderNode): string | undefined {
   return node.color ?? props.inheritTint;
 }
 
-// 缩进线色：默认 = 自定义/常态-2（--n-custom-2，40% 灰实色——2026-08-30 四轮用户实机试：
-// 与变色后的颜色-2 暗档同亮度基准更统一；前身 = 亮色/半透明-2）；
-// 节点设自定义色后 = 该色-2 暗档实色（三轮：-1 亮档 14% 与常态灰白反差大看不清）
+// 缩进线色：统一 = 对应颜色-2 的 50% 透明档（2026-08-30 五轮实机定——常态-2 实色偏抢）：
+// 常态 = 常态-2 半透明（新 token --n-custom-2-50）；节点设自定义色后 = 该色-2 的 50%（color-mix 派生）
 function guideColor(node: FolderNode): string | undefined {
   const t = toNewTint(nodeTint(node));
-  return t ? `var(--n-custom-${t}-2)` : undefined;
+  return t ? `color-mix(in srgb, var(--n-custom-${t}-2) 50%, transparent)` : undefined;
 }
 
 // 拖拽落点（C4c）：引擎按 data-folder-id 匹配（dragOperation），zone 三分（上/下插入线、中间并入）；
@@ -210,8 +209,8 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
 }
 /* 缩进竖线：横坐标 = 父级展开钮尖角（item 左 padding 6+depth×20 + 展开钮半宽 9，即
    --guide-x = depth×20+15）；纵坐标首子项顶部 → 末子项底部（top 0 bottom 0 贯穿）。
-   线色 = 自定义/常态-2 实色（40% 灰，2026-08-30 四轮实机定；前身亮色/半透明-2），
-   节点设自定义色后 = 该色-2 暗档实色（三轮：-1 亮档 14% 与常态灰白反差大看不清；--guide-color 传入）。
+   线色 = 常态-2 半透明（--n-custom-2-50，2026-08-30 五轮实机定），
+   节点设自定义色后 = 该色-2 的 50% 档（--guide-color 传入，color-mix 派生）。
    z-index 1：item 罩层满宽后会盖住同层先绘制的线（2026-08-08 走查修复），线在 item 空白
    padding 区（内容从 depth×20+24 起），不压内容 */
 .ft-children::before {
@@ -221,7 +220,7 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: var(--guide-color, var(--n-custom-2));
+  background: var(--guide-color, var(--n-custom-2-50));
   z-index: 1;
   pointer-events: none;
 }

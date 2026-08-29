@@ -8,7 +8,7 @@
 #   S7  树 item 26 高；f2 自定义色 blue → .tt-icon[data-tint="blue"]（旧色名映射新九色）
 #   S8  选中态：点 f1 → 半透明-2 底 + 立体感-通用 + 文字升一级
 #   S9  展开 f1：子层出现 + 缩进线 1px 半透明-2（二轮改定：半透明-3 太淡）；f1 数量 3 → 2（展开 = 直接子项，双口径）
-#   S9d 展开 f2（蓝色）：tint 缩进线 = 颜色-2 实色 rgb(37,80,118)（三轮改定：-1 亮档 14% 看不清）；
+#   S9d 展开 f2（蓝色）：tint 缩进线 = 颜色-2 的 50% rgba(37,80,118,0.5)（五轮改定：实色偏抢）；
 #       档案子项提示装饰圆点 = 颜色-2（tint 变色后口径；tint+选中 = 颜色-1 走预览页陈列）
 #   S10 旧结构清零：.bar-title / .rail / .side-content / .library-switch / .side-thumb 均不存在
 #   截图 r18-sidebar-left.png（整窗 + 侧栏局部）
@@ -283,9 +283,9 @@ async def main():
             check("S9a 展开出子层 + 子项 f1a 渲染",
                   isinstance(exp, dict) and exp.get("children") is True and exp.get("sub") is True,
                   json.dumps(exp))
-            check("S9b 缩进线 1px 常态-2（四轮改定：--n-custom-2 实色）",
+            check("S9b 缩进线 1px 常态-2 的 50%（五轮改定：--n-custom-2-50）",
                   isinstance(exp, dict) and exp.get("lw") == "1px"
-                  and exp.get("lc") == "rgb(102, 102, 102)",
+                  and exp.get("lc") == "rgba(102, 102, 102, 0.5)",
                   json.dumps(exp))
             check("S9c 展开后 f1 数量 = 直接子项 2（双口径）",
                   isinstance(exp, dict) and exp.get("cnt") == "2", json.dumps(exp))
@@ -301,8 +301,10 @@ async def main():
                 " const dot = document.querySelector('.tree-item[data-folder-id=\"f2a\"] .dot');"
                 " return { children: true, line: getComputedStyle(ch, '::before').backgroundColor,"
                 "   dc: dot ? getComputedStyle(dot, '::before').backgroundColor : null }; })()")
-            check("S9d tint 缩进线 = 颜色-2 实色；档案圆点 = 颜色-2",
-                  isinstance(tinted, dict) and tinted.get("line") == "rgb(37, 80, 118)"
+            check("S9d tint 缩进线 = 颜色-2 的 50%；档案圆点 = 颜色-2",
+                  isinstance(tinted, dict)
+                  and tinted.get("line") in ("rgba(37, 80, 118, 0.5)",
+                                             "color(srgb 0.145098 0.313726 0.462745 / 0.5)")  # color-mix 序列化为 color(srgb)
                   and tinted.get("dc") == "rgb(37, 80, 118)",
                   json.dumps(tinted))
 
