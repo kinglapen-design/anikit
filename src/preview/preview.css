@@ -117,6 +117,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--n-space-8);
+  align-items: flex-start; /* 默认 stretch 会把自适应宽组件（拉下按钮等）撑到 caption 宽，2026-08-29 十轮修 */
 }
 .pv-cap {
   color: var(--n-l3);

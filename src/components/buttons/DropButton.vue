@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // 拉下按钮-横向——docs/UI 重构/Design Token/组件/按钮/拉下按钮-横向：
-// 容器 通用/六级底 + 亮色/半透明-3 1px 内描边，高 28 padding 6 圆角 6，宽度自适应内容；
+// 容器 通用/六级底 + 亮色/半透明-3 1px 内描边，高 28 padding 6 圆角 6，**宽度自适应内容、随展开收起一起变**；
 // 常态只显示选中项 + 展开箭头朝右；点箭头展开全部项（箭头转朝左），点项 = 选中并收起；
-// 展开/收起 = 未选项 grid 0fr→1fr 推挤式宽度展开（item 族 .ni-slide 同款机制），250ms 小位移（--n-dur-250）；
-// 间距模型（2026-08-29 走查定）：容器左 padding 6 + 每项 wrap 内层左 padding 6（首项视觉前距 12 = 稿值）——
-//   缝恒由后项提供，选中项换位不留缝不错乱（此前"仅未选项带 padding"，选中 MB/GB 时与前项贴死，作废）；
+// 展开/收起动画 = 250ms 小位移（--n-dur-250）：**JS 实测各项内容宽 + wrap 显式 width 过渡**——
+//   grid 0fr→1fr 推挤只适用外部定宽容器（item 卡片 240 有效），本组件内容自适应下 0fr 轨道仍把
+//   max-content 计入容器宽度（收起态隐藏项占位撑宽、间距错乱，2026-08-29 走查实锤），故改实测方案；
+// 间距模型：容器 padding 6 + 各项内层左 padding 6（首项视觉前距 12 = 稿值 6+6），缝恒由后项提供；
 // 箭头 = 标题同款 expand（∨ 朝下，∓90° 旋转得朝右/朝左），hover 升 亮色/二级；
 // 项文字 = 次要文字-加粗：选中 亮色/一级、未选 亮色/三级（hover 升二级）。
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
 import AppIcon from "../AppIcon.vue";
 
 const model = defineModel<string>({ required: true });
@@ -17,6 +18,15 @@ const props = withDefaults(
 );
 
 const expanded = ref(props.initialExpanded);
+const inners: (HTMLElement | null)[] = []; // v-for 函数 ref 收集（不参与响应式）
+const widths = ref<number[]>([]);
+const ready = ref(false); // 测量完成前禁过渡，防首帧闪动画
+
+onMounted(() => {
+  // inner 恒 width: max-content，任何状态下 offsetWidth = 内容实宽（含左 padding 6）
+  widths.value = props.options.map((_, i) => inners[i]?.offsetWidth ?? 0);
+  requestAnimationFrame(() => (ready.value = true));
+});
 
 function pick(v: string): void {
   model.value = v;
@@ -25,14 +35,14 @@ function pick(v: string): void {
 </script>
 
 <template>
-  <div class="drop-btn" :class="{ expanded }">
+  <div class="drop-btn" :class="[{ expanded }, ready ? 'anim' : '']">
     <span
-      v-for="o in options"
+      v-for="(o, i) in options"
       :key="o"
       class="opt-wrap"
-      :class="{ hide: !expanded && o !== model }"
+      :style="{ width: expanded || o === model ? `${widths[i] ?? 0}px` : '0px' }"
     >
-      <span class="opt-inner">
+      <span class="opt-inner" :ref="(el) => (inners[i] = el as HTMLElement | null)">
         <button v-if="o !== model" class="opt" @click="pick(o)">{{ o }}</button>
         <span v-else class="opt on">{{ o }}</span>
       </span>
@@ -68,23 +78,21 @@ function pick(v: string): void {
 button.opt:hover {
   color: var(--n-l2);
 }
-/* 项推挤式宽度展开（间距 = 内层左 padding 6，收起时随内层一并裁掉） */
+/* 项宽度展开：wrap 受控显式宽度（JS 实测）+ overflow hidden；间距 = 内层左 padding 6 */
 .opt-wrap {
-  display: grid;
-  grid-template-columns: 1fr;
-  transition: grid-template-columns var(--n-dur-250) var(--n-ease-in-out);
+  overflow: hidden;
+  flex: none;
 }
-.opt-wrap.hide {
-  grid-template-columns: 0fr;
+.anim .opt-wrap {
+  transition: width var(--n-dur-250) var(--n-ease-in-out);
 }
 .opt-inner {
-  overflow: hidden;
-  min-width: 0;
   display: flex;
   justify-content: flex-start;
+  width: max-content;
   padding-left: var(--n-space-6);
 }
-/* 箭头：常态朝右，展开朝左（expand 图形 ∨ 朝下，∓90° 旋转）；左 padding 6 = 与末项间距（gap 会因 0fr 隐藏项留缝，不可用） */
+/* 箭头：常态朝右，展开朝左（expand 图形 ∨ 朝下，∓90° 旋转）；左 padding 6 = 与末项间距 */
 .arrow {
   display: inline-flex;
   align-items: center;
