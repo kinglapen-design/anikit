@@ -361,7 +361,7 @@ async def main():
 
             # ── S7 BUG5 新标签页打开恒新开 ──
             print("S7 新标签页打开")
-            ntabs0 = await ev("document.querySelectorAll('.tab-label').length")
+            ntabs0 = await ev("document.querySelectorAll('.dv-tab .tab').length")
             pos = await rect('.tree-item[data-folder-id="f2"] .body')
             if pos:
                 await click(pos["x"], pos["y"], button="right")
@@ -378,8 +378,8 @@ async def main():
             if tab_item:
                 await click(tab_item["x"], tab_item["y"])
                 await asyncio.sleep(0.8)
-            ntabs1 = await ev("document.querySelectorAll('.tab-label').length")
-            active_title = await ev("document.querySelector('.tab-label.active .tab-title')?.textContent.trim() ?? null")
+            ntabs1 = await ev("document.querySelectorAll('.dv-tab .tab').length")
+            active_title = await ev("document.querySelector('.dv-tab .tab.selected .label')?.textContent.trim() ?? null")
             check("S7a 标签数 +1", ntabs1 == (ntabs0 or 0) + 1, f"{ntabs0} → {ntabs1}")
             check("S7b 新页激活且视口 = 场景", active_title == "场景", str(active_title))
 
@@ -407,14 +407,14 @@ async def main():
             if isinstance(btns, list) and len(btns) >= 2 and btns[0]["disabled"] is False:
                 await click(btns[0]["x"], btns[0]["y"])
                 await asyncio.sleep(0.6)
-            active_title = await ev("document.querySelector('.tab-label.active .tab-title')?.textContent.trim() ?? null")
+            active_title = await ev("document.querySelector('.dv-tab .tab.selected .label')?.textContent.trim() ?? null")
             check("S8b 后退回「角色」", active_title == "角色", str(active_title))
             btns = await ev(nav_btns)
             check("S8c 前进钮可用", isinstance(btns, list) and len(btns) >= 2 and btns[1]["disabled"] is False, str(btns))
             if isinstance(btns, list) and len(btns) >= 2 and btns[1]["disabled"] is False:
                 await click(btns[1]["x"], btns[1]["y"])
                 await asyncio.sleep(0.6)
-            active_title = await ev("document.querySelector('.tab-label.active .tab-title')?.textContent.trim() ?? null")
+            active_title = await ev("document.querySelector('.dv-tab .tab.selected .label')?.textContent.trim() ?? null")
             check("S8d 前进回「场景」", active_title == "场景", str(active_title))
 
             print()

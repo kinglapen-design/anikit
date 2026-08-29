@@ -367,8 +367,8 @@ async function togglePin(): Promise<void> {
 /* 主窗口壳（7.1 十七轮 · 主窗口骨架轮贴稿，布局/主窗口/主窗口.md）：transparent 窗口 +
    运行时按系统版本云母/实色双态——基态（fx-solid）= 实色-1 --n-g-a1-solid 回退底，
    fx-mica = 半透明-1 --n-g-a1（云母透出）；圆角 8，最大化归零；大阴影 = DWM shadow
-   （tauri.conf shadow:true）；外框 1px 亮-半透明-1 描边前端自绘（::before，DWM 边框
-   染色保留——lib.rs DWMWA_BORDER_COLOR，实机若见叠粗则云母模式去染色，速查表 §19）。 */
+   （tauri.conf shadow:true）；窗口边框：实色模式前端自绘（::before 1px 亮-半透明-1），
+   云母模式交 DWM（lib.rs DWMWA_BORDER_COLOR 染色 #2E332F，前端不画防双重线，速查表 §19）。 */
 .window {
   position: relative;
   height: 100%;
@@ -387,7 +387,9 @@ async function togglePin(): Promise<void> {
 .window.maximized {
   border-radius: 0;
 }
-/* 1px 亮-半透明-1 窗口描边（稿值，伪元素 inset 0 自绘不占空间）：
+/* 1px 亮-半透明-1 窗口描边（稿值，伪元素 inset 0 自绘不占空间）——仅实色回退模式自绘；
+   云母模式边框整体交 DWM（lib.rs DWMWA_BORDER_COLOR 染色 #2E332F），前端再画与 DWM
+   边框叠粗成双重线（2026-08-30 实机 BUG，用户定交 DWM 免 BUG）；
    z-54 = 三栏内容之上、picking 外框（55）之下；最大化贴屏边无意义隐藏 */
 .window::before {
   content: "";
@@ -397,6 +399,9 @@ async function togglePin(): Promise<void> {
   border-radius: var(--n-radius-8);
   pointer-events: none;
   z-index: 54;
+}
+.window.fx-mica::before {
+  border: 0;
 }
 .window.maximized::before {
   border: 0;

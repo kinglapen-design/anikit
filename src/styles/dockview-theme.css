@@ -1,7 +1,9 @@
-/* AniKit dockview 主题（1.2 多标签页，figma-css 15_标签栏 / 39_右键菜单-标签页）：
-   标签栏 46px / C3 底 / 下边框 暗-悬停；标签页 32px / 圆角 6 / padding 6·8；
-   选中 = C4 底 + 亮-选中 1px 边框；未选中 = 与栏同色（C3）、之间 暗-悬停 竖分割线；
-   文字 = 标签档 12/17。变量名见 dockview-core/dist/styles/dockview.css（dockview-theme-dark）。 */
+/* AniKit dockview 主题：
+   标签栏（7.1 十九轮贴稿 布局/主窗口/中间面板-标签栏）——栏 46 / padding 8·24·0·36 / 行 gap 12；
+   标签页 180×38（固定宽 + 过多平分收缩，2026-08-30 用户定）/ 间 gap 4 / 选中 = g1 底与内容容器
+   无缝（反弧肩膀）/ 未选中透明三级字；标签页视觉全在 items/TabItem（scoped 自包含），本层只管
+   dockview 外壳尺寸与栏容器排布；右键 = 39 号稿菜单（lib/tabMenus）。
+   变量名见 dockview-core/dist/styles/dockview.css（dockview-theme-dark）。 */
 
 .anikit-dock-theme {
   /* 容器与分组（7.1 十七轮骨架轮贴稿：标签栏与 group 区透明透窗口云母/实色底，
@@ -9,22 +11,14 @@
   --dv-group-view-background-color: transparent;
   --dv-tabs-and-actions-container-background-color: transparent;
   --dv-tabs-and-actions-container-height: 46px;
-  --dv-tabs-and-actions-container-font-size: var(--text-label-size);
 
-  /* 标签页配色（四档全部铺平：激活组 / 非激活组 × 选中 / 未选中） */
-  --dv-activegroup-visiblepanel-tab-background-color: var(--c4);
-  --dv-activegroup-visiblepanel-tab-color: var(--text-normal);
+  /* 标签页外壳四档全透明（视觉由 TabItem 自绘：选中 g1 / 未选中透明） */
+  --dv-activegroup-visiblepanel-tab-background-color: transparent;
   --dv-activegroup-hiddenpanel-tab-background-color: transparent;
-  --dv-activegroup-hiddenpanel-tab-color: var(--text-normal);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--c4);
-  --dv-inactivegroup-visiblepanel-tab-color: var(--text-normal);
+  --dv-inactivegroup-visiblepanel-tab-background-color: transparent;
   --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
-  --dv-inactivegroup-hiddenpanel-tab-color: var(--text-normal);
-  --dv-tab-divider-color: transparent; /* 分割线自绘（下方伪元素） */
+  --dv-tab-divider-color: transparent; /* focus 环随隐形 */
   --dv-tab-margin: 0;
-  --dv-tab-font-size: var(--text-label-size);
-  --dv-tab-border-radius: var(--radius-6);
-  --dv-border-radius: var(--radius-6);
 
   /* 分隔与拆分条 */
   --dv-separator-border: var(--line-hover);
@@ -38,10 +32,11 @@
   --dv-drag-over-border-color: var(--brand-border);
 }
 
-/* 标签栏条：padding 8 16（figma 15：容器 846×46，padding 8px 16px）；
-   7.1 十七轮起栏底透明 + 去下边框线（稿：内容容器 g1 卡片顶边即分界，标签栏轮再细化） */
+/* 标签栏条（稿值）：46 高 / padding 8·24·0·36 / 行 gap 12（标签页组 与 + 钮 的间距）；
+   栏底透明透窗口底（7.1 十七轮定），内容容器 g1 卡片顶边即分界 */
 .anikit-dock-theme .dv-tabs-and-actions-container {
-  padding: 0 var(--space-16);
+  padding: var(--n-space-8) var(--n-space-24) 0 var(--n-space-36);
+  gap: var(--n-space-12);
   box-sizing: border-box;
 }
 
@@ -67,62 +62,34 @@
   border-left: 1px solid var(--n-l-a2);
 }
 
-/* 标签列表：相邻标签页间距 16（figma 15 口径：gap 8 + 分割线 + 8，分割线居中）；
-   标签页在 46 容器内垂直居中（dockview 默认顶对齐） */
+/* 标签列表（稿值）：标签页间 gap 4（选中反弧肩径同此值，hover 罩右下间距才能统一 4）；
+   栏内容区 38（46 - padding-top 8），标签页 stretch 贴满 = 底与内容容器顶齐平 */
 .anikit-dock-theme .dv-tabs-container {
-  gap: var(--space-16);
-  align-items: center;
+  gap: var(--n-space-4);
 }
 
-/* 标签页：32px / 圆角 6 / padding 6·8；固定宽 218（figma 15），文字超出截断；
-   标签页过多时平分收缩（shrink 1 + min-width 0，覆盖 dockview 默认 flex-shrink 0 溢出滚动）；
-   未选中透明（C3 栏色）；悬停未选中 = C2 底 + 暗-悬停边框（2026-08-08 用户定） */
+/* 标签页外壳（尺寸层；视觉归 TabItem）：180 固定宽 + 过多平分收缩（shrink 1 + min-width 0，
+   覆盖 dockview 默认 flex-shrink 0 溢出滚动）；高 100% = 38；去 dockview 默认 padding/圆角，
+   hover/选中底色一律不画（TabItem 自绘，防双层罩） */
 .anikit-dock-theme .dv-tabs-container > .dv-tab {
-  width: 218px;
+  width: 180px;
   flex: 0 1 auto;
   min-width: 0;
-  height: 32px;
-  padding: var(--space-6) var(--space-8);
-  border: 1px solid transparent; /* 占位防选中态抖动 */
-  border-radius: var(--radius-6);
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  position: relative; /* 分割线伪元素锚点 */
-  box-sizing: border-box;
-}
-.anikit-dock-theme .dv-tab.dv-inactive-tab:hover {
-  background: var(--c2);
-  border-color: var(--line-hover);
-}
-.anikit-dock-theme .dv-tab.dv-active-tab {
-  background: var(--c4);
-  border-color: var(--line-active);
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
-/* 相邻标签页之间的竖分割线（figma 15：每个标签页后跟分割线；暗-悬停，高 26 ≈ 30 容器内 26 线）：
-   两标签页间距 16，线居间（本 tab 左缘外 8px） */
-.anikit-dock-theme .dv-tabs-container > .dv-tab + .dv-tab::before {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 1px;
-  height: 26px;
-  background: var(--line-hover);
-  pointer-events: none;
-}
-
-/* 标签页行首（prefix actions，左栏收起时的"展开侧边栏"按钮）：垂直居中 + 与标签页间距 16 */
+/* 标签页行首（prefix actions，左栏收起时的"展开侧边栏"按钮）：垂直居中；
+   与标签页的间距由栏行 gap 12 承担，无按钮时 display:none 不占位（gap 不给空盒留距） */
 .anikit-dock-theme .dv-pre-actions-container {
   display: flex;
   align-items: center;
 }
 .anikit-dock-theme .dv-pre-actions-container:not(:has(.icon-btn)) {
-  margin-right: 0; /* 无按钮时不占位 */
-}
-.anikit-dock-theme .dv-pre-actions-container:has(.icon-btn) {
-  margin-right: var(--space-16);
+  display: none;
 }
 .anikit-dock-theme .dv-pre-actions-container .dv-vue-part,
 .anikit-dock-theme .dv-left-actions-container .dv-vue-part {
@@ -132,33 +99,35 @@
 }
 
 /* 左侧 actions（+ 按钮，tabs 后 = 挨着最后一个标签页；DOM 顺序 tabs → left-actions → void →
-   right-actions，天然位）：与标签页同口径 间隔 16 + 分割线居中（figma 15：添加按钮前也有分割线） */
+   right-actions，天然位）：与标签组间距 = 栏行 gap 12（稿口径，不再自绘分割线）；
+   钮 = IconButton 大档 30×30（稿值），色 亮/三级、hover 亮/二级 + 半透明-3 罩（贴预览展区口径） */
 .anikit-dock-theme .dv-left-actions-container {
   display: flex;
   align-items: center;
-  position: relative;
-  margin-left: var(--space-16);
   margin-right: auto; /* 钉在标签页后——后续元素（void/右端 actions/浮块）一律顶到最右 */
 }
-.anikit-dock-theme .dv-left-actions-container::before {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 1px;
-  height: 26px;
-  background: var(--line-hover);
-  pointer-events: none;
+.anikit-dock-theme .dv-left-actions-container .icon-btn {
+  color: var(--n-l3);
 }
-.anikit-dock-theme .dv-left-actions-container .dv-vue-part {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.anikit-dock-theme .dv-left-actions-container .icon-btn:hover {
+  color: var(--n-l2);
+  background: var(--n-l-a3); /* shorthand 覆盖 IconButton 的 gradient 罩 */
 }
 
 /* 默认 tab 内部结构不使用（自定义 TabLabel 全接管），关掉默认关闭钮的样式干扰 */
 .anikit-dock-theme .dv-default-tab-action {
+  display: none;
+}
+
+/* dockview 自绘滚动条恒关（7.1 十九轮截图实证）：flex trailing gap 计入 scrollable overflow
+   （规范行为）——两 tab 364 内容 scrollWidth 恒 368，假溢出 4px 致横向滚动条（4px 灰带）
+   横贯标签组底部，截断选中标签与内容容器的无缝衔接；标签页 shrink 平分本就无滚动场景 */
+.anikit-dock-theme .dv-scrollbar {
+  display: none;
+}
+
+/* dockview 分组指示线（tab group underline）防御性关闭——稿无此线（分组着色功能未启用时本不渲染） */
+.anikit-dock-theme .dv-tab-group-underline {
   display: none;
 }
 

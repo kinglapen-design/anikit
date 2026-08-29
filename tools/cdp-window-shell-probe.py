@@ -1,7 +1,8 @@
 # CDP 探针：7.1 十七轮 · 主窗口骨架轮（2026-08-30）——窗口壳 + 三段底色结构断言
 #   W1  mica 模式：.window 挂 fx-mica 类 + 底 = 全透明（2026-08-30 十七轮同日观感定稿：
 #       工程里云母上不叠色，DWM 云母直接呈现；稿 93% 半透明-1 是 figma 模拟手法）
-#   W2  窗口描边：.window::before 1px rgba(242,242,242,0.18) + 圆角 8（稿值自绘）
+#   W2  窗口描边：mica 模式 ::before border 0（描边交 DWM，2026-08-30 十七轮同日实机定稿——
+#       前端再画与 DWM 边框叠粗双重线）；solid 轮补 W7c 断言 1px rgba(242,242,242,0.18) + 圆角 8
 #   W3  右栏：g1 rgb(23,23,23) + 左缘 1px 通用/三级 rgb(36,36,36)
 #   W4  左栏壳透明：menu-bar / seg-wrap / side-body 均 rgba(0,0,0,0)（透窗口底；7.1 十八轮左栏轮新类名）
 #   W5  标签栏透明（dv-tabs-and-actions-container rgba(0,0,0,0)）
@@ -162,10 +163,10 @@ async def main():
             check("W1b .window fx-mica 底 = 全透明（云母直呈）", wbg == "rgba(0, 0, 0, 0)", str(wbg))
             before = await ev(
                 "(() => { const s = getComputedStyle(document.querySelector('.window'), '::before');"
-                " return { w: s.borderTopWidth, c: s.borderTopColor, r: s.borderTopLeftRadius, pe: s.pointerEvents }; })()")
-            check("W2 窗口描边 1px 亮/半透明-1 + 圆角 8",
-                  isinstance(before, dict) and before.get("w") == "1px"
-                  and before.get("c") == "rgba(242, 242, 242, 0.18)" and before.get("r") == "8px",
+                " return { w: s.borderTopWidth, pe: s.pointerEvents }; })()")
+            check("W2 mica 描边交 DWM（::before border 0）",
+                  isinstance(before, dict) and before.get("w") == "0px"
+                  and before.get("pe") == "none",
                   json.dumps(before))
             rbg = await bg(".sidebar-right")
             rbd = await ev("(() => { const s = getComputedStyle(document.querySelector('.sidebar-right'));"

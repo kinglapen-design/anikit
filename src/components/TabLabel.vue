@@ -1,10 +1,10 @@
 <script setup lang="ts">
-// 标签页渲染（1.2，figma-css 15_标签栏）：dockview tabComponent，全接管默认 tab 内容。
-// 标题按 viewKey 实时派生（文件夹重命名自动跟随）；锁定 = 置顶图标替代关闭钮；
-// 关闭钮未选中 opacity 0、悬停 / 选中显示；右键 = 39 号稿菜单（lib/tabMenus）。
+// 标签页 dockview 适配器（7.1 十九轮重写）：视觉全归 items/TabItem（贴稿），本件只接业务——
+// 标题按 viewKey 实时派生（文件夹重命名自动跟随）；锁定 = pin 替代关闭钮（TabItem locked）；
+// 右键 = lib/tabMenus；点击激活 / 拖拽换位由 dockview 外壳（.dv-tab）处理，本件不接 click。
 import { computed, onBeforeUnmount, ref } from "vue";
 import type { DockviewPanelApi, IDockviewPanelHeaderProps } from "dockview-vue";
-import AppIcon from "./AppIcon.vue";
+import TabItem from "./items/TabItem.vue";
 import { useContentStore } from "../stores/content";
 import { useTabsStore } from "../stores/tabs";
 import { openTabContextMenu } from "../lib/tabMenus";
@@ -22,15 +22,14 @@ const viewKey = computed(() => (frame.value.params?.viewKey as string) ?? "quick
 const locked = computed(() => !!frame.value.params?.locked);
 const title = computed(() => content.viewTitle(viewKey.value));
 
-// 选中态（关闭钮显隐判定）：panel api 事件驱动，不靠全局 CSS 类（scoped 样式自包含）
+// 选中态：panel api 事件驱动，不靠全局 CSS 类（TabItem selected 自包含样式）
 const active = ref(panelApi.isActive);
 const disposeActive = panelApi.onDidActiveChange(() => {
   active.value = panelApi.isActive;
 });
 onBeforeUnmount(() => disposeActive.dispose());
 
-function onClose(e: MouseEvent): void {
-  e.stopPropagation();
+function onClose(): void {
   tabs.closeTab(panelApi.id);
 }
 
@@ -40,65 +39,21 @@ function onMenu(e: MouseEvent): void {
 </script>
 
 <template>
-  <div class="tab-label" :class="{ active, locked }" @contextmenu.prevent.stop="onMenu">
-    <span class="tab-title">{{ title }}</span>
-    <span v-if="locked" class="tab-pin" v-tip="'已锁定'">
-      <AppIcon name="window-pin-on" :size="18" />
-    </span>
-    <button v-else class="tab-close" v-tip="'关闭标签页'" @mousedown.stop @click="onClose">
-      <AppIcon name="clear" :size="12" />
-    </button>
-  </div>
+  <!-- contextmenu 走 attribute fallthrough 落 TabItem 根；TabItem 根即视觉标签页，撑满 dockview 外壳 -->
+  <TabItem
+    class="dock-tab"
+    :label="title"
+    :selected="active"
+    :locked="locked"
+    @close="onClose"
+    @contextmenu.prevent.stop="onMenu"
+  />
 </template>
 
 <style scoped>
-/* 标签页内容：标题 + 右侧钮（关闭 20×20 padding 4 / 锁定图标 18，figma 15） */
-.tab-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  min-width: 0;
+/* 撑满 dockview 外壳（.dv-tab 180×38，主题层定尺寸）；样式全在 TabItem scoped */
+.dock-tab {
   width: 100%;
-}
-.tab-title {
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  color: var(--text-normal);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tab-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: var(--space-4);
-  box-sizing: border-box;
-  border-radius: var(--radius-6);
-  color: var(--text-label); /* figma：关闭 × = 标签档 */
-  flex: none;
-  transition: background 0.15s ease;
-}
-.tab-close:hover {
-  background: var(--line-hover);
-}
-/* 未选中：关闭钮 opacity 0（figma 15 未选中态），悬停标签页时显示 */
-.tab-label:not(.active) .tab-close {
-  opacity: 0;
-}
-.tab-label:hover .tab-close {
-  opacity: 1;
-}
-.tab-pin {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  color: var(--text-normal); /* figma 15 锁定态：图标 = 常态档 */
-  flex: none;
+  height: 100%;
 }
 </style>

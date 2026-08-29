@@ -211,8 +211,8 @@ async def main():
             pack = await ev("""({
               cards: [...document.querySelectorAll('.frame-card .name')].map((n) => n.textContent.trim()),
               covers: document.querySelectorAll('.frame-card .cover-tag').length,
-              title: document.querySelector('.tab-label.active .tab-title')?.textContent?.trim()
-                     ?? document.querySelector('.tab-title')?.textContent?.trim() ?? null,
+              title: document.querySelector('.dv-tab .tab.selected .label')?.textContent?.trim()
+                     ?? document.querySelector('.dv-tab .tab .label')?.textContent?.trim() ?? null,
               detailBlocks: document.querySelectorAll('.detail-panel .detail-block').length,
             })""")
             print("包内视图:", json.dumps(pack, ensure_ascii=False))

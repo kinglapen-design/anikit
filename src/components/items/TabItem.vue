@@ -2,16 +2,18 @@
 // 标签页 item——docs/UI 重构/Design Token/组件/item/标签页 item/ + 布局/中间面板-标签栏
 // 选中：通用/一级底 + 圆角 8 8 0 0 + 与中间面板无缝衔接（底部两侧反弧肩膀，radial-gradient 反圆角）；
 // 未选中 hover：四周 4px 间距的 6px 圆角矩形罩（亮色/半透明-3，2026-08-28 用户定）；关闭钮常态仅选中显示。
+// 锁定（稿未画，沿用 1.2 现口径）：pin 图标替代关闭钮，色 = 亮色/二级。
 import AppIcon from "../AppIcon.vue";
 
 withDefaults(
   defineProps<{
     label: string;
     selected?: boolean;
-    closable?: boolean; // 锁定页等业务态可不显示关闭钮
+    closable?: boolean; // 业务态可不显示关闭钮（锁定走 locked，pin 替代）
+    locked?: boolean;
     forceState?: "" | "hover" | "selected"; // 预览页强制态
   }>(),
-  { selected: false, closable: true, forceState: "" },
+  { selected: false, closable: true, locked: false, forceState: "" },
 );
 
 const emit = defineEmits<{ click: []; close: [] }>();
@@ -20,11 +22,14 @@ const emit = defineEmits<{ click: []; close: [] }>();
 <template>
   <div
     class="tab"
-    :class="[{ selected }, forceState ? `force-${forceState}` : '']"
+    :class="[{ selected, locked }, forceState ? `force-${forceState}` : '']"
     @click="emit('click')"
   >
     <span class="label">{{ label }}</span>
-    <button v-if="closable" class="x" @click.stop="emit('close')">
+    <span v-if="locked" class="pin" v-tip="'已锁定'">
+      <AppIcon name="window-pin-on" :size="18" />
+    </span>
+    <button v-else-if="closable" class="x" @click.stop="emit('close')">
       <AppIcon name="close-small" :size="14" />
     </button>
   </div>
@@ -71,6 +76,16 @@ const emit = defineEmits<{ click: []; close: [] }>();
     opacity var(--n-dur-100) var(--n-ease-in-out);
 }
 .x:hover {
+  color: var(--n-l2);
+}
+/* 锁定 pin（沿用 1.2 现口径）：18 图标替代关闭钮，亮色/二级 */
+.pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
   color: var(--n-l2);
 }
 /* 未选中 hover：四周 4px 间距的 6px 圆角矩形罩（亮色/半透明-3） */

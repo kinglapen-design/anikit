@@ -172,11 +172,12 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
             <TabItem label="新标签页" />
             <TabItem label="新标签页" force-state="hover" />
             <TabItem label="01_人物" selected />
+            <TabItem label="已锁定" locked />
             <button class="tab-add"><AppIcon name="add-large" :size="18" /></button>
           </div>
           <div class="tab-panel" />
           <span class="pv-cap">
-            栏底 = 通用三级、面板 = 通用一级（示意）；选中标签与面板无缝 + 肩膀反弧，未选中 hover = 四周 4px 的 6px 圆角罩
+            栏底 = 通用三级、面板 = 通用一级（示意）；选中标签与面板无缝 + 肩膀反弧，未选中 hover = 四周 4px 的 6px 圆角罩；锁定 = pin 替代关闭钮（稿未画，沿用 1.2 现口径）。实际标签栏 = dockview 外壳 180 固定宽 + 平分收缩（2026-08-30 用户定），TabLabel 适配器接线
           </span>
         </div>
       </div>
