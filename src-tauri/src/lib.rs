@@ -146,7 +146,8 @@ pub fn run() {
         .build(app)?;
 
       // 关闭按钮 = 隐藏到托盘，不退出（快捷搜索框要求软件常驻后台）
-      // 窗口为不透明 + 原生装饰（DWM 圆角/阴影），线框色用 DWMWA_BORDER_COLOR 指定
+      // 窗口为 transparent + 运行时按系统版本接云母（7.1 十七轮：Win11 22H2+ Mica，
+      // 其余实色回退 --n-g-a1-solid，前端 get_window_fx_mode 查询后切 .window 底色）
       if let Some(w) = app.get_webview_window("main") {
         // 主窗口几何恢复（2026-07-28 用户定：窗口大小位置持久化；tauri.conf visible:false
         // 先隐后显防跳变，预览子窗口不记录不恢复）：显示器拔除致坐标落空时只恢复尺寸不恢复位置
@@ -170,6 +171,8 @@ pub fn run() {
             let _ = w.maximize();
           }
         }
+        // 云母接入须在 show 前（首帧即正确观感，避免实色→半透明跳变）
+        adapters::window_fx::apply_main(&w);
         let _ = w.show();
         let _ = w.set_focus();
 
@@ -225,6 +228,7 @@ pub fn run() {
       commands::settings::save_ui_settings,
       commands::settings::save_window_state,
       commands::settings::exit_app,
+      commands::settings::get_window_fx_mode,
       commands::import::classify_paths,
       commands::import::detect_sequences,
       commands::import::import_paths,

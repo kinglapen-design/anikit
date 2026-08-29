@@ -257,11 +257,15 @@ pub async fn open_preview_window(app: tauri::AppHandle, asset_key: String) -> Re
     .inner_size(1000.0, 760.0)
     .resizable(true)
     .decorations(false)
+    .transparent(true)
     .shadow(true)
     .center()
-    .background_color(tauri::window::Color(9, 9, 10, 255))
     .build()
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| e.to_string())
+  .map(|win| {
+    // 与主窗口同口径接云母（7.1 十七轮；前端 PreviewWindow 根同样查 get_window_fx_mode 切底色）
+    crate::adapters::window_fx::apply(&win);
+  })?;
   Ok(())
 }
 

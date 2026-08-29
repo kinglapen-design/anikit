@@ -81,7 +81,9 @@ function toggleSectionEdit(e: MouseEvent): void {
 </template>
 
 <style scoped>
-/* 右侧面板（figma 11967）：column，宽度可拖（SplitBar，默认 250）。
+/* 右侧面板（7.1 十七轮贴稿 布局/主窗口/右侧边栏-总容器）：column，g1 实底 +
+   左缘 1px 通用/三级通栏分隔线（稿口径；子块原各自 border-left 收编容器统一）；
+   宽度可拖（SplitBar，默认 250）。
    收展 = 常驻挂载 + 宽度由 App.vue rAF 驱动逐帧写入（同 SidebarLeft 的 v6 定案；
    本文件禁挂 width 的 CSS transition）；子块定宽 --sb-w + align-end =
    收窄时内容锚右缘、左缘裁剪（向右滑出观感），不挤压 */
@@ -93,7 +95,8 @@ function toggleSectionEdit(e: MouseEvent): void {
   flex: none;
   min-height: 0;
   overflow: hidden;
-  background: var(--c3);
+  background: var(--n-g1);
+  border-left: 1px solid var(--n-g3);
 }
 /* 标题栏（figma 11986）：46（含边框，box-sizing——与中间标签栏行对齐）/ 下边框 暗-悬停 /
    padding 8 12——窗口控制组由 App.vue 右上角浮块呈现（收展不联动），本行仅作窗口拖拽区。
@@ -105,7 +108,8 @@ function toggleSectionEdit(e: MouseEvent): void {
   flex: none;
   border-bottom: 1px solid var(--line-hover);
 }
-/* 工具栏（figma 12263）：54（含边框）/ padding 12 16 / 间距 4 / 下边框 + 左边框 暗-悬停 */
+/* 工具栏（figma 12263）：54（含边框）/ padding 12 16 / 间距 4 / 下边框 暗-悬停；
+   左缘线收编容器（.sidebar-right border-left，7.1 十七轮） */
 .panel-toolbar {
   display: flex;
   align-items: center;
@@ -116,9 +120,8 @@ function toggleSectionEdit(e: MouseEvent): void {
   padding: var(--space-12) var(--space-16);
   flex: none;
   border-bottom: 1px solid var(--line-hover);
-  border-left: 1px solid var(--line-hover);
 }
-/* 详情内容区（figma 12239 左边框 暗-悬停 = 与中间面板分隔线） */
+/* 详情内容区（左缘分隔线收编容器统一，7.1 十七轮） */
 .side-content {
   position: relative;
   display: flex;
@@ -126,7 +129,6 @@ function toggleSectionEdit(e: MouseEvent): void {
   flex: 1;
   width: var(--sb-w);
   min-height: 0;
-  border-left: 1px solid var(--line-hover);
 }
 .detail-body {
   flex: 1;

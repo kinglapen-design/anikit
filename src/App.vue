@@ -1,6 +1,8 @@
 <script setup lang="ts">
-// 主窗口（03_UI 布局/01）：C1 底 / 圆角 8 / padding 0 / 间距 0 / 外边框 2px border-1。
-// 全透明无边框窗口：最大化时去圆角与边框；resize 判定在可视边缘内 8px（startResizeDragging）。
+// 主窗口（7.1 十七轮 · 主窗口骨架轮贴稿）：transparent 窗口 + 运行时按系统版本
+// 云母/实色双态（fx-mica = 半透明-1 底透云母；基态 = 实色-1 --n-g-a1-solid 回退）；
+// 1px 亮-半透明-1 描边前端自绘（::before）；圆角 8，最大化去圆角与描边；
+// resize 判定在可视边缘内 8px（startResizeDragging）。
 // 导入弹窗宿主：菜单 / 拖拽填 content.importDraft，ImportDialog 确认后刷新内容区。
 // 全局键盘 / 侧栏收展动画 / 窗口几何持久化已拆 lib（useGlobalKeys / useSidebarAnim /
 // windowState，2026-08-12，规范第 3 条行数控制）。
@@ -65,6 +67,11 @@ const dockHostRef = ref<InstanceType<typeof DockHost>>();
 const maximized = ref(false);
 const appWindow = getCurrentWindow();
 const webview = getCurrentWebviewWindow();
+
+// 窗口背景效果模式（7.1 十七轮 · 主窗口骨架轮）：Win11 22H2+ = mica（云母透底），
+// 其余 = solid（实色-1 --n-g-a1-solid 回退）。基态样式即 solid 观感，查询返回 mica
+// 才单向切换——防首帧半透明闪。主窗口与预览子窗口同此一处（.window 为共同根）。
+const fxMode = ref<"solid" | "mica">("solid");
 
 // 启动时未打开任何素材库 → 强制弹初次打开向导（38_向导稿，2.1；状态在 libraryOps.wizardState）
 const wizardOpen = () => wizardState.open;
@@ -131,6 +138,12 @@ let unlistenDragDrop: (() => void) | undefined;
 
 onMounted(() => {
   void syncMaximized();
+  // 查询窗口背景效果模式（返回 mica 才切半透明底；失败保持 solid 实色）
+  void invoke<string>("get_window_fx_mode")
+    .then((m) => {
+      if (m === "mica") fxMode.value = "mica";
+    })
+    .catch(() => {});
   void ui.initSettings(); // 全局 UI 设置加载 + 变更防抖写回（2026-07-28 持久化）
   window.addEventListener("resize", onResize);
   // 视图切换（6.1）：左栏选中项变化即清空素材选择；
@@ -204,7 +217,7 @@ async function togglePin(): Promise<void> {
 </script>
 
 <template>
-  <div class="window" :class="{ maximized, picking: picker.active }">
+  <div class="window" :class="{ maximized, picking: picker.active, 'fx-mica': fxMode === 'mica' }">
     <PreviewWindow v-if="previewParam" :asset-key="previewParam" />
     <!-- 预览子窗口的通知条挂点（6.0；主窗口挂在 DockHost 内） -->
     <!-- 预览子窗口的通知条挂点（6.0；主窗口通知族挂 DockHost 内统一锚点） -->
@@ -351,20 +364,40 @@ async function togglePin(): Promise<void> {
 .del-lib-check {
   margin-top: var(--space-12);
 }
-/* 不透明窗口 + 原生装饰（DWM 阴影）：容器贴满窗口；圆角 8 与 DWM 一致。
-   外框 = DWM 1px 边框染 亮-选中 实色（lib.rs DWMWA_BORDER_COLOR，2026-08-08 用户定；
-   前端不自绘——自绘与 DWM 叠加变粗难看，2026-07-23 实测） */
+/* 主窗口壳（7.1 十七轮 · 主窗口骨架轮贴稿，布局/主窗口/主窗口.md）：transparent 窗口 +
+   运行时按系统版本云母/实色双态——基态（fx-solid）= 实色-1 --n-g-a1-solid 回退底，
+   fx-mica = 半透明-1 --n-g-a1（云母透出）；圆角 8，最大化归零；大阴影 = DWM shadow
+   （tauri.conf shadow:true）；外框 1px 亮-半透明-1 描边前端自绘（::before，DWM 边框
+   染色保留——lib.rs DWMWA_BORDER_COLOR，实机若见叠粗则云母模式去染色，速查表 §19）。 */
 .window {
   position: relative;
   height: 100%;
   display: flex;
   gap: 0;
   padding: 0;
-  background: var(--c1);
+  background: var(--n-g-a1-solid);
   overflow: hidden;
-  border-radius: var(--radius-8);
+  border-radius: var(--n-radius-8);
+}
+.window.fx-mica {
+  background: var(--n-g-a1);
 }
 .window.maximized {
+  border-radius: 0;
+}
+/* 1px 亮-半透明-1 窗口描边（稿值，伪元素 inset 0 自绘不占空间）：
+   z-54 = 三栏内容之上、picking 外框（55）之下；最大化贴屏边无意义隐藏 */
+.window::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--n-l-a1);
+  border-radius: var(--n-radius-8);
+  pointer-events: none;
+  z-index: 54;
+}
+.window.maximized::before {
+  border: 0;
   border-radius: 0;
 }
 /* 选择模式整圈品牌色外边框（6.2 一轮，PRD 03_数据链接 04 四重标识之一；figma 02 稿：

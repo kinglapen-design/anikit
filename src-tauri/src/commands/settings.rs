@@ -29,3 +29,10 @@ pub async fn exit_app(app: tauri::AppHandle) -> Result<(), String> {
   app.exit(0);
   Ok(())
 }
+
+/// 查询主窗口背景效果模式（7.1 十七轮主窗口骨架轮）："mica"（Win11 22H2+ 云母）/
+/// "solid"（实色回退 --n-g-a1-solid）。前端据此前切换 .window 底色。
+#[tauri::command]
+pub async fn get_window_fx_mode() -> Result<String, String> {
+  Ok(crate::adapters::window_fx::main_mode().to_string())
+}

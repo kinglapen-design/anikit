@@ -19,7 +19,8 @@ body {
   line-height: var(--text-body-line);
   font-weight: var(--text-body-weight);
   color: var(--text-highlight);
-  /* 无边框透明窗口：body 透明，圆角与底色由 App 根容器绘制 */
+  /* transparent 窗口（7.1 十七轮主窗口骨架轮）：body 恒透明，云母/实色双态底色与
+     圆角、1px 描边由 App 根容器 .window 绘制（fx-mica = 半透明-1 / 基态 = 实色-1） */
   background: transparent;
   user-select: none;
   -webkit-user-select: none;

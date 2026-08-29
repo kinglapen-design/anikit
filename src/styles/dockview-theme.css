@@ -4,9 +4,10 @@
    文字 = 标签档 12/17。变量名见 dockview-core/dist/styles/dockview.css（dockview-theme-dark）。 */
 
 .anikit-dock-theme {
-  /* 容器与分组 */
-  --dv-group-view-background-color: var(--c1); /* panel 内容区 = 中间面板 C1 */
-  --dv-tabs-and-actions-container-background-color: var(--c3);
+  /* 容器与分组（7.1 十七轮骨架轮贴稿：标签栏与 group 区透明透窗口云母/实色底，
+     内容容器卡片由下方 .dv-content-container 规则提供 g1 实底） */
+  --dv-group-view-background-color: transparent;
+  --dv-tabs-and-actions-container-background-color: transparent;
   --dv-tabs-and-actions-container-height: 46px;
   --dv-tabs-and-actions-container-font-size: var(--text-label-size);
 
@@ -37,11 +38,33 @@
   --dv-drag-over-border-color: var(--brand-border);
 }
 
-/* 标签栏条：padding 8 16、下边框 暗-悬停（figma 15：容器 846×46，padding 8px 16px） */
+/* 标签栏条：padding 8 16（figma 15：容器 846×46，padding 8px 16px）；
+   7.1 十七轮起栏底透明 + 去下边框线（稿：内容容器 g1 卡片顶边即分界，标签栏轮再细化） */
 .anikit-dock-theme .dv-tabs-and-actions-container {
   padding: 0 var(--space-16);
-  border-bottom: 1px solid var(--line-hover);
   box-sizing: border-box;
+}
+
+/* 内容容器（7.1 十七轮贴稿 布局/主窗口/中间面板-内容容器）：g1 实底卡片；
+   最左 group 的卡片带左上 16px 圆角 + 左缘 1px 亮-半透明-2（稿口径）。
+   定位链 = .dv-grid-view > .dv-branch-node > 第一层 split 的首个 view-container——
+   dockview split 首子恒为 .dv-sash-container（探针实证），故首个 view-container 用
+   `.dv-sash-container + .dv-view-container` 紧邻定位（:first-child 恒不匹配，勿回退）；
+   dockview-vue 壳层比 core 深（theme/.dv-shell 下还有 middle-column 两层 split），
+   选择器必须锚 .dv-grid-view 起；深层嵌套分屏时左列内层 group 同带左缘线 = 近似
+   可接受，分屏观感随标签栏轮再精调 */
+.anikit-dock-theme .dv-content-container {
+  background: var(--n-g1);
+}
+.anikit-dock-theme
+  .dv-grid-view
+  > .dv-branch-node
+  > .dv-split-view-container
+  > .dv-sash-container
+  + .dv-view-container
+  .dv-content-container {
+  border-radius: 16px 0 0 0;
+  border-left: 1px solid var(--n-l-a2);
 }
 
 /* 标签列表：相邻标签页间距 16（figma 15 口径：gap 8 + 分割线 + 8，分割线居中）；

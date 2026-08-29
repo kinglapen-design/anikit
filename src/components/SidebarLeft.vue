@@ -169,7 +169,8 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
   overflow: hidden;
 }
 /* 标题栏（figma 58）：46（含边框，box-sizing——与中间标签栏行对齐，2026-08-08 走查修正）/
-   C3 / 下边框 暗-悬停 / padding 8 16 8 12 / space-between */
+   下边框 暗-悬停 / padding 8 16 8 12 / space-between；
+   7.1 十七轮起壳底透明（稿菜单栏无背景，透窗口云母/实色底，左栏轮再细调内部） */
 .bar-title {
   display: flex;
   align-items: center;
@@ -180,7 +181,6 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
   box-sizing: border-box;
   padding: var(--space-8) var(--space-16) var(--space-8) var(--space-12);
   flex: none;
-  background: var(--c3);
   border-bottom: 1px solid var(--line-hover);
 }
 /* 右对齐按钮组（figma 137）：间距 4 */
@@ -200,7 +200,8 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
   width: var(--sb-w);
   min-height: 0;
 }
-/* 导航栏（figma 330）：54px / C3 / 右边框 暗-悬停 / padding 12 / space-between */
+/* 导航栏（figma 330）：54px / 右边框 暗-悬停 / padding 12 / space-between；
+   7.1 十七轮起壳底透明（透窗口底） */
 .rail {
   display: flex;
   flex-direction: column;
@@ -210,7 +211,6 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
   width: 54px;
   flex: none;
   box-sizing: border-box;
-  background: var(--c3);
   border-right: 1px solid var(--line-hover);
 }
 /* 视图切换按钮组（figma 357）：间距 8；选中态 = 亮-选中 底（IconButton active） */
@@ -232,8 +232,9 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
 .help-btn:disabled:hover {
   background: var(--c5) !important;
 }
-/* 内容区（figma 607）：250 / C3 / 右边框 暗-悬停；拖宽时导航栏固定 54、本区弹性；
-   收起时随 aside 收窄被压至 0（flex 1 + min-width 0 + 溢出裁切，无需单独动画） */
+/* 内容区（figma 607）：250 / 右边框 暗-悬停；拖宽时导航栏固定 54、本区弹性；
+   收起时随 aside 收窄被压至 0（flex 1 + min-width 0 + 溢出裁切，无需单独动画）；
+   7.1 十七轮起壳底透明（透窗口底） */
 .side-content {
   position: relative;
   display: flex;
@@ -241,7 +242,6 @@ async function toggleLibrarySwitch(e: MouseEvent): Promise<void> {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  background: var(--c3);
   border-right: 1px solid var(--line-hover);
 }
 /* 资源库切换按钮（figma 632；2026-08-15 顶行三栏对齐定案）：54 含边框 / padding 12 16 /
