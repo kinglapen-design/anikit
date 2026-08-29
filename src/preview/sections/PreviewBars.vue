@@ -77,11 +77,14 @@ pickerDemo.purpose = "relation";
 pickerDemo.origin = { kind: "asset", id: "demo-asset", name: "01_人物" };
 
 // —— 悬停-链接列表演示：seed content store 两条活位置（同 asset 两文件夹；幂等防 HMR 重复）——
+// f-renwu 故意套一层父级「角色」：实证路径两级截止口径（只显 区块 / 所在目录，完整父级链不放，2026-08-29 用户定）
 const contentDemo = useContentStore();
 if (contentDemo.blocks.length === 0) {
   contentDemo.blocks = [{ id: "dir", name: "文件夹", icon: null }];
   contentDemo.folders = [
-    { id: "f-renwu", name: "01_人物", count: 1, children: [] },
+    { id: "f-juese", name: "角色", count: 1, children: [
+      { id: "f-renwu", name: "01_人物", count: 1, children: [] },
+    ] },
     { id: "f-changjing", name: "02_场景", count: 1, children: [] },
   ];
   const base = {

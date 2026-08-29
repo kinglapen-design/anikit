@@ -3,7 +3,8 @@
 // 悬停卡片徽章（origin ★ / 链接 icon）弹出该文件全部活位置列表。
 // 壳 = 通用/半透明-1 + 1px 亮色/半透明-3 真 border + 小阴影 + blur 小 + 圆角 6；宽随内容（max-content，上限 360）。
 // 行 = 双行结构（padding 8 / gap 4 / 行间 1px 半透明-3 顶线，首行去线；hover 底 半透明-3）：
-//   上 = 文件夹图标 18（双色调原值）+ 全路径（首段 正文-加粗 二级、分隔 / 二级、后续段 三级）；
+//   上 = 文件夹图标 18（双色调原值）+ 路径——**只写 所属区块 / 所在目录 两级**（完整父级链放不下，
+//        2026-08-29 用户定；与详情链接区块「两段」口径一致）：首段 正文-加粗 二级、分隔 / 二级、目录段 三级；
 //   下 = 显示名（正文 三级）+ 徽章（origin = original-file-badge 14 品牌色原值 / 链接 = linked-file-badge 13 三级）。
 // 点击行 = 跳转定位（该位置视口 + 选中卡片，同链接区块 item / 关系 item 口径）后关闭。
 // 机制：Teleport body fixed 定位（徽章上方，右对齐；上方不够翻下方），150ms 延迟出，
@@ -33,7 +34,7 @@ function pathOf(folderId: string): FolderNode[] | null {
 interface Row {
   key: string;
   folderId: string;
-  segments: string[]; // 全路径段（区块 / … / 目录；档案目录带 .档案 后缀）
+  segments: string[]; // 路径两段：区块 / 所在目录（档案目录带 .档案 后缀；完整父级链不放，2026-08-29 用户定）
   name: string;
   origin: boolean;
   isArchive: boolean; // 所在目录是档案（图标换 archive）
@@ -51,10 +52,8 @@ const rows = computed<Row[]>(() =>
       const isArchive = dir?.kind === "archive";
       const top = trail[0];
       const blockName = content.blocks.find((b) => b.id === (top?.block ?? "dir"))?.name ?? "目录";
-      const segments = [
-        blockName,
-        ...trail.map((n) => (n.kind === "archive" ? `${n.name}.档案` : n.name)),
-      ];
+      // 两级截止：区块 + 所在目录（中间父级省略）；dir 恒存在（非 root 必有父链）
+      const segments = [blockName, ...(dir ? [isArchive ? `${dir.name}.档案` : dir.name] : [])];
       return {
         key: `${p.assetId}|${p.folderId}|${p.name}`,
         folderId: p.folderId,
