@@ -283,9 +283,9 @@ async def main():
             check("S9a 展开出子层 + 子项 f1a 渲染",
                   isinstance(exp, dict) and exp.get("children") is True and exp.get("sub") is True,
                   json.dumps(exp))
-            check("S9b 缩进线 1px 半透明-2（二轮改定）",
+            check("S9b 缩进线 1px 常态-2（四轮改定：--n-custom-2 实色）",
                   isinstance(exp, dict) and exp.get("lw") == "1px"
-                  and exp.get("lc") == "rgba(242, 242, 242, 0.14)",
+                  and exp.get("lc") == "rgb(102, 102, 102)",
                   json.dumps(exp))
             check("S9c 展开后 f1 数量 = 直接子项 2（双口径）",
                   isinstance(exp, dict) and exp.get("cnt") == "2", json.dumps(exp))
