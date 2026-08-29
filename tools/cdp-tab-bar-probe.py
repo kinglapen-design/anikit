@@ -10,6 +10,8 @@
 #   T9  dockview 自绘滚动条（dv-scrollbar）恒关——flex trailing gap 假溢出 4px 冒灰带截断无缝
 #   T11 中间面板底色链（十九轮二轮用户定）：dock-host / content-area 透明 + 内容容器 g1 透出
 #   T10 左栏收起 → 栏左 padding 36→12（十九轮二轮用户定）；展开恢复 36
+#   T12 肩膀像素断言（十九轮三轮：截图读像素——首尾标签外肩被 .dv-scrollable/.dv-tabs-container
+#       overflow 裁内容盒的 BUG，computed 样式在 ≠ 可见；a=单标签双肩 / b=多标签最右右肩）
 #   截图 r19-tab-bar.png（hover 未选中态留档；headless 无云母，仅结构）
 # 桩：最小主窗口（空 placements）；fx 固定 solid（本断言与窗口特效无关）。
 # 坑位沿用：端口/profile 随 pid 唯一 + 禁缓存；收尾 taskkill /F /T 整树杀（踩坑 056）。
@@ -17,6 +19,7 @@
 #   tools/.venv/Scripts/python.exe tools/cdp-tab-bar-probe.py
 import asyncio
 import base64
+import io
 import json
 import os
 import subprocess
@@ -25,6 +28,7 @@ import time
 import urllib.request
 
 import websockets
+from PIL import Image
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -195,6 +199,32 @@ async def main():
                   and sel.get("ar") == "-4px")
             check("T5 选中 = g1 底 + 圆角 8 8 0 0 + 一级字 + 关闭钮显 + 两侧 4px 反弧", ok, json.dumps(sel))
 
+            # T12 肩膀像素级断言（2026-08-30 实机 BUG 补盲：computed 样式在 ≠ 可见——
+            # .dv-scrollable/.dv-tabs-container overflow 裁内容盒，首尾标签外肩被裁）：
+            # 截图读像素，单标签选中时双肩点 ≈ g1（肩弧过渡区取肩块中心，容差放宽至 ≤60）
+            async def shoulder_px(tag_js):
+                r = await ev(
+                    "(() => { const r = " + tag_js + ".getBoundingClientRect();"
+                    " return { l: r.left, r: r.right, b: r.bottom }; })()")
+                shot = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
+                im = Image.open(io.BytesIO(base64.b64decode(shot["result"]["data"]))).convert("RGB")
+                if not isinstance(r, dict):
+                    return None
+                y = int(r["b"] - 1)
+                return {
+                    "left": im.getpixel((int(r["l"] - 1), y)),
+                    "right": im.getpixel((int(r["r"] + 1), y)),
+                }
+
+            # g1 = rgb(23,23,23)，窗口实色底 = rgb(31,31,31)：阈值 27 分判（抗锯齿过渡带 ≤4）
+            def near_g1(px):
+                return isinstance(px, tuple) and all(c <= 27 for c in px)
+
+            sh1 = await shoulder_px("document.querySelector('" + BAR + " .dv-tab .tab')")
+            check("T12a 单标签双肩像素可见（≈g1，不被容器裁剪）",
+                  isinstance(sh1, dict) and near_g1(sh1.get("left")) and near_g1(sh1.get("right")),
+                  json.dumps(sh1))
+
             # 添加钮规格
             add = await ev(
                 "(() => { const b = document.querySelector('" + BAR + " .dv-left-actions-container .icon-btn');"
@@ -262,6 +292,12 @@ async def main():
                   and grounds.get("area") == "rgba(0, 0, 0, 0)"
                   and grounds.get("card") == "rgb(23, 23, 23)",
                   json.dumps(grounds))
+
+            # T12b 多标签：最右一枚选中（第二枚）的右肩像素可见（同 T12a 裁剪口径）
+            sh2 = await shoulder_px("document.querySelectorAll('" + BAR + " .dv-tab .tab')[1]")
+            check("T12b 多标签最右选中标签右肩像素可见（≈g1）",
+                  isinstance(sh2, dict) and near_g1(sh2.get("left")) and near_g1(sh2.get("right")),
+                  json.dumps(sh2))
 
             # T10 左栏收起时标签栏左 padding 36 → 12（十九轮二轮用户定）：
             # 点菜单栏收起钮 → 等 400ms 收展动画 → 断言；再点展开钮（pre-actions）恢复

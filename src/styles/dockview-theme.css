@@ -63,9 +63,18 @@
 }
 
 /* 标签列表（稿值）：标签页间 gap 4（选中反弧肩径同此值，hover 罩右下间距才能统一 4）；
-   栏内容区 38（46 - padding-top 8），标签页 stretch 贴满 = 底与内容容器顶齐平 */
+   栏内容区 38（46 - padding-top 8），标签页 stretch 贴满 = 底与内容容器顶齐平。
+   反弧肩膀伸出 tab 本体左右各 4px——.dv-scrollable（overflow hidden，dockview 7 包装层）与
+   本容器均裁至内容盒，首尾标签的外侧肩膀被裁掉（2026-08-30 实机 BUG，探针截图像素实证）：
+   两层各加 padding 0 4px + 负 margin 抵消——tab 视觉位置不变，padding 区供肩膀绘制 */
+.anikit-dock-theme .dv-scrollable {
+  padding: 0 var(--n-space-4);
+  margin: 0 calc(-1 * var(--n-space-4));
+}
 .anikit-dock-theme .dv-tabs-container {
   gap: var(--n-space-4);
+  padding: 0 var(--n-space-4);
+  margin: 0 calc(-1 * var(--n-space-4));
 }
 
 /* 标签页外壳（尺寸层；视觉归 TabItem）：180 固定宽 + 过多平分收缩（shrink 1 + min-width 0，
