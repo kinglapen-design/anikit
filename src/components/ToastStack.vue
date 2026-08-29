@@ -1,8 +1,11 @@
 <script setup lang="ts">
-// 通知栏（figma-css 07_通知栏）：胶囊形 C2 底 + C5-底色边框 + 投影；
-// 状态圆形图标 24（成功 success / 失败 fail，figma：按情况切换成功和失败图标）+ 行为文字（正文常态）
-// + 可选动作（撤销，标题档高亮）+ 删除（20×20 圆角 10，clear 标签档）。
-// 挂点与层级沿用：浮于中间面板工具栏下方（top 64），z-1600 高于全屏预览。
+// 通知栏（阶段七稿：docs/UI 重构/Design Token/组件/悬浮栏/通知栏）：
+// 胶囊 = 通用/半透明-2 底 + 立体感-背景模糊-大阴影 + blur 小 + 圆角 99px（稿值字面量，同 .fb-shell 21px 先例）；
+// 高 46 / padding 12 16 12 12 / gap 12。状态圆点 22（成功 --n-success + 对勾-小 / 失败 --n-danger + 关闭-小，
+// 内图标 14 一级）+ 立体感-主要按钮；「失败和成功按需出现」= 每条单图标（2026-08-29 用户定，store 契约不变）。
+// 行为文字 = 正文 一级；动作（撤销）= 按钮文字-大 一级；末尾关闭 = close-small 14 二级（hover 态稿未画，记 09 待办）。
+// 定位归 .notice-anchor（base.css）：列表容器顶部居中、不挡工具栏；与选择模式横幅同族同锚点（横幅在上，2026-08-29 用户定）。
+// 出入场 = 上→下位移 8px + 透明度，250ms 小位移 缓入缓出（稿 prose「上→下位移出现」，时长/缓动走动画 token）。
 import AppIcon from "./AppIcon.vue";
 import { useToastStore } from "../stores/toast";
 
@@ -10,94 +13,96 @@ const toast = useToastStore();
 </script>
 
 <template>
-  <div class="toast-stack">
-    <TransitionGroup name="toast">
-      <div v-for="t in toast.items" :key="t.id" class="toast">
-        <AppIcon v-if="t.icon === 'success'" name="success" :size="24" class="state-icon" />
-        <AppIcon v-else-if="t.icon === 'fail'" name="fail" :size="24" class="state-icon" />
-        <span class="message">{{ t.message }}</span>
-        <button v-if="t.actionLabel" class="action" @click="toast.act(t.id)">
-          {{ t.actionLabel }}
-        </button>
-        <button class="close" v-tip="'关闭'" @click="toast.close(t.id)">
-          <AppIcon name="clear" :size="12" />
-        </button>
-      </div>
-    </TransitionGroup>
-  </div>
+  <TransitionGroup name="toast" tag="div" class="toast-stack">
+    <div v-for="t in toast.items" :key="t.id" class="toast">
+      <span class="state" :class="t.icon">
+        <AppIcon :name="t.icon === 'success' ? 'check-small' : 'close-small'" :size="14" />
+      </span>
+      <span class="message">{{ t.message }}</span>
+      <button v-if="t.actionLabel" class="action" @click="toast.act(t.id)">{{ t.actionLabel }}</button>
+      <button class="close" v-tip="'关闭'" @click="toast.close(t.id)">
+        <AppIcon name="close-small" :size="14" />
+      </button>
+    </div>
+  </TransitionGroup>
 </template>
 
 <style scoped>
-/* 浮层容器：居中于父级内容区，顶部对齐标题栏下缘（64，不挡工具栏，2026-07-28 用户定）；
-   z-1600 高于全屏预览（1500） */
+/* 堆叠列：定位由 .notice-anchor 承担；空隙不挡卡片，通知条自身恢复交互 */
 .toast-stack {
-  position: absolute;
-  top: 64px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1600;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-8);
-  pointer-events: none; /* 空隙不挡卡片；通知条自身恢复交互 */
+  gap: var(--n-space-8);
+  pointer-events: none;
 }
-/* 通知栏：胶囊 C2 底 + C5-底色 1px 边框 + 投影（figma 07） */
+/* 通知条胶囊（稿：通用/半透明-2 + 大阴影 + inset 高光 + blur + 圆角 99；宽随内容 max-content） */
 .toast {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: var(--space-12);
-  padding: var(--space-12);
-  background: var(--c2);
-  box-shadow:
-    inset 0 0 0 1px var(--c5-base),
-    var(--shadow-pop);
-  border-radius: var(--radius-pill);
+  height: 46px;
+  padding: var(--n-space-12) var(--n-space-16) var(--n-space-12) var(--n-space-12);
+  gap: var(--n-space-12);
+  border-radius: 99px;
+  background: var(--n-g-a2);
+  box-shadow: var(--n-effect-raised-blur);
+  backdrop-filter: blur(var(--n-blur-sm));
+  white-space: nowrap;
   pointer-events: auto;
 }
-.state-icon {
+/* 状态圆点 22：成功/失败底 + 立体感-主要按钮 + 内图标 14 一级（check-small 已转 currentColor） */
+.state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 15px;
+  color: var(--n-l1);
+  box-shadow: var(--n-effect-raised-primary);
   flex: none;
 }
+.state.success {
+  background: var(--n-success);
+}
+.state.fail {
+  background: var(--n-danger);
+}
+/* 行为文字 = 正文 一级 */
 .message {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
-  white-space: nowrap;
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l1);
 }
-/* 动作（撤销）：标题档 高亮色 */
+/* 动作（撤销）= 按钮文字-大 一级；hover 态稿未画（09 待办），仅指针 */
 .action {
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--text-highlight);
-  white-space: nowrap;
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l1);
   flex: none;
+  cursor: pointer;
 }
-/* 删除：20×20 圆角 10（figma 07），clear 标签档，hover 叠暗-悬停 */
+/* 末尾关闭 = close-small 14 二级，裸钮无 hover 底（稿未画） */
 .close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 10px;
-  color: var(--text-label);
+  color: var(--n-l2);
   flex: none;
-  transition: background 0.15s ease;
+  cursor: pointer;
 }
-.close:hover {
-  background: var(--line-hover);
-}
-/* 出入场：上浮淡入淡出 */
+/* 出入场：上→下位移 + 透明度，250ms 小位移 缓入缓出 */
 .toast-enter-active,
 .toast-leave-active {
   transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
+    opacity var(--n-dur-250) var(--n-ease-in-out),
+    transform var(--n-dur-250) var(--n-ease-in-out);
 }
 .toast-enter-from,
 .toast-leave-to {
   opacity: 0;
-  transform: translateY(calc(-1 * var(--space-8)));
+  transform: translateY(calc(-1 * var(--n-space-8)));
 }
 </style>

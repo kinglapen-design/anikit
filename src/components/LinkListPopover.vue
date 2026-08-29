@@ -1,7 +1,10 @@
 <script setup lang="ts">
-// 徽章悬停链接列表浮层（6.2 四轮走查⑤，用户效果图）：悬停卡片徽章（origin ★ / 链接 icon）
-// 弹出该文件全部活位置列表——行 = 文件夹图标 18 + 全路径（区块 / 父级… / 目录，常态色段
-// 标签色分隔；档案目录「名称.档案」后缀；未分类 = 未分类）+ 显示名 + 徽章；
+// 徽章悬停链接列表浮层（阶段七稿：docs/UI 重构/Design Token/组件/悬浮栏/悬停-tip/悬停-链接列表）：
+// 悬停卡片徽章（origin ★ / 链接 icon）弹出该文件全部活位置列表。
+// 壳 = 通用/半透明-1 + 1px 亮色/半透明-3 真 border + 小阴影 + blur 小 + 圆角 6；宽随内容（max-content，上限 360）。
+// 行 = 双行结构（padding 8 / gap 4 / 行间 1px 半透明-3 顶线，首行去线；hover 底 半透明-3）：
+//   上 = 文件夹图标 18（双色调原值）+ 全路径（首段 正文-加粗 二级、分隔 / 二级、后续段 三级）；
+//   下 = 显示名（正文 三级）+ 徽章（origin = original-file-badge 14 品牌色原值 / 链接 = linked-file-badge 13 三级）。
 // 点击行 = 跳转定位（该位置视口 + 选中卡片，同链接区块 item / 关系 item 口径）后关闭。
 // 机制：Teleport body fixed 定位（徽章上方，右对齐；上方不够翻下方），150ms 延迟出，
 // 徽章→浮层 hover 桥（120ms 容错），Esc / 行点击关闭。
@@ -118,84 +121,102 @@ function onKey(e: KeyboardEvent): void {
       @mouseleave="emit('hover', false)"
     >
       <div v-for="(r, i) in rows" :key="r.key" class="row" :class="{ first: i === 0 }" @click="jump(r)">
-        <AppIcon :name="r.isArchive ? 'archive' : 'folder-closed'" :size="18" class="deco" />
-        <span class="path" v-tip="r.segments.join(' / ')">
-          <template v-for="(s, si) in r.segments" :key="si">
-            <span v-if="si > 0" class="sep">/</span><span :class="si === 0 ? 'seg block' : 'seg'">{{ s }}</span>
-          </template>
-        </span>
-        <span class="name" v-tip="r.name">{{ r.name }}</span>
-        <AppIcon v-if="r.origin" name="original-file-badge" :size="15" class="badge" />
-        <AppIcon v-else name="linked-file-badge" :size="13" class="badge link" />
+        <div class="line">
+          <AppIcon :name="r.isArchive ? 'archive' : 'folder-closed'" :size="18" class="deco" />
+          <span class="path" v-tip="r.segments.join(' / ')">
+            <template v-for="(s, si) in r.segments" :key="si">
+              <span v-if="si > 0" class="sep">/</span><span class="seg" :class="{ head: si === 0 }">{{ s }}</span>
+            </template>
+          </span>
+        </div>
+        <div class="line name-line">
+          <span class="name" v-tip="r.name">{{ r.name }}</span>
+          <AppIcon v-if="r.origin" name="original-file-badge" :size="14" class="badge" />
+          <AppIcon v-else name="linked-file-badge" :size="13" class="badge link" />
+        </div>
       </div>
     </div>
   </Teleport>
 </template>
 
 <style scoped>
-/* 浮层（用户效果图）：C4 底 + 1px 亮-选中真 border + 圆角 8 + --shadow-pop；z-2000 同悬停浮层档 */
+/* 浮层壳（悬停-链接列表稿）：通用/半透明-1 + 1px 半透明-3 真 border + 小阴影 + blur 小 + 圆角 6；
+   宽随内容（稿 182 = 内容快照），上限 360 超出走省略；z-2000 同悬停浮层档 */
 .link-pop {
   position: fixed;
   z-index: 2000;
   display: flex;
   flex-direction: column;
-  min-width: 260px;
+  width: max-content;
   max-width: 360px;
-  border: 1px solid var(--line-active);
-  border-radius: var(--radius-8);
-  background: var(--c4);
-  box-shadow: var(--shadow-pop);
+  border: 1px solid var(--n-l-a3);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g-a1);
+  box-shadow: var(--n-shadow-sm);
+  backdrop-filter: blur(var(--n-blur-sm));
   overflow: hidden;
 }
-/* 行（效果图：44 高 / padding 8 12 / 行间 1px 暗-悬停线，首行去线） */
+/* 行（稿：双行 56 高 = padding 8 + 18 + gap 4 + 18；行间 1px 半透明-3 顶线，首行去线；hover 底 半透明-3） */
 .row {
   display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  height: 44px;
-  box-sizing: border-box;
-  padding: var(--space-8) var(--space-12);
-  border-top: 1px solid var(--line-hover);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--n-space-4);
+  padding: var(--n-space-8);
+  border-top: 1px solid var(--n-l-a3);
   cursor: pointer;
 }
 .row.first {
   border-top: none;
 }
 .row:hover {
-  background: var(--c5);
+  background: var(--n-l-a3);
+}
+.line {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-6);
+  height: 18px;
+  align-self: stretch;
+  min-width: 0;
 }
 .deco {
   flex: none;
-  color: var(--text-normal);
 }
+/* 全路径：首段 正文-加粗 二级 / 分隔符 二级 / 后续段 三级 */
 .path {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--n-space-4);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  font-weight: var(--n-fw-bold);
 }
 .seg {
-  color: var(--text-label);
+  color: var(--n-l3);
 }
-.seg.block {
-  color: var(--text-normal);
+.seg.head {
+  color: var(--n-l2);
 }
 .sep {
-  color: var(--text-label);
+  color: var(--n-l2);
   flex: none;
 }
+/* 下行：显示名（正文 三级）+ 徽章右置（space-between，稿） */
+.name-line {
+  justify-content: space-between;
+  gap: var(--n-space-8);
+}
 .name {
-  flex: none;
-  max-width: 40%;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
+  min-width: 0;
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -204,6 +225,6 @@ function onKey(e: KeyboardEvent): void {
   flex: none;
 }
 .badge.link {
-  color: var(--text-label);
+  color: var(--n-l3);
 }
 </style>

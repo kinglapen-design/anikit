@@ -12,12 +12,15 @@ import TabLabel from "./TabLabel.vue";
 import TabAddButton from "./TabAddButton.vue";
 import SidebarExpandButton from "./SidebarExpandButton.vue";
 import ToastStack from "./ToastStack.vue";
+import PickerBanner from "./PickerBanner.vue";
 import { anikitDockTheme } from "../lib/dockTheme";
 import { useTabsStore } from "../stores/tabs";
 import { useUiStore } from "../stores/ui";
+import { usePickerStore } from "../stores/picker";
 
 const tabs = useTabsStore();
 const ui = useUiStore();
+const picker = usePickerStore();
 
 // dockview-vue 7.0.4 的 VueComponent = DefineComponent<T>（单泛型签名），与 Vue 3.5+ SFC
 // 编译产物的 DefineComponent 多泛型签名不可互赋——纯类型层不兼容，运行时无碍，统一断言。
@@ -64,7 +67,12 @@ function onReady(e: DockviewReadyEvent): void {
       dnd-strategy="pointer"
       @ready="onReady"
     />
-    <ToastStack />
+    <!-- 通知族统一锚点（2026-08-29 用户定）：选择模式横幅（上）+ 通知条（下）同列，
+         列表容器顶部居中不挡工具栏；横幅随选择模式从 App 层迁入本面板锚定 -->
+    <div class="notice-anchor">
+      <PickerBanner v-if="picker.active" />
+      <ToastStack />
+    </div>
   </main>
 </template>
 

@@ -85,23 +85,43 @@ textarea {
   background: transparent;
 }
 
-/* 工具 tip（02_通用组件/09_工具tip）：fixed 定位，元素下方居中；
-   2026-08-07 按 figma-css 06_悬停 tip：C2 底 / 亮-选中 1px 边框 / 8px 圆角 / 正文常态色 */
+/* 通知族统一锚点（2026-08-29 用户定，阶段七稿 组件/悬浮栏/通知栏）：列表容器顶部居中、不挡工具栏；
+   选择模式横幅与通知条同族同锚点——横幅在上、通知在下竖列堆叠，空隙不挡卡片（子件各自恢复交互）。
+   挂点：主窗口 DockHost（relative）、预览子窗口 App 层；z-1600 高于全屏预览（1500）。 */
+.notice-anchor {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--n-space-8);
+  pointer-events: none;
+}
+
+/* 悬停 tip（阶段七稿：Design Token/组件/悬浮栏/悬停-tip + 悬停-卡片名称，2026-08-29）：
+   壳 = 通用/半透明-1 底 + 1px 亮色/半透明-3 真 border + 小阴影 + blur 小 + 圆角 6；padding 4 8。
+   标题 = 次要文字-加粗 二级；keys（快捷键 / 卡片简介副行）= 数字档 Fira Mono 三级 原文直显——
+   kbd 徽章形态废除（稿为纯文字；右键菜单 KbdBadge 不受影响）。
+   fixed 定位，元素下方居中；出现/消失 = 透明度 120ms（稿未提，沿旧值）。 */
 .app-tip {
   position: fixed;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: var(--space-12);
-  padding: var(--space-6) var(--space-8);
-  border-radius: var(--radius-8);
-  background: var(--c2);
-  box-shadow:
-    inset 0 0 0 1px var(--line-active),
-    var(--shadow-pop);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
+  gap: var(--n-space-8);
+  padding: var(--n-space-4) var(--n-space-8);
+  border: 1px solid var(--n-l-a3);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g-a1);
+  box-shadow: var(--n-shadow-sm);
+  backdrop-filter: blur(var(--n-blur-sm));
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
   /* 宽度 = 自然内容宽（max-content）：fixed shrink-to-fit 受 left 位置约束会被压窄
      （2026-08-10 走查：靠右缘时"打开链接"被压成一字一行）——显式 max-content 不被压缩，
      靠右整体左移由 tip.ts 水平钳制负责；仅超 max-width 的长名称换行 */
@@ -118,36 +138,18 @@ textarea {
 .app-tip.show {
   opacity: 1;
 }
-/* 快捷键徽章组（2026-08-11 用户定：与右键菜单 KbdBadge 一致——C3 底 / 暗-悬停边框 / 圆角 6 /
-   12px 标签色；多字母 padding 2 4、单字母 2 6；词键小写转换在 tip.ts） */
-.app-tip-keys {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-6);
-  flex: none; /* 徽章组不被长名称挤压（2026-08-10） */
-}
-.app-tip-kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-6);
-  background: var(--c3);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
-  color: var(--text-label);
-  font-family: inherit;
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
+/* 快捷键 / 简介副行 = 数字档（Fira Mono 中）三级；不被长名称挤压（2026-08-10） */
+.app-tip-meta {
+  font-family: var(--n-font-mono);
+  font-weight: var(--n-fw-medium);
+  color: var(--n-l3);
   flex: none;
-}
-.app-tip-kbd.single {
-  padding: var(--space-2) var(--space-6);
 }
 /* 两行竖排变体（2026-08-10 卡片名称 tip 用户定：名称 / 简介分两行，gap 4） */
 .app-tip.col {
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-4);
+  gap: var(--n-space-4);
 }
 
 /* 就地重命名输入共享基座（6.1 C2/C3，2026-08-10 统一口径——透明底族：素材卡片 / 列表行 /

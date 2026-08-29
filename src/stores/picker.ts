@@ -41,11 +41,11 @@ export const usePickerStore = defineStore("picker", {
       if (state.template === "relation") return state.picked.every((p) => p.label.trim() !== "");
       return true;
     },
-    // 顶部横幅文案（目的 + 发起名）
+    // 顶部横幅文案（目的 + 发起名；格式贴阶段七通知栏-选择模式稿：逗号分隔 + 名称方括号，2026-08-29）
     bannerText(state): string {
-      if (state.purpose === "voice") return `选择音频 - 为 ${state.origin?.name ?? ""} 链接音频`;
-      if (state.purpose === "link") return `选择文件 - 添加链接到 ${state.targetFolder?.name ?? ""}`;
-      return `选择文件/档案 - 为 ${state.origin?.name ?? ""} 添加关系`;
+      if (state.purpose === "voice") return `选择音频，为 [${state.origin?.name ?? ""}] 链接音频`;
+      if (state.purpose === "link") return `选择文件，为 [${state.targetFolder?.name ?? ""}] 添加链接文件`;
+      return `选择文件/档案，为 [${state.origin?.name ?? ""}] 添加关系`;
     },
   },
   actions: {

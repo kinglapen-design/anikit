@@ -1,7 +1,8 @@
-// 工具 tip（02_通用组件/09_工具tip）：C3 / 圆角 6 / 2px border-1 / 内边距 4 6 / 间距 6，
-// 标题 副文本 font-icon-1 + 快捷键徽章组（同右键菜单 KbdBadge：按 "+" 拆分多枚，
-// 词键小写 ctrl/shift/alt/enter/delete、单字母大写、中文键名原样，2026-08-11 用户定）。
-// 悬停 400ms 显示，跟随元素下方居中。
+// 悬停 tip（阶段七稿：docs/UI 重构/Design Token/组件/悬浮栏/悬停-tip + 悬停-卡片名称）：
+// 壳 = 通用/半透明-1 + 1px 亮色/半透明-3 + 小阴影 + blur 小 + 圆角 6；标题 = 次要文字-加粗 二级；
+// keys（快捷键 / 卡片简介副行）= 数字档 Fira Mono 三级 **原文直显**（kbd 徽章形态废除——稿为纯文字，
+// 2026-08-29；右键菜单 KbdBadge 不受影响）。
+// 悬停 400ms 显示，跟随元素下方居中（空间不足翻上方，水平钳制在窗口内）；点击即隐藏。
 // 用法：v-tip="'菜单'" 或 v-tip="{ text: '新建', keys: 'Ctrl+N' }"；
 // column: true = 名称 / 简介两行竖排（gap 4，卡片名称 tip，2026-08-10 用户定）。
 import type { Directive } from "vue";
@@ -32,16 +33,10 @@ function show(el: HTMLElement, value: TipValue): void {
   span.textContent = value.text;
   tip.appendChild(span);
   if (value.keys) {
-    const group = document.createElement("span");
-    group.className = "app-tip-keys";
-    for (const raw of value.keys.split("+").filter(Boolean)) {
-      const kbd = document.createElement("kbd");
-      kbd.className = raw.length <= 1 ? "app-tip-kbd single" : "app-tip-kbd";
-      // 显示口径同菜单（MenuItem）：词键小写、单字母大写、中文原样
-      kbd.textContent = /^[A-Za-z]{2,}$/.test(raw) ? raw.toLowerCase() : raw;
-      group.appendChild(kbd);
-    }
-    tip.appendChild(group);
+    const meta = document.createElement("span");
+    meta.className = "app-tip-meta";
+    meta.textContent = value.keys;
+    tip.appendChild(meta);
   }
   const rect = el.getBoundingClientRect();
   tip.classList.add("show");

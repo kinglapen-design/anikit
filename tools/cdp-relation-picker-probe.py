@@ -272,7 +272,7 @@ async def main():
             })()""")
             check("S1 四重标识 + 进入清选择域 + 空态占位组（发起文件雪牧.fla 在组内）",
                   bool(s1 and s1["picking"] and s1["bw"] in ("1px", "1.5px") and s1["bc"] == "rgb(61, 221, 210)"
-                       and s1["banner"] == "选择文件/档案 - 为 雪牧.fla 添加关系"
+                       and s1["banner"] == "选择文件/档案，为 [雪牧.fla] 添加关系"
                        and s1["panel"] and not s1["detail"] and s1["selectedCards"] == 0
                        and s1["origin"] == "雪牧.fla" and s1["placeholder"] == "点击卡片选择"),
                   json.dumps(s1, ensure_ascii=False))

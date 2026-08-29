@@ -24,7 +24,6 @@ import AppModal from "./components/AppModal.vue";
 import AppButton from "./components/AppButton.vue";
 import AppCheckbox from "./components/AppCheckbox.vue";
 import ImportDialog from "./components/ImportDialog.vue";
-import PickerBanner from "./components/PickerBanner.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
 import FailedListDialog from "./components/FailedListDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
@@ -208,10 +207,12 @@ async function togglePin(): Promise<void> {
   <div class="window" :class="{ maximized, picking: picker.active }">
     <PreviewWindow v-if="previewParam" :asset-key="previewParam" />
     <!-- 预览子窗口的通知条挂点（6.0；主窗口挂在 DockHost 内） -->
-    <ToastStack v-if="previewParam" />
+    <!-- 预览子窗口的通知条挂点（6.0；主窗口通知族挂 DockHost 内统一锚点） -->
+    <div v-if="previewParam" class="notice-anchor">
+      <ToastStack />
+    </div>
     <template v-else>
-      <!-- 选择模式目的横幅（6.2 一轮：品牌底胶囊，滑入 + 循环浮动；pointer-events none 不挡操作） -->
-      <PickerBanner v-if="picker.active" />
+      <!-- 选择模式目的横幅已迁入 DockHost 通知族统一锚点（2026-08-29 用户定：横幅在上、通知条在下） -->
       <!-- 侧栏收展（2026-08-08 定案 v6 锚点；2026-08-10 同步改 RO）：侧栏常驻挂载，收展宽度由
            App 层 rAF 驱动逐帧写入；dockview 网格由 dockResizeObs 在 RO 阶段以当帧最终宽同步
            （其自身 RO 回调被 rAF 包裹且持旧尺寸，同帧灌宽会被覆盖回上一帧）。

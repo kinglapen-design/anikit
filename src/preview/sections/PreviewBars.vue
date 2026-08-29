@@ -11,6 +11,12 @@ import FrameStrip from "../../components/bars/FrameStrip.vue";
 import RatePop from "../../components/bars/RatePop.vue";
 import VolumePop from "../../components/bars/VolumePop.vue";
 import NotesPop from "../../components/bars/NotesPop.vue";
+import ToastStack from "../../components/ToastStack.vue";
+import PickerBanner from "../../components/PickerBanner.vue";
+import LinkListPopover from "../../components/LinkListPopover.vue";
+import { useToastStore } from "../../stores/toast";
+import { usePickerStore } from "../../stores/picker";
+import { useContentStore, type PlacementView } from "../../stores/content";
 
 // 模式切换 morph 演示
 const morphMode = ref<"search" | "markdown" | "play">("search");
@@ -52,6 +58,46 @@ function noteRemove(i: number): void {
   noteList.value.splice(i, 1);
   if (noteSel.value >= noteList.value.length) noteSel.value = Math.max(0, noteList.value.length - 1);
 }
+
+// —— 通知栏演示（真实例走 toast store；duration 拉长便于目验，刷新页面复位）——
+const toastDemo = useToastStore();
+function demoToast(kind: "success" | "fail" | "undo"): void {
+  if (kind === "fail") {
+    toastDemo.notify({ message: "移动失败：目标文件夹不存在", icon: "fail", duration: 60_000 });
+  } else if (kind === "undo") {
+    toastDemo.notify({ message: "已删除 3 个文件", icon: "success", actionLabel: "撤销", onAction: () => {}, duration: 60_000 });
+  } else {
+    toastDemo.notify({ message: "已复制 2 个文件至剪切版", icon: "success", duration: 60_000 });
+  }
+}
+
+// —— 选择模式横幅演示：只 seed bannerText 依赖的两个字段（不进入模式、无副作用）——
+const pickerDemo = usePickerStore();
+pickerDemo.purpose = "relation";
+pickerDemo.origin = { kind: "asset", id: "demo-asset", name: "01_人物" };
+
+// —— 悬停-链接列表演示：seed content store 两条活位置（同 asset 两文件夹；幂等防 HMR 重复）——
+const contentDemo = useContentStore();
+if (contentDemo.blocks.length === 0) {
+  contentDemo.blocks = [{ id: "dir", name: "文件夹", icon: null }];
+  contentDemo.folders = [
+    { id: "f-renwu", name: "01_人物", count: 1, children: [] },
+    { id: "f-changjing", name: "02_场景", count: 1, children: [] },
+  ];
+  const base = {
+    w: null, h: null, ext: "fla", thumbPath: null, thumbKind: null,
+    frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null,
+    size: 1_258_291, createdAt: null,
+    modifiedAt: "2026-08-29T00:00:00Z", importedAt: "2026-08-29T00:00:00Z",
+  };
+  contentDemo.placements = [
+    { ...base, assetId: "demo-asset", folderId: "f-renwu", name: "雪牧_自动.fla", origin: true },
+    { ...base, assetId: "demo-asset", folderId: "f-changjing", name: "雪牧_自动.fla", origin: false },
+  ];
+}
+const demoAsset = contentDemo.placements.find((p) => p.assetId === "demo-asset") as PlacementView;
+const popAnchor = ref<HTMLElement>();
+const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后需重开（实机悬停重新触发同理）
 </script>
 
 <template>
@@ -195,6 +241,58 @@ function noteRemove(i: number): void {
         </div>
       </div>
     </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">通知栏 + 选择模式横幅（通知栏稿两枚：同族胶囊同锚点——列表容器顶部居中，横幅在上、通知在下）</h3>
+      <p class="pv-group-note">
+        通知栏 = 通用/半透明-2 + 大阴影 + 圆角 99：状态圆点 22（成功 ✓ / 失败 ✗ 单图标按需）+ 正文 一级 + 可选动作（撤销，按钮文字-大）+ 关闭 ✕ 二级；
+        出入场 = 上→下位移 <b>250ms</b> 缓入缓出。横幅 = 品牌/半透明 + 圆角 99：滑入 <b>300ms</b> 后 2.6s 循环浮动（独立合成层修文字抖动）。
+        下方为真实例（演示通知 duration 60s 不自动消失，刷新页面复位；失败通知带提示音）。
+      </p>
+      <div class="pv-demo-row">
+        <button class="pv-switch" @click="demoToast('success')">成功通知</button>
+        <button class="pv-switch" @click="demoToast('fail')">失败通知</button>
+        <button class="pv-switch" @click="demoToast('undo')">带「撤销」动作</button>
+      </div>
+      <div class="pv-notice-stage">
+        <!-- 复用全局 .notice-anchor（实机挂 DockHost / 预览窗口 App 层）；舞台内锚点下沉从简（实机 top 64 贴工具栏下） -->
+        <div class="notice-anchor">
+          <PickerBanner />
+          <ToastStack />
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">悬停 tip（壳 = 半透明-1 + 1px 半透明-3 + 小阴影 + blur + 圆角 6；快捷键/副行 = 数字档 三级原文直显，kbd 徽章废除）</h3>
+      <p class="pv-group-note">
+        悬停 400ms 出、元素下方居中（空间不足翻上方、水平钳制窗口内）、点击即隐藏；标题 = 次要文字-加粗 二级。
+        下方按钮为真实交互实例，静态验收由探针驱动截图。
+      </p>
+      <div class="pv-demo-row">
+        <button class="pv-switch" v-tip="{ text: '添加文件/档案链接', keys: 'Ctrl+L' }">悬停 · 横排（标题 + 快捷键）</button>
+        <button class="pv-switch" v-tip="{ text: '雪牧_自动.fla', keys: '1.2 MB', column: true }">悬停 · 竖排（卡片名称 + 简介）</button>
+        <button class="pv-switch" v-tip="'纯文字'">悬停 · 纯文字</button>
+      </div>
+    </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">悬停-链接列表（LinkListPopover 真实例；宽随内容上限 360；行 = 图标+全路径 / 显示名+徽章 双行，hover 底 半透明-3）</h3>
+      <p class="pv-group-note">
+        行为与实机一致：150ms 延迟出、徽章上方右对齐（不足翻下）；行间 1px 半透明-3 顶线（首行去线）。
+        演示数据 = 同一资产两条活位置（origin ★ / 链接 icon）；行跳转接真实业务，演示页内勿点行。
+      </p>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div class="pv-demo-row">
+            <button ref="popAnchor" class="pv-switch">★ 徽章锚点</button>
+            <button class="pv-switch" @click="showPop = !showPop">{{ showPop ? "关闭浮层" : "显示浮层" }}</button>
+          </div>
+          <LinkListPopover v-if="showPop" :asset="demoAsset" :anchor="popAnchor" />
+          <span class="pv-cap">浮层在锚点上方右对齐（fixed body 级，滚动后请重开）；双行：图标 18 + 路径（首段 二级 / 后续 三级）｜显示名 三级 + 徽章</span>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -226,5 +324,18 @@ function noteRemove(i: number): void {
   display: flex;
   flex-direction: column;
   gap: var(--n-space-12);
+}
+
+/* 通知栏 / 横幅演示舞台：relative 供 .notice-anchor 锚定；锚点下沉从简（实机 top 64 贴工具栏下） */
+.pv-notice-stage {
+  position: relative;
+  width: 100%;
+  height: 260px;
+  border-radius: var(--n-radius-8);
+  background: var(--n-g1);
+  box-shadow: inset 0 0 0 1px var(--n-l-a3);
+}
+.pv-notice-stage .notice-anchor {
+  top: 12px;
 }
 </style>

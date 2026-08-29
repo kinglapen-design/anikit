@@ -424,7 +424,7 @@ async def main():
               placeholder: document.querySelector('.picker-panel .name-field.placeholder')?.placeholder ?? null,
             }))()""")
             check("V1 选择模式文件模板：横幅 + 过滤非音频（只剩主题曲.mp3 卡，档案区不渲染）",
-                  bool(v1 and v1["picking"] and v1["banner"] == "选择音频 - 为 雪牧-改.fla 链接音频"
+                  bool(v1 and v1["picking"] and v1["banner"] == "选择音频，为 [雪牧-改.fla] 链接音频"
                        and len(v1["cards"]) == 1 and "主题曲" in v1["cards"][0] and v1["archives"] == 0),
                   json.dumps({"banner": v1 and v1["banner"], "cards": v1 and v1["cards"], "archives": v1 and v1["archives"]}, ensure_ascii=False))
             await click("[...document.querySelectorAll('.asset-card')].find((c) => c.textContent.includes('主题曲'))")
