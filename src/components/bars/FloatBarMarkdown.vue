@@ -64,7 +64,7 @@ const groups: readonly MdIcon[][] = [
 <style scoped>
 .fbm-root {
   flex: none;
-  width: max-content;
+  width: 100%; /* 恒满壳宽（壳 = 唯一宽度动画源，FloatBar 探针实测内容宽） */
 }
 .fbm-first {
   display: flex;

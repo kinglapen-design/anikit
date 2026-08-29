@@ -12,9 +12,11 @@ import urllib.request
 import websockets
 
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-PORT = 9394
+# 端口与 profile 随进程号唯一化——固定端口会撞上历史探针残留的僵尸 headless Edge（CDP 连上旧实例 = 拿到旧页面旧模块）
+PORT = 19393 + os.getpid() % 1000
 BASE = "http://127.0.0.1:5373/"
-PROFILE = os.path.join(os.environ["TEMP"], "edge-cdp-bars")
+# 每次独立临时 profile + 禁 HTTP 缓存——复用 profile 会拿旧模块（混合新旧 = 既非旧版亦非新版的鬼状态）
+PROFILE = os.path.join(os.environ["TEMP"], f"edge-cdp-bars-{os.getpid()}")
 
 # 展区组标题 → 截图名（组级截屏）
 GROUPS = {
@@ -57,13 +59,25 @@ async def main() -> int:
 
         async with websockets.connect(page["webSocketDebuggerUrl"], max_size=None) as ws:
             mid = 0
+            console_logs = []
 
             async def send(method: str, params: dict | None = None) -> dict:
                 nonlocal mid
                 mid += 1
                 await ws.send(json.dumps({"id": mid, "method": method, "params": params or {}}))
                 while True:
-                    msg = json.loads(await ws.recv())
+                    raw = await asyncio.wait_for(ws.recv(), 30)
+                    msg = json.loads(raw)
+                    if msg.get("method") == "Runtime.consoleAPICalled":
+                        args = msg["params"].get("args", [])
+                        console_logs.append(
+                            msg["params"].get("type", "log") + ": "
+                            + " ".join(str(a.get("value", a.get("description", "")))[:300] for a in args)
+                        )
+                        continue
+                    if msg.get("method") == "Runtime.exceptionThrown":
+                        console_logs.append("EXCEPTION: " + json.dumps(msg["params"], ensure_ascii=False)[:500])
+                        continue
                     if msg.get("id") == mid:
                         return msg.get("result", {})
 
@@ -79,6 +93,8 @@ async def main() -> int:
 
             await send("Page.enable")
             await send("Runtime.enable")
+            await send("Network.enable")
+            await send("Network.setCacheDisabled", {"cacheDisabled": True})
             await send("Emulation.setDeviceMetricsOverride", {
                 "width": 1600, "height": 1000, "deviceScaleFactor": 2, "mobile": False,
             })
@@ -90,7 +106,7 @@ async def main() -> int:
             else:
                 print("FATAL: 预览页悬浮栏区未渲染")
                 return 1
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(2.0)  # 渲染沉降（懒加载 + 字体 + 挂载测宽链）
 
             fails = []
 
@@ -168,6 +184,62 @@ async def main() -> int:
             if not combo or combo[0] != combo[1]:
                 fails.append(f"帧条与播放条不同宽: {combo}")
 
+            # ---- 断言 5（十五轮修复实证）：聚焦/失焦宽度动画中段，筛选图标随壳边平滑移动 ----
+            # 旧机制（模式根自持宽度类瞬时切换）下：根瞬跳 450、壳还在 250 附近 → 图标右缘超出壳右缘 ~170px。
+            # 新机制（壳宽唯一动画源 + 模式根 100% 随壳）：中段任意时刻 图标右缘 ≈ 壳右缘 - 16 padding。
+            # 注：headless 无窗口焦点，原生 focus() 只挂 activeElement 不发事件（实机正常）——探针改用合成 FocusEvent。
+            async def bars_mid(tag: str):
+                v = await js(
+                    "(() => { try {"
+                    " const g = [...document.querySelectorAll('#design-system-bars .pv-group')]"
+                    "  .find(h => h.querySelector('.pv-group-title').textContent.startsWith('多功能悬浮栏'));"
+                    " if (!g) return { err: 'no group' };"
+                    " const s = g.querySelector('.fb-shell').getBoundingClientRect();"
+                    " const ic = g.querySelector('.fbs-ic.filter');"
+                    " if (!ic) return { err: 'no filter icon', w: Math.round(s.width),"
+                    "   html: g.querySelector('.fb-shell').innerHTML.slice(0, 260) };"
+                    " const i = ic.getBoundingClientRect();"
+                    " return { w: Math.round(s.width), d: Math.round(s.right - i.right) };"
+                    " } catch (e) { return { err: e.message }; } })()"
+                )
+                print(tag, v)
+                return v
+
+            await js(
+                "(() => { const g = [...document.querySelectorAll('#design-system-bars .pv-group')]"
+                "  .find(h => h.querySelector('.pv-group-title').textContent.startsWith('多功能悬浮栏'));"
+                " g.querySelector('.fbs-input').dispatchEvent(new FocusEvent('focus')); return true; })()"
+            )
+            await asyncio.sleep(0.12)  # 300ms 过渡中段
+            mid_focus = await bars_mid("聚焦中段:")
+            if not mid_focus or "err" in mid_focus:
+                fails.append(f"聚焦中段取值异常: {mid_focus}")
+            elif not (251 < mid_focus["w"] < 449):
+                fails.append(f"聚焦中段壳宽 {mid_focus['w']} 不在 251~448 动画区间（动画未发生？）")
+            elif abs(mid_focus["d"] - 16) > 24:
+                fails.append(f"聚焦中段筛选图标未随壳边（右缘差 {mid_focus['d']} ≠ 16）")
+            await asyncio.sleep(0.6)
+            end_focus = await bars_mid("聚焦末态:")
+            if not end_focus or "err" in end_focus or end_focus["w"] != 450 or end_focus["d"] != 16:
+                fails.append(f"聚焦末态异常: {end_focus}（应 w=450 d=16）")
+            await js(
+                "(() => { const g = [...document.querySelectorAll('#design-system-bars .pv-group')]"
+                "  .find(h => h.querySelector('.pv-group-title').textContent.startsWith('多功能悬浮栏'));"
+                " g.querySelector('.fbs-input').dispatchEvent(new FocusEvent('blur')); return true; })()"
+            )
+            await asyncio.sleep(0.12)
+            mid_blur = await bars_mid("失焦中段:")
+            if not mid_blur or "err" in mid_blur:
+                fails.append(f"失焦中段取值异常: {mid_blur}")
+            elif not (251 < mid_blur["w"] < 449):
+                fails.append(f"失焦中段壳宽 {mid_blur['w']} 不在 251~448 动画区间")
+            elif abs(mid_blur["d"] - 16) > 24:
+                fails.append(f"失焦中段筛选图标未随壳边（右缘差 {mid_blur['d']} ≠ 16）")
+            await asyncio.sleep(0.6)
+            end_blur = await bars_mid("失焦末态:")
+            if not end_blur or "err" in end_blur or end_blur["w"] != 250 or end_blur["d"] != 16:
+                fails.append(f"失焦末态异常: {end_blur}（应 w=250 d=16）")
+
             # ---- 组级截图（2x）----
             for name, title in GROUPS.items():
                 ok = await js(
@@ -195,15 +267,24 @@ async def main() -> int:
                     "format": "png",
                     "clip": {"x": rect["x"], "y": rect["y"], "width": rect["width"], "height": rect["height"], "scale": 2},
                 })
-                await save(f"r14-bars-2x-{name}", s["data"])
+                await save(f"r15-bars-2x-{name}", s["data"])
 
             if fails:
                 print("FAIL:", *fails, sep="\n  ")
+                if console_logs:
+                    print("页面 console:", *console_logs[-20:], sep="\n  ")
                 return 1
             print("PASS: 全部断言通过")
+            if console_logs:
+                print("页面 console:", *console_logs[-10:], sep="\n  ")
             return 0
     finally:
-        proc.terminate()
+        # Windows 上 terminate 只杀父进程——headless Edge 子进程树会整体残留成僵尸
+        # （占调试端口导致后续探针连上旧实例），必须 taskkill /T 整树
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+            capture_output=True,
+        )
 
 
 if __name__ == "__main__":

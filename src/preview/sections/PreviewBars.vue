@@ -59,14 +59,14 @@ function noteRemove(i: number): void {
     <h2 class="pv-sec-title">组件 · 悬浮栏</h2>
     <p class="pv-sec-desc">
       Design Token/组件/悬浮栏/多功能悬浮栏/ 八稿：搜索栏 / 展开成筛选 / MarkDown 工具栏 / 播放条 + 帧条 / 倍率 / 音量 / 笔记。
-      四模式同一容器切换 = 宽度伸缩 + Y 轴出入 <b>250ms</b> 小位移（位移 4px，2026-08-29 用户定）；hover / 颜色 <b>150ms</b>；
+      四模式同一容器切换 = 宽度伸缩 + Y 轴出入 <b>300ms</b> 形态切换（位移 4px，2026-08-29 用户两轮定）；hover / 颜色 <b>150ms</b>；
       壳 = 通用/半透明-2 + 立体感-背景模糊 + 圆角 21（稿值），弹层 = 通用/半透明-1 + 大阴影 + 圆角 8。
     </p>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">多功能悬浮栏 · 模式切换（同一容器，宽度伸缩 + 按钮 Y 轴出入 250ms）</h3>
+      <h3 class="pv-group-title">多功能悬浮栏 · 模式切换（同一容器，宽度伸缩 + 按钮 Y 轴出入 300ms）</h3>
       <p class="pv-group-note">
-        点按钮切换模式 / 显隐；搜索态可输入、聚焦扩 450、点筛选图标展开筛选钮组（反向折叠同路径）。
+        点按钮切换模式 / 显隐；搜索态可输入、聚焦扩 450、点筛选图标展开筛选钮组（反向折叠同路径）——宽度全程壳动画驱动，右端筛选图标随壳边平滑移动（十五轮走查修复）。
       </p>
       <div class="pv-demo-row">
         <button class="pv-switch" @click="morphMode = 'search'">搜索栏</button>

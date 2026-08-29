@@ -1,13 +1,13 @@
 <script setup lang="ts">
 // 搜索栏 / 搜索栏展开成筛选（同一组件两态：点筛选图标横向展开筛选按钮组，收起钮折叠回——
-// 搜索图标与搜索区域两态不变，稿 prose）。宽度：常态 250 / 输入聚焦 450（稿值）/ 展开 max-content；
-// 宽度伸缩动画归 FloatBar 壳（250ms 小位移，2026-08-29 用户定）。
+// 搜索图标与搜索区域两态不变，稿 prose）。根宽恒 100% 随 FloatBar 壳（壳 = 唯一宽度动画源，
+// 300ms 形态切换，2026-08-29 用户定）；定值档 250 常态 / 450 聚焦与展开实测都归壳（FloatBar）。
 // 搜索图标 亮色/三级、筛选图标与收起钮 亮色/半透明-2，hover 均升 亮色/二级（稿 hover 口径）；
 // 占位符 亮色/半透明-2；已输入文字 亮色/二级（稿无已填态，随输入框族文字档，2026-08-29 定）。
 // 筛选钮 = 高 24 padding 4/8 圆角 6 + 亮色/半透明-3 底 + 立体感-通用 + 次要文字-加粗 亮色/二级；
 // hover 底升 半透明-2；选中 底 半透明-1 + 文字 一级（稿 prose）。
 // 自动实时搜索（input 即 v-model）；搜索图标点击 = 预留（未来展开向量/AI 搜索选项，稿 prose）。
-import { ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import "./bars.css";
 
@@ -46,6 +46,16 @@ function setFocused(v: boolean): void {
   focused.value = v;
   emit("focused-change", v);
 }
+
+// FloatBar 壳定值宽档依赖 focused/expanded 镜像——force 静态态（预览验收）与初始展开挂载即上报
+onMounted(() => {
+  if (expanded.value) emit("expanded-change", true);
+  if (props.forceState === "focus") emit("focused-change", true);
+});
+watch(
+  () => props.forceState,
+  (s) => emit("focused-change", s === "focus" || focused.value),
+);
 </script>
 
 <template>
@@ -86,16 +96,10 @@ function setFocused(v: boolean): void {
 </template>
 
 <style scoped>
-/* 宽度三态：常态 250 / 聚焦 450（稿值）/ 展开 max-content；伸缩动画在 FloatBar 壳 */
+/* 根宽恒 100% 随壳（壳 = 唯一宽度动画源）；内容态差异 = 输入区伸缩与筛选组挂载 */
 .fbs-root {
   flex: none;
-  width: 250px;
-}
-.fbs-root.focused {
-  width: 450px;
-}
-.fbs-root.expanded {
-  width: max-content;
+  width: 100%;
 }
 
 /* 图标钮：搜索 = 亮色/三级；筛选 / 收起 = 亮色/半透明-2；hover 统一升 亮色/二级 */
