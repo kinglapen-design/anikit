@@ -1,0 +1,46 @@
+/* 悬浮栏族共享样式（阶段七新体系，docs/UI 重构/Design Token/组件/悬浮栏/多功能悬浮栏/ +
+   布局/主窗口/中间面板/中间面板-多功能悬浮栏）。只引 --n- token。
+   两档容器：主悬浮栏壳 .fb-shell（通用/半透明-2 + 立体感-背景模糊，四模式同一容器）/
+   悬浮弹层壳 .fb-pop（通用/半透明-1 + 立体感-背景模糊-大阴影：倍率 / 音量 / 笔记 / 帧条）。 */
+
+/* 主悬浮栏壳：通用/半透明-2 底 + 立体感-背景模糊（raised 阴影 + blur 小）；高 42；
+   圆角 21 = 稿值（42 高胶囊半高，Token.md 圆角无此档，非新造 token——同卡片波形圆头 99px 先例）；
+   padding 由模式根自带（四稿同为 12/16），壳只负责视觉铬 + 宽度动画裁剪（overflow hidden） */
+.fb-shell {
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+  height: 42px;
+  background: var(--n-g-a2);
+  box-shadow: var(--n-effect-raised);
+  backdrop-filter: blur(var(--n-blur-sm));
+  border-radius: 21px;
+}
+
+/* 模式根公共骨架（搜索栏 / MarkDown 工具栏 / 播放条，四稿同为 padding 12/16 + gap 8 + 高 42） */
+.fb-mode {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-8);
+  height: 42px;
+  padding: var(--n-space-12) var(--n-space-16);
+}
+
+/* 悬浮弹层壳：通用/半透明-1 底 + 立体感-背景模糊-大阴影 + blur 小 + 圆角 8 */
+.fb-pop {
+  box-sizing: border-box;
+  background: var(--n-g-a1);
+  box-shadow: var(--n-effect-raised-blur);
+  backdrop-filter: blur(var(--n-blur-sm));
+  border-radius: var(--n-radius-8);
+}
+
+/* 组分隔（筛选按钮组 / MarkDown 工具栏分组）：稿 border-left 方案——组容器左 1px 亮色/半透明-3 + 左 padding 8 */
+.fb-group {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-8);
+  padding-left: var(--n-space-8);
+  border-left: 1px solid var(--n-l-a3);
+}

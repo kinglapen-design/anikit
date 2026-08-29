@@ -12,6 +12,7 @@ import PreviewItems from "./sections/PreviewItems.vue";
 import PreviewButtons from "./sections/PreviewButtons.vue";
 import PreviewInputs from "./sections/PreviewInputs.vue";
 import PreviewCards from "./sections/PreviewCards.vue";
+import PreviewBars from "./sections/PreviewBars.vue";
 
 const nav = [
   { id: "colors", label: "颜色" },
@@ -23,6 +24,7 @@ const nav = [
   { id: "buttons", label: "组件 按钮" },
   { id: "inputs", label: "组件 输入框" },
   { id: "cards", label: "组件 卡片" },
+  { id: "bars", label: "组件 悬浮栏" },
 ];
 </script>
 
@@ -49,6 +51,7 @@ const nav = [
       <PreviewButtons />
       <PreviewInputs />
       <PreviewCards />
+      <PreviewBars />
     </main>
   </div>
 </template>
