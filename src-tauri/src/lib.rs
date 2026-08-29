@@ -171,10 +171,12 @@ pub fn run() {
             let _ = w.maximize();
           }
         }
-        // 云母接入须在 show 前（首帧即正确观感，避免实色→半透明跳变）
-        adapters::window_fx::apply_main(&w);
         let _ = w.show();
         let _ = w.set_focus();
+        // 云母接入须在 show 后（7.1 十七轮实机实证：show 前 set_effects 会把 WebView2
+        // 内容吞掉只剩云母渐变——热切换不吞；透明窗口初始化期的 DWM 背景材料与 webview
+        // 合成冲突，窗口显示后再设则两者兼容）
+        adapters::window_fx::apply_main(&w);
 
         #[cfg(target_os = "windows")]
         {

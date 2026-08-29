@@ -23,22 +23,31 @@ pub fn mode_for_build(build: u32) -> &'static str {
 
 /// 判定当前系统模式（读 build 失败 = solid 安全回退）。
 pub fn detect_mode() -> &'static str {
-  match imp::current_build() {
+  let build = imp::current_build();
+  let mode = match build {
     Some(b) => mode_for_build(b),
     None => "solid",
-  }
+  };
+  log::info!("[window_fx] 系统 build={build:?} → 模式 {mode}");
+  mode
 }
 
 /// 对窗口应用模式：mica 调 set_effects，solid 不动（前端实色底盖住）。
 /// 返回实际生效模式（set_effects 失败 = solid 回退）。
+/// **必须在窗口 show 后调用**（7.1 十七轮实机实证：show 前 set_effects 会吞掉
+/// WebView2 内容只剩云母渐变；窗口显示后再设两者兼容）。
 pub fn apply(win: &tauri::WebviewWindow) -> &'static str {
   let mode = detect_mode();
   if mode == "mica" {
     let effects = tauri::window::EffectsBuilder::new()
       .effect(tauri::window::Effect::Mica)
       .build();
-    if win.set_effects(effects).is_err() {
-      return "solid";
+    match win.set_effects(effects) {
+      Ok(()) => log::info!("[window_fx] 云母 Mica set_effects 成功"),
+      Err(e) => {
+        log::error!("[window_fx] set_effects(Mica) 失败：{e}——回退 solid");
+        return "solid";
+      }
     }
   }
   mode
