@@ -133,7 +133,8 @@ const archiveNode = computed<FolderNode | null>(() => {
   flex-direction: column;
   height: 100%; /* 1.2：dockview panel 内容容器由 dock 管理尺寸，铺满即可 */
   min-width: 0;
-  background: var(--c1);
+  /* 无底色（7.1 十九轮二轮用户定）：透 dockview 内容容器卡片底 通用/一级，
+     与选中标签页（同 g1）融合可辨；旧 c1 实底盖住卡片底色已废 */
   /* 三栏面板无圆角无边框、外层无 padding（figma-css 02_布局/42_中间面板，2026-08-10）：
      工具栏 / 搜索框自带 padding 12 16、列表容器 padding 16 16 0，各自承担 */
   box-sizing: border-box;

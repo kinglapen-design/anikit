@@ -55,7 +55,7 @@ function onReady(e: DockviewReadyEvent): void {
 </script>
 
 <template>
-  <main ref="rootRef" class="dock-host" :class="{ 'pad-win': ui.rightCollapsed || ui.sidebarAnimating }">
+  <main ref="rootRef" class="dock-host" :class="{ 'pad-win': ui.rightCollapsed || ui.sidebarAnimating, 'left-collapsed': ui.leftCollapsed }">
     <DockviewVue
       class="dock-root"
       :components="components"
@@ -77,12 +77,18 @@ function onReady(e: DockviewReadyEvent): void {
 </template>
 
 <style scoped>
-/* 中间面板容器：C1 底，dock 铺满；relative 供通知条锚定（原 ContentArea 口径） */
+/* 中间面板容器：无底色——标签栏 / group 区透窗口云母或实色底（7.1 十九轮二轮用户定：
+   旧 c1 实底把云母挡住了）；内容容器 g1 卡片由 dockview-theme .dv-content-container 画。
+   relative 供通知条锚定（原 ContentArea 口径） */
 .dock-host {
   position: relative;
   flex: 1;
   min-width: 0;
-  background: var(--c1);
+}
+/* 左栏收起时：标签栏左 padding 36 → 12（2026-08-30 用户定——收起态行首展开钮距窗口左缘
+   36 太远；展开态保持稿值 36） */
+.dock-host.left-collapsed :deep(.dv-tabs-and-actions-container) {
+  padding-left: var(--n-space-12);
 }
 /* DockviewVue 是 Fragment 多根组件：scoped 的 data-v 落不到它内部 div，
    尺寸必须 :deep 穿透（否则容器高 0，dockview 铺满失败 = 全黑，2026-08-08 踩坑） */

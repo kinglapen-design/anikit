@@ -8,6 +8,8 @@
 #   T7  hover 未选中：四周 4px 内缩 6px 圆角罩 亮/半透明-3 rgba(242,242,242,0.06) + 关闭钮显
 #   T8  添加钮：30×30 + 色 亮/三级
 #   T9  dockview 自绘滚动条（dv-scrollbar）恒关——flex trailing gap 假溢出 4px 冒灰带截断无缝
+#   T11 中间面板底色链（十九轮二轮用户定）：dock-host / content-area 透明 + 内容容器 g1 透出
+#   T10 左栏收起 → 栏左 padding 36→12（十九轮二轮用户定）；展开恢复 36
 #   截图 r19-tab-bar.png（hover 未选中态留档；headless 无云母，仅结构）
 # 桩：最小主窗口（空 placements）；fx 固定 solid（本断言与窗口特效无关）。
 # 坑位沿用：端口/profile 随 pid 唯一 + 禁缓存；收尾 taskkill /F /T 整树杀（踩坑 056）。
@@ -248,6 +250,32 @@ async def main():
                   and hov.get("br") == "6px" and hov.get("i") == "4px,4px,4px,4px"
                   and hov.get("xo") == "1",
                   json.dumps(hov))
+
+            # T11 中间面板底色链（十九轮二轮用户定）：dock-host / content-area 均无底色——
+            # 标签栏透窗口底（云母/实色-1），内容容器 g1 卡片透出（选中标签同 g1 融合可辨）
+            grounds = await ev(
+                "(() => { const r = (s) => { const el = document.querySelector(s);"
+                "   return el ? getComputedStyle(el).backgroundColor : 'absent'; };"
+                " return { host: r('.dock-host'), area: r('.content-area'), card: r('.dv-content-container') }; })()")
+            check("T11 dock-host / content-area 透明 + 内容容器 g1",
+                  isinstance(grounds, dict) and grounds.get("host") == "rgba(0, 0, 0, 0)"
+                  and grounds.get("area") == "rgba(0, 0, 0, 0)"
+                  and grounds.get("card") == "rgb(23, 23, 23)",
+                  json.dumps(grounds))
+
+            # T10 左栏收起时标签栏左 padding 36 → 12（十九轮二轮用户定）：
+            # 点菜单栏收起钮 → 等 400ms 收展动画 → 断言；再点展开钮（pre-actions）恢复
+            await ev("document.querySelector('.sidebar-left .menu-bar .ic-btn').click()")
+            await asyncio.sleep(1.0)
+            pl = await ev("getComputedStyle(document.querySelector('" + BAR + "')).paddingLeft")
+            check("T10 左栏收起 → 栏左 padding 12", pl == "12px", str(pl))
+            exp = await ev(
+                "(() => { const b = document.querySelector('.dv-pre-actions-container .icon-btn');"
+                " if (!b) return null; b.click(); return true; })()")
+            await asyncio.sleep(1.0)
+            pl2 = await ev("getComputedStyle(document.querySelector('" + BAR + "')).paddingLeft")
+            check("T10b 左栏展开 → 栏左 padding 回 36",
+                  exp is True and pl2 == "36px", f"btn={exp} pl={pl2}")
 
             # 截图留档（hover 未选中态）
             s = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
