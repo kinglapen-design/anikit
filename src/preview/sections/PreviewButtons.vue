@@ -209,8 +209,12 @@ const filterRow = ["颜色", "时长", "标签", "扩展名", "文件夹", "比�
           <span class="pv-cap">安装钮 · 常态</span>
         </div>
         <div class="pv-demo-cell">
+          <FontInstallButton force-state="hover" />
+          <span class="pv-cap">hover（描边 亮色/四级）</span>
+        </div>
+        <div class="pv-demo-cell">
           <FontInstallButton selected />
-          <span class="pv-cap">选中（品牌底）</span>
+          <span class="pv-cap">选中（品牌底 + 半透明-3 边）</span>
         </div>
         <div class="pv-demo-cell">
           <DropButton v-model="unit" :options="['KB', 'MB', 'GB']" />

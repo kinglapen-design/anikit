@@ -7,7 +7,8 @@
 // size：lg = 高 38 + 按钮文字-大 / md = 高 34 + 正文-加粗 / sm = 高 28 + 按钮文字（稿仅 ghost）；
 // lg/md 为填充式按钮（宽 100%——figma padding-x 0 + flex-grow 的拉伸语境，宽度由父容器定），
 // sm 自适应内容（padding 4/8）；圆角 lg/md = 8、sm = 6；
-// icon = 前置图标（图标+文字-立体稿：svg 12 / 亮色三级 / gap 6，hover 不变色）。
+// icon = 前置图标（图标+文字-立体稿：icon 容器 18 实寸 / 亮色三级 / gap 6，hover 不变色）；
+// hover 过渡 = 150ms 缓入缓出（--n-dur-150）。
 import AppIcon from "../AppIcon.vue";
 
 withDefaults(
@@ -29,7 +30,7 @@ defineEmits<{ click: [e: MouseEvent] }>();
     :class="[variant, size, forceState ? `force-${forceState}` : '']"
     @click="$emit('click', $event)"
   >
-    <AppIcon v-if="icon" :name="icon" :size="12" />
+    <AppIcon v-if="icon" :name="icon" :size="18" />
     <span class="lbl">{{ label }}</span>
   </button>
 </template>
