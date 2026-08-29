@@ -118,7 +118,9 @@ const bodyRef = ref<HTMLElement>();
   height: 100%;
 }
 /* 视图切换动画（2026-08-30 用户实机定）：旧内容左移出、新内容右移入 + 渐隐；
-   300ms 形态切换档 + 缓入缓出（与分段滑块位移同步）；离场 absolute 不占位（两内容同帧并行） */
+   300ms 形态切换档 + 缓入缓出（与分段滑块同步）；离场 absolute 不占位（两内容同帧并行）。
+   位移 48px（同日实机二调：24px 时缓入缓出尾段减速显得退场不干脆；缓入/缓出分段会造成
+   出入场叠加，改加大位移量缓解——token 无位移档，参照稿值字面量先例不新造 token） */
 .view-x-enter-active,
 .view-x-leave-active {
   transition:
@@ -126,11 +128,11 @@ const bodyRef = ref<HTMLElement>();
     opacity var(--n-dur-300) var(--n-ease-in-out);
 }
 .view-x-enter-from {
-  transform: translateX(var(--n-space-24));
+  transform: translateX(48px);
   opacity: 0;
 }
 .view-x-leave-to {
-  transform: translateX(calc(var(--n-space-24) * -1));
+  transform: translateX(-48px);
   opacity: 0;
 }
 .view-x-leave-active {
