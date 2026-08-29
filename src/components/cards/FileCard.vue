@@ -93,7 +93,7 @@ watch(
 
 <template>
   <div
-    class="kc-media kc-sel fc-root"
+    class="kc-media kc-bordered kc-sel fc-root"
     :class="[kind, { square, selected, playing }, forceState ? `force-${forceState}` : '']"
   >
     <!-- 内容区（圆角裁剪层；选中环在层外防 overflow 切边） -->

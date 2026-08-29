@@ -33,7 +33,7 @@ withDefaults(
 
 <template>
   <div
-    class="kc-media kc-sel ar-card"
+    class="kc-media kc-bordered kc-sel ar-card"
     :class="[{ selected }, forceState ? `force-${forceState}` : '']"
   >
     <div class="kc-clip">

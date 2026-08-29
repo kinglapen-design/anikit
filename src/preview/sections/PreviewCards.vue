@@ -208,7 +208,7 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">文件夹卡片（220×122，hover 仅底升六级；tint = 自定义九色对）</h3>
+      <h3 class="pv-group-title">文件夹卡片（220×122，hover 仅底升六级；图标恒默认色——变色只留树容器）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div style="width: 220px; height: 122px">
@@ -227,12 +227,6 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
             <FolderCard name="01_人物" :lines="folderLines" selected />
           </div>
           <span class="pv-cap">选中</span>
-        </div>
-        <div class="pv-demo-cell">
-          <div style="width: 220px; height: 122px">
-            <FolderCard name="02_场景" :lines="folderLines" tint="red" />
-          </div>
-          <span class="pv-cap">自定义色 · 红</span>
         </div>
       </div>
     </div>

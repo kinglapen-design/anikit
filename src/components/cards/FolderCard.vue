@@ -2,7 +2,8 @@
 // 文件夹卡片——docs/UI 重构/Design Token/组件/卡片/文件夹卡片.md：
 // 通用三级底 + 立体感-通用 + 圆角 8 + padding 12；hover 仅底升通用六级（稿只给 background-color，
 // 无位移无阴影——与媒体卡不同）；选中 2px 品牌描边（cards.css .kc-sel）。
-// 顶行 = 名称（标题档 一级，截断）+ 文件夹-大双色调图标 24（tint = 自定义九色对，TwoToneIcon 通道）；
+// 顶行 = 名称（标题档 一级，截断）+ 文件夹-大双色调图标 24——**图标恒默认色不接 tint**
+//（2026-08-29 用户定：卡片变色整屏噪声太大，自定义色只留树容器）；
 // 简介 = 两行统计（数字档 亮色/三级，段间 " / " 分隔 gap 4）；名称行与简介间距 36（稿值，填满 122 高链）。
 import TwoToneIcon from "../items/TwoToneIcon.vue";
 import "./cards.css";
@@ -11,11 +12,10 @@ withDefaults(
   defineProps<{
     name: string;
     lines?: string[][]; // 统计行（每行若干段，段间 " / "）
-    tint?: string; // 文件夹自定义色（九色对，TwoToneIcon data-tint）
     selected?: boolean;
     forceState?: "" | "hover" | "selected";
   }>(),
-  { lines: () => [], tint: undefined, selected: false, forceState: "" },
+  { lines: () => [], selected: false, forceState: "" },
 );
 </script>
 
@@ -23,7 +23,7 @@ withDefaults(
   <div class="kc-sel folder-card" :class="[{ selected }, forceState ? `force-${forceState}` : '']">
     <div class="fd-head">
       <span class="fd-name">{{ name }}</span>
-      <TwoToneIcon name="folder-large" :size="24" :tint="tint" />
+      <TwoToneIcon name="folder-large" :size="24" />
     </div>
     <div class="fd-stats">
       <div v-for="(line, i) in lines" :key="i" class="fd-line">

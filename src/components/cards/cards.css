@@ -1,15 +1,18 @@
 /* 卡片族共享样式（阶段七新体系，docs/UI 重构/Design Token/组件/卡片/）。
-   只引 --n- token；描边换色瞬时切换（颜色过渡禁用于描边，踩坑 036，速查表 §7），
-   选中 = 品牌色 2px ::after 状态层 opacity 过渡（同一定案）。 */
+   只引 --n- token；线条走旧统一方案（速查表 §7 / 旧 AssetCard）：常态 1px = .kc-bordered::after、
+   选中 2px 品牌 = .kc-sel::before，双层伪元素 inset 0——不用真 border、无负 inset
+   （真 border + 负偏移状态环在分数物理像素下渗线、粗细不均，2026-08-29 走查实锤）；
+   描边换色瞬时（hover）/ opacity 过渡（选中），颜色过渡禁用（踩坑 036）。 */
 
-/* 媒体卡壳（文件卡 / 档案卡）：通用二级底 + 通用三级 1px 描边 + 圆角 8；
+/* 媒体卡壳（文件卡 / 档案卡）：通用二级底 + 圆角 8（1px 常态描边走 .kc-bordered 伪元素层，不用真 border——
+   真 border + 负 inset 状态环在分数物理像素下渗线、粗细不均，2026-08-29 走查实锤；
+   沿用旧统一线条方案：双层伪元素 inset 0，速查表 §7 / 旧 AssetCard 同款）；
    hover = 描边升通用六级（瞬时）+ 位移 Y -4px + 小阴影（250ms 小位移 + 缓入缓出） */
 .kc-media {
   box-sizing: border-box;
   position: relative;
   overflow: hidden;
   background: var(--n-g2);
-  border: 1px solid var(--n-g3);
   border-radius: var(--n-radius-8);
   transition:
     transform var(--n-dur-250) var(--n-ease-in-out),
@@ -17,16 +20,35 @@
 }
 .kc-media:hover,
 .kc-media.force-hover {
-  border-color: var(--n-g6);
   transform: translateY(-4px);
   box-shadow: var(--n-shadow-sm);
 }
 
-/* 选中描边状态层：inset -1px 让 2px 环正好盖住常态 1px 描边（无外凸双线圈） */
-.kc-sel::after {
+/* 常态 1px 描边层（媒体卡 / 列表行）：::after inset 0，hover 瞬时换色不做过渡（踩坑 036）。
+   换色档位按卡型分流：媒体卡 hover 升 g6（下行），列表行 hover 升 g5（组件 scoped 覆盖） */
+.kc-bordered {
+  position: relative;
+}
+.kc-bordered::after {
   content: "";
   position: absolute;
-  inset: -1px;
+  inset: 0;
+  z-index: 7;
+  border: 1px solid var(--n-g3);
+  border-radius: var(--n-radius-8);
+  pointer-events: none;
+}
+.kc-media:hover::after,
+.kc-media.force-hover::after {
+  border-color: var(--n-g6);
+}
+
+/* 选中 2px 品牌描边层：::before inset 0（2px 环全在卡缘内侧 = figma border 语义，零负偏移防渗线），
+   opacity 过渡（颜色过渡禁用，踩坑 036）；文件夹卡无常态描边，选中环同样 inset 0 */
+.kc-sel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
   z-index: 8;
   border: 2px solid var(--n-brand);
   border-radius: var(--n-radius-8);
@@ -34,8 +56,8 @@
   pointer-events: none;
   transition: opacity var(--n-dur-150) var(--n-ease-in-out);
 }
-.kc-sel.selected::after,
-.kc-sel.force-selected::after {
+.kc-sel.selected::before,
+.kc-sel.force-selected::before {
   opacity: 1;
 }
 

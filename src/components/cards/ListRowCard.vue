@@ -37,7 +37,7 @@ withDefaults(
 </script>
 
 <template>
-  <div class="kc-sel lr-card" :class="[{ selected }, forceState ? `force-${forceState}` : '']">
+  <div class="kc-bordered kc-sel lr-card" :class="[{ selected }, forceState ? `force-${forceState}` : '']">
     <span class="lr-thumb">
       <img v-if="thumbUrl" :src="thumbUrl" class="lr-thumb-img" alt="" />
     </span>
@@ -68,13 +68,16 @@ withDefaults(
   padding: var(--n-space-6) var(--n-space-12) var(--n-space-6) var(--n-space-6);
   gap: var(--n-space-12);
   background: var(--n-g2);
-  border: 1px solid var(--n-g3);
   border-radius: var(--n-radius-8);
   transition: background var(--n-dur-150) var(--n-ease-in-out);
 }
 .lr-card:hover,
 .lr-card.force-hover {
   background: var(--n-g3);
+}
+/* 常态 1px 描边 = cards.css .kc-bordered::after，hover 升五级（瞬时换色） */
+.lr-card:hover::after,
+.lr-card.force-hover::after {
   border-color: var(--n-g5);
 }
 

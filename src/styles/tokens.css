@@ -76,7 +76,7 @@
 
   /* 2 字体 */
   --n-font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
-  --n-font-mono: "Fira Mono", Consolas, monospace; /* Fira Mono 已内嵌（fonts.css），Consolas 兜底 */
+  --n-font-mono: "Fira Mono", Consolas, "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; /* Fira Mono 已内嵌（fonts.css），Consolas 兜底拉丁、雅黑兜底 CJK（2026-08-29 走查：无 CJK 回退会落 monospace=宋体） */
 
   /* 2.1 通用（字号 / 行高成组；加粗档 = 同组 + --n-fw-bold） */
   --n-fs-body: 13px; /* 正文 / 正文-加粗 */
