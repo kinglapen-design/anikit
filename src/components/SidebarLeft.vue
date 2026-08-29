@@ -118,19 +118,18 @@ const bodyRef = ref<HTMLElement>();
   height: 100%;
 }
 /* 视图切换动画（2026-08-30 用户实机定）：旧内容左移出、新内容右移入 + 渐隐；位移 48px。
-   时序（同日实机三调）：退场 300ms 缓出（--n-ease-out）先行；入场同为 300ms 缓入
-   （--n-ease-in），启动时间 = 退场的 200ms 后（delay 200ms，总时长 500ms）——
-   缓入缓出并行的尾段减速与出入场叠加两问题一并消解；
-   离场 absolute 不占位 */
+   时序（同日实机四调定稿）：退场 150ms 缓出（--n-dur-150 + --n-ease-out）先行；
+   入场 250ms 缓入（--n-dur-250 + --n-ease-in），启动 = 退场的 100ms 后（delay --n-dur-100，
+   总 350ms）——全部 token 档；离场 absolute 不占位 */
 .view-x-enter-active {
   transition:
-    transform var(--n-dur-300) var(--n-ease-in) 200ms,
-    opacity var(--n-dur-300) var(--n-ease-in) 200ms;
+    transform var(--n-dur-250) var(--n-ease-in) var(--n-dur-100),
+    opacity var(--n-dur-250) var(--n-ease-in) var(--n-dur-100);
 }
 .view-x-leave-active {
   transition:
-    transform var(--n-dur-300) var(--n-ease-out),
-    opacity var(--n-dur-300) var(--n-ease-out);
+    transform var(--n-dur-150) var(--n-ease-out),
+    opacity var(--n-dur-150) var(--n-ease-out);
 }
 .view-x-enter-from {
   transform: translateX(48px);
