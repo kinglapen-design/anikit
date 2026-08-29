@@ -380,7 +380,9 @@ async function togglePin(): Promise<void> {
   border-radius: var(--n-radius-8);
 }
 .window.fx-mica {
-  background: var(--n-g-a1);
+  /* 云母模式 = 窗口底全透明，DWM 云母直接呈现（2026-08-30 用户定：稿 93% 是 figma
+     模拟手法，工程里云母上不叠色；实色区由各面板自画——内容容器/右栏 g1 卡片） */
+  background: transparent;
 }
 .window.maximized {
   border-radius: 0;
