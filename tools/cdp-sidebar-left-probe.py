@@ -7,7 +7,7 @@
 #   S6  文件夹区块标题 SectionTitle 16 高：「目录 / 2」；常态动作组 visibility hidden（hover 才现身）
 #   S7  树 item 26 高；f2 自定义色 blue → .tt-icon[data-tint="blue"]（旧色名映射新九色）
 #   S8  选中态：点 f1 → 半透明-2 底 + 立体感-通用 + 文字升一级
-#   S9  展开 f1：子层出现 + 缩进线 1px 半透明-3；f1 数量 3 → 2（展开 = 直接子项，双口径）
+#   S9  展开 f1：子层出现 + 缩进线 1px 半透明-2（二轮改定：半透明-3 太淡）；f1 数量 3 → 2（展开 = 直接子项，双口径）
 #   S10 旧结构清零：.bar-title / .rail / .side-content / .library-switch / .side-thumb 均不存在
 #   截图 r18-sidebar-left.png（整窗 + 侧栏局部）
 # 桩：最小主窗口；2 区块顶级文件夹（f1 带子层、f2 蓝色）+ 3 条 Placement（f1×2 / f1a×1）。
@@ -281,9 +281,9 @@ async def main():
             check("S9a 展开出子层 + 子项 f1a 渲染",
                   isinstance(exp, dict) and exp.get("children") is True and exp.get("sub") is True,
                   json.dumps(exp))
-            check("S9b 缩进线 1px 半透明-3",
+            check("S9b 缩进线 1px 半透明-2（二轮改定）",
                   isinstance(exp, dict) and exp.get("lw") == "1px"
-                  and exp.get("lc") == "rgba(242, 242, 242, 0.06)",
+                  and exp.get("lc") == "rgba(242, 242, 242, 0.14)",
                   json.dumps(exp))
             check("S9c 展开后 f1 数量 = 直接子项 2（双口径）",
                   isinstance(exp, dict) and exp.get("cnt") == "2", json.dumps(exp))

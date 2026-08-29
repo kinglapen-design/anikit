@@ -21,7 +21,9 @@ function onMove(e: PointerEvent): void {
   if (!dragging.value) return;
   const delta = e.clientX - startX;
   const w = props.side === "left" ? startW + delta : startW - delta;
-  const clamped = Math.max(200, Math.min(480, w));
+  // 左栏最小 246（2026-08-30 用户实机：再窄菜单栏四文字钮被裁，246 = 菜单栏恰好全显宽）；右栏 200
+  const min = props.side === "left" ? 246 : 200;
+  const clamped = Math.max(min, Math.min(480, w));
   if (props.side === "left") ui.leftWidth = clamped;
   else ui.rightWidth = clamped;
 }

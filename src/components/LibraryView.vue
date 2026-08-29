@@ -27,6 +27,7 @@ import { recycleBlankSpec } from "../lib/menuSpecs/recycle";
 import { currentSpace, setAutoImport } from "../lib/libraryOps";
 import { reorderBlocks } from "../lib/blockOps";
 import { isBlockOpen, openBlock, toggleBlockOpen, treeExpansion } from "../lib/treeExpansion";
+import { expandEnter, expandLeave } from "../lib/expandAnim";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
@@ -323,14 +324,16 @@ function onQuickMenu(key: string, e: MouseEvent): void {
           @add="onAddFolder(sec.block.id)"
         />
       </div>
-      <div
-        v-if="isBlockOpen(sec.block.id)"
-        class="items block-tree"
-        :data-block-id="sec.block.id"
-        @pointerdown="onTreePointerDown"
-      >
-        <FolderTree :nodes="sec.nodes" :force-open-ids="forceOpenIds" />
-      </div>
+      <Transition :css="false" @enter="expandEnter" @leave="expandLeave">
+        <div
+          v-if="isBlockOpen(sec.block.id)"
+          class="items block-tree"
+          :data-block-id="sec.block.id"
+          @pointerdown="onTreePointerDown"
+        >
+          <FolderTree :nodes="sec.nodes" :force-open-ids="forceOpenIds" />
+        </div>
+      </Transition>
     </section>
     <!-- 自动导入未开启确认弹窗（confirm 形态：无 X，点遮罩 / 取消关闭） -->
     <AppModal
@@ -389,7 +392,8 @@ function onQuickMenu(key: string, e: MouseEvent): void {
   transition: none;
 }
 /* 区块标题行落点视觉（与 TreeRowItem 同口径，2026-08-30 用户定案）：
-   into = 品牌/半透明罩层 + 1.5px 品牌/常态 ::after 描边（inset box-shadow 分数像素渗线，速查 §7） */
+   into = 品牌/半透明罩层 + 2px 品牌/常态 ::after 描边（inset box-shadow 分数像素渗线，速查 §7；
+   2px = 同日实机定案，1.5px 屏幕缩放下问题多已废） */
 .block-head {
   position: relative;
   border-radius: var(--n-radius-6);
@@ -401,7 +405,7 @@ function onQuickMenu(key: string, e: MouseEvent): void {
   content: "";
   position: absolute;
   inset: 0;
-  border: 1.5px solid var(--n-brand);
+  border: 2px solid var(--n-brand);
   border-radius: var(--n-radius-6);
   pointer-events: none;
   z-index: 1;

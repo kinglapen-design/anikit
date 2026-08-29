@@ -3,13 +3,16 @@
 // 壳：宽 100% 随父容器（稿值 230 = 254 侧栏 − 12×2 的画布语境，卡片族尺寸模型口径）× 26 高 /
 // padding 4 6 / gap 6 / 圆角 6；hover = 亮色/半透明-3；选中 = 半透明-2 + 立体感-通用 +
 // 展开钮/提示装饰/图标/名称/数量提亮 亮色/一级。
-// 业务态（2026-08-30 左栏轮用户定案，稿未画——状态描边一律 ::after 伪元素 border，速查 §7）：
-//   多选联动 domain-selected = 半透明-2 底 + 1.5px 亮色/二级描边（与当前目录选中互斥由父保证）；
-//   拖拽排序插入线 = 2px 品牌/常态（item 上/下沿）；并入 drop-into = 品牌/半透明填充 + 1.5px 品牌/常态描边；
-//   重命名输入态 naming = 1.5px 品牌/常态描边（校验违规换 --n-danger），输入框透明底（base.css
+// 业务态（2026-08-30 左栏轮用户定案 + 同日二轮实机修订，稿未画——状态描边一律 ::after 伪元素
+// border，速查 §7；描边宽 2px——1.5px 屏幕缩放下问题多已废）：
+//   多选联动 domain-selected = 半透明-2 底，无描边（二轮改定：去边框只留底色；
+//   卡片↔树联动分场景表达涉及多选改造，用户定搁置——现状 = 所有选择域成员统一只留底色）；
+//   拖拽排序插入线 = 2px 品牌/常态（item 上/下沿）；并入 drop-into = 品牌/半透明填充 + 2px 品牌/常态描边；
+//   重命名输入态 naming = 2px 品牌/常态描边（校验违规换 --n-danger），输入框透明底（base.css
 //   .rename-input 共享基座，本地覆盖 18 高 + 新字档）；
 //   拖拽源 dimmed / 剪切 cut = 整项半透明 0.4 / 0.5（沿用速查 §5 既有档）；
-//   层级缩进 = padding-left 6 + depth×20（稿未画层级，沿用旧 20 档）。
+//   层级缩进 = padding-left 6 + depth×20（稿未画层级，沿用旧 20 档）；
+//   档案提示装饰圆点 tint 变色后 = 该色-2 暗档（二轮实机定；选中升一级优先）。
 // 数量双口径（旧 TreeItem 2026-08-20 定）：folder 展开 = 直接子项数 / 折叠 = 递归总数；0 不显示。
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
@@ -123,7 +126,7 @@ function onClick(e: MouseEvent): void {
       >
         <AppIcon name="expand" :size="14" />
       </button>
-      <span v-else-if="kind === 'archive'" class="dot" aria-hidden="true" />
+      <span v-else-if="kind === 'archive'" class="dot" :data-tint="tint || undefined" aria-hidden="true" />
       <template v-if="kind === 'folder'">
         <AppIcon v-if="icon" :name="icon" :size="18" class="fico" />
         <TwoToneIcon v-else :name="expanded ? 'folder-open' : 'folder-closed'" :size="18" :tint="tint" />
@@ -233,6 +236,34 @@ function onClick(e: MouseEvent): void {
   border-radius: 50%; /* 提示装饰：稿 CSS 为 8×8 方块，图实为圆点（以图为准） */
   background: var(--n-l4);
 }
+/* tint 变色后圆点 = 该色-2 暗档（2026-08-30 用户实机定；写在 selected 前——选中升一级优先） */
+.dot[data-tint="red"]::before {
+  background: var(--n-custom-red-2);
+}
+.dot[data-tint="blue"]::before {
+  background: var(--n-custom-blue-2);
+}
+.dot[data-tint="yellow"]::before {
+  background: var(--n-custom-yellow-2);
+}
+.dot[data-tint="yellowgreen"]::before {
+  background: var(--n-custom-yellowgreen-2);
+}
+.dot[data-tint="green"]::before {
+  background: var(--n-custom-green-2);
+}
+.dot[data-tint="cyan"]::before {
+  background: var(--n-custom-cyan-2);
+}
+.dot[data-tint="purple"]::before {
+  background: var(--n-custom-purple-2);
+}
+.dot[data-tint="pink"]::before {
+  background: var(--n-custom-pink-2);
+}
+.dot[data-tint="peach"]::before {
+  background: var(--n-custom-peach-2);
+}
 .selected .dot::before,
 .force-selected .dot::before {
   background: var(--n-l1);
@@ -286,18 +317,11 @@ function onClick(e: MouseEvent): void {
 .force-selected .cnt {
   color: var(--n-l1);
 }
-/* —— 业务态（2026-08-30 用户定案；描边一律 ::after 伪元素 border，速查 §7）—— */
-/* 多选联动：半透明-2 底 + 1.5px 亮色/二级描边（与 selected 互斥由父保证） */
+/* —— 业务态（2026-08-30 用户定案；状态描边一律 ::after 伪元素 border，速查 §7；
+      描边宽 2px——1.5px 屏幕缩放下问题多，同日实机废除）—— */
+/* 多选联动（含右键选择）：半透明-2 底，无描边（2026-08-30 二轮用户实机改定：去边框只留底色） */
 .tree-item.domain-selected {
   background: var(--n-l-a2);
-}
-.tree-item.domain-selected::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border: 1.5px solid var(--n-l2);
-  border-radius: var(--n-radius-6);
-  pointer-events: none;
 }
 /* 拖拽排序插入线：2px 品牌/常态于 item 上/下沿（仅文件夹拖拽上/下 1/3 区） */
 .tree-item.drop-before::before,
@@ -317,7 +341,7 @@ function onClick(e: MouseEvent): void {
 .tree-item.drop-after::before {
   bottom: 0;
 }
-/* 拖拽并入：品牌/半透明填充 + 1.5px 品牌/常态描边 */
+/* 拖拽并入：品牌/半透明填充 + 2px 品牌/常态描边 */
 .tree-item.drop-into {
   background: var(--n-brand-50);
 }
@@ -325,16 +349,16 @@ function onClick(e: MouseEvent): void {
   content: "";
   position: absolute;
   inset: 0;
-  border: 1.5px solid var(--n-brand);
+  border: 2px solid var(--n-brand);
   border-radius: var(--n-radius-6);
   pointer-events: none;
 }
-/* 重命名输入态：1.5px 品牌/常态描边；校验违规（重名等）换禁止色 */
+/* 重命名输入态：2px 品牌/常态描边；校验违规（重名等）换禁止色 */
 .tree-item.naming::after {
   content: "";
   position: absolute;
   inset: 0;
-  border: 1.5px solid var(--n-brand);
+  border: 2px solid var(--n-brand);
   border-radius: var(--n-radius-6);
   pointer-events: none;
 }

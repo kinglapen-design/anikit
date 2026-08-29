@@ -19,6 +19,7 @@ import { openContextMenu } from "../lib/contextMenus";
 import { treeItemSpec } from "../lib/menuSpecs/folder";
 import { isTreeOpen, toggleOpen } from "../lib/treeExpansion";
 import { toNewTint } from "../lib/customColors";
+import { expandEnter, expandLeave } from "../lib/expandAnim";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
@@ -65,10 +66,11 @@ function nodeTint(node: FolderNode): string | undefined {
   return node.color ?? props.inheritTint;
 }
 
-// 缩进线色（2026-08-30 用户定）：默认 亮色/半透明-3；节点设自定义色后 = 该色-1 的 6% 档
+// 缩进线色：默认 亮色/半透明-2（2026-08-30 用户实机：半透明-3 太淡，变色后更看不清）；
+// 节点设自定义色后 = 该色-1 的 14% 档（同半透明-2 透明度）
 function guideColor(node: FolderNode): string | undefined {
   const t = toNewTint(nodeTint(node));
-  return t ? `color-mix(in srgb, var(--n-custom-${t}-1) 6%, transparent)` : undefined;
+  return t ? `color-mix(in srgb, var(--n-custom-${t}-1) 14%, transparent)` : undefined;
 }
 
 // 拖拽落点（C4c）：引擎按 data-folder-id 匹配（dragOperation），zone 三分（上/下插入线、中间并入）；
@@ -172,19 +174,21 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
         @click="onSelect(node.id, $event)"
         @name-commit="onNameCommit(node, $event)"
       />
-      <div
-        v-if="isOpen(node.id) && node.children.length > 0"
-        class="ft-children"
-        :style="{ '--guide-x': `${depth * 20 + 15}px`, '--guide-color': guideColor(node) }"
-      >
-        <FolderTree
-          :nodes="node.children"
-          :depth="depth + 1"
-          :parent-id="node.id"
-          :force-open-ids="forceOpenIds"
-          :inherit-tint="nodeTint(node)"
-        />
-      </div>
+      <Transition :css="false" @enter="expandEnter" @leave="expandLeave">
+        <div
+          v-if="isOpen(node.id) && node.children.length > 0"
+          class="ft-children"
+          :style="{ '--guide-x': `${depth * 20 + 15}px`, '--guide-color': guideColor(node) }"
+        >
+          <FolderTree
+            :nodes="node.children"
+            :depth="depth + 1"
+            :parent-id="node.id"
+            :force-open-ids="forceOpenIds"
+            :inherit-tint="nodeTint(node)"
+          />
+        </div>
+      </Transition>
     </div>
   </template>
 </template>
@@ -205,7 +209,8 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
 }
 /* 缩进竖线：横坐标 = 父级展开钮尖角（item 左 padding 6+depth×20 + 展开钮半宽 9，即
    --guide-x = depth×20+15）；纵坐标首子项顶部 → 末子项底部（top 0 bottom 0 贯穿）。
-   线色 = 亮色/半透明-3，节点设自定义色后 = 该色-1 的 6% 档（2026-08-30 用户定，--guide-color 传入）。
+   线色 = 亮色/半透明-2（半透明-3 实机太淡，变色后更看不清，2026-08-30 用户改定），
+   节点设自定义色后 = 该色-1 的 14% 档（--guide-color 传入）。
    z-index 1：item 罩层满宽后会盖住同层先绘制的线（2026-08-08 走查修复），线在 item 空白
    padding 区（内容从 depth×20+24 起），不压内容 */
 .ft-children::before {
@@ -215,7 +220,7 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: var(--guide-color, var(--n-l-a3));
+  background: var(--guide-color, var(--n-l-a2));
   z-index: 1;
   pointer-events: none;
 }

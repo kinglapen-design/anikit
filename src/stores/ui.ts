@@ -179,6 +179,8 @@ export const useUiStore = defineStore("ui", {
         // 左栏宽默认值迁移（2026-08-30，7.1 十八轮左栏轮）：旧默认 304 → 新稿 254；
         // 仅改恰好等于旧默认的值（用户拖过的不动），同 briefMode 迁移先例
         if (saved.leftWidth === 304) this.leftWidth = 254;
+        // 左栏最小宽 246（同日用户实机定：再窄菜单栏四文字钮被裁）；存量更窄的值夹到 246
+        if (typeof saved.leftWidth === "number" && saved.leftWidth < 246) this.leftWidth = 246;
       } catch (e) {
         console.warn("UI 设置读取失败（用默认值）：", e);
       }

@@ -45,11 +45,12 @@ textarea {
   outline: none;
 }
 
-/* 选中文字高亮：品牌色实底 + 高亮字（替换系统蓝，2026-08-10 用户定；
+/* 选中文字高亮：品牌/常态实底 + 亮色/一级字（替换系统蓝，2026-08-10 用户定；
+   2026-08-30 左栏轮复验改新品牌色 --n-brand（旧青绿 --brand 退役中）；
    主要生效于输入框——body 全局 user-select:none） */
 ::selection {
-  background: var(--brand);
-  color: var(--text-highlight);
+  background: var(--n-brand);
+  color: var(--n-l1);
 }
 
 /* 主列表滚动为自定义 transform 方案（踩坑 005），原生滚动条全局隐藏；

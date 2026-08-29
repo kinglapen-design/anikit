@@ -64,12 +64,15 @@ const bodyRef = ref<HTMLElement>();
       />
     </div>
 
-    <!-- 树容器（稿：flex-grow 1）：资源库 = LibraryView；工作空间 / AI = 空态占位 -->
+    <!-- 树容器（稿：flex-grow 1）：资源库 = LibraryView；工作空间 / AI = 空态占位；
+         视图切换 = 旧内容左移出、新内容右移入（2026-08-30 用户实机定）300ms 缓入缓出（与滑块同步） -->
     <div class="side-body">
-      <div v-if="viewMode === 'library'" ref="bodyRef" class="tree-scroll kit-scroll">
-        <LibraryView />
-      </div>
-      <div v-else class="empty-state">功能正在开发中</div>
+      <Transition name="view-x">
+        <div v-if="viewMode === 'library'" ref="bodyRef" class="tree-scroll kit-scroll" key="library">
+          <LibraryView />
+        </div>
+        <div v-else class="empty-state" key="empty">功能正在开发中</div>
+      </Transition>
       <ScrollThumb :body="bodyRef" />
     </div>
   </aside>
@@ -113,6 +116,26 @@ const bodyRef = ref<HTMLElement>();
 }
 .tree-scroll {
   height: 100%;
+}
+/* 视图切换动画（2026-08-30 用户实机定）：旧内容左移出、新内容右移入 + 渐隐；
+   300ms 形态切换档 + 缓入缓出（与分段滑块位移同步）；离场 absolute 不占位（两内容同帧并行） */
+.view-x-enter-active,
+.view-x-leave-active {
+  transition:
+    transform var(--n-dur-300) var(--n-ease-in-out),
+    opacity var(--n-dur-300) var(--n-ease-in-out);
+}
+.view-x-enter-from {
+  transform: translateX(var(--n-space-24));
+  opacity: 0;
+}
+.view-x-leave-to {
+  transform: translateX(calc(var(--n-space-24) * -1));
+  opacity: 0;
+}
+.view-x-leave-active {
+  position: absolute;
+  inset: 0;
 }
 /* 空态占位（工作空间 / AI 对话框）：一段文字居中（2026-08-30 用户定）；
    正文档 + 亮色/四级（占位符同档语义，输入框族口径） */

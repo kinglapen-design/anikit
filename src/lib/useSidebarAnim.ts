@@ -20,9 +20,35 @@ import { onBeforeUnmount, onMounted, reactive, watch } from "vue";
 import { useTabsStore } from "../stores/tabs";
 import { useUiStore } from "../stores/ui";
 
-const SIDEBAR_ANIM_MS = 180;
+// 时长与缓动（2026-08-30 用户实机定）：400ms 大幅度位移档（--n-dur-400）+
+// token 缓入缓出 cubic-bezier(.32,.08,.1,1)（--n-ease-in-out 的 JS 求值——rAF 补间用不了 CSS 曲线）；
+// 档案二级侧边栏同引擎同参数。旧 180ms + easeInOutCubic 作废。
+const SIDEBAR_ANIM_MS = 400;
 function easeInOut(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+  // cubic-bezier(.32,.08,.1,1) 求值：牛顿迭代解 x(u)=t 得 u，返回 y(u)；不收敛时二分兜底
+  const [x1, y1, x2, y2] = [0.32, 0.08, 0.1, 1];
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const sx = (u: number): number => ((ax * u + bx) * u + cx) * u;
+  const sy = (u: number): number => ((ay * u + by) * u + cy) * u;
+  let u = t;
+  for (let i = 0; i < 8; i++) {
+    const x = sx(u) - t;
+    if (Math.abs(x) < 1e-6) return sy(u);
+    const d = (3 * ax * u + 2 * bx) * u + cx;
+    if (Math.abs(d) < 1e-6) break;
+    u -= x / d;
+  }
+  let lo = 0, hi = 1;
+  u = t;
+  while (hi - lo > 1e-6) {
+    const x = sx(u);
+    if (Math.abs(x - t) < 1e-6) break;
+    if (x < t) lo = u;
+    else hi = u;
+    u = (lo + hi) / 2;
+  }
+  return sy(u);
 }
 
 /** 档案二级侧边栏宽（250，同右栏） */

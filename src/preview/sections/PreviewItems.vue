@@ -71,7 +71,7 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
       <div class="pv-demo-row">
         <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="folder" name="人物" :count="20" domain-selected />
-          <span class="pv-cap">多选联动（半透明-2 + 1.5px 二级描边）</span>
+          <span class="pv-cap">多选联动（半透明-2 底，无框）</span>
         </div>
         <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="folder" name="人物" :count="20" drop-zone="before" />
