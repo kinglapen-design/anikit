@@ -117,15 +117,20 @@ const bodyRef = ref<HTMLElement>();
 .tree-scroll {
   height: 100%;
 }
-/* 视图切换动画（2026-08-30 用户实机定）：旧内容左移出、新内容右移入 + 渐隐；
-   300ms 形态切换档 + 缓入缓出（与分段滑块同步）；离场 absolute 不占位（两内容同帧并行）。
-   位移 48px（同日实机二调：24px 时缓入缓出尾段减速显得退场不干脆；缓入/缓出分段会造成
-   出入场叠加，改加大位移量缓解——token 无位移档，参照稿值字面量先例不新造 token） */
-.view-x-enter-active,
+/* 视图切换动画（2026-08-30 用户实机定）：旧内容左移出、新内容右移入 + 渐隐；位移 48px。
+   时序（同日实机三调）：退场 300ms 缓出（--n-ease-out）先行；入场同为 300ms 缓入
+   （--n-ease-in），启动时间 = 退场的 200ms 后（delay 200ms，总时长 500ms）——
+   缓入缓出并行的尾段减速与出入场叠加两问题一并消解；
+   离场 absolute 不占位 */
+.view-x-enter-active {
+  transition:
+    transform var(--n-dur-300) var(--n-ease-in) 200ms,
+    opacity var(--n-dur-300) var(--n-ease-in) 200ms;
+}
 .view-x-leave-active {
   transition:
-    transform var(--n-dur-300) var(--n-ease-in-out),
-    opacity var(--n-dur-300) var(--n-ease-in-out);
+    transform var(--n-dur-300) var(--n-ease-out),
+    opacity var(--n-dur-300) var(--n-ease-out);
 }
 .view-x-enter-from {
   transform: translateX(48px);
