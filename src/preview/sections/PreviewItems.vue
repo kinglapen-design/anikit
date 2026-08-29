@@ -12,9 +12,23 @@ import LinkRelationItem from "../../components/items/LinkRelationItem.vue";
 import PollutionFileItem from "../../components/items/PollutionFileItem.vue";
 import PickFileItem from "../../components/items/PickFileItem.vue";
 import PickRelationItem from "../../components/items/PickRelationItem.vue";
+import BaseDataItem from "../../components/items/BaseDataItem.vue";
+import ColorSwatchItem from "../../components/items/ColorSwatchItem.vue";
 import AppIcon from "../../components/AppIcon.vue";
 
 const tints = ["", "red", "blue", "yellow", "yellowgreen", "green", "cyan", "purple", "pink", "peach"];
+
+// 基础数据 item 假数据（贴稿六行）
+const baseDataRows = [
+  { label: "尺寸", values: ["1920 x 1080"] },
+  { label: "文件大小", values: ["123 MB"] },
+  { label: "格式", values: ["PSD"] },
+  { label: "添加日期", values: ["2026/07/12", "14:26"] },
+  { label: "创建日期", values: ["2026/07/12", "14:26"] },
+  { label: "修改日期", values: ["2026/07/12", "14:26"] },
+];
+// 色块 item 假数据（稿七色）
+const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4B6E", "#E19E73"];
 </script>
 
 <template>
@@ -210,6 +224,30 @@ const tints = ["", "red", "blue", "yellow", "yellowgreen", "green", "cyan", "pur
         <div class="pv-demo-cell">
           <PollutionFileItem name="恢复_雪牧.fla" force-state="hover" />
           <span class="pv-cap">hover（按钮组滑入）</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">基础数据 item（详情面板 · 信息列表）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell" style="width: 240px">
+          <BaseDataItem :rows="baseDataRows" />
+          <span class="pv-cap">常态 · 纯展示无 hover（标签 四级 Bold / 值 数字档三级，宽度随父容器）</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">色块 item（详情面板 · 主色）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <ColorSwatchItem :colors="swatchDemo" />
+          <span class="pv-cap">常态（16 圆块 + 半透明-1 描边；hover 单块放大 1.25）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <ColorSwatchItem :colors="swatchDemo" force-state="hover" />
+          <span class="pv-cap">force 全块放大示意（实际交互仅悬停块放大）</span>
         </div>
       </div>
     </div>
