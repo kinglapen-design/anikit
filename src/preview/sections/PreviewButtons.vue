@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 组件 按钮展区——docs/UI 重构/Design Token/组件/按钮/ 六族 17 稿的全态展示与验收面。
 // forceState 强制 hover 用于静态验收；分段控制器 / 拉下按钮为真实交互实例（v-model）。
+// 动画时长：全族 hover / 颜色过渡 150ms；拉下按钮展开收起 250ms；分段控制器滑块 300ms。
 import { ref } from "vue";
 import ActionButton from "../../components/buttons/ActionButton.vue";
 import IconButton from "../../components/buttons/IconButton.vue";
@@ -23,6 +24,9 @@ const segTextOpts = [
   { value: "other", label: "其他" },
 ];
 const unit = ref("KB");
+// 拉下按钮间距矩阵静态验收（2026-08-29 走查：选中 MB/GB 时缺缝挤死，改缝恒由后项提供）
+const unitMb = ref("MB");
+const unitGb = ref("GB");
 // 标签按钮-小-立体 贴稿假数据（男主角 = 选中）
 const tagRow = [
   { label: "男", on: false },
@@ -38,7 +42,8 @@ const filterRow = ["颜色", "时长", "标签", "扩展名", "文件夹", "比�
   <section id="design-system-buttons" class="pv-section">
     <h2 class="pv-sec-title">组件 · 按钮</h2>
     <p class="pv-sec-desc">
-      Design Token/组件/按钮/ 六族 17 稿；force-hover 列 = 强制态静态验收，分段控制器与拉下按钮可直接点击交互。
+      Design Token/组件/按钮/ 六族 17 稿；force-hover 列 = 强制态静态验收，分段控制器与拉下按钮可直接点击交互。<br />
+      动画时长：全族 hover / 颜色过渡 <b>150ms</b>（通用）；拉下按钮展开 / 收起与箭头旋转 <b>250ms</b>（小位移）；分段控制器滑块 <b>300ms</b>（形态切换）。
     </p>
 
     <div class="pv-group">
@@ -202,7 +207,7 @@ const filterRow = ["颜色", "时长", "标签", "扩展名", "文件夹", "比�
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">字体安装按钮 / 拉下按钮-横向</h3>
+      <h3 class="pv-group-title">字体安装按钮 / 拉下按钮-横向（展开收起 250ms 小位移）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <FontInstallButton />
@@ -223,6 +228,24 @@ const filterRow = ["颜色", "时长", "标签", "扩展名", "文件夹", "比�
         <div class="pv-demo-cell">
           <DropButton v-model="unit" :options="['KB', 'MB', 'GB']" initial-expanded />
           <span class="pv-cap">展开态（点项选中并收起）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <DropButton v-model="unitMb" :options="['KB', 'MB', 'GB']" initial-expanded />
+          <span class="pv-cap">间距验收 · 展开选中 MB</span>
+        </div>
+        <div class="pv-demo-cell">
+          <DropButton v-model="unitGb" :options="['KB', 'MB', 'GB']" initial-expanded />
+          <span class="pv-cap">间距验收 · 展开选中 GB</span>
+        </div>
+        <div class="pv-demo-cell">
+          <DropButton v-model="unitMb" :options="['KB', 'MB', 'GB']" />
+          <span class="pv-cap">间距验收 · 收起选中 MB</span>
+        </div>
+        <div class="pv-demo-cell">
+          <DropButton v-model="unitGb" :options="['KB', 'MB', 'GB']" />
+          <span class="pv-cap">间距验收 · 收起选中 GB</span>
         </div>
       </div>
     </div>
