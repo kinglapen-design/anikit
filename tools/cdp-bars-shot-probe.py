@@ -199,12 +199,14 @@ async def main() -> int:
                     " if (!ic) return { err: 'no filter icon', w: Math.round(s.width),"
                     "   html: g.querySelector('.fb-shell').innerHTML.slice(0, 260) };"
                     " const i = ic.getBoundingClientRect();"
-                    " return { w: Math.round(s.width), d: Math.round(s.right - i.right) };"
+                    " return { w: Math.round(s.width), d: Math.round(s.right - i.right),"
+                    "   cx: Math.round(s.left + s.width / 2) };"
                     " } catch (e) { return { err: e.message }; } })()"
                 )
                 print(tag, v)
                 return v
 
+            base_focus = await bars_mid("聚焦前:")
             await js(
                 "(() => { const g = [...document.querySelectorAll('#design-system-bars .pv-group')]"
                 "  .find(h => h.querySelector('.pv-group-title').textContent.startsWith('多功能悬浮栏'));"
@@ -218,10 +220,15 @@ async def main() -> int:
                 fails.append(f"聚焦中段壳宽 {mid_focus['w']} 不在 251~448 动画区间（动画未发生？）")
             elif abs(mid_focus["d"] - 16) > 24:
                 fails.append(f"聚焦中段筛选图标未随壳边（右缘差 {mid_focus['d']} ≠ 16）")
+            # 居中扩张实证：父容器居中口径下，宽度动画全程壳中心不动（中心向两侧生长）
+            elif base_focus and "cx" in base_focus and abs(mid_focus["cx"] - base_focus["cx"]) > 2:
+                fails.append(f"聚焦中段壳中心漂移 {base_focus['cx']} → {mid_focus['cx']}（应中心向两侧）")
             await asyncio.sleep(0.6)
             end_focus = await bars_mid("聚焦末态:")
             if not end_focus or "err" in end_focus or end_focus["w"] != 450 or end_focus["d"] != 16:
                 fails.append(f"聚焦末态异常: {end_focus}（应 w=450 d=16）")
+            elif base_focus and "cx" in base_focus and abs(end_focus["cx"] - base_focus["cx"]) > 2:
+                fails.append(f"聚焦末态壳中心漂移 {base_focus['cx']} → {end_focus['cx']}")
             await js(
                 "(() => { const g = [...document.querySelectorAll('#design-system-bars .pv-group')]"
                 "  .find(h => h.querySelector('.pv-group-title').textContent.startsWith('多功能悬浮栏'));"

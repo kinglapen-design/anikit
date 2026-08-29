@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 组件 悬浮栏展区——docs/UI 重构/Design Token/组件/悬浮栏/多功能悬浮栏/ 八稿的展示与验收面。
 // 搜索栏 / 搜索栏展开成筛选 / 播放条 / MarkDown 工具栏 = 同一容器（FloatBar）：
-// 切换宽度平滑伸缩 + 功能按钮 Y 轴出场入场 = 250ms 小位移 + 位移 4px（2026-08-29 用户定）；hover / 颜色 150ms。
+// 切换宽度平滑伸缩 + 功能按钮 Y 轴出场入场 = 300ms 形态切换 + 位移 4px（2026-08-29 用户两轮定）；hover / 颜色 150ms。
 // 无需悬浮栏 = 宽度 + 透明度退场（稿 prose，visible prop）。
 // 播放/暂停、声音/静音 = 单钮按态切换（稿两态并列是全量画法）；进度条无填充段（稿未画，进度靠拖钮位置）；
 // 循环/笔记开启态稿未画记 09 待办；图标 hover 升二级 = 按钮族 IconButton bare 口径（按钮展区已验收，此不重复 force 列）。
@@ -67,6 +67,7 @@ function noteRemove(i: number): void {
       <h3 class="pv-group-title">多功能悬浮栏 · 模式切换（同一容器，宽度伸缩 + 按钮 Y 轴出入 300ms）</h3>
       <p class="pv-group-note">
         点按钮切换模式 / 显隐；搜索态可输入、聚焦扩 450、点筛选图标展开筛选钮组（反向折叠同路径）——宽度全程壳动画驱动，右端筛选图标随壳边平滑移动（十五轮走查修复）。
+        演示舞台居中陈列 = 实际布局口径（中间面板底部居中）：壳宽过渡逐帧重排，展开自动以中心向两侧生长。
       </p>
       <div class="pv-demo-row">
         <button class="pv-switch" @click="morphMode = 'search'">搜索栏</button>
@@ -76,7 +77,7 @@ function noteRemove(i: number): void {
           {{ morphVisible ? "退场（宽度+透明度）" : "入场" }}
         </button>
       </div>
-      <div class="pv-demo-row">
+      <div class="pv-demo-row pv-morph-stage">
         <FloatBar
           :mode="morphMode"
           :visible="morphVisible"
@@ -212,6 +213,12 @@ function noteRemove(i: number): void {
 .pv-switch:hover {
   background: var(--n-g4);
   color: var(--n-l1);
+}
+
+/* morph 演示舞台居中——实机布局口径（中间面板底部居中）：壳宽过渡逐帧重排，展开即中心向两侧 */
+.pv-morph-stage {
+  justify-content: center;
+  width: 100%;
 }
 
 /* 帧条 + 播放条同宽组合：列排 gap 12（稿 prose 间距），两者同宽 777 */
