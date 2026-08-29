@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 笔记 item——docs/UI 重构/Design Token/组件/item/笔记 item/
 // 24 高 / padding 4 6 / gap 6 / 圆角 6；时间码 = 数字档 亮色/二级，文本 = 次要文字 亮色/三级；
-// 关闭钮常态不显示，hover 右至左滑入（items.css .ni-slide 机制）；hover = 半透明-3，选中 = 半透明-2 + 文本升二级。
+// 关闭钮常态不显示，hover 从右缘向左滑入并把文本推左（items.css .ni-slide 推挤机制）；hover = 半透明-3，选中 = 半透明-2 + 文本升二级。
 import "./items.css";
 import AppIcon from "../AppIcon.vue";
 
@@ -26,17 +26,18 @@ const emit = defineEmits<{ click: []; close: [] }>();
   >
     <span class="tc">{{ time }}</span>
     <span class="txt">{{ text }}</span>
-    <span class="ni-act" style="--ni-act-right: 6px">
-      <button class="ni-close" @click.stop="emit('close')">
-        <AppIcon name="close-small" :size="14" />
-      </button>
+    <span class="ni-slide">
+      <span class="ni-slide-inner">
+        <button class="ni-close" @click.stop="emit('close')">
+          <AppIcon name="close-small" :size="14" />
+        </button>
+      </span>
     </span>
   </div>
 </template>
 
 <style scoped>
 .note {
-  position: relative;
   display: flex;
   align-items: center;
   gap: var(--n-space-6);

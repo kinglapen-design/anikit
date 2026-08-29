@@ -27,16 +27,18 @@ const emit = defineEmits<{ click: []; openExplorer: []; import: []; trash: [] }>
       <TwoToneIcon name="warning-small" :size="18" />
       <span class="nm">{{ name }}</span>
     </span>
-    <span class="ni-act">
-      <button class="act" @click.stop="emit('openExplorer')">
-        <AppIcon name="open-in-explorer" :size="18" />
-      </button>
-      <button class="act" @click.stop="emit('import')">
-        <AppIcon name="import" :size="18" />
-      </button>
-      <button class="act" @click.stop="emit('trash')">
-        <AppIcon name="trash" :size="18" />
-      </button>
+    <span class="ni-slide">
+      <span class="ni-slide-inner">
+        <button class="act" @click.stop="emit('openExplorer')">
+          <AppIcon name="open-in-explorer" :size="18" />
+        </button>
+        <button class="act" @click.stop="emit('import')">
+          <AppIcon name="import" :size="18" />
+        </button>
+        <button class="act" @click.stop="emit('trash')">
+          <AppIcon name="trash" :size="18" />
+        </button>
+      </span>
     </span>
   </div>
 </template>

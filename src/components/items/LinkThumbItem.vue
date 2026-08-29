@@ -29,11 +29,13 @@ const emit = defineEmits<{ click: []; close: [] }>();
     </span>
     <span class="tail">
       <span v-if="count !== undefined" class="cnt">{{ count }}</span>
-    </span>
-    <span class="ni-act">
-      <button class="ni-close" @click.stop="emit('close')">
-        <AppIcon name="close-small" :size="14" />
-      </button>
+      <span class="ni-slide">
+        <span class="ni-slide-inner">
+          <button class="ni-close" @click.stop="emit('close')">
+            <AppIcon name="close-small" :size="14" />
+          </button>
+        </span>
+      </span>
     </span>
   </div>
 </template>
@@ -76,11 +78,5 @@ const emit = defineEmits<{ click: []; close: [] }>();
   line-height: var(--n-lh-num);
   font-weight: var(--n-fw-medium);
   color: var(--n-l3);
-  transition: opacity var(--n-dur-100) var(--n-ease-in-out);
-}
-/* 关闭钮覆盖式滑入与数量同位（右缘）：hover 时数量淡出避让，不重叠不挤压（2026-08-28 走查） */
-.ni-card:hover .cnt,
-.ni-card.force-hover .cnt {
-  opacity: 0;
 }
 </style>

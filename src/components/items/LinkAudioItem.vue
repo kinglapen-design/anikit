@@ -37,11 +37,13 @@ const wave = getIcon("waveform-deco"); // 装饰图标，保留原值（#F2F2F2@
     </span>
     <span class="tail">
       <span class="wave" aria-hidden="true" v-html="wave" />
-    </span>
-    <span class="ni-act">
-      <button class="ni-close" @click.stop="emit('close')">
-        <AppIcon name="close-small" :size="14" />
-      </button>
+      <span class="ni-slide">
+        <span class="ni-slide-inner">
+          <button class="ni-close" @click.stop="emit('close')">
+            <AppIcon name="close-small" :size="14" />
+          </button>
+        </span>
+      </span>
     </span>
   </div>
 </template>

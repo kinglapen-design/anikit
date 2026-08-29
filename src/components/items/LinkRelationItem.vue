@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // 链接关系 item——docs/UI 重构/Design Token/组件/item/详情面板 item/链接关系（2026-08-28 用户补稿）
 // 卡片 240×50 / padding 12 / gap 6：关系标签 chip（通用六级底 + 立体感-通用 + 圆角 6，
-// 正文-加粗 亮色/三级；hover = 亮色/半透明-2 + 输入指针；输入态 = 去立体感 + 通用二级底 +
-// 亮色/半透明-1 描边 + 展开宽度）+ 目标文件名（正文 二级，余宽居中）；关闭钮 hover 滑入。
+// 正文-加粗 亮色/三级；**仅悬停 chip 本身** = 亮色/半透明-2 + 输入指针，卡 hover 不变——
+// 2026-08-28 走查定，不然 chip 没反馈；输入态 = 去立体感 + 通用二级底 +
+// 亮色/半透明-1 描边 + 展开宽度）+ 目标文件名（正文 二级，右对齐顶到右缘，hover 被滑入的关闭钮推左）。
 import "./items.css";
 import AppIcon from "../AppIcon.vue";
 
@@ -34,10 +35,12 @@ const emit = defineEmits<{ click: []; close: []; editRelation: [] }>();
       <template v-else>{{ relation }}</template>
     </span>
     <span class="tgt">{{ target }}</span>
-    <span class="ni-act">
-      <button class="ni-close" @click.stop="emit('close')">
-        <AppIcon name="close-small" :size="14" />
-      </button>
+    <span class="ni-slide">
+      <span class="ni-slide-inner">
+        <button class="ni-close" @click.stop="emit('close')">
+          <AppIcon name="close-small" :size="14" />
+        </button>
+      </span>
     </span>
   </div>
 </template>
@@ -70,7 +73,7 @@ const emit = defineEmits<{ click: []; close: []; editRelation: [] }>();
   flex: none;
   transition: background var(--n-dur-100) var(--n-ease-in-out);
 }
-.lr:hover .chip:not(.editing),
+.chip:hover:not(.editing),
 .lr.force-chip-hover .chip:not(.editing) {
   background: var(--n-l-a2);
   cursor: text;
@@ -97,9 +100,7 @@ const emit = defineEmits<{ click: []; close: []; editRelation: [] }>();
 .tgt {
   flex: 1;
   min-width: 0;
-  /* 名称右对齐（2026-08-28 走查定）；padding-right 20 = 关闭钮 14 + 间距 6 预留，
-     关闭钮覆盖式滑入时名称不被压也不挪位 */
-  padding-right: calc(var(--n-space-8) + 14px);
+  /* 名称右对齐顶到右缘（2026-08-28 走查定）；hover 时滑入的关闭钮把它往左推（推挤机制） */
   text-align: right;
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
