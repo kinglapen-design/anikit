@@ -278,14 +278,15 @@ async def main():
                 " if (!ch) return { children: false };"
                 " const line = getComputedStyle(ch, '::before');"
                 " const cnt = document.querySelector('.tree-item[data-folder-id=\"f1\"] .cnt');"
-                " return { children: true, lw: line.width, lc: line.backgroundColor,"
+                " return { children: true, lw: line.width, lc: line.backgroundColor, lz: line.zIndex,"
                 " cnt: cnt?.textContent ?? null, sub: !!document.querySelector('.tree-item[data-folder-id=\"f1a\"]') }; })()")
             check("S9a 展开出子层 + 子项 f1a 渲染",
                   isinstance(exp, dict) and exp.get("children") is True and exp.get("sub") is True,
                   json.dumps(exp))
-            check("S9b 缩进线 1px 常态-2 的 50%（五轮改定：--n-custom-2-50）",
+            check("S9b 缩进线 1px 常态-2 的 50%（五轮改定：--n-custom-2-50）+ 无 z-index（沉在选中/悬停罩下，六轮定）",
                   isinstance(exp, dict) and exp.get("lw") == "1px"
-                  and exp.get("lc") == "rgba(102, 102, 102, 0.5)",
+                  and exp.get("lc") == "rgba(102, 102, 102, 0.5)"
+                  and exp.get("lz") in ("auto", "0"),
                   json.dumps(exp))
             check("S9c 展开后 f1 数量 = 直接子项 2（双口径）",
                   isinstance(exp, dict) and exp.get("cnt") == "2", json.dumps(exp))

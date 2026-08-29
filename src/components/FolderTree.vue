@@ -211,8 +211,9 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
    --guide-x = depth×20+15）；纵坐标首子项顶部 → 末子项底部（top 0 bottom 0 贯穿）。
    线色 = 常态-2 半透明（--n-custom-2-50，2026-08-30 五轮实机定），
    节点设自定义色后 = 该色-2 的 50% 档（--guide-color 传入，color-mix 派生）。
-   z-index 1：item 罩层满宽后会盖住同层先绘制的线（2026-08-08 走查修复），线在 item 空白
-   padding 区（内容从 depth×20+24 起），不压内容 */
+   不设 z-index（同层先绘制）= 线沉在 item 选中/悬停罩层之下（2026-08-30 六轮用户定；
+   旧体系的 z-index 1 防盖线遗留作废——彼时 item 有实色底，新体系常态无底、罩层半透明，
+   线透过罩层自然变暗属预期观感），线在 item 空白 padding 区（内容从 depth×20+24 起），不压内容 */
 .ft-children::before {
   content: "";
   position: absolute;
@@ -221,7 +222,6 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
   bottom: 0;
   width: 1px;
   background: var(--guide-color, var(--n-custom-2-50));
-  z-index: 1;
   pointer-events: none;
 }
 </style>
