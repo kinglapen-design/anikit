@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // 链接文件 item——docs/UI 重构/Design Token/组件/item/详情面板 item/链接文件
 // 卡片 240×66 / padding 12 / 两行：文件夹图标 + 路径（区块名 正文加粗 二级 / 目录 加粗 三级）、文件名 三级；
-// 关闭钮绝对定位右上（hover 滑入），原始文件徽章（品牌星）绝对定位右下（仅 origin）。
+// 关闭钮 hover 从右缘向左滑入并把内容推左（items.css .ni-slide 推挤机制，2026-08-29 走查定——
+// 此前绝对定位 translateX 从容器右缘进来，与其他 item 从内容缘进来不统一，作废）；
+// 原始文件徽章（品牌星）绝对定位右下（仅 origin）。
 import "./items.css";
 import AppIcon from "../AppIcon.vue";
 import TwoToneIcon from "./TwoToneIcon.vue";
@@ -26,18 +28,24 @@ const emit = defineEmits<{ click: []; close: [] }>();
     :class="forceState ? `force-${forceState}` : ''"
     @click="emit('click')"
   >
-    <div class="path">
-      <TwoToneIcon name="folder-closed" :size="18" />
-      <span class="seg">
-        <span class="blk">{{ blockName }}</span>
-        <span class="sep">/</span>
-        <span class="dir">{{ folderName }}</span>
-      </span>
+    <div class="body">
+      <div class="path">
+        <TwoToneIcon name="folder-closed" :size="18" />
+        <span class="seg">
+          <span class="blk">{{ blockName }}</span>
+          <span class="sep">/</span>
+          <span class="dir">{{ folderName }}</span>
+        </span>
+      </div>
+      <div class="fname">{{ fileName }}</div>
     </div>
-    <div class="fname">{{ fileName }}</div>
-    <button class="ni-close lf-close" @click.stop="emit('close')">
-      <AppIcon name="close-small" :size="14" />
-    </button>
+    <span class="ni-slide">
+      <span class="ni-slide-inner">
+        <button class="ni-close" @click.stop="emit('close')">
+          <AppIcon name="close-small" :size="14" />
+        </button>
+      </span>
+    </span>
     <span v-if="origin" class="badge" aria-hidden="true">
       <AppIcon name="original-file-badge" :size="14" />
     </span>
@@ -47,13 +55,21 @@ const emit = defineEmits<{ click: []; close: [] }>();
 <style scoped>
 .lf {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
+  align-items: flex-start;
   gap: var(--n-space-6);
   width: 240px;
   height: 66px;
   padding: var(--n-space-12);
   cursor: pointer;
+}
+.body {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--n-space-6);
 }
 .path {
   display: flex;
@@ -90,23 +106,6 @@ const emit = defineEmits<{ click: []; close: [] }>();
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-/* 关闭钮：绝对定位右上，常态不显示，hover 右至左滑入（位移 14px + 透明度，2026-08-28 走查修订加大位移） */
-.lf-close {
-  position: absolute;
-  right: var(--n-space-12);
-  top: var(--n-space-12);
-  opacity: 0;
-  transform: translateX(14px);
-  transition:
-    opacity var(--n-dur-150) var(--n-ease-in-out),
-    transform var(--n-dur-150) var(--n-ease-in-out),
-    color var(--n-dur-100) var(--n-ease-in-out);
-}
-.ni-card:hover .lf-close,
-.ni-card.force-hover .lf-close {
-  opacity: 1;
-  transform: translateX(0);
 }
 .badge {
   position: absolute;
