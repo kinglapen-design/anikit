@@ -1,6 +1,7 @@
 // 全局键盘 composable（2026-08-12 自 App.vue 拆出，规范第 3 条行数控制）：
 // window keydown 四处理器（剪贴板导入 / 撤销重做 / 选择 / 操作快捷键）+ 注册注销；
-// 输入框豁免判定 isEditableTarget 为 App / SidebarLeft（Ctrl+N）/ AssetGrid（空格）共用。
+// 输入框豁免判定 isEditableTarget 为 App / AssetGrid（空格）共用
+//（SidebarLeft 的 Ctrl+N 随 7.1 十八轮左栏轮撤下——新增按钮新稿无位，接菜单栏业务时恢复）。
 import { onBeforeUnmount, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore } from "../stores/content";

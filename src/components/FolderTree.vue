@@ -1,20 +1,24 @@
 <script setup lang="ts">
-// 文件夹树（递归）：展开 / 折叠状态每层自管，选中态写入 content store（阶段 1 仅样式）。
-// 层级与缩进线（2026-08-08 用户简化定案）：item 不携带层级 padding——子层容器 padding-left 20
-// 承担缩进；缩进竖线 = 子层容器级连续线（left 14 = 父级 item 左 padding 8 + 箭头容器半宽 6，
-// 正对父级展开按钮尖角，01_主窗口注释 8），纵贯首子项顶部至末子项底部（top 0 bottom 0）。
-// 新建文件夹"先建后命名"（2026-07-29 复验三轮，替换原"命名中临时节点"）：入口直接以默认名
-// 建库（LibraryView），成功返回的新 id 写入 selection.namingFolderId，本组件对应节点进
-// naming 输入态——Enter / Esc / 失焦一律保存：名非空且变了 → renameFolder，空或不变保留
-// 默认名；命名态节点不参与拖拽 / 右键（不挂 data-folder-id，naming 态 TreeItem 是 div 非 button）。
+// 文件夹树（递归，7.1 十八轮迁移 TreeRowItem，稿 = 布局/主窗口/左侧边栏 + 组件/item/树容器 item）：
+// item = TreeRowItem（26 高 / 圆角 6 / hover 半透明-3 / 选中 半透明-2+立体感+提亮一级）；
+// 层级与缩进线（沿用 2026-08-08 简化定案，数值按新稿重算）：item 不携带层级类名——内容缩进 =
+// TreeRowItem padding-left 6 + depth×20；缩进竖线 = 子层容器级连续线（left = depth×20+15 =
+// item 左 padding 6 + 展开钮半宽 9，正对父级展开钮尖角），纵贯首子项顶部至末子项底部；
+// 线色 = 亮色/半透明-3，节点设自定义色后 = 该色-1 的 6% 档（2026-08-30 用户定，color-mix 派生）。
+// 新建文件夹"先建后命名"（2026-07-29 复验三轮）：入口直接以默认名建库（LibraryView），成功返回的
+// 新 id 写入 selection.namingFolderId，本组件对应节点进 naming 输入态——Enter / Esc / 失焦一律保存：
+// 名非空且变了 → renameFolder，空或不变保留默认名；命名态节点不参与拖拽 / 右键（不挂 data-folder-id）。
 // 树 item 右键：全局菜单宿主（lib/contextMenus → App.vue <ContextMenu>），05 稿 320 宽 + 搜索框。
+// 业务态视觉（2026-08-30 用户定案）：多选 = 半透明-2 底 + 1.5px 二级描边；拖拽插入线/并入 =
+// 品牌常态描边 + 品牌半透明填充；命名 = 品牌常态描边；剪切/拖拽源 = 半透明（TreeRowItem 内实现）。
 import { computed, nextTick } from "vue";
-import TreeItem from "./TreeItem.vue";
+import TreeRowItem from "./items/TreeRowItem.vue";
 import { dragView, visibleTreeFolderIds } from "../lib/dragOperation";
 import { renameFolder } from "../lib/placementOps";
 import { openContextMenu } from "../lib/contextMenus";
 import { treeItemSpec } from "../lib/menuSpecs/folder";
 import { isTreeOpen, toggleOpen } from "../lib/treeExpansion";
+import { toNewTint } from "../lib/customColors";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
@@ -25,9 +29,9 @@ const props = withDefaults(
   defineProps<{
     nodes: FolderNode[];
     depth?: number; // 本层层级（内容缩进与缩进线定位用；item 底色块满宽不缩进）
-    parentId?: string | null; // 本层父级 id（顶层 = null）：树排序"当前层级"与右键菜单判定、根父级形态判定用
+    parentId?: string | null; // 本层父级 id（顶层 = null）：树排序"当前层级"与右键菜单判定用
     forceOpenIds?: Set<string>; // 命名节点的祖先链强制展开（新建子文件夹时父级可能折叠）
-    inheritTint?: string; // 祖先链最近自定义色（2026-08-18，3.3）：子级视觉跟随 = 该色底色版本（TreeItem tint）
+    inheritTint?: string; // 祖先链最近自定义色（2026-08-18，3.3）：子级视觉跟随（图标双色 tint）
   }>(),
   { depth: 0, parentId: null, forceOpenIds: undefined, inheritTint: undefined },
 );
@@ -54,10 +58,24 @@ function isOpen(id: string): boolean {
   return isTreeOpen(id) || (props.forceOpenIds?.has(id) ?? false);
 }
 
-// 自定义色（2026-08-18，3.3）：本节点色 ?? 祖先链最近色（子级视觉跟随 = 底色版本，
-// TreeItem 按 variant 查 --custom-{tint} / --custom-{tint}-bg）；子孙层经 inheritTint 续传
+// 自定义色（2026-08-18，3.3）：本节点色 ?? 祖先链最近色（子级视觉跟随）；子孙层经 inheritTint 续传。
+// 存量色名为旧九色（red/orange/...），展示层经 toNewTint 映射新九色名（TreeRowItem tint /
+// 缩进线色）；数据迁移归独立待办（lib/customColors 注）
 function nodeTint(node: FolderNode): string | undefined {
   return node.color ?? props.inheritTint;
+}
+
+// 缩进线色（2026-08-30 用户定）：默认 亮色/半透明-3；节点设自定义色后 = 该色-1 的 6% 档
+function guideColor(node: FolderNode): string | undefined {
+  const t = toNewTint(nodeTint(node));
+  return t ? `color-mix(in srgb, var(--n-custom-${t}-1) 6%, transparent)` : undefined;
+}
+
+// 拖拽落点（C4c）：引擎按 data-folder-id 匹配（dragOperation），zone 三分（上/下插入线、中间并入）；
+// 命名态节点不参与拖拽（无 data-folder-id，引擎命不中）
+function dropZoneFor(node: FolderNode): "before" | "after" | "into" | null {
+  if (selection.namingFolderId === node.id) return null;
+  return dragView.tree?.folderId === node.id ? dragView.tree.zone : null;
 }
 
 // 选中：有效拖拽结束后的紧随 click 不触发（C4 引擎置位）；
@@ -130,33 +148,34 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
   <template v-for="node in sortedNodes" :key="node.id">
     <div class="ft-node" @contextmenu.prevent.stop="onItemMenu($event, node)">
       <!-- 当前目录（sidebarSelected）= selected 实心高亮（你在这里）；选择域成员 =
-           domain-selected 品牌色描边（文件夹卡片选中联动 / 树多选）——两态互斥，
+           domain-selected 半透明-2 底 + 二级描边（文件夹卡片选中联动 / 树多选）——两态互斥，
            当前目录优先（2026-08-10 用户定：区分双高亮，防"停在哪个目录"混淆） -->
-      <TreeItem
-        :icon="node.kind === 'archive' ? 'archive' : node.icon ?? (isOpen(node.id) ? 'folder-open' : 'folder-closed')"
-        :label="node.name"
+      <TreeRowItem
+        :kind="node.kind === 'archive' ? 'archive' : 'folder'"
+        :icon="node.kind === 'archive' ? '' : (node.icon ?? '')"
+        :name="node.name"
         :count="node.count"
         :direct-count="content.directCounts.get(node.id) ?? 0"
-        :depth="depth"
-        :variant="node.kind === 'archive' ? 'archive' : parentId === null ? 'root' : 'child'"
-        :tint="nodeTint(node)"
+        :expanded="isOpen(node.id)"
         :expandable="node.children.length > 0"
-        :open="isOpen(node.id)"
         :selected="content.sidebarSelected === `folder:${node.id}`"
         :domain-selected="selection.isFolderSelected(node.id) && content.sidebarSelected !== `folder:${node.id}`"
+        :tint="toNewTint(nodeTint(node))"
+        :depth="depth"
         :dimmed="dragView.folderIds?.has(node.id) ?? false"
         :cut="selection.isFolderCut(node.id)"
-        :folder-id="selection.namingFolderId === node.id ? undefined : node.id"
-        :data-drag-name="node.name"
+        :drop-zone="dropZoneFor(node)"
         :naming="selection.namingFolderId === node.id"
+        :data-folder-id="selection.namingFolderId === node.id ? undefined : node.id"
+        :data-drag-name="node.name"
         @toggle="toggleOpen(node.id)"
-        @select="onSelect(node.id, $event)"
+        @click="onSelect(node.id, $event)"
         @name-commit="onNameCommit(node, $event)"
       />
       <div
         v-if="isOpen(node.id) && node.children.length > 0"
         class="ft-children"
-        :style="{ '--guide-x': `${depth * 20 + 14}px` }"
+        :style="{ '--guide-x': `${depth * 20 + 15}px`, '--guide-color': guideColor(node) }"
       >
         <FolderTree
           :nodes="node.children"
@@ -171,23 +190,24 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
 </template>
 
 <style scoped>
-/* 节点：TreeItem 与展开子层间距 4（figma 40_左侧边栏 目录树 gap 4） */
+/* 节点：TreeRowItem 与展开子层间距 2（左侧边栏稿 树形容器 gap 2） */
 .ft-node {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--n-space-2);
 }
-/* 子层容器：不缩进（item 底色块满宽，内容缩进由 TreeItem padding-left 承担，2026-08-08 用户定） */
+/* 子层容器：不缩进（item 满宽，内容缩进由 TreeRowItem padding-left 承担，2026-08-08 用户定） */
 .ft-children {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--n-space-2);
 }
-/* 缩进竖线（01_主窗口注释 8）：横坐标 = 父级箭头尖角（父级 padding-left 8+depth×20 + 箭头容器
-   半宽 6，即 --guide-x = depth×20+14）；纵坐标首子项顶部 → 末子项底部（top 0 bottom 0 贯穿）。
-   z-index 1：item 底色块满宽后会盖住同层先绘制的线（2026-08-08 走查修复），线在 item 空白
-   padding 区（内容从 depth×20+28 起），不压内容 */
+/* 缩进竖线：横坐标 = 父级展开钮尖角（item 左 padding 6+depth×20 + 展开钮半宽 9，即
+   --guide-x = depth×20+15）；纵坐标首子项顶部 → 末子项底部（top 0 bottom 0 贯穿）。
+   线色 = 亮色/半透明-3，节点设自定义色后 = 该色-1 的 6% 档（2026-08-30 用户定，--guide-color 传入）。
+   z-index 1：item 罩层满宽后会盖住同层先绘制的线（2026-08-08 走查修复），线在 item 空白
+   padding 区（内容从 depth×20+24 起），不压内容 */
 .ft-children::before {
   content: "";
   position: absolute;
@@ -195,8 +215,7 @@ async function onNameCommit(node: FolderNode, name: string): Promise<void> {
   top: 0;
   bottom: 0;
   width: 1px;
-  /* 半透明暗-悬停线：叠在带色 item 上自然叠出略带颜色的线条（2026-08-18 用户定，不变色） */
-  background: var(--line-hover);
+  background: var(--guide-color, var(--n-l-a3));
   z-index: 1;
   pointer-events: none;
 }

@@ -1,19 +1,22 @@
 <script setup lang="ts">
-// 资源库视图（PRD 04-1）：快速访问区块 + 文件树区块（03_UI 布局/02_左侧边栏 04 树形容器）。
-// 多区块（2026-08-14 区块子系统，PRD 02 §01）：文件树按区块分段——每区块 =
-// SectionHeader（标题 / 顶级文件夹数 / 加号 / grip 拖拽排序）+ FolderTree（该区块顶级节点）；
-// 区块展开态 = lib/treeExpansion 模块级 closedSet（默认开）；区块头挂 data-block-id 兼作
-// 文件夹拖拽落点（移入该区块根级）与区块排序拖拽起点。
-// 新建文件夹（2026-07-29 复验三轮改"先建后命名"）：入口——区块头 + 按钮（该区块根级最底部，
+// 资源库视图（PRD 04-1）：快速访问区块 + 文件树区块。
+// 7.1 十八轮贴稿重构（稿 = 布局/主窗口/左侧边栏 树容器 + 组件/item/树容器 item、标题 item）：
+// 树容器 = column gap 8（padding 0，区块自带 padding 8 12）；
+// 快速访问区块 = TreeRowItem quick 六项（items gap 2，无区块标题）；
+// 文件夹区块（多区块子系统，PRD 02 §01）= SectionTitle block 型（标题 / 数量 / hover 出展开·更多·添加，
+// 常态只显标题）+ FolderTree（该区块顶级节点）；区块间距 8（稿 树容器 gap 8，旧 24 作废）。
+// 区块头挂 data-block-id 兼作文件夹拖拽落点（移入该区块根级）与区块排序拖拽起点（让位式，
+// 本地 pointer 追踪，库菜单同款动画）；SectionTitle 折叠点击查 dragView.suppressClick
+//（拖完松手的紧随 click 误折叠，与旧 SectionHeader 同口径）。
+// 区块标题「更多」钮 = 点亮不接业务（2026-08-30 用户定，同菜单栏口径；区块操作菜单后续轮接）。
+// 新建文件夹（2026-07-29 复验三轮"先建后命名"）：入口——区块头 添加钮（该区块根级最底部，
 // 2026-08-14 起不再跟随 sidebarSelected 建兄弟）、树 item 右键菜单（同级 / 子级）；
 // 统一流程 = 直接以同级唯一默认名调 createFolder 入库 →
 // 成功后 selection.namingFolderId 定位新节点进命名态，不再有"命名中临时节点 / 取消新建"。
-// 树空白右键 2026-08-11 用户定废除（判定范围只有 4px item 间距，无实用价值；
-// 后期多区块后"在哪个区块新建"难判定）。
 // 树 item 拖拽起点（C4）：pointerdown 超阈值进拖拽引擎，未过阈值 = 原 click 选中语义。
 import { computed, nextTick, reactive, ref, watch } from "vue";
-import SectionHeader from "./SectionHeader.vue";
-import TreeItem from "./TreeItem.vue";
+import SectionTitle from "./items/SectionTitle.vue";
+import TreeRowItem from "./items/TreeRowItem.vue";
 import FolderTree from "./FolderTree.vue";
 import AppModal from "./AppModal.vue";
 import AppButton from "./AppButton.vue";
@@ -95,7 +98,7 @@ async function onEnableAutoImport(): Promise<void> {
 }
 
 // 快速访问（PRD 02-15 定案六项：全部 / 未分类 / 最近使用 / 自动导入 / 缩略图 / 回收站）：
-// "缩略图"视图待 hidden 资产业务（5.x）接入后放；收件箱 = PRD"自动导入"
+// "缩略图"视图待 hidden 资产业务（5.x）接入后放；收件箱 = PRD"自动导入"；图标 = 新库同名线条图标
 const quickItems = [
   { key: "all", icon: "library", label: "全部" },
   { key: "uncategorized", icon: "uncategorized", label: "未分类" },
@@ -127,7 +130,7 @@ function quickCount(key: (typeof quickItems)[number]["key"]): number | undefined
 
 // —— 新建文件夹（先建后命名，2026-07-29 复验三轮）——
 // 统一流程（createAndName / uniqueFolderName 已提为 lib/menuOps 共享：
-// 树右键 / 文件夹卡片 / 区块头 + 按钮共用）；命名节点祖先链强制展开让新节点可见
+// 树右键 / 文件夹卡片 / 区块头 添加钮 共用）；命名节点祖先链强制展开让新节点可见
 const forceOpenIds = computed(() => {
   const out = new Set<string>();
   const target = selection.namingFolderId;
@@ -146,11 +149,18 @@ const forceOpenIds = computed(() => {
   return out;
 });
 
-// 区块头 + 按钮（2026-08-14 多区块）：该区块根级最底部新建；区块折叠时先强制展开让新节点可见
+// 区块头 添加钮（2026-08-14 多区块）：该区块根级最底部新建；区块折叠时先强制展开让新节点可见
 function onAddFolder(blockId: string): void {
   if (usePickerStore().active) return; // 选择模式（6.2）：树仅导航，新建禁用
   openBlock(blockId);
   void createAndName(null, null, blockId);
+}
+
+// 区块标题折叠切换：有效拖拽结束后的紧随 click 不触发（2026-08-14 区块子系统——区块标题可拖拽
+// 排序，拖完松手的 click 落在标题上会误折叠；与树 item suppressClick 同口径，旧 SectionHeader 同款）
+function onBlockToggle(blockId: string): void {
+  if (dragView.suppressClick) return;
+  toggleBlockOpen(blockId);
 }
 
 // 区块标题拖拽排序（2026-08-14 用户定：与切换资源库同款让位机制——拖动段跟随指针无过渡、
@@ -158,7 +168,7 @@ function onAddFolder(blockId: string): void {
 // 不走拖拽引擎：区块段高不定（头 + 展开的树），引擎的间隙/插入线模型不适配；
 // 本地 pointer 追踪与库菜单（ContextMenu libDrag）同范式。不挂 pointer capture（折叠 click 保留），
 // 僵尸兜底 = buttons 自清 + 划出窗口取消（与引擎同口径）
-const BLOCK_GAP = 24; // .library-view 段间距 --space-24
+const BLOCK_GAP = 8; // .library-view 段间距（稿 树容器 gap 8，2026-08-30 左栏轮；旧 24 作废）
 const blockDrag = reactive({ id: "", startY: 0, dy: 0, from: -1, to: -1 });
 const blockSettling = ref(false); // 松手归位帧：禁段 transform 过渡
 let blockMoved = false; // 超阈值视为拖动：松手后抑制折叠 click
@@ -167,7 +177,7 @@ let blockStep = 0; // 被拖段高 + gap（让位位移量）
 
 function onBlockHeadPointerDown(blockId: string, e: PointerEvent): void {
   if (e.button !== 0) return;
-  if ((e.target as HTMLElement).closest(".add-btn")) return; // 加号不启动
+  if ((e.target as HTMLElement).closest(".act")) return; // 动作钮（更多 / 添加）不启动
   if (usePickerStore().active) return; // 选择模式（6.2）：排序禁用（折叠 click 保留——导航类）
   const secs = content.blockSections;
   const from = secs.findIndex((s) => s.block.id === blockId);
@@ -272,23 +282,21 @@ function onQuickMenu(key: string, e: MouseEvent): void {
 
 <template>
   <div class="library-view" :class="{ settling: blockSettling }">
-    <!-- 快速访问（1.2 新稿：无区块标题，直接 item 列表） -->
+    <!-- 快速访问（稿：无区块标题，直接 item 列表；区块 padding 8 12 / items gap 2） -->
     <section class="block quick">
-      <div class="items">
-        <TreeItem
-          v-for="q in quickItems"
-          :key="q.key"
-          variant="quick"
-          :icon="q.icon"
-          :label="q.label"
-          :count="quickCount(q.key)"
-          :selected="content.sidebarSelected === `quick:${q.key}`"
-          @select="onQuickSelect(q.key)"
-          @contextmenu="onQuickMenu(q.key, $event)"
-        />
-      </div>
+      <TreeRowItem
+        v-for="q in quickItems"
+        :key="q.key"
+        kind="quick"
+        :icon="q.icon"
+        :name="q.label"
+        :count="quickCount(q.key)"
+        :selected="content.sidebarSelected === `quick:${q.key}`"
+        @click="onQuickSelect(q.key)"
+        @contextmenu="onQuickMenu(q.key, $event)"
+      />
     </section>
-    <!-- 区块段（2026-08-14 区块子系统）：每区块 = 标题行 + 该区块顶级文件夹树；
+    <!-- 文件夹区块段（2026-08-14 区块子系统）：每区块 = SectionTitle 标题行 + 该区块顶级文件夹树；
          区块头挂 data-block-id——文件夹拖入 = 移入该区块根级（并入高亮，引擎）；
          区块互拖 = 让位式排序（本地 pointer 追踪，库菜单同款动画） -->
     <section
@@ -306,14 +314,12 @@ function onQuickMenu(key: string, e: MouseEvent): void {
         :data-drag-name="sec.block.name"
         @pointerdown="onBlockHeadPointerDown(sec.block.id, $event)"
       >
-        <SectionHeader
+        <SectionTitle
+          variant="block"
           :title="sec.block.name"
           :count="sec.nodes.length"
-          addable
-          grip
-          pad="0 0 0 8px"
-          :open="isBlockOpen(sec.block.id)"
-          @update:open="toggleBlockOpen(sec.block.id)"
+          :expanded="isBlockOpen(sec.block.id)"
+          @toggle="onBlockToggle(sec.block.id)"
           @add="onAddFolder(sec.block.id)"
         />
       </div>
@@ -354,24 +360,27 @@ function onQuickMenu(key: string, e: MouseEvent): void {
   line-height: var(--text-body-line);
   color: var(--text-normal);
 }
-/* 1.2 新稿（01_主窗口 树容器）：两区块间距 24；容器 padding 由 SidebarLeft 承担 */
+/* 树容器（稿 左侧边栏-树容器）：column gap 8；padding 0（区块各自 padding 8 12） */
 .library-view {
   display: flex;
   flex-direction: column;
-  gap: var(--space-24);
+  gap: var(--n-space-8);
 }
-/* 快速访问区块：item 间距 4（figma 853） */
+/* 快速访问区块（稿 树容器-快速访问）：padding 8 12 / items gap 2 */
 .block.quick {
   display: flex;
   flex-direction: column;
+  gap: var(--n-space-2);
+  padding: var(--n-space-8) var(--n-space-12);
   flex: none;
 }
-/* 文件树区块段（2026-08-14 多区块）：每区块独立成段自然堆叠（原单区块 flex:1 撑满作废）；
+/* 文件夹区块段（稿 树容器-文件夹）：padding 8 12 / 标题↔树 gap 8；每区块独立成段自然堆叠；
    transform 过渡 = 区块拖拽让位动画（库菜单同款；拖动段 inline 禁过渡跟随指针） */
 .block.tree {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
+  padding: var(--n-space-8) var(--n-space-12);
   flex: none;
   transition: transform 0.18s ease;
 }
@@ -379,29 +388,28 @@ function onQuickMenu(key: string, e: MouseEvent): void {
 .library-view.settling .block.tree {
   transition: none;
 }
-/* 区块标题行落点视觉（与 TreeItem 同口径）：into = 品牌 30% 罩层 + 1.5px 品牌边框线 */
+/* 区块标题行落点视觉（与 TreeRowItem 同口径，2026-08-30 用户定案）：
+   into = 品牌/半透明罩层 + 1.5px 品牌/常态 ::after 描边（inset box-shadow 分数像素渗线，速查 §7） */
 .block-head {
   position: relative;
-  border-radius: var(--radius-6);
+  border-radius: var(--n-radius-6);
 }
 .block-head.drop-into {
-  background: linear-gradient(var(--brand-1-30), var(--brand-1-30));
+  background: var(--n-brand-50);
 }
-/* into 描边用 ::after 伪元素 border（2026-08-14 走查：inset box-shadow 1.5px 在分数物理像素下
-   边缘渗线断出像素点——文件夹卡片 2026-08-10 定案教训，同 .folder-card::after 机制） */
 .block-head.drop-into::after {
   content: "";
   position: absolute;
   inset: 0;
-  border: 1.5px solid var(--brand-border);
-  border-radius: var(--radius-6);
+  border: 1.5px solid var(--n-brand);
+  border-radius: var(--n-radius-6);
   pointer-events: none;
   z-index: 1;
 }
-/* item 组：间距 4（figma 目录树 gap 4） */
+/* 区块内树 items：间距 2（稿 树形容器 gap 2；旧 4 作废） */
 .items {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--n-space-2);
 }
 </style>

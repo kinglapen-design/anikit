@@ -19,3 +19,26 @@ export const CUSTOM_COLORS: CustomColorDef[] = [
   { tint: "peach", label: "桃红", hex: "#3c222a" },
   { tint: "blue", label: "蓝色", hex: "#1a2c37" },
 ];
+
+// 旧九色名 → 阶段七新九色名（2026-08-30 左栏轮过渡映射）：存量 Folder.color 为旧体系
+// 暗底色名（--custom-{tint}），新树容器（TreeRowItem tint / 缩进线 tint）吃新名
+//（--n-custom-{tint}-1/-2 亮暗对，TwoToneIcon data-tint 集合）。
+// 新体系无 orange / blue-violet：就近归 yellow / purple。数据层迁移（连同 02自定义 图标
+// 文件干映射，命名对照.md 02 节注）归独立待办，本表常驻至迁移完成。
+const LEGACY_TINT_MAP: Record<string, string> = {
+  red: "red",
+  orange: "yellow",
+  "yellow-green": "yellowgreen",
+  green: "green",
+  "blue-violet": "purple",
+  purple: "purple",
+  pink: "pink",
+  peach: "peach",
+  blue: "blue",
+};
+
+/** 旧体系自定义色名映射为新九色名；未知名（含空）原样返回（TwoToneIcon 无匹配 data-tint 时回默认双色） */
+export function toNewTint(tint: string | undefined): string {
+  if (!tint) return "";
+  return LEGACY_TINT_MAP[tint] ?? tint;
+}

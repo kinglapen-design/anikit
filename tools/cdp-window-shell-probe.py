@@ -1,8 +1,9 @@
 # CDP 探针：7.1 十七轮 · 主窗口骨架轮（2026-08-30）——窗口壳 + 三段底色结构断言
-#   W1  mica 模式：.window 挂 fx-mica 类 + 底 = 半透明-1 rgba(31,31,31,0.93)
+#   W1  mica 模式：.window 挂 fx-mica 类 + 底 = 全透明（2026-08-30 十七轮同日观感定稿：
+#       工程里云母上不叠色，DWM 云母直接呈现；稿 93% 半透明-1 是 figma 模拟手法）
 #   W2  窗口描边：.window::before 1px rgba(242,242,242,0.18) + 圆角 8（稿值自绘）
 #   W3  右栏：g1 rgb(23,23,23) + 左缘 1px 通用/三级 rgb(36,36,36)
-#   W4  左栏壳透明：bar-title / rail / side-content 均 rgba(0,0,0,0)（透窗口底）
+#   W4  左栏壳透明：menu-bar / seg-wrap / side-body 均 rgba(0,0,0,0)（透窗口底；7.1 十八轮左栏轮新类名）
 #   W5  标签栏透明（dv-tabs-and-actions-container rgba(0,0,0,0)）
 #   W6  内容容器卡片：g1 + 首 group 左上 16px 圆角 + 左缘 1px 亮/半透明-2 rgba(242,242,242,0.14)
 #   W7  solid 模式（重载换桩）：无 fx-mica 类 + 底 = 实色-1 rgb(31,31,31)
@@ -158,7 +159,7 @@ async def main():
             cls = await ev("document.querySelector('.window').className")
             check("W1a fx-mica 类挂载", "fx-mica" in (cls or ""), cls or "无 .window")
             wbg = await bg(".window")
-            check("W1b .window 底 = 半透明-1", wbg == "rgba(31, 31, 31, 0.93)", str(wbg))
+            check("W1b .window fx-mica 底 = 全透明（云母直呈）", wbg == "rgba(0, 0, 0, 0)", str(wbg))
             before = await ev(
                 "(() => { const s = getComputedStyle(document.querySelector('.window'), '::before');"
                 " return { w: s.borderTopWidth, c: s.borderTopColor, r: s.borderTopLeftRadius, pe: s.pointerEvents }; })()")
@@ -171,8 +172,8 @@ async def main():
                            " return s.borderLeftWidth + ' ' + s.borderLeftColor; })()")
             check("W3a 右栏底 = g1", rbg == "rgb(23, 23, 23)", str(rbg))
             check("W3b 右栏左缘 1px g3", rbd == "1px rgb(36, 36, 36)", str(rbd))
-            for sel, tag in [(".sidebar-left .bar-title", "菜单栏行"), (".sidebar-left .rail", "rail"),
-                             (".sidebar-left .side-content", "侧栏内容")]:
+            for sel, tag in [(".sidebar-left .menu-bar", "菜单栏"), (".sidebar-left .seg-wrap", "分段控制器"),
+                             (".sidebar-left .side-body", "侧栏树容器")]:
                 v = await bg(sel)
                 check(f"W4 左栏{tag}透明", v == "rgba(0, 0, 0, 0)", f"{sel} = {v}")
             tbg = await bg(".anikit-dock-theme .dv-tabs-and-actions-container")

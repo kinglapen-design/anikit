@@ -41,63 +41,93 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
     <div class="pv-group">
       <h3 class="pv-group-title">树容器 item（文件夹 / 快速访问 / 档案）</h3>
       <div class="pv-demo-row">
-        <div class="pv-demo-cell">
+        <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="folder" name="人物" :count="20" />
           <span class="pv-cap">文件夹 · 常态（收起 >）</span>
         </div>
-        <div class="pv-demo-cell">
+        <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="folder" name="人物" :count="20" force-state="hover" />
           <span class="pv-cap">hover（亮色/半透明-3）</span>
         </div>
-        <div class="pv-demo-cell">
+        <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="folder" name="人物" :count="20" force-state="selected" />
           <span class="pv-cap">选中（半透明-2 + 立体感 + 提亮一级）</span>
         </div>
-        <div class="pv-demo-cell">
-          <TreeRowItem kind="folder" name="人物" :count="20" expanded />
-          <span class="pv-cap">展开（∨）</span>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" name="人物" :direct-count="7" expanded />
+          <span class="pv-cap">展开（∨ + 文件夹-打开；数量 = 直接子项）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" name="人物" :count="20" :expandable="false" />
+          <span class="pv-cap">无子项（藏箭头保占位）</span>
         </div>
       </div>
       <div class="pv-demo-row">
-        <div v-for="t in tints" :key="t || 'default'" class="pv-demo-cell">
+        <div v-for="t in tints" :key="t || 'default'" class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="folder" name="人物" :count="20" :tint="t" />
           <span class="pv-cap">{{ t || "常态双色" }}</span>
         </div>
       </div>
       <div class="pv-demo-row">
-        <div class="pv-demo-cell">
-          <TreeRowItem kind="quick" icon="library" name="全部" :count="132" />
-          <span class="pv-cap">快速访问 · 全部</span>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" name="人物" :count="20" domain-selected />
+          <span class="pv-cap">多选联动（半透明-2 + 1.5px 二级描边）</span>
         </div>
-        <div class="pv-demo-cell">
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" name="人物" :count="20" drop-zone="before" />
+          <span class="pv-cap">拖拽插入线（2px 品牌常态）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" name="人物" :count="20" drop-zone="into" />
+          <span class="pv-cap">并入（品牌半透明填充 + 常态描边）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" name="人物" :count="20" cut />
+          <span class="pv-cap">剪切中（半透明 0.5）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" name="二级文件夹" :count="3" :depth="1" />
+          <span class="pv-cap">层级缩进（depth 1 = +20）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="quick" icon="library" name="全部" :count="3134" />
+          <span class="pv-cap">快速访问 · 全部（千分位）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="quick" icon="uncategorized" name="未分类" :count="132" />
           <span class="pv-cap">未分类</span>
         </div>
-        <div class="pv-demo-cell">
+        <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="quick" icon="recent" name="最近使用" :count="12" force-state="selected" />
           <span class="pv-cap">最近使用 · 选中</span>
         </div>
-        <div class="pv-demo-cell">
+        <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="quick" icon="auto-import" name="自动导入" :count="3" />
           <span class="pv-cap">自动导入</span>
         </div>
-        <div class="pv-demo-cell">
+        <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="quick" icon="thumbnail" name="缩略图" :count="8" />
           <span class="pv-cap">缩略图</span>
         </div>
-        <div class="pv-demo-cell">
+        <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="quick" icon="trash" name="回收站" :count="5" />
           <span class="pv-cap">回收站</span>
         </div>
       </div>
       <div class="pv-demo-row">
-        <div class="pv-demo-cell">
+        <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="archive" name="人物" :count="20" />
           <span class="pv-cap">档案 · 常态（提示装饰圆点 + 档案图标）</span>
         </div>
-        <div class="pv-demo-cell">
+        <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="archive" name="人物" :count="20" force-state="selected" />
           <span class="pv-cap">选中</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="archive" name="人物" :count="20" tint="blue" />
+          <span class="pv-cap">档案 · tint（档案图标双色跟随）</span>
         </div>
       </div>
     </div>

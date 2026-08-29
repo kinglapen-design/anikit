@@ -46,7 +46,7 @@ export const useUiStore = defineStore("ui", {
   state: () => ({
     leftView: "library" as LeftView,
     rightView: "detail" as RightView,
-    leftWidth: 304, // 1.2 新稿：54 导航栏 + 250 内容区
+    leftWidth: 254, // 7.1 十八轮左栏轮：左侧边栏稿 254（旧 304 = 54 导航栏 + 250 内容区作废）
     rightWidth: 250,
     leftCollapsed: false,
     rightCollapsed: false,
@@ -176,6 +176,9 @@ export const useUiStore = defineStore("ui", {
         // 「无显示」档废除迁移（2026-08-19）：旧配置 briefMode "none" 回退尺寸档（赋值循环只校验
         // typeof 不校验枚举值，运行态可能已被 "none" 覆盖，此处纠正）
         if (saved.briefMode === "none") this.briefMode = "size";
+        // 左栏宽默认值迁移（2026-08-30，7.1 十八轮左栏轮）：旧默认 304 → 新稿 254；
+        // 仅改恰好等于旧默认的值（用户拖过的不动），同 briefMode 迁移先例
+        if (saved.leftWidth === 304) this.leftWidth = 254;
       } catch (e) {
         console.warn("UI 设置读取失败（用默认值）：", e);
       }

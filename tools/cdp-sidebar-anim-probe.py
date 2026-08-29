@@ -42,7 +42,7 @@ window.__TAURI_INTERNALS__ = {
       list_placements: () => placements,
       list_folder_tree: () => ({ blocks: [{ id: "dir", name: "目录", icon: null }], nodes: folders.filter((f) => f.parent === null).map(nodeOf) }),
       list_archives: () => [{ folderId: "F-ARC", badge: { text: "设定", color: "#B38427" }, avatar: null, props: ["奇幻"], descriptions: [{ title: "来源", content: "官方设定集" }], links: ["https://archive.ref"], createdAt: "2026-08-15T09:00:00+08:00" }],
-      list_recycle: [], list_recent_assets: [], list_inbox_snapshot: [],
+      list_recycle: [], list_recent_assets: [], list_inbox_snapshot: [], list_relations: [],
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
       list_space_libraries: ["动画资产"], list_recent_libraries: [],
     };
@@ -196,15 +196,15 @@ async def main():
                   json.dumps(seq))
 
             # —— 任务 B：左栏收 / 展 ——
-            seq = await record_toggle("document.querySelector('.sidebar-left')", "[...document.querySelectorAll('.sidebar-left .bar-title .btn-group .icon-btn')][2]")
+            seq = await record_toggle("document.querySelector('.sidebar-left')", "document.querySelector('.sidebar-left .menu-bar .ic-btn')")
             print("左栏收起序列:", seq[:8], "...", seq[-3:] if seq else "")
             check("B 左栏收起：单调递减无弹回（首帧不跳 0）",
-                  bool(seq) and seq[0] > 250 and monotonic_down(seq) and seq[-1] <= 1,
+                  bool(seq) and seq[0] > 200 and monotonic_down(seq) and seq[-1] <= 1,
                   json.dumps(seq))
             seq = await record_toggle("document.querySelector('.sidebar-left')", "[...document.querySelectorAll('.icon-btn.flip-h')].find((b) => !b.closest('.panel-toolbar'))")
             print("左栏展开序列:", seq[:8], "...", seq[-3:] if seq else "")
             check("B 左栏展开：单调递增无回退（首帧不跳全宽）",
-                  bool(seq) and seq[0] <= 1 and monotonic_up(seq) and seq[-1] >= 303,
+                  bool(seq) and seq[0] <= 1 and monotonic_up(seq) and seq[-1] >= 253,
                   json.dumps(seq))
 
             # —— 任务 A：档案二级侧边栏（视口内部组成） ——
@@ -212,9 +212,9 @@ async def main():
             strip0 = await ev("Math.round(document.querySelector('.dv-tabs-and-actions-container').getBoundingClientRect().left)")
             pre = await ev("({ btn: !!document.querySelector('.archive-panel-toggle'), panel: !!document.querySelector('.archive-side') })")
             check("A 非档案视口：切换钮与面板均不出现", pre == {"btn": False, "panel": False}, json.dumps(pre))
-            # 进入档案视口（展开素材 → 点设定集树节点）
-            await click("document.querySelector('.tree-item[data-folder-id=\"F-DIR\"] .expand')")
-            await click("document.querySelector('.tree-item[data-folder-id=\"F-ARC\"] .body')")
+            # 进入档案视口（展开素材 → 点设定集树节点；7.1 十八轮左栏轮新类名 .exp / .lead）
+            await click("document.querySelector('.tree-item[data-folder-id=\"F-DIR\"] .exp')")
+            await click("document.querySelector('.tree-item[data-folder-id=\"F-ARC\"] .lead')")
             await asyncio.sleep(0.8)
             strip1 = await ev("Math.round(document.querySelector('.dv-tabs-and-actions-container').getBoundingClientRect().left)")
             check("A 标签栏 x 进档案视口不变（不被面板推挤）", strip1 == strip0, f"{strip0} → {strip1}")
@@ -331,7 +331,8 @@ async def main():
             await send(ws, "Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
             await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
             await asyncio.sleep(0.5)
-            # —— 顶行三工具栏对齐（2026-08-15 用户定案：高 54 / padding 12 16 / 按钮 30×30 同 y 中线）——
+            # —— 顶行工具栏对齐（2026-08-15 用户定案：高 54 / padding 12 16 / 按钮 30×30 同 y 中线）——
+            # 7.1 十八轮左栏轮：library-switch 行随新稿删除（左栏菜单栏 46，无 54 行），libSwitch 移出断言
             bars = await ev("""(() => {
               const grab = (el) => {
                 if (!el) return null;
@@ -344,7 +345,6 @@ async def main():
                 return { h: Math.round(r.height * 10) / 10, padding: cs.padding, btns };
               };
               return {
-                libSwitch: grab(document.querySelector('.sidebar-left .library-switch')),
                 archiveTools: grab(document.querySelector('.archive-side .as-tools')),
                 rightToolbar: grab(document.querySelector('.sidebar-right .panel-toolbar')),
                 midToolbar: grab(document.querySelector('.panel-toolbar')),
@@ -356,7 +356,7 @@ async def main():
                     return False
                 return all(x["w"] == 30 and x["h"] == 30 for x in b["btns"]) and len(b["btns"]) > 0
             cys = [b["btns"][0]["cy"] for b in bars.values() if b and b["btns"]]
-            check("顶行三工具栏 + 中栏：高 54 / padding 12 16 / 按钮 30×30 / 按钮中心 y 互差 ≤1px",
+            check("顶行工具栏（档案面板/右栏/中栏）：高 54 / padding 12 16 / 按钮 30×30 / 按钮中心 y 互差 ≤1px",
                   all(bar_ok(b) for b in bars.values()) and cys and max(cys) - min(cys) <= 1,
                   json.dumps(bars, ensure_ascii=False))
             # 收展逐帧单调（面板内收起钮 → 中栏展开钮再展开；任务 3：收起时中栏才出展开钮且无 active 底色）
@@ -400,7 +400,7 @@ async def main():
             w_closed = await ev("Math.round(document.querySelector('.archive-side').getBoundingClientRect().width)")
             await click("[...document.querySelectorAll('.dv-tab')].find((t) => t.textContent.includes('全部'))")
             await asyncio.sleep(0.5)
-            await click("document.querySelector('.tree-item[data-folder-id=\"F-ARC2\"] .body')")
+            await click("document.querySelector('.tree-item[data-folder-id=\"F-ARC2\"] .lead')")
             await asyncio.sleep(0.8)
             arc2 = await ev("""(() => {
               const el = document.querySelector('.archive-side');
@@ -417,7 +417,7 @@ async def main():
             w_back = await ev("(() => { const el = document.querySelector('.archive-side'); return el ? Math.round(el.getBoundingClientRect().width) : -1; })()")
             check("A per-folder：切回设定集仍收起（0）", w_back == 0, str(w_back))
             # 切出档案视口：面板与按钮同消失 + 标签栏 x 不变
-            await click("document.querySelector('.tree-item[data-folder-id=\"F-DIR\"] .body')")
+            await click("document.querySelector('.tree-item[data-folder-id=\"F-DIR\"] .lead')")
             await asyncio.sleep(0.8)
             strip3 = await ev("Math.round(document.querySelector('.dv-tabs-and-actions-container').getBoundingClientRect().left)")
             post = await ev("({ btn: !!document.querySelector('.archive-panel-toggle'), panel: !!document.querySelector('.archive-side') })")
