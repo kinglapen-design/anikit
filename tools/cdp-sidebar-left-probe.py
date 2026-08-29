@@ -8,6 +8,8 @@
 #   S7  树 item 26 高；f2 自定义色 blue → .tt-icon[data-tint="blue"]（旧色名映射新九色）
 #   S8  选中态：点 f1 → 半透明-2 底 + 立体感-通用 + 文字升一级
 #   S9  展开 f1：子层出现 + 缩进线 1px 半透明-2（二轮改定：半透明-3 太淡）；f1 数量 3 → 2（展开 = 直接子项，双口径）
+#   S9d 展开 f2（蓝色）：tint 缩进线 = 颜色-2 实色 rgb(37,80,118)（三轮改定：-1 亮档 14% 看不清）；
+#       档案子项提示装饰圆点 = 颜色-2（tint 变色后口径；tint+选中 = 颜色-1 走预览页陈列）
 #   S10 旧结构清零：.bar-title / .rail / .side-content / .library-switch / .side-thumb 均不存在
 #   截图 r18-sidebar-left.png（整窗 + 侧栏局部）
 # 桩：最小主窗口；2 区块顶级文件夹（f1 带子层、f2 蓝色）+ 3 条 Placement（f1×2 / f1a×1）。
@@ -48,7 +50,7 @@ window.__TAURI_INTERNALS__ = {
       list_folder_tree: { blocks: [{ id: "dir", name: "目录", icon: null }],
         nodes: [
           { id: "f1", name: "角色", count: 3, children: [{ id: "f1a", name: "主角", count: 1, children: [] }] },
-          { id: "f2", name: "场景", count: 0, children: [], color: "blue" },
+          { id: "f2", name: "场景", count: 0, children: [{ id: "f2a", name: "子档案", count: 0, children: [], kind: "archive" }], color: "blue" },
         ] },
       list_placements: [
         { assetId: "a1", folderId: "f1", ext: "png", thumbKind: null, thumbPath: null },
@@ -287,6 +289,22 @@ async def main():
                   json.dumps(exp))
             check("S9c 展开后 f1 数量 = 直接子项 2（双口径）",
                   isinstance(exp, dict) and exp.get("cnt") == "2", json.dumps(exp))
+
+            # ---------- S9d tint 缩进线（颜色-2 实色）+ 档案圆点（颜色-2） ----------
+            await ev("document.querySelector('.tree-item[data-folder-id=\"f2\"] .exp').dispatchEvent("
+                     "new MouseEvent('click', { bubbles: true }))")
+            await asyncio.sleep(0.4)
+            tinted = await ev(
+                "(() => { const ch = [...document.querySelectorAll('.ft-children')]"
+                "   .find(c => c.querySelector('[data-folder-id=\"f2a\"]'));"
+                " if (!ch) return { children: false };"
+                " const dot = document.querySelector('.tree-item[data-folder-id=\"f2a\"] .dot');"
+                " return { children: true, line: getComputedStyle(ch, '::before').backgroundColor,"
+                "   dc: dot ? getComputedStyle(dot, '::before').backgroundColor : null }; })()")
+            check("S9d tint 缩进线 = 颜色-2 实色；档案圆点 = 颜色-2",
+                  isinstance(tinted, dict) and tinted.get("line") == "rgb(37, 80, 118)"
+                  and tinted.get("dc") == "rgb(37, 80, 118)",
+                  json.dumps(tinted))
 
             # ---------- S4 分段切换 → 空态 ----------
             await ev("[...document.querySelectorAll('.seg-item')][1].click()")

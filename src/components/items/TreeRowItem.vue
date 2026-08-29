@@ -12,7 +12,8 @@
 //   .rename-input 共享基座，本地覆盖 18 高 + 新字档）；
 //   拖拽源 dimmed / 剪切 cut = 整项半透明 0.4 / 0.5（沿用速查 §5 既有档）；
 //   层级缩进 = padding-left 6 + depth×20（稿未画层级，沿用旧 20 档）；
-//   档案提示装饰圆点 tint 变色后 = 该色-2 暗档（二轮实机定；选中升一级优先）。
+//   档案提示装饰圆点 tint 变色后 = 该色-2 暗档（二轮实机定）；tint + 选中 = 该色-1 亮档（三轮实机定；
+//   无 tint 选中 = 亮色/一级）。
 // 数量双口径（旧 TreeItem 2026-08-20 定）：folder 展开 = 直接子项数 / 折叠 = 递归总数；0 不显示。
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
@@ -267,6 +268,43 @@ function onClick(e: MouseEvent): void {
 .selected .dot::before,
 .force-selected .dot::before {
   background: var(--n-l1);
+}
+/* tint + 选中 = 该色-1 亮档（2026-08-30 三轮实机定；权重压 .selected .dot 与 .dot[data-tint]） */
+.selected .dot[data-tint="red"]::before,
+.force-selected .dot[data-tint="red"]::before {
+  background: var(--n-custom-red-1);
+}
+.selected .dot[data-tint="blue"]::before,
+.force-selected .dot[data-tint="blue"]::before {
+  background: var(--n-custom-blue-1);
+}
+.selected .dot[data-tint="yellow"]::before,
+.force-selected .dot[data-tint="yellow"]::before {
+  background: var(--n-custom-yellow-1);
+}
+.selected .dot[data-tint="yellowgreen"]::before,
+.force-selected .dot[data-tint="yellowgreen"]::before {
+  background: var(--n-custom-yellowgreen-1);
+}
+.selected .dot[data-tint="green"]::before,
+.force-selected .dot[data-tint="green"]::before {
+  background: var(--n-custom-green-1);
+}
+.selected .dot[data-tint="cyan"]::before,
+.force-selected .dot[data-tint="cyan"]::before {
+  background: var(--n-custom-cyan-1);
+}
+.selected .dot[data-tint="purple"]::before,
+.force-selected .dot[data-tint="purple"]::before {
+  background: var(--n-custom-purple-1);
+}
+.selected .dot[data-tint="pink"]::before,
+.force-selected .dot[data-tint="pink"]::before {
+  background: var(--n-custom-pink-1);
+}
+.selected .dot[data-tint="peach"]::before,
+.force-selected .dot[data-tint="peach"]::before {
+  background: var(--n-custom-peach-1);
 }
 .qico,
 .fico {

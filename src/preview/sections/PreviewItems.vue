@@ -127,7 +127,11 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
         </div>
         <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="archive" name="人物" :count="20" tint="blue" />
-          <span class="pv-cap">档案 · tint（档案图标双色跟随）</span>
+          <span class="pv-cap">档案 · tint（档案图标与圆点双色跟随，圆点 = 颜色-2）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="archive" name="人物" :count="20" tint="blue" force-state="selected" />
+          <span class="pv-cap">tint + 选中（圆点 = 颜色-1 亮档）</span>
         </div>
       </div>
     </div>
