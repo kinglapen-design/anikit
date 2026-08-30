@@ -415,15 +415,17 @@ async function togglePin(): Promise<void> {
   border: 0;
   border-radius: 0;
 }
-/* 选择模式常态描边让位品牌外框（::after，实色模式单层；云母模式 DWM 边框同步切染
-   品牌色，::after 与之同色重叠不分层） */
+/* 选择模式常态描边让位（实色模式由 ::after 品牌框独存；云母模式 DWM 边框切染品牌色） */
 .window.picking::before {
   border: 0;
 }
 /* 选择模式整圈品牌色外边框（6.2 一轮，PRD 03_数据链接 04 四重标识之一；figma 02 稿：
-   1.5px 品牌色-边框线 = --brand-border，token 注释既定预留）。伪元素不遮交互；圆角 8
-   与 DWM 圆角裁切同路径——直角线四角会被 DWM 角弧（内陷 2.3px > 线宽）整段吞掉断线
-   （踩坑 063）；z-index 55：盖三栏内容（win-controls 浮块 60 与弹窗仍在其上） */
+   1.5px 品牌色-边框线 = --brand-border，token 注释既定预留）——**仅实色模式自绘**；
+   云母模式不画：品牌框 = DWM 切染品牌色的 1px 线独存（set_main_border_picking）——
+   2026-08-30 四轮用户定：云母下圆角/边框全交 DWM，前端零参与（任何 CSS 线与 DWM 线
+   双画，两套弧光栅化路径的亚像素差在角上必显缝/双层，踩坑 063 四轮实机实证）。
+   伪元素不遮交互；圆角 8 与 DWM 圆角裁切同路径（直角线四角会被 DWM 角弧吞断，063）；
+   z-index 55：盖三栏内容（win-controls 浮块 60 与弹窗仍在其上） */
 .window.picking::after {
   content: "";
   position: absolute;
@@ -432,6 +434,9 @@ async function togglePin(): Promise<void> {
   border-radius: var(--radius-8);
   pointer-events: none;
   z-index: 55;
+}
+.window.fx-mica.picking::after {
+  border: 0; /* 云母模式品牌框前端零画，DWM 染色线独存单层 */
 }
 .window.maximized.picking::after {
   border-radius: 0;

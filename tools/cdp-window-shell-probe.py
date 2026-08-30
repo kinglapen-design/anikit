@@ -1,11 +1,12 @@
 # CDP 探针：7.1 十七轮 · 主窗口骨架轮（2026-08-30）——窗口壳 + 三段底色结构断言
 #   W1  mica 模式：.window 挂 fx-mica 类 + 底 = 全透明（2026-08-30 十七轮同日观感定稿：
 #       工程里云母上不叠色，DWM 云母直接呈现；稿 93% 半透明-1 是 figma 模拟手法）
-#   W2  窗口描边（2026-08-30 同日三轮改定：边框分模式同色 通用/六级实心 #333——云母 =
-#       DWM 染画沿裁切路径恒连续、前端 ::before 不画（DWM 线与 CSS inset 0 线 ~0.5px
-#       系统错位，双画恒双层；直角线四角被 DWM 角弧整段吞掉断线，前两轮实机实证，踩坑 063），
-#       picking 进出 set_main_border_picking 切染品牌色与 ::after 同色重叠；solid = 前端自绘）
-#       mica = ::before border 0 + .window radius 0 + picking 品牌框圆角 8（沿路径不断线）
+#   W2  窗口描边（2026-08-30 同日四轮定稿：云母模式圆角/边框/picking 品牌框全交 DWM——
+#       常态 DWM 染画 通用/六级实心 #333、picking 进出 set_main_border_picking 切染品牌色，
+#       前端零线条参与：任何 CSS 线与 DWM 线双画，两套弧光栅化路径亚像素差在角上必显缝/
+#       双层，同色双画也救不回，踩坑 063 四轮实机实证；实色模式 DWM 无边框，前端自绘）：
+#       mica = ::before border 0 + .window radius 0 + picking ::after border 0；
+#       solid = W7c ::before 1px rgb(51,51,51) + 圆角 8 / W7d picking ::after 1.5px 品牌色
 #   W3  右栏：g1 rgb(23,23,23) + 左缘 1px 通用/三级 rgb(36,36,36)
 #   W4  左栏壳透明：menu-bar / seg-wrap / side-body 均 rgba(0,0,0,0)（透窗口底；7.1 十八轮左栏轮新类名）
 #   W5  标签栏透明（dv-tabs-and-actions-container rgba(0,0,0,0)）
@@ -177,17 +178,9 @@ async def main():
             await ev("document.querySelector('.window').classList.add('picking')")
             pb = await ev("getComputedStyle(document.querySelector('.window'), '::before').borderTopWidth")
             check("W2c picking 常态描边让位（::before border 0）", pb == "0px", str(pb))
-            pa = await ev(
-                "(() => { const s = getComputedStyle(document.querySelector('.window'), '::after');"
-                " return { w: s.borderTopWidth, st: s.borderTopStyle, c: s.borderTopColor, r: s.borderTopLeftRadius }; })()")
-            # 宽度容差：getComputedStyle 对 border-width 返回 used value，headless DPR=1 下
-            # 1.5px 被量化成 1px（TreeRowItem 二轮同款量化坑）；稿值源头由 W2e 锁变量档
-            check("W2d picking 品牌框 solid + 品牌色 + 圆角 8（沿 DWM 同路径不断线）",
-                  isinstance(pa, dict) and pa.get("st") == "solid"
-                  and pa.get("w") in ("1px", "1.5px")
-                  and pa.get("c") == "rgb(61, 221, 210)"
-                  and pa.get("r") == "8px",
-                  json.dumps(pa))
+            pa = await ev("getComputedStyle(document.querySelector('.window'), '::after').borderTopWidth")
+            check("W2d mica picking 品牌框前端不画（DWM 染色线独存——双画双弧角缝，四轮用户定）",
+                  pa == "0px", str(pa))
             bs = await ev("getComputedStyle(document.documentElement).getPropertyValue('--border-strong').trim()")
             check("W2e 品牌框宽档 --border-strong = 1.5px（稿值源头）", bs == "1.5px", str(bs))
             await ev("document.querySelector('.window').classList.remove('picking')")
@@ -231,6 +224,20 @@ async def main():
                   and b7.get("c") == "rgb(51, 51, 51)"
                   and b7.get("r") == "8px",
                   json.dumps(b7))
+            # solid 轮 picking：品牌框前端自绘（云母模式才交 DWM 染色线）
+            await ev("document.querySelector('.window').classList.add('picking')")
+            pa7 = await ev(
+                "(() => { const s = getComputedStyle(document.querySelector('.window'), '::after');"
+                " return { w: s.borderTopWidth, st: s.borderTopStyle, c: s.borderTopColor, r: s.borderTopLeftRadius }; })()")
+            # 宽度容差：getComputedStyle 对 border-width 返回 used value，headless DPR=1 下
+            # 1.5px 被量化成 1px（TreeRowItem 二轮同款量化坑）；稿值源头由 W2e 锁变量档
+            check("W7d solid picking 品牌框自绘 1.5px 品牌色 + 圆角 8",
+                  isinstance(pa7, dict) and pa7.get("st") == "solid"
+                  and pa7.get("w") in ("1px", "1.5px")
+                  and pa7.get("c") == "rgb(61, 221, 210)"
+                  and pa7.get("r") == "8px",
+                  json.dumps(pa7))
+            await ev("document.querySelector('.window').classList.remove('picking')")
     finally:
         edge.terminate()
         try:
