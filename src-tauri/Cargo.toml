@@ -33,7 +33,9 @@ tauri-plugin-dialog = "2"
 # + 预览窗口"默认程序打开"（ShellExecuteW；SW_SHOW 在 Win32_UI_WindowsAndMessaging）
 # + 5.3 帧流节奏（timeBeginPeriod(1) 定时粒度提升，踩坑 040；Win32_Media）
 # + 5.6 字体安装（HKCU 注册表 Fonts 项读写，Win32_System_Registry）
-windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_Media", "Win32_System_Registry"] }
+# + 7.1 窗口框架延伸（DwmExtendFrameIntoClientArea 的 MARGINS，Win32_UI_Controls；
+#   失焦态角弧带非客户区穿透修复，踩坑 063 六轮）
+windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_Media", "Win32_System_Registry", "Win32_UI_Controls"] }
 # 数据层：时间戳（ID / importedAt / 备份命名）
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 # 数据层：ID 随机字符

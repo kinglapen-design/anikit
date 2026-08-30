@@ -1,12 +1,13 @@
 # CDP 探针：7.1 十七轮 · 主窗口骨架轮（2026-08-30）——窗口壳 + 三段底色结构断言
 #   W1  mica 模式：.window 挂 fx-mica 类 + 底 = 全透明（2026-08-30 十七轮同日观感定稿：
 #       工程里云母上不叠色，DWM 云母直接呈现；稿 93% 半透明-1 是 figma 模拟手法）
-#   W2  窗口描边（2026-08-30 同日五轮定稿：云母模式 = DWM 染色线 + 前端 ::before 同色
-#       遮罩环——1px 边框线 + 1.5px 外扩阴影同为边框色，圆角 AA 过渡带整圈淹没成边框色、
-#       内容边缘退入弧内，四角缺口消（纯 DWM 画边角弧 AA 咬内容色成缺口，100%/125%/150%
-#       实机均见；同色重叠合一故无双层）；常态 #333、picking 换品牌色（Rust
-#       set_main_border_picking 同步切染 DWM）；实色模式 DWM 无边框，前端自绘）：
-#       mica = .window radius 0 + ::before 遮罩环 1px+阴影 / picking 环换品牌色 + ::after 0；
+#   W2  窗口描边（2026-08-30 六轮定稿，win-border-measure 实机像素测量推翻五轮遮罩环）：
+#       云母模式 = CSS 零绘制、DWM 染色线独存——实测 @150% DWM 线 2 物理 px 四边均匀；
+#       CSS 1px border 虽被 Chromium 吸附成物理 1px 锐线，但与 DWM 线并集左右不对称
+#       （左/上 3px、右/下 2px）且角部 CSS 弧与 DWM 裁切弧异径分离出缝——任何 CSS 线
+#       都逃不掉系统错位，纯 DWM = 唯一均匀解；常态 #333、picking Rust 侧
+#       set_main_border_picking 切染品牌色独存；实色模式 DWM 无边框，前端自绘：
+#       mica = ::before border 0 + box-shadow none / picking 恒零画 + ::after 0；
 #       solid = W7c ::before 1px rgb(51,51,51) + 圆角 8 / W7d picking ::after 1.5px 品牌色
 #   W3  右栏：g1 rgb(23,23,23) + 左缘 1px 通用/三级 rgb(36,36,36)
 #   W4  左栏壳透明：menu-bar / seg-wrap / side-body 均 rgba(0,0,0,0)（透窗口底；7.1 十八轮左栏轮新类名）
@@ -168,15 +169,11 @@ async def main():
             check("W1b .window fx-mica 底 = 全透明（云母直呈）", wbg == "rgba(0, 0, 0, 0)", str(wbg))
             before = await ev(
                 "(() => { const s = getComputedStyle(document.querySelector('.window'), '::before');"
-                " return { w: s.borderTopWidth, c: s.borderTopColor, r: s.borderTopLeftRadius,"
-                "        sh: s.boxShadow, pe: s.pointerEvents }; })()")
-            check("W2 mica 遮罩环 = 边框色 1px 线 + 1.5px 外扩阴影同色 + 圆角 7"
-                  "（边框色淹没圆角 AA 带消四角缺口；与 DWM 染色线同色合一无双层，五轮）",
-                  isinstance(before, dict) and before.get("w") == "1px"
-                  and before.get("c") == "rgb(51, 51, 51)"
-                  and before.get("r") == "7px"
-                  and "rgb(51, 51, 51)" in (before.get("sh") or "")
-                  and "1.5px" in (before.get("sh") or "")
+                " return { w: s.borderTopWidth, sh: s.boxShadow, pe: s.pointerEvents }; })()")
+            check("W2 mica ::before 零绘制（六轮：CSS 线与 DWM 线并集必错位、角弧分离出缝，"
+                  "边框主权 100% 交 DWM——四边恒均匀 2 物理 px @150%、角弧原生观感）",
+                  isinstance(before, dict) and before.get("w") == "0px"
+                  and before.get("sh") == "none"
                   and before.get("pe") == "none",
                   json.dumps(before))
             wr = await ev("getComputedStyle(document.querySelector('.window')).borderTopLeftRadius")
@@ -185,14 +182,13 @@ async def main():
             await ev("document.querySelector('.window').classList.add('picking')")
             pb = await ev(
                 "(() => { const s = getComputedStyle(document.querySelector('.window'), '::before');"
-                " return { w: s.borderTopWidth, c: s.borderTopColor, sh: s.boxShadow }; })()")
-            check("W2c mica picking 遮罩环换品牌色（与 DWM 切染品牌线同色合一）",
-                  isinstance(pb, dict) and pb.get("w") == "1px"
-                  and pb.get("c") == "rgb(61, 221, 210)"
-                  and "rgb(61, 221, 210)" in (pb.get("sh") or ""),
+                " return { w: s.borderTopWidth, sh: s.boxShadow }; })()")
+            check("W2c mica picking ::before 恒零画（品牌框 = DWM 切染品牌线独存，六轮）",
+                  isinstance(pb, dict) and pb.get("w") == "0px"
+                  and pb.get("sh") == "none",
                   json.dumps(pb))
             pa = await ev("getComputedStyle(document.querySelector('.window'), '::after').borderTopWidth")
-            check("W2d mica picking ::after 零画（品牌框 = DWM 染色线 + ::before 品牌遮罩环承担）",
+            check("W2d mica picking ::after 零画（品牌框 = DWM 切染品牌线独存）",
                   pa == "0px", str(pa))
             bs = await ev("getComputedStyle(document.documentElement).getPropertyValue('--border-strong').trim()")
             check("W2e 品牌框宽档 --border-strong = 1.5px（稿值源头）", bs == "1.5px", str(bs))

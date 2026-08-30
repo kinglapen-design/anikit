@@ -1,7 +1,14 @@
 //! 窗口背景效果适配器（阶段七 7.1 十七轮 · 主窗口骨架轮）：
 //! Win11 22H2+ 接云母（Mica），其余版本实色回退（前端 --n-g-a1-solid #1F1F1F 实底，
 //! 2026-08-30 用户定，不做 Acrylic）。模式经 get_window_fx_mode 命令告知前端切换
-//! `.window` 底色；set_effects 要求窗口 transparent（tauri.conf 已配）。
+//! `.window` 底色。
+//!
+//! 窗口配置终态（063 六轮定稿）：`transparent:false + backgroundColor:#00000000 +
+//! shadow:true + ExtendFrame(-1)`——tao transparent:true 的 blur-behind 空 region hack
+//! 会让含非客户区的整窗表面按 alpha 合成，DWM 圆角描边曲线与方形客户区角之间的月牙
+//! 窄缝 alpha=0 成透底洞（用户实机"角部钩形透出下层"，CSS 垫块只及客户区位图够不着）；
+//! Mica 由 DWM 在窗口表面底下合成，不需要 tao transparent，只需 WebView2 默认背景透明
+//! （backgroundColor:#00000000）；ExtendFrame(-1) 令 DWM 帧/backdrop 填充覆盖非客户区。
 //!
 //! 版本判定读注册表 HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\CurrentBuildNumber
 //! （REG_SZ 字符串，注册表路径零新依赖；Win11 22H2 = 22621，DWM 系统背景自此才有 Mica）。

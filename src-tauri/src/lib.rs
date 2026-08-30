@@ -181,7 +181,10 @@ pub fn run() {
         #[cfg(target_os = "windows")]
         {
           use windows::Win32::Foundation::HWND;
-          use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
+          use windows::Win32::Graphics::Dwm::{
+            DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMWA_BORDER_COLOR,
+          };
+          use windows::Win32::UI::Controls::MARGINS;
           if let Ok(raw) = w.hwnd() {
             let hwnd = HWND(raw.0 as _);
             // 主窗口 DWM 边框染 通用/六级实心 #333333（COLORREF 0x00BBGGRR；2026-08-30
@@ -197,6 +200,19 @@ pub fn run() {
                 &border as *const _ as *const std::ffi::c_void,
                 std::mem::size_of_val(&border) as u32,
               );
+              // 框架延伸整窗（margins -1）：配合 transparent:false（2026-08-30 六轮方案一，
+              // 用户定）——去掉 tao transparent 的 blur-behind 空 region hack（它让含非客户
+              // 区的整个窗口表面按 alpha 合成，DWM 圆角描边曲线与方形客户区角之间的月牙
+              // 窄缝 alpha=0 成透底洞），DWM 帧/backdrop 填充该缝。与 set_effects 同在
+              // show 后调用（057 时序约束）
+              let margins = MARGINS {
+                cxLeftWidth: -1,
+                cxRightWidth: -1,
+                cyTopHeight: -1,
+                cyBottomHeight: -1,
+              };
+              let r = DwmExtendFrameIntoClientArea(hwnd, &margins);
+              log::info!("[window] DwmExtendFrameIntoClientArea(-1) = {r:?}");
             }
           }
         }
