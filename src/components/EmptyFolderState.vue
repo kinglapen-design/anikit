@@ -45,9 +45,11 @@ import { pickImportPaths } from "../lib/menuOps";
   gap: var(--n-space-24);
   padding-bottom: var(--n-space-24);
 }
-/* 空文件夹插画：opacity 0.6 + 小阴影（稿 filter drop-shadow 0 4 20 40%） */
+/* 空文件夹插画：opacity 0.6 已在 SVG 内（figma 导出把节点透明度烘进 <g opacity="0.6">），
+   CSS 不再叠（2026-08-30 用户实机"投影实心 + 中间深色方块"根因之一——双层 0.6 = 0.36，
+   图标过淡、前板暗区对比失真，投影也被打到 14% 黑不可见）；外阴影 = filter drop-shadow
+   （figma 效果不随 SVG 导出，稿「小阴影」在此补） */
 .ef-icon {
-  opacity: 0.6;
   filter: drop-shadow(0 4px 20px rgba(0, 0, 0, 0.4));
 }
 /* 标题+提示：column 居中 gap 8 */
