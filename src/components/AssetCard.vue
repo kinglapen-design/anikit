@@ -321,6 +321,20 @@ const meta = computed(() => {
   padding: 2px;
   color: var(--n-l3);
 }
+/* 壳层附件（位置徽章 / 笔记角标 / 已选大勾）随卡芯 hover 位移 -4px（2026-08-30 用户实机：
+   徽章没随卡上移——卡芯 .kc-media:hover translateY(-4px) 250ms，壳层附件同参数跟随） */
+.card-badges,
+.note-badge,
+.pick-check {
+  transition: transform var(--n-dur-250) var(--n-ease-in-out);
+}
+.asset-card:hover .card-badges,
+.asset-card:hover .note-badge {
+  transform: translateY(-4px);
+}
+.asset-card:hover .pick-check {
+  transform: translate(-50%, calc(-50% - 4px));
+}
 /* 选择模式已选（§12）：壳层徽章 / 笔记角标同压暗 30% 档（卡内压暗归 FileCard picked）；
    大勾不压（在壳层独立） */
 .asset-card.picked .card-badges,
