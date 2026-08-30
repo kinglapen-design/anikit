@@ -3,6 +3,8 @@
 // panel 内容 = ContentArea（按各自 viewKey 渲染视口）；标签 = TabLabel；右侧添加钮 = TabAddButton。
 // 通知条单例在此层（原 ContentArea 内——多 panel 下每 panel 一份会重复弹出）。
 // floating groups / popout 本轮禁用（样式未适配；popout 在 Tauri webview 不可用）。
+// 标签溢出下拉（tabs overflow list）禁用（2026-08-30：标签页 shrink 平分策略下无意义，
+// 且亚像素取整假溢出会让它压在 + 钮右端占位 ~60px——实机「+ 钮右边空白过多」根因）。
 // 窗口拖拽：标签栏不设 data-tauri-drag-region（与 dockview tab 拖拽冲突），
 // 窗口拖拽区保留在 panel 内工具栏行（ContentTitleBar 既有 drag-region，记待办后续评估）。
 import { DockviewVue, type DockviewReadyEvent, type VueComponent } from "dockview-vue";
@@ -64,6 +66,7 @@ function onReady(e: DockviewReadyEvent): void {
       :left-header-actions-component="leftHeaderActions"
       :theme="anikitDockTheme"
       :disable-floating-groups="true"
+      :disable-tabs-overflow-list="true"
       dnd-strategy="pointer"
       @ready="onReady"
     />

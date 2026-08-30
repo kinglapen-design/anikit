@@ -12,6 +12,11 @@
 #   T10 左栏收起 → 栏左 padding 36→12（十九轮二轮用户定）；展开恢复 36
 #   T12 肩膀像素断言（十九轮三轮：截图读像素——首尾标签外肩被 .dv-scrollable/.dv-tabs-container
 #       overflow 裁内容盒的 BUG，computed 样式在 ≠ 可见；a=单标签双肩 / b=多标签最右右肩）
+#   T13 pad-win 生命周期：右栏收起 → padding-right 160 让位浮块；再展开 → 解除回 24
+#       （sidebarAnimating 复位；动画 + RO 灌宽时序不定，断言轮询等待不固定 sleep）
+#   T14 溢出下拉禁用（十九轮五轮「+ 钮右端空白」实机 BUG）：dockview OverflowObserver 按
+#       scrollW > clientW 判溢出——DPR 缩放下 flex shrink 亚像素累积恒假溢出，下拉占 ~60px
+#       压 + 钮右端；disable-tabs-overflow-list 禁用（shrink 平分无下车场景）
 #   截图 r19-tab-bar.png（hover 未选中态留档；headless 无云母，仅结构）
 # 桩：最小主窗口（空 placements）；fx 固定 solid（本断言与窗口特效无关）。
 # 坑位沿用：端口/profile 随 pid 唯一 + 禁缓存；收尾 taskkill /F /T 整树杀（踩坑 056）。
@@ -299,6 +304,32 @@ async def main():
                   isinstance(sh2, dict) and near_g1(sh2.get("left")) and near_g1(sh2.get("right")),
                   json.dumps(sh2))
 
+            # T14 标签溢出下拉禁用（十九轮五轮「+ 钮右端空白过多」实机 BUG）：
+            # dockview OverflowObserver 以 scrollW > clientW 判溢出——DPR 缩放下 flex shrink
+            # 亚像素累积可恒假溢出，下拉（占 ~60px）渲染进 right-actions 压在 + 钮右端；
+            # shrink 平分策略下溢出下车无意义，disable-tabs-overflow-list 禁用（DockHost）。
+            # shrink 撑满态下 + 钮被抵到栏内容右缘——右缘距 = padding-right 24 稿值（无额外占位）
+            for _ in range(5):  # 2 → 7 枚标签，强 shrink 场景
+                await ev("document.querySelector('" + BAR + " .dv-left-actions-container .icon-btn').click()")
+                await asyncio.sleep(0.25)
+            await asyncio.sleep(0.8)
+            ov = await ev(
+                "(() => { const dd = document.querySelector('.dv-tabs-overflow-dropdown-root');"
+                " const bar = document.querySelector('" + BAR + "');"
+                " const add = bar.querySelector('.dv-left-actions-container');"
+                " const ra = bar.querySelector('.dv-right-actions-container');"
+                " const br = bar.getBoundingClientRect();"
+                " const ar = add.getBoundingClientRect();"
+                " const rr = ra.getBoundingClientRect();"
+                " return { dropdown: !!dd, addRight: Math.round(ar.right),"
+                "        barRight: Math.round(br.right), raW: Math.round(rr.width),"
+                "        padR: parseInt(getComputedStyle(bar).paddingRight) }; })()")
+            check("T14 7 标签 shrink：无溢出下拉 + + 钮右缘距栏内容右缘 24",
+                  isinstance(ov, dict) and ov.get("dropdown") is False
+                  and ov.get("raW") == 0
+                  and abs(ov.get("barRight", 0) - ov.get("padR", 0) - ov.get("addRight", 0) - 24) <= 2,
+                  json.dumps(ov))
+
             # T10 左栏收起时标签栏左 padding 36 → 12（十九轮二轮用户定）：
             # 点菜单栏收起钮 → 等 400ms 收展动画 → 断言；再点展开钮（pre-actions）恢复
             await ev("document.querySelector('.sidebar-left .menu-bar .ic-btn').click()")
@@ -312,6 +343,39 @@ async def main():
             pl2 = await ev("getComputedStyle(document.querySelector('" + BAR + "')).paddingLeft")
             check("T10b 左栏展开 → 栏左 padding 回 36",
                   exp is True and pl2 == "36px", f"btn={exp} pl={pl2}")
+
+            # T13 pad-win 让位生命周期（2026-08-30 实机「+ 钮右端空白过多」排查）：
+            # 右栏收起 → pad-win 生效（padding-right 160 给窗口控制浮块让位）；
+            # 右栏再展开 → 动画结束 sidebarAnimating 复位，pad-win 必须解除回 24——
+            # 卡住则 + 钮右端恒 160 空白（用户实机所见）
+            pr0 = await ev(
+                "(({ cls: document.querySelector('.dock-host').className,"
+                "   p: getComputedStyle(document.querySelector('" + BAR + "')).paddingRight }))")
+            check("T13a 初始（右栏展开）无 pad-win + padding-right 24",
+                  isinstance(pr0, dict) and "pad-win" not in (pr0.get("cls") or "")
+                  and pr0.get("p") == "24px", json.dumps(pr0))
+            await ev("[...document.querySelectorAll('.sidebar-right .panel-toolbar .icon-btn')][0].click()")
+            await asyncio.sleep(1.0)
+            pr1 = await ev(
+                "(({ cls: document.querySelector('.dock-host').className,"
+                "   p: getComputedStyle(document.querySelector('" + BAR + "')).paddingRight }))")
+            check("T13b 右栏收起 → pad-win 生效 padding-right 160",
+                  isinstance(pr1, dict) and "pad-win" in (pr1.get("cls") or "")
+                  and pr1.get("p") == "160px", json.dumps(pr1))
+            await ev("document.querySelector('.panel-toolbar .icon-btn.flip-h').click()")
+            # 轮询等 pad-win 解除（展开动画 + RO/dockview 灌宽时序不定，固定 sleep 会 flake）
+            pr2 = None
+            deadline = time.time() + 4
+            while time.time() < deadline:
+                pr2 = await ev(
+                    "(({ cls: document.querySelector('.dock-host').className,"
+                    "   p: getComputedStyle(document.querySelector('" + BAR + "')).paddingRight }))")
+                if isinstance(pr2, dict) and "pad-win" not in (pr2.get("cls") or "") and pr2.get("p") == "24px":
+                    break
+                await asyncio.sleep(0.2)
+            check("T13c 右栏再展开 → pad-win 解除回 24（sidebarAnimating 正常复位）",
+                  isinstance(pr2, dict) and "pad-win" not in (pr2.get("cls") or "")
+                  and pr2.get("p") == "24px", json.dumps(pr2))
 
             # 截图留档（hover 未选中态）
             s = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
