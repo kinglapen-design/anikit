@@ -90,7 +90,7 @@ function startRename(): void {
 
 <template>
   <div
-    class="list-row-shell"
+    class="list-row-shell list-row"
     :class="{ 'fade-source': faded === 'source', 'fade-cut': faded === 'cut' }"
     :style="{ left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` }"
     @click="emit('select', $event)"
@@ -98,6 +98,7 @@ function startRename(): void {
     <RowCard
       :name="displayName"
       :thumb-url="thumbUrl ?? ''"
+      :thumb-fit="asset.thumbKind === 'formatIcon' ? 'icon' : 'contain'"
       :badge="format"
       :dims="size"
       :file-size="fileSize"
@@ -115,7 +116,10 @@ function startRename(): void {
 </template>
 
 <style scoped>
-/* 壳：虚拟滚动 box 绝对定位；选中 / 重命名环与 hover 全归 cards/ListRowCard（kc 族） */
+/* 壳：虚拟滚动 box 绝对定位；选中 / 重命名环与 hover 全归 cards/ListRowCard（kc 族）。
+   .list-row = JS 分发标记类（无样式挂钩，勿删）：gridPointerDown 拖拽/框选分发、useSpaceZoom
+   空格放大定位、gridDispatch 右键菜单均按 ".asset-card, .list-row" 命中——7.1 重构壳改名
+   list-row-shell 后三处断配（单击被当空白起框选吞 click = 列表模式无法选中，2026-08-30 实机报修） */
 .list-row-shell {
   position: absolute;
   cursor: default;

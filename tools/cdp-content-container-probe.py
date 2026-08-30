@@ -28,7 +28,9 @@
 #   T13 列表表头：34 高 g3 底圆角 8 padding 8/12 gap 12 + 名称列 flex 1 + 四数据列各 123 +
 #       标签 13/18 Bold 三级
 #   T14 列表行：57 高 padding 6/12/6/6 gap 12 g2 底圆角 8 + 缩略图 80×45（g3 + g5 描边圆角 6）+
-#       数据列 123 mono 数字-大 三级 + 名称 13/18 Bold 一级 + 文件大小/修改日期真值
+#       数据列 123 mono 数字-大 三级 + 名称 13/18 Bold 一级 + 文件大小/修改日期真值；
+#       T14d 真实点击行 → 选中（2026-08-30 列表选中回归，壳 list-row 标记类补回）+
+#       T14e 格式图标行 icon 档 50% 居中（a2 桩 thumbKind=formatIcon）
 #   T15 排序接线：点「文件大小」→ 列 active + 行序升序（首行 50.0 KB）；再点 → 箭头 desc +
 #       降序（首行 5.0 MB）；点「尺寸」列 → 无反应（无 SortKey 档纯展示）
 #   T15b 表头右缘 = 行右缘 = 视口右缘 -12（钉顶列头与行严格对齐）
@@ -99,7 +101,8 @@ window.__TAURI_INTERNALS__ = {
         ] },
       list_placements: [
         P({ assetId: "a1", folderId: "f1", name: "跑步循环.png", w: 1920, h: 1080, ext: "png", size: 2097152 }),
-        P({ assetId: "a2", folderId: "f1", name: "主角设定.fla", ext: "fla", size: 5242880 }),
+        P({ assetId: "a2", folderId: "f1", name: "主角设定.fla", ext: "fla", size: 5242880,
+            thumbKind: "formatIcon", thumbPath: "E:/fake/fla-icon.png" }),
         P({ assetId: "a3", folderId: "f1", name: "参考片段.mp4", w: 1280, h: 720, ext: "mp4", duration: 62.4, size: 1572864 }),
         P({ assetId: "a4", folderId: "f1a", name: "线稿01.png", w: 800, h: 600, ext: "png", size: 102400 }),
         P({ assetId: "a5", folderId: "f1a1", name: "草图01.png", w: 640, h: 480, ext: "png", size: 51200 }),
@@ -647,6 +650,42 @@ async def main():
                   isinstance(row14, dict) and row14.get("szt") == "2.0 MB"
                   and isinstance(row14.get("mt"), list) and row14["mt"] == ["2026/08/24", "16:07"],
                   json.dumps(row14, ensure_ascii=False))
+
+            # T14d 列表行真实点击 → 选中（2026-08-30 实机"列表模式无法选中"回归：壳 list-row 标记类
+            # 补回后 gridPointerDown 命中 ".asset-card, .list-row" 走拖拽分发，不再落空白框选吞 click；
+            # 必须 Input.dispatchMouseEvent 真实点击——JS .click() 不过 pointerdown 分发链测不到本 bug）
+            rc = await ev(
+                "(() => { const rows = [...document.querySelectorAll('.list-row-shell')]"
+                ".sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top));"
+                " const r = rows[0].getBoundingClientRect(); return { x: r.x + 200, y: r.y + r.height / 2 }; })()")
+            if isinstance(rc, dict):
+                await send(ws, "Input.dispatchMouseEvent",
+                           {"type": "mousePressed", "x": rc["x"], "y": rc["y"],
+                            "button": "left", "buttons": 1, "clickCount": 1}, session=sess)
+                await send(ws, "Input.dispatchMouseEvent",
+                           {"type": "mouseReleased", "x": rc["x"], "y": rc["y"],
+                            "button": "left", "buttons": 0, "clickCount": 1}, session=sess)
+                await asyncio.sleep(0.4)
+            sel14 = await ev(
+                "(() => { const rows = [...document.querySelectorAll('.list-row-shell')]"
+                ".sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top));"
+                " return { sel: !!rows[0].querySelector('.lr-card.selected'),"
+                "  mq: !!document.querySelector('.grid-viewport .marquee') }; })()")
+            check("T14d 列表行真实点击 → 选中（list-row 标记类命中分发，不落空白框选吞 click）",
+                  isinstance(sel14, dict) and sel14.get("sel") is True and sel14.get("mq") is False,
+                  json.dumps(sel14))
+
+            # T14e 格式图标行缩略图 icon 档 50% 居中（a2 fla 桩 thumbKind=formatIcon；
+            # 假 thumbPath 加载失败不影响——50% 是 CSS 尺寸与图加载无关）
+            ico = await ev(
+                "(() => { const rows = [...document.querySelectorAll('.list-row-shell')]"
+                ".sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top));"
+                " const img = rows[1]?.querySelector('.lr-thumb-img');"
+                " return img ? { cls: img.className, w: img.offsetWidth, h: img.offsetHeight } : null; })()")
+            check("T14e 格式图标行缩略图 icon 档 50% 居中不撑满（2026-08-30 用户实机）",
+                  isinstance(ico, dict) and "icon" in (ico.get("cls") or "")
+                  and ico.get("w") == 39 and abs((ico.get("h") or 0) - 21.5) < 1,
+                  json.dumps(ico))
 
             async def read_sizes():
                 return await ev(
