@@ -32,11 +32,13 @@
   --dv-drag-over-border-color: var(--brand-border);
 }
 
-/* 标签栏条（稿值）：46 高 / padding 8·24·0·36 / 行 gap 12（标签页组 与 + 钮 的间距）；
-   栏底透明透窗口底（7.1 十七轮定），内容容器 g1 卡片顶边即分界 */
+/* 标签栏条（稿值）：46 高 / padding 8·24·0·36 / 底透明透窗口底（十七轮定），
+   内容容器 g1 卡片顶边即分界。
+   不用栏级 gap：void / right-actions 零宽时 gap 仍生效——+ 钮右端会凭空多 24
+   （双 gap 12，2026-08-30 实机「右端空白 48 > 稿值 24」根因）；间距改挂具体元素
+   （pre-actions 有钮时 margin-right 12、left-actions margin-left 12），有内容才占距 */
 .anikit-dock-theme .dv-tabs-and-actions-container {
   padding: var(--n-space-8) var(--n-space-24) 0 var(--n-space-36);
-  gap: var(--n-space-12);
   box-sizing: border-box;
 }
 
@@ -92,13 +94,16 @@
 }
 
 /* 标签页行首（prefix actions，左栏收起时的"展开侧边栏"按钮）：垂直居中；
-   与标签页的间距由栏行 gap 12 承担，无按钮时 display:none 不占位（gap 不给空盒留距） */
+   无按钮时 display:none 不占位；有钮时与首标签间距 12（margin——栏级 gap 已废，见栏容器注释） */
 .anikit-dock-theme .dv-pre-actions-container {
   display: flex;
   align-items: center;
 }
 .anikit-dock-theme .dv-pre-actions-container:not(:has(.icon-btn)) {
   display: none;
+}
+.anikit-dock-theme .dv-pre-actions-container:has(.icon-btn) {
+  margin-right: var(--n-space-12);
 }
 .anikit-dock-theme .dv-pre-actions-container .dv-vue-part,
 .anikit-dock-theme .dv-left-actions-container .dv-vue-part {
@@ -108,11 +113,13 @@
 }
 
 /* 左侧 actions（+ 按钮，tabs 后 = 挨着最后一个标签页；DOM 顺序 tabs → left-actions → void →
-   right-actions，天然位）：与标签组间距 = 栏行 gap 12（稿口径，不再自绘分割线）；
+   right-actions，天然位）：与标签组间距 12（margin-left——栏级 gap 已废，稿口径不变；
+   flex 间距按 scrollable 的 margin 盒缘起算，视觉恒 12）；
    钮 = IconButton 大档 30×30（稿值），色 亮/三级、hover 亮/二级 + 半透明-3 罩（贴预览展区口径） */
 .anikit-dock-theme .dv-left-actions-container {
   display: flex;
   align-items: center;
+  margin-left: var(--n-space-12);
   margin-right: auto; /* 钉在标签页后——后续元素（void/右端 actions/浮块）一律顶到最右 */
 }
 .anikit-dock-theme .dv-left-actions-container .icon-btn {

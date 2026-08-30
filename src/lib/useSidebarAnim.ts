@@ -61,6 +61,7 @@ export const sidebarShowWidths = reactive({ left: 0, right: 0, archive: 0 });
 // 多档案标签页共享宽度可接受）——
 let archiveAnim: { el: HTMLElement; from: number; to: number; start: number } | null = null;
 let archiveRaf = 0;
+let archiveWatchdog: ReturnType<typeof setTimeout> | undefined;
 
 function archiveAnimFrame(now: number): void {
   const a = archiveAnim;
@@ -74,6 +75,7 @@ function archiveAnimFrame(now: number): void {
   } else {
     archiveAnim = null;
     useUiStore().sidebarAnimating = false;
+    clearTimeout(archiveWatchdog);
   }
 }
 
@@ -89,6 +91,16 @@ export function animateArchivePanel(el: HTMLElement, to: number): void {
   useUiStore().sidebarAnimating = true;
   cancelAnimationFrame(archiveRaf);
   archiveRaf = requestAnimationFrame(archiveAnimFrame);
+  // watchdog 同左右栏引擎（rAF 暂停时布尔恒卡 true 的兜底，2026-08-30）
+  clearTimeout(archiveWatchdog);
+  archiveWatchdog = setTimeout(() => {
+    if (!archiveAnim) return;
+    cancelAnimationFrame(archiveRaf);
+    sidebarShowWidths.archive = archiveAnim.to;
+    archiveAnim.el.style.width = `${archiveAnim.to}px`;
+    archiveAnim = null;
+    useUiStore().sidebarAnimating = false;
+  }, SIDEBAR_ANIM_MS + 200);
 }
 
 type SideKey = keyof typeof sidebarShowWidths;
@@ -109,6 +121,7 @@ export function useSidebarAnim(opts: {
   const tabs = useTabsStore();
   let sideAnims: SideAnim[] = [];
   let sideAnimRaf = 0;
+  let sideAnimWatchdog: ReturnType<typeof setTimeout> | undefined;
   let dockResizeObs: ResizeObserver | undefined;
 
   // 初始显示宽度（模板首帧即正确，不经过 0/全宽跳变）
@@ -130,6 +143,7 @@ export function useSidebarAnim(opts: {
     } else {
       sideAnims = [];
       ui.sidebarAnimating = false;
+      clearTimeout(sideAnimWatchdog);
     }
   }
 
@@ -147,6 +161,19 @@ export function useSidebarAnim(opts: {
     ui.sidebarAnimating = true;
     cancelAnimationFrame(sideAnimRaf);
     sideAnimRaf = requestAnimationFrame(sidebarAnimFrame);
+    // watchdog（2026-08-30：rAF 在窗口遮挡 / headless 节流下可暂停，布尔会恒卡 true——
+    // pad-win 让位不解除、标签栏右端恒 160 空白的实机 BUG 根因）：超时强制收官写终值
+    clearTimeout(sideAnimWatchdog);
+    sideAnimWatchdog = setTimeout(() => {
+      if (!sideAnims.length) return;
+      cancelAnimationFrame(sideAnimRaf);
+      for (const a of sideAnims) {
+        sidebarShowWidths[a.key] = a.to;
+        a.el.style.width = `${a.to}px`;
+      }
+      sideAnims = [];
+      ui.sidebarAnimating = false;
+    }, SIDEBAR_ANIM_MS + 200);
   }
 
   onMounted(() => {
@@ -176,6 +203,7 @@ export function useSidebarAnim(opts: {
   });
   onBeforeUnmount(() => {
     cancelAnimationFrame(sideAnimRaf);
+    clearTimeout(sideAnimWatchdog);
     dockResizeObs?.disconnect();
   });
 }

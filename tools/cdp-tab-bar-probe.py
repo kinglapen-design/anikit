@@ -165,8 +165,14 @@ async def main():
                   isinstance(bar, dict) and bar.get("h") == "46px"
                   and bar.get("p") == "8px,24px,0px,36px" and bar.get("bg") == "rgba(0, 0, 0, 0)",
                   json.dumps(bar))
-            check("T2 栏行 gap 12", isinstance(bar, dict) and bar.get("gap") == "12px",
-                  json.dumps(bar) if not isinstance(bar, dict) else bar.get("gap", ""))
+            sp = await ev(
+                "(() => { const bar = document.querySelector('" + BAR + "');"
+                " const la = bar.querySelector('.dv-left-actions-container');"
+                " return { gap: getComputedStyle(bar).columnGap,"
+                "        ml: getComputedStyle(la).marginLeft }; })()")
+            check("T2 栏无级 gap（零宽容器不吃距）+ + 钮 margin-left 12",
+                  isinstance(sp, dict) and sp.get("gap") in ("normal", "0px") and sp.get("ml") == "12px",
+                  json.dumps(sp))
 
             tabs_gap = await ev(
                 "getComputedStyle(document.querySelector('" + BAR + " .dv-tabs-container')).columnGap")
@@ -324,10 +330,10 @@ async def main():
                 " return { dropdown: !!dd, addRight: Math.round(ar.right),"
                 "        barRight: Math.round(br.right), raW: Math.round(rr.width),"
                 "        padR: parseInt(getComputedStyle(bar).paddingRight) }; })()")
-            check("T14 7 标签 shrink：无溢出下拉 + + 钮右缘距栏内容右缘 24",
+            check("T14 7 标签 shrink：无溢出下拉 + + 钮右缘距栏右缘 24（零宽容器不占距）",
                   isinstance(ov, dict) and ov.get("dropdown") is False
                   and ov.get("raW") == 0
-                  and abs(ov.get("barRight", 0) - ov.get("padR", 0) - ov.get("addRight", 0) - 24) <= 2,
+                  and abs(ov.get("barRight", 0) - ov.get("addRight", 0) - 24) <= 2,
                   json.dumps(ov))
 
             # T10 左栏收起时标签栏左 padding 36 → 12（十九轮二轮用户定）：
