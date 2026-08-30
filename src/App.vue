@@ -241,7 +241,7 @@ async function togglePin(): Promise<void> {
       <SidebarRight ref="sidebarRightRef" />
       <div v-if="!previewParam" class="win-controls-overlay">
         <IconButton
-          :name="ui.alwaysOnTop ? 'window-pin-off' : 'window-pin-on'"
+          :name="ui.alwaysOnTop ? 'pin-off' : 'pin-on'"
           title="窗口置顶"
           @click="togglePin"
         />

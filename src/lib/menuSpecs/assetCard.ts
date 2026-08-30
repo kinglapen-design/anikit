@@ -234,7 +234,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       ],
     },
     "divider",
-    { label: "置顶", icon: "window-pin-on", disabled: true },
+    { label: "置顶", icon: "pin-on", disabled: true },
     "divider",
   );
   // 删除组两项恒显（3.4 八轮，2026-08-18 用户定：废除链接分流项——链接删除本就只移除记录，

@@ -157,7 +157,7 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
       ],
     },
     "divider",
-    { label: "置顶", icon: "window-pin-on", disabled: true },
+    { label: "置顶", icon: "pin-on", disabled: true },
     "divider",
     { label: "从文件夹中移除档案链接", icon: "remove-from-folder", shortcut: "Shift+Delete", disabled: true },
     {

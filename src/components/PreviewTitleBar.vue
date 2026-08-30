@@ -88,7 +88,7 @@ async function togglePin(): Promise<void> {
       />
       <template v-if="window">
         <IconButton
-          :name="ui.alwaysOnTop ? 'window-pin-off' : 'window-pin-on'"
+          :name="ui.alwaysOnTop ? 'pin-off' : 'pin-on'"
           title="窗口置顶"
           @click="togglePin"
         />

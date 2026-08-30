@@ -27,7 +27,7 @@ export function openTabContextMenu(e: MouseEvent, tabId: string): void {
       : []),
     {
       label: tab.locked ? "取消锁定" : "锁定",
-      icon: "window-pin-on",
+      icon: "pin-on",
       action: () => tabs.toggleLock(tabId),
     },
     { label: "新窗口打开", icon: "open-new-window", disabled: true },

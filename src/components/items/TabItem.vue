@@ -27,7 +27,7 @@ const emit = defineEmits<{ click: []; close: [] }>();
   >
     <span class="label">{{ label }}</span>
     <span v-if="locked" class="pin" v-tip="'已锁定'">
-      <AppIcon name="window-pin-on" :size="18" />
+      <AppIcon name="pin-on" :size="18" />
     </span>
     <button v-else-if="closable" class="x" @click.stop="emit('close')">
       <AppIcon name="close-small" :size="14" />
