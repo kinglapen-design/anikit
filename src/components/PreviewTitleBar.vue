@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 预览态标题栏（4.3/5.2）：返回 + 索引 x/y / 缩放滑块+百分比 / 工具按钮组。
-// 布局模式照 ContentTitleBar（space-between 等距、中栏图标 80%）。
+// 布局模式照 ContentTitleBar（space-between 等距；图标统一 亮色/三级，2026-08-30 用户实机定——
+// 旧 80% 口径作废；返回 = chevron-large 原样朝左；索引 mono 13/18、百分比 mono 12/16）。
 // image/sequence/anim/video：缩放组 + 适合窗口 + 原图大小（源文件 PSD·AI·SVG 去旋转翻转、加默认应用打开；
 // anim/video 无默认应用打开）；audio：仅返回、索引、插件、新窗口打开、上/下一个；
 // font/text（5.6）：同 other 组（含默认应用打开；字体安装/卸载在字体预览「其它」页内，不占标题栏）；
@@ -43,21 +44,28 @@ async function togglePin(): Promise<void> {
   <div class="preview-titlebar" data-tauri-drag-region>
     <div class="nav-group">
       <template v-if="!window">
-        <IconButton name="chevron-large" title="返回" class="rot-180" @click="preview.close()" />
-        <span class="index-text">{{ preview.index + 1 }} / {{ preview.total }}</span>
+        <!-- 返回 = chevron-large 原样朝左（2026-08-30 实机修正：图标文件实为朝左，
+             速查表 §6「朝右」口径与文件相反已修正——旧 rot-180 旋转后朝右 = 反了） -->
+        <IconButton name="chevron-large" title="返回" @click="preview.close()" />
+        <!-- 索引计数（预览工具栏稿）：数字-大 mono 13/18，当前/分隔 二级、总数 三级 -->
+        <span class="index-text">
+          <span class="idx-cur">{{ preview.index + 1 }}</span>
+          <span class="idx-sep">/</span>
+          <span class="idx-total">{{ preview.total }}</span>
+        </span>
       </template>
-      <span v-else class="index-text">{{ preview.current?.name ?? "预览" }}</span>
+      <span v-else class="index-name">{{ preview.current?.name ?? "预览" }}</span>
     </div>
     <div v-if="preview.viewable" class="zoom-group">
       <SideSlider v-model="zoomPct" :min="2" :max="800" />
       <span class="zoom-text">{{ Math.round(preview.zoom * 100) }}%</span>
     </div>
     <div class="btn-group">
-      <IconButton name="ai-tools" title="插件" />
+      <IconButton name="plugin" title="插件" />
       <template v-if="preview.viewable">
         <IconButton v-if="!preview.isSource" name="rotate-cw" title="旋转" @click="preview.rotateCw()" />
         <IconButton v-if="!preview.isSource" name="flip-h" title="水平翻转" @click="preview.toggleFlip()" />
-        <IconButton name="fit-window" title="适合窗口" @click="preview.fit()" />
+        <IconButton name="fit-screen" title="适合窗口" @click="preview.fit()" />
         <IconButton name="original-size" title="原图大小" @click="preview.actual()" />
       </template>
       <IconButton
@@ -72,15 +80,16 @@ async function togglePin(): Promise<void> {
         title="新窗口打开"
         @click="openInNewWindow"
       />
-      <!-- 上一个 / 下一个 = nav-history，与面包屑后退 / 前进同款（2026-08-20 用户定） -->
+      <!-- 上一个 / 下一个 = angle-bracket 尖括号（原样朝左 / rot-180 朝右），与内容工具栏
+           后退/前进同款（2026-08-30 内容容器轮统一，旧 nav-history 引用清零） -->
       <IconButton
-        name="nav-history"
+        name="angle-bracket"
         title="上一个"
         :disabled="preview.index <= 0"
         @click="preview.step(-1)"
       />
       <IconButton
-        name="nav-history"
+        name="angle-bracket"
         title="下一个"
         class="rot-180"
         :disabled="preview.index >= preview.total - 1"
@@ -107,9 +116,10 @@ async function togglePin(): Promise<void> {
   padding: var(--space-12) var(--space-16);
   flex: none;
 }
-/* 中栏标题栏图标按钮 80%（2026-07-23 用户定） */
+/* 中栏标题栏图标按钮统一 亮色/三级（2026-08-30 用户实机定，与内容工具栏 IconButton plain 同档；
+   旧 --font-icon-2 80% 口径作废） */
 .preview-titlebar :deep(.icon-btn) {
-  color: var(--font-icon-2);
+  color: var(--n-l3);
 }
 .nav-group {
   display: flex;
@@ -129,23 +139,42 @@ async function togglePin(): Promise<void> {
   gap: var(--space-6);
   flex: none;
 }
-/* chevron-large 原图标朝右（18px 箭头）：返回 = 旋转 180° 朝左；
-   上/下一个 = nav-history 与面包屑后退/前进同款，下一个旋转 180° 朝右（figma 41 口径）。
-   2026-08-20 修：1.1 图标换血后 chevron-large 由朝下变朝右，旧 rot-ccw/rot-cw（±90°）约定
-   失效——返回曾显示朝下、上/下一个曾显示 ↓↑。 */
+/* 上/下一个 = angle-bracket rot-180 朝右（翻转类沿用） */
 .rot-180 :deep(svg) {
   transform: rotate(180deg);
 }
+/* 索引计数（预览工具栏稿）：数字-大 mono 13/18，gap 4；当前/分隔 二级、总数 三级 */
 .index-text {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-1);
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-4);
+  font-family: var(--n-font-mono);
+  font-size: var(--n-fs-num-lg);
+  line-height: var(--n-lh-num-lg);
+  font-weight: var(--n-fw-medium);
   white-space: nowrap;
 }
+.idx-cur,
+.idx-sep {
+  color: var(--n-l2);
+}
+.idx-total {
+  color: var(--n-l3);
+}
+/* window 模式文件名（正文档 一级） */
+.index-name {
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l1);
+  white-space: nowrap;
+}
+/* 缩放百分比（2026-08-30 用户实机定）：数字档 mono 12/16 三级（稿未画此件，沿用元素改字档） */
 .zoom-text {
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
+  font-family: var(--n-font-mono);
+  font-size: var(--n-fs-num);
+  line-height: var(--n-lh-num);
+  font-weight: var(--n-fw-medium);
+  color: var(--n-l3);
   white-space: nowrap;
   min-width: 38px;
   text-align: right;

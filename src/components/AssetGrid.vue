@@ -595,24 +595,25 @@ onBeforeUnmount(() => {
 .grid-thumb:hover {
   background: var(--c5);
 }
-/* 框选矩形（6.1，2026-07-28 用户定）：--brand-1-12 填充 + 1px --brand-1 描边
-   （inset shadow 模拟边框——规范第 4 条 UI 线条不用 border）；滚动条（z 10）之下、卡片之上 */
+/* 框选矩形（6.1）：品牌色-半透明填充 + 品牌色-常态描边（2026-08-30 用户实机统一口径——
+   与拖拽插入提示同色系，旧 --brand-1-12/--brand-1 青绿系随新品牌蓝色换代）；
+   滚动条（z 10）之下、卡片之上 */
 .marquee {
   position: absolute;
   z-index: 5;
   pointer-events: none;
-  background: var(--brand-1-12);
-  box-shadow: inset 0 0 0 1px var(--brand-1);
+  background: var(--n-brand-50);
+  box-shadow: inset 0 0 0 1px var(--n-brand);
 }
-/* 拖拽卡片间距落点色块（C4a，2026-07-28 定案）：圆角竖向矩形填间距，同框选配色；
-   填充 30%（2026-08-10 用户定：12% 不够明显，与并入填充同档）；
+/* 拖拽卡片间距落点色块（C4a，2026-07-28 定案）：圆角竖向矩形填间距，同框选配色
+   （品牌-常态描边 + 品牌-半透明填充，2026-08-30 统一）；
    Teleport 到 body 后 fixed 定位（2026-08-18，脱离 grid-viewport 裁剪） */
 .drop-gap {
   position: fixed;
   z-index: 5;
   pointer-events: none;
   border-radius: var(--radius-4);
-  background: var(--brand-1-30);
-  box-shadow: inset 0 0 0 1px var(--brand-1);
+  background: var(--n-brand-50);
+  box-shadow: inset 0 0 0 1px var(--n-brand);
 }
 </style>

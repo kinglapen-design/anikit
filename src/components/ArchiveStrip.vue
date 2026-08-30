@@ -151,12 +151,14 @@ async function onRenameCommit(f: FolderNode, name: string): Promise<void> {
 </template>
 
 <style scoped>
-/* 档案卡片区块：容器口径同 FolderStrip（四缘 padding 0，边距归列表容器与 PAD.right 12；标题↔卡片 gap 12） */
+/* 档案卡片区块：容器口径同 FolderStrip（右 12 对齐网格 PAD.right——卡片右缘距容器 12 不被裁；
+   标题↔卡片 gap 12） */
 .archive-block {
   flex: none;
   display: flex;
   flex-direction: column;
   gap: var(--n-space-12);
+  padding-right: var(--n-space-12);
 }
 /* 卡片列表（稿）：grid auto-fill 弹性列宽（min 250 = 稿卡片宽）；间距 12（稿 档案列表 gap 12，
    旧 24 随贴稿改）；卡片正方形比例由 ArchiveCard aspect-ratio 保持 */

@@ -2,7 +2,8 @@
 #   T1  工具栏容器：54 高（30 内容 + padding 12×2）/ padding 12 / 无底色 / space-between
 #   T2  面包屑组 gap 12 + 返回前进组 gap 2 + 钮 30×30 圆角 6 图标 18 三级色 + 前进 flip-h
 #       （svg computed transform = scaleX(-1)）+ 初始无历史双禁用 + 非搜索态无 result-group
-#   T3  尺寸滑块：wrap 100 宽 + BarSlider tone=size（轨道 6px g3 #242424 / 拖钮 10px 圆 二级 无边框）
+#   T3  尺寸滑块：wrap 100 宽 + BarSlider tone=size（轨道 3px g3 #242424——稿滑轨 = 3px 线，
+#       用户实机纠正 / 拖钮 10px 圆 二级 无边框）
 #   T4  按钮组 gap 2 + 4 钮 30×30 + 插件业务禁用 + 右栏展开态无第五钮
 #   T4b 收起右栏 → 第五钮「展开详细信息」现（collapse-sidebar flip-h）；点它 → 右栏展开 + 钮消失
 #   T5  列表容器 padding：asset-section 上 12 / 左 12 / 下 0 / 右 0（稿右 12 由布局 PAD.right 承担——
@@ -272,9 +273,9 @@ async def main():
                 " return { ww: w.offsetWidth, size: w.querySelector('.bs-root').className.includes('size'),"
                 "  th: ts.height, tbg: ts.backgroundColor, kw: ks.width, kh: ks.height,"
                 "  kbg: ks.backgroundColor, kbr: ks.borderRadius, kbw: ks.borderTopWidth }; })()")
-            check("T3 尺寸滑块 wrap 100 + 轨道 6px g3 + 拖钮 10px 圆 二级 无边框",
+            check("T3 尺寸滑块 wrap 100 + 轨道 3px g3 + 拖钮 10px 圆 二级 无边框",
                   isinstance(sl, dict) and sl.get("ww") == 100 and sl.get("size") is True
-                  and sl.get("th") == "6px" and sl.get("tbg") == "rgb(36, 36, 36)"
+                  and sl.get("th") == "3px" and sl.get("tbg") == "rgb(36, 36, 36)"
                   and sl.get("kw") == "10px" and sl.get("kh") == "10px"
                   and sl.get("kbg") == "rgb(191, 191, 191)" and sl.get("kbr") == "50%"
                   and sl.get("kbw") == "0px",
@@ -394,10 +395,9 @@ async def main():
                   and st7.get("fs") == "12px" and st7.get("lh") == "16px"
                   and st7.get("fw") == "700" and st7.get("c") == "rgb(77, 77, 77)",
                   json.dumps(st7, ensure_ascii=False))
-            check("T7b 稿无动作钮（无 .acts）+ tail 递归显示复选框（label 12/16）+ 展开钮 14 常态隐",
+            check("T7b 稿无动作钮（无 .acts）+ 无 tail（递归显示撤出归查看方式菜单，2026-08-30 用户定）+ 展开钮 14 常态隐",
                   isinstance(st7, dict) and st7.get("acts") is False
-                  and st7.get("tail") == "递归显示"
-                  and st7.get("tfs") == "12px" and st7.get("tlh") == "16px"
+                  and st7.get("tail") is None
                   and st7.get("cw") == 14 and st7.get("cv") == "hidden",
                   json.dumps(st7, ensure_ascii=False))
 
@@ -543,7 +543,14 @@ async def main():
             check("T11c 点前进 → 回 f1（文件夹区重现）", fwd_ok is True, str(fwd_ok))
 
             # ================= 阶段 C：关递归显示 → 分组标题 =================
-            await ev("document.querySelector('.folder-block .recursive-cb').click()")
+            # 递归开关已撤区块标题（2026-08-30 用户定：查看方式菜单里有就行）——走菜单路径切换
+            await ev("[...document.querySelectorAll('" + TB + " .btn-group .ic-btn')][3].click()")
+            await wait_for("!!document.querySelector('.app-menu')", 5)
+            await ev("[...document.querySelectorAll('.app-menu .row')]"
+                     ".find((r) => r.querySelector('.label')?.textContent === '显示子文件夹内容')"
+                     "?.querySelector('.app-switch')?.click()")
+            await ev("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))")
+            await wait_for("!document.querySelector('.app-menu')", 5)
             await wait_for(
                 "document.querySelector('.grid-header > .st.block .num')?.textContent === '3'"
                 " && document.querySelectorAll('.group-header .st.group').length === 2", 8)
@@ -562,7 +569,13 @@ async def main():
                   json.dumps(grp, ensure_ascii=False))
 
             # ================= 阶段 D：开递归 + 列表模式 =================
-            await ev("document.querySelector('.folder-block .recursive-cb').click()")
+            await ev("[...document.querySelectorAll('" + TB + " .btn-group .ic-btn')][3].click()")
+            await wait_for("!!document.querySelector('.app-menu')", 5)
+            await ev("[...document.querySelectorAll('.app-menu .row')]"
+                     ".find((r) => r.querySelector('.label')?.textContent === '显示子文件夹内容')"
+                     "?.querySelector('.app-switch')?.click()")
+            await ev("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))")
+            await wait_for("!document.querySelector('.app-menu')", 5)
             await wait_for(
                 "document.querySelector('.grid-header > .st.block .num')?.textContent === '5'"
                 " && document.querySelectorAll('.group-header').length === 0", 8)

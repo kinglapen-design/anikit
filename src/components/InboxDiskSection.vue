@@ -182,14 +182,14 @@ const entries = computed(() => content.inboxDisk);
 </template>
 
 <style scoped>
-/* 区块容器：与文件夹区块同口径（figma 42：padding 0 由 asset-section 承担边距 / 标题↔卡片 gap 12；
-   右 16 对齐网格 PAD.right，不与贴边滚动条重叠） */
+/* 区块容器：与文件夹区块同口径（标题↔卡片 gap 12；
+   右 12 对齐网格 PAD.right——卡片右缘距容器 12 不被裁，7.1 内容容器轮修订） */
 .disk-block {
   flex: none;
   display: flex;
   flex-direction: column;
   gap: var(--space-12);
-  padding-right: var(--space-16);
+  padding-right: var(--n-space-12);
 }
 /* 固定提醒与操作错误：标签档（text-label / caption），错误用语义色 --error */
 .notice {

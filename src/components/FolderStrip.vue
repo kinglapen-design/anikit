@@ -2,8 +2,8 @@
 // 文件夹卡片区（7.1 内容容器轮贴稿——中间面板-内容容器-列表容器-文件夹列表）：
 // 卡片 = cards/FolderCard（220×122 稿比例：grid auto-fill minmax 220 弹性列宽 + auto-rows 122 定高，
 // 列表 gap 12；不跟随滑块缩放，查看方式的自适应/瀑布/网格只影响素材卡片）；
-// 区块标题 = items/SectionTitle block（稿无动作钮 → actions=false）+ tail「递归显示」复选框
-//（ui.showSubfolders——PRD 04-1 显示子文件夹内容开关）；
+// 区块标题 = items/SectionTitle block（稿无动作钮 → actions=false）；递归显示开关撤出本行
+//（2026-08-30 用户定：查看方式菜单里有就行——ViewOptionsMenu AppSwitch 仍在）；
 // 简介两行（稿）：「N 个文件 / 容量」+「M 个档案 / K 个子文件夹」——容量 = 后端 totalSize 递归去重合计
 //（7.1 内容容器轮扩展，与 count 同径）；档案/子文件夹 = 直接子级按 kind 分流计数。
 // 行内重命名（上移自旧 FolderCard）：入口 = 名称双击（卡片 nameEdit）/ 右键菜单
@@ -11,7 +11,6 @@
 // 1.2 多标签页：子文件夹按本标签页 viewKey 取；双击进入经 tabs.openView（锁定标签页会新开）。
 import { computed, ref, watch } from "vue";
 import SectionTitle from "./items/SectionTitle.vue";
-import AppCheckbox from "./AppCheckbox.vue";
 import FolderCard from "./cards/FolderCard.vue";
 import { dragView } from "../lib/dragOperation";
 import { formatSize } from "../lib/formatSize";
@@ -21,13 +20,11 @@ import { useContentStore, type FolderNode } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
-import { useUiStore } from "../stores/ui";
 
 const props = defineProps<{ viewKey: string }>();
 const content = useContentStore();
 const selection = useSelectionStore();
 const tabs = useTabsStore();
-const ui = useUiStore();
 const folderOpen = ref(true);
 // 折叠切换：SectionTitle 守卫在调用方（§20——dragView.suppressClick 吞拖拽后紧随 click）
 function onFold(): void {
@@ -113,7 +110,7 @@ const gapBar = computed(() => {
 <template>
   <section class="folder-block">
     <!-- 区块标题（7.1 内容容器轮 = items/SectionTitle block 贴稿；稿无动作钮 → actions=false）：
-         右侧递归显示复选框（tail 插槽常驻，绑 ui.showSubfolders——PRD 04-1 显示子文件夹内容开关） -->
+         递归显示开关撤出本行（2026-08-30 用户定：查看方式菜单里有就行） -->
     <SectionTitle
       variant="block"
       title="文件夹"
@@ -121,11 +118,7 @@ const gapBar = computed(() => {
       :expanded="folderOpen"
       :actions="false"
       @toggle="onFold"
-    >
-      <template #tail>
-        <AppCheckbox v-model="ui.showSubfolders" label="递归显示" class="recursive-cb" />
-      </template>
-    </SectionTitle>
+    />
     <div v-if="folderOpen" class="flow">
       <FolderCard
         v-for="f in stripFolders"
@@ -160,25 +153,22 @@ const gapBar = computed(() => {
 </template>
 
 <style scoped>
-/* 文件夹卡片区块（7.1 内容容器轮）：四缘 padding 0——区块边距由列表容器（asset-section 12）
-   与网格 PAD.right 12 承担（旧 padding-right 16 随骨架贴稿撤除）；标题↔卡片 gap 12 */
+/* 文件夹卡片区块（7.1 内容容器轮）：右 12 对齐网格 PAD.right——卡片右缘距容器 12 不被裁
+   （同日修订：PAD.right 只管素材网格布局，strip grid 满宽须自收，旧 padding-right 16 改 12 归位）；
+   标题↔卡片 gap 12 */
 .folder-block {
   flex: none;
   display: flex;
   flex-direction: column;
   gap: var(--n-space-12);
+  padding-right: var(--n-space-12);
 }
-/* 递归显示复选框：label 按新档次要文字 12/16（组件 AppCheckbox 默认正文档 13/18） */
-.recursive-cb :deep(.label) {
-  font-size: var(--n-fs-secondary);
-  line-height: var(--n-lh-secondary);
-}
-/* 卡片列表（稿）：grid 均分同宽（auto-fill 空轨道同宽，末行不被拉宽），满了换行；
-   min 220 = 稿卡片宽，行高 122 定高（122 高链 = padding 24 + 名称 26 + 间距 36 + 简介 36）；
-   列/行间距 12（稿 文件夹列表 gap 12） */
+/* 卡片列表（稿）：**固定 220 宽列** auto-fill 换行（2026-08-30 用户实机定：窗口余量大时不跟随拉伸——
+   旧 minmax(220,1fr) 弹性拉宽会在拖窗时反复重排抖动；余量右侧留白）；
+   行高 122 定高（122 高链 = padding 24 + 名称 26 + 间距 36 + 简介 36）；列/行间距 12（稿 gap 12） */
 .flow {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, 220px);
   grid-auto-rows: 122px;
   column-gap: var(--n-space-12);
   row-gap: var(--n-space-12);
@@ -187,15 +177,16 @@ const gapBar = computed(() => {
   min-width: 0;
 }
 /* 同级排序间隙竖块（Teleport 到 body，fixed 定位）：宽 12 = 卡片间距档 / 高随目标卡片，
-   圆角竖向矩形色块；填充 30%（2026-08-10 用户定档）——原卡片内 left:-12 方案被 viewport
+   圆角竖向矩形色块；**品牌色-常态描边 + 品牌色-半透明填充**（2026-08-30 用户实机统一口径，
+   旧 --brand-1-30/--brand-1 青绿系随新品牌蓝色 #0F89EC 换代）——原卡片内 left:-12 方案被 viewport
    裁剪废除（2026-08-18，首列前插提示线不可见的根因） */
 .folder-drop-gap {
   position: fixed;
   z-index: 5;
   width: 12px;
   border-radius: var(--radius-4);
-  background: var(--brand-1-30);
-  box-shadow: inset 0 0 0 1px var(--brand-1);
+  background: var(--n-brand-50);
+  box-shadow: inset 0 0 0 1px var(--n-brand);
   pointer-events: none;
 }
 </style>

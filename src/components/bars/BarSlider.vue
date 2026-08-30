@@ -62,6 +62,7 @@ function onDown(e: PointerEvent): void {
 }
 /* size = 工具栏尺寸滑块：轨道 通用/三级，拖钮无描边（稿值） */
 .bs-root.size .bs-track {
+  height: 3px; /* 稿滑轨 = 3px 线（figma height 0 + border 3 = 线宽 3，非盒高 6——2026-08-30 用户实机纠正） */
   background: var(--n-g3);
 }
 .bs-root.size .bs-knob {
