@@ -1,15 +1,9 @@
 // 内容区四种布局算法（PRD 04 卡片布局）：统一产出 boxes（含 item 下标）+ rows（滚动二分用）+ 总高。
 // 布局全部用 metadata 宽高预计算，滚动时不读图（规范第 7 条）。
-// 自适应为贪心分行（替换 justified-layout npm 库，10 万条 <100ms）；
-// 卡片文字区（标题 + 标签）固定像素高，不参与等比缩放（justified 按行追加）。
-
-// 卡片文字区（标题容器）固定像素高，不参与等比缩放（justified 按行追加）。
-/** 素材卡片简介区高度（figma-css 01_组件/14_卡片，2026-08-10：padding 8 8 8 12 +
-    名称单行 20 + 间距 4 + 标签 17 = 57；旧两行标题 64 作废） */
-export const CARD_CAPTION_H = 57;
-/** 简介关闭时的紧凑简介区高度（2026-08-19 显示简介接入：关 = 隐藏简介行并缩短卡片——
-    padding 8 8 8 12 + 名称单行 20 = 36），与 AssetCard .texts 实际高度严格一致 */
-export const CARD_CAPTION_COMPACT_H = 36;
+// 自适应为贪心分行（替换 justified-layout npm 库，10 万条 <100ms）。
+// 盒高 = 纯图高（7.1 内容容器轮"卡即图满铺"定稿：名称/简介渐变罩叠图内，不占布局高度——
+// 旧"图 + 下文字区"排版（简介区 57 / 紧凑 36 按行追加盒高）2026-08-30 用户实机废除：
+// 盒高比图高多一截致盒比例 ≠ 图比例，cover 满铺必然裁切；盒比例 = 图比例时 cover 零裁）。
 
 export interface Box {
   top: number;
@@ -45,12 +39,11 @@ const LIST_ROW_H = 57;
 /** 列表模式行间距（7.1 内容容器轮贴稿——列表显示模式 gap 6） */
 const LIST_ROW_GAP = 6;
 
-// —— 自适应（等高不等宽）：贪心分行，行内等比拉伸填满宽度 ——
+// —— 自适应（等高不等宽）：贪心分行，行内等比拉伸填满宽度；盒高 = 行高（卡即图满铺） ——
 export function computeJustified(
   items: { w: number; h: number }[],
   containerWidth: number,
   targetRowHeight: number,
-  captionHeight = 0,
 ): LayoutResult {
   const n = items.length;
   const boxes = new Array<Box>(n);
@@ -61,14 +54,14 @@ export function computeJustified(
   let ratioSum = 0;
 
   const layoutRow = (start: number, end: number, height: number): void => {
-    const top = y + rows.length * captionHeight;
+    const top = y;
     let x = PAD.left;
     for (let i = start; i <= end; i++) {
       const w = (items[i].w / items[i].h) * height;
-      boxes[i] = { top, left: x, width: w, height: height + captionHeight, i };
+      boxes[i] = { top, left: x, width: w, height, i };
       x += w + COL_GAP;
     }
-    rows.push({ top, height: height + captionHeight, start, end: end + 1 });
+    rows.push({ top, height, start, end: end + 1 });
     y += height + ROW_GAP;
   };
 
@@ -87,16 +80,15 @@ export function computeJustified(
     layoutRow(rowStart, n - 1, h);
   }
 
-  const totalHeight = rows.length === 0 ? 0 : y - ROW_GAP + PAD.bottom + rows.length * captionHeight;
+  const totalHeight = rows.length === 0 ? 0 : y - ROW_GAP + PAD.bottom;
   return { boxes, rows, totalHeight };
 }
 
-// —— 瀑布流（等宽不等高）：列数随容器宽度，列宽弹性均分，逐条放最矮列 ——
+// —— 瀑布流（等宽不等高）：列数随容器宽度，列宽弹性均分，逐条放最矮列；盒高 = 图等比高 ——
 export function computeWaterfall(
   items: { w: number; h: number }[],
   containerWidth: number,
   targetColWidth: number,
-  captionHeight = 0,
 ): LayoutResult {
   const contentWidth = containerWidth - PAD.left - PAD.right;
   const cols = Math.max(1, Math.floor((contentWidth + COL_GAP) / (targetColWidth + COL_GAP)));
@@ -107,7 +99,7 @@ export function computeWaterfall(
   for (let i = 0; i < items.length; i++) {
     let c = 0;
     for (let k = 1; k < cols; k++) if (tops[k] < tops[c]) c = k;
-    const h = (items[i].h / items[i].w) * colW + captionHeight;
+    const h = (items[i].h / items[i].w) * colW;
     boxes.push({ top: tops[c], left: PAD.left + c * (colW + COL_GAP), width: colW, height: h, i });
     tops[c] += h + ROW_GAP;
   }
@@ -123,21 +115,20 @@ export function computeWaterfall(
   return { boxes: order.map((boxIdx) => boxes[boxIdx]), rows, totalHeight: Math.max(...tops, 0) + PAD.bottom };
 }
 
-// —— 网格（figma 比例，2026-08-10 用户定）：设计缩略图尺寸 260×220（缩略图区本身，
-// 非整卡）——缩略图高 = 格宽 × 220/260，整卡高 = 缩略图 + 简介 57；格子随容器宽度
+// —— 网格（figma 比例，2026-08-10 用户定）：设计缩略图尺寸 260×220——格高 = 格宽 × 220/260
+//（7.1 满铺定稿后盒即整卡，旧"整卡 = 缩略图 + 简介 57"口径废除）；格子随容器宽度
 // 自适应填充（列数由目标格宽决定，格宽弹性均分无右侧空余） ——
 const GRID_THUMB_RATIO = 220 / 260;
 export function computeGrid(
   items: { w: number; h: number }[],
   containerWidth: number,
   targetCell: number,
-  captionHeight = 0,
 ): LayoutResult {
   const contentWidth = containerWidth - PAD.left - PAD.right;
   const cols = Math.max(1, Math.floor((contentWidth + COL_GAP) / (targetCell + COL_GAP)));
   const cell = (contentWidth - COL_GAP * (cols - 1)) / cols;
   const thumbH = cell * GRID_THUMB_RATIO;
-  const rowH = thumbH + captionHeight + ROW_GAP;
+  const rowH = thumbH + ROW_GAP;
   const boxes: Box[] = [];
   const rows: Row[] = [];
 
@@ -145,12 +136,12 @@ export function computeGrid(
     const r = Math.floor(i / cols);
     const c = i % cols;
     const top = PAD.top + r * rowH;
-    boxes.push({ top, left: PAD.left + c * (cell + COL_GAP), width: cell, height: thumbH + captionHeight, i });
-    if (c === 0) rows.push({ top, height: thumbH + captionHeight, start: i, end: i + 1 });
+    boxes.push({ top, left: PAD.left + c * (cell + COL_GAP), width: cell, height: thumbH, i });
+    if (c === 0) rows.push({ top, height: thumbH, start: i, end: i + 1 });
     else rows[rows.length - 1].end = i + 1;
   }
 
-  const totalHeight = rows.length === 0 ? 0 : rows[rows.length - 1].top + thumbH + captionHeight + PAD.bottom;
+  const totalHeight = rows.length === 0 ? 0 : rows[rows.length - 1].top + thumbH + PAD.bottom;
   return { boxes, rows, totalHeight };
 }
 
@@ -160,7 +151,6 @@ export function computeList(
   items: { w: number; h: number }[],
   containerWidth: number,
   _targetRowHeight: number,
-  _captionHeight = 0,
 ): LayoutResult {
   const rowH = LIST_ROW_H;
   const gap = LIST_ROW_GAP;

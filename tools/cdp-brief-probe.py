@@ -1,8 +1,10 @@
-# CDP 探针：3.5 二轮 · 显示简介接入实证（2026-08-19）
+# CDP 探针：3.5 二轮 · 显示简介接入实证（2026-08-19；2026-08-30 适配 7.1 满铺卡新口径）
 #   S1 菜单结构：显示简介 picker = 尺寸/文件大小/创建日期/修改日期/标签 5 项，无「无显示」，标签 disabled
-#   S2 简介开（默认）：卡高 = thumb + 57；.meta 可见；图片卡 "1920 x 1080"；视频卡 "02:05"；
-#      无尺寸卡回退文件大小（2026-08-19 用户定：全档空值兜底统一回退 formatSize，旧角标文案回退废除）
-#   S3 简介关：卡高减恰好 21；.meta 隐藏；.texts = 36；卡底与 .texts 底差 ≤ 1px；origin-badge 在名称行右侧
+#   S2 简介开（默认）：盒比例 = 图比例（7.1 满铺定稿——盒高 = 纯图高，名称/简介渐变罩叠图内
+#      不占布局，cover 零裁；旧"卡高 = thumb + 57 简介区"排版废除）；.kc-info 可见；
+#      图片卡 "1920 x 1080"；视频卡 "02:05"；无尺寸卡回退文件大小（2026-08-19 用户定：全档空值兜底统一回退 formatSize）
+#   S3 简介关：卡高不变（满铺卡简介行只在渐变罩内显隐，缩卡必错位裁图——2026-08-30 用户实机
+#      "卡片没按图片尺寸、都被裁剪"修订）；.kc-info 不渲染（v-if 空串）；名称行仍在
 #   S4 下拉分流：文件大小 "1.5 MB" / 创建日期 YYYY/MM/DD HH:mm（null 卡回退文件大小 "512 B"，
 #      2026-08-19 用户定：档内无数据回退文件大小，不显示 "—"）/ 修改日期 / 切回尺寸还原
 #   S5 截图 brief-on.png / brief-off.png / brief-created-at.png（tools/style-preview/；
@@ -197,7 +199,8 @@ async def main():
                   }})()
                 """)
 
-            VIEW_BTN = "document.querySelector('.panel-toolbar .btn-group span .icon-btn')"
+            # 查看方式钮 = 内容区工具栏按钮组第 4 个（7.1 工具栏重构：.ic-btn 族，同内容容器探针 TB 口径）
+            VIEW_BTN = "[...document.querySelectorAll('.content-area .panel-toolbar .btn-group .ic-btn')][3]"
             BRIEF_ROW = "[...document.querySelectorAll('.app-menu .group .row')].find((r) => r.querySelector('.label')?.textContent.trim() === '显示简介')"
 
             async def ensure_menu():
@@ -218,7 +221,8 @@ async def main():
                     await click(pos["x"], pos["y"])
 
             async def card_meta(key):
-                return await ev(f"(document.querySelector('.asset-card[data-key=\"{key}|f1\"] .meta')?.textContent ?? '').trim()")
+                # 7.1 满铺卡：简介行 = FileCard .kc-info（旧 .meta 类随重构废除）
+                return await ev(f"(document.querySelector('.asset-card[data-key=\"{key}|f1\"] .kc-info')?.textContent ?? '').trim()")
 
             # 准备：等树渲染，进 f1 视口
             n = 0
@@ -264,15 +268,18 @@ async def main():
                 const card = document.querySelector('.asset-card[data-key="AN-IMG|f1"]');
                 if (!card) return null;
                 return {
+                  cardW: card.offsetWidth,
                   cardH: card.offsetHeight,
-                  thumbH: card.querySelector('.thumb').offsetHeight,
-                  metaVisible: card.querySelector('.meta').offsetParent !== null,
+                  infoVisible: card.querySelector('.kc-info')?.offsetParent != null,
                 };
               })()
             """)
             print("  几何:", geo)
-            check("S2a 卡高 = thumb + 57", bool(geo) and geo["cardH"] - geo["thumbH"] == 57, str(geo))
-            check("S2b .meta 可见", bool(geo) and geo["metaVisible"] is True, str(geo))
+            # 7.1 满铺定稿：盒高 = 纯图高，盒比例 = 图比例（cover 零裁）——本次修复核心回归断言
+            ratio_ok = bool(geo) and abs(geo["cardW"] / geo["cardH"] - 1920 / 1080) < 0.02
+            check("S2a 盒比例 = 图比例 16:9（盒高 = 纯图高，无简介区占位）", ratio_ok,
+                  f"{geo and geo['cardW']}x{geo and geo['cardH']} 比 {geo and round(geo['cardW'] / geo['cardH'], 4)}")
+            check("S2b 简介行 .kc-info 可见", bool(geo) and geo["infoVisible"] is True, str(geo))
             m_img = await card_meta("AN-IMG")
             m_vid = await card_meta("AN-VID")
             m_fla = await card_meta("AN-FLA")
@@ -294,46 +301,25 @@ async def main():
                 check("S3a 显示简介开关存在", False, "未找到 .app-switch")
                 return 2
             await click(sw["x"], sw["y"])
-            await asyncio.sleep(0.6)  # 等 watch 重排
+            await asyncio.sleep(0.6)  # 等响应式刷新（满铺卡不随开关重排，仅简介行显隐切换）
             off = await ev("""
               (() => {
                 const card = document.querySelector('.asset-card[data-key="AN-IMG|f1"]');
                 if (!card) return null;
-                const texts = card.querySelector('.texts');
-                const badge = card.querySelector('.origin-badge');
-                const title = card.querySelector('.title');
-                const cr = card.getBoundingClientRect();
-                const tr = texts.getBoundingClientRect();
-                const br = badge?.getBoundingClientRect() ?? null;
-                const tir = title.getBoundingClientRect();
                 return {
                   cardH: card.offsetHeight,
-                  textsH: texts.offsetHeight,
-                  metaVisible: card.querySelector('.meta').offsetParent !== null,
-                  bottomDiff: Math.round(Math.abs(cr.bottom - tr.bottom) * 10) / 10,
-                  badgeVisible: badge ? badge.offsetParent !== null : null,
-                  badgeCenterY: br ? (br.top + br.bottom) / 2 : null,
-                  titleTop: tir.top, titleBottom: tir.bottom,
+                  info: !!card.querySelector('.kc-info'),
+                  nameVisible: card.querySelector('.kc-name')?.offsetParent != null,
                 };
               })()
             """)
             print("  关闭态:", json.dumps(off, ensure_ascii=False))
             h_on = geo["cardH"] if geo else None
-            check("S3a 卡高减少恰好 21", bool(off) and h_on is not None and h_on - off["cardH"] == 21,
+            # 2026-08-30 满铺修订：关 = 仅隐简介行——盒高 = 纯图高恒定（缩卡必致盒比例 ≠ 图比例 cover 裁图）
+            check("S3a 卡高不变（满铺卡简介行不占布局高度）", bool(off) and h_on is not None and off["cardH"] == h_on,
                   f"开 {h_on} → 关 {off and off['cardH']}")
-            check("S3b .meta 不可见", bool(off) and off["metaVisible"] is False, str(off and off["metaVisible"]))
-            check("S3c .texts 高 = 36", bool(off) and off["textsH"] == 36, str(off and off["textsH"]))
-            check("S3d 卡底与 .texts 底差 ≤ 1px", bool(off) and off["bottomDiff"] <= 1, str(off and off["bottomDiff"]))
-            badge_ok = (
-                bool(off) and off["badgeVisible"] is True
-                and off["badgeCenterY"] is not None
-                and off["titleTop"] <= off["badgeCenterY"] <= off["titleBottom"]
-            )
-            check("S3e origin-badge 可见且垂直中心落在名称行", badge_ok,
-                  f"badgeY={off and off['badgeCenterY']} title=[{off and off['titleTop']}, {off and off['titleBottom']}]")
-            # 全部 4 卡徽章仍在
-            badges = await ev("[...document.querySelectorAll('.asset-card .origin-badge')].filter((b) => b.offsetParent !== null).length")
-            check("S3f 4 卡 origin-badge 均可见", badges == 4, f"可见 {badges}/4")
+            check("S3b 简介行 .kc-info 不渲染（info 空串 v-if）", bool(off) and off["info"] is False, str(off and off["info"]))
+            check("S3c 名称行 .kc-name 仍可见", bool(off) and off["nameVisible"] is True, str(off and off["nameVisible"]))
             await key("Escape", "Escape", 27)
             await asyncio.sleep(0.3)
             await shot(SHOT_OFF)

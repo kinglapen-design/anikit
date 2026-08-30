@@ -7,8 +7,6 @@
 // transform 容器内 sticky 无效）。
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from "vue";
 import {
-  CARD_CAPTION_H,
-  CARD_CAPTION_COMPACT_H,
   PAD,
   computeJustified,
   computeWaterfall,
@@ -143,18 +141,17 @@ export function useGridLayout(opts: {
         }
       }
     }
-    // 简介区高度跟随「显示简介」开关（2026-08-19 接入）：关 = 紧凑 36（隐藏简介行并缩短
-    // 卡片，与 AssetCard .texts 实际高度一致）；relayout 由 watch 触发，执行时读最新值
-    const captionH = ui.showBrief ? CARD_CAPTION_H : CARD_CAPTION_COMPACT_H;
-    // 四种布局（PRD 04）：自适应 / 瀑布流 / 网格 / 列表
+    // 盒高 = 纯图高（7.1 满铺定稿，见 layouts.ts 头注）：名称/简介渐变罩叠图内不占布局，
+    // 「显示简介」开关只切 AssetCard 简介行显隐（info prop），不再改变卡高、无需随开关重排
+    // （2026-08-30 用户实机"卡片没按图片尺寸、都被裁剪"——盒高多 57/36 简介区致 cover 裁图）
     const computeOne = (list: { w: number; h: number }[]): LayoutResult =>
       ui.layoutMode === "waterfall"
-        ? computeWaterfall(list, vp.clientWidth, rowH, captionH)
+        ? computeWaterfall(list, vp.clientWidth, rowH)
         : ui.layoutMode === "grid"
-          ? computeGrid(list, vp.clientWidth, rowH, captionH)
+          ? computeGrid(list, vp.clientWidth, rowH)
           : ui.layoutMode === "list"
-            ? computeList(list, vp.clientWidth, rowH, captionH)
-            : computeJustified(list, vp.clientWidth, rowH, captionH);
+            ? computeList(list, vp.clientWidth, rowH)
+            : computeJustified(list, vp.clientWidth, rowH);
     // 分组模式（3.5 二轮）：逐组独立布局拼全局坐标——组标题 26 + 标题↔内容 12 + 组间 24
     //（2026-08-19 复验定：12 太挤滑过察觉不到；首组离内容标题恒 12 由 cards-layer translateY 承担）；
     // 折叠组只计标题；每组剥掉布局自带底部留白（PAD.bottom），末组底部 PAD.bottom（对齐单段口径）；
@@ -199,7 +196,7 @@ export function useGridLayout(opts: {
       const idx = items.findIndex((it) => `${it.assetId}|${it.folderId}` === anchorKey);
       const b = idx >= 0 ? boxes.value.find((bb) => bb.i === idx) : undefined;
       if (b) {
-        // box.height = 缩略图 + 简介 = 行高（四种布局同构），按比例还原行内偏移
+        // box.height = 行高（卡即图满铺，四种布局同构），按比例还原行内偏移
         scrollTo(b.top + headerH.value + 12 + listExtra.value + anchorRatio * b.height);
       }
     }
@@ -252,8 +249,9 @@ export function useGridLayout(opts: {
   );
   // 折叠 / 展开"内容"：网格高度不计入总高
   watch(assetsOpen, () => setTotal(currentTotal()));
-  // 布局方式 / 显示简介开关（查看方式菜单）：简介区高度随开关 57↔36 → 重排
-  watch([() => ui.layoutMode, () => ui.showBrief], () => relayout());
+  // 布局方式切换（查看方式菜单）：四种算法盒高语义不同 → 重排；
+  // 显示简介开关不在此——满铺卡简介行在渐变罩内显隐，不改盒高（见 relayout 注）
+  watch(() => ui.layoutMode, () => relayout());
 
   onMounted(() => {
     attach(opts.viewportRef.value!, opts.trackRef.value!, opts.thumbRef.value!);
