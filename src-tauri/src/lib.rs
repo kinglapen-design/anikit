@@ -184,11 +184,12 @@ pub fn run() {
           use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
           if let Ok(raw) = w.hwnd() {
             let hwnd = HWND(raw.0 as _);
-            // 主窗口 DWM 边框整体抑制（DWMWA_COLOR_NONE = 0xFFFFFFFE；2026-08-30 实机 BUG
-            // 三连后用户定：窗口描边两模式均前端 ::before 自绘——DWM COLORREF 纯色贴不了稿
-            // 半透明档、与 picking 品牌框叠画成双层；DWM 只管圆角裁切与投影，速查表 §19）。
-            // Win11 22000+ 生效，Win10 忽略（本就不画此边框，无差异）
-            let border: u32 = 0xFFFF_FFFE;
+            // 主窗口 DWM 边框染 通用/六级实心 #333333（COLORREF 0x00BBGGRR；2026-08-30
+            // 用户定实心色档）：云母模式边框由 DWM 沿圆角裁切路径画——恒连续恒贴边；前端
+            // ::before 云母模式不画（DWM 线与 CSS inset 0 线有 ~0.5px 系统错位，双画恒双层，
+            // 踩坑 063），实色模式前端自绘同色。选择模式进出由 set_main_border_picking
+            // 切染品牌色。Win11 22000+ 生效，Win10 忽略
+            let border: u32 = 0x0033_3333;
             unsafe {
               let _ = DwmSetWindowAttribute(
                 hwnd,
@@ -232,6 +233,7 @@ pub fn run() {
       commands::settings::save_window_state,
       commands::settings::exit_app,
       commands::settings::get_window_fx_mode,
+      commands::settings::set_main_border_picking,
       commands::import::classify_paths,
       commands::import::detect_sequences,
       commands::import::import_paths,

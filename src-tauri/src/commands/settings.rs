@@ -36,3 +36,35 @@ pub async fn exit_app(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn get_window_fx_mode() -> Result<String, String> {
   Ok(crate::adapters::window_fx::main_mode().to_string())
 }
+
+/// 主窗口 DWM 边框色随选择模式切换（6.2 四重标识之一；2026-08-30 实机定：云母模式边框
+/// 由 DWM 画，picking = 品牌色 #3DDDD2 与前端 ::after 品牌框同色重叠错位不分层、
+/// 常态 = 通用/六级 #333333）。Win11 22000+ 生效，Win10 忽略（实色模式边框前端自绘，
+/// 调用无害）；任何失败静默 Ok——掉回常态色，前端品牌框仍在，观感可降级不阻断。
+#[tauri::command]
+pub async fn set_main_border_picking(app: tauri::AppHandle, picking: bool) -> Result<(), String> {
+  #[cfg(target_os = "windows")]
+  {
+    use tauri::Manager;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
+    if let Some(w) = app.get_webview_window("main") {
+      if let Ok(raw) = w.hwnd() {
+        let hwnd = HWND(raw.0 as _);
+        // COLORREF 0x00BBGGRR：品牌 #3DDDD2 → B=0xD2 G=0xDD R=0x3D；#333333 正反对称
+        let border: u32 = if picking { 0x00D2_DD3D } else { 0x0033_3333 };
+        unsafe {
+          let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_BORDER_COLOR,
+            &border as *const _ as *const std::ffi::c_void,
+            std::mem::size_of_val(&border) as u32,
+          );
+        }
+      }
+    }
+  }
+  #[cfg(not(target_os = "windows"))]
+  let _ = (app, picking);
+  Ok(())
+}

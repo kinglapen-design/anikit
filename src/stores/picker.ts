@@ -12,6 +12,7 @@
 //   **过滤非音频**（02 稿"过滤掉非音频文件去掉噪音"：网格只渲染音频卡片、档案区不渲染），
 //   确认 add_relations(kind=voice)（无称谓，后端校验 to 必须音频 asset）。
 import { defineStore } from "pinia";
+import { invoke } from "@tauri-apps/api/core";
 import { nextTick } from "vue";
 import { useContentStore } from "./content";
 import { useSelectionStore } from "./selection";
@@ -53,6 +54,9 @@ export const usePickerStore = defineStore("picker", {
     enter(): void {
       this.active = true;
       this.picked = [];
+      // 云母模式 DWM 窗口边框切染品牌色（四重标识之一；与 ::after 品牌框同色重叠单层，
+      // 2026-08-30 实机定；实色模式 DWM 忽略、前端自绘，调用无害；失败静默降级）
+      void invoke("set_main_border_picking", { picking: true }).catch(() => {});
       // 进入即清全局选择：单击语义已变为加入/移出备选，残留选中只会误导
       useSelectionStore().clear();
       const ui = useUiStore();
@@ -96,6 +100,8 @@ export const usePickerStore = defineStore("picker", {
     exit(): void {
       const origin = this.origin;
       this.active = false;
+      // DWM 窗口边框染回常态色（通用/六级 #333333，同 enter 口径反向）
+      void invoke("set_main_border_picking", { picking: false }).catch(() => {});
       this.origin = null;
       this.targetFolder = null;
       this.filterAudio = false;

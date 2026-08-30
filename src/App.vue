@@ -369,9 +369,10 @@ async function togglePin(): Promise<void> {
    （云母直呈）；大阴影 = DWM shadow（tauri.conf shadow:true）。
    圆角分模式（2026-08-30 实机 BUG 后改定）：实色 = 前端自裁 8（最大化归零）；云母 = DWM
    系统圆角独裁、前端 radius 0 不裁——双层裁切的 AA 路径差在四角透出云母成缝隙（踩坑 063）。
-   窗口边框两模式均前端 ::before 自绘，云母模式 DWM 边框 COLOR_NONE 抑制（lib.rs）——DWM
-   COLORREF 纯色贴不了稿半透明档、与 picking 品牌框叠画成双层（同日 BUG 三连，用户定：
-   DWM 只管圆角裁切与投影，速查表 §19）。 */
+   窗口边框分模式同色（通用/六级实心 --n-g6，2026-08-30 用户定）：云母 = DWM 画（lib.rs
+   DWMWA_BORDER_COLOR 染 #333333，沿圆角裁切路径恒连续恒贴边）、前端 ::before 不画——
+   DWM 线与 CSS inset 0 线有 ~0.5px 系统错位，双画恒显双层；实色 = 前端 ::before 自绘
+   （Win10 DWM 无边框可画）。选择模式进出由 set_main_border_picking 切染品牌色（§19）。 */
 .window {
   position: relative;
   height: 100%;
@@ -393,35 +394,36 @@ async function togglePin(): Promise<void> {
 .window.maximized {
   border-radius: 0;
 }
-/* 1px 窗口描边（伪元素 inset 0 自绘不占空间；两模式均前端自绘，云母模式 DWM 边框
-   COLOR_NONE 抑制防双层）：实色 = 亮/半透明-1（稿值）+ 圆角 8 随壳自裁；云母 =
-   亮/半透明-3（2026-08-30 用户实机试色档）+ 直角——线四角伸出窗口圆角之外，由 DWM
-   圆角裁边，外缘贴 DWM 裁切路径零缝隙（CSS 圆角路径与 DWM 路径的 AA 差是缝隙根因）；
+/* 1px 窗口描边（伪元素 inset 0 自绘不占空间）——仅实色回退模式自绘（通用/六级实心
+   --n-g6 + 圆角 8 随壳自裁）；云母模式边框由 DWM 染同色沿裁切路径画（lib.rs），前端
+   不画——DWM 线与 CSS inset 0 线有系统性 ~0.5px 错位，双画恒显双层（2026-08-30 实机
+   两轮实证，踩坑 063）；
    z-54 = 三栏内容之上、picking 外框（55）之下；最大化贴屏边无意义隐藏 */
 .window::before {
   content: "";
   position: absolute;
   inset: 0;
-  border: 1px solid var(--n-l-a1);
+  border: 1px solid var(--n-g6);
   border-radius: var(--n-radius-8);
   pointer-events: none;
   z-index: 54;
 }
 .window.fx-mica::before {
-  border-color: var(--n-l-a3);
-  border-radius: 0;
+  border: 0;
 }
 .window.maximized::before {
   border: 0;
   border-radius: 0;
 }
-/* 选择模式常态描边让位品牌外框（::after 独存单层，2026-08-30 实机双层 BUG） */
+/* 选择模式常态描边让位品牌外框（::after，实色模式单层；云母模式 DWM 边框同步切染
+   品牌色，::after 与之同色重叠不分层） */
 .window.picking::before {
   border: 0;
 }
 /* 选择模式整圈品牌色外边框（6.2 一轮，PRD 03_数据链接 04 四重标识之一；figma 02 稿：
-   1.5px 品牌色-边框线 = --brand-border，token 注释既定预留）。伪元素不遮交互；
-   z-index 55：盖三栏内容（win-controls 浮块 60 与弹窗仍在其上） */
+   1.5px 品牌色-边框线 = --brand-border，token 注释既定预留）。伪元素不遮交互；圆角 8
+   与 DWM 圆角裁切同路径——直角线四角会被 DWM 角弧（内陷 2.3px > 线宽）整段吞掉断线
+   （踩坑 063）；z-index 55：盖三栏内容（win-controls 浮块 60 与弹窗仍在其上） */
 .window.picking::after {
   content: "";
   position: absolute;
@@ -430,9 +432,6 @@ async function togglePin(): Promise<void> {
   border-radius: var(--radius-8);
   pointer-events: none;
   z-index: 55;
-}
-.window.fx-mica.picking::after {
-  border-radius: 0; /* 云母模式同 ::before 口径：直角交 DWM 圆角裁边 */
 }
 .window.maximized.picking::after {
   border-radius: 0;

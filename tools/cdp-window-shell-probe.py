@@ -1,10 +1,11 @@
 # CDP 探针：7.1 十七轮 · 主窗口骨架轮（2026-08-30）——窗口壳 + 三段底色结构断言
 #   W1  mica 模式：.window 挂 fx-mica 类 + 底 = 全透明（2026-08-30 十七轮同日观感定稿：
 #       工程里云母上不叠色，DWM 云母直接呈现；稿 93% 半透明-1 是 figma 模拟手法）
-#   W2  窗口描边（2026-08-30 同日二轮改定：DWM 边框 COLOR_NONE 抑制、两模式均前端自绘——
-#       DWM 纯色贴不了稿半透明档 + picking 叠画双层 + CSS/DWM 双裁切 AA 四角透缝，BUG 三连）：
-#       mica = ::before 1px 亮/半透明-3 直角（DWM 圆角裁边）+ .window radius 0（DWM 独裁）
-#       + picking 常态描边让位/品牌框 1.5px 单层直角；solid = W7c 1px 亮/半透明-1 + 圆角 8
+#   W2  窗口描边（2026-08-30 同日三轮改定：边框分模式同色 通用/六级实心 #333——云母 =
+#       DWM 染画沿裁切路径恒连续、前端 ::before 不画（DWM 线与 CSS inset 0 线 ~0.5px
+#       系统错位，双画恒双层；直角线四角被 DWM 角弧整段吞掉断线，前两轮实机实证，踩坑 063），
+#       picking 进出 set_main_border_picking 切染品牌色与 ::after 同色重叠；solid = 前端自绘）
+#       mica = ::before border 0 + .window radius 0 + picking 品牌框圆角 8（沿路径不断线）
 #   W3  右栏：g1 rgb(23,23,23) + 左缘 1px 通用/三级 rgb(36,36,36)
 #   W4  左栏壳透明：menu-bar / seg-wrap / side-body 均 rgba(0,0,0,0)（透窗口底；7.1 十八轮左栏轮新类名）
 #   W5  标签栏透明（dv-tabs-and-actions-container rgba(0,0,0,0)）
@@ -165,16 +166,14 @@ async def main():
             check("W1b .window fx-mica 底 = 全透明（云母直呈）", wbg == "rgba(0, 0, 0, 0)", str(wbg))
             before = await ev(
                 "(() => { const s = getComputedStyle(document.querySelector('.window'), '::before');"
-                " return { w: s.borderTopWidth, c: s.borderTopColor, r: s.borderTopLeftRadius, pe: s.pointerEvents }; })()")
-            check("W2 mica 描边前端自绘 1px 亮/半透明-3 + 直角（DWM 圆角裁边）",
-                  isinstance(before, dict) and before.get("w") == "1px"
-                  and before.get("c") == "rgba(242, 242, 242, 0.06)"
-                  and before.get("r") == "0px"
+                " return { w: s.borderTopWidth, pe: s.pointerEvents }; })()")
+            check("W2 mica 描边前端不画（DWM 染 #333 沿裁切路径画，双画 ~0.5px 错位恒双层）",
+                  isinstance(before, dict) and before.get("w") == "0px"
                   and before.get("pe") == "none",
                   json.dumps(before))
             wr = await ev("getComputedStyle(document.querySelector('.window')).borderTopLeftRadius")
             check("W2b mica .window 圆角 0（DWM 独裁，双裁切 AA 透缝 BUG 根）", wr == "0px", str(wr))
-            # picking 组：手动挂类断言 CSS 层（不进真 store）
+            # picking 组：手动挂类断言 CSS 层（不进真 store；DWM 切染品牌色为 Rust 侧行为）
             await ev("document.querySelector('.window').classList.add('picking')")
             pb = await ev("getComputedStyle(document.querySelector('.window'), '::before').borderTopWidth")
             check("W2c picking 常态描边让位（::before border 0）", pb == "0px", str(pb))
@@ -183,11 +182,11 @@ async def main():
                 " return { w: s.borderTopWidth, st: s.borderTopStyle, c: s.borderTopColor, r: s.borderTopLeftRadius }; })()")
             # 宽度容差：getComputedStyle 对 border-width 返回 used value，headless DPR=1 下
             # 1.5px 被量化成 1px（TreeRowItem 二轮同款量化坑）；稿值源头由 W2e 锁变量档
-            check("W2d picking 品牌框 solid 单层 + 品牌色 + mica 直角",
+            check("W2d picking 品牌框 solid + 品牌色 + 圆角 8（沿 DWM 同路径不断线）",
                   isinstance(pa, dict) and pa.get("st") == "solid"
                   and pa.get("w") in ("1px", "1.5px")
                   and pa.get("c") == "rgb(61, 221, 210)"
-                  and pa.get("r") == "0px",
+                  and pa.get("r") == "8px",
                   json.dumps(pa))
             bs = await ev("getComputedStyle(document.documentElement).getPropertyValue('--border-strong').trim()")
             check("W2e 品牌框宽档 --border-strong = 1.5px（稿值源头）", bs == "1.5px", str(bs))
@@ -227,9 +226,9 @@ async def main():
             b7 = await ev(
                 "(() => { const s = getComputedStyle(document.querySelector('.window'), '::before');"
                 " return { w: s.borderTopWidth, c: s.borderTopColor, r: s.borderTopLeftRadius }; })()")
-            check("W7c solid 描边 1px 亮/半透明-1 + 圆角 8（前端自裁）",
+            check("W7c solid 描边 1px 通用/六级实心 rgb(51,51,51) + 圆角 8（前端自裁）",
                   isinstance(b7, dict) and b7.get("w") == "1px"
-                  and b7.get("c") == "rgba(242, 242, 242, 0.18)"
+                  and b7.get("c") == "rgb(51, 51, 51)"
                   and b7.get("r") == "8px",
                   json.dumps(b7))
     finally:
