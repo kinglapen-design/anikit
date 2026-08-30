@@ -163,15 +163,20 @@ const gapBar = computed(() => {
   gap: var(--n-space-12);
   padding-right: var(--n-space-12);
 }
-/* 卡片列表（稿）：**固定 220 宽列** auto-fill 换行（2026-08-30 用户实机定：窗口余量大时不跟随拉伸——
-   旧 minmax(220,1fr) 弹性拉宽会在拖窗时反复重排抖动；余量右侧留白）；
-   行高 122 定高（122 高链 = padding 24 + 名称 26 + 间距 36 + 简介 36）；列/行间距 12（稿 gap 12） */
+/* 卡片列表（稿）：minmax(220, 1fr) 自适应吃满（2026-08-30 用户实机二轮定——换行时余量由本行
+   卡片分摊拉伸，不留近卡宽空区）；行高 122 定高（122 高链 = padding 24 + 名称 26 + 间距 36 +
+   简介 36）；列/行间距 12（稿 gap 12） */
 .flow {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 220px);
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   grid-auto-rows: 122px;
   column-gap: var(--n-space-12);
   row-gap: var(--n-space-12);
+}
+/* 唯一卡片限稿宽 220 不拉伸（同日用户定：单卡没有排满概念，一张卡被来回拉伸重排很傻；
+   2 张起 = 上方自适应吃满） */
+.flow > .cell:only-child {
+  width: 220px;
 }
 .cell {
   min-width: 0;
