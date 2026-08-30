@@ -2,7 +2,7 @@
 // 标签页 item——docs/UI 重构/Design Token/组件/item/标签页 item/ + 布局/中间面板-标签栏
 // 选中：通用/一级底 + 圆角 8 8 0 0 + 与中间面板无缝衔接（底部两侧反弧肩膀，radial-gradient 反圆角）；
 // 未选中 hover：四周 4px 间距的 6px 圆角矩形罩（亮色/半透明-3，2026-08-28 用户定）；关闭钮常态仅选中显示。
-// 锁定（稿未画，沿用 1.2 现口径）：pin 图标替代关闭钮，色 = 亮色/二级。
+// 锁定（稿未画）：pin-small 14 替代关闭钮，色 = 未选中亮/三级、选中亮/二级（2026-08-30 用户定）。
 import AppIcon from "../AppIcon.vue";
 
 withDefaults(
@@ -78,8 +78,8 @@ const emit = defineEmits<{ click: []; close: [] }>();
 .x:hover {
   color: var(--n-l2);
 }
-/* 锁定 pin（稿未画）：pin-small 14 替代关闭钮（与关闭钮同 14 档，2026-08-30 用户供小图），
-   色 = 亮色/二级（沿用 1.2 现口径） */
+/* 锁定 pin（稿未画）：pin-small 14 替代关闭钮（与关闭钮同 14 档，2026-08-30 用户供小图）；
+   色档（同日用户定）：未选中 = 亮色/三级，选中 = 亮色/二级 */
 .pin {
   display: inline-flex;
   align-items: center;
@@ -87,6 +87,10 @@ const emit = defineEmits<{ click: []; close: [] }>();
   width: 14px;
   height: 14px;
   flex: none;
+  color: var(--n-l3);
+}
+.tab.selected .pin,
+.tab.force-selected .pin {
   color: var(--n-l2);
 }
 /* 未选中 hover：四周 4px 间距的 6px 圆角矩形罩（亮色/半透明-3） */
