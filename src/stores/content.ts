@@ -283,7 +283,7 @@ export const useContentStore = defineStore("content", {
     // 显示侧按当前库过滤（lib/relationOps.relationsForTarget）
     relations: [] as Relation[],
     // 详情数据版本号（6.1）：属性 / 描述 / 封面设置等详情编辑成功后 bump，
-    // DetailPanel / ArchiveSidePanel watch 重拉 get_asset_detail / get_archive_data
+    // DetailPanel watch 重拉 get_asset_detail / get_archive_data
     //（selectedAssetKey 不变时 watch 不触发，编辑落盘后的刷新信号）
     detailRev: 0,
     // 3.5 排序新增区（2026-08-19 用户定）：排序状态下新增 / 导入的项不按排序键分散、集中置顶
@@ -646,7 +646,7 @@ export const useContentStore = defineStore("content", {
       }
     },
     // 详情编辑落盘信号（6.1）：属性 / 描述 / 封面设置等写命令成功后 bump，
-    // DetailPanel / ArchiveSidePanel watch detailRev 重拉当前详情（选中未变时 watch 不触发）
+    // DetailPanel watch detailRev 重拉当前详情（选中未变时 watch 不触发）
     bumpDetailRev(): void {
       this.detailRev++;
     },

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // 中间面板-内容容器-工具栏（7.1 内容容器轮贴稿，稿 = 布局/主窗口/中间面板/中间面板-内容容器-工具栏.md）：
 // 54 高（30 内容 + padding 12）/ space-between / gap 10，无底色（透内容容器 通用/一级 g1 卡片底）。
-// 左 = 面包屑导航（gap 12）：（档案视口且面板收起时）档案面板展开钮 + 后退/前进钮组（gap 2，
-//      angle-bracket 尖括号：后退原样朝左、前进 flip-h）+ 搜索结果计数（仅搜索态：
+// 左 = 面包屑导航（gap 12）：后退/前进钮组（gap 2，angle-bracket 尖括号：后退原样朝左、
+//      前进 flip-h）+ 搜索结果计数（仅搜索态：
 //      「搜索结果 / N」= 正文 二级 + 数字-大 三级，3.6 数据本轮接线回填；当前目录名由标签页承担
 //      不进工具栏，2026-08-08 用户定）。
 // 右 = 尺寸滑块（BarSlider tone=size，稿宽 100）+ 按钮组（gap 2）：添加文件/档案链接 / 插件（占位
@@ -16,34 +16,23 @@ import IconButton from "./buttons/IconButton.vue";
 import BarSlider from "./bars/BarSlider.vue";
 import ViewOptionsMenu from "./ViewOptionsMenu.vue";
 import { useUiStore } from "../stores/ui";
-import { useContentStore, type FolderNode } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSearchStore } from "../stores/search";
 import { useTabsStore } from "../stores/tabs";
-import { findFolderNode } from "../lib/detailSections";
 import { currentLinkTarget, enterLinkPicker } from "../lib/menuOps";
 
 const ui = useUiStore();
-const content = useContentStore();
 const picker = usePickerStore();
 const search = useSearchStore();
 const tabs = useTabsStore();
 
-// 本标签页视口（ContentArea 传入；档案切换钮按本视口档案读写，2026-08-15 迁入视口）；
+// 本标签页视口（ContentArea 传入）；
 // panelId（2026-08-20 面包屑接入）：导航历史 per-panel，按钮按本页历史栈禁用/触发
 const props = defineProps<{ viewKey: string; panelId?: string }>();
 
 // 面包屑后退 / 前进按钮态（本页历史栈；无历史禁用）
 const canBack = computed(() => (props.panelId ? (tabs.navCan[props.panelId]?.back ?? false) : false));
 const canFwd = computed(() => (props.panelId ? (tabs.navCan[props.panelId]?.fwd ?? false) : false));
-
-// 档案二级侧边栏切换钮（仅本视口 = 档案文件夹时显示，面包屑返回按钮左边）；
-// 图标 = collapse-sidebar 原样（竖条在左 = 左侧面板，与右栏「展开详细信息」flip-h 相对）
-const archiveViewportNode = computed<FolderNode | null>(() => {
-  if (!props.viewKey.startsWith("folder:")) return null;
-  const n = findFolderNode(content.folders, props.viewKey.slice(7));
-  return n?.kind === "archive" ? n : null;
-});
 
 // 搜索结果计数（3.6 接线）：搜索态显示「搜索结果 / N」，N = 文件命中 + 档案命中总数
 const searching = computed(() => (props.panelId ? search.isActive(props.panelId) : false));
@@ -95,15 +84,6 @@ function addFileLink(): void {
 <template>
   <div class="panel-toolbar" data-tauri-drag-region>
     <div class="crumb-group">
-      <!-- 档案面板展开钮（2026-08-15 走查修正模式沿用）：仅本视口为档案且面板已收起时出现；
-           面板展开时此处不放任何按钮 -->
-      <IconButton
-        v-if="archiveViewportNode && !ui.archivePanelOpenFor(archiveViewportNode.id)"
-        name="collapse-sidebar"
-        title="展开档案面板"
-        class="archive-panel-toggle"
-        @click="ui.toggleArchivePanel(archiveViewportNode.id)"
-      />
       <!-- 后退 / 前进（稿「返回+前进-按钮」组 gap 2）：angle-bracket 尖括号，前进 = flip-h 朝右；
            per-panel 导航历史（openView 替换视口入栈，锁定页新开不入栈） -->
       <div class="nav-pair">

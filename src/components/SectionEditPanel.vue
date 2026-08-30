@@ -12,8 +12,8 @@
 // 行高 52 恒定同参数）。
 // 操作即时生效（写 ui store，防抖持久化既有机制自动覆盖）。
 // 文件 / 档案各一套配置（2026-08-23 用户定，原共用一份联动改动互串）：本面板编辑哪套 =
-// 档案侧栏入口（host=archive）恒档案套；右栏入口跟随当前选中——选中档案卡片 = 档案套，
-// 选中文件 / 无选中 = 文件套（与 DetailPanel 档案判定同逻辑：文件夹选择域首项 kind=archive）
+// 跟随当前选中——选中档案卡片 = 档案套，选中文件 / 无选中 = 文件套（与 DetailPanel 档案判定
+// 同逻辑：文件夹选择域首项 kind=archive）；档案侧栏入口随面板删除（2026-08-30）撤除
 import { computed } from "vue";
 import AppMenu from "./AppMenu.vue";
 import IconButton from "./IconButton.vue";
@@ -32,9 +32,9 @@ const WINDOW_W = 404;
 // 原级联菜单宽 175：窗口加宽后右缘与原位置对齐（不超出窗口右缘，同 ViewOptionsMenu 口径）
 const winX = computed(() => props.anchor.x - (WINDOW_W - 175));
 
-// 本面板编辑的配置套（文件 / 档案独立，2026-08-23）
+// 本面板编辑的配置套（文件 / 档案独立，2026-08-23）：跟随当前选中——选中档案卡片 = 档案套，
+// 选中文件 / 无选中 = 文件套（与 DetailPanel 档案判定同逻辑：文件夹选择域首项 kind=archive）
 const host = computed<"file" | "archive">(() => {
-  if (ui.sectionEditHost === "archive") return "archive";
   for (const id of selection.selectedFolders) {
     const n = findFolderNode(content.folders, id);
     return n?.kind === "archive" ? "archive" : "file";

@@ -106,14 +106,9 @@ export const useUiStore = defineStore("ui", {
     // 会串到文件详情）**——detailSections = 文件套（存量配置无缝保留），detailSectionsArchive = 档案套
     detailSections: mergeDetailSections(null) as DetailSectionPref[],
     detailSectionsArchive: mergeDetailSections(null) as DetailSectionPref[],
-    // 22 稿「编辑数据区块」面板开关（会话级，同 blockManageOpen 口径）：右栏工具栏与档案侧栏
-    // 工具行两处入口（2026-08-15 走查修正：档案面板铅笔开同一个面板），host 记打开来源
-    // （两处各自带 anchor/trigger 渲染，同一时刻只一处弹出）
+    // 22 稿「编辑数据区块」面板开关（会话级，同 blockManageOpen 口径）：右栏工具栏入口
+    //（2026-08-30 档案二级侧边栏删除后唯一入口，host 分流随之撤除）
     sectionEditOpen: false,
-    sectionEditHost: "right" as "right" | "archive",
-    // 档案二级侧边栏开关（2026-08-15 迁入标签页视口）：per-folder 会话级 map
-    //（folderId → 是否展开，默认 true）——两个档案标签页各自独立互不干扰
-    archivePanelOpen: {} as Record<string, boolean>,
     // 自定义数据编辑弹窗（6.1，会话级）：propsEdit = 32 稿属性标签 / descEdit = 31 稿编辑描述；
     // target = 打开时锁定的对象与当前值快照（弹窗草稿以此为初值；打开后切选中不漂移，
     // 同 groupDialogFolder 口径），宿主 App.vue；SectionCustom「添加属性 / 编辑描述」钮置位
@@ -121,13 +116,6 @@ export const useUiStore = defineStore("ui", {
     descEdit: null as { kind: "file" | "archive"; id: string; name: string; initial: { title: string; content: string }[] } | null,
   }),
   actions: {
-    // 档案二级侧边栏开关读写（per-folder，缺省 true = 进档案默认展开）
-    archivePanelOpenFor(folderId: string): boolean {
-      return this.archivePanelOpen[folderId] ?? true;
-    },
-    toggleArchivePanel(folderId: string): void {
-      this.archivePanelOpen[folderId] = !this.archivePanelOpenFor(folderId);
-    },
     // 详情区块配置按 host 取套（2026-08-23：文件 / 档案各一套独立设置）：archive = 档案套，file = 文件套
     sectionsFor(host: "file" | "archive"): DetailSectionPref[] {
       return host === "archive" ? this.detailSectionsArchive : this.detailSections;

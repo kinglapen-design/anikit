@@ -9,7 +9,6 @@ import type { DockviewPanelApi, IDockviewPanelProps } from "dockview-vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
 import SequencePackView from "./SequencePackView.vue";
-import ArchiveSidePanel from "./ArchiveSidePanel.vue";
 import SearchBar from "./SearchBar.vue";
 import ImportProgressBar from "./ImportProgressBar.vue";
 import PreviewTitleBar from "./PreviewTitleBar.vue";
@@ -19,7 +18,6 @@ import PreviewFrameStrip from "./PreviewFrameStrip.vue";
 import PreviewNotes from "./PreviewNotes.vue";
 import { findFolderNode } from "../lib/detailSections";
 import { useContentStore, type FolderNode } from "../stores/content";
-import { usePickerStore } from "../stores/picker";
 import { usePreviewStore } from "../stores/preview";
 import { useSearchStore } from "../stores/search";
 
@@ -30,7 +28,6 @@ const raw = defineProps<{ params: Record<string, unknown> }>();
 const frame = computed(() => raw.params as unknown as IDockviewPanelProps);
 const panelApi = frame.value.api as DockviewPanelApi; // api 引用 init 时确定、不变
 const content = useContentStore();
-const picker = usePickerStore();
 const preview = usePreviewStore();
 const search = useSearchStore();
 
@@ -74,14 +71,6 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
   return out;
 });
 
-// 档案二级侧边栏（2026-08-15 迁入视口）：本标签页视口 = 档案文件夹时，渲染在视口内容区最左
-// （标签栏不被推挤；分屏 / 多标签各管各）
-const archiveNode = computed<FolderNode | null>(() => {
-  const k = viewKey.value;
-  if (!k.startsWith("folder:")) return null;
-  const n = findFolderNode(content.folders, k.slice(7));
-  return n?.kind === "archive" ? n : null;
-});
 </script>
 
 <template>
@@ -100,25 +89,21 @@ const archiveNode = computed<FolderNode | null>(() => {
       </div>
     </template>
     <template v-else>
-      <!-- 视口主体行：档案视口时面板插最左（视口内部组成，标签栏不被推挤）；搜索栏通栏在其下 -->
-      <div class="viewport-body">
-        <!-- 选择模式（6.2，2026-08-24 白名单收窄）：档案二级侧栏含数据编辑入口，本模式不渲染 -->
-        <ArchiveSidePanel v-if="archiveNode && !picker.active" :node="archiveNode" :panel-active="active" />
-        <div class="viewport-main">
-          <ContentTitleBar :view-key="viewKey" :panel-id="panelApi.id" />
-          <ImportProgressBar />
-          <section class="asset-section">
-            <SequencePackView v-if="seqPackAssetId" :asset-id="seqPackAssetId" :panel-active="active" />
-            <AssetGrid
-              v-else
-              :items="items"
-              :view-key="viewKey"
-              :panel-active="active"
-              :searching="searching"
-              :search-archives="searchArchiveNodes"
-            />
-          </section>
-        </div>
+      <!-- 视口主体列：工具栏 + 卡片列表；搜索栏通栏在其下 -->
+      <div class="viewport-main">
+        <ContentTitleBar :view-key="viewKey" :panel-id="panelApi.id" />
+        <ImportProgressBar />
+        <section class="asset-section">
+          <SequencePackView v-if="seqPackAssetId" :asset-id="seqPackAssetId" :panel-active="active" />
+          <AssetGrid
+            v-else
+            :items="items"
+            :view-key="viewKey"
+            :panel-active="active"
+            :searching="searching"
+            :search-archives="searchArchiveNodes"
+          />
+        </section>
       </div>
       <footer class="search-wrap">
         <SearchBar :panel-id="panelApi.id" :view-key="viewKey" />
@@ -139,16 +124,12 @@ const archiveNode = computed<FolderNode | null>(() => {
      工具栏 / 搜索框自带 padding 12 16、列表容器 padding 16 16 0，各自承担 */
   box-sizing: border-box;
 }
-/* 视口主体行（2026-08-15 档案面板迁入）：面板 + 内容列横向排，行占满工具栏与搜索栏之间 */
-.viewport-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
+/* 视口主体列：占满工具栏与搜索栏之间（档案二级侧边栏 2026-08-30 删除后无横向排布） */
 .viewport-main {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;
   min-width: 0;
 }
 /* 卡片列表（7.1 内容容器轮贴稿——列表容器 padding 12 12 0）：上 12 / 左 12 / 下 0；

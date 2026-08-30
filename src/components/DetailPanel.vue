@@ -3,8 +3,7 @@
 // get_asset_detail（await 期间切选中防错配，DetailNotes 先例）；选中档案卡片（selection
 // 文件夹选择域首项，kind = archive）→ get_archive_data（ArchiveDetailView：数据 + 统计，
 // 失败/无记录用默认空）；无选中 → 空面板（不渲染区块）。
-// 区块栈渲染（pinned + 笔记 + 注册表 7 区块 + 面板内拖拽排序）在共享组合 DetailSections
-// （ArchiveSidePanel 档案侧栏复用同一套，2026-08-15 任务 A 三项）。
+// 区块栈渲染（pinned + 笔记 + 注册表 7 区块 + 面板内拖拽排序）在共享组合 DetailSections。
 import { computed, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import DetailSections from "./DetailSections.vue";

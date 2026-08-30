@@ -2,8 +2,8 @@
 // 详情区块栈共享组合（2026-08-15 任务 A 三项，自 DetailPanel 抽出）：
 // pinned 缩略图区块（恒第一，体系外）+ DetailNotes（可选，仅文件）+ 注册表 7 区块按
 // 配置排序显隐渲染（**文件 / 档案各一套**：ui.detailSections / detailSectionsArchive，
-// 2026-08-23 用户定独立设置，按 target.kind 分流）。DetailPanel（右侧详情面板）与
-// ArchiveSidePanel（档案二级侧边栏内容区）复用同一套，避免两套拷贝。
+// 2026-08-23 用户定独立设置，按 target.kind 分流）。DetailPanel（右侧详情面板）使用；
+// 档案二级侧边栏 2026-08-30 删除（用户定：选中档案右栏即显示详情，面板冗余）。
 // 面板内拖拽排序（2026-08-15 定案）：拖区块标题行重排，让位动画 = 侧栏区块标题拖拽
 //（LibraryView blockDrag）同款本地 pointer 追踪；pinned / DetailNotes 不参与；松手写
 // ui.moveDetailSectionTo；拖出面板取消兜底 = buttons 自清 + blur/mouseleave（侧栏范式）。

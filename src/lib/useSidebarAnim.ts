@@ -21,8 +21,8 @@ import { useTabsStore } from "../stores/tabs";
 import { useUiStore } from "../stores/ui";
 
 // 时长与缓动（2026-08-30 用户实机定）：400ms 大幅度位移档（--n-dur-400）+
-// token 缓入缓出 cubic-bezier(.32,.08,.1,1)（--n-ease-in-out 的 JS 求值——rAF 补间用不了 CSS 曲线）；
-// 档案二级侧边栏同引擎同参数。旧 180ms + easeInOutCubic 作废。
+// token 缓入缓出 cubic-bezier(.32,.08,.1,1)（--n-ease-in-out 的 JS 求值——rAF 补间用不了 CSS 曲线）。
+// 旧 180ms + easeInOutCubic 作废。
 const SIDEBAR_ANIM_MS = 400;
 function easeInOut(t: number): number {
   // cubic-bezier(.32,.08,.1,1) 求值：牛顿迭代解 x(u)=t 得 u，返回 y(u)；不收敛时二分兜底
@@ -51,57 +51,8 @@ function easeInOut(t: number): number {
   return sy(u);
 }
 
-/** 档案二级侧边栏宽（250，同右栏） */
-export const ARCHIVE_PANEL_W = 250;
-
 /** 各侧栏实际显示宽度（px）：模板唯一绑定源，rAF 引擎逐帧写，禁其他写点（见文件头注释） */
-export const sidebarShowWidths = reactive({ left: 0, right: 0, archive: 0 });
-
-// —— 档案二级侧边栏收展动画（2026-08-15 迁入标签页视口：面板在视口内自驱动，不走上方引擎；
-// 多档案标签页共享宽度可接受）——
-let archiveAnim: { el: HTMLElement; from: number; to: number; start: number } | null = null;
-let archiveRaf = 0;
-let archiveWatchdog: ReturnType<typeof setTimeout> | undefined;
-
-function archiveAnimFrame(now: number): void {
-  const a = archiveAnim;
-  if (!a) return;
-  const t = Math.min(1, (now - a.start) / SIDEBAR_ANIM_MS);
-  const w = a.from + (a.to - a.from) * easeInOut(t);
-  sidebarShowWidths.archive = w; // 单一写点（同左右栏口径）
-  a.el.style.width = `${w}px`; // 直写兜底
-  if (t < 1) {
-    archiveRaf = requestAnimationFrame(archiveAnimFrame);
-  } else {
-    archiveAnim = null;
-    useUiStore().sidebarAnimating = false;
-    clearTimeout(archiveWatchdog);
-  }
-}
-
-/** 档案面板收展：rAF 逐帧从当前宽到目标宽（参数与左右栏引擎一致；起点 = 当前视觉宽） */
-export function animateArchivePanel(el: HTMLElement, to: number): void {
-  const from = el.getBoundingClientRect().width;
-  if (from === to) {
-    sidebarShowWidths.archive = to;
-    el.style.width = `${to}px`;
-    return;
-  }
-  archiveAnim = { el, from, to, start: performance.now() };
-  useUiStore().sidebarAnimating = true;
-  cancelAnimationFrame(archiveRaf);
-  archiveRaf = requestAnimationFrame(archiveAnimFrame);
-  // watchdog 同左右栏引擎（rAF 暂停时布尔恒卡 true 的兜底，2026-08-30）
-  clearTimeout(archiveWatchdog);
-  archiveWatchdog = setTimeout(() => {
-    if (!archiveAnim) return;
-    cancelAnimationFrame(archiveRaf);
-    sidebarShowWidths.archive = archiveAnim.to;
-    archiveAnim.el.style.width = `${archiveAnim.to}px`;
-    archiveAnim = null;
-    useUiStore().sidebarAnimating = false;
-  }, SIDEBAR_ANIM_MS + 200);
-}
+export const sidebarShowWidths = reactive({ left: 0, right: 0 });
 
 type SideKey = keyof typeof sidebarShowWidths;
 interface SideAnim {
