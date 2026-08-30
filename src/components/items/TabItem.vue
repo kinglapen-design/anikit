@@ -27,7 +27,7 @@ const emit = defineEmits<{ click: []; close: [] }>();
   >
     <span class="label">{{ label }}</span>
     <span v-if="locked" class="pin" v-tip="'已锁定'">
-      <AppIcon name="pin-on" :size="18" />
+      <AppIcon name="pin-small" :size="14" />
     </span>
     <button v-else-if="closable" class="x" @click.stop="emit('close')">
       <AppIcon name="close-small" :size="14" />
@@ -78,13 +78,14 @@ const emit = defineEmits<{ click: []; close: [] }>();
 .x:hover {
   color: var(--n-l2);
 }
-/* 锁定 pin（沿用 1.2 现口径）：18 图标替代关闭钮，亮色/二级 */
+/* 锁定 pin（稿未画）：pin-small 14 替代关闭钮（与关闭钮同 14 档，2026-08-30 用户供小图），
+   色 = 亮色/二级（沿用 1.2 现口径） */
 .pin {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   flex: none;
   color: var(--n-l2);
 }
