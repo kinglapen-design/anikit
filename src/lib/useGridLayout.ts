@@ -1,13 +1,15 @@
 // 网格布局 composable（2026-08-12 自 AssetGrid 拆出，规范第 3 条行数控制）：
 // 虚拟滚动接线（useVirtualScroll + updateRange）+ 四布局重排（重排锚点 / 滚动位置恢复）+
 // 可见卡片窗口（visibleCards）+ 尺寸观察（视口 / 头部 RO）与重排触发 watch 编排。
-// 2026-08-19（3.5 二轮）分组支持：sections 非空时逐组独立布局拼全局坐标（组标题 30 + 间距累加偏移，
-// 组间 24 / 末组 16——复验定案），groupHeaders 输出各组标题位置供模板渲染（sticky 置顶在 AssetGrid 悬浮层做——
+// 2026-08-19（3.5 二轮）分组支持：sections 非空时逐组独立布局拼全局坐标（组标题 26 + 间距累加偏移，
+// 组间 24 / 末组 PAD.bottom——复验定案；7.1 内容容器轮组标题高 30→26 贴 SectionTitle group 稿值），
+// groupHeaders 输出各组标题位置供模板渲染（sticky 置顶在 AssetGrid 悬浮层做——
 // transform 容器内 sticky 无效）。
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from "vue";
 import {
   CARD_CAPTION_H,
   CARD_CAPTION_COMPACT_H,
+  PAD,
   computeJustified,
   computeWaterfall,
   computeGrid,
@@ -70,8 +72,8 @@ export function useGridLayout(opts: {
   // 总高 = 头部（文件夹区块 + 内容副标题 + 间距 12）+ 网格高（折叠"内容"时不计）。
   // 偏移恒为 headerH + 12（与 cards-layer translateY 严格一致，2026-08-10 走查：
   // 此前此处 +6 而卡片层 +12——判定 / 滚动区间与视觉错位 6px，间隙起框选把相邻行带入）
-  // 列表模式另有固定列头 46（figma 列表显示稿）+ 列头与列表间距 6（不占布局、不随滚动）
-  const listExtra = computed(() => (ui.layoutMode === "list" ? 52 : 0));
+  // 列表模式另有固定列头 34（7.1 内容容器轮贴稿——组件/卡片/列表表头）+ 列头与列表间距 6（不占布局、不随滚动）
+  const listExtra = computed(() => (ui.layoutMode === "list" ? 40 : 0));
 
   function currentTotal(): number {
     return (assetsOpen.value ? gridTotal.value : 0) + headerH.value + 12 + listExtra.value;
@@ -153,9 +155,9 @@ export function useGridLayout(opts: {
           : ui.layoutMode === "list"
             ? computeList(list, vp.clientWidth, rowH, captionH)
             : computeJustified(list, vp.clientWidth, rowH, captionH);
-    // 分组模式（3.5 二轮）：逐组独立布局拼全局坐标——组标题 30 + 标题↔内容 12 + 组间 24
+    // 分组模式（3.5 二轮）：逐组独立布局拼全局坐标——组标题 26 + 标题↔内容 12 + 组间 24
     //（2026-08-19 复验定：12 太挤滑过察觉不到；首组离内容标题恒 12 由 cards-layer translateY 承担）；
-    // 折叠组只计标题；每组剥掉布局自带底部留白（PAD.bottom 16），末组底部 16（对齐单段口径）；
+    // 折叠组只计标题；每组剥掉布局自带底部留白（PAD.bottom），末组底部 PAD.bottom（对齐单段口径）；
     // rows.start/end 是 boxes 下标、box.i 是 items 下标，均按组基址偏移
     const secs = opts.sections?.() ?? null;
     if (secs && secs.length > 0) {
@@ -166,16 +168,16 @@ export function useGridLayout(opts: {
       const headers: GroupHeaderInfo[] = [];
       secs.forEach((s, si) => {
         headers.push({ groupId: s.groupId, name: s.name, count: s.end - s.start, top: y });
-        y += 30;
+        y += 26;
         if (!s.collapsed && s.end > s.start) {
           y += 12;
           const sub = computeOne(li.slice(s.start, s.end));
           const boxBase = allBoxes.length;
           for (const b of sub.boxes) allBoxes.push({ ...b, top: b.top + y, i: b.i + s.start });
           for (const r of sub.rows) allRows.push({ ...r, top: r.top + y, start: r.start + boxBase, end: r.end + boxBase });
-          y += sub.totalHeight - 16; // 剥单组底部留白
+          y += sub.totalHeight - PAD.bottom; // 剥单组底部留白
         }
-        y += si === secs.length - 1 ? 16 : 24; // 组间 24；末组底部 16
+        y += si === secs.length - 1 ? PAD.bottom : 24; // 组间 24；末组底部 PAD.bottom
       });
       boxes.value = allBoxes;
       rows.value = allRows;

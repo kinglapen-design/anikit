@@ -80,7 +80,7 @@ pub async fn convert_to_folder(state: State<'_, AppState>, folder_id: String) ->
   }
 }
 
-/// 档案清单项（list_archives 输出）：ArchiveData 全字段 + 封面图绝对路径（前端 convertFileSrc 直用；
+/// 档案清单项（list_archives 输出）：ArchiveData 全字段 + 容量 + 封面图绝对路径（前端 convertFileSrc 直用；
 /// 无自定义封面 / 文件缺失 = null，前端回退子项首图）
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -92,10 +92,29 @@ pub struct ArchiveListItem {
   pub descriptions: Vec<DescItem>,
   pub links: Vec<String>,
   pub created_at: String,
+  /// 档案容量（字节，2026-08-30 用户定案）：档案内 Placement 引用资产 size 去重合计（同详情口径）
+  pub total_size: u64,
   pub cover_path: Option<String>,
 }
 
-/// 全部档案数据 + 封面路径
+/// 档案内容统计：fileCount = 档案内 Placement 数（逐条计）；
+/// totalSize = 引用资产 size 合计（同一资产多链接只计一次——占用空间语义）
+fn archive_stats(lib: &Library, folder_id: &str) -> (u32, u64) {
+  let mut file_count: u32 = 0;
+  let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+  let mut total_size: u64 = 0;
+  for p in lib.folders.items.iter().filter(|p| p.folder == folder_id) {
+    file_count += 1;
+    if seen.insert(p.asset.as_str()) {
+      if let Some(meta) = lib.index.assets.get(&p.asset) {
+        total_size += meta.size;
+      }
+    }
+  }
+  (file_count, total_size)
+}
+
+/// 全部档案数据 + 容量 + 封面路径
 #[tauri::command]
 pub fn list_archives(state: State<AppState>) -> Result<Vec<ArchiveListItem>, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
@@ -105,6 +124,7 @@ pub fn list_archives(state: State<AppState>) -> Result<Vec<ArchiveListItem>, Str
       .into_iter()
       .map(|a| ArchiveListItem {
         cover_path: archive::cover_file_path(lib, &a.folder_id),
+        total_size: archive_stats(lib, &a.folder_id).1,
         folder_id: a.folder_id,
         badge: a.badge,
         avatar: a.avatar,
@@ -142,18 +162,7 @@ pub fn get_archive_data(state: State<AppState>, folder_id: String) -> Result<Arc
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
   let rec = lib.archives.archives.iter().find(|a| a.folder_id == folder_id).cloned().unwrap_or_else(|| ArchiveData::new(&folder_id));
-  // 档案内 Placement 与其资产（去重）合计
-  let mut file_count: u32 = 0;
-  let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
-  let mut total_size: u64 = 0;
-  for p in lib.folders.items.iter().filter(|p| p.folder == folder_id) {
-    file_count += 1;
-    if seen.insert(p.asset.as_str()) {
-      if let Some(meta) = lib.index.assets.get(&p.asset) {
-        total_size += meta.size;
-      }
-    }
-  }
+  let (file_count, total_size) = archive_stats(lib, &folder_id);
   Ok(ArchiveDetailView {
     folder_id: rec.folder_id,
     badge: rec.badge,
@@ -523,15 +532,7 @@ mod tests {
 
     let view = {
       let rec = h.lib.archives.archives.iter().find(|a| a.folder_id == "F-ARC").cloned().unwrap();
-      let mut file_count: u32 = 0;
-      let mut seen = std::collections::HashSet::new();
-      let mut total_size: u64 = 0;
-      for p in h.lib.folders.items.iter().filter(|p| p.folder == "F-ARC") {
-        file_count += 1;
-        if seen.insert(p.asset.as_str()) {
-          total_size += h.lib.index.assets[&p.asset].size;
-        }
-      }
+      let (file_count, total_size) = archive_stats(&h.lib, "F-ARC");
       ArchiveDetailView {
         folder_id: rec.folder_id,
         badge: rec.badge,
@@ -555,6 +556,41 @@ mod tests {
     for key in ["folderId", "createdAt", "fileCount", "totalSize", "props", "descriptions", "links"] {
       assert!(obj.contains_key(key), "缺 camelCase 键 {key}");
     }
+    for key in obj.keys() {
+      assert!(!key.contains('_'), "出现 snake_case 键 {key}");
+    }
+  }
+
+  /// ArchiveListItem（list_archives 输出）带 totalSize（2026-08-30 用户定案，同详情口径去重合计）；
+  /// camelCase 键名防线（踩坑 031 同类）
+  #[test]
+  fn archive_list_item_carries_total_size_camel_case() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F-ARC", "设定集", None, None, 0);
+    h.lib.archives.archives.push(ArchiveData::new("F-ARC"));
+    add_asset(&mut h.lib, "AN-A"); // size 100
+    add_placement(&mut h.lib, "AN-A", "F-ARC", "a.fla", true);
+    add_placement(&mut h.lib, "AN-A", "F-ARC", "a-链接.fla", false); // 同资产第二条：体积不重复计
+
+    let item = archive::list_archives(&h.lib)
+      .into_iter()
+      .find(|a| a.folder_id == "F-ARC")
+      .map(|a| ArchiveListItem {
+        cover_path: archive::cover_file_path(&h.lib, &a.folder_id),
+        total_size: archive_stats(&h.lib, &a.folder_id).1,
+        folder_id: a.folder_id,
+        badge: a.badge,
+        avatar: a.avatar,
+        props: a.props,
+        descriptions: a.descriptions,
+        links: a.links,
+        created_at: a.created_at,
+      })
+      .unwrap();
+    assert_eq!(item.total_size, 100, "同资产去重合计");
+    let v = serde_json::to_value(&item).unwrap();
+    let obj = v.as_object().unwrap();
+    assert!(obj.contains_key("totalSize"), "缺 camelCase 键 totalSize");
     for key in obj.keys() {
       assert!(!key.contains('_'), "出现 snake_case 键 {key}");
     }

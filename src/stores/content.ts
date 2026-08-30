@@ -47,6 +47,9 @@ export interface FolderNode {
   id: string;
   name: string;
   count: number; // 该文件夹递归 Placement 总数（含全部子文件夹，2026-07-25 用户定）
+  // 递归容量（字节，2026-08-30 用户定案）：子树全部 Placement 按 asset 去重后 size 合计——
+  // 同一资产在父子文件夹各放一份只计一次（占用空间语义，与 count 同口径同趟算出）
+  totalSize: number;
   // 节点形态（2026-08-15 档案子系统一轮）："archive" = 档案；缺省 = 普通文件夹（所有层级都带）
   kind?: string | null;
   // 所属区块 id（2026-08-14 区块子系统）：仅顶级节点有值语义，null/缺省 = 默认区块「目录」
@@ -87,6 +90,7 @@ export interface ArchiveData {
   descriptions: { title: string; content: string }[];
   links: string[]; // 链接（详情 pinned 链接输入框数据源，2026-08-15 任务 A 三项）
   createdAt: string; // 创建时间 RFC3339；旧数据 / 未建档 = 空串
+  totalSize: number; // 档案容量（字节，2026-08-30 用户定案）：档案内资产 size 去重合计（同 get_archive_data 口径）
   coverPath?: string | null; // 封面图绝对路径（6.1 list_archives 输出；无自定义封面 = null 回退子项首图）
 }
 

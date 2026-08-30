@@ -5,24 +5,71 @@
 // 顶行 = 名称（标题档 一级，截断）+ 文件夹-大双色调图标 24——**图标恒默认色不接 tint**
 //（2026-08-29 用户定：卡片变色整屏噪声太大，自定义色只留树容器）；
 // 简介 = 两行统计（数字档 亮色/三级，段间 " / " 分隔 gap 4）；名称行与简介间距 36（稿值，填满 122 高链）。
+// 业务态（7.1 内容容器轮接线，模式同 items/TreeRowItem）：naming = 行内重命名输入态
+//（useInlineRename，速查 §4；空/不变判定在父级，nameCommit 上抛）；拖拽源 dimmed / 剪切 cut =
+// 整卡半透明 0.4 / 0.5（速查 §5 既有档）；拖拽并入 dropInto = 品牌/半透明填充 + 2px 品牌/常态描边
+//（::after 伪元素，速查 §7 / §20 口径）。名称双击 = nameEdit（父级进命名态）；悬停 tip = 名称 + 简介行。
+import { computed } from "vue";
 import TwoToneIcon from "../items/TwoToneIcon.vue";
+import { useInlineRename } from "../../lib/useInlineRename";
 import "./cards.css";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     name: string;
     lines?: string[][]; // 统计行（每行若干段，段间 " / "）
     selected?: boolean;
+    dimmed?: boolean; // 拖拽源半透明（0.4）
+    cut?: boolean; // 剪切半透明（0.5）
+    naming?: boolean; // 行内重命名输入态
+    dropInto?: boolean; // 拖拽并入落点（父级按引擎判定算好传入）
     forceState?: "" | "hover" | "selected";
   }>(),
-  { lines: () => [], selected: false, forceState: "" },
+  { lines: () => [], selected: false, dimmed: false, cut: false, naming: false, dropInto: false, forceState: "" },
 );
+
+const emit = defineEmits<{
+  nameCommit: [name: string];
+  nameEdit: []; // 名称双击 = 进命名态（父级置 naming）
+}>();
+
+// 行内重命名（useInlineRename 封装：词干选区不包后缀 / blur 恒提交 / Enter/Esc 语义）——
+// 空或不变直接退出不动、改名落 renameFolder 命令，判定在父级（TreeRowItem 同口径）
+const { draft: nameDraft, bindInput, commit: commitName } = useInlineRename({
+  active: () => props.naming,
+  initial: () => props.name,
+  escSaves: true,
+  onCommit: (name) => emit("nameCommit", name),
+});
+
+// 名称悬停 tip（2026-08-10 用户定口径沿用）：完整名称 + 简介档（统计行拼一行，column 竖排）
+const nameTip = computed(() => {
+  const meta = props.lines.map((l) => l.join(" / ")).join(" / ");
+  return { text: props.name, keys: meta || undefined, column: true };
+});
 </script>
 
 <template>
-  <div class="kc-sel folder-card" :class="[{ selected }, forceState ? `force-${forceState}` : '']">
+  <div
+    class="kc-sel folder-card"
+    :class="[{ selected, dimmed, cut, naming, 'drop-into': dropInto }, forceState ? `force-${forceState}` : '']"
+  >
     <div class="fd-head">
-      <span class="fd-name">{{ name }}</span>
+      <!-- 命名态：input 替换名称位（整卡品牌描边提示，输入框透明底，速查 §4 统一口径）；
+           命名中 dblclick 不冒泡（防触发卡片双击"进入"） -->
+      <input
+        v-if="naming"
+        :ref="bindInput"
+        v-model="nameDraft"
+        class="rename-input"
+        @keydown.enter.prevent="commitName"
+        @keydown.esc.prevent="commitName"
+        @blur="commitName"
+        @click.stop
+        @dblclick.stop
+        @pointerdown.stop
+      />
+      <span v-else class="fd-name" v-tip="nameTip" @dblclick.stop="emit('nameEdit')">{{ name }}</span>
       <TwoToneIcon name="folder-large" :size="24" />
     </div>
     <div class="fd-stats">
@@ -73,6 +120,26 @@ withDefaults(
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* 名称区悬停文本光标（双击可改名） */
+.fd-name:hover {
+  cursor: text;
+}
+/* 命名输入：透明底不单独描边（整卡品牌环提示）；共享基座 base.css .rename-input，
+   本地覆盖 = 标题档 18/26 与名称视觉连续 */
+.rename-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  font-size: var(--n-fs-title);
+  line-height: var(--n-lh-title);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l1);
+  text-align: left;
+}
+/* 命名态整卡品牌描边（复用 .kc-sel 选中环层，opacity 恒亮） */
+.folder-card.naming::before {
+  opacity: 1;
+}
 
 /* 简介统计：两行 gap 4，行内段间 " / " gap 4，数字档 亮色/三级 */
 .fd-stats {
@@ -93,5 +160,25 @@ withDefaults(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 拖拽源 / 剪切：整卡半透明（速查 §5 既有档 0.4 / 0.5） */
+.folder-card.dimmed {
+  opacity: 0.4;
+}
+.folder-card.cut {
+  opacity: 0.5;
+}
+/* 拖拽并入：品牌/半透明填充 + 2px 品牌/常态描边（::after 伪元素，速查 §7 / §20 口径） */
+.folder-card.drop-into {
+  background: var(--n-brand-50);
+}
+.folder-card.drop-into::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--n-brand);
+  border-radius: var(--n-radius-8);
+  pointer-events: none;
 }
 </style>

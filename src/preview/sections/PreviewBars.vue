@@ -8,6 +8,7 @@
 import { ref } from "vue";
 import FloatBar from "../../components/bars/FloatBar.vue";
 import FrameStrip from "../../components/bars/FrameStrip.vue";
+import BarSlider from "../../components/bars/BarSlider.vue";
 import RatePop from "../../components/bars/RatePop.vue";
 import VolumePop from "../../components/bars/VolumePop.vue";
 import NotesPop from "../../components/bars/NotesPop.vue";
@@ -40,6 +41,11 @@ const COMBO_W = 777;
 // 弹层交互实例
 const liveRate = ref("1x");
 const liveVolume = ref(0.2);
+
+// 条形滑块三档 tone 交互实例（宽度 = 各自稿值语境：进度 327 / 音量 100 / 尺寸 100）
+const sliderLight = ref(0.35);
+const sliderDark = ref(0.2);
+const sliderSize = ref(0.5);
 
 // 笔记弹层
 const noteList = ref([
@@ -82,10 +88,10 @@ const contentDemo = useContentStore();
 if (contentDemo.blocks.length === 0) {
   contentDemo.blocks = [{ id: "dir", name: "文件夹", icon: null }];
   contentDemo.folders = [
-    { id: "f-juese", name: "角色", count: 1, children: [
-      { id: "f-renwu", name: "01_人物", count: 1, children: [] },
+    { id: "f-juese", name: "角色", count: 1, totalSize: 1_258_291, children: [
+      { id: "f-renwu", name: "01_人物", count: 1, totalSize: 1_258_291, children: [] },
     ] },
-    { id: "f-changjing", name: "02_场景", count: 1, children: [] },
+    { id: "f-changjing", name: "02_场景", count: 1, totalSize: 1_258_291, children: [] },
   ];
   const base = {
     w: null, h: null, ext: "fla", thumbPath: null, thumbKind: null,
@@ -218,6 +224,24 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
         <div class="pv-demo-cell">
           <VolumePop v-model="liveVolume" />
           <span class="pv-cap">真实交互（点击跳值 / 拖动，{{ Math.round(liveVolume * 100) }}%）</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">条形滑块（BarSlider 三稿合一：播放条进度 light / 音量 dark / 工具栏尺寸 size——轨道 通用/三级 + 拖钮无描边，7.1 内容容器轮加）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell" style="width: 240px">
+          <BarSlider v-model="sliderLight" tone="light" />
+          <span class="pv-cap">light · 播放条进度（轨道 亮色/半透明-3 + 拖钮同档描边）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <BarSlider v-model="sliderDark" tone="dark" />
+          <span class="pv-cap">dark · 音量（轨道 通用/四级 + 拖钮同档描边）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 100px">
+          <BarSlider v-model="sliderSize" tone="size" />
+          <span class="pv-cap">size · 工具栏尺寸（轨道 通用/三级，拖钮无描边；稿宽 100）</span>
         </div>
       </div>
     </div>

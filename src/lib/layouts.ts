@@ -32,18 +32,18 @@ export interface LayoutResult {
   totalHeight: number;
 }
 
-// 网格内边距（figma-css 02_布局/42_中间面板 列表 padding 16 16 0，2026-08-10）：
-// 左 0（asset-section padding 左 16 承担），右 16（滚动条贴右边框后卡片右缘距边框恒 16，
-// 滚动条 6px 与命中区 12 均在此带内）；底 16 = 列表末行呼吸空间（2026-08-10 用户定）
-const PAD = { top: 0, right: 16, bottom: 16, left: 0 };
+// 网格内边距（7.1 内容容器轮贴稿——中间面板-内容容器-列表容器 padding 12 12 0）：
+// 左 0 / 上 0（asset-section padding 上左 12 承担），右 12（滚动条贴右边框后卡片右缘距边框恒 12，
+// 滚动条 6px 与命中区 12 均在此带内）；底 0 = 稿 padding-bottom 0
+export const PAD = { top: 0, right: 12, bottom: 0, left: 0 };
 // 卡片间距（figma 42 文件卡片列表 gap 12，2026-08-10）：列间距 12，行间距 12
 export const COL_GAP = 12;
 export const ROW_GAP = 12;
-/** 列表模式行高（figma-css 列表显示稿，2026-08-10：item 高 69 = padding 12×2 + 内容 45；
-    滑块联动作废——同文件夹卡片定稿先例） */
-const LIST_ROW_H = 69;
-/** 列表模式行间距（figma 列表显示稿 gap 4，2026-08-10） */
-const LIST_ROW_GAP = 4;
+/** 列表模式行高（7.1 内容容器轮贴稿——组件/卡片/列表卡片 57 高 = padding 6×2 + 内容 45；
+    滑块联动作废口径不变） */
+const LIST_ROW_H = 57;
+/** 列表模式行间距（7.1 内容容器轮贴稿——列表显示模式 gap 6） */
+const LIST_ROW_GAP = 6;
 
 // —— 自适应（等高不等宽）：贪心分行，行内等比拉伸填满宽度 ——
 export function computeJustified(

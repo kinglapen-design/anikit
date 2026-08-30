@@ -5,8 +5,9 @@
 //   5-40ms、66ms 间隔连发全部完成，浏览器自身合并跟不上的 seek，无需 rAF 合帧 / 门控；
 //   原"rAF 合帧 + 66ms 门控 + 0.05s 死区"（2026-07-27 定稿）作废；
 //   预生成帧图方案已于 2026-07-28 用户决策废弃——CPU 长期高负载 / 磁盘占用大 / 载入慢）；
-//   右下胶囊 = 当前帧号（5.3 帧化：查看方式"时间显示 = 帧数"且 fps 可用；回退当前时间）+ 音量钮
-//   （默认静音），底部 3px 进度条显示全片进度；
+//   右上胶囊（7.1 内容容器轮换代，稿 = 组件/卡片/文件卡片-视频 悬停胶囊）= 当前帧号 + 播放/暂停 +
+//   音量/静音（card-hover-* 图标 14，常态 二级 hover 一级），底部 4px 播放条（轨道 亮色/半透明-2、
+//   填充 亮色/一级，贴底 4、左右 12、圆头 99）；旧右下胶囊 + 3px 品牌紫进度条口径作废；
 // - 自动播放模式（auto=true，查看方式菜单"自动播放视频"开启且未悬停）：无控件、恒静音、不 scrub，
 //   范围 = 封面帧（thumbFrame `t:{秒}`，未设置 = 0）起 10 秒封顶时长循环——
 //   "设置当前画面为预览图"后自动播放范围自动跟随该帧（无需新设置 UI）。
@@ -20,6 +21,7 @@ import { getMediaSource } from "../lib/mediaOps";
 import { AUTOPLAY_ENTER_DELAY, HOVER_ENTER_DELAY, useHoverPlayer } from "../lib/useHoverPlayer";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
+import "./cards/cards.css";
 
 const props = withDefaults(defineProps<{ asset: PlacementView; auto?: boolean }>(), { auto: false });
 const ui = useUiStore();
@@ -33,6 +35,7 @@ const ready = ref(false); // canplay：视频淡入（之前保持底层静态�
 const currentTime = ref(0);
 const duration = ref(0);
 const muted = ref(true); // 默认静音；自动播放模式恒静音（多视频同播），悬停可点音量钮开
+const playing = ref(false); // 播放/暂停胶囊钮态（7.1 内容容器轮新增——稿悬停胶囊含播放/暂停）
 
 // 范围起点：自动播放 = 封面帧秒数（源已变短于封面帧时回退 0）；悬停 = 0（完整播放）
 function rangeStart(): number {
@@ -147,6 +150,13 @@ function toggleMute(): void {
   v.muted = !v.muted;
   muted.value = v.muted;
 }
+// 播放/暂停（7.1 新增，稿悬停胶囊）：暂停后进度条/帧号停当帧，再点续播
+function togglePlay(): void {
+  const v = videoRef.value;
+  if (!v || !v.src) return;
+  if (v.paused) void v.play().catch(() => {});
+  else v.pause();
+}
 </script>
 
 <template>
@@ -159,20 +169,28 @@ function toggleMute(): void {
       preload="auto"
       playsinline
       @canplay="ready = true"
+      @play="playing = true"
+      @pause="playing = false"
       @timeupdate="onTimeUpdate"
       @loadedmetadata="onLoadedMetadata"
       @ended="onEnded"
     />
-    <!-- 底部控件区（仅悬停模式）：不触发 scrub -->
-    <div v-if="!auto" class="hud" @pointermove.stop>
-      <div class="capsule">
-        <span class="time">{{ posText }}</span>
-        <button class="hud-btn" v-tip="muted ? '取消静音' : '静音'" @click.stop="toggleMute">
-          <AppIcon :name="muted ? 'mute' : 'volume'" :size="12" />
+    <!-- 控件（仅悬停模式；7.1 换代贴稿）：右上胶囊 = 帧号 + 播放/暂停 + 音量/静音；
+         底部 4px 播放条（贴底 4 左右 12，纯显示 pointer-events none 不挡名称）；
+         层根不建层叠上下文，胶囊 / 播放条 z 4 / 5 全局层叠在渐变罩（z 1）之上；
+         均 pointermove.stop 不触发 scrub -->
+    <template v-if="!auto">
+      <div class="kc-float hv-capsule" @pointermove.stop>
+        <span class="hv-pos">{{ posText }}</span>
+        <button class="hv-btn" v-tip="playing ? '暂停' : '播放'" @click.stop="togglePlay">
+          <AppIcon :name="playing ? 'card-hover-pause' : 'card-hover-play'" :size="14" />
+        </button>
+        <button class="hv-btn" v-tip="muted ? '取消静音' : '静音'" @click.stop="toggleMute">
+          <AppIcon :name="muted ? 'card-hover-mute' : 'card-hover-volume'" :size="14" />
         </button>
       </div>
-      <div class="progress"><div class="fill" :style="{ width: `${pct}%` }" /></div>
-    </div>
+      <div class="hv-bar"><div class="hv-fill" :style="{ width: `${pct}%` }" /></div>
+    </template>
   </div>
 </template>
 
@@ -195,25 +213,52 @@ function toggleMute(): void {
 .v.ready {
   opacity: 1;
 }
-/* 控件区贴底部：进度条在最下沿横贯，胶囊在其上方右下（图 1） */
-.hud {
+/* 控件区（7.1 换代贴稿）：胶囊 = 右上 12/12（kc-float 铬，cards.css）；播放条 = 底部 4px 横贯
+   （贴底 4、左右 12、圆头 99 稿值字面量），轨道 亮色/半透明-2 + 填充 亮色/一级；
+   旧 base.css .capsule 共享样式不再用（HoverAudioLayer 同步换代） */
+.hv-capsule {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  right: var(--n-space-12);
+  top: var(--n-space-12);
+  z-index: 4;
+  gap: var(--n-space-6);
 }
-/* 胶囊共享样式在 base.css（.capsule / .time / .hud-btn）；本地差异：bottom 7 给底部 3px
-   进度条让位（进度条 3 + 间距 4） */
-.capsule {
-  bottom: 7px;
+/* 帧号：数字档 12/16 二级 */
+.hv-pos {
+  font-family: var(--n-font-mono);
+  font-size: var(--n-fs-num);
+  line-height: var(--n-lh-num);
+  font-weight: var(--n-fw-medium);
+  color: var(--n-l2);
 }
-/* 进度条：3px 轨道 border-2（暗，压图不抢眼）+ fill 品牌紫（与 5.2 播放条同口径） */
-.progress {
-  height: 3px;
-  background: var(--border-2);
+/* 胶囊图标钮：常态 二级，自身 hover 提亮 一级（稿「hover-播放/音量按钮」节），150ms */
+.hv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--n-l2);
+  cursor: pointer;
+  transition: color var(--n-dur-150) var(--n-ease-in-out);
 }
-.fill {
+.hv-btn:hover {
+  color: var(--n-l1);
+}
+.hv-bar {
+  position: absolute;
+  left: var(--n-space-12);
+  right: var(--n-space-12);
+  bottom: var(--n-space-4);
+  z-index: 5;
+  height: 4px;
+  border-radius: 99px; /* 稿值 99 */
+  background: var(--n-l-a2);
+  pointer-events: none;
+}
+.hv-fill {
+  display: block;
   height: 100%;
-  background: var(--brand-1);
+  border-radius: 99px; /* 稿值 99 */
+  background: var(--n-l1);
 }
 </style>

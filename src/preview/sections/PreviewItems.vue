@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 组件 item 展区——docs/UI 重构/Design Token/组件/item/ 六族 15 稿的全态展示与验收面。
 // forceState 强制态用于静态验收（hover / 选中 / 输入态），常态实例保持真实交互可 hover。
+import { ref } from "vue";
 import TreeRowItem from "../../components/items/TreeRowItem.vue";
 import SectionTitle from "../../components/items/SectionTitle.vue";
 import TabItem from "../../components/items/TabItem.vue";
@@ -15,8 +16,12 @@ import PickRelationItem from "../../components/items/PickRelationItem.vue";
 import BaseDataItem from "../../components/items/BaseDataItem.vue";
 import ColorSwatchItem from "../../components/items/ColorSwatchItem.vue";
 import AppIcon from "../../components/AppIcon.vue";
+import AppCheckbox from "../../components/AppCheckbox.vue";
 
 const tints = ["", "red", "blue", "yellow", "yellowgreen", "green", "cyan", "purple", "pink", "peach"];
+
+// SectionTitle tail 插槽演示（常驻「递归显示」复选框，7.1 内容容器轮）
+const tailRecursive = ref(true);
 
 // 基础数据 item 假数据（贴稿六行）
 const baseDataRows = [
@@ -137,7 +142,7 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">标题 item（区块标题-树容器 / 详情链接、分组标题）</h3>
+      <h3 class="pv-group-title">标题 item（区块标题-树容器 / 详情链接、分组标题；7.1 扩：actions 显隐 + tail 常驻插槽）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell" style="width: 240px">
           <SectionTitle variant="block" title="文件夹" :count="123" />
@@ -150,6 +155,18 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
         <div class="pv-demo-cell" style="width: 240px">
           <SectionTitle variant="block" title="链接" with-link force-state="hover" />
           <span class="pv-cap">详情链接 · hover（链接 / 新建）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell" style="width: 240px">
+          <SectionTitle variant="block" title="文件" :count="46" :actions="false" force-state="hover" />
+          <span class="pv-cap">actions=false（force-hover 也不渲染动作组——列表容器区块标题稿无动作钮）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <SectionTitle variant="block" title="文件夹" :count="123" force-state="hover">
+            <template #tail><AppCheckbox v-model="tailRecursive" label="递归显示" /></template>
+          </SectionTitle>
+          <span class="pv-cap">tail 常驻（递归显示复选框，点击自停冒泡）+ hover 动作组</span>
         </div>
       </div>
       <div class="pv-demo-row">

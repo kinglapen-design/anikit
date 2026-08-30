@@ -1,8 +1,11 @@
 <script setup lang="ts">
 // 音频卡片悬停播放层（5.3，2026-07-27 用户定案，参考图 2）：无悬停按钮，悬停即有声播放。
 // 卡片缩略图即波形图（5.1），播放时叠加：已播放部分品牌紫（div 以同一波形图作 CSS mask +
-// clip-path 裁到进度，照 PlayBarAudio 方案）+ 1px 品牌紫播放头竖线；
-// 点击/拖动波形 seek；右下胶囊 = 当前时间 + 播放/暂停钮。media 元素组件自管。
+// clip-path 裁到进度，照 PlayBarAudio 方案）；点击/拖动波形 seek；
+// 右上胶囊（7.1 内容容器轮换代，稿 = 组件/卡片/文件卡片-音频 悬停胶囊）= 时长 + 播放/暂停
+//（kc-float 铬 + card-hover-* 图标 14）；新稿扫过层无 1px 播放头竖线（旧口径废除——
+// 扫过层缘即播放头）；peaks 竖线波形如稿待后端数据通道（09 待办，本轮沿用 mask 波形图方案）。
+// media 元素组件自管。
 import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
@@ -11,6 +14,7 @@ import { getMediaSource } from "../lib/mediaOps";
 import { useHoverPlayer } from "../lib/useHoverPlayer";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
+import "./cards/cards.css";
 
 const props = defineProps<{ asset: PlacementView }>();
 const ui = useUiStore();
@@ -115,12 +119,11 @@ function onSeekUp(e: PointerEvent): void {
       :class="{ contain: ui.layoutMode === 'grid' }"
       :style="[waveMask, { clipPath: `inset(0 ${100 - pct}% 0 0)` }]"
     />
-    <span v-if="duration > 0" class="head" :style="{ left: `${pct}%` }" />
-    <!-- 右下胶囊：时间 + 播放/暂停；不触发 seek -->
-    <div class="capsule" @pointerdown.stop @pointermove.stop @pointerup.stop>
-      <span class="time">{{ formatDuration(currentTime) }}</span>
-      <button class="hud-btn" v-tip="playing ? '暂停' : '播放'" @click.stop="togglePlay">
-        <AppIcon :name="playing ? 'pause' : 'play'" :size="12" />
+    <!-- 右上胶囊（7.1 换代贴稿）：时长 + 播放/暂停；不触发 seek；z 4 在渐变罩之上 -->
+    <div class="kc-float ha-capsule" @pointerdown.stop @pointermove.stop @pointerup.stop>
+      <span class="ha-pos">{{ formatDuration(asset.duration ?? duration) }}</span>
+      <button class="ha-btn" v-tip="playing ? '暂停' : '播放'" @click.stop="togglePlay">
+        <AppIcon :name="playing ? 'card-hover-pause' : 'card-hover-play'" :size="14" />
       </button>
     </div>
   </div>
@@ -153,14 +156,34 @@ function onSeekUp(e: PointerEvent): void {
   -webkit-mask-size: contain;
   mask-size: contain;
 }
-/* 播放头：1px 品牌紫竖线（同 5.2 波形进度条口径） */
-.head {
+/* 右上胶囊（7.1 换代贴稿 = 文件卡片-音频 悬停胶囊）：kc-float 铬；z 4 在渐变罩（z 1）之上；
+   旧右下胶囊（base.css .capsule）与 1px 播放头竖线口径废除 */
+.ha-capsule {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--brand-1);
-  pointer-events: none;
+  right: var(--n-space-12);
+  top: var(--n-space-12);
+  z-index: 4;
+  gap: var(--n-space-6);
 }
-/* 右下胶囊（时间 + 播放/暂停钮）：共享样式在 base.css（.capsule / .time / .hud-btn） */
+/* 时长：数字档 12/16 二级 */
+.ha-pos {
+  font-family: var(--n-font-mono);
+  font-size: var(--n-fs-num);
+  line-height: var(--n-lh-num);
+  font-weight: var(--n-fw-medium);
+  color: var(--n-l2);
+}
+/* 胶囊图标钮：常态 二级，自身 hover 提亮 一级（稿「hover-播放/音量按钮」节），150ms */
+.ha-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--n-l2);
+  cursor: pointer;
+  transition: color var(--n-dur-150) var(--n-ease-in-out);
+}
+.ha-btn:hover {
+  color: var(--n-l1);
+}
 </style>

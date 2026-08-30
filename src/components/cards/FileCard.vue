@@ -12,10 +12,16 @@
 //        （通用/三级，胶囊自身 hover 升五级——稿「hover-滚动条」节）；
 // 悬停控件（胶囊 / 播放条 / 波形扫过）一律 hover 才出现（2026-08-29 用户定），过渡 150ms；
 // 壳 / hover 位移 -4 + 小阴影 / 选中 2px 品牌描边 见 cards.css（kc-media / kc-sel）。
+// 业务态（7.1 内容容器轮接线，模式同 cards/FolderCard）：naming = 行内重命名（名称位换输入框；
+// 文件口径 Esc = 取消——nameCancel 上抛，TreeRowItem/文件夹卡的 escSaves 不同）；picked = 选择模式
+// 已选压暗 30%（大勾在壳层）；thumbFit = 缩略图适配三档（cover 默认 / contain 网格固定格完整显示
+// ——旧 AssetCard 口径 / icon 格式图标 50% 居中——Eagle 口径，不与内容缩略图抢视觉噪音）；
+// 默认插槽 = 内容区扩展（壳层注入悬停播放层等，叠在缩略图上、渐变罩下）。
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import FontInstallButton from "../buttons/FontInstallButton.vue";
 import FormatBadge from "./FormatBadge.vue";
+import { useInlineRename } from "../../lib/useInlineRename";
 import "./cards.css";
 
 const props = withDefaults(
@@ -25,6 +31,7 @@ const props = withDefaults(
     info?: string; // 简介行（尺寸 / 时长 / 字重…，内容业务侧定）
     badge?: string; // 格式角标文案（不传不出）
     thumbUrl?: string; // general / video 缩略图
+    thumbFit?: "cover" | "contain" | "icon"; // 缩略图适配（icon = 格式图标 50% 居中）
     square?: boolean; // general：shell 缩略图 / 未导入卡 = 正方形 + 50% 居中
     capsuleText?: string; // 悬停胶囊文本（video = 帧数 / audio = 时长）
     playing?: boolean; // 胶囊 播放 ↔ 暂停
@@ -37,6 +44,8 @@ const props = withDefaults(
     textBody?: string; // text 卡正文
     originBadge?: boolean; // 原始文件-徽章（右下 12/12）
     selected?: boolean;
+    naming?: boolean; // 行内重命名输入态
+    picked?: boolean; // 选择模式已选（内容压暗 30%，大勾在壳层）
     forceState?: "" | "hover" | "selected";
   }>(),
   {
@@ -44,6 +53,7 @@ const props = withDefaults(
     info: "",
     badge: "",
     thumbUrl: "",
+    thumbFit: "cover",
     square: false,
     capsuleText: "",
     playing: false,
@@ -56,9 +66,27 @@ const props = withDefaults(
     textBody: "",
     originBadge: false,
     selected: false,
+    naming: false,
+    picked: false,
     forceState: "",
   },
 );
+
+const emit = defineEmits<{
+  nameCommit: [name: string]; // Enter / 失焦（父级判空/不变/落命令）
+  nameCancel: []; // Esc（文件重命名口径 = 取消，区别于文件夹 escSaves）
+  nameEdit: []; // 名称双击 = 进命名态（父级置 naming）
+}>();
+
+// 行内重命名（useInlineRename 封装，速查 §4）：selectStem = 词干选区不包后缀（文件口径）；
+// Esc = 取消上抛（onEsc），Enter / 失焦 = 提交上抛（空/不变判定在父级壳层）
+const { draft: nameDraft, bindInput, commit: commitName, onEsc: cancelName } = useInlineRename({
+  active: () => props.naming,
+  initial: () => props.name,
+  selectStem: true,
+  onCommit: (name) => emit("nameCommit", name),
+  onCancel: () => emit("nameCancel"),
+});
 
 const hasCapsule = computed(() => props.kind === "video" || props.kind === "audio");
 const hasProgress = computed(() => props.progress > 0);
@@ -94,7 +122,7 @@ watch(
 <template>
   <div
     class="kc-media kc-bordered kc-sel fc-root"
-    :class="[kind, { square, selected, playing }, forceState ? `force-${forceState}` : '']"
+    :class="[kind, { square, selected, playing, naming, picked }, forceState ? `force-${forceState}` : '']"
   >
     <!-- 内容区（圆角裁剪层；选中环在层外防 overflow 切边） -->
     <div class="kc-clip">
@@ -102,8 +130,10 @@ watch(
         v-if="(kind === 'general' || kind === 'video') && thumbUrl"
         :src="thumbUrl"
         class="fc-thumb"
-        :class="square ? 'shell' : 'cover'"
+        :class="square ? 'shell' : thumbFit"
         alt=""
+        decoding="async"
+        draggable="false"
       />
 
       <div v-else-if="kind === 'audio'" class="fc-wave">
@@ -130,9 +160,26 @@ watch(
         <div class="fc-text-body">{{ textBody }}</div>
       </div>
 
+      <!-- 内容区扩展槽（壳层悬停播放层等注入）：叠在缩略图上、渐变罩下 -->
+      <slot />
+
       <!-- 名称+简介渐变罩 -->
       <div class="kc-overlay">
-        <span class="kc-name">{{ name }}</span>
+        <!-- 命名态：input 替换名称位（整卡品牌环提示，输入框透明底，速查 §4 统一口径）；
+             命名中 click / dblclick / pointerdown 自停冒泡（防触发选中 / 预览 / 起拖拽） -->
+        <input
+          v-if="naming"
+          :ref="bindInput"
+          v-model="nameDraft"
+          class="rename-input"
+          @keydown.enter.prevent="commitName"
+          @keydown.esc.prevent="cancelName"
+          @blur="commitName"
+          @click.stop
+          @dblclick.stop
+          @pointerdown.stop
+        />
+        <span v-else class="kc-name" v-tip="{ text: name, keys: info || undefined, column: true }" @dblclick.stop="emit('nameEdit')">{{ name }}</span>
         <span v-if="info" class="kc-info">{{ info }}</span>
       </div>
     </div>
@@ -189,7 +236,8 @@ watch(
 }
 /* 圆角裁剪层 .kc-clip 见 cards.css（与档案卡共享） */
 
-/* 缩略图：cover 充满（旧网格口径）；shell = 50% 居中（稿注） */
+/* 缩略图：cover 充满（旧网格口径）；contain = 网格固定格完整显示不裁切（2026-07-24 用户定）；
+   icon / shell = 50% 居中 contain（格式图标 Eagle 口径 / 稿 square 注） */
 .fc-thumb.cover {
   position: absolute;
   inset: 0;
@@ -197,6 +245,14 @@ watch(
   height: 100%;
   object-fit: cover;
 }
+.fc-thumb.contain {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.fc-thumb.icon,
 .fc-thumb.shell {
   position: absolute;
   left: 25%;
@@ -373,5 +429,26 @@ watch(
   right: var(--n-space-12);
   top: var(--n-space-12);
   z-index: 4;
+}
+
+/* 命名输入：透明底不单独描边（整卡品牌环提示）；覆盖共享基座 = 正文-加粗 13/18 与名称视觉连续 */
+.rename-input {
+  width: 100%;
+  min-width: 0;
+  height: 18px;
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l1);
+  text-align: left;
+}
+/* 命名态整卡品牌描边（复用 .kc-sel 选中环层，opacity 恒亮） */
+.fc-root.naming::before {
+  opacity: 1;
+}
+/* 选择模式已选（§12）：内容压暗 30% 档（大勾在壳层不随压） */
+.fc-root.picked .kc-clip,
+.fc-root.picked .fc-badge {
+  opacity: 0.3;
 }
 </style>

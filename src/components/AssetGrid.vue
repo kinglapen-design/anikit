@@ -12,7 +12,8 @@ import ListHeader from "./ListHeader.vue";
 import FolderStrip from "./FolderStrip.vue";
 import ArchiveStrip from "./ArchiveStrip.vue";
 import InboxDiskSection from "./InboxDiskSection.vue";
-import SectionHeader from "./SectionHeader.vue";
+import EmptyFolderState from "./EmptyFolderState.vue";
+import SectionTitle from "./items/SectionTitle.vue";
 import { useGridLayout, type GridSection } from "../lib/useGridLayout";
 import { groupPlacements } from "../lib/grouping";
 import { isAudioExt } from "../lib/formatBadge";
@@ -144,8 +145,15 @@ const {
 });
 
 // 分组标题折叠 / 菜单（12 稿）：折叠态在 content store（会话级）；菜单由 groupHeaderSpec 出
+//（SectionTitle 折叠点击守卫在调用方，§20——dragView.suppressClick 吞拖拽后紧随 click）
 function onGroupFold(groupId: string | null): void {
+  if (dragView.suppressClick) return;
   if (gridFolderId.value) content.toggleGroupCollapsed(gridFolderId.value, groupId);
+}
+// "内容"区块标题折叠（同守卫口径）
+function onAssetsFold(): void {
+  if (dragView.suppressClick) return;
+  assetsOpen.value = !assetsOpen.value;
 }
 // 12 稿「跳转」：滚动到目标组标题（组标题层顶 = headerH + 12 + listExtra + h.top）
 function scrollToGroup(groupId: string | null): void {
@@ -160,7 +168,7 @@ function onGroupMenu(h: { groupId: string | null }, e: MouseEvent): void {
   openContextMenu(e, groupHeaderSpec({ folderId: fid, groupId: h.groupId, scrollToGroup }), undefined, { width: 150 });
 }
 // sticky 置顶分组标题（05_区块标题：滚到容器顶部停留，下一组接替）：transform 容器内 sticky 无效，
-// 悬浮层手动实现——当前组 = 最后滚过视口顶的组；下一组标题接近 30 内时上移让位（顶走动画）
+// 悬浮层手动实现——当前组 = 最后滚过视口顶的组；下一组标题接近 26（组标题稿高）内时上移让位（顶走动画）
 const stickyGroup = computed(() => {
   const hs = groupHeaders.value;
   if (hs.length === 0) return null;
@@ -178,7 +186,7 @@ const stickyGroup = computed(() => {
   let shift = 0;
   if (next) {
     const nextY = next.top + off - pos.value;
-    if (nextY < 30) shift = nextY - 30;
+    if (nextY < 26) shift = nextY - 26;
   }
   return { ...cur, shift, open: !content.isGroupCollapsed(gridFolderId.value ?? "", cur.groupId) };
 });
@@ -201,6 +209,18 @@ const showContentHeader = computed(() => {
 const searchEmpty = computed(
   () => props.searching && props.items.length === 0 && props.searchArchives.length === 0,
 );
+
+// 空文件夹空态（7.1 内容容器轮，稿 = 中间面板-内容容器-空文件夹）：非搜索态且三区皆空
+//（文件夹 / 档案 / 文件全无）→ 中央插画 + 导入双钮；回收站 / 收件箱视口不出（语义不合），
+// 范围 = folder: 视口 + quick:all（库空同态）
+const folderEmpty = computed(() => {
+  if (props.searching || props.items.length > 0) return false;
+  if (isInbox.value || content.isRecycleView) return false;
+  if (!props.viewKey.startsWith("folder:") && props.viewKey !== "quick:all") return false;
+  if (content.stripFoldersFor(props.viewKey).length > 0) return false;
+  if (content.stripArchivesFor(props.viewKey).length > 0) return false;
+  return true;
+});
 
 // 空格放大预览（lib/useSpaceZoom）：浮层态 + 悬停追踪；panelHover 滚动条悬停显隐共用
 const { zoomAsset, panelHover, trackPointer, onGridMouseLeave, onZoomSpace } = useSpaceZoom({
@@ -331,16 +351,19 @@ onBeforeUnmount(() => {
         <!-- 收件箱视口（4.4）：磁盘实况"工程文件"区块在 FolderStrip 同位（快速访问不出文件夹区块）；
              搜索态隐藏（磁盘实况不入搜索范围——搜索搜库内素材） -->
         <InboxDiskSection v-if="isInbox && !searching && content.inboxDisk.length > 0" />
-        <!-- "内容"副标题：无子文件夹（含档案）时隐藏（无需区分）；有子文件夹但无文件时同样隐藏（2026-07-24 用户定）。
+        <!-- "内容"副标题（7.1 内容容器轮 = SectionTitle block 贴稿，稿无动作钮 → actions=false）：
+             无子文件夹（含档案）时隐藏（无需区分）；有子文件夹但无文件时同样隐藏（2026-07-24 用户定）。
              收件箱视口改题"已导入"（4.4）：无文件夹区块概念，只要有已导入内容就显示。
-             分组不再强制出内容标题（2026-08-19 复验定：无文件夹视图里"内容"与组标题叠着多余；
-             有文件夹/档案区块时保留——分隔文件夹区与内容区）；搜索态 = 有命中档案时才出（分隔档案区与内容区）。
-             padding 统一 0（2026-08-08 用户定：仅目录树区块标题 left 8）；标题↔卡片间距 12（下方 translateY） -->
-        <SectionHeader
+             分组不再强制出内容标题（2026-08-19 复验定）；有文件夹/档案区块时保留（分隔文件夹区与内容区）；
+             搜索态 = 有命中档案时才出。标题↔卡片间距 12（下方 translateY） -->
+        <SectionTitle
           v-if="showContentHeader"
+          variant="block"
           :title="isInbox ? '已导入' : '内容'"
           :count="items.length"
-          v-model:open="assetsOpen"
+          :expanded="assetsOpen"
+          :actions="false"
+          @toggle="onAssetsFold"
         />
       </div>
       <div
@@ -386,26 +409,29 @@ onBeforeUnmount(() => {
         <!-- 拖拽卡片间距落点（C4a）：Teleport 到 body 按 client 坐标画（2026-08-18 修复
              "首列前插提示线不可见 / 盖住卡片"——grid-viewport overflow 裁剪会把行首间隙
              （负 layer-x = 容器 16 留白区）整条裁掉，原 Math.max(0,…) 钳位又拉回盖住卡片） -->
-        <!-- 分组标题（3.5 二轮）：canvas 内随滚动的原位标题（absolute 于 cards-layer 坐标系） -->
+        <!-- 分组标题（3.5 二轮；7.1 内容容器轮 = SectionTitle group 贴稿）：canvas 内随滚动的原位标题
+             （absolute 于 cards-layer 坐标系）；more = 分组菜单，add 点亮不接业务 -->
         <div
           v-for="h in groupHeaders"
           :key="h.groupId ?? '__ungrouped'"
           class="group-header"
           :style="{ top: `${h.top}px` }"
         >
-          <SectionHeader
-            group
+          <SectionTitle
+            variant="group"
             :title="h.name"
             :count="h.count"
-            :open="!content.isGroupCollapsed(gridFolderId ?? '', h.groupId)"
-            @update:open="onGroupFold(h.groupId)"
-            @menu="onGroupMenu(h, $event)"
+            :expanded="!content.isGroupCollapsed(gridFolderId ?? '', h.groupId)"
+            @toggle="onGroupFold(h.groupId)"
+            @more="onGroupMenu(h, $event)"
           />
         </div>
       </div>
     </div>
     <!-- 搜索空态（3.6，用户定：中央「无搜索结果」极淡档；pointer-events none 不挡空白右键 / 框选） -->
     <div v-if="searchEmpty" class="search-empty">无搜索结果</div>
+    <!-- 空文件夹空态（7.1 内容容器轮贴稿）：三区皆空 → 中央插画 + 导入双钮（组件根穿透，仅钮可点） -->
+    <EmptyFolderState v-if="folderEmpty" />
     <!-- sticky 置顶分组标题（05_区块标题：滚过顶后停留，下一组接替顶走）；C1 实底盖卡片；
          贴 viewport 顶（2026-08-19 复验：原 top=headerH+12 悬在视口中部截断首行卡片）；
          列表模式让开钉顶列头（46+6=listExtra） -->
@@ -414,13 +440,13 @@ onBeforeUnmount(() => {
       class="sticky-group-header"
       :style="{ top: `${listExtra}px`, transform: `translateY(${stickyGroup.shift}px)` }"
     >
-      <SectionHeader
-        group
+      <SectionTitle
+        variant="group"
         :title="stickyGroup.name"
         :count="stickyGroup.count"
-        :open="stickyGroup.open"
-        @update:open="onGroupFold(stickyGroup.groupId)"
-        @menu="onGroupMenu(stickyGroup, $event)"
+        :expanded="stickyGroup.open"
+        @toggle="onGroupFold(stickyGroup.groupId)"
+        @more="onGroupMenu(stickyGroup, $event)"
       />
     </div>
     <Teleport to="body">
@@ -522,21 +548,21 @@ onBeforeUnmount(() => {
   will-change: transform;
 }
 /* 分组标题（3.5 二轮）：canvas 内原位标题——absolute 于 cards-layer 坐标系（top 由 groupHeaders 给），
-   右缘 16 与卡片右缘对齐（布局 PAD.right）；随 canvas 滚动 */
+   高 26（7.1 内容容器轮 SectionTitle group 稿值）；右缘 12 与卡片右缘对齐（布局 PAD.right）；随 canvas 滚动 */
 .group-header {
   position: absolute;
   left: 0;
-  right: 16px;
-  height: 30px;
+  right: 12px;
+  height: 26px;
 }
 /* sticky 置顶分组标题（05_区块标题：滚到容器顶部停留，该组滚完下一组接替）：
-   viewport 内绝对定位（不随 canvas transform）+ C1 实底盖滚过卡片；shift 位移 = 下一组顶走 */
+   viewport 内绝对定位（不随 canvas transform）+ g1 实底盖滚过卡片；shift 位移 = 下一组顶走 */
 .sticky-group-header {
   position: absolute;
   left: 0;
-  right: 16px;
-  height: 30px;
-  background: var(--c1);
+  right: 12px;
+  height: 26px;
+  background: var(--n-g1);
   z-index: 5;
 }
 /* border-1：滚动条 6px 胶囊、贴 viewport 右缘、不影响布局；命中区 12px。

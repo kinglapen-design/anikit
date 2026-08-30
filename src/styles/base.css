@@ -169,33 +169,5 @@ textarea {
   outline: none;
 }
 
-/* 悬停播放层右下胶囊（5.3，HoverVideoLayer / HoverAudioLayer 共用）：时间 / 帧号 + 控制钮，
-   C1-50 底圆角 4；视频组件给 3px 进度条让位（bottom 7）为局部覆盖 */
-.capsule {
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-4);
-  background: var(--c1-50);
-}
-/* 帧号 / 时间：徽标档 10/14 700 常态色（figma-css 悬停播放稿） */
-.capsule .time {
-  font-size: var(--text-badge-size);
-  line-height: var(--text-badge-line);
-  font-weight: var(--text-badge-weight);
-  color: var(--text-normal);
-  white-space: nowrap;
-}
-.capsule .hud-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 12px;
-  height: 12px;
-  color: var(--text-normal);
-  line-height: 0; /* 防继承行高把图标行盒撑高（figma 悬停播放稿：文字与图标垂直居中对齐） */
-}
+/* 悬停播放层右下胶囊共享样式已于 7.1 内容容器轮废除（HoverVideoLayer / HoverAudioLayer
+   换代为 kc-float 新稿胶囊，cards.css） */

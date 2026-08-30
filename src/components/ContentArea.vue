@@ -151,15 +151,14 @@ const archiveNode = computed<FolderNode | null>(() => {
   flex: 1;
   min-width: 0;
 }
-/* 卡片列表（figma 42 列表 padding 16px 16px 0px）：上 16 / 左 16 / 下 0；
-   右 0——滚动条紧贴右边框（2026-08-10 用户定：4px 间距让通栏分隔线视觉截断；
-   卡片右缘距边框 16 由布局 PAD.right 16 承担） */
+/* 卡片列表（7.1 内容容器轮贴稿——列表容器 padding 12 12 0）：上 12 / 左 12 / 下 0；
+   右 0——滚动条紧贴右边框（卡片右缘距边框 12 由布局 PAD.right 12 承担，layouts.ts） */
 .asset-section {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: var(--space-16) 0 0 var(--space-16);
+  padding: var(--n-space-12) 0 0 var(--n-space-12);
 }
 /* 搜索框（1.2 新稿）：通栏行（C3 + 上边框横贯中栏）——外层无 padding，自然通栏 */
 .search-wrap {

@@ -7,8 +7,10 @@
 //                   （hover 通用/四级底）；
 // 图标尺寸 = 稿 icon 容器实寸（图标按实际尺寸导出，勿缩放——2026-08-29 走查）；
 // hover 过渡 = 150ms 缓入缓出（--n-dur-150）。
+// title = v-tip 悬浮 tip（内容容器轮补，与旧根目录 IconButton 对齐；禁用态视觉稿未画不做，§15）。
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
+import type { TipValue } from "../../lib/tip";
 
 const props = withDefaults(
   defineProps<{
@@ -16,8 +18,9 @@ const props = withDefaults(
     variant?: "plain" | "bare" | "solid" | "float";
     size?: "lg" | "sm"; // 仅 bare：大 18 / 小 14
     forceState?: "" | "hover";
+    title?: string | TipValue;
   }>(),
-  { variant: "plain", size: "lg", forceState: "" },
+  { variant: "plain", size: "lg", forceState: "", title: undefined },
 );
 defineEmits<{ click: [e: MouseEvent] }>();
 
@@ -28,6 +31,7 @@ const iconSize = computed(() => (props.variant === "bare" && props.size === "sm"
   <button
     class="ic-btn"
     :class="[variant, size, forceState ? `force-${forceState}` : '']"
+    v-tip="title"
     @click="$emit('click', $event)"
   >
     <AppIcon :name="name" :size="iconSize" />

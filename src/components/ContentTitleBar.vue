@@ -1,19 +1,24 @@
 <script setup lang="ts">
-// 中间面板工具栏（1.2 重构，figma-css 02_布局/41_工具栏）：54px / padding 12 16 / space-between。
-// 左 = 后退 / 前进 + 搜索结果（仅搜索时显示——当前所在目录由标签页承担，工具栏不再显示目录名，
-// 2026-08-08 用户定；搜索业务 3.6 接入，本轮搜索结果无数据源不渲染）。
-// 左侧位置留给档案看板的收起按钮（档案业务接入时启用）；
-// 侧栏收展不再经本栏（左栏展开按钮在左栏汉堡位、右栏展开/收起到右栏顶行，2026-08-08 收展定案）。
-// 右 = 卡片尺寸滑块 + 按钮组（添加文件链接（6.2 三轮点亮）/ 缩略图 / AI 工具集（占位）/ 分组管理
-// / 查看方式）+（右栏收起时：展开详情面板 + 窗口置顶 + 窗口控制——注释 6）。
-// 递归显示开关已移出（2026-08-08 用户定：归内容区区块标题行，随该区块改造时接入）。
+// 中间面板-内容容器-工具栏（7.1 内容容器轮贴稿，稿 = 布局/主窗口/中间面板/中间面板-内容容器-工具栏.md）：
+// 54 高（30 内容 + padding 12）/ space-between / gap 10，无底色（透内容容器 通用/一级 g1 卡片底）。
+// 左 = 面包屑导航（gap 12）：（档案视口且面板收起时）档案面板展开钮 + 后退/前进钮组（gap 2，
+//      angle-bracket 尖括号：后退原样朝左、前进 flip-h）+ 搜索结果计数（仅搜索态：
+//      「搜索结果 / N」= 正文 二级 + 数字-大 三级，3.6 数据本轮接线回填；当前目录名由标签页承担
+//      不进工具栏，2026-08-08 用户定）。
+// 右 = 尺寸滑块（BarSlider tone=size，稿宽 100）+ 按钮组（gap 2）：添加文件/档案链接 / 插件（占位
+//      disabled）/ 分组管理 / 查看方式 /（右栏收起时）展开详细信息 = collapse-sidebar flip-h；
+//      缩略图 / AI 工具集两旧占位钮稿无，本轮撤下。
+// 图标钮一律 buttons/IconButton plain（30×30 圆角 6、图标 18 三级、hover 半透明-3 底 + 升二级）；
+// 禁用态视觉稿未画不做（速查表 §15），仅业务禁用。
+// 递归显示开关移出口径不变（2026-08-08 用户定：归内容区区块标题行，随该区块改造时接入）。
 import { ref, computed } from "vue";
-import IconButton from "./IconButton.vue";
-import SideSlider from "./SideSlider.vue";
+import IconButton from "./buttons/IconButton.vue";
+import BarSlider from "./bars/BarSlider.vue";
 import ViewOptionsMenu from "./ViewOptionsMenu.vue";
 import { useUiStore } from "../stores/ui";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
+import { useSearchStore } from "../stores/search";
 import { useTabsStore } from "../stores/tabs";
 import { findFolderNode } from "../lib/detailSections";
 import { currentLinkTarget, enterLinkPicker } from "../lib/menuOps";
@@ -21,6 +26,7 @@ import { currentLinkTarget, enterLinkPicker } from "../lib/menuOps";
 const ui = useUiStore();
 const content = useContentStore();
 const picker = usePickerStore();
+const search = useSearchStore();
 const tabs = useTabsStore();
 
 // 本标签页视口（ContentArea 传入；档案切换钮按本视口档案读写，2026-08-15 迁入视口）；
@@ -31,15 +37,28 @@ const props = defineProps<{ viewKey: string; panelId?: string }>();
 const canBack = computed(() => (props.panelId ? (tabs.navCan[props.panelId]?.back ?? false) : false));
 const canFwd = computed(() => (props.panelId ? (tabs.navCan[props.panelId]?.fwd ?? false) : false));
 
-// 档案二级侧边栏切换钮（仅本视口 = 档案文件夹时显示，面包屑返回按钮左边）
+// 档案二级侧边栏切换钮（仅本视口 = 档案文件夹时显示，面包屑返回按钮左边）；
+// 图标 = collapse-sidebar 原样（竖条在左 = 左侧面板，与右栏「展开详细信息」flip-h 相对）
 const archiveViewportNode = computed<FolderNode | null>(() => {
   if (!props.viewKey.startsWith("folder:")) return null;
   const n = findFolderNode(content.folders, props.viewKey.slice(7));
   return n?.kind === "archive" ? n : null;
 });
 
-// 搜索结果文案（3.6 分词搜索接入后回填："搜索结果 - 12"）；null = 常态不显示
-const searchResult = ref<string | null>(null);
+// 搜索结果计数（3.6 接线）：搜索态显示「搜索结果 / N」，N = 文件命中 + 档案命中总数
+const searching = computed(() => (props.panelId ? search.isActive(props.panelId) : false));
+const searchCount = computed(() =>
+  props.panelId ? search.hitsFor(props.panelId).size + search.hitArchivesFor(props.panelId).size : 0,
+);
+
+// 卡片尺寸滑块（稿宽 100）：BarSlider 0~1 归一化 ↔ targetRowHeight 80~gridWidth 实际像素换算
+const SIZE_MIN = 80;
+const sliderRatio = computed({
+  get: () => (ui.targetRowHeight - SIZE_MIN) / Math.max(1, ui.gridWidth - SIZE_MIN),
+  set: (r) => {
+    ui.targetRowHeight = Math.round(SIZE_MIN + Math.min(1, Math.max(0, r)) * (ui.gridWidth - SIZE_MIN));
+  },
+});
 
 // 查看方式菜单：按钮右缘对齐、下方展开；再次点击按钮收起（toggle）
 const viewMenuOpen = ref(false);
@@ -65,7 +84,7 @@ function openGroupManage(): void {
   ui.groupManageOpen = true;
 }
 
-// 添加文件链接（6.2 三轮点亮）：落点 = 本标签页文件夹视口（快速访问全部/回收站/收件箱不可添加禁用）；
+// 添加文件/档案链接（6.2 三轮点亮）：落点 = 本标签页文件夹视口（快速访问全部/回收站/收件箱不可添加禁用）；
 // 选择模式进行中禁用（白名单只放行查看类，2026-08-24 收窄口径）
 const linkTarget = computed(() => (picker.active ? null : currentLinkTarget(props.viewKey)));
 function addFileLink(): void {
@@ -76,43 +95,49 @@ function addFileLink(): void {
 <template>
   <div class="panel-toolbar" data-tauri-drag-region>
     <div class="crumb-group">
-      <!-- 档案面板展开钮（2026-08-15 走查修正，照右栏"展开详情面板"归位中栏工具栏的现成模式）：
-           仅本视口为档案且面板已收起时出现；collapse-detail 图标、无 active/选中底色；
+      <!-- 档案面板展开钮（2026-08-15 走查修正模式沿用）：仅本视口为档案且面板已收起时出现；
            面板展开时此处不放任何按钮 -->
       <IconButton
         v-if="archiveViewportNode && !ui.archivePanelOpenFor(archiveViewportNode.id)"
-        name="collapse-detail"
+        name="collapse-sidebar"
         title="展开档案面板"
         class="archive-panel-toggle"
         @click="ui.toggleArchivePanel(archiveViewportNode.id)"
       />
-      <!-- 后退 / 前进（figma 41：nav-history 图标，前进 rotate 180°；2026-08-20 接入：
-           per-panel 导航历史——openView 替换视口入栈，锁定页新开不入栈） -->
-      <IconButton
-        name="nav-history"
-        title="后退"
-        :disabled="!canBack"
-        @click="panelId && tabs.goHistory(panelId, -1)"
-      />
-      <IconButton
-        name="nav-history"
-        title="前进"
-        class="rot-180"
-        :disabled="!canFwd"
-        @click="panelId && tabs.goHistory(panelId, 1)"
-      />
-      <span v-if="searchResult" class="result-text">{{ searchResult }}</span>
+      <!-- 后退 / 前进（稿「返回+前进-按钮」组 gap 2）：angle-bracket 尖括号，前进 = flip-h 朝右；
+           per-panel 导航历史（openView 替换视口入栈，锁定页新开不入栈） -->
+      <div class="nav-pair">
+        <IconButton
+          name="angle-bracket"
+          title="后退"
+          :disabled="!canBack"
+          @click="panelId && tabs.goHistory(panelId, -1)"
+        />
+        <IconButton
+          name="angle-bracket"
+          title="前进"
+          class="flip-h"
+          :disabled="!canFwd"
+          @click="panelId && tabs.goHistory(panelId, 1)"
+        />
+      </div>
+      <!-- 搜索结果计数（稿「搜索结果 / 123」）：仅搜索态显示 -->
+      <span v-if="searching" class="result-group">
+        <span class="result-label">搜索结果</span>
+        <span class="result-sep">/</span>
+        <span class="result-count">{{ searchCount.toLocaleString() }}</span>
+      </span>
     </div>
     <div class="right-group">
-      <SideSlider v-model="ui.targetRowHeight" :min="80" :max="ui.gridWidth" />
-      <!-- 按钮组（figma 41：添加文件链接 / 缩略图 / AI 工具集 / 分组管理 / 查看方式）；
-           「链接文件管理」钮删除（2026-08-24 用户定：链接管理针对单个文件，入口 = 右键菜单 + 详情面板）；
-           添加文件链接 6.2 三轮点亮 = 进选择模式，落点当前文件夹视口（无视口禁用）；
-           缩略图 / AI 业务未接占位；分组管理 3.5 二轮点亮（仅文件夹/档案视口） -->
+      <div class="slider-wrap">
+        <BarSlider v-model="sliderRatio" tone="size" />
+      </div>
+      <!-- 按钮组（稿）：添加文件/档案链接（6.2 三轮点亮 = 进选择模式，落点当前文件夹视口，无视口禁用）/
+           插件（业务未接占位）/ 分组管理（3.5 二轮点亮，仅文件夹/档案视口；递归显示时禁用）/ 查看方式 /
+           展开详细信息（仅右栏收起时）；「链接文件管理」钮删除口径不变（2026-08-24 用户定） -->
       <div class="btn-group">
-        <IconButton name="add-file-link" title="添加文件链接" :disabled="!linkTarget" @click="addFileLink" />
-        <IconButton name="thumbnail" title="缩略图" disabled />
-        <IconButton name="ai-tools" title="AI 工具集" disabled />
+        <IconButton name="add-file-archive-link" title="添加文件/档案链接" :disabled="!linkTarget" @click="addFileLink" />
+        <IconButton name="plugin" title="插件" disabled />
         <IconButton
           name="group-manage"
           :title="viewKey.startsWith('folder:') && ui.showSubfolders ? '分组管理（递归显示时不分组）' : '分组管理'"
@@ -122,11 +147,10 @@ function addFileLink(): void {
         <span ref="viewBtnRef" style="display: contents">
           <IconButton name="view-options" title="查看方式" @click="openViewMenu" />
         </span>
-        <!-- 右栏收起：仅"展开详情面板"进工具栏（窗口控制组在 App 层右上角浮块，不参与收展） -->
         <IconButton
           v-if="ui.rightCollapsed"
-          name="collapse-detail"
-          title="展开详情面板"
+          name="collapse-sidebar"
+          title="展开详细信息"
           class="flip-h"
           @click="ui.rightCollapsed = false"
         />
@@ -137,51 +161,67 @@ function addFileLink(): void {
 </template>
 
 <style scoped>
-/* 工具栏（figma 9560）：54 / padding 12 16 / space-between / gap 10；无底色（随中间面板 C1） */
+/* 工具栏（稿）：54（30 + padding 12×2）/ space-between / gap 10（figma 自动占位值，按 token 档用 8，§14 先例）；无底色（透内容容器 g1） */
 .panel-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: var(--space-12) var(--space-16);
+  gap: var(--n-space-8);
+  padding: var(--n-space-12);
   flex: none;
 }
-/* 中栏工具栏图标按钮 80% 亮度（2026-07-23 用户定：面板深，满亮太抢眼） */
-.panel-toolbar :deep(.icon-btn) {
-  color: var(--text-normal);
-}
-/* 面包屑容器：展开按钮 + 后退/前进 + 搜索结果，间距 4 */
+/* 面包屑导航（稿 gap 12） */
 .crumb-group {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--n-space-12);
   min-width: 0;
 }
-/* 搜索结果（figma 41）：正文 14/20，标签档 */
-.result-text {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-label);
+/* 返回+前进按钮组（稿 gap 2） */
+.nav-pair {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-2);
+}
+/* 搜索结果计数（稿）：「搜索结果 / N」组 gap 4；文字 = 正文 二级，数字 = 数字-大 三级 */
+.result-group {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-4);
   white-space: nowrap;
 }
-/* 右对齐按钮组（figma 41）：滑块 + 按钮组，间距 12；按钮组内间距 4 */
+.result-label,
+.result-sep {
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
+}
+.result-count {
+  font-family: var(--n-font-mono);
+  font-size: var(--n-fs-num-lg);
+  line-height: var(--n-lh-num-lg);
+  font-weight: var(--n-fw-medium);
+  color: var(--n-l3);
+}
+/* 尺寸滑块+按钮组（稿 gap 12）；滑块稿宽 100 */
 .right-group {
   display: flex;
   align-items: center;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   flex: none;
 }
+.slider-wrap {
+  width: 100px;
+  flex: none;
+}
+/* 按钮组（稿 gap 2） */
 .btn-group {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--n-space-2);
 }
-/* 收起 / 展开同图标翻转使用 */
+/* 前进 / 展开详细信息 = 左向图标水平翻转 */
 .flip-h :deep(svg) {
   transform: scaleX(-1);
-}
-/* 前进 = nav-history rotate 180°（figma 41 口径） */
-.rot-180 :deep(svg) {
-  transform: rotate(180deg);
 }
 </style>

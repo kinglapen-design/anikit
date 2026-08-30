@@ -63,11 +63,13 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
     <p class="pv-sec-desc">
       Design Token/组件/卡片/ 十稿：文件卡（通用 / 视频 / 音频 / 字体 / txt-md 五稿合一 FileCard）+ 文件夹 / 档案 /
       列表卡 / 列表表头 / 格式角标。悬停控件（右上胶囊 / 视频播放条 / 波形品牌色扫过）<b>hover 才现</b>，force-hover 列为静态验收。<br />
-      动画时长：hover / 颜色 <b>150ms</b>；悬停位移 -4px + 小阴影 <b>250ms</b>；表头排序箭头旋转 <b>300ms</b>。组件宽高随父容器，此处按稿值演示。
+      动画时长：hover / 颜色 <b>150ms</b>；悬停位移 -4px + 小阴影 <b>250ms</b>；表头排序箭头旋转 <b>300ms</b>。组件宽高随父容器，此处按稿值演示。<br />
+      业务态（7.1 内容容器轮接线）静态陈列：naming 行内重命名（整卡品牌环 + 名称位换输入框）/ dimmed 拖拽源 0.4 / cut 剪切 0.5 /
+      dropInto 拖拽并入（品牌/半透明 + 2px 品牌描边）/ picked 选择模式已选（压暗 30%）；thumbFit = cover / contain / icon 三档。
     </p>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">文件卡片-通用（395×222；square = shell 缩略图 / 未导入 50% 居中）</h3>
+      <h3 class="pv-group-title">文件卡片-通用（395×222；square = shell 缩略图 / 未导入 50% 居中；thumbFit 三档）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div style="width: 395px; height: 222px">
@@ -92,6 +94,40 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
             <FileCard name="雪牧_自动.fla" info="1920 x 1080" badge="FLA" :thumb-url="demoShell" square origin-badge />
           </div>
           <span class="pv-cap">square · 未导入 / shell</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div style="width: 220px; height: 124px">
+            <FileCard name="雪牧_自动.fla" info="1920 x 1080" badge="FLA" :thumb-url="demoShell" />
+          </div>
+          <span class="pv-cap">thumbFit · cover（默认，充满裁切）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div style="width: 220px; height: 124px">
+            <FileCard name="雪牧_自动.fla" info="1920 x 1080" badge="FLA" :thumb-url="demoShell" thumb-fit="contain" />
+          </div>
+          <span class="pv-cap">thumbFit · contain（固定格完整显示不裁切）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div style="width: 220px; height: 124px">
+            <FileCard name="雪牧_自动.fla" info="1920 x 1080" badge="FLA" :thumb-url="demoShell" thumb-fit="icon" />
+          </div>
+          <span class="pv-cap">thumbFit · icon（格式图标 50% 居中，Eagle 口径）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div style="width: 220px; height: 124px">
+            <FileCard name="雪牧_自动.fla" info="1920 x 1080" badge="FLA" :thumb-url="demoPhoto" origin-badge naming />
+          </div>
+          <span class="pv-cap">命名态（naming 直挂；词干选区，Esc = 取消——文件口径）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div style="width: 220px; height: 124px">
+            <FileCard name="雪牧_自动.fla" info="1920 x 1080" badge="FLA" :thumb-url="demoPhoto" origin-badge picked />
+          </div>
+          <span class="pv-cap">选择模式已选 picked（内容压暗 30%，大勾由壳层加）</span>
         </div>
       </div>
     </div>
@@ -193,7 +229,7 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">列表卡片 + 列表表头（856；表头箭头 hover 现 / 当前排序列恒显，点击可切向）</h3>
+      <h3 class="pv-group-title">列表卡片 + 列表表头（856；表头箭头 hover 现 / 当前排序列恒显，点击可切向；尺寸列不可排序——无箭头不响应点击）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell" style="width: 856px">
           <div style="display: flex; flex-direction: column; gap: 6px">
@@ -201,14 +237,20 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
             <ListRowCard name="雪牧_自动.fla" :thumb-url="demoPhoto" badge="FLA" dims="1920 x 1080" file-size="12 MB" mod-date="2026/08/24" mod-time="16:07" origin-badge />
             <ListRowCard name="第一集.mp4" :thumb-url="demoPhoto" badge="MP4" dims="1920 x 1080" file-size="128 MB" mod-date="2026/08/25" mod-time="09:41" origin-badge force-state="hover" />
             <ListRowCard name="雪牧.wav" badge="WAV" dims="—" file-size="36 MB" mod-date="2026/08/26" mod-time="21:03" selected />
+            <ListRowCard name="雪牧_自动.fla" badge="FLA" dims="1920 x 1080" file-size="12 MB" mod-date="2026/08/24" mod-time="16:07" linked-badge />
+            <ListRowCard name="镜头1_提示词.md" badge="MD" dims="—" file-size="2.1 KB" mod-date="2026/08/27" mod-time="10:12" naming />
           </div>
-          <span class="pv-cap">表头（文件大小 ↓ 降序）+ 行：常态 / hover / 选中（容器 gap 6）</span>
+          <span class="pv-cap">表头（文件大小 ↓ 降序）+ 行：常态 / hover / 选中 / 链接徽章 linkedBadge / 命名态 naming（整行品牌环，Esc 取消）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 856px">
+          <ListHeader sort-key="name" sort-dir="asc" />
+          <span class="pv-cap">表头 · 当前排序列 = 名称 ↑ 升序（箭头恒显；换向旋转 300ms）</span>
         </div>
       </div>
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">文件夹卡片（220×122，hover 仅底升六级；图标恒默认色——变色只留树容器）</h3>
+      <h3 class="pv-group-title">文件夹卡片（220×122，hover 仅底升六级；图标恒默认色——变色只留树容器；业务态 dimmed / cut / naming / dropInto）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div style="width: 220px; height: 122px">
@@ -229,10 +271,36 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
           <span class="pv-cap">选中</span>
         </div>
       </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div style="width: 220px; height: 122px">
+            <FolderCard name="01_人物" :lines="folderLines" dimmed />
+          </div>
+          <span class="pv-cap">拖拽源 dimmed（半透明 0.4）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div style="width: 220px; height: 122px">
+            <FolderCard name="01_人物" :lines="folderLines" cut />
+          </div>
+          <span class="pv-cap">剪切中 cut（半透明 0.5）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div style="width: 220px; height: 122px">
+            <FolderCard name="01_人物" :lines="folderLines" naming />
+          </div>
+          <span class="pv-cap">命名态 naming（整卡品牌环 + 输入框；Esc 保存，同树容器口径）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div style="width: 220px; height: 122px">
+            <FolderCard name="01_人物" :lines="folderLines" drop-into />
+          </div>
+          <span class="pv-cap">拖拽并入 dropInto（品牌/半透明 + 2px 品牌描边）</span>
+        </div>
+      </div>
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">档案卡片（250×250 正方形，角标 = 属性文字；右下 = 链接文件-徽章）</h3>
+      <h3 class="pv-group-title">档案卡片（250×250 正方形，角标 = 属性文字；右下 = 链接文件-徽章；业务态 dimmed / cut / naming / dropInto / picked / pickerSelf）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div style="width: 250px">
@@ -251,6 +319,46 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
             <ArchiveCard name="雪牧.archive" :cover-url="demoCover" badge="主角" :attrs="archiveAttrs" :stats="archiveStats" linked-badge selected />
           </div>
           <span class="pv-cap">选中</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div style="width: 250px">
+            <ArchiveCard name="雪牧.archive" :cover-url="demoCover" badge="主角" :attrs="archiveAttrs" :stats="archiveStats" dimmed />
+          </div>
+          <span class="pv-cap">拖拽源 dimmed（半透明 0.4）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div style="width: 250px">
+            <ArchiveCard name="雪牧.archive" :cover-url="demoCover" badge="主角" :attrs="archiveAttrs" :stats="archiveStats" cut />
+          </div>
+          <span class="pv-cap">剪切中 cut（半透明 0.5）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div style="width: 250px">
+            <ArchiveCard name="雪牧.archive" :cover-url="demoCover" badge="主角" :attrs="archiveAttrs" :stats="archiveStats" naming />
+          </div>
+          <span class="pv-cap">命名态 naming（名称位换输入框，整卡品牌环）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div style="width: 250px">
+            <ArchiveCard name="雪牧.archive" :cover-url="demoCover" badge="主角" :attrs="archiveAttrs" :stats="archiveStats" drop-into />
+          </div>
+          <span class="pv-cap">拖拽并入 dropInto（品牌/半透明罩 + 2px 品牌描边）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div style="width: 250px">
+            <ArchiveCard name="雪牧.archive" :cover-url="demoCover" badge="主角" :attrs="archiveAttrs" :stats="archiveStats" picked />
+          </div>
+          <span class="pv-cap">选择模式已选 picked（压暗 30% + 绿圆大勾，速查 §12）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div style="width: 250px">
+            <ArchiveCard name="雪牧.archive" :cover-url="demoCover" badge="主角" :attrs="archiveAttrs" :stats="archiveStats" picker-self />
+          </div>
+          <span class="pv-cap">发起档案自身 pickerSelf（半透明 0.5 + 禁选）</span>
         </div>
       </div>
     </div>

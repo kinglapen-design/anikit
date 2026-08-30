@@ -16,13 +16,20 @@ withDefaults(
 );
 const emit = defineEmits<{ sort: [key: string] }>();
 
+// 列定义：sortable = 可作排序依据（sort emit）；尺寸列无对应 SortKey（2026-08-30 内容容器轮：
+// lib/sortPlacements 无尺寸档）——纯展示（无箭头、不响应点击）
 const columns = [
-  { key: "name", label: "名称", grow: true },
-  { key: "dims", label: "尺寸", grow: false },
-  { key: "ext", label: "扩展名", grow: false },
-  { key: "size", label: "文件大小", grow: false },
-  { key: "mtime", label: "修改日期", grow: false },
+  { key: "name", label: "名称", grow: true, sortable: true },
+  { key: "dims", label: "尺寸", grow: false, sortable: false },
+  { key: "ext", label: "扩展名", grow: false, sortable: true },
+  { key: "size", label: "文件大小", grow: false, sortable: true },
+  { key: "mtime", label: "修改日期", grow: false, sortable: true },
 ];
+
+function onColClick(c: { key: string; sortable: boolean }): void {
+  if (!c.sortable) return;
+  emit("sort", c.key);
+}
 </script>
 
 <template>
@@ -31,11 +38,12 @@ const columns = [
       v-for="c in columns"
       :key="c.key"
       class="lh-col"
-      :class="{ grow: c.grow, active: sortKey === c.key }"
-      @click="emit('sort', c.key)"
+      :class="{ grow: c.grow, active: sortKey === c.key, sortable: c.sortable }"
+      @click="onColClick(c)"
     >
       <span class="lh-label">{{ c.label }}</span>
       <AppIcon
+        v-if="c.sortable"
         name="chevron-small"
         :size="14"
         class="lh-arrow"
@@ -65,6 +73,9 @@ const columns = [
   flex-direction: row;
   align-items: center;
   gap: var(--n-space-6);
+}
+/* 可排序列 = 指针 + hover 文案升二级 + 箭头现身；不可排序列（尺寸）纯展示 */
+.lh-col.sortable {
   cursor: pointer;
 }
 .lh-col.grow {
@@ -80,7 +91,7 @@ const columns = [
   white-space: nowrap;
   transition: color var(--n-dur-150) var(--n-ease-in-out);
 }
-.lh-col:hover .lh-label {
+.lh-col.sortable:hover .lh-label {
   color: var(--n-l2);
 }
 /* 箭头：hover 列 / 当前排序列才现身；desc = rotate 180°（300ms 形态切换） */
@@ -92,7 +103,7 @@ const columns = [
     color var(--n-dur-150) var(--n-ease-in-out),
     transform var(--n-dur-300) var(--n-ease-in-out);
 }
-.lh-col:hover .lh-arrow,
+.lh-col.sortable:hover .lh-arrow,
 .lh-col.active .lh-arrow {
   opacity: 1;
 }

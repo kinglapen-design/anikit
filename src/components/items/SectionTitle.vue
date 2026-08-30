@@ -11,12 +11,13 @@ withDefaults(
     count?: number | string; // 「标题 / 数量」；不传则无数量段
     expanded?: boolean; // 展开钮朝向（默认收起 >）
     withLink?: boolean; // block 型详情链接变体：剪贴板有链接时才显示链接钮（业务传入）
+    actions?: boolean; // 动作组（更多/添加）显隐——false = 整块不渲染（列表容器区块标题稿无动作钮，7.1 内容容器轮）
     forceState?: "" | "hover"; // 预览页强制态（hover 展开动作组）
   }>(),
-  { count: undefined, expanded: false, withLink: false, forceState: "" },
+  { count: undefined, expanded: false, withLink: false, actions: true, forceState: "" },
 );
 
-const emit = defineEmits<{ toggle: []; more: []; add: []; link: [] }>();
+const emit = defineEmits<{ toggle: []; more: [e: MouseEvent]; add: [e: MouseEvent]; link: [e: MouseEvent] }>();
 </script>
 
 <template>
@@ -37,16 +38,21 @@ const emit = defineEmits<{ toggle: []; more: []; add: []; link: [] }>();
         <AppIcon name="expand" :size="14" />
       </button>
     </span>
-    <span class="acts">
-      <button v-if="withLink" class="act" @click.stop="emit('link')">
+    <!-- 右组：tail 插槽（常驻自定义内容，如文件夹区块「递归显示」复选框——7.1 内容容器轮加；
+         点击自停冒泡防触发行折叠）+ 动作组（actions=false 整块不渲染——列表容器区块标题稿无动作钮） -->
+    <span v-if="$slots.tail || actions" class="st-right">
+      <span v-if="$slots.tail" class="st-tail" @click.stop><slot name="tail" /></span>
+      <span v-if="actions" class="acts">
+      <button v-if="withLink" class="act" @click.stop="emit('link', $event)">
         <AppIcon name="link-small" :size="14" />
       </button>
-      <button class="act" @click.stop="emit('more')">
+      <button class="act" @click.stop="emit('more', $event)">
         <AppIcon :name="variant === 'group' ? 'more-large' : 'more-small'" :size="variant === 'group' ? 18 : 14" />
       </button>
-      <button class="act" @click.stop="emit('add')">
+      <button class="act" @click.stop="emit('add', $event)">
         <AppIcon :name="variant === 'group' ? 'add-large' : 'add-small'" :size="variant === 'group' ? 18 : 14" />
       </button>
+      </span>
     </span>
   </div>
 </template>
@@ -133,6 +139,14 @@ const emit = defineEmits<{ toggle: []; more: []; add: []; link: [] }>();
 }
 .chev:not(.open) {
   transform: rotate(-90deg);
+}
+/* 右组：tail（常驻内容，如递归显示复选框）+ 动作组横排，space-between 下整体右置 */
+.st-right {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-8);
+  flex: none;
+  min-width: 0;
 }
 /* 动作组：常态隐藏，hover 出现（opacity + 可见性，稿未写滑入）；hover 行 = 抓手指针 */
 .acts {

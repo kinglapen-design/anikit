@@ -111,13 +111,17 @@ const sections = computed(() => {
     out.push({ id: sec.block.id, name: sec.block.name, count: sec.nodes.reduce((a, n) => a + n.count, 0), lines });
   }
   // 未分类特殊组（稿无，实现补：root 位置也要可管理）；搜索命中「未分类」时保留
-  const rootCount = content.placements.filter((p) => p.folderId === "root").length;
+  const rootPlacements = content.placements.filter((p) => p.folderId === "root");
+  const rootCount = rootPlacements.length;
+  // 容量口径同后端（2026-08-30 用户定案）：按 asset 去重合计 size
+  const seen = new Set<string>();
+  const rootSize = rootPlacements.reduce((a, p) => (seen.has(p.assetId) ? a : (seen.add(p.assetId), a + p.size)), 0);
   const rootHit = query.value.trim() === "" || "未分类".includes(query.value.trim());
   if (rootHit) {
     const lines: Line[] = [];
     if (!blockCollapsed.value.has("__root__")) {
       lines.push({
-        node: { id: "root", name: "未分类", count: rootCount, children: [] },
+        node: { id: "root", name: "未分类", count: rootCount, totalSize: rootSize, children: [] },
         depth: 0,
         tint: null,
       });

@@ -405,6 +405,9 @@ pub struct FolderNode {
   pub name: String,
   /// 该文件夹递归 Placement 总数（含全部子文件夹；2026-07-25 用户定：整洁层级下直接数会大面积为 0）
   pub count: u32,
+  /// 递归容量（字节，2026-08-30 用户定案，与 count 同口径同趟算出）：子树全部 Placement 按 asset
+  /// 去重后 size 合计——同一资产在父子文件夹各放一份只计一次（占用空间语义，同 archive.rs 档案容量）
+  pub total_size: u64,
   /// 所属区块 ID（2026-08-14 区块子系统：仅顶级节点有值语义，None = 「目录」；子节点恒 None 不写字段）
   #[serde(skip_serializing_if = "Option::is_none")]
   pub block: Option<String>,
@@ -450,30 +453,42 @@ pub fn list_folder_tree(state: State<AppState>) -> Result<FolderTreeView, String
 
 /// 组装文件夹树：parent=None 为顶层，递归子级；区块表按 order 排序一并输出
 fn folder_tree(lib: &Library) -> FolderTreeView {
-  fn children_of(lib: &Library, parent: Option<&str>) -> Vec<FolderNode> {
+  /// 返回 (节点, 子树资产 id 集)：集合供父级并集去重算 totalSize（跨子树同资产只计一次）
+  fn children_of<'a>(lib: &'a Library, parent: Option<&'a str>) -> Vec<(FolderNode, std::collections::HashSet<&'a str>)> {
     let mut folders: Vec<&crate::core::models::Folder> =
       lib.folders.folders.iter().filter(|f| f.parent.as_deref() == parent).collect();
     folders.sort_by_key(|f| f.order);
     folders
       .into_iter()
       .map(|f| {
-        let children = children_of(lib, Some(&f.id));
-        let direct = lib.index.placements_by_folder.get(&f.id).map(|v| v.len()).unwrap_or(0) as u32;
+        let pairs = children_of(lib, Some(&f.id));
+        let (children, child_sets): (Vec<FolderNode>, Vec<std::collections::HashSet<&str>>) = pairs.into_iter().unzip();
+        let direct_ps = lib.index.placements_by_folder.get(&f.id).map(|v| v.as_slice()).unwrap_or(&[]);
+        let direct = direct_ps.len() as u32;
         let recursive = direct + children.iter().map(|c| c.count).sum::<u32>();
+        // 子树资产集 = 本级 placements ∪ 各子树集；totalSize = 集内资产 size 合计（缺失索引的脏引用跳过）
+        let mut subtree: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for set in child_sets {
+          subtree.extend(set);
+        }
+        subtree.extend(direct_ps.iter().map(|p| p.asset.as_str()));
+        let total_size = subtree.iter().filter_map(|id| lib.index.assets.get(*id)).map(|m| m.size).sum::<u64>();
         // block 仅顶级节点输出（子节点不持区块语义）；icon / kind / color 全层级如实输出
         //（icon 2026-08-14 区块默认图标继承 → 3.3 起子级也可持自定义图标）
         let block = if parent.is_none() { f.block.clone() } else { None };
-        FolderNode {
+        let node = FolderNode {
           id: f.id.clone(),
           name: f.name.clone(),
           count: recursive,
+          total_size,
           block,
           icon: f.icon.clone(),
           kind: f.kind.clone(),
           color: f.color.clone(),
           groups: f.groups.clone().filter(|g| !g.is_empty()), // 空组不输出（写回统一 None 口径）
           children,
-        }
+        };
+        (node, subtree)
       })
       .collect()
   }
@@ -481,7 +496,7 @@ fn folder_tree(lib: &Library) -> FolderTreeView {
   blocks.sort_by_key(|b| b.order);
   FolderTreeView {
     blocks: blocks.into_iter().map(|b| BlockView { id: b.id.clone(), name: b.name.clone(), icon: b.icon.clone() }).collect(),
-    nodes: children_of(lib, None),
+    nodes: children_of(lib, None).into_iter().map(|(n, _)| n).collect(),
   }
 }
 
@@ -573,6 +588,43 @@ mod tests {
     // count = 递归总数：父级"参考"= 自身 a.txt 1 + 子文件夹"人物" b.txt 1
     assert_eq!((tree.nodes[0].name.as_str(), tree.nodes[0].count), ("参考", 2));
     assert_eq!((tree.nodes[0].children[0].name.as_str(), tree.nodes[0].children[0].count), ("人物", 1));
+    // totalSize = 递归容量（2026-08-30 用户定案）：a.txt / b.txt 各 1 字节，父级 2、子级 1
+    assert_eq!(tree.nodes[0].total_size, 2);
+    assert_eq!(tree.nodes[0].children[0].total_size, 1);
+    // camelCase 键名防线（踩坑 031 同类）
+    assert!(serde_json::to_string(&tree.nodes[0]).unwrap().contains(r#""totalSize":2"#));
+  }
+
+  /// 递归容量跨层级去重（2026-08-30 用户定案）：同一资产在父、子文件夹各一份 placement，
+  /// 父级 totalSize 只计一次；count 口径（逐条计 placement）不变
+  #[test]
+  fn folder_tree_total_size_dedupes_assets_across_levels() {
+    let h = make_lib();
+    let src = h._dir.path().join("库");
+    std::fs::create_dir_all(src.join("子")).unwrap();
+    std::fs::write(src.join("a.txt"), "aaa").unwrap(); // 3 字节
+    std::fs::write(src.join("子/b.txt"), "bb").unwrap(); // 2 字节
+    import(&h, vec![src], Structure::Keep);
+
+    // 同资产 a 再放一份进子文件夹（跨层级重复放置；folders.items 与索引同步推入）
+    let (asset, child_id) = with_lib(&h, |l| {
+      (
+        l.folders.items.iter().find(|p| p.name == "a.txt").unwrap().asset.clone(),
+        l.folders.folders.iter().find(|f| f.name == "子").unwrap().id.clone(),
+      )
+    });
+    {
+      let mut guard = h.lib.lock().unwrap();
+      let lib = guard.as_mut().unwrap();
+      lib.folders.items.push(Placement { asset, folder: child_id, name: "a-链接.txt".into(), order: 1, origin: false });
+      lib.index.rebuild_placements(&lib.folders.items);
+    }
+
+    let tree = with_lib(&h, folder_tree);
+    let top = &tree.nodes[0];
+    let child = &top.children[0];
+    assert_eq!((top.count, top.total_size), (3, 5), "父级：3 条 placement，资产 a 去重后 3+2 字节");
+    assert_eq!((child.count, child.total_size), (2, 5), "子级：2 条 placement，a+b 两资产 5 字节");
   }
 
   /// 区块输出（2026-08-14 区块子系统）：blocks 按 order 排序；顶级节点带 block，子节点不带

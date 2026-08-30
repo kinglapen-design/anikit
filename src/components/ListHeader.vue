@@ -1,101 +1,52 @@
 <script setup lang="ts">
-// 列表式列头（figma-css 列表显示稿，2026-08-10 对齐）：高 46 / padding 12 / 标题档 16/22 700
-// 标签色；名称列 flex 1，右侧列组间距 24、列宽 82 / 64 / 64 / 119 与列表行对齐；
-// 每列均可作排序依据（图标 chevron-small 12，hover 列显示；排序业务阶段 4 接）。
-import AppIcon from "./AppIcon.vue";
+// 列表式列头钉顶壳（7.1 内容容器轮改造）：视觉芯 = cards/ListHeader（高 34 / padding 8/12 /
+// 列 123 与列表行对齐——通用三级底 + 立体感-通用），本壳承担钉顶定位与排序接线——
+// 排序业务 = 3.5 已有（lib/sortPlacements + ui.sortBy/sortAsc，ViewOptionsMenu 同径直写）：
+// 点当前排序列 = 翻转升降；点新列 = 换键升序；尺寸列无 SortKey 档纯展示（内容容器轮定）。
+// 列头随内容滚动至顶部后钉住（自定义 transform 滚动无 CSS sticky，AssetGrid 手动 top 驱动）。
+import { computed } from "vue";
+import ListHeaderCore from "./cards/ListHeader.vue";
+import { useUiStore } from "../stores/ui";
+import type { SortKey } from "../lib/sortPlacements";
+
+const ui = useUiStore();
+
+// 列 key ↔ SortKey 映射（尺寸列无键不排序——cards/ListHeader 已拦 emit，此处双闸）
+const COL_TO_SORT: Record<string, SortKey> = { name: "name", ext: "ext", size: "size", mtime: "modifiedAt" };
+const SORT_TO_COL = computed(() => {
+  const inv: Record<string, string> = {};
+  for (const [col, sk] of Object.entries(COL_TO_SORT)) inv[sk] = col;
+  return inv;
+});
+const sortKey = computed(() => SORT_TO_COL.value[ui.sortBy] ?? "");
+const sortDir = computed<"asc" | "desc">(() => (ui.sortAsc ? "asc" : "desc"));
+function onSort(col: string): void {
+  const sk = COL_TO_SORT[col];
+  if (!sk) return;
+  if (ui.sortBy === sk) ui.sortAsc = !ui.sortAsc;
+  else {
+    ui.sortBy = sk;
+    ui.sortAsc = true;
+  }
+}
 </script>
 
 <template>
+  <!-- 钉顶壳：absolute 满宽（右缘 12 = 网格 PAD.right，与行 box 右缘齐——列头列与行列严格对齐）；
+       top 由 AssetGrid :style 驱动（滚过顶钉住） -->
   <div class="list-header">
-    <!-- 每列均可作排序依据（2026-08-10 用户定：名称 / 尺寸 / 文件大小 / 修改日期升降序；
-         图标统一 chevron-small 12，hover 列显示；排序业务阶段 4 接） -->
-    <div class="main">
-      <span class="col col-title">
-        名称
-        <AppIcon name="chevron-small" :size="12" class="sort-arrow" />
-      </span>
-    </div>
-    <div class="details">
-      <span class="col size">
-        尺寸
-        <AppIcon name="chevron-small" :size="12" class="sort-arrow" />
-      </span>
-      <span class="col format">
-        格式
-        <AppIcon name="chevron-small" :size="12" class="sort-arrow" />
-      </span>
-      <span class="col filesize">
-        文件大小
-        <AppIcon name="chevron-small" :size="12" class="sort-arrow" />
-      </span>
-      <span class="col date">
-        修改日期
-        <AppIcon name="chevron-small" :size="12" class="sort-arrow" />
-      </span>
-    </div>
+    <ListHeaderCore :sort-key="sortKey" :sort-dir="sortDir" @sort="onSort" />
   </div>
 </template>
 
 <style scoped>
-/* 列头行（figma 列表显示稿）：固定于列表区顶部（不随滚动），高 46 / 背景 C1 /
-   标题档 16/22 700 标签色；padding 左 12 对齐行左缘，右 24 = 行 padding 12 + 网格
-   PAD.right 12（滚动条区）——列头 details 右缘与行 details 右缘严格对齐（列头满宽、行 box 右缘内缩） */
+/* 钉顶壳（7.1 换代）：列头满宽区 right 12 对齐行右缘（旧 padding 右 24 对齐口径随新件同构列构废除）；
+   高 34 = 芯件稿值（旧 46 废除）；滚动条区由 PAD.right 承担与网格卡同口径 */
 .list-header {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
+  right: 12px;
   z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 46px;
-  box-sizing: border-box;
-  padding: var(--space-12) var(--space-24) var(--space-12) var(--space-12);
-  background: var(--c1);
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--text-label);
-}
-.main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-}
-/* 右侧列组（figma）：间距 24 / 列宽 82 / 64 / 64 / 119 与列表行对齐 */
-.details {
-  display: flex;
-  align-items: center;
-  gap: var(--space-24);
-  flex: none;
-}
-.col {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-4);
-  white-space: nowrap;
-  cursor: pointer;
-}
-.size {
-  width: 82px;
-}
-.format {
-  width: 64px;
-}
-.filesize {
-  width: 64px;
-}
-.date {
-  width: 119px;
-}
-/* 悬停列显示排序箭头（16×16，hover 提亮 C4） */
-.sort-arrow {
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-.col:hover .sort-arrow {
-  opacity: 1;
 }
 </style>
