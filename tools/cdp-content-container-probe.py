@@ -789,14 +789,19 @@ async def main():
                 " const t = root.querySelector('.ef-title'); const h = root.querySelector('.ef-hint');"
                 " const ts = getComputedStyle(t); const hs = getComputedStyle(h);"
                 " const acts = root.querySelector('.ef-actions'); const as = getComputedStyle(acts);"
+                " const rr = root.getBoundingClientRect();"
+                " const bd = root.querySelector('.ef-body').getBoundingClientRect();"
+                " const rc = [...acts.children].map((c) => c.getBoundingClientRect());"
                 " const btns = [...acts.querySelectorAll('.act-btn')].map((b) => {"
                 "  const s = getComputedStyle(b);"
-                "  return { t: b.querySelector('.lbl')?.textContent, h: b.offsetHeight,"
+                "  return { t: b.querySelector('.lbl')?.textContent, h: b.offsetHeight, w: b.offsetWidth,"
                 "   bg: s.backgroundColor, br: s.borderTopLeftRadius, cls: b.className }; });"
                 " return { tt: t.textContent, ht: h.textContent,"
                 "  tfs: ts.fontSize, tlh: ts.lineHeight, tfw: ts.fontWeight, tc: ts.color,"
                 "  hfs: hs.fontSize, hlh: hs.lineHeight, hc: hs.color,"
-                "  aw: acts.offsetWidth, agap: as.columnGap, btns }; })()")
+                "  aw: acts.offsetWidth, agap: as.columnGap, btns,"
+                "  cx: (rc[0].left + rc[1].right) / 2 - (rr.left + rr.right) / 2,"
+                "  cy: (bd.top + bd.bottom) / 2 - (rr.top + rr.bottom) / 2 }; })()")
             check("T17a 空态标题「暂无文件」18/26 Bold 二级 + 提示「将文件拖拽至此处导入」13/18 三级",
                   isinstance(ef, dict) and ef.get("tt") == "暂无文件"
                   and ef.get("tfs") == "18px" and ef.get("tlh") == "26px"
@@ -806,14 +811,21 @@ async def main():
                   and ef.get("hc") == "rgb(128, 128, 128)",
                   json.dumps(ef, ensure_ascii=False))
             btns17 = ef.get("btns") if isinstance(ef, dict) else None
-            check("T17b 双钮（导入文件/导入文件夹）= ActionButton solid md 34 高 g4 #292929 圆角 8 + 组 282 宽 gap 8",
+            check("T17b 双钮（导入文件/导入文件夹）= ActionButton solid md 34 高 g4 #292929 圆角 8 + 组 282 宽 gap 8 + 钮实宽 137 均分",
                   isinstance(btns17, list) and len(btns17) == 2
                   and [b.get("t") for b in btns17] == ["导入文件", "导入文件夹"]
-                  and all(b.get("h") == 34 and b.get("bg") == "rgb(41, 41, 41)"
+                  and all(b.get("h") == 34 and b.get("w") == 137 and b.get("bg") == "rgb(41, 41, 41)"
                           and b.get("br") == "8px" and "solid" in b.get("cls", "")
                           and "md" in b.get("cls", "") for b in btns17)
                   and isinstance(ef, dict) and ef.get("aw") == 282 and ef.get("agap") == "8px",
                   json.dumps(ef, ensure_ascii=False))
+            # T17c 居中实证（2026-08-30 用户实机"空态没居中"回归）：按钮组视觉中心 = root 水平中心
+            #（防 ActionButton width:100% + flex:none 溢出偏右——旧断言只看声明宽 aw=282 漏检溢出）；
+            # 垂直 = ef-body 盒（含 padding-bottom 24，稿组 282×339.4）中心 = root 中心
+            check("T17c 空态组居中（按钮组中心 = root 水平中心 ±1 + body 中心 = root 垂直中心 ±1）",
+                  isinstance(ef, dict) and isinstance(ef.get("cx"), (int, float))
+                  and abs(ef["cx"]) <= 1 and abs(ef["cy"]) <= 1,
+                  json.dumps({"cx": ef and ef.get("cx"), "cy": ef and ef.get("cy")}))
 
             await shot(f"{SHOT_DIR}/r21-content-container-empty.png", ".content-area", 2)
     finally:

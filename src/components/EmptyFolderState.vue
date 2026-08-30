@@ -68,10 +68,12 @@ import { pickImportPaths } from "../lib/menuOps";
   line-height: var(--n-lh-body);
   color: var(--n-l3);
 }
-/* 按钮组：gap 8，宽 282（稿值），两钮均分（各 137 稿值） */
+/* 按钮组：grid 双列均分各 137（稿值）+ gap 8、宽 282（稿值）——ActionButton md/lg 宽 100%
+   由父容器定格（稿 flex-grow 拉伸语境）；flex 行内 width:100% + 组件 flex:none 不收缩会
+   双双撑满 282 向右溢出，视觉组中心偏右 = 2026-08-30 用户实机"空态没居中"根因，故用 grid 定格 */
 .ef-actions {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--n-space-8);
   width: 282px;
   pointer-events: auto;
