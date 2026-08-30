@@ -369,10 +369,12 @@ async function togglePin(): Promise<void> {
    （云母直呈）；大阴影 = DWM shadow（tauri.conf shadow:true）。
    圆角分模式（2026-08-30 实机 BUG 后改定）：实色 = 前端自裁 8（最大化归零）；云母 = DWM
    系统圆角独裁、前端 radius 0 不裁——双层裁切的 AA 路径差在四角透出云母成缝隙（踩坑 063）。
-   窗口边框分模式同色（通用/六级实心 --n-g6，2026-08-30 用户定）：云母 = DWM 画（lib.rs
-   DWMWA_BORDER_COLOR 染 #333333，沿圆角裁切路径恒连续恒贴边）、前端 ::before 不画——
-   DWM 线与 CSS inset 0 线有 ~0.5px 系统错位，双画恒显双层；实色 = 前端 ::before 自绘
-   （Win10 DWM 无边框可画）。选择模式进出由 set_main_border_picking 切染品牌色（§19）。 */
+   窗口边框分模式同色（通用/六级实心 --n-g6，2026-08-30 用户定）：云母 = DWM 染画（lib.rs
+   DWMWA_BORDER_COLOR #333333）+ 前端 ::before 同色遮罩环（五轮定稿：边框色淹没圆角 AA
+   过渡带、内容边缘退入弧内，四角缺口消——纯 DWM 画边时角弧 AA 直接咬内容色成缺口，
+   实机 100%/125%/150% 缩放均见，Codex 即以同色外圈遮罩规避）；实色 = 前端 ::before
+   自绘（Win10 DWM 无边框可画）。选择模式进出 = set_main_border_picking 切染品牌色 +
+   遮罩环换品牌色（§19）。 */
 .window {
   position: relative;
   height: 100%;
@@ -394,10 +396,8 @@ async function togglePin(): Promise<void> {
 .window.maximized {
   border-radius: 0;
 }
-/* 1px 窗口描边（伪元素 inset 0 自绘不占空间）——仅实色回退模式自绘（通用/六级实心
-   --n-g6 + 圆角 8 随壳自裁）；云母模式边框由 DWM 染同色沿裁切路径画（lib.rs），前端
-   不画——DWM 线与 CSS inset 0 线有系统性 ~0.5px 错位，双画恒显双层（2026-08-30 实机
-   两轮实证，踩坑 063）；
+/* 1px 窗口描边（伪元素 inset 0 自绘不占空间）——实色回退模式自绘（通用/六级实心
+   --n-g6 + 圆角 8 随壳自裁，Win10 DWM 无边框可画）；云母模式 = 同色遮罩环（见下）；
    z-54 = 三栏内容之上、picking 外框（55）之下；最大化贴屏边无意义隐藏 */
 .window::before {
   content: "";
@@ -408,24 +408,41 @@ async function togglePin(): Promise<void> {
   pointer-events: none;
   z-index: 54;
 }
+/* 云母遮罩环（2026-08-30 五轮用户定，Codex 手法）：1px 边框线 + 1.5px 零模糊外扩阴影
+   同为边框色——圆角过渡带整圈淹没成边框色，内容边缘退入弧内不直接暴露给 DWM 角弧
+   AA，缝隙无对比色可透；与 DWM 染色线同色重叠合一，故无双层。圆角 7 = DWM 裁切弧
+   （实测 ~7 逻辑 px @150%，踩坑 063）内缩 1 贴其内缘，外扩阴影兜底各 DPI 下裁切弧
+   ≤9 的分叉（100%/125% 实机仍有缺口后的定稿） */
 .window.fx-mica::before {
-  border: 0;
+  border: 1px solid var(--n-g6);
+  border-radius: calc(var(--n-radius-8) - 1px);
+  box-shadow: 0 0 0 var(--border-strong) var(--n-g6);
 }
 .window.maximized::before {
   border: 0;
   border-radius: 0;
+  box-shadow: none;
 }
-/* 选择模式常态描边让位（实色模式由 ::after 品牌框独存；云母模式 DWM 边框切染品牌色） */
+/* 选择模式常态描边让位（实色模式由 ::after 品牌框独存；云母模式遮罩环换品牌色承框） */
 .window.picking::before {
   border: 0;
 }
+/* 云母 picking = 遮罩环换品牌色（与 DWM 切染品牌线同色重叠合一——选择模式角部缺口
+   在高亮下最显，品牌色淹没后消） */
+.window.fx-mica.picking::before {
+  border: 1px solid var(--brand-border);
+  box-shadow: 0 0 0 var(--border-strong) var(--brand-border);
+}
+/* 最大化整环让位（DWM 最大化不裁角不画边）——后置与 picking 环同优先级（0,3,0）拼顺序压之 */
+.window.maximized.fx-mica::before {
+  border: 0;
+  box-shadow: none;
+}
 /* 选择模式整圈品牌色外边框（6.2 一轮，PRD 03_数据链接 04 四重标识之一；figma 02 稿：
    1.5px 品牌色-边框线 = --brand-border，token 注释既定预留）——**仅实色模式自绘**；
-   云母模式不画：品牌框 = DWM 切染品牌色的 1px 线独存（set_main_border_picking）——
-   2026-08-30 四轮用户定：云母下圆角/边框全交 DWM，前端零参与（任何 CSS 线与 DWM 线
-   双画，两套弧光栅化路径的亚像素差在角上必显缝/双层，踩坑 063 四轮实机实证）。
-   伪元素不遮交互；圆角 8 与 DWM 圆角裁切同路径（直角线四角会被 DWM 角弧吞断，063）；
-   z-index 55：盖三栏内容（win-controls 浮块 60 与弹窗仍在其上） */
+   云母模式不画：品牌框 = DWM 切染品牌线 + ::before 品牌遮罩环同色合一（五轮定稿：
+   同色重叠不分层，角弧 AA 带被品牌色淹没无缺口）。
+   伪元素不遮交互；z-index 55：盖三栏内容（win-controls 浮块 60 与弹窗仍在其上） */
 .window.picking::after {
   content: "";
   position: absolute;
@@ -436,7 +453,7 @@ async function togglePin(): Promise<void> {
   z-index: 55;
 }
 .window.fx-mica.picking::after {
-  border: 0; /* 云母模式品牌框前端零画，DWM 染色线独存单层 */
+  border: 0; /* 云母模式 ::after 零画：品牌框 = DWM 染色线 + ::before 品牌遮罩环承担 */
 }
 .window.maximized.picking::after {
   border-radius: 0;

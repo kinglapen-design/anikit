@@ -37,10 +37,11 @@ pub async fn get_window_fx_mode() -> Result<String, String> {
   Ok(crate::adapters::window_fx::main_mode().to_string())
 }
 
-/// 主窗口 DWM 边框色随选择模式切换（6.2 四重标识之一；2026-08-30 实机定：云母模式边框
-/// 由 DWM 画，picking = 品牌色 #3DDDD2 与前端 ::after 品牌框同色重叠错位不分层、
-/// 常态 = 通用/六级 #333333）。Win11 22000+ 生效，Win10 忽略（实色模式边框前端自绘，
-/// 调用无害）；任何失败静默 Ok——掉回常态色，前端品牌框仍在，观感可降级不阻断。
+/// 主窗口 DWM 边框色随选择模式切换（6.2 四重标识之一；2026-08-30 五轮定：云母模式 =
+/// DWM 染色线 + 前端 ::before 同色遮罩环合一——遮罩环淹没圆角 AA 过渡带消四角缺口，
+/// picking = 品牌色 #3DDDD2、常态 = 通用/六级 #333333，两端同色故重叠不分层）。
+/// Win11 22000+ 生效，Win10 忽略（实色模式边框前端自绘，调用无害）；任何失败静默
+/// Ok——掉回常态色，前端品牌遮罩环仍在，观感可降级不阻断。
 #[tauri::command]
 pub async fn set_main_border_picking(app: tauri::AppHandle, picking: bool) -> Result<(), String> {
   #[cfg(target_os = "windows")]
