@@ -55,8 +55,9 @@ export const usePickerStore = defineStore("picker", {
       this.active = true;
       this.picked = [];
       // 云母模式 DWM 窗口边框切染品牌色（四重标识之一；与 ::after 品牌框同色重叠单层，
-      // 2026-08-30 实机定；实色模式 DWM 忽略、前端自绘，调用无害；失败静默降级）
-      void invoke("set_main_border_picking", { picking: true }).catch(() => {});
+      // 2026-08-30 实机定；实色模式 DWM 忽略、前端自绘，调用无害；失败告警不阻断——
+      // 掉回常态色前端品牌框仍在，可降级）
+      void invoke("set_main_border_picking", { picking: true }).catch((e) => console.warn("[picker] DWM 边框切色失败：", e));
       // 进入即清全局选择：单击语义已变为加入/移出备选，残留选中只会误导
       useSelectionStore().clear();
       const ui = useUiStore();
@@ -101,7 +102,7 @@ export const usePickerStore = defineStore("picker", {
       const origin = this.origin;
       this.active = false;
       // DWM 窗口边框染回常态色（通用/六级 #333333，同 enter 口径反向）
-      void invoke("set_main_border_picking", { picking: false }).catch(() => {});
+      void invoke("set_main_border_picking", { picking: false }).catch((e) => console.warn("[picker] DWM 边框回色失败：", e));
       this.origin = null;
       this.targetFolder = null;
       this.filterAudio = false;

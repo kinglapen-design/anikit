@@ -49,19 +49,30 @@ pub async fn set_main_border_picking(app: tauri::AppHandle, picking: bool) -> Re
     use windows::Win32::Foundation::HWND;
     use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
     if let Some(w) = app.get_webview_window("main") {
-      if let Ok(raw) = w.hwnd() {
-        let hwnd = HWND(raw.0 as _);
-        // COLORREF 0x00BBGGRR：品牌 #3DDDD2 → B=0xD2 G=0xDD R=0x3D；#333333 正反对称
-        let border: u32 = if picking { 0x00D2_DD3D } else { 0x0033_3333 };
-        unsafe {
-          let _ = DwmSetWindowAttribute(
-            hwnd,
-            DWMWA_BORDER_COLOR,
-            &border as *const _ as *const std::ffi::c_void,
-            std::mem::size_of_val(&border) as u32,
-          );
+      match w.hwnd() {
+        Ok(raw) => {
+          let hwnd = HWND(raw.0 as _);
+          // COLORREF 0x00BBGGRR：品牌 #3DDDD2 → B=0xD2 G=0xDD R=0x3D；#333333 正反对称
+          let border: u32 = if picking { 0x00D2_DD3D } else { 0x0033_3333 };
+          let r = unsafe {
+            DwmSetWindowAttribute(
+              hwnd,
+              DWMWA_BORDER_COLOR,
+              &border as *const _ as *const std::ffi::c_void,
+              std::mem::size_of_val(&border) as u32,
+            )
+          };
+          // 埋点（2026-08-30 三轮排障：选择模式角部暗点疑似切色未生效——失败原静默吞掉无信号）
+          if let Err(e) = r {
+            log::warn!("[window_fx] set_main_border_picking({picking}) DwmSetWindowAttribute 失败：{e}");
+          } else {
+            log::info!("[window_fx] 主窗口边框切色 picking={picking}");
+          }
         }
+        Err(e) => log::warn!("[window_fx] set_main_border_picking 取 hwnd 失败：{e}"),
       }
+    } else {
+      log::warn!("[window_fx] set_main_border_picking：main 窗口不存在");
     }
   }
   #[cfg(not(target_os = "windows"))]
