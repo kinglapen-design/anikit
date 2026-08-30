@@ -184,10 +184,11 @@ pub fn run() {
           use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
           if let Ok(raw) = w.hwnd() {
             let hwnd = HWND(raw.0 as _);
-            // 主窗口 DWM 1px 边框染为 亮-选中（token：主窗口边框档）叠 C1 实色 #2E332F
-            //（COLORREF 0x00BBGGRR；2026-08-08 新 token 体系换色，旧 border-1 #3A3940 作废），
-            // Win11 22000+ 生效，Win10 忽略
-            let border: u32 = 0x002F_332E;
+            // 主窗口 DWM 边框整体抑制（DWMWA_COLOR_NONE = 0xFFFFFFFE；2026-08-30 实机 BUG
+            // 三连后用户定：窗口描边两模式均前端 ::before 自绘——DWM COLORREF 纯色贴不了稿
+            // 半透明档、与 picking 品牌框叠画成双层；DWM 只管圆角裁切与投影，速查表 §19）。
+            // Win11 22000+ 生效，Win10 忽略（本就不画此边框，无差异）
+            let border: u32 = 0xFFFF_FFFE;
             unsafe {
               let _ = DwmSetWindowAttribute(
                 hwnd,

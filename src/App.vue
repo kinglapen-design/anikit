@@ -365,10 +365,13 @@ async function togglePin(): Promise<void> {
   margin-top: var(--space-12);
 }
 /* 主窗口壳（7.1 十七轮 · 主窗口骨架轮贴稿，布局/主窗口/主窗口.md）：transparent 窗口 +
-   运行时按系统版本云母/实色双态——基态（fx-solid）= 实色-1 --n-g-a1-solid 回退底，
-   fx-mica = 半透明-1 --n-g-a1（云母透出）；圆角 8，最大化归零；大阴影 = DWM shadow
-   （tauri.conf shadow:true）；窗口边框：实色模式前端自绘（::before 1px 亮-半透明-1），
-   云母模式交 DWM（lib.rs DWMWA_BORDER_COLOR 染色 #2E332F，前端不画防双重线，速查表 §19）。 */
+   运行时按系统版本云母/实色双态——基态 = 实色-1 --n-g-a1-solid 回退底，fx-mica = 全透明
+   （云母直呈）；大阴影 = DWM shadow（tauri.conf shadow:true）。
+   圆角分模式（2026-08-30 实机 BUG 后改定）：实色 = 前端自裁 8（最大化归零）；云母 = DWM
+   系统圆角独裁、前端 radius 0 不裁——双层裁切的 AA 路径差在四角透出云母成缝隙（踩坑 063）。
+   窗口边框两模式均前端 ::before 自绘，云母模式 DWM 边框 COLOR_NONE 抑制（lib.rs）——DWM
+   COLORREF 纯色贴不了稿半透明档、与 picking 品牌框叠画成双层（同日 BUG 三连，用户定：
+   DWM 只管圆角裁切与投影，速查表 §19）。 */
 .window {
   position: relative;
   height: 100%;
@@ -383,13 +386,17 @@ async function togglePin(): Promise<void> {
   /* 云母模式 = 窗口底全透明，DWM 云母直接呈现（2026-08-30 用户定：稿 93% 是 figma
      模拟手法，工程里云母上不叠色；实色区由各面板自画——内容容器/右栏 g1 卡片） */
   background: transparent;
+  /* 圆角交 DWM 系统圆角独裁（前端再裁 radius 8 会与 DWM 裁切路径 AA 差在四角透缝）；
+     实色模式 DWM 无圆角裁切，仍基态前端自裁 8 */
+  border-radius: 0;
 }
 .window.maximized {
   border-radius: 0;
 }
-/* 1px 亮-半透明-1 窗口描边（稿值，伪元素 inset 0 自绘不占空间）——仅实色回退模式自绘；
-   云母模式边框整体交 DWM（lib.rs DWMWA_BORDER_COLOR 染色 #2E332F），前端再画与 DWM
-   边框叠粗成双重线（2026-08-30 实机 BUG，用户定交 DWM 免 BUG）；
+/* 1px 窗口描边（伪元素 inset 0 自绘不占空间；两模式均前端自绘，云母模式 DWM 边框
+   COLOR_NONE 抑制防双层）：实色 = 亮/半透明-1（稿值）+ 圆角 8 随壳自裁；云母 =
+   亮/半透明-3（2026-08-30 用户实机试色档）+ 直角——线四角伸出窗口圆角之外，由 DWM
+   圆角裁边，外缘贴 DWM 裁切路径零缝隙（CSS 圆角路径与 DWM 路径的 AA 差是缝隙根因）；
    z-54 = 三栏内容之上、picking 外框（55）之下；最大化贴屏边无意义隐藏 */
 .window::before {
   content: "";
@@ -401,11 +408,16 @@ async function togglePin(): Promise<void> {
   z-index: 54;
 }
 .window.fx-mica::before {
-  border: 0;
+  border-color: var(--n-l-a3);
+  border-radius: 0;
 }
 .window.maximized::before {
   border: 0;
   border-radius: 0;
+}
+/* 选择模式常态描边让位品牌外框（::after 独存单层，2026-08-30 实机双层 BUG） */
+.window.picking::before {
+  border: 0;
 }
 /* 选择模式整圈品牌色外边框（6.2 一轮，PRD 03_数据链接 04 四重标识之一；figma 02 稿：
    1.5px 品牌色-边框线 = --brand-border，token 注释既定预留）。伪元素不遮交互；
@@ -418,6 +430,9 @@ async function togglePin(): Promise<void> {
   border-radius: var(--radius-8);
   pointer-events: none;
   z-index: 55;
+}
+.window.fx-mica.picking::after {
+  border-radius: 0; /* 云母模式同 ::before 口径：直角交 DWM 圆角裁边 */
 }
 .window.maximized.picking::after {
   border-radius: 0;
