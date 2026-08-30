@@ -804,14 +804,14 @@ async def main():
                 "  aw: acts.offsetWidth, agap: as.columnGap, btns,"
                 "  cx: (rc[0].left + rc[1].right) / 2 - (rr.left + rr.right) / 2,"
                 "  cy: (bd.top + bd.bottom) / 2 - (rr.top + rr.bottom) / 2 }; })()")
-            check("T17a 空态标题「暂无文件」18/26 Bold 二级 + 提示「将文件拖拽至此处导入」13/18 三级 + 插画 CSS 不叠 opacity（SVG 内 0.6）+ drop-shadow 补外阴影",
+            check("T17a 空态标题「暂无文件」18/26 Bold 二级 + 提示「将文件拖拽至此处导入」13/18 三级 + 插画 CSS opacity 0.6（SVG 不透明导出，阴影不透出）+ drop-shadow 补外阴影",
                   isinstance(ef, dict) and ef.get("tt") == "暂无文件"
                   and ef.get("tfs") == "18px" and ef.get("tlh") == "26px"
                   and ef.get("tfw") == "700" and ef.get("tc") == "rgb(191, 191, 191)"
                   and ef.get("ht") == "将文件拖拽至此处导入"
                   and ef.get("hfs") == "13px" and ef.get("hlh") == "18px"
                   and ef.get("hc") == "rgb(128, 128, 128)"
-                  and ef.get("io") == "1" and "drop-shadow" in (ef.get("ifi") or ""),
+                  and ef.get("io") == "0.6" and "drop-shadow" in (ef.get("ifi") or ""),
                   json.dumps(ef, ensure_ascii=False))
             btns17 = ef.get("btns") if isinstance(ef, dict) else None
             check("T17b 双钮（导入文件/导入文件夹）= ActionButton solid md 34 高 g4 #292929 圆角 8 + 组 282 宽 gap 8 + 钮实宽 137 均分",
