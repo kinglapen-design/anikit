@@ -111,9 +111,10 @@ pub struct CoverInput {
   pub crop: crate::core::models::Crop,
 }
 
-/// 封面烘培输出规格（43 稿封面框 218:168 = 13:10，短边取缩略图同档 320 → 416×320）
+/// 封面烘培输出规格（7.1 新稿封面框方形 240×240 → 416×416 同比例；像素档沿旧 43 稿长边 416）。
+/// 输出长宽比必须与前端取景框一致——不一致则 cover 铺满窗口不同，确认后观感"又裁了一次"（2026-09-01 实机实锤）
 pub const COVER_OUT_W: u32 = 416;
-pub const COVER_OUT_H: u32 = 320;
+pub const COVER_OUT_H: u32 = 416;
 
 /// 封面设置（43 稿，6.1）：徽标三角语义（None = 不动 / Some(None) = 清除 / Some(Some) = 设置）+
 /// 封面（None = 不动 / Some = 选图按取景参数烘培新封面）。记录懒建；返回是否有改动。
@@ -134,7 +135,11 @@ pub fn set_archive_cover_settings(
     let file = bake_cover(lib, folder_id, &input.source_path, input.crop)?;
     new_avatar = Some(crate::core::models::Avatar { file, crop: Some(input.crop) });
   }
-  if lib.archives.archives.iter().all(|a| a.folder_id == folder_id) {
+  // 记录懒建（同 custom_data 口径：编辑路径懒建不写 created_at——created_at 保持新建/转换当次语义）。
+  // 2026-09-01 修：旧条件误写 all(folder_id == 本档案)——空表/全表皆本档案时成立，
+  // 后者每次确认都追加同 ID 空壳副本：读侧 find 命中首条（详情面板正常），list 全量前端 map
+  // 后写覆盖 → 空壳赢、卡片角标消失；且"他档有记录本档无"时 all 不成立 → 下方 expect 直接 panic
+  if lib.archives.archives.iter().all(|a| a.folder_id != folder_id) {
     lib.archives.archives.push(ArchiveData::new(folder_id));
   }
   let rec = lib.archives.archives.iter_mut().find(|a| a.folder_id == folder_id).expect("懒建后必有");
@@ -499,8 +504,38 @@ mod tests {
     assert!(set_archive_cover_settings(&mut h.lib, "F-不存在", None, None).is_err());
   }
 
+  /// 懒建回归（2026-09-01 实机 BUG：旧条件 all(folder_id == 本档案) 写错）：
+  /// ① 他档有记录本档无 → 懒建一条不 panic（旧码此处 expect panic）；
+  /// ② 本档记录已是唯一记录 → 再设置不追加同 ID 空壳副本（旧码每次确认都追加）
+  #[test]
+  fn cover_settings_lazy_create_never_duplicates() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F-A", "雪牧", None, 0);
+    mark_archive(&mut h.lib, "F-A");
+    add_folder(&mut h.lib, "F-B", "其他", None, 1);
+    mark_archive(&mut h.lib, "F-B");
+    h.lib.archives.archives.push(ArchiveData::new("F-B")); // 列表非空但无 F-A 记录
+    // ① 懒建 F-A：不 panic、恰一条
+    let badge = crate::core::models::Badge { text: "主角".into(), color: "#402122".into() };
+    assert!(set_archive_cover_settings(&mut h.lib, "F-A", Some(Some(badge)), None).unwrap());
+    assert_eq!(h.lib.archives.archives.iter().filter(|a| a.folder_id == "F-A").count(), 1, "懒建恰一条");
+    assert!(h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().created_at.is_empty(), "编辑路径懒建不写 created_at（同 custom_data 口径）");
+    // ② 本档记录存在（且下一轮换库区只剩本档一条）→ 反复设置不追加副本
+    h.lib.archives.archives.retain(|a| a.folder_id == "F-A");
+    let badge2 = crate::core::models::Badge { text: "女猪脚".into(), color: "#402122".into() };
+    for b in [Some(Some(badge2.clone())), None, Some(None)] {
+      set_archive_cover_settings(&mut h.lib, "F-A", b, None).unwrap();
+      assert_eq!(h.lib.archives.archives.len(), 1, "不得出现同 ID 副本");
+    }
+    assert_eq!(
+      h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().badge,
+      None,
+      "最后一拍清除徽标生效"
+    );
+  }
+
   /// 封面烘培：左红右蓝测试图按取景偏移裁切——x>0 视图右偏看到图左侧（红），x<0 看到右侧（蓝）；
-  /// 输出恒 416×320，avatar.file 记录且 covers/ 内文件存在；时间戳命名不覆盖
+  /// 输出恒 416×416 方形（与 7.1 新稿取景框同比例），avatar.file 记录且 covers/ 内文件存在；时间戳命名不覆盖
   #[test]
   fn cover_bake_crops_by_crop_params() {
     let mut h = make_lib();
@@ -524,9 +559,9 @@ mod tests {
     let avatar = h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().avatar.clone().unwrap();
     let out_path = h.lib.root.join(crate::core::library::COVERS_DIR).join(&avatar.file);
     assert!(out_path.is_file(), "封面文件落盘");
-    assert_eq!(crate::services::thumbnail::probe(&out_path), Some((416, 320)), "输出恒 416×320");
+    assert_eq!(crate::services::thumbnail::probe(&out_path), Some((416, 416)), "输出恒 416×416 方形");
     let baked = crate::services::thumbnail::decode_by_signature(&out_path).unwrap().to_rgba8();
-    let center = baked.get_pixel(208, 160);
+    let center = baked.get_pixel(208, 208);
     assert!(center[0] > center[2], "x>0 看到图左侧（红）：{center:?}");
     // cover_file_path 输出绝对路径；换一张不覆盖旧文件
     assert_eq!(cover_file_path(&h.lib, "F-A").as_deref(), Some(out_path.to_string_lossy().as_ref()));
@@ -543,7 +578,7 @@ mod tests {
     let baked2 = crate::services::thumbnail::decode_by_signature(&h.lib.root.join(crate::core::library::COVERS_DIR).join(&avatar2.file))
       .unwrap()
       .to_rgba8();
-    let center2 = baked2.get_pixel(208, 160);
+    let center2 = baked2.get_pixel(208, 208);
     assert!(center2[2] > center2[0], "x<0 看到图右侧（蓝）：{center2:?}");
     // 不存在的源文件报错
     assert!(set_archive_cover_settings(

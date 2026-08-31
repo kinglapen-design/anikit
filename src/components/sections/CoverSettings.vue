@@ -26,7 +26,8 @@ import { setArchiveCoverSettings, type CropInput } from "../../lib/customDataOps
 import { useContentStore, type ArchiveDetailView, type FolderNode } from "../../stores/content";
 
 // 封面框规格（新稿 240×240 方形；宽随栏内容宽 100%，取景数学用逻辑像素 240 归一——
-// crop 语义与像素无关，后端烘培输出 416×320 口径不变）
+// crop 语义与像素无关；后端烘培输出 416×416 方形与框同比例——输出长宽比必须等于框比，
+// 否则 cover 铺满窗口前后端不一致，确认后观感"又裁了一次"，2026-09-01 实机实锤）
 const FRAME = 240;
 
 const props = defineProps<{ node: FolderNode; data: ArchiveDetailView }>();

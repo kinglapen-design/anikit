@@ -208,10 +208,11 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   if blocks_fixed {
     log::info!("打开自检修复区块表（注入默认区块 / 失效区块引用置空）");
   }
-  // 档案数据自检（2026-08-15 档案子系统）：剔除指向不存在 folder / folder 非档案形态的记录
+  // 档案数据自检（2026-08-15 档案子系统）：剔除指向不存在 folder / folder 非档案形态的记录；
+  // 同 folder_id 重复记录去重（2026-09-01 封面设置懒建 BUG 存量自愈）
   let archives_fixed = fix_archives(&mut archives, &folders);
   if archives_fixed {
-    log::info!("打开自检修复 archives.json（剔除失效档案记录）");
+    log::info!("打开自检修复 archives.json（剔除失效档案记录 / 重复记录去重）");
   }
   // 关系自检（6.2 选择模式一轮，PRD 03_数据链接 06）：空间级 relations.json——剔除 from/to
   // 端点指向本库已失效目标的关系（跨库端点无法校验，保留）。空间级文件不在库备份清单，
@@ -324,12 +325,16 @@ fn read_archives(path: &Path) -> Result<ArchivesFile, DataError> {
 }
 
 /// 打开自检（2026-08-15 档案子系统）：archives.json 记录自愈——指向不存在 folder 或
-/// folder 非档案形态（kind != "archive"）的记录剔除。返回是否有改动
+/// folder 非档案形态（kind != "archive"）的记录剔除；同 folder_id 重复记录去重保留首条
+///（2026-09-01 前封面设置懒建条件写错会追加同 ID 空壳副本；更新永远落在 find 命中的首条，
+/// 副本必为陈旧空壳，故首条即真数据）。返回是否有改动
 fn fix_archives(archives: &mut ArchivesFile, folders: &FoldersFile) -> bool {
   let before = archives.archives.len();
   archives
     .archives
     .retain(|a| folders.folders.iter().any(|f| f.id == a.folder_id && f.kind.as_deref() == Some(ARCHIVE_KIND)));
+  let mut seen = HashSet::new();
+  archives.archives.retain(|a| seen.insert(a.folder_id.clone()));
   before != archives.archives.len()
 }
 
@@ -760,6 +765,47 @@ mod tests {
     assert_eq!(lib.archives.archives.len(), 1, "失效记录剔除");
     assert_eq!(lib.archives.archives[0].folder_id, "F01");
     assert_eq!(lib.archives.archives[0].props, vec!["主角"]);
+    let disk: ArchivesFile = read_json(&root.join(ARCHIVES_FILE)).unwrap();
+    assert_eq!(disk.archives.len(), 1, "自愈落盘");
+  }
+
+  /// 档案自检去重（2026-09-01 封面设置懒建 BUG 存量自愈）：同 folderId 重复记录保留首条
+  ///（真数据恒在首条——更新永远落在 find 命中的首条，副本是后追加的空壳）并落盘
+  #[test]
+  fn open_dedups_archive_records() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let root = lib.root.clone();
+
+    fs::write(
+      root.join(FOLDERS_FILE),
+      r#"{
+        "version": 1,
+        "folders": [
+          { "id": "F01", "name": "雪牧", "parent": null, "kind": "archive", "order": 0 }
+        ],
+        "items": []
+      }"#,
+    )
+    .unwrap();
+    fs::write(
+      root.join(ARCHIVES_FILE),
+      r##"{
+        "version": 1,
+        "archives": [
+          { "folderId": "F01", "badge": { "text": "女猪脚", "color": "#402122" }, "props": ["主角"] },
+          { "folderId": "F01" },
+          { "folderId": "F01" }
+        ]
+      }"##,
+    )
+    .unwrap();
+
+    let lib = open(&lib.space_root, &root).unwrap();
+    assert_eq!(lib.archives.archives.len(), 1, "重复记录去重");
+    let rec = &lib.archives.archives[0];
+    assert_eq!(rec.badge.as_ref().map(|b| b.text.as_str()), Some("女猪脚"), "首条真数据保留");
+    assert_eq!(rec.props, vec!["主角"]);
     let disk: ArchivesFile = read_json(&root.join(ARCHIVES_FILE)).unwrap();
     assert_eq!(disk.archives.len(), 1, "自愈落盘");
   }
