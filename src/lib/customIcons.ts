@@ -4,8 +4,9 @@
 // 3.3 更改图标网格面板（05 稿 §3/§4）复用本清单。
 // 2026-09-01（7.1 二十五轮）：30 个新双色图标接入，旧 19 名清单废除（folder-closed/folder-open
 // 为基础件不入本清单）；顺序 = 命名对照.md 02自定义 表序。
-// 存量 Folder.icon / Block.icon 旧文件干（animal/audio 等）迁移映射待用户定（命名对照.md 02自定义 节注）——
-// 迁移落地前，存过旧图标的节点渲染会命中 icons.ts 旧版回退层或报"图标不存在"。
+// 存量 Folder.icon / Block.icon 旧文件干迁移已落地 = 后端开库自检 fix_custom_icons
+//（core/library.rs：就近映射 animal→dog / audio→music / video→film / vehicle→car / monster→slime，
+// 对不上的旧名与任意未知名回退 None——2026-09-01 用户定；其新名白名单与本清单同源）。
 export interface CustomIconDef {
   name: string; // 文件干（Folder.icon / Block.icon 存储值）
   label: string; // 中文名（下拉列表显示）

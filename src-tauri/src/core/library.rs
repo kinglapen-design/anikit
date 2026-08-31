@@ -208,6 +208,12 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   if blocks_fixed {
     log::info!("打开自检修复区块表（注入默认区块 / 失效区块引用置空）");
   }
+  // 自定义图标值迁移（2026-09-01，7.1 二十五轮）：02自定义 新 30 图标集——旧文件干
+  // 就近映射（animal→dog 等 5 项），失效值回退默认 None（用户定）
+  let icons_fixed = fix_custom_icons(&mut folders);
+  if icons_fixed {
+    log::info!("打开自检迁移自定义图标值（旧文件干就近映射 / 失效值回退默认）");
+  }
   // 档案数据自检（2026-08-15 档案子系统）：剔除指向不存在 folder / folder 非档案形态的记录；
   // 同 folder_id 重复记录去重（2026-09-01 封面设置懒建 BUG 存量自愈）
   let archives_fixed = fix_archives(&mut archives, &folders);
@@ -231,7 +237,7 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
       Err(e) => log::error!("关系自检读取失败（跳过）：{e}"),
     }
   }
-  let folders_changed = removed > 0 || blocks_fixed;
+  let folders_changed = removed > 0 || blocks_fixed || icons_fixed;
   if folders_changed || archives_fixed {
     match backup::backup_library(path, &assets_dir) {
       Ok(_) => {
@@ -311,6 +317,45 @@ fn fix_blocks(folders: &mut FoldersFile) -> bool {
       f.block = None;
       changed = true;
     }
+  }
+  changed
+}
+
+/// 02自定义 新 30 图标集（2026-09-01，7.1 二十五轮；assets/icons/命名对照.md 表序，
+/// folder-closed/folder-open 为基础件不作自定义值）。与前端 src/lib/customIcons.ts 清单同源
+const CUSTOM_ICONS_NEW: [&str; 30] = [
+  "inbox", "window", "briefcase", "medal", "card", "slime", "layers", "image", "chat", "layout", "film", "house", "tag", "archive", "building", "car", "browser", "flame", "thumbs-up", "dog", "camera", "kanban", "vegetable", "emoji", "character", "palette", "shopping-basket", "music", "plane", "tableware",
+];
+
+/// 单个图标值迁移（fix_custom_icons 用）：新集内原样；旧 05_custom-icon 文件干就近映射；
+/// 对不上的旧名与任意未知名 → None 回退默认（2026-09-01 用户定）
+fn migrate_icon_value(icon: &mut Option<String>) -> bool {
+  let Some(name) = icon.as_deref() else { return false };
+  if CUSTOM_ICONS_NEW.contains(&name) {
+    return false;
+  }
+  *icon = match name {
+    "animal" => Some("dog".to_string()),
+    "audio" => Some("music".to_string()),
+    "video" => Some("film".to_string()),
+    "vehicle" => Some("car".to_string()),
+    "monster" => Some("slime".to_string()),
+    _ => None,
+  };
+  true
+}
+
+/// 打开自检（2026-09-01，7.1 二十五轮）：自定义图标值迁移——02自定义 新 30 图标集接入后，
+/// 存量 Folder.icon / Block.icon 旧文件干（05_custom-icon 集，svg 已随旧版归档）按
+/// migrate_icon_value 就近映射改写、失效值回退默认（未迁移值渲染命中前端旧版回退层，
+/// 回退层退役后即报"图标不存在"）。返回是否有改动
+fn fix_custom_icons(folders: &mut FoldersFile) -> bool {
+  let mut changed = false;
+  for f in &mut folders.folders {
+    changed |= migrate_icon_value(&mut f.icon);
+  }
+  for b in &mut folders.blocks {
+    changed |= migrate_icon_value(&mut b.icon);
   }
   changed
 }
@@ -695,6 +740,44 @@ mod tests {
     assert_eq!((lib.folders.folders[0].block.clone(), lib.folders.folders[0].icon.clone()), (None, None));
     let disk: FoldersFile = read_json(&root.join(FOLDERS_FILE)).unwrap();
     assert_eq!(disk.blocks.len(), 1, "自检改动落盘");
+  }
+
+  /// 自定义图标迁移（2026-09-01，7.1 二十五轮）：旧 05_custom-icon 文件干就近映射（animal→dog）、
+  /// 对不上的旧名与未知名回退 None；新 30 名原样保留；Folder.icon 与 Block.icon 同规则并落盘
+  #[test]
+  fn open_migrates_legacy_custom_icon_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let root = lib.root.clone();
+
+    fs::write(
+      root.join(FOLDERS_FILE),
+      r#"{
+        "version": 1,
+        "blocks": [
+          { "id": "dir", "name": "目录", "icon": null, "order": 0 },
+          { "id": "B01", "name": "参考", "icon": "weapon", "order": 1 }
+        ],
+        "folders": [
+          { "id": "F01", "name": "动物", "parent": null, "order": 0, "icon": "animal" },
+          { "id": "F02", "name": "狗狗", "parent": null, "order": 1, "icon": "dog" },
+          { "id": "F03", "name": "杂物", "parent": null, "order": 2, "icon": "weapon" },
+          { "id": "F04", "name": "手改", "parent": null, "order": 3, "icon": "not-a-icon" }
+        ],
+        "items": []
+      }"#,
+    )
+    .unwrap();
+
+    let lib = open(&lib.space_root, &root).unwrap();
+    let at = |id: &str| lib.folders.folders.iter().find(|f| f.id == id).unwrap().icon.clone();
+    assert_eq!(at("F01").as_deref(), Some("dog"), "animal 就近映射 dog");
+    assert_eq!(at("F02").as_deref(), Some("dog"), "新 30 名原样保留");
+    assert_eq!(at("F03"), None, "对不上的旧名回退默认");
+    assert_eq!(at("F04"), None, "任意未知名回退默认（防渲染报错）");
+    assert_eq!(lib.folders.blocks[1].icon, None, "Block.icon 同规则回退");
+    let disk: FoldersFile = read_json(&root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.folders.iter().find(|f| f.id == "F01").unwrap().icon.as_deref(), Some("dog"), "迁移落盘");
   }
 
   /// 区块自检：默认区块缺失（已有其他区块）→ 补注队首；Folder.block 指向不存在的区块 → 置 None 自愈
