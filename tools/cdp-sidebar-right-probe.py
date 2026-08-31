@@ -19,6 +19,16 @@
 #   R14 关闭钮 hover = 状态/禁止底 rgb(220,57,57)（Input.dispatchMouseEvent 真实悬停）
 #   R15 选择模式：关系区块添加钮进 picker → 占位组（点击卡片选择 + 双框禁用）+ 按钮序 取消左/确认右 +
 #       顶部横幅；取消退出 = 详情面板恢复
+# 2026-08-31 用户实机走查六条修复追加断言：
+#   R4c 窗口控制区透窗口底：aside 根无底色/无左边线，::before 只画顶行 46 以下（g1 + 左缘 1px g3）
+#   R7b 分段图标色：选中段一级 rgb(242,242,242) / 未选中三级 rgb(128,128,128)（svg stroke 转 currentColor 修复）
+#   R8d 描述标题行收起 = 留一排截断正文（clamp-1 / 高 18 / line-clamp 1），不再整段隐藏
+#   R10d 链接 tab 四区块标题行折叠钮 + 动作组常显（staticActions——「添加按钮本身就是入口」）；
+#       污染文件区块仍无动作组（R10c）
+#   R10e tab 切换滑动动画：fwd 规则组存在（enter 250ms 缓入 delay 100ms / leave 150ms 缓出 / 位移 48px），
+#       点击切换后 .tab-pane 挂 tab-x-fwd-enter 类
+#   R13b/R13c/R13d 封面编辑：点封面 → pinned 根 250ms 高度补间（inline height + transition）；
+#       编辑态边距 = 栏缘 +12（pinned padding 12——双重 padding 24 修复）；取消退回常态组
 #   截图 r23-sidebar-right.png（整窗 + 右栏局部）
 # 桩：最小主窗口；f1 角色（子 f1a 主角）/ f2 场景（子 f2a 子档案 kind=archive）；3 条 Placement（a1 fla 等）。
 # 坑位沿用：端口/profile 随 pid 唯一 + 禁缓存；桩返回 structuredClone 深拷贝（速查 §12）；
@@ -274,6 +284,19 @@ async def main():
             check("R4b 旧结构清零（54 工具栏 / 旧自制滚轮）",
                   isinstance(legacy, list) and len(legacy) == 0, json.dumps(legacy))
 
+            # ---------- R4c 窗口控制区透窗口底（2026-08-31 用户实机定） ----------
+            sr = await ev(
+                "(() => { const a = document.querySelector('.sidebar-right');"
+                " const s = getComputedStyle(a);"
+                " const b = getComputedStyle(a, '::before');"
+                " return { bg: s.backgroundColor, bl: s.borderLeftWidth,"
+                "   pbg: b.backgroundColor, ptop: b.top, pbl: b.borderLeftWidth }; })()")
+            check("R4c 窗口控制区透窗口底（aside 根无底无线；::before 只画顶行 46 以下 g1 + 左缘 1px）",
+                  isinstance(sr, dict) and sr.get("bg") == "rgba(0, 0, 0, 0)" and sr.get("bl") == "0px"
+                  and sr.get("ptop") == "46px" and sr.get("pbg") != "rgba(0, 0, 0, 0)"
+                  and sr.get("pbl") == "1px",
+                  json.dumps(sr))
+
             # ---------- R5 文件夹形态（点树 f1） ----------
             await click_sel('.tree-item[data-folder-id="f1"]')
             fd = await ev(
@@ -327,6 +350,18 @@ async def main():
                   isinstance(seg, dict) and seg.get("n") == 3 and seg.get("on") == 0 and seg.get("h") == 38,
                   json.dumps(seg))
 
+            # ---------- R7b 分段图标色（svg 转 currentColor 修复，2026-08-31 走查） ----------
+            segc = await ev(
+                "[...document.querySelectorAll('.sidebar-right .seg-block .seg-item')].map(b => ({"
+                " on: b.className.includes('on'), color: getComputedStyle(b).color,"
+                " stroke: b.querySelector('svg path')?.getAttribute('stroke') ?? null }))")
+            check("R7b 图标随选中态着色：选中一级 / 未选中三级 + stroke=currentColor",
+                  isinstance(segc, list) and len(segc) == 3
+                  and segc[0].get("color") == "rgb(242, 242, 242)"
+                  and segc[1].get("color") == "rgb(128, 128, 128)" and segc[2].get("color") == "rgb(128, 128, 128)"
+                  and all(i.get("stroke") == "currentColor" for i in segc),
+                  json.dumps(segc))
+
             # ---------- R8 基础信息 tab ----------
             basic = await ev(
                 "(() => { const root = document.querySelector('.sidebar-right .tab-body');"
@@ -347,6 +382,22 @@ async def main():
             check("R8c 数据卡 4 行（桩 width null 无尺寸行）= 文件大小/格式/添加日期/修改日期",
                   isinstance(basic, dict) and basic.get("rows") == ["文件大小", "格式", "添加日期", "修改日期"],
                   json.dumps(basic, ensure_ascii=False))
+
+            # ---------- R8d 描述标题行收起 = 留一排截断（2026-08-31 用户实机定） ----------
+            await ev("document.querySelector('.sidebar-right .desc-head').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
+            await asyncio.sleep(0.3)
+            dc = await ev(
+                "(() => { const el = document.querySelector('.sidebar-right .desc-content');"
+                " if (!el) return null;"
+                " return { cls: el.className, h: el.offsetHeight,"
+                "   lc: getComputedStyle(el).webkitLineClamp ?? null }; })()")
+            check("R8d 描述收起 = 留一排截断正文（clamp-1 / 高 18 / line-clamp 1）",
+                  isinstance(dc, dict) and "clamp-1" in (dc.get("cls") or "")
+                  and dc.get("h") == 18 and dc.get("lc") == "1",
+                  json.dumps(dc))
+            # 再点回展开复原（防影响后续断言与截图）
+            await ev("document.querySelector('.sidebar-right .desc-head').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
+            await asyncio.sleep(0.3)
 
             # ---------- R9 信息查看管理钮 ----------
             mb = await ev(
@@ -380,6 +431,65 @@ async def main():
             check("R10c 污染文件区块标题行无动作组（稿）",
                   len(pollution) == 1 and pollution[0].get("acts") is False,
                   json.dumps(pollution, ensure_ascii=False))
+
+            # ---------- R10d 标题行折叠钮 + 动作组常显（staticActions，2026-08-31 用户定） ----------
+            # 鼠标挪中性位排除 hover 干扰（常显断言必须是非悬停态读出）
+            await send(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": 700, "y": 500}, session=sess)
+            await asyncio.sleep(0.2)
+            stv = await ev(
+                "[...document.querySelectorAll('.sidebar-right .links-tab .lb-block')].map(b => {"
+                " const c = getComputedStyle(b.querySelector('.st .chev'));"
+                " const a = b.querySelector('.st .acts');"
+                " return { t: b.querySelector('.st .txt')?.textContent ?? null,"
+                "   chev: c.opacity + '/' + c.visibility,"
+                "   acts: a ? (s => s.opacity + '/' + s.visibility)(getComputedStyle(a)) : null }; })")
+            check("R10d 五区块标题行折叠钮常显 + 四区块动作组常显（非悬停态 opacity 1）",
+                  isinstance(stv, list) and len(stv) == 5
+                  and all(x.get("chev") == "1/visible" for x in stv)
+                  and all(x.get("acts") == "1/visible" for x in stv if x.get("t") != "污染文件")
+                  and [x for x in stv if x.get("t") == "污染文件"][0].get("acts") is None,
+                  json.dumps(stv, ensure_ascii=False))
+
+            # ---------- R10e tab 切换滑动动画（侧栏范例同款时序，2026-08-31 用户定） ----------
+            # computed 级行为断言：basic → links（fwd），入场 delay 100ms 窗内读 ——
+            # 新内容挂 tab-x-fwd-enter-active + 250ms 档 + delay 100ms + 停在 enter-from 位移 48px
+            await ev("[...document.querySelectorAll('.sidebar-right .seg-block .seg-item')][0].click()")
+            await asyncio.sleep(0.5)
+            await ev("[...document.querySelectorAll('.sidebar-right .seg-block .seg-item')][1].click()")
+            await asyncio.sleep(0.06)
+            pane = await ev(
+                "(() => { const panes = [...document.querySelectorAll('.sidebar-right .tab-body .tab-pane')];"
+                " const p = panes[panes.length - 1];" # 新内容在 DOM 尾（首个 = 离场旧内容）
+                " if (!p) return null; const s = getComputedStyle(p);"
+                " return { cls: p.className, dur: s.transitionDuration, delay: s.transitionDelay,"
+                "   ease: s.transitionTimingFunction, tf: s.transform }; })()")
+            check("R10e tab 切换动画：fwd 新内容右入 48px + 250ms 缓入 delay 100ms（侧栏同款时序）",
+                  isinstance(pane, dict) and "tab-x-fwd-enter-active" in (pane.get("cls") or "")
+                  and "0.25s" in (pane.get("dur") or "") and "0.1s" in (pane.get("delay") or "")
+                  and "cubic-bezier(0, 0, 0.1, 1)" in (pane.get("ease") or "") and "48" in (pane.get("tf") or ""),
+                  json.dumps(pane))
+            await asyncio.sleep(0.5)
+            back = await ev(
+                "(() => { const panes = [...document.querySelectorAll('.sidebar-right .tab-body .tab-pane')];"
+                " const p = panes[panes.length - 1];"
+                " return p ? { cls: p.className, tf: getComputedStyle(p).transform, n: panes.length } : null; })()")
+            check("R10e2 动画收尾：单 pane + 类摘除 + transform 归零",
+                  isinstance(back, dict) and back.get("n") == 1 and "enter" not in (back.get("cls") or "")
+                  and back.get("tf") in ("none", "matrix(1, 0, 0, 1, 0, 0)"),
+                  json.dumps(back))
+
+            # 链接 tab 标题行常显截图留档（staticActions 目验）
+            clip3 = await ev(
+                "(() => { const r = document.querySelector('.sidebar-right').getBoundingClientRect();"
+                " return { x: r.x, y: r.y, width: r.width, height: r.height }; })()")
+            shot3 = await send(ws, "Page.captureScreenshot", {
+                "format": "png",
+                "clip": {"x": clip3["x"], "y": clip3["y"], "width": clip3["width"],
+                         "height": min(clip3["height"], 900), "scale": 2},
+            }, session=sess)
+            with open("tools/style-preview/r23b-sidebar-links.png", "wb") as f:
+                f.write(base64.b64decode(shot3["result"]["data"]))
+            print("saved tools/style-preview/r23b-sidebar-links.png")
 
             # ---------- R11 提示词 tab ----------
             await ev("[...document.querySelectorAll('.sidebar-right .seg-block .seg-item')][2].click()")
@@ -427,6 +537,43 @@ async def main():
                   and arch.get("chips") == ["连载"] and "创建日期" in (arch.get("rows") or []),
                   json.dumps(arch, ensure_ascii=False))
 
+            # ---------- R13b/c/d 封面编辑（边距修复 + 250ms 展开动画，2026-08-31 用户实机报） ----------
+            await ev("document.querySelector('.sidebar-right .section-pinned .thumb.cover').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
+            mid = await ev(
+                "(() => { const p = document.querySelector('.sidebar-right .section-pinned');"
+                " return p ? { h: p.style.height, tr: p.style.transition } : null; })()")
+            check("R13b 点封面 → pinned 根 250ms 高度补间启动（inline height + transition）",
+                  isinstance(mid, dict) and bool(mid.get("h")) and "250ms" in (mid.get("tr") or ""),
+                  json.dumps(mid))
+            await asyncio.sleep(0.6)
+            cs = await ev(
+                "(() => { const aside = document.querySelector('.sidebar-right');"
+                " const p = aside.querySelector('.section-pinned');"
+                " const c = p.querySelector('.cover-settings');"
+                " const fr = p.querySelector('.cs-frame');"
+                " if (!c || !fr) return null;"
+                " return { done: p.style.height === '', pad: getComputedStyle(p).paddingLeft,"
+                "   inset: Math.round(fr.getBoundingClientRect().left - aside.getBoundingClientRect().left),"
+                "   slider: !!p.querySelector('.cs-slider'), btns: p.querySelectorAll('.cs-actions .act-btn').length }; })()")
+            check("R13c 封面编辑边距 = 栏缘 +12（pinned padding 12——双重 padding 24 修复）+ 动画收尾归位",
+                  isinstance(cs, dict) and cs.get("done") is True and cs.get("pad") == "12px"
+                  and cs.get("inset") == 12 and cs.get("slider") is True and cs.get("btns") == 2,
+                  json.dumps(cs))
+            # 取消退回常态组（收起动画同路）——分拍读 height 排查收尾时机
+            await ev("document.querySelector('.sidebar-right .cs-actions .act-btn').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
+            taps = []
+            for wait in (0.3, 0.4, 0.5):
+                await asyncio.sleep(wait)
+                taps.append(await ev("document.querySelector('.sidebar-right .section-pinned')?.style.height ?? null"))
+            backc = await ev(
+                "({ cover: !!document.querySelector('.sidebar-right .section-pinned .thumb.cover'),"
+                "  cs: !!document.querySelector('.sidebar-right .cover-settings'),"
+                "  h: document.querySelector('.sidebar-right .section-pinned')?.style.height ?? null })")
+            check("R13d 取消退回常态组（封面回 + 设置组消失 + inline 高清空）",
+                  isinstance(backc, dict) and backc.get("cover") is True and backc.get("cs") is False
+                  and backc.get("h") == "",
+                  json.dumps(backc) + " taps=" + json.dumps(taps))
+
             # ---------- R14 关闭钮 hover = 状态/禁止底 ----------
             closeRect = await ev(
                 "(() => { const b = [...document.querySelectorAll('.win-controls-overlay .wc-btn')].pop();"
@@ -449,16 +596,7 @@ async def main():
             await pointer_click(".asset-card")
             await ev("[...document.querySelectorAll('.sidebar-right .seg-block .seg-item')][1].click()")
             await asyncio.sleep(0.5)
-            # 关系区块标题行动作组 hover 才现身：真实悬停后点添加钮
-            relTitle = await ev(
-                "(() => { const blocks = [...document.querySelectorAll('.sidebar-right .lb-block')];"
-                " const b = blocks.find(x => x.querySelector('.st .txt')?.textContent === '关系');"
-                " if (!b) return null; const r = b.querySelector('.st').getBoundingClientRect();"
-                " return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()")
-            if relTitle:
-                await send(ws, "Input.dispatchMouseEvent",
-                           {"type": "mouseMoved", "x": relTitle["x"], "y": relTitle["y"]}, session=sess)
-                await asyncio.sleep(0.4)
+            # 关系区块添加钮（staticActions 常显，2026-08-31 起不再需悬停）直点
             await ev(
                 "(() => { const blocks = [...document.querySelectorAll('.sidebar-right .lb-block')];"
                 " const b = blocks.find(x => x.querySelector('.st .txt')?.textContent === '关系');"

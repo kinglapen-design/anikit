@@ -7,9 +7,10 @@
 // 名称 / 链接输入框已下移基础信息 tab 输入框区块（旧 pinned 四件口径作废）。
 // 档案形态：封面容器同款 240×240（封面 cover 充满——稿裁切语义）+ 徽标 FormatBadge（badge.text）；
 //   hover = 纯黑压暗 50% + set-cover 图标居中 二级（稿 prose 1_hover-封面图）；
-//   点击 = 内联展开封面设置组（CoverSettings，6.1 业务不变；设置组贴稿随本轮档案形态阶段）。
+//   点击 = 内联展开封面设置组（CoverSettings，6.1 业务不变；设置组贴稿随本轮档案形态阶段）——
+//   展开 / 收起 = pinned 根高度 250ms 缓入缓出补间（稿 prose「向下展开设置」，2026-08-31 用户定档）。
 //   档案无颜色列表（稿未画）。
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import CoverSettings from "./CoverSettings.vue";
 import FormatBadge from "../cards/FormatBadge.vue";
@@ -32,6 +33,44 @@ watch(
   () => (archive.value ? archive.value.node.id : null),
   () => (coverEditing.value = false),
 );
+
+// 展开 / 收起动画（稿 prose「2_点击-封面图：向下展开设置」；250ms 缓入缓出 = --n-dur-250 +
+// --n-ease-in-out，2026-08-31 用户定）：pinned 根高度 FLIP 补间（翻转前实测 → 新分支挂载后实测），
+// overflow 锁裁剪呈「向下展开」观感；padding 不参与跳变（挂载点 pinned 恒 padding 12，
+// CoverSettings 根不自持 padding——二十三轮双重 padding 24 走查 BUG 的修复口径）
+const rootRef = ref<HTMLElement>();
+let coverAnimTimer: ReturnType<typeof setTimeout> | undefined;
+async function animatePinnedHeight(): Promise<void> {
+  const root = rootRef.value;
+  if (!root) return;
+  const from = root.getBoundingClientRect().height; // pre flush：旧分支当帧实际高
+  await nextTick(); // 等新分支挂载
+  const to = root.getBoundingClientRect().height;
+  if (Math.abs(to - from) < 1) return;
+  root.style.overflow = "hidden";
+  root.style.height = `${from}px`;
+  void root.offsetHeight; // reflow：先绘制起点高，再起过渡（同帧写两值不动画）
+  root.style.transition = "height 250ms cubic-bezier(.32,.08,.1,1)"; // JS 补间用不了 CSS 变量，字面量同步
+  root.style.height = `${to}px`;
+  let finished = false;
+  const finish = (): void => {
+    if (finished) return;
+    finished = true;
+    root.style.transition = "";
+    root.style.height = "";
+    root.style.overflow = "";
+  };
+  root.addEventListener(
+    "transitionend",
+    (e) => {
+      if (e.propertyName === "height") finish();
+    },
+    { once: true },
+  );
+  if (coverAnimTimer) clearTimeout(coverAnimTimer);
+  coverAnimTimer = setTimeout(finish, 290); // 兜底（display 切换等场景 transitionend 不发）
+}
+watch(coverEditing, () => void animatePinnedHeight());
 
 const thumbUrl = computed(() => {
   const p = file.value?.placement.thumbPath;
@@ -57,8 +96,9 @@ const swatchColors = computed(() => (file.value?.detail.colors ?? []).slice(0, 7
 </script>
 
 <template>
-  <section class="section-pinned">
-    <!-- 封面设置编辑态（6.1，43 稿；仅档案）：整组替换（组件自带 padding / gap） -->
+  <section ref="rootRef" class="section-pinned">
+    <!-- 封面设置编辑态（6.1，43 稿；仅档案）：整组替换（组件不自持 padding——挂载点 pinned
+         恒 padding 12，防双重 padding；组件内 gap 12 自管） -->
     <CoverSettings
       v-if="archive && coverEditing"
       :node="archive.node"

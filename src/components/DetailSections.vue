@@ -42,6 +42,15 @@ const TAB_OPTIONS = [
 ] as const;
 const tab = ref<string>("basic");
 
+// tab 切换滑动动画（2026-08-31 用户定：SidebarLeft 分段切换范例同款——旧内容移出 + 新内容移入渐隐，
+// 速查 §20 时序）：方向随 tab 序（向右切 = 旧左出 / 新右入，向左切反之），与分段滑块位移同向
+const TAB_INDEX: Record<string, number> = { basic: 0, links: 1, prompt: 2 };
+const tabShift = ref("tab-x-fwd");
+watch(tab, (next, prev) => {
+  tabShift.value = (TAB_INDEX[next] ?? 0) >= (TAB_INDEX[prev] ?? 0) ? "tab-x-fwd" : "tab-x-back";
+  if (tabBodyRef.value) tabBodyRef.value.scrollTop = 0; // 切 tab 回顶（会话记忆只记 tab 不记滚动位）
+});
+
 // 会话级记忆（2026-08-31 用户定）：选中对象身份变化 → 回「基础信息」；同选中内切 tab 不重置
 const targetKey = computed(() => {
   const t = props.target;
@@ -65,12 +74,18 @@ const tabBodyRef = ref<HTMLElement>();
     <div class="seg-block">
       <SegmentedControl v-model="tab" :options="TAB_OPTIONS" variant="icon" />
     </div>
-    <!-- tab 内容区（独立滚动； pinned 与分段控制器不参与） -->
+    <!-- tab 内容区（独立滚动； pinned 与分段控制器不参与）；
+         切换滑动动画 = 侧栏分段切换范例同款（速查 §20 时序四调定稿），方向随 tab 序；
+         .tab-pane 包层 = Transition 单子元素要求（TabBasic 等多根组件） -->
     <div class="tab-scroll-wrap">
       <div ref="tabBodyRef" class="tab-body kit-scroll">
-        <TabBasic v-if="tab === 'basic'" :target="tabsTarget" />
-        <TabLinks v-else-if="tab === 'links'" :target="tabsTarget" />
-        <TabPrompt v-else :target="tabsTarget" />
+        <Transition :name="tabShift">
+          <div :key="tab" class="tab-pane">
+            <TabBasic v-if="tab === 'basic'" :target="tabsTarget" />
+            <TabLinks v-else-if="tab === 'links'" :target="tabsTarget" />
+            <TabPrompt v-else :target="tabsTarget" />
+          </div>
+        </Transition>
       </div>
       <ScrollThumb :body="tabBodyRef" />
     </div>
@@ -121,6 +136,43 @@ const tabBodyRef = ref<HTMLElement>();
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
+}
+.tab-pane {
+  flex: none;
+}
+/* tab 切换滑动动画（2026-08-31 用户定，SidebarLeft 分段切换范例同款，速查 §20 时序四调定稿）：
+   退场 150ms 缓出（--n-dur-150 + --n-ease-out）先行；入场 250ms 缓入（--n-dur-250 + --n-ease-in）
+   delay 100ms 启动（总 350ms，全 token 档）；位移 48px；离场 absolute 不占位。
+   fwd = 向右切（旧左出 / 新右入，与分段滑块位移同向）；back = 向左切（反向） */
+.tab-x-fwd-enter-active,
+.tab-x-back-enter-active {
+  transition:
+    transform var(--n-dur-250) var(--n-ease-in) var(--n-dur-100),
+    opacity var(--n-dur-250) var(--n-ease-in) var(--n-dur-100);
+}
+.tab-x-fwd-leave-active,
+.tab-x-back-leave-active {
+  position: absolute;
+  inset: 0;
+  transition:
+    transform var(--n-dur-150) var(--n-ease-out),
+    opacity var(--n-dur-150) var(--n-ease-out);
+}
+.tab-x-fwd-enter-from {
+  transform: translateX(48px);
+  opacity: 0;
+}
+.tab-x-fwd-leave-to {
+  transform: translateX(-48px);
+  opacity: 0;
+}
+.tab-x-back-enter-from {
+  transform: translateX(-48px);
+  opacity: 0;
+}
+.tab-x-back-leave-to {
+  transform: translateX(48px);
+  opacity: 0;
 }
 /* 信息查看管理按钮块（稿：58 高 = padding 12 + 钮 34；稿无 border-top） */
 .manage-bar {

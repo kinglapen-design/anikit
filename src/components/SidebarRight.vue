@@ -35,7 +35,8 @@ const picker = usePickerStore();
 
 <style scoped>
 /* 右侧面板（7.1 十七轮贴稿 布局/主窗口/右侧边栏-总容器）：column，g1 实底 +
-   左缘 1px 通用/三级通栏分隔线（稿口径；子块原各自 border-left 收编容器统一）；
+   左缘 1px 通用/三级通栏分隔线（稿口径；子块原各自 border-left 收编容器统一）——
+   2026-08-31 用户实机修订：底色与分隔线改 ::before 只画顶行以下，顶行 46 透窗口云母；
    宽度可拖（SplitBar；默认 250→264 迁移见 ui store loadSettings）。
    收展 = 常驻挂载 + 宽度由 App.vue rAF 驱动逐帧写入（同 SidebarLeft 的 v6 定案；
    本文件禁挂 width 的 CSS transition）；子块定宽 --sb-w + align-end =
@@ -48,10 +49,22 @@ const picker = usePickerStore();
   flex: none;
   min-height: 0;
   overflow: hidden;
+}
+/* g1 栏底 + 左缘 1px 通用/三级通栏分隔线下移伪元素、只画顶行以下（2026-08-31 用户实机定）：
+   顶行 46（窗口控制行）不要底色——透主窗口云母/实色-1，与菜单栏、标签栏同一行连成一片；
+   aside 根不再挂 background/border-left（根挂 = 顶行也被盖成 g1 色块） */
+.sidebar-right::before {
+  content: "";
+  position: absolute;
+  top: 46px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: var(--n-g1);
   border-left: 1px solid var(--n-g3);
+  pointer-events: none;
 }
-/* 顶行 46（稿 窗口控制行）：窗口拖拽区；稿无底色无下边框（透 g1 栏底） */
+/* 顶行 46（稿 窗口控制行）：窗口拖拽区；稿无底色无下边框（透窗口底——云母/实色-1） */
 .bar-title {
   width: var(--sb-w); /* 定宽：aside 收窄时裁剪不挤压 */
   height: 46px;

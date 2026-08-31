@@ -7,7 +7,8 @@
 //     ——figma「标签」档 12/17 未收录 Token.md，2026-08-31 用户定就近用档）
 //     + add-small 添加钮（6.1 业务：开 32 稿属性弹窗 ui.propsEdit）；
 //   详情区块（gap 12）：描述条目（标题行 = 正文-加粗 四级 + expand 折叠钮；正文 13/18 二级，
-//     超 3 行截断 + 展开/收起小字钮 6.1 口径保留）+ 编辑描述 ActionButton（6.1 业务：ui.descEdit）；
+//     标题行收起 = 留一排截断（2026-08-31 用户实机定）；超 3 行截断 + 展开/收起小字钮 6.1 口径保留）
+//     + 编辑描述 ActionButton（6.1 业务：ui.descEdit）；
 //   基本数据区块（gap 12）：BaseDataItem 信息卡（文件 = 尺寸/文件大小/格式/添加日期/修改日期——
 //     创建日期 metadata 无字段不加（旧口径沿）；档案 = 文件数/占用空间/创建日期）。
 // 文件与档案同构（2026-08-31 用户定）：档案 = props / descriptions / 统计数据渲染同一结构。
@@ -44,7 +45,8 @@ const descriptions = computed(() =>
   file.value ? file.value.detail.descriptions : (archive.value?.data.descriptions ?? []),
 );
 
-// —— 描述折叠（稿：标题行 expand 钮折叠正文，默认展开）+ 3 行截断（6.1 口径：超 3 行出展开/收起小字钮）——
+// —— 描述折叠（稿：标题行 expand 钮折叠正文，默认展开；收起态留一排截断——2026-08-31 用户实机定）
+//    + 3 行截断（6.1 口径：超 3 行出展开/收起小字钮）——
 const bodyCollapsed = ref<Set<number>>(new Set());
 function toggleBody(i: number): void {
   const next = new Set(bodyCollapsed.value);
@@ -58,7 +60,8 @@ const expanded = ref<Set<number>>(new Set());
 async function measure(): Promise<void> {
   await nextTick();
   needsClamp.value = descriptions.value.map((_, i) => {
-    if (expanded.value.has(i)) return needsClamp.value[i] ?? false; // 展开态保持判定（展开后量不出截断）
+    // 展开态 / 收起态保持判定（展开后量不出截断；收起 = 1 行截断，量出的必是截断值）
+    if (expanded.value.has(i) || bodyCollapsed.value.has(i)) return needsClamp.value[i] ?? false;
     const el = descEls.value[i];
     return el ? el.scrollHeight > el.clientHeight + 1 : false;
   });
@@ -141,16 +144,16 @@ const dataRows = computed<{ label: string; values: string[] }[]>(() => {
           :class="{ collapsed: bodyCollapsed.has(i) }"
         />
       </div>
-      <template v-if="!bodyCollapsed.has(i)">
-        <span
-          :ref="(el) => { if (el) descEls[i] = el as HTMLElement; }"
-          class="desc-content"
-          :class="{ clamp: !expanded.has(i) }"
-        >{{ d.content }}</span>
-        <button v-if="needsClamp[i]" class="desc-toggle" @click="toggleDesc(i)">
-          {{ expanded.has(i) ? "收起" : "展开" }}
-        </button>
-      </template>
+      <!-- 收起态留一排截断正文（2026-08-31 用户实机定：收起只留标题完全看不出写的什么，
+           无法判断要不要展开；一排 = -webkit-line-clamp 1 自带省略号） -->
+      <span
+        :ref="(el) => { if (el) descEls[i] = el as HTMLElement; }"
+        class="desc-content"
+        :class="bodyCollapsed.has(i) ? 'clamp-1' : { clamp: !expanded.has(i) }"
+      >{{ d.content }}</span>
+      <button v-if="!bodyCollapsed.has(i) && needsClamp[i]" class="desc-toggle" @click="toggleDesc(i)">
+        {{ expanded.has(i) ? "收起" : "展开" }}
+      </button>
     </div>
     <ActionButton label="编辑描述" icon="pencil" variant="solid" size="md" @click="openDescDialog" />
   </section>
@@ -245,6 +248,14 @@ const dataRows = computed<{ label: string; values: string[] }[]>(() => {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+/* 收起态（标题行折叠）：留一排正文截断（2026-08-31 用户实机定——原口径收起整段隐藏，
+   只留标题看不出内容、无法判断是否展开） */
+.desc-content.clamp-1 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
   overflow: hidden;
 }
 /* 展开 / 收起钮（2026-08-23 用户定：标签色小字钮，hover 提亮常态色；字档就近 12/16 次要文字） */

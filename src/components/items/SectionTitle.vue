@@ -2,6 +2,9 @@
 // 标题 item 族（区块标题-树容器 / 区块标题-详情链接 / 分组标题）——
 // docs/UI 重构/Design Token/组件/item/标题 item/
 // 常态下动作钮（展开/更多/链接/新建）不显示，hover 出现（抓手指针）；按钮组 hover 提亮 亮色/二级。
+// 例外 = staticActions（2026-08-31 用户实机定）：折叠钮与动作组常显——详情面板链接关系 tab 五区块
+// 按区块稿常态帧（稿上按钮组/展开钮即常态画出；「标题上的添加按钮本身就是入口」），
+// 树容器 / 列表容器等其余调用方维持 hover 现身口径不变。
 import AppIcon from "../AppIcon.vue";
 
 withDefaults(
@@ -13,9 +16,10 @@ withDefaults(
     withLink?: boolean; // block 型详情链接变体：剪贴板有链接时才显示链接钮（业务传入）
     withMore?: boolean; // more 钮显隐（详情链接区块稿按钮组 = 链接+添加两钮无 more，7.1 二十三轮扩）
     actions?: boolean; // 动作组（更多/添加）显隐——false = 整块不渲染（列表容器区块标题稿无动作钮，7.1 内容容器轮）
+    staticActions?: boolean; // 折叠钮与动作组常显（链接关系 tab 五区块稿口径，2026-08-31 用户定；默认 hover 现身）
     forceState?: "" | "hover"; // 预览页强制态（hover 展开动作组）
   }>(),
-  { count: undefined, expanded: false, withLink: false, withMore: true, actions: true, forceState: "" },
+  { count: undefined, expanded: false, withLink: false, withMore: true, actions: true, staticActions: false, forceState: "" },
 );
 
 const emit = defineEmits<{ toggle: []; more: [e: MouseEvent]; add: [e: MouseEvent]; link: [e: MouseEvent] }>();
@@ -24,7 +28,7 @@ const emit = defineEmits<{ toggle: []; more: [e: MouseEvent]; add: [e: MouseEven
 <template>
   <div
     class="st"
-    :class="[variant, forceState ? `force-${forceState}` : '']"
+    :class="[variant, staticActions ? 'static-actions' : '', forceState ? `force-${forceState}` : '']"
     @click="emit('toggle')"
   >
     <span class="lead">
@@ -135,6 +139,12 @@ const emit = defineEmits<{ toggle: []; more: [e: MouseEvent]; add: [e: MouseEven
 }
 .st:hover .chev,
 .st.force-hover .chev {
+  opacity: 1;
+  visibility: visible;
+}
+/* staticActions（链接关系 tab 五区块稿口径）：折叠钮与动作组常显，不依赖 hover */
+.st.static-actions .chev,
+.st.static-actions .acts {
   opacity: 1;
   visibility: visible;
 }

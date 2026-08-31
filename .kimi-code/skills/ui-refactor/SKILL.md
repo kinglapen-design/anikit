@@ -72,6 +72,8 @@ docs/UI 重构/
 - 菜单 / 列表的分割：消灭独立分割线元素——组容器挂 `box-shadow: 0 1px 0`，父容器 `gap:1px` 让阴影有落点。
 - 间距一律 padding + gap，不用 margin（`00_写法说明.md` 第 6 节）。
 - 描边一律 inside、不占空间，工程用 inset box-shadow / `::after`（`00_写法说明.md` 第 8 节）。
+- **动画要主动做，不等用户提醒**（2026-08-31 用户原话「为啥每次都不主动去做动画效果」）：稿 prose 提到展开 / 切换 / 滑入 / 伸缩等动效字样的必须同轮落地；稿未给数值时优先套既有范例与 token 档（侧栏分段切换 = 退 150ms 缓出 + 入 250ms 缓入 delay 100ms 位移 48px；树节点展开 = `lib/expandAnim.ts` 150ms；分段滑块 300ms；hover 150ms），稿有 prose 无数值可就近套用后标注，拿不准再问——**禁止静默省略动画直接交付瞬时切换**。
+- **图标入库必转 currentColor 时核对线条层色值**（同日走查坑：basic-info / link-relations / prompt 漏转，figma 烘焙稿中状态色 → 选中态 CSS color 驱动失效；错误信号 = 选中/未选中图标色不随态变）。
 
 ## 5. 图标入库
 

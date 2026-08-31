@@ -1,8 +1,11 @@
 <script setup lang="ts">
 // 链接关系 tab（7.1 二十三轮贴稿，稿 = 右侧边栏-详情面板-链接关系 + 链接/音频/关系/缩略图/污染文件 五区块稿）：
 // 区块壳 = padding 12 / gap 12 / border-top 通用/三级；标题行 = items/SectionTitle block 型
-//（标题 + expand 折叠钮 + 右侧动作组 hover 现身；稿按钮组 = 链接+添加两钮 → withMore=false；
+//（标题 + expand 折叠钮 + 右侧动作组；稿按钮组 = 链接+添加两钮 → withMore=false；
 // link 钮 = 剪贴板有链接才显示（稿 prose），检测业务未接 → 本轮不渲染，09 待办）。
+// **标题行恒渲染 + 折叠钮/动作组常显**（staticActions，2026-08-31 用户实机定：「没有内容标题也要在，
+// 标题上的添加按钮本身就是入口」——区块稿常态帧即画出按钮组；空数据仅不渲染内容容器，
+// 展开/折叠零高度变化旧口径不变）。
 // 五区块业务（旧 SectionLinks / SectionAudio / SectionRelations 移植，逻辑不变）：
 //   链接 = LinkFileItem 列表（当前目录置顶 / 档案目录 .档案 后缀 / 添加 = 链接管理弹窗（仅文件形态）/
 //         × = 移除该条链接 / 点 item = 跳转定位）；
@@ -344,6 +347,7 @@ function hasContent(id: DetailLinkBlockId): boolean {
         :expanded="isOpen(id)"
         :with-more="false"
         :actions="id !== 'pollution'"
+        static-actions
         @toggle="toggleOpen(id)"
         @add="onAdd(id)"
       />

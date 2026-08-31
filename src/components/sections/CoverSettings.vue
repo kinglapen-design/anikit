@@ -169,7 +169,7 @@ function onCancel(): void {
 </script>
 
 <template>
-  <!-- 新稿容器：padding 12 / gap 12（栏内容宽 240 随栏） -->
+  <!-- 容器：gap 12 / 满宽（padding 12 由挂载点 pinned 区块承担；稿「封面图+更改封面」高链 424 不变） -->
   <div class="cover-settings">
     <!-- 封面框（240×240 方形 / 通用二级底 + 通用三级 1px / 圆角 8）：取景态图可拖动，徽标左上 12/12 实时预览 -->
     <div
@@ -198,12 +198,14 @@ function onCancel(): void {
 </template>
 
 <style scoped>
-/* 容器（稿：padding 12 / gap 12 纵列——pinned 区块位，无 border-top） */
+/* 容器：gap 12 纵列 + 满宽（padding 由挂载点 pinned 区块承担——2026-08-31 走查修复：
+   二十三轮组件自持 padding 12 叠 pinned 12 = 双重 24 内收 BUG；本组件唯一挂载点 = SectionPinned） */
 .cover-settings {
   display: flex;
   flex-direction: column;
   gap: var(--n-space-12);
-  padding: var(--n-space-12);
+  width: 100%;
+  box-sizing: border-box;
 }
 /* 封面框（稿：240×240 方形随栏宽 / 通用二级底 + 通用三级 1px / 圆角 8） */
 .cs-frame {

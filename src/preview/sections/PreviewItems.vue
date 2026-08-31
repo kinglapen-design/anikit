@@ -142,7 +142,7 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">标题 item（区块标题-树容器 / 详情链接、分组标题；7.1 扩：actions 显隐 + tail 常驻插槽）</h3>
+      <h3 class="pv-group-title">标题 item（区块标题-树容器 / 详情链接、分组标题；7.1 扩：actions 显隐 + tail 常驻插槽 + staticActions 常显）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell" style="width: 240px">
           <SectionTitle variant="block" title="文件夹" :count="123" />
@@ -171,6 +171,10 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
             <template #tail><AppCheckbox v-model="tailRecursive" label="递归显示" /></template>
           </SectionTitle>
           <span class="pv-cap">tail 常驻（递归显示复选框，点击自停冒泡）+ hover 动作组</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <SectionTitle variant="block" title="音频" :with-more="false" static-actions expanded />
+          <span class="pv-cap">staticActions 常显（折叠钮+添加钮不随 hover——链接关系 tab 五区块稿口径，2026-08-31 用户定）</span>
         </div>
       </div>
       <div class="pv-demo-row">
