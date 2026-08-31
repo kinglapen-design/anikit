@@ -49,10 +49,15 @@ const picker = usePickerStore();
   flex: none;
   min-height: 0;
   overflow: hidden;
+  /* 自建层叠上下文：让 ::before 背景层 z-index -1 只在本栏内沉底（不依赖外层上下文状态） */
+  isolation: isolate;
 }
 /* g1 栏底 + 左缘 1px 通用/三级通栏分隔线下移伪元素、只画顶行以下（2026-08-31 用户实机定）：
    顶行 46（窗口控制行）不要底色——透主窗口云母/实色-1，与菜单栏、标签栏同一行连成一片；
-   aside 根不再挂 background/border-left（根挂 = 顶行也被盖成 g1 色块） */
+   aside 根不再挂 background/border-left（根挂 = 顶行也被盖成 g1 色块）。
+   **z-index: -1 必须**（同日实机 BUG：无 z-index 的 absolute 伪元素列于层叠第 6 层 = 定位元素档，
+   会盖住正常流内容（ActionButton / cs-slider 等无定位元素「能盲点但看不到」——pointer-events none
+   让 hit 穿透所致）；负 z-index + aside isolation 沉到正常流之下） */
 .sidebar-right::before {
   content: "";
   position: absolute;
@@ -60,6 +65,7 @@ const picker = usePickerStore();
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: -1;
   background: var(--n-g1);
   border-left: 1px solid var(--n-g3);
   pointer-events: none;

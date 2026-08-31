@@ -289,12 +289,15 @@ async def main():
                 "(() => { const a = document.querySelector('.sidebar-right');"
                 " const s = getComputedStyle(a);"
                 " const b = getComputedStyle(a, '::before');"
-                " return { bg: s.backgroundColor, bl: s.borderLeftWidth,"
-                "   pbg: b.backgroundColor, ptop: b.top, pbl: b.borderLeftWidth }; })()")
+                " return { bg: s.backgroundColor, bl: s.borderLeftWidth, iso: s.isolation,"
+                "   pbg: b.backgroundColor, ptop: b.top, pbl: b.borderLeftWidth, pz: b.zIndex }; })()")
             check("R4c 窗口控制区透窗口底（aside 根无底无线；::before 只画顶行 46 以下 g1 + 左缘 1px）",
                   isinstance(sr, dict) and sr.get("bg") == "rgba(0, 0, 0, 0)" and sr.get("bl") == "0px"
                   and sr.get("ptop") == "46px" and sr.get("pbg") != "rgba(0, 0, 0, 0)"
                   and sr.get("pbl") == "1px",
+                  json.dumps(sr))
+            check("R4c2 背景伪元素沉底（aside isolation isolate + ::before z-index -1——防盖正常流内容）",
+                  isinstance(sr, dict) and sr.get("iso") == "isolate" and sr.get("pz") == "-1",
                   json.dumps(sr))
 
             # ---------- R5 文件夹形态（点树 f1） ----------
@@ -552,13 +555,33 @@ async def main():
                 " const c = p.querySelector('.cover-settings');"
                 " const fr = p.querySelector('.cs-frame');"
                 " if (!c || !fr) return null;"
-                " return { done: p.style.height === '', pad: getComputedStyle(p).paddingLeft,"
+                " const kids = [...c.children].map(k => ({ cls: k.className.split(' ')[0],"
+                "   h: k.offsetHeight, disp: getComputedStyle(k).display }));"
+                " return { done: p.style.height === '', ovf: p.style.overflow, ph: p.style.height,"
+                "   pad: getComputedStyle(p).paddingLeft,"
                 "   inset: Math.round(fr.getBoundingClientRect().left - aside.getBoundingClientRect().left),"
-                "   slider: !!p.querySelector('.cs-slider'), btns: p.querySelectorAll('.cs-actions .act-btn').length }; })()")
+                "   slider: !!p.querySelector('.cs-slider'), btns: p.querySelectorAll('.cs-actions .act-btn').length,"
+                "   kids }; })()")
             check("R13c 封面编辑边距 = 栏缘 +12（pinned padding 12——双重 padding 24 修复）+ 动画收尾归位",
                   isinstance(cs, dict) and cs.get("done") is True and cs.get("pad") == "12px"
                   and cs.get("inset") == 12 and cs.get("slider") is True and cs.get("btns") == 2,
                   json.dumps(cs))
+            kids = cs.get("kids") if isinstance(cs, dict) else None
+            check("R13c2 封面编辑五件全显（框 240 / 滑块 10 / 更换封面 34 / 角标名 34 / 按钮组 34——不许被压没）",
+                  isinstance(kids, list) and len(kids) == 5
+                  and [k.get("h") for k in kids] == [240, 10, 34, 34, 34],
+                  json.dumps(kids))
+
+            # 封面编辑态截图留档（2026-08-31 ::before 遮挡 BUG 的像素级目验面——computed/几何断言
+            # 测不出层叠遮挡，必须截图目验：更换封面 / 取消·确认 / 底部信息查看管理钮可见）
+            shotc = await send(ws, "Page.captureScreenshot", {
+                "format": "png",
+                "clip": {"x": clip3["x"], "y": clip3["y"], "width": clip3["width"],
+                         "height": min(clip3["height"], 900), "scale": 2},
+            }, session=sess)
+            with open("tools/style-preview/r23c-cover-editing.png", "wb") as f:
+                f.write(base64.b64decode(shotc["result"]["data"]))
+            print("saved tools/style-preview/r23c-cover-editing.png")
             # 取消退回常态组（收起动画同路）——分拍读 height 排查收尾时机
             await ev("document.querySelector('.sidebar-right .cs-actions .act-btn').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
             taps = []
