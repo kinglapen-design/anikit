@@ -181,9 +181,12 @@ const { draft: nameDraft, bindInput, commit: commitName, onEsc: cancelName } = u
   color: var(--n-l1);
   text-align: left;
 }
-/* 命名态整行品牌描边（复用 .kc-sel 选中环层，opacity 恒亮） */
+/* 命名态整行品牌描边（复用 .kc-sel 选中环层，opacity 恒亮）；常态环让位透明（cards.css 选中同款） */
 .lr-card.naming::before {
   opacity: 1;
+}
+.lr-card.naming::after {
+  border-color: transparent;
 }
 
 /* 数据列：123 宽，数字-大档 亮色/三级 */

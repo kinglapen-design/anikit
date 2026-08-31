@@ -140,6 +140,7 @@ const nameTip = computed(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: var(--n-radius-8); /* 图片自圆角（FileCard 缩略图同款，2026-08-30 角部锯齿治理） */
 }
 .ar-badge {
   position: absolute;
@@ -176,9 +177,12 @@ const nameTip = computed(() => {
   color: var(--n-l1);
   text-align: left;
 }
-/* 命名态整卡品牌描边（复用 .kc-sel 选中环层，opacity 恒亮） */
+/* 命名态整卡品牌描边（复用 .kc-sel 选中环层，opacity 恒亮）；常态环让位透明（cards.css 选中同款） */
 .ar-card.naming::before {
   opacity: 1;
+}
+.ar-card.naming::after {
+  border-color: transparent;
 }
 .ar-row {
   display: flex;

@@ -237,19 +237,21 @@ watch(
 /* 圆角裁剪层 .kc-clip 见 cards.css（与档案卡共享） */
 
 /* 缩略图：cover 充满（旧网格口径）；contain = 网格固定格完整显示不裁切（2026-07-24 用户定）；
-   icon / shell = 50% 居中 contain（格式图标 Eagle 口径 / 稿 square 注） */
-.fc-thumb.cover {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+   icon / shell = 50% 居中 contain（格式图标 Eagle 口径 / 稿 square 注）。
+   铺满档自带圆角 8：图片走图片绘制路径画角（比容器蒙版裁剪平滑），与描边弧同心同半径——
+   2026-08-30 用户实机亮图四角锯齿（.kc-clip 蒙版弧 + 描边弧双线错位），图片自圆角后裁剪弧合一 */
+.fc-thumb.cover,
 .fc-thumb.contain {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  border-radius: var(--n-radius-8);
+}
+.fc-thumb.cover {
+  object-fit: cover;
+}
+.fc-thumb.contain {
   object-fit: contain;
 }
 .fc-thumb.icon,
@@ -442,9 +444,12 @@ watch(
   color: var(--n-l1);
   text-align: left;
 }
-/* 命名态整卡品牌描边（复用 .kc-sel 选中环层，opacity 恒亮） */
+/* 命名态整卡品牌描边（复用 .kc-sel 选中环层，opacity 恒亮）；常态环让位透明（cards.css 选中同款） */
 .fc-root.naming::before {
   opacity: 1;
+}
+.fc-root.naming::after {
+  border-color: transparent;
 }
 /* 选择模式已选（§12）：内容压暗 30% 档（大勾在壳层不随压） */
 .fc-root.picked .kc-clip,

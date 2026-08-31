@@ -7,11 +7,12 @@
 /* 媒体卡壳（文件卡 / 档案卡）：通用二级底 + 圆角 8（1px 常态描边走 .kc-bordered 伪元素层，不用真 border——
    真 border + 负 inset 状态环在分数物理像素下渗线、粗细不均，2026-08-29 走查实锤；
    沿用旧统一线条方案：双层伪元素 inset 0，速查表 §7 / 旧 AssetCard 同款）；
-   hover = 描边升通用六级（瞬时）+ 位移 Y -4px + 小阴影（250ms 小位移 + 缓入缓出） */
+   hover = 描边升通用六级（瞬时）+ 位移 Y -4px + 小阴影（250ms 小位移 + 缓入缓出）。
+   壳不挂 overflow:hidden——内容已由 .kc-clip 单层裁剪，外层再裁 = 圆角走两遍蒙版路径，
+   角部锯齿加重（2026-08-30 用户实机亮图角部锯齿，删后背景走纯圆角填充路径） */
 .kc-media {
   box-sizing: border-box;
   position: relative;
-  overflow: hidden;
   background: var(--n-g2);
   border-radius: var(--n-radius-8);
   transition:
@@ -25,7 +26,14 @@
 }
 
 /* 常态 1px 描边层（媒体卡 / 列表行）：::after inset 0，hover 瞬时换色不做过渡（踩坑 036）。
-   换色档位按卡型分流：媒体卡 hover 升 g6（下行），列表行 hover 升 g5（组件 scoped 覆盖） */
+   换色档位按卡型分流：媒体卡 hover 升 亮色/半透明-2（下行），列表行 hover 升 g5（组件 scoped 覆盖）。
+   2026-08-30 试过 inset box-shadow 1px 替代 border：用户实机对比无改善，当日退回——
+   圆角平滑靠三件套（§7），绘制路径不再是变量，勿再试。
+   2026-08-30 定案（用户实机"好多了"）：常态环 = **亮色/半透明-4**（l-a4，深底 ≈ g3 等效亮度）、
+   媒体卡 hover = **亮色/半透明-2**（l-a2，深底 ≈ g6 等效）——半透明环与图片内容混合，
+   抗锯齿过渡带对比度降低，角部锯齿观感更柔（亮图环近隐形、黑图微亮边比 g6 实色柔）；
+   选中 ::before 2px 品牌不变。trade-off：环色随底下内容变化，contain/方卡留白区与图片区
+   环色有细微差异（用户实机可接受）。列表行 hover 维持 g5 实色（行底实色，无图片混合场景） */
 .kc-bordered {
   position: relative;
 }
@@ -34,13 +42,20 @@
   position: absolute;
   inset: 0;
   z-index: 7;
-  border: 1px solid var(--n-g3);
+  border: 1px solid var(--n-l-a4);
   border-radius: var(--n-radius-8);
   pointer-events: none;
 }
 .kc-media:hover::after,
 .kc-media.force-hover::after {
-  border-color: var(--n-g6);
+  border-color: var(--n-l-a2);
+}
+/* 选中 / 命名（品牌环亮）时常态环让位透明——双环变单环：两环外缘同弧各自抗锯齿采样，
+   角部叠出不均匀亮暗（2026-08-30 用户实机）；透明瞬时换色无过渡（踩坑 036 同口径），
+   规则须置于 hover 换色之后（同权重拼加载序）。命名态由组件 scoped 补同款 */
+.kc-sel.selected::after,
+.kc-sel.force-selected::after {
+  border-color: transparent;
 }
 
 /* 选中 2px 品牌描边层：::before inset 0（2px 环全在卡缘内侧 = figma border 语义，零负偏移防渗线），
