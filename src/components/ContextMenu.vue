@@ -1,87 +1,73 @@
 <script setup lang="ts">
-// 全局右键菜单渲染器（6.3；1.3 一轮 2026-08-11 升级）：宿主 App.vue 唯一实例，读 lib/contextMenus 的 menuState。
-// 渲染复用 AppMenu / MenuItem / MenuDivider（视觉口径不变）；一级级联 flyout——
-// hover 带子菜单的项时右侧飞出，右缘溢出改向左飞出（03 稿注"菜单不可超出窗口边缘"）；
+// 全局右键菜单渲染器（6.3；7.1 二十四轮 2026-09-01 按新稿 组件/上下文菜单 重构）：宿主 App.vue
+// 唯一实例，读 lib/contextMenus 的 menuState。渲染复用 AppMenu / MenuItem。
+// 分组（分割线稿口径）："divider" 标记渲染层切成组容器——总容器 gap 0，组内 item gap 2，
+// 组 padding 上下 4（首组上 0、末组下 0），组间 = 非末组 inset 底 1px 通用/五级线（无孤立分割线元素）。
+// 一级级联 flyout：hover 带子菜单的项时右侧飞出，右缘溢出改向左飞出（03 稿注"菜单不可超出窗口边缘"）；
 // flyout 按 key 随父项重建（2026-08-11 走查：复用实例位置滞留越偏越远）+ pop=false 不回放弹出动画。
-// 菜单结构（03/04/05 稿）：容器 padding 0——搜索区（高 44 / padding 12 / 搜索图标 18 盒 svg 15 标签色 /
-// 占位符"搜索..." 极淡 / 右侧清除钮 20 圆角 6 / border-bottom 暗-悬停 随容器满宽）与 item 组
-//（独立容器 padding 12 / gap 2；divider = 组内自然宽 296，稿值，不通栏，2026-08-11 二轮走查）是两个容器。
-// 搜索：打开自动聚焦，输入即过滤——一级+二级项扁平匹配 label（命中二级平铺为一级直接执行），
-// 过滤时隐藏 divider 且不出 flyout；清空恢复层级；Esc 先清空、空时再按关闭（AppMenu 豁免输入框 Esc）。
+// 搜索区 / 左侧图标位 / 各菜单定宽 随新稿废除（2026-09-01 用户定）。
 // 组外关闭关系：根菜单的 group = flyout 根元素（flyout 内点击不关根菜单）；
 // flyout 自身无 group，点其外部经根菜单统一关闭（closeAll 幂等）。
-import { computed, nextTick, reactive, ref, watch } from "vue";
-import AppIcon from "./AppIcon.vue";
+import { computed, reactive, ref, watch } from "vue";
 import AppMenu from "./AppMenu.vue";
 import MenuItem from "./MenuItem.vue";
-import MenuDivider from "./MenuDivider.vue";
 import LibraryMenuItem from "./LibraryMenuItem.vue";
 import FolderIconPanel from "./FolderIconPanel.vue";
-import FolderColorPanel from "./FolderColorPanel.vue";
 import FolderIconGrid from "./FolderIconGrid.vue";
 import { closeContextMenu, menuState, type CtxEntry, type CtxItem } from "../lib/contextMenus";
 import { reorderLibraries, requestDeleteLibrary, currentLibrary, switchLibrary } from "../lib/libraryOps";
 
-const query = ref("");
-const searchInputRef = ref<HTMLInputElement>();
-
-// 级联 flyout：当前展开的子菜单（父项 top 作 key 随项重建）与位置、宽度；
-// panel（2026-08-18，3.3 / 05 稿 §3§4）= 自定义网格面板形态（图标/颜色），不走条目列表
+// 级联 flyout：当前展开的子菜单（父项 top 作 key 随项重建）与位置；
+// panel（2026-08-18，3.3 / 05 稿 §3）= 自定义网格面板形态（图标），不走条目列表
 const flyout = ref<{
   key: number;
   x: number;
   y: number;
-  width: number;
   entries: CtxEntry[];
-  panel?: { kind: "folderIcon" | "folderColor"; folderId: string };
+  panel?: { kind: "folderIcon"; folderId: string };
 } | null>(null);
 const flyoutRootRef = ref<HTMLElement>();
 
-// 每次打开重置搜索并自动聚焦
+// 每次打开收起上次 flyout
 watch(
   () => menuState.entries,
-  async (v) => {
-    query.value = "";
+  () => {
     flyout.value = null;
-    if (v && menuState.searchable) {
-      await nextTick();
-      searchInputRef.value?.focus();
-    }
   },
 );
 
-// 搜索过滤：扁平匹配（大小写不敏感）；命中二级的项平铺为一级展示
-const entries = computed<CtxEntry[]>(() => {
-  const all = menuState.entries ?? [];
-  const q = query.value.trim().toLowerCase();
-  if (!q) return all;
-  const out: CtxItem[] = [];
-  for (const e of all) {
-    if (e === "divider") continue;
-    if (e.label.toLowerCase().includes(q)) out.push(e.submenu || e.panel ? { ...e, submenu: undefined, panel: undefined } : e);
-    else if (e.submenu) {
-      for (const s of e.submenu) {
-        if (s !== "divider" && s.label.toLowerCase().includes(q)) out.push(s);
-      }
+// 分组：按 "divider" 切段（连续 divider 出空组、首末 divider 自动忽略）；index = entries 全局索引（库拖拽用）
+interface GroupRow {
+  entry: CtxItem;
+  index: number;
+}
+function splitGroups(list: CtxEntry[]): GroupRow[][] {
+  const out: GroupRow[][] = [[]];
+  list.forEach((e, i) => {
+    if (e === "divider") {
+      if (out[out.length - 1].length) out.push([]);
+    } else {
+      out[out.length - 1].push({ entry: e, index: i });
     }
-  }
-  return out;
-});
+  });
+  return out.filter((g) => g.length);
+}
+const groups = computed(() => splitGroups(menuState.entries ?? []));
+const flyoutGroups = computed(() => splitGroups(flyout.value?.entries ?? []));
 
 function onItemHover(entry: CtxItem, e: MouseEvent): void {
-  if ((!entry.submenu && !entry.panel) || entry.disabled || query.value.trim()) {
+  if ((!entry.submenu && !entry.panel) || entry.disabled) {
     flyout.value = null;
     return;
   }
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  const width = entry.submenuWidth ?? 175;
-  // 右缘溢出 → 向左飞出（父项左缘 - 二级宽 - 2）
-  const x = r.right + 2 + width > window.innerWidth - 4 ? r.left - width - 2 : r.right + 2;
-  flyout.value = { key: r.top, x, y: r.top - 8, width, entries: entry.submenu ?? [], panel: entry.panel };
+  // 菜单统一 300 宽（容器稿）；右缘溢出 → 向左飞出（父项左缘 - 二级宽 - 2）
+  const x = r.right + 2 + 300 > window.innerWidth - 4 ? r.left - 300 - 2 : r.right + 2;
+  flyout.value = { key: r.top, x, y: r.top - 6, entries: entry.submenu ?? [], panel: entry.panel };
 }
 
 function onItemClick(entry: CtxEntry): void {
-  if (entry === "divider" || entry.disabled || entry.submenu || entry.panel) return;
+  if (entry === "divider" || entry.disabled || entry.submenu || entry.panel || entry.swatches) return;
   // 库条目点击动态判定（2026-08-12 走查：菜单 keepOpen 期间可能已切库，
   // 静态 action 快照会让"切回去"失效——当前库跳过，其余直接按名切）
   if (entry.library) {
@@ -91,15 +77,6 @@ function onItemClick(entry: CtxEntry): void {
   }
   entry.action?.();
   if (!entry.keepOpen) closeAll(true); // keepOpen = 状态切换类：执行后菜单保持（切库/排序等）
-}
-
-function onSearchKeydown(e: KeyboardEvent): void {
-  // Esc：有内容先清空，空则关闭菜单（AppMenu 已豁免输入框 Esc）
-  if (e.key === "Escape") {
-    e.stopPropagation();
-    if (query.value) query.value = "";
-    else closeAll(false);
-  }
 }
 
 function closeAll(executed = false): void {
@@ -115,15 +92,13 @@ function onPanelPick(name: string | null): void {
 }
 
 // —— 库条目拖动排序（08 稿：抓手拖动、其他 item 让位移动动画、落点持久化 space.json libraryOrder）——
-const ITEM_STEP = 35; // 库 item 高 33 + 组 gap 2
+const ITEM_STEP = 35; // 库 item 高 33 + 组 gap 2（LibraryMenuItem 行高随 08 稿未迁，本常量随其）
 const libDrag = reactive({ idx: -1, startY: 0, dy: 0, target: -1 });
 let dragMoved = false; // 拖动超阈值：松手后的 click 误触发抑制
 const settling = ref(false); // 松手归位帧：禁 .lib-item transform 过渡（松手即到位）
 
 // entries 中库条目的索引（08 稿连续段）
-const libIdxs = computed(() =>
-  entries.value.map((e, i) => (e !== "divider" && e.library ? i : -1)).filter((i) => i >= 0),
-);
+const libIdxs = computed(() => (menuState.entries ?? []).map((e, i) => (e !== "divider" && e.library ? i : -1)).filter((i) => i >= 0));
 
 // 让位位移：拖动项跟随指针；被跨越的项反向让出一步（transition 在 LibraryMenuItem 根样式）
 function libItemStyle(i: number): string {
@@ -205,106 +180,63 @@ function onLibraryRemove(entry: CtxItem): void {
 </script>
 
 <template>
-  <AppMenu
-    v-if="menuState.entries"
-    :x="menuState.x"
-    :y="menuState.y"
-    :width="menuState.width ?? 175"
-    :pad="menuState.panel ? '24px' : '0'"
-    :gap="menuState.panel ? '12px' : '0'"
-    :group="flyoutRootRef ?? null"
-    @close="closeAll(false)"
-  >
-    <!-- 整体面板菜单（openPanelMenu）：一级内容 = 面板组件，无搜索区无条目列表 -->
+  <AppMenu v-if="menuState.entries" :x="menuState.x" :y="menuState.y" :pad="menuState.panel ? '24px' : undefined" :group="flyoutRootRef ?? null" @close="closeAll(false)">
+    <!-- 整体面板菜单（openPanelMenu）：一级内容 = 面板组件，无条目列表 -->
     <FolderIconGrid v-if="menuState.panel?.kind === 'iconPicker'" :current="menuState.panel.current" @select="onPanelPick" />
-    <template v-else>
-      <!-- 搜索区（03/04/05 稿独立容器）：搜索图标 + 输入框 + 清除钮，border-bottom 通栏分隔 -->
-      <div v-if="menuState.searchable" class="menu-search">
-      <span class="lead">
-        <span class="search-icon"><AppIcon name="search" :size="15" /></span>
-        <input
-          ref="searchInputRef"
-          v-model="query"
-          type="text"
-          placeholder="搜索..."
-          spellcheck="false"
-          @keydown="onSearchKeydown"
-        />
-      </span>
-      <button v-if="query" class="clear" @click="query = ''">
-        <AppIcon name="clear" :size="12" />
-      </button>
+    <!-- 条目菜单：分组容器（组内 gap 2 / 组 padding 上下 4 首末 0 / 组间 1px 线） -->
+    <div v-else class="menu-groups" :class="{ settling }">
+      <div v-for="(group, gi) in groups" :key="gi" class="menu-group">
+        <template v-for="row in group" :key="row.entry.library ? `lib:${row.entry.label}` : row.index">
+          <LibraryMenuItem
+            v-if="row.entry.library"
+            :label="row.entry.label"
+            :current="row.entry.label === currentLibrary.name"
+            :style="libItemStyle(row.index)"
+            @select="onLibrarySelect(row.entry)"
+            @remove="onLibraryRemove(row.entry)"
+            @grip-down="onGripDown(row.index, $event)"
+          />
+          <MenuItem
+            v-else
+            :label="row.entry.label"
+            :trailing-icon="row.entry.trailingIcon"
+            :trailing-icon-class="row.entry.trailingIconClass"
+            :shortcut="row.entry.shortcut"
+            :disabled="row.entry.disabled"
+            :arrow="!!(row.entry.submenu || row.entry.panel)"
+            :checkable="row.entry.checkable"
+            :checked="row.entry.checked"
+            :swatches="row.entry.swatches"
+            @select="onItemClick(row.entry)"
+            @pick="row.entry.swatches?.onPick($event)"
+            @mouseenter="onItemHover(row.entry, $event)"
+          />
+        </template>
+      </div>
     </div>
-    <!-- item 组（独立容器 padding 12 / gap 2） -->
-    <div class="menu-items" :class="{ settling }">
-      <template v-for="(entry, i) in entries" :key="entry !== 'divider' && entry.library ? `lib:${entry.label}` : i">
-        <MenuDivider v-if="entry === 'divider'" />
-        <LibraryMenuItem
-          v-else-if="entry.library && !query.trim()"
-          :label="entry.label"
-          :current="entry.label === currentLibrary.name"
-          :style="libItemStyle(i)"
-          @select="onLibrarySelect(entry)"
-          @remove="onLibraryRemove(entry)"
-          @grip-down="onGripDown(i, $event)"
-        />
-        <MenuItem
-          v-else
-          :label="entry.label"
-          :icon="entry.icon"
-          :icon-class="entry.iconClass"
-          :icon-data="entry.iconData"
-          :trailing-icon="entry.trailingIcon"
-          :trailing-icon-class="entry.trailingIconClass"
-          :shortcut="entry.shortcut"
-          :disabled="entry.disabled"
-          :arrow="!!(entry.submenu || entry.panel)"
-          :checkable="entry.checkable"
-          :checked="entry.checked"
-          @select="onItemClick(entry)"
-          @mouseenter="onItemHover(entry, $event)"
-        />
-      </template>
-      <div v-if="query && entries.length === 0" class="menu-empty">无匹配项</div>
-    </div>
-    </template>
   </AppMenu>
   <!-- 级联 flyout：key 随父项重建（防实例复用位置滞留）；pop=false 不回放动画；
        内容包一层 div 供根菜单 group 判定（点击 flyout 内 = 组内）；
-       panel 形态（3.3 网格面板）padding/gap 按 05 稿 §3§4 = 24 / 12，条目形态保持默认 12 / 2 -->
-  <AppMenu
-    v-if="flyout && menuState.entries"
-    :key="flyout.key"
-    :x="flyout.x"
-    :y="flyout.y"
-    :width="flyout.width"
-    :pad="flyout.panel ? '24px' : 'var(--space-12)'"
-    :gap="flyout.panel ? '12px' : 'var(--space-2)'"
-    :pop="false"
-    @close="closeAll(false)"
-  >
+       panel 形态（3.3 网格面板）padding 按 05 稿 §3 = 24，条目形态默认 6 -->
+  <AppMenu v-if="flyout && menuState.entries" :key="flyout.key" :x="flyout.x" :y="flyout.y" :pad="flyout.panel ? '24px' : undefined" :pop="false" @close="closeAll(false)">
     <div ref="flyoutRootRef" class="flyout-root">
       <FolderIconPanel v-if="flyout.panel?.kind === 'folderIcon'" :folder-id="flyout.panel.folderId" @done="closeAll(true)" />
-      <FolderColorPanel v-else-if="flyout.panel?.kind === 'folderColor'" :folder-id="flyout.panel.folderId" @done="closeAll(true)" />
-      <template v-else>
-        <template v-for="(entry, i) in flyout.entries" :key="i">
-          <MenuDivider v-if="entry === 'divider'" />
+      <div v-else class="menu-groups">
+        <div v-for="(group, gi) in flyoutGroups" :key="gi" class="menu-group">
           <MenuItem
-            v-else
-            :label="entry.label"
-            :icon="entry.icon"
-            :icon-class="entry.iconClass"
-            :icon-data="entry.iconData"
-            :trailing-icon="entry.trailingIcon"
-            :trailing-icon-class="entry.trailingIconClass"
-            :shortcut="entry.shortcut"
-            :disabled="entry.disabled"
-            :checkable="entry.checkable"
-            :checked="entry.checked"
-            @select="onItemClick(entry)"
+            v-for="row in group"
+            :key="row.index"
+            :label="row.entry.label"
+            :trailing-icon="row.entry.trailingIcon"
+            :trailing-icon-class="row.entry.trailingIconClass"
+            :shortcut="row.entry.shortcut"
+            :disabled="row.entry.disabled"
+            :checkable="row.entry.checkable"
+            :checked="row.entry.checked"
+            @select="onItemClick(row.entry)"
           />
-        </template>
-      </template>
+        </div>
+      </div>
     </div>
   </AppMenu>
 </template>
@@ -313,78 +245,28 @@ function onLibraryRemove(entry: CtxItem): void {
 .flyout-root {
   display: contents;
 }
-/* 搜索区（03 稿）：高 44 / padding 12 / gap 6 / 下边框 暗-悬停（容器 padding 0 → 通栏） */
-.menu-search {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
-  height: 44px;
-  padding: 0 var(--space-12);
-  flex: none;
-  border-bottom: 1px solid var(--line-hover);
+/* 分组容器（分割线稿）：组内 item gap 2；组 padding 上下 4、首组上 0 末组下 0（容器 padding 6 已供边距）；
+   组间分割 = 非末组盒内底 1px 通用/五级线（inset 不占布局，组间距恒 8px 贴稿；无孤立分割线元素） */
+.menu-groups {
+  display: contents;
 }
-.menu-search .lead {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  flex: 1;
-  min-width: 0;
-}
-/* 搜索图标 18 盒（svg 15），标签色 */
-.search-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  flex: none;
-  color: var(--text-label);
-}
-.menu-search input {
-  flex: 1;
-  min-width: 0;
-  background: none;
-  border: none;
-  outline: none;
-  color: var(--text-normal);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-}
-.menu-search input::placeholder {
-  color: var(--text-faint);
-}
-/* 清除钮 20×20 圆角 6（图标 12，标签色） */
-.menu-search .clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-6);
-  flex: none;
-  color: var(--text-label);
-}
-.menu-search .clear:hover {
-  background: linear-gradient(var(--line-hover), var(--line-hover));
-  color: var(--text-normal);
-}
-/* item 组容器（03 稿）：padding 12 / gap 2 */
-.menu-items {
+.menu-group {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-12);
-  min-height: 0;
+  gap: var(--n-space-2);
+  padding: var(--n-space-4) 0;
+}
+.menu-group:first-child {
+  padding-top: 0;
+}
+.menu-group:last-child {
+  padding-bottom: 0;
+}
+.menu-group:not(:last-child) {
+  box-shadow: inset 0 -1px 0 var(--n-g5);
 }
 /* 库排序松手归位帧：禁 transform 过渡（让位项视觉本已在目标位，2026-08-12 走查） */
-.menu-items.settling :deep(.lib-item) {
+.menu-groups.settling :deep(.lib-item) {
   transition: none;
-}
-.menu-empty {
-  padding: var(--space-6) var(--space-8);
-  color: var(--text-faint);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
 }
 </style>

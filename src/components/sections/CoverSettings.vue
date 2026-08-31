@@ -119,7 +119,7 @@ function onFrameDragEnd(): void {
 }
 onUnmounted(onFrameDragEnd); // 组件卸下（确认 / 取消 / 切目标）时清窗级监听
 
-// 更换封面菜单（10 稿 152 宽两项；从资源库中选择 = 主窗口选择模式后置，disabled 占位）
+// 更换封面菜单（10 稿两项；从资源库中选择 = 主窗口选择模式后置，disabled 占位）
 function openCoverMenu(e: MouseEvent): void {
   openContextMenu(
     e,
@@ -128,7 +128,6 @@ function openCoverMenu(e: MouseEvent): void {
       { label: "从资源库中选择", disabled: true },
     ],
     undefined,
-    { width: 152 },
   );
 }
 async function pickLocal(): Promise<void> {

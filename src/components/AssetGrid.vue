@@ -161,11 +161,11 @@ function scrollToGroup(groupId: string | null): void {
   if (!h) return;
   scrollTo(h.top + headerH.value + 12 + listExtra.value);
 }
-// 12 稿分组菜单（150 宽；未分组 = 简化菜单——spec 内分流）
+// 12 稿分组菜单（未分组 = 简化菜单——spec 内分流）
 function onGroupMenu(h: { groupId: string | null }, e: MouseEvent): void {
   const fid = gridFolderId.value;
   if (!fid) return;
-  openContextMenu(e, groupHeaderSpec({ folderId: fid, groupId: h.groupId, scrollToGroup }), undefined, { width: 150 });
+  openContextMenu(e, groupHeaderSpec({ folderId: fid, groupId: h.groupId, scrollToGroup }), undefined);
 }
 // sticky 置顶分组标题（05_区块标题：滚到容器顶部停留，下一组接替）：transform 容器内 sticky 无效，
 // 悬浮层手动实现——当前组 = 最后滚过视口顶的组；下一组标题接近 26（组标题稿高）内时上移让位（顶走动画）

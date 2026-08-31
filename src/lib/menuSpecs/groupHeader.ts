@@ -1,5 +1,5 @@
 // 分组标题菜单（12 稿，3.5 二轮）：分组标题 group-menu 按钮触发。
-// 一级（150 宽）：跳转▸（二级 = 全部分组列表，点击滚动跳转，滚动条联动）/ 新建分组（34 稿弹窗）/
+// 一级：跳转▸（二级 = 全部分组列表，点击滚动跳转，滚动条联动）/ 新建分组（34 稿弹窗）/
 // 编辑分组（33 稿管理弹窗）/ 展开折叠▸（二级：当前分组 / 全部分组 / 排除当前分组展开全部）/
 // 上移 / 下移 / 删除。
 // 未分组（组 id null）简化：仅 跳转▸ / 展开折叠▸（未分组不是真组——无规则可编辑、不参与组序）。
@@ -29,8 +29,6 @@ export function groupHeaderSpec(ctx: GroupMenuCtx): CtxEntry[] {
 
   const jumpItem: CtxEntry = {
     label: "跳转",
-    // 稿无独立图标（二级箭头由 submenu 自动出）——"稿无图标不配"口径
-    submenuWidth: 180,
     submenu: collapsedSet().map((id) => ({
       label: id === null ? "未分组" : (defs.find((g) => g.id === id)?.name ?? "未命名分组"),
       action: () => ctx.scrollToGroup(id),
@@ -38,7 +36,6 @@ export function groupHeaderSpec(ctx: GroupMenuCtx): CtxEntry[] {
   };
   const foldItem: CtxEntry = {
     label: "展开/折叠",
-    submenuWidth: 180,
     submenu: [
       {
         label: "当前分组",

@@ -121,42 +121,39 @@ async function openFramePreview(name: string): Promise<void> {
   if (idx >= 0) preview.setFrame(idx);
 }
 
-// —— 右键菜单（宽 320 = 素材卡片右键菜单同宽，2026-08-21 用户定：快捷键徽章也占空间，213 仍裁切）——
+// —— 右键菜单 ——
 function frameMenu(e: MouseEvent, name: string, idx: number): void {
   // 选择模式（6.2，2026-08-24 白名单收窄）：帧不是可选目标，菜单仅留查看类「打开预览」
   if (usePickerStore().active) {
-    openContextMenu(e, [{ label: "打开预览", icon: "open-preview", action: () => void openFramePreview(name) }], undefined, { width: 320 });
+    openContextMenu(e, [{ label: "打开预览", action: () => void openFramePreview(name) }], undefined);
     return;
   }
   // 右键未选中项先单选（全库惯例）；已在多选域内保持选择
   if (!selected.value.has(name)) clickFrame(e, name, idx);
   const targets = [...selected.value];
   const entries: CtxEntry[] = [
-    { label: "打开预览", icon: "open-preview", action: () => void openFramePreview(name) },
+    { label: "打开预览", action: () => void openFramePreview(name) },
     // 将当前帧设为预览图（2026-08-21 用户定）：直复用播放条同款 set_thumb_frame 业务；
     // 单帧语义——多选时恒对被右键帧生效
     {
       label: "将当前帧设为预览图",
-      icon: "thumbnail",
       action: () => void setSequenceFrameThumb(props.assetId, name),
     },
-    // 重排图标 = 清除缓存并重新加载同款刷新图标（2026-08-21 用户定）
-    { label: "重排序号", icon: "clear-cache-reload", action: () => void renumberSequenceFrames(props.assetId) },
+    { label: "重排序号", action: () => void renumberSequenceFrames(props.assetId) },
     "divider",
     {
       label: targets.length > 1 ? `删除 ${targets.length} 张序列图` : "删除此张序列图",
-      icon: "drop-to-trash",
       shortcut: "Delete",
       action: () => void deleteSequenceFrames(props.assetId, targets),
     },
   ];
-  openContextMenu(e, entries, undefined, { width: 320 });
+  openContextMenu(e, entries, undefined);
 }
 
 function blankMenu(e: MouseEvent): void {
   if (usePickerStore().active) return; // 选择模式（6.2）：重排序号是编辑类，不出
   openContextMenu(e, [
-    { label: "重排序号", icon: "clear-cache-reload", action: () => void renumberSequenceFrames(props.assetId) },
+    { label: "重排序号", action: () => void renumberSequenceFrames(props.assetId) },
   ]);
 }
 

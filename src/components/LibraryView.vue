@@ -273,11 +273,11 @@ function onTreePointerDown(e: PointerEvent): void {
   if (item) beginFolderDrag(e, item.getAttribute("data-folder-id")!);
 }
 // 快速访问项右键（13 稿回收站菜单，2026-08-11）：目前仅"回收站"有菜单——
-// 还原全部文件 / 清空回收站（recycleBlankSpec，宽 148）；其余快速访问项无右键
+// 还原全部文件 / 清空回收站（recycleBlankSpec）；其余快速访问项无右键
 function onQuickMenu(key: string, e: MouseEvent): void {
   if (key !== "recycle") return;
   e.preventDefault();
-  openContextMenu(e, recycleBlankSpec(), undefined, { width: 148 });
+  openContextMenu(e, recycleBlankSpec(), undefined);
 }
 </script>
 

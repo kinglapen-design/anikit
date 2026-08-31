@@ -1,54 +1,80 @@
 <script setup lang="ts">
-// 右键菜单 item（figma-css 04_右键菜单 item）：padding 6/8、gap 12、圆角 6、高 33；
-// 一级项：图标 18（常态档）+ 标题（正文常态）+ 快捷键徽章组 或 二级菜单提示箭头
-// （tree-expand-arrow 12 rotate(-90) 朝右，figma 04 第 3 节）；
-// 快捷键按 "+" 拆分为多个徽章（多字母 padding 2/4、单字母 2/6，见 KbdBadge）；无快捷键时隐藏；
-// 二级项（checkable）：对勾占位保证标题列对齐；hover 叠 暗-悬停；禁用 = 亮-选中档色不响应 hover。
-import { computed } from "vue";
+// 右键菜单 item（7.1 二十四轮 2026-09-01 按新稿 组件/上下文菜单 重写，旧 figma-css 04 稿废除）：
+// 高 26 / padding 4 8 / 圆角 6；标题 = 通用/正文 13/18 亮色/二级；hover 底 = 亮色/半透明-3；
+// 禁用 = 亮色/禁用档不响应 hover/点击。
+// 右侧件（space-between，互斥）：
+// - 快捷键纯文本（通用/数字 Fira Mono 500 12/16 亮色/三级，原串显示 "Ctrl+Enter"——
+//   旧 KbdBadge 徽章组形态与"词键转小写"逻辑随新稿废除）；
+// - 对勾（checkable，18 盒 check 12）：常态不显示 / 行 hover 显 亮色/三级 / 选中恒显 亮色/一级
+//   （恒渲染 opacity 切换——v-if 移除会改 flex 基线致行高抖动，踩坑 026）；
+// - 展开箭头（arrow，expand 14 盒 rotate(-90deg) 朝右，亮色/三级）；
+// - 色块行（swatches，「更改颜色」稿）：16 圆块 gap 4 + 1px 亮色/半透明-1 描边（ColorSwatchItem
+//   口径），hover 单块放大 125% 提层（2026-08-29 用户定），当前色 1.5px 亮色/一级外环（不占布局）；
+//   色块点击 @pick（不关菜单，连续试色场景），整行点击无动作。
+// trailingIcon = 标题右侧小图标 12（3.5 分组菜单「上移/下移」口径保留，亮色/三级，禁用随父色）。
 import AppIcon from "./AppIcon.vue";
-import KbdBadge from "./KbdBadge.vue";
+
+export interface SwatchColor {
+  tint: string | null;
+  hex: string;
+  label: string;
+}
 
 const props = withDefaults(
   defineProps<{
-    icon?: string;
-    iconClass?: string; // 图标附加类（如 rot-90）
-    iconData?: string; // 内联图片图标（data URL / 文件 URL，16 居中于 18 盒——新建文档组 md.webp / txt.png）
-    trailingIcon?: string; // 标题右侧小图标 12（3.5 分组菜单「上移/下移」稿口径：箭头-小跟文字右）
-    trailingIconClass?: string; // 尾图标附加类（rot-180 = 源图形朝上转朝下）
     label: string;
+    trailingIcon?: string;
+    trailingIconClass?: string; // 尾图标附加类（rot-180 = 源图形朝上转朝下）
     shortcut?: string;
     arrow?: boolean;
     checkable?: boolean;
     checked?: boolean;
     disabled?: boolean; // 禁用态：不响应 hover / 点击
+    swatches?: { colors: SwatchColor[]; current: string | null }; // 内嵌色块行（与 arrow/shortcut 互斥）
+    forceState?: "" | "hover"; // 预览页强制态：静态验收 hover（实际交互仅悬停触发）
   }>(),
-  { icon: undefined, iconClass: undefined, iconData: undefined, trailingIcon: undefined, trailingIconClass: undefined, shortcut: undefined, arrow: false, checkable: false, checked: false, disabled: false },
+  {
+    trailingIcon: undefined,
+    trailingIconClass: undefined,
+    shortcut: undefined,
+    arrow: false,
+    checkable: false,
+    checked: false,
+    disabled: false,
+    swatches: undefined,
+    forceState: "",
+  },
 );
-const emit = defineEmits<{ select: [] }>();
+const emit = defineEmits<{ select: []; pick: [tint: string | null] }>();
 
-// 快捷键拆分："Ctrl+Shift+N" → ["Ctrl", "Shift", "N"]；
-// 显示口径（新稿 02_布局 03/04/05/07，2026-08-11 走查）：词键小写（ctrl/shift/alt/enter/delete），
-// 单字母键保持大写，中文键名（"菜单"）原样
-const keys = computed(() =>
-  props.shortcut ? props.shortcut.split("+").filter(Boolean).map((k) => (/^[A-Za-z]{2,}$/.test(k) ? k.toLowerCase() : k)) : [],
-);
+function onRowClick(): void {
+  if (props.swatches) return; // 色块行整行点击无动作（仅色块可点）
+  emit("select");
+}
 </script>
 
 <template>
-  <button class="menu-item" :class="{ checked }" :disabled="disabled" @click="emit('select')">
+  <button class="menu-item" :class="[{ checked }, forceState ? `force-${forceState}` : '']" :disabled="disabled" @click="onRowClick">
     <span class="main">
-      <span v-if="checkable" class="check-slot">
-        <AppIcon v-if="checked" name="check" :size="12" />
-      </span>
-      <span v-else-if="iconData" class="deco data-icon"><img :src="iconData" alt="" /></span>
-      <AppIcon v-else-if="icon" :name="icon" :size="18" class="deco" :class="iconClass" />
       <span class="label">{{ label }}</span>
       <AppIcon v-if="trailingIcon" :name="trailingIcon" :size="12" class="trail" :class="trailingIconClass" />
     </span>
-    <span v-if="keys.length" class="shortcut">
-      <KbdBadge v-for="k in keys" :key="k" :label="k" />
+    <span v-if="swatches" class="swatches">
+      <button
+        v-for="s in swatches.colors"
+        :key="s.tint ?? 'default'"
+        class="sw"
+        :class="{ cur: s.tint === swatches.current }"
+        :style="{ background: s.hex }"
+        :aria-label="s.label"
+        @click.stop="emit('pick', s.tint)"
+      />
     </span>
-    <AppIcon v-if="arrow" name="tree-expand-arrow" :size="12" class="arrow" />
+    <span v-else-if="shortcut" class="shortcut">{{ shortcut }}</span>
+    <span v-else-if="checkable" class="check-slot">
+      <AppIcon name="check" :size="12" />
+    </span>
+    <AppIcon v-else-if="arrow" name="expand" :size="14" class="arrow" />
   </button>
 </template>
 
@@ -57,61 +83,45 @@ const keys = computed(() =>
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-12);
   width: 100%;
-  padding: var(--space-6) var(--space-8);
-  border-radius: var(--radius-6);
-  color: var(--text-normal);
-  transition: background 0.15s ease;
+  height: 26px;
+  padding: var(--n-space-4) var(--n-space-8);
+  box-sizing: border-box;
+  border-radius: var(--n-radius-6);
+  color: var(--n-l2);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  transition: background var(--n-dur-150) var(--n-ease-in-out);
 }
-/* hover 叠 暗-悬停 罩层 */
-.menu-item:hover {
-  background: linear-gradient(var(--line-hover), var(--line-hover));
+/* hover 底 = 亮色/半透明-3 */
+.menu-item:hover,
+.menu-item.force-hover {
+  background: var(--n-l-a3);
 }
-/* 禁用态（token：禁用 = 亮-选中档）：不响应 hover / 点击 */
+/* 禁用态（亮色/禁用档）：不响应 hover / 点击 */
 .menu-item:disabled {
-  color: var(--line-active);
+  color: var(--n-l-disabled);
   cursor: default;
 }
 .menu-item:disabled:hover {
   background: none;
 }
-/* 基础 item：图标 + 标题，间距 6 */
 .main {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
   flex: 1;
   min-width: 0;
 }
-.deco {
-  flex: none;
+.label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-/* 内联图片图标（data URL）：16 居中于 18 盒 */
-.deco.data-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-}
-.deco.data-icon img {
-  width: 16px;
-  height: 16px;
-  display: block;
-}
-/* 图标旋转 90°（如"上下分屏"与左右分屏同图标的语义区分） */
-.deco.rot-90 :deep(svg) {
-  transform: rotate(90deg);
-}
-/* 图标旋转 180°（3.5 分组菜单"下移"：chevron-small 源图形朝上，旋转朝下） */
-.deco.rot-180 :deep(svg) {
-  transform: rotate(180deg);
-}
-/* 标题右侧小图标（12，标签档色；禁用态随父色） */
+/* 标题右侧小图标（12，三级色；禁用态随父色） */
 .trail {
   flex: none;
-  color: var(--text-label);
+  color: var(--n-l3);
 }
 .menu-item:disabled .trail {
   color: inherit;
@@ -119,32 +129,66 @@ const keys = computed(() =>
 .trail.rot-180 :deep(svg) {
   transform: rotate(180deg);
 }
+/* 快捷键：纯文本 通用/数字（Fira Mono 500 12/16）三级色 */
+.shortcut {
+  font-family: var(--n-font-mono);
+  font-weight: var(--n-fw-medium);
+  font-size: var(--n-fs-num);
+  line-height: var(--n-lh-num);
+  color: var(--n-l3);
+  flex: none;
+}
+/* 对勾 18 盒（check 12）：常态隐 / hover 显三级 / 选中恒显一级 */
 .check-slot {
   width: 18px;
   height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-normal);
   flex: none;
+  color: var(--n-l3);
+  opacity: 0;
+  transition: opacity var(--n-dur-150) var(--n-ease-in-out);
 }
-.label {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.menu-item:hover .check-slot,
+.menu-item.force-hover .check-slot {
+  opacity: 1;
 }
-.shortcut {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-6);
-  flex: none;
+.menu-item.checked .check-slot {
+  color: var(--n-l1);
+  opacity: 1;
 }
-/* 二级菜单提示：展开箭头旋转朝右（figma 04 第 3 节），标签档 */
+/* 二级菜单提示箭头：expand 14 盒旋转朝右，三级色 */
 .arrow {
   flex: none;
-  color: var(--text-label);
+  color: var(--n-l3);
   transform: rotate(-90deg);
+}
+/* 色块行（「更改颜色」稿）：16 圆块 gap 4、1px 半透明-1 描边；hover 单块 125% 提层；当前色 1.5px 一级外环 */
+.swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--n-space-4);
+  flex: none;
+}
+.sw {
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--n-l-a1);
+  padding: 0;
+  cursor: pointer;
+  transition: transform var(--n-dur-150) var(--n-ease-in-out);
+}
+/* 放大块提层：避免被 DOM 后继块盖住边缘（ColorSwatchItem 同口径） */
+.sw:hover {
+  position: relative;
+  z-index: 1;
+  transform: scale(1.25);
+}
+.sw.cur {
+  box-shadow: 0 0 0 1.5px var(--n-l1);
 }
 </style>

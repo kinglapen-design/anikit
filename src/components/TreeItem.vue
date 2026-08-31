@@ -13,6 +13,7 @@ import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
 import { dragView } from "../lib/dragOperation";
 import { useInlineRename } from "../lib/useInlineRename";
+import { toNewTint } from "../lib/customColors";
 
 const props = withDefaults(
   defineProps<{
@@ -88,11 +89,13 @@ const dropZone = computed(
     (props.folderId && dragView.tree?.folderId === props.folderId ? dragView.tree.zone : null),
 );
 
-// 自定义色（3.3 预留）：root 底 = custom-{tint}，child/archive = custom-{tint}-bg；
-// 经 --tint-bg 注入，hover/选中罩层照常叠加（不掺白，2026-08-07 用户定）
+// 自定义色（3.3 预留；7.1 二十四轮 2026-09-01 迁新名）：tint 经 toNewTint 转正（存量旧名映射、新名原样）；
+// root 底 = --n-custom-{tint}-2 暗档，child/archive = 其 50% color-mix 派生（常态-2 半透明同口径）——
+// 移动面板等旧体系视觉的近似档，随其重构轮贴稿；经 --tint-bg 注入，hover/选中罩层照常叠加（不掺白）
 const tintBg = computed(() => {
-  if (!props.tint) return undefined;
-  return `var(--custom-${props.tint}${props.variant === "root" ? "" : "-bg"})`;
+  const t = toNewTint(props.tint);
+  if (!t) return undefined;
+  return props.variant === "root" ? `var(--n-custom-${t}-2)` : `color-mix(in srgb, var(--n-custom-${t}-2) 50%, transparent)`;
 });
 // 单击选中 + 双击展开/折叠（用 e.detail 连击计数自判，不用 dblclick 事件——Chromium 的 dblclick
 // 只在连击序列第 2 次点击派发，第 4/6… 次不再派发，连续双击展开/折叠会失效，2026-08-08 走查）

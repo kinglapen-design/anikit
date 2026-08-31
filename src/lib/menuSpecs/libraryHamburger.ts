@@ -7,55 +7,51 @@ import { pickImportPaths } from "../menuOps";
 import { openScan } from "../dupScanOps";
 import { newDocGroupEntries } from "./addMenu";
 
-// —— 08 稿 · 切换资源库（宽 300；14 汉堡"资源库"二级复用同一内容）——
+// —— 08 稿 · 切换资源库（14 汉堡"资源库"二级复用同一内容）——
 // 库列表 = 当前储存空间内库动态生成（2.1 空间化：list_space_libraries；checkable 勾 = 当前库；
 // 点击切换 = libraryOps.switchLibrary 按名开库）；切换储存空间 / 工作空间（阶段九）、
 // 合并资源库（单独立项，先补 PRD）、清除缓存 占位 disabled。
-export function librarySwitchSpec(names: string[], currentName: string | null): CtxEntry[] {
+export function librarySwitchSpec(names: string[], _currentName: string | null): CtxEntry[] {
   const items: CtxEntry[] = names.map((name) => ({
     label: name,
-    icon: "library-duotone", // 搜索平铺态的退化渲染用；常态走 LibraryMenuItem 品牌徽章
     library: true, // 点击行为在 ContextMenu 动态判定（不配 action——静态快照会让 keepOpen 期间"切回去"失效）
     keepOpen: true, // 切库是状态切换类：执行后菜单保持（用户可切过去看一眼切回来，2026-08-12 用户定）
     checkable: true,
-    checked: name === currentName, // 搜索平铺态 MenuItem 的勾；常态 LibraryMenuItem 动态绑定 currentLibrary
   }));
   return [
-    { label: "切换储存空间", icon: "switch-space", disabled: true, submenu: [] },
+    { label: "切换储存空间", disabled: true, submenu: [] },
     "divider",
     ...(items.length > 0 ? items : [{ label: "（当前空间无资源库）", disabled: true } as CtxItem]),
     "divider",
-    { label: "新建资源库", icon: "library", action: () => requestLibrarySetup() },
-    { label: "合并资源库", icon: "merge-libraries", disabled: true },
-    { label: "工作空间", icon: "workspace", disabled: true, submenu: [] },
+    { label: "新建资源库", action: () => requestLibrarySetup() },
+    { label: "合并资源库", disabled: true },
+    { label: "工作空间", disabled: true, submenu: [] },
     "divider",
-    { label: "清除缓存并重新加载", icon: "clear-cache-reload", disabled: true },
+    { label: "清除缓存并重新加载", disabled: true },
   ];
 }
 
-// —— 14 稿 · 汉堡菜单（宽 220，一级项稿无图标）——
+// —— 14 稿 · 汉堡菜单 ——
 // 资源库 ▸ = 08 切换资源库内容（用户定）；文件 ▸ = 新增菜单子集（导入文件/文件夹 + 新建文档组）；
 // 查找 ▸ = 扫描两项（占位）；偏好设置 / 帮助 先不管（占位 disabled）；退出 = 完全结束进程（exit_app）。
 export function hamburgerSpec(names: string[], currentName: string | null): CtxEntry[] {
   return [
-    { label: "资源库", submenuWidth: 300, submenu: librarySwitchSpec(names, currentName) },
+    { label: "资源库", submenu: librarySwitchSpec(names, currentName) },
     {
       label: "文件",
-      submenuWidth: 213,
       submenu: [
-        { label: "导入本地文件", icon: "import-file", action: () => void pickImportPaths("files") },
-        { label: "导入本地文件夹", icon: "import-folder", action: () => void pickImportPaths("folder") },
+        { label: "导入本地文件", action: () => void pickImportPaths("files") },
+        { label: "导入本地文件夹", action: () => void pickImportPaths("folder") },
         "divider",
         ...newDocGroupEntries(),
       ],
     },
     {
       label: "查找",
-      submenuWidth: 213,
       submenu: [
         // 扫描重复文件已点亮（2.7 二轮，35 稿）：汉堡入口 = 全部范围；扫描链接仍占位
-        { label: "扫描重复文件", icon: "scan-duplicates", action: () => void openScan({ kind: "all" }) },
-        { label: "扫描文件/档案链接", icon: "scan-links", disabled: true },
+        { label: "扫描重复文件", action: () => void openScan({ kind: "all" }) },
+        { label: "扫描文件/档案链接", disabled: true },
       ],
     },
     "divider",

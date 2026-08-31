@@ -115,10 +115,9 @@ function onSelect(id: string, e: MouseEvent): void {
 // 菜单取消（点外 / Esc 未执行动作）时恢复原选择（2026-08-10 用户反馈：取消后品牌色选中态残留）
 function onItemMenu(e: MouseEvent, node: FolderNode): void {
   if (selection.namingFolderId === node.id) return;
-  const opts = { width: 320, searchable: true }; // 1.3：树节点右键复用 05 文件夹稿（320 宽 + 搜索框）
   // 选择模式（6.2）：不入选择域直接出菜单（spec 内已分流"仅导航"精简集）
   if (usePickerStore().active) {
-    openContextMenu(e, treeItemSpec(node, props.parentId ?? null), undefined, opts);
+    openContextMenu(e, treeItemSpec(node, props.parentId ?? null), undefined);
     return;
   }
   if (!selection.isFolderSelected(node.id)) {
@@ -130,10 +129,10 @@ function onItemMenu(e: MouseEvent, node: FolderNode): void {
       selection.selectedFolders.clear();
       for (const id of snapshot) selection.selectedFolders.add(id);
       selection.folderAnchor = prevAnchor;
-    }, opts);
+    });
     return;
   }
-  openContextMenu(e, treeItemSpec(node, props.parentId ?? null), undefined, opts);
+  openContextMenu(e, treeItemSpec(node, props.parentId ?? null), undefined);
 }
 
 // 命名保存（先建后命名）：非空且与当前名（默认名）不同 → renameFolder；

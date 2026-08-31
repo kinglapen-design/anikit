@@ -42,3 +42,19 @@ export function toNewTint(tint: string | undefined): string {
   if (!tint) return "";
   return LEGACY_TINT_MAP[tint] ?? tint;
 }
+
+// 文件夹色块行十色（2026-09-01 新稿「右键菜单-更改颜色」，用户定案）：常态-1 = 默认位（清色 null）
+// + 九色 -1 档按 Token.md 1.6 声明序；显示色 = 新 token -1 档，存储值 = 新 tint 名
+//（旧消费端 TreeItem / LinkManageDialog 经 toNewTint 转正，数据层迁移待办完成后 LEGACY_TINT_MAP 退役）。
+export const FOLDER_SWATCHES: { tint: string | null; hex: string; label: string }[] = [
+  { tint: null, hex: "var(--n-custom-1)", label: "默认" },
+  { tint: "red", hex: "var(--n-custom-red-1)", label: "红色" },
+  { tint: "blue", hex: "var(--n-custom-blue-1)", label: "蓝色" },
+  { tint: "yellow", hex: "var(--n-custom-yellow-1)", label: "黄色" },
+  { tint: "yellowgreen", hex: "var(--n-custom-yellowgreen-1)", label: "黄绿" },
+  { tint: "green", hex: "var(--n-custom-green-1)", label: "绿色" },
+  { tint: "cyan", hex: "var(--n-custom-cyan-1)", label: "青色" },
+  { tint: "purple", hex: "var(--n-custom-purple-1)", label: "紫色" },
+  { tint: "pink", hex: "var(--n-custom-pink-1)", label: "粉色" },
+  { tint: "peach", hex: "var(--n-custom-peach-1)", label: "桃红" },
+];

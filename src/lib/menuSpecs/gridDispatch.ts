@@ -3,7 +3,7 @@
 // 空白处（含 grid-header）= 07 新增菜单（2026-08-11 用户定：空白右键/新增按钮/Ctrl+N 三入口共用，
 // 旧 6.3 空白菜单 assetBlankSpec/folderBlankSpec 废除——布局方式等归 28 查看方式菜单）；
 // 回收站视口空白 = 13 稿空白菜单；文件夹卡片 / 档案卡片 / 按钮 / 输入框上不处理（"pass"——卡片自带菜单）。
-// 1.3：素材 / 文件夹卡片菜单按稿出 320 宽 + 搜索框。
+// 1.3：菜单项按新稿纯文字口径（2026-09-01）。
 import { useContentStore, type PlacementView } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
@@ -26,18 +26,18 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
     if (usePickerStore().active) {
       if (content.isRecycleView) return "done";
       const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
-      if (p) openContextMenu(e, assetCardSpec(p), undefined, { width: 320, searchable: true });
+      if (p) openContextMenu(e, assetCardSpec(p), undefined);
       return "done";
     }
     if (!selection.isSelected(key)) selection.selectOnly(key);
     // 回收站分流前置（2026-08-11 修复 item 右键调不出：键解析失败也不依赖 items 反查，
     // 与 6.1 旧代码同构——回收站菜单不读卡片数据）
     if (content.isRecycleView) {
-      openContextMenu(e, recycleCardSpec(), undefined, { width: 148 });
+      openContextMenu(e, recycleCardSpec(), undefined);
       return "done";
     }
     const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
-    if (p) openContextMenu(e, assetCardSpec(p), undefined, { width: 320, searchable: true });
+    if (p) openContextMenu(e, assetCardSpec(p), undefined);
     return "done";
   }
   // .disk-card = 收件箱工程文件卡片（自带 inboxDiskSpec 菜单，InboxDiskSection @contextmenu.stop 已拦冒泡）
@@ -45,17 +45,17 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
   e.preventDefault();
   // 选择模式（6.2）：空白处新增菜单是编辑类，不出
   if (usePickerStore().active) return "done";
-  if (content.isRecycleView) openContextMenu(e, recycleBlankSpec(), undefined, { width: 148 });
-  else openContextMenu(e, addButtonSpec(), undefined, { width: 320 });
+  if (content.isRecycleView) openContextMenu(e, recycleBlankSpec(), undefined);
+  else openContextMenu(e, addButtonSpec(), undefined);
   return "done";
 }
 
-// 文件夹卡片右键（FolderStrip 调用）：05 稿 320 宽 + 搜索框
+// 文件夹卡片右键（FolderStrip 调用）：05 稿
 export function openFolderCardMenu(e: MouseEvent, folder: { id: string; name: string }): void {
-  openContextMenu(e, folderCardSpec(folder), undefined, { width: 320, searchable: true });
+  openContextMenu(e, folderCardSpec(folder), undefined);
 }
 
-// 档案卡片右键（ArchiveStrip 调用，3.2 一轮）：04 稿 320 宽 + 搜索框
+// 档案卡片右键（ArchiveStrip 调用，3.2 一轮）：04 稿
 export function openArchiveCardMenu(e: MouseEvent, archive: { id: string; name: string }): void {
-  openContextMenu(e, archiveCardSpec(archive), undefined, { width: 320, searchable: true });
+  openContextMenu(e, archiveCardSpec(archive), undefined);
 }

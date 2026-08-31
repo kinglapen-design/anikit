@@ -22,6 +22,7 @@ import AppSearchBar from "./AppSearchBar.vue";
 import IconButton from "./IconButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { syncAssetLinks, type SyncLinkAdd, type SyncLinkRemove, type SyncLinkRename } from "../lib/placementOps";
+import { toNewTint } from "../lib/customColors";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 
@@ -201,10 +202,12 @@ async function onConfirm(): Promise<void> {
   }
 }
 
-// 文件夹格样式：tint（--custom-{tint} 主档 / 子级 -bg，TreeItem 同口径）；无 tint = 两档默认
+// 文件夹格样式：tint 经 toNewTint 转正（7.1 二十四轮迁新名）——顶级 = --n-custom-{tint}-2 暗档 /
+// 子级 = 50% color-mix 派生（TreeItem 同口径，旧 --custom-{tint}/-bg 体系废除）；无 tint = 两档默认
 function cellStyle(line: Line): Record<string, string> | undefined {
-  if (!line.tint) return undefined;
-  return { background: `var(--custom-${line.tint}${line.depth === 0 ? "" : "-bg"})` };
+  const t = toNewTint(line.tint ?? undefined);
+  if (!t) return undefined;
+  return { background: line.depth === 0 ? `var(--n-custom-${t}-2)` : `color-mix(in srgb, var(--n-custom-${t}-2) 50%, transparent)` };
 }
 function toggleNode(id: string): void {
   if (collapsed.value.has(id)) collapsed.value.delete(id);

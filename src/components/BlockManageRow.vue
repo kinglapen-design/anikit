@@ -22,13 +22,12 @@ const props = defineProps<{
 const emit = defineEmits<{ moveUp: []; moveDown: []; remove: [] }>();
 
 // 默认图标下拉（58×28）：点击弹 05 稿 §3 图标网格（2026-08-18，3.3 换网格面板落地——
-// 整体面板菜单 openPanelMenu，230 宽 20 格，选中即写草稿并关菜单）
+// 整体面板菜单 openPanelMenu，20 格，选中即写草稿并关菜单）
 function openIconMenu(e: MouseEvent): void {
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
   openPanelMenu(
     { clientX: rect.left, clientY: rect.bottom + 4 },
     { kind: "iconPicker", current: props.row.icon, onPick: (name) => (props.row.icon = name) },
-    { width: 230 },
   );
 }
 </script>

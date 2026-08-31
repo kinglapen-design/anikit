@@ -1,17 +1,20 @@
 <script setup lang="ts">
-// 菜单容器（figma-css 04_右键菜单 + 布局稿菜单共性）：C2 底 / 圆角 8 / 1.5px 亮-选中边框（inset）/
-// 内边距 12（布局稿菜单容器统一）/ 子项间距 2 / 投影 --shadow-pop；
+// 菜单容器（7.1 二十四轮 2026-09-01 按新稿 组件/上下文菜单 容器定案替换，旧 figma-css 04 稿口径废除）：
+// 通用/三级 #242424 底（--n-g3）/ 圆角 8 / 1px 通用/五级 #2E2E2E 描边（inset 内画不占空间，
+// 内容宽恒 288 = item 稿宽）/ 小阴影 --n-shadow-sm；宽 300 定宽 / 内边距 6 / gap 0
+//（分组间距由 ContextMenu 组容器承担：组内 gap 2 / 组 padding 上下 4 首末 0 / 组间 1px 线）。
 // fixed 定位，点击组外（group 之外）或 Esc 关闭；菜单项点击不自动关闭（连续操作）。
 // 边界钳制（1.3，03 稿注"菜单不可超出窗口边缘"）：挂载/位移后量实际尺寸，右/下缘溢出回收进窗口
 //（留 4 呼吸），弹出动画 origin 随回收方位翻转；超出窗口高度时封顶 100vh-8 并纵向滚动。
 // 尺寸用 offsetWidth/offsetHeight（布局尺寸）——getBoundingClientRect 会带上 menu-pop 的 scale(0.96)
 // 动画初帧，底部溢出被低估 4% 导致钳制失效（2026-08-11 走查）。
 // pop = false 关闭弹出动画（级联 flyout 每次 hover 换父项重建，回放动画会闪）。
+// width/pad/gap 仍可按面板形态覆盖（ViewOptionsMenu 404 面板、FolderIconGrid 网格面板）。
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{ x: number; y: number; width?: number; pad?: string; gap?: string; group?: HTMLElement | null; trigger?: HTMLElement | null; pop?: boolean }>(),
-  { width: 175, pad: "var(--space-12)", gap: "var(--space-2)", group: null, trigger: null, pop: true },
+  { width: 300, pad: "var(--n-space-6)", gap: "0", group: null, trigger: null, pop: true },
 );
 const emit = defineEmits<{ close: [] }>();
 const rootRef = ref<HTMLElement>();
@@ -100,11 +103,11 @@ onBeforeUnmount(() => {
   z-index: 2000;
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-8);
-  background: var(--c2);
+  border-radius: var(--n-radius-8);
+  background: var(--n-g3);
   box-shadow:
-    inset 0 0 0 var(--border-strong) var(--line-active),
-    var(--shadow-pop);
+    inset 0 0 0 1px var(--n-g5),
+    var(--n-shadow-sm);
 }
 /* 弹出动画：快速缩放 + 透明度过渡，缓出曲线（2026-07-24 用户定）；flyout 等逐帧位移场景用 pop=false 关闭 */
 .app-menu.pop {

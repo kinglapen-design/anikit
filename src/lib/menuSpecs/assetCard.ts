@@ -1,7 +1,5 @@
 // 03 稿 · 素材卡片右键菜单 spec（自 menuSpecs.ts 拆出，规范第 3 条行数控制）：
-// 宽 320 + 搜索框（openGridContextMenu 调用处传 opts）；
-// 二级菜单宽度按稿（submenuWidth）：链接位置 320 / 缩略图·导出 213 / 资源库·AI·复制数据 180
-//（2026-08-11 二轮走查，原默认 175 文字截断）。
+// 菜单项按新稿纯文字口径（2026-09-01）。
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore, type FolderNode, type PlacementView } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
@@ -77,7 +75,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     action: () => jumpToAssetPlacement(assetId, fid),
   }));
   const entries: CtxEntry[] = [
-    { label: "打开预览", icon: "open-preview", shortcut: "Enter", action: () => void usePreviewStore().open(assetKey) },
+    { label: "打开预览", shortcut: "Enter", action: () => void usePreviewStore().open(assetKey) },
   ];
   if (isSequence) {
     entries.push(
@@ -85,34 +83,31 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       // 进包前清全局选择域——包内视口无素材卡片，残留选中会让全局 Delete 误删素材/文件夹
       {
         label: "打开序列帧包",
-        icon: "open-sequence-pack",
         action: () => {
           selection.clear();
           useTabsStore().openView(`seq:${assetId}`);
         },
       },
       // 解散序列帧包导入（5.2）：危险操作，alert warning 弹窗明示不可撤销（流程在 menuOps）
-      { label: "解散序列帧包导入", icon: "import-sequence-unpack", action: () => dissolveSequenceFlow(p) },
+      { label: "解散序列帧包导入", action: () => dissolveSequenceFlow(p) },
     );
   }
   entries.push(
     {
       label: "新标签页打开",
-      icon: "open-in-new-tab",
       shortcut: "Ctrl+Enter",
       disabled: true, // 文件无独立标签页视口业务（标签页 = 文件夹视口），占位
     },
-    { label: "新窗口打开", icon: "open-new-window", action: () => void invoke("open_preview_window", { assetKey }) },
-    { label: "在默认应用打开", icon: "open-default", shortcut: "Shift+Enter", action: () => openDefaultApp(assetId) },
-    { label: "在其他应用打开", icon: "open-in-other-app", action: () => void openWithDialog(assetId) },
-    { label: "发送至 Animate", icon: "send-to-animate", shortcut: "Ctrl+E", disabled: true },
-    { label: "在资源管理器打开", icon: "open-in-explorer", action: () => revealWithWarning(assetId) },
+    { label: "新窗口打开", action: () => void invoke("open_preview_window", { assetKey }) },
+    { label: "在默认应用打开", shortcut: "Shift+Enter", action: () => openDefaultApp(assetId) },
+    { label: "在其他应用打开", action: () => void openWithDialog(assetId) },
+    { label: "发送至 Animate", shortcut: "Ctrl+E", disabled: true },
+    { label: "在资源管理器打开", action: () => revealWithWarning(assetId) },
     "divider",
-    { label: "移动文件", icon: "move-file", shortcut: "Ctrl+Y", action: () => moveAssetsFlow() },
+    { label: "移动文件", shortcut: "Ctrl+Y", action: () => moveAssetsFlow() },
     // 文件链接管理（17 稿，6.2 三轮点亮）：单选才可（面板 = 管理一个文件的链接分布）
     {
       label: "文件链接管理",
-      icon: "file-link-manage",
       shortcut: "Ctrl+J",
       disabled: selection.count !== 1,
       action: () => {
@@ -120,7 +115,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       },
     },
     // 将此文件设为原始文件（6.2 四轮走查③，PRD 01 边界规则 8 手动 origin 转移）：
-    // 仅链接卡片（origin=false）可点——origin 卡已是原始文件；单选才可；稿无此项不配图标（速查表 §6）
+    // 仅链接卡片（origin=false）可点——origin 卡已是原始文件；单选才可
     {
       label: "将此文件设为原始文件",
       disabled: selection.count !== 1 || p.origin,
@@ -128,25 +123,22 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     },
     {
       label: "打开文件链接所在位置",
-      icon: "reveal-file-link",
-      submenuWidth: 320,
       submenu: locations.length > 0 ? locations : [{ label: "（无）", disabled: true }],
     },
     "divider",
-    { label: "剪切文件", icon: "cut-file", shortcut: "Ctrl+X", action: () => copySelection("cut") },
-    { label: "复制文件", icon: "copy-file", shortcut: "Ctrl+C", action: () => copySelection("copy") },
+    { label: "剪切文件", shortcut: "Ctrl+X", action: () => copySelection("cut") },
+    { label: "复制文件", shortcut: "Ctrl+C", action: () => copySelection("copy") },
   );
   if (hasClipboard) {
     entries.push(
-      { label: "作为链接粘贴", icon: "paste-as-link", shortcut: "Ctrl+V", action: () => void pasteClipboard() },
-      { label: "作为副本粘贴", icon: "paste-as-copy", shortcut: "Ctrl+Shift+V", action: () => void pasteDuplicate() },
+      { label: "作为链接粘贴", shortcut: "Ctrl+V", action: () => void pasteClipboard() },
+      { label: "作为副本粘贴", shortcut: "Ctrl+Shift+V", action: () => void pasteDuplicate() },
     );
   }
   entries.push(
     {
       // 多选分流批量重命名（3.4，37 稿）：弹窗逐条改名；单选 = 卡片就地重命名（F2 同径）
       label: selection.count > 1 ? "批量重命名" : "重命名",
-      icon: "rename",
       shortcut: "F2",
       action: () => {
         if (selection.count > 1) selection.renameDraft = selection.selectedRefs();
@@ -154,12 +146,10 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       },
     },
     "divider",
-    { label: "创建副本", icon: "duplicate", shortcut: "Ctrl+D", action: () => void duplicateSelected() },
+    { label: "创建副本", shortcut: "Ctrl+D", action: () => void duplicateSelected() },
     "divider",
     {
       label: "缩略图",
-      icon: "thumbnail",
-      submenuWidth: 213,
       submenu: [
         { label: "打开 Animate 生成缩略图", disabled: true },
         { label: "复制缩略图", disabled: selection.count !== 1, action: () => void copyThumb(assetId) },
@@ -183,29 +173,22 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     "divider",
     {
       label: "添加至其他资源库",
-      icon: "add-to-library",
-      submenuWidth: 180,
       submenu: [{ label: "（暂无其他资源库）", disabled: true }],
     },
     {
       label: "导出文件",
-      icon: "export-file",
-      submenuWidth: 213,
       submenu: [
-        { label: "导出为素材包", icon: "library", disabled: true },
+        { label: "导出为素材包", disabled: true },
         {
           label: "导出到本地磁盘",
-          icon: "export-to-disk",
           action: () => void pickExportAssets(selection.selectedRefs().map((r) => r.assetId)),
         },
-        { label: "导出提示词为 .MD 文档", icon: "set-markdown-as-prompt", disabled: true },
+        { label: "导出提示词为 .MD 文档", disabled: true },
       ],
     },
     "divider",
     {
       label: "AI 工具集",
-      icon: "ai-tools",
-      submenuWidth: 180,
       submenu: [
         { label: "以图搜图", disabled: true },
         "divider",
@@ -219,22 +202,20 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       ],
     },
     "divider",
-    { label: "保存提示词", icon: "save-prompt", disabled: true },
+    { label: "保存提示词", disabled: true },
     {
       label: "复制数据",
-      icon: "copy-data",
-      submenuWidth: 180,
       submenu: [
         { label: "复制链接", action: () => void copyAssetLink(assetId) },
         { label: "复制文件路径", action: () => void copyAssetPath(assetId) },
         "divider",
-        { label: "复制名称", action: () => void copyName(p.name) },
-        { label: "复制 base64", action: () => void copyBase64(assetId) },
+        { label: "复制名称", action: () => copyName(p.name) },
+        { label: "复制 base64", action: () => copyBase64(assetId) },
         { label: "复制提示词", disabled: true },
       ],
     },
     "divider",
-    { label: "置顶", icon: "pin-on", disabled: true },
+    { label: "置顶", disabled: true },
     "divider",
   );
   // 删除组两项恒显（3.4 八轮，2026-08-18 用户定：废除链接分流项——链接删除本就只移除记录，
@@ -242,13 +223,11 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
   entries.push(
     {
       label: "从文件夹中移除",
-      icon: "remove-from-folder",
       shortcut: "Shift+Delete",
       action: () => void deletePlacements(selection.selectedRefs(), "uncategorized"),
     },
     {
       label: "丢到回收站",
-      icon: "drop-to-trash",
       shortcut: "Delete",
       action: () => void deletePlacements(selection.selectedRefs()),
     },
@@ -276,12 +255,11 @@ function pickerAssetCardSpec(p: PlacementView): CtxEntry[] {
   const assetId = p.assetId;
   const assetKey = `${p.assetId}|${p.folderId}`;
   const entries: CtxEntry[] = [
-    { label: "打开预览", icon: "open-preview", action: () => void usePreviewStore().open(assetKey) },
+    { label: "打开预览", action: () => void usePreviewStore().open(assetKey) },
   ];
   if (isSequenceAsset(p)) {
     entries.push({
       label: "打开序列帧包",
-      icon: "open-sequence-pack",
       action: () => {
         useSelectionStore().clear();
         useTabsStore().openView(`seq:${assetId}`);
@@ -289,29 +267,25 @@ function pickerAssetCardSpec(p: PlacementView): CtxEntry[] {
     });
   }
   entries.push(
-    { label: "新窗口打开", icon: "open-new-window", action: () => void invoke("open_preview_window", { assetKey }) },
-    { label: "在默认应用打开", icon: "open-default", action: () => openDefaultApp(assetId) },
-    { label: "在其他应用打开", icon: "open-in-other-app", action: () => void openWithDialog(assetId) },
-    { label: "在资源管理器打开", icon: "open-in-explorer", action: () => revealWithWarning(assetId) },
+    { label: "新窗口打开", action: () => void invoke("open_preview_window", { assetKey }) },
+    { label: "在默认应用打开", action: () => openDefaultApp(assetId) },
+    { label: "在其他应用打开", action: () => void openWithDialog(assetId) },
+    { label: "在资源管理器打开", action: () => revealWithWarning(assetId) },
     "divider",
     {
       label: "打开文件链接所在位置",
-      icon: "reveal-file-link",
-      submenuWidth: 320,
       submenu: linkLocationEntries(assetId),
     },
     "divider",
     { label: "复制缩略图", action: () => void copyThumb(assetId) },
     {
       label: "复制数据",
-      icon: "copy-data",
-      submenuWidth: 180,
       submenu: [
         { label: "复制链接", action: () => void copyAssetLink(assetId) },
         { label: "复制文件路径", action: () => void copyAssetPath(assetId) },
         "divider",
-        { label: "复制名称", action: () => void copyName(p.name) },
-        { label: "复制 base64", action: () => void copyBase64(assetId) },
+        { label: "复制名称", action: () => copyName(p.name) },
+        { label: "复制 base64", action: () => copyBase64(assetId) },
       ],
     },
   );

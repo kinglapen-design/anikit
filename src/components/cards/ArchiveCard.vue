@@ -227,7 +227,8 @@ const nameTip = computed(() => {
   opacity: 0.5;
   cursor: not-allowed;
 }
-/* 已选大勾：成功色圆底 44 + check 22（烘焙 亮色/一级 原值），居中整卡（正方形封面区） */
+/* 已选大勾：成功色圆底 44 + check 22（currentColor 吃 text-highlight 白，2026-09-01 随 check.svg 转换补登记色——
+   原依赖 svg 烘焙 亮色/一级 原值），居中整卡（正方形封面区） */
 .ar-pick-check {
   position: absolute;
   left: 50%;
@@ -241,6 +242,7 @@ const nameTip = computed(() => {
   height: 44px;
   border-radius: 50%;
   background: var(--n-success);
+  color: var(--text-highlight);
   pointer-events: none;
 }
 </style>
