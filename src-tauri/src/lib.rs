@@ -187,6 +187,9 @@ pub fn run() {
           use windows::Win32::UI::Controls::MARGINS;
           if let Ok(raw) = w.hwnd() {
             let hwnd = HWND(raw.0 as _);
+            // 失焦欺骗（2026-08-30 用户方案）：骗 DWM 恒按激活渲染——失焦不再退化云母
+            // 成实色、阴影不再收小。详见 window_fx::ncactivate_guard 注释
+            adapters::window_fx::install_ncactivate_guard(hwnd);
             // 主窗口 DWM 边框染 通用/六级实心 #333333（COLORREF 0x00BBGGRR；2026-08-30
             // 用户定实心色档）：云母模式边框由 DWM 沿圆角裁切路径画——恒连续恒贴边；前端
             // ::before 云母模式不画（DWM 线与 CSS inset 0 线有 ~0.5px 系统错位，双画恒双层，

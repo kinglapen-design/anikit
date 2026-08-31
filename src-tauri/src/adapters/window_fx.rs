@@ -19,6 +19,36 @@ use std::sync::OnceLock;
 /// 主窗口实际生效的模式（"mica" / "solid"），启动时 apply_main 写入，前端查询依据。
 static MAIN_MODE: OnceLock<&'static str> = OnceLock::new();
 
+/// 失焦欺骗 subclass（2026-08-30 用户方案）：失焦时 DWM 把云母退化为实色、窗口阴影
+/// 收成小圈——两者都绑 DWM 的"窗口激活态"渲染判定。拦截 WM_NCACTIVATE 把 wParam 恒改
+/// TRUE 再下放默认链（lParam -1 = 阻止默认流程重绘非客户区），骗 DWM 恒按激活渲染
+/// 帧/backdrop/阴影。焦点/activation 本身不变（WM_ACTIVATE、前后台焦点事件不受影响）。
+#[cfg(windows)]
+unsafe extern "system" fn ncactivate_guard(
+  hwnd: windows::Win32::Foundation::HWND,
+  msg: u32,
+  wparam: windows::Win32::Foundation::WPARAM,
+  lparam: windows::Win32::Foundation::LPARAM,
+  _id: usize,
+  _data: usize,
+) -> windows::Win32::Foundation::LRESULT {
+  use windows::Win32::Foundation::{LPARAM, WPARAM};
+  use windows::Win32::UI::Shell::DefSubclassProc;
+  use windows::Win32::UI::WindowsAndMessaging::WM_NCACTIVATE;
+  if msg == WM_NCACTIVATE {
+    return DefSubclassProc(hwnd, msg, WPARAM(1), LPARAM(-1));
+  }
+  DefSubclassProc(hwnd, msg, wparam, lparam)
+}
+
+/// 给主窗口装失焦欺骗 subclass（show 后随边框染色/帧延伸一起装，本进程只装一次）。
+#[cfg(windows)]
+pub fn install_ncactivate_guard(hwnd: windows::Win32::Foundation::HWND) {
+  use windows::Win32::UI::Shell::SetWindowSubclass;
+  let ok = unsafe { SetWindowSubclass(hwnd, Some(ncactivate_guard), 1, 0) };
+  log::info!("[window_fx] WM_NCACTIVATE 失焦欺骗 subclass 安装 = {ok:?}");
+}
+
 /// build 号 → 模式（纯函数，单测边界）。
 pub fn mode_for_build(build: u32) -> &'static str {
   if build >= 22621 {
