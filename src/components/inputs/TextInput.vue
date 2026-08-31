@@ -7,6 +7,8 @@
 // ::after 常态层瞬时、::before 聚焦层 opacity 过渡 150ms（聚焦不做颜色过渡，踩坑 036）。
 // hover 稿无 → 不做；禁用态稿未画 → 属性透传不改视觉（随按钮族记 09 待办，不自创）。
 // trailingIcon = 右置装饰图标 18（亮色/四级，详情面板链接框稿，7.1 二十三轮扩）；readonly 透传（只读展示口径）。
+// focusable=false = 聚焦描边不显（2026-08-31 用户定：仅快速访问固定入口框用——亮边误导人以为能输入；
+// 文件夹/文件名称框保留聚焦态，改名语义上可输入，勿全局禁用 readonly 聚焦）。
 import { ref } from "vue";
 import AppIcon from "../AppIcon.vue";
 
@@ -17,9 +19,11 @@ withDefaults(
     disabled?: boolean;
     readonly?: boolean;
     trailingIcon?: string;
+    focusable?: boolean; // false = 聚焦描边不显（2026-08-31 用户定：快速访问固定入口框不给聚焦边框——
+    // 亮了误导人以为能输入；文件夹/文件名称框保留聚焦态，改名业务语义上可输入）
     forceState?: "" | "focus";
   }>(),
-  { size: "lg", placeholder: undefined, disabled: false, readonly: false, trailingIcon: undefined, forceState: "" },
+  { size: "lg", placeholder: undefined, disabled: false, readonly: false, trailingIcon: undefined, focusable: true, forceState: "" },
 );
 const model = defineModel<string>({ default: "" });
 
@@ -32,7 +36,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="ti-root" :class="[size, { disabled }, forceState ? `force-${forceState}` : '']">
+  <div class="ti-root" :class="[size, { disabled, 'no-focus': !focusable }, forceState ? `force-${forceState}` : '']">
     <input
       ref="inputEl"
       v-model="model"
@@ -93,6 +97,10 @@ defineExpose({
 .ti-root:focus-within::before,
 .ti-root.force-focus::before {
   opacity: 1;
+}
+/* no-focus（focusable=false，快速访问固定入口框）：聚焦描边恒隐（2026-08-31 用户定） */
+.ti-root.no-focus:focus-within::before {
+  opacity: 0;
 }
 
 /* 内嵌 input：透明去框（底色 / 描边 / 聚焦全在壳） */

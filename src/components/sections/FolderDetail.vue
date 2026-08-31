@@ -67,9 +67,10 @@ const dataRows = computed<{ label: string; values: string[] }[]>(() => {
     </div>
   </section>
   <!-- 输入框区块（稿：padding 12 / gap 8 / border-top 通用/三级）；
-       快速访问 = 单名称框（不让改名——本面板输入框恒只读口径） -->
+       快速访问 = 单名称框（不让改名——本面板输入框恒只读口径；focusable=false 不出聚焦描边，
+       2026-08-31 用户定：固定入口亮聚焦边误导人以为能输入；文件夹名称框保留聚焦态） -->
   <section class="fd-inputs">
-    <TextInput :model-value="folder ? folder.name : (quick?.name ?? '')" readonly placeholder="名称" />
+    <TextInput :model-value="folder ? folder.name : (quick?.name ?? '')" readonly :focusable="!!folder" placeholder="名称" />
     <TextInput v-if="folder" model-value="" readonly placeholder="http://" trailing-icon="link" />
   </section>
   <!-- 基础信息区块（稿：border-top；BaseDataItem 信息卡） -->

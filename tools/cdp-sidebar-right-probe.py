@@ -272,6 +272,16 @@ async def main():
                 "document.querySelector('.sidebar-right .bd-row .bd-values')?.textContent")
             check("R3d 文件数 = 3（桩 3 条 Placement）", qv == "3", f"值 = {qv}")
 
+            # ---------- R3e 快速访问名称框不出聚焦描边（focusable=false，2026-08-31 用户定） ----------
+            await pointer_click(".sidebar-right .fd-inputs .ti-root .ti-inner")
+            qf = await ev(
+                "(() => { const r = document.querySelector('.sidebar-right .fd-inputs .ti-root');"
+                " return r ? { op: getComputedStyle(r, '::before').opacity,"
+                "   focus: document.activeElement === r.querySelector('.ti-inner') } : null; })()")
+            check("R3e 快速访问名称框：可聚焦但不出聚焦描边（聚焦保留、边不显）",
+                  isinstance(qf, dict) and qf.get("op") == "0" and qf.get("focus") is True,
+                  json.dumps(qf))
+
             # ---------- R4 顶行与旧结构 ----------
             bt = await ev(
                 "(() => { const el = document.querySelector('.sidebar-right .bar-title');"
@@ -401,6 +411,17 @@ async def main():
             # 再点回展开复原（防影响后续断言与截图）
             await ev("document.querySelector('.sidebar-right .desc-head').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
             await asyncio.sleep(0.3)
+
+            # ---------- R8e 文件名称框保留聚焦描边（文件/文件夹语义可改名，2026-08-31 用户定） ----------
+            await pointer_click(".sidebar-right .db-block.inputs .ti-root .ti-inner")
+            await asyncio.sleep(0.3)
+            ff = await ev(
+                "(() => { const r = document.querySelector('.sidebar-right .db-block.inputs .ti-root');"
+                " return r ? { op: getComputedStyle(r, '::before').opacity,"
+                "   focus: document.activeElement === r.querySelector('.ti-inner') } : null; })()")
+            check("R8e 文件名称框保留聚焦描边（聚焦后 ::before opacity 1）",
+                  isinstance(ff, dict) and ff.get("op") == "1" and ff.get("focus") is True,
+                  json.dumps(ff))
 
             # ---------- R9 信息查看管理钮 ----------
             mb = await ev(

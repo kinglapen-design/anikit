@@ -40,6 +40,10 @@ const liveSm = ref("");
           <TextInput model-value="" placeholder="http://" trailing-icon="link" readonly />
           <span class="pv-cap">trailingIcon 右置装饰（详情面板链接框）+ 只读（7.1 右栏轮扩）</span>
         </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <TextInput model-value="全部" readonly :focusable="false" />
+          <span class="pv-cap">focusable=false：聚焦描边不显（快速访问固定入口框，2026-08-31 用户定）</span>
+        </div>
       </div>
     </div>
 
