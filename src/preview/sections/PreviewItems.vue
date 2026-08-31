@@ -154,7 +154,11 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
         </div>
         <div class="pv-demo-cell" style="width: 240px">
           <SectionTitle variant="block" title="链接" with-link force-state="hover" />
-          <span class="pv-cap">详情链接 · hover（链接 / 新建）</span>
+          <span class="pv-cap">详情链接 · hover（链接 / 更多 / 新建）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <SectionTitle variant="block" title="链接" with-link :with-more="false" force-state="hover" />
+          <span class="pv-cap">详情链接稿按钮组 = 链接 + 添加（withMore=false，7.1 右栏轮扩）</span>
         </div>
       </div>
       <div class="pv-demo-row">
@@ -301,6 +305,10 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
           <ColorSwatchItem :colors="swatchDemo" force-state="hover" />
           <span class="pv-cap">force 全块放大示意（实际交互仅悬停块放大）</span>
         </div>
+        <div class="pv-demo-cell">
+          <ColorSwatchItem :colors="[]" :placeholder-count="7" />
+          <span class="pv-cap">空态 7 占位（详情面板 pinned 恒显口径，7.1 右栏轮扩）</span>
+        </div>
       </div>
     </div>
 
@@ -322,6 +330,22 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
         <div class="pv-demo-cell">
           <PickRelationItem picked="雪天_自动.fla" from-label="父亲" to-label="儿子" origin="雪天_自动.fla" />
           <span class="pv-cap">选择关系 · 常态（关系框可输入，聚焦描边 半透明-1）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <PickFileItem name="" editing placeholder="点击卡片选择" readonly :closable="false" />
+          <span class="pv-cap">选择文件 · 空态占位行（只读 + 无关闭钮，7.1 右栏轮扩）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <PickRelationItem
+            picked=""
+            picked-placeholder="点击卡片选择"
+            from-label=""
+            to-label=""
+            origin="雪天_自动.fla"
+            disabled
+            :closable="false"
+          />
+          <span class="pv-cap">选择关系 · 空态占位组（双框禁用 + 无关闭钮）</span>
         </div>
       </div>
     </div>

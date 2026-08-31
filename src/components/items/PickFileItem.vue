@@ -9,12 +9,15 @@ withDefaults(
   defineProps<{
     name: string;
     editing?: boolean; // 输入态（名称框本身就是输入框，速查表 §12.2）
+    placeholder?: string; // 输入态占位（空态行「点击卡片选择」，7.1 二十三轮补）
+    readonly?: boolean; // 输入态只读（空态行禁用口径，同上）
+    closable?: boolean; // 关闭钮显隐（空态占位组无删除钮，旧口径沿）；默认 true
     forceState?: "" | "hover";
   }>(),
-  { editing: false, forceState: "" },
+  { editing: false, placeholder: undefined, readonly: false, closable: true, forceState: "" },
 );
 
-const emit = defineEmits<{ click: []; close: [] }>();
+const emit = defineEmits<{ click: []; close: []; "update:name": [v: string] }>();
 </script>
 
 <template>
@@ -23,9 +26,17 @@ const emit = defineEmits<{ click: []; close: [] }>();
     :class="[{ editing }, forceState ? `force-${forceState}` : '']"
     @click="emit('click')"
   >
-    <input v-if="editing" class="pk-input" :value="name" />
+    <input
+      v-if="editing"
+      class="pk-input"
+      :value="name"
+      :placeholder="placeholder"
+      :readonly="readonly"
+      @input="emit('update:name', ($event.target as HTMLInputElement).value)"
+      @click.stop
+    />
     <span v-else class="nm">{{ name }}</span>
-    <button class="ni-close" @click.stop="emit('close')">
+    <button v-if="closable" class="ni-close" @click.stop="emit('close')">
       <AppIcon name="close-small" :size="14" />
     </button>
   </div>

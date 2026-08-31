@@ -11,10 +11,11 @@ withDefaults(
     count?: number | string; // 「标题 / 数量」；不传则无数量段
     expanded?: boolean; // 展开钮朝向（默认收起 >）
     withLink?: boolean; // block 型详情链接变体：剪贴板有链接时才显示链接钮（业务传入）
+    withMore?: boolean; // more 钮显隐（详情链接区块稿按钮组 = 链接+添加两钮无 more，7.1 二十三轮扩）
     actions?: boolean; // 动作组（更多/添加）显隐——false = 整块不渲染（列表容器区块标题稿无动作钮，7.1 内容容器轮）
     forceState?: "" | "hover"; // 预览页强制态（hover 展开动作组）
   }>(),
-  { count: undefined, expanded: false, withLink: false, actions: true, forceState: "" },
+  { count: undefined, expanded: false, withLink: false, withMore: true, actions: true, forceState: "" },
 );
 
 const emit = defineEmits<{ toggle: []; more: [e: MouseEvent]; add: [e: MouseEvent]; link: [e: MouseEvent] }>();
@@ -46,7 +47,7 @@ const emit = defineEmits<{ toggle: []; more: [e: MouseEvent]; add: [e: MouseEven
       <button v-if="withLink" class="act" @click.stop="emit('link', $event)">
         <AppIcon name="link-small" :size="14" />
       </button>
-      <button class="act" @click.stop="emit('more', $event)">
+      <button v-if="withMore" class="act" @click.stop="emit('more', $event)">
         <AppIcon :name="variant === 'group' ? 'more-large' : 'more-small'" :size="variant === 'group' ? 18 : 14" />
       </button>
       <button class="act" @click.stop="emit('add', $event)">

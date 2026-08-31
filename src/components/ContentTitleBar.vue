@@ -6,7 +6,8 @@
 //      「搜索结果 / N」= 正文 二级 + 数字-大 三级，3.6 数据本轮接线回填；当前目录名由标签页承担
 //      不进工具栏，2026-08-08 用户定）。
 // 右 = 尺寸滑块（BarSlider tone=size，稿宽 100）+ 按钮组（gap 2）：添加文件/档案链接 / 插件（占位
-//      disabled）/ 分组管理 / 查看方式 /（右栏收起时）展开详细信息 = collapse-sidebar flip-h；
+//      disabled）/ 分组管理 / 查看方式 / 右栏收展钮（恒显最右侧，7.1 二十三轮用户定——右栏新稿
+//      无收起入口；收起态 = collapse-sidebar flip-h「展开详细信息」）；
 //      缩略图 / AI 工具集两旧占位钮稿无，本轮撤下。
 // 图标钮一律 buttons/IconButton plain（30×30 圆角 6、图标 18 三级、hover 半透明-3 底 + 升二级）；
 // 禁用态视觉稿未画不做（速查表 §15），仅业务禁用。
@@ -127,12 +128,13 @@ function addFileLink(): void {
         <span ref="viewBtnRef" style="display: contents">
           <IconButton name="view-options" title="查看方式" @click="openViewMenu" />
         </span>
+        <!-- 右栏收展钮（7.1 二十三轮用户定：恒显工具栏最右侧，不再仅收起态出现——
+             右栏新稿无收起入口，原右栏 54 工具栏废除；收起态 flip-h + 「展开详细信息」） -->
         <IconButton
-          v-if="ui.rightCollapsed"
           name="collapse-sidebar"
-          title="展开详细信息"
-          class="flip-h"
-          @click="ui.rightCollapsed = false"
+          :title="ui.rightCollapsed ? '展开详细信息' : '收起详细信息'"
+          :class="{ 'flip-h': ui.rightCollapsed }"
+          @click="ui.rightCollapsed = !ui.rightCollapsed"
         />
       </div>
     </div>

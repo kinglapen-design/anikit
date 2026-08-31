@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
-import { mergeDetailSections, type DetailSectionPref } from "../lib/detailSections";
+import { mergeDetailLinkOrder } from "../lib/detailSections";
 import type { SortKey } from "../lib/sortPlacements";
 
 export type LeftView = "library" | "workspace" | "tags" | "pins";
@@ -31,8 +31,7 @@ const PERSIST_KEYS = [
   "showSubfolders",
   "timeDisplay",
   "tabLayout",
-  "detailSections",
-  "detailSectionsArchive",
+  "detailLinksOrder",
 ] as const;
 
 // 变更防抖写回（500ms；模块级单例防重复订阅）
@@ -47,7 +46,7 @@ export const useUiStore = defineStore("ui", {
     leftView: "library" as LeftView,
     rightView: "detail" as RightView,
     leftWidth: 254, // 7.1 十八轮左栏轮：左侧边栏稿 254（旧 304 = 54 导航栏 + 250 内容区作废）
-    rightWidth: 250,
+    rightWidth: 264, // 7.1 二十三轮右栏轮：右侧边栏稿 264（内容宽 240 + 左右 padding 12×2）
     leftCollapsed: false,
     rightCollapsed: false,
     alwaysOnTop: false,
@@ -99,16 +98,11 @@ export const useUiStore = defineStore("ui", {
     // 多标签页布局（1.2）：dockview toJSON 快照，tabs store 防抖写入 / 启动 fromJSON 恢复；
     // null = 无布局（首启默认单标签页）。typeof null === "object"，PERSIST_KEYS 类型校验放行对象
     tabLayout: null as object | null,
-    // 详情面板 8 区块排序 / 显隐（2026-08-15 区块体系一轮，22 稿「编辑数据区块」面板）：
-    // 默认 = 注册表全 visible；加载后经注册表兜底合并（新增补位 / 已删忽略）。
+    // 链接关系 tab 区块顺序（7.1 二十三轮 tab 化，稿序 = 链接/音频/关系/缩略图/污染文件）：
+    // 仅链接 tab 五区块可排序（面板内拖标题行，2026-08-31 用户定）；显隐体系废除
+    //（后续「信息查看管理」面板轮再接）；旧 detailSections / detailSectionsArchive 双套配置作废不迁移。
     // 数组 typeof "object"，PERSIST_KEYS 类型校验放行（同 tabLayout 先例），形状由合并函数校验。
-    // **文件与档案各一套（2026-08-23 用户定：原共用 detailSections 应用级一份，档案侧改序/隐藏
-    // 会串到文件详情）**——detailSections = 文件套（存量配置无缝保留），detailSectionsArchive = 档案套
-    detailSections: mergeDetailSections(null) as DetailSectionPref[],
-    detailSectionsArchive: mergeDetailSections(null) as DetailSectionPref[],
-    // 22 稿「编辑数据区块」面板开关（会话级，同 blockManageOpen 口径）：右栏工具栏入口
-    //（2026-08-30 档案二级侧边栏删除后唯一入口，host 分流随之撤除）
-    sectionEditOpen: false,
+    detailLinksOrder: mergeDetailLinkOrder(null),
     // 自定义数据编辑弹窗（6.1，会话级）：propsEdit = 32 稿属性标签 / descEdit = 31 稿编辑描述；
     // target = 打开时锁定的对象与当前值快照（弹窗草稿以此为初值；打开后切选中不漂移，
     // 同 groupDialogFolder 口径），宿主 App.vue；SectionCustom「添加属性 / 编辑描述」钮置位
@@ -116,31 +110,14 @@ export const useUiStore = defineStore("ui", {
     descEdit: null as { kind: "file" | "archive"; id: string; name: string; initial: { title: string; content: string }[] } | null,
   }),
   actions: {
-    // 详情区块配置按 host 取套（2026-08-23：文件 / 档案各一套独立设置）：archive = 档案套，file = 文件套
-    sectionsFor(host: "file" | "archive"): DetailSectionPref[] {
-      return host === "archive" ? this.detailSectionsArchive : this.detailSections;
-    },
-    // 详情区块排序（22 稿面板箭头）：相邻交换，越界不动
-    moveDetailSection(id: string, dir: 1 | -1, host: "file" | "archive" = "file"): void {
-      const list = this.sectionsFor(host);
-      const i = list.findIndex((s) => s.id === id);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= list.length) return;
-      const [row] = list.splice(i, 1);
-      list.splice(j, 0, row);
-    },
-    // 详情区块拖拽落点排序（22 稿面板让位式拖拽）：直接移到目标位（与逐次 moveDetailSection 等效）
-    moveDetailSectionTo(id: string, to: number, host: "file" | "archive" = "file"): void {
-      const list = this.sectionsFor(host);
-      const from = list.findIndex((s) => s.id === id);
+    // 链接关系 tab 区块拖拽落点排序（面板内拖标题行让位式，DetailSections 旧范式移植）：
+    // 直接移到目标位；越界 / 原位不动
+    moveDetailLinkTo(id: string, to: number): void {
+      const list = this.detailLinksOrder;
+      const from = list.indexOf(id);
       if (from < 0 || to < 0 || to >= list.length || to === from) return;
       const [row] = list.splice(from, 1);
       list.splice(to, 0, row);
-    },
-    // 详情区块显隐（22 稿面板眼睛）
-    toggleDetailSection(id: string, host: "file" | "archive" = "file"): void {
-      const s = this.sectionsFor(host).find((s) => s.id === id);
-      if (s) s.visible = !s.visible;
     },
     // 启动加载全局 UI 设置并订阅变更防抖写回（多预览窗口各自独立 Pinia 各自加载，
     // 不做跨窗口同步，2026-07-28 定）；读取失败 / 字段类型不符一律按默认值，不阻断启动。
@@ -158,9 +135,8 @@ export const useUiStore = defineStore("ui", {
           // 类型对照默认值校验：config 手改 / 旧版本字段变形不污染 store
           if (v !== undefined && typeof v === typeof state[k]) state[k] = v;
         }
-        // 区块配置兜底合并：注册表新增补位 / 配置里已删 id 忽略（lib/detailSections；文件 / 档案两套同口径）
-        this.detailSections = mergeDetailSections(this.detailSections);
-        this.detailSectionsArchive = mergeDetailSections(this.detailSectionsArchive);
+        // 链接 tab 区块序兜底合并：注册表新增补位 / 配置里已删 id 忽略（lib/detailSections）
+        this.detailLinksOrder = mergeDetailLinkOrder(this.detailLinksOrder);
         // 「无显示」档废除迁移（2026-08-19）：旧配置 briefMode "none" 回退尺寸档（赋值循环只校验
         // typeof 不校验枚举值，运行态可能已被 "none" 覆盖，此处纠正）
         if (saved.briefMode === "none") this.briefMode = "size";
@@ -169,6 +145,8 @@ export const useUiStore = defineStore("ui", {
         if (saved.leftWidth === 304) this.leftWidth = 254;
         // 左栏最小宽 246（同日用户实机定：再窄菜单栏四文字钮被裁）；存量更窄的值夹到 246
         if (typeof saved.leftWidth === "number" && saved.leftWidth < 246) this.leftWidth = 246;
+        // 右栏宽默认值迁移（2026-08-31，7.1 二十三轮右栏轮）：旧默认 250 → 新稿 264；同 leftWidth 先例
+        if (saved.rightWidth === 250) this.rightWidth = 264;
       } catch (e) {
         console.warn("UI 设置读取失败（用默认值）：", e);
       }

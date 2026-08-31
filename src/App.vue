@@ -1,7 +1,9 @@
 <script setup lang="ts">
-// 主窗口（7.1 十七轮 · 主窗口骨架轮贴稿）：transparent 窗口 + 运行时按系统版本
-// 云母/实色双态（fx-mica = 半透明-1 底透云母；基态 = 实色-1 --n-g-a1-solid 回退）；
-// 1px 亮-半透明-1 描边前端自绘（::before）；圆角 8，最大化去圆角与描边；
+// 主窗口（7.1 十七轮 · 主窗口骨架轮贴稿）：transparent:false + WebView2 背景透明
+// （063 六轮方案一定稿：tao transparent 的 blur-behind hack 会让圆角月牙缝成透底洞）+
+// 运行时按系统版本云母/实色双态（fx-mica = 半透明-1 底透云母；基态 = 实色-1 回退）；
+// 窗口描边分模式：实色 = 前端自绘 1px（::before）；云母 = 零绘制、DWM 染画独存
+// （六轮实测定稿，踩坑 063）；圆角 8，最大化去圆角与描边；
 // resize 判定在可视边缘内 8px（startResizeDragging）。
 // 导入弹窗宿主：菜单 / 拖拽填 content.importDraft，ImportDialog 确认后刷新内容区。
 // 全局键盘 / 侧栏收展动画 / 窗口几何持久化已拆 lib（useGlobalKeys / useSidebarAnim /
@@ -17,8 +19,7 @@ import SidebarLeft from "./components/SidebarLeft.vue";
 import SidebarRight from "./components/SidebarRight.vue";
 import DockHost from "./components/DockHost.vue";
 import SplitBar from "./components/SplitBar.vue";
-import IconButton from "./components/IconButton.vue";
-import WindowControls from "./components/WindowControls.vue";
+import AppIcon from "./components/AppIcon.vue";
 import PreviewWindow from "./components/PreviewWindow.vue";
 import SetupWizard from "./components/SetupWizard.vue";
 import CreateLibraryModal from "./components/CreateLibraryModal.vue";
@@ -239,13 +240,23 @@ async function togglePin(): Promise<void> {
       <DockHost ref="dockHostRef" />
       <SplitBar v-if="!ui.rightCollapsed" side="right" />
       <SidebarRight ref="sidebarRightRef" />
+      <!-- 窗口控制浮块（2026-08-08 定案恒在右上角；7.1 二十三轮贴稿 布局/主窗口/右侧边栏-窗口控制：
+           4 钮 58×46 满格 hit 区连续排（无容器底无间隙），图标 18 亮色/二级，
+           hover 亮色/半透明-3 底、关闭 hover 状态/禁止底；置顶 = pin-on / 置顶中 = pin-off。
+           关闭由 Rust 侧 CloseRequested 拦截转托盘（原 WindowControls 口径） -->
       <div v-if="!previewParam" class="win-controls-overlay">
-        <IconButton
-          :name="ui.alwaysOnTop ? 'pin-off' : 'pin-on'"
-          title="窗口置顶"
-          @click="togglePin"
-        />
-        <WindowControls />
+        <button class="wc-btn" v-tip="'窗口置顶'" @click="togglePin">
+          <AppIcon :name="ui.alwaysOnTop ? 'pin-off' : 'pin-on'" :size="18" />
+        </button>
+        <button class="wc-btn" v-tip="'最小化'" @click="appWindow.minimize()">
+          <AppIcon name="minimize" :size="18" />
+        </button>
+        <button class="wc-btn" v-tip="'最大化'" @click="appWindow.toggleMaximize()">
+          <AppIcon name="maximize" :size="18" />
+        </button>
+        <button class="wc-btn close" v-tip="'关闭'" @click="appWindow.close()">
+          <AppIcon name="close-large" :size="18" />
+        </button>
       </div>
     </template>
     <template v-if="!maximized">
@@ -364,17 +375,18 @@ async function togglePin(): Promise<void> {
 .del-lib-check {
   margin-top: var(--space-12);
 }
-/* 主窗口壳（7.1 十七轮 · 主窗口骨架轮贴稿，布局/主窗口/主窗口.md）：transparent 窗口 +
+/* 主窗口壳（7.1 十七轮 · 主窗口骨架轮贴稿，布局/主窗口/主窗口.md）：transparent:false +
+   WebView2 背景透明（backgroundColor:#00000000，Mica 由 DWM 在表面下合成，不需要 tao
+   transparent——其 blur-behind hack 会让圆角月牙缝 alpha=0 透底，063 六轮方案一）+
    运行时按系统版本云母/实色双态——基态 = 实色-1 --n-g-a1-solid 回退底，fx-mica = 全透明
    （云母直呈）；大阴影 = DWM shadow（tauri.conf shadow:true）。
    圆角分模式（2026-08-30 实机 BUG 后改定）：实色 = 前端自裁 8（最大化归零）；云母 = DWM
    系统圆角独裁、前端 radius 0 不裁——双层裁切的 AA 路径差在四角透出云母成缝隙（踩坑 063）。
-   窗口边框分模式同色（通用/六级实心 --n-g6，2026-08-30 用户定）：云母 = DWM 染画（lib.rs
-   DWMWA_BORDER_COLOR #333333）+ 前端 ::before 同色遮罩环（五轮定稿：边框色淹没圆角 AA
-   过渡带、内容边缘退入弧内，四角缺口消——纯 DWM 画边时角弧 AA 直接咬内容色成缺口，
-   实机 100%/125%/150% 缩放均见，Codex 即以同色外圈遮罩规避）；实色 = 前端 ::before
-   自绘（Win10 DWM 无边框可画）。选择模式进出 = set_main_border_picking 切染品牌色 +
-   遮罩环换品牌色（§19）。 */
+   窗口边框分模式同色（通用/六级实心 --n-g6，2026-08-30 用户定）：云母 = DWM 染画独存
+   （lib.rs DWMWA_BORDER_COLOR #333333），前端 CSS 零绘制——六轮实测（win-border-measure）：
+   CSS 线与 DWM 线的并集左右/角弧必错位分离（四边 3vs2、角缝），五轮遮罩环反成分缝
+   之源，纯 DWM = 唯一均匀解（踩坑 063）；实色 = 前端 ::before 自绘（Win10 DWM 无边框
+   可画）。选择模式进出 = set_main_border_picking 切染品牌色（§19）。 */
 .window {
   position: relative;
   height: 100%;
@@ -396,9 +408,9 @@ async function togglePin(): Promise<void> {
 .window.maximized {
   border-radius: 0;
 }
-/* 1px 窗口描边（伪元素 inset 0 自绘不占空间）——实色回退模式自绘（通用/六级实心
-   --n-g6 + 圆角 8 随壳自裁，Win10 DWM 无边框可画）；云母模式 = 同色遮罩环（见下）；
-   z-54 = 三栏内容之上、picking 外框（55）之下；最大化贴屏边无意义隐藏 */
+/* 1px 窗口描边（伪元素 inset 0 自绘不占空间）——**仅实色回退模式自绘**（通用/六级实心
+   --n-g6 + 圆角 8 随壳自裁，Win10 DWM 无边框可画）；云母模式零绘制（边框主权 100% 交
+   DWM，见下）；z-54 = 三栏内容之上、picking 外框（55）之下；最大化贴屏边无意义隐藏 */
 .window::before {
   content: "";
   position: absolute;
@@ -408,68 +420,86 @@ async function togglePin(): Promise<void> {
   pointer-events: none;
   z-index: 54;
 }
-/* 云母遮罩环（2026-08-30 五轮用户定，Codex 手法）：1px 边框线 + 1.5px 零模糊外扩阴影
-   同为边框色——圆角过渡带整圈淹没成边框色，内容边缘退入弧内不直接暴露给 DWM 角弧
-   AA，缝隙无对比色可透；与 DWM 染色线同色重叠合一，故无双层。圆角 7 = DWM 裁切弧
-   （实测 ~7 逻辑 px @150%，踩坑 063）内缩 1 贴其内缘，外扩阴影兜底各 DPI 下裁切弧
-   ≤9 的分叉（100%/125% 实机仍有缺口后的定稿） */
-.window.fx-mica::before {
-  border: 1px solid var(--n-g6);
-  border-radius: calc(var(--n-radius-8) - 1px);
-  box-shadow: 0 0 0 var(--border-strong) var(--n-g6);
+/* 云母模式 CSS 描边零绘制（2026-08-30 六轮定稿，win-border-measure 实机像素测量推翻
+   五轮遮罩环）：实测 @150%——DWM 线 = 2 物理 px 四边均匀；Chromium 把 CSS 1px border
+   吸附成物理 1px 锐线（宽度吸附设备像素，无半透列），但 CSS 线与 DWM 线的并集左右
+   不对称（左/上边视口缘贴 DWM 线内缘 → 并集 3px；右/下边视口缘伸入 DWM 线区 1px →
+   CSS 被盖，并集 2px）= 四边 3 vs 2 粗细不一；角部 CSS 弧（半径 7 逻辑 = 10.5 物理）
+   与 DWM 裁切弧（10.3 物理）异径分离 → 两弧间露内容色缝（用户实机"圆弧变细/缝隙"
+   真身）。任何 CSS 线都逃不掉这套系统错位，唯一均匀解 = 纯 DWM 独画（"别人的完美
+   边框"即此路径）；角弧 AA 过渡带 = Windows 原生通病（搜索面板同病），接受。
+   maximized 时 DWM 不裁角不画边，同零画（合并入选择器列表）。 */
+.window.fx-mica::before,
+.window.maximized.fx-mica::before {
+  border: 0;
+  box-shadow: none;
 }
 .window.maximized::before {
   border: 0;
   border-radius: 0;
   box-shadow: none;
 }
-/* 选择模式常态描边让位（实色模式由 ::after 品牌框独存；云母模式遮罩环换品牌色承框） */
+/* 选择模式常态描边让位（实色模式由 ::after 品牌框独存；云母模式 ::before 恒零画） */
 .window.picking::before {
   border: 0;
 }
-/* 云母 picking = 遮罩环换品牌色（与 DWM 切染品牌线同色重叠合一——选择模式角部缺口
-   在高亮下最显，品牌色淹没后消） */
-.window.fx-mica.picking::before {
-  border: 1px solid var(--brand-border);
-  box-shadow: 0 0 0 var(--border-strong) var(--brand-border);
-}
-/* 最大化整环让位（DWM 最大化不裁角不画边）——后置与 picking 环同优先级（0,3,0）拼顺序压之 */
-.window.maximized.fx-mica::before {
-  border: 0;
-  box-shadow: none;
-}
-/* 选择模式整圈品牌色外边框（6.2 一轮，PRD 03_数据链接 04 四重标识之一；figma 02 稿：
-   1.5px 品牌色-边框线 = --brand-border，token 注释既定预留）——**仅实色模式自绘**；
-   云母模式不画：品牌框 = DWM 切染品牌线 + ::before 品牌遮罩环同色合一（五轮定稿：
-   同色重叠不分层，角弧 AA 带被品牌色淹没无缺口）。
+/* 选择模式整圈品牌色外边框（6.2 一轮，PRD 03_数据链接 04 四重标识之一；2026-08-30 用户
+   改定 = 品牌色-常态 --n-brand，原 品牌色-边框线 --brand-border 废除）——**仅实色模式自绘**；
+   云母模式不画：品牌框 = DWM 切染品牌线独存（六轮定稿：CSS 任何线/环与 DWM 线并集
+   必错位分离，高亮品牌色下尤显——纯 DWM 染色线 = 原生观感）。
    伪元素不遮交互；z-index 55：盖三栏内容（win-controls 浮块 60 与弹窗仍在其上） */
 .window.picking::after {
   content: "";
   position: absolute;
   inset: 0;
-  border: var(--border-strong) solid var(--brand-border);
+  border: var(--border-strong) solid var(--n-brand);
   border-radius: var(--radius-8);
   pointer-events: none;
   z-index: 55;
 }
 .window.fx-mica.picking::after {
-  border: 0; /* 云母模式 ::after 零画：品牌框 = DWM 染色线 + ::before 品牌遮罩环承担 */
+  border: 0; /* 云母模式 ::after 零画：品牌框 = DWM 切染品牌线独存 */
 }
 .window.maximized.picking::after {
   border-radius: 0;
 }
 /* 窗口控制浮块（2026-08-08 定案）：恒在窗口右上角（标签栏行 / 右栏标题栏同一位），
-   侧栏收展时它不参与布局变化——从根上消除窗口控制的跳变 */
+   侧栏收展时它不参与布局变化——从根上消除窗口控制的跳变；
+   7.1 二十三轮贴稿：浮块无 padding/gap，四钮 58×46 连续排（右栏-窗口控制稿） */
 .win-controls-overlay {
   position: absolute;
   top: 0;
   right: 0;
   height: 46px;
   display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: 0 var(--space-12);
   z-index: 60;
+}
+/* 窗口控制钮（稿）：58×46 满格 hit 区、无容器底；图标 18 亮色/二级；
+   hover 亮色/半透明-3 底、关闭 hover 状态/禁止底（稿 1_hover 节）；过渡 150ms 通用档 */
+.wc-btn {
+  width: 58px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--n-l2);
+  transition: background var(--n-dur-150) var(--n-ease-in-out);
+}
+.wc-btn:hover {
+  background: var(--n-l-a3);
+}
+.wc-btn.close:hover {
+  background: var(--n-danger);
+}
+/* 最右关闭钮贴窗口圆角（实色模式前端自裁 radius 8；最大化归零，同 .window 口径） */
+.wc-btn.close {
+  border-top-right-radius: var(--n-radius-8);
+}
+.window.maximized .wc-btn.close {
+  border-top-right-radius: 0;
 }
 /* 可视边缘内 8px 的 resize 判定热区（startResizeDragging 手动发起） */
 .resize-zone {

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// 详情面板（3.2 一轮区块体系）：数据装配壳——选中文件卡片 → watch selectedAssetKey 调
-// get_asset_detail（await 期间切选中防错配，DetailNotes 先例）；选中档案卡片（selection
-// 文件夹选择域首项，kind = archive）→ get_archive_data（ArchiveDetailView：数据 + 统计，
-// 失败/无记录用默认空）；无选中 → 空面板（不渲染区块）。
-// 区块栈渲染（pinned + 笔记 + 注册表 7 区块 + 面板内拖拽排序）在共享组合 DetailSections。
+// 详情面板（7.1 二十三轮三 tab 化 + 文件夹详情形态）：数据装配壳——
+// 选中文件卡片 → watch selectedAssetKey 调 get_asset_detail（await 期间切选中防错配）；
+// 选中档案卡片 / 普通文件夹卡片（selection 文件夹选择域首项按 kind 分流）；
+// **视口未选中文件时回退显示当前停留视口的文件夹 / 档案 / 快速访问信息**（2026-08-31 用户定，
+// 稿 = 右侧面板-文件夹详情；快速访问 = 简化版：无缩略图 + 名称框禁改名 + 文件数/占用空间两行）。
+// 渲染结构（pinned + 分段控制器三 tab / FolderDetail 形态分流）在共享组合 DetailSections。
 import { computed, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import DetailSections from "./DetailSections.vue";
@@ -37,14 +38,26 @@ watch(() => content.selectedAssetKey, () => void loadDetail(true), { immediate: 
 // 6.1：属性 / 描述等详情编辑落盘后 bumpDetailRev 重拉（不清空防闪烁）
 watch(() => content.detailRev, () => void loadDetail(false));
 
-// 选中档案节点：文件夹选择域首项（ArchiveCard 复用 FolderCard 选择机制）；
-// 仅 kind = archive 进档案形态，普通文件夹选中 = 空面板
+// 无任何选中（素材 / 文件夹选择域皆空；seq 包内视图 selectedAssetKey 回退包资产视为有选中）
+const nothingSelected = computed(
+  () => !content.selectedAssetKey && selection.selectedFolders.size === 0,
+);
+
+// 视口文件夹节点（当前停留视口 = sidebarSelected；folder:{id} 才有点）
+const viewportFolderNode = computed<FolderNode | null>(() => {
+  const vk = content.sidebarSelected;
+  return vk.startsWith("folder:") ? findFolderNode(content.folders, vk.slice(7)) : null;
+});
+
+// 档案上下文节点：选中档案卡片优先；无选中时回退视口档案节点（2026-08-31 文件夹详情定案同覆盖档案）
 const archiveNode = computed<FolderNode | null>(() => {
   for (const id of selection.selectedFolders) {
     const n = findFolderNode(content.folders, id);
     return n?.kind === "archive" ? n : null;
   }
-  return null;
+  return nothingSelected.value && viewportFolderNode.value?.kind === "archive"
+    ? viewportFolderNode.value
+    : null;
 });
 
 // 档案详情（ArchiveDetailView：数据 + 文件数/占用空间统计；防 await 错配同资产）
@@ -64,7 +77,16 @@ watch(() => archiveNode.value?.id, () => void loadArchiveDetail(true), { immedia
 // 6.1：档案属性 / 描述 / 封面设置落盘后 bumpDetailRev 重拉（不清空防闪烁）
 watch(() => content.detailRev, () => void loadArchiveDetail(false));
 
-// 当前展示目标（素材 / 文件夹两选择域互斥，实际只会中一个）；
+// 选中普通文件夹节点（选择域首项非 archive 节点）
+const folderNode = computed<FolderNode | null>(() => {
+  for (const id of selection.selectedFolders) {
+    const n = findFolderNode(content.folders, id);
+    return n?.kind === "archive" ? null : (n ?? null);
+  }
+  return null;
+});
+
+// 当前展示目标：选中文件 > 选中/视口档案 > 选中普通文件夹 > 视口回退（文件夹 / 快速访问）；
 // 回收站选中（2026-08-16 用户拍板）：Placement 不在 content.placements（folderId 恒 "recycle"），
 // 回退 recycleEntries 取缩略图/显示数据（get_asset_detail 按 assetId 不依赖 Placement）
 const target = computed<DetailTarget | null>(() => {
@@ -75,14 +97,23 @@ const target = computed<DetailTarget | null>(() => {
       content.recycleEntries.find((e) => `${e.assetId}|${e.folderId}` === key);
     if (p) return { kind: "file", placement: p, detail: detail.value };
   }
-  const node = archiveNode.value;
-  if (node) {
-    return { kind: "archive", node, data: archiveDetail.value ?? emptyArchiveData(node.id) };
+  const an = archiveNode.value;
+  if (an) {
+    return { kind: "archive", node: an, data: archiveDetail.value ?? emptyArchiveData(an.id) };
+  }
+  const fn = folderNode.value;
+  if (fn) return { kind: "folder", node: fn };
+  // 视口回退（未选中文件时显示当前视口信息）：文件夹视口 → folder 形态；快速访问 → quick 形态
+  if (nothingSelected.value) {
+    const vn = viewportFolderNode.value;
+    if (vn) return { kind: "folder", node: vn };
+    const vk = content.sidebarSelected;
+    if (vk.startsWith("quick:")) return { kind: "quick", viewKey: vk, name: content.viewTitle(vk) };
   }
   return null;
 });
 </script>
 
 <template>
-  <DetailSections v-if="target" :target="target" notes />
+  <DetailSections v-if="target" :target="target" />
 </template>

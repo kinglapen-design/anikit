@@ -14,12 +14,19 @@ withDefaults(
     fromLabel: string; // 左框称谓（源侧，如「父亲」）
     toLabel: string; // 右框称谓（目标侧，如「儿子」）
     origin: string; // 原始文件（发起方）显示名
+    pickedPlaceholder?: string; // 选中文件框占位（空态占位组「点击卡片选择」，7.1 二十三轮补）
+    disabled?: boolean; // 关系双框禁用（空态占位组口径，同上）
+    closable?: boolean; // 关闭钮显隐（空态占位组无删除钮，旧口径沿）；默认 true
     forceState?: "" | "hover";
   }>(),
-  { forceState: "" },
+  { pickedPlaceholder: undefined, disabled: false, closable: true, forceState: "" },
 );
 
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{
+  close: [];
+  "update:fromLabel": [v: string];
+  "update:toLabel": [v: string];
+}>();
 </script>
 
 <template>
@@ -29,19 +36,33 @@ const emit = defineEmits<{ close: [] }>();
   >
     <div class="row">
       <span class="box">
-        <input class="box-input" :value="picked" readonly />
+        <input class="box-input" :value="picked" :placeholder="pickedPlaceholder" readonly />
       </span>
-      <button class="ni-close" @click.stop="emit('close')">
+      <button v-if="closable" class="ni-close" @click.stop="emit('close')">
         <AppIcon name="close-small" :size="14" />
       </button>
     </div>
     <div class="row">
       <span class="box rel">
-        <input class="box-input" :value="fromLabel" placeholder="源称谓" />
+        <input
+          class="box-input"
+          :value="fromLabel"
+          placeholder="源称谓"
+          :disabled="disabled"
+          maxlength="20"
+          @input="emit('update:fromLabel', ($event.target as HTMLInputElement).value)"
+        />
         <AppIcon class="arrow down" name="chevron-small" :size="14" />
       </span>
       <span class="box rel">
-        <input class="box-input" :value="toLabel" placeholder="目标称谓" />
+        <input
+          class="box-input"
+          :value="toLabel"
+          placeholder="目标称谓"
+          :disabled="disabled"
+          maxlength="20"
+          @input="emit('update:toLabel', ($event.target as HTMLInputElement).value)"
+        />
         <AppIcon class="arrow" name="chevron-small" :size="14" />
       </span>
       <span class="ni-close placeholder" aria-hidden="true" />

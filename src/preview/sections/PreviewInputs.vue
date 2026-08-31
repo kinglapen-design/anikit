@@ -36,6 +36,10 @@ const liveSm = ref("");
           <TextInput v-model="liveLg" placeholder="点击聚焦试试" />
           <span class="pv-cap">真实交互（可输入）</span>
         </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <TextInput model-value="" placeholder="http://" trailing-icon="link" readonly />
+          <span class="pv-cap">trailingIcon 右置装饰（详情面板链接框）+ 只读（7.1 右栏轮扩）</span>
+        </div>
       </div>
     </div>
 

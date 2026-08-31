@@ -1,38 +1,41 @@
 <script setup lang="ts">
-// 封面设置组（43_封面设置稿，6.1；仅档案，2026-08-23 用户定：文件不做本面板）：
-// SectionPinned 档案分支点击封面图展开（内联替换常态组），确认 / 取消退回常态。
-// 结构（稿：容器 padding 16 / gap 12）：封面框 218×168（C2 / 1px 暗-悬停 / 圆角 8，
-// 徽标 chip 左上 6,6 实时预览）→ 尺寸滑块（218×10，SideSlider 复用；未选新图禁用）
-// → 更换封面钮（C5 通栏 38，挂 10 稿菜单 152 宽：从本地磁盘中选择（点亮）/
-// 从资源库中选择（disabled——主窗口选择模式后置））→ 徽标行（输入框留空清除 + 颜色下拉，
-// 点击展开 9 色格行：16 圆形色格与 pinned 颜色 bar 同尺寸，选中 2px 常态 border 同 FolderColorPanel 口径）
-// → 确认（主左）/ 取消（次右）flex 1 38 高。
+// 封面设置组（7.1 二十三轮贴稿重构，稿 = 右侧边栏-详情面板-档案封面 展开态；仅档案，
+// 2026-08-23 用户定：文件不做本面板）：SectionPinned 档案分支点击封面图展开（内联替换常态组），
+// 确认 / 取消退回常态。
+// 结构（稿：264×424 高链 = padding 12 + 封面 240 + 滑块 10 + 更换封面 34 + 输入框 34 + 按钮组 34）：
+//   封面框 240×240（通用二级底 + 通用三级 1px / 圆角 8；徽标 FormatBadge 左上 12/12 实时预览）；
+//   尺寸滑块 224×10 = BarSlider tone="size"（轨道 3px 通用三级 / 拖钮 10 无描边；未选新图禁用压暗 30%——
+//     取景参数只对新图生效，已烘培封面不重烘培防质量递减）；
+//   更换封面 = ActionButton solid md + edit-cover 图标（挂 10 稿菜单 152 宽：从本地磁盘中选择（点亮）/
+//     从资源库中选择（disabled——主窗口选择模式后置））；
+//   角标名输入框 = TextInput lg（placeholder「输入角标名...」，留空 = 清除徽标）——
+//     徽标颜色选择 UI 随新稿移除（稿未画；badge.color 提交时沿现值，统一 FormatBadge 铬后视觉本就作废）；
+//   按钮组 = 取消（solid 左）/ 确认（primary 右）flex 均分——2026-08-31 用户全局定案「取消左确认右」。
 // 取景（2026-08-23 用户定：滑块缩放 + 拖动位移）：选新图后进入取景态——图按 cover 铺满 × scale
 // 渲染并随拖动偏移（边缘 clamp 不露底），确认时 crop 随源图路径提交后端烘培（covers/ 独立存）。
 import { computed, onUnmounted, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import AppButton from "../AppButton.vue";
-import AppIcon from "../AppIcon.vue";
-import AppInput from "../AppInput.vue";
-import SideSlider from "../SideSlider.vue";
+import ActionButton from "../buttons/ActionButton.vue";
+import TextInput from "../inputs/TextInput.vue";
+import BarSlider from "../bars/BarSlider.vue";
+import FormatBadge from "../cards/FormatBadge.vue";
 import { openContextMenu } from "../../lib/contextMenus";
 import { CUSTOM_COLORS } from "../../lib/customColors";
 import { setArchiveCoverSettings, type CropInput } from "../../lib/customDataOps";
 import { useContentStore, type ArchiveDetailView, type FolderNode } from "../../stores/content";
 
-// 封面框规格（43 稿 218×168；与后端烘培输出 416×320 同比例——crop 语义与像素无关）
-const FRAME_W = 218;
-const FRAME_H = 168;
+// 封面框规格（新稿 240×240 方形；宽随栏内容宽 100%，取景数学用逻辑像素 240 归一——
+// crop 语义与像素无关，后端烘培输出 416×320 口径不变）
+const FRAME = 240;
 
 const props = defineProps<{ node: FolderNode; data: ArchiveDetailView }>();
 const emit = defineEmits<{ done: [] }>();
 const content = useContentStore();
 
-// —— 徽标草稿（输入框留空 = 清除徽标；颜色默认红色档 = 43 稿色块样例 --custom-red）——
+// —— 徽标草稿（输入框留空 = 清除徽标；颜色沿现值——新稿无颜色选择 UI，默认红色档语义保留）——
 const badgeText = ref(props.data.badge?.text ?? "");
 const badgeColor = ref(props.data.badge?.color ?? CUSTOM_COLORS[0].hex);
-const colorOpen = ref(false); // 颜色下拉展开态（9 色格行）
 
 // —— 封面预览：当前封面（自定义 coverPath 优先，回退子项首图）或取景态新图 ——
 const currentCover = computed(() => {
@@ -43,24 +46,25 @@ const currentCover = computed(() => {
 const picked = ref<{ path: string; url: string; w: number; h: number } | null>(null);
 const crop = ref<CropInput>({ x: 0, y: 0, scale: 1 });
 
-// 滑块 = scale × 100（SideSlider 整数档 100–400 = 1.00–4.00 倍）
-const scalePct = computed({
-  get: () => Math.round(crop.value.scale * 100),
-  set: (v: number) => setCrop({ scale: v / 100 }),
+// 滑块 = scale 1~4 ↔ BarSlider 0~1 归一化
+const scaleRatio = computed({
+  get: () => (crop.value.scale - 1) / 3,
+  set: (r: number) => setCrop({ scale: 1 + Math.min(1, Math.max(0, r)) * 3 }),
 });
 
-// 取景渲染：图显示尺寸 dw/dh = cover 铺满 × scale；中心 = 框中心 + (x·框宽, y·框高)
+// 取景渲染：图显示尺寸 dw/dh = cover 铺满 × scale；中心 = 框中心 + (x·框宽, y·框高)。
+// 百分比表达（框实际像素随栏宽变，逻辑 240 仅作比例基准；拖动位移换算用 framePx 实测）
 const viewStyle = computed(() => {
   const p = picked.value;
   if (!p) return null;
-  const z0 = Math.max(FRAME_W / p.w, FRAME_H / p.h);
-  const dw = p.w * z0 * crop.value.scale;
-  const dh = p.h * z0 * crop.value.scale;
+  const z0 = Math.max(FRAME / p.w, FRAME / p.h);
+  const dw = (p.w * z0 * crop.value.scale) / FRAME;
+  const dh = (p.h * z0 * crop.value.scale) / FRAME;
   return {
-    width: `${dw}px`,
-    height: `${dh}px`,
-    left: `${FRAME_W / 2 + crop.value.x * FRAME_W - dw / 2}px`,
-    top: `${FRAME_H / 2 + crop.value.y * FRAME_H - dh / 2}px`,
+    width: `${dw * 100}%`,
+    height: `${dh * 100}%`,
+    left: `${(0.5 + crop.value.x - dw / 2) * 100}%`,
+    top: `${(0.5 + crop.value.y - dh / 2) * 100}%`,
   };
 });
 
@@ -70,21 +74,24 @@ function setCrop(patch: Partial<CropInput>): void {
   if (!p) return;
   const next = { ...crop.value, ...patch };
   next.scale = Math.max(1, next.scale);
-  const z0 = Math.max(FRAME_W / p.w, FRAME_H / p.h);
-  const mx = Math.max(0, (p.w * z0 * next.scale - FRAME_W) / 2 / FRAME_W);
-  const my = Math.max(0, (p.h * z0 * next.scale - FRAME_H) / 2 / FRAME_H);
+  const z0 = Math.max(FRAME / p.w, FRAME / p.h);
+  const mx = Math.max(0, (p.w * z0 * next.scale - FRAME) / 2 / FRAME);
+  const my = Math.max(0, (p.h * z0 * next.scale - FRAME) / 2 / FRAME);
   next.x = Math.max(-mx, Math.min(mx, next.x));
   next.y = Math.max(-my, Math.min(my, next.y));
   crop.value = next;
 }
 
 // 拖动位移（window 监听 pointermove/up + buttons 活性检查自清，与拖拽引擎同口径——
-// 不挂元素级 pointer capture：headless CDP 合成事件下捕获会吃掉位移，2026-08-23 探针实证）
+// 不挂元素级 pointer capture：headless CDP 合成事件下捕获会吃掉位移，2026-08-23 探针实证）；
+// 位移按框实际像素宽换算（getBoundingClientRect——栏宽可拖，逻辑 240 仅作比例基准）
 let dragging = false;
 let lastX = 0;
 let lastY = 0;
+let framePx = FRAME;
 function onFramePointerDown(e: PointerEvent): void {
   if (!picked.value || e.button !== 0) return;
+  framePx = (e.currentTarget as HTMLElement).getBoundingClientRect().width || FRAME;
   dragging = true;
   lastX = e.clientX;
   lastY = e.clientY;
@@ -99,7 +106,7 @@ function onFrameDragMove(e: PointerEvent): void {
     onFrameDragEnd(); // 僵尸自清（窗外松手等）
     return;
   }
-  setCrop({ x: crop.value.x + (e.clientX - lastX) / FRAME_W, y: crop.value.y + (e.clientY - lastY) / FRAME_H });
+  setCrop({ x: crop.value.x + (e.clientX - lastX) / framePx, y: crop.value.y + (e.clientY - lastY) / framePx });
   lastX = e.clientX;
   lastY = e.clientY;
 }
@@ -162,9 +169,9 @@ function onCancel(): void {
 </script>
 
 <template>
-  <!-- 43 稿容器：padding 16 / gap 12（250 面板内内容宽 218） -->
+  <!-- 新稿容器：padding 12 / gap 12（栏内容宽 240 随栏） -->
   <div class="cover-settings">
-    <!-- 封面框（218×168 / C2 / 1px 暗-悬停 / 圆角 8）：取景态图可拖动，徽标 chip 左上实时预览 -->
+    <!-- 封面框（240×240 方形 / 通用二级底 + 通用三级 1px / 圆角 8）：取景态图可拖动，徽标左上 12/12 实时预览 -->
     <div
       class="cs-frame"
       :class="{ framing: picked }"
@@ -172,59 +179,40 @@ function onCancel(): void {
     >
       <img v-if="picked" class="cs-view" :src="picked.url" :style="viewStyle ?? undefined" alt="" draggable="false" />
       <img v-else-if="currentCover" class="cs-still" :src="currentCover" alt="" draggable="false" />
-      <span v-if="badgeText.trim()" class="cs-badge" :style="{ background: badgeColor }">{{ badgeText.trim() }}</span>
+      <FormatBadge v-if="badgeText.trim()" class="cs-badge" :label="badgeText.trim()" />
     </div>
-    <!-- 尺寸滑块（稿 218×10）：未选新图禁用（取景参数只对新图生效——已烘培封面不重烘培防质量递减） -->
-    <div class="cs-slider" :class="{ off: !picked }" v-tip="picked ? undefined : '先更换封面'">
-      <SideSlider v-model="scalePct" :min="100" :max="400" />
+    <!-- 尺寸滑块（稿 224×10 居中 = BarSlider tone size；未选新图禁用压暗 30% 档，速查表 §5） -->
+    <div class="cs-slider" :class="{ off: !picked }" v-tip="picked ? '' : '先更换封面'">
+      <BarSlider v-model="scaleRatio" tone="size" />
     </div>
-    <!-- 更换封面（稿 218×38 C5 通栏）：挂 10 稿菜单 -->
-    <AppButton variant="sidebar" label="更换封面" class="cs-change" @click="openCoverMenu" />
-    <!-- 徽标行（稿：标签 32 标签色 / 输入框 28 高留空清除 / 颜色下拉 57×28 C4 + 色块 + 展开箭头） -->
-    <div class="cs-badge-row">
-      <span class="cs-label">徽标:</span>
-      <AppInput v-model="badgeText" size="small" placeholder="留空清除" class="cs-badge-input" />
-      <span class="cs-label">颜色:</span>
-      <button class="cs-color" :class="{ open: colorOpen }" @click="colorOpen = !colorOpen">
-        <span class="sw" :style="{ background: badgeColor }" />
-        <AppIcon name="tree-expand-arrow" :size="12" class="arrow" :class="{ up: colorOpen }" />
-      </button>
-    </div>
-    <!-- 颜色格行（下拉展开：9 色 16 圆形格均分一行——与 pinned 颜色 bar 同尺寸，选中 2px 常态 border） -->
-    <div v-if="colorOpen" class="cs-colors">
-      <button
-        v-for="c in CUSTOM_COLORS"
-        :key="c.tint"
-        class="cell"
-        :class="{ cur: badgeColor === c.hex }"
-        :style="{ background: `var(--custom-${c.tint})` }"
-        :aria-label="c.label"
-        @click="badgeColor = c.hex; colorOpen = false"
-      />
-    </div>
-    <!-- 按钮行（稿：确认主左 / 取消次右，flex 1 各 103×38 gap 12） -->
+    <!-- 更换封面（稿 240×34 solid + edit-cover 图标）：挂 10 稿菜单 -->
+    <ActionButton label="更换封面" icon="edit-cover" variant="solid" size="md" @click="openCoverMenu" />
+    <!-- 角标名（稿 placeholder「输入角标名...」；留空 = 清除徽标） -->
+    <TextInput v-model="badgeText" placeholder="输入角标名..." />
+    <!-- 按钮组（取消左 / 确认右 flex 均分，2026-08-31 全局定案；忙态防重入在处理器内） -->
     <div class="cs-actions">
-      <AppButton variant="primary" label="确认" :disabled="busy" @click="onConfirm" />
-      <AppButton variant="panel" label="取消" :disabled="busy" @click="onCancel" />
+      <ActionButton label="取消" variant="solid" size="md" @click="onCancel" />
+      <ActionButton label="确认" variant="primary" size="md" @click="onConfirm" />
     </div>
   </div>
 </template>
 
 <style scoped>
+/* 容器（稿：padding 12 / gap 12 纵列——pinned 区块位，无 border-top） */
 .cover-settings {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: var(--space-16);
+  gap: var(--n-space-12);
+  padding: var(--n-space-12);
 }
-/* 封面框（43 稿：218×168 / C2 / 1px 暗-悬停 / 圆角 8） */
+/* 封面框（稿：240×240 方形随栏宽 / 通用二级底 + 通用三级 1px / 圆角 8） */
 .cs-frame {
   position: relative;
-  width: 218px;
-  height: 168px;
-  border-radius: var(--radius-8);
-  background: var(--c2);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--n-radius-8);
+  background: var(--n-g2);
+  border: 1px solid var(--n-g3);
   overflow: hidden;
   flex: none;
 }
@@ -232,130 +220,48 @@ function onCancel(): void {
 .cs-frame.framing {
   cursor: grab;
 }
-/* 取景图：绝对定位按取景参数渲染（width/height/left/top 由 viewStyle 给） */
+/* 取景图：绝对定位按取景参数渲染（width/height/left/top 由 viewStyle 以 % 给，随框实际像素缩放） */
 .cs-view {
   position: absolute;
   max-width: none;
   max-height: none;
   user-select: none;
 }
-/* 常态封面：contain 不裁剪（pinned 口径） */
+/* 常态封面：cover 充满（稿裁切语义）；铺满图自带圆角（圆角平滑三件套口径） */
 .cs-still {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   display: block;
+  border-radius: var(--n-radius-8);
 }
-/* 徽标 chip（43 稿样例：padding 2 4 / 圆角 4 / 徽标档 10/14 700 常态色，与 pinned fmt-badge 同式） */
+/* 徽标（稿：左上 12/12；FormatBadge 统一铬） */
 .cs-badge {
   position: absolute;
-  top: 6px;
-  left: 6px;
-  max-width: calc(100% - 12px);
-  padding: 2px var(--space-4);
-  border-radius: var(--radius-4);
-  font-size: var(--text-badge-size);
-  line-height: var(--text-badge-line);
-  font-weight: var(--text-badge-weight);
-  color: var(--text-normal);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  top: var(--n-space-12);
+  left: var(--n-space-12);
   pointer-events: none;
+  max-width: calc(100% - 24px);
 }
-/* 尺寸滑块行（稿 218×10）：SideSlider 宽覆盖 218；禁用 = 压暗 + 不响应 */
+/* 尺寸滑块行（稿 224×10 居中）；禁用 = 压暗 30% 档 + 不响应 */
 .cs-slider {
-  display: flex;
-  align-items: center;
-  width: 218px;
+  width: 224px;
   height: 10px;
+  align-self: center;
   flex: none;
-}
-.cs-slider :deep(.side-slider) {
-  width: 218px;
 }
 .cs-slider.off {
-  opacity: 0.5;
+  opacity: 0.3;
   pointer-events: none;
 }
-/* 更换封面钮（稿：通栏 218×38 C5 = AppButton sidebar） */
-.cs-change {
-  width: 218px;
-  height: 38px;
-}
-/* 徽标行（稿：28 高 gap 8；标签 14/20 标签色） */
-.cs-badge-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  width: 218px;
-  height: 28px;
-  flex: none;
-}
-.cs-label {
-  width: 32px;
-  flex: none;
-  color: var(--text-label);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-}
-.cs-badge-input {
-  flex: 1;
-  min-width: 0;
-}
-/* 颜色下拉框（稿：57×28 C4 / 1px 暗-悬停 / 圆角 6；色块 17×17 圆角 4 + 展开箭头 20×20） */
-.cs-color {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  width: 57px;
-  height: 28px;
-  box-sizing: border-box;
-  padding: 4px 4px 4px 8px;
-  border-radius: var(--radius-6);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
-  flex: none;
-}
-.cs-color .sw {
-  width: 17px;
-  height: 17px;
-  border-radius: var(--radius-4);
-  flex: none;
-}
-/* 展开箭头（库内下拉统一 tree-expand-arrow 12 标签档，ViewOptionsMenu picker 同口径），展开时朝上 */
-.cs-color .arrow {
-  color: var(--text-label);
-  flex: none;
-}
-.cs-color .arrow.up :deep(svg) {
-  transform: rotate(180deg);
-}
-/* 颜色格行（9 色 16 圆形格均分一行；选中 2px 常态 border 内缩——FolderColorPanel 选中口径） */
-.cs-colors {
-  display: flex;
-  justify-content: space-between;
-  width: 218px;
-  flex: none;
-}
-.cs-colors .cell {
-  width: 16px;
-  height: 16px;
-  box-sizing: border-box;
-  border-radius: 50%;
-}
-.cs-colors .cell.cur {
-  border: 2px solid var(--text-normal);
-}
-/* 按钮行（稿：gap 12，两钮 flex 1 各 103×38） */
+/* 按钮组（稿：gap 8 两钮均分；ActionButton md 宽 100% 由父定 + flex:none 覆盖为均分，
+   同提示词按钮组口径） */
 .cs-actions {
   display: flex;
-  gap: var(--space-12);
-  width: 218px;
-  flex: none;
+  gap: var(--n-space-8);
 }
-.cs-actions :deep(.app-btn) {
+.cs-actions :deep(.act-btn) {
   flex: 1;
-  height: 38px;
+  min-width: 0;
 }
 </style>

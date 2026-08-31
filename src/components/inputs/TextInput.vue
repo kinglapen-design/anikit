@@ -6,16 +6,20 @@
 // 聚焦 = 亮色/半透明-1 描边，线条走卡片同款双层伪元素 inset 0（禁真 border 禁负 inset，速查表 §16）：
 // ::after 常态层瞬时、::before 聚焦层 opacity 过渡 150ms（聚焦不做颜色过渡，踩坑 036）。
 // hover 稿无 → 不做；禁用态稿未画 → 属性透传不改视觉（随按钮族记 09 待办，不自创）。
+// trailingIcon = 右置装饰图标 18（亮色/四级，详情面板链接框稿，7.1 二十三轮扩）；readonly 透传（只读展示口径）。
 import { ref } from "vue";
+import AppIcon from "../AppIcon.vue";
 
 withDefaults(
   defineProps<{
     size?: "lg" | "sm";
     placeholder?: string;
     disabled?: boolean;
+    readonly?: boolean;
+    trailingIcon?: string;
     forceState?: "" | "focus";
   }>(),
-  { size: "lg", placeholder: undefined, disabled: false, forceState: "" },
+  { size: "lg", placeholder: undefined, disabled: false, readonly: false, trailingIcon: undefined, forceState: "" },
 );
 const model = defineModel<string>({ default: "" });
 
@@ -35,7 +39,10 @@ defineExpose({
       class="ti-inner"
       :placeholder="placeholder"
       :disabled="disabled"
+      :readonly="readonly"
     />
+    <!-- 右置装饰图标（详情面板链接框稿：18 实寸 亮色/四级，纯装饰不交互） -->
+    <AppIcon v-if="trailingIcon" :name="trailingIcon" :size="18" class="ti-trail" />
   </div>
 </template>
 
@@ -109,5 +116,11 @@ defineExpose({
 }
 .ti-inner:disabled {
   cursor: default;
+}
+/* 右置装饰图标：亮色/四级、不抢点击（链接框稿） */
+.ti-trail {
+  flex: none;
+  color: var(--n-l4);
+  pointer-events: none;
 }
 </style>

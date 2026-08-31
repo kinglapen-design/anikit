@@ -5,9 +5,10 @@
 // 2026-08-28 走查定，不然 chip 没反馈；输入态 = 去立体感 + 通用二级底 +
 // 亮色/半透明-1 描边 + 展开宽度）+ 目标文件名（正文 二级，右对齐顶到右缘，hover 被滑入的关闭钮推左）。
 import "./items.css";
+import { nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     relation: string; // 关系称谓（如「父亲」）
     target: string; // 目标文件显示名
@@ -17,7 +18,32 @@ withDefaults(
   { editing: false, forceState: "" },
 );
 
-const emit = defineEmits<{ click: []; close: []; editRelation: [] }>();
+const emit = defineEmits<{ click: []; close: []; editRelation: []; commit: [value: string]; cancel: [] }>();
+
+// 称谓输入态接线（7.1 二十三轮补，详情面板关系区块业务）：进入 editing = 本地 draft 取现值 +
+// 聚焦全选（nextTick 等 input 挂载）；Enter / blur = 提交，Esc = 取消；blur 晚到双触发用 done 闸
+const draft = ref("");
+const inputRef = ref<HTMLInputElement>();
+let done = true; // 非编辑态恒 true（防 mount 首帧 blur 误提交）
+watch(
+  () => props.editing,
+  (v) => {
+    if (!v) return;
+    draft.value = props.relation;
+    done = false;
+    void nextTick(() => inputRef.value?.select());
+  },
+);
+function commit(): void {
+  if (done) return;
+  done = true;
+  emit("commit", draft.value.trim());
+}
+function cancel(): void {
+  if (done) return;
+  done = true;
+  emit("cancel");
+}
 </script>
 
 <template>
@@ -31,7 +57,17 @@ const emit = defineEmits<{ click: []; close: []; editRelation: [] }>();
       :class="{ editing }"
       @click.stop="emit('editRelation')"
     >
-      <input v-if="editing" class="chip-input" :value="relation" />
+      <input
+        v-if="editing"
+        ref="inputRef"
+        v-model="draft"
+        class="chip-input"
+        maxlength="20"
+        @keydown.enter.prevent="commit"
+        @keydown.esc.prevent="cancel"
+        @blur="commit"
+        @click.stop
+      />
       <template v-else>{{ relation }}</template>
     </span>
     <span class="tgt">{{ target }}</span>
