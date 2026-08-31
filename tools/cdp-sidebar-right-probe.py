@@ -25,8 +25,8 @@
 #   R8d 描述标题行收起 = 留一排截断正文（clamp-1 / 高 18 / line-clamp 1），不再整段隐藏
 #   R10d 链接 tab 四区块标题行折叠钮 + 动作组常显（staticActions——「添加按钮本身就是入口」）；
 #       污染文件区块仍无动作组（R10c）
-#   R10e tab 切换滑动动画：fwd 规则组存在（enter 250ms 缓入 delay 100ms / leave 150ms 缓出 / 位移 48px），
-#       点击切换后 .tab-pane 挂 tab-x-fwd-enter 类
+#   R10e tab 切换滑动动画：方向恒定旧左出/新右入（与左侧边栏统一——初版按 tab 序双向被走查否掉），
+#       enter 250ms 缓入 delay 100ms / leave 150ms 缓出 / 位移 48px，点击切换后 .tab-pane 挂 tab-x-enter 类
 #   R13b/R13c/R13d 封面编辑：点封面 → pinned 根 250ms 高度补间（inline height + transition）；
 #       编辑态边距 = 栏缘 +12（pinned padding 12——双重 padding 24 修复）；取消退回常态组
 #   截图 r23-sidebar-right.png（整窗 + 右栏局部）
@@ -450,9 +450,9 @@ async def main():
                   and [x for x in stv if x.get("t") == "污染文件"][0].get("acts") is None,
                   json.dumps(stv, ensure_ascii=False))
 
-            # ---------- R10e tab 切换滑动动画（侧栏范例同款时序，2026-08-31 用户定） ----------
-            # computed 级行为断言：basic → links（fwd），入场 delay 100ms 窗内读 ——
-            # 新内容挂 tab-x-fwd-enter-active + 250ms 档 + delay 100ms + 停在 enter-from 位移 48px
+            # ---------- R10e tab 切换滑动动画（侧栏范例同款时序 + 方向恒定左出右入，2026-08-31 用户定） ----------
+            # computed 级行为断言：basic → links，入场 delay 100ms 窗内读 ——
+            # 新内容挂 tab-x-enter-active + 250ms 档 + delay 100ms + 停在 enter-from 位移 48px
             await ev("[...document.querySelectorAll('.sidebar-right .seg-block .seg-item')][0].click()")
             await asyncio.sleep(0.5)
             await ev("[...document.querySelectorAll('.sidebar-right .seg-block .seg-item')][1].click()")
@@ -463,8 +463,8 @@ async def main():
                 " if (!p) return null; const s = getComputedStyle(p);"
                 " return { cls: p.className, dur: s.transitionDuration, delay: s.transitionDelay,"
                 "   ease: s.transitionTimingFunction, tf: s.transform }; })()")
-            check("R10e tab 切换动画：fwd 新内容右入 48px + 250ms 缓入 delay 100ms（侧栏同款时序）",
-                  isinstance(pane, dict) and "tab-x-fwd-enter-active" in (pane.get("cls") or "")
+            check("R10e tab 切换动画：新内容恒定右入 48px + 250ms 缓入 delay 100ms（与左侧边栏同向）",
+                  isinstance(pane, dict) and "tab-x-enter-active" in (pane.get("cls") or "")
                   and "0.25s" in (pane.get("dur") or "") and "0.1s" in (pane.get("delay") or "")
                   and "cubic-bezier(0, 0, 0.1, 1)" in (pane.get("ease") or "") and "48" in (pane.get("tf") or ""),
                   json.dumps(pane))
