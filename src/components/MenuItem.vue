@@ -2,6 +2,8 @@
 // 右键菜单 item（7.1 二十四轮 2026-09-01 按新稿 组件/上下文菜单 重写，旧 figma-css 04 稿废除）：
 // 高 26 / padding 4 8 / 圆角 6；标题 = 通用/正文 13/18 亮色/二级；hover 底 = 亮色/半透明-3；
 // 禁用 = 亮色/禁用档不响应 hover/点击。
+// 间距（2026-09-01 二十五轮用户定）：名称→36px→右侧件（flex gap 36 = 最小间距；
+// 容器宽由最长 item 内容自适应，其余项 .main flex:1 拉伸把右件顶到右缘对齐）。
 // 右侧件（space-between，互斥）：
 // - 快捷键纯文本（通用/数字 Fira Mono 500 12/16 亮色/三级，原串显示 "Ctrl+Enter"——
 //   旧 KbdBadge 徽章组形态与"词键转小写"逻辑随新稿废除）；
@@ -83,6 +85,7 @@ function onRowClick(): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--n-space-36); /* 名称→右件最小间距（二十五轮用户定）；无右件时单子元素 gap 不生效 */
   width: 100%;
   height: 26px;
   padding: var(--n-space-4) var(--n-space-8);

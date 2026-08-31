@@ -1,8 +1,12 @@
 <script setup lang="ts">
 // 菜单容器（7.1 二十四轮 2026-09-01 按新稿 组件/上下文菜单 容器定案替换，旧 figma-css 04 稿口径废除）：
-// 通用/三级 #242424 底（--n-g3）/ 圆角 8 / 1px 通用/五级 #2E2E2E 描边（inset 内画不占空间，
-// 内容宽恒 288 = item 稿宽）/ 小阴影 --n-shadow-sm；宽 300 定宽 / 内边距 6 / gap 0
+// 通用/三级 #242424 底（--n-g3）/ 圆角 8 / 1px 通用/五级 #2E2E2E 描边（inset 内画不占空间）
+// / 小阴影 --n-shadow-sm；内边距 6 / gap 0
 //（分组间距由 ContextMenu 组容器承担：组内 gap 2 / 组 padding 上下 4 首末 0 / 组间 1px 线）。
+// 宽度（2026-09-01 二十五轮用户定，废 300 定宽——定宽致短内容右侧大片空白）：
+// 不传 width 时内容自适应（fit-content，容器宽由最长 item 决定；item 内 名称→36px→右件 最小间距
+// 由 MenuItem 承担），视口宽封顶 100vw-8（超长 label 回 ellipsis）；width 仍可按面板形态定宽
+//（ViewOptionsMenu 404 面板），pad/gap 亦可覆盖。
 // fixed 定位，点击组外（group 之外）或 Esc 关闭；菜单项点击不自动关闭（连续操作）。
 // 边界钳制（1.3，03 稿注"菜单不可超出窗口边缘"）：挂载/位移后量实际尺寸，右/下缘溢出回收进窗口
 //（留 4 呼吸），弹出动画 origin 随回收方位翻转；超出窗口高度时封顶 100vh-8 并纵向滚动。
@@ -14,10 +18,12 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{ x: number; y: number; width?: number; pad?: string; gap?: string; group?: HTMLElement | null; trigger?: HTMLElement | null; pop?: boolean }>(),
-  { width: 300, pad: "var(--n-space-6)", gap: "0", group: null, trigger: null, pop: true },
+  { width: undefined, pad: "var(--n-space-6)", gap: "0", group: null, trigger: null, pop: true },
 );
 const emit = defineEmits<{ close: [] }>();
 const rootRef = ref<HTMLElement>();
+// flyout 等调用方需渲染后实测宽度（内容自适应场景）：暴露根元素（ContextMenu 左飞修正用）
+defineExpose({ root: rootRef });
 // 实际定位（钳制后可能偏移）与动画原点（默认左上）
 const pos = ref({ left: props.x, top: props.y });
 const origin = ref("top left");
@@ -90,7 +96,7 @@ onBeforeUnmount(() => {
     ref="rootRef"
     class="app-menu"
     :class="{ pop }"
-    :style="{ left: `${pos.left}px`, top: `${pos.top}px`, width: `${width}px`, padding: pad, gap, transformOrigin: origin }"
+    :style="{ left: `${pos.left}px`, top: `${pos.top}px`, width: width ? `${width}px` : undefined, padding: pad, gap, transformOrigin: origin }"
     @pointerdown.stop
   >
     <slot />
@@ -103,6 +109,8 @@ onBeforeUnmount(() => {
   z-index: 2000;
   display: flex;
   flex-direction: column;
+  width: fit-content; /* 内容自适应（最长 item 决定）；内联 width 覆盖（定宽面板） */
+  max-width: calc(100vw - 8px); /* 视口封顶：超长 label 回 ellipsis，不撑出窗口 */
   border-radius: var(--n-radius-8);
   background: var(--n-g3);
   box-shadow:

@@ -2,7 +2,8 @@
 // 数据驱动——各上下文产出 CtxEntry 清单（设计项全列，未实现的一律 disabled 置灰占位），
 // 全局单一宿主（App.vue 一个 <ContextMenu>），任何组件 openContextMenu 即可弹出。
 // 与 AppMenu/MenuItem 的关系：渲染复用这两个组件（视觉口径不变），本模块只加数据驱动与
-// 一级级联子菜单（flyout）。菜单宽度统一 300（容器稿；内容 288 = item 稿宽）。
+// 一级级联子菜单（flyout）。菜单宽度 = 内容自适应（2026-09-01 二十五轮用户定，废 300 定宽：
+// 名称→36px→右件最小间距，容器宽由最长 item 决定）。
 // 2026-09-01 新稿废除：item 左侧图标位（icon/iconClass/iconData）、搜索区（searchable）、
 // 各菜单定宽（width/submenuWidth）、孤立分割线元素（渲染层按 "divider" 切分组容器）。
 import { reactive } from "vue";

@@ -5,10 +5,12 @@
 // 组 padding 上下 4（首组上 0、末组下 0），组间 = 非末组 inset 底 1px 通用/五级线（无孤立分割线元素）。
 // 一级级联 flyout：hover 带子菜单的项时右侧飞出，右缘溢出改向左飞出（03 稿注"菜单不可超出窗口边缘"）；
 // flyout 按 key 随父项重建（2026-08-11 走查：复用实例位置滞留越偏越远）+ pop=false 不回放弹出动画。
-// 搜索区 / 左侧图标位 / 各菜单定宽 随新稿废除（2026-09-01 用户定）。
+// 搜索区 / 左侧图标位 / 各菜单定宽 随新稿废除（2026-09-01 用户定）；
+// 宽度内容自适应（2026-09-01 二十五轮）：flyout 宽渲染前不可知——先按右飞放置，
+// 挂载后实测宽，右缘溢出再以父项左缘为锚左飞（fixFlyoutX）。
 // 组外关闭关系：根菜单的 group = flyout 根元素（flyout 内点击不关根菜单）；
 // flyout 自身无 group，点其外部经根菜单统一关闭（closeAll 幂等）。
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import AppMenu from "./AppMenu.vue";
 import MenuItem from "./MenuItem.vue";
 import LibraryMenuItem from "./LibraryMenuItem.vue";
@@ -18,15 +20,18 @@ import { closeContextMenu, menuState, type CtxEntry, type CtxItem } from "../lib
 import { reorderLibraries, requestDeleteLibrary, currentLibrary, switchLibrary } from "../lib/libraryOps";
 
 // 级联 flyout：当前展开的子菜单（父项 top 作 key 随项重建）与位置；
-// panel（2026-08-18，3.3 / 05 稿 §3）= 自定义网格面板形态（图标），不走条目列表
+// panel（2026-08-18，3.3 / 05 稿 §3）= 自定义网格面板形态（图标），不走条目列表；
+// parentLeft = 父项左缘（左飞修正锚点）
 const flyout = ref<{
   key: number;
   x: number;
   y: number;
   entries: CtxEntry[];
   panel?: { kind: "folderIcon"; folderId: string };
+  parentLeft: number;
 } | null>(null);
 const flyoutRootRef = ref<HTMLElement>();
+const flyoutMenuRef = ref<InstanceType<typeof AppMenu>>();
 
 // 每次打开收起上次 flyout
 watch(
@@ -61,9 +66,21 @@ function onItemHover(entry: CtxItem, e: MouseEvent): void {
     return;
   }
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  // 菜单统一 300 宽（容器稿）；右缘溢出 → 向左飞出（父项左缘 - 二级宽 - 2）
-  const x = r.right + 2 + 300 > window.innerWidth - 4 ? r.left - 300 - 2 : r.right + 2;
-  flyout.value = { key: r.top, x, y: r.top - 6, entries: entry.submenu ?? [], panel: entry.panel };
+  // 菜单宽内容自适应（二十五轮）：先按右飞放置，挂载后实测宽——右缘溢出改向左飞出
+  flyout.value = { key: r.top, x: r.right + 2, y: r.top - 6, entries: entry.submenu ?? [], panel: entry.panel, parentLeft: r.left };
+  void fixFlyoutX();
+}
+
+// flyout 左飞修正：实测宽（AppMenu expose root）右缘溢出 → 以父项左缘为锚向左飞出
+async function fixFlyoutX(): Promise<void> {
+  await nextTick();
+  const f = flyout.value;
+  const el = flyoutMenuRef.value?.root;
+  if (!f || !el) return;
+  const w = el.offsetWidth;
+  if (f.x + w > window.innerWidth - 4) {
+    flyout.value = { ...f, x: Math.max(4, f.parentLeft - w - 2) };
+  }
 }
 
 function onItemClick(entry: CtxEntry): void {
@@ -180,7 +197,7 @@ function onLibraryRemove(entry: CtxItem): void {
 </script>
 
 <template>
-  <AppMenu v-if="menuState.entries" :x="menuState.x" :y="menuState.y" :pad="menuState.panel ? '24px' : undefined" :group="flyoutRootRef ?? null" @close="closeAll(false)">
+  <AppMenu v-if="menuState.entries" :x="menuState.x" :y="menuState.y" :group="flyoutRootRef ?? null" @close="closeAll(false)">
     <!-- 整体面板菜单（openPanelMenu）：一级内容 = 面板组件，无条目列表 -->
     <FolderIconGrid v-if="menuState.panel?.kind === 'iconPicker'" :current="menuState.panel.current" @select="onPanelPick" />
     <!-- 条目菜单：分组容器（组内 gap 2 / 组 padding 上下 4 首末 0 / 组间 1px 线） -->
@@ -217,8 +234,8 @@ function onLibraryRemove(entry: CtxItem): void {
   </AppMenu>
   <!-- 级联 flyout：key 随父项重建（防实例复用位置滞留）；pop=false 不回放动画；
        内容包一层 div 供根菜单 group 判定（点击 flyout 内 = 组内）；
-       panel 形态（3.3 网格面板）padding 按 05 稿 §3 = 24，条目形态默认 6 -->
-  <AppMenu v-if="flyout && menuState.entries" :key="flyout.key" :x="flyout.x" :y="flyout.y" :pad="flyout.panel ? '24px' : undefined" :pop="false" @close="closeAll(false)">
+       面板形态（图标网格）与条目形态 padding 统一 6（2026-09-01 二十五轮，废 24） -->
+  <AppMenu v-if="flyout && menuState.entries" :key="flyout.key" ref="flyoutMenuRef" :x="flyout.x" :y="flyout.y" :pop="false" @close="closeAll(false)">
     <div ref="flyoutRootRef" class="flyout-root">
       <FolderIconPanel v-if="flyout.panel?.kind === 'folderIcon'" :folder-id="flyout.panel.folderId" @done="closeAll(true)" />
       <div v-else class="menu-groups">

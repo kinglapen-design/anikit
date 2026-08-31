@@ -1,7 +1,9 @@
-# CDP 实测：右键菜单新稿（2026-09-01，组件/上下文菜单 五件 + 用户容器定案）
-# A 容器/分组/item：300 宽 / 无搜索区 / 无左图标 / 组间 1px 五级线（组盒内底 inset）/ item 26 高 /
+# CDP 实测：右键菜单新稿（2026-09-01，组件/上下文菜单 五件 + 用户容器定案；二十五轮口径更新）
+# A 容器/分组/item：宽度内容自适应（无内联 width，最长 item 决定）/ 名称→36px→右件最小间距 /
+#   右件贴右缘 / 无搜索区 / 无左图标 / 组间 1px 五级线（组盒内底 inset）/ item 26 高 /
 #   快捷键原串纯文本 / 展开箭头；
-# B hover 排序依据 → flyout 300 + checkable 对勾（自定义选中恒显）；
+# B hover 排序依据 → flyout 宽自适应（< 250，废 300）+ checkable 对勾（自定义选中恒显）+ 对勾贴右缘；
+# E hover 更改图标 → 网格面板 31 格（默认 + 30 新双色）/ 宽 186（5×30+4×6+pad 12）/ gap 6 / 双色原值；
 # C 更改颜色内嵌色块行：10 色块 / 默认位选中 / 点色不关菜单 + set_folder_color 调用 + 外环跟随回写；
 # D 截图 menu / flyout / swatches + 设计系统预览页 menus 展区。
 import asyncio
@@ -135,7 +137,7 @@ async def main():
             await mouse("mousePressed", rect["x"], rect["y"], "right"); await mouse("mouseReleased", rect["x"], rect["y"], "right")
             await asyncio.sleep(0.6)
 
-            check("A1 容器宽 300", await ev("document.querySelector('.app-menu')?.offsetWidth === 300"))
+            check("A1 容器宽内容自适应（无内联 width）", await ev("document.querySelector('.app-menu')?.style.width === ''"))
             check("A2 无搜索区", await ev("!document.querySelector('.menu-search')"))
             check("A3 分组数 >= 8", await ev("document.querySelectorAll('.app-menu .menu-group').length >= 8"), str(await ev("document.querySelectorAll('.app-menu .menu-group').length")))
             check("A4 组间线 = 组盒内底 inset 五级", await ev("getComputedStyle(document.querySelector('.app-menu .menu-group')).boxShadow.includes('inset')"))
@@ -144,21 +146,35 @@ async def main():
             check("A7 快捷键原串大写", await ev("[...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '新标签页打开')?.querySelector('.shortcut')?.textContent === 'Ctrl+Enter'"))
             check("A8 排序依据带箭头", await ev("[...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '排序依据')?.querySelector('.arrow svg') != null"))
             check("A9 禁用项存在（粘贴文件夹）", await ev("[...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '粘贴文件夹')?.disabled === true"))
+            check("A10 名称→右件最小间距 36（更改颜色行 label→色块组）", await ev("(() => { const it = [...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '更改颜色'); if (!it) return false; const l = it.querySelector('.label').getBoundingClientRect(); const s = it.querySelector('.swatches').getBoundingClientRect(); return Math.abs(s.left - l.right - 36) <= 1.5; })()"))
+            check("A11 容器宽=最长项（短项右件贴右缘：容器右缘-14）", await ev("(() => { const m = document.querySelector('.app-menu'); const it = [...m.querySelectorAll('.menu-item')].find((x) => x.querySelector('.label')?.textContent === '打开文件夹'); if (!it) return false; const s = it.querySelector('.shortcut').getBoundingClientRect(); return Math.abs(m.getBoundingClientRect().right - 14 - s.right) <= 1.5; })()"))
             await shot("ctx-menu")
 
             # —— B. hover 排序依据 → flyout ——
             sortRect = await ev("(() => { const el = [...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '排序依据'); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()")
             await mouse("mouseMoved", sortRect["x"], sortRect["y"])
             await asyncio.sleep(0.5)
-            check("B1 flyout 出且宽 300", await ev("document.querySelectorAll('.app-menu').length === 2 && document.querySelectorAll('.app-menu')[1].offsetWidth === 300"))
-            check("B2 flyout 五个对勾项", await ev("document.querySelectorAll('.app-menu')[1].querySelectorAll('.check-slot').length === 5"))
-            check("B3 自定义选中（checked 恒显一级）", await ev("document.querySelectorAll('.app-menu')[1].querySelector('.menu-item.checked .check-slot') != null"))
+            check("B1 flyout 出且宽内容自适应（无内联 width）", await ev("document.querySelectorAll('.app-menu').length === 2 && document.querySelectorAll('.app-menu')[1].style.width === ''"))
+            check("B2 flyout 宽 < 250（废 300 定宽）", await ev("document.querySelectorAll('.app-menu')[1]?.offsetWidth < 250"), str(await ev("document.querySelectorAll('.app-menu')[1]?.offsetWidth")))
+            check("B3 flyout 五个对勾项", await ev("document.querySelectorAll('.app-menu')[1].querySelectorAll('.check-slot').length === 5"))
+            check("B4 自定义选中（checked 恒显一级）", await ev("document.querySelectorAll('.app-menu')[1].querySelector('.menu-item.checked .check-slot') != null"))
+            check("B5 flyout 对勾贴右缘（容器右缘-14）", await ev("(() => { const m = document.querySelectorAll('.app-menu')[1]; const c = m.querySelector('.menu-item .check-slot'); if (!c) return false; return Math.abs(m.getBoundingClientRect().right - 14 - c.getBoundingClientRect().right) <= 1.5; })()"))
             await shot("ctx-menu-flyout")
+
+            # —— E. hover 更改图标 → 网格面板（31 格新双色 / 宽 186 / gap 6）——
+            iconRect = await ev("(() => { const el = [...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '更改图标'); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()")
+            await mouse("mouseMoved", iconRect["x"], iconRect["y"])
+            await asyncio.sleep(0.5)
+            check("E1 图标面板出且宽 186（5×30+4×6+pad 12）", await ev("(() => { const ms = document.querySelectorAll('.app-menu'); if (ms.length !== 2 || !ms[1].querySelector('.icon-grid')) return false; return Math.abs(ms[1].offsetWidth - 186) <= 1; })()"), str(await ev("document.querySelectorAll('.app-menu')[1]?.offsetWidth")))
+            check("E2 网格 31 格（默认 + 30 新双色）", await ev("document.querySelectorAll('.app-menu')[1]?.querySelectorAll('.icon-grid .cell').length === 31"), str(await ev("document.querySelectorAll('.app-menu')[1]?.querySelectorAll('.icon-grid .cell').length")))
+            check("E3 网格 gap 6 行列统一", await ev("(() => { const g = document.querySelectorAll('.app-menu')[1]?.querySelector('.icon-grid'); if (!g) return false; const cs = getComputedStyle(g); return cs.columnGap === '6px' && cs.rowGap === '6px'; })()"))
+            check("E4 首格双色原值（fill #BFBFBF 亮层）", await ev("document.querySelectorAll('.app-menu')[1]?.querySelector('.icon-grid .cell svg path[fill=\"#BFBFBF\"]') != null"))
+            await shot("ctx-menu-iconpanel")
             # 移开（回第一组项）收 flyout
             firstRect = await ev("(() => { const el = [...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '打开文件夹'); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()")
             await mouse("mouseMoved", firstRect["x"], firstRect["y"])
             await asyncio.sleep(0.4)
-            check("B4 移开后 flyout 收", await ev("document.querySelectorAll('.app-menu').length === 1"))
+            check("B6 移开后 flyout 收", await ev("document.querySelectorAll('.app-menu').length === 1"))
 
             # —— C. 更改颜色色块行 ——
             check("C1 色块行 10 块", await ev("[...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '更改颜色')?.querySelectorAll('.sw').length === 10"))
