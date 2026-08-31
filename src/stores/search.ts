@@ -2,8 +2,9 @@
 // 匹配在后端（search_assets 命令，规范第 1 条业务层）；本 store 持有命中键集合，视图层过滤展示。
 // 口径（2026-08-19 用户定）：结果替换素材区（清空恢复）/ 排序生效分组平铺 / 当前目录跟随递归开关 /
 // 快速访问 = 当前视图即范围（回收站里搜回收站）。
-// 输入形态（同日用户定，tag 化）：已提交前缀 / 关键字 = chips（`~` 全局 / `//` 搜索显式 / `/` 筛选占位 +
-// 分词各自成 chip），草稿即时参与——全局 = `~` chip 或草稿 `~` 前缀（无范围按钮）。
+// 输入形态（2026-08-31 用户定案，7.1 二十二轮悬浮栏接入）：多功能悬浮栏单行输入实时分词——
+// tag 化 chips（`~` / `//` / `/` 前缀 tag、空格成 chip、kbd 提示组）废除，筛选与搜索分离
+//（筛选 = 悬浮栏筛选按钮组 + 弹窗，随筛选轮点亮）；`~` 手敲全局保留（后端前缀协议不变）。
 import { ref } from "vue";
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
@@ -16,8 +17,7 @@ interface SearchHits {
 }
 
 interface PanelSearch {
-  chips: string[]; // 已提交 tag："~" / "//" / "/"（占位）/ 关键字
-  draft: string; // 输入框草稿（未提交也即时参与搜索）
+  draft: string; // 输入框草稿（输入即参与搜索）
   hits: Set<string>; // `${assetId}|${folderId}`（与选择 / 拖拽键同口径）
   hitArchives: Set<string>; // 命中档案 folderId
   seq: number; // 竞态序号（防抖与异步返回只收最新）
@@ -27,7 +27,7 @@ const DEBOUNCE_MS = 150; // inbox-fs-changed 去抖同值先例
 
 export const useSearchStore = defineStore("search", () => {
   const panels = ref(new Map<string, PanelSearch>());
-  // Ctrl+F 聚焦请求（SearchBar watch 比对 panelId 后聚焦自身输入框）
+  // Ctrl+F 聚焦请求（SearchFloatBar watch 比对 panelId 后聚焦自身输入框）
   const focusSeq = ref(0);
   const focusPanelId = ref("");
 
@@ -36,37 +36,24 @@ export const useSearchStore = defineStore("search", () => {
   function ensure(panelId: string): PanelSearch {
     let s = panels.value.get(panelId);
     if (!s) {
-      s = { chips: [], draft: "", hits: new Set(), hitArchives: new Set(), seq: 0 };
+      s = { draft: "", hits: new Set(), hitArchives: new Set(), seq: 0 };
       panels.value.set(panelId, s);
     }
     return s;
   }
 
-  /** 拼成后端 query 字符串：`~` chip → "~" 前缀；`//` chip → "//" 前缀；`/` 筛选 chip 占位不参与；
-      关键字 chips 与草稿原样拼接（草稿内的 `~` / `//` 前缀由后端同规则解析） */
-  function fullQuery(s: PanelSearch): string {
-    const parts: string[] = [];
-    if (s.chips.includes("~")) parts.push("~");
-    if (s.chips.includes("//")) parts.push("//");
-    for (const c of s.chips) if (c !== "~" && c !== "//" && c !== "/") parts.push(c);
-    if (s.draft.trim()) parts.push(s.draft.trim());
-    return parts.join(" ");
-  }
-
-  /** 关键字（chips 的非前缀项 + 草稿剥前缀后的词）——搜索态 = 至少一个关键字 */
+  /** 关键字（草稿剥 `~` / `//` 前缀后的分词）——与后端 parse_query 同规则 */
   function keywordsOf(s: PanelSearch): string[] {
-    const kws = s.chips.filter((c) => c !== "~" && c !== "//" && c !== "/");
     let d = s.draft.trim();
     for (;;) {
       if (d.startsWith("//")) d = d.slice(2).trimStart();
       else if (d.startsWith("~")) d = d.slice(1).trimStart();
       else break;
     }
-    if (d) kws.push(...d.split(/\s+/));
-    return kws.filter(Boolean);
+    return d ? d.split(/\s+/).filter(Boolean) : [];
   }
 
-  /** 搜索态 = 剥前缀后有关键字（纯 `~` / `//` 不占位搜索） */
+  /** 搜索态 = 剥前缀后有关键字（纯 `~` / `//` 不进入搜索态） */
   function isActive(panelId: string): boolean {
     const s = panels.value.get(panelId);
     return !!s && keywordsOf(s).length > 0;
@@ -80,11 +67,10 @@ export const useSearchStore = defineStore("search", () => {
     return panels.value.get(panelId)?.hitArchives ?? new Set();
   }
 
-  /** 全局范围 = 有 `~` chip 或草稿带 `~` 前缀（无范围按钮，tag 即范围） */
+  /** 全局范围 = 草稿带 `~` 前缀（无范围按钮，手敲生效；后端 parse_query 同规则再剥一次） */
   function effectiveGlobal(panelId: string): boolean {
     const s = panels.value.get(panelId);
     if (!s) return false;
-    if (s.chips.includes("~")) return true;
     let d = s.draft.trim();
     for (;;) {
       if (d.startsWith("//")) d = d.slice(2).trimStart();
@@ -92,10 +78,6 @@ export const useSearchStore = defineStore("search", () => {
       else break;
     }
     return false;
-  }
-
-  function chipsFor(panelId: string): string[] {
-    return panels.value.get(panelId)?.chips ?? [];
   }
 
   function draftFor(panelId: string): string {
@@ -114,7 +96,7 @@ export const useSearchStore = defineStore("search", () => {
     const ui = useUiStore();
     try {
       const r = await invoke<SearchHits>("search_assets", {
-        query: fullQuery(s),
+        query: s.draft.trim(),
         scope: { viewKey, recursive: ui.showSubfolders, global: effectiveGlobal(panelId) },
       });
       if (s.seq !== seq) return; // 过期响应丢弃
@@ -126,7 +108,7 @@ export const useSearchStore = defineStore("search", () => {
     }
   }
 
-  /** 内容变更（chips 或 draft）：无关键字即时退出搜索态；有关键字防抖 150ms 后搜 */
+  /** 内容变更（draft）：无关键字即时退出搜索态；有关键字防抖 150ms 后搜 */
   function scheduleRun(panelId: string, viewKey: string): void {
     const s = panels.value.get(panelId);
     const t = timers.get(panelId);
@@ -146,43 +128,9 @@ export const useSearchStore = defineStore("search", () => {
     scheduleRun(panelId, viewKey);
   }
 
-  /** 提交 chip（`~` 唯一——重复输入不追加；空文本忽略） */
-  function addChip(panelId: string, viewKey: string, chip: string): void {
-    const s = ensure(panelId);
-    const v = chip.trim();
-    if (!v) return;
-    if (v === "~" && s.chips.includes("~")) return;
-    s.chips.push(v);
-    scheduleRun(panelId, viewKey);
-  }
-
-  function removeChip(panelId: string, viewKey: string, chip: string): void {
-    const s = panels.value.get(panelId);
-    if (!s) return;
-    const i = s.chips.lastIndexOf(chip);
-    if (i >= 0) s.chips.splice(i, 1);
-    scheduleRun(panelId, viewKey);
-  }
-
-  /** 空草稿 Backspace = 删尾 chip（TermChipsInput 口径） */
-  function popChip(panelId: string, viewKey: string): void {
-    const s = panels.value.get(panelId);
-    if (!s || s.chips.length === 0) return;
-    s.chips.pop();
-    scheduleRun(panelId, viewKey);
-  }
-
   /** 视图 / 递归开关变化：搜索保持并按新范围重搜（2026-08-19 定案） */
   function rerun(panelId: string, viewKey: string): void {
     if (isActive(panelId)) void run(panelId, viewKey);
-  }
-
-  function clear(panelId: string, viewKey: string): void {
-    const s = panels.value.get(panelId);
-    if (!s) return;
-    s.chips = [];
-    s.draft = "";
-    scheduleRun(panelId, viewKey);
   }
 
   function removePanel(panelId: string): void {
@@ -205,14 +153,9 @@ export const useSearchStore = defineStore("search", () => {
     hitsFor,
     hitArchivesFor,
     effectiveGlobal,
-    chipsFor,
     draftFor,
     setDraft,
-    addChip,
-    removeChip,
-    popChip,
     rerun,
-    clear,
     removePanel,
     requestFocus,
   };

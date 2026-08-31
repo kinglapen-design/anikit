@@ -745,7 +745,7 @@ async def main():
 
             # ================= 阶段 E：搜索态计数 =================
             await ev(
-                "(() => { const inp = document.querySelector('.content-area .search-bar .draft-input');"
+                "(() => { const inp = document.querySelector('.content-area .fbs-input');"
                 " inp.value = '跑步'; inp.dispatchEvent(new Event('input', { bubbles: true })); return true; })()")
             await wait_for("!!document.querySelector('" + TB + " .result-group')", 8)
             # 计数 = hits 装配后渲染（防抖 150ms + invoke）——轮询等 count 文本到位，勿固定 sleep（§12 纪律）
@@ -774,7 +774,7 @@ async def main():
             await shot(f"{SHOT_DIR}/r21-content-container-search.png", ".content-area", 2)
 
             await ev(
-                "(() => { const inp = document.querySelector('.content-area .search-bar .draft-input');"
+                "(() => { const inp = document.querySelector('.content-area .fbs-input');"
                 " inp.value = ''; inp.dispatchEvent(new Event('input', { bubbles: true })); return true; })()")
             gone = await wait_for("!document.querySelector('" + TB + " .result-group')", 5)
             check("T16c 清空搜索 → 计数消失", gone is True, str(gone))

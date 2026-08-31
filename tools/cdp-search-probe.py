@@ -1,27 +1,29 @@
-# CDP 探针：3.6 分词搜索（2026-08-19 一轮 + 二轮 tag 化）
-#   S1 全部视图输入「人物 走路」→ AND 分词命中两卡（草稿即时参与）
-#   S1b 空格提交成 chip（tag 化：人物/走路各成 chip，命中保持）
-#   S2 Esc 清空 → 恢复全部 6 卡（搜索态退出）
+# CDP 探针：3.6 分词搜索（2026-08-30 三轮重写——多功能悬浮栏接入，旧通栏 SearchBar + tag 化 chips 废除）
+#   S0 全部视图 6 卡渲染（前置）
+#   S1 全部视图直输「人物 走路」→ AND 分词命中两卡（空格 = 分词字符，无 chips）
+#   S2 Esc 清空并失焦 → 恢复全部 6 卡（搜索态退出）
 #   S3 扩展名大小写不敏感：「GIF」命中 跑步.gif
 #   S4 无结果 → 中央空态文案「无搜索结果」
 #   S5 路径命中：「走路参考」命中后代文件夹 f2 内的 场景-日.png
 #   S6 链接 URL decode：「档案」命中 分镜01（路径含档案名）+ 参考图（links q=%E6%A1%A3%E6%A1%88）；
 #      quick 视图不出档案区
-#   S7 tag 化范围（f1 视图）：无前缀 tag / 递归开搜「场景」命中后代 /「~场景」空格剥落 =
-#      「~ 全局搜索」+「场景」两 chip / Backspace 删尾 chip / 清空退出搜索态
-#   S8 草稿「~场景」即时全局（未提交也生效；轮询断言——headless 防抖+渲染延迟敏感）
-#   S9 「//人物」草稿命中 + 空格剥落 =「// 搜索」+「人物」
+#   S7 f1 视图范围：直输「场景」命中后代（递归开）/ 直输「~场景」全局命中 / 清空退出搜索态
+#   S8 草稿「~场景」即时全局（轮询断言——headless 防抖+渲染延迟敏感）
+#   S9 直输「//人物」命中两卡（// 与直接输入等效）
 #   S10 档案名命中：f1 视图搜「分镜」→ 档案区「分镜档案」+ 档案内素材卡
 #   S11 徽标命中：搜「进行中」→ 档案区「分镜档案」
-#   S12 分组平铺：f1（配扩展名分组，先关递归——递归恒不分组）搜索态组标题消失；清空恢复
-#   S13 Ctrl+F 聚焦搜索框
-#   S14 空文件夹 f3 视图「~人物」→ 全局命中视口外素材（基底分流回归钉）+ 空格剥落
-#   S15 「/」空格 →「/ 筛选」占位 tag（不参与搜索，人物正常命中）
-#   S16 kbd 徽章显隐：未聚焦且空 = 显示 / 聚焦 = 隐藏 / 失焦提交草稿成 chip 保持隐藏
-#   截图 = 「~人物」剥落两 chip 的搜索态（chip = C4 底/暗-悬停线/常态字，不用品牌色）
+#   S12 分组平铺：f1（配扩展名分组，查看方式菜单关递归——递归恒不分组）搜索态组标题消失；清空恢复
+#   S13 Ctrl+F 聚焦悬浮栏输入框
+#   S14 空文件夹 f3 视图直输「~人物」→ 全局命中视口外素材（基底分流回归钉）
+#   （旧 S15「/」占位 tag / S16 kbd 徽章组随 tag 化废除删除；旧 S1b 空格成 chip 删除）
+#   S17 悬浮栏宽度：常态 250 → 聚焦 450 → 失焦回 250（壳 = 唯一宽度动画源 300ms，轮询等宽到位）
+#   S18 筛选展开：filter 钮 → chip×10 出现；chip 点击 = .on 本地切换且不触发 search_assets；
+#      collapse 钮收起
+#   截图 = 搜索态悬浮栏（f1 视图「人物」命中 + 聚焦 450 宽，clip 栏体）
 # 用法：先起 pnpm dev（5373；探针检测到未监听会自起并在结束时杀掉），再
 #   tools/.venv/Scripts/python.exe tools/cdp-search-probe.py
 import asyncio
+import base64
 import json
 import subprocess
 import sys
@@ -41,6 +43,7 @@ SLEEP = 0.35
 # 桩：f1 角色（人物-开心/伤心-走路 + 参考图）/ f2 走路参考（场景-日，f1 后代）/
 # fa 分镜档案（分镜01，f1 后代，kind=archive，徽标「进行中」）/ root 跑步.gif。
 # f1 配扩展名分组（png 组）供 S12 平铺断言。search_assets 桩 = 后端同口径 JS 简化实现。
+# 纪律：返回列表 / 对象一律深拷贝斩断共享引用（§12）。
 STUB = r"""
 window.__calls = { search_assets: [] };
 const TREE = {
@@ -111,8 +114,8 @@ window.__TAURI_INTERNALS__ = {
       list_placements: JSON.parse(JSON.stringify(PLACEMENTS)),
       list_recycle: [], list_recent_assets: [], list_recent_libraries: [],
       list_inbox_snapshot: [],
-      list_archives: [{ folderId: "fa", badge: ARCHIVES.fa.badge, avatar: null,
-        props: ARCHIVES.fa.props, descriptions: ARCHIVES.fa.descriptions, links: [], createdAt: "" }],
+      list_archives: JSON.parse(JSON.stringify([{ folderId: "fa", badge: ARCHIVES.fa.badge, avatar: null,
+        props: ARCHIVES.fa.props, descriptions: ARCHIVES.fa.descriptions, links: [], createdAt: "" }])),
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
       undo: null, redo: null,
     };
@@ -271,17 +274,31 @@ async def main():
                 if not ok:
                     fails.append(f"{name}: {detail}")
 
-            # 激活 panel 搜索框（单 panel 场景 = 唯一 .search-bar）
+            # 激活 panel 悬浮栏搜索输入框（单 panel 场景 = 唯一 .fbs-input）
             async def search_input():
-                return await ev("document.querySelector('.search-bar input') !== null")
+                return await ev("document.querySelector('.fbs-input') !== null")
+
+            # 聚焦驱动（headless Edge focus() 只挂 activeElement 不发 focus 事件——
+            # 悬浮栏壳宽 450 档依赖 Vue @focus → focused-change，须合成 FocusEvent 补发）
+            async def focus_input():
+                await ev("""
+                  (() => { const i = document.querySelector('.fbs-input');
+                    i.focus(); i.dispatchEvent(new FocusEvent('focus')); return true; })()
+                """)
+
+            async def blur_input():
+                await ev("""
+                  (() => { const i = document.querySelector('.fbs-input');
+                    i.blur(); i.dispatchEvent(new FocusEvent('blur')); return true; })()
+                """)
 
             async def set_input(text):
-                """先清空（chips + 草稿，Esc 口径）再设草稿文本，随后轮询等待防抖 + invoke 完成
+                """先清空（Esc 口径：清空 + 失焦）再设草稿文本，随后轮询等待防抖 + invoke 完成
                 （headless 下 setTimeout 防抖触发延迟漂移——固定 sleep 断言不可靠，2026-08-19 复验实证）"""
                 await clear_all()
                 await ev(f"""
-                  (() => {{ const i = document.querySelector('.search-bar input');
-                    i.focus(); i.value = {json.dumps(text)}; i.dispatchEvent(new Event('input', {{ bubbles: true }})); return i.value; }})()
+                  (() => {{ const i = document.querySelector('.fbs-input');
+                    i.value = {json.dumps(text)}; i.dispatchEvent(new Event('input', {{ bubbles: true }})); return i.value; }})()
                 """)
                 if text.strip():
                     deadline = time.time() + 5
@@ -294,59 +311,34 @@ async def main():
                 else:
                     await asyncio.sleep(0.5)
 
-            async def clear_draft():
-                """只清草稿（不动 chips）"""
-                await ev("""
-                  (() => { const i = document.querySelector('.search-bar input');
-                    i.focus(); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()
-                """)
-                await asyncio.sleep(0.5)
-
             async def card_names():
-                return await ev("[...document.querySelectorAll('.asset-card .title')].map((el) => el.textContent.trim())")
+                return await ev("[...document.querySelectorAll('.asset-card .kc-name')].map((el) => el.textContent.trim())")
 
             async def archive_names():
-                return await ev("[...document.querySelectorAll('.archive-card .archive-name')].map((el) => el.textContent.trim())")
-
-            # tag 化（2026-08-19 二轮）：chips 区读 .chip 文本；范围 = `~` tag（无按钮）
-            async def chips_texts():
-                return await ev("[...document.querySelectorAll('.search-bar .chip .chip-text')].map((el) => el.textContent.trim())")
-
-            async def kbd_visible():
-                return await ev("document.querySelector('.search-bar .kbd-group') !== null")
+                return await ev("[...document.querySelectorAll('.ar-card .ar-name')].map((el) => el.textContent.trim())")
 
             async def press_key(key, code, vk):
                 await send(ws, "Input.dispatchKeyEvent", {"type": "keyDown", "key": key, "code": code, "windowsVirtualKeyCode": vk}, session=sess)
                 await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": key, "code": code, "windowsVirtualKeyCode": vk}, session=sess)
                 await asyncio.sleep(0.3)
 
-            async def press_space():
-                await press_key(" ", "Space", 32)
-
-            async def press_backspace():
-                await press_key("Backspace", "Backspace", 8)
-
-            # Esc 清空全部（chips + 草稿）并失焦（SearchBar 口径）
+            # Esc 清空草稿并失焦（SearchFloatBar onEscape 口径：输入框 keydown.esc → 业务壳清空 + blur）
             async def clear_all():
-                await ev("(() => { const i = document.querySelector('.search-bar input'); i.focus(); return true; })()")
+                await focus_input()
                 await asyncio.sleep(0.1)
                 await press_key("Escape", "Escape", 27)
                 await asyncio.sleep(0.4)
 
-            # 追加草稿（不清空现有内容）
-            async def append_input(text, wait_query=None):
-                await ev(f"""
-                  (() => {{ const i = document.querySelector('.search-bar input');
-                    i.focus(); i.value += {json.dumps(text)}; i.dispatchEvent(new Event('input', {{ bubbles: true }})); return i.value; }})()
-                """)
-                if wait_query is not None:
-                    deadline = time.time() + 5
-                    while time.time() < deadline:
-                        last = await ev("window.__calls.search_assets.length ? window.__calls.search_assets.at(-1).query : null")
-                        if last == wait_query:
-                            break
-                        await asyncio.sleep(0.2)
-                await asyncio.sleep(0.5)
+            # 出现类断言轮询（§18：出现/消失类不断固定 sleep）
+            async def wait_cards(n, timeout=5.0):
+                cards = []
+                deadline = time.time() + timeout
+                while time.time() < deadline:
+                    cards = await card_names()
+                    if cards and len(cards) == n:
+                        break
+                    await asyncio.sleep(0.2)
+                return cards or []
 
             async def tree_click(fid):
                 pos = await ev(f"""
@@ -357,8 +349,11 @@ async def main():
                     return {{ x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }};
                   }})()
                 """)
+                if not pos:
+                    return False
                 await click(pos["x"], pos["y"])
                 await asyncio.sleep(0.4)
+                return True
 
             # 准备：等卡片渲染（默认 quick:all = 6 卡）
             cards = []
@@ -370,34 +365,19 @@ async def main():
             print("初始卡片（quick:all）:", cards)
             check("S0 全部视图 6 卡渲染", bool(cards) and len(cards) == 6, str(cards))
             if not await search_input():
-                print("搜索框未渲染，探针无法执行")
+                print("悬浮栏搜索框未渲染，探针无法执行")
                 return 2
 
-            # ── S1：AND 分词（草稿即时参与）──
+            # ── S1：AND 分词（空格 = 分词字符，直输直搜无 chips）──
             await set_input("人物 走路")
             cards = await card_names()
             print("S1 「人物 走路」:", cards)
             check("S1 AND 分词命中两卡", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
 
-            # ── S1b：空格提交成 chip（tag 化）──
-            await clear_all()
-            await append_input("人物", wait_query="人物")
-            await press_space()
-            chips = await chips_texts()
-            check("S1b-1 空格提交「人物」chip", chips == ["人物"], str(chips))
-            await append_input("走路")
-            cards = await card_names()
-            check("S1b-2 chip+草稿 AND 命中两卡", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
-            await press_space()
-            chips = await chips_texts()
-            check("S1b-3 第二词提交成 chip", chips == ["人物", "走路"], str(chips))
-            cards = await card_names()
-            check("S1b-4 两 chips 命中保持", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
-
             # ── S2：Esc 清空恢复 ──
             await clear_all()
-            cards = await card_names()
-            check("S2 Esc 清空恢复 6 卡", bool(cards) and len(cards) == 6, str(cards))
+            cards = await wait_cards(6)
+            check("S2 Esc 清空恢复 6 卡", len(cards) == 6, str(cards))
 
             # ── S3：扩展名大小写不敏感 ──
             await set_input("GIF")
@@ -426,33 +406,21 @@ async def main():
             archs = await archive_names()
             check("S6b quick 视图不出档案区", archs == [], str(archs))
 
-            # ── S7：f1 视图 tag 化范围（~ tag 生成 / 生效 / 删除）──
+            # ── S7：f1 视图范围（直输 / ~ 手敲全局 / 清空退出）──
             await clear_all()
             await tree_click("f1")
-            chips = await chips_texts()
-            check("S7a f1 视图无前缀 tag", chips == [], str(chips))
             # 递归显示默认开（ui.showSubfolders）→ 当前目录搜索含后代（跟随递归开关口径）
             await set_input("场景")
             cards = await card_names()
-            check("S7b 递归开：当前目录搜「场景」命中后代", cards == ["场景-日.png"], str(cards))
-            # 前缀剥落：改输「~场景」空格 →「~ 全局搜索」tag +「场景」chip
+            check("S7a f1 视图直输「场景」命中后代", cards == ["场景-日.png"], str(cards))
             await set_input("~场景")
-            await press_space()
-            chips = await chips_texts()
-            check("S7c 「~场景」空格剥落 = 全局 tag + 关键字 chip", chips == ["~ 全局搜索", "场景"], str(chips))
             cards = await card_names()
-            check("S7d ~ tag 全局搜索保持命中", cards == ["场景-日.png"], str(cards))
-            # 空草稿 Backspace 删尾 chip：先删「场景」（回当前目录+无 tag），再删「~ 全局搜索」
-            await press_backspace()
-            chips = await chips_texts()
-            check("S7e Backspace 删尾 chip（场景）", chips == ["~ 全局搜索"], str(chips))
-            await press_backspace()
-            chips = await chips_texts()
-            check("S7f 再删「~ 全局搜索」回当前范围", chips == [], str(chips))
-            cards = await card_names()
-            check("S7g 无 tag 无关键字 = 退出搜索态（f1 递归 5 卡）", bool(cards) and len(cards) == 5, str(cards))
+            check("S7b f1 视图直输「~场景」全局命中", cards == ["场景-日.png"], str(cards))
+            await clear_all()
+            cards = await wait_cards(5)
+            check("S7c 清空退出搜索态（f1 递归 5 卡）", len(cards) == 5, str(cards))
 
-            # ── S8：草稿 ~ 前缀即时全局（未提交也生效）──
+            # ── S8：草稿 ~ 前缀即时全局 ──
             await set_input("~场景")
             # 时序敏感场景（草稿前缀 + 全局基底切换）：轮询等渲染结果，不赌固定 sleep
             cards = []
@@ -463,15 +431,10 @@ async def main():
                 await asyncio.sleep(0.2)
             check("S8 草稿「~场景」即时全局命中", cards == ["场景-日.png"], str(cards))
 
-            # ── S9：// 前缀（草稿 + tag 两态）──
+            # ── S9：// 前缀（与直接输入等效）──
             await set_input("//人物")
             cards = await card_names()
-            check("S9a 草稿「//人物」显式分词命中两卡", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
-            await press_space()
-            chips = await chips_texts()
-            check("S9b 「//人物」空格剥落 = 搜索 tag + 关键字 chip", chips == ["// 搜索", "人物"], str(chips))
-            cards = await card_names()
-            check("S9c 命中保持", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
+            check("S9 直输「//人物」命中两卡", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
 
             # ── S10：档案名命中 → 档案区 + 档案内素材（递归开：fa 在范围集内）──
             await set_input("分镜")
@@ -487,84 +450,181 @@ async def main():
             cards = await card_names()
             check("S11 徽标「进行中」命中档案区", archs == ["分镜档案"] and cards == [], f"cards={cards} archs={archs}")
 
-            # ── S12：分组平铺（先关递归——递归口径恒不分组，3.5 复验定案）──
+            # ── S12：分组平铺（查看方式菜单关递归——递归口径恒不分组，3.5 复验定案；
+            #    旧工具栏 .recursive-cb 复选框已随 UI 重构移除，开关在「查看方式」菜单 AppSwitch）──
             await clear_all()
-            cb_pos = await ev("""
-              (() => { const el = document.querySelector('.recursive-cb');
-                if (!el) return null;
-                const b = el.getBoundingClientRect();
-                return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }; })()
+            # 查看方式钮 = 工具栏按钮组第 4 个（添加链接 / 插件 / 分组管理 / 查看方式；
+            # IconButton 的 title 是 v-tip 不落 title 属性，按 DOM 序取）
+            await ev("""
+              (() => { const b = [...document.querySelectorAll('.panel-toolbar .btn-group .ic-btn')][3];
+                if (!b) return false; b.click(); return true; })()
             """)
-            if not cb_pos:
-                check("S12a 递归复选框存在", False, "未找到 .recursive-cb")
-            else:
-                await click(cb_pos["x"], cb_pos["y"])  # 关递归
-                await asyncio.sleep(0.6)
-            grp = await ev("document.querySelectorAll('.group-header').length")
-            check("S12a 非搜索态分组标题存在（f1 配 png 组）", bool(grp) and grp >= 1, f"group-headers={grp}")
+            menu_ok = False
+            for _ in range(20):
+                menu_ok = await ev("""
+                  [...document.querySelectorAll('.app-menu .label')]
+                    .some((el) => el.textContent.trim() === '显示子文件夹内容')
+                """)
+                if menu_ok:
+                    break
+                await asyncio.sleep(0.2)
+            check("S12a 查看方式菜单打开（含「显示子文件夹内容」开关行）", menu_ok is True, str(menu_ok))
+            await ev("""
+              (() => { const row = [...document.querySelectorAll('.app-menu .row')]
+                  .find((r) => r.querySelector('.label')?.textContent.trim() === '显示子文件夹内容');
+                const sw = row?.querySelector('.app-switch'); if (!sw) return false; sw.click(); return true; })()
+            """)
+            sw_off = False
+            for _ in range(20):
+                sw_off = await ev("""
+                  (() => { const row = [...document.querySelectorAll('.app-menu .row')]
+                      .find((r) => r.querySelector('.label')?.textContent.trim() === '显示子文件夹内容');
+                    const sw = row?.querySelector('.app-switch'); return sw ? !sw.classList.contains('on') : null; })()
+                """)
+                if sw_off:
+                    break
+                await asyncio.sleep(0.2)
+            check("S12b 递归开关关闭", sw_off is True, str(sw_off))
+            # 关菜单（AppMenu window capture 监听 Esc；菜单内输入框豁免不涉及——悬浮栏 input 不在菜单内）
+            await ev("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); true")
+            grp = 0
+            for _ in range(20):
+                grp = await ev("document.querySelectorAll('.group-header').length")
+                if grp and grp >= 1:
+                    break
+                await asyncio.sleep(0.2)
+            check("S12c 非搜索态分组标题存在（f1 配 png 组）", bool(grp) and grp >= 1, f"group-headers={grp}")
             await set_input("人物")
-            grp2 = await ev("document.querySelectorAll('.group-header').length")
+            grp2 = 1
+            for _ in range(20):
+                grp2 = await ev("document.querySelectorAll('.group-header').length")
+                if grp2 == 0:
+                    break
+                await asyncio.sleep(0.2)
             cards = await card_names()
-            check("S12b 搜索态组标题消失（平铺）", grp2 == 0, f"group-headers={grp2}")
-            check("S12c 搜索态命中保持", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
+            check("S12d 搜索态组标题消失（平铺）", grp2 == 0, f"group-headers={grp2}")
+            check("S12e 搜索态命中保持", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
             await clear_all()
-            grp3 = await ev("document.querySelectorAll('.group-header').length")
-            check("S12d 清空后分组恢复", bool(grp3) and grp3 >= 1, f"group-headers={grp3}")
+            grp3 = 0
+            for _ in range(20):
+                grp3 = await ev("document.querySelectorAll('.group-header').length")
+                if grp3 and grp3 >= 1:
+                    break
+                await asyncio.sleep(0.2)
+            check("S12f 清空后分组恢复", bool(grp3) and grp3 >= 1, f"group-headers={grp3}")
 
             # ── S13：Ctrl+F 聚焦 ──
-            await ev("document.activeElement?.blur(); true")
+            await blur_input()
             await send(ws, "Input.dispatchKeyEvent", {"type": "keyDown", "key": "f", "code": "KeyF", "windowsVirtualKeyCode": 70, "modifiers": 2}, session=sess)
             await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "f", "code": "KeyF", "windowsVirtualKeyCode": 70, "modifiers": 2}, session=sess)
             await asyncio.sleep(0.3)
-            focused = await ev("document.activeElement === document.querySelector('.search-bar input')")
-            check("S13 Ctrl+F 聚焦搜索框", focused is True, str(focused))
+            focused = await ev("document.activeElement === document.querySelector('.fbs-input')")
+            check("S13 Ctrl+F 聚焦悬浮栏输入框", focused is True, str(focused))
 
             # ── S14：空文件夹视图 + ~ 全局搜命中视口外素材（2026-08-19 复验修复回归钉：
             #    原前端过滤基底恒取本视口，空基底把全库命中键滤光）──
             await tree_click("f3")
-            cards = await card_names()
+            cards = ["__init__"]
+            for _ in range(20):
+                cards = await card_names()
+                if cards == []:
+                    break
+                await asyncio.sleep(0.2)
             check("S14a 空文件夹视口零卡", cards == [], str(cards))
             await set_input("~人物")
             cards = await card_names()
             check("S14b 空文件夹 ~ 全局命中视口外素材", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
-            await press_space()
-            chips = await chips_texts()
-            check("S14c 空格剥落 = 全局 tag + 关键字 chip", chips == ["~ 全局搜索", "人物"], str(chips))
 
-            # ── S15：/ 筛选占位 tag（3.6 二轮点亮；不参与搜索）──
+            # ── S17：悬浮栏宽度（壳 = 唯一宽度动画源：250 常态 / 450 聚焦定值档；300ms 动画轮询到位）──
+            await clear_all()  # 空草稿 + 失焦回常态
+
+            async def shell_width():
+                return await ev("document.querySelector('.fb-shell')?.offsetWidth ?? null")
+
+            w0 = None
+            for _ in range(25):
+                w0 = await shell_width()
+                if w0 == 250:
+                    break
+                await asyncio.sleep(0.2)
+            check("S17a 常态壳宽 250", w0 == 250, f"w={w0}")
+            await focus_input()
+            w1 = None
+            for _ in range(25):
+                w1 = await shell_width()
+                if w1 == 450:
+                    break
+                await asyncio.sleep(0.2)
+            check("S17b 聚焦壳宽 450（合成 FocusEvent 驱动）", w1 == 450, f"w={w1}")
+            await blur_input()
+            w2 = None
+            for _ in range(25):
+                w2 = await shell_width()
+                if w2 == 250:
+                    break
+                await asyncio.sleep(0.2)
+            check("S17c 失焦壳宽回 250", w2 == 250, f"w={w2}")
+
+            # ── S18：筛选展开（点亮不接业务：.on 本地切换，不触发搜索）──
+            await ev("document.querySelector('.fbs-ic.filter')?.click(); true")
+            chips_n = 0
+            for _ in range(20):
+                chips_n = await ev("document.querySelectorAll('.fbs-chip').length")
+                if chips_n == 10:
+                    break
+                await asyncio.sleep(0.2)
+            check("S18a 点筛选钮展开 chip×10", chips_n == 10, f"n={chips_n}")
+            chip_names = await ev("[...document.querySelectorAll('.fbs-chip')].map((el) => el.textContent.trim())")
+            check("S18b chip 文案齐（稿 10 项）",
+                  chip_names == ["颜色", "时长", "标签", "扩展名", "文件夹", "比例", "链接", "大小", "添加日期", "修改日期"],
+                  str(chip_names))
+            n0 = await ev("window.__calls.search_assets.length")
+            await ev("document.querySelectorAll('.fbs-chip')[0]?.click(); true")
+            on_n = 0
+            for _ in range(15):
+                on_n = await ev("document.querySelectorAll('.fbs-chip.on').length")
+                if on_n == 1:
+                    break
+                await asyncio.sleep(0.2)
+            n1 = await ev("window.__calls.search_assets.length")
+            check("S18c chip 点击点亮 .on（本地切换）", on_n == 1, f"on={on_n}")
+            check("S18d chip 点击不触发 search_assets", n1 == n0, f"before={n0} after={n1}")
+            await ev("document.querySelectorAll('.fbs-chip')[0]?.click(); true")
+            off_n = 1
+            for _ in range(15):
+                off_n = await ev("document.querySelectorAll('.fbs-chip.on').length")
+                if off_n == 0:
+                    break
+                await asyncio.sleep(0.2)
+            n2 = await ev("window.__calls.search_assets.length")
+            check("S18e 再点熄灭 .on（切换）且仍不触发搜索", off_n == 0 and n2 == n0, f"on={off_n} before={n0} after={n2}")
+            await ev("document.querySelector('.fbs-ic.collapse')?.click(); true")
+            chips_n2 = 1
+            for _ in range(20):
+                chips_n2 = await ev("document.querySelectorAll('.fbs-chip').length")
+                if chips_n2 == 0:
+                    break
+                await asyncio.sleep(0.2)
+            filter_back = await ev("document.querySelector('.fbs-ic.filter') !== null")
+            check("S18f 点收起钮折叠回搜索态", chips_n2 == 0 and filter_back is True, f"chips={chips_n2} filterBtn={filter_back}")
+
+            # 截图留档：搜索态悬浮栏（f1 视图「人物」命中两卡 + 聚焦 450 宽，clip 栏体）
             await clear_all()
             await tree_click("f1")
-            await set_input("/")
-            await press_space()
-            chips = await chips_texts()
-            check("S15a 「/」空格生成「/ 筛选」占位 tag", chips == ["/ 筛选"], str(chips))
-            await append_input("人物", wait_query="人物")
-            cards = await card_names()
-            check("S15b 占位 tag 不参与搜索（人物正常命中）", sorted(cards or []) == sorted(["人物-开心-走路.png", "人物-伤心-走路.png"]), str(cards))
-
-            # ── S16：kbd 徽章 = 未聚焦且无内容时的提示（聚焦 / 有内容隐藏）──
-            await clear_all()  # 含 blur
-            vis0 = await kbd_visible()
-            check("S16a 未聚焦且无内容：徽章组显示", vis0 is True, str(vis0))
-            await ev("document.querySelector('.search-bar input').focus(); true")
-            await asyncio.sleep(0.2)
-            vis1 = await kbd_visible()
-            check("S16b 聚焦后徽章隐藏", vis1 is False, str(vis1))
-            await append_input("人")
-            await ev("document.activeElement?.blur(); true")
-            await asyncio.sleep(0.5)  # blur 触发 commit（失焦提交草稿成 chip）
-            vis2 = await kbd_visible()
-            chips = await chips_texts()
-            check("S16c 失焦提交草稿成 chip 且徽章保持隐藏（有内容）", vis2 is False and chips == ["人"], f"vis={vis2} chips={chips}")
-
-            await clear_all()
-            await tree_click("f1")  # 回 f1 供截图（递归此时已关——先开回）
-
-            # 截图留档（chip 形态目验：「~人物」剥落两 chip + 档案区「分镜」命中——分两次截）
-            await set_input("~人物")
-            await press_space()
-            shot = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
-            import base64
+            await set_input("人物")
+            await focus_input()
+            for _ in range(25):
+                if await shell_width() == 450:
+                    break
+                await asyncio.sleep(0.2)
+            clip = await ev("""
+              (() => { const b = document.querySelector('.fb-shell').getBoundingClientRect();
+                const m = 16;
+                return { x: Math.max(0, b.left - m), y: Math.max(0, b.top - m),
+                  width: b.width + m * 2, height: b.height + m * 2 }; })()
+            """)
+            shot = await send(ws, "Page.captureScreenshot",
+                              {"format": "png", "clip": {**clip, "scale": 1}}, session=sess)
             with open(SHOT, "wb") as f:
                 f.write(base64.b64decode(shot["result"]["data"]))
             print("截图:", SHOT)
@@ -578,7 +638,8 @@ async def main():
             print("全部 PASS")
             return 0
     finally:
-        edge.kill()
+        # headless Edge 整树杀（§18：proc.terminate()/kill() 只杀父进程，残留占调试端口）
+        subprocess.run(["taskkill", "/PID", str(edge.pid), "/F", "/T"], capture_output=True)
         if spawned:
             spawned.kill()
             kill_listening_port(5373)

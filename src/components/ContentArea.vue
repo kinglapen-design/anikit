@@ -1,6 +1,9 @@
 <script setup lang="ts">
 // 中间内容展示区（C1）：1.2 起 = dockview panel 组件，每个标签页一个实例，按 params.viewKey
-// 渲染各自视口（标题栏 + 卡片列表（统一滚动：文件夹区块 + 素材网格）+ 搜索框）。
+// 渲染各自视口（标题栏 + 卡片列表（统一滚动：文件夹区块 + 素材网格）+ 多功能悬浮栏）。
+// 悬浮栏（7.1 二十二轮，2026-08-30）：SearchFloatBar 浮于列表上方（底部居中距底 12，
+// 旧通栏 SearchBar 同日废除）；列表底部遮挡补偿 66 = layouts.ts PAD.bottom（12 栏距底 + 42 栏高
+// + 12 呼吸距；JS 滚动 translateY，CSS padding 不影响可滚距离）。
 // 预览模式（4.3/5.2）：preview.assetKey 非空且本 panel 激活时整栏切换——预览是全局单例状态，
 // 只在激活标签页内发生，非激活 panel 保持原视口；全屏时 preview-root fixed 铺满窗口、隐藏标题栏。
 // 通知条（ToastStack）已上移到 DockHost 单例（多 panel 下每 panel 一份会重复弹出）。
@@ -9,7 +12,7 @@ import type { DockviewPanelApi, IDockviewPanelProps } from "dockview-vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
 import SequencePackView from "./SequencePackView.vue";
-import SearchBar from "./SearchBar.vue";
+import SearchFloatBar from "./SearchFloatBar.vue";
 import ImportProgressBar from "./ImportProgressBar.vue";
 import PreviewTitleBar from "./PreviewTitleBar.vue";
 import PreviewPanel from "./PreviewPanel.vue";
@@ -89,7 +92,7 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
       </div>
     </template>
     <template v-else>
-      <!-- 视口主体列：工具栏 + 卡片列表；搜索栏通栏在其下 -->
+      <!-- 视口主体列：工具栏 + 卡片列表；多功能悬浮栏浮于下方（不占布局） -->
       <div class="viewport-main">
         <ContentTitleBar :view-key="viewKey" :panel-id="panelApi.id" />
         <ImportProgressBar />
@@ -105,15 +108,15 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
           />
         </section>
       </div>
-      <footer class="search-wrap">
-        <SearchBar :panel-id="panelApi.id" :view-key="viewKey" />
-      </footer>
+      <!-- 多功能悬浮栏（搜索模式）：浮于列表上方，底部居中距底 12（sf-anchor absolute 定位） -->
+      <SearchFloatBar :panel-id="panelApi.id" :view-key="viewKey" />
     </template>
   </main>
 </template>
 
 <style scoped>
 .content-area {
+  position: relative; /* 悬浮栏（sf-anchor）定位基准 */
   display: flex;
   flex-direction: column;
   height: 100%; /* 1.2：dockview panel 内容容器由 dock 管理尺寸，铺满即可 */
@@ -121,7 +124,7 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
   /* 无底色（7.1 十九轮二轮用户定）：透 dockview 内容容器卡片底 通用/一级，
      与选中标签页（同 g1）融合可辨；旧 c1 实底盖住卡片底色已废 */
   /* 三栏面板无圆角无边框、外层无 padding（figma-css 02_布局/42_中间面板，2026-08-10）：
-     工具栏 / 搜索框自带 padding 12 16、列表容器 padding 16 16 0，各自承担 */
+     工具栏自带 padding、列表容器 padding 12 12 0，各自承担 */
   box-sizing: border-box;
 }
 /* 视口主体列：占满工具栏与搜索栏之间（档案二级侧边栏 2026-08-30 删除后无横向排布） */
@@ -140,10 +143,6 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
   flex: 1;
   min-height: 0;
   padding: var(--n-space-12) 0 0 var(--n-space-12);
-}
-/* 搜索框（1.2 新稿）：通栏行（C3 + 上边框横贯中栏）——外层无 padding，自然通栏 */
-.search-wrap {
-  flex: none;
 }
 /* 预览模式根：占满中栏；全屏时 fixed 铺满窗口（2026-07-25 定案：显示器全屏） */
 .preview-root {

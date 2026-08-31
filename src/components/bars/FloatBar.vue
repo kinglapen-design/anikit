@@ -11,7 +11,7 @@
 // 无需悬浮栏的界面 = 宽度和透明度退场（稿 prose）→ visible=false 时 width 0 + opacity 0。
 // 模式内容的 props / 事件经 $attrs 透传（inheritAttrs: false），如 v-model:query / v-model:progress /
 // @action / @toggle-play；布局口径 = 中间面板居中、距底 12（中间面板-多功能悬浮栏稿，业务接入轮）。
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch, type ComponentPublicInstance } from "vue";
 import FloatBarSearch from "./FloatBarSearch.vue";
 import FloatBarMarkdown from "./FloatBarMarkdown.vue";
 import FloatBarPlay from "./FloatBarPlay.vue";
@@ -30,6 +30,13 @@ const props = withDefaults(
 
 const comps = { search: FloatBarSearch, markdown: FloatBarMarkdown, play: FloatBarPlay };
 const modeComp = computed(() => comps[props.mode]);
+
+// 聚焦/失焦转发（业务壳 SearchFloatBar：Ctrl+F 聚焦 / Esc 失焦；仅 search 模式实现 focus/blur）
+const modeRef = ref<ComponentPublicInstance | null>(null);
+defineExpose({
+  focusSearch: () => (modeRef.value as { focus?: () => void } | null)?.focus?.(),
+  blurSearch: () => (modeRef.value as { blur?: () => void } | null)?.blur?.(),
+});
 
 const slotEl = ref<HTMLElement>();
 const shellW = ref(0);
@@ -99,6 +106,7 @@ onMounted(() => {
         <component
           :is="modeComp"
           :key="mode"
+          ref="modeRef"
           v-bind="$attrs"
           @expanded-change="onExpandedChange"
           @focused-change="onFocusedChange"

@@ -225,7 +225,7 @@ async def main():
               const r = el.getBoundingClientRect();
               const view = el.closest('.content-area')?.getBoundingClientRect();
               const toolbar = document.querySelector('.panel-toolbar')?.getBoundingClientRect();
-              const search = document.querySelector('.search-bar')?.getBoundingClientRect();
+              const search = document.querySelector('.fb-shell')?.getBoundingClientRect();
               const tools = [...el.querySelectorAll('.as-tools .icon-btn')];
               const toolsEl = el.querySelector('.as-tools');
               return {

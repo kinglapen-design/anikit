@@ -8,7 +8,7 @@
 //!
 //! 范围口径（2026-08-19 用户定）：
 //! - 当前目录跟随递归显示开关（scope.recursive）；快速访问视图 = 当前视图即当前范围（回收站里搜回收站）；
-//! - 全局（chip 或 ~ 前缀）= 全库，回收站除外（回收站资产无活 Placement，天然排除）；
+//! - 全局（`~` 前缀；2026-08-31 tag 化 chips 废除后手敲仍生效）= 全库，回收站除外（回收站资产无活 Placement，天然排除）；
 //! - 档案区仅文件夹视图出（快速访问同既有口径不出）；非全局时档案仅直属口径
 //!   （同 stripArchivesFor，递归开关不影响档案区），全局时 = 全库命中档案。
 
@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::core::library::Library;
 use crate::core::models::{AssetMeta, Folder, Placement, ROOT_FOLDER_ID};
 
-/// 搜索范围（前端按视口组装）：viewKey + 递归开关 + chip 全局态；query 含 ~ 前缀时强制全局
+/// 搜索范围（前端按视口组装）：viewKey + 递归开关 + 全局标记；query 含 ~ 前缀时强制全局
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchScope {
@@ -44,8 +44,8 @@ pub struct SearchHits {
   pub archives: Vec<String>,
 }
 
-/// 解析查询：剥 `//` 分词前缀与 `~` 全局前缀（可交叉、顺序不限；单 `/` = 筛选未落地，
-/// 按普通文本搜），Unicode 空白分词（含全角空格），转小写。返回（关键字，强制全局）
+/// 解析查询：剥 `//` 分词前缀与 `~` 全局前缀（可交叉、顺序不限；`/` 无语义——筛选走悬浮栏
+/// 按钮组另轮（2026-08-31 定案），按普通文本搜），Unicode 空白分词（含全角空格），转小写。返回（关键字，强制全局）
 fn parse_query(query: &str) -> (Vec<String>, bool) {
   let mut q = query.trim();
   let mut global = false;
@@ -204,7 +204,7 @@ pub fn search(lib: &Library, query: &str, scope: &SearchScope) -> SearchHits {
 
   let mut hits = SearchHits::default();
 
-  // 回收站范围（chip 非全局时）：快照 placements 补文本；命中键 folderId 恒 "recycle"（前端回收站视图键口径）
+  // 回收站范围（非全局时）：快照 placements 补文本；命中键 folderId 恒 "recycle"（前端回收站视图键口径）
   if !global && scope.view_key == "quick:recycle" {
     for item in &lib.recycle.items {
       let Some(meta) = lib.index.assets.get(&item.asset) else { continue };
@@ -574,7 +574,7 @@ mod tests {
     // // 前缀 = 显式分词（与直接输入等效）
     let s = scope("folder:F01");
     assert_eq!(hit_keys(&search(&h.lib, "//走路", &s)), ["AN-B|F01"]);
-    // ~ 前缀 = 本条强制全局（chip 非全局也生效）
+    // ~ 前缀 = 本条强制全局（scope 非全局也生效）
     assert_eq!(hit_keys(&search(&h.lib, "~走路", &s)), ["AN-A|root", "AN-B|F01"]);
     // 前缀交叉顺序不限
     assert_eq!(hit_keys(&search(&h.lib, "//~走路", &s)), ["AN-A|root", "AN-B|F01"]);
