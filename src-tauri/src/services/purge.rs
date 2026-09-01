@@ -1,11 +1,14 @@
 //! 彻底删除服务（6.3 右键菜单）：素材直接彻底删除（不经过回收站）、删除文件夹两形态。
-//! - delete_assets_permanently：两段式（虚拟片段引用拦截）→ 移除全部 Placement + 物理删 info
-//!   + 四处同步清理（index / recycle / recent / pins，复用 recycle.rs 同收尾）；**不接撤销**。
+//! - delete_assets_permanently：两段式（虚拟片段引用拦截）→ **先物理段后数据段**——逐个删
+//!   info（失败收集名单不中断）→ 只清成功项 Placement + 四处同步（index / recycle / recent /
+//!   pins，复用 recycle.rs 同收尾）；失败项数据层原样保留可重试（2026-09-03 资产污染修复：
+//!   旧序"先清数据后删物理"半途失败产孤儿）；**不接撤销**。
 //! - delete_folder(permanent=false)："删除文件夹"——子树 origin Placement 改挂 root（素材进未分类，
 //!   2026-07-29 用户定）+ 链接 Placement 随文件夹直接删除（不进回收站，2026-08-12 用户定案，
 //!   PRD 02-15）+ 子树文件夹节点删除；仅改数据，**撤销三步由命令层接入**。
-//! - delete_folder(permanent=true)："彻底删除文件夹"——两段式 → 子树资产物理全删 + 节点删除；
-//!   **不接撤销**。两形态执行前均 backup_library 兜底（失败仅警告不阻断）。
+//! - delete_folder(permanent=true)："彻底删除文件夹"——两段式 → 子树资产物理全删（同上当先物理
+//!   后数据，失败项挪未分类保留）+ 节点删除；**不接撤销**。两形态执行前均 backup_library 兜底
+//!   （失败仅警告不阻断）。
 
 use std::collections::HashSet;
 use std::fs;
@@ -33,23 +36,38 @@ pub fn delete_assets_permanently(lib: &mut Library, asset_ids: &[String], confir
   if let Err(e) = backup::backup_library(&lib.root, &lib.assets_dir) {
     log::warn!("彻底删除前备份失败（不阻断删除）：{e}");
   }
-  // 数据段：移除全部 Placement（资产随之从各文件夹消失，与回收站流入路径殊途同归）
-  lib.folders.items.retain(|p| !target_set.contains(p.asset.as_str()));
-  finish(lib)?;
-  // 物理段：半途失败先把已删部分同步一致再报错（recycle.rs 同策略）
+  // 物理段先行（2026-09-03 资产污染修复：旧序"先清数据后删物理"半途失败会把未删资产的
+  // Placement 一并冲掉产孤儿）：逐个删除，失败收集名单不中断；数据段只清成功项，
+  // 失败项 Placement / index / recent 原样保留（库内可见、可重试）。
+  // 崩溃窗口（info 已删 Placement 未清）由开库自检 prune_missing_placements 兜底。
   let mut removed: Vec<String> = Vec::new();
+  let mut failed: Vec<String> = Vec::new();
   for id in &targets {
     let info = lib.info_dir(id);
     if info.exists() {
+      let name = lib.index.assets.get(id).map(|m| m.name.clone()).unwrap_or_else(|| id.clone());
       if let Err(e) = fs::remove_dir_all(&info) {
-        sync_after_purge(lib, &removed)?;
-        let name = lib.index.assets.get(id).map(|m| m.name.clone()).unwrap_or_else(|| id.clone());
-        return Err(format!("删除「{name}」的文件失败：{e}"));
+        log::warn!("彻底删除「{name}」的文件失败（{e}），该项保留在库中");
+        failed.push(name);
+        continue;
       }
     }
     removed.push(id.clone());
   }
-  sync_after_purge(lib, &removed)?;
+  // 数据段：只清已成功删除项（Placement / index / recycle / recent / pins / 伴生引用级联）
+  if !removed.is_empty() {
+    let removed_set: HashSet<&str> = removed.iter().map(String::as_str).collect();
+    lib.folders.items.retain(|p| !removed_set.contains(p.asset.as_str()));
+    finish(lib)?;
+    sync_after_purge(lib, &removed)?;
+  }
+  if !failed.is_empty() {
+    return Err(format!(
+      "{} 个素材的文件删除失败（可能被 Animate 等程序占用）：{}。其余已删除，失败项保留在库中，可关闭占用程序后重试",
+      failed.len(),
+      failed.join("、")
+    ));
+  }
   log::info!("彻底删除 {} 个素材（虚拟片段引用 {segment_refs}）", removed.len());
   Ok(DeleteRecycleReport { need_confirm: false, segment_refs, link_refs: 0, deleted: removed.len() })
 }
@@ -128,26 +146,52 @@ pub fn delete_folder(lib: &mut Library, folder_id: &str, permanent: bool, confir
   if let Err(e) = backup::backup_library(&lib.root, &lib.assets_dir) {
     log::warn!("彻底删除文件夹前备份失败（不阻断删除）：{e}");
   }
-  // 数据段：子树 Placement 与文件夹节点移除 + **他处指向子树资产的链接一并清除**
-  //（物理删本体后链接必死——2026-08-19 位置级模型，不再靠"子树外无链接"假设）
-  lib.folders.items.retain(|p| !asset_set.contains(p.asset.as_str()));
-  lib.folders.folders.retain(|f| !subtree_set.contains(f.id.as_str()));
-  sync_folder_index(lib);
-  finish(lib)?;
-  // 物理段
+  // 物理段先行（2026-09-03 资产污染修复，同 delete_assets_permanently 口径）：
+  // 成功项进数据段全清，失败项保留（子树内 Placement 随文件夹删除挪未分类、子树外链接不动——本体还在）
   let mut removed: Vec<String> = Vec::new();
+  let mut failed: Vec<String> = Vec::new();
+  let mut failed_ids: HashSet<String> = HashSet::new();
   for id in &asset_set {
     let info = lib.info_dir(id);
     if info.exists() {
+      let name = lib.index.assets.get(id).map(|m| m.name.clone()).unwrap_or_else(|| id.clone());
       if let Err(e) = fs::remove_dir_all(&info) {
-        sync_after_purge(lib, &removed)?;
-        let name = lib.index.assets.get(id).map(|m| m.name.clone()).unwrap_or_else(|| id.clone());
-        return Err(format!("删除「{name}」的文件失败：{e}"));
+        log::warn!("彻底删除「{name}」的文件失败（{e}），该项移入未分类保留");
+        failed.push(name);
+        failed_ids.insert(id.clone());
+        continue;
       }
     }
     removed.push(id.clone());
   }
+  // 数据段：成功项全部 Placement 清除（含他处链接——本体已死）+ 失败项子树内 Placement 挪未分类
+  // + 子树文件夹节点删除
+  let removed_set: HashSet<&str> = removed.iter().map(String::as_str).collect();
+  let mut kept = Vec::with_capacity(lib.folders.items.len());
+  for mut p in std::mem::take(&mut lib.folders.items) {
+    if removed_set.contains(p.asset.as_str()) {
+      continue;
+    }
+    if failed_ids.contains(p.asset.as_str()) && subtree_set.contains(p.folder.as_str()) {
+      p.folder = ROOT_FOLDER_ID.to_string();
+    }
+    kept.push(p);
+  }
+  lib.folders.items = kept;
+  lib.folders.folders.retain(|f| !subtree_set.contains(f.id.as_str()));
+  sync_folder_index(lib);
+  if !failed_ids.is_empty() {
+    rewrite_orders(lib, ROOT_FOLDER_ID);
+  }
+  finish(lib)?;
   sync_after_purge(lib, &removed)?;
+  if !failed.is_empty() {
+    return Err(format!(
+      "{} 个素材的文件删除失败（可能被 Animate 等程序占用）：{}。其余已删除，失败项已移入未分类保留，可关闭占用程序后重试",
+      failed.len(),
+      failed.join("、")
+    ));
+  }
   log::info!("彻底删除文件夹 {folder_id}（{} 个素材物理删除，{folder_count} 个节点）", removed.len());
   Ok(DeleteFolderReport {
     segment_refs,
@@ -424,5 +468,60 @@ mod tests {
     assert!(h.lib.folders.folders.is_empty());
     assert!(h.lib.folders.items.iter().all(|p| p.asset != "AN-V"));
     assert!(h.lib.index.assets.contains_key("AN-SEG"), "子树外片段保留");
+  }
+
+  /// 2026-09-03 半途失败加固（先物理后数据）：占用失败项数据层原样保留可重试
+  ///（Placement / index / recent 不动 + info 保留），成功项照常全清，报错含名单
+  #[cfg(windows)]
+  #[test]
+  fn delete_assets_permanently_partial_failure_keeps_failed_asset() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", None);
+    add_asset(&mut h, "AN-A", "a.png", "F01");
+    add_asset(&mut h, "AN-B", "b.fla", "root");
+    touch_recent(&mut h.lib, "AN-B").unwrap();
+    // 独占打开 AN-B 实体 → remove_dir_all 必失败
+    let _lock = std::fs::OpenOptions::new().read(true).share_mode(0).open(info_dir(&h, "AN-B").join("b.fla")).unwrap();
+
+    let err = delete_assets_permanently(&mut h.lib, &["AN-A".into(), "AN-B".into()], true).unwrap_err();
+    assert!(err.contains("b") && err.contains("保留在库中"), "报错含名单与重试提示：{err}");
+    assert!(!info_dir(&h, "AN-A").exists(), "成功项物理删除");
+    assert!(h.lib.folders.items.iter().all(|p| p.asset != "AN-A"), "成功项 Placement 清除");
+    assert!(!h.lib.index.assets.contains_key("AN-A"), "成功项 index 移除");
+    assert!(info_dir(&h, "AN-B").is_dir(), "失败项 info 保留");
+    assert!(h.lib.folders.items.iter().any(|p| p.asset == "AN-B"), "失败项 Placement 保留（旧版此处被误清产孤儿）");
+    assert!(h.lib.index.assets.contains_key("AN-B"), "失败项 index 保留");
+    assert_eq!(h.lib.recent.items.len(), 1, "失败项 recent 保留");
+    // 落盘一致：folders.json 只剩失败项
+    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.items.len(), 1);
+    assert_eq!(disk.items[0].asset, "AN-B");
+    // 重试路径：放手后再删成功
+    drop(_lock);
+    let rep = delete_assets_permanently(&mut h.lib, &["AN-B".into()], true).unwrap();
+    assert_eq!(rep.deleted, 1);
+    assert!(!info_dir(&h, "AN-B").exists(), "重试物理删除成功");
+  }
+
+  /// 2026-09-03 半途失败加固（彻底删除文件夹）：失败项子树内 Placement 挪未分类保留
+  ///（文件夹节点照删），成功项全清
+  #[cfg(windows)]
+  #[test]
+  fn delete_folder_permanent_partial_failure_moves_failed_to_root() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F-TOP", None);
+    add_asset(&mut h, "AN-A", "a.png", "F-TOP");
+    add_asset(&mut h, "AN-B", "b.fla", "F-TOP");
+    let _lock = std::fs::OpenOptions::new().read(true).share_mode(0).open(info_dir(&h, "AN-B").join("b.fla")).unwrap();
+
+    let err = delete_folder(&mut h.lib, "F-TOP", true, true).unwrap_err();
+    assert!(err.contains("移入未分类"), "{err}");
+    assert!(!info_dir(&h, "AN-A").exists(), "成功项物理删除");
+    assert!(h.lib.folders.folders.is_empty(), "文件夹节点照删");
+    let b = h.lib.folders.items.iter().find(|p| p.asset == "AN-B").unwrap();
+    assert_eq!(b.folder, ROOT_FOLDER_ID, "失败项挪未分类（不指向已删文件夹）");
+    assert!(h.lib.index.assets.contains_key("AN-B"), "失败项 index 保留");
   }
 }

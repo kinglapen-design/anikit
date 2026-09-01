@@ -5,6 +5,9 @@
 //!   物理删 {ID}.info 整目录 + 库内该资产全部活位置（含链接）随清，不可逆——**不接撤销**，
 //!   操作前 backup_library 兜底（失败仅警告不阻断，参照 delete.rs 大批量删除策略）；
 //!   纯位置记录条目只删记录、物理不动、无需确认。同步清理 index / recycle.json / recent.json / pins.json。
+//! - 半途失败口径（2026-09-03 资产污染修复）：物理删除失败收集名单不中断，失败项回收站条目
+//!   **保留**（可关闭占用程序后重试），成功项照常同步；hidden 伴生缩略图随主删除级联回收
+//!   （无其他存活资产引用才物理删，见 sync_after_purge / cascade_hidden_thumbs）。
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -156,33 +159,53 @@ pub fn delete_recycle(lib: &mut Library, asset_ids: &[String], confirmed: bool) 
       log::warn!("彻底删除前备份失败（不阻断删除）：{e}");
     }
   }
+  // 物理段：失败收集名单不中断（2026-09-03 资产污染修复——旧实现首个失败即中断，
+  // 且 partial_sync 把 target_set 全集回收站条目清除，失败/未尝试项丢重试入口成孤儿）。
+  // 失败项条目保留在回收站，关闭占用程序后可重新清空。
   let mut removed: Vec<String> = Vec::new();
+  let mut failed: Vec<String> = Vec::new();
   for &id in &purge_set {
     let info = lib.info_dir(id);
     if info.exists() {
+      let name = lib.index.assets.get(id).map(|m| m.name.clone()).unwrap_or_else(|| id.to_string());
       if let Err(e) = fs::remove_dir_all(&info) {
-        // 半途失败：已删的部分先同步数据文件保持一致，再报错
-        partial_sync(lib, &target_set, &removed)?;
-        let name = lib.index.assets.get(id).map(|m| m.name.clone()).unwrap_or_else(|| id.to_string());
-        return Err(format!("删除「{name}」的文件失败：{e}"));
+        log::warn!("彻底删除「{name}」的文件失败（{e}），该项保留在回收站");
+        failed.push(name);
+        continue;
       }
     }
     removed.push(id.to_string());
   }
   partial_sync(lib, &target_set, &removed)?;
+  if !failed.is_empty() {
+    return Err(format!(
+      "{} 个项目的文件删除失败（可能被 Animate 等程序占用）：{}。其余已删除，失败项保留在回收站，可关闭占用程序后重试",
+      failed.len(),
+      failed.join("、")
+    ));
+  }
   log::info!("彻底删除 {} 个回收站项目（物理删除 {}，虚拟片段引用 {segment_refs}，活链接 {link_refs}）", targets.len(), removed.len());
   Ok(DeleteRecycleReport { need_confirm: false, segment_refs, link_refs, deleted: targets.len() })
 }
 
 /// 删除后同步：库内活位置清除（本体被物理删的资产，其链接随清）+ 回收站条目移除 +
-/// index / recent / pins 收尾（sync_after_purge）
+/// index / recent / pins 收尾（sync_after_purge）。
+/// 回收站条目清除范围（2026-09-03 半途失败加固）：纯位置记录条目（本就只删记录）+
+/// 已成功物理删除项；物理失败 / 未尝试项**保留在回收站**（留重试入口，防"站空物留"孤儿）
 fn partial_sync(lib: &mut Library, target_set: &HashSet<&str>, removed: &[String]) -> Result<(), String> {
   if !removed.is_empty() {
     let purge_set: HashSet<&str> = removed.iter().map(String::as_str).collect();
     lib.folders.items.retain(|p| !purge_set.contains(p.asset.as_str()));
     finish(lib)?;
   }
-  lib.recycle.items.retain(|i| !target_set.contains(i.asset.as_str()));
+  let removed_set: HashSet<&str> = removed.iter().map(String::as_str).collect();
+  lib.recycle.items.retain(|i| {
+    if !target_set.contains(i.asset.as_str()) {
+      return true; // 非本次目标原样保留
+    }
+    let record_only = !i.placements.iter().any(|p| p.origin);
+    !record_only && !removed_set.contains(i.asset.as_str()) // 纯记录或已成功才清除
+  });
   library::save_recycle(lib).map_err(|e| e.to_string())?;
   sync_after_purge(lib, removed)
 }
@@ -191,6 +214,55 @@ fn partial_sync(lib: &mut Library, target_set: &HashSet<&str>, removed: &[String
 pub fn clear_recycle(lib: &mut Library, confirmed: bool) -> Result<DeleteRecycleReport, String> {
   let ids: Vec<String> = lib.recycle.items.iter().map(|i| i.asset.clone()).collect();
   delete_recycle(lib, &ids, confirmed)
+}
+
+/// 级联回收无主 hidden 伴生缩略图（sync_after_purge 子步骤，2026-09-03）：
+/// 被删资产的 thumb_asset_id 指向的 hidden 资产，在"排除本次删除集后无任何存活资产引用"时
+/// 一并物理删除（一 hidden 可绑多工程——引用计数为零才删），级联 id 并入 removed 走统一收尾。
+/// 护栏：候选须 hidden == true（「还原为素材」后即普通资产不随删）且不在本次删除集内
+///（同批显式删除的由原路径处理，不重复）；深度恒 1（set_thumb_asset 防套娃：hidden 不能再绑缩略图）。
+/// 级联物理删除失败仅记录跳过（主删除已完成；残留由开库自检无主 info 扫描兜底）
+fn cascade_hidden_thumbs(lib: &mut Library, removed: &mut Vec<String>) {
+  let purging: HashSet<String> = removed.iter().cloned().collect();
+  // 候选 = 被删资产 thumb_asset_id 指向的 hidden 资产（保序去重）
+  let mut candidates: Vec<String> = Vec::new();
+  for id in removed.iter() {
+    if let Some(m) = lib.index.assets.get(id) {
+      if let Some(t) = &m.thumb_asset_id {
+        if !purging.contains(t)
+          && !candidates.contains(t)
+          && lib.index.assets.get(t).is_some_and(|tm| tm.hidden == Some(true))
+        {
+          candidates.push(t.clone());
+        }
+      }
+    }
+  }
+  for cand in candidates {
+    // 引用计数：排除本次删除集后，存活资产中还有 thumb_asset_id 指向它的不删
+    let still_referenced =
+      lib.index.assets.values().any(|m| !purging.contains(m.id.as_str()) && m.thumb_asset_id.as_deref() == Some(cand.as_str()));
+    if still_referenced {
+      continue;
+    }
+    let info = lib.info_dir(&cand);
+    if info.exists() {
+      if let Err(e) = fs::remove_dir_all(&info) {
+        log::error!("伴生缩略图级联删除失败（{cand}）：{e}");
+        continue;
+      }
+    }
+    // hidden 资产在库内的 Placement 随物理删除一并清（普通视图本不可见，「缩略图」视图同步消失）
+    let before = lib.folders.items.len();
+    lib.folders.items.retain(|p| p.asset != cand);
+    if lib.folders.items.len() != before {
+      if let Err(e) = finish(lib) {
+        log::error!("伴生缩略图级联后 folders 落盘失败：{e}");
+      }
+    }
+    log::info!("级联回收无主伴生缩略图资产 {cand}");
+    removed.push(cand);
+  }
 }
 
 /// 虚拟片段引用计数：库内不在删除集合内的资产 type="segment" 且 source 指向删除集合
@@ -215,6 +287,12 @@ pub(crate) fn sync_after_purge(lib: &mut Library, removed: &[String]) -> Result<
   if removed.is_empty() {
     return Ok(());
   }
+  // 级联回收 hidden 伴生（2026-09-03，PRD 02-15）：被删工程的 thumb_asset_id 指向的
+  // hidden 缩略图资产，无其他存活资产再引用时一并物理删除（旧行为只清引用不回收本体，
+  // hidden 资产数据层 + 磁盘双双残留成孤儿——大批量删除资产污染 BUG 主链之一）
+  let mut removed = removed.to_vec();
+  cascade_hidden_thumbs(lib, &mut removed);
+  let removed = removed.as_slice();
   let set: HashSet<&str> = removed.iter().map(String::as_str).collect();
   for id in removed {
     lib.index.assets.remove(id);
@@ -522,5 +600,97 @@ mod tests {
     assert!(h.lib.recycle.items.is_empty());
     // 片段指向被删的 AN-B，但片段自身不在删除集合 → 保留
     assert!(h.lib.index.assets.contains_key("AN-SEG"));
+  }
+
+  /// 2026-09-03 半途失败加固：物理删除失败（Windows 独占打开模拟 Animate 占用）不中断——
+  /// 失败项回收站条目保留（留重试入口）+ info 保留，成功项照常清除，报错含名单与重试提示
+  #[cfg(windows)]
+  #[test]
+  fn delete_recycle_partial_failure_keeps_failed_entry() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-A", "a.png", "root");
+    add_asset(&mut h, "AN-B", "b.fla", "root");
+    recycle_asset(&mut h, "AN-A", "root");
+    recycle_asset(&mut h, "AN-B", "root");
+    // 独占打开（share_mode(0) 不授权 DELETE/读共享）→ remove_dir_all 必失败
+    let _lock = std::fs::OpenOptions::new().read(true).share_mode(0).open(h.lib.info_dir("AN-B").join("b.fla")).unwrap();
+
+    let err = delete_recycle(&mut h.lib, &["AN-A".to_string(), "AN-B".to_string()], true).unwrap_err();
+    assert!(err.contains("b") && err.contains("保留在回收站"), "报错含名单与重试提示：{err}");
+    assert!(!info_dir(&h, "AN-A").exists(), "成功项物理删除");
+    assert!(info_dir(&h, "AN-B").is_dir(), "失败项 info 保留");
+    assert!(!h.lib.recycle.items.iter().any(|i| i.asset == "AN-A"), "成功项条目清除");
+    assert!(h.lib.recycle.items.iter().any(|i| i.asset == "AN-B"), "失败项条目保留（可重试）");
+    assert!(!h.lib.index.assets.contains_key("AN-A"), "成功项 index 移除");
+    assert!(h.lib.index.assets.contains_key("AN-B"), "失败项 index 保留");
+    // 落盘一致
+    let disk: RecycleFile = read_json(&h.lib.root.join(RECYCLE_FILE)).unwrap();
+    assert_eq!(disk.items.len(), 1);
+    assert_eq!(disk.items[0].asset, "AN-B");
+  }
+
+  /// 级联回收（2026-09-03）：彻底删除工程 → 无其他引用的 hidden 伴生缩略图一并物理删除
+  ///（Placement / info / index 全清，落盘一致）
+  #[test]
+  fn purge_cascades_orphan_hidden_thumb() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-F", "工程.fla", "root");
+    add_asset(&mut h, "AN-T", "封面.webp", "root");
+    crate::services::asset_menu::set_thumb_asset(&mut h.lib, "AN-F", "AN-T").unwrap();
+    // 删工程进回收站：hidden 不在普通视图不随删，其 Placement 留在 root
+    recycle_asset(&mut h, "AN-F", "root");
+    assert_eq!(h.lib.folders.items.len(), 1, "hidden 伴生 Placement 留在库内");
+
+    let rep = delete_recycle(&mut h.lib, &["AN-F".to_string()], false).unwrap();
+    assert_eq!(rep.deleted, 1);
+    assert!(!info_dir(&h, "AN-F").exists() && !info_dir(&h, "AN-T").exists(), "工程与无主伴生双双物理删除");
+    assert!(!h.lib.index.assets.contains_key("AN-T"), "级联项 index 移除");
+    assert!(h.lib.folders.items.is_empty(), "级联项 Placement 清除");
+    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    assert!(disk.items.is_empty(), "folders.json 落盘一致");
+  }
+
+  /// 级联护栏（2026-09-03）：一 hidden 可绑多工程——删其一引用未归零不删，删其二才级联
+  #[test]
+  fn purge_keeps_shared_hidden_thumb_until_last_ref() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-F1", "工程1.fla", "root");
+    add_asset(&mut h, "AN-F2", "工程2.fla", "root");
+    add_asset(&mut h, "AN-T", "封面.webp", "root");
+    crate::services::asset_menu::set_thumb_asset(&mut h.lib, "AN-F1", "AN-T").unwrap();
+    crate::services::asset_menu::set_thumb_asset(&mut h.lib, "AN-F2", "AN-T").unwrap();
+    recycle_asset(&mut h, "AN-F1", "root");
+    recycle_asset(&mut h, "AN-F2", "root");
+
+    delete_recycle(&mut h.lib, &["AN-F1".to_string()], false).unwrap();
+    assert!(info_dir(&h, "AN-T").is_dir(), "仍有工程引用，伴生保留");
+    assert!(h.lib.index.assets.contains_key("AN-T"));
+    assert_eq!(h.lib.folders.items.len(), 1, "伴生 Placement 保留");
+
+    delete_recycle(&mut h.lib, &["AN-F2".to_string()], false).unwrap();
+    assert!(!info_dir(&h, "AN-T").exists(), "引用归零，级联物理删除");
+    assert!(!h.lib.index.assets.contains_key("AN-T"));
+    assert!(h.lib.folders.items.is_empty());
+  }
+
+  /// 级联护栏（2026-09-03）：hidden 同批被显式删除（「缩略图」视图连选）→ 候选在删除集内，
+  /// 走原路径处理不重复（不 panic、不双重删除、索引干净）
+  #[test]
+  fn purge_explicit_batch_with_hidden_no_double_processing() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-F", "工程.fla", "root");
+    add_asset(&mut h, "AN-T", "封面.webp", "root");
+    crate::services::asset_menu::set_thumb_asset(&mut h.lib, "AN-F", "AN-T").unwrap();
+    recycle_asset(&mut h, "AN-F", "root");
+    recycle_asset(&mut h, "AN-T", "root");
+    assert_eq!(h.lib.recycle.items.len(), 2);
+
+    let rep = clear_recycle(&mut h.lib, false).unwrap();
+    assert_eq!(rep.deleted, 2);
+    assert!(!info_dir(&h, "AN-F").exists() && !info_dir(&h, "AN-T").exists());
+    assert!(h.lib.index.assets.is_empty());
+    assert!(h.lib.folders.items.is_empty());
+    assert!(h.lib.recycle.items.is_empty());
   }
 }

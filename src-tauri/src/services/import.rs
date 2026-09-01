@@ -237,7 +237,9 @@ fn walk(
 
 /// 单文件建档（锁外重活）：建 info 文件夹 → 实体入库 → 探测宽高 → 缩略图 → 写 metadata.json。
 /// 路径全由新 ID 推导（core::paths 单点），不依赖共享状态；
-/// 使用预分配的 asset id（并行管线在阶段 2 查重时统一分配），并携带导入渠道标记（inbox 导入写 metadata.importedFrom）
+/// 使用预分配的 asset id（并行管线在阶段 2 查重时统一分配），并携带导入渠道标记（inbox 导入写 metadata.importedFrom）。
+/// 半截清理（2026-09-03，operations/document.rs 同款口径）：建目录后任何失败 remove_dir_all
+/// 自建 info 壳，不留孤儿（Source::Move 失败时源文件不动，只清目标侧）
 pub(crate) fn build_asset_with_id(
   assets_dir: &Path,
   file: &PendingFile,
@@ -248,7 +250,21 @@ pub(crate) fn build_asset_with_id(
 ) -> Result<AssetMeta, String> {
   let info_dir = paths::info_dir(assets_dir, asset_id);
   fs::create_dir_all(&info_dir).map_err(|e| format!("info 文件夹创建失败：{e}"))?;
+  let r = build_asset_in_info(&info_dir, file, hash, asset_id, source, imported_from);
+  if r.is_err() {
+    let _ = fs::remove_dir_all(&info_dir);
+  }
+  r
+}
 
+fn build_asset_in_info(
+  info_dir: &Path,
+  file: &PendingFile,
+  hash: &str,
+  asset_id: &str,
+  source: Source,
+  imported_from: Option<&str>,
+) -> Result<AssetMeta, String> {
   let origin_name = file_name(&file.path);
   let dest = info_dir.join(&origin_name);
   let size = fs::metadata(&file.path).map(|m| m.len()).unwrap_or(0);
@@ -612,6 +628,18 @@ mod tests {
     add_placement(&mut lib, "M2".into(), "FY".into(), "m2.png".into(), true, &mut anchor3);
     let items: Vec<&str> = lib.folders.items.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(&items[..2], ["m1.png", "m2.png"], "混批按到达序全局保序");
+  }
+
+  #[test]
+  fn build_asset_failure_leaves_no_orphan_info_shell() {
+    // 半截清理（2026-09-03）：建档中途失败（store_file 源不存在必败）→ 自建 info 壳整体回收，
+    // 不留孤儿（assets 池空壳污染源之一）
+    let dir = tempfile::tempdir().unwrap();
+    let assets_dir = dir.path().join("assets");
+    let pf = PendingFile { path: dir.path().join("不存在.png"), chain: Vec::new() };
+    let r = build_asset_with_id(&assets_dir, &pf, "sha256:x", "AN-NEW", Source::Move, None);
+    assert!(r.is_err(), "源不存在应报错");
+    assert!(!paths::info_dir(&assets_dir, "AN-NEW").exists(), "失败不留 info 壳");
   }
 
   #[test]

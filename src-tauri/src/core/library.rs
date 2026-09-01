@@ -205,6 +205,19 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   if removed > 0 {
     log::warn!("打开自检剔除 {removed} 条指向缺失 info 的 Placement");
   }
+  // 无主 info 扫描（2026-09-03 资产污染修复配套）：空壳自动物理删、孤儿仅记 log 清单
+  let orphans = scan_orphan_infos(&assets_dir, &folders, &recycle, &assets);
+  if !orphans.is_empty() {
+    let detail = orphans
+      .iter()
+      .map(|id| {
+        let name = assets.iter().find(|a| &a.id == id).map(|a| a.name.as_str()).unwrap_or("");
+        format!("{id}（{name}）")
+      })
+      .collect::<Vec<_>>()
+      .join("、");
+    log::warn!("打开自检发现 {} 个无主资产（数据层无记录，info 残留磁盘，请确认后手动处置）：{detail}", orphans.len());
+  }
   // 区块表自检（2026-08-14 区块子系统）：blocks 缺默认区块 → 注入「目录」；
   // Folder.block 指向不存在的区块 → 置 None（存量自愈）
   let blocks_fixed = fix_blocks(&mut folders);
@@ -318,6 +331,38 @@ fn prune_missing_placements(folders: &mut FoldersFile, assets: &[AssetMeta]) -> 
   let before = folders.items.len();
   folders.items.retain(|p| ids.contains(p.asset.as_str()));
   before - folders.items.len()
+}
+
+/// 无主 info 扫描（2026-09-03 资产污染修复配套，打开自检冷路径）：
+/// - 空壳（info 目录无 metadata.json 未载入）= 导入 / 删除半截残骸 → **自动物理删**
+///   （100% 垃圾；无数据文件，不涉及备份门禁；删除失败仅记录，下轮开库再扫）；
+/// - 孤儿（metadata 在，但 folders ∪ recycle 无任何引用）= 异常路径残留 → **只返回清单
+///   不自动删**（可能是用户数据唯一副本，删 / 复活由用户定），调用方负责 log。
+/// 返回孤儿 id 清单（测试断言用）
+fn scan_orphan_infos(assets_dir: &Path, folders: &FoldersFile, recycle: &RecycleFile, assets: &[AssetMeta]) -> Vec<String> {
+  let infos = match info_dirs(assets_dir) {
+    Ok(v) => v,
+    Err(e) => {
+      log::error!("无主 info 扫描枚举失败（跳过）：{e}");
+      return Vec::new();
+    }
+  };
+  let loaded: HashSet<&str> = assets.iter().map(|a| a.id.as_str()).collect();
+  let referenced: HashSet<&str> =
+    folders.items.iter().map(|p| p.asset.as_str()).chain(recycle.items.iter().map(|i| i.asset.as_str())).collect();
+  let mut orphans = Vec::new();
+  for info in infos {
+    let Some(stem) = info.file_stem().map(|s| s.to_string_lossy().into_owned()) else { continue };
+    if !loaded.contains(stem.as_str()) {
+      match fs::remove_dir_all(&info) {
+        Ok(()) => log::warn!("打开自检清理无主 info 空壳：{}", info.display()),
+        Err(e) => log::error!("无主 info 空壳清理失败（{}）：{e}", info.display()),
+      }
+    } else if !referenced.contains(stem.as_str()) {
+      orphans.push(stem);
+    }
+  }
+  orphans
 }
 
 /// 打开自检（2026-08-14 区块子系统）：区块表自愈——默认区块「目录」缺失（含 blocks 为空）→
@@ -696,6 +741,60 @@ mod tests {
     let persisted: FoldersFile = read_json(&root.join(FOLDERS_FILE)).unwrap();
     assert_eq!(persisted.items.len(), 1, "folders.json 应落盘清理，防永久错误计数");
     assert_eq!(persisted.items[0].asset, "AN-REAL");
+  }
+
+  /// 无主 info 扫描（2026-09-03 资产污染修复配套）：空壳（无 metadata.json）开库自动物理删；
+  /// 孤儿（metadata 在，folders ∪ recycle 无引用）保留不动（log 清单由用户处置）；
+  /// 正常资产与回收站引用资产不误伤
+  #[test]
+  fn open_scans_orphan_infos() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let root = lib.root.clone();
+    let assets_dir = lib.assets_dir.clone();
+    let seed = |id: &str, name: &str| {
+      let info = lib.info_dir(id);
+      fs::create_dir_all(&info).unwrap();
+      fs::write(
+        info.join("metadata.json"),
+        format!(
+          r#"{{ "version": 1, "id": "{id}", "name": "{name}", "originName": "{name}.fla",
+               "ext": "fla", "size": 1, "importedAt": "2026-09-02T01:00:00+08:00",
+               "modifiedAt": "2026-09-02T01:00:00+08:00" }}"#
+        ),
+      )
+      .unwrap();
+      fs::write(info.join(format!("{name}.fla")), b"fake").unwrap();
+    };
+    seed("AN-KEEP", "留"); // 有 Placement 的正常资产
+    seed("AN-REC", "站"); // 回收站引用的资产
+    seed("AN-ORPHAN", "孤"); // 孤儿：metadata 在，folders ∪ recycle 无引用
+    fs::create_dir_all(lib.info_dir("AN-SHELL")).unwrap(); // 空壳：无 metadata.json
+    let folders: FoldersFile = serde_json::from_str(
+      r#"{
+        "version": 1, "folders": [],
+        "items": [ { "asset": "AN-KEEP", "folder": "root", "name": "留.fla", "order": 0, "origin": true } ]
+      }"#,
+    )
+    .unwrap();
+    write_json(&root.join(FOLDERS_FILE), &folders).unwrap();
+    let recycle: RecycleFile = serde_json::from_str(
+      r#"{
+        "version": 1,
+        "items": [ { "asset": "AN-REC", "deletedAt": "2026-09-02T02:00:00+08:00",
+          "placements": [ { "asset": "AN-REC", "folder": "root", "name": "站.fla", "order": 0, "origin": true } ] } ]
+      }"#,
+    )
+    .unwrap();
+    write_json(&root.join(RECYCLE_FILE), &recycle).unwrap();
+
+    let lib = open(&lib.space_root, &root).unwrap();
+    assert!(!assets_dir.join("AN-SHELL.info").exists(), "空壳自动物理删");
+    assert!(assets_dir.join("AN-ORPHAN.info").is_dir(), "孤儿不自动删（用户处置）");
+    assert!(lib.index.assets.contains_key("AN-ORPHAN"), "孤儿仍载入索引（数据层实况）");
+    assert!(lib.index.placements_of("AN-ORPHAN").is_empty(), "孤儿无 Placement 不可见");
+    assert!(assets_dir.join("AN-KEEP.info").is_dir() && assets_dir.join("AN-REC.info").is_dir(), "正常与回收站引用资产不误伤");
+    assert_eq!(lib.index.placements_of("AN-KEEP").len(), 1);
   }
 
   /// 打开自检不剔 root 链接（2026-08-13 用户定案：候车区不做内容限制，
