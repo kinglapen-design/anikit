@@ -636,4 +636,27 @@ function onExported(name, dir) {
   };
 }
 
+/* —— 面板尺寸持久化（2026-09-02 用户报：调好宽度重开 AN 回退默认 300——CEP 宿主不替扩展记忆尺寸）：
+ * 启动读 localStorage 恢复（resizeContent）；window resize（dock 拖宽 / 浮动调整都会触发）防抖 300ms 记忆。
+ * docked 下 resizeContent 有效性因宿主而异，实测定；无效时退路 = manifest 默认尺寸调大 + Animate 保存工作区。 —— */
+(function panelSizePersist() {
+  try {
+    var s = localStorage.getItem('cepPanelSize');
+    if (s) {
+      var p = JSON.parse(s);
+      if (p && p.w >= 260 && p.h >= 380) cs.resizeContent(p.w, p.h); // 下限 = manifest MinSize
+    }
+  } catch (e) {}
+  var t = 0;
+  window.addEventListener('resize', function () {
+    clearTimeout(t);
+    t = setTimeout(function () {
+      var w = window.innerWidth, h = window.innerHeight;
+      if (w >= 260 && h >= 380) {
+        try { localStorage.setItem('cepPanelSize', JSON.stringify({ w: w, h: h })); } catch (e) {}
+      }
+    }, 300);
+  });
+})();
+
 connect();
