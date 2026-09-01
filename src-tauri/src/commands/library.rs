@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 use crate::core::config::{self, LibraryEntry};
 use crate::core::library::{self, Library};
@@ -73,10 +73,13 @@ fn activate_space(app: &AppHandle, state: &State<AppState>, space: Space) -> Res
 
 /// 库进入打开状态：更新应用状态 + 记录到全局配置最近列表（切库不动收件箱——空间级共用）；
 /// 库切换停止全部帧流会话（会话绑定旧库 assets 池）与撤销双栈（6.0：会话级不持久化，
-/// 栈内快照绑定旧库路径）
-fn activate(state: &State<AppState>, lib: Library) -> Result<LibraryInfo, String> {
+/// 栈内快照绑定旧库路径）。开库自检扫出无主资产 → emit 前端弹警告窗（2026-09-02）
+fn activate(app: &AppHandle, state: &State<AppState>, lib: Library) -> Result<LibraryInfo, String> {
   crate::services::frame_stream::stop_all(); // 帧流会话绑定旧库 assets 池（阶段四）
   state.undo.lock().map_err(|e| e.to_string())?.clear();
+  if !lib.orphan_infos.is_empty() {
+    let _ = app.emit("library-orphan-infos", &lib.orphan_infos);
+  }
   let info = to_info(&lib);
   *state.library.lock().map_err(|e| e.to_string())? = Some(lib);
   config::record_library_open(&info.name, &info.path).map_err(|e| e.to_string())?;
@@ -128,20 +131,20 @@ pub async fn list_space_libraries(state: State<'_, AppState>) -> Result<Vec<Stri
 
 /// 在当前储存空间内创建资源库（文件夹名即资源库名）；新库名自动排尾进 libraryOrder（3.2）
 #[tauri::command]
-pub async fn create_library(state: State<'_, AppState>, name: String) -> Result<LibraryInfo, String> {
+pub async fn create_library(app: AppHandle, state: State<'_, AppState>, name: String) -> Result<LibraryInfo, String> {
   let mut guard = state.space.lock().map_err(|e| e.to_string())?;
   let space = guard.as_mut().ok_or_else(|| "请先打开储存空间".to_string())?;
   let lib = library::create(space, &name).map_err(|e| e.to_string())?;
   drop(guard); // activate 走 AppState 其他锁，先放空间锁（与 set_auto_import 同风格）
-  activate(&state, lib)
+  activate(&app, &state, lib)
 }
 
 /// 在当前储存空间内按名打开资源库（打开前校验结构；旧版库结构明确报错引导新建）
 #[tauri::command]
-pub async fn open_library(state: State<'_, AppState>, name: String) -> Result<LibraryInfo, String> {
+pub async fn open_library(app: AppHandle, state: State<'_, AppState>, name: String) -> Result<LibraryInfo, String> {
   let space = current_space(&state)?;
   let lib = library::open(&space.root, &space.root.join(&name)).map_err(|e| e.to_string())?;
-  activate(&state, lib)
+  activate(&app, &state, lib)
 }
 
 /// 当前打开的素材库；未打开返回 null

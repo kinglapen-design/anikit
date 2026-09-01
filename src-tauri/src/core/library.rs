@@ -38,8 +38,19 @@ pub const ROOT_DATA_FILES: &[&str] = &[FOLDERS_FILE, TAGS_FILE, PINS_FILE, RECYC
 /// frames.json 已随动图解包废除移除（2026-08-20，播放走自研解码帧流，逐帧 delay 运行时读取源文件）
 const INFO_DATA_FILES: &[&str] = &["metadata.json", "annotation.json", "notes.json"];
 
+/// 无主资产通知（2026-09-02 开库自检产物）：孤儿 info 实况清单——打开库时经
+/// 「library-orphan-infos」事件推前端弹警告窗（完整管理入口后续补稿）
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrphanNotice {
+  pub id: String,
+  pub name: String,
+  /// info 目录完整路径（后续「打开资源管理器查看」入口用）
+  pub path: String,
+}
+
 /// 打开状态的素材库：数据 + 内存索引（运行期查询走内存，写操作先落盘再更新内存，PRD 06-03）
-#[allow(dead_code)] // tags / space_root 字段随阶段 7 标签业务 / 后续空间能力启用
+#[allow(dead_code)] // tags / space_root / orphan_infos 字段随阶段 7 标签业务 / 后续空间能力启用
 pub struct Library {
   /// 库目录自身（5 数据文件 + backup/cache/vectors）
   pub root: PathBuf,
@@ -57,6 +68,8 @@ pub struct Library {
   pub index: LibraryIndex,
   /// 已缓存系统格式图标的扩展名集（cache/thumbs/{ext}.webp，4.2）——视图层回退查内存集，免逐卡片 stat
   pub format_icons: HashSet<String>,
+  /// 开库自检无主资产实况（2026-09-02）：本次 open 扫出的孤儿清单（空壳已自动清理不在此列）
+  pub orphan_infos: Vec<OrphanNotice>,
 }
 
 impl Library {
@@ -205,18 +218,12 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   if removed > 0 {
     log::warn!("打开自检剔除 {removed} 条指向缺失 info 的 Placement");
   }
-  // 无主 info 扫描（2026-09-03 资产污染修复配套）：空壳自动物理删、孤儿仅记 log 清单
+  // 无主 info 扫描（2026-09-03 资产污染修复配套）：空壳自动物理删、孤儿清单存实况字段
+  //（命令层 emit 前端弹警告窗；2026-09-02 用户定：不自动删，删 / 复活由用户处置）
   let orphans = scan_orphan_infos(&assets_dir, &folders, &recycle, &assets);
   if !orphans.is_empty() {
-    let detail = orphans
-      .iter()
-      .map(|id| {
-        let name = assets.iter().find(|a| &a.id == id).map(|a| a.name.as_str()).unwrap_or("");
-        format!("{id}（{name}）")
-      })
-      .collect::<Vec<_>>()
-      .join("、");
-    log::warn!("打开自检发现 {} 个无主资产（数据层无记录，info 残留磁盘，请确认后手动处置）：{detail}", orphans.len());
+    let detail = orphans.iter().map(|o| format!("{}（{}）", o.id, o.name)).collect::<Vec<_>>().join("、");
+    log::warn!("打开自检发现 {} 个无主资产（数据层无记录，info 残留磁盘）：{detail}", orphans.len());
   }
   // 区块表自检（2026-08-14 区块子系统）：blocks 缺默认区块 → 注入「目录」；
   // Folder.block 指向不存在的区块 → 置 None（存量自愈）
@@ -296,6 +303,7 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
     archives,
     index,
     format_icons: scan_format_icons(path),
+    orphan_infos: orphans,
   })
 }
 
@@ -337,9 +345,10 @@ fn prune_missing_placements(folders: &mut FoldersFile, assets: &[AssetMeta]) -> 
 /// - 空壳（info 目录无 metadata.json 未载入）= 导入 / 删除半截残骸 → **自动物理删**
 ///   （100% 垃圾；无数据文件，不涉及备份门禁；删除失败仅记录，下轮开库再扫）；
 /// - 孤儿（metadata 在，但 folders ∪ recycle 无任何引用）= 异常路径残留 → **只返回清单
-///   不自动删**（可能是用户数据唯一副本，删 / 复活由用户定），调用方负责 log。
-/// 返回孤儿 id 清单（测试断言用）
-fn scan_orphan_infos(assets_dir: &Path, folders: &FoldersFile, recycle: &RecycleFile, assets: &[AssetMeta]) -> Vec<String> {
+///   不自动删**（可能是用户数据唯一副本，删 / 复活由用户定），调用方负责 log + 存 Library
+///   实况字段（命令层 emit 前端弹警告窗）。
+/// 返回孤儿清单（测试断言用）
+fn scan_orphan_infos(assets_dir: &Path, folders: &FoldersFile, recycle: &RecycleFile, assets: &[AssetMeta]) -> Vec<OrphanNotice> {
   let infos = match info_dirs(assets_dir) {
     Ok(v) => v,
     Err(e) => {
@@ -359,7 +368,8 @@ fn scan_orphan_infos(assets_dir: &Path, folders: &FoldersFile, recycle: &Recycle
         Err(e) => log::error!("无主 info 空壳清理失败（{}）：{e}", info.display()),
       }
     } else if !referenced.contains(stem.as_str()) {
-      orphans.push(stem);
+      let name = assets.iter().find(|a| a.id == stem).map(|a| a.name.clone()).unwrap_or_default();
+      orphans.push(OrphanNotice { id: stem, name, path: info.to_string_lossy().into_owned() });
     }
   }
   orphans
@@ -795,6 +805,29 @@ mod tests {
     assert!(lib.index.placements_of("AN-ORPHAN").is_empty(), "孤儿无 Placement 不可见");
     assert!(assets_dir.join("AN-KEEP.info").is_dir() && assets_dir.join("AN-REC.info").is_dir(), "正常与回收站引用资产不误伤");
     assert_eq!(lib.index.placements_of("AN-KEEP").len(), 1);
+  }
+
+  /// 无主 info 扫描（2026-09-02）：孤儿清单结构（id / name / info 路径）——
+  /// 前端警告弹窗与后续「打开资源管理器查看」入口的数据源
+  #[test]
+  fn scan_orphan_infos_notice_carries_name_and_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let info = lib.info_dir("AN-ORPHAN");
+    fs::create_dir_all(&info).unwrap();
+    fs::write(
+      info.join("metadata.json"),
+      r#"{ "version": 1, "id": "AN-ORPHAN", "name": "孤", "originName": "孤.fla",
+           "ext": "fla", "size": 1, "importedAt": "2026-09-02T01:00:00+08:00",
+           "modifiedAt": "2026-09-02T01:00:00+08:00" }"#,
+    )
+    .unwrap();
+    let assets = load_assets(&lib.assets_dir).unwrap();
+    let orphans = scan_orphan_infos(&lib.assets_dir, &lib.folders, &lib.recycle, &assets);
+    assert_eq!(orphans.len(), 1);
+    assert_eq!(orphans[0].id, "AN-ORPHAN");
+    assert_eq!(orphans[0].name, "孤");
+    assert!(orphans[0].path.replace('\\', "/").ends_with("assets/AN-ORPHAN.info"), "带 info 完整路径：{}", orphans[0].path);
   }
 
   /// 打开自检不剔 root 链接（2026-08-13 用户定案：候车区不做内容限制，

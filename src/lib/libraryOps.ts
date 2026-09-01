@@ -4,10 +4,31 @@
 // Windows 名称即时校验（CreateLibraryForm 退役提取至此，与后端 core/library.rs 同规则）。
 import { reactive } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useContentStore } from "../stores/content";
 import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
 import { useUndoStore } from "../stores/undo";
+
+// 无主资产警告（2026-09-02 资产污染修复配套）：开库自检扫出孤儿 info（数据层无记录、
+// 磁盘残留、库内不可见）→ 后端 activate emit 推清单，OrphanInfosAlert 弹窗列出。
+// 简单版只展示；完整管理入口（打开资源管理器查看 / 删除按钮）用户后续补稿。
+export interface OrphanNotice {
+  id: string;
+  name: string;
+  path: string; // info 目录完整路径
+}
+
+export const orphanInfosState = reactive<{ list: OrphanNotice[] | null }>({ list: null });
+
+let orphanInfosListening = false;
+export async function initOrphanInfosListener(): Promise<void> {
+  if (orphanInfosListening) return;
+  orphanInfosListening = true;
+  await listen<OrphanNotice[]>("library-orphan-infos", (e) => {
+    orphanInfosState.list = e.payload.length > 0 ? e.payload : null;
+  });
+}
 
 export interface LibraryEntry {
   name: string;

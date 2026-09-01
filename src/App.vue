@@ -40,6 +40,7 @@ import PropsDialog from "./components/PropsDialog.vue";
 import DescEditDialog from "./components/DescEditDialog.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import AppConfirm from "./components/AppConfirm.vue";
+import OrphanInfosAlert from "./components/OrphanInfosAlert.vue";
 import MovePanel from "./components/MovePanel.vue";
 import BatchRenameDialog from "./components/BatchRenameDialog.vue";
 import ToastStack from "./components/ToastStack.vue";
@@ -48,7 +49,7 @@ import { useContentStore } from "./stores/content";
 import { usePickerStore } from "./stores/picker";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
-import { wizardState, reopenLastSession, createLibraryModalState, deleteLibraryState, confirmDeleteLibrary } from "./lib/libraryOps";
+import { wizardState, reopenLastSession, createLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener } from "./lib/libraryOps";
 import { dupScanState } from "./lib/dupScanOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
 import { useSidebarAnim } from "./lib/useSidebarAnim";
@@ -157,6 +158,7 @@ onMounted(() => {
   void content.initFpsHealListener(); // 存量视频 fps 自愈通知（2026-07-28 复验反馈修复）
   void content.initRecentListener(); // 最近使用热刷新（2026-07-29 复验反馈修复）
   void content.initCepListener(); // CEP 导出入库热刷新（8.1：WS 接收入库完成 → 全量对齐）
+  void initOrphanInfosListener(); // 无主资产警告（2026-09-02）——须在开库（reopenLastSession）前注册
   void preview.initPreviewListener(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3）
   void webview.onDragDropEvent((event) => {
     if (event.payload.type === "drop") {
@@ -360,6 +362,8 @@ async function togglePin(): Promise<void> {
     <ContextMenu />
     <!-- 通用确认弹窗（6.3：警示前置 / 删除文件夹 / 彻底删除二次确认） -->
     <AppConfirm v-if="selection.confirmPrompt" />
+    <!-- 无主资产警告弹窗（2026-09-02 开库自检，资产污染修复配套；内部 v-if 驱动） -->
+    <OrphanInfosAlert />
   </div>
 </template>
 
