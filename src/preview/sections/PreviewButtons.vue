@@ -9,6 +9,9 @@ import TagButton from "../../components/buttons/TagButton.vue";
 import SegmentedControl from "../../components/buttons/SegmentedControl.vue";
 import FontInstallButton from "../../components/buttons/FontInstallButton.vue";
 import DropButton from "../../components/buttons/DropButton.vue";
+import Checkbox from "../../components/buttons/Checkbox.vue";
+import Radio from "../../components/buttons/Radio.vue";
+import SwitchButton from "../../components/buttons/SwitchButton.vue";
 
 const segIcon = ref("library");
 const segText = ref("preview");
@@ -36,6 +39,12 @@ const tagRow = [
   { label: "无限穿越", on: false },
 ];
 const filterRow = ["颜色", "时长", "标签", "扩展名", "文件夹", "比例", "链接", "大小", "添加日期", "修改日期"];
+// 复选框 / 单选框 / 开关按钮（2026-09-01 三稿）真实交互实例
+const cbOn = ref(true);
+const cbOff = ref(false);
+const radioPick = ref("static");
+const swOn = ref(true);
+const swOff = ref(false);
 </script>
 
 <template>
@@ -246,6 +255,56 @@ const filterRow = ["颜色", "时长", "标签", "扩展名", "文件夹", "比�
         <div class="pv-demo-cell">
           <DropButton v-model="unitGb" :options="['KB', 'MB', 'GB']" />
           <span class="pv-cap">间距验收 · 收起选中 GB</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">复选框 / 单选框 / 开关按钮（2026-09-01 三稿）</h3>
+      <p class="pv-group-note">
+        对勾与单选圆点：弹出 250ms 过冲、收回 150ms 快收；开关横移 250ms 小位移；底 / 描边过渡 150ms。
+        选中态 hover 与禁用态稿未给（开关 disabled 仅不响应点击），待补稿。
+      </p>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <Checkbox v-model="cbOn" label="递归显示" />
+          <span class="pv-cap">复选框 · 选中（可点击）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <Checkbox v-model="cbOff" label="递归显示" />
+          <span class="pv-cap">复选框 · 未选中（可点击）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <Checkbox :model-value="false" label="递归显示" force-state="hover" />
+          <span class="pv-cap">hover 未选中（描边 通用/六级）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <Radio v-model="radioPick" value="static" label="静态图" />
+          <span class="pv-cap">单选框 · 选中（可点击）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <Radio v-model="radioPick" value="anim" label="动态图" />
+          <span class="pv-cap">单选框 · 未选中（可点击）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <Radio model-value="x" value="y" label="动态图" force-state="hover" />
+          <span class="pv-cap">hover 未选中（描边 通用/六级）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <SwitchButton v-model="swOn" />
+          <span class="pv-cap">开关 · 开（可点击）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <SwitchButton v-model="swOff" />
+          <span class="pv-cap">开关 · 关（可点击）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <SwitchButton :model-value="false" disabled />
+          <span class="pv-cap">禁用（稿未给样式，仅不响应）</span>
         </div>
       </div>
     </div>

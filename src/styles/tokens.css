@@ -76,6 +76,7 @@
   /* 1.7 黑白 */
   --n-white: #ffffff;
   --n-black: #000000;
+  --n-mask: hsla(0, 0%, 0%, 0.5); /* 窗口遮罩：黑色-50%（2026-09-01 用户定） */
 
   /* 2 字体 */
   --n-font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
