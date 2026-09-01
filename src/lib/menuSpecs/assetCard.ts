@@ -33,6 +33,7 @@ import {
   pasteDuplicate,
   refreshThumb,
   restoreThumbAsset,
+  sendToAnimate,
   setPlacementOrigin,
 } from "../placementOps";
 
@@ -104,7 +105,9 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     { label: "新窗口打开", action: () => void invoke("open_preview_window", { assetKey }) },
     { label: "在默认应用打开", shortcut: "Shift+Enter", action: () => openDefaultApp(assetId) },
     { label: "在其他应用打开", action: () => void openWithDialog(assetId) },
-    { label: "发送至 Animate", shortcut: "Ctrl+E", disabled: true },
+    // 发送至 Animate（8.3，PRD 07-04 点亮）：仅 fla + 单选（多选发送记 09 待办）；
+    // 面板未连接 / 在途重复由后端报错 toast（无队列不积压）
+    { label: "发送至 Animate", shortcut: "Ctrl+E", disabled: selection.count !== 1 || p.ext !== "fla", action: () => void sendToAnimate(assetId) },
     { label: "在资源管理器打开", action: () => revealWithWarning(assetId) },
     "divider",
     { label: "移动文件", shortcut: "Ctrl+Y", action: () => moveAssetsFlow() },

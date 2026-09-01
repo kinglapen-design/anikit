@@ -4,4 +4,4 @@
 
 mod plugin_ws;
 
-pub use plugin_ws::{broadcast_settings, init};
+pub use plugin_ws::{broadcast_settings, init, request_paste, try_acquire_send, PastePermit};

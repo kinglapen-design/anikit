@@ -357,6 +357,7 @@ pub fn run() {
       commands::cep::install_cep_plugin,
       commands::cep::get_cep_export_settings,
       commands::cep::save_cep_export_settings,
+      commands::cep::send_to_animate,
       commands::asset_menu::export_assets,
       commands::asset_menu::export_folder,
       commands::asset_menu::export_retry,

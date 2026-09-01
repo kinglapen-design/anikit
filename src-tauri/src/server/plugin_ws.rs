@@ -9,12 +9,13 @@
 //! cfg(not(test)) 才由 lib.rs 拉起（同 frame_stream，踩坑 014）。
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use futures_util::{SinkExt, StreamExt};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::net::TcpListener;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::commands::library::AppState;
 use crate::core::library::TEMP_DIR;
@@ -26,6 +27,84 @@ static CLIENTS: OnceLock<Mutex<HashMap<u64, mpsc::UnboundedSender<String>>>> = O
 fn clients() -> &'static Mutex<HashMap<u64, mpsc::UnboundedSender<String>>> {
   CLIENTS.get_or_init(|| Mutex::new(HashMap::new()))
 }
+
+/// —— 发送至 AN（8.3，PRD 07-04）请求-回执 ——
+/// pending 表：reqId → (客户端 id, 回执通道)；客户端断开即 drain 当场失败（不等超时，用户当场知情）
+static PENDING: OnceLock<Mutex<HashMap<u64, (u64, oneshot::Sender<serde_json::Value>)>>> = OnceLock::new();
+/// 全局发送锁：同一时刻仅一趟发送——旧 electron 版痛点根治（CEP 未连通时点发送请求积压不报错，
+/// 重连后积压队列一次性全跑 = 舞台连粘 N 次）。本设计：不在线立即报错不排队；在途期间拒绝新发送。
+static SEND_BUSY: AtomicBool = AtomicBool::new(false);
+static NEXT_REQ_ID: AtomicU64 = AtomicU64::new(1);
+
+fn pending() -> &'static Mutex<HashMap<u64, (u64, oneshot::Sender<serde_json::Value>)>> {
+  PENDING.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 发送许可（RAII：一趟发送全程持有——主方案/兜底只走其一，许可内可发一次请求）
+pub struct PastePermit {
+  _private: (),
+}
+
+/// 抢占发送权；在途返回 None（命令层报「上一次发送尚未完成」）
+pub fn try_acquire_send() -> Option<PastePermit> {
+  if SEND_BUSY.swap(true, Ordering::SeqCst) {
+    None
+  } else {
+    Some(PastePermit { _private: () })
+  }
+}
+
+impl Drop for PastePermit {
+  fn drop(&mut self) {
+    SEND_BUSY.store(false, Ordering::SeqCst);
+  }
+}
+
+/// 向在线插件发粘贴类请求并等回执（20s 超时）。
+/// msg_type = "paste"（主方案：剪贴板已由后端写好）/ "pasteFla"（兜底：jsx 打开-复制-粘贴-关闭）。
+/// 无在线客户端立即 Err（不排队——积压根治）；回执 = pasteResult 消息体。
+pub async fn request_paste(msg_type: &str, name: &str, fla_path: Option<&str>) -> Result<serde_json::Value, String> {
+  let picked = clients().lock().unwrap().iter().next().map(|(id, tx)| (*id, tx.clone()));
+  let (client_id, tx) = picked.ok_or_else(|| "Animate 面板未连接，请先在 Animate 中打开 AniKit 面板".to_string())?;
+  let req_id = NEXT_REQ_ID.fetch_add(1, Ordering::SeqCst);
+  let (rtx, rrx) = oneshot::channel();
+  pending().lock().unwrap().insert(req_id, (client_id, rtx));
+  let msg = match fla_path {
+    Some(p) => serde_json::json!({ "type": msg_type, "reqId": req_id, "name": name, "flaPath": p }),
+    None => serde_json::json!({ "type": msg_type, "reqId": req_id, "name": name }),
+  };
+  if tx.send(msg.to_string()).is_err() {
+    pending().lock().unwrap().remove(&req_id);
+    return Err("消息发送失败（面板连接已断开）".to_string());
+  }
+  let r = match tokio::time::timeout(std::time::Duration::from_secs(20), rrx).await {
+    Ok(Ok(v)) => Ok(v),
+    Ok(Err(_)) => Err("面板连接中断".to_string()),
+    Err(_) => Err("粘贴等待超时（20s）——Animate 可能正忙，请检查后重试".to_string()),
+  };
+  pending().lock().unwrap().remove(&req_id);
+  r
+}
+
+/// pasteResult 回执路由（handle_conn 内调用）
+fn resolve_paste(v: &serde_json::Value) {
+  let Some(req_id) = v.get("reqId").and_then(|x| x.as_u64()) else { return };
+  if let Some((_, sender)) = pending().lock().unwrap().remove(&req_id) {
+    let _ = sender.send(v.clone());
+  }
+}
+
+/// 客户端断开：drain 其 pending 请求立即失败（不等超时）
+fn fail_pending_of(client_id: u64) {
+  let mut map = pending().lock().unwrap();
+  let ids: Vec<u64> = map.iter().filter(|(_, (cid, _))| *cid == client_id).map(|(rid, _)| *rid).collect();
+  for rid in ids {
+    if let Some((_, sender)) = map.remove(&rid) {
+      let _ = sender.send(serde_json::json!({ "ok": false, "message": "面板连接中断，粘贴未完成" }));
+    }
+  }
+}
+
 
 /// lib.rs setup 拉起（tauri 异步运行时）
 pub fn init(app: AppHandle) {
@@ -110,10 +189,15 @@ async fn handle_conn(app: AppHandle, id: u64, stream: tokio::net::TcpStream) {
           handle_thumb_only(app2, tx2, payload).await;
         });
       }
+      Some("pasteResult") => {
+        // 发送至 AN（8.3）粘贴回执：路由到等待中的请求
+        resolve_paste(&v);
+      }
       _ => {}
     }
   }
   clients().lock().unwrap().remove(&id);
+  fail_pending_of(id);
   pump.abort();
   log::info!("插件客户端 #{id} 断开");
 }

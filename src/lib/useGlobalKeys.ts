@@ -20,6 +20,7 @@ import {
   pasteClipboard,
   pasteDuplicate,
   recycleSelectedAssetIds,
+  sendToAnimate,
 } from "./placementOps";
 import { cloneFolderFlow, currentLinkTarget, deleteFoldersFlow, enterLinkPicker, findParentId, moveAssetsFlow, moveFoldersFlow } from "./menuOps";
 
@@ -226,6 +227,17 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     // 批量重命名入口 = 多选右键「批量重命名」菜单项）
     if (k === "r") {
       e.preventDefault();
+      return;
+    }
+    // Ctrl+E = 发送至 Animate（8.3，PRD 07-04）：单选 fla 素材生效（菜单同款口径；回收站只读不发）
+    if (k === "e") {
+      if (selection.selectedFolders.size === 0 && selection.count === 1 && !content.isRecycleView) {
+        const p = content.visiblePlacements.find((v) => `${v.assetId}|${v.folderId}` === selection.first);
+        if (p && p.ext === "fla") {
+          e.preventDefault();
+          void sendToAnimate(p.assetId);
+        }
+      }
       return;
     }
     // 粘贴两键（2026-08-18 定案）：Ctrl+V 链接 / Ctrl+Shift+V 副本；Ctrl+Alt+V 键位废除不响应

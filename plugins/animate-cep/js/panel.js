@@ -140,6 +140,13 @@ function connect() {
       refreshExportBtn();
       if (/不存在/.test(msg.message)) log('· ' + msg.message + '（产物已处理或已清理，无需重发）');
       else log('✗ 缩略图导出失败：' + msg.message, 'err');
+    } else if (msg.type === 'paste') {
+      // 发送至 AN（8.3）主方案：APP 已写 Flash 11 Picture 剪贴板，原位粘贴并回执
+      evalJsx('pasteClipboard()', function (r) { replyPaste(msg.reqId, r); });
+    } else if (msg.type === 'pasteFla') {
+      // 兜底（剪贴板转换失败）：打开-复制-粘贴-关闭（会闪窗，状态区明示）
+      log('转换回退：打开「' + (msg.name || '') + '」复制粘贴中（会闪窗）…');
+      evalJsx('pasteFlaFile(' + JSON.stringify(msg.flaPath || '') + ')', function (r) { replyPaste(msg.reqId, r); });
     }
   };
   ws.onclose = function () { onWsDead('连接断开'); };
@@ -167,6 +174,14 @@ function onWsDead(text) {
 
 /* —— jsx 桥 —— */
 function evalJsx(script, cb) { cs.evalScript(script, function (r) { cb(r); }); }
+
+/* 发送至 AN（8.3）回执：粘贴结果回传 APP（发送前查 readyState——CLOSED 态 send 静默丢弃是坑；
+ * 发送失败无害：后端 20s 超时自动报错，用户当场知情，不会积压） */
+function replyPaste(reqId, r) {
+  var ok = r === 'OK' || String(r).indexOf('OK:') === 0;
+  var message = ok ? '' : String(r).replace(/^ERROR:/, '');
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'pasteResult', reqId: reqId, ok: ok, message: message }));
+}
 
 /* —— 未完成导出的断线续传（2026-09-02 用户实机报：导出时退出 APP → 卡「等待入库」无提示无重试）——
  * 单选/仅缩略图 = 单条 pending（localStorage cepPending 持久化；产物在 cep-out 待重发，面板重开也不丢）；

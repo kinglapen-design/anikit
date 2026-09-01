@@ -608,6 +608,18 @@ export async function restoreThumbAsset(assetId: string): Promise<void> {
   }
 }
 
+// 发送至 Animate（8.3，PRD 07-04 快速发送）：fla → 剪贴板载荷 → WS 下发 jsx 原位粘贴；
+// 转换失败后端自动回退兜底（打开-复制-粘贴-关闭）。面板未连接 / 在途重复发送由后端报错，此处透传。
+export async function sendToAnimate(assetId: string): Promise<void> {
+  const toast = useToastStore();
+  try {
+    const name = await invoke<string>("send_to_animate", { assetId });
+    toast.notify({ message: `已发送至 Animate：${name}`, icon: "success" });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+  }
+}
+
 // 导出（库外写操作，不接撤销）：目录由系统对话框选定（menuOps 流程）。
 // 任务化（2026-08-14 用户定：导出用导入的进度条样式与位置）——进度条 / 失败弹窗 /
 // 完成 toast 全部走 content.runExportTask 编排（Channel 事件收尾，取消后不提示）

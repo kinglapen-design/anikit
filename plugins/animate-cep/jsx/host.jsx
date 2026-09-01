@@ -296,3 +296,72 @@ function endBatch() {
   __batchSel = null;
   return 'OK';
 }
+
+/* —— 发送至 AN（8.3，PRD 07-04 快速发送）—— */
+
+/* 主方案粘贴：APP 已把素材转成 Flash 11 Picture 写进系统剪贴板，此处原位粘贴。
+ * 粘贴后校验选区非空——为空 = 剪贴板数据无效（主方案排障信号）。 */
+function pasteClipboard() {
+  var doc = fl.getDocumentDOM();
+  if (!doc) return 'ERROR:请先打开目标文档';
+  try {
+    doc.clipPaste(true); // true = 原位粘贴（坐标含在剪贴板载荷内）
+  } catch (e) {
+    return 'ERROR:粘贴失败 ' + e;
+  }
+  if (!doc.selection || doc.selection.length === 0) return 'ERROR:粘贴无内容（剪贴板数据无效）';
+  return 'OK';
+}
+
+/* 兜底（剪贴板转换失败 / 复杂 fla）：打开-复制-粘贴-关闭（会闪窗，慢但通用）。
+ * 护栏（旧 electron 版脚本实机验证的模式）：fla 已在 Animate 中打开时不能 closeDocument
+ *（会关掉用户开着的文档）——哪怕它当前不是活动文档；用前先扫 fl.documents 预判。 */
+function findOpenDoc(uri) {
+  var docs = fl.documents;
+  for (var i = 0; i < docs.length; i++) {
+    try { if (docs[i].pathURI === uri) return docs[i]; } catch (e) {}
+  }
+  return null;
+}
+
+function pasteFlaFile(flaPath) {
+  var origDoc = fl.getDocumentDOM();
+  if (!origDoc) return 'ERROR:请先打开目标文档';
+  var uri = FLfile.platformPathToURI(flaPath);
+  if (!uri) return 'ERROR:路径无效';
+  var doc = findOpenDoc(uri);
+  var openedHere = false;
+  if (!doc) {
+    try {
+      doc = fl.openDocument(uri);
+      openedHere = true;
+    } catch (e) {
+      return 'ERROR:打开 fla 失败 ' + e;
+    }
+    if (!doc) return 'ERROR:打开 fla 失败（无文档句柄）';
+  }
+  try {
+    fl.setActiveWindow(doc); // 文档级操作前激活（已开但未聚焦的文档保险；兜底本就闪窗）
+    doc.getTimeline().currentFrame = 0; // 主时间轴第一帧
+    doc.selectAll();
+    if (!doc.selection || doc.selection.length === 0) {
+      if (openedHere) fl.closeDocument(doc, false);
+      fl.setActiveWindow(origDoc);
+      return 'ERROR:fla 主时间轴第一帧无内容';
+    }
+    doc.clipCopy();
+  } catch (e) {
+    if (openedHere) fl.closeDocument(doc, false);
+    fl.setActiveWindow(origDoc);
+    return 'ERROR:复制失败 ' + e;
+  }
+  if (openedHere) fl.closeDocument(doc, false);
+  fl.setActiveWindow(origDoc);
+  try {
+    origDoc.clipPaste(true);
+  } catch (e) {
+    return 'ERROR:粘贴失败 ' + e;
+  }
+  if (!origDoc.selection || origDoc.selection.length === 0) return 'ERROR:粘贴无内容';
+  return 'OK';
+}
