@@ -24,7 +24,7 @@ import {
   pickExportFolder,
   topLevelBlockId,
 } from "../menuOps";
-import { pasteFoldersInto, setFolderColor } from "../placementOps";
+import { pasteFoldersInto, setFoldersColor } from "../placementOps";
 import { archiveCardSpec } from "./archiveCard";
 import { collapseAll, collapseLevel, expandAll, expandLevel, toggleOpen, treeExpansion } from "../treeExpansion";
 
@@ -187,7 +187,8 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
       "divider",
       // 更改图标 = 网格面板 flyout（05 稿 §3）；更改颜色 = 内嵌色块行（2026-09-01 新稿：
       // 点色直接生效不关菜单——连续试色场景；回写快照 current 让外环跟随，同排序依据 syncSortChecks 口径）；
-      // 同步语义（用户定）：默认影响子级——链路一致的后代跟随，不一致的不动
+      // 同步语义（用户定）：默认影响子级——链路一致的后代跟随，不一致的不动；「默认」= 显式断链回常态灰；
+      // 批量（2026-09-01 用户定）：触发项在多选域内 → 整个选中集一并换色（同剪切/克隆分流口径）
       { label: "更改图标", panel: { kind: "folderIcon", folderId: folder.id } },
       {
         label: "更改颜色",
@@ -195,7 +196,11 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
           colors: FOLDER_SWATCHES,
           current: toNewTint(node?.color ?? undefined) || null,
           onPick: (tint) => {
-            void setFolderColor(folder.id, tint);
+            const ids =
+              selection.selectedFolders.size > 1 && selection.selectedFolders.has(folder.id)
+                ? selection.orderedSelectedFolderIds()
+                : [folder.id];
+            void setFoldersColor(ids, tint);
             const e = menuState.entries?.find((x): x is CtxItem => x !== "divider" && x.label === "更改颜色");
             if (e?.swatches) e.swatches.current = tint;
           },

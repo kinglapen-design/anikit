@@ -194,11 +194,41 @@ pub fn set_folder_icon(lib: &mut Library, folder_id: &str, icon: Option<&str>) -
   Ok(())
 }
 
-/// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：color None = 恢复默认。
+/// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：color None = 清为跟随态（无值 = 视觉继承最近祖先色）。
+/// 「默认」色块 = 显式默认——前端传 "default" 哨兵（2026-09-01 用户定：子级选默认要能断开父级
+/// 链路退回常态灰，直接清 None 会被父级色盖回）；哨兵在同步语义上按普通链路值对待。
 /// 同步语义（2026-08-18 用户定）：默认影响子级——后代颜色与本节点旧链路色一致的跟随调整
 ///（用户：子级改回与父级一致后要能重新跟随），不一致的不动且不再下钻；
 /// 无色后代不写数据（视觉自动跟随底色版本 --custom-{色}-bg）但链路穿透继续下钻
 pub fn set_folder_color(lib: &mut Library, folder_id: &str, color: Option<&str>) -> Result<(), String> {
+  apply_folder_color(lib, folder_id, color)?;
+  library::save_folders(lib).map_err(|e| e.to_string())?;
+  log::info!("更改文件夹颜色 {folder_id} → {color:?}（链路一致后代跟随）");
+  Ok(())
+}
+
+/// 更改文件夹颜色（批量，2026-09-01 左侧边栏走查：多选树 item 换色无法批量）：
+/// 多选域内触发 → 整个选中集逐 id 走单节点同语义（各自链路一致后代跟随），单次落盘单撤销步；
+/// 陈旧 id 跳过不计，全部不存在才报错
+pub fn set_folder_colors(lib: &mut Library, folder_ids: &[String], color: Option<&str>) -> Result<usize, String> {
+  let mut n = 0;
+  for id in folder_ids {
+    if !lib.index.folders.contains_key(id.as_str()) {
+      continue; // 陈旧 id（选中后又被删等）跳过
+    }
+    apply_folder_color(lib, id, color)?;
+    n += 1;
+  }
+  if n == 0 {
+    return Err("目标文件夹不存在，可能已被删除".to_string());
+  }
+  library::save_folders(lib).map_err(|e| e.to_string())?;
+  log::info!("批量更改文件夹颜色 {} 个 → {color:?}", n);
+  Ok(n)
+}
+
+/// set_folder_color 的不落盘内层（批量复用）：目标 + 链路一致跟随集改写 + 索引同步
+fn apply_folder_color(lib: &mut Library, folder_id: &str, color: Option<&str>) -> Result<(), String> {
   let folder = lib
     .index
     .folders
@@ -224,8 +254,6 @@ pub fn set_folder_color(lib: &mut Library, folder_id: &str, color: Option<&str>)
     }
   }
   sync_folder_index(lib);
-  library::save_folders(lib).map_err(|e| e.to_string())?;
-  log::info!("更改文件夹颜色 {folder_id} → {color:?}（链路一致后代跟随）");
   Ok(())
 }
 
@@ -961,6 +989,53 @@ mod tests {
     set_folder_color(&mut h.lib, "F01-1", Some("green")).unwrap();
     assert_eq!(h.lib.index.folders["F01-1-1"].color.as_deref(), Some("green"), "与祖先链路一致的后代跟随");
     assert_eq!(h.lib.index.folders["F01"].color.as_deref(), Some("red"), "祖不受影响");
+  }
+
+  /// 显式默认哨兵（2026-09-01 用户定）：子级选「默认」= 存 "default" 断开父级链路退回常态灰——
+  /// 父级后续改色不再影响（写 None 会被父级色视觉盖回，永退不回）；改回与父级同色后恢复跟随
+  ///（哨兵按普通链路值参与同步语义）
+  #[test]
+  fn set_folder_color_default_sentinel_breaks_chain() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "父", None, 0);
+    add_folder(&mut h.lib, "F01-1", "子", Some("F01"), 0);
+    add_folder(&mut h.lib, "F01-1-1", "孙", Some("F01-1"), 0);
+
+    set_folder_color(&mut h.lib, "F01", Some("red")).unwrap(); // 父红，子孙无色视觉跟随
+    // 子选「默认」→ 显式哨兵断链
+    set_folder_color(&mut h.lib, "F01-1", Some("default")).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1"].color.as_deref(), Some("default"), "显式默认存哨兵");
+    assert_eq!(h.lib.index.folders["F01-1-1"].color, None, "孙无色穿透不写（视觉跟随子的默认灰）");
+    // 父改蓝：子哨兵 != 旧链路红 → 整支不动不下钻
+    set_folder_color(&mut h.lib, "F01", Some("blue")).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1"].color.as_deref(), Some("default"), "断链子级不跟随");
+    assert_eq!(h.lib.index.folders["F01-1-1"].color, None, "阻断分支不下钻");
+    // 子改回与父一致（blue）→ 父再改绿：子重新跟随（哨兵与九色同规则）
+    set_folder_color(&mut h.lib, "F01-1", Some("blue")).unwrap();
+    set_folder_color(&mut h.lib, "F01", Some("green")).unwrap();
+    assert_eq!(h.lib.index.folders["F01-1"].color.as_deref(), Some("green"), "改回一致后重新跟随");
+  }
+
+  /// 批量更改颜色（2026-09-01，多选树 item 批量换色）：选中集逐 id 同语义（各自链路一致后代
+  /// 跟随）；陈旧 id 跳过不计，全陈旧报错
+  #[test]
+  fn set_folder_colors_batch_applies_skips_stale() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "甲", None, 0);
+    add_folder(&mut h.lib, "F02", "乙", None, 1);
+    add_folder(&mut h.lib, "F02-1", "乙子", Some("F02"), 0);
+
+    let n = set_folder_colors(&mut h.lib, &["F01".to_string(), "F02".to_string(), "F-陈旧".to_string()], Some("green")).unwrap();
+    assert_eq!(n, 2, "陈旧 id 跳过不计");
+    assert_eq!(h.lib.index.folders["F01"].color.as_deref(), Some("green"));
+    assert_eq!(h.lib.index.folders["F02"].color.as_deref(), Some("green"));
+    assert_eq!(h.lib.index.folders["F02-1"].color, None, "无色后代不写数据（视觉跟随）");
+    // 批量显式默认同样写哨兵
+    set_folder_colors(&mut h.lib, &["F01".to_string(), "F02".to_string()], Some("default")).unwrap();
+    assert_eq!(h.lib.index.folders["F01"].color.as_deref(), Some("default"));
+    assert_eq!(h.lib.index.folders["F02"].color.as_deref(), Some("default"));
+    // 全陈旧 → 报错
+    assert!(set_folder_colors(&mut h.lib, &["F-不存在".to_string()], Some("red")).is_err());
   }
 
   // ---------- 分组（2026-08-19，3.5 二轮 / PRD 02-04）----------

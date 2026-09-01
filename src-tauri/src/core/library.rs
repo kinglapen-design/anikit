@@ -321,10 +321,12 @@ fn fix_blocks(folders: &mut FoldersFile) -> bool {
   changed
 }
 
-/// 02自定义 新 30 图标集（2026-09-01，7.1 二十五轮；assets/icons/命名对照.md 表序，
-/// folder-closed/folder-open 为基础件不作自定义值）。与前端 src/lib/customIcons.ts 清单同源
-const CUSTOM_ICONS_NEW: [&str; 30] = [
-  "inbox", "window", "briefcase", "medal", "card", "slime", "layers", "image", "chat", "layout", "film", "house", "tag", "archive", "building", "car", "browser", "flame", "thumbs-up", "dog", "camera", "kanban", "vegetable", "emoji", "character", "palette", "shopping-basket", "music", "plane", "tableware",
+/// 02自定义 新图标集（2026-09-01，7.1 二十五轮 30 个；同日走查 archive 移出 = 29——档案图标
+/// 档案专属不可选，存量 Folder/Block.icon = "archive" 随本白名单剔除回退 None；
+/// assets/icons/命名对照.md 表序，folder-closed/folder-open 为基础件不作自定义值）。
+/// 与前端 src/lib/customIcons.ts 清单同源
+const CUSTOM_ICONS_NEW: [&str; 29] = [
+  "inbox", "window", "briefcase", "medal", "card", "slime", "layers", "image", "chat", "layout", "film", "house", "tag", "building", "car", "browser", "flame", "thumbs-up", "dog", "camera", "kanban", "vegetable", "emoji", "character", "palette", "shopping-basket", "music", "plane", "tableware",
 ];
 
 /// 单个图标值迁移（fix_custom_icons 用）：新集内原样；旧 05_custom-icon 文件干就近映射；
@@ -743,7 +745,8 @@ mod tests {
   }
 
   /// 自定义图标迁移（2026-09-01，7.1 二十五轮）：旧 05_custom-icon 文件干就近映射（animal→dog）、
-  /// 对不上的旧名与未知名回退 None；新 30 名原样保留；Folder.icon 与 Block.icon 同规则并落盘
+  /// 对不上的旧名与未知名回退 None；新 29 名原样保留（archive 档案专属出清单，存量值同回退）；
+  /// Folder.icon 与 Block.icon 同规则并落盘
   #[test]
   fn open_migrates_legacy_custom_icon_values() {
     let dir = tempfile::tempdir().unwrap();
@@ -762,7 +765,8 @@ mod tests {
           { "id": "F01", "name": "动物", "parent": null, "order": 0, "icon": "animal" },
           { "id": "F02", "name": "狗狗", "parent": null, "order": 1, "icon": "dog" },
           { "id": "F03", "name": "杂物", "parent": null, "order": 2, "icon": "weapon" },
-          { "id": "F04", "name": "手改", "parent": null, "order": 3, "icon": "not-a-icon" }
+          { "id": "F04", "name": "手改", "parent": null, "order": 3, "icon": "not-a-icon" },
+          { "id": "F05", "name": "旧档", "parent": null, "order": 4, "icon": "archive" }
         ],
         "items": []
       }"#,
@@ -775,6 +779,7 @@ mod tests {
     assert_eq!(at("F02").as_deref(), Some("dog"), "新 30 名原样保留");
     assert_eq!(at("F03"), None, "对不上的旧名回退默认");
     assert_eq!(at("F04"), None, "任意未知名回退默认（防渲染报错）");
+    assert_eq!(at("F05"), None, "archive 档案专属出清单（2026-09-01 走查）→ 存量值回退默认");
     assert_eq!(lib.folders.blocks[1].icon, None, "Block.icon 同规则回退");
     let disk: FoldersFile = read_json(&root.join(FOLDERS_FILE)).unwrap();
     assert_eq!(disk.folders.iter().find(|f| f.id == "F01").unwrap().icon.as_deref(), Some("dog"), "迁移落盘");

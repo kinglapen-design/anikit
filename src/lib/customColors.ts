@@ -37,9 +37,15 @@ const LEGACY_TINT_MAP: Record<string, string> = {
   blue: "blue",
 };
 
-/** 旧体系自定义色名映射为新九色名；未知名（含空）原样返回（TwoToneIcon 无匹配 data-tint 时回默认双色） */
+// 显式默认色哨兵（2026-09-01，用户定：子级选「默认」要能断开父级链路退回常态灰）：
+// Folder.color 存 "default" = 显式默认——显示无 tint，且子孙层继承链到此为止（不再上溯祖先色）；
+// 无值（None）仍 = 链路跟随（视觉继承最近祖先色）。同步语义上哨兵按普通链路值对待
+//（后代 color == "default" 视为链路一致跟随，与九色值同规则）。
+export const DEFAULT_COLOR = "default";
+
+/** 旧体系自定义色名映射为新九色名；显式默认哨兵（DEFAULT_COLOR）与空 → ""（无 tint，回默认双色）；其余未知名原样返回 */
 export function toNewTint(tint: string | undefined): string {
-  if (!tint) return "";
+  if (!tint || tint === DEFAULT_COLOR) return "";
   return LEGACY_TINT_MAP[tint] ?? tint;
 }
 

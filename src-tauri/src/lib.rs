@@ -298,6 +298,7 @@ pub fn run() {
       commands::operations::rename_folder,
       commands::operations::set_folder_icon,
       commands::operations::set_folder_color,
+      commands::operations::set_folder_colors,
       commands::operations::set_folder_groups,
       commands::operations::move_placements,
       commands::operations::reorder_placements,

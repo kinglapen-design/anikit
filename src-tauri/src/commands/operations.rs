@@ -100,7 +100,8 @@ pub async fn set_folder_icon(
   }
 }
 
-/// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：color = null 恢复默认；
+/// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：color = null 清为跟随态（无值 = 视觉继承最近
+/// 祖先色）；前端「默认」色块传 "default" 哨兵 = 显式默认断链（2026-09-01 用户定）；
 /// 同步语义（用户定）：链路一致的后代跟随调整（无色后代不写数据、视觉自动跟随），不一致的不动
 #[tauri::command]
 pub async fn set_folder_color(
@@ -117,6 +118,29 @@ pub async fn set_folder_color(
     Ok(()) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(())
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
+/// 更改文件夹颜色（批量，2026-09-01 左侧边栏走查：多选树 item 换色无法批量）：
+/// 多选域内触发 → 整个选中集，逐 id 同语义（各自链路一致后代跟随），单撤销步；
+/// 陈旧 id 跳过不计，返回实际生效个数
+#[tauri::command]
+pub async fn set_folder_colors(
+  state: State<'_, AppState>,
+  folder_ids: Vec<String>,
+  color: Option<String>,
+) -> Result<usize, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin("更改文件夹颜色");
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  match operations::set_folder_colors(lib, &folder_ids, color.as_deref()) {
+    Ok(n) => {
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(n)
     }
     Err(e) => Err(fail(lib, &mut undo, e)),
   }

@@ -13,6 +13,7 @@ import { useSelectionStore, type PlacementRef } from "../stores/selection";
 import { useToastStore } from "../stores/toast";
 import { useUndoStore } from "../stores/undo";
 import { treeExpansion } from "./treeExpansion";
+import { DEFAULT_COLOR } from "./customColors";
 
 export type { PlacementRef };
 
@@ -188,10 +189,13 @@ export async function setFolderIcon(folderId: string, icon: string | null): Prom
   }, () => "更改文件夹图标");
 }
 
-// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4）：color = null 恢复默认；同步语义同图标
-export async function setFolderColor(folderId: string, color: string | null): Promise<boolean> {
+// 更改文件夹颜色（2026-08-18，3.3 / 05 稿 §4；2026-09-01 批量 + 显式默认修订）：
+// 多选域内触发 → 整个选中集（folderIds 多个，单命令单撤销步）；单个 = 单元素数组。
+// color = null（「默认」色块）= 显式默认——落盘存 DEFAULT_COLOR 哨兵断开父级链路
+//（None 无值的语义是“跟随父级”，直接写 None 会被父级色盖回，永远退不回常态灰）；同步语义同图标
+export async function setFoldersColor(folderIds: string[], color: string | null): Promise<boolean> {
   return await runOp(async () => {
-    await invoke("set_folder_color", { folderId, color });
+    await invoke("set_folder_colors", { folderIds, color: color ?? DEFAULT_COLOR });
   }, () => "更改文件夹颜色");
 }
 

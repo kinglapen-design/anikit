@@ -1,9 +1,11 @@
 // 04 稿 · 档案卡片右键菜单 spec（自 menuSpecs.ts 拆出，规范第 3 条行数控制）：菜单项按新稿纯文字口径（2026-09-01）。
-import { useContentStore } from "../../stores/content";
+import { useContentStore, type FolderNode } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
-import type { CtxEntry } from "../contextMenus";
+import type { CtxEntry, CtxItem } from "../contextMenus";
+import { menuState } from "../contextMenus";
+import { FOLDER_SWATCHES, toNewTint } from "../customColors";
 import {
   copyFolderLink,
   copyName,
@@ -17,6 +19,17 @@ import {
   moveFoldersFlow,
   topLevelBlockId,
 } from "../menuOps";
+import { setFoldersColor } from "../placementOps";
+
+// 档案节点的 FolderNode 查找（更改颜色当前色回显）：档案 = Folder kind 标记，色值在同一张 folders 表
+function findNode(nodes: FolderNode[], id: string): FolderNode | null {
+  for (const n of nodes) {
+    if (n.id === id) return n;
+    const hit = findNode(n.children, id);
+    if (hit) return hit;
+  }
+  return null;
+}
 
 // —— 04 稿 · 档案卡片 ——
 // 2026-08-15 一轮挂载：档案卡片（ArchiveStrip）右键 + 树档案节点（folder.ts treeItemSpec 分流）共用；
@@ -118,7 +131,24 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
         { label: "从资源库中选择", disabled: true },
       ],
     },
-    { label: "更改颜色", disabled: true, submenu: [] },
+    // 更改颜色（2026-09-01 接入，同树文件夹口径）：内嵌色块行点色即生效不关菜单 + 多选域内批量；
+    // 生效处 = 树档案节点圆点/图标 tint（Folder.color；档案徽标色是 archives 表另一套，不动）
+    {
+      label: "更改颜色",
+      swatches: {
+        colors: FOLDER_SWATCHES,
+        current: toNewTint(findNode(content.folders, archive.id)?.color ?? undefined) || null,
+        onPick: (tint) => {
+          const ids =
+            selection.selectedFolders.size > 1 && selection.selectedFolders.has(archive.id)
+              ? selection.orderedSelectedFolderIds()
+              : [archive.id];
+          void setFoldersColor(ids, tint);
+          const e = menuState.entries?.find((x): x is CtxItem => x !== "divider" && x.label === "更改颜色");
+          if (e?.swatches) e.swatches.current = tint;
+        },
+      },
+    },
     "divider",
     { label: "添加至其他资源库", submenu: [{ label: "（暂无其他资源库）", disabled: true }] },
     {
