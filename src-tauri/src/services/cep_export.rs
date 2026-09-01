@@ -101,10 +101,25 @@ fn push_chunk(out: &mut Vec<u8>, fourcc: &[u8; 4], data: &[u8]) {
   }
 }
 
-/// 组 WebP 动画（全帧矩形 + blend=0 + loop 0 无限循环）：帧尺寸必须一致（调用方先缩放）
+/// 组 WebP 动画（全帧矩形 + blend=0 + loop 0 无限循环）：帧尺寸必须一致（调用方先缩放）。
+/// 性能（2026-09-02 用户实机报「8M 导出卡 10 秒」）：逐帧编码 rayon 并行（帧间独立无共享态，
+/// 保序 collect 组包）；libwebp method 4→2（动画缩略图不追极致压缩比，体积由降级链兜底）；
+/// 降级链内存判大小先不写盘（旧版每档写盘覆盖，temp 里 8M 早现≠完成）+ 超 2.5 倍跳中间档。
 fn encode_webp_anim(frames: &[AnimFrame], quality: f32) -> Option<Vec<u8>> {
   let first = frames.first()?;
   let (w, h) = (first.rgba.width(), first.rgba.height());
+  // 并行逐帧编码（保序：par_iter collect 回 Vec 保持原序）
+  use rayon::prelude::*;
+  let chunks: Vec<Vec<u8>> = frames
+    .par_iter()
+    .map(|f| {
+      let mut config = webp::WebPConfig::new().ok()?;
+      config.quality = quality;
+      config.method = 2; // 0=最快…4=默认…6=最慢最小；动画缩略图取快档
+      let mem = webp::Encoder::from_rgba(f.rgba.as_raw(), w, h).encode_advanced(&config).ok()?;
+      extract_image_chunks(&mem)
+    })
+    .collect::<Option<Vec<_>>>()?;
   let mut body: Vec<u8> = Vec::new();
   // VP8X：动画位 0x02 + alpha 位 0x10（恒带 alpha 通道编码，白底帧 alpha 全满也无妨）
   let mut vp8x: Vec<u8> = vec![0x12, 0, 0, 0];
@@ -113,13 +128,7 @@ fn encode_webp_anim(frames: &[AnimFrame], quality: f32) -> Option<Vec<u8>> {
   push_chunk(&mut body, b"VP8X", &vp8x);
   // ANIM：背景色 BGRA(白,不透明) + loop=0 无限
   push_chunk(&mut body, b"ANIM", &[0xff, 0xff, 0xff, 0xff, 0, 0]);
-  for f in frames {
-    let mem = webp::Encoder::from_rgba(f.rgba.as_raw(), w, h).encode(quality);
-    if mem.is_empty() {
-      log::warn!("webp 单帧编码失败（组动画中断）");
-      return None;
-    }
-    let chunk = extract_image_chunks(&mem)?;
+  for (f, chunk) in frames.iter().zip(chunks) {
     let mut anmf: Vec<u8> = Vec::with_capacity(16 + chunk.len());
     push_u24le(&mut anmf, 0); // x
     push_u24le(&mut anmf, 0); // y
@@ -252,13 +261,23 @@ fn compose_webp(
 }
 
 /// 动态合成降级链：FALLBACK 逐级（长边档 = maxEdge × 系数；系数 < 1 档从基底内存再缩，不重读 PNG）→
-/// 末段抽帧降帧率（隔帧取 + delay×2，时长不变）→ 压不进保留最后一版（over_limit = true）
+/// 末段抽帧降帧率（隔帧取 + delay×2，时长不变）→ 压不进保留最后一版（over_limit = true）。
+/// 2026-09-02 提速（用户实机报「8M 导出卡 10 秒」）：大小判断改内存（data.len()）过了才写盘
+///（旧版每档写盘再 stat——temp 里文件早现≠完成）；首档超上限 >5 倍直接跳中间档
+///（8M/2M=4x 级别时同尺寸低质量档压进上限概率极低，直奔 0.5 尺寸档 + 抽帧档）。
 fn compose_with_fallback(seq: &Path, fps: f64, out: &Path, settings: &crate::core::config::CepExportSettings) -> Result<bool, String> {
   let max_edge = settings.max_edge.max(16);
   let Some(base) = load_seq_frames(seq, fps, max_edge, 1) else {
     return Err("序列帧解码失败（PNG 损坏或目录为空）".to_string());
   };
+  let mut first_over_ratio: Option<u64> = None; // 首档超出倍数（跳档依据）
   for &(q, ratio) in FALLBACK {
+    // 跳档：首档超 >5 倍时，其余 1.0 系数档与 0.75 档直接跳过
+    if let Some(r) = first_over_ratio {
+      if r > 5 && ratio >= 0.75 {
+        continue;
+      }
+    }
     let edge = ((max_edge as f64 * ratio).round() as u32).max(16);
     let owned;
     let frames: &[AnimFrame] = if ratio >= 1.0 {
@@ -268,7 +287,12 @@ fn compose_with_fallback(seq: &Path, fps: f64, out: &Path, settings: &crate::cor
       &owned
     };
     if let Some(data) = encode_webp_anim(frames, q as f32) {
-      if fs::write(out, &data).is_ok() && within_limit(out, settings.max_bytes) {
+      let len = data.len() as u64;
+      if first_over_ratio.is_none() && len > settings.max_bytes {
+        first_over_ratio = Some(len / settings.max_bytes.max(1));
+      }
+      if len <= settings.max_bytes {
+        fs::write(out, &data).map_err(|e| format!("WebP 写入失败：{e}"))?;
         return Ok(false);
       }
     }
@@ -277,7 +301,9 @@ fn compose_with_fallback(seq: &Path, fps: f64, out: &Path, settings: &crate::cor
   let halved: Vec<AnimFrame> = base.iter().step_by(2).map(|f| AnimFrame { rgba: f.rgba.clone(), delay_ms: f.delay_ms * 2 }).collect();
   if !halved.is_empty() {
     if let Some(data) = encode_webp_anim(&halved, 60.0) {
-      if fs::write(out, &data).is_ok() && within_limit(out, settings.max_bytes) {
+      // 过限写盘返回；压不进也写末版保底（over_limit 产出——旧版靠每档写盘副作用留底，现显式写）
+      fs::write(out, &data).map_err(|e| format!("WebP 写入失败：{e}"))?;
+      if (data.len() as u64) <= settings.max_bytes {
         return Ok(false);
       }
     }

@@ -274,6 +274,18 @@ export const usePreviewStore = defineStore("preview", {
         await this.loadAnim(p.assetId);
         return;
       }
+      // 工程资产静态伴生（2026-09-02 用户实机报：静态 fla 预览滚轮缩放失效——落 other 无 viewable）：
+      // 伴生 hidden 为静态图时预览 = 该图本体（image 全功能：缩放/平移/查看器控件）；
+      // 动态伴生已由上支 animated 代理接住（kind=anim）；解析失败落回下方原流程（other 保底）
+      if (p.playAssetId) {
+        const r = await getAssetFilePath(p.playAssetId);
+        if (this.current?.assetId !== p.assetId) return; // await 期间已切走
+        if (r.path) {
+          this.kind = "image";
+          this.filePath = r.path;
+          return;
+        }
+      }
       if (isAudioExt(ext)) {
         this.kind = "audio";
         await media.load(p.assetId, "audio");

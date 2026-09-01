@@ -903,9 +903,19 @@ export const useContentStore = defineStore("content", {
     // CEP 导出入库热刷新（8.1）：WS 服务接收入库完成广播 cep-imported → 全量对齐
     // （新 fla 卡片显示伴生图 + 缩略图视图入列 + 目标文件夹新增，涉及视图代理与 hidden
     // 过滤多口径，局部同步成本高且易漏，导入级操作频率低，直接 refresh 同导入完成口径）
+    // + 成功提示音（2026-09-02 用户定：导出时视口大概率停留在 Animate 窗口，听觉反馈兜底；
+    // 批量导出逐条 emit → 500ms 节流合并，一次批量只响一声；失败音待 09——面板侧回执用户可见）
     async initCepListener(): Promise<void> {
       if (unlistenCep) return;
-      unlistenCep = await listen("cep-imported", () => void this.refresh());
+      let lastSound = 0;
+      unlistenCep = await listen("cep-imported", () => {
+        const now = Date.now();
+        if (now - lastSound > 500) {
+          lastSound = now;
+          playSuccess();
+        }
+        void this.refresh();
+      });
     },
 
     // 拉取收件箱磁盘实况快层快照（4.4）：失败静默降级——实况是辅助展示，不阻断任何流程
