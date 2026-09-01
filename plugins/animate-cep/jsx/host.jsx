@@ -25,11 +25,13 @@ function getSelectedInfo() {
   var sel = doc.selection;
   if (!sel || sel.length === 0) return 'ERROR:请先选中舞台上的元件';
   var el = sel[0];
+  // 位图/文本等实例的 libraryItem 无 timeline（DOMBitmapItem 等）——裸访问 timeline 会抛
+  // TypeError 弹 Animate 错误框（2026-09-02 用户实机报；轮询路径必须绝不抛）
   var info = {
     elementType: el.elementType,
     instanceName: el.name || '',
     libraryItem: el.libraryItem ? el.libraryItem.name : null,
-    frameCount: el.libraryItem ? el.libraryItem.timeline.frameCount : 0,
+    frameCount: (el.libraryItem && el.libraryItem.timeline) ? el.libraryItem.timeline.frameCount : 0,
     width: el.width, height: el.height, x: el.x, y: el.y,
     docW: doc.width, docH: doc.height, fps: doc.frameRate
   };
@@ -136,6 +138,8 @@ function exportSelection(name, outDir, dynamic, maxFrames, ratioW, ratioH, keepO
   if (el.elementType !== 'instance') return 'ERROR:选中的不是元件实例（' + el.elementType + '）';
   var item = el.libraryItem;
   if (!item) return 'ERROR:元件实例无库引用';
+  // 位图等非元件项（itemType=bitmap 等）无 timeline——裸访问抛 TypeError（2026-09-02 用户实机报同款）
+  if (!item.timeline) return 'ERROR:选中的不是元件（库项类型：' + (item.itemType || '未知') + '），请选元件实例';
 
   if (!name) {
     var parts = item.name.split('/');
