@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <title>素材导出</title>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+  <div class="panel-title">导出到素材库</div>
+
+  <div class="section">
+    <label>缩略图格式（单选）</label>
+    <div class="radio-group">
+      <label><input type="radio" name="thumbFormat" value="png" checked/> PNG 缩略图</label>
+      <label><input type="radio" name="thumbFormat" value="gif"/> GIF 缩略图</label>
+    </div>
+  </div>
+
+  <div class="section">
+    <button id="exportBtn" class="btn btn-primary">导出到素材库</button>
+    <div id="status" class="status">请选中舞台上的元件</div>
+  </div>
+
+  <script src="../../js/CSInterface.js"></script>
+  <script src="index.js"></script>
+</body>
+</html>

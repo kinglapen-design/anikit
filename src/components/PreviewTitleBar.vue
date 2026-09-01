@@ -3,7 +3,8 @@
 // 布局模式照 ContentTitleBar（space-between 等距；图标统一 亮色/三级，2026-08-30 用户实机定——
 // 旧 80% 口径作废；返回 = chevron-large 原样朝左；索引 mono 13/18、百分比 mono 12/16）。
 // image/sequence/anim/video：缩放组 + 适合窗口 + 原图大小（源文件 PSD·AI·SVG 去旋转翻转、加默认应用打开；
-// anim/video 无默认应用打开）；audio：仅返回、索引、插件、新窗口打开、上/下一个；
+// anim/video 无默认应用打开——**8.1 例外：伴生代理资产（fla 预览按伴生 WebP 显示为 anim）有，
+// 本质工程文件，打开 fla 本身**）；audio：仅返回、索引、插件、新窗口打开、上/下一个；
 // font/text（5.6）：同 other 组（含默认应用打开；字体安装/卸载在字体预览「其它」页内，不占标题栏）；
 // other：返回、索引、插件、默认应用打开、新窗口打开、上/下一个。
 // window 模式（新窗口打开）：返回 + 索引替换为文件名标题，加置顶与完整窗口控制按钮（PRD 4.3）。
@@ -68,8 +69,10 @@ async function togglePin(): Promise<void> {
         <IconButton name="fit-screen" title="适合窗口" @click="preview.fit()" />
         <IconButton name="original-size" title="原图大小" @click="preview.actual()" />
       </template>
+      <!-- 默认应用打开：源格式（PSD 等）/ other / font / text + **伴生代理资产（8.1：fla 预览
+           按伴生 WebP 显示为 anim，但本质是工程文件——入口打开 fla 本身）** -->
       <IconButton
-        v-if="preview.isSource || preview.kind === 'other' || preview.kind === 'font' || preview.kind === 'text'"
+        v-if="preview.isSource || preview.kind === 'other' || preview.kind === 'font' || preview.kind === 'text' || !!preview.current?.playAssetId"
         name="open-default"
         title="默认应用打开"
         @click="preview.openDefaultApp()"

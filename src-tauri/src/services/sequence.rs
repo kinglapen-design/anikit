@@ -280,6 +280,8 @@ pub(crate) fn build_sequence_asset(
     fps: Some(DEFAULT_FPS),
     frame_count: Some(frames.len() as u32),
     thumb_frame: Some(thumb_frame),
+    hidden: None,
+    thumb_asset_id: None,
     r#type: None,
     source: None,
     start: None,

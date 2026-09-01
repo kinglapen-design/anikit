@@ -452,7 +452,8 @@ pub fn list_folder_tree(state: State<AppState>) -> Result<FolderTreeView, String
 }
 
 /// 组装文件夹树：parent=None 为顶层，递归子级；区块表按 order 排序一并输出
-fn folder_tree(lib: &Library) -> FolderTreeView {
+/// pub(crate)：server/plugin_ws（插件目标文件夹选择器数据源，8.1）同用——结构整理随 8.x 再下迁 services
+pub(crate) fn folder_tree(lib: &Library) -> FolderTreeView {
   /// 返回 (节点, 子树资产 id 集)：集合供父级并集去重算 totalSize（跨子树同资产只计一次）
   fn children_of<'a>(lib: &'a Library, parent: Option<&'a str>) -> Vec<(FolderNode, std::collections::HashSet<&'a str>)> {
     let mut folders: Vec<&crate::core::models::Folder> =
@@ -463,7 +464,13 @@ fn folder_tree(lib: &Library) -> FolderTreeView {
       .map(|f| {
         let pairs = children_of(lib, Some(&f.id));
         let (children, child_sets): (Vec<FolderNode>, Vec<std::collections::HashSet<&str>>) = pairs.into_iter().unzip();
-        let direct_ps = lib.index.placements_by_folder.get(&f.id).map(|v| v.as_slice()).unwrap_or(&[]);
+        let direct_all = lib.index.placements_by_folder.get(&f.id).map(|v| v.as_slice()).unwrap_or(&[]);
+        // hidden 伴生缩略图资产不计数（8.1，PRD 02-15：视图统一过滤，计数/容量同口径——
+        // 否则"文件数 2 只见 1 卡"割裂，2026-09-01 用户实机报）
+        let direct_ps: Vec<_> = direct_all
+          .iter()
+          .filter(|p| lib.index.assets.get(p.asset.as_str()).map(|m| m.hidden != Some(true)).unwrap_or(false))
+          .collect();
         let direct = direct_ps.len() as u32;
         let recursive = direct + children.iter().map(|c| c.count).sum::<u32>();
         // 子树资产集 = 本级 placements ∪ 各子树集；totalSize = 集内资产 size 合计（缺失索引的脏引用跳过）
@@ -625,6 +632,34 @@ mod tests {
     let child = &top.children[0];
     assert_eq!((top.count, top.total_size), (3, 5), "父级：3 条 placement，资产 a 去重后 3+2 字节");
     assert_eq!((child.count, child.total_size), (2, 5), "子级：2 条 placement，a+b 两资产 5 字节");
+  }
+
+  /// hidden 伴生缩略图资产不计数（8.1，PRD 02-15）：count / totalSize 与视图过滤同口径——
+  /// 否则"文件数 2 只见 1 卡"割裂（2026-09-01 用户实机报）
+  #[test]
+  fn folder_tree_excludes_hidden_assets_from_counts() {
+    let h = make_lib();
+    let src = h._dir.path().join("库");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("工程.fla"), "fla").unwrap();
+    std::fs::write(src.join("封面.png"), "png").unwrap();
+    import(&h, vec![src], Structure::Keep);
+
+    // 绑定：封面.png 打 hidden 成为 工程.fla 的伴生缩略图
+    {
+      let mut guard = h.lib.lock().unwrap();
+      let lib = guard.as_mut().unwrap();
+      let (fla, webp) = (
+        lib.folders.items.iter().find(|p| p.name == "工程.fla").unwrap().asset.clone(),
+        lib.folders.items.iter().find(|p| p.name == "封面.png").unwrap().asset.clone(),
+      );
+      crate::services::asset_menu::set_thumb_asset(lib, &fla, &webp).unwrap();
+    }
+
+    let tree = with_lib(&h, folder_tree);
+    let top = &tree.nodes[0];
+    assert_eq!(top.count, 1, "hidden 资产位置不计入 count（仅 fla）");
+    assert_eq!(top.total_size, 3, "hidden 资产容量不计入 totalSize（仅 fla 3 字节）");
   }
 
   /// 区块输出（2026-08-14 区块子系统）：blocks 按 order 排序；顶级节点带 block，子节点不带

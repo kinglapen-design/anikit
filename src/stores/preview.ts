@@ -178,7 +178,8 @@ export const usePreviewStore = defineStore("preview", {
       unlistenStrips = await listen<{ assetId: string; items: { name: string; stripPath: string }[] }>(
         "preview-strips-ready",
         (e) => {
-          if (this.current?.assetId !== e.payload.assetId) return;
+          // 播放源代理（8.1）：fla 预览的帧条任务按伴生资产提交——事件 assetId = 伴生 id 同样放行
+          if (this.current?.assetId !== e.payload.assetId && this.current?.playAssetId !== e.payload.assetId) return;
           if (this.kind === "anim") {
             // 动图：name = `f:{索引}`，渐进填充帧条缓存
             for (const item of e.payload.items) {
@@ -268,6 +269,8 @@ export const usePreviewStore = defineStore("preview", {
       }
       if (p.animated) {
         this.kind = "anim";
+        // 播放源代理（8.1）收在 loadAnim 内部（开流源 = playAssetId ?? assetId）；
+        // 此处置预览目标自身——"已切走"守卫按 current 判定
         await this.loadAnim(p.assetId);
         return;
       }
@@ -313,8 +316,11 @@ export const usePreviewStore = defineStore("preview", {
       this.animFrame = null;
       this.animTotal = 0;
       this.animStrips = {};
+      // 播放源代理（8.1）：fla 等工程的伴生 WebP——开流 / 帧条 / 回退图源全走伴生资产；
+      // "已切走"守卫恒按预览目标（assetId = current，fla）判定
+      const sourceId = this.current?.playAssetId ?? assetId;
       const edge = streamEdge(this.naturalW, this.naturalH, this.viewW, this.viewH, this.zoom);
-      const s = await StreamSession.start(assetId, edge, (f) => this.onStreamFrame(f));
+      const s = await StreamSession.start(sourceId, edge, (f) => this.onStreamFrame(f));
       if (this.current?.assetId !== assetId || this.kind !== "anim") {
         s?.stop(); // await 期间已切走
         return;
@@ -331,14 +337,14 @@ export const usePreviewStore = defineStore("preview", {
       } else {
         // 帧流失败回退：原生 <img> 播源文件（gif/webp 直渲格式返回源路径；取不到则保持缩略图）
         this.playing = false;
-        const f = await getAssetFilePath(assetId);
+        const f = await getAssetFilePath(sourceId);
         if (this.current?.assetId !== assetId || this.kind !== "anim") return;
         if (f.path) this.filePath = f.path;
       }
-      // 帧条与逐帧笔记不依赖帧清单：帧条按需解码渐进，笔记 key = f:{索引}（后端 get_notes 附带旧 key 迁移）
+      // 帧条与逐帧笔记不依赖帧清单：帧条按需解码渐进（源 = 播放源），笔记归预览目标自身
       void usePreviewNotesStore().load();
       try {
-        const r = await prepareAnimStrips(assetId);
+        const r = await prepareAnimStrips(sourceId);
         if (this.current?.assetId !== assetId || this.kind !== "anim") return;
         for (const item of r.items) {
           this.animStrips[item.name] = item.stripPath;
@@ -536,8 +542,10 @@ export const usePreviewStore = defineStore("preview", {
       if (!frameName) return;
       const toast = useToastStore();
       try {
+        // 播放源代理（8.1）：fla 预览时设封面 = 改伴生 hidden 资产的封面帧与缩略图——
+        // fla 卡片经视图代理同步换图（target 仍按 fla 定位刷新版本戳与布局尺寸）
         const r = await invoke<{ thumbPath: string; modifiedAt: string; thumbWidth: number; thumbHeight: number }>("set_thumb_frame", {
-          assetId: p.assetId,
+          assetId: p.playAssetId ?? p.assetId,
           frameName,
         });
         // 即时更新卡片缩略图：路径不变（同词干重建），置空再还原迫使 <img> 重载（asset 协议不走 HTTP 缓存）

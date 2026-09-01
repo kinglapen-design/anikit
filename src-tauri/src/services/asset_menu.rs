@@ -153,6 +153,78 @@ fn thumbnail_source(lib: &Library, asset_id: &str) -> Result<PathBuf, String> {
   Err("该格式的系统图标不可用".to_string())
 }
 
+// —— 伴生缩略图绑定（8.1，PRD 02-15 hidden 资产模型；CEP 导出与手动设置共用）——
+
+/// 可作为伴生缩略图的资产格式：静态图 + 动图（hidden 绑定后工程卡片显示其缩略图）
+fn is_thumb_capable(ext: &str) -> bool {
+  matches!(ext, "png" | "jpg" | "jpeg" | "bmp" | "webp" | "gif")
+}
+
+/// 设置伴生缩略图（绑定 / 换绑）：asset = 工程侧（fla 等），thumb = 缩略图资产。
+/// 一个 hidden 资产可绑多个工程（重复绑定幂等）；换绑不动旧 hidden 资产
+/// （PRD 02-15：旧缩略图由用户手动「解除缩略图」或删除）。
+/// 写序 = 先工程侧引用后缩略图侧 hidden：半途失败时引用目标未 hidden 不代理
+/// （视图层 filter 兜住），不出现反向半态。不接撤销（同缩略图三件套既有口径）。
+pub fn set_thumb_asset(lib: &mut Library, asset_id: &str, thumb_id: &str) -> Result<(), String> {
+  if asset_id == thumb_id {
+    return Err("不能把资产设为自身的缩略图".to_string());
+  }
+  let asset = lib.index.assets.get(asset_id).ok_or_else(|| "资源不存在，可能已被删除".to_string())?.clone();
+  if asset.hidden == Some(true) {
+    return Err("缩略图资产不能再绑定缩略图".to_string());
+  }
+  let thumb = lib.index.assets.get(thumb_id).ok_or_else(|| "缩略图资产不存在，可能已被删除".to_string())?.clone();
+  if !is_thumb_capable(&thumb.ext) {
+    return Err(format!("「.{}」格式不能用作缩略图", thumb.ext));
+  }
+  if asset.thumb_asset_id.as_deref() == Some(thumb_id) {
+    return Ok(()); // 重复绑定幂等
+  }
+  let now = super::operations::now();
+  let mut a = asset;
+  a.thumb_asset_id = Some(thumb_id.to_string());
+  a.modified_at = now.clone();
+  write_json(&lib.info_dir(asset_id).join("metadata.json"), &a).map_err(|e| e.to_string())?;
+  lib.index.assets.insert(asset_id.to_string(), a);
+  let mut t = thumb;
+  t.hidden = Some(true);
+  t.modified_at = now;
+  write_json(&lib.info_dir(thumb_id).join("metadata.json"), &t).map_err(|e| e.to_string())?;
+  lib.index.assets.insert(thumb_id.to_string(), t);
+  Ok(())
+}
+
+/// 还原为素材（PRD 02-15「还原为素材」；换绑后旧缩略图的「解除缩略图」同此）：
+/// 取消 hidden 标记（链接位置原样恢复显示），并清除所有工程侧指向它的 thumb_asset_id 引用
+/// （联动清除——否则工程卡片会继续显示一个已非 hidden 资产的图）。返回清除的引用数。
+pub fn restore_thumb_asset(lib: &mut Library, asset_id: &str) -> Result<u32, String> {
+  let asset = lib.index.assets.get(asset_id).ok_or_else(|| "资源不存在，可能已被删除".to_string())?.clone();
+  if asset.hidden != Some(true) {
+    return Err("该资产不是缩略图资产".to_string());
+  }
+  let refs: Vec<String> = lib
+    .index
+    .assets
+    .values()
+    .filter(|m| m.thumb_asset_id.as_deref() == Some(asset_id))
+    .map(|m| m.id.clone())
+    .collect();
+  let now = super::operations::now();
+  for id in &refs {
+    let mut m = lib.index.assets.get(id).unwrap().clone();
+    m.thumb_asset_id = None;
+    m.modified_at = now.clone();
+    write_json(&lib.info_dir(id).join("metadata.json"), &m).map_err(|e| e.to_string())?;
+    lib.index.assets.insert(id.clone(), m);
+  }
+  let mut a = asset;
+  a.hidden = None;
+  a.modified_at = now;
+  write_json(&lib.info_dir(asset_id).join("metadata.json"), &a).map_err(|e| e.to_string())?;
+  lib.index.assets.insert(asset_id.to_string(), a);
+  Ok(refs.len() as u32)
+}
+
 /// 目标目录校验（导出公共）：存在且是目录
 fn check_target_dir(target_dir: &str) -> Result<PathBuf, String> {
   let dir = PathBuf::from(target_dir);
@@ -553,6 +625,74 @@ mod tests {
     assert_eq!(base64_encode(b"foo"), "Zm9v");
     assert_eq!(base64_encode(b"foob"), "Zm9vYg==");
     assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
+  }
+
+  #[test]
+  fn set_thumb_asset_binds_and_marks_hidden() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-F", "工程.fla", "root");
+    add_asset(&mut h, "AN-T", "封面.webp", "root");
+    set_thumb_asset(&mut h.lib, "AN-F", "AN-T").unwrap();
+    assert_eq!(h.lib.index.assets["AN-T"].hidden, Some(true), "缩略图资产打 hidden");
+    assert_eq!(h.lib.index.assets["AN-F"].thumb_asset_id.as_deref(), Some("AN-T"), "工程侧记引用");
+    // 先落盘后内存（规范第 7 条）：磁盘与索引一致
+    let meta: AssetMeta = read_json(&h.lib.info_dir("AN-T").join("metadata.json")).unwrap();
+    assert_eq!(meta.hidden, Some(true));
+    let meta: AssetMeta = read_json(&h.lib.info_dir("AN-F").join("metadata.json")).unwrap();
+    assert_eq!(meta.thumb_asset_id.as_deref(), Some("AN-T"));
+    set_thumb_asset(&mut h.lib, "AN-F", "AN-T").unwrap(); // 重复绑定幂等
+    assert_eq!(h.lib.index.assets["AN-F"].thumb_asset_id.as_deref(), Some("AN-T"));
+  }
+
+  #[test]
+  fn set_thumb_asset_rebind_keeps_old_hidden_and_shares() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-F", "工程.fla", "root");
+    add_asset(&mut h, "AN-F2", "工程2.fla", "root");
+    add_asset(&mut h, "AN-T", "封面.webp", "root");
+    add_asset(&mut h, "AN-T2", "封面2.webp", "root");
+    set_thumb_asset(&mut h.lib, "AN-F", "AN-T").unwrap();
+    // 多工程共绑同一 hidden 资产（PRD 02-15：一个资产可绑定多个工程）
+    set_thumb_asset(&mut h.lib, "AN-F2", "AN-T").unwrap();
+    assert_eq!(h.lib.index.assets["AN-F2"].thumb_asset_id.as_deref(), Some("AN-T"));
+    // 换绑：旧 hidden 资产保持 hidden（用户手动处理）
+    set_thumb_asset(&mut h.lib, "AN-F", "AN-T2").unwrap();
+    assert_eq!(h.lib.index.assets["AN-F"].thumb_asset_id.as_deref(), Some("AN-T2"));
+    assert_eq!(h.lib.index.assets["AN-T"].hidden, Some(true), "换绑不动旧 hidden");
+  }
+
+  #[test]
+  fn set_thumb_asset_guards() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-F", "工程.fla", "root");
+    add_asset(&mut h, "AN-T", "封面.webp", "root");
+    add_asset(&mut h, "AN-V", "视频.mp4", "root");
+    assert!(set_thumb_asset(&mut h.lib, "AN-F", "AN-F").unwrap_err().contains("自身"));
+    assert!(set_thumb_asset(&mut h.lib, "AN-F", "AN-X").unwrap_err().contains("不存在"));
+    assert!(set_thumb_asset(&mut h.lib, "AN-F", "AN-V").unwrap_err().contains("不能用作缩略图"), "非图格式拦截");
+    set_thumb_asset(&mut h.lib, "AN-F", "AN-T").unwrap();
+    // hidden 资产不能再绑定自己的缩略图（防套娃）
+    assert!(set_thumb_asset(&mut h.lib, "AN-T", "AN-F").unwrap_err().contains("缩略图资产"));
+  }
+
+  #[test]
+  fn restore_thumb_asset_clears_refs_and_unhides() {
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-F", "工程.fla", "root");
+    add_asset(&mut h, "AN-F2", "工程2.fla", "root");
+    add_asset(&mut h, "AN-T", "封面.webp", "root");
+    set_thumb_asset(&mut h.lib, "AN-F", "AN-T").unwrap();
+    set_thumb_asset(&mut h.lib, "AN-F2", "AN-T").unwrap();
+    let cleared = restore_thumb_asset(&mut h.lib, "AN-T").unwrap();
+    assert_eq!(cleared, 2, "返回清除的引用数");
+    assert_eq!(h.lib.index.assets["AN-T"].hidden, None, "hidden 解除");
+    assert_eq!(h.lib.index.assets["AN-F"].thumb_asset_id, None);
+    assert_eq!(h.lib.index.assets["AN-F2"].thumb_asset_id, None);
+    // 落盘一致
+    let meta: AssetMeta = read_json(&h.lib.info_dir("AN-F").join("metadata.json")).unwrap();
+    assert_eq!(meta.thumb_asset_id, None);
+    // 非 hidden 资产还原报错
+    assert!(restore_thumb_asset(&mut h.lib, "AN-T").unwrap_err().contains("不是缩略图资产"));
   }
 
   #[test]

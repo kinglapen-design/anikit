@@ -80,6 +80,8 @@ pub fn create_document(
     height: None,
     thumb_width: None,
     thumb_height: None,
+    hidden: None,
+    thumb_asset_id: None,
     duration: None,
     bpm: None,
     rating: 0,

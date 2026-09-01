@@ -115,6 +115,16 @@ pub struct AssetMeta {
   /// 封面帧文件名（frames/ 内的归一名 标题-序号.扩展名；2026-07-22 用户定案：默认首帧文件名）
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub thumb_frame: Option<String>,
+  /// hidden 标记（PRD 02-15，8.1）：图片被设为工程/档案的缩略图后打标——所有普通视图统一过滤，
+  /// 仅快速访问「缩略图」视图按资产显示一次；不复制、不搬迁、不删链接（链接位置原样保留只是不显示，
+  /// 「还原为素材」取消标记即恢复）。default None 不写字段，不升 DATA_VERSION
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub hidden: Option<bool>,
+  /// 伴生缩略图引用（PRD 02-15 thumbAssetId，8.1）：工程资产（fla 等）指向其 hidden 缩略图资产——
+  /// 卡片缩略图 / 布局尺寸经此引用取目标资产的图（PlacementView 组装时代理）；一个 hidden 资产
+  /// 可被多个工程引用。开库自检剔除失效引用；「还原为素材」时同步清除所有指向它的引用
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub thumb_asset_id: Option<String>,
   // 视频虚拟片段（PRD 01-2.6）：type 为 "segment" 时 source/start/end 有效
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub r#type: Option<String>,

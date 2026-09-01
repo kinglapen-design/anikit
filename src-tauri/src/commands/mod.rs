@@ -4,6 +4,7 @@
 pub mod archive;
 pub mod asset_menu;
 pub mod anim_stream;
+pub mod cep;
 pub mod custom_data;
 pub mod font;
 pub mod import;

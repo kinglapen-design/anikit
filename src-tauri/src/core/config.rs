@@ -145,6 +145,38 @@ pub fn ui_settings() -> Result<serde_json::Value, DataError> {
   Ok(load()?.settings.get("ui").cloned().unwrap_or_else(|| serde_json::json!({})))
 }
 
+/// CEP 导出设置（settings.cepExport 子树，8.1 二轮 2b）：插件 welcome 下发与接收服务
+/// （cep_export 降级链）共用同一份——APP 设置页单写点，8.2 批量导出同读
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CepExportSettings {
+  /// 动态导出时长上限（秒；jsx 侧帧数 = fps × 秒）
+  pub max_secs: u32,
+  /// WebP 体积软上限（字节；降级链目标，压不进保留产出）
+  pub max_bytes: u64,
+  /// WebP 长边像素上限（合成前缩放）
+  pub max_edge: u32,
+}
+
+impl Default for CepExportSettings {
+  fn default() -> Self {
+    Self { max_secs: 10, max_bytes: 2 * 1024 * 1024, max_edge: 1024 }
+  }
+}
+
+/// CEP 导出设置读取（缺字段按默认补齐）
+pub fn cep_export_settings() -> Result<CepExportSettings, DataError> {
+  let raw = load()?.settings.get("cepExport").cloned().unwrap_or_else(|| serde_json::json!({}));
+  Ok(serde_json::from_value(raw).unwrap_or_default())
+}
+
+/// CEP 导出设置写回（settings.cepExport 单点覆盖）
+pub fn save_cep_export_settings(value: CepExportSettings) -> Result<(), DataError> {
+  let p = config_path()?;
+  let mut cfg = load_from(&p);
+  cfg.settings["cepExport"] = serde_json::to_value(value).map_err(|e| DataError::Corrupt(e.to_string()))?;
+  save_to(&p, &cfg)
+}
 /// UI 设置整体写回（前端变更防抖 500ms 后整体提交，settings.ui 单点覆盖）
 pub fn save_ui_settings(value: serde_json::Value) -> Result<(), DataError> {
   let p = config_path()?;

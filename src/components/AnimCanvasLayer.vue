@@ -5,7 +5,7 @@
 // 出帧尺寸跟随卡片显示短边（2026-08-20 用户定：缩小省资源、放大跟清晰）——
 // 开流时按实际尺寸起，ResizeObserver 监听 .thumb 尺寸变化（缩放布局）防抖 150ms setSize 热更新。
 // 骨架（进入延迟 / 主窗口隐藏暂停 / disposed 护栏）收编 useHoverPlayer。
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { AUTOPLAY_ENTER_DELAY, HOVER_ENTER_DELAY, useHoverPlayer } from "../lib/useHoverPlayer";
 import { StreamSession, type StreamFrame } from "../lib/streamClient";
 import { useUiStore } from "../stores/ui";
@@ -46,7 +46,8 @@ function shortEdge(): number {
 }
 
 async function start(): Promise<void> {
-  const s = await StreamSession.start(props.asset.assetId, shortEdge(), draw);
+  // 播放源代理（8.1）：fla 等工程卡片的伴生 WebP 动图，帧流开流目标是 hidden 资产而非自身
+  const s = await StreamSession.start(props.asset.playAssetId ?? props.asset.assetId, shortEdge(), draw);
   if (isDisposed()) {
     s?.stop();
     return;
@@ -69,6 +70,19 @@ function stopSession(): void {
   session?.stop();
   session = null;
 }
+
+// 播放源热切换（2026-09-02 用户实机报：换绑伴生缩略图后卡片仍播旧动画——start 只读一次
+// playAssetId，常驻组件（自动播放）滞留旧会话盖住下层已刷新的静态封面）：源 id 变 = 停旧流重开，
+// hasFrame 回落让下层新封面先露出直到新流出帧
+watch(
+  () => props.asset.playAssetId ?? props.asset.assetId,
+  (id, old) => {
+    if (!old || id === old) return;
+    stopSession();
+    hasFrame.value = false;
+    void start();
+  },
+);
 
 onMounted(() => {
   const box = cv.value?.parentElement;
@@ -98,6 +112,9 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* 播放中衬卡片底色（g2）：帧透明像素不透下层静态首帧图——大透明区动图（CEP 伴生 WebP）
+     首曝"第一帧永远在后面"（2026-09-01）；GIF 等不透明帧像素全覆盖无视觉变化 */
+  background: var(--n-g2);
 }
 .anim-canvas.contain {
   object-fit: contain;

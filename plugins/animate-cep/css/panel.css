@@ -1,0 +1,237 @@
+/* AniKit CEP 面板样式（2b 正式版）——token 值引用 css/tokens.css（自 src/styles/tokens.css 同步） */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* CEF 默认焦点白框禁用（2026-09-02 用户实机：点击按钮后残留 outline 碍眼）；
+ * input 焦点反馈已有 border-color（.input:focus），不依赖 outline */
+:focus { outline: none; }
+
+body {
+  padding: var(--n-space-12);
+  background: var(--n-g1);
+  color: var(--n-l1);
+  font: 12px/1.6 "Microsoft YaHei", sans-serif;
+  user-select: none;
+}
+
+/* —— 双视图 tab 页切换（树选择不占遮罩，2026-09-01 用户定） —— */
+/* 纵向滚轮（2026-09-02 用户定：高度不够出滚轮不压缩控件）：overflow-y auto + 子项禁收缩；
+ * 滚动条 = 悬浮 6px 实色胶囊、悬停显隐（速查 §2 口径的 CEP 无 Vue 简化版——ScrollThumb 组件用不了）；
+ * padding-right 6 = 滚动条与内容留隙（2026-09-02 复验：贴太近） */
+.view { display: flex; flex-direction: column; gap: 14px; height: calc(100vh - 24px); overflow-y: auto; padding-right: 6px; }
+.view > * { flex: none; }
+.view .status { flex: 1 1 0; } /* 唯一吃剩余空间（basis 0 防内容顶高，min-height 保底） */
+.view .tree-body { flex: 1 1 0; min-height: 0; } /* 树选择页同口径：内部滚动，不被内容顶高（2026-09-02 复验） */
+.tree-view { display: none; }
+body.show-tree .main-view { display: none; }
+body.show-tree .tree-view { display: flex; }
+.view::-webkit-scrollbar, .status::-webkit-scrollbar, .tree-body::-webkit-scrollbar { width: 6px; }
+.view::-webkit-scrollbar-thumb, .status::-webkit-scrollbar-thumb, .tree-body::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+.view:hover::-webkit-scrollbar-thumb, .status:hover::-webkit-scrollbar-thumb, .tree-body:hover::-webkit-scrollbar-thumb {
+  background: var(--n-g5);
+}
+.view::-webkit-scrollbar-track, .status::-webkit-scrollbar-track, .tree-body::-webkit-scrollbar-track { background: transparent; }
+
+/* —— 分组（2026-09-02 用户定：控件分组 + 小标题区分功能） —— */
+.group { display: flex; flex-direction: column; gap: var(--n-space-8); }
+.group-title { font-size: 11px; color: var(--n-l4); } /* 标题小字灰（params 同档），不抢控件 */
+.group-desc { font-size: 11px; line-height: 1.6; color: var(--n-l4); } /* 仅缩略图模式说明（同档） */
+
+/* —— 导出模式分段层级强化（2026-09-02 用户定：16px 加粗 + 选中品牌色 + 加高 34，区别于参数级分段） —— */
+#segMode .seg-item { height: 34px; font-size: 16px; font-weight: 600; }
+#segMode .seg-item.on { background: var(--n-brand); color: var(--n-l1); }
+
+/* —— 连接状态 —— */
+.conn { display: flex; align-items: center; gap: var(--n-space-6, 6px); }
+.conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--n-l4); flex: none; }
+.conn-dot.on { background: var(--n-success); }
+.conn-text { font-size: 12px; color: var(--n-l3); }
+.conn-text.on { color: var(--n-l2); }
+
+/* —— 分段开关（静态/动态） —— */
+.seg {
+  display: flex;
+  padding: 2px;
+  background: var(--n-g3);
+  border: 1px solid var(--n-g5);
+  border-radius: var(--n-radius-8, 8px);
+}
+.seg-item {
+  flex: 1;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--n-l3);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 150ms, color 150ms;
+}
+.seg-item:hover { color: var(--n-l2); }
+.seg-item.on { background: var(--n-l-a1); color: var(--n-l1); } /* 选中态 = 半透明-1（2026-09-01 用户定：不用品牌色，不抢导出钮视觉焦点） */
+
+/* —— 输入框 + 中文辅助钮 —— */
+.row { display: flex; gap: var(--n-space-6, 6px); align-items: center; }
+.row-label { flex: none; color: var(--n-l4); font-size: 12px; } /* 行内小标签（帧范围「至」等） */
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 var(--n-space-8);
+  background: var(--n-g3);
+  border: 1px solid var(--n-l-a3);
+  border-radius: var(--n-radius-8, 8px);
+  color: var(--n-l1);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 150ms;
+}
+.input::placeholder { color: var(--n-l4); }
+.input:focus { border-color: var(--n-l-a1); }
+.input.err { border-color: var(--n-danger); } /* 非法输入（自定义比例等） */
+.input:disabled { opacity: 0.4; } /* 批量导出期命名框禁用（批量 = 各元件自动命名） */
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  background: var(--n-g3);
+  border: 1px solid var(--n-l-a3);
+  border-radius: var(--n-radius-8, 8px);
+  color: var(--n-l2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 150ms;
+}
+.icon-btn:hover { background: var(--n-g4); }
+
+/* —— 目标文件夹按钮 —— */
+.folder-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-6, 6px);
+  height: 30px;
+  padding: 0 var(--n-space-8);
+  background: var(--n-g3);
+  border: 1px solid var(--n-l-a3);
+  border-radius: var(--n-radius-8, 8px);
+  color: var(--n-l2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 150ms;
+}
+.folder-btn:hover { background: var(--n-g4); }
+.folder-label { color: var(--n-l4); flex: none; }
+.folder-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  color: var(--n-l1);
+}
+.folder-caret { color: var(--n-l3); flex: none; }
+
+/* —— 导出主按钮 —— */
+.primary {
+  height: 34px;
+  border: 0;
+  border-radius: var(--n-radius-8, 8px);
+  background: var(--n-brand);
+  color: var(--n-l1);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms;
+}
+.primary:hover:not(:disabled) { background: var(--n-brand-bright); }
+.primary:disabled { opacity: 0.4; cursor: default; }
+
+/* —— 状态区 —— */
+.status {
+  flex: 1;
+  min-height: 90px;
+  padding: var(--n-space-6, 6px) var(--n-space-8);
+  background: var(--n-g2);
+  border-radius: var(--n-radius-8, 8px);
+  font: 11px/1.6 Consolas, "Microsoft YaHei", monospace;
+  color: var(--n-l3);
+  overflow-y: auto;
+  user-select: text;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.status .ok { color: var(--n-success); }
+.status .err { color: var(--n-danger); }
+
+/* —— 生效参数（只读） —— */
+.params { font-size: 11px; color: var(--n-l4); text-align: center; }
+
+/* —— 树选择视图（tab 页） —— */
+.tree-head {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-8);
+}
+.tree-back {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--n-l2);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tree-back:hover { background: var(--n-l-a3); color: var(--n-l1); }
+.tree-title { font-size: 13px; font-weight: 600; color: var(--n-l1); }
+.tree-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--n-space-6, 6px);
+  background: var(--n-g2);
+  border-radius: var(--n-radius-8, 8px);
+}
+.tree-item {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  flex: none; /* 防压缩（2026-09-02 复验：item 被挤压而非出滚动条——flex 默认 shrink 的坑） */
+  padding: 0 var(--n-space-8);
+  border-radius: 6px;
+  color: var(--n-l2);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-item:hover { background: var(--n-l-a3); }
+.tree-item.on { background: var(--n-l-a1); color: var(--n-l1); }
+/* 档案标识（APP 树口径：文字正常色 + 品牌色圆点前置，2026-09-01 用户定——整行蓝字突兀） */
+.tree-item.archive::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--n-brand);
+  flex: none;
+  margin-right: 6px;
+}
+.tree-cancel {
+  height: 30px;
+  border: 0;
+  border-radius: var(--n-radius-8, 8px);
+  background: var(--n-g5);
+  color: var(--n-l2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.tree-cancel:hover { background: var(--n-g6); }

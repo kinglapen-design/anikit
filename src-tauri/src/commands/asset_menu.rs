@@ -73,6 +73,23 @@ pub async fn copy_thumbnail_to_clipboard(state: State<'_, AppState>, asset_id: S
   asset_menu::copy_thumbnail_to_clipboard(lib, &asset_id)
 }
 
+/// 设置伴生缩略图（8.1，PRD 02-15 hidden 绑定）：thumb 资产打 hidden + 工程侧记 thumb_asset_id；
+/// 换绑 / 多工程共绑同图均可；不接撤销（同缩略图三件套口径）
+#[tauri::command]
+pub async fn set_thumb_asset(state: State<'_, AppState>, asset_id: String, thumb_id: String) -> Result<(), String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  asset_menu::set_thumb_asset(lib, &asset_id, &thumb_id)
+}
+
+/// 还原为素材（8.1，PRD 02-15）：取消 hidden 标记并联动清除所有工程侧引用；返回清除的引用数
+#[tauri::command]
+pub async fn restore_thumb_asset(state: State<'_, AppState>, asset_id: String) -> Result<u32, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  asset_menu::restore_thumb_asset(lib, &asset_id)
+}
+
 /// 导出数据源快照：锁内克隆（资产索引 + folders 文件），工作线程只持快照——
 /// 导出 IO 不占用库锁，长拷贝不阻塞 UI 其他命令
 fn export_snapshot(app: &AppHandle) -> Result<asset_menu::ExportSource, String> {

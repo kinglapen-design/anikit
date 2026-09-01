@@ -85,6 +85,9 @@ export const useSelectionStore = defineStore("selection", {
     folderAnchor: null as string | null,
     // —— 6.1 阶段 C 操作态（会话级，均不进持久化）——
     clipboard: null as InternalClipboard | null,
+    // 缩略图链接（批次 4，2026-09-02）：「转换为缩略图链接并复制」写入、「将 xx 设置为缩略图」消费——
+    // 纯引用复制（不动库数据，hidden 在实际绑定 set_thumb_asset 时打）；会话级不落盘
+    thumbLink: null as { assetId: string; name: string } | null,
     linkManageDraft: null as LinkManageDraft | null, // 非空 = 链接管理弹窗打开（宿主 App.vue，6.2 三轮）
     recyclePrompt: null as RecyclePrompt | null, // 非空 = 回收站彻底删除确认窗打开（宿主 App.vue，6.1 二轮）
     // 卡片就地重命名目标 key（C2；F2 / 右键菜单设置，单选才可；滚出视口 / Esc = 取消置 null）

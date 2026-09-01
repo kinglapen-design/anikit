@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>AniKit</title>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/panel.css">
+</head>
+<body>
+  <!-- 主视图 -->
+  <div class="view main-view" id="mainView">
+    <!-- 连接状态 -->
+    <div class="conn" id="conn">
+      <span class="conn-dot" id="connDot"></span>
+      <span class="conn-text" id="connText">未连接</span>
+    </div>
+
+    <!-- 导出模式 -->
+    <div class="group">
+      <div class="group-title">导出模式</div>
+      <div class="seg" id="segMode">
+        <button class="seg-item on" id="segFile" type="button">新文件</button>
+        <button class="seg-item" id="segThumb" type="button">仅缩略图</button>
+      </div>
+      <div class="group-desc" id="modeDesc" style="display:none">不产生新 fla，直接导当前文档画面：静态 = 播放头当前帧；动态 = 起止帧范围，留空 = 全部帧（超上限自动截断）。库内 fla 自动绑定缩略图；库外导出到原文件旁边，自行导入。</div>
+    </div>
+
+    <!-- 画面 -->
+    <div class="group">
+      <div class="group-title">画面</div>
+      <!-- 静态 / 动态 分段（2026-09-02 复验改回：有标题分组后不复选框——用户定「切换按钮更直观」） -->
+      <div class="seg" id="seg">
+        <button class="seg-item on" id="segStatic" type="button">静态</button>
+        <button class="seg-item" id="segAnim" type="button">动态</button>
+      </div>
+      <!-- 帧范围（仅缩略图 + 动态时显示；1-based 含端点，留空 = 全部） -->
+      <div class="row" id="rangeRow" style="display:none">
+        <span class="row-label">帧</span>
+        <input id="rangeStart" class="input" type="text" inputmode="numeric" placeholder="起" spellcheck="false">
+        <span class="row-label">至</span>
+        <input id="rangeEnd" class="input" type="text" inputmode="numeric" placeholder="止" spellcheck="false">
+      </div>
+      <!-- 舞台尺寸（新 fla）：比例档 = 高度跟随文档按比例算宽；像素框两框都填 = 直定尺寸（优先于比例档） -->
+      <div class="seg" id="segRatio">
+        <button class="seg-item on" data-ratio="" type="button" title="跟随当前文档舞台尺寸">文档</button>
+        <button class="seg-item" data-ratio="16:9" type="button">16:9</button>
+        <button class="seg-item" data-ratio="4:3" type="button">4:3</button>
+        <button class="seg-item" data-ratio="1:1" type="button">1:1</button>
+        <button class="seg-item" data-ratio="3:4" type="button">3:4</button>
+        <button class="seg-item" data-ratio="9:16" type="button">9:16</button>
+      </div>
+      <div class="row" id="pixelRow" title="自定义舞台尺寸（像素，两框都填才生效）">
+        <input id="sizeW" class="input" type="text" inputmode="numeric" placeholder="宽 px" spellcheck="false">
+        <span class="row-label">×</span>
+        <input id="sizeH" class="input" type="text" inputmode="numeric" placeholder="高 px" spellcheck="false">
+      </div>
+      <!-- 对齐方式（保持坐标 = fla 保原坐标，与发送至 AN 原位粘贴联动；合适舞台 = 缩放居中态直存，拆素材用） -->
+      <div class="seg" id="segAlign">
+        <button class="seg-item on" id="segKeep" type="button">保持坐标</button>
+        <button class="seg-item" id="segFit" type="button">合适舞台</button>
+      </div>
+    </div>
+
+    <!-- 入库 -->
+    <div class="group" id="groupInbox">
+      <div class="group-title">入库</div>
+      <!-- 命名行：输入框 + 中文辅助钮（多选批量时内容作前缀，自动加 -序号） -->
+      <div class="row" id="nameRow">
+        <input id="name" class="input" type="text" placeholder="命名（多选 = 前缀+序号）" spellcheck="false">
+        <button id="btnZh" class="icon-btn" type="button" title="中文输入（系统输入法）">中</button>
+      </div>
+      <!-- 目标文件夹（点击切树选择页） -->
+      <button id="btnFolder" class="folder-btn" type="button">
+        <span class="folder-label">目标</span>
+        <span class="folder-value" id="folderValue">未分类</span>
+        <span class="folder-caret">▾</span>
+      </button>
+    </div>
+
+    <!-- 导出 -->
+    <button id="btnExport" class="primary" type="button" disabled>导出</button>
+
+    <!-- 状态区 -->
+    <div class="status" id="status"></div>
+
+    <!-- 生效参数（APP 设置下发，只读） -->
+    <div class="params" id="params">上限 10s · 2M · 1024px</div>
+  </div>
+
+  <!-- 树选择视图（tab 页切换，不遮挡主视图） -->
+  <div class="view tree-view" id="treeView">
+    <div class="tree-head">
+      <button class="tree-back" id="treeBack" type="button">‹</button>
+      <span class="tree-title">选择目标文件夹</span>
+    </div>
+    <div class="tree-body" id="treeBody"></div>
+    <button class="tree-cancel" id="treeCancel" type="button">取消</button>
+  </div>
+
+  <script src="js/CSInterface.js"></script>
+  <script src="js/panel.js"></script>
+</body>
+</html>

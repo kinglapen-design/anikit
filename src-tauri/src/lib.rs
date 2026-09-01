@@ -8,6 +8,7 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 mod adapters;
 mod commands;
 mod core;
+mod server;
 mod services;
 
 /// 托盘菜单项句柄（收件箱盘符勾选态 / 标注由 services::inbox::sync_tray 同步）
@@ -74,6 +75,10 @@ pub fn run() {
       // cfg(not(test))：init 内部持 AppHandle + 起 WS server，测试构建编译不出该函数（踩坑 014）
       #[cfg(not(test))]
       services::frame_stream::init(app.handle().clone());
+
+      // 插件通信 WS 服务（8.1，PRD 07-01）：Animate CEP 等软件插件的统一通信通道
+      #[cfg(not(test))]
+      server::init(app.handle().clone());
 
       // 全局热键 alt+`：呼出 / 隐藏主窗口（后续用于快捷搜索框）
       // 注册失败（热键被他方占用）只记日志降级，不阻断启动
@@ -346,6 +351,12 @@ pub fn run() {
       commands::asset_menu::set_thumbnail_custom,
       commands::asset_menu::refresh_thumbnail,
       commands::asset_menu::copy_thumbnail_to_clipboard,
+      commands::asset_menu::set_thumb_asset,
+      commands::asset_menu::restore_thumb_asset,
+      commands::cep::get_cep_install_status,
+      commands::cep::install_cep_plugin,
+      commands::cep::get_cep_export_settings,
+      commands::cep::save_cep_export_settings,
       commands::asset_menu::export_assets,
       commands::asset_menu::export_folder,
       commands::asset_menu::export_retry,

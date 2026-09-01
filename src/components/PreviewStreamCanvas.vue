@@ -35,5 +35,7 @@ watch(
   width: 100%;
   height: 100%;
   display: block;
+  /* 播放中衬预览区底色（g1）：帧透明像素不透下层占位首帧图（同 AnimCanvasLayer 修复，2026-09-01） */
+  background: var(--n-g1);
 }
 </style>

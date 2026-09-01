@@ -224,6 +224,9 @@ pub fn search(lib: &Library, query: &str, scope: &SearchScope) -> SearchHits {
     };
 
   for meta in lib.index.assets.values() {
+    if meta.hidden == Some(true) {
+      continue; // hidden 伴生缩略图资产（8.1，PRD 02-15）：不是用户管理对象，全范围搜索不命中
+    }
     let placements = lib.index.placements_of(&meta.id);
     if placements.is_empty() {
       continue; // 回收站资产（无活 Placement）不参与——全局 = 全库不含回收站（2026-08-19 用户定）
@@ -342,6 +345,8 @@ mod tests {
       height: None,
       thumb_width: None,
       thumb_height: None,
+      hidden: None,
+      thumb_asset_id: None,
       duration: None,
       bpm: None,
       rating: 0,

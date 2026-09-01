@@ -62,6 +62,12 @@ pub struct PlacementView {
   /// 帧率（序列帧 = 播放帧率默认 24；视频 = 素材自身帧率，5.3 帧化改造补——前端帧号显示 /
   /// 逐帧步进按 1/fps）；无帧概念资源为 null
   pub fps: Option<f64>,
+  /// hidden 标记（PRD 02-15，8.1）：被设为缩略图的资产——普通视图统一过滤，仅「缩略图」视图显示
+  pub hidden: bool,
+  /// 播放源代理（8.1，PRD 02-15）：thumb_asset_id 有效时 = hidden 伴生资产 id——卡片动图播放
+  /// （悬停 / 自动播放）的帧流开流目标（fla 自身无可解码帧流，伴生 WebP 才是画面源）；无代理为 None
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub play_asset_id: Option<String>,
 }
 
 /// 格式图标缓存键（空扩展名归 "file"）
@@ -83,28 +89,44 @@ pub fn thumb_path(lib: &Library, meta: &AssetMeta, icons: &HashSet<String>) -> O
 
 /// Placement + 资源元数据 → 视图；调用方负责跳过索引中缺失的资源（脏 Placement）
 pub fn placement_view(lib: &Library, meta: &AssetMeta, p: &Placement, icons: &HashSet<String>) -> PlacementView {
-  let thumb_kind = if meta.thumbnail.is_some() {
+  // 伴生缩略图代理（8.1，PRD 02-15 thumbAssetId）：工程资产（fla 等）的缩略图四件
+  // （路径 / 来源 / 实际尺寸）改取目标 hidden 资产——fla 卡片直接显示伴生 WebP 的图。
+  // 目标须 hidden 才代理（防止「还原为素材」途中脏引用显示普通资产）；失效引用由开库自检清除
+  let thumb_meta = meta
+    .thumb_asset_id
+    .as_deref()
+    .and_then(|id| lib.index.assets.get(id))
+    .filter(|t| t.hidden == Some(true));
+  let source = thumb_meta.unwrap_or(meta);
+  let thumb_kind = if source.thumbnail.is_some() {
     Some(ThumbKind::Asset)
-  } else if icons.contains(icon_key(&meta.ext)) {
+  } else if icons.contains(icon_key(&source.ext)) {
     Some(ThumbKind::FormatIcon)
   } else {
     None
   };
+  // 播放字段同代理（卡片动图播放：fla 的 animated/frame_count/fps/duration/thumb_frame
+  // 全从伴生资产来——帧流开流目标走 play_asset_id）；无代理 = 自身值
+  let (frame_count, fps, duration, thumb_frame) = match thumb_meta {
+    Some(t) => (t.frame_count, t.fps, t.duration, t.thumb_frame.clone()),
+    None => (meta.frame_count, meta.fps, meta.duration, meta.thumb_frame.clone()),
+  };
+  let animated = frame_count.is_some() && matches!(source.ext.as_str(), "gif" | "webp");
   PlacementView {
     asset_id: p.asset.clone(),
     folder_id: p.folder.clone(),
     name: p.name.clone(),
     w: meta.width,
     h: meta.height,
-    thumb_w: meta.thumb_width,
-    thumb_h: meta.thumb_height,
+    thumb_w: source.thumb_width,
+    thumb_h: source.thumb_height,
     ext: meta.ext.clone(),
-    thumb_path: thumb_path(lib, meta, icons),
+    thumb_path: thumb_path(lib, source, icons),
     thumb_kind,
     origin: p.origin,
-    frame_count: meta.frame_count,
-    animated: meta.frame_count.is_some() && matches!(meta.ext.as_str(), "gif" | "webp"),
-    duration: meta.duration,
+    frame_count,
+    animated,
+    duration,
     bpm: meta.bpm,
     imported_from: meta.imported_from.clone(),
     size: meta.size,
@@ -112,7 +134,70 @@ pub fn placement_view(lib: &Library, meta: &AssetMeta, p: &Placement, icons: &Ha
     modified_at: meta.modified_at.clone(),
     imported_at: meta.imported_at.clone(),
     note_count: meta.note_count,
-    thumb_frame: meta.thumb_frame.clone(),
-    fps: meta.fps,
+    thumb_frame,
+    fps,
+    hidden: meta.hidden == Some(true),
+    play_asset_id: thumb_meta.map(|t| t.id.clone()),
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::core::library;
+  use crate::services::import::{self as ops, PendingFile, Source};
+  use std::collections::HashMap;
+
+  /// 伴生缩略图代理（8.1，PRD 02-15）：工程资产带 thumb_asset_id 时，
+  /// 缩略图四件（路径 / 来源 / 尺寸）取目标 hidden 资产；目标未 hidden 不代理（半态护栏）
+  #[test]
+  fn thumb_asset_id_proxies_thumb_fields() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut lib = library::create_test(dir.path());
+    // 造资产：fla（fake 字节）+ webp 缩略图资产（fake 字节；thumbnail 字段直接内存注入——
+    // 本测试只验证代理指向，不读真实图）
+    for (id, file) in [("AN-F", "工程.fla"), ("AN-T", "封面.webp")] {
+      let src = dir.path().join(file);
+      std::fs::write(&src, b"fake").unwrap();
+      let pf = PendingFile { path: src, chain: Vec::new() };
+      let meta = ops::build_asset_with_id(&lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+      lib.index.assets.insert(id.into(), meta);
+      ops::add_placement(&mut lib, id.into(), "root".into(), file.into(), true, &mut HashMap::new());
+    }
+    {
+      let t = lib.index.assets.get_mut("AN-T").unwrap();
+      t.hidden = Some(true);
+      t.thumbnail = Some("封面_thumbnail.webp".into());
+      t.thumb_width = Some(320);
+      t.thumb_height = Some(180);
+      t.frame_count = Some(17); // 伴生 WebP 是动图（播放代理验证）
+      t.fps = Some(25.0);
+      t.duration = Some(0.68);
+    }
+    lib.index.assets.get_mut("AN-F").unwrap().thumb_asset_id = Some("AN-T".into());
+
+    let meta_f = lib.index.assets["AN-F"].clone();
+    let p = lib.index.placements_of("AN-F")[0].clone();
+    let view = placement_view(&lib, &meta_f, &p, &lib.format_icons);
+    let thumb = view.thumb_path.unwrap();
+    assert!(thumb.contains("AN-T"), "代理取 hidden 资产的缩略图路径：{thumb}");
+    assert_eq!(view.thumb_kind, Some(ThumbKind::Asset));
+    assert_eq!((view.thumb_w, view.thumb_h), (Some(320), Some(180)), "布局尺寸跟随缩略图资产");
+    assert!(!view.hidden, "工程侧自身不 hidden");
+    // 播放字段代理（卡片动图播放：fla 卡片 animated + 帧流开流目标 = 伴生资产）
+    assert!(view.animated, "fla 卡片按伴生 WebP 显示为动图");
+    assert_eq!(view.frame_count, Some(17));
+    assert_eq!(view.fps, Some(25.0));
+    assert_eq!(view.duration, Some(0.68));
+    assert_eq!(view.play_asset_id.as_deref(), Some("AN-T"));
+    let view_t = placement_view(&lib, &lib.index.assets["AN-T"].clone(), &lib.index.placements_of("AN-T")[0].clone(), &lib.format_icons);
+    assert!(view_t.hidden, "hidden 资产视图带标记（前端过滤依据）");
+    assert_eq!(view_t.play_asset_id, None, "hidden 资产自身无代理");
+
+    // 半态护栏：目标未 hidden 时不代理（回退自身缩略图逻辑）
+    lib.index.assets.get_mut("AN-T").unwrap().hidden = None;
+    let view2 = placement_view(&lib, &meta_f, &p, &lib.format_icons);
+    assert!(!view2.thumb_path.map(|t| t.contains("AN-T")).unwrap_or(false), "目标未 hidden 不代理");
+    assert!(!view2.animated && view2.play_asset_id.is_none(), "播放代理同解除");
   }
 }

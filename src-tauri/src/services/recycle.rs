@@ -227,6 +227,24 @@ pub(crate) fn sync_after_purge(lib: &mut Library, removed: &[String]) -> Result<
   if lib.pins.pins.len() != before {
     library::save_pins(lib).map_err(|e| e.to_string())?;
   }
+  // 伴生缩略图引用清理（8.1，PRD 02-15）：他处 thumb_asset_id 指向被删资产 → 清除（逐资产落盘）
+  let ref_ids: Vec<String> = lib
+    .index
+    .assets
+    .values()
+    .filter(|m| m.thumb_asset_id.as_deref().is_some_and(|t| set.contains(t)))
+    .map(|m| m.id.clone())
+    .collect();
+  if !ref_ids.is_empty() {
+    let now = super::operations::now();
+    for id in ref_ids {
+      let mut m = lib.index.assets.get(&id).unwrap().clone();
+      m.thumb_asset_id = None;
+      m.modified_at = now.clone();
+      crate::core::json_io::write_json(&lib.info_dir(&id).join("metadata.json"), &m).map_err(|e| e.to_string())?;
+      lib.index.assets.insert(id, m);
+    }
+  }
   Ok(())
 }
 
@@ -266,6 +284,20 @@ mod tests {
     h.lib.index.assets.insert(id.into(), meta);
     ops::add_placement(&mut h.lib, id.into(), folder.into(), file.into(), true, &mut HashMap::new());
     finish(&mut h.lib).unwrap();
+  }
+
+  #[test]
+  fn sync_after_purge_clears_thumb_asset_refs() {
+    // 8.1：彻底删除 hidden 缩略图资产 → 工程侧 thumb_asset_id 引用同步清除（落盘一致）
+    let mut h = make_lib();
+    add_asset(&mut h, "AN-F", "工程.fla", "root");
+    add_asset(&mut h, "AN-T", "封面.webp", "root");
+    crate::services::asset_menu::set_thumb_asset(&mut h.lib, "AN-F", "AN-T").unwrap();
+    sync_after_purge(&mut h.lib, &["AN-T".to_string()]).unwrap();
+    assert!(!h.lib.index.assets.contains_key("AN-T"));
+    assert_eq!(h.lib.index.assets["AN-F"].thumb_asset_id, None, "工程侧引用清除");
+    let disk: crate::core::models::AssetMeta = read_json(&h.lib.info_dir("AN-F").join("metadata.json")).unwrap();
+    assert_eq!(disk.thumb_asset_id, None, "落盘一致");
   }
 
   /// 把资源 origin Placement 删进回收站（走删除的 recycle 分支，数据与线上一致；

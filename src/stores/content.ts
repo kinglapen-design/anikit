@@ -37,6 +37,8 @@ export interface PlacementView {
   noteCount?: number | null; // 逐帧笔记条数冗余（5.2 展示层：卡片笔记角标据此显隐）；无笔记为 null
   thumbFrame?: string | null; // 封面帧：序列帧/动图 = 帧名；视频 = `t:{秒}`（5.2 写入，5.3 悬停播放范围起点）
   fps?: number | null; // 帧率：序列帧 = 播放帧率；视频 = 素材自身帧率（5.3 帧化：帧号显示 / 逐帧步进按 1/fps）
+  hidden: boolean; // hidden 伴生缩略图标记（8.1，PRD 02-15）：普通视图统一过滤，仅「缩略图」视图显示
+  playAssetId?: string | null; // 播放源代理（8.1）：fla 等工程卡片动图播放的帧流开流目标（= hidden 伴生资产 id）；无代理为 null
 }
 
 // 最近使用 / 回收站视图 DTO（6.1 二轮）已拆至 stores/quickViews.ts（规范第 3 条行数控制），
@@ -236,6 +238,8 @@ let unlistenInbox: (() => void) | undefined;
 let unlistenFpsHeal: (() => void) | undefined;
 // 最近使用变更事件监听（2026-07-29 复验反馈修复：原仅全量 refresh 拉取、要重启才更新）
 let unlistenRecent: (() => void) | undefined;
+// CEP 导出接收入库事件监听（8.1）：后端 WS 服务导入完成后广播 cep-imported，全量对齐
+let unlistenCep: (() => void) | undefined;
 
 // 视口滚动位置（会话级，2026-07-25 用户定）：进出预览 / 切换目录都恢复——
 // 预览返回不跳顶（设缩略图后可直接确认），对比两个文件夹不用重新翻
@@ -384,11 +388,14 @@ export const useContentStore = defineStore("content", {
           fresh.sort((a, b) => a.seq - b.seq);
           return [...fresh.map((f) => f.p), ...rest];
         };
+        // hidden 伴生缩略图过滤（8.1，PRD 02-15）：普通视图统一过滤 hidden 资产的全部位置
+        // （链接位置一并消失；回收站条目独立数组不受影响）；「缩略图」视图反向取 hidden 集
+        const visible = state.placements.filter((p) => !p.hidden);
         if (viewKey.startsWith("folder:")) {
           const id = viewKey.slice(7);
           // 递归显示（ui.showSubfolders，2026-08-10 接入）：开 = 视口含全部后代文件夹的 Placement；
           // 关 = 仅当前文件夹直接 Placement
-          if (!useUiStore().showSubfolders) return sort(state.placements.filter((p) => p.folderId === id));
+          if (!useUiStore().showSubfolders) return sort(visible.filter((p) => p.folderId === id));
           const ids = new Set<string>();
           const collect = (n: FolderNode): void => {
             ids.add(n.id);
@@ -397,21 +404,32 @@ export const useContentStore = defineStore("content", {
           const root = findFolder(state.folders, id);
           if (root) collect(root);
           else ids.add(id); // 失效 viewKey（文件夹已删）：退化为直接匹配
-          return sort(state.placements.filter((p) => ids.has(p.folderId)));
+          return sort(visible.filter((p) => ids.has(p.folderId)));
         }
         switch (viewKey) {
           // 2026-08-13 用户定案：快速访问不做内容限制——按实际 Placement 显示，
           // 链接不再隐藏（原 originOnly 资产级去重 + origin 过滤整体废除）
           case "quick:all": // 全部 = 递归显示所有文件（2026-07-22 用户定案）
-            return sort(state.placements);
+            return sort(visible);
           case "quick:uncategorized": // 未分类 = 未归入任何文件夹（root 即未分类）
-            return sort(state.placements.filter((p) => p.folderId === "root"));
+            return sort(visible.filter((p) => p.folderId === "root"));
           case "quick:inbox": // 收件箱"已导入" = importedFrom=inbox 且未摘标的资产，持久显示
             // （2026-07-25 用户定：用户没分类走就要一直在）。不限 folderId=root——手动导入 Keep
             // 生成的层级也算未分类；摘标 = 清 importedFrom（归 6.3），清后自然消失
-            return sort(state.placements.filter((p) => p.importedFrom === "inbox"));
+            return sort(visible.filter((p) => p.importedFrom === "inbox"));
+          case "quick:thumbnail": {
+            // 缩略图视图（8.1，PRD 02-15 hidden 资产）：按资产显示一次（多条链接位置去重取首条）
+            const seen = new Set<string>();
+            return sort(
+              state.placements.filter((p) => {
+                if (!p.hidden || seen.has(p.assetId)) return false;
+                seen.add(p.assetId);
+                return true;
+              }),
+            );
+          }
           case "quick:recent": // 最近使用（后端已按时间倒序；3.5 排序开启后按排序键覆盖）
-            return sort(state.recentAssets);
+            return sort(state.recentAssets.filter((r) => !r.hidden));
           case "quick:recycle": // 回收站（folderId 恒 "recycle"，key 与素材域互不干扰）
             return sort(state.recycleEntries);
           default:
@@ -447,13 +465,21 @@ export const useContentStore = defineStore("content", {
     // 最近使用 / 回收站留 6.1，工作空间 / 标签 / 快捷入口占位视图不接（对应阶段未开工）；
     // 2026-08-13 起与视图同口径：按实际 Placement 计数（链接不再隐藏）
     allCount(state): number {
-      return state.placements.length;
+      return state.placements.filter((p) => !p.hidden).length;
     },
     uncategorizedCount(state): number {
-      return state.placements.filter((p) => p.folderId === "root").length;
+      return state.placements.filter((p) => !p.hidden && p.folderId === "root").length;
     },
     inboxCount(state): number {
-      return state.placements.filter((p) => p.importedFrom === "inbox").length;
+      return state.placements.filter((p) => !p.hidden && p.importedFrom === "inbox").length;
+    },
+    // 缩略图视图计数（8.1，PRD 02-15）：hidden 资产按资产去重（与 quick:thumbnail 视图同口径）
+    thumbnailCount(state): number {
+      const seen = new Set<string>();
+      for (const p of state.placements) {
+        if (p.hidden) seen.add(p.assetId);
+      }
+      return seen.size;
     },
     // 文件夹卡片横排（03_中间面板）：仅文件夹视图显示直接子文件夹；
     // 快速访问视图一律不出文件夹区块（2026-07-22 用户定案；回收站保留文件夹随对应阶段另议）。
@@ -872,6 +898,14 @@ export const useContentStore = defineStore("content", {
     async initRecentListener(): Promise<void> {
       if (unlistenRecent) return;
       unlistenRecent = await listen("recent-changed", () => void this.refreshRecent());
+    },
+
+    // CEP 导出入库热刷新（8.1）：WS 服务接收入库完成广播 cep-imported → 全量对齐
+    // （新 fla 卡片显示伴生图 + 缩略图视图入列 + 目标文件夹新增，涉及视图代理与 hidden
+    // 过滤多口径，局部同步成本高且易漏，导入级操作频率低，直接 refresh 同导入完成口径）
+    async initCepListener(): Promise<void> {
+      if (unlistenCep) return;
+      unlistenCep = await listen("cep-imported", () => void this.refresh());
     },
 
     // 拉取收件箱磁盘实况快层快照（4.4）：失败静默降级——实况是辅助展示，不阻断任何流程

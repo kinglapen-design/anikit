@@ -19,6 +19,9 @@ use crate::core::space::{self, Space};
 pub const BACKUP_DIR: &str = "backup";
 pub const CACHE_DIR: &str = "cache";
 pub const VECTORS_DIR: &str = "vectors";
+/// 临时文件总目录（8.1，2026-09-01 用户定：temp 与 cache 分离——temp = 中转产物用完即删，
+/// cache = 可重建缓存；各功能临时文件在 temp/ 下各有归属子目录，如 CEP 导出中转 temp/cep-out）
+pub const TEMP_DIR: &str = "temp";
 pub const FOLDERS_FILE: &str = "folders.json";
 pub const TAGS_FILE: &str = "tags.json";
 pub const PINS_FILE: &str = "pins.json";
@@ -144,7 +147,7 @@ pub fn create(space: &mut Space, name: &str) -> Result<Library, DataError> {
   if fs::read_dir(&path)?.next().is_some() {
     return Err(DataError::NotEmpty);
   }
-  for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR] {
+  for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR, TEMP_DIR] {
     fs::create_dir_all(path.join(dir))?;
   }
   write_json(&path.join(FOLDERS_FILE), &FoldersFile::new())?;
@@ -170,7 +173,7 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   validate(path)?;
   let assets_dir = paths::assets_dir(space_root);
   fs::create_dir_all(&assets_dir)?; // assets/ 缺失自愈补建（space::open 已补，此处双保险）
-  for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR] {
+  for dir in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR, TEMP_DIR] {
     fs::create_dir_all(path.join(dir))?;
   }
   // 会话级缓存（2026-07-25 用户定）：tmp（冲突弹窗预览）/ previews（PSD 高清层）/ frames（序列帧+动图帧条小图）
@@ -194,7 +197,7 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   let recent: RecentFile = read_json(&path.join(RECENT_FILE))?;
   // archives.json 是 3.2 新增文件：旧库无此文件按空表加载（不算损坏，同 PRD 06-04 口径的例外）
   let mut archives = read_archives(&path.join(ARCHIVES_FILE))?;
-  let assets = load_assets(&assets_dir)?;
+  let mut assets = load_assets(&assets_dir)?;
   // 打开自检（2026-07-25 用户反馈：手动删 assets/{ID}.info 后数量成永久错误）：
   // 剔除指向缺失 info 的 Placement（内存与磁盘同清，数量统计随索引重建归零）。
   // 落盘前先强制备份一份含脏数据的快照；备份失败则不写盘（只内存清理，防误删无可回滚）。
@@ -213,6 +216,12 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   let icons_fixed = fix_custom_icons(&mut folders);
   if icons_fixed {
     log::info!("打开自检迁移自定义图标值（旧文件干就近映射 / 失效值回退默认）");
+  }
+  // 伴生缩略图引用自检（8.1，PRD 02-15）：thumb_asset_id 指向已不存在资产 → 剔除（失效引用）。
+  // 反向（hidden 资产无引用）合法不动——换绑遗留由用户手动「解除缩略图」或删除
+  let thumb_refs_fixed = fix_thumb_refs(&mut assets);
+  if !thumb_refs_fixed.is_empty() {
+    log::info!("打开自检剔除 {} 条失效伴生缩略图引用（thumb_asset_id）", thumb_refs_fixed.len());
   }
   // 档案数据自检（2026-08-15 档案子系统）：剔除指向不存在 folder / folder 非档案形态的记录；
   // 同 folder_id 重复记录去重（2026-09-01 封面设置懒建 BUG 存量自愈）
@@ -238,7 +247,7 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
     }
   }
   let folders_changed = removed > 0 || blocks_fixed || icons_fixed;
-  if folders_changed || archives_fixed {
+  if folders_changed || archives_fixed || !thumb_refs_fixed.is_empty() {
     match backup::backup_library(path, &assets_dir) {
       Ok(_) => {
         if folders_changed {
@@ -246,6 +255,15 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
         }
         if archives_fixed {
           write_json(&path.join(ARCHIVES_FILE), &archives)?;
+        }
+        // thumb_asset_id 自检落盘：逐资产 metadata.json（备份门禁同 folders——失败仅内存清理）
+        for id in &thumb_refs_fixed {
+          if let Some(a) = assets.iter().find(|a| &a.id == id) {
+            let meta_path = paths::info_dir(&assets_dir, id).join("metadata.json");
+            if let Err(e) = write_json(&meta_path, a) {
+              log::error!("thumb_asset_id 自检落盘失败（{id}）：{e}");
+            }
+          }
         }
       }
       Err(e) => log::error!("自检清理前备份失败，数据文件保持原样（仅本会话内存清理）：{e}"),
@@ -362,6 +380,21 @@ fn fix_custom_icons(folders: &mut FoldersFile) -> bool {
   changed
 }
 
+/// 打开自检（8.1，PRD 02-15）：剔除失效伴生缩略图引用（thumb_asset_id 指向已不存在的资产）。
+/// 只改内存返回改动 id 列表——逐资产 metadata.json 落盘在备份门禁段（备份失败则仅内存清理）。
+/// 反向不查：hidden 资产无引用是合法态（换绑遗留，用户手动处理）
+fn fix_thumb_refs(assets: &mut [AssetMeta]) -> Vec<String> {
+  let ids: HashSet<String> = assets.iter().map(|a| a.id.clone()).collect();
+  let mut changed = Vec::new();
+  for a in assets.iter_mut() {
+    if a.thumb_asset_id.as_deref().is_some_and(|t| !ids.contains(t)) {
+      a.thumb_asset_id = None;
+      changed.push(a.id.clone());
+    }
+  }
+  changed
+}
+
 /// archives.json 读取（2026-08-15 档案子系统）：文件不存在 = 空表（3.2 新增文件，旧库无此文件不算损坏）
 fn read_archives(path: &Path) -> Result<ArchivesFile, DataError> {
   if path.is_file() {
@@ -466,14 +499,36 @@ mod tests {
   }
 
   #[test]
+  fn open_prunes_dangling_thumb_asset_id() {
+    // 8.1 伴生缩略图引用自检：thumb_asset_id 指向不存在资产 → 开库剔除 + 落盘一致
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let space_root = lib.space_root.clone();
+    let root = lib.root.clone();
+    // 造一个真实资产并把它的 thumb_asset_id 改为悬空引用落盘
+    let src = dir.path().join("工程.fla");
+    fs::write(&src, b"fake").unwrap();
+    let pf = crate::services::import::PendingFile { path: src, chain: Vec::new() };
+    let mut meta = crate::services::import::build_asset_with_id(&lib.assets_dir, &pf, "sha256:t", "AN-F", crate::services::import::Source::Copy, None).unwrap();
+    meta.thumb_asset_id = Some("AN-GHOST".into());
+    write_json(&lib.info_dir("AN-F").join("metadata.json"), &meta).unwrap();
+    drop(lib);
+
+    let lib2 = open(&space_root, &root).unwrap();
+    assert_eq!(lib2.index.assets["AN-F"].thumb_asset_id, None, "开库剔除悬空引用");
+    let disk: AssetMeta = read_json(&lib2.info_dir("AN-F").join("metadata.json")).unwrap();
+    assert_eq!(disk.thumb_asset_id, None, "落盘一致");
+  }
+
+  #[test]
   fn create_initializes_full_structure() {
     let dir = tempfile::tempdir().unwrap();
     let (mut space, space_root) = make_space(dir.path());
     let lib = create(&mut space, "我的素材库").unwrap();
     let root = space_root.join("我的素材库");
 
-    // 库目录 = 纯数据 + backup/cache/vectors（assets/ 与 inbox/ 均在空间级）
-    for d in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR] {
+    // 库目录 = 纯数据 + backup/cache/vectors/temp（assets/ 与 inbox/ 均在空间级）
+    for d in [BACKUP_DIR, CACHE_DIR, VECTORS_DIR, TEMP_DIR] {
       assert!(root.join(d).is_dir(), "缺目录 {d}");
     }
     assert!(!root.join("asstes").exists(), "库目录不应再有 asstes/");

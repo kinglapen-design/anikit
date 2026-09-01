@@ -78,10 +78,23 @@ pub fn generate(info_dir: &Path, origin: &Path, stem: &str) -> Option<ThumbOut> 
   None
 }
 
+/// 动图解码入口（8.1 黑底修复）：动图（gif/webp 动画）= anim 首帧（image-webp/gif 解码器，
+/// 保 alpha）；静态图 = image crate 魔数解码。image crate 0.25 的 webp 解码器对 VP8X 动画容器
+/// 会把透明像素落成黑（alpha 丢弃）——动图必须绕开它（2026-09-01 用户实机报"黑底"）
+fn decode_origin_image(path: &Path) -> Option<DynamicImage> {
+  let ext = path.extension().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+  if matches!(ext.as_str(), "gif" | "webp") {
+    if let Some((frame, _delay)) = crate::services::anim::decode_frame(path, 0) {
+      return Some(DynamicImage::ImageRgba8(frame));
+    }
+  }
+  decode_by_signature(path)
+}
+
 /// 原图解码：按内容魔数（jpg/png/gif/webp/bmp，扩展名撒谎也能识别）→ PSD/SVG 解码补充
 /// （thumb_formats，4.2）→ 视频首帧 / 音频波形（media，5.1 ffmpeg sidecar；缺失返回 None 退格式图标）
 fn load_origin(origin: &Path) -> Option<DynamicImage> {
-  if let Some(img) = decode_by_signature(origin) {
+  if let Some(img) = decode_origin_image(origin) {
     return Some(img);
   }
   if let Some(img) = thumb_formats::decode(origin) {

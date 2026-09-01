@@ -16,6 +16,7 @@ import { ref, computed } from "vue";
 import IconButton from "./buttons/IconButton.vue";
 import BarSlider from "./bars/BarSlider.vue";
 import ViewOptionsMenu from "./ViewOptionsMenu.vue";
+import CepSettingsDialog from "./modals/CepSettingsDialog.vue";
 import { useUiStore } from "../stores/ui";
 import { usePickerStore } from "../stores/picker";
 import { useSearchStore } from "../stores/search";
@@ -52,6 +53,8 @@ const sliderRatio = computed({
 
 // 查看方式菜单：按钮右缘对齐、下方展开；再次点击按钮收起（toggle）
 const viewMenuOpen = ref(false);
+// CEP 导出设置弹窗显隐（8.1 二轮 2b：工具栏插件钮入口）
+const showCepSettings = ref(false);
 const viewMenuAnchor = ref({ x: 0, y: 0 });
 const viewBtnRef = ref<HTMLElement>();
 function openViewMenu(e: MouseEvent): void {
@@ -118,7 +121,7 @@ function addFileLink(): void {
            展开详细信息（仅右栏收起时）；「链接文件管理」钮删除口径不变（2026-08-24 用户定） -->
       <div class="btn-group">
         <IconButton name="add-file-archive-link" title="添加文件/档案链接" :disabled="!linkTarget" @click="addFileLink" />
-        <IconButton name="plugin" title="插件" disabled />
+        <IconButton name="plugin" title="插件（CEP 导出设置）" @click="showCepSettings = true" />
         <IconButton
           name="group-manage"
           :title="viewKey.startsWith('folder:') && ui.showSubfolders ? '分组管理（递归显示时不分组）' : '分组管理'"
@@ -139,6 +142,8 @@ function addFileLink(): void {
       </div>
     </div>
     <ViewOptionsMenu v-if="viewMenuOpen" :anchor="viewMenuAnchor" :trigger="viewBtnRef ?? null" @close="viewMenuOpen = false" />
+    <!-- CEP 导出设置弹窗（8.1 二轮 2b：工具栏插件钮入口） -->
+    <CepSettingsDialog v-if="showCepSettings" @close="showCepSettings = false" />
   </div>
 </template>
 

@@ -28,6 +28,8 @@
 pub mod anim;
 pub mod archive;
 pub mod asset_menu;
+pub mod cep_export;
+pub mod cep_install;
 pub mod color;
 pub mod custom_data;
 pub mod font;

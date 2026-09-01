@@ -22,14 +22,17 @@ import {
 } from "../menuOps";
 import {
   applyClipboardThumb,
+  applyThumbLink,
   copySelection,
   copyThumb,
+  copyThumbLink,
   deletePlacements,
   duplicateSelected,
   openWithDialog,
   pasteClipboard,
   pasteDuplicate,
   refreshThumb,
+  restoreThumbAsset,
   setPlacementOrigin,
 } from "../placementOps";
 
@@ -153,8 +156,15 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       submenu: [
         { label: "打开 Animate 生成缩略图", disabled: true },
         { label: "复制缩略图", disabled: selection.count !== 1, action: () => void copyThumb(assetId) },
-        { label: "转换为缩略图链接并复制", disabled: true },
-        { label: "将「xx」设置为缩略图", disabled: true },
+        // 缩略图链接（批次 4 点亮）：转换 = 纯引用复制不动库数据；设置 = set_thumb_asset 绑定（hidden 随绑定打）
+        { label: "转换为缩略图链接并复制", disabled: selection.count !== 1, action: () => copyThumbLink(assetId, p.name) },
+        selection.thumbLink
+          ? {
+              label: `将「${selection.thumbLink.name}」设置为缩略图`,
+              disabled: selection.thumbLink.assetId === assetId, // 自绑无意义（后端同护栏）
+              action: () => void applyThumbLink(assetId),
+            }
+          : { label: "将「xx」设置为缩略图", disabled: true },
         "divider",
         {
           label: "自定义缩略图 - 从剪贴板",
@@ -168,6 +178,10 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
         },
         "divider",
         { label: "刷新缩略图", action: () => void refreshThumb(assetId) },
+        // 还原为素材（PRD 02-15，批次 4）：仅 hidden 伴生缩略图资产显示（缩略图视图右键）
+        ...(p.hidden
+          ? [{ label: "还原为素材", action: () => void restoreThumbAsset(assetId) } as CtxEntry]
+          : []),
       ],
     },
     "divider",

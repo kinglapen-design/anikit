@@ -577,6 +577,37 @@ export async function refreshThumb(assetId: string): Promise<void> {
   await runThumbOp(() => invoke("refresh_thumbnail", { assetId }), "已刷新缩略图");
 }
 
+// —— 缩略图链接（批次 4，2026-09-02，PRD 04-03 缩略图组）：「转换为缩略图链接并复制」= 纯引用复制
+//（会话级 thumbLink，不动库数据——hidden 在实际绑定时由 set_thumb_asset 打）；「将 xx 设置为缩略图」= 绑定。
+// 重复绑定 = 换绑语义（用户定保守路径）：工程改指向新资产，旧 hidden 不动（手动「解除缩略图」或删除）。
+export function copyThumbLink(assetId: string, name: string): void {
+  useSelectionStore().thumbLink = { assetId, name };
+  useToastStore().notify({ message: `已复制缩略图链接：${name}`, duration: 3000 });
+}
+
+export async function applyThumbLink(targetAssetId: string): Promise<void> {
+  const link = useSelectionStore().thumbLink;
+  if (!link) return;
+  await runThumbOp(
+    () => invoke("set_thumb_asset", { assetId: targetAssetId, thumbId: link.assetId }),
+    `已将「${link.name}」设置为缩略图`,
+  );
+}
+
+// 还原为素材（PRD 02-15；批次 4 挂前端入口，仅缩略图视图 hidden 资产右键可见）：
+// 取消 hidden（链接位置原样恢复显示）+ 清除全部工程侧 thumb_asset_id 引用；不接撤销（同三件套口径）
+export async function restoreThumbAsset(assetId: string): Promise<void> {
+  const content = useContentStore();
+  const toast = useToastStore();
+  try {
+    const cleared = await invoke<number>("restore_thumb_asset", { assetId });
+    await content.refresh();
+    toast.notify({ message: `已还原为素材${cleared > 0 ? `（清除 ${cleared} 处绑定）` : ""}`, icon: "success" });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+  }
+}
+
 // 导出（库外写操作，不接撤销）：目录由系统对话框选定（menuOps 流程）。
 // 任务化（2026-08-14 用户定：导出用导入的进度条样式与位置）——进度条 / 失败弹窗 /
 // 完成 toast 全部走 content.runExportTask 编排（Channel 事件收尾，取消后不提示）

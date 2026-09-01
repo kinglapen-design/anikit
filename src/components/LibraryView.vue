@@ -99,7 +99,7 @@ async function onEnableAutoImport(): Promise<void> {
 }
 
 // 快速访问（PRD 02-15 定案六项：全部 / 未分类 / 最近使用 / 自动导入 / 缩略图 / 回收站）：
-// "缩略图"视图待 hidden 资产业务（5.x）接入后放；收件箱 = PRD"自动导入"；图标 = 新库同名线条图标
+// 缩略图视图 8.1 接入（hidden 伴生缩略图资产）；收件箱 = PRD"自动导入"；图标 = 新库同名线条图标
 const quickItems = [
   { key: "all", icon: "library", label: "全部" },
   { key: "uncategorized", icon: "uncategorized", label: "未分类" },
@@ -120,6 +120,8 @@ function quickCount(key: (typeof quickItems)[number]["key"]): number | undefined
       return content.uncategorizedCount;
     case "inbox":
       return content.inboxCount;
+    case "thumbnail":
+      return content.thumbnailCount;
     case "recent":
       return content.recentAssets.length;
     case "recycle":
