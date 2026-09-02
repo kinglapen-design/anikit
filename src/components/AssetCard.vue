@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 素材卡片业务壳（7.1 内容容器轮改造）：视觉芯 = cards/FileCard（缩略图满铺 + 底部渐变罩名称/简介 +
 // 格式角标统一 FormatBadge 铬），本壳承担业务装配与旧机制对接——
-// box 绝对定位（虚拟滚动）/ 悬停播放层分发（视频 HoverVideoLayer / 动图 AnimCanvasLayer /
+// box 绝对定位（虚拟滚动）/ 悬停播放层分发（视频 HoverVideoLayer / 动图 AnimImgLayer /
 // 序列帧 HoverSequenceLayer / 音频 HoverAudioLayer，注入 FileCard 默认插槽 = 缩略图上、渐变罩下）/
 // 自动播放闸（autoplayGate + IntersectionObserver 可见性）/ 就地重命名（selection.renamingKey 驱动，
 // FileCard naming 位）/ 位置徽章 + LinkListPopover / 笔记角标 / 选择模式 picked·picker-self / 拖拽半透明。
@@ -17,7 +17,7 @@ import FileCard from "./cards/FileCard.vue";
 import HoverVideoLayer from "./HoverVideoLayer.vue";
 import HoverAudioLayer from "./HoverAudioLayer.vue";
 import HoverSequenceLayer from "./HoverSequenceLayer.vue";
-import AnimCanvasLayer from "./AnimCanvasLayer.vue";
+import AnimImgLayer from "./AnimImgLayer.vue";
 import LinkListPopover from "./LinkListPopover.vue";
 import { type Box } from "../lib/layouts";
 import { dragView } from "../lib/dragOperation";
@@ -110,7 +110,8 @@ function startRename(): void {
 }
 
 // 动图播放（5.3）：悬停或"自动播放动图"开关（序列帧同归此开关，2026-07-27 用户定）；
-// 阶段四起由 AnimCanvasLayer 帧流渲染（进入延迟分档收编 useHoverPlayer：悬停 300 / 自动播放 100）
+// 2026-09-02 起由 AnimImgLayer 原生 <img> 播放（阶段四帧流卡片层退役，回滚原生）；
+// 进入延迟分档收编 useHoverPlayer：悬停 300 / 自动播放 100
 // 自动播放数量闸（2.3）：开关驱动的自动播放申请名额（满员排队 FIFO 唤醒），悬停播放直通——
 // 小卡片高密度时窗口内 200+ 卡片同时解码致全局卡顿（hover 目录树滞后）；
 // 动图 / 视频 / 序列帧三处自动播放共用本卡 gateRequested/autoGranted（一卡同时至多一种 kind）。
@@ -145,8 +146,8 @@ watch(
   { immediate: true },
 );
 const animPlaying = computed(() => hoverActive.value || autoGranted.value);
-// 动图播放（阶段四）：animPlaying 且 kind==='anim' 时模板挂载 AnimCanvasLayer——
-// WS 帧流 canvas 渲染（自研解码器，替代 2.3 小动画缓存 img 换源）；序列帧归 HoverSequenceLayer。
+// 动图播放（2026-09-02 回滚原生 <img>，帧流卡片层退役——实机 CPU/风扇失控，详见 AnimImgLayer 头注）：
+// animPlaying 且 kind==='anim' 时模板挂载 AnimImgLayer；序列帧归 HoverSequenceLayer。
 onMounted(() => {
   // root null = webview 视口：网格 BUFFER 缓冲区内但视口外的卡判不可见不占名额
   visibilityObs = new IntersectionObserver((entries) => {
@@ -244,7 +245,7 @@ const meta = computed(() => {
         :asset="asset"
         :auto="!hoverActive"
       />
-      <AnimCanvasLayer v-else-if="animPlaying && kind === 'anim'" :asset="asset" :auto="!hoverActive" />
+      <AnimImgLayer v-else-if="animPlaying && kind === 'anim'" :asset="asset" :auto="!hoverActive" />
       <HoverAudioLayer v-else-if="hoverActive && kind === 'audio'" :asset="asset" />
       <HoverSequenceLayer v-else-if="animPlaying && kind === 'sequence'" :asset="asset" :auto="!hoverActive" />
     </FileCard>

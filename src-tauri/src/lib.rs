@@ -16,20 +16,44 @@ pub struct TrayItems {
   pub inbox: CheckMenuItem<tauri::Wry>,
 }
 
-/// 任务 2 spike：从窗口拖出文件到其他软件（WebView HTML5 拖拽出不了窗口边界，
-/// 由原生层发起系统级拖拽，Windows 底层即 CF_HDROP）。
-/// 注意：OLE 拖拽（DoDragDrop）必须在主线程发起，同步命令即运行于主线程。
+/// 跨窗口拖出：从窗口拖文件到其他软件打开（WebView HTML5 拖拽出不了窗口边界，
+/// 由原生层发起系统级拖拽，Windows 底层即 CF_HDROP——拖至任务栏图标走系统"打开方式"同链路）。
+/// 入参 = 资产 id 集（前端在指针越出窗口边界的手势途中调用，需一次 IPC 直达 DoDragDrop，
+/// 路径若先经前端往返解析，OLE 接管时机被拉长、松手即失拖出窗口期）；锁内只做 index 查表 +
+/// real_origin_file 定位（序列帧 = frames/ 封面帧），不涉重 IO；不存在 / 解析失败的 id 静默跳过。
+/// 注意：OLE 拖拽（DoDragDrop）必须在主线程发起，同步命令即运行于主线程（踩坑 004）。
 #[tauri::command]
-fn drag_files(window: tauri::WebviewWindow, paths: Vec<String>) -> Result<(), String> {
-  let items: Vec<std::path::PathBuf> = paths.iter().map(std::path::PathBuf::from).collect();
+fn drag_assets(
+  window: tauri::WebviewWindow,
+  state: tauri::State<'_, commands::library::AppState>,
+  asset_ids: Vec<String>,
+) -> Result<(), String> {
+  let paths = {
+    let guard = state.library.lock().map_err(|e| e.to_string())?;
+    let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+    resolve_drag_paths(lib, &asset_ids)
+  };
+  if paths.is_empty() {
+    return Err("没有可拖出的文件".to_string());
+  }
   drag::start_drag(
     &window,
-    drag::DragItem::Files(items),
+    drag::DragItem::Files(paths),
     drag::Image::Raw(Vec::new()),
     |_result, _cursor| {},
     drag::Options::default(),
   )
   .map_err(|e| e.to_string())
+}
+
+/// 拖出路径解析：id → info 内真实实体路径，去重保序，失败项跳过
+fn resolve_drag_paths(lib: &core::library::Library, asset_ids: &[String]) -> Vec<std::path::PathBuf> {
+  let mut seen = std::collections::HashSet::new();
+  asset_ids
+    .iter()
+    .filter_map(|id| services::asset_menu::real_origin_file(lib, id).ok())
+    .filter(|p| seen.insert(p.clone()))
+    .collect()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -71,10 +95,13 @@ pub fn run() {
       // 提交新任务作废旧任务（快速切换素材不堆积），须在命令可达前初始化
       services::preview_queue::init(app.handle().clone());
 
-      // 动图帧流服务（阶段四·自研解码器）：WS server 推帧，动图卡播放源
+      // 动图帧流服务（阶段四·自研解码器）：WS server 推帧，预览窗口动图播放源
       // cfg(not(test))：init 内部持 AppHandle + 起 WS server，测试构建编译不出该函数（踩坑 014）
       #[cfg(not(test))]
       services::frame_stream::init(app.handle().clone());
+
+      // 小动画生成队列（2.3 恢复）：单 worker 串行转码，卡片播放源 info/{stem}_anim.webp
+      services::anim_preview_queue::init(app.handle().clone());
 
       // 插件通信 WS 服务（8.1，PRD 07-01）：Animate CEP 等软件插件的统一通信通道
       #[cfg(not(test))]
@@ -239,7 +266,7 @@ pub fn run() {
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
-      drag_files,
+      drag_assets,
       commands::library::create_space,
       commands::library::open_space,
       commands::library::get_current_space,
@@ -376,4 +403,39 @@ pub fn run() {
         services::inbox::stop(app);
       }
     });
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::core::library;
+  use crate::services::import::{self as ops, PendingFile, Source};
+  use crate::services::operations::finish;
+  use std::collections::HashMap;
+
+  fn add_file_asset(lib: &mut core::library::Library, id: &str, file: &str) {
+    let src = lib.root.join(file);
+    std::fs::write(&src, b"fake").unwrap();
+    let pf = PendingFile { path: src, chain: Vec::new() };
+    let meta = ops::build_asset_with_id(&lib.assets_dir, &pf, "sha256:t", id, Source::Copy, None).unwrap();
+    lib.index.assets.insert(id.into(), meta);
+    ops::add_placement(lib, id.into(), "root".into(), file.into(), true, &mut HashMap::new());
+    finish(lib).unwrap();
+  }
+
+  #[test]
+  fn resolve_drag_paths_resolves_dedups_and_skips_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut lib = library::create_test(dir.path());
+    add_file_asset(&mut lib, "AN-A", "a.png");
+    add_file_asset(&mut lib, "AN-B", "b.psd");
+    let paths = resolve_drag_paths(
+      &lib,
+      &["AN-A".into(), "AN-不存在".into(), "AN-B".into(), "AN-A".into()],
+    );
+    assert_eq!(paths.len(), 2, "不存在的跳过 + 重复 id 去重：{paths:?}");
+    assert!(paths[0].ends_with("a.png") && paths[0].is_file(), "info 内真实实体");
+    assert!(paths[1].ends_with("b.psd"));
+    assert!(resolve_drag_paths(&lib, &["AN-不存在".into()]).is_empty(), "全失败 = 空");
+  }
 }

@@ -12,7 +12,8 @@
 // 树上/下 1/3：整组同父 = reorder_folders 同级排序，跨父级 = move_folders 带 beforeFolderId
 // 定位插入（2026-07-29 复验：嵌套文件夹拖出）；树中间 1/3 / 文件夹卡片并入 = move_folders 移动层级
 //（2026-07-28 复验反馈 5 接入，替换原"暂不支持"toast）。
-// 拖拽中 Esc 取消；拖出窗口 / 松开无效区域 = 无操作。
+// 拖拽中 Esc 取消；拖出窗口（素材）= 移交系统级拖放（CF_HDROP，拖至其他软件 / 任务栏图标打开）；
+// 文件夹拖出窗口 / 松开无效区域 = 无操作。
 //
 // 2026-07-28 复验反馈修复（根因记录）：
 //   ① 落点动作闭包统一从全局 sess 取数，而 endDrag 先 sess = null 再 void drop()——drop 函数
@@ -38,6 +39,7 @@
 //   ⑥ 双击名称变打开（2026-08-18 修复）：begin 即 pointer capture 会把双击第二击与 dblclick
 //      重定向到卡片根元素，名称区 @dblclick.stop 收不到；capture 后移到 startDrag（拖拽全程仍有效）。
 import { reactive } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { useContentStore, type PlacementView } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
@@ -471,6 +473,19 @@ function onMove(e: PointerEvent): void {
   if (!sess.started) {
     if (Math.hypot(e.clientX - sess.startX, e.clientY - sess.startY) < START_THRESHOLD) return;
     startDrag(e);
+  }
+  // 拖出窗口（素材）= 移交系统级拖放（PRD 05_导入与导出：跨窗口拖至其他软件打开；Windows 底层
+  // CF_HDROP，拖至任务栏图标走系统"打开方式"同链路）：capture 生效后窗外 pointermove 照常派发
+  // 且坐标越界。文件夹 = info 目录非用户文件，不拖出。先取消内部会话再 invoke——DoDragDrop 模态
+  // 循环接管指针直至松手；路径解析放后端锁内完成（一次 IPC 直达，手势途中经不起前端往返）
+  if (
+    sess.kind === "asset" &&
+    (e.clientX < 0 || e.clientY < 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight)
+  ) {
+    const ids = [...new Set(sess.items.map((it) => it.assetId))];
+    endDrag(true);
+    void invoke("drag_assets", { assetIds: ids }).catch((err) => console.warn("拖出失败", err));
+    return;
   }
   if (sess.ghost) moveGhost(sess.ghost, e.clientX, e.clientY);
   updateDropTarget(e);

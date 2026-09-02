@@ -10,7 +10,9 @@
 //! - thumb_formats：图片格式解码注册表（新格式 = 目录内新增一个适配器文件 + ADAPTERS 一行；4.2）
 //! - thumbnail：缩略图与图片宽高探测（缓存，可重建）
 //! - anim：动图（GIF / WEBP 动图）探测与逐帧解码（5.1，纯 Rust；probe 为字节级扫描 2026-07-26）
-//! - frame_stream：动图帧流（阶段四·自研解码器：解码线程会话 + WS 推帧，动图卡与预览播放源）
+//! - anim_preview：动图小动画播放缓存（2.3；2026-09-02 恢复：info/{stem}_anim.webp 短边 320，卡片播放源）
+//! - anim_preview_queue：小动画生成队列（单 worker 无代际作废，导入挂钩 + 懒生成；事件 preview-anim-ready）
+//! - frame_stream：动图帧流（阶段四·自研解码器：解码线程会话 + WS 推帧，预览窗口播放源；卡片层 2026-09-02 回滚原生 img）
 //! - media：音视频元数据与预览图（5.1，ffprobe/ffmpeg sidecar；视频首帧 / 音频波形）
 //! - operations：素材基础操作（6.1 选择态：新建文件夹 / 移动 / 排序 / 关联 / 副本 / 重命名 / 删除）
 //! - archive：档案文件夹（3.2 一轮骨架：新建档案 / 文件夹 ⇄ 档案转换 / 档案数据清单）
@@ -26,6 +28,8 @@
 //! - views：Placement 列表视图（中间面板与导入事件共用）
 
 pub mod anim;
+pub mod anim_preview;
+pub mod anim_preview_queue;
 pub mod archive;
 pub mod asset_menu;
 pub mod cep_export;

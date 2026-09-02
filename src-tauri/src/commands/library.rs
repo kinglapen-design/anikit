@@ -76,6 +76,7 @@ fn activate_space(app: &AppHandle, state: &State<AppState>, space: Space) -> Res
 /// 栈内快照绑定旧库路径）。开库自检扫出无主资产 → emit 前端弹警告窗（2026-09-02）
 fn activate(app: &AppHandle, state: &State<AppState>, lib: Library) -> Result<LibraryInfo, String> {
   crate::services::frame_stream::stop_all(); // 帧流会话绑定旧库 assets 池（阶段四）
+  crate::services::anim_preview_queue::clear_pending(); // 小动画生成任务同绑旧库 assets 池
   state.undo.lock().map_err(|e| e.to_string())?.clear();
   if !lib.orphan_infos.is_empty() {
     let _ = app.emit("library-orphan-infos", &lib.orphan_infos);
@@ -231,6 +232,7 @@ fn apply_delete_library(state: &AppState, name: &str, delete_orphans: bool) -> R
     == Some(name);
   if is_current {
     crate::services::frame_stream::stop_all();
+    crate::services::anim_preview_queue::clear_pending();
     state.undo.lock().map_err(|e| e.to_string())?.clear();
     *state.library.lock().map_err(|e| e.to_string())? = None;
   }

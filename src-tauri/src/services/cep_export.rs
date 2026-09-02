@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::core::library::{Library, TEMP_DIR};
 use crate::core::models::new_asset_id;
 use crate::core::paths;
+use crate::services::anim;
 use crate::services::asset_menu;
 use crate::services::import::{self as ops, PendingFile, Source};
 use crate::services::operations;
@@ -49,108 +50,8 @@ fn default_fps() -> f64 {
   24.0
 }
 
-// —— WebP 动画组装（纯 Rust 全帧组包）——
-// 背景（2026-09-01 实机踩坑两连）：① ffmpeg libwebp_anim 合成输出差分帧（帧矩形裁剪 + blend/dispose
-// 混合档），image-webp 的画布合成对其处理缺陷 → 播放重影；② 本组包 flags 初版写 0（alpha 混合），
-// 透明区混合 = 保留画布旧内容 → 移动残影。编码端根治终版：逐帧 webp 单帧编码 + 手写 RIFF 组包——
-// 每帧**全画布矩形 + flags bit1=1（do not blend，源像素含透明区直接替换画布）**，
-// 每帧画布即该帧完整内容，任何解码端都不可能叠影；同时摘掉对 ffmpeg sidecar 的依赖。
-
-/// WebP 动画帧（解码后 RGBA + 帧时长 ms）
-#[derive(Clone)]
-struct AnimFrame {
-  rgba: image::RgbaImage,
-  delay_ms: u32,
-}
-
-/// 从单帧 webp 字节（完整 RIFF 文件）提取图像 chunk 序列（ALPH（有损 alpha 伴随块，**必须保留**——
-/// 2026-09-01 黑底回归：初版只提 VP8 丢 ALPH 致透明丢）+ VP8/VP8L，按序拼接；VP8X/ICCP 等元数据跳过）
-fn extract_image_chunks(webp_file: &[u8]) -> Option<Vec<u8>> {
-  if webp_file.len() < 16 || &webp_file[0..4] != b"RIFF" || &webp_file[8..12] != b"WEBP" {
-    return None;
-  }
-  let mut out = Vec::new();
-  let mut has_image = false;
-  let mut i = 12;
-  while i + 8 <= webp_file.len() {
-    let fourcc = &webp_file[i..i + 4];
-    let size = u32::from_le_bytes(webp_file[i + 4..i + 8].try_into().ok()?) as usize;
-    let end = i + 8 + size + (size & 1); // chunk 偶对齐 pad
-    if end > webp_file.len() {
-      return None;
-    }
-    if fourcc == b"ALPH" || fourcc == b"VP8 " || fourcc == b"VP8L" {
-      out.extend_from_slice(&webp_file[i..end]);
-      has_image = true;
-    }
-    i = end;
-  }
-  has_image.then_some(out)
-}
-
-fn push_u24le(out: &mut Vec<u8>, v: u32) {
-  out.extend_from_slice(&v.to_le_bytes()[0..3]);
-}
-
-fn push_chunk(out: &mut Vec<u8>, fourcc: &[u8; 4], data: &[u8]) {
-  out.extend_from_slice(fourcc);
-  out.extend_from_slice(&(data.len() as u32).to_le_bytes());
-  out.extend_from_slice(data);
-  if data.len() % 2 == 1 {
-    out.push(0); // RIFF chunk 偶对齐
-  }
-}
-
-/// 组 WebP 动画（全帧矩形 + blend=0 + loop 0 无限循环）：帧尺寸必须一致（调用方先缩放）。
-/// 性能（2026-09-02 用户实机报「8M 导出卡 10 秒」）：逐帧编码 rayon 并行（帧间独立无共享态，
-/// 保序 collect 组包）；libwebp method 4→2（动画缩略图不追极致压缩比，体积由降级链兜底）；
-/// 降级链内存判大小先不写盘（旧版每档写盘覆盖，temp 里 8M 早现≠完成）+ 超 2.5 倍跳中间档。
-fn encode_webp_anim(frames: &[AnimFrame], quality: f32) -> Option<Vec<u8>> {
-  let first = frames.first()?;
-  let (w, h) = (first.rgba.width(), first.rgba.height());
-  // 并行逐帧编码（保序：par_iter collect 回 Vec 保持原序）
-  use rayon::prelude::*;
-  let chunks: Vec<Vec<u8>> = frames
-    .par_iter()
-    .map(|f| {
-      let mut config = webp::WebPConfig::new().ok()?;
-      config.quality = quality;
-      config.method = 2; // 0=最快…4=默认…6=最慢最小；动画缩略图取快档
-      let mem = webp::Encoder::from_rgba(f.rgba.as_raw(), w, h).encode_advanced(&config).ok()?;
-      extract_image_chunks(&mem)
-    })
-    .collect::<Option<Vec<_>>>()?;
-  let mut body: Vec<u8> = Vec::new();
-  // VP8X：动画位 0x02 + alpha 位 0x10（恒带 alpha 通道编码，白底帧 alpha 全满也无妨）
-  let mut vp8x: Vec<u8> = vec![0x12, 0, 0, 0];
-  push_u24le(&mut vp8x, w - 1);
-  push_u24le(&mut vp8x, h - 1);
-  push_chunk(&mut body, b"VP8X", &vp8x);
-  // ANIM：背景色 BGRA(白,不透明) + loop=0 无限
-  push_chunk(&mut body, b"ANIM", &[0xff, 0xff, 0xff, 0xff, 0, 0]);
-  for (f, chunk) in frames.iter().zip(chunks) {
-    let mut anmf: Vec<u8> = Vec::with_capacity(16 + chunk.len());
-    push_u24le(&mut anmf, 0); // x
-    push_u24le(&mut anmf, 0); // y
-    push_u24le(&mut anmf, w - 1);
-    push_u24le(&mut anmf, h - 1);
-    push_u24le(&mut anmf, f.delay_ms);
-    anmf.push(0b10); // flags：bit1=1 do not blend（源像素**含透明区**直接替换画布——
-    // 全帧矩形 + 源覆盖 = 每帧画布即该帧完整内容，任何解码端不可能叠影。
-    // 注意 bit1=0（alpha 混合）才是坑：透明区混合 = 保留画布旧内容 = 残影，2026-09-01 实机钉）
-    anmf.extend_from_slice(&chunk);
-    push_chunk(&mut body, b"ANMF", &anmf);
-  }
-  let mut out: Vec<u8> = Vec::with_capacity(body.len() + 12);
-  out.extend_from_slice(b"RIFF");
-  out.extend_from_slice(&(body.len() as u32 + 4).to_le_bytes());
-  out.extend_from_slice(b"WEBP");
-  out.extend_from_slice(&body);
-  Some(out)
-}
-
 /// 读 PNG 序列目录（f_0001.png 起按文件名排序）→ 逐帧解码 + 长边缩放（0 = 不缩放）→ 帧列表
-fn load_seq_frames(seq: &Path, fps: f64, max_edge: u32, step: u32) -> Option<Vec<AnimFrame>> {
+fn load_seq_frames(seq: &Path, fps: f64, max_edge: u32, step: u32) -> Option<Vec<anim::AnimFrame>> {
   let mut files: Vec<PathBuf> = fs::read_dir(seq)
     .ok()?
     .filter_map(|e| e.ok())
@@ -167,7 +68,7 @@ fn load_seq_frames(seq: &Path, fps: f64, max_edge: u32, step: u32) -> Option<Vec
   for path in files.into_iter().step_by(step) {
     let img = thumbnail::decode_by_signature(&path)?;
     let img = if max_edge > 0 { thumbnail::shrink_long_edge(img, max_edge) } else { img };
-    frames.push(AnimFrame { rgba: img.to_rgba8(), delay_ms });
+    frames.push(anim::AnimFrame { rgba: img.to_rgba8(), delay_ms });
   }
   Some(frames)
 }
@@ -280,13 +181,13 @@ fn compose_with_fallback(seq: &Path, fps: f64, out: &Path, settings: &crate::cor
     }
     let edge = ((max_edge as f64 * ratio).round() as u32).max(16);
     let owned;
-    let frames: &[AnimFrame] = if ratio >= 1.0 {
+    let frames: &[anim::AnimFrame] = if ratio >= 1.0 {
       &base
     } else {
       owned = rescale_frames(&base, edge);
       &owned
     };
-    if let Some(data) = encode_webp_anim(frames, q as f32) {
+    if let Some(data) = anim::encode_webp_anim(frames, q as f32) {
       let len = data.len() as u64;
       if first_over_ratio.is_none() && len > settings.max_bytes {
         first_over_ratio = Some(len / settings.max_bytes.max(1));
@@ -298,9 +199,9 @@ fn compose_with_fallback(seq: &Path, fps: f64, out: &Path, settings: &crate::cor
     }
   }
   // 末段：抽帧降帧率（时长不变）
-  let halved: Vec<AnimFrame> = base.iter().step_by(2).map(|f| AnimFrame { rgba: f.rgba.clone(), delay_ms: f.delay_ms * 2 }).collect();
+  let halved: Vec<anim::AnimFrame> = base.iter().step_by(2).map(|f| anim::AnimFrame { rgba: f.rgba.clone(), delay_ms: f.delay_ms * 2 }).collect();
   if !halved.is_empty() {
-    if let Some(data) = encode_webp_anim(&halved, 60.0) {
+    if let Some(data) = anim::encode_webp_anim(&halved, 60.0) {
       // 过限写盘返回；压不进也写末版保底（over_limit 产出——旧版靠每档写盘副作用留底，现显式写）
       fs::write(out, &data).map_err(|e| format!("WebP 写入失败：{e}"))?;
       if (data.len() as u64) <= settings.max_bytes {
@@ -316,12 +217,12 @@ fn compose_with_fallback(seq: &Path, fps: f64, out: &Path, settings: &crate::cor
 }
 
 /// 帧列表内存再缩放（降级链小档；base 已是 1024 档，不重读 PNG）
-fn rescale_frames(frames: &[AnimFrame], max_edge: u32) -> Vec<AnimFrame> {
+fn rescale_frames(frames: &[anim::AnimFrame], max_edge: u32) -> Vec<anim::AnimFrame> {
   frames
     .iter()
     .map(|f| {
       let img = image::DynamicImage::ImageRgba8(f.rgba.clone());
-      AnimFrame { rgba: thumbnail::shrink_long_edge(img, max_edge).to_rgba8(), delay_ms: f.delay_ms }
+      anim::AnimFrame { rgba: thumbnail::shrink_long_edge(img, max_edge).to_rgba8(), delay_ms: f.delay_ms }
     })
     .collect()
 }
@@ -343,6 +244,11 @@ pub fn commit(lib: &mut Library, p: &Prepared, over_limit: bool, webp_bytes: u64
   }
   asset_menu::set_thumb_asset(lib, &fla_id, &webp_id)?;
   operations::finish(lib)?;
+  // 伴生 webp 提交小动画生成（动态 = 卡片播放源 info/{stem}_anim.webp；静态伴生 is_anim 判定跳过）
+  crate::services::anim_preview_queue::global().submit(crate::services::anim_preview_queue::AnimPreviewTask {
+    assets_dir: lib.assets_dir.clone(),
+    asset_id: webp_id.clone(),
+  });
   // 清场：序列帧目录与静图 PNG（fla / webp 本体已 Move 进库）
   if let Some(seq) = &p.payload.seq_dir {
     let _ = fs::remove_dir_all(seq);
@@ -493,6 +399,10 @@ pub fn thumb_commit(lib: &mut Library, p: &ThumbPrepared, over_limit: bool, webp
         return Err(e);
       }
       operations::finish(lib)?;
+      crate::services::anim_preview_queue::global().submit(crate::services::anim_preview_queue::AnimPreviewTask {
+        assets_dir: lib.assets_dir.clone(),
+        asset_id: webp_id.clone(),
+      });
       let name = lib.index.assets.get(asset_id).map(|m| m.name.clone()).unwrap_or_default();
       cleanup(p);
       Ok(ThumbOutcome::Bound { asset_id: asset_id.clone(), webp_asset_id: webp_id, name, over_limit, webp_bytes })
@@ -612,7 +522,7 @@ mod tests {
     let frames = load_seq_frames(&seq, 25.0, 0, 1).unwrap();
     assert_eq!(frames.len(), 4);
     assert_eq!(frames[0].delay_ms, 40, "1000/25 = 40ms");
-    let data = encode_webp_anim(&frames, 80.0).unwrap();
+    let data = anim::encode_webp_anim(&frames, 80.0).unwrap();
     let out = dir.path().join("anim.webp");
     fs::write(&out, &data).unwrap();
     // 动图探测：帧数 / 时长
@@ -644,11 +554,11 @@ mod tests {
           img.put_pixel(x, y, image::Rgba([220, 40, 40, 255]));
         }
       }
-      AnimFrame { rgba: img, delay_ms: 40 }
+      anim::AnimFrame { rgba: img, delay_ms: 40 }
     };
     let frames = vec![make(true), make(false)];
     let out = dir.path().join("anim.webp");
-    fs::write(&out, encode_webp_anim(&frames, 80.0).unwrap()).unwrap();
+    fs::write(&out, anim::encode_webp_anim(&frames, 80.0).unwrap()).unwrap();
     crate::services::anim::decode_frames(&out, |idx, img, _| {
       if idx == 1 {
         // 帧 2：帧 1 色块区（左）必须透明（无残留），帧 2 色块区（右）不透明
@@ -688,7 +598,7 @@ mod tests {
   fn webp_anim_thumbnail_keeps_alpha() {
     let dir = tempfile::tempdir().unwrap();
     // 组 2 帧动画：全透明底 + 中心红色块
-    let frames: Vec<AnimFrame> = (0..2)
+    let frames: Vec<anim::AnimFrame> = (0..2)
       .map(|_| {
         let mut img = image::RgbaImage::from_pixel(64, 48, image::Rgba([0, 0, 0, 0]));
         for y in 12..36 {
@@ -696,11 +606,11 @@ mod tests {
             img.put_pixel(x, y, image::Rgba([220, 40, 40, 255]));
           }
         }
-        AnimFrame { rgba: img, delay_ms: 40 }
+        anim::AnimFrame { rgba: img, delay_ms: 40 }
       })
       .collect();
     let webp_path = dir.path().join("anim.webp");
-    fs::write(&webp_path, encode_webp_anim(&frames, 80.0).unwrap()).unwrap();
+    fs::write(&webp_path, anim::encode_webp_anim(&frames, 80.0).unwrap()).unwrap();
     let info_dir = dir.path().join("info");
     fs::create_dir_all(&info_dir).unwrap();
     let thumb = thumbnail::generate(&info_dir, &webp_path, "anim").unwrap();

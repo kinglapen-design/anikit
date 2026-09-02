@@ -6,7 +6,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 // get_asset_file_path 返回：path = webview 可渲染文件绝对路径（直渲格式 = 源路径；
 // psd/psb = 已缓存的解码预览；暂不可得为 null）；pending = 高清层后台解析中（完成经 preview-full-ready 推送）；
-// animPreview 阶段四一轮起恒 null（2.3 小动画播放缓存已随自研解码帧流退役，字段待下轮移除）
+// animPreview = 动图小动画播放缓存（2.3 恢复：info/{stem}_anim.webp 短边 320 animated webp），
+// 卡片播放优先于 path；未生成时为 null（已提交后台懒生成，完成经 preview-anim-ready 热切换）
 export interface AssetFilePath {
   path: string | null;
   pending: boolean;

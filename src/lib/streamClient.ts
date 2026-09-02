@@ -5,7 +5,8 @@
 // 出帧尺寸 = 调用方显示短边（真短边等比、不足不放大）；setSize 热更新（不重启会话、不回第一帧）。
 // 播放控制（预览窗口）：setPlaying / setRate / seek（动图帧索引，GIF/WEBP 无索引顺序解码——
 // 前进 = 后端快进，回退 = 重开从头快进；暂停 + seek±1 = 逐帧步进）。
-// 一卡一会话 / 预览单实例；失败（非动图 / 上限 / 解码失败 / WS 不通）一律 null——调用方回退静态封面。
+// 一预览单实例（卡片层 2026-09-02 回滚原生 <img> 播放，帧流仅预览面板在用）；失败（非动图 / 上限 /
+// 解码失败 / WS 不通）一律 null——调用方回退静态封面。
 //（5.3 视频接入已回滚，2026-08-22：视频播放回 <video> 元素 asset 直读，帧流仅动图在用——
 // 视频会话 / 音轨 PCM / 音画同步随之拆除，存档见 12d8bc6）
 import { invoke } from "@tauri-apps/api/core";
@@ -30,7 +31,7 @@ export class StreamSession {
     private readonly onFrame: (f: StreamFrame) => void,
   ) {}
 
-  /** 动图会话（卡片 / 预览）：shortEdge = 显示短边（后端 clamp）。失败返回 null（回退静态封面） */
+  /** 动图会话（预览）：shortEdge = 显示短边（后端 clamp）。失败返回 null（回退静态封面） */
   static async start(assetId: string, shortEdge: number, onFrame: (f: StreamFrame) => void): Promise<StreamSession | null> {
     let info: { session: number; port: number };
     try {

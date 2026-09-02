@@ -202,6 +202,107 @@ fn stream_webp(path: &Path, on_frame: &mut impl FnMut(u32, RgbaImage, u32) -> bo
   Some(())
 }
 
+// —— WebP 动画组装（纯 Rust 全帧组包，2026-09-01 CEP 导出落地 / 2026-09-02 收编本域共用）——
+// 背景（实机踩坑三连）：① ffmpeg libwebp_anim 合成输出差分帧（帧矩形裁剪 + blend/dispose
+// 混合档），image-webp 的画布合成对其处理缺陷 → 播放重影；② 组包 flags 写 0（alpha 混合），
+// 透明区混合 = 保留画布旧内容 → 移动残影；③ **ffmpeg libwebp 差分编码产物本身带残影**
+// （Pillow 规范合成验证，2026-09-02 八轮——小动画 ffmpeg 转码链因此整体退役换本组包）。
+// 编码端根治终版：逐帧 webp 单帧编码 + 手写 RIFF 组包——每帧**全画布矩形 + flags bit1=1
+// （do not blend，源像素含透明区直接替换画布）**，每帧画布即该帧完整内容，任何解码端都不可能叠影；
+// 同时摘掉对 ffmpeg sidecar 的依赖。
+
+/// WebP 动画帧（解码后 RGBA + 帧时长 ms）
+#[derive(Clone)]
+pub struct AnimFrame {
+  pub rgba: RgbaImage,
+  pub delay_ms: u32,
+}
+
+/// 从单帧 webp 字节（完整 RIFF 文件）提取图像 chunk 序列（ALPH（有损 alpha 伴随块，**必须保留**——
+/// 2026-09-01 黑底回归：初版只提 VP8 丢 ALPH 致透明丢）+ VP8/VP8L，按序拼接；VP8X/ICCP 等元数据跳过）
+fn extract_image_chunks(webp_file: &[u8]) -> Option<Vec<u8>> {
+  if webp_file.len() < 16 || &webp_file[0..4] != b"RIFF" || &webp_file[8..12] != b"WEBP" {
+    return None;
+  }
+  let mut out = Vec::new();
+  let mut has_image = false;
+  let mut i = 12;
+  while i + 8 <= webp_file.len() {
+    let fourcc = &webp_file[i..i + 4];
+    let size = u32::from_le_bytes(webp_file[i + 4..i + 8].try_into().ok()?) as usize;
+    let end = i + 8 + size + (size & 1); // chunk 偶对齐 pad
+    if end > webp_file.len() {
+      return None;
+    }
+    if fourcc == b"ALPH" || fourcc == b"VP8 " || fourcc == b"VP8L" {
+      out.extend_from_slice(&webp_file[i..end]);
+      has_image = true;
+    }
+    i = end;
+  }
+  has_image.then_some(out)
+}
+
+fn push_u24le(out: &mut Vec<u8>, v: u32) {
+  out.extend_from_slice(&v.to_le_bytes()[0..3]);
+}
+
+fn push_chunk(out: &mut Vec<u8>, fourcc: &[u8; 4], data: &[u8]) {
+  out.extend_from_slice(fourcc);
+  out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+  out.extend_from_slice(data);
+  if data.len() % 2 == 1 {
+    out.push(0); // RIFF chunk 偶对齐
+  }
+}
+
+/// 组 WebP 动画（全帧矩形 + blend=0 + loop 0 无限循环）：帧尺寸必须一致（调用方先缩放）。
+/// 逐帧编码 rayon 并行（帧间独立无共享态，保序 collect 组包）；libwebp method 2
+/// （动画缩略图不追极致压缩比，体积由调用方降级链兜底）。
+pub fn encode_webp_anim(frames: &[AnimFrame], quality: f32) -> Option<Vec<u8>> {
+  let first = frames.first()?;
+  let (w, h) = (first.rgba.width(), first.rgba.height());
+  // 并行逐帧编码（保序：par_iter collect 回 Vec 保持原序）
+  use rayon::prelude::*;
+  let chunks: Vec<Vec<u8>> = frames
+    .par_iter()
+    .map(|f| {
+      let mut config = webp::WebPConfig::new().ok()?;
+      config.quality = quality;
+      config.method = 2; // 0=最快…4=默认…6=最慢最小；动画缩略图取快档
+      let mem = webp::Encoder::from_rgba(f.rgba.as_raw(), w, h).encode_advanced(&config).ok()?;
+      extract_image_chunks(&mem)
+    })
+    .collect::<Option<Vec<_>>>()?;
+  let mut body: Vec<u8> = Vec::new();
+  // VP8X：动画位 0x02 + alpha 位 0x10（恒带 alpha 通道编码，白底帧 alpha 全满也无妨）
+  let mut vp8x: Vec<u8> = vec![0x12, 0, 0, 0];
+  push_u24le(&mut vp8x, w - 1);
+  push_u24le(&mut vp8x, h - 1);
+  push_chunk(&mut body, b"VP8X", &vp8x);
+  // ANIM：背景色 BGRA(白,不透明) + loop=0 无限
+  push_chunk(&mut body, b"ANIM", &[0xff, 0xff, 0xff, 0xff, 0, 0]);
+  for (f, chunk) in frames.iter().zip(chunks) {
+    let mut anmf: Vec<u8> = Vec::with_capacity(16 + chunk.len());
+    push_u24le(&mut anmf, 0); // x
+    push_u24le(&mut anmf, 0); // y
+    push_u24le(&mut anmf, w - 1);
+    push_u24le(&mut anmf, h - 1);
+    push_u24le(&mut anmf, f.delay_ms);
+    anmf.push(0b10); // flags：bit1=1 do not blend（源像素**含透明区**直接替换画布——
+    // 全帧矩形 + 源覆盖 = 每帧画布即该帧完整内容，任何解码端不可能叠影。
+    // 注意 bit1=0（alpha 混合）才是坑：透明区混合 = 保留画布旧内容 = 残影，2026-09-01 实机钉）
+    anmf.extend_from_slice(&chunk);
+    push_chunk(&mut body, b"ANMF", &anmf);
+  }
+  let mut out: Vec<u8> = Vec::with_capacity(body.len() + 12);
+  out.extend_from_slice(b"RIFF");
+  out.extend_from_slice(&(body.len() as u32 + 4).to_le_bytes());
+  out.extend_from_slice(b"WEBP");
+  out.extend_from_slice(&body);
+  Some(out)
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

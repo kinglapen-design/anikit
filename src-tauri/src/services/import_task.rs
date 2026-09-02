@@ -360,7 +360,7 @@ fn pipeline(
       for msg in rx {
         match msg {
           Phase3Msg::Built { item, asset, icon } => {
-            register_one(state, lib, root, files, groups, item, *asset, icon, &mut deferred, &mut front_anchor, on_event)
+            register_one(state, lib, root, assets_dir, files, groups, item, *asset, icon, &mut deferred, &mut front_anchor, on_event)
           }
           Phase3Msg::Broken { unit, reason } => state.outcome.failed.push(FailedItem {
             path: unit_path(files, groups, unit).to_string_lossy().into_owned(),
@@ -456,6 +456,7 @@ fn register_one(
   state: &mut TaskState,
   lib: &Mutex<Option<Library>>,
   root: &Path,
+  assets_dir: &Path,
   files: &[PendingFile],
   groups: &[SequenceGroup],
   item: WorkItem,
@@ -468,6 +469,8 @@ fn register_one(
   state.dirty = true; // Placement 必改 folders.json，先标脏让节流落盘生效
   let name = unit_name(files, groups, item.unit);
   let asset_id = asset.id.clone();
+  // 动图（2.3 恢复）：注册成功后提交小动画生成队列——info/{stem}_anim.webp 短边 320 卡片播放源
+  let anim = crate::services::anim::is_anim(&asset);
   let result = with_lib(lib, state, move |l| {
     if let Some(ext) = icon {
       l.format_icons.insert(ext);
@@ -481,6 +484,12 @@ fn register_one(
     l.index.assets.insert(asset_id, asset);
     (view, conflicts)
   });
+  if anim && result.is_ok() {
+    crate::services::anim_preview_queue::global().submit(crate::services::anim_preview_queue::AnimPreviewTask {
+      assets_dir: assets_dir.to_path_buf(),
+      asset_id: item.asset_id.clone(),
+    });
+  }
   collect_registered(state, root, files, groups, item.unit, result, on_event);
 }
 
