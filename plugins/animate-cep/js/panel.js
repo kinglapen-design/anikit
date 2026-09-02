@@ -375,14 +375,17 @@ function onSizeInput() {
   }
 })();
 
-/* —— 命名框：轮询填充元件名（用户未编辑过时；仅缩略图模式跳过） ——
- * nameDirty 语义 = 「用户为**当前元件**改过名」（2026-09-02 用户实机报：中文辅助钮用过一次后
- * 自动填充永久失效——旧实现 dirty 置位后永不复位）。轮询发现库内名变了（换选区）→ 复位恢复自动填充；
- * dirty 期轮询不停（保持 lastLibItem 跟踪）仅跳过写入；手动清空名称框（length=0）也复位。 —— */
-var lastLibItem = null; // 上次轮询看到的库内名（dirty 期也跟踪，供换选区判定）
+/* —— 命名框自动填充 = 面板获焦时拉一次（用户未编辑过时；仅缩略图模式跳过） ——
+ * 2026-09-02 用户实机报「输入数字乱跳」（严重）：旧 1.5s 轮询 evalScript 周期性**打断 Animate
+ * 输入态**（摄像机/数值框被强制提交失焦）——CEP 轮询宿主 UI 经典坑（踩坑 069），轮询模型废除。
+ * 获焦驱动动线全覆盖：用户从 Animate 切回面板（点面板必触发 focus）即刷新；导出路径本有
+ * getSelectedInfo 调用（exportSingle），导出前名称恒最新。
+ * nameDirty 语义 = 「用户为**当前元件**改过名」：库内名变（换选区）→ 复位恢复自动填充；
+ * 手动清空名称框（length=0）也复位。 —— */
+var lastLibItem = null; // 上次看到的库内名（dirty 期也跟踪，供换选区判定）
 $('name').addEventListener('input', function () { nameDirty = $('name').value.trim().length > 0; });
-setInterval(function () {
-  if (mode === 'thumb' || document.activeElement === $('name')) return;
+window.addEventListener('focus', function () {
+  if (mode === 'thumb') return;
   evalJsx('getSelectedInfo()', function (r) {
     if (r.indexOf('OK:') !== 0) return;
     var m = r.match(/"libraryItem":"([^"]+)"/);
@@ -395,7 +398,7 @@ setInterval(function () {
     var stem = m[1].split('/').pop();
     if (stem && $('name').value !== stem) $('name').value = stem;
   });
-}, 1500);
+});
 
 /* —— 中文辅助钮：jsx ScriptUI 原生输入框（系统 IME），回填命名框 —— */
 $('btnZh').onclick = function () {
