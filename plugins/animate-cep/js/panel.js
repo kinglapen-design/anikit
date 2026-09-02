@@ -375,14 +375,23 @@ function onSizeInput() {
   }
 })();
 
-/* —— 命名框：轮询填充元件名（用户未编辑过时；仅缩略图模式跳过） —— */
+/* —— 命名框：轮询填充元件名（用户未编辑过时；仅缩略图模式跳过） ——
+ * nameDirty 语义 = 「用户为**当前元件**改过名」（2026-09-02 用户实机报：中文辅助钮用过一次后
+ * 自动填充永久失效——旧实现 dirty 置位后永不复位）。轮询发现库内名变了（换选区）→ 复位恢复自动填充；
+ * dirty 期轮询不停（保持 lastLibItem 跟踪）仅跳过写入；手动清空名称框（length=0）也复位。 —— */
+var lastLibItem = null; // 上次轮询看到的库内名（dirty 期也跟踪，供换选区判定）
 $('name').addEventListener('input', function () { nameDirty = $('name').value.trim().length > 0; });
 setInterval(function () {
-  if (mode === 'thumb' || nameDirty || document.activeElement === $('name')) return;
+  if (mode === 'thumb' || document.activeElement === $('name')) return;
   evalJsx('getSelectedInfo()', function (r) {
     if (r.indexOf('OK:') !== 0) return;
     var m = r.match(/"libraryItem":"([^"]+)"/);
     if (!m) return;
+    if (m[1] !== lastLibItem) {
+      lastLibItem = m[1];
+      nameDirty = false; // 换元件 = 新目标，恢复自动填充
+    }
+    if (nameDirty) return;
     var stem = m[1].split('/').pop();
     if (stem && $('name').value !== stem) $('name').value = stem;
   });
