@@ -56,6 +56,20 @@ fn resolve_drag_paths(lib: &core::library::Library, asset_ids: &[String]) -> Vec
     .collect()
 }
 
+/// 显示主窗口统一出口（2026-09-02 走查修复：最小化状态 show() 不还原——SW_SHOW 对最小化
+/// 窗口无效，须先 unminimize；热键 / 托盘 / 单实例共用）。emit_shown = 是否通知前端恢复播放
+///（托盘隐藏态恢复需要——隐藏即停播；最小化未停播，单实例唤起不通知，保持各调用点原语义）
+fn show_main_window(w: &tauri::WebviewWindow, emit_shown: bool) {
+  if w.is_minimized().unwrap_or(false) {
+    let _ = w.unminimize();
+  }
+  let _ = w.show();
+  let _ = w.set_focus();
+  if emit_shown {
+    let _ = w.emit("main-window-shown", ());
+  }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   // WebView2 色彩管理对齐（2026-07-23 偏色排查）：WebView2 与 Edge 在 BT2020 广色域屏上
@@ -69,8 +83,7 @@ pub fn run() {
     // 单实例必须最先注册：二次启动时聚焦已有窗口
     .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
       if let Some(w) = app.get_webview_window("main") {
-        let _ = w.show();
-        let _ = w.set_focus();
+        show_main_window(&w, false);
       }
     }))
     .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -123,10 +136,8 @@ pub fn run() {
               // 窗口隐藏即通知前端暂停播放（2026-07-27 用户定：最小化保持播放，隐藏到托盘停止）
               let _ = w.emit("main-window-hidden", ());
             } else {
-              let _ = w.show();
-              let _ = w.set_focus();
               // 重新显示即通知前端恢复悬停/自动播放（2026-08-23 用户实机报修：隐藏再开不恢复）
-              let _ = w.emit("main-window-shown", ());
+              show_main_window(&w, true);
             }
           }
         },
@@ -147,9 +158,7 @@ pub fn run() {
         .on_menu_event(|app, event| match event.id.as_ref() {
           "show" => {
             if let Some(w) = app.get_webview_window("main") {
-              let _ = w.show();
-              let _ = w.set_focus();
-              let _ = w.emit("main-window-shown", ());
+              show_main_window(&w, true);
             }
           }
           "inbox-drive" => services::inbox::toggle_drive(app),
@@ -168,9 +177,7 @@ pub fn run() {
               && matches!(button_state, tauri::tray::MouseButtonState::Up)
             {
               if let Some(w) = tray.app_handle().get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.set_focus();
-                let _ = w.emit("main-window-shown", ());
+                show_main_window(&w, true);
               }
             }
           }
