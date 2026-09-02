@@ -131,7 +131,11 @@ pub fn run() {
           if let Some(w) = app.get_webview_window("main") {
             let visible = w.is_visible().unwrap_or(false);
             let focused = w.is_focused().unwrap_or(false);
-            if visible && focused {
+            // 最小化态一律走呼出（2026-09-02 走查修复：Win+D / 任务栏最小化不移焦点，
+            // focused 可能仍 true → visible && focused 误命中把窗口 hide 进托盘，
+            // 表现为"第一次按键先收进托盘"）
+            let minimized = w.is_minimized().unwrap_or(false);
+            if visible && focused && !minimized {
               let _ = w.hide();
               // 窗口隐藏即通知前端暂停播放（2026-07-27 用户定：最小化保持播放，隐藏到托盘停止）
               let _ = w.emit("main-window-hidden", ());
