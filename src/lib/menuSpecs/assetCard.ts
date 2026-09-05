@@ -7,7 +7,8 @@
 // - 「将此文件设为原始文件」无链接状态（活位置 ≤1）不出现（旧"恒列置灰"废除）；
 // - 「打开文件链接所在位置」二级 = linkList 面板（与卡片徽章 hover 弹窗 LinkListPopover 同构）；
 // - 导出二级删「导出提示词为 .MD 文档」；复制数据删「复制提示词」、加「复制标签/复制描述」，
-//   复制后多出「粘贴标签/粘贴描述」（合并追加，多选批量）；
+//   复制后「粘贴标签/粘贴描述」出现在一级「复制文件」同组下方（同日二轮修订：不放复制数据二级，
+//   与粘贴文件项习惯一致；合并追加，多选批量）；
 // - 「保存提示词」占位项改「提示词」一级菜单骨架（分析/指定/新建——业务未立项全占位，三态切换随业务轮）。
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore, type PlacementView } from "../../stores/content";
@@ -144,6 +145,14 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       { label: "作为副本粘贴", shortcut: "Ctrl+Shift+V", action: () => void pasteDuplicate() },
     );
   }
+  // 粘贴标签/描述（2026-09-05 走查修订：不放复制数据二级——复制后直接跟在「复制文件」同组下方，
+  // 与粘贴文件项的使用习惯一致；合并追加语义（按词/按标题去重）见 customDataOps）
+  if (selection.copiedData.tags?.length) {
+    entries.push({ label: "粘贴标签", action: () => void pasteTags({ assets: selectedAssetIds(), archives: [] }) });
+  }
+  if (selection.copiedData.descriptions?.length) {
+    entries.push({ label: "粘贴描述", action: () => void pasteDescriptions({ assets: selectedAssetIds(), archives: [] }) });
+  }
   entries.push(
     {
       // 多选分流批量重命名（3.4，37 稿）：弹窗逐条改名；单选 = 卡片就地重命名（F2 同径）
@@ -245,20 +254,10 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
         { label: "复制名称", action: () => copyName(p.name) },
         { label: "复制 base64", action: () => copyBase64(assetId) },
         "divider",
-        // 复制标签/描述（2026-09-05 走查）：写 selection.copiedData 会话槽，复制后多出对应粘贴项；
+        // 复制标签/描述（2026-09-05 走查）：写 selection.copiedData 会话槽，复制后一级菜单多出对应粘贴项；
         // 「复制提示词」占位删除（提示词移一级菜单骨架）
         { label: "复制标签", action: () => void copyAssetTags(assetId) },
         { label: "复制描述", action: () => void copyAssetDescriptions(assetId) },
-        // 粘贴 = 合并追加（标签按词去重 / 描述按标题去重，用户定）；多选批量 = 选中集按 assetId 去重
-        ...(selection.copiedData.tags?.length
-          ? ["divider" as CtxEntry, { label: "粘贴标签", action: () => void pasteTags({ assets: selectedAssetIds(), archives: [] }) } as CtxEntry]
-          : []),
-        ...(selection.copiedData.descriptions?.length
-          ? [
-              ...(selection.copiedData.tags?.length ? [] : ["divider" as CtxEntry]),
-              { label: "粘贴描述", action: () => void pasteDescriptions({ assets: selectedAssetIds(), archives: [] }) } as CtxEntry,
-            ]
-          : []),
       ],
     },
     "divider",

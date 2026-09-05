@@ -240,9 +240,10 @@ async def main():
             await asyncio.sleep(0.5)
             check("B1 flyout 出且宽内容自适应（无内联 width）", await ev("document.querySelectorAll('.app-menu').length === 2 && document.querySelectorAll('.app-menu')[1].style.width === ''"))
             check("B2 flyout 宽 < 250（废 300 定宽）", await ev("document.querySelectorAll('.app-menu')[1]?.offsetWidth < 250"), str(await ev("document.querySelectorAll('.app-menu')[1]?.offsetWidth")))
-            check("B3 flyout 五个对勾项", await ev("document.querySelectorAll('.app-menu')[1].querySelectorAll('.check-slot').length === 5"))
-            check("B4 自定义选中（checked 恒显一级）", await ev("document.querySelectorAll('.app-menu')[1].querySelector('.menu-item.checked .check-slot') != null"))
-            check("B5 flyout 对勾贴右缘（容器右缘-14）", await ev("(() => { const m = document.querySelectorAll('.app-menu')[1]; const c = m.querySelector('.menu-item .check-slot'); if (!c) return false; return Math.abs(m.getBoundingClientRect().right - 14 - c.getBoundingClientRect().right) <= 1.5; })()"))
+            check("B3 flyout 五个对勾项", await ev("document.querySelectorAll('.app-menu')[1].querySelectorAll('.mark-slot').length === 5"))
+            check("B4 自定义选中（checked 恒显一级）", await ev("document.querySelectorAll('.app-menu')[1].querySelector('.menu-item.checked .mark-slot') != null"))
+            # 对勾 2026-09-05 走查移到左侧（对勾稿本意，与快捷键可同存）：贴左缘（容器 pad 6 + item padding 8 = 14）
+            check("B5 flyout 对勾贴左缘（容器左缘+14）", await ev("(() => { const m = document.querySelectorAll('.app-menu')[1]; const c = m.querySelector('.menu-item .mark-slot'); if (!c) return false; return Math.abs(c.getBoundingClientRect().left - m.getBoundingClientRect().left - 14) <= 1.5; })()"))
             await shot("ctx-menu-flyout")
 
             # —— E. hover 更改图标 → 网格面板（31 格新双色 / 宽 186 / gap 6）——
@@ -435,10 +436,11 @@ async def main():
             fl = await menu_labels(1)
             check("S5-5 档案复制数据有复制标签/描述", "复制标签" in fl and "复制描述" in fl, str(fl))
             await js_click(item_center("复制标签", 1))  # 槽 = [主角, NPC]
+            # 粘贴标签挪一级（2026-09-05 走查二轮：跟在复制项后，不放复制数据二级）
             await rclick("a1")
-            await js_hover(item_center("复制数据"))
-            fl = await menu_labels(1)
-            check("S5-6 档案复制后多出「粘贴标签」", "粘贴标签" in fl, str(fl))
+            labels = await menu_labels()
+            check("S5-6 档案复制后一级多出「粘贴标签」（复制档案下方）", "粘贴标签" in labels, str(labels))
+            check("S5-7 一级位置：跟在「复制档案」后", await ev("(() => { const ls = [...document.querySelectorAll('.app-menu')[0].querySelectorAll('.menu-item .label')].map((x) => x.textContent); return ls.indexOf('粘贴标签') === ls.indexOf('复制档案') + 1; })()"))
             await esc_close()
 
             # S6 空白视口分流
@@ -447,8 +449,8 @@ async def main():
             labels = await menu_labels()
             check("S6-1 全部空白：无新建文件夹/新建档案", "新建文件夹" not in labels and "新建档案" not in labels, str(labels))
             check("S6-2 全部空白：有导入与扫描", "导入本地文件" in labels and "扫描重复文件" in labels, str(labels))
-            check("S6-3 新建文档项带图标（icon-slot svg）", await ev(f"(() => {{ const it = {js_find('Animate 文档')}; return it?.querySelector('.icon-slot svg') != null; }})()"))
-            check("S6-4 无图标项占位对齐（iconPad 空盒）", await ev(f"(() => {{ const it = {js_find('导入本地文件')}; const s = it?.querySelector('.icon-slot'); return s != null && s.querySelector('svg') == null; }})()"))
+            check("S6-3 新建文档项带图标（mark-slot svg）", await ev(f"(() => {{ const it = {js_find('Animate 文档')}; return it?.querySelector('.mark-slot svg') != null; }})()"))
+            check("S6-4 无图标项占位对齐（markPad 空盒）", await ev(f"(() => {{ const it = {js_find('导入本地文件')}; const s = it?.querySelector('.mark-slot'); return s != null && s.querySelector('svg') == null; }})()"))
             await esc_close()
             for q in ["最近使用", "自动导入", "缩略图"]:
                 await click_quick(q)
@@ -500,10 +502,10 @@ async def main():
             await asyncio.sleep(0.6)
             check("D1 预览页菜单展区存在", await ev("document.querySelectorAll('#design-system-menus .pv-menu-shell').length >= 9"), str(await ev("document.querySelectorAll('#design-system-menus .pv-menu-shell').length")))
             check("D2 预览色块行 cur 外环", await ev("getComputedStyle(document.querySelector('#design-system-menus .sw.cur')).boxShadow.includes('0px 0px 0px 1.5px')"))
-            # 2026-09-05 带图标稿展区：文档图标陈列 / iconPad 空盒 / checkPad 占位
-            check("D3 文档图标陈列（7 项 icon-slot svg）", await ev("[...document.querySelectorAll('#design-system-menus .menu-item .icon-slot')].filter((s) => s.querySelector('svg')).length >= 7"), str(await ev("document.querySelectorAll('#design-system-menus .menu-item .icon-slot svg').length")))
-            check("D4 iconPad 空盒占位（无图标项对齐）", await ev("[...document.querySelectorAll('#design-system-menus .menu-item .icon-slot')].some((s) => !s.querySelector('svg'))"))
-            check("D5 checkPad 右占位（.check-slot.pad）", await ev("document.querySelector('#design-system-menus .menu-item .check-slot.pad') != null"))
+            # 2026-09-05 带图标稿展区：文档图标陈列 / markPad 空盒 / 对勾左侧占位
+            check("D3 文档图标陈列（7 项 mark-slot svg）", await ev("[...document.querySelectorAll('#design-system-menus .menu-item .mark-slot')].filter((s) => s.querySelector('svg')).length >= 7"), str(await ev("document.querySelectorAll('#design-system-menus .menu-item .mark-slot svg').length")))
+            check("D4 markPad 空盒占位（无图标项对齐）", await ev("[...document.querySelectorAll('#design-system-menus .menu-item .mark-slot')].some((s) => !s.querySelector('svg'))"))
+            check("D5 对勾在左侧（checked 项 mark-check 一级恒显）", await ev("document.querySelector('#design-system-menus .menu-item.checked .mark-slot .mark-check') != null"))
             await shot("ctx-menu-preview")
             return 1 if fails else 0
     finally:

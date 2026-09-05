@@ -14,11 +14,14 @@
 // 动画初帧，底部溢出被低估 4% 导致钳制失效（2026-08-11 走查）。
 // pop = false 关闭弹出动画（级联 flyout 每次 hover 换父项重建，回放动画会闪）。
 // width/pad/gap 仍可按面板形态覆盖（ViewOptionsMenu 404 面板、FolderIconGrid 网格面板）。
+// tone（2026-09-05 走查：linkList 二级复用悬停 tip 观感）= "menu" 默认（g3 实底 + inset g5 描边 +
+// 圆角 8）/ "tip"（悬停-tip 壳：通用/半透明-1 底 + 1px 亮色/半透明-3 真 border + blur 小 + 圆角 6，
+// 配 pad="0" 行贴边——linkList 面板用，与卡片徽章 hover 弹窗 LinkListPopover 同壳）。
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 const props = withDefaults(
-  defineProps<{ x: number; y: number; width?: number; pad?: string; gap?: string; group?: HTMLElement | null; trigger?: HTMLElement | null; pop?: boolean }>(),
-  { width: undefined, pad: "var(--n-space-6)", gap: "0", group: null, trigger: null, pop: true },
+  defineProps<{ x: number; y: number; width?: number; pad?: string; gap?: string; group?: HTMLElement | null; trigger?: HTMLElement | null; pop?: boolean; tone?: "menu" | "tip" }>(),
+  { width: undefined, pad: "var(--n-space-6)", gap: "0", group: null, trigger: null, pop: true, tone: "menu" },
 );
 const emit = defineEmits<{ close: [] }>();
 const rootRef = ref<HTMLElement>();
@@ -95,7 +98,7 @@ onBeforeUnmount(() => {
   <div
     ref="rootRef"
     class="app-menu"
-    :class="{ pop }"
+    :class="{ pop, tip: tone === 'tip' }"
     :style="{ left: `${pos.left}px`, top: `${pos.top}px`, width: width ? `${width}px` : undefined, padding: pad, gap, transformOrigin: origin }"
     @pointerdown.stop
   >
@@ -116,6 +119,14 @@ onBeforeUnmount(() => {
   box-shadow:
     inset 0 0 0 1px var(--n-g5),
     var(--n-shadow-sm);
+}
+/* tip 壳（linkList 二级 = 悬停-tip 观感，与徽章 hover 弹窗 LinkListPopover 同口径） */
+.app-menu.tip {
+  border: 1px solid var(--n-l-a3);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g-a1);
+  box-shadow: var(--n-shadow-sm);
+  backdrop-filter: blur(var(--n-blur-sm));
 }
 /* 弹出动画：快速缩放 + 透明度过渡，缓出曲线（2026-07-24 用户定）；flyout 等逐帧位移场景用 pop=false 关闭 */
 .app-menu.pop {

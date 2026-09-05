@@ -142,6 +142,24 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
     { label: "剪切档案", shortcut: "Ctrl+X", action: () => cutFoldersFlow(archive.id) },
     // 复制档案：占位 disabled——复制/作为链接粘贴业务随档案多位置立项另轮（2026-09-05 走查定）
     { label: "复制档案", shortcut: "Ctrl+C", disabled: true },
+    // 粘贴标签/描述（2026-09-05 走查二轮修订：不放复制数据二级——复制后一级跟在复制项后，
+    // 与粘贴文件项习惯一致；合并追加；多选域内触发 = 域内全部档案批量）
+    ...(selection.copiedData.tags?.length
+      ? [
+          {
+            label: "粘贴标签",
+            action: () => void pasteTags({ assets: [], archives: selectedArchiveIds(archive.id) }),
+          } as CtxEntry,
+        ]
+      : []),
+    ...(selection.copiedData.descriptions?.length
+      ? [
+          {
+            label: "粘贴描述",
+            action: () => void pasteDescriptions({ assets: [], archives: selectedArchiveIds(archive.id) }),
+          } as CtxEntry,
+        ]
+      : []),
     {
       label: "重命名",
       shortcut: "F2",
@@ -207,26 +225,9 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
         { label: "复制链接", action: () => void copyFolderLink(archive.id) },
         { label: "复制名称", action: () => void copyName(archive.name) },
         "divider",
-        // 复制标签/描述（2026-09-05 走查）：写 selection.copiedData 会话槽，复制后多出对应粘贴项
+        // 复制标签/描述（2026-09-05 走查）：写 selection.copiedData 会话槽，复制后一级菜单多出对应粘贴项
         { label: "复制标签", action: () => copyArchiveTags(archive.id) },
         { label: "复制描述", action: () => copyArchiveDescriptions(archive.id) },
-        // 粘贴 = 合并追加（标签按词去重 / 描述按标题去重，用户定）；多选域内触发 = 域内全部档案批量
-        ...(selection.copiedData.tags?.length
-          ? [
-              {
-                label: "粘贴标签",
-                action: () => void pasteTags({ assets: [], archives: selectedArchiveIds(archive.id) }),
-              } as CtxEntry,
-            ]
-          : []),
-        ...(selection.copiedData.descriptions?.length
-          ? [
-              {
-                label: "粘贴描述",
-                action: () => void pasteDescriptions({ assets: [], archives: selectedArchiveIds(archive.id) }),
-              } as CtxEntry,
-            ]
-          : []),
       ],
     },
     "divider",

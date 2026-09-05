@@ -4,19 +4,21 @@
 // 禁用 = 亮色/禁用档不响应 hover/点击。
 // 间距（2026-09-01 二十五轮用户定）：名称→36px→右侧件（flex gap 36 = 最小间距；
 // 容器宽由最长 item 内容自适应，其余项 .main flex:1 拉伸把右件顶到右缘对齐）。
+// 左侧标记槽（mark-slot 18 盒；对勾 2026-09-05 走查纠正到左侧——右键菜单-对勾稿本意即在名称左侧，
+// 对勾与快捷键可能同存，且同 Chrome 原生样式无学习成本；首版误放右侧）：
+// - 对勾（checkable，check 12）：常态不显示 / 行 hover 显 亮色/三级 / 选中恒显 亮色/一级
+//   （恒渲染 opacity 切换——v-if 移除会改 flex 基线致行高抖动，踩坑 026）；
+// - 图标（icon，右键菜单-带图标稿 2026-09-05）：svg 14，05_文档图标等品牌彩色原值；
+// - 占位（markPad）：同菜单（根 / flyout 各自）有任一项带对勾 / 图标时，无标记项补 18 空盒，
+//   名称纵向对齐（渲染层 ContextMenu scanPads 扫描传入）。
 // 右侧件（space-between，互斥）：
 // - 快捷键纯文本（通用/数字 Fira Mono 500 12/16 亮色/三级，原串显示 "Ctrl+Enter"——
 //   旧 KbdBadge 徽章组形态与"词键转小写"逻辑随新稿废除）；
-// - 对勾（checkable，18 盒 check 12）：常态不显示 / 行 hover 显 亮色/三级 / 选中恒显 亮色/一级
-//   （恒渲染 opacity 切换——v-if 移除会改 flex 基线致行高抖动，踩坑 026）；
 // - 展开箭头（arrow，expand 14 盒 rotate(-90deg) 朝右，亮色/三级）；
 // - 色块行（swatches，「更改颜色」稿）：16 圆块 gap 4 + 1px 亮色/半透明-1 描边（ColorSwatchItem
 //   口径），hover 单块放大 125% 提层（2026-08-29 用户定），当前色 1.5px 亮色/一级外环（不占布局）；
 //   色块点击 @pick（不关菜单，连续试色场景），整行点击无动作。
 // trailingIcon = 标题右侧小图标 12（3.5 分组菜单「上移/下移」口径保留，亮色/三级，禁用随父色）。
-// 左侧图标位（2026-09-05 走查「新增」节恢复，右键菜单-带图标稿）：icon = 18 盒内 14 图标
-//（05_文档图标等品牌彩色原值）；iconPad = 占位对齐（同菜单内有任一项带 icon 时，无 icon 项渲染空 18 盒，
-// 保持名称纵向对齐）；checkPad 同口径（菜单内有 checkable 项时，无右侧件的项补 18 空盒）。
 import AppIcon from "./AppIcon.vue";
 
 export interface SwatchColor {
@@ -28,9 +30,8 @@ export interface SwatchColor {
 const props = withDefaults(
   defineProps<{
     label: string;
-    icon?: string; // 名称左侧图标（带图标稿；05_文档图标等品牌彩色原值）
-    iconPad?: boolean; // 左图标占位（同菜单有图标项时对齐用，渲染层扫描传入）
-    checkPad?: boolean; // 右对勾占位（同菜单有对勾项且本项无右件时对齐用）
+    icon?: string; // 左标记槽图标（带图标稿；05_文档图标等品牌彩色原值）
+    markPad?: boolean; // 左标记槽占位（同菜单有对勾/图标项时对齐用，渲染层扫描传入）
     trailingIcon?: string;
     trailingIconClass?: string; // 尾图标附加类（rot-180 = 源图形朝上转朝下）
     shortcut?: string;
@@ -43,8 +44,7 @@ const props = withDefaults(
   }>(),
   {
     icon: undefined,
-    iconPad: false,
-    checkPad: false,
+    markPad: false,
     trailingIcon: undefined,
     trailingIconClass: undefined,
     shortcut: undefined,
@@ -67,8 +67,9 @@ function onRowClick(): void {
 <template>
   <button class="menu-item" :class="[{ checked }, forceState ? `force-${forceState}` : '']" :disabled="disabled" @click="onRowClick">
     <span class="main">
-      <span v-if="icon || iconPad" class="icon-slot">
-        <AppIcon v-if="icon" :name="icon" :size="14" />
+      <span v-if="checkable || icon || markPad" class="mark-slot">
+        <AppIcon v-if="checkable" name="check" :size="12" class="mark-check" />
+        <AppIcon v-else-if="icon" :name="icon" :size="14" />
       </span>
       <span class="label">{{ label }}</span>
       <AppIcon v-if="trailingIcon" :name="trailingIcon" :size="12" class="trail" :class="trailingIconClass" />
@@ -85,11 +86,7 @@ function onRowClick(): void {
       />
     </span>
     <span v-else-if="shortcut" class="shortcut">{{ shortcut }}</span>
-    <span v-else-if="checkable" class="check-slot">
-      <AppIcon name="check" :size="12" />
-    </span>
     <AppIcon v-else-if="arrow" name="expand" :size="14" class="arrow" />
-    <span v-else-if="checkPad" class="check-slot pad" />
   </button>
 </template>
 
@@ -129,14 +126,28 @@ function onRowClick(): void {
   flex: 1;
   min-width: 0;
 }
-/* 左侧图标位（带图标稿）：18 盒内 14 图标（品牌彩色原值）；占位 = 空盒对齐 */
-.icon-slot {
+/* 左侧标记槽（18 盒）：对勾（12，色档驱动）/ 图标（14，品牌彩色原值）/ 空盒占位对齐 */
+.mark-slot {
   width: 18px;
   height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
+}
+/* 对勾：常态隐 / 行 hover 显三级 / 选中恒显一级 */
+.mark-check {
+  color: var(--n-l3);
+  opacity: 0;
+  transition: opacity var(--n-dur-150) var(--n-ease-in-out);
+}
+.menu-item:hover .mark-check,
+.menu-item.force-hover .mark-check {
+  opacity: 1;
+}
+.menu-item.checked .mark-check {
+  color: var(--n-l1);
+  opacity: 1;
 }
 .label {
   white-space: nowrap;
@@ -162,26 +173,6 @@ function onRowClick(): void {
   line-height: var(--n-lh-num);
   color: var(--n-l3);
   flex: none;
-}
-/* 对勾 18 盒（check 12）：常态隐 / hover 显三级 / 选中恒显一级 */
-.check-slot {
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  color: var(--n-l3);
-  opacity: 0;
-  transition: opacity var(--n-dur-150) var(--n-ease-in-out);
-}
-.menu-item:hover .check-slot,
-.menu-item.force-hover .check-slot {
-  opacity: 1;
-}
-.menu-item.checked .check-slot {
-  color: var(--n-l1);
-  opacity: 1;
 }
 /* 二级菜单提示箭头：expand 14 盒旋转朝右，三级色 */
 .arrow {

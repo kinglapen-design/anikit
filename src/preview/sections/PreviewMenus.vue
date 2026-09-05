@@ -13,7 +13,8 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
     <p class="pv-sec-desc">
       Design Token/组件/上下文菜单/ 六件稿（分割线 / 对勾 / 展开箭头 / 快捷键 / 更改颜色 / 带图标）+ 用户容器定案（2026-09-01）；
       壳为预览复刻（AppMenu 口径），item 为真组件——常态列可直接 hover 交互。
-      「打开文件链接所在位置」二级 = linkList 面板（LinkListRows，与卡片徽章 hover 弹窗同构，2026-09-05），弹出层形态不陈列。
+      「打开文件链接所在位置」二级 = linkList 面板（LinkListRows，与卡片徽章 hover 弹窗同构；flyout 用 tip 壳——
+      AppMenu tone="tip" + pad 0 行贴边，最小宽 180，2026-09-05 走查定），弹出层形态不陈列。
     </p>
 
     <div class="pv-group">
@@ -63,7 +64,7 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">右侧件（快捷键 / 对勾 / 展开箭头 / 尾图标）</h3>
+      <h3 class="pv-group-title">右侧件（快捷键 / 展开箭头 / 尾图标；对勾 2026-09-05 起在左侧，见下组）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div class="pv-menu-shell">
@@ -71,14 +72,6 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
             <MenuItem label="新标签页打开" shortcut="Ctrl+Enter" />
           </div>
           <span class="pv-cap">快捷键（Fira Mono 12 三级，原串直显）</span>
-        </div>
-        <div class="pv-demo-cell">
-          <div class="pv-menu-shell">
-            <MenuItem label="名称" checkable checked />
-            <MenuItem label="文件大小" checkable />
-            <MenuItem label="时长" checkable force-state="hover" />
-          </div>
-          <span class="pv-cap">对勾：选中恒显一级 / 常态隐 / hover 显三级（第三个 = 强制 hover）</span>
         </div>
         <div class="pv-demo-cell">
           <div class="pv-menu-shell">
@@ -110,10 +103,11 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">左侧图标位 + 占位对齐（右键菜单-带图标稿，2026-09-05 走查恢复）</h3>
+      <h3 class="pv-group-title">左侧标记槽 + 占位对齐（对勾稿 / 带图标稿，2026-09-05 走查）</h3>
       <p class="pv-sec-desc">
-        图标 18 盒内 14（05_文档图标品牌彩色原值）；同菜单内有任一项带图标 → 无图标项左侧补 18 占位盒（iconPad），
-        有对勾项 → 无右件项右侧补 18 占位盒（checkPad），名称纵向对齐。真实菜单里占位由 ContextMenu scanPads 自动扫描，此处手动陈列。
+        对勾在名称<strong>左侧</strong>（对勾稿本意；与快捷键可同存，同 Chrome 原生样式）；图标 18 盒内 14（05_文档图标品牌彩色原值）。
+        同菜单内有任一项带对勾/图标 → 无标记项左侧补 18 占位盒（markPad），名称纵向对齐。
+        真实菜单里占位由 ContextMenu scanMark 自动扫描，此处手动陈列。
       </p>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
@@ -135,25 +129,34 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
         <div class="pv-demo-cell">
           <div class="pv-menu-shell">
             <div class="pv-menu-group">
-              <MenuItem label="打开预览" icon-pad shortcut="Enter" />
-              <MenuItem label="打开文件链接所在位置" icon-pad arrow />
+              <MenuItem label="打开预览" mark-pad shortcut="Enter" />
+              <MenuItem label="打开文件链接所在位置" mark-pad arrow />
             </div>
             <div class="pv-menu-group">
               <MenuItem label="MarkDown 文档" icon="markdown" />
               <MenuItem label="文本文档" icon="txt" />
             </div>
           </div>
-          <span class="pv-cap">混排：无图标项 icon-pad 左占位，名称对齐</span>
+          <span class="pv-cap">混排：无图标项 mark-pad 左占位，名称对齐</span>
         </div>
         <div class="pv-demo-cell">
           <div class="pv-menu-shell">
             <div class="pv-menu-group">
-              <MenuItem label="名称" checkable checked />
-              <MenuItem label="文件大小" check-pad />
-              <MenuItem label="时长" checkable force-state="hover" />
+              <MenuItem label="自定义" checkable checked />
+              <MenuItem label="当前层级 - 标题 A → Z" checkable />
+              <MenuItem label="全部 - 标题 A → Z" checkable force-state="hover" />
             </div>
           </div>
-          <span class="pv-cap">对勾占位：中间项 check-pad 右补 18 空盒</span>
+          <span class="pv-cap">对勾左侧：选中恒显一级 / 常态隐 / hover 显三级</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="自定义" checkable checked shortcut="Alt+1" />
+              <MenuItem label="文件大小" mark-pad shortcut="Alt+2" />
+            </div>
+          </div>
+          <span class="pv-cap">对勾与快捷键同存（左勾右键）+ 占位对齐</span>
         </div>
       </div>
     </div>

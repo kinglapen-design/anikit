@@ -95,6 +95,7 @@ function jump(r: Row): void {
   display: flex;
   flex-direction: column;
   width: max-content;
+  min-width: 180px; /* 2026-09-05 走查：内容太窄看着累，最小宽 180（用户定） */
   max-width: 360px;
 }
 /* 行（悬停-链接列表稿：双行 56 高 = padding 8 + 18 + gap 4 + 18；行间 1px 半透明-3 顶线，首行去线；hover 底 半透明-3） */

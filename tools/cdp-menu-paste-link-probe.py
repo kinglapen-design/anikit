@@ -208,11 +208,12 @@ async def main():
             await js_click(el_center(js_find("复制标签", 1)))  # 写槽 [走路, 跑步]；菜单关
             await wait_toast_gone()
             await js_rclick(el_center("document.querySelector('.asset-card[data-key=\"B2|f1\"]')"))  # 右键未选中项先单选
-            await js_hover(el_center(js_find("复制数据")))
-            fl = await menu_labels(1)
-            check("P1-1 复制后多出「粘贴标签」", "粘贴标签" in fl, str(fl))
-            check("P1-2 无「粘贴描述」（未复制过）", "粘贴描述" not in fl, str(fl))
-            await js_click(el_center(js_find("粘贴标签", 1)))
+            # 粘贴项 2026-09-05 走查二轮挪一级（跟在「复制文件」同组下方，不放复制数据二级）
+            labels = await menu_labels(0)
+            check("P1-1 复制后一级多出「粘贴标签」", "粘贴标签" in labels, str(labels))
+            check("P1-1b 一级位置：在「复制文件」之后", await ev("(() => { const ls = [...document.querySelectorAll('.app-menu')[0].querySelectorAll('.menu-item .label')].map((x) => x.textContent); return ls.indexOf('粘贴标签') > ls.indexOf('复制文件'); })()"))
+            check("P1-2 无「粘贴描述」（未复制过）", "粘贴描述" not in labels, str(labels))
+            await js_click(el_center(js_find("粘贴标签", 0)))
             check("P1-3 粘贴合并追加（B2：待机 + 走路/跑步）", await ev("(() => { const c = window.__calls.set_asset_props; return c.length === 1 && c[0].assetId === 'B2' && JSON.stringify(c[0].props) === '[\"待机\",\"走路\",\"跑步\"]'; })()"), str(await ev("JSON.stringify(window.__calls.set_asset_props)")))
             await wait_toast_gone()
 
@@ -222,20 +223,21 @@ async def main():
             await js_click(el_center(js_find("复制描述", 1)))  # 写槽 [动作, 背景]
             await wait_toast_gone()
             await js_rclick(el_center("document.querySelector('.asset-card[data-key=\"B2|f1\"]')"))
-            await js_hover(el_center(js_find("复制数据")))
-            fl = await menu_labels(1)
-            check("P2-1 复制描述后多出「粘贴描述」（粘贴标签也在，双槽）", "粘贴描述" in fl and "粘贴标签" in fl, str(fl))
-            await js_click(el_center(js_find("粘贴描述", 1)))
+            labels = await menu_labels(0)
+            check("P2-1 复制描述后一级多出「粘贴描述」（粘贴标签也在，双槽）", "粘贴描述" in labels and "粘贴标签" in labels, str(labels))
+            await js_click(el_center(js_find("粘贴描述", 0)))
             check("P2-2 描述按标题去重合并（B2 已有「动作」不重复 + 追加「背景」）", await ev("(() => { const c = window.__calls.set_asset_descriptions; return c.length === 1 && c[0].assetId === 'B2' && c[0].descriptions.length === 2 && c[0].descriptions[0].title === '动作' && c[0].descriptions[0].content === '已有的' && c[0].descriptions[1].title === '背景'; })()"), str(await ev("JSON.stringify(window.__calls.set_asset_descriptions)")))
             await wait_toast_gone()
 
             # —— P3 链接状态：「将此文件设为原始文件」出现（origin 卡禁用）——
             await js_rclick(el_center("document.querySelector('.asset-card[data-key=\"B2|f1\"]')"))
             check("P3 双位置出「将此文件设为原始文件」（origin 卡禁用）", await ev(f"(() => {{ const it = {js_find('将此文件设为原始文件')}; return it != null && it.disabled; }})()"))
-            # —— P4 打开文件链接所在位置 = linkList 二级（双行）——
+            # —— P4 打开文件链接所在位置 = linkList 二级（tip 壳 + 最小宽 180，2026-09-05 走查定）——
             await js_hover(el_center(js_find("打开文件链接所在位置")))
             check("P4-1 二级 = linkList 双行两行（f1 + f2 位置）", await ev("document.querySelectorAll('.app-menu')[1]?.querySelectorAll('.link-rows .row').length === 2"), str(await ev("document.querySelectorAll('.app-menu')[1]?.querySelectorAll('.link-rows .row').length")))
             check("P4-2 行路径两段（目录 / 角色）+ origin 徽章", await ev("(() => { const r = document.querySelectorAll('.app-menu')[1]?.querySelector('.link-rows .row'); if (!r) return false; const segs = [...r.querySelectorAll('.seg')].map((x) => x.textContent); return segs[0] === '目录' && segs[1] === '角色' && r.querySelector('.badge') != null; })()"))
+            check("P4-2b tip 壳 + 最小宽 180", await ev("(() => { const m = document.querySelectorAll('.app-menu')[1]; return m.classList.contains('tip') && m.offsetWidth >= 180; })()"), str(await ev("document.querySelectorAll('.app-menu')[1]?.offsetWidth")))
+            check("P4-2c tip 壳无容器内距（pad 0 行贴边）", await ev("document.querySelectorAll('.app-menu')[1]?.style.padding === '0px'"), str(await ev("document.querySelectorAll('.app-menu')[1]?.style.padding")))
             # 点第二行（f2 位置）→ 跳转定位 folder:f2（菜单关 + 视口切）
             await js_click(el_center("document.querySelectorAll('.app-menu')[1].querySelectorAll('.link-rows .row')[1]"))
             await asyncio.sleep(0.8)

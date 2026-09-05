@@ -5,8 +5,10 @@
 // 组 padding 上下 4（首组上 0、末组下 0），组间 = 非末组 inset 底 1px 通用/五级线（无孤立分割线元素）。
 // 一级级联 flyout：hover 带子菜单的项时右侧飞出，右缘溢出改向左飞出（03 稿注"菜单不可超出窗口边缘"）；
 // flyout 按 key 随父项重建（2026-08-11 走查：复用实例位置滞留越偏越远）+ pop=false 不回放弹出动画。
-// 搜索区 / 各菜单定宽 随新稿废除（2026-09-01 用户定）；左侧图标位 2026-09-05 走查部分恢复
-//（CtxItem.icon + 同菜单占位对齐扫描 scanPads，仅设计明确带图标的项使用，如新建文档组）；
+// 搜索区 / 各菜单定宽 随新稿废除（2026-09-01 用户定）；2026-09-05 走查：① 左侧标记槽恢复——
+// CtxItem.icon 带图标项（带图标稿）+ 对勾移左侧（对勾稿本意，与快捷键可同存），同菜单无标记项
+// 占位对齐（scanMark 扫描，根 / flyout 各自）；② linkList 二级 = tip 壳（AppMenu tone="tip" + pad 0，
+// 与徽章 hover 弹窗同观感，容器无内距行贴边）；
 // 宽度内容自适应（2026-09-01 二十五轮）：flyout 宽渲染前不可知——先按右飞放置，
 // 挂载后实测宽，右缘溢出再以父项左缘为锚左飞（fixFlyoutX）。
 // 组外关闭关系：根菜单的 group = flyout 根元素（flyout 内点击不关根菜单）；
@@ -35,20 +37,17 @@ const flyout = ref<{
 const flyoutRootRef = ref<HTMLElement>();
 const flyoutMenuRef = ref<InstanceType<typeof AppMenu>>();
 
-// 占位对齐扫描（2026-09-05 走查「新增」节）：同一菜单（根 / flyout 各自）内有任一项带 icon
-// → 其余项左侧补 18 占位盒；有任一项 checkable → 无右件的项右侧补 18 占位盒（名称纵向对齐贴稿）
-function scanPads(list: CtxEntry[] | null | undefined): { icon: boolean; check: boolean } {
-  let icon = false;
-  let check = false;
+// 左标记槽占位扫描（2026-09-05 走查）：同一菜单（根 / flyout 各自）内有任一项带 icon 或 checkable
+// → 无标记项左侧补 18 占位盒（名称纵向对齐贴稿；对勾与图标同槽互斥，扫描合并判定）
+function scanMark(list: CtxEntry[] | null | undefined): boolean {
   for (const e of list ?? []) {
     if (e === "divider") continue;
-    if (e.icon) icon = true;
-    if (e.checkable) check = true;
+    if (e.icon || e.checkable) return true;
   }
-  return { icon, check };
+  return false;
 }
-const rootPads = computed(() => scanPads(menuState.entries));
-const flyoutPads = computed(() => scanPads(flyout.value?.entries));
+const rootMark = computed(() => scanMark(menuState.entries));
+const flyoutMark = computed(() => scanMark(flyout.value?.entries));
 
 // 每次打开收起上次 flyout
 watch(
@@ -234,8 +233,7 @@ function onLibraryRemove(entry: CtxItem): void {
             v-else
             :label="row.entry.label"
             :icon="row.entry.icon"
-            :icon-pad="rootPads.icon"
-            :check-pad="rootPads.check"
+            :mark-pad="rootMark"
             :trailing-icon="row.entry.trailingIcon"
             :trailing-icon-class="row.entry.trailingIconClass"
             :shortcut="row.entry.shortcut"
@@ -255,7 +253,7 @@ function onLibraryRemove(entry: CtxItem): void {
   <!-- 级联 flyout：key 随父项重建（防实例复用位置滞留）；pop=false 不回放动画；
        内容包一层 div 供根菜单 group 判定（点击 flyout 内 = 组内）；
        面板形态（图标网格）与条目形态 padding 统一 6（2026-09-01 二十五轮，废 24） -->
-  <AppMenu v-if="flyout && menuState.entries" :key="flyout.key" ref="flyoutMenuRef" :x="flyout.x" :y="flyout.y" :pop="false" @close="closeAll(false)">
+  <AppMenu v-if="flyout && menuState.entries" :key="flyout.key" ref="flyoutMenuRef" :x="flyout.x" :y="flyout.y" :pop="false" :pad="flyout.panel?.kind === 'linkList' ? '0' : undefined" :tone="flyout.panel?.kind === 'linkList' ? 'tip' : 'menu'" @close="closeAll(false)">
     <div ref="flyoutRootRef" class="flyout-root">
       <FolderIconPanel v-if="flyout.panel?.kind === 'folderIcon'" :folder-id="flyout.panel.folderId" @done="closeAll(true)" />
       <LinkListRows v-else-if="flyout.panel?.kind === 'linkList'" :asset-id="flyout.panel.assetId" @jump="closeAll(true)" />
@@ -266,8 +264,7 @@ function onLibraryRemove(entry: CtxItem): void {
             :key="row.index"
             :label="row.entry.label"
             :icon="row.entry.icon"
-            :icon-pad="flyoutPads.icon"
-            :check-pad="flyoutPads.check"
+            :mark-pad="flyoutMark"
             :trailing-icon="row.entry.trailingIcon"
             :trailing-icon-class="row.entry.trailingIconClass"
             :shortcut="row.entry.shortcut"
