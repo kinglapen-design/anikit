@@ -17,10 +17,11 @@
 // tone（2026-09-05 走查：linkList 二级复用悬停 tip 观感）= "menu" 默认（g3 实底 + inset g5 描边 +
 // 圆角 8）/ "tip"（悬停-tip 壳：通用/半透明-1 底 + 1px 亮色/半透明-3 真 border + blur 小 + 圆角 6，
 // 配 pad="0" 行贴边——linkList 面板用，与卡片徽章 hover 弹窗 LinkListPopover 同壳）。
+// group（2026-09-05 菜单栏主菜单多级级联）支持数组：各级 flyout 根元素全列为"组内"，点任一级不关菜单。
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 const props = withDefaults(
-  defineProps<{ x: number; y: number; width?: number; pad?: string; gap?: string; group?: HTMLElement | null; trigger?: HTMLElement | null; pop?: boolean; tone?: "menu" | "tip" }>(),
+  defineProps<{ x: number; y: number; width?: number; pad?: string; gap?: string; group?: HTMLElement | (HTMLElement | null | undefined)[] | null; trigger?: HTMLElement | null; pop?: boolean; tone?: "menu" | "tip" }>(),
   { width: undefined, pad: "var(--n-space-6)", gap: "0", group: null, trigger: null, pop: true, tone: "menu" },
 );
 const emit = defineEmits<{ close: [] }>();
@@ -73,7 +74,11 @@ function onPointerDown(e: PointerEvent): void {
   // 触发按钮本身不算组外（toggle 由按钮的 click 处理，避免"组外先关、click 又开"反复弹）
   if (props.trigger?.contains(t)) return;
   if (rootRef.value?.contains(t)) return;
-  if (props.group && props.group !== rootRef.value && props.group.contains(t)) return;
+  // 组内元素（级联 flyout 等）不算外部：group 支持单元素或数组（多级 flyout 各级根元素，2026-09-05）
+  const groups = Array.isArray(props.group) ? props.group : [props.group];
+  for (const g of groups) {
+    if (g && g !== rootRef.value && g.contains(t)) return;
+  }
   emit("close");
 }
 function onKeydown(e: KeyboardEvent): void {

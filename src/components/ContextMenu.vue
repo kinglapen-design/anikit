@@ -3,16 +3,17 @@
 // 唯一实例，读 lib/contextMenus 的 menuState。渲染复用 AppMenu / MenuItem。
 // 分组（分割线稿口径）："divider" 标记渲染层切成组容器——总容器 gap 0，组内 item gap 2，
 // 组 padding 上下 4（首组上 0、末组下 0），组间 = 非末组 inset 底 1px 通用/五级线（无孤立分割线元素）。
-// 一级级联 flyout：hover 带子菜单的项时右侧飞出，右缘溢出改向左飞出（03 稿注"菜单不可超出窗口边缘"）；
-// flyout 按 key 随父项重建（2026-08-11 走查：复用实例位置滞留越偏越远）+ pop=false 不回放弹出动画。
+// 多级级联 flyout 栈（2026-09-05 菜单栏主菜单接业务，单级改多级）：hover 带子菜单的项时右侧飞出，
+// 右缘溢出改向左飞出（03 稿注"菜单不可超出窗口边缘"）；
+// flyout 按 key（层级 + 父项 top）随父项重建（2026-08-11 走查：复用实例位置滞留越偏越远）+ pop=false 不回放弹出动画。
 // 搜索区 / 各菜单定宽 随新稿废除（2026-09-01 用户定）；2026-09-05 走查：① 左侧标记槽恢复——
 // CtxItem.icon 带图标项（带图标稿）+ 对勾移左侧（对勾稿本意，与快捷键可同存），同菜单无标记项
-// 占位对齐（scanMark 扫描，根 / flyout 各自）；② linkList 二级 = tip 壳（AppMenu tone="tip" + pad 0，
+// 占位对齐（scanMark 扫描，根 / 各级 flyout 各自）；② linkList 二级 = tip 壳（AppMenu tone="tip" + pad 0，
 // 与徽章 hover 弹窗同观感，容器无内距行贴边）；
 // 宽度内容自适应（2026-09-01 二十五轮）：flyout 宽渲染前不可知——先按右飞放置，
 // 挂载后实测宽，右缘溢出再以父项左缘为锚左飞（fixFlyoutX）。
-// 组外关闭关系：根菜单的 group = flyout 根元素（flyout 内点击不关根菜单）；
-// flyout 自身无 group，点其外部经根菜单统一关闭（closeAll 幂等）。
+// 组外关闭关系：根菜单与各级 flyout 的 group = 全部 flyout 根元素（点任一级内不关菜单）；
+// 点组外任一级 AppMenu 都会 closeAll（幂等）。trigger = 触发按钮豁免（菜单栏「菜单」钮 toggle，2026-09-05）。
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import AppMenu from "./AppMenu.vue";
 import MenuItem from "./MenuItem.vue";
@@ -23,19 +24,25 @@ import LinkListRows from "./LinkListRows.vue";
 import { closeContextMenu, menuState, type CtxEntry, type CtxItem } from "../lib/contextMenus";
 import { reorderLibraries, requestDeleteLibrary, currentLibrary, switchLibrary } from "../lib/libraryOps";
 
-// 级联 flyout：当前展开的子菜单（父项 top 作 key 随项重建）与位置；
+// 级联 flyout（2026-09-05 菜单栏主菜单：单级 → 多级栈）：hover 带子菜单的项时右侧飞出，
+// 右缘溢出改向左飞出（03 稿注"菜单不可超出窗口边缘"）；flyout 按 key（层级 + 父项 top）随父项重建
+//（2026-08-11 走查：复用实例位置滞留越偏越远）+ pop=false 不回放弹出动画。
+// 栈语义：flyouts[i] = 第 i+2 级；hover 第 k 级（根 = 0）的项 → 截断到 k 层再按项推新层——
+// hover 必先于 pointerdown，截断后深层 AppMenu 的"点外关闭"不会误伤浅层项的 click。
 // panel（2026-08-18，3.3 / 05 稿 §3）= 自定义面板形态（图标网格 / linkList 链接位置双行列表 2026-09-05），不走条目列表；
 // parentLeft = 父项左缘（左飞修正锚点）
-const flyout = ref<{
-  key: number;
+interface FlyoutState {
+  key: string;
   x: number;
   y: number;
   entries: CtxEntry[];
   panel?: NonNullable<CtxItem["panel"]>;
   parentLeft: number;
-} | null>(null);
-const flyoutRootRef = ref<HTMLElement>();
-const flyoutMenuRef = ref<InstanceType<typeof AppMenu>>();
+}
+const flyouts = ref<FlyoutState[]>([]);
+// 各级 flyout 根元素 / AppMenu 实例（函数 ref 收集；AppMenu group 组外判定与左飞实测用，非响应式——事件期现读）
+const flyoutEls: (HTMLElement | null)[] = [];
+const flyoutMenuRefs: (InstanceType<typeof AppMenu> | null)[] = [];
 
 // 左标记槽占位扫描（2026-09-05 走查）：同一菜单（根 / flyout 各自）内有任一项带 icon 或 checkable
 // → 无标记项左侧补 18 占位盒（名称纵向对齐贴稿；对勾与图标同槽互斥，扫描合并判定）
@@ -47,13 +54,14 @@ function scanMark(list: CtxEntry[] | null | undefined): boolean {
   return false;
 }
 const rootMark = computed(() => scanMark(menuState.entries));
-const flyoutMark = computed(() => scanMark(flyout.value?.entries));
 
-// 每次打开收起上次 flyout
+// 每次打开清空上次 flyout 栈
 watch(
   () => menuState.entries,
   () => {
-    flyout.value = null;
+    flyouts.value = [];
+    flyoutEls.length = 0;
+    flyoutMenuRefs.length = 0;
   },
 );
 
@@ -74,28 +82,28 @@ function splitGroups(list: CtxEntry[]): GroupRow[][] {
   return out.filter((g) => g.length);
 }
 const groups = computed(() => splitGroups(menuState.entries ?? []));
-const flyoutGroups = computed(() => splitGroups(flyout.value?.entries ?? []));
 
-function onItemHover(entry: CtxItem, e: MouseEvent): void {
-  if ((!entry.submenu && !entry.panel) || entry.disabled) {
-    flyout.value = null;
-    return;
-  }
+// level：0 = 根菜单项，i+1 = flyouts[i] 内项。hover 即截断到本层（关掉更深层），再按项推新层
+function onItemHover(entry: CtxItem, e: MouseEvent, level: number): void {
+  flyouts.value.splice(level);
+  flyoutEls.length = level;
+  flyoutMenuRefs.length = level;
+  if ((!entry.submenu && !entry.panel) || entry.disabled) return;
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   // 菜单宽内容自适应（二十五轮）：先按右飞放置，挂载后实测宽——右缘溢出改向左飞出
-  flyout.value = { key: r.top, x: r.right + 2, y: r.top - 6, entries: entry.submenu ?? [], panel: entry.panel, parentLeft: r.left };
-  void fixFlyoutX();
+  flyouts.value.push({ key: `${level}:${r.top}`, x: r.right + 2, y: r.top - 6, entries: entry.submenu ?? [], panel: entry.panel, parentLeft: r.left });
+  void fixFlyoutX(level);
 }
 
 // flyout 左飞修正：实测宽（AppMenu expose root）右缘溢出 → 以父项左缘为锚向左飞出
-async function fixFlyoutX(): Promise<void> {
+async function fixFlyoutX(level: number): Promise<void> {
   await nextTick();
-  const f = flyout.value;
-  const el = flyoutMenuRef.value?.root;
+  const f = flyouts.value[level];
+  const el = flyoutMenuRefs[level]?.root;
   if (!f || !el) return;
   const w = el.offsetWidth;
   if (f.x + w > window.innerWidth - 4) {
-    flyout.value = { ...f, x: Math.max(4, f.parentLeft - w - 2) };
+    flyouts.value[level] = { ...f, x: Math.max(4, f.parentLeft - w - 2) };
   }
 }
 
@@ -113,7 +121,9 @@ function onItemClick(entry: CtxEntry): void {
 }
 
 function closeAll(executed = false): void {
-  flyout.value = null;
+  flyouts.value = [];
+  flyoutEls.length = 0;
+  flyoutMenuRefs.length = 0;
   closeContextMenu(executed);
 }
 
@@ -213,7 +223,7 @@ function onLibraryRemove(entry: CtxItem): void {
 </script>
 
 <template>
-  <AppMenu v-if="menuState.entries" :x="menuState.x" :y="menuState.y" :group="flyoutRootRef ?? null" @close="closeAll(false)">
+  <AppMenu v-if="menuState.entries" :x="menuState.x" :y="menuState.y" :group="flyoutEls" :trigger="menuState.trigger" @close="closeAll(false)">
     <!-- 整体面板菜单（openPanelMenu）：一级内容 = 面板组件，无条目列表 -->
     <FolderIconGrid v-if="menuState.panel?.kind === 'iconPicker'" :current="menuState.panel.current" @select="onPanelPick" />
     <!-- 条目菜单：分组容器（组内 gap 2 / 组 padding 上下 4 首末 0 / 组间 1px 线） -->
@@ -244,34 +254,48 @@ function onLibraryRemove(entry: CtxItem): void {
             :swatches="row.entry.swatches"
             @select="onItemClick(row.entry)"
             @pick="row.entry.swatches?.onPick($event)"
-            @mouseenter="onItemHover(row.entry, $event)"
+            @mouseenter="onItemHover(row.entry, $event, 0)"
           />
         </template>
       </div>
     </div>
   </AppMenu>
-  <!-- 级联 flyout：key 随父项重建（防实例复用位置滞留）；pop=false 不回放动画；
-       内容包一层 div 供根菜单 group 判定（点击 flyout 内 = 组内）；
+  <!-- 级联 flyout 栈（多级）：key = 层级 + 父项 top 随父项重建（防实例复用位置滞留）；pop=false 不回放动画；
+       内容包一层 div 供各级 AppMenu group 判定（点任一级 flyout 内 = 组内，不关菜单）；
        面板形态（图标网格）与条目形态 padding 统一 6（2026-09-01 二十五轮，废 24） -->
-  <AppMenu v-if="flyout && menuState.entries" :key="flyout.key" ref="flyoutMenuRef" :x="flyout.x" :y="flyout.y" :pop="false" :pad="flyout.panel?.kind === 'linkList' ? '0' : undefined" :tone="flyout.panel?.kind === 'linkList' ? 'tip' : 'menu'" @close="closeAll(false)">
-    <div ref="flyoutRootRef" class="flyout-root">
+  <AppMenu
+    v-for="(flyout, i) in flyouts"
+    :key="flyout.key"
+    :ref="(el) => (flyoutMenuRefs[i] = el as InstanceType<typeof AppMenu> | null)"
+    :x="flyout.x"
+    :y="flyout.y"
+    :pop="false"
+    :pad="flyout.panel?.kind === 'linkList' ? '0' : undefined"
+    :tone="flyout.panel?.kind === 'linkList' ? 'tip' : 'menu'"
+    :group="flyoutEls"
+    :trigger="menuState.trigger"
+    @close="closeAll(false)"
+  >
+    <div :ref="(el) => (flyoutEls[i] = el as HTMLElement | null)" class="flyout-root">
       <FolderIconPanel v-if="flyout.panel?.kind === 'folderIcon'" :folder-id="flyout.panel.folderId" @done="closeAll(true)" />
       <LinkListRows v-else-if="flyout.panel?.kind === 'linkList'" :asset-id="flyout.panel.assetId" @jump="closeAll(true)" />
       <div v-else class="menu-groups">
-        <div v-for="(group, gi) in flyoutGroups" :key="gi" class="menu-group">
+        <div v-for="(group, gi) in splitGroups(flyout.entries)" :key="gi" class="menu-group">
           <MenuItem
             v-for="row in group"
             :key="row.index"
             :label="row.entry.label"
             :icon="row.entry.icon"
-            :mark-pad="flyoutMark"
+            :mark-pad="scanMark(flyout.entries)"
             :trailing-icon="row.entry.trailingIcon"
             :trailing-icon-class="row.entry.trailingIconClass"
             :shortcut="row.entry.shortcut"
             :disabled="row.entry.disabled"
+            :arrow="!!(row.entry.submenu || row.entry.panel)"
             :checkable="row.entry.checkable"
-            :checked="row.entry.checked"
+            :checked="row.entry.library ? row.entry.label === currentLibrary.name : row.entry.checked"
             @select="onItemClick(row.entry)"
+            @mouseenter="onItemHover(row.entry, $event, i + 1)"
           />
         </div>
       </div>

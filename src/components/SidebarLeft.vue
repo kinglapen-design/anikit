@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 左侧边栏（7.1 十八轮贴稿重构，稿 = docs/UI 重构/Design Token/布局/主窗口/左侧边栏/）：
 // 254 宽 column 三段——菜单栏 46（收起侧边栏 plain 钮 + 菜单/编辑/插件/视图 四文字钮，ghost sm；
-// 四钮点亮不接业务，2026-08-30 用户定——汉堡菜单 / 新增菜单 / Ctrl+N / 区块管理 / 切库入口
+// 「菜单」2026-09-05 接业务 = 应用主菜单（menuSpecs/appMenu，按钮下方弹出 + toggle）；
+// 编辑 / 插件 / 视图 仍点亮不接业务，2026-08-30 用户定——汉堡菜单 / 新增菜单 / Ctrl+N / 区块管理 / 切库入口
 // 随旧 rail 结构一并撤下，spec 与快捷键逻辑保留在 lib（网格右键新增菜单仍在），接业务时恢复）；
 // 分段控制器 54（SegmentedControl icon 型：资源库 / 工作空间 / AI 对话框——三段可切换，
 // 工作空间 / AI = 空态「功能正在开发中」居中，2026-08-30 用户定；选择模式下禁用切换，
@@ -19,12 +20,30 @@ import LibraryView from "./LibraryView.vue";
 import { useUiStore } from "../stores/ui";
 import { usePickerStore } from "../stores/picker";
 import { sidebarShowWidths } from "../lib/useSidebarAnim";
+import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
+import { appMenuSpec } from "../lib/menuSpecs/appMenu";
+import { loadLibraries } from "../lib/libraryOps";
 
 const ui = useUiStore();
 const picker = usePickerStore();
 
-// 菜单栏四文字钮（菜单 / 编辑 / 插件 / 视图）：点亮不接业务（2026-08-30 用户定，业务接线归后续轮）
-const menuButtons = ["菜单", "编辑", "插件", "视图"] as const;
+// 菜单栏四文字钮：菜单 = 应用主菜单（2026-09-05 接业务：稿 = 用户当场供稿，spec = menuSpecs/appMenu）；
+// 编辑 / 插件 / 视图 = 点亮不接业务（2026-08-30 用户定，业务接线归后续轮）
+const otherButtons = ["编辑", "插件", "视图"] as const;
+
+// 「菜单」钮 toggle：同一按钮再点 = 关闭（trigger 豁免 AppMenu 组外判定，click 到这里做开关）；
+// 选择模式下禁开（白名单收窄：主菜单含切库，速查 §12.1——视觉不改，稿无禁用态）
+async function onAppMenu(e: MouseEvent): Promise<void> {
+  const el = e.currentTarget as HTMLElement;
+  if (menuState.entries && menuState.trigger === el) {
+    closeContextMenu();
+    return;
+  }
+  if (picker.active) return;
+  const rect = el.getBoundingClientRect();
+  const { names } = await loadLibraries();
+  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, appMenuSpec(names), undefined, { trigger: el });
+}
 
 // 分段控制器（模式切换）：library = 资源库树；workspace / ai = 空态占位（功能正在开发中）。
 // 会话级状态（旧 rail 同样不可切、无持久化先例）；选择模式（6.2 白名单收窄）下禁用切换——
@@ -51,7 +70,8 @@ const bodyRef = ref<HTMLElement>();
     <!-- 菜单栏（稿 左侧边栏-菜单栏）：46 高 / padding 8 12 / gap 2；兼窗口拖拽区（旧 bar-title 同款） -->
     <header class="menu-bar" data-tauri-drag-region>
       <IconButton name="collapse-sidebar" @click="ui.leftCollapsed = true" />
-      <ActionButton v-for="b in menuButtons" :key="b" :label="b" variant="ghost" size="sm" />
+      <ActionButton label="菜单" variant="ghost" size="sm" @click="onAppMenu" />
+      <ActionButton v-for="b in otherButtons" :key="b" :label="b" variant="ghost" size="sm" />
     </header>
 
     <!-- 模式切换区块（稿 左侧边栏-分段控制器）：54 高 / padding 8 12 -->

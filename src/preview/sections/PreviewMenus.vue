@@ -15,8 +15,49 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
       壳为预览复刻（AppMenu 口径），item 为真组件——常态列可直接 hover 交互。
       「打开文件链接所在位置」二级 = linkList 面板（LinkListRows，与卡片徽章 hover 弹窗同构；flyout 用 tip 壳——
       AppMenu tone="tip" + pad 0 行贴边，最小宽 180，2026-09-05 走查定），弹出层形态不陈列。
+      菜单栏「菜单」主菜单（2026-09-05 接业务，稿 = 用户当场供稿）：三级级联 flyout 栈为交互行为不陈列，此处摆根级与库列表形态。
     </p>
 
+    <div class="pv-group">
+      <h3 class="pv-group-title">菜单栏「菜单」主菜单（2026-09-05；spec = menuSpecs/appMenu，多级级联 flyout 栈）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="仓库" arrow />
+              <MenuItem label="文件" arrow force-state="hover" />
+              <MenuItem label="查找" arrow />
+              <MenuItem label="整理" arrow />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="偏好设置" disabled />
+              <MenuItem label="帮助" arrow />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="关于 AniKit" disabled />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="退出" shortcut="Alt+F4" />
+            </div>
+          </div>
+          <span class="pv-cap">根级八项四组（按钮下方弹出 + 同钮 toggle）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="新建资源库" mark-pad />
+              <MenuItem label="删除当前资源库" mark-pad />
+              <MenuItem label="合并资源库" mark-pad disabled />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="资源库-01" checkable checked />
+              <MenuItem label="资源库-02" checkable />
+            </div>
+          </div>
+          <span class="pv-cap">仓库 ▸ 资源库 三级：库列表 = 纯对勾行（2026-09-05 用户定，旧 LibraryMenuItem 抓手/删除× 不进此菜单）</span>
+        </div>
+      </div>
+    </div>
     <div class="pv-group">
       <h3 class="pv-group-title">整菜单形态（宽度自适应 / 名称→36px→右件 / 分组 / 组间 1px 五级线）</h3>
       <div class="pv-demo-row">

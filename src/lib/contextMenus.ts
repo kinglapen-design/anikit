@@ -55,20 +55,29 @@ export interface PanelMenuState {
 // onClose（2026-08-10）：关闭回调，executed = 执行了动作（true）还是取消（false，点外 / Esc）——
 // 用于"右键未选中项先单选，菜单取消时恢复原选择"（FolderTree 树 item 右键）
 // panel（2026-08-18）：整体面板菜单形态（一级内容 = 面板组件，无条目列表，见 openPanelMenu）
+// trigger（2026-09-05 菜单栏主菜单）：触发按钮元素——AppMenu 组外判定豁免（点按钮不先关，
+// toggle 语义归按钮 click；旧右键菜单恒 null 走坐标），并供"同钮再点 = 关闭"判定
 export const menuState = reactive({
   x: 0,
   y: 0,
   entries: null as CtxEntry[] | null,
   panel: null as PanelMenuState | null,
   onClose: null as ((executed: boolean) => void) | null,
+  trigger: null as HTMLElement | null,
 });
 
-export function openContextMenu(e: { clientX: number; clientY: number }, entries: CtxEntry[], onClose?: (executed: boolean) => void): void {
+export function openContextMenu(
+  e: { clientX: number; clientY: number },
+  entries: CtxEntry[],
+  onClose?: (executed: boolean) => void,
+  opts?: { trigger?: HTMLElement | null },
+): void {
   menuState.x = e.clientX;
   menuState.y = e.clientY;
   menuState.entries = entries;
   menuState.panel = null;
   menuState.onClose = onClose ?? null;
+  menuState.trigger = opts?.trigger ?? null;
 }
 
 // 整体面板菜单（2026-08-18，3.3）：一级内容直接 = 网格面板，无条目列表——
@@ -80,6 +89,7 @@ export function openPanelMenu(e: { clientX: number; clientY: number }, panel: Pa
   menuState.entries = []; // 非空 = 打开；渲染分支以 panel 为准
   menuState.panel = panel;
   menuState.onClose = null;
+  menuState.trigger = null;
 }
 
 export function closeContextMenu(executed = false): void {
@@ -87,5 +97,6 @@ export function closeContextMenu(executed = false): void {
   menuState.entries = null;
   menuState.panel = null;
   menuState.onClose = null;
+  menuState.trigger = null;
   cb?.(executed);
 }
