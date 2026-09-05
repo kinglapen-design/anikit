@@ -230,7 +230,7 @@ async function togglePin(): Promise<void> {
 </script>
 
 <template>
-  <div class="window" :class="{ maximized, picking: picker.active, 'fx-mica': fxMode === 'mica' }">
+  <div class="window" :class="{ maximized, picking: picker.active, 'fx-mica': fxMode === 'mica', 'plugin-win': !!pluginParam }">
     <PreviewWindow v-if="previewParam" :asset-key="previewParam" />
     <!-- 插件详情子窗口（?plugin={id} 分发，?preview= 先例）：只渲染插件面板（无三栏无弹窗）；
          未知 id = 错误提示帧 -->
@@ -476,6 +476,20 @@ async function togglePin(): Promise<void> {
   border: 0;
   border-radius: 0;
   box-shadow: none;
+}
+/* 插件详情子窗口边框 = 亮色/半透明-1（2026-09-06 五轮用户定：子窗口 DWM 默认色在复杂桌面下
+   识别度低；DWM 默认边框已由后端 COLOR_NONE 抑制（open_plugin_window），CSS 自绘独存无并集——
+   云母特例恢复自绘（覆盖上方零画口径，**仅 plugin 窗**：主窗口云母仍 DWM 染 #333 独存，
+   主窗口换半透明边框用户另行立项）；radius 8 沿窗口圆角同路径（踩坑 063 结论）） */
+.window.plugin-win::before {
+  border-color: var(--n-l-a1);
+}
+.window.fx-mica.plugin-win::before {
+  border: 1px solid var(--n-l-a1);
+  border-radius: var(--n-radius-8);
+}
+.window.maximized.plugin-win::before {
+  border: 0;
 }
 /* 选择模式常态描边让位（实色模式由 ::after 品牌框独存；云母模式 ::before 恒零画） */
 .window.picking::before {

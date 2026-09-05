@@ -3,10 +3,29 @@
 // 故隐藏原生条（base.css 全局 width 0），自绘悬浮 thumb 同步滚动位置。
 // 拖拽：pointerdown 后按 内容可滚动高 / 可视高 比例换算 scrollTop（2026-07-23 补，
 // 此前 pointer-events none 纯指示——事件穿透导致右侧误触窗口 resize 热区）。
+// 拖拽期间禁当前窗口拉伸（2026-09-06 五轮用户实机：滚轮紧贴窗口右缘 = 与系统边缘拉伸热区
+// 重叠，拖滚轮屡屡触发拉伸「小心翼翼生怕丢失滚动条」——按下即 setResizable(false)，
+// 松手 / pointercancel / blur / 组件卸载恢复；invoke 失败（桩 / 无权限）静默不阻断拖动）。
 // 初始化走 watch（2026-08-13 ScrollThumb 组件化修复）：bodyRef 可能经 props 传值——
 // 模板 ref 填充晚于子组件 mounted（prop 初值 undefined），onMounted 一次性初始化会永远 show=false；
 // watch immediate + 元素就位重跑，两种传法（同组件 ref 对象 / 跨组件 props 值）都健壮。
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { onBeforeUnmount, reactive, watch, type Ref } from "vue";
+
+let resizeLockCount = 0; // 并发防御（理论单实例，计数兜底）
+function lockWindowResize(): void {
+  resizeLockCount++;
+  void getCurrentWindow()
+    .setResizable(false)
+    .catch(() => {});
+}
+function unlockWindowResize(): void {
+  if (resizeLockCount > 0) resizeLockCount--;
+  if (resizeLockCount > 0) return;
+  void getCurrentWindow()
+    .setResizable(true)
+    .catch(() => {});
+}
 
 export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
   // dragging：thumb 拖拽中为 true——滚动条悬停显隐（2026-08-10）的拖拽锁，拖出面板不消失
@@ -30,6 +49,7 @@ export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
     e.preventDefault();
     e.stopPropagation();
     state.dragging = true;
+    lockWindowResize();
     const startY = e.clientY;
     const startScroll = el.scrollTop;
     const ratio = (el.scrollHeight - el.clientHeight) / (el.clientHeight - state.height);
@@ -37,12 +57,18 @@ export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
       el.scrollTop = startScroll + (ev.clientY - startY) * ratio;
     };
     const onUp = (): void => {
+      if (!state.dragging) return; // pointerup / pointercancel / blur 并发幂等
       state.dragging = false;
+      unlockWindowResize();
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("blur", onUp);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    window.addEventListener("blur", onUp);
   }
 
   watch(
@@ -78,6 +104,7 @@ export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
   );
 
   onBeforeUnmount(() => {
+    if (state.dragging) unlockWindowResize(); // 拖拽中组件卸载兜底（防窗口永禁拉伸）
     state.dragging = false;
   });
 

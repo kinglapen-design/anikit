@@ -86,9 +86,10 @@ const tempText = computed(() => (libPath.value ? `${libPath.value}\\temp\\cep-ou
   <div class="plugin-window">
     <!-- 顶部拖拽带（2026-09-06 四轮用户实机：标题行 26px 拖拽范围太小——负 margin 扩成通栏 62px：
          上 24（吃进根 padding 顶）+ 标题 26 + 下 12；margin-bottom -12 抵消使「使用教程」间距仍 24 贴稿；
-         滚动区 / 按钮行不挂拖拽） -->
+         滚动区 / 按钮行不挂。五轮修订：**容器与 h1 双挂**——Tauri v2 的 data-tauri-drag-region
+         只认元素自身命中（e.target 须为挂属性元素，后代不冒泡），容器单挂时标题文字（h1 后代）不可拖） -->
     <div class="pw-dragband" data-tauri-drag-region>
-      <h1 class="pw-title">Animate 插件</h1>
+      <h1 class="pw-title" data-tauri-drag-region>Animate 插件</h1>
     </div>
     <!-- 组区（稿 介绍文本：列 gap 24；组 = 标题 16/22 Bold 二级 + 行组 gap 6 的 13/18 三级） -->
     <div class="pw-scroll-wrap">
@@ -159,6 +160,7 @@ const tempText = computed(() => (libPath.value ? `${libPath.value}\\temp\\cep-ou
   padding: var(--n-space-24);
 }
 .pw-title {
+  margin: 0; /* 清 UA h1 margin-block（拖拽带 62px = 24+26+12 精确链的前提） */
   font-size: var(--n-fs-title);
   line-height: var(--n-lh-title);
   font-weight: var(--n-fw-bold);
