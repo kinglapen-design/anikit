@@ -70,6 +70,13 @@ export function isStaticImageExt(ext: string): boolean {
   return IMAGE_EXTS.has(ext.toLowerCase());
 }
 
+/** 可作为伴生缩略图的格式（静态图 + gif 动图）——前端镜像后端 asset_menu.rs `is_thumb_capable`。
+ *  「转换为缩略图链接并复制」按此条件出现（2026-09-05 用户定：不能作缩略图的格式不列该项，点了报错是误导） */
+export function isThumbCapableExt(ext: string): boolean {
+  const k = ext.toLowerCase();
+  return IMAGE_EXTS.has(k) || k === "gif";
+}
+
 /** 角标底色：null = 不显示角标；animated（WEBP 动图，5.1）覆盖静态图片归动图组 */
 export function formatBadgeColor(ext: string, isSeq = false, animated = false): string | null {
   if (isSeq || animated) return "var(--custom-purple)";

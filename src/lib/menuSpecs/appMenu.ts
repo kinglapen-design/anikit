@@ -37,6 +37,7 @@ import {
   copyThumbLink,
   setPlacementOrigin,
 } from "../placementOps";
+import { isThumbCapableExt } from "../formatBadge";
 import { copyArchiveTags, copyAssetTags, pasteTags } from "../customDataOps";
 import type { PickerTarget } from "../relationOps";
 
@@ -298,7 +299,11 @@ function organizeEntries(): CtxEntry[] {
     { label: "添加音频", disabled: !target, action: () => target && usePickerStore().enterVoice(target) },
     "divider",
     { label: "添加缩略图", disabled: true },
-    { label: "转为为缩略图链接并复制", disabled: !a, action: () => a && copyThumbLink(a.assetId, a.name) },
+    // 条件出现（2026-09-05 用户定，与卡片右键同步）：单选且格式不能作缩略图（非静态图/gif）不列——
+    // 列了点了必报错，误导人；无选中时保留 disabled 占位（主菜单是固定设计清单，无格式可判）
+    ...(a === null || isThumbCapableExt(a.ext)
+      ? [{ label: "转为为缩略图链接并复制", disabled: !a, action: () => a && copyThumbLink(a.assetId, a.name) } as CtxEntry]
+      : []),
     selection.thumbLink
       ? {
           label: `将「${selection.thumbLink.name}」设置为缩略图`,

@@ -5,6 +5,8 @@
 //   （占位文案「将「文件」设为缩略图」，有缩略图链接时正常显示复制的名称）│ 自定义两项 │
 //   复制缩略图 + 刷新缩略图 一组（复制移到刷新上）；
 // - 「将此文件设为原始文件」无链接状态（活位置 ≤1）不出现（旧"恒列置灰"废除）；
+// - 「转换为缩略图链接并复制」格式不能作缩略图（非静态图/gif）不出现（2026-09-05 用户定，防误导）；
+//   主菜单「整理」同口径同步（appMenu.ts）；
 // - 「打开文件链接所在位置」二级 = linkList 面板（与卡片徽章 hover 弹窗 LinkListPopover 同构）；
 // - 导出二级删「导出提示词为 .MD 文档」；复制数据删「复制提示词」、加「复制标签/复制描述」，
 //   复制后「粘贴标签/粘贴描述」出现在一级「复制文件」同组下方（同日二轮修订：不放复制数据二级，
@@ -17,7 +19,7 @@ import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
 import { usePreviewStore } from "../../stores/preview";
 import type { CtxEntry } from "../contextMenus";
-import { isSequence as isSequenceAsset } from "../formatBadge";
+import { isSequence as isSequenceAsset, isThumbCapableExt } from "../formatBadge";
 import {
   copyAssetDescriptions,
   copyAssetTags,
@@ -173,7 +175,11 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
         { label: "打开 Animate 生成缩略图", disabled: true },
         "divider",
         // 缩略图链接（批次 4 点亮）：转换 = 纯引用复制不动库数据；设置 = set_thumb_asset 绑定（hidden 随绑定打）
-        { label: "转换为缩略图链接并复制", disabled: selection.count !== 1, action: () => copyThumbLink(assetId, p.name) },
+        // 条件出现（2026-09-05 用户定）：格式不能作缩略图（asset_menu.rs is_thumb_capable 口径：静态图 + gif）
+        // 就不列「转换为缩略图链接并复制」——列了点了必报错，误导人
+        ...(isThumbCapableExt(p.ext)
+          ? [{ label: "转换为缩略图链接并复制", disabled: selection.count !== 1, action: () => copyThumbLink(assetId, p.name) } as CtxEntry]
+          : []),
         selection.thumbLink
           ? {
               label: `将「${selection.thumbLink.name}」设为缩略图`,

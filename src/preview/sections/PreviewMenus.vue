@@ -211,6 +211,7 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
   flex-direction: column;
   gap: 0;
   width: fit-content; /* 内容自适应（最长 item 决定，2026-09-01 二十五轮废 300 定宽） */
+  min-width: 250px; /* 一级条目菜单最小宽（2026-09-05 用户实机定：太窄显得轻；flyout/面板形态不受限） */
   box-sizing: border-box;
   padding: var(--n-space-6);
   border-radius: var(--n-radius-8);

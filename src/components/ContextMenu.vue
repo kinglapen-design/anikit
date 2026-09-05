@@ -223,7 +223,8 @@ function onLibraryRemove(entry: CtxItem): void {
 </script>
 
 <template>
-  <AppMenu v-if="menuState.entries" :x="menuState.x" :y="menuState.y" :group="flyoutEls" :trigger="menuState.trigger" @close="closeAll(false)">
+  <!-- 一级条目菜单 min-width 250（2026-09-05 用户实机定：纯自适应太窄显得轻）；面板形态（iconPicker 稿值宽）不传 -->
+  <AppMenu v-if="menuState.entries" :x="menuState.x" :y="menuState.y" :min-w="menuState.panel ? undefined : 250" :group="flyoutEls" :trigger="menuState.trigger" @close="closeAll(false)">
     <!-- 整体面板菜单（openPanelMenu）：一级内容 = 面板组件，无条目列表 -->
     <FolderIconGrid v-if="menuState.panel?.kind === 'iconPicker'" :current="menuState.panel.current" @select="onPanelPick" />
     <!-- 条目菜单：分组容器（组内 gap 2 / 组 padding 上下 4 首末 0 / 组间 1px 线） -->

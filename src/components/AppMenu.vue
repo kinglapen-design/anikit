@@ -18,11 +18,13 @@
 // 圆角 8）/ "tip"（悬停-tip 壳：通用/半透明-1 底 + 1px 亮色/半透明-3 真 border + blur 小 + 圆角 6，
 // 配 pad="0" 行贴边——linkList 面板用，与卡片徽章 hover 弹窗 LinkListPopover 同壳）。
 // group（2026-09-05 菜单栏主菜单多级级联）支持数组：各级 flyout 根元素全列为"组内"，点任一级不关菜单。
+// minW（2026-09-05 用户实机定）：一级条目菜单最小宽 250（内容自适应太窄显得轻）——仅根级条目菜单传，
+// flyout 与面板形态（iconPicker 186 等稿值定宽）不传保持自适应。
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 const props = withDefaults(
-  defineProps<{ x: number; y: number; width?: number; pad?: string; gap?: string; group?: HTMLElement | (HTMLElement | null | undefined)[] | null; trigger?: HTMLElement | null; pop?: boolean; tone?: "menu" | "tip" }>(),
-  { width: undefined, pad: "var(--n-space-6)", gap: "0", group: null, trigger: null, pop: true, tone: "menu" },
+  defineProps<{ x: number; y: number; width?: number; minW?: number; pad?: string; gap?: string; group?: HTMLElement | (HTMLElement | null | undefined)[] | null; trigger?: HTMLElement | null; pop?: boolean; tone?: "menu" | "tip" }>(),
+  { width: undefined, minW: undefined, pad: "var(--n-space-6)", gap: "0", group: null, trigger: null, pop: true, tone: "menu" },
 );
 const emit = defineEmits<{ close: [] }>();
 const rootRef = ref<HTMLElement>();
@@ -104,7 +106,7 @@ onBeforeUnmount(() => {
     ref="rootRef"
     class="app-menu"
     :class="{ pop, tip: tone === 'tip' }"
-    :style="{ left: `${pos.left}px`, top: `${pos.top}px`, width: width ? `${width}px` : undefined, padding: pad, gap, transformOrigin: origin }"
+    :style="{ left: `${pos.left}px`, top: `${pos.top}px`, width: width ? `${width}px` : undefined, minWidth: minW ? `${minW}px` : undefined, padding: pad, gap, transformOrigin: origin }"
     @pointerdown.stop
   >
     <slot />

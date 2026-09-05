@@ -4,6 +4,8 @@
 # M5 仓库 → 资源库 L3：库列表纯对勾行（checkable / 当前库 checked / 无 LibraryMenuItem 抓手旧形态）+ 点当前库 keepOpen 不关；
 # M6 仓库 → 仓库 L3：当前空间对勾行 + 新建/删除占位 disabled；M7 同钮再点 toggle 关；M8 Esc 关；
 # M9 整理无选中 = 添加关系/移动/编辑描述 disabled；M10 选中 A1 后同项 enabled + 文件 L2 链接位置 L3 = linkList tip 壳；
+# M1-7 一级条目菜单 min-width 250（2026-09-05 用户实机定，flyout 不受限）；
+# M11 「转换为缩略图链接并复制」条件出现（同日用户定：fla 等不能作缩略图的格式不列，主菜单整理 + 卡片右键同步）。
 # D 截图 root / docs-l3 / lib-l3。
 import asyncio
 import base64
@@ -50,6 +52,8 @@ const PLACEMENTS = [
   mkP("A1", "f1", "走路.png", "png", true),
   mkP("B2", "f1", "雪牧.png", "png", true),
   mkP("B2", "f2", "雪牧-链接.png", "png", false),
+  // F3 = fla 工程卡（f1）：缩略图链接条件出现的负例（2026-09-05 用户定：不能作缩略图的格式不列「转换为缩略图链接并复制」）
+  mkP("F3", "f1", "工程.fla", "fla", true),
 ];
 const RECYCLE = [mkP("R1", "recycle", "废稿.fla", "fla", false)];
 const ARCHIVES = [
@@ -59,6 +63,7 @@ const ARCHIVES = [
 const DETAILS = {
   A1: { tags: ["走路", "跑步"], descriptions: [{ title: "动作", content: "基础动作" }] },
   B2: { tags: ["待机"], descriptions: [] },
+  F3: { tags: [], descriptions: [] },
   R1: { tags: ["废案"], descriptions: [] },
 };
 window.__cbId = 0; window.__cbs = {};
@@ -237,6 +242,8 @@ async def main():
             check("M1-4 退出带 Alt+F4 原串", await ev(f"({js_find('退出')})?.querySelector('.shortcut')?.textContent === 'Alt+F4'"))
             check("M1-5 偏好设置 / 关于 占位禁用", await ev(f"({js_find('偏好设置')})?.disabled === true && ({js_find('关于 AniKit')})?.disabled === true"))
             check("M1-6 弹出位 = 钮左缘对齐 + 底 +4", await ev(el_center(MENU_BTN)) is not None and await ev(f"(() => {{ const m = document.querySelector('.app-menu').getBoundingClientRect(); const b = {MENU_BTN}.getBoundingClientRect(); return Math.abs(m.left - b.left) <= 2 && Math.abs(m.top - b.bottom - 4) <= 2; }})()"))
+            # 一级条目菜单 min-width 250（2026-09-05 用户实机定：纯自适应太窄显得轻；flyout 不受限）
+            check("M1-7 一级菜单 min-width 250（短内容撑到 250）", await ev("(() => { const m = document.querySelector('.app-menu'); return m.style.minWidth === '250px' && m.offsetWidth === 250; })()"), str(await ev("document.querySelector('.app-menu')?.offsetWidth")))
 
             # —— M2 文件 L2 ——
             await js_hover(el_center(js_find("文件")))
@@ -310,11 +317,12 @@ async def main():
             # —— M10 选中 A1：编辑类点亮 + 链接位置 L3 = linkList tip 壳 ——
             await js_click(el_center("document.querySelector('[data-folder-id=\"f1\"]')"))
             await asyncio.sleep(0.8)
-            check("M10-0 f1 视口渲两卡", await ev("document.querySelectorAll('.asset-card').length === 2"))
+            check("M10-0 f1 视口渲三卡（含 fla F3）", await ev("document.querySelectorAll('.asset-card').length === 3"))
             await js_click(el_center("document.querySelector('.asset-card[data-key=\"A1|f1\"]')"))
             await js_click(el_center(MENU_BTN))
             await js_hover(el_center(js_find("整理")))
             check("M10-1 选中后：添加关系 / 编辑描述 / 移动 点亮", await ev(f"({js_find('添加关系', 1)})?.disabled === false && ({js_find('编辑描述', 1)})?.disabled === false && ({js_find('移动', 1)})?.disabled === false"))
+            check("M10-1b png 可选：转为缩略图链接项在且点亮", await ev(f"({js_find('转为为缩略图链接并复制', 1)})?.disabled === false"))
             check("M10-2 单位置文件不设原始 disabled", await ev(f"({js_find('将所选设置为原始文件/文档', 1)})?.disabled === true"))
             await js_hover(el_center(js_find("文件")))
             check("M10-3 文件 L2 链接位置可 hover", await ev(f"({js_find('打开文件/档案链接所在位置', 1)})?.disabled === false"))
@@ -325,6 +333,36 @@ async def main():
             await shot("app-menu-linklist-l3")
             await esc_close()
             check("M10-7 Esc 关（含 L3 面板）", await menu_count() == 0)
+
+            # —— M11 「转换为缩略图链接」条件出现（2026-09-05 用户定：不能作缩略图的格式不列，两菜单同步）——
+            # F3 = fla：主菜单整理不列该项
+            await js_click(el_center("document.querySelector('.asset-card[data-key=\"F3|f1\"]')"))
+            await js_click(el_center(MENU_BTN))
+            await js_hover(el_center(js_find("整理")))
+            labels = await menu_labels(1)
+            check("M11-1 fla 选中：整理无「转为为缩略图链接并复制」", "转为为缩略图链接并复制" not in labels, str(labels))
+            check("M11-2 相邻项仍在（添加缩略图 / 将文件设为缩略图占位）", "添加缩略图" in labels and "将「文件」设置为缩略图" in labels)
+            await esc_close()
+            # 右键菜单同步：fla 卡右键 → 缩略图二级无「转换为缩略图链接并复制」
+            r = await ev(el_center("document.querySelector('.asset-card[data-key=\"F3|f1\"]')"))
+            await mouse("mouseMoved", r["x"], r["y"]); await asyncio.sleep(0.2)
+            await mouse("mousePressed", r["x"], r["y"], "right"); await mouse("mouseReleased", r["x"], r["y"], "right")
+            await asyncio.sleep(0.6)
+            await js_hover(el_center(js_find("缩略图")))
+            fl = await menu_labels(1)
+            check("M11-3 fla 右键缩略图二级无转换项", "转换为缩略图链接并复制" not in fl, str(fl))
+            check("M11-4 缩略图二级余项完整（6 项）", json.dumps(fl) == json.dumps(["打开 Animate 生成缩略图", "将「文件」设为缩略图", "自定义缩略图 - 从剪贴板", "自定义缩略图 - 选择文件", "复制缩略图", "刷新缩略图"]), str(fl))
+            await esc_close()
+            # png 卡对照：转换项在
+            r = await ev(el_center("document.querySelector('.asset-card[data-key=\"A1|f1\"]')"))
+            await mouse("mouseMoved", r["x"], r["y"]); await asyncio.sleep(0.2)
+            await mouse("mousePressed", r["x"], r["y"], "right"); await mouse("mouseReleased", r["x"], r["y"], "right")
+            await asyncio.sleep(0.6)
+            await js_hover(el_center(js_find("缩略图")))
+            fl = await menu_labels(1)
+            check("M11-5 png 右键缩略图二级有转换项", "转换为缩略图链接并复制" in fl, str(fl))
+            await esc_close()
+            check("M11-6 收尾菜单全关", await menu_count() == 0)
 
             print("----")
             print("FAIL:", fails if fails else "无")
