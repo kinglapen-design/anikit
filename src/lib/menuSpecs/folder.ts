@@ -17,11 +17,13 @@ import {
   createArchiveAndName,
   cutFoldersFlow,
   deleteFolderFlow,
+  deleteFoldersFlow,
   cloneFolderFlow,
   enterLinkPicker,
   findParentId,
   moveFoldersFlow,
   pickExportFolder,
+  splitSelectedFolderKinds,
   topLevelBlockId,
 } from "../menuOps";
 import { pasteFoldersInto, setFoldersColor } from "../placementOps";
@@ -102,13 +104,17 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
     "divider",
     // 剪切文件夹（3.4 点亮）：触发项在多选域内 → 剪切整个选中集（cutFoldersFlow 分流）
     { label: "剪切文件夹", shortcut: "Ctrl+X", action: () => cutFoldersFlow(folder.id) },
-    // 粘贴文件夹（3.4 点亮）：落点 = 被右键的本文件夹；剪贴板无文件夹时禁用
-    {
-      label: "粘贴文件夹",
-      shortcut: "Ctrl+V",
-      disabled: !(selection.clipboard?.folders?.length),
-      action: () => void pasteFoldersInto(folder.id),
-    },
+    // 粘贴文件夹（3.4 点亮）：落点 = 被右键的本文件夹；
+    // 条件出现（2026-09-05 走查：没有剪切过文件夹就不出现，旧"恒列置灰"废除）
+    ...(selection.clipboard?.folders?.length
+      ? [
+          {
+            label: "粘贴文件夹",
+            shortcut: "Ctrl+V",
+            action: () => void pasteFoldersInto(folder.id),
+          } as CtxEntry,
+        ]
+      : []),
     { label: "重命名", shortcut: "F2", action: rename },
     "divider",
     // 克隆（3.4 四轮点亮）：复制克隆无弹窗；多选域内触发 → 批量克隆整个选中集
@@ -212,15 +218,26 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
     "divider",
     { label: "添加至其他资源库", submenu: [{ label: "（暂无其他资源库）", disabled: true }] },
     {
-      label: "导出文件",
+      // 2026-09-05 走查修正：文案写错——文件夹菜单是「导出文件夹」
+      label: "导出文件夹",
       submenu: [
         { label: "导出为素材包", disabled: true },
         { label: "导出到本地磁盘", action: () => void pickExportFolder(folder.id) },
       ],
     },
     "divider",
-    { label: "删除文件夹", shortcut: "Delete", action: () => deleteFolderFlow(folder.id, folder.name) },
   );
+  // 删除组（2026-09-05 走查档案节）：同时多选档案+文件夹时两项分开处理——
+  // 「删除文件夹」只删文件夹 /「将档案丢到回收站」只删档案；非混选照旧单项
+  const mixed = splitSelectedFolderKinds(folder.id);
+  if (mixed) {
+    entries.push(
+      { label: "删除文件夹", shortcut: "Delete", action: () => deleteFoldersFlow(mixed.folders) },
+      { label: "将档案丢到回收站", action: () => deleteFoldersFlow(mixed.archives) },
+    );
+  } else {
+    entries.push({ label: "删除文件夹", shortcut: "Delete", action: () => deleteFolderFlow(folder.id, folder.name) });
+  }
   return entries;
 }
 

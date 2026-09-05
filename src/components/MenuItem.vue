@@ -14,6 +14,9 @@
 //   口径），hover 单块放大 125% 提层（2026-08-29 用户定），当前色 1.5px 亮色/一级外环（不占布局）；
 //   色块点击 @pick（不关菜单，连续试色场景），整行点击无动作。
 // trailingIcon = 标题右侧小图标 12（3.5 分组菜单「上移/下移」口径保留，亮色/三级，禁用随父色）。
+// 左侧图标位（2026-09-05 走查「新增」节恢复，右键菜单-带图标稿）：icon = 18 盒内 14 图标
+//（05_文档图标等品牌彩色原值）；iconPad = 占位对齐（同菜单内有任一项带 icon 时，无 icon 项渲染空 18 盒，
+// 保持名称纵向对齐）；checkPad 同口径（菜单内有 checkable 项时，无右侧件的项补 18 空盒）。
 import AppIcon from "./AppIcon.vue";
 
 export interface SwatchColor {
@@ -25,6 +28,9 @@ export interface SwatchColor {
 const props = withDefaults(
   defineProps<{
     label: string;
+    icon?: string; // 名称左侧图标（带图标稿；05_文档图标等品牌彩色原值）
+    iconPad?: boolean; // 左图标占位（同菜单有图标项时对齐用，渲染层扫描传入）
+    checkPad?: boolean; // 右对勾占位（同菜单有对勾项且本项无右件时对齐用）
     trailingIcon?: string;
     trailingIconClass?: string; // 尾图标附加类（rot-180 = 源图形朝上转朝下）
     shortcut?: string;
@@ -36,6 +42,9 @@ const props = withDefaults(
     forceState?: "" | "hover"; // 预览页强制态：静态验收 hover（实际交互仅悬停触发）
   }>(),
   {
+    icon: undefined,
+    iconPad: false,
+    checkPad: false,
     trailingIcon: undefined,
     trailingIconClass: undefined,
     shortcut: undefined,
@@ -58,6 +67,9 @@ function onRowClick(): void {
 <template>
   <button class="menu-item" :class="[{ checked }, forceState ? `force-${forceState}` : '']" :disabled="disabled" @click="onRowClick">
     <span class="main">
+      <span v-if="icon || iconPad" class="icon-slot">
+        <AppIcon v-if="icon" :name="icon" :size="14" />
+      </span>
       <span class="label">{{ label }}</span>
       <AppIcon v-if="trailingIcon" :name="trailingIcon" :size="12" class="trail" :class="trailingIconClass" />
     </span>
@@ -77,6 +89,7 @@ function onRowClick(): void {
       <AppIcon name="check" :size="12" />
     </span>
     <AppIcon v-else-if="arrow" name="expand" :size="14" class="arrow" />
+    <span v-else-if="checkPad" class="check-slot pad" />
   </button>
 </template>
 
@@ -115,6 +128,15 @@ function onRowClick(): void {
   gap: var(--n-space-6);
   flex: 1;
   min-width: 0;
+}
+/* 左侧图标位（带图标稿）：18 盒内 14 图标（品牌彩色原值）；占位 = 空盒对齐 */
+.icon-slot {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
 }
 .label {
   white-space: nowrap;

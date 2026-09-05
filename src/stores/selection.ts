@@ -85,6 +85,12 @@ export const useSelectionStore = defineStore("selection", {
     folderAnchor: null as string | null,
     // —— 6.1 阶段 C 操作态（会话级，均不进持久化）——
     clipboard: null as InternalClipboard | null,
+    // 复制的属性词 / 描述（2026-09-05 走查「上下文菜单」：复制数据组加「复制标签/复制描述」，
+    // 复制后右键多出对应粘贴项）：会话级双槽——复制标签不覆盖已复制的描述；粘贴只读不写槽，可连续多处粘贴
+    copiedData: { tags: null, descriptions: null } as {
+      tags: string[] | null;
+      descriptions: { title: string; content: string }[] | null;
+    },
     // 缩略图链接（批次 4，2026-09-02）：「转换为缩略图链接并复制」写入、「将 xx 设置为缩略图」消费——
     // 纯引用复制（不动库数据，hidden 在实际绑定 set_thumb_asset 时打）；会话级不落盘
     thumbLink: null as { assetId: string; name: string } | null,

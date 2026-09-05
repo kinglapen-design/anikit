@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 上下文菜单展区——docs/UI 重构/Design Token/组件/上下文菜单/ 五件稿 + 用户容器定案（2026-09-01）。
+// 上下文菜单展区——docs/UI 重构/Design Token/组件/上下文菜单/ 六件稿 + 用户容器定案（2026-09-01）。
 // AppMenu/ContextMenu 是 fixed 弹出层不便静态展示，预览壳 .pv-menu-shell 复刻容器口径
 //（宽度内容自适应——最长 item 决定 / padding 6 / --n-g3 底 / 1px --n-g5 inset 描边 / --n-shadow-sm / 圆角 8），
 // 分组 = .pv-menu-group 复刻 ContextMenu .menu-group 口径；item = 真 MenuItem 组件（名称→36px→右件）。
@@ -11,8 +11,9 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
   <section id="design-system-menus" class="pv-section">
     <h2 class="pv-sec-title">组件 · 上下文菜单</h2>
     <p class="pv-sec-desc">
-      Design Token/组件/上下文菜单/ 五件稿（分割线 / 对勾 / 展开箭头 / 快捷键 / 更改颜色）+ 用户容器定案（2026-09-01）；
+      Design Token/组件/上下文菜单/ 六件稿（分割线 / 对勾 / 展开箭头 / 快捷键 / 更改颜色 / 带图标）+ 用户容器定案（2026-09-01）；
       壳为预览复刻（AppMenu 口径），item 为真组件——常态列可直接 hover 交互。
+      「打开文件链接所在位置」二级 = linkList 面板（LinkListRows，与卡片徽章 hover 弹窗同构，2026-09-05），弹出层形态不陈列。
     </p>
 
     <div class="pv-group">
@@ -104,6 +105,55 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
             <MenuItem label="更改颜色" :swatches="{ colors: FOLDER_SWATCHES, current: 'cyan' }" />
           </div>
           <span class="pv-cap">青色选中（九色 -1 档按 token 声明序）</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">左侧图标位 + 占位对齐（右键菜单-带图标稿，2026-09-05 走查恢复）</h3>
+      <p class="pv-sec-desc">
+        图标 18 盒内 14（05_文档图标品牌彩色原值）；同菜单内有任一项带图标 → 无图标项左侧补 18 占位盒（iconPad），
+        有对勾项 → 无右件项右侧补 18 占位盒（checkPad），名称纵向对齐。真实菜单里占位由 ContextMenu scanPads 自动扫描，此处手动陈列。
+      </p>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="Animate 文档" icon="animate" />
+              <MenuItem label="Photoshop 文档" icon="photoshop" />
+              <MenuItem label="Illustrator 文档" icon="illustrator" />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="MarkDown 文档" icon="markdown" />
+              <MenuItem label="文本文档" icon="txt" />
+              <MenuItem label="Word 文档" icon="word" />
+              <MenuItem label="Excel 文档" icon="excel" />
+            </div>
+          </div>
+          <span class="pv-cap">新建文档七项（addMenu.newDocGroupEntries 实接）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="打开预览" icon-pad shortcut="Enter" />
+              <MenuItem label="打开文件链接所在位置" icon-pad arrow />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="MarkDown 文档" icon="markdown" />
+              <MenuItem label="文本文档" icon="txt" />
+            </div>
+          </div>
+          <span class="pv-cap">混排：无图标项 icon-pad 左占位，名称对齐</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="名称" checkable checked />
+              <MenuItem label="文件大小" check-pad />
+              <MenuItem label="时长" checkable force-state="hover" />
+            </div>
+          </div>
+          <span class="pv-cap">对勾占位：中间项 check-pad 右补 18 空盒</span>
         </div>
       </div>
     </div>

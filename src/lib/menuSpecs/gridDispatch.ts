@@ -1,15 +1,18 @@
 // 网格右键统一调度（6.3，自 AssetGrid 拆出；2026-08-12 自 menuSpecs.ts 再拆，规范第 3 条行数控制）：
 // 素材卡片 = 素材菜单（回收站视口 = 13 稿回收站菜单，1.3 归并全局宿主，RecycleCardMenu 局部菜单废除）；
-// 空白处（含 grid-header）= 07 新增菜单（2026-08-11 用户定：空白右键/新增按钮/Ctrl+N 三入口共用，
-// 旧 6.3 空白菜单 assetBlankSpec/folderBlankSpec 废除——布局方式等归 28 查看方式菜单）；
-// 回收站视口空白 = 13 稿空白菜单；文件夹卡片 / 档案卡片 / 按钮 / 输入框上不处理（"pass"——卡片自带菜单）。
+// 空白处（含 grid-header）按视口分流（2026-09-05 走查「快速访问」节，旧"一律 07 新增菜单"废除）：
+//   folder: 视口 = 07 新增菜单（addButtonSpec）；
+//   全部 / 未分类 = quickFullSpec（去新建文件夹/新建档案——快速访问里没用）；
+//   最近使用 / 自动导入（quick:inbox）/ 缩略图 = scanOnlySpec（只给扫描两项）；
+//   回收站 = 13 稿空白菜单；seq: 等其余视口照旧新增菜单；
+// 文件夹卡片 / 档案卡片 / 按钮 / 输入框上不处理（"pass"——卡片自带菜单）。
 // 1.3：菜单项按新稿纯文字口径（2026-09-01）。
 import { useContentStore, type PlacementView } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { openContextMenu } from "../contextMenus";
 import { assetCardSpec } from "./assetCard";
-import { addButtonSpec } from "./addMenu";
+import { addButtonSpec, quickFullSpec, scanOnlySpec } from "./addMenu";
 import { archiveCardSpec } from "./archiveCard";
 import { folderCardSpec } from "./folder";
 import { recycleBlankSpec, recycleCardSpec } from "./recycle";
@@ -30,10 +33,11 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
       return "done";
     }
     if (!selection.isSelected(key)) selection.selectOnly(key);
-    // 回收站分流前置（2026-08-11 修复 item 右键调不出：键解析失败也不依赖 items 反查，
-    // 与 6.1 旧代码同构——回收站菜单不读卡片数据）
+    // 回收站分流前置（2026-08-11 修复 item 右键调不出：键解析失败也不依赖 items 反查——
+    // recycleCardSpec 无参回退基础集）；2026-09-05 全量菜单起传条目 p（打开/导出/复制数据等要 assetId）
     if (content.isRecycleView) {
-      openContextMenu(e, recycleCardSpec(), undefined);
+      const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
+      openContextMenu(e, recycleCardSpec(p), undefined);
       return "done";
     }
     const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
@@ -45,7 +49,11 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
   e.preventDefault();
   // 选择模式（6.2）：空白处新增菜单是编辑类，不出
   if (usePickerStore().active) return "done";
-  if (content.isRecycleView) openContextMenu(e, recycleBlankSpec(), undefined);
+  const vk = content.sidebarSelected;
+  if (vk === "quick:recycle") openContextMenu(e, recycleBlankSpec(), undefined);
+  else if (vk.startsWith("folder:")) openContextMenu(e, addButtonSpec(), undefined);
+  else if (vk === "quick:all" || vk === "quick:uncategorized") openContextMenu(e, quickFullSpec(), undefined);
+  else if (vk === "quick:recent" || vk === "quick:inbox" || vk === "quick:thumbnail") openContextMenu(e, scanOnlySpec(), undefined);
   else openContextMenu(e, addButtonSpec(), undefined);
   return "done";
 }

@@ -1,4 +1,13 @@
 // 04 稿 · 档案卡片右键菜单 spec（自 menuSpecs.ts 拆出，规范第 3 条行数控制）：菜单项按新稿纯文字口径（2026-09-01）。
+// 2026-09-05 走查「上下文菜单」档案节修订：
+// - 「作为链接粘贴」移除（只有复制档案后才出现——复制档案业务随档案多位置立项另轮，届时按条件接回）；
+// - 「作为副本粘贴」删除（档案走与文件夹一样的克隆，新加「克隆」Ctrl+D = clone_folders，档案记录随迁）；
+// - 「导出文件」文案修正为「导出档案」，二级删「导出提示词为 .MD 文档」（占位废除）；
+// - 「置顶」删除；「从文件夹中移除档案链接」删除（档案不存在分类问题——档案本身在树容器目录里，
+//   至少也在根目录；档案进回收站语义 = 链接/原始档案独立进站，后端另轮统一立项，本轮「丢到回收站」行为照旧）；
+// - 同时多选档案+文件夹时删除组分两项（删除文件夹 / 将档案丢到回收站，splitSelectedFolderKinds 分流）；
+// - 「提示词」一级菜单 + 二级骨架（提示词业务未立项，本轮纯骨架全占位，三态切换随业务轮接）；
+// - 复制数据组加「复制标签/复制描述」，复制后多出「粘贴标签/粘贴描述」（合并追加语义，多选批量）。
 import { useContentStore, type FolderNode } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
@@ -7,16 +16,25 @@ import type { CtxEntry, CtxItem } from "../contextMenus";
 import { menuState } from "../contextMenus";
 import { FOLDER_SWATCHES, toNewTint } from "../customColors";
 import {
+  copyArchiveDescriptions,
+  copyArchiveTags,
+  pasteDescriptions,
+  pasteTags,
+} from "../customDataOps";
+import {
   copyFolderLink,
   copyName,
   createAndName,
   createArchiveAndName,
   cutFoldersFlow,
   deleteFolderFlow,
+  deleteFoldersFlow,
   dissolveArchiveFlow,
+  cloneFolderFlow,
   enterLinkPicker,
   findParentId,
   moveFoldersFlow,
+  splitSelectedFolderKinds,
   topLevelBlockId,
 } from "../menuOps";
 import { setFoldersColor } from "../placementOps";
@@ -29,6 +47,15 @@ function findNode(nodes: FolderNode[], id: string): FolderNode | null {
     if (hit) return hit;
   }
   return null;
+}
+
+// 粘贴标签/描述的目标集（多选批量）：触发项在文件夹多选域内 → 域内全部档案；否则仅自身
+function selectedArchiveIds(triggerId: string): string[] {
+  const selection = useSelectionStore();
+  if (!(selection.selectedFolders.size > 1 && selection.selectedFolders.has(triggerId))) return [triggerId];
+  return selection
+    .orderedSelectedFolderIds()
+    .filter((id) => findNode(useContentStore().folders, id)?.kind === "archive");
 }
 
 // —— 04 稿 · 档案卡片 ——
@@ -65,7 +92,7 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
   const content = useContentStore();
   const selection = useSelectionStore();
   const parentId = findParentId(content.folders, archive.id) ?? null;
-  return [
+  const entries: CtxEntry[] = [
     {
       label: "打开档案",
       shortcut: "Enter",
@@ -113,9 +140,8 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
     { label: "打开档案链接所在位置", submenu: [{ label: "（无）", disabled: true }] },
     "divider",
     { label: "剪切档案", shortcut: "Ctrl+X", action: () => cutFoldersFlow(archive.id) },
+    // 复制档案：占位 disabled——复制/作为链接粘贴业务随档案多位置立项另轮（2026-09-05 走查定）
     { label: "复制档案", shortcut: "Ctrl+C", disabled: true },
-    { label: "作为链接粘贴", shortcut: "Ctrl+V", disabled: true },
-    { label: "作为副本粘贴", shortcut: "Ctrl+Shift+V", disabled: true },
     {
       label: "重命名",
       shortcut: "F2",
@@ -124,6 +150,10 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
         else selection.namingFolderCardId = archive.id;
       },
     },
+    "divider",
+    // 克隆（2026-09-05 走查：档案「作为副本粘贴」删除，走与文件夹一样的克隆）：
+    // clone_folders 递归复制子树（结构 / 资产物理副本 / 档案记录），多选域内触发批量分流
+    { label: "克隆", shortcut: "Ctrl+D", action: () => cloneFolderFlow(archive.id) },
     "divider",
     { label: "更改封面图",
       submenu: [
@@ -152,30 +182,68 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
     "divider",
     { label: "添加至其他资源库", submenu: [{ label: "（暂无其他资源库）", disabled: true }] },
     {
-      label: "导出文件",
+      // 2026-09-05 走查修正：文案写错——档案菜单是「导出档案」；「导出提示词为 .MD 文档」占位删除
+      label: "导出档案",
       submenu: [
         { label: "导出为素材包", disabled: true },
         { label: "导出到本地磁盘", disabled: true },
-        { label: "导出提示词为 .MD 文档", disabled: true },
       ],
     },
     "divider",
-    { label: "打开提示词编辑器", shortcut: "Ctrl+T", disabled: true },
+    // 提示词（2026-09-05 走查重做，一级「提示词」+ 展开箭头）：业务未立项，本轮纯菜单骨架全占位——
+    // 二级按态切换（未指定 = 指定/新建；已指定 = 打开编辑器/复制/断开/删除）随业务轮接；
+    // 档案不是文件，无「分析提示词」（走查原文）
+    {
+      label: "提示词",
+      submenu: [
+        { label: "指定文本文档为提示词", disabled: true },
+        { label: "新建 .md 提示词文档", disabled: true },
+        { label: "新建 .txt 提示词文档", disabled: true },
+      ],
+    },
     {
       label: "复制数据",
       submenu: [
         { label: "复制链接", action: () => void copyFolderLink(archive.id) },
         { label: "复制名称", action: () => void copyName(archive.name) },
+        "divider",
+        // 复制标签/描述（2026-09-05 走查）：写 selection.copiedData 会话槽，复制后多出对应粘贴项
+        { label: "复制标签", action: () => copyArchiveTags(archive.id) },
+        { label: "复制描述", action: () => copyArchiveDescriptions(archive.id) },
+        // 粘贴 = 合并追加（标签按词去重 / 描述按标题去重，用户定）；多选域内触发 = 域内全部档案批量
+        ...(selection.copiedData.tags?.length
+          ? [
+              {
+                label: "粘贴标签",
+                action: () => void pasteTags({ assets: [], archives: selectedArchiveIds(archive.id) }),
+              } as CtxEntry,
+            ]
+          : []),
+        ...(selection.copiedData.descriptions?.length
+          ? [
+              {
+                label: "粘贴描述",
+                action: () => void pasteDescriptions({ assets: [], archives: selectedArchiveIds(archive.id) }),
+              } as CtxEntry,
+            ]
+          : []),
       ],
     },
     "divider",
-    { label: "置顶", disabled: true },
-    "divider",
-    { label: "从文件夹中移除档案链接", shortcut: "Shift+Delete", disabled: true },
-    {
+  ];
+  // 删除组：混选档案+文件夹时两项分开（2026-09-05 走查）；单选/同构多选照旧「丢到回收站」
+  const mixed = splitSelectedFolderKinds(archive.id);
+  if (mixed) {
+    entries.push(
+      { label: "删除文件夹", shortcut: "Delete", action: () => deleteFoldersFlow(mixed.folders) },
+      { label: "将档案丢到回收站", action: () => deleteFoldersFlow(mixed.archives) },
+    );
+  } else {
+    entries.push({
       label: "丢到回收站",
       shortcut: "Delete",
       action: () => deleteFolderFlow(archive.id, archive.name),
-    },
-  ];
+    });
+  }
+  return entries;
 }

@@ -316,6 +316,29 @@ export function deleteFolderFlow(folderId: string, folderName: string): void {
   };
 }
 
+// 选中域按形态分流（2026-09-05 走查「上下文菜单」档案节：同时多选档案和文件夹时，
+// 右键删除分两项——「删除文件夹」只删文件夹 /「将档案丢到回收站」只删档案）：
+// 返回 null = 非混选（单选或同构多选），调用方照旧单项流程
+export function splitSelectedFolderKinds(triggerId: string): { folders: string[]; archives: string[] } | null {
+  const selection = useSelectionStore();
+  if (!(selection.selectedFolders.size > 1 && selection.selectedFolders.has(triggerId))) return null;
+  const content = useContentStore();
+  const isArchive = (id: string): boolean => {
+    const walk = (nodes: FolderNode[]): boolean => {
+      for (const n of nodes) {
+        if (n.id === id) return n.kind === "archive";
+        if (walk(n.children)) return true;
+      }
+      return false;
+    };
+    return walk(content.folders);
+  };
+  const folders: string[] = [];
+  const archives: string[] = [];
+  for (const id of selection.orderedSelectedFolderIds()) (isArchive(id) ? archives : folders).push(id);
+  return folders.length > 0 && archives.length > 0 ? { folders, archives } : null;
+}
+
 // 批量删除文件夹（3.4）：一次确认 + 后端 delete_folders 单撤销步；
 // 单元素时回退单删文案（键盘 Delete 分流入口不分单复数，统一走这里）
 export function deleteFoldersFlow(folderIds: string[]): void {

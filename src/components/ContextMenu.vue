@@ -5,7 +5,8 @@
 // 组 padding 上下 4（首组上 0、末组下 0），组间 = 非末组 inset 底 1px 通用/五级线（无孤立分割线元素）。
 // 一级级联 flyout：hover 带子菜单的项时右侧飞出，右缘溢出改向左飞出（03 稿注"菜单不可超出窗口边缘"）；
 // flyout 按 key 随父项重建（2026-08-11 走查：复用实例位置滞留越偏越远）+ pop=false 不回放弹出动画。
-// 搜索区 / 左侧图标位 / 各菜单定宽 随新稿废除（2026-09-01 用户定）；
+// 搜索区 / 各菜单定宽 随新稿废除（2026-09-01 用户定）；左侧图标位 2026-09-05 走查部分恢复
+//（CtxItem.icon + 同菜单占位对齐扫描 scanPads，仅设计明确带图标的项使用，如新建文档组）；
 // 宽度内容自适应（2026-09-01 二十五轮）：flyout 宽渲染前不可知——先按右飞放置，
 // 挂载后实测宽，右缘溢出再以父项左缘为锚左飞（fixFlyoutX）。
 // 组外关闭关系：根菜单的 group = flyout 根元素（flyout 内点击不关根菜单）；
@@ -16,22 +17,38 @@ import MenuItem from "./MenuItem.vue";
 import LibraryMenuItem from "./LibraryMenuItem.vue";
 import FolderIconPanel from "./FolderIconPanel.vue";
 import FolderIconGrid from "./FolderIconGrid.vue";
+import LinkListRows from "./LinkListRows.vue";
 import { closeContextMenu, menuState, type CtxEntry, type CtxItem } from "../lib/contextMenus";
 import { reorderLibraries, requestDeleteLibrary, currentLibrary, switchLibrary } from "../lib/libraryOps";
 
 // 级联 flyout：当前展开的子菜单（父项 top 作 key 随项重建）与位置；
-// panel（2026-08-18，3.3 / 05 稿 §3）= 自定义网格面板形态（图标），不走条目列表；
+// panel（2026-08-18，3.3 / 05 稿 §3）= 自定义面板形态（图标网格 / linkList 链接位置双行列表 2026-09-05），不走条目列表；
 // parentLeft = 父项左缘（左飞修正锚点）
 const flyout = ref<{
   key: number;
   x: number;
   y: number;
   entries: CtxEntry[];
-  panel?: { kind: "folderIcon"; folderId: string };
+  panel?: NonNullable<CtxItem["panel"]>;
   parentLeft: number;
 } | null>(null);
 const flyoutRootRef = ref<HTMLElement>();
 const flyoutMenuRef = ref<InstanceType<typeof AppMenu>>();
+
+// 占位对齐扫描（2026-09-05 走查「新增」节）：同一菜单（根 / flyout 各自）内有任一项带 icon
+// → 其余项左侧补 18 占位盒；有任一项 checkable → 无右件的项右侧补 18 占位盒（名称纵向对齐贴稿）
+function scanPads(list: CtxEntry[] | null | undefined): { icon: boolean; check: boolean } {
+  let icon = false;
+  let check = false;
+  for (const e of list ?? []) {
+    if (e === "divider") continue;
+    if (e.icon) icon = true;
+    if (e.checkable) check = true;
+  }
+  return { icon, check };
+}
+const rootPads = computed(() => scanPads(menuState.entries));
+const flyoutPads = computed(() => scanPads(flyout.value?.entries));
 
 // 每次打开收起上次 flyout
 watch(
@@ -216,6 +233,9 @@ function onLibraryRemove(entry: CtxItem): void {
           <MenuItem
             v-else
             :label="row.entry.label"
+            :icon="row.entry.icon"
+            :icon-pad="rootPads.icon"
+            :check-pad="rootPads.check"
             :trailing-icon="row.entry.trailingIcon"
             :trailing-icon-class="row.entry.trailingIconClass"
             :shortcut="row.entry.shortcut"
@@ -238,12 +258,16 @@ function onLibraryRemove(entry: CtxItem): void {
   <AppMenu v-if="flyout && menuState.entries" :key="flyout.key" ref="flyoutMenuRef" :x="flyout.x" :y="flyout.y" :pop="false" @close="closeAll(false)">
     <div ref="flyoutRootRef" class="flyout-root">
       <FolderIconPanel v-if="flyout.panel?.kind === 'folderIcon'" :folder-id="flyout.panel.folderId" @done="closeAll(true)" />
+      <LinkListRows v-else-if="flyout.panel?.kind === 'linkList'" :asset-id="flyout.panel.assetId" @jump="closeAll(true)" />
       <div v-else class="menu-groups">
         <div v-for="(group, gi) in flyoutGroups" :key="gi" class="menu-group">
           <MenuItem
             v-for="row in group"
             :key="row.index"
             :label="row.entry.label"
+            :icon="row.entry.icon"
+            :icon-pad="flyoutPads.icon"
+            :check-pad="flyoutPads.check"
             :trailing-icon="row.entry.trailingIcon"
             :trailing-icon-class="row.entry.trailingIconClass"
             :shortcut="row.entry.shortcut"

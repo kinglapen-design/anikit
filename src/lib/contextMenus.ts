@@ -4,15 +4,21 @@
 // 与 AppMenu/MenuItem 的关系：渲染复用这两个组件（视觉口径不变），本模块只加数据驱动与
 // 一级级联子菜单（flyout）。菜单宽度 = 内容自适应（2026-09-01 二十五轮用户定，废 300 定宽：
 // 名称→36px→右件最小间距，容器宽由最长 item 决定）。
-// 2026-09-01 新稿废除：item 左侧图标位（icon/iconClass/iconData）、搜索区（searchable）、
-// 各菜单定宽（width/submenuWidth）、孤立分割线元素（渲染层按 "divider" 切分组容器）。
+// 2026-09-01 新稿废除：搜索区（searchable）、各菜单定宽（width/submenuWidth）、
+// 孤立分割线元素（渲染层按 "divider" 切分组容器）。
+// 2026-09-05 走查「新增」节：item 左侧图标位按「右键菜单-带图标」稿部分恢复（icon 字段，
+// 仅新建文档组等设计明确带图标的项使用；同菜单内无图标项占位对齐）。
 import { reactive } from "vue";
 
 // 菜单条目：action 缺失或 disabled = 置灰占位；submenu = 一级级联（hover 展开）；
 // checkable/checked 用于布局方式、排序等状态项（对勾在右侧：常态隐 / hover 三级 / 选中一级）；
-// trailingIcon = 标题右侧小图标 12（3.5 分组菜单「上移/下移」口径，功能保留）
+// trailingIcon = 标题右侧小图标 12（3.5 分组菜单「上移/下移」口径，功能保留）；
+// icon（2026-09-05 走查「新增」节恢复左图标位，右键菜单-带图标稿）= 名称左侧图标 18 盒（svg 14，
+// 品牌彩色原值）——同一菜单（一级 / flyout 各自）内有任一项带 icon 时，其余项左侧占位对齐
+// （对勾同口径：菜单内有 checkable 项时，无右件的项右侧补 18 占位盒；渲染层扫描判定）
 export interface CtxItem {
   label: string;
+  icon?: string; // 名称左侧图标（lib/icons 文件名干；05_文档图标等彩色稿原值）
   trailingIcon?: string; // 标题右侧小图标 12（chevron-small 等）
   trailingIconClass?: string; // 尾图标附加类（rot-180）
   shortcut?: string; // 快捷键纯文本（右侧，Fira Mono 12 三级色；原串显示如 "Ctrl+Enter"）
@@ -24,9 +30,10 @@ export interface CtxItem {
   // 判定口径 2026-08-12 用户定：一次性任务类（新建/重命名/删除/导入，进入后续输入或任务流）必关，
   // 可逆状态翻转类（用户可能立即再做一次，如切过去看一眼切回来）保持打开
   submenu?: CtxEntry[];
-  // 自定义网格面板（2026-08-18，3.3 / 05 稿 §3）：与 submenu 互斥——hover 时 flyout
-  // 渲染对应面板组件（FolderIconPanel）而非条目列表
-  panel?: { kind: "folderIcon"; folderId: string };
+  // 自定义面板 flyout（与 submenu 互斥——hover 时 flyout 渲染对应面板组件而非条目列表）：
+  // folderIcon = 图标网格（2026-08-18，3.3 / 05 稿 §3，FolderIconPanel）；
+  // linkList = 文件链接位置双行列表（2026-09-05 走查：二级菜单与卡片徽章 hover 弹窗 LinkListPopover 同构）
+  panel?: { kind: "folderIcon"; folderId: string } | { kind: "linkList"; assetId: string };
   // 内嵌色块行（2026-09-01 新稿「右键菜单-更改颜色」）：item 右侧 10 色块（常态-1 = 默认清色
   // + 九色-1 按 token 声明序），点击色块直接生效且**不关菜单**（用户可连续试色）；
   // 当前色块 1.5px 亮色/一级外环。整行（非色块区）点击无动作。

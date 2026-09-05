@@ -8,6 +8,20 @@
 #   「默认」= "default" 显式断链哨兵（子级能退回常态灰）；
 # F 显式默认断链端到端（父绿子选默认 → 子灰父仍绿）；G 多选批量换色；H 档案节点菜单接入更改颜色；
 # D 截图 menu / flyout / swatches + 设计系统预览页 menus 展区。
+# S 段（2026-09-05 走查「上下文菜单」节修订）：S1 文件夹粘贴条件出现（A9 同步改口径）/
+#   S2 文件卡（提示词骨架·缩略图重排·设为原始条件出现·导出删提示词·复制数据加标签描述）/
+#   S3 复制→粘贴标签合并追加（set_asset_props 实证）/ S4 linkList 二级与徽章弹窗同构 /
+#   S5 档案删项五条+克隆+导出档案文案+提示词骨架 / S6 空白视口分流（全部去新建；最近使用/自动导入/缩略图只扫描）/
+#   S7 回收站全量 19 项+占位四项禁用 / S8 混选删除两项分流；D3-D5 带图标陈列与占位对齐。
+# A 容器/分组/item：宽度内容自适应（无内联 width，最长 item 决定）/ 名称→36px→右件最小间距 /
+#   右件贴右缘 / 无搜索区 / 无左图标 / 组间 1px 五级线（组盒内底 inset）/ item 26 高 /
+#   快捷键原串纯文本 / 展开箭头；
+# B hover 排序依据 → flyout 宽自适应（< 250，废 300）+ checkable 对勾（自定义选中恒显）+ 对勾贴右缘；
+# E hover 更改图标 → 网格面板 30 格（默认 + 29 双色；archive 档案专属出清单）/ 宽 186 / gap 6 / 双色原值；
+# C 更改颜色内嵌色块行：10 色块 / 默认位选中 / 点色不关菜单 + set_folder_colors 调用 + 外环跟随回写 /
+#   「默认」= "default" 显式断链哨兵（子级能退回常态灰）；
+# F 显式默认断链端到端（父绿子选默认 → 子灰父仍绿）；G 多选批量换色；H 档案节点菜单接入更改颜色；
+# D 截图 menu / flyout / swatches + 设计系统预览页 menus 展区。
 import asyncio
 import base64
 import json
@@ -22,14 +36,14 @@ PORT = 9347
 URL = "http://localhost:5373"
 
 STUB = r"""
-window.__calls = { set_folder_colors: [] };
+window.__calls = { set_folder_colors: [], set_asset_props: [], set_archive_props: [] };
 const TREE = {
   blocks: [{ id: "dir", name: "目录", icon: null }],
   nodes: [
-    { id: "f1", name: "角色", count: 0, children: [
+    { id: "f1", name: "角色", count: 2, children: [
       { id: "f1-1", name: "主角", count: 0, children: [] },
     ] },
-    { id: "f2", name: "场景", count: 0, children: [] },
+    { id: "f2", name: "场景", count: 1, children: [] },
     { id: "a1", name: "主角档案", kind: "archive", count: 0, children: [] },
   ],
 };
@@ -40,6 +54,30 @@ const findNode = (nodes, id) => {
     if (h) return h;
   }
   return null;
+};
+// 2026-09-05 走查轮 S 段桩：A1 = 单位置文件（f1，tags 走路/跑步）；B2 = 双位置（f1 origin + f2 链接，tags 待机）；
+// R1 = 回收站 fla 条目（folderId 伪值 "recycle"）；a1 档案 props [主角, NPC]
+const mkP = (assetId, folderId, name, ext, origin) => ({
+  assetId, folderId, name, w: 100, h: 100, thumbW: null, thumbH: null, ext,
+  thumbPath: null, thumbKind: null, origin, frameCount: null, animated: false,
+  duration: null, bpm: null, importedFrom: null, size: 1234, createdAt: null,
+  modifiedAt: "2026-09-05T00:00:00Z", importedAt: "2026-09-05T00:00:00Z",
+  noteCount: null, thumbFrame: null, fps: null, hidden: false, playAssetId: null,
+});
+const PLACEMENTS = [
+  mkP("A1", "f1", "走路.png", "png", true),
+  mkP("B2", "f1", "雪牧.png", "png", true),
+  mkP("B2", "f2", "雪牧-链接.png", "png", false),
+];
+const RECYCLE = [mkP("R1", "recycle", "废稿.fla", "fla", false)];
+const ARCHIVES = [
+  { folderId: "a1", badge: null, avatar: null, props: ["主角", "NPC"],
+    descriptions: [{ title: "设定", content: "雪国主角" }], links: [], createdAt: "", totalSize: 0, coverPath: null },
+];
+const DETAILS = {
+  A1: { tags: ["走路", "跑步"], descriptions: [{ title: "动作", content: "基础动作" }] },
+  B2: { tags: ["待机"], descriptions: [] },
+  R1: { tags: ["废案"], descriptions: [] },
 };
 window.__cbId = 0; window.__cbs = {};
 window.__TAURI_INTERNALS__ = {
@@ -52,13 +90,40 @@ window.__TAURI_INTERNALS__ = {
       for (const id of args.folderIds ?? []) { const n = findNode(TREE.nodes, id); if (n) n.color = args.color; }
       return Promise.resolve((args.folderIds ?? []).length);
     }
+    if (cmd === "set_asset_props") {
+      window.__calls.set_asset_props.push(JSON.parse(JSON.stringify(args ?? {})));
+      if (DETAILS[args.assetId]) DETAILS[args.assetId].tags = args.props;
+      return Promise.resolve(null);
+    }
+    if (cmd === "set_archive_props") {
+      window.__calls.set_archive_props.push(JSON.parse(JSON.stringify(args ?? {})));
+      const a = ARCHIVES.find((x) => x.folderId === args.folderId); if (a) a.props = args.props;
+      return Promise.resolve(null);
+    }
+    if (cmd === "set_auto_import") {
+      // 探针环境启动链路不填 currentSpace（autoImport 恒 false）——点「自动导入」先弹确认窗；
+      // 桩直接批准开启（S6-5 自动导入视口分流断言前提）
+      return Promise.resolve({ name: "S", path: "E:/T/S", autoImport: args?.enabled ?? true });
+    }
+    if (cmd === "get_asset_detail") {
+      const d = DETAILS[args.assetId] ?? { tags: [], descriptions: [] };
+      return Promise.resolve(JSON.parse(JSON.stringify({
+        assetId: args.assetId, originName: "o.png", ext: "png", size: 1, width: 1, height: 1,
+        duration: null, importedAt: "", modifiedAt: "", tags: d.tags, descriptions: d.descriptions,
+        colors: [], links: [], note: "", placements: [], archives: [],
+      })));
+    }
     const R = {
-      get_current_library: { name: "测试库", path: "E:/test-lib", assetCount: 1, folderCount: 3 },
+      get_current_library: { name: "测试库", path: "E:/test-lib", assetCount: 3, folderCount: 3 },
       get_current_space: { name: "S", path: "E:/T/S", autoImport: true },
       get_ui_settings: {},
       list_folder_tree: JSON.parse(JSON.stringify(TREE)),
-      list_placements: [], list_recycle: [], list_recent_assets: [], list_recent_libraries: [],
-      list_inbox_snapshot: [], list_archives: [], list_space_libraries: ["测试库"],
+      list_placements: JSON.parse(JSON.stringify(PLACEMENTS)),
+      list_recycle: JSON.parse(JSON.stringify(RECYCLE)),
+      list_recent_assets: [], list_recent_libraries: [],
+      list_inbox_snapshot: [],
+      list_archives: JSON.parse(JSON.stringify(ARCHIVES)),
+      list_space_libraries: ["测试库"],
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
     };
     return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
@@ -84,6 +149,9 @@ async def send(ws, method, params=None, session=None):
         if raw.get("method") == "Runtime.exceptionThrown":
             d = raw["params"]["exceptionDetails"]
             print("[EXCEPTION]", str(d.get("exception", {}).get("description", d.get("text")))[:500])
+        if raw.get("method") == "Runtime.consoleAPICalled" and raw["params"]["type"] == "error":
+            args = raw["params"]["args"]
+            print("[CONSOLE-ERR]", str([a.get("value", a.get("description", "?")) for a in args])[:300])
 
 
 async def main():
@@ -129,7 +197,9 @@ async def main():
                 return r.get("result", {}).get("result", {}).get("value")
 
             async def mouse(t, x, y, button="left", modifiers=0):
-                await send(ws, "Input.dispatchMouseEvent", {"type": t, "button": button, "modifiers": modifiers, "buttons": 2 if button == "right" else (0 if t == "mouseMoved" else 1), "x": x, "y": y, "clickCount": 1}, session=sess)
+                # buttons = 事件后的按键状态：release/move 恒 0（旧写法 release 带 1 = 左键"假按住"，
+                # 后续右键 press 被 Chromium 当组合键吃不发 contextmenu——2026-09-05 S3 段随机失败根因）
+                await send(ws, "Input.dispatchMouseEvent", {"type": t, "button": button, "modifiers": modifiers, "buttons": 0 if t in ("mouseReleased", "mouseMoved") else (2 if button == "right" else 1), "x": x, "y": y, "clickCount": 1}, session=sess)
 
             async def shot(name):
                 r = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
@@ -159,7 +229,7 @@ async def main():
             check("A6 item 无左图标", await ev("[...document.querySelectorAll('.app-menu .menu-item .main .app-icon')].length === 0"))
             check("A7 快捷键原串大写", await ev("[...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '新标签页打开')?.querySelector('.shortcut')?.textContent === 'Ctrl+Enter'"))
             check("A8 排序依据带箭头", await ev("[...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '排序依据')?.querySelector('.arrow svg') != null"))
-            check("A9 禁用项存在（粘贴文件夹）", await ev("[...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '粘贴文件夹')?.disabled === true"))
+            check("A9 无剪切时「粘贴文件夹」不出现（2026-09-05 走查改条件出现，旧 disabled 断言废除）", await ev("[...document.querySelectorAll('.app-menu .menu-item')].every((x) => x.querySelector('.label')?.textContent !== '粘贴文件夹')"))
             check("A10 名称→右件最小间距 36（更改颜色行 label→色块组）", await ev("(() => { const it = [...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '更改颜色'); if (!it) return false; const l = it.querySelector('.label').getBoundingClientRect(); const s = it.querySelector('.swatches').getBoundingClientRect(); return Math.abs(s.left - l.right - 36) <= 1.5; })()"))
             check("A11 容器宽=最长项（短项右件贴右缘：容器右缘-14）", await ev("(() => { const m = document.querySelector('.app-menu'); const it = [...m.querySelectorAll('.menu-item')].find((x) => x.querySelector('.label')?.textContent === '打开文件夹'); if (!it) return false; const s = it.querySelector('.shortcut').getBoundingClientRect(); return Math.abs(m.getBoundingClientRect().right - 14 - s.right) <= 1.5; })()"))
             await shot("ctx-menu")
@@ -266,6 +336,161 @@ async def main():
             await esc_close()
             check("H3 档案圆点变色（a1 dot tint=red）", await ev("document.querySelector('[data-folder-id=\"a1\"] .dot[data-tint=\"red\"]') != null"))
 
+            # —— S. 2026-09-05 走查「上下文菜单」节修订 ——
+            # S1 文件夹粘贴条件出现 / S2 文件卡（提示词骨架·缩略图重排·设为原始条件·导出删项·复制数据）/
+            # S3 复制→粘贴标签合并追加 / S4 linkList 二级（与徽章弹窗同构）/ S5 档案删项+克隆+提示词骨架 /
+            # S6 空白视口分流 / S7 回收站全量 / S8 混选删除两项分流
+            async def js_click(expr):
+                r = await ev(expr)
+                if r is None:
+                    return None
+                await mouse("mousePressed", r["x"], r["y"]); await mouse("mouseReleased", r["x"], r["y"])
+                await asyncio.sleep(0.5)
+                return r
+
+            async def js_hover(expr):
+                r = await ev(expr)
+                if r is None:
+                    return None
+                await mouse("mouseMoved", r["x"], r["y"])
+                await asyncio.sleep(0.5)
+                return r
+
+            async def js_rclick_expr(expr):
+                r = await ev(expr)
+                if r is None:
+                    print("DIAG rclick MISS（元素取不到坐标）:", expr[:100])
+                    return None
+                await mouse("mousePressed", r["x"], r["y"], "right"); await mouse("mouseReleased", r["x"], r["y"], "right")
+                await asyncio.sleep(0.6)
+                return r
+
+            def js_find(label, idx=0):
+                return f"[...document.querySelectorAll('.app-menu')[{idx}]?.querySelectorAll('.menu-item') ?? []].find((x) => x.querySelector('.label')?.textContent === '{label}')"
+
+            def el_center(sel_expr):
+                return f"(() => {{ const el = {sel_expr}; if (!el) return null; const b = el.getBoundingClientRect(); return {{ x: b.left + b.width / 2, y: b.top + b.height / 2 }}; }})()"
+
+            def item_center(label, idx=0):
+                return el_center(js_find(label, idx))
+
+            async def menu_labels(idx=0):
+                return await ev(f"[...document.querySelectorAll('.app-menu')[{idx}]?.querySelectorAll('.menu-item .label') ?? []].map((x) => x.textContent)") or []
+
+            async def click_quick(label):
+                await js_click(el_center(f"[...document.querySelectorAll('.block.quick .tree-item')].find((x) => x.textContent.includes('{label}'))"))
+                await asyncio.sleep(0.6)
+
+            def blank_bottom():
+                # 落点避开底部居中搜索悬浮栏（底 12 + 高 42 = 底部 54 区间；25 稿悬浮栏）——取右下偏上
+                return "(() => { const el = document.querySelector('.grid-viewport'); if (!el) return null; const b = el.getBoundingClientRect(); return { x: b.right - 60, y: b.bottom - 100 }; })()"
+
+            # S1 文件夹「粘贴文件夹」条件出现（无剪切不出现 → 剪切后出现）
+            await lclick("f1")  # 单选归位（G 段后选中域 f1+f2）
+            await rclick("f1")
+            labels = await menu_labels()
+            check("S1-1 无剪切时「粘贴文件夹」不出现", "粘贴文件夹" not in labels)
+            await js_click(item_center("剪切文件夹"))  # 一次性任务类：点完菜单关
+            await rclick("f1")
+            check("S1-2 剪切后「粘贴文件夹」出现且未禁用", await ev(f"(() => {{ const it = {js_find('粘贴文件夹')}; return it != null && !it.disabled; }})()"))
+            await esc_close()
+
+            # S2 文件卡菜单（f1 视口已开；A1 = 单位置）
+            check("S2-0 f1 视口渲卡", await ev("document.querySelector('.asset-card[data-key=\"A1|f1\"]') != null"))
+            await js_rclick_expr(el_center("document.querySelector('.asset-card[data-key=\"A1|f1\"]')"))
+            labels = await menu_labels()
+            check("S2-1 文件卡「提示词」一级带箭头", await ev(f"(() => {{ const it = {js_find('提示词')}; return it != null && it.querySelector('.arrow') != null; }})()"))
+            check("S2-2 单位置无「将此文件设为原始文件」", "将此文件设为原始文件" not in labels)
+            check("S2-3 旧「保存提示词」占位项移除", "保存提示词" not in labels)
+            await js_hover(item_center("提示词"))
+            fl = await menu_labels(1)
+            check("S2-4 提示词二级 = 分析/指定/新建md/新建txt", fl == ["分析提示词", "指定文本文件为提示词", "新建 .md 提示词文档", "新建 .txt 提示词文档"], str(fl))
+            check("S2-5 提示词二级全禁用（业务未立项骨架）", await ev("[...document.querySelectorAll('.app-menu')[1].querySelectorAll('.menu-item')].every((x) => x.disabled)"))
+            await js_hover(item_center("缩略图"))
+            fl = await menu_labels(1)
+            check("S2-6 缩略图二级重排序", fl == ["打开 Animate 生成缩略图", "转换为缩略图链接并复制", "将「文件」设为缩略图", "自定义缩略图 - 从剪贴板", "自定义缩略图 - 选择文件", "复制缩略图", "刷新缩略图"], str(fl))
+            check("S2-7 「将「文件」设为缩略图」禁用占位文案", await ev(f"(() => {{ const it = {js_find('将「文件」设为缩略图', 1)}; return it != null && it.disabled; }})()"))
+            check("S2-8 缩略图二级 4 分组", await ev("document.querySelectorAll('.app-menu')[1].querySelectorAll('.menu-group').length === 4"), str(await ev("document.querySelectorAll('.app-menu')[1].querySelectorAll('.menu-group').length")))
+            await js_hover(item_center("导出文件"))
+            fl = await menu_labels(1)
+            check("S2-9 导出二级无「导出提示词为 .MD 文档」", all("提示词" not in x for x in fl), str(fl))
+            await js_hover(item_center("复制数据"))
+            fl = await menu_labels(1)
+            check("S2-10 复制数据：有复制标签/描述、无复制提示词", "复制标签" in fl and "复制描述" in fl and "复制提示词" not in fl, str(fl))
+            # S3/S4（复制→粘贴标签合并追加 / linkList 二级）= 独立探针 cdp-menu-paste-link-probe.py——
+            # 长操作链后 CDP 合成右键偶发不派发 contextmenu（2026-09-05 实证，事件连 document capture 都收不到），
+            # 拆短链独立跑稳定；主探针本段仅验复制数据二级构成
+            await esc_close()
+
+            # S5 档案树节点：删项 / 克隆 / 导出档案文案 / 提示词骨架 / 复制数据
+            await rclick("a1")
+            labels = await menu_labels()
+            check("S5-1 档案菜单有「克隆」", "克隆" in labels)
+            check("S5-2 删项五条不在（置顶/副本粘贴/链接粘贴/移除链接/打开提示词编辑器）", all(x not in labels for x in ["置顶", "作为副本粘贴", "作为链接粘贴", "从文件夹中移除档案链接", "打开提示词编辑器"]), str(labels))
+            check("S5-3 「导出档案」文案（无导出文件）", "导出档案" in labels and "导出文件" not in labels)
+            await js_hover(item_center("提示词"))
+            fl = await menu_labels(1)
+            check("S5-4 档案提示词二级三项（无分析）", fl == ["指定文本文档为提示词", "新建 .md 提示词文档", "新建 .txt 提示词文档"], str(fl))
+            await js_hover(item_center("复制数据"))
+            fl = await menu_labels(1)
+            check("S5-5 档案复制数据有复制标签/描述", "复制标签" in fl and "复制描述" in fl, str(fl))
+            await js_click(item_center("复制标签", 1))  # 槽 = [主角, NPC]
+            await rclick("a1")
+            await js_hover(item_center("复制数据"))
+            fl = await menu_labels(1)
+            check("S5-6 档案复制后多出「粘贴标签」", "粘贴标签" in fl, str(fl))
+            await esc_close()
+
+            # S6 空白视口分流
+            await click_quick("全部")
+            await js_rclick_expr(blank_bottom())
+            labels = await menu_labels()
+            check("S6-1 全部空白：无新建文件夹/新建档案", "新建文件夹" not in labels and "新建档案" not in labels, str(labels))
+            check("S6-2 全部空白：有导入与扫描", "导入本地文件" in labels and "扫描重复文件" in labels, str(labels))
+            check("S6-3 新建文档项带图标（icon-slot svg）", await ev(f"(() => {{ const it = {js_find('Animate 文档')}; return it?.querySelector('.icon-slot svg') != null; }})()"))
+            check("S6-4 无图标项占位对齐（iconPad 空盒）", await ev(f"(() => {{ const it = {js_find('导入本地文件')}; const s = it?.querySelector('.icon-slot'); return s != null && s.querySelector('svg') == null; }})()"))
+            await esc_close()
+            for q in ["最近使用", "自动导入", "缩略图"]:
+                await click_quick(q)
+                # 自动导入首次点击弹确认窗（探针环境 currentSpace.autoImport 恒 false）——点「开启」批准进视图
+                if q == "自动导入":
+                    if await ev("!!document.querySelector('.modal-mask')"):
+                        await js_click(el_center("[...document.querySelectorAll('.modal-mask button')].find((x) => x.textContent.includes('开启'))"))
+                        await asyncio.sleep(0.6)
+                await js_rclick_expr(blank_bottom())
+                labels = await menu_labels()
+                check(f"S6-5 {q} 空白 = 只扫描两项", labels == ["扫描重复文件", "扫描文件/档案链接"], str(labels))
+                await esc_close()
+
+            # S7 回收站全量
+            await click_quick("回收站")
+            check("S7-0 回收站渲卡", await ev("document.querySelector('.asset-card[data-key=\"R1|recycle\"]') != null"))
+            await js_rclick_expr(el_center("document.querySelector('.asset-card[data-key=\"R1|recycle\"]')"))
+            labels = await menu_labels()
+            expect7 = ["还原文件", "打开预览", "新标签页打开", "新窗口打开", "在默认应用打开", "在其他应用打开", "发送至 Animate", "在资源管理器打开", "移动文件", "将此文件设为原始文件", "打开文件链接所在位置", "剪切", "重命名", "添加至其他资源库", "导出文件", "AI 工具集", "复制数据", "彻底删除文件", "清空回收站"]
+            check("S7-1 回收站卡菜单 = 全量 19 项", labels == expect7, str(labels))
+            check("S7-2 占位四项禁用（移动/设为原始/剪切/重命名）", await ev("['移动文件', '将此文件设为原始文件', '剪切', '重命名'].every((l) => { const it = [...document.querySelectorAll('.app-menu')[0].querySelectorAll('.menu-item')].find((x) => x.querySelector('.label')?.textContent === l); return it != null && it.disabled; })"))
+            check("S7-3 发送至 Animate 可用（fla 单选）", await ev(f"(() => {{ const it = {js_find('发送至 Animate')}; return it != null && !it.disabled; }})()"))
+            check("S7-4 链接位置二级 = linkList 面板", await ev(f"(() => {{ const it = {js_find('打开文件链接所在位置')}; return it != null && it.querySelector('.arrow') != null; }})()"))
+            await esc_close()
+            await js_rclick_expr(blank_bottom())
+            labels = await menu_labels()
+            check("S7-5 回收站空白四项", labels == ["扫描重复文件", "扫描文件/档案链接", "还原全部文件", "清空回收站"], str(labels))
+            check("S7-6 清空回收站未禁用（有条目）", await ev(f"(() => {{ const it = {js_find('清空回收站')}; return it != null && !it.disabled; }})()"))
+            await esc_close()
+
+            # S8 混选删除两项分流（f2 文件夹 + a1 档案）
+            await lclick("f2")
+            await lclick("a1", modifiers=2)  # Ctrl 加选
+            await rclick("f2")
+            labels = await menu_labels()
+            check("S8-1 混选右键文件夹：删除文件夹 + 将档案丢到回收站", "删除文件夹" in labels and "将档案丢到回收站" in labels, str(labels))
+            await esc_close()
+            await rclick("a1")
+            labels = await menu_labels()
+            check("S8-2 混选右键档案：同两项", "删除文件夹" in labels and "将档案丢到回收站" in labels, str(labels))
+            await esc_close()
+
             # —— D. 设计系统预览页 menus 展区（hash 导航不重跑 main.ts，须 reload 触发预览页挂载判定）——
             await send(ws, "Page.navigate", {"url": URL + "/#design-system-menus"}, session=sess)
             await asyncio.sleep(1)
@@ -273,8 +498,12 @@ async def main():
             await asyncio.sleep(5)
             await send(ws, "Runtime.evaluate", {"expression": "document.querySelector('#design-system-menus')?.scrollIntoView()"}, session=sess)
             await asyncio.sleep(0.6)
-            check("D1 预览页菜单展区存在", await ev("document.querySelectorAll('#design-system-menus .pv-menu-shell').length >= 6"), str(await ev("document.querySelectorAll('#design-system-menus .pv-menu-shell').length")))
+            check("D1 预览页菜单展区存在", await ev("document.querySelectorAll('#design-system-menus .pv-menu-shell').length >= 9"), str(await ev("document.querySelectorAll('#design-system-menus .pv-menu-shell').length")))
             check("D2 预览色块行 cur 外环", await ev("getComputedStyle(document.querySelector('#design-system-menus .sw.cur')).boxShadow.includes('0px 0px 0px 1.5px')"))
+            # 2026-09-05 带图标稿展区：文档图标陈列 / iconPad 空盒 / checkPad 占位
+            check("D3 文档图标陈列（7 项 icon-slot svg）", await ev("[...document.querySelectorAll('#design-system-menus .menu-item .icon-slot')].filter((s) => s.querySelector('svg')).length >= 7"), str(await ev("document.querySelectorAll('#design-system-menus .menu-item .icon-slot svg').length")))
+            check("D4 iconPad 空盒占位（无图标项对齐）", await ev("[...document.querySelectorAll('#design-system-menus .menu-item .icon-slot')].some((s) => !s.querySelector('svg'))"))
+            check("D5 checkPad 右占位（.check-slot.pad）", await ev("document.querySelector('#design-system-menus .menu-item .check-slot.pad') != null"))
             await shot("ctx-menu-preview")
             return 1 if fails else 0
     finally:

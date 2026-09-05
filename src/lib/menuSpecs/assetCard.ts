@@ -1,14 +1,28 @@
 // 03 稿 · 素材卡片右键菜单 spec（自 menuSpecs.ts 拆出，规范第 3 条行数控制）：
 // 菜单项按新稿纯文字口径（2026-09-01）。
+// 2026-09-05 走查「上下文菜单」文件节修订：
+// - 缩略图二级重排分组：「打开 Animate 生成缩略图」独组 │ 转换为缩略图链接 / 将「xx」设为缩略图 一组
+//   （占位文案「将「文件」设为缩略图」，有缩略图链接时正常显示复制的名称）│ 自定义两项 │
+//   复制缩略图 + 刷新缩略图 一组（复制移到刷新上）；
+// - 「将此文件设为原始文件」无链接状态（活位置 ≤1）不出现（旧"恒列置灰"废除）；
+// - 「打开文件链接所在位置」二级 = linkList 面板（与卡片徽章 hover 弹窗 LinkListPopover 同构）；
+// - 导出二级删「导出提示词为 .MD 文档」；复制数据删「复制提示词」、加「复制标签/复制描述」，
+//   复制后多出「粘贴标签/粘贴描述」（合并追加，多选批量）；
+// - 「保存提示词」占位项改「提示词」一级菜单骨架（分析/指定/新建——业务未立项全占位，三态切换随业务轮）。
 import { invoke } from "@tauri-apps/api/core";
-import { useContentStore, type FolderNode, type PlacementView } from "../../stores/content";
+import { useContentStore, type PlacementView } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
 import { usePreviewStore } from "../../stores/preview";
 import type { CtxEntry } from "../contextMenus";
 import { isSequence as isSequenceAsset } from "../formatBadge";
-import { jumpToAssetPlacement } from "../relationOps";
+import {
+  copyAssetDescriptions,
+  copyAssetTags,
+  pasteDescriptions,
+  pasteTags,
+} from "../customDataOps";
 import {
   copyAssetLink,
   copyAssetPath,
@@ -42,25 +56,16 @@ function openDefaultApp(assetId: string): void {
   void invoke("open_with_default_app", { assetId }).then(() => useContentStore().refreshRecent());
 }
 
-// 文件夹名（id → 名称；root = 未分类）
-function folderName(id: string): string {
-  if (id === "root") return "未分类";
-  const walk = (nodes: FolderNode[]): string | null => {
-    for (const n of nodes) {
-      if (n.id === id) return n.name;
-      const hit = walk(n.children);
-      if (hit) return hit;
-    }
-    return null;
-  };
-  return walk(useContentStore().folders) ?? id;
+// 粘贴标签/描述的目标资产集（多选批量）：当前选中集按 assetId 去重
+function selectedAssetIds(): string[] {
+  return [...new Set(useSelectionStore().selectedRefs().map((r) => r.assetId))];
 }
 
 // —— 03 稿 · 素材卡片（右键未选中项调用方已先单选；批量项对全部选中项执行）——
 // 上下文规则（稿原文）：无复制/剪切 → 三个粘贴项不出现；非序列帧 → 序列帧两项不出现；
 // 链接文件删除组只出「从文件夹中移除文件链接」，非链接出「从文件夹中移除 / 丢到回收站」
 //（稿 prose 另提及"去到未分类"，2026-08-11 用户确认无此项，不列）；
-// 无提示词 → 「打开提示词编辑器」改「保存提示词」（提示词数据未落地，恒显示保存提示词占位，记 09 待办）
+// 提示词 = 一级菜单骨架（2026-09-05 走查重做；业务未立项全占位，记 09 待办）
 export function assetCardSpec(p: PlacementView): CtxEntry[] {
   // 选择模式（6.2 一轮，PRD 03_数据链接 04）：右键仅留查看类操作，编辑类不出现
   if (usePickerStore().active) return pickerAssetCardSpec(p);
@@ -70,14 +75,9 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
   const assetKey = `${p.assetId}|${p.folderId}`;
   const isSequence = isSequenceAsset(p); // 序列帧（动图同 frameCount 字段，靠 animated 区分）
   const hasClipboard = selection.clipboard !== null;
-  // 打开文件链接所在位置（6.2 四轮走查④接入）：同 assetId 的全部 Placement 所在文件夹去重
-  //（含关联文件夹）；点击 = 跳转该位置视口 + 选中该卡片（同链接区块 item 跳转口径）
-  const locations: CtxEntry[] = [
-    ...new Set(content.placements.filter((q) => q.assetId === assetId).map((q) => q.folderId)),
-  ].map((fid) => ({
-    label: folderName(fid),
-    action: () => jumpToAssetPlacement(assetId, fid),
-  }));
+  // 活位置数（同 assetId 全部 Placement）：「将此文件设为原始文件」仅链接状态（>1）出现——
+  // 2026-09-05 走查：没有链接状态的文件不出该项（旧"恒列置灰"废除）
+  const liveCount = content.placements.filter((q) => q.assetId === assetId).length;
   const entries: CtxEntry[] = [
     { label: "打开预览", shortcut: "Enter", action: () => void usePreviewStore().open(assetKey) },
   ];
@@ -120,17 +120,20 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
         selection.linkManageDraft = { assetId, name: p.name };
       },
     },
-    // 将此文件设为原始文件（6.2 四轮走查③，PRD 01 边界规则 8 手动 origin 转移）：
-    // 仅链接卡片（origin=false）可点——origin 卡已是原始文件；单选才可
-    {
+  );
+  // 将此文件设为原始文件（6.2 四轮走查③，PRD 01 边界规则 8 手动 origin 转移）：
+  // 仅链接卡片（origin=false）可点——origin 卡已是原始文件；单选才可；活位置 ≤1 不出现
+  if (liveCount > 1) {
+    entries.push({
       label: "将此文件设为原始文件",
       disabled: selection.count !== 1 || p.origin,
       action: () => void setPlacementOrigin(assetId, p.folderId, p.name),
-    },
-    {
-      label: "打开文件链接所在位置",
-      submenu: locations.length > 0 ? locations : [{ label: "（无）", disabled: true }],
-    },
+    });
+  }
+  entries.push(
+    // 打开文件链接所在位置（2026-09-05 走查：二级与徽章 hover 弹窗一致）=
+    // linkList 面板（LinkListRows 双行行：区块/目录两段 + 显示名 + 徽章，点行跳转定位）
+    { label: "打开文件链接所在位置", panel: { kind: "linkList", assetId } },
     "divider",
     { label: "剪切文件", shortcut: "Ctrl+X", action: () => copySelection("cut") },
     { label: "复制文件", shortcut: "Ctrl+C", action: () => copySelection("copy") },
@@ -157,17 +160,18 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     {
       label: "缩略图",
       submenu: [
+        // 2026-09-05 走查分组：Animate 生成独组 │ 转换链接 / 设为缩略图 │ 自定义两项 │ 复制 + 刷新
         { label: "打开 Animate 生成缩略图", disabled: true },
-        { label: "复制缩略图", disabled: selection.count !== 1, action: () => void copyThumb(assetId) },
+        "divider",
         // 缩略图链接（批次 4 点亮）：转换 = 纯引用复制不动库数据；设置 = set_thumb_asset 绑定（hidden 随绑定打）
         { label: "转换为缩略图链接并复制", disabled: selection.count !== 1, action: () => copyThumbLink(assetId, p.name) },
         selection.thumbLink
           ? {
-              label: `将「${selection.thumbLink.name}」设置为缩略图`,
+              label: `将「${selection.thumbLink.name}」设为缩略图`,
               disabled: selection.thumbLink.assetId === assetId, // 自绑无意义（后端同护栏）
               action: () => void applyThumbLink(assetId),
             }
-          : { label: "将「xx」设置为缩略图", disabled: true },
+          : { label: "将「文件」设为缩略图", disabled: true },
         "divider",
         {
           label: "自定义缩略图 - 从剪贴板",
@@ -180,6 +184,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
           action: () => void pickCustomThumb(assetId),
         },
         "divider",
+        { label: "复制缩略图", disabled: selection.count !== 1, action: () => void copyThumb(assetId) },
         { label: "刷新缩略图", action: () => void refreshThumb(assetId) },
         // 还原为素材（PRD 02-15，批次 4）：仅 hidden 伴生缩略图资产显示（缩略图视图右键）
         ...(p.hidden
@@ -200,7 +205,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
           label: "导出到本地磁盘",
           action: () => void pickExportAssets(selection.selectedRefs().map((r) => r.assetId)),
         },
-        { label: "导出提示词为 .MD 文档", disabled: true },
+        // 「导出提示词为 .MD 文档」占位删除（2026-09-05 走查）
       ],
     },
     "divider",
@@ -219,7 +224,18 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       ],
     },
     "divider",
-    { label: "保存提示词", disabled: true },
+    // 提示词（2026-09-05 走查重做，一级「提示词」+ 展开箭头）：业务未立项，本轮纯菜单骨架全占位——
+    // 二级按态切换（未指定 = 分析/指定/新建；已指定 = 打开编辑器/复制/断开/删除；
+    // 已扫描 = 保存 md/txt/复制/重新分析/清空）随业务轮接
+    {
+      label: "提示词",
+      submenu: [
+        { label: "分析提示词", disabled: true },
+        { label: "指定文本文件为提示词", disabled: true },
+        { label: "新建 .md 提示词文档", disabled: true },
+        { label: "新建 .txt 提示词文档", disabled: true },
+      ],
+    },
     {
       label: "复制数据",
       submenu: [
@@ -228,7 +244,21 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
         "divider",
         { label: "复制名称", action: () => copyName(p.name) },
         { label: "复制 base64", action: () => copyBase64(assetId) },
-        { label: "复制提示词", disabled: true },
+        "divider",
+        // 复制标签/描述（2026-09-05 走查）：写 selection.copiedData 会话槽，复制后多出对应粘贴项；
+        // 「复制提示词」占位删除（提示词移一级菜单骨架）
+        { label: "复制标签", action: () => void copyAssetTags(assetId) },
+        { label: "复制描述", action: () => void copyAssetDescriptions(assetId) },
+        // 粘贴 = 合并追加（标签按词去重 / 描述按标题去重，用户定）；多选批量 = 选中集按 assetId 去重
+        ...(selection.copiedData.tags?.length
+          ? ["divider" as CtxEntry, { label: "粘贴标签", action: () => void pasteTags({ assets: selectedAssetIds(), archives: [] }) } as CtxEntry]
+          : []),
+        ...(selection.copiedData.descriptions?.length
+          ? [
+              ...(selection.copiedData.tags?.length ? [] : ["divider" as CtxEntry]),
+              { label: "粘贴描述", action: () => void pasteDescriptions({ assets: selectedAssetIds(), archives: [] }) } as CtxEntry,
+            ]
+          : []),
       ],
     },
     "divider",
@@ -250,20 +280,6 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     },
   );
   return entries;
-}
-
-// 打开文件链接所在位置（子菜单条目组）：同 assetId 全部 Placement 所在文件夹去重——
-// assetCardSpec 与选择模式精简集共用
-function linkLocationEntries(assetId: string): CtxEntry[] {
-  const locations: CtxEntry[] = [
-    ...new Set(useContentStore().placements.filter((q) => q.assetId === assetId).map((q) => q.folderId)),
-  ].map((fid) => ({
-    label: folderName(fid),
-    action: () => {
-      useTabsStore().openView(`folder:${fid}`);
-    },
-  }));
-  return locations.length > 0 ? locations : [{ label: "（无）", disabled: true }];
 }
 
 // 选择模式精简集（6.2 一轮，PRD 03_数据链接 04"右键仅留查看类操作，编辑类禁用"）：
@@ -289,10 +305,8 @@ function pickerAssetCardSpec(p: PlacementView): CtxEntry[] {
     { label: "在其他应用打开", action: () => void openWithDialog(assetId) },
     { label: "在资源管理器打开", action: () => revealWithWarning(assetId) },
     "divider",
-    {
-      label: "打开文件链接所在位置",
-      submenu: linkLocationEntries(assetId),
-    },
+    // 同主菜单口径（2026-09-05）：二级 = linkList 面板（与徽章 hover 弹窗同构）
+    { label: "打开文件链接所在位置", panel: { kind: "linkList", assetId } },
     "divider",
     { label: "复制缩略图", action: () => void copyThumb(assetId) },
     {
