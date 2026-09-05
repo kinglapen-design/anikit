@@ -3,7 +3,8 @@
 // 卡片 240×66 / padding 12 / 两行：文件夹图标 + 路径（区块名 正文加粗 二级 / 目录 加粗 三级）、文件名 三级；
 // 关闭钮 hover 从右缘向左滑入并把内容推左（items.css .ni-slide 推挤机制，2026-08-29 走查定——
 // 此前绝对定位 translateX 从容器右缘进来，与其他 item 从内容缘进来不统一，作废）；
-// 原始文件徽章（品牌星）绝对定位右下（仅 origin）。
+// 原始文件徽章（品牌星）绝对定位右下——仅 origin 且活位置 > 1 出（2026-09-05 走查：与卡片徽章同口径，
+// 单位置无链接可区分不出；判定在调用方 TabLinks：origin && linkItems.length > 1）。
 import "./items.css";
 import AppIcon from "../AppIcon.vue";
 import TwoToneIcon from "./TwoToneIcon.vue";

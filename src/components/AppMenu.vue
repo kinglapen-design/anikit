@@ -120,13 +120,15 @@ onBeforeUnmount(() => {
     inset 0 0 0 1px var(--n-g5),
     var(--n-shadow-sm);
 }
-/* tip 壳（linkList 二级 = 悬停-tip 观感，与徽章 hover 弹窗 LinkListPopover 同口径） */
+/* tip 壳（linkList 二级 = 悬停-tip 观感，与徽章 hover 弹窗 LinkListPopover 同口径）：
+   overflow hidden = 行 hover 直角底裁进圆角（2026-09-05 走查抓出溢出线） */
 .app-menu.tip {
   border: 1px solid var(--n-l-a3);
   border-radius: var(--n-radius-6);
   background: var(--n-g-a1);
   box-shadow: var(--n-shadow-sm);
   backdrop-filter: blur(var(--n-blur-sm));
+  overflow: hidden;
 }
 /* 弹出动画：快速缩放 + 透明度过渡，缓出曲线（2026-07-24 用户定）；flyout 等逐帧位移场景用 pop=false 关闭 */
 .app-menu.pop {

@@ -506,6 +506,8 @@ async def main():
             check("D3 文档图标陈列（7 项 mark-slot svg）", await ev("[...document.querySelectorAll('#design-system-menus .menu-item .mark-slot')].filter((s) => s.querySelector('svg')).length >= 7"), str(await ev("document.querySelectorAll('#design-system-menus .menu-item .mark-slot svg').length")))
             check("D4 markPad 空盒占位（无图标项对齐）", await ev("[...document.querySelectorAll('#design-system-menus .menu-item .mark-slot')].some((s) => !s.querySelector('svg'))"))
             check("D5 对勾在左侧（checked 项 mark-check 一级恒显）", await ev("document.querySelector('#design-system-menus .menu-item.checked .mark-slot .mark-check') != null"))
+            # 对勾稿：外框 18×18、svg 实际 12×8.7——check.svg viewBox=18 满盒渲染不被二次缩放（2026-09-05 走查抓出）
+            check("D5b 对勾实寸 18 满盒（viewBox 18 不缩放）", await ev("(() => { const c = document.querySelector('#design-system-menus .menu-item.checked .mark-check svg'); return c != null && Math.abs(c.getBoundingClientRect().width - 18) <= 0.5; })()"), str(await ev("document.querySelector('#design-system-menus .menu-item.checked .mark-check svg')?.getBoundingClientRect().width")))
             await shot("ctx-menu-preview")
             return 1 if fails else 0
     finally:

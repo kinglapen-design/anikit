@@ -68,7 +68,9 @@ function onRowClick(): void {
   <button class="menu-item" :class="[{ checked }, forceState ? `force-${forceState}` : '']" :disabled="disabled" @click="onRowClick">
     <span class="main">
       <span v-if="checkable || icon || markPad" class="mark-slot">
-        <AppIcon v-if="checkable" name="check" :size="12" class="mark-check" />
+        <!-- 对勾稿：外框 18×18、svg 实际 12×8.7——check.svg viewBox 恰为 18（path 内缩留白），
+             故 size 必须 18 满盒（首版 size=12 把 18 viewBox 整体缩 12，glyph 被二次缩放偏小，2026-09-05 走查抓出） -->
+        <AppIcon v-if="checkable" name="check" :size="18" class="mark-check" />
         <AppIcon v-else-if="icon" :name="icon" :size="14" />
       </span>
       <span class="label">{{ label }}</span>

@@ -82,8 +82,12 @@ function jump(r: Row): void {
       </div>
       <div class="line name-line">
         <span class="name" v-tip="r.name">{{ r.name }}</span>
-        <AppIcon v-if="r.origin" name="original-file-badge" :size="14" class="badge" />
-        <AppIcon v-else name="linked-file-badge" :size="13" class="badge link" />
+        <!-- 位置徽章 = 活位置 > 1 才出（2026-09-05 走查：与卡片徽章同口径——单位置无链接可区分，
+             原始/链接标识无意义不出；卡片壳 AssetCard 与列表行 ListRowCard 已遵守，tip 此处补齐） -->
+        <template v-if="rows.length > 1">
+          <AppIcon v-if="r.origin" name="original-file-badge" :size="14" class="badge" />
+          <AppIcon v-else name="linked-file-badge" :size="13" class="badge link" />
+        </template>
       </div>
     </div>
     <div v-if="rows.length === 0" class="empty">（无）</div>

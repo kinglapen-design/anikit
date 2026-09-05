@@ -360,7 +360,7 @@ function hasContent(id: DetailLinkBlockId): boolean {
             :block-name="p.blockName"
             :folder-name="dirName(p)"
             :file-name="p.name"
-            :origin="p.origin"
+            :origin="p.origin && linkItems.length > 1"
             @click="jumpToLink(p)"
             @close="removeLink(p)"
           />

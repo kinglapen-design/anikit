@@ -238,10 +238,19 @@ async def main():
             check("P4-2 行路径两段（目录 / 角色）+ origin 徽章", await ev("(() => { const r = document.querySelectorAll('.app-menu')[1]?.querySelector('.link-rows .row'); if (!r) return false; const segs = [...r.querySelectorAll('.seg')].map((x) => x.textContent); return segs[0] === '目录' && segs[1] === '角色' && r.querySelector('.badge') != null; })()"))
             check("P4-2b tip 壳 + 最小宽 180", await ev("(() => { const m = document.querySelectorAll('.app-menu')[1]; return m.classList.contains('tip') && m.offsetWidth >= 180; })()"), str(await ev("document.querySelectorAll('.app-menu')[1]?.offsetWidth")))
             check("P4-2c tip 壳无容器内距（pad 0 行贴边）", await ev("document.querySelectorAll('.app-menu')[1]?.style.padding === '0px'"), str(await ev("document.querySelectorAll('.app-menu')[1]?.style.padding")))
+            check("P4-2d tip 壳 overflow hidden（行 hover 直角底裁进圆角）", await ev("getComputedStyle(document.querySelectorAll('.app-menu')[1]).overflow === 'hidden'"))
             # 点第二行（f2 位置）→ 跳转定位 folder:f2（菜单关 + 视口切）
             await js_click(el_center("document.querySelectorAll('.app-menu')[1].querySelectorAll('.link-rows .row')[1]"))
             await asyncio.sleep(0.8)
             check("P4-3 点行跳转定位（f2 视口 + 菜单关）", await ev("document.querySelectorAll('.app-menu').length === 0 && document.querySelector('.asset-card[data-key=\"B2|f2\"]') != null"))
+            # 单位置文件（A1）：linkList 一行且无徽章（2026-09-05 走查：徽章 = 活位置 > 1 才出，同卡片口径）
+            # 先点树 f1 回其视口（P4-3 已跳转到 f2，A1 卡不在当前视口）
+            await js_click(el_center("document.querySelector('[data-folder-id=\"f1\"]')"))
+            await asyncio.sleep(0.8)
+            await js_rclick(el_center("document.querySelector('.asset-card[data-key=\"A1|f1\"]')"))
+            await js_hover(el_center(js_find("打开文件链接所在位置")))
+            check("P4-4 单位置行无原始徽章（活位置 1）", await ev("(() => { const rows = document.querySelectorAll('.app-menu')[1]?.querySelectorAll('.link-rows .row') ?? []; return rows.length === 1 && rows[0].querySelector('.badge') == null; })()"))
+            await esc_close()
             return 1 if fails else 0
     finally:
         proc.terminate()
