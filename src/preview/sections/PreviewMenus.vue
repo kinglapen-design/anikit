@@ -16,6 +16,7 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
       「打开文件链接所在位置」二级 = linkList 面板（LinkListRows，与卡片徽章 hover 弹窗同构；flyout 用 tip 壳——
       AppMenu tone="tip" + pad 0 行贴边，最小宽 180，2026-09-05 走查定），弹出层形态不陈列。
       菜单栏「菜单」主菜单（2026-09-05 接业务，稿 = 用户当场供稿）：三级级联 flyout 栈为交互行为不陈列，此处摆根级与库列表形态。
+      菜单栏「编辑」菜单（2026-09-06 接业务，稿 = 用户当场供稿）：全项 = 全局快捷键的菜单面；创建副本 / 克隆 同键 Ctrl+D 按选中域分流显示。
     </p>
 
     <div class="pv-group">
@@ -55,6 +56,69 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
             </div>
           </div>
           <span class="pv-cap">仓库 ▸ 资源库 三级：库列表 = 纯对勾行（2026-09-05 用户定，旧 LibraryMenuItem 抓手/删除× 不进此菜单）</span>
+        </div>
+      </div>
+    </div>
+    <div class="pv-group">
+      <h3 class="pv-group-title">菜单栏「编辑」菜单（2026-09-06；spec = menuSpecs/editMenu，六组）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="撤销" shortcut="Ctrl+Z" disabled />
+              <MenuItem label="重做" shortcut="Ctrl+Shift+Z" disabled />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="剪切" shortcut="Ctrl+X" />
+              <MenuItem label="复制" shortcut="Ctrl+C" />
+              <MenuItem label="作为文件/档案链接粘贴" shortcut="Ctrl+V" />
+              <MenuItem label="作为副本粘贴" shortcut="Ctrl+Shift+V" />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="重命名" shortcut="F2" />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="创建副本" shortcut="Ctrl+D" />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="全选" shortcut="Ctrl+A" />
+              <MenuItem label="清除选择" shortcut="Esc" />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="从文件夹中移除" shortcut="Shift+Delete" />
+              <MenuItem label="丢到回收站" shortcut="Delete" />
+            </div>
+          </div>
+          <span class="pv-cap">素材域形态：创建副本（此处陈列撤销/重做禁用态，其余点亮）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="撤销" shortcut="Ctrl+Z" />
+              <MenuItem label="重做" shortcut="Ctrl+Shift+Z" />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="剪切" shortcut="Ctrl+X" />
+              <MenuItem label="复制" shortcut="Ctrl+C" disabled />
+              <MenuItem label="作为文件/档案链接粘贴" shortcut="Ctrl+V" />
+              <MenuItem label="作为副本粘贴" shortcut="Ctrl+Shift+V" />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="重命名" shortcut="F2" />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="克隆" shortcut="Ctrl+D" />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="全选" shortcut="Ctrl+A" />
+              <MenuItem label="清除选择" shortcut="Esc" />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="从文件夹中移除" shortcut="Shift+Delete" disabled />
+              <MenuItem label="丢到回收站" shortcut="Delete" />
+            </div>
+          </div>
+          <span class="pv-cap">文件夹·档案域形态：克隆（同键 Ctrl+D 分流显示，2026-09-06 用户定）；复制 / 从文件夹中移除 无文件夹语义置灰</span>
         </div>
       </div>
     </div>

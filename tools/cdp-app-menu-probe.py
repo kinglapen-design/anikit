@@ -10,7 +10,12 @@
 # M12 全局搜索 = 聚焦搜索框 + 预填 `~`（同日用户定「就这么简单」）——续输关键字走 search_assets 全局范围，Esc 清空恢复。
 # M13 添加标签 = 32 稿属性标签弹窗（单目标，多选禁用）/ 清空标签 = 所选项（文件+档案多选批量）标签全删，
 #   空标签目标幂等跳过不发命令 + 零目标 toast。
-# D 截图 root / docs-l3 / lib-l3。
+# E 编辑菜单（2026-09-06 接业务轮；稿 = 用户当场供稿截图，spec = src/lib/menuSpecs/editMenu.ts）：
+#   E1 空选态 12 项 6 组全列（克隆不在——副本/克隆同键 Ctrl+D 按选中域分流显示）+ 禁用态 + 弹出位 + min-width 250；
+#   E2 素材选中点亮集；E3 复制 → 两粘贴点亮 → 作为副本粘贴发 duplicate_placements；
+#   E4 文件夹域分流（克隆在 / 创建副本不在）+ 克隆发 clone_folders；E5 撤销点亮链（桩 __undo 态 + 操作后 refreshState 拉取）；
+#   E6 同钮 toggle；E7 回收站视口只读——编辑类全 disabled。
+# D 截图 root / docs-l3 / lib-l3 / edit-empty / edit-asset。
 import asyncio
 import base64
 import json
@@ -26,7 +31,9 @@ URL = "http://localhost:5373"
 
 # 桩同 cdp-context-menu-probe（2026-09-05 全量启动链路）；__calls 记录全量 invoke 供断言
 STUB = r"""
-window.__calls = { set_folder_colors: [], set_asset_props: [], set_archive_props: [], search_assets: [] };
+window.__calls = { set_folder_colors: [], set_asset_props: [], set_archive_props: [], search_assets: [], delete_placements: [], duplicate_placements: [], clone_folders: [] };
+// 撤销栈有状态桩（E5 编辑菜单「撤销」点亮链）：操作 runOp 收尾 refreshState 拉取本对象
+window.__undo = { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" };
 const TREE = {
   blocks: [{ id: "dir", name: "目录", icon: null }],
   nodes: [
@@ -105,6 +112,20 @@ window.__TAURI_INTERNALS__ = {
         colors: [], links: [], note: "", placements: [], archives: [],
       })));
     }
+    if (cmd === "get_undo_state") return Promise.resolve(JSON.parse(JSON.stringify(window.__undo)));
+    // 编辑菜单 E 段三件（2026-09-06）：只记录参数不回写数据（断言 = 调用本身）
+    if (cmd === "delete_placements") {
+      window.__calls.delete_placements.push(JSON.parse(JSON.stringify(args ?? {})));
+      return Promise.resolve(null);
+    }
+    if (cmd === "duplicate_placements") {
+      window.__calls.duplicate_placements.push(JSON.parse(JSON.stringify(args ?? {})));
+      return Promise.resolve([]);
+    }
+    if (cmd === "clone_folders") {
+      window.__calls.clone_folders.push(JSON.parse(JSON.stringify(args ?? {})));
+      return Promise.resolve(null);
+    }
     if (cmd === "open_space") return Promise.resolve({ name: "S", path: "E:/T/S", autoImport: true });
     if (cmd === "open_library") {
       libOpen = true;
@@ -126,7 +147,6 @@ window.__TAURI_INTERNALS__ = {
       list_archives: JSON.parse(JSON.stringify(ARCHIVES)),
       list_space_libraries: ["测试库"],
       list_prop_pool: ["FLA", "雪牧", "预设"],
-      get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
     };
     return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
   },
@@ -430,6 +450,82 @@ async def main():
             check("M13-3a 空标签目标不发 set_asset_props", await ev("window.__calls.set_asset_props.filter((x) => x.assetId === 'F3').length === 0"))
             check("M13-3b 零目标 toast「所选项都没有标签」", await ev("[...document.querySelectorAll('.toast')].some((t) => t.textContent.includes('所选项都没有标签'))"), str(await ev("[...document.querySelectorAll('.toast')].map((t) => t.textContent.trim())")))
             await ev("document.querySelectorAll('.toast .close').forEach((b) => b.click())")
+
+            # —— E 编辑菜单（2026-09-06 接业务；稿 = 用户当场供稿截图，spec = menuSpecs/editMenu）——
+            EDIT_BTN = "[...document.querySelectorAll('.menu-bar .act-btn')].find((b) => b.textContent.trim() === '编辑')"
+
+            def e_disabled(labels_list, want):
+                return " && ".join([f"({js_find(l)})?.disabled === {str(want).lower()}" for l in labels_list])
+
+            # E1 空选态（Esc 清掉 M13 的 F3 选中）
+            await esc_close()
+            await js_click(el_center(EDIT_BTN))
+            check("E1-1 编辑菜单出（1 个 .app-menu）", await menu_count() == 1)
+            labels = await menu_labels(0)
+            expect_e = ["撤销", "重做", "剪切", "复制", "作为文件/档案链接粘贴", "作为副本粘贴", "重命名", "创建副本", "全选", "清除选择", "从文件夹中移除", "丢到回收站"]
+            check("E1-2 12 项全列（克隆不在——同键 Ctrl+D 分流显示）", json.dumps(labels) == json.dumps(expect_e), str(labels))
+            check("E1-3 六组", await ev("document.querySelectorAll('.app-menu')[0].querySelectorAll('.menu-group').length === 6"))
+            check("E1-4 空选禁用态（撤销/重做/剪切/复制/两粘贴/重命名/副本/清除/移除/回收站）", await ev(e_disabled(["撤销", "重做", "剪切", "复制", "作为文件/档案链接粘贴", "作为副本粘贴", "重命名", "创建副本", "清除选择", "从文件夹中移除", "丢到回收站"], True)))
+            check("E1-5 全选恒可点", await ev(f"({js_find('全选')})?.disabled === false"))
+            check("E1-6 快捷键原串（撤销 Ctrl+Z / 清除选择 Esc / 移除 Shift+Delete / 丢到回收站 Delete）", await ev(f"({js_find('撤销')})?.querySelector('.shortcut')?.textContent === 'Ctrl+Z' && ({js_find('清除选择')})?.querySelector('.shortcut')?.textContent === 'Esc' && ({js_find('从文件夹中移除')})?.querySelector('.shortcut')?.textContent === 'Shift+Delete' && ({js_find('丢到回收站')})?.querySelector('.shortcut')?.textContent === 'Delete'"))
+            check("E1-7 弹出位 = 编辑钮左缘对齐 + 底 +4 / min-width 250", await ev(f"(() => {{ const m = document.querySelector('.app-menu').getBoundingClientRect(); const b = {EDIT_BTN}.getBoundingClientRect(); return Math.abs(m.left - b.left) <= 2 && Math.abs(m.top - b.bottom - 4) <= 2 && document.querySelector('.app-menu').style.minWidth === '250px'; }})()"))
+            await shot("app-menu-edit-empty")
+            await esc_close()
+
+            # E2 素材选中（A1）点亮集
+            await js_click(el_center("document.querySelector('.asset-card[data-key=\"A1|f1\"]')"))
+            await js_click(el_center(EDIT_BTN))
+            check("E2-1 素材选中：剪切/复制/重命名/创建副本/清除选择/移除/丢到回收站 点亮", await ev(e_disabled(["剪切", "复制", "重命名", "创建副本", "清除选择", "从文件夹中移除", "丢到回收站"], False)))
+            check("E2-2 无剪贴板：两粘贴 + 撤销/重做 disabled", await ev(e_disabled(["作为文件/档案链接粘贴", "作为副本粘贴", "撤销", "重做"], True)))
+            await shot("app-menu-edit-asset")
+
+            # E3 复制 → 两粘贴点亮；作为副本粘贴发 duplicate_placements
+            await js_click(el_center(js_find("复制")))
+            check("E3-1 复制后菜单关", await menu_count() == 0)
+            await js_click(el_center(EDIT_BTN))
+            check("E3-2 有剪贴板：两粘贴点亮", await ev(e_disabled(["作为文件/档案链接粘贴", "作为副本粘贴"], False)))
+            await js_click(el_center(js_find("作为副本粘贴")))
+            await asyncio.sleep(0.8)
+            check("E3-3 副本粘贴发 duplicate_placements（A1 → f1）", await ev("(() => { const c = window.__calls.duplicate_placements; return c.length === 1 && c[0].targetFolder === 'f1' && c[0].items.length === 1 && c[0].items[0].assetId === 'A1'; })()"), str(await ev("JSON.stringify(window.__calls.duplicate_placements)")))
+            await ev("document.querySelectorAll('.toast .close').forEach((b) => b.click())")
+            await asyncio.sleep(0.4)
+
+            # E4 文件夹域分流（树 f2 plain click = 导航 + 入选）：克隆在 / 创建副本不在
+            await ev("window.__undo.canUndo = true")  # 供 E5：克隆收尾 refreshState 拉取（桩纪律：操作驱动拉取）
+            await js_click(el_center("document.querySelector('[data-folder-id=\"f2\"]')"))
+            await asyncio.sleep(0.6)
+            await js_click(el_center(EDIT_BTN))
+            labels = await menu_labels(0)
+            check("E4-1 文件夹域：克隆在 / 创建副本不在", "克隆" in labels and "创建副本" not in labels, str(labels))
+            check("E4-2 文件夹域：复制/移除 disabled；剪切/重命名/克隆/丢到回收站 enabled", await ev(e_disabled(["复制", "从文件夹中移除"], True) + " && " + e_disabled(["剪切", "重命名", "克隆", "丢到回收站"], False)))
+            await js_click(el_center(js_find("克隆")))
+            await asyncio.sleep(0.8)
+            check("E4-3 克隆发 clone_folders（f2）", await ev("(() => { const c = window.__calls.clone_folders; return c.length === 1 && c[0].folderIds.length === 1 && c[0].folderIds[0] === 'f2'; })()"), str(await ev("JSON.stringify(window.__calls.clone_folders)")))
+            await ev("document.querySelectorAll('.toast .close').forEach((b) => b.click())")
+            await asyncio.sleep(0.4)
+
+            # E5 撤销点亮链（克隆 runOp 收尾 refreshState 已拉 __undo.canUndo=true）
+            await js_click(el_center(EDIT_BTN))
+            check("E5-1 撤销点亮 / 重做仍 disabled", await ev(f"({js_find('撤销')})?.disabled === false && ({js_find('重做')})?.disabled === true"))
+            await esc_close()
+
+            # E6 同钮再点 = toggle 关
+            await js_click(el_center(EDIT_BTN))
+            check("E6-1 编辑钮开", await menu_count() == 1)
+            await js_click(el_center(EDIT_BTN))
+            check("E6-2 同钮再点 toggle 关", await menu_count() == 0)
+
+            # E7 回收站视口只读（编辑类全 disabled；Esc 先清选择回素材域形态）
+            await js_click(el_center("[...document.querySelectorAll('.block.quick .tree-item')].find((x) => x.textContent.includes('回收站'))"))
+            await asyncio.sleep(0.6)
+            await esc_close()
+            await js_click(el_center(EDIT_BTN))
+            labels = await menu_labels(0)
+            check("E7-1 回收站空选：创建副本在（回素材域形态）/ 克隆不在", "创建副本" in labels and "克隆" not in labels, str(labels))
+            check("E7-2 回收站只读：剪切/复制/重命名/创建副本/移除/丢到回收站 全 disabled", await ev(e_disabled(["剪切", "复制", "重命名", "创建副本", "从文件夹中移除", "丢到回收站"], True)))
+            check("E7-3 全选 / 撤销可用", await ev(e_disabled(["全选", "撤销"], False)))
+            await esc_close()
+            check("E7-4 收尾菜单全关", await menu_count() == 0)
 
             print("----")
             print("FAIL:", fails if fails else "无")
