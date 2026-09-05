@@ -8,6 +8,9 @@
 // 导入弹窗宿主：菜单 / 拖拽填 content.importDraft，ImportDialog 确认后刷新内容区。
 // 全局键盘 / 侧栏收展动画 / 窗口几何持久化已拆 lib（useGlobalKeys / useSidebarAnim /
 // windowState，2026-08-12，规范第 3 条行数控制）。
+// 子窗口 query 分发（2026-09-06 插件窗轮）：?preview={assetKey} = 预览子窗口；
+// ?plugin={id} = 插件详情子窗口（AnimatePluginWindow，仅 animate；未知 id = 错误提示帧）——
+// 子窗口只渲染各自面板（无三栏无弹窗），通知条锚点两子窗口同挂。
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -21,6 +24,8 @@ import DockHost from "./components/DockHost.vue";
 import SplitBar from "./components/SplitBar.vue";
 import AppIcon from "./components/AppIcon.vue";
 import PreviewWindow from "./components/PreviewWindow.vue";
+import AnimatePluginWindow from "./components/plugins/AnimatePluginWindow.vue";
+import PluginListPanel from "./components/plugins/PluginListPanel.vue";
 import SetupWizard from "./components/SetupWizard.vue";
 import CreateLibraryModal from "./components/CreateLibraryModal.vue";
 import AppModal from "./components/AppModal.vue";
@@ -50,6 +55,7 @@ import { usePickerStore } from "./stores/picker";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
 import { wizardState, reopenLastSession, createLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener } from "./lib/libraryOps";
+import { closePluginPanel, pluginPanelState } from "./lib/pluginPanel";
 import { dupScanState } from "./lib/dupScanOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
 import { useSidebarAnim } from "./lib/useSidebarAnim";
@@ -80,17 +86,20 @@ const wizardOpen = () => wizardState.open;
 
 // 独立预览窗口（4.3 新窗口打开）：URL ?preview={assetKey} 进入，只渲染预览布局（无三栏、无导入弹窗）
 const previewParam = new URLSearchParams(window.location.search).get("preview");
+// 插件详情子窗口（2026-09-06 插件窗轮）：URL ?plugin={id} 进入（open_plugin_window 后端命令单例）
+const pluginParam = new URLSearchParams(window.location.search).get("plugin");
 
-// 全局键盘（lib/useGlobalKeys）：剪贴板导入 / 撤销重做 / 选择 / 操作快捷键
-useGlobalKeys({ previewParam, needLibrarySetup: wizardOpen });
+// 全局键盘（lib/useGlobalKeys）：剪贴板导入 / 撤销重做 / 选择 / 操作快捷键；
+// 子窗口（预览 / 插件详情）不挂主窗口快捷键（previewParam 闸复用——语义 = 子窗口参数）
+useGlobalKeys({ previewParam: previewParam ?? pluginParam, needLibrarySetup: wizardOpen });
 // 侧栏收展动画 rAF 引擎 + dockResizeObs 灌宽（lib/useSidebarAnim，机制注释随迁该文件）
 useSidebarAnim({
   leftEl: () => sidebarLeftRef.value?.$el as HTMLElement | undefined,
   rightEl: () => sidebarRightRef.value?.$el as HTMLElement | undefined,
   dockEl: () => dockHostRef.value?.$el as HTMLElement | undefined,
 });
-// 主窗口几何持久化（lib/windowState；预览子窗口不记录）
-useWindowStatePersistence({ enabled: !previewParam });
+// 主窗口几何持久化（lib/windowState；预览 / 插件详情子窗口不记录）
+useWindowStatePersistence({ enabled: !previewParam && !pluginParam });
 
 async function syncMaximized(): Promise<void> {
   maximized.value = await appWindow.isMaximized();
@@ -169,14 +178,14 @@ onMounted(() => {
   });
   // 查询库状态：未打开时自动重开最近空间与库（2.1 空间化：reopenLastSession 三态——
   // ok 直接进；need-library 空间已开但无库，向导直进第二步；need-wizard 首次使用 / 重开失败，向导入口帧）。
-  // 预览窗口不弹向导（PreviewWindow 自行拉数据）
+  // 子窗口不弹向导（预览 = PreviewWindow 自行拉数据；插件详情 = 内容自拉，2026-09-06）
   invoke<unknown>("get_current_library")
     .then(async (lib) => {
       if (lib !== null) {
         void content.refresh();
         return;
       }
-      if (previewParam) return;
+      if (previewParam || pluginParam) return;
       const r = await reopenLastSession();
       if (r === "ok") return;
       wizardState.open = true;
@@ -223,9 +232,12 @@ async function togglePin(): Promise<void> {
 <template>
   <div class="window" :class="{ maximized, picking: picker.active, 'fx-mica': fxMode === 'mica' }">
     <PreviewWindow v-if="previewParam" :asset-key="previewParam" />
-    <!-- 预览子窗口的通知条挂点（6.0；主窗口挂在 DockHost 内） -->
-    <!-- 预览子窗口的通知条挂点（6.0；主窗口通知族挂 DockHost 内统一锚点） -->
-    <div v-if="previewParam" class="notice-anchor">
+    <!-- 插件详情子窗口（?plugin={id} 分发，?preview= 先例）：只渲染插件面板（无三栏无弹窗）；
+         未知 id = 错误提示帧 -->
+    <AnimatePluginWindow v-else-if="pluginParam === 'animate'" />
+    <div v-else-if="pluginParam" class="plugin-unknown">未知插件：{{ pluginParam }}</div>
+    <!-- 子窗口的通知条挂点（6.0；主窗口通知族挂 DockHost 内统一锚点；预览 / 插件详情同挂） -->
+    <div v-if="previewParam || pluginParam" class="notice-anchor">
       <ToastStack />
     </div>
     <template v-else>
@@ -359,6 +371,15 @@ async function togglePin(): Promise<void> {
     <PropsDialog v-if="ui.propsEdit" />
     <DescEditDialog v-if="ui.descEdit" />
     <!-- 全局右键菜单宿主（6.3：lib/contextMenus 单一实例，六上下文共用） -->
+    <!-- 插件列表面板宿主（2026-09-06 插件窗轮：lib/pluginPanel 单一实例，三入口共用——
+         菜单栏「插件」钮 / 工具栏 plugin 钮 / 预览标题栏 plugin 钮；预览子窗口同可开） -->
+    <PluginListPanel
+      v-if="pluginPanelState.open"
+      :x="pluginPanelState.x"
+      :y="pluginPanelState.y"
+      :trigger="pluginPanelState.trigger"
+      @close="closePluginPanel"
+    />
     <ContextMenu />
     <!-- 通用确认弹窗（6.3：警示前置 / 删除文件夹 / 彻底删除二次确认） -->
     <AppConfirm v-if="selection.confirmPrompt" />
@@ -368,6 +389,18 @@ async function togglePin(): Promise<void> {
 </template>
 
 <style scoped>
+/* 未知插件 id 错误提示帧（?plugin= 分发兜底）：一句提示居中，正文档三级 */
+.plugin-unknown {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
+  user-select: none;
+}
 /* 删除资源库确认文案：正文常态色，限宽换行 */
 .del-lib-text {
   margin: 0;

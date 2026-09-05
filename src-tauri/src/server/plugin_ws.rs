@@ -3,9 +3,11 @@
 //! 经 node fs 读它发现端口）；JSON 文本帧协议（camelCase）：
 //! - C→S `hello`        → S→C `welcome`（libReady / libRoot / cepOutDir / settings）
 //! - C→S `getTree`      → S→C `tree`（文件夹树，供面板目标选择器；2b）
+//! - C→S `saveSettings` → 护栏校验 → config 单写点落盘 → 广播 `settings`（含发件者回显确认）；
+//!                        校验 / 解析失败回发件者 `settingsError`（2026-09 重构：设置项面板可编辑回写）
 //! - C→S `exported`     → 接收入库（services::cep_export 三段式；合成在锁外）→ `importDone` / `importError`
 //!
-//! 协议演进方向（8.2+）：批量导出任务下发 / 快速发送指令 / 设置变更推送，同通道加分 type 即可。
+//! 协议演进方向（8.2+）：批量导出任务下发 / 快速发送指令，同通道加分 type 即可。
 //! cfg(not(test)) 才由 lib.rs 拉起（同 frame_stream，踩坑 014）。
 
 use std::collections::HashMap;
@@ -172,6 +174,20 @@ async fn handle_conn(app: AppHandle, id: u64, stream: tokio::net::TcpStream) {
       Some("getTree") => {
         let _ = tx.send(tree_payload(&app).to_string());
       }
+      Some("saveSettings") => {
+        // CEP 面板设置回写：校验（与命令层共用 validate）→ 单写点落盘 → 全员广播（含发件者回显）
+        let raw = v.get("settings").cloned().unwrap_or_default();
+        let result = serde_json::from_value::<crate::core::config::CepExportSettings>(raw)
+          .map_err(|e| format!("设置载荷解析失败：{e}"))
+          .and_then(|s| s.validate().map(|_| s))
+          .and_then(|s| crate::core::config::save_cep_export_settings(s).map_err(|e| e.to_string()));
+        match result {
+          Ok(()) => broadcast_settings(),
+          Err(message) => {
+            let _ = tx.send(serde_json::json!({ "type": "settingsError", "message": message }).to_string());
+          }
+        }
+      }
       Some("exported") => {
         let app2 = app.clone();
         let tx2 = tx.clone();
@@ -202,7 +218,7 @@ async fn handle_conn(app: AppHandle, id: u64, stream: tokio::net::TcpStream) {
   log::info!("插件客户端 #{id} 断开");
 }
 
-/// welcome：库就绪态 + 落点路径 + 导出设置（settings.cepExport 子树，APP 设置页单写点）
+/// welcome：库就绪态 + 落点路径 + 导出设置（settings.cepExport 子树，core::config 单写点）
 fn welcome_payload(app: &AppHandle) -> serde_json::Value {
   let state = app.state::<AppState>();
   let guard = state.library.lock().unwrap();
@@ -226,10 +242,10 @@ fn welcome_payload(app: &AppHandle) -> serde_json::Value {
 /// 导出设置 JSON（读盘失败回退默认档）
 fn settings_json() -> serde_json::Value {
   let s = crate::core::config::cep_export_settings().unwrap_or_default();
-  serde_json::json!({ "maxSecs": s.max_secs, "maxBytes": s.max_bytes, "maxEdge": s.max_edge })
+  serde_json::json!({ "maxSecs": s.max_secs, "maxBytes": s.max_bytes, "fps": s.fps })
 }
 
-/// 设置变更广播（APP 设置页保存后由命令层调用）：全部在线客户端推送 settings 消息
+/// 设置变更广播（APP 命令层保存 / CEP 面板 saveSettings 回写后调用）：全部在线客户端推送 settings 消息
 pub fn broadcast_settings() {
   let msg = serde_json::json!({ "type": "settings", "settings": settings_json() }).to_string();
   let clients = clients().lock().unwrap();

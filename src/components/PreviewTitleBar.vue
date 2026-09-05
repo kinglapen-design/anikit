@@ -16,6 +16,7 @@ import SideSlider from "./SideSlider.vue";
 import WindowControls from "./WindowControls.vue";
 import { usePreviewStore } from "../stores/preview";
 import { useUiStore } from "../stores/ui";
+import { openPluginPanel } from "../lib/pluginPanel";
 
 withDefaults(defineProps<{ window?: boolean }>(), { window: false });
 
@@ -62,7 +63,8 @@ async function togglePin(): Promise<void> {
       <span class="zoom-text">{{ Math.round(preview.zoom * 100) }}%</span>
     </div>
     <div class="btn-group">
-      <IconButton name="plugin" title="插件" />
+      <!-- 插件（2026-09-06 接业务 = 插件列表面板浮层，预览子窗口同可开——宿主 App.vue 层） -->
+      <IconButton name="plugin" title="插件" @click="openPluginPanel" />
       <template v-if="preview.viewable">
         <IconButton v-if="!preview.isSource" name="rotate-cw" title="旋转" @click="preview.rotateCw()" />
         <IconButton v-if="!preview.isSource" name="flip-h" title="水平翻转" @click="preview.toggleFlip()" />

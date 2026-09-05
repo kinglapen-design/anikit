@@ -37,7 +37,7 @@ body.show-tree .tree-view { display: flex; }
 
 /* —— 分组（2026-09-02 用户定：控件分组 + 小标题区分功能） —— */
 .group { display: flex; flex-direction: column; gap: var(--n-space-8); }
-.group-title { font-size: 11px; color: var(--n-l4); } /* 标题小字灰（params 同档），不抢控件 */
+.group-title { font-size: 11px; color: var(--n-l4); } /* 标题小字灰（group-desc 同档），不抢控件 */
 .group-desc { font-size: 11px; line-height: 1.6; color: var(--n-l4); } /* 仅缩略图模式说明（同档） */
 
 /* —— 导出模式分段层级强化（2026-09-02 用户定：16px 加粗 + 选中品牌色 + 加高 34，区别于参数级分段） —— */
@@ -91,8 +91,8 @@ body.show-tree .tree-view { display: flex; }
 }
 .input::placeholder { color: var(--n-l4); }
 .input:focus { border-color: var(--n-l-a1); }
-.input.err { border-color: var(--n-danger); } /* 非法输入（自定义比例等） */
-.input:disabled { opacity: 0.4; } /* 批量导出期命名框禁用（批量 = 各元件自动命名） */
+.input.err { border-color: var(--n-danger); } /* 非法输入（自定义像素、导出设置等） */
+.input:disabled { opacity: 0.4; cursor: default; } /* 禁用态（批量导出期命名框；断连期导出设置三框，2026-09-06） */
 .icon-btn {
   width: 30px;
   height: 30px;
@@ -167,8 +167,8 @@ body.show-tree .tree-view { display: flex; }
 .status .ok { color: var(--n-success); }
 .status .err { color: var(--n-danger); }
 
-/* —— 生效参数（只读） —— */
-.params { font-size: 11px; color: var(--n-l4); text-align: center; }
+/* —— 导出设置区（2026-09-06：只读 params 行改可编辑三行输入）：单位标签定宽对齐三行输入框 —— */
+#groupSettings .row-unit { min-width: 22px; }
 
 /* —— 树选择视图（tab 页） —— */
 .tree-head {

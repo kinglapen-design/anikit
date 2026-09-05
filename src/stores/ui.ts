@@ -34,6 +34,7 @@ const PERSIST_KEYS = [
   "timeDisplay",
   "tabLayout",
   "detailLinksOrder",
+  "pluginOrder",
 ] as const;
 
 // 变更防抖写回（500ms；模块级单例防重复订阅）
@@ -111,6 +112,10 @@ export const useUiStore = defineStore("ui", {
     //（后续「信息查看管理」面板轮再接）；旧 detailSections / detailSectionsArchive 双套配置作废不迁移。
     // 数组 typeof "object"，PERSIST_KEYS 类型校验放行（同 tabLayout 先例），形状由合并函数校验。
     detailLinksOrder: mergeDetailLinkOrder(null),
+    // 插件列表面板拖拽排序（2026-09-06 插件面板轮，稿 = 工具栏展开窗口/插件 抓手 prose）：
+    // 渲染 = pluginOrder 过滤已知 id 后按数据源（lib/plugins PLUGINS）补尾；数组 typeof "object"，
+    // PERSIST_KEYS 类型校验放行（tabLayout / detailLinksOrder 先例），形状由 loadSettings 兜底校验
+    pluginOrder: [] as string[],
     // 自定义数据编辑弹窗（6.1，会话级）：propsEdit = 32 稿属性标签 / descEdit = 31 稿编辑描述；
     // target = 打开时锁定的对象与当前值快照（弹窗草稿以此为初值；打开后切选中不漂移，
     // 同 groupDialogFolder 口径），宿主 App.vue；SectionCustom「添加属性 / 编辑描述」钮置位
@@ -145,6 +150,12 @@ export const useUiStore = defineStore("ui", {
         }
         // 链接 tab 区块序兜底合并：注册表新增补位 / 配置里已删 id 忽略（lib/detailSections）
         this.detailLinksOrder = mergeDetailLinkOrder(this.detailLinksOrder);
+        // 插件序兜底（同上）：config 手改变形（非数组 / 非字符串项）回退默认空序
+        if (saved.pluginOrder !== undefined) {
+          this.pluginOrder = Array.isArray(saved.pluginOrder)
+            ? saved.pluginOrder.filter((x): x is string => typeof x === "string")
+            : [];
+        }
         // 「无显示」档废除迁移（2026-08-19）：旧配置 briefMode "none" 回退尺寸档（赋值循环只校验
         // typeof 不校验枚举值，运行态可能已被 "none" 覆盖，此处纠正）
         if (saved.briefMode === "none") this.briefMode = "size";

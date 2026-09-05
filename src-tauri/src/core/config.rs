@@ -146,21 +146,41 @@ pub fn ui_settings() -> Result<serde_json::Value, DataError> {
 }
 
 /// CEP 导出设置（settings.cepExport 子树，8.1 二轮 2b）：插件 welcome 下发与接收服务
-/// （cep_export 降级链）共用同一份——APP 设置页单写点，8.2 批量导出同读
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// （cep_export 降级链）共用同一份——单写点（APP 命令层 / CEP 面板 WS saveSettings 同写此处），
+/// 8.2 批量导出同读。2026-09 重构：尺寸上限（maxEdge）废除（导出图片不再限像素，WebP 合成
+/// 本就有体积压缩），旧配置残留 maxEdge 反序列化静默忽略（无 deny_unknown_fields）
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CepExportSettings {
   /// 动态导出时长上限（秒；jsx 侧帧数 = fps × 秒）
   pub max_secs: u32,
   /// WebP 体积软上限（字节；降级链目标，压不进保留产出）
   pub max_bytes: u64,
-  /// WebP 长边像素上限（合成前缩放）
-  pub max_edge: u32,
+  /// 导出帧率（0 = 跟随文档帧率——新建 fla 文档的帧率设置）
+  #[serde(default)]
+  pub fps: f64,
 }
 
 impl Default for CepExportSettings {
   fn default() -> Self {
-    Self { max_secs: 10, max_bytes: 2 * 1024 * 1024, max_edge: 1024 }
+    Self { max_secs: 10, max_bytes: 2 * 1024 * 1024, fps: 0.0 }
+  }
+}
+
+impl CepExportSettings {
+  /// 参数护栏（APP 命令层 save 与插件 WS saveSettings 共用单一定义）：
+  /// 时长 1-600 秒；体积 256KB-50MB；fps 0（跟随文档）或 1-120
+  pub fn validate(&self) -> Result<(), String> {
+    if self.max_secs == 0 || self.max_secs > 600 {
+      return Err("时长上限须在 1-600 秒之间".to_string());
+    }
+    if self.max_bytes < 262_144 || self.max_bytes > 50 * 1024 * 1024 {
+      return Err("大小上限须在 256KB-50MB 之间".to_string());
+    }
+    if self.fps != 0.0 && !(1.0..=120.0).contains(&self.fps) {
+      return Err("帧率须为 0（跟随文档）或 1-120".to_string());
+    }
+    Ok(())
   }
 }
 
@@ -311,5 +331,29 @@ mod tests {
     assert_eq!(merged, WindowState { maximized: true, ..normal });
     // 无旧值（首次最大化）按新值存
     assert_eq!(merge_window_state(None, maxed), maxed);
+  }
+
+  #[test]
+  fn cep_export_settings_compat_and_guard() {
+    // 旧配置残留 maxEdge 静默忽略；fps 缺失 default 0.0（其余字段保留，不回退全默认）
+    let s: CepExportSettings =
+      serde_json::from_value(serde_json::json!({ "maxSecs": 5, "maxBytes": 1048576, "maxEdge": 1024 })).unwrap();
+    assert_eq!(s, CepExportSettings { max_secs: 5, max_bytes: 1048576, fps: 0.0 });
+    // 写回不再带 maxEdge；fps 照常落盘
+    let v = serde_json::to_value(CepExportSettings::default()).unwrap();
+    assert!(v.get("maxEdge").is_none());
+    assert_eq!(v["fps"], 0.0);
+    // 护栏：fps 0（跟随文档）/ 1-120 放行，其余拒绝（含负值、超界、NaN）
+    assert!(CepExportSettings { fps: 0.0, ..Default::default() }.validate().is_ok());
+    assert!(CepExportSettings { fps: 1.0, ..Default::default() }.validate().is_ok());
+    assert!(CepExportSettings { fps: 120.0, ..Default::default() }.validate().is_ok());
+    assert!(CepExportSettings { fps: 0.5, ..Default::default() }.validate().is_err());
+    assert!(CepExportSettings { fps: 121.0, ..Default::default() }.validate().is_err());
+    assert!(CepExportSettings { fps: -1.0, ..Default::default() }.validate().is_err());
+    assert!(CepExportSettings { fps: f64::NAN, ..Default::default() }.validate().is_err());
+    // 时长 / 体积护栏不变
+    assert!(CepExportSettings { max_secs: 0, ..Default::default() }.validate().is_err());
+    assert!(CepExportSettings { max_secs: 601, ..Default::default() }.validate().is_err());
+    assert!(CepExportSettings { max_bytes: 100, ..Default::default() }.validate().is_err());
   }
 }

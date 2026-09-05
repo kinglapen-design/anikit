@@ -1,5 +1,5 @@
-//! 命令 API：CEP 插件安装与导出设置（8.1 二轮 2b）——安装状态查询 / 一键安装 / 导出参数读写；
-//! 发送至 Animate（8.3，PRD 07-04 快速发送）。
+//! 命令 API：CEP 插件安装与导出设置（8.1 二轮 2b）——安装状态查询 / 一键安装 / 卸载 /
+//! 导出参数读写；发送至 Animate（8.3，PRD 07-04 快速发送）。
 //! 纯库外操作（文件复制 + 注册表 + 全局 config），不持库锁、不接撤销。
 
 use crate::core::config::{self, CepExportSettings};
@@ -19,6 +19,12 @@ pub async fn install_cep_plugin() -> Result<CepInstallStatus, String> {
   cep_install::install()
 }
 
+/// 卸载 CEP 插件（删除 extensions 下本插件目录；未安装 = 幂等成功），返回最新状态
+#[tauri::command]
+pub async fn uninstall_cep_plugin() -> Result<CepInstallStatus, String> {
+  cep_install::uninstall()
+}
+
 /// 导出设置读取（settings.cepExport 子树；CEP 面板与 8.2 批量导出共用）
 #[tauri::command]
 pub async fn get_cep_export_settings() -> Result<CepExportSettings, String> {
@@ -28,15 +34,7 @@ pub async fn get_cep_export_settings() -> Result<CepExportSettings, String> {
 /// 导出设置保存（写回 + WS 广播推送在线插件实时生效）
 #[tauri::command]
 pub async fn save_cep_export_settings(settings: CepExportSettings) -> Result<(), String> {
-  if settings.max_secs == 0 || settings.max_secs > 600 {
-    return Err("时长上限须在 1-600 秒之间".to_string());
-  }
-  if settings.max_edge < 128 || settings.max_edge > 4096 {
-    return Err("尺寸上限须在 128-4096 像素之间".to_string());
-  }
-  if settings.max_bytes < 262_144 || settings.max_bytes > 50 * 1024 * 1024 {
-    return Err("大小上限须在 256KB-50MB 之间".to_string());
-  }
+  settings.validate()?;
   config::save_cep_export_settings(settings).map_err(|e| e.to_string())?;
   crate::server::broadcast_settings();
   Ok(())

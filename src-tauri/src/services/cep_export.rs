@@ -21,9 +21,9 @@ use crate::services::import::{self as ops, PendingFile, Source};
 use crate::services::operations;
 use crate::services::thumbnail;
 
-/// 动态降级链（质量, 长边系数）：长边档 = maxEdge × 系数（1024 基准则 768/512）；
-/// 全过仍超 → 抽帧末段，再超保留产出（软上限口径）
-const FALLBACK: &[(u32, f64)] = &[(80, 1.0), (60, 1.0), (40, 1.0), (60, 0.75), (60, 0.5)];
+/// 动态降级链（质量档）：全过仍超 → 抽帧末段，再超保留产出（软上限口径）。
+/// 2026-09 起不再按长边像素缩放（尺寸上限废除——导出图片不限像素，体积压缩本就有此一轮）
+const FALLBACK: &[u32] = &[80, 60, 40];
 
 /// 插件 exported 通知载荷（WS 协议，server 层 serde 解析）
 #[derive(Debug, Clone, Deserialize)]
@@ -50,8 +50,8 @@ fn default_fps() -> f64 {
   24.0
 }
 
-/// 读 PNG 序列目录（f_0001.png 起按文件名排序）→ 逐帧解码 + 长边缩放（0 = 不缩放）→ 帧列表
-fn load_seq_frames(seq: &Path, fps: f64, max_edge: u32, step: u32) -> Option<Vec<anim::AnimFrame>> {
+/// 读 PNG 序列目录（f_0001.png 起按文件名排序）→ 逐帧解码 → 帧列表
+fn load_seq_frames(seq: &Path, fps: f64, step: u32) -> Option<Vec<anim::AnimFrame>> {
   let mut files: Vec<PathBuf> = fs::read_dir(seq)
     .ok()?
     .filter_map(|e| e.ok())
@@ -67,7 +67,6 @@ fn load_seq_frames(seq: &Path, fps: f64, max_edge: u32, step: u32) -> Option<Vec
   let mut frames = Vec::new();
   for path in files.into_iter().step_by(step) {
     let img = thumbnail::decode_by_signature(&path)?;
-    let img = if max_edge > 0 { thumbnail::shrink_long_edge(img, max_edge) } else { img };
     frames.push(anim::AnimFrame { rgba: img.to_rgba8(), delay_ms });
   }
   Some(frames)
@@ -153,7 +152,6 @@ fn compose_webp(
   } else {
     let png = Path::new(png_path.unwrap_or(""));
     let img = thumbnail::decode_by_signature(png).ok_or_else(|| "PNG 解码失败".to_string())?;
-    let img = thumbnail::shrink_long_edge(img, settings.max_edge);
     thumbnail::save_webp(&img, out).map_err(|e| format!("WebP 编码失败：{e}"))?;
     false
   };
@@ -161,33 +159,24 @@ fn compose_webp(
   Ok((over_limit, bytes))
 }
 
-/// 动态合成降级链：FALLBACK 逐级（长边档 = maxEdge × 系数；系数 < 1 档从基底内存再缩，不重读 PNG）→
-/// 末段抽帧降帧率（隔帧取 + delay×2，时长不变）→ 压不进保留最后一版（over_limit = true）。
+/// 动态合成降级链：FALLBACK 质量档逐级 → 末段抽帧降帧率（隔帧取 + delay×2，时长不变）→
+/// 压不进保留最后一版（over_limit = true）。
 /// 2026-09-02 提速（用户实机报「8M 导出卡 10 秒」）：大小判断改内存（data.len()）过了才写盘
-///（旧版每档写盘再 stat——temp 里文件早现≠完成）；首档超上限 >5 倍直接跳中间档
-///（8M/2M=4x 级别时同尺寸低质量档压进上限概率极低，直奔 0.5 尺寸档 + 抽帧档）。
+///（旧版每档写盘再 stat——temp 里文件早现≠完成）；首档超上限 >5 倍直接跳剩余质量档
+///（8M/2M=4x 级别时同尺寸低质量档压进上限概率极低，直奔抽帧档）。
 fn compose_with_fallback(seq: &Path, fps: f64, out: &Path, settings: &crate::core::config::CepExportSettings) -> Result<bool, String> {
-  let max_edge = settings.max_edge.max(16);
-  let Some(base) = load_seq_frames(seq, fps, max_edge, 1) else {
+  let Some(base) = load_seq_frames(seq, fps, 1) else {
     return Err("序列帧解码失败（PNG 损坏或目录为空）".to_string());
   };
   let mut first_over_ratio: Option<u64> = None; // 首档超出倍数（跳档依据）
-  for &(q, ratio) in FALLBACK {
-    // 跳档：首档超 >5 倍时，其余 1.0 系数档与 0.75 档直接跳过
+  for &q in FALLBACK {
+    // 跳档：首档超 >5 倍时，其余质量档压进上限概率极低，直奔抽帧末段
     if let Some(r) = first_over_ratio {
-      if r > 5 && ratio >= 0.75 {
-        continue;
+      if r > 5 {
+        break;
       }
     }
-    let edge = ((max_edge as f64 * ratio).round() as u32).max(16);
-    let owned;
-    let frames: &[anim::AnimFrame] = if ratio >= 1.0 {
-      &base
-    } else {
-      owned = rescale_frames(&base, edge);
-      &owned
-    };
-    if let Some(data) = anim::encode_webp_anim(frames, q as f32) {
+    if let Some(data) = anim::encode_webp_anim(&base, q as f32) {
       let len = data.len() as u64;
       if first_over_ratio.is_none() && len > settings.max_bytes {
         first_over_ratio = Some(len / settings.max_bytes.max(1));
@@ -214,17 +203,6 @@ fn compose_with_fallback(seq: &Path, fps: f64, out: &Path, settings: &crate::cor
   }
   log::warn!("WebP 降级链压不进上限，保留产出（{}）", out.display());
   Ok(true)
-}
-
-/// 帧列表内存再缩放（降级链小档；base 已是 1024 档，不重读 PNG）
-fn rescale_frames(frames: &[anim::AnimFrame], max_edge: u32) -> Vec<anim::AnimFrame> {
-  frames
-    .iter()
-    .map(|f| {
-      let img = image::DynamicImage::ImageRgba8(f.rgba.clone());
-      anim::AnimFrame { rgba: thumbnail::shrink_long_edge(img, max_edge).to_rgba8(), delay_ms: f.delay_ms }
-    })
-    .collect()
 }
 
 fn within_limit(out: &Path, max_bytes: u64) -> bool {
@@ -519,7 +497,7 @@ mod tests {
     for (i, c) in colors.iter().enumerate() {
       image::RgbaImage::from_pixel(64, 48, image::Rgba(*c)).save(seq.join(format!("f_{:04}.png", i + 1))).unwrap();
     }
-    let frames = load_seq_frames(&seq, 25.0, 0, 1).unwrap();
+    let frames = load_seq_frames(&seq, 25.0, 1).unwrap();
     assert_eq!(frames.len(), 4);
     assert_eq!(frames[0].delay_ms, 40, "1000/25 = 40ms");
     let data = anim::encode_webp_anim(&frames, 80.0).unwrap();
@@ -586,7 +564,7 @@ mod tests {
     assert_eq!(compose_with_fallback(&seq, 25.0, &out, &settings).unwrap(), false, "首档即过");
     assert!(within_limit(&out, settings.max_bytes));
     // 抽帧（step=2）：帧数减半 + delay 翻倍（时长不变）
-    let frames = load_seq_frames(&seq, 25.0, 0, 2).unwrap();
+    let frames = load_seq_frames(&seq, 25.0, 2).unwrap();
     assert_eq!(frames.len(), 3);
     assert_eq!(frames[0].delay_ms, 80);
   }

@@ -40,9 +40,10 @@
         <span class="row-label">至</span>
         <input id="rangeEnd" class="input" type="text" inputmode="numeric" placeholder="止" spellcheck="false">
       </div>
-      <!-- 舞台尺寸（新 fla）：比例档 = 高度跟随文档按比例算宽；像素框两框都填 = 直定尺寸（优先于比例档） -->
+      <!-- 舞台尺寸（新 fla）：比例档 = 固定像素表（长边 1280 基准，点档直接用表值，2026-09-06 用户定）；
+           像素框两框都填 = 直定尺寸（覆盖档值并去选中）；「自适应」= 按元件自身尺寸建新文档 -->
       <div class="seg" id="segRatio">
-        <button class="seg-item on" data-ratio="" type="button" title="跟随当前文档舞台尺寸">文档</button>
+        <button class="seg-item on" data-ratio="" type="button" title="按元件自身尺寸建新文档">自适应</button>
         <button class="seg-item" data-ratio="16:9" type="button">16:9</button>
         <button class="seg-item" data-ratio="4:3" type="button">4:3</button>
         <button class="seg-item" data-ratio="1:1" type="button">1:1</button>
@@ -64,6 +65,12 @@
     <!-- 入库 -->
     <div class="group" id="groupInbox">
       <div class="group-title">入库</div>
+      <!-- 多选方式（2026-09-06）：分别建立 = 逐项批量导（命名框作前缀）；整合到一个文档 = 多选整体导一个 fla。
+           仅 file 模式可见（thumb 模式随 groupInbox 隐藏） -->
+      <div class="seg" id="segMerge">
+        <button id="segSplit" class="seg-item on" type="button">分别建立</button>
+        <button id="segMergeOne" class="seg-item" type="button">整合到一个文档</button>
+      </div>
       <!-- 命名行：输入框 + 中文辅助钮（多选批量时内容作前缀，自动加 -序号） -->
       <div class="row" id="nameRow">
         <input id="name" class="input" type="text" placeholder="命名（多选 = 前缀+序号）" spellcheck="false">
@@ -83,8 +90,26 @@
     <!-- 状态区 -->
     <div class="status" id="status"></div>
 
-    <!-- 生效参数（APP 设置下发，只读） -->
-    <div class="params" id="params">上限 10s · 2M · 1024px</div>
+    <!-- 导出设置（2026-09-06：只读参数行改面板可编辑——失焦/回车校验保存，
+         APP 校验写盘后广播 settings 回显；失败 settingsError 回滚。断连禁用，welcome 解除） -->
+    <div class="group" id="groupSettings">
+      <div class="group-title">导出设置</div>
+      <div class="row">
+        <span class="row-label">时长</span>
+        <input id="cfgSecs" class="input" type="text" inputmode="numeric" placeholder="10" spellcheck="false">
+        <span class="row-label row-unit">秒</span>
+      </div>
+      <div class="row">
+        <span class="row-label">大小</span>
+        <input id="cfgBytes" class="input" type="text" inputmode="numeric" placeholder="2" spellcheck="false">
+        <span class="row-label row-unit">MB</span>
+      </div>
+      <div class="row">
+        <span class="row-label">帧率</span>
+        <input id="cfgFps" class="input" type="text" inputmode="numeric" placeholder="跟随文档" spellcheck="false">
+      </div>
+      <div class="group-desc">新建 fla 文档的帧率，留空 = 跟随当前文档；时长与大小是动态 WebP 上限</div>
+    </div>
   </div>
 
   <!-- 树选择视图（tab 页切换，不遮挡主视图） -->

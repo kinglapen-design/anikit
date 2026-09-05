@@ -13,6 +13,7 @@ pub mod library;
 pub mod media;
 pub mod notes;
 pub mod operations;
+pub mod plugin;
 pub mod preview;
 pub mod recent;
 pub mod recycle;

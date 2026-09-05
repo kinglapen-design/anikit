@@ -5,8 +5,10 @@
 //      前进 flip-h）+ 搜索结果计数（仅搜索态：
 //      「搜索结果 / N」= 正文 二级 + 数字-大 三级，3.6 数据本轮接线回填；当前目录名由标签页承担
 //      不进工具栏，2026-08-08 用户定）。
-// 右 = 尺寸滑块（BarSlider tone=size，稿宽 100）+ 按钮组（gap 2）：添加文件/档案链接 / 插件（占位
-//      disabled）/ 分组管理 / 查看方式 / 右栏收展钮（恒显最右侧，7.1 二十三轮用户定——右栏新稿
+// 右 = 尺寸滑块（BarSlider tone=size，稿宽 100）+ 按钮组（gap 2）：添加文件/档案链接 / 插件
+//      （2026-09-06 接业务 = 插件列表面板浮层 PluginListPanel，lib/pluginPanel 单例，同菜单栏
+//      「插件」钮口径；旧 CepSettingsDialog 入口随本轮退役——CEP 导出设置挪 CEP 面板内编辑）/
+//      分组管理 / 查看方式 / 右栏收展钮（恒显最右侧，7.1 二十三轮用户定——右栏新稿
 //      无收起入口；收起态 = collapse-sidebar flip-h「展开详细信息」）；
 //      缩略图 / AI 工具集两旧占位钮稿无，本轮撤下。
 // 图标钮一律 buttons/IconButton plain（30×30 圆角 6、图标 18 三级、hover 半透明-3 底 + 升二级）；
@@ -16,12 +18,12 @@ import { ref, computed } from "vue";
 import IconButton from "./buttons/IconButton.vue";
 import BarSlider from "./bars/BarSlider.vue";
 import ViewOptionsMenu from "./ViewOptionsMenu.vue";
-import CepSettingsDialog from "./modals/CepSettingsDialog.vue";
 import { useUiStore } from "../stores/ui";
 import { usePickerStore } from "../stores/picker";
 import { useSearchStore } from "../stores/search";
 import { useTabsStore } from "../stores/tabs";
 import { currentLinkTarget, enterLinkPicker } from "../lib/menuOps";
+import { openPluginPanel } from "../lib/pluginPanel";
 
 const ui = useUiStore();
 const picker = usePickerStore();
@@ -53,8 +55,6 @@ const sliderRatio = computed({
 
 // 查看方式菜单：按钮右缘对齐、下方展开；再次点击按钮收起（toggle）
 const viewMenuOpen = ref(false);
-// CEP 导出设置弹窗显隐（8.1 二轮 2b：工具栏插件钮入口）
-const showCepSettings = ref(false);
 const viewMenuAnchor = ref({ x: 0, y: 0 });
 const viewBtnRef = ref<HTMLElement>();
 function openViewMenu(e: MouseEvent): void {
@@ -117,11 +117,11 @@ function addFileLink(): void {
         <BarSlider v-model="sliderRatio" tone="size" />
       </div>
       <!-- 按钮组（稿）：添加文件/档案链接（6.2 三轮点亮 = 进选择模式，落点当前文件夹视口，无视口禁用）/
-           插件（业务未接占位）/ 分组管理（3.5 二轮点亮，仅文件夹/档案视口；递归显示时禁用）/ 查看方式 /
-           展开详细信息（仅右栏收起时）；「链接文件管理」钮删除口径不变（2026-08-24 用户定） -->
+           插件（2026-09-06 接业务 = 插件列表面板浮层）/ 分组管理（3.5 二轮点亮，仅文件夹/档案视口；
+           递归显示时禁用）/ 查看方式 / 展开详细信息（仅右栏收起时）；「链接文件管理」钮删除口径不变（2026-08-24 用户定） -->
       <div class="btn-group">
         <IconButton name="add-file-archive-link" title="添加文件/档案链接" :disabled="!linkTarget" @click="addFileLink" />
-        <IconButton name="plugin" title="插件（CEP 导出设置）" @click="showCepSettings = true" />
+        <IconButton name="plugin" title="插件" @click="openPluginPanel" />
         <IconButton
           name="group-manage"
           :title="viewKey.startsWith('folder:') && ui.showSubfolders ? '分组管理（递归显示时不分组）' : '分组管理'"
@@ -142,8 +142,6 @@ function addFileLink(): void {
       </div>
     </div>
     <ViewOptionsMenu v-if="viewMenuOpen" :anchor="viewMenuAnchor" :trigger="viewBtnRef ?? null" @close="viewMenuOpen = false" />
-    <!-- CEP 导出设置弹窗（8.1 二轮 2b：工具栏插件钮入口） -->
-    <CepSettingsDialog v-if="showCepSettings" @close="showCepSettings = false" />
   </div>
 </template>
 

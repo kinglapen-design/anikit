@@ -16,6 +16,7 @@ import PreviewBars from "./sections/PreviewBars.vue";
 import PreviewMenus from "./sections/PreviewMenus.vue";
 import PreviewModals from "./sections/PreviewModals.vue";
 import PreviewStates from "./sections/PreviewStates.vue";
+import PreviewPlugins from "./sections/PreviewPlugins.vue";
 
 const nav = [
   { id: "colors", label: "颜色" },
@@ -31,6 +32,7 @@ const nav = [
   { id: "menus", label: "组件 上下文菜单" },
   { id: "modals", label: "组件 模态窗口" },
   { id: "states", label: "组件 空态" },
+  { id: "plugins", label: "面板 插件" },
 ];
 </script>
 
@@ -61,6 +63,7 @@ const nav = [
       <PreviewMenus />
       <PreviewModals />
       <PreviewStates />
+      <PreviewPlugins />
     </main>
   </div>
 </template>

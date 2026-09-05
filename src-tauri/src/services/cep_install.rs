@@ -1,6 +1,7 @@
 //! CEP 插件安装服务（8.1 二轮 2b）：
 //! 插件文件复制到用户级 CEP extensions 目录 + PlayerDebugMode 注册表确保（未签名 CEP 扩展
-//! 的加载前提，HKCU 写入免管理员）。插件源：dev = 项目 plugins/animate-cep；prod = exe 同目录
+//! 的加载前提，HKCU 写入免管理员）；卸载 = 删除 extensions 下本插件目录（幂等）。
+//! 插件源：dev = 项目 plugins/animate-cep；prod = exe 同目录
 //! plugins/animate-cep（tauri resources 携带，同 sidecar_path 双候选模式）。
 
 use std::fs;
@@ -29,6 +30,8 @@ pub struct CepInstallStatus {
   pub bundled_version: String,
   /// PlayerDebugMode 全部目标键就绪
   pub debug_mode_ready: bool,
+  /// 插件安装目录绝对路径（extensions 下本插件目录；无法定位系统配置目录时为空串）
+  pub install_dir: String,
 }
 
 /// CEP 用户级 extensions 根（%APPDATA%\Adobe\CEP\extensions）
@@ -93,6 +96,7 @@ pub fn status() -> CepInstallStatus {
     installed_version,
     bundled_version: BUNDLED_VERSION.to_string(),
     debug_mode_ready: debug_mode_ready(),
+    install_dir: dest.map(|d| d.to_string_lossy().into_owned()).unwrap_or_default(),
   }
 }
 
@@ -103,6 +107,16 @@ pub fn install() -> Result<CepInstallStatus, String> {
   let dest = root.join(PLUGIN_DIR_NAME);
   copy_dir(&source, &dest)?;
   ensure_debug_mode()?;
+  Ok(status())
+}
+
+/// 卸载：删除 extensions 下本插件目录（目录不存在 = 幂等成功），返回最新状态
+pub fn uninstall() -> Result<CepInstallStatus, String> {
+  let root = extensions_root().ok_or_else(|| "无法定位 CEP extensions 目录".to_string())?;
+  let dest = root.join(PLUGIN_DIR_NAME);
+  if dest.exists() {
+    fs::remove_dir_all(&dest).map_err(|e| format!("插件目录删除失败（{}）：{e}", dest.display()))?;
+  }
   Ok(status())
 }
 

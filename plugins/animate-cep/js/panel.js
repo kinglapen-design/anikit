@@ -6,12 +6,14 @@
  *  bound 命中绑定 / beside 池外落原文件旁边 / thumbError）。
  * 断线续传（2026-09-02 用户实机报修复）：导出单条 pending 落 localStorage——断连/未发送/进程退出
  * 后重连开库自动重发；未开库时 5s 轮询 hello 自动跟上；「产物不存在」回执 = 重复重发撞已清场，温和提示。
+ * 批次 4（2026-09-06）：导出设置面板可编辑（saveSettings / settingsError，settings 新结构删 maxEdge 加 fps）；
+ * 比例档改固定像素表 + 首档「自适应」；多选整合导出（exportMerged 单条入库）。
  */
 var cs = new CSInterface();
 var ws = null;
 var cepOut = null;
 var libReady = false;
-var settings = { maxSecs: 10, maxBytes: 2097152, maxEdge: 1024 };
+var settings = { maxSecs: 10, maxBytes: 2097152, fps: 0 }; // fps = 新建 fla 帧率（0 = 跟随文档）
 
 var dynamic = false;          // 静/动开关（默认静态）
 var keepOrigin = true;        // 对齐方式：true = 保持坐标（fla 保原坐标，发送至 AN 原位粘贴联动）；false = 合适舞台（居中态直存，拆素材）
@@ -76,8 +78,12 @@ function connect() {
     if (msg.type === 'welcome') {
       libReady = !!msg.libReady;
       cepOut = msg.cepOutDir || null;
-      if (msg.settings) settings = msg.settings;
-      $('params').textContent = '上限 ' + settings.maxSecs + 's · ' + Math.round(settings.maxBytes / 1048576) + 'M · ' + settings.maxEdge + 'px';
+      if (msg.settings) {
+        settings = msg.settings;
+        fillSettingsInputs(settings, true); // 用户正在编辑的框不覆盖
+        cacheSettings();
+      }
+      setSettingsEnabled(true); // 断连期禁用，welcome 解除（未 libReady 无所谓，ws 通即可保存）
       setConn('on', libReady ? '已连接' : '已连接（AniKit 未开库）');
       if (libReady) {
         ws.send(JSON.stringify({ type: 'getTree' }));
@@ -103,11 +109,16 @@ function connect() {
     } else if (msg.type === 'tree') {
       renderTree(msg.data);
     } else if (msg.type === 'settings') {
-      // APP 设置页保存后实时推送（8.1 二轮 2b）
+      // APP 侧保存后广播（含面板 saveSettings 的回显）：刷新输入框并更新缓存
       if (msg.settings) {
         settings = msg.settings;
-        $('params').textContent = '上限 ' + settings.maxSecs + 's · ' + Math.round(settings.maxBytes / 1048576) + 'M · ' + settings.maxEdge + 'px';
+        fillSettingsInputs(settings, true);
+        cacheSettings();
       }
+    } else if (msg.type === 'settingsError') {
+      // APP 校验失败：报错并回滚输入框为当前 settings 值
+      log('✗ 设置保存失败：' + (msg.message || '未知错误'), 'err');
+      fillSettingsInputs(settings, false);
     } else if (msg.type === 'importProgress') {
       log('合成 WebP 中…');
     } else if (msg.type === 'importDone') {
@@ -157,6 +168,7 @@ function connect() {
 function onWsDead(text) {
   libReady = false;
   setConn('off', text);
+  setSettingsEnabled(false); // ws 断开即不可保存
   if (exporting) {
     exporting = false;
     if (batch) {
@@ -274,17 +286,35 @@ $('segThumb').onclick = function () { setMode('thumb'); };
   if (saved === 'thumb') setMode('thumb', false);
 })();
 
-/* —— 舞台尺寸（批次 1 比例档；2026-09-02 自定义改像素双框，用户定「比例算起来麻烦，直接传像素建文档」）——
- * 生效源互斥三态：seg 比例档（高度跟随文档按比例算宽，「文档」= 原尺寸）/ 像素框（两框都填直定尺寸，优先）；
- * seg 点击 = 清像素框；像素输入 = seg 去选中；像素全空 = 回「文档」。
- * 记忆：cepRatio（seg 档）+ cepSize（像素，恢复时优先；旧 custom: 比例值废弃回「文档」）。 —— */
-var ratioW = 0, ratioH = 0; // 比例档（0 = 跟随文档）
-var sizeW = 0, sizeH = 0;   // 像素直定舞台（>0 优先于比例档）
-
-function parseRatioText(t) {
-  var m = t.match(/^\s*(\d+(?:\.\d+)?)\s*[:：xX×\/]\s*(\d+(?:\.\d+)?)\s*$/);
-  return m ? [parseFloat(m[1]), parseFloat(m[2])] : null;
+/* —— 多选整合分段（批次 4，2026-09-06）：多选时分流——分别建立 = 逐项批量导（命名框作前缀-序号）；
+ * 整合到一个文档 = 多选整体导一个 fla（exportMerged，单条 exported 入库，同单选契约）。
+ * localStorage（cepMerge）记忆；仅 file 模式可见（thumb 模式随 groupInbox 整组隐藏）。 —— */
+var mergeOne = false; // 多选方式：false = 分别建立；true = 整合到一个文档
+function setMerge(one, save) {
+  mergeOne = one;
+  $('segSplit').className = 'seg-item' + (one ? '' : ' on');
+  $('segMergeOne').className = 'seg-item' + (one ? ' on' : '');
+  if (save !== false) { try { localStorage.setItem('cepMerge', one ? 'merge' : 'split'); } catch (e) {} }
 }
+$('segSplit').onclick = function () { setMerge(false); };
+$('segMergeOne').onclick = function () { setMerge(true); };
+(function () { // 恢复上次选择
+  var saved = null;
+  try { saved = localStorage.getItem('cepMerge'); } catch (e) {}
+  if (saved === 'merge') setMerge(true, false);
+})();
+
+/* —— 舞台尺寸（批次 4，2026-09-06 用户定：比例档改固定像素表 + 首档「文档」改「自适应」）——
+ * 生效源互斥三态：自适应档（data-ratio=""，传 -1,-1 = jsx 按元件自身尺寸建文档）/
+ * 比例档（固定像素表，长边 1280 基准，点档直接用表值，不再传 ratio 给 jsx）/
+ * 像素框（两框都填 = 覆盖档值并 seg 去选中）。
+ * seg 点击 = 清像素框显示（内部值由档位持有）；像素输入 = seg 去选中；像素全空 = 回「自适应」。
+ * 记忆：cepRatio（档位名，自适应 = auto）+ cepSize（像素，恢复时优先；旧 custom: 比例值废弃回「自适应」）。 —— */
+var RATIO_PIXELS = { // 比例档固定像素表（用户定，长边 1280 基准）
+  '16:9': [1280, 720], '4:3': [1280, 960], '1:1': [1280, 1280],
+  '3:4': [960, 1280], '9:16': [720, 1280]
+};
+var sizeW = -1, sizeH = -1; // 生效舞台尺寸：-1,-1 = 自适应；均 >0 = 档值/像素直定
 
 function markRatioSeg(btn) {
   var items = $('segRatio').getElementsByClassName('seg-item');
@@ -292,17 +322,17 @@ function markRatioSeg(btn) {
   if (btn) btn.className = 'seg-item on';
 }
 
-function setRatio(w, h, btn, save) {
-  ratioW = w; ratioH = h;
+function setRatioSeg(btn, save) {
+  var v = btn.getAttribute('data-ratio') || ''; // '' = 自适应
+  var px = RATIO_PIXELS[v];
+  sizeW = px ? px[0] : -1;
+  sizeH = px ? px[1] : -1;
   markRatioSeg(btn);
   if (save === false) return;
-  try {
-    localStorage.setItem('cepRatio', btn ? (btn.getAttribute('data-ratio') || 'auto') : 'auto');
-  } catch (e) {}
+  try { localStorage.setItem('cepRatio', v || 'auto'); } catch (e) {}
 }
 
 function clearSizeInputs() {
-  sizeW = sizeH = 0;
   $('sizeW').value = '';
   $('sizeH').value = '';
   $('sizeW').classList.remove('err');
@@ -313,10 +343,9 @@ function clearSizeInputs() {
 function onSizeInput() {
   var w = $('sizeW').value.trim();
   var h = $('sizeH').value.trim();
-  if (!w && !h) { // 全空 = 回「文档」档
+  if (!w && !h) { // 全空 = 回「自适应」档
     clearSizeInputs();
-    markRatioSeg($('segRatio').getElementsByClassName('seg-item')[0]);
-    setRatio(0, 0, $('segRatio').getElementsByClassName('seg-item')[0]);
+    setRatioSeg($('segRatio').getElementsByClassName('seg-item')[0]);
     return;
   }
   var wOk = /^\d+$/.test(w) && parseInt(w, 10) > 0;
@@ -326,8 +355,7 @@ function onSizeInput() {
   if (wOk && hOk) {
     sizeW = parseInt(w, 10);
     sizeH = parseInt(h, 10);
-    ratioW = 0; ratioH = 0;
-    markRatioSeg(null); // seg 去选中 = 像素自定义生效
+    markRatioSeg(null); // seg 去选中 = 像素自定义生效（覆盖档值）
     try {
       localStorage.setItem('cepSize', sizeW + 'x' + sizeH);
       localStorage.setItem('cepRatio', 'auto');
@@ -340,16 +368,14 @@ function onSizeInput() {
   for (var i = 0; i < items.length; i++) {
     (function (btn) {
       btn.onclick = function () {
-        var v = btn.getAttribute('data-ratio'); // '' = 文档（跟随原尺寸）
-        var p = v ? parseRatioText(v) : null;
-        clearSizeInputs();
-        setRatio(p ? p[0] : 0, p ? p[1] : 0, btn);
+        clearSizeInputs();  // 点档清像素框输入（显示清空，值由档位持有）
+        setRatioSeg(btn);
       };
     })(items[i]);
   }
   $('sizeW').addEventListener('input', onSizeInput);
   $('sizeH').addEventListener('input', onSizeInput);
-  // 恢复上次选择：像素优先（旧 cepRatio "custom:宽:高" 比例自定义值废弃 → 回「文档」）
+  // 恢复上次选择：像素优先（旧 cepRatio "custom:宽:高" 比例自定义值废弃 → 回「自适应」）
   var savedSize = null;
   try { savedSize = localStorage.getItem('cepSize'); } catch (e) {}
   if (savedSize) {
@@ -365,14 +391,83 @@ function onSizeInput() {
   }
   var saved = null;
   try { saved = localStorage.getItem('cepRatio'); } catch (e) {}
-  if (!saved || saved === 'auto' || saved.indexOf('custom:') === 0) return;
+  if (!saved || saved === 'auto') return; // 自适应 = 默认首档（HTML 已 on，sizeW/sizeH 初值 -1,-1）
   for (var j = 0; j < items.length; j++) {
-    if (items[j].getAttribute('data-ratio') === saved) {
-      var ps = parseRatioText(saved);
-      if (ps) setRatio(ps[0], ps[1], items[j], false);
+    if (items[j].getAttribute('data-ratio') === saved && RATIO_PIXELS[saved]) {
+      setRatioSeg(items[j], false);
       return;
     }
   }
+})();
+
+/* —— 导出设置（批次 4，2026-09-06：只读参数行改面板可编辑）——
+ * localStorage（cepSettings）缓存兜底（PRD「插件本地缓存最后值兜底」口径）：启动先填缓存值，
+ * welcome / settings 消息到达后用 APP 值刷新输入框并更新缓存——重开面板不回硬编码默认。
+ * 失焦/回车即校验+保存：时长 1-600 秒整数、大小 1-50 MB（界面用 MB，发字节）、帧率留空 = 0
+ *（跟随文档）或 1-120 整数；非法标红（照 sizeW/sizeH 的 .err 做法）不发送；合法发 saveSettings。
+ * ws 断开即三框禁用，welcome 解除；settingsError 回滚为当前 settings 值。 —— */
+function fillSettingsInputs(s, keepFocused) {
+  var vals = { cfgSecs: String(s.maxSecs), cfgBytes: String(Math.round(s.maxBytes / 1048576)), cfgFps: s.fps > 0 ? String(s.fps) : '' };
+  for (var id in vals) {
+    var el = $(id);
+    if (keepFocused && document.activeElement === el) continue; // 正在编辑的框不覆盖
+    el.value = vals[id];
+    el.classList.remove('err');
+  }
+}
+
+function cacheSettings() {
+  try { localStorage.setItem('cepSettings', JSON.stringify(settings)); } catch (e) {}
+}
+
+function setSettingsEnabled(on) {
+  $('cfgSecs').disabled = !on;
+  $('cfgBytes').disabled = !on;
+  $('cfgFps').disabled = !on;
+}
+
+function validateSettings() { // 全合法返回新结构 settings；任一非法 = 标红返回 null
+  var secsRaw = $('cfgSecs').value.trim();
+  var mbRaw = $('cfgBytes').value.trim();
+  var fpsRaw = $('cfgFps').value.trim();
+  var secs = /^\d+$/.test(secsRaw) ? parseInt(secsRaw, 10) : 0;
+  var mb = /^\d+$/.test(mbRaw) ? parseInt(mbRaw, 10) : 0;
+  var secsOk = secs >= 1 && secs <= 600;
+  var mbOk = mb >= 1 && mb <= 50;
+  var fpsOk = fpsRaw === '' || (/^\d+$/.test(fpsRaw) && parseInt(fpsRaw, 10) >= 1 && parseInt(fpsRaw, 10) <= 120);
+  $('cfgSecs').classList.toggle('err', !secsOk);
+  $('cfgBytes').classList.toggle('err', !mbOk);
+  $('cfgFps').classList.toggle('err', !fpsOk);
+  if (!secsOk || !mbOk || !fpsOk) return null;
+  return { maxSecs: secs, maxBytes: mb * 1048576, fps: fpsRaw === '' ? 0 : parseInt(fpsRaw, 10) };
+}
+
+function saveSettings() {
+  if (!ws || ws.readyState !== 1) return;
+  var s = validateSettings();
+  if (!s) return; // 非法标红不发送
+  if (s.maxSecs === settings.maxSecs && s.maxBytes === settings.maxBytes && s.fps === settings.fps) return; // 未改动不发（防失焦刷 log）
+  try {
+    ws.send(JSON.stringify({ type: 'saveSettings', settings: s }));
+    log('设置已保存生效');
+  } catch (e) {}
+}
+
+(function initSettings() {
+  try {
+    var s = localStorage.getItem('cepSettings');
+    if (s) {
+      var c = JSON.parse(s);
+      if (c && c.maxSecs > 0 && c.maxBytes > 0) settings = { maxSecs: c.maxSecs, maxBytes: c.maxBytes, fps: c.fps || 0 };
+    }
+  } catch (e) {}
+  fillSettingsInputs(settings, false);
+  setSettingsEnabled(false); // 未连上不可保存
+  ['cfgSecs', 'cfgBytes', 'cfgFps'].forEach(function (id) {
+    var el = $(id);
+    el.addEventListener('blur', saveSettings);
+    el.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.keyCode === 13) el.blur(); }); // 回车 = 失焦走同一保存路径
+  });
 })();
 
 /* —— 命名框自动填充 = 面板获焦时拉一次（用户未编辑过时；仅缩略图模式跳过） ——
@@ -463,7 +558,7 @@ $('btnExport').onclick = function () {
   if (exporting) return;
   if (mode === 'thumb') { exportThumb(); return; }
   var dir = (cepOut || '').replace(/\\/g, '/');
-  // 多选探测（批次 3）：beginBatch 拿选区数，>1 走批量分别导出，=1 走原单选流程
+  // 多选探测（批次 3）：beginBatch 拿选区数；>1 再按整合分段分流（批次 4）——整合档走 exportMerged，否则批量分别导出
   evalJsx('beginBatch()', function (r) {
     if (r.indexOf('OK:') !== 0) { log('✗ ' + r.replace('ERROR:', ''), 'err'); return; }
     var info;
@@ -471,6 +566,9 @@ $('btnExport').onclick = function () {
     if (info.count <= 1) {
       evalJsx('endBatch()', function () {});
       exportSingle(dir);
+    } else if (mergeOne) {
+      evalJsx('endBatch()', function () {}); // 整合不走逐项快照，清批量会话
+      exportMerged(dir);
     } else {
       exportBatch(dir, info.count);
     }
@@ -484,12 +582,31 @@ function exportSingle(dir) {
   refreshExportBtn();
   log(dynamic ? '导出动态 WebP…' : '导出静态图…');
   evalJsx('getSelectedInfo()', function (info) {
-    var fps = 24;
+    var docFps = 24;
     var fm = info.match(/"fps":([\d.]+)/);
-    if (fm) fps = parseFloat(fm[1]) || 24;
-    var maxFrames = dynamic ? Math.round(settings.maxSecs * fps) : 0;
+    if (fm) docFps = parseFloat(fm[1]) || 24;
+    var maxFrames = dynamic ? Math.round(settings.maxSecs * docFps) : 0;
     evalJsx(
-      'exportSelection(' + JSON.stringify(name) + ',' + JSON.stringify(dir) + ',' + dynamic + ',' + maxFrames + ',' + ratioW + ',' + ratioH + ',' + keepOrigin + ',' + sizeW + ',' + sizeH + ')',
+      'exportSelection(' + JSON.stringify(name) + ',' + JSON.stringify(dir) + ',' + dynamic + ',' + maxFrames + ',' + keepOrigin + ',' + sizeW + ',' + sizeH + ',' + settings.fps + ')',
+      onExported(name, dir)
+    );
+  });
+}
+
+/* —— 多选整合导出（批次 4，2026-09-06）：多选整体导一个 fla，单条 WS exported 消息入库（同单选契约）。
+ * 命名框空 = 落「未命名」（jsx 侧兜底替换，面板先提示）；帧率/撑满/自适应口径同 exportSelection。 —— */
+function exportMerged(dir) {
+  var name = $('name').value.trim();
+  if (!name) log('整合导出未命名，落「未命名」');
+  exporting = true;
+  refreshExportBtn();
+  log(dynamic ? '导出动态 WebP（整合到一个文档）…' : '导出静态图（整合到一个文档）…');
+  evalJsx('getDocInfo()', function (r0) {
+    var docFps = 24;
+    if (r0.indexOf('OK:') === 0) { try { docFps = JSON.parse(r0.slice(3)).fps || 24; } catch (e) {} }
+    var maxFrames = dynamic ? Math.round(settings.maxSecs * docFps) : 0;
+    evalJsx(
+      'exportMerged(' + JSON.stringify(name) + ',' + JSON.stringify(dir) + ',' + dynamic + ',' + maxFrames + ',' + keepOrigin + ',' + sizeW + ',' + sizeH + ',' + settings.fps + ')',
       onExported(name, dir)
     );
   });
@@ -508,9 +625,9 @@ function exportBatch(dir, total) {
   batch = { total: total, sent: 0, done: 0, ok: 0, fail: 0, jsxDone: false };
   log('批量导出 ' + total + ' 项（' + (prefix ? '命名 = ' + prefix + '-序号' : '各以元件名命名') + '）…');
   evalJsx('getDocInfo()', function (r0) {
-    var fps = 24;
-    if (r0.indexOf('OK:') === 0) { try { fps = JSON.parse(r0.slice(3)).fps || 24; } catch (e) {} }
-    var maxFrames = dynamic ? Math.round(settings.maxSecs * fps) : 0;
+    var docFps = 24;
+    if (r0.indexOf('OK:') === 0) { try { docFps = JSON.parse(r0.slice(3)).fps || 24; } catch (e) {} }
+    var maxFrames = dynamic ? Math.round(settings.maxSecs * docFps) : 0;
     var i = 0;
     (function next() {
       if (i >= total) {
@@ -521,7 +638,7 @@ function exportBatch(dir, total) {
       }
       var idx = i++;
       evalJsx(
-        'exportBatchItem(' + idx + ',' + JSON.stringify(dir) + ',' + dynamic + ',' + maxFrames + ',' + ratioW + ',' + ratioH + ',' + keepOrigin + ',' + sizeW + ',' + sizeH + ',' + JSON.stringify(prefix) + ')',
+        'exportBatchItem(' + idx + ',' + JSON.stringify(dir) + ',' + dynamic + ',' + maxFrames + ',' + keepOrigin + ',' + sizeW + ',' + sizeH + ',' + JSON.stringify(prefix) + ',' + settings.fps + ')',
         function (r2) { onBatchItem(idx, r2, dir); next(); }
       );
     })();
@@ -635,6 +752,9 @@ function onExported(name, dir) {
         return;
       }
       var stem = m[1];
+      // 整合导出：非元件实例混选跳过数（jsx 回执 skipped 字段；仅动态导出有意义——静态无所谓逐帧推进）
+      var sm = result.match(/,skipped:(\d+)/);
+      if (dynamic && sm && parseInt(sm[1], 10) > 0) log('· 已跳过非元件实例 ' + sm[1] + ' 项（画面照常导出，不逐帧推进）');
       log('已导出，等待入库…');
       sendPayload('exported', {
         name: stem,

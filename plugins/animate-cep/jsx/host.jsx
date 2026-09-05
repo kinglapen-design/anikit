@@ -1,7 +1,8 @@
 /* AniKit CEP 宿主脚本（供 evalScript 调用）
  * 选中读取 / 复制粘贴到新文档 / 缩放对齐舞台中央（仅缩略图画面；fla 坐标按对齐档位：保持坐标 =
  * 导出后还原，合适舞台 = 居中态直存）/ PNG 与逐帧序列导出（movieclip 转 graphic 逐帧同步）/
- * fla 另存 / 中文命名原生输入框 / 仅缩略图直导（批次 2）/ 多选批量分别导出（批次 3）。
+ * fla 另存 / 中文命名原生输入框 / 仅缩略图直导（批次 2）/ 多选批量分别导出（批次 3）/
+ * 多选整合导出（批次 4，2026-09-06：exportMerged 整体导一个 fla）。
  * 返回值恒为字符串（evalScript 契约）：'OK:...' / 'ERROR:...' / 'CANCEL'。
  */
 
@@ -121,14 +122,15 @@ function exportThumbFrames(outDir, name, dynamic, startFrame, endFrame) {
 
 /* 导出主流程：name 空串 = 取元件名；outDir = 平台路径（正斜杠）；dynamic = 是否导 PNG 序列；
  * maxFrames = 动态帧数上限（APP 设置下发 = maxSecs × fps；≤0 兜底 240）；
- * ratioW/ratioH = 舞台比例（宽:高；任一 ≤0 = 跟随当前文档原尺寸）。
- * 比例基准（2026-09-02 用户定）：高度跟随当前文档，宽 = 高 × ratioW/ratioH（四舍五入取整）。
  * keepOrigin = 对齐方式（2026-09-02 用户定）：false = **合适舞台**——缩放居中态直接保存
  *（拥挤 fla 拆素材场景，拆出来元件即在舞台中央）；缺省/true = **保持坐标**——导出后还原
  * 坐标再保存（fla 保原坐标，与快速发送原位粘贴联动，PRD 07-03/04）。
- * sizeW/sizeH = 舞台像素直定（2026-09-02 用户定「直接传像素建文档」；均 >0 生效，优先于比例档）。
+ * sizeW/sizeH = 舞台像素（2026-09-06 用户定：比例档面板侧改固定像素表直传像素，ratio 参数废弃）：
+ * 均 >0 = 直定尺寸；均 = -1 = **自适应档**（按元件自身显示尺寸建文档，粘贴后平移左上角对齐，
+ * 随后缩放居中 s = 1 自然撑满）；其余 = 跟随当前文档原尺寸。
+ * fps = 新建文档帧率（批次 4 设置新增）：>0 直定；≤0 = 跟随当前文档帧率（修复旧版不继承隐患）。
  * 口径（PRD 07-03）：缩放居中只为缩略图画面，导出后还原坐标再保存 fla（保原坐标）。 */
-function exportSelection(name, outDir, dynamic, maxFrames, ratioW, ratioH, keepOrigin, sizeW, sizeH) {
+function exportSelection(name, outDir, dynamic, maxFrames, keepOrigin, sizeW, sizeH, fps) {
   var doc = fl.getDocumentDOM();
   if (!doc) return 'ERROR:没有打开的文档';
   var sel = doc.selection;
@@ -154,11 +156,13 @@ function exportSelection(name, outDir, dynamic, maxFrames, ratioW, ratioH, keepO
   var pngURI = base + '.png';
 
   var W = doc.width, H = doc.height;          // 舞台尺寸：默认跟随当前文档
-  if (sizeW > 0 && sizeH > 0) {
-    W = Math.max(1, Math.round(sizeW));       // 像素档：直定尺寸（优先）
+  var autoSize = sizeW < 0 && sizeH < 0;      // 自适应档：按元件自身尺寸建文档
+  if (autoSize) {
+    W = Math.max(1, Math.round(el.width));    // 元件实例显示尺寸（四舍五入取整，下限 1）
+    H = Math.max(1, Math.round(el.height));
+  } else if (sizeW > 0 && sizeH > 0) {
+    W = Math.max(1, Math.round(sizeW));       // 像素档：直定尺寸
     H = Math.max(1, Math.round(sizeH));
-  } else if (ratioW > 0 && ratioH > 0) {
-    W = Math.max(1, Math.round(H * ratioW / ratioH)); // 比例档：高随文档、宽 = 高 × 比例
   }
   var frameCount = item.timeline.frameCount;  // 元件时间轴帧数
   var MAX_FRAMES = (maxFrames && maxFrames > 0) ? Math.floor(maxFrames) : 240; // APP 设置下发，兜底 10s@24fps
@@ -170,10 +174,11 @@ function exportSelection(name, outDir, dynamic, maxFrames, ratioW, ratioH, keepO
   doc.clipCopy();
   doc.selectNone();
 
-  // ② 新建文档（舞台 = 高随文档、宽按比例）+ 原位粘贴
+  // ② 新建文档（帧率：设置下发，0 = 跟随原文档；舞台 = 像素直定/自适应/原尺寸）+ 原位粘贴
   var origDoc = doc;
   fl.createDocument();
   var nd = fl.getDocumentDOM();
+  nd.frameRate = (fps > 0) ? fps : doc.frameRate;
   nd.width = W; nd.height = H;
   nd.clipPaste(true); // true = 原位粘贴
   nd.selectAll();
@@ -190,9 +195,12 @@ function exportSelection(name, outDir, dynamic, maxFrames, ratioW, ratioH, keepO
     p.loop = 'loop';
   }
 
-  // ④ 记录原坐标，等比缩放至舞台短边 90% 并居中（left/top = 包围盒左上舞台坐标）
+  // ④ 记录原坐标；自适应档先平移左上角对齐（s 随后 = 1 自然撑满），再等比缩放 100% contain 贴边居中
+  //（2026-09-06 修复：去 0.9——旧 90% 留一圈 padding，用户实机报 16:9 素材放 16:9 舞台不贴边；
+  // left/top = 包围盒左上舞台坐标）
   var origX = p.x, origY = p.y, origSX = p.scaleX, origSY = p.scaleY;
-  var s = Math.min((W * 0.9) / p.width, (H * 0.9) / p.height);
+  if (autoSize) { p.x -= p.left; p.y -= p.top; }
+  var s = Math.min(W / p.width, H / p.height);
   p.scaleX = origSX * s;
   p.scaleY = origSY * s;
   p.x += (W - p.width) / 2 - p.left;
@@ -231,6 +239,7 @@ function exportSelection(name, outDir, dynamic, maxFrames, ratioW, ratioH, keepO
   }
 
   // ⑦ 保存 fla → 关闭不保存后续变化 → 焦点切回原文档
+  var ndFps = nd.frameRate; // 回执报新文档实际帧率（先取值——关闭后 nd 句柄失效）
   try {
     fl.saveDocument(nd, flaURI);
   } catch (e) {
@@ -241,7 +250,7 @@ function exportSelection(name, outDir, dynamic, maxFrames, ratioW, ratioH, keepO
   fl.closeDocument(nd, false);
   fl.setActiveWindow(origDoc);
 
-  return 'OK:{fla:"' + name + '.fla",frames:' + frames + ',fps:' + doc.frameRate + '}';
+  return 'OK:{fla:"' + name + '.fla",frames:' + frames + ',fps:' + ndFps + '}';
 }
 
 /* —— 批次 3（2026-09-02）：多选批量分别导出（PRD 07-03「多选：将所选项分别导出 fla」）——
@@ -272,8 +281,9 @@ function beginBatch() {
 }
 
 /* 批量导第 index 项（0-based）：设单选 → 复用 exportSelection。
- * namePrefix（2026-09-02 用户点题批量命名）：空 = 元件名；非空 = 「前缀-序号」（总数 ≥10 补零对齐排序） */
-function exportBatchItem(index, outDir, dynamic, maxFrames, ratioW, ratioH, keepOrigin, sizeW, sizeH, namePrefix) {
+ * namePrefix（2026-09-02 用户点题批量命名）：空 = 元件名；非空 = 「前缀-序号」（总数 ≥10 补零对齐排序）。
+ * 批次 4（2026-09-06）：签名删 ratioW/ratioH 加 fps（新建文档帧率，0 = 跟随原文档）。 */
+function exportBatchItem(index, outDir, dynamic, maxFrames, keepOrigin, sizeW, sizeH, namePrefix, fps) {
   if (!__batchSel) return 'ERROR:批量会话未开始（beginBatch 未调）';
   if (index < 0 || index >= __batchSel.length) return 'ERROR:批量序号越界（' + index + '）';
   var el = __batchSel[index];
@@ -292,13 +302,162 @@ function exportBatchItem(index, outDir, dynamic, maxFrames, ratioW, ratioH, keep
     while (s.length < digits) s = '0' + s;
     name = namePrefix + '-' + s;
   }
-  return exportSelection(name, outDir, dynamic, maxFrames, ratioW, ratioH, keepOrigin, sizeW, sizeH);
+  return exportSelection(name, outDir, dynamic, maxFrames, keepOrigin, sizeW, sizeH, fps);
 }
 
 /* 结束批量：清快照 */
 function endBatch() {
   __batchSel = null;
   return 'OK';
+}
+
+/* —— 批次 4（2026-09-06）：多选整合导出（PRD 07-03 多选另一条路——整体导一个 fla）—— */
+
+/* 选区整体包围盒（各元素 left/top/width/height 并集） */
+function selBBox(sel) {
+  var l = sel[0].left, t = sel[0].top, r = l + sel[0].width, b = t + sel[0].height;
+  for (var i = 1; i < sel.length; i++) {
+    var el = sel[i];
+    if (el.left < l) l = el.left;
+    if (el.top < t) t = el.top;
+    if (el.left + el.width > r) r = el.left + el.width;
+    if (el.top + el.height > b) b = el.top + el.height;
+  }
+  return { left: l, top: t, w: r - l, h: b - t };
+}
+
+/* 多选整合导出：当前舞台多选整体复制 → 新文档原位粘贴（相对位置保持）→ 单 fla 落盘。
+ * name 空串 = 落「未命名」（面板侧已先提示）；outDir = 平台路径（正斜杠）；
+ * dynamic/maxFrames/keepOrigin/fps 口径同 exportSelection（fps >0 直定新文档帧率，≤0 跟随原文档）。
+ * 舞台尺寸：sizeW/sizeH 均 >0 = 直定；均 = -1 = 自适应（选区整体包围盒取整，下限 1）；
+ * 其余（含 0,0 未给）= 跟随原文档尺寸。
+ * 动态：粘贴后所有 movieclip 实例转 graphic + loop（逐元素记原 symbolType/loop，导出后恒还原）；
+ * frames = 各元件 libraryItem.timeline.frameCount 最大值截断 maxFrames（非元件项跳过并计数，
+ * 全是非元件项时按静态 1 帧处理）；主时间轴 insertFrames 后逐帧导 PNG 序列（复用 cleanSeqDir/pad4）。
+ * 缩放居中：以整体包围盒为单位 100% contain 居中（自适应档天然撑满，跳过缩放只左上角对齐）；
+ * keepOrigin 档导出后逐元素还原矩阵（matrix 全量还原坐标/缩放/旋转），合适舞台档直存。
+ * 回执 OK:{fla:"name.fla",frames:N,fps:X,skipped:K}——fps 报新文档实际帧率；skipped = 跳过的非元件实例数。 */
+function exportMerged(name, outDir, dynamic, maxFrames, keepOrigin, sizeW, sizeH, fps) {
+  var doc = fl.getDocumentDOM();
+  if (!doc) return 'ERROR:没有打开的文档';
+  var sel = doc.selection;
+  if (!sel || sel.length === 0) return 'ERROR:请先在舞台上选中元件（可多选）';
+
+  if (!name) name = '未命名';
+
+  var outURI = FLfile.platformPathToURI(outDir);
+  if (!outURI) return 'ERROR:路径无效';
+  ensureDir(outURI);
+  var base = outURI + '/' + name;
+  var flaURI = base + '.fla';
+  var pngURI = base + '.png';
+
+  // ① 多选整体复制
+  doc.clipCopy();
+
+  // ② 新建文档（帧率设置同 exportSelection）+ 原位粘贴（相对位置保持）
+  var origDoc = doc;
+  fl.createDocument();
+  var nd = fl.getDocumentDOM();
+  nd.frameRate = (fps > 0) ? fps : doc.frameRate;
+  nd.clipPaste(true);
+  nd.selectAll();
+  if (!nd.selection || nd.selection.length === 0) {
+    fl.closeDocument(nd, false);
+    fl.setActiveWindow(origDoc);
+    return 'ERROR:粘贴失败';
+  }
+
+  // ③ 逐元素记录原矩阵与元件态（keepOrigin 还原用）+ 帧数统计 + 非元件项跳过计数
+  var bb = selBBox(nd.selection);
+  var orig = []; // [{ el, m, sym, loop }]——m 为 matrix 快照（全元素通用，缩放/旋转/坐标一并还原）
+  var maxCount = 0, skipped = 0;
+  for (var i = 0; i < nd.selection.length; i++) {
+    var el = nd.selection[i];
+    var m = el.matrix;
+    var rec = { el: el, m: { a: m.a, b: m.b, c: m.c, d: m.d, tx: m.tx, ty: m.ty }, sym: undefined, loop: undefined };
+    if (el.elementType === 'instance' && el.libraryItem && el.libraryItem.timeline) {
+      if (el.libraryItem.timeline.frameCount > maxCount) maxCount = el.libraryItem.timeline.frameCount;
+      if (el.symbolType !== undefined) { rec.sym = el.symbolType; rec.loop = el.loop; }
+    } else {
+      skipped++; // 非元件实例混选（位图/文本/形状等）：不转图形、不计帧数，画面照常导出
+    }
+    orig.push(rec);
+  }
+  var MAX_FRAMES = (maxFrames && maxFrames > 0) ? Math.floor(maxFrames) : 240;
+  var frames = dynamic ? Math.min(maxCount, MAX_FRAMES) : 1;
+  if (frames < 1) frames = 1; // 无元件项（全形状/位图）按静态处理
+
+  // ④ 动态导出前置：movieclip 转 graphic + loop（同 exportSelection 口径）
+  if (dynamic && frames > 1) {
+    for (var j = 0; j < orig.length; j++) {
+      if (orig[j].sym !== undefined) { orig[j].el.symbolType = 'graphic'; orig[j].el.loop = 'loop'; }
+    }
+  }
+
+  // ⑤ 舞台尺寸：直定 / 自适应（= 选区整体包围盒取整）/ 跟随原文档
+  var autoSize = sizeW < 0 && sizeH < 0;
+  var W, H;
+  if (sizeW > 0 && sizeH > 0) { W = Math.max(1, Math.round(sizeW)); H = Math.max(1, Math.round(sizeH)); }
+  else if (autoSize) { W = Math.max(1, Math.round(bb.w)); H = Math.max(1, Math.round(bb.h)); }
+  else { W = doc.width; H = doc.height; }
+  nd.width = W; nd.height = H;
+
+  // ⑥ 缩放居中：以整体包围盒为单位 100% contain（自适应档天然撑满，跳过缩放只平移左上角对齐）
+  if (autoSize) {
+    nd.moveSelectionBy({ x: -bb.left, y: -bb.top });
+  } else {
+    var s = Math.min(W / bb.w, H / bb.h);
+    if (s !== 1) nd.scaleSelection(s, s);
+    var nb = selBBox(nd.selection);
+    nd.moveSelectionBy({ x: (W - nb.w) / 2 - nb.left, y: (H - nb.h) / 2 - nb.top });
+  }
+
+  // ⑦ 导出 PNG（第三参 true = 当前播放头帧）/ 逐帧序列
+  try {
+    if (!dynamic || frames <= 1) {
+      nd.exportPNG(pngURI, true, true);
+    } else {
+      var tl = nd.getTimeline();
+      tl.insertFrames(frames - 1); // 当前帧(0)处追加，主时间轴全层扩展到 frames 帧
+      var seqBase = outURI + '/' + name + '_seq';
+      ensureDir(seqBase);
+      cleanSeqDir(seqBase); // 同名重导防上次残留帧混入
+      for (var k = 0; k < frames; k++) {
+        tl.currentFrame = k;
+        nd.exportPNG(seqBase + '/f_' + pad4(k + 1) + '.png', true, true);
+      }
+    }
+  } catch (e) {
+    fl.closeDocument(nd, false);
+    fl.setActiveWindow(origDoc);
+    return 'ERROR:PNG 导出失败 ' + e;
+  }
+
+  // ⑧ 还原（仅 keepOrigin 保持坐标档逐元素还原矩阵；合适舞台档 = 缩放居中态直存）。
+  // symbolType/loop 恢复恒做（元件语义与坐标无关——动态导出 movieclip→graphic 是导帧用临时态）
+  if (keepOrigin !== false) {
+    for (var q = 0; q < orig.length; q++) orig[q].el.matrix = orig[q].m;
+  }
+  if (dynamic && frames > 1) {
+    for (var u = 0; u < orig.length; u++) {
+      if (orig[u].sym !== undefined) { orig[u].el.symbolType = orig[u].sym; orig[u].el.loop = orig[u].loop; }
+    }
+  }
+
+  // ⑨ 保存 fla → 关闭不保存后续变化 → 焦点切回原文档
+  var ndFps = nd.frameRate; // 回执报新文档实际帧率（先取值——关闭后 nd 句柄失效）
+  try {
+    fl.saveDocument(nd, flaURI);
+  } catch (e) {
+    fl.closeDocument(nd, false);
+    fl.setActiveWindow(origDoc);
+    return 'ERROR:FLA 保存失败 ' + e;
+  }
+  fl.closeDocument(nd, false);
+  fl.setActiveWindow(origDoc);
+
+  return 'OK:{fla:"' + name + '.fla",frames:' + frames + ',fps:' + ndFps + ',skipped:' + skipped + '}';
 }
 
 /* —— 发送至 AN（8.3，PRD 07-04 快速发送）—— */
