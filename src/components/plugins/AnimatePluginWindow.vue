@@ -3,8 +3,10 @@
 // 544×538 非模态独立窗，可移动/缩放、单例聚焦——open_plugin_window 后端命令）：
 // 经 URL ?plugin=animate 进入（App.vue query 分发，?preview= 先例）；窗口壳（fx 云母/实色、圆角、
 // 描边、阴影）由 App.vue .window 承担（预览子窗口同口径），本组件 = 内容面板：padding 24 / 列 gap 24。
-// 标题行 = 窗口拖拽区（data-tauri-drag-region，按钮区不挂）；「关闭」钮与 Esc = 关窗口（window.close）；
-// 内容溢出（窗口缩放）时中部组区纵向 ScrollThumb 悬浮滚轮（速查 §2）。
+// 标题区 = 通栏 62px 拖拽带（data-tauri-drag-region，2026-09-06 四轮用户实机扩——原标题行 26px 太小；
+// 滚动区/按钮行不挂）；「关闭」钮与 Esc = 关窗口（window.close）；
+// 内容溢出（窗口缩放）时中部组区纵向 ScrollThumb 悬浮滚轮（速查 §2；包裹层负扩 24 = 滚轮紧贴窗口右缘，
+// 实机走查第一批末项口径；thumb 色档 通用/四级常态、通用/六级 hover 同日定）。
 // 安装 / 卸载业务移植自退役的 modals/CepSettingsDialog（状态查询 / 安装 / 卸载 + toast，
 // 封装 lib/plugins）；按钮族复用 ActionButton lg——关闭 = cancel 变体（稿 通用/五级底 128×38）、
 // 卸载 = danger 变体（稿 状态/禁止底 128×38，未安装 disabled）、安装 = primary（稿 品牌/常态 200×38，
@@ -82,8 +84,12 @@ const tempText = computed(() => (libPath.value ? `${libPath.value}\\temp\\cep-ou
 
 <template>
   <div class="plugin-window">
-    <!-- 标题（稿：18/26 Bold 一级）；标题行区域 = 窗口拖拽区 -->
-    <h1 class="pw-title" data-tauri-drag-region>Animate 插件</h1>
+    <!-- 顶部拖拽带（2026-09-06 四轮用户实机：标题行 26px 拖拽范围太小——负 margin 扩成通栏 62px：
+         上 24（吃进根 padding 顶）+ 标题 26 + 下 12；margin-bottom -12 抵消使「使用教程」间距仍 24 贴稿；
+         滚动区 / 按钮行不挂拖拽） -->
+    <div class="pw-dragband" data-tauri-drag-region>
+      <h1 class="pw-title">Animate 插件</h1>
+    </div>
     <!-- 组区（稿 介绍文本：列 gap 24；组 = 标题 16/22 Bold 二级 + 行组 gap 6 的 13/18 三级） -->
     <div class="pw-scroll-wrap">
       <div ref="bodyRef" class="pw-body kit-scroll">
@@ -153,23 +159,34 @@ const tempText = computed(() => (libPath.value ? `${libPath.value}\\temp\\cep-ou
   padding: var(--n-space-24);
 }
 .pw-title {
-  flex: none;
   font-size: var(--n-fs-title);
   line-height: var(--n-lh-title);
   font-weight: var(--n-fw-bold);
   color: var(--n-l1);
 }
-/* 组区滚动包裹：relative = ScrollThumb 锚点（§2 悬浮滚轮结构） */
+/* 顶部拖拽带 = 通栏 62px（负 margin 三向扩：上 24 吃进根 padding 顶、左右到窗口边；
+   margin-bottom -12 与 padding-bottom 12 对消，标题与首组间距保持 gap 24 贴稿） */
+.pw-dragband {
+  flex: none;
+  margin: calc(-1 * var(--n-space-24)) calc(-1 * var(--n-space-24)) calc(-1 * var(--n-space-12));
+  padding: var(--n-space-24) var(--n-space-24) var(--n-space-12);
+}
+/* 组区滚动包裹：relative = ScrollThumb 锚点（§2 悬浮滚轮结构）；
+   margin-right 负扩 24 = 滚轮紧贴窗口右缘（实机走查第一批末项口径：滚动条紧贴窗口右边不挤压内容） */
 .pw-scroll-wrap {
   position: relative;
   flex: 1;
   min-height: 0;
+  margin-right: calc(-1 * var(--n-space-24));
 }
 .pw-body {
   height: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: var(--n-space-24);
+  /* 包裹层右扩后补回内容原位（内容仍距窗口右缘 24，滚轮贴窗口右缘） */
+  padding-right: var(--n-space-24);
 }
 .pw-group {
   flex: none;
