@@ -170,14 +170,15 @@ export interface PasteDataTargets {
 }
 
 // 批量粘贴统一收尾（不走 run——逐目标合并须先读后写，且只出一次 toast）：
-// 逐目标 try，失败计数不中断；成功项合并写盘后一次 refreshArchives + bumpDetailRev
-async function pasteRun(label: () => string, write: () => Promise<number>): Promise<void> {
+// 逐目标 try，失败计数不中断；成功项合并写盘后一次 refreshArchives + bumpDetailRev。
+// zeroMessage（2026-09-05 清空标签复用）：零目标提示文案按操作给（粘贴 = 没有可粘贴的目标 / 清空 = 所选项都没有标签）
+async function pasteRun(label: () => string, write: () => Promise<number>, zeroMessage = "没有可粘贴的目标"): Promise<void> {
   const content = useContentStore();
   const toast = useToastStore();
   try {
     const done = await write();
     if (done === 0) {
-      toast.notify({ message: "没有可粘贴的目标", icon: "fail" });
+      toast.notify({ message: zeroMessage, icon: "fail" });
       return;
     }
     await content.refreshArchives();
@@ -246,5 +247,31 @@ export async function pasteDescriptions(targets: PasteDataTargets): Promise<void
       }
       return done;
     },
+  );
+}
+
+/** 清空标签（菜单栏主菜单「整理」，2026-09-05 用户定：所选项的标签全部删掉）——
+ *  文件 + 档案多选批量：逐目标写空集（已空的幂等跳过不计数）；一次 toast 收尾（pasteRun 同口径；
+ *  撤销 = 后端逐目标步，Ctrl+Z 逐步回滚） */
+export async function clearTags(targets: PasteDataTargets): Promise<void> {
+  await pasteRun(
+    () => `清空标签（${targets.assets.length + targets.archives.length} 个目标）`,
+    async () => {
+      let done = 0;
+      for (const id of targets.assets) {
+        const d = await readAssetData(id);
+        if (!d || d.tags.length === 0) continue; // 空集幂等跳过
+        await invoke("set_asset_props", { assetId: id, props: [] });
+        done++;
+      }
+      for (const id of targets.archives) {
+        const cur = useContentStore().archives[id]?.props ?? [];
+        if (cur.length === 0) continue;
+        await invoke("set_archive_props", { folderId: id, props: [] });
+        done++;
+      }
+      return done;
+    },
+    "所选项都没有标签",
   );
 }

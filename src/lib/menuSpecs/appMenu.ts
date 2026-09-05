@@ -38,7 +38,7 @@ import {
   setPlacementOrigin,
 } from "../placementOps";
 import { isThumbCapableExt } from "../formatBadge";
-import { copyArchiveTags, copyAssetTags, pasteTags } from "../customDataOps";
+import { copyArchiveTags, copyAssetTags, clearTags, pasteTags } from "../customDataOps";
 import type { PickerTarget } from "../relationOps";
 
 // —— 选中集解析（整理菜单 / 文件菜单的选中依赖项共用）——
@@ -102,6 +102,25 @@ function openDescEdit(): void {
       name: ar.name,
       initial: (useContentStore().archives[ar.id]?.descriptions ?? []).map((x) => ({ ...x })),
     };
+  }
+}
+
+// 添加标签（32 稿属性标签弹窗 PropsDialog，ui.propsEdit 草稿式）：文件 = get_asset_detail 拉现值；
+// 档案 = content.archives 直读（copyArchiveTags 同口径）。单目标面板——多选禁用
+function openPropsEdit(): void {
+  const ui = useUiStore();
+  const a = singleAsset();
+  if (a) {
+    void invoke<{ tags: string[] }>("get_asset_detail", { assetId: a.assetId })
+      .then((d) => {
+        ui.propsEdit = { kind: "file", id: a.assetId, name: a.name, initial: [...(d.tags ?? [])] };
+      })
+      .catch((e) => console.warn("[appMenu] 属性标签拉取失败：", e));
+    return;
+  }
+  const ar = singleArchive();
+  if (ar) {
+    ui.propsEdit = { kind: "archive", id: ar.id, name: ar.name, initial: [...(useContentStore().archives[ar.id]?.props ?? [])] };
   }
 }
 
@@ -292,6 +311,8 @@ function organizeEntries(): CtxEntry[] {
   const ar = singleArchive();
   const target = pickerTarget();
   const hasAssets = selectedAssetIds().length > 0 && !content.isRecycleView;
+  // 标签可写目标（清空标签）：选中集含文件或档案且非回收站（回收站只读不开编辑类，useGlobalKeys 同口径）
+  const hasTaggable = (selectedAssetIds().length > 0 || selectedArchiveIds().length > 0) && !content.isRecycleView;
   // 将此文件设为原始文件：单选非 origin + 活位置 > 1（assetCard 同口径；主菜单恒列、不满足则 disabled）
   const liveCount = a ? content.placements.filter((q) => q.assetId === a.assetId).length : 0;
   const canSetOrigin = !!a && !a.origin && liveCount > 1;
@@ -331,7 +352,8 @@ function organizeEntries(): CtxEntry[] {
       ],
     },
     "divider",
-    { label: "添加标签", disabled: true },
+    // 添加标签 = 32 稿属性标签弹窗（单目标面板，多选禁用；2026-09-05 用户定接线）
+    { label: "添加标签", disabled: !a && !ar, action: openPropsEdit },
     {
       label: "复制标签",
       disabled: !a && !ar,
@@ -345,7 +367,12 @@ function organizeEntries(): CtxEntry[] {
       disabled: !selection.copiedData.tags?.length,
       action: () => void pasteTags({ assets: selectedAssetIds(), archives: selectedArchiveIds() }),
     },
-    { label: "清空标签", disabled: true },
+    // 清空标签 = 所选项（文件 + 档案，多选批量）标签全删（2026-09-05 用户定）；回收站只读不开
+    {
+      label: "清空标签",
+      disabled: !hasTaggable,
+      action: () => void clearTags({ assets: selectedAssetIds(), archives: selectedArchiveIds() }),
+    },
     "divider",
     { label: "编辑描述", disabled: !a && !ar, action: openDescEdit },
     "divider",

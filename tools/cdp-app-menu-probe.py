@@ -8,6 +8,8 @@
 # M11 「转换为缩略图链接并复制」格式门槛（同日用户定：fla 等不能作缩略图的格式——右键菜单不出现防误导；
 #   主菜单恒列置灰，三轮用户定：主菜单是入口汇总需完整展示，和右键菜单不一样）。
 # M12 全局搜索 = 聚焦搜索框 + 预填 `~`（同日用户定「就这么简单」）——续输关键字走 search_assets 全局范围，Esc 清空恢复。
+# M13 添加标签 = 32 稿属性标签弹窗（单目标，多选禁用）/ 清空标签 = 所选项（文件+档案多选批量）标签全删，
+#   空标签目标幂等跳过不发命令 + 零目标 toast。
 # D 截图 root / docs-l3 / lib-l3。
 import asyncio
 import base64
@@ -123,6 +125,7 @@ window.__TAURI_INTERNALS__ = {
       list_inbox_snapshot: [],
       list_archives: JSON.parse(JSON.stringify(ARCHIVES)),
       list_space_libraries: ["测试库"],
+      list_prop_pool: ["FLA", "雪牧", "预设"],
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
     };
     return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
@@ -387,6 +390,46 @@ async def main():
             await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
             await asyncio.sleep(0.6)
             check("M12-4 Esc 清空恢复（输入框空 + 网格回 3 卡）", await ev("(() => { const inp = document.querySelector('.sf-anchor input'); return !!inp && inp.value === '' && document.querySelectorAll('.asset-card').length === 3; })()"))
+
+            # —— M13 添加标签 = 32 稿属性标签弹窗 / 清空标签 = 所选项全删（2026-09-05 用户定）——
+            # M13-1 单选 A1（tags 走路/跑步）→ 添加标签弹面板
+            await js_click(el_center("document.querySelector('.asset-card[data-key=\"A1|f1\"]')"))
+            await js_click(el_center(MENU_BTN))
+            await js_hover(el_center(js_find("整理")))
+            check("M13-1a 单选：添加标签点亮", await ev(f"({js_find('添加标签', 1)})?.disabled === false"))
+            await js_click(el_center(js_find("添加标签", 1)))
+            await asyncio.sleep(0.6)
+            check("M13-1b 属性标签弹窗出（菜单已关）", await ev("document.querySelector('.props-dialog') != null && document.querySelectorAll('.app-menu').length === 0"))
+            check("M13-1c 拥有 chips = 走路/跑步", json.dumps(await ev("[...document.querySelectorAll('.props-dialog .pd-owned .app-tag')].map((x) => x.textContent.trim())")) == json.dumps(["走路", "跑步"]), str(await ev("[...document.querySelectorAll('.props-dialog .pd-owned .app-tag')].map((x) => x.textContent.trim())")))
+            check("M13-1d 属性池三项（桩）", await ev("document.querySelectorAll('.props-dialog .pool-chips .app-tag').length === 3"))
+            # 取消关闭（草稿式放弃）
+            await js_click(el_center("[...document.querySelectorAll('.props-dialog .pd-bottom .app-btn')].find((b) => b.textContent.trim() === '取消')"))
+            check("M13-1e 取消关弹窗", await ev("document.querySelector('.props-dialog') == null"))
+
+            # M13-2 多选 A1+B2 → 添加标签禁用（单目标面板）；清空标签批量写空集
+            # Ctrl 追加 B2（modifiers=2；选中类名不猜，多选态由菜单禁用态实证）
+            rB2 = await ev(el_center("document.querySelector('.asset-card[data-key=\"B2|f1\"]')"))
+            await mouse("mousePressed", rB2["x"], rB2["y"], "left", 2); await mouse("mouseReleased", rB2["x"], rB2["y"], "left", 2)
+            await asyncio.sleep(0.4)
+            await js_click(el_center(MENU_BTN))
+            await js_hover(el_center(js_find("整理")))
+            check("M13-2b 多选：添加标签禁用 / 清空标签点亮", await ev(f"({js_find('添加标签', 1)})?.disabled === true && ({js_find('清空标签', 1)})?.disabled === false"))
+            await js_click(el_center(js_find("清空标签", 1)))
+            await asyncio.sleep(0.8)
+            check("M13-2c 清空批量写空集（A1 + B2 各一次）", await ev("(() => { const c = window.__calls.set_asset_props.filter((x) => Array.isArray(x.props) && x.props.length === 0); return c.length === 2 && c[0].assetId === 'A1' && c[1].assetId === 'B2'; })()"), str(await ev("JSON.stringify(window.__calls.set_asset_props)")))
+            # 清 toast 防挡命中（2026-09-05 主探针踩坑口径）
+            await ev("document.querySelectorAll('.toast .close').forEach((b) => b.click())")
+            await asyncio.sleep(0.4)
+
+            # M13-3 F3 无标签 → 清空 = 幂等零目标（不发命令 + toast 提示）
+            await js_click(el_center("document.querySelector('.asset-card[data-key=\"F3|f1\"]')"))
+            await js_click(el_center(MENU_BTN))
+            await js_hover(el_center(js_find("整理")))
+            await js_click(el_center(js_find("清空标签", 1)))
+            await asyncio.sleep(0.8)
+            check("M13-3a 空标签目标不发 set_asset_props", await ev("window.__calls.set_asset_props.filter((x) => x.assetId === 'F3').length === 0"))
+            check("M13-3b 零目标 toast「所选项都没有标签」", await ev("[...document.querySelectorAll('.toast')].some((t) => t.textContent.includes('所选项都没有标签'))"), str(await ev("[...document.querySelectorAll('.toast')].map((t) => t.textContent.trim())")))
+            await ev("document.querySelectorAll('.toast .close').forEach((b) => b.click())")
 
             print("----")
             print("FAIL:", fails if fails else "无")
