@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ExtensionManifest Version="7.0" ExtensionBundleId="com.anikit.cep"
-  ExtensionBundleVersion="0.2.0"
+  ExtensionBundleVersion="0.3.0"
   ExtensionBundleName="AniKit"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="com.anikit.cep.panel" Version="0.2.0"/>
+    <Extension Id="com.anikit.cep.panel" Version="0.3.0"/>
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
@@ -37,7 +37,7 @@
           <Geometry>
             <Size>
               <Width>300</Width>
-              <Height>520</Height>
+              <Height>760</Height>
             </Size>
             <MinSize>
               <Width>260</Width>

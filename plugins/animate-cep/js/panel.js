@@ -770,15 +770,24 @@ function onExported(name, dir) {
 
 /* —— 面板尺寸持久化（2026-09-02 用户报：调好宽度重开 AN 回退默认 300——CEP 宿主不替扩展记忆尺寸）：
  * 启动读 localStorage 恢复（resizeContent）；window resize（dock 拖宽 / 浮动调整都会触发）防抖 300ms 记忆。
- * docked 下 resizeContent 有效性因宿主而异，实测定；无效时退路 = manifest 默认尺寸调大 + Animate 保存工作区。 —— */
+ * 2026-09-06 三轮（用户实机报「还是不能记忆高度，保存工作区只记位置」）：
+ * ① manifest 默认高 520 → 760——导出设置组入面板后 520 放不下（Animate 工作区对 CEP 面板
+ *    高度不持久，重开回 manifest 默认，默认必须能容纳全部内容）；
+ * ② resizeContent 启动重试 300ms / 1000ms——docked 下宿主布局完成后可能覆盖首次调用，
+ *    重试兜底（docked 下 resizeContent 有效性因宿主而异：浮动面板恒有效，dock 尽力而为）。 —— */
 (function panelSizePersist() {
-  try {
-    var s = localStorage.getItem('cepPanelSize');
-    if (s) {
-      var p = JSON.parse(s);
-      if (p && p.w >= 260 && p.h >= 380) cs.resizeContent(p.w, p.h); // 下限 = manifest MinSize
-    }
-  } catch (e) {}
+  function restoreSize() {
+    try {
+      var s = localStorage.getItem('cepPanelSize');
+      if (s) {
+        var p = JSON.parse(s);
+        if (p && p.w >= 260 && p.h >= 380) cs.resizeContent(p.w, p.h); // 下限 = manifest MinSize
+      }
+    } catch (e) {}
+  }
+  restoreSize();
+  setTimeout(restoreSize, 300);
+  setTimeout(restoreSize, 1000);
   var t = 0;
   window.addEventListener('resize', function () {
     clearTimeout(t);

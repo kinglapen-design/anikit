@@ -237,8 +237,9 @@ async def main():
 
             # P2 工具栏 plugin 钮开浮层（浮层唯一入口）：位置 / 尺寸 / 两项 / batch 禁用 / 默认桥接
             check("P2-1 工具栏 plugin 钮开面板", await open_panel())
-            geo = await ev(f"(() => {{ const p = {PANEL}; const b = {TOOLBAR_PLUGIN_BTN}; if (!p || !b) return null; const pr = p.getBoundingClientRect(); const br = b.getBoundingClientRect(); return {{ pt: pr.top, pw: p.offsetWidth, ph: p.offsetHeight, bb: br.bottom }}; }})()")
+            geo = await ev(f"(() => {{ const p = {PANEL}; const b = {TOOLBAR_PLUGIN_BTN}; if (!p || !b) return null; const pr = p.getBoundingClientRect(); const br = b.getBoundingClientRect(); return {{ pt: pr.top, pr: pr.right, pw: p.offsetWidth, ph: p.offsetHeight, bb: br.bottom, br: br.right }}; }})()")
             check("P2-2 弹出在钮下方 +4", geo is not None and abs(geo["pt"] - geo["bb"] - 4) <= 1, str(geo))
+            check("P2-2b 右缘 = 钮右缘对齐（三轮改定向左展开）", geo is not None and abs(geo["pr"] - geo["br"]) <= 1, str(geo))
             check("P2-3 尺寸 400×450", geo is not None and geo["pw"] == 400 and geo["ph"] == 450, str(geo))
             names = await ev("[...document.querySelectorAll('.plugin-panel .plugin-item .p-name')].map((x) => x.textContent)")
             check("P2-4 列表两项（Animate 插件 / 批量生成缩略图）", json.dumps(names, ensure_ascii=False) == json.dumps(["Animate 插件", "批量生成缩略图"], ensure_ascii=False), str(names))
@@ -249,7 +250,7 @@ async def main():
             await js_click(el_center(TOOLBAR_PLUGIN_BTN))
             check("P2-7 同钮再点 toggle 关", not await panel_open())
             check("P2-8 前置：再开", await open_panel())
-            await mouse("mousePressed", 700, 500); await mouse("mouseReleased", 700, 500)
+            await mouse("mousePressed", 500, 500); await mouse("mouseReleased", 500, 500)
             await asyncio.sleep(0.4)
             check("P2-9 点面板外关闭", not await panel_open())
             check("P2-10 前置：再开", await open_panel())

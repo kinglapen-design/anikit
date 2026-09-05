@@ -90,6 +90,9 @@ function onDragEnd(): void {
   const { from, to } = drag;
   const moved = dragMoved;
   drag.id = "";
+  // 归位帧禁过渡（itemStyle settling 分支）——任何松手都置位：拖回原位也有残留 dy 偏移
+  settling.value = true;
+  setTimeout(() => (settling.value = false), 50);
   if (!moved || from < 0 || to === from) return;
   // 可见子序重排 → 回写全局序（其他分类 id 保持原位：按可见集原位替换）
   const vis = visiblePlugins.value.map((p) => p.id);
@@ -100,8 +103,6 @@ function onDragEnd(): void {
   ui.pluginOrder = orderedPlugins.value.map((p) => (visSet.has(p.id) ? vis[j++] : p.id));
   suppressClick = true;
   setTimeout(() => (suppressClick = false), 0);
-  settling.value = true;
-  setTimeout(() => (settling.value = false), 50);
 }
 
 function onDragCancel(): void {
@@ -121,13 +122,16 @@ onBeforeUnmount(() => {
   onDragCancel();
 });
 
-// 让位位移：拖动项跟随指针（无过渡、置顶）；被跨越项反向让出一步（transition 在 .plugin-item 根样式）
+// 让位位移：拖动项跟随指针（无过渡、置顶）；被跨越项反向让出一步（transition 在 .plugin-item 根样式）。
+// 松手归位帧（settling，2026-09-06 三轮修「松手回弹」）：drag.id 清空与 pluginOrder 重排同帧发生——
+// inline transform 移除若走根样式 0.18s transition，残留 dy/让位偏移会从新位置滑回（= 用户看到的回弹）；
+// 归位帧恒禁过渡，DOM 重排 + transform 移除同帧瞬时完成，落位干脆（settling 判定必须先于 drag.id 判空）。
 function itemStyle(i: number): string {
+  if (settling.value) return "transition: none;";
   if (!drag.id) return "";
   if (i === drag.from) {
     return `transform: translateY(${drag.dy}px); transition: none; position: relative; z-index: 2;`;
   }
-  if (settling.value) return "";
   const { from, to } = drag;
   if (from < to && i > from && i <= to) return `transform: translateY(${-ITEM_STEP}px)`;
   if (to < from && i >= to && i < from) return `transform: translateY(${ITEM_STEP}px)`;
