@@ -13,7 +13,11 @@ const props = defineProps<{
 }>();
 const thumb = useSideThumb(toRef(props, "body"));
 
-// hover 自管：鼠标在父包裹层上即显（滚轮坏了也能用——鼠标在内容区滚轮必在可拖）
+// hover 自管：鼠标在父包裹层上即显（滚轮坏了也能用——鼠标在内容区滚轮必在可拖）。
+// mouseenter/leave = 快速路径；**window mousemove（capture）= 兜底校正**（2026-09-06 七轮用户实机：
+// 子窗口打开后首次悬停滚轮不显、要点一下——WebView2 新窗未激活态首次 mouseenter 丢失，
+// 点击激活后事件链才恢复；mousemove 不依赖「进入」语义，鼠标一动即按 contains 实时校正，
+// 离开窗口由 mouseleave 置 false 防滞留）。
 const hover = ref(false);
 const rootEl = ref<HTMLElement>();
 let wrap: HTMLElement | null = null;
@@ -23,14 +27,19 @@ const onEnter = (): void => {
 const onLeave = (): void => {
   hover.value = false;
 };
+const onMove = (e: MouseEvent): void => {
+  hover.value = !!(wrap && e.target instanceof Node && wrap.contains(e.target));
+};
 onMounted(() => {
   wrap = rootEl.value?.parentElement ?? null;
   wrap?.addEventListener("mouseenter", onEnter);
   wrap?.addEventListener("mouseleave", onLeave);
+  window.addEventListener("mousemove", onMove, { capture: true, passive: true });
 });
 onBeforeUnmount(() => {
   wrap?.removeEventListener("mouseenter", onEnter);
   wrap?.removeEventListener("mouseleave", onLeave);
+  window.removeEventListener("mousemove", onMove, { capture: true });
 });
 </script>
 
