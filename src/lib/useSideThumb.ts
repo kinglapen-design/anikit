@@ -9,6 +9,9 @@
 // 六轮补：同步禁**前端拉伸热区**（.thumb-scroll-lock 类 → .resize-zone pointer-events/cursor 失效——
 // setResizable 只管 OS 级 WS_THICKFRAME 与 tao 物理判定，前端 8px（右缘 3px）热区的 e-resize
 // 光标与 mousedown 抢走是 JS 层，须一并禁；用户原话「把拉伸的指针也禁用掉」）。
+// 八轮补：show 计算的观测盲区——异步内容增长（IPC 返回后文本折行变高）发生在子树文本节点时
+// RO(el)/RO(firstElementChild)/childList MO 三路全捕不到（show 恒 false 滚轮不显，滚一下才调出）；
+// MO 补 characterData + subtree 观测（2026-09-06 用户实机：子窗口首次悬停滚轮不显的真根因）。
 // 初始化走 watch（2026-08-13 ScrollThumb 组件化修复）：bodyRef 可能经 props 传值——
 // 模板 ref 填充晚于子组件 mounted（prop 初值 undefined），onMounted 一次性初始化会永远 show=false；
 // watch immediate + 元素就位重跑，两种传法（同组件 ref 对象 / 跨组件 props 值）都健壮。
@@ -98,11 +101,16 @@ export function useSideThumb(bodyRef: Ref<HTMLElement | undefined>) {
         if (observedChild) ro.observe(observedChild);
       };
       watchChild();
+      // MO 观测：childList（子元素增删）+ characterData + subtree（文本内容变化——2026-09-06 八轮
+      // 用户实机根因：子窗口「路径」组 IPC 返回后短文本换长路径折行，内容从不溢出变溢出，
+      // 但变化发生在第三 section 内部文本节点——RO(el)（容器高不变）/ RO(firstElementChild)
+      //（变的是第三个）/ childList MO（文本属 characterData）三路全捕不到，show 恒 false，
+      // 滚一下（scroll 事件触发 sync）才调出滚轮；subtree 文本观测补上这类异步内容增长）
       const mo = new MutationObserver(() => {
         watchChild();
         sync();
       });
-      mo.observe(el, { childList: true });
+      mo.observe(el, { childList: true, characterData: true, subtree: true });
       onCleanup(() => {
         el.removeEventListener("scroll", sync);
         ro.disconnect();
