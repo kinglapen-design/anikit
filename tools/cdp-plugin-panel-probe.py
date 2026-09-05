@@ -1,10 +1,11 @@
-# CDP 实测：插件列表面板（2026-09-06 插件窗轮；稿 = Design Token/布局/主窗口/工具栏展开窗口/插件.md）
-# P1 菜单栏「插件」钮弹出（位置 = 钮左缘对齐 + 底 +4 / 尺寸 400×450 / 列表两项 / batch 禁用态）；
-# P1b 工具栏 plugin 钮同开（三入口共用宿主）；P2 同钮 toggle 关；P3 点外关；P4 Esc 关；
-# P5 分类分段切换过滤（格式 = 空态「暂无插件」→ 桥接回两项）；P6 更多菜单三项（打开 / 安装动态文案 /
-# 配置快捷键 disabled）+ 打开发 open_plugin_window + 安装链路（install_cep_plugin + toast + 文案翻卸载）；
-# P7 选择模式（picker.active）禁开。
-# 截图 plugin-panel / plugin-more-menu → tools/style-preview/。
+# CDP 实测：插件菜单 + 插件列表面板（2026-09-06 插件窗轮；同日二轮走查改定——菜单栏「插件」钮
+# = 普通上下文菜单（menuSpecs/pluginMenu 四项两组），400×450 浮层面板只留工具栏 plugin 图标钮）
+# P1 菜单栏「插件」钮出菜单（位置 = 钮左缘 + 底 +4 / 四项两组 / 三项 disabled / Animate 发
+# open_plugin_window）；P1b 菜单三关闭（同钮 toggle / 点外 / Esc）；
+# P2 工具栏 plugin 钮开浮层（位置 / 400×450 / 两项 / batch 禁用 / 默认桥接）+ 浮层三关闭；
+# P3 分类分段切换过滤；P4 更多菜单（打开 / 安装动态文案 / 配置快捷键 disabled + 安装链路 toast 翻转）；
+# P5 选择模式（picker.active）菜单栏钮禁开。
+# 截图 plugin-menu / plugin-panel / plugin-more-menu → tools/style-preview/。
 import asyncio
 import base64
 import json
@@ -183,13 +184,22 @@ async def main():
             PLUGIN_BTN = "[...document.querySelectorAll('.sidebar-left .menu-bar .act-btn')].find((b) => b.textContent.trim() === '插件')"
             TOOLBAR_PLUGIN_BTN = "document.querySelectorAll('.panel-toolbar .btn-group .ic-btn')[1]"
             PANEL = "document.querySelector('.plugin-panel')"
+            MENU = "[...document.querySelectorAll('.app-menu')].find((m) => m.querySelector('.menu-item'))"
 
             async def panel_open():
                 return await ev("document.querySelector('.plugin-panel') != null")
 
+            async def menu_open():
+                return await ev(f"({MENU}) != null")
+
             async def open_panel():
-                await js_click(el_center(PLUGIN_BTN))
+                # 浮层入口 = 工具栏 plugin 图标钮（二轮改定：菜单栏钮改出菜单，浮层只留工具栏）
+                await js_click(el_center(TOOLBAR_PLUGIN_BTN))
                 return await panel_open()
+
+            async def open_menu():
+                await js_click(el_center(PLUGIN_BTN))
+                return await menu_open()
 
             # 启动就绪闸：菜单栏四钮齐 + 内容工具栏在（库重开链完成）
             for _ in range(20):
@@ -197,86 +207,98 @@ async def main():
                     break
                 await asyncio.sleep(0.4)
 
-            # P1 插件钮弹出：位置 / 尺寸 / 两项 / batch 禁用
-            check("P1-1 点「插件」钮面板出", await open_panel(), "panel 未出现")
-            geo = await ev(f"(() => {{ const p = {PANEL}; const b = {PLUGIN_BTN}; if (!p || !b) return null; const pr = p.getBoundingClientRect(); const br = b.getBoundingClientRect(); return {{ pl: pr.left, pt: pr.top, pw: p.offsetWidth, ph: p.offsetHeight, bl: br.left, bb: br.bottom }}; }})()")
-            check("P1-2 位置 = 钮左缘对齐 + 底 +4", geo is not None and abs(geo["pl"] - geo["bl"]) <= 1 and abs(geo["pt"] - geo["bb"] - 4) <= 1, str(geo))
-            check("P1-3 尺寸 400×450", geo is not None and geo["pw"] == 400 and geo["ph"] == 450, str(geo))
-            names = await ev("[...document.querySelectorAll('.plugin-panel .plugin-item .p-name')].map((x) => x.textContent)")
-            check("P1-4 列表两项（Animate 插件 / 批量生成缩略图）", json.dumps(names, ensure_ascii=False) == json.dumps(["Animate 插件", "批量生成缩略图"], ensure_ascii=False), str(names))
-            check("P1-5 第二项禁用态（disabled 类 + pointer-events none）", await ev("(() => { const it = document.querySelectorAll('.plugin-panel .plugin-item')[1]; return it?.classList.contains('disabled') && getComputedStyle(it).pointerEvents === 'none'; })()"))
-            check("P1-6 默认选中「桥接」分段", await ev("[...document.querySelectorAll('.plugin-panel .seg-item')].find((s) => s.textContent.trim() === '桥接')?.classList.contains('on') === true"))
-            await shot("plugin-panel")
+            # P1 菜单栏「插件」钮出上下文菜单（二轮改定）：位置 / 四项两组 / 三项 disabled / Animate 发命令
+            check("P1-1 点「插件」钮菜单出", await open_menu(), "app-menu 未出现")
+            geo = await ev(f"(() => {{ const m = {MENU}; const b = {PLUGIN_BTN}; if (!m || !b) return null; const mr = m.getBoundingClientRect(); const br = b.getBoundingClientRect(); return {{ ml: mr.left, mt: mr.top, bl: br.left, bb: br.bottom }}; }})()")
+            check("P1-2 位置 = 钮左缘对齐 + 底 +4", geo is not None and abs(geo["ml"] - geo["bl"]) <= 1 and abs(geo["mt"] - geo["bb"] - 4) <= 1, str(geo))
+            labels = await ev(f"[...{MENU}?.querySelectorAll('.menu-item .label') ?? []].map((x) => x.textContent)")
+            expect = ["Animate", "批量生成缩略图", "API 接口文档", "开发者选项"]
+            check("P1-3 四项两组", json.dumps(labels, ensure_ascii=False) == json.dumps(expect, ensure_ascii=False) and await ev(f"{MENU}.querySelectorAll('.menu-group').length === 2"), str(labels))
+            disabled = await ev(f"[...{MENU}.querySelectorAll('.menu-item')].filter((m) => m.disabled === true).map((m) => m.querySelector('.label')?.textContent)")
+            check("P1-4 三项 disabled（批量缩略图 / API / 开发者选项）", json.dumps(disabled, ensure_ascii=False) == json.dumps(expect[1:], ensure_ascii=False), str(disabled))
+            check("P1-5 Animate 可用（未禁用）", await ev(f"[...{MENU}.querySelectorAll('.menu-item')].find((m) => m.querySelector('.label')?.textContent === 'Animate')?.disabled === false"))
+            await shot("plugin-menu")
+            await js_click(el_center(f"[...{MENU}.querySelectorAll('.menu-item')].find((m) => m.querySelector('.label')?.textContent === 'Animate')"))
+            calls = await ev("window.__calls.open_plugin_window")
+            check("P1-6 点 Animate = invoke open_plugin_window（pluginId animate）", json.dumps(calls) == json.dumps([{"pluginId": "animate"}]), str(calls))
+            check("P1-7 点击后菜单关闭", not await menu_open())
 
-            # P1b 工具栏 plugin 钮同开（先关再开；位置断言从略——右侧钮 400 宽面板必触发右缘钳制）
-            await esc_close()
-            check("P1b-0 前置：Esc 已关", not await panel_open())
-            await js_click(el_center(TOOLBAR_PLUGIN_BTN))
-            check("P1b 工具栏 plugin 钮开面板", await panel_open())
-            top = await ev(f"(() => {{ const p = {PANEL}; const b = {TOOLBAR_PLUGIN_BTN}; return p && b ? p.getBoundingClientRect().top - b.getBoundingClientRect().bottom : null; }})()")
-            check("P1b-2 弹出在钮下方 +4", top is not None and abs(top - 4) <= 1, str(top))
-
-            # P2 同钮 toggle（菜单栏钮）
-            await esc_close()
-            check("P2-0 前置：已关", not await panel_open())
-            check("P2-1 再点菜单栏「插件」开", await open_panel())
+            # P1b 菜单三关闭：同钮 toggle / 点外 / Esc
+            check("P1b-0 前置：再开菜单", await open_menu())
             await js_click(el_center(PLUGIN_BTN))
-            check("P2-2 同钮再点 toggle 关", not await panel_open())
-
-            # P3 点外关闭（点内容区空白 700,500）
-            check("P3-0 前置：再开", await open_panel())
+            check("P1b-1 同钮再点 toggle 关", not await menu_open())
+            check("P1b-2 前置：再开菜单", await open_menu())
             await mouse("mousePressed", 700, 500); await mouse("mouseReleased", 700, 500)
             await asyncio.sleep(0.4)
-            check("P3 点面板外关闭", not await panel_open())
-
-            # P4 Esc 关闭
-            check("P4-0 前置：再开", await open_panel())
+            check("P1b-3 点菜单外关闭", not await menu_open())
+            check("P1b-4 前置：再开菜单", await open_menu())
             await esc_close()
-            check("P4 Esc 关闭", not await panel_open())
+            check("P1b-5 Esc 关闭", not await menu_open())
 
-            # P5 分类分段切换过滤
-            check("P5-0 前置：再开", await open_panel())
+            # P2 工具栏 plugin 钮开浮层（浮层唯一入口）：位置 / 尺寸 / 两项 / batch 禁用 / 默认桥接
+            check("P2-1 工具栏 plugin 钮开面板", await open_panel())
+            geo = await ev(f"(() => {{ const p = {PANEL}; const b = {TOOLBAR_PLUGIN_BTN}; if (!p || !b) return null; const pr = p.getBoundingClientRect(); const br = b.getBoundingClientRect(); return {{ pt: pr.top, pw: p.offsetWidth, ph: p.offsetHeight, bb: br.bottom }}; }})()")
+            check("P2-2 弹出在钮下方 +4", geo is not None and abs(geo["pt"] - geo["bb"] - 4) <= 1, str(geo))
+            check("P2-3 尺寸 400×450", geo is not None and geo["pw"] == 400 and geo["ph"] == 450, str(geo))
+            names = await ev("[...document.querySelectorAll('.plugin-panel .plugin-item .p-name')].map((x) => x.textContent)")
+            check("P2-4 列表两项（Animate 插件 / 批量生成缩略图）", json.dumps(names, ensure_ascii=False) == json.dumps(["Animate 插件", "批量生成缩略图"], ensure_ascii=False), str(names))
+            check("P2-5 第二项禁用态（disabled 类 + pointer-events none）", await ev("(() => { const it = document.querySelectorAll('.plugin-panel .plugin-item')[1]; return it?.classList.contains('disabled') && getComputedStyle(it).pointerEvents === 'none'; })()"))
+            check("P2-6 默认选中「桥接」分段", await ev("[...document.querySelectorAll('.plugin-panel .seg-item')].find((s) => s.textContent.trim() === '桥接')?.classList.contains('on') === true"))
+            await shot("plugin-panel")
+            # 浮层三关闭（工具栏钮 toggle / 点外 / Esc）
+            await js_click(el_center(TOOLBAR_PLUGIN_BTN))
+            check("P2-7 同钮再点 toggle 关", not await panel_open())
+            check("P2-8 前置：再开", await open_panel())
+            await mouse("mousePressed", 700, 500); await mouse("mouseReleased", 700, 500)
+            await asyncio.sleep(0.4)
+            check("P2-9 点面板外关闭", not await panel_open())
+            check("P2-10 前置：再开", await open_panel())
+            await esc_close()
+            check("P2-11 Esc 关闭", not await panel_open())
+
+            # P3 分类分段切换过滤
+            check("P3-0 前置：再开", await open_panel())
             await js_click(el_center("[...document.querySelectorAll('.plugin-panel .seg-item')].find((s) => s.textContent.trim() === '格式')"))
-            check("P5-1 切「格式」= 空态「暂无插件」", await ev("document.querySelector('.plugin-panel .list-empty')?.textContent === '暂无插件'"))
-            check("P5-2 空态下无 item", await ev("document.querySelectorAll('.plugin-panel .plugin-item').length === 0"))
+            check("P3-1 切「格式」= 空态「暂无插件」", await ev("document.querySelector('.plugin-panel .list-empty')?.textContent === '暂无插件'"))
+            check("P3-2 空态下无 item", await ev("document.querySelectorAll('.plugin-panel .plugin-item').length === 0"))
             await js_click(el_center("[...document.querySelectorAll('.plugin-panel .seg-item')].find((s) => s.textContent.trim() === '桥接')"))
-            check("P5-3 切回「桥接」= 两项回来", await ev("document.querySelectorAll('.plugin-panel .plugin-item').length === 2"))
+            check("P3-3 切回「桥接」= 两项回来", await ev("document.querySelectorAll('.plugin-panel .plugin-item').length === 2"))
 
-            # P6 更多菜单：三项 + 禁用 + 打开发命令 + 安装链路文案翻转
+            # P4 更多菜单：三项 + 禁用 + 打开发命令 + 安装链路文案翻转
             await js_click(el_center("document.querySelector('.plugin-panel .plugin-item .more-btn')"))
             ctx = "[...document.querySelectorAll('.app-menu')].find((m) => m.querySelector('.menu-item'))"
             labels = await ev(f"[...{ctx}?.querySelectorAll('.menu-item .label') ?? []].map((x) => x.textContent)")
-            check("P6-1 更多菜单三项（打开 / 安装 / 配置快捷键）", json.dumps(labels, ensure_ascii=False) == json.dumps(["打开", "安装", "配置快捷键"], ensure_ascii=False), str(labels))
-            check("P6-2 配置快捷键 disabled 占位", await ev(f"[...{ctx}.querySelectorAll('.menu-item')].find((m) => m.textContent.includes('配置快捷键'))?.disabled === true"))
+            check("P4-1 更多菜单三项（打开 / 安装 / 配置快捷键）", json.dumps(labels, ensure_ascii=False) == json.dumps(["打开", "安装", "配置快捷键"], ensure_ascii=False), str(labels))
+            check("P4-2 配置快捷键 disabled 占位", await ev(f"[...{ctx}.querySelectorAll('.menu-item')].find((m) => m.textContent.includes('配置快捷键'))?.disabled === true"))
             await shot("plugin-more-menu")
             await js_click(el_center(f"[...{ctx}.querySelectorAll('.menu-item')].find((m) => m.querySelector('.label')?.textContent === '打开')"))
             calls = await ev("window.__calls.open_plugin_window")
-            check("P6-3 打开 = invoke open_plugin_window（pluginId animate）", json.dumps(calls) == json.dumps([{"pluginId": "animate"}]), str(calls))
-            check("P6-4 打开后浮层与菜单同关", not await panel_open() and await ev("document.querySelectorAll('.app-menu').length === 0"))
+            check("P4-3 打开 = invoke open_plugin_window（P1 菜单一次 + 本次 = 两条）", json.dumps(calls) == json.dumps([{"pluginId": "animate"}, {"pluginId": "animate"}]), str(calls))
+            check("P4-4 打开后浮层与菜单同关", not await panel_open() and await ev("document.querySelectorAll('.app-menu').length === 0"))
             # 安装链路：未安装 =「安装」→ 点击发 install_cep_plugin + toast；再开菜单文案翻「卸载」
-            check("P6-5 前置：再开面板", await open_panel())
+            check("P4-5 前置：再开面板", await open_panel())
             await js_click(el_center("document.querySelector('.plugin-panel .plugin-item .more-btn')"))
             await js_click(el_center(f"[...{ctx}.querySelectorAll('.menu-item')].find((m) => m.querySelector('.label')?.textContent === '安装')"))
             await asyncio.sleep(0.5)
-            check("P6-6 安装 = invoke install_cep_plugin", await ev("window.__calls.install_cep_plugin.length === 1"))
-            check("P6-7 安装成功 toast", await ev("[...document.querySelectorAll('.toast')].some((t) => t.textContent.includes('CEP 插件已安装'))"), str(await ev("[...document.querySelectorAll('.toast')].map((t) => t.textContent.trim())")))
+            check("P4-6 安装 = invoke install_cep_plugin", await ev("window.__calls.install_cep_plugin.length === 1"))
+            check("P4-7 安装成功 toast", await ev("[...document.querySelectorAll('.toast')].some((t) => t.textContent.includes('CEP 插件已安装'))"), str(await ev("[...document.querySelectorAll('.toast')].map((t) => t.textContent.trim())")))
             await ev("document.querySelectorAll('.toast .close').forEach((b) => b.click())")
-            check("P6-8 前置：再开面板", await open_panel())
+            check("P4-8 前置：再开面板", await open_panel())
             await js_click(el_center("document.querySelector('.plugin-panel .plugin-item .more-btn')"))
             labels = await ev(f"[...{ctx}?.querySelectorAll('.menu-item .label') ?? []].map((x) => x.textContent)")
-            check("P6-9 已安装文案翻「卸载」", json.dumps(labels, ensure_ascii=False) == json.dumps(["打开", "卸载", "配置快捷键"], ensure_ascii=False), str(labels))
+            check("P4-9 已安装文案翻「卸载」", json.dumps(labels, ensure_ascii=False) == json.dumps(["打开", "卸载", "配置快捷键"], ensure_ascii=False), str(labels))
             await esc_close()
 
-            # P7 选择模式禁开：进文件夹视口 → 工具栏「添加文件/档案链接」进 picker → 插件钮不开
+            # P5 选择模式禁开：进文件夹视口 → 工具栏「添加文件/档案链接」进 picker → 菜单栏插件钮不开菜单
             await js_click(el_center("document.querySelector('.block.tree .tree-item[data-folder-id=\"f1\"]')"))
             await asyncio.sleep(0.6)
             await js_click(el_center("document.querySelectorAll('.panel-toolbar .btn-group .ic-btn')[0]"))
             await asyncio.sleep(0.6)
-            check("P7-0 前置：picker 已进入（.window.picking）", await ev("document.querySelector('.window')?.classList.contains('picking') === true"))
+            check("P5-0 前置：picker 已进入（.window.picking）", await ev("document.querySelector('.window')?.classList.contains('picking') === true"))
             await js_click(el_center(PLUGIN_BTN))
-            check("P7-1 选择模式下点「插件」不开面板", not await panel_open())
+            check("P5-1 选择模式下点「插件」不开菜单", not await menu_open())
             await esc_close()  # 退出 picker 清场
-            check("P7-2 Esc 退出 picker 清场", await ev("document.querySelector('.window')?.classList.contains('picking') === false"))
+            check("P5-2 Esc 退出 picker 清场", await ev("document.querySelector('.window')?.classList.contains('picking') === false"))
 
             print("----")
             print("FAIL:", fails if fails else "无")

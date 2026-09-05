@@ -4,8 +4,8 @@
 // 「菜单」2026-09-05 接业务 = 应用主菜单（menuSpecs/appMenu，按钮下方弹出 + toggle）；
 // 「编辑」2026-09-06 接业务 = 编辑菜单（menuSpecs/editMenu，同 toggle 口径）；
 // 「视图」2026-09-06 接业务 = 视图菜单（menuSpecs/viewMenu，同 toggle 口径）；
-// 「插件」2026-09-06 接业务 = 插件列表面板浮层（plugins/PluginListPanel，lib/pluginPanel 单例，
-// 同 toggle 口径；选择模式禁开）；
+// 「插件」2026-09-06 接业务 = 插件菜单（menuSpecs/pluginMenu，同 toggle 口径；同日二轮用户走查
+// 改定：菜单栏钮 = 普通上下文菜单，400×450 插件列表浮层只留工具栏 plugin 图标钮）；
 // 分段控制器 54（SegmentedControl icon 型：资源库 / 工作空间 / AI 对话框——三段可切换，
 // 工作空间 / AI = 空态「功能正在开发中」居中，2026-08-30 用户定；选择模式下禁用切换，
 // 视觉不改——稿无禁用态）；
@@ -25,8 +25,8 @@ import { sidebarShowWidths } from "../lib/useSidebarAnim";
 import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
 import { appMenuSpec } from "../lib/menuSpecs/appMenu";
 import { editMenuSpec } from "../lib/menuSpecs/editMenu";
+import { pluginMenuSpec } from "../lib/menuSpecs/pluginMenu";
 import { viewMenuSpec } from "../lib/menuSpecs/viewMenu";
-import { openPluginPanel } from "../lib/pluginPanel";
 import { loadLibraries } from "../lib/libraryOps";
 
 const ui = useUiStore();
@@ -35,7 +35,7 @@ const picker = usePickerStore();
 // 菜单栏四文字钮：菜单 = 应用主菜单（2026-09-05 接业务：稿 = 用户当场供稿，spec = menuSpecs/appMenu）；
 // 编辑 = 编辑菜单（2026-09-06 接业务：spec = menuSpecs/editMenu，全项 = useGlobalKeys 快捷键的菜单面）；
 // 视图 = 视图菜单（2026-09-06 接业务：spec = menuSpecs/viewMenu，查看方式 / 标签页 / 面板显隐）；
-// 插件 = 插件列表面板（2026-09-06 接业务：PluginListPanel 非模态浮层，openPluginPanel 内 toggle / 选择模式禁开）
+// 插件 = 插件菜单（2026-09-06 接业务：spec = menuSpecs/pluginMenu；同日二轮走查改定 = 普通上下文菜单）
 
 // 「菜单」钮 toggle：同一按钮再点 = 关闭（trigger 豁免 AppMenu 组外判定，click 到这里做开关）；
 // 选择模式下禁开（白名单收窄：主菜单含切库，速查 §12.1——视觉不改，稿无禁用态）
@@ -61,6 +61,19 @@ function onEditMenu(e: MouseEvent): void {
   if (picker.active) return;
   const rect = el.getBoundingClientRect();
   openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, editMenuSpec(), undefined, { trigger: el });
+}
+
+// 「插件」钮（2026-09-06 接业务，同日二轮走查改定 = 普通上下文菜单，同 toggle 口径）；
+// 选择模式禁开（插件入口与挑选无关，同「菜单/编辑」钮闸——视觉不改，稿无禁用态）
+function onPluginMenu(e: MouseEvent): void {
+  const el = e.currentTarget as HTMLElement;
+  if (menuState.entries && menuState.trigger === el) {
+    closeContextMenu();
+    return;
+  }
+  if (picker.active) return;
+  const rect = el.getBoundingClientRect();
+  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, pluginMenuSpec(), undefined, { trigger: el });
 }
 
 // 「视图」钮（2026-09-06 接业务）：同 toggle 口径。选择模式下**可开**——§12.1 白名单含
@@ -102,7 +115,7 @@ const bodyRef = ref<HTMLElement>();
       <IconButton name="collapse-sidebar" @click="ui.leftCollapsed = true" />
       <ActionButton label="菜单" variant="ghost" size="sm" @click="onAppMenu" />
       <ActionButton label="编辑" variant="ghost" size="sm" @click="onEditMenu" />
-      <ActionButton label="插件" variant="ghost" size="sm" @click="openPluginPanel" />
+      <ActionButton label="插件" variant="ghost" size="sm" @click="onPluginMenu" />
       <ActionButton label="视图" variant="ghost" size="sm" @click="onViewMenu" />
     </header>
 
