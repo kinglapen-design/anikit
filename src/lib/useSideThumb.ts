@@ -3,9 +3,12 @@
 // 故隐藏原生条（base.css 全局 width 0），自绘悬浮 thumb 同步滚动位置。
 // 拖拽：pointerdown 后按 内容可滚动高 / 可视高 比例换算 scrollTop（2026-07-23 补，
 // 此前 pointer-events none 纯指示——事件穿透导致右侧误触窗口 resize 热区）。
-// 拖拽期间禁当前窗口拉伸（2026-09-06 五轮用户实机：滚轮紧贴窗口右缘 = 与系统边缘拉伸热区
+// 拖拽期间禁窗口拉伸（2026-09-06 五轮用户实机：滚轮紧贴窗口右缘 = 与系统边缘拉伸热区
 // 重叠，拖滚轮屡屡触发拉伸「小心翼翼生怕丢失滚动条」——按下即 setResizable(false)，
 // 松手 / pointercancel / blur / 组件卸载恢复；invoke 失败（桩 / 无权限）静默不阻断拖动）。
+// 六轮补：同步禁**前端拉伸热区**（.thumb-scroll-lock 类 → .resize-zone pointer-events/cursor 失效——
+// setResizable 只管 OS 级 WS_THICKFRAME 与 tao 物理判定，前端 8px（右缘 3px）热区的 e-resize
+// 光标与 mousedown 抢走是 JS 层，须一并禁；用户原话「把拉伸的指针也禁用掉」）。
 // 初始化走 watch（2026-08-13 ScrollThumb 组件化修复）：bodyRef 可能经 props 传值——
 // 模板 ref 填充晚于子组件 mounted（prop 初值 undefined），onMounted 一次性初始化会永远 show=false；
 // watch immediate + 元素就位重跑，两种传法（同组件 ref 对象 / 跨组件 props 值）都健壮。
@@ -15,6 +18,12 @@ import { onBeforeUnmount, reactive, watch, type Ref } from "vue";
 let resizeLockCount = 0; // 并发防御（理论单实例，计数兜底）
 function lockWindowResize(): void {
   resizeLockCount++;
+  if (resizeLockCount === 1) {
+    // 同步禁窗口边缘拉伸热区（2026-09-06 六轮用户定：拖滚轮时把「拉伸的指针」也禁用——
+    // 前端 .resize-zone 热区（右缘 3px，z-100 在滚轮之上）的 e-resize 光标与 startResizeDragging
+    // 行为在滚轮拖拽期间一律不响应；base.css .thumb-scroll-lock 规则）
+    document.documentElement.classList.add("thumb-scroll-lock");
+  }
   void getCurrentWindow()
     .setResizable(false)
     .catch(() => {});
@@ -22,6 +31,7 @@ function lockWindowResize(): void {
 function unlockWindowResize(): void {
   if (resizeLockCount > 0) resizeLockCount--;
   if (resizeLockCount > 0) return;
+  document.documentElement.classList.remove("thumb-scroll-lock");
   void getCurrentWindow()
     .setResizable(true)
     .catch(() => {});

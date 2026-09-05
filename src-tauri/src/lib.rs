@@ -224,28 +224,20 @@ pub fn run() {
         #[cfg(target_os = "windows")]
         {
           use windows::Win32::Foundation::HWND;
-          use windows::Win32::Graphics::Dwm::{
-            DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMWA_BORDER_COLOR,
-          };
+          use windows::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
           use windows::Win32::UI::Controls::MARGINS;
           if let Ok(raw) = w.hwnd() {
             let hwnd = HWND(raw.0 as _);
             // 失焦欺骗（2026-08-30 用户方案）：骗 DWM 恒按激活渲染——失焦不再退化云母
             // 成实色、阴影不再收小。详见 window_fx::ncactivate_guard 注释
             adapters::window_fx::install_ncactivate_guard(hwnd);
-            // 主窗口 DWM 边框染 通用/六级实心 #333333（COLORREF 0x00BBGGRR；2026-08-30
-            // 用户定实心色档）：云母模式边框由 DWM 沿圆角裁切路径画——恒连续恒贴边；前端
-            // ::before 云母模式不画（DWM 线与 CSS inset 0 线有 ~0.5px 系统错位，双画恒双层，
-            // 踩坑 063），实色模式前端自绘同色。选择模式进出由 set_main_border_picking
-            // 切染品牌色。Win11 22000+ 生效，Win10 忽略
-            let border: u32 = 0x0033_3333;
+            // 主窗口边框 = **DWM 默认半透明**（2026-09-06 六轮用户改定：DWM 原生默认边框即半透明，
+            // 直接交给 DWM，全窗统一——原 2026-08-30「实心 #333 染色」撤销；子窗口本就未染色同此口径；
+            // 选择模式进出仍由 set_main_border_picking 切染品牌色 ↔ COLOR_NONE 恢复默认）。
+            // 云母模式边框由 DWM 沿圆角裁切路径画——恒连续恒贴边；前端 ::before 云母模式不画
+            //（DWM 线与 CSS inset 0 线有 ~0.5px 系统错位，双画恒双层，踩坑 063），
+            // 实色模式前端自绘（Win10 DWM 无默认边框可画）。
             unsafe {
-              let _ = DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_BORDER_COLOR,
-                &border as *const _ as *const std::ffi::c_void,
-                std::mem::size_of_val(&border) as u32,
-              );
               // 框架延伸整窗（margins -1）：配合 transparent:false（2026-08-30 六轮方案一，
               // 用户定）——去掉 tao transparent 的 blur-behind 空 region hack（它让含非客户
               // 区的整个窗口表面按 alpha 合成，DWM 圆角描边曲线与方形客户区角之间的月牙

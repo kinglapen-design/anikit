@@ -2,8 +2,9 @@
 // 主窗口（7.1 十七轮 · 主窗口骨架轮贴稿）：transparent:false + WebView2 背景透明
 // （063 六轮方案一定稿：tao transparent 的 blur-behind hack 会让圆角月牙缝成透底洞）+
 // 运行时按系统版本云母/实色双态（fx-mica = 半透明-1 底透云母；基态 = 实色-1 回退）；
-// 窗口描边分模式：实色 = 前端自绘 1px（::before）；云母 = 零绘制、DWM 染画独存
-// （六轮实测定稿，踩坑 063）；圆角 8，最大化去圆角与描边；
+// 窗口描边分模式：实色 = 前端自绘 1px（::before）；云母 = 零绘制、**DWM 默认半透明边框独存**
+// （2026-09-06 六轮用户改定：DWM 原生默认即半透明全窗交 DWM——原 #333 实心染色撤销；踩坑 063）；
+// 圆角 8，最大化去圆角与描边；
 // resize 判定在可视边缘内 8px（startResizeDragging）。
 // 导入弹窗宿主：菜单 / 拖拽填 content.importDraft，ImportDialog 确认后刷新内容区。
 // 全局键盘 / 侧栏收展动画 / 窗口几何持久化已拆 lib（useGlobalKeys / useSidebarAnim /
@@ -230,7 +231,7 @@ async function togglePin(): Promise<void> {
 </script>
 
 <template>
-  <div class="window" :class="{ maximized, picking: picker.active, 'fx-mica': fxMode === 'mica', 'plugin-win': !!pluginParam }">
+  <div class="window" :class="{ maximized, picking: picker.active, 'fx-mica': fxMode === 'mica' }">
     <PreviewWindow v-if="previewParam" :asset-key="previewParam" />
     <!-- 插件详情子窗口（?plugin={id} 分发，?preview= 先例）：只渲染插件面板（无三栏无弹窗）；
          未知 id = 错误提示帧 -->
@@ -420,11 +421,12 @@ async function togglePin(): Promise<void> {
    （云母直呈）；大阴影 = DWM shadow（tauri.conf shadow:true）。
    圆角分模式（2026-08-30 实机 BUG 后改定）：实色 = 前端自裁 8（最大化归零）；云母 = DWM
    系统圆角独裁、前端 radius 0 不裁——双层裁切的 AA 路径差在四角透出云母成缝隙（踩坑 063）。
-   窗口边框分模式同色（通用/六级实心 --n-g6，2026-08-30 用户定）：云母 = DWM 染画独存
-   （lib.rs DWMWA_BORDER_COLOR #333333），前端 CSS 零绘制——六轮实测（win-border-measure）：
+   窗口边框（2026-09-06 六轮用户改定 = **DWM 默认半透明**，原 2026-08-30「通用/六级实心 #333
+   染色」撤销——DWM 原生默认边框即半透明，全窗交 DWM；子窗口本就未染色同此口径）：云母 =
+   DWM 沿圆角裁切路径画独存（lib.rs 不再染色），前端 CSS 零绘制——六轮实测（win-border-measure）：
    CSS 线与 DWM 线的并集左右/角弧必错位分离（四边 3vs2、角缝），五轮遮罩环反成分缝
    之源，纯 DWM = 唯一均匀解（踩坑 063）；实色 = 前端 ::before 自绘（Win10 DWM 无边框
-   可画）。选择模式进出 = set_main_border_picking 切染品牌色（§19）。 */
+   可画）。选择模式进出 = set_main_border_picking 切染品牌色 ↔ COLOR_NONE 恢复默认（§19）。 */
 .window {
   position: relative;
   height: 100%;
@@ -476,20 +478,6 @@ async function togglePin(): Promise<void> {
   border: 0;
   border-radius: 0;
   box-shadow: none;
-}
-/* 插件详情子窗口边框 = 亮色/半透明-1（2026-09-06 五轮用户定：子窗口 DWM 默认色在复杂桌面下
-   识别度低；DWM 默认边框已由后端 COLOR_NONE 抑制（open_plugin_window），CSS 自绘独存无并集——
-   云母特例恢复自绘（覆盖上方零画口径，**仅 plugin 窗**：主窗口云母仍 DWM 染 #333 独存，
-   主窗口换半透明边框用户另行立项）；radius 8 沿窗口圆角同路径（踩坑 063 结论）） */
-.window.plugin-win::before {
-  border-color: var(--n-l-a1);
-}
-.window.fx-mica.plugin-win::before {
-  border: 1px solid var(--n-l-a1);
-  border-radius: var(--n-radius-8);
-}
-.window.maximized.plugin-win::before {
-  border: 0;
 }
 /* 选择模式常态描边让位（实色模式由 ::after 品牌框独存；云母模式 ::before 恒零画） */
 .window.picking::before {

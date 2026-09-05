@@ -28,27 +28,8 @@ pub async fn open_plugin_window(app: tauri::AppHandle, plugin_id: String) -> Res
     .center()
     .build()
     .map_err(|e| e.to_string())?;
-  // 与主窗口 / 预览窗同口径接云母（7.1 十七轮）
+  // 与主窗口 / 预览窗同口径接云母（7.1 十七轮）；边框 = DWM 默认（2026-09-06 六轮用户定：
+  // DWM 原生默认边框即半透明，全窗统一交 DWM——主窗口 #333 实心染色同轮撤销）
   crate::adapters::window_fx::apply(&win);
-  // DWM 默认边框抑制（2026-09-06 五轮用户定：子窗口边框改前端 CSS 亮色/半透明-1 自绘——
-  // 子窗口从未染 #333（染色仅 main），DWM 画的是系统默认色；默认色线与 CSS l-a1 线并集
-  // 必错位（踩坑 063 机制），COLOR_NONE 独让 CSS 自绘；Win11 22000+ 生效，Win10 忽略无害）
-  #[cfg(target_os = "windows")]
-  {
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
-    if let Ok(raw) = win.hwnd() {
-      const DWMWA_COLOR_NONE: u32 = 0xFFFF_FFFE;
-      let border: u32 = DWMWA_COLOR_NONE;
-      let _ = unsafe {
-        DwmSetWindowAttribute(
-          HWND(raw.0 as _),
-          DWMWA_BORDER_COLOR,
-          &border as *const _ as *const std::ffi::c_void,
-          std::mem::size_of_val(&border) as u32,
-        )
-      };
-    }
-  }
   Ok(())
 }

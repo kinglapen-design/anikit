@@ -62,11 +62,13 @@ textarea {
 
 /* 统一滚动体系（2026-08-13 定稿，对齐主窗口 2026-08-10 定案）：
    纵向滚轮 = **悬浮滚轮 + 悬停显隐**——原生条保持隐藏（上方全局 width 0），滚动容器挂
-   .kit-scroll（仅 overflow-y），滚轮由组件 ScrollThumb（useSideThumb 同款，实色 C4/C5、
+   .kit-scroll（仅 overflow-y），滚轮由组件 ScrollThumb（useSideThumb 同款，
+   通用/四级常态、通用/六级 hover——2026-09-06 走查行 42 口径，废旧 C4/C5；
    absolute 贴右 right:0 不占布局，与主窗口 side-thumb 统一）承担，鼠标在面板上即显可拖
   （"滚轮坏了也能用"的落地形态），持久恒显作废（主窗口定案：持久存在视觉噪音）。
    .kit-scroll-x = 横向滚动区（组内卡片行等）：原生 6px 胶囊恒显（不贴窗口/弹窗边框，
-   无遮挡叠色场景），容器自留 padding 容纳（如 .cards padding-bottom 6） */
+   无遮挡叠色场景），容器自留 padding 容纳（如 .cards padding-bottom 6）；
+   色档 2026-09-06 同步改 通用/四级、hover 通用/六级（走查行 42「应用至所有」口径） */
 .kit-scroll {
   overflow-y: auto;
 }
@@ -77,14 +79,23 @@ textarea {
   height: 6px;
 }
 .kit-scroll-x::-webkit-scrollbar-thumb {
-  background: var(--c4);
+  background: var(--n-g4);
   border-radius: 3px;
 }
 .kit-scroll-x::-webkit-scrollbar-thumb:hover {
-  background: var(--c5);
+  background: var(--n-g6);
 }
 .kit-scroll-x::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* 滚轮拖拽中锁（useSideThumb 挂载/卸除，2026-09-06 六轮用户定）：
+   禁前端窗口边缘拉伸热区——右缘 3px（他缘 8px）的 .resize-zone 与滚轮贴边位重叠，
+   其 *-resize 光标与 startResizeDragging 抢走是滚轮拖拽的干扰源（「把拉伸的指针也禁用掉」）；
+   pointer-events none 后事件落到下层滚轮，光标同归默认 */
+.thumb-scroll-lock .resize-zone {
+  pointer-events: none !important;
+  cursor: default !important;
 }
 
 /* 通知族统一锚点（2026-08-29 用户定，阶段七稿 组件/悬浮栏/通知栏）：列表容器顶部居中、不挡工具栏；
