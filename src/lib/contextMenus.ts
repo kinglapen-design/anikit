@@ -22,14 +22,18 @@ export interface CtxItem {
   trailingIcon?: string; // 标题右侧小图标 12（chevron-small 等）
   trailingIconClass?: string; // 尾图标附加类（rot-180）
   shortcut?: string; // 快捷键纯文本（右侧，Fira Mono 12 三级色；原串显示如 "Ctrl+Enter"）
-  disabled?: boolean;
+  // disabled / checked 支持函数（2026-09-06 视图菜单轮）：keepOpen 菜单保持打开期间
+  // 状态项（对勾 / 禁用）随 store 实时刷新——渲染层求值时读 store，响应式追踪自动重渲
+  disabled?: boolean | (() => boolean);
   checkable?: boolean;
-  checked?: boolean;
+  checked?: boolean | (() => boolean);
   library?: boolean; // 资源库条目（08 稿：抓手拖动排序 + 品牌徽章 + 右勾 + 删除×，LibraryMenuItem 渲染）
   keepOpen?: boolean; // 执行后不关菜单（状态切换/预览类：切库、排序依据等可反复尝试的操作；
   // 判定口径 2026-08-12 用户定：一次性任务类（新建/重命名/删除/导入，进入后续输入或任务流）必关，
   // 可逆状态翻转类（用户可能立即再做一次，如切过去看一眼切回来）保持打开
-  submenu?: CtxEntry[];
+  // submenu 支持函数（2026-09-06 视图菜单轮）：hover 展开时实时生成——动态列表（标签页清单）
+  // 随开随关不滞留旧快照
+  submenu?: CtxEntry[] | (() => CtxEntry[]);
   // 自定义面板 flyout（与 submenu 互斥——hover 时 flyout 渲染对应面板组件而非条目列表）：
   // folderIcon = 图标网格（2026-08-18，3.3 / 05 稿 §3，FolderIconPanel）；
   // linkList = 文件链接位置双行列表（2026-09-05 走查：二级菜单与卡片徽章 hover 弹窗 LinkListPopover 同构）

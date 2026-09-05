@@ -176,9 +176,10 @@ const showFormatBadge = computed(
 );
 // —— 位置徽章（6.2 四轮走查③：「有链接」（活位置 > 1）才上徽章——origin ★ / 链接 icon，
 //    单位置文件无徽章；⑤悬停 = LinkListPopover 全部链接列表）——
+// 视图菜单「显示链接标识」总开关（ui.showLinkBadge，2026-09-06）关时两侧都不上徽章
 const linkCount = computed(() => content.placementCountByAsset.get(props.asset.assetId) ?? 0);
-const showOriginBadge = computed(() => props.asset.origin && linkCount.value > 1);
-const showLinkBadge = computed(() => !props.asset.origin && linkCount.value > 1);
+const showOriginBadge = computed(() => ui.showLinkBadge && props.asset.origin && linkCount.value > 1);
+const showLinkBadge = computed(() => ui.showLinkBadge && !props.asset.origin && linkCount.value > 1);
 const badgeAnchorRef = ref<HTMLElement>();
 const linkListOpen = ref(false);
 let linkListCloseTimer = 0;

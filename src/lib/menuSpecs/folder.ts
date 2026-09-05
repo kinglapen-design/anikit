@@ -50,7 +50,7 @@ function findChildrenList(nodes: FolderNode[], id: string): FolderNode[] | null 
 
 // —— 05 稿 · 文件夹（卡片与树节点共用主体；差异：重命名入口 + 树专属段）——
 // 排序依据带当前模式对勾 + "自定义"首项（2026-08-14 用户定，显示简介下拉同款；原"无对勾列防截断"
-// 口径推翻，二级宽 184 → 226 容纳对勾列 + 长标签；keepOpen 期间经 menuState reactive 回写 checked）；
+// 口径推翻，二级宽 184 → 226 容纳对勾列 + 长标签；对勾 = checked 函数化实时刷新，2026-09-06）；
 // 展开收起三项沿用 treeExpansion 业务；
 // 排序依据/展开收起/更改图标/更改颜色 = 树节点专属（文件夹卡片不支持，用户定）；
 // 更改图标/颜色 = 网格面板形态（2026-08-18，3.3 点亮：CtxItem.panel + ContextMenu flyout 分流渲染）。
@@ -128,7 +128,8 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
     const hasChildren = (node?.children.length ?? 0) > 0;
     // 排序依据（2026-08-14 用户定：加"自定义"首项 + 当前模式对勾，显示简介下拉同款）——
     // 对勾口径：自定义 = treeSort custom；level* 仅锚定层级命中；all* 全局。
-    // keepOpen 期间 spec 静态快照不刷新——action 里经 menuState（reactive）回写 checked
+    // checked 函数化（2026-09-06 视图菜单轮新机制）：渲染期求值 = 读 store 即响应式追踪，
+    // keepOpen 期间对勾随 treeSort 实时刷新（旧「action 里经 menuState 回写 checked」hack 废除）
     const sortModes = [
       ["自定义", "custom"],
       ["当前层级 - 标题 A → Z", "levelAsc"],
@@ -140,21 +141,14 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
       mode === "custom"
         ? ui.treeSort === "custom"
         : ui.treeSort === mode && (mode.startsWith("all") || ui.treeSortAnchor === parentId);
-    const syncSortChecks = (): void => {
-      const entry = menuState.entries?.find((e): e is CtxItem => e !== "divider" && e.label === "排序依据");
-      entry?.submenu?.forEach((it, i) => {
-        if (it !== "divider") it.checked = isCurrentSort(sortModes[i][1]); // 二级无分隔线，索引对齐
-      });
-    };
     const sortItem = (label: string, mode: (typeof sortModes)[number][1]): CtxItem => ({
       label,
       keepOpen: true, // 状态切换类：用户可能连续试几种排序（2026-08-12 判定口径）
       checkable: true,
-      checked: isCurrentSort(mode),
+      checked: () => isCurrentSort(mode),
       action: () => {
         ui.treeSort = mode;
         ui.treeSortAnchor = mode === "custom" ? null : parentId;
-        syncSortChecks();
       },
     });
     entries.push(

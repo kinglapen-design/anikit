@@ -24,16 +24,17 @@ import { sidebarShowWidths } from "../lib/useSidebarAnim";
 import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
 import { appMenuSpec } from "../lib/menuSpecs/appMenu";
 import { editMenuSpec } from "../lib/menuSpecs/editMenu";
+import { viewMenuSpec } from "../lib/menuSpecs/viewMenu";
 import { loadLibraries } from "../lib/libraryOps";
 
 const ui = useUiStore();
 const picker = usePickerStore();
 
 // 菜单栏四文字钮：菜单 = 应用主菜单（2026-09-05 接业务：稿 = 用户当场供稿，spec = menuSpecs/appMenu）；
-// 编辑 = 编辑菜单（2026-09-06 接业务：稿 = 用户当场供稿，spec = menuSpecs/editMenu，
-// 全项 = useGlobalKeys 快捷键的菜单面）；
-// 插件 / 视图 = 点亮不接业务（2026-08-30 用户定，业务接线归后续轮）
-const otherButtons = ["插件", "视图"] as const;
+// 编辑 = 编辑菜单（2026-09-06 接业务：spec = menuSpecs/editMenu，全项 = useGlobalKeys 快捷键的菜单面）；
+// 视图 = 视图菜单（2026-09-06 接业务：spec = menuSpecs/viewMenu，查看方式 / 标签页 / 面板显隐）；
+// 插件 = 点亮不接业务（2026-08-30 用户定，业务接线归后续轮）
+const otherButtons = ["插件"] as const;
 
 // 「菜单」钮 toggle：同一按钮再点 = 关闭（trigger 豁免 AppMenu 组外判定，click 到这里做开关）；
 // 选择模式下禁开（白名单收窄：主菜单含切库，速查 §12.1——视觉不改，稿无禁用态）
@@ -59,6 +60,18 @@ function onEditMenu(e: MouseEvent): void {
   if (picker.active) return;
   const rect = el.getBoundingClientRect();
   openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, editMenuSpec(), undefined, { trigger: el });
+}
+
+// 「视图」钮（2026-09-06 接业务）：同 toggle 口径。选择模式下**可开**——§12.1 白名单含
+// 查看方式（布局 / 递归显示 / 排序），菜单内非白名单项（管理弹窗 / 标签页 / 侧栏收展）各自禁用
+function onViewMenu(e: MouseEvent): void {
+  const el = e.currentTarget as HTMLElement;
+  if (menuState.entries && menuState.trigger === el) {
+    closeContextMenu();
+    return;
+  }
+  const rect = el.getBoundingClientRect();
+  openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, viewMenuSpec(), undefined, { trigger: el });
 }
 
 // 分段控制器（模式切换）：library = 资源库树；workspace / ai = 空态占位（功能正在开发中）。
@@ -89,6 +102,7 @@ const bodyRef = ref<HTMLElement>();
       <ActionButton label="菜单" variant="ghost" size="sm" @click="onAppMenu" />
       <ActionButton label="编辑" variant="ghost" size="sm" @click="onEditMenu" />
       <ActionButton v-for="b in otherButtons" :key="b" :label="b" variant="ghost" size="sm" />
+      <ActionButton label="视图" variant="ghost" size="sm" @click="onViewMenu" />
     </header>
 
     <!-- 模式切换区块（稿 左侧边栏-分段控制器）：54 高 / padding 8 12 -->

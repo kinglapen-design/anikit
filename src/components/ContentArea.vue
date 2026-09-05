@@ -7,7 +7,7 @@
 // 预览模式（4.3/5.2）：preview.assetKey 非空且本 panel 激活时整栏切换——预览是全局单例状态，
 // 只在激活标签页内发生，非激活 panel 保持原视口；全屏时 preview-root fixed 铺满窗口、隐藏标题栏。
 // 通知条（ToastStack）已上移到 DockHost 单例（多 panel 下每 panel 一份会重复弹出）。
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { DockviewPanelApi, IDockviewPanelProps } from "dockview-vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
@@ -23,6 +23,7 @@ import { findFolderNode } from "../lib/detailSections";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
 import { useSearchStore } from "../stores/search";
+import { useUiStore } from "../stores/ui";
 
 // props 运行时声明（rolldown 环境 SFC 编译器无法解析 node_modules 类型，defineProps 泛型须字面量）。
 // dockview-vue 传参约定（v7 源码 VueRenderer.init）：framework props 整组包在一个 params prop 里——
@@ -33,6 +34,18 @@ const panelApi = frame.value.api as DockviewPanelApi; // api 引用 init 时确�
 const content = useContentStore();
 const preview = usePreviewStore();
 const search = useSearchStore();
+const ui = useUiStore();
+
+// 「始终显示搜索框」关（ui.showSearchBar=false，2026-09-06 视图菜单轮，用户定）时的唤出态：
+// Ctrl+F（search.requestFocus 本 panel）唤出；Esc 清空失焦后 SearchFloatBar request-hide 收回。
+// 开关恒开时本态无关（v-if 第一条件恒真）；显隐动画 = 下浮入 / 下沉出（sf-reveal）
+const searchRevealed = ref(false);
+watch(
+  () => search.focusSeq,
+  () => {
+    if (search.focusPanelId === panelApi.id) searchRevealed.value = true;
+  },
+);
 
 // 本标签页视口（frame.params = addPanel/updateParameters 的用户参数）
 const viewKey = computed(() => (frame.value.params?.viewKey as string) ?? "quick:all");
@@ -108,8 +121,16 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
           />
         </section>
       </div>
-      <!-- 多功能悬浮栏（搜索模式）：浮于列表上方，底部居中距底 12（sf-anchor absolute 定位） -->
-      <SearchFloatBar :panel-id="panelApi.id" :view-key="viewKey" />
+      <!-- 多功能悬浮栏（搜索模式）：浮于列表上方，底部居中距底 12（sf-anchor absolute 定位）。
+           「始终显示搜索框」关 = 平时隐藏，Ctrl+F 唤出 / Esc 收回（2026-09-06 用户定） -->
+      <Transition name="sf-reveal">
+        <SearchFloatBar
+          v-if="ui.showSearchBar || searchRevealed"
+          :panel-id="panelApi.id"
+          :view-key="viewKey"
+          @request-hide="searchRevealed = false"
+        />
+      </Transition>
     </template>
   </main>
 </template>
@@ -164,6 +185,19 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
   right: 0;
   bottom: 0;
   z-index: 1;
+}
+/* 悬浮栏显隐动画（「始终显示搜索框」开关，2026-09-06 用户定）：
+   显示 = 下至上浮入 / 隐藏 = 上至下沉出——位移 8 + 透明度，250ms 缓入缓出（悬浮栏族动画档 §18） */
+.sf-reveal-enter-active,
+.sf-reveal-leave-active {
+  transition:
+    transform var(--n-dur-250) var(--n-ease-in-out),
+    opacity var(--n-dur-250) var(--n-ease-in-out);
+}
+.sf-reveal-enter-from,
+.sf-reveal-leave-to {
+  transform: translateY(8px);
+  opacity: 0;
 }
 .preview-section {
   display: flex;

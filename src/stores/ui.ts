@@ -28,6 +28,8 @@ const PERSIST_KEYS = [
   "showBadge",
   "showExt",
   "showBrief",
+  "showLinkBadge",
+  "showSearchBar",
   "showSubfolders",
   "timeDisplay",
   "tabLayout",
@@ -75,6 +77,12 @@ export const useUiStore = defineStore("ui", {
     showBadge: true,
     showExt: true,
     showBrief: true,
+    // 视图菜单（2026-09-06 菜单栏「视图」接业务轮）：
+    // showLinkBadge = 显示链接标识（卡片/列表行的位置徽章 origin ★ / 链接 icon 显隐总开关）；
+    // showSearchBar = 始终显示搜索框（关 = 悬浮栏搜索平时隐藏，Ctrl+F 唤出 / Esc 清空失焦后收回，
+    // 关闭动作带 toast 告知 Ctrl+F 通道，2026-09-06 用户定）
+    showLinkBadge: true,
+    showSearchBar: true,
     // 时间显示（5.3 帧化改造，2026-07-28 用户定：帧数优先）——视频播放条 / 悬停胶囊 / 笔记
     // 按帧号显示（fps 缺失回退时间）；音频无帧概念恒时间显示
     timeDisplay: "frames" as "frames" | "timecode",

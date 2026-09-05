@@ -60,10 +60,11 @@ const modParts = computed(() => {
   const i = s.indexOf(" ");
   return i > 0 ? { date: s.slice(0, i), time: s.slice(i + 1) } : { date: s, time: "" };
 });
-// 位置徽章（§6 口径）：活位置 > 1 才上——origin ★ / 链接 icon
+// 位置徽章（§6 口径）：活位置 > 1 才上——origin ★ / 链接 icon；
+// 视图菜单「显示链接标识」总开关（ui.showLinkBadge，2026-09-06）关时不上徽章
 const linkCount = computed(() => content.placementCountByAsset.get(props.asset.assetId) ?? 0);
-const originBadge = computed(() => props.asset.origin && linkCount.value > 1);
-const linkedBadge = computed(() => !props.asset.origin && linkCount.value > 1);
+const originBadge = computed(() => ui.showLinkBadge && props.asset.origin && linkCount.value > 1);
+const linkedBadge = computed(() => ui.showLinkBadge && !props.asset.origin && linkCount.value > 1);
 
 // —— 就地重命名（6.1 C2，与 AssetCard 同口径）：Enter / 失焦确认（空或不变不动）/ Esc 取消；
 // 滚出虚拟滚动销毁 = 取消（AssetGrid 先清 renamingKey，blur 晚到按 key 失配判取消）

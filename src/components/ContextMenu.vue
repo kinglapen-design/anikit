@@ -55,6 +55,19 @@ function scanMark(list: CtxEntry[] | null | undefined): boolean {
 }
 const rootMark = computed(() => scanMark(menuState.entries));
 
+// 函数化字段求值（2026-09-06 视图菜单轮）：checked / disabled 可为 () => boolean——
+// 在模板渲染期调用 = 读 store 即被响应式追踪，keepOpen 菜单保持打开期间对勾/禁用随状态实时刷新
+function isDisabled(e: CtxItem): boolean {
+  return typeof e.disabled === "function" ? e.disabled() : !!e.disabled;
+}
+function isChecked(e: CtxItem): boolean {
+  return typeof e.checked === "function" ? e.checked() : !!e.checked;
+}
+// submenu 可为 () => CtxEntry[]（hover 展开时实时生成，动态清单不滞留旧快照）
+function submenuOf(e: CtxItem): CtxEntry[] | undefined {
+  return typeof e.submenu === "function" ? e.submenu() : e.submenu;
+}
+
 // 每次打开清空上次 flyout 栈
 watch(
   () => menuState.entries,
@@ -88,10 +101,10 @@ function onItemHover(entry: CtxItem, e: MouseEvent, level: number): void {
   flyouts.value.splice(level);
   flyoutEls.length = level;
   flyoutMenuRefs.length = level;
-  if ((!entry.submenu && !entry.panel) || entry.disabled) return;
+  if ((!entry.submenu && !entry.panel) || isDisabled(entry)) return;
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   // 菜单宽内容自适应（二十五轮）：先按右飞放置，挂载后实测宽——右缘溢出改向左飞出
-  flyouts.value.push({ key: `${level}:${r.top}`, x: r.right + 2, y: r.top - 6, entries: entry.submenu ?? [], panel: entry.panel, parentLeft: r.left });
+  flyouts.value.push({ key: `${level}:${r.top}`, x: r.right + 2, y: r.top - 6, entries: submenuOf(entry) ?? [], panel: entry.panel, parentLeft: r.left });
   void fixFlyoutX(level);
 }
 
@@ -108,7 +121,7 @@ async function fixFlyoutX(level: number): Promise<void> {
 }
 
 function onItemClick(entry: CtxEntry): void {
-  if (entry === "divider" || entry.disabled || entry.submenu || entry.panel || entry.swatches) return;
+  if (entry === "divider" || isDisabled(entry) || entry.submenu || entry.panel || entry.swatches) return;
   // 库条目点击动态判定（2026-08-12 走查：菜单 keepOpen 期间可能已切库，
   // 静态 action 快照会让"切回去"失效——当前库跳过，其余直接按名切）
   if (entry.library) {
@@ -248,10 +261,10 @@ function onLibraryRemove(entry: CtxItem): void {
             :trailing-icon="row.entry.trailingIcon"
             :trailing-icon-class="row.entry.trailingIconClass"
             :shortcut="row.entry.shortcut"
-            :disabled="row.entry.disabled"
+            :disabled="isDisabled(row.entry)"
             :arrow="!!(row.entry.submenu || row.entry.panel)"
             :checkable="row.entry.checkable"
-            :checked="row.entry.checked"
+            :checked="isChecked(row.entry)"
             :swatches="row.entry.swatches"
             @select="onItemClick(row.entry)"
             @pick="row.entry.swatches?.onPick($event)"
@@ -291,10 +304,10 @@ function onLibraryRemove(entry: CtxItem): void {
             :trailing-icon="row.entry.trailingIcon"
             :trailing-icon-class="row.entry.trailingIconClass"
             :shortcut="row.entry.shortcut"
-            :disabled="row.entry.disabled"
+            :disabled="isDisabled(row.entry)"
             :arrow="!!(row.entry.submenu || row.entry.panel)"
             :checkable="row.entry.checkable"
-            :checked="row.entry.library ? row.entry.label === currentLibrary.name : row.entry.checked"
+            :checked="row.entry.library ? row.entry.label === currentLibrary.name : isChecked(row.entry)"
             @select="onItemClick(row.entry)"
             @mouseenter="onItemHover(row.entry, $event, i + 1)"
           />

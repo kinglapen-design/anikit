@@ -15,7 +15,13 @@
 #   E2 素材选中点亮集；E3 复制 → 两粘贴点亮 → 作为副本粘贴发 duplicate_placements；
 #   E4 文件夹域分流（克隆在 / 创建副本不在）+ 克隆发 clone_folders；E5 撤销点亮链（桩 __undo 态 + 操作后 refreshState 拉取）；
 #   E6 同钮 toggle；E7 回收站视口只读——编辑类全 disabled。
-# D 截图 root / docs-l3 / lib-l3 / edit-empty / edit-asset。
+# V 视图菜单（2026-09-06 接业务轮；稿 = 用户当场供稿截图，spec = src/lib/menuSpecs/viewMenu.ts）：
+#   V1 根级 8 项 3 组 + 禁用态（信息查看管理占位）+ 弹出位 + 三显隐开关默认勾；V2 查看方式 L2 全列 + Alt+1 标注
+#   + 点布局 keepOpen 对勾实时换（checked 函数化实证）；V3 排序 L3（自定义档升/降禁用 → 点键实时解禁 disabled 函数化）；
+#   V4 时间/简介 L3（标签档占位禁用）；V5 开关组；V6 大纲管理 = 区块管理弹窗；V7 分组管理（f1 点亮 / 快速访问禁用）；
+#   V8 标签页 L2（submenu 函数实时清单：单页禁用 → 分屏两页 → 关闭所有回单页）；V9 侧栏/信息面板收展 + 对勾实时；
+#   V10 始终显示搜索框（关 = 隐藏 + toast 告知 Ctrl+F；Ctrl+F 唤出聚焦 / Esc 收回）；V11 同钮 toggle。
+# D 截图 root / docs-l3 / lib-l3 / edit-empty / edit-asset / view-l2 / view-sort。
 import asyncio
 import base64
 import json
@@ -165,7 +171,9 @@ async def send(ws, method, params=None, session=None):
         payload["sessionId"] = session
     await ws.send(json.dumps(payload))
     while True:
-        raw = json.loads(await ws.recv())
+        # 60s 无回应 = 卡死判负（2026-09-06 V 段实证：Page.captureScreenshot 可挂起——
+        # 无超时则整探针陪葬且管道缓冲输出全丢；超时抛异常走 finally 收 Edge，已跑部分留档）
+        raw = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
         if raw.get("id") == mid:
             return raw
         if raw.get("method") == "Runtime.exceptionThrown":
@@ -526,6 +534,151 @@ async def main():
             check("E7-3 全选 / 撤销可用", await ev(e_disabled(["全选", "撤销"], False)))
             await esc_close()
             check("E7-4 收尾菜单全关", await menu_count() == 0)
+
+            # —— V 视图菜单（2026-09-06 接业务；稿 = 用户当场供稿截图，spec = menuSpecs/viewMenu）——
+            # checked/disabled 函数化（keepOpen 期间对勾实时刷新）与 submenu 函数（标签页清单实时生成）同轮落地
+            VIEW_BTN = "[...document.querySelectorAll('.menu-bar .act-btn')].find((b) => b.textContent.trim() === '视图')"
+
+            # V0 导航到文件夹 f1（分组管理目标 = 当前文件夹视口；E7 收尾停在回收站）
+            await js_click(el_center("document.querySelector('[data-folder-id=\"f1\"]')"))
+            await asyncio.sleep(0.6)
+
+            # V1 根级全列 + 禁用态 + 弹出位 + 三显隐开关默认勾
+            await js_click(el_center(VIEW_BTN))
+            check("V1-1 视图菜单出（1 个 .app-menu）", await menu_count() == 1)
+            labels = await menu_labels(0)
+            expect_v = ["大纲管理", "分组管理", "信息查看管理", "查看方式", "标签页", "显示侧边栏", "显示信息面板", "始终显示搜索框"]
+            check("V1-2 根级 8 项全列", json.dumps(labels) == json.dumps(expect_v), str(labels))
+            check("V1-3 三组", await ev("document.querySelectorAll('.app-menu')[0].querySelectorAll('.menu-group').length === 3"))
+            check("V1-4 信息查看管理占位禁用；大纲/分组管理点亮（f1 视口）", await ev(f"({js_find('信息查看管理')})?.disabled === true && ({js_find('大纲管理')})?.disabled === false && ({js_find('分组管理')})?.disabled === false"))
+            check("V1-5 弹出位 = 视图钮左缘对齐 + 底 +4 / min-width 250", await ev(f"(() => {{ const m = document.querySelector('.app-menu').getBoundingClientRect(); const b = {VIEW_BTN}.getBoundingClientRect(); return Math.abs(m.left - b.left) <= 2 && Math.abs(m.top - b.bottom - 4) <= 2 && document.querySelector('.app-menu').style.minWidth === '250px'; }})()"))
+            check("V1-6 显示侧边栏/信息面板/搜索框 默认全勾", await ev(f"({js_find('显示侧边栏')})?.classList.contains('checked') && ({js_find('显示信息面板')})?.classList.contains('checked') && ({js_find('始终显示搜索框')})?.classList.contains('checked')"))
+
+            # V2 查看方式 L2：全列 + 布局对勾/快捷键 + 点「网格」keepOpen 对勾实时换（checked 函数化实证）
+            await js_hover(el_center(js_find("查看方式")))
+            check("V2-1 查看方式 L2 飞出（2 个菜单）", await menu_count() == 2)
+            labels = await menu_labels(1)
+            expect_v2 = ["自适应", "瀑布流", "网格", "列表", "排序方式", "时间显示格式", "简介显示方式", "显示扩展名", "显示角标", "显示链接标识", "显示子文件夹内容", "自动播放动图", "自动播放视频预览"]
+            check("V2-2 L2 13 项 4 组全列", json.dumps(labels) == json.dumps(expect_v2) and await ev("document.querySelectorAll('.app-menu')[1].querySelectorAll('.menu-group').length === 4"), str(labels))
+            check("V2-3 自适应默认勾 + Alt+1 快捷键标注", await ev(f"({js_find('自适应', 1)})?.classList.contains('checked') && ({js_find('自适应', 1)})?.querySelector('.shortcut')?.textContent === 'Alt+1'"))
+            check("V2-4 三个子菜单项带展开箭头", await ev("[...document.querySelectorAll('.app-menu')[1].querySelectorAll('.menu-item')].filter((x) => ['排序方式', '时间显示格式', '简介显示方式'].includes(x.querySelector('.label')?.textContent)).every((x) => x.querySelector('.arrow svg') != null)"))
+            await shot("app-menu-view-l2")
+            await js_click(el_center(js_find("网格", 1)))
+            check("V2-5 点布局项 keepOpen 不关菜单", await menu_count() == 2)
+            check("V2-6 对勾实时换：网格勾 / 自适应灭（checked 函数化）", await ev(f"({js_find('网格', 1)})?.classList.contains('checked') && !({js_find('自适应', 1)})?.classList.contains('checked')"))
+
+            # V3 排序方式 L3：自定义档升/降禁用 → 点排序键实时解禁（disabled 函数化实证）→ 降序切换
+            await js_hover(el_center(js_find("排序方式", 1)))
+            check("V3-1 排序方式 L3 飞出（3 个菜单）", await menu_count() == 3)
+            labels = await menu_labels(2)
+            check("V3-2 L3 = 8 键 + 升/降序", json.dumps(labels) == json.dumps(["自定义", "名称", "文件大小", "时长", "扩展名", "创建时间", "修改时间", "导入时间", "升序", "降序"]), str(labels))
+            check("V3-3 默认自定义勾 + 升/降序禁用（存储序无升降语义）", await ev(f"({js_find('自定义', 2)})?.classList.contains('checked') && ({js_find('升序', 2)})?.disabled === true && ({js_find('降序', 2)})?.disabled === true"))
+            await js_click(el_center(js_find("文件大小", 2)))
+            check("V3-4 点排序键 keepOpen + 升/降序实时解禁（disabled 函数化）", await ev(f"({js_find('文件大小', 2)})?.classList.contains('checked') && ({js_find('升序', 2)})?.disabled === false"))
+            check("V3-5 升序默认勾（sortAsc=true）", await ev(f"({js_find('升序', 2)})?.classList.contains('checked')"))
+            await js_click(el_center(js_find("降序", 2)))
+            check("V3-6 点降序：降序勾 / 升序灭（对勾实时）", await ev(f"({js_find('降序', 2)})?.classList.contains('checked') && !({js_find('升序', 2)})?.classList.contains('checked')"))
+
+            # V4 时间显示格式 / 简介显示方式 L3
+            await js_hover(el_center(js_find("时间显示格式", 1)))
+            check("V4-1 时间显示 L3 = 帧数勾 / 时间码", json.dumps(await menu_labels(2)) == json.dumps(["帧数", "时间码"]) and await ev(f"({js_find('帧数', 2)})?.classList.contains('checked')"))
+            await js_hover(el_center(js_find("简介显示方式", 1)))
+            labels = await menu_labels(2)
+            check("V4-2 简介 L3 = 显示简介 + 内容 5 档", json.dumps(labels) == json.dumps(["显示简介", "尺寸", "文件大小", "创建日期", "修改日期", "标签"]), str(labels))
+            check("V4-3 显示简介勾 / 尺寸勾 / 标签档禁用（卡片数据无 tags）", await ev(f"({js_find('显示简介', 2)})?.classList.contains('checked') && ({js_find('尺寸', 2)})?.classList.contains('checked') && ({js_find('标签', 2)})?.disabled === true"))
+            await js_click(el_center(js_find("显示简介", 2)))
+            check("V4-4 关显示简介 keepOpen + 对勾实时灭", await menu_count() == 3 and await ev(f"({js_find('显示简介', 2)})?.classList.contains('checked') === false"))
+            await js_click(el_center(js_find("显示简介", 2)))  # 恢复默认态收尾
+            await asyncio.sleep(0.3)
+
+            # V5 L2 开关组：默认态 + 自动播放动图点亮
+            check("V5-1 显示扩展名/角标/链接标识/子文件夹 默认全勾", await ev("['显示扩展名', '显示角标', '显示链接标识', '显示子文件夹内容'].every((l) => [...document.querySelectorAll('.app-menu')[1].querySelectorAll('.menu-item')].find((x) => x.querySelector('.label')?.textContent === l)?.classList.contains('checked'))"))
+            await js_click(el_center(js_find("自动播放动图", 1)))
+            # keepOpen = 根 + L2 不关；L3 被点击项 hover 截断收掉（标准行为，非 keepOpen 失效）
+            check("V5-2 自动播放动图默认关 → 点击点亮（keepOpen：根+L2 不关，L3 hover 截断收）", await menu_count() == 2 and await ev(f"({js_find('自动播放动图', 1)})?.classList.contains('checked')"))
+
+            # V6 大纲管理 = 侧栏区块管理弹窗（BlockManageDialog）
+            await esc_close()
+            await js_click(el_center(VIEW_BTN))
+            await js_click(el_center(js_find("大纲管理")))
+            await asyncio.sleep(0.6)
+            check("V6-1 大纲管理 → 区块管理弹窗出（菜单关）", await ev("document.querySelector('.block-manage') != null && document.querySelectorAll('.app-menu').length === 0"))
+            check("V6-2 弹窗含桩区块行（目录）", await ev("[...document.querySelectorAll('.block-manage')].some((d) => d.textContent.includes('目录'))"))
+            await js_click(el_center("[...document.querySelectorAll('.block-manage button')].find((b) => b.textContent.trim() === '取消')"))
+            check("V6-3 取消关弹窗", await ev("document.querySelector('.block-manage') == null"))
+
+            # V7 分组管理 = GroupManageDialog（groupDialogFolder = f1）；非文件夹视口禁用
+            await js_click(el_center(VIEW_BTN))
+            await js_click(el_center(js_find("分组管理")))
+            await asyncio.sleep(0.6)
+            check("V7-1 分组管理弹窗出（目标 = f1 视口）", await ev("document.querySelector('.group-manage') != null"))
+            await js_click(el_center("[...document.querySelectorAll('.group-manage button')].find((b) => b.textContent.trim() === '取消')"))
+            check("V7-2 取消关弹窗", await ev("document.querySelector('.group-manage') == null"))
+            await js_click(el_center("[...document.querySelectorAll('.block.quick .tree-item')].find((x) => x.textContent.includes('全部'))"))
+            await asyncio.sleep(0.6)
+            await js_click(el_center(VIEW_BTN))
+            check("V7-3 快速访问视口：分组管理禁用（无目标文件夹）", await ev(f"({js_find('分组管理')})?.disabled === true"))
+
+            # V8 标签页 ▸（submenu 函数实时生成）：单页禁用态 → 左右分屏 → 两页清单 → 关闭所有回单页
+            await js_hover(el_center(js_find("标签页")))
+            labels = await menu_labels(1)
+            check("V8-1 标签页 L2 = 清单 1 行 + 管理 6 项", json.dumps(labels) == json.dumps(["全部", "锁定当前标签页", "关闭当前标签页", "关闭所有标签页", "关闭其他标签页", "左右分屏", "上下分屏"]), str(labels))
+            check("V8-2 当前页勾 / 关闭所有·其他 单页禁用 / 关闭当前点亮", await ev(f"({js_find('全部', 1)})?.classList.contains('checked') && ({js_find('关闭所有标签页', 1)})?.disabled === true && ({js_find('关闭其他标签页', 1)})?.disabled === true && ({js_find('关闭当前标签页', 1)})?.disabled === false"))
+            await js_click(el_center(js_find("左右分屏", 1)))
+            await asyncio.sleep(0.8)
+            check("V8-3 左右分屏 = 2 标签页（菜单关）", await ev("document.querySelectorAll('.dv-tab').length === 2 && document.querySelectorAll('.app-menu').length === 0"))
+            await js_click(el_center(VIEW_BTN))
+            await js_hover(el_center(js_find("标签页")))
+            labels = await menu_labels(1)
+            check("V8-4 分屏后清单 2 行 + 关闭所有解禁（清单实时生成）", len(labels) == 9 and await ev(f"({js_find('关闭所有标签页', 1)})?.disabled === false"), str(labels))
+            await js_click(el_center(js_find("关闭所有标签页", 1)))
+            await asyncio.sleep(0.8)
+            check("V8-5 关闭所有 → 回单页（自动补默认「全部」）", await ev("document.querySelectorAll('.dv-tab').length === 1"))
+
+            # V9 显示侧边栏 / 显示信息面板（收展 + 对勾实时；收展动画 400ms 后断言宽）
+            await js_click(el_center(VIEW_BTN))
+            await js_click(el_center(js_find("显示侧边栏")))
+            await asyncio.sleep(0.9)
+            check("V9-1 点显示侧边栏 keepOpen + 对勾灭 + 左栏收起", await menu_count() == 1 and await ev(f"({js_find('显示侧边栏')})?.classList.contains('checked') === false && document.querySelector('.sidebar-left').offsetWidth === 0"))
+            await js_click(el_center(js_find("显示侧边栏")))
+            await asyncio.sleep(0.9)
+            check("V9-2 再点恢复（对勾亮 + 左栏回 254）", await ev(f"({js_find('显示侧边栏')})?.classList.contains('checked') && document.querySelector('.sidebar-left').offsetWidth === 254"))
+            await js_click(el_center(js_find("显示信息面板")))
+            await asyncio.sleep(0.9)
+            check("V9-3 显示信息面板：右栏收起 + 对勾灭", await ev(f"({js_find('显示信息面板')})?.classList.contains('checked') === false && document.querySelector('.sidebar-right').offsetWidth === 0"))
+            await js_click(el_center(js_find("显示信息面板")))
+            await asyncio.sleep(0.9)
+            check("V9-4 右栏恢复", await ev(f"({js_find('显示信息面板')})?.classList.contains('checked') && document.querySelector('.sidebar-right').offsetWidth > 0"))
+
+            # V10 始终显示搜索框（2026-09-06 用户定：关 = 下沉隐藏 + toast 告知 Ctrl+F；Ctrl+F 唤出 / Esc 收回）
+            check("V10-1 默认悬浮栏在（.sf-anchor）", await ev("document.querySelector('.sf-anchor') != null"))
+            await js_click(el_center(js_find("始终显示搜索框")))
+            await asyncio.sleep(0.6)
+            check("V10-2 关闭后 keepOpen + 对勾灭 + 悬浮栏收走（下沉动画后 DOM 移除）", await menu_count() == 1 and await ev(f"({js_find('始终显示搜索框')})?.classList.contains('checked') === false && document.querySelector('.sf-anchor') == null"))
+            check("V10-3 toast 告知 Ctrl+F 通道", await ev("[...document.querySelectorAll('.toast')].some((t) => t.textContent.includes('Ctrl+F'))"), str(await ev("[...document.querySelectorAll('.toast')].map((t) => t.textContent.trim())")))
+            # Ctrl+F 唤出（菜单开着不挡——onSearchFocus 无菜单让位）；modifiers 2 = Ctrl
+            await send(ws, "Input.dispatchKeyEvent", {"type": "keyDown", "key": "f", "code": "KeyF", "modifiers": 2, "windowsVirtualKeyCode": 70}, session=sess)
+            await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "f", "code": "KeyF", "modifiers": 2, "windowsVirtualKeyCode": 70}, session=sess)
+            await asyncio.sleep(0.6)
+            check("V10-4 Ctrl+F 唤出悬浮栏（下浮入）", await ev("document.querySelector('.sf-anchor') != null"))
+            check("V10-5 唤出即聚焦输入框", await ev("document.activeElement === document.querySelector('.sf-anchor input')"))
+            # Esc = 清空失焦收回悬浮栏（菜单同被 Esc 关——escHadOverlay 口径两吃）
+            await esc_close()
+            await asyncio.sleep(0.4)
+            check("V10-6 Esc 收回悬浮栏 + 菜单关", await ev("document.querySelector('.sf-anchor') == null && document.querySelectorAll('.app-menu').length === 0"))
+            await js_click(el_center(VIEW_BTN))
+            await js_click(el_center(js_find("始终显示搜索框")))
+            await asyncio.sleep(0.6)
+            check("V10-7 恢复勾选：悬浮栏回 + 对勾亮", await ev(f"document.querySelector('.sf-anchor') != null && ({js_find('始终显示搜索框')})?.classList.contains('checked')"))
+            await esc_close()
+            await ev("document.querySelectorAll('.toast .close').forEach((b) => b.click())")
+            await asyncio.sleep(0.4)
+
+            # V11 同钮 toggle
+            await js_click(el_center(VIEW_BTN))
+            check("V11-1 视图钮开", await menu_count() == 1)
+            await js_click(el_center(VIEW_BTN))
+            check("V11-2 同钮再点 toggle 关", await menu_count() == 0)
 
             print("----")
             print("FAIL:", fails if fails else "无")

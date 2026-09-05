@@ -195,6 +195,11 @@ export const useTabsStore = defineStore("tabs", () => {
     if (api && api.panels.length === 0) addTab("quick:all");
   }
 
+  // 激活标签页（2026-09-06 视图菜单「标签页」子菜单：点行切换激活；dockview setActive 标准路径）
+  function activateTab(id: string): void {
+    api?.getPanel(id)?.api.setActive();
+  }
+
   // 关闭所有标签（≥2 时出现在右键菜单，2026-08-08 用户定）：锁定页尊重锁定语义跳过；关空补默认
   function closeAllTabs(): void {
     if (!api) return;
@@ -291,5 +296,5 @@ export const useTabsStore = defineStore("tabs", () => {
     api?.layout(width, height, true);
   }
 
-  return { tabs, activeTabId, navCan, bind, openView, openInNewTab, goHistory, addTab, closeTab, closeAllTabs, closeOtherTabs, toggleLock, splitTab, forceLayout };
+  return { tabs, activeTabId, navCan, bind, openView, openInNewTab, goHistory, addTab, closeTab, activateTab, closeAllTabs, closeOtherTabs, toggleLock, splitTab, forceLayout };
 });

@@ -17,6 +17,8 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
       AppMenu tone="tip" + pad 0 行贴边，最小宽 180，2026-09-05 走查定），弹出层形态不陈列。
       菜单栏「菜单」主菜单（2026-09-05 接业务，稿 = 用户当场供稿）：三级级联 flyout 栈为交互行为不陈列，此处摆根级与库列表形态。
       菜单栏「编辑」菜单（2026-09-06 接业务，稿 = 用户当场供稿）：全项 = 全局快捷键的菜单面；创建副本 / 克隆 同键 Ctrl+D 按选中域分流显示。
+      菜单栏「视图」菜单（2026-09-06 接业务，稿 = 用户当场供稿）：查看方式 = ui store 持久化字段菜单面（对勾 / 禁用函数化实时刷新），
+      标签页 ▸ = submenu 函数实时生成清单；「始终显示搜索框」关 = 悬浮栏隐藏（Ctrl+F 唤出 / Esc 收回 + 下沉浮入动画 + toast 告知）。
     </p>
 
     <div class="pv-group">
@@ -119,6 +121,123 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
             </div>
           </div>
           <span class="pv-cap">文件夹·档案域形态：克隆（同键 Ctrl+D 分流显示，2026-09-06 用户定）；复制 / 从文件夹中移除 无文件夹语义置灰</span>
+        </div>
+      </div>
+    </div>
+    <div class="pv-group">
+      <h3 class="pv-group-title">菜单栏「视图」菜单（2026-09-06；spec = menuSpecs/viewMenu，多级级联 flyout）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="大纲管理" />
+              <MenuItem label="分组管理" />
+              <MenuItem label="信息查看管理" disabled />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="查看方式" arrow force-state="hover" />
+              <MenuItem label="标签页" arrow />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="显示侧边栏" checkable checked />
+              <MenuItem label="显示信息面板" checkable checked />
+              <MenuItem label="始终显示搜索框" checkable checked />
+            </div>
+          </div>
+          <span class="pv-cap">根级三组（信息查看管理 = 业务未立项占位）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="自适应" checkable checked shortcut="Alt+1" />
+              <MenuItem label="瀑布流" mark-pad shortcut="Alt+2" />
+              <MenuItem label="网格" mark-pad shortcut="Alt+3" />
+              <MenuItem label="列表" mark-pad shortcut="Alt+4" />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="排序方式" mark-pad arrow />
+              <MenuItem label="时间显示格式" mark-pad arrow />
+              <MenuItem label="简介显示方式" mark-pad arrow />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="显示扩展名" checkable checked />
+              <MenuItem label="显示角标" checkable checked />
+              <MenuItem label="显示链接标识" checkable checked />
+              <MenuItem label="显示子文件夹内容" checkable checked />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="自动播放动图" checkable />
+              <MenuItem label="自动播放视频预览" checkable />
+            </div>
+          </div>
+          <span class="pv-cap">查看方式 ▸ 二级（布局四项 Alt+1~4；开关组对勾随 store 实时）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="自定义" checkable checked />
+              <MenuItem label="名称" checkable />
+              <MenuItem label="文件大小" checkable />
+              <MenuItem label="时长" checkable />
+              <MenuItem label="扩展名" checkable force-state="hover" />
+              <MenuItem label="创建时间" checkable />
+              <MenuItem label="修改时间" checkable />
+              <MenuItem label="导入时间" checkable />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="升序" checkable disabled />
+              <MenuItem label="降序" checkable disabled />
+            </div>
+          </div>
+          <span class="pv-cap">排序方式 ▸ 三级（此处陈列「自定义」档：升/降序无存储序语义实时禁用，3.5 定）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="全部" checkable checked />
+              <MenuItem label="素材-02" checkable />
+              <MenuItem label="角色设定" checkable />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="锁定当前标签页" mark-pad />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="关闭当前标签页" mark-pad />
+              <MenuItem label="关闭所有标签页" mark-pad />
+              <MenuItem label="关闭其他标签页" mark-pad />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="左右分屏" mark-pad />
+              <MenuItem label="上下分屏" mark-pad />
+            </div>
+          </div>
+          <span class="pv-cap">标签页 ▸ 二级（清单 = submenu 函数实时生成，点行切换激活）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="帧数" checkable checked />
+              <MenuItem label="时间码" checkable />
+            </div>
+          </div>
+          <span class="pv-cap">时间显示格式 ▸ 三级</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div class="pv-menu-shell">
+            <div class="pv-menu-group">
+              <MenuItem label="显示简介" checkable checked />
+            </div>
+            <div class="pv-menu-group">
+              <MenuItem label="尺寸" checkable checked />
+              <MenuItem label="文件大小" checkable />
+              <MenuItem label="创建日期" checkable />
+              <MenuItem label="修改日期" checkable force-state="hover" />
+              <MenuItem label="标签" checkable disabled />
+            </div>
+          </div>
+          <span class="pv-cap">简介显示方式 ▸ 三级（标签档占位禁用——卡片数据无 tags）</span>
         </div>
       </div>
     </div>

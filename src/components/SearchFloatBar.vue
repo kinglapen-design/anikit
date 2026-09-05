@@ -11,6 +11,9 @@ import { useSearchStore } from "../stores/search";
 import { useUiStore } from "../stores/ui";
 
 const props = defineProps<{ panelId: string; viewKey: string }>();
+// 「始终显示搜索框」关（ui.showSearchBar=false，2026-09-06 视图菜单轮）时的收回请求：
+// Esc 清空失焦后通知 ContentArea 隐藏（v-if 第二条件）；开关恒开时该 emit 无害
+const emit = defineEmits<{ requestHide: [] }>();
 const search = useSearchStore();
 const ui = useUiStore();
 
@@ -49,10 +52,11 @@ function toggleFilter(key: string): void {
   else activeFilters.value.push(key);
 }
 
-// Esc = 清空并失焦（draft 置空经 watch 同步 store）
+// Esc = 清空并失焦（draft 置空经 watch 同步 store）；「始终显示搜索框」关时顺带收回悬浮栏
 function onEscape(): void {
   draft.value = "";
   floatBarRef.value?.blurSearch();
+  emit("requestHide");
 }
 
 onMounted(() => {

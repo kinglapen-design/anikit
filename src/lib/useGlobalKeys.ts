@@ -10,6 +10,7 @@ import { usePreviewStore } from "../stores/preview";
 import { useSearchStore } from "../stores/search";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
+import { useUiStore } from "../stores/ui";
 import { useUndoStore } from "../stores/undo";
 import {
   copySelection,
@@ -258,6 +259,27 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     search.requestFocus(tabs.activeTabId);
   }
 
+  // Alt+1~4 = 查看方式布局切换（2026-09-06 菜单栏「视图」接业务轮，稿 = 查看方式子菜单快捷键标注）：
+  // 自适应 / 瀑布流 / 网格 / 列表 ↔ ui.layoutMode（与视图菜单 / ViewOptionsMenu 同状态源）。
+  // 查看类操作——选择模式白名单放行（§12.1 查看方式）；输入框 / 预览态 / 向导态不抢；
+  // 菜单 / 浮层 / 弹窗打开时让位（同 onOperationKeys 口径）
+  function onViewKeys(e: KeyboardEvent): void {
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const modes: Record<string, "justified" | "waterfall" | "grid" | "list"> = {
+      "1": "justified",
+      "2": "waterfall",
+      "3": "grid",
+      "4": "list",
+    };
+    const mode = modes[e.key];
+    if (!mode) return;
+    if (isEditableTarget(e.target as HTMLElement)) return;
+    if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
+    if (document.querySelector(".app-menu, .zoom-mask, .modal-mask, .del-mask, .pick-mask")) return;
+    e.preventDefault();
+    useUiStore().layoutMode = mode;
+  }
+
   // Esc 按下时刻的浮层快照（2026-08-16 根治"Esc 关菜单误清选择"）：
   // capture 阶段早序记录（本监听随 App 挂载注册，恒早于任何菜单的 capture 关闭处理），
   // bubble 的 onSelectionKeys 只读此标记，不再查实时 DOM（菜单关闭后 DOM 已同步移除，
@@ -275,6 +297,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     window.addEventListener("keydown", onSelectionKeys);
     window.addEventListener("keydown", onOperationKeys);
     window.addEventListener("keydown", onSearchFocus);
+    window.addEventListener("keydown", onViewKeys);
   });
   onBeforeUnmount(() => {
     window.removeEventListener("keydown", onEscCapture, true);
@@ -283,5 +306,6 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     window.removeEventListener("keydown", onSelectionKeys);
     window.removeEventListener("keydown", onOperationKeys);
     window.removeEventListener("keydown", onSearchFocus);
+    window.removeEventListener("keydown", onViewKeys);
   });
 }
