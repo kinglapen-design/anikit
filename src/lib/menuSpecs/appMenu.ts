@@ -247,7 +247,11 @@ function findEntries(): CtxEntry[] {
       shortcut: "Ctrl+F",
       action: () => useSearchStore().requestFocus(useTabsStore().activeTabId),
     },
-    { label: "全局搜索", disabled: true },
+    // 全局搜索（2026-09-05 用户定）：= 聚焦搜索框 + 帮用户输入 `~`（后端前缀协议全局范围），就这么简单
+    {
+      label: "全局搜索",
+      action: () => useSearchStore().prefillGlobal(useTabsStore().activeTabId, useContentStore().sidebarSelected),
+    },
     "divider",
     {
       label: "筛选器",

@@ -7,6 +7,7 @@
 # M1-7 一级条目菜单 min-width 250（2026-09-05 用户实机定，flyout 不受限）；
 # M11 「转换为缩略图链接并复制」格式门槛（同日用户定：fla 等不能作缩略图的格式——右键菜单不出现防误导；
 #   主菜单恒列置灰，三轮用户定：主菜单是入口汇总需完整展示，和右键菜单不一样）。
+# M12 全局搜索 = 聚焦搜索框 + 预填 `~`（同日用户定「就这么简单」）——续输关键字走 search_assets 全局范围，Esc 清空恢复。
 # D 截图 root / docs-l3 / lib-l3。
 import asyncio
 import base64
@@ -23,7 +24,7 @@ URL = "http://localhost:5373"
 
 # 桩同 cdp-context-menu-probe（2026-09-05 全量启动链路）；__calls 记录全量 invoke 供断言
 STUB = r"""
-window.__calls = { set_folder_colors: [], set_asset_props: [], set_archive_props: [] };
+window.__calls = { set_folder_colors: [], set_asset_props: [], set_archive_props: [], search_assets: [] };
 const TREE = {
   blocks: [{ id: "dir", name: "目录", icon: null }],
   nodes: [
@@ -89,6 +90,10 @@ window.__TAURI_INTERNALS__ = {
     }
     if (cmd === "set_auto_import") {
       return Promise.resolve({ name: "S", path: "E:/T/S", autoImport: args?.enabled ?? true });
+    }
+    if (cmd === "search_assets") {
+      window.__calls.search_assets.push(JSON.parse(JSON.stringify(args ?? {})));
+      return Promise.resolve({ placements: [], archives: [] });
     }
     if (cmd === "get_asset_detail") {
       const d = DETAILS[args.assetId] ?? { tags: [], descriptions: [] };
@@ -365,6 +370,23 @@ async def main():
             check("M11-5 png 右键缩略图二级有转换项", "转换为缩略图链接并复制" in fl, str(fl))
             await esc_close()
             check("M11-6 收尾菜单全关", await menu_count() == 0)
+
+            # —— M12 全局搜索 = 聚焦 + 预填 `~`（2026-09-05 用户定，后端前缀协议全局范围）——
+            await js_click(el_center(MENU_BTN))
+            await js_hover(el_center(js_find("查找")))
+            check("M12-0 查找 L2 全局搜索已点亮", await ev(f"({js_find('全局搜索', 1)})?.disabled === false"))
+            await js_click(el_center(js_find("全局搜索", 1)))
+            check("M12-1 点击后菜单关", await menu_count() == 0)
+            check("M12-2 搜索框预填 `~` 且聚焦", await ev("(() => { const inp = document.querySelector('.sf-anchor input'); return !!inp && inp.value === '~' && document.activeElement === inp; })()"))
+            # 续输关键字 → 全局范围搜索（search_assets scope.global + query 带前缀）
+            await ev("(() => { const inp = document.querySelector('.sf-anchor input'); inp.value = '~雪牧'; inp.dispatchEvent(new Event('input', { bubbles: true })); })()")
+            await asyncio.sleep(0.7)
+            check("M12-3 search_assets 全局范围（scope.global = true，query 带 `~`）", await ev("(() => { const c = window.__calls.search_assets; return c.length > 0 && c[c.length - 1].scope.global === true && c[c.length - 1].query === '~雪牧'; })()"), str(await ev("JSON.stringify(window.__calls.search_assets)")))
+            # Esc 清空并失焦 → 退出搜索态，网格恢复
+            await send(ws, "Input.dispatchKeyEvent", {"type": "keyDown", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, session=sess)
+            await asyncio.sleep(0.6)
+            check("M12-4 Esc 清空恢复（输入框空 + 网格回 3 卡）", await ev("(() => { const inp = document.querySelector('.sf-anchor input'); return !!inp && inp.value === '' && document.querySelectorAll('.asset-card').length === 3; })()"))
 
             print("----")
             print("FAIL:", fails if fails else "无")

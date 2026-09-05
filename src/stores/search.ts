@@ -146,6 +146,15 @@ export const useSearchStore = defineStore("search", () => {
     focusSeq.value++;
   }
 
+  /** 全局搜索入口（菜单栏主菜单「查找 ▸ 全局搜索」，2026-09-05 用户定：聚焦搜索 + 帮用户输入 `~`）：
+   *  草稿补 `~` 前缀（已带 `~` 不动只聚焦；纯 `~` 无关键字不进搜索态，等用户续输） */
+  function prefillGlobal(panelId: string, viewKey: string): void {
+    if (!panelId) return;
+    const s = ensure(panelId);
+    if (!s.draft.trimStart().startsWith("~")) setDraft(panelId, viewKey, `~${s.draft}`);
+    requestFocus(panelId);
+  }
+
   return {
     focusSeq,
     focusPanelId,
@@ -158,5 +167,6 @@ export const useSearchStore = defineStore("search", () => {
     rerun,
     removePanel,
     requestFocus,
+    prefillGlobal,
   };
 });

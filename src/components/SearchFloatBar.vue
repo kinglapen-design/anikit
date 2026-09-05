@@ -22,6 +22,14 @@ const activeFilters = ref<string[]>([]);
 
 watch(draft, (v) => search.setDraft(props.panelId, props.viewKey, v));
 
+// store → 本地回填（主菜单「全局搜索」prefillGlobal 预填 `~` 等外部写入通道；等值不回流防环）
+watch(
+  () => search.draftFor(props.panelId),
+  (v) => {
+    if (v !== draft.value) draft.value = v;
+  },
+);
+
 // 视图 / 递归开关变化：搜索保持并按新范围重搜
 watch([() => props.viewKey, () => ui.showSubfolders], () => {
   search.rerun(props.panelId, props.viewKey);
