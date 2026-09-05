@@ -299,11 +299,9 @@ function organizeEntries(): CtxEntry[] {
     { label: "添加音频", disabled: !target, action: () => target && usePickerStore().enterVoice(target) },
     "divider",
     { label: "添加缩略图", disabled: true },
-    // 条件出现（2026-09-05 用户定，与卡片右键同步）：单选且格式不能作缩略图（非静态图/gif）不列——
-    // 列了点了必报错，误导人；无选中时保留 disabled 占位（主菜单是固定设计清单，无格式可判）
-    ...(a === null || isThumbCapableExt(a.ext)
-      ? [{ label: "转为为缩略图链接并复制", disabled: !a, action: () => a && copyThumbLink(a.assetId, a.name) } as CtxEntry]
-      : []),
+    // 主菜单恒列（2026-09-05 三轮用户定：主菜单 = 入口汇总需完整展示，与右键菜单的条件出现不同）——
+    // 无单选或格式不能作缩略图（非静态图/gif）时 disabled 置灰
+    { label: "转为为缩略图链接并复制", disabled: !a || !isThumbCapableExt(a.ext), action: () => a && copyThumbLink(a.assetId, a.name) },
     selection.thumbLink
       ? {
           label: `将「${selection.thumbLink.name}」设置为缩略图`,

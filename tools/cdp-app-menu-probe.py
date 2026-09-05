@@ -5,7 +5,8 @@
 # M6 仓库 → 仓库 L3：当前空间对勾行 + 新建/删除占位 disabled；M7 同钮再点 toggle 关；M8 Esc 关；
 # M9 整理无选中 = 添加关系/移动/编辑描述 disabled；M10 选中 A1 后同项 enabled + 文件 L2 链接位置 L3 = linkList tip 壳；
 # M1-7 一级条目菜单 min-width 250（2026-09-05 用户实机定，flyout 不受限）；
-# M11 「转换为缩略图链接并复制」条件出现（同日用户定：fla 等不能作缩略图的格式不列，主菜单整理 + 卡片右键同步）。
+# M11 「转换为缩略图链接并复制」格式门槛（同日用户定：fla 等不能作缩略图的格式——右键菜单不出现防误导；
+#   主菜单恒列置灰，三轮用户定：主菜单是入口汇总需完整展示，和右键菜单不一样）。
 # D 截图 root / docs-l3 / lib-l3。
 import asyncio
 import base64
@@ -334,13 +335,14 @@ async def main():
             await esc_close()
             check("M10-7 Esc 关（含 L3 面板）", await menu_count() == 0)
 
-            # —— M11 「转换为缩略图链接」条件出现（2026-09-05 用户定：不能作缩略图的格式不列，两菜单同步）——
-            # F3 = fla：主菜单整理不列该项
+            # —— M11 「转换为缩略图链接」格式门槛（2026-09-05 用户定：fla 等不能作缩略图的格式——
+            # 右键菜单不出现（防误导）；主菜单恒列置灰（三轮用户定：入口汇总需完整展示，与右键不同））——
+            # F3 = fla：主菜单整理该项在且 disabled
             await js_click(el_center("document.querySelector('.asset-card[data-key=\"F3|f1\"]')"))
             await js_click(el_center(MENU_BTN))
             await js_hover(el_center(js_find("整理")))
             labels = await menu_labels(1)
-            check("M11-1 fla 选中：整理无「转为为缩略图链接并复制」", "转为为缩略图链接并复制" not in labels, str(labels))
+            check("M11-1 fla 选中：整理恒列「转为为缩略图链接并复制」且置灰", "转为为缩略图链接并复制" in labels and await ev(f"({js_find('转为为缩略图链接并复制', 1)})?.disabled === true"))
             check("M11-2 相邻项仍在（添加缩略图 / 将文件设为缩略图占位）", "添加缩略图" in labels and "将「文件」设置为缩略图" in labels)
             await esc_close()
             # 右键菜单同步：fla 卡右键 → 缩略图二级无「转换为缩略图链接并复制」
