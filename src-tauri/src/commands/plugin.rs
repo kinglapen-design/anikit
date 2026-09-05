@@ -20,7 +20,9 @@ pub async fn open_plugin_window(app: tauri::AppHandle, plugin_id: String) -> Res
   let url = tauri::WebviewUrl::App(format!("index.html?plugin={plugin_id}").into());
   let win = tauri::WebviewWindowBuilder::new(&app, &label, url)
     .title("AniKit 插件")
-    .inner_size(544.0, 538.0)
+    // 544×578（2026-09-06 九轮用户定：稿值 538 在路径组长路径折行后最后一行被迫滚动一条——
+    // 「为了最后一行字滚动一条实在没有必要」；内容实量 ≈568 + 10 余量）
+    .inner_size(544.0, 578.0)
     .resizable(true)
     .decorations(false)
     .transparent(true)

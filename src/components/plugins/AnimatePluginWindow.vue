@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Animate 插件详情子窗口（稿 = docs/UI 重构/Design Token/布局/主窗口/工具栏展开窗口/Animate 插件.md，
-// 544×538 非模态独立窗，可移动/缩放、单例聚焦——open_plugin_window 后端命令）：
+// 544×578 非模态独立窗——稿值 538 高，2026-09-06 九轮用户定加高 40（路径组折行后最后一行被迫滚动一条），
+// 可移动/缩放、单例聚焦——open_plugin_window 后端命令）：
 // 经 URL ?plugin=animate 进入（App.vue query 分发，?preview= 先例）；窗口壳（fx 云母/实色、圆角、
 // 描边、阴影）由 App.vue .window 承担（预览子窗口同口径），本组件 = 内容面板：padding 24 / 列 gap 24。
 // 标题区 = 通栏 62px 拖拽带（data-tauri-drag-region，2026-09-06 四轮用户实机扩——原标题行 26px 太小；
