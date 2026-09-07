@@ -168,7 +168,7 @@ textarea {
 /* 就地重命名输入共享基座（6.1 C2/C3，2026-08-10 统一口径——透明底族：素材卡片 / 列表行 /
    文件夹卡片 / 树 item）：整卡 / 整行 1.5px 品牌色高亮提示，输入框透明底不单独描边；
    高度恒 20 = 字体行高不撑高容器。各组件差异（宽度 / flex / 字色 / 对齐）留局部覆盖；
-   收件箱磁盘区 C4 实底族（InboxDiskSection）是另一套，本地自管 */
+   收件箱磁盘区 2026-09-08 起归 FileCard naming 内建（InboxDiskSection 散装输入框废除） */
 .rename-input {
   height: 20px;
   box-sizing: border-box;

@@ -4,19 +4,20 @@
 // 白名单以外不自动导入，右键手动"导入"= 移走入库（剪切语义；先弹确认明示"源文件将从收件箱移走"，
 // PRD 05-01 硬性要求，2.6；确认后进度条 / 重复提示流与常规导入一致）。
 // 占用条目：仅实况展示（"被占用"标记），导入 / 重命名禁用，后端同口径再拦一道。
-// 文件图标：优先系统格式图标缓存（iconPath，details 事件补齐），无缓存回退扩展名角标；
-// 目录恒 folder-closed。占用标记以 details 合并后为准（快层目录 occupied=false 是过渡态）。
-// 卡片样式 2026-08-13 同步素材卡片 14 稿（整卡圆角 6 + ::after 状态边框 + 图标区 C2 /
-// 简介区 C3 名称单行左对齐）；右键 @contextmenu.stop 拦冒泡（gridDispatch 空白新增菜单会覆盖，同日修复）。
+// 文件图标：优先系统格式图标缓存（iconPath，details 事件补齐），无缓存则仅左上格式角标；
+// 目录恒 folder-closed 居中（存量元素保旧 40 档，新稿未画）。占用标记以 details 合并后为准
+//（快层目录 occupied=false 是过渡态）。
+// 卡片 2026-09-08 换代 = cards/FileCard square 变体（§16 稿注：shell 缩略图 / 自动导入未导入 =
+// 正方形 + 缩略图 50% 居中；格式角标统一 FormatBadge 铬，不再按格式设色——旧 14 稿散装样式
+//（C2 图标区 + C3 简介区 + 实色扩展名角标）废除）；重命名输入态归 FileCard 内建（naming prop）。
 import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
+import FileCard from "./cards/FileCard.vue";
 import SectionHeader from "./SectionHeader.vue";
-import { formatBadgeColor } from "../lib/formatBadge";
 import { openContextMenu } from "../lib/contextMenus";
 import { inboxDiskSpec } from "../lib/menuSpecs/inboxDisk";
 import { deleteInboxEntry, confirmImportInboxEntry, openInboxEntry, renameInboxEntry } from "../lib/inboxOps";
-import { useInlineRename } from "../lib/useInlineRename";
 import { useContentStore, type InboxDiskEntry } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
@@ -34,16 +35,13 @@ function showError(e: unknown): void {
   errorTimer = setTimeout(() => (errorMsg.value = ""), 5000);
 }
 
-// 扩展名角标：复用格式角标色映射（静态图组无底色时回退 C4——实况区无缩略图，角标必须可见）
+// 格式角标 = 扩展名大写（FormatBadge 统一铬，§16；目录 / 无后缀文件不出）
 function extOf(e: InboxDiskEntry): string {
   const i = e.name.lastIndexOf(".");
   return i > 0 ? e.name.slice(i + 1) : "";
 }
 function extLabel(e: InboxDiskEntry): string {
   return extOf(e).toUpperCase();
-}
-function badgeColor(e: InboxDiskEntry): string {
-  return formatBadgeColor(extOf(e)) ?? "var(--c4)";
 }
 function sizeLabel(e: InboxDiskEntry): string {
   const kb = e.size / 1024;
@@ -90,38 +88,24 @@ async function deleteEntry(entry: InboxDiskEntry): Promise<void> {
   }
 }
 
-// 行内重命名（2026-08-13 接入 useInlineRename 统一语义，原散装实现废除——blur 取消离群
-// 导致"输入后返回旧名"、全选含后缀、无双击）：selectStem 选区只到词干（扩展名不入选）；
-// Enter / 失焦恒提交，Esc 取消；双击名称进入
+// 行内重命名：输入态在 FileCard（naming prop，useInlineRename 内建——selectStem 词干选区 /
+// Enter·失焦提交 / Esc 取消，速查 §4 统一口径），本区只管目标条目与落命令；
+// 双击名称（name-edit）或菜单进命名态，占用条目禁重命名
 const renaming = ref<string | null>(null); // 目标条目名（当前原名）
-const {
-  draft: renameDraft,
-  bindInput: bindRenameInput,
-  commit: commitRename,
-  onEsc: onRenameEsc,
-} = useInlineRename({
-  active: () => renaming.value !== null,
-  initial: () => renaming.value ?? "",
-  selectStem: true,
-  onCommit: (name) => {
-    const old = renaming.value;
-    renaming.value = null;
-    if (!old || !name || name === old) return;
-    void doRename(old, name);
-  },
-  onCancel: () => {
-    renaming.value = null;
-  },
-});
 function startRename(entry: InboxDiskEntry): void {
   if (entry.occupied) return;
   renaming.value = entry.name;
 }
-async function doRename(oldName: string, newName: string): Promise<void> {
+function onRenameCommit(entry: InboxDiskEntry, name: string): void {
+  renaming.value = null;
+  if (!name || name === entry.name) return;
   // 扩展名不动（Eagle 口径：改名只编词干）——draft 被改成无后缀/异后缀时补回原扩展名
-  const dot = oldName.lastIndexOf(".");
-  const ext = dot > 0 ? oldName.slice(dot) : "";
-  if (ext && !newName.toLowerCase().endsWith(ext.toLowerCase())) newName += ext;
+  const dot = entry.name.lastIndexOf(".");
+  const ext = dot > 0 ? entry.name.slice(dot) : "";
+  if (ext && !name.toLowerCase().endsWith(ext.toLowerCase())) name += ext;
+  void doRename(entry.name, name);
+}
+async function doRename(oldName: string, newName: string): Promise<void> {
   try {
     await renameInboxEntry(oldName, newName);
     if (content.selectedInboxName === oldName) content.selectedInboxName = newName;
@@ -145,36 +129,24 @@ const entries = computed(() => content.inboxDisk);
           v-for="e in entries"
           :key="e.name"
           class="disk-card"
-          :class="{ selected: content.selectedInboxName === e.name, renaming: renaming === e.name }"
           @click="select(e)"
           @contextmenu.prevent.stop="openMenu($event, e)"
         >
-          <div class="icon-wrap">
-            <AppIcon v-if="e.isDir" name="folder-closed" :size="40" class="folder-icon" />
-            <img
-              v-else-if="e.iconPath"
-              :src="convertFileSrc(e.iconPath)"
-              class="format-icon"
-              :alt="extLabel(e)"
-              draggable="false"
-            />
-            <span v-else class="ext-badge" :style="{ background: badgeColor(e) }">{{ extLabel(e) }}</span>
-            <span v-if="e.occupied" class="occupied-tag">被占用</span>
-          </div>
-          <div class="texts">
-            <input
-              v-if="renaming === e.name"
-              :ref="bindRenameInput"
-              v-model="renameDraft"
-              class="rename-input"
-              @keydown.enter.prevent="commitRename"
-              @keydown.esc.prevent="onRenameEsc"
-              @blur="commitRename"
-              @click.stop
-            />
-            <span v-else class="title" v-tip="e.name" @dblclick.stop="startRename(e)">{{ e.name }}</span>
-            <span class="meta">{{ e.isDir ? "文件夹" : sizeLabel(e) }}</span>
-          </div>
+          <FileCard
+            :name="e.name"
+            :info="e.isDir ? '文件夹' : sizeLabel(e)"
+            :badge="e.isDir ? '' : extLabel(e)"
+            :thumb-url="e.iconPath ? convertFileSrc(e.iconPath) : ''"
+            square
+            :selected="content.selectedInboxName === e.name"
+            :naming="renaming === e.name"
+            @name-edit="startRename(e)"
+            @name-commit="onRenameCommit(e, $event)"
+            @name-cancel="renaming = null"
+          >
+            <AppIcon v-if="e.isDir" name="folder-closed" :size="40" class="dir-icon" />
+          </FileCard>
+          <span v-if="e.occupied" class="occupied-tag">被占用</span>
         </div>
       </div>
     </template>
@@ -205,127 +177,43 @@ const entries = computed(() => content.inboxDisk);
   color: var(--error);
   word-break: break-all;
 }
-/* 卡片列表：与素材网格视图同宽（260，2026-08-13 用户：120 太窄名称五字就截断） */
+/* 卡片列表：与素材网格视图同宽（260，2026-08-13 用户：120 太窄名称五字就截断）；
+   square 变体 = 正方形卡（§16 稿注：自动导入未导入正方形比例），行高随列宽 */
 .flow {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   column-gap: var(--space-16);
   row-gap: var(--space-16);
 }
-/* 卡片（同步素材卡片 14 稿，2026-08-13）：整卡圆角 6 / 状态边框双伪元素分层
-   （::after = 常态 1px 暗-悬停无过渡；::before = 状态层 1.5px hover 实色 line-card-hover /
-   选中品牌色-边框线，opacity 过渡——2026-08-19 残留修复，踩坑 036）——
-   图标区 C2 / 简介区 C3 整片不透明底会盖住父级 inset 阴影，边框必须在最上层伪元素 */
+/* 卡壳：被占用标记定位锚；常态描边 / 选中环 / hover 位移 -4 全归 FileCard（cards.css kc 族） */
 .disk-card {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  border-radius: var(--radius-6);
-  cursor: default;
 }
-.disk-card::after {
-  content: "";
+/* 目录条目：folder-closed 整卡居中（与 shell 缩略图同位 = 50% 居中档；40 尺寸保旧，
+   新稿未画——同 AssetCard 笔记角标「存量元素保旧」先例） */
+.dir-icon {
   position: absolute;
-  inset: 0;
-  border: 1px solid var(--line-hover);
-  border-radius: var(--radius-6);
-  pointer-events: none;
-}
-.disk-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  border: var(--border-strong) solid transparent;
-  border-radius: var(--radius-6);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-.disk-card:hover::before {
-  opacity: 1;
-  border-color: var(--line-card-hover);
-}
-.disk-card.selected::before,
-.disk-card.renaming::before {
-  opacity: 1;
-  border-color: var(--brand-border);
-}
-/* 图标区（14 稿缩略图区口径）：C2 底 / 圆角上沿；
-   比例按网格视图格子 260×220（2026-08-13 用户定）：简介区恒 57，图标区 260:163 */
-.icon-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 260 / 163;
-  background: var(--c2);
-  border-radius: var(--radius-6) var(--radius-6) 0 0;
-  overflow: hidden;
-}
-.folder-icon {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   color: var(--text-label);
 }
-/* 系统格式图标：缓存源图 256px，最大边 = 正方形图标位 50%（与素材卡片 / 列表行同一口径，
-   shell 小一点给内容缩略图让视觉噪音，2026-07-25 用户定） */
-.format-icon {
-  max-width: 50%;
-  max-height: 50%;
-  object-fit: contain;
-}
-/* 扩展名角标文本：实底白字（格式角标 7 组实色映射，01 样式 token 01-6）；
-   静态图组无底色时回退 C4——实况区无缩略图，角标必须可见 */
-.ext-badge {
-  padding: var(--space-2) var(--space-6);
-  border-radius: var(--radius-4);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--text-highlight);
-}
-/* 被占用标记：右上小标签（警告色——占用 = 暂不可操作态） */
+/* 被占用标记：保旧视觉旧位（右上各 4，c3 底警告字——新稿未画，同笔记角标先例）；
+   壳层附件随卡芯 hover 位移 -4px（kc-media 250ms，AssetCard 位置徽章同参数跟随模式） */
 .occupied-tag {
   position: absolute;
   top: var(--space-4);
   right: var(--space-4);
+  z-index: 6;
   padding: 0 var(--space-4);
   border-radius: var(--radius-4);
   background: var(--c3);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
   color: var(--warning);
+  transition: transform var(--n-dur-250) var(--n-ease-in-out);
 }
-/* 简介区（14 稿）：C3 / 上分割线（inset 不占位）/ 圆角下沿 / padding 8 8 8 12 / 间距 4 / 恒 57 高 */
-.texts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  height: 57px;
-  box-sizing: border-box;
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
-  background: var(--c3);
-  box-shadow: inset 0 1px 0 0 var(--line-hover);
-  border-radius: 0 0 var(--radius-6) var(--radius-6);
+.disk-card:hover .occupied-tag {
+  transform: translateY(-4px);
 }
-/* 名称：正文 14/20 高亮，单行左对齐截断（14 稿口径，旧两行居中作废）；
-   悬停文本光标（双击就地重命名，同素材卡片口径） */
-.title {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-highlight);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: text;
-}
-.meta {
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--text-label);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* 行内重命名：不额外给输入框（2026-08-13 用户定，同素材卡片透明族）——
-   直接用 base.css .rename-input 共享基座（透明底无描边），整卡 ::after 品牌色边框提示重命名态 */
 </style>
