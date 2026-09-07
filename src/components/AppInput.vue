@@ -7,7 +7,7 @@
 // opacity 走合成器无光栅损伤）。
 // 2026-08-19 统一壳化（原"非 clearable 裸 input 根"分支废除）：壳统一承担底色 / 边框 / 聚焦层，
 // 内嵌 input 透明去框——聚焦层 opacity 机制必须有壳（input 无伪元素）；
-// CreateLibraryModal 的聚焦改用 expose 的 focus()（壳化后 $el 是壳 div 不再可 focus）。
+// 外部聚焦改用 expose 的 focus()（壳化后 $el 是壳 div 不再可 focus）。
 // clearable（2026-08-18，36/37 稿输入框内"清除 ×"）：有内容时尾部 20×20 清除钮
 //（AppSearchBar 同款：标签档、hover 暗-悬停罩）。
 import { ref } from "vue";
@@ -20,7 +20,7 @@ const props = withDefaults(
 const model = defineModel<string>({ default: "" });
 
 const inputEl = ref<HTMLInputElement>();
-// 壳化后外部聚焦入口（CreateLibraryModal 等）：转发内嵌 input
+// 壳化后外部聚焦入口：转发内嵌 input
 defineExpose({
   focus: () => inputEl.value?.focus(),
   select: () => inputEl.value?.select(),

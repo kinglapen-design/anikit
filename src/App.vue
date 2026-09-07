@@ -29,6 +29,7 @@ import AnimatePluginWindow from "./components/plugins/AnimatePluginWindow.vue";
 import PluginListPanel from "./components/plugins/PluginListPanel.vue";
 import SetupWizard from "./components/SetupWizard.vue";
 import CreateLibraryModal from "./components/CreateLibraryModal.vue";
+import MergeLibraryModal from "./components/MergeLibraryModal.vue";
 import AppModal from "./components/AppModal.vue";
 import AppButton from "./components/AppButton.vue";
 import AppCheckbox from "./components/AppCheckbox.vue";
@@ -56,7 +57,7 @@ import { useContentStore } from "./stores/content";
 import { usePickerStore } from "./stores/picker";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
-import { wizardState, reopenLastSession, createLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener } from "./lib/libraryOps";
+import { wizardState, reopenLastSession, createLibraryModalState, mergeLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener } from "./lib/libraryOps";
 import { closePluginPanel, pluginPanelState } from "./lib/pluginPanel";
 import { dupScanState } from "./lib/dupScanOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
@@ -301,6 +302,12 @@ async function togglePin(): Promise<void> {
     />
     <!-- 菜单"新建资源库"（16 稿独立弹窗） -->
     <CreateLibraryModal v-if="createLibraryModalState.open" @close="createLibraryModalState.open = false" />
+    <!-- 菜单"合并资源库"（2026-09-08 布局/模态窗口稿纯 UI 轮：列表 = 已登记其余库，合并动作未实接） -->
+    <MergeLibraryModal
+      v-if="mergeLibraryModalState.open"
+      :names="mergeLibraryModalState.names"
+      @close="mergeLibraryModalState.open = false"
+    />
     <!-- 删除资源库确认（08 稿 item 删除×；09 稿 alert 侵入式配提示音；孤儿素材复选清理） -->
     <AppModal
       v-if="deleteLibraryState.name"

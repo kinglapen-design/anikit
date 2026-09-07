@@ -5,8 +5,13 @@
 import { ref } from "vue";
 import ActionButton from "../../components/buttons/ActionButton.vue";
 import ConfirmModal from "../../components/modals/ConfirmModal.vue";
+import CreateLibraryModal from "../../components/CreateLibraryModal.vue";
+import MergeLibraryModal from "../../components/MergeLibraryModal.vue";
 
 const demoOpen = ref(false);
+const createOpen = ref(false);
+const mergeOpen = ref(false);
+const mockLibNames = ["沙雕动画资源库", "学习参考", "项目素材备份"];
 </script>
 
 <template>
@@ -73,6 +78,22 @@ const demoOpen = ref(false);
     >
       推荐将区块内的文件夹移动至其他区块后删除。
     </ConfirmModal>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">功能模态窗（BaseModal 共享壳，布局/模态窗口 四稿：创建 400 / 合并 498 宽；按钮 128×38 次左主右）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell" style="width: 240px">
+          <ActionButton label="创建资源库" variant="solid" size="md" @click="createOpen = true" />
+          <span class="pv-cap">真实弹出：TextInput lg 自动聚焦；确认 = 真建库（接后端，预览环境请勿点确认）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <ActionButton label="合并资源库" variant="solid" size="md" @click="mergeOpen = true" />
+          <span class="pv-cap">真实弹出：行对勾切换可验；确认钮未接动作（合并后端排期）</span>
+        </div>
+      </div>
+    </div>
+    <CreateLibraryModal v-if="createOpen" @close="createOpen = false" />
+    <MergeLibraryModal v-if="mergeOpen" :names="mockLibNames" @close="mergeOpen = false" />
   </section>
 </template>
 

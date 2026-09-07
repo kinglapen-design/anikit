@@ -166,6 +166,20 @@ export function requestLibrarySetup(): void {
   createLibraryModalState.open = true;
 }
 
+// 合并资源库（菜单触发，2026-09-08 布局/模态窗口稿纯 UI 轮）：弹窗列表数据 = 当前空间已登记的
+// 其余库（排除当前库）——打开时加载快照进 state（预览页陈列走 mock props，不经此处）；
+// 容量列与合并动作后端未实现，随功能轮补
+export const mergeLibraryModalState = reactive<{ open: boolean; names: string[] }>({
+  open: false,
+  names: [],
+});
+
+export async function requestMergeLibrary(): Promise<void> {
+  const { names } = await loadLibraries();
+  mergeLibraryModalState.names = names.filter((n) => n !== currentLibrary.name);
+  mergeLibraryModalState.open = true;
+}
+
 // 删除资源库（08 稿 item 删除×）：确认弹窗状态 + 执行。
 // 孤儿清理（2026-08-12 用户定案：统一池保留 + 引用计数清理）——弹窗前统计"仅该库引用"的素材数，
 // 复选框勾选（默认勾）则删库时一并删除这些素材实体（info 文件夹），共享素材保留。
