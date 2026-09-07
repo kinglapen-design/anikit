@@ -1,0 +1,3 @@
+# 预览八轮：`active` ReferenceError（2026-08-10 用户实测"选中按空格也无法预览"，踩坑 027）
+
+**预览八轮：`active` ReferenceError（2026-08-10 用户实测"选中按空格也无法预览"，踩坑 027）**：根因 = 七轮激活闸引用了只存在于 ContentArea 的 `active` 变量——AssetGrid 里根本没有定义；**裸 tsc 不检查 .vue**（vite/rolldown 只转译不查类型），tsc / build 全绿漏网，运行时按键即抛 ReferenceError。修法 = 激活态由 ContentArea 以 `panelActive` prop 显式传入（AssetGrid 拿不到 panelApi / panel id）。教训两连：跨组件搬代码先确认目标文件有该变量；"tsc/build 全绿"不等于 .vue 无类型错，SFC 关键改动要实际点一遍。vue-tsc 补盲评估记 09 待办。tsc / build 全绿。

@@ -1,0 +1,12 @@
+# 14. 阶段七 item 组件族口径（2026-08-28，稿 = Design Token/组件/item/）
+
+
+
+- **组件位置 = `src/components/items/`**（11 件 + 共享 `items.css`）；卡片壳统一 `.ni-card`（g3 底 + g5 1px 描边 / hover g4+g6，**描边瞬时切换不做颜色过渡**——踩坑 036），关闭钮统一 `.ni-close`（14×14，四级 → hover 二级）。
+- **hover 滑入动作区 = `.ni-hover` + `.ni-slide`（2026-08-29 两轮走查定稿 = 推挤式）**：grid 0fr→1fr 宽度展开 + 内层**左锚定**（`justify-content: flex-start`）——按钮从右缘向左滑到位、内容随宽度展开被推左；**右锚定 = 按钮钉在右缘不动（方向反了）、绝对定位覆盖式 = 盖在内容上，两版均作废勿回退**。链接关系名称右对齐顶到右缘（无预留），hover 被滑入的关闭钮推左；**关系标签 chip 仅悬停自身才变色**（卡 hover 不变，不然 chip 无反馈）。**链接文件卡片原为绝对定位 translateX 残留**（从容器右缘进入，与其他 item 从内容缘 12px 处进入不统一）——2026-08-29 走查定一并改推挤式：item 族关闭钮全部统一 `.ni-slide`，任何形式的绝对定位滑入彻底作废。
+- **小图标钮点击热区一律 `::after` 外扩**（2026-08-28 走查通用问题：判定太小、缝隙在抓手/指针光标间抖动）——伪元素参与命中判定、布局零影响（旧 TreeItem 展开钮同款）：SectionTitle 展开钮 `inset: -4px -4px -4px -6px`（左吃名称间距）、动作钮 block -4 / group -6（两半各吃钮间距）、TreeRowItem 展开钮 `-4px -3px -4px -6px`、`.ni-close` -4px。**SectionTitle 展开钮 hover 提亮 亮色/二级**（与动作钮同）。
+- **标题 item（SectionTitle）**：常态只显标题（/数量），**展开钮与动作组 hover 才现身**（稿 prose 明确，勿恒显），hover 行抓手指针 cursor: grab；稿值 gap 10 = figma 默认自动占位（2026-08-28 用户确认），按间距 token 档用 8。**受控例外 = `staticActions` prop**（2026-08-31 右栏轮用户实机定）：折叠钮与动作组常显不随 hover——仅详情面板链接关系 tab 五区块用（区块稿常态帧即画出按钮组，「标题上的添加按钮本身就是入口」）；树容器 / 列表容器等其余调用方维持 hover 现身不变。
+- **标签页（TabItem）**：选中 = g1 底 + 圆角 8 8 0 0 + **反弧肩膀**（::before/::after radial-gradient 反圆角，与 g1 面板无缝衔接）；**弧径 = 4px = 标签间隙**（2026-08-28 走查定——8px 会伸进相邻标签，hover 罩层右下间距就不是统一的 4px 了）；未选中 hover = 四周 4px 间距的 6px 圆角罩（亮色/半透明-3）；关闭钮仅选中 / hover 显示。
+- **双色调结构图标**（folder-closed / archive / image / warning-small）：文件保留 Figma 原值，用 `TwoToneIcon`（getTwoToneIcon 换 `--tone-1/-2` 内联 style——presentation attribute 不吃 var()），data-tint 九色对覆盖；单灰线条图标一律 currentColor（首批 18 个已转，清单与规则见命名对照.md 头部）。
+- **预览页强制态**：组件带 `forceState` prop（hover / selected / chip-hover / input 等），专供预览页静态陈列与无头截图验收，生产交互路径不因此分叉。
+- **基础数据 item / 色块 item（2026-08-29 补稿落地）**：基础数据（信息列表，`BaseDataItem`）= **纯展示卡片无 hover 态**——g2 底 + g3 描边（区别于 `.ni-card` 的 g3+g5，勿套卡片壳），标签 = 次要文字-加粗 亮色/四级、值 = 数字档（Fira Mono 中）亮色/三级右对齐，多截值（日期 + 时间）gap 4，行 gap 4 / padding 12 / 圆角 8；宽度随父容器不锁稿值 240；行内容 gap 用 8（figma 的 10 = 自动布局占位）。色块（颜色列表，`ColorSwatchItem`）= **透明壳**横排（figma-css 无 background，radius 14 无视觉意义）padding 4 / gap 4 + 16px **圆形**块（figma-css 未写 radius，以稿图为准）+ 1px 亮色/半透明-1 描边；**hover 单块放大 = transform scale(1.25)**（稿只写「放大。」无数值，2026-08-29 用户定 1.25）——不撑容器不影响布局，放大块 `position: relative; z-index: 1` 防被 DOM 后继块盖边缘；空态 7 占位口径留业务侧（SectionPinned 现有口径）。

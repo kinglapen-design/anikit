@@ -1,0 +1,3 @@
+# base64 复制支持 psd/psb/svg（用户定：实机右键 PSD "复制 base64" 报"该格式不支持"）
+
+**base64 复制支持 psd/psb/svg（用户定：实机右键 PSD "复制 base64" 报"该格式不支持"）**。原 `get_asset_base64` 只放行 6 种静态图片原字节且 ≤10MB。口径（用户选定"解码成 PNG 图片"）：psd / psb / svg 走 thumb_formats 适配器解码合成图 → `shrink_long_edge` 长边 ≤4096（复用 FULL_PREVIEW_LONG_EDGE 全尺寸预览口径）→ PNG 编码 → base64，10MB 上限改对编码后 PNG 判定——贴给 AI / 网页可用（原字节 PSD 对方不认，123MB 级文件编码也无意义）；静态图片原字节分支不变；其余格式维持"该格式不支持 base64 复制"；解码失败（PSD 未存合成图等）报"解码失败（PSD 可能未存合成图）"。**命令层两阶段改造**：`locate_base64_source`（锁内取 origin/扩展名/大小）+ `base64_from_origin`（锁外纯 IO）——123MB 级 PSD 解码秒级，原实现持库锁会阻塞全部库命令。新测试 2 用例（svg 真解码出 PNG 魔数 / 假 PSD 解码失败报错），守卫用例按两函数改写。cargo test 295 全绿（又撞增量缓存 LNK2019，clean -p app 重过——踩坑 033 同况）。PRD 02 §13 新增"复制 base64"条目（原 PRD 无此功能条文）/ 07 接口文档同步。前端零改动（菜单项恒定显示、报错走后端 toast，placementOps 注释同步）。
