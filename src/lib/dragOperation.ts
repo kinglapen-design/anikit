@@ -87,6 +87,10 @@ export const dragView = reactive({
   folderGapId: null as string | null, // 文件夹卡片间隙排序目标（FolderCard 渲染竖块）
   folderGapAfter: false,
   tree: null as TreeIndicator | null, // 文件树落点（TreeItem 渲染）
+  // 快速访问「回收站」行落点（2026-09-08 用户定）：素材拖入 = 丢到回收站（免右键 Del 同路径）；
+  // 行带 data-quick-drop="recycle"（LibraryView TreeRowItem 自渲染并入高亮）——专属性不用
+  // data-folder-id，防 App.vue onDrop 系统拖入导入的 closest 误判导入目标
+  quickRecycle: false,
   // 区块标题落点（2026-08-14 区块子系统，LibraryView .block-head 渲染）：文件夹拖入该区块根级
   //（并入高亮）。区块标题互拖排序不走引擎——改 LibraryView 本地让位式拖拽（库菜单同款，
   // 区块段高不定，间隙/插入线模型不适配）
@@ -244,6 +248,7 @@ function resetIndicators(): void {
   dragView.folderGapId = null;
   dragView.tree = null;
   dragView.block = null;
+  dragView.quickRecycle = false;
   if (sess) sess.drop = null;
 }
 
@@ -280,6 +285,16 @@ function updateDropTarget(e: PointerEvent): void {
         dragView.tree = { folderId: id, zone };
         sess.drop = async () => dropFolderBeside(folderIds, id, zone);
       }
+    }
+    return;
+  }
+
+  // 快速访问「回收站」行（2026-09-08 用户定）：素材拖入 = 丢到回收站（Del 同路径，免右键）；
+  // 文件夹不落——删除文件夹 = 素材移未分类语义不同，不给落点误导；Ctrl 无语义忽略
+  if (el.closest<HTMLElement>("[data-quick-drop='recycle']")) {
+    if (sess.kind === "asset") {
+      dragView.quickRecycle = true;
+      sess.drop = async () => dropAssetsToRecycle(items);
     }
     return;
   }
@@ -347,6 +362,13 @@ async function dropAssetsInto(items: PlacementRef[], folderId: string, ctrl: boo
     return;
   }
   await ops.movePlacements(items, folderId);
+}
+
+// 素材落快速访问「回收站」行（2026-09-08 用户定）：丢到回收站——deletePlacements 默认
+// action "recycle"，与 Del 键同路径（可撤销；回收站条目互相独立，多次拖入各自成条目）
+async function dropAssetsToRecycle(items: PlacementRef[]): Promise<void> {
+  if (items.length === 0) return;
+  await ops.deletePlacements(items);
 }
 
 // 素材落卡片间隙：reorder_placements（仅当前文件夹段内项参与；beforeItem = 间隙后项）

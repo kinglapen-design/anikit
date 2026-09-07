@@ -80,6 +80,9 @@ const autoImportPrompt = ref(false);
 const autoImportBusy = ref(false);
 
 function onQuickSelect(key: string): void {
+  // 有效拖拽结束后的紧随 click 不触发（2026-09-08 回收站行成落点——拖素材丢回收站松手的
+  // click 落在行上会误导航；与树 item / 区块标题 suppressClick 同口径，C4 引擎置位）
+  if (dragView.suppressClick) return;
   if (key === "inbox" && !currentSpace.autoImport) {
     autoImportPrompt.value = true;
     return;
@@ -112,7 +115,9 @@ const quickItems = [
   { key: "recycle", icon: "trash", label: "回收站" },
 ] as const;
 
-// 数量口径（4.4）：全部=全部 Placement；未分类=root；收件箱=importedFrom=inbox 未摘标；
+// 数量口径（4.4）：全部=全部 Placement；未分类=root；
+// 收件箱=已导入（importedFrom=inbox 未摘标）+ 磁盘实况未导入源文件（2026-09-08 用户定：
+// inboxDisk 热刷新现成，数量与视口「工程文件 + 已导入」两区块同口径）；
 // 最近使用 / 回收站（6.1 二轮，2026-07-29）= recentAssets / recycleEntries 实长；
 // 工作空间 / 标签 / 快捷入口占位视图不接（对应阶段未开工）
 function quickCount(key: (typeof quickItems)[number]["key"]): number | undefined {
@@ -122,7 +127,7 @@ function quickCount(key: (typeof quickItems)[number]["key"]): number | undefined
     case "uncategorized":
       return content.uncategorizedCount;
     case "inbox":
-      return content.inboxCount;
+      return content.inboxCount + content.inboxDisk.length;
     case "thumbnail":
       return content.thumbnailCount;
     case "recent":
@@ -321,6 +326,8 @@ async function onSwitchLibrary(e: MouseEvent): Promise<void> {
         :count="quickCount(q.key)"
         :switchable="q.key === 'all'"
         :selected="content.sidebarSelected === `quick:${q.key}`"
+        :drop-zone="q.key === 'recycle' && dragView.quickRecycle ? 'into' : null"
+        :data-quick-drop="q.key === 'recycle' ? 'recycle' : undefined"
         @click="onQuickSelect(q.key)"
         @switch="onSwitchLibrary"
         @contextmenu="onQuickMenu(q.key, $event)"

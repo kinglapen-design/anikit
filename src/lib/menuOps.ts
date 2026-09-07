@@ -7,6 +7,7 @@ import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
+import { useUiStore } from "../stores/ui";
 import {
   createFolder,
   createArchive,
@@ -31,9 +32,15 @@ import { treeExpansion } from "./treeExpansion";
 // —— 导入系统对话框（1.3：新增菜单三入口共用——侧栏新增按钮 / 空白右键 / Ctrl+N）——
 // PRD 05-01 导入位置：导入文件 → 当前视口目录；导入文件夹 → 根目录
 export async function pickImportPaths(kind: "files" | "folder"): Promise<void> {
+  const content = useContentStore();
+  // 只读视口兜底（2026-09-08 用户定，isNoImportView 统一判定）：禁导入视口下任何入口触达都
+  // 拒入弹窗——菜单栏两项已 disabled、空态四视口不出，本道兜底防未来新增调用方漏判
+  if (content.isNoImportView) {
+    useUiStore().importRejectOpen = true;
+    return;
+  }
   const picked = await open(kind === "files" ? { multiple: true } : { directory: true, multiple: false });
   if (!picked) return;
-  const content = useContentStore();
   content.importDraft = {
     kind,
     paths: Array.isArray(picked) ? picked : [picked],

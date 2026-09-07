@@ -461,6 +461,12 @@ export const useContentStore = defineStore("content", {
     isRecycleView(state): boolean {
       return state.sidebarSelected === "quick:recycle";
     },
+    // 禁导入视口判定（2026-09-08 用户定）：最近使用 / 自动导入 / 缩略图 / 回收站 = 不允许额外导入的
+    // 只读视口——右键菜单收窄（scanOnlySpec / recycleBlankSpec）/ 拖拽拒入弹窗 / 菜单栏导入项禁用 /
+    // Ctrl+V 系统剪贴板导入拒入，四处同一判定
+    isNoImportView(state): boolean {
+      return ["quick:recent", "quick:inbox", "quick:thumbnail", "quick:recycle"].includes(state.sidebarSelected);
+    },
     // 快速访问 item 数量（4.4 查缺补漏）：全部 / 未分类 / 收件箱接真实统计；
     // 最近使用 / 回收站留 6.1，工作空间 / 标签 / 快捷入口占位视图不接（对应阶段未开工）；
     // 2026-08-13 起与视图同口径：按实际 Placement 计数（链接不再隐藏）

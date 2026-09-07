@@ -38,6 +38,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   const undo = useUndoStore();
   const search = useSearchStore();
   const tabs = useTabsStore();
+  const ui = useUiStore();
 
   // 剪贴板导入（PRD 05-01；2026-07-27 扩：图片 + 文件列表，恒 Copy）；剪贴板无图无文件属常态，静默降级
   // 6.1 仲裁（2026-07-28 定案）：内部剪贴板非空时 Ctrl+V 归 onOperationKeys（链接粘贴 / 移动，
@@ -49,6 +50,12 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     if (isEditableTarget(e.target as HTMLElement)) return;
     if (opts.needLibrarySetup() || content.importDraft) return;
     if (usePickerStore().active) return; // 选择模式（6.2）：导入是编辑类，禁用
+    // 只读视口拒入（2026-09-08 用户定，isNoImportView 统一判定）：最近使用 / 自动导入 / 缩略图 /
+    // 回收站不允许额外导入——系统剪贴板导入同拖拽口径弹错误弹窗（与拖拽共用 ui.importRejectOpen）
+    if (content.isNoImportView) {
+      ui.importRejectOpen = true;
+      return;
+    }
     try {
       await content.startImportClipboard(content.currentFolderId);
     } catch (err) {

@@ -46,6 +46,7 @@ import PropsDialog from "./components/PropsDialog.vue";
 import DescEditDialog from "./components/DescEditDialog.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import AppConfirm from "./components/AppConfirm.vue";
+import ConfirmModal from "./components/modals/ConfirmModal.vue";
 import OrphanInfosAlert from "./components/OrphanInfosAlert.vue";
 import MovePanel from "./components/MovePanel.vue";
 import BatchRenameDialog from "./components/BatchRenameDialog.vue";
@@ -129,6 +130,13 @@ function onImportConfirm(opts: { structure: "flatten" | "keep"; source: "copy" |
 // 拖拽导入（PRD 05-01）：webview 拖放事件拿文件路径，落点在文件树 item 上则导入至该文件夹
 async function onDrop(paths: string[], x: number, y: number): Promise<void> {
   if (wizardState.open || paths.length === 0 || content.importDraft) return;
+  // 只读视口拒入（2026-09-08 用户定，与右键菜单收窄同口径，isNoImportView 统一判定）：
+  // 最近使用 / 自动导入 / 缩略图 / 回收站不允许额外导入——拖入直接拒绝弹错误弹窗，
+  // 走 classify / importDraft 前拦截（弹窗开关在 ui store：Ctrl+V 拒入同弹，lib 无权触达本地态）
+  if (content.isNoImportView) {
+    ui.importRejectOpen = true;
+    return;
+  }
   try {
     const { kind } = await invoke<{ kind: "files" | "folder" | "mixed"; fileCount: number }>(
       "classify_paths",
@@ -384,6 +392,18 @@ async function togglePin(): Promise<void> {
     <ContextMenu />
     <!-- 通用确认弹窗（6.3：警示前置 / 删除文件夹 / 彻底删除二次确认） -->
     <AppConfirm v-if="selection.confirmPrompt" />
+    <!-- 只读视口导入拒入（2026-09-08：最近使用/自动导入/缩略图/回收站，与右键收窄同口径）——
+         新弹窗定稿件 ConfirmModal danger（状态/禁止钮），纯告知两钮同义关闭；拖拽与 Ctrl+V 共用 -->
+    <ConfirmModal
+      v-if="ui.importRejectOpen"
+      title="当前视口不允许导入"
+      kind="danger"
+      confirm-label="知道了"
+      @confirm="ui.importRejectOpen = false"
+      @cancel="ui.importRejectOpen = false"
+    >
+      「最近使用」「自动导入」「缩略图」「回收站」视口不允许额外导入素材，请切换到文件夹视口后再导入。
+    </ConfirmModal>
     <!-- 无主资产警告弹窗（2026-09-02 开库自检，资产污染修复配套；内部 v-if 驱动） -->
     <OrphanInfosAlert />
   </div>

@@ -98,6 +98,9 @@ export const useUiStore = defineStore("ui", {
     // 区块管理弹窗开关（2026-08-14 区块子系统，会话级）：SidebarLeft section-manage 按钮置位，
     // 弹窗宿主 App.vue（同 FailedListDialog 惯例）
     blockManageOpen: false,
+    // 只读视口拖拽/快捷键导入拒入弹窗开关（2026-09-08，会话级）：onDrop 守卫与 Ctrl+V 系统剪贴板
+    // 导入守卫置位（两处 lib 无权触达 App.vue 本地态），ConfirmModal 宿主 App.vue
+    importRejectOpen: false,
     // 分组弹窗（3.5 二轮，会话级）：groupManageOpen = 33 稿分组管理 / groupEditOpen = 34 稿新建分组；
     // groupDialogFolder = 打开时锁定的目标文件夹（打开后切视口不漂移）；工具栏分组管理钮 /
     // 12 稿分组菜单「新建分组 / 编辑分组」置位，宿主 App.vue
