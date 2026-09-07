@@ -1,6 +1,6 @@
 // 菜单栏「视图」按钮 · 视图菜单 spec（2026-09-06 接业务轮；稿 = 用户当场供稿截图，同日会话）：
-// 三组 = 大纲管理 / 分组管理 / 信息查看管理 │ 查看方式 ▸ / 标签页 ▸ │
-// 显示侧边栏 / 显示信息面板 / 始终显示搜索框。
+// 四组 = 大纲管理 / 分组管理 / 信息查看管理 │ 查看方式 ▸ / 标签页 ▸ │
+// 显示侧边栏 / 显示信息面板 / 始终显示搜索框 │ 重置窗口（2026-09-07 用户定）。
 //
 // 口径：
 // - 大纲管理 = 侧栏区块管理弹窗（30 稿 BlockManageDialog，ui.blockManageOpen——侧栏大纲的
@@ -24,6 +24,7 @@
 //   下沉/浮入动画），关闭动作 toast 告知 Ctrl+F 通道；
 // - 选择模式（picker.active）：查看方式 / 搜索框放行（§12.1 白名单），管理弹窗 / 标签页 /
 //   侧栏收展（左栏 = 挑选主通路恒在；右栏 = PickerPanel 整体替换中）禁用。
+import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
 import { useContentStore } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
 import { useTabsStore } from "../../stores/tabs";
@@ -82,6 +83,24 @@ function toggleSearchBar(): void {
   ui.showSearchBar = !ui.showSearchBar;
   if (!ui.showSearchBar) {
     useToastStore().notify({ message: "搜索框已隐藏，按 Ctrl+F 可随时调出" });
+  }
+}
+
+// 「重置窗口」（2026-09-07 用户定）：窗口与三栏回设计基准——1400×1100 = 左 254 + 中 880 + 右 266
+//（布局/主窗口稿；右栏稿 264 与主窗口稿 1400 总宽差 2px，以用户定 266 收口，中栏 880 由总宽挤出）。
+// 最大化先还原再定尺寸（最大化下 setSize 不生效）；收起的侧栏一并展开——三栏齐才达成 254/880/266
+async function resetWindow(): Promise<void> {
+  const ui = useUiStore();
+  ui.leftWidth = 254;
+  ui.rightWidth = 266;
+  ui.leftCollapsed = false;
+  ui.rightCollapsed = false;
+  const win = getCurrentWindow();
+  try {
+    if (await win.isMaximized()) await win.unmaximize();
+    await win.setSize(new LogicalSize(1400, 1100));
+  } catch (e) {
+    console.warn("重置窗口尺寸失败：", e);
   }
 }
 
@@ -254,5 +273,7 @@ export function viewMenuSpec(): CtxEntry[] {
       disabled: picking,
     },
     { label: "始终显示搜索框", checkable: true, checked: () => ui.showSearchBar, keepOpen: true, action: toggleSearchBar },
+    "divider",
+    { label: "重置窗口", action: () => void resetWindow() },
   ];
 }

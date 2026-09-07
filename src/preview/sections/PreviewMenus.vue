@@ -143,8 +143,11 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
               <MenuItem label="显示信息面板" checkable checked />
               <MenuItem label="始终显示搜索框" checkable checked />
             </div>
+            <div class="pv-menu-group">
+              <MenuItem label="重置窗口" />
+            </div>
           </div>
-          <span class="pv-cap">根级三组（信息查看管理 = 业务未立项占位）</span>
+          <span class="pv-cap">根级四组（信息查看管理 = 业务未立项占位；重置窗口 = 窗口 1400×1100 + 三栏 254/880/266 回设计基准，2026-09-07）</span>
         </div>
         <div class="pv-demo-cell">
           <div class="pv-menu-shell">

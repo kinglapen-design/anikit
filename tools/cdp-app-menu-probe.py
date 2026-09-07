@@ -16,11 +16,13 @@
 #   E4 文件夹域分流（克隆在 / 创建副本不在）+ 克隆发 clone_folders；E5 撤销点亮链（桩 __undo 态 + 操作后 refreshState 拉取）；
 #   E6 同钮 toggle；E7 回收站视口只读——编辑类全 disabled。
 # V 视图菜单（2026-09-06 接业务轮；稿 = 用户当场供稿截图，spec = src/lib/menuSpecs/viewMenu.ts）：
-#   V1 根级 8 项 3 组 + 禁用态（信息查看管理占位）+ 弹出位 + 三显隐开关默认勾；V2 查看方式 L2 全列 + Alt+1 标注
+#   V1 根级 9 项 4 组 + 禁用态（信息查看管理占位）+ 弹出位 + 三显隐开关默认勾；V2 查看方式 L2 全列 + Alt+1 标注
 #   + 点布局 keepOpen 对勾实时换（checked 函数化实证）；V3 排序 L3（自定义档升/降禁用 → 点键实时解禁 disabled 函数化）；
 #   V4 时间/简介 L3（标签档占位禁用）；V5 开关组；V6 大纲管理 = 区块管理弹窗；V7 分组管理（f1 点亮 / 快速访问禁用）；
 #   V8 标签页 L2（submenu 函数实时清单：单页禁用 → 分屏两页 → 关闭所有回单页）；V9 侧栏/信息面板收展 + 对勾实时；
-#   V10 始终显示搜索框（关 = 隐藏 + toast 告知 Ctrl+F；Ctrl+F 唤出聚焦 / Esc 收回）；V11 同钮 toggle。
+#   V10 始终显示搜索框（关 = 隐藏 + toast 告知 Ctrl+F；Ctrl+F 唤出聚焦 / Esc 收回）；V11 同钮 toggle；
+#   V12 重置窗口（2026-09-07 用户定：窗口 1400×1100 + 左 254 / 中 880 / 右 266 回设计基准——桩环境只验
+#   三栏宽与 set_size IPC 参数，真机尺寸归实机走查）。
 # D 截图 root / docs-l3 / lib-l3 / edit-empty / edit-asset / view-l2 / view-sort。
 import asyncio
 import base64
@@ -37,7 +39,7 @@ URL = "http://localhost:5373"
 
 # 桩同 cdp-context-menu-probe（2026-09-05 全量启动链路）；__calls 记录全量 invoke 供断言
 STUB = r"""
-window.__calls = { set_folder_colors: [], set_asset_props: [], set_archive_props: [], search_assets: [], delete_placements: [], duplicate_placements: [], clone_folders: [] };
+window.__calls = { set_folder_colors: [], set_asset_props: [], set_archive_props: [], search_assets: [], delete_placements: [], duplicate_placements: [], clone_folders: [], set_size: [] };
 // 撤销栈有状态桩（E5 编辑菜单「撤销」点亮链）：操作 runOp 收尾 refreshState 拉取本对象
 window.__undo = { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" };
 const TREE = {
@@ -119,6 +121,11 @@ window.__TAURI_INTERNALS__ = {
       })));
     }
     if (cmd === "get_undo_state") return Promise.resolve(JSON.parse(JSON.stringify(window.__undo)));
+    // 视图菜单 V12「重置窗口」（2026-09-07）：窗口插件 IPC 只记录参数（桩环境无真窗口可缩放）
+    if (cmd === "plugin:window|set_size") {
+      window.__calls.set_size.push(JSON.parse(JSON.stringify(args ?? {})));
+      return Promise.resolve(null);
+    }
     // 编辑菜单 E 段三件（2026-09-06）：只记录参数不回写数据（断言 = 调用本身）
     if (cmd === "delete_placements") {
       window.__calls.delete_placements.push(JSON.parse(JSON.stringify(args ?? {})));
@@ -547,9 +554,9 @@ async def main():
             await js_click(el_center(VIEW_BTN))
             check("V1-1 视图菜单出（1 个 .app-menu）", await menu_count() == 1)
             labels = await menu_labels(0)
-            expect_v = ["大纲管理", "分组管理", "信息查看管理", "查看方式", "标签页", "显示侧边栏", "显示信息面板", "始终显示搜索框"]
-            check("V1-2 根级 8 项全列", json.dumps(labels) == json.dumps(expect_v), str(labels))
-            check("V1-3 三组", await ev("document.querySelectorAll('.app-menu')[0].querySelectorAll('.menu-group').length === 3"))
+            expect_v = ["大纲管理", "分组管理", "信息查看管理", "查看方式", "标签页", "显示侧边栏", "显示信息面板", "始终显示搜索框", "重置窗口"]
+            check("V1-2 根级 9 项全列", json.dumps(labels) == json.dumps(expect_v), str(labels))
+            check("V1-3 四组", await ev("document.querySelectorAll('.app-menu')[0].querySelectorAll('.menu-group').length === 4"))
             check("V1-4 信息查看管理占位禁用；大纲/分组管理点亮（f1 视口）", await ev(f"({js_find('信息查看管理')})?.disabled === true && ({js_find('大纲管理')})?.disabled === false && ({js_find('分组管理')})?.disabled === false"))
             check("V1-5 弹出位 = 视图钮左缘对齐 + 底 +4 / min-width 250", await ev(f"(() => {{ const m = document.querySelector('.app-menu').getBoundingClientRect(); const b = {VIEW_BTN}.getBoundingClientRect(); return Math.abs(m.left - b.left) <= 2 && Math.abs(m.top - b.bottom - 4) <= 2 && document.querySelector('.app-menu').style.minWidth === '250px'; }})()"))
             check("V1-6 显示侧边栏/信息面板/搜索框 默认全勾", await ev(f"({js_find('显示侧边栏')})?.classList.contains('checked') && ({js_find('显示信息面板')})?.classList.contains('checked') && ({js_find('始终显示搜索框')})?.classList.contains('checked')"))
@@ -679,6 +686,17 @@ async def main():
             check("V11-1 视图钮开", await menu_count() == 1)
             await js_click(el_center(VIEW_BTN))
             check("V11-2 同钮再点 toggle 关", await menu_count() == 0)
+
+            # V12 重置窗口（2026-09-07 用户定：窗口 1400×1100 + 三栏 254/880/266 回设计基准）——
+            # 桩环境无真窗口：验三栏宽 + set_size IPC 参数；真机尺寸 / 最大化还原归实机走查
+            await ev("window.__calls.set_size = []")
+            await js_click(el_center(VIEW_BTN))
+            check("V12-1 视图菜单开", await menu_count() == 1)
+            await js_click(el_center(js_find("重置窗口")))
+            await asyncio.sleep(0.6)
+            check("V12-2 点重置窗口 = 菜单关（非 keepOpen）", await menu_count() == 0)
+            check("V12-3 左栏 254 / 右栏 266（侧栏收展动画后）", await ev("document.querySelector('.sidebar-left').offsetWidth === 254 && document.querySelector('.sidebar-right').offsetWidth === 266"))
+            check("V12-4 set_size IPC = 逻辑 1400×1100", await ev("window.__calls.set_size.length === 1 && window.__calls.set_size[0].value?.Logical?.width === 1400 && window.__calls.set_size[0].value?.Logical?.height === 1100"), str(await ev("window.__calls.set_size")))
 
             print("----")
             print("FAIL:", fails if fails else "无")
