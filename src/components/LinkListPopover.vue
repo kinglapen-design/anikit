@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 徽章悬停链接列表浮层（阶段七稿：docs/UI 重构/Design Token/组件/悬浮栏/悬停-tip/悬停-链接列表）：
+// 徽章悬停链接列表浮层（阶段七稿：docs/06_UI重构/Design Token/组件/悬浮栏/悬停-tip/悬停-链接列表）：
 // 悬停卡片徽章（origin ★ / 链接 icon）弹出该文件全部活位置列表。
 // 壳 = 通用/半透明-1 + 1px 亮色/半透明-3 真 border + 小阴影 + blur 小 + 圆角 6；宽随内容（max-content，上限 360）。
 // 行结构 = LinkListRows（2026-09-05 抽出共用：右键「打开文件链接所在位置」二级菜单同构）。

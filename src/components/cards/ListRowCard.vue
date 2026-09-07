@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 列表卡片——docs/UI 重构/Design Token/组件/卡片/列表卡片.md：
+// 列表卡片——docs/06_UI重构/Design Token/组件/卡片/列表卡片.md：
 // 行高 57 / padding 6/12/6/6 / gap 12 / 圆角 8；通用二级底 + 通用三级 1px 描边；
 // hover = 底升通用三级 + 描边升通用五级（描边瞬时切换，踩坑 036 口径）；选中 2px 品牌描边（.kc-sel）。
 // 列：缩略图 80×45（通用三级底 + 五级 1px 描边 + 圆角 6；thumbFit = contain 默认 / icon 格式图标

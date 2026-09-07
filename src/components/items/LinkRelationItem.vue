@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 链接关系 item——docs/UI 重构/Design Token/组件/item/详情面板 item/链接关系（2026-08-28 用户补稿）
+// 链接关系 item——docs/06_UI重构/Design Token/组件/item/详情面板 item/链接关系（2026-08-28 用户补稿）
 // 卡片 240×50 / padding 12 / gap 6：关系标签 chip（通用六级底 + 立体感-通用 + 圆角 6，
 // 正文-加粗 亮色/三级；**仅悬停 chip 本身** = 亮色/半透明-2 + 输入指针，卡 hover 不变——
 // 2026-08-28 走查定，不然 chip 没反馈；输入态 = 去立体感 + 通用二级底 +

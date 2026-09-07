@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 组件 按钮展区——docs/UI 重构/Design Token/组件/按钮/ 六族 17 稿的全态展示与验收面。
+// 组件 按钮展区——docs/06_UI重构/Design Token/组件/按钮/ 六族 17 稿的全态展示与验收面。
 // forceState 强制 hover 用于静态验收；分段控制器 / 拉下按钮为真实交互实例（v-model）。
 // 动画时长：全族 hover / 颜色过渡 150ms；拉下按钮展开收起 250ms；分段控制器滑块 300ms。
 import { ref } from "vue";

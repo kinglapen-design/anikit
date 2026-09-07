@@ -41,7 +41,7 @@ const nav = [
     <header class="pv-head">
       <h1 class="pv-title">AniKit 设计系统</h1>
       <p class="pv-sub">
-        源头：docs/UI 重构 / Design Token / Token.md（阶段七，2026-08-28 起）· 仅开发环境可见
+        源头：docs/06_UI重构 / Design Token / Token.md（阶段七，2026-08-28 起）· 仅开发环境可见
       </p>
       <nav class="pv-nav">
         <a v-for="n in nav" :key="n.id" class="pv-nav-item" :href="`#design-system-${n.id}`">

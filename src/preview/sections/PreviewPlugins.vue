@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 插件面板展区——docs/UI 重构/Design Token/布局/主窗口/工具栏展开窗口/插件.md（列表浮层 400×450）
+// 插件面板展区——docs/06_UI重构/Design Token/布局/主窗口/工具栏展开窗口/插件.md（列表浮层 400×450）
 // + Animate 插件.md（详情子窗口 544×538）（2026-09-06 插件窗轮）。
 // PluginListPanel 是 AppMenu fixed 浮层、AnimatePluginWindow 挂载即调后端命令——均不便静态展示，
 // 按 PreviewModals 的 pv-modal-shell 手法复刻口径静态陈列（口径变更时与组件同步）；

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 选择文件-通用 item——docs/UI 重构/Design Token/组件/item/选择模式 item/选择文件-通用
+// 选择文件-通用 item——docs/06_UI重构/Design Token/组件/item/选择模式 item/选择文件-通用
 // 卡片 240×34 / padding 8 12：名称（正文 二级）+ 关闭钮（恒显，选择模式 = 移出备选）；
 // hover = 通用四级底 + 通用六级描边 + 输入指针；输入态（选中进入）= 通用二级底 + 亮色/半透明-1 描边。
 import "./items.css";

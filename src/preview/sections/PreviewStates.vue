@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 组件 空态展区——docs/UI 重构/Design Token/布局/主窗口/中间面板/中间面板-内容容器-空文件夹.md 的展示与验收面。
+// 组件 空态展区——docs/06_UI重构/Design Token/布局/主窗口/中间面板/中间面板-内容容器-空文件夹.md 的展示与验收面。
 // EmptyFolderState 实机根层 pointer-events none 穿透（不挡空白右键 / 框选 / 拖入导入），仅按钮可点；
 // 按钮接真实业务（menuOps.pickImportPaths 系统导入对话框）——预览页纯展示口径：演示舞台整层禁指针（2026-08-30 内容容器轮）。
 import EmptyFolderState from "../../components/EmptyFolderState.vue";

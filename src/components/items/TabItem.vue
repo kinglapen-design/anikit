@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 标签页 item——docs/UI 重构/Design Token/组件/item/标签页 item/ + 布局/中间面板-标签栏
+// 标签页 item——docs/06_UI重构/Design Token/组件/item/标签页 item/ + 布局/中间面板-标签栏
 // 选中：通用/一级底 + 圆角 8 8 0 0 + 与中间面板无缝衔接（底部两侧反弧肩膀，radial-gradient 反圆角）；
 // 未选中 hover：四周 4px 间距的 6px 圆角矩形罩（亮色/半透明-3，2026-08-28 用户定）；关闭钮常态仅选中显示。
 // 锁定（稿未画）：pin-small 14 替代关闭钮，色 = 未选中亮/三级、选中亮/二级（2026-08-30 用户定）。

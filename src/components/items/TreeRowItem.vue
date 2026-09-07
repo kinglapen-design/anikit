@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 树容器 item 族（文件夹 / 快速访问 / 档案）——docs/UI 重构/Design Token/组件/item/树容器 item/
+// 树容器 item 族（文件夹 / 快速访问 / 档案）——docs/06_UI重构/Design Token/组件/item/树容器 item/
 // 壳：宽 100% 随父容器（稿值 230 = 254 侧栏 − 12×2 的画布语境，卡片族尺寸模型口径）× 26 高 /
 // padding 4 6 / gap 6 / 圆角 6；hover = 亮色/半透明-3；选中 = 半透明-2 + 立体感-通用 +
 // 展开钮/提示装饰/图标/名称/数量提亮 亮色/一级。

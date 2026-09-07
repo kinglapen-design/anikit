@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 图标按钮——docs/UI 重构/Design Token/组件/按钮/ 图标按钮-通用 / 大 / 小 / 立体 / 立体-半透明 五稿合一：
+// 图标按钮——docs/06_UI重构/Design Token/组件/按钮/ 图标按钮-通用 / 大 / 小 / 立体 / 立体-半透明 五稿合一：
 // variant：plain = 30×30 padding 6 圆角 6，图标 18 亮色/三级（hover 亮色/半透明-3 底 + 图标升二级）；
 //           bare = 裸图标无容器（size lg = 18 / sm = 14，hover 图标升二级）；
 //           solid = 通用/四级 + 立体感-通用，高 34 填充式圆角 8，图标 18 恒 亮色/二级（hover 通用/六级）；

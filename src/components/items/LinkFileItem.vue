@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 链接文件 item——docs/UI 重构/Design Token/组件/item/详情面板 item/链接文件
+// 链接文件 item——docs/06_UI重构/Design Token/组件/item/详情面板 item/链接文件
 // 卡片 240×66 / padding 12 / 两行：文件夹图标 + 路径（区块名 正文加粗 二级 / 目录 加粗 三级）、文件名 三级；
 // 关闭钮 hover 从右缘向左滑入并把内容推左（items.css .ni-slide 推挤机制，2026-08-29 走查定——
 // 此前绝对定位 translateX 从容器右缘进来，与其他 item 从内容缘进来不统一，作废）；

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 模态窗口展区——docs/UI 重构/Design Token/组件/模态窗口/弹窗.md（警告与错误，2026-09-01）。
+// 模态窗口展区——docs/06_UI重构/Design Token/组件/模态窗口/弹窗.md（警告与错误，2026-09-01）。
 // ConfirmModal 是 fixed 遮罩层不便静态展示：.pv-modal-shell 复刻窗口口径（口径变更时与组件同步），
 // 末行真实弹出实例验收遮罩（黑色-50%）与弹出动画（缩放+淡入 150ms）。
 import { ref } from "vue";

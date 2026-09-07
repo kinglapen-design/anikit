@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 空文件夹空态——docs/UI 重构/Design Token/布局/主窗口/中间面板/中间面板-内容容器-空文件夹.md：
+// 空文件夹空态——docs/06_UI重构/Design Token/布局/主窗口/中间面板/中间面板-内容容器-空文件夹.md：
 // 列表容器中央 = 空文件夹插画（200×181.4，opacity 0.6 + 小阴影 drop-shadow 0 4 20 40%）
 // + 标题「暂无文件」（标题档 二级）+ 提示（正文 三级）+ 按钮组（gap 8：
 // 导入文件 / 导入文件夹 = ActionButton solid md + 前置图标 18，各 137 宽稿值）；

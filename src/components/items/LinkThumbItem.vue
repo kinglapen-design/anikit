@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 链接缩略图 item——docs/UI 重构/Design Token/组件/item/详情面板 item/链接缩略图
+// 链接缩略图 item——docs/06_UI重构/Design Token/组件/item/详情面板 item/链接缩略图
 // 卡片 240×42 / padding 12：图片图标 + 名称（正文 二级）+ 数量（数字档 三级）；关闭钮 hover 滑入。
 import "./items.css";
 import AppIcon from "../AppIcon.vue";

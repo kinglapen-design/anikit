@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 左侧边栏（7.1 十八轮贴稿重构，稿 = docs/UI 重构/Design Token/布局/主窗口/左侧边栏/）：
+// 左侧边栏（7.1 十八轮贴稿重构，稿 = docs/06_UI重构/Design Token/布局/主窗口/左侧边栏/）：
 // 254 宽 column 三段——菜单栏 46（收起侧边栏 plain 钮 + 菜单/编辑/插件/视图 四文字钮，ghost sm；
 // 「菜单」2026-09-05 接业务 = 应用主菜单（menuSpecs/appMenu，按钮下方弹出 + toggle）；
 // 「编辑」2026-09-06 接业务 = 编辑菜单（menuSpecs/editMenu，同 toggle 口径）；

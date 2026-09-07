@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 插件列表面板（稿 = docs/UI 重构/Design Token/布局/主窗口/工具栏展开窗口/插件.md，400×450 非模态浮层）：
+// 插件列表面板（稿 = docs/06_UI重构/Design Token/布局/主窗口/工具栏展开窗口/插件.md，400×450 非模态浮层）：
 // 壳 = AppMenu 机制（fixed + 视口钳制 + 点外/Esc 关 + trigger 触发钮豁免 + 弹出动画 menu-pop），
 // 视觉覆盖为稿口径：g3 底 + 1px g5 真 border（速查 §1 弹窗口径）+ 大阴影 + 圆角 8；
 // 打开/关闭状态在 lib/pluginPanel（三入口共用：菜单栏「插件」钮 / 工具栏 plugin 钮 / 预览标题栏 plugin 钮）。

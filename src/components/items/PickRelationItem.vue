@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 选择关系 item——docs/UI 重构/Design Token/组件/item/选择模式 item/选择关系
+// 选择关系 item——docs/06_UI重构/Design Token/组件/item/选择模式 item/选择关系
 // 卡片 240×118 / padding 12 / 列 gap 8：
 //   行1 选中文件框（通用二级底 + 五级描边）+ 关闭钮（恒显）；
 //   行2 关系双框（同款底，label + 箭头-小：源图形朝上，左框转 180 = ↓、右框原样 = ↑）+ 关闭占位（透明，对齐用）；

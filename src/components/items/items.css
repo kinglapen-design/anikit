@@ -1,4 +1,4 @@
-/* item 族共享样式（阶段七新体系，docs/UI 重构/Design Token/组件/item/）。
+/* item 族共享样式（阶段七新体系，docs/06_UI重构/Design Token/组件/item/）。
    只引 --n- token；hover 换 1px 中性描边瞬时切换（颜色过渡禁用于描边，速查表 §7），仅背景过渡。 */
 
 /* 详情面板 / 选择模式卡片壳：通用三级底 + 通用五级 1px 描边 + 圆角 8；

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 输入框——docs/UI 重构/Design Token/组件/输入框/ 大 / 小 两稿合一：
+// 输入框——docs/06_UI重构/Design Token/组件/输入框/ 大 / 小 两稿合一：
 // size：lg = 高 34 / padding 8/12 / 常态描边 通用三级；sm = 高 26 / padding 4/12 / 常态描边 亮色/半透明-3，
 // 文字居中（稿 justify-content center，年/月/日小框语境）；lg 文字左对齐。
 // 底色通用二级 + 圆角 8；文字 正文档 13/18 亮色/二级；占位符 亮色/四级（2026-08-29 用户定）。

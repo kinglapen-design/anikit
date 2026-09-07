@@ -8,7 +8,7 @@
 - **通道定案 = 本地 WS 推**（16 路全速：WS 1686fps / invoke 876 / custom protocol 924；50 路 2400fps）。
 - **生产语义（pace=1 原速，50 路 1080p→320p，32 核机）**：GIF CPU 17%（每路 9.1/10fps）、H264 CPU 29%（每路 25.6/30fps）。
 - **边界**：lgpl 构建无 libwebp decoder → 动图 webp 归主线 image-webp；Windows sleep 15.6ms 粒度坑（铺量 timeBeginPeriod 或消费端节奏）。
-- 详细数据与铺量草案：`docs/04_开发日志/2026-08-20.md`；踩坑 038/039/040。
+- 详细数据与铺量草案：`docs/02_开发日志/2026-08-20.md`；踩坑 038/039/040。
 
 ## 组成
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 污染文件 item——docs/UI 重构/Design Token/组件/item/详情面板 item/污染文件
+// 污染文件 item——docs/06_UI重构/Design Token/组件/item/详情面板 item/污染文件
 // 卡片 240×42 / padding 12：警告-小图标 + 名称（正文 二级）；
 // 按钮组（打开资源管理器 / 导入 / 回收站，18×18，gap 8）常态不显示，hover 右至左滑入，按钮 hover 提亮二级。
 import "./items.css";

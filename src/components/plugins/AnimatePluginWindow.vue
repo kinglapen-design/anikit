@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Animate 插件详情子窗口（稿 = docs/UI 重构/Design Token/布局/主窗口/工具栏展开窗口/Animate 插件.md，
+// Animate 插件详情子窗口（稿 = docs/06_UI重构/Design Token/布局/主窗口/工具栏展开窗口/Animate 插件.md，
 // 544×578 非模态独立窗——稿值 538 高，2026-09-06 九轮用户定加高 40（路径组折行后最后一行被迫滚动一条），
 // 可移动/缩放、单例聚焦——open_plugin_window 后端命令）：
 // 经 URL ?plugin=animate 进入（App.vue query 分发，?preview= 先例）；窗口壳（fx 云母/实色、圆角、

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 笔记 item——docs/UI 重构/Design Token/组件/item/笔记 item/
+// 笔记 item——docs/06_UI重构/Design Token/组件/item/笔记 item/
 // 24 高 / padding 4 6 / gap 6 / 圆角 6；时间码 = 数字档 亮色/二级，文本 = 次要文字 亮色/三级；
 // 关闭钮常态不显示，hover 从右缘向左滑入并把文本推左（items.css .ni-slide 推挤机制）；hover = 半透明-3，选中 = 半透明-2 + 文本升二级。
 import "./items.css";

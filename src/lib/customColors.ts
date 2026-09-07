@@ -23,7 +23,7 @@ export const CUSTOM_COLORS: CustomColorDef[] = [
 // 旧九色名 → 阶段七新九色名（2026-08-30 左栏轮过渡映射）：存量 Folder.color 为旧体系
 // 暗底色名（--custom-{tint}），新树容器（TreeRowItem tint / 缩进线 tint）吃新名
 //（--n-custom-{tint}-1/-2 亮暗对，TwoToneIcon data-tint 集合）。
-// 新体系无 orange / blue-violet：就近归 yellow / purple。数据层迁移（连同 02自定义 图标
+// 新体系无 orange / blue-violet：就近归 yellow / purple。数据层迁移（连同 02_自定义 图标
 // 文件干映射，命名对照.md 02 节注）归独立待办，本表常驻至迁移完成。
 const LEGACY_TINT_MAP: Record<string, string> = {
   red: "red",

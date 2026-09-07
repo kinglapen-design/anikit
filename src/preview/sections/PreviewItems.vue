@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 组件 item 展区——docs/UI 重构/Design Token/组件/item/ 六族 15 稿的全态展示与验收面。
+// 组件 item 展区——docs/06_UI重构/Design Token/组件/item/ 六族 15 稿的全态展示与验收面。
 // forceState 强制态用于静态验收（hover / 选中 / 输入态），常态实例保持真实交互可 hover。
 import { ref } from "vue";
 import TreeRowItem from "../../components/items/TreeRowItem.vue";

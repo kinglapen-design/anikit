@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 文件卡片——docs/UI 重构/Design Token/组件/卡片/ 文件卡片-通用 / 视频 / 音频 / 字体 / txt-md 五稿合一
+// 文件卡片——docs/06_UI重构/Design Token/组件/卡片/ 文件卡片-通用 / 视频 / 音频 / 字体 / txt-md 五稿合一
 // （同 ActionButton 五稿合一先例）：
 // kind：general = 缩略图充满（cover，沿用旧网格口径；square = shell 缩略图 / 自动导入未导入 →
 //        正方形卡 + 缩略图占 50% 居中，稿注明确）；

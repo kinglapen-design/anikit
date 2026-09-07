@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 组件 悬浮栏展区——docs/UI 重构/Design Token/组件/悬浮栏/多功能悬浮栏/ 八稿的展示与验收面。
+// 组件 悬浮栏展区——docs/06_UI重构/Design Token/组件/悬浮栏/多功能悬浮栏/ 八稿的展示与验收面。
 // 搜索栏 / 搜索栏展开成筛选 / 播放条 / MarkDown 工具栏 = 同一容器（FloatBar）：
 // 切换宽度平滑伸缩 + 功能按钮 Y 轴出场入场 = 300ms 形态切换 + 位移 4px（2026-08-29 用户两轮定）；hover / 颜色 150ms。
 // 无需悬浮栏 = 宽度 + 透明度退场（稿 prose，visible prop）。

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 列表表头——docs/UI 重构/Design Token/组件/卡片/列表表头.md：
+// 列表表头——docs/06_UI重构/Design Token/组件/卡片/列表表头.md：
 // 通用三级底 + 立体感-通用 + 圆角 8，padding 8/12 gap 12 高 34；
 // 列 = 名称（flex 1）/ 尺寸 / 扩展名 / 文件大小 / 修改日期（各 123 宽，与列表卡片列对齐）；
 // 列标签 正文-加粗 亮色/三级，hover 升二级并出现箭头；箭头 = chevron-small（朝上 = 升序原样，

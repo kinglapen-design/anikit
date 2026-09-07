@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 上下文菜单展区——docs/UI 重构/Design Token/组件/上下文菜单/ 六件稿 + 用户容器定案（2026-09-01）。
+// 上下文菜单展区——docs/06_UI重构/Design Token/组件/上下文菜单/ 六件稿 + 用户容器定案（2026-09-01）。
 // AppMenu/ContextMenu 是 fixed 弹出层不便静态展示，预览壳 .pv-menu-shell 复刻容器口径
 //（宽度内容自适应——最长 item 决定 / padding 6 / --n-g3 底 / 1px --n-g5 inset 描边 / --n-shadow-sm / 圆角 8），
 // 分组 = .pv-menu-group 复刻 ContextMenu .menu-group 口径；item = 真 MenuItem 组件（名称→36px→右件）。

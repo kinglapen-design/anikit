@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 链接音频 item——docs/UI 重构/Design Token/组件/item/详情面板 item/链接音频
+// 链接音频 item——docs/06_UI重构/Design Token/组件/item/详情面板 item/链接音频
 // 卡片 240×46 / padding 12：播放钮（22 圆，品牌底 + 亮色/半透明-1 描边，hover 品牌/提亮）
 // + 名称（正文 二级）+ 波形装饰 49×18（装饰图标原值）；关闭钮 hover 滑入。
 import "./items.css";

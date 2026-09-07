@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 组件 输入框展区——docs/UI 重构/Design Token/组件/输入框/ 大 / 小两稿的展示与验收面。
+// 组件 输入框展区——docs/06_UI重构/Design Token/组件/输入框/ 大 / 小两稿的展示与验收面。
 // force-focus = 聚焦态静态验收；每档附真实可点实例（focus-within 出聚焦描边）。
 // 聚焦描边 = 亮色/半透明-1，opacity 过渡 150ms；hover 稿无不做；禁用态稿未画（09 待办）。占位符 亮色/四级（2026-08-29 用户定）。
 import { ref } from "vue";

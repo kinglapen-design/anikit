@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 色块 item（颜色列表）——docs/UI 重构/Design Token/组件/item/色块 item/
+// 色块 item（颜色列表）——docs/06_UI重构/Design Token/组件/item/色块 item/
 // 壳 = 横排 padding 4 / gap 4 / 圆角 14，figma-css 无 background → 透明布局壳；
 // 色块 = 16×16 圆形（figma-css 未写 radius，以稿图为准）+ 1px 亮色/半透明-1 描边；
 // hover 单块放大 1.25（16→20，2026-08-29 用户定），transform 不影响布局、不撑容器。

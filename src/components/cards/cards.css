@@ -1,4 +1,4 @@
-/* 卡片族共享样式（阶段七新体系，docs/UI 重构/Design Token/组件/卡片/）。
+/* 卡片族共享样式（阶段七新体系，docs/06_UI重构/Design Token/组件/卡片/）。
    只引 --n- token；线条走旧统一方案（速查表 §7 / 旧 AssetCard）：常态 1px = .kc-bordered::after、
    选中 2px 品牌 = .kc-sel::before，双层伪元素 inset 0——不用真 border、无负 inset
    （真 border + 负偏移状态环在分数物理像素下渗线、粗细不均，2026-08-29 走查实锤）；

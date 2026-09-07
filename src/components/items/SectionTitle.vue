@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 标题 item 族（区块标题-树容器 / 区块标题-详情链接 / 分组标题）——
-// docs/UI 重构/Design Token/组件/item/标题 item/
+// docs/06_UI重构/Design Token/组件/item/标题 item/
 // 常态下动作钮（展开/更多/链接/新建）不显示，hover 出现（抓手指针）；按钮组 hover 提亮 亮色/二级。
 // 例外 = staticActions（2026-08-31 用户实机定）：折叠钮与动作组常显——详情面板链接关系 tab 五区块
 // 按区块稿常态帧（稿上按钮组/展开钮即常态画出；「标题上的添加按钮本身就是入口」），

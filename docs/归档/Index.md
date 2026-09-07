@@ -5,4 +5,4 @@
 - [00_修改与需求](00_修改与需求/重新审视.md) —— 用户维护的历史需求与设计稿（阶段 3 修改 / 新 PRD 草稿 / 新阶段划分 / 新 token / 新样式 figma-css 导出稿 / 选择态需求 / 右键菜单 / 实机走查 / 重新审视；入口文件以「重新审视.md」为代表，余见同目录）
 - [阶段进度_旧](阶段进度_旧/) —— 旧体系（阶段 0-9，2026-07-22 版）完成记录与验收清单
 - [通用组件_旧](通用组件_旧/00_组件目录.md) —— 旧样式体系通用组件（按钮 / item 类零件，阶段七已被 Design Token/组件 取代）
-- [样式token_旧](样式token_旧.md) —— 2026-08-07 前旧 token 文档（现以 `docs/UI 重构/Design Token/Token.md` + `src/styles/tokens.css` 为准）
+- [样式token_旧](样式token_旧.md) —— 2026-08-07 前旧 token 文档（现以 `docs/06_UI重构/Design Token/Token.md` + `src/styles/tokens.css` 为准）

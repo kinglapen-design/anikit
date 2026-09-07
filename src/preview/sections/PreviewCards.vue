@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 组件 卡片展区——docs/UI 重构/Design Token/组件/卡片/ 十稿的展示与验收面。
+// 组件 卡片展区——docs/06_UI重构/Design Token/组件/卡片/ 十稿的展示与验收面。
 // force-hover / force-selected = 强制态静态验收；悬停控件（胶囊 / 播放条 / 波形扫过）hover 才现（2026-08-29 用户定）。
 // 动画时长：hover / 颜色 150ms；位移 -4 + 小阴影 250ms；列表表头箭头旋转 300ms。
 // 演示缩略图 = 内联 SVG data URI（纯前端渲染，不调后端命令）。

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 文件夹卡片——docs/UI 重构/Design Token/组件/卡片/文件夹卡片.md：
+// 文件夹卡片——docs/06_UI重构/Design Token/组件/卡片/文件夹卡片.md：
 // 通用三级底 + 立体感-通用 + 圆角 8 + padding 12；hover 仅底升通用六级（稿只给 background-color，
 // 无位移无阴影——与媒体卡不同）；选中 2px 品牌描边（cards.css .kc-sel）。
 // 顶行 = 名称（标题档 一级，截断）+ 文件夹-大双色调图标 24——**图标恒默认色不接 tint**

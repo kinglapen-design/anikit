@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 基础数据 item（信息列表）——docs/UI 重构/Design Token/组件/item/基础数据 item/
+// 基础数据 item（信息列表）——docs/06_UI重构/Design Token/组件/item/基础数据 item/
 // 通用二级底 + 通用三级 1px 描边 + 圆角 8 / padding 12 / 行 gap 4；
 // 行 = 标签（次要文字-加粗 亮色/四级）左 · 值（数字档 Fira Mono 中 亮色/三级）右 space-between，
 // 多截值（日期 + 时间）gap 4；行内 gap 用 8（figma 的 10 是自动布局占位，速查表口径）。

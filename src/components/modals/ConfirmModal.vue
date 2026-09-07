@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 确认弹窗（警告与错误）——docs/UI 重构/Design Token/组件/模态窗口/弹窗.md：
+// 确认弹窗（警告与错误）——docs/06_UI重构/Design Token/组件/模态窗口/弹窗.md：
 // 窗口 520 宽、padding 24、列 gap 24，通用/三级底 + 1px 通用/五级真 border
 //（弹窗口径：真 border 盒模型内缩，禁 inset box-shadow 画框）+ 大阴影 + 圆角 8；
 // 遮罩 = 黑色-50%（--n-mask，2026-09-01 用户定），点击不关闭（关闭只走取消/确认）。

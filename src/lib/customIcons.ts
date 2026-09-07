@@ -1,9 +1,9 @@
 // 自定义图标库清单（2026-08-14 区块子系统：区块管理弹窗"默认图标"下拉数据源）：
-// 文件 = assets/icons/02自定义/*.svg（双色集，#BFBFBF 亮层 / #666666 暗层原值），引用值 = 文件干
+// 文件 = assets/icons/02_自定义/*.svg（双色集，#BFBFBF 亮层 / #666666 暗层原值），引用值 = 文件干
 //（lib/icons.ts glob 自动注册，AppIcon/getIcon 直接按名引用）；中文标签出自 assets/icons/命名对照.md。
 // 3.3 更改图标网格面板（05 稿 §3/§4）复用本清单。
 // 2026-09-01（7.1 二十五轮）：30 个新双色图标接入，旧 19 名清单废除（folder-closed/folder-open
-// 为基础件不入本清单）；顺序 = 命名对照.md 02自定义 表序。
+// 为基础件不入本清单）；顺序 = 命名对照.md 02_自定义 表序。
 // 2026-09-01（同日走查）：archive 移出清单（29 个）——档案图标档案专属不可选（TreeRowItem
 // 按 kind === "archive" 强制挂载，勿作文件夹自定义值；存量 Folder/Block.icon = "archive"
 // 由后端 fix_custom_icons 白名单同批剔除回退 None）。
