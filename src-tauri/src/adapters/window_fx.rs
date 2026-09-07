@@ -49,6 +49,30 @@ pub fn install_ncactivate_guard(hwnd: windows::Win32::Foundation::HWND) {
   log::info!("[window_fx] WM_NCACTIVATE 失焦欺骗 subclass 安装 = {ok:?}");
 }
 
+/// 框架延伸按最大化/全屏态切换（2026-09-08 实机走查修复：最大化时 DWM 原生窗口按钮
+/// 压自定义按钮）。根因链：tao 建窗保留 WS_CAPTION | WS_SYSMENU | MIN/MAXIMIZEBOX
+///（tao window_state.rs 无条件加），最大化时其 WM_NCCALCSIZE 把客户区调成工作区
+///（让出任务栏），窗口矩形与客户区顶缘之间露出 caption 高框架条带——叠加整窗玻璃
+/// 延伸（-1）后 DWM 在该条带画出原生最小化/最大化(还原)/关闭按钮，位置正好压在
+/// 前端 .win-controls-overlay 上。修法：最大化 / 全屏态去延伸（margins 0）——
+/// 最大化时 DWM 不裁角不画边（063），延伸填充月牙缝的职责彼时无对象；云母由
+/// DWMWA_SYSTEMBACKDROP_TYPE backdrop 提供、与延伸无关，不受影响。还原回 -1。
+/// 不摘 WS_CAPTION：阴影 / Win11 圆角全靠这组样式（踩坑 007 终局）。
+#[cfg(windows)]
+pub fn extend_frame(hwnd: windows::Win32::Foundation::HWND, maximized: bool) {
+  use windows::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
+  use windows::Win32::UI::Controls::MARGINS;
+  let m = if maximized { 0 } else { -1 };
+  let margins = MARGINS {
+    cxLeftWidth: m,
+    cxRightWidth: m,
+    cyTopHeight: m,
+    cyBottomHeight: m,
+  };
+  let r = unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) };
+  log::info!("[window_fx] DwmExtendFrameIntoClientArea({m}) maximized={maximized} = {r:?}");
+}
+
 /// build 号 → 模式（纯函数，单测边界）。
 pub fn mode_for_build(build: u32) -> &'static str {
   if build >= 22621 {

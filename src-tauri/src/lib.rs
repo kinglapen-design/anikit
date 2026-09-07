@@ -56,6 +56,24 @@ fn resolve_drag_paths(lib: &core::library::Library, asset_ids: &[String]) -> Vec
     .collect()
 }
 
+/// 主窗口是否在最上层（2026-09-08 实机走查第 19 条）：判定 APP 是否显示在最上层，
+/// 不是就呼出到最上层。旧用 is_focused 近似前台——窗口被其他 APP 遮挡在后但焦点未移
+///（is_focused 仍 true）时旧判定会误走 hide 收进托盘。改用系统前台窗口比对 HWND。
+/// 非 Windows / 取句柄失败回退 is_focused 近似。
+#[cfg(windows)]
+fn is_main_foreground(w: &tauri::WebviewWindow) -> bool {
+  use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+  match w.hwnd() {
+    Ok(raw) => (unsafe { GetForegroundWindow() }) == windows::Win32::Foundation::HWND(raw.0 as _),
+    Err(_) => w.is_focused().unwrap_or(false),
+  }
+}
+
+#[cfg(not(windows))]
+fn is_main_foreground(w: &tauri::WebviewWindow) -> bool {
+  w.is_focused().unwrap_or(false)
+}
+
 /// 显示主窗口统一出口（2026-09-02 走查修复：最小化状态 show() 不还原——SW_SHOW 对最小化
 /// 窗口无效，须先 unminimize；热键 / 托盘 / 单实例共用）。emit_shown = 是否通知前端恢复播放
 ///（托盘隐藏态恢复需要——隐藏即停播；最小化未停播，单实例唤起不通知，保持各调用点原语义）
@@ -130,12 +148,14 @@ pub fn run() {
           }
           if let Some(w) = app.get_webview_window("main") {
             let visible = w.is_visible().unwrap_or(false);
-            let focused = w.is_focused().unwrap_or(false);
+            // 最上层判定（2026-09-08 走查：可见但被其他 APP 遮挡在后时一律呼出到最上层，
+            // 不再看 is_focused——被遮挡未失焦的旧场景会误走 hide 收进托盘）
+            let foreground = is_main_foreground(&w);
             // 最小化态一律走呼出（2026-09-02 走查修复：Win+D / 任务栏最小化不移焦点，
-            // focused 可能仍 true → visible && focused 误命中把窗口 hide 进托盘，
+            // focused 可能仍 true → 旧 visible && focused 误命中把窗口 hide 进托盘，
             // 表现为"第一次按键先收进托盘"）
             let minimized = w.is_minimized().unwrap_or(false);
-            if visible && focused && !minimized {
+            if visible && foreground && !minimized {
               let _ = w.hide();
               // 窗口隐藏即通知前端暂停播放（2026-07-27 用户定：最小化保持播放，隐藏到托盘停止）
               let _ = w.emit("main-window-hidden", ());
@@ -224,8 +244,6 @@ pub fn run() {
         #[cfg(target_os = "windows")]
         {
           use windows::Win32::Foundation::HWND;
-          use windows::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
-          use windows::Win32::UI::Controls::MARGINS;
           if let Ok(raw) = w.hwnd() {
             let hwnd = HWND(raw.0 as _);
             // 失焦欺骗（2026-08-30 用户方案）：骗 DWM 恒按激活渲染——失焦不再退化云母
@@ -237,31 +255,47 @@ pub fn run() {
             // 云母模式边框由 DWM 沿圆角裁切路径画——恒连续恒贴边；前端 ::before 云母模式不画
             //（DWM 线与 CSS inset 0 线有 ~0.5px 系统错位，双画恒双层，踩坑 063），
             // 实色模式前端自绘（Win10 DWM 无默认边框可画）。
-            unsafe {
-              // 框架延伸整窗（margins -1）：配合 transparent:false（2026-08-30 六轮方案一，
-              // 用户定）——去掉 tao transparent 的 blur-behind 空 region hack（它让含非客户
-              // 区的整个窗口表面按 alpha 合成，DWM 圆角描边曲线与方形客户区角之间的月牙
-              // 窄缝 alpha=0 成透底洞），DWM 帧/backdrop 填充该缝。与 set_effects 同在
-              // show 后调用（057 时序约束）
-              let margins = MARGINS {
-                cxLeftWidth: -1,
-                cxRightWidth: -1,
-                cyTopHeight: -1,
-                cyBottomHeight: -1,
-              };
-              let r = DwmExtendFrameIntoClientArea(hwnd, &margins);
-              log::info!("[window] DwmExtendFrameIntoClientArea(-1) = {r:?}");
-            }
+            // 框架延伸整窗（margins -1）：配合 transparent:false（2026-08-30 六轮方案一，
+            // 用户定）——去掉 tao transparent 的 blur-behind 空 region hack（它让含非客户
+            // 区的整个窗口表面按 alpha 合成，DWM 圆角描边曲线与方形客户区角之间的月牙
+            // 窄缝 alpha=0 成透底洞），DWM 帧/backdrop 填充该缝。与 set_effects 同在
+            // show 后调用（057 时序约束）。
+            // 最大化 / 全屏态去延伸（2026-09-08 走查修复：玻璃 + WS_CAPTION 会让 DWM 在
+            // 顶部框架条带画原生窗口按钮压自定义按钮，根因见 window_fx::extend_frame）——
+            // 窗口恢复可能已是最大化（window_state.maximized），初始调用即按当前态
+            adapters::window_fx::extend_frame(hwnd, w.is_maximized().unwrap_or(false) || w.is_fullscreen().unwrap_or(false));
           }
         }
 
         let w2 = w.clone();
+        // on_window_event 闭包要求 Fn + Send：HWND 含裸指针不可跨线程捕获，转 usize 带入、
+        // 用内重建；延伸态跟踪用 Cell 内部可变性
+        #[cfg(target_os = "windows")]
+        let main_hwnd = w.hwnd().ok().map(|raw| raw.0 as usize);
+        // 延伸当前态跟踪（与初始调用同口径）：最大化 / 全屏进出切换，避免重复 DWM 调用
+        #[cfg(target_os = "windows")]
+        let frame_maximized =
+          std::cell::Cell::new(w.is_maximized().unwrap_or(false) || w.is_fullscreen().unwrap_or(false));
         w.on_window_event(move |event| {
-          if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-            api.prevent_close();
-            let _ = w2.hide();
-            // 关闭到托盘即通知前端暂停播放（2026-07-27 用户定）
-            let _ = w2.emit("main-window-hidden", ());
+          match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+              api.prevent_close();
+              let _ = w2.hide();
+              // 关闭到托盘即通知前端暂停播放（2026-07-27 用户定）
+              let _ = w2.emit("main-window-hidden", ());
+            }
+            // 最大化 / 全屏进出：切换框架延伸（实机走查修复，根因见 window_fx::extend_frame）
+            #[cfg(target_os = "windows")]
+            tauri::WindowEvent::Resized(_) => {
+              let maxed = w2.is_maximized().unwrap_or(false) || w2.is_fullscreen().unwrap_or(false);
+              if maxed != frame_maximized.get() {
+                frame_maximized.set(maxed);
+                if let Some(raw) = main_hwnd {
+                  adapters::window_fx::extend_frame(windows::Win32::Foundation::HWND(raw as _), maxed);
+                }
+              }
+            }
+            _ => {}
           }
         });
       }

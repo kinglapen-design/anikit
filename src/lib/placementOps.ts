@@ -8,6 +8,7 @@
 // 2026-07-29 二轮：回收站操作入口（restore_recycle 带撤销；delete_recycle / clear_recycle
 // 两段式确认、不可恢复无撤销；后端契约并行开发，UI 直接 invoke）。
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
 import { useToastStore } from "../stores/toast";
@@ -610,8 +611,11 @@ export async function restoreThumbAsset(assetId: string): Promise<void> {
 
 // 发送至 Animate（8.3，PRD 07-04 快速发送）：fla → 剪贴板载荷 → WS 下发 jsx 原位粘贴；
 // 转换失败后端自动回退兜底（打开-复制-粘贴-关闭）。面板未连接 / 在途重复发送由后端报错，此处透传。
+// 点击即最小化主窗口（2026-09-08 实机走查第 20 条）：用户要看的是 AN 侧有没有导入，
+// 且 AN 弹窗（重复元件选择框等）不能被 APP 挡住——不等发送结果；结果 toast 回窗后可见。
 export async function sendToAnimate(assetId: string): Promise<void> {
   const toast = useToastStore();
+  void getCurrentWindow().minimize();
   try {
     const name = await invoke<string>("send_to_animate", { assetId });
     toast.notify({ message: `已发送至 Animate：${name}`, icon: "success" });

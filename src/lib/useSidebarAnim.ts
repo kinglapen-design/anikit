@@ -79,6 +79,12 @@ export function useSidebarAnim(opts: {
   sidebarShowWidths.left = ui.leftCollapsed ? 0 : ui.leftWidth;
   sidebarShowWidths.right = ui.rightCollapsed ? 0 : ui.rightWidth;
 
+  // 持久化恢复就绪标志（2026-09-08 实机走查第 1 条修复）：初始宽按 setup 期默认值算
+  //（上行），get_ui_settings 异步回写才把 collapsed 翻 true——若走 watch 动画路径会
+  // 白播一次 400ms 收起动画（"没保持收起状态"的观感根因）。就绪前布尔跳变直写终值，
+  // 就绪回调再对齐一次兜底（watch flush 先于 promise then，同 tabs.ts await 恢复先例）。
+  let restored = false;
+
   function sidebarAnimFrame(now: number): void {
     let active = false;
     for (const a of sideAnims) {
@@ -138,14 +144,26 @@ export function useSidebarAnim(opts: {
       });
       dockResizeObs.observe(dockEl);
     }
-    // 侧栏收展：状态翻转后由 JS 逐帧驱动宽度（见文件头注释）
+    // 侧栏收展：状态翻转后由 JS 逐帧驱动宽度（见文件头注释）；
+    // 恢复就绪前（启动回写期）的跳变直写终值不起动画（restored 注释处根因）
     watch(
       [() => ui.leftCollapsed, () => ui.rightCollapsed],
       ([l, r], [pl, pr]) => {
+        if (!restored) {
+          sidebarShowWidths.left = l ? 0 : ui.leftWidth;
+          sidebarShowWidths.right = r ? 0 : ui.rightWidth;
+          return;
+        }
         if (l !== pl) startSidebarAnim("left", opts.leftEl(), l, ui.leftWidth);
         if (r !== pr) startSidebarAnim("right", opts.rightEl(), r, ui.rightWidth);
       },
     );
+    // 设置恢复就绪：直写终值兜底对齐（无动画），此后收展走正常动画路径
+    void ui.initSettings().then(() => {
+      restored = true;
+      sidebarShowWidths.left = ui.leftCollapsed ? 0 : ui.leftWidth;
+      sidebarShowWidths.right = ui.rightCollapsed ? 0 : ui.rightWidth;
+    });
     // SplitBar 拖改全宽：非动画期间显示宽度即时跟随（Collapsed 时不跟随，保持 0）
     watch([() => ui.leftWidth, () => ui.rightWidth], ([lw, rw]) => {
       if (!ui.leftCollapsed && !sideAnims.some((a) => a.key === "left")) sidebarShowWidths.left = lw;
