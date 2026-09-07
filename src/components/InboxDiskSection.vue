@@ -10,11 +10,15 @@
 // 卡片 2026-09-08 换代 = cards/FileCard square 变体（§16 稿注：shell 缩略图 / 自动导入未导入 =
 // 正方形 + 缩略图 50% 居中；格式角标统一 FormatBadge 铬，不再按格式设色——旧 14 稿散装样式
 //（C2 图标区 + C3 简介区 + 实色扩展名角标）废除）；重命名输入态归 FileCard 内建（naming prop）。
+// 区块标题同日换代 = items/SectionTitle block（旧 SectionHeader 废除：计数「- N」改「/ N」三段、
+// 标题次要文字-加粗 12/16 亮色/四级、展开钮 hover 才现身——与左栏树容器区块标题统一）；
+// 提示行 = 正文档 13/18 亮色/三级（空文件夹稿「提示文字」档，旧 caption/label 旧 token 废除）。
 import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import FileCard from "./cards/FileCard.vue";
-import SectionHeader from "./SectionHeader.vue";
+import SectionTitle from "./items/SectionTitle.vue";
+import { dragView } from "../lib/dragOperation";
 import { openContextMenu } from "../lib/contextMenus";
 import { inboxDiskSpec } from "../lib/menuSpecs/inboxDisk";
 import { deleteInboxEntry, confirmImportInboxEntry, openInboxEntry, renameInboxEntry } from "../lib/inboxOps";
@@ -25,6 +29,11 @@ import { useSelectionStore } from "../stores/selection";
 const content = useContentStore();
 const selection = useSelectionStore();
 const diskOpen = ref(true);
+// 折叠切换：SectionTitle 守卫在调用方（§20——dragView.suppressClick 吞拖拽后紧随 click）
+function onFold(): void {
+  if (dragView.suppressClick) return;
+  diskOpen.value = !diskOpen.value;
+}
 
 // 操作错误（打开 / 重命名 / 删除 / 导入占用拦截）：后端中文人话原样展示，5 秒自消
 const errorMsg = ref("");
@@ -119,7 +128,14 @@ const entries = computed(() => content.inboxDisk);
 
 <template>
   <section class="disk-block">
-    <SectionHeader title="工程文件" :count="entries.length" v-model:open="diskOpen" />
+    <SectionTitle
+      variant="block"
+      title="工程文件"
+      :count="entries.length"
+      :expanded="diskOpen"
+      :actions="false"
+      @toggle="onFold"
+    />
     <template v-if="diskOpen">
       <!-- 固定提醒（4.4 定案文案）：白名单以外一律不自动导入 -->
       <p class="notice">工程文件不支持自动导入，请手动导入</p>
@@ -160,20 +176,21 @@ const entries = computed(() => content.inboxDisk);
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   padding-right: var(--n-space-12);
 }
-/* 固定提醒与操作错误：标签档（text-label / caption），错误用语义色 --error */
+/* 固定提醒与操作错误：正文档 13/18（空文件夹稿「提示文字」档，2026-09-08 换代——
+   旧 caption/label 旧 token 废除），提醒 = 亮色/三级，错误用语义色 --error */
 .notice {
   margin: 0;
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
 }
 .error-line {
   margin: 0;
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
   color: var(--error);
   word-break: break-all;
 }
@@ -182,8 +199,8 @@ const entries = computed(() => content.inboxDisk);
 .flow {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  column-gap: var(--space-16);
-  row-gap: var(--space-16);
+  column-gap: var(--n-space-16);
+  row-gap: var(--n-space-16);
 }
 /* 卡壳：被占用标记定位锚；常态描边 / 选中环 / hover 位移 -4 全归 FileCard（cards.css kc 族） */
 .disk-card {
