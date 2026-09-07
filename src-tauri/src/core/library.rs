@@ -218,6 +218,12 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   if removed > 0 {
     log::warn!("打开自检剔除 {removed} 条指向缺失 info 的 Placement");
   }
+  // 无 origin 扶正（2026-09-08 副本 origin 标记修复存量自愈）：有活位置无 origin 且回收站
+  // 无其 origin 快照的资产，首条活位置置 origin（历史副本误标链接语义致回收站漏物理删）
+  let origins_fixed = fix_missing_origins(&mut folders, &recycle);
+  if origins_fixed > 0 {
+    log::info!("打开自检扶正 {origins_fixed} 个无 origin 资产（首条位置置原始标记）");
+  }
   // 无主 info 扫描（2026-09-03 资产污染修复配套）：空壳自动物理删、孤儿清单存实况字段
   //（命令层 emit 前端弹警告窗；2026-09-02 用户定：不自动删，删 / 复活由用户处置）
   let orphans = scan_orphan_infos(&assets_dir, &folders, &recycle, &assets);
@@ -266,7 +272,7 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
       Err(e) => log::error!("关系自检读取失败（跳过）：{e}"),
     }
   }
-  let folders_changed = removed > 0 || blocks_fixed || icons_fixed;
+  let folders_changed = removed > 0 || blocks_fixed || icons_fixed || origins_fixed > 0;
   if folders_changed || archives_fixed || !thumb_refs_fixed.is_empty() {
     match backup::backup_library(path, &assets_dir) {
       Ok(_) => {
@@ -339,6 +345,34 @@ fn prune_missing_placements(folders: &mut FoldersFile, assets: &[AssetMeta]) -> 
   let before = folders.items.len();
   folders.items.retain(|p| ids.contains(p.asset.as_str()));
   before - folders.items.len()
+}
+
+/// 打开自检（2026-09-08 副本 origin 标记修复配套存量自愈）：扶正「无 origin」资产——
+/// 库内有活位置但无 origin、且回收站无其 origin 快照的资产（历史 duplicate 把副本唯一
+/// Placement 误标 origin=false 的产物：回收站彻底清除按"快照含 origin = 本体在站"判定，
+/// 副本被当纯位置记录只删记录、info 永久残留），首条活位置（items 序）置 origin = true。
+/// 排除回收站有 origin 快照的 = "origin 在站、全链接存活"合法过渡态（PRD 01 规则 8）不动；
+/// 一资产只扶正首条，保库内 origin 恒 ≤ 1（hidden / segment 经正常建档有 origin 不受影响）。
+fn fix_missing_origins(folders: &mut FoldersFile, recycle: &RecycleFile) -> usize {
+  let origin_in_recycle: HashSet<&str> = recycle
+    .items
+    .iter()
+    .filter(|i| i.placements.iter().any(|p| p.origin))
+    .map(|i| i.asset.as_str())
+    .collect();
+  let has_origin: HashSet<String> = folders.items.iter().filter(|p| p.origin).map(|p| p.asset.clone()).collect();
+  let mut seen: HashSet<String> = HashSet::new();
+  let mut fixed = 0usize;
+  for p in &mut folders.items {
+    if p.origin || has_origin.contains(p.asset.as_str()) || origin_in_recycle.contains(p.asset.as_str()) {
+      continue;
+    }
+    if seen.insert(p.asset.clone()) {
+      p.origin = true;
+      fixed += 1;
+    }
+  }
+  fixed
 }
 
 /// 无主 info 扫描（2026-09-03 资产污染修复配套，打开自检冷路径）：
@@ -806,6 +840,67 @@ mod tests {
     assert!(lib.index.placements_of("AN-ORPHAN").is_empty(), "孤儿无 Placement 不可见");
     assert!(assets_dir.join("AN-KEEP.info").is_dir() && assets_dir.join("AN-REC.info").is_dir(), "正常与回收站引用资产不误伤");
     assert_eq!(lib.index.placements_of("AN-KEEP").len(), 1);
+  }
+
+  /// 无 origin 扶正自检（2026-09-08 副本 origin 标记修复存量自愈）：有活位置无 origin 且回收站
+  /// 无其 origin 快照（历史 duplicate 副本产物）→ items 序首条置 origin 并落盘；
+  /// 回收站有其 origin 快照（"origin 在站、全链接存活"过渡态，PRD 01 规则 8）→ 不动；
+  /// 已有 origin 的资产不多置（库内 origin 恒 ≤ 1）
+  #[test]
+  fn open_fixes_missing_origins() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let root = lib.root.clone();
+    let seed = |id: &str, name: &str| {
+      let info = lib.info_dir(id);
+      fs::create_dir_all(&info).unwrap();
+      fs::write(
+        info.join("metadata.json"),
+        format!(
+          r#"{{ "version": 1, "id": "{id}", "name": "{name}", "originName": "{name}.fla",
+               "ext": "fla", "size": 1, "importedAt": "2026-09-08T01:00:00+08:00",
+               "modifiedAt": "2026-09-08T01:00:00+08:00" }}"#
+        ),
+      )
+      .unwrap();
+      fs::write(info.join(format!("{name}.fla")), b"fake").unwrap();
+    };
+    seed("AN-DUP", "副"); // 存量副本态：两位置全无 origin、回收站无快照 → 扶正首条
+    seed("AN-LINK", "链"); // origin 在回收站、全链接存活 → 不动
+    seed("AN-OK", "正"); // 已有 origin → 不动
+    let folders: FoldersFile = serde_json::from_str(
+      r#"{
+        "version": 1, "folders": [],
+        "items": [
+          { "asset": "AN-DUP", "folder": "root", "name": "副-1.fla", "order": 0, "origin": false },
+          { "asset": "AN-DUP", "folder": "root", "name": "副-2.fla", "order": 1, "origin": false },
+          { "asset": "AN-LINK", "folder": "root", "name": "链.fla", "order": 2, "origin": false },
+          { "asset": "AN-OK", "folder": "root", "name": "正.fla", "order": 3, "origin": true }
+        ]
+      }"#,
+    )
+    .unwrap();
+    write_json(&root.join(FOLDERS_FILE), &folders).unwrap();
+    let recycle: RecycleFile = serde_json::from_str(
+      r#"{
+        "version": 1,
+        "items": [ { "asset": "AN-LINK", "deletedAt": "2026-09-08T02:00:00+08:00",
+          "placements": [ { "asset": "AN-LINK", "folder": "root", "name": "链.fla", "order": 0, "origin": true } ] } ]
+      }"#,
+    )
+    .unwrap();
+    write_json(&root.join(RECYCLE_FILE), &recycle).unwrap();
+
+    let lib = open(&lib.space_root, &root).unwrap();
+    let dup = lib.index.placements_of("AN-DUP");
+    assert_eq!(dup.iter().filter(|p| p.origin).count(), 1, "扶正且仅一条");
+    assert!(dup[0].origin && dup[0].name == "副-1.fla", "items 序首条扶正");
+    assert!(!lib.index.placements_of("AN-LINK").iter().any(|p| p.origin), "origin 在回收站的过渡态不动");
+    assert_eq!(lib.index.placements_of("AN-OK").iter().filter(|p| p.origin).count(), 1, "已有 origin 不动");
+    // 落盘一致（经自检备份门禁写回）
+    let disk: FoldersFile = read_json(&root.join(FOLDERS_FILE)).unwrap();
+    assert!(disk.items.iter().find(|p| p.asset == "AN-DUP" && p.name == "副-1.fla").unwrap().origin, "folders.json 落盘");
+    assert!(!disk.items.iter().find(|p| p.asset == "AN-LINK").unwrap().origin, "落盘同样不动");
   }
 
   /// 无主 info 扫描（2026-09-02）：孤儿清单结构（id / name / info 路径）——

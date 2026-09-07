@@ -1,4 +1,7 @@
-//! 副本与重命名（6.1）：duplicate = info 目录整体复制 + 新 ID + 链接 Placement；
+//! 副本与重命名（6.1）：duplicate = info 目录整体复制 + 新 ID + origin Placement
+//! （副本 = 独立物理本体，落点即原始位置，与导入建档 / 克隆文件夹同口径——
+//! 2026-09-08 修复：原误标链接语义 origin=false，回收站彻底清除按"快照含 origin = 本体在站"
+//! 判定漏物理删，副本 info 永久残留；重命名副本随 origin 走磁盘段改名）；
 //! rename = 显示名即时改，原始 Placement 追加磁盘段（originName + 词干缩略图同步改名）。
 
 use std::collections::{HashMap, HashSet};
@@ -21,7 +24,10 @@ pub struct DuplicateOutcome {
 
 /// 创建副本：每条 = copy_dir `{旧ID}.info` → `{新ID}.info`（保留原 hash，利于导入查重命中）
 /// → 改 metadata（id / name / importedAt / modifiedAt）写盘 → 索引 insert
-/// → 副本 Placement 落点（2026-08-20 用户定，替换原统一"段首前插"）：
+/// → 副本 Placement 挂 **origin = true**（2026-09-08 修复：副本 = 独立物理本体，落点即原始位置，
+///   与导入建档 / 克隆文件夹同口径；原误标链接语义致回收站彻底清除漏物理删 info 残留；
+///   连带口径：重命名副本走 origin 磁盘段改名、导入查重"用已存入文件导入"可命中副本）
+/// → 副本落点（2026-08-20 用户定，替换原统一"段首前插"）：
 ///   源在目标文件夹内 = **紧随原件**（克隆后不用回顶部找——原段首前插会把副本顶到第一行第一列；
 ///   恒插源后第一位，连续副本时新副本贴原件、旧副本顺后移）；
 ///   跨文件夹副本粘贴（Ctrl+Shift+V 落他处）= 段首前插（新项顶部可见，导入同语义）。
@@ -107,13 +113,13 @@ fn duplicate_one(
       folder: target_folder.to_string(),
       name: display,
       order: 0,
-      origin: false,
+      origin: true,
     };
     lib.folders.items.insert(pos + 1, placement);
   } else {
     // 跨文件夹副本粘贴：段首前插（导入同语义，新项顶部可见）；add_placement 内部唯一化 + 索引同步
     let display = custom.unwrap_or(&source_name).to_string();
-    ops::add_placement(lib, new_id.clone(), target_folder.to_string(), display, false, front_anchor);
+    ops::add_placement(lib, new_id.clone(), target_folder.to_string(), display, true, front_anchor);
   }
   Ok(Some((new_id, (old_info, new_info))))
 }
@@ -321,13 +327,34 @@ mod tests {
     assert_eq!(meta.thumbnail, old_thumb);
     let disk: AssetMeta = read_json(&new_info.join("metadata.json")).unwrap();
     assert_eq!(disk.id, *new_id, "metadata.json 落盘");
-    // Placement：origin = false，显示名唯一化（同名追加 -1）
+    // Placement：origin = true（副本 = 独立本体，落点即原始位置），显示名唯一化（同名追加 -1）
     let p = h.lib.folders.items.iter().find(|p| p.asset == *new_id).unwrap();
-    assert!(!p.origin);
+    assert!(p.origin);
     assert_eq!(p.name, "原图-1.png");
     // 陈旧三元组跳过不计
     let out2 = duplicate_placements(&mut h.lib, &[pref("AN-幽灵", "root", true)], "root", &[]).unwrap();
     assert!(out2.new_ids.is_empty());
+  }
+
+  /// 副本 = 独立本体（origin Placement）：删除进回收站 → 彻底清除物理删副本 info、源不动
+  ///（2026-09-08 修复闭环：原 origin=false 误标，回收站按"纯位置记录"只删记录致 info 残留）
+  #[test]
+  fn duplicate_delete_purges_copy_info() {
+    let mut h = make_lib();
+    add_png(&mut h, "AN-A", "原图.png");
+    let out = duplicate_placements(&mut h.lib, &[pref("AN-A", "root", true)], "root", &[None]).unwrap();
+    let new_id = out.new_ids[0].clone();
+    let new_info = h.lib.info_dir(&new_id);
+    assert!(new_info.is_dir());
+
+    crate::services::operations::delete_placements(&mut h.lib, &[pref(&new_id, "root", true)], Some("recycle")).unwrap();
+    let rep = crate::services::recycle::delete_recycle(&mut h.lib, &[new_id.clone()], false).unwrap();
+    assert_eq!(rep.deleted, 1, "无引用无活链接，第一段直接删不需确认");
+    assert!(!new_info.exists(), "副本 info 物理删除");
+    assert!(h.lib.info_dir("AN-A").is_dir(), "源 info 不动");
+    assert!(h.lib.index.assets.contains_key("AN-A"));
+    assert!(!h.lib.index.assets.contains_key(&new_id), "副本 index 移除");
+    assert!(h.lib.recycle.items.is_empty(), "回收站条目清空");
   }
 
   #[test]
