@@ -1,0 +1,43 @@
+PASS P1-1 点「插件」钮菜单出 | app-menu 未出现
+PASS P1-2 位置 = 钮左缘对齐 + 底 +4 | {'ml': 140, 'mt': 41, 'bl': 140, 'bb': 37}
+PASS P1-3 四项两组 | ['Animate', '批量生成缩略图', 'API 接口文档', '开发者选项']
+PASS P1-4 三项 disabled（批量缩略图 / API / 开发者选项） | ['批量生成缩略图', 'API 接口文档', '开发者选项']
+PASS P1-5 Animate 可用（未禁用）
+PASS P1-6 点 Animate = invoke open_plugin_window（pluginId animate） | [{'pluginId': 'animate'}]
+PASS P1-7 点击后菜单关闭
+PASS P1b-0 前置：再开菜单
+PASS P1b-1 同钮再点 toggle 关
+PASS P1b-2 前置：再开菜单
+PASS P1b-3 点菜单外关闭
+PASS P1b-4 前置：再开菜单
+PASS P1b-5 Esc 关闭
+PASS P2-1 工具栏 plugin 钮开面板
+PASS P2-2 弹出在钮下方 +4 | {'pt': 92, 'pr': 998, 'pw': 400, 'ph': 450, 'bb': 88, 'br': 998}
+PASS P2-2b 右缘 = 钮右缘对齐（三轮改定向左展开） | {'pt': 92, 'pr': 998, 'pw': 400, 'ph': 450, 'bb': 88, 'br': 998}
+PASS P2-3 尺寸 400×450 | {'pt': 92, 'pr': 998, 'pw': 400, 'ph': 450, 'bb': 88, 'br': 998}
+PASS P2-4 列表两项（Animate 插件 / 批量生成缩略图） | ['Animate 插件', '批量生成缩略图']
+PASS P2-5 第二项禁用态（disabled 类 + pointer-events none）
+PASS P2-6 默认选中「桥接」分段
+PASS P2-7 同钮再点 toggle 关
+PASS P2-8 前置：再开
+PASS P2-9 点面板外关闭
+PASS P2-10 前置：再开
+PASS P2-11 Esc 关闭
+PASS P3-0 前置：再开
+PASS P3-1 切「格式」= 空态「暂无插件」
+PASS P3-2 空态下无 item
+PASS P3-3 切回「桥接」= 两项回来
+PASS P4-1 更多菜单三项（打开 / 安装 / 配置快捷键） | ['打开', '安装', '配置快捷键']
+PASS P4-2 配置快捷键 disabled 占位
+PASS P4-3 打开 = invoke open_plugin_window（P1 菜单一次 + 本次 = 两条） | [{'pluginId': 'animate'}, {'pluginId': 'animate'}]
+PASS P4-4 打开后浮层与菜单同关
+PASS P4-5 前置：再开面板
+PASS P4-6 安装 = invoke install_cep_plugin
+PASS P4-7 安装成功 toast | ['CEP 插件已安装（v1.0.0），重启 Animate 后在 窗口 > 扩展 中打开']
+PASS P4-8 前置：再开面板
+PASS P4-9 已安装文案翻「卸载」 | ['打开', '卸载', '配置快捷键']
+PASS P5-0 前置：picker 已进入（.window.picking）
+PASS P5-1 选择模式下点「插件」不开菜单
+PASS P5-2 Esc 退出 picker 清场
+----
+FAIL: 无
