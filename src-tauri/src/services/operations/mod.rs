@@ -27,7 +27,7 @@ pub(crate) fn find_placement_named(lib: &Library, item: &PlacementRef, name: Opt
     p.asset == item.asset_id && p.folder == item.folder_id && p.origin == item.origin && name.map_or(true, |n| p.name == n)
   })
 }
-pub use sequence::{delete_frames, dissolve_sequence, renumber_frames, DeleteFramesOutcome, DissolveOutcome, RenumberOutcome};
+pub use sequence::{delete_frames, dissolve_sequence, renumber_frames};
 
 use serde::{Deserialize, Serialize};
 

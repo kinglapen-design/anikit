@@ -5,6 +5,7 @@
 //! - "recycle"（丢到回收站，Del）：Placement 从 folders.json 移除并进 recycle.json
 //!   （按资产聚合条目——同资产已有条目则追加 placements，无则新建）；origin 标记随记录走
 //!   （origin 进回收站后资产可以只剩活链接，不主动转移——手动转移归阶段六「设为原始文件」）。
+//!
 //! 物理删除只在回收站彻底清除（recycle.rs）发生，本模块不动磁盘。
 //! 原两段式（needConfirm / lastAssets）与 origin 转移随旧模型废除（2026-08-19）。
 

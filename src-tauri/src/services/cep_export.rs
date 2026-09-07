@@ -205,6 +205,7 @@ fn compose_with_fallback(seq: &Path, fps: f64, out: &Path, settings: &crate::cor
   Ok(true)
 }
 
+#[cfg(test)]
 fn within_limit(out: &Path, max_bytes: u64) -> bool {
   fs::metadata(out).map(|m| m.len() <= max_bytes).unwrap_or(false)
 }
@@ -561,7 +562,7 @@ mod tests {
     }
     let out = dir.path().join("anim.webp");
     let settings = crate::core::config::CepExportSettings::default();
-    assert_eq!(compose_with_fallback(&seq, 25.0, &out, &settings).unwrap(), false, "首档即过");
+    assert!(!compose_with_fallback(&seq, 25.0, &out, &settings).unwrap(), "首档即过");
     assert!(within_limit(&out, settings.max_bytes));
     // 抽帧（step=2）：帧数减半 + delay 翻倍（时长不变）
     let frames = load_seq_frames(&seq, 25.0, 2).unwrap();

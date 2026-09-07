@@ -619,7 +619,7 @@ mod tests {
     let f = dir.join("图.png");
     std::fs::write(&f, "123").unwrap();
     let rec = entry_record(&f).unwrap();
-    assert!(is_blocked(&[rec.clone()], &f), "原记录应命中");
+    assert!(is_blocked(std::slice::from_ref(&rec), &f), "原记录应命中");
     let diff_mtime = BlockedEntry { mtime_ms: rec.mtime_ms + 1, ..rec.clone() };
     assert!(!is_blocked(&[diff_mtime], &f), "mtime 不同不拦（同名新文件）");
     let diff_size = BlockedEntry { size: rec.size + 1, ..rec };

@@ -45,7 +45,7 @@ pub fn extract(img: &DynamicImage) -> Vec<String> {
     .filter(|c| c.0 > 0)
     .map(|&(n, sr, sg, sb)| (n, (sr / n as u64) as u8, (sg / n as u64) as u8, (sb / n as u64) as u8))
     .collect();
-  ranked.sort_by(|a, b| b.0.cmp(&a.0));
+  ranked.sort_by_key(|c| std::cmp::Reverse(c.0));
 
   let mut picked: Vec<(u8, u8, u8)> = Vec::new();
   for &(_, r, g, b) in &ranked {

@@ -15,6 +15,8 @@
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
+#[cfg(not(test))]
+use std::path::Path;
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 #[cfg(not(test))]
@@ -56,7 +58,7 @@ struct Shared {
 
 #[cfg(not(test))]
 impl Shared {
-  fn emit(&self, asset_id: &str, path: &PathBuf) {
+  fn emit(&self, asset_id: &str, path: &Path) {
     if let Some(app) = &self.app {
       let payload = AnimReadyPayload { asset_id: asset_id.to_string(), path: path.to_string_lossy().into_owned() };
       if let Err(e) = app.emit(EVENT_ANIM_READY, payload) {

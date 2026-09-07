@@ -251,7 +251,7 @@ mod tests {
   #[test]
   fn archive_props_and_descriptions_lazy_record() {
     let mut h = make_lib();
-    add_archive(&mut h.lib, "F-A", &["旧".into()]);
+    add_archive(&mut h.lib, "F-A", &["旧"]);
     add_folder_plain(&mut h.lib, "F-PLAIN");
     assert!(set_archive_props(&mut h.lib, "F-A", &["新".into()]).unwrap());
     assert_eq!(h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().props, vec!["新"]);

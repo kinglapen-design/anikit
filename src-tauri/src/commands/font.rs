@@ -1,5 +1,5 @@
-//! 命令 API：字体（5.6）。get_font_info = 预览「其它」页元数据 + origin 路径（前端 @font-face 加载）
-//! + 系统安装状态；install_font / uninstall_font = 系统级安装 / 卸载（用户级，免管理员——
+//! 命令 API：字体（5.6）。get_font_info = 预览「其它」页元数据 + origin 路径（前端 @font-face 加载）+
+//! 系统安装状态；install_font / uninstall_font = 系统级安装 / 卸载（用户级，免管理员——
 //! 其他软件立即可见，避免 Eagle"装了识别不到"，2026-08-23 用户痛点定案；实现见 services/font）。
 //! 安装 / 卸载只动系统状态（字体目录 + 注册表），不改库数据；锁内定位、锁外系统 IO（不占库锁）。
 

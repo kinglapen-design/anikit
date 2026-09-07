@@ -60,17 +60,15 @@ fn asset_file_path(lib: &Library, asset_id: &str) -> Result<AssetFilePath, Strin
     // 单测共享全局 worker，submit 会与测试手动生成并发写同一临时库（偶发竞态）；
     // 懒生成是薄包装，队列与生成各有独立测试
     let anim_preview = if crate::services::anim::is_anim(&meta) {
-      match crate::services::anim_preview::fresh_anim_preview(&lib.assets_dir, asset_id, &meta.origin_name) {
-        Some(p) => Some(p),
-        None => {
-          #[cfg(not(test))]
-          crate::services::anim_preview_queue::global().submit(crate::services::anim_preview_queue::AnimPreviewTask {
-            assets_dir: lib.assets_dir.clone(),
-            asset_id: asset_id.to_string(),
-          });
-          None
-        }
+      let hit = crate::services::anim_preview::fresh_anim_preview(&lib.assets_dir, asset_id, &meta.origin_name);
+      #[cfg(not(test))]
+      if hit.is_none() {
+        crate::services::anim_preview_queue::global().submit(crate::services::anim_preview_queue::AnimPreviewTask {
+          assets_dir: lib.assets_dir.clone(),
+          asset_id: asset_id.to_string(),
+        });
       }
+      hit
     } else {
       None
     };

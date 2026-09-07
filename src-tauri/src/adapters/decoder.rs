@@ -15,8 +15,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use ffmpeg_next as ffmpeg;
 
 /// 音频输出采样率（Hz，立体声 f32 packed；前端 WebAudio AudioBuffer 按此率创建，播放自动重采样）
+#[allow(dead_code)] // 5.3 视频/音频引擎随视频播放回滚 <video> 直读拆除（2026-08-22）后仅测试使用，留存待重启
 pub const AUDIO_RATE: u32 = 48000;
 /// 音频块帧数（每声道）：1024 帧 ≈ 21.3ms——调度平滑与推送频率的平衡点
+#[allow(dead_code)]
 pub const AUDIO_CHUNK: usize = 1024;
 
 /// 一帧解码产物（RGBA 紧凑字节，短边等比缩放后）
@@ -168,7 +170,7 @@ fn drain(
   true
 }
 
-/// 视频解码选项（decode_video_once；测试专用——生产帧流直接用 VideoDecoder 持久形态）
+/// 视频解码选项（decode_video_once；测试专用——生产视频会话已随 <video> 直读回滚拆除 2026-08-22）
 #[cfg(test)]
 pub struct VideoOpts {
   /// 起播点（秒）：>0 时 ictx.seek 真定位（关键帧落点 + 前向丢帧），0 = 从头
@@ -178,6 +180,7 @@ pub struct VideoOpts {
 }
 
 /// 音频块：pts_ms = 块首样本时刻（与视频帧 pts 同一时间轴，音画同步基准）
+#[allow(dead_code)]
 pub struct AudioChunk {
   pub pts_ms: f64,
   /// 48kHz 立体声 f32 packed 交错（长度恒 AUDIO_CHUNK*2，趟末尾块可短）
@@ -185,7 +188,8 @@ pub struct AudioChunk {
 }
 
 /// 单趟视频解码（5.3，薄封装供测试 / 一次性消费者）：= VideoDecoder::open + 逐事件回调
-/// （回调返回 false 中止，两回调同语义）。帧流会话用 VideoDecoder 持久形态（就地 seek 不重开）。
+/// （回调返回 false 中止，两回调同语义）。持久形态 VideoDecoder 原供帧流视频会话（就地 seek 不重开），
+/// 视频会话随 <video> 直读回滚拆除（2026-08-22）后引擎留存待重启。
 /// 视频帧 pts_ms 来自 best_effort_timestamp（时间轴绝对值，seek 后不从 0 起）；
 /// delay_ms = 帧距（个别帧 0 时调用方按 fps 兜底）。音频块 pts 与视频同轴。
 /// seek 丢帧口径：帧区间 [pts, pts+delay) 整体在开始点之前才丢（跨点帧保留 = 开始点所在帧精确命中）。
@@ -219,6 +223,7 @@ pub fn decode_video_once(
 }
 
 /// 拉取结果（VideoDecoder::read_frame）
+#[allow(dead_code)]
 pub enum Pull {
   /// 视频帧（已过 seek 丢帧过滤 + 真短边缩放）
   Frame(DecodedFrame),
@@ -236,6 +241,7 @@ pub enum Pull {
 /// 长 GOP 再叠加前向丢帧解码，~1s 延迟根源）；**相邻前跳 = continue_to 续解**（逐帧步进免
 /// 关键帧往返：只设丢帧阈值继续解，下一帧即目标帧）；**循环重开 = seek(0) 同路径**（消除循环接缝卡顿）。
 /// 拉取模型（read_frame 一次一事件）：seek 打断粒度 = 单帧（丢帧循环内逐帧查 interrupt）。
+#[allow(dead_code)]
 pub struct VideoDecoder {
   ictx: ffmpeg::format::context::Input,
   vi: usize,
@@ -260,6 +266,7 @@ pub struct VideoDecoder {
   a_eof: bool,
 }
 
+#[allow(dead_code)]
 impl VideoDecoder {
   /// 打开 + 建两路解码器（audio=false / 无音轨 / 音轨初始化失败 = 静默无音，画面照常）
   pub fn open(path: &Path, audio: bool) -> Result<Self, String> {
@@ -377,10 +384,12 @@ impl VideoDecoder {
           self.v_eof = true;
           continue;
         }
-        if self.audio.is_some() && !self.a_eof {
-          let _ = self.audio.as_mut().unwrap().2.send_eof();
-          self.a_eof = true;
-          continue;
+        if let Some((_, _, adec)) = self.audio.as_mut() {
+          if !self.a_eof {
+            let _ = adec.send_eof();
+            self.a_eof = true;
+            continue;
+          }
         }
         if let Some(p) = self.finish_audio_tail() {
           return Ok(p);
@@ -457,7 +466,7 @@ impl VideoDecoder {
         let atb = *atb;
         if adec.receive_frame(&mut self.aframe).is_ok() { Some(atb) } else { None }
       };
-      let Some(atb) = atb else { return None };
+      let atb = atb?;
       resample_into(
         &mut self.resampler,
         &self.aframe,
@@ -480,9 +489,7 @@ impl VideoDecoder {
 
   /// EOF 尾巴（幂等，二次空调用返回 None）：重采样器延迟线尾料 + 残块推送
   fn finish_audio_tail(&mut self) -> Option<Pull> {
-    if self.audio.is_none() {
-      return None;
-    }
+    self.audio.as_ref()?;
     if let Some(rs) = self.resampler.as_mut() {
       let mut out = ffmpeg::frame::Audio::new(
         ffmpeg::format::Sample::F32(ffmpeg::format::sample::Type::Packed),
@@ -513,6 +520,7 @@ impl VideoDecoder {
 /// packed 立体声 f32 帧的前 n 帧样本切片（n×2 个 f32）。
 /// 注意不能用 frame.plane::<f32>(0)——其长度 = samples() 不含声道数（ffmpeg-next 语义，
 /// 踩坑 047），立体声交错数据会只取到一半。
+#[allow(dead_code)]
 fn f32_plane(frame: &ffmpeg::frame::Audio, n: usize) -> &[f32] {
   let bytes = frame.data(0);
   // 分配保证 linesize ≥ n×2×4（预分配 cap ≥ n），安全
@@ -523,6 +531,7 @@ fn f32_plane(frame: &ffmpeg::frame::Audio, n: usize) -> &[f32] {
 /// 单测直测用）。seek 丢帧：整块区间在阈值前丢弃；重采样器按首帧实际格式懒建，初始化 /
 /// 单帧失败静默跳过（音轨降级不拖垮画面）。块 pts 锚定：缓冲空时 = 当前帧 pts。
 #[allow(clippy::too_many_arguments)]
+#[allow(dead_code)]
 fn resample_into(
   resampler: &mut Option<ffmpeg::software::resampling::Context>,
   aframe: &ffmpeg::frame::Audio,
@@ -576,6 +585,7 @@ fn resample_into(
 }
 
 /// 攒块满 AUDIO_CHUNK 帧即吐（块 pts = 锚 + 已发块长累加；重采样连续流内自洽）
+#[allow(dead_code)]
 fn emit_chunk(abuf: &mut Vec<f32>, abuf_pts: &mut f64) -> Option<AudioChunk> {
   if abuf.len() < AUDIO_CHUNK * 2 {
     return None;
@@ -952,7 +962,7 @@ mod tests {
     let v0 = v0.expect("seek 后应有视频帧");
     assert!((v0 - 600.0).abs() <= 100.0, "视频首帧应落 600ms 帧（实际 {v0}）");
     if let Some(a0) = a0 {
-      assert!(a0 >= 500.0 && a0 <= 700.0, "音频首块应在 600ms 附近（实际 {a0}）");
+      assert!((500.0..=700.0).contains(&a0), "音频首块应在 600ms 附近（实际 {a0}）");
     }
   }
 }

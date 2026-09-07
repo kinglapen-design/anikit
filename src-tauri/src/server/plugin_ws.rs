@@ -4,7 +4,7 @@
 //! - C→S `hello`        → S→C `welcome`（libReady / libRoot / cepOutDir / settings）
 //! - C→S `getTree`      → S→C `tree`（文件夹树，供面板目标选择器；2b）
 //! - C→S `saveSettings` → 护栏校验 → config 单写点落盘 → 广播 `settings`（含发件者回显确认）；
-//!                        校验 / 解析失败回发件者 `settingsError`（2026-09 重构：设置项面板可编辑回写）
+//!   校验 / 解析失败回发件者 `settingsError`（2026-09 重构：设置项面板可编辑回写）
 //! - C→S `exported`     → 接收入库（services::cep_export 三段式；合成在锁外）→ `importDone` / `importError`
 //!
 //! 协议演进方向（8.2+）：批量导出任务下发 / 快速发送指令，同通道加分 type 即可。
@@ -14,13 +14,19 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
+#[cfg(not(test))] // 以下仅 WS server 路径使用（测试构建不起 server，踩坑 014）
 use futures_util::{SinkExt, StreamExt};
+#[cfg(not(test))]
 use tauri::{AppHandle, Emitter, Manager};
+#[cfg(not(test))]
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot};
 
+#[cfg(not(test))]
 use crate::commands::library::AppState;
+#[cfg(not(test))]
 use crate::core::library::TEMP_DIR;
+#[cfg(not(test))]
 use crate::services::cep_export::{self, ExportPayload};
 
 /// 客户端出口表（连接 id → 推消息通道；服务端 → 插件单播）
@@ -32,13 +38,14 @@ fn clients() -> &'static Mutex<HashMap<u64, mpsc::UnboundedSender<String>>> {
 
 /// —— 发送至 AN（8.3，PRD 07-04）请求-回执 ——
 /// pending 表：reqId → (客户端 id, 回执通道)；客户端断开即 drain 当场失败（不等超时，用户当场知情）
-static PENDING: OnceLock<Mutex<HashMap<u64, (u64, oneshot::Sender<serde_json::Value>)>>> = OnceLock::new();
+type PendingMap = Mutex<HashMap<u64, (u64, oneshot::Sender<serde_json::Value>)>>;
+static PENDING: OnceLock<PendingMap> = OnceLock::new();
 /// 全局发送锁：同一时刻仅一趟发送——旧 electron 版痛点根治（CEP 未连通时点发送请求积压不报错，
 /// 重连后积压队列一次性全跑 = 舞台连粘 N 次）。本设计：不在线立即报错不排队；在途期间拒绝新发送。
 static SEND_BUSY: AtomicBool = AtomicBool::new(false);
 static NEXT_REQ_ID: AtomicU64 = AtomicU64::new(1);
 
-fn pending() -> &'static Mutex<HashMap<u64, (u64, oneshot::Sender<serde_json::Value>)>> {
+fn pending() -> &'static PendingMap {
   PENDING.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -89,6 +96,7 @@ pub async fn request_paste(msg_type: &str, name: &str, fla_path: Option<&str>) -
 }
 
 /// pasteResult 回执路由（handle_conn 内调用）
+#[cfg(not(test))]
 fn resolve_paste(v: &serde_json::Value) {
   let Some(req_id) = v.get("reqId").and_then(|x| x.as_u64()) else { return };
   if let Some((_, sender)) = pending().lock().unwrap().remove(&req_id) {
@@ -97,6 +105,7 @@ fn resolve_paste(v: &serde_json::Value) {
 }
 
 /// 客户端断开：drain 其 pending 请求立即失败（不等超时）
+#[cfg(not(test))]
 fn fail_pending_of(client_id: u64) {
   let mut map = pending().lock().unwrap();
   let ids: Vec<u64> = map.iter().filter(|(_, (cid, _))| *cid == client_id).map(|(rid, _)| *rid).collect();
@@ -109,6 +118,7 @@ fn fail_pending_of(client_id: u64) {
 
 
 /// lib.rs setup 拉起（tauri 异步运行时）
+#[cfg(not(test))] // 测试构建不起 server（踩坑 014）
 pub fn init(app: AppHandle) {
   tauri::async_runtime::spawn(async move {
     if let Err(e) = serve(app).await {
@@ -117,6 +127,7 @@ pub fn init(app: AppHandle) {
   });
 }
 
+#[cfg(not(test))]
 async fn serve(app: AppHandle) -> Result<(), String> {
   let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|e| e.to_string())?;
   let port = listener.local_addr().map_err(|e| e.to_string())?.port();
@@ -132,6 +143,7 @@ async fn serve(app: AppHandle) -> Result<(), String> {
 }
 
 /// 端口文件（CEP 面板发现机制）：每次启动覆写；进程退出残留无害（面板连不上即显示未连接）
+#[cfg(not(test))]
 fn write_port_file(port: u16) {
   let Some(dir) = dirs::config_dir() else {
     return;
@@ -143,6 +155,7 @@ fn write_port_file(port: u16) {
   }
 }
 
+#[cfg(not(test))]
 async fn handle_conn(app: AppHandle, id: u64, stream: tokio::net::TcpStream) {
   let ws = match tokio_tungstenite::accept_async(stream).await {
     Ok(w) => w,
@@ -155,7 +168,7 @@ async fn handle_conn(app: AppHandle, id: u64, stream: tokio::net::TcpStream) {
   let (tx, mut rx) = mpsc::unbounded_channel::<String>();
   clients().lock().unwrap().insert(id, tx.clone());
   // 出队泵：服务端 → 该客户端
-  let mut pump = tokio::spawn(async move {
+  let pump = tokio::spawn(async move {
     while let Some(text) = rx.recv().await {
       if sink.send(tokio_tungstenite::tungstenite::Message::Text(text.into())).await.is_err() {
         break;
@@ -219,6 +232,7 @@ async fn handle_conn(app: AppHandle, id: u64, stream: tokio::net::TcpStream) {
 }
 
 /// welcome：库就绪态 + 落点路径 + 导出设置（settings.cepExport 子树，core::config 单写点）
+#[cfg(not(test))]
 fn welcome_payload(app: &AppHandle) -> serde_json::Value {
   let state = app.state::<AppState>();
   let guard = state.library.lock().unwrap();
@@ -257,6 +271,7 @@ pub fn broadcast_settings() {
 }
 
 /// tree：文件夹树（面板目标选择器数据源；folder_tree 现居 commands 层，复用——结构整理随 8.x 再下迁）
+#[cfg(not(test))]
 fn tree_payload(app: &AppHandle) -> serde_json::Value {
   let state = app.state::<AppState>();
   let guard = state.library.lock().unwrap();
@@ -267,6 +282,7 @@ fn tree_payload(app: &AppHandle) -> serde_json::Value {
 }
 
 /// exported：三段式接收入库——短锁 prepare → 锁外 compose（ffmpeg 秒级慢 IO 不冻结命令层）→ 锁 commit
+#[cfg(not(test))]
 async fn handle_exported(app: AppHandle, tx: mpsc::UnboundedSender<String>, payload: serde_json::Value) {
   let payload: ExportPayload = match serde_json::from_value(payload) {
     Ok(p) => p,
@@ -329,6 +345,7 @@ async fn handle_exported(app: AppHandle, tx: mpsc::UnboundedSender<String>, payl
 
 /// thumbOnly（批次 2）：仅缩略图三段式——短锁 thumb_prepare → 锁外 thumb_compose → 锁 thumb_commit；
 /// 命中回 thumbDone{mode:"bound"}（emit cep-imported 前端对齐），池外回 {mode:"beside"}
+#[cfg(not(test))]
 async fn handle_thumb_only(app: AppHandle, tx: mpsc::UnboundedSender<String>, payload: serde_json::Value) {
   let payload: cep_export::ThumbPayload = match serde_json::from_value(payload) {
     Ok(p) => p,

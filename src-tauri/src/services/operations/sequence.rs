@@ -6,6 +6,7 @@
 //!   暂存区与 frames/ 互斥），可撤销；
 //! - 重排序号：剩余帧按当前文件名顺序重排为连续序号（词干-001..N，位宽只增不减），
 //!   两段改名防撞（先临时名再目标名）；帧笔记 key 随映射迁移；磁盘改名对登记 DiskOp 可撤销。
+//!
 //! 播放口径：播放按 frames/ 文件名排序清单逐帧等长播放，序号不参与连续性推导——
 //! 抽删帧序号断开不影响播放（PRD 04 包内视图文末口径）。
 
@@ -17,6 +18,7 @@ use crate::core::json_io::write_json;
 use crate::core::library::{Library, CACHE_DIR};
 use crate::core::models::{new_asset_id, AssetMeta};
 use crate::core::notes;
+#[cfg(test)]
 use crate::core::paths;
 use crate::services::import::{self as ops, PendingFile, Source, ROOT_FOLDER_ID};
 use crate::services::sequence::{frame_name, frames_dir_if_sequence};
@@ -80,6 +82,7 @@ fn clear_strip_cache(lib: &Library, asset_id: &str) {
 #[derive(Debug, Default)]
 pub struct DissolveOutcome {
   pub new_ids: Vec<String>,
+  #[allow(dead_code)] // 命令层只回解散数量，落点文件夹暂仅测试断言（440 行钉落点语义）
   pub target_folder: String,
 }
 
@@ -222,7 +225,7 @@ pub fn delete_frames(lib: &mut Library, asset_id: &str, frame_names: &[String]) 
   if cover_deleted {
     meta.thumb_frame = Some(first.clone());
   }
-  if targets.iter().any(|n| *n == &meta.origin_name) {
+  if targets.contains(&&meta.origin_name) {
     meta.origin_name = first.clone();
   }
   meta.frame_count = Some(remaining as u32);

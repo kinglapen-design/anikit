@@ -1,6 +1,6 @@
 //! 字体服务（5.6）：ttf / otf / ttc 元数据解析（ttf-parser）+ 缩略图样张渲染（fontdue 光栅化，
-//! 纯 Rust 无系统依赖）+ 系统级安装 / 卸载（Windows 用户级：%LOCALAPPDATA%\Microsoft\Windows\Fonts
-//! + HKCU 注册表 Fonts 项 + WM_FONTCHANGE 广播——其他软件立即可见。**2026-08-23 用户痛点定案**：
+//! 纯 Rust 无系统依赖）+ 系统级安装 / 卸载（Windows 用户级：%LOCALAPPDATA%\Microsoft\Windows\Fonts +
+//! HKCU 注册表 Fonts 项 + WM_FONTCHANGE 广播——其他软件立即可见。**2026-08-23 用户痛点定案**：
 //! Eagle 装字体其他软件识别不到（仅注册进 Eagle 自有体系），AniKit 必须装到系统级）。
 //! 元数据字段口径对齐 Eagle「其它」页：名称（PostScript 名）/ 全名 / 系列 / 样式 / 版本 / 字数。
 //! 样张字样口径（同日用户供 Eagle 参考图）：cmap 含中文（'永' U+6C38）→ 中文四行
@@ -221,7 +221,7 @@ mod win_install {
     let name = HSTRING::from(value_name);
     let mut size = 0u32;
     let r = unsafe { RegQueryValueExW(hkey, PCWSTR(name.as_ptr()), None, None, None, Some(&mut size)) };
-    unsafe { RegCloseKey(hkey) };
+    let _ = unsafe { RegCloseKey(hkey) };
     r.is_ok()
   }
 
@@ -270,7 +270,7 @@ mod win_install {
     }
     for (value_name, path) in &paths {
       let wide = HSTRING::from(path.as_os_str());
-      unsafe { RemoveFontResourceW(PCWSTR(wide.as_ptr())) };
+      let _ = unsafe { RemoveFontResourceW(PCWSTR(wide.as_ptr())) };
       delete_registry_value(value_name)?;
       // 文件占用（某软件加载中）：删不掉不硬删——注册表已清，报占用由用户关软件后手动删
       if path.is_file() && path.starts_with(&dir) {
@@ -290,14 +290,14 @@ mod win_install {
     let mut size = 0u32;
     let r = unsafe { RegQueryValueExW(hkey, PCWSTR(name.as_ptr()), None, None, None, Some(&mut size)) };
     if !r.is_ok() || size < 4 {
-      unsafe { RegCloseKey(hkey) };
+      let _ = unsafe { RegCloseKey(hkey) };
       return None;
     }
     let mut buf = vec![0u8; size as usize];
     let r = unsafe {
       RegQueryValueExW(hkey, PCWSTR(name.as_ptr()), None, None, Some(buf.as_mut_ptr()), Some(&mut size))
     };
-    unsafe { RegCloseKey(hkey) };
+    let _ = unsafe { RegCloseKey(hkey) };
     if !r.is_ok() {
       return None;
     }
@@ -340,7 +340,7 @@ mod win_install {
         break;
       }
     }
-    unsafe { windows::Win32::System::Registry::RegCloseKey(hkey) };
+    let _ = unsafe { windows::Win32::System::Registry::RegCloseKey(hkey) };
     result
   }
 
@@ -365,7 +365,7 @@ mod win_install {
     }
     let name = HSTRING::from(value_name);
     let r = unsafe { RegDeleteValueW(hkey, PCWSTR(name.as_ptr())) };
-    unsafe { windows::Win32::System::Registry::RegCloseKey(hkey) };
+    let _ = unsafe { windows::Win32::System::Registry::RegCloseKey(hkey) };
     r.is_ok().then_some(()).ok_or_else(|| format!("字体注册表删除失败：{}", r.0))
   }
 

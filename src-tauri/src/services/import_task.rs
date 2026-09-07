@@ -260,6 +260,7 @@ fn prepare_folders(
 
 /// 阶段 2（一次短锁）：全量查重。命中库内 → 立即组装冲突挂起（源侧锁外补；不分渠道，
 /// 同渠道静默合并 2026-08-13 定案废除）；命中同批次 → 延后冲突；未命中 → 预分配 ID + 解析落点生成工作项
+#[allow(clippy::too_many_arguments)]
 fn dedup_phase(
   state: &mut TaskState,
   lib: &Mutex<Option<Library>>,
@@ -312,6 +313,7 @@ enum Classified {
 /// 查重分类单项：命中库内 → 冲突挂起（2026-08-13 定案：撞 hash 一律走正常重复提示，
 /// 不分渠道——同渠道静默合并随工程文件不自动导入而废除）；命中同批次 → 延后冲突；
 /// 未命中 → 预分配 ID 建工作项
+#[allow(clippy::too_many_arguments)]
 fn classify_one(
   l: &Library,
   by_hash: &HashMap<&str, &AssetMeta>,

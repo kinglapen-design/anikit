@@ -128,6 +128,7 @@ pub struct DeleteRecycleReport {
 /// - 快照含 origin 的条目 = 资产本体在回收站 → 物理删 info + 库内该资产全部活位置（含链接）清除
 ///   + index / recycle / recent / pins 同步；本体在库内的活链接必随之死，故计数进 linkRefs；
 /// - 纯链接位置记录（无 origin 快照）= 只删回收站条目，物理不动、无需确认。
+///
 /// 未确认只返回 needConfirm + 计数不动数据（仅"本体在回收站且有引用/活链接"时才需要确认）
 pub fn delete_recycle(lib: &mut Library, asset_ids: &[String], confirmed: bool) -> Result<DeleteRecycleReport, String> {
   let want: HashSet<&str> = asset_ids.iter().map(String::as_str).collect();

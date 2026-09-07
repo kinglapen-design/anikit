@@ -347,6 +347,7 @@ fn prune_missing_placements(folders: &mut FoldersFile, assets: &[AssetMeta]) -> 
 /// - 孤儿（metadata 在，但 folders ∪ recycle 无任何引用）= 异常路径残留 → **只返回清单
 ///   不自动删**（可能是用户数据唯一副本，删 / 复活由用户定），调用方负责 log + 存 Library
 ///   实况字段（命令层 emit 前端弹警告窗）。
+///
 /// 返回孤儿清单（测试断言用）
 fn scan_orphan_infos(assets_dir: &Path, folders: &FoldersFile, recycle: &RecycleFile, assets: &[AssetMeta]) -> Vec<OrphanNotice> {
   let infos = match info_dirs(assets_dir) {

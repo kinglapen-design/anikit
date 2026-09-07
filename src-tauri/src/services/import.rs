@@ -286,7 +286,7 @@ fn build_asset_in_info(
   } else {
     thumbnail::probe(&dest).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None))
   };
-  let thumb = thumbnail::generate(&info_dir, &dest, file_stem(&file.path).as_str());
+  let thumb = thumbnail::generate(info_dir, &dest, file_stem(&file.path).as_str());
   let mut meta = make_meta(asset_id, file, &origin_name, size, hash, width, height, thumb.as_ref().map(|t| t.name.clone()), imported_from);
   meta.thumb_width = thumb.as_ref().map(|t| t.width);
   meta.thumb_height = thumb.as_ref().map(|t| t.height);

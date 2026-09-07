@@ -171,6 +171,7 @@ async fn serve(listener: tokio::net::TcpListener) {
 /// 单连接推流：先推当前帧（已有内容时新连接立刻有画面），随后跟 watch 通道推新帧
 ///（latest-only 语义——卡顿丢帧是正确语义）；对端关闭 / 会话消亡即结束
 #[cfg(not(test))]
+#[allow(clippy::result_large_err)] // accept_hdr_async 握手回调 Err 变体 = tungstenite ErrorResponse，签名既定无法装箱
 async fn serve_ws(
   stream: tokio::net::TcpStream,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

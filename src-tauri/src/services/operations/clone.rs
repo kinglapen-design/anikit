@@ -5,6 +5,7 @@
 //! - Placement 结构忠实重建：origin 挂对应新文件夹（origin=true）；链接 Placement 指向子树内新副本，
 //!   指向子树外资产的链接原样保留（不越界复制别夹本体）
 //! - 档案节点 archives.json 记录深拷贝（badge / avatar / props / descriptions / links 随迁）
+//!
 //! 任一根失败整体 Err：已复制目录删除 + 内存数据回滚（撤销事务由命令层 cancel）。
 
 use std::collections::{HashMap, HashSet};
