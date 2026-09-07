@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// 拆分条：拖拽调整侧栏宽度。样式 2026-09-07 实机走查第一批条 4/5 用户供稿：
-// 左栏 = 亮色/四级渐变线（沿条长两头 0%、中间 50%）；右栏（详情面板侧）= 零绘制
-// 简约——无常态线、无悬停效果，仅 col-resize 指针提示。
+// 拆分条：拖拽调整侧栏宽度。样式 2026-09-07 实机走查第一批条 4/5 用户供稿 +
+// 同日二轮正态（渐变归属 hover）：常态 = 以前的 1px 分割线样（右栏左缘同档 通用/三级）；
+// hover / 拖拽 = 亮色/四级渐变线（沿条长两头 0%、中间 50%，1px 升 2px）；
+// 右栏（详情面板侧）= 无悬停效果，仅 col-resize 指针提示（常态线由右栏自身左缘承担）。
 import { ref } from "vue";
 import { useUiStore } from "../stores/ui";
 
@@ -60,12 +61,20 @@ function onUp(e: PointerEvent): void {
   flex: none;
   z-index: 20;
 }
-/* 左栏拆分条线：亮色/四级渐变——沿条长方向两头 0%、中间 50%（实机走查条 4 用户供稿，
-   替代旧「常态透明 + 悬停品牌色高亮」，旧 token 一并清出） */
+/* 常态 = 以前的 1px 分割线样（右栏左缘同档 通用/三级，条 4 二轮用户正态）；
+   hover / 拖拽 = 亮色/四级渐变线（两头 0%、中间 50%），线宽 1px 升 2px */
 .line {
-  width: 2px;
+  width: 1px;
   height: 100%;
   border-radius: 1px;
+  background: var(--n-g3);
+  transition:
+    width var(--n-dur-150) var(--n-ease-in-out),
+    background var(--n-dur-150) var(--n-ease-in-out);
+}
+.split-bar:hover .line,
+.split-bar.dragging .line {
+  width: 2px;
   background: linear-gradient(
     to bottom,
     transparent 0%,
@@ -73,6 +82,6 @@ function onUp(e: PointerEvent): void {
     transparent 100%
   );
 }
-/* 右栏拆分条：零绘制（条 5 用户定——不需要悬停效果，简约，仅指针提示），
-   模板不渲染 .line，此处无样式 */
+/* 右栏拆分条：零绘制（条 5 用户定——不需要悬停效果，简约，仅指针提示；
+   常态 1px 线由右栏自身左缘通栏线承担），模板不渲染 .line */
 </style>

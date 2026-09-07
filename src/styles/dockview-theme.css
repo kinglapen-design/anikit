@@ -45,15 +45,13 @@
   box-sizing: border-box;
 }
 
-/* 内容容器（7.1 十七轮贴稿 布局/主窗口/中间面板-内容容器）：g1 实底卡片；
-   最左 group 的卡片带左上 16px 圆角 + 左缘 1px 亮-半透明-2（稿口径）。
-   定位链 = .dv-grid-view > .dv-branch-node > 第一层 split 的首个 view-container——
-   dockview split 首子恒为 .dv-sash-container（探针实证），故首个 view-container 用
-   `.dv-sash-container + .dv-view-container` 紧邻定位（:first-child 恒不匹配，勿回退）；
-   末端必须走直达子链 > .dv-view > .dv-groupview > .dv-content-container——原后代
-   选择器会把第一列嵌套分屏的内层容器一并圆角化（2026-09-07 走查条 6 用户报
-   「其他列左上角圆角非常丑」的根因）；分屏静态分割线同日废除（面板自带边框，
-   中间不再画 1.5px 线） */
+/* 内容容器（7.1 十七轮贴稿 布局/主窗口/中间面板-内容容器）：g1 实底卡片。
+   定位链（dockview 7 实证：split 首子恒为单个 .dv-sash-container，全部 .dv-view 是其
+   紧邻 .dv-view-container 的子级）——只有第一行第一列的分屏带左上 16px 圆角 + 左缘
+   1px 亮-半透明-2（2026-09-07 二轮用户正态：原「第一列」口径改为「第一行第一列」）：
+   > .dv-view:first-child 锁定首个分屏，末端用后代 .dv-content-container——上下分屏时
+   dockview 会把原组重定向包进嵌套分支，直达子链会漏匹配（同日一轮回归根因）；
+   分屏静态分割线同日废除（面板自带边框，中间不再画 1.5px 线） */
 .anikit-dock-theme .dv-content-container {
   background: var(--n-g1);
 }
@@ -63,11 +61,22 @@
   > .dv-split-view-container
   > .dv-sash-container
   + .dv-view-container
-  > .dv-view
-  > .dv-groupview
-  > .dv-content-container {
+  > .dv-view:first-child
+  .dv-content-container {
   border-radius: 16px 0 0 0;
   border-left: 1px solid var(--n-l-a2);
+}
+/* 左栏收起（同日走查补充用户定）：内容容器贴窗口左缘，左上圆角归零、与右缘直角统一 */
+.dock-host.left-collapsed
+  .anikit-dock-theme
+  .dv-grid-view
+  > .dv-branch-node
+  > .dv-split-view-container
+  > .dv-sash-container
+  + .dv-view-container
+  > .dv-view:first-child
+  .dv-content-container {
+  border-top-left-radius: 0;
 }
 
 /* 标签列表（稿值）：标签页间 gap 4（选中反弧肩径同此值，hover 罩右下间距才能统一 4）；
@@ -153,10 +162,10 @@
   display: none;
 }
 
-/* ===== 拆分条（sash）悬停指示（2026-09-07 走查条 6 修订）=====
+/* ===== 拆分条（sash）悬停指示（2026-09-07 走查条 6 + 二轮条 5 修订）=====
    分屏静态分隔线废除（原 view::before 1.5px 暗-悬停线整套删除——面板自带边框，
-   用户定）；sash 热区 4px 不变（可拖），悬停 / 拖拽时 1.5px 品牌常态线居中
-   （旧 --brand-border 青绿 → --n-brand 新品牌蓝，行为不变） */
+   用户定）；sash 热区 4px 不变（可拖），悬停 / 拖拽时 1.5px 渐变线居中——同左栏
+   拆分条 hover 语言（亮色/四级，两头 0% 中间 50%，方向沿 sash 长轴） */
 .anikit-dock-theme .dv-sash::after {
   content: "";
   position: absolute;
@@ -179,7 +188,23 @@
 }
 .anikit-dock-theme .dv-sash:hover::after,
 .anikit-dock-theme .dv-sash:active::after {
-  background: var(--n-brand);
+  /* 渐变线（走查条 5 二轮用户定：同左栏拆分条 hover 语言）——方向沿 sash 长轴：
+     横向容器 = 竖 sash = 垂直渐变；纵向容器 = 横 sash = 水平渐变；两头 0% 中间 50% 亮色/四级 */
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--n-l4) 50%, transparent) 50%,
+    transparent 100%
+  );
+}
+.anikit-dock-theme .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:hover::after,
+.anikit-dock-theme .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:active::after {
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    color-mix(in srgb, var(--n-l4) 50%, transparent) 50%,
+    transparent 100%
+  );
 }
 
 /* 标签栏空白区：普通指针（dockview 默认 grab 抓手，与全局窗口拖拽区域的箭头不一致，2026-08-08 用户定） */
