@@ -46,14 +46,15 @@
 }
 
 /* 内容容器（7.1 十七轮贴稿 布局/主窗口/中间面板-内容容器）：g1 实底卡片。
-   定位链（dockview 7 实证：split 首子恒为单个 .dv-sash-container，全部 .dv-view 是其
-   紧邻 .dv-view-container 的子级）——只有第一行第一列的分屏带左上 16px 圆角 + 左缘
-   1px 亮-半透明-2（2026-09-07 二轮用户正态：原「第一列」口径改为「第一行第一列」）：
-   > .dv-view:first-child 锁定首个分屏，末端用后代 .dv-content-container——上下分屏时
-   dockview 会把原组重定向包进嵌套分支，直达子链会漏匹配（同日一轮回归根因）；
-   分屏静态分割线同日废除（面板自带边框，中间不再画 1.5px 线） */
+   **左缘线 1px 亮-半透明-2 = 每个容器自带**（稿口径，边框跟容器走——同日四轮用户
+   正态：分割出的新容器自然带自己的左缘线，分屏分界 = 相邻容器的自带线，不画额外线）；
+   **左上 16px 圆角 = 只有第一行第一列**（条 6 二轮用户定）。圆角定位链（dockview 7
+   实证：split 首子恒为单个 .dv-sash-container，全部 .dv-view 是其紧邻 .dv-view-container
+   的子级）：> .dv-view:first-child 锁首个分屏，末端用后代 .dv-content-container——
+   上下分屏时 dockview 会把原组重定向包进嵌套分支，直达子链会漏匹配（一轮回归根因） */
 .anikit-dock-theme .dv-content-container {
   background: var(--n-g1);
+  border-left: 1px solid var(--n-l-a2);
 }
 .anikit-dock-theme
   .dv-grid-view
@@ -64,7 +65,6 @@
   > .dv-view:first-child
   .dv-content-container {
   border-radius: 16px 0 0 0;
-  border-left: 1px solid var(--n-l-a2);
 }
 /* 左栏收起（同日走查补充用户定）：内容容器贴窗口左缘，左上圆角归零、与右缘直角统一 */
 .dock-host.left-collapsed
