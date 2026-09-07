@@ -22,7 +22,8 @@
 //! cfg(test) 不起 WS server（tauri GUI 依赖链拖垮测试 exe，踩坑 014），会话逻辑可单测。
 //!
 //! （5.3 视频会话 / 音频通路已随视频播放回滚 <video> 直读拆除，2026-08-22——帧流纯动图；
-//! 文本控制消息 flush/ended/error 与 PCM 音频块同为视频专用协议，一并退役；方案存档见 git 历史）
+//! 文本控制消息 flush/ended/error 与 PCM 音频块同为视频专用协议，一并退役；方案存档见 git 历史，
+//! decoder 侧视频/音频引擎随视频播放定线 <video> 于 2026-09-07 删除）
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
