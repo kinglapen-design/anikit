@@ -97,8 +97,12 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
       </div>
       <div class="pv-demo-row">
         <div class="pv-demo-cell" style="width: 230px">
-          <TreeRowItem kind="quick" icon="library" name="全部" :count="3134" />
-          <span class="pv-cap">快速访问 · 全部（千分位）</span>
+          <TreeRowItem kind="quick" icon="library" name="动画素材" :count="3134" switchable />
+          <span class="pv-cap">资源库行 · 库名 + 切换钮（2026-09-07 定）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="quick" icon="library" name="一个名字特别特别长的资源库" :count="3134" switchable force-state="selected" />
+          <span class="pv-cap">长库名截断 · 选中（切换钮不挤压）</span>
         </div>
         <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="quick" icon="uncategorized" name="未分类" :count="132" />

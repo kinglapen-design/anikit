@@ -2,7 +2,8 @@
 // 资源库视图（PRD 04-1）：快速访问区块 + 文件树区块。
 // 7.1 十八轮贴稿重构（稿 = 布局/主窗口/左侧边栏 树容器 + 组件/item/树容器 item、标题 item）：
 // 树容器 = column gap 8（padding 0，区块自带 padding 8 12）；
-// 快速访问区块 = TreeRowItem quick 六项（items gap 2，无区块标题）；
+// 快速访问区块 = TreeRowItem quick 六项（items gap 2，无区块标题；首项「全部」2026-09-07 用户定改
+// 资源库行——文案 = 当前库名 + 名称后常显切换资源库钮（弹 08 稿切库菜单），视图语义不变仍 quick:all）；
 // 文件夹区块（多区块子系统，PRD 02 §01）= SectionTitle block 型（标题 / 数量 / hover 出展开·更多·添加，
 // 常态只显标题）+ FolderTree（该区块顶级节点）；区块间距 8（稿 树容器 gap 8，旧 24 作废）。
 // 区块头挂 data-block-id 兼作文件夹拖拽落点（移入该区块根级）与区块排序拖拽起点（让位式，
@@ -22,9 +23,10 @@ import AppModal from "./AppModal.vue";
 import AppButton from "./AppButton.vue";
 import { beginFolderDrag, dragView } from "../lib/dragOperation";
 import { createAndName } from "../lib/menuOps";
-import { openContextMenu } from "../lib/contextMenus";
+import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
 import { recycleBlankSpec } from "../lib/menuSpecs/recycle";
-import { currentSpace, setAutoImport } from "../lib/libraryOps";
+import { currentLibrary, currentSpace, loadLibraries, setAutoImport } from "../lib/libraryOps";
+import { librarySwitchSpec } from "../lib/menuSpecs/libraryHamburger";
 import { reorderBlocks } from "../lib/blockOps";
 import { isBlockOpen, openBlock, toggleBlockOpen, treeExpansion } from "../lib/treeExpansion";
 import { expandEnter, expandLeave } from "../lib/expandAnim";
@@ -99,7 +101,8 @@ async function onEnableAutoImport(): Promise<void> {
 }
 
 // 快速访问（PRD 02-15 定案六项：全部 / 未分类 / 最近使用 / 自动导入 / 缩略图 / 回收站）：
-// 缩略图视图 8.1 接入（hidden 伴生缩略图资产）；收件箱 = PRD"自动导入"；图标 = 新库同名线条图标
+// 缩略图视图 8.1 接入（hidden 伴生缩略图资产）；收件箱 = PRD"自动导入"；图标 = 新库同名线条图标；
+// 「全部」行（2026-09-07 用户定）：文案 = 当前库名（currentLibrary.name，空回退"全部"）+ switchable 切换钮
 const quickItems = [
   { key: "all", icon: "library", label: "全部" },
   { key: "uncategorized", icon: "uncategorized", label: "未分类" },
@@ -281,6 +284,26 @@ function onQuickMenu(key: string, e: MouseEvent): void {
   e.preventDefault();
   openContextMenu(e, recycleBlankSpec(), undefined);
 }
+
+// 切换资源库钮（「全部」= 资源库行，2026-09-07 用户定：把 08 稿切库菜单从菜单栏深处提到行内，
+// 新建资源库入口同菜单直达）：行下方弹出 + 同钮再点关闭（菜单栏四文字钮同款 toggle 口径）；
+// 选择模式禁开（切库非 §12.1 白名单，视觉不改——同「菜单」钮）；菜单左缘对齐行左缘
+async function onSwitchLibrary(e: MouseEvent): Promise<void> {
+  const el = e.currentTarget as HTMLElement;
+  if (menuState.entries && menuState.trigger === el) {
+    closeContextMenu();
+    return;
+  }
+  if (usePickerStore().active) return;
+  const rect = (el.closest(".tree-item") ?? el).getBoundingClientRect();
+  const { names } = await loadLibraries();
+  openContextMenu(
+    { clientX: rect.left, clientY: rect.bottom + 4 },
+    librarySwitchSpec(names, currentLibrary.name),
+    undefined,
+    { trigger: el },
+  );
+}
 </script>
 
 <template>
@@ -292,10 +315,12 @@ function onQuickMenu(key: string, e: MouseEvent): void {
         :key="q.key"
         kind="quick"
         :icon="q.icon"
-        :name="q.label"
+        :name="q.key === 'all' ? (currentLibrary.name ?? q.label) : q.label"
         :count="quickCount(q.key)"
+        :switchable="q.key === 'all'"
         :selected="content.sidebarSelected === `quick:${q.key}`"
         @click="onQuickSelect(q.key)"
+        @switch="onSwitchLibrary"
         @contextmenu="onQuickMenu(q.key, $event)"
       />
     </section>

@@ -15,6 +15,8 @@
 //   档案提示装饰圆点 tint 变色后 = 该色-2 暗档（二轮实机定）；tint + 选中 = 该色-1 亮档（三轮实机定；
 //   无 tint 选中 = 亮色/一级）。
 // 数量双口径（旧 TreeItem 2026-08-20 定）：folder 展开 = 直接子项数 / 折叠 = 递归总数；0 不显示。
+// switchable（2026-09-07 用户定，quick「全部」行专用变体）：名称后常显切换资源库钮——与图标/名称
+// 同 .lead 容器等距 gap 6、名称截断不挤压；点击 emit switch 由父级弹 08 稿切库菜单；命名态不渲染。
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import TwoToneIcon from "./TwoToneIcon.vue";
@@ -38,6 +40,7 @@ const props = withDefaults(
     dropZone?: "before" | "after" | "into" | null; // 拖拽落点（父级按引擎/本地判定算好传入）
     naming?: boolean; // 行内重命名输入态（useInlineRename，速查 §4）
     namingError?: boolean; // 名称校验违规：描边 --n-danger
+    switchable?: boolean; // 名称后常显切换资源库钮（2026-09-07 用户定，quick「全部」行专用）
     forceState?: "" | "hover" | "selected"; // 预览页强制态
   }>(),
   {
@@ -55,6 +58,7 @@ const props = withDefaults(
     dropZone: null,
     naming: false,
     namingError: false,
+    switchable: false,
     forceState: "",
   },
 );
@@ -63,6 +67,7 @@ const emit = defineEmits<{
   toggle: [];
   click: [e: MouseEvent]; // 携带修饰键（Ctrl 加选 / Shift 范围选判定在父级）
   nameCommit: [name: string];
+  switch: [e: MouseEvent]; // 切换资源库钮（switchable）：携带触发元素供父级定位弹菜单
 }>();
 
 // 数量显示规则：折叠 = 递归总数（提醒"哪个文件夹里有文件"）、展开 = 直接子项数
@@ -147,6 +152,10 @@ function onClick(e: MouseEvent): void {
         @pointerdown.stop
       />
       <span v-else class="nm">{{ name }}</span>
+      <!-- 切换资源库钮（switchable，2026-09-07 用户定）：与图标/名称同容器等距（.lead gap 6） -->
+      <button v-if="switchable && !naming" class="lib-switch" title="切换资源库" @click.stop="emit('switch', $event)">
+        <AppIcon name="switch-library" :size="18" />
+      </button>
     </span>
     <span v-if="showCount && !naming" class="cnt">{{ countText }}</span>
   </div>
@@ -331,6 +340,33 @@ function onClick(e: MouseEvent): void {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+/* 切换资源库钮（switchable）：色档同 quick 图标（常态三级 / 选中行随名称一级），hover 提亮二级；
+   flex none——名称再长截断也不挤压本钮 */
+.lib-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  padding: 0;
+  color: var(--n-l3);
+  transition: color var(--n-dur-100) var(--n-ease-in-out);
+}
+/* 点击热区外扩（.exp 同款机制）：上下 -4 吃满 item padding、左右 -3 各吃间距一半 */
+.lib-switch::after {
+  content: "";
+  position: absolute;
+  inset: -4px -3px;
+}
+.lib-switch:hover {
+  color: var(--n-l2);
+}
+.selected .lib-switch,
+.force-selected .lib-switch {
+  color: var(--n-l1);
 }
 /* 命名输入：透明底不单独描边（整 item 1.5px 品牌描边提示）；覆盖共享基座 20 高 → 18（item 内容行高），
    字档 = 正文档 13/18（基座为旧字档） */
