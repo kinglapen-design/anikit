@@ -1,0 +1,7 @@
+## 071 DWM 整窗玻璃延伸 + tao 保留 WS_CAPTION——DWM 画原生窗口按钮；延伸切换翻车云母纯黑，终局 = 摘 WS_CAPTION（2026-09-08）
+
+- **现象：** 无边框 + 云母主窗口（063 六轮终态配置），①最大化/全屏后右上角冒出一组系统默认窗口按钮（最小化/还原/关闭）压在自定义 `.win-controls-overlay` 上；②常态也在——hover 窗口顶边细条会露出原生关闭钮的红色 hover 细条（用户视频实机报）。
+- **原因：** 三层叠加——① tao 建窗**无条件保留** `WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX`（tao-0.35.3 `window_state.rs` to_window_styles），"无边框"靠 WM_NCCALCSIZE 返回 0 把非客户区归零；② 项目为云母做了 `DwmExtendFrameIntoClientArea(-1)` 整窗玻璃延伸——**玻璃延伸正是云母 backdrop 的载体**（DWMWA_SYSTEMBACKDROP_TYPE 只选材料，填充区域由延伸定义）；③ 带 caption 样式的窗口 + 整窗玻璃，DWM 便把原生标题栏按钮画进玻璃——最大化时画在 tao 把客户区调成 rcWork 让出的 caption 高条带（完整三钮），常态时画在 Win11 顶边 inset（tao `calculate_insets_for_dpi`：dpi/96 圆整，150% = 2px）细条里。
+- **一轮修法（实机翻车）：** 按最大化/全屏态切换延伸（-1 ↔ 0）——**翻车两宗**：margins 0 把云母载体抽了，最大化整窗变纯黑；常态细条按钮本来就在，切换管不着。教训：先实证"云母从哪来"再动延伸。
+- **终局解法：** 摘 `WS_CAPTION`（无边框应用标准配方）——DWM 无 caption 可画按钮，常态/最大化两态同愈；**保留** `WS_THICKFRAME | WS_SYSMENU | MIN/MAXIMIZEBOX`（DWM 阴影 / Win11 圆角 / Aero snap / 任务栏系统菜单全靠它们，007 终局成果不动）；延伸恒 -1 保云母。**防 tao 回写**：tao `apply_diff` 运行期会整体重写 `GWL_STYLE`（setFullscreen / 置顶等路径），把 caption 带回来——主窗口 subclass 拦 `WM_STYLECHANGED` 复检重摘（守卫内只改样式不补 FRAMECHANGED，tao 改写后自跟刷帧；重摘再触发本消息时 caption 已摘，递归必终止）。
+- **预防：** `DwmExtendFrameIntoClientArea(-1)` 整窗玻璃 ×「保留 caption 样式的无边框窗」组合必出原生按钮——要么别整窗延伸，要么摘 caption（推荐后者，配方成熟）。改 DWM / 窗口样式级 hack 后**三态目验**（常态 / 最大化 / 全屏）+ 失焦态；DWM 层 headless 截不到（063），只能实机验。给第三方窗库（tao）打样式补丁时注意其运行期 `SetWindowLong` 回写点，须配守卫。

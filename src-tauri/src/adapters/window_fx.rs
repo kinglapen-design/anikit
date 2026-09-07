@@ -19,12 +19,17 @@ use std::sync::OnceLock;
 /// 主窗口实际生效的模式（"mica" / "solid"），启动时 apply_main 写入，前端查询依据。
 static MAIN_MODE: OnceLock<&'static str> = OnceLock::new();
 
-/// 失焦欺骗 subclass（2026-08-30 用户方案）：失焦时 DWM 把云母退化为实色、窗口阴影
-/// 收成小圈——两者都绑 DWM 的"窗口激活态"渲染判定。拦截 WM_NCACTIVATE 把 wParam 恒改
-/// TRUE 再下放默认链（lParam -1 = 阻止默认流程重绘非客户区），骗 DWM 恒按激活渲染
-/// 帧/backdrop/阴影。焦点/activation 本身不变（WM_ACTIVATE、前后台焦点事件不受影响）。
+/// 主窗口守卫 subclass：① 失焦欺骗（2026-08-30 用户方案）——失焦时 DWM 把云母退化为
+/// 实色、窗口阴影收成小圈，两者都绑 DWM 的"窗口激活态"渲染判定；拦截 WM_NCACTIVATE
+/// 把 wParam 恒改 TRUE 再下放默认链（lParam -1 = 阻止默认流程重绘非客户区），骗 DWM
+/// 恒按激活渲染帧/backdrop/阴影。焦点/activation 本身不变（WM_ACTIVATE、前后台焦点
+/// 事件不受影响）。② WS_CAPTION 复检重摘（2026-09-08 实机走查修复，详见 strip_caption）：
+/// tao 运行期在 setFullscreen / 置顶等路径会整体重写 GWL_STYLE（window_state.rs apply_diff
+/// 的 to_window_styles 无条件含 WS_CAPTION），把已摘的 caption 带回来——拦 WM_STYLECHANGED
+/// 复检，发现即重摘。SetWindowLong 同步再触发本消息时 caption 已摘，分支不进，递归必终止；
+/// 此处不补 FRAMECHANGED：tao apply_diff 改写后必自跟一次 SWP_FRAMECHANGED 刷帧。
 #[cfg(windows)]
-unsafe extern "system" fn ncactivate_guard(
+unsafe extern "system" fn main_window_guard(
   hwnd: windows::Win32::Foundation::HWND,
   msg: u32,
   wparam: windows::Win32::Foundation::WPARAM,
@@ -34,43 +39,78 @@ unsafe extern "system" fn ncactivate_guard(
 ) -> windows::Win32::Foundation::LRESULT {
   use windows::Win32::Foundation::{LPARAM, WPARAM};
   use windows::Win32::UI::Shell::DefSubclassProc;
-  use windows::Win32::UI::WindowsAndMessaging::WM_NCACTIVATE;
+  use windows::Win32::UI::WindowsAndMessaging::{
+    GetWindowLongPtrW, SetWindowLongPtrW, GWL_STYLE, WM_NCACTIVATE, WM_STYLECHANGED, WS_CAPTION,
+  };
   if msg == WM_NCACTIVATE {
     return DefSubclassProc(hwnd, msg, WPARAM(1), LPARAM(-1));
+  }
+  if msg == WM_STYLECHANGED && wparam.0 as i32 == GWL_STYLE.0 {
+    let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    if style & (WS_CAPTION.0 as isize) != 0 {
+      log::info!("[window_fx] tao 重写样式带回 WS_CAPTION，重摘");
+      SetWindowLongPtrW(hwnd, GWL_STYLE, style & !(WS_CAPTION.0 as isize));
+    }
   }
   DefSubclassProc(hwnd, msg, wparam, lparam)
 }
 
-/// 给主窗口装失焦欺骗 subclass（show 后随边框染色/帧延伸一起装，本进程只装一次）。
+/// 给主窗口装守卫 subclass（show 后随摘样式/帧延伸一起装，本进程只装一次）。
 #[cfg(windows)]
-pub fn install_ncactivate_guard(hwnd: windows::Win32::Foundation::HWND) {
+pub fn install_main_window_guard(hwnd: windows::Win32::Foundation::HWND) {
   use windows::Win32::UI::Shell::SetWindowSubclass;
-  let ok = unsafe { SetWindowSubclass(hwnd, Some(ncactivate_guard), 1, 0) };
-  log::info!("[window_fx] WM_NCACTIVATE 失焦欺骗 subclass 安装 = {ok:?}");
+  let ok = unsafe { SetWindowSubclass(hwnd, Some(main_window_guard), 1, 0) };
+  log::info!("[window_fx] 主窗口守卫 subclass（失焦欺骗 + caption 复检）安装 = {ok:?}");
 }
 
-/// 框架延伸按最大化/全屏态切换（2026-09-08 实机走查修复：最大化时 DWM 原生窗口按钮
-/// 压自定义按钮）。根因链：tao 建窗保留 WS_CAPTION | WS_SYSMENU | MIN/MAXIMIZEBOX
-///（tao window_state.rs 无条件加），最大化时其 WM_NCCALCSIZE 把客户区调成工作区
-///（让出任务栏），窗口矩形与客户区顶缘之间露出 caption 高框架条带——叠加整窗玻璃
-/// 延伸（-1）后 DWM 在该条带画出原生最小化/最大化(还原)/关闭按钮，位置正好压在
-/// 前端 .win-controls-overlay 上。修法：最大化 / 全屏态去延伸（margins 0）——
-/// 最大化时 DWM 不裁角不画边（063），延伸填充月牙缝的职责彼时无对象；云母由
-/// DWMWA_SYSTEMBACKDROP_TYPE backdrop 提供、与延伸无关，不受影响。还原回 -1。
-/// 不摘 WS_CAPTION：阴影 / Win11 圆角全靠这组样式（踩坑 007 终局）。
+/// 摘除 WS_CAPTION（2026-09-08 实机走查修复：DWM 原生窗口按钮压自定义按钮）。
+/// 根因链：tao 建窗无条件保留 WS_CAPTION | WS_SYSMENU | MIN/MAXIMIZEBOX
+///（tao window_state.rs to_window_styles），"无边框"靠 WM_NCCALCSIZE 返 0 实现；
+/// 而项目为云母做了 DwmExtendFrameIntoClientArea(-1) 整窗玻璃延伸（063 六轮终态——
+/// 玻璃延伸正是云母载体，撤了整窗变纯黑，实机实证）——带 caption 样式的窗口 + 整窗
+/// 玻璃，DWM 便把原生标题栏按钮画进玻璃：最大化时画在 rcWork 让出的 caption 高条带
+///（完整三钮压 .win-controls-overlay），常态时画在 Win11 顶边 inset（dpi/96 圆整，
+/// 150% = 2px）细条里（hover 露原生关闭钮红色细条）。
+/// 摘 WS_CAPTION = 无边框应用标准配方：DWM 无 caption 可画按钮，两态同愈；
+/// **保留** WS_THICKFRAME | WS_SYSMENU | MIN/MAXIMIZEBOX——DWM 阴影 / Win11 圆角 /
+/// Aero snap / 任务栏系统菜单全靠它们（踩坑 007 终局成果不动）。运行期防 tao 回写
+/// 由 main_window_guard 的 WM_STYLECHANGED 复检兜底。
 #[cfg(windows)]
-pub fn extend_frame(hwnd: windows::Win32::Foundation::HWND, maximized: bool) {
+pub fn strip_caption(hwnd: windows::Win32::Foundation::HWND) {
+  use windows::Win32::UI::WindowsAndMessaging::{
+    GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_STYLE, SET_WINDOW_POS_FLAGS, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WS_CAPTION,
+  };
+  let style = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) };
+  if style & (WS_CAPTION.0 as isize) == 0 {
+    return;
+  }
+  unsafe {
+    SetWindowLongPtrW(hwnd, GWL_STYLE, style & !(WS_CAPTION.0 as isize));
+    // 帧样式变更须 FRAMECHANGED 才生效（运行期 tao 回写由守卫重摘，靠 tao 自己的 FRAMECHANGED）
+    let flags: SET_WINDOW_POS_FLAGS = SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED;
+    let _ = SetWindowPos(hwnd, None, 0, 0, 0, 0, flags);
+  }
+  log::info!("[window_fx] WS_CAPTION 已摘除（保留 THICKFRAME/SYSMENU/MIN/MAXBOX）");
+}
+
+/// 框架延伸整窗（margins 恒 -1，063 六轮定稿 + 2026-09-08 实机走查实证）：
+/// 玻璃延伸 = 云母 backdrop 载体——DWMWA_SYSTEMBACKDROP_TYPE 只选材料，填充区域由
+/// 延伸定义，撤延伸（margins 0）整窗云母立即消失变纯黑（实机实证）；同时填充 DWM
+/// 圆角描边曲线与方形客户区角之间的月牙缝（063）。原生按钮副作用由 strip_caption
+/// 摘 WS_CAPTION 根治，不再按最大化态切换延伸。
+#[cfg(windows)]
+pub fn extend_frame(hwnd: windows::Win32::Foundation::HWND) {
   use windows::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
   use windows::Win32::UI::Controls::MARGINS;
-  let m = if maximized { 0 } else { -1 };
   let margins = MARGINS {
-    cxLeftWidth: m,
-    cxRightWidth: m,
-    cyTopHeight: m,
-    cyBottomHeight: m,
+    cxLeftWidth: -1,
+    cxRightWidth: -1,
+    cyTopHeight: -1,
+    cyBottomHeight: -1,
   };
   let r = unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) };
-  log::info!("[window_fx] DwmExtendFrameIntoClientArea({m}) maximized={maximized} = {r:?}");
+  log::info!("[window_fx] DwmExtendFrameIntoClientArea(-1) = {r:?}");
 }
 
 /// build 号 → 模式（纯函数，单测边界）。
