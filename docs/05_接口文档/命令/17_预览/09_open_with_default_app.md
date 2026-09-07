@@ -1,0 +1,1 @@
+	- `open_with_default_app(assetId: string)` —— 系统默认程序打开源文件（Windows ShellExecuteW "open"，adapters/shell_open；非 Windows 暂不支持）

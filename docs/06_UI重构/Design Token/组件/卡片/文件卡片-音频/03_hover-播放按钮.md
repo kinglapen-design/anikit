@@ -1,0 +1,1058 @@
+## 3_hover-播放按钮
+
+icon-color：亮色 / 一级
+
+``` css
+/* 音频卡片 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+justify-content: center;
+align-items: center;
+padding: 12px;
+isolation: isolate;
+
+position: absolute;
+width: 400px;
+height: 200px;
+
+/* 通用/二级 */
+background: #1C1C1C;
+/* 通用/三级 */
+border: 1px solid #242424;
+border-radius: 8px;
+
+
+/* 波形图 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px;
+gap: 4px;
+
+width: 376px;
+height: 176px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 1;
+z-index: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 50px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 89px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 67px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 50px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 3;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 36px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 4;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 77px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 5;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 50px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 6;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 35px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 7;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 50px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 8;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 102px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 9;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 155px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 10;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 78px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 11;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 50px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 12;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 32px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 13;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 68px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 14;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 109px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 15;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 59px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 16;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 46px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 17;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 36px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 18;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 19px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 19;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 39px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 20;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 50px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 21;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 65px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 22;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 134px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 23;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 98px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 24;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 40px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 25;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 73px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 26;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 13px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 27;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 31px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 28;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 58px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 29;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 85px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 30;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 126px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 31;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 75px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 32;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 90px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 33;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 37px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 34;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 69px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 35;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 101px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 36;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 74px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 37;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 63px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 38;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 37px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 39;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 27px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 40;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 54px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 41;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 82px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 42;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 115px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 43;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 66px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 44;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 50px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 45;
+flex-grow: 0;
+
+
+/* 竖线 */
+
+width: 4px;
+height: 25px;
+
+/* 通用/五级 */
+background: #2E2E2E;
+border-radius: 99px;
+
+/* Inside auto layout */
+flex: none;
+order: 46;
+flex-grow: 0;
+
+
+/* 名称+简介 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+justify-content: flex-end;
+align-items: flex-start;
+padding: 24px 12px 12px;
+gap: 4px;
+
+position: absolute;
+width: 400px;
+height: 74px;
+left: 0px;
+top: 126px;
+
+background: linear-gradient(180deg, rgba(23, 23, 23, 0) 0%, rgba(23, 23, 23, 0.8) 100%);
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+z-index: 1;
+
+
+/* 雪牧.wav */
+
+width: 56px;
+height: 18px;
+
+/* 通用/正文-加粗 */
+font-family: 'Microsoft YaHei UI';
+font-style: normal;
+font-weight: 700;
+font-size: 13px;
+line-height: 18px;
+/* identical to box height, or 138% */
+display: flex;
+align-items: center;
+
+/* 亮色/一级 */
+color: #F2F2F2;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* 12:23 */
+
+width: 36px;
+height: 16px;
+
+/* 通用/数字 */
+font-family: 'Fira Mono';
+font-style: normal;
+font-weight: 500;
+font-size: 12px;
+line-height: 16px;
+/* identical to box height, or 133% */
+display: flex;
+align-items: center;
+
+/* 亮色/二级 */
+color: #BFBFBF;
+
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* 原始文件-徽章 */
+
+position: absolute;
+width: 14px;
+height: 14px;
+left: 369px;
+top: 174px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+flex-grow: 0;
+z-index: 2;
+
+
+/* svg */
+
+position: absolute;
+width: 14px;
+height: 14px;
+left: 369px;
+top: 174px;
+
+/* 品牌/常态 */
+background: #0F89EC;
+
+
+/* 徽标 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 2px 6px;
+
+position: absolute;
+width: 34px;
+height: 20px;
+left: 12px;
+top: 12px;
+
+/* 通用/半透明-2 */
+background: rgba(41, 41, 41, 0.5);
+/* 立体感-背景模糊 */
+box-shadow: 0px 2px 1px rgba(0, 0, 0, 0.2), inset 0px 1px 1px rgba(255, 255, 255, 0.2);
+backdrop-filter: blur(40px);
+/* Note: backdrop-filter has minimal browser support */
+border-radius: 4px;
+
+/* Inside auto layout */
+flex: none;
+order: 3;
+flex-grow: 0;
+z-index: 3;
+
+
+/* WAV */
+
+width: 22px;
+height: 16px;
+
+/* 通用/数字 */
+font-family: 'Fira Mono';
+font-style: normal;
+font-weight: 500;
+font-size: 12px;
+line-height: 16px;
+/* identical to box height, or 133% */
+display: flex;
+align-items: center;
+
+/* 亮色/二级 */
+color: #BFBFBF;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* 音频卡片-悬停-按钮 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 2px 6px;
+gap: 6px;
+
+position: absolute;
+width: 68px;
+height: 20px;
+left: 320px;
+top: 12px;
+
+/* 通用/半透明-2 */
+background: rgba(41, 41, 41, 0.5);
+/* 立体感-背景模糊 */
+box-shadow: 0px 2px 1px rgba(0, 0, 0, 0.2), inset 0px 1px 1px rgba(255, 255, 255, 0.2);
+backdrop-filter: blur(40px);
+/* Note: backdrop-filter has minimal browser support */
+border-radius: 4px;
+
+/* Inside auto layout */
+flex: none;
+order: 4;
+flex-grow: 0;
+z-index: 4;
+
+
+/* 03:12 */
+
+width: 36px;
+height: 16px;
+
+/* 通用/数字 */
+font-family: 'Fira Mono';
+font-style: normal;
+font-weight: 500;
+font-size: 12px;
+line-height: 16px;
+/* identical to box height, or 133% */
+display: flex;
+align-items: center;
+
+/* 亮色/二级 */
+color: #BFBFBF;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* 音频卡片-悬停-播放 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 0px;
+
+width: 14px;
+height: 14px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Vector */
+
+width: 7px;
+height: 9px;
+
+/* 亮色/二级 */
+background: #BFBFBF;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* 音频卡片-悬停-暂停 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 0px;
+
+display: none;
+width: 14px;
+height: 14px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+flex-grow: 0;
+
+
+/* svg */
+
+width: 6px;
+height: 9px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Rectangle 17758 */
+
+position: absolute;
+width: 2px;
+height: 9px;
+left: 4px;
+top: 2.5px;
+
+/* 亮色/二级 */
+background: #BFBFBF;
+border-radius: 0.3px;
+
+
+/* Rectangle 17759 */
+
+position: absolute;
+width: 2px;
+height: 9px;
+left: 8px;
+top: 2.5px;
+
+/* 亮色/二级 */
+background: #BFBFBF;
+border-radius: 0.3px;
+```

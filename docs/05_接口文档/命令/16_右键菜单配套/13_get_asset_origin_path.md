@@ -1,0 +1,1 @@
+	- `get_asset_origin_path(assetId) -> string` —— 源文件真实绝对路径（复制文件路径用，恒 info 内实体；**序列帧 = frames/ 封面帧**——originName 指向 frames/ 内帧、info 根路径不存在，2026-08-14 修复：`real_origin_file` 特判，open_with_dialog / reveal_in_explorer 同口径）

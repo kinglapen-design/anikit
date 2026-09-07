@@ -1,0 +1,1 @@
+	- `delete_assets_permanently(assetIds, confirmed) -> { needConfirm, segmentRefs, deleted }` —— 素材直接彻底删除（两段式；**先物理后数据**——逐个删 info 失败收集名单不中断，只清成功项 Placement + 四处同步清理，失败项数据层原样保留可重试，2026-09-02 资产污染修复）

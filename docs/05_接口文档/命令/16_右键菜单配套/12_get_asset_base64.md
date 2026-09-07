@@ -1,0 +1,1 @@
+	- `get_asset_base64(assetId) -> string` —— 复制 base64（无依赖手写编码，纯 base64 无 data: 前缀）：静态图片（png/jpg/jpeg/bmp/webp/gif）读原字节 ≤10MB；**psd/psb/svg 走 thumb_formats 解码合成图 → 长边 ≤4096 PNG 编码 ≤10MB（2026-08-14 用户定）**，解码失败（PSD 未存合成图等）中文报错；锁内只定位（origin/扩展名/大小），解码与 PNG 编码在锁外（大 PSD 解码秒级不占库锁）

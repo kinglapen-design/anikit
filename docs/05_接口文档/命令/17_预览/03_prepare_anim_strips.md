@@ -1,0 +1,1 @@
+	- `prepare_anim_strips(assetId: string) -> { items: [{ name, stripPath }] }` —— **动图帧条**（2026-08-20 解包废除新增）：立即返回已缓存清单（`cache/frames/{assetId}/f-{索引5位}.webp`，name = `f:{索引0起}`），同时提交预览解析队列 AnimStrips 任务——origin 单趟流式解码逐帧缩 128 落盘（已缓存跳过幂等），批次经同一 `preview-strips-ready` 事件渐进推送（items 同构）。非动图报中文错误

@@ -1,0 +1,1 @@
+	- `delete_folder(folderId, permanent, confirmed) -> DeleteFolderReport` —— permanent=false = "删除文件夹"（子树**全部 Placement 移未分类——origin / 链接一视同仁、名称与 origin 标记不动**（2026-08-19 位置级模型，"链接随文件夹删"废除）；+ 节点删除，**接撤销**，标签"删除文件夹 {name}"）；permanent=true = "彻底删除文件夹"（两段式含 assetCount/folderCount/segmentRefs，物理递归，**他处指向子树资产的链接一并清除**——本体已死链接必死，不接撤销）

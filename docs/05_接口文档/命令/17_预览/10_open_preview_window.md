@@ -1,0 +1,1 @@
+	- `open_preview_window(assetKey: string) -> ()` —— 新窗口打开预览（4.3）：assetKey = `{assetId}|{folderId}`；窗口 label `preview-{assetId}`，同资产复用聚焦，否则开无边框预览窗（视觉参数同主窗口），URL `?preview={assetKey}` 进独立预览布局

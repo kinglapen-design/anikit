@@ -1,0 +1,1 @@
+	- `restore_thumb_asset(assetId: string) -> number` —— 还原为素材（PRD 02-15；换绑后旧缩略图的「解除缩略图」同此）：取消 hidden 标记（链接位置原样恢复显示）+ 联动清除所有工程侧 thumb_asset_id 引用（逐资产落盘 + 索引同步），返回清除的引用数；非 hidden 资产报错「该资产不是缩略图资产」。**前端入口（2026-09-02 批次 4）**：hidden 资产右键缩略图组「还原为素材」（仅 `p.hidden` 显示，placementOps `restoreThumbAsset`，toast 带清除引用数）

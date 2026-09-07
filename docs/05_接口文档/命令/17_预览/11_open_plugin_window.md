@@ -1,0 +1,1 @@
+	- `open_plugin_window(pluginId: string) -> ()` —— 插件详情子窗口（2026-09-06，commands/plugin.rs）：pluginId 白名单（现仅 `animate`）；label `plugin-{pluginId}` 单例复用聚焦，否则开无边框窗（544×**578**——稿值 538 高，同日九轮用户定加高 40：路径组折行后最后一行被迫滚动一条；transparent、shadow、云母 apply 同预览窗机制；**async 必须**——主线程 build 死锁教训沿预览窗注释）；URL `?plugin={id}` 进插件面板布局（App.vue query 分发）
