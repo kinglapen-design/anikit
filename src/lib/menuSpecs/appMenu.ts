@@ -2,9 +2,10 @@
 // 根级 = 仓库 ▸ / 文件 ▸ / 查找 ▸ / 整理 ▸ │ 偏好设置 / 帮助 ▸ │ 关于 AniKit │ 退出（Alt+F4）。
 // 三级级联（ContextMenu flyout 栈）：
 // - 仓库→仓库 = 储存空间管理（多空间业务未立项，阶段九——新建/删除占位，列表仅当前空间）；
-// - 仓库→资源库 = 库管理（新建/删除当前/合并 + 库列表切换）。库列表 = 纯对勾行（MenuItem checkable +
-//   library 动态切换，2026-09-05 用户定稿口径）——旧 LibraryMenuItem 抓手排序 + 删除× 不进此菜单，
-//   删除走同级「删除当前资源库」项；对勾随 currentLibrary 实时（渲染层 library 特判）；
+// - 仓库→资源库 = 库管理（新建/删除当前/合并 + 库列表切换），spec 与侧栏资源库行切换钮共享
+//   libraryMenuEntries（menuSpecs/libraryMenu，2026-09-07 提取）。库列表 = 纯对勾行（MenuItem checkable，
+//   2026-09-05 用户定稿口径）——08 稿 LibraryMenuItem 抓手排序 + 删除× 全库废除（2026-09-07 用户：
+//   资源库不至于多到需要排序），删除走同级「删除当前资源库」项；对勾随 currentLibrary 实时（函数化求值）；
 // - 文件→新建 = 新建文档七项带品牌图标（newDocGroupEntries，05_文档图标）；
 // - 查找→筛选器 / 以图找图 = 业务另轮（筛选 9 子稿 / 以图搜图未立项），全占位；
 // - 整理 = 选中集操作（素材卡 / 档案卡域）。有既有业务的接线（同 assetCard / useGlobalKeys 口径），
@@ -17,7 +18,8 @@ import { useTabsStore } from "../../stores/tabs";
 import { useSearchStore } from "../../stores/search";
 import { useUiStore } from "../../stores/ui";
 import type { CtxEntry, CtxItem } from "../contextMenus";
-import { currentLibrary, currentSpace, requestDeleteLibrary, requestLibrarySetup } from "../libraryOps";
+import { currentSpace } from "../libraryOps";
+import { libraryMenuEntries } from "./libraryMenu";
 import { newDocGroupEntries, scanEntries } from "./addMenu";
 import {
   convertToArchiveFlow,
@@ -157,37 +159,13 @@ function repoEntries(libraryNames: string[]): CtxEntry[] {
   const spaceRows: CtxItem[] = space
     ? [{ label: space, checkable: true, checked: true, keepOpen: true }]
     : [{ label: "（当前无仓库）", disabled: true }];
-  const libRows: CtxEntry[] =
-    libraryNames.length > 0
-      ? libraryNames.map((name) => ({
-          label: name,
-          library: true, // 点击行为在 ContextMenu 动态判定（切换 + 对勾实时），keepOpen = 切库可切回
-          keepOpen: true,
-          checkable: true,
-        }))
-      : [{ label: "（当前空间无资源库）", disabled: true }];
   return [
     {
       label: "仓库",
       submenu: [{ label: "新建仓库", disabled: true }, { label: "删除当前仓库", disabled: true }, "divider", ...spaceRows],
     },
-    {
-      label: "资源库",
-      submenu: [
-        { label: "新建资源库", action: () => requestLibrarySetup() },
-        {
-          label: "删除当前资源库",
-          disabled: !currentLibrary.name,
-          action: () => {
-            // 删除目标 = 当前库（稿「删除当前资源库」）；无当前库不可点
-            if (currentLibrary.name) requestDeleteLibrary(currentLibrary.name);
-          },
-        },
-        { label: "合并资源库", disabled: true },
-        "divider",
-        ...libRows,
-      ],
-    },
+    // 资源库 ▸ = 共享 spec（menuSpecs/libraryMenu，2026-09-07 提取）：侧栏资源库行切换钮同一内容
+    { label: "资源库", submenu: libraryMenuEntries(libraryNames) },
     "divider",
     { label: "管理工作空间", disabled: true },
     { label: "清除缓存并重新加载", disabled: true },

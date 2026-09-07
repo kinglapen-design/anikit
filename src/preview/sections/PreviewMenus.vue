@@ -57,7 +57,7 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
               <MenuItem label="资源库-02" checkable />
             </div>
           </div>
-          <span class="pv-cap">仓库 ▸ 资源库 三级：库列表 = 纯对勾行（2026-09-05 用户定，旧 LibraryMenuItem 抓手/删除× 不进此菜单）</span>
+          <span class="pv-cap">仓库 ▸ 资源库 = 共享 spec（libraryMenuEntries，侧栏资源库行切换钮同款）：库列表纯对勾行（2026-09-07 起 08 稿抓手/删除× 全库废除）</span>
         </div>
       </div>
     </div>

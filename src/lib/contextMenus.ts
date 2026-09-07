@@ -27,7 +27,6 @@ export interface CtxItem {
   disabled?: boolean | (() => boolean);
   checkable?: boolean;
   checked?: boolean | (() => boolean);
-  library?: boolean; // 资源库条目（08 稿：抓手拖动排序 + 品牌徽章 + 右勾 + 删除×，LibraryMenuItem 渲染）
   keepOpen?: boolean; // 执行后不关菜单（状态切换/预览类：切库、排序依据等可反复尝试的操作；
   // 判定口径 2026-08-12 用户定：一次性任务类（新建/重命名/删除/导入，进入后续输入或任务流）必关，
   // 可逆状态翻转类（用户可能立即再做一次，如切过去看一眼切回来）保持打开

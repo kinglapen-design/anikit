@@ -56,7 +56,7 @@ const visiblePlugins = computed(() => orderedPlugins.value.filter((p) => p.categ
 
 const listRef = ref<HTMLElement>();
 
-// —— 抓手拖拽排序（blockDrag / libDrag 范式：item 定高 32 + gap 2 = 步长 34 算术让位）——
+// —— 抓手拖拽排序（blockDrag 让位范式：item 定高 32 + gap 2 = 步长 34 算术让位）——
 const ITEM_STEP = 34;
 const drag = reactive({ id: "", from: -1, to: -1, startY: 0, dy: 0 });
 const settling = ref(false); // 松手归位帧：禁 transform 过渡

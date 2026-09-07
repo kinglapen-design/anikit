@@ -166,15 +166,6 @@ export function requestLibrarySetup(): void {
   createLibraryModalState.open = true;
 }
 
-// 库列表拖动排序持久化（08 稿，space.json libraryOrder 单写点）；失败 toast，顺序以后端为准（下次开菜单重拉）
-export async function reorderLibraries(order: string[]): Promise<void> {
-  try {
-    await invoke<string[]>("reorder_libraries", { order });
-  } catch (e) {
-    useToastStore().notify({ message: String(e), icon: "fail" });
-  }
-}
-
 // 删除资源库（08 稿 item 删除×）：确认弹窗状态 + 执行。
 // 孤儿清理（2026-08-12 用户定案：统一池保留 + 引用计数清理）——弹窗前统计"仅该库引用"的素材数，
 // 复选框勾选（默认勾）则删库时一并删除这些素材实体（info 文件夹），共享素材保留。

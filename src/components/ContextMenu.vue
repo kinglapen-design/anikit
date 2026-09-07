@@ -14,15 +14,13 @@
 // 挂载后实测宽，右缘溢出再以父项左缘为锚左飞（fixFlyoutX）。
 // 组外关闭关系：根菜单与各级 flyout 的 group = 全部 flyout 根元素（点任一级内不关菜单）；
 // 点组外任一级 AppMenu 都会 closeAll（幂等）。trigger = 触发按钮豁免（菜单栏「菜单」钮 toggle，2026-09-05）。
-import { computed, nextTick, reactive, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import AppMenu from "./AppMenu.vue";
 import MenuItem from "./MenuItem.vue";
-import LibraryMenuItem from "./LibraryMenuItem.vue";
 import FolderIconPanel from "./FolderIconPanel.vue";
 import FolderIconGrid from "./FolderIconGrid.vue";
 import LinkListRows from "./LinkListRows.vue";
 import { closeContextMenu, menuState, type CtxEntry, type CtxItem } from "../lib/contextMenus";
-import { reorderLibraries, requestDeleteLibrary, currentLibrary, switchLibrary } from "../lib/libraryOps";
 
 // 级联 flyout（2026-09-05 菜单栏主菜单：单级 → 多级栈）：hover 带子菜单的项时右侧飞出，
 // 右缘溢出改向左飞出（03 稿注"菜单不可超出窗口边缘"）；flyout 按 key（层级 + 父项 top）随父项重建
@@ -78,7 +76,7 @@ watch(
   },
 );
 
-// 分组：按 "divider" 切段（连续 divider 出空组、首末 divider 自动忽略）；index = entries 全局索引（库拖拽用）
+// 分组：按 "divider" 切段（连续 divider 出空组、首末 divider 自动忽略）；index = entries 全局索引（:key 用）
 interface GroupRow {
   entry: CtxItem;
   index: number;
@@ -122,13 +120,6 @@ async function fixFlyoutX(level: number): Promise<void> {
 
 function onItemClick(entry: CtxEntry): void {
   if (entry === "divider" || isDisabled(entry) || entry.submenu || entry.panel || entry.swatches) return;
-  // 库条目点击动态判定（2026-08-12 走查：菜单 keepOpen 期间可能已切库，
-  // 静态 action 快照会让"切回去"失效——当前库跳过，其余直接按名切）
-  if (entry.library) {
-    if (entry.label !== currentLibrary.name) void switchLibrary(entry.label);
-    if (!entry.keepOpen) closeAll(true);
-    return;
-  }
   entry.action?.();
   if (!entry.keepOpen) closeAll(true); // keepOpen = 状态切换类：执行后菜单保持（切库/排序等）
 }
@@ -146,93 +137,6 @@ function onPanelPick(name: string | null): void {
   closeAll(true);
   panel?.onPick(name);
 }
-
-// —— 库条目拖动排序（08 稿：抓手拖动、其他 item 让位移动动画、落点持久化 space.json libraryOrder）——
-const ITEM_STEP = 35; // 库 item 高 33 + 组 gap 2（LibraryMenuItem 行高随 08 稿未迁，本常量随其）
-const libDrag = reactive({ idx: -1, startY: 0, dy: 0, target: -1 });
-let dragMoved = false; // 拖动超阈值：松手后的 click 误触发抑制
-const settling = ref(false); // 松手归位帧：禁 .lib-item transform 过渡（松手即到位）
-
-// entries 中库条目的索引（08 稿连续段）
-const libIdxs = computed(() => (menuState.entries ?? []).map((e, i) => (e !== "divider" && e.library ? i : -1)).filter((i) => i >= 0));
-
-// 让位位移：拖动项跟随指针；被跨越的项反向让出一步（transition 在 LibraryMenuItem 根样式）
-function libItemStyle(i: number): string {
-  if (libDrag.idx < 0) return "";
-  const pos = libIdxs.value;
-  const from = pos.indexOf(libDrag.idx);
-  const to = pos.indexOf(libDrag.target);
-  const me = pos.indexOf(i);
-  if (i === libDrag.idx) return `transform: translateY(${libDrag.dy}px); transition: none; position: relative; z-index: 1;`;
-  if (me < 0) return "";
-  if (from < to && me > from && me <= to) return "transform: translateY(-35px)";
-  if (to < from && me >= to && me < from) return "transform: translateY(35px)";
-  return "";
-}
-
-function onDragMove(e: PointerEvent): void {
-  if (libDrag.idx < 0) return;
-  libDrag.dy = e.clientY - libDrag.startY;
-  if (Math.abs(libDrag.dy) > 3) dragMoved = true;
-  const pos = libIdxs.value;
-  const from = pos.indexOf(libDrag.idx);
-  const to = Math.max(0, Math.min(pos.length - 1, from + Math.round(libDrag.dy / ITEM_STEP)));
-  libDrag.target = pos[to];
-}
-
-function onDragEnd(): void {
-  window.removeEventListener("pointermove", onDragMove);
-  const { idx, target } = libDrag;
-  if (idx >= 0 && target !== idx && target >= 0 && menuState.entries) {
-    const arr = menuState.entries;
-    const [moved] = arr.splice(idx, 1);
-    arr.splice(target, 0, moved);
-    const order = arr.filter((e): e is CtxItem => e !== "divider" && !!e.library).map((e) => e.label);
-    void reorderLibraries(order); // 失败 toast 在封装内，顺序以后端为准（下次开菜单重拉）
-    // 松手即到位（2026-08-12 走查）：让位项视觉本已在目标位，清 transform 必须禁过渡，
-    // 否则 DOM 重排 + 清除的过程会再放一遍交换动画（"弹回去"观感）
-    settling.value = true;
-    setTimeout(() => {
-      settling.value = false;
-    }, 50);
-  }
-  libDrag.idx = -1;
-  libDrag.target = -1;
-}
-
-// 系统抢指针兜底（规范第 4 条：blur 强制取消，不提交）
-function onDragCancel(): void {
-  window.removeEventListener("pointermove", onDragMove);
-  libDrag.idx = -1;
-  libDrag.target = -1;
-}
-
-function onGripDown(i: number, e: PointerEvent): void {
-  libDrag.idx = i;
-  libDrag.startY = e.clientY;
-  libDrag.dy = 0;
-  libDrag.target = i;
-  dragMoved = false;
-  window.addEventListener("pointermove", onDragMove);
-  window.addEventListener("pointerup", onDragEnd, { once: true });
-  window.addEventListener("blur", onDragCancel, { once: true });
-}
-
-// 库条目点击：拖动松手后的 click 抑制；否则切库（action 同普通项）
-function onLibrarySelect(entry: CtxItem): void {
-  if (dragMoved) {
-    dragMoved = false;
-    return;
-  }
-  onItemClick(entry);
-}
-
-// 删除×：关菜单弹确认（确认模态在 App.vue，libraryOps.deleteLibraryState）
-function onLibraryRemove(entry: CtxItem): void {
-  const name = entry.label;
-  closeAll(false);
-  requestDeleteLibrary(name);
-}
 </script>
 
 <template>
@@ -241,20 +145,10 @@ function onLibraryRemove(entry: CtxItem): void {
     <!-- 整体面板菜单（openPanelMenu）：一级内容 = 面板组件，无条目列表 -->
     <FolderIconGrid v-if="menuState.panel?.kind === 'iconPicker'" :current="menuState.panel.current" @select="onPanelPick" />
     <!-- 条目菜单：分组容器（组内 gap 2 / 组 padding 上下 4 首末 0 / 组间 1px 线） -->
-    <div v-else class="menu-groups" :class="{ settling }">
+    <div v-else class="menu-groups">
       <div v-for="(group, gi) in groups" :key="gi" class="menu-group">
-        <template v-for="row in group" :key="row.entry.library ? `lib:${row.entry.label}` : row.index">
-          <LibraryMenuItem
-            v-if="row.entry.library"
-            :label="row.entry.label"
-            :current="row.entry.label === currentLibrary.name"
-            :style="libItemStyle(row.index)"
-            @select="onLibrarySelect(row.entry)"
-            @remove="onLibraryRemove(row.entry)"
-            @grip-down="onGripDown(row.index, $event)"
-          />
+        <template v-for="row in group" :key="row.index">
           <MenuItem
-            v-else
             :label="row.entry.label"
             :icon="row.entry.icon"
             :mark-pad="rootMark"
@@ -307,7 +201,7 @@ function onLibraryRemove(entry: CtxItem): void {
             :disabled="isDisabled(row.entry)"
             :arrow="!!(row.entry.submenu || row.entry.panel)"
             :checkable="row.entry.checkable"
-            :checked="row.entry.library ? row.entry.label === currentLibrary.name : isChecked(row.entry)"
+            :checked="isChecked(row.entry)"
             @select="onItemClick(row.entry)"
             @mouseenter="onItemHover(row.entry, $event, i + 1)"
           />
@@ -340,9 +234,5 @@ function onLibraryRemove(entry: CtxItem): void {
 }
 .menu-group:not(:last-child) {
   box-shadow: inset 0 -1px 0 var(--n-g5);
-}
-/* 库排序松手归位帧：禁 transform 过渡（让位项视觉本已在目标位，2026-08-12 走查） */
-.menu-groups.settling :deep(.lib-item) {
-  transition: none;
 }
 </style>

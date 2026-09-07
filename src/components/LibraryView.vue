@@ -3,7 +3,7 @@
 // 7.1 十八轮贴稿重构（稿 = 布局/主窗口/左侧边栏 树容器 + 组件/item/树容器 item、标题 item）：
 // 树容器 = column gap 8（padding 0，区块自带 padding 8 12）；
 // 快速访问区块 = TreeRowItem quick 六项（items gap 2，无区块标题；首项「全部」2026-09-07 用户定改
-// 资源库行——文案 = 当前库名 + 名称后常显切换资源库钮（弹 08 稿切库菜单），视图语义不变仍 quick:all）；
+// 资源库行——文案 = 当前库名 + 名称后常显切换资源库钮（弹资源库菜单，菜单栏 仓库▸资源库 同款），视图语义不变仍 quick:all）；
 // 文件夹区块（多区块子系统，PRD 02 §01）= SectionTitle block 型（标题 / 数量 / hover 出展开·更多·添加，
 // 常态只显标题）+ FolderTree（该区块顶级节点）；区块间距 8（稿 树容器 gap 8，旧 24 作废）。
 // 区块头挂 data-block-id 兼作文件夹拖拽落点（移入该区块根级）与区块排序拖拽起点（让位式，
@@ -26,7 +26,7 @@ import { createAndName } from "../lib/menuOps";
 import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
 import { recycleBlankSpec } from "../lib/menuSpecs/recycle";
 import { currentLibrary, currentSpace, loadLibraries, setAutoImport } from "../lib/libraryOps";
-import { librarySwitchSpec } from "../lib/menuSpecs/libraryHamburger";
+import { libraryMenuEntries } from "../lib/menuSpecs/libraryMenu";
 import { reorderBlocks } from "../lib/blockOps";
 import { isBlockOpen, openBlock, toggleBlockOpen, treeExpansion } from "../lib/treeExpansion";
 import { expandEnter, expandLeave } from "../lib/expandAnim";
@@ -169,10 +169,11 @@ function onBlockToggle(blockId: string): void {
   toggleBlockOpen(blockId);
 }
 
-// 区块标题拖拽排序（2026-08-14 用户定：与切换资源库同款让位机制——拖动段跟随指针无过渡、
+// 区块标题拖拽排序（2026-08-14 用户定：让位式——拖动段跟随指针无过渡、
 // 被跨越段反向让位 0.18s 过渡；松手提交 reorder_blocks，归位帧禁过渡防"弹回去"）。
 // 不走拖拽引擎：区块段高不定（头 + 展开的树），引擎的间隙/插入线模型不适配；
-// 本地 pointer 追踪与库菜单（ContextMenu libDrag）同范式。不挂 pointer capture（折叠 click 保留），
+// 本地 pointer 追踪自管（原参考系 08 稿库菜单 libDrag 已随拖拽排序废除拆除，2026-09-07）。
+// 不挂 pointer capture（折叠 click 保留），
 // 僵尸兜底 = buttons 自清 + 划出窗口取消（与引擎同口径）
 const BLOCK_GAP = 8; // .library-view 段间距（稿 树容器 gap 8，2026-08-30 左栏轮；旧 24 作废）
 const blockDrag = reactive({ id: "", startY: 0, dy: 0, from: -1, to: -1 });
@@ -285,8 +286,9 @@ function onQuickMenu(key: string, e: MouseEvent): void {
   openContextMenu(e, recycleBlankSpec(), undefined);
 }
 
-// 切换资源库钮（「全部」= 资源库行，2026-09-07 用户定：把 08 稿切库菜单从菜单栏深处提到行内，
-// 新建资源库入口同菜单直达）：行下方弹出 + 同钮再点关闭（菜单栏四文字钮同款 toggle 口径）；
+// 切换资源库钮（「全部」= 资源库行，2026-09-07 用户定：把资源库菜单从菜单栏深处提到行内，
+// 新建资源库入口同菜单直达）：菜单内容 = 菜单栏 仓库▸资源库 同款（libraryMenuEntries 共享，
+// 纯对勾行、无拖拽排序）；行下方弹出 + 同钮再点关闭（菜单栏四文字钮同款 toggle 口径）；
 // 选择模式禁开（切库非 §12.1 白名单，视觉不改——同「菜单」钮）；菜单左缘对齐行左缘
 async function onSwitchLibrary(e: MouseEvent): Promise<void> {
   const el = e.currentTarget as HTMLElement;
@@ -299,7 +301,7 @@ async function onSwitchLibrary(e: MouseEvent): Promise<void> {
   const { names } = await loadLibraries();
   openContextMenu(
     { clientX: rect.left, clientY: rect.bottom + 4 },
-    librarySwitchSpec(names, currentLibrary.name),
+    libraryMenuEntries(names),
     undefined,
     { trigger: el },
   );
