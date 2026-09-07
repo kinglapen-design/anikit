@@ -228,7 +228,9 @@ export const useTabsStore = defineStore("tabs", () => {
   // addPanel position { referencePanel, direction } 是 dockview 成熟路径（含均分尺寸）。
   // 前案 moveTo({position}) 不传 group 被强制 center（布局损坏全黑）；addGroup+moveTo 新组尺寸
   // undefined 为 0 不可见——均作废。
-  function splitTab(id: string, direction: "right" | "below"): void {
+  // direction 四向全收（2026-09-07 单标签拖拽分屏拦截复用：左/右/上/下边缘拖入，
+  // 右键菜单只用 right/below 两向）。
+  function splitTab(id: string, direction: "left" | "right" | "above" | "below"): void {
     const panel = api?.getPanel(id);
     if (!panel) return;
     const viewKey = (panel.params?.viewKey as string) ?? "quick:all";

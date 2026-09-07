@@ -20,16 +20,19 @@
   --dv-tab-divider-color: transparent; /* focus 环随隐形 */
   --dv-tab-margin: 0;
 
-  /* 分隔与拆分条 */
-  --dv-separator-border: var(--line-hover);
+  /* 分隔与拆分条（2026-09-07 走查条 6：分屏零分割线——分隔变量全透明，
+     悬停指示线统一新品牌色，旧 line-hover/brand-border 清出） */
+  --dv-separator-border: transparent;
   --dv-sash-color: transparent;
-  --dv-active-sash-color: var(--brand-border);
+  --dv-active-sash-color: transparent;
   --dv-active-sash-transition-duration: 0.1s;
   --dv-active-sash-transition-delay: 0.2s;
 
-  /* 拖拽提示：品牌色描边 + 淡罩 */
-  --dv-drag-over-background-color: color-mix(in srgb, var(--brand) 24%, transparent);
-  --dv-drag-over-border-color: var(--brand-border);
+  /* 拖拽插入提示 = 框选同款（走查条 8：品牌-半透明填充 + 品牌常态 1px 描边，
+     与 AssetGrid .marquee 同色系同粗细，2026-08-30 框选统一口径延用） */
+  --dv-drag-over-background-color: var(--n-brand-50);
+  --dv-drag-over-border-color: var(--n-brand);
+  --dv-drag-over-border: 1px solid var(--n-brand);
 }
 
 /* 标签栏条（稿值）：46 高 / padding 8·24·0·36 / 底透明透窗口底（十七轮定），
@@ -47,9 +50,10 @@
    定位链 = .dv-grid-view > .dv-branch-node > 第一层 split 的首个 view-container——
    dockview split 首子恒为 .dv-sash-container（探针实证），故首个 view-container 用
    `.dv-sash-container + .dv-view-container` 紧邻定位（:first-child 恒不匹配，勿回退）；
-   dockview-vue 壳层比 core 深（theme/.dv-shell 下还有 middle-column 两层 split），
-   选择器必须锚 .dv-grid-view 起；深层嵌套分屏时左列内层 group 同带左缘线 = 近似
-   可接受，分屏观感随标签栏轮再精调 */
+   末端必须走直达子链 > .dv-view > .dv-groupview > .dv-content-container——原后代
+   选择器会把第一列嵌套分屏的内层容器一并圆角化（2026-09-07 走查条 6 用户报
+   「其他列左上角圆角非常丑」的根因）；分屏静态分割线同日废除（面板自带边框，
+   中间不再画 1.5px 线） */
 .anikit-dock-theme .dv-content-container {
   background: var(--n-g1);
 }
@@ -59,7 +63,9 @@
   > .dv-split-view-container
   > .dv-sash-container
   + .dv-view-container
-  .dv-content-container {
+  > .dv-view
+  > .dv-groupview
+  > .dv-content-container {
   border-radius: 16px 0 0 0;
   border-left: 1px solid var(--n-l-a2);
 }
@@ -147,30 +153,10 @@
   display: none;
 }
 
-/* ===== 拆分条（sash）与组分隔线（2026-08-08 用户定：可见线 1.5px）=====
-   sash 热区 4px 不变（可拖），但不再刷满激活色（--dv-active-sash-color 刷满 = 粗色条，作废）；
-   常态分隔线 1.5px 暗-悬停（view::before），悬停/拖拽 sash 时 1.5px 品牌色线居中 */
-.anikit-dock-theme {
-  --dv-active-sash-color: transparent;
-}
-.anikit-dock-theme .dv-split-view-container.dv-horizontal > .dv-view-container > .dv-view:not(:first-child)::before,
-.anikit-dock-theme .dv-split-view-container.dv-vertical > .dv-view-container > .dv-view:not(:first-child)::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 5;
-  pointer-events: none;
-  background: var(--line-hover);
-}
-.anikit-dock-theme .dv-split-view-container.dv-horizontal > .dv-view-container > .dv-view:not(:first-child)::before {
-  width: 1.5px;
-  height: 100%;
-}
-.anikit-dock-theme .dv-split-view-container.dv-vertical > .dv-view-container > .dv-view:not(:first-child)::before {
-  height: 1.5px;
-  width: 100%;
-}
+/* ===== 拆分条（sash）悬停指示（2026-09-07 走查条 6 修订）=====
+   分屏静态分隔线废除（原 view::before 1.5px 暗-悬停线整套删除——面板自带边框，
+   用户定）；sash 热区 4px 不变（可拖），悬停 / 拖拽时 1.5px 品牌常态线居中
+   （旧 --brand-border 青绿 → --n-brand 新品牌蓝，行为不变） */
 .anikit-dock-theme .dv-sash::after {
   content: "";
   position: absolute;
@@ -193,7 +179,7 @@
 }
 .anikit-dock-theme .dv-sash:hover::after,
 .anikit-dock-theme .dv-sash:active::after {
-  background: var(--brand-border);
+  background: var(--n-brand);
 }
 
 /* 标签栏空白区：普通指针（dockview 默认 grab 抓手，与全局窗口拖拽区域的箭头不一致，2026-08-08 用户定） */

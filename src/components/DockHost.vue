@@ -7,7 +7,7 @@
 // 且亚像素取整假溢出会让它压在 + 钮右端占位 ~60px——实机「+ 钮右边空白过多」根因）。
 // 窗口拖拽：标签栏不设 data-tauri-drag-region（与 dockview tab 拖拽冲突），
 // 窗口拖拽区保留在 panel 内工具栏行（ContentTitleBar 既有 drag-region，记待办后续评估）。
-import { DockviewVue, type DockviewReadyEvent, type VueComponent } from "dockview-vue";
+import { DockviewVue, type DockviewGroupPanel, type DockviewReadyEvent, type VueComponent } from "dockview-vue";
 import { nextTick, ref } from "vue";
 import ContentArea from "./ContentArea.vue";
 import TabLabel from "./TabLabel.vue";
@@ -49,8 +49,40 @@ function applyDragRegions(): void {
   });
 }
 
+// 单标签拖拽分屏修复（实机走查第一批条 9）：dockview 对「单 panel 组拖自己内容区
+// 边缘」走「单 tab = 移组」优化——源/目标同分支时 moveChild 自身 = no-op（分屏永不成功，
+// dockview-core moveTo 源码实证）。拦组级 model 的 willDrop（可 preventDefault，
+// dockview 随即放弃默认处理），改走 tabs.splitTab 同语义——同视口复制到新组，
+// 与右键菜单分屏一致（单标签拖走 = 源组销毁布局回弹，复制是该场景唯一有效结果）。
+// 注：组件级 @will-drop 在无 advancedDnD 模块时不转发组级事件，必须逐组订阅 model。
+const willDropHooked = new Set<string>();
+function hookGroupWillDrop(group: DockviewGroupPanel): void {
+  if (willDropHooked.has(group.id)) return; // onDidAddGroup 移组时重复触发，幂等防重挂
+  willDropHooked.add(group.id);
+  group.model.onWillDrop((e) => {
+    if (e.kind !== "content") return; // 只拦内容区边缘拖入（标签栏内排序不碰）
+    // willDrop 的 position 词汇是 top/bottom，addPanel 的 direction 词汇是 above/below，映射后传
+    const pos = e.position;
+    const direction =
+      pos === "left" ? ("left" as const)
+      : pos === "right" ? ("right" as const)
+      : pos === "top" ? ("above" as const)
+      : pos === "bottom" ? ("below" as const)
+      : null;
+    if (!direction) return;
+    const data = e.getData();
+    if (!data || data.panelId === null || data.tabGroupId) return;
+    const target = e.group; // 落点组（自拖 = 源组）
+    if (!target || target.id !== data.groupId || target.panels.length !== 1) return;
+    e.preventDefault();
+    tabs.splitTab(data.panelId, direction);
+  });
+}
+
 function onReady(e: DockviewReadyEvent): void {
   void tabs.bind(e.api);
+  e.api.groups.forEach(hookGroupWillDrop);
+  e.api.onDidAddGroup((g) => hookGroupWillDrop(g)); // 分屏新建组同挂
   applyDragRegions();
   e.api.onDidLayoutChange(() => applyDragRegions()); // 分屏新增 group 的标签栏空白补设
 }
