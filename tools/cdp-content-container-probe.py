@@ -366,7 +366,7 @@ async def main():
             check("T6c fla 卡徽标「FLA」左上 12/12 统一铬（半透明-2 底 + 圆角 4 + mono 12 Bold 二级）",
                   isinstance(card6, dict) and card6.get("bt") == "FLA"
                   and card6.get("bl") == "12px" and card6.get("btop") == "12px"
-                  and card6.get("bbg") == "rgba(41, 41, 41, 0.5)" and card6.get("bbr") == "4px"
+                  and card6.get("bbg") == "rgba(41, 41, 41, 0.75)" and card6.get("bbr") == "4px"
                   and card6.get("bfs") == "12px" and card6.get("bfw") == "700"
                   and card6.get("bc") == "rgb(191, 191, 191)",
                   json.dumps(card6))
@@ -503,7 +503,7 @@ async def main():
             check("T9d 徽标「主角」左上 12/12 统一铬（半透明-2 底 + 圆角 4）",
                   isinstance(ar9, dict) and ar9.get("bt") == "主角"
                   and ar9.get("bl") == "12px" and ar9.get("btop") == "12px"
-                  and ar9.get("bbg") == "rgba(41, 41, 41, 0.5)" and ar9.get("bbr") == "4px",
+                  and ar9.get("bbg") == "rgba(41, 41, 41, 0.75)" and ar9.get("bbr") == "4px",
                   json.dumps(ar9, ensure_ascii=False))
 
             ch10 = await ev(

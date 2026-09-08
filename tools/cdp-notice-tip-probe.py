@@ -219,7 +219,7 @@ async def main() -> int:
                 else:
                     t0, t1, t2 = ts
                     for i, t in enumerate(ts):
-                        if t["bg"] != "rgba(41, 41, 41, 0.5)":
+                        if t["bg"] != "rgba(41, 41, 41, 0.75)":
                             fails.append(f"通知{i} 底 {t['bg']} ≠ 通用/半透明-2")
                         if t["radius"] != "99px" or t["h"] != 46:
                             fails.append(f"通知{i} 形态 {t['radius']}/{t['h']} ≠ 99px/46")
