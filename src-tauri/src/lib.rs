@@ -257,22 +257,15 @@ pub fn run() {
             //（DWM 线与 CSS inset 0 线有 ~0.5px 系统错位，双画恒双层，踩坑 063），
             // 实色模式前端自绘（Win10 DWM 无默认边框可画）。
             // 框架延伸整窗（margins -1）：配合 transparent:false（2026-08-30 六轮方案一，
-            // 用户定）——DWM 帧/backdrop 填充月牙缝 + 云母载体；最大化/全屏态撤玻璃
-            //（2026-09-08 走查 17：DWM 在玻璃+caption 上画原生按钮压自定义按钮，
-            // 最大化时按钮露出，撤玻璃杀按钮、前端同步回落实色，window_fx::extend_frame）。
-            // 窗口恢复可能已是最大化（window_state.maximized），初始调用即按当前态
-            adapters::window_fx::extend_frame(hwnd, w.is_maximized().unwrap_or(false) || w.is_fullscreen().unwrap_or(false));
+            // 用户定）——DWM 帧/backdrop 填充月牙缝 + 云母载体；全程恒 -1 不按最大化/全屏
+            // 切换（2026-09-08 二轮根治：原生按钮画在最大化 caption 条带而非玻璃上，杀按钮
+            // 改由守卫接管 NCCALCSIZE/GETMINMAXINFO 归零条带，最大化云母保留，
+            // window_fx::extend_frame / main_window_guard ②）。
+            adapters::window_fx::extend_frame(hwnd);
           }
         }
 
         let w2 = w.clone();
-        // on_window_event 闭包要求 Fn + Send：HWND 含裸指针不可跨线程捕获，转 usize 带入、
-        // 用内重建；延伸态跟踪用 Cell 内部可变性（只在态变时调 DWM，不重复刷）
-        #[cfg(target_os = "windows")]
-        let main_hwnd = w.hwnd().ok().map(|raw| raw.0 as usize);
-        #[cfg(target_os = "windows")]
-        let frame_maximized =
-          std::cell::Cell::new(w.is_maximized().unwrap_or(false) || w.is_fullscreen().unwrap_or(false));
         w.on_window_event(move |event| {
           match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
@@ -280,17 +273,6 @@ pub fn run() {
               let _ = w2.hide();
               // 关闭到托盘即通知前端暂停播放（2026-07-27 用户定）
               let _ = w2.emit("main-window-hidden", ());
-            }
-            // 最大化 / 全屏进出：切换框架延伸（走查 17，根因见 window_fx::extend_frame）
-            #[cfg(target_os = "windows")]
-            tauri::WindowEvent::Resized(_) => {
-              let maxed = w2.is_maximized().unwrap_or(false) || w2.is_fullscreen().unwrap_or(false);
-              if maxed != frame_maximized.get() {
-                frame_maximized.set(maxed);
-                if let Some(raw) = main_hwnd {
-                  adapters::window_fx::extend_frame(windows::Win32::Foundation::HWND(raw as _), maxed);
-                }
-              }
             }
             _ => {}
           }

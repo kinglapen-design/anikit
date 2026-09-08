@@ -8,7 +8,8 @@
 //! 会让含非客户区的整窗表面按 alpha 合成，DWM 圆角描边曲线与方形客户区角之间的月牙
 //! 窄缝 alpha=0 成透底洞（用户实机"角部钩形透出下层"，CSS 垫块只及客户区位图够不着）；
 //! Mica 由 DWM 在窗口表面底下合成，不需要 tao transparent，只需 WebView2 默认背景透明
-//! （backgroundColor:#00000000）；ExtendFrame(-1) 令 DWM 帧/backdrop 填充覆盖非客户区。
+//! （backgroundColor:#00000000）；ExtendFrame(-1) 令 DWM 帧/backdrop 填充覆盖非客户区，
+//! 全程恒 -1 不按最大化/全屏切换（2026-09-08 二轮根治，见 main_window_guard ②）。
 //!
 //! 版本判定读注册表 HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\CurrentBuildNumber
 //! （REG_SZ 字符串，注册表路径零新依赖；Win11 22H2 = 22621，DWM 系统背景自此才有 Mica）。
@@ -19,20 +20,22 @@ use std::sync::OnceLock;
 /// 主窗口实际生效的模式（"mica" / "solid"），启动时 apply_main 写入，前端查询依据。
 static MAIN_MODE: OnceLock<&'static str> = OnceLock::new();
 
-/// 玻璃当前是否已撤（true = margins 0，最大化/全屏态）——extend_frame 唯一写点，
-/// 守卫 subclass 读（防 WM_WINDOWPOSCHANGING 预撤与 Resized 补撤重复调 DWM）
-#[cfg(windows)]
-static FRAME_GLASS_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// 主窗口守卫 subclass：① 失焦欺骗（2026-08-30 用户方案）——失焦时 DWM 把云母退化为
-/// 实色、窗口阴影收成小圈，两者都绑 DWM 的"窗口激活态"渲染判定；拦截 WM_NCACTIVATE
-/// 把 wParam 恒改 TRUE 再下放默认链（lParam -1 = 阻止默认流程重绘非客户区），骗 DWM
-/// 恒按激活渲染帧/backdrop/阴影。焦点/activation 本身不变（WM_ACTIVATE、前后台焦点
-/// 事件不受影响）。② 最大化动画防闪（2026-09-08 实机走查 17 复验：动画里闪 DWM 原生
-/// 按钮）——Resized 事件在最大化动画结束后才到，动画期窗口仍是玻璃+caption，DWM 把
-/// 按钮画进动画；拦 WM_WINDOWPOSCHANGING，新几何覆盖工作区（最大化/snap 置顶/Win+Up/
-/// tauri toggleMaximize 的 ShowWindow 全过此消息）且玻璃未撤时，动画开始前先撤玻璃。
-/// 还原方向不预撤：动画期保持无玻璃（无按钮可画），完成后由 Resized 处理器回 -1。
+/// 主窗口守卫 subclass：
+/// ① 失焦欺骗（2026-08-30 用户方案）——失焦时 DWM 把云母退化为实色、窗口阴影收成小圈，
+///    两者都绑 DWM 的"窗口激活态"渲染判定；拦截 WM_NCACTIVATE 把 wParam 恒改 TRUE 再下放
+///    默认链（lParam -1 = 阻止默认流程重绘非客户区），骗 DWM 恒按激活渲染帧/backdrop/阴影。
+///    焦点/activation 本身不变（WM_ACTIVATE、前后台焦点事件不受影响）。
+/// ② 最大化 caption 条带归零（2026-09-08 二轮根治，踩坑 071）——DWM 原生按钮画在
+///    「WS_MAXIMIZE + WS_CAPTION + 最大化非客户区条带」上：tao 的 WM_NCCALCSIZE 最大化
+///    特判把客户区设为 rcWork，与系统默认最大化矩形（rcWork 外扩 frame 厚度）之间留出
+///    条带；按钮稳态画进条带，最大化过渡动画期亦按条带绘制——「动画前撤玻璃」一轮
+///    方案因此治不好（实机复验动画期照闪）。根治 = 接管两条消息让条带不存在：
+///    WM_NCCALCSIZE 最大化时客户区 = 整窗矩形（返回 0 不下放 tao；非最大化照旧下放，
+///    shadow insets 边框阴影体系不动）+ WM_GETMINMAXINFO 把最大化矩形限定为 rcWork
+///    （先下放让 tao 填 min/max 尺寸约束，再覆盖 ptMaxPosition/ptMaxSize），内容四边
+///    不外扩不被裁。玻璃延伸恒 -1 不动——无条带即无按钮，云母最大化保留（Codex/
+///    Electron 无边框同路线实机先例）。自动隐藏任务栏的边客户区留 1px（照搬 tao
+///    has_edge/SHAppBarMessage 补偿），不挡屏幕边缘触发。
 #[cfg(windows)]
 unsafe extern "system" fn main_window_guard(
   hwnd: windows::Win32::Foundation::HWND,
@@ -42,30 +45,70 @@ unsafe extern "system" fn main_window_guard(
   _id: usize,
   _data: usize,
 ) -> windows::Win32::Foundation::LRESULT {
-  use windows::Win32::Foundation::{LPARAM, WPARAM};
-  use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
-  use windows::Win32::UI::Shell::DefSubclassProc;
-  use windows::Win32::UI::WindowsAndMessaging::{SWP_NOSIZE, WINDOWPOS, WM_NCACTIVATE, WM_WINDOWPOSCHANGING};
+  use windows::Win32::Foundation::{LPARAM, LRESULT, POINT, WPARAM};
+  use windows::Win32::Graphics::Gdi::{
+    GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+  };
+  use windows::Win32::UI::Shell::{
+    DefSubclassProc, SHAppBarMessage, ABE_BOTTOM, ABE_LEFT, ABE_RIGHT, ABE_TOP,
+    ABM_GETAUTOHIDEBAR, APPBARDATA,
+  };
+  use windows::Win32::UI::WindowsAndMessaging::{
+    GetWindowLongPtrW, GWL_STYLE, MINMAXINFO, NCCALCSIZE_PARAMS, WM_GETMINMAXINFO, WM_NCACTIVATE,
+    WM_NCCALCSIZE, WS_MAXIMIZE,
+  };
   if msg == WM_NCACTIVATE {
     return DefSubclassProc(hwnd, msg, WPARAM(1), LPARAM(-1));
   }
-  if msg == WM_WINDOWPOSCHANGING {
-    let wp = &*(lparam.0 as *const WINDOWPOS);
-    if (wp.flags & SWP_NOSIZE).0 == 0
-      && !FRAME_GLASS_OFF.load(std::sync::atomic::Ordering::Relaxed)
-    {
-      let mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-      let mut mi = MONITORINFO {
-        cbSize: std::mem::size_of::<MONITORINFO>() as u32,
-        ..Default::default()
-      };
-      if GetMonitorInfoW(mon, &mut mi).as_bool() {
-        let (ww, wh) = (mi.rcWork.right - mi.rcWork.left, mi.rcWork.bottom - mi.rcWork.top);
-        if wp.cx >= ww && wp.cy >= wh {
-          extend_frame(hwnd, true);
-        }
+  if msg == WM_NCCALCSIZE && wparam.0 != 0 {
+    let maximized = (GetWindowLongPtrW(hwnd, GWL_STYLE) as u32) & WS_MAXIMIZE.0 != 0;
+    if maximized {
+      // rgrc[0] 输入即提议窗口矩形：保持不动 = 客户区占满整窗（caption 条带归零）；
+      // 仅自动隐藏任务栏的边留 1px（照搬 tao 无边框最大化特判的同款补偿）
+      fn has_edge(edge: u32) -> bool {
+        let mut app_data = APPBARDATA {
+          cbSize: std::mem::size_of::<APPBARDATA>() as _,
+          uEdge: edge,
+          ..Default::default()
+        };
+        unsafe { SHAppBarMessage(ABM_GETAUTOHIDEBAR, &mut app_data) != 0 }
       }
+      let params = &mut *(lparam.0 as *mut NCCALCSIZE_PARAMS);
+      if has_edge(ABE_BOTTOM) {
+        params.rgrc[0].bottom -= 1;
+      }
+      if has_edge(ABE_LEFT) {
+        params.rgrc[0].left += 1;
+      }
+      if has_edge(ABE_TOP) {
+        params.rgrc[0].top += 1;
+      }
+      if has_edge(ABE_RIGHT) {
+        params.rgrc[0].right -= 1;
+      }
+      return LRESULT(0);
     }
+  }
+  if msg == WM_GETMINMAXINFO {
+    // 先下放让 tao 填 min/max 尺寸约束（ptMinTrackSize 等），再限定最大化矩形 = 工作区
+    let r = DefSubclassProc(hwnd, msg, wparam, lparam);
+    let mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    let mut mi = MONITORINFO {
+      cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+      ..Default::default()
+    };
+    if GetMonitorInfoW(mon, &mut mi).as_bool() {
+      let mmi = &mut *(lparam.0 as *mut MINMAXINFO);
+      mmi.ptMaxPosition = POINT {
+        x: mi.rcWork.left,
+        y: mi.rcWork.top,
+      };
+      mmi.ptMaxSize = POINT {
+        x: mi.rcWork.right - mi.rcWork.left,
+        y: mi.rcWork.bottom - mi.rcWork.top,
+      };
+    }
+    return r;
   }
   DefSubclassProc(hwnd, msg, wparam, lparam)
 }
@@ -75,31 +118,28 @@ unsafe extern "system" fn main_window_guard(
 pub fn install_main_window_guard(hwnd: windows::Win32::Foundation::HWND) {
   use windows::Win32::UI::Shell::SetWindowSubclass;
   let ok = unsafe { SetWindowSubclass(hwnd, Some(main_window_guard), 1, 0) };
-  log::info!("[window_fx] 主窗口守卫 subclass（失焦欺骗 + 最大化动画防闪）安装 = {ok:?}");
+  log::info!("[window_fx] 主窗口守卫 subclass（失焦欺骗 + 最大化条带归零）安装 = {ok:?}");
 }
 
-/// 框架延伸按最大化/全屏态切换（2026-09-08 实机走查第 17 条，三轮实证定稿）：
-/// 原生窗口按钮 = DWM 在「整窗玻璃 + WS_CAPTION」上画的——最大化时 tao 把客户区调成
-/// 工作区（让出任务栏），顶部露出 caption 高框架条带，按钮画进条带压自定义按钮。
-/// 玻璃与 caption 都是承重墙（玻璃扛云母、caption 扛边框阴影，摘/撤各自翻车实录见
-/// 踩坑 071），唯一实证可行解 = **最大化/全屏态撤玻璃**（margins 0：DWM 无玻璃可画
-/// 按钮；DWM 此时亦关掉云母 backdrop，前端 .window.fx-mica.maximized 同步回落实色
-/// --n-g-a1-solid——微软自家应用最大化关云母同惯例），还原回 -1。常态一律 -1 不动。
-/// 三个调用点：启动初始态 / Resized 完成后 / 守卫 WINDOWPOSCHANGING 动画前预撤。
+/// 框架延伸整窗（margins -1），启动 show 后调一次、全程不再动（2026-09-08 二轮终局）：
+/// -1 = DWM 帧/backdrop 填充覆盖整窗——云母载体（063 六轮定稿配置），DWM 最大化时
+/// 亦不关 backdrop，云母最大化保留（Codex 实机先例；微软自家应用最大化同样不关）。
+/// 历史一轮方案曾按最大化/全屏态撤玻璃杀原生按钮（踩坑 071：撤玻璃纯黑、摘 caption
+/// 白边两轮翻车后的折中），实机复验动画期照闪——按钮画在最大化 caption 条带上而非
+/// 玻璃上；根治改由守卫接管 NCCALCSIZE/GETMINMAXINFO 让条带归零（main_window_guard ②），
+/// 玻璃不再承担杀按钮职责。
 #[cfg(windows)]
-pub fn extend_frame(hwnd: windows::Win32::Foundation::HWND, maximized: bool) {
+pub fn extend_frame(hwnd: windows::Win32::Foundation::HWND) {
   use windows::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
   use windows::Win32::UI::Controls::MARGINS;
-  FRAME_GLASS_OFF.store(maximized, std::sync::atomic::Ordering::Relaxed);
-  let m = if maximized { 0 } else { -1 };
   let margins = MARGINS {
-    cxLeftWidth: m,
-    cxRightWidth: m,
-    cyTopHeight: m,
-    cyBottomHeight: m,
+    cxLeftWidth: -1,
+    cxRightWidth: -1,
+    cyTopHeight: -1,
+    cyBottomHeight: -1,
   };
   let r = unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) };
-  log::info!("[window_fx] DwmExtendFrameIntoClientArea({m}) maximized={maximized} = {r:?}");
+  log::info!("[window_fx] DwmExtendFrameIntoClientArea(-1) = {r:?}");
 }
 
 /// build 号 → 模式（纯函数，单测边界）。

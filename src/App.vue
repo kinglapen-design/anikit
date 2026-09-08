@@ -475,13 +475,9 @@ async function togglePin(): Promise<void> {
 .window.maximized {
   border-radius: 0;
 }
-/* 云母模式最大化回落实色-1（2026-09-08 走查 17）：最大化时 Rust 侧撤掉整窗玻璃
-   杀原生窗口按钮（window_fx::extend_frame），DWM 同时关掉云母 backdrop——底从透明
-   切回 --n-g-a1-solid（同 Win10 实色回退观感；微软自家应用最大化关云母同惯例），
-   不补会变成云母底下裸奔的纯黑。还原时玻璃与透明底同步恢复 */
-.window.fx-mica.maximized {
-  background: var(--n-g-a1-solid);
-}
+/* 云母模式最大化不回实色（2026-09-08 二轮根治，踩坑 071）：原生按钮画在最大化
+   caption 条带而非玻璃上——Rust 守卫接管 NCCALCSIZE/GETMINMAXINFO 归零条带杀按钮，
+   玻璃恒 -1 云母最大化保留（Codex 实机先例），.window 底不按 maximized 切换 */
 /* 1px 窗口描边（伪元素 inset 0 自绘不占空间）——**仅实色回退模式自绘**（通用/六级实心
    --n-g6 + 圆角 8 随壳自裁，Win10 DWM 无边框可画）；云母模式零绘制（边框主权 100% 交
    DWM，见下）；z-54 = 三栏内容之上、picking 外框（55）之下；最大化贴屏边无意义隐藏 */
