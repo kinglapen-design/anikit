@@ -246,9 +246,9 @@ pub fn run() {
           use windows::Win32::Foundation::HWND;
           if let Ok(raw) = w.hwnd() {
             let hwnd = HWND(raw.0 as _);
-            // 主窗口守卫（2026-08-30 失焦欺骗 + 2026-09-08 走查 17 最大化动画防闪预撤玻璃）。
-            // 失焦欺骗：骗 DWM 恒按激活渲染——失焦不再退化云母成实色、阴影不再收小。
-            // 详见 window_fx::main_window_guard 注释
+            // 主窗口守卫（2026-08-30 失焦欺骗 + 2026-09-08 走查 17 三轮终局：最大化摘
+            // caption、还原加回）。失焦欺骗：骗 DWM 恒按激活渲染——失焦不再退化云母成实色、
+            // 阴影不再收小。详见 window_fx::main_window_guard 注释
             adapters::window_fx::install_main_window_guard(hwnd);
             // 主窗口边框 = **DWM 默认半透明**（2026-09-06 六轮用户改定：DWM 原生默认边框即半透明，
             // 直接交给 DWM，全窗统一——原 2026-08-30「实心 #333 染色」撤销；子窗口本就未染色同此口径；
@@ -258,9 +258,9 @@ pub fn run() {
             // 实色模式前端自绘（Win10 DWM 无默认边框可画）。
             // 框架延伸整窗（margins -1）：配合 transparent:false（2026-08-30 六轮方案一，
             // 用户定）——DWM 帧/backdrop 填充月牙缝 + 云母载体；全程恒 -1 不按最大化/全屏
-            // 切换（2026-09-08 二轮根治：原生按钮画在最大化 caption 条带而非玻璃上，杀按钮
-            // 改由守卫接管 NCCALCSIZE/GETMINMAXINFO 归零条带，最大化云母保留，
-            // window_fx::extend_frame / main_window_guard ②）。
+            // 切换（2026-09-08 三轮终局：原生按钮只依附 WS_CAPTION 样式，杀按钮 = 守卫
+            // 最大化摘 caption、还原加回，最大化云母保留，
+            // window_fx::extend_frame / sync_caption_for_state）。
             adapters::window_fx::extend_frame(hwnd);
           }
         }
