@@ -1,5 +1,9 @@
 // 03 稿 · 素材卡片右键菜单 spec（自 menuSpecs.ts 拆出，规范第 3 条行数控制）：
 // 菜单项按新稿纯文字口径（2026-09-01）。
+// 2026-09-09 入口收窄（PRD 02-15）：虚拟视图（全部 / 最近使用 / 缩略图）分流
+// virtualAssetCardSpec——位置级（移动 / 剪切 / 副本 / 从文件夹中移除）与落点类（粘贴 /
+// 导入）不出现（不是位置，黑箱移动语义不成立）；留打开外发 / 链接管理导航 / 复制 / 重命名 /
+// 缩略图组 / 导出 / 丢到回收站（删除 = 资产判断无需位置）；未立项占位项不列。
 // 2026-09-05 走查「上下文菜单」文件节修订：
 // - 缩略图二级重排分组：「打开 Animate 生成缩略图」独组 │ 转换为缩略图链接 / 将「xx」设为缩略图 一组
 //   （占位文案「将「文件」设为缩略图」，有缩略图链接时正常显示复制的名称）│ 自定义两项 │
@@ -73,6 +77,9 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
   // 选择模式（6.2 一轮，PRD 03_数据链接 04）：右键仅留查看类操作，编辑类不出现
   if (usePickerStore().active) return pickerAssetCardSpec(p);
   const content = useContentStore();
+  // 虚拟视图收窄（2026-09-09 入口收窄，PRD 02-15）：全部 / 最近使用 / 缩略图不是位置——
+  // 位置级与落点类不出现，留资产级 / 所见即所得集（回收站走 recycleCardSpec 专属口径，不到这里）
+  if (content.isVirtualView) return virtualAssetCardSpec(p);
   const selection = useSelectionStore();
   const assetId = p.assetId;
   const assetKey = `${p.assetId}|${p.folderId}`;
@@ -278,6 +285,144 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
       shortcut: "Shift+Delete",
       action: () => void deletePlacements(selection.selectedRefs(), "uncategorized"),
     },
+    {
+      label: "丢到回收站",
+      shortcut: "Delete",
+      action: () => void deletePlacements(selection.selectedRefs()),
+    },
+  );
+  return entries;
+}
+
+// 虚拟视图收窄集（2026-09-09 入口收窄，用户定，PRD 02-15）：全部 / 最近使用 / 缩略图 =
+// 不是位置的视图——位置级（移动 / 剪切 / 副本 / 从文件夹中移除）与落点类（粘贴两项 /
+// 导入）语义不成立（黑箱移动），一律不出现；留资产级与所见即所得项：打开外发全组 /
+// 链接管理与位置导航 / 复制（文件 / 数据）/ 重命名（用户定：卡片上所见即所得——缩略图视口
+// 改 hidden 伴生图名配工程名案例）/ 缩略图绑定组 / 导出 / 丢到回收站（删除 = 资产"要不要"
+// 的判断，无需在乎位置；多位置条目右键哪条丢哪条）。业务未立项占位项（新标签页 /
+// 添加资源库 / AI 工具集 / 提示词 / 置顶 / Animate 生成缩略图）快速访问不列。
+function virtualAssetCardSpec(p: PlacementView): CtxEntry[] {
+  const selection = useSelectionStore();
+  const content = useContentStore();
+  const assetId = p.assetId;
+  const assetKey = `${p.assetId}|${p.folderId}`;
+  // 活位置数（同主菜单口径）：「将此文件设为原始文件」仅链接状态（>1）出现
+  const liveCount = content.placements.filter((q) => q.assetId === assetId).length;
+  const entries: CtxEntry[] = [
+    { label: "打开预览", shortcut: "Enter", action: () => void usePreviewStore().open(assetKey) },
+  ];
+  if (isSequenceAsset(p)) {
+    entries.push(
+      {
+        label: "打开序列帧包",
+        action: () => {
+          selection.clear();
+          useTabsStore().openView(`seq:${assetId}`);
+        },
+      },
+      { label: "解散序列帧包导入", action: () => dissolveSequenceFlow(p) },
+    );
+  }
+  entries.push(
+    { label: "新窗口打开", action: () => void invoke("open_preview_window", { assetKey }) },
+    { label: "在默认应用打开", shortcut: "Shift+Enter", action: () => openDefaultApp(assetId) },
+    { label: "在其他应用打开", action: () => void openWithDialog(assetId) },
+    // 发送至 Animate：仅 fla + 单选（同主菜单口径）
+    { label: "发送至 Animate", shortcut: "Ctrl+E", disabled: selection.count !== 1 || p.ext !== "fla", action: () => void sendToAnimate(assetId) },
+    { label: "在资源管理器打开", action: () => revealWithWarning(assetId) },
+    "divider",
+    {
+      label: "文件链接管理",
+      shortcut: "Ctrl+J",
+      disabled: selection.count !== 1,
+      action: () => {
+        selection.linkManageDraft = { assetId, name: p.name };
+      },
+    },
+  );
+  if (liveCount > 1) {
+    entries.push({
+      label: "将此文件设为原始文件",
+      disabled: selection.count !== 1 || p.origin,
+      action: () => void setPlacementOrigin(assetId, p.folderId, p.name),
+    });
+  }
+  entries.push(
+    { label: "打开文件链接所在位置", panel: { kind: "linkList", assetId } },
+    "divider",
+    { label: "复制文件", shortcut: "Ctrl+C", action: () => copySelection("copy") },
+  );
+  // 粘贴标签/描述（资产级元数据，合并追加）——复制后直接跟在「复制文件」同组下方，同主菜单口径
+  if (selection.copiedData.tags?.length) {
+    entries.push({ label: "粘贴标签", action: () => void pasteTags({ assets: selectedAssetIds(), archives: [] }) });
+  }
+  if (selection.copiedData.descriptions?.length) {
+    entries.push({ label: "粘贴描述", action: () => void pasteDescriptions({ assets: selectedAssetIds(), archives: [] }) });
+  }
+  entries.push(
+    {
+      label: selection.count > 1 ? "批量重命名" : "重命名",
+      shortcut: "F2",
+      action: () => {
+        if (selection.count > 1) selection.renameDraft = selection.selectedRefs();
+        else selection.renamingKey = assetKey;
+      },
+    },
+    "divider",
+    {
+      label: "缩略图",
+      submenu: [
+        // 分组同主菜单（2026-09-05 走查口径）：转换链接 / 设为缩略图 │ 自定义两项 │ 复制 + 刷新；
+        // 占位项「打开 Animate 生成缩略图」收窄集不列
+        ...(isThumbCapableExt(p.ext)
+          ? [{ label: "转换为缩略图链接并复制", disabled: selection.count !== 1, action: () => copyThumbLink(assetId, p.name) } as CtxEntry]
+          : []),
+        selection.thumbLink
+          ? {
+              label: `将「${selection.thumbLink.name}」设为缩略图`,
+              disabled: selection.thumbLink.assetId === assetId, // 自绑无意义（后端同护栏）
+              action: () => void applyThumbLink(assetId),
+            }
+          : { label: "将「文件」设为缩略图", disabled: true },
+        "divider",
+        {
+          label: "自定义缩略图 - 从剪贴板",
+          disabled: selection.count !== 1,
+          action: () => void applyClipboardThumb(assetId),
+        },
+        {
+          label: "自定义缩略图 - 选择文件",
+          disabled: selection.count !== 1,
+          action: () => void pickCustomThumb(assetId),
+        },
+        "divider",
+        { label: "复制缩略图", disabled: selection.count !== 1, action: () => void copyThumb(assetId) },
+        { label: "刷新缩略图", action: () => void refreshThumb(assetId) },
+        // 还原为素材：仅 hidden 伴生缩略图资产显示（缩略图视图右键）
+        ...(p.hidden
+          ? [{ label: "还原为素材", action: () => void restoreThumbAsset(assetId) } as CtxEntry]
+          : []),
+      ],
+    },
+    // 导出拍平一级（「导出为素材包」占位未立项，收窄集不列空壳二级）
+    {
+      label: "导出到本地磁盘",
+      action: () => void pickExportAssets(selection.selectedRefs().map((r) => r.assetId)),
+    },
+    {
+      label: "复制数据",
+      submenu: [
+        { label: "复制链接", action: () => void copyAssetLink(assetId) },
+        { label: "复制文件路径", action: () => void copyAssetPath(assetId) },
+        "divider",
+        { label: "复制名称", action: () => copyName(p.name) },
+        { label: "复制 base64", action: () => copyBase64(assetId) },
+        "divider",
+        { label: "复制标签", action: () => void copyAssetTags(assetId) },
+        { label: "复制描述", action: () => void copyAssetDescriptions(assetId) },
+      ],
+    },
+    "divider",
     {
       label: "丢到回收站",
       shortcut: "Delete",

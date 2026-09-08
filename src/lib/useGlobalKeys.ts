@@ -50,8 +50,9 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     if (isEditableTarget(e.target as HTMLElement)) return;
     if (opts.needLibrarySetup() || content.importDraft) return;
     if (usePickerStore().active) return; // 选择模式（6.2）：导入是编辑类，禁用
-    // 只读视口拒入（2026-09-08 用户定，isNoImportView 统一判定）：最近使用 / 自动导入 / 缩略图 /
-    // 回收站不允许额外导入——系统剪贴板导入同拖拽口径弹错误弹窗（与拖拽共用 ui.importRejectOpen）
+    // 只读视口拒入（2026-09-08 用户定，isNoImportView 统一判定；2026-09-09 收窄扩「全部」）：
+    // 全部 / 最近使用 / 自动导入 / 缩略图 / 回收站不允许额外导入——系统剪贴板导入同拖拽口径
+    // 弹错误弹窗（与拖拽共用 ui.importRejectOpen）；未分类 = 候车区总入口豁免（落 root）
     if (content.isNoImportView) {
       ui.importRejectOpen = true;
       return;
@@ -109,7 +110,8 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   // Ctrl+D = 创建副本（2026-08-18 补绑）。
   // 回收站视口（6.1 二轮，2026-07-29）：F2 不触发（只读）；Del 分流彻底删除两段式
   //（delete_recycle，虚拟片段引用确认窗，不可恢复无撤销）——delete_placements 路径不再走。
-  // 快速访问视图不作粘贴目标（toast 提示）；菜单 / 浮层 / 弹窗打开时让位
+  // 快速访问视图不作粘贴目标（2026-09-09 收窄修订：未分类豁免 = 候车区总入口可粘贴落 root，
+  // 其余快速访问视口 pasteTarget 拦截 toast 提示）；菜单 / 浮层 / 弹窗打开时让位
   function onOperationKeys(e: KeyboardEvent): void {
     if (isEditableTarget(e.target as HTMLElement)) return;
     if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
@@ -160,10 +162,11 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
         if (content.isRecycleView) {
           void deleteRecycle(recycleSelectedAssetIds()); // 回收站 = 彻底删除两段式
         } else if (e.shiftKey) {
-          // Shift+Delete = 从文件夹中移除（3.4 八轮：去未分类；链接记录直接移除）
-          void deletePlacements(selection.selectedRefs(), "uncategorized");
+          // Shift+Delete = 从文件夹中移除（3.4 八轮：去未分类；链接记录直接移除）；
+          // 虚拟视图禁（2026-09-09 收窄：全部/最近使用/缩略图不是位置，"从哪个文件夹移除"不成立）
+          if (!content.isVirtualView) void deletePlacements(selection.selectedRefs(), "uncategorized");
         } else {
-          void deletePlacements(selection.selectedRefs()); // Delete = 丢到回收站
+          void deletePlacements(selection.selectedRefs()); // Delete = 丢到回收站（虚拟视图同留：删除 = 资产判断）
         }
       }
       return;
@@ -180,7 +183,9 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
         }
         return;
       }
-      if (selection.count > 0) {
+      // 素材域：虚拟视图禁剪切（2026-09-09 收窄：剪切 = 移动前半段，位置级黑箱）；
+      // 复制 = 资产引用标记只读，全视口留
+      if (selection.count > 0 && (k === "c" || !content.isVirtualView)) {
         e.preventDefault();
         copySelection(k === "c" ? "copy" : "cut");
       }
@@ -194,19 +199,21 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
         if (first) cloneFolderFlow(first); // 触发项在域内 → 批量分流整个选中集
         return;
       }
-      if (selection.count > 0 && !content.isRecycleView) {
+      // 素材域副本 = "就地"落点生成新 ID——虚拟视图禁（2026-09-09 收窄：不是位置，"就地"不成立）
+      if (selection.count > 0 && !content.isRecycleView && !content.isVirtualView) {
         e.preventDefault();
         void duplicateSelected();
       }
       return;
     }
-    // Ctrl+Y = 移动面板（3.4，29 稿）：文件夹域 → 移动文件夹/档案；素材域 → 移动文件（回收站只读不开）
+    // Ctrl+Y = 移动面板（3.4，29 稿）：文件夹域 → 移动文件夹/档案；素材域 → 移动文件
+    //（回收站只读不开；虚拟视图禁——2026-09-09 收窄：不是位置，移动 = 黑箱）
     if (k === "y") {
       if (selection.selectedFolders.size > 0) {
         e.preventDefault();
         const first = selection.orderedSelectedFolderIds()[0];
         if (first) moveFoldersFlow(first); // 触发项在域内 → 批量分流整个选中集
-      } else if (selection.count > 0 && !content.isRecycleView) {
+      } else if (selection.count > 0 && !content.isRecycleView && !content.isVirtualView) {
         e.preventDefault();
         moveAssetsFlow();
       }

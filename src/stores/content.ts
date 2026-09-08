@@ -463,11 +463,23 @@ export const useContentStore = defineStore("content", {
     isRecycleView(state): boolean {
       return state.sidebarSelected === "quick:recycle";
     },
-    // 禁导入视口判定（2026-09-08 用户定）：最近使用 / 自动导入 / 缩略图 / 回收站 = 不允许额外导入的
-    // 只读视口——右键菜单收窄（scanOnlySpec / recycleBlankSpec）/ 拖拽拒入弹窗 / 菜单栏导入项禁用 /
-    // Ctrl+V 系统剪贴板导入拒入，四处同一判定
+    // 禁导入视口判定（2026-09-08 用户定；2026-09-09 入口收窄扩五视口加「全部」——全部不是位置，
+    // 落点必借道未分类，与虚拟视图禁位置级同口径）：全部 / 最近使用 / 自动导入 / 缩略图 / 回收站
+    // 不允许额外导入 / 新建——右键收窄 / 拖拽拒入弹窗 / 菜单栏导入与新建组禁用 / Ctrl+V 拒入，
+    // 多处同一判定；未分类 = 候车区总入口豁免（落点 root 所见即所得）
     isNoImportView(state): boolean {
-      return ["quick:recent", "quick:inbox", "quick:thumbnail", "quick:recycle"].includes(state.sidebarSelected);
+      return state.sidebarSelected.startsWith("quick:") && state.sidebarSelected !== "quick:uncategorized";
+    },
+    // 虚拟视图判定（2026-09-09 入口收窄，用户定）：全部 / 最近使用 / 缩略图 = 不是位置的视图——
+    // 位置级操作（移动 / 剪切 / 副本 / 从文件夹中移除 / 拖出）在此语义不成立（黑箱移动：
+    // 用户不知从何移到何），右键收窄 / 快捷键 / 拖拽源同一判定；回收站只读走 isRecycleView
+    // 专属口径不在此列；未分类 / 自动导入 = 位置视口（真实落点）也不在此列
+    isVirtualView(state): boolean {
+      return ["quick:all", "quick:recent", "quick:thumbnail"].includes(state.sidebarSelected);
+    },
+    // 快速访问视口判定（2026-09-09 入口收窄）：六视口无文件夹概念——新建文件夹 / 新建档案整组禁用
+    isQuickView(state): boolean {
+      return state.sidebarSelected.startsWith("quick:");
     },
     // 快速访问 item 数量（4.4 查缺补漏）：全部 / 未分类 / 收件箱接真实统计；
     // 最近使用 / 回收站留 6.1，工作空间 / 标签 / 快捷入口占位视图不接（对应阶段未开工）；

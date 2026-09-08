@@ -2,9 +2,10 @@
 // 新建文档组（newDocGroupEntries）与 14 汉堡"文件"二级共用，故同文件导出。
 // 2026-09-05 走查「上下文菜单」修订：
 // - 新建文档七项带图标（icon 字段，05_文档图标；同菜单其余项由渲染层扫描自动占位对齐）；
-// - 快速访问空白处收窄（gridDispatch 分流调用）：全部/未分类 = quickFullSpec（去新建文件夹/新建档案，
-//   走查：快速访问里这两项没有用）；最近使用/自动导入/缩略图 = scanOnlySpec（只给扫描两项——
-//   走查：新建文档在这里污染很严重，也不允许导入）。
+// - 快速访问空白处收窄（gridDispatch 分流调用）：未分类 = quickFullSpec（去新建文件夹/新建档案——
+//   快速访问无文件夹概念；留导入 / 新建文档 / 粘贴，2026-09-09 收窄定：未分类 = 候车区总入口）；
+//   全部 / 最近使用 / 自动导入 / 缩略图 = scanOnlySpec（只给扫描两项——09-05 走查：新建文档在这里
+//   污染严重，也不允许导入；09-09 收窄：全部不是位置，随虚拟视图同档）。
 import { useSelectionStore } from "../../stores/selection";
 import { useContentStore, DEFAULT_BLOCK_ID } from "../../stores/content";
 import type { CtxEntry } from "../contextMenus";
@@ -133,14 +134,16 @@ export function addButtonSpec(opts?: { includeCreate?: boolean }): CtxEntry[] {
   return entries;
 }
 
-// —— 快速访问空白处收窄（2026-09-05 走查「快速访问」节）——
-// 全部 / 未分类：新增菜单去掉新建两项（新建文件夹/新建档案在快速访问里没用），其余不动
+// —— 快速访问空白处收窄（2026-09-05 走查「快速访问」节；2026-09-09 入口收窄修订）——
+// 未分类 = 候车区总入口：新增菜单去掉新建两项（新建文件夹/新建档案——快速访问无文件夹概念），
+// 留导入 / 新建文档 / 粘贴 / 添加链接 / 扫描
 export function quickFullSpec(): CtxEntry[] {
   return addButtonSpec({ includeCreate: false });
 }
 
-// 最近使用 / 自动导入（quick:inbox）/ 缩略图：只给扫描两项（新建文档/导入/链接全不出——
-// 最近使用是"使用过的文件"，新建文件污染严重；自动导入、缩略图用户同定收窄）
+// 全部 / 最近使用 / 自动导入（quick:inbox）/ 缩略图：只给扫描两项（新建文档/导入/链接全不出——
+// 最近使用是"使用过的文件"，新建文件污染严重；自动导入、缩略图用户同定收窄；
+// 2026-09-09 收窄：全部 = 虚拟视图不是位置，落点类同档禁）
 export function scanOnlySpec(): CtxEntry[] {
   return scanEntries();
 }

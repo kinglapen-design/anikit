@@ -434,14 +434,15 @@ export function copySelection(action: "copy" | "cut"): void {
   });
 }
 
-// 粘贴落点判定（2026-07-28 定案）：快速访问视图不作粘贴目标
+// 粘贴落点判定（2026-07-28 定案；2026-09-09 入口收窄修订）：快速访问视图不作粘贴目标——
+// **未分类豁免**（候车区总入口，落点 "root" 所见即所得）；全部 / 最近使用 / 自动导入 /
+// 缩略图 / 回收站仍拦截（虚拟视图不是位置、自动导入只走自动通道、回收站只读）
 function pasteTarget(): string | null {
   const content = useContentStore();
-  if (!content.sidebarSelected.startsWith("folder:")) {
-    useToastStore().notify({ message: "快速访问视图不支持粘贴", icon: "fail" });
-    return null;
-  }
-  return content.currentFolderId;
+  if (content.sidebarSelected.startsWith("folder:")) return content.currentFolderId;
+  if (content.sidebarSelected === "quick:uncategorized") return "root";
+  useToastStore().notify({ message: "当前视口不支持粘贴", icon: "fail" });
+  return null;
 }
 
 // 剪切文件夹（3.4，2026-08-18）：写内部剪贴板（folders 分支，与素材互斥由选择域保证）；

@@ -33,8 +33,9 @@ import { treeExpansion } from "./treeExpansion";
 // PRD 05-01 导入位置：导入文件 → 当前视口目录；导入文件夹 → 根目录
 export async function pickImportPaths(kind: "files" | "folder"): Promise<void> {
   const content = useContentStore();
-  // 只读视口兜底（2026-09-08 用户定，isNoImportView 统一判定）：禁导入视口下任何入口触达都
-  // 拒入弹窗——菜单栏两项已 disabled、空态四视口不出，本道兜底防未来新增调用方漏判
+  // 只读视口兜底（2026-09-08 用户定，isNoImportView 统一判定；2026-09-09 收窄扩五视口加
+  // 「全部」）：禁导入视口下任何入口触达都拒入弹窗——菜单栏两项已 disabled、空态双钮不出
+  //（范围改 folder: + 未分类），本道兜底防未来新增调用方漏判；未分类放行（落点 root）
   if (content.isNoImportView) {
     useUiStore().importRejectOpen = true;
     return;

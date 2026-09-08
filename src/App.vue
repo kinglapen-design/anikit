@@ -131,9 +131,10 @@ function onImportConfirm(opts: { structure: "flatten" | "keep"; source: "copy" |
 // 拖拽导入（PRD 05-01）：webview 拖放事件拿文件路径，落点在文件树 item 上则导入至该文件夹
 async function onDrop(paths: string[], x: number, y: number): Promise<void> {
   if (wizardState.open || paths.length === 0 || content.importDraft) return;
-  // 只读视口拒入（2026-09-08 用户定，与右键菜单收窄同口径，isNoImportView 统一判定）：
-  // 最近使用 / 自动导入 / 缩略图 / 回收站不允许额外导入——拖入直接拒绝弹错误弹窗，
-  // 走 classify / importDraft 前拦截（弹窗开关在 ui store：Ctrl+V 拒入同弹，lib 无权触达本地态）
+  // 只读视口拒入（2026-09-08 用户定，isNoImportView 统一判定；2026-09-09 收窄扩「全部」）：
+  // 全部 / 最近使用 / 自动导入 / 缩略图 / 回收站不允许额外导入——拖入直接拒绝弹错误弹窗，
+  // 走 classify / importDraft 前拦截（弹窗开关在 ui store：Ctrl+V 拒入同弹，lib 无权触达本地态）；
+  // 未分类 = 候车区总入口放行（落点 root）
   if (content.isNoImportView) {
     ui.importRejectOpen = true;
     return;
@@ -399,7 +400,7 @@ async function togglePin(): Promise<void> {
     <ContextMenu />
     <!-- 通用确认弹窗（6.3：警示前置 / 删除文件夹 / 彻底删除二次确认） -->
     <AppConfirm v-if="selection.confirmPrompt" />
-    <!-- 只读视口导入拒入（2026-09-08：最近使用/自动导入/缩略图/回收站，与右键收窄同口径）——
+    <!-- 只读视口导入拒入（2026-09-08：与右键收窄同口径；2026-09-09 收窄扩「全部」五视口）——
          新弹窗定稿件 ConfirmModal danger（状态/禁止钮），纯告知两钮同义关闭；拖拽与 Ctrl+V 共用 -->
     <ConfirmModal
       v-if="ui.importRejectOpen"
@@ -409,7 +410,7 @@ async function togglePin(): Promise<void> {
       @confirm="ui.importRejectOpen = false"
       @cancel="ui.importRejectOpen = false"
     >
-      「最近使用」「自动导入」「缩略图」「回收站」视口不允许额外导入素材，请切换到文件夹视口后再导入。
+      「全部」「最近使用」「自动导入」「缩略图」「回收站」视口不允许额外导入素材，请切换到文件夹视口或「未分类」后再导入。
     </ConfirmModal>
     <!-- 无主资产警告弹窗（2026-09-02 开库自检，资产污染修复配套；内部 v-if 驱动） -->
     <OrphanInfosAlert />

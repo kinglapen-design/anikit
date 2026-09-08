@@ -222,11 +222,12 @@ const searchEmpty = computed(
 
 // 空文件夹空态（7.1 内容容器轮，稿 = 中间面板-内容容器-空文件夹）：非搜索态且三区皆空
 //（文件夹 / 档案 / 文件全无）→ 中央插画 + 导入双钮；回收站 / 收件箱视口不出（语义不合），
-// 范围 = folder: 视口 + quick:all（库空同态）
+// 范围 = folder: 视口 + quick:uncategorized（2026-09-09 收窄：全部禁导入——不是位置，
+// 空库导入双钮撤到未分类 = 候车区总入口）
 const folderEmpty = computed(() => {
   if (props.searching || props.items.length > 0) return false;
   if (isInbox.value || content.isRecycleView) return false;
-  if (!props.viewKey.startsWith("folder:") && props.viewKey !== "quick:all") return false;
+  if (!props.viewKey.startsWith("folder:") && props.viewKey !== "quick:uncategorized") return false;
   if (content.stripFoldersFor(props.viewKey).length > 0) return false;
   if (content.stripArchivesFor(props.viewKey).length > 0) return false;
   return true;

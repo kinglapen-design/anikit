@@ -1,9 +1,12 @@
 // 网格右键统一调度（6.3，自 AssetGrid 拆出；2026-08-12 自 menuSpecs.ts 再拆，规范第 3 条行数控制）：
-// 素材卡片 = 素材菜单（回收站视口 = 13 稿回收站菜单，1.3 归并全局宿主，RecycleCardMenu 局部菜单废除）；
+// 素材卡片 = 素材菜单（回收站视口 = 13 稿回收站菜单，1.3 归并全局宿主，RecycleCardMenu 局部菜单废除；
+// 虚拟视图 = 收窄集——2026-09-09 入口收窄，assetCardSpec 内分流）；
 // 空白处（含 grid-header）按视口分流（2026-09-05 走查「快速访问」节，旧"一律 07 新增菜单"废除）：
 //   folder: 视口 = 07 新增菜单（addButtonSpec）；
-//   全部 / 未分类 = quickFullSpec（去新建文件夹/新建档案——快速访问里没用）；
-//   最近使用 / 自动导入（quick:inbox）/ 缩略图 = scanOnlySpec（只给扫描两项）；
+//   未分类 = quickFullSpec（去新建文件夹/新建档案——快速访问无文件夹概念；2026-09-09 收窄：
+//     候车区总入口，留导入 / 新建文档 / 粘贴）；
+//   全部 / 最近使用 / 自动导入（quick:inbox）/ 缩略图 = scanOnlySpec（只给扫描两项——全部不是位置，
+//     2026-09-09 起随虚拟视图同档）；
 //   回收站 = 13 稿空白菜单；seq: 等其余视口照旧新增菜单；
 // 文件夹卡片 / 档案卡片 / 按钮 / 输入框上不处理（"pass"——卡片自带菜单）。
 // 1.3：菜单项按新稿纯文字口径（2026-09-01）。
@@ -52,8 +55,8 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
   const vk = content.sidebarSelected;
   if (vk === "quick:recycle") openContextMenu(e, recycleBlankSpec(), undefined);
   else if (vk.startsWith("folder:")) openContextMenu(e, addButtonSpec(), undefined);
-  else if (vk === "quick:all" || vk === "quick:uncategorized") openContextMenu(e, quickFullSpec(), undefined);
-  else if (vk === "quick:recent" || vk === "quick:inbox" || vk === "quick:thumbnail") openContextMenu(e, scanOnlySpec(), undefined);
+  else if (vk === "quick:uncategorized") openContextMenu(e, quickFullSpec(), undefined);
+  else if (vk === "quick:all" || vk === "quick:recent" || vk === "quick:inbox" || vk === "quick:thumbnail") openContextMenu(e, scanOnlySpec(), undefined);
   else openContextMenu(e, addButtonSpec(), undefined);
   return "done";
 }

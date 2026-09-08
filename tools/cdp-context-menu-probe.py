@@ -11,8 +11,12 @@
 # S 段（2026-09-05 走查「上下文菜单」节修订）：S1 文件夹粘贴条件出现（A9 同步改口径）/
 #   S2 文件卡（提示词骨架·缩略图重排·设为原始条件出现·导出删提示词·复制数据加标签描述）/
 #   S3 复制→粘贴标签合并追加（set_asset_props 实证）/ S4 linkList 二级与徽章弹窗同构 /
-#   S5 档案删项五条+克隆+导出档案文案+提示词骨架 / S6 空白视口分流（全部去新建；最近使用/自动导入/缩略图只扫描）/
-#   S7 回收站全量 19 项+占位四项禁用 / S8 混选删除两项分流；D3-D5 带图标陈列与占位对齐。
+#   S5 档案删项五条+克隆+导出档案文案+提示词骨架 / S6 空白视口分流（2026-09-09 收窄修订：
+#   全部降只扫描——不是位置；未分类 = 候车区总入口留导入/新建文档）/
+#   S7 回收站全量 19 项+占位四项禁用 / S8 混选删除两项分流 /
+#   S9 虚拟视图文件卡收窄（2026-09-09 入口收窄：全部/最近使用/缩略图不是位置——位置级与
+#   落点类不出现、占位项不列，留资产级/所见即所得；未分类位置视口全量对照 + 禁拖出）；
+# D3-D5 带图标陈列与占位对齐。
 # A 容器/分组/item：宽度内容自适应（无内联 width，最长 item 决定）/ 名称→36px→右件最小间距 /
 #   右件贴右缘 / 无搜索区 / 无左图标 / 组间 1px 五级线（组盒内底 inset）/ item 26 高 /
 #   快捷键原串纯文本 / 展开箭头；
@@ -68,6 +72,8 @@ const PLACEMENTS = [
   mkP("A1", "f1", "走路.png", "png", true),
   mkP("B2", "f1", "雪牧.png", "png", true),
   mkP("B2", "f2", "雪牧-链接.png", "png", false),
+  // 2026-09-09 入口收窄：未分类视口卡（C3|root——位置视口全量菜单 / 粘贴落 root 断言前提）
+  mkP("C3", "root", "散落笔记.txt", "txt", true),
 ];
 const RECYCLE = [mkP("R1", "recycle", "废稿.fla", "fla", false)];
 const ARCHIVES = [
@@ -80,6 +86,13 @@ const DETAILS = {
   R1: { tags: ["废案"], descriptions: [] },
 };
 window.__cbId = 0; window.__cbs = {};
+// contextmenu 派发记录（capture 全量，2026-09-09 S9-7 偶发不开菜单诊断：连 capture 都没有 = 事件被吞）
+window.__ctxLog = [];
+window.addEventListener('contextmenu', (e) => {
+  const t = e.target;
+  window.__ctxLog.push(((t.className && t.className.toString()) || t.tagName || '?').slice(0, 90));
+  if (window.__ctxLog.length > 30) window.__ctxLog.shift();
+}, true);
 window.__TAURI_INTERNALS__ = {
   metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
   convertFileSrc: (p) => "asset://localhost/" + encodeURIComponent(p),
@@ -362,8 +375,21 @@ async def main():
                 if r is None:
                     print("DIAG rclick MISS（元素取不到坐标）:", expr[:100])
                     return None
+                # 先移入目标再按（真人路径）——上一轮菜单项原位关菜单后指针悬停卡片会触发
+                # 悬停大图浮层，不移动直接 press 时 contextmenu 被浮层吃掉（2026-09-09 S9-7 高发实证）
+                await mouse("mouseMoved", r["x"], r["y"])
+                await asyncio.sleep(0.25)
                 await mouse("mousePressed", r["x"], r["y"], "right"); await mouse("mouseReleased", r["x"], r["y"], "right")
                 await asyncio.sleep(0.6)
+                # CDP 合成右键偶发不开菜单两道防线（2026-09-09 S9-7 实证，__ctxLog 抓到真凶）：
+                # ① toast 挡命中（§25 坑①：headless 计时节流 toast leave 动画卡死永不移除，
+                #    contextmenu 打在 toast 上到不了卡片）——点 .close 无效（leave-active 卡 DOM），
+                #    必须直接 remove；② 合成右键偶发不派发（§25 坑②）——原位重试一次
+                if not await ev("!!document.querySelector('.app-menu')"):
+                    await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
+                    await asyncio.sleep(0.3)
+                    await mouse("mousePressed", r["x"], r["y"], "right"); await mouse("mouseReleased", r["x"], r["y"], "right")
+                    await asyncio.sleep(0.6)
                 return r
 
             def js_find(label, idx=0):
@@ -443,14 +469,20 @@ async def main():
             check("S5-7 一级位置：跟在「复制档案」后", await ev("(() => { const ls = [...document.querySelectorAll('.app-menu')[0].querySelectorAll('.menu-item .label')].map((x) => x.textContent); return ls.indexOf('粘贴标签') === ls.indexOf('复制档案') + 1; })()"))
             await esc_close()
 
-            # S6 空白视口分流
+            # S6 空白视口分流（2026-09-09 收窄修订）：全部降只扫描（虚拟视图不是位置）；
+            # 未分类 = 候车区总入口（quickFullSpec：去新建文件夹/档案，留导入/新建文档/粘贴/扫描）
             await click_quick("全部")
             await js_rclick_expr(blank_bottom())
             labels = await menu_labels()
-            check("S6-1 全部空白：无新建文件夹/新建档案", "新建文件夹" not in labels and "新建档案" not in labels, str(labels))
-            check("S6-2 全部空白：有导入与扫描", "导入本地文件" in labels and "扫描重复文件" in labels, str(labels))
-            check("S6-3 新建文档项带图标（mark-slot svg）", await ev(f"(() => {{ const it = {js_find('Animate 文档')}; return it?.querySelector('.mark-slot svg') != null; }})()"))
-            check("S6-4 无图标项占位对齐（markPad 空盒）", await ev(f"(() => {{ const it = {js_find('导入本地文件')}; const s = it?.querySelector('.mark-slot'); return s != null && s.querySelector('svg') == null; }})()"))
+            check("S6-1 全部空白 = 只扫描两项（09-09 收窄：全部不是位置，落点类降档）", labels == ["扫描重复文件", "扫描文件/档案链接"], str(labels))
+            await esc_close()
+            await click_quick("未分类")
+            await js_rclick_expr(blank_bottom())
+            labels = await menu_labels()
+            check("S6-2 未分类空白：无新建文件夹/新建档案（快速访问无文件夹概念）", "新建文件夹" not in labels and "新建档案" not in labels, str(labels))
+            check("S6-3 未分类空白：有导入与新建文档（候车区总入口放开）", "导入本地文件" in labels and "Animate 文档" in labels, str(labels))
+            check("S6-4 新建文档项带图标（mark-slot svg）", await ev(f"(() => {{ const it = {js_find('Animate 文档')}; return it?.querySelector('.mark-slot svg') != null; }})()"))
+            check("S6-4b 无图标项占位对齐（markPad 空盒）", await ev(f"(() => {{ const it = {js_find('导入本地文件')}; const s = it?.querySelector('.mark-slot'); return s != null && s.querySelector('svg') == null; }})()"))
             await esc_close()
             for q in ["最近使用", "自动导入", "缩略图"]:
                 await click_quick(q)
@@ -463,6 +495,53 @@ async def main():
                 labels = await menu_labels()
                 check(f"S6-5 {q} 空白 = 只扫描两项", labels == ["扫描重复文件", "扫描文件/档案链接"], str(labels))
                 await esc_close()
+
+            # S9 虚拟视图文件卡收窄（2026-09-09 入口收窄，PRD 02-15）：全部/最近使用/缩略图
+            # 不是位置——位置级（移动/剪切/副本/移除）与落点类（粘贴/导入）不出现，占位项不列；
+            # 留资产级与所见即所得（打开外发/链接管理导航/复制/重命名/缩略图组/导出/丢回收站）
+            # 先清累积 toast（§25 坑①：headless 下 toast leave 动画卡死堆叠盖卡片吃右键，
+            # 点 .close 无效须直接 remove——S9-7 实证）
+            await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
+            await asyncio.sleep(0.3)
+            await click_quick("全部")
+            check("S9-0 全部渲卡（含未分类 C3|root）", await ev("document.querySelector('.asset-card[data-key=\"A1|f1\"]') != null && document.querySelector('.asset-card[data-key=\"C3|root\"]') != null"))
+            await js_rclick_expr(el_center("document.querySelector('.asset-card[data-key=\"A1|f1\"]')"))
+            labels = await menu_labels()
+            check("S9-1 全部卡：位置级/落点类全不出现", all(x not in labels for x in ["移动文件", "剪切文件", "创建副本", "从文件夹中移除", "作为链接粘贴", "作为副本粘贴"]), str(labels))
+            check("S9-2 全部卡：占位项不出现（新标签页/添加资源库/AI/提示词/置顶）", all(x not in labels for x in ["新标签页打开", "添加至其他资源库", "AI 工具集", "提示词", "置顶"]), str(labels))
+            check("S9-3 全部卡：保留集在（打开外发/链接管理/复制/重命名/缩略图/导出/复制数据/丢回收站）", all(x in labels for x in ["打开预览", "新窗口打开", "在默认应用打开", "在其他应用打开", "发送至 Animate", "在资源管理器打开", "文件链接管理", "打开文件链接所在位置", "复制文件", "重命名", "缩略图", "导出到本地磁盘", "复制数据", "丢到回收站"]), str(labels))
+            check("S9-4 全部卡：导出拍平一级（无「导出文件」壳）", "导出文件" not in labels, str(labels))
+            check("S9-5 单位置 A1 无「将此文件设为原始文件」（条件出现口径不变）", "将此文件设为原始文件" not in labels)
+            await js_hover(item_center("缩略图"))
+            fl = await menu_labels(1)
+            check("S9-6 缩略图二级 = 收窄六项（无 Animate 生成占位）", fl == ["转换为缩略图链接并复制", "将「文件」设为缩略图", "自定义缩略图 - 从剪贴板", "自定义缩略图 - 选择文件", "复制缩略图", "刷新缩略图"], str(fl))
+            await esc_close()
+            # 双位置卡 B2|f2（链接卡）→ 设为原始出现且可用（!origin；origin 卡反向 = 禁用）
+            await js_rclick_expr(el_center("document.querySelector('.asset-card[data-key=\"B2|f2\"]')"))
+            labels = await menu_labels()
+            if not labels:
+                # 偶发不开菜单现场诊断（2026-09-09）：contextmenu capture 记录 + 浮层/遮罩存在性
+                print("DIAG S9-7 ctxLog:", await ev("JSON.stringify(window.__ctxLog.slice(-4))"),
+                      "| zoom:", await ev("!!document.querySelector('.zoom-mask')"),
+                      "| modal:", await ev("!!document.querySelector('.modal-mask')"),
+                      "| toast:", await ev("document.querySelectorAll('.toast').length"))
+            check("S9-7 全部卡双位置：链接卡「将此文件设为原始文件」出现且可用", await ev(f"(() => {{ const it = {js_find('将此文件设为原始文件')}; return it != null && !it.disabled; }})()"), str(labels))
+            await esc_close()
+            # 虚拟视图卡片禁拖出（黑箱移动同病）：按下 + 移动超阈值不启动手势（body 无 .dragging）
+            r = await ev(el_center("document.querySelector('.asset-card[data-key=\"A1|f1\"]')"))
+            await mouse("mousePressed", r["x"], r["y"])
+            await send(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": r["x"] + 40, "y": r["y"] + 40, "buttons": 1}, session=sess)
+            await asyncio.sleep(0.5)
+            check("S9-8 全部视口卡片拖不出（body 无 dragging）", await ev("!document.body.classList.contains('dragging')"))
+            await mouse("mouseReleased", r["x"] + 40, r["y"] + 40)
+            await asyncio.sleep(0.4)
+            # 位置视口对照：未分类卡 = 全量菜单（移动/剪切/副本/移除都在；候车区粘贴两项出现）
+            await click_quick("未分类")
+            await js_rclick_expr(el_center("document.querySelector('.asset-card[data-key=\"C3|root\"]')"))
+            labels = await menu_labels()
+            check("S9-9 未分类卡 = 全量（位置视口：移动/剪切/副本/移除/丢回收站都在）", all(x in labels for x in ["移动文件", "剪切文件", "创建副本", "从文件夹中移除", "丢到回收站"]), str(labels))
+            check("S9-10 未分类卡：粘贴两项出现（S1 剪切文件夹后剪贴板非空；落点 root 已放开）", "作为链接粘贴" in labels and "作为副本粘贴" in labels, str(labels))
+            await esc_close()
 
             # S7 回收站全量
             await click_quick("回收站")

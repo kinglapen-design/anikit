@@ -179,10 +179,13 @@ function fileEntries(): CtxEntry[] {
   // 转换为档案：文件夹视口且非档案节点才可（档案再转换无语义）
   const convertible = folderId !== null && !content.archives[folderId];
   const hasAssets = selectedAssetIds().length > 0 && !content.isRecycleView;
-  // 只读视口（最近使用/自动导入/缩略图/回收站，isNoImportView 统一判定）新建组整组禁用
-  //（2026-09-08 用户定：四视口 = 数据自动维护，与全部/未分类不同——新建文档/文件夹/档案全置灰；
-  // 新建子文件夹 / 转换为档案本随 folderId 禁用，不重复接）
+  // 禁导入视口（全部/最近使用/自动导入/缩略图/回收站，isNoImportView 统一判定）新建文档组禁用
+  //（2026-09-08 用户定：四视口 = 数据自动维护；2026-09-09 入口收窄扩「全部」——全部不是位置，
+  // 落点必借道。未分类 = 候车区总入口可新建文档，落点 root 所见即所得）
   const noExtra = content.isNoImportView;
+  // 新建文件夹 / 档案：六个快速访问视口一律禁（2026-09-09 用户定：快速访问无文件夹概念，
+  // 建到根级视图里也看不见）；新建子文件夹 / 转换为档案本随 folderId 禁用不重复接
+  const noFolder = content.isQuickView;
   return [
     // 新建三级 = 新建文档七项带图标（2026-09-05 用户定：用 2026-09-05 入库的 05_文档图标七件）
     { label: "新建", disabled: noExtra, submenu: newDocGroupEntries() },
@@ -190,7 +193,7 @@ function fileEntries(): CtxEntry[] {
     {
       label: "新建文件夹",
       shortcut: "Ctrl+Shift+N",
-      disabled: noExtra,
+      disabled: noFolder,
       action: () => {
         openBlock(DEFAULT_BLOCK_ID);
         void createAndName(null, null, DEFAULT_BLOCK_ID);
@@ -207,7 +210,7 @@ function fileEntries(): CtxEntry[] {
     {
       label: "新建档案",
       shortcut: "Shift+N",
-      disabled: noExtra,
+      disabled: noFolder,
       action: () => {
         openBlock(DEFAULT_BLOCK_ID);
         void createArchiveAndName(null, null, DEFAULT_BLOCK_ID);
@@ -222,8 +225,9 @@ function fileEntries(): CtxEntry[] {
       },
     },
     "divider",
-    // 只读视口（最近使用/自动导入/缩略图/回收站，isNoImportView 统一判定）禁用导入——
-    // 2026-09-08 用户定，与右键收窄 / 拖拽拒入 / Ctrl+V 拒入同口径；菜单项保留置灰不消失
+    // 只读视口（全部/最近使用/自动导入/缩略图/回收站，isNoImportView 统一判定）禁用导入——
+    // 2026-09-08 用户定，与右键收窄 / 拖拽拒入 / Ctrl+V 拒入同口径；2026-09-09 收窄扩「全部」；
+    // 菜单项保留置灰不消失。未分类 = 候车区总入口可导入
     { label: "导入文件", disabled: content.isNoImportView, action: () => void pickImportPaths("files") },
     { label: "导入文件夹", disabled: content.isNoImportView, action: () => void pickImportPaths("folder") },
     { label: "导入链接", disabled: true },
@@ -362,7 +366,9 @@ function organizeEntries(): CtxEntry[] {
     "divider",
     { label: "编辑描述", disabled: !a && !ar, action: openDescEdit },
     "divider",
-    { label: "移动", shortcut: "Ctrl+Y", disabled: !hasAssets, action: () => moveAssetsFlow() },
+    // 移动 = 位置级操作：虚拟视图（全部/最近使用/缩略图）禁——不是位置，移动 = 黑箱
+    //（2026-09-09 入口收窄，isVirtualView 统一判定；回收站只读本随 hasAssets 禁）
+    { label: "移动", shortcut: "Ctrl+Y", disabled: !hasAssets || content.isVirtualView, action: () => moveAssetsFlow() },
     {
       label: "将所选设置为原始文件/文档",
       disabled: !canSetOrigin,
