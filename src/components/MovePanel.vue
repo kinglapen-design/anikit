@@ -1,16 +1,22 @@
 <script setup lang="ts">
-// 移动面板（29 稿，3.4，2026-08-18）：移动文件 / 文件夹 / 档案共用——文件夹树选落点：
-// item 上中下三段 hover（上/下 = 移为目标 item 的前/后兄弟，中 = 并入为子项），
-// 单击弹出警告确认（ConfirmPrompt alert warning，发起名与目标父级名品牌色-常态高亮——29 稿 prose），确认执行。
-// 默认全部展开（折叠态本地自管）；移动文件夹时发起项自身及后代不渲染（不能移入自己，后端护栏之外的 UI 前置）；
-// 树恒按自定义序（order 字段）渲染——before/after 落点所见即所得，不受侧栏"排序依据"显示模式影响。
+// 移动面板（3.4；2026-09-08 换代 = 布局/模态窗口/移动 稿，旧 29 稿 AppModal 壳口径退役）：
+// 移动文件 / 文件夹 / 档案共用——文件夹树选落点：
+// 壳 = modals/BaseModal framed 变体（460 宽稿值：padding 0 / 列 gap 12 + 标题栏 54 带底线与关闭 X）；
+// 搜索框 = inputs/TextInput lg + 左置 search 图标（稿占位「搜索文件夹...」）；
+// 区块标题 = items/SectionTitle block 型（添加钮稿有画——点亮不接业务：移动窗新建文件夹未立项）；
+// item = MoveNode（items/TreeRowItem）：行级 hover 三分（上/下 = 移为前/后兄弟，中 = 并入为子项），
+// 单击弹出警告确认（ConfirmPrompt alert warning，发起名与目标父级名品牌色高亮——29 稿 prose 沿），
+// 确认执行。默认全部展开（折叠态本地自管）；移动文件夹时发起项自身及后代不渲染
+// （不能移入自己，后端护栏之外的 UI 前置）；树恒按自定义序（order 字段）渲染——
+// before/after 落点所见即所得，不受侧栏"排序依据"显示模式影响。
 // 业务：文件 = move_placements / 文件夹·档案 = move_folders（复用后端护栏：档案不作父级、禁入自身/子级）。
 import { computed, ref } from "vue";
-import AppModal from "./AppModal.vue";
-import AppSearchBar from "./AppSearchBar.vue";
-import SectionHeader from "./SectionHeader.vue";
+import BaseModal from "./modals/BaseModal.vue";
+import TextInput from "./inputs/TextInput.vue";
+import SectionTitle from "./items/SectionTitle.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import MoveNode, { type MoveZone } from "./MoveNode.vue";
+import { expandEnter, expandLeave } from "../lib/expandAnim";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { moveFolders, movePlacements } from "../lib/placementOps";
@@ -184,68 +190,58 @@ const treeRef = ref<HTMLElement>();
 </script>
 
 <template>
-  <AppModal v-if="draft" :title="title" class="move-panel" @close="onClose">
-    <!-- 搜索框（29 稿：0 24 padding，小号搜索框 = AppSearchBar 同形态） -->
+  <BaseModal v-if="draft" :title="title" :width="460" framed class="move-panel" @close="onClose">
+    <!-- 搜索框（移动稿：0 24 padding；lg 34 高 + 左置搜索图标 亮色/三级） -->
     <div class="mv-search">
-      <AppSearchBar v-model="query" />
+      <TextInput v-model="query" leading-icon="search" placeholder="搜索文件夹..." />
     </div>
-    <!-- 树形容器（29 稿：0 24 padding / 区块间 gap 24；滚轮 = ScrollThumb 悬浮件） -->
+    <!-- 树形容器（移动稿：0 24 padding / 区块间 gap 24；滚轮 = ScrollThumb 悬浮件） -->
     <div class="mv-wrap">
       <div ref="treeRef" class="mv-tree kit-scroll">
         <section v-for="sec in sections" :key="sec.block.id" class="mv-block">
-          <SectionHeader
+          <!-- 区块标题（稿 = 标题 item block 型：标题 / 数量 + 展开钮 + 添加钮；
+               添加钮稿有画但移动窗新建文件夹未立项——点亮不接业务，同菜单栏口径） -->
+          <SectionTitle
+            variant="block"
             :title="sec.block.name"
             :count="countNodes(sec.nodes)"
-            :open="!blockCollapsed.has(sec.block.id)"
-            pad="0 0 0 8px"
-            @update:open="toggleBlock(sec.block.id)"
+            :expanded="!blockCollapsed.has(sec.block.id)"
+            :with-more="false"
+            @toggle="toggleBlock(sec.block.id)"
           />
-          <div v-if="!blockCollapsed.has(sec.block.id)" class="mv-nodes">
-            <MoveNode
-              v-for="n in sec.nodes"
-              :key="n.id"
-              :node="n"
-              :depth="0"
-              :parent-id="null"
-              :collapsed="collapsed"
-              :force-open="searching"
-              :hint="hint"
-              @toggle="toggle"
-              @hover="onHover"
-              @leave="onLeave"
-              @pick="onPick"
-            />
-          </div>
+          <Transition :css="false" @enter="expandEnter" @leave="expandLeave">
+            <div v-if="!blockCollapsed.has(sec.block.id)" class="mv-nodes">
+              <MoveNode
+                v-for="n in sec.nodes"
+                :key="n.id"
+                :node="n"
+                :depth="0"
+                :collapsed="collapsed"
+                :force-open="searching"
+                :hint="hint"
+                @toggle="toggle"
+                @hover="onHover"
+                @leave="onLeave"
+                @pick="onPick"
+              />
+            </div>
+          </Transition>
         </section>
       </div>
       <ScrollThumb :body="treeRef" />
     </div>
-  </AppModal>
+  </BaseModal>
 </template>
 
 <style scoped>
-/* 29 稿壳：500 内容宽 + 真 border 3 补偿（速查表 §1 定宽口径）；高 906 稿值 + 窗口封顶留呼吸；
-   壳 padding 0（标题栏 / 搜索 / 树各自承担边距，同 DupScanDialog 范式），稿根 gap 12；
-   class 透传落在 AppModal 根 .modal-mask 上 → 壳样式须 :deep(.app-modal)（同 .scan-dialog 范式） */
-.move-panel :deep(.app-modal) {
-  width: 503px;
-  height: min(909px, calc(100vh - 96px));
-  padding: 0;
-  gap: var(--space-12);
-}
-/* 标题栏（29 稿：54 高 / padding 12 12 12 24 / 底线通栏）——真 border 后横线与竖框不重叠 */
-.move-panel :deep(.titlebar) {
-  height: 54px;
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  border-bottom: 1px solid var(--line-hover);
-  flex: none;
-}
-/* AppModal 内容区 flex 1 撑满稿高（基座无 padding，gap 12 同稿根） */
-.move-panel :deep(.content) {
-  flex: 1;
+/* 移动稿壳：460 宽稿值由 BaseModal width prop 给（border-box 含 1px 边）；
+   高 822 稿值 + 窗口封顶留呼吸（旧 29 稿 906+96 封顶口径沿）；
+   class 透传落在 BaseModal 根 .bm-mask 上 → 壳样式须 :deep(.bm-modal) */
+.move-panel :deep(.bm-modal) {
+  height: min(822px, calc(100vh - 96px));
 }
 .mv-search {
-  padding: 0 var(--space-24);
+  padding: 0 var(--n-space-24);
   flex: none;
 }
 .mv-wrap {
@@ -253,24 +249,25 @@ const treeRef = ref<HTMLElement>();
   flex: 1;
   min-height: 0;
 }
-/* 树形容器：0 24 padding（稿）；区块间 gap 24（稿），区块内标题→树 gap 8（稿目录区块 gap 8） */
+/* 树形容器：0 24 padding（稿）；区块间 gap 24（稿），区块内 标题→树 gap 8（稿 文件夹-区块 gap 8） */
 .mv-tree {
   height: 100%;
   overflow-y: auto;
-  padding: 0 var(--space-24);
+  padding: 0 var(--n-space-24);
   display: flex;
   flex-direction: column;
-  gap: var(--space-24);
+  gap: var(--n-space-24);
 }
 .mv-block {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
   flex: none;
 }
+/* 区块内树 item 间 gap 2（移动稿 树形容器 gap 2） */
 .mv-nodes {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--n-space-2);
 }
 </style>

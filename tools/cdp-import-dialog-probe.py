@@ -1,8 +1,8 @@
-# CDP 实测：导入三弹窗 = figma 27_导入 稿（2026-08-12，2.2）
-# 桩有库进主界面 → 新增菜单"导入本地文件" → 导入文件弹窗（§1 单组）截图
-# → "导入本地文件夹"（classify 桩改 folder）→ 导入文件夹弹窗（§2 双组+分隔线）截图
-# → 确认后 detect_sequences 桩命中 → 检测到序列帧弹窗（§3 单组，来源组不重复）截图。
-# 校验：plain 壳 / 标题 / 单选项 / 按钮序（确认左取消右）/ 88 定宽 / 分隔线。
+# CDP 实测：导入三弹窗 = 布局/模态窗口/导入弹窗 稿（2026-09-08 换代；旧 figma 27_导入 稿口径退役）
+# 桩有库进主界面 → 菜单栏「菜单」→ 文件 ▸ 导入文件 → 导入文件弹窗（单组）截图
+# → 导入文件夹（classify 桩改 folder）→ 导入文件夹弹窗（双组+层级组顶分隔线）截图
+# → 确认后 detect_sequences 桩命中 → 检测到序列帧弹窗（单组，来源组不重复——稿内来源组为复制残留，2026-08-12 定）截图。
+# 校验：BaseModal 壳 / 标题 / Radio 单选项 / 按钮序（次左主右 = 取消左确认右）/ 128×38 定宽 / 312 弹宽 / 分隔线。
 import asyncio
 import base64
 import json
@@ -91,15 +91,29 @@ async def main():
                 r = await send(ws, "Runtime.evaluate", {"expression": expr, "returnByValue": True, "awaitPromise": True}, session=sess)
                 return r.get("result", {}).get("result", {}).get("value")
 
-            async def click(expr):
-                rect = await ev(f"(() => {{ const el = {expr}; if (!el) return null; const b = el.getBoundingClientRect(); return {{ x: b.left + b.width / 2, y: b.top + b.height / 2 }}; }})()")
-                if not rect:
-                    print("!! 元素不存在:", expr[:60])
-                    return False
-                for t in ("mousePressed", "mouseReleased"):
-                    await send(ws, "Input.dispatchMouseEvent", {"type": t, "button": "left", "buttons": 1, "x": rect["x"], "y": rect["y"], "clickCount": 1}, session=sess)
+            async def mouse(t, x, y, button="left"):
+                # buttons = 事件后的按键状态：release/move 恒 0（2026-09-05 主菜单探针实证口径）
+                await send(ws, "Input.dispatchMouseEvent", {"type": t, "button": button, "buttons": 0 if t in ("mouseReleased", "mouseMoved") else 1, "x": x, "y": y, "clickCount": 1}, session=sess)
+
+            def el_center(expr):
+                return f"(() => {{ const el = {expr}; if (!el) return null; const r = el.getBoundingClientRect(); return {{ x: r.left + r.width / 2, y: r.top + r.height / 2 }}; }})()"
+
+            async def js_click(expr):
+                r = await ev(expr)
+                if r is None:
+                    print("!! 元素不存在:", expr[:80])
+                    return None
+                await mouse("mousePressed", r["x"], r["y"]); await mouse("mouseReleased", r["x"], r["y"])
                 await asyncio.sleep(0.6)
-                return True
+                return r
+
+            async def js_hover(expr):
+                r = await ev(expr)
+                if r is None:
+                    return None
+                await mouse("mouseMoved", r["x"], r["y"])
+                await asyncio.sleep(0.5)
+                return r
 
             async def shot(name):
                 r = await send(ws, "Page.captureScreenshot", {"format": "png"}, session=sess)
@@ -107,57 +121,67 @@ async def main():
                     f.write(base64.b64decode(r["result"]["data"]))
                 print("截图:", name)
 
+            # 菜单栏「菜单」→ hover「文件」→ 点 L2 导入项（2026-09-08：旧 .add-btn-wrap 新增菜单入口已撤）
+            MENU_BTN = "[...document.querySelectorAll('.menu-bar .act-btn')].find((b) => b.textContent.trim() === '菜单')"
+            def js_find(label, idx=0):
+                return f"[...document.querySelectorAll('.app-menu')[{idx}].querySelectorAll('.menu-item')].find((x) => x.querySelector('.label')?.textContent === '{label}')"
+
             async def open_import(menu_label):
-                await click("document.querySelector('.add-btn-wrap .icon-btn')")
-                ok = await click(f"[...document.querySelectorAll('.app-menu .menu-item')].find((m) => m.textContent.includes('{menu_label}'))")
-                await asyncio.sleep(0.8)
-                return ok
+                if not await js_click(el_center(MENU_BTN)):
+                    return False
+                await js_hover(el_center(js_find("文件")))
+                return await js_click(el_center(js_find(menu_label, 1)))
 
             INFO = """({
-              plain: !!document.querySelector('.app-modal.plain'),
-              title: document.querySelector('.app-modal .title')?.textContent ?? null,
-              groups: document.querySelectorAll('.app-modal .option-group').length,
-              divided: !!document.querySelector('.app-modal .option-group.divided'),
-              radios: [...document.querySelectorAll('.app-modal .app-radio')].map((r) => ({ t: r.textContent.trim(), on: r.classList.contains('on') })),
-              buttons: [...document.querySelectorAll('.app-modal .app-btn')].map((b) => b.textContent.trim()),
-              btnWidth: document.querySelector('.app-modal .app-btn')?.getBoundingClientRect().width ?? null,
-              width: document.querySelector('.app-modal')?.getBoundingClientRect().width ?? null,
+              shell: !!document.querySelector('.bm-modal'),
+              title: document.querySelector('.bm-modal .bm-title')?.textContent ?? null,
+              groups: document.querySelectorAll('.bm-modal .option-group').length,
+              divided: !!document.querySelector('.bm-modal .option-group.divided'),
+              topLine: !!document.querySelector('.bm-modal .option-group.top-line'),
+              radios: [...document.querySelectorAll('.bm-modal .kit-radio')].map((r) => ({ t: r.textContent.trim(), on: r.classList.contains('on') })),
+              buttons: [...document.querySelectorAll('.bm-modal .act-btn')].map((b) => b.textContent.trim()),
+              btnWidth: document.querySelector('.bm-modal .act-btn')?.getBoundingClientRect().width ?? null,
+              width: document.querySelector('.bm-modal')?.getBoundingClientRect().width ?? null,
             })"""
 
             fails = []
 
-            # ① 导入文件（§1：单组，无分隔线）
-            await open_import("导入本地文件")
+            # ① 导入文件（单组，无分隔线；按钮 取消/确认 次左主右、128×38、弹宽 312）
+            await open_import("导入文件")
             info = json.loads(json.dumps(await ev(INFO)))
             print("导入文件:", json.dumps(info, ensure_ascii=False))
-            if not (info["plain"] and info["title"] == "导入文件" and info["groups"] == 1 and not info["divided"]):
+            if not (info["shell"] and info["title"] == "导入文件" and info["groups"] == 1 and not info["divided"]):
                 fails.append("导入文件结构")
-            if info["buttons"] != ["确认", "取消"] or info["btnWidth"] != 88:
+            if info["buttons"] != ["取消", "确认"] or info["btnWidth"] != 128:
                 fails.append("按钮序/定宽")
+            if info["width"] != 312:
+                fails.append(f"弹宽 {info['width']}")
             await shot("import-files")
-            await click("[...document.querySelectorAll('.app-modal .app-btn')].find((b) => b.textContent.includes('取消'))")
+            await js_click(el_center("[...document.querySelectorAll('.bm-modal .act-btn')].find((b) => b.textContent.includes('取消'))"))
 
-            # ② 导入文件夹（§2：双组，来源组带分隔线，默认 复制+保留层级）
+            # ② 导入文件夹（双组：来源组下 padding 12 + 层级组顶分隔线，默认 复制+保留层级）
             await ev("window.__classifyKind = 'folder'")
-            await open_import("导入本地文件夹")
+            await open_import("导入文件夹")
             info = json.loads(json.dumps(await ev(INFO)))
             print("导入文件夹:", json.dumps(info, ensure_ascii=False))
             on_labels = [r["t"] for r in info["radios"] if r["on"]]
-            if not (info["plain"] and info["title"] == "导入文件夹" and info["groups"] == 2 and info["divided"]):
+            if not (info["shell"] and info["title"] == "导入文件夹" and info["groups"] == 2 and info["divided"] and info["topLine"]):
                 fails.append("导入文件夹结构")
             if on_labels != ["复制", "保留层级"]:
                 fails.append(f"默认选中态 {on_labels}")
             await shot("import-folder")
 
-            # ③ 确认 → 检测到序列帧（§3：单组，来源组不重复）
-            await click("[...document.querySelectorAll('.app-modal .app-btn')].find((b) => b.textContent.includes('确认'))")
+            # ③ 确认 → 检测到序列帧（单组，来源组不重复）
+            await js_click(el_center("[...document.querySelectorAll('.bm-modal .act-btn')].find((b) => b.textContent.includes('确认'))"))
             await asyncio.sleep(1.0)
             info = json.loads(json.dumps(await ev(INFO)))
             print("序列帧:", json.dumps(info, ensure_ascii=False))
-            if not (info["plain"] and info["title"] == "检测到序列帧" and info["groups"] == 1):
+            if not (info["shell"] and info["title"] == "检测到序列帧" and info["groups"] == 1):
                 fails.append("序列帧结构")
             if [r["t"] for r in info["radios"]] != ["打包导入", "分散导入"]:
                 fails.append("序列帧单选项")
+            if info["buttons"] != ["取消", "确认"]:
+                fails.append("序列帧按钮序")
             await shot("import-sequence")
 
             if fails:

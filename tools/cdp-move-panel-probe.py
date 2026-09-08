@@ -1,7 +1,7 @@
-# CDP 回归探针：3.4 移动面板（29 稿，2026-08-18）
-#   S1 右键树 f2 →「移动文件夹」→ 面板结构：标题/宽 503/搜索框/区块标题"目录 - 3"（f2 被排除）/
-#      f1-1 可见（默认全展开）/ 面板内无 f2
-#   S2 hover f1 中部 → drop-into；上部 → drop-before（三分判定，TreeItem dropZoneOverride）
+# CDP 回归探针：3.4 移动面板（2026-09-08 换代 = 布局/模态窗口/移动 稿，BaseModal framed 壳；旧 29 稿口径退役）
+#   S1 右键树 f2 →「移动文件夹」→ 面板结构：标题/宽 460/搜索框（TextInput 左置图标）/
+#      区块标题「目录 / 3」（f2 被排除）/ f1-1 可见（默认全展开）/ 面板内无 f2
+#   S2 hover f1 中部 → drop-into；上部 → drop-before（三分判定，TreeRowItem dropZone）
 #   S3 点击 f1 中部 → AppConfirm alert：标题"移动文件夹" + accent 高亮段「场景」「角色」+
 #      确认钮"移动文件夹" + 48 徽章
 #   S4 确认 → move_folders{folderIds:["f2"], targetParent:"f1"} + 面板关闭
@@ -258,14 +258,14 @@ async def main():
                     await asyncio.sleep(0.6)
             panel = await ev("""
               (() => {
-                const m = document.querySelector('.move-panel .app-modal');
+                const m = document.querySelector('.move-panel .bm-modal');
                 if (!m) return null;
                 return {
-                  title: m.querySelector('.titlebar .title')?.textContent ?? "",
+                  title: m.querySelector('.bm-titlebar .bm-title')?.textContent ?? "",
                   width: Math.round(m.getBoundingClientRect().width),
-                  search: !!m.querySelector('.app-search input'),
-                  blockTitle: m.querySelector('.section-header .title')?.textContent ?? "",
-                  blockCount: m.querySelector('.section-header .count')?.textContent?.trim() ?? "",
+                  search: !!m.querySelector('.mv-search .ti-root input'),
+                  blockTitle: m.querySelector('.st .txt')?.textContent ?? "",
+                  blockCount: m.querySelector('.st .num')?.textContent?.trim() ?? "",
                   items: [...m.querySelectorAll('.tree-item')].map((i) => i.textContent.trim()),
                 };
               })()
@@ -273,10 +273,10 @@ async def main():
             check("S1b 面板开", panel is not None)
             if panel:
                 check("S1c 标题=移动文件夹", panel["title"] == "移动文件夹", panel["title"])
-                check("S1d 宽=503", panel["width"] == 503, str(panel["width"]))
+                check("S1d 宽=460", panel["width"] == 460, str(panel["width"]))
                 check("S1e 搜索框在", panel["search"])
                 check("S1f 区块标题=目录", panel["blockTitle"] == "目录", panel["blockTitle"])
-                check("S1g 计数=- 3（f2 排除）", panel["blockCount"] == "- 3", panel["blockCount"])
+                check("S1g 计数=3（f2 排除）", panel["blockCount"] == "3", panel["blockCount"])
                 check("S1h 默认全展开（主角可见）", "主角" in panel["items"], ",".join(panel["items"]))
                 check("S1i 面板内无 f2 场景", "场景" not in panel["items"], ",".join(panel["items"]))
 
@@ -350,11 +350,11 @@ async def main():
             # ---- S5 档案 → 移动档案 ----
             if await right_click_tree("f3") and await click_menu("移动档案"):
                 await asyncio.sleep(0.5)
-            t5 = await ev("document.querySelector('.move-panel .app-modal .title')?.textContent ?? null")
+            t5 = await ev("document.querySelector('.move-panel .bm-modal .bm-title')?.textContent ?? null")
             check("S5a 档案标题=移动档案", t5 == "移动档案", str(t5))
             x = await ev("""
               (() => {
-                const b = document.querySelector('.move-panel .titlebar .icon-btn');
+                const b = document.querySelector('.move-panel .bm-titlebar .ic-btn');
                 if (!b) return null;
                 const r = b.getBoundingClientRect();
                 return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
@@ -385,7 +385,7 @@ async def main():
                 }, session=sess)
                 await asyncio.sleep(0.6)
             check("S6a 素材卡选中+Ctrl+Y", card is not None)
-            t6 = await ev("document.querySelector('.move-panel .app-modal .title')?.textContent ?? null")
+            t6 = await ev("document.querySelector('.move-panel .bm-modal .bm-title')?.textContent ?? null")
             check("S6b 标题=移动文件", t6 == "移动文件", str(t6))
             mid6 = await panel_item_rect("角色", 0.5)
             if mid6:

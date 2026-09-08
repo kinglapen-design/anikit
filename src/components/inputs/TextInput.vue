@@ -6,7 +6,9 @@
 // 聚焦 = 亮色/半透明-1 描边，线条走卡片同款双层伪元素 inset 0（禁真 border 禁负 inset，速查表 §16）：
 // ::after 常态层瞬时、::before 聚焦层 opacity 过渡 150ms（聚焦不做颜色过渡，踩坑 036）。
 // hover 稿无 → 不做；禁用态稿未画 → 属性透传不改视觉（随按钮族记 09 待办，不自创）。
-// trailingIcon = 右置装饰图标 18（亮色/四级，详情面板链接框稿，7.1 二十三轮扩）；readonly 透传（只读展示口径）。
+// trailingIcon = 右置装饰图标 18（亮色/四级，详情面板链接框稿，7.1 二十三轮扩）；
+// leadingIcon = 左置图标 18（亮色/三级，移动弹窗搜索框稿，2026-09-08 功能模态窗二轮扩）；
+// readonly 透传（只读展示口径）。
 // focusable=false = 聚焦描边不显（2026-08-31 用户定：仅快速访问固定入口框用——亮边误导人以为能输入；
 // 文件夹/文件名称框保留聚焦态，改名语义上可输入，勿全局禁用 readonly 聚焦）。
 import { ref } from "vue";
@@ -18,12 +20,13 @@ withDefaults(
     placeholder?: string;
     disabled?: boolean;
     readonly?: boolean;
+    leadingIcon?: string; // 左置装饰图标（移动弹窗搜索框稿：18 实寸 亮色/三级）
     trailingIcon?: string;
     focusable?: boolean; // false = 聚焦描边不显（2026-08-31 用户定：快速访问固定入口框不给聚焦边框——
     // 亮了误导人以为能输入；文件夹/文件名称框保留聚焦态，改名业务语义上可输入）
     forceState?: "" | "focus";
   }>(),
-  { size: "lg", placeholder: undefined, disabled: false, readonly: false, trailingIcon: undefined, focusable: true, forceState: "" },
+  { size: "lg", placeholder: undefined, disabled: false, readonly: false, leadingIcon: undefined, trailingIcon: undefined, focusable: true, forceState: "" },
 );
 const model = defineModel<string>({ default: "" });
 
@@ -36,7 +39,9 @@ defineExpose({
 </script>
 
 <template>
-  <div class="ti-root" :class="[size, { disabled, 'no-focus': !focusable }, forceState ? `force-${forceState}` : '']">
+  <div class="ti-root" :class="[size, { disabled, 'has-lead': !!leadingIcon, 'no-focus': !focusable }, forceState ? `force-${forceState}` : '']">
+    <!-- 左置装饰图标（移动弹窗搜索框稿：18 实寸 亮色/三级，纯装饰不交互） -->
+    <AppIcon v-if="leadingIcon" :name="leadingIcon" :size="18" class="ti-lead" />
     <input
       ref="inputEl"
       v-model="model"
@@ -124,6 +129,15 @@ defineExpose({
 }
 .ti-inner:disabled {
   cursor: default;
+}
+/* 左置装饰图标：亮色/三级、不抢点击（移动弹窗搜索框稿）；与输入文字间距 6（稿 gap 6） */
+.ti-lead {
+  flex: none;
+  color: var(--n-l3);
+  pointer-events: none;
+}
+.ti-root.has-lead {
+  gap: var(--n-space-6);
 }
 /* 右置装饰图标：亮色/四级、不抢点击（链接框稿） */
 .ti-trail {

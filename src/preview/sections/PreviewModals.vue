@@ -4,14 +4,26 @@
 // 末行真实弹出实例验收遮罩（黑色-50%）与弹出动画（缩放+淡入 150ms）。
 import { ref } from "vue";
 import ActionButton from "../../components/buttons/ActionButton.vue";
+import IconButton from "../../components/buttons/IconButton.vue";
 import ConfirmModal from "../../components/modals/ConfirmModal.vue";
 import CreateLibraryModal from "../../components/CreateLibraryModal.vue";
 import MergeLibraryModal from "../../components/MergeLibraryModal.vue";
+import ImportDialog from "../../components/ImportDialog.vue";
+import SequenceDialog from "../../components/SequenceDialog.vue";
+import TextInput from "../../components/inputs/TextInput.vue";
+import SectionTitle from "../../components/items/SectionTitle.vue";
+import TreeRowItem from "../../components/items/TreeRowItem.vue";
+import type { ImportDraft } from "../../stores/content";
 
 const demoOpen = ref(false);
 const createOpen = ref(false);
 const mergeOpen = ref(false);
+const importFilesOpen = ref(false);
+const importFolderOpen = ref(false);
+const seqOpen = ref(false);
 const mockLibNames = ["沙雕动画资源库", "学习参考", "项目素材备份"];
+const draftFiles: ImportDraft = { kind: "files", paths: ["C:/演示/主角-走01.png"], targetFolder: null };
+const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素材"], targetFolder: null };
 </script>
 
 <template>
@@ -80,7 +92,7 @@ const mockLibNames = ["沙雕动画资源库", "学习参考", "项目素材备�
     </ConfirmModal>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">功能模态窗（BaseModal 共享壳，布局/模态窗口 四稿：创建 400 / 合并 498 宽；按钮 128×38 次左主右）</h3>
+      <h3 class="pv-group-title">功能模态窗（BaseModal 共享壳，布局/模态窗口 四稿：创建 400 / 合并 498 / 导入·序列帧 312 / 移动 460 framed；按钮 128×38 次左主右）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell" style="width: 240px">
           <ActionButton label="创建资源库" variant="solid" size="md" @click="createOpen = true" />
@@ -91,9 +103,65 @@ const mockLibNames = ["沙雕动画资源库", "学习参考", "项目素材备�
           <span class="pv-cap">真实弹出：行对勾切换可验；确认钮未接动作（合并后端排期）</span>
         </div>
       </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell" style="width: 240px">
+          <ActionButton label="导入文件（单组）" variant="solid" size="md" @click="importFilesOpen = true" />
+          <span class="pv-cap">真实弹出：312 宽 / Radio 单选 / 确认·取消仅关闭（预览不接后端）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <ActionButton label="导入文件夹（双组）" variant="solid" size="md" @click="importFolderOpen = true" />
+          <span class="pv-cap">双组：层级组顶分隔线 1px 亮色/半透明-3 + 上下各 12（稿值）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <ActionButton label="检测到序列帧" variant="solid" size="md" @click="seqOpen = true" />
+          <span class="pv-cap">只问打包/分散——稿内来源组 = 复制残留（2026-08-12 用户定，不重复问）</span>
+        </div>
+      </div>
     </div>
     <CreateLibraryModal v-if="createOpen" @close="createOpen = false" />
     <MergeLibraryModal v-if="mergeOpen" :names="mockLibNames" @close="mergeOpen = false" />
+    <ImportDialog
+      v-if="importFilesOpen"
+      :draft="draftFiles"
+      @confirm="importFilesOpen = false"
+      @cancel="importFilesOpen = false"
+    />
+    <ImportDialog
+      v-if="importFolderOpen"
+      :draft="draftFolder"
+      @confirm="importFolderOpen = false"
+      @cancel="importFolderOpen = false"
+    />
+    <SequenceDialog v-if="seqOpen" @confirm="seqOpen = false" @cancel="seqOpen = false" />
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">移动（BaseModal framed 变体：壳 padding 0 / 列 gap 12 + 标题栏 54 带底线与关闭 X；静态复刻 = 真实组件拼装）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div class="pv-move-shell">
+            <div class="pv-move-titlebar">
+              <h2 class="pv-move-title">移动文件</h2>
+              <IconButton name="close-large" title="关闭" />
+            </div>
+            <div class="pv-move-search">
+              <TextInput leading-icon="search" placeholder="搜索文件夹..." />
+            </div>
+            <div class="pv-move-tree">
+              <SectionTitle variant="block" title="文件夹" :count="123" expanded :with-more="false" force-state="hover" />
+              <div class="pv-move-nodes">
+                <TreeRowItem kind="folder" name="人物" :count="20" :direct-count="20" expanded expandable />
+                <TreeRowItem kind="folder" name="场景" :count="8" :depth="1" :expandable="false" drop-zone="into" />
+                <TreeRowItem kind="archive" name="角色设定" :count="20" />
+              </div>
+            </div>
+          </div>
+          <span class="pv-cap">
+            壳复刻 BaseModal framed 口径（口径变更与组件同步）；行 2 = 并入落点高亮（品牌/半透明填充 + 2px 品牌描边）；
+            区块标题 force-hover 展示添加钮（稿有画，移动窗新建文件夹未立项 = 点亮不接业务）；业务弹窗依赖库数据，不进真实弹出
+          </span>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -154,5 +222,49 @@ const mockLibNames = ["沙雕动画资源库", "学习参考", "项目素材备�
 }
 .pv-modal-btn.confirm.brand {
   background: var(--n-brand);
+}
+/* 移动弹窗静态复刻壳（复刻 BaseModal framed 口径：壳 padding 0 / 列 gap 12 / 标题栏 54 + 底线） */
+.pv-move-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-12);
+  width: 460px;
+  box-sizing: border-box;
+  border: 1px solid var(--n-g5);
+  border-radius: var(--n-radius-8);
+  background: var(--n-g3);
+  box-shadow: var(--n-shadow-lg);
+}
+.pv-move-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--n-space-12);
+  box-sizing: border-box;
+  height: 54px;
+  padding: var(--n-space-12) var(--n-space-12) var(--n-space-12) var(--n-space-24);
+  border-bottom: 1px solid var(--n-g5);
+  flex: none;
+}
+.pv-move-title {
+  font-size: var(--n-fs-title);
+  line-height: var(--n-lh-title);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l1);
+}
+.pv-move-search {
+  padding: 0 var(--n-space-24);
+}
+/* 树形容器：0 24 padding / 区块内 标题→树 gap 8；item 间 gap 2（移动稿） */
+.pv-move-tree {
+  padding: 0 var(--n-space-24);
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-8);
+}
+.pv-move-nodes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-2);
 }
 </style>
