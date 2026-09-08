@@ -65,6 +65,7 @@ onMounted(() => taEl.value?.focus()); // 打开就聚焦输入闪烁（稿 prose
   width: 533px; /* 稿值 */
   height: 378px; /* 稿值 */
   padding: 0;
+  overflow: hidden; /* 裁圆角：右输入区满高满右，不裁会把壳圆角 8 顶成直角（2026-09-09 三轮实机报） */
 }
 
 /* 左列表：宽随余量（稿 flex-grow 1），padding 12 gap 2 */
@@ -131,7 +132,9 @@ onMounted(() => taEl.value?.focus()); // 打开就聚焦输入闪烁（稿 prose
   color: var(--n-l2);
 }
 
-/* 右输入框区：340 稿值，通用/二级底 + 左 1px 亮色/半透明-3 分隔线 */
+/* 右输入框区：340 稿值，通用/二级底 + 左 1px 亮色/半透明-3 分隔线；
+   inset 顶高光同立体感档（与 --n-effect-raised-blur 的 inset 同值）——实色底会盖住壳 inset 高光，
+   不补则高光在输入面板处断开（2026-09-09 三轮实机报） */
 .np-editor {
   display: flex;
   flex-direction: column;
@@ -141,6 +144,7 @@ onMounted(() => taEl.value?.focus()); // 打开就聚焦输入闪烁（稿 prose
   padding: var(--n-space-12);
   background: var(--n-g2);
   border-left: 1px solid var(--n-l-a3);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.2);
 }
 .np-ta {
   flex: 1;

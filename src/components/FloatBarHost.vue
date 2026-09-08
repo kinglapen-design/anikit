@@ -150,7 +150,8 @@ function stripSelect(i: number): void {
 // ─── 悬停弹层（倍率 / 音量 / 时间显示）：悬停开 + 120ms 延迟关桥；对齐触发件上方居中 ───
 type PopKind = "" | "rate" | "volume" | "tc";
 const pop = ref<PopKind>("");
-const popLeft = ref(0); // anchor 内 x（弹层中心，钳制在 anchor 内）
+const popLeft = ref(0); // anchor 内 x（hover 弹层中心，钳制在 anchor 内）
+const noteLeft = ref(0); // 笔记弹层独立 x——hover 弹层换位不带着笔记跑（2026-09-09 三轮实机报）
 const anchorRef = ref<HTMLElement>();
 let closeTimer: number | undefined;
 
@@ -173,9 +174,12 @@ async function placePop(ev?: Event, kind: string = "rate"): Promise<void> {
   const ideal = tRect
     ? tRect.left + tRect.width / 2 - anchor.getBoundingClientRect().left
     : aW / 2;
-  popLeft.value = w > 0 && aW > w ? Math.min(Math.max(ideal, w / 2), aW - w / 2) : ideal;
+  const clamped = w > 0 && aW > w ? Math.min(Math.max(ideal, w / 2), aW - w / 2) : ideal;
+  if (kind === "note") noteLeft.value = clamped;
+  else popLeft.value = clamped;
 }
 const popStyle = computed(() => ({ left: `${popLeft.value}px` }));
+const noteStyle = computed(() => ({ left: `${noteLeft.value}px` }));
 function hoverPop(kind: PopKind, on: boolean, ev?: PointerEvent): void {
   window.clearTimeout(closeTimer);
   if (on) {
@@ -268,8 +272,9 @@ function noteRemove(i: number): void {
 </script>
 
 <template>
-  <!-- 定位 = 底部居中距底 12、两侧各 12 呼吸（2026-09-09 用户定）；浮于内容上方、穿透空隙 -->
-  <div ref="anchorRef" class="fbh-anchor">
+  <!-- 定位 = 底部居中距底 12、两侧各 12 呼吸（2026-09-09 用户定）；浮于内容上方、穿透空隙；
+       全屏 = fixed 锚窗口（preview-root z-1500 铺满会盖住 content-area 内的 anchor，提 z 1600 压其上） -->
+  <div ref="anchorRef" class="fbh-anchor" :class="{ fullscreen: preview.fullscreen }">
     <!-- 帧条：播放态且 spec 提供帧条时浮于播放条上方（同宽 = 同随 anchor 满宽，间距 12 归列 gap） -->
     <Transition name="fbh-strip">
       <FrameStrip
@@ -355,7 +360,7 @@ function noteRemove(i: number): void {
       <NotesPop
         v-if="mode === 'play' && notes.open"
         class="fbh-pop"
-        :style="popStyle"
+        :style="noteStyle"
         :notes="noteItems"
         :selected="noteSel"
         v-model:draft="noteDraft"
@@ -384,6 +389,15 @@ function noteRemove(i: number): void {
 }
 .fbh-anchor > * {
   pointer-events: auto;
+}
+/* 全屏：preview-root z-1500 fixed 铺满窗口会盖住 content-area 内的 anchor——锚改 fixed 窗口级、
+   z 提 1600（通知条同档）压其上（2026-09-09 三轮实机报：全屏无播放条无法控制） */
+.fbh-anchor.fullscreen {
+  position: fixed;
+  left: var(--n-space-12);
+  right: var(--n-space-12);
+  bottom: var(--n-space-12);
+  z-index: 1600;
 }
 /* 帧条 / fill 播放条满 anchor 宽；搜索态壳自宽 + align center 居中（稿口径） */
 .fbh-anchor > .fs-root {

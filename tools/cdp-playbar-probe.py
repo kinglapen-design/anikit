@@ -393,6 +393,26 @@ async def main():
             elif abs(tcp["popCx"] - tcp["btnCx"]) > 2:
                 fails.append(f"[视频] 时间显示弹层未对齐时间码（pop cx {tcp['popCx']:.0f} vs tc cx {tcp['btnCx']:.0f}）")
             await hover(".preview-stage")  # 移出关弹层
+            # 全屏悬浮栏（2026-09-09 三轮钉：preview-root z-1500 铺满盖住 content-area 内 anchor →
+            # 全屏时 anchor 改 fixed 窗口级 + z 1600；STUB invoke 兜底吞 window 插件调用）
+            await ev("document.querySelectorAll('.fbh-anchor .fbp-root .ic-btn')[9]?.click(); true")
+            await asyncio.sleep(0.5)
+            fs = await ev("""(() => {
+              const a = document.querySelector('.fbh-anchor');
+              if (!a) return null;
+              const cs = getComputedStyle(a); const r = a.getBoundingClientRect();
+              return { pos: cs.position, z: cs.zIndex, bottomGap: Math.round(window.innerHeight - r.bottom),
+                       inView: r.bottom <= window.innerHeight + 1 && r.top >= -1 };
+            })()""")
+            print("[视频] 全屏悬浮栏:", json.dumps(fs, ensure_ascii=False))
+            if not fs or fs["pos"] != "fixed" or fs["z"] != "1600" or not fs["inView"] or fs["bottomGap"] != 12:
+                fails.append(f"[视频] 全屏悬浮栏未浮窗级（{fs}，期望 fixed + z1600 + 视口内距底 12）")
+            await shot_anchor("playbar-video-fullscreen")
+            await ev("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))")  # 退全屏（不退预览）
+            await asyncio.sleep(0.5)
+            fs_off = await ev("getComputedStyle(document.querySelector('.fbh-anchor')).position")
+            if fs_off != "absolute":
+                fails.append(f"[视频] 退全屏悬浮栏未回 absolute（{fs_off}）")
             await shot_anchor("playbar-video")
             await close_preview()
 
