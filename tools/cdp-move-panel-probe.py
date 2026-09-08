@@ -2,8 +2,8 @@
 #   S1 右键树 f2 →「移动文件夹」→ 面板结构：标题/宽 460/搜索框（TextInput 左置图标）/
 #      区块标题「目录 / 3」（f2 被排除）/ f1-1 可见（默认全展开）/ 面板内无 f2
 #   S2 hover f1 中部 → drop-into；上部 → drop-before（三分判定，TreeRowItem dropZone）
-#   S3 点击 f1 中部 → AppConfirm alert：标题"移动文件夹" + accent 高亮段「场景」「角色」+
-#      确认钮"移动文件夹" + 48 徽章
+#   S3 点击 f1 中部 → ConfirmModal（warning）：标题"移动文件夹" + accent 高亮段「场景」「角色」+
+#      按钮次左主右 = 取消 / 移动文件类（确认在右）
 #   S4 确认 → move_folders{folderIds:["f2"], targetParent:"f1"} + 面板关闭
 #   S5 右键档案 f3 →「移动档案」→ 标题"移动档案"；X 关闭
 #   S6 素材卡选中 → Ctrl+Y → 标题"移动文件" → 点 f1 中部 → 确认 → move_placements{targetFolder:"f1"}
@@ -298,36 +298,36 @@ async def main():
             else:
                 check("S2 面板内定位角色", False)
 
-            # ---- S3 点击中部 → alert 确认窗 ----
+            # ---- S3 点击中部 → ConfirmModal 确认窗（2026-09-08 AppConfirm 换代 ConfirmModal） ----
             if mid:
                 await click_xy(mid["x"], mid["y"])
                 await asyncio.sleep(0.6)
             conf = await ev("""
               (() => {
-                const m = document.querySelector('.app-modal.alert');
+                const m = document.querySelector('.kit-modal');
                 if (!m) return null;
                 return {
                   title: m.querySelector('.title')?.textContent ?? "",
                   accents: [...m.querySelectorAll('.accent')].map((a) => a.textContent),
-                  confirm: [...m.querySelectorAll('.actions .app-btn')].map((b) => b.textContent.trim()),
-                  badge: !!m.querySelector('.alert-badge'),
-                  body: m.querySelector('.text')?.textContent ?? "",
+                  buttons: [...m.querySelectorAll('.actions .btn')].map((b) => b.textContent.trim()),
+                  confirmKind: [...m.querySelectorAll('.actions .btn.confirm')].map((b) => b.className),
+                  body: m.querySelector('.body')?.textContent ?? "",
                 };
               })()
             """)
-            check("S3a 确认窗 alert 开", conf is not None)
+            check("S3a 确认窗 ConfirmModal 开", conf is not None)
             if conf:
                 check("S3b 标题=移动文件夹", conf["title"] == "移动文件夹", conf["title"])
                 check("S3c 高亮段=场景/角色", conf["accents"] == ["场景", "角色"], json.dumps(conf["accents"], ensure_ascii=False))
-                check("S3d 确认钮=移动文件夹", conf["confirm"][0] == "移动文件夹", json.dumps(conf["confirm"], ensure_ascii=False))
-                check("S3e 48 徽章在", conf["badge"])
+                check("S3d 按钮次左主右=取消/移动文件夹", conf["buttons"] == ["取消", "移动文件夹"], json.dumps(conf["buttons"], ensure_ascii=False))
+                check("S3e 确认钮 warning 档", any("warning" in k for k in conf["confirmKind"]), str(conf["confirmKind"]))
                 check("S3f 文案句式", conf["body"] == "是否将「场景」移动至「角色」中", conf["body"])
                 await shot(SHOT2)
 
             # ---- S4 确认执行 ----
             btn = await ev("""
               (() => {
-                const b = [...document.querySelectorAll('.app-modal.alert .actions .app-btn')]
+                const b = [...document.querySelectorAll('.kit-modal .actions .btn')]
                   .find((x) => x.textContent.trim() === "移动文件夹");
                 if (!b) return null;
                 const r = b.getBoundingClientRect();
@@ -345,7 +345,7 @@ async def main():
                       c0.get("folderIds") == ["f2"] and c0.get("targetParent") == "f1",
                       json.dumps(c0, ensure_ascii=False))
             check("S4c 面板关闭", not await ev("!!document.querySelector('.move-panel')"))
-            check("S4d 确认窗关闭", not await ev("!!document.querySelector('.app-modal.alert')"))
+            check("S4d 确认窗关闭", not await ev("!!document.querySelector('.kit-modal')"))
 
             # ---- S5 档案 → 移动档案 ----
             if await right_click_tree("f3") and await click_menu("移动档案"):
@@ -395,7 +395,7 @@ async def main():
                 await asyncio.sleep(0.6)
                 btn6 = await ev("""
                   (() => {
-                    const b = [...document.querySelectorAll('.app-modal.alert .actions .app-btn')]
+                    const b = [...document.querySelectorAll('.kit-modal .actions .btn')]
                       .find((x) => x.textContent.trim() === "移动文件");
                     if (!b) return null;
                     const r = b.getBoundingClientRect();

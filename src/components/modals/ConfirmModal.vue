@@ -77,6 +77,7 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>();
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
   color: var(--n-l3);
+  word-break: break-all; /* 沿用旧 AppConfirm 正文折行口径——长路径/英文串不顶出 520 定宽 */
 }
 .actions {
   display: flex;
