@@ -3,12 +3,15 @@
 // 壳 = .fb-pop + padding 8 + gap 8（高随内容：8 + 76 + 8 = 92 稿值链）。
 // 两端上/下帧钮 = 尖括号 angle-bracket（下一帧 flip-h），34 宽纵贯圆角 6，图标 亮色/三级、hover 升二级
 // （稿无 hover 节，随悬浮栏族按钮口径）；帧图 129×76 = 通用/二级底 + 1px 通用/三级描边 + 圆角 8，
-// 无图 = 空槽；当前帧高亮稿未画 → 不做（记 09 待办，不自创）。
+// 无图 = 空槽；**当前帧 = 亮色/一级 1px 边框**（2026-09-09 四轮用户定稿，原「稿未画不做」09 待办闭环）——
+// ::after 状态层 opacity 过渡（踩坑 036 先例：元素 border 换色过渡在圆角 + 分数像素下有残留）；
+// 笔记圆点稿仍未画 → 不做。
 import AppIcon from "../AppIcon.vue";
 import "./bars.css";
 
-withDefaults(defineProps<{ frames?: readonly (string | null)[] }>(), {
+withDefaults(defineProps<{ frames?: readonly (string | null)[]; current?: number }>(), {
   frames: () => [null, null, null, null, null], // 稿 5 格
+  current: -1, // 当前帧（页内索引；选中帧 = 亮色/一级边框，-1 = 无）
 });
 defineEmits<{ "page-prev": []; "page-next": []; select: [i: number] }>();
 </script>
@@ -19,7 +22,13 @@ defineEmits<{ "page-prev": []; "page-next": []; select: [i: number] }>();
       <AppIcon name="angle-bracket" :size="18" />
     </button>
     <div class="fs-frames">
-      <button v-for="(f, i) in frames" :key="i" class="fs-frame" @click="$emit('select', i)">
+      <button
+        v-for="(f, i) in frames"
+        :key="i"
+        class="fs-frame"
+        :class="{ current: i === current }"
+        @click="$emit('select', i)"
+      >
         <img v-if="f" :src="f" alt="" />
       </button>
     </div>
@@ -69,6 +78,7 @@ defineEmits<{ "page-prev": []; "page-next": []; select: [i: number] }>();
   min-width: 0;
 }
 .fs-frame {
+  position: relative; /* 当前帧 ::after 边框定位基准 */
   flex: none;
   width: 129px;
   height: 76px;
@@ -83,5 +93,19 @@ defineEmits<{ "page-prev": []; "page-next": []; select: [i: number] }>();
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+/* 当前帧 = 亮色/一级 1px 边框（2026-09-09 四轮用户定稿）：::after 状态层 opacity 过渡（踩坑 036 先例） */
+.fs-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--n-l1);
+  border-radius: var(--n-radius-8);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--n-dur-150) var(--n-ease-in-out);
+}
+.fs-frame.current::after {
+  opacity: 1;
 }
 </style>

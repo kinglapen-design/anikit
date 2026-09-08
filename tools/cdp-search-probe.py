@@ -70,7 +70,7 @@ const mk = (assetId, folderId, name, ext) => ({
   modifiedAt: "2026-08-10T10:00:00+08:00", importedAt: "2026-08-11T10:00:00+08:00", noteCount: null,
 });
 const PLACEMENTS = [
-  mk("AN-1", "f1", "人物-开心-走路.png", "png"),
+  { ...mk("AN-1", "f1", "人物-开心-走路.png", "png"), noteCount: 2 }, // 笔记徽章回归钉（S21）
   mk("AN-2", "f1", "人物-伤心-走路.png", "png"),
   mk("AN-3", "f2", "场景-日.png", "png"),
   mk("AN-4", "fa", "分镜01.png", "png"),
@@ -691,6 +691,26 @@ async def main():
             await ev("""(() => { const ca = document.querySelector('.content-area');
               ca.style.width = ''; ca.style.flex = ''; return true; })()""")
             await ev("document.querySelector('.fbs-ic.collapse')?.click(); true")
+
+            # ── S21：卡片笔记徽章（2026-09-09 四轮用户定稿：kc-float 角标铬「笔记 N」——标签雅黑 /
+            #    数量 mono；名称上方 6px、左缘对齐名称；旧右上品牌圆点口径作废）──
+            badge = await ev("""(() => {
+              const b = document.querySelector('.note-badge');
+              if (!b) return null;
+              const card = b.closest('.asset-card');
+              const name = card?.querySelector('.kc-name');
+              const label = b.querySelector('.nb-label'); const cnt = b.querySelector('.nb-count');
+              const br = b.getBoundingClientRect(); const nr = name?.getBoundingClientRect();
+              return { text: b.textContent?.trim(),
+                       labelFont: label ? getComputedStyle(label).fontFamily : null,
+                       countFont: cnt ? getComputedStyle(cnt).fontFamily : null,
+                       gap: nr ? Math.round(nr.top - br.bottom) : null,
+                       alignLeft: nr ? Math.abs(br.left - nr.left) <= 1 : null };
+            })()""")
+            print("  [S21] 笔记徽章:", json.dumps(badge, ensure_ascii=False))
+            check("S21a 徽章文案「笔记 2」（间距由 gap 4 承担，textContent 无空格）", bool(badge and badge["text"] == "笔记2"), json.dumps(badge, ensure_ascii=False))
+            check("S21b 标签雅黑 / 数量 mono", bool(badge and "YaHei" in (badge["labelFont"] or "") and "Fira" in (badge["countFont"] or "")), json.dumps(badge, ensure_ascii=False))
+            check("S21c 名称上方 6px + 左缘对齐", bool(badge and badge["gap"] == 6 and badge["alignLeft"]), json.dumps(badge, ensure_ascii=False))
 
             print()
             if fails:

@@ -315,6 +315,24 @@ async def main():
             print("[动图] 时间码:", json.dumps(tc, ensure_ascii=False))
             if not tc or tc["cur"] != L2_RGB or tc["tot"] != L3_RGB:
                 fails.append(f"[动图] 时间码色档不符（{tc}，期望 当前 {L2_RGB} / 总计 {L3_RGB}）")
+            # 帧条选中帧 = 亮色/一级 1px 边框（2026-09-09 四轮定稿；帧流播放中 frame 推进，当前格在页内）
+            cur = await ev("""(() => {
+              const f = document.querySelector('.fbh-anchor .fs-frame.current');
+              if (!f) return null;
+              const aft = getComputedStyle(f, '::after');
+              return { borderColor: aft.borderColor, opacity: aft.opacity };
+            })()""")
+            print("[动图] 选中帧边框:", json.dumps(cur, ensure_ascii=False))
+            if not cur or cur["borderColor"] != "rgb(242, 242, 242)" or cur["opacity"] != "1":
+                fails.append(f"[动图] 选中帧边框不符（{cur}，期望 亮色/一级 1px opacity 1）")
+            # 进度条已播放填充 = 亮色/三级（同轮定稿；light 档独有）
+            fill = await ev("""(() => {
+              const f = document.querySelector('.fbh-anchor .bs-root.light .bs-fill');
+              return f ? { bg: getComputedStyle(f).backgroundColor } : null;
+            })()""")
+            print("[动图] 进度填充:", json.dumps(fill, ensure_ascii=False))
+            if not fill or fill["bg"] != L3_RGB:
+                fails.append(f"[动图] 进度填充段不符（{fill}，期望 亮色/三级 {L3_RGB}）")
             await shot_anchor("playbar-frames")
             await close_preview()
 

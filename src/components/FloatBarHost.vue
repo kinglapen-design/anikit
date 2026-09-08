@@ -130,6 +130,11 @@ const stripPage = computed(() => {
   const f = spec.value?.frames;
   return f ? Math.floor(f.frame() / STRIP_PAGE) : 0;
 });
+// 当前帧页内索引（当前帧选中框 = 亮色/一级边框，2026-09-09 四轮用户定稿）
+const stripCurrent = computed(() => {
+  const f = spec.value?.frames;
+  return f ? f.frame() - stripPage.value * STRIP_PAGE : -1;
+});
 const stripFrames = computed<(string | null)[]>(() => {
   const f = spec.value?.frames;
   const out: (string | null)[] = [];
@@ -280,6 +285,7 @@ function noteRemove(i: number): void {
       <FrameStrip
         v-if="stripShow"
         :frames="stripFrames"
+        :current="stripCurrent"
         @select="stripSelect"
         @page-prev="spec?.frames?.stepFrame(-1)"
         @page-next="spec?.frames?.stepFrame(1)"

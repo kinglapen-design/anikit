@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// 条形滑块——播放条 进度条 / 播放条-音量滑块 / 工具栏-尺寸滑块 三稿合一（轨道 + 圆形拖钮；稿无已播放填充段，进度靠拖钮位置表达）：
-// tone：light = 播放条进度条（轨道 亮色/半透明-3，拖钮 1px 描边同档）；
-//       dark = 音量滑块（轨道 通用/四级，拖钮 1px 描边同档）；
-//       size = 工具栏尺寸滑块（轨道 通用/三级，拖钮无描边——内容容器-工具栏稿值）。
+// 条形滑块——播放条 进度条 / 播放条-音量滑块 / 工具栏-尺寸滑块 三稿合一（轨道 + 圆形拖钮）：
+// tone：light = 播放条进度条（轨道 亮色/半透明-3，拖钮 1px 描边同档；**已播放填充段 = 亮色/三级**
+//       ——2026-09-09 四轮用户定稿，原「无填充段」口径作废）；
+//       dark = 音量滑块（轨道 通用/四级，拖钮 1px 描边同档；无填充）；
+//       size = 工具栏尺寸滑块（轨道 通用/三级，拖钮无描边——内容容器-工具栏稿值；无填充）。
 // 轨道 = 6px 高圆头横条（稿 height 0 + border 3 的等效渲染，圆头 99px 同卡片波形先例，非新造 token）；
 // 拖钮 10px 圆形 亮色/二级底 + 1px 描边（圆形 = 稿椭圆语义，figma-css 未导 radius）。
 // 交互 = pointerdown 跳值 + window pointermove 拖动（窗口监听同款，速查表 §9 ③）；hover/按下态稿未画 → 不做。
@@ -41,6 +42,8 @@ function onDown(e: PointerEvent): void {
 <template>
   <div ref="rootEl" class="bs-root" :class="tone" @pointerdown="onDown">
     <div class="bs-track" />
+    <!-- 已播放填充段 = 亮色/三级（仅 light 播放条档，2026-09-09 四轮用户定稿）；音量/尺寸档无 -->
+    <div v-if="tone === 'light'" class="bs-fill" :style="{ width: `${model * 100}%` }" />
     <div class="bs-knob" :style="{ left: `${model * 100}%` }" />
   </div>
 </template>
@@ -61,6 +64,16 @@ function onDown(e: PointerEvent): void {
 }
 .bs-root.light .bs-track {
   background: var(--n-l-a3);
+}
+/* 已播放填充段（仅 light 播放条档）：亮色/三级，轨道同高同圆头，左缘到拖钮位置（2026-09-09 四轮用户定稿） */
+.bs-fill {
+  position: absolute;
+  left: 0;
+  top: 2px; /* 轨道纵向居中位（root 高 10、轨道高 6） */
+  height: 6px;
+  border-radius: 99px; /* 圆头同轨道口径 */
+  background: var(--n-l3);
+  pointer-events: none;
 }
 .bs-root.dark .bs-track {
   background: var(--n-g4);

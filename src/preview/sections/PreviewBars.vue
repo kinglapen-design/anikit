@@ -3,8 +3,9 @@
 // 搜索栏 / 搜索栏展开成筛选 / 播放条 / MarkDown 工具栏 = 同一容器（FloatBar）：
 // 切换宽度平滑伸缩 + 功能按钮 Y 轴出场入场 = 300ms 形态切换 + 位移 4px（2026-08-29 用户两轮定）；hover / 颜色 150ms。
 // 无需悬浮栏 = 宽度 + 透明度退场（稿 prose，visible prop）。
-// 播放/暂停、声音/静音 = 单钮按态切换（稿两态并列是全量画法）；进度条无填充段（稿未画，进度靠拖钮位置）；
-// 循环/笔记开启态稿未画记 09 待办；图标 hover 升二级 = 按钮族 IconButton bare 口径（按钮展区已验收，此不重复 force 列）。
+// 播放/暂停、声音/静音 = 单钮按态切换（稿两态并列是全量画法）；**进度条已播放填充段 = 亮色/三级**
+//（2026-09-09 四轮用户定稿，原「无填充段」口径作废）；帧条选中帧 = 亮色/一级 1px 边框（同轮定稿）；
+// 笔记圆点、循环/笔记开启态稿仍未画记 09 待办；图标 hover 升二级 = 按钮族 IconButton bare 口径（按钮展区已验收，此不重复 force 列）。
 import { ref } from "vue";
 import FloatBar from "../../components/bars/FloatBar.vue";
 import FrameStrip from "../../components/bars/FrameStrip.vue";
@@ -174,7 +175,7 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">播放条（全量陈列；时间码 数字-大：当前·分隔 二级 / 总计 三级；进度条无填充段）</h3>
+      <h3 class="pv-group-title">播放条（全量陈列；时间码 数字-大：当前·分隔 二级 / 总计 三级；进度条已播放填充 亮色/三级）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <FloatBar mode="play" :progress="0.2" />
@@ -251,14 +252,14 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">帧条 + 播放条（帧条宽与播放条一致、间距 12——稿 prose）</h3>
+      <h3 class="pv-group-title">帧条 + 播放条（帧条宽与播放条一致、间距 12——稿 prose；选中帧 = 亮色/一级 1px 边框，2026-09-09 四轮定稿）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div class="pv-combo" :style="{ width: `${COMBO_W}px` }">
-            <FrameStrip />
+            <FrameStrip :current="1" />
             <FloatBar mode="play" :width="COMBO_W" :progress="0.2" />
           </div>
-          <span class="pv-cap">帧图 129×76（二级底 + 三级描边）；上/下帧 = 尖括号（下一帧 flip-h）</span>
+          <span class="pv-cap">帧图 129×76（二级底 + 三级描边）；上/下帧 = 尖括号（下一帧 flip-h）；第 2 格 = 选中帧静态陈列</span>
         </div>
       </div>
     </div>

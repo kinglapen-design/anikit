@@ -251,9 +251,12 @@ const meta = computed(() => {
       <HoverAudioLayer v-else-if="hoverActive && kind === 'audio'" :asset="asset" />
       <HoverSequenceLayer v-else-if="animPlaying && kind === 'sequence'" :asset="asset" :auto="!hoverActive" />
     </FileCard>
-    <!-- 笔记角标（5.2，Eagle 式数字圆标）：保持旧视觉旧位（右上各 4；新稿未画，
-         与悬停胶囊 12 位的关系待稿——09 待办） -->
-    <span v-if="asset.noteCount" class="note-badge">{{ asset.noteCount }}</span>
+    <!-- 笔记徽章（2026-09-09 四轮用户定稿）：kc-float 角标铬「笔记 N」（笔记 = 雅黑 / 数量 = mono，
+         数字档 12/16 bold 二级）——旧 16px 品牌圆点数字右上口径作废（压悬停胶囊）；
+         位置 = 名称上方 6px、左缘与名称对齐（罩 padding 左 12）；隐藏简介时随名称行下移（36→56 档差） -->
+    <span v-if="asset.noteCount" class="note-badge kc-float" :class="{ 'no-brief': !ui.showBrief }">
+      <span class="nb-label">笔记</span><span class="nb-count">{{ asset.noteCount }}</span>
+    </span>
     <!-- 位置徽章（6.2 四轮走查③⑤）：origin ★ / 链接 icon（活位置 > 1 才上），14px 右下各 12
          （kc-corner-badge 位，§16/§18）；悬停 = 全部链接列表浮层（LinkListPopover，可点行跳转） -->
     <span
@@ -294,23 +297,31 @@ const meta = computed(() => {
 .asset-card.fade-cut {
   opacity: var(--opacity-cut);
 }
-/* 笔记角标（5.2，Eagle 式数字圆标）：图片右上各 4px / 直径 16 / 品牌实底（存量元素搬迁，
-   样式保旧档——新稿未画，待新 token / 稿，09 待办） */
+/* 笔记徽章（2026-09-09 四轮用户定稿）：角标同款 kc-float 铬（padding 2/6 半透明-2 + 立体感 + blur 小 +
+   圆角 4）；内容「笔记 N」——标签雅黑 / 数量 mono，数字档 12/16 bold 亮色/二级。
+   位置 = 名称上方 6px、左缘与名称对齐（12）；隐藏简介时名称行下移 20（简介行 16 + gap 4），徽章跟随。
+   底缘距卡底 = 罩底 padding 12 + 名称行 18 + 间距 6 = 36；有简介再 +20 = 56。 */
 .note-badge {
   position: absolute;
-  top: var(--space-4);
-  right: var(--space-4);
+  left: var(--n-space-12);
+  bottom: 56px;
   z-index: 6;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--brand-1);
-  font-size: var(--text-badge-size);
-  line-height: 16px;
-  font-weight: var(--text-badge-weight);
-  color: var(--font-icon-1);
-  text-align: center;
+  gap: var(--n-space-4); /* 「笔记」与数量间距 */
+  font-size: var(--n-fs-num);
+  line-height: var(--n-lh-num);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
+  white-space: nowrap;
   pointer-events: none;
+}
+.note-badge.no-brief {
+  bottom: 36px;
+}
+.nb-label {
+  font-family: var(--n-font-family); /* 雅黑（正文档族） */
+}
+.nb-count {
+  font-family: var(--n-font-mono); /* 数量 = Fira Mono（数字档族） */
 }
 /* 位置徽章：14×14，卡片右下各 12（kc-corner-badge 位）；可悬停出链接列表浮层 */
 .card-badges {
