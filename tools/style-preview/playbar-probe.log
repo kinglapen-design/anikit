@@ -1,0 +1,22 @@
+[动图] 播放条: {"height": "42px", "borderRadius": "21px", "background": "rgba(41, 41, 41, 0.75)", "padding": "12px 16px", "iconColor": "rgb(128, 128, 128)", "btnCount": 4, "hasRate": true, "shellW": 827, "anchorW": 827, "panelW": 851}
+[动图] 帧条: {"borderRadius": "8px", "background": "rgba(31, 31, 31, 0.93)", "padding": "8px", "navTransforms": ["none", "matrix(-1, 0, 0, 1, 0, 0)"], "navCount": 2, "frameCount": 5, "frameRadius": "8px", "stripW": 827, "shellW": 827}
+[动图] 时间码: {"text": "1/24", "cur": "rgb(191, 191, 191)", "tot": "rgb(128, 128, 128)"}
+[动图] 选中帧边框: {"borderColor": "rgb(242, 242, 242)", "opacity": "1"}
+[动图] 进度填充: {"bg": "rgb(128, 128, 128)"}
+截图: tools/style-preview/playbar-frames.png (827x146)
+[视频] 宽度诊断: {"shellW": 827, "progW": 470, "fillGrow": "1"}
+[视频] 播放条: {"height": "42px", "borderRadius": "21px", "background": "rgba(41, 41, 41, 0.75)", "padding": "12px 16px", "iconColor": "rgb(128, 128, 128)", "btnCount": 10, "hasRate": true, "shellW": 827, "anchorW": 827, "panelW": 851}
+[视频] 图标 transform: ['none', 'none', 'matrix(-1, 0, 0, 1, 0, 0)', 'none', 'matrix(-1, 0, 0, 1, 0, 0)', 'none', 'none', 'none', 'none', 'none']
+[视频] 下一帧 hover 色: rgb(128, 128, 128) → rgb(191, 191, 191)
+[视频] 下一帧 tip: {"cls": "app-tip show", "text": "下一帧."}
+[视频] 倍率弹层: {"n": 11, "bg": "rgba(31, 31, 31, 0.93)"}
+[视频] 音量弹层: {"w": 124, "bg": "rgba(31, 31, 31, 0.93)", "popCx": 422, "btnCx": 422}
+[视频] 时间显示弹层: {"items": ["帧数", "时间码"], "popCx": 454.71875, "btnCx": 454.71875}
+[视频] 全屏悬浮栏: {"pos": "fixed", "z": "1600", "bottomGap": 12, "inView": true}
+截图: tools/style-preview/playbar-video-fullscreen.png (1346x42)
+截图: tools/style-preview/playbar-video.png (827x42)
+[音频] 播放条: {"height": "42px", "borderRadius": "21px", "background": "rgba(41, 41, 41, 0.75)", "padding": "12px 16px", "iconColor": "rgb(128, 128, 128)", "btnCount": 3, "hasRate": true, "shellW": 827, "anchorW": 827, "panelW": 851}
+[音频] 波形进度: {"layers": 2, "head": true}
+截图: tools/style-preview/playbar-audio.png (827x42)
+[回程] 搜索形态壳宽: 250
+PASS: 预览悬浮播放条三变体成立（42 高圆角 21 半透明壳 / 帧条 5 格同宽 / 图标朝向与 hover / 悬停弹层 / 音频波形）

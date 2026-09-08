@@ -1,0 +1,54 @@
+初始卡片（quick:all）: ['人物-开心-走路.png', '人物-伤心-走路.png', '场景-日.png', '分镜01.png', '跑步.gif', '参考图.png']
+  [PASS] S0 全部视图 6 卡渲染 — ['人物-开心-走路.png', '人物-伤心-走路.png', '场景-日.png', '分镜01.png', '跑步.gif', '参考图.png']
+S1 「人物 走路」: ['人物-开心-走路.png', '人物-伤心-走路.png']
+  [PASS] S1 AND 分词命中两卡 — ['人物-开心-走路.png', '人物-伤心-走路.png']
+  [PASS] S2 Esc 清空恢复 6 卡 — ['人物-开心-走路.png', '人物-伤心-走路.png', '场景-日.png', '分镜01.png', '跑步.gif', '参考图.png']
+  [PASS] S3 「GIF」命中 跑步.gif — ['跑步.gif']
+  [PASS] S4a 无结果零卡 — []
+  [PASS] S4b 空态文案「无搜索结果」 — 无搜索结果
+  [PASS] S5 路径「走路参考」命中 场景-日.png — ['场景-日.png']
+S6 「档案」: ['分镜01.png', '参考图.png']
+  [PASS] S6 「档案」命中 分镜01（路径含档案名）+ 参考图（链接 decode） — ['分镜01.png', '参考图.png']
+  [PASS] S6b quick 视图不出档案区 — []
+  [PASS] S7a f1 视图直输「场景」命中后代 — ['场景-日.png']
+  [PASS] S7b f1 视图直输「~场景」全局命中 — ['场景-日.png']
+  [PASS] S7c 清空退出搜索态（f1 递归 5 卡） — ['人物-开心-走路.png', '人物-伤心-走路.png', '场景-日.png', '分镜01.png', '参考图.png']
+  [PASS] S8 草稿「~场景」即时全局命中 — ['场景-日.png']
+  [PASS] S9 直输「//人物」命中两卡 — ['人物-开心-走路.png', '人物-伤心-走路.png']
+S10 素材: ['分镜01.png'] 档案: ['分镜档案']
+  [PASS] S10a 档案内素材命中（路径含档案名） — ['分镜01.png']
+  [PASS] S10b 档案区显示「分镜档案」 — ['分镜档案']
+  [PASS] S11 徽标「进行中」命中档案区 — cards=[] archs=['分镜档案']
+  [PASS] S12a 查看方式菜单打开（含「显示子文件夹内容」开关行） — True
+  [PASS] S12b 递归开关关闭 — True
+  [PASS] S12c 非搜索态分组标题存在（f1 配 png 组） — group-headers=1
+  [PASS] S12d 搜索态组标题消失（平铺） — group-headers=0
+  [PASS] S12e 搜索态命中保持 — ['人物-开心-走路.png', '人物-伤心-走路.png']
+  [PASS] S12f 清空后分组恢复 — group-headers=1
+  [PASS] S13 Ctrl+F 聚焦悬浮栏输入框 — True
+  [PASS] S14a 空文件夹视口零卡 — []
+  [PASS] S14b 空文件夹 ~ 全局命中视口外素材 — ['人物-开心-走路.png', '人物-伤心-走路.png']
+  [PASS] S17a 常态壳宽 250 — w=250
+  [PASS] S17b 聚焦壳宽 450（合成 FocusEvent 驱动） — w=450
+  [PASS] S17c 失焦壳宽回 250 — w=250
+  [PASS] S18a 点筛选钮展开 chip×10 — n=10
+  [PASS] S18b chip 文案齐（稿 10 项） — ['颜色', '时长', '标签', '扩展名', '文件夹', '比例', '链接', '大小', '添加日期', '修改日期']
+  [PASS] S18c chip 点击点亮 .on（本地切换） — on=1
+  [PASS] S18d chip 点击不触发 search_assets — before=13 after=13
+  [PASS] S18e 再点熄灭 .on（切换）且仍不触发搜索 — on=0 before=13 after=13
+  [PASS] S18f 点收起钮折叠回搜索态 — chips=0 filterBtn=True
+截图: tools/style-preview/search-probe.png
+  [PASS] S19a 聚焦态点筛选展开 chip×10 — n=10
+  [PASS] S19b 展开后输入框保持聚焦（mousedown.prevent 阻失焦） — True
+  [PASS] S19c 壳宽展开实测（>450，探针实测档） — w=759
+  [S20] 挤压态: {"shellW": 476, "panelW": 500, "inPanelX": true, "collapseIn": true, "overflowX": true}
+  [PASS] S20a 壳钳制在面板内 + 两侧 12 呼吸（不跑底色外） — {"shellW": 476, "panelW": 500, "inPanelX": true, "collapseIn": true, "overflowX": true}
+  [PASS] S20b 收起钮钉在壳内（不被裁走） — {"shellW": 476, "panelW": 500, "inPanelX": true, "collapseIn": true, "overflowX": true}
+  [PASS] S20c 筛选组横向溢出（可横滚前提） — {"shellW": 476, "panelW": 500, "inPanelX": true, "collapseIn": true, "overflowX": true}
+  [PASS] S20d 滚轮横向滚动筛选组 — scrollLeft=240
+  [S21] 笔记徽章: {"text": "笔记2", "labelFont": "\"Microsoft YaHei UI\", \"Microsoft YaHei\", system-ui, sans-serif", "countFont": "\"Fira Mono\", Consolas, \"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif", "gap": 6, "alignLeft": true}
+  [PASS] S21a 徽章文案「笔记 2」（间距由 gap 4 承担，textContent 无空格） — {"text": "笔记2", "labelFont": "\"Microsoft YaHei UI\", \"Microsoft YaHei\", system-ui, sans-serif", "countFont": "\"Fira Mono\", Consolas, \"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif", "gap": 6, "alignLeft": true}
+  [PASS] S21b 标签雅黑 / 数量 mono — {"text": "笔记2", "labelFont": "\"Microsoft YaHei UI\", \"Microsoft YaHei\", system-ui, sans-serif", "countFont": "\"Fira Mono\", Consolas, \"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif", "gap": 6, "alignLeft": true}
+  [PASS] S21c 名称上方 6px + 左缘对齐 — {"text": "笔记2", "labelFont": "\"Microsoft YaHei UI\", \"Microsoft YaHei\", system-ui, sans-serif", "countFont": "\"Fira Mono\", Consolas, \"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif", "gap": 6, "alignLeft": true}
+
+全部 PASS

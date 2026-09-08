@@ -1,0 +1,20 @@
+搜索栏三态宽度(逻辑px): [250, 450, 815]
+播放条结构: {'icons': 10, 'rate': True, 'tc': True, 'slider': True}
+帧条/播放条组合宽: [777, 777]
+聚焦前: {'w': 250, 'd': 16, 'cx': 796}
+聚焦中段: {'w': 396, 'd': 16, 'cx': 796}
+聚焦末态: {'w': 450, 'd': 16, 'cx': 796}
+失焦中段: {'w': 322, 'd': 16, 'cx': 796}
+失焦末态: {'w': 250, 'd': 16, 'cx': 796}
+saved tools/style-preview/r15-bars-2x-morph.png
+saved tools/style-preview/r15-bars-2x-search.png
+saved tools/style-preview/r15-bars-2x-markdown.png
+saved tools/style-preview/r15-bars-2x-play.png
+saved tools/style-preview/r15-bars-2x-rate.png
+saved tools/style-preview/r15-bars-2x-volume.png
+saved tools/style-preview/r15-bars-2x-frames.png
+saved tools/style-preview/r15-bars-2x-notes.png
+PASS: 全部断言通过
+页面 console:
+  debug: [vite] connecting...
+  debug: [vite] connected.
