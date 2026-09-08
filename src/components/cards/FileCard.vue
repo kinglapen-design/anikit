@@ -248,6 +248,10 @@ watch(
 .rename-input {
   pointer-events: auto;
 }
+/* 名称区悬停文本光标（双击可改名，FolderCard / ArchiveCard / ListRowCard 同款先例） */
+.kc-name:hover {
+  cursor: text;
+}
 
 /* 缩略图：cover 充满（旧网格口径）；contain = 网格固定格完整显示不裁切（2026-07-24 用户定）；
    icon / shell = 50% 居中 contain（格式图标 Eagle 口径 / 稿 square 注）。
