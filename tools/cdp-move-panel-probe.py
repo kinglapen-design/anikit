@@ -306,9 +306,12 @@ async def main():
               (() => {
                 const m = document.querySelector('.kit-modal');
                 if (!m) return null;
+                const a0 = m.querySelector('.accent');
+                const cs = a0 ? getComputedStyle(a0) : null;
                 return {
                   title: m.querySelector('.title')?.textContent ?? "",
                   accents: [...m.querySelectorAll('.accent')].map((a) => a.textContent),
+                  accentStyle: cs ? { fw: cs.fontWeight, color: cs.color } : null,
                   buttons: [...m.querySelectorAll('.actions .btn')].map((b) => b.textContent.trim()),
                   confirmKind: [...m.querySelectorAll('.actions .btn.confirm')].map((b) => b.className),
                   body: m.querySelector('.body')?.textContent ?? "",
@@ -318,7 +321,10 @@ async def main():
             check("S3a 确认窗 ConfirmModal 开", conf is not None)
             if conf:
                 check("S3b 标题=移动文件夹", conf["title"] == "移动文件夹", conf["title"])
-                check("S3c 高亮段=场景/角色", conf["accents"] == ["场景", "角色"], json.dumps(conf["accents"], ensure_ascii=False))
+                # 2026-09-08 用户定：「」并入强调段；样式 = Animate 插件面板方括号强调同款（加粗 700 + 亮色/二级 #BFBFBF）
+                check("S3c 高亮段=「场景」「角色」", conf["accents"] == ["「场景」", "「角色」"], json.dumps(conf["accents"], ensure_ascii=False))
+                st = conf["accentStyle"] or {}
+                check("S3c2 高亮段样式=加粗+二级", st.get("fw") == "700" and st.get("color") == "rgb(191, 191, 191)", json.dumps(st))
                 check("S3d 按钮次左主右=取消/移动文件夹", conf["buttons"] == ["取消", "移动文件夹"], json.dumps(conf["buttons"], ensure_ascii=False))
                 check("S3e 确认钮 warning 档", any("warning" in k for k in conf["confirmKind"]), str(conf["confirmKind"]))
                 check("S3f 文案句式", conf["body"] == "是否将「场景」移动至「角色」中", conf["body"])

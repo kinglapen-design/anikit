@@ -32,6 +32,7 @@ export function confirmImportInboxEntry(name: string, onError: (e: unknown) => v
     title: "导入到资源库",
     body: `「${name}」将从收件箱移走入库，原位置不再保留。`,
     confirmLabel: "导入",
+    kind: "warning", // 「原位置不再保留」= 警示语义，警告黄钮（2026-09-08 用户定按钮颜色区分口径）
     onConfirm: () => void importInboxEntry(name).catch(onError),
   };
 }

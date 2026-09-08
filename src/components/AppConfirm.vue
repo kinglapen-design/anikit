@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // 通用确认弹窗（6.3）——2026-09-08 换代：渲染层 AppModal（plain / alert）退役，换 modals/ConfirmModal
 //（组件/模态窗口/弹窗 稿：520 宽 / 标题 18/26 Bold 一级 / 正文 13/18 三级 / 按钮 120×38 次左主右）。
-// 字段映射：alert warning → kind warning（状态/警告钮）；alert error / danger → kind danger（状态/禁止钮）；
-// 无 alert 非危险 → kind brand（品牌/常态钮——稿：不危险的提示换品牌色）。
-// alert 提示音保留（figma 09 侵入式语义，lib/sounds playAlert）；bodySegments 高亮段保留 = 品牌/常态
-// --n-brand（新稿正文未画高亮——功能必需就近定档，旧 29 稿品牌色高亮口径沿，色号随新品牌）。
+// 字段映射：显式 kind 优先（2026-09-08 用户定——旧 alert 48 徽章没了，纯靠按钮颜色区分轻重，
+// 按语义显式给）；未给则派生：alert warning → warning（状态/警告钮）；alert error / danger →
+// danger（状态/禁止钮）；无 alert 非危险 → brand（品牌/常态钮——稿：不危险的提示换品牌色）。
+// alert 提示音保留（figma 09 侵入式语义，lib/sounds playAlert）；bodySegments 高亮段 = 加粗 +
+// 亮色/二级（Animate 插件面板方括号强调同款口径，2026-09-08 用户定——比品牌色更清晰；「」并入强调段）。
 // 由 selection.confirmPrompt 驱动，宿主 App.vue。
 import { watch } from "vue";
 import ConfirmModal from "./modals/ConfirmModal.vue";
@@ -22,6 +23,7 @@ watch(
 );
 
 function kindOf(p: ConfirmPrompt): "warning" | "danger" | "brand" {
+  if (p.kind) return p.kind;
   if (p.alert === "error" || p.danger) return "danger";
   if (p.alert === "warning") return "warning";
   return "brand";
@@ -57,8 +59,10 @@ function onCancel(): void {
 </template>
 
 <style scoped>
-/* 正文高亮段（3.4 移动确认：发起名 / 目标父级名品牌色——新稿未画高亮，就近定档 --n-brand） */
+/* 正文高亮段（Animate 插件面板方括号强调同款：三级正文上加粗 + 亮色/二级，2026-09-08 用户定——
+   比品牌色更清晰；品牌色旧口径随同日换代废除） */
 .accent {
-  color: var(--n-brand);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
 }
 </style>

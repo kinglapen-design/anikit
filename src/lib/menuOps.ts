@@ -319,6 +319,7 @@ export function deleteFolderFlow(folderId: string, folderName: string): void {
     title: "删除文件夹",
     body: `文件夹「${folderName}」将被删除，素材将全部进入未分类，需重新整理。`,
     confirmLabel: "删除文件夹",
+    kind: "warning", // 2026-09-08 用户定：删除语义 = 警告黄钮（旧徽章没了，纯靠按钮颜色区分）
     onConfirm: () => void deleteFolder(folderId),
   };
 }
@@ -357,6 +358,7 @@ export function deleteFoldersFlow(folderIds: string[]): void {
       title: "删除文件夹",
       body: `文件夹「${name}」将被删除，素材将全部进入未分类，需重新整理。`,
       confirmLabel: "删除文件夹",
+      kind: "warning",
       onConfirm: () => void deleteFolder(folderIds[0]),
     };
     return;
@@ -365,6 +367,7 @@ export function deleteFoldersFlow(folderIds: string[]): void {
     title: "删除文件夹",
     body: `已选中的 ${folderIds.length} 个文件夹将被删除，素材将全部进入未分类，需重新整理。`,
     confirmLabel: "删除文件夹",
+    kind: "warning",
     onConfirm: () => void deleteFolders(folderIds),
   };
 }

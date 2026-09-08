@@ -54,11 +54,15 @@ export interface RecyclePrompt {
 export interface ConfirmPrompt {
   title: string;
   body: string;
-  // 富文本正文（3.4 移动确认，29 稿：发起名与目标名品牌色-常态高亮）——给了它就不读 body
+  // 富文本正文（3.4 移动确认：发起名与目标名高亮——2026-09-08 用户定改 Animate 插件面板
+  // 方括号强调口径：加粗 + 亮色/二级，「」括号并入强调段）——给了它就不读 body
   bodySegments?: { text: string; accent?: boolean }[];
   confirmLabel?: string; // 缺省"确认"
+  // 确认钮语义档（2026-09-08 用户定：旧 alert 48 徽章随 ConfirmModal 换代没了，纯靠按钮颜色
+  // 区分轻重——按语义显式给；不给则派生：alert warning→warning / alert error·danger→danger / 否则 brand）
+  kind?: "warning" | "danger" | "brand";
   danger?: boolean; // 主按钮用错误色（不可逆操作）
-  alert?: "warning" | "error"; // 危险弹出模板（figma 09 侵入式 alert：48 状态徽章 + 提示音，2026-08-13 用户定）
+  alert?: "warning" | "error"; // 侵入式警示（figma 09：提示音；旧 48 徽章随 2026-09-08 换代废除）
   onConfirm: () => void;
 }
 
