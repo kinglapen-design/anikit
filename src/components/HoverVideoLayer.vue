@@ -3,7 +3,8 @@
 // - 悬停模式（auto=false）：完整播放整段视频（循环），跟随鼠标横向移动快进快退
 //   （video seek：pointermove 记目标——seeking 空闲直发、在飞合流于 seeked 补发（2026-09-08
 //   实机报：长片源连发 seek，解码器取消-重启饿死，画面卡住甚至无反应；2026-08-22"浏览器
-//   自身合并跟不上的 seek、无需门控"结论对长片源不成立，作废）；UI 状态同步写目标值跟手；
+//   自身合并跟不上的 seek、无需门控"结论对长片源不成立，作废）；UI 状态同步写目标值跟手，
+//   scrub 期间 timeupdate 不用实际位置覆盖（4Hz 覆盖 = 进度条回弹 / 闪烁，2026-09-08 二轮）；
 //   预生成帧图方案已于 2026-07-28 用户决策废弃——CPU 长期高负载 / 磁盘占用大 / 载入慢）；
 //   右上胶囊（7.1 内容容器轮换代，稿 = 组件/卡片/文件卡片-视频 悬停胶囊）= 当前帧号 + 播放/暂停 +
 //   音量/静音（card-hover-* 图标 14，常态 二级 hover 一级），底部 4px 播放条（轨道 亮色/半透明-2、
@@ -121,6 +122,9 @@ function onTimeUpdate(): void {
   if (!v) return;
   // 范围循环：到终点跳回起点（悬停模式 = 片尾跳回开头整段循环；不足 10 秒的视频自然整段循环）
   if (v.currentTime >= rangeEnd()) v.currentTime = rangeStart();
+  // scrub 期间 UI 由 onScrub 直写跟手——seek 落点滞后于鼠标目标，timeupdate（4Hz）用实际
+  // 位置覆盖 = 进度条回弹 / 闪烁（2026-09-08 实机复验报）；seek 落定后恢复同步
+  if (v.seeking || scrubTarget !== null) return;
   currentTime.value = v.currentTime;
 }
 function onLoadedMetadata(): void {
