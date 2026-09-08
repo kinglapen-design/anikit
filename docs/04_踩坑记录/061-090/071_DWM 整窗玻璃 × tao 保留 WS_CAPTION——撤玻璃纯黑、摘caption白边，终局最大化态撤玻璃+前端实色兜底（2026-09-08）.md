@@ -1,0 +1,7 @@
+## 071 DWM 整窗玻璃延伸 + tao 保留 WS_CAPTION——原生按钮；撤玻璃纯黑、摘 caption 白边，终局 = 最大化态撤玻璃 + 前端实色兜底（2026-09-08）
+
+- **现象：** 无边框 + 云母主窗口（063 六轮终态配置），最大化/全屏后右上角冒出一组系统默认窗口按钮（最小化/还原/关闭）压在自定义 `.win-controls-overlay` 上；常态也有——hover 窗口顶边细条会露出原生关闭钮的红色 hover 细条（用户实机两报）。
+- **原因：** tao 建窗**无条件保留** `WS_CAPTION | WS_SYSMENU | MIN/MAXIMIZEBOX`（`window_state.rs` to_window_styles），无边框靠 WM_NCCALCSIZE 返 0；而 063 终态的 `DwmExtendFrameIntoClientArea(-1)` 整窗玻璃延伸**正是云母 backdrop 的载体**（38 号 backdrop 属性只选材料，填充区域由延伸定义）。带 caption 样式 + 整窗玻璃，DWM 便把原生标题栏按钮画进玻璃：最大化时画在 tao 把客户区调成 rcWork 让出的 caption 高条带（完整三钮），常态画在 Win11 顶边 inset（dpi/96 圆整，150% = 2px）细条里。
+- **翻车两轮（实机用户连报）：** ① 按最大化态把延伸切 0——按钮是没了，但玻璃=云母载体被抽，最大化整窗**纯黑**；② 摘 `WS_CAPTION`——按钮没了，但 caption 同时扛着 DWM 阴影/圆角/边框体系（007/063 终局），全窗**白边环**、阴影丢失。两轮当日回滚。教训：这两个都是承重墙，谁都不能整体动。
+- **终局解法（实证可行唯一解）：** **只在最大化/全屏态撤玻璃**（margins 0，DWM 无玻璃可画按钮；常态一律 -1 不动）+ **前端 `.window.fx-mica.maximized` 回落实色 `--n-g-a1-solid`**（DWM 最大化时本就关掉云母 backdrop——微软自家应用最大化也关云母，实色 = Win10 回退观感，不补会裸奔纯黑）。三个调用点：启动初始态 / `on_window_event` Resized 完成后切换 / **守卫 subclass 拦 `WM_WINDOWPOSCHANGING` 动画前预撤**——否则动画期仍是玻璃+caption，DWM 把按钮画进最大化动画（复验实机报"动画里闪按钮"）。还原方向不预撤：动画期保持无玻璃无按钮，完成后 Resized 回 -1。状态用 `FRAME_GLASS_OFF` AtomicBool 防重复调 DWM。
+- **预防：** `DwmExtendFrameIntoClientArea(-1)` 整窗玻璃 ×「保留 caption 样式的无边框窗」必出原生按钮；玻璃延伸与 caption 样式在这种配置下各有隐藏的承重职责（云母载体 / 边框阴影体系），**动 DWM/窗口样式前先把每个组件的完整职责列清，再三态目验（常态/最大化/全屏）+ 过渡动画**。DWM 层 headless 截不到（063），只能实机验；探针截屏必须先做前台断言（`GetForegroundWindow == hwnd`），否则截到的是上层别的窗口，结论全错。

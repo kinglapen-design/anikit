@@ -19,12 +19,22 @@ use std::sync::OnceLock;
 /// 主窗口实际生效的模式（"mica" / "solid"），启动时 apply_main 写入，前端查询依据。
 static MAIN_MODE: OnceLock<&'static str> = OnceLock::new();
 
-/// 失焦欺骗 subclass（2026-08-30 用户方案）：失焦时 DWM 把云母退化为实色、窗口阴影
-/// 收成小圈——两者都绑 DWM 的"窗口激活态"渲染判定。拦截 WM_NCACTIVATE 把 wParam 恒改
-/// TRUE 再下放默认链（lParam -1 = 阻止默认流程重绘非客户区），骗 DWM 恒按激活渲染
-/// 帧/backdrop/阴影。焦点/activation 本身不变（WM_ACTIVATE、前后台焦点事件不受影响）。
+/// 玻璃当前是否已撤（true = margins 0，最大化/全屏态）——extend_frame 唯一写点，
+/// 守卫 subclass 读（防 WM_WINDOWPOSCHANGING 预撤与 Resized 补撤重复调 DWM）
 #[cfg(windows)]
-unsafe extern "system" fn ncactivate_guard(
+static FRAME_GLASS_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 主窗口守卫 subclass：① 失焦欺骗（2026-08-30 用户方案）——失焦时 DWM 把云母退化为
+/// 实色、窗口阴影收成小圈，两者都绑 DWM 的"窗口激活态"渲染判定；拦截 WM_NCACTIVATE
+/// 把 wParam 恒改 TRUE 再下放默认链（lParam -1 = 阻止默认流程重绘非客户区），骗 DWM
+/// 恒按激活渲染帧/backdrop/阴影。焦点/activation 本身不变（WM_ACTIVATE、前后台焦点
+/// 事件不受影响）。② 最大化动画防闪（2026-09-08 实机走查 17 复验：动画里闪 DWM 原生
+/// 按钮）——Resized 事件在最大化动画结束后才到，动画期窗口仍是玻璃+caption，DWM 把
+/// 按钮画进动画；拦 WM_WINDOWPOSCHANGING，新几何覆盖工作区（最大化/snap 置顶/Win+Up/
+/// tauri toggleMaximize 的 ShowWindow 全过此消息）且玻璃未撤时，动画开始前先撤玻璃。
+/// 还原方向不预撤：动画期保持无玻璃（无按钮可画），完成后由 Resized 处理器回 -1。
+#[cfg(windows)]
+unsafe extern "system" fn main_window_guard(
   hwnd: windows::Win32::Foundation::HWND,
   msg: u32,
   wparam: windows::Win32::Foundation::WPARAM,
@@ -33,20 +43,63 @@ unsafe extern "system" fn ncactivate_guard(
   _data: usize,
 ) -> windows::Win32::Foundation::LRESULT {
   use windows::Win32::Foundation::{LPARAM, WPARAM};
+  use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
   use windows::Win32::UI::Shell::DefSubclassProc;
-  use windows::Win32::UI::WindowsAndMessaging::WM_NCACTIVATE;
+  use windows::Win32::UI::WindowsAndMessaging::{SWP_NOSIZE, WINDOWPOS, WM_NCACTIVATE, WM_WINDOWPOSCHANGING};
   if msg == WM_NCACTIVATE {
     return DefSubclassProc(hwnd, msg, WPARAM(1), LPARAM(-1));
+  }
+  if msg == WM_WINDOWPOSCHANGING {
+    let wp = &*(lparam.0 as *const WINDOWPOS);
+    if (wp.flags & SWP_NOSIZE).0 == 0
+      && !FRAME_GLASS_OFF.load(std::sync::atomic::Ordering::Relaxed)
+    {
+      let mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+      let mut mi = MONITORINFO {
+        cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+      };
+      if GetMonitorInfoW(mon, &mut mi).as_bool() {
+        let (ww, wh) = (mi.rcWork.right - mi.rcWork.left, mi.rcWork.bottom - mi.rcWork.top);
+        if wp.cx >= ww && wp.cy >= wh {
+          extend_frame(hwnd, true);
+        }
+      }
+    }
   }
   DefSubclassProc(hwnd, msg, wparam, lparam)
 }
 
-/// 给主窗口装失焦欺骗 subclass（show 后随边框染色/帧延伸一起装，本进程只装一次）。
+/// 给主窗口装守卫 subclass（show 后随边框染色/帧延伸一起装，本进程只装一次）。
 #[cfg(windows)]
-pub fn install_ncactivate_guard(hwnd: windows::Win32::Foundation::HWND) {
+pub fn install_main_window_guard(hwnd: windows::Win32::Foundation::HWND) {
   use windows::Win32::UI::Shell::SetWindowSubclass;
-  let ok = unsafe { SetWindowSubclass(hwnd, Some(ncactivate_guard), 1, 0) };
-  log::info!("[window_fx] WM_NCACTIVATE 失焦欺骗 subclass 安装 = {ok:?}");
+  let ok = unsafe { SetWindowSubclass(hwnd, Some(main_window_guard), 1, 0) };
+  log::info!("[window_fx] 主窗口守卫 subclass（失焦欺骗 + 最大化动画防闪）安装 = {ok:?}");
+}
+
+/// 框架延伸按最大化/全屏态切换（2026-09-08 实机走查第 17 条，三轮实证定稿）：
+/// 原生窗口按钮 = DWM 在「整窗玻璃 + WS_CAPTION」上画的——最大化时 tao 把客户区调成
+/// 工作区（让出任务栏），顶部露出 caption 高框架条带，按钮画进条带压自定义按钮。
+/// 玻璃与 caption 都是承重墙（玻璃扛云母、caption 扛边框阴影，摘/撤各自翻车实录见
+/// 踩坑 071），唯一实证可行解 = **最大化/全屏态撤玻璃**（margins 0：DWM 无玻璃可画
+/// 按钮；DWM 此时亦关掉云母 backdrop，前端 .window.fx-mica.maximized 同步回落实色
+/// --n-g-a1-solid——微软自家应用最大化关云母同惯例），还原回 -1。常态一律 -1 不动。
+/// 三个调用点：启动初始态 / Resized 完成后 / 守卫 WINDOWPOSCHANGING 动画前预撤。
+#[cfg(windows)]
+pub fn extend_frame(hwnd: windows::Win32::Foundation::HWND, maximized: bool) {
+  use windows::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
+  use windows::Win32::UI::Controls::MARGINS;
+  FRAME_GLASS_OFF.store(maximized, std::sync::atomic::Ordering::Relaxed);
+  let m = if maximized { 0 } else { -1 };
+  let margins = MARGINS {
+    cxLeftWidth: m,
+    cxRightWidth: m,
+    cyTopHeight: m,
+    cyBottomHeight: m,
+  };
+  let r = unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) };
+  log::info!("[window_fx] DwmExtendFrameIntoClientArea({m}) maximized={maximized} = {r:?}");
 }
 
 /// build 号 → 模式（纯函数，单测边界）。

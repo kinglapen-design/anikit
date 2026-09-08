@@ -244,44 +244,55 @@ pub fn run() {
         #[cfg(target_os = "windows")]
         {
           use windows::Win32::Foundation::HWND;
-          use windows::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
-          use windows::Win32::UI::Controls::MARGINS;
           if let Ok(raw) = w.hwnd() {
             let hwnd = HWND(raw.0 as _);
-            // 失焦欺骗（2026-08-30 用户方案）：骗 DWM 恒按激活渲染——失焦不再退化云母
-            // 成实色、阴影不再收小。详见 window_fx::ncactivate_guard 注释
-            adapters::window_fx::install_ncactivate_guard(hwnd);
+            // 主窗口守卫（2026-08-30 失焦欺骗 + 2026-09-08 走查 17 最大化动画防闪预撤玻璃）。
+            // 失焦欺骗：骗 DWM 恒按激活渲染——失焦不再退化云母成实色、阴影不再收小。
+            // 详见 window_fx::main_window_guard 注释
+            adapters::window_fx::install_main_window_guard(hwnd);
             // 主窗口边框 = **DWM 默认半透明**（2026-09-06 六轮用户改定：DWM 原生默认边框即半透明，
             // 直接交给 DWM，全窗统一——原 2026-08-30「实心 #333 染色」撤销；子窗口本就未染色同此口径；
             // 选择模式进出仍由 set_main_border_picking 切染品牌色 ↔ COLOR_NONE 恢复默认）。
             // 云母模式边框由 DWM 沿圆角裁切路径画——恒连续恒贴边；前端 ::before 云母模式不画
             //（DWM 线与 CSS inset 0 线有 ~0.5px 系统错位，双画恒双层，踩坑 063），
             // 实色模式前端自绘（Win10 DWM 无默认边框可画）。
-            unsafe {
-              // 框架延伸整窗（margins -1）：配合 transparent:false（2026-08-30 六轮方案一，
-              // 用户定）——去掉 tao transparent 的 blur-behind 空 region hack（它让含非客户
-              // 区的整个窗口表面按 alpha 合成，DWM 圆角描边曲线与方形客户区角之间的月牙
-              // 窄缝 alpha=0 成透底洞），DWM 帧/backdrop 填充该缝。与 set_effects 同在
-              // show 后调用（057 时序约束）
-              let margins = MARGINS {
-                cxLeftWidth: -1,
-                cxRightWidth: -1,
-                cyTopHeight: -1,
-                cyBottomHeight: -1,
-              };
-              let r = DwmExtendFrameIntoClientArea(hwnd, &margins);
-              log::info!("[window] DwmExtendFrameIntoClientArea(-1) = {r:?}");
-            }
+            // 框架延伸整窗（margins -1）：配合 transparent:false（2026-08-30 六轮方案一，
+            // 用户定）——DWM 帧/backdrop 填充月牙缝 + 云母载体；最大化/全屏态撤玻璃
+            //（2026-09-08 走查 17：DWM 在玻璃+caption 上画原生按钮压自定义按钮，
+            // 最大化时按钮露出，撤玻璃杀按钮、前端同步回落实色，window_fx::extend_frame）。
+            // 窗口恢复可能已是最大化（window_state.maximized），初始调用即按当前态
+            adapters::window_fx::extend_frame(hwnd, w.is_maximized().unwrap_or(false) || w.is_fullscreen().unwrap_or(false));
           }
         }
 
         let w2 = w.clone();
+        // on_window_event 闭包要求 Fn + Send：HWND 含裸指针不可跨线程捕获，转 usize 带入、
+        // 用内重建；延伸态跟踪用 Cell 内部可变性（只在态变时调 DWM，不重复刷）
+        #[cfg(target_os = "windows")]
+        let main_hwnd = w.hwnd().ok().map(|raw| raw.0 as usize);
+        #[cfg(target_os = "windows")]
+        let frame_maximized =
+          std::cell::Cell::new(w.is_maximized().unwrap_or(false) || w.is_fullscreen().unwrap_or(false));
         w.on_window_event(move |event| {
-          if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-            api.prevent_close();
-            let _ = w2.hide();
-            // 关闭到托盘即通知前端暂停播放（2026-07-27 用户定）
-            let _ = w2.emit("main-window-hidden", ());
+          match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+              api.prevent_close();
+              let _ = w2.hide();
+              // 关闭到托盘即通知前端暂停播放（2026-07-27 用户定）
+              let _ = w2.emit("main-window-hidden", ());
+            }
+            // 最大化 / 全屏进出：切换框架延伸（走查 17，根因见 window_fx::extend_frame）
+            #[cfg(target_os = "windows")]
+            tauri::WindowEvent::Resized(_) => {
+              let maxed = w2.is_maximized().unwrap_or(false) || w2.is_fullscreen().unwrap_or(false);
+              if maxed != frame_maximized.get() {
+                frame_maximized.set(maxed);
+                if let Some(raw) = main_hwnd {
+                  adapters::window_fx::extend_frame(windows::Win32::Foundation::HWND(raw as _), maxed);
+                }
+              }
+            }
+            _ => {}
           }
         });
       }
