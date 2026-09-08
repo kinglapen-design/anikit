@@ -19,6 +19,11 @@
 #   S17 悬浮栏宽度：常态 250 → 聚焦 450 → 失焦回 250（壳 = 唯一宽度动画源 300ms，轮询等宽到位）
 #   S18 筛选展开：filter 钮 → chip×10 出现；chip 点击 = .on 本地切换且不触发 search_assets；
 #      collapse 钮收起
+#   S19 聚焦态点筛选直接展开（2026-09-09 修复钉：真鼠标链路 mousedown→click；mousedown.prevent
+#      阻失焦，展开后输入框保持聚焦，壳宽探针实测档 >450）
+#   S20 挤压裁剪 + 滚轮横滚（2026-09-09 修复钉：content-area 钉窄 500 等价侧栏挤压——壳钳制在
+#      面板内不跑底色外 / 收起钮钉壳内 / 筛选组溢出横滚 wheel→scrollLeft；Emulation 视口收窄对
+#      dockview 无效故用 inline 宽模拟）
 #   截图 = 搜索态悬浮栏（f1 视图「人物」命中 + 聚焦 450 宽，clip 栏体）
 # 用法：先起 pnpm dev（5373；探针检测到未监听会自起并在结束时杀掉），再
 #   tools/.venv/Scripts/python.exe tools/cdp-search-probe.py
@@ -628,6 +633,64 @@ async def main():
             with open(SHOT, "wb") as f:
                 f.write(base64.b64decode(shot["result"]["data"]))
             print("截图:", SHOT)
+
+            # ── S19：聚焦态点筛选直接展开（2026-09-09 修复回归钉：原 blur 抢先触发 450→250 收缩动画，
+            #    筛选钮随壳边移出指针下方致 click 落空；现栏内钮一律 mousedown.prevent 阻失焦）。
+            #    必须真鼠标链路（mousedown→mouseup→click）——js .click() 不经过失焦路径，复现不了原 bug ──
+            frect = await ev("(() => { const b = document.querySelector('.fbs-ic.filter').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()")
+            await send(ws, "Input.dispatchMouseEvent", {"type": "mousePressed", "x": frect["x"], "y": frect["y"], "button": "left", "clickCount": 1}, session=sess)
+            await send(ws, "Input.dispatchMouseEvent", {"type": "mouseReleased", "x": frect["x"], "y": frect["y"], "button": "left", "clickCount": 1}, session=sess)
+            chips19 = 0
+            for _ in range(20):
+                chips19 = await ev("document.querySelectorAll('.fbs-chip').length")
+                if chips19 == 10:
+                    break
+                await asyncio.sleep(0.2)
+            still_focused = await ev("document.activeElement === document.querySelector('.fbs-input')")
+            check("S19a 聚焦态点筛选展开 chip×10", chips19 == 10, f"n={chips19}")
+            check("S19b 展开后输入框保持聚焦（mousedown.prevent 阻失焦）", still_focused is True, str(still_focused))
+            w19 = None
+            for _ in range(25):
+                w19 = await shell_width()
+                if w19 and w19 > 450:
+                    break
+                await asyncio.sleep(0.2)
+            check("S19c 壳宽展开实测（>450，探针实测档）", bool(w19 and w19 > 450), f"w={w19}")
+
+            # ── S20：挤压裁剪 + 滚轮横滚（2026-09-09 回归钉：侧栏挤压中间面板时筛选组壳内裁剪、
+            #    收起钮钉右端不被裁走、筛选组滚轮横滚；壳 max-width 100% 不跑底色外）。
+            #    注：Emulation 收窄视口对 dockview 无效（panel 宽由 dock split 钉，panelW 不随视口变），
+            #    故直接钉 .content-area inline 宽 = 侧栏挤压后的窄态等价物（验证目标 = 壳在窄容器内的行为）──
+            await ev("""(() => { const ca = document.querySelector('.content-area');
+              ca.style.width = '500px'; ca.style.flex = 'none'; return true; })()""")
+            await asyncio.sleep(0.6)  # 等布局重排 + 壳宽收缩到位
+            s20 = await ev("""(() => {
+              const shell = document.querySelector('.fb-shell');
+              const panel = document.querySelector('.content-area');
+              const col = document.querySelector('.fbs-filters');
+              const collapse = document.querySelector('.fbs-ic.collapse');
+              if (!shell || !panel || !col || !collapse) return null;
+              const sr = shell.getBoundingClientRect(); const pr = panel.getBoundingClientRect();
+              const cr = collapse.getBoundingClientRect();
+              return { shellW: shell.offsetWidth, panelW: panel.offsetWidth,
+                       inPanelX: sr.left >= pr.left - 1 && sr.right <= pr.right + 1,
+                       collapseIn: cr.left >= sr.left - 1 && cr.right <= sr.right + 1,
+                       overflowX: col.scrollWidth > col.clientWidth };
+            })()""")
+            print("  [S20] 挤压态:", json.dumps(s20, ensure_ascii=False))
+            check("S20a 壳钳制在面板内（不跑底色外）", bool(s20 and s20["inPanelX"] and s20["shellW"] <= s20["panelW"]), json.dumps(s20))
+            check("S20b 收起钮钉在壳内（不被裁走）", bool(s20 and s20["collapseIn"]), json.dumps(s20))
+            check("S20c 筛选组横向溢出（可横滚前提）", bool(s20 and s20["overflowX"]), json.dumps(s20))
+            # 滚轮横滚：合成 wheel（deltaY → scrollLeft）
+            await ev("""(() => { const c = document.querySelector('.fbs-filters');
+              c.dispatchEvent(new WheelEvent('wheel', { deltaY: 240, bubbles: true, cancelable: true })); return true; })()""")
+            await asyncio.sleep(0.2)
+            sl = await ev("document.querySelector('.fbs-filters').scrollLeft")
+            check("S20d 滚轮横向滚动筛选组", bool(sl and sl > 0), f"scrollLeft={sl}")
+            # 还原布局 + 收起（不留脏状态）
+            await ev("""(() => { const ca = document.querySelector('.content-area');
+              ca.style.width = ''; ca.style.flex = ''; return true; })()""")
+            await ev("document.querySelector('.fbs-ic.collapse')?.click(); true")
 
             print()
             if fails:

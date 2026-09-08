@@ -201,6 +201,10 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
           />
           <span class="pv-cap">真实交互（播放暂停 / 静音切换 / 进度可拖）</span>
         </div>
+        <div class="pv-demo-cell">
+          <FloatBar mode="play" disabled />
+          <span class="pv-cap">转码态（disabled：控件禁用 + 进度区「转码中…」，2026-09-09 接入轮补）</span>
+        </div>
       </div>
     </div>
 

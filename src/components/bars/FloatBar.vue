@@ -110,7 +110,12 @@ onMounted(() => {
           v-bind="$attrs"
           @expanded-change="onExpandedChange"
           @focused-change="onFocusedChange"
-        />
+        >
+          <!-- 插槽透传（2026-09-09 播放条接入轮：业务壳 #progress 波形插槽穿透到模式组件） -->
+          <template v-for="(_, name) in $slots" :key="name" #[name]="slotProps">
+            <slot :name="name" v-bind="slotProps ?? {}" />
+          </template>
+        </component>
       </Transition>
     </div>
   </div>

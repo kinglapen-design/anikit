@@ -36,6 +36,7 @@ defineEmits<{ "page-prev": []; "page-next": []; select: [i: number] }>();
   gap: var(--n-space-8);
   padding: var(--n-space-8);
   width: 100%;
+  overflow: hidden; /* 窄容器时帧格壳内裁剪（2026-09-09 接入轮保险，同悬浮栏壳挤压口径） */
 }
 
 /* 上/下帧钮：34 宽纵贯（align stretch），圆角 6，图标 三级 → hover 二级 */

@@ -65,6 +65,15 @@ watch(
   () => props.forceState,
   (s) => emit("focused-change", s === "focus" || focused.value),
 );
+
+// 筛选组滚轮横滚（2026-09-09 挤压裁剪轮）：壳被侧栏挤压收窄时筛选组壳内裁剪、横向滚轮翻看；
+// 无需横滚时不拦默认行为（穿透给下层列表纵向滚动）
+function onFiltersWheel(e: WheelEvent): void {
+  const el = e.currentTarget as HTMLElement;
+  if (el.scrollWidth <= el.clientWidth) return;
+  e.preventDefault();
+  el.scrollLeft += e.deltaY || e.deltaX;
+}
 </script>
 
 <template>
@@ -84,22 +93,26 @@ watch(
       @blur="setFocused(false)"
       @keydown.esc="emit('escape')"
     />
-    <button v-if="!expanded" class="fbs-ic filter" @click="setExpanded(true)">
+    <!-- 栏内按钮一律 @mousedown.prevent：阻止 input 失焦——否则聚焦态点筛选时 blur 抢先触发
+         壳宽 450→250 收缩动画，按钮随壳边移出指针下方，mouseup 落空 click 不成立（2026-09-09 走查修复）；
+         顺带保持输入聚焦，点筛选/收起后可继续敲字 -->
+    <button v-if="!expanded" class="fbs-ic filter" @mousedown.prevent @click="setExpanded(true)">
       <AppIcon name="filter" :size="18" />
     </button>
     <template v-else>
-      <div class="fb-group fbs-filters">
+      <div class="fb-group fbs-filters" @wheel="onFiltersWheel">
         <button
           v-for="f in filters"
           :key="f"
           class="fbs-chip"
           :class="[{ on: active.includes(f), 'force-hover': forceHoverFilter === f }]"
+          @mousedown.prevent
           @click="emit('filter-toggle', f)"
         >
           {{ f }}
         </button>
       </div>
-      <button class="fbs-ic collapse" @click="setExpanded(false)">
+      <button class="fbs-ic collapse" @mousedown.prevent @click="setExpanded(false)">
         <AppIcon name="expand" :size="14" />
       </button>
     </template>
@@ -166,6 +179,19 @@ watch(
 .fbs-root.expanded .fbs-input {
   flex: none;
   width: 174px;
+}
+
+/* 筛选组 = 展开态唯一可缩件（2026-09-09 挤压裁剪轮）：壳被左右侧栏挤压收窄时本组壳内裁剪，
+   输入区（174 稿值）与收起钮 flex:none 钉住两端不被裁走；组内滚轮横滚翻看，不出滚动条
+   （同旧帧条 .frames 口径——菜单/列表形态隐藏滚动条） */
+.fbs-filters {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.fbs-filters::-webkit-scrollbar {
+  display: none;
 }
 
 /* 筛选钮（稿：颜色/时长/标签/扩展名/文件夹/比例/链接/大小/添加日期/修改日期） */

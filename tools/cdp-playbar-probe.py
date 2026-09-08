@@ -1,7 +1,9 @@
-# CDP 实测：播放条 / 帧条贴 13_播放条稿（2026-08-20，阶段五 5.1 复核——用户定：
-# 播放条与搜索栏同位同尺寸 46 高通栏直角 border-top 暗-悬停；帧选择同样式；图标按实际删减）。
-# 三变体覆盖：动图（PlayBarFrames + 帧条，假 WS 帧流撑起 animTotal）/ 视频（PlayBarVideo 全量左组）/
-# 音频（PlayBarAudio 波形）。断言容器 computed style + 图标色档 + 帧条两端按钮旋转方向 + 截图留档。
+# CDP 实测：预览悬浮播放条（2026-09-09 预览悬浮栏接入轮重写——FloatBar play 模式 + FrameStrip +
+# 倍率/音量/时间显示悬停弹层，替代旧通栏三件套 PreviewPlayBar/PreviewFrameStrip/PreviewNotes，
+# 13_播放条稿直角通栏口径作废）：壳 = 高 42 / 圆角 21 / 通用/半透明-2 底 / 模式根 padding 12 16 /
+# 图标 亮色/三级；帧条 = .fb-pop 圆角 8 / 半透明-1 / 5 格分页 / 与播放条同宽（间距 12 归父容器）。
+# 三变体覆盖：动图（帧条 5 格分页，假 WS 帧流撑起 animTotal）/ 视频（全量组 + 图标朝向 +
+# hover 提亮 + tip + 倍率/音量/时间显示悬停弹层）/ 音频（波形进度 WaveProgress + 删减组）。截图留档。
 import asyncio
 import base64
 import json
@@ -13,6 +15,8 @@ import time
 import urllib.request
 
 import websockets
+
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 PORT = 9368
@@ -107,45 +111,54 @@ async def frame_server():
     return await websockets.serve(handler, "127.0.0.1", WS_PORT)
 
 
-# 容器贴稿断言（13 稿：46 高 / 直角 / border-top 1px / C3 / 无 inset 画框）
+# 悬浮播放条壳断言（多功能悬浮栏稿：42 高 / 圆角 21 / 通用/半透明-2 底 / 模式根 padding 12 16 /
+# 图标 亮色/三级）
 BAR_STYLE_JS = """(() => {
-  const bar = document.querySelector('.preview-footer .play-bar');
-  if (!bar) return null;
-  const cs = getComputedStyle(bar);
-  const icon = bar.querySelector('.icon-btn');
+  const shell = document.querySelector('.pfb-anchor .fb-shell');
+  if (!shell) return null;
+  const root = shell.querySelector('.fbp-root');
+  const cs = getComputedStyle(shell);
+  const icon = shell.querySelector('.ic-btn');
   return {
-    height: cs.height, borderRadius: cs.borderRadius, borderTopWidth: cs.borderTopWidth,
-    boxShadow: cs.boxShadow, background: cs.backgroundColor, padding: cs.padding,
+    height: cs.height, borderRadius: cs.borderRadius,
+    background: cs.backgroundColor, padding: root ? getComputedStyle(root).padding : null,
     iconColor: icon ? getComputedStyle(icon).color : null,
-    progressTrack: (() => { const p = bar.querySelector('.progress::before'); return null; })(),
+    btnCount: root ? root.querySelectorAll('.ic-btn').length : 0,
+    hasRate: !!root.querySelector('.fbp-rate'),
   };
 })()"""
 
+# 帧条断言（播放条-帧条稿：.fb-pop 圆角 8 / 半透明-1 底 / padding 8 / 5 格 129x76 /
+# 两端尖括号（下一帧 flip-h）/ 与播放条同宽）
 STRIP_STYLE_JS = """(() => {
-  const strip = document.querySelector('.frame-strip');
+  const strip = document.querySelector('.pfb-anchor .fs-root');
   if (!strip) return null;
   const cs = getComputedStyle(strip);
-  const btns = [...strip.querySelectorAll('.icon-btn svg')].map((s) => getComputedStyle(s).transform);
+  const navs = [...strip.querySelectorAll('.fs-nav .app-icon')].map((s) => getComputedStyle(s).transform);
+  const shell = document.querySelector('.pfb-anchor .fb-shell');
+  const frame = strip.querySelector('.fs-frame');
   return {
-    borderRadius: cs.borderRadius, borderTopWidth: cs.borderTopWidth, boxShadow: cs.boxShadow,
-    background: cs.backgroundColor, padding: cs.padding,
-    btnTransforms: btns, btnCount: btns.length,
-    btnDs: [...strip.querySelectorAll('.icon-btn svg path')].map((p) => p.getAttribute('d')?.slice(0, 20) ?? null),
-    frameRadius: (() => { const f = strip.querySelector('.frame'); return f ? getComputedStyle(f).borderRadius : null; })(),
+    borderRadius: cs.borderRadius, background: cs.backgroundColor, padding: cs.padding,
+    navTransforms: navs, navCount: navs.length,
+    frameCount: strip.querySelectorAll('.fs-frame').length,
+    frameRadius: frame ? getComputedStyle(frame).borderRadius : null,
+    stripW: strip.offsetWidth, shellW: shell ? shell.offsetWidth : null,
   };
 })()"""
 
-# 视频左组按钮朝向断言（2026-08-20 修：seek 原样 ◀◀ = 快退 / flip-h = 快进；step-frame-vertical
-# 原样 ◀| = 上一帧 / flip-h = 下一帧）——读 svg computed transform 序列比对
-VIDEO_LEFT_JS = """(() => {
-  const group = document.querySelector('.preview-footer .play-bar .btn-group');
-  if (!group) return null;
-  return [...group.querySelectorAll('.icon-btn svg')].map((s) => getComputedStyle(s).transform);
+# 视频播放条图标朝向断言（悬浮栏族口径：seek 原样 ◀◀ = 快退 / flip-h ▶▶ = 快进；
+# step-frame 原样 |◀ = 上一帧 / flip-h ▶| = 下一帧）——读 .ic-btn svg computed transform 序列比对
+VIDEO_BTNS_JS = """(() => {
+  const root = document.querySelector('.pfb-anchor .fbp-root');
+  if (!root) return null;
+  return [...root.querySelectorAll('.ic-btn .app-icon')].map((s) => getComputedStyle(s).transform);
 })()"""
 FLIP = "matrix(-1, 0, 0, 1, 0, 0)"  # scaleX(-1)
 
-C3_RGB = "rgb(24, 25, 25)"  # #181919
-LABEL_RGBA = "rgba(234, 255, 247, 0.341)"  # 文字/标签 0.3412（浏览器舍入）
+SHELL_BG = "rgba(41, 41, 41, 0.5)"  # 通用/半透明-2（--n-g-a2）
+POP_BG = "rgba(31, 31, 31, 0.93)"  # 通用/半透明-1（--n-g-a1）
+L2_RGB = "rgb(191, 191, 191)"  # 亮色/二级（--n-l2）
+L3_RGB = "rgb(128, 128, 128)"  # 亮色/三级（--n-l3）
 
 
 def rot_deg(matrix: str):
@@ -203,30 +216,29 @@ async def main():
 
             fails = []
 
-            async def check_bar(tag):
+            async def check_bar(tag, btn_count, has_rate):
                 s = await ev(BAR_STYLE_JS)
                 print(f"[{tag}] 播放条:", json.dumps(s, ensure_ascii=False))
                 if not s:
                     fails.append(f"[{tag}] 播放条未渲染")
                     return
-                if s["height"] != "46px":
-                    fails.append(f"[{tag}] 播放条高 {s['height']}（期望 46px）")
-                if s["borderRadius"] != "0px":
-                    fails.append(f"[{tag}] 播放条圆角 {s['borderRadius']}（期望 0 直角）")
-                if s["borderTopWidth"] != "1px":
-                    fails.append(f"[{tag}] 播放条上边框 {s['borderTopWidth']}（期望 1px）")
-                if s["boxShadow"] != "none":
-                    fails.append(f"[{tag}] 播放条仍有 inset 画框（{s['boxShadow']}）")
-                if s["background"] != C3_RGB:
-                    fails.append(f"[{tag}] 播放条底色 {s['background']}（期望 C3 {C3_RGB}）")
-                if s["padding"] != "8px 16px":
-                    fails.append(f"[{tag}] 播放条内边距 {s['padding']}（期望 8px 16px）")
-                # 浏览器 alpha 舍入到 2 位小数（0.3412 → 0.34），前缀比到 0.34
-                if s["iconColor"] and not s["iconColor"].startswith("rgba(234, 255, 247, 0.34"):
-                    fails.append(f"[{tag}] 播放条图标色 {s['iconColor']}（期望标签档 {LABEL_RGBA}）")
+                if s["height"] != "42px":
+                    fails.append(f"[{tag}] 播放条高 {s['height']}（期望 42px）")
+                if s["borderRadius"] != "21px":
+                    fails.append(f"[{tag}] 播放条圆角 {s['borderRadius']}（期望 21px 胶囊）")
+                if s["background"] != SHELL_BG:
+                    fails.append(f"[{tag}] 播放条底色 {s['background']}（期望 半透明-2 {SHELL_BG}）")
+                if s["padding"] != "12px 16px":
+                    fails.append(f"[{tag}] 模式根内边距 {s['padding']}（期望 12px 16px）")
+                if s["iconColor"] != L3_RGB:
+                    fails.append(f"[{tag}] 播放条图标色 {s['iconColor']}（期望 亮色/三级 {L3_RGB}）")
+                if s["btnCount"] != btn_count:
+                    fails.append(f"[{tag}] 图标钮 {s['btnCount']} 件（期望 {btn_count}）")
+                if s["hasRate"] != has_rate:
+                    fails.append(f"[{tag}] 倍速钮存在性 {s['hasRate']}（期望 {has_rate}）")
 
-            async def shot_footer(name):
-                rect = await ev("(() => { const r = document.querySelector('.preview-footer')?.getBoundingClientRect(); return r ? { x: r.left, y: r.top, width: r.width, height: r.height } : null; })()")
+            async def shot_anchor(name):
+                rect = await ev("(() => { const r = document.querySelector('.pfb-anchor')?.getBoundingClientRect(); return r ? { x: r.left, y: r.top, width: r.width, height: r.height } : null; })()")
                 if not rect:
                     return
                 shot = await send(ws, "Page.captureScreenshot", {
@@ -238,6 +250,15 @@ async def main():
                     f.write(base64.b64decode(shot["result"]["data"]))
                 print("截图:", out, f"({rect['width']:.0f}x{rect['height']:.0f})")
 
+            async def hover(sel, idx=None):
+                """真鼠标悬停（选择器 + 可选序号）→ 返回元素中心坐标。"""
+                q = f"document.querySelectorAll('{sel}')[{idx}]" if idx is not None else f"document.querySelector('{sel}')"
+                rect = await ev(f"(() => {{ const b = {q}; if (!b) return null; const r = b.getBoundingClientRect(); return {{ x: r.left + r.width / 2, y: r.top + r.height / 2 }}; }})()")
+                if not rect:
+                    return None
+                await send(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": rect["x"], "y": rect["y"]}, session=sess)
+                return rect
+
             async def open_card(i, wait=2.0):
                 await ev(f"document.querySelectorAll('.asset-card')[{i}].dispatchEvent(new MouseEvent('dblclick', {{ bubbles: true }}))")
                 await asyncio.sleep(wait)
@@ -246,81 +267,118 @@ async def main():
                 await ev("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))")
                 await asyncio.sleep(0.8)
 
-            # 场景 A：动图（PlayBarFrames + 帧条；等帧流撑起 animTotal）
+            # 场景 A：动图（帧条 5 格分页；等帧流撑起 animTotal）
             await open_card(0, 3.0)
             total = await ev("!!document.querySelector('.preview-stage')")
             if not total:
                 fails.append("[动图] 预览未打开")
-            await check_bar("动图")
+            await check_bar("动图", 4, True)  # 播放/倍率/笔记/设封面/全屏 = 4 图标 + 1 文字
             strip = await ev(STRIP_STYLE_JS)
             print("[动图] 帧条:", json.dumps(strip, ensure_ascii=False))
             if not strip:
                 fails.append("[动图] 帧条未渲染（帧流未撑起 animTotal？）")
             else:
-                if strip["borderRadius"] != "0px":
-                    fails.append(f"[动图] 帧条圆角 {strip['borderRadius']}（期望 0）")
-                if strip["borderTopWidth"] != "1px" or strip["boxShadow"] != "none":
-                    fails.append(f"[动图] 帧条边框/画框不符（top {strip['borderTopWidth']} / shadow {strip['boxShadow']}）")
-                if strip["padding"] != "8px 16px":
-                    fails.append(f"[动图] 帧条内边距 {strip['padding']}（期望 8px 16px）")
-                # 两端按钮 = nav-history 面包屑同款：上一帧不旋转（朝左）/ 下一帧 rotate(180°)
-                ds = strip.get("btnDs") or []
-                if not all(d and d.startswith("M11.6251 2.5") for d in ds):
-                    fails.append(f"[动图] 帧条两端图标 ≠ nav-history（{ds}）")
-                rots = [rot_deg(t) for t in strip["btnTransforms"]]
-                if len(rots) != 2 or rots[0] is not None or rots[1] != 180:
-                    fails.append(f"[动图] 帧条两端按钮方向错（{rots}，期望 [不旋转, 180] 即 ‹ ›）")
-            # 帧数文本色 = 常态档
-            ft = await ev("(() => { const t = document.querySelector('.play-bar .frame-text'); return t ? getComputedStyle(t).color : null; })()")
-            print("[动图] 帧数文本色:", ft)
-            if ft and not ft.startswith("rgba(247, 255, 252, 0.694"):
-                fails.append(f"[动图] 帧数文本色 {ft}（期望常态档）")
-            await shot_footer("playbar-frames")
+                if strip["borderRadius"] != "8px":
+                    fails.append(f"[动图] 帧条圆角 {strip['borderRadius']}（期望 8px）")
+                if strip["background"] != POP_BG:
+                    fails.append(f"[动图] 帧条底色 {strip['background']}（期望 半透明-1 {POP_BG}）")
+                if strip["padding"] != "8px":
+                    fails.append(f"[动图] 帧条内边距 {strip['padding']}（期望 8px）")
+                if strip["navCount"] != 2:
+                    fails.append(f"[动图] 帧条两端钮 {strip['navCount']}（期望 2）")
+                # 两端尖括号：上一帧不翻转（‹）/ 下一帧 flip-h（›）
+                if strip["navTransforms"] != ["none", FLIP]:
+                    fails.append(f"[动图] 帧条两端钮方向错（{strip['navTransforms']}，期望 [none, flip] 即 ‹ ›）")
+                if strip["frameCount"] != 5:
+                    fails.append(f"[动图] 帧条格数 {strip['frameCount']}（期望 5 格分页）")
+                if strip["frameRadius"] != "8px":
+                    fails.append(f"[动图] 帧格圆角 {strip['frameRadius']}（期望 8px）")
+                if strip["stripW"] != strip["shellW"]:
+                    fails.append(f"[动图] 帧条与播放条不同宽（{strip['stripW']} vs {strip['shellW']}）")
+            # 时间码：帧号 当前 亮色/二级、总计 三级（数字-大档）
+            tc = await ev("""(() => {
+              const tc = document.querySelector('.pfb-anchor .fbp-tc');
+              if (!tc) return null;
+              return { text: tc.textContent, cur: getComputedStyle(tc.querySelector('.cur')).color,
+                       tot: getComputedStyle(tc.querySelector('.tot')).color };
+            })()""")
+            print("[动图] 时间码:", json.dumps(tc, ensure_ascii=False))
+            if not tc or tc["cur"] != L2_RGB or tc["tot"] != L3_RGB:
+                fails.append(f"[动图] 时间码色档不符（{tc}，期望 当前 {L2_RGB} / 总计 {L3_RGB}）")
+            await shot_anchor("playbar-frames")
             await close_preview()
 
-            # 场景 B：视频（PlayBarVideo 全量左组 6 件）
+            # 场景 B：视频（全量组 10 图标 + 倍速文字钮）
             await open_card(1, 2.0)
-            await check_bar("视频")
-            left_n = await ev("document.querySelector('.preview-footer .play-bar .btn-group')?.childElementCount ?? 0")
-            print("[视频] 左组按钮数:", left_n)
-            if left_n != 6:
-                fails.append(f"[视频] 左组 {left_n} 件（期望 6：播放/快退/快进/上帧/下帧/音量）")
-            # 左组朝向序列：播放 none / 快退 none（◀◀）/ 快进 flip / 上帧 none（◀|）/ 下帧 flip / 音量 none
-            transforms = await ev(VIDEO_LEFT_JS)
-            print("[视频] 左组 transform:", transforms)
+            diag = await ev("""(() => {
+              const shell = document.querySelector('.pfb-anchor .fb-shell');
+              const root = shell?.querySelector('.fbp-root');
+              const prog = root?.querySelector('.fbp-progress');
+              return { shellW: shell?.offsetWidth, rootW: root?.offsetWidth, progW: prog?.offsetWidth,
+                       progFlex: prog ? getComputedStyle(prog).flexBasis + '/' + getComputedStyle(prog).flexGrow : null };
+            })()""")
+            print("[视频] 宽度诊断:", json.dumps(diag, ensure_ascii=False))
+            await check_bar("视频", 10, True)
+            # 朝向序列：播放 none / 快退 none（◀◀）/ 快进 flip / 上帧 none（|◀）/ 下帧 flip /
+            # 音量 none / 循环 none / 笔记 none / 设封面 none / 全屏 none
+            transforms = await ev(VIDEO_BTNS_JS)
+            print("[视频] 图标 transform:", transforms)
             if transforms:
-                expect = ["none", "none", FLIP, "none", FLIP, "none"]
+                expect = ["none", "none", FLIP, "none", FLIP, "none", "none", "none", "none", "none"]
                 if transforms != expect:
-                    fails.append(f"[视频] 左组朝向序列不符（{transforms}，期望 {expect}）")
-            # hover 提亮 + tip tag 化（下一帧钮：非禁用）：真鼠标悬停 → 图标色提亮常态 + 400ms 出 tag 化 tip
-            btn_rect = await ev("(() => { const b = document.querySelectorAll('.preview-footer .play-bar .btn-group .icon-btn')[4]; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()")
-            color0 = await ev("getComputedStyle(document.querySelectorAll('.preview-footer .play-bar .btn-group .icon-btn')[4]).color")
-            await send(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": btn_rect["x"], "y": btn_rect["y"]}, session=sess)
+                    fails.append(f"[视频] 图标朝向序列不符（{transforms}，期望 {expect}）")
+            # hover 提亮 + tip（下一帧钮 index 4）：图标 三级 → 二级；tip 400ms 出，快捷键纯文本
+            color0 = await ev("getComputedStyle(document.querySelectorAll('.pfb-anchor .fbp-root .ic-btn')[4]).color")
+            await hover(".pfb-anchor .fbp-root .ic-btn", 4)
             await asyncio.sleep(0.2)
-            color1 = await ev("getComputedStyle(document.querySelectorAll('.preview-footer .play-bar .btn-group .icon-btn')[4]).color")
+            color1 = await ev("getComputedStyle(document.querySelectorAll('.pfb-anchor .fbp-root .ic-btn')[4]).color")
             print("[视频] 下一帧 hover 色:", color0, "→", color1)
-            if color1 == color0 or not (color1 or "").startswith("rgba(247, 255, 252, 0.694"):
-                fails.append(f"[视频] hover 未提亮到常态（{color0} → {color1}）")
+            if color0 != L3_RGB or color1 != L2_RGB:
+                fails.append(f"[视频] hover 未升二级（{color0} → {color1}）")
             await asyncio.sleep(0.6)  # v-tip 400ms 延迟
-            tip = await ev("(() => { const t = document.querySelector('.app-tip.show'); return t ? { text: t.textContent, kbd: [...t.querySelectorAll('kbd')].map((k) => k.textContent) } : null; })()")
+            tip = await ev("(() => { const t = document.querySelector('.app-tip'); return t ? { cls: t.className, text: t.textContent } : null; })()")
             print("[视频] 下一帧 tip:", json.dumps(tip, ensure_ascii=False))
-            if not tip or "下一帧" not in tip["text"] or tip["kbd"] != ["."]:
-                fails.append(f"[视频] 下一帧 tip 未 tag 化（{tip}，期望 文本「下一帧」+ kbd [.]）")
-            await shot_footer("playbar-video")
+            if not tip or "show" not in tip["cls"] or "下一帧" not in tip["text"] or "." not in tip["text"]:
+                fails.append(f"[视频] 下一帧 tip 不符（{tip}，期望 .show 含「下一帧」与「.」纯文本）")
+            # 倍率悬停弹层（RatePop 11 档横排，悬停开 + 移走延迟关）
+            await hover(".pfb-anchor .fbp-rate")
+            await asyncio.sleep(0.3)
+            rp = await ev("(() => { const p = document.querySelector('.pfb-anchor .rp-root'); return p ? { n: p.querySelectorAll('.rp-item').length, bg: getComputedStyle(p).backgroundColor } : null; })()")
+            print("[视频] 倍率弹层:", json.dumps(rp, ensure_ascii=False))
+            if not rp or rp["n"] != 11 or rp["bg"] != POP_BG:
+                fails.append(f"[视频] 倍率弹层未悬停开出（{rp}，期望 11 档 + 半透明-1）")
+            # 音量悬停弹层（VolumePop 宽 124 稿值）
+            await hover(".pfb-anchor .fbp-root .ic-btn", 5)
+            await asyncio.sleep(0.3)
+            vp = await ev("(() => { const p = document.querySelector('.pfb-anchor .vp-root'); return p ? { w: p.offsetWidth, bg: getComputedStyle(p).backgroundColor } : null; })()")
+            print("[视频] 音量弹层:", json.dumps(vp, ensure_ascii=False))
+            if not vp or vp["w"] != 124 or vp["bg"] != POP_BG:
+                fails.append(f"[视频] 音量弹层未悬停开出（{vp}，期望 宽 124 + 半透明-1）")
+            # 时间显示悬停弹层（RatePop 复用「帧数/时间码」两档，类 pfb-tc-pop 与倍率弹层区分）
+            await hover(".pfb-anchor .fbp-tc")
+            await asyncio.sleep(0.3)
+            tcp = await ev("(() => { const p = document.querySelector('.pfb-anchor .pfb-tc-pop'); return p ? [...p.querySelectorAll('.rp-item')].map((b) => b.textContent) : null; })()")
+            print("[视频] 时间显示弹层:", json.dumps(tcp, ensure_ascii=False))
+            if tcp != ["帧数", "时间码"]:
+                fails.append(f"[视频] 时间显示弹层不符（{tcp}，期望 [帧数, 时间码]）")
+            await hover(".preview-stage")  # 移出关弹层
+            await shot_anchor("playbar-video")
             await close_preview()
 
-            # 场景 C：音频（PlayBarAudio 波形）
+            # 场景 C：音频（删减组：播放/音量/倍率/循环 = 3 图标 + 1 文字；波形进度 WaveProgress）
             await open_card(2, 2.0)
-            await check_bar("音频")
-            wave = await ev("!!document.querySelector('.preview-footer .play-bar .wave-progress')")
-            if not wave:
-                fails.append("[音频] 波形进度条未渲染")
-            await shot_footer("playbar-audio")
+            await check_bar("音频", 3, True)
+            wave = await ev("(() => { const w = document.querySelector('.pfb-anchor .wp-root'); if (!w) return null; return { layers: w.querySelectorAll('.wave-layer').length, head: !!w.querySelector('.head') }; })()")
+            print("[音频] 波形进度:", json.dumps(wave, ensure_ascii=False))
+            if not wave or wave["layers"] != 2 or not wave["head"]:
+                fails.append(f"[音频] 波形进度条未渲染（{wave}，期望 双层 mask + 播放头）")
+            # 删减组已由 check_bar 钉（3 图标 + 1 文字 = 播放/音量/循环 + 倍率，其余组全删）
+            await shot_anchor("playbar-audio")
 
             if fails:
                 print("FAIL:", "; ".join(dict.fromkeys(fails)))
                 return 3
-            print("PASS: 播放条/帧条贴 13 稿成立（三变体 46 高通栏直角 border-top C3 / 图标标签档 / 帧条 ←→ 修正）")
+            print("PASS: 预览悬浮播放条三变体成立（42 高圆角 21 半透明壳 / 帧条 5 格同宽 / 图标朝向与 hover / 悬停弹层 / 音频波形）")
             return 0
     finally:
         proc.terminate()

@@ -11,6 +11,9 @@ import { ref } from "vue";
 
 withDefaults(defineProps<{ tone?: "light" | "dark" | "size" }>(), { tone: "light" });
 const model = defineModel<number>({ default: 0 }); // 0~1
+// 拖动起止（2026-09-09 预览悬浮栏接入轮补）：视频 scrub 等业务需在拖动期挂 scrubbing 旗标
+// （拖动期 timeupdate 不回写、松手对齐真实位置，previewMedia.setScrubbing 口径）
+const emit = defineEmits<{ "drag-start": []; "drag-end": [] }>();
 
 const rootEl = ref<HTMLElement>();
 
@@ -23,10 +26,12 @@ function setFromX(clientX: number): void {
 
 function onDown(e: PointerEvent): void {
   setFromX(e.clientX);
+  emit("drag-start");
   const move = (ev: PointerEvent) => setFromX(ev.clientX);
   const up = (): void => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
+    emit("drag-end");
   };
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);

@@ -11,6 +11,9 @@
   position: relative;
   overflow: hidden;
   height: 42px;
+  /* 壳宽 = js 目标宽，但永不超出锚点容器（2026-09-09 挤压裁剪轮）：侧栏挤压中间面板时
+     flex 收缩 + max-width 双保险，内容在壳内裁剪（筛选组横滚），不跑到底色外 */
+  max-width: 100%;
   background: var(--n-g-a2);
   box-shadow: var(--n-effect-raised);
   backdrop-filter: blur(var(--n-blur-sm));

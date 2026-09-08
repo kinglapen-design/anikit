@@ -19,8 +19,9 @@ const props = withDefaults(
     size?: "lg" | "sm"; // 仅 bare：大 18 / 小 14
     forceState?: "" | "hover";
     title?: string | TipValue;
+    disabled?: boolean; // 功能禁用（转码中等场景）；禁用态视觉稿未画（§15），仅去交互不改色
   }>(),
-  { variant: "plain", size: "lg", forceState: "", title: undefined },
+  { variant: "plain", size: "lg", forceState: "", title: undefined, disabled: false },
 );
 defineEmits<{ click: [e: MouseEvent] }>();
 
@@ -31,6 +32,7 @@ const iconSize = computed(() => (props.variant === "bare" && props.size === "sm"
   <button
     class="ic-btn"
     :class="[variant, size, forceState ? `force-${forceState}` : '']"
+    :disabled="disabled"
     v-tip="title"
     @click="$emit('click', $event)"
   >
@@ -47,6 +49,11 @@ const iconSize = computed(() => (props.variant === "bare" && props.size === "sm"
   transition:
     background var(--n-dur-150) var(--n-ease-in-out),
     color var(--n-dur-150) var(--n-ease-in-out);
+}
+/* 禁用态（转码中等）：仅去交互，视觉稿未画不改色（§15 口径） */
+.ic-btn:disabled {
+  cursor: default;
+  pointer-events: none;
 }
 /* plain / float：30×30 方钮 */
 .ic-btn.plain,

@@ -16,9 +16,7 @@ import SearchFloatBar from "./SearchFloatBar.vue";
 import ImportProgressBar from "./ImportProgressBar.vue";
 import PreviewTitleBar from "./PreviewTitleBar.vue";
 import PreviewPanel from "./PreviewPanel.vue";
-import PreviewPlayBar from "./PreviewPlayBar.vue";
-import PreviewFrameStrip from "./PreviewFrameStrip.vue";
-import PreviewNotes from "./PreviewNotes.vue";
+import PreviewFloatBar from "./PreviewFloatBar.vue";
 import { findFolderNode } from "../lib/detailSections";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
@@ -97,11 +95,9 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
         <section class="preview-section">
           <PreviewPanel />
         </section>
-        <footer v-if="preview.hasPlayBar" class="preview-footer">
-          <PreviewPlayBar />
-          <PreviewFrameStrip />
-          <PreviewNotes />
-        </footer>
+        <!-- 预览悬浮播放条（2026-09-09 预览悬浮栏接入轮）：FloatBar play + 帧条 + 弹层，
+             底部居中距底 12（同搜索悬浮栏口径）；旧通栏 footer 三件套作废 -->
+        <PreviewFloatBar v-if="preview.hasPlayBar" />
       </div>
     </template>
     <template v-else>
@@ -165,7 +161,9 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
   min-height: 0;
   padding: var(--n-space-12) 0 0 var(--n-space-12);
 }
-/* 预览模式根：占满中栏；全屏时 fixed 铺满窗口（2026-07-25 定案：显示器全屏） */
+/* 预览模式根：占满中栏；全屏时 fixed 铺满窗口（2026-07-25 定案：显示器全屏）。
+   悬浮播放条（PreviewFloatBar anchor absolute 底部居中距底 12）非全屏锚于 content-area（relative）、
+   全屏锚于本根（fixed 包含块），两态同位（2026-09-09 预览悬浮栏接入轮） */
 .preview-root {
   display: flex;
   flex-direction: column;
@@ -177,14 +175,6 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
   inset: 0;
   z-index: 1500;
   background: var(--c1);
-}
-/* 全屏时播放条/帧条脱离文档流浮在画面底部（2026-07-26 用户：画面按整个窗口铺满，挡住就挡住） */
-.preview-root.fullscreen .preview-footer {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1;
 }
 /* 悬浮栏显隐动画（「始终显示搜索框」开关，2026-09-06 用户定）：
    显示 = 下至上浮入 / 隐藏 = 上至下沉出——位移 8 + 透明度，250ms 缓入缓出（悬浮栏族动画档 §18） */
@@ -204,11 +194,5 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-}
-/* 播放条 + 帧条容器：通栏贴底无内边距（13_播放条稿 2026-08-20 用户定：播放条与搜索栏同位同尺寸，
-   直角 border-top 通栏——原 8 16 16 浮条内边距作废）；relative 供笔记浮层（bottom:100%）锚定 */
-.preview-footer {
-  position: relative;
-  flex: none;
 }
 </style>
