@@ -10,6 +10,7 @@ import { defineStore } from "pinia";
 import { markRaw, nextTick, ref } from "vue";
 import type { DockviewApi, IDockviewPanel, SerializedDockview } from "dockview-vue";
 import { useContentStore } from "./content";
+import { usePreviewStore } from "./preview";
 import { useSelectionStore } from "./selection";
 import { useUiStore } from "./ui";
 import { findFolderNode } from "../lib/detailSections";
@@ -121,18 +122,30 @@ export const useTabsStore = defineStore("tabs", () => {
 
   // ---- 命令 ----
 
+  // 导航即退出预览（2026-09-08 用户实机报：预览模式下点侧栏文件夹 / 快速访问，视口已切但
+  // 中栏仍是预览画面，用户不知文件夹已换）。预览 = 全局单例渲染在激活 panel（ContentArea
+  // `preview.assetKey && active`），凡视口切换 / 新开页前先关掉。同视口点击（openView 早退）
+  // 不算导航，预览保持。
+  function exitPreview(): void {
+    const preview = usePreviewStore();
+    if (preview.assetKey) preview.close();
+  }
+
   // 侧边栏 / 文件夹卡片等导航统一入口：锁定标签页不替换（新开），未锁定替换视口
   function openView(viewKey: string): void {
     if (!api) {
       content.sidebarSelected = viewKey;
+      exitPreview();
       return;
     }
     const active = api.activePanel;
     if (!active || active.params?.locked) {
+      exitPreview();
       addTab(viewKey);
       return;
     }
     if (panelInfo(active).viewKey === viewKey) return;
+    exitPreview();
     // 导航历史：旧视口（带选中快照）入后退栈、清前进栈（2026-08-20 面包屑接入；2026-08-24 快照）
     const h = histories.get(active.id) ?? { back: [], fwd: [] };
     h.back.push({ key: panelInfo(active).viewKey, sel: currentSel() });
@@ -155,6 +168,7 @@ export const useTabsStore = defineStore("tabs", () => {
     const [from, to] = dir === -1 ? [h.back, h.fwd] : [h.fwd, h.back];
     const target = from.pop();
     if (target === undefined) return;
+    exitPreview();
     to.push({ key: panelInfo(panel).viewKey, sel: currentSel() });
     panel.api.updateParameters({ viewKey: target.key });
     panel.api.setTitle(content.viewTitle(target.key));
@@ -182,8 +196,10 @@ export const useTabsStore = defineStore("tabs", () => {
   function openInNewTab(viewKey: string): void {
     if (!api) {
       content.sidebarSelected = viewKey;
+      exitPreview();
       return;
     }
+    exitPreview();
     addTab(viewKey);
   }
 
