@@ -163,7 +163,8 @@ watch(
       <!-- 内容区扩展槽（壳层悬停播放层等注入）：叠在缩略图上、渐变罩下 -->
       <slot />
 
-      <!-- 名称+简介渐变罩 -->
+      <!-- 名称+简介渐变罩（pointer-events 穿透：罩区不再吃 pointermove，scrub 整卡跟手；
+           仅名称文本行 / 命名输入恢复交互——v-tip、双击重命名保留，见 scoped 样式注） -->
       <div class="kc-overlay">
         <!-- 命名态：input 替换名称位（整卡品牌环提示，输入框透明底，速查 §4 统一口径）；
              命名中 click / dblclick / pointerdown 自停冒泡（防触发选中 / 预览 / 起拖拽） -->
@@ -235,6 +236,18 @@ watch(
   aspect-ratio: 1 / 1;
 }
 /* 圆角裁剪层 .kc-clip 见 cards.css（与档案卡共享） */
+
+/* 渐变罩 pointer-events 穿透（2026-09-08 用户实机报：悬停视频 scrub 划过罩区丢失跟随——
+   罩贴底 ≈74px 高、冒泡不经播放层，pointermove 被吃）；名称文本行 / 命名输入恢复 auto
+   保 v-tip / 双击重命名 / 输入交互（"底部名称行不 scrub"旧口径精确化到文本行；
+   info 行无交互一并穿透，也可 scrub） */
+.kc-overlay {
+  pointer-events: none;
+}
+.kc-name,
+.rename-input {
+  pointer-events: auto;
+}
 
 /* 缩略图：cover 充满（旧网格口径）；contain = 网格固定格完整显示不裁切（2026-07-24 用户定）；
    icon / shell = 50% 居中 contain（格式图标 Eagle 口径 / 稿 square 注）。

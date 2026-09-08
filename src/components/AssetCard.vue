@@ -7,7 +7,8 @@
 // FileCard naming 位）/ 位置徽章 + LinkListPopover / 笔记角标 / 选择模式 picked·picker-self / 拖拽半透明。
 // 口径变化：格式角标不再按格式设色（FormatBadge 统一铬，§16——formatBadgeColor 仅留"静态图不出角标"
 // null 判定）；位置徽章 14px 右下各 12（kc-corner-badge 位，§16/§18）；悬停播放触发区 = 整卡
-//（新稿卡即图满铺，旧仅缩略图区；渐变罩层在播放层之上，名称可点、底部行不 scrub 与旧一致）；
+//（新稿卡即图满铺，旧仅缩略图区；渐变罩层在播放层之上、pointer-events 穿透——2026-09-08 修复：
+// 罩区吃 pointermove 致 scrub 丢跟随，仅名称文本行恢复交互不 scrub，v-tip / 双击重命名保留）；
 // 笔记角标保持旧视觉旧位（右上 4——与悬停胶囊 12 位的关系稿未画，记 09 待办）。
 // 图片类无悬停控件（2026-08-10 用户定）；查看方式"自动播放动图（含序列帧）/ 自动播放视频"开关不变。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
