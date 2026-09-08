@@ -75,6 +75,20 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
       </div>
       <div class="pv-demo-row">
         <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" icon="dog" name="角色绑定" :count="8" />
+          <span class="pv-cap">自定义图标 · 常态双色</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" icon="camera" name="分镜参考" :count="12" tint="purple" />
+          <span class="pv-cap">自定义图标 + tint（改色联动，2026-09-08 修复）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" icon="music" name="音效" :count="45" tint="green" force-state="selected" />
+          <span class="pv-cap">自定义图标 + tint + 选中</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="folder" name="人物" :count="20" domain-selected />
           <span class="pv-cap">多选联动（半透明-2 底，无框）</span>
         </div>

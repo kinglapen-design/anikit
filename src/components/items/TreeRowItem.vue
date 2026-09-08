@@ -134,7 +134,8 @@ function onClick(e: MouseEvent): void {
       </button>
       <span v-else-if="kind === 'archive'" class="dot" :data-tint="tint || undefined" aria-hidden="true" />
       <template v-if="kind === 'folder'">
-        <AppIcon v-if="icon" :name="icon" :size="18" class="fico" />
+        <!-- 自定义图标同走双色变量通道（2026-09-08 走查修复：原 AppIcon 原值直出，tint 改色不生效） -->
+        <TwoToneIcon v-if="icon" :name="icon" :size="18" :tint="tint" />
         <TwoToneIcon v-else :name="expanded ? 'folder-open' : 'folder-closed'" :size="18" :tint="tint" />
       </template>
       <TwoToneIcon v-else-if="kind === 'archive'" name="archive" :size="18" :tint="tint" />
@@ -315,22 +316,16 @@ function onClick(e: MouseEvent): void {
 .force-selected .dot[data-tint="peach"]::before {
   background: var(--n-custom-peach-1);
 }
-.qico,
-.fico {
+/* quick 图标稿 = 三级（folder 自定义图标 2026-09-08 起走 TwoToneIcon 双色通道，tint 驱动不吃 color 档） */
+.qico {
   display: inline-flex;
   width: 18px;
   height: 18px;
   flex: none;
   color: var(--n-l3);
 }
-/* folder 自定义图标与名称同档（二级）；quick 图标稿 = 三级 */
-.fico {
-  color: var(--n-l2);
-}
 .selected .qico,
-.force-selected .qico,
-.selected .fico,
-.force-selected .fico {
+.force-selected .qico {
   color: var(--n-l1);
 }
 .nm {
