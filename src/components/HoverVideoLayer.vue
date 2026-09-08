@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // 视频卡片播放层（5.3，2026-07-27 用户定案，参考图 1），双模式：
 // - 悬停模式（auto=false）：完整播放整段视频（循环），跟随鼠标横向移动快进快退
-//   （video seek：pointermove 直接设 currentTime——2026-08-22 实机数据：WebView2 单点 seek
-//   5-40ms、66ms 间隔连发全部完成，浏览器自身合并跟不上的 seek，无需 rAF 合帧 / 门控；
-//   原"rAF 合帧 + 66ms 门控 + 0.05s 死区"（2026-07-27 定稿）作废；
+//   （video seek：pointermove 记目标——seeking 空闲直发、在飞合流于 seeked 补发（2026-09-08
+//   实机报：长片源连发 seek，解码器取消-重启饿死，画面卡住甚至无反应；2026-08-22"浏览器
+//   自身合并跟不上的 seek、无需门控"结论对长片源不成立，作废）；UI 状态同步写目标值跟手；
 //   预生成帧图方案已于 2026-07-28 用户决策废弃——CPU 长期高负载 / 磁盘占用大 / 载入慢）；
 //   右上胶囊（7.1 内容容器轮换代，稿 = 组件/卡片/文件卡片-视频 悬停胶囊）= 当前帧号 + 播放/暂停 +
 //   音量/静音（card-hover-* 图标 14，常态 二级 hover 一级），底部 4px 播放条（轨道 亮色/半透明-2、
@@ -132,17 +132,33 @@ function onEnded(): void {
   v.currentTime = rangeStart();
   void v.play().catch(() => {});
 }
-// 跟随鼠标快进快退（仅悬停模式）：横向位置映射到 [start, end]，pointermove 直接 seek
-//（实测每次 seek 5-40ms，无需合帧 / 门控 / 死区；元素未 ready 时不 seek，保持底层缩略图）；
-// UI 状态（进度条 / 帧号）同步写目标值立即跟手——2026-08-22 修：原只走 timeupdate（250ms 粒度），肉眼滞后
+// 跟随鼠标快进快退（仅悬停模式）：横向位置映射到 [start, end]。
+// UI 状态（进度条 / 帧号）同步写目标值立即跟手；video seek 串行化合流——seeking 在飞只记
+// 最新目标（scrubTarget），seeked 补发（2026-09-08 实机报：长片源连发 seek 取消-重启饿死，
+// 画面卡住甚至无反应）；元素未 ready 时不 seek，保持底层缩略图
+let scrubTarget: number | null = null;
+
 function onScrub(e: PointerEvent): void {
   if (props.auto) return;
   const v = videoRef.value;
   if (!v || !ready.value) return;
   const rect = layerRef.value!.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  v.currentTime = rangeStart() + ratio * (rangeEnd() - rangeStart());
-  currentTime.value = v.currentTime;
+  const t = rangeStart() + ratio * (rangeEnd() - rangeStart());
+  currentTime.value = t;
+  if (v.seeking) {
+    scrubTarget = t;
+    return;
+  }
+  scrubTarget = null; // 直发时清账——防陈旧目标在后续 seeked 误补发回跳
+  v.currentTime = t;
+}
+function onSeeked(): void {
+  const v = videoRef.value;
+  if (!v || scrubTarget === null) return;
+  const t = scrubTarget;
+  scrubTarget = null;
+  if (Math.abs(t - v.currentTime) > 0.04) v.currentTime = t; // 落点已在一帧内不重复 seek
 }
 function toggleMute(): void {
   const v = videoRef.value;
@@ -171,6 +187,7 @@ function togglePlay(): void {
       @canplay="ready = true"
       @play="playing = true"
       @pause="playing = false"
+      @seeked="onSeeked"
       @timeupdate="onTimeUpdate"
       @loadedmetadata="onLoadedMetadata"
       @ended="onEnded"
