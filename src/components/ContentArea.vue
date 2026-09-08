@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // 中间内容展示区（C1）：1.2 起 = dockview panel 组件，每个标签页一个实例，按 params.viewKey
 // 渲染各自视口（标题栏 + 卡片列表（统一滚动：文件夹区块 + 素材网格）+ 多功能悬浮栏）。
-// 悬浮栏（7.1 二十二轮，2026-08-30）：SearchFloatBar 浮于列表上方（底部居中距底 12，
-// 旧通栏 SearchBar 同日废除）；列表底部遮挡补偿 66 = layouts.ts PAD.bottom（12 栏距底 + 42 栏高
-// + 12 呼吸距；JS 滚动 translateY，CSS padding 不影响可滚距离）。
+// 悬浮栏 = FloatBarHost 根部单例（2026-09-09 二轮宿主合并，稿 prose「同一容器切换」：预览进出 =
+// 搜索栏 ↔ 播放条 morph；底部居中距底 12、两侧 12 呼吸；旧通栏 SearchBar 与预览 footer 三件套均废）；
+// 列表底部遮挡补偿 66 = layouts.ts PAD.bottom（12 栏距底 + 42 栏高 + 12 呼吸距；JS 滚动 translateY，
+// CSS padding 不影响可滚距离）。
 // 预览模式（4.3/5.2）：preview.assetKey 非空且本 panel 激活时整栏切换——预览是全局单例状态，
 // 只在激活标签页内发生，非激活 panel 保持原视口；全屏时 preview-root fixed 铺满窗口、隐藏标题栏。
 // 通知条（ToastStack）已上移到 DockHost 单例（多 panel 下每 panel 一份会重复弹出）。
@@ -12,11 +13,10 @@ import type { DockviewPanelApi, IDockviewPanelProps } from "dockview-vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
 import SequencePackView from "./SequencePackView.vue";
-import SearchFloatBar from "./SearchFloatBar.vue";
+import FloatBarHost from "./FloatBarHost.vue";
 import ImportProgressBar from "./ImportProgressBar.vue";
 import PreviewTitleBar from "./PreviewTitleBar.vue";
 import PreviewPanel from "./PreviewPanel.vue";
-import PreviewFloatBar from "./PreviewFloatBar.vue";
 import { findFolderNode } from "../lib/detailSections";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
@@ -35,8 +35,8 @@ const search = useSearchStore();
 const ui = useUiStore();
 
 // 「始终显示搜索框」关（ui.showSearchBar=false，2026-09-06 视图菜单轮，用户定）时的唤出态：
-// Ctrl+F（search.requestFocus 本 panel）唤出；Esc 清空失焦后 SearchFloatBar request-hide 收回。
-// 开关恒开时本态无关（v-if 第一条件恒真）；显隐动画 = 下浮入 / 下沉出（sf-reveal）
+// Ctrl+F（search.requestFocus 本 panel）唤出；Esc 清空失焦后 FloatBarHost request-hide 收回。
+// 开关恒开时本态无关（v-if 条件恒真）；显隐动画 = 下浮入 / 下沉出（sf-reveal）
 const searchRevealed = ref(false);
 watch(
   () => search.focusSeq,
@@ -58,6 +58,8 @@ const disposeActive = panelApi.onDidActiveChange(() => {
   active.value = panelApi.isActive;
 });
 onBeforeUnmount(() => disposeActive.dispose());
+// 预览态 = preview.assetKey 非空且本 panel 激活（预览是全局单例，非激活 panel 保持原视口）
+const previewActive = computed(() => !!preview.assetKey && active.value);
 
 // 当前视口资源（"全部"= 全部 Placement；文件夹 = 该文件夹直接 Placement，
 // 递归显示开关 ui.showSubfolders 打开时含全部后代文件夹，2026-08-10 接入）。
@@ -89,15 +91,12 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
 
 <template>
   <main class="content-area">
-    <template v-if="preview.assetKey && active">
+    <template v-if="previewActive">
       <div class="preview-root" :class="{ fullscreen: preview.fullscreen }">
         <PreviewTitleBar v-if="!preview.fullscreen" />
         <section class="preview-section">
           <PreviewPanel />
         </section>
-        <!-- 预览悬浮播放条（2026-09-09 预览悬浮栏接入轮）：FloatBar play + 帧条 + 弹层，
-             底部居中距底 12（同搜索悬浮栏口径）；旧通栏 footer 三件套作废 -->
-        <PreviewFloatBar v-if="preview.hasPlayBar" />
       </div>
     </template>
     <template v-else>
@@ -117,23 +116,25 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
           />
         </section>
       </div>
-      <!-- 多功能悬浮栏（搜索模式）：浮于列表上方，底部居中距底 12（sf-anchor absolute 定位）。
-           「始终显示搜索框」关 = 平时隐藏，Ctrl+F 唤出 / Esc 收回（2026-09-06 用户定） -->
-      <Transition name="sf-reveal">
-        <SearchFloatBar
-          v-if="ui.showSearchBar || searchRevealed"
-          :panel-id="panelApi.id"
-          :view-key="viewKey"
-          @request-hide="searchRevealed = false"
-        />
-      </Transition>
     </template>
+    <!-- 多功能悬浮栏宿主：根部单例——预览进出 = 搜索栏 ↔ 播放条同一容器形态切换 morph
+         （稿 prose，2026-09-09 二轮落地）；定位底部居中距底 12、两侧 12 呼吸。
+         「始终显示搜索框」关 = 非预览态平时隐藏，Ctrl+F 唤出 / Esc 收回（sf-reveal 出入场） -->
+    <Transition name="sf-reveal">
+      <FloatBarHost
+        v-if="previewActive || ui.showSearchBar || searchRevealed"
+        :panel-id="panelApi.id"
+        :view-key="viewKey"
+        :preview-active="previewActive"
+        @request-hide="searchRevealed = false"
+      />
+    </Transition>
   </main>
 </template>
 
 <style scoped>
 .content-area {
-  position: relative; /* 悬浮栏（sf-anchor）定位基准 */
+  position: relative; /* 悬浮栏（fbh-anchor）定位基准 */
   display: flex;
   flex-direction: column;
   height: 100%; /* 1.2：dockview panel 内容容器由 dock 管理尺寸，铺满即可 */
@@ -162,8 +163,8 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
   padding: var(--n-space-12) 0 0 var(--n-space-12);
 }
 /* 预览模式根：占满中栏；全屏时 fixed 铺满窗口（2026-07-25 定案：显示器全屏）。
-   悬浮播放条（PreviewFloatBar anchor absolute 底部居中距底 12）非全屏锚于 content-area（relative）、
-   全屏锚于本根（fixed 包含块），两态同位（2026-09-09 预览悬浮栏接入轮） */
+   悬浮栏宿主（FloatBarHost）挂 content-area 根部两分支外（预览进出不卸载 = morph 成立前提）；
+   全屏时 anchor 上溯 fixed 本根为包含块，距底/两侧 12 两态同位（2026-09-09 二轮） */
 .preview-root {
   display: flex;
   flex-direction: column;

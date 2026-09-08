@@ -27,7 +27,7 @@ const DEBOUNCE_MS = 150; // inbox-fs-changed 去抖同值先例
 
 export const useSearchStore = defineStore("search", () => {
   const panels = ref(new Map<string, PanelSearch>());
-  // Ctrl+F 聚焦请求（SearchFloatBar watch 比对 panelId 后聚焦自身输入框）
+  // Ctrl+F 聚焦请求（FloatBarHost watch 比对 panelId 后聚焦自身输入框）
   const focusSeq = ref(0);
   const focusPanelId = ref("");
 

@@ -1,9 +1,11 @@
 # CDP 实测：预览悬浮播放条（2026-09-09 预览悬浮栏接入轮重写——FloatBar play 模式 + FrameStrip +
 # 倍率/音量/时间显示悬停弹层，替代旧通栏三件套 PreviewPlayBar/PreviewFrameStrip/PreviewNotes，
-# 13_播放条稿直角通栏口径作废）：壳 = 高 42 / 圆角 21 / 通用/半透明-2 底 / 模式根 padding 12 16 /
-# 图标 亮色/三级；帧条 = .fb-pop 圆角 8 / 半透明-1 / 5 格分页 / 与播放条同宽（间距 12 归父容器）。
+# 13_播放条稿直角通栏口径作废；同日二轮：宿主合并 FloatBarHost（.fbh-anchor，两侧 12 呼吸）+
+# 播放条 fill 横向填满 + 弹层对齐触发件上方居中）：壳 = 高 42 / 圆角 21 / 通用/半透明-2 底 /
+# 模式根 padding 12 16 / 图标 亮色/三级；帧条 = .fb-pop 圆角 8 / 半透明-1 / 5 格分页 / 与播放条同宽满幅。
 # 三变体覆盖：动图（帧条 5 格分页，假 WS 帧流撑起 animTotal）/ 视频（全量组 + 图标朝向 +
-# hover 提亮 + tip + 倍率/音量/时间显示悬停弹层）/ 音频（波形进度 WaveProgress + 删减组）。截图留档。
+# hover 提亮 + tip + 倍率/音量/时间显示悬停弹层 + 弹层对齐 + fill 伸展）/ 音频（波形进度
+# WaveProgress + 删减组）。截图留档。
 import asyncio
 import base64
 import json
@@ -114,7 +116,7 @@ async def frame_server():
 # 悬浮播放条壳断言（多功能悬浮栏稿：42 高 / 圆角 21 / 通用/半透明-2 底 / 模式根 padding 12 16 /
 # 图标 亮色/三级）
 BAR_STYLE_JS = """(() => {
-  const shell = document.querySelector('.pfb-anchor .fb-shell');
+  const shell = document.querySelector('.fbh-anchor .fb-shell');
   if (!shell) return null;
   const root = shell.querySelector('.fbp-root');
   const cs = getComputedStyle(shell);
@@ -125,17 +127,20 @@ BAR_STYLE_JS = """(() => {
     iconColor: icon ? getComputedStyle(icon).color : null,
     btnCount: root ? root.querySelectorAll('.ic-btn').length : 0,
     hasRate: !!root.querySelector('.fbp-rate'),
+    shellW: shell.offsetWidth,
+    anchorW: document.querySelector('.fbh-anchor')?.offsetWidth ?? null,
+    panelW: document.querySelector('.fbh-anchor')?.parentElement?.offsetWidth ?? null,
   };
 })()"""
 
 # 帧条断言（播放条-帧条稿：.fb-pop 圆角 8 / 半透明-1 底 / padding 8 / 5 格 129x76 /
 # 两端尖括号（下一帧 flip-h）/ 与播放条同宽）
 STRIP_STYLE_JS = """(() => {
-  const strip = document.querySelector('.pfb-anchor .fs-root');
+  const strip = document.querySelector('.fbh-anchor .fs-root');
   if (!strip) return null;
   const cs = getComputedStyle(strip);
   const navs = [...strip.querySelectorAll('.fs-nav .app-icon')].map((s) => getComputedStyle(s).transform);
-  const shell = document.querySelector('.pfb-anchor .fb-shell');
+  const shell = document.querySelector('.fbh-anchor .fb-shell');
   const frame = strip.querySelector('.fs-frame');
   return {
     borderRadius: cs.borderRadius, background: cs.backgroundColor, padding: cs.padding,
@@ -149,7 +154,7 @@ STRIP_STYLE_JS = """(() => {
 # 视频播放条图标朝向断言（悬浮栏族口径：seek 原样 ◀◀ = 快退 / flip-h ▶▶ = 快进；
 # step-frame 原样 |◀ = 上一帧 / flip-h ▶| = 下一帧）——读 .ic-btn svg computed transform 序列比对
 VIDEO_BTNS_JS = """(() => {
-  const root = document.querySelector('.pfb-anchor .fbp-root');
+  const root = document.querySelector('.fbh-anchor .fbp-root');
   if (!root) return null;
   return [...root.querySelectorAll('.ic-btn .app-icon')].map((s) => getComputedStyle(s).transform);
 })()"""
@@ -236,9 +241,14 @@ async def main():
                     fails.append(f"[{tag}] 图标钮 {s['btnCount']} 件（期望 {btn_count}）")
                 if s["hasRate"] != has_rate:
                     fails.append(f"[{tag}] 倍速钮存在性 {s['hasRate']}（期望 {has_rate}）")
+                # fill = 横向填满（2026-09-09 二轮用户定）：壳 = anchor 宽，anchor = 面板 - 两侧 12 呼吸
+                if s["shellW"] != s["anchorW"]:
+                    fails.append(f"[{tag}] 播放条未填满 anchor（壳 {s['shellW']} ≠ anchor {s['anchorW']}）")
+                if s["anchorW"] is None or s["panelW"] is None or s["anchorW"] != s["panelW"] - 24:
+                    fails.append(f"[{tag}] anchor ≠ 面板 - 两侧12（{s['anchorW']} vs panel {s['panelW']}）")
 
             async def shot_anchor(name):
-                rect = await ev("(() => { const r = document.querySelector('.pfb-anchor')?.getBoundingClientRect(); return r ? { x: r.left, y: r.top, width: r.width, height: r.height } : null; })()")
+                rect = await ev("(() => { const r = document.querySelector('.fbh-anchor')?.getBoundingClientRect(); return r ? { x: r.left, y: r.top, width: r.width, height: r.height } : null; })()")
                 if not rect:
                     return
                 shot = await send(ws, "Page.captureScreenshot", {
@@ -297,7 +307,7 @@ async def main():
                     fails.append(f"[动图] 帧条与播放条不同宽（{strip['stripW']} vs {strip['shellW']}）")
             # 时间码：帧号 当前 亮色/二级、总计 三级（数字-大档）
             tc = await ev("""(() => {
-              const tc = document.querySelector('.pfb-anchor .fbp-tc');
+              const tc = document.querySelector('.fbh-anchor .fbp-tc');
               if (!tc) return null;
               return { text: tc.textContent, cur: getComputedStyle(tc.querySelector('.cur')).color,
                        tot: getComputedStyle(tc.querySelector('.tot')).color };
@@ -308,16 +318,18 @@ async def main():
             await shot_anchor("playbar-frames")
             await close_preview()
 
-            # 场景 B：视频（全量组 10 图标 + 倍速文字钮）
+            # 场景 B：视频（全量组 10 图标 + 倍速文字钮；fill 模式进度条吃余量伸展）
             await open_card(1, 2.0)
             diag = await ev("""(() => {
-              const shell = document.querySelector('.pfb-anchor .fb-shell');
+              const shell = document.querySelector('.fbh-anchor .fb-shell');
               const root = shell?.querySelector('.fbp-root');
               const prog = root?.querySelector('.fbp-progress');
-              return { shellW: shell?.offsetWidth, rootW: root?.offsetWidth, progW: prog?.offsetWidth,
-                       progFlex: prog ? getComputedStyle(prog).flexBasis + '/' + getComputedStyle(prog).flexGrow : null };
+              return { shellW: shell?.offsetWidth, progW: prog?.offsetWidth,
+                       fillGrow: prog ? getComputedStyle(prog).flexGrow : null };
             })()""")
             print("[视频] 宽度诊断:", json.dumps(diag, ensure_ascii=False))
+            if not diag or diag["fillGrow"] != "1" or not diag["progW"] or diag["progW"] < 327:
+                fails.append(f"[视频] fill 进度条未伸展（{diag}，期望 grow 1 且实宽 ≥ 327 稿值）")
             await check_bar("视频", 10, True)
             # 朝向序列：播放 none / 快退 none（◀◀）/ 快进 flip / 上帧 none（|◀）/ 下帧 flip /
             # 音量 none / 循环 none / 笔记 none / 设封面 none / 全屏 none
@@ -328,10 +340,10 @@ async def main():
                 if transforms != expect:
                     fails.append(f"[视频] 图标朝向序列不符（{transforms}，期望 {expect}）")
             # hover 提亮 + tip（下一帧钮 index 4）：图标 三级 → 二级；tip 400ms 出，快捷键纯文本
-            color0 = await ev("getComputedStyle(document.querySelectorAll('.pfb-anchor .fbp-root .ic-btn')[4]).color")
-            await hover(".pfb-anchor .fbp-root .ic-btn", 4)
+            color0 = await ev("getComputedStyle(document.querySelectorAll('.fbh-anchor .fbp-root .ic-btn')[4]).color")
+            await hover(".fbh-anchor .fbp-root .ic-btn", 4)
             await asyncio.sleep(0.2)
-            color1 = await ev("getComputedStyle(document.querySelectorAll('.pfb-anchor .fbp-root .ic-btn')[4]).color")
+            color1 = await ev("getComputedStyle(document.querySelectorAll('.fbh-anchor .fbp-root .ic-btn')[4]).color")
             print("[视频] 下一帧 hover 色:", color0, "→", color1)
             if color0 != L3_RGB or color1 != L2_RGB:
                 fails.append(f"[视频] hover 未升二级（{color0} → {color1}）")
@@ -341,26 +353,45 @@ async def main():
             if not tip or "show" not in tip["cls"] or "下一帧" not in tip["text"] or "." not in tip["text"]:
                 fails.append(f"[视频] 下一帧 tip 不符（{tip}，期望 .show 含「下一帧」与「.」纯文本）")
             # 倍率悬停弹层（RatePop 11 档横排，悬停开 + 移走延迟关）
-            await hover(".pfb-anchor .fbp-rate")
+            await hover(".fbh-anchor .fbp-rate")
             await asyncio.sleep(0.3)
-            rp = await ev("(() => { const p = document.querySelector('.pfb-anchor .rp-root'); return p ? { n: p.querySelectorAll('.rp-item').length, bg: getComputedStyle(p).backgroundColor } : null; })()")
+            rp = await ev("(() => { const p = document.querySelector('.fbh-anchor .rp-root'); return p ? { n: p.querySelectorAll('.rp-item').length, bg: getComputedStyle(p).backgroundColor } : null; })()")
             print("[视频] 倍率弹层:", json.dumps(rp, ensure_ascii=False))
             if not rp or rp["n"] != 11 or rp["bg"] != POP_BG:
                 fails.append(f"[视频] 倍率弹层未悬停开出（{rp}，期望 11 档 + 半透明-1）")
-            # 音量悬停弹层（VolumePop 宽 124 稿值）
-            await hover(".pfb-anchor .fbp-root .ic-btn", 5)
+            # 音量悬停弹层（VolumePop 宽 124 稿值；对齐触发件上方居中——2026-09-09 二轮用户定）
+            await hover(".fbh-anchor .fbp-root .ic-btn", 5)
             await asyncio.sleep(0.3)
-            vp = await ev("(() => { const p = document.querySelector('.pfb-anchor .vp-root'); return p ? { w: p.offsetWidth, bg: getComputedStyle(p).backgroundColor } : null; })()")
+            vp = await ev("""(() => {
+              const p = document.querySelector('.fbh-anchor .vp-root');
+              const b = document.querySelectorAll('.fbh-anchor .fbp-root .ic-btn')[5];
+              if (!p || !b) return null;
+              const pr = p.getBoundingClientRect(); const br = b.getBoundingClientRect();
+              return { w: p.offsetWidth, bg: getComputedStyle(p).backgroundColor,
+                       popCx: pr.left + pr.width / 2, btnCx: br.left + br.width / 2 };
+            })()""")
             print("[视频] 音量弹层:", json.dumps(vp, ensure_ascii=False))
             if not vp or vp["w"] != 124 or vp["bg"] != POP_BG:
                 fails.append(f"[视频] 音量弹层未悬停开出（{vp}，期望 宽 124 + 半透明-1）")
-            # 时间显示悬停弹层（RatePop 复用「帧数/时间码」两档，类 pfb-tc-pop 与倍率弹层区分）
-            await hover(".pfb-anchor .fbp-tc")
+            elif abs(vp["popCx"] - vp["btnCx"]) > 2:
+                fails.append(f"[视频] 音量弹层未对齐触发钮（pop cx {vp['popCx']:.0f} vs btn cx {vp['btnCx']:.0f}）")
+            # 时间显示悬停弹层（RatePop 复用「帧数/时间码」两档，类 fbh-tc-pop 与倍率弹层区分；
+            # 对齐时间码触发区）
+            await hover(".fbh-anchor .fbp-tc")
             await asyncio.sleep(0.3)
-            tcp = await ev("(() => { const p = document.querySelector('.pfb-anchor .pfb-tc-pop'); return p ? [...p.querySelectorAll('.rp-item')].map((b) => b.textContent) : null; })()")
+            tcp = await ev("""(() => {
+              const p = document.querySelector('.fbh-anchor .fbh-tc-pop');
+              const b = document.querySelector('.fbh-anchor .fbp-tc');
+              if (!p) return null;
+              const pr = p.getBoundingClientRect(); const br = b.getBoundingClientRect();
+              return { items: [...p.querySelectorAll('.rp-item')].map((x) => x.textContent),
+                       popCx: pr.left + pr.width / 2, btnCx: br.left + br.width / 2 };
+            })()""")
             print("[视频] 时间显示弹层:", json.dumps(tcp, ensure_ascii=False))
-            if tcp != ["帧数", "时间码"]:
+            if not tcp or tcp["items"] != ["帧数", "时间码"]:
                 fails.append(f"[视频] 时间显示弹层不符（{tcp}，期望 [帧数, 时间码]）")
+            elif abs(tcp["popCx"] - tcp["btnCx"]) > 2:
+                fails.append(f"[视频] 时间显示弹层未对齐时间码（pop cx {tcp['popCx']:.0f} vs tc cx {tcp['btnCx']:.0f}）")
             await hover(".preview-stage")  # 移出关弹层
             await shot_anchor("playbar-video")
             await close_preview()
@@ -368,12 +399,25 @@ async def main():
             # 场景 C：音频（删减组：播放/音量/倍率/循环 = 3 图标 + 1 文字；波形进度 WaveProgress）
             await open_card(2, 2.0)
             await check_bar("音频", 3, True)
-            wave = await ev("(() => { const w = document.querySelector('.pfb-anchor .wp-root'); if (!w) return null; return { layers: w.querySelectorAll('.wave-layer').length, head: !!w.querySelector('.head') }; })()")
+            wave = await ev("(() => { const w = document.querySelector('.fbh-anchor .wp-root'); if (!w) return null; return { layers: w.querySelectorAll('.wave-layer').length, head: !!w.querySelector('.head') }; })()")
             print("[音频] 波形进度:", json.dumps(wave, ensure_ascii=False))
             if not wave or wave["layers"] != 2 or not wave["head"]:
                 fails.append(f"[音频] 波形进度条未渲染（{wave}，期望 双层 mask + 播放头）")
             # 删减组已由 check_bar 钉（3 图标 + 1 文字 = 播放/音量/循环 + 倍率，其余组全删）
             await shot_anchor("playbar-audio")
+
+            # morph 回程（稿 prose「同一容器」口径，2026-09-09 二轮）：关闭预览 → 同一 FloatBar 壳
+            # 切回搜索形态（宿主根部单例不卸载，fbp-root → fbs-input + 壳宽回 250）
+            await close_preview()
+            back = None
+            for _ in range(20):
+                back = await ev("(() => { const s = document.querySelector('.fbh-anchor .fb-shell'); return s && document.querySelector('.fbs-input') ? s.offsetWidth : null; })()")
+                if back == 250:
+                    break
+                await asyncio.sleep(0.2)
+            print("[回程] 搜索形态壳宽:", back)
+            if back != 250:
+                fails.append(f"[回程] 关闭预览未 morph 回搜索栏 250（{back}）")
 
             if fails:
                 print("FAIL:", "; ".join(dict.fromkeys(fails)))

@@ -24,14 +24,16 @@ const props = withDefaults(
     mode?: "search" | "markdown" | "play";
     visible?: boolean;
     width?: number; // 显式宽度覆盖（跳过实测；帧条同宽组合等父级定宽场景）
+    fill?: boolean; // 横向填满父容器（2026-09-09 二轮：预览播放条口径——两侧 12 呼吸归 anchor；
+    // 壳 width 100% 跳过实测，resize 指定值不变不触发过渡 = 即时跟随；退场 gone 宽 0 仍过渡）
   }>(),
-  { mode: "search", visible: true, width: undefined },
+  { mode: "search", visible: true, width: undefined, fill: false },
 );
 
 const comps = { search: FloatBarSearch, markdown: FloatBarMarkdown, play: FloatBarPlay };
 const modeComp = computed(() => comps[props.mode]);
 
-// 聚焦/失焦转发（业务壳 SearchFloatBar：Ctrl+F 聚焦 / Esc 失焦；仅 search 模式实现 focus/blur）
+// 聚焦/失焦转发（业务壳 FloatBarHost：Ctrl+F 聚焦 / Esc 失焦；仅 search 模式实现 focus/blur）
 const modeRef = ref<ComponentPublicInstance | null>(null);
 defineExpose({
   focusSearch: () => (modeRef.value as { focus?: () => void } | null)?.focus?.(),
@@ -54,6 +56,7 @@ function probe(el: HTMLElement): number {
 }
 
 async function syncWidth(): Promise<void> {
+  if (props.fill) return; // 填满模式：壳 width 100% 随父（CSS），跳过实测
   if (props.width != null) {
     shellW.value = props.width; // 显式覆盖：跳过实测
     return;
@@ -98,8 +101,8 @@ onMounted(() => {
 <template>
   <div
     class="fb-shell"
-    :class="[{ anim: ready, gone: !visible }]"
-    :style="{ width: `${shellW}px` }"
+    :class="[{ anim: ready, gone: !visible, fill }]"
+    :style="fill ? undefined : { width: `${shellW}px` }"
   >
     <div ref="slotEl" class="fb-slot">
       <Transition name="fb">
@@ -108,6 +111,7 @@ onMounted(() => {
           :key="mode"
           ref="modeRef"
           v-bind="$attrs"
+          :fill="fill"
           @expanded-change="onExpandedChange"
           @focused-change="onFocusedChange"
         >
@@ -131,6 +135,11 @@ onMounted(() => {
 .fb-shell.gone {
   width: 0 !important;
   opacity: 0;
+}
+/* fill = 横向填满父容器（2026-09-09 二轮播放条口径）：width 100% 指定值恒定，
+   父容器 resize 不触发过渡 = 即时跟随；退场 gone 宽 0 仍走 300ms 过渡 */
+.fb-shell.fill {
+  width: 100%;
 }
 
 /* 内容槽恒满壳宽——模式根 100% 随壳，内容右端件随壳边平滑移动（十五轮走查定） */

@@ -1,11 +1,11 @@
 <script setup lang="ts">
-// 独立预览窗口（4.3 新窗口打开）：标题栏（文件名 + 置顶 + 窗口控制）+ 预览画面 + 悬浮播放条/帧条/笔记弹层
-//（2026-09-09 预览悬浮栏接入轮换 PreviewFloatBar，旧通栏 footer 三件套作废）。
+// 独立预览窗口（4.3 新窗口打开）：标题栏（文件名 + 置顶 + 窗口控制）+ 预览画面 + 悬浮播放条/帧条/弹层
+//（FloatBarHost 预览态 play 模式；不传 panelId/viewKey = 搜索分支禁用，2026-09-09 二轮宿主合并）。
 // 经 URL ?preview={assetKey} 进入；数据走同一 Rust AppState，本窗口独立 pinia，拉全量后 open。
 import { onMounted } from "vue";
 import PreviewTitleBar from "./PreviewTitleBar.vue";
 import PreviewPanel from "./PreviewPanel.vue";
-import PreviewFloatBar from "./PreviewFloatBar.vue";
+import FloatBarHost from "./FloatBarHost.vue";
 import { useContentStore } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
 
@@ -25,13 +25,13 @@ onMounted(async () => {
     <section class="pw-body">
       <PreviewPanel />
     </section>
-    <PreviewFloatBar v-if="preview.hasPlayBar" />
+    <FloatBarHost v-if="preview.hasPlayBar" preview-active />
   </div>
 </template>
 
 <style scoped>
 /* 独立预览窗口：占满窗口（App.vue 的 .window 是横向 flex——必须 flex:1，否则宽度由内容撑开、右侧留白）；
-   relative = 悬浮播放条（PreviewFloatBar anchor absolute 底部居中距底 12）定位基准，全屏两态同位 */
+   relative = 悬浮栏宿主（FloatBarHost anchor absolute 底部居中距底 12、两侧 12）定位基准，全屏两态同位 */
 .preview-window {
   position: relative;
   display: flex;

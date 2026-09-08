@@ -14,7 +14,7 @@
 //   flex-basis 定值 + shrink>0 时 Blink 只报内容固有尺寸，FloatBar 探针实测会丢 327 稿值
 //   （cdp-flex-contrib-exp.py 实测定案）；
 // - title = v-tip（文案沿用旧播放条）；rate / volume / 时间码 带 pointerenter/leave emit（悬停弹层挂钩，
-//   弹层定位与开合归业务壳 PreviewFloatBar）；进度拖动起止经 progress-drag-start/end 透传（scrubbing 挂钩）。
+//   弹层定位与开合归业务壳 FloatBarHost）；进度拖动起止经 progress-drag-start/end 透传（scrubbing 挂钩）。
 import IconButton from "../buttons/IconButton.vue";
 import BarSlider from "./BarSlider.vue";
 import "./bars.css";
@@ -36,6 +36,7 @@ const props = withDefaults(
     loopOn?: boolean;
     fullscreen?: boolean; // 全屏态（title 文案两态：全屏 / 退出全屏）
     disabled?: boolean; // 转码态：全控件禁用 + 进度区「转码中…」
+    fill?: boolean; // 填满模式（FloatBar fill 透传）：进度条吃余量伸展（非 fill = width 327 稿值链）
     rateText?: string;
     curr?: string; // 时间码当前（帧数 / 时长文本，父级格式化）
     total?: string; // 时间码总计
@@ -47,6 +48,7 @@ const props = withDefaults(
     loopOn: false,
     fullscreen: false,
     disabled: false,
+    fill: false,
     rateText: "1x",
     curr: "00132",
     total: "00132",
@@ -54,6 +56,7 @@ const props = withDefaults(
   },
 );
 const progress = defineModel<number>("progress", { default: 0 }); // 0~1
+// hover / open 事件带触发事件对象（2026-09-09 二轮：业务壳弹层对齐触发件——取 currentTarget rect 定位）
 const emit = defineEmits<{
   "toggle-play": [];
   "seek-back": [];
@@ -61,12 +64,12 @@ const emit = defineEmits<{
   "step-prev": [];
   "step-next": [];
   "volume-click": []; // 父级定行为（开音量弹层 / 切静音）
-  "volume-hover": [on: boolean]; // 悬停开合音量弹层挂钩
-  "open-rate": []; // 父级开倍率弹层（点击）
-  "rate-hover": [on: boolean]; // 悬停开合倍率弹层挂钩
-  "tc-hover": [on: boolean]; // 时间码悬停（时间显示切换弹层挂钩）
+  "volume-hover": [on: boolean, ev?: PointerEvent]; // 悬停开合音量弹层挂钩
+  "open-rate": [ev?: MouseEvent]; // 父级开倍率弹层（点击）
+  "rate-hover": [on: boolean, ev?: PointerEvent]; // 悬停开合倍率弹层挂钩
+  "tc-hover": [on: boolean, ev?: PointerEvent]; // 时间码悬停（时间显示切换弹层挂钩）
   "toggle-loop": [];
-  "open-note": []; // 父级开笔记弹层
+  "open-note": [ev?: MouseEvent]; // 父级开笔记弹层
   "set-cover": [];
   "open-fullscreen": [];
   "progress-drag-start": []; // 进度拖动起止（scrubbing 挂钩，BarSlider 透传）
@@ -79,7 +82,7 @@ function has(g: PlayGroup): boolean {
 </script>
 
 <template>
-  <div class="fb-mode fbp-root">
+  <div class="fb-mode fbp-root" :class="{ fill }">
     <IconButton
       :name="playing ? 'pause' : 'play'"
       variant="bare"
@@ -102,13 +105,13 @@ function has(g: PlayGroup): boolean {
       :title="muted ? '取消静音' : '静音'"
       :disabled="disabled"
       @click="emit('volume-click')"
-      @pointerenter="emit('volume-hover', true)"
+      @pointerenter="emit('volume-hover', true, $event)"
       @pointerleave="emit('volume-hover', false)"
     />
     <div
       class="fbp-tc"
       v-tip="'时间显示'"
-      @pointerenter="emit('tc-hover', true)"
+      @pointerenter="emit('tc-hover', true, $event)"
       @pointerleave="emit('tc-hover', false)"
     >
       <span class="cur">{{ curr }}</span>
@@ -131,8 +134,8 @@ function has(g: PlayGroup): boolean {
       v-if="has('rate')"
       class="fbp-rate"
       :disabled="disabled"
-      @click="emit('open-rate')"
-      @pointerenter="emit('rate-hover', true)"
+      @click="emit('open-rate', $event)"
+      @pointerenter="emit('rate-hover', true, $event)"
       @pointerleave="emit('rate-hover', false)"
     >
       {{ rateText }}
@@ -146,7 +149,7 @@ function has(g: PlayGroup): boolean {
       :disabled="disabled"
       @click="emit('toggle-loop')"
     />
-    <IconButton v-if="has('note')" name="note" variant="bare" title="笔记" :disabled="disabled" @click="emit('open-note')" />
+    <IconButton v-if="has('note')" name="note" variant="bare" title="笔记" :disabled="disabled" @click="emit('open-note', $event)" />
     <IconButton
       v-if="has('cover')"
       name="set-cover"
@@ -206,6 +209,11 @@ function has(g: PlayGroup): boolean {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+/* fill（填满模式）：进度条吃余量伸展（grow 1 + width auto；fill 不走 max-content 探针，无丢宽坑） */
+.fbp-root.fill .fbp-progress {
+  width: auto;
+  flex-grow: 1;
 }
 
 /* 转码提示（disabled 态进度区）：次要文字档 亮色/三级（稿无此态，随笔记摘录档就近套） */

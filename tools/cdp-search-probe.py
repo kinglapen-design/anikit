@@ -673,12 +673,12 @@ async def main():
               const sr = shell.getBoundingClientRect(); const pr = panel.getBoundingClientRect();
               const cr = collapse.getBoundingClientRect();
               return { shellW: shell.offsetWidth, panelW: panel.offsetWidth,
-                       inPanelX: sr.left >= pr.left - 1 && sr.right <= pr.right + 1,
+                       inPanelX: sr.left >= pr.left + 11 && sr.right <= pr.right - 11,
                        collapseIn: cr.left >= sr.left - 1 && cr.right <= sr.right + 1,
                        overflowX: col.scrollWidth > col.clientWidth };
             })()""")
             print("  [S20] 挤压态:", json.dumps(s20, ensure_ascii=False))
-            check("S20a 壳钳制在面板内（不跑底色外）", bool(s20 and s20["inPanelX"] and s20["shellW"] <= s20["panelW"]), json.dumps(s20))
+            check("S20a 壳钳制在面板内 + 两侧 12 呼吸（不跑底色外）", bool(s20 and s20["inPanelX"] and s20["shellW"] <= s20["panelW"] - 24), json.dumps(s20))
             check("S20b 收起钮钉在壳内（不被裁走）", bool(s20 and s20["collapseIn"]), json.dumps(s20))
             check("S20c 筛选组横向溢出（可横滚前提）", bool(s20 and s20["overflowX"]), json.dumps(s20))
             # 滚轮横滚：合成 wheel（deltaY → scrollLeft）
