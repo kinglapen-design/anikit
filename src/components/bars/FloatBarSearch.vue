@@ -7,7 +7,7 @@
 // 筛选钮 = 高 24 padding 4/8 圆角 6 + 亮色/半透明-3 底 + 立体感-通用 + 次要文字-加粗 亮色/二级；
 // hover 底升 半透明-2；选中 底 半透明-1 + 文字 一级（稿 prose）。
 // 自动实时搜索（input 即 v-model）；搜索图标点击 = 预留（未来展开向量/AI 搜索选项，稿 prose）。
-// 业务接入（2026-08-31 悬浮栏接入轮）：expose focus/blur + escape emit 供业务壳 SearchFloatBar
+// 业务接入（2026-08-31 悬浮栏接入轮）：expose focus/blur + escape emit 供业务壳 FloatBarHost
 //（Ctrl+F 聚焦 / Esc 清空失焦口径）。
 import { onMounted, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
@@ -34,7 +34,7 @@ const emit = defineEmits<{
   "filter-toggle": [key: string];
   "expanded-change": [v: boolean]; // FloatBar 宽度重测挂钩
   "focused-change": [v: boolean];
-  escape: []; // Esc（业务壳口径：清空并失焦，SearchFloatBar）
+  escape: []; // Esc（业务壳口径：清空并失焦，FloatBarHost）
 }>();
 const query = defineModel<string>("query", { default: "" });
 
