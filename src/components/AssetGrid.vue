@@ -16,7 +16,7 @@ import EmptyFolderState from "./EmptyFolderState.vue";
 import SectionTitle from "./items/SectionTitle.vue";
 import { useGridLayout, type GridSection } from "../lib/useGridLayout";
 import { groupPlacements } from "../lib/grouping";
-import { isAudioExt } from "../lib/formatBadge";
+import { isAudioExt, isSequence, isThumbCapableExt } from "../lib/formatBadge";
 import { useSpaceZoom } from "../lib/useSpaceZoom";
 import { useMarquee, makeBoxHitTest, headerBlankClear } from "../lib/useMarquee";
 import {
@@ -63,13 +63,19 @@ function openPreview(p: PlacementView): void {
 //（文件夹选择域在 selection store，clickItem 内部互斥清理，2026-07-28 复验反馈 5）。
 // 2026-08-18 用户定：简介区（含 meta 行）点击 = 选中——名称+简介有底色框后用户预期整卡可点，
 // 原".card-info 视为空白"（2026-07-29 对齐 Eagle 旧口径）废除，card-info 分类整体退役
-// 选择模式（6.2 一轮）：单击 = 加入/移出备选（不再是选中，PRD 03_数据链接 04 交互变化）
+// 选择模式（6.2 一轮）：单击 = 加入/移出备选（不再是选中，PRD 03_数据链接 04 交互变化）；
+// cover 用途（2026-09-08）= 单击图片即定（单选直回不进备选区，picker.pickCoverAsset）
 function onCardClick(p: PlacementView, e: MouseEvent): void {
   if (dragView.suppressClick) return; // 有效拖拽结束后紧随的 click 不当选择（拖拽引擎置位）
   if (picker.active) {
     if (content.isRecycleView) return; // 回收站文件不可加入备选（已删除资产不该建关系）
+    const target = { kind: "asset" as const, id: p.assetId, name: p.name, ext: p.ext, thumb: p.thumbPath, folderId: p.folderId, origin: p.origin };
+    if (picker.purpose === "cover") {
+      void picker.pickCoverAsset(target);
+      return;
+    }
     // folderId 随三元组定位源 Placement（link 用途确认时 link_placements 入参）
-    picker.togglePick({ kind: "asset", id: p.assetId, name: p.name, ext: p.ext, thumb: p.thumbPath, folderId: p.folderId, origin: p.origin });
+    picker.togglePick(target);
     return;
   }
   if (e.ctrlKey || e.metaKey || e.shiftKey) {
@@ -98,8 +104,12 @@ const groupSections = computed(() => {
 });
 const displayItems = computed(() => {
   const items = groupSections.value ? groupSections.value.flatMap((s) => s.items) : props.items;
-  // 选择模式链接音频（6.2 三轮）：过滤非音频（02 稿"过滤掉非音频文件，去掉噪音，加快选择"）
-  return picker.filterAudio ? items.filter((p) => isAudioExt(p.ext)) : items;
+  // 选择模式链接音频（6.2 三轮）：过滤非音频（02 稿"过滤掉非音频文件，去掉噪音，加快选择"）；
+  // 选择模式档案封面（2026-09-08）：过滤非封面图——静态图 + gif 动图（isThumbCapableExt，
+  // 与烘培可解码格式同口径），排除序列帧包（origin 指向 frames/ 内帧非实体单图，不可烘培）
+  if (picker.filterAudio) return items.filter((p) => isAudioExt(p.ext));
+  if (picker.filterImage) return items.filter((p) => isThumbCapableExt(p.ext) && !isSequence(p));
+  return items;
 });
 const gridSections = computed<GridSection[] | null>(() => {
   const secs = groupSections.value;
@@ -342,9 +352,9 @@ onBeforeUnmount(() => {
         <FolderStrip v-if="!searching && content.stripFoldersFor(viewKey).length > 0" :view-key="viewKey" />
         <!-- 档案区（3.2 一轮，PRD 02-03 三区：文件夹 / 档案 / 文件）：无档案整块不渲染（同文件夹区口径）；
              搜索态 = 命中档案列表（nodes 数据源切换，快速访问视图后端不返回档案命中——档案区仅文件夹视图出）；
-             选择模式链接音频（6.2 三轮）档案区不渲染（voice 目标只能是音频 asset，过滤噪音） -->
+             选择模式链接音频 / 档案封面（档案非可选目标）档案区不渲染（过滤噪音） -->
         <ArchiveStrip
-          v-if="!picker.filterAudio && (searching ? searchArchives.length > 0 : content.stripArchivesFor(viewKey).length > 0)"
+          v-if="!picker.filterAudio && !picker.filterImage && (searching ? searchArchives.length > 0 : content.stripArchivesFor(viewKey).length > 0)"
           :view-key="viewKey"
           :nodes="searching ? searchArchives : undefined"
         />

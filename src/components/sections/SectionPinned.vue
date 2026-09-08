@@ -6,6 +6,7 @@
 //   + 颜色列表 ColorSwatchItem（真色 = detail.colors 前 7，空 = 7 占位块恒显——6.1 口径）。
 // 名称 / 链接输入框已下移基础信息 tab 输入框区块（旧 pinned 四件口径作废）。
 // 档案形态：封面容器同款 240×240（封面 cover 充满——稿裁切语义）+ 徽标 FormatBadge（badge.text）；
+//   封面链 = 自定义封面 → 子项首图 → 默认封面图（2026-09-08 用户定，lib/archiveCover）；
 //   hover = 纯黑压暗 50% + set-cover 图标居中 二级（稿 prose 1_hover-封面图）；
 //   点击 = 内联展开封面设置组（CoverSettings，6.1 业务不变；设置组贴稿随本轮档案形态阶段）——
 //   展开 / 收起 = pinned 根高度 250ms 缓入缓出补间（稿 prose「向下展开设置」，2026-08-31 用户定档）。
@@ -16,22 +17,39 @@ import CoverSettings from "./CoverSettings.vue";
 import FormatBadge from "../cards/FormatBadge.vue";
 import ColorSwatchItem from "../items/ColorSwatchItem.vue";
 import AppIcon from "../AppIcon.vue";
+import { archiveCoverUrl } from "../../lib/archiveCover";
 import { formatBadgeColor, isSequence } from "../../lib/formatBadge";
 import type { DetailTarget } from "../../lib/detailSections";
 import { useContentStore } from "../../stores/content";
+import { usePickerStore } from "../../stores/picker";
 
 const props = defineProps<{ target: Extract<DetailTarget, { kind: "file" | "archive" }> }>();
 const content = useContentStore();
+const picker = usePickerStore();
 
 const file = computed(() => (props.target.kind === "file" ? props.target : null));
 const archive = computed(() => (props.target.kind === "archive" ? props.target : null));
 
 // 封面设置编辑态（6.1，43 稿；仅档案）：点击封面图展开，确认 / 取消（done）退回常态；
-// 切换展示目标（别的档案 / 文件）时复位退出
+// 切换展示目标（别的档案 / 文件）时复位退出。
+// 封面选择模式回填（2026-09-08，picker cover 用途）：选择模式选定图片退模式后档案恢复选中，
+// 草稿（coverDraft）匹配本档案 = 自动展开封面设置组并以该图进入取景态（CoverSettings initialSourcePath）
 const coverEditing = ref(false);
+const coverDraftSource = ref<string | null>(null);
 watch(
   () => (archive.value ? archive.value.node.id : null),
-  () => (coverEditing.value = false),
+  () => {
+    coverEditing.value = false;
+    const d = picker.coverDraft;
+    if (d && archive.value && d.archiveId === archive.value.node.id) {
+      picker.coverDraft = null; // 一次性消费
+      coverDraftSource.value = d.sourcePath;
+      coverEditing.value = true;
+    } else {
+      coverDraftSource.value = null;
+    }
+  },
+  { immediate: true },
 );
 
 // 展开 / 收起动画（稿 prose「2_点击-封面图：向下展开设置」；250ms 缓入缓出 = --n-dur-250 +
@@ -76,13 +94,12 @@ const thumbUrl = computed(() => {
   const p = file.value?.placement.thumbPath;
   return p ? convertFileSrc(p) : null;
 });
-// 档案封面：自定义封面优先（6.1 封面设置产物 covers/，coverPath 绝对路径）；
-// 无自定义 = 子项第一张静态图（folderThumbMap 既有口径）；无图 = 浅色块占位
+// 档案封面链（2026-09-08 用户定，lib/archiveCover）：自定义封面（cache/covers/ 烘培产物，
+// ?v= 版本戳随覆盖重写重载）→ 子项第一张静态图（folderThumbMap 既有口径）→ 默认封面图
 const archiveCover = computed(() => {
   const id = archive.value?.node.id;
   if (!id) return null;
-  const p = archive.value?.data.coverPath ?? content.folderThumbMap.get(id) ?? null;
-  return p ? convertFileSrc(p) : null;
+  return archiveCoverUrl(archive.value?.data.coverPath, archive.value?.data.coverVer, content.folderThumbMap.get(id));
 });
 // 格式徽标：静态图 / 无扩展名映射返回 null = 不出徽标（统一铬后仅留此判定，速查表 §16）
 const badgeLabel = computed(() => {
@@ -98,11 +115,13 @@ const swatchColors = computed(() => (file.value?.detail.colors ?? []).slice(0, 7
 <template>
   <section ref="rootRef" class="section-pinned">
     <!-- 封面设置编辑态（6.1，43 稿；仅档案）：整组替换（组件不自持 padding——挂载点 pinned
-         恒 padding 12，防双重 padding；组件内 gap 12 自管） -->
+         恒 padding 12，防双重 padding；组件内 gap 12 自管）；
+         initialSourcePath = 封面选择模式回填图源（picker cover 用途，选定即取景态） -->
     <CoverSettings
       v-if="archive && coverEditing"
       :node="archive.node"
       :data="archive.data"
+      :initial-source-path="coverDraftSource ?? ''"
       @done="coverEditing = false"
     />
     <template v-else>
@@ -121,7 +140,6 @@ const swatchColors = computed(() => (file.value?.detail.colors ?? []).slice(0, 7
         </template>
         <template v-else-if="archive">
           <img v-if="archiveCover" :src="archiveCover" alt="" draggable="false" class="fit-cover" />
-          <span v-else class="ext" />
           <FormatBadge v-if="archive.data.badge" class="badge" :label="archive.data.badge.text" />
           <!-- hover 封面 = 纯黑压暗 50% + 设为封面图标居中（稿 prose） -->
           <span class="cover-hover" aria-hidden="true">

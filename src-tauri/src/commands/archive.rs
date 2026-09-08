@@ -7,6 +7,7 @@ use crate::commands::library::AppState;
 use crate::commands::operations::fail;
 use crate::core::library::{Library, ARCHIVES_FILE, FOLDERS_FILE};
 use crate::core::models::{ArchiveData, Badge, Avatar, DescItem, Folder, Placement, ARCHIVE_KIND, DEFAULT_BLOCK_ID, ROOT_FOLDER_ID};
+use crate::core::undo::DiskOp;
 use crate::services::archive::{self, ConvertOutcome};
 use crate::services::custom_data;
 
@@ -80,8 +81,8 @@ pub async fn convert_to_folder(state: State<'_, AppState>, folder_id: String) ->
   }
 }
 
-/// 档案清单项（list_archives 输出）：ArchiveData 全字段 + 容量 + 封面图绝对路径（前端 convertFileSrc 直用；
-/// 无自定义封面 / 文件缺失 = null，前端回退子项首图）
+/// 档案清单项（list_archives 输出）：ArchiveData 全字段 + 容量 + 封面图绝对路径 + 版本戳
+///（前端 convertFileSrc + ?v= 直用；无自定义封面 / 文件缺失 = null，前端回退子项首图 / 默认封面图）
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchiveListItem {
@@ -95,6 +96,8 @@ pub struct ArchiveListItem {
   /// 档案容量（字节，2026-08-30 用户定案）：档案内 Placement 引用资产 size 去重合计（同详情口径）
   pub total_size: u64,
   pub cover_path: Option<String>,
+  /// 封面版本戳（2026-09-08 覆盖式烘培）：文件 mtime 纳秒——同路径重写后前端 ?v= 驱动 img 重载
+  pub cover_ver: Option<String>,
 }
 
 /// 档案内容统计：fileCount = 档案内 Placement 数（逐条计）；
@@ -122,16 +125,20 @@ pub fn list_archives(state: State<AppState>) -> Result<Vec<ArchiveListItem>, Str
   Ok(
     archive::list_archives(lib)
       .into_iter()
-      .map(|a| ArchiveListItem {
-        cover_path: archive::cover_file_path(lib, &a.folder_id),
-        total_size: archive_stats(lib, &a.folder_id).1,
-        folder_id: a.folder_id,
-        badge: a.badge,
-        avatar: a.avatar,
-        props: a.props,
-        descriptions: a.descriptions,
-        links: a.links,
-        created_at: a.created_at,
+      .map(|a| {
+        let (cover_path, cover_ver) = archive::cover_file_info(lib, &a.folder_id).unzip();
+        ArchiveListItem {
+          cover_path,
+          cover_ver,
+          total_size: archive_stats(lib, &a.folder_id).1,
+          folder_id: a.folder_id,
+          badge: a.badge,
+          avatar: a.avatar,
+          props: a.props,
+          descriptions: a.descriptions,
+          links: a.links,
+          created_at: a.created_at,
+        }
       })
       .collect(),
   )
@@ -152,8 +159,10 @@ pub struct ArchiveDetailView {
   pub created_at: String,
   pub file_count: u32,
   pub total_size: u64,
-  /// 封面图绝对路径（6.1；无自定义封面 / 文件缺失 = null，前端回退子项首图）
+  /// 封面图绝对路径（6.1；无自定义封面 / 文件缺失 = null，前端回退子项首图 / 默认封面图）
   pub cover_path: Option<String>,
+  /// 封面版本戳（2026-09-08 覆盖式烘培）：文件 mtime 纳秒，前端 ?v= 驱动 img 重载
+  pub cover_ver: Option<String>,
 }
 
 /// 单个档案的详细数据 + 统计；无记录返回默认空记录（档案刚转换、尚未配置数据）
@@ -163,6 +172,7 @@ pub fn get_archive_data(state: State<AppState>, folder_id: String) -> Result<Arc
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
   let rec = lib.archives.archives.iter().find(|a| a.folder_id == folder_id).cloned().unwrap_or_else(|| ArchiveData::new(&folder_id));
   let (file_count, total_size) = archive_stats(lib, &folder_id);
+  let (cover_path, cover_ver) = archive::cover_file_info(lib, &folder_id).unzip();
   Ok(ArchiveDetailView {
     folder_id: rec.folder_id,
     badge: rec.badge,
@@ -173,7 +183,8 @@ pub fn get_archive_data(state: State<AppState>, folder_id: String) -> Result<Arc
     created_at: rec.created_at,
     file_count,
     total_size,
-    cover_path: archive::cover_file_path(lib, &folder_id),
+    cover_path,
+    cover_ver,
   })
 }
 
@@ -214,8 +225,10 @@ pub async fn set_archive_descriptions(state: State<'_, AppState>, folder_id: Str
 }
 
 /// 档案封面设置（6.1，43 稿确认）：徽标三角（null/省略 = 不动……serde Option<Option<Badge>>：
-/// 缺省 = 不动、null = 清除、对象 = 设置）+ 封面（缺省 = 不动、给 = 本地选图按取景参数烘培）。
-/// 封面图独立存库根 covers/（不入库为资产，2026-08-23 用户定），时间戳命名不覆盖（undo 回滚即恢复旧封面）
+/// 缺省 = 不动、null = 清除、对象 = 设置）+ 封面（缺省 = 不动、给 = 选图按取景参数烘培）。
+/// 封面图独立存 cache/covers/（可再生缓存，2026-09-08 用户定），**覆盖式**文件名恒 {folder_id}
+/// 一档案一文件；撤销依托 = 旧封面改名暂存 cache/covers-trash/（本命令登记的 DiskOp::Rename
+/// 在 undo/redo 时执行搬运，同 sequence 删帧 seq-trash 口径；暂存开库清空 = 会话结束真弃）
 #[tauri::command]
 pub async fn set_archive_cover_settings(
   state: State<'_, AppState>,
@@ -229,10 +242,34 @@ pub async fn set_archive_cover_settings(
   undo.begin("设置档案封面");
   undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
   match archive::set_archive_cover_settings(lib, &folder_id, badge, cover) {
-    Ok(true) => undo.commit().map_err(|e| e.to_string()),
-    Ok(false) => {
-      undo.cancel();
-      Ok(())
+    Ok(out) => {
+      if !out.changed {
+        undo.cancel();
+        return Ok(());
+      }
+      // 封面覆盖烘培的撤销磁盘操作（apply_disk 逆序执行——登记序 = 执行序的反向）：
+      // undo 执行序 = [新封面挪入暂存 a, 旧封面自暂存 b 归位]；redo 执行序 = [旧封面再挪 b, 新封面自 a 归位]
+      if let Some(b) = out.bake {
+        let trash_a = crate::core::library::covers_trash_dir(&lib.root).join(format!("{}-a-{}", b.stamp, b.file));
+        if let Some((old_name, staged)) = b.staged_old {
+          let cover_old = crate::core::library::covers_dir(&lib.root).join(&old_name);
+          undo.record_disk_op(
+            DiskOp::Rename { from: staged.clone(), to: cover_old.clone() }, // undo ②旧封面归位
+            DiskOp::Rename { from: trash_a.clone(), to: b.new_path.clone() }, // redo ②新封面归位
+          );
+          undo.record_disk_op(
+            DiskOp::Rename { from: b.new_path.clone(), to: trash_a.clone() }, // undo ①新封面暂存
+            DiskOp::Rename { from: cover_old, to: staged },                 // redo ①旧封面再暂存
+          );
+        } else {
+          // 首次设置（无旧封面）：undo = 新封面挪入暂存（留内容供 redo），redo = 挪回
+          undo.record_disk_op(
+            DiskOp::Rename { from: b.new_path.clone(), to: trash_a.clone() },
+            DiskOp::Rename { from: trash_a, to: b.new_path },
+          );
+        }
+      }
+      undo.commit().map_err(|e| e.to_string())
     }
     Err(e) => Err(fail(lib, &mut undo, e)),
   }
@@ -544,6 +581,7 @@ mod tests {
         file_count,
         total_size,
         cover_path: None,
+        cover_ver: None,
       }
     };
     assert_eq!(view.file_count, 3, "Placement 逐条计数");
@@ -575,16 +613,20 @@ mod tests {
     let item = archive::list_archives(&h.lib)
       .into_iter()
       .find(|a| a.folder_id == "F-ARC")
-      .map(|a| ArchiveListItem {
-        cover_path: archive::cover_file_path(&h.lib, &a.folder_id),
-        total_size: archive_stats(&h.lib, &a.folder_id).1,
-        folder_id: a.folder_id,
-        badge: a.badge,
-        avatar: a.avatar,
-        props: a.props,
-        descriptions: a.descriptions,
-        links: a.links,
-        created_at: a.created_at,
+      .map(|a| {
+        let (cover_path, cover_ver) = archive::cover_file_info(&h.lib, &a.folder_id).unzip();
+        ArchiveListItem {
+          cover_path,
+          cover_ver,
+          total_size: archive_stats(&h.lib, &a.folder_id).1,
+          folder_id: a.folder_id,
+          badge: a.badge,
+          avatar: a.avatar,
+          props: a.props,
+          descriptions: a.descriptions,
+          links: a.links,
+          created_at: a.created_at,
+        }
       })
       .unwrap();
     assert_eq!(item.total_size, 100, "同资产去重合计");

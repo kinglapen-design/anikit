@@ -11,6 +11,12 @@
 // - voice 链接音频（模板 file）：详情音频区块添加钮进入，origin = 发起文件/档案；
 //   **过滤非音频**（02 稿"过滤掉非音频文件去掉噪音"：网格只渲染音频卡片、档案区不渲染），
 //   确认 add_relations(kind=voice)（无称谓，后端校验 to 必须音频 asset）。
+// 四用途起（2026-09-08 用户定）：
+// - cover 档案封面（模板 file 占位——**单选直回不进备选区**）：封面设置组「更换封面 - 从资源库中选择」
+//   进入，origin = 档案；**过滤非封面图**（静态图 png/jpg/jpeg/bmp/webp + gif 动图，排除序列帧包——
+//   同烘培可解码格式口径，isThumbCapableExt 镜像后端 is_thumb_capable）；单击图片卡片即
+//   pickCoverAsset 解析源图路径 → coverDraft → 退模式恢复档案选中，SectionPinned 消费草稿
+//   自动展开封面设置组取景态；确认按钮恒禁用（picked 恒空），Esc / 备选区取消 = 放弃。
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
 import { nextTick } from "vue";
@@ -19,10 +25,11 @@ import { useSelectionStore } from "./selection";
 import { useToastStore } from "./toast";
 import { useUiStore } from "./ui";
 import { linkPlacements } from "../lib/placementOps";
+import { getAssetFilePath } from "../lib/mediaOps";
 import { addRelations, type PickerTarget, type PickedRelation } from "../lib/relationOps";
 
 export type PickerTemplate = "file" | "relation";
-export type PickerPurpose = "relation" | "link" | "voice";
+export type PickerPurpose = "relation" | "link" | "voice" | "cover";
 
 export const usePickerStore = defineStore("picker", {
   state: () => ({
@@ -32,6 +39,8 @@ export const usePickerStore = defineStore("picker", {
     origin: null as PickerTarget | null, // 发起文件/档案（relation / voice 的 from）
     targetFolder: null as { id: string; name: string } | null, // link 落点文件夹/档案
     filterAudio: false, // voice：网格只渲染音频卡片（AssetGrid / ArchiveStrip 分流）
+    filterImage: false, // cover：网格只渲染可作封面的图片卡片（静态图 + gif，排除序列帧包），档案区不渲染
+    coverDraft: null as { archiveId: string; sourcePath: string } | null, // cover 单选直回草稿（退模式后由 SectionPinned 一次性消费）
     picked: [] as PickedRelation[], // 备选组（多选累积；relation 用双框称谓，file 模板用 name 草稿）
     confirming: false, // 确认在途防重入（连点确认 = 重复建关系，2026-08-23 探针实证）
   }),
@@ -44,6 +53,7 @@ export const usePickerStore = defineStore("picker", {
     },
     // 顶部横幅文案（目的 + 发起名；格式贴阶段七通知栏-选择模式稿：逗号分隔 + 名称方括号，2026-08-29）
     bannerText(state): string {
+      if (state.purpose === "cover") return `选择图片，为 [${state.origin?.name ?? ""}] 设置封面`;
       if (state.purpose === "voice") return `选择音频，为 [${state.origin?.name ?? ""}] 链接音频`;
       if (state.purpose === "link") return `选择文件，为 [${state.targetFolder?.name ?? ""}] 添加链接文件`;
       return `选择文件/档案，为 [${state.origin?.name ?? ""}] 添加关系`;
@@ -54,6 +64,7 @@ export const usePickerStore = defineStore("picker", {
     enter(): void {
       this.active = true;
       this.picked = [];
+      this.coverDraft = null; // 陈旧草稿清场（上轮未消费的封面图源不带入新会话）
       // 云母模式 DWM 窗口边框切染品牌色（四重标识之一；与 ::after 品牌框同色重叠单层，
       // 2026-08-30 实机定；实色模式 DWM 忽略、前端自绘，调用无害；失败告警不阻断——
       // 掉回常态色前端品牌框仍在，可降级）
@@ -84,6 +95,18 @@ export const usePickerStore = defineStore("picker", {
       this.filterAudio = true;
     },
 
+    /** 进入档案封面选择模式（封面设置组「更换封面 - 从资源库中选择」，2026-09-08 点亮）：
+     *  过滤非封面图；单击图片卡片即定（pickCoverAsset 单选直回，不进备选区） */
+    enterCover(origin: PickerTarget): void {
+      this.enter();
+      this.template = "file";
+      this.purpose = "cover";
+      this.origin = origin;
+      this.targetFolder = null;
+      this.filterAudio = false;
+      this.filterImage = true;
+    },
+
     /** 进入添加文件链接模式（文件夹/档案右键 Ctrl+L / 工具栏钮）：落点 = 目标文件夹 */
     enterLink(folder: { id: string; name: string }): void {
       this.enter();
@@ -106,6 +129,7 @@ export const usePickerStore = defineStore("picker", {
       this.origin = null;
       this.targetFolder = null;
       this.filterAudio = false;
+      this.filterImage = false;
       this.picked = [];
       if (origin) {
         void nextTick(() => {
@@ -131,6 +155,26 @@ export const usePickerStore = defineStore("picker", {
 
     isPicked(kind: "asset" | "archive", id: string): boolean {
       return this.picked.some((p) => p.target.kind === kind && p.target.id === id);
+    },
+
+    /** cover 用途单选直回（2026-09-08 用户定：选择图片后不进备选区，直接显示在封面里）：
+     *  解析资产源图路径 → coverDraft → 退模式（exit 恢复档案选中 → SectionPinned 消费草稿
+     *  自动展开封面设置组取景态）；解析失败留在模式内可改选别的 */
+    async pickCoverAsset(target: PickerTarget): Promise<void> {
+      const origin = this.origin;
+      if (!origin || this.purpose !== "cover") return;
+      const toast = useToastStore();
+      try {
+        const r = await getAssetFilePath(target.id);
+        if (!r.path) {
+          toast.notify({ message: "该文件没有可用图片，无法用作封面", icon: "fail" });
+          return;
+        }
+        this.coverDraft = { archiveId: origin.id, sourcePath: r.path };
+        this.exit();
+      } catch (e) {
+        toast.notify({ message: String(e), icon: "fail" });
+      }
     },
 
     /** 确认 = 按用途执行后退出（relation/voice 批量写入单撤销步；link 按行写入落点文件夹） */

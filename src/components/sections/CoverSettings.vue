@@ -3,16 +3,19 @@
 // 2026-08-23 用户定：文件不做本面板）：SectionPinned 档案分支点击封面图展开（内联替换常态组），
 // 确认 / 取消退回常态。
 // 结构（稿：264×424 高链 = padding 12 + 封面 240 + 滑块 10 + 更换封面 34 + 输入框 34 + 按钮组 34）：
-//   封面框 240×240（通用二级底 + 通用三级 1px / 圆角 8；徽标 FormatBadge 左上 12/12 实时预览）；
+//   封面框 240×240（通用二级底 + 通用三级 1px / 圆角 8；徽标 FormatBadge 左上 12/12 实时预览；
+//     无封面 = 默认封面图，lib/archiveCover 链）；
 //   尺寸滑块 224×10 = BarSlider tone="size"（轨道 3px 通用三级 / 拖钮 10 无描边；未选新图禁用压暗 30%——
 //     取景参数只对新图生效，已烘培封面不重烘培防质量递减）；
-//   更换封面 = ActionButton solid md + edit-cover 图标（挂 10 稿菜单 152 宽：从本地磁盘中选择（点亮）/
-//     从资源库中选择（disabled——主窗口选择模式后置））；
+//   更换封面 = ActionButton solid md + edit-cover 图标（挂 10 稿菜单：从本地磁盘中选择 /
+//     从资源库中选择（2026-09-08 点亮 = 主窗口选择模式 cover 用途：过滤非封面图，单击图片
+//     单选直回不进备选区，选定图源经 picker.coverDraft 由 SectionPinned 回填本组件取景态））；
 //   角标名输入框 = TextInput lg（placeholder「输入角标名...」，留空 = 清除徽标）——
 //     徽标颜色选择 UI 随新稿移除（稿未画；badge.color 提交时沿现值，统一 FormatBadge 铬后视觉本就作废）；
 //   按钮组 = 取消（solid 左）/ 确认（primary 右）flex 均分——2026-08-31 用户全局定案「取消左确认右」。
 // 取景（2026-08-23 用户定：滑块缩放 + 拖动位移）：选新图后进入取景态——图按 cover 铺满 × scale
-// 渲染并随拖动偏移（边缘 clamp 不露底），确认时 crop 随源图路径提交后端烘培（covers/ 独立存）。
+// 渲染并随拖动偏移（边缘 clamp 不露底），确认时 crop 随源图路径提交后端烘培
+//（cache/covers/ 覆盖式一档案一文件，2026-09-08 用户定）。
 import { computed, onUnmounted, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -20,29 +23,34 @@ import ActionButton from "../buttons/ActionButton.vue";
 import TextInput from "../inputs/TextInput.vue";
 import BarSlider from "../bars/BarSlider.vue";
 import FormatBadge from "../cards/FormatBadge.vue";
+import { archiveCoverUrl } from "../../lib/archiveCover";
 import { openContextMenu } from "../../lib/contextMenus";
 import { CUSTOM_COLORS } from "../../lib/customColors";
 import { setArchiveCoverSettings, type CropInput } from "../../lib/customDataOps";
 import { useContentStore, type ArchiveDetailView, type FolderNode } from "../../stores/content";
+import { usePickerStore } from "../../stores/picker";
 
 // 封面框规格（新稿 240×240 方形；宽随栏内容宽 100%，取景数学用逻辑像素 240 归一——
 // crop 语义与像素无关；后端烘培输出 416×416 方形与框同比例——输出长宽比必须等于框比，
 // 否则 cover 铺满窗口前后端不一致，确认后观感"又裁了一次"，2026-09-01 实机实锤）
 const FRAME = 240;
 
-const props = defineProps<{ node: FolderNode; data: ArchiveDetailView }>();
+const props = withDefaults(defineProps<{ node: FolderNode; data: ArchiveDetailView; initialSourcePath?: string }>(), {
+  // 选择模式回填图源（picker cover 用途，SectionPinned 消费 coverDraft 传入；空 = 常态进）
+  initialSourcePath: "",
+});
 const emit = defineEmits<{ done: [] }>();
 const content = useContentStore();
+const picker = usePickerStore();
 
 // —— 徽标草稿（输入框留空 = 清除徽标；颜色沿现值——新稿无颜色选择 UI，默认红色档语义保留）——
 const badgeText = ref(props.data.badge?.text ?? "");
 const badgeColor = ref(props.data.badge?.color ?? CUSTOM_COLORS[0].hex);
 
-// —— 封面预览：当前封面（自定义 coverPath 优先，回退子项首图）或取景态新图 ——
-const currentCover = computed(() => {
-  const p = props.data.coverPath ?? content.folderThumbMap.get(props.node.id) ?? null;
-  return p ? convertFileSrc(p) : null;
-});
+// —— 封面预览：封面链（自定义 coverPath → 子项首图 → 默认封面图）或取景态新图 ——
+const currentCover = computed(() =>
+  archiveCoverUrl(props.data.coverPath, props.data.coverVer, content.folderThumbMap.get(props.node.id)),
+);
 // 取景态：选中的本地图（sourcePath + 自然尺寸）与取景参数
 const picked = ref<{ path: string; url: string; w: number; h: number } | null>(null);
 const crop = ref<CropInput>({ x: 0, y: 0, scale: 1 });
@@ -119,25 +127,25 @@ function onFrameDragEnd(): void {
 }
 onUnmounted(onFrameDragEnd); // 组件卸下（确认 / 取消 / 切目标）时清窗级监听
 
-// 更换封面菜单（10 稿两项；从资源库中选择 = 主窗口选择模式后置，disabled 占位）
+// 更换封面菜单（10 稿两项）：从本地磁盘中选择（文件对话框）/ 从资源库中选择
+//（2026-09-08 点亮 = 主窗口选择模式 cover 用途，picker.enterCover；本组件随右栏替换卸载，
+//  选定图源经 picker.coverDraft 由 SectionPinned 以 initialSourcePath 回填——见文件头）
 function openCoverMenu(e: MouseEvent): void {
   openContextMenu(
     e,
     [
       { label: "从本地磁盘中选择", action: () => void pickLocal() },
-      { label: "从资源库中选择", disabled: true },
+      { label: "从资源库中选择", action: () => pickFromLibrary() },
     ],
     undefined,
   );
 }
-async function pickLocal(): Promise<void> {
-  const pickedPath = await open({
-    multiple: false,
-    filters: [{ name: "图片", extensions: ["png", "jpg", "jpeg", "bmp", "webp", "gif"] }],
-  });
-  if (typeof pickedPath !== "string") return;
-  const url = convertFileSrc(pickedPath);
-  // 读自然尺寸（cover 铺满基准）；加载失败按未选处理
+function pickFromLibrary(): void {
+  picker.enterCover({ kind: "archive", id: props.node.id, name: props.node.name });
+}
+// 选定图源进取景态：读自然尺寸（cover 铺满基准）；加载失败按未选处理
+async function loadPicked(path: string): Promise<void> {
+  const url = convertFileSrc(path);
   const dims = await new Promise<{ w: number; h: number } | null>((resolve) => {
     const img = new Image();
     img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
@@ -145,9 +153,19 @@ async function pickLocal(): Promise<void> {
     img.src = url;
   });
   if (!dims || dims.w < 1 || dims.h < 1) return;
-  picked.value = { path: pickedPath, url, ...dims };
+  picked.value = { path, url, ...dims };
   crop.value = { x: 0, y: 0, scale: 1 };
 }
+async function pickLocal(): Promise<void> {
+  const pickedPath = await open({
+    multiple: false,
+    filters: [{ name: "图片", extensions: ["png", "jpg", "jpeg", "bmp", "webp", "gif"] }],
+  });
+  if (typeof pickedPath !== "string") return;
+  await loadPicked(pickedPath);
+}
+// 选择模式回填（initialSourcePath 非空 = 从资源库选图回归）：直接取景态
+if (props.initialSourcePath) void loadPicked(props.initialSourcePath);
 
 const busy = ref(false);
 async function onConfirm(): Promise<void> {
@@ -178,7 +196,7 @@ function onCancel(): void {
       @pointerdown="onFramePointerDown"
     >
       <img v-if="picked" class="cs-view" :src="picked.url" :style="viewStyle ?? undefined" alt="" draggable="false" />
-      <img v-else-if="currentCover" class="cs-still" :src="currentCover" alt="" draggable="false" />
+      <img v-else class="cs-still" :src="currentCover" alt="" draggable="false" />
       <FormatBadge v-if="badgeText.trim()" class="cs-badge" :label="badgeText.trim()" />
     </div>
     <!-- 尺寸滑块（稿 224×10 居中 = BarSlider tone size；未选新图禁用压暗 30% 档，速查表 §5） -->

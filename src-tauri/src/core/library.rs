@@ -28,8 +28,23 @@ pub const PINS_FILE: &str = "pins.json";
 pub const RECYCLE_FILE: &str = "recycle.json";
 pub const RECENT_FILE: &str = "recent.json";
 pub const ARCHIVES_FILE: &str = "archives.json";
-/// 档案封面目录（库根 covers/，6.1：独立存的烘培封面图，不入库为资产；惰性创建，无封面不建目录）
+/// 档案封面目录名（cache/covers/，6.1 独立存的烘培封面图，不入库为资产；
+/// 2026-09-08 用户定：挪入 cache 归可再生缓存 + 覆盖式烘培一档案一文件，不累积历史封面；
+/// 惰性创建，无封面不建目录）
 pub const COVERS_DIR: &str = "covers";
+/// 封面撤销暂存目录名（cache/covers-trash/）：覆盖式烘培的旧封面改名暂存支撑撤销/重做
+///（同 seq-trash 口径，会话级——开库清空）
+pub const COVERS_TRASH_DIR: &str = "covers-trash";
+
+/// 档案封面目录（cache/covers/）
+pub fn covers_dir(root: &Path) -> PathBuf {
+  root.join(CACHE_DIR).join(COVERS_DIR)
+}
+
+/// 封面撤销暂存目录（cache/covers-trash/）
+pub fn covers_trash_dir(root: &Path) -> PathBuf {
+  root.join(CACHE_DIR).join(COVERS_TRASH_DIR)
+}
 
 /// 库根数据文件（均为备份对象，PRD 06-04）
 pub const ROOT_DATA_FILES: &[&str] = &[FOLDERS_FILE, TAGS_FILE, PINS_FILE, RECYCLE_FILE, RECENT_FILE, ARCHIVES_FILE];
@@ -192,9 +207,11 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   // 会话级缓存（2026-07-25 用户定）：tmp（冲突弹窗预览）/ previews（PSD 高清层）/ frames（序列帧+动图帧条小图）
   // / waveforms（按需重采样波形图，2026-07-26）/ note-thumbs（详情面板笔记悬停帧画面，5.2）
   // / seq-trash（序列帧删帧暂存——支撑撤销，2026-08-21，5.2 包内视图）
+  // / covers-trash（档案覆盖式烘培旧封面暂存——支撑撤销，2026-09-08）
   // 打开库时清空上一轮遗留——点开过的素材缓存不留到下一会话，防容量膨胀；cache/thumbs 格式图标按格式跨会话保留。
-  // seq-trash 清空 = 删帧会话结束真删（undo 栈同为会话级，重启后无从撤销）；序列帧帧图持久化在 info/frames/，不进 cache 不清空
-  for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs", "seq-trash"] {
+  // seq-trash / covers-trash 清空 = 暂存物会话结束真弃（undo 栈同为会话级，重启后无从撤销）；
+  // 序列帧帧图持久化在 info/frames/，不进 cache 不清空；cache/covers 跨会话保留（开库自检清理无引用封面）
+  for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs", "seq-trash", "covers-trash"] {
     let dir = path.join(CACHE_DIR).join(sub);
     if dir.is_dir() {
       if let Err(e) = fs::remove_dir_all(&dir) {
@@ -254,6 +271,18 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   let archives_fixed = fix_archives(&mut archives, &folders);
   if archives_fixed {
     log::info!("打开自检修复 archives.json（剔除失效档案记录 / 重复记录去重）");
+  }
+  // 档案封面自检（2026-09-08 覆盖式烘培定案配套，纯缓存操作失败只记日志不阻断开库）：
+  // ① 旧版库根 covers/ 迁入 cache/covers/；② 清理无 archives 记录引用的封面文件
+  //（覆盖式后一档案一文件，历史过期封面不再累积——用户实锤"covers 里几十个过期封面"）
+  {
+    let (migrated, purged) = migrate_and_purge_covers(path, &archives);
+    if migrated > 0 {
+      log::info!("打开自检迁移旧版档案封面 {migrated} 个（库根 covers/ → cache/covers/）");
+    }
+    if purged > 0 {
+      log::info!("打开自检清理过期档案封面 {purged} 个（无记录引用）");
+    }
   }
   // 关系自检（6.2 选择模式一轮，PRD 03_数据链接 06）：空间级 relations.json——剔除 from/to
   // 端点指向本库已失效目标的关系（跨库端点无法校验，保留）。空间级文件不在库备份清单，
@@ -506,6 +535,52 @@ fn fix_archives(archives: &mut ArchivesFile, folders: &FoldersFile) -> bool {
   let mut seen = HashSet::new();
   archives.archives.retain(|a| seen.insert(a.folder_id.clone()));
   before != archives.archives.len()
+}
+
+/// 档案封面迁移与清理（打开自检，2026-09-08）：
+/// ① 旧版库根 covers/ 内文件整体迁入 cache/covers/（封面改存缓存目录，归可再生缓存）；
+/// ② cache/covers/ 内无 archives 记录引用的文件一律删除（覆盖式烘培一档案一文件，
+/// 过期封面 = 换封面 / 删档案的遗留）。返回（迁移数, 清理数）；纯缓存操作，失败静默容错。
+fn migrate_and_purge_covers(root: &Path, archives: &ArchivesFile) -> (usize, usize) {
+  let mut migrated = 0usize;
+  let legacy = root.join(COVERS_DIR);
+  let dir = covers_dir(root);
+  if legacy.is_dir() {
+    if let Err(e) = fs::create_dir_all(&dir) {
+      log::warn!("封面目录创建失败（跳过迁移）：{e}");
+    } else if let Ok(rd) = fs::read_dir(&legacy) {
+      for e in rd.flatten() {
+        let from = e.path();
+        if !from.is_file() {
+          continue;
+        }
+        let to = dir.join(e.file_name());
+        // 目标已存在 = 同名冲突（理论不发生：新位置文件名恒 {folder_id}.webp）：旧文件内容弃用
+        if to.exists() {
+          let _ = fs::remove_file(&from);
+        } else if let Err(e) = fs::rename(&from, &to) {
+          log::warn!("封面迁移失败（{}）：{e}", from.display());
+          continue;
+        }
+        migrated += 1;
+      }
+    }
+    // 只清空目录（子目录等残留不递归强删，留残不阻断）
+    let _ = fs::remove_dir(&legacy);
+  }
+  let referenced: HashSet<&str> = archives.archives.iter().filter_map(|a| a.avatar.as_ref().map(|v| v.file.as_str())).collect();
+  let mut purged = 0usize;
+  if let Ok(rd) = fs::read_dir(&dir) {
+    for e in rd.flatten() {
+      let p = e.path();
+      if p.is_file() && !p.file_name().and_then(|n| n.to_str()).is_some_and(|n| referenced.contains(n)) {
+        if fs::remove_file(&p).is_ok() {
+          purged += 1;
+        }
+      }
+    }
+  }
+  (migrated, purged)
 }
 
 /// folders.json 单一写点（01_开发规范 第 1 条）：全量保存文件夹树 + 全部 Placement。
@@ -981,8 +1056,8 @@ mod tests {
     let lib = create_test(dir.path());
     let root = lib.root.clone();
     // 会话级缓存（2026-07-25 用户定）：tmp / previews / frames / waveforms / note-thumbs
-    // / seq-trash（序列帧删帧暂存，2026-08-21）打开库时整目录清空
-    for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs", "seq-trash"] {
+    // / seq-trash（序列帧删帧暂存，2026-08-21）/ covers-trash（封面覆盖烘培撤销暂存，2026-09-08）打开库时整目录清空
+    for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs", "seq-trash", "covers-trash"] {
       let d = root.join("cache").join(sub);
       fs::create_dir_all(&d).unwrap();
       fs::write(d.join("a.webp"), b"x").unwrap();
@@ -992,10 +1067,58 @@ mod tests {
     fs::create_dir_all(&thumbs).unwrap();
     fs::write(thumbs.join("fla.webp"), b"x").unwrap();
     open(&lib.space_root, &root).unwrap();
-    for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs", "seq-trash"] {
+    for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs", "seq-trash", "covers-trash"] {
       assert!(!root.join("cache").join(sub).exists(), "打开库应清空 cache/{sub}");
     }
     assert!(thumbs.join("fla.webp").exists(), "格式图标缓存应保留");
+  }
+
+  /// 档案封面自检（2026-09-08 覆盖式烘培定案配套）：旧版库根 covers/ 迁入 cache/covers/（引用不动），
+  /// 无 archives 记录引用的封面文件开库即清（过期封面不累积）；covers/ 本体跨会话保留
+  #[test]
+  fn open_migrates_legacy_covers_and_purges_stale() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let space_root = lib.space_root.clone();
+    let root = lib.root.clone();
+    fs::write(
+      root.join(FOLDERS_FILE),
+      r#"{
+        "version": 1,
+        "folders": [ { "id": "F01", "name": "雪牧", "parent": null, "kind": "archive", "order": 0 } ],
+        "items": []
+      }"#,
+    )
+    .unwrap();
+    fs::write(
+      root.join(ARCHIVES_FILE),
+      r#"{
+        "version": 1,
+        "archives": [ { "folderId": "F01", "avatar": { "file": "F01-20260823093000000.webp" } } ]
+      }"#,
+    )
+    .unwrap();
+    // 旧版库根 covers/：被引用 + 无引用（过期）各一
+    let legacy = root.join("covers");
+    fs::create_dir_all(&legacy).unwrap();
+    fs::write(legacy.join("F01-20260823093000000.webp"), b"referenced").unwrap();
+    fs::write(legacy.join("F01-20260822093000000.webp"), b"stale").unwrap();
+    // 已在 cache/covers/ 的过期文件（上次会话换封面的遗留场景由暂存承担，这里测纯清理）
+    let cache_covers = root.join("cache").join("covers");
+    fs::create_dir_all(&cache_covers).unwrap();
+    fs::write(cache_covers.join("F99.webp"), b"stale-in-cache").unwrap();
+
+    let lib2 = open(&space_root, &root).unwrap();
+    drop(lib2);
+    assert!(
+      cache_covers.join("F01-20260823093000000.webp").is_file(),
+      "被引用封面迁入 cache/covers/"
+    );
+    assert!(!legacy.join("F01-20260822093000000.webp").exists(), "旧目录过期文件已清");
+    assert!(!cache_covers.join("F99.webp").exists(), "cache/covers/ 无引用文件已清");
+    assert!(!legacy.exists(), "旧版库根 covers/ 已移除");
+    // 再开一次幂等（无 covers 相关报错 / 二次清理无副作用）
+    open(&space_root, &root).unwrap();
   }
 
   /// 区块自检（2026-08-14 区块子系统）：旧版 folders.json（无 blocks 字段、Folder 无 block/icon）

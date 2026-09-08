@@ -3,17 +3,18 @@
 // 7.1 内容容器轮贴稿——中间面板-内容容器-列表容器-档案列表）：
 // 卡片 = cards/ArchiveCard（正方形 aspect-ratio 1 稿注；grid auto-fill minmax 250 弹性列宽，列表 gap 12）；
 // 区块标题 = items/SectionTitle block（稿无动作钮 → actions=false）。
-// 卡面数据：封面 = 自定义封面优先（covers/）回退子项首图（folderThumbMap 既有口径）；
+// 卡面数据：封面 = 自定义封面（cache/covers/）→ 子项首图（folderThumbMap 既有口径）→
+// 默认封面图（2026-09-08 用户定，lib/archiveCover 链）；
 // 左上徽标 = ArchiveData.badge 文字（统一 FormatBadge 铬，旧 badge.color 底色芯片口径作废）；
 // 属性行 = ArchiveData.props（" | " 分隔）；数量行 = 「N 个文件 / 容量」（容量 = list_archives
 // totalSize 去重合计，7.1 扩展）；右下链接徽章业务口径未定 → 恒 false（09 待办）。
 // 无档案时整块不渲染（AssetGrid v-if，同"子项无文件夹隐藏区块"既有口径）；
 // 交互口径同 FolderStrip（单击选中 / 双击进入 / 右键 04 稿档案菜单），随网格统一滚动。
 import { computed, ref, watch } from "vue";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import SectionTitle from "./items/SectionTitle.vue";
 import ArchiveCard from "./cards/ArchiveCard.vue";
 import { dragView } from "../lib/dragOperation";
+import { archiveCoverUrl } from "../lib/archiveCover";
 import { formatSize } from "../lib/formatSize";
 import { openArchiveCardMenu } from "../lib/menuSpecs/gridDispatch";
 import { renameFolder } from "../lib/placementOps";
@@ -38,10 +39,10 @@ function onFold(): void {
 // nodes 传入时取而代之（3.6 搜索态：命中档案列表由 ContentArea 按 search store 装配）
 const stripArchives = computed(() => props.nodes ?? content.stripArchivesFor(props.viewKey));
 
-// 卡面数据装配：封面（自定义封面优先，回退子项首图）/ 徽标文字 / 属性行 / 数量行
+// 卡面数据装配：封面（链 = 自定义封面 → 子项首图 → 默认封面图，2026-09-08 用户定）/ 徽标文字 / 属性行 / 数量行
 function coverOf(id: string): string {
-  const p = content.archives[id]?.coverPath ?? content.folderThumbMap.get(id);
-  return p ? convertFileSrc(p) : "";
+  const a = content.archives[id];
+  return archiveCoverUrl(a?.coverPath, a?.coverVer, content.folderThumbMap.get(id));
 }
 function badgeOf(id: string): string {
   return content.archives[id]?.badge?.text ?? "";

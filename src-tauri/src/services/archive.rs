@@ -96,11 +96,22 @@ pub fn list_archives(lib: &Library) -> Vec<ArchiveData> {
   lib.archives.archives.clone()
 }
 
-/// 档案封面图绝对路径（avatar.file → 库根 covers/；文件缺失视为无封面，回退子项首图）
-pub fn cover_file_path(lib: &Library, folder_id: &str) -> Option<String> {
+/// 档案封面信息（avatar.file → cache/covers/）：(绝对路径, 版本戳)；文件缺失视为无封面
+///（前端回退子项首图 / 默认封面图）。版本戳 = 文件 mtime 纳秒——覆盖式烘培同路径重写后
+/// 前端 ?v= 驱动 img 重载；undo 改名还原把旧 mtime 一并带回，缓存命中恰为旧内容（2026-09-08）
+pub fn cover_file_info(lib: &Library, folder_id: &str) -> Option<(String, String)> {
   let avatar = lib.archives.archives.iter().find(|a| a.folder_id == folder_id)?.avatar.as_ref()?;
-  let p = lib.root.join(library::COVERS_DIR).join(&avatar.file);
-  p.is_file().then(|| p.to_string_lossy().into_owned())
+  let p = library::covers_dir(&lib.root).join(&avatar.file);
+  if !p.is_file() {
+    return None;
+  }
+  let ver = std::fs::metadata(&p)
+    .and_then(|m| m.modified())
+    .ok()
+    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+    .map(|d| d.as_nanos().to_string())
+    .unwrap_or_default();
+  Some((p.to_string_lossy().into_owned(), ver))
 }
 
 /// 封面设置入参（43 稿「更换封面 - 从本地磁盘中选择」）：本地图片路径 + 取景框参数
@@ -116,24 +127,63 @@ pub struct CoverInput {
 pub const COVER_OUT_W: u32 = 416;
 pub const COVER_OUT_H: u32 = 416;
 
+/// 封面变更产物（命令层登记撤销磁盘操作用，2026-09-08 覆盖式烘培）：
+/// 旧封面已改名暂存 cache/covers-trash/{stamp}-b-{旧名}（无旧封面 / 文件已缺失 = None）；
+/// 命令层据此成对登记 DiskOp::Rename——undo = 新封面挪入暂存（{stamp}-a-{新名}）后旧封面归位，redo 反之
+#[derive(Debug)]
+pub struct CoverBakeOutcome {
+  /// 新封面文件名（恒 {folder_id}.webp，webp 编码失败退 .png）
+  pub file: String,
+  /// 新封面绝对路径（cache/covers/ 内）
+  pub new_path: std::path::PathBuf,
+  /// 本次事务时间戳（撤销暂存文件名前缀，-a-（新）/ -b-（旧）两侧共用）
+  pub stamp: String,
+  /// (旧封面文件名, 暂存绝对路径)
+  pub staged_old: Option<(String, std::path::PathBuf)>,
+}
+
+impl CoverBakeOutcome {
+  /// 落盘失败的物理回滚（best-effort）：新封面移除 + 暂存旧封面归位，防文件与记录脱节
+  fn rollback(&self) {
+    if self.new_path.exists() {
+      let _ = std::fs::remove_file(&self.new_path);
+    }
+    if let (Some((old, staged)), Some(dir)) = (&self.staged_old, self.new_path.parent()) {
+      if let Err(e) = std::fs::rename(staged, dir.join(old)) {
+        log::error!("封面设置失败后旧封面恢复失败（{old}）：{e}");
+      }
+    }
+  }
+}
+
+/// 封面设置结果
+#[derive(Debug)]
+pub struct CoverSettingsOutcome {
+  pub changed: bool,
+  pub bake: Option<CoverBakeOutcome>,
+}
+
 /// 封面设置（43 稿，6.1）：徽标三角语义（None = 不动 / Some(None) = 清除 / Some(Some) = 设置）+
-/// 封面（None = 不动 / Some = 选图按取景参数烘培新封面）。记录懒建；返回是否有改动。
-/// 封面文件带时间戳命名不覆盖写：undo 回滚 archives.json 后旧封面文件仍在即恢复显示；
-/// 旧文件留盘（孤儿清理记 09 待办，不随换封面即删——即删会破坏 undo 恢复）
+/// 封面（None = 不动 / Some = 选图按取景参数烘培新封面）。记录懒建。
+/// 覆盖式（2026-09-08 用户定，旧时间戳命名废除）：封面文件恒 {folder_id}.webp 一档案一文件；
+/// 撤销依托 = 旧封面改名暂存 covers-trash/（产物经 CoverSettingsOutcome 交命令层登记磁盘操作），
+/// undo = archives.json 回滚 + 暂存改名还原双管恢复旧封面
 pub fn set_archive_cover_settings(
   lib: &mut Library,
   folder_id: &str,
   badge: Option<Option<crate::core::models::Badge>>,
   cover: Option<CoverInput>,
-) -> Result<bool, String> {
+) -> Result<CoverSettingsOutcome, String> {
   if !lib.index.folders.contains_key(folder_id) {
     return Err("目标档案不存在，可能已被删除".to_string());
   }
   let mut changed = false;
   let mut new_avatar: Option<crate::core::models::Avatar> = None;
+  let mut bake: Option<CoverBakeOutcome> = None;
   if let Some(input) = cover {
-    let file = bake_cover(lib, folder_id, &input.source_path, input.crop)?;
-    new_avatar = Some(crate::core::models::Avatar { file, crop: Some(input.crop) });
+    let b = bake_cover(lib, folder_id, &input.source_path, input.crop)?;
+    new_avatar = Some(crate::core::models::Avatar { file: b.file.clone(), crop: Some(input.crop) });
+    bake = Some(b);
   }
   // 记录懒建（同 custom_data 口径：编辑路径懒建不写 created_at——created_at 保持新建/转换当次语义）。
   // 2026-09-01 修：旧条件误写 all(folder_id == 本档案)——空表/全表皆本档案时成立，
@@ -154,21 +204,64 @@ pub fn set_archive_cover_settings(
     changed = true;
   }
   if changed {
-    library::save_archives(lib).map_err(|e| e.to_string())?;
+    if let Err(e) = library::save_archives(lib) {
+      if let Some(b) = &bake {
+        b.rollback();
+      }
+      return Err(e.to_string());
+    }
     log::info!("档案封面设置：{folder_id}");
   }
-  Ok(changed)
+  Ok(CoverSettingsOutcome { changed, bake })
 }
 
-/// 封面烘培：源图按内容魔数解码（假扩展名防护，踩坑 052）→ 按取景参数裁切缩放 →
-/// webp 存库根 covers/（编码失败退 PNG）。返回封面文件名
-fn bake_cover(lib: &Library, folder_id: &str, source_path: &str, crop: crate::core::models::Crop) -> Result<String, String> {
-  use crate::services::thumbnail;
+/// 封面烘培（覆盖式）：旧封面先改名暂存 covers-trash/（撤销依托）→ 烘培写 cache/covers/{folder_id}；
+/// 烘培失败先把暂存旧封面归位再报错（不留半截物理态）
+fn bake_cover(lib: &Library, folder_id: &str, source_path: &str, crop: crate::core::models::Crop) -> Result<CoverBakeOutcome, String> {
   let source = std::path::PathBuf::from(source_path);
   if !source.is_file() {
     return Err("所选文件不存在".to_string());
   }
-  let img = thumbnail::decode_by_signature(&source).ok_or_else(|| "该文件无法用作封面（不支持的格式）".to_string())?;
+  let dir = library::covers_dir(&lib.root);
+  let stamp = chrono::Local::now().format("%Y%m%d%H%M%S%3f").to_string();
+  // 旧封面暂存（记录无 avatar / 文件已缺失 = 无旧可暂）
+  let old_file = lib
+    .archives
+    .archives
+    .iter()
+    .find(|a| a.folder_id == folder_id)
+    .and_then(|a| a.avatar.as_ref())
+    .map(|v| v.file.clone());
+  let mut staged_old: Option<(String, std::path::PathBuf)> = None;
+  if let Some(old) = old_file {
+    let old_path = dir.join(&old);
+    if old_path.is_file() {
+      let trash = library::covers_trash_dir(&lib.root);
+      std::fs::create_dir_all(&trash).map_err(|e| format!("封面暂存目录创建失败：{e}"))?;
+      let staged = trash.join(format!("{stamp}-b-{old}"));
+      std::fs::rename(&old_path, &staged).map_err(|e| format!("旧封面暂存失败：{e}"))?;
+      staged_old = Some((old, staged));
+    }
+  }
+  match bake_cover_pixels(&dir, folder_id, &source, crop) {
+    Ok(file) => Ok(CoverBakeOutcome { new_path: dir.join(&file), file, stamp, staged_old }),
+    Err(e) => {
+      // 失败恢复：暂存旧封面归位（防记录指着已被挪走的文件）
+      if let Some((old, staged)) = &staged_old {
+        if let Err(re) = std::fs::rename(staged, dir.join(old)) {
+          log::error!("封面烘培失败后旧封面恢复失败（{old}）：{re}");
+        }
+      }
+      Err(e)
+    }
+  }
+}
+
+/// 烘培像素段：源图按内容魔数解码（假扩展名防护，踩坑 052）→ 按取景参数裁切缩放 →
+/// webp 存 cache/covers/（编码失败退 PNG），文件名恒 {folder_id}（覆盖写）。返回封面文件名
+fn bake_cover_pixels(dir: &std::path::Path, folder_id: &str, source: &std::path::Path, crop: crate::core::models::Crop) -> Result<String, String> {
+  use crate::services::thumbnail;
+  let img = thumbnail::decode_by_signature(source).ok_or_else(|| "该文件无法用作封面（不支持的格式）".to_string())?;
   let (iw, ih) = (img.width() as f64, img.height() as f64);
   if iw < 1.0 || ih < 1.0 {
     return Err("该文件无法用作封面（图片尺寸无效）".to_string());
@@ -187,14 +280,12 @@ fn bake_cover(lib: &Library, folder_id: &str, source_path: &str, crop: crate::co
   let out = img
     .crop_imm(left, top, swu, shu)
     .resize_exact(COVER_OUT_W, COVER_OUT_H, image::imageops::FilterType::Triangle);
-  let dir = lib.root.join(library::COVERS_DIR);
-  std::fs::create_dir_all(&dir).map_err(|e| format!("封面目录创建失败：{e}"))?;
-  let stamp = chrono::Local::now().format("%Y%m%d%H%M%S%3f");
-  let webp_name = format!("{folder_id}-{stamp}.webp");
+  std::fs::create_dir_all(dir).map_err(|e| format!("封面目录创建失败：{e}"))?;
+  let webp_name = format!("{folder_id}.webp");
   if thumbnail::save_webp(&out, &dir.join(&webp_name)).is_ok() {
     return Ok(webp_name);
   }
-  let png_name = format!("{folder_id}-{stamp}.png");
+  let png_name = format!("{folder_id}.png");
   out.save(dir.join(&png_name)).map_err(|e| format!("封面保存失败：{e}"))?;
   Ok(png_name)
 }
@@ -491,12 +582,12 @@ mod tests {
     mark_archive(&mut h.lib, "F-A");
     let badge = crate::core::models::Badge { text: "主角".into(), color: "#402122".into() };
     // 设置徽标（无记录懒建）
-    assert!(set_archive_cover_settings(&mut h.lib, "F-A", Some(Some(badge.clone())), None).unwrap());
+    assert!(set_archive_cover_settings(&mut h.lib, "F-A", Some(Some(badge.clone())), None).unwrap().changed);
     assert_eq!(h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().badge, Some(badge));
     // 不动徽标（None）= 无改动
-    assert!(!set_archive_cover_settings(&mut h.lib, "F-A", None, None).unwrap());
+    assert!(!set_archive_cover_settings(&mut h.lib, "F-A", None, None).unwrap().changed);
     // 清除徽标
-    assert!(set_archive_cover_settings(&mut h.lib, "F-A", Some(None), None).unwrap());
+    assert!(set_archive_cover_settings(&mut h.lib, "F-A", Some(None), None).unwrap().changed);
     assert_eq!(h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().badge, None);
     let disk: crate::core::models::ArchivesFile = read_json(&h.lib.root.join(ARCHIVES_FILE)).unwrap();
     assert_eq!(disk.archives.iter().find(|a| a.folder_id == "F-A").unwrap().badge, None, "落盘");
@@ -517,7 +608,7 @@ mod tests {
     h.lib.archives.archives.push(ArchiveData::new("F-B")); // 列表非空但无 F-A 记录
     // ① 懒建 F-A：不 panic、恰一条
     let badge = crate::core::models::Badge { text: "主角".into(), color: "#402122".into() };
-    assert!(set_archive_cover_settings(&mut h.lib, "F-A", Some(Some(badge)), None).unwrap());
+    assert!(set_archive_cover_settings(&mut h.lib, "F-A", Some(Some(badge)), None).unwrap().changed);
     assert_eq!(h.lib.archives.archives.iter().filter(|a| a.folder_id == "F-A").count(), 1, "懒建恰一条");
     assert!(h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().created_at.is_empty(), "编辑路径懒建不写 created_at（同 custom_data 口径）");
     // ② 本档记录存在（且下一轮换库区只剩本档一条）→ 反复设置不追加副本
@@ -535,7 +626,9 @@ mod tests {
   }
 
   /// 封面烘培：左红右蓝测试图按取景偏移裁切——x>0 视图右偏看到图左侧（红），x<0 看到右侧（蓝）；
-  /// 输出恒 416×416 方形（与 7.1 新稿取景框同比例），avatar.file 记录且 covers/ 内文件存在；时间戳命名不覆盖
+  /// 输出恒 416×416 方形（与 7.1 新稿取景框同比例）存 cache/covers/。
+  /// 覆盖式（2026-09-08 用户定）：文件名恒 {folder_id}.webp——换封面同名覆盖，covers/ 恒一档案一文件，
+  /// 旧封面改名暂存 covers-trash/（撤销依托，产物交命令层登记 DiskOp）
   #[test]
   fn cover_bake_crops_by_crop_params() {
     let mut h = make_lib();
@@ -549,24 +642,30 @@ mod tests {
     img.save(&src).unwrap();
 
     let crop = crate::core::models::Crop { x: 0.2, y: 0.0, scale: 1.0 };
-    assert!(set_archive_cover_settings(
+    let out1 = set_archive_cover_settings(
       &mut h.lib,
       "F-A",
       None,
       Some(CoverInput { source_path: src.to_string_lossy().into_owned(), crop }),
     )
-    .unwrap());
+    .unwrap();
+    assert!(out1.changed);
+    assert!(out1.bake.as_ref().unwrap().staged_old.is_none(), "首次设置无旧封面可暂存");
     let avatar = h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().avatar.clone().unwrap();
-    let out_path = h.lib.root.join(crate::core::library::COVERS_DIR).join(&avatar.file);
-    assert!(out_path.is_file(), "封面文件落盘");
+    assert_eq!(avatar.file, "F-A.webp", "覆盖式文件名恒 F-A.webp（folder_id 推导）");
+    let out_path = crate::core::library::covers_dir(&h.lib.root).join(&avatar.file);
+    assert!(out_path.is_file(), "封面文件落盘 cache/covers/");
     assert_eq!(crate::services::thumbnail::probe(&out_path), Some((416, 416)), "输出恒 416×416 方形");
     let baked = crate::services::thumbnail::decode_by_signature(&out_path).unwrap().to_rgba8();
     let center = baked.get_pixel(208, 208);
     assert!(center[0] > center[2], "x>0 看到图左侧（红）：{center:?}");
-    // cover_file_path 输出绝对路径；换一张不覆盖旧文件
-    assert_eq!(cover_file_path(&h.lib, "F-A").as_deref(), Some(out_path.to_string_lossy().as_ref()));
+    // cover_file_info 输出绝对路径 + 版本戳（mtime 纳秒非空）
+    let (path, ver) = cover_file_info(&h.lib, "F-A").expect("有封面");
+    assert_eq!(path, out_path.to_string_lossy());
+    assert!(!ver.is_empty(), "版本戳非空（前端 ?v= 驱动重载）");
+    // 换一张：同名覆盖，covers/ 恒一档案一文件；旧封面改名暂存 covers-trash/
     let crop2 = crate::core::models::Crop { x: -0.2, y: 0.0, scale: 1.0 };
-    set_archive_cover_settings(
+    let out2 = set_archive_cover_settings(
       &mut h.lib,
       "F-A",
       None,
@@ -574,13 +673,18 @@ mod tests {
     )
     .unwrap();
     let avatar2 = h.lib.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap().avatar.clone().unwrap();
-    assert_ne!(avatar.file, avatar2.file, "时间戳命名不覆盖（undo 回滚可恢复旧封面）");
-    let baked2 = crate::services::thumbnail::decode_by_signature(&h.lib.root.join(crate::core::library::COVERS_DIR).join(&avatar2.file))
-      .unwrap()
-      .to_rgba8();
+    assert_eq!(avatar.file, avatar2.file, "覆盖式：换封面文件名不变");
+    let covers: Vec<_> = std::fs::read_dir(crate::core::library::covers_dir(&h.lib.root)).unwrap().collect();
+    assert_eq!(covers.len(), 1, "covers/ 恒一档案一文件（不累积历史封面）");
+    let bake2 = out2.bake.unwrap();
+    let (old_name, staged) = bake2.staged_old.expect("旧封面已暂存");
+    assert_eq!(old_name, "F-A.webp");
+    assert!(staged.is_file(), "旧封面在 covers-trash/ 暂存（撤销依托）");
+    assert!(staged.to_string_lossy().contains("covers-trash"), "暂存目录 = covers-trash");
+    let baked2 = crate::services::thumbnail::decode_by_signature(&bake2.new_path).unwrap().to_rgba8();
     let center2 = baked2.get_pixel(208, 208);
     assert!(center2[2] > center2[0], "x<0 看到图右侧（蓝）：{center2:?}");
-    // 不存在的源文件报错
+    // 不存在的源文件报错（源检查在暂存之前，旧封面原位不动）
     assert!(set_archive_cover_settings(
       &mut h.lib,
       "F-A",
@@ -588,5 +692,41 @@ mod tests {
       Some(CoverInput { source_path: "不存在.png".into(), crop: crate::core::models::Crop { x: 0.0, y: 0.0, scale: 1.0 } }),
     )
     .is_err());
+    assert!(out_path.is_file(), "报错后旧封面仍在（源不存在 = 未进暂存段）");
+  }
+
+  /// 烘培失败（源文件存在但不可解码）：暂存的旧封面必须归位——记录指着它，不能留半截物理态
+  #[test]
+  fn cover_bake_failure_restores_staged_old_cover() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F-A", "雪牧", None, 0);
+    let src = h.lib.root.join("cover-src.png");
+    image::RgbaImage::new(10, 10).save(&src).unwrap();
+    set_archive_cover_settings(
+      &mut h.lib,
+      "F-A",
+      None,
+      Some(CoverInput { source_path: src.to_string_lossy().into_owned(), crop: crate::core::models::Crop { x: 0.0, y: 0.0, scale: 1.0 } }),
+    )
+    .unwrap();
+    let cover_path = crate::core::library::covers_dir(&h.lib.root).join("F-A.webp");
+    assert!(cover_path.is_file(), "首次烘培落盘");
+
+    // 伪图片（内容不可解码，踩坑 052 魔数识别路径）
+    let fake = h.lib.root.join("fake.png");
+    std::fs::write(&fake, b"not an image").unwrap();
+    assert!(set_archive_cover_settings(
+      &mut h.lib,
+      "F-A",
+      None,
+      Some(CoverInput { source_path: fake.to_string_lossy().into_owned(), crop: crate::core::models::Crop { x: 0.0, y: 0.0, scale: 1.0 } }),
+    )
+    .is_err());
+    assert!(cover_path.is_file(), "烘培失败后暂存旧封面已归位");
+    assert!(
+      std::fs::read_dir(crate::core::library::covers_trash_dir(&h.lib.root)).map(|d| d.count()).unwrap_or(0) == 0,
+      "covers-trash/ 无残留"
+    );
+    assert!(cover_file_info(&h.lib, "F-A").is_some(), "封面记录与文件一致可读");
   }
 }

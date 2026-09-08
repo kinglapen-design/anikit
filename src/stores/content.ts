@@ -80,7 +80,7 @@ export interface ArchiveBadge {
 }
 
 export interface ArchiveAvatar {
-  file: string; // 封面文件名（库根 covers/ 内，6.1 独立存不入库；展示用 coverPath 绝对路径）
+  file: string; // 封面文件名（cache/covers/ 内，6.1 独立存不入库、2026-09-08 挪 cache；展示用 coverPath 绝对路径）
   crop?: { x: number; y: number; scale: number } | null;
 }
 
@@ -93,7 +93,8 @@ export interface ArchiveData {
   links: string[]; // 链接（详情 pinned 链接输入框数据源，2026-08-15 任务 A 三项）
   createdAt: string; // 创建时间 RFC3339；旧数据 / 未建档 = 空串
   totalSize: number; // 档案容量（字节，2026-08-30 用户定案）：档案内资产 size 去重合计（同 get_archive_data 口径）
-  coverPath?: string | null; // 封面图绝对路径（6.1 list_archives 输出；无自定义封面 = null 回退子项首图）
+  coverPath?: string | null; // 封面图绝对路径（6.1 list_archives 输出；无自定义封面 = null 回退子项首图 / 默认封面图）
+  coverVer?: string | null; // 封面版本戳（2026-09-08 覆盖式烘培：同路径重写，mtime 戳驱动 ?v= 重载）
 }
 
 /** 档案详情视图（get_archive_data，2026-08-15 任务 A 三项）：ArchiveData 全字段 + 统计 */
@@ -108,6 +109,7 @@ export interface ArchiveDetailView {
   fileCount: number; // 档案内 Placement 数
   totalSize: number; // 档案内资产 size 合计（同资产去重）
   coverPath?: string | null; // 封面图绝对路径（6.1）
+  coverVer?: string | null; // 封面版本戳（同 list_archives）
 }
 
 // 区块视图（后端 commands/import.rs BlockView；list_folder_tree 按 order 排序输出）
