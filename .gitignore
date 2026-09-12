@@ -1,5 +1,7 @@
 # 前端
 node_modules/
+# pnpm 包存储（2026-09-13 起经 pnpm-workspace.yaml storeDir 收到项目内，不再放磁盘根目录）
+.pnpm-store/
 dist/
 
 # Rust / Tauri
