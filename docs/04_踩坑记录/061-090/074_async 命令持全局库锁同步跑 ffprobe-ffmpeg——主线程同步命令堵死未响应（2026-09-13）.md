@@ -1,0 +1,6 @@
+## 074 async 命令持全局库锁同步跑 ffprobe/ffmpeg——主线程同步命令堵死未响应（2026-09-13）
+
+- **现象：** 实机走查两条严重项——视频文件夹里 Ctrl 逐个点选多个 MP4，整个窗口冻结，Windows 弹「未响应」；拖拽排序视频，落点后同样冻死。图片做完全相同的多选 / 排序操作一点不卡。
+- **原因：** `get_media_source`（commands/media.rs）声明为 async 命令，却第一行就 `state.library.lock()` 拿全局 std Mutex，随后**全程持锁**同步跑 ffprobe 探测、甚至整段 ffmpeg 转码（数十秒级）——async 只是把闭包 spawn 到 tokio runtime，阻塞体不会自动 offload，锁照样长占。而 `get_asset_detail` / `list_placements` / `list_folder_tree` / `list_archives` 等读类命令是**同步命令，Tauri v2 安排在主线程执行**：多选触发的 `get_asset_detail`、排序落点后 `refresh()` 的 `list_*` 全在 `lock()` 上排队 → GUI 事件循环停摆 → 未响应。只有音视频会走 `get_media_source`（悬停 >300ms 即触发，多选逐个点视频必然悬停；起拖前指针也停在视频卡上），所以只有视频卡。
+- **解法：** media.rs 锁外化三段式——① 短锁快照（`locate_asset` 后克隆 info_dir / origin / meta / lib.root 即放锁）；② 探测与转码收进 `media_source_heavy`，`tauri::async_runtime::spawn_blocking` 锁外执行；③ fps 自愈回写保持「先落盘 metadata.json 再短锁同步内存索引 + 广播 video-fps-healed」。同资产并发去重 = 模块级 per-asset tokio Mutex 串行化（后者拿到锁时 stamp 已命中直接复用产物，消除双重转码）。`get_waveform` 同病同改。前端 `mediaOps.getMediaSource` 补 in-flight Map（并发请求共享同一趟解析，settle 即删不长期缓存）。
+- **预防：** **全局 std Mutex 持锁区只放内存数据读写；子进程调用（ffprobe/ffmpeg sidecar）与文件 IO 一律锁外（spawn_blocking）**。记牢 Tauri v2 模型：同步命令 = 主线程执行，任何命令长持全局锁 = 直接冻 UI；新增 / 改动命令时先查锁内有没有 IO 或子进程。排查「只有某类资源卡」时，先找该类资源独有的后端链路（本案 = 播放源解析），再看它占了什么共享锁。

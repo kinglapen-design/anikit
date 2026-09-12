@@ -3,6 +3,8 @@
 //! HEVC 等）经 ffmpeg 转码兜底——视频转 cache/tmp/media-{assetId}.mp4（libx264 + aac），
 //! 音频转 cache/tmp/media-{assetId}.wav（pcm_s16le）。转码幂等：产物旁 .stamp 记源文件
 //! "大小:mtime秒"，一致直接复用不重复转码；源变化重转。sidecar 缺失 / 转码失败给中文文案。
+//! 锁纪律：全局库锁仅用于入口快照（locate_asset + 克隆 root 后立即放锁），ffprobe / ffmpeg
+//! 重活全部在锁外线程池执行——持锁转码（数十秒级）会堵死主线程同步命令，导致界面「未响应」。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,7 +16,8 @@ use crate::adapters::ffmpeg;
 use crate::commands::library::AppState;
 use crate::commands::preview::locate_asset;
 use crate::core::json_io::write_json;
-use crate::core::library::{Library, CACHE_DIR};
+use crate::core::library::CACHE_DIR;
+use crate::core::models::AssetMeta;
 use crate::services::{media, thumbnail};
 
 /// 音视频播放源解析结果
@@ -37,56 +40,96 @@ enum Route {
   Transcode,
 }
 
+/// 同资产播放源解析并发去重：并发重复调用串行化，后者拿到锁时转码产物 stamp 已命中，
+/// 直接复用，消除双重转码 / 重复探测。条目按资产留驻（每资产一条 Arc，体积极小，不清理）
+static MEDIA_SRC_LOCKS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>>> =
+  std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
 /// 音视频播放源解析：可直播格式直给源文件绝对路径；其余转码（幂等复用，见模块头）。
 /// 非音视频资源中文报错；ffmpeg 缺失报"组件缺失"，转码失败报"该格式暂时无法播放"。
-/// async：ffprobe / ffmpeg sidecar 调用为 IO 重活，一律走线程池（规范第 2 条）
+/// 三段式：短锁快照 → 锁外线程池重活（ffprobe / ffmpeg，规范第 2 条）→ 自愈回写短锁
 #[tauri::command]
 pub async fn get_media_source(
   app: tauri::AppHandle,
   state: State<'_, AppState>,
   asset_id: String,
 ) -> Result<MediaSource, String> {
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  media_source(lib, &asset_id, Some(&app))
+  // 短锁快照：定位资源、克隆出后续所需全部字段后立即放锁
+  let (info_dir, origin, meta, root) = {
+    let guard = state.library.lock().map_err(|e| e.to_string())?;
+    let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+    let (info_dir, origin, meta) = locate_asset(lib, &asset_id)?;
+    (info_dir, origin, meta, lib.root.clone())
+  };
+  // 同资产并发去重（见 MEDIA_SRC_LOCKS 注释），guard 持到重活与回写完成
+  let asset_lock = {
+    let mut map = MEDIA_SRC_LOCKS.lock().map_err(|e| e.to_string())?;
+    map
+      .entry(asset_id.clone())
+      .or_insert_with(|| std::sync::Arc::new(tokio::sync::Mutex::new(())))
+      .clone()
+  };
+  let _permit = asset_lock.lock().await;
+  // 锁外重活：fps 补探测 / ffprobe / 转码走线程池
+  let asset_id2 = asset_id.clone();
+  let (src, healed) =
+    tauri::async_runtime::spawn_blocking(move || media_source_heavy(&info_dir, &origin, meta, &root, &asset_id2))
+      .await
+      .map_err(|e| format!("播放源解析任务失败：{e}"))??;
+  // fps 自愈回写（仅视频且探测到新 fps）：metadata.json 已在锁外落盘，这里短锁同步内存索引；
+  // 库已关则跳过同步与广播（落盘已完成，无害）
+  if let Some(meta) = healed {
+    let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+    if let Some(lib) = guard.as_mut() {
+      let fps = meta.fps.unwrap_or(0.0);
+      lib.index.assets.insert(asset_id.clone(), meta);
+      let _ = app.emit("video-fps-healed", serde_json::json!({ "assetId": asset_id, "fps": fps }));
+    }
+  }
+  Ok(src)
 }
 
-fn media_source(lib: &mut Library, asset_id: &str, app: Option<&tauri::AppHandle>) -> Result<MediaSource, String> {
-  let (info_dir, origin, mut meta) = locate_asset(lib, asset_id)?;
-  let video = media::is_video(&origin);
-  if !video && !media::is_audio(&origin) {
+/// 播放源解析重活（锁外线程池执行）：fps 自愈探测 → ffprobe 路由 → 直渲 / 转码。
+/// 返回 (播放源, 自愈成功待回写内存索引的 meta)；fps 自愈先落盘 metadata.json 再交由调用方
+/// 短锁同步内存索引（规范第 7 条），探测 / 落盘失败静默跳过——下次播放再试，不阻塞播放
+fn media_source_heavy(
+  info_dir: &Path,
+  origin: &Path,
+  mut meta: AssetMeta,
+  root: &Path,
+  asset_id: &str,
+) -> Result<(MediaSource, Option<AssetMeta>), String> {
+  let video = media::is_video(origin);
+  if !video && !media::is_audio(origin) {
     return Err(format!("「{}」不是音视频资源", meta.name));
   }
   let ext = meta.ext.to_lowercase();
   let mut fps = meta.fps;
+  let mut healed = None;
   // 存量视频 fps 自愈（5.3 帧化改造）：5.3 前导入的视频 metadata 无 fps，
-  // 首次播放解析时补探测写回（先落盘 metadata.json 再同步内存索引，规范第 7 条）；
-  // 探测失败（sidecar 缺失 / 文件损坏）静默跳过——下次播放再试，不阻塞播放。
-  // 写回成功广播 video-fps-healed（2026-07-28 复验反馈修复）：前端 content store 同步
-  // PlacementView.fps——卡片悬停胶囊 / 详情笔记即时正确，免重开窗口重拉
+  // 首次播放解析时补探测写回；写回成功后调用方广播 video-fps-healed
+  // （2026-07-28 复验反馈修复）：前端 content store 同步 PlacementView.fps——
+  // 卡片悬停胶囊 / 详情笔记即时正确，免重开窗口重拉
   if video && fps.is_none() {
-    if let Some(f) = media::probe_video(&origin).and_then(|v| v.fps) {
+    if let Some(f) = media::probe_video(origin).and_then(|v| v.fps) {
       meta.fps = Some(f);
       match write_json(&info_dir.join("metadata.json"), &meta) {
         Ok(()) => {
-          lib.index.assets.insert(asset_id.to_string(), meta);
           fps = Some(f);
-          if let Some(app) = app {
-            let _ = app.emit("video-fps-healed", serde_json::json!({ "assetId": asset_id, "fps": f }));
-          }
+          healed = Some(meta);
         }
         Err(e) => log::warn!("视频 fps 自愈落盘失败（{asset_id}）：{e}"),
       }
     }
   }
-  let probe = ffmpeg::probe_json(&origin);
+  let probe = ffmpeg::probe_json(origin);
   let mut src = if route(&ext, video, probe.as_ref()) == Route::Direct {
     MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps: None }
   } else {
-    transcode_source(lib, asset_id, &origin, video)?
+    transcode_source(root, asset_id, origin, video)?
   };
   src.fps = fps;
-  Ok(src)
+  Ok((src, healed))
 }
 
 /// 播放路由判定（纯逻辑，单测直接构造 probe JSON）：
@@ -114,9 +157,10 @@ fn route(ext: &str, is_video: bool, probe: Option<&serde_json::Value>) -> Route 
   }
 }
 
-/// 转码兜底：产物与 .stamp 一致直接复用（先查复用再查二进制——已有产物不需要 ffmpeg）
-fn transcode_source(lib: &Library, asset_id: &str, origin: &Path, is_video: bool) -> Result<MediaSource, String> {
-  let out_dir = lib.root.join(CACHE_DIR).join("tmp");
+/// 转码兜底：产物与 .stamp 一致直接复用（先查复用再查二进制——已有产物不需要 ffmpeg）。
+/// root = 库根（快照值），只用于拼 CACHE_DIR/tmp，不吃整个 Library
+fn transcode_source(root: &Path, asset_id: &str, origin: &Path, is_video: bool) -> Result<MediaSource, String> {
+  let out_dir = root.join(CACHE_DIR).join("tmp");
   let out = out_dir.join(format!("media-{asset_id}.{}", if is_video { "mp4" } else { "wav" }));
   let stamp = stamp_path(&out);
   if out.is_file() && source_stamp(origin).is_some_and(|s| read_stamp(&stamp) == Some(s)) {
@@ -156,7 +200,8 @@ pub struct WaveformImage {
 /// （CSS px × devicePixelRatio）请求，后端按该尺寸重渲 PCM 波形（渲染口径同 5.1 定稿，
 /// 任意宽度 1px 级清晰，对齐 Eagle），产物缓存 cache/waveforms/（会话级，开库清空），
 /// 已存在直给不重渲。非音频资源中文报错；ffmpeg 缺失 / 提取失败给中文文案（前端回退
-/// info 缩略图拉伸旧行为）。async：ffmpeg sidecar 调用为 IO 重活，一律走线程池（规范第 2 条）
+/// info 缩略图拉伸旧行为）。短锁快照后重采样 / 落盘走锁外线程池（规范第 2 条）；
+/// 产物按 宽x高 文件名幂等，无需并发去重
 #[tauri::command]
 pub async fn get_waveform(
   state: State<'_, AppState>,
@@ -164,18 +209,24 @@ pub async fn get_waveform(
   width: u32,
   height: u32,
 ) -> Result<WaveformImage, String> {
-  let guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
-  waveform(lib, &asset_id, width, height)
+  // 短锁快照：定位资源、克隆所需字段后立即放锁（原因同 get_media_source）
+  let (origin, meta, root) = {
+    let guard = state.library.lock().map_err(|e| e.to_string())?;
+    let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+    let (_info_dir, origin, meta) = locate_asset(lib, &asset_id)?;
+    (origin, meta, lib.root.clone())
+  };
+  tauri::async_runtime::spawn_blocking(move || waveform(&origin, &meta, &root, &asset_id, width, height))
+    .await
+    .map_err(|e| format!("波形图任务失败：{e}"))?
 }
 
-fn waveform(lib: &Library, asset_id: &str, width: u32, height: u32) -> Result<WaveformImage, String> {
-  let (_info_dir, origin, meta) = locate_asset(lib, asset_id)?;
-  if !media::is_audio(&origin) {
+fn waveform(origin: &Path, meta: &AssetMeta, root: &Path, asset_id: &str, width: u32, height: u32) -> Result<WaveformImage, String> {
+  if !media::is_audio(origin) {
     return Err(format!("「{}」不是音频资源", meta.name));
   }
   let (w, h) = clamp_wave_size(width, height);
-  let dir = lib.root.join(CACHE_DIR).join("waveforms");
+  let dir = root.join(CACHE_DIR).join("waveforms");
   let out = dir.join(format!("{asset_id}_{w}x{h}.webp"));
   if out.is_file() {
     return Ok(WaveformImage { path: out.to_string_lossy().into_owned() });
@@ -217,7 +268,7 @@ fn read_stamp(stamp: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::library;
+  use crate::core::library::{self, Library};
   use crate::services::import::{self, PendingFile, Source};
 
   struct Harness {
@@ -240,6 +291,12 @@ mod tests {
     h.lib.index.assets.insert(id.to_string(), meta);
   }
 
+  /// 模拟命令入口的短锁快照：locate_asset + 克隆 lib.root（内部函数已不再吃 &Library）
+  fn snap(h: &Harness, id: &str) -> (PathBuf, PathBuf, AssetMeta, PathBuf) {
+    let (info_dir, origin, meta) = locate_asset(&h.lib, id).unwrap();
+    (info_dir, origin, meta, h.lib.root.clone())
+  }
+
   fn probe_json(streams: serde_json::Value) -> serde_json::Value {
     serde_json::json!({ "streams": streams })
   }
@@ -256,7 +313,8 @@ mod tests {
     let mut h = make_lib();
     // 非音频资源中文报错
     add_file(&mut h, "AN-PIC", "参考图.png");
-    let err = waveform(&h.lib, "AN-PIC", 640, 272).unwrap_err();
+    let (_i, origin, meta, root) = snap(&h, "AN-PIC");
+    let err = waveform(&origin, &meta, &root, "AN-PIC", 640, 272).unwrap_err();
     assert!(err.contains("不是音频资源"), "{err}");
 
     // 缓存命中直给（命中判定先于二进制检查：无 ffmpeg / 假字节也直接返回）
@@ -264,15 +322,16 @@ mod tests {
     let out = h.lib.root.join(CACHE_DIR).join("waveforms").join("AN-AU_1200x48.webp");
     fs::create_dir_all(out.parent().unwrap()).unwrap();
     fs::write(&out, b"webp").unwrap();
-    let r = waveform(&h.lib, "AN-AU", 1200, 48).unwrap();
+    let (_i, origin, meta, root) = snap(&h, "AN-AU");
+    let r = waveform(&origin, &meta, &root, "AN-AU", 1200, 48).unwrap();
     assert_eq!(r, WaveformImage { path: out.to_string_lossy().into_owned() });
     // 幂等：已存在不重写（mtime 不变）
     let mtime = fs::metadata(&out).unwrap().modified().unwrap();
-    waveform(&h.lib, "AN-AU", 1200, 48).unwrap();
+    waveform(&origin, &meta, &root, "AN-AU", 1200, 48).unwrap();
     assert_eq!(fs::metadata(&out).unwrap().modified().unwrap(), mtime);
 
     // 未命中且源是假字节：组件缺失 / 提取失败 中文文案（按环境有无 ffmpeg 二选一）
-    let err = waveform(&h.lib, "AN-AU", 640, 272).unwrap_err();
+    let err = waveform(&origin, &meta, &root, "AN-AU", 640, 272).unwrap_err();
     assert!(err.contains("组件缺失") || err.contains("波形提取失败"), "{err}");
   }
 
@@ -320,13 +379,15 @@ mod tests {
   fn media_source_rejects_non_av_and_direct_renders_mp3() {
     let mut h = make_lib();
     add_file(&mut h, "AN-PIC", "参考图.png");
-    let err = media_source(&mut h.lib, "AN-PIC", None).unwrap_err();
+    let (info_dir, origin, meta, root) = snap(&h, "AN-PIC");
+    let err = media_source_heavy(&info_dir, &origin, meta, &root, "AN-PIC").unwrap_err();
     assert!(err.contains("不是音视频资源"), "{err}");
 
     // mp3 不看内容直渲（假字节也直给源路径）
     add_file(&mut h, "AN-AU", "配乐.mp3");
-    let src = media_source(&mut h.lib, "AN-AU", None).unwrap();
-    let origin = h.lib.info_dir("AN-AU").join("配乐.mp3");
+    let (info_dir, origin, meta, root) = snap(&h, "AN-AU");
+    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-AU").unwrap();
+    assert!(healed.is_none());
     assert_eq!(src, MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps: None });
   }
 
@@ -336,13 +397,14 @@ mod tests {
     // 播放源解析照常走通（不阻塞播放，下次播放再试）
     let mut h = make_lib();
     add_file(&mut h, "AN-VID2", "片段.mp4");
-    let origin = h.lib.info_dir("AN-VID2").join("片段.mp4");
-    let out = h.lib.root.join(CACHE_DIR).join("tmp").join("media-AN-VID2.mp4");
+    let (info_dir, origin, meta, root) = snap(&h, "AN-VID2");
+    let out = root.join(CACHE_DIR).join("tmp").join("media-AN-VID2.mp4");
     fs::create_dir_all(out.parent().unwrap()).unwrap();
     fs::write(&out, b"transcoded").unwrap();
     fs::write(stamp_path(&out), source_stamp(&origin).unwrap()).unwrap();
-    let src = media_source(&mut h.lib, "AN-VID2", None).unwrap();
+    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID2").unwrap();
     assert!(src.transcoded);
+    assert!(healed.is_none(), "探测失败不应产生自愈回写");
     let disk: crate::core::models::AssetMeta =
       crate::core::json_io::read_json(&h.lib.info_dir("AN-VID2").join("metadata.json")).unwrap();
     assert_eq!(disk.fps, None, "探测失败不应写入 fps");
@@ -352,19 +414,21 @@ mod tests {
   fn transcode_reuses_stamped_product_and_fails_gracefully() {
     let mut h = make_lib();
     add_file(&mut h, "AN-VID", "片段.mp4");
-    let origin = h.lib.info_dir("AN-VID").join("片段.mp4");
+    let (info_dir, origin, meta, root) = snap(&h, "AN-VID");
 
     // 预置产物 + 匹配戳：无 ffmpeg 也直接复用（复用判定先于二进制检查）
-    let out = h.lib.root.join(CACHE_DIR).join("tmp").join("media-AN-VID.mp4");
+    let out = root.join(CACHE_DIR).join("tmp").join("media-AN-VID.mp4");
     fs::create_dir_all(out.parent().unwrap()).unwrap();
     fs::write(&out, b"transcoded").unwrap();
     fs::write(stamp_path(&out), source_stamp(&origin).unwrap()).unwrap();
-    let src = media_source(&mut h.lib, "AN-VID", None).unwrap();
+    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID").unwrap();
+    assert!(healed.is_none());
     assert_eq!(src, MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None });
 
     // 源变化（大小变了戳失配）→ 重转：假 mp4 转码失败给中文文案；无 ffmpeg 则组件缺失文案
     fs::write(&origin, b"fake-changed-longer").unwrap();
-    let err = media_source(&mut h.lib, "AN-VID", None).unwrap_err();
+    let (info_dir, origin, meta, root) = snap(&h, "AN-VID");
+    let err = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID").unwrap_err();
     assert!(
       err.contains("该格式暂时无法播放") || err.contains("音视频组件缺失"),
       "{err}"

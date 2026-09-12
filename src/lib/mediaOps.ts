@@ -49,9 +49,20 @@ export async function getAssetFilePath(assetId: string): Promise<AssetFilePath> 
   return await invoke<AssetFilePath>("get_asset_file_path", { assetId });
 }
 
-// 播放源解析：可直播格式直给源路径；其余后端转码兜底（transcoded=true，转码可能数十秒）
+// 播放源解析：可直播格式直给源路径；其余后端转码兜底（transcoded=true，转码可能数十秒）。
+// in-flight 去重（2026-09-13 视频多选/排序卡死修复）：悬停层 / 预览 / 链接面板并发请求同一资产时
+// 共享同一趟后端解析（探测/转码），settle 后即删——不长期缓存结果，"设为原始文件"换源后不重吃旧路径
+const mediaSourceInflight = new Map<string, Promise<MediaSource>>();
 export async function getMediaSource(assetId: string): Promise<MediaSource> {
-  return await invoke<MediaSource>("get_media_source", { assetId });
+  let p = mediaSourceInflight.get(assetId);
+  if (!p) {
+    p = invoke<MediaSource>("get_media_source", { assetId });
+    mediaSourceInflight.set(assetId, p);
+    p.finally(() => {
+      if (mediaSourceInflight.get(assetId) === p) mediaSourceInflight.delete(assetId);
+    });
+  }
+  return await p;
 }
 
 // 序列帧帧清单：立即返回（帧条小图后台渐进）

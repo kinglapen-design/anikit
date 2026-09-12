@@ -8,6 +8,8 @@
 //   c) 文件树落点：item 高度三等分——上/下 1/3 = 排序插入线（仅文件夹拖拽生效，
 //      素材拖到树 item 任何位置都算并入），中间 1/3 = 并入高亮；
 //   d) Ctrl 拖拽：素材落文件夹（树 / 文件夹卡片）= 弹关联弹窗而非移动；落间距排序忽略 Ctrl。
+// 边缘自动滚动（2026-09-13 实机走查新增）：素材拖拽指针压网格视口上 / 下 56px 热区时 rAF
+// 持续 scrollTo（指针驻留无 move 事件），每帧滚动后按最后指针坐标重算落点，提示线随滚动跟随。
 // 混排护栏：FolderCard / 树文件夹拖拽只与文件夹排序，素材只对素材排序；
 // 树上/下 1/3：整组同父 = reorder_folders 同级排序，跨父级 = move_folders 带 beforeFolderId
 // 定位插入（2026-07-29 复验：嵌套文件夹拖出）；树中间 1/3 / 文件夹卡片并入 = move_folders 移动层级
@@ -108,19 +110,31 @@ export function assetCardFade(key: string): "source" | "cut" | null {
   return useSelectionStore().isCut(key) ? "cut" : null;
 }
 
-// 卡片间距解析器：AssetGrid 挂载时注册（它持有 boxes / 滚动 pos），卸载注销。
+// 卡片间距解析器：AssetGrid 注册（它持有 boxes / 滚动 pos）。注册归属激活 panel、谁注册谁注销
+//（2026-09-13 实机走查修复"提示线跑到列表盒子外"：dockview 非激活标签页不卸载仅 display:none，
+// 多网格实例共存——全局单例若被隐藏实例挂载覆盖 / 卸载误清，落点解析错位甚至静默失效）。
 // draggedKeys = 拖拽组 key 集（组约束判定用，2026-08-20 组内排序放开）；visibleKeys =
 // 网格当前可见序（displayItems）key 序列——分组模式的物化可见序 = 组拼接序，非 placementsFor 原序
 export type GridResolver = (clientX: number, clientY: number, draggedKeys: readonly string[]) => GapIndicator | null;
+// 网格滚动接口（拖拽边缘自动滚动，2026-09-13）：viewport 取实时 rect 判边缘热区，scrollTo/pos 驱动自定义滚动
+export interface GridScroll {
+  viewport: () => HTMLElement | undefined;
+  scrollTo: (y: number) => void;
+  pos: () => number;
+}
 let gridResolver: GridResolver | null = null;
 let gridVisibleKeys: (() => string[]) | null = null;
-export function registerGridResolver(fn: GridResolver, visibleKeys?: () => string[]): void {
+let gridScroll: GridScroll | null = null;
+export function registerGridResolver(fn: GridResolver, visibleKeys?: () => string[], scroll?: GridScroll): void {
   gridResolver = fn;
   gridVisibleKeys = visibleKeys ?? null;
+  gridScroll = scroll ?? null;
 }
-export function unregisterGridResolver(): void {
+export function unregisterGridResolver(fn?: GridResolver): void {
+  if (fn && gridResolver !== fn) return; // 非注册者不清（防隐藏实例卸载把存活 panel 的注册误清）
   gridResolver = null;
   gridVisibleKeys = null;
+  gridScroll = null;
 }
 
 // 间距解析器工厂（C4a；主体落 lib 控制 AssetGrid 行数 ≤500，规范第 3 条）：
@@ -252,8 +266,11 @@ function resetIndicators(): void {
   if (sess) sess.drop = null;
 }
 
-// 落点判定（pointermove 实时）：树 > 文件夹卡片 > 卡片间隙；互不叠加
-function updateDropTarget(e: PointerEvent): void {
+// 落点入参：pointermove 事件 / 边缘自动滚动 rAF 回放的最后指针坐标，共用一条判定链
+type DropPointer = Pick<PointerEvent, "clientX" | "clientY" | "ctrlKey" | "metaKey">;
+
+// 落点判定（pointermove 实时 + 边缘滚动回放）：树 > 文件夹卡片 > 卡片间隙；互不叠加
+function updateDropTarget(e: DropPointer): void {
   if (!sess) return;
   resetIndicators();
   dragView.ctrl = e.ctrlKey || e.metaKey;
@@ -427,6 +444,53 @@ async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator): Promis
   await ops.reorderPlacements(items, target, beforeItem);
 }
 
+// —— 拖拽边缘自动滚动（2026-09-13 实机走查"拖拽排序时滚动条没有跟着移动"新增）——
+// 指针驻留边缘时 pointermove 不再触发，必须 rAF 持续驱动；每帧滚动后用最后指针坐标重算落点——
+// 内容滚过静止指针，落点行已变，提示线须跟随。手感：热区 56px，速度随深入程度 4→24px/帧
+const EDGE_ZONE = 56;
+let edgeRaf = 0;
+let lastX = 0;
+let lastY = 0;
+let lastCtrl = false; // ctrl || meta 合并记录（回放时两字段同喂，判定只看 ctrlKey || metaKey）
+
+function edgeSpeed(depth: number): number {
+  return 4 + (Math.min(EDGE_ZONE, Math.max(0, depth)) / EDGE_ZONE) * 20;
+}
+
+function edgeScrollFrame(): void {
+  edgeRaf = 0;
+  const s = sess;
+  if (!s?.started || s.kind !== "asset" || !gridScroll) return;
+  const r = gridScroll.viewport()?.getBoundingClientRect();
+  // 指针横向离开视口（拖到树 / 侧栏上）不滚；纵向压上 / 下热区按深入程度加速
+  if (r && lastX >= r.left && lastX <= r.right) {
+    let delta = 0;
+    if (lastY >= r.top - EDGE_ZONE / 2 && lastY < r.top + EDGE_ZONE) {
+      delta = -edgeSpeed(r.top + EDGE_ZONE - lastY);
+    } else if (lastY <= r.bottom + EDGE_ZONE / 2 && lastY > r.bottom - EDGE_ZONE) {
+      delta = edgeSpeed(lastY - (r.bottom - EDGE_ZONE));
+    }
+    if (delta !== 0) {
+      const before = gridScroll.pos();
+      gridScroll.scrollTo(before + delta);
+      // 滚到头（pos 未变）无需重算；滚动了 = 内容相对指针位移，落点按最后坐标重算
+      if (gridScroll.pos() !== before) {
+        updateDropTarget({ clientX: lastX, clientY: lastY, ctrlKey: lastCtrl, metaKey: lastCtrl });
+      }
+    }
+  }
+  edgeRaf = requestAnimationFrame(edgeScrollFrame);
+}
+
+function startEdgeScroll(): void {
+  if (!edgeRaf) edgeRaf = requestAnimationFrame(edgeScrollFrame);
+}
+
+function stopEdgeScroll(): void {
+  if (edgeRaf) cancelAnimationFrame(edgeRaf);
+  edgeRaf = 0;
+}
+
 function startDrag(e: PointerEvent): void {
   if (!sess || sess.started) return;
   sess.started = true;
@@ -466,8 +530,11 @@ function startDrag(e: PointerEvent): void {
   let anchor = hit?.closest<HTMLElement>(".asset-card, .list-row, .folder-card, .archive-card, .tree-item") ?? null;
   if (sess.kind === "asset" && sess.items.length > 0) {
     const k0 = `${sess.items[0].assetId}|${sess.items[0].folderId}`;
+    // 查询限定拖拽源所在网格（2026-09-13 修复）：多标签页下同 key 卡片会命中隐藏 panel
+    //（display:none → 零 rect → ghost 尺寸 / 取图错），全局查询仅作兜底
+    const scope: ParentNode = sess.capEl?.closest(".grid-viewport") ?? document;
     anchor =
-      document.querySelector<HTMLElement>(
+      scope.querySelector<HTMLElement>(
         `.asset-card[data-key="${CSS.escape(k0)}"], .list-row[data-key="${CSS.escape(k0)}"]`,
       ) ?? anchor;
   }
@@ -481,10 +548,15 @@ function startDrag(e: PointerEvent): void {
   dragView.kind = sess.kind;
   document.body.style.userSelect = "none"; // 拖拽期间禁止文本选择
   document.body.classList.add("dragging"); // 拖拽期间禁用悬停控件（2026-07-29 复验二轮 5，CSS 闸）
+  startEdgeScroll(); // 边缘自动滚动（素材拖拽且网格注册了滚动接口时才实际滚动，见 edgeScrollFrame）
 }
 
 function onMove(e: PointerEvent): void {
   if (!sess) return;
+  // 记录最后指针坐标（边缘自动滚动 rAF 回放落点判定用——指针驻留边缘时本函数不再触发）
+  lastX = e.clientX;
+  lastY = e.clientY;
+  lastCtrl = e.ctrlKey || e.metaKey;
   // 僵尸会话自清（2026-08-13 用户实机"点不动 / 双选中"根因）：指针已非按下态（buttons 无左键）
   // 说明 pointerup 曾丢失（窗口外松手等）——立即取消旧会话，否则旧 sess 会被后续按下静默复用，
   // 移动超阈值误 startDrag：吞 click（点不动、双击才行）+ clickFolder 误入域（双选中残留）+ 误执行 drop
@@ -523,6 +595,7 @@ function endDrag(cancelled: boolean): void {
   window.removeEventListener("keydown", onKey, true);
   window.removeEventListener("blur", onWindowBlur);
   document.removeEventListener("mouseleave", onDocLeave);
+  stopEdgeScroll();
   // 释放 pointer capture（元素已卸载等情况 capture 已自动释放，吞异常）
   if (s.capEl && s.captured) {
     try {

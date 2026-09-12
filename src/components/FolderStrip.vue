@@ -21,7 +21,7 @@ import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
 
-const props = defineProps<{ viewKey: string }>();
+const props = withDefaults(defineProps<{ viewKey: string; panelActive?: boolean }>(), { panelActive: false });
 const content = useContentStore();
 const selection = useSelectionStore();
 const tabs = useTabsStore();
@@ -95,11 +95,14 @@ async function onRenameCommit(f: FolderNode, name: string): Promise<void> {
 
 // 同级排序间隙竖块（2026-08-18 修复"首列前插提示线不可见"：卡片内 left:-12 的竖块会被
 // grid-viewport overflow 整条裁掉——改由 FolderStrip 单件 Teleport 到 body 按 client 坐标画；
-// 拖拽中 folderGapId 随指针 move 变更 → 本 computed 逐次重取 rect）
+// 拖拽中 folderGapId 随指针 move 变更 → 本 computed 逐次重取 rect）。
+// 2026-09-13 修复"提示线画到窗口左上"：查询限定组件根内 + 非激活 panel 不渲染——
+// 原 document.querySelector 全局首匹配会命中隐藏 panel（display:none）的同名卡片 → 零 rect 错位
+const rootRef = ref<HTMLElement>();
 const gapBar = computed(() => {
   const id = dragView.folderGapId;
-  if (!id) return null;
-  const el = document.querySelector<HTMLElement>(`.folder-card[data-folder-id="${CSS.escape(id)}"]`);
+  if (!id || !props.panelActive) return null;
+  const el = rootRef.value?.querySelector<HTMLElement>(`.folder-card[data-folder-id="${CSS.escape(id)}"]`);
   if (!el) return null;
   const r = el.getBoundingClientRect();
   return { left: dragView.folderGapAfter ? r.right : r.left - 12, top: r.top, height: r.height };
@@ -108,7 +111,7 @@ const gapBar = computed(() => {
 </script>
 
 <template>
-  <section class="folder-block">
+  <section ref="rootRef" class="folder-block">
     <!-- 区块标题（7.1 内容容器轮 = items/SectionTitle block 贴稿；稿无动作钮 → actions=false）：
          递归显示开关撤出本行（2026-08-30 用户定：查看方式菜单里有就行） -->
     <SectionTitle

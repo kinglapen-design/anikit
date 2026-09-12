@@ -303,10 +303,14 @@ const resolveGap = makeGridResolver({
 });
 
 // 间隙竖块 client 坐标（Teleport body 渲染）：layer 坐标 + 层 rect 实时换算；
-// 拖拽中指针持续 move → resolver 每次重算 gap → 本 computed 随之刷新（滚动瞬间的短滞后随下一次 move 自愈）
+// 拖拽中指针持续 move → resolver 每次重算 gap → 本 computed 随之刷新；pos 纳入依赖——transform
+// 滚动后层 rect 随 pos 变（滚轮 / 拖拽边缘自动滚动），提示线随滚动跟随不滞留。
+// 非激活 panel 不渲染（2026-09-13 实机走查修复"提示线跑到列表盒子外"）：dockview 非激活标签页
+// 不卸载仅 display:none，隐藏实例的层 rect 全零 → 竖块会按 layer 原始坐标画到窗口左上盒子外
 const gapClient = computed(() => {
   const g = dragView.gap;
-  if (!g) return null;
+  if (!g || !props.panelActive) return null;
+  void pos.value;
   const r = cardsLayerRef.value?.getBoundingClientRect();
   if (!r) return null;
   return { left: r.left + g.left, top: r.top + g.top, width: g.width, height: g.height };
@@ -323,13 +327,30 @@ watch(visibleCards, (cards) => {
 
 onMounted(() => {
   viewportRef.value!.addEventListener("wheel", onCtrlWheel, { passive: false });
-  // 拖拽卡片间距落点解析（C4）；visibleKeys = 网格可见序（组拼接序）——显示排序物化以它为准
-  registerGridResolver(resolveGap, () => displayItems.value.map((p) => `${p.assetId}|${p.folderId}`));
 });
+
+// 拖拽卡片间距落点解析（C4）；visibleKeys = 网格可见序（组拼接序）——显示排序物化以它为准。
+// 注册归属激活 panel（2026-09-13 修复，同 gapClient 注释）：激活才注册、失活 / 卸载只清自己；
+// scroll 接口供拖拽引擎边缘自动滚动（指针压视口上下热区时 rAF 持续 scrollTo）
+watch(
+  () => props.panelActive,
+  (on) => {
+    if (on) {
+      registerGridResolver(
+        resolveGap,
+        () => displayItems.value.map((p) => `${p.assetId}|${p.folderId}`),
+        { viewport: () => viewportRef.value, scrollTo, pos: () => pos.value },
+      );
+    } else {
+      unregisterGridResolver(resolveGap);
+    }
+  },
+  { immediate: true },
+);
 
 onBeforeUnmount(() => {
   viewportRef.value?.removeEventListener("wheel", onCtrlWheel);
-  unregisterGridResolver();
+  unregisterGridResolver(resolveGap);
 });
 </script>
 
@@ -350,7 +371,7 @@ onBeforeUnmount(() => {
       <div ref="headerRef" class="grid-header" @pointerdown="headerBlankClear">
         <!-- 当前视口无子文件夹时整个文件夹区块隐藏（阶段3修改定案；1.2 按本标签页 viewKey 取子文件夹）；
              搜索态（3.6）隐藏文件夹区块（命中只出素材与档案，2026-08-19 用户定） -->
-        <FolderStrip v-if="!searching && content.stripFoldersFor(viewKey).length > 0" :view-key="viewKey" />
+        <FolderStrip v-if="!searching && content.stripFoldersFor(viewKey).length > 0" :view-key="viewKey" :panel-active="panelActive" />
         <!-- 档案区（3.2 一轮，PRD 02-03 三区：文件夹 / 档案 / 文件）：无档案整块不渲染（同文件夹区口径）；
              搜索态 = 命中档案列表（nodes 数据源切换，快速访问视图后端不返回档案命中——档案区仅文件夹视图出）；
              选择模式链接音频 / 档案封面（档案非可选目标）档案区不渲染（过滤噪音） -->

@@ -1,6 +1,6 @@
 # 踩坑记录 061-090
 
-> 四段式：现象 / 原因 / 解法 / 预防。共 11 条。返回 [Index](../Index.md)。
+> 四段式：现象 / 原因 / 解法 / 预防。共 14 条。返回 [Index](../Index.md)。
 
 | 编号 | 标题 | 日期 | 链接 |
 | --- | --- | --- | --- |
@@ -17,3 +17,4 @@
 | 071 | DWM 整窗玻璃 × tao 保留 WS_CAPTION 出原生按钮——撤玻璃与归零条带均证伪，终局最大化摘 caption 还原加回（2026-09-08） | 2026-09-08 | [DWM 整窗玻璃 × tao 保留 WS_CAPTION 出原生按钮——撤玻璃与归零条带均证伪，终局最大化摘 caption 还原加回（2026-09-08）](071_DWM 整窗玻璃 × tao 保留 WS_CAPTION 出原生按钮——撤玻璃与归零条带均证伪，终局最大化摘 caption 还原加回（2026-09-08）.md) |
 | 072 | flex-basis 定值项不进父容器 max-content——width 定值才有贡献，FloatBar 探针实测丢稿值宽（2026-09-09） | 2026-09-09 | [flex-basis 定值项不进父容器 max-content——width 定值才有贡献，FloatBar 探针实测丢稿值宽（2026-09-09）](072_flex-basis 定值项不进父容器 max-content——width 定值才有贡献，FloatBar 探针实测丢稿值宽（2026-09-09）.md) |
 | 073 | dockview 布局不吃 Emulation 视口收窄——探针模拟侧栏挤压要直接钉 inline 宽（2026-09-09） | 2026-09-09 | [dockview 布局不吃 Emulation 视口收窄——探针模拟侧栏挤压要直接钉 inline 宽（2026-09-09）](073_dockview 布局不吃 Emulation 视口收窄——探针模拟侧栏挤压要直接钉 inline 宽（2026-09-09）.md) |
+| 074 | async 命令持全局库锁同步跑 ffprobe/ffmpeg——主线程同步命令堵死未响应（2026-09-13） | 2026-09-13 | [async 命令持全局库锁同步跑 ffprobe/ffmpeg——主线程同步命令堵死未响应（2026-09-13）](074_async 命令持全局库锁同步跑 ffprobe-ffmpeg——主线程同步命令堵死未响应（2026-09-13）.md) |
