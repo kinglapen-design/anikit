@@ -97,15 +97,21 @@ async function onRenameCommit(f: FolderNode, name: string): Promise<void> {
 // grid-viewport overflow 整条裁掉——改由 FolderStrip 单件 Teleport 到 body 按 client 坐标画；
 // 拖拽中 folderGapId 随指针 move 变更 → 本 computed 逐次重取 rect）。
 // 2026-09-13 修复"提示线画到窗口左上"：查询限定组件根内 + 非激活 panel 不渲染——
-// 原 document.querySelector 全局首匹配会命中隐藏 panel（display:none）的同名卡片 → 零 rect 错位
+// 原 document.querySelector 全局首匹配会命中隐藏 panel（display:none）的同名卡片 → 零 rect 错位；
+// 同日二轮再钳制到所属 grid-viewport 可见矩形（Teleport 无裁剪，滚出视口会画到工具栏上）
 const rootRef = ref<HTMLElement>();
 const gapBar = computed(() => {
   const id = dragView.folderGapId;
   if (!id || !props.panelActive) return null;
   const el = rootRef.value?.querySelector<HTMLElement>(`.folder-card[data-folder-id="${CSS.escape(id)}"]`);
-  if (!el) return null;
+  const vr = rootRef.value?.closest(".grid-viewport")?.getBoundingClientRect();
+  if (!el || !vr) return null;
   const r = el.getBoundingClientRect();
-  return { left: dragView.folderGapAfter ? r.right : r.left - 12, top: r.top, height: r.height };
+  const left = Math.min(Math.max(dragView.folderGapAfter ? r.right : r.left - 12, vr.left), vr.right - 12);
+  const top = Math.max(r.top, vr.top);
+  const bottom = Math.min(r.bottom, vr.bottom);
+  if (bottom <= top) return null;
+  return { left, top, height: bottom - top };
 });
 
 </script>

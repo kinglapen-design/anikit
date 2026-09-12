@@ -306,14 +306,22 @@ const resolveGap = makeGridResolver({
 // 拖拽中指针持续 move → resolver 每次重算 gap → 本 computed 随之刷新；pos 纳入依赖——transform
 // 滚动后层 rect 随 pos 变（滚轮 / 拖拽边缘自动滚动），提示线随滚动跟随不滞留。
 // 非激活 panel 不渲染（2026-09-13 实机走查修复"提示线跑到列表盒子外"）：dockview 非激活标签页
-// 不卸载仅 display:none，隐藏实例的层 rect 全零 → 竖块会按 layer 原始坐标画到窗口左上盒子外
+// 不卸载仅 display:none，隐藏实例的层 rect 全零 → 竖块会按 layer 原始坐标画到窗口左上盒子外。
+// 再钳制到 viewport 可见矩形（同日二轮"提示线超出窗口"）：Teleport 逃出 overflow 裁剪后，
+// 滚出视口的间隙行会把竖块画到工具栏 / 标签栏上——与视口求交，不相交不渲染
 const gapClient = computed(() => {
   const g = dragView.gap;
   if (!g || !props.panelActive) return null;
   void pos.value;
   const r = cardsLayerRef.value?.getBoundingClientRect();
-  if (!r) return null;
-  return { left: r.left + g.left, top: r.top + g.top, width: g.width, height: g.height };
+  const vr = viewportRef.value?.getBoundingClientRect();
+  if (!r || !vr) return null;
+  const left = Math.max(r.left + g.left, vr.left);
+  const top = Math.max(r.top + g.top, vr.top);
+  const right = Math.min(r.left + g.left + g.width, vr.right);
+  const bottom = Math.min(r.top + g.top + g.height, vr.bottom);
+  if (right <= left || bottom <= top) return null;
+  return { left, top, width: right - left, height: bottom - top };
 });
 
 // 就地重命名（C2）：滚出虚拟滚动销毁 = 取消——重命名卡片离开可视渲染集时清 renamingKey
