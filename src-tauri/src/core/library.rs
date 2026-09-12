@@ -210,7 +210,9 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   // / covers-trash（档案覆盖式烘培旧封面暂存——支撑撤销，2026-09-08）
   // 打开库时清空上一轮遗留——点开过的素材缓存不留到下一会话，防容量膨胀；cache/thumbs 格式图标按格式跨会话保留。
   // seq-trash / covers-trash 清空 = 暂存物会话结束真弃（undo 栈同为会话级，重启后无从撤销）；
-  // 序列帧帧图持久化在 info/frames/，不进 cache 不清空；cache/covers 跨会话保留（开库自检清理无引用封面）
+  // 序列帧帧图持久化在 info/frames/，不进 cache 不清空；cache/covers 跨会话保留（开库自检清理无引用封面）；
+  // 音视频转码产物在 cache/media（2026-09-13 用户实机定：原放 tmp 随开库清空 → 每次启动首次播放都重转、
+  // CPU 长时间满载——stamp 记源"大小:mtime秒"已能保证源变化重转，迁出 tmp 跨会话保留，不在本清空名单）
   for sub in ["tmp", "previews", "frames", "waveforms", "note-thumbs", "seq-trash", "covers-trash"] {
     let dir = path.join(CACHE_DIR).join(sub);
     if dir.is_dir() {

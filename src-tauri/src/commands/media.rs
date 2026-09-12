@@ -1,8 +1,10 @@
 //! 命令 API：音视频播放源（5.2）。前端用 <video>/<audio> + convertFileSrc 播放，
 //! WebView2（Chromium）可直播：mp4(H.264 + AAC/MP3) / mp3 / wav；其余格式（wma、mov/avi、
-//! HEVC 等）经 ffmpeg 转码兜底——视频转 cache/tmp/media-{assetId}.mp4（libx264 + aac），
-//! 音频转 cache/tmp/media-{assetId}.wav（pcm_s16le）。转码幂等：产物旁 .stamp 记源文件
+//! HEVC 等）经 ffmpeg 转码兜底——视频转 cache/media/media-{assetId}.mp4（libopenh264 + aac），
+//! 音频转 cache/media/media-{assetId}.wav（pcm_s16le）。转码幂等：产物旁 .stamp 记源文件
 //! "大小:mtime秒"，一致直接复用不重复转码；源变化重转。sidecar 缺失 / 转码失败给中文文案。
+//! 产物目录 cache/media 跨会话保留（2026-09-13 用户实机定：cache/tmp 开库清空导致每次启动
+//! 后首次播放都重新转码，CPU 长时间满载）——stamp 已能保证源变化重转，无需清空防膨胀。
 //! 锁纪律：全局库锁仅用于入口快照（locate_asset + 克隆 root 后立即放锁），ffprobe / ffmpeg
 //! 重活全部在锁外线程池执行——持锁转码（数十秒级）会堵死主线程同步命令，导致界面「未响应」。
 
@@ -24,7 +26,7 @@ use crate::services::{media, thumbnail};
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct MediaSource {
-  /// 可播放文件绝对路径（transcoded=false = 源文件；true = cache/tmp 转码产物）
+  /// 可播放文件绝对路径（transcoded=false = 源文件；true = cache/media 转码产物）
   pub path: String,
   /// true = webview 播不了源格式，返回的是后端转码产物（mp4/wav）
   pub transcoded: bool,
@@ -158,9 +160,9 @@ fn route(ext: &str, is_video: bool, probe: Option<&serde_json::Value>) -> Route 
 }
 
 /// 转码兜底：产物与 .stamp 一致直接复用（先查复用再查二进制——已有产物不需要 ffmpeg）。
-/// root = 库根（快照值），只用于拼 CACHE_DIR/tmp，不吃整个 Library
+/// root = 库根（快照值），只用于拼 CACHE_DIR/media，不吃整个 Library
 fn transcode_source(root: &Path, asset_id: &str, origin: &Path, is_video: bool) -> Result<MediaSource, String> {
-  let out_dir = root.join(CACHE_DIR).join("tmp");
+  let out_dir = root.join(CACHE_DIR).join("media");
   let out = out_dir.join(format!("media-{asset_id}.{}", if is_video { "mp4" } else { "wav" }));
   let stamp = stamp_path(&out);
   if out.is_file() && source_stamp(origin).is_some_and(|s| read_stamp(&stamp) == Some(s)) {
@@ -398,7 +400,7 @@ mod tests {
     let mut h = make_lib();
     add_file(&mut h, "AN-VID2", "片段.mp4");
     let (info_dir, origin, meta, root) = snap(&h, "AN-VID2");
-    let out = root.join(CACHE_DIR).join("tmp").join("media-AN-VID2.mp4");
+    let out = root.join(CACHE_DIR).join("media").join("media-AN-VID2.mp4");
     fs::create_dir_all(out.parent().unwrap()).unwrap();
     fs::write(&out, b"transcoded").unwrap();
     fs::write(stamp_path(&out), source_stamp(&origin).unwrap()).unwrap();
@@ -417,7 +419,7 @@ mod tests {
     let (info_dir, origin, meta, root) = snap(&h, "AN-VID");
 
     // 预置产物 + 匹配戳：无 ffmpeg 也直接复用（复用判定先于二进制检查）
-    let out = root.join(CACHE_DIR).join("tmp").join("media-AN-VID.mp4");
+    let out = root.join(CACHE_DIR).join("media").join("media-AN-VID.mp4");
     fs::create_dir_all(out.parent().unwrap()).unwrap();
     fs::write(&out, b"transcoded").unwrap();
     fs::write(stamp_path(&out), source_stamp(&origin).unwrap()).unwrap();

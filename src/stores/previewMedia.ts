@@ -1,6 +1,6 @@
 // 音视频播放（5.2）：<video> 元素模块级持有（非响应式，音频也复用 video 元素免双实现），
 // 播放状态（playing/currentTime/duration/volume/rate/loop）经元素事件同步进 store。
-// get_media_source 解析播放源（WebView2 不可直播格式后端已转码 cache/tmp，转码期 transcoding 加载态）；
+// get_media_source 解析播放源（WebView2 不可直播格式后端已转码 cache/media，转码期 transcoding 加载态）；
 // 解析失败降级：preview.kind 落 other + 中文报错文案（preview.error 画面提示）。
 import { defineStore } from "pinia";
 import { nextTick } from "vue";
