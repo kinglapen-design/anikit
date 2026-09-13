@@ -307,10 +307,10 @@ const resolveGap = makeGridResolver({
 // 滚动后层 rect 随 pos 变（滚轮 / 拖拽边缘自动滚动），提示线随滚动跟随不滞留。
 // 非激活 panel 不渲染（2026-09-13 实机走查修复"提示线跑到列表盒子外"）：dockview 非激活标签页
 // 不卸载仅 display:none，隐藏实例的层 rect 全零 → 竖块会按 layer 原始坐标画到窗口左上盒子外。
-// 再钳制到 viewport 可见矩形（同日二轮"提示线超出窗口"）：Teleport 逃出 overflow 裁剪后，
-// 滚出视口的间隙行会把竖块画到工具栏 / 标签栏上。**横向平移进视口、纵向求交**——行首间隙
-// g.left = -GAP（PAD.left=0 无留白）整条在视口左缘外，求交会判空丢掉最左侧插入提示（同日
-// 三轮实机"最左侧的插入提示没了"）；平移钳制把它钉回视口左缘内显示。纵向行滚出视口仍求交不渲染
+// 钳制口径（同日四轮定稿）：**纵向求交、横向不钳**——纵向：Teleport 无 overflow 裁剪，滚出视口的
+// 间隙行会把竖块画到工具栏 / 标签栏上，求交后不渲染；横向：行首间隙 g.left=-GAP 落在宿主
+//（列表容器 padding-left 12）留白带是设计口径（与右侧 PAD.right 对称，"和右侧一样在边距处"），
+// 钳进视口反而盖住首卡（三轮"最左侧提示没了 / 覆盖卡片"两轮试错定稿）
 const gapClient = computed(() => {
   const g = dragView.gap;
   if (!g || !props.panelActive) return null;
@@ -318,11 +318,10 @@ const gapClient = computed(() => {
   const r = cardsLayerRef.value?.getBoundingClientRect();
   const vr = viewportRef.value?.getBoundingClientRect();
   if (!r || !vr) return null;
-  const left = Math.min(Math.max(r.left + g.left, vr.left), Math.max(vr.left, vr.right - g.width));
   const top = Math.max(r.top + g.top, vr.top);
   const bottom = Math.min(r.top + g.top + g.height, vr.bottom);
   if (bottom <= top) return null;
-  return { left, top, width: g.width, height: bottom - top };
+  return { left: r.left + g.left, top, width: g.width, height: bottom - top };
 });
 
 // 就地重命名（C2）：滚出虚拟滚动销毁 = 取消——重命名卡片离开可视渲染集时清 renamingKey

@@ -107,11 +107,12 @@ const gapBar = computed(() => {
   const vr = rootRef.value?.closest(".grid-viewport")?.getBoundingClientRect();
   if (!el || !vr) return null;
   const r = el.getBoundingClientRect();
-  const left = Math.min(Math.max(dragView.folderGapAfter ? r.right : r.left - 12, vr.left), vr.right - 12);
+  // 钳制口径同 AssetGrid gapClient（2026-09-13 四轮）：纵向求交（条带随 canvas 滚出视口不画到
+  // 工具栏上）；横向不钳——首卡前插落在宿主列表容器 padding-left 12 留白带是设计口径
   const top = Math.max(r.top, vr.top);
   const bottom = Math.min(r.bottom, vr.bottom);
   if (bottom <= top) return null;
-  return { left, top, height: bottom - top };
+  return { left: dragView.folderGapAfter ? r.right : r.left - 12, top, height: bottom - top };
 });
 
 </script>
