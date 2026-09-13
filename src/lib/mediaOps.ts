@@ -49,17 +49,21 @@ export async function getAssetFilePath(assetId: string): Promise<AssetFilePath> 
   return await invoke<AssetFilePath>("get_asset_file_path", { assetId });
 }
 
-// 播放源解析：可直播格式直给源路径；其余后端转码兜底（transcoded=true，转码可能数十秒）。
+// 播放源解析（2026-09-13 直读优先口径）：一律先直给源文件路径（transcoded=false，后端不探测
+// 不等待——HEVC 等编码 WebView2 经 Windows Media Foundation 可直解，与 Eagle 同机制）；
+// <video>/<audio> error 后调用方带 forceTranscode=true 重调 → 后端转码兜底（cache/media 跨会话保留）。
 // in-flight 去重（2026-09-13 视频多选/排序卡死修复）：悬停层 / 预览 / 链接面板并发请求同一资产时
-// 共享同一趟后端解析（探测/转码），settle 后即删——不长期缓存结果，"设为原始文件"换源后不重吃旧路径
+// 共享同一趟后端解析（key 含 force 档——直读与转码是两趟），settle 后即删——不长期缓存结果，
+//"设为原始文件"换源后不重吃旧路径
 const mediaSourceInflight = new Map<string, Promise<MediaSource>>();
-export async function getMediaSource(assetId: string): Promise<MediaSource> {
-  let p = mediaSourceInflight.get(assetId);
+export async function getMediaSource(assetId: string, forceTranscode = false): Promise<MediaSource> {
+  const key = `${assetId}|${forceTranscode ? 1 : 0}`;
+  let p = mediaSourceInflight.get(key);
   if (!p) {
-    p = invoke<MediaSource>("get_media_source", { assetId });
-    mediaSourceInflight.set(assetId, p);
+    p = invoke<MediaSource>("get_media_source", { assetId, forceTranscode });
+    mediaSourceInflight.set(key, p);
     p.finally(() => {
-      if (mediaSourceInflight.get(assetId) === p) mediaSourceInflight.delete(assetId);
+      if (mediaSourceInflight.get(key) === p) mediaSourceInflight.delete(key);
     });
   }
   return await p;

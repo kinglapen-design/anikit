@@ -96,11 +96,31 @@ async function loadSource(): Promise<void> {
     if (isDisposed()) return;
     const v = videoRef.value;
     if (!v) return;
+    usedTranscode = r.transcoded;
     v.src = convertFileSrc(r.path);
     v.currentTime = rangeStart();
     void v.play().catch((e) => console.warn("卡片播放失败：", e));
   } catch (e) {
     console.warn("卡片播放源解析失败：", e);
+  }
+}
+
+// 直读优先的播放错误回退（2026-09-13）：源编码 webview 直解不了（无 OS 解码器的 HEVC、
+// mov/wma 容器等）→ error 后带 forceTranscode 重调，后端转码兜底；转码期 ready 恒 false，
+// 卡片保持底层静态缩略图（无闪烁）
+let usedTranscode = false;
+async function onSourceError(): Promise<void> {
+  const v = videoRef.value;
+  if (!v || !v.currentSrc || usedTranscode || isDisposed()) return;
+  usedTranscode = true;
+  try {
+    const r = await getMediaSource(props.asset.assetId, true);
+    if (isDisposed()) return;
+    v.src = convertFileSrc(r.path);
+    v.currentTime = rangeStart();
+    void v.play().catch(() => {});
+  } catch (e) {
+    console.warn("卡片播放转码兜底失败：", e);
   }
 }
 
@@ -195,6 +215,7 @@ function togglePlay(): void {
       @timeupdate="onTimeUpdate"
       @loadedmetadata="onLoadedMetadata"
       @ended="onEnded"
+      @error="onSourceError"
     />
     <!-- 控件（仅悬停模式；7.1 换代贴稿）：右上胶囊 = 帧号 + 播放/暂停 + 音量/静音；
          底部 4px 播放条（贴底 4 左右 12，纯显示 pointer-events none 不挡名称）；

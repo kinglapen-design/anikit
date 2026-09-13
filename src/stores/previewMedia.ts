@@ -1,6 +1,7 @@
 // 音视频播放（5.2）：<video> 元素模块级持有（非响应式，音频也复用 video 元素免双实现），
 // 播放状态（playing/currentTime/duration/volume/rate/loop）经元素事件同步进 store。
-// get_media_source 解析播放源（WebView2 不可直播格式后端已转码 cache/media，转码期 transcoding 加载态）；
+// get_media_source 解析播放源（2026-09-13 直读优先：先直给源路径，播放 error 回退转码
+// cache/media 持久产物，转码期 transcoding 加载态）；
 // 解析失败降级：preview.kind 落 other + 中文报错文案（preview.error 画面提示）。
 import { defineStore } from "pinia";
 import { nextTick } from "vue";
@@ -14,6 +15,9 @@ import { getMediaSource } from "../lib/mediaOps";
 let el: HTMLVideoElement | null = null;
 // transcodingSlow 延迟定时器（300ms 防闪）
 let slowTimer: ReturnType<typeof setTimeout> | undefined;
+// 直读优先回退用（2026-09-13）：当前装载资产 id + 是否已回退过转码（每素材只回退一次）
+let curAssetId: string | null = null;
+let transcodeRetried = false;
 
 function errText(e: unknown): string {
   if (typeof e === "string") return e;
@@ -58,6 +62,8 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
         if (!this.scrubbing) this.currentTime = el?.currentTime ?? 0;
       });
       el.addEventListener("durationchange", () => (this.duration = el?.duration || 0));
+      // 直读优先的播放错误回退（2026-09-13）：源编码直解不了 → error 后 forceTranscode 转码兜底
+      el.addEventListener("error", () => void this.onSourceError());
       el.addEventListener("loadedmetadata", () => {
         this.duration = el?.duration || 0;
         // 视频尺寸喂给查看器（fit/缩放数学与图片同一套）
@@ -70,6 +76,8 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
     async load(assetId: string, kind: "audio" | "video", fps: number | null = null): Promise<void> {
       const preview = usePreviewStore();
       this.kind = kind;
+      curAssetId = assetId;
+      transcodeRetried = false;
       this.fps = kind === "video" ? fps : null;
       this.transcoding = true;
       this.transcodingSlow = false;
@@ -99,6 +107,39 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
         this.transcodingSlow = false;
       }
     },
+    // 播放错误回退转码（直读优先口径，2026-09-13）：仅直读源 error 触发一次；
+    // 转码期复用 transcoding + 300ms 防闪（"转码中…"提示）
+    async onSourceError(): Promise<void> {
+      const preview = usePreviewStore();
+      const id = curAssetId;
+      if (!id || transcodeRetried || !el?.currentSrc) return;
+      if (preview.current?.assetId !== id) return;
+      transcodeRetried = true;
+      clearTimeout(slowTimer);
+      this.transcoding = true;
+      this.transcodingSlow = false;
+      slowTimer = setTimeout(() => {
+        if (this.transcoding) this.transcodingSlow = true;
+      }, 300);
+      try {
+        const r = await getMediaSource(id, true);
+        if (preview.current?.assetId !== id || !el) return;
+        if (this.kind === "video" && r.fps != null) this.fps = r.fps;
+        this.srcPath = r.path;
+        el.src = convertFileSrc(r.path);
+        el.loop = this.loop;
+        this.play();
+      } catch (e) {
+        if (preview.current?.assetId !== id) return;
+        console.error("音视频转码兜底失败：", e);
+        preview.kind = "other";
+        preview.error = errText(e);
+      } finally {
+        clearTimeout(slowTimer);
+        this.transcoding = false;
+        this.transcodingSlow = false;
+      }
+    },
     // 释放（切素材/退出预览）：暂停并卸载源，状态归零（音量/静音保留用户设置）
     release(): void {
       if (el) {
@@ -106,6 +147,8 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
         el.removeAttribute("src");
         el.load();
       }
+      curAssetId = null;
+      transcodeRetried = false;
       this.kind = null;
       this.srcPath = null;
       clearTimeout(slowTimer);

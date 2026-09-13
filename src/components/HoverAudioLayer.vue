@@ -54,10 +54,28 @@ async function loadSource(): Promise<void> {
     if (isDisposed()) return;
     const v = mediaRef.value;
     if (!v) return;
+    usedTranscode = r.transcoded;
     v.src = convertFileSrc(r.path);
     void v.play().catch((e) => console.warn("悬停播放失败：", e));
   } catch (e) {
     console.warn("悬停播放源解析失败：", e);
+  }
+}
+
+// 直读优先的播放错误回退（2026-09-13，同 HoverVideoLayer）：wma 等直解不了 →
+// error 后 forceTranscode 重调转码兜底（cache/media 持久产物，每资产只转一次）
+let usedTranscode = false;
+async function onSourceError(): Promise<void> {
+  const v = mediaRef.value;
+  if (!v || !v.currentSrc || usedTranscode || isDisposed()) return;
+  usedTranscode = true;
+  try {
+    const r = await getMediaSource(props.asset.assetId, true);
+    if (isDisposed()) return;
+    v.src = convertFileSrc(r.path);
+    void v.play().catch(() => {});
+  } catch (e) {
+    console.warn("悬停播放转码兜底失败：", e);
   }
 }
 
@@ -110,6 +128,7 @@ function onSeekUp(e: PointerEvent): void {
       @ended="playing = false"
       @timeupdate="currentTime = mediaRef?.currentTime ?? 0"
       @loadedmetadata="duration = mediaRef?.duration || 0"
+      @error="onSourceError"
     />
     <!-- 已播放高亮：同一波形图作 mask（alpha 通道），品牌紫实底，clip-path 裁到进度；
          mask-size 与卡片 img 的 object-fit 同口径（grid contain / 其他 cover） -->

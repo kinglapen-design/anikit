@@ -307,11 +307,28 @@ async function togglePlay(v: RelationView): Promise<void> {
     const r = await getMediaSource(v.other.id);
     el.src = convertFileSrc(r.path);
     playingId.value = v.relation.id;
+    // 直读优先的播放错误回退（2026-09-13）：直解不了的音频（wma 等）error 后转码兜底重试一次
+    el.onerror = () => void onSourceError(v);
     void el.play().catch(() => {});
   } catch (e) {
     toast.notify({ message: String(e), icon: "fail" });
   } finally {
     loadingId.value = "";
+  }
+}
+
+// 播放错误回退（直读优先口径）：转码兜底重试一次；仍失败 toast 原样文案
+let transcodeRetriedId = "";
+async function onSourceError(v: RelationView): Promise<void> {
+  const el = mediaRef.value;
+  if (!el || !el.currentSrc || transcodeRetriedId === v.relation.id) return;
+  transcodeRetriedId = v.relation.id;
+  try {
+    const r = await getMediaSource(v.other.id, true);
+    el.src = convertFileSrc(r.path);
+    void el.play().catch(() => {});
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
   }
 }
 

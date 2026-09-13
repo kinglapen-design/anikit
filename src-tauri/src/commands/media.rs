@@ -1,8 +1,10 @@
-//! 命令 API：音视频播放源（5.2）。前端用 <video>/<audio> + convertFileSrc 播放，
-//! WebView2（Chromium）可直播：mp4(H.264 + AAC/MP3) / mp3 / wav；其余格式（wma、mov/avi、
-//! HEVC 等）经 ffmpeg 转码兜底——视频转 cache/media/media-{assetId}.mp4（libopenh264 + aac），
-//! 音频转 cache/media/media-{assetId}.wav（pcm_s16le）。转码幂等：产物旁 .stamp 记源文件
-//! "大小:mtime秒"，一致直接复用不重复转码；源变化重转。sidecar 缺失 / 转码失败给中文文案。
+//! 命令 API：音视频播放源（5.2）。前端用 <video>/<audio> + convertFileSrc 播放。
+//! 路由口径（2026-09-13 改，废除"ffprobe 探测分流"）：**一律先直给源文件绝对路径**——
+//! WebView2（Chromium）经 Windows Media Foundation 可直解 HEVC 等编码（OS 装了解码器即可，
+//! 与 Eagle 同机制，实机验证），探测分流只会让 HEVC 这类可直播格式白跑一趟软编码转码。
+//! 前端播放 error 后带 force_transcode=true 重调 → 转码兜底（cache/media/media-{assetId}.mp4|.wav，
+//! libopenh264 + aac / pcm_s16le）。转码幂等：产物旁 .stamp 记源文件 "大小:mtime秒"，一致直接
+//! 复用不重复转码；源变化重转。sidecar 缺失 / 转码失败给中文文案。
 //! 产物目录 cache/media 跨会话保留（2026-09-13 用户实机定：cache/tmp 开库清空导致每次启动
 //! 后首次播放都重新转码，CPU 长时间满载）——stamp 已能保证源变化重转，无需清空防膨胀。
 //! 锁纪律：全局库锁仅用于入口快照（locate_asset + 克隆 root 后立即放锁），ffprobe / ffmpeg
@@ -35,26 +37,21 @@ pub struct MediaSource {
   pub fps: Option<f64>,
 }
 
-/// 播放路由：直渲（源文件可直接喂 <video>/<audio>）还是转码兜底
-#[derive(Debug, PartialEq, Eq)]
-enum Route {
-  Direct,
-  Transcode,
-}
-
 /// 同资产播放源解析并发去重：并发重复调用串行化，后者拿到锁时转码产物 stamp 已命中，
 /// 直接复用，消除双重转码 / 重复探测。条目按资产留驻（每资产一条 Arc，体积极小，不清理）
 static MEDIA_SRC_LOCKS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>>> =
   std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
-/// 音视频播放源解析：可直播格式直给源文件绝对路径；其余转码（幂等复用，见模块头）。
+/// 音视频播放源解析：先直给源文件绝对路径（transcoded=false，不探测不等待，口径见模块头）；
+/// 前端播放 error 后带 force_transcode=true 重调 → 转码兜底（幂等复用）。
 /// 非音视频资源中文报错；ffmpeg 缺失报"组件缺失"，转码失败报"该格式暂时无法播放"。
-/// 三段式：短锁快照 → 锁外线程池重活（ffprobe / ffmpeg，规范第 2 条）→ 自愈回写短锁
+/// 三段式：短锁快照 → 锁外线程池重活（fps 自愈探测 / 转码，规范第 2 条）→ 自愈回写短锁
 #[tauri::command]
 pub async fn get_media_source(
   app: tauri::AppHandle,
   state: State<'_, AppState>,
   asset_id: String,
+  force_transcode: Option<bool>,
 ) -> Result<MediaSource, String> {
   // 短锁快照：定位资源、克隆出后续所需全部字段后立即放锁
   let (info_dir, origin, meta, root) = {
@@ -72,10 +69,11 @@ pub async fn get_media_source(
       .clone()
   };
   let _permit = asset_lock.lock().await;
-  // 锁外重活：fps 补探测 / ffprobe / 转码走线程池
+  // 锁外重活：fps 补探测 / 转码走线程池（直读路径无任何探测，秒回）
   let asset_id2 = asset_id.clone();
+  let force = force_transcode.unwrap_or(false);
   let (src, healed) =
-    tauri::async_runtime::spawn_blocking(move || media_source_heavy(&info_dir, &origin, meta, &root, &asset_id2))
+    tauri::async_runtime::spawn_blocking(move || media_source_heavy(&info_dir, &origin, meta, &root, &asset_id2, force))
       .await
       .map_err(|e| format!("播放源解析任务失败：{e}"))??;
   // fps 自愈回写（仅视频且探测到新 fps）：metadata.json 已在锁外落盘，这里短锁同步内存索引；
@@ -91,7 +89,8 @@ pub async fn get_media_source(
   Ok(src)
 }
 
-/// 播放源解析重活（锁外线程池执行）：fps 自愈探测 → ffprobe 路由 → 直渲 / 转码。
+/// 播放源解析重活（锁外线程池执行）：fps 自愈探测（仅缺 fps 的存量视频）→
+/// force=false 直给源路径（零探测）；force=true 转码兜底（播放 error 回退路径）。
 /// 返回 (播放源, 自愈成功待回写内存索引的 meta)；fps 自愈先落盘 metadata.json 再交由调用方
 /// 短锁同步内存索引（规范第 7 条），探测 / 落盘失败静默跳过——下次播放再试，不阻塞播放
 fn media_source_heavy(
@@ -100,12 +99,12 @@ fn media_source_heavy(
   mut meta: AssetMeta,
   root: &Path,
   asset_id: &str,
+  force: bool,
 ) -> Result<(MediaSource, Option<AssetMeta>), String> {
   let video = media::is_video(origin);
   if !video && !media::is_audio(origin) {
     return Err(format!("「{}」不是音视频资源", meta.name));
   }
-  let ext = meta.ext.to_lowercase();
   let mut fps = meta.fps;
   let mut healed = None;
   // 存量视频 fps 自愈（5.3 帧化改造）：5.3 前导入的视频 metadata 无 fps，
@@ -124,39 +123,15 @@ fn media_source_heavy(
       }
     }
   }
-  let probe = ffmpeg::probe_json(origin);
-  let mut src = if route(&ext, video, probe.as_ref()) == Route::Direct {
-    MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps: None }
-  } else {
+  let mut src = if force {
     transcode_source(root, asset_id, origin, video)?
+  } else {
+    // 直读优先（2026-09-13，模块头口径）：不做 ffprobe 分流——能否解码由 webview 试播判定，
+    // 播放 error 后前端带 force_transcode 回退转码
+    MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps: None }
   };
   src.fps = fps;
   Ok((src, healed))
-}
-
-/// 播放路由判定（纯逻辑，单测直接构造 probe JSON）：
-/// 音频 = 扩展名 mp3/wav 直渲；视频 = 容器 mp4/m4v + 视频流 h264 + 音频流 aac/mp3（或无音频流）直渲
-fn route(ext: &str, is_video: bool, probe: Option<&serde_json::Value>) -> Route {
-  if !is_video {
-    return if matches!(ext, "mp3" | "wav") { Route::Direct } else { Route::Transcode };
-  }
-  if !matches!(ext, "mp4" | "m4v") {
-    return Route::Transcode;
-  }
-  let streams = probe.and_then(|p| p.get("streams")).and_then(|s| s.as_array());
-  let Some(streams) = streams else { return Route::Transcode };
-  let h264 = streams
-    .iter()
-    .any(|s| s.get("codec_type").and_then(|t| t.as_str()) == Some("video") && s.get("codec_name").and_then(|c| c.as_str()) == Some("h264"));
-  let audio_ok = streams
-    .iter()
-    .filter(|s| s.get("codec_type").and_then(|t| t.as_str()) == Some("audio"))
-    .all(|s| matches!(s.get("codec_name").and_then(|c| c.as_str()), Some("aac" | "mp3")));
-  if h264 && audio_ok {
-    Route::Direct
-  } else {
-    Route::Transcode
-  }
 }
 
 /// 转码兜底：产物与 .stamp 一致直接复用（先查复用再查二进制——已有产物不需要 ffmpeg）。
@@ -299,10 +274,6 @@ mod tests {
     (info_dir, origin, meta, h.lib.root.clone())
   }
 
-  fn probe_json(streams: serde_json::Value) -> serde_json::Value {
-    serde_json::json!({ "streams": streams })
-  }
-
   #[test]
   fn clamp_wave_size_bounds() {
     assert_eq!(clamp_wave_size(1, 1), (32, 8));
@@ -338,57 +309,17 @@ mod tests {
   }
 
   #[test]
-  fn route_audio_direct_only_mp3_wav() {
-    assert_eq!(route("mp3", false, None), Route::Direct);
-    assert_eq!(route("wav", false, None), Route::Direct);
-    // wma 与探测缺失都走转码
-    assert_eq!(route("wma", false, None), Route::Transcode);
-    assert_eq!(route("mp4", false, None), Route::Transcode); // 非视频按音频判
-  }
-
-  #[test]
-  fn route_video_direct_only_h264_mp4_with_webview_audio() {
-    let h264_aac = probe_json(serde_json::json!([
-      { "codec_type": "video", "codec_name": "h264" },
-      { "codec_type": "audio", "codec_name": "aac" }
-    ]));
-    assert_eq!(route("mp4", true, Some(&h264_aac)), Route::Direct);
-    assert_eq!(route("m4v", true, Some(&h264_aac)), Route::Direct);
-
-    // mp3 音频流可直播；无音频流也可直播
-    let h264_mp3 = probe_json(serde_json::json!([
-      { "codec_type": "video", "codec_name": "h264" },
-      { "codec_type": "audio", "codec_name": "mp3" }
-    ]));
-    assert_eq!(route("mp4", true, Some(&h264_mp3)), Route::Direct);
-    let h264_only = probe_json(serde_json::json!([{ "codec_type": "video", "codec_name": "h264" }]));
-    assert_eq!(route("mp4", true, Some(&h264_only)), Route::Direct);
-
-    // 容器不对（mov/avi）、编码不对（hevc/mpeg4）、音频编码不对（ac3/opus）全转码
-    assert_eq!(route("mov", true, Some(&h264_aac)), Route::Transcode);
-    let hevc = probe_json(serde_json::json!([{ "codec_type": "video", "codec_name": "hevc" }]));
-    assert_eq!(route("mp4", true, Some(&hevc)), Route::Transcode);
-    let h264_ac3 = probe_json(serde_json::json!([
-      { "codec_type": "video", "codec_name": "h264" },
-      { "codec_type": "audio", "codec_name": "ac3" }
-    ]));
-    assert_eq!(route("mp4", true, Some(&h264_ac3)), Route::Transcode);
-    // 探测失败（sidecar 缺失 / 文件损坏）保守转码
-    assert_eq!(route("mp4", true, None), Route::Transcode);
-  }
-
-  #[test]
   fn media_source_rejects_non_av_and_direct_renders_mp3() {
     let mut h = make_lib();
     add_file(&mut h, "AN-PIC", "参考图.png");
     let (info_dir, origin, meta, root) = snap(&h, "AN-PIC");
-    let err = media_source_heavy(&info_dir, &origin, meta, &root, "AN-PIC").unwrap_err();
+    let err = media_source_heavy(&info_dir, &origin, meta, &root, "AN-PIC", false).unwrap_err();
     assert!(err.contains("不是音视频资源"), "{err}");
 
-    // mp3 不看内容直渲（假字节也直给源路径）
-    add_file(&mut h, "AN-AU", "配乐.mp3");
+    // 直读优先：不探测不看内容直给源路径（假字节也直给；播不了由前端 error 回退 force 转码）
+    add_file(&mut h, "AN-AU", "配乐.wma");
     let (info_dir, origin, meta, root) = snap(&h, "AN-AU");
-    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-AU").unwrap();
+    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-AU", false).unwrap();
     assert!(healed.is_none());
     assert_eq!(src, MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps: None });
   }
@@ -396,16 +327,13 @@ mod tests {
   #[test]
   fn video_fps_self_heal_skips_silently_on_probe_failure() {
     // 存量视频 fps 自愈（5.3）：假字节探测失败 → 静默跳过，fps 保持 None 不改写 metadata，
-    // 播放源解析照常走通（不阻塞播放，下次播放再试）
+    // 播放源解析照常走通（直读直给源路径，下次播放再试）
     let mut h = make_lib();
     add_file(&mut h, "AN-VID2", "片段.mp4");
     let (info_dir, origin, meta, root) = snap(&h, "AN-VID2");
-    let out = root.join(CACHE_DIR).join("media").join("media-AN-VID2.mp4");
-    fs::create_dir_all(out.parent().unwrap()).unwrap();
-    fs::write(&out, b"transcoded").unwrap();
-    fs::write(stamp_path(&out), source_stamp(&origin).unwrap()).unwrap();
-    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID2").unwrap();
-    assert!(src.transcoded);
+    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID2", false).unwrap();
+    assert!(!src.transcoded);
+    assert_eq!(src.path, origin.to_string_lossy());
     assert!(healed.is_none(), "探测失败不应产生自愈回写");
     let disk: crate::core::models::AssetMeta =
       crate::core::json_io::read_json(&h.lib.info_dir("AN-VID2").join("metadata.json")).unwrap();
@@ -423,14 +351,14 @@ mod tests {
     fs::create_dir_all(out.parent().unwrap()).unwrap();
     fs::write(&out, b"transcoded").unwrap();
     fs::write(stamp_path(&out), source_stamp(&origin).unwrap()).unwrap();
-    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID").unwrap();
+    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID", true).unwrap();
     assert!(healed.is_none());
     assert_eq!(src, MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None });
 
     // 源变化（大小变了戳失配）→ 重转：假 mp4 转码失败给中文文案；无 ffmpeg 则组件缺失文案
     fs::write(&origin, b"fake-changed-longer").unwrap();
     let (info_dir, origin, meta, root) = snap(&h, "AN-VID");
-    let err = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID").unwrap_err();
+    let err = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID", true).unwrap_err();
     assert!(
       err.contains("该格式暂时无法播放") || err.contains("音视频组件缺失"),
       "{err}"
