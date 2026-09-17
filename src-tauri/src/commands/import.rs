@@ -141,12 +141,23 @@ pub fn import_clipboard(
   let (root, assets_dir) = current_paths(&app)?;
   ensure_target(&app, &target_folder)?;
 
-  // 图片分支：截图 / 剪贴板图片 → PNG 落 cache/ 走管线（临时文件导入后清理）
-  if let Ok(img) = clipboard.get_image() {
+  // 图片分支：截图 / 剪贴板图片 → PNG 落 cache/ 走管线（临时文件导入后清理）；
+  // arboard 只认 PNG / CF_DIBV5——QQ·微信截图等只写 CF_DIB 的软件走 DIB 兜底
+  //（2026-09-17 实机走查「外部剪贴板以前能导入现在不行」根因）
+  let clip_image: Option<(u32, u32, Vec<u8>)> = clipboard
+    .get_image()
+    .ok()
+    .map(|img| (img.width as u32, img.height as u32, img.bytes.into_owned()))
+    .or_else(|| {
+      crate::adapters::clipboard::read_image_dib_fallback()
+        .ok()
+        .map(|rgba| (rgba.width(), rgba.height(), rgba.into_raw()))
+    });
+  if let Some((w, h, bytes)) = clip_image {
     let cache_dir = root.join(CACHE_DIR);
     std::fs::create_dir_all(&cache_dir).map_err(|e| format!("缓存目录创建失败：{e}"))?;
     let tmp = cache_dir.join(clipboard_temp_name(&cache_dir, "png"));
-    save_clipboard_png(&img, &tmp)?;
+    save_clipboard_png(w, h, &bytes, &tmp)?;
     let opts = ImportOptions {
       structure: Structure::Flatten,
       source: Source::Copy,
@@ -295,9 +306,9 @@ fn clipboard_temp_name(cache_dir: &Path, ext: &str) -> String {
   name
 }
 
-/// arboard RGBA 数据编码为 PNG 落盘
-fn save_clipboard_png(img: &arboard::ImageData, path: &Path) -> Result<(), String> {
-  let rgba = image::RgbaImage::from_raw(img.width as u32, img.height as u32, img.bytes.to_vec())
+/// 剪贴板 RGBA 数据编码为 PNG 落盘（arboard / CF_DIB 兜底两路同喂）
+fn save_clipboard_png(width: u32, height: u32, bytes: &[u8], path: &Path) -> Result<(), String> {
+  let rgba = image::RgbaImage::from_raw(width, height, bytes.to_vec())
     .ok_or_else(|| "剪贴板图片数据无效".to_string())?;
   image::DynamicImage::ImageRgba8(rgba).save(path).map_err(|e| format!("剪贴板图片保存失败：{e}"))
 }

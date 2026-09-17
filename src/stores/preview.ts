@@ -74,6 +74,10 @@ let unlistenFull: (() => void) | undefined;
 let unlistenStrips: (() => void) | undefined;
 let unlistenHidden: (() => void) | undefined;
 
+// 全屏前的工作视图暂存（2026-09-17 实机走查：全屏 = 临时充满看大，退出还原用户取景，
+// 不污染抓手/缩放好的工作视图——详见 setFullscreen）
+let savedView: { zoom: number; panX: number; panY: number; fitMode: boolean } | null = null;
+
 export const usePreviewStore = defineStore("preview", {
   state: () => ({
     assetKey: null as string | null, // `${assetId}|${folderId}`，null = 非预览模式
@@ -611,10 +615,25 @@ export const usePreviewStore = defineStore("preview", {
         toast.notify({ message: String(e), icon: "fail" });
       }
     },
-    // 显示器全屏（2026-07-25 定案）：预览区 fixed 铺满 + 窗口 fullscreen，Esc 退出
+    // 显示器全屏（2026-07-25 定案）：预览区 fixed 铺满 + 窗口 fullscreen，Esc 退出；
+    // 进入 = 充满铺满（2026-09-17 实机走查：抓手/缩放已退出「适合窗口」跟随的视图，
+    // 全屏也要放大填充）——暂存工作视图先 fit()（容器随全屏变化后 RO 再精确跟随），
+    // 退出全屏还原取景（全屏 = 临时看大，不改用户工作取景）
     async setFullscreen(on: boolean): Promise<void> {
+      if (on === this.fullscreen) return;
+      if (on && this.viewable) {
+        savedView = { zoom: this.zoom, panX: this.panX, panY: this.panY, fitMode: this.fitMode };
+        this.fit();
+      }
       this.fullscreen = on;
       await getCurrentWindow().setFullscreen(on);
+      if (!on && savedView) {
+        this.zoom = savedView.zoom;
+        this.panX = savedView.panX;
+        this.panY = savedView.panY;
+        this.fitMode = savedView.fitMode;
+        savedView = null;
+      }
     },
     async openDefaultApp(): Promise<void> {
       const p = this.current;

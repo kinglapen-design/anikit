@@ -82,13 +82,16 @@ fn regenerate(info_dir: &Path, meta: &AssetMeta, source: &Path) -> Option<thumbn
 }
 
 /// 剪贴板图片应用为缩略图（6.3 右键菜单；2026-07-23 待办落地）：
-/// arboard 读图 → PNG 落 cache/tmp → 同管线重生成覆盖 → 临时文件即删
+/// arboard 读图（PNG/CF_DIBV5）→ CF_DIB 兜底（2026-09-17 实机走查：QQ/微信截图等只写
+/// DIB 的软件读不到——arboard 不认 CF_DIB）→ PNG 落 cache/tmp → 同管线重生成覆盖 → 临时文件即删
 pub fn set_thumbnail_from_clipboard(lib: &mut Library, asset_id: &str) -> Result<ThumbResult, String> {
   let (info_dir, _origin, meta) = locate(lib, asset_id)?;
   let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("剪贴板不可用：{e}"))?;
-  let img = clipboard.get_image().map_err(|_| "剪贴板里没有图片".to_string())?;
-  let rgba = image::RgbaImage::from_raw(img.width as u32, img.height as u32, img.bytes.to_vec())
-    .ok_or_else(|| "剪贴板图片数据无效".to_string())?;
+  let rgba = match clipboard.get_image() {
+    Ok(img) => image::RgbaImage::from_raw(img.width as u32, img.height as u32, img.bytes.to_vec())
+      .ok_or_else(|| "剪贴板图片数据无效".to_string())?,
+    Err(_) => crate::adapters::clipboard::read_image_dib_fallback()?,
+  };
   let tmp = lib.root.join(CACHE_DIR).join("tmp").join(format!("thumb-clip-{asset_id}.png"));
   if let Some(dir) = tmp.parent() {
     fs::create_dir_all(dir).map_err(|e| format!("临时目录创建失败：{e}"))?;
@@ -98,6 +101,38 @@ pub fn set_thumbnail_from_clipboard(lib: &mut Library, asset_id: &str) -> Result
   let _ = fs::remove_file(&tmp);
   let thumb = thumb.ok_or_else(|| "缩略图生成失败，请重试".to_string())?;
   persist(lib, &info_dir, meta, &thumb, true)
+}
+
+/// 复制文件到系统剪贴板（2026-09-17 实机走查：复制图片要能粘贴到 APP 外——网页 AI 对话框等）：
+/// 内部「复制文件」同步调用——CF_HDROP 文件列表（各软件按附件粘贴）+ 单张静态图且 ≤20MB
+/// 附位图（PNG + CF_DIBV5，对话框直接贴图；Eagle 同款）。ws: 与解析失败项跳过
+/// （real_origin_file 同 resolve_drag_paths 口径）；纯读操作不改库数据。
+pub fn copy_files_to_system_clipboard(lib: &Library, asset_ids: &[String]) -> Result<(), String> {
+  let mut seen = std::collections::HashSet::new();
+  let paths: Vec<PathBuf> = asset_ids
+    .iter()
+    .filter_map(|id| real_origin_file(lib, id).ok())
+    .filter(|p| seen.insert(p.clone()))
+    .collect();
+  if paths.is_empty() {
+    return Err("没有可复制的文件".to_string());
+  }
+  // 单张静态图且体量可控（≤20MB 解码预算）附位图：对话框/IM 直接贴图；否则仅 CF_HDROP 附件
+  let mut bitmap: Option<image::RgbaImage> = None;
+  if paths.len() == 1 {
+    let p = &paths[0];
+    let ext = p
+      .extension()
+      .and_then(|e| e.to_str())
+      .map(|e| e.to_ascii_lowercase())
+      .unwrap_or_default();
+    let small = fs::metadata(p).map(|m| m.len() <= 20 * 1024 * 1024).unwrap_or(false);
+    if small && matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "bmp" | "webp" | "gif") {
+      bitmap = image::open(p).ok().map(|i| i.to_rgba8());
+    }
+  }
+  let refs: Vec<&Path> = paths.iter().map(|p| p.as_path()).collect();
+  crate::adapters::clipboard::write_files_clipboard(&refs, bitmap.as_ref())
 }
 
 /// 自定义缩略图（6.3 右键菜单）：指定图片文件（动图取首帧——generate 解码首帧口径与导入一致）

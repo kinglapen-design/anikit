@@ -408,6 +408,7 @@ pub fn run() {
       commands::asset_menu::set_thumbnail_custom,
       commands::asset_menu::refresh_thumbnail,
       commands::asset_menu::copy_thumbnail_to_clipboard,
+      commands::asset_menu::copy_files_to_system_clipboard,
       commands::asset_menu::set_thumb_asset,
       commands::asset_menu::restore_thumb_asset,
       commands::cep::get_cep_install_status,

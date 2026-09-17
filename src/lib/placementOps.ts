@@ -422,12 +422,20 @@ export async function createDocument(kind: NewDocKind): Promise<void> {
 
 // Ctrl+C / Ctrl+X：写入内部剪贴板（仅素材；空选择不动作）；
 // 复制 / 剪切即时反馈（2026-07-28 复验反馈 7）：成功型、无动作按钮、3 秒
-//（2026-08-20 修复：原 icon:"fail" 是 info 型废除时的误改——成功操作用失败提示，用户实机报）
+//（2026-08-20 修复：原 icon:"fail" 是 info 型废除时的误改——成功操作用失败提示，用户实机报）；
+// 复制时同步写系统剪贴板（2026-09-17 实机走查：复制图片要能粘到 APP 外——网页 AI 对话框等，
+// CF_HDROP 文件 + 单张静态图附位图；后端解析 origin 真实路径，ws:/解析失败项跳过，静默不打扰）
 export function copySelection(action: "copy" | "cut"): void {
   const selection = useSelectionStore();
   const items = selection.selectedRefs();
   if (items.length === 0) return;
   selection.clipboard = { items, action };
+  if (action === "copy") {
+    const assetIds = [...new Set(items.map((i) => i.assetId))];
+    void invoke("copy_files_to_system_clipboard", { assetIds }).catch((e) =>
+      console.debug("系统剪贴板写入不可用：", e),
+    );
+  }
   useToastStore().notify({
     message: `已${action === "copy" ? "复制" : "剪切"} ${items.length} 个项目`,
     duration: 3000,

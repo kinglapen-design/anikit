@@ -73,6 +73,15 @@ pub async fn copy_thumbnail_to_clipboard(state: State<'_, AppState>, asset_id: S
   asset_menu::copy_thumbnail_to_clipboard(lib, &asset_id)
 }
 
+/// 复制文件到系统剪贴板（2026-09-17 实机走查：复制图片要能粘到 APP 外——网页 AI 对话框等）：
+/// CF_HDROP 文件列表 + 单张静态图 ≤20MB 附位图（PNG + CF_DIBV5）；解析失败项跳过，纯读操作
+#[tauri::command]
+pub async fn copy_files_to_system_clipboard(state: State<'_, AppState>, asset_ids: Vec<String>) -> Result<(), String> {
+  let guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+  asset_menu::copy_files_to_system_clipboard(lib, &asset_ids)
+}
+
 /// 设置伴生缩略图（8.1，PRD 02-15 hidden 绑定）：thumb 资产打 hidden + 工程侧记 thumb_asset_id；
 /// 换绑 / 多工程共绑同图均可；不接撤销（同缩略图三件套口径）
 #[tauri::command]
