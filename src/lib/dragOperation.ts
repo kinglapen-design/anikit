@@ -94,6 +94,11 @@ export const dragView = reactive({
   // 分组标题 / 自由组段落点（2026-09-17 无规则空组）：素材拖入自由组段（标题 / 空组提示框，
   // 带 data-group-drop）= 移入该组；值为组 id（"" = 未分组段 = 移出分组）
   groupDrop: null as string | null,
+  // 分屏跨视口落点（2026-09-17 实机走查「标签分屏后文件要能跨分屏拖拽」）：
+  // paneDrop = 并入移动的目标网格 token（pane 级高亮）；gapGrid = 当前间隙归属的网格 token
+  //（多网格注册表下间隙提示线只渲染在归属网格，替代原 panelActive 门控）
+  paneDrop: null as number | null,
+  gapGrid: null as number | null,
   // 快速访问「回收站」行落点（2026-09-08 用户定）：素材拖入 = 丢到回收站（免右键 Del 同路径）；
   // 行带 data-quick-drop="recycle"（LibraryView TreeRowItem 自渲染并入高亮）——专属性不用
   // data-folder-id，防 App.vue onDrop 系统拖入导入的 closest 误判导入目标
@@ -127,19 +132,26 @@ export interface GridScroll {
   scrollTo: (y: number) => void;
   pos: () => number;
 }
-let gridResolver: GridResolver | null = null;
-let gridVisibleKeys: (() => string[]) | null = null;
-let gridScroll: GridScroll | null = null;
-export function registerGridResolver(fn: GridResolver, visibleKeys?: () => string[], scroll?: GridScroll): void {
-  gridResolver = fn;
-  gridVisibleKeys = visibleKeys ?? null;
-  gridScroll = scroll ?? null;
+/** 网格注册项（2026-09-17 分屏跨视口拖拽改造，单例 → 注册表）：
+ * 每个可见 AssetGrid 一份；命中按层 rect 包含判定（dockview 隐藏标签页 rect 全零天然不中） */
+export interface GridRegistration {
+  resolve: GridResolver;
+  visibleKeys?: () => string[];
+  scroll?: GridScroll;
+  layer: () => HTMLElement | undefined;
+  /** 落点目标：folder: → 文件夹 id；quick:uncategorized → "root"；quick:recycle → "recycle"；
+   * ws 视口 → 原 viewKey（仅 ws 素材可落，引擎内判）；其余（虚拟视图）= null 不出落点 */
+  dropFolder: () => string | null;
 }
-export function unregisterGridResolver(fn?: GridResolver): void {
-  if (fn && gridResolver !== fn) return; // 非注册者不清（防隐藏实例卸载把存活 panel 的注册误清）
-  gridResolver = null;
-  gridVisibleKeys = null;
-  gridScroll = null;
+const gridResolvers = new Map<number, GridRegistration>();
+let gridTokenSeq = 0;
+export function registerGridResolver(reg: GridRegistration): number {
+  gridTokenSeq += 1;
+  gridResolvers.set(gridTokenSeq, reg);
+  return gridTokenSeq;
+}
+export function unregisterGridResolver(token: number): void {
+  gridResolvers.delete(token);
 }
 
 // 间距解析器工厂（C4a；主体落 lib 控制 AssetGrid 行数 ≤500，规范第 3 条）：
@@ -269,11 +281,16 @@ function resetIndicators(): void {
   dragView.block = null;
   dragView.quickRecycle = false;
   dragView.groupDrop = null;
+  dragView.paneDrop = null;
+  dragView.gapGrid = null;
+  activeGridScroll = null;
   if (sess) sess.drop = null;
 }
 
 // 落点入参：pointermove 事件 / 边缘自动滚动 rAF 回放的最后指针坐标，共用一条判定链
 type DropPointer = Pick<PointerEvent, "clientX" | "clientY" | "ctrlKey" | "metaKey">;
+// 间隙命中的网格 scroll 接口（注册表多网格下边缘自动滚动只驱动归属网格；resetIndicators 清）
+let activeGridScroll: GridScroll | null = null;
 
 // 落点判定（pointermove 实时 + 边缘滚动回放）：树 > 文件夹卡片 > 卡片间隙；互不叠加
 function updateDropTarget(e: DropPointer): void {
@@ -395,14 +412,54 @@ function updateDropTarget(e: DropPointer): void {
     return;
   }
 
+  // 分屏跨视口落点（2026-09-17 实机走查「标签分屏后，文件要能跨分屏拖拽」）：
+  // 指针落某注册网格先看目标文件夹——不同 = **并入移动**（pane 级高亮，非间隙排序；
+  // Ctrl = 建链接，与文件夹卡落点同语义）；相同（同文件夹分屏）= 落下方 gap 排序流程；
+  // 回收站视口 = 丢回收站；ws 视口 = ws 素材按路径移动；虚拟视图（dropFolder null）不出落点
+  if (sess.kind === "asset" && gridResolvers.size > 0) {
+    const curFolder = useContentStore().currentFolderId;
+    for (const [token, grid] of gridResolvers) {
+      const layer = grid.layer();
+      if (!layer) continue;
+      const r = layer.getBoundingClientRect();
+      if (r.width === 0 || e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) continue;
+      const target = grid.dropFolder();
+      if (target === null) return; // 指针在某网格但不可落（虚拟视图）——不出落点
+      if (target === "recycle") {
+        dragView.paneDrop = token;
+        sess.drop = async () => dropAssetsToRecycle(items);
+        return;
+      }
+      if (target.startsWith("ws:")) {
+        if (items.some((it) => it.assetId.startsWith("ws:"))) {
+          dragView.paneDrop = token;
+          sess.drop = async () => dropWsAssetsInto(items, target.slice(3));
+        }
+        return;
+      }
+      if (target !== curFolder) {
+        dragView.paneDrop = token;
+        sess.drop = async () => dropAssetsInto(items, target, ctrl);
+        return;
+      }
+      break; // 同文件夹（含同视口两分屏）：走下方 gap 排序同语义
+    }
+  }
+
   // 素材卡片间隙排序（仅素材拖拽；网格 resolver 由 AssetGrid 注册）。
   // ws 磁盘实况无排序语义：间隙不作落点（防合成 id 进 reorder_placements）
-  if (sess.kind === "asset" && gridResolver) {
+  if (sess.kind === "asset" && gridResolvers.size > 0) {
     if (items.every((it) => it.assetId.startsWith("ws:"))) return;
-    const gap = gridResolver(e.clientX, e.clientY, items.map((it) => `${it.assetId}|${it.folderId}`));
-    if (gap) {
+    const draggedKeys = items.map((it) => `${it.assetId}|${it.folderId}`);
+    for (const [token, grid] of gridResolvers) {
+      const gap = grid.resolve(e.clientX, e.clientY, draggedKeys);
+      if (!gap) continue;
       dragView.gap = gap;
-      sess.drop = async () => dropAssetsGap(items, gap);
+      dragView.gapGrid = token;
+      activeGridScroll = grid.scroll ?? null;
+      const visibleKeys = grid.visibleKeys;
+      sess.drop = async () => dropAssetsGap(items, gap, visibleKeys);
+      return;
     }
   }
 }
@@ -440,8 +497,9 @@ async function dropAssetsToRecycle(items: PlacementRef[]): Promise<void> {
   await ops.deletePlacements(items);
 }
 
-// 素材落卡片间隙：reorder_placements（仅当前文件夹段内项参与；beforeItem = 间隙后项）
-async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator): Promise<void> {
+// 素材落卡片间隙：reorder_placements（仅当前文件夹段内项参与；beforeItem = 间隙后项）；
+// visibleKeys = 归属网格的可见序（注册表多网格，2026-09-17 分屏改造按 token 带入）
+async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator, visibleKeys?: () => string[]): Promise<void> {
   const content = useContentStore();
   const target = content.currentFolderId;
   if (target === null) return;
@@ -457,7 +515,7 @@ async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator): Promis
     if (gap.beforeKey && items.some((it) => `${it.assetId}|${it.folderId}` === gap.beforeKey)) return; // 插到自身前 = 无操作
     const base = content.placementsFor(`folder:${target}`).filter((p) => p.folderId === target);
     let visible = base;
-    const keys = gridVisibleKeys?.();
+    const keys = visibleKeys?.();
     if (keys) {
       const order = new Map(keys.map((k, i) => [k, i] as const));
       visible = [...base].sort(
@@ -512,8 +570,8 @@ function edgeSpeed(depth: number): number {
 function edgeScrollFrame(): void {
   edgeRaf = 0;
   const s = sess;
-  if (!s?.started || s.kind !== "asset" || !gridScroll) return;
-  const r = gridScroll.viewport()?.getBoundingClientRect();
+  if (!s?.started || s.kind !== "asset" || !activeGridScroll) return;
+  const r = activeGridScroll.viewport()?.getBoundingClientRect();
   // 指针横向离开视口（拖到树 / 侧栏上）不滚；纵向压上 / 下热区按深入程度加速
   if (r && lastX >= r.left && lastX <= r.right) {
     let delta = 0;
@@ -523,10 +581,10 @@ function edgeScrollFrame(): void {
       delta = edgeSpeed(lastY - (r.bottom - EDGE_ZONE));
     }
     if (delta !== 0) {
-      const before = gridScroll.pos();
-      gridScroll.scrollTo(before + delta);
+      const before = activeGridScroll.pos();
+      activeGridScroll.scrollTo(before + delta);
       // 滚到头（pos 未变）无需重算；滚动了 = 内容相对指针位移，落点按最后坐标重算
-      if (gridScroll.pos() !== before) {
+      if (activeGridScroll.pos() !== before) {
         updateDropTarget({ clientX: lastX, clientY: lastY, ctrlKey: lastCtrl, metaKey: lastCtrl });
       }
     }

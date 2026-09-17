@@ -323,7 +323,9 @@ const resolveGap = makeGridResolver({
 // 钳进视口反而盖住首卡（三轮"最左侧提示没了 / 覆盖卡片"两轮试错定稿）
 const gapClient = computed(() => {
   const g = dragView.gap;
-  if (!g || !props.panelActive) return null;
+  // 只渲染归属网格的提示线（2026-09-17 分屏跨视口改造，替代 panelActive 门控——
+  // 跨分屏拖拽时目标 pane 非激活也要画线；dockview 隐藏标签页永不持有 gapGrid 天然不画）
+  if (!g || dragView.gapGrid !== gridToken.value) return null;
   void pos.value;
   const r = cardsLayerRef.value?.getBoundingClientRect();
   const vr = viewportRef.value?.getBoundingClientRect();
@@ -343,32 +345,33 @@ watch(visibleCards, (cards) => {
   }
 });
 
+// 拖拽卡片间距落点解析（C4）+ 分屏跨视口落点（2026-09-17 实机走查「标签分屏后文件要能跨分屏拖拽」）：
+// 注册表多网格共存——**不再按 panelActive 注册**（跨 pane 落点需要每个可见网格都在册；
+// dockview 隐藏标签页层 rect 全零，命中判定天然不中）；token 归属本实例，卸载只清自己；
+// visibleKeys = 网格可见序（组拼接序——显示排序物化以它为准）；scroll 供边缘自动滚动；
+// dropFolder = 并入移动目标（folder: → id / 未分类 root / 回收站 / ws / 虚拟视图 null 不落）
+const gridToken = ref(0);
 onMounted(() => {
   viewportRef.value!.addEventListener("wheel", onCtrlWheel, { passive: false });
+  gridToken.value = registerGridResolver({
+    resolve: resolveGap,
+    visibleKeys: () => displayItems.value.map((p) => `${p.assetId}|${p.folderId}`),
+    scroll: { viewport: () => viewportRef.value, scrollTo, pos: () => pos.value },
+    layer: () => cardsLayerRef.value,
+    dropFolder: () => {
+      const vk = props.viewKey;
+      if (vk.startsWith("folder:")) return vk.slice(7);
+      if (vk === "quick:uncategorized") return "root";
+      if (vk === "quick:recycle") return "recycle";
+      if (vk.startsWith("ws:")) return vk;
+      return null;
+    },
+  });
 });
-
-// 拖拽卡片间距落点解析（C4）；visibleKeys = 网格可见序（组拼接序）——显示排序物化以它为准。
-// 注册归属激活 panel（2026-09-13 修复，同 gapClient 注释）：激活才注册、失活 / 卸载只清自己；
-// scroll 接口供拖拽引擎边缘自动滚动（指针压视口上下热区时 rAF 持续 scrollTo）
-watch(
-  () => props.panelActive,
-  (on) => {
-    if (on) {
-      registerGridResolver(
-        resolveGap,
-        () => displayItems.value.map((p) => `${p.assetId}|${p.folderId}`),
-        { viewport: () => viewportRef.value, scrollTo, pos: () => pos.value },
-      );
-    } else {
-      unregisterGridResolver(resolveGap);
-    }
-  },
-  { immediate: true },
-);
 
 onBeforeUnmount(() => {
   viewportRef.value?.removeEventListener("wheel", onCtrlWheel);
-  unregisterGridResolver(resolveGap);
+  if (gridToken.value) unregisterGridResolver(gridToken.value);
 });
 </script>
 
@@ -376,6 +379,7 @@ onBeforeUnmount(() => {
   <div
     ref="viewportRef"
     class="grid-viewport"
+    :class="{ 'pane-drop': dragView.paneDrop === gridToken }"
     tabindex="0"
     @pointerdown="gridPointerDown($event, onMarqueeDown)"
     @pointermove="onGridPointerMove"
@@ -574,6 +578,12 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: hidden;
   outline: none;
+}
+/* 分屏跨视口并入落点（2026-09-17 实机走查「标签分屏后文件要能跨分屏拖拽」）：
+   目标 pane 级高亮 = 并入同款——品牌/半透明填充 + 2px 品牌描边（inset 不占布局，§20 口径） */
+.grid-viewport.pane-drop {
+  background: var(--n-brand-50);
+  box-shadow: inset 0 0 0 2px var(--n-brand);
 }
 /* 搜索空态（3.6）：absolute 居中于 viewport（内容为空无滚动，天然居中） */
 .search-empty {
