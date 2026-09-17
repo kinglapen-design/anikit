@@ -541,6 +541,20 @@ export const useContentStore = defineStore("content", {
             (n) => n.kind !== "archive",
           );
         }
+        // 工作空间视口（PRD 02 步骤 1，2026-09-17 实机定：文件夹同库视图口径进网格 FolderStrip）：
+        // 直接子目录合成 FolderNode——id = relPath（FolderStrip 按 ws 前缀分流导航 / 菜单），
+        // count = 直接文件数，children 不填（简介行走 FolderStrip ws 分支自取）
+        if (viewKey.startsWith("ws:")) {
+          const ws = useWsStore();
+          return ws.subDirs(viewKey.slice(3)).map((d) => ({
+            id: d.relPath,
+            name: d.name,
+            count: ws.fileCount(d.relPath),
+            totalSize: 0,
+            kind: null,
+            children: [],
+          }));
+        }
         return [];
       };
     },

@@ -5,6 +5,7 @@
 import type { PlacementView } from "../../stores/content";
 import type { CtxEntry } from "../contextMenus";
 import { usePreviewStore } from "../../stores/preview";
+import { useTabsStore } from "../../stores/tabs";
 import { useWsStore } from "../../stores/ws";
 import { revealPath } from "../wsOps";
 import { useToastStore } from "../../stores/toast";
@@ -17,6 +18,28 @@ function refreshDir(rel: string): void {
 // 视口空白处菜单（gridDispatch ws 分支调用）
 export function wsBlankSpec(rel: string): CtxEntry[] {
   return [{ label: "刷新", action: () => refreshDir(rel) }];
+}
+
+// ws 文件夹菜单（FolderStrip ws 分流调用；打开 = 进该目录视口，与双击同径）
+export function wsFolderSpec(rel: string, _name: string): CtxEntry[] {
+  const toast = useToastStore();
+  return [
+    {
+      label: "打开",
+      action: () => void useTabsStore().openView(`ws:${rel}`),
+    },
+    {
+      label: "在资源管理器中显示",
+      action: () => {
+        const abs = useWsStore().absPath(rel);
+        if (!abs) return;
+        void revealPath(abs).catch((e: unknown) =>
+          toast.notify({ message: String(e), icon: "fail" }),
+        );
+      },
+    },
+    { label: "刷新", action: () => refreshDir(rel) },
+  ];
 }
 
 // ws 条目菜单（打开 = 进预览，与双击卡片同径；所在目录 rel = folderId 去 "ws:" 前缀）

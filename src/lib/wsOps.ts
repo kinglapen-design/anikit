@@ -19,6 +19,8 @@ export interface WsEntry {
   isDir: boolean;
   size: number; // 文件字节数；目录恒 0
   mtimeMs: number; // 文件修改时间（Unix 毫秒）；目录恒 0
+  w: number | null; // 图片像素宽（内容魔数探测）；非图片 / 目录 = null
+  h: number | null; // 图片像素高，同上
   ext: string; // 小写无点扩展名；目录 / 无扩展名 = ""
   thumbPath: string | null; // 缩略图缓存绝对路径：仅缓存新鲜时给，否则 null
 }

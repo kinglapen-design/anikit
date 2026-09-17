@@ -140,8 +140,9 @@ export const useWsStore = defineStore("ws", {
 
 // 磁盘实况条目 → 合成 PlacementView（content.ts:15-42 形状；缺的真实数据给安全缺省值）：
 // id/assetId 合成 = `ws:${relPath}`（假 id，禁发 assetId 类命令）；folderId = `ws:${所在目录 rel}`
-//（视口 key 同口径，根级文件 = "ws:"）；thumbW/H 与 w/h 恒 null（布局回退 300 方盒，缩略图就绪
-// 后比例跟随缺失——磁盘实况无 metadata 可挂，步骤 1 接受方盒）；modifiedAt/importedAt 由 mtimeMs
+//（视口 key 同口径，根级文件 = "ws:"）；thumbW/H 恒 null（布局回退链 thumbW→w，图片条目带
+// 后端探测的真实宽高 w/h（2026-09-17 实机定：卡片按真实比例自适应，禁填充裁切；非图片
+// 无尺寸回退 300 方盒）；modifiedAt/importedAt 由 mtimeMs
 // 转 RFC3339（? v= URL 版本戳 + 排序键）；frameCount/animated 恒 null/false（GIF 预览走直渲源
 // 原生循环）；wsPath = 源文件绝对路径（预览按路径分支与卡片悬停判定用，库 Placement 无此字段）
 function wsEntryToPlacement(e: WsEntry, parentRel: string, rootPath: string | null): PlacementView {
@@ -150,8 +151,8 @@ function wsEntryToPlacement(e: WsEntry, parentRel: string, rootPath: string | nu
     assetId: `${WS_ID_PREFIX}${e.relPath}`,
     folderId: `${WS_ID_PREFIX}${parentRel}`,
     name: e.name,
-    w: null,
-    h: null,
+    w: e.w,
+    h: e.h,
     thumbW: null,
     thumbH: null,
     ext: e.ext,

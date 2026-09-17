@@ -37,6 +37,10 @@ pub struct WsEntry {
   pub size: u64,
   /// 文件修改时间（Unix 毫秒）；目录恒 0
   pub mtime_ms: i64,
+  /// 图片像素宽高（内容魔数探测，PRD 02：卡片布局按真实比例自适应，无填充裁切）；
+  /// 非图片 / 探测失败 / 目录 = null
+  pub w: Option<u32>,
+  pub h: Option<u32>,
   /// 小写无点扩展名；目录 / 无扩展名 = ""
   pub ext: String,
   /// 缩略图缓存绝对路径：仅缓存新鲜（文件名内嵌 mtime+size 与当前文件一致）时给，否则 null
@@ -134,7 +138,10 @@ fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool) -> 
     path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default()
   };
   let thumb_path = if is_dir { None } else { fresh_thumb_path(root, &rel, mtime_ms, size) };
-  Some(WsEntry { name: name.to_string(), rel_path: rel, is_dir, size, mtime_ms, ext, thumb_path })
+  // 图片探测宽高（魔数不认扩展名，壁纸站扩展名撒谎场景同 thumbnail::probe 口径）；
+  // 只读文件头，探测失败静默 null——布局回退方盒（useGridLayout 既定链）
+  let (w, h) = if is_dir { (None, None) } else { crate::services::thumbnail::probe(path).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None)) };
+  Some(WsEntry { name: name.to_string(), rel_path: rel, is_dir, size, mtime_ms, w, h, ext, thumb_path })
 }
 
 // ---------- 缩略图缓存 ----------

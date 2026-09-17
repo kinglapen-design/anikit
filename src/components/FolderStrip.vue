@@ -14,18 +14,26 @@ import SectionTitle from "./items/SectionTitle.vue";
 import FolderCard from "./cards/FolderCard.vue";
 import { dragView } from "../lib/dragOperation";
 import { formatSize } from "../lib/formatSize";
+import { openContextMenu } from "../lib/contextMenus";
 import { openFolderCardMenu } from "../lib/menuSpecs/gridDispatch";
+import { wsFolderSpec } from "../lib/menuSpecs/workspace";
 import { renameFolder } from "../lib/placementOps";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
+import { useWsStore } from "../stores/ws";
 
 const props = withDefaults(defineProps<{ viewKey: string; panelActive?: boolean }>(), { panelActive: false });
 const content = useContentStore();
 const selection = useSelectionStore();
 const tabs = useTabsStore();
+const ws = useWsStore();
 const folderOpen = ref(true);
+// 工作空间视口（PRD 02 步骤 1，2026-09-17 实机定：文件夹同库口径进网格）：导航 / 右键菜单 /
+// 简介行全部分流；卡片不渲染 data-folder-id——防拖拽层把 ws 合成 id 当库文件夹发起并入 /
+// 排序（dragOperation 凭该属性识别）；选择 / 重命名 / 档案口径不适用（树只导航，写操作归步骤 2）
+const isWs = computed(() => props.viewKey.startsWith("ws:"));
 // 折叠切换：SectionTitle 守卫在调用方（§20——dragView.suppressClick 吞拖拽后紧随 click）
 function onFold(): void {
   if (dragView.suppressClick) return;
@@ -37,6 +45,10 @@ const stripFolders = computed(() => content.stripFoldersFor(props.viewKey));
 
 // 文件夹卡简介两行（稿值结构恒定）：行1 = 文件数 / 容量；行2 = 档案数 / 子文件夹数（直接子级按 kind 分流）
 function folderLines(f: FolderNode): string[][] {
+  if (isWs.value) {
+    // ws：磁盘实况无容量 / 档案口径——直接文件数 / 直接子文件夹数
+    return [[`${f.count.toLocaleString()} 个文件`, `${ws.subDirs(f.id).length.toLocaleString()} 个子文件夹`]];
+  }
   const archives = f.children.filter((c) => c.kind === "archive").length;
   const subs = f.children.length - archives;
   return [
@@ -50,6 +62,7 @@ function folderLines(f: FolderNode): string[][] {
 // 互斥清理由 clickFolder 内部统一做）；有效拖拽结束后的紧随 click 不触发（C4 引擎置位）
 function onSelect(id: string, e: MouseEvent): void {
   if (dragView.suppressClick) return;
+  if (isWs.value) return; // ws：文件夹选择域不接合成 id（写操作归步骤 2）
   if (usePickerStore().active) return; // 选择模式（6.2）：文件夹不是可选目标，单击无操作（双击导航保留）
   selection.clickFolder(
     id,
@@ -61,18 +74,28 @@ function onSelect(id: string, e: MouseEvent): void {
 // 双击卡片（非名称区域）= 进入该文件夹（2026-07-29 复验三轮；1.2 经 tabs.openView——
 // 当前标签页锁定则新开标签页）；sidebarSelected watch 会清选择，无需手动；名称双击在卡片内 stop 不会到此
 function onEnter(id: string): void {
-  tabs.openView(`folder:${id}`);
+  tabs.openView(isWs.value ? `ws:${id}` : `folder:${id}`);
 }
 
 // 右键（6.3；1.3 一轮按 05 稿 320 宽 + 搜索框）：未选中项先单选（与树 item 同规则），全局菜单宿主
 // 选择模式（6.2）：不入选择域，直接出菜单（spec 内精简为查看类）
+// ws：选择域不适用，直接出 ws 菜单（打开 / 资源管理器定位 / 刷新——无库写操作项）
 function onMenu(f: { id: string; name: string }, e: MouseEvent): void {
+  if (isWs.value) {
+    openContextMenu(e, wsFolderSpec(f.id, f.name), undefined);
+    return;
+  }
   if (usePickerStore().active) {
     openFolderCardMenu(e, f);
     return;
   }
   if (!selection.isFolderSelected(f.id)) selection.clickFolder(f.id);
   openFolderCardMenu(e, f);
+}
+
+// ws：名称双击进重命名不适用（步骤 2），拦截不发命名态
+function onNameEdit(id: string): void {
+  if (!isWs.value) namingId.value = id;
 }
 
 // —— 行内重命名（7.1 上移自旧 FolderCard，TreeRowItem 同口径：空/不变判定在调用方）——
@@ -89,6 +112,7 @@ watch(
 );
 async function onRenameCommit(f: FolderNode, name: string): Promise<void> {
   namingId.value = null;
+  if (isWs.value) return; // ws 命名态恒 null（onNameEdit 拦截），双保险不发库命令
   if (!name || name === f.name) return;
   await renameFolder(f.id, name);
 }
@@ -136,17 +160,17 @@ const gapBar = computed(() => {
         :name="f.name"
         :lines="folderLines(f)"
         class="cell"
-        :selected="selection.isFolderSelected(f.id)"
-        :dimmed="dragView.folderIds?.has(f.id) ?? false"
-        :cut="selection.isFolderCut(f.id)"
+        :selected="!isWs && selection.isFolderSelected(f.id)"
+        :dimmed="!isWs && (dragView.folderIds?.has(f.id) ?? false)"
+        :cut="!isWs && selection.isFolderCut(f.id)"
         :naming="namingId === f.id"
-        :drop-into="dragView.folderCardId === f.id"
-        :data-folder-id="f.id"
-        :data-drag-name="f.name"
+        :drop-into="!isWs && dragView.folderCardId === f.id"
+        :data-folder-id="isWs ? undefined : f.id"
+        :data-drag-name="isWs ? undefined : f.name"
         @click="onSelect(f.id, $event)"
         @dblclick="onEnter(f.id)"
         @contextmenu.prevent.stop="onMenu(f, $event)"
-        @name-edit="namingId = f.id"
+        @name-edit="onNameEdit(f.id)"
         @name-commit="onRenameCommit(f, $event)"
       />
     </div>
