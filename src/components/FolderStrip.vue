@@ -218,10 +218,10 @@ const gapBar = computed(() => {
   column-gap: var(--n-space-12);
   row-gap: var(--n-space-12);
 }
-/* 唯一卡片限宽 180 不拉伸（同日用户定：单卡没有排满概念，一张卡被来回拉伸重排很傻；
-   2 张起 = 上方自适应吃满） */
+/* 唯一卡片限宽 220 不拉伸（同日用户定：单卡没有排满概念，一张卡被来回拉伸重排很傻；
+   2026-09-17 实机走查回宽 180→220——单卡 180 太窄太挤；2 张起 = 上方 minmax(180,1fr) 自适应吃满） */
 .flow > .cell:only-child {
-  width: 180px;
+  width: 220px;
 }
 .cell {
   min-width: 0;
