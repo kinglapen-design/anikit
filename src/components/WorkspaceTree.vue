@@ -3,8 +3,8 @@
 // 展开才挂载子层（v-if），子层挂载即 list_workspace_dir 取子目录（只展示目录，文件进网格视口）；
 // 节点点击 = tabs.openView("ws:"+rel)（根 = "ws:"）；复用 TreeRowItem 与 treeExpansion 会话级展开态
 // （openSet 以 relPath 为 id，与库文件夹 F id 不撞）；展开动画复用 expandAnim（FolderTree 同口径）。
-// workspace/ 目录不存在（exists=false）/ 未开空间（root=null）= 空态文案（正文档 + 亮色/四级，
-// 沿用 SidebarLeft empty-state 风格）；磁盘写操作（新建/重命名/删除）归步骤 2，树只导航。
+// workspace/ 目录不存在（exists=false）= 空态文案（正文档 + 亮色/四级，
+// 沿用 SidebarLeft empty-state 风格；root=null 是拉取瞬态不渲染误标）；磁盘写操作（新建/重命名/删除）归步骤 2，树只导航。
 import { computed, onMounted } from "vue";
 import TreeRowItem from "./items/TreeRowItem.vue";
 import { isTreeOpen, toggleOpen } from "../lib/treeExpansion";
@@ -77,12 +77,10 @@ function openDir(rel: string): void {
         </Transition>
       </div>
     </template>
-    <!-- 空态：未开空间（root=null）/ workspace 目录不存在（exists=false）——文案风格沿用 SidebarLeft empty-state -->
+    <!-- 空态：workspace 目录不存在（exists=false）。root=null 是拉取中 / 未开空间的瞬态
+        （ensureRoot null 不缓存、下次调用即重试），不渲染「未开启」误标（2026-09-17 实机报） -->
     <div v-if="isRoot && ws.root !== null && !ws.root.exists" class="ws-empty">
       工作空间目录不存在
-    </div>
-    <div v-else-if="isRoot && ws.root === null && ws.loadedOk('')" class="ws-empty">
-      未开启工作空间
     </div>
   </div>
 </template>

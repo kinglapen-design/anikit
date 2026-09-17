@@ -44,15 +44,23 @@ export const useWsStore = defineStore("ws", {
     },
   },
   actions: {
-    // 根信息拉取（幂等；未开空间恒 null）
+    // 根信息拉取（幂等；未开空间恒 null）。**null 结果不缓存**：启动竞态——initWsListeners 随
+    // App onMounted 即发，彼时后端空间常未开（workspace_root 返 null），缓存住则整会话
+    // absPath 恒 null：缩略图永不请求（卡片全空）+ wsPath 恒 null（reveal 无反应）——
+    // 2026-09-17 实机两报同根。root 迟到时补发此前因 root 缺失未请求的缩略图
     async ensureRoot(): Promise<void> {
+      if (this.root) return;
       if (!rootPromise) {
         rootPromise = getWorkspaceRoot()
           .then((r) => {
             this.root = r;
+            if (r) this.requestMissingThumbs();
           })
           .catch((e) => {
             console.warn("工作空间根信息拉取失败（静默降级）：", e);
+          })
+          .finally(() => {
+            rootPromise = null;
           });
       }
       await rootPromise;
