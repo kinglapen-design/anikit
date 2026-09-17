@@ -1,6 +1,8 @@
 // 网格右键统一调度（6.3，自 AssetGrid 拆出；2026-08-12 自 menuSpecs.ts 再拆，规范第 3 条行数控制）：
 // 素材卡片 = 素材菜单（回收站视口 = 13 稿回收站菜单，1.3 归并全局宿主，RecycleCardMenu 局部菜单废除；
 // 虚拟视图 = 收窄集——2026-09-09 入口收窄，assetCardSpec 内分流）；
+// 工作空间视口（PRD 02 步骤 1）= ws 专属最小集——卡片走 wsCardSpec（打开/资源管理器显示[占位置灰]/
+// 刷新），空白走 wsBlankSpec（刷新）；只读底座，素材菜单的一切写操作项不挂；
 // 空白处（含 grid-header）按视口分流（2026-09-05 走查「快速访问」节，旧"一律 07 新增菜单"废除）：
 //   folder: 视口 = 07 新增菜单（addButtonSpec）；
 //   未分类 = quickFullSpec（去新建文件夹/新建档案——快速访问无文件夹概念；2026-09-09 收窄：
@@ -19,6 +21,7 @@ import { addButtonSpec, quickFullSpec, scanOnlySpec } from "./addMenu";
 import { archiveCardSpec } from "./archiveCard";
 import { folderCardSpec } from "./folder";
 import { recycleBlankSpec, recycleCardSpec } from "./recycle";
+import { wsBlankSpec, wsCardSpec } from "./workspace";
 
 export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "done" | "pass" {
   const t = e.target as HTMLElement;
@@ -28,11 +31,18 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
   const key = card?.getAttribute("data-key");
   if (key) {
     e.preventDefault();
-    // 选择模式（6.2）：不入选择域；素材卡出查看类精简集（spec 内分流），回收站卡无可出项
+    // 选择模式（6.2）：不入选择域；素材卡出查看类精简集（spec 内分流），回收站卡无可出项；
+    // 工作空间同不出（只读底座无挑选语义——选择模式入口全在库视口）
     if (usePickerStore().active) {
-      if (content.isRecycleView) return "done";
+      if (content.isRecycleView || content.isWorkspaceView) return "done";
       const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
       if (p) openContextMenu(e, assetCardSpec(p), undefined);
+      return "done";
+    }
+    // 工作空间（PRD 02 步骤 1）分流前置：ws 条目出最小只读集，不进素材菜单（写操作项一律不挂）
+    if (content.isWorkspaceView) {
+      const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
+      if (p) openContextMenu(e, wsCardSpec(p), undefined);
       return "done";
     }
     if (!selection.isSelected(key)) selection.selectOnly(key);
@@ -53,7 +63,8 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
   // 选择模式（6.2）：空白处新增菜单是编辑类，不出
   if (usePickerStore().active) return "done";
   const vk = content.sidebarSelected;
-  if (vk === "quick:recycle") openContextMenu(e, recycleBlankSpec(), undefined);
+  if (vk.startsWith("ws:")) openContextMenu(e, wsBlankSpec(vk.slice(3)), undefined);
+  else if (vk === "quick:recycle") openContextMenu(e, recycleBlankSpec(), undefined);
   else if (vk.startsWith("folder:")) openContextMenu(e, addButtonSpec(), undefined);
   else if (vk === "quick:uncategorized") openContextMenu(e, quickFullSpec(), undefined);
   else if (vk === "quick:all" || vk === "quick:recent" || vk === "quick:inbox" || vk === "quick:thumbnail") openContextMenu(e, scanOnlySpec(), undefined);

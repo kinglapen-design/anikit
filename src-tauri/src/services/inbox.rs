@@ -386,7 +386,7 @@ pub fn start(app: &AppHandle, root: &Path) {
         log::debug!("收件箱派发通道已关闭，就绪批次丢弃");
       }
     },
-    move || {
+    move |_paths| {
       if let Err(e) = app_fs.emit(FS_CHANGED_EVENT, ()) {
         log::debug!("收件箱实况事件推送失败（前端可能已关闭）：{e}");
       }

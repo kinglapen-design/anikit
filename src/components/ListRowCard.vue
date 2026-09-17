@@ -82,9 +82,10 @@ function onRenameCancel(): void {
 }
 // 双击名称 = 就地重命名（2026-07-29 复验三轮，renamingKey 既有机制——
 // 双击第一下 click 已把本行单选入域，此处仅置重命名目标）；
-// 回收站视口只读不可重命名（2026-07-29 二轮，与 AssetCard 同口径闸）
+// 回收站视口只读不可重命名（2026-07-29 二轮，与 AssetCard 同口径闸）；
+// 工作空间只读底座（PRD 02 步骤 1）同禁——重命名走 rename_placement（assetId 命令）
 function startRename(): void {
-  if (content.isRecycleView) return;
+  if (content.isRecycleView || content.isWorkspaceView) return;
   selection.renamingKey = rowKey;
 }
 </script>

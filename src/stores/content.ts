@@ -10,6 +10,7 @@ import { useToastStore } from "./toast";
 import { useUiStore } from "./ui";
 import type { RecentAssetView, RecycleEntryView } from "./quickViews";
 import type { Relation } from "../lib/relationOps";
+import { useWsStore } from "./ws";
 
 // 与后端 commands/import.rs 输出一一对应（camelCase，07_接口文档）
 export interface PlacementView {
@@ -39,6 +40,11 @@ export interface PlacementView {
   fps?: number | null; // 帧率：序列帧 = 播放帧率；视频 = 素材自身帧率（5.3 帧化：帧号显示 / 逐帧步进按 1/fps）
   hidden: boolean; // hidden 伴生缩略图标记（8.1，PRD 02-15）：普通视图统一过滤，仅「缩略图」视图显示
   playAssetId?: string | null; // 播放源代理（8.1）：fla 等工程卡片动图播放的帧流开流目标（= hidden 伴生资产 id）；无代理为 null
+  // 工作空间磁盘实况合成项专属（stores/ws.ts wsEntryToPlacement，PRD 02 步骤 1）：
+  // 源文件绝对路径——预览按路径分支（图片直 convertFileSrc / 音视频 get_media_source_by_path）与
+  // 卡片悬停层禁用判定用；库 Placement 无此字段。此时 assetId = `ws:${relPath}` 为合成假 id，
+  // **严禁发 assetId 类命令**（判定走 stores/ws.ts isWsPlacement）
+  wsPath?: string | null;
 }
 
 // 最近使用 / 回收站视图 DTO（6.1 二轮）已拆至 stores/quickViews.ts（规范第 3 条行数控制），
@@ -393,6 +399,10 @@ export const useContentStore = defineStore("content", {
         // hidden 伴生缩略图过滤（8.1，PRD 02-15）：普通视图统一过滤 hidden 资产的全部位置
         // （链接位置一并消失；回收站条目独立数组不受影响）；「缩略图」视图反向取 hidden 集
         const visible = state.placements.filter((p) => !p.hidden);
+        // 工作空间磁盘实况（PRD 02 步骤 1）：viewKey "ws:" = 根，"ws:a/b" = relPath——
+        // 数据在 ws store 按 rel 缓存，此处合成 PlacementView（assetId = ws: 假 id，禁发 assetId 命令）；
+        // 磁盘实况无附加数据，全局排序键仍生效（显示层），新增区不涉
+        if (viewKey.startsWith("ws:")) return sort(useWsStore().placementsFor(viewKey.slice(3)));
         if (viewKey.startsWith("folder:")) {
           const id = viewKey.slice(7);
           // 递归显示（ui.showSubfolders，2026-08-10 接入）：开 = 视口含全部后代文件夹的 Placement；
@@ -445,11 +455,16 @@ export const useContentStore = defineStore("content", {
     },
     // 视口标题（1.2 多标签页：标签页标题 / 面包屑共用）：folder → 实时文件夹名（重命名跟随）；
     // quick 五项 → 固定文案；seq（5.2 包内视图）→ 序列帧包名（资产已删/已解散兜底"序列帧包"）；
+    // ws（PRD 02 步骤 1）→ 根 = 「工作空间」，子目录 = 末段目录名（磁盘实况语义，无库内重命名）；
     // 工作空间/标签等占位视图 → "全部"兜底（调用方可另传 fallback）
     viewTitle(state) {
       return (viewKey: string): string => {
         if (viewKey.startsWith("folder:")) {
           return findFolder(state.folders, viewKey.slice(7))?.name ?? "文件夹";
+        }
+        if (viewKey.startsWith("ws:")) {
+          const rel = viewKey.slice(3);
+          return rel === "" ? "工作空间" : (rel.split("/").pop() ?? "工作空间");
         }
         if (viewKey.startsWith("seq:")) {
           const id = viewKey.slice(4);
@@ -463,19 +478,33 @@ export const useContentStore = defineStore("content", {
     isRecycleView(state): boolean {
       return state.sidebarSelected === "quick:recycle";
     },
+    // 工作空间磁盘实况视口判定（PRD 02 步骤 1，2026-09-17）：viewKey = "ws:"+relPath；
+    // 只读底座——步骤 2 才落地磁盘写操作，位置级写操作（移动/剪切/副本/删除/重命名/导入）本阶段全禁
+    isWorkspaceView(state): boolean {
+      return state.sidebarSelected.startsWith("ws:");
+    },
     // 禁导入视口判定（2026-09-08 用户定；2026-09-09 入口收窄扩五视口加「全部」——全部不是位置，
     // 落点必借道未分类，与虚拟视图禁位置级同口径）：全部 / 最近使用 / 自动导入 / 缩略图 / 回收站
     // 不允许额外导入 / 新建——右键收窄 / 拖拽拒入弹窗 / 菜单栏导入与新建组禁用 / Ctrl+V 拒入，
-    // 多处同一判定；未分类 = 候车区总入口豁免（落点 root 所见即所得）
+    // 多处同一判定；未分类 = 候车区总入口豁免（落点 root 所见即所得）；
+    // 工作空间（PRD 02 步骤 1）= 磁盘位置但只读底座，导入语义未立项（库互通另行立项），同档禁
     isNoImportView(state): boolean {
-      return state.sidebarSelected.startsWith("quick:") && state.sidebarSelected !== "quick:uncategorized";
+      return (
+        (state.sidebarSelected.startsWith("quick:") && state.sidebarSelected !== "quick:uncategorized") ||
+        state.sidebarSelected.startsWith("ws:")
+      );
     },
     // 虚拟视图判定（2026-09-09 入口收窄，用户定）：全部 / 最近使用 / 缩略图 = 不是位置的视图——
     // 位置级操作（移动 / 剪切 / 副本 / 从文件夹中移除 / 拖出）在此语义不成立（黑箱移动：
     // 用户不知从何移到何），右键收窄 / 快捷键 / 拖拽源同一判定；回收站只读走 isRecycleView
-    // 专属口径不在此列；未分类 / 自动导入 = 位置视口（真实落点）也不在此列
+    // 专属口径不在此列；未分类 / 自动导入 = 位置视口（真实落点）也不在此列；
+    // 工作空间（PRD 02 步骤 1）= 真实磁盘位置但只读底座——位置级写操作本阶段全禁，同档挂入
+    // （磁盘写语义与库不通用，步骤 2 另行定案后摘除）
     isVirtualView(state): boolean {
-      return ["quick:all", "quick:recent", "quick:thumbnail"].includes(state.sidebarSelected);
+      return (
+        ["quick:all", "quick:recent", "quick:thumbnail"].includes(state.sidebarSelected) ||
+        state.sidebarSelected.startsWith("ws:")
+      );
     },
     // 快速访问视口判定（2026-09-09 入口收窄）：六视口无文件夹概念——新建文件夹 / 新建档案整组禁用
     isQuickView(state): boolean {

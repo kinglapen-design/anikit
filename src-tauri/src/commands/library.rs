@@ -19,6 +19,9 @@ pub struct AppState {
   pub imports: Mutex<std::collections::HashMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>>>,
   /// 收件箱运行实例（3.2）：空间级共用，随空间打开 / 自动导入开关 / 退出由 services::inbox 启停
   pub inbox: Mutex<Option<crate::services::inbox::InboxHandle>>,
+  /// 工作空间监听实例（PRD 02 步骤 1）：随空间打开启停（.anikit 缓存写回自激已滤），
+  /// 切空间 / 应用退出由 services::workspace 收
+  pub workspace: Mutex<Option<crate::adapters::inbox_watch::WatchHandle>>,
   /// 撤销 / 重做双栈（6.0）：会话级不持久化，库切换清空
   pub undo: Mutex<crate::core::undo::UndoManager>,
 }
@@ -56,7 +59,8 @@ fn to_info(lib: &Library) -> LibraryInfo {
 
 /// 空间进入打开状态：更新应用状态 + 记录到全局配置最近列表 + 按空间级 autoImport 启停收件箱
 /// （2026-08-12 用户定：inbox 空间级共用，盘符挂载恒定指向空间 inbox/、不随切库变化；
-/// 关 = 防御性停止，换掉开着收件箱的旧空间时卸干净）
+/// 关 = 防御性停止，换掉开着收件箱的旧空间时卸干净）+ 启停工作空间监听（PRD 02 步骤 1：
+/// workspace/ 存在才监听，.anikit 缓存写回自激已滤）
 fn activate_space(app: &AppHandle, state: &State<AppState>, space: Space) -> Result<SpaceInfo, String> {
   let info = space_info(&space);
   let root = space.root.clone();
@@ -68,6 +72,7 @@ fn activate_space(app: &AppHandle, state: &State<AppState>, space: Space) -> Res
   } else {
     crate::services::inbox::stop(app);
   }
+  crate::services::workspace::start_watch(app, &root);
   Ok(info)
 }
 
@@ -256,6 +261,7 @@ mod tests {
       library: Mutex::new(Some(lib_a)),
       imports: Mutex::new(std::collections::HashMap::new()),
       inbox: Mutex::new(None),
+      workspace: Mutex::new(None),
       undo: Mutex::new(crate::core::undo::UndoManager::default()),
     };
     (dir, state)

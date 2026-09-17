@@ -46,11 +46,12 @@ impl Drop for WatchHandle {
 
 /// 启动监听：目录下每个就绪的顶层条目整批触发 on_ready。
 /// 启动时先清点存量条目（上次崩溃残留 / 用户跳过项），与通知事件走同一判定。
-/// on_change：任何带路径的监听事件都触发（不做过滤，由前端去抖），服务"工程文件"磁盘实况热刷新。
+/// on_change：任何带路径的监听事件都触发（原始路径清单透传，过滤交由调用方——收件箱不滤、
+/// 工作空间滤 .anikit 缓存写回；去抖在前端），服务"工程文件"磁盘实况热刷新。
 pub fn spawn(
   dir: PathBuf,
   on_ready: impl Fn(Vec<PathBuf>) + Send + 'static,
-  on_change: impl Fn() + Send + 'static,
+  on_change: impl Fn(&[PathBuf]) + Send + 'static,
 ) -> Result<WatchHandle, String> {
   let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
   let mut watcher = RecommendedWatcher::new(tx.clone(), Config::default()).map_err(|e| format!("文件监听创建失败：{e}"))?;
@@ -79,7 +80,7 @@ fn watch_loop(
   _watcher: RecommendedWatcher, // 持有保活，线程退出即停止监听
   stop: Arc<AtomicBool>,
   on_ready: impl Fn(Vec<PathBuf>),
-  on_change: impl Fn(),
+  on_change: impl Fn(&[PathBuf]),
 ) {
   let mut pending: HashMap<PathBuf, Pending> = HashMap::new();
   // 存量清点：目录里已存在的条目按"刚有活动"入队，静默期满后照常入库
@@ -105,7 +106,7 @@ fn watch_loop(
     match msg {
       Some(Ok(ev)) => {
         if !ev.paths.is_empty() {
-          on_change(); // 磁盘实况热刷新信号（直调，前端去抖）
+          on_change(&ev.paths); // 磁盘实况热刷新信号（原始路径透传，调用方过滤，前端去抖）
         }
         for p in &ev.paths {
           if let Some(root) = root_entry(&dir, p) {
@@ -261,7 +262,7 @@ mod tests {
       move |paths| {
         let _ = tx.send(paths);
       },
-      || {},
+      |_| {},
     )
     .unwrap();
 
@@ -279,7 +280,7 @@ mod tests {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path().join("inbox");
     std::fs::create_dir_all(&dir).unwrap();
-    let mut handle = spawn(dir, |_| {}, || {}).unwrap();
+    let mut handle = spawn(dir, |_| {}, |_| {}).unwrap();
     std::thread::sleep(Duration::from_millis(200)); // 让线程先进入空闲阻塞
     let t0 = Instant::now();
     handle.stop();
@@ -307,7 +308,7 @@ mod tests {
       move |paths| {
         let _ = tx.send(paths);
       },
-      || {},
+      |_| {},
     )
     .unwrap();
 

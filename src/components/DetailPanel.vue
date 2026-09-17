@@ -27,6 +27,9 @@ async function loadDetail(clear: boolean): Promise<void> {
   if (clear) detail.value = null;
   if (!key) return;
   const assetId = key.split("|")[0];
+  // 工作空间磁盘实况合成项（PRD 02 步骤 1）：assetId = ws: 假 id 严禁发 assetId 类命令——
+  // 详情面板本阶段留空（右栏无目标即隐藏）
+  if (assetId.startsWith("ws:")) return;
   try {
     const d = await invoke<AssetDetail>("get_asset_detail", { assetId });
     if (content.selectedAssetKey === key) detail.value = d; // await 期间已切走防错配

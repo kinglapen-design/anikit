@@ -75,6 +75,9 @@ const kind = computed<HoverKind>(() => {
 
 // 悬停态：驱动播放层挂载（视频/音频）与动图播放——7.1 起挂壳根（整卡即图）
 const hovered = ref(false);
+// 工作空间磁盘实况项（PRD 02 步骤 1，assetId = ws: 合成假 id）：悬停播放层（视频/音频/序列帧/动图）
+// 全走 assetId 类命令——本阶段禁用（不挂载即静默无操作，不许报错）；自动播放同样不申请名额
+const isWs = computed(() => props.asset.assetId.startsWith("ws:"));
 // 拖拽期间全局禁用悬停层（2026-07-29 复验二轮 5，JS 闸）：拖拽激活时视同未悬停——
 // 播放层 v-if 条件即刻转假，走既有退出路径（卸载停播 / 动图还原封面 / 序列帧停轮播）
 const hoverActive = computed(() => hovered.value && !dragView.active);
@@ -104,9 +107,10 @@ function onRenameCancel(): void {
 }
 // 双击名称 = 就地重命名（2026-07-29 复验三轮，renamingKey 既有机制——
 // 双击第一下 click 已把卡片单选入域，此处仅置重命名目标）；
-// 回收站视口只读不可重命名（2026-07-29 二轮，与 F2 / 菜单同口径闸）
+// 回收站视口只读不可重命名（2026-07-29 二轮，与 F2 / 菜单同口径闸）；
+// 工作空间只读底座（PRD 02 步骤 1）同禁——重命名走 rename_placement（assetId 命令）
 function startRename(): void {
-  if (useContentStore().isRecycleView) return;
+  if (useContentStore().isRecycleView || useContentStore().isWorkspaceView) return;
   selection.renamingKey = cardKey;
 }
 
@@ -125,6 +129,7 @@ const rootEl = ref<HTMLElement>();
 let visibilityObs: IntersectionObserver | undefined;
 const gatePool = computed<AutoplayPool>(() => (kind.value === "video" ? "video" : "anim"));
 const wantAutoplay = computed(() => {
+  if (isWs.value) return false; // 工作空间合成项：悬停/自动播放层走 assetId 命令，禁用（步骤 1）
   if (!cardVisible.value) return false;
   if (kind.value === "anim" || kind.value === "sequence") return ui.autoPlayGif;
   if (kind.value === "video") return ui.autoPlayVideo;
@@ -243,13 +248,13 @@ const meta = computed(() => {
       @name-cancel="onRenameCancel"
     >
       <HoverVideoLayer
-        v-if="animPlaying && kind === 'video'"
+        v-if="!isWs && animPlaying && kind === 'video'"
         :asset="asset"
         :auto="!hoverActive"
       />
-      <AnimImgLayer v-else-if="animPlaying && kind === 'anim'" :asset="asset" :auto="!hoverActive" />
-      <HoverAudioLayer v-else-if="hoverActive && kind === 'audio'" :asset="asset" />
-      <HoverSequenceLayer v-else-if="animPlaying && kind === 'sequence'" :asset="asset" :auto="!hoverActive" />
+      <AnimImgLayer v-else-if="!isWs && animPlaying && kind === 'anim'" :asset="asset" :auto="!hoverActive" />
+      <HoverAudioLayer v-else-if="!isWs && hoverActive && kind === 'audio'" :asset="asset" />
+      <HoverSequenceLayer v-else-if="!isWs && animPlaying && kind === 'sequence'" :asset="asset" :auto="!hoverActive" />
     </FileCard>
     <!-- 笔记徽章（2026-09-09 四轮用户定稿）：kc-float 角标铬「笔记 N」（笔记 = 雅黑 / 数量 = mono，
          数字档 12/16 bold 二级）——旧 16px 品牌圆点数字右上口径作废（压悬停胶囊）；

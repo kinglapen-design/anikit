@@ -22,6 +22,7 @@ import { useContentStore, type FolderNode } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
 import { useSearchStore } from "../stores/search";
 import { useUiStore } from "../stores/ui";
+import { useWsStore } from "../stores/ws";
 
 // props 运行时声明（rolldown 环境 SFC 编译器无法解析 node_modules 类型，defineProps 泛型须字面量）。
 // dockview-vue 传参约定（v7 源码 VueRenderer.init）：framework props 整组包在一个 params prop 里——
@@ -51,6 +52,18 @@ const viewKey = computed(() => (frame.value.params?.viewKey as string) ?? "quick
 // 序列帧包内视图（5.2）：viewKey = seq:{assetId}——素材区整区换包内帧卡片列表
 //（数据不走 placementsFor：帧不是 Placement；搜索/排序/分组对包内不适用，组件内自管）
 const seqPackAssetId = computed(() => (viewKey.value.startsWith("seq:") ? viewKey.value.slice(4) : null));
+
+// 工作空间视口（PRD 02 步骤 1）：挂载 + viewKey 变化即确保对应目录 listing 已发起加载
+// （懒加载竞态守卫在 ws store；loadDir 完成自动补请求缺失缩略图；fs-changed 重扫经
+// initWsListeners 统一驱动 rescanLoaded，此处只管线首发）
+const ws = useWsStore();
+watch(
+  viewKey,
+  (vk) => {
+    if (vk.startsWith("ws:")) void ws.loadDir(vk.slice(3));
+  },
+  { immediate: true },
+);
 
 // 本 panel 激活态：预览整栏切换只对激活标签页生效
 const active = ref(panelApi.isActive);

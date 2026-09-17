@@ -26,6 +26,7 @@
 //! - font：字体元数据与样张渲染（5.6，ttf-parser / fontdue 纯 Rust）+ 系统级安装卸载（用户级注册表）
 //! - text：文本资产读写（5.6，txt/md；读 UTF-8 优先 GBK 回退，写恒 UTF-8，2MB 上限）
 //! - views：Placement 列表视图（中间面板与导入事件共用）
+//! - workspace：索引式工作空间只读底座（PRD 02 步骤 1：目录列举 + .anikit 缩略图缓存 + 监听热刷新）
 
 pub mod anim;
 pub mod anim_preview;
@@ -58,3 +59,4 @@ pub mod text;
 pub mod thumb_formats;
 pub mod thumbnail;
 pub mod views;
+pub mod workspace;

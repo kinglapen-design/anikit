@@ -9,7 +9,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { useContentStore } from "./content";
 import { usePreviewStore } from "./preview";
 import { useToastStore } from "./toast";
-import { getMediaSource } from "../lib/mediaOps";
+import { getMediaSource, getMediaSourceByPath } from "../lib/mediaOps";
 
 // 媒体元素单例（模块级；store 状态响应式、元素本身不进响应式系统）
 let el: HTMLVideoElement | null = null;
@@ -18,6 +18,10 @@ let slowTimer: ReturnType<typeof setTimeout> | undefined;
 // 直读优先回退用（2026-09-13）：当前装载资产 id + 是否已回退过转码（每素材只回退一次）
 let curAssetId: string | null = null;
 let transcodeRetried = false;
+// 按路径模式（PRD 02 步骤 1 工作空间预览）：当前装载源文件绝对路径 + 转码回退标记
+// （curPath 非空 = onSourceError 走按路径回退；与按 assetId 模式互斥，release 两者皆清）
+let curPath: string | null = null;
+let pathTranscodeRetried = false;
 
 function errText(e: unknown): string {
   if (typeof e === "string") return e;
@@ -62,8 +66,12 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
         if (!this.scrubbing) this.currentTime = el?.currentTime ?? 0;
       });
       el.addEventListener("durationchange", () => (this.duration = el?.duration || 0));
-      // 直读优先的播放错误回退（2026-09-13）：源编码直解不了 → error 后 forceTranscode 转码兜底
-      el.addEventListener("error", () => void this.onSourceError());
+      // 直读优先的播放错误回退（2026-09-13）：源编码直解不了 → error 后按装载模式路由回退
+      // （按 assetId 链 / 工作空间按路径链，PRD 02 步骤 1）
+      el.addEventListener("error", () => {
+        if (curPath) void this.onPathSourceError();
+        else void this.onSourceError();
+      });
       el.addEventListener("loadedmetadata", () => {
         this.duration = el?.duration || 0;
         // 视频尺寸喂给查看器（fit/缩放数学与图片同一套）
@@ -100,6 +108,83 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
         if (preview.current?.assetId !== assetId) return;
         console.error("音视频源解析失败：", e);
         preview.kind = "other"; // 降级：格式图标/缩略图静态 + 报错文案
+        preview.error = errText(e);
+      } finally {
+        clearTimeout(slowTimer);
+        this.transcoding = false;
+        this.transcodingSlow = false;
+      }
+    },
+    // 按路径装载（PRD 02 步骤 1 工作空间预览）：get_media_source_by_path 直读优先，
+    // error 后 forceTranscode 转码兜底（同 load 口径）；null（非音视频 / 越界）= 降级 other + 报错文案。
+    // "已切走"守卫按 current.wsPath 判定（合成项 assetId 为假 id 不可用）
+    async loadPath(absPath: string, kind: "audio" | "video", fps: number | null = null): Promise<void> {
+      const preview = usePreviewStore();
+      this.kind = kind;
+      curPath = absPath;
+      pathTranscodeRetried = false;
+      this.fps = kind === "video" ? fps : null;
+      this.transcoding = true;
+      this.transcodingSlow = false;
+      clearTimeout(slowTimer);
+      slowTimer = setTimeout(() => {
+        if (this.transcoding) this.transcodingSlow = true;
+      }, 300);
+      try {
+        const r = await getMediaSourceByPath(absPath);
+        if (preview.current?.wsPath !== absPath) return; // await 期间已切走
+        if (!r) {
+          preview.kind = "other";
+          preview.error = "该格式暂时无法播放";
+          return;
+        }
+        if (kind === "video" && r.fps != null) this.fps = r.fps;
+        this.srcPath = r.path;
+        const v = this.getEl();
+        v.src = convertFileSrc(r.path);
+        v.loop = this.loop;
+        this.play();
+      } catch (e) {
+        if (preview.current?.wsPath !== absPath) return;
+        console.error("工作空间播放源解析失败：", e);
+        preview.kind = "other"; // 降级：格式图标/缩略图静态 + 报错文案
+        preview.error = errText(e);
+      } finally {
+        clearTimeout(slowTimer);
+        this.transcoding = false;
+        this.transcodingSlow = false;
+      }
+    },
+    // 按路径播放错误回退转码（直读优先口径，同 onSourceError）：仅直读源 error 触发一次
+    async onPathSourceError(): Promise<void> {
+      const preview = usePreviewStore();
+      const absPath = curPath;
+      if (!absPath || pathTranscodeRetried || !el?.currentSrc) return;
+      if (preview.current?.wsPath !== absPath) return;
+      pathTranscodeRetried = true;
+      clearTimeout(slowTimer);
+      this.transcoding = true;
+      this.transcodingSlow = false;
+      slowTimer = setTimeout(() => {
+        if (this.transcoding) this.transcodingSlow = true;
+      }, 300);
+      try {
+        const r = await getMediaSourceByPath(absPath, true);
+        if (preview.current?.wsPath !== absPath || !el) return;
+        if (!r) {
+          preview.kind = "other";
+          preview.error = "该格式暂时无法播放";
+          return;
+        }
+        if (this.kind === "video" && r.fps != null) this.fps = r.fps;
+        this.srcPath = r.path;
+        el.src = convertFileSrc(r.path);
+        el.loop = this.loop;
+        this.play();
+      } catch (e) {
+        if (preview.current?.wsPath !== absPath) return;
+        console.error("工作空间转码兜底失败：", e);
+        preview.kind = "other";
         preview.error = errText(e);
       } finally {
         clearTimeout(slowTimer);
@@ -149,6 +234,8 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       }
       curAssetId = null;
       transcodeRetried = false;
+      curPath = null;
+      pathTranscodeRetried = false;
       this.kind = null;
       this.srcPath = null;
       clearTimeout(slowTimer);
@@ -212,7 +299,8 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
     // toast 反馈 + modifiedAt URL 版本戳 + 视图外兜底 refresh（2026-08-20 与动图侧同修复）
     async setVideoThumb(): Promise<void> {
       const p = usePreviewStore().current;
-      if (!p) return;
+      // ws 合成假 id 禁发 assetId 类命令（PRD 02 步骤 1 只读，cover 钮已由播放条 spec 滤除）
+      if (!p || p.assetId.startsWith("ws:")) return;
       const toast = useToastStore();
       try {
         const r = await invoke<{ thumbPath: string; modifiedAt: string; thumbFrame: string; thumbWidth: number; thumbHeight: number }>("set_video_thumb", {

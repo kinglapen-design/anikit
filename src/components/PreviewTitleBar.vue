@@ -36,6 +36,11 @@ async function openInNewWindow(): Promise<void> {
   await invoke("open_preview_window", { assetKey: preview.assetKey });
 }
 
+// 工作空间磁盘实况（PRD 02 步骤 1）：预览目标是 ws 合成项（assetId 假 id）——
+// 「默认应用打开」走 assetId 命令、「新窗口打开」子窗口按 assetId 链拉数据，本阶段均不下发/不开，
+// 两钮隐藏（其余按钮纯前端 / 按路径，照常）
+const isWsCurrent = computed(() => !!preview.current?.assetId.startsWith("ws:"));
+
 async function togglePin(): Promise<void> {
   ui.alwaysOnTop = !ui.alwaysOnTop;
   await appWindow.setAlwaysOnTop(ui.alwaysOnTop);
@@ -72,15 +77,16 @@ async function togglePin(): Promise<void> {
         <IconButton name="original-size" title="原图大小" @click="preview.actual()" />
       </template>
       <!-- 默认应用打开：源格式（PSD 等）/ other / font / text + **伴生代理资产（8.1：fla 预览
-           按伴生 WebP 显示为 anim，但本质是工程文件——入口打开 fla 本身）** -->
+           按伴生 WebP 显示为 anim，但本质是工程文件——入口打开 fla 本身）**；
+           工作空间合成项隐藏（assetId 假 id 禁发命令，见 script isWsCurrent） -->
       <IconButton
-        v-if="preview.isSource || preview.kind === 'other' || preview.kind === 'font' || preview.kind === 'text' || !!preview.current?.playAssetId"
+        v-if="(preview.isSource || preview.kind === 'other' || preview.kind === 'font' || preview.kind === 'text' || !!preview.current?.playAssetId) && !isWsCurrent"
         name="open-default"
         title="默认应用打开"
         @click="preview.openDefaultApp()"
       />
       <IconButton
-        v-if="!window"
+        v-if="!window && !isWsCurrent"
         name="open-new-window"
         title="新窗口打开"
         @click="openInNewWindow"

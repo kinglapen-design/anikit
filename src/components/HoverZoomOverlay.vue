@@ -10,7 +10,7 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getAssetFilePath, listSequenceFrames } from "../lib/mediaOps";
-import { isSequence } from "../lib/formatBadge";
+import { isSequence, isStaticImageExt } from "../lib/formatBadge";
 import type { PlacementView } from "../stores/content";
 
 const props = defineProps<{ asset: PlacementView }>();
@@ -28,7 +28,14 @@ let seqInterval: ReturnType<typeof setInterval> | undefined;
 let disposed = false;
 
 onMounted(() => {
-  if (isSeq) void loadSequence();
+  // 工作空间磁盘实况（PRD 02 步骤 1）：assetId 为合成假 id 禁走 get_asset_file_path——
+  // 直渲图类（静态图 / GIF / SVG）直 convertFileSrc 源路径；其余（音视频/工程等）保持缩略图层
+  if (props.asset.assetId.startsWith("ws:")) {
+    const ext = props.asset.ext.toLowerCase();
+    if (props.asset.wsPath && (isStaticImageExt(ext) || ext === "gif" || ext === "svg")) {
+      src.value = convertFileSrc(props.asset.wsPath);
+    }
+  } else if (isSeq) void loadSequence();
   else void loadFull();
   window.addEventListener("keydown", onKeydown);
 });

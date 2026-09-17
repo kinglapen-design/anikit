@@ -111,6 +111,7 @@ pub fn run() {
       library: std::sync::Mutex::new(None),
       imports: std::sync::Mutex::new(std::collections::HashMap::new()),
       inbox: std::sync::Mutex::new(None),
+      workspace: std::sync::Mutex::new(None),
       undo: std::sync::Mutex::new(core::undo::UndoManager::default()),
     })
     .setup(|app| {
@@ -295,6 +296,10 @@ pub fn run() {
       commands::library::reorder_libraries,
       commands::library::delete_library,
       commands::library::count_library_orphans,
+      commands::workspace::workspace_root,
+      commands::workspace::list_workspace_dir,
+      commands::workspace::request_workspace_thumbs,
+      commands::workspace::reveal_path,
       commands::settings::get_ui_settings,
       commands::settings::save_ui_settings,
       commands::settings::save_window_state,
@@ -329,6 +334,7 @@ pub fn run() {
       commands::thumb_frame::set_thumb_frame,
       commands::thumb_frame::set_video_thumb,
       commands::media::get_media_source,
+      commands::media::get_media_source_by_path,
       commands::media::get_waveform,
       commands::font::get_font_info,
       commands::font::install_font,
@@ -415,10 +421,12 @@ pub fn run() {
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")
-    // 退出时收尾收件箱（3.2）：停监听 + 卸载盘符（PRD：启动时挂载、退出卸载）
+    // 退出时收尾收件箱（3.2）：停监听 + 卸载盘符（PRD：启动时挂载、退出卸载）；
+    // 同时收工作空间监听（PRD 02 步骤 1）
     .run(|app, event| {
       if let tauri::RunEvent::Exit = event {
         services::inbox::stop(app);
+        services::workspace::stop_watch(app);
       }
     });
 }

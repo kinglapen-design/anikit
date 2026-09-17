@@ -22,7 +22,8 @@ use crate::commands::preview::locate_asset;
 use crate::core::json_io::write_json;
 use crate::core::library::CACHE_DIR;
 use crate::core::models::AssetMeta;
-use crate::services::{media, thumbnail};
+use crate::core::space::WORKSPACE_DIR;
+use crate::services::{media, thumbnail, workspace as ws};
 
 /// 音视频播放源解析结果
 #[derive(Debug, Serialize, PartialEq)]
@@ -154,6 +155,81 @@ fn transcode_source(root: &Path, asset_id: &str, origin: &Path, is_video: bool) 
   if let Some(s) = source_stamp(origin) {
     if let Err(e) = fs::write(&stamp, s) {
       log::warn!("转码戳写入失败（{}）：{e}", stamp.display());
+    }
+  }
+  Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None })
+}
+
+// ---------- 按真实路径取播放源（PRD 02 步骤 1 工作空间预览） ----------
+
+/// 按真实路径取音视频播放源：跳过 info 目录寻址，直对 workspace 内真实文件——
+/// 默认直给源路径（transcoded=false，口径同 get_media_source 直读优先，踩坑 075）；
+/// 前端 <video>/<audio> 播放 error 后带 force_transcode=true 重调 → 转码兜底
+/// （产物 workspace/.anikit/media/，按源文件 大小+mtime 散列 + .stamp 幂等）。
+/// 未开空间 / 文件不存在 / 不在当前空间 workspace 内 / 非音视频返回 Ok(None)——前端回退
+/// 直渲（图片 / 动图 / 文本走 convertFileSrc 源路径）或格式图标，kind 口径与按 assetId 链一致
+#[tauri::command]
+pub async fn get_media_source_by_path(
+  state: State<'_, AppState>,
+  abs_path: String,
+  force_transcode: Option<bool>,
+) -> Result<Option<MediaSource>, String> {
+  let Some(space) = state.space.lock().map_err(|e| e.to_string())?.clone() else { return Ok(None) };
+  let ws_root = space.root.join(WORKSPACE_DIR);
+  match media_source_by_path(&ws_root, Path::new(&abs_path), force_transcode.unwrap_or(false)) {
+    Ok(src) => Ok(src),
+    Err(e) => {
+      log::warn!("工作空间播放源解析失败（{abs_path}）：{e}");
+      Ok(None)
+    }
+  }
+}
+
+/// 按路径解析实现（命令层薄壳，便于单测）：越界 / 非音视频 = Ok(None)；转码失败 = 中文 Err
+fn media_source_by_path(ws_root: &Path, origin: &Path, force: bool) -> Result<Option<MediaSource>, String> {
+  if !origin.is_file() || !ws::is_under(ws_root, origin) {
+    return Ok(None);
+  }
+  let video = media::is_video(origin);
+  if !video && !media::is_audio(origin) {
+    return Ok(None);
+  }
+  // 无 metadata 可挂，fps 每次实时探测（探测失败静默，前端按缺省帧率）
+  let fps = if video { media::probe_video(origin).and_then(|v| v.fps) } else { None };
+  if force {
+    return transcode_workspace_source(ws_root, origin, video).map(Some);
+  }
+  Ok(Some(MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps }))
+}
+
+/// 工作空间转码兜底：产物 workspace/.anikit/media/media-{大小}-{mtime秒}.mp4|.wav + .stamp
+/// （与 transcode_source 同口径：复用判定先于二进制检查，源变化重转；锚点在 .anikit——
+/// 可重建缓存目录，监听事件已滤 .anikit 防自激）
+fn transcode_workspace_source(ws_root: &Path, origin: &Path, is_video: bool) -> Result<MediaSource, String> {
+  let meta = fs::metadata(origin).map_err(|e| format!("源文件读取失败：{e}"))?;
+  let secs = meta
+    .modified()
+    .ok()
+    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+    .map(|d| d.as_secs())
+    .unwrap_or(0);
+  let out_dir = ws_root.join(ws::CACHE_DIR).join("media");
+  let out = out_dir.join(format!("media-{}-{secs}.{}", meta.len(), if is_video { "mp4" } else { "wav" }));
+  let stamp = stamp_path(&out);
+  if out.is_file() && source_stamp(origin).is_some_and(|s| read_stamp(&stamp) == Some(s)) {
+    return Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None });
+  }
+  if !ffmpeg::ffmpeg_available() {
+    return Err("音视频组件缺失，无法播放该格式".to_string());
+  }
+  fs::create_dir_all(&out_dir).map_err(|e| format!("转码缓存目录创建失败：{e}"))?;
+  let _ = fs::remove_file(&out); // 先清旧产物：防转码失败留下半截文件被下次复用
+  if !ffmpeg::transcode_for_webview(origin, &out, !is_video) {
+    return Err("该格式暂时无法播放".to_string());
+  }
+  if let Some(s) = source_stamp(origin) {
+    if let Err(e) = fs::write(&stamp, s) {
+      log::warn!("转码戳写入失败（{}）：{e}", out.display());
     }
   }
   Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None })
@@ -363,5 +439,33 @@ mod tests {
       err.contains("该格式暂时无法播放") || err.contains("音视频组件缺失"),
       "{err}"
     );
+  }
+
+  /// 按路径取播放源（PRD 02 步骤 1 工作空间预览）：workspace 内音视频直给源路径（fps 实时探测，
+  /// 假字节探测失败静默 = None）；越界 / 不存在 / 非音视频 = null；force 转码失败给中文 Err
+  #[test]
+  fn media_source_by_path_direct_serves_and_bounds_check() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws_root = dir.path().join("workspace");
+    fs::create_dir_all(&ws_root).unwrap();
+
+    // 假字节 mp4：直给源路径、transcoded=false、fps 探测失败为 None（不报错）
+    let mp4 = ws_root.join("片段.mp4");
+    fs::write(&mp4, b"fake").unwrap();
+    let src = media_source_by_path(&ws_root, &mp4, false).unwrap().unwrap();
+    assert_eq!(src, MediaSource { path: mp4.to_string_lossy().into_owned(), transcoded: false, fps: None });
+
+    // 非音视频（图片）→ null；workspace 外 → null；不存在 → null
+    let png = ws_root.join("图.png");
+    fs::write(&png, b"fake").unwrap();
+    assert_eq!(media_source_by_path(&ws_root, &png, false).unwrap(), None);
+    let outside = dir.path().join("外.mp4");
+    fs::write(&outside, b"fake").unwrap();
+    assert_eq!(media_source_by_path(&ws_root, &outside, false).unwrap(), None);
+    assert_eq!(media_source_by_path(&ws_root, &ws_root.join("不存在.mp4"), false).unwrap(), None);
+
+    // force 转码：假字节 / 无 ffmpeg 环境给两种中文文案之一
+    let err = media_source_by_path(&ws_root, &mp4, true).unwrap_err();
+    assert!(err.contains("该格式暂时无法播放") || err.contains("音视频组件缺失"), "{err}");
   }
 }

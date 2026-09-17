@@ -25,3 +25,4 @@ pub mod settings;
 pub mod text;
 pub mod thumb_frame;
 pub mod undo;
+pub mod workspace;

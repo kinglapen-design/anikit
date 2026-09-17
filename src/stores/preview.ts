@@ -12,8 +12,9 @@ import { useContentStore } from "./content";
 import { usePreviewMediaStore } from "./previewMedia";
 import { usePreviewNotesStore } from "./previewNotes";
 import { useToastStore } from "./toast";
-import { isAudioExt, isFontExt, isSequence, isTextExt, isVideoExt } from "../lib/formatBadge";
+import { isAudioExt, isFontExt, isSequence, isStaticImageExt, isTextExt, isVideoExt } from "../lib/formatBadge";
 import { getAssetFilePath, listSequenceFrames, prepareAnimStrips, type FrameEntry } from "../lib/mediaOps";
+import { isWsPlacement } from "./ws";
 import { StreamSession, type StreamFrame } from "../lib/streamClient";
 
 // 播放帧（5.2 改版）：命令原始结构见 lib/mediaOps（FrameEntry.delayMs 序列帧恒 null）——
@@ -255,6 +256,36 @@ export const usePreviewStore = defineStore("preview", {
       }
       this.filePath = p.thumbPath; // 秒显：info 缩略图（格式图标同路径，other 情形也先盖住旧图）
       const ext = p.ext.toLowerCase();
+      // 工作空间磁盘实况（PRD 02 步骤 1）：assetId = ws: 合成假 id，一律走按路径分支，不碰 assetId 命令——
+      // 图片 / 动图（GIF 及 WEBP 动图 Chromium 原生循环）/ SVG 直 convertFileSrc 源路径（秒显后换源）；
+      // 音视频走 get_media_source_by_path（previewMedia.loadPath，error 后 forceTranscode 兜底，踩坑 075 口径）；
+      // 其余（字体 / 文本 / 工程 / 未知格式 = assetId 强依赖类型）优雅降级 other（格式图标保底，不报错）
+      if (isWsPlacement(p)) {
+        const wsPath = p.wsPath;
+        if (!wsPath) {
+          this.kind = "other";
+          this.filePath = null;
+          return;
+        }
+        if (isAudioExt(ext)) {
+          this.kind = "audio";
+          await media.loadPath(wsPath, "audio");
+          return;
+        }
+        if (isVideoExt(ext)) {
+          this.kind = "video";
+          await media.loadPath(wsPath, "video", p.fps ?? null);
+          return;
+        }
+        if (isStaticImageExt(ext) || ext === "gif" || ext === "svg") {
+          this.kind = "image";
+          this.filePath = wsPath;
+          return;
+        }
+        this.kind = "other"; // 字体 / 文本 / 工程等：assetId 强依赖，工作空间下不进对应预览页
+        this.filePath = null;
+        return;
+      }
       if (isSequence(p)) {
         this.kind = "sequence";
         const r = await listSequenceFrames(p.assetId);
@@ -548,7 +579,7 @@ export const usePreviewStore = defineStore("preview", {
     //（asset 协议同 URL 启发式缓存致静帧不热刷新，用户实机报）；视图外资产兜底全量 refresh
     async setAsThumb(): Promise<void> {
       const p = this.current;
-      if (!p) return;
+      if (!p || isWsPlacement(p)) return; // ws 合成假 id 禁发 assetId 类命令（步骤 1 只读，cover 钮已滤）
       const frameName =
         this.kind === "anim" ? `f:${this.frame}` : this.seq ? this.seq.frames[this.frame]?.name : undefined;
       if (!frameName) return;
@@ -587,7 +618,8 @@ export const usePreviewStore = defineStore("preview", {
     },
     async openDefaultApp(): Promise<void> {
       const p = this.current;
-      if (!p) return;
+      // ws 合成假 id 禁发 assetId 类命令（PRD 02 步骤 1：按路径系统打开未立项，标题栏入口已隐藏）
+      if (!p || isWsPlacement(p)) return;
       await invoke("open_with_default_app", { assetId: p.assetId });
       // 成功后直接重拉最近使用（2026-07-29 复验反馈：双保险，同 AssetCard.openDefault）
       await useContentStore().refreshRecent();

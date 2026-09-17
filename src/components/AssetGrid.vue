@@ -69,6 +69,9 @@ function onCardClick(p: PlacementView, e: MouseEvent): void {
   if (dragView.suppressClick) return; // 有效拖拽结束后紧随的 click 不当选择（拖拽引擎置位）
   if (picker.active) {
     if (content.isRecycleView) return; // 回收站文件不可加入备选（已删除资产不该建关系）
+    // 工作空间合成项（PRD 02 步骤 1，assetId = ws: 假 id）严禁进备选——确认会发 assetId 类命令；
+    // 选择模式树导航可切到工作空间（白名单放行），此处兜底拦点选
+    if (content.isWorkspaceView) return;
     const target = { kind: "asset" as const, id: p.assetId, name: p.name, ext: p.ext, thumb: p.thumbPath, folderId: p.folderId, origin: p.origin };
     if (picker.purpose === "cover") {
       void picker.pickCoverAsset(target);

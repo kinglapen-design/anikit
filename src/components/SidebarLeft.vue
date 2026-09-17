@@ -19,8 +19,10 @@ import ActionButton from "./buttons/ActionButton.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import LibraryView from "./LibraryView.vue";
+import WorkspaceTree from "./WorkspaceTree.vue";
 import { useUiStore } from "../stores/ui";
 import { usePickerStore } from "../stores/picker";
+import { useTabsStore } from "../stores/tabs";
 import { sidebarShowWidths } from "../lib/useSidebarAnim";
 import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
 import { appMenuSpec } from "../lib/menuSpecs/appMenu";
@@ -88,10 +90,13 @@ function onViewMenu(e: MouseEvent): void {
   openContextMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, viewMenuSpec(), undefined, { trigger: el });
 }
 
-// 分段控制器（模式切换）：library = 资源库树；workspace / ai = 空态占位（功能正在开发中）。
+// 分段控制器（模式切换）：library = 资源库树；workspace = 工作空间树（PRD 02 步骤 1 只读底座，
+// 2026-09-17 接入：真实目录树 + 懒加载子目录）；ai = 空态占位（功能正在开发中）。
 // 会话级状态（旧 rail 同样不可切、无持久化先例）；选择模式（6.2 白名单收窄）下禁用切换——
-// 树 / 快速访问导航是挑选主通路，须恒在
+// 树 / 快速访问导航是挑选主通路，须恒在。
+// 首次切到 workspace 分段：若尚无 ws: 视口标签页则自动 openView("ws:")（根目录视口，树导航的前提）
 const viewMode = ref<"library" | "workspace" | "ai">("library");
+const tabs = useTabsStore();
 const segOptions = [
   { value: "library", icon: "library" },
   { value: "workspace", icon: "workspace" },
@@ -100,6 +105,9 @@ const segOptions = [
 function onModeChange(v: string): void {
   if (picker.active) return;
   viewMode.value = v as "library" | "workspace" | "ai";
+  if (viewMode.value === "workspace" && !tabs.tabs.some((t) => t.viewKey.startsWith("ws:"))) {
+    tabs.openView("ws:");
+  }
 }
 
 const bodyRef = ref<HTMLElement>();
@@ -129,12 +137,15 @@ const bodyRef = ref<HTMLElement>();
       />
     </div>
 
-    <!-- 树容器（稿：flex-grow 1）：资源库 = LibraryView；工作空间 / AI = 空态占位；
-         视图切换 = 旧内容左移出、新内容右移入（2026-08-30 用户实机定）300ms 缓入缓出（与滑块同步） -->
+    <!-- 树容器（稿：flex-grow 1）：资源库 = LibraryView；工作空间 = WorkspaceTree（PRD 02 步骤 1）；
+         AI = 空态占位；视图切换 = 旧内容左移出、新内容右移入（2026-08-30 用户实机定）300ms 缓入缓出（与滑块同步） -->
     <div class="side-body">
       <Transition name="view-x">
         <div v-if="viewMode === 'library'" ref="bodyRef" class="tree-scroll kit-scroll" key="library">
           <LibraryView />
+        </div>
+        <div v-else-if="viewMode === 'workspace'" ref="bodyRef" class="tree-scroll kit-scroll" key="workspace">
+          <WorkspaceTree />
         </div>
         <div v-else class="empty-state" key="empty">功能正在开发中</div>
       </Transition>

@@ -1,6 +1,8 @@
 // 视频播放条 spec（旧 PlayBarVideo 业务口径全量迁移）：控件全量组；快退/快进 ∓5 秒；
 // 逐帧步进 = 暂停 + ±1/fps（fps 缺失回退 24）；时间码 = 帧数优先（查看方式「时间显示 = 帧数」且 fps 可用，
 // 回退 mm:ss）；进度拖动挂 scrubbing（拖动期 timeupdate 不回写）；当前画面设为预览图 = set_video_thumb。
+// 工作空间磁盘实况（PRD 02 步骤 1）：cover（set_video_thumb）/ note（逐帧笔记）走 assetId 命令——
+// 合成假 id 严禁下发，show 组滤除（其余控件纯前端 / 按路径，照常）
 import { useUiStore } from "../../stores/ui";
 import { usePreviewStore } from "../../stores/preview";
 import { usePreviewMediaStore } from "../../stores/previewMedia";
@@ -14,8 +16,12 @@ export function makeVideoSpec(): PlayBarSpec {
   const media = usePreviewMediaStore();
   const useFrames = (): boolean => ui.timeDisplay === "frames" && media.fps != null && media.fps > 0;
   const total = (): number => totalFrames(media.duration, media.fps ?? 24);
+  const groups = (): PlayBarSpec["show"] =>
+    preview.current?.assetId.startsWith("ws:")
+      ? (["transport", "step", "volume", "rate", "loop", "fullscreen"] as const)
+      : (["transport", "step", "volume", "rate", "loop", "note", "cover", "fullscreen"] as const);
   return {
-    show: ["transport", "step", "volume", "rate", "loop", "note", "cover", "fullscreen"],
+    show: groups(),
     playing: () => media.playing,
     disabled: () => media.transcodingSlow,
     progressGet: () => (media.duration > 0 ? media.currentTime / media.duration : 0),

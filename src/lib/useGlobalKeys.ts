@@ -119,6 +119,9 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     // 选择模式（6.2）：编辑类快捷键全禁（单击已不入选择域，本守卫双保险）；查看类（Shift+Enter
     // 默认应用打开）因选择域恒空天然无效，不单独放行
     if (picker.active) return;
+    // 工作空间磁盘实况（PRD 02 步骤 1 只读底座）：全部操作快捷键禁用——选中键为 ws: 合成假 id，
+    // F2 重命名 / Del 删除 / Ctrl+C·X·V·D·Y·J·E 无一可走 assetId 类命令（右键「刷新」为唯一操作项）
+    if (content.isWorkspaceView) return;
     // F2 = 重命名（单选生效）：素材卡片就地重命名；文件夹域 = 文件夹重命名（3.4 七轮接入——
     // 当前视口条带含该项走卡片命名态（用户视线在卡片），否则树命名态；档案同径）
     if (e.key === "F2") {

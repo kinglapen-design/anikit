@@ -69,6 +69,14 @@ export async function getMediaSource(assetId: string, forceTranscode = false): P
   return await p;
 }
 
+// 按真实路径取播放源（get_media_source_by_path，commands/media.rs；PRD 02 步骤 1 工作空间预览）：
+// 默认直给源路径（transcoded=false，直读优先同 getMediaSource 踩坑 075 口径）；<video>/<audio>
+// error 后带 forceTranscode=true 重调 → 转码兜底（workspace/.anikit/media/）。null = 非音视频 /
+// 越界 / 未开空间（前端回退直渲或格式图标，kind 口径与按 assetId 链一致）
+export async function getMediaSourceByPath(absPath: string, forceTranscode = false): Promise<MediaSource | null> {
+  return await invoke<MediaSource | null>("get_media_source_by_path", { absPath, forceTranscode });
+}
+
 // 序列帧帧清单：立即返回（帧条小图后台渐进）
 export async function listSequenceFrames(assetId: string): Promise<SequenceFrames> {
   return await invoke<SequenceFrames>("list_sequence_frames", { assetId });

@@ -45,11 +45,13 @@ import type { PickerTarget } from "../relationOps";
 
 // —— 选中集解析（整理菜单 / 文件菜单的选中依赖项共用）——
 
-// 单选素材卡（文件夹域 / 回收站视口不响应——编辑类只读口径，同 useGlobalKeys）
+// 单选素材卡（文件夹域 / 回收站视口不响应——编辑类只读口径，同 useGlobalKeys）；
+// 工作空间视口（PRD 02 步骤 1）同样不响应——ws 合成项 assetId = `ws:` 假 id，严禁发 assetId 类命令
 function singleAsset(): PlacementView | null {
   const selection = useSelectionStore();
   const content = useContentStore();
   if (selection.selectedFolders.size > 0 || selection.count !== 1 || content.isRecycleView) return null;
+  if (content.isWorkspaceView) return null;
   return content.visiblePlacements.find((v) => `${v.assetId}|${v.folderId}` === selection.first) ?? null;
 }
 
@@ -178,7 +180,8 @@ function fileEntries(): CtxEntry[] {
   const folderId = content.currentFolderId;
   // 转换为档案：文件夹视口且非档案节点才可（档案再转换无语义）
   const convertible = folderId !== null && !content.archives[folderId];
-  const hasAssets = selectedAssetIds().length > 0 && !content.isRecycleView;
+  // 工作空间视口（PRD 02 步骤 1）：ws 合成项 assetId = `ws:` 假 id 严禁发 assetId 类命令——导出同禁
+  const hasAssets = selectedAssetIds().length > 0 && !content.isRecycleView && !content.isWorkspaceView;
   // 禁导入视口（全部/最近使用/自动导入/缩略图/回收站，isNoImportView 统一判定）新建文档组禁用
   //（2026-09-08 用户定：四视口 = 数据自动维护；2026-09-09 入口收窄扩「全部」——全部不是位置，
   // 落点必借道。未分类 = 候车区总入口可新建文档，落点 root 所见即所得）
@@ -300,9 +303,11 @@ function organizeEntries(): CtxEntry[] {
   const a = singleAsset();
   const ar = singleArchive();
   const target = pickerTarget();
-  const hasAssets = selectedAssetIds().length > 0 && !content.isRecycleView;
-  // 标签可写目标（清空标签）：选中集含文件或档案且非回收站（回收站只读不开编辑类，useGlobalKeys 同口径）
-  const hasTaggable = (selectedAssetIds().length > 0 || selectedArchiveIds().length > 0) && !content.isRecycleView;
+  const hasAssets = selectedAssetIds().length > 0 && !content.isRecycleView && !content.isWorkspaceView;
+  // 标签可写目标（清空标签）：选中集含文件或档案且非回收站（回收站只读不开编辑类，useGlobalKeys 同口径）；
+  // 工作空间视口（PRD 02 步骤 1）同禁——ws 合成假 id 严禁发 assetId 类命令
+  const hasTaggable =
+    (selectedAssetIds().length > 0 || selectedArchiveIds().length > 0) && !content.isRecycleView && !content.isWorkspaceView;
   // 将此文件设为原始文件：单选非 origin + 活位置 > 1（assetCard 同口径；主菜单恒列、不满足则 disabled）
   const liveCount = a ? content.placements.filter((q) => q.assetId === a.assetId).length : 0;
   const canSetOrigin = !!a && !a.origin && liveCount > 1;
@@ -354,7 +359,8 @@ function organizeEntries(): CtxEntry[] {
     },
     {
       label: "粘贴标签",
-      disabled: !selection.copiedData.tags?.length,
+      // 工作空间视口（PRD 02 步骤 1）同禁：选中集为 ws 合成假 id，严禁发 assetId 类命令
+      disabled: !selection.copiedData.tags?.length || content.isWorkspaceView,
       action: () => void pasteTags({ assets: selectedAssetIds(), archives: selectedArchiveIds() }),
     },
     // 清空标签 = 所选项（文件 + 档案，多选批量）标签全删（2026-09-05 用户定）；回收站只读不开

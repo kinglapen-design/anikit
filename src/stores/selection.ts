@@ -9,6 +9,7 @@
 // content store 与本 store 互相 lazy 取用（函数内 useXxxStore），避免模块循环引用初始化问题。
 import { defineStore } from "pinia";
 import { useContentStore, type FolderNode } from "./content";
+import { useWsStore } from "./ws";
 
 // 点击修饰键（ctrl 含 macOS metaKey，调用方归一化后传入）
 export interface ClickMods {
@@ -293,6 +294,14 @@ export const useSelectionStore = defineStore("selection", {
       const valid = new Set(content.placements.map(keyOf));
       for (const e of content.recycleEntries) valid.add(keyOf(e));
       for (const e of content.recentAssets) valid.add(keyOf(e));
+      // 工作空间磁盘实况选中键（PRD 02 步骤 1）存活以 ws store 已缓存条目为准——
+      // 合成项不在 content.placements，不补判会被库 refresh 连带清掉
+      const ws = useWsStore();
+      for (const entries of ws.dirs.values()) {
+        for (const e of entries) {
+          if (!e.isDir) valid.add(`ws:${e.relPath}|ws:${e.relPath.split("/").slice(0, -1).join("/")}`);
+        }
+      }
       for (const k of [...this.selected]) {
         if (!valid.has(k)) this.selected.delete(k);
       }

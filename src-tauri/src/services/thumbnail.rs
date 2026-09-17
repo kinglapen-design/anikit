@@ -78,6 +78,19 @@ pub fn generate(info_dir: &Path, origin: &Path, stem: &str) -> Option<ThumbOut> 
   None
 }
 
+/// 缩略图编码为字节（有损 webp q80 优先，libwebp 编码失败退回 PNG）：纯函数不落盘——
+/// 工作空间缩略图缓存（services::workspace，PRD 02 步骤 1）复用同一编码规格
+pub(crate) fn encode_thumb_bytes(thumb: &DynamicImage) -> Option<(Vec<u8>, &'static str)> {
+  let rgba = thumb.to_rgba8();
+  let mem = webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height()).encode(WEBP_QUALITY);
+  if !mem.is_empty() {
+    return Some((mem.to_vec(), "webp"));
+  }
+  let mut buf = Vec::new();
+  thumb.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png).ok()?;
+  Some((buf, "png"))
+}
+
 /// 动图解码入口（8.1 黑底修复）：动图（gif/webp 动画）= anim 首帧（image-webp/gif 解码器，
 /// 保 alpha）；静态图 = image crate 魔数解码。image crate 0.25 的 webp 解码器对 VP8X 动画容器
 /// 会把透明像素落成黑（alpha 丢弃）——动图必须绕开它（2026-09-01 用户实机报"黑底"）
@@ -93,7 +106,8 @@ fn decode_origin_image(path: &Path) -> Option<DynamicImage> {
 
 /// 原图解码：按内容魔数（jpg/png/gif/webp/bmp，扩展名撒谎也能识别）→ PSD/SVG 解码补充
 /// （thumb_formats，4.2）→ 视频首帧 / 音频波形（media，5.1 ffmpeg sidecar；缺失返回 None 退格式图标）
-fn load_origin(origin: &Path) -> Option<DynamicImage> {
+/// pub(crate)：工作空间缩略图（services::workspace）复用同一解码链（PRD 02 步骤 1）
+pub(crate) fn load_origin(origin: &Path) -> Option<DynamicImage> {
   if let Some(img) = decode_origin_image(origin) {
     return Some(img);
   }
