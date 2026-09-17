@@ -89,7 +89,18 @@ mod imp {
     if !ensure_com() {
       return None;
     }
-    let hpath = HSTRING::from(path.as_os_str());
+    // canonicalize 产物是 \\?\ 逐字路径，SHCreateItemFromParsingName 解析不了会失败
+    //（2026-09-17 实机：工作空间 list_dir 经 resolve_under 规范化后取图标全军覆没）——
+    // 调 shell 前剥前缀还原普通路径（UNC 形 \\?\UNC\s\sh → \\s\sh）
+    let normalized = {
+      let s = path.as_os_str().to_string_lossy();
+      if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+      } else {
+        s.strip_prefix(r"\\?\").map(str::to_string).unwrap_or_else(|| s.into_owned())
+      }
+    };
+    let hpath = HSTRING::from(normalized);
     let factory: IShellItemImageFactory =
       unsafe { SHCreateItemFromParsingName(PCWSTR::from_raw(hpath.as_ptr()), None) }
         .map_err(|e| log::warn!("Shell 项创建失败（{}）：{e}", path.display()))

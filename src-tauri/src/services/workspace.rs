@@ -327,6 +327,36 @@ mod tests {
     image::RgbaImage::from_pixel(w, h, image::Rgba([200, 30, 30, 255])).save(path).unwrap();
   }
 
+  /// 非图片/音视频类型回退系统格式图标（2026-09-17 实机定）：现场 shell 提取按扩展名缓存
+  /// .anikit/thumbs/{ext}.webp，thumbPath + thumbKind=FormatIcon；可解码类型不回退（thumbPath=null）
+  #[cfg(windows)]
+  #[test]
+  fn list_dir_non_decodable_falls_back_to_format_icon() {
+    let (_dir, root) = make_ws();
+    fs::write(root.join("说明.txt"), b"hello").unwrap();
+    fs::write(root.join("程序.exe"), b"MZ fake").unwrap();
+    make_png(&root.join("图.png"), 100, 80);
+
+    let list = list_dir(&root, "").unwrap();
+    let txt = list.iter().find(|e| e.name == "说明.txt").unwrap();
+    let t = txt.thumb_path.as_ref().expect("txt 应回退格式图标");
+    assert!(t.replace('\\', "/").ends_with(".anikit/thumbs/txt.webp"), "图标缓存锚点：{t}");
+    assert_eq!(txt.thumb_kind, Some(ThumbKind::FormatIcon));
+    assert!(root.join(".anikit/thumbs/txt.webp").is_file());
+
+    let exe = list.iter().find(|e| e.name == "程序.exe").unwrap();
+    assert_eq!(exe.thumb_kind, Some(ThumbKind::FormatIcon));
+
+    let png = list.iter().find(|e| e.name == "图.png").unwrap();
+    assert_eq!(png.thumb_path, None, "可解码类型走内容缩略图管线，不回退图标");
+    assert_eq!(png.thumb_kind, None);
+
+    // 二次列举：图标已缓存直接命中（不再现场提取）
+    let list2 = list_dir(&root, "").unwrap();
+    let txt2 = list2.iter().find(|e| e.name == "说明.txt").unwrap();
+    assert_eq!(txt2.thumb_kind, Some(ThumbKind::FormatIcon));
+  }
+
   /// 列举：目录在前、同名不区分大小写、.anikit 隐藏、字段齐全
   #[test]
   fn list_dir_sorts_hides_cache_and_fills_fields() {
@@ -428,6 +458,9 @@ mod tests {
     let ready = request_thumbs(&root, vec![inside, outside, sub, fla]);
     assert_eq!(ready.len(), 1, "仅 workspace 内可解码的条目生成缩略图");
     assert!(ready[0].abs_path.ends_with("内.png"));
-    assert!(list_dir(&root, "").unwrap().iter().all(|e| e.thumb_path.is_none() || e.name == "内.png"));
+    // fla 不可解码，list_dir 会回退 FormatIcon 图标；其余条目（外.png/子目录）无 thumb_path
+    assert!(list_dir(&root, "").unwrap().iter().all(|e| {
+      e.thumb_path.is_none() || e.name == "内.png" || e.thumb_kind == Some(ThumbKind::FormatIcon)
+    }));
   }
 }
