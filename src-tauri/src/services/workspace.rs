@@ -14,6 +14,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::adapters::inbox_watch;
+use crate::adapters::shell_thumb;
 use crate::commands::library::AppState;
 use crate::core::space::WORKSPACE_DIR;
 use crate::services::thumbnail;
@@ -149,7 +150,8 @@ fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool) -> 
   let (w, h) = if is_dir { (None, None) } else { crate::services::thumbnail::probe(path).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None)) };
   // 缩略图来源（2026-09-17 实机定：非图片/音视频类型必须有系统格式图标，不许空盒）：
   // ① 内容缩略图缓存新鲜 = asset；② 缩略管线解不出的类型（w/h 探测失败且非音视频）=
-  //   现场 shell 提取系统格式图标，按扩展名缓存 .anikit/thumbs/{ext}.webp（库 cache/thumbs 同口径换锚）；
+  //   现场 shell 提取系统格式图标——exe 走文件级缓存（.anikit/thumbs/{rel}-{mtime}-{size}.icon.webp，
+  //   同扩展名各程序图标不同），其余按扩展名缓存 {ext}.webp（库 cache/thumbs 同口径换锚）；
   // ③ 可解码但尚未生成 = (null, null)，后台生成后 thumbs-ready 回填
   let (thumb_path, thumb_kind) = if is_dir {
     (None, None)
@@ -161,7 +163,15 @@ fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool) -> 
       || crate::services::media::AUDIO_EXTS.contains(&ext.as_str());
     if !decodable {
       let dir = thumbs_dir(root);
-      if crate::services::thumbnail::ensure_format_icon_in(&dir, path, &ext) {
+      // exe 走文件级图标缓存（2026-09-17 用户定：按扩展名缓存会把首个 exe 的图标串给
+      // 所有 exe）：命名同内容缩略图键（url-safe(rel)-mtime-size，内嵌 .icon 中缀防与
+      // 内容缩略图撞名），改版本即失效重提并顺清旧缓存；thumbKind 仍 = FormatIcon
+      if ext == "exe" {
+        match ensure_exe_icon(root, path, &rel, mtime_ms, size) {
+          Some(p) => (Some(p.to_string_lossy().into_owned()), Some(ThumbKind::FormatIcon)),
+          None => (None, None),
+        }
+      } else if crate::services::thumbnail::ensure_format_icon_in(&dir, path, &ext) {
         (Some(crate::services::thumbnail::format_icon_path_in(&dir, &ext).to_string_lossy().into_owned()), Some(ThumbKind::FormatIcon))
       } else {
         (None, None)
@@ -235,6 +245,33 @@ fn purge_stale(dir: &Path, rel: &str, keep: &Path) {
       let _ = fs::remove_file(&p);
     }
   }
+}
+
+/// exe 文件级图标缓存名：内容缩略图键 + `.icon` 中缀（同 {url-safe(rel)}-{mtime}-{size}
+/// 前缀，purge_stale 同源顺清；中缀防与内容缩略图撞名——exe 不解码，理论上不撞，双保险）
+fn icon_cache_name(rel: &str, mtime_ms: i64, size: u64) -> String {
+  format!("{}-{}-{}.icon.webp", encode_rel(rel), mtime_ms, size)
+}
+
+/// exe 图标缓存命中（新鲜）判定：按当前 mtime+size 重算期望文件名，存在即新鲜
+fn fresh_exe_icon_path(ws_root: &Path, rel: &str, mtime_ms: i64, size: u64) -> Option<PathBuf> {
+  let dest = thumbs_dir(ws_root).join(icon_cache_name(rel, mtime_ms, size));
+  dest.is_file().then_some(dest)
+}
+
+/// exe 文件级图标缓存：已新鲜直接命中；否则现场 shell 提取该文件自身的图标落盘
+/// （不按扩展名——同扩展名各程序图标不同），顺手清理同 relPath 旧缓存；提取失败 None
+fn ensure_exe_icon(ws_root: &Path, abs: &Path, rel: &str, mtime_ms: i64, size: u64) -> Option<PathBuf> {
+  if let Some(p) = fresh_exe_icon_path(ws_root, rel, mtime_ms, size) {
+    return Some(p);
+  }
+  let img = shell_thumb::format_icon(abs, shell_thumb::FORMAT_ICON_EDGE)?;
+  let dir = thumbs_dir(ws_root);
+  fs::create_dir_all(&dir).ok()?;
+  let dest = dir.join(icon_cache_name(rel, mtime_ms, size));
+  thumbnail::save_webp(&image::DynamicImage::ImageRgba8(img), &dest).ok()?;
+  purge_stale(&dir, rel, &dest);
+  Some(dest)
 }
 
 /// 逐一生成缺失 / 过期的缩略图（过滤 workspace 外路径与目录；已新鲜跳过；失败条目跳过），
@@ -601,8 +638,9 @@ mod tests {
     image::RgbaImage::from_pixel(w, h, image::Rgba([200, 30, 30, 255])).save(path).unwrap();
   }
 
-  /// 非图片/音视频类型回退系统格式图标（2026-09-17 实机定）：现场 shell 提取按扩展名缓存
-  /// .anikit/thumbs/{ext}.webp，thumbPath + thumbKind=FormatIcon；可解码类型不回退（thumbPath=null）
+  /// 非图片/音视频类型回退系统格式图标（2026-09-17 实机定）：现场 shell 提取——txt 按扩展名
+  /// 缓存 .anikit/thumbs/{ext}.webp；exe 按文件缓存 {rel}-{mtime}-{size}.icon.webp（同扩展名
+  /// 各程序图标不同，2026-09-17 用户定）；thumbPath + thumbKind=FormatIcon；可解码类型不回退
   #[cfg(windows)]
   #[test]
   fn list_dir_non_decodable_falls_back_to_format_icon() {
@@ -620,6 +658,11 @@ mod tests {
 
     let exe = list.iter().find(|e| e.name == "程序.exe").unwrap();
     assert_eq!(exe.thumb_kind, Some(ThumbKind::FormatIcon));
+    let exe_icon = exe.thumb_path.as_ref().expect("exe 应回退文件级图标");
+    assert!(
+      exe_icon.replace('\\', "/").contains(".anikit/thumbs/") && exe_icon.ends_with(".icon.webp") && !exe_icon.ends_with("exe.webp"),
+      "exe 图标按文件缓存（非扩展名键）：{exe_icon}"
+    );
 
     let png = list.iter().find(|e| e.name == "图.png").unwrap();
     assert_eq!(png.thumb_path, None, "可解码类型走内容缩略图管线，不回退图标");
@@ -629,6 +672,30 @@ mod tests {
     let list2 = list_dir(&root, "").unwrap();
     let txt2 = list2.iter().find(|e| e.name == "说明.txt").unwrap();
     assert_eq!(txt2.thumb_kind, Some(ThumbKind::FormatIcon));
+  }
+
+  /// exe 文件级图标：两个 exe 各缓存各的（互不相同，根治按扩展名串味），mtime 变化旧缓存被清
+  #[cfg(windows)]
+  #[test]
+  fn exe_icons_cache_per_file() {
+    let (_dir, root) = make_ws();
+    fs::write(root.join("甲.exe"), b"MZ fake one").unwrap();
+    fs::write(root.join("乙.exe"), b"MZ fake two").unwrap();
+
+    let list = list_dir(&root, "").unwrap();
+    let a = list.iter().find(|e| e.name == "甲.exe").unwrap().thumb_path.clone().expect("甲 exe 图标");
+    let b = list.iter().find(|e| e.name == "乙.exe").unwrap().thumb_path.clone().expect("乙 exe 图标");
+    assert_ne!(a, b, "两个 exe 的图标缓存必须按文件区分");
+    assert!(Path::new(&a).is_file() && Path::new(&b).is_file());
+
+    // 甲内容变化（mtime+size 变）→ 新名新缓存，旧缓存被 purge_stale 清掉
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    fs::write(root.join("甲.exe"), b"MZ fake one renewed and larger").unwrap();
+    let list2 = list_dir(&root, "").unwrap();
+    let a2 = list2.iter().find(|e| e.name == "甲.exe").unwrap().thumb_path.clone().expect("甲 exe 新图标");
+    assert_ne!(a2, a, "源变化后图标缓存键跟着变");
+    assert!(!Path::new(&a).exists(), "旧 exe 图标缓存已清理");
+    assert!(Path::new(&b).exists(), "乙的缓存不受影响");
   }
 
   /// 列举：目录在前、同名不区分大小写、.anikit 隐藏、字段齐全

@@ -1,9 +1,10 @@
 # 当前状态 · 2026-09
 
-> 本月 68 条状态记录。返回 [当前状态 Index](../../Index.md)。
+> 本月 69 条状态记录。返回 [当前状态 Index](../../Index.md)。
 
 | 文件 | 日期 | 标题 |
 | --- | --- | --- |
+| [2026-09-17_04_工作空间区块标题分割与exe图标文件级缓存.md](2026-09-17_04_工作空间区块标题分割与exe图标文件级缓存.md) | 2026-09-17 | 工作空间 · 区块标题分割 + exe 图标文件级缓存（2026-09-17，feat/new-ui，用户实机两条） | ：WorkspaceTree 根层「常用 / N」「文件夹 / N」SectionTitle block 标题分割（hover 展开钮可折叠，FolderStrip 同先例；改 04 轮无标题初判）；exe 图标串味根治 = 文件级缓存 {rel}-{mtime}-{size}.icon.webp（现场提取该文件自身图标，源变化失效重提顺清旧缓存），其余类型维持按扩展名；thumbKind 仍 FormatIcon 前端零改动；+1 测 exe_icons_cache_per_file；typecheck 0 错；**库侧 exe 按扩展名缓存同病未修**（import/resolve/inbox 链路，待用户定） |
 | [2026-09-17_03_工作空间步骤3常用固定与根行废除已落地.md](2026-09-17_03_工作空间步骤3常用固定与根行废除已落地.md) | 2026-09-17 | 工作空间 · 步骤 3 常用固定与根行废除（2026-09-17，feat/new-ui，用户三条意见定案） | ：搜索搁置（Everything 快在 USN+MFT 常驻索引；可行路径 = SDK/es.exe 查常驻实例，记 PRD 另行立项）；视图状态 = .anikit/workspace.json 的 pinned 清单，读取即静默剔除失效回写；ws_list_pinned/ws_pin/ws_unpin 三命令（均返最新清单）；WorkspaceTree 顶部常用区块无标题直接列表（库快速访问先例）+ 树行右键 wsTreeRowSpec（打开/固定·取消固定/资源管理器/刷新）+ 根行废除（假父级与子级同缩进撞兄弟；根视口 = 切分段自动 openView("ws:")+历史后退）；462 测试绿 + typecheck 0 错 |
 | [2026-09-17_02_工作空间步骤2基础整理已落地.md](2026-09-17_02_工作空间步骤2基础整理已落地.md) | 2026-09-17 | 工作空间 · 步骤 2 基础整理落地（2026-09-17，feat/new-ui，同日接步骤 1 实机走查） | ：新建 adapters/recycle_bin（SHFileOperationW FOF_ALLOWUNDO）+ shell_path 剥 \\?\ 前缀（踩坑 078 预防收编 shell_thumb）；写操作 5 命令 + 回声消重登记簿（3s 窗口全路径命中才丢）；冲突口径 = 新建/重命名重名报错、移动/复制自动「名 (n)」；前端剪贴板 + refreshAround 局部重扫 + 右键扩项 + 行内重命名双接线 + 拖拽落点（树行/文件夹卡片）；461 测试绿 + typecheck 0 错；exe 图标 per-file 缓存用户挂起 |
 | [2026-09-17_01_工作空间步骤1只读底座已落地.md](2026-09-17_01_工作空间步骤1只读底座已落地.md) | 2026-09-17 | 工作空间 · 步骤 1 只读底座已落地（2026-09-17，feat/new-ui，插队提前自阶段十二，范围三步走用户定） | ：后端 services/workspace（列举 + .anikit 缩略图缓存内嵌 mtime-size 判鲜 + request_thumbs）+ 4 命令（root/列举/缩略图/reveal_path），监听复用 inbox_watch（on_change 签名演进带路径，.anikit 自激过滤）挂 activate_space；前端 wsOps/ws store/WorkspaceTree 填 SidebarLeft 预留分段坑，viewKey `ws:` 接入 content 全口径 AssetGrid 零改动复用，预览按路径分支（图直读/音视频 by-path 直读优先 + forceTranscode 兜底）；右键「刷新」兜底同日用户定，挂空白处 + 条目菜单；452 测试绿 + typecheck 0 错 + clippy 零新增；步骤 2 基础整理（写操作 + 回声消重 + 系统回收站适配器）待开工 |

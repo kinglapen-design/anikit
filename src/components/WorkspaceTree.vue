@@ -1,15 +1,19 @@
 <script setup lang="ts">
-// 工作空间树（PRD 02 + 步骤 3）：常用固定区块（无区块标题，直接 item 列表，沿用库快速
-// 访问先例）+ 懒加载子目录树——展开才挂载子层（v-if），子层挂载即 list_workspace_dir 取
-// 子目录（只展示目录，文件进网格视口）；节点点击 = tabs.openView("ws:"+rel)；复用
-// TreeRowItem 与 treeExpansion 会话级展开态（openSet 以 relPath 为 id，与库文件夹 F id 不撞）。
-// 步骤 3 起废除根行「工作空间」（磁盘上无此目录，合成父级与子级同缩进视觉上撞兄弟）；
-// 根视口经切 workspace 分段自动 openView("ws:") 与历史后退可达。
+// 工作空间树（PRD 02 + 步骤 3）：常用固定区块 + 懒加载子目录树，区块标题（items/SectionTitle
+// block，「常用 / N」「文件夹 / N」）分割——2026-09-17 用户截图定：固定行与目录树挤在一起，
+// 要区块分割；交互沿用 FolderStrip / ArchiveStrip 先例（hover 出展开钮，点击折叠区块）。
+// 子目录树：展开才挂载子层（v-if），子层挂载即 list_workspace_dir 取子目录（只展示目录，
+// 文件进网格视口）；节点点击 = tabs.openView("ws:"+rel)；复用 TreeRowItem 与 treeExpansion
+// 会话级展开态（openSet 以 relPath 为 id，与库文件夹 F id 不撞）；展开动画复用 expandAnim
+// （FolderTree 同口径）。步骤 3 废除根行「工作空间」（磁盘上无此目录，合成父级与子级同
+// 缩进视觉撞兄弟）；根视口经切 workspace 分段自动 openView("ws:") 与历史后退可达。
 // 树行右键（步骤 3 最小集）：打开 / 固定到常用·取消固定 / 在资源管理器中显示 / 刷新。
-// workspace/ 目录不存在（exists=false）= 空态文案；步骤 2 起树行兼拖拽落点
-// （data-folder-id="ws:"+rel，素材移入该目录，落点视觉 dropZone）。
-import { computed, onMounted } from "vue";
+// workspace/ 目录不存在（exists=false）= 空态文案（正文档 + 亮色/四级，SidebarLeft 同风格；
+// root=null 是拉取瞬态不渲染误标）；步骤 2 起树行兼拖拽落点（data-folder-id="ws:"+rel，
+// 素材移入该目录，落点视觉 dropZone）。
+import { computed, onMounted, ref } from "vue";
 import TreeRowItem from "./items/TreeRowItem.vue";
+import SectionTitle from "./items/SectionTitle.vue";
 import { openContextMenu } from "../lib/contextMenus";
 import { wsTreeRowSpec } from "../lib/menuSpecs/workspace";
 import { isTreeOpen, toggleOpen } from "../lib/treeExpansion";
@@ -29,6 +33,11 @@ const isRoot = computed(() => props.rel === "");
 // 本层子目录行缩进档 / 递归子层缩进档
 const rowDepth = computed(() => (isRoot.value ? 0 : props.depth));
 const childDepth = computed(() => rowDepth.value + 1);
+
+// 区块折叠（FolderStrip / ArchiveStrip 同先例：区块标题点击折叠，组件级 ref 默认开）；
+// 空态不随折叠隐藏（workspace 目录缺失是重要状态）
+const pinsOpen = ref(true);
+const treeOpen = ref(true);
 
 // 懒加载：层级挂载即拉本目录 listing（根层随分段切换挂载；子层随父级展开挂载）；
 // 根层另取固定清单（ensureRoot 已拉一次，此处兜底会话内 pin 变化）+ 拉各 pin 目录计数
@@ -66,23 +75,45 @@ function dropZone(rel: string): "before" | "after" | "into" | undefined {
 
 <template>
   <div class="ws-tree" :class="{ root: isRoot }">
-    <!-- 常用固定区块（步骤 3：无区块标题直接列表；行 = 目录快捷入口，右键可取消固定；
-         数量 = 该目录直接文件数，未加载不显示） -->
-    <template v-if="isRoot">
-      <div v-for="rel in ws.pinned" :key="`pin:${rel}`" class="ws-node" @contextmenu.prevent.stop="onRowMenu($event, rel)">
-        <TreeRowItem
-          kind="folder"
-          :name="pinName(rel)"
-          :count="ws.loadedOk(rel) ? ws.fileCount(rel) : undefined"
-          :expandable="false"
-          :selected="content.sidebarSelected === `ws:${rel}`"
-          :depth="0"
-          @click="openDir(rel)"
-        />
-      </div>
+    <!-- 常用固定区块（步骤 3：区块标题「常用 / N」+ item 列表；行 = 目录快捷入口，
+         右键可取消固定；数量 = 该目录直接文件数，未加载不显示） -->
+    <template v-if="isRoot && ws.pinned.length">
+      <SectionTitle
+        class="ws-head"
+        variant="block"
+        title="常用"
+        :count="ws.pinned.length"
+        :expanded="pinsOpen"
+        :actions="false"
+        @toggle="pinsOpen = !pinsOpen"
+      />
+      <template v-if="pinsOpen">
+        <div v-for="rel in ws.pinned" :key="`pin:${rel}`" class="ws-node" @contextmenu.prevent.stop="onRowMenu($event, rel)">
+          <TreeRowItem
+            kind="folder"
+            :name="pinName(rel)"
+            :count="ws.loadedOk(rel) ? ws.fileCount(rel) : undefined"
+            :expandable="false"
+            :selected="content.sidebarSelected === `ws:${rel}`"
+            :depth="0"
+            @click="openDir(rel)"
+          />
+        </div>
+      </template>
     </template>
+    <!-- 文件夹区块（根层区块标题「文件夹 / N」；子层递归无标题） -->
+    <SectionTitle
+      v-if="isRoot"
+      class="ws-head"
+      variant="block"
+      title="文件夹"
+      :count="subDirs.length"
+      :expanded="treeOpen"
+      :actions="false"
+      @toggle="treeOpen = !treeOpen"
+    />
     <!-- 子目录行（本层 = props.rel 的子目录；点击导航，展开钮挂 treeExpansion） -->
-    <template v-for="d in subDirs" :key="d.relPath">
+    <template v-if="!isRoot || treeOpen" v-for="d in subDirs" :key="d.relPath">
       <div class="ws-node" @contextmenu.prevent.stop="onRowMenu($event, d.relPath)">
         <TreeRowItem
           kind="folder"
@@ -106,7 +137,8 @@ function dropZone(rel: string): "before" | "after" | "into" | undefined {
       </div>
     </template>
     <!-- 空态：workspace 目录不存在（exists=false）。root=null 是拉取中 / 未开空间的瞬态
-        （ensureRoot null 不缓存、下次调用即重试），不渲染「未开启」误标（2026-09-17 实机报） -->
+        （ensureRoot null 不缓存、下次调用即重试），不渲染「未开启」误标（2026-09-17 实机报）；
+        不随区块折叠隐藏 -->
     <div v-if="isRoot && ws.root !== null && !ws.root.exists" class="ws-empty">
       工作空间目录不存在
     </div>
@@ -122,6 +154,13 @@ function dropZone(rel: string): "before" | "after" | "into" | undefined {
 }
 .ws-tree.root {
   padding: var(--n-space-8) var(--n-space-12);
+}
+/* 区块标题与上一区块的间隔（padding 顶 8；首个标题不吃双份——容器已有 padding-top 8） */
+.ws-head {
+  padding-top: var(--n-space-8);
+}
+.ws-tree.root > .ws-head:first-child {
+  padding-top: 0;
 }
 .ws-node {
   display: flex;
