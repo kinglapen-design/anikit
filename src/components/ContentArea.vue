@@ -100,10 +100,14 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
   return out;
 });
 
-// 空白处点击即聚焦本 panel（2026-09-17 实机走查：分屏后点空白不聚焦，只能点标签/选文件）——
-// 只对**真空白**激活：整区 pointerdown 激活会与卡片选中冲突（同日实机单变量石锤——卡片/树行/
-// 按钮/输入框/菜单/分组标题等交互件上不激活，card click 链不受影响；已激活幂等无操作）
+// 空白处点击的状态机（2026-09-17 实机走查两条定案）：
+// ① 本 pane **已聚焦** = 不干预——空白 click 走原语义 = **取消选择**（setActive 一概不调——
+//    复验石锤：激活链即时重渲染会把 in-flight click 目标元素换掉，调了就吞清选 click）；
+// ② **未聚焦** = 本击**只聚焦不清空**（setActive + stopImmediatePropagation 拦下后续手势——
+//    capture 阶段先拦，框选不启动、选择域不动；下一击即按已聚焦走清空语义）。
+// 交互件（卡片/树行/按钮/输入框/菜单/分组标题/滚动条等）上永不激活，card click 链不受影响。
 function onRootPointerdown(e: PointerEvent): void {
+  if (panelApi.isActive) return;
   const t = e.target as HTMLElement;
   if (
     t.closest(
@@ -113,13 +117,14 @@ function onRootPointerdown(e: PointerEvent): void {
     return;
   }
   panelApi.setActive();
+  e.stopImmediatePropagation(); // 本击只聚焦（拦下框选等后续手势，不清空选中）
 }
 </script>
 
 <template>
-  <!-- 空白处点击即聚焦本 panel（2026-09-17 实机走查）：只对真空白激活（onRootPointerdown），
-       交互件上不抢——整区 pointerdown 激活曾与卡片选中冲突（同日实机单变量石锤） -->
-  <main class="content-area" @pointerdown="onRootPointerdown">
+  <!-- 空白处点击状态机（onRootPointerdown，capture 先拦）：已聚焦 = 空白取消选择；
+       未聚焦 = 本击只聚焦不清空；交互件上永不激活（复验石锤：整区激活吞 click） -->
+  <main class="content-area" @pointerdown.capture="onRootPointerdown">
     <template v-if="previewActive">
       <div class="preview-root" :class="{ fullscreen: preview.fullscreen }">
         <PreviewTitleBar v-if="!preview.fullscreen" />
