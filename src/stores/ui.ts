@@ -17,6 +17,7 @@ const PERSIST_KEYS = [
   "rightCollapsed",
   "alwaysOnTop",
   "targetRowHeight",
+  "viewRowHeights",
   "layoutMode",
   "useGlobalView",
   "sortBy",
@@ -56,6 +57,9 @@ export const useUiStore = defineStore("ui", {
     // 内容区滑块：自适应布局目标行高（min 80，max = gridWidth 即单张撑满）
     targetRowHeight: 220,
     gridWidth: 800,
+    // 按视口记忆的卡片尺寸（2026-09-13 实机走查：每个视口文件类型不同，尺寸不要统一应用）——
+    // viewKey → 行高覆盖值；未定制的视口回退全局 targetRowHeight（拖动滑块只写本视口，不串台）
+    viewRowHeights: {} as Record<string, number>,
     // 递归显示（PRD 04-1 显示子文件夹内容）：文件夹视口含全部后代文件夹内容（2026-08-10 接入
     // placementsFor；文件夹区块标题"递归显示"复选框与查看方式菜单开关同绑本字段）
     showSubfolders: true,
@@ -126,6 +130,15 @@ export const useUiStore = defineStore("ui", {
     descEdit: null as { kind: "file" | "archive"; id: string; name: string; initial: { title: string; content: string }[] } | null,
   }),
   actions: {
+    // 视口有效卡片行高（2026-09-13 实机走查：尺寸按视口记忆——每个视口文件类型不同，
+    // 不要统一应用；未定制的视口回退全局 targetRowHeight）
+    rowHeightFor(viewKey: string): number {
+      return this.viewRowHeights[viewKey] ?? this.targetRowHeight;
+    },
+    // 尺寸滑块 / Ctrl+滚轮写本视口行高（只写 viewKey 覆盖值，不动全局默认——不串其他视口）
+    setRowHeight(viewKey: string, h: number): void {
+      this.viewRowHeights[viewKey] = h;
+    },
     // 链接关系 tab 区块拖拽落点排序（面板内拖标题行让位式，DetailSections 旧范式移植）：
     // 直接移到目标位；越界 / 原位不动
     moveDetailLinkTo(id: string, to: number): void {

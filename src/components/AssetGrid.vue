@@ -251,8 +251,8 @@ function onCtrlWheel(e: WheelEvent): void {
   if (!e.ctrlKey) return;
   e.preventDefault();
   const max = Math.max(80, viewportRef.value?.clientWidth ?? 800);
-  const next = ui.targetRowHeight + (e.deltaY > 0 ? -10 : 10);
-  ui.targetRowHeight = Math.max(80, Math.min(max, next));
+  const next = ui.rowHeightFor(props.viewKey) + (e.deltaY > 0 ? -10 : 10);
+  ui.setRowHeight(props.viewKey, Math.max(80, Math.min(max, next))); // 按视口记忆（2026-09-13 走查）
 }
 
 // —— 框选（6.1，2026-07-28 用户定案；手势与命中算法在 lib/useMarquee）——

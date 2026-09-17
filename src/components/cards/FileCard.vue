@@ -8,8 +8,9 @@
 //       audio  = 波形（竖线 4px 圆头 gap 4 通用/五级，根数恒定由业务保证、美观优先）+ 悬停胶囊
 //        （时长 + 播放/暂停）；进度 = 品牌色波形层 clip-path 丝滑扫过（与根数解耦，稿 prose + 2026-08-29 用户定色）；
 //       font   = 示例字块居中（标题档 亮色/四级，日/韩环境示例字业务侧替换）+ 右上 FontInstallButton；
-//       text   = 标题（标题档 二级）+ 正文（正文档 四级）滚动预览，内容溢出出 6px 滚动胶囊
-//        （通用/三级，胶囊自身 hover 升五级——稿「hover-滚动条」节）；
+//       text   = 标题（标题档 二级）+ 正文（正文档 四级）滚动预览，**内容随卡宽 cqw 等比缩放**
+//        （2026-09-13 实机走查：文档卡片跟随尺寸缩放，稿基准 300 宽比例换算），内容溢出出 6px
+//        滚动胶囊（通用/四级，胶囊自身 hover 升六级——2026-09-13 全局滚动条色档定案）；
 // 悬停控件（胶囊 / 播放条 / 波形扫过）一律 hover 才出现（2026-08-29 用户定），过渡 150ms；
 // 壳 / hover 位移 -4 + 小阴影 / 选中 2px 品牌描边 见 cards.css（kc-media / kc-sel）。
 // 业务态（7.1 内容容器轮接线，模式同 cards/FolderCard）：naming = 行内重命名（名称位换输入框；
@@ -17,7 +18,7 @@
 // 已选压暗 30%（大勾在壳层）；thumbFit = 缩略图适配三档（cover 默认 / contain 网格固定格完整显示
 // ——旧 AssetCard 口径 / icon 格式图标 50% 居中——Eagle 口径，不与内容缩略图抢视觉噪音）；
 // 默认插槽 = 内容区扩展（壳层注入悬停播放层等，叠在缩略图上、渐变罩下）。
-import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import FontInstallButton from "../buttons/FontInstallButton.vue";
 import FormatBadge from "./FormatBadge.vue";
@@ -96,7 +97,8 @@ function barH(p: number): string {
   return `${Math.min(100, Math.max(8, p * 100))}%`;
 }
 
-// text 卡滚动胶囊：内容溢出才显，轨道 = 内容区（卡 padding 12 内），跟随滚动
+// text 卡滚动胶囊：内容溢出才显，轨道 = 内容区（卡 padding 12 内），跟随滚动；
+// 卡片尺寸变化（尺寸滑块）同步重算（2026-09-13 实机走查：文档卡内容随卡宽等比缩放，滚动量随动）
 const textEl = ref<HTMLElement>();
 const thumb = reactive({ show: false, top: 12, height: 0 });
 function updateThumb(): void {
@@ -112,7 +114,13 @@ function updateThumb(): void {
   thumb.top = 12 + (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - h);
   thumb.show = true;
 }
-onMounted(updateThumb);
+let textRo: ResizeObserver | undefined;
+onMounted(() => {
+  updateThumb();
+  textRo = new ResizeObserver(updateThumb);
+  if (textEl.value) textRo.observe(textEl.value);
+});
+onBeforeUnmount(() => textRo?.disconnect());
 watch(
   () => [props.textTitle, props.textBody],
   () => nextTick(updateThumb),
@@ -229,6 +237,7 @@ watch(
 .fc-root {
   width: 100%;
   height: 100%;
+  container-type: inline-size; /* text 卡内容按卡宽 cqw 等比缩放（2026-09-13 实机走查） */
 }
 /* square 变体：shell 缩略图 / 自动导入未导入 = 正方形比例（稿注） */
 .fc-root.square {
@@ -341,14 +350,16 @@ watch(
   white-space: nowrap;
 }
 
-/* 文本预览：卡 padding 12 内滚动（滚动内容可入渐变罩下），标题 二级 / 正文 四级 gap 8 */
+/* 文本预览：卡 padding 12 内滚动（滚动内容可入渐变罩下），标题 二级 / 正文 四级 gap 8；
+   内容随卡宽等比缩放（2026-09-13 实机走查：文档卡片需要跟随尺寸缩放）——cqw 容器查询单位，
+   稿基准 300 宽：标题 18px=6cqw / 正文 13px≈4.34cqw / 内边距 12px=4cqw / gap 8px≈2.67cqw */
 .fc-text {
   position: absolute;
-  inset: var(--n-space-12);
+  inset: 4cqw;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--n-space-8);
+  gap: 2.67cqw;
   scrollbar-width: none;
 }
 .fc-text::-webkit-scrollbar {
@@ -356,14 +367,14 @@ watch(
 }
 .fc-text-title {
   flex: none;
-  font-size: var(--n-fs-title);
-  line-height: var(--n-lh-title);
+  font-size: 6cqw;
+  line-height: 1.45; /* 26/18 */
   font-weight: var(--n-fw-bold);
   color: var(--n-l2);
 }
 .fc-text-body {
-  font-size: var(--n-fs-body);
-  line-height: var(--n-lh-body);
+  font-size: 4.34cqw;
+  line-height: 1.39; /* 18/13 */
   color: var(--n-l4);
   white-space: pre-wrap;
 }

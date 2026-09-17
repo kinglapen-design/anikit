@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 文件夹卡片区（7.1 内容容器轮贴稿——中间面板-内容容器-列表容器-文件夹列表）：
-// 卡片 = cards/FolderCard（220×122 稿比例：grid auto-fill minmax 220 弹性列宽 + auto-rows 122 定高，
-// 列表 gap 12；不跟随滑块缩放，查看方式的自适应/瀑布/网格只影响素材卡片）；
+// 卡片 = cards/FolderCard（122 定高稿比例：grid auto-fill minmax 180 弹性列宽 + auto-rows 122 定高，
+// 列表 gap 12；2026-09-13 实机走查列宽 min 220→180——一排能放四个放三个显太宽；不跟随滑块缩放，
+// 查看方式的自适应/瀑布/网格只影响素材卡片）；
 // 区块标题 = items/SectionTitle block（稿无动作钮 → actions=false）；递归显示开关撤出本行
 //（2026-08-30 用户定：查看方式菜单里有就行——ViewOptionsMenu AppSwitch 仍在）；
 // 简介两行（稿）：「N 个文件 / 容量」+「M 个档案 / K 个子文件夹」——容量 = 后端 totalSize 递归去重合计
@@ -207,20 +208,20 @@ const gapBar = computed(() => {
   gap: var(--n-space-12);
   padding-right: var(--n-space-12);
 }
-/* 卡片列表（稿）：minmax(220, 1fr) 自适应吃满（2026-08-30 用户实机二轮定——换行时余量由本行
-   卡片分摊拉伸，不留近卡宽空区）；行高 122 定高（122 高链 = padding 24 + 名称 26 + 间距 36 +
-   简介 36）；列/行间距 12（稿 gap 12） */
+/* 卡片列表（稿）：minmax(180, 1fr) 自适应吃满（2026-08-30 用户实机二轮定——换行时余量由本行
+   卡片分摊拉伸，不留近卡宽空区；2026-09-13 实机走查 220→180——一排能放四个放三个显太宽，走查待复验）；
+   行高 122 定高（122 高链 = padding 24 + 名称 26 + 间距 36 + 简介 36）；列/行间距 12（稿 gap 12） */
 .flow {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   grid-auto-rows: 122px;
   column-gap: var(--n-space-12);
   row-gap: var(--n-space-12);
 }
-/* 唯一卡片限稿宽 220 不拉伸（同日用户定：单卡没有排满概念，一张卡被来回拉伸重排很傻；
+/* 唯一卡片限宽 180 不拉伸（同日用户定：单卡没有排满概念，一张卡被来回拉伸重排很傻；
    2 张起 = 上方自适应吃满） */
 .flow > .cell:only-child {
-  width: 220px;
+  width: 180px;
 }
 .cell {
   min-width: 0;

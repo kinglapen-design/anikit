@@ -32,8 +32,9 @@ const error = ref<string | null>(null); // 加载失败（包不存在 / 已解�
 const selected = ref<Set<string>>(new Set());
 let anchorIdx = -1; // shift 范围选锚点（frames 数组下标）
 
-// 卡片宽度随滑块（targetRowHeight = 素材网格行高）：按素材卡 260:220 比例折算
-const cardWidth = computed(() => Math.round(ui.targetRowHeight * (260 / 220)));
+// 卡片宽度随滑块（行高按视口记忆——本包视口 `seq:{assetId}` 的覆盖值，2026-09-13 实机走查）：
+// 按素材卡 260:220 比例折算
+const cardWidth = computed(() => Math.round(ui.rowHeightFor(`seq:${props.assetId}`) * (260 / 220)));
 
 async function load(): Promise<void> {
   try {

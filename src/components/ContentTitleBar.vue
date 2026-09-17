@@ -44,12 +44,13 @@ const searchCount = computed(() =>
   props.panelId ? search.hitsFor(props.panelId).size + search.hitArchivesFor(props.panelId).size : 0,
 );
 
-// 卡片尺寸滑块（稿宽 100）：BarSlider 0~1 归一化 ↔ targetRowHeight 80~gridWidth 实际像素换算
+// 卡片尺寸滑块（稿宽 100）：BarSlider 0~1 归一化 ↔ targetRowHeight 80~gridWidth 实际像素换算；
+// 按视口记忆（2026-09-13 实机走查：每个视口文件类型不同，尺寸不统一应用）——读写都走本视口覆盖值
 const SIZE_MIN = 80;
 const sliderRatio = computed({
-  get: () => (ui.targetRowHeight - SIZE_MIN) / Math.max(1, ui.gridWidth - SIZE_MIN),
+  get: () => (ui.rowHeightFor(props.viewKey) - SIZE_MIN) / Math.max(1, ui.gridWidth - SIZE_MIN),
   set: (r) => {
-    ui.targetRowHeight = Math.round(SIZE_MIN + Math.min(1, Math.max(0, r)) * (ui.gridWidth - SIZE_MIN));
+    ui.setRowHeight(props.viewKey, Math.round(SIZE_MIN + Math.min(1, Math.max(0, r)) * (ui.gridWidth - SIZE_MIN)));
   },
 });
 

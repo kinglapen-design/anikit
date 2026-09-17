@@ -114,9 +114,10 @@ export function useGridLayout(opts: {
     if (!vp || vp.clientWidth <= 0) return;
     ui.gridWidth = vp.clientWidth;
     // 行高只在布局时按容器宽 clamp（滑块 max = 内容区宽、min 80），
-    // 不回写 targetRowHeight——否则窗口收窄到最小再拉出，卡片会保持被压的小尺寸
+    // 不回写行高——否则窗口收窄到最小再拉出，卡片会保持被压的小尺寸；
+    // 行高按视口记忆（2026-09-13 实机走查：每个视口文件类型不同，尺寸不统一应用）
     const maxH = Math.max(80, vp.clientWidth);
-    const rowH = Math.max(80, Math.min(maxH, ui.targetRowHeight));
+    const rowH = Math.max(80, Math.min(maxH, ui.rowHeightFor(opts.viewKey())));
     const t0 = performance.now();
     const items = opts.items();
     // 重排锚点（2026-08-10 用户实测：缩放卡片 / 拖拆分条改宽后视图跳走——旧行为 pos 像素
@@ -244,7 +245,8 @@ export function useGridLayout(opts: {
     watch(opts.sections, () => relayout());
   }
   watch(
-    () => ui.targetRowHeight,
+    // 行高变化即重排：全局默认与本视口覆盖值两路（2026-09-13 按视口记忆）
+    () => [ui.targetRowHeight, ui.viewRowHeights[opts.viewKey()]],
     () => relayout(),
   );
   // 折叠 / 展开"内容"：网格高度不计入总高
