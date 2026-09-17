@@ -1,7 +1,9 @@
 // 分组（2026-08-19，3.5 二轮 / PRD 02-04 / 04-07）：**显示层归组计算**——规则存 folders.json
 // 文件夹节点，归组不改任何数据；仅文件夹 / 档案视图生效（快速访问无分组，用户定）。
-// 归组语义（用户定）：组内多规则 AND 全命中；多组同时命中归规则条数更多者（更具体），
-// 平局按分组定义顺序先建者优先；未命中任何组 = 未分组（在头）。
+// 归组语义（用户定）：组内多规则 AND 全命中；多组同时命中归**命中关键字（值）更多者**（更具体——
+// 2026-09-17 用户实机修订：旧"规则条数更多者"在规则数相同、名称词数不同时误判——P1 vs P1_2K 案：
+// 组一 名称{P1}、组二 名称{P1,2K}，P1_02_2K 命中词 1 vs 2，应归组二），平局按分组定义顺序先建者优先；
+// 未命中任何组 = 未分组（在头）。
 // 组内顺序 = 输入流相对序（placementsFor 输出已含新增区置顶 + 排序键，stable 分割自然带入组内）。
 import type { PlacementView } from "../stores/content";
 import { isAudioExt, isStaticImageExt, isVideoExt } from "./formatBadge";
@@ -120,14 +122,30 @@ function ruleHits(p: PlacementView, rule: GroupRule): boolean {
   }
 }
 
-/** 资产归组：AND 全命中的组里取规则条数最多者；平局按定义顺序先者（groups 数组序）；
+/** 单规则命中权重 = 命中的值（关键字）个数：ext / type / 日期 = 单值域命中恒计 1；
+ *  name = 命中词数（AND 语义下命中即全词，计 values 有效词数——显式计数写法为后续
+ *  标签等复值域规则预留同一口径） */
+function ruleWeight(p: PlacementView, rule: GroupRule): number {
+  if (rule.kind === "name") {
+    const name = p.name.toLowerCase();
+    return rule.values.filter((w) => w.trim() !== "" && name.includes(w.trim().toLowerCase())).length;
+  }
+  return ruleHits(p, rule) ? 1 : 0;
+}
+
+/** 资产归组：AND 全命中的组里取**命中关键字（值）总数**最多者；平局按定义顺序先者（groups 数组序）；
  *  全不命中 = null（未分组） */
 export function matchGroup(p: PlacementView, groups: readonly GroupDef[]): GroupDef | null {
   let best: GroupDef | null = null;
+  let bestW = 0;
   for (const g of groups) {
     if (g.rules.length === 0) continue;
     if (!g.rules.every((r) => ruleHits(p, r))) continue;
-    if (best === null || g.rules.length > best.rules.length) best = g;
+    const w = g.rules.reduce((sum, r) => sum + ruleWeight(p, r), 0);
+    if (best === null || w > bestW) {
+      best = g;
+      bestW = w;
+    }
   }
   return best;
 }
