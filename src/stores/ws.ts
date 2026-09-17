@@ -276,6 +276,7 @@ function wsEntryToPlacement(e: WsEntry, parentRel: string, rootPath: string | nu
     thumbFrame: null,
     fps: null,
     hidden: false,
+    tags: [], // 工作空间无标签（PRD 02：磁盘实况无附加数据）
     wsPath: rootPath !== null ? (e.relPath === "" ? rootPath : `${rootPath}\\${e.relPath.replace(/\//g, "\\")}`) : null,
   };
 }

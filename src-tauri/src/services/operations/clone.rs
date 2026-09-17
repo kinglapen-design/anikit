@@ -95,6 +95,27 @@ fn clone_one_root(lib: &mut Library, src_id: &str, out: &mut CloneOutcome) -> Re
     let new_folder = id_map[&p.folder].clone();
     ops::add_placement(lib, target_asset, new_folder, p.name.clone(), p.origin, &mut anchor);
   }
+  // 自由组成员重映射（2026-09-17，PRD 02-04 无规则空组）：分组配置随迁时，子树内被物理复制的
+  // origin 资产成员重指新副本；子树外资产（链接指向）成员 id 不变；索引与 vec 两处同步
+  let new_ids: HashSet<&String> = id_map.values().collect();
+  for node in lib.folders.folders.iter_mut().filter(|f| new_ids.contains(&f.id)) {
+    let mut touched = false;
+    if let Some(groups) = &mut node.groups {
+      for g in groups.iter_mut() {
+        if let Some(members) = &mut g.members {
+          for m in members.iter_mut() {
+            if let Some(n) = cloned_assets.get(m.as_str()) {
+              *m = n.clone();
+              touched = true;
+            }
+          }
+        }
+      }
+    }
+    if touched {
+      lib.index.folders.insert(node.id.clone(), node.clone());
+    }
+  }
   Ok(())
 }
 

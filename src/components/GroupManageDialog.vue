@@ -31,6 +31,8 @@ interface GroupDraft {
   id: string;
   name: string;
   rules: GroupRule[];
+  free: boolean; // 自由组（2026-09-17 无规则空组）：无规则编辑、手动归组；加载 = rules 为空即自由组
+  members?: string[]; // 自由组成员快照（保存时原样带回）
 }
 let seq = 0;
 const draft = ref<GroupDraft[]>(
@@ -40,6 +42,8 @@ const draft = ref<GroupDraft[]>(
     id: g.id,
     name: g.name,
     rules: g.rules.map((r) => ({ kind: r.kind, values: [...r.values] })),
+    free: g.rules.length === 0,
+    members: g.members ? [...g.members] : undefined,
   })),
 );
 const rowsEl = ref<HTMLElement>();
@@ -51,7 +55,16 @@ const saveError = ref<{ title: string; desc: string } | null>(null);
 const items = content.placementsFor(`folder:${props.folderId}`);
 
 function addGroup(): void {
-  draft.value.push({ key: `new-${++seq}`, id: `g${Date.now().toString(36)}-${seq}`, name: "", rules: [{ kind: "ext", values: [] }] });
+  draft.value.push({ key: `new-${++seq}`, id: `g${Date.now().toString(36)}-${seq}`, name: "", rules: [{ kind: "ext", values: [] }], free: false });
+  void nextTick(() => {
+    const input = rowsEl.value?.querySelector<HTMLElement>(".group-block:last-child input");
+    input?.focus();
+  });
+}
+// 添加无规则空组（自由组，2026-09-17 实机走查）：创建即为空、完全无规则、手动归组——
+// 内容区恒渲染给「将文件拖入分组」落点；保存时 rules = [] + members 快照带回
+function addFreeGroup(): void {
+  draft.value.push({ key: `new-${++seq}`, id: `g${Date.now().toString(36)}-${seq}`, name: "", rules: [], free: true, members: [] });
   void nextTick(() => {
     const input = rowsEl.value?.querySelector<HTMLElement>(".group-block:last-child input");
     input?.focus();
@@ -85,9 +98,11 @@ function onPickValue(rule: GroupRule, value: string): void {
   }
 }
 
-// 预检（后端同口径兜底）：空规则 / 空范围 / 完全相同（名称不查重，规则集合规范化比较）
+// 预检（后端同口径兜底）：空范围 / 完全相同（名称不查重，规则集合规范化比较）；
+// 自由组（2026-09-17 无规则空组）放开空规则、查重只管规则组
 function precheck(): string | null {
   for (const g of draft.value) {
+    if (g.free) continue;
     if (g.rules.length === 0) return `分组「${g.name || "未命名分组"}」至少需要一条规则`;
     for (const r of g.rules) {
       if (r.values.length === 0) return `分组「${g.name || "未命名分组"}」存在未选择范围的规则`;
@@ -96,7 +111,9 @@ function precheck(): string | null {
   const norm = (rules: GroupRule[]): string =>
     JSON.stringify(rules.map((r) => [r.kind, [...r.values].sort()] as const).sort());
   for (let i = 0; i < draft.value.length; i++) {
+    if (draft.value[i].free) continue;
     for (let j = i + 1; j < draft.value.length; j++) {
+      if (draft.value[j].free) continue;
       if (norm(draft.value[i].rules) === norm(draft.value[j].rules)) return "存在完全相同的分组";
     }
   }
@@ -115,11 +132,11 @@ async function submit(): Promise<void> {
   }
   busy.value = true;
   try {
-    const groups: GroupDef[] = draft.value.map((g) => ({
-      id: g.id,
-      name: g.name.trim() || "未命名分组",
-      rules: g.rules,
-    }));
+    const groups: GroupDef[] = draft.value.map((g) =>
+      g.free
+        ? { id: g.id, name: g.name.trim() || "未命名分组", rules: [], members: g.members ?? [] }
+        : { id: g.id, name: g.name.trim() || "未命名分组", rules: g.rules },
+    );
     await setFolderGroups(props.folderId, groups);
     emit("close");
   } catch (e) {
@@ -145,15 +162,18 @@ async function submit(): Promise<void> {
                 <AppInput v-model="g.name" size="small" class="name-input" placeholder="未命名分组" />
                 <IconButton name="delete-red" delete-red title="删除分组" @click="removeGroup(i)" />
               </div>
-              <GroupRulesEditor v-model="g.rules" :items="items" @pick-value="onPickValue" />
+              <!-- 自由组（2026-09-17 无规则空组）：无规则编辑——静态说明行；规则组 = 规则编辑器 -->
+              <div v-if="g.free" class="free-hint">无规则（手动归组）——将文件拖入分组，或右键「移动至分组」</div>
+              <GroupRulesEditor v-else v-model="g.rules" :items="items" @pick-value="onPickValue" />
             </div>
           </TransitionGroup>
         </div>
         <ScrollThumb :body="rowsEl" />
       </div>
-      <!-- 添加分组（33 稿：60 高容器，C4 104×36 居中） -->
+      <!-- 添加分组（33 稿：60 高容器，C4 104×36 居中）+ 添加空组（自由组，2026-09-17 实机走查） -->
       <div class="add-wrap">
         <AppButton variant="panel" icon="add-large" label="添加分组" class="add-btn" @click="addGroup" />
+        <AppButton variant="panel" icon="add-large" label="添加空组" class="add-btn" @click="addFreeGroup" />
       </div>
     </div>
     <template #actions>
@@ -288,6 +308,7 @@ async function submit(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: var(--space-12); /* 双钮（添加分组 / 添加空组）间距 */
   height: 60px;
   box-sizing: border-box;
   padding: var(--space-12) var(--space-24);
@@ -295,6 +316,21 @@ async function submit(): Promise<void> {
 }
 .add-btn {
   width: 104px;
+}
+/* 自由组静态说明行（2026-09-17 无规则空组）：C3 容器与规则行同形，说明文字标签色 */
+.free-hint {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-6);
+  background: var(--c3);
+  box-shadow: inset 0 0 0 1px var(--line-hover);
+  color: var(--text-label);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  flex: none;
 }
 .err-desc {
   margin: 0;

@@ -362,6 +362,7 @@ pub fn run() {
       commands::operations::set_folder_color,
       commands::operations::set_folder_colors,
       commands::operations::set_folder_groups,
+      commands::operations::assign_group,
       commands::operations::move_placements,
       commands::operations::reorder_placements,
       commands::operations::reorder_folders,

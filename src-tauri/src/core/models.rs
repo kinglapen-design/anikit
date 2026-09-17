@@ -234,7 +234,9 @@ pub struct Folder {
   pub order: i32,
 }
 
-/// 分组定义（PRD 02-04）：名称 + 规则集；组内多规则 AND 全命中才算归入
+/// 分组定义（PRD 02-04）：名称 + 规则集；组内多规则 AND 全命中才算归入；
+/// **rules 为空 = 自由组（2026-09-17，PRD 02-04 无规则空组）**：完全无规则、手动归组，
+/// members 为 assetId 有序列表（移动语义唯一归属；与规则组不混态）
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GroupDef {
@@ -242,11 +244,14 @@ pub struct GroupDef {
   pub name: String,
   #[serde(default)]
   pub rules: Vec<GroupRule>,
+  /// 自由组成员（assetIds；None / 缺省 = 无成员不写字段，不升 DATA_VERSION）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub members: Option<Vec<String>>,
 }
 
 /// 分组规则：kind = "ext"（扩展名多选）/ "type"（类型多选）/ "name"（分词列表，词间 AND）/
-/// "importDate" / "modifyDate"（日期分档，多档 = OR）——均存值集合；类型清单前端口径
-///（图片 / 动图 / 视频 / 音频 / 文本 / 文档 / 工程 / 其他，2026-08-19 用户定 8 类）
+/// "importDate" / "modifyDate"（日期分档，多档 = OR）/ "tags"（标签词列表，词间 AND，2026-09-17）
+/// ——均存值集合；类型清单前端口径（图片 / 动图 / 视频 / 音频 / 文本 / 文档 / 工程 / 其他，2026-08-19 用户定 8 类）
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GroupRule {

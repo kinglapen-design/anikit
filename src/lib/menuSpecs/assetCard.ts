@@ -41,6 +41,7 @@ import {
   pickExportAssets,
   revealWithWarning,
 } from "../menuOps";
+import { assignGroup } from "../groupOps";
 import {
   applyClipboardThumb,
   applyThumbLink,
@@ -121,6 +122,30 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
     { label: "在资源管理器打开", action: () => revealWithWarning(assetId) },
     "divider",
     { label: "移动文件", shortcut: "Ctrl+Y", action: () => moveAssetsFlow() },
+    // 移动至分组（2026-09-17 无规则空组）：文件夹视口有自由组时出现——自由组清单 +
+    // 移出分组（选中集有成员在任一自由组时才给）；移动语义唯一归属、多选批量、单撤销步
+    ...(() => {
+      if (!content.sidebarSelected.startsWith("folder:")) return [];
+      const folderId = content.sidebarSelected.slice(7);
+      const freeGroups = (content.folderGroupsFor(content.sidebarSelected) ?? []).filter((g) => g.rules.length === 0);
+      if (freeGroups.length === 0) return [];
+      const assetIds = selectedAssetIds();
+      const inAnyFree = freeGroups.some((g) => g.members?.some((m) => assetIds.includes(m)));
+      return [
+        {
+          label: "移动至分组",
+          submenu: () => [
+            ...freeGroups.map((g) => ({
+              label: g.name,
+              action: () => void assignGroup(folderId, g.id, assetIds),
+            })),
+            ...(inAnyFree
+              ? [{ label: "移出分组", action: () => void assignGroup(folderId, null, assetIds) }]
+              : []),
+          ],
+        },
+      ];
+    })(),
     // 文件链接管理（17 稿，6.2 三轮点亮）：单选才可（面板 = 管理一个文件的链接分布）
     {
       label: "文件链接管理",

@@ -258,24 +258,23 @@ fn apply_folder_color(lib: &mut Library, folder_id: &str, color: Option<&str>) -
 }
 
 /// 设置文件夹分组（2026-08-19，3.5 二轮 / PRD 02-04，33 稿管理 / 34 稿新建 / 12 稿菜单统一写点）：
-/// 草稿式一次提交；空数组 = 不分组（存 None 不写字段）。校验：组至少一条规则、规则范围非空、
+/// 草稿式一次提交；空数组 = 不分组（存 None 不写字段）。校验：**规则组**规则范围非空 +
 /// 规则集合完全相同的两组禁止保存（23 稿"无法保存，存在完全相同的分组"；名称不查重——2026-08-19 用户定）；
+/// **rules 为空 = 自由组（2026-09-17，PRD 02-04 无规则空组）放开**——无规则可比，查重只管规则组；
 /// 单规则组互斥转移由前端草稿内完成（确认前取消全恢复），后端不再处理
 pub fn set_folder_groups(lib: &mut Library, folder_id: &str, groups: Vec<GroupDef>) -> Result<(), String> {
   if !lib.index.folders.contains_key(folder_id) {
     return Err("目标文件夹不存在，可能已被删除".to_string());
   }
   for g in &groups {
-    if g.rules.is_empty() {
-      return Err(format!("分组「{}」至少需要一条规则", g.name));
-    }
     for r in &g.rules {
       if r.values.is_empty() {
         return Err(format!("分组「{}」存在未选择范围的规则", g.name));
       }
     }
   }
-  // 完全相同判定：规则集合（kind + 排序后 values，组序 / 规则序无关；名称不查重）
+  // 完全相同判定：仅规则组之间（规则集合 = kind + 排序后 values，组序 / 规则序无关；名称不查重；
+  // 自由组 rules 为空直接跳过——2026-09-17 自由组无规则可比）
   let norm = |rules: &[GroupRule]| {
     let mut v: Vec<(String, Vec<String>)> = rules
       .iter()
@@ -289,7 +288,13 @@ pub fn set_folder_groups(lib: &mut Library, folder_id: &str, groups: Vec<GroupDe
     v
   };
   for i in 0..groups.len() {
+    if groups[i].rules.is_empty() {
+      continue;
+    }
     for j in (i + 1)..groups.len() {
+      if groups[j].rules.is_empty() {
+        continue;
+      }
       if norm(&groups[i].rules) == norm(&groups[j].rules) {
         return Err("无法保存，存在完全相同的分组".to_string());
       }
@@ -306,6 +311,48 @@ pub fn set_folder_groups(lib: &mut Library, folder_id: &str, groups: Vec<GroupDe
   sync_folder_index(lib);
   library::save_folders(lib).map_err(|e| e.to_string())?;
   log::info!("设置文件夹分组 {folder_id}（{count} 组）");
+  Ok(())
+}
+
+/// 自由组成员归组（2026-09-17，PRD 02-04 无规则空组）：把 assetIds **移入**目标自由组
+///（移动语义 = 先从本文件夹全部自由组摘除再加入，成员身份唯一）；group_id = None = 移出
+///（摘除成员身份，回未分组或按规则重估）。目标组必须存在且为自由组（rules 为空）；
+/// 资产存在性不校验（显示层成员身份，陈旧 id 随编辑/开库自然清）
+pub fn assign_group(lib: &mut Library, folder_id: &str, group_id: Option<&str>, asset_ids: &[String]) -> Result<(), String> {
+  if asset_ids.is_empty() {
+    return Ok(());
+  }
+  let folder = lib
+    .folders
+    .folders
+    .iter_mut()
+    .find(|f| f.id == folder_id)
+    .ok_or_else(|| "目标文件夹不存在，可能已被删除".to_string())?;
+  let groups = folder.groups.get_or_insert_with(Vec::new);
+  if let Some(gid) = group_id {
+    let g = groups.iter().find(|g| g.id == gid).ok_or_else(|| "目标分组不存在".to_string())?;
+    if !g.rules.is_empty() {
+      return Err("只能移入自由组（无规则空组）".to_string());
+    }
+  }
+  let want: std::collections::HashSet<&String> = asset_ids.iter().collect();
+  for g in groups.iter_mut() {
+    if let Some(m) = &mut g.members {
+      m.retain(|a| !want.contains(a));
+    }
+  }
+  if let Some(gid) = group_id {
+    let g = groups.iter_mut().find(|g| g.id == gid).expect("前面已校验存在");
+    let m = g.members.get_or_insert_with(Vec::new);
+    for a in asset_ids {
+      if !m.contains(a) {
+        m.push(a.clone());
+      }
+    }
+  }
+  sync_folder_index(lib);
+  library::save_folders(lib).map_err(|e| e.to_string())?;
+  log::info!("自由组归组 {folder_id} → {group_id:?}（{} 项）", asset_ids.len());
   Ok(())
 }
 
@@ -1048,6 +1095,7 @@ mod tests {
         .iter()
         .map(|(k, vs)| GroupRule { kind: k.to_string(), values: vs.iter().map(|v| v.to_string()).collect() })
         .collect(),
+      members: None,
     }
   }
 
@@ -1100,8 +1148,46 @@ mod tests {
       group("g2", "B", &[("ext", &["fla"]), ("type", &["image"])]),
     ])
     .unwrap();
-    // 空规则 / 空范围报错
-    assert!(set_folder_groups(&mut h.lib, "F01", vec![group("g1", "A", &[])]).is_err());
+    // 空规则 = 自由组（2026-09-17 无规则空组放开）；空范围仍报错
+    assert!(set_folder_groups(&mut h.lib, "F01", vec![group("g1", "A", &[])]).is_ok(), "空规则 = 自由组放开");
     assert!(set_folder_groups(&mut h.lib, "F01", vec![group("g1", "A", &[("ext", &[])])]).is_err());
+  }
+
+  /// 自由组（2026-09-17，PRD 02-04 无规则空组）：assign_group 移动语义唯一归属 / 移出 /
+  /// 非自由组与不存在组拦截；自由组与规则组「完全相同」查重不混
+  #[test]
+  fn assign_group_moves_members_uniquely() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "角色", None, 0);
+    let mut free_a = group("ga", "空组A", &[]);
+    free_a.members = Some(vec![]);
+    let mut free_b = group("gb", "空组B", &[]);
+    free_b.members = Some(vec!["AN-1".into()]);
+    set_folder_groups(&mut h.lib, "F01", vec![free_a, free_b, group("g1", "规则组", &[("ext", &["fla"])])]).unwrap();
+    // 自由组与规则组查重不混（另一文件夹：两个空规则自由组不算「完全相同」）
+    add_folder(&mut h.lib, "F02", "特效", None, 1);
+    set_folder_groups(&mut h.lib, "F02", vec![group("ga", "空A", &[]), group("gb", "空B", &[])]).unwrap();
+
+    let members_of = |lib: &Library, idx: usize| {
+      lib.index.folders["F01"].groups.as_ref().unwrap()[idx]
+        .members
+        .clone()
+        .unwrap_or_default()
+    };
+    // 移入 A：唯一归属
+    assign_group(&mut h.lib, "F01", Some("ga"), &["AN-1".into(), "AN-2".into()]).unwrap();
+    assert_eq!(members_of(&h.lib, 0), vec!["AN-1", "AN-2"], "移入目标组");
+    assert_eq!(members_of(&h.lib, 1), Vec::<String>::new(), "从其他自由组摘除（移动语义）");
+    // 再移 B：只动 AN-1（A 留 AN-2）、B 收留（幂等去重）
+    assign_group(&mut h.lib, "F01", Some("gb"), &["AN-1".into()]).unwrap();
+    assert_eq!(members_of(&h.lib, 0), vec!["AN-2"], "未涉及的成员不动");
+    assert_eq!(members_of(&h.lib, 1), vec!["AN-1"], "幂等去重");
+    // 移出（None）：全部摘除
+    assign_group(&mut h.lib, "F01", None, &["AN-1".into()]).unwrap();
+    assert_eq!(members_of(&h.lib, 1), Vec::<String>::new());
+    // 非自由组 / 不存在组拦截
+    assert!(assign_group(&mut h.lib, "F01", Some("g1"), &["AN-1".into()]).is_err());
+    assert!(assign_group(&mut h.lib, "F01", Some("g-x"), &["AN-1".into()]).is_err());
+    assert!(assign_group(&mut h.lib, "F-X", None, &["AN-1".into()]).is_err());
   }
 }

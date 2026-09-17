@@ -68,6 +68,8 @@ pub struct PlacementView {
   /// （悬停 / 自动播放）的帧流开流目标（fla 自身无可解码帧流，伴生 WebP 才是画面源）；无代理为 None
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub play_asset_id: Option<String>,
+  /// 标签（metadata.tags，2026-09-17 分组「标签」规则的卡片级数据通道——与排序四字段同径带出）
+  pub tags: Vec<String>,
 }
 
 /// 格式图标缓存键（空扩展名归 "file"）
@@ -138,6 +140,7 @@ pub fn placement_view(lib: &Library, meta: &AssetMeta, p: &Placement, icons: &Ha
     fps,
     hidden: meta.hidden == Some(true),
     play_asset_id: thumb_meta.map(|t| t.id.clone()),
+    tags: meta.tags.clone(),
   }
 }
 

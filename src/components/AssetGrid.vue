@@ -14,7 +14,7 @@ import ArchiveStrip from "./ArchiveStrip.vue";
 import InboxDiskSection from "./InboxDiskSection.vue";
 import EmptyFolderState from "./EmptyFolderState.vue";
 import SectionTitle from "./items/SectionTitle.vue";
-import { useGridLayout, type GridSection } from "../lib/useGridLayout";
+import { FREE_EMPTY_H, useGridLayout, type GridSection } from "../lib/useGridLayout";
 import { groupPlacements } from "../lib/grouping";
 import { isAudioExt, isSequence, isThumbCapableExt } from "../lib/formatBadge";
 import { useSpaceZoom } from "../lib/useSpaceZoom";
@@ -126,6 +126,7 @@ const gridSections = computed<GridSection[] | null>(() => {
       start: at,
       end: at + s.items.length,
       collapsed: content.isGroupCollapsed(fid, s.groupId),
+      free: s.free, // 自由组（2026-09-17 无规则空组）：空组恒渲染占位
     };
     at += s.items.length;
     return sec;
@@ -180,6 +181,12 @@ function onGroupMenu(h: { groupId: string | null }, e: MouseEvent): void {
   if (!fid) return;
   openContextMenu(e, groupHeaderSpec({ folderId: fid, groupId: h.groupId, scrollToGroup }), undefined);
 }
+// 空自由组提示框清单（2026-09-17 无规则空组）：展开态且成员为空的自由组——占位提示即拖入落点
+const emptyFreeHeaders = computed(() =>
+  groupHeaders.value.filter(
+    (h) => h.free && h.count === 0 && !content.isGroupCollapsed(gridFolderId.value ?? "", h.groupId),
+  ),
+);
 // sticky 置顶分组标题（05_区块标题：滚到容器顶部停留，下一组接替）：transform 容器内 sticky 无效，
 // 悬浮层手动实现——当前组 = 最后滚过视口顶的组；下一组标题接近 26（组标题稿高）内时上移让位（顶走动画）
 const stickyGroup = computed(() => {
@@ -453,12 +460,15 @@ onBeforeUnmount(() => {
              "首列前插提示线不可见 / 盖住卡片"——grid-viewport overflow 裁剪会把行首间隙
              （负 layer-x = 容器 16 留白区）整条裁掉，原 Math.max(0,…) 钳位又拉回盖住卡片） -->
         <!-- 分组标题（3.5 二轮；7.1 内容容器轮 = SectionTitle group 贴稿）：canvas 内随滚动的原位标题
-             （absolute 于 cards-layer 坐标系）；more = 分组菜单，add 点亮不接业务 -->
+             （absolute 于 cards-layer 坐标系）；more = 分组菜单，add 点亮不接业务；
+             data-group-drop（2026-09-17 自由组 / 未分组段）：素材拖入 = 移动至分组（"" = 移出） -->
         <div
           v-for="h in groupHeaders"
           :key="h.groupId ?? '__ungrouped'"
           class="group-header"
+          :class="{ 'drop-into': dragView.groupDrop !== null && (h.groupId ?? '') === dragView.groupDrop }"
           :style="{ top: `${h.top}px` }"
+          :data-group-drop="h.free || h.groupId === null ? (h.groupId ?? '') : undefined"
         >
           <SectionTitle
             variant="group"
@@ -468,6 +478,17 @@ onBeforeUnmount(() => {
             @toggle="onGroupFold(h.groupId)"
             @more="onGroupMenu(h, $event)"
           />
+        </div>
+        <!-- 空自由组提示框（2026-09-17 无规则空组）：小高度占位 + 居中提示，本身即拖入落点 -->
+        <div
+          v-for="h in emptyFreeHeaders"
+          :key="`free-hint-${h.groupId}`"
+          class="free-empty-hint"
+          :class="{ 'drop-into': dragView.groupDrop === (h.groupId ?? '') }"
+          :style="{ top: `${h.top + 38}px`, height: `${FREE_EMPTY_H}px` }"
+          :data-group-drop="h.groupId ?? ''"
+        >
+          将文件拖入分组
         </div>
       </div>
     </div>
@@ -597,6 +618,31 @@ onBeforeUnmount(() => {
   left: 0;
   right: 12px;
   height: 26px;
+  border-radius: var(--n-radius-6);
+}
+/* 自由组 / 未分组段标题拖入落点（2026-09-17）：并入同款——品牌/半透明填充 + 2px 品牌描边（§20 口径） */
+.group-header.drop-into {
+  background: var(--n-brand-50);
+  box-shadow: inset 0 0 0 2px var(--n-brand);
+}
+/* 空自由组提示框（2026-09-17 无规则空组）：小高度占位 + 居中提示（辅助说明文字档）；
+   本身即拖入落点；左缘 0 右缘 12 与卡片列对齐 */
+.free-empty-hint {
+  position: absolute;
+  left: 0;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--n-radius-6);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
+  user-select: none;
+}
+.free-empty-hint.drop-into {
+  background: var(--n-brand-50);
+  box-shadow: inset 0 0 0 2px var(--n-brand);
 }
 /* sticky 置顶分组标题（05_区块标题：滚到容器顶部停留，该组滚完下一组接替）：
    viewport 内绝对定位（不随 canvas transform）+ g1 实底盖滚过卡片；shift 位移 = 下一组顶走 */

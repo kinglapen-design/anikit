@@ -97,7 +97,7 @@ if (contentDemo.blocks.length === 0) {
   const base = {
     w: null, h: null, ext: "fla", thumbPath: null, thumbKind: null,
     frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null,
-    size: 1_258_291, createdAt: null, hidden: false,
+    size: 1_258_291, createdAt: null, hidden: false, tags: [] as string[],
     modifiedAt: "2026-08-29T00:00:00Z", importedAt: "2026-08-29T00:00:00Z",
   };
   contentDemo.placements = [

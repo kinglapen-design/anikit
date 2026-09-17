@@ -168,6 +168,28 @@ pub async fn set_folder_groups(
   }
 }
 
+/// 自由组成员归组（2026-09-17，PRD 02-04 无规则空组）：移动至分组 / 移出分组——单撤销步
+#[tauri::command]
+pub async fn assign_group(
+  state: State<'_, AppState>,
+  folder_id: String,
+  group_id: Option<String>,
+  asset_ids: Vec<String>,
+) -> Result<(), String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin(if group_id.is_some() { "移动至分组" } else { "移出分组" });
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  match operations::assign_group(lib, &folder_id, group_id.as_deref(), &asset_ids) {
+    Ok(()) => {
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(())
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
 /// 移动 Placement 到目标文件夹，返回实际移动条数（去重 / 原地 / 陈旧项跳过不计）；
 /// 移出 root 时清 metadata.importedFrom（摘标：移动即转正）
 #[tauri::command]

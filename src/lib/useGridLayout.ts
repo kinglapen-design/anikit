@@ -28,7 +28,11 @@ export interface GridSection {
   start: number;
   end: number;
   collapsed: boolean;
+  free?: boolean; // 自由组（2026-09-17 无规则空组）：空组恒渲染——展开态空组占位 FREE_EMPTY_H
 }
+
+/** 空自由组展开态占位高（提示框「将文件拖入分组」+ 拖入落点区，2026-09-17；模板同值渲染） */
+export const FREE_EMPTY_H = 64;
 
 /** 组标题（模板渲染用）：top = 组标题在 cards-layer 坐标系的 y */
 export interface GroupHeaderInfo {
@@ -36,6 +40,7 @@ export interface GroupHeaderInfo {
   name: string;
   count: number;
   top: number;
+  free?: boolean; // 自由组（模板挂 data-group-drop 落点属性用）
 }
 
 export function useGridLayout(opts: {
@@ -165,7 +170,7 @@ export function useGridLayout(opts: {
       const allRows: Row[] = [];
       const headers: GroupHeaderInfo[] = [];
       secs.forEach((s, si) => {
-        headers.push({ groupId: s.groupId, name: s.name, count: s.end - s.start, top: y });
+        headers.push({ groupId: s.groupId, name: s.name, count: s.end - s.start, top: y, free: s.free });
         y += 26;
         if (!s.collapsed && s.end > s.start) {
           y += 12;
@@ -174,6 +179,9 @@ export function useGridLayout(opts: {
           for (const b of sub.boxes) allBoxes.push({ ...b, top: b.top + y, i: b.i + s.start });
           for (const r of sub.rows) allRows.push({ ...r, top: r.top + y, start: r.start + boxBase, end: r.end + boxBase });
           y += sub.totalHeight - PAD.bottom; // 剥单组底部留白
+        } else if (!s.collapsed && s.free) {
+          // 空自由组恒渲染（2026-09-17 无规则空组）：占位提示框 + 拖入落点区
+          y += 12 + FREE_EMPTY_H;
         }
         y += si === secs.length - 1 ? PAD.bottom : 24; // 组间 24；末组底部 PAD.bottom
       });

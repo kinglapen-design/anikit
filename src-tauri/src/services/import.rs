@@ -676,6 +676,7 @@ mod tests {
       fps: None,
       hidden: false,
       play_asset_id: None,
+      tags: vec![],
     };
     let asset = serde_json::to_value(ImportEvent::Asset { placement: Box::new(view) }).unwrap();
     assert_eq!(
@@ -688,7 +689,7 @@ mod tests {
           "frameCount": null, "animated": false, "duration": null, "bpm": null, "importedFrom": null,
           "size": 0, "createdAt": null,
           "modifiedAt": "2026-08-19T00:00:00+08:00", "importedAt": "2026-08-19T00:00:00+08:00",
-          "noteCount": null, "thumbFrame": null, "fps": null, "hidden": false
+          "noteCount": null, "thumbFrame": null, "fps": null, "hidden": false, "tags": []
         }
       })
     );

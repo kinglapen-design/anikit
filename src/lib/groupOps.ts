@@ -11,3 +11,12 @@ export async function setFolderGroups(folderId: string, groups: GroupDef[]): Pro
   await useContentStore().refresh();
   void useUndoStore().refreshState();
 }
+
+/** 自由组成员归组（2026-09-17 无规则空组）：移动至分组（groupId）/ 移出分组（null）——
+ * 移动语义唯一归属（后端先摘除再加入）；成功后全量刷新（归组改变内容区组织） */
+export async function assignGroup(folderId: string, groupId: string | null, assetIds: string[]): Promise<void> {
+  if (assetIds.length === 0) return;
+  await invoke("assign_group", { folderId, groupId, assetIds });
+  await useContentStore().refresh();
+  void useUndoStore().refreshState();
+}

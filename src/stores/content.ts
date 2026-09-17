@@ -38,6 +38,7 @@ export interface PlacementView {
   noteCount?: number | null; // 逐帧笔记条数冗余（5.2 展示层：卡片笔记角标据此显隐）；无笔记为 null
   thumbFrame?: string | null; // 封面帧：序列帧/动图 = 帧名；视频 = `t:{秒}`（5.2 写入，5.3 悬停播放范围起点）
   fps?: number | null; // 帧率：序列帧 = 播放帧率；视频 = 素材自身帧率（5.3 帧化：帧号显示 / 逐帧步进按 1/fps）
+  tags: string[]; // 标签（2026-09-17 分组「标签」规则数据通道，后端 views.rs 自 metadata 同径带出）
   hidden: boolean; // hidden 伴生缩略图标记（8.1，PRD 02-15）：普通视图统一过滤，仅「缩略图」视图显示
   playAssetId?: string | null; // 播放源代理（8.1）：fla 等工程卡片动图播放的帧流开流目标（= hidden 伴生资产 id）；无代理为 null
   // 工作空间磁盘实况合成项专属（stores/ws.ts wsEntryToPlacement，PRD 02 步骤 1）：

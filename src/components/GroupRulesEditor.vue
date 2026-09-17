@@ -3,6 +3,7 @@
 // 规则行 = C3 容器（min 44 高 圆角 6 + 暗-悬停边框，2026-08-19 复验补）：头段（删除× + 「规则:」+
 // 规则下拉 96 +「范围:」，恒 28 居首行）+ 范围区（chips 多行向下排）；
 // 范围区形态：ext / type / 日期 = chips 多选（选中 = 品牌色底；候选按当前文件夹实际存在动态出——33 稿注释），
+// 标签 = 当前文件夹实际存在 tags chips（2026-09-17，词间 AND；空态一行提示），
 // 名称 = 分词 chips 输入（TermChipsInput：回车/空格/+/失焦提交，词间 AND——2026-08-19 复验由单输入框改）；
 // 底部「添加新规则」钮（C5 底 102×29）。标签冒号 = 英文「:」（2026-08-19 用户定，全库统一）。
 // 单规则组互斥转移（PRD 02-04 条款 2）由父级经 pickValue 事件处理（编辑器不感知其他组）。
@@ -38,6 +39,10 @@ const typeCandidates = computed(() => {
   const present = new Set(props.items.map((p) => groupTypeOf(p)));
   return GROUP_TYPE_ORDER.filter((t) => present.has(t));
 });
+// 标签候选（2026-09-17）：当前文件夹实际存在的 tags 去重出 chips（33 稿注释口径）
+const tagCandidates = computed(() =>
+  [...new Set(props.items.flatMap((p) => p.tags))].sort((a, b) => a.localeCompare(b, "zh")),
+);
 
 // —— 规则下拉（picker + AppMenu，同 28 稿排序下拉形态） ——
 const kindPicker = ref<{ rule: GroupRule; x: number; y: number } | null>(null);
@@ -145,6 +150,17 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
             :class="{ on: rule.values.includes(d) }"
             @click="toggleValue(rule, d)"
           >{{ DATE_BUCKET_LABELS[d] }}</button>
+        </div>
+        <!-- 标签（2026-09-17）：当前文件夹实际存在的 tags chips（多选，词间 AND） -->
+        <div v-else-if="rule.kind === 'tags'" class="chips">
+          <button
+            v-for="t in tagCandidates"
+            :key="t"
+            class="chip"
+            :class="{ on: rule.values.includes(t) }"
+            @click="toggleValue(rule, t)"
+          >{{ t }}</button>
+          <span v-if="tagCandidates.length === 0" class="chips-empty">当前文件夹没有标签</span>
         </div>
         <!-- 名称：分词 chips（回车/空格/+/失焦提交，词间 AND） -->
         <TermChipsInput
@@ -279,6 +295,12 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
   background: var(--brand);
   box-shadow: inset 0 0 0 1px var(--line-active);
   color: var(--text-highlight);
+}
+/* 标签候选空态提示（2026-09-17：当前文件夹无 tags 时） */
+.chips-empty {
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  color: var(--text-faint);
 }
 /* 添加新规则（33 稿：C5 底 / 1px 亮-选中 / 圆角 6 / padding 6 12 / gap 6 / 标签档） */
 .add-rule {

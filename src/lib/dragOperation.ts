@@ -50,6 +50,7 @@ import { useWsStore } from "../stores/ws";
 import { isDisplaySorted } from "./sortPlacements";
 import { COL_GAP } from "./layouts";
 import * as ops from "./placementOps";
+import { assignGroup } from "./groupOps";
 import { makeGhost, moveGhost } from "./dragGhost";
 import {
   dropFolderBeside,
@@ -90,6 +91,9 @@ export const dragView = reactive({
   folderGapId: null as string | null, // 文件夹卡片间隙排序目标（FolderCard 渲染竖块）
   folderGapAfter: false,
   tree: null as TreeIndicator | null, // 文件树落点（TreeItem 渲染）
+  // 分组标题 / 自由组段落点（2026-09-17 无规则空组）：素材拖入自由组段（标题 / 空组提示框，
+  // 带 data-group-drop）= 移入该组；值为组 id（"" = 未分组段 = 移出分组）
+  groupDrop: null as string | null,
   // 快速访问「回收站」行落点（2026-09-08 用户定）：素材拖入 = 丢到回收站（免右键 Del 同路径）；
   // 行带 data-quick-drop="recycle"（LibraryView TreeRowItem 自渲染并入高亮）——专属性不用
   // data-folder-id，防 App.vue onDrop 系统拖入导入的 closest 误判导入目标
@@ -264,6 +268,7 @@ function resetIndicators(): void {
   dragView.tree = null;
   dragView.block = null;
   dragView.quickRecycle = false;
+  dragView.groupDrop = null;
   if (sess) sess.drop = null;
 }
 
@@ -374,6 +379,20 @@ function updateDropTarget(e: DropPointer): void {
       sess.drop = async () => dropFoldersIntoBlock(folderIds, id);
       return;
     }
+  }
+
+  // 自由组段 / 未分组段标题（2026-09-17 无规则空组）：素材拖入 = 移动至分组（移动语义唯一归属，
+  // "" = 未分组段 = 移出分组）；data-group-drop 挂在 AssetGrid 组标题与空组提示框——
+  // 仅素材拖拽、非 ws 合成 id（ws 无分组语义）；文件夹拖拽不作落点
+  const groupZone = el.closest<HTMLElement>("[data-group-drop]");
+  if (groupZone && sess.kind === "asset" && !items.every((it) => it.assetId.startsWith("ws:"))) {
+    const folderId = useContentStore().currentFolderId;
+    if (folderId !== null) {
+      const groupId = groupZone.getAttribute("data-group-drop")!;
+      dragView.groupDrop = groupId;
+      sess.drop = async () => assignGroup(folderId, groupId || null, [...new Set(items.map((it) => it.assetId))]);
+    }
+    return;
   }
 
   // 素材卡片间隙排序（仅素材拖拽；网格 resolver 由 AssetGrid 注册）。
