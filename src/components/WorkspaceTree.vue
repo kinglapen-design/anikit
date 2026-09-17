@@ -155,9 +155,11 @@ function dropZone(rel: string): "before" | "after" | "into" | undefined {
 .ws-tree.root {
   padding: var(--n-space-8) var(--n-space-12);
 }
-/* 区块标题与上一区块的间隔（padding 顶 8；首个标题不吃双份——容器已有 padding-top 8） */
+/* 区块标题与上一区块的间隔（顶 8）+ 与本职首行的间隔（底 6 + 容器 gap 2 = 8 视觉，
+   参照截图 2 标题—首行留白大于行间距）；首个标题不吃双份顶距——容器已有 padding-top 8 */
 .ws-head {
   padding-top: var(--n-space-8);
+  padding-bottom: var(--n-space-6);
 }
 .ws-tree.root > .ws-head:first-child {
   padding-top: 0;
