@@ -430,6 +430,12 @@ export function copySelection(action: "copy" | "cut"): void {
   const items = selection.selectedRefs();
   if (items.length === 0) return;
   selection.clipboard = { items, action };
+  // 记录写入时刻的系统剪贴板序号（复制/剪切都记——粘贴仲裁基准：序号变了 = 外部覆盖）
+  void invoke<number>("get_clipboard_seq")
+    .then((s) => {
+      selection.clipboardSeq = s;
+    })
+    .catch(() => {});
   if (action === "copy") {
     const assetIds = [...new Set(items.map((i) => i.assetId))];
     void invoke("copy_files_to_system_clipboard", { assetIds }).catch((e) =>

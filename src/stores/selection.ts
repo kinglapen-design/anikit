@@ -90,6 +90,10 @@ export const useSelectionStore = defineStore("selection", {
     folderAnchor: null as string | null,
     // —— 6.1 阶段 C 操作态（会话级，均不进持久化）——
     clipboard: null as InternalClipboard | null,
+    // 内剪贴板写入时刻的系统剪贴板序号（2026-09-17 粘贴仲裁）：Ctrl+V 时序号变了 =
+    // 用户在外部复制了新内容（覆盖 APP 内剪贴板）→ 内部粘贴让位系统剪贴板导入；
+    // null = 旧会话未记录（按内部优先原口径）
+    clipboardSeq: null as number | null,
     // 复制的属性词 / 描述（2026-09-05 走查「上下文菜单」：复制数据组加「复制标签/复制描述」，
     // 复制后右键多出对应粘贴项）：会话级双槽——复制标签不覆盖已复制的描述；粘贴只读不写槽，可连续多处粘贴
     copiedData: { tags: null, descriptions: null } as {

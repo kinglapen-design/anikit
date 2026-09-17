@@ -103,7 +103,9 @@ const searchArchiveNodes = computed<FolderNode[]>(() => {
 </script>
 
 <template>
-  <main class="content-area">
+  <!-- 空白处点击即聚焦本 panel（2026-09-17 实机走查：分屏后点空白不聚焦，只能点标签/选文件）——
+       dockview 激活语义跟 pointerdown 走，已激活幂等无操作 -->
+  <main class="content-area" @pointerdown="panelApi.setActive()">
     <template v-if="previewActive">
       <div class="preview-root" :class="{ fullscreen: preview.fullscreen }">
         <PreviewTitleBar v-if="!preview.fullscreen" />

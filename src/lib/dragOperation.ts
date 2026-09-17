@@ -417,7 +417,6 @@ function updateDropTarget(e: DropPointer): void {
   // Ctrl = 建链接，与文件夹卡落点同语义）；相同（同文件夹分屏）= 落下方 gap 排序流程；
   // 回收站视口 = 丢回收站；ws 视口 = ws 素材按路径移动；虚拟视图（dropFolder null）不出落点
   if (sess.kind === "asset" && gridResolvers.size > 0) {
-    const curFolder = useContentStore().currentFolderId;
     for (const [token, grid] of gridResolvers) {
       const layer = grid.layer();
       if (!layer) continue;
@@ -437,7 +436,10 @@ function updateDropTarget(e: DropPointer): void {
         }
         return;
       }
-      if (target !== curFolder) {
+      // 同文件夹判定按**被拖项自身 folderId**（2026-09-17 实机走查实锤：旧按激活 pane 文件夹
+      // 判定——右往左「恰好成立」只因目标恰为激活 pane，左往右全灭；源/目标 pane 与激活态
+      // 任意组合下被拖项的文件夹才是唯一可靠基准）
+      if (!items.every((it) => it.folderId === target)) {
         dragView.paneDrop = token;
         sess.drop = async () => dropAssetsInto(items, target, ctrl);
         return;
@@ -454,11 +456,13 @@ function updateDropTarget(e: DropPointer): void {
     for (const [token, grid] of gridResolvers) {
       const gap = grid.resolve(e.clientX, e.clientY, draggedKeys);
       if (!gap) continue;
+      const target = grid.dropFolder();
+      if (target === null || target === "recycle" || target.startsWith("ws:")) continue;
       dragView.gap = gap;
       dragView.gapGrid = token;
       activeGridScroll = grid.scroll ?? null;
       const visibleKeys = grid.visibleKeys;
-      sess.drop = async () => dropAssetsGap(items, gap, visibleKeys);
+      sess.drop = async () => dropAssetsGap(items, gap, target, visibleKeys);
       return;
     }
   }
@@ -497,12 +501,11 @@ async function dropAssetsToRecycle(items: PlacementRef[]): Promise<void> {
   await ops.deletePlacements(items);
 }
 
-// 素材落卡片间隙：reorder_placements（仅当前文件夹段内项参与；beforeItem = 间隙后项）；
-// visibleKeys = 归属网格的可见序（注册表多网格，2026-09-17 分屏改造按 token 带入）
-async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator, visibleKeys?: () => string[]): Promise<void> {
+// 素材落卡片间隙：reorder_placements（仅目标文件夹段内项参与；beforeItem = 间隙后项）；
+// target = 归属网格的目标文件夹（2026-09-17 分屏改造显式带入——不再读激活 pane 的 currentFolderId，
+// 同文件夹两分屏且第三 pane 激活时也不会错位）；visibleKeys = 归属网格的可见序
+async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator, target: string, visibleKeys?: () => string[]): Promise<void> {
   const content = useContentStore();
-  const target = content.currentFolderId;
-  if (target === null) return;
   const items = dragged.filter((it) => it.folderId === target);
   if (items.length === 0) return;
   const ui = useUiStore();

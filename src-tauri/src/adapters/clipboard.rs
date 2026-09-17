@@ -10,7 +10,12 @@
 //! 业务语义（fla → 载荷转换）在 services/send_stage，本层只管字节读写。
 
 #[cfg(windows)]
-pub use imp::{read_image_dib_fallback, write_files_clipboard, write_flash_picture};
+pub use imp::{clipboard_sequence, read_image_dib_fallback, write_files_clipboard, write_flash_picture};
+
+#[cfg(not(windows))]
+pub fn clipboard_sequence() -> u32 {
+  0
+}
 
 #[cfg(not(windows))]
 pub fn write_flash_picture(_data: &[u8]) -> Result<(), String> {
@@ -104,6 +109,12 @@ mod imp {
       std::thread::sleep(std::time::Duration::from_millis(50));
     }
     Err("剪贴板被占用，请重试".to_string())
+  }
+
+  /// 剪贴板序号（2026-09-17 粘贴仲裁）：任何程序每次写剪贴板它都递增——
+  /// 前端记录「APP 内复制时刻」的值，粘贴时比对：变了 = 外部已覆盖 → 走系统导入
+  pub fn clipboard_sequence() -> u32 {
+    unsafe { windows::Win32::System::DataExchange::GetClipboardSequenceNumber() }
   }
 
   /// 全局内存打包一字节串并 SetClipboardData（成功后句柄所有权移交系统）

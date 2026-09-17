@@ -42,13 +42,26 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   const tabs = useTabsStore();
   const ui = useUiStore();
 
+  // 粘贴仲裁（2026-09-17 实机走查修订）：内部剪贴板非空时——系统剪贴板序号未变 = 内部粘贴
+  //（链接 / 移动，原 6.1 定案）；**序号变了 = 用户在外部复制了新内容**（覆盖 APP 内剪贴板）→
+  // Ctrl+V 让位系统剪贴板导入（「复制本地音频粘贴还是 APP 内图片」实锤）。读取失败 / 未记录
+  // 保持原口径（内部优先）。onPaste 与 onOperationKeys 的 Ctrl+V 共用本判定（防双触发）
+  async function internalClipboardLive(): Promise<boolean> {
+    if (!selection.clipboard) return false;
+    if (selection.clipboardSeq === null) return true;
+    const seq = await invoke<number>("get_clipboard_seq").catch(() => -1);
+    return seq < 0 || seq === selection.clipboardSeq;
+  }
+
   // 剪贴板导入（PRD 05-01；2026-07-27 扩：图片 + 文件列表，恒 Copy）；剪贴板无图无文件属常态，静默降级
   // 6.1 仲裁（2026-07-28 定案）：内部剪贴板非空时 Ctrl+V 归 onOperationKeys（链接粘贴 / 移动，
   // 2026-08-18 起链接粘贴静默不弹窗），本函数只处理"内部剪贴板为空"的系统剪贴板导入；
+  // **2026-09-17 修订：内部非空但系统序号已变（外部覆盖）→ 也走本函数系统导入**（见 internalClipboardLive）；
   // Ctrl+Shift+V = 粘贴为副本快捷键，不走导入
   async function onPaste(e: KeyboardEvent): Promise<void> {
     if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "v") return;
-    if (e.shiftKey || selection.clipboard) return;
+    if (e.shiftKey) return;
+    if (await internalClipboardLive()) return;
     if (isEditableTarget(e.target as HTMLElement)) return;
     if (opts.needLibrarySetup() || content.importDraft) return;
     if (usePickerStore().active) return; // 选择模式（6.2）：导入是编辑类，禁用
@@ -117,7 +130,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   //（delete_recycle，虚拟片段引用确认窗，不可恢复无撤销）——delete_placements 路径不再走。
   // 快速访问视图不作粘贴目标（2026-09-09 收窄修订：未分类豁免 = 候车区总入口可粘贴落 root，
   // 其余快速访问视口 pasteTarget 拦截 toast 提示）；菜单 / 浮层 / 弹窗打开时让位
-  function onOperationKeys(e: KeyboardEvent): void {
+  async function onOperationKeys(e: KeyboardEvent): Promise<void> {
     if (isEditableTarget(e.target as HTMLElement)) return;
     if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
     if (document.querySelector(".app-menu, .zoom-mask, .modal-mask, .del-mask, .pick-mask")) return;
@@ -302,12 +315,16 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       }
       return;
     }
-    // 粘贴两键（2026-08-18 定案）：Ctrl+V 链接 / Ctrl+Shift+V 副本；Ctrl+Alt+V 键位废除不响应
+    // 粘贴两键（2026-08-18 定案）：Ctrl+V 链接 / Ctrl+Shift+V 副本；Ctrl+Alt+V 键位废除不响应；
+    // 2026-09-17 仲裁修订：系统剪贴板序号已变（外部覆盖）→ 让位 onPaste 系统导入
     if (k === "v" && selection.clipboard) {
       if (e.altKey) return;
       e.preventDefault();
-      if (e.shiftKey) void pasteDuplicate();
-      else void pasteClipboard();
+      if (e.shiftKey) {
+        void pasteDuplicate(); // Ctrl+Shift+V = 副本：显式键位不参与仲裁（原 6.1：不走导入）
+        return;
+      }
+      if (await internalClipboardLive()) void pasteClipboard();
     }
   }
 

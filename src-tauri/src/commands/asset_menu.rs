@@ -82,6 +82,13 @@ pub async fn copy_files_to_system_clipboard(state: State<'_, AppState>, asset_id
   asset_menu::copy_files_to_system_clipboard(lib, &asset_ids)
 }
 
+/// 系统剪贴板序号（2026-09-17 粘贴仲裁）：任何程序每次写剪贴板它都递增——前端据此判定
+/// 「用户在外部复制了新内容」（覆盖 APP 内剪贴板）→ Ctrl+V 从内部粘贴让位系统剪贴板导入
+#[tauri::command]
+pub fn get_clipboard_seq() -> u32 {
+  crate::adapters::clipboard::clipboard_sequence()
+}
+
 /// 设置伴生缩略图（8.1，PRD 02-15 hidden 绑定）：thumb 资产打 hidden + 工程侧记 thumb_asset_id；
 /// 换绑 / 多工程共绑同图均可；不接撤销（同缩略图三件套口径）
 #[tauri::command]
