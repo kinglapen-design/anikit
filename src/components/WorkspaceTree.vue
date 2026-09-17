@@ -1,14 +1,16 @@
 <script setup lang="ts">
-// 工作空间树（PRD 02 步骤 1 只读底座）：根节点「工作空间」+ 懒加载子目录树——
+// 工作空间树（PRD 02）：根节点「工作空间」+ 懒加载子目录树——
 // 展开才挂载子层（v-if），子层挂载即 list_workspace_dir 取子目录（只展示目录，文件进网格视口）；
 // 节点点击 = tabs.openView("ws:"+rel)（根 = "ws:"）；复用 TreeRowItem 与 treeExpansion 会话级展开态
 // （openSet 以 relPath 为 id，与库文件夹 F id 不撞）；展开动画复用 expandAnim（FolderTree 同口径）。
 // workspace/ 目录不存在（exists=false）= 空态文案（正文档 + 亮色/四级，
-// 沿用 SidebarLeft empty-state 风格；root=null 是拉取瞬态不渲染误标）；磁盘写操作（新建/重命名/删除）归步骤 2，树只导航。
+// 沿用 SidebarLeft empty-state 风格；root=null 是拉取瞬态不渲染误标）；
+// 步骤 2 起树行兼拖拽落点（data-folder-id="ws:"+rel，素材移入该目录，落点视觉 dropZone）。
 import { computed, onMounted } from "vue";
 import TreeRowItem from "./items/TreeRowItem.vue";
 import { isTreeOpen, toggleOpen } from "../lib/treeExpansion";
 import { expandEnter, expandLeave } from "../lib/expandAnim";
+import { dragView } from "../lib/dragOperation";
 import { useContentStore } from "../stores/content";
 import { useTabsStore } from "../stores/tabs";
 import { useWsStore } from "../stores/ws";
@@ -38,6 +40,12 @@ const expandable = (rel: string): boolean =>
 function openDir(rel: string): void {
   tabs.openView(`ws:${rel}`);
 }
+
+// 拖拽落点视觉（PRD 02 步骤 2：树行 = ws 素材移动落点，引擎 dragView.tree 按 "ws:"+rel 命中；
+// ws 只有并入（into）语义，before/after 排序不出现）
+function dropZone(rel: string): "before" | "after" | "into" | undefined {
+  return dragView.tree?.folderId === `ws:${rel}` ? dragView.tree.zone : undefined;
+}
 </script>
 
 <template>
@@ -47,6 +55,8 @@ function openDir(rel: string): void {
       v-if="isRoot"
       kind="folder"
       name="工作空间"
+      data-folder-id="ws:"
+      :drop-zone="dropZone('')"
       :count="ws.loadedOk('') ? ws.fileCount('') : undefined"
       :expanded="isTreeOpen('')"
       :expandable="true"
@@ -61,6 +71,8 @@ function openDir(rel: string): void {
         <TreeRowItem
           kind="folder"
           :name="d.name"
+          :data-folder-id="`ws:${d.relPath}`"
+          :drop-zone="dropZone(d.relPath)"
           :count="ws.loadedOk(d.relPath) ? ws.fileCount(d.relPath) : undefined"
           :expanded="isTreeOpen(d.relPath)"
           :expandable="expandable(d.relPath)"

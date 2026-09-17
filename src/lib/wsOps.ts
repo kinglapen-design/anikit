@@ -54,6 +54,33 @@ export async function revealPath(absPath: string): Promise<void> {
   await invoke("reveal_path", { absPath });
 }
 
+// —— 步骤 2 基础整理写操作（命令返回即更新 UI；watcher 回声后端消重，见 services/workspace）——
+
+// 新建文件夹：relDir 下创建 name；重名 / 非法名抛中文错（commands/workspace.rs ws_create_folder）
+export async function createWsFolder(relDir: string, name: string): Promise<void> {
+  await invoke("ws_create_folder", { relDir, name });
+}
+
+// 重命名：relPath 最后一段改为 newName（文件与文件夹同径）；目标重名抛中文错
+export async function renameWsEntry(relPath: string, newName: string): Promise<void> {
+  await invoke("ws_rename", { relPath, newName });
+}
+
+// 删除到系统回收站（多路径一次调用；PRD 06 不进库内回收站）
+export async function deleteWsEntries(relPaths: string[]): Promise<void> {
+  await invoke("ws_delete", { relPaths });
+}
+
+// 移动（拖拽 / 剪切粘贴）：relPaths 移入 destRel；重名自动 " (n)" 规避
+export async function moveWsEntries(relPaths: string[], destRel: string): Promise<void> {
+  await invoke("ws_move", { relPaths, destRel });
+}
+
+// 粘贴：复制（cut=false）或移动（cut=true）进 destRel；剪切成功后前端清剪贴板
+export async function pasteWsEntries(relPaths: string[], destRel: string, cut: boolean): Promise<void> {
+  await invoke("ws_paste", { relPaths, destRel, cut });
+}
+
 // —— 事件监听（App.vue onMounted 统一调，模块级幂等）——
 // fs-changed 写入连发去抖 300ms 合并为一拍重扫（缩略图缓存写回已后端过滤，不触发）；
 // thumbs-ready 总是 emit（可能空数组），补丁回填 ws store 对应条目的 thumbPath

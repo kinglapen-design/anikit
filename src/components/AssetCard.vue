@@ -38,6 +38,8 @@ import { useUiStore } from "../stores/ui";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useContentStore } from "../stores/content";
+import { useToastStore } from "../stores/toast";
+import { useWsStore } from "../stores/ws";
 import type { PlacementView } from "../stores/content";
 
 const props = withDefaults(
@@ -93,10 +95,19 @@ const cardKey = `${props.asset.assetId}|${props.asset.folderId}`;
 const picked = computed(() => picker.active && picker.isPicked("asset", props.asset.assetId));
 // 发起文件自身（2026-08-24 用户定）：剪切档半透明 + 禁选（togglePick 同拦），视觉明确"不可选"
 const pickerSelf = computed(() => picker.active && picker.origin?.kind === "asset" && picker.origin.id === props.asset.assetId);
-// 重命名提交 / 取消（FileCard nameCommit / nameCancel 上抛；空/不变判定在本壳，TreeRowItem 口径）
+// 重命名提交 / 取消（FileCard nameCommit / nameCancel 上抛；空/不变判定在本壳，TreeRowItem 口径）；
+// 工作空间（PRD 02 步骤 2）走 ws_rename 按路径改名（assetId = ws: 合成假 id 严禁 rename_placement）
 async function onRenameCommit(name: string): Promise<void> {
   selection.renamingKey = null;
   if (!name || name === props.asset.name) return;
+  if (isWs.value) {
+    try {
+      await useWsStore().rename(props.asset.assetId.slice(3), name);
+    } catch (e) {
+      useToastStore().notify({ message: String(e), icon: "fail" });
+    }
+    return;
+  }
   await renamePlacement(
     { assetId: props.asset.assetId, folderId: props.asset.folderId, origin: props.asset.origin },
     name,
@@ -108,9 +119,9 @@ function onRenameCancel(): void {
 // 双击名称 = 就地重命名（2026-07-29 复验三轮，renamingKey 既有机制——
 // 双击第一下 click 已把卡片单选入域，此处仅置重命名目标）；
 // 回收站视口只读不可重命名（2026-07-29 二轮，与 F2 / 菜单同口径闸）；
-// 工作空间只读底座（PRD 02 步骤 1）同禁——重命名走 rename_placement（assetId 命令）
+// 工作空间（PRD 02 步骤 2）放开：按路径 ws_rename（提交分支在 onRenameCommit）
 function startRename(): void {
-  if (useContentStore().isRecycleView || useContentStore().isWorkspaceView) return;
+  if (useContentStore().isRecycleView) return;
   selection.renamingKey = cardKey;
 }
 

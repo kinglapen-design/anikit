@@ -1,6 +1,7 @@
-//! 命令 API：索引式工作空间（PRD 02 步骤 1 只读底座）——根信息 / 目录列举 / 缩略图请求。
-//! 未开空间一律返回空（null / []）不报错（参照 list_space_libraries 先例）；
-//! 业务在 services::workspace，本层只做取空间快照与参数传递。
+//! 命令 API：索引式工作空间（PRD 02）——根信息 / 目录列举 / 缩略图请求（步骤 1 只读底座）
+//! + 基础整理写操作（步骤 2：新建文件夹 / 重命名 / 回收站删除 / 移动 / 复制粘贴）。
+//! 未开空间一律返回空（null / []）不报错（参照 list_space_libraries 先例）；写操作未开
+//! 空间报错；业务在 services::workspace，本层只做取空间快照与参数传递。
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
@@ -76,4 +77,54 @@ pub fn request_workspace_thumbs(app: AppHandle, state: State<AppState>, abs_path
     }
   });
   Ok(())
+}
+
+// ---------- 步骤 2 基础整理写操作（命令返回即更新 UI，watcher 回声由服务消重） ----------
+
+/// 未开空间给统一中文错；开了取 workspace 根（写操作专属，读路径的空返回不适用）
+fn ws_root(state: &State<AppState>) -> Result<std::path::PathBuf, String> {
+  let space = state.space.lock().map_err(|e| e.to_string())?.clone().ok_or_else(|| "请先打开储存空间".to_string())?;
+  Ok(space.root.join(WORKSPACE_DIR))
+}
+
+/// 新建文件夹：rel_dir 下创建 name；重名 / 非法名 / .anikit 内给中文错
+#[tauri::command]
+pub fn ws_create_folder(state: State<AppState>, rel_dir: String, name: String) -> Result<(), String> {
+  let root = ws_root(&state)?;
+  if !root.is_dir() {
+    return Err("工作空间目录不存在".to_string());
+  }
+  workspace::create_folder(&root, &rel_dir, &name)
+}
+
+/// 重命名：rel_path 最后一段改为 new_name（文件与文件夹同径）；目标重名给中文错
+#[tauri::command]
+pub fn ws_rename(state: State<AppState>, rel_path: String, new_name: String) -> Result<(), String> {
+  let root = ws_root(&state)?;
+  workspace::rename_entry(&root, &rel_path, &new_name)
+}
+
+/// 删除到系统回收站（多路径一次调用；PRD 06 不进库内回收站）
+#[tauri::command]
+pub fn ws_delete(state: State<AppState>, rel_paths: Vec<String>) -> Result<(), String> {
+  let root = ws_root(&state)?;
+  workspace::delete_entries(&root, &rel_paths)
+}
+
+/// 移动（拖拽 / 剪切粘贴）：rel_paths 移入 dest_rel；重名自动 " (n)" 规避
+#[tauri::command]
+pub fn ws_move(state: State<AppState>, rel_paths: Vec<String>, dest_rel: String) -> Result<(), String> {
+  let root = ws_root(&state)?;
+  workspace::move_entries(&root, &rel_paths, &dest_rel)
+}
+
+/// 粘贴：rel_paths 复制（cut=false）或移动（cut=true）进 dest_rel；剪切成功后前端清剪贴板
+#[tauri::command]
+pub fn ws_paste(state: State<AppState>, rel_paths: Vec<String>, dest_rel: String, cut: bool) -> Result<(), String> {
+  let root = ws_root(&state)?;
+  if cut {
+    workspace::move_entries(&root, &rel_paths, &dest_rel)
+  } else {
+    workspace::copy_entries(&root, &rel_paths, &dest_rel)
+  }
 }

@@ -46,6 +46,7 @@ import { useContentStore, type PlacementView } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
+import { useWsStore } from "../stores/ws";
 import { isDisplaySorted } from "./sortPlacements";
 import { COL_GAP } from "./layouts";
 import * as ops from "./placementOps";
@@ -284,6 +285,15 @@ function updateDropTarget(e: DropPointer): void {
   const treeItem = el.closest<HTMLElement>(".tree-item[data-folder-id]");
   if (treeItem) {
     const id = treeItem.getAttribute("data-folder-id")!;
+    // 工作空间树行（WorkspaceTree 渲染 "ws:"+rel 合成 id，PRD 02 步骤 2）：只接 ws 素材
+    // 并入 = 移动进该目录；文件夹拖拽在工作空间无排序语义，不作落点
+    if (id.startsWith("ws:")) {
+      if (sess.kind === "asset" && items.some((it) => it.assetId.startsWith("ws:"))) {
+        dragView.tree = { folderId: id, zone: "into" };
+        sess.drop = async () => dropWsAssetsInto(items, id.slice(3));
+      }
+      return;
+    }
     const r = treeItem.getBoundingClientRect();
     const rel = (e.clientY - r.top) / Math.max(1, r.height);
     if (sess.kind === "asset") {
@@ -309,9 +319,22 @@ function updateDropTarget(e: DropPointer): void {
   // 快速访问「回收站」行（2026-09-08 用户定）：素材拖入 = 丢到回收站（Del 同路径，免右键）；
   // 文件夹不落——删除文件夹 = 素材移未分类语义不同，不给落点误导；Ctrl 无语义忽略
   if (el.closest<HTMLElement>("[data-quick-drop='recycle']")) {
-    if (sess.kind === "asset") {
+    // ws 合成项不走库回收站（dropAssetsToRecycle = deletePlacements assetId 命令）——不作落点
+    if (sess.kind === "asset" && !items.every((it) => it.assetId.startsWith("ws:"))) {
       dragView.quickRecycle = true;
       sess.drop = async () => dropAssetsToRecycle(items);
+    }
+    return;
+  }
+
+  // 工作空间文件夹卡片（FolderStrip ws 分流渲染 data-ws-folder = rel，PRD 02 步骤 2）：
+  // 只接 ws 素材并入 = 移动；文件夹卡片拖拽在 ws 无排序语义，不作落点
+  const wsFolderCard = el.closest<HTMLElement>(".folder-card[data-ws-folder]");
+  if (wsFolderCard) {
+    if (sess.kind === "asset" && items.some((it) => it.assetId.startsWith("ws:"))) {
+      const rel = wsFolderCard.getAttribute("data-ws-folder")!;
+      dragView.folderCardId = `ws:${rel}`;
+      sess.drop = async () => dropWsAssetsInto(items, rel);
     }
     return;
   }
@@ -353,8 +376,10 @@ function updateDropTarget(e: DropPointer): void {
     }
   }
 
-  // 素材卡片间隙排序（仅素材拖拽；网格 resolver 由 AssetGrid 注册）
+  // 素材卡片间隙排序（仅素材拖拽；网格 resolver 由 AssetGrid 注册）。
+  // ws 磁盘实况无排序语义：间隙不作落点（防合成 id 进 reorder_placements）
   if (sess.kind === "asset" && gridResolver) {
+    if (items.every((it) => it.assetId.startsWith("ws:"))) return;
     const gap = gridResolver(e.clientX, e.clientY, items.map((it) => `${it.assetId}|${it.folderId}`));
     if (gap) {
       dragView.gap = gap;
@@ -379,6 +404,14 @@ async function dropAssetsInto(items: PlacementRef[], folderId: string, ctrl: boo
     return;
   }
   await ops.movePlacements(items, folderId);
+}
+
+// ws 素材落工作空间文件夹（树行 / 文件夹卡片，PRD 02 步骤 2 拖拽移动）：assetId 剥 ws:
+// 前缀得 rel，按路径 ws_move（重名自动 " (n)" 规避）；store 局部重扫刷新（watcher 回声后端消重）
+async function dropWsAssetsInto(items: PlacementRef[], targetRel: string): Promise<void> {
+  const rels = items.filter((it) => it.assetId.startsWith("ws:")).map((it) => it.assetId.slice(3));
+  if (rels.length === 0) return;
+  await useWsStore().move(rels, targetRel);
 }
 
 // 素材落快速访问「回收站」行（2026-09-08 用户定）：丢到回收站——deletePlacements 默认
@@ -577,8 +610,12 @@ function onMove(e: PointerEvent): void {
     (e.clientX < 0 || e.clientY < 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight)
   ) {
     const ids = [...new Set(sess.items.map((it) => it.assetId))];
+    // ws 合成项（ws: 假 id）不可拖出——drag_assets 是库命令，只带真实 assetId
+    const libIds = ids.filter((id) => !id.startsWith("ws:"));
     endDrag(true);
-    void invoke("drag_assets", { assetIds: ids }).catch((err) => console.warn("拖出失败", err));
+    if (libIds.length > 0) {
+      void invoke("drag_assets", { assetIds: libIds }).catch((err) => console.warn("拖出失败", err));
+    }
     return;
   }
   if (sess.ghost) moveGhost(sess.ghost, e.clientX, e.clientY);

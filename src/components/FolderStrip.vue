@@ -22,6 +22,7 @@ import { useContentStore, type FolderNode } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
+import { useToastStore } from "../stores/toast";
 import { useWsStore } from "../stores/ws";
 
 const props = withDefaults(defineProps<{ viewKey: string; panelActive?: boolean }>(), { panelActive: false });
@@ -30,9 +31,9 @@ const selection = useSelectionStore();
 const tabs = useTabsStore();
 const ws = useWsStore();
 const folderOpen = ref(true);
-// 工作空间视口（PRD 02 步骤 1，2026-09-17 实机定：文件夹同库口径进网格）：导航 / 右键菜单 /
-// 简介行全部分流；卡片不渲染 data-folder-id——防拖拽层把 ws 合成 id 当库文件夹发起并入 /
-// 排序（dragOperation 凭该属性识别）；选择 / 重命名 / 档案口径不适用（树只导航，写操作归步骤 2）
+// 工作空间视口（PRD 02，2026-09-17 实机定：文件夹同库口径进网格）：导航 / 右键菜单 /
+// 简介行全部分流；库侧专属域（多选选择 / 剪切态 / 排序并入 data-folder-id）不适用——
+// 步骤 2 起 ws 文件夹卡片改挂 data-ws-folder（= rel）作素材移动拖拽落点，落点视觉 drop-into 同位
 const isWs = computed(() => props.viewKey.startsWith("ws:"));
 // 折叠切换：SectionTitle 守卫在调用方（§20——dragView.suppressClick 吞拖拽后紧随 click）
 function onFold(): void {
@@ -93,9 +94,9 @@ function onMenu(f: { id: string; name: string }, e: MouseEvent): void {
   openFolderCardMenu(e, f);
 }
 
-// ws：名称双击进重命名不适用（步骤 2），拦截不发命名态
+// 名称双击进重命名：ws 同样适用（PRD 02 步骤 2，提交走 ws_rename 按路径分支）
 function onNameEdit(id: string): void {
-  if (!isWs.value) namingId.value = id;
+  namingId.value = id;
 }
 
 // —— 行内重命名（7.1 上移自旧 FolderCard，TreeRowItem 同口径：空/不变判定在调用方）——
@@ -112,8 +113,16 @@ watch(
 );
 async function onRenameCommit(f: FolderNode, name: string): Promise<void> {
   namingId.value = null;
-  if (isWs.value) return; // ws 命名态恒 null（onNameEdit 拦截），双保险不发库命令
   if (!name || name === f.name) return;
+  // ws（PRD 02 步骤 2）：f.id = rel，走 ws_rename；库走 renameFolder
+  if (isWs.value) {
+    try {
+      await useWsStore().rename(f.id, name);
+    } catch (e) {
+      useToastStore().notify({ message: String(e), icon: "fail" });
+    }
+    return;
+  }
   await renameFolder(f.id, name);
 }
 
@@ -164,8 +173,9 @@ const gapBar = computed(() => {
         :dimmed="!isWs && (dragView.folderIds?.has(f.id) ?? false)"
         :cut="!isWs && selection.isFolderCut(f.id)"
         :naming="namingId === f.id"
-        :drop-into="!isWs && dragView.folderCardId === f.id"
+        :drop-into="dragView.folderCardId === (isWs ? `ws:${f.id}` : f.id)"
         :data-folder-id="isWs ? undefined : f.id"
+        :data-ws-folder="isWs ? f.id : undefined"
         :data-drag-name="isWs ? undefined : f.name"
         @click="onSelect(f.id, $event)"
         @dblclick="onEnter(f.id)"

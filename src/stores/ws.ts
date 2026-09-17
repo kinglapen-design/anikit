@@ -1,10 +1,23 @@
-// 工作空间 store（PRD 02 步骤 1 只读底座）：根信息 + 按 relPath 的目录条目缓存（Map，懒加载）+
-// 合成 PlacementView 供给 content.placementsFor。磁盘实况语义：无标签 / 评分 / 排序等附加数据，
-// 所见即所得；写操作（新建 / 重命名 / 删除 / 拖拽移动）归步骤 2，本模块一概不做。
+// 工作空间 store（PRD 02）：根信息 + 按 relPath 的目录条目缓存（Map，懒加载）+
+// 合成 PlacementView 供给 content.placementsFor + 步骤 2 基础整理（新建文件夹 / 重命名 /
+// 回收站删除 / 移动 / 工作空间内复制·剪切·粘贴，命令返回即局部重扫刷新）。磁盘实况语义：
+// 无标签 / 评分 / 排序等附加数据，所见即所得。
 // 合成项铁律：assetId = `ws:${relPath}` 为合成假 id，**任何场景不得发给后端 assetId 类命令**——
 // 消费方按本文件导出的 isWsPlacement 判定走按路径分支或直接禁用。
 import { defineStore } from "pinia";
-import { getWorkspaceRoot, listWorkspaceDir, requestWorkspaceThumbs, type WsEntry, type WsRootInfo, type WsThumbReady } from "../lib/wsOps";
+import {
+  createWsFolder,
+  deleteWsEntries,
+  getWorkspaceRoot,
+  listWorkspaceDir,
+  moveWsEntries,
+  pasteWsEntries,
+  renameWsEntry,
+  requestWorkspaceThumbs,
+  type WsEntry,
+  type WsRootInfo,
+  type WsThumbReady,
+} from "../lib/wsOps";
 import type { PlacementView } from "./content";
 
 // 目录拉取竞态守卫：同一 rel 在途请求共享一趟（fs-changed 连发 / 树展开与视口加载并发常见）
@@ -27,6 +40,9 @@ export const useWsStore = defineStore("ws", {
     dirs: new Map<string, WsEntry[]>(),
     // 加载完成标记（含加载结果为空；未加载目录不在其中——树据此判定展开钮形态）
     loaded: {} as Record<string, boolean>,
+    // 工作空间内剪贴板（PRD 02 步骤 2：复制·剪切·粘贴 = 纯磁盘操作，与系统剪贴板无关）：
+    // rel 清单 + cut 语义；剪切粘贴成功即清空
+    clip: null as { rels: string[]; cut: boolean } | null,
   }),
   getters: {
     entries: (state) => (rel: string): WsEntry[] => state.dirs.get(rel) ?? [],
@@ -105,6 +121,65 @@ export const useWsStore = defineStore("ws", {
     // 手动刷新兜底（PRD 02 定案：右键「刷新」）：全量重扫当前目录
     async refreshDir(rel: string): Promise<void> {
       await this.loadDir(rel);
+    },
+    // —— 步骤 2 写操作（PRD 02：命令返回即直接更新 UI，watcher 回声后端消重）——
+    // 写操作后的局部重扫：源父目录 + 源子树内已加载目录 + 目标目录（rel 以移动 / 重命名 /
+    // 删除路径为锚，全部已加载键中匹配；loaded 目录数 = 展开树 + 开过视口，量级小）
+    async refreshAround(srcRels: string[], destRel?: string): Promise<void> {
+      const affected = new Set<string>();
+      for (const rel of srcRels) {
+        const parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+        affected.add(parent);
+        for (const k of Object.keys(this.loaded)) {
+          if (k === rel || k.startsWith(`${rel}/`)) affected.add(k);
+        }
+      }
+      if (destRel !== undefined) affected.add(destRel);
+      await Promise.all([...affected].map((rel) => this.loadDir(rel)));
+    },
+    // 新建文件夹：默认名「新建文件夹」，本地按当前目录缓存避让重名（与后端 unique_target 同形）
+    async createFolder(rel: string): Promise<void> {
+      const names = new Set((this.dirs.get(rel) ?? []).map((e) => e.name));
+      let name = "新建文件夹";
+      for (let n = 2; names.has(name); n += 1) name = `新建文件夹 (${n})`;
+      await createWsFolder(rel, name);
+      await this.refreshAround([], rel);
+    },
+    // 重命名（文件与文件夹同径）：空 / 不变不动；成功重扫源父目录与源子树（目录改名殃及子路径）
+    async rename(rel: string, newName: string): Promise<void> {
+      const oldName = rel.includes("/") ? rel.slice(rel.lastIndexOf("/") + 1) : rel;
+      if (!newName || newName === oldName) return;
+      await renameWsEntry(rel, newName);
+      await this.refreshAround([rel]);
+    },
+    // 删除到系统回收站（多路径一次调用）
+    async removeEntries(rels: string[]): Promise<void> {
+      if (rels.length === 0) return;
+      await deleteWsEntries(rels);
+      await this.refreshAround(rels);
+    },
+    // 移动（拖拽 / 剪切粘贴）
+    async move(rels: string[], destRel: string): Promise<void> {
+      if (rels.length === 0) return;
+      await moveWsEntries(rels, destRel);
+      await this.refreshAround(rels, destRel);
+    },
+    // 复制 / 剪切入剪贴板（rels = 相对根路径；粘贴到自身所在目录 = 无操作由调用方判）
+    setClip(rels: string[], cut: boolean): void {
+      this.clip = rels.length > 0 ? { rels, cut } : null;
+    },
+    // 粘贴进 destRel；剪切成功后清空剪贴板（一次性语义）
+    async paste(destRel: string): Promise<void> {
+      const clip = this.clip;
+      if (!clip) return;
+      const targets = clip.rels.filter((r) => {
+        const parent = r.includes("/") ? r.slice(0, r.lastIndexOf("/")) : "";
+        return parent !== destRel;
+      });
+      if (targets.length === 0) return;
+      await pasteWsEntries(targets, destRel, clip.cut);
+      await this.refreshAround(targets, destRel);
+      if (clip.cut) this.clip = null;
     },
     // 对已加载目录里 thumbPath 为 null 的文件发后台生成请求（生成完成经 workspace-thumbs-ready 回填）
     requestMissingThumbs(onlyRel?: string): void {
