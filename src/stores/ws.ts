@@ -10,10 +10,13 @@ import {
   deleteWsEntries,
   getWorkspaceRoot,
   listWorkspaceDir,
+  listWsPinned,
   moveWsEntries,
   pasteWsEntries,
+  pinWsEntry,
   renameWsEntry,
   requestWorkspaceThumbs,
+  unpinWsEntry,
   type WsEntry,
   type WsRootInfo,
   type WsThumbReady,
@@ -43,6 +46,9 @@ export const useWsStore = defineStore("ws", {
     // 工作空间内剪贴板（PRD 02 步骤 2：复制·剪切·粘贴 = 纯磁盘操作，与系统剪贴板无关）：
     // rel 清单 + cut 语义；剪切粘贴成功即清空
     clip: null as { rels: string[]; cut: boolean } | null,
+    // 步骤 3 常用固定：rel 清单（顺序 = 固定先后；持久化于 .anikit/workspace.json，
+    // 读取时后端静默剔除失效条目——改名 / 移动 / 删除 / 非目录）
+    pinned: [] as string[],
   }),
   getters: {
     entries: (state) => (rel: string): WsEntry[] => state.dirs.get(rel) ?? [],
@@ -70,7 +76,10 @@ export const useWsStore = defineStore("ws", {
         rootPromise = getWorkspaceRoot()
           .then((r) => {
             this.root = r;
-            if (r) this.requestMissingThumbs();
+            if (r) {
+              this.requestMissingThumbs();
+              void this.loadPinned();
+            }
           })
           .catch((e) => {
             console.warn("工作空间根信息拉取失败（静默降级）：", e);
@@ -136,6 +145,8 @@ export const useWsStore = defineStore("ws", {
       }
       if (destRel !== undefined) affected.add(destRel);
       await Promise.all([...affected].map((rel) => this.loadDir(rel)));
+      // 写操作可能殃及固定条目（改名 / 移动 / 删除）——后端读取即静默剔除回写，重取对齐
+      void this.loadPinned();
     },
     // 新建文件夹：默认名「新建文件夹」，本地按当前目录缓存避让重名（与后端 unique_target 同形）
     async createFolder(rel: string): Promise<void> {
@@ -182,6 +193,21 @@ export const useWsStore = defineStore("ws", {
       await pasteWsEntries(targets, destRel, clip.cut);
       await this.refreshAround(targets, destRel);
       if (clip.cut) this.clip = null;
+    },
+    // —— 步骤 3 常用固定（清单以后端返回为准覆写：固定顺序 + 失效剔除都由后端权威）——
+    // 未开空间容忍空（命令层降级 []）；失败静默（不打扰主流程，下次重试）
+    async loadPinned(): Promise<void> {
+      try {
+        this.pinned = await listWsPinned();
+      } catch {
+        /* 静默：常用区块缺失不阻塞树 */
+      }
+    },
+    async pin(rel: string): Promise<void> {
+      this.pinned = await pinWsEntry(rel);
+    },
+    async unpin(rel: string): Promise<void> {
+      this.pinned = await unpinWsEntry(rel);
     },
     // 对已加载目录里 thumbPath 为 null 的文件发后台生成请求（生成完成经 workspace-thumbs-ready 回填）
     requestMissingThumbs(onlyRel?: string): void {

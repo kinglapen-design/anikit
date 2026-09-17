@@ -76,6 +76,30 @@ export function wsFolderSpec(rel: string, _name: string): CtxEntry[] {
   ];
 }
 
+// ws 树行菜单（WorkspaceTree 行包装 div 右键调用；最小集：打开 / 固定或取消固定 /
+// 在资源管理器中显示 / 刷新——重命名等写操作走视口卡片 / 空白菜单，树行保持轻量）
+export function wsTreeRowSpec(rel: string): CtxEntry[] {
+  const ws = useWsStore();
+  const fail = (e: unknown) => useToastStore().notify({ message: String(e), icon: "fail" });
+  const pinned = ws.pinned.includes(rel);
+  return [
+    { label: "打开", action: () => void useTabsStore().openView(`ws:${rel}`) },
+    {
+      label: pinned ? "从常用中取消固定" : "固定到常用",
+      action: () => void (pinned ? ws.unpin(rel) : ws.pin(rel)).catch(fail),
+    },
+    {
+      label: "在资源管理器中显示",
+      action: () => {
+        const abs = ws.absPath(rel);
+        if (!abs) return;
+        void revealPath(abs).catch(fail);
+      },
+    },
+    { label: "刷新", action: () => refreshDir(rel) },
+  ];
+}
+
 // ws 条目菜单（打开 = 进预览，与双击卡片同径；重命名 = 置卡片行内命名态，
 // 提交在 AssetCard 的 ws 分支；所在目录 rel = folderId 去 "ws:" 前缀）。
 // 批量分流（同库 3.4 口径）：触发项在选择域内且多选 → 复制 / 剪切 / 删除作用于整个选中集；

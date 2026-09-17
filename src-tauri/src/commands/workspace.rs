@@ -128,3 +128,30 @@ pub fn ws_paste(state: State<AppState>, rel_paths: Vec<String>, dest_rel: String
     workspace::copy_entries(&root, &rel_paths, &dest_rel)
   }
 }
+
+// ---------- 步骤 3 常用固定（.anikit/workspace.json，PRD 02） ----------
+
+/// 常用固定清单（读取时静默剔除失效条目并回写；未开空间返回空）
+#[tauri::command]
+pub fn ws_list_pinned(state: State<AppState>) -> Vec<String> {
+  let Some(space) = state.space.lock().ok().and_then(|g| g.clone()) else { return Vec::new() };
+  let root = space.root.join(WORKSPACE_DIR);
+  if !root.is_dir() {
+    return Vec::new();
+  }
+  workspace::list_pinned(&root)
+}
+
+/// 固定文件夹到常用；返回最新清单
+#[tauri::command]
+pub fn ws_pin(state: State<AppState>, rel_path: String) -> Result<Vec<String>, String> {
+  let root = ws_root(&state)?;
+  workspace::pin(&root, &rel_path)
+}
+
+/// 取消固定；返回最新清单
+#[tauri::command]
+pub fn ws_unpin(state: State<AppState>, rel_path: String) -> Result<Vec<String>, String> {
+  let root = ws_root(&state)?;
+  Ok(workspace::unpin(&root, &rel_path))
+}

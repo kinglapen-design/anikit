@@ -515,6 +515,76 @@ pub fn copy_entries(root: &Path, src_rels: &[String], dest_rel_dir: &str) -> Res
   Ok(())
 }
 
+// ---------- 视图状态：常用固定（PRD 02 步骤 3，.anikit/workspace.json） ----------
+
+/// 视图状态文件形状（字段后补；当前仅 pinned = 常用固定 rel 清单）
+#[derive(Default, serde::Deserialize, serde::Serialize)]
+struct ViewState {
+  #[serde(default)]
+  pinned: Vec<String>,
+}
+
+fn view_state_path(root: &Path) -> PathBuf {
+  root.join(CACHE_DIR).join("workspace.json")
+}
+
+/// 读视图状态：缺文件 / 解析失败 / 形状不符 = 默认（空）——可删可重建口径
+fn read_view_state(root: &Path) -> ViewState {
+  fs::read_to_string(view_state_path(root)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+}
+
+fn write_view_state(root: &Path, st: &ViewState) -> Result<(), String> {
+  let path = view_state_path(root);
+  if let Some(parent) = path.parent() {
+    fs::create_dir_all(parent).map_err(|e| format!("视图状态写入失败：{e}"))?;
+  }
+  let text = serde_json::to_string_pretty(st).map_err(|e| format!("视图状态序列化失败：{e}"))?;
+  fs::write(&path, text).map_err(|e| format!("视图状态写入失败：{e}"))
+}
+
+/// 常用固定清单（PRD 步骤 3）：读取时剔除已不存在 / 已改名 / 非目录条目（静默回写），
+/// 去重保序；rel 全部经 resolve_under 校验，坏数据不炸
+pub fn list_pinned(root: &Path) -> Vec<String> {
+  let mut st = read_view_state(root);
+  let before = st.pinned.len();
+  st.pinned.retain(|rel| match resolve_under(root, rel) {
+    Ok(p) => p.is_dir() && !in_cache_dir(&p),
+    Err(_) => false,
+  });
+  let mut seen = std::collections::HashSet::new();
+  st.pinned.retain(|rel| seen.insert(rel.clone()));
+  if st.pinned.len() != before {
+    if let Err(e) = write_view_state(root, &st) {
+      log::warn!("常用固定清单清理回写失败：{e}");
+    }
+  }
+  st.pinned
+}
+
+/// 固定文件夹到常用：仅目录可固定；重复固定幂等
+pub fn pin(root: &Path, rel: &str) -> Result<Vec<String>, String> {
+  let p = resolve_existing(root, rel)?;
+  if !p.is_dir() {
+    return Err("只能固定文件夹".to_string());
+  }
+  let mut st = read_view_state(root);
+  if !st.pinned.iter().any(|r| r == rel) {
+    st.pinned.push(rel.to_string());
+    write_view_state(root, &st)?;
+  }
+  Ok(st.pinned)
+}
+
+/// 取消固定；返回最新清单（容忍清单里的失效条目——list_pinned 顺带清理）
+pub fn unpin(root: &Path, rel: &str) -> Vec<String> {
+  let mut st = read_view_state(root);
+  st.pinned.retain(|r| r != rel);
+  if let Err(e) = write_view_state(root, &st) {
+    log::warn!("取消固定回写失败：{e}");
+  }
+  list_pinned(root)
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -756,5 +826,34 @@ mod tests {
     // 极小窗口（等价过期）：不再判回声
     std::thread::sleep(Duration::from_millis(10));
     assert!(!is_echo_within(&[root.join("甲.txt")], Duration::from_millis(1)));
+  }
+
+  /// 常用固定：固定 / 取消 / 幂等；读取时静默剔除失效（删除 / 改名）与非目录条目
+  #[test]
+  fn pinned_roundtrip_and_stale_pruned() {
+    let (_dir, root) = make_ws();
+    fs::create_dir_all(root.join("夹A/子")).unwrap();
+    fs::create_dir_all(root.join("夹B")).unwrap();
+    fs::write(root.join("文件.txt"), b"x").unwrap();
+    fs::create_dir_all(root.join(".anikit/thumbs")).unwrap();
+
+    assert!(pin(&root, "夹A").unwrap() == ["夹A"]);
+    assert!(pin(&root, "夹B").unwrap() == ["夹A", "夹B"]);
+    assert!(pin(&root, "夹A").unwrap() == ["夹A", "夹B"], "重复固定幂等");
+    assert!(pin(&root, "文件.txt").is_err(), "文件不可固定");
+    assert!(pin(&root, ".anikit/thumbs").is_err(), ".anikit 拒绝");
+    assert!(pin(&root, "../外").is_err(), "越界拒绝");
+
+    // 改名 → 旧 pin 失效剔除；再次读取也是空（已回写落盘）
+    rename_entry(&root, "夹B", "夹B新").unwrap();
+    rename_entry(&root, "夹A", "夹A新").unwrap();
+    assert_eq!(list_pinned(&root), Vec::<String>::new(), "失效条目静默剔除并回写");
+    assert_eq!(list_pinned(&root), Vec::<String>::new());
+
+    // 取消固定
+    pin(&root, "夹A新").unwrap();
+    pin(&root, "夹B新").unwrap();
+    assert_eq!(unpin(&root, "夹A新"), vec!["夹B新".to_string()], "取消后返回剩余清单");
+    assert_eq!(unpin(&root, "夹B新"), Vec::<String>::new());
   }
 }

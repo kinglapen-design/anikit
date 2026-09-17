@@ -81,6 +81,24 @@ export async function pasteWsEntries(relPaths: string[], destRel: string, cut: b
   await invoke("ws_paste", { relPaths, destRel, cut });
 }
 
+// —— 步骤 3 常用固定（视图状态 = .anikit/workspace.json 的 pinned 清单，PRD 02 技术口径）——
+// 后端读取时静默剔除失效条目（删除 / 改名 / 非目录）并回写；未开空间一律返回 []
+
+// 当前固定清单（rel 路径，固定顺序）
+export async function listWsPinned(): Promise<string[]> {
+  return await invoke<string[]>("ws_list_pinned");
+}
+
+// 固定目录（rel 须为空间内已存在目录；重复固定幂等）；返回最新清单
+export async function pinWsEntry(rel: string): Promise<string[]> {
+  return await invoke<string[]>("ws_pin", { relPath: rel });
+}
+
+// 取消固定；返回最新清单（失效条目读取时顺带清理）
+export async function unpinWsEntry(rel: string): Promise<string[]> {
+  return await invoke<string[]>("ws_unpin", { relPath: rel });
+}
+
 // —— 事件监听（App.vue onMounted 统一调，模块级幂等）——
 // fs-changed 写入连发去抖 300ms 合并为一拍重扫（缩略图缓存写回已后端过滤，不触发）；
 // thumbs-ready 总是 emit（可能空数组），补丁回填 ws store 对应条目的 thumbPath
