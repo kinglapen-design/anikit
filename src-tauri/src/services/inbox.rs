@@ -557,7 +557,7 @@ mod tests {
       source_h: None,
       source_thumb_path: None,
       target_folder: "root".to_string(),
-      target_folder_name: "根目录".to_string(),
+      target_folder_name: "根文件夹".to_string(),
       existing_asset_id: "AN-X".to_string(),
       existing_name: "已有".to_string(),
       existing_w: None,
@@ -565,7 +565,7 @@ mod tests {
       existing_size: 0,
       existing_ext: "png".to_string(),
       existing_thumb_path: None,
-      existing_folder_name: "根目录".to_string(),
+      existing_folder_name: "根文件夹".to_string(),
       sequence: None,
       imported_from: None,
     }

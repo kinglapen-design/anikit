@@ -49,7 +49,7 @@ const rows = computed<Row[]>(() =>
       const dir = trail[trail.length - 1];
       const isArchive = dir?.kind === "archive";
       const top = trail[0];
-      const blockName = content.blocks.find((b) => b.id === (top?.block ?? "dir"))?.name ?? "目录";
+      const blockName = content.blocks.find((b) => b.id === (top?.block ?? "dir"))?.name ?? "文件夹";
       // 两级截止：区块 + 所在目录（中间父级省略）；dir 恒存在（非 root 必有父链）
       const segments = [blockName, ...(dir ? [isArchive ? `${dir.name}.档案` : dir.name] : [])];
       return {

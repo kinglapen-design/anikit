@@ -55,7 +55,7 @@ export function scanEntries(): CtxEntry[] {
         // 三范围（锚点过滤：组内任一资产命中整组返回，PRD 03_查找文件-03）；
         // 快速访问视图无当前文件夹 / 无选中素材时对应项禁用
         {
-          label: "当前目录",
+          label: "当前文件夹",
           disabled: scanFolderId === null,
           action: scanFolderId === null ? undefined : () => void openScan({ kind: "folder", folderId: scanFolderId }),
         },

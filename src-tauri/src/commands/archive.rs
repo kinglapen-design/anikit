@@ -427,10 +427,10 @@ fn placement_link(lib: &Library, p: &Placement) -> Option<PlacementLink> {
   })
 }
 
-/// 区块名：None / 失效引用 = 默认区块「目录」
+/// 区块名：None / 失效引用 = 默认区块「文件夹」（2026-09-17 目录语义改文件夹）
 fn block_name(lib: &Library, block: Option<&str>) -> String {
   let id = block.unwrap_or(DEFAULT_BLOCK_ID);
-  lib.folders.blocks.iter().find(|b| b.id == id).map(|b| b.name.clone()).unwrap_or_else(|| "目录".to_string())
+  lib.folders.blocks.iter().find(|b| b.id == id).map(|b| b.name.clone()).unwrap_or_else(|| "文件夹".to_string())
 }
 
 #[cfg(test)]
@@ -505,7 +505,7 @@ mod tests {
     assert!(dir_link.origin);
     let root_link = &d.placements[1];
     assert_eq!(root_link.folder_id, None, "未分类 folderId = null");
-    assert_eq!(root_link.block_name, "目录");
+    assert_eq!(root_link.block_name, "文件夹");
     assert_eq!(root_link.path, vec!["未分类"]);
     assert!(!root_link.origin);
     // 资产不存在报中文错
@@ -525,7 +525,7 @@ mod tests {
 
     let d = asset_detail(&h.lib, "AN-A").unwrap();
     assert_eq!(d.placements[0].path, vec!["一", "三", "四"], "首段（根目录）+ 末两段（父级 / 所在目录）");
-    assert_eq!(d.placements[0].block_name, "目录", "无区块归属 = 默认区块");
+    assert_eq!(d.placements[0].block_name, "文件夹", "无区块归属 = 默认区块");
   }
 
   /// 归属档案反查：folder 链上 kind = archive 者去重（含嵌套档案、跨 Placement 去重）

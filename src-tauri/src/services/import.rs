@@ -704,7 +704,7 @@ mod tests {
         source_h: None,
         source_thumb_path: None,
         target_folder: ROOT_FOLDER_ID.into(),
-        target_folder_name: "根目录".into(),
+        target_folder_name: "根文件夹".into(),
         existing_asset_id: "AN-X".into(),
         existing_name: "旧图.png".into(),
         existing_w: None,
@@ -712,7 +712,7 @@ mod tests {
         existing_size: 200,
         existing_ext: "png".into(),
         existing_thumb_path: None,
-        existing_folder_name: "根目录".into(),
+        existing_folder_name: "根文件夹".into(),
         sequence: None,
         imported_from: None,
       }],
@@ -726,10 +726,10 @@ mod tests {
         "conflicts": [{
           "sourcePath": "p", "sourceName": "新图.png", "sourceSize": 100,
           "sourceW": 10, "sourceH": null, "sourceThumbPath": null,
-          "targetFolder": "root", "targetFolderName": "根目录",
+          "targetFolder": "root", "targetFolderName": "根文件夹",
           "existingAssetId": "AN-X", "existingName": "旧图.png",
           "existingW": null, "existingH": null, "existingSize": 200,
-          "existingExt": "png", "existingThumbPath": null, "existingFolderName": "根目录"
+          "existingExt": "png", "existingThumbPath": null, "existingFolderName": "根文件夹"
         }],
         "failed": [{ "path": "q", "reason": "r" }]
       })

@@ -177,9 +177,9 @@
     assert_eq!(c.source_name, "乙.txt");
     assert_eq!(c.source_size, 12); // "相同内容" 4 字 × 3 字节 UTF-8
     assert_eq!((c.source_w, c.source_h), (None, None));
-    assert_eq!((c.target_folder.as_str(), c.target_folder_name.as_str()), (ROOT_FOLDER_ID, "根目录"));
+    assert_eq!((c.target_folder.as_str(), c.target_folder_name.as_str()), (ROOT_FOLDER_ID, "根文件夹"));
     assert_eq!((c.existing_name.as_str(), c.existing_ext.as_str()), ("甲.txt", "txt"));
-    assert_eq!(c.existing_folder_name, "根目录");
+    assert_eq!(c.existing_folder_name, "根文件夹");
     with_lib(&h, |l| assert!(l.index.assets.contains_key(&c.existing_asset_id)));
 
     // png 场景：双侧宽高 + 已有侧缩略图齐备

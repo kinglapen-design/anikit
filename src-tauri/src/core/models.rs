@@ -187,7 +187,7 @@ impl FoldersFile {
     Self {
       version: DATA_VERSION,
       // 新库自带默认区块（与开库自检同一口径，省一次自愈落盘）
-      blocks: vec![Block { id: DEFAULT_BLOCK_ID.to_string(), name: "目录".to_string(), icon: None, order: 0 }],
+      blocks: vec![Block { id: DEFAULT_BLOCK_ID.to_string(), name: "文件夹".to_string(), icon: None, order: 0 }],
       folders: Vec::new(),
       items: Vec::new(),
     }
@@ -212,7 +212,8 @@ pub struct Folder {
   pub name: String,
   #[serde(default)]
   pub parent: Option<String>,
-  /// 所属区块 ID（仅顶级文件夹有意义；None / "dir" = 默认区块「目录」，2026-08-14 区块子系统）
+  /// 所属区块 ID（仅顶级文件夹有意义；None / "dir" = 默认区块「文件夹」，2026-08-14 区块子系统；
+  /// 2026-09-17 实机走查「目录语义改成文件夹」——默认区块名由「目录」更名，id 不变）
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub block: Option<String>,
   /// 自定义图标（新建顶级文件夹时继承所在区块默认图标；None = 默认文件夹图标，不写字段）

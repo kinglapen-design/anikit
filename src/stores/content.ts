@@ -158,7 +158,7 @@ export interface ConflictItem {
   sourceH: number | null;
   sourceThumbPath: string | null; // webview 直渲不了的格式（PSD/PSB/SVG 等）后端生成的预览缓存（cache/tmp），图片格式为 null 走直读源文件
   targetFolder: string; // 落点文件夹 ID（"root" 或 F 开头）
-  targetFolderName: string; // 落点文件夹显示名（root → "根目录"）
+  targetFolderName: string; // 落点文件夹显示名（root → "根文件夹"）
   existingAssetId: string;
   existingName: string; // 已有资源显示名（origin Placement 名）
   existingW: number | null;

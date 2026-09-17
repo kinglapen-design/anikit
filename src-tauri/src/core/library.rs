@@ -441,13 +441,20 @@ fn scan_orphan_infos(assets_dir: &Path, folders: &FoldersFile, recycle: &Recycle
   orphans
 }
 
-/// 打开自检（2026-08-14 区块子系统）：区块表自愈——默认区块「目录」缺失（含 blocks 为空）→
-/// 注入队首；Folder.block 指向不存在的区块 → 置 None。返回是否有改动
+/// 打开自检（2026-08-14 区块子系统）：区块表自愈——默认区块「文件夹」缺失（含 blocks 为空）→
+/// 注入队首；Folder.block 指向不存在的区块 → 置 None。返回是否有改动；
+/// 2026-09-17 实机走查「目录语义改成文件夹」迁移：默认区块名仍为旧名「目录」（= 用户从未改名）→ 更名「文件夹」
 fn fix_blocks(folders: &mut FoldersFile) -> bool {
   let mut changed = false;
   if !folders.blocks.iter().any(|b| b.id == DEFAULT_BLOCK_ID) {
-    folders.blocks.insert(0, Block { id: DEFAULT_BLOCK_ID.to_string(), name: "目录".to_string(), icon: None, order: 0 });
+    folders.blocks.insert(0, Block { id: DEFAULT_BLOCK_ID.to_string(), name: "文件夹".to_string(), icon: None, order: 0 });
     changed = true;
+  }
+  for b in &mut folders.blocks {
+    if b.id == DEFAULT_BLOCK_ID && b.name == "目录" {
+      b.name = "文件夹".to_string();
+      changed = true;
+    }
   }
   let ids: HashSet<&str> = folders.blocks.iter().map(|b| b.id.as_str()).collect();
   for f in &mut folders.folders {
@@ -1145,11 +1152,48 @@ mod tests {
     assert_eq!(lib.folders.blocks.len(), 1, "blocks 为空注入默认区块");
     assert_eq!(
       (lib.folders.blocks[0].id.as_str(), lib.folders.blocks[0].name.as_str(), lib.folders.blocks[0].order),
-      (DEFAULT_BLOCK_ID, "目录", 0)
+      (DEFAULT_BLOCK_ID, "文件夹", 0)
     );
     assert_eq!((lib.folders.folders[0].block.clone(), lib.folders.folders[0].icon.clone()), (None, None));
     let disk: FoldersFile = read_json(&root.join(FOLDERS_FILE)).unwrap();
     assert_eq!(disk.blocks.len(), 1, "自检改动落盘");
+  }
+
+  /// 默认区块名迁移（2026-09-17 实机走查「目录语义改成文件夹」）：存量「目录」更名「文件夹」并落盘；
+  /// 用户改过名的默认区块不动
+  #[test]
+  fn open_renames_legacy_default_block_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let root = lib.root.clone();
+
+    fs::write(
+      root.join(FOLDERS_FILE),
+      r#"{
+        "version": 1,
+        "blocks": [ { "id": "dir", "name": "目录", "order": 0 } ],
+        "folders": [],
+        "items": []
+      }"#,
+    )
+    .unwrap();
+    let lib = open(&lib.space_root, &root).unwrap();
+    assert_eq!(lib.folders.blocks[0].name, "文件夹", "旧名「目录」更名");
+    let disk: FoldersFile = read_json(&root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.blocks[0].name, "文件夹", "迁移落盘");
+
+    fs::write(
+      root.join(FOLDERS_FILE),
+      r#"{
+        "version": 1,
+        "blocks": [ { "id": "dir", "name": "素材区", "order": 0 } ],
+        "folders": [],
+        "items": []
+      }"#,
+    )
+    .unwrap();
+    let lib = open(&lib.space_root, &root).unwrap();
+    assert_eq!(lib.folders.blocks[0].name, "素材区", "用户改过名的不动");
   }
 
   /// 自定义图标迁移（2026-09-01，7.1 二十五轮）：旧 05_custom-icon 文件干就近映射（animal→dog）、

@@ -121,7 +121,7 @@ function conflictLines(): string[] {
     @close="conflicts = null"
   >
     <p v-for="line in conflictLines()" :key="line" class="warn-line">{{ line }}</p>
-    <p class="warn-line">删除后文件夹将移入目录区块。</p>
+    <p class="warn-line">删除后文件夹将移入文件夹区块。</p>
     <template #actions>
       <AppButton variant="primary" label="删除" :disabled="busy" @click="submit(true)" />
       <AppButton variant="panel" label="取消" :disabled="busy" @click="conflicts = null" />

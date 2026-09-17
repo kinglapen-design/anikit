@@ -574,10 +574,10 @@ fn conflict_of(l: &Library, meta: &AssetMeta, folder_id: String, imported_from: 
   }
 }
 
-/// 文件夹显示名："root" → "根目录"；未知 ID → "未知文件夹"（防御，正常不出现）
+/// 文件夹显示名："root" → "根文件夹"（2026-09-17 目录语义改文件夹）；未知 ID → "未知文件夹"（防御，正常不出现）
 fn folder_display_name(l: &Library, folder_id: &str) -> String {
   if folder_id == ROOT_FOLDER_ID {
-    return "根目录".to_string();
+    return "根文件夹".to_string();
   }
   l.index.folders.get(folder_id).map(|f| f.name.clone()).unwrap_or_else(|| "未知文件夹".to_string())
 }
