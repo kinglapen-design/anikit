@@ -144,11 +144,14 @@ function conflictLines(): string[] {
   border-bottom: 1px solid var(--line-hover);
   flex: none;
 }
-/* 内容区（30 稿）：padding 0 24；滚动自管（ScrollThumb 悬浮件），壳 overflow 关闭 */
+/* 内容区（30 稿）：padding 0 24；滚动自管（ScrollThumb 悬浮件），壳 overflow 关闭；
+   壳 padding 0：归零 AppModal .content 的负 margin（2026-09-13 实机走查贴右缘口径）——
+   padding-right 保留 24（行靠它内缩），贴右缘由内层 .scroll-wrap/.bm-rows 负 margin 对承担 */
 .block-manage :deep(.content) {
   padding: 0 var(--space-24);
   gap: 0;
   overflow: hidden;
+  margin-right: 0;
 }
 /* 底部按钮栏（30 稿）：62 高 / padding 12 12 12 24 / 顶线通栏 / 按钮 88×38 主左次右 */
 .block-manage :deep(.actions) {
@@ -167,16 +170,21 @@ function conflictLines(): string[] {
   flex-direction: column;
   min-height: 0;
 }
-/* 滚动包裹层：relative 锚 ScrollThumb（悬浮滚轮悬停显隐，主窗口统一交互） */
+/* 滚动包裹层：relative 锚 ScrollThumb（悬浮滚轮悬停显隐，主窗口统一交互）；
+   负 margin 对（2026-09-13 实机走查贴右缘口径）——margin-right 负扩 24 吃进 .content 的
+   0 24 padding 贴到弹窗缘（恰抵 .content 裁剪线内，overflow hidden 不裁），.bm-rows 补回 */
 .scroll-wrap {
   position: relative;
   min-height: 0;
+  margin-right: calc(-1 * var(--space-24));
 }
-/* 行列表：超高自滚（4 行封顶，稿内容区 3 行量上放宽一行） */
+/* 行列表：超高自滚（4 行封顶，稿内容区 3 行量上放宽一行）；
+   padding-right 补回包裹层负扩，行内容原位不动（2026-09-13 贴右缘口径） */
 .bm-rows {
   display: flex;
   flex-direction: column;
   max-height: 208px;
+  padding-right: var(--space-24);
 }
 .bm-rows-inner {
   display: flex;

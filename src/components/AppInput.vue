@@ -9,7 +9,8 @@
 // 内嵌 input 透明去框——聚焦层 opacity 机制必须有壳（input 无伪元素）；
 // 外部聚焦改用 expose 的 focus()（壳化后 $el 是壳 div 不再可 focus）。
 // clearable（2026-08-18，36/37 稿输入框内"清除 ×"）：有内容时尾部 20×20 清除钮
-//（AppSearchBar 同款：标签档、hover 暗-悬停罩）。
+//（AppSearchBar 同款：标签档、hover 暗-悬停罩）；**tabindex -1 不进 Tab 序**
+//（2026-09-13 实机走查：Tab 应直达下一输入框，不停在 × 上）。
 import { ref } from "vue";
 import AppIcon from "./AppIcon.vue";
 
@@ -36,7 +37,7 @@ defineExpose({
       :placeholder="placeholder"
       :disabled="disabled"
     />
-    <button v-if="clearable && model && !disabled" class="clear" v-tip="'清除'" @click="model = ''">
+    <button v-if="clearable && model && !disabled" class="clear" tabindex="-1" v-tip="'清除'" @click="model = ''">
       <AppIcon name="clear" :size="12" />
     </button>
   </div>

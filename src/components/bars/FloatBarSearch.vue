@@ -148,8 +148,16 @@ function onFiltersWheel(e: WheelEvent): void {
   color: var(--n-l-a2);
 }
 .fbs-ic.collapse {
+  position: relative;
   width: 14px;
   height: 14px;
+}
+/* 点击热区伪元素外扩（2026-09-13 实机走查：热区太小——树容器 item 展开钮同款 ::after 手法，
+   §14 口径；上右下 -4 吃壳 padding，左 -6 吃筛选组间距） */
+.fbs-ic.collapse::after {
+  content: "";
+  position: absolute;
+  inset: -4px -4px -4px -6px;
 }
 .fbs-ic:hover {
   color: var(--n-l2);

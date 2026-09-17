@@ -206,6 +206,10 @@ function thumbUrl(a: DupAsset): string | null {
   padding: 0;
   gap: 0;
   overflow: hidden;
+  /* 壳 padding 0：归零 AppModal .content 的负 margin 对（2026-09-13 实机走查贴右缘口径），
+     内层包裹（.scroll-wrap/.list-wrap/.keeper-wrap）通栏，thumb 维持贴弹窗缘 */
+  margin-right: 0;
+  padding-right: 0;
 }
 .scan-dialog :deep(.actions) {
   flex: none;

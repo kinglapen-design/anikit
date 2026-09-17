@@ -630,13 +630,13 @@ onBeforeUnmount(() => {
   right: 0;
   width: 6px;
   border-radius: var(--radius-pill);
-  /* 滚动条三栏同口径（2026-08-10 用户定二轮）：6px 胶囊紧贴右边框 / 实色——常态 C4、
-     悬停 C5（透明色在通栏分割线上会交叉叠加，作废） */
-  background: var(--c4);
+  /* 滚动条色档定案（2026-09-06 用户定，2026-09-13 实机走查扫尾旧 token）：6px 胶囊紧贴
+     右边框 / 实色——常态 通用/四级、悬停 通用/六级（旧 C4/C5 在 g3 底上几乎不可见，全废） */
+  background: var(--n-g4);
   transition: background 0.12s ease;
 }
 .grid-thumb:hover {
-  background: var(--c5);
+  background: var(--n-g6);
 }
 /* 框选矩形（6.1）：品牌色-半透明填充 + 品牌色-常态描边（2026-08-30 用户实机统一口径——
    与拖拽插入提示同色系，旧 --brand-1-12/--brand-1 青绿系随新品牌蓝色换代）；

@@ -11,6 +11,7 @@ import AppButton from "./AppButton.vue";
 import AppSearchBar from "./AppSearchBar.vue";
 import AppTag from "./AppTag.vue";
 import IconButton from "./IconButton.vue";
+import ScrollThumb from "./ScrollThumb.vue";
 import { useUiStore } from "../stores/ui";
 import { useSelectionStore } from "../stores/selection";
 import { deletePropsGlobally, listPropPool, setArchiveProps, setAssetProps } from "../lib/customDataOps";
@@ -27,6 +28,7 @@ const keyword = ref("");
 const draft = ref(""); // 新属性输入
 const busy = ref(false);
 const popKey = ref(""); // 新加入 chip（过冲回弹动画挂点）
+const poolRef = ref<HTMLElement>(); // 属性池滚动容器（ScrollThumb 锚：包裹层 = .pd-body）
 
 onMounted(async () => {
   pool.value = await listPropPool();
@@ -112,13 +114,15 @@ function onCancel(): void {
         />
         <IconButton name="add-small" small title="添加" @click="add(draft); draft = ''" />
       </div>
-      <!-- 属性池（稿：C1 底 + 顶分隔线，「已有属性标签：」标签色 + 流式 chips gap 8） -->
-      <div class="pd-pool">
+      <!-- 属性池（稿：C1 底 + 顶分隔线，「已有属性标签：」标签色 + 流式 chips gap 8；
+           滚轮 = ScrollThumb 悬浮件，2026-09-13 实机走查补——此前有滚动无滚轮） -->
+      <div ref="poolRef" class="pd-pool kit-scroll">
         <span class="pool-label">已有属性标签:</span>
         <div class="pool-chips">
           <AppTag v-for="w in poolShown" :key="w" :label="w" @click="add(w)" @remove="removePoolWord(w)" />
         </div>
       </div>
+      <ScrollThumb :body="poolRef" />
     </div>
     <template #actions>
       <div class="pd-bottom">
@@ -151,11 +155,16 @@ function onCancel(): void {
   padding: 0;
   gap: 0;
   overflow: hidden;
+  /* 壳 padding 0：归零 AppModal .content 的负 margin 对（2026-09-13 实机走查贴右缘口径），
+     .pd-body 通栏 = 属性池包裹右缘即弹窗缘 */
+  margin-right: 0;
+  padding-right: 0;
 }
 .props-dialog :deep(.actions) {
   flex: none;
 }
 .pd-body {
+  position: relative; /* ScrollThumb 锚点（属性池滚轮，2026-09-13 实机走查贴右缘口径） */
   display: flex;
   flex-direction: column;
   flex: 1;

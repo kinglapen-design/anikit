@@ -11,9 +11,10 @@
 // 右侧标题 + 描述（竖排 gap 8），按钮组右对齐；**2026-08-12 修正：初版做成居中竖排与 09 稿不符**。
 // 按钮组由 actions slot 给（AppButton primary/panel），内容区默认 slot。
 // alert 侵入式弹出配提示音（2026-08-10 用户供音频：侵入弹窗.wav，lib/sounds）。
-import { onMounted } from "vue";
+import { onMounted, ref } from "vue";
 import AppIcon from "./AppIcon.vue";
 import IconButton from "./IconButton.vue";
+import ScrollThumb from "./ScrollThumb.vue";
 import { playAlert } from "../lib/sounds";
 
 const props = withDefaults(
@@ -30,6 +31,9 @@ const emit = defineEmits<{ close: [] }>();
 onMounted(() => {
   if (props.variant === "alert") playAlert();
 });
+
+// .content 兜底滚动（小窗口时）的悬浮滚轮锚点（2026-09-13 实机走查：此前完全没有滚动指示）
+const contentRef = ref<HTMLElement>();
 </script>
 
 <template>
@@ -68,12 +72,14 @@ onMounted(() => {
           <IconButton name="window-close" title="关闭" @click="emit('close')" />
         </div>
       </template>
-      <div v-if="variant !== 'alert'" class="content">
+      <div v-if="variant !== 'alert'" ref="contentRef" class="content">
         <slot />
       </div>
       <div v-if="$slots.actions" class="actions">
         <slot name="actions" />
       </div>
+      <!-- .content 兜底滚动的悬浮滚轮（thumb 贴弹窗右缘，2026-09-13 实机走查贴右缘口径） -->
+      <ScrollThumb v-if="variant !== 'alert'" :body="contentRef" />
     </div>
   </div>
 </template>
@@ -94,6 +100,7 @@ onMounted(() => {
    与主窗口同机制；原 inset box-shadow 方案（画在内容层）滚轮贴边必压线，作废。
    定宽弹窗（DuplicateDialog / DupScanDialog）width 已 +3 补偿保持内容宽不变 */
 .app-modal {
+  position: relative; /* ScrollThumb 锚点（.content 兜底滚轮，2026-09-13 实机走查） */
   display: flex;
   flex-direction: column;
   gap: var(--space-24);
@@ -150,13 +157,19 @@ onMounted(() => {
 .spacer {
   flex: 1;
 }
-/* 内容区：gap 12 增加内容显示密度（figma 08） */
+/* 内容区：gap 12 增加内容显示密度（figma 08）；
+   负 margin 对（2026-09-13 实机走查贴右缘口径：滚动条贴弹窗右缘、不挤压内容）——
+   margin-right 负扩 24 吃进壳 padding，padding-right 补回使内容排版原位不动；
+   .content 自身兜底滚轮与其内各弹窗滚动容器（包裹层在 .content 内、且未自带右 padding 者）
+   的 thumb 全部贴到弹窗右缘。壳 padding 被弹窗改为 0 的，在该弹窗 :deep(.content) 里归零 margin-right */
 .content {
   display: flex;
   flex-direction: column;
   gap: var(--space-12);
   min-height: 0;
   overflow: auto;
+  margin-right: calc(-1 * var(--space-24));
+  padding-right: var(--space-24);
 }
 /* 按钮组：右对齐（确认 = 品牌色高亮 / 取消 = C4 底色，由 actions slot 给 AppButton） */
 .actions {

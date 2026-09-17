@@ -209,8 +209,9 @@ async function onMore(p: PluginMeta, e: MouseEvent): Promise<void> {
 <style scoped>
 /* 浮层壳覆盖为稿口径（ specificity 提权压 AppMenu 自带 .app-menu，速查 §6 口径）：
    400×450（宽走 AppMenu width prop 内联）+ g3 底（沿 AppMenu）+ 1px g5 真 border（§1 弹窗口径，
-   悬浮滚轮贴边不压框）+ 大阴影 + 圆角 8（沿 AppMenu）；AppMenu 默认 inset 描边 + 小阴影被本块覆盖 */
-.plugin-panel.app-menu {
+   悬浮滚轮贴边不压框）+ 大阴影 + 圆角 8（沿 AppMenu）；AppMenu 默认 inset 描边 + 小阴影被本块覆盖。
+   2026-09-13：AppMenu 加锚点包裹层后 class 透传落包裹层（模板根），覆盖改 :deep 口径 */
+.plugin-panel :deep(.app-menu) {
   height: 450px;
   box-sizing: border-box;
   border: 1px solid var(--n-g5);

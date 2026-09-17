@@ -124,16 +124,16 @@ const tempText = computed(() => (libPath.value ? `${libPath.value}\\temp\\cep-ou
       </div>
       <ScrollThumb :body="bodyRef" />
     </div>
-    <!-- 按钮行（稿：右对齐 gap 8 / 高 38；关闭 128 + 卸载 128 + 安装 200 稿值定宽槽，
-         ActionButton lg 填充式宽 100% 由槽定格） -->
+    <!-- 按钮行（稿：右对齐 gap 8 / 高 38；宽自适应内容 + 左右 48px——2026-09-13 实机走查
+         用户定稿值，废 128/200 定宽槽） -->
     <div class="pw-actions">
-      <span class="pw-btn" style="width: 128px">
+      <span class="pw-btn">
         <ActionButton label="关闭" variant="cancel" size="lg" @click="closeWin" />
       </span>
-      <span class="pw-btn" style="width: 128px">
+      <span class="pw-btn">
         <ActionButton label="卸载" variant="danger" size="lg" :disabled="busy || !install?.installed" @click="doUninstall" />
       </span>
-      <span class="pw-btn" style="width: 200px">
+      <span class="pw-btn">
         <ActionButton
           :label="install?.installed ? '重新安装 / 升级' : '安装 CEP 插件'"
           variant="primary"
@@ -244,5 +244,11 @@ const tempText = computed(() => (libPath.value ? `${libPath.value}\\temp\\cep-ou
   flex: none;
   display: block;
   height: 38px;
+}
+/* 按钮宽自适应内容 + 左右 48px（2026-09-13 实机走查用户定稿值，废 128/200 定宽；
+   提权压 ActionButton lg 的 width:100% / padding 8 0） */
+.pw-actions .pw-btn :deep(.act-btn) {
+  width: auto;
+  padding: var(--n-space-8) 48px;
 }
 </style>

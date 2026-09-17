@@ -4,7 +4,8 @@
 //（弹窗口径：真 border 盒模型内缩，禁 inset box-shadow 画框）+ 大阴影 + 圆角 8；
 // 遮罩 = 黑色-50%（--n-mask，2026-09-01 用户定），点击不关闭（关闭只走取消/确认）。
 // 标题 18/26 Bold 亮色/一级；正文 13/18 亮色/三级（默认 slot）；
-// 按钮行右对齐 gap 8（次左主右，2026-08-31 口径）：按钮 120×38 圆角 8 按钮文字-大——
+// 按钮行右对齐 gap 8（次左主右，2026-08-31 口径）：按钮高 38 圆角 8 按钮文字-大、
+// **宽自适应内容 + 左右 48px**（2026-09-13 实机走查用户定稿值，废 120×38 定宽）——
 // 取消 = 通用/五级底 + 立体感-通用 + 亮色/二级；
 // 确认 = kind 色底 + 立体感-主要按钮 + 亮色/一级
 //（warning 状态/警告 / danger 状态/禁止 / brand 品牌/常态——稿：不危险的提示换品牌色）。
@@ -85,9 +86,9 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>();
   gap: var(--n-space-8);
 }
 .btn {
-  width: 120px;
+  /* 宽度自适应内容 + 左右 48px（2026-09-13 实机走查用户定稿值，废 120×38 定宽） */
   height: 38px;
-  padding: var(--n-space-8) 0;
+  padding: var(--n-space-8) 48px;
   border-radius: var(--n-radius-8);
   font-size: var(--n-fs-btn-lg);
   line-height: var(--n-lh-btn-lg);

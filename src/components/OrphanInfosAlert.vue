@@ -47,18 +47,23 @@ const listEl = ref<HTMLElement>();
   line-height: var(--text-body-line);
   color: var(--text-normal);
 }
-/* 滚动包裹层：relative 锚 ScrollThumb；限宽 372（同 AppConfirm 正文口径） */
+/* 滚动包裹层：relative 锚 ScrollThumb；限宽 372（同 AppConfirm 正文口径）；
+   负 margin 对（2026-09-13 实机走查贴右缘口径）——margin-right 负扩 24 吃进壳 padding
+   贴到弹窗缘（alert 变体无 .content，路径无裁剪祖先），.orphan-list padding-right 补回 */
 .scroll-wrap {
   position: relative;
   max-width: 372px;
   margin-top: var(--space-8);
+  margin-right: calc(-1 * var(--space-24));
 }
-/* 清单：名称 + 路径双行竖排，间距 8；超高自滚（上限同 FailedListDialog 160） */
+/* 清单：名称 + 路径双行竖排，间距 8；超高自滚（上限同 FailedListDialog 160）；
+   padding-right 补回包裹层负扩，文字原位不动（2026-09-13 贴右缘口径） */
 .orphan-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
   max-height: 160px;
+  padding-right: var(--space-24);
 }
 .row {
   display: flex;

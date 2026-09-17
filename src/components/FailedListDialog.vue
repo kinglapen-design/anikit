@@ -40,17 +40,22 @@ const listEl = ref<HTMLElement>();
 
 <style scoped>
 /* 滚动包裹层：relative 锚 ScrollThumb（悬浮滚轮悬停显隐，主窗口统一交互）；
-   限宽 372（同 AppConfirm 正文口径），长文件名换行 */
+   限宽 372（同 AppConfirm 正文口径），长文件名换行；
+   负 margin 对（2026-09-13 实机走查贴右缘口径）——margin-right 负扩 24 吃进壳 padding
+   贴到弹窗缘（alert 变体无 .content，路径无裁剪祖先），.fail-list padding-right 补回 */
 .scroll-wrap {
   position: relative;
   max-width: 372px;
+  margin-right: calc(-1 * var(--space-24));
 }
-/* 失败清单：文件名竖排间距 8（用户定）；超高自滚（上限 = 旧弹窗 160 沿用） */
+/* 失败清单：文件名竖排间距 8（用户定）；超高自滚（上限 = 旧弹窗 160 沿用）；
+   padding-right 补回包裹层负扩，文字原位不动（2026-09-13 贴右缘口径） */
 .fail-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
   max-height: 160px;
+  padding-right: var(--space-24);
 }
 .fail-item {
   margin: 0;

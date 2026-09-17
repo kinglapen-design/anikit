@@ -191,10 +191,14 @@ async function submit(): Promise<void> {
   border-bottom: 1px solid var(--line-hover);
   flex: none;
 }
+/* 内容区（33 稿）：padding 0 24；
+   壳 padding 0：归零 AppModal .content 的负 margin（2026-09-13 实机走查贴右缘口径）——
+   padding-right 保留 24（组块靠它内缩），贴右缘由内层 .scroll-wrap/.gm-rows 负 margin 对承担 */
 .group-manage :deep(.content) {
   padding: 0 var(--space-24);
   gap: 0;
   overflow: hidden;
+  margin-right: 0;
 }
 .group-manage :deep(.actions) {
   height: 62px;
@@ -212,15 +216,21 @@ async function submit(): Promise<void> {
   flex-direction: column;
   min-height: 0;
 }
+/* 滚动包裹层：relative 锚 ScrollThumb；
+   负 margin 对（2026-09-13 实机走查贴右缘口径）——margin-right 负扩 24 吃进 .content 的
+   0 24 padding 贴到弹窗缘（恰抵 .content 裁剪线内，overflow hidden 不裁），.gm-rows 补回 */
 .scroll-wrap {
   position: relative;
   min-height: 0;
+  margin-right: calc(-1 * var(--space-24));
 }
-/* 内容区 414 高自滚（稿值；组块纵向排，组间距 0——组块自带 padding 12 0） */
+/* 内容区 414 高自滚（稿值；组块纵向排，组间距 0——组块自带 padding 12 0）；
+   padding-right 补回包裹层负扩，组块原位不动（2026-09-13 贴右缘口径） */
 .gm-rows {
   display: flex;
   flex-direction: column;
   max-height: 414px;
+  padding-right: var(--space-24);
 }
 .gm-rows-inner {
   display: flex;

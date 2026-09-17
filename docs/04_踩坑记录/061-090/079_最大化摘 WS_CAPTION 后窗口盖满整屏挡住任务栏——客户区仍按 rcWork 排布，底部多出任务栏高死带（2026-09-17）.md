@@ -1,0 +1,6 @@
+## 079 最大化摘 WS_CAPTION 后窗口盖满整屏挡住任务栏——客户区仍按 rcWork 排布，底部多出任务栏高死带（2026-09-17）
+
+- **现象：** 实机走查「全屏后，中间面板纵向没填满」——窗口最大化后，中间面板（含右栏）底部有一条横贯的死带，左栏看似正常（其底色透明透窗口底，与死带同色不可辨）。用户实机点破：死带 = 任务栏区域，**最大化把任务栏挡住了**。
+- **原因：** 踩坑 071 终局 = 主窗口守卫在最大化时摘掉 `WS_CAPTION`（杀 DWM 原生按钮）。而 Windows 对**无 caption 窗口的最大化布窗规则 = 盖满整个显示器**（含任务栏区域）；同时客户区（tao 对最大化态的 NCCALCSIZE 处理）仍按 rcWork 排布——于是窗口比内容高出一条任务栏高度：Win32 实测（QHD@100%）最大化 outer = 2575×1455（整屏 + frame），client = 2560×1392（= rcWork），底部非客户区 56px = 任务栏 48 + frame 8，死带即这段被自家窗口背景（云母/实色底）覆盖的任务栏区域。带 caption 时无此问题（默认最大化矩形本就 = rcWork）。
+- **解法：** 主窗口守卫（`adapters/window_fx.rs::main_window_guard`）新增第 ③ 职责——`WM_GETMINMAXINFO` 时把 `ptMaxPosition/ptMaxSize` 约束到 `MonitorFromWindow` 当前显示器的 rcWork：最大化矩形回到 rcWork（任务栏不再被盖、死带消失），带 caption 态覆盖同名值 = 默认行为无变化，`WS_POPUP` 全屏路径跳过不干预。**必须在 `DefSubclassProc` 之后覆写**——tao 处理同一消息（ptMinSize 等），先链后写才是最终值。修后实测：最大化 outer = client = 2560×1392 = rcWork，bottomNC = 0；还原 caption 加回、摘 caption 杀按钮（071）不受影响。
+- **预防：** ① 动窗口样式位（WS_CAPTION/WS_THICKFRAME/WS_POPUP）必查「最大化矩形」副作用——无 caption 窗最大化盖任务栏是 Windows 默认规则；② 此类几何病别靠截图猜——`GetWindowRect`/`GetClientRect`/`ClientToScreen` 三件套一次量清（outer / client / client origin，本次一轮定位）；③ 改窗口守卫类代码后，最大化/还原/全屏三态都要实机过一遍（本坑正是 071 修的回归，隔 9 天才被走查抓到）。

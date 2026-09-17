@@ -123,13 +123,17 @@ function onCancel(): void {
   box-shadow: inset 0 -1px 0 0 var(--line-hover);
   flex: none;
 }
-/* 区块展示：吃满剩余高，padding 0 24，内部自滚 */
+/* 区块展示：吃满剩余高，padding 0 24，内部自滚；
+   壳 padding 0：归零 AppModal .content 的负 margin（2026-09-13 实机走查贴右缘口径）——
+   padding-right 必须保留 24（表头 / 行靠它内缩，归零会把内容冲到弹窗缘）；
+   贴右缘改由内层 .dup-wrap/.dup-scroll 负 margin 对承担 */
 .dup-dialog :deep(.content) {
   flex: 1;
   min-height: 0;
   padding: 0 var(--space-24);
   gap: 0;
   overflow: hidden;
+  margin-right: 0;
 }
 /* actions 槽：底部按钮行通栏 */
 .dup-dialog :deep(.actions) {
@@ -156,19 +160,22 @@ function onCancel(): void {
   font-weight: var(--text-title-weight);
   color: var(--text-label);
 }
+/* 滚动包裹层：负 margin 对（2026-09-13 实机走查贴右缘口径）——margin-right 负扩 24 吃进
+   .content 的 0 24 padding 贴到弹窗缘，.dup-scroll padding-right 补回使行内容原位不动 */
 .dup-wrap {
   position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  margin-right: calc(-1 * var(--space-24));
 }
-/* 注：本弹窗 .content 有 0 24 padding，滚轮距弹窗 inset 边框 24px 不压线，
-   无需像 DupScanDialog 那样 ::after 补画右缘线 */
+/* 滚轮 = ScrollThumb 悬浮件（悬停显隐，主窗口统一交互，2026-08-13 定稿）；
+   2026-09-13 走查后 thumb 贴弹窗右缘（原距 inset 边框 24px 口径废） */
 .dup-scroll {
   flex: 1;
   min-height: 0;
-  /* 滚轮 = ScrollThumb 悬浮件（悬停显隐，主窗口统一交互，2026-08-13 定稿） */
+  padding-right: var(--space-24);
 }
 /* 底部按钮行（36 稿）：62 高 / 上分隔线 / padding 12 12 12 24，右对齐；
    flex: 1 占满 actions 主轴（row flex 项宽默认内容宽——不撑满上边框线会断在内容左缘，2026-08-13 走查） */

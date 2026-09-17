@@ -53,6 +53,12 @@ const seqStart = ref("1");
 const findText = ref("");
 const replaceText = ref("");
 
+// TAB 循环聚焦（2026-09-13 实机走查：输入一个后手不离键盘——查找↔替换、名称↔起始编号互跳）
+const seqNameRef = ref<InstanceType<typeof AppInput>>();
+const seqStartRef = ref<InstanceType<typeof AppInput>>();
+const findRef = ref<InstanceType<typeof AppInput>>();
+const replaceRef = ref<InstanceType<typeof AppInput>>();
+
 // 位宽自动（PRD 02-14：<100 两位、≥100 三位）
 const padWidth = computed(() => (rows.value.length < 100 ? 2 : 3));
 const startNum = computed(() => {
@@ -163,19 +169,19 @@ const listRef = ref<HTMLElement>();
       </div>
       <ScrollThumb :body="listRef" />
     </div>
-    <!-- 输入区（同一时刻只显示当前模式一行；PRD 02-14） -->
+    <!-- 输入区（同一时刻只显示当前模式一行；PRD 02-14；TAB 两框互跳——2026-09-13 实机走查） -->
     <div class="rd-fields">
       <template v-if="mode === 'sequence'">
         <span class="lbl">名称:</span>
-        <AppInput v-model="seqName" size="medium" clearable class="grow" placeholder="输入名称" />
+        <AppInput ref="seqNameRef" v-model="seqName" size="medium" clearable class="grow" placeholder="输入名称" @keydown.tab.prevent="seqStartRef?.focus()" />
         <span class="lbl">起始编号:</span>
-        <AppInput v-model="seqStart" size="medium" clearable class="narrow" placeholder="1" />
+        <AppInput ref="seqStartRef" v-model="seqStart" size="medium" clearable class="narrow" placeholder="1" @keydown.tab.prevent="seqNameRef?.focus()" />
       </template>
       <template v-else>
         <span class="lbl">查找文本:</span>
-        <AppInput v-model="findText" size="medium" clearable class="grow" placeholder="输入查找文本" />
+        <AppInput ref="findRef" v-model="findText" size="medium" clearable class="grow" placeholder="输入查找文本" @keydown.tab.prevent="replaceRef?.focus()" />
         <span class="lbl">替换为:</span>
-        <AppInput v-model="replaceText" size="medium" clearable class="grow" placeholder="输入替换文本" />
+        <AppInput ref="replaceRef" v-model="replaceText" size="medium" clearable class="grow" placeholder="输入替换文本" @keydown.tab.prevent="findRef?.focus()" />
       </template>
     </div>
     <!-- 底部栏（37 稿：62 高 / padding 12 12 12 24 / 顶部分隔线；左 segmented 右按钮组主左次右） -->
@@ -207,6 +213,11 @@ const listRef = ref<HTMLElement>();
   flex: 1;
   gap: 0;
   min-height: 0;
+  /* 壳 padding 0：归零 AppModal .content 的负 margin 对（2026-09-13 实机走查贴右缘口径）——
+     各区自承边距（.rd-head margin 0 24 / .rd-list padding 0 24 等），.rd-list-wrap 通栏，
+     归零后 thumb 自然贴弹窗缘 */
+  margin-right: 0;
+  padding-right: 0;
 }
 /* 表头（37 稿：46 高 / 0 24 容器内 / 下分隔线暗-悬停；双列 flex 1 对齐行内双卡） */
 .rd-head {

@@ -207,7 +207,8 @@ const scrollRef = ref<HTMLElement>();
 </template>
 
 <style scoped>
-/* 包内视图容器：占满素材区（ContentArea .asset-section 已承担 padding 16 16 0），relative 供 ScrollThumb 锚定 */
+/* 包内视图容器：占满素材区（ContentArea .asset-section 承担 padding 12 0 0 12——右 0 让滚动条贴右边框），
+   relative 供 ScrollThumb 锚定；2026-09-13 走查核实：thumb 已在面板右缘（.pack-scroll 自承右 padding），无需整改 */
 .seq-pack {
   position: relative;
   display: flex;

@@ -118,13 +118,17 @@ function onCancel(): void {
   box-shadow: inset 0 -1px 0 0 var(--line-hover);
   flex: none;
 }
-/* 内容区（稿：padding 0 24） */
+/* 内容区（稿：padding 0 24）；
+   壳 padding 0：归零 AppModal .content 的负 margin（2026-09-13 实机走查贴右缘口径）——
+   padding-right 保留 24（条目靠它内缩）；.content 自身即滚动容器，
+   AppModal 兜底 ScrollThumb 贴弹窗右缘 */
 .desc-dialog :deep(.content) {
   flex: 1;
   min-height: 0;
   padding: 0 var(--space-24);
   gap: 0;
   overflow: auto;
+  margin-right: 0;
 }
 .desc-dialog :deep(.actions) {
   flex: none;

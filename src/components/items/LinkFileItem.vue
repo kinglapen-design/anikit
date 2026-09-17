@@ -38,7 +38,7 @@ const emit = defineEmits<{ click: []; close: [] }>();
           <span class="dir">{{ folderName }}</span>
         </span>
       </div>
-      <div class="fname">{{ fileName }}</div>
+      <div class="fname" :class="{ 'has-badge': origin }">{{ fileName }}</div>
     </div>
     <span class="ni-slide">
       <span class="ni-slide-inner">
@@ -107,6 +107,11 @@ const emit = defineEmits<{ click: []; close: [] }>();
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* 有原始文件徽章（右下 14px）：名称右缩 徽章 14 + 间距 6，省略号收在徽章前——
+   2026-09-13 实机走查：徽章盖住长文件名 */
+.fname.has-badge {
+  padding-right: calc(14px + var(--n-space-6));
 }
 .badge {
   position: absolute;

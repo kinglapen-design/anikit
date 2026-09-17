@@ -367,18 +367,19 @@ watch(
   color: var(--n-l4);
   white-space: pre-wrap;
 }
-/* 滚动胶囊：6px 通用/三级贴右缘，自身 hover 升五级（稿「hover-滚动条」节） */
+/* 滚动胶囊：6px 通用/四级贴右缘，自身 hover 升六级（2026-09-13 实机走查全局滚动条色档
+   定案应用至卡片——原稿「hover-滚动条」节 g3/g5 档被全局定案覆盖） */
 .fc-text-thumb {
   position: absolute;
   right: 0;
   z-index: 3;
   width: 6px;
   border-radius: 99px; /* 稿值 99 */
-  background: var(--n-g3);
+  background: var(--n-g4);
   transition: background var(--n-dur-150) var(--n-ease-in-out);
 }
 .fc-text-thumb:hover {
-  background: var(--n-g5);
+  background: var(--n-g6);
 }
 
 /* 格式角标定位（左上 12/12） */

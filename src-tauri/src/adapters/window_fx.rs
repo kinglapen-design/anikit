@@ -64,6 +64,13 @@ unsafe fn sync_caption_for_state(hwnd: windows::Win32::Foundation::HWND) {
 ///    重入一次即终止，e793efe 同款机制）。样式 SetWindowLongPtr 直改即可——最大化的
 ///    SetWindowPos 随后自重算 frame（NCCALCSIZE 紧接），样式同帧生效无中间帧，无需
 ///    SWP_FRAMECHANGED 嵌套 SetWindowPos（重入风险）。
+/// ③ 最大化矩形约束回 rcWork（2026-09-17，实机走查「全屏后中间面板纵向没填满」根治）——
+///    ②摘掉 caption 后 Windows 按「无 caption 窗最大化 = 盖满整屏」布窗（盖住任务栏），
+///    而客户区仍按 rcWork 排布 → 窗口底部多出一条任务栏高的死带（任务栏被自家窗口挡住）。
+///    修法 = WM_GETMINMAXINFO 时把 ptMaxPosition/ptMaxSize 约束到当前显示器的 rcWork
+///    （带 caption 时 Windows 默认即此值，覆盖无行为变化；WS_POPUP 全屏路径跳过不干预）。
+///    注意必须在 DefSubclassProc **之后**覆写——tao 处理同一消息（最小宽高等），
+///    先链后写才是最终值。
 #[cfg(windows)]
 unsafe extern "system" fn main_window_guard(
   hwnd: windows::Win32::Foundation::HWND,
@@ -74,12 +81,39 @@ unsafe extern "system" fn main_window_guard(
   _data: usize,
 ) -> windows::Win32::Foundation::LRESULT {
   use windows::Win32::Foundation::{LPARAM, WPARAM};
+  use windows::Win32::Graphics::Gdi::{
+    GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+  };
   use windows::Win32::UI::Shell::DefSubclassProc;
   use windows::Win32::UI::WindowsAndMessaging::{
-    WM_NCACTIVATE, WM_NCCALCSIZE, WM_STYLECHANGED, WM_WINDOWPOSCHANGING,
+    GetWindowLongPtrW, GWL_STYLE, MINMAXINFO, WM_GETMINMAXINFO, WM_NCACTIVATE, WM_NCCALCSIZE,
+    WM_STYLECHANGED, WM_WINDOWPOSCHANGING, WS_POPUP,
   };
   if msg == WM_NCACTIVATE {
     return DefSubclassProc(hwnd, msg, WPARAM(1), LPARAM(-1));
+  }
+  if msg == WM_GETMINMAXINFO {
+    // 先链（tao 可能写 ptMinSize 等），后覆写最大化矩形 = rcWork（见注释③）
+    let r = DefSubclassProc(hwnd, msg, wparam, lparam);
+    let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    if style & (WS_POPUP.0 as isize) == 0 {
+      let mmi = lparam.0 as *mut MINMAXINFO;
+      if !mmi.is_null() {
+        let mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        let mut mi = MONITORINFO {
+          cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+          ..Default::default()
+        };
+        if GetMonitorInfoW(mon, &mut mi).as_bool() {
+          let m = unsafe { &mut *mmi };
+          m.ptMaxPosition.x = mi.rcWork.left - mi.rcMonitor.left;
+          m.ptMaxPosition.y = mi.rcWork.top - mi.rcMonitor.top;
+          m.ptMaxSize.x = mi.rcWork.right - mi.rcWork.left;
+          m.ptMaxSize.y = mi.rcWork.bottom - mi.rcWork.top;
+        }
+      }
+    }
+    return r;
   }
   if msg == WM_WINDOWPOSCHANGING || msg == WM_NCCALCSIZE || msg == WM_STYLECHANGED {
     sync_caption_for_state(hwnd);

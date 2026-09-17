@@ -327,12 +327,15 @@ function toggleBlock(id: string): void {
   font-weight: var(--text-title-weight);
   color: var(--text-label);
 }
-/* 树形容器（稿 604 高；悬浮滚轮 ScrollThumb 贴右） */
+/* 树形容器（稿 604 高；悬浮滚轮 ScrollThumb 贴右）；
+   负 margin 对（2026-09-13 实机走查贴右缘口径）——margin-right 负扩 24 吃进壳 padding
+   贴到弹窗缘（恰抵 .content 裁剪线内），.tree-body padding-right 补回使行原位不动 */
 .tree-wrap {
   position: relative;
   height: 604px;
   display: flex;
   flex-direction: column;
+  margin-right: calc(-1 * var(--space-24));
 }
 .tree-body {
   flex: 1;
@@ -342,6 +345,7 @@ function toggleBlock(id: string): void {
   gap: var(--space-24);
   overflow-y: auto;
   overflow-x: hidden;
+  padding-right: var(--space-24);
 }
 .block-group {
   display: flex;

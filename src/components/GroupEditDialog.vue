@@ -102,10 +102,14 @@ async function submit(): Promise<void> {
   border-bottom: 1px solid var(--line-hover);
   flex: none;
 }
-/* 内容区（34 稿：padding 12 24；组块 padding 12 0 自带底分隔线） */
+/* 内容区（34 稿：padding 12 24；组块 padding 12 0 自带底分隔线）；
+   壳 padding 0：归零 AppModal .content 的负 margin（2026-09-13 实机走查贴右缘口径）——
+   padding-right 保留 24（组块靠它内缩）；.content 自身即滚动容器，
+   AppModal 兜底 ScrollThumb 贴弹窗右缘 */
 .group-edit :deep(.content) {
   padding: 0 var(--space-24);
   gap: 0;
+  margin-right: 0;
 }
 .group-edit :deep(.actions) {
   height: 62px;

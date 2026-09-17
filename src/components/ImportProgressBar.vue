@@ -5,7 +5,7 @@
 // 2026-08-14 用户定：导出复用本组件样式与位置——导入优先（同跑时先显导入），
 // 导出总数 = 文件数（序列帧按帧计），清点期（total=0）不定态同"扫描中"。
 import { computed } from "vue";
-import IconButton from "./IconButton.vue";
+import IconButton from "./buttons/IconButton.vue";
 import { useContentStore } from "../stores/content";
 
 const content = useContentStore();
@@ -48,35 +48,37 @@ function cancel(): void {
     </div>
     <span class="label">{{ label }}</span>
     <span v-if="eta" class="eta">{{ eta }}</span>
-    <IconButton name="window-close" :title="isExport ? '取消导出' : '取消导入'" @click="cancel" />
+    <IconButton name="close-small" variant="plain" :title="isExport ? '取消导出' : '取消导入'" @click="cancel" />
   </div>
 </template>
 
 <style scoped>
 /* 容器（11）：padding 12 16（与中间面板工具栏同 padding 对齐，2026-08-10 用户走查）/
-   无底无边 / 子项间距 6 / 高 = 关闭按钮 28 + 24 */
+   无底无边 / 子项间距 6 / 高 = 关闭按钮 28 + 24；
+   2026-09-13 实机走查：全件旧 token 换代（填充 = 品牌色-常态 --n-brand，关闭钮换代 buttons/IconButton） */
 .import-progress {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-12) var(--space-16);
+  gap: var(--n-space-6);
+  padding: var(--n-space-12) var(--n-space-16);
   box-sizing: border-box;
   height: 52px;
   flex: none;
 }
-/* 进度条（10_进度条）：高 6 胶囊 / border-1 底 / 品牌色-1 已加载，占剩余空间 */
+/* 进度条（10_进度条）：高 6 胶囊 / 轨道 亮色/半透明-2（旧 border-1 视觉等效 14% 白）/
+   填充 品牌色-常态（2026-09-13 实机走查定），占剩余空间 */
 .bar {
   position: relative;
   flex: 1;
   height: 6px;
   border-radius: 3px;
-  background: var(--border-1);
+  background: var(--n-l-a2);
   overflow: hidden;
 }
 .fill {
   height: 100%;
   border-radius: 3px;
-  background: var(--brand-1);
+  background: var(--n-brand);
   transition: width 0.2s ease;
 }
 /* 扫描中（总数未知）：品牌色块往返滑动不定态 */
@@ -93,12 +95,12 @@ function cancel(): void {
     left: 70%;
   }
 }
-/* 标签与预计时间：副文本 font-icon-3 */
+/* 标签与预计时间：次要文字档 亮色/三级 */
 .label,
 .eta {
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
   white-space: nowrap;
   flex: none;
 }

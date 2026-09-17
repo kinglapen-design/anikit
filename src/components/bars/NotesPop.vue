@@ -11,6 +11,7 @@
 import { onMounted, ref } from "vue";
 import AppIcon from "../AppIcon.vue";
 import ActionButton from "../buttons/ActionButton.vue";
+import ScrollThumb from "../ScrollThumb.vue";
 import "./bars.css";
 
 interface NoteEntry {
@@ -30,24 +31,31 @@ const emit = defineEmits<{ select: [i: number]; remove: [i: number]; confirm: []
 
 const taEl = ref<HTMLTextAreaElement>();
 onMounted(() => taEl.value?.focus()); // 打开就聚焦输入闪烁（稿 prose）
+
+const listRef = ref<HTMLElement>(); // 左列表滚动容器（ScrollThumb 锚：包裹层 = .np-list-wrap）
 </script>
 
 <template>
   <div class="fb-pop np-root">
-    <div class="np-list">
-      <div
-        v-for="(n, i) in notes"
-        :key="i"
-        class="np-item"
-        :class="{ on: selected === i }"
-        @click="emit('select', i)"
-      >
-        <span class="np-frame">{{ n.frame }}</span>
-        <span class="np-text">{{ n.text }}</span>
-        <button class="np-close" @click.stop="emit('remove', i)">
-          <AppIcon name="close-small" :size="14" />
-        </button>
+    <!-- 左列表（滚轮 = ScrollThumb 悬浮件，贴列表自身右缘——右侧是编辑区不贴弹层缘，
+         2026-09-13 实机走查补；.np-root overflow hidden 裁圆角，不做负 margin） -->
+    <div class="np-list-wrap">
+      <div ref="listRef" class="np-list kit-scroll">
+        <div
+          v-for="(n, i) in notes"
+          :key="i"
+          class="np-item"
+          :class="{ on: selected === i }"
+          @click="emit('select', i)"
+        >
+          <span class="np-frame">{{ n.frame }}</span>
+          <span class="np-text">{{ n.text }}</span>
+          <button class="np-close" @click.stop="emit('remove', i)">
+            <AppIcon name="close-small" :size="14" />
+          </button>
+        </div>
       </div>
+      <ScrollThumb :body="listRef" />
     </div>
     <div class="np-editor">
       <textarea ref="taEl" v-model="draft" class="np-ta" />
@@ -66,6 +74,15 @@ onMounted(() => taEl.value?.focus()); // 打开就聚焦输入闪烁（稿 prose
   height: 378px; /* 稿值 */
   padding: 0;
   overflow: hidden; /* 裁圆角：右输入区满高满右，不裁会把壳圆角 8 顶成直角（2026-09-09 三轮实机报） */
+}
+
+/* 左列表包裹层：relative = ScrollThumb 锚点（2026-09-13 实机走查补滚轮）；
+   flex:1 承接原 .np-list 的宽随余量 */
+.np-list-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
 }
 
 /* 左列表：宽随余量（稿 flex-grow 1），padding 12 gap 2 */

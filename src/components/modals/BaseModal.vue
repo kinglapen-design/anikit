@@ -8,9 +8,9 @@
 // 通用/五级通栏 + 标题 + 关闭钮（buttons/IconButton plain close-large——稿 30×30 圆角 6、
 // 图标 18 盒 12 矢量与 close-large 实寸一致；图标为烘焙二级原值，hover 仅出半透明-3 底）；
 // 内容各段（搜索 / 树形容器）自承 padding 0 24。
-// 按钮：ActionButton lg 恒宽 128（四稿钮值 128×38——区别于 ConfirmModal 警告稿 120×38，
-// 各按各稿；次左主右）。按钮行右对齐 gap 8（actions 插槽）；合并稿「提示+按钮」混排行在
-// default 插槽内自排（.bm-modal 全域 :deep 罩 128 宽，不限 actions）。
+// 按钮：ActionButton lg **宽自适应内容 + 左右 48px**（2026-09-13 实机走查用户定稿值——
+// 四稿原 128×38 定宽与 ConfirmModal 120×38 一并废除；次左主右）。按钮行右对齐 gap 8
+//（actions 插槽）；合并稿「提示+按钮」混排行在 default 插槽内自排（.bm-modal 全域 :deep 罩，不限 actions）。
 import IconButton from "../buttons/IconButton.vue";
 
 withDefaults(defineProps<{ title: string; width: number; framed?: boolean }>(), { framed: false });
@@ -92,9 +92,11 @@ const emit = defineEmits<{ close: [] }>();
   justify-content: flex-end;
   gap: var(--n-space-8);
 }
-/* 四稿按钮定宽 128×38（ActionButton lg 宽 100% 随父——模态窗内恒 128） */
+/* 模态窗按钮：宽度自适应内容 + 左右 48px（2026-09-13 实机走查用户定稿值，废 128 定宽；
+   ActionButton lg 宽 100% 随父——模态窗内随内容） */
 .bm-modal :deep(.act-btn) {
-  width: 128px;
+  width: auto;
+  padding: var(--n-space-8) 48px;
   flex: none;
 }
 </style>
