@@ -747,9 +747,10 @@ export function gridPointerDown(e: PointerEvent, onBlank: (e: PointerEvent) => v
     //"点击空白"清空选择——回收站卡片单击选中 / 双击预览全灭（2026-08-21 用户实机报修）。
     // 虚拟视图同禁（2026-09-09 入口收窄）：全部 / 最近使用 / 缩略图不是位置，拖出 =
     // 黑箱移动（与「移动文件」同病）——卡片不可作为拖拽源；未分类 / 自动导入 = 位置视口放行。
-    // 框选不受影响：空白处按下照常起框选（onBlank 只在非卡片命中时调用）
+    // 工作空间（PRD 02 步骤 2）例外放行：真实磁盘位置，拖拽 = 移动进目标文件夹（dragOperation
+    // ws 分支按路径走 ws_move，间隙排序等库语义另有守卫）
     const cs = useContentStore();
-    if (cs.isRecycleView || cs.isVirtualView) return;
+    if (cs.isRecycleView || (cs.isVirtualView && !cs.isWorkspaceView)) return;
     const key = card.getAttribute("data-key");
     if (key) beginAssetDrag(e, key);
     return;

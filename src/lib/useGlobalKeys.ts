@@ -10,8 +10,10 @@ import { usePreviewStore } from "../stores/preview";
 import { useSearchStore } from "../stores/search";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
+import { useToastStore } from "../stores/toast";
 import { useUiStore } from "../stores/ui";
 import { useUndoStore } from "../stores/undo";
+import { useWsStore } from "../stores/ws";
 import {
   copySelection,
   cutFolders,
@@ -52,7 +54,10 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     if (usePickerStore().active) return; // 选择模式（6.2）：导入是编辑类，禁用
     // 只读视口拒入（2026-09-08 用户定，isNoImportView 统一判定；2026-09-09 收窄扩「全部」）：
     // 全部 / 最近使用 / 自动导入 / 缩略图 / 回收站不允许额外导入——系统剪贴板导入同拖拽口径
-    // 弹错误弹窗（与拖拽共用 ui.importRejectOpen）；未分类 = 候车区总入口豁免（落 root）
+    // 弹错误弹窗（与拖拽共用 ui.importRejectOpen）；未分类 = 候车区总入口豁免（落 root）。
+    // 工作空间（PRD 02 步骤 2）静默让位：粘贴走 ws 内剪贴板（onOperationKeys ws 分支），
+    // 系统剪贴板文件导入进工作空间未立项（库互通另行立项），不弹拒入窗
+    if (content.isWorkspaceView) return;
     if (content.isNoImportView) {
       ui.importRejectOpen = true;
       return;
@@ -119,9 +124,48 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     // 选择模式（6.2）：编辑类快捷键全禁（单击已不入选择域，本守卫双保险）；查看类（Shift+Enter
     // 默认应用打开）因选择域恒空天然无效，不单独放行
     if (picker.active) return;
-    // 工作空间磁盘实况（PRD 02 步骤 1 只读底座）：全部操作快捷键禁用——选中键为 ws: 合成假 id，
-    // F2 重命名 / Del 删除 / Ctrl+C·X·V·D·Y·J·E 无一可走 assetId 类命令（右键「刷新」为唯一操作项）
-    if (content.isWorkspaceView) return;
+    // 工作空间磁盘实况（PRD 02 步骤 2）：F2 重命名 / Del 回收站删除 / Ctrl+C·X 写 ws 剪贴板 /
+    // Ctrl+V 粘贴（ws 内剪贴板非空时）接 ws 按路径命令；其余库快捷键（D 副本 / Y 移动 / J 链接 /
+    // L 添加链接 / E 发送至 AN 等）在 ws 无对应语义，一律不响应——assetId = ws: 合成假 id
+    // 严禁落入任何 assetId 类命令
+    if (content.isWorkspaceView) {
+      const ws = useWsStore();
+      const rels = () =>
+        selection.selectedRefs().filter((r) => r.assetId.startsWith("ws:")).map((r) => r.assetId.slice(3));
+      const fail = (err: unknown) => useToastStore().notify({ message: String(err), icon: "fail" });
+      if (e.key === "F2") {
+        if (selection.count === 1) {
+          e.preventDefault();
+          selection.renamingKey = selection.first;
+        }
+        return;
+      }
+      if (e.key === "Delete") {
+        const targets = rels();
+        if (targets.length > 0) {
+          e.preventDefault();
+          void ws.removeEntries(targets).catch(fail); // 同库 Del 口径：直接进回收站（可找回），不两段确认
+        }
+        return;
+      }
+      if (e.ctrlKey || e.metaKey) {
+        const k = e.key.toLowerCase();
+        if (k === "c" || k === "x") {
+          const targets = rels();
+          if (targets.length > 0) {
+            e.preventDefault();
+            ws.setClip(targets, k === "x");
+          }
+          return;
+        }
+        if (k === "v" && !e.shiftKey && !e.altKey && ws.clip) {
+          e.preventDefault(); // 粘贴到当前视口目录（sidebarSelected = 活动 viewKey，tabs 同步口径）
+          void ws.paste(content.sidebarSelected.slice(3)).catch(fail);
+          return;
+        }
+      }
+      return;
+    }
     // F2 = 重命名（单选生效）：素材卡片就地重命名；文件夹域 = 文件夹重命名（3.4 七轮接入——
     // 当前视口条带含该项走卡片命名态（用户视线在卡片），否则树命名态；档案同径）
     if (e.key === "F2") {

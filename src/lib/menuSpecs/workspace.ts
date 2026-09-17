@@ -77,19 +77,28 @@ export function wsFolderSpec(rel: string, _name: string): CtxEntry[] {
 }
 
 // ws 条目菜单（打开 = 进预览，与双击卡片同径；重命名 = 置卡片行内命名态，
-// 提交在 AssetCard 的 ws 分支；所在目录 rel = folderId 去 "ws:" 前缀）
+// 提交在 AssetCard 的 ws 分支；所在目录 rel = folderId 去 "ws:" 前缀）。
+// 批量分流（同库 3.4 口径）：触发项在选择域内且多选 → 复制 / 剪切 / 删除作用于整个选中集；
+// 重命名单项语义，多选时不出现
 export function wsCardSpec(p: PlacementView): CtxEntry[] {
   const rel = p.folderId.slice(3);
   const entryRel = p.assetId.slice(3);
   const toast = useToastStore();
   const ws = useWsStore();
+  const selection = useSelectionStore();
   const fail = (e: unknown) => toast.notify({ message: String(e), icon: "fail" });
+  const key = `${p.assetId}|${p.folderId}`;
+  const batch =
+    selection.count > 1 && selection.isSelected(key)
+      ? selection.selectedRefs().filter((r) => r.assetId.startsWith("ws:")).map((r) => r.assetId.slice(3))
+      : [entryRel];
+  const multi = batch.length > 1;
   return [
     { label: "打开", action: () => void usePreviewStore().open(`${p.assetId}|${p.folderId}`) },
-    { label: "重命名", action: () => void (useSelectionStore().renamingKey = `${p.assetId}|${p.folderId}`) },
-    { label: "复制", action: () => ws.setClip([entryRel], false) },
-    { label: "剪切", action: () => ws.setClip([entryRel], true) },
-    { label: "删除", action: () => confirmDelete([entryRel], p.name) },
+    ...(multi ? [] : [{ label: "重命名", action: () => void (selection.renamingKey = key) }]),
+    { label: multi ? `复制 ${batch.length} 项` : "复制", action: () => ws.setClip(batch, false) },
+    { label: multi ? `剪切 ${batch.length} 项` : "剪切", action: () => ws.setClip(batch, true) },
+    { label: multi ? `删除 ${batch.length} 项` : "删除", action: () => confirmDelete(batch, multi ? `已选中的 ${batch.length} 个文件` : p.name) },
     {
       label: "在资源管理器中显示",
       action: () => {

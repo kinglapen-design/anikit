@@ -158,11 +158,13 @@ export const useWsStore = defineStore("ws", {
       await deleteWsEntries(rels);
       await this.refreshAround(rels);
     },
-    // 移动（拖拽 / 剪切粘贴）
+    // 移动（拖拽 / 剪切粘贴）：目标 = 自身所在目录的条目剔除（拖拽落到当前目录行 / 已剪切所在
+    // 目录粘贴 = 无操作，防 unique_target 造出 "名 (2)" 副本）
     async move(rels: string[], destRel: string): Promise<void> {
-      if (rels.length === 0) return;
-      await moveWsEntries(rels, destRel);
-      await this.refreshAround(rels, destRel);
+      const targets = rels.filter((r) => (r.includes("/") ? r.slice(0, r.lastIndexOf("/")) : "") !== destRel);
+      if (targets.length === 0) return;
+      await moveWsEntries(targets, destRel);
+      await this.refreshAround(targets, destRel);
     },
     // 复制 / 剪切入剪贴板（rels = 相对根路径；粘贴到自身所在目录 = 无操作由调用方判）
     setClip(rels: string[], cut: boolean): void {
