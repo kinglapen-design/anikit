@@ -120,16 +120,26 @@ pub(crate) fn load_origin(origin: &Path) -> Option<DynamicImage> {
 /// 格式图标缓存路径（cache/thumbs/{ext}.webp；无扩展名归 "file" 键）。
 /// 只组路径不判存在：供"只命中已缓存"的快照场景（收件箱实况快层）与落盘后回填复用
 pub fn format_icon_path(root: &Path, ext: &str) -> PathBuf {
+  format_icon_path_in(&root.join(CACHE_DIR).join("thumbs"), ext)
+}
+
+/// 缓存目录直给版：工作空间锚 `.anikit/thumbs` 时复用同一命名（workspace 服务用，PRD 02）
+pub fn format_icon_path_in(dir: &Path, ext: &str) -> PathBuf {
   let key = if ext.is_empty() { "file" } else { ext };
-  root.join(CACHE_DIR).join("thumbs").join(format!("{key}.webp"))
+  dir.join(format!("{key}.webp"))
 }
 
 /// 格式图标缓存（PRD 04-03：系统缩略图按格式缓存一份，cache/thumbs/{ext}.webp，**不进 info**——
 /// 避免与后期补的伴生缩略图并存污染 info，2026-07-22 用户定案）。已存在直接 true；
 /// 否则经 shell 适配器取系统图标落盘。返回该格式图标是否可用。
 pub fn ensure_format_icon(root: &Path, path: &Path, ext: &str) -> bool {
+  ensure_format_icon_in(&root.join(CACHE_DIR).join("thumbs"), path, ext)
+}
+
+/// 缓存目录直给版（同 ensure_format_icon 语义，锚目录由调用方给——工作空间 = .anikit/thumbs）
+pub fn ensure_format_icon_in(dir: &Path, path: &Path, ext: &str) -> bool {
   let key = if ext.is_empty() { "file" } else { ext };
-  let dest = format_icon_path(root, ext);
+  let dest = format_icon_path_in(dir, ext);
   if dest.is_file() {
     return true;
   }

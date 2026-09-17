@@ -130,7 +130,8 @@ export const useWsStore = defineStore("ws", {
         const next = entries.map((e) => {
           const abs = e.isDir ? null : this.absPath(e.relPath);
           const thumb = abs !== null ? byAbs.get(abs) : undefined;
-          return thumb !== undefined ? { ...e, thumbPath: thumb } : e;
+          // 本事件只载内容缩略图（格式图标在 list 时已就位）——回填即 asset 来源
+          return thumb !== undefined ? { ...e, thumbPath: thumb, thumbKind: "asset" as const } : e;
         });
         this.dirs.set(rel, next);
       }
@@ -157,7 +158,7 @@ function wsEntryToPlacement(e: WsEntry, parentRel: string, rootPath: string | nu
     thumbH: null,
     ext: e.ext,
     thumbPath: e.thumbPath,
-    thumbKind: e.thumbPath ? "asset" : null,
+    thumbKind: e.thumbKind,
     origin: true,
     frameCount: null,
     animated: false,

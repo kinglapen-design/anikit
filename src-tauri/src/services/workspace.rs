@@ -15,6 +15,7 @@ use crate::adapters::inbox_watch;
 use crate::commands::library::AppState;
 use crate::core::space::WORKSPACE_DIR;
 use crate::services::thumbnail;
+use crate::services::views::ThumbKind;
 
 /// 磁盘实况热刷新事件名（负载 = ()；.anikit 缓存写回自激已滤，前端去抖重扫）
 pub const FS_CHANGED_EVENT: &str = "workspace-fs-changed";
@@ -45,6 +46,10 @@ pub struct WsEntry {
   pub ext: String,
   /// 缩略图缓存绝对路径：仅缓存新鲜（文件名内嵌 mtime+size 与当前文件一致）时给，否则 null
   pub thumb_path: Option<String>,
+  /// 缩略图来源（同 services::views::ThumbKind 口径）：asset = 内容缩略图；
+  /// formatIcon = 系统格式图标（缩略管线解不出的类型——fla/txt/zip 等，现场 shell 提取按扩展名缓存）；
+  /// 可解码但缩略图未生成为 (null, null)（后台生成后 thumbs-ready 回填）
+  pub thumb_kind: Option<crate::services::views::ThumbKind>,
 }
 
 /// 缩略图生成结果（workspace-thumbs-ready 负载条目）
@@ -119,7 +124,7 @@ pub fn list_dir(root: &Path, rel: &str) -> Result<Vec<WsEntry>, String> {
   Ok(entries)
 }
 
-/// 单条目：文件补 大小 / mtime / 扩展名 / 新鲜缩略图；目录 size/mtime 恒 0、无缩略图
+/// 单条目：文件补 大小 / mtime / 扩展名 / 缩略图（内容缩略图 → 格式图标回退）；目录恒无缩略图
 fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool) -> Option<WsEntry> {
   let rel = if rel_base.is_empty() { name.to_string() } else { format!("{rel_base}/{name}") };
   let meta = fs::metadata(path).ok();
@@ -137,11 +142,33 @@ fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool) -> 
   } else {
     path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default()
   };
-  let thumb_path = if is_dir { None } else { fresh_thumb_path(root, &rel, mtime_ms, size) };
   // 图片探测宽高（魔数不认扩展名，壁纸站扩展名撒谎场景同 thumbnail::probe 口径）；
   // 只读文件头，探测失败静默 null——布局回退方盒（useGridLayout 既定链）
   let (w, h) = if is_dir { (None, None) } else { crate::services::thumbnail::probe(path).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None)) };
-  Some(WsEntry { name: name.to_string(), rel_path: rel, is_dir, size, mtime_ms, w, h, ext, thumb_path })
+  // 缩略图来源（2026-09-17 实机定：非图片/音视频类型必须有系统格式图标，不许空盒）：
+  // ① 内容缩略图缓存新鲜 = asset；② 缩略管线解不出的类型（w/h 探测失败且非音视频）=
+  //   现场 shell 提取系统格式图标，按扩展名缓存 .anikit/thumbs/{ext}.webp（库 cache/thumbs 同口径换锚）；
+  // ③ 可解码但尚未生成 = (null, null)，后台生成后 thumbs-ready 回填
+  let (thumb_path, thumb_kind) = if is_dir {
+    (None, None)
+  } else if let Some(t) = fresh_thumb_path(root, &rel, mtime_ms, size) {
+    (Some(t), Some(ThumbKind::Asset))
+  } else {
+    let decodable = w.is_some()
+      || crate::services::media::VIDEO_EXTS.contains(&ext.as_str())
+      || crate::services::media::AUDIO_EXTS.contains(&ext.as_str());
+    if !decodable {
+      let dir = thumbs_dir(root);
+      if crate::services::thumbnail::ensure_format_icon_in(&dir, path, &ext) {
+        (Some(crate::services::thumbnail::format_icon_path_in(&dir, &ext).to_string_lossy().into_owned()), Some(ThumbKind::FormatIcon))
+      } else {
+        (None, None)
+      }
+    } else {
+      (None, None)
+    }
+  };
+  Some(WsEntry { name: name.to_string(), rel_path: rel, is_dir, size, mtime_ms, w, h, ext, thumb_path, thumb_kind })
 }
 
 // ---------- 缩略图缓存 ----------

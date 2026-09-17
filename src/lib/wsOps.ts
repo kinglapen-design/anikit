@@ -22,7 +22,8 @@ export interface WsEntry {
   w: number | null; // 图片像素宽（内容魔数探测）；非图片 / 目录 = null
   h: number | null; // 图片像素高，同上
   ext: string; // 小写无点扩展名；目录 / 无扩展名 = ""
-  thumbPath: string | null; // 缩略图缓存绝对路径：仅缓存新鲜时给，否则 null
+  thumbPath: string | null; // 缩略图缓存绝对路径：内容缩略图新鲜 / 格式图标已缓存时给，否则 null
+  thumbKind: "asset" | "formatIcon" | null; // 缩略图来源（同库 ThumbKind 口径；未就绪 = null）
 }
 
 // workspace-thumbs-ready 负载条目（services/workspace.rs ThumbReady）
