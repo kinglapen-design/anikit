@@ -1,6 +1,6 @@
 # 踩坑记录 061-090
 
-> 四段式：现象 / 原因 / 解法 / 预防。共 16 条。返回 [Index](../Index.md)。
+> 四段式：现象 / 原因 / 解法 / 预防。共 17 条。返回 [Index](../Index.md)。
 
 | 编号 | 标题 | 日期 | 链接 |
 | --- | --- | --- | --- |
@@ -21,3 +21,4 @@
 | 075 | ffprobe 探测分流把本可直解的 HEVC 送进软编码转码——试播回退优于探测预判（2026-09-13） | 2026-09-13 | [ffprobe 探测分流把本可直解的 HEVC 送进软编码转码——试播回退优于探测预判（2026-09-13）](075_ffprobe 探测分流把本可直解的 HEVC 送进软编码转码——试播回退优于探测预判（2026-09-13）.md) |
 | 076 | 手工 cargo build --release 打出的包找 devUrl——免安装打包必须走 tauri build 链（2026-09-13） | 2026-09-13 | [手工 cargo build --release 打出的包找 devUrl——免安装打包必须走 tauri build 链（2026-09-13）](076_手工 cargo build --release 打出的包找 devUrl——免安装打包必须走 tauri build 链（2026-09-13）.md) |
 | 077 | Smart App Control 评估期满自动转「开」，本地 cargo 新编 exe 被 WDAC 拦截 os error 4551（2026-09-17） | 2026-09-17 | [Smart App Control 评估期满自动转「开」，本地 cargo 新编 exe 被 WDAC 拦截（os error 4551）（2026-09-17）](077_Smart App Control 评估期满自动转开——本地新编 exe 被 WDAC 拦截（os error 4551）（2026-09-17）.md) |
+| 078 | canonicalize 逐字路径喂 Shell API 全灭——调 shell 前剥前缀还原普通路径（2026-09-17） | 2026-09-17 | [canonicalize 逐字路径喂 Shell API 全灭——调 shell 前剥前缀还原普通路径（2026-09-17）](078_canonicalize 逐字路径喂 Shell API 全灭——调 shell 前剥前缀还原普通路径（2026-09-17）.md) |
