@@ -90,14 +90,19 @@ export function addButtonSpec(opts?: { includeCreate?: boolean }): CtxEntry[] {
   }
   if (includeCreate) {
     entries.push(
-      // 新建文件夹入口 = 默认区块「目录」根级（2026-08-14 区块子系统：保持原语义——根级最底部）；
-      // 区块折叠时先强制展开让新节点可见（与侧栏区块头 + 按钮同口径）
+      // 新建文件夹入口（2026-09-19 BUG 1 修订）：文件夹视口内 = 建到当前文件夹（用户心智 =
+      // 文件管理器"在这里新建"，原恒建根级被报 BUG）；其余视口保持原口径 = 默认区块「目录」
+      // 根级（2026-08-14 区块子系统），区块折叠时先强制展开让新节点可见
       {
         label: "新建文件夹",
         shortcut: "Ctrl+Shift+N",
         action: () => {
-          openBlock(DEFAULT_BLOCK_ID);
-          void createAndName(null, null, DEFAULT_BLOCK_ID);
+          const cur = useContentStore().currentFolderId;
+          if (cur !== null) void createAndName(cur, null);
+          else {
+            openBlock(DEFAULT_BLOCK_ID);
+            void createAndName(null, null, DEFAULT_BLOCK_ID);
+          }
         },
       },
       {

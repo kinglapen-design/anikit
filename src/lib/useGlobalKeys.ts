@@ -247,7 +247,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       // 复制 = 资产引用标记只读，全视口留
       if (selection.count > 0 && (k === "c" || !content.isVirtualView)) {
         e.preventDefault();
-        copySelection(k === "c" ? "copy" : "cut");
+        void copySelection(k === "c" ? "copy" : "cut");
       }
       return;
     }

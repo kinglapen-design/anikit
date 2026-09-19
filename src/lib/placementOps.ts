@@ -425,23 +425,27 @@ export async function createDocument(kind: NewDocKind): Promise<void> {
 //（2026-08-20 修复：原 icon:"fail" 是 info 型废除时的误改——成功操作用失败提示，用户实机报）；
 // 复制时同步写系统剪贴板（2026-09-17 实机走查：复制图片要能粘到 APP 外——网页 AI 对话框等，
 // CF_HDROP 文件 + 单张静态图附位图；后端解析 origin 真实路径，ws:/解析失败项跳过，静默不打扰）
-export function copySelection(action: "copy" | "cut"): void {
+export async function copySelection(action: "copy" | "cut"): Promise<void> {
   const selection = useSelectionStore();
   const items = selection.selectedRefs();
   if (items.length === 0) return;
   selection.clipboard = { items, action };
-  // 记录写入时刻的系统剪贴板序号（复制/剪切都记——粘贴仲裁基准：序号变了 = 外部覆盖）
+  if (action === "copy") {
+    const assetIds = [...new Set(items.map((i) => i.assetId))];
+    // **先写完系统剪贴板**（2026-09-19 BUG 2 仲裁竞态根治）：原实现「读序号」与「写系统
+    // 剪贴板」两 invoke 并发——读几乎恒先返回，clipboardSeq 记下的是写入前的旧序号，写完成
+    // 后系统序号已推进 → 每次 APP 内复制后 Ctrl+V 都误判"外部覆盖"让位系统导入，链接粘贴
+    // 全灭（还连锁把"导入自己的文件"喂给假冲突链）
+    await invoke("copy_files_to_system_clipboard", { assetIds }).catch((e) =>
+      console.debug("系统剪贴板写入不可用：", e),
+    );
+  }
+  // 记录（系统剪贴板写入完成后此刻的）序号——粘贴仲裁基准：序号变了 = 外部覆盖
   void invoke<number>("get_clipboard_seq")
     .then((s) => {
       selection.clipboardSeq = s;
     })
     .catch(() => {});
-  if (action === "copy") {
-    const assetIds = [...new Set(items.map((i) => i.assetId))];
-    void invoke("copy_files_to_system_clipboard", { assetIds }).catch((e) =>
-      console.debug("系统剪贴板写入不可用：", e),
-    );
-  }
   useToastStore().notify({
     message: `已${action === "copy" ? "复制" : "剪切"} ${items.length} 个项目`,
     duration: 3000,

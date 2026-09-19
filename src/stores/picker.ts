@@ -31,6 +31,12 @@ import { addRelations, type PickerTarget, type PickedRelation } from "../lib/rel
 export type PickerTemplate = "file" | "relation";
 export type PickerPurpose = "relation" | "link" | "voice" | "cover";
 
+/** 备选匹配键（2026-09-19 BUG 3）：kind+id+folderId 三元组——同资产多条链接位置各自独立；
+ *  archive 无位置概念（folderId 恒 ""） */
+function pickKey(kind: "asset" | "archive", id: string, folderId?: string): string {
+  return `${kind}|${id}|${folderId ?? ""}`;
+}
+
 export const usePickerStore = defineStore("picker", {
   state: () => ({
     active: false,
@@ -142,10 +148,14 @@ export const usePickerStore = defineStore("picker", {
 
     /** 单击卡片 = 加入/移出备选（多选累积：点新卡追加一组、点已选移除该组）；
      *  发起文件自身不可选（卡片半透明禁选态，后端同拦）；
-     *  file 模板行 name 草稿默认取源显示名（备选区输入框可改，确认按行写入） */
+     *  file 模板行 name 草稿默认取源显示名（备选区输入框可改，确认按行写入）；
+     *  匹配键 = 三元组 kind+id+folderId（2026-09-19 BUG 3：曾按 kind+id 匹配——同资产多条
+     *  链接位置共享 assetId，任一位置入备选、同资产全部位置卡片都亮大勾，点另一条还误判
+     *  "取消"→ 改为 Placement 级独立选择；archive 无位置概念 folderId 恒 ""） */
     togglePick(target: PickerTarget): void {
       if (this.origin && this.origin.kind === target.kind && this.origin.id === target.id) return;
-      const i = this.picked.findIndex((p) => p.target.kind === target.kind && p.target.id === target.id);
+      const key = pickKey(target.kind, target.id, target.folderId);
+      const i = this.picked.findIndex((p) => pickKey(p.target.kind, p.target.id, p.target.folderId) === key);
       if (i >= 0) {
         this.picked.splice(i, 1);
         return;
@@ -153,8 +163,9 @@ export const usePickerStore = defineStore("picker", {
       this.picked.push({ target, label: "", reverseLabel: "", name: target.name });
     },
 
-    isPicked(kind: "asset" | "archive", id: string): boolean {
-      return this.picked.some((p) => p.target.kind === kind && p.target.id === id);
+    isPicked(kind: "asset" | "archive", id: string, folderId?: string): boolean {
+      const key = pickKey(kind, id, folderId);
+      return this.picked.some((p) => pickKey(p.target.kind, p.target.id, p.target.folderId) === key);
     },
 
     /** cover 用途单选直回（2026-09-08 用户定：选择图片后不进备选区，直接显示在封面里）：
@@ -197,7 +208,16 @@ export const usePickerStore = defineStore("picker", {
         }
         if (!this.origin) return;
         const kind = this.purpose === "voice" ? "voice" : undefined;
-        const rels = await addRelations(this.origin, this.picked, kind);
+        // relation / voice = 资产级关系：同资产多条链接位置（BUG 3 起按 Placement 独立选择）
+        // 折叠为首条——同资产不重复建关系
+        const seen = new Set<string>();
+        const items = this.picked.filter((p) => {
+          const k = `${p.target.kind}|${p.target.id}`;
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+        const rels = await addRelations(this.origin, items, kind);
         // 幂等插入：刷新交错 / 重入下按 id 查重（同一条不重复进清单）
         for (const rel of rels) {
           if (!content.relations.some((r) => r.id === rel.id)) content.relations.push(rel);

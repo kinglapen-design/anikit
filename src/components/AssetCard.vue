@@ -91,8 +91,9 @@ const selection = useSelectionStore();
 const picker = usePickerStore();
 const content = useContentStore();
 const cardKey = `${props.asset.assetId}|${props.asset.folderId}`;
-// 选择模式（6.2 一轮，PRD 03_数据链接 04 四重标识之四）：已选卡片压暗（30% 档）+ 品牌绿大勾
-const picked = computed(() => picker.active && picker.isPicked("asset", props.asset.assetId));
+// 选择模式（6.2 一轮，PRD 03_数据链接 04 四重标识之四）：已选卡片压暗（30% 档）+ 品牌绿大勾；
+// 三元组匹配（2026-09-19 BUG 3：同资产多条链接位置独立选择，不再按 assetId 联动亮勾）
+const picked = computed(() => picker.active && picker.isPicked("asset", props.asset.assetId, props.asset.folderId));
 // 发起文件自身（2026-08-24 用户定）：剪切档半透明 + 禁选（togglePick 同拦），视觉明确"不可选"
 const pickerSelf = computed(() => picker.active && picker.origin?.kind === "asset" && picker.origin.id === props.asset.assetId);
 // 重命名提交 / 取消（FileCard nameCommit / nameCancel 上抛；空/不变判定在本壳，TreeRowItem 口径）；

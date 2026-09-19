@@ -198,8 +198,14 @@ function fileEntries(): CtxEntry[] {
       shortcut: "Ctrl+Shift+N",
       disabled: noFolder,
       action: () => {
-        openBlock(DEFAULT_BLOCK_ID);
-        void createAndName(null, null, DEFAULT_BLOCK_ID);
+        // 文件夹视口内 = 建到当前文件夹（2026-09-19 BUG 1 修订，同 addMenu 口径）；
+        // 其余位置视图保持原口径 = 默认区块根级
+        const cur = content.currentFolderId;
+        if (cur !== null) void createAndName(cur, null);
+        else {
+          openBlock(DEFAULT_BLOCK_ID);
+          void createAndName(null, null, DEFAULT_BLOCK_ID);
+        }
       },
     },
     {
