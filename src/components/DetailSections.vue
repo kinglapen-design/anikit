@@ -6,8 +6,9 @@
 //   → tab 内容区（flex 1 自管滚动：kit-scroll + ScrollThumb 悬浮滚轮，速查表 §2）
 //   → 底部「信息查看管理」钮（58 高块 padding 12，ActionButton solid md + info-manage 图标；
 //     点亮不接业务——排序/显隐管理面板后续轮接，2026-08-31 用户定）。
-// tab 口径（同日用户定）：默认「基础信息」；会话级记忆——同一选中对象内切 tab 记住，换选中回基础信息；
-// 不写设置存储。
+// tab 口径（2026-09-19 用户改定）：默认「基础信息」；**全局记忆 + 持久化**（ui.detailTab，
+// settings.ui 写回通道）——换选中 / 选择模式往返（右栏替换卸载）不重置，链接文件成功后
+// 留在当前 tab；旧「会话级记忆、换选中回基础信息、不写设置存储」口径（2026-08-31）废除。
 // 旧体系废除：pinned + 7 排序区块堆叠栈 / 注册表双套配置 / 22 稿 SectionEditPanel（摘挂载退役）/
 // DetailNotes 笔记区块（待补稿接回，09 待办）。
 import { computed, ref, watch } from "vue";
@@ -20,6 +21,7 @@ import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ActionButton from "./buttons/ActionButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import type { DetailTarget } from "../lib/detailSections";
+import { useUiStore } from "../stores/ui";
 
 const props = defineProps<{ target: DetailTarget }>();
 
@@ -40,24 +42,21 @@ const TAB_OPTIONS = [
   { value: "links", icon: "link-relations" },
   { value: "prompt", icon: "prompt" },
 ] as const;
-const tab = ref<string>("basic");
+// 全局记忆（ui.detailTab 持久化）：卸载重挂 / 换选中不丢当前 tab
+const ui = useUiStore();
+const tab = computed({
+  get: () => ui.detailTab,
+  set: (v: string) => {
+    ui.detailTab = v as "basic" | "links" | "prompt";
+  },
+});
 
 // tab 切换滑动动画（2026-08-31 用户定：SidebarLeft 分段切换范例同款 + **方向恒定**旧左出 / 新右入——
 // 初版按 tab 序双向（fwd/back）被用户走查否掉：「左侧边栏是恒定左出右入，统一一下，不然语义不统一」；
-// 时序 = 速查 §20 四调定稿）；切 tab 回顶（会话记忆只记 tab 不记滚动位）
+// 时序 = 速查 §20 四调定稿）；切 tab 回顶（全局记忆只记 tab 不记滚动位）
 watch(tab, () => {
   if (tabBodyRef.value) tabBodyRef.value.scrollTop = 0;
 });
-
-// 会话级记忆（2026-08-31 用户定）：选中对象身份变化 → 回「基础信息」；同选中内切 tab 不重置
-const targetKey = computed(() => {
-  const t = props.target;
-  if (t.kind === "file") return `f:${t.placement.assetId}|${t.placement.folderId}|${t.placement.name}`;
-  if (t.kind === "archive") return `a:${t.node.id}`;
-  if (t.kind === "folder") return `d:${t.node.id}`;
-  return `q:${t.viewKey}`;
-});
-watch(targetKey, () => (tab.value = "basic"));
 
 // tab 内容区滚动（kit-scroll 隐藏原生条 + ScrollThumb 悬浮）
 const tabBodyRef = ref<HTMLElement>();

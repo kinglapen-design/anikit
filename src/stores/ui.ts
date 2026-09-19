@@ -36,6 +36,10 @@ const PERSIST_KEYS = [
   "tabLayout",
   "detailLinksOrder",
   "pluginOrder",
+  "leftMode",
+  "lastLibView",
+  "lastWsView",
+  "detailTab",
   "mcpWriteEnabled",
 ] as const;
 
@@ -124,6 +128,17 @@ export const useUiStore = defineStore("ui", {
     // 渲染 = pluginOrder 过滤已知 id 后按数据源（lib/plugins PLUGINS）补尾；数组 typeof "object"，
     // PERSIST_KEYS 类型校验放行（tabLayout / detailLinksOrder 先例），形状由 loadSettings 兜底校验
     pluginOrder: [] as string[],
+    // 左侧分段模式 + 各模式停留视口（2026-09-19 用户定：库 / 工作空间切换各自记忆中间容器，
+    // 切回恢复——旧「切 workspace 仅无 ws 页才开根视口、切回库不动」停留对方目录口径废除）：
+    // lastLibView / lastWsView 由 App.vue 的 sidebarSelected watch 按 ws: 前缀归桶持续记录，
+    // 持久化三键；启动时中间容器仍由 tabLayout 恢复，本组只管侧栏模式与切换基点
+    leftMode: "library" as "library" | "workspace" | "ai",
+    lastLibView: "quick:all",
+    lastWsView: "ws:",
+    // 详情面板当前 tab（7.1 二十三轮三段：basic 基础信息 / links 链接关系 / prompt 提示词）：
+    // 全局记忆 + 持久化（2026-09-19 用户定：换选中 / 选择模式往返不重置——链接文件成功后
+    // 不再回基础信息；旧「会话级记忆换选中回 basic、不写设置存储」口径废除）
+    detailTab: "basic" as "basic" | "links" | "prompt",
     // MCP 写入开关（PRD 08-06 写入闸形态 A，2026-09-19 用户定）：持久化 settings.ui 子树
     // mcpWriteEnabled（默认关）；偏好设置弹窗开关行直改本字段，随 ui 设置防抖整体写回；
     // MCP 写工具逐次直读 config.json 门禁（server/mcp write_gate）

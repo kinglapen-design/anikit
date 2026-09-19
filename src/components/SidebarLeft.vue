@@ -7,8 +7,9 @@
 // 「插件」2026-09-06 接业务 = 插件菜单（menuSpecs/pluginMenu，同 toggle 口径；同日二轮用户走查
 // 改定：菜单栏钮 = 普通上下文菜单，400×450 插件列表浮层只留工具栏 plugin 图标钮）；
 // 分段控制器 54（SegmentedControl icon 型：资源库 / 工作空间 / AI 对话框——三段可切换，
-// 工作空间 / AI = 空态「功能正在开发中」居中，2026-08-30 用户定；选择模式下禁用切换，
-// 视觉不改——稿无禁用态）；
+// 资源库 = LibraryView 树、工作空间 = WorkspaceTree 树（2026-09-17 接入），AI = 空态
+// 「功能正在开发中」居中；模式与停留视口持久化见下方「分段控制器（模式切换）」段；
+// 选择模式下禁用切换，视觉不改——稿无禁用态）；
 // 树容器 flex 1（LibraryView：快速访问 + 文件夹区块；ScrollThumb 悬浮滚轮，速查 §2）。
 // 收展动画 = sidebarShowWidths 唯一写点（速查 §8）：模板只绑它，toggle 只翻布尔；
 // 本文件禁挂 width 的 CSS transition（与逐帧 JS 写宽打架 = 慢一帧）；
@@ -92,10 +93,11 @@ function onViewMenu(e: MouseEvent): void {
 
 // 分段控制器（模式切换）：library = 资源库树；workspace = 工作空间树（PRD 02 步骤 1 只读底座，
 // 2026-09-17 接入：真实目录树 + 懒加载子目录）；ai = 空态占位（功能正在开发中）。
-// 会话级状态（旧 rail 同样不可切、无持久化先例）；选择模式（6.2 白名单收窄）下禁用切换——
-// 树 / 快速访问导航是挑选主通路，须恒在。
-// 首次切到 workspace 分段：若尚无 ws: 视口标签页则自动 openView("ws:")（根目录视口，树导航的前提）
-const viewMode = ref<"library" | "workspace" | "ai">("library");
+// 模式与停留视口持久化（ui.leftMode / lastLibView / lastWsView，2026-09-19 用户定）：
+// 切分段 = 恢复该模式停留视口（库 / 工作空间各自记忆，App.vue 按 ws: 前缀归桶持续记录）——
+// 旧「切 workspace 仅无 ws 页才开根视口、切回库不动」停留对方目录口径废除；
+// 选择模式（6.2 白名单收窄）下禁用切换——树 / 快速访问导航是挑选主通路，须恒在。
+// AI 占位段不动中间容器。
 const tabs = useTabsStore();
 const segOptions = [
   { value: "library", icon: "library" },
@@ -104,10 +106,10 @@ const segOptions = [
 ] as const;
 function onModeChange(v: string): void {
   if (picker.active) return;
-  viewMode.value = v as "library" | "workspace" | "ai";
-  if (viewMode.value === "workspace" && !tabs.tabs.some((t) => t.viewKey.startsWith("ws:"))) {
-    tabs.openView("ws:");
-  }
+  ui.leftMode = v as "library" | "workspace" | "ai";
+  // 切分段恢复该模式停留视口（openView 同视口早退；锁定页按既有 Eagle 语义新开标签页）
+  if (v === "workspace") tabs.openView(ui.lastWsView || "ws:");
+  else if (v === "library") tabs.openView(ui.lastLibView || "quick:all");
 }
 
 const bodyRef = ref<HTMLElement>();
@@ -130,7 +132,7 @@ const bodyRef = ref<HTMLElement>();
     <!-- 模式切换区块（稿 左侧边栏-分段控制器）：54 高 / padding 8 12 -->
     <div class="seg-wrap">
       <SegmentedControl
-        :model-value="viewMode"
+        :model-value="ui.leftMode"
         :options="segOptions"
         variant="icon"
         @update:model-value="onModeChange"
@@ -141,10 +143,10 @@ const bodyRef = ref<HTMLElement>();
          AI = 空态占位；视图切换 = 旧内容左移出、新内容右移入（2026-08-30 用户实机定）300ms 缓入缓出（与滑块同步） -->
     <div class="side-body">
       <Transition name="view-x">
-        <div v-if="viewMode === 'library'" ref="bodyRef" class="tree-scroll kit-scroll" key="library">
+        <div v-if="ui.leftMode === 'library'" ref="bodyRef" class="tree-scroll kit-scroll" key="library">
           <LibraryView />
         </div>
-        <div v-else-if="viewMode === 'workspace'" ref="bodyRef" class="tree-scroll kit-scroll" key="workspace">
+        <div v-else-if="ui.leftMode === 'workspace'" ref="bodyRef" class="tree-scroll kit-scroll" key="workspace">
           <WorkspaceTree />
         </div>
         <div v-else class="empty-state" key="empty">功能正在开发中</div>
