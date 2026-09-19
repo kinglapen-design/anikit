@@ -104,6 +104,72 @@
     assert!(out.conflicts[0].source_thumb_path.is_none(), "图片格式不生成预览缓存");
   }
 
+  /// 假冲突根治（2026-09-19，BUG 4 用户实锤）：回收站引用 / 孤儿残留资产不参与查重——
+  /// 删除进回收站（info 保留）或删除事故半截残留（metadata.hash 仍在、无任何引用）的
+  /// 资产对导入不可见，同内容文件再导入应正常建档，不再报"幽灵冲突"
+  ///（原全量 by_hash 命中后：弹窗显示空白文件夹名 + 无缩略图，useExisting 缺 origin 必失败）
+  #[test]
+  fn recycled_or_orphan_assets_do_not_conflict() {
+    let h = make_lib();
+    let seed = h._dir.path().join("原图.png");
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([9, 9, 9, 255])).save(&seed).unwrap();
+    let dup = h._dir.path().join("复制.png");
+    fs::copy(&seed, &dup).unwrap();
+
+    // 情形一：删除进回收站（folders.items 清空 + recycle 快照，info 实体保留）
+    run(&h, opts(Structure::Flatten, Source::Copy, vec![seed.clone()]));
+    {
+      let mut guard = h.lib.lock().unwrap();
+      let l = guard.as_mut().unwrap();
+      let asset = l.folders.items[0].asset.clone();
+      let placements: Vec<crate::core::models::Placement> = l.folders.items.iter().filter(|p| p.asset == asset).cloned().collect();
+      l.folders.items.retain(|p| p.asset != asset);
+      l.recycle.items.push(crate::core::models::RecycleItem { asset, deleted_at: "2026-09-19T00:00:00+08:00".into(), placements });
+      l.index.rebuild_placements(&l.folders.items);
+    }
+    let (out, _) = run(&h, opts(Structure::Flatten, Source::Copy, vec![dup.clone()]));
+    assert_eq!((out.imported, out.conflicts.len()), (1, 0), "回收站资产不触发冲突：{:?}", out.conflicts);
+
+    // 情形二：孤儿残留（metadata 在、folders ∪ recycle 无任何引用——删除事故半截态）
+    {
+      let mut guard = h.lib.lock().unwrap();
+      let l = guard.as_mut().unwrap();
+      l.folders.items.clear();
+      l.recycle.items.clear();
+      l.index.rebuild_placements(&l.folders.items);
+    }
+    fs::copy(&seed, &dup).unwrap();
+    let (out, _) = run(&h, opts(Structure::Flatten, Source::Copy, vec![dup.clone()]));
+    assert_eq!((out.imported, out.conflicts.len()), (1, 0), "孤儿资产不触发冲突：{:?}", out.conflicts);
+
+    // 回归：活 Placement 资产正常参与查重（再导同内容 → 冲突挂起）
+    fs::copy(&seed, &dup).unwrap();
+    let (out, _) = run(&h, opts(Structure::Flatten, Source::Copy, vec![dup]));
+    assert_eq!(out.conflicts.len(), 1, "活资产仍正常报冲突");
+  }
+
+  /// hidden 伴生缩略图资产不参与查重（8.1 伴生 = 附属品，用户不可见）：同内容图片再导入
+  /// 正常建档为新资产，不与伴生撞 hash 报冲突（伴生本有活 Placement，原会命中且
+  /// useExisting 会把伴生的 origin 搬离，语义全乱）
+  #[test]
+  fn hidden_thumb_asset_does_not_conflict() {
+    let h = make_lib();
+    let seed = h._dir.path().join("封面.png");
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([3, 3, 3, 255])).save(&seed).unwrap();
+    let dup = h._dir.path().join("同图.png");
+    fs::copy(&seed, &dup).unwrap();
+
+    run(&h, opts(Structure::Flatten, Source::Copy, vec![seed]));
+    {
+      let mut guard = h.lib.lock().unwrap();
+      let l = guard.as_mut().unwrap();
+      let asset = l.folders.items[0].asset.clone();
+      l.index.assets.get_mut(&asset).unwrap().hidden = Some(true);
+    }
+    let (out, _) = run(&h, opts(Structure::Flatten, Source::Copy, vec![dup]));
+    assert_eq!((out.imported, out.conflicts.len()), (1, 0), "hidden 伴生不触发冲突：{:?}", out.conflicts);
+  }
+
   #[test]
   fn flatten_imports_flat_and_streams_events() {
     let h = make_lib();

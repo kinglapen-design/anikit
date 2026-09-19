@@ -51,6 +51,12 @@ const DETAIL_DELAY: Duration = Duration::from_millis(200);
 /// detail worker 防重入标记：同一时刻至多一个在跑（连发事件由在跑的那拍合并覆盖）
 static DETAIL_RUNNING: AtomicBool = AtomicBool::new(false);
 
+/// stop 等待派发线程排空的上限（2026-09-19 BUG 4 用户实锤"托盘退出卡死"）：stop 置位即
+/// 作为 cancel 传入导入管线，当前单元写完即中断，正常秒级退出；超时不再死等——开关场景
+/// 旧线程跑完当前批自行退出，退出场景随进程终止（原无限 join：导入卡死 / 长批次时
+/// RunEvent::Exit 卡在 stop，整个应用退不掉）
+const DISPATCH_STOP_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// 自动导入白名单（小写比较）：可视素材扩展名（4.2 可出缩略图口径 + 2026-07-25 用户补视频
 /// mp4/mov/avi/mpeg4/m4v + 2026-07-26 音频 mp3/wav/wma（5.1 波形/元数据就位，消化 4.4 留待））；
 /// 白名单以外一律不自动导入——不反向枚举工程格式（枚举不完，2026-07-25 用户定案）
@@ -347,6 +353,8 @@ pub struct InboxHandle {
   stop: Arc<AtomicBool>,
   watch: Option<inbox_watch::WatchHandle>,
   dispatcher: Option<JoinHandle<()>>,
+  /// 派发线程退出通知（stop 有界等待用：线程结束 drop 发送端 → 接收端 Disconnected）
+  done: Option<mpsc::Receiver<()>>,
   /// 当前挂载的盘符（未挂载 None，托盘开关读写）
   drive: Option<char>,
 }
@@ -369,12 +377,16 @@ pub fn start(app: &AppHandle, root: &Path) {
 
   // 派发线程：就绪批次串行跑导入管线（与 UI 导入共用库锁，分段短锁不卡界面）
   let (tx, rx) = mpsc::channel::<Vec<PathBuf>>();
+  let (done_tx, done_rx) = mpsc::channel::<()>();
   let stop = Arc::new(AtomicBool::new(false));
   let dispatcher = {
     let app = app.clone();
     let root = root.to_path_buf(); // 搁置清单锚点（空间根）
     let stop = stop.clone();
-    std::thread::spawn(move || dispatch_loop(app, root, rx, stop))
+    std::thread::spawn(move || {
+      dispatch_loop(app, root, rx, stop);
+      drop(done_tx); // 线程结束即断开，stop 侧 recv_timeout 立即收讫
+    })
   };
   // 磁盘实况热刷新：任何路径事件原样转发给前端（去抖在 listen 侧做），并起慢层 details 补算
   let app_fs = app.clone();
@@ -402,7 +414,7 @@ pub fn start(app: &AppHandle, root: &Path) {
 
   let state = app.state::<AppState>();
   match state.inbox.lock() {
-    Ok(mut slot) => *slot = Some(InboxHandle { stop, watch, dispatcher: Some(dispatcher), drive }),
+    Ok(mut slot) => *slot = Some(InboxHandle { stop, watch, dispatcher: Some(dispatcher), done: Some(done_rx), drive }),
     Err(_) => log::error!("收件箱状态登记失败（锁冲突）"),
   }
   sync_tray(app);
@@ -410,7 +422,10 @@ pub fn start(app: &AppHandle, root: &Path) {
   log::info!("收件箱已启动：{}（盘符 {:?}）", dir.display(), drive);
 }
 
-/// 停止收件箱（自动导入关闭 / 应用退出）：停监听 → 等派发线程排空 → 卸载盘符（幂等）
+/// 停止收件箱（自动导入关闭 / 应用退出）：停监听 → 有界等派发线程排空 → 卸载盘符（幂等）。
+/// 等待有界（DISPATCH_STOP_TIMEOUT，2026-09-19 BUG 4）：cancel 已随 stop 置位传入导入管线，
+/// 当前单元写完即中断，正常秒级退出；超时（文件级调用卡死等异常）放弃 join 不再死等——
+/// 开关场景旧线程跑完当前批自行退出（分段短锁与新实例互不干扰），退出场景随进程终止
 pub fn stop(app: &AppHandle) {
   let handle = app.state::<AppState>().inbox.lock().ok().and_then(|mut slot| slot.take());
   if let Some(mut h) = handle {
@@ -419,7 +434,18 @@ pub fn stop(app: &AppHandle) {
       w.stop(); // 监听线程退出后回调里的 tx 随之释放，派发线程 recv 断开自然退出
     }
     if let Some(j) = h.dispatcher.take() {
-      let _ = j.join();
+      let drained = match h.done.as_ref() {
+        Some(rx) => match rx.recv_timeout(DISPATCH_STOP_TIMEOUT) {
+          Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => true,
+          Err(mpsc::RecvTimeoutError::Timeout) => false,
+        },
+        None => true,
+      };
+      if drained {
+        let _ = j.join();
+      } else {
+        log::error!("收件箱派发线程 {DISPATCH_STOP_TIMEOUT:?} 内未退出（导入可能卡在文件级调用），放弃等待");
+      }
     }
     if let Some(letter) = h.drive {
       if let Err(e) = inbox_drive::unmount(letter) {
@@ -505,7 +531,9 @@ fn dispatch_loop(app: AppHandle, root: PathBuf, rx: mpsc::Receiver<Vec<PathBuf>>
       log::warn!("收件箱自动导入跳过：当前无打开的素材库");
       continue;
     };
-    // 收件箱导入无 UI 取消入口（批次通常很小），cancel 恒 false
+    // cancel = 停止标志（2026-09-19 BUG 4）：stop 置位（退出 / 关开关）时管线在当前单元
+    // 写完后中断，Finished 照发（前端 refresh 兜底显示已导入部分）——原 cancel 恒 false，
+    // 长批次 / 单元卡死时 RunEvent::Exit 的 stop 无限 join，托盘退出卡死
     let outcome = run_import(
       &state.library,
       lib_root,
@@ -516,7 +544,7 @@ fn dispatch_loop(app: AppHandle, root: PathBuf, rx: mpsc::Receiver<Vec<PathBuf>>
           log::debug!("收件箱事件推送失败（前端可能已关闭）：{e}");
         }
       },
-      &AtomicBool::new(false),
+      stop.as_ref(),
     );
     // 取消冲突 / 失败条目落搁置清单：不再自动重试（2026-08-13 用户定案），手动入库除外
     block_outcome(&root, &outcome);

@@ -3,12 +3,13 @@
 //! 全部处理完重建 Placement 索引 + folders.json 一次落盘。
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
 use crate::core::library::{self, Library};
-use crate::core::models::new_asset_id;
+use crate::core::models::{new_asset_id, AssetMeta};
 use crate::core::paths;
 use crate::services::import as ops;
 use crate::services::import::{FailedItem, Source, ROOT_FOLDER_ID};
@@ -59,14 +60,60 @@ pub struct ResolveReport {
   pub failed: Vec<FailedItem>,
 }
 
-/// 逐项执行决策：skip 直接过；copy 复用建档原语（继承 source）；useExisting / link 为轻操作；
-/// 决策成功（含 skip）即删除该项预览缓存（cache/tmp 会话级临时，4.2）；
-/// 全部处理完重建 Placement 索引 + folders.json 一次落盘（有改动才写）。
-pub fn resolve_conflicts(lib: &mut Library, items: &[ConflictResolution], source: Source) -> ResolveReport {
+/// 逐项执行决策（两阶段）：**copy 建档锁外准备**（sha256 + 实体入库 + 缩略图 + 格式图标——
+/// 重活与 ffmpeg 探测不再占全局库锁；2026-09-19 BUG 4：原全程持锁跑建档，坏文件探测卡死时
+/// 全 app 命令堵死、收件箱派发等锁、托盘退出 join 卡死）→ 一次短锁校验 + 应用全部决策 +
+/// 重建 Placement 索引 + folders.json 落盘。单项失败不阻塞（中文原因进 failed）；
+/// 决策成功（含 skip）即删除该项预览缓存（cache/tmp 会话级临时，4.2）。
+pub fn resolve_conflicts(
+  lib_mutex: &Mutex<Option<Library>>,
+  items: &[ConflictResolution],
+  source: Source,
+) -> Result<ResolveReport, String> {
   let mut report = ResolveReport { resolved: 0, failed: Vec::new() };
+
+  // 阶段 1（锁外）：copy 项建档准备。库根 / assets 池短锁取出（失败即整体报错）
+  let (root, assets_dir) = {
+    let guard = lib_mutex.lock().map_err(|e| e.to_string())?;
+    let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+    (lib.root.clone(), lib.assets_dir.clone())
+  };
+  let mut prepared: HashMap<usize, PreparedCopy> = HashMap::new();
+  for (i, item) in items.iter().enumerate() {
+    if item.action != ResolveAction::Copy {
+      continue;
+    }
+    match prepare_copy(&root, &assets_dir, item, source) {
+      Ok(p) => {
+        prepared.insert(i, p);
+      }
+      Err(reason) => {
+        report.failed.push(FailedItem { path: item.source_path.to_string_lossy().into_owned(), reason });
+      }
+    }
+  }
+
+  // 阶段 2（一次短锁）：校验 + 应用全部决策 + 落盘
+  let mut guard = lib_mutex.lock().map_err(|e| e.to_string())?;
+  let Some(lib) = guard.as_mut() else {
+    // 决策途中库被关闭：已建档 info 整体回收，不留孤儿
+    for (_, p) in prepared {
+      let _ = std::fs::remove_dir_all(paths::info_dir(&assets_dir, &p.asset.id));
+    }
+    return Err("素材库已关闭，决策未执行".to_string());
+  };
   let mut dirty = false;
-  for item in items {
-    match apply_one(lib, item, source) {
+  for (i, item) in items.iter().enumerate() {
+    let r = match item.action {
+      ResolveAction::Skip => Ok(false),
+      ResolveAction::Link => link(lib, item).map(|_| true),
+      ResolveAction::UseExisting => use_existing(lib, item).map(|_| true),
+      ResolveAction::Copy => match prepared.remove(&i) {
+        Some(p) => register_copy(lib, item, p).map(|_| true),
+        None => continue, // 阶段 1 已记 failed
+      },
+    };
+    match r {
       Ok(changed) => {
         dirty |= changed;
         report.resolved += 1;
@@ -84,7 +131,7 @@ pub fn resolve_conflicts(lib: &mut Library, items: &[ConflictResolution], source
     }
   }
   log::info!("冲突决策完成：成功 {}、失败 {}", report.resolved, report.failed.len());
-  report
+  Ok(report)
 }
 
 /// 决策完成（含 skip）后删除该项预览缓存（cache/tmp 会话级临时）；删除失败仅记日志——
@@ -94,16 +141,6 @@ fn cleanup_preview(item: &ConflictResolution) {
     if let Err(e) = std::fs::remove_file(p) {
       log::warn!("预览缓存删除失败（{p}）：{e}");
     }
-  }
-}
-
-/// 执行单项决策；返回 Ok(true) 表示 folders.json 有改动
-fn apply_one(lib: &mut Library, item: &ConflictResolution, source: Source) -> Result<bool, String> {
-  match item.action {
-    ResolveAction::Skip => Ok(false),
-    ResolveAction::Link => link(lib, item).map(|_| true),
-    ResolveAction::UseExisting => use_existing(lib, item).map(|_| true),
-    ResolveAction::Copy => copy_new(lib, item, source).map(|_| true),
   }
 }
 
@@ -164,12 +201,19 @@ fn use_existing(lib: &mut Library, item: &ConflictResolution) -> Result<(), Stri
   Ok(())
 }
 
-/// copy：源走标准建档（新 ID 新实体 + origin Placement），继承原导入的 source；
-/// 序列帧冲突按回传的组信息重新打包（frames/ 归一，组 hash 重算）
-fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Result<(), String> {
-  check_target(lib, &item.target_folder)?;
-  let root = lib.root.clone();
-  let assets_dir = lib.assets_dir.clone();
+/// copy 决策的锁外建档产物（阶段 1 → 阶段 2 交接）
+struct PreparedCopy {
+  asset: AssetMeta,
+  /// 无内容缩略图时已就绪的格式图标扩展名（登记时入内存集，4.2）
+  icon_ext: Option<String>,
+  /// Placement 显示名（源文件原名；序列帧 = `标题.扩展名`）
+  name: String,
+}
+
+/// copy 决策锁外建档（阶段 1）：源走标准建档（新 ID 新实体），继承原导入的 source 与
+/// 批次渠道标记；序列帧冲突按回传的组信息重新打包（frames/ 归一，组 hash 重算）。
+/// 全部为文件级操作（复制 / 探测 / 缩略图），不碰共享状态
+fn prepare_copy(root: &Path, assets_dir: &Path, item: &ConflictResolution, source: Source) -> Result<PreparedCopy, String> {
   match &item.sequence {
     Some(seq) => {
       let stem = seq.name.clone();
@@ -180,7 +224,7 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
       }
       let hash = sequence::group_hash(&hashes.iter().map(String::as_str).collect::<Vec<_>>());
       let asset = sequence::build_sequence_asset(
-        &assets_dir,
+        assets_dir,
         &stem,
         &seq.ext,
         seq.width as usize,
@@ -190,30 +234,40 @@ fn copy_new(lib: &mut Library, item: &ConflictResolution, source: Source) -> Res
         source,
         item.imported_from.as_deref(), // 继承批次渠道标记（2026-08-13）
       )?;
-      ops::add_placement_keep_name(lib, asset.id.clone(), item.target_folder.clone(), format!("{stem}.{}", seq.ext), true, &mut HashMap::new());
-      lib.index.assets.insert(asset.id.clone(), asset);
-      Ok(())
+      Ok(PreparedCopy { asset, icon_ext: None, name: format!("{stem}.{}", seq.ext) })
     }
     None => {
       let pending = ops::PendingFile { path: item.source_path.clone(), chain: Vec::new() };
       let hash = ops::sha256_file(&pending.path).map_err(|e| format!("文件读取失败：{e}"))?;
       // build_asset_with_id：携带批次渠道标记（新资产进"已导入"视图，2026-08-13）
-      let asset = ops::build_asset_with_id(&assets_dir, &pending, &hash, &new_asset_id(), source, item.imported_from.as_deref())?;
+      let asset = ops::build_asset_with_id(assets_dir, &pending, &hash, &new_asset_id(), source, item.imported_from.as_deref())?;
+      // 4.2：无内容缩略图补系统格式图标缓存（cache/thumbs，不进 info）；内存集在阶段 2 登记
+      let icon_ext = if asset.thumbnail.is_none() {
+        let origin = paths::origin_file(assets_dir, &asset.id, &asset.origin_name);
+        thumbnail::ensure_format_icon(root, &origin, &asset.ext).then(|| asset.ext.clone())
+      } else {
+        None
+      };
       // 显示名 = 源文件原名；hash 判定不受影响
-      let name = ops::file_name(&pending.path);
-      // 4.2：无内容缩略图补系统格式图标缓存（cache/thumbs，不进 info）并登记内存集
-      if asset.thumbnail.is_none() {
-        let origin = paths::origin_file(&assets_dir, &asset.id, &asset.origin_name);
-        if thumbnail::ensure_format_icon(&root, &origin, &asset.ext) {
-          lib.format_icons.insert(asset.ext.clone());
-        }
-      }
-      // "保留两个"允许同名（2026-08-14 用户定：不自动加序号，要改名用户自己改）
-      ops::add_placement_keep_name(lib, asset.id.clone(), item.target_folder.clone(), name, true, &mut HashMap::new());
-      lib.index.assets.insert(asset.id.clone(), asset);
-      Ok(())
+      Ok(PreparedCopy { asset, icon_ext, name: ops::file_name(&pending.path) })
     }
   }
+}
+
+/// copy 决策锁内登记（阶段 2）：校验落点 + Placement 前插 + 索引插入；
+/// 失败时回收已建 info 壳，不留孤儿
+fn register_copy(lib: &mut Library, item: &ConflictResolution, p: PreparedCopy) -> Result<(), String> {
+  if let Err(reason) = check_target(lib, &item.target_folder) {
+    let _ = std::fs::remove_dir_all(paths::info_dir(&lib.assets_dir, &p.asset.id));
+    return Err(reason);
+  }
+  if let Some(ext) = p.icon_ext {
+    lib.format_icons.insert(ext);
+  }
+  // "保留两个"允许同名（2026-08-14 用户定：不自动加序号，要改名用户自己改）
+  ops::add_placement_keep_name(lib, p.asset.id.clone(), item.target_folder.clone(), p.name, true, &mut HashMap::new());
+  lib.index.assets.insert(p.asset.id.clone(), p.asset);
+  Ok(())
 }
 
 #[cfg(test)]
@@ -253,21 +307,20 @@ mod tests {
     std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
     std::fs::write(&cache, b"x").unwrap();
 
-    let report = with_lib(&h, |l| {
-      resolve_conflicts(
-        l,
-        &[ConflictResolution {
-          source_path: PathBuf::from("源.svg"),
-          existing_asset_id: "AN-X".into(),
-          target_folder: ROOT_FOLDER_ID.into(),
-          action: ResolveAction::Skip,
-          sequence: None,
-          source_thumb_path: Some(cache.to_string_lossy().into_owned()),
-          imported_from: None,
-        }],
-        Source::Copy,
-      )
-    });
+    let report = resolve_conflicts(
+      &h.lib,
+      &[ConflictResolution {
+        source_path: PathBuf::from("源.svg"),
+        existing_asset_id: "AN-X".into(),
+        target_folder: ROOT_FOLDER_ID.into(),
+        action: ResolveAction::Skip,
+        sequence: None,
+        source_thumb_path: Some(cache.to_string_lossy().into_owned()),
+        imported_from: None,
+      }],
+      Source::Copy,
+    )
+    .unwrap();
     assert_eq!(report.resolved, 1);
     assert!(!cache.exists(), "决策完成后预览缓存应删除");
   }
@@ -310,7 +363,7 @@ mod tests {
   }
 
   fn resolve(h: &Harness, items: Vec<ConflictResolution>, source: Source) -> ResolveReport {
-    with_lib(h, |l| resolve_conflicts(l, &items, source))
+    resolve_conflicts(&h.lib, &items, source).unwrap()
   }
 
   fn to_resolution(c: &ops::ConflictItem, action: ResolveAction) -> ConflictResolution {

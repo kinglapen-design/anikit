@@ -276,7 +276,20 @@ fn dedup_phase(
   let mut immediate: Vec<(Unit, ConflictItem)> = Vec::new();
   let mut no_folder: Vec<Unit> = Vec::new();
   with_lib(lib, state, |l| {
-    let by_hash: HashMap<&str, &AssetMeta> = l.index.assets.values().map(|a| (a.hash.as_str(), a)).collect();
+    // 查重只对本库"看得见"的资产生效（2026-09-19 假冲突根治，BUG 4）：本库 folders.items
+    // 有活 Placement 且非 hidden 伴生才参与 hash 比对。回收站引用（info 保留但已删语义）、
+    // 孤儿残留（删除事故半截 info，metadata.hash 仍在）、其他库资产（空间共池全量载入）、
+    // hidden 伴生（用户不可见）一律不触发冲突——它们无本库活位置，conflict_of 组装出空白
+    // 文件夹名/无缩略图的"幽灵冲突"，useExisting 因缺本库 origin 必失败（用户实锤：
+    // 删了再导总报冲突、替换失败，多次重启待自检清掉残留才恢复）
+    let alive: HashSet<&str> = l.folders.items.iter().map(|p| p.asset.as_str()).collect();
+    let by_hash: HashMap<&str, &AssetMeta> = l
+      .index
+      .assets
+      .values()
+      .filter(|a| a.hidden != Some(true) && alive.contains(a.id.as_str()))
+      .map(|a| (a.hash.as_str(), a))
+      .collect();
     let mut batch: HashMap<String, String> = HashMap::new(); // hash → 同批次 twin asset id
     for (unit, hash) in units {
       let chain = unit_chain(files, groups, *unit);

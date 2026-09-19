@@ -4,8 +4,10 @@
 //! 二进制缺失 / 执行失败一律返回 None（"能力探测"语义，同 thumbnail）——音视频退化为格式图标保底，
 //! 导入不因此失败；只留 warn 日志。调用方都在后台线程（导入管线 / detail worker），同步阻塞可接受。
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 /// Tauri externalBin 命名约定：{name}-{target triple}
 const TRIPLE: &str = "x86_64-pc-windows-msvc";
@@ -16,6 +18,12 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// 音频 PCM 抽取的时长上限（秒）：8kHz mono f32 每分钟约 1.9MB，10 分钟封顶防超长文件撑内存
 const PCM_MAX_SECS: u32 = 600;
+
+/// 探测 / 抽帧 / PCM 抽取类调用的子进程超时（2026-09-19 BUG 4）：`output()` 无超时——sidecar
+/// 对坏文件 / 异常流可能永不退出，卡死导入管线单元（整批无 Finished：进度条定格、卡片不出、
+/// 托盘退出 join 死等）。正常探测秒级返回，90s 已是病态宽限；超时杀进程按探测失败处理
+///（调用方退化为格式图标保底，导入不失败）
+const PROBE_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// sidecar 路径解析：dev = CARGO_MANIFEST_DIR/binaries（带 triple 后缀）；
 /// prod = 当前 exe 同目录（externalBin 产物，带不带 triple 后缀都试）。找不到返回 None。
@@ -33,29 +41,63 @@ fn sidecar_path(name: &str) -> Option<PathBuf> {
   candidates.into_iter().find(|p| p.is_file())
 }
 
-/// 运行 sidecar 并取 stdout；二进制缺失 / 启动失败 / 非零退出 / stdout 为空均返回 None
+/// 运行 sidecar 并取 stdout；二进制缺失 / 启动失败 / 非零退出 / stdout 为空 / **超时**均返回 None
 fn run(name: &str, args: &[String]) -> Option<Vec<u8>> {
   let bin = sidecar_path(name)?;
   let mut cmd = Command::new(bin);
   cmd.args(args).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
   #[cfg(windows)]
   std::os::windows::process::CommandExt::creation_flags(&mut cmd, CREATE_NO_WINDOW);
-  let out = match cmd.output() {
-    Ok(o) => o,
+  let mut child = match cmd.spawn() {
+    Ok(c) => c,
     Err(e) => {
       log::warn!("{name} 启动失败：{e}");
       return None;
     }
   };
-  if !out.status.success() {
-    log::warn!("{name} 退出码 {:?}：{}", out.status.code(), String::from_utf8_lossy(&out.stderr).trim());
+  // stdout / stderr 各起 reader 线程：管道缓冲有限，不并行读满即互等死锁（output() 内部同法）
+  let mut out_pipe = child.stdout.take()?;
+  let mut err_pipe = child.stderr.take()?;
+  let out_reader = std::thread::spawn(move || {
+    let mut buf = Vec::new();
+    let _ = out_pipe.read_to_end(&mut buf);
+    buf
+  });
+  let err_reader = std::thread::spawn(move || {
+    let mut buf = Vec::new();
+    let _ = err_pipe.read_to_end(&mut buf);
+    buf
+  });
+  let deadline = Instant::now() + PROBE_TIMEOUT;
+  let status = loop {
+    match child.try_wait() {
+      Ok(Some(status)) => break status,
+      Ok(None) => {
+        if Instant::now() >= deadline {
+          let _ = child.kill();
+          let _ = child.wait(); // 收尸防僵尸；reader 线程随管道断开自行结束
+          log::warn!("{name} 超时（{}s）已终止：{}", PROBE_TIMEOUT.as_secs(), args.last().map(String::as_str).unwrap_or(""));
+          return None;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+      }
+      Err(e) => {
+        log::warn!("{name} 等待失败：{e}");
+        return None;
+      }
+    }
+  };
+  let stdout = out_reader.join().unwrap_or_default();
+  let stderr = err_reader.join().unwrap_or_default();
+  if !status.success() {
+    log::warn!("{name} 退出码 {:?}：{}", status.code(), String::from_utf8_lossy(&stderr).trim());
     return None;
   }
-  if out.stdout.is_empty() {
+  if stdout.is_empty() {
     log::warn!("{name} 无输出");
     return None;
   }
-  Some(out.stdout)
+  Some(stdout)
 }
 
 /// ffmpeg sidecar 是否可用：转码类命令据此区分"组件缺失"与"转码失败"两种中文文案

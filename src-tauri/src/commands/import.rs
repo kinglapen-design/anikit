@@ -126,11 +126,14 @@ pub fn import_paths(
   Ok(spawn_import(app, root, assets_dir, opts, on_event, None))
 }
 
-/// 剪贴板导入：先读图片（截图场景 → PNG 落 cache/ 临时文件），无图再读文件列表
+/// 剪贴板导入：先读图片（截图场景 → PNG 落 cache/tmp 临时文件），无图再读文件列表
 /// （资源管理器 Ctrl+C 的文件，CF_HDROP），再读 base64 文本（2026-08-14 用户定：
 /// data URI / 裸 base64 解码按魔数定扩展名落临时文件）；三者皆无报错。
-/// 来源恒 Copy（2026-07-27 定：剪贴板复制的文件绝不能 Move 走用户原文件；
-/// 临时文件由工作线程导入结束后清理，Copy 与 Move 等价且更安全）；Flatten + Scatter。
+/// 来源恒 Copy（2026-07-27 定：剪贴板复制的文件绝不能 Move 走用户原文件）；
+/// 临时文件落 cache/tmp（会话级，开库整目录清空兜底）：**无冲突挂起才由工作线程即删，
+/// 有冲突挂起必须保留**——resolve copy（"作为新文件导入"）决策要回读源文件建档
+///（2026-09-19 BUG 4 用户实锤：原落 cache 根且导入结束即删，冲突决策读不到源
+/// 不停报"文件读取失败"，重试拿死路径再投连环失败）；Flatten + Scatter。
 #[tauri::command]
 pub fn import_clipboard(
   app: AppHandle,
@@ -141,7 +144,8 @@ pub fn import_clipboard(
   let (root, assets_dir) = current_paths(&app)?;
   ensure_target(&app, &target_folder)?;
 
-  // 图片分支：截图 / 剪贴板图片 → PNG 落 cache/ 走管线（临时文件导入后清理）；
+  // 图片分支：截图 / 剪贴板图片 → PNG 落 cache/tmp 走管线（无冲突挂起才即删，有冲突保留
+  // 供 resolve copy 回读，开库整目录清空兜底）；
   // arboard 只认 PNG / CF_DIBV5——QQ·微信截图等只写 CF_DIB 的软件走 DIB 兜底
   //（2026-09-17 实机走查「外部剪贴板以前能导入现在不行」根因）
   let clip_image: Option<(u32, u32, Vec<u8>)> = clipboard
@@ -154,7 +158,7 @@ pub fn import_clipboard(
         .map(|rgba| (rgba.width(), rgba.height(), rgba.into_raw()))
     });
   if let Some((w, h, bytes)) = clip_image {
-    let cache_dir = root.join(CACHE_DIR);
+    let cache_dir = root.join(CACHE_DIR).join("tmp");
     std::fs::create_dir_all(&cache_dir).map_err(|e| format!("缓存目录创建失败：{e}"))?;
     let tmp = cache_dir.join(clipboard_temp_name(&cache_dir, "png"));
     save_clipboard_png(w, h, &bytes, &tmp)?;
@@ -184,11 +188,11 @@ pub fn import_clipboard(
   }
 
   // base64 文本分支：别处复制的文件 base64（data URI / 裸 base64）→ 魔数定扩展名
-  // → 落 cache/ 临时文件走管线（命名与清理同 PNG 分支口径）
+  // → 落 cache/tmp 临时文件走管线（命名与清理同 PNG 分支口径）
   if let Ok(text) = clipboard.get_text() {
     match parse_base64_payload(&text) {
       Ok(Some((ext, bytes))) => {
-        let cache_dir = root.join(CACHE_DIR);
+        let cache_dir = root.join(CACHE_DIR).join("tmp");
         std::fs::create_dir_all(&cache_dir).map_err(|e| format!("缓存目录创建失败：{e}"))?;
         let tmp = cache_dir.join(clipboard_temp_name(&cache_dir, ext));
         std::fs::write(&tmp, &bytes).map_err(|e| format!("剪贴板文件保存失败：{e}"))?;
@@ -224,7 +228,8 @@ pub fn cancel_import(state: State<AppState>, task_id: u64) -> Result<(), String>
 }
 
 /// 冲突逐项决策（PRD 10_重复添加提示）：导入挂起的 hash 冲突，前端逐个弹窗收集
-/// 用户决策后一次性提交；逐项执行、单项失败不阻塞，folders.json 一次落盘
+/// 用户决策后一次性提交；逐项执行、单项失败不阻塞，folders.json 一次落盘。
+/// copy 建档重活在锁外执行（2026-09-19 BUG 4），锁内只做校验 + Placement 登记 + 落盘
 #[tauri::command]
 pub fn resolve_conflicts(
   state: State<AppState>,
@@ -232,9 +237,7 @@ pub fn resolve_conflicts(
   source: String,
 ) -> Result<crate::services::resolve::ResolveReport, String> {
   let source = parse_source(&source)?;
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  Ok(crate::services::resolve::resolve_conflicts(lib, &items, source))
+  crate::services::resolve::resolve_conflicts(&state.library, &items, source)
 }
 
 /// 短锁拿库 root 与 assets 池目录并校验库存在（命令唯一需要的共享状态）
@@ -260,7 +263,9 @@ fn ensure_target(app: &AppHandle, target_folder: &Option<String>) -> Result<(), 
   }
 }
 
-/// 注册任务 + 起工作线程：线程内 run_import（分段短锁），结束注销任务、清理临时文件
+/// 注册任务 + 起工作线程：线程内 run_import（分段短锁），结束注销任务；
+/// 剪贴板临时文件（cleanup）**仅无冲突挂起才删**——有冲突挂起时保留供 resolve copy 回读
+/// （读不到源 = 连环"文件读取失败"，2026-09-19 BUG 4）；残留由开库 cache/tmp 清空兜底
 pub(crate) fn spawn_import(
   app: AppHandle,
   root: PathBuf,
@@ -279,13 +284,15 @@ pub(crate) fn spawn_import(
   }
   std::thread::spawn(move || {
     let state = app.state::<AppState>();
-    run_import(&state.library, root, assets_dir, opts, move |ev| {
+    let outcome = run_import(&state.library, root, assets_dir, opts, move |ev| {
       if let Err(e) = on_event.send(ev) {
         log::debug!("导入事件推送失败（前端可能已关闭）：{e}");
       }
     }, &cancel);
     if let Some(p) = cleanup.filter(|p| p.exists()) {
-      let _ = std::fs::remove_file(&p);
+      if outcome.conflicts.is_empty() {
+        let _ = std::fs::remove_file(&p);
+      }
     }
     if let Ok(mut registry) = state.imports.lock() {
       registry.remove(&task_id);
