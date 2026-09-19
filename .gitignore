@@ -37,3 +37,10 @@ docs/00_修改与需求/
 # 用户临时投放的录屏/参考视频（大文件，非项目资源）
 assets/video/
 release/
+
+# 设计素材区（213M：图标库 / LOGO 源文件等本地素材区，不入库，2026-09-20 用户定）
+design/
+# 探针测试素材与截图（临时产物，不入库）
+tools/test-assets/
+# Obsidian 个人配置（窗口状态等，不入库）
+docs/.obsidian/
