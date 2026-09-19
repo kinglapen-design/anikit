@@ -42,12 +42,24 @@ pub async fn create_folder(
   after_folder_id: Option<String>,
   block_id: Option<String>,
 ) -> Result<Folder, String> {
+  create_folder_op(&state, parent_id.as_deref(), &name, after_folder_id.as_deref(), block_id.as_deref())
+}
+
+/// 新建文件夹整段（锁 library → 锁 undo → 单撤销步，锁序与撤销三步同命令层各操作）；
+/// pub(crate)：server/mcp（AI 外接通道二批写工具 create_folder）同用
+pub(crate) fn create_folder_op(
+  state: &AppState,
+  parent_id: Option<&str>,
+  name: &str,
+  after_folder_id: Option<&str>,
+  block_id: Option<&str>,
+) -> Result<Folder, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin("新建文件夹");
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  match operations::create_folder(lib, parent_id.as_deref(), &name, after_folder_id.as_deref(), block_id.as_deref()) {
+  match operations::create_folder(lib, parent_id, name, after_folder_id, block_id) {
     Ok(folder) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(folder)
@@ -198,6 +210,12 @@ pub async fn move_placements(
   items: Vec<PlacementRef>,
   target_folder: String,
 ) -> Result<usize, String> {
+  move_placements_op(&state, &items, &target_folder)
+}
+
+/// 移动整段（锁 library → 锁 undo → 单撤销步；root → 非 root 摘标的 metadata 写点前快照）；
+/// pub(crate)：server/mcp（AI 外接通道二批写工具 move_placements）同用
+pub(crate) fn move_placements_op(state: &AppState, items: &[PlacementRef], target_folder: &str) -> Result<usize, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
@@ -205,13 +223,13 @@ pub async fn move_placements(
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
   // 摘标候选（root → 非 root）的 metadata 写点前快照
   if target_folder != ROOT_FOLDER_ID {
-    for it in &items {
+    for it in items {
       if it.folder_id == ROOT_FOLDER_ID {
         undo.record_file(&meta_path(lib, &it.asset_id)).map_err(|e| e.to_string())?;
       }
     }
   }
-  match operations::move_placements(lib, &items, &target_folder) {
+  match operations::move_placements(lib, items, target_folder) {
     Ok(moved) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(moved)
@@ -310,12 +328,23 @@ pub async fn link_placements(
   target_folder: String,
   names: Vec<Option<String>>,
 ) -> Result<usize, String> {
+  link_placements_op(&state, &items, &target_folder, &names)
+}
+
+/// 链接汇总整段（锁 library → 锁 undo → 单撤销步）；pub(crate)：server/mcp
+///（AI 外接通道二批写工具 link_placements）同用——资产本体留原地，目标文件夹只建链接
+pub(crate) fn link_placements_op(
+  state: &AppState,
+  items: &[PlacementRef],
+  target_folder: &str,
+  names: &[Option<String>],
+) -> Result<usize, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin(format!("关联 {} 个项目", items.len()));
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  match operations::link_placements(lib, &items, &target_folder, &names) {
+  match operations::link_placements(lib, items, target_folder, names) {
     Ok(linked) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(linked)

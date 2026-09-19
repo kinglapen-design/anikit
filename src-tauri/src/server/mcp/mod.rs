@@ -16,6 +16,11 @@
 //! 撤销口径 = create_document / rename_placements 进撤销（复用 commands::operations 抽出的
 //! _op 整段，单写点 + 单撤销步），write_text_asset 不进撤销（与 APP 内文本编辑同口径，2026-08-23 定）。
 //!
+//! 二批结构性写工具（2026-09-19 定，tools/structure.rs + tools/import.rs）：create_folder /
+//! move_placements / link_placements（同首批 _op 复用范式，进撤销）+ import_paths（方案一
+//! 冲突策略：hash 相同跳过回已有 id / 同名不同内容加 -序号 后缀入库，逐文件报告；
+//! 逐文件同步直调既有 run_import 管线，不进撤销——APP 导入管线本就不接 UndoManager）。
+//!
 //! 工具注册表模式（PRD 定，范式 = 前端 barSpecs）：一类一文件 + 下方一行注册；
 //! 加工具 = tools/ 加一个文件 + new() 注册处加一行。本注册表未来复用为插件 API 注册表。
 //!
@@ -54,7 +59,9 @@ impl AnikitMcp {
         + Self::assets_router()
         + Self::text_router()
         + Self::archives_router()
-        + Self::write_router(),
+        + Self::write_router()
+        + Self::structure_router()
+        + Self::import_router(),
     }
   }
 
@@ -123,7 +130,7 @@ fn json_result<T: serde::Serialize>(v: &T) -> Result<CallToolResult, ErrorData> 
 /// ServerHandler：工具面由 tool_router 提供；server 名 / 版本 / 使用说明经宏参数生成。
 /// instructions = 给 Agent 的README（每次连接必读）：典型流程 + 纪律红线，与
 /// docs/05_接口文档/MCP使用指南.md 同口径（改其一必须同步另一处）
-#[tool_handler(router = self.tool_router, name = "anikit", instructions = "AniKit 素材库外接通道（MCP，一期只读 + 二期首批写工具）。典型流程：get_current_library 确认库已打开 → search_assets 搜索 / list_folder_tree + list_placements 浏览 → get_asset_detail 看标签·描述·注释 → get_asset_origin_path 拿磁盘绝对路径后直读文件看图（webp 缩略图优先，不经协议传图）→ read_text_asset 读提示词·剧本等文本资产。写入（三个）：create_document 新建文档入库 / write_text_asset 覆写文本资产内容 / rename_placements 批量改名——默认关闸，需在 APP 偏好设置开启「允许 MCP 写入」，关闸调用回「MCP 写入未开启」；write_text_asset 覆写不进撤销（先 read_text_asset 备份原文），create_document / rename_placements 进撤销（APP 内 Ctrl+Z 可撤）。纪律：资产磁盘名随重命名变化，路径每次现取、禁止缓存复用；库未打开时工具返回「请先打开素材库」；删除永不经 MCP。")]
+#[tool_handler(router = self.tool_router, name = "anikit", instructions = "AniKit 素材库外接通道（MCP，一期只读 8 + 二期写工具 7）。典型流程：get_current_library 确认库已打开 → search_assets 搜索 / list_folder_tree + list_placements 浏览 → get_asset_detail 看标签·描述·注释 → get_asset_origin_path 拿磁盘绝对路径后直读文件看图（webp 缩略图优先，不经协议传图）→ read_text_asset 读提示词·剧本等文本资产。写入（七个）：create_document 新建文档入库 / write_text_asset 覆写文本资产内容 / rename_placements 批量改名 / create_folder 新建文件夹 / move_placements 移入文件夹 / link_placements 链接汇总（资产留原地、目标文件夹建链接）/ import_paths 导入磁盘文件入库——默认关闸，需在 APP 偏好设置开启「允许 MCP 写入」，关闸调用回「MCP 写入未开启」。撤销口径：write_text_asset 与 import_paths 不进撤销（覆写前先 read_text_asset 备份；导入冲突不阻断——hash 相同跳过并回已有资产 id、同名不同内容自动加 -序号 后缀，逐文件报告），其余五个进撤销（APP 内 Ctrl+Z 可撤）。纪律：资产磁盘名随重命名变化，路径每次现取、禁止缓存复用；库未打开时工具返回「请先打开素材库」；删除永不经 MCP。")]
 impl ServerHandler for AnikitMcp {}
 
 /// lib.rs setup 拉起（tauri 异步运行时，同 plugin_ws）
