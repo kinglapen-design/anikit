@@ -119,18 +119,18 @@ fn write_gate() -> Option<CallToolResult> {
   }
 }
 
-/// 成功回包：content 文本（pretty JSON，兼容只读文本的客户端）+ structuredContent 双带
+/// 成功回包：仅 content 文本（紧凑 JSON）。不带 structuredContent——同一份数据双带会被
+/// 不查重的客户端（Codex 等）双倍计入上下文（2026-09-19 用户实测额度消耗后定的省 token 口径）；
+/// 未声明 outputSchema 时 structuredContent 本就可选，文本 JSON Agent 直接可解析
 fn json_result<T: serde::Serialize>(v: &T) -> Result<CallToolResult, ErrorData> {
-  let text = serde_json::to_string_pretty(v).map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
-  let mut result = CallToolResult::success(vec![ContentBlock::text(text)]);
-  result.structured_content = Some(serde_json::to_value(v).map_err(|e| ErrorData::internal_error(e.to_string(), None))?);
-  Ok(result)
+  let text = serde_json::to_string(v).map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+  Ok(CallToolResult::success(vec![ContentBlock::text(text)]))
 }
 
 /// ServerHandler：工具面由 tool_router 提供；server 名 / 版本 / 使用说明经宏参数生成。
 /// instructions = 给 Agent 的README（每次连接必读）：典型流程 + 纪律红线，与
 /// docs/05_接口文档/MCP使用指南.md 同口径（改其一必须同步另一处）
-#[tool_handler(router = self.tool_router, name = "anikit", instructions = "AniKit 素材库外接通道（MCP，一期只读 8 + 二期写工具 7）。典型流程：get_current_library 确认库已打开 → search_assets 搜索 / list_folder_tree + list_placements 浏览 → get_asset_detail 看标签·描述·注释 → get_asset_origin_path 拿磁盘绝对路径后直读文件看图（webp 缩略图优先，不经协议传图）→ read_text_asset 读提示词·剧本等文本资产。写入（七个）：create_document 新建文档入库 / write_text_asset 覆写文本资产内容 / rename_placements 批量改名 / create_folder 新建文件夹 / move_placements 移入文件夹 / link_placements 链接汇总（资产留原地、目标文件夹建链接）/ import_paths 导入磁盘文件入库——默认关闸，需在 APP 偏好设置开启「允许 MCP 写入」，关闸调用回「MCP 写入未开启」。撤销口径：write_text_asset 与 import_paths 不进撤销（覆写前先 read_text_asset 备份；导入冲突不阻断——hash 相同跳过并回已有资产 id、同名不同内容自动加 -序号 后缀，逐文件报告），其余五个进撤销（APP 内 Ctrl+Z 可撤）。纪律：资产磁盘名随重命名变化，路径每次现取、禁止缓存复用；库未打开时工具返回「请先打开素材库」；删除永不经 MCP。")]
+#[tool_handler(router = self.tool_router, name = "anikit", instructions = "AniKit 素材库外接通道（MCP，一期只读 8 + 二期写工具 7）。典型流程：get_current_library 确认库已打开 → search_assets 搜索 / list_folder_tree + list_placements 浏览 → get_asset_detail 看标签·描述·注释 → get_asset_origin_path 拿磁盘绝对路径后直读文件看图（webp 缩略图优先，不经协议传图）→ read_text_asset 读提示词·剧本等文本资产。写入（七个）：create_document 新建文档入库 / write_text_asset 覆写文本资产内容 / rename_placements 批量改名 / create_folder 新建文件夹 / move_placements 移入文件夹 / link_placements 链接汇总（资产留原地、目标文件夹建链接）/ import_paths 导入磁盘文件入库——默认关闸，需在 APP 偏好设置开启「允许 MCP 写入」，关闸调用回「MCP 写入未开启」。撤销口径：write_text_asset 与 import_paths 不进撤销（覆写前先 read_text_asset 备份；导入冲突不阻断——hash 相同跳过并回已有资产 id、同名不同内容自动加 -序号 后缀，逐文件报告），其余五个进撤销（APP 内 Ctrl+Z 可撤）。纪律：资产磁盘名随重命名变化，路径每次现取、禁止缓存复用；库未打开时工具返回「请先打开素材库」；删除永不经 MCP。省 token：先 search_assets 缩小范围再按需取详情，避免无 folderId 的全库 list_placements；看图读 thumbPath 缩略图而非源图。")]
 impl ServerHandler for AnikitMcp {}
 
 /// lib.rs setup 拉起（tauri 异步运行时，同 plugin_ws）

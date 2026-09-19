@@ -14,7 +14,7 @@
 
 ## 工具面（15 个 = 一期只读 8 + 二期写 7）
 
-加工具 = `server/mcp/tools/` 加一个文件 + `mod.rs` 注册处一行（工具注册表模式，范式 = 前端 barSpecs；未来复用为插件 API 注册表）。回包统一：`content` 文本（pretty JSON）+ `structuredContent` 双带；库未打开回工具级错误（`isError: true`，文本「请先打开素材库」），不静默空表；域错误（资产不存在等）同口径回中文原因。
+加工具 = `server/mcp/tools/` 加一个文件 + `mod.rs` 注册处一行（工具注册表模式，范式 = 前端 barSpecs；未来复用为插件 API 注册表）。回包统一：**仅 `content` 文本（紧凑 JSON），不带 structuredContent**——同一份数据双带会被不查重的客户端双倍计入上下文（2026-09-19 用户实测额度消耗后定的省 token 口径；未声明 outputSchema 时 structuredContent 本就可选）；库未打开回工具级错误（`isError: true`，文本「请先打开素材库」），不静默空表；域错误（资产不存在等）同口径回中文原因。
 
 只读 8 个（一期，全部 `annotations.readOnlyHint = true`）：
 

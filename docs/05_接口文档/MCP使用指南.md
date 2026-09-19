@@ -65,6 +65,14 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 - **路径不缓存**：资产磁盘名随库内重命名同步变化，路径必须每次现取现用。
 - 浏览走文件夹树 / 搜索入口按 id 直达，不要全目录枚举 assets 池。
 
+## 省 token（2026-09-19 用户实测后补）
+
+MCP 进 Agent 上下文的开销分三块，对应三招：
+
+- **工具 schema 固定开销**（每会话一次）：15 个工具的说明 + 参数 schema。Kimi Code 侧可在 mcp.json 给 anikit 加 `"deferred": true`（按需加载，见 Kimi Code MCP 文档），不用工具时不占上下文。
+- **回包体积**（每次调用）：本通道已做两刀——回包仅 `content` 紧凑 JSON、不带 structuredContent 重复副本。Agent 侧配合：先 `search_assets` 缩小范围再按需 `get_asset_detail`，避免不带 folderId 的全库 `list_placements`（几百条 Placement 全字段很占额度）。
+- **图片读取**：看图读 `thumbPath`（webp 缩略图，几百 token 级），非必要不读源图（大图千 token 级）。
+
 ## 故障排查
 
 - 裸浏览器 / 无 `Accept: text/event-stream` 头的请求访问 `/mcp` 回 406「Client must accept text/event-stream」——规范行为，不是故障。
