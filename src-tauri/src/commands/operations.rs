@@ -622,20 +622,27 @@ pub async fn delete_placements(
   items: Vec<PlacementRef>,
   last_action: Option<String>,
 ) -> Result<(), String> {
+  delete_placements_op(&state, &items, last_action.as_deref())
+}
+
+/// 删除 Placement 整段（锁 library → 锁 undo → 单撤销步）；pub(crate)：server/mcp
+///（AI 外接通道三批 trash_placements）同用——MCP 只传 Some("recycle")，
+/// "uncategorized" 仅 APP 内
+pub(crate) fn delete_placements_op(state: &AppState, items: &[PlacementRef], last_action: Option<&str>) -> Result<(), String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   // 撤销标签分流（3.4 八轮，2026-08-18）：从文件夹中移除（去未分类）/ 丢到回收站
-  let label = match last_action.as_deref() {
+  let label = match last_action {
     Some("uncategorized") => format!("从文件夹中移除 {} 个项目", items.len()),
     _ => format!("丢到回收站 {} 个项目", items.len()),
   };
   undo.begin(label);
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  if last_action.as_deref() == Some("recycle") {
+  if last_action == Some("recycle") {
     undo.record_file(&lib.root.join(RECYCLE_FILE)).map_err(|e| e.to_string())?;
   }
-  match operations::delete_placements(lib, &items, last_action.as_deref()) {
+  match operations::delete_placements(lib, items, last_action) {
     Ok(()) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(())

@@ -8,4 +8,5 @@ pub mod library;
 pub mod search;
 pub mod structure;
 pub mod text;
+pub mod trash;
 pub mod write;
