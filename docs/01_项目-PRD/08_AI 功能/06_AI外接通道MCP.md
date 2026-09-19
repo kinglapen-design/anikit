@@ -30,11 +30,11 @@
 
 **首批写工具（2026-09-19 定并落地，三个）**：`create_document`（在指定文件夹新建 md / txt 文本资产入库）、`write_text_asset`（写 / 改文本内容，metadata.size / modifiedAt 同步）、`rename_placements`（改名，批量数组、单条 = 1 项）。撤销口径：create_document / rename_placements 进撤销（单写点 + 单撤销步，复用既有 UndoManager）；**write_text_asset 不进撤销**——与 APP 内文本编辑同口径（2026-08-23 定：库操作撤销体系不覆盖内容编辑），此点写进工具描述让 Agent 知晓。
 
-**二批写工具（工作流驱动，2026-09-19 用户定，四个）**：`create_folder`（新建文件夹）/ `move_placements`（资产移入文件夹——属 03 节 L3 结构性操作，仍走形态 A 全局开关 + 撤销兜底，可逆，不另立弹窗闸）/ `link_placements`（链接汇总——资产留大池、链接进场次文件夹的用户习惯配套）/ `import_paths`（导入磁盘文件入库——Agent 外部生成图片后入库的入口，缩略图随导入管线自动生成、导入即可看图）。
+**二批写工具（工作流驱动，2026-09-19 用户定，五个）**：`create_folder`（新建文件夹）/ `move_placements`（资产移入文件夹——属 03 节 L3 结构性操作，仍走形态 A 全局开关 + 撤销兜底，可逆，不另立弹窗闸）/ `link_placements`（链接汇总——资产留大池、链接进场次文件夹的用户习惯配套）/ `move_folders`（移动文件夹重设父级——同日用户补：「万一改一下结构就改不动了」，仅改数据不动磁盘）/ `import_paths`（导入磁盘文件入库——Agent 外部生成图片后入库的入口，缩略图随导入管线自动生成、导入即可看图）。
 
 **import_paths 冲突策略 = 方案一（2026-09-19 用户定，不阻断，已落地）**：hash 完全相同 → 跳过并把已有资产 id 回给 Agent（查重白送，Agent 直接拿去用）；同名不同内容 → 自动加 `-序号` 后缀入库（复用 core::library::unique_name 既有单写点口径）；回包逐文件报告处理结果（imported / skippedDuplicate + 已有 id / renamed + finalName / failed + reason）。自动化场景不中断优先，全程可追溯。
 
-撤销口径：create_folder / move_placements / link_placements 进撤销（同首批 _op 复用范式）；**import_paths 不进撤销**（落地时定：APP 导入管线本就不接 UndoManager——导入 = 资产池新增，撤销体系覆盖库结构操作不覆盖导入，MCP 同口径不硬接，工具描述如实告知）。
+撤销口径：create_folder / move_placements / link_placements / move_folders 进撤销（同首批 _op 复用范式）；**import_paths 不进撤销**（落地时定：APP 导入管线本就不接 UndoManager——导入 = 资产池新增，撤销体系覆盖库结构操作不覆盖导入，MCP 同口径不硬接，工具描述如实告知）。
 
 **提示词载体说明**：提示词专属功能（[[03_数据链接]] 的提示词链接）尚未落地，当前载体 = md / txt 文本资产——写工具写的就是文本资产形态的提示词；专属功能落地后工具面再加，不冲突。
 
@@ -42,4 +42,4 @@
 
 ### 阶段表
 
-① 本 PRD 立项（2026-09-19）→ ② **只读 MCP**（2026-09-19 落地，Codex 真库验证跑通）→ ③ **写入闸首批**（2026-09-19 落地，形态 A + 三写工具 + 偏好设置弹窗）→ ④ **二批结构性四件套**（create_folder / move_placements / link_placements / import_paths 方案一冲突策略，2026-09-19 定案并落地）→ ⑤ 余量批（属性词 / 描述 / 打标记）。可选起步垫（库索引导出小命令）未做、随需要再评。接口文档 `docs/05_接口文档/MCP通道.md` + `MCP使用指南.md` 随开发同步。
+① 本 PRD 立项（2026-09-19）→ ② **只读 MCP**（2026-09-19 落地，Codex 真库验证跑通）→ ③ **写入闸首批**（2026-09-19 落地，形态 A + 三写工具 + 偏好设置弹窗）→ ④ **二批结构性五件套**（create_folder / move_placements / link_placements / move_folders / import_paths 方案一冲突策略，2026-09-19 定案并落地）→ ⑤ 余量批（属性词 / 描述 / 打标记）。可选起步垫（库索引导出小命令）未做、随需要再评。接口文档 `docs/05_接口文档/MCP通道.md` + `MCP使用指南.md` 随开发同步。

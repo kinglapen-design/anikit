@@ -1,6 +1,6 @@
 # MCP 使用指南（给 Agent 与接入者）
 
-AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期写工具 7 个，写入闸形态 A）。本文是接入与使用说明；协议层细节（握手 / 回包结构 / 错误口径）见 [MCP通道](MCP通道.md)。
+AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期写工具 8 个，写入闸形态 A）。本文是接入与使用说明；协议层细节（握手 / 回包结构 / 错误口径）见 [MCP通道](MCP通道.md)。
 
 ## 连接
 
@@ -10,7 +10,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 - Codex：`config.toml` 加 `[mcp_servers.anikit]` + `url = "http://127.0.0.1:17701/mcp"`，重启会话
 - Claude Code：`claude mcp add --transport http anikit http://127.0.0.1:17701/mcp`
 
-## 工具速览（15 个 = 只读 8 + 写 7）
+## 工具速览（16 个 = 只读 8 + 写 8）
 
 | 工具 | 用途 |
 | --- | --- |
@@ -27,16 +27,17 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 | `rename_placements`（写） | 批量改名（单条 = 1 项数组），失败跳过不整体回滚，回 BatchRenameReport；**进撤销** |
 | `create_folder`（写） | 新建文件夹（`parentId` 缺省 = 顶层），回 Folder 拿新 folderId；**进撤销** |
 | `move_placements`（写） | 资产移入文件夹（Placement 级，去重 / 原地自动跳过），回 `{ moved }`；**进撤销** |
+| `move_folders`（写） | 移动文件夹重设父级（仅改数据不动磁盘；`targetParentId` 缺省 = 顶层），回 `{ moved }`；**进撤销** |
 | `link_placements`（写） | 链接汇总：资产留原地、目标文件夹建链接 Placement，回 `{ linked }`；**进撤销** |
 | `import_paths`（写） | 导入磁盘文件入库（缩略图自动生成、导入即可看图）；冲突不阻断——hash 相同跳过回已有 id / 同名不同内容加 `-序号` 后缀；逐文件报告；**不进撤销** |
 
 ## 写入开关（二期，默认关）
 
-七个写工具受**全局写入开关**门禁：APP 菜单栏「偏好设置」→「允许 MCP 写入」（持久化于全局 config.json `settings.ui.mcpWriteEnabled`，默认关）。开关**逐次生效**——写调用每次都现查：关态一律回工具级错误「MCP 写入未开启（偏好设置里可开启）」，开态直接执行。写前建议流程：
+八个写工具受**全局写入开关**门禁：APP 菜单栏「偏好设置」→「允许 MCP 写入」（持久化于全局 config.json `settings.ui.mcpWriteEnabled`，默认关）。开关**逐次生效**——写调用每次都现查：关态一律回工具级错误「MCP 写入未开启（偏好设置里可开启）」，开态直接执行。写前建议流程：
 
 1. `write_text_asset` 覆写内容**不进撤销**（与 APP 内编辑同口径）——先 `read_text_asset` 留底再覆写；
 2. `import_paths` **不进撤销**（导入 = 资产池新增，撤销体系不覆盖）——但冲突策略不阻断：重复导入同文件只会 `skippedDuplicate` 回已有 id，放心重试；
-3. 其余五个（create_document / rename_placements / create_folder / move_placements / link_placements）进撤销——用户在 APP 内 Ctrl+Z 可整步撤回，但仍请克制调用、批量改名一次给全数组；
+3. 其余六个（create_document / rename_placements / create_folder / move_placements / move_folders / link_placements）进撤销——用户在 APP 内 Ctrl+Z 可整步撤回，但仍请克制调用、批量改名一次给全数组；
 4. 删除类操作不存在于本通道（L4 永远人工确认），不要尝试构造。
 
 ## 典型流程

@@ -305,12 +305,24 @@ pub async fn move_folders(
   before_folder_id: Option<String>,
   target_block: Option<String>,
 ) -> Result<usize, String> {
+  move_folders_op(&state, &folder_ids, target_parent.as_deref(), before_folder_id.as_deref(), target_block.as_deref())
+}
+
+/// 文件夹重设父级整段（锁 library → 锁 undo → 单撤销步；循环移入自身或子孙整条报错、
+/// 同父 / 陈旧 ID 跳过）；pub(crate)：server/mcp（AI 外接通道二批写工具 move_folders）同用
+pub(crate) fn move_folders_op(
+  state: &AppState,
+  folder_ids: &[String],
+  target_parent: Option<&str>,
+  before_folder_id: Option<&str>,
+  target_block: Option<&str>,
+) -> Result<usize, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin(format!("移动 {} 个文件夹", folder_ids.len()));
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  match operations::move_folders(lib, &folder_ids, target_parent.as_deref(), before_folder_id.as_deref(), target_block.as_deref()) {
+  match operations::move_folders(lib, folder_ids, target_parent, before_folder_id, target_block) {
     Ok(moved) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(moved)
