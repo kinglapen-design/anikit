@@ -182,6 +182,15 @@ function titleOf(id: DetailLinkBlockId): string {
   return DETAIL_LINK_BLOCK_TITLES[id];
 }
 
+// 区块动作组显隐（稿口径）：污染文件恒无（占位）；音频区块在「使用者」视角（当前目标是音频）
+// 同样无添加钮——voice 语义 = 使用方 → 音频，从音频发起只会造出 音频→音频 的语义乱链
+//（"使用者"区块混入它自己"链接"的音频，2026-09-19 用户实机"链接音频加了不显示/对不上"）
+function hasActions(id: DetailLinkBlockId): boolean {
+  if (id === "pollution") return false;
+  if (id === "audio" && isAudioTarget.value) return false;
+  return true;
+}
+
 // ================= 链接区块（SectionLinks 移植） =================
 const linkItems = computed<PlacementLink[]>(() => {
   if (!file.value) return [];
@@ -363,7 +372,7 @@ function hasContent(id: DetailLinkBlockId): boolean {
         :title="titleOf(id)"
         :expanded="isOpen(id)"
         :with-more="false"
-        :actions="id !== 'pollution'"
+        :actions="hasActions(id)"
         static-actions
         @toggle="toggleOpen(id)"
         @add="onAdd(id)"

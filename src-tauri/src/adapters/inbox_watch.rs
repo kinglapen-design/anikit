@@ -44,6 +44,18 @@ impl Drop for WatchHandle {
   }
 }
 
+/// notify 事件通道两端（make_watcher 产出；别名消 type_complexity）
+type EventTx = mpsc::Sender<notify::Result<Event>>;
+type EventRx = mpsc::Receiver<notify::Result<Event>>;
+
+/// 建 watcher + 事件通道（spawn / spawn_changes_only 共用）
+fn make_watcher(dir: &Path) -> Result<(RecommendedWatcher, EventTx, EventRx), String> {
+  let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
+  let mut watcher = RecommendedWatcher::new(tx.clone(), Config::default()).map_err(|e| format!("文件监听创建失败：{e}"))?;
+  watcher.watch(dir, RecursiveMode::Recursive).map_err(|e| format!("文件监听失败：{e}"))?;
+  Ok((watcher, tx, rx))
+}
+
 /// 启动监听：目录下每个就绪的顶层条目整批触发 on_ready。
 /// 启动时先清点存量条目（上次崩溃残留 / 用户跳过项），与通知事件走同一判定。
 /// on_change：任何带路径的监听事件都触发（原始路径清单透传，过滤交由调用方——收件箱不滤、
@@ -53,12 +65,39 @@ pub fn spawn(
   on_ready: impl Fn(Vec<PathBuf>) + Send + 'static,
   on_change: impl Fn(&[PathBuf]) + Send + 'static,
 ) -> Result<WatchHandle, String> {
-  let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
-  let mut watcher = RecommendedWatcher::new(tx.clone(), Config::default()).map_err(|e| format!("文件监听创建失败：{e}"))?;
-  watcher.watch(&dir, RecursiveMode::Recursive).map_err(|e| format!("收件箱监听失败：{e}"))?;
+  let (watcher, tx, rx) = make_watcher(&dir)?;
   let stop = Arc::new(AtomicBool::new(false));
   let stop_thread = stop.clone();
   let join = std::thread::spawn(move || watch_loop(dir, rx, watcher, stop_thread, on_ready, on_change));
+  Ok(WatchHandle { stop, wake: tx, join: Some(join) })
+}
+
+/// 轻量监听（工作空间实况用，2026-09-19）：**不就绪判定**——无"写入完成"语义需求时，
+/// spawn 版的 pending / drain_ready 纯属白烧（有文件活动时每 TICK 对活动条目递归
+/// entry_movable 逐文件 CreateFileW + entry_size 递归 stat，大目录下常驻烧 IO/CPU；
+/// 退出 stop 的 join 还要等当前这趟遍历跑完——用户实机「接入工作空间后托盘退出又卡又慢」）。
+/// 纯事件转发 on_change，队列空纯阻塞零定时器；stop 唤醒即退（join 秒回）。
+pub fn spawn_changes_only(dir: PathBuf, on_change: impl Fn(&[PathBuf]) + Send + 'static) -> Result<WatchHandle, String> {
+  let (watcher, tx, rx) = make_watcher(&dir)?;
+  let stop = Arc::new(AtomicBool::new(false));
+  let stop_thread = stop.clone();
+  let join = std::thread::spawn(move || {
+    let _watcher = watcher; // 持有保活，线程退出即停止监听
+    loop {
+      if stop_thread.load(Ordering::Relaxed) {
+        break;
+      }
+      match rx.recv() {
+        Ok(Ok(ev)) => {
+          if !ev.paths.is_empty() {
+            on_change(&ev.paths);
+          }
+        }
+        Ok(Err(e)) => log::error!("文件监听事件异常：{e}"),
+        Err(_) => break, // 发送端全 drop（watcher 已停）
+      }
+    }
+  });
   Ok(WatchHandle { stop, wake: tx, join: Some(join) })
 }
 
@@ -285,6 +324,30 @@ mod tests {
     let t0 = Instant::now();
     handle.stop();
     assert!(t0.elapsed() < Duration::from_secs(2), "空闲时停止应立即返回：{:?}", t0.elapsed());
+  }
+
+  /// 轻量监听（工作空间实况）：文件事件纯转发（不就绪判定不遍历），stop 立即返回
+  ///（2026-09-19「接入工作空间后托盘退出又卡又慢」修复）
+  #[test]
+  fn changes_only_forwards_events_and_stops_promptly() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("ws");
+    std::fs::create_dir_all(&dir).unwrap();
+    let (tx, rx) = mpsc::channel();
+    let mut handle = spawn_changes_only(dir.clone(), move |paths| {
+      for p in paths {
+        let _ = tx.send(p.clone());
+      }
+    })
+    .unwrap();
+    std::thread::sleep(Duration::from_millis(300)); // 让监听就位
+    let file = dir.join("a.txt");
+    std::fs::write(&file, "x").unwrap();
+    let hit = (0..10).any(|_| matches!(rx.recv_timeout(Duration::from_secs(2)), Ok(p) if p.ends_with("a.txt")));
+    assert!(hit, "应收到 a.txt 变更事件（纯转发不就绪判定）");
+    let t0 = Instant::now();
+    handle.stop();
+    assert!(t0.elapsed() < Duration::from_secs(2), "轻量监听停止应立即返回：{:?}", t0.elapsed());
   }
 
   /// 逐条目独立（用户定案）：被占用的条目自己等放手；不被占用的条目照常入库，不被拖累

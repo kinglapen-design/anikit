@@ -305,6 +305,9 @@ pub fn request_thumbs(root: &Path, abs_paths: Vec<PathBuf>) -> Vec<ThumbReady> {
 
 /// 启动工作空间监听（空间打开唯一入口 activate_space 调用；workspace/ 目录缺失则不启）：
 /// 任何路径事件（.anikit 缓存写回自激已滤）→ emit workspace-fs-changed，前端去抖重扫。
+/// 用**纯转发轻量监听**（不就绪判定，零遍历零探测，stop 秒退——2026-09-19 用户实机
+/// 「接入工作空间后托盘退出又卡又慢」：复用收件箱就绪判定版时对活动条目每 500ms 递归
+/// 探测全树，退出 join 还要等当趟遍历跑完）。
 /// 先停旧监听（切空间防御性清理）；全部失败记日志降级，不影响空间打开
 pub fn start_watch(app: &AppHandle, space_root: &Path) {
   stop_watch(app);
@@ -313,9 +316,8 @@ pub fn start_watch(app: &AppHandle, space_root: &Path) {
     return;
   }
   let app_emit = app.clone();
-  let handle = match inbox_watch::spawn(
+  let handle = match inbox_watch::spawn_changes_only(
     dir,
-    |_| {}, // on_ready = 收件箱"写入完成"语义，工作空间不需要（步骤 2 写操作回声另定）
     move |paths| {
       // .anikit 缓存写回自激滤掉 + 已知操作回声消重（PRD 步骤 2：命令返回即更新 UI，
       // 窗口期内本进程写操作的 watcher 事件不上报，窗口外 / 混合事件照常推送）
