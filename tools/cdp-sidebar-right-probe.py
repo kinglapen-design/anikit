@@ -14,7 +14,7 @@
 #   R10 链接关系 tab：五区块标题序 = 链接/音频/关系/缩略图/污染文件；链接卡 ×2 首行 origin 徽章；
 #       污染文件区块无动作组（稿）
 #   R11 提示词 tab：只读编辑框 + 五枚 solid 图标钮（业务占位）
-#   R12 tab 会话级记忆：links 态点另一素材卡 a2 → 回基础信息（2026-08-31 用户定）
+#   R12 tab 全局记忆：links 态点另一素材卡 a2 → 仍 links（2026-09-19 用户改定，持久化 ui.detailTab）
 #   R13 档案视口（folder:f2a）未选中 → 档案形态：封面区块 + 徽标「主角」+ chips「连载」+ 数据卡含创建日期
 #   R14 关闭钮 hover = 状态/禁止底 rgb(220,57,57)（Input.dispatchMouseEvent 真实悬停）
 #   R15 选择模式：关系区块添加钮进 picker → 占位组（点击卡片选择 + 双框禁用）+ 按钮序 取消左/确认右 +
@@ -530,17 +530,20 @@ async def main():
                   and pr.get("copy") is True and pr.get("btns") == 5,
                   json.dumps(pr))
 
-            # ---------- R12 会话级记忆：links 态换选中回 basic ----------
+            # ---------- R12 全局记忆：links 态换选中不重置（2026-09-19 用户改定） ----------
             await ev("[...document.querySelectorAll('.sidebar-right .seg-block .seg-item')][1].click()")
             await asyncio.sleep(0.4)
             await pointer_click(".asset-card ~ .asset-card, .asset-card:nth-child(2)")
             mem = await ev(
                 "(() => { const items = [...document.querySelectorAll('.sidebar-right .seg-block .seg-item')];"
                 " return { on: items.findIndex(b => b.className.includes('on')),"
-                "  basic: !!document.querySelector('.sidebar-right .tab-body .db-block.inputs') }; })()")
-            check("R12 换选中回「基础信息」（links → 点 a2 → basic）",
-                  isinstance(mem, dict) and mem.get("on") == 0 and mem.get("basic") is True,
+                "  links: !!document.querySelector('.sidebar-right .tab-body .links-tab') }; })()")
+            check("R12 全局记忆当前 tab（links → 点 a2 → 仍 links）",
+                  isinstance(mem, dict) and mem.get("on") == 1 and mem.get("links") is True,
                   json.dumps(mem))
+            # 后续 R13 档案 chips 在基础信息 tab——回 basic 再继续
+            await ev("[...document.querySelectorAll('.sidebar-right .seg-block .seg-item')][0].click()")
+            await asyncio.sleep(0.4)
 
             # ---------- R13 档案形态（视口 folder:f2a 未选中回退） ----------
             await ev("document.querySelector('.tree-item[data-folder-id=\"f2\"] .exp').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
