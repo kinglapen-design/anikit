@@ -44,14 +44,16 @@ pub struct PlacementRef {
   pub origin: bool,
 }
 
-/// 批量重命名单项（3.4，37 稿）：定位三元组 + 新显示名（词干规则由前端组装，含扩展名）
+/// 批量重命名单项（3.4，37 稿）：定位三元组 + 新显示名（词干规则由前端组装，含扩展名）。
+/// origin = None 时自动消歧（2026-09-20，MCP 调用方常省略踩坑后加）：(asset, folder)
+/// 恰好一条记录即命中；多条（origin + 链接同文件夹）进 failed 要求指定。APP 前端恒传 Some
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameItem {
   pub asset_id: String,
   pub folder_id: String,
   #[serde(default)]
-  pub origin: bool,
+  pub origin: Option<bool>,
   pub new_name: String,
 }
 
@@ -113,6 +115,22 @@ pub(crate) fn find_placement(lib: &Library, item: &PlacementRef) -> Option<usize
     .items
     .iter()
     .position(|p| p.asset == item.asset_id && p.folder == item.folder_id && p.origin == item.origin)
+}
+
+/// RenameItem.origin 缺省消歧（2026-09-20）：Some 直用；None = 按 (asset, folder) 找——
+/// 恰好一条记录取其实际 origin；零条 / 多条 = None（零条走原「项目不存在」路径、多条进
+/// failed 要求指定，由调用方分流）。命令层 undo 快照与 service 匹配共用本 helper（单写点）
+pub(crate) fn resolve_origin(lib: &Library, it: &RenameItem) -> Option<bool> {
+  match it.origin {
+    Some(o) => Some(o),
+    None => {
+      let mut hits = lib.folders.items.iter().filter(|p| p.asset == it.asset_id && p.folder == it.folder_id);
+      match (hits.next(), hits.next()) {
+        (Some(p), None) => Some(p.origin),
+        _ => None,
+      }
+    }
+  }
 }
 
 /// 文件夹段 order 重写为连续 0..n（按 items vec 顺序；reorder 落盘前调用）

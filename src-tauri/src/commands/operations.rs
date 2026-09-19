@@ -593,7 +593,9 @@ pub(crate) fn rename_placements_op(state: &AppState, items: &[RenameItem]) -> Re
   undo.begin(format!("批量重命名 {} 个项目", items.len()));
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
   for it in items {
-    if it.origin {
+    // origin 经 resolve_origin 消歧（2026-09-20）：MCP 传 None 时锁内按唯一记录判定，
+    // 漏判会漏 record metadata 快照（撤销后 originName 不回滚）
+    if operations::resolve_origin(lib, it) == Some(true) {
       undo.record_file(&meta_path(lib, &it.asset_id)).map_err(|e| e.to_string())?;
     }
   }

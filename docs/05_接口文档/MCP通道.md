@@ -38,7 +38,7 @@
 | --- | --- | --- |
 | `create_document` | `{ kind: string, folderId?: string }`（kind = md / txt / fla / psd / ai / docx / xlsx；folderId 缺省 = 根目录） | `PlacementView`。**进撤销**（撤销 = info 目录移入 cache/tmp 备份，可重做） |
 | `write_text_asset` | `{ assetId, content }`（整体覆写，恒 UTF-8 无 BOM，2MB 上限） | `{ size, modifiedAt }`（metadata 同步落盘）。**不进撤销**——与 APP 内文本编辑同口径（2026-08-23 定：库操作撤销体系不覆盖内容编辑），工具描述注明提醒 Agent 先备份 |
-| `rename_placements` | `{ items: [{ assetId, folderId, origin?: boolean, newName }] }`（单条改名 = 1 项数组；origin = true 连磁盘 originName + 词干缩略图同步改；空数组回「items 至少 1 项」） | `BatchRenameReport { renamed, failed: [{ name, reason }] }`——失败项跳过不整体回滚。**进撤销**（整体单撤销步） |
+| `rename_placements` | `{ items: [{ assetId, folderId, origin?: boolean, newName }] }`（单条改名 = 1 项数组；origin = 定位三元组之一，true 原始 / false 链接，照 list_placements 回包抄——**缺省 = 自动定位**：该文件夹内仅此资产一条记录即命中，多条（origin + 链接同文件夹）进 failed 要求指定；命中 origin 记录连磁盘 originName + 词干缩略图同步改；定位落空但文件夹内有记录时 reason 带实际 origin 值。空数组回「items 至少 1 项」） | `BatchRenameReport { renamed, failed: [{ name, reason }] }`——失败项跳过不整体回滚。**进撤销**（整体单撤销步） |
 
 二批结构性 5 个（2026-09-19，`tools/structure.rs` + `tools/import.rs`）：
 

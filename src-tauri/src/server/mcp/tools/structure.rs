@@ -30,7 +30,8 @@ pub struct PlacementRefParams {
   pub asset_id: String,
   /// 所在文件夹 id（Placement 定位二元组之一）
   pub folder_id: String,
-  /// 是否原始 Placement（回包 origin 字段；缺省 false）
+  /// 是否原始 Placement（**定位三元组之一**，照回包 origin 字段抄；缺省 false = 只命中链接件——
+  /// 对 origin 记录漏传本字段会定位落空被跳过）
   #[serde(default)]
   pub origin: bool,
 }

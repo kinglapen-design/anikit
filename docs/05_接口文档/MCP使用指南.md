@@ -24,7 +24,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 | `list_archives` | 档案列表（封面、属性、描述等） |
 | `create_document`（写） | 新建文档入库（md / txt / fla / psd / ai / docx / xlsx），回 PlacementView；**进撤销** |
 | `write_text_asset`（写） | 整体覆写文本资产内容（提示词正文等），size / modifiedAt 同步；**不进撤销，先备份** |
-| `rename_placements`（写） | 批量改名（单条 = 1 项数组），失败跳过不整体回滚，回 BatchRenameReport；**进撤销** |
+| `rename_placements`（写） | 批量改名（单条 = 1 项数组），失败跳过不整体回滚，回 BatchRenameReport；`origin` 缺省自动定位（文件夹内唯一记录即命中，多条须照回包指定）；**进撤销** |
 | `create_folder`（写） | 新建文件夹（`parentId` 缺省 = 顶层），回 Folder 拿新 folderId；**进撤销** |
 | `move_placements`（写） | 资产移入文件夹（Placement 级，去重 / 原地自动跳过），回 `{ moved }`；**进撤销** |
 | `move_folders`（写） | 移动文件夹重设父级（仅改数据不动磁盘；`targetParentId` 缺省 = 顶层），回 `{ moved }`；**进撤销** |

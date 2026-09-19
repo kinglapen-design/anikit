@@ -202,12 +202,39 @@ pub fn rename_placement(
 pub fn rename_placements(lib: &mut Library, items: &[RenameItem]) -> Result<BatchRenameOutcome, String> {
   let mut out = BatchRenameOutcome::default();
   for it in items {
-    match rename_placement(lib, &it.asset_id, &it.folder_id, it.origin, &it.new_name) {
+    // origin 缺省消歧（2026-09-20，MCP 实测 agent 漏传 origin 全灭后加）：None = 该
+    // (asset, folder) 唯一记录自动命中；多条（origin + 链接同文件夹）进 failed 要求指定
+    let origin = match super::resolve_origin(lib, it) {
+      Some(o) => o,
+      None => {
+        if lib.folders.items.iter().any(|p| p.asset == it.asset_id && p.folder == it.folder_id) {
+          out.failed.push(BatchRenameFailed {
+            name: it.new_name.clone(),
+            reason: "该文件夹内此资产有多条记录（origin / 链接），请指定 origin 字段".to_string(),
+          });
+          continue;
+        }
+        false // 零条记录：走原路径报「项目不存在」
+      }
+    };
+    match rename_placement(lib, &it.asset_id, &it.folder_id, origin, &it.new_name) {
       Ok(rs) => {
         out.renames.extend(rs);
         out.renamed += 1;
       }
-      Err(e) => out.failed.push(BatchRenameFailed { name: it.new_name.clone(), reason: e }),
+      Err(e) => {
+        // 诊断增强（2026-09-20）：定位落空但 (asset, folder) 有记录 = origin 传错，
+        // reason 带上实际 origin 值（self-correcting，agent 看了就会改）
+        let reason = if e.starts_with("项目不存在") {
+          match lib.folders.items.iter().find(|p| p.asset == it.asset_id && p.folder == it.folder_id) {
+            Some(p) => format!("项目不存在（该文件夹内此资产的记录 origin={}，请核对 origin 字段）", p.origin),
+            None => e,
+          }
+        } else {
+          e
+        };
+        out.failed.push(BatchRenameFailed { name: it.new_name.clone(), reason });
+      }
     }
   }
   log::info!("批量重命名 {} 个（失败 {}）", out.renamed, out.failed.len());
@@ -547,7 +574,7 @@ mod tests {
     let item = |asset: &str, origin: bool, name: &str| RenameItem {
       asset_id: asset.into(),
       folder_id: "root".into(),
-      origin,
+      origin: Some(origin),
       new_name: name.into(),
     };
 
@@ -568,5 +595,46 @@ mod tests {
     assert!(h.lib.info_dir("AN-A").join("同名.png").is_file(), "origin 磁盘同步改名");
     assert_eq!(out.renames.len(), 2, "origin + 词干缩略图两对磁盘改名（失败项无磁盘段）");
     assert_eq!(h.lib.folders.items.iter().find(|p| p.asset == "AN-B").unwrap().name, "原图B.png", "无关项不动");
+  }
+
+  /// origin 缺省消歧（2026-09-20，MCP 实测 agent 漏传 origin 全灭后加）：None = 唯一记录
+  /// 自动命中（origin / 链接皆可）；多条（origin + 链接同文件夹）进 failed 要求指定；
+  /// 显式传错 origin 时 reason 带实际值（self-correcting）
+  #[test]
+  fn rename_placements_origin_omitted_auto_resolve() {
+    let mut h = make_lib();
+    add_png(&mut h, "AN-A", "原图A.png"); // root origin=true 单条
+    add_png(&mut h, "AN-B", "原图B.png");
+    // AN-B 摘掉 origin 记录 = 纯链接单条场景（链接改名不查 meta，add_png 只为 meta 完备）
+    h.lib.folders.items.retain(|p| p.asset != "AN-B");
+    ops::add_placement(&mut h.lib, "AN-B".into(), "root".into(), "乙链接.png".into(), false, &mut HashMap::new());
+    // AN-C：origin + 链接同挂 root（多条）
+    add_png(&mut h, "AN-C", "原图C.png");
+    ops::add_placement(&mut h.lib, "AN-C".into(), "root".into(), "丙链接.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+    let item = |asset: &str, origin: Option<bool>, name: &str| RenameItem {
+      asset_id: asset.into(),
+      folder_id: "root".into(),
+      origin,
+      new_name: name.into(),
+    };
+
+    let out = rename_placements(
+      &mut h.lib,
+      &[
+        item("AN-A", None, "新A.png"),      // 单条 origin 记录：自动命中，磁盘同步
+        item("AN-B", None, "新B.png"),      // 单条链接记录：自动命中，仅显示名
+        item("AN-C", None, "新C.png"),      // 多条：failed 要求指定
+        item("AN-A", Some(false), "错.png"), // 显式传错：reason 带实际 origin
+      ],
+    )
+    .unwrap();
+    assert_eq!(out.renamed, 2);
+    assert_eq!(out.failed.len(), 2);
+    assert!(out.failed[0].reason.contains("多条记录"), "多条要求指定 origin");
+    assert!(out.failed[1].reason.contains("origin=true"), "诊断带实际 origin 值：{}", out.failed[1].reason);
+    assert!(h.lib.info_dir("AN-A").join("新A.png").is_file(), "消歧命中 origin 后磁盘同步改名");
+    assert_eq!(h.lib.folders.items.iter().find(|p| p.asset == "AN-B").unwrap().name, "新B.png", "链接消歧命中");
+    assert_eq!(out.renames.len(), 2, "仅 AN-A 的 origin + 词干缩略图两对磁盘改名");
   }
 }

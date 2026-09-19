@@ -42,9 +42,12 @@ pub struct RenameItemParams {
   pub asset_id: String,
   /// 所在文件夹 id（Placement 定位二元组之一，取自 list_placements 回包 folderId）
   pub folder_id: String,
-  /// true = 原始 Placement（磁盘文件名 originName 与词干缩略图同步改名）；false / 缺省 = 仅改显示名
+  /// Placement 定位三元组之一：true = 原始 Placement / false = 链接件（照 list_placements 回包
+  /// origin 字段抄）；**缺省 = 自动定位**——该文件夹内此资产仅一条记录时自动命中，多条
+  /// （origin + 链接同文件夹）该条进 failed 要求指定。改名力度由命中记录自然决定
+  ///（命中 origin 记录 = 磁盘 originName + 词干缩略图同步改，命中链接 = 仅改显示名）
   #[serde(default)]
-  pub origin: bool,
+  pub origin: Option<bool>,
   /// 新名（含扩展名；origin 项无扩展名时自动补原扩展名）
   pub new_name: String,
 }
