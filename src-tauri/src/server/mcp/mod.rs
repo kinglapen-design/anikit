@@ -5,9 +5,16 @@
 //! 实现 = 官方 Rust SDK rmcp（≥1.4.0 内置 Host 头校验防 DNS rebinding，CVE-2026-42559）
 //! + axum nest_service 挂载其 Tower 服务；协议握手 / 会话 / schema 协商全由 SDK 承担。
 //!
-//! 一期只读红线：全部工具 annotations(read_only_hint = true)；薄壳转发既有命令层 / 服务层；
+//! 一期只读红线：只读工具全部 annotations(read_only_hint = true)；薄壳转发既有命令层 / 服务层；
 //! 库未打开统一回「请先打开素材库」工具级错误（isError=true），不静默空表；有副作用的
 //! 准只读命令（触发转码 / 后台生成队列类）不进白名单。
+//!
+//! 二期首批写工具（2026-09-19 定，tools/write.rs）：create_document / write_text_asset /
+//! rename_placements 三个，annotations(read_only_hint = false)。**写入闸 = 形态 A**：
+//! 全局开关 config.json settings.ui.mcpWriteEnabled（默认关，偏好设置弹窗开启），写调用
+//! 逐次检查（write_gate，core::config 无缓存、低频直读），关态回工具级错误「MCP 写入未开启」；
+//! 撤销口径 = create_document / rename_placements 进撤销（复用 commands::operations 抽出的
+//! _op 整段，单写点 + 单撤销步），write_text_asset 不进撤销（与 APP 内文本编辑同口径，2026-08-23 定）。
 //!
 //! 工具注册表模式（PRD 定，范式 = 前端 barSpecs）：一类一文件 + 下方一行注册；
 //! 加工具 = tools/ 加一个文件 + new() 注册处加一行。本注册表未来复用为插件 API 注册表。
@@ -46,7 +53,8 @@ impl AnikitMcp {
         + Self::folders_router()
         + Self::assets_router()
         + Self::text_router()
-        + Self::archives_router(),
+        + Self::archives_router()
+        + Self::write_router(),
     }
   }
 
@@ -67,6 +75,41 @@ impl AnikitMcp {
       Err(msg) => Ok(CallToolResult::error(vec![ContentBlock::text(msg)])),
     }
   }
+
+  /// 写工具骨架（二期）：同 with_lib 口径，取可变库引用。只服务不进撤销的写
+  ///（write_text_asset 等）——进撤销的写工具走 commands::operations 的 _op 整段（锁 + undo 一体），不经本骨架
+  fn with_lib_mut<T: serde::Serialize>(
+    &self,
+    f: impl FnOnce(&mut Library) -> Result<T, String>,
+  ) -> Result<CallToolResult, ErrorData> {
+    let result = {
+      let state = self.app.state::<AppState>();
+      let mut guard = state.library.lock().map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+      match guard.as_mut() {
+        Some(lib) => f(lib),
+        None => return Ok(CallToolResult::error(vec![ContentBlock::text("请先打开素材库")])),
+      }
+    };
+    match result {
+      Ok(v) => json_result(&v),
+      Err(msg) => Ok(CallToolResult::error(vec![ContentBlock::text(msg)])),
+    }
+  }
+}
+
+/// 写入闸（PRD 08-06 形态 A，2026-09-19 用户定）：全局开关 = config.json settings.ui 子树
+/// mcpWriteEnabled（默认关，偏好设置弹窗开启）。MCP 写调用逐次检查、直读配置
+///（core::config 无缓存，低频调用直读可接受）；关态 / 读取失败一律回工具级错误（同「请先打开素材库」口径）
+fn write_gate() -> Option<CallToolResult> {
+  let enabled = crate::core::config::ui_settings()
+    .ok()
+    .and_then(|ui| ui.get("mcpWriteEnabled")?.as_bool())
+    .unwrap_or(false);
+  if enabled {
+    None
+  } else {
+    Some(CallToolResult::error(vec![ContentBlock::text("MCP 写入未开启（偏好设置里可开启）")]))
+  }
 }
 
 /// 成功回包：content 文本（pretty JSON，兼容只读文本的客户端）+ structuredContent 双带
@@ -80,7 +123,7 @@ fn json_result<T: serde::Serialize>(v: &T) -> Result<CallToolResult, ErrorData> 
 /// ServerHandler：工具面由 tool_router 提供；server 名 / 版本 / 使用说明经宏参数生成。
 /// instructions = 给 Agent 的README（每次连接必读）：典型流程 + 纪律红线，与
 /// docs/05_接口文档/MCP使用指南.md 同口径（改其一必须同步另一处）
-#[tool_handler(router = self.tool_router, name = "anikit", instructions = "AniKit 素材库只读通道（一期）。典型流程：get_current_library 确认库已打开 → search_assets 搜索 / list_folder_tree + list_placements 浏览 → get_asset_detail 看标签·描述·注释 → get_asset_origin_path 拿磁盘绝对路径后直读文件看图（webp 缩略图优先，不经协议传图）→ read_text_asset 读提示词·剧本等文本资产。纪律：全部工具只读；资产磁盘名随重命名变化，路径每次现取、禁止缓存复用；库未打开时工具返回「请先打开素材库」。")]
+#[tool_handler(router = self.tool_router, name = "anikit", instructions = "AniKit 素材库外接通道（MCP，一期只读 + 二期首批写工具）。典型流程：get_current_library 确认库已打开 → search_assets 搜索 / list_folder_tree + list_placements 浏览 → get_asset_detail 看标签·描述·注释 → get_asset_origin_path 拿磁盘绝对路径后直读文件看图（webp 缩略图优先，不经协议传图）→ read_text_asset 读提示词·剧本等文本资产。写入（三个）：create_document 新建文档入库 / write_text_asset 覆写文本资产内容 / rename_placements 批量改名——默认关闸，需在 APP 偏好设置开启「允许 MCP 写入」，关闸调用回「MCP 写入未开启」；write_text_asset 覆写不进撤销（先 read_text_asset 备份原文），create_document / rename_placements 进撤销（APP 内 Ctrl+Z 可撤）。纪律：资产磁盘名随重命名变化，路径每次现取、禁止缓存复用；库未打开时工具返回「请先打开素材库」；删除永不经 MCP。")]
 impl ServerHandler for AnikitMcp {}
 
 /// lib.rs setup 拉起（tauri 异步运行时，同 plugin_ws）

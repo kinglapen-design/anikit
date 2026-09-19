@@ -466,12 +466,22 @@ pub async fn create_document(
   kind: String,
   target_folder: Option<String>,
 ) -> Result<crate::services::views::PlacementView, String> {
+  create_document_op(&state, &kind, target_folder.as_deref())
+}
+
+/// 新建文档整段（锁 library → 锁 undo → begin/record_file/服务调用/record_disk_op/commit，
+/// 锁序与撤销三步同命令层各操作）；pub(crate)：server/mcp（AI 外接通道二期写工具）同用
+pub(crate) fn create_document_op(
+  state: &AppState,
+  kind: &str,
+  target_folder: Option<&str>,
+) -> Result<crate::services::views::PlacementView, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin("新建文档".to_string());
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  match operations::create_document(lib, &kind, target_folder.as_deref()) {
+  match operations::create_document(lib, kind, target_folder) {
     Ok((view, info_dir, backup)) => {
       undo.record_disk_op(
         DiskOp::Rename { from: info_dir.clone(), to: backup.clone() },
@@ -530,17 +540,23 @@ pub struct BatchRenameReport {
 ///（folders.json + 各 origin 项 metadata.json 快照 + 磁盘改名对成对登记，同单条 rename 口径）
 #[tauri::command]
 pub async fn rename_placements(state: State<'_, AppState>, items: Vec<RenameItem>) -> Result<BatchRenameReport, String> {
+  rename_placements_op(&state, &items)
+}
+
+/// 批量重命名整段（锁 library → 锁 undo → 单撤销步）；pub(crate)：server/mcp
+///（AI 外接通道二期写工具）同用——失败项跳过不整体回滚语义对 MCP 同样生效
+pub(crate) fn rename_placements_op(state: &AppState, items: &[RenameItem]) -> Result<BatchRenameReport, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin(format!("批量重命名 {} 个项目", items.len()));
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  for it in &items {
+  for it in items {
     if it.origin {
       undo.record_file(&meta_path(lib, &it.asset_id)).map_err(|e| e.to_string())?;
     }
   }
-  match operations::rename_placements(lib, &items) {
+  match operations::rename_placements(lib, items) {
     Ok(out) => {
       for (old_path, new_path) in &out.renames {
         undo.record_disk_op(

@@ -45,6 +45,7 @@ import GroupManageDialog from "./components/GroupManageDialog.vue";
 import GroupEditDialog from "./components/GroupEditDialog.vue";
 import PropsDialog from "./components/PropsDialog.vue";
 import DescEditDialog from "./components/DescEditDialog.vue";
+import SettingsModal from "./components/SettingsModal.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import AppConfirm from "./components/AppConfirm.vue";
 import ConfirmModal from "./components/modals/ConfirmModal.vue";
@@ -389,6 +390,8 @@ async function togglePin(): Promise<void> {
          文件与档案同做；须在 AppConfirm 之前——池内 × 删除弹确认窗，后渲染者在上 -->
     <PropsDialog v-if="ui.propsEdit" />
     <DescEditDialog v-if="ui.descEdit" />
+    <!-- 偏好设置弹窗（2026-09-19 MCP 二期写入闸配套）：菜单栏主菜单「偏好设置」置位 settingsOpen -->
+    <SettingsModal v-if="ui.settingsOpen" @close="ui.settingsOpen = false" />
     <!-- 全局右键菜单宿主（6.3：lib/contextMenus 单一实例，六上下文共用） -->
     <!-- 插件列表面板宿主（2026-09-06 插件窗轮：lib/pluginPanel 单一实例，三入口共用——
          菜单栏「插件」钮 / 工具栏 plugin 钮 / 预览标题栏 plugin 钮；预览子窗口同可开） -->

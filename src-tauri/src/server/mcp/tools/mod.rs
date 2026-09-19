@@ -6,3 +6,4 @@ pub mod folders;
 pub mod library;
 pub mod search;
 pub mod text;
+pub mod write;

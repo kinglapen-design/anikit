@@ -397,7 +397,13 @@ export function appMenuSpec(libraryNames: string[]): CtxEntry[] {
     { label: "查找", submenu: findEntries() },
     { label: "整理", submenu: organizeEntries() },
     "divider",
-    { label: "偏好设置", disabled: true },
+    {
+      label: "偏好设置",
+      // MCP 二期写入闸配套（2026-09-19）：打开偏好设置弹窗（SettingsModal，宿主 App.vue）
+      action: () => {
+        useUiStore().settingsOpen = true;
+      },
+    },
     {
       label: "帮助",
       submenu: [

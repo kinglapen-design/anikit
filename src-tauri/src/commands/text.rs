@@ -53,7 +53,10 @@ pub async fn write_text_asset(
   write_text(lib, &asset_id, &content)
 }
 
-fn write_text(lib: &mut Library, asset_id: &str, content: &str) -> Result<WriteTextResult, String> {
+/// 保存文本内容：覆写 origin（恒 UTF-8 无 BOM）→ metadata.size / modifiedAt 落盘 → 同步索引。
+/// pub(crate)：server/mcp（AI 外接通道二期写工具 write_text_asset）同用；
+/// 不进 undo（库操作撤销体系不覆盖内容编辑，2026-08-23 定——MCP 工具描述同口径告知 Agent）
+pub(crate) fn write_text(lib: &mut Library, asset_id: &str, content: &str) -> Result<WriteTextResult, String> {
   let (info_dir, origin, meta) = locate_asset(lib, asset_id)?;
   if !text::is_text(&origin) {
     return Err(format!("「{}」不是文本资源", meta.name));
