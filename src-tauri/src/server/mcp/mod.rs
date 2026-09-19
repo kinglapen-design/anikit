@@ -1,6 +1,6 @@
 //! AI 外接通道（MCP 一期，PRD 08-06「AI 外接通道」）：进程内嵌 Streamable HTTP server——
-//! 127.0.0.1 动态端口 + 端口文件（全局配置目录 AniKit/mcp-server.port，每次启动覆写，
-//! 同 plugin_ws 发现机制）；外部 Agent 工具（Kimi Code / Claude Code 等）配 URL 直连。
+//! 127.0.0.1 固定端口 17701 优先（被占回退动态）+ 端口文件（全局配置目录 AniKit/mcp-server.port，
+//! 每次启动覆写实际端口）；外部 Agent 工具（Kimi Code / Codex / Claude Code 等）配静态 URL 直连。
 //!
 //! 实现 = 官方 Rust SDK rmcp（≥1.4.0 内置 Host 头校验防 DNS rebinding，CVE-2026-42559）
 //! + axum nest_service 挂载其 Tower 服务；协议握手 / 会话 / schema 协商全由 SDK 承担。
@@ -91,7 +91,17 @@ pub fn init(app: AppHandle) {
 }
 
 async fn serve(app: AppHandle) -> Result<(), String> {
-  let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|e| e.to_string())?;
+  // 固定端口优先（2026-09-19 用户定：Agent 工具只读静态配置 config.toml，动态端口每重启失效
+  // 不匹配——与 plugin_ws 的场景差在客户端不会读端口文件）；被占（双开 / 他占）回退动态，
+  // 实际端口恒写端口文件
+  const FIXED_PORT: u16 = 17701;
+  let listener = match TcpListener::bind(("127.0.0.1", FIXED_PORT)).await {
+    Ok(l) => l,
+    Err(e) => {
+      log::warn!("MCP 固定端口 {FIXED_PORT} 被占（{e}），回退动态端口");
+      TcpListener::bind("127.0.0.1:0").await.map_err(|e| e.to_string())?
+    }
+  };
   let port = listener.local_addr().map_err(|e| e.to_string())?.port();
   write_port_file(port);
   log::info!("MCP 服务就绪：http://127.0.0.1:{port}/mcp");

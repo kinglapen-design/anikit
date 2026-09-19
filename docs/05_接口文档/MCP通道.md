@@ -1,6 +1,6 @@
 # 3. AI 外接通道（MCP，一期只读）
 
-- 服务：`server/mcp/`（PRD 08-06，一期只读落地），`http://127.0.0.1:{动态端口}/mcp`，lib.rs setup 拉起（`server::init_mcp`）；端口文件 = 全局配置目录 `AniKit/mcp-server.port`（每次启动覆写，Agent 工具读文件直连——同 plugin-server.port 发现机制）。
+- 服务：`server/mcp/`（PRD 08-06，一期只读落地），`http://127.0.0.1:17701/mcp`——**固定端口 17701 优先**（Agent 工具只读静态 config，动态端口每重启失效不匹配；被占回退动态），lib.rs setup 拉起（`server::init_mcp`）；端口文件 = 全局配置目录 `AniKit/mcp-server.port`（每次启动覆写实际端口，兜底发现）。
 - 实现：官方 Rust SDK `rmcp` 3.4（Streamable HTTP server 为 Tower service，axum `nest_service("/mcp", …)` 挂载；复用 Tauri tokio 运行时，不另起进程）。协议握手 / 会话管理 / 工具 schema 协商全由 SDK 承担。
 - 安全口径：仅回环监听、无鉴权（本机 Agent 场景）；Host 头校验防 DNS rebinding 由 rmcp 内置（≥1.4.0，默认 allowedHosts = localhost / 127.0.0.1 / ::1）。**测试构建不起 server**（cfg(not(test))，踩坑 014 同 plugin_ws）。
 
@@ -37,5 +37,5 @@
 ## 客户端配置示例
 
 ```json
-{ "mcpServers": { "anikit": { "url": "http://127.0.0.1:<读 mcp-server.port>/mcp" } } }
+{ "mcpServers": { "anikit": { "url": "http://127.0.0.1:17701/mcp" } } }
 ```
