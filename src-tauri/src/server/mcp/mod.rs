@@ -77,8 +77,10 @@ fn json_result<T: serde::Serialize>(v: &T) -> Result<CallToolResult, ErrorData> 
   Ok(result)
 }
 
-/// ServerHandler：工具面由 tool_router 提供；server 名 / 版本 / 使用说明经宏参数生成
-#[tool_handler(router = self.tool_router, name = "anikit", instructions = "AniKit 素材库只读通道（一期）：搜索 / 浏览文件夹与资产 / 读资产详情与文本内容 / 取源文件与缩略图磁盘路径（看图直读 webp 缩略图，不经协议传图）。全部工具只读；素材库未打开时工具返回「请先打开素材库」。")]
+/// ServerHandler：工具面由 tool_router 提供；server 名 / 版本 / 使用说明经宏参数生成。
+/// instructions = 给 Agent 的README（每次连接必读）：典型流程 + 纪律红线，与
+/// docs/05_接口文档/MCP使用指南.md 同口径（改其一必须同步另一处）
+#[tool_handler(router = self.tool_router, name = "anikit", instructions = "AniKit 素材库只读通道（一期）。典型流程：get_current_library 确认库已打开 → search_assets 搜索 / list_folder_tree + list_placements 浏览 → get_asset_detail 看标签·描述·注释 → get_asset_origin_path 拿磁盘绝对路径后直读文件看图（webp 缩略图优先，不经协议传图）→ read_text_asset 读提示词·剧本等文本资产。纪律：全部工具只读；资产磁盘名随重命名变化，路径每次现取、禁止缓存复用；库未打开时工具返回「请先打开素材库」。")]
 impl ServerHandler for AnikitMcp {}
 
 /// lib.rs setup 拉起（tauri 异步运行时，同 plugin_ws）
