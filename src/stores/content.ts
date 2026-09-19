@@ -249,6 +249,8 @@ let unlistenFpsHeal: (() => void) | undefined;
 let unlistenRecent: (() => void) | undefined;
 // CEP 导出接收入库事件监听（8.1）：后端 WS 服务导入完成后广播 cep-imported，全量对齐
 let unlistenCep: (() => void) | undefined;
+// MCP 写入事件监听（PRD 08-06，2026-09-19）：MCP 写工具绕开前端改库，后端广播 mcp-library-changed
+let unlistenMcp: (() => void) | undefined;
 
 // 视口滚动位置（会话级，2026-07-25 用户定）：进出预览 / 切换目录都恢复——
 // 预览返回不跳顶（设缩略图后可直接确认），对比两个文件夹不用重新翻
@@ -979,6 +981,19 @@ export const useContentStore = defineStore("content", {
           playSuccess();
         }
         void this.refresh();
+      });
+    },
+
+    // MCP 写入热刷新（PRD 08-06，2026-09-19 用户实测「agent 新建文件夹要重启才显示」补）：
+    // 库数据文件无监听（watcher 只管收件箱），命令层写由前端自刷新，MCP 绕开前端——后端
+    // server/mcp 写成功广播 mcp-library-changed；去抖 300ms 合并（Agent 批量写连发一拍全量对齐，
+    // 同 cep-imported 的 refresh 口径但不带 CEP 成功提示音）
+    async initMcpListener(): Promise<void> {
+      if (unlistenMcp) return;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      unlistenMcp = await listen("mcp-library-changed", () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => void this.refresh(), 300);
       });
     },
 

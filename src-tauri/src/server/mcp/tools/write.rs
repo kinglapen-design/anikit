@@ -59,8 +59,7 @@ pub struct RenamePlacementsParams {
 
 #[tool_router(router = write_router, vis = "pub")]
 impl AnikitMcp {
-  /// 在素材库新建文档入库（md / txt / fla / psd / ai / docx / xlsx），返回 PlacementView。
-  /// 写入操作：进撤销（APP 内 Ctrl+Z 可撤回）；需先在 APP 偏好设置开启「允许 MCP 写入」
+  /// 在素材库新建文档入库（md / txt / fla / psd / ai / docx / xlsx），返回 PlacementView。进撤销
   #[tool(name = "create_document", annotations(read_only_hint = false))]
   fn create_document(&self, Parameters(p): Parameters<CreateDocumentParams>) -> Result<CallToolResult, ErrorData> {
     if let Some(err) = write_gate() {
@@ -68,25 +67,30 @@ impl AnikitMcp {
     }
     let state = self.app.state::<AppState>();
     match crate::commands::operations::create_document_op(&state, &p.kind, p.folder_id.as_deref()) {
-      Ok(view) => json_result(&view),
+      Ok(view) => {
+        self.emit_library_changed("create_document");
+        json_result(&view)
+      }
       Err(msg) => Ok(CallToolResult::error(vec![ContentBlock::text(msg)])),
     }
   }
 
-  /// 整体覆写文本资产（txt / md，提示词正文等）内容，metadata.size / modifiedAt 同步。
-  /// **注意：内容编辑不进撤销（与 APP 内编辑同口径）——覆写不可撤回，覆写前先 read_text_asset 备份原文**；
-  /// 需先在 APP 偏好设置开启「允许 MCP 写入」
+  /// 整体覆写文本资产（txt / md）内容，size / modifiedAt 同步。
+  /// 不进撤销——覆写前先 read_text_asset 备份原文
   #[tool(name = "write_text_asset", annotations(read_only_hint = false))]
   fn write_text_asset(&self, Parameters(p): Parameters<WriteTextParams>) -> Result<CallToolResult, ErrorData> {
     if let Some(err) = write_gate() {
       return Ok(err);
     }
-    self.with_lib_mut(|lib| crate::commands::text::write_text(lib, &p.asset_id, &p.content))
+    let result = self.with_lib_mut(|lib| crate::commands::text::write_text(lib, &p.asset_id, &p.content))?;
+    if result.is_error != Some(true) {
+      self.emit_library_changed("write_text_asset");
+    }
+    Ok(result)
   }
 
-  /// 批量改名（单条改名 = 1 项数组）：逐条改名，失败项跳过不整体回滚，
-  /// 返回 BatchRenameReport { renamed 成功计数, failed 失败清单（新名 + 原因） }。
-  /// 进撤销（整体单撤销步，APP 内 Ctrl+Z 可撤回）；需先在 APP 偏好设置开启「允许 MCP 写入」
+  /// 批量改名（单条改名 = 1 项数组），失败项跳过不整体回滚，
+  /// 返回 BatchRenameReport { renamed 成功计数, failed 失败清单（新名 + 原因） }。进撤销
   #[tool(name = "rename_placements", annotations(read_only_hint = false))]
   fn rename_placements(&self, Parameters(p): Parameters<RenamePlacementsParams>) -> Result<CallToolResult, ErrorData> {
     if let Some(err) = write_gate() {
@@ -102,7 +106,10 @@ impl AnikitMcp {
       .collect();
     let state = self.app.state::<AppState>();
     match crate::commands::operations::rename_placements_op(&state, &items) {
-      Ok(report) => json_result(&report),
+      Ok(report) => {
+        self.emit_library_changed("rename_placements");
+        json_result(&report)
+      }
       Err(msg) => Ok(CallToolResult::error(vec![ContentBlock::text(msg)])),
     }
   }

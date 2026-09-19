@@ -71,8 +71,7 @@ struct ImportReport {
 impl AnikitMcp {
   /// 导入磁盘文件入库（仅文件；复制语义——源文件不动），缩略图随管线自动生成（导入即可看图）。
   /// 冲突不阻断：hash 完全相同 → 跳过并回已有资产 id；同名不同内容 → 自动加 -序号 后缀入库；
-  /// 逐文件报告 { path, status, assetId?, finalName?, reason? }。**不进撤销**（APP 导入管线
-  /// 本就不进撤销体系）——同步执行无进度事件、不支持取消。需先在 APP 偏好设置开启「允许 MCP 写入」
+  /// 逐文件报告 { path, status, assetId?, finalName?, reason? }。不进撤销；同步执行、不支持取消
   #[tool(name = "import_paths", annotations(read_only_hint = false))]
   fn import_paths(&self, Parameters(p): Parameters<ImportPathsParams>) -> Result<CallToolResult, ErrorData> {
     if let Some(err) = write_gate() {
@@ -167,6 +166,10 @@ impl AnikitMcp {
       failed: count("failed"),
       items,
     };
+    // 有真实入库才广播热刷新（全 skippedDuplicate / failed 库未变，不打扰前端）
+    if report.imported + report.renamed > 0 {
+      self.emit_library_changed("import_paths");
+    }
     json_result(&report)
   }
 }

@@ -102,6 +102,15 @@ impl AnikitMcp {
       Err(msg) => Ok(CallToolResult::error(vec![ContentBlock::text(msg)])),
     }
   }
+
+  /// 写入成功后的前端热刷新广播（2026-09-19 用户实测「agent 新建文件夹要重启才显示」补）：
+  /// 库数据文件无监听（watcher 只管收件箱），命令层写由前端自己刷新，MCP 绕开前端必须广播；
+  /// 前端 content store initMcpListener 监听 mcp-library-changed，去抖 300ms 全量对齐
+  ///（Agent 批量写连发合并为一拍；同 cep-imported 的 refresh 口径，但不带 CEP 的成功提示音）
+  pub fn emit_library_changed(&self, what: &str) {
+    use tauri::Emitter;
+    let _ = self.app.emit("mcp-library-changed", what);
+  }
 }
 
 /// 写入闸（PRD 08-06 形态 A，2026-09-19 用户定）：全局开关 = config.json settings.ui 子树

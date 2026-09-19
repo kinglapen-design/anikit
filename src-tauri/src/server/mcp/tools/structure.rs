@@ -76,8 +76,7 @@ fn to_refs(items: Vec<PlacementRefParams>) -> Vec<PlacementRef> {
 
 #[tool_router(router = structure_router, vis = "pub")]
 impl AnikitMcp {
-  /// 新建文件夹，返回 Folder（含新 folderId）。parentId 缺省 / "root" = 顶层。
-  /// 写入操作：进撤销（APP 内 Ctrl+Z 可撤回）；需先在 APP 偏好设置开启「允许 MCP 写入」
+  /// 新建文件夹，返回 Folder（含新 folderId）。parentId 缺省 / "root" = 顶层。进撤销
   #[tool(name = "create_folder", annotations(read_only_hint = false))]
   fn create_folder(&self, Parameters(p): Parameters<CreateFolderParams>) -> Result<CallToolResult, ErrorData> {
     if let Some(err) = write_gate() {
@@ -85,13 +84,16 @@ impl AnikitMcp {
     }
     let state = self.app.state::<AppState>();
     match crate::commands::operations::create_folder_op(&state, p.parent_id.as_deref(), &p.name, None, None) {
-      Ok(folder) => json_result(&folder),
+      Ok(folder) => {
+        self.emit_library_changed("create_folder");
+        json_result(&folder)
+      }
       Err(msg) => Ok(CallToolResult::error(vec![ContentBlock::text(msg)])),
     }
   }
 
   /// 把资产移入目标文件夹（Placement 级移动，去重 / 原地 / 陈旧项自动跳过不计），
-  /// 返回 { moved 实际移动条数 }。写入操作：进撤销（整体单撤销步）；需先开启「允许 MCP 写入」
+  /// 返回 { moved 实际移动条数 }。进撤销
   #[tool(name = "move_placements", annotations(read_only_hint = false))]
   fn move_placements(&self, Parameters(p): Parameters<MovePlacementsParams>) -> Result<CallToolResult, ErrorData> {
     if let Some(err) = write_gate() {
@@ -103,14 +105,16 @@ impl AnikitMcp {
     let items = to_refs(p.items);
     let state = self.app.state::<AppState>();
     match crate::commands::operations::move_placements_op(&state, &items, &p.target_folder_id) {
-      Ok(moved) => json_result(&serde_json::json!({ "moved": moved })),
+      Ok(moved) => {
+        self.emit_library_changed("move_placements");
+        json_result(&serde_json::json!({ "moved": moved }))
+      }
       Err(msg) => Ok(CallToolResult::error(vec![ContentBlock::text(msg)])),
     }
   }
 
   /// 移动文件夹重设父级（仅改数据不动磁盘；移入自身或子孙整条报错，同父 / 陈旧 id 跳过不计），
-  /// 返回 { moved 实际移动数 }；目标 = 同级末尾，不给排序插入位。写入操作：进撤销（整体单撤销步）；
-  /// 需先开启「允许 MCP 写入」
+  /// 返回 { moved 实际移动数 }；目标 = 同级末尾，不给排序插入位。进撤销
   #[tool(name = "move_folders", annotations(read_only_hint = false))]
   fn move_folders(&self, Parameters(p): Parameters<MoveFoldersParams>) -> Result<CallToolResult, ErrorData> {
     if let Some(err) = write_gate() {
@@ -127,13 +131,16 @@ impl AnikitMcp {
     };
     let state = self.app.state::<AppState>();
     match crate::commands::operations::move_folders_op(&state, &p.folder_ids, target_parent, None, target_block) {
-      Ok(moved) => json_result(&serde_json::json!({ "moved": moved })),
+      Ok(moved) => {
+        self.emit_library_changed("move_folders");
+        json_result(&serde_json::json!({ "moved": moved }))
+      }
       Err(msg) => Ok(CallToolResult::error(vec![ContentBlock::text(msg)])),
     }
   }
 
   /// 链接汇总：目标文件夹逐条建链接 Placement（资产本体留原地、不占双份磁盘），
-  /// 返回 { linked 实际关联条数 }。写入操作：进撤销（整体单撤销步）；需先开启「允许 MCP 写入」
+  /// 返回 { linked 实际关联条数 }。进撤销
   #[tool(name = "link_placements", annotations(read_only_hint = false))]
   fn link_placements(&self, Parameters(p): Parameters<LinkPlacementsParams>) -> Result<CallToolResult, ErrorData> {
     if let Some(err) = write_gate() {
@@ -158,7 +165,10 @@ impl AnikitMcp {
     let items = to_refs(p.items);
     let state = self.app.state::<AppState>();
     match crate::commands::operations::link_placements_op(&state, &items, &p.target_folder_id, &names) {
-      Ok(linked) => json_result(&serde_json::json!({ "linked": linked })),
+      Ok(linked) => {
+        self.emit_library_changed("link_placements");
+        json_result(&serde_json::json!({ "linked": linked }))
+      }
       Err(msg) => Ok(CallToolResult::error(vec![ContentBlock::text(msg)])),
     }
   }

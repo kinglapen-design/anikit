@@ -4,6 +4,7 @@
 - 实现：官方 Rust SDK `rmcp` 3.4（Streamable HTTP server 为 Tower service，axum `nest_service("/mcp", …)` 挂载；复用 Tauri tokio 运行时，不另起进程）。协议握手 / 会话管理 / 工具 schema 协商全由 SDK 承担。
 - 安全口径：仅回环监听、无鉴权（本机 Agent 场景）；Host 头校验防 DNS rebinding 由 rmcp 内置（≥1.4.0，默认 allowedHosts = localhost / 127.0.0.1 / ::1）。**测试构建不起 server**（cfg(not(test))，踩坑 014 同 plugin_ws）。
 - **写入闸（二期，2026-09-19 用户定形态 A）**：全局写入开关 + 撤销兜底——开关持久化 config.json `settings.ui.mcpWriteEnabled`（默认 false，偏好设置弹窗「允许 MCP 写入」开启）；MCP 写调用**逐次检查**（`write_gate` 直读配置，core::config 无缓存、低频调用直读可接受），关态 / 读取失败一律回工具级错误「MCP 写入未开启（偏好设置里可开启）」（isError=true，与「请先打开素材库」同口径）。不做逐笔弹窗（首批全是 L2 可逆操作，二批结构性操作可逆仍走形态 A）；删除永不经 MCP（L4 永远人工确认）。
+- **写入热刷新（2026-09-19 补）**：库数据文件无监听（命令层写由前端自刷新），MCP 绕开前端——八个写工具成功路径广播 `mcp-library-changed`（`emit_library_changed`；import_paths 有真实入库才发），前端 `initMcpListener` 去抖 300ms 全量对齐（同 cep-imported 的 refresh 口径，不带成功提示音）。
 
 ## 握手流程（Streamable HTTP，单端点 POST /mcp）
 
