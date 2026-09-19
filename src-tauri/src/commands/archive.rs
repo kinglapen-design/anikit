@@ -122,26 +122,29 @@ fn archive_stats(lib: &Library, folder_id: &str) -> (u32, u64) {
 pub fn list_archives(state: State<AppState>) -> Result<Vec<ArchiveListItem>, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
-  Ok(
-    archive::list_archives(lib)
-      .into_iter()
-      .map(|a| {
-        let (cover_path, cover_ver) = archive::cover_file_info(lib, &a.folder_id).unzip();
-        ArchiveListItem {
-          cover_path,
-          cover_ver,
-          total_size: archive_stats(lib, &a.folder_id).1,
-          folder_id: a.folder_id,
-          badge: a.badge,
-          avatar: a.avatar,
-          props: a.props,
-          descriptions: a.descriptions,
-          links: a.links,
-          created_at: a.created_at,
-        }
-      })
-      .collect(),
-  )
+  Ok(archive_list_items(lib))
+}
+
+/// 档案清单组装（ArchiveData + 容量 + 封面路径）；pub(crate)：server/mcp（AI 外接通道）同用
+pub(crate) fn archive_list_items(lib: &Library) -> Vec<ArchiveListItem> {
+  archive::list_archives(lib)
+    .into_iter()
+    .map(|a| {
+      let (cover_path, cover_ver) = archive::cover_file_info(lib, &a.folder_id).unzip();
+      ArchiveListItem {
+        cover_path,
+        cover_ver,
+        total_size: archive_stats(lib, &a.folder_id).1,
+        folder_id: a.folder_id,
+        badge: a.badge,
+        avatar: a.avatar,
+        props: a.props,
+        descriptions: a.descriptions,
+        links: a.links,
+        created_at: a.created_at,
+      }
+    })
+    .collect()
 }
 
 /// 档案详情视图（2026-08-15 任务 A 三项）：ArchiveData 全字段 + 统计（fileCount / totalSize）；
@@ -336,7 +339,8 @@ pub fn get_asset_detail(state: State<AppState>, asset_id: String) -> Result<Asse
 }
 
 /// 组装资产详情（命令层薄壳，便于单测）
-fn asset_detail(lib: &Library, asset_id: &str) -> Result<AssetDetail, String> {
+/// pub(crate)：server/mcp（AI 外接通道）同用——MCP 走纯读，不调 ensure_asset_colors 懒回填
+pub(crate) fn asset_detail(lib: &Library, asset_id: &str) -> Result<AssetDetail, String> {
   let meta = lib.index.assets.get(asset_id).ok_or_else(|| "资源不存在，可能已被删除".to_string())?;
   let mut placements = Vec::new();
   let mut archives: Vec<ArchiveRef> = Vec::new();

@@ -35,7 +35,8 @@ pub struct SpaceInfo {
   pub auto_import: bool,
 }
 
-fn space_info(space: &Space) -> SpaceInfo {
+/// pub(crate)：server/mcp（AI 外接通道 get_current_library）同用
+pub(crate) fn space_info(space: &Space) -> SpaceInfo {
   SpaceInfo { name: space.name.clone(), path: space.root.to_string_lossy().into_owned(), auto_import: space.auto_import }
 }
 
@@ -48,7 +49,8 @@ pub struct LibraryInfo {
   pub folder_count: usize,
 }
 
-fn to_info(lib: &Library) -> LibraryInfo {
+/// pub(crate)：server/mcp（AI 外接通道 get_current_library）同用
+pub(crate) fn to_info(lib: &Library) -> LibraryInfo {
   LibraryInfo {
     name: lib.root.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
     path: lib.root.to_string_lossy().into_owned(),

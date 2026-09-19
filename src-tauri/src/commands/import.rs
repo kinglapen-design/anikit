@@ -534,7 +534,8 @@ pub fn list_placements(state: State<AppState>, folder: Option<String>) -> Result
 }
 
 /// Placement → 视图：资源在索引中缺失的脏 Placement 跳过
-fn placement_views(lib: &Library, folder: Option<&str>) -> Vec<PlacementView> {
+/// pub(crate)：server/mcp（AI 外接通道 list_placements）同用
+pub(crate) fn placement_views(lib: &Library, folder: Option<&str>) -> Vec<PlacementView> {
   let items: Vec<&Placement> = match folder {
     Some(id) => lib.index.placements_by_folder.get(id).map(|v| v.iter().collect()).unwrap_or_default(),
     None => lib.folders.items.iter().collect(),

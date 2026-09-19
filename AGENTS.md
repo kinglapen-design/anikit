@@ -33,7 +33,7 @@ PRD 内使用 Obsidian 双链 `[[文件名]]`，按文件名在 `docs/01_项目-
 │       ├── core/         数据层（JSON 读写、迁移、备份；每个数据文件单一写点）
 │       ├── services/     业务服务（导入、缩略图、搜索、帧流 WS（frame_stream，阶段四）……）
 │       ├── adapters/     适配器（剪贴板、Shell、全局热键、文件监听、ffmpeg 解码……）
-│       └── server/       动画软件通信通道（plugin_ws，阶段八 8.1 落地）
+│       └── server/       动画软件通信通道（plugin_ws，阶段八 8.1 落地）+ AI 外接通道（mcp/，PRD 08-06 一期只读）
 ├── plugins/              动画软件插件（CEP 等，如 plugins/animate-cep/）
 ├── spike/                阶段 0 技术验证代码（验证完归档，不进主线）
 ├── tools/                开发辅助工具（假数据生成、打包脚本等）

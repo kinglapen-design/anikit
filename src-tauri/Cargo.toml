@@ -81,6 +81,11 @@ encoding_rs = "0.8"
 zip = { version = "2.2", default-features = false, features = ["deflate"] }
 # 8.3 发送至 AN：DOMDocument.xml 事件流改写（读写事件保属性顺序；XML 树库会丢序）
 quick-xml = "0.36"
+# AI 外接通道（MCP 一期，PRD 08-06）：官方 Rust SDK——JSON-RPC / 会话 / 工具 schema 协商不走手写；
+# ≥1.4.0 内置 Host 头校验防 DNS rebinding（CVE-2026-42559）
+rmcp = { version = "3.4", features = ["transport-streamable-http-server"] }
+# AI 外接通道：axum nest_service 挂载 rmcp Streamable HTTP Tower 服务（最小特性面）
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
 
 # 阶段四 spike 同款补丁：ffmpeg-next 8.1.0 的 EXIF frame side data 门控门槛
 #（avcodec minor>=28 才开 ffmpeg_8_1）滞后于实际合入（avutil 60.10 / avcodec 62.13 已含

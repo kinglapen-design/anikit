@@ -30,4 +30,5 @@
 ## 协议
 
 - [WebSocket通道](WebSocket通道.md)
+- [MCP通道](MCP通道.md)
 - [anikit协议](anikit协议.md)

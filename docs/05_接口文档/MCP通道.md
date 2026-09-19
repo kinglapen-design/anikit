@@ -1,0 +1,41 @@
+# 3. AI 外接通道（MCP，一期只读）
+
+- 服务：`server/mcp/`（PRD 08-06，一期只读落地），`http://127.0.0.1:{动态端口}/mcp`，lib.rs setup 拉起（`server::init_mcp`）；端口文件 = 全局配置目录 `AniKit/mcp-server.port`（每次启动覆写，Agent 工具读文件直连——同 plugin-server.port 发现机制）。
+- 实现：官方 Rust SDK `rmcp` 3.4（Streamable HTTP server 为 Tower service，axum `nest_service("/mcp", …)` 挂载；复用 Tauri tokio 运行时，不另起进程）。协议握手 / 会话管理 / 工具 schema 协商全由 SDK 承担。
+- 安全口径：仅回环监听、无鉴权（本机 Agent 场景）；Host 头校验防 DNS rebinding 由 rmcp 内置（≥1.4.0，默认 allowedHosts = localhost / 127.0.0.1 / ::1）。**测试构建不起 server**（cfg(not(test))，踩坑 014 同 plugin_ws）。
+
+## 握手流程（Streamable HTTP，单端点 POST /mcp）
+
+1. POST `initialize`（头：`Accept: application/json, text/event-stream`、`Content-Type: application/json`；协议版本 2025-03-26 或更新）→ 回包 SSE 帧（`data:` 行 JSON-RPC），响应头带 `Mcp-Session-Id`；`serverInfo = { name: "anikit", version: <app 版本> }`，capabilities 仅 `tools`。
+2. POST `notifications/initialized`（带 `Mcp-Session-Id` 头）→ 202 无体。
+3. 之后 `tools/list` / `tools/call` 均 POST 同端点、带 session 头；回包同为 SSE `data:` 帧。
+4. 会话内存态（LocalSessionManager），APP 重启即失效——Agent 重连重新 initialize 即可。
+
+## 工具面（8 个，全部 `annotations.readOnlyHint = true`）
+
+加工具 = `server/mcp/tools/` 加一个文件 + `mod.rs` 注册处一行（工具注册表模式，范式 = 前端 barSpecs；未来复用为插件 API 注册表）。回包统一：`content` 文本（pretty JSON）+ `structuredContent` 双带；库未打开回工具级错误（`isError: true`，文本「请先打开素材库」），不静默空表；域错误（资产不存在等）同口径回中文原因。
+
+| 工具 | 入参 | 回包（同命令层结构） |
+| --- | --- | --- |
+| `get_current_library` | 无 | `{ space: SpaceInfo \| null, library: LibraryInfo \| null }`——探状态用，未开库不算错误 |
+| `search_assets` | `{ query: string, folderId?: string, recursive?: boolean }` | `SearchHits { placements: [{ assetId, folderId }], archives: [folderId] }`。范围口径：不传 folderId = 全库（回收站除外）；传 = 限定该文件夹，recursive 缺省 true 含子级 |
+| `list_folder_tree` | 无 | `FolderTreeView { blocks: [{ id, name, icon }], nodes: [{ id, name, count, totalSize, icon, kind, color, groups?, children }] }` |
+| `list_placements` | `{ folderId?: string }`（"root" = 未分类；缺省 = 全部） | `PlacementView[]`（assetId / folderId / name / 宽高 / ext / **thumbPath 缩略图绝对路径** / size / duration / tags 等，字段见 `services/views.rs`） |
+| `get_asset_detail` | `{ assetId }` | `AssetDetail`（originName / ext / size / 宽高 / duration / tags / descriptions / colors / links / note / placements 反查 / archives 归属）。**纯读**——不走 APP 侧 ensure_asset_colors 懒回填，存量资产 colors 可能为空 |
+| `get_asset_origin_path` | `{ assetId }` | `{ originPath, thumbPath: string \| null }`——源文件真实路径（序列帧 = frames/ 封面帧，同右键「复制文件路径」口径）+ 缩略图路径（含 thumbAssetId 伴生代理：fla 等工程资产取伴生 hidden 资产的图） |
+| `read_text_asset` | `{ assetId }` | `{ content }`（txt / md；UTF-8 优先 GBK 回退，2MB 上限；非文本资产报错） |
+| `list_archives` | 无 | `ArchiveListItem[]`（folderId / badge / avatar / props / descriptions / links / createdAt / totalSize / coverPath / coverVer）；folderId 可交给 list_placements 列档案内容 |
+
+## 纪律（PRD 08-06 定，一期红线）
+
+- **只读**：有副作用的准只读命令（get_media_source / get_waveform / list_sequence_frames / prepare_anim_strips / get_asset_file_path 等触发转码 / 后台生成队列类）**不进**白名单。
+- **看图零集成**：工具只回磁盘绝对路径，Agent 有文件权限即直读 webp 缩略图与源图，不经协议传图。
+- **路径不缓存**：originName 随重命名同步改磁盘名，外部每次现推现取（get_asset_origin_path），不得缓存复用。
+- 禁止 assets/ 全目录枚举：以文件夹树 / Placement 为入口按 id 直达。
+- 写入闸（写提示词 / 打属性词 / 导入 / 改名等）为二期，删除永不经 MCP（L4 永远人工确认）。
+
+## 客户端配置示例
+
+```json
+{ "mcpServers": { "anikit": { "url": "http://127.0.0.1:<读 mcp-server.port>/mcp" } } }
+```

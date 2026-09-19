@@ -139,6 +139,10 @@ pub fn run() {
       #[cfg(not(test))]
       server::init(app.handle().clone());
 
+      // AI 外接通道 MCP 服务（一期只读，PRD 08-06）：Streamable HTTP，127.0.0.1 动态端口 + 端口文件
+      #[cfg(not(test))]
+      server::init_mcp(app.handle().clone());
+
       // 全局热键 alt+`：呼出 / 隐藏主窗口（后续用于快捷搜索框）
       // 注册失败（热键被他方占用）只记日志降级，不阻断启动
       if let Err(e) = app.global_shortcut().on_shortcut(
