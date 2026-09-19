@@ -191,14 +191,14 @@ const mcpWriteOn = ref(false);
                   <span class="pv-cfg-text"><b>Claude Code</b>：运行 claude mcp add --transport http anikit http://127.0.0.1:17701/mcp</span>
                   <IconButton name="copy" variant="bare" size="sm" title="复制" />
                 </li>
-                <li>接入后 Agent 默认只能<b>只读</b>（搜索、浏览、看图等 8 个工具）；需要 Agent 写入时开启上方 <b>[允许写入]</b>。</li>
+                <li>接入后 Agent 默认只能 <b>[只读]</b>（搜索、浏览、看图等 8 个工具）；需要 Agent 写入时开启上方 <b>[允许写入]</b>。</li>
               </ul>
             </section>
             <section class="pv-aw-group">
               <h2 class="pv-aw-sub">功能列表</h2>
               <ul class="pv-aw-lines">
                 <li><b>只读（8 个）</b>：当前库状态 / 搜索素材 / 文件夹树 / 文件夹资产清单 / 资产详情 / 磁盘路径（看图入口）/ 读文本资产 / 档案列表。</li>
-                <li><b>写入（9 个，需开「允许写入」）</b>：新建文档 / 覆写文本 / 批量改名 / 新建文件夹 / 移入文件夹 / 移动文件夹 / 链接汇总 / 导入入库 / 丢回收站。</li>
+                <li><b>写入（9 个，需开 [允许写入]）</b>：新建文档 / 覆写文本 / 批量改名 / 新建文件夹 / 移入文件夹 / 移动文件夹 / 链接汇总 / 导入入库 / 丢回收站。</li>
               </ul>
             </section>
             <section class="pv-aw-group">
@@ -211,8 +211,8 @@ const mcpWriteOn = ref(false);
             <div class="pv-aw-spacer" />
             <div class="pv-aw-actions pv-aw-actions--mcp">
               <span class="pv-svc-status">
-                <span class="pv-svc-dot on" />
-                <span class="pv-svc-status-text">运行中 · http://127.0.0.1:17701/mcp</span>
+                <span class="pv-svc-state on">运行中</span>
+                <span class="pv-svc-url">http://127.0.0.1:17701/mcp</span>
               </span>
               <span class="pv-aw-btn" style="width: 128px">
                 <ActionButton label="关闭" variant="cancel" size="lg" />
@@ -222,7 +222,7 @@ const mcpWriteOn = ref(false);
           <span class="pv-cap">
             版式仿 Animate 窗；两开关同一行 gap 12（开关左 + 标签右 gap 8 沿退役 SettingsModal 口径），服务关时「允许写入」禁用；
             配置行 = 圆角矩形块（圆角 6 / 亮色/半透明-4 底与描边，学 md 代码块）+ IconButton bare sm copy；
-            按钮行左件 = 运行状态（圆点 联通成功色 / 断开四级灰）；无安装/卸载钮（MCP 无文件可装）
+            按钮行左件 = 运行状态（字重区分：状态词加粗，运行中亮二级 / 已停止留三级，词与地址 gap 8）；无安装/卸载钮（MCP 无文件可装）
           </span>
         </div>
       </div>
@@ -434,7 +434,7 @@ const mcpWriteOn = ref(false);
   height: 38px;
 }
 /* —— MCP 详情窗复刻（与 plugins/McpPluginWindow.vue 口径同步，2026-09-20 含同日调整轮：两开关一行 /
-   运行状态挪按钮行左件（圆点 成功色·四级灰）/ 配置行圆角矩形块化 圆角 6·a4 底与描边）：壳高 640，余同 pv-aw 系 —— */
+   运行状态挪按钮行左件（字重区分 加粗 运行中二级·已停止三级）/ 配置行圆角矩形块化 圆角 6·a4 底与描边）：壳高 640，余同 pv-aw 系 —— */
 .pv-aw-shell--mcp {
   height: 640px;
 }
@@ -457,25 +457,24 @@ const mcpWriteOn = ref(false);
   justify-content: space-between;
   align-items: center;
 }
+/* 运行状态（按钮行左件）：字重区分——状态词加粗 运行中二级/已停止三级，词与地址 gap 8 */
 .pv-svc-status {
   display: flex;
   align-items: center;
-  gap: var(--n-space-6);
+  gap: var(--n-space-8);
   min-width: 0;
-}
-.pv-svc-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 99px;
-  background: var(--n-l4);
-  flex: none;
-}
-.pv-svc-dot.on {
-  background: var(--n-success);
-}
-.pv-svc-status-text {
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
+}
+.pv-svc-state {
+  flex: none;
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l3);
+}
+.pv-svc-state.on {
+  color: var(--n-l2);
+}
+.pv-svc-url {
   color: var(--n-l3);
   overflow-wrap: anywhere;
 }
