@@ -5,10 +5,12 @@
 // 功能列表（只读 8 + 写 9）/ 路径（服务地址 + 端口文件）；底部按钮行 = 左件运行状态 + 右件「关闭」钮
 //（MCP 无文件可装，无安装/卸载——「真安装动作 = 写 Agent 配置」，本轮做展示+复制，一键写配置属远期项）。
 // 同日 UI 调整轮（用户实机标注定案）：① 两开关同一行 gap 12（省纵向空间）；② 运行状态挪按钮行左件，
-// 二轮定 = **字重区分**（圆点方案废除）——状态词加粗，运行中 亮色/二级、已停止 亮色/三级（保留层级，
-// 仅开启时升二级），词与地址间 gap 8；③ 接入配置行学 md 代码块 = 圆角矩形包裹（圆角 6 / 底色与描边同
-// 亮色/半透明-4，深缩进子行口径废除）；④ 强调词写法统一 = 空格+[词]+空格（[MCP 服务] / [允许写入] / [只读]，
-// 直角引号与裸加粗废除；行首类别词 只读（8 个）/ 写入（9 个） 为加粗标签不入此例）。
+// 三轮定 = **圆点+字重双指示**（圆点保留——用户澄清要废的是「运行中·http」的间隔中点非绿点）——
+// 圆点 8×8 联通 状态/成功色、断开 亮色/四级；状态词加粗 运行中 亮色/二级、已停止 亮色/三级，三件套 gap 8；
+// ③ 接入配置行学 md 代码块 = 圆角矩形包裹（圆角 6 / 底色与描边同 亮色/半透明-4，深缩进子行口径废除）；
+// ④ 强调词写法统一 = 空格+[词]+空格（[MCP 服务] / [允许写入] / [只读]，直角引号与裸加粗废除；
+// 行首类别词 只读（8 个）/ 写入（9 个） 为加粗标签不入此例）；⑤ **UI 显示名 = MCP 连接器**
+//（用户定：名字不要括号——「你们特别爱加括号」；文档术语 AI 外接通道（MCP）不变，仅 UI 名去括号）。
 // 开关组口径沿退役的 SettingsModal 既有定案（开关左 + 文字右 gap 8，标签 13/18 二级）；
 // 复制钮 = IconButton bare sm copy（既有库件，零新样式）。
 // 状态零 ui store：子窗口 store 快照与主窗口双写竞态（save_ui_settings 整体替换语义），
@@ -92,7 +94,7 @@ async function copyCfg(text: string, name: string): Promise<void> {
   <div class="plugin-window">
     <!-- 顶部拖拽带（AnimatePluginWindow 同口径：通栏 62px，容器与 h1 双挂 data-tauri-drag-region） -->
     <div class="pw-dragband" data-tauri-drag-region>
-      <h1 class="pw-title" data-tauri-drag-region>AI 外接通道（MCP）</h1>
+      <h1 class="pw-title" data-tauri-drag-region>MCP 连接器</h1>
     </div>
     <div class="pw-scroll-wrap">
       <div ref="bodyRef" class="pw-body kit-scroll">
@@ -168,6 +170,7 @@ async function copyCfg(text: string, name: string): Promise<void> {
          圆点 联通=成功色/断开=四级灰 + 状态文字），右件 = 关闭钮） -->
     <div class="pw-actions">
       <span class="svc-status">
+        <span class="svc-dot" :class="{ on: status?.running }" />
         <span class="svc-state" :class="{ on: status?.running }">{{ stateText }}</span>
         <span v-if="status?.url" class="svc-url">{{ status.url }}</span>
       </span>
@@ -295,8 +298,9 @@ async function copyCfg(text: string, name: string): Promise<void> {
   line-height: var(--n-lh-body);
   color: var(--n-l2);
 }
-/* 运行状态（按钮行左件）：字重区分（2026-09-20 用户二轮定，圆点方案废除）——状态词加粗，
-   运行中 亮色/二级、已停止·读取中 亮色/三级（保留原层级，仅开启时升二级）；词与地址间 gap 8 */
+/* 运行状态（按钮行左件）：圆点 + 字重双指示（2026-09-20 用户定——圆点保留，废的是「运行中·http」的
+   间隔中点）——圆点 8×8 联通 状态/成功色、断开 亮色/四级；状态词加粗 运行中 亮色/二级、
+   已停止·读取中 亮色/三级（保留层级，仅开启时升二级）；三件套间 gap 8 */
 .svc-status {
   display: flex;
   align-items: center;
@@ -304,6 +308,16 @@ async function copyCfg(text: string, name: string): Promise<void> {
   min-width: 0;
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
+}
+.svc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--n-l4);
+  flex: none;
+}
+.svc-dot.on {
+  background: var(--n-success);
 }
 .svc-state {
   flex: none;

@@ -2,9 +2,10 @@
 // 插件列表面板（plugins/PluginListPanel）按本清单 + ui.pluginOrder 渲染；详情子窗口经
 // open_plugin_window(plugin_id) 打开（后端白名单 = animate / mcp）。
 // 「批量生成缩略图」业务未立项 = disabled 占位（名称/图标降四级、不响应点击）。
-// 「AI 外接通道（MCP）」（2026-09-20，待办细节清单 09-20 立项）：详情窗 = 服务总开关（启停
-// 17701）+ 允许写入开关（写入闸，从偏好设置弹窗挪入）+ 使用教程/功能列表/路径；状态与开关走
-// commands/mcp.rs 三命令（配置 settings.mcp 子树，不经 ui store 管道——子窗口双写竞态）。
+// 「AI 外接通道（MCP）」（2026-09-20，待办细节清单 09-20 立项；UI 显示名 = MCP 连接器——同日用户定
+// 去括号）：详情窗 = 服务总开关（启停 17701）+ 允许写入开关（写入闸，从偏好设置弹窗挪入）+ 使用教程/
+// 功能列表/路径；状态与开关走 commands/mcp.rs 三命令（配置 settings.mcp 子树，不经 ui store 管道——
+// 子窗口双写竞态）。
 // 图标（命名对照十一批入库）：animate-plugin = Animate 品牌彩色原值；
 // batch-thumbnails = 玻璃质感位图图标（用户直投 批量生产缩略图-icon，base64 内嵌原值）；
 // mcp = MCP 官方插头对接 logo（十三批用户直投，黑线条转 currentColor）。
@@ -24,7 +25,7 @@ export const PLUGIN_CATEGORIES = ["桥接", "格式", "属性", "效率", "其�
 
 export const PLUGINS: readonly PluginMeta[] = [
   { id: "animate", name: "Animate 插件", icon: "animate-plugin", category: "桥接" },
-  { id: "mcp", name: "AI 外接通道（MCP）", icon: "mcp", category: "桥接" },
+  { id: "mcp", name: "MCP 连接器", icon: "mcp", category: "桥接" }, // UI 显示名去括号（2026-09-20 用户定「名字不要加括号」；文档术语 AI 外接通道（MCP）不变）
   { id: "batch-thumbnails", name: "批量生成缩略图", icon: "batch-thumbnails", category: "桥接", disabled: true },
 ];
 

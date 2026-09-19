@@ -160,7 +160,7 @@ const mcpWriteOn = ref(false);
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div class="pv-aw-shell pv-aw-shell--mcp">
-            <h1 class="pv-aw-title">AI 外接通道（MCP）</h1>
+            <h1 class="pv-aw-title">MCP 连接器</h1>
             <section class="pv-aw-group">
               <h2 class="pv-aw-sub">服务</h2>
               <div class="pv-svc-row">
@@ -211,6 +211,7 @@ const mcpWriteOn = ref(false);
             <div class="pv-aw-spacer" />
             <div class="pv-aw-actions pv-aw-actions--mcp">
               <span class="pv-svc-status">
+                <span class="pv-svc-dot on" />
                 <span class="pv-svc-state on">运行中</span>
                 <span class="pv-svc-url">http://127.0.0.1:17701/mcp</span>
               </span>
@@ -222,7 +223,8 @@ const mcpWriteOn = ref(false);
           <span class="pv-cap">
             版式仿 Animate 窗；两开关同一行 gap 12（开关左 + 标签右 gap 8 沿退役 SettingsModal 口径），服务关时「允许写入」禁用；
             配置行 = 圆角矩形块（圆角 6 / 亮色/半透明-4 底与描边，学 md 代码块）+ IconButton bare sm copy；
-            按钮行左件 = 运行状态（字重区分：状态词加粗，运行中亮二级 / 已停止留三级，词与地址 gap 8）；无安装/卸载钮（MCP 无文件可装）
+            按钮行左件 = 运行状态（圆点+字重双指示：圆点 联通成功色/断开四级灰 + 状态词加粗 运行中二级/已停止三级，gap 8）；
+            无安装/卸载钮（MCP 无文件可装）
           </span>
         </div>
       </div>
@@ -457,7 +459,8 @@ const mcpWriteOn = ref(false);
   justify-content: space-between;
   align-items: center;
 }
-/* 运行状态（按钮行左件）：字重区分——状态词加粗 运行中二级/已停止三级，词与地址 gap 8 */
+/* 运行状态（按钮行左件）：圆点+字重双指示——圆点 8×8 联通成功色/断开四级灰；状态词加粗 运行中二级/
+   已停止三级；三件套 gap 8 */
 .pv-svc-status {
   display: flex;
   align-items: center;
@@ -465,6 +468,16 @@ const mcpWriteOn = ref(false);
   min-width: 0;
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
+}
+.pv-svc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--n-l4);
+  flex: none;
+}
+.pv-svc-dot.on {
+  background: var(--n-success);
 }
 .pv-svc-state {
   flex: none;
