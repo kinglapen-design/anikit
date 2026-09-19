@@ -1,11 +1,14 @@
 <script setup lang="ts">
 // AI 外接通道（MCP）详情子窗口（2026-09-20，待办细节清单 09-20 立项；版式仿 AnimatePluginWindow——
 // 544×640 非模态独立窗，可移动/缩放、单例聚焦，open_plugin_window 后端命令，URL ?plugin=mcp 分发）：
-// 四组内容 = 服务（总开关 + 允许写入开关 + 运行状态行）/ 使用教程（三种 Agent 接入配置 + 复制钮）/
-// 功能列表（只读 8 + 写 9）/ 路径（服务地址 + 端口文件）；底部仅「关闭」钮（MCP 无文件可装，
-// 无安装/卸载——「真安装动作 = 写 Agent 配置」，本轮做展示+复制，一键写配置属远期项）。
-// 开关行口径沿退役的 SettingsModal 既有定案（开关左 + 文字右 gap 8，标签 13/18 二级，说明 13/18 三级）；
-// 配置行 = pw-lines 深缩进子行（24，从属于上一条 bullet）+ IconButton bare sm copy 复制。
+// 四组内容 = 服务（MCP 服务 + 允许写入 两开关同一行）/ 使用教程（三种 Agent 接入配置 + 复制钮）/
+// 功能列表（只读 8 + 写 9）/ 路径（服务地址 + 端口文件）；底部按钮行 = 左件运行状态 + 右件「关闭」钮
+//（MCP 无文件可装，无安装/卸载——「真安装动作 = 写 Agent 配置」，本轮做展示+复制，一键写配置属远期项）。
+// 同日 UI 调整轮（用户实机标注定案）：① 两开关同一行 gap 12（省纵向空间）；② 运行状态挪按钮行左下角——
+// 圆点 8×8（形态参 文件卡片-字体 安装按钮圆角 99）联通=状态/成功色、断开=亮色/四级 + 13/18 三级文字；
+// ③ 接入配置行学 md 代码块 = 圆角矩形包裹（圆角 6 / 底色与描边同 亮色/半透明-4，深缩进子行口径废除）。
+// 开关组口径沿退役的 SettingsModal 既有定案（开关左 + 文字右 gap 8，标签 13/18 二级）；
+// 复制钮 = IconButton bare sm copy（既有库件，零新样式）。
 // 状态零 ui store：子窗口 store 快照与主窗口双写竞态（save_ui_settings 整体替换语义），
 // 两开关直走 commands/mcp.rs（settings.mcp 子树单写点），动作后以回包校正本地态（失败不回滚假象）。
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
@@ -91,27 +94,26 @@ async function copyCfg(text: string, name: string): Promise<void> {
     </div>
     <div class="pw-scroll-wrap">
       <div ref="bodyRef" class="pw-body kit-scroll">
-        <!-- 服务组：总开关（启停 17701）+ 允许写入（服务关时禁用）+ 运行状态行 -->
+        <!-- 服务组：两开关同一行（2026-09-20 用户定：省纵向空间，两开关间 gap 12） -->
         <section class="pw-group">
           <h2 class="pw-sub">服务</h2>
-          <div class="svc-lines">
-            <div class="svc-row">
+          <div class="svc-row">
+            <span class="svc-item">
               <SwitchButton
                 :model-value="status?.serverEnabled ?? false"
                 :disabled="busy || !status"
                 @update:model-value="onServerToggle"
               />
               <span class="svc-label">MCP 服务</span>
-            </div>
-            <div class="svc-row">
+            </span>
+            <span class="svc-item">
               <SwitchButton
                 :model-value="status?.writeEnabled ?? false"
                 :disabled="busy || !status?.serverEnabled"
                 @update:model-value="onWriteToggle"
               />
               <span class="svc-label">允许写入</span>
-            </div>
-            <p class="svc-status">{{ statusText }}</p>
+            </span>
           </div>
         </section>
         <section class="pw-group">
@@ -160,8 +162,13 @@ async function copyCfg(text: string, name: string): Promise<void> {
       </div>
       <ScrollThumb :body="bodyRef" />
     </div>
-    <!-- 按钮行（稿口径同 Animate 窗：右对齐 gap 8 / 高 38；宽自适应内容 + 左右 48px） -->
+    <!-- 按钮行（稿口径同 Animate 窗：高 38；左件 = 运行状态（2026-09-20 用户定挪左下角：
+         圆点 联通=成功色/断开=四级灰 + 状态文字），右件 = 关闭钮） -->
     <div class="pw-actions">
+      <span class="svc-status">
+        <span class="svc-dot" :class="{ on: status?.running }" />
+        <span class="svc-status-text">{{ statusText }}</span>
+      </span>
       <span class="pw-btn">
         <ActionButton label="关闭" variant="cancel" size="lg" @click="closeWin" />
       </span>
@@ -246,12 +253,17 @@ async function copyCfg(text: string, name: string): Promise<void> {
   font-weight: var(--n-fw-bold);
   color: var(--n-l2);
 }
-/* 接入配置行：从属于上一条 bullet 的深缩进子行（无自身 bullet），配置文本长串折行 + 复制钮贴右 */
+/* 接入配置块（2026-09-20 用户定：学 md 代码块——圆角矩形包裹，圆角 6 / 底色与描边同 亮色/半透明-4，
+   描边 inside 不占空间 §口径；padding 6 8 就近套间距档）：无自身 bullet、通栏（深缩进子行口径废除），
+   文本长串折行 + 复制钮贴右 */
 .pw-lines li.cfg-row {
   display: flex;
   align-items: flex-start;
   gap: var(--n-space-6);
-  padding-left: var(--n-space-24);
+  padding: var(--n-space-6) var(--n-space-8);
+  background: var(--n-l-a4);
+  box-shadow: inset 0 0 0 1px var(--n-l-a4);
+  border-radius: var(--n-radius-6);
 }
 .pw-lines li.cfg-row::before {
   content: none;
@@ -265,13 +277,13 @@ async function copyCfg(text: string, name: string): Promise<void> {
   flex: none;
   margin-top: 1px; /* 与首行文字基线对齐（14 盒对 18 行高） */
 }
-/* 服务组行组（开关行口径沿退役 SettingsModal 定案：开关左 + 文字右 gap 8；说明 13/18 三级） */
-.svc-lines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--n-space-6);
-}
+/* 服务组：两开关同一行 gap 12（2026-09-20 用户定）；单开关组内 = 开关左 + 文字右 gap 8（沿退役 SettingsModal 定案），标签 13/18 二级 */
 .svc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-12);
+}
+.svc-item {
   display: flex;
   align-items: center;
   gap: var(--n-space-8);
@@ -281,7 +293,25 @@ async function copyCfg(text: string, name: string): Promise<void> {
   line-height: var(--n-lh-body);
   color: var(--n-l2);
 }
+/* 运行状态（按钮行左件）：圆点 8×8（形态参 文件卡片-字体 安装按钮圆角 99）+ 13/18 三级文字；
+   联通 = 状态/成功色，断开/读取中 = 亮色/四级（2026-09-20 用户定色档） */
 .svc-status {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-6);
+  min-width: 0;
+}
+.svc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--n-l4);
+  flex: none;
+}
+.svc-dot.on {
+  background: var(--n-success);
+}
+.svc-status-text {
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
   color: var(--n-l3);
@@ -291,12 +321,13 @@ async function copyCfg(text: string, name: string): Promise<void> {
 .pw-path {
   overflow-wrap: anywhere;
 }
-/* 按钮行（稿：右对齐 gap 8 / 高 38） */
+/* 按钮行（稿：高 38；左件状态 + 右件关闭 = space-between——纯按钮稿为右对齐，本窗有左件 2026-09-20 用户定） */
 .pw-actions {
   flex: none;
   height: 38px;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--n-space-8);
 }
 .pw-btn {

@@ -163,16 +163,15 @@ const mcpWriteOn = ref(false);
             <h1 class="pv-aw-title">AI 外接通道（MCP）</h1>
             <section class="pv-aw-group">
               <h2 class="pv-aw-sub">服务</h2>
-              <div class="pv-svc-lines">
-                <div class="pv-svc-row">
+              <div class="pv-svc-row">
+                <span class="pv-svc-item">
                   <SwitchButton v-model="mcpSvcOn" />
                   <span class="pv-svc-label">MCP 服务</span>
-                </div>
-                <div class="pv-svc-row">
+                </span>
+                <span class="pv-svc-item">
                   <SwitchButton v-model="mcpWriteOn" :disabled="!mcpSvcOn" />
                   <span class="pv-svc-label">允许写入</span>
-                </div>
-                <p class="pv-svc-status">运行中 · http://127.0.0.1:17701/mcp</p>
+                </span>
               </div>
             </section>
             <section class="pv-aw-group">
@@ -210,15 +209,20 @@ const mcpWriteOn = ref(false);
               </ul>
             </section>
             <div class="pv-aw-spacer" />
-            <div class="pv-aw-actions">
+            <div class="pv-aw-actions pv-aw-actions--mcp">
+              <span class="pv-svc-status">
+                <span class="pv-svc-dot on" />
+                <span class="pv-svc-status-text">运行中 · http://127.0.0.1:17701/mcp</span>
+              </span>
               <span class="pv-aw-btn" style="width: 128px">
                 <ActionButton label="关闭" variant="cancel" size="lg" />
               </span>
             </div>
           </div>
           <span class="pv-cap">
-            版式仿 Animate 窗；开关行 = SwitchButton 左 + 标签右 gap 8（退役 SettingsModal 口径沿入），服务关时「允许写入」禁用；
-            配置行 = 深缩进 24 子行 + IconButton bare sm copy；无安装/卸载钮（MCP 无文件可装）
+            版式仿 Animate 窗；两开关同一行 gap 12（开关左 + 标签右 gap 8 沿退役 SettingsModal 口径），服务关时「允许写入」禁用；
+            配置行 = 圆角矩形块（圆角 6 / 亮色/半透明-4 底与描边，学 md 代码块）+ IconButton bare sm copy；
+            按钮行左件 = 运行状态（圆点 联通成功色 / 断开四级灰）；无安装/卸载钮（MCP 无文件可装）
           </span>
         </div>
       </div>
@@ -429,16 +433,17 @@ const mcpWriteOn = ref(false);
   display: block;
   height: 38px;
 }
-/* —— MCP 详情窗复刻（与 plugins/McpPluginWindow.vue 口径同步，2026-09-20）：壳高 640，余同 pv-aw 系 —— */
+/* —— MCP 详情窗复刻（与 plugins/McpPluginWindow.vue 口径同步，2026-09-20 含同日调整轮：两开关一行 /
+   运行状态挪按钮行左件（圆点 成功色·四级灰）/ 配置行圆角矩形块化 圆角 6·a4 底与描边）：壳高 640，余同 pv-aw 系 —— */
 .pv-aw-shell--mcp {
   height: 640px;
 }
-.pv-svc-lines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--n-space-6);
-}
 .pv-svc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-12);
+}
+.pv-svc-item {
   display: flex;
   align-items: center;
   gap: var(--n-space-8);
@@ -448,18 +453,41 @@ const mcpWriteOn = ref(false);
   line-height: var(--n-lh-body);
   color: var(--n-l2);
 }
+.pv-aw-actions--mcp {
+  justify-content: space-between;
+  align-items: center;
+}
 .pv-svc-status {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-6);
+  min-width: 0;
+}
+.pv-svc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--n-l4);
+  flex: none;
+}
+.pv-svc-dot.on {
+  background: var(--n-success);
+}
+.pv-svc-status-text {
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
   color: var(--n-l3);
   overflow-wrap: anywhere;
 }
-/* 接入配置行：深缩进 24 子行（无 bullet）+ copy 钮贴右 */
+/* 接入配置块：学 md 代码块——圆角矩形（圆角 6 / 底色与描边同 亮色/半透明-4），copy 钮贴右 */
 .pv-aw-lines li.pv-cfg-row {
   display: flex;
   align-items: flex-start;
   gap: var(--n-space-6);
-  padding-left: var(--n-space-24);
+  padding: var(--n-space-6) var(--n-space-8);
+  background: var(--n-l-a4);
+  box-shadow: inset 0 0 0 1px var(--n-l-a4);
+  border-radius: var(--n-radius-6);
 }
 .pv-aw-lines li.pv-cfg-row::before {
   content: none;
