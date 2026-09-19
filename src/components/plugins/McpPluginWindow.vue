@@ -1,0 +1,312 @@
+<script setup lang="ts">
+// AI 外接通道（MCP）详情子窗口（2026-09-20，待办细节清单 09-20 立项；版式仿 AnimatePluginWindow——
+// 544×640 非模态独立窗，可移动/缩放、单例聚焦，open_plugin_window 后端命令，URL ?plugin=mcp 分发）：
+// 四组内容 = 服务（总开关 + 允许写入开关 + 运行状态行）/ 使用教程（三种 Agent 接入配置 + 复制钮）/
+// 功能列表（只读 8 + 写 9）/ 路径（服务地址 + 端口文件）；底部仅「关闭」钮（MCP 无文件可装，
+// 无安装/卸载——「真安装动作 = 写 Agent 配置」，本轮做展示+复制，一键写配置属远期项）。
+// 开关行口径沿退役的 SettingsModal 既有定案（开关左 + 文字右 gap 8，标签 13/18 二级，说明 13/18 三级）；
+// 配置行 = pw-lines 深缩进子行（24，从属于上一条 bullet）+ IconButton bare sm copy 复制。
+// 状态零 ui store：子窗口 store 快照与主窗口双写竞态（save_ui_settings 整体替换语义），
+// 两开关直走 commands/mcp.rs（settings.mcp 子树单写点），动作后以回包校正本地态（失败不回滚假象）。
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import ActionButton from "../buttons/ActionButton.vue";
+import IconButton from "../buttons/IconButton.vue";
+import SwitchButton from "../buttons/SwitchButton.vue";
+import ScrollThumb from "../ScrollThumb.vue";
+import { getMcpStatus, setMcpServerEnabled, setMcpWriteEnabled, type McpStatus } from "../../lib/plugins";
+import { useToastStore } from "../../stores/toast";
+
+const status = ref<McpStatus | null>(null);
+const busy = ref(false); // 开关动作互斥
+const bodyRef = ref<HTMLElement>();
+const toast = useToastStore();
+
+onMounted(async () => {
+  status.value = await getMcpStatus();
+  window.addEventListener("keydown", onKeydown, true);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKeydown, true);
+});
+
+// Esc = 关窗口（与「关闭」钮同径；本窗无菜单/输入框争用 Esc）
+function onKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape") void getCurrentWindow().close();
+}
+function closeWin(): void {
+  void getCurrentWindow().close();
+}
+
+// 服务总开关 / 写入闸：不用 v-model 直绑——点击只发动作，本地态以 command 回包校正
+async function onServerToggle(enabled: boolean): Promise<void> {
+  if (busy.value) return;
+  busy.value = true;
+  try {
+    const st = await setMcpServerEnabled(enabled);
+    if (st) status.value = st;
+  } finally {
+    busy.value = false;
+  }
+}
+async function onWriteToggle(enabled: boolean): Promise<void> {
+  if (busy.value) return;
+  busy.value = true;
+  try {
+    const st = await setMcpWriteEnabled(enabled);
+    if (st) status.value = st;
+  } finally {
+    busy.value = false;
+  }
+}
+
+// 状态行：运行中带实际地址；已停止（总开关关 / 启动失败）统一文案
+const statusText = computed(() => {
+  const st = status.value;
+  if (!st) return "读取中…";
+  return st.running && st.url ? `运行中 · ${st.url}` : "已停止";
+});
+
+// 接入配置文本：服务未起时按固定端口 17701 兜底（Agent 侧本来就是静态配置）
+const url = computed(() => status.value?.url ?? "http://127.0.0.1:17701/mcp");
+const cfgKimi = computed(() => `{ "mcpServers": { "anikit": { "url": "${url.value}" } } }`);
+const cfgCodex = computed(() => `[mcp_servers.anikit]\nurl = "${url.value}"`);
+const cfgClaude = computed(() => `claude mcp add --transport http anikit ${url.value}`);
+
+async function copyCfg(text: string, name: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.notify({ message: `${name} 接入配置已复制`, icon: "success" });
+  } catch {
+    toast.notify({ message: "复制失败", icon: "fail" });
+  }
+}
+</script>
+
+<template>
+  <div class="plugin-window">
+    <!-- 顶部拖拽带（AnimatePluginWindow 同口径：通栏 62px，容器与 h1 双挂 data-tauri-drag-region） -->
+    <div class="pw-dragband" data-tauri-drag-region>
+      <h1 class="pw-title" data-tauri-drag-region>AI 外接通道（MCP）</h1>
+    </div>
+    <div class="pw-scroll-wrap">
+      <div ref="bodyRef" class="pw-body kit-scroll">
+        <!-- 服务组：总开关（启停 17701）+ 允许写入（服务关时禁用）+ 运行状态行 -->
+        <section class="pw-group">
+          <h2 class="pw-sub">服务</h2>
+          <div class="svc-lines">
+            <div class="svc-row">
+              <SwitchButton
+                :model-value="status?.serverEnabled ?? false"
+                :disabled="busy || !status"
+                @update:model-value="onServerToggle"
+              />
+              <span class="svc-label">MCP 服务</span>
+            </div>
+            <div class="svc-row">
+              <SwitchButton
+                :model-value="status?.writeEnabled ?? false"
+                :disabled="busy || !status?.serverEnabled"
+                @update:model-value="onWriteToggle"
+              />
+              <span class="svc-label">允许写入</span>
+            </div>
+            <p class="svc-status">{{ statusText }}</p>
+          </div>
+        </section>
+        <section class="pw-group">
+          <h2 class="pw-sub">使用教程</h2>
+          <ul class="pw-lines">
+            <li>开启上方 <b>[MCP 服务]</b>（默认开），AniKit 会在本机拉起 MCP 服务供外部 Agent 接入。</li>
+            <li>在你的 Agent 工具里接入 AniKit（三选一，点右侧复制钮拷贝配置）：</li>
+            <li class="cfg-row">
+              <span class="cfg-text"><b>Kimi Code</b>：mcp.json 加 {{ cfgKimi }}</span>
+              <IconButton name="copy" variant="bare" size="sm" title="复制" @click="copyCfg(cfgKimi, 'Kimi Code')" />
+            </li>
+            <li class="cfg-row">
+              <span class="cfg-text"><b>Codex</b>：config.toml 加 [mcp_servers.anikit] 与 url = "{{ url }}"</span>
+              <IconButton name="copy" variant="bare" size="sm" title="复制" @click="copyCfg(cfgCodex, 'Codex')" />
+            </li>
+            <li class="cfg-row">
+              <span class="cfg-text"><b>Claude Code</b>：运行 {{ cfgClaude }}</span>
+              <IconButton name="copy" variant="bare" size="sm" title="复制" @click="copyCfg(cfgClaude, 'Claude Code')" />
+            </li>
+            <li>
+              接入后 Agent 默认只能<b>只读</b>（搜索、浏览、看图等 8 个工具）；需要 Agent 写入时开启上方
+              <b>[允许写入]</b>（9 个写工具；彻底删除永不经 MCP，回收站清空须 APP 内人工）。
+            </li>
+          </ul>
+        </section>
+        <section class="pw-group">
+          <h2 class="pw-sub">功能列表</h2>
+          <ul class="pw-lines">
+            <li>
+              <b>只读（8 个）</b>：当前库状态 / 搜索素材 / 文件夹树 / 文件夹资产清单 / 资产详情 /
+              源文件与缩略图磁盘路径（看图入口）/ 读文本资产 / 档案列表。
+            </li>
+            <li>
+              <b>写入（9 个，需开「允许写入」）</b>：新建文档 / 覆写文本资产 / 批量改名 / 新建文件夹 /
+              资产移入文件夹 / 移动文件夹 / 链接汇总 / 导入磁盘文件入库 / 丢回收站（可逆，APP 内 Ctrl+Z 可撤）。
+            </li>
+          </ul>
+        </section>
+        <section class="pw-group">
+          <h2 class="pw-sub">路径</h2>
+          <ul class="pw-lines">
+            <li class="pw-path">服务地址: {{ status?.url ?? "未运行（固定端口 17701 优先，被占回退动态）" }}</li>
+            <li class="pw-path">端口文件: %APPDATA%\AniKit\mcp-server.port</li>
+          </ul>
+        </section>
+      </div>
+      <ScrollThumb :body="bodyRef" />
+    </div>
+    <!-- 按钮行（稿口径同 Animate 窗：右对齐 gap 8 / 高 38；宽自适应内容 + 左右 48px） -->
+    <div class="pw-actions">
+      <span class="pw-btn">
+        <ActionButton label="关闭" variant="cancel" size="lg" @click="closeWin" />
+      </span>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+/* 版式与 AnimatePluginWindow 同口径（稿 544×538 系：padding 24 / 列 gap 24；窗口壳底色/描边/圆角
+   = App.vue .window 承担，本组件只画内容面板）；flex:1 必填（App .window 横向 flex） */
+.plugin-window {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-24);
+  padding: var(--n-space-24);
+}
+.pw-title {
+  margin: 0;
+  font-size: var(--n-fs-title);
+  line-height: var(--n-lh-title);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l1);
+}
+/* 顶部拖拽带 = 通栏 62px（负 margin 三向扩；margin-bottom -12 与 padding-bottom 12 对消） */
+.pw-dragband {
+  flex: none;
+  margin: calc(-1 * var(--n-space-24)) calc(-1 * var(--n-space-24)) calc(-1 * var(--n-space-12));
+  padding: var(--n-space-24) var(--n-space-24) var(--n-space-12);
+}
+/* 组区滚动包裹：relative = ScrollThumb 锚点；margin-right 负扩 24 = 滚轮紧贴窗口右缘 */
+.pw-scroll-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin-right: calc(-1 * var(--n-space-24));
+}
+.pw-body {
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-24);
+  padding-right: var(--n-space-24);
+}
+.pw-group {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-12);
+}
+.pw-sub {
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
+}
+/* 行组（稿 提示文字 gap 6）：13/18 三级；bullet 悬挂缩进 12 */
+.pw-lines {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-6);
+}
+.pw-lines li {
+  position: relative;
+  padding-left: var(--n-space-12);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
+}
+.pw-lines li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.pw-lines b {
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
+}
+/* 接入配置行：从属于上一条 bullet 的深缩进子行（无自身 bullet），配置文本长串折行 + 复制钮贴右 */
+.pw-lines li.cfg-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--n-space-6);
+  padding-left: var(--n-space-24);
+}
+.pw-lines li.cfg-row::before {
+  content: none;
+}
+.cfg-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cfg-row .ic-btn {
+  flex: none;
+  margin-top: 1px; /* 与首行文字基线对齐（14 盒对 18 行高） */
+}
+/* 服务组行组（开关行口径沿退役 SettingsModal 定案：开关左 + 文字右 gap 8；说明 13/18 三级） */
+.svc-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-6);
+}
+.svc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-8);
+}
+.svc-label {
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
+}
+.svc-status {
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
+  overflow-wrap: anywhere;
+}
+/* 路径行：长路径折行 */
+.pw-path {
+  overflow-wrap: anywhere;
+}
+/* 按钮行（稿：右对齐 gap 8 / 高 38） */
+.pw-actions {
+  flex: none;
+  height: 38px;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--n-space-8);
+}
+.pw-btn {
+  flex: none;
+  display: block;
+  height: 38px;
+}
+/* 按钮宽自适应内容 + 左右 48px（2026-09-13 实机走查用户定稿值） */
+.pw-actions .pw-btn :deep(.act-btn) {
+  width: auto;
+  padding: var(--n-space-8) 48px;
+}
+</style>

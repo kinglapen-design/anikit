@@ -8,7 +8,6 @@ import IconButton from "../../components/buttons/IconButton.vue";
 import ConfirmModal from "../../components/modals/ConfirmModal.vue";
 import CreateLibraryModal from "../../components/CreateLibraryModal.vue";
 import MergeLibraryModal from "../../components/MergeLibraryModal.vue";
-import SettingsModal from "../../components/SettingsModal.vue";
 import ImportDialog from "../../components/ImportDialog.vue";
 import SequenceDialog from "../../components/SequenceDialog.vue";
 import TextInput from "../../components/inputs/TextInput.vue";
@@ -19,7 +18,6 @@ import type { ImportDraft } from "../../stores/content";
 const demoOpen = ref(false);
 const createOpen = ref(false);
 const mergeOpen = ref(false);
-const settingsOpen = ref(false);
 const importFilesOpen = ref(false);
 const importFolderOpen = ref(false);
 const seqOpen = ref(false);
@@ -94,7 +92,7 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
     </ConfirmModal>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">功能模态窗（BaseModal 共享壳，布局/模态窗口 四稿：创建 400 / 合并 498 / 导入·序列帧 312 / 移动 460 framed；另：偏好设置 framed 400，2026-09-19 就近套稿值；按钮宽自适应内容 + 左右 48px 次左主右）</h3>
+      <h3 class="pv-group-title">功能模态窗（BaseModal 共享壳，布局/模态窗口 四稿：创建 400 / 合并 498 / 导入·序列帧 312 / 移动 460 framed；按钮宽自适应内容 + 左右 48px 次左主右）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell" style="width: 240px">
           <ActionButton label="创建资源库" variant="solid" size="md" @click="createOpen = true" />
@@ -103,13 +101,6 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
         <div class="pv-demo-cell" style="width: 240px">
           <ActionButton label="合并资源库" variant="solid" size="md" @click="mergeOpen = true" />
           <span class="pv-cap">真实弹出：行对勾切换可验；确认钮未接动作（合并后端排期）</span>
-        </div>
-        <div class="pv-demo-cell" style="width: 240px">
-          <ActionButton label="偏好设置" variant="solid" size="md" @click="settingsOpen = true" />
-          <span class="pv-cap">
-            真实弹出（2026-09-19 MCP 二期配套）：framed 壳 400 宽（就近套创建稿值，偏好设置稿未出待补）；
-            开关直写全局设置（点动即生效，预览环境同）
-          </span>
         </div>
       </div>
       <div class="pv-demo-row">
@@ -129,7 +120,6 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
     </div>
     <CreateLibraryModal v-if="createOpen" @close="createOpen = false" />
     <MergeLibraryModal v-if="mergeOpen" :names="mockLibNames" @close="mergeOpen = false" />
-    <SettingsModal v-if="settingsOpen" @close="settingsOpen = false" />
     <ImportDialog
       v-if="importFilesOpen"
       :draft="draftFiles"

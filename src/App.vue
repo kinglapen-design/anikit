@@ -10,7 +10,7 @@
 // 全局键盘 / 侧栏收展动画 / 窗口几何持久化已拆 lib（useGlobalKeys / useSidebarAnim /
 // windowState，2026-08-12，规范第 3 条行数控制）。
 // 子窗口 query 分发（2026-09-06 插件窗轮）：?preview={assetKey} = 预览子窗口；
-// ?plugin={id} = 插件详情子窗口（AnimatePluginWindow，仅 animate；未知 id = 错误提示帧）——
+// ?plugin={id} = 插件详情子窗口（AnimatePluginWindow / McpPluginWindow；未知 id = 错误提示帧）——
 // 子窗口只渲染各自面板（无三栏无弹窗），通知条锚点两子窗口同挂。
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
@@ -26,6 +26,7 @@ import SplitBar from "./components/SplitBar.vue";
 import AppIcon from "./components/AppIcon.vue";
 import PreviewWindow from "./components/PreviewWindow.vue";
 import AnimatePluginWindow from "./components/plugins/AnimatePluginWindow.vue";
+import McpPluginWindow from "./components/plugins/McpPluginWindow.vue";
 import PluginListPanel from "./components/plugins/PluginListPanel.vue";
 import SetupWizard from "./components/SetupWizard.vue";
 import CreateLibraryModal from "./components/CreateLibraryModal.vue";
@@ -45,7 +46,6 @@ import GroupManageDialog from "./components/GroupManageDialog.vue";
 import GroupEditDialog from "./components/GroupEditDialog.vue";
 import PropsDialog from "./components/PropsDialog.vue";
 import DescEditDialog from "./components/DescEditDialog.vue";
-import SettingsModal from "./components/SettingsModal.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import AppConfirm from "./components/AppConfirm.vue";
 import ConfirmModal from "./components/modals/ConfirmModal.vue";
@@ -253,6 +253,7 @@ async function togglePin(): Promise<void> {
     <!-- 插件详情子窗口（?plugin={id} 分发，?preview= 先例）：只渲染插件面板（无三栏无弹窗）；
          未知 id = 错误提示帧 -->
     <AnimatePluginWindow v-else-if="pluginParam === 'animate'" />
+    <McpPluginWindow v-else-if="pluginParam === 'mcp'" />
     <div v-else-if="pluginParam" class="plugin-unknown">未知插件：{{ pluginParam }}</div>
     <!-- 子窗口的通知条挂点（6.0；主窗口通知族挂 DockHost 内统一锚点；预览 / 插件详情同挂） -->
     <div v-if="previewParam || pluginParam" class="notice-anchor">
@@ -394,8 +395,6 @@ async function togglePin(): Promise<void> {
          文件与档案同做；须在 AppConfirm 之前——池内 × 删除弹确认窗，后渲染者在上 -->
     <PropsDialog v-if="ui.propsEdit" />
     <DescEditDialog v-if="ui.descEdit" />
-    <!-- 偏好设置弹窗（2026-09-19 MCP 二期写入闸配套）：菜单栏主菜单「偏好设置」置位 settingsOpen -->
-    <SettingsModal v-if="ui.settingsOpen" @close="ui.settingsOpen = false" />
     <!-- 全局右键菜单宿主（6.3：lib/contextMenus 单一实例，六上下文共用） -->
     <!-- 插件列表面板宿主（2026-09-06 插件窗轮：lib/pluginPanel 单一实例，三入口共用——
          菜单栏「插件」钮 / 工具栏 plugin 钮 / 预览标题栏 plugin 钮；预览子窗口同可开） -->

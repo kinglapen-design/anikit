@@ -29,8 +29,10 @@ import {
   PLUGINS,
   PLUGIN_CATEGORIES,
   getCepInstallStatus,
+  getMcpStatus,
   installCepPlugin,
   openPluginWindow,
+  setMcpServerEnabled,
   uninstallCepPlugin,
   type PluginMeta,
 } from "../../lib/plugins";
@@ -148,9 +150,26 @@ function onItemClick(p: PluginMeta, e: MouseEvent): void {
 }
 
 // 更多菜单（稿 prose：打开 / 安装或卸载 / 配置快捷键）——配置快捷键业务未立项占位禁用；
-// 安装/卸载按 Animate 安装态动态文案（开菜单时实时拉状态）
+// 安装/卸载按 Animate 安装态动态文案（开菜单时实时拉状态）；
+// MCP 条目（2026-09-20）：安装位换 启动服务/停止服务（开菜单时 getMcpStatus 动态文案）
 async function onMore(p: PluginMeta, e: MouseEvent): Promise<void> {
   if (p.disabled) return;
+  if (p.id === "mcp") {
+    const st = await getMcpStatus();
+    const running = st?.running ?? false;
+    openContextMenu(e, [
+      {
+        label: "打开",
+        action: () => {
+          emit("close");
+          void openPluginWindow(p.id);
+        },
+      },
+      { label: running ? "停止服务" : "启动服务", action: () => void setMcpServerEnabled(!running) },
+      { label: "配置快捷键", disabled: true },
+    ]);
+    return;
+  }
   if (p.id !== "animate") return;
   const st = await getCepInstallStatus();
   const installed = st?.installed ?? false;

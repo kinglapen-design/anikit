@@ -4,7 +4,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 
 ## 连接
 
-服务随 APP 启动，地址恒定 `http://127.0.0.1:17701/mcp`（固定端口优先；被占回退动态，实际端口以全局配置目录 `AniKit/mcp-server.port` 为准）。各 Agent 工具配置：
+服务默认随 APP 启动（插件面板「AI 外接通道（MCP）」详情窗可启停——停服即删端口文件），地址恒定 `http://127.0.0.1:17701/mcp`（固定端口优先；被占回退动态，实际端口以全局配置目录 `AniKit/mcp-server.port` 为准）。各 Agent 工具配置：
 
 - Kimi Code：`mcp.json` 加 `{ "mcpServers": { "anikit": { "url": "http://127.0.0.1:17701/mcp" } } }`（用户级 `~/.kimi-code/mcp.json` 或项目级 `.kimi-code/mcp.json`；会话中途添加只对新会话生效）
 - Codex：`config.toml` 加 `[mcp_servers.anikit]` + `url = "http://127.0.0.1:17701/mcp"`，重启会话
@@ -34,7 +34,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 
 ## 写入开关（二期，默认关）
 
-九个写工具受**全局写入开关**门禁：APP 菜单栏「偏好设置」→「允许 MCP 写入」（持久化于全局 config.json `settings.ui.mcpWriteEnabled`，默认关）。开关**逐次生效**——写调用每次都现查：关态一律回工具级错误「MCP 写入未开启（偏好设置里可开启）」，开态直接执行。写前建议流程：
+九个写工具受**全局写入开关**门禁：插件面板「AI 外接通道（MCP）」详情窗 →「允许写入」（持久化于全局 config.json `settings.mcp.writeEnabled`，默认关；2026-09-20 从偏好设置弹窗挪入，旧 settings.ui.mcpWriteEnabled 自动迁移）。开关**逐次生效**——写调用每次都现查：关态一律回工具级错误「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」，开态直接执行。写前建议流程：
 
 1. `write_text_asset` 覆写内容**不进撤销**（与 APP 内编辑同口径）——先 `read_text_asset` 留底再覆写；
 2. `import_paths` **不进撤销**（导入 = 资产池新增，撤销体系不覆盖）——但冲突策略不阻断：重复导入同文件只会 `skippedDuplicate` 回已有 id，放心重试；
@@ -63,7 +63,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 
 ## 纪律红线
 
-- **写入先确认开关**：写工具默认关闸，回「MCP 写入未开启」时提示用户去偏好设置开启，不要重试刷屏。
+- **写入先确认开关**：写工具默认关闸，回「MCP 写入未开启」时提示用户去插件面板 MCP 详情窗开启，不要重试刷屏。
 - **路径不缓存**：资产磁盘名随库内重命名同步变化，路径必须每次现取现用。
 - 浏览走文件夹树 / 搜索入口按 id 直达，不要全目录枚举 assets 池。
 

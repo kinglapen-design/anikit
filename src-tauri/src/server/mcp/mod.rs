@@ -11,10 +11,16 @@
 //!
 //! 二期首批写工具（2026-09-19 定，tools/write.rs）：create_document / write_text_asset /
 //! rename_placements 三个，annotations(read_only_hint = false)。**写入闸 = 形态 A**：
-//! 全局开关 config.json settings.ui.mcpWriteEnabled（默认关，偏好设置弹窗开启），写调用
-//! 逐次检查（write_gate，core::config 无缓存、低频直读），关态回工具级错误「MCP 写入未开启」；
+//! 全局开关 config.json settings.mcp.writeEnabled（默认关，插件面板 MCP 详情窗开启——
+//! 2026-09-20 从偏好设置弹窗挪入，旧落点 settings.ui.mcpWriteEnabled 由 core::config 一次性迁移），
+//! 写调用逐次检查（write_gate，core::config 无缓存、低频直读），关态回工具级错误「MCP 写入未开启」；
 //! 撤销口径 = create_document / rename_placements 进撤销（复用 commands::operations 抽出的
 //! _op 整段，单写点 + 单撤销步），write_text_asset 不进撤销（与 APP 内文本编辑同口径，2026-08-23 定）。
+//!
+//! 服务总开关（2026-09-20 插件面板 MCP 详情窗配套）：settings.mcp.serverEnabled 缺省开——
+//! init 读配置决定是否启动；详情窗经 commands/mcp.rs 随时启停（全局 MCP_HANDLE 存 stop 信号 +
+//! 实际端口 + 任务句柄，graceful shutdown；停止即删端口文件，Agent 发现机制同步下线）。
+//! 动机 = 入口统一 + 暴露面管理：不用 Agent 的用户可整个关掉，17701 不白听。
 //!
 //! 二批结构性写工具（2026-09-19 定，tools/structure.rs + tools/import.rs）：create_folder /
 //! move_placements / link_placements / move_folders（同日用户补：结构重组留一手；同首批 _op
@@ -118,18 +124,15 @@ impl AnikitMcp {
   }
 }
 
-/// 写入闸（PRD 08-06 形态 A，2026-09-19 用户定）：全局开关 = config.json settings.ui 子树
-/// mcpWriteEnabled（默认关，偏好设置弹窗开启）。MCP 写调用逐次检查、直读配置
+/// 写入闸（PRD 08-06 形态 A，2026-09-19 用户定；2026-09-20 挪插件面板 MCP 详情窗）：全局开关 =
+/// config.json settings.mcp 子树 writeEnabled（默认关）。MCP 写调用逐次检查、直读配置
 ///（core::config 无缓存，低频调用直读可接受）；关态 / 读取失败一律回工具级错误（同「请先打开素材库」口径）
 fn write_gate() -> Option<CallToolResult> {
-  let enabled = crate::core::config::ui_settings()
-    .ok()
-    .and_then(|ui| ui.get("mcpWriteEnabled")?.as_bool())
-    .unwrap_or(false);
+  let enabled = crate::core::config::mcp_settings().map(|s| s.write_enabled).unwrap_or(false);
   if enabled {
     None
   } else {
-    Some(CallToolResult::error(vec![ContentBlock::text("MCP 写入未开启（偏好设置里可开启）")]))
+    Some(CallToolResult::error(vec![ContentBlock::text("MCP 写入未开启（插件面板 MCP 详情窗里可开启）")]))
   }
 }
 
@@ -144,22 +147,51 @@ fn json_result<T: serde::Serialize>(v: &T) -> Result<CallToolResult, ErrorData> 
 /// ServerHandler：工具面由 tool_router 提供；server 名 / 版本 / 使用说明经宏参数生成。
 /// instructions = 给 Agent 的README（每次连接必读）：典型流程 + 纪律红线，与
 /// docs/05_接口文档/MCP使用指南.md 同口径（改其一必须同步另一处）
-#[tool_handler(router = self.tool_router, name = "anikit", instructions = "AniKit 素材库外接通道（MCP，一期只读 8 + 二期写工具 9）。典型流程：get_current_library 确认库已打开 → search_assets 搜索 / list_folder_tree + list_placements 浏览 → get_asset_detail 看标签·描述·注释 → get_asset_origin_path 拿磁盘绝对路径后直读文件看图（webp 缩略图优先，不经协议传图）→ read_text_asset 读提示词·剧本等文本资产。写入（九个）：create_document 新建文档入库 / write_text_asset 覆写文本资产内容 / rename_placements 批量改名（origin 缺省自动定位——该文件夹内仅此资产一条记录即命中，多条记录须照 list_placements 回包 origin 指定；命中 origin 记录连磁盘名同步改） / create_folder 新建文件夹 / move_placements 资产移入文件夹 / move_folders 移动文件夹重设父级 / link_placements 链接汇总（资产留原地、目标文件夹建链接）/ import_paths 导入磁盘文件入库 / trash_placements 丢回收站（Placement 进库内回收站，磁盘文件不动）——默认关闸，需在 APP 偏好设置开启「允许 MCP 写入」，关闸调用回「MCP 写入未开启」。撤销口径：write_text_asset 与 import_paths 不进撤销（覆写前先 read_text_asset 备份；导入冲突不阻断——hash 相同跳过并回已有资产 id、同名不同内容自动加 -序号 后缀，逐文件报告），其余七个进撤销（APP 内 Ctrl+Z 可撤）。纪律：资产磁盘名随重命名变化，路径每次现取、禁止缓存复用；库未打开时工具返回「请先打开素材库」；彻底删除永不经 MCP（丢回收站经 trash_placements，可逆，回收站清空 / 彻底删除须 APP 内人工）。省 token：先 search_assets 缩小范围再按需取详情，避免无 folderId 的全库 list_placements；看图读 thumbPath 缩略图而非源图。")]
+#[tool_handler(router = self.tool_router, name = "anikit", instructions = "AniKit 素材库外接通道（MCP，一期只读 8 + 二期写工具 9）。典型流程：get_current_library 确认库已打开 → search_assets 搜索 / list_folder_tree + list_placements 浏览 → get_asset_detail 看标签·描述·注释 → get_asset_origin_path 拿磁盘绝对路径后直读文件看图（webp 缩略图优先，不经协议传图）→ read_text_asset 读提示词·剧本等文本资产。写入（九个）：create_document 新建文档入库 / write_text_asset 覆写文本资产内容 / rename_placements 批量改名（origin 缺省自动定位——该文件夹内仅此资产一条记录即命中，多条记录须照 list_placements 回包 origin 指定；命中 origin 记录连磁盘名同步改） / create_folder 新建文件夹 / move_placements 资产移入文件夹 / move_folders 移动文件夹重设父级 / link_placements 链接汇总（资产留原地、目标文件夹建链接）/ import_paths 导入磁盘文件入库 / trash_placements 丢回收站（Placement 进库内回收站，磁盘文件不动）——默认关闸，需在插件面板 MCP 详情窗开启「允许写入」，关闸调用回「MCP 写入未开启」。撤销口径：write_text_asset 与 import_paths 不进撤销（覆写前先 read_text_asset 备份；导入冲突不阻断——hash 相同跳过并回已有资产 id、同名不同内容自动加 -序号 后缀，逐文件报告），其余七个进撤销（APP 内 Ctrl+Z 可撤）。纪律：资产磁盘名随重命名变化，路径每次现取、禁止缓存复用；库未打开时工具返回「请先打开素材库」；彻底删除永不经 MCP（丢回收站经 trash_placements，可逆，回收站清空 / 彻底删除须 APP 内人工）。省 token：先 search_assets 缩小范围再按需取详情，避免无 folderId 的全库 list_placements；看图读 thumbPath 缩略图而非源图。")]
 impl ServerHandler for AnikitMcp {}
 
-/// lib.rs setup 拉起（tauri 异步运行时，同 plugin_ws）
+/// lib.rs setup 拉起（tauri 异步运行时，同 plugin_ws）：读服务总开关（settings.mcp.serverEnabled，
+/// 缺省开）决定本轮是否启动；关 = 不监听（插件面板 MCP 详情窗可随时拉起）
 pub fn init(app: AppHandle) {
+  let enabled = crate::core::config::mcp_settings().map(|s| s.server_enabled).unwrap_or(true);
+  if !enabled {
+    log::info!("MCP 服务总开关关，本轮不启动（插件面板 MCP 详情窗可开启）");
+    return;
+  }
   tauri::async_runtime::spawn(async move {
-    if let Err(e) = serve(app).await {
-      log::error!("MCP 服务异常退出：{e}");
+    if let Err(e) = start(app).await {
+      log::error!("MCP 服务启动失败：{e}");
     }
   });
 }
 
-async fn serve(app: AppHandle) -> Result<(), String> {
-  // 固定端口优先（2026-09-19 用户定：Agent 工具只读静态配置 config.toml，动态端口每重启失效
-  // 不匹配——与 plugin_ws 的场景差在客户端不会读端口文件）；被占（双开 / 他占）回退动态，
-  // 实际端口恒写端口文件
+/// 运行句柄（服务总开关）：stop 信号 + 实际端口 + serve 任务；全局单例（OnceLock 惰性初始化）。
+/// task 用 tokio::spawn（同一 tauri tokio 运行时）——tauri::async_runtime::JoinHandle 无 is_finished
+struct McpHandle {
+  stop: tokio::sync::oneshot::Sender<()>,
+  port: u16,
+  task: tokio::task::JoinHandle<()>,
+}
+
+static MCP_HANDLE: std::sync::OnceLock<std::sync::Mutex<Option<McpHandle>>> = std::sync::OnceLock::new();
+
+fn handle_slot() -> &'static std::sync::Mutex<Option<McpHandle>> {
+  MCP_HANDLE.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+/// 启动（幂等：运行中直接回实际端口）。固定端口 17701 优先（2026-09-19 用户定：Agent 工具
+/// 只读静态配置 config.toml，动态端口每重启失效不匹配——与 plugin_ws 的场景差在客户端不会读
+/// 端口文件）；被占（双开 / 他占）回退动态，实际端口恒写端口文件
+pub async fn start(app: AppHandle) -> Result<u16, String> {
+  {
+    let mut guard = handle_slot().lock().map_err(|e| e.to_string())?;
+    if let Some(h) = guard.as_ref() {
+      if !h.task.is_finished() {
+        return Ok(h.port);
+      }
+      guard.take(); // 尸体清理：serve 异常退出后句柄残留，走重起路径
+    }
+  }
   const FIXED_PORT: u16 = 17701;
   let listener = match TcpListener::bind(("127.0.0.1", FIXED_PORT)).await {
     Ok(l) => l,
@@ -169,15 +201,52 @@ async fn serve(app: AppHandle) -> Result<(), String> {
     }
   };
   let port = listener.local_addr().map_err(|e| e.to_string())?.port();
-  write_port_file(port);
-  log::info!("MCP 服务就绪：http://127.0.0.1:{port}/mcp");
   let service = StreamableHttpService::new(
     move || Ok::<_, std::io::Error>(AnikitMcp::new(app.clone())),
     LocalSessionManager::default().into(),
     StreamableHttpServerConfig::default(),
   );
   let router = axum::Router::new().nest_service("/mcp", service);
-  axum::serve(listener, router).await.map_err(|e| e.to_string())
+  let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+  let task = tokio::spawn(async move {
+    let server = axum::serve(listener, router).with_graceful_shutdown(async move {
+      let _ = stop_rx.await;
+    });
+    if let Err(e) = server.await {
+      log::error!("MCP 服务异常退出：{e}");
+    }
+  });
+  let mut guard = handle_slot().lock().map_err(|e| e.to_string())?;
+  if let Some(h) = guard.as_ref() {
+    // await 期间被另一路 start 抢先（init / 详情窗并发）：弃新保旧
+    task.abort();
+    return Ok(h.port);
+  }
+  *guard = Some(McpHandle { stop: stop_tx, port, task });
+  write_port_file(port);
+  log::info!("MCP 服务就绪：http://127.0.0.1:{port}/mcp");
+  Ok(port)
+}
+
+/// 停止（幂等：未运行直接 Ok）：graceful shutdown 收束后删端口文件（Agent 发现机制同步下线——
+/// 残留端口文件会误导 Agent 连死端口）
+pub async fn stop() -> Result<(), String> {
+  let handle = handle_slot().lock().map_err(|e| e.to_string())?.take();
+  let Some(h) = handle else { return Ok(()); };
+  let _ = h.stop.send(());
+  let _ = h.task.await;
+  remove_port_file();
+  log::info!("MCP 服务已停止");
+  Ok(())
+}
+
+/// 运行状态查询（commands/mcp get_mcp_status 用）：serve 意外退出（句柄在但任务已完）按未运行报
+pub fn status() -> (bool, Option<u16>) {
+  let Ok(guard) = handle_slot().lock() else { return (false, None) };
+  match guard.as_ref() {
+    Some(h) if !h.task.is_finished() => (true, Some(h.port)),
+    _ => (false, None),
+  }
 }
 
 /// 端口文件（Agent 工具发现机制）：每次启动覆写；进程退出残留无害（连不上即未启动）
@@ -190,4 +259,12 @@ fn write_port_file(port: u16) {
   if let Err(e) = std::fs::write(dir.join("mcp-server.port"), port.to_string()) {
     log::warn!("MCP 端口文件写入失败：{e}");
   }
+}
+
+/// 停止时删端口文件（见 stop）
+fn remove_port_file() {
+  let Some(dir) = dirs::config_dir() else {
+    return;
+  };
+  let _ = std::fs::remove_file(dir.join("AniKit").join("mcp-server.port"));
 }

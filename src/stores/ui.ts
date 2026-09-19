@@ -40,7 +40,6 @@ const PERSIST_KEYS = [
   "lastLibView",
   "lastWsView",
   "detailTab",
-  "mcpWriteEnabled",
 ] as const;
 
 // 变更防抖写回（500ms；模块级单例防重复订阅）
@@ -139,13 +138,6 @@ export const useUiStore = defineStore("ui", {
     // 全局记忆 + 持久化（2026-09-19 用户定：换选中 / 选择模式往返不重置——链接文件成功后
     // 不再回基础信息；旧「会话级记忆换选中回 basic、不写设置存储」口径废除）
     detailTab: "basic" as "basic" | "links" | "prompt",
-    // MCP 写入开关（PRD 08-06 写入闸形态 A，2026-09-19 用户定）：持久化 settings.ui 子树
-    // mcpWriteEnabled（默认关）；偏好设置弹窗开关行直改本字段，随 ui 设置防抖整体写回；
-    // MCP 写工具逐次直读 config.json 门禁（server/mcp write_gate）
-    mcpWriteEnabled: false,
-    // 偏好设置弹窗开关（2026-09-19，会话级）：菜单栏主菜单「偏好设置」置位，
-    // 弹窗宿主 App.vue（同 blockManageOpen 惯例）
-    settingsOpen: false,
     // 自定义数据编辑弹窗（6.1，会话级）：propsEdit = 32 稿属性标签 / descEdit = 31 稿编辑描述；
     // target = 打开时锁定的对象与当前值快照（弹窗草稿以此为初值；打开后切选中不漂移，
     // 同 groupDialogFolder 口径），宿主 App.vue；SectionCustom「添加属性 / 编辑描述」钮置位

@@ -10,6 +10,7 @@ pub mod font;
 pub mod import;
 pub mod inbox;
 pub mod library;
+pub mod mcp;
 pub mod media;
 pub mod notes;
 pub mod operations;

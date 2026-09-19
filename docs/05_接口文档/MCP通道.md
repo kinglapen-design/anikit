@@ -1,9 +1,10 @@
 # 3. AI 外接通道（MCP，一期只读 + 二期写工具）
 
-- 服务：`server/mcp/`（PRD 08-06），`http://127.0.0.1:17701/mcp`——**固定端口 17701 优先**（Agent 工具只读静态 config，动态端口每重启失效不匹配；被占回退动态），lib.rs setup 拉起（`server::init_mcp`）；端口文件 = 全局配置目录 `AniKit/mcp-server.port`（每次启动覆写实际端口，兜底发现）。
+- 服务：`server/mcp/`（PRD 08-06），`http://127.0.0.1:17701/mcp`——**固定端口 17701 优先**（Agent 工具只读静态 config，动态端口每重启失效不匹配；被占回退动态），lib.rs setup 拉起（`server::init_mcp`，读服务总开关决定是否启动）；端口文件 = 全局配置目录 `AniKit/mcp-server.port`（每次启动覆写实际端口，兜底发现；停服即删）。
+- **服务总开关与面板命令（2026-09-20 插件面板 MCP 详情窗配套）**：全局句柄 `MCP_HANDLE`（stop 信号 + 实际端口 + serve 任务）支持运行期启停（graceful shutdown）；配置 `settings.mcp` 子树（`serverEnabled` 缺省 true / `writeEnabled` 缺省 false，core::config 单写点，旧 `settings.ui.mcpWriteEnabled` 一次性迁移）。命令：`get_mcp_status`（running / port / url / serverEnabled / writeEnabled）/ `set_mcp_server_enabled`（先启停后持久化）/ `set_mcp_write_enabled`（持久化即生效）——回包同构 McpStatus，前端插件面板详情窗（plugins/McpPluginWindow）直调，不经 ui store 管道。
 - 实现：官方 Rust SDK `rmcp` 3.4（Streamable HTTP server 为 Tower service，axum `nest_service("/mcp", …)` 挂载；复用 Tauri tokio 运行时，不另起进程）。协议握手 / 会话管理 / 工具 schema 协商全由 SDK 承担。
 - 安全口径：仅回环监听、无鉴权（本机 Agent 场景）；Host 头校验防 DNS rebinding 由 rmcp 内置（≥1.4.0，默认 allowedHosts = localhost / 127.0.0.1 / ::1）。**测试构建不起 server**（cfg(not(test))，踩坑 014 同 plugin_ws）。
-- **写入闸（二期，2026-09-19 用户定形态 A）**：全局写入开关 + 撤销兜底——开关持久化 config.json `settings.ui.mcpWriteEnabled`（默认 false，偏好设置弹窗「允许 MCP 写入」开启）；MCP 写调用**逐次检查**（`write_gate` 直读配置，core::config 无缓存、低频调用直读可接受），关态 / 读取失败一律回工具级错误「MCP 写入未开启（偏好设置里可开启）」（isError=true，与「请先打开素材库」同口径）。不做逐笔弹窗（首批全是 L2 可逆操作，二批结构性操作可逆仍走形态 A）；**彻底删除永不经 MCP**（L4 永远人工确认；库内回收站可逆删除经 trash_placements，2026-09-20 用户定）。
+- **写入闸（二期，2026-09-19 用户定形态 A；2026-09-20 开关挪插件面板 MCP 详情窗）**：全局写入开关 + 撤销兜底——开关持久化 config.json `settings.mcp.writeEnabled`（默认 false，插件面板「AI 外接通道（MCP）」详情窗「允许写入」开启；初版落点 settings.ui.mcpWriteEnabled 由后端一次性迁移）；MCP 写调用**逐次检查**（`write_gate` 直读配置，core::config 无缓存、低频调用直读可接受），关态 / 读取失败一律回工具级错误「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」（isError=true，与「请先打开素材库」同口径）。不做逐笔弹窗（首批全是 L2 可逆操作，二批结构性操作可逆仍走形态 A）；**彻底删除永不经 MCP**（L4 永远人工确认；库内回收站可逆删除经 trash_placements，2026-09-20 用户定）。
 - **写入热刷新（2026-09-19 补）**：库数据文件无监听（命令层写由前端自刷新），MCP 绕开前端——九个写工具成功路径广播 `mcp-library-changed`（`emit_library_changed`；import_paths 有真实入库才发），前端 `initMcpListener` 去抖 300ms 全量对齐（同 cep-imported 的 refresh 口径，不带成功提示音）。
 
 ## 握手流程（Streamable HTTP，单端点 POST /mcp）
@@ -30,7 +31,7 @@
 | `read_text_asset` | `{ assetId }` | `{ content }`（txt / md；UTF-8 优先 GBK 回退，2MB 上限；非文本资产报错） |
 | `list_archives` | 无 | `ArchiveListItem[]`（folderId / badge / avatar / props / descriptions / links / createdAt / totalSize / coverPath / coverVer）；folderId 可交给 list_placements 列档案内容 |
 
-写 9 个（二期，全部 `annotations.readOnlyHint = false`）：公共门禁 = **write_gate 逐次检查** `settings.ui.mcpWriteEnabled`（关态回「MCP 写入未开启（偏好设置里可开启）」工具级错误）。撤销口径分流——进撤销 7 个（create_document / rename_placements / create_folder / move_placements / move_folders / link_placements / trash_placements）复用 `commands::operations` 抽出的 `_op` 整段（锁 library → 锁 undo → 单写点 + 单撤销步，与 APP 命令同一实现）；不进撤销 2 个 = write_text_asset（与 APP 内文本编辑同口径，2026-08-23 定）+ import_paths（APP 导入管线本就不接 UndoManager，不硬接）。
+写 9 个（二期，全部 `annotations.readOnlyHint = false`）：公共门禁 = **write_gate 逐次检查** `settings.mcp.writeEnabled`（关态回「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」工具级错误）。撤销口径分流——进撤销 7 个（create_document / rename_placements / create_folder / move_placements / move_folders / link_placements / trash_placements）复用 `commands::operations` 抽出的 `_op` 整段（锁 library → 锁 undo → 单写点 + 单撤销步，与 APP 命令同一实现）；不进撤销 2 个 = write_text_asset（与 APP 内文本编辑同口径，2026-08-23 定）+ import_paths（APP 导入管线本就不接 UndoManager，不硬接）。
 
 首批 3 个（2026-09-19，`tools/write.rs`）：
 

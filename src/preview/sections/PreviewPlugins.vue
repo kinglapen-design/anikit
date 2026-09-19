@@ -1,20 +1,26 @@
 <script setup lang="ts">
 // 插件面板展区——docs/06_UI重构/Design Token/布局/主窗口/工具栏展开窗口/插件.md（列表浮层 400×450）
-// + Animate 插件.md（详情子窗口 544×538）（2026-09-06 插件窗轮）。
-// PluginListPanel 是 AppMenu fixed 浮层、AnimatePluginWindow 挂载即调后端命令——均不便静态展示，
-// 按 PreviewModals 的 pv-modal-shell 手法复刻口径静态陈列（口径变更时与组件同步）；
-// 复刻壳内尽量嵌真实组件（SegmentedControl text tone=g2 / IconButton bare / ActionButton lg 三变体）。
+// + Animate 插件.md（详情子窗口 544×538）（2026-09-06 插件窗轮）；MCP 详情窗复刻（544×640，
+// 2026-09-20 MCP 条目轮：服务组开关行 SwitchButton + 教程配置行 copy 钮）。
+// PluginListPanel 是 AppMenu fixed 浮层、AnimatePluginWindow/McpPluginWindow 挂载即调后端命令——
+// 均不便静态展示，按 PreviewModals 的 pv-modal-shell 手法复刻口径静态陈列（口径变更时与组件同步）；
+// 复刻壳内尽量嵌真实组件（SegmentedControl text tone=g2 / IconButton bare / ActionButton lg 三变体 / SwitchButton）。
 import { computed, ref } from "vue";
 import AppIcon from "../../components/AppIcon.vue";
 import SegmentedControl from "../../components/buttons/SegmentedControl.vue";
 import IconButton from "../../components/buttons/IconButton.vue";
 import ActionButton from "../../components/buttons/ActionButton.vue";
+import SwitchButton from "../../components/buttons/SwitchButton.vue";
 import { PLUGINS, PLUGIN_CATEGORIES } from "../../lib/plugins";
 
 // 面板复刻的分类分段可交互（本地状态，纯前端过滤静态清单；空分类出空态「暂无插件」）
 const cat = ref<string>(PLUGIN_CATEGORIES[0]);
 const catOptions = PLUGIN_CATEGORIES.map((c) => ({ value: c, label: c }));
 const shown = computed(() => PLUGINS.filter((p) => p.category === cat.value));
+
+// MCP 详情窗复刻的开关行（纯展示，不接后端）
+const mcpSvcOn = ref(true);
+const mcpWriteOn = ref(false);
 </script>
 
 <template>
@@ -145,6 +151,75 @@ const shown = computed(() => PLUGINS.filter((p) => p.category === cat.value));
             </div>
           </div>
           <span class="pv-cap">已安装态：卸载点亮、主钮文案「重新安装 / 升级」；按钮 cancel / danger 为本轮 ActionButton 新扩变体</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">MCP 详情子窗口（544×640，2026-09-20；四组 = 服务 / 使用教程 / 功能列表 / 路径，图示 = 服务开·只读态）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div class="pv-aw-shell pv-aw-shell--mcp">
+            <h1 class="pv-aw-title">AI 外接通道（MCP）</h1>
+            <section class="pv-aw-group">
+              <h2 class="pv-aw-sub">服务</h2>
+              <div class="pv-svc-lines">
+                <div class="pv-svc-row">
+                  <SwitchButton v-model="mcpSvcOn" />
+                  <span class="pv-svc-label">MCP 服务</span>
+                </div>
+                <div class="pv-svc-row">
+                  <SwitchButton v-model="mcpWriteOn" :disabled="!mcpSvcOn" />
+                  <span class="pv-svc-label">允许写入</span>
+                </div>
+                <p class="pv-svc-status">运行中 · http://127.0.0.1:17701/mcp</p>
+              </div>
+            </section>
+            <section class="pv-aw-group">
+              <h2 class="pv-aw-sub">使用教程</h2>
+              <ul class="pv-aw-lines">
+                <li>开启上方 <b>[MCP 服务]</b>（默认开），AniKit 会在本机拉起 MCP 服务供外部 Agent 接入。</li>
+                <li>在你的 Agent 工具里接入 AniKit（三选一，点右侧复制钮拷贝配置）：</li>
+                <li class="pv-cfg-row">
+                  <span class="pv-cfg-text"><b>Kimi Code</b>：mcp.json 加 { "mcpServers": { "anikit": { "url": "http://127.0.0.1:17701/mcp" } } }</span>
+                  <IconButton name="copy" variant="bare" size="sm" title="复制" />
+                </li>
+                <li class="pv-cfg-row">
+                  <span class="pv-cfg-text"><b>Codex</b>：config.toml 加 [mcp_servers.anikit] 与 url = "http://127.0.0.1:17701/mcp"</span>
+                  <IconButton name="copy" variant="bare" size="sm" title="复制" />
+                </li>
+                <li class="pv-cfg-row">
+                  <span class="pv-cfg-text"><b>Claude Code</b>：运行 claude mcp add --transport http anikit http://127.0.0.1:17701/mcp</span>
+                  <IconButton name="copy" variant="bare" size="sm" title="复制" />
+                </li>
+                <li>接入后 Agent 默认只能<b>只读</b>（搜索、浏览、看图等 8 个工具）；需要 Agent 写入时开启上方 <b>[允许写入]</b>。</li>
+              </ul>
+            </section>
+            <section class="pv-aw-group">
+              <h2 class="pv-aw-sub">功能列表</h2>
+              <ul class="pv-aw-lines">
+                <li><b>只读（8 个）</b>：当前库状态 / 搜索素材 / 文件夹树 / 文件夹资产清单 / 资产详情 / 磁盘路径（看图入口）/ 读文本资产 / 档案列表。</li>
+                <li><b>写入（9 个，需开「允许写入」）</b>：新建文档 / 覆写文本 / 批量改名 / 新建文件夹 / 移入文件夹 / 移动文件夹 / 链接汇总 / 导入入库 / 丢回收站。</li>
+              </ul>
+            </section>
+            <section class="pv-aw-group">
+              <h2 class="pv-aw-sub">路径</h2>
+              <ul class="pv-aw-lines">
+                <li>服务地址: http://127.0.0.1:17701/mcp</li>
+                <li>端口文件: %APPDATA%\AniKit\mcp-server.port</li>
+              </ul>
+            </section>
+            <div class="pv-aw-spacer" />
+            <div class="pv-aw-actions">
+              <span class="pv-aw-btn" style="width: 128px">
+                <ActionButton label="关闭" variant="cancel" size="lg" />
+              </span>
+            </div>
+          </div>
+          <span class="pv-cap">
+            版式仿 Animate 窗；开关行 = SwitchButton 左 + 标签右 gap 8（退役 SettingsModal 口径沿入），服务关时「允许写入」禁用；
+            配置行 = 深缩进 24 子行 + IconButton bare sm copy；无安装/卸载钮（MCP 无文件可装）
+          </span>
         </div>
       </div>
     </div>
@@ -353,5 +428,49 @@ const shown = computed(() => PLUGINS.filter((p) => p.category === cat.value));
   flex: none;
   display: block;
   height: 38px;
+}
+/* —— MCP 详情窗复刻（与 plugins/McpPluginWindow.vue 口径同步，2026-09-20）：壳高 640，余同 pv-aw 系 —— */
+.pv-aw-shell--mcp {
+  height: 640px;
+}
+.pv-svc-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-6);
+}
+.pv-svc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-8);
+}
+.pv-svc-label {
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
+}
+.pv-svc-status {
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
+  overflow-wrap: anywhere;
+}
+/* 接入配置行：深缩进 24 子行（无 bullet）+ copy 钮贴右 */
+.pv-aw-lines li.pv-cfg-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--n-space-6);
+  padding-left: var(--n-space-24);
+}
+.pv-aw-lines li.pv-cfg-row::before {
+  content: none;
+}
+.pv-cfg-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pv-cfg-row .ic-btn {
+  flex: none;
+  margin-top: 1px;
 }
 </style>

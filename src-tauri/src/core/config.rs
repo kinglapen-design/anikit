@@ -205,6 +205,66 @@ pub fn save_ui_settings(value: serde_json::Value) -> Result<(), DataError> {
   save_to(&p, &cfg)
 }
 
+// ---------- MCP 设置（settings.mcp 子树，PRD 08-06；2026-09-20 插件面板 MCP 详情窗配套） ----------
+
+/// MCP 设置：服务总开关（默认开，17701 不白听的用户可关）+ 写入闸（默认关）。
+/// 独立子树原因：save_ui_settings 是 settings.ui 整体替换语义，MCP 两键若留 ui 子树，
+/// 前端 store 快照（PERSIST_KEYS 不含）写回即被抹除；单写点 = commands/mcp.rs 两 set 命令。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpSettings {
+  /// 服务总开关（缺省开）：启动时是否拉起 127.0.0.1:17701 Streamable HTTP server
+  #[serde(default = "default_server_enabled")]
+  pub server_enabled: bool,
+  /// 写入闸（缺省关）：9 个写工具门禁，MCP 写调用逐次直读（server/mcp write_gate）
+  #[serde(default)]
+  pub write_enabled: bool,
+}
+
+fn default_server_enabled() -> bool {
+  true
+}
+
+impl Default for McpSettings {
+  fn default() -> Self {
+    Self { server_enabled: true, write_enabled: false }
+  }
+}
+
+/// MCP 设置读取（缺字段按默认补齐）。含一次性迁移：旧落点 settings.ui.mcpWriteEnabled
+/// （2026-09-19 写入闸形态 A 初版）——settings.mcp 尚未建立时采用旧键值；下次 save_mcp_settings
+/// 落新子树，ui 旧键随前端 store 字段退役（快照不再携带 + ui 整体替换写回）自然消亡
+pub fn mcp_settings() -> Result<McpSettings, DataError> {
+  Ok(parse_mcp_settings(&load()?.settings))
+}
+
+/// 纯解析（单测直调）：settings.mcp 优先；子树未建立时迁移旧 ui.mcpWriteEnabled
+fn parse_mcp_settings(settings: &serde_json::Value) -> McpSettings {
+  let mut s: McpSettings = settings
+    .get("mcp")
+    .cloned()
+    .and_then(|raw| serde_json::from_value(raw).ok())
+    .unwrap_or_default();
+  if settings.get("mcp").is_none() {
+    if let Some(old) = settings
+      .get("ui")
+      .and_then(|ui| ui.get("mcpWriteEnabled"))
+      .and_then(|v| v.as_bool())
+    {
+      s.write_enabled = old;
+    }
+  }
+  s
+}
+
+/// MCP 设置写回（settings.mcp 单点覆盖）
+pub fn save_mcp_settings(value: McpSettings) -> Result<(), DataError> {
+  let p = config_path()?;
+  let mut cfg = load_from(&p);
+  cfg.settings["mcp"] = serde_json::to_value(value).map_err(|e| DataError::Corrupt(e.to_string()))?;
+  save_to(&p, &cfg)
+}
+
 /// 主窗口几何读取（启动恢复用；从未保存 / 形状损坏为 None，走 tauri.conf 默认居中）
 pub fn window_state() -> Option<WindowState> {
   let cfg = load().ok()?;
@@ -331,6 +391,24 @@ mod tests {
     assert_eq!(merged, WindowState { maximized: true, ..normal });
     // 无旧值（首次最大化）按新值存
     assert_eq!(merge_window_state(None, maxed), maxed);
+  }
+
+  #[test]
+  fn mcp_settings_defaults_migration_and_roundtrip() {
+    // 空配置 = 默认：服务开 / 写入关
+    assert_eq!(parse_mcp_settings(&serde_json::json!({})), McpSettings::default());
+    // 迁移：settings.mcp 未建立时采用旧 ui.mcpWriteEnabled
+    let old = serde_json::json!({ "ui": { "mcpWriteEnabled": true } });
+    assert_eq!(parse_mcp_settings(&old), McpSettings { server_enabled: true, write_enabled: true });
+    // settings.mcp 已建立 = 新子树优先，旧 ui 键不再影响
+    let both = serde_json::json!({ "mcp": { "serverEnabled": false, "writeEnabled": false }, "ui": { "mcpWriteEnabled": true } });
+    assert_eq!(parse_mcp_settings(&both), McpSettings { server_enabled: false, write_enabled: false });
+    // 缺字段按默认补齐（serverEnabled 缺省 true）
+    let partial: McpSettings = serde_json::from_value(serde_json::json!({ "writeEnabled": true })).unwrap();
+    assert_eq!(partial, McpSettings { server_enabled: true, write_enabled: true });
+    // 序列化落盘键名 camelCase
+    let v = serde_json::to_value(McpSettings { server_enabled: false, write_enabled: true }).unwrap();
+    assert_eq!(v, serde_json::json!({ "serverEnabled": false, "writeEnabled": true }));
   }
 
   #[test]

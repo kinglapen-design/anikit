@@ -399,10 +399,9 @@ export function appMenuSpec(libraryNames: string[]): CtxEntry[] {
     "divider",
     {
       label: "偏好设置",
-      // MCP 二期写入闸配套（2026-09-19）：打开偏好设置弹窗（SettingsModal，宿主 App.vue）
-      action: () => {
-        useUiStore().settingsOpen = true;
-      },
+      // 2026-09-20 退役占位：弹窗唯一内容（MCP 写入开关）已挪插件面板 MCP 详情窗
+      //（plugins/McpPluginWindow，settings.mcp 子树），空壳弹窗删除；后续设置项立项再点亮
+      disabled: true,
     },
     {
       label: "帮助",

@@ -9,6 +9,6 @@ mod plugin_ws;
 
 pub use plugin_ws::{broadcast_settings, request_paste, try_acquire_send};
 #[cfg(not(test))] // 测试构建不起 server（踩坑 014）
-pub use mcp::init as init_mcp;
+pub use mcp::{init as init_mcp, start as start_mcp, status as mcp_status, stop as stop_mcp};
 #[cfg(not(test))] // 测试构建不起 server（踩坑 014）
 pub use plugin_ws::init;

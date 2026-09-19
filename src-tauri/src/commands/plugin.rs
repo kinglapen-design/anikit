@@ -4,14 +4,18 @@
 use tauri::Manager;
 
 /// 打开插件详情子窗口：label = plugin-{plugin_id}，已存在则聚焦复用，否则开无边框窗。
-/// plugin_id 白名单：目前仅 "animate"（未来开源插件再扩）。
+/// plugin_id 白名单与窗口尺寸：animate 544×578（2026-09-06 九轮用户定：稿值 538 在路径组长路径
+/// 折行后最后一行被迫滚动一条——「为了最后一行字滚动一条实在没有必要」；内容实量 ≈568 + 10 余量）、
+/// mcp 544×640（2026-09-20：四组内容多于 Animate 窗，滚动兜底前的实量估值，实机走查校）。
 /// **必须 async**——Tauri v2 非 async 命令在主线程执行，主线程内 build 窗口会与事件循环互等死锁
 /// （2026-07-25 实测：界面/托盘全卡死）；async 走线程池，build 内部 dispatch 回主线程不阻塞
 #[tauri::command]
 pub async fn open_plugin_window(app: tauri::AppHandle, plugin_id: String) -> Result<(), String> {
-  if plugin_id != "animate" {
-    return Err(format!("未知插件：{plugin_id}"));
-  }
+  let (w, h) = match plugin_id.as_str() {
+    "animate" => (544.0, 578.0),
+    "mcp" => (544.0, 640.0),
+    _ => return Err(format!("未知插件：{plugin_id}")),
+  };
   let label = format!("plugin-{plugin_id}");
   if let Some(win) = app.get_webview_window(&label) {
     win.set_focus().map_err(|e| e.to_string())?;
@@ -20,9 +24,7 @@ pub async fn open_plugin_window(app: tauri::AppHandle, plugin_id: String) -> Res
   let url = tauri::WebviewUrl::App(format!("index.html?plugin={plugin_id}").into());
   let win = tauri::WebviewWindowBuilder::new(&app, &label, url)
     .title("AniKit 插件")
-    // 544×578（2026-09-06 九轮用户定：稿值 538 在路径组长路径折行后最后一行被迫滚动一条——
-    // 「为了最后一行字滚动一条实在没有必要」；内容实量 ≈568 + 10 余量）
-    .inner_size(544.0, 578.0)
+    .inner_size(w, h)
     .resizable(true)
     .decorations(false)
     .transparent(true)
