@@ -2,7 +2,7 @@
 // 独立窗口 / 整页挂载件展区——覆盖清单与处理模式：
 // 1. PreviewWindow.vue（预览子窗口 4.3 新窗口打开）= 静态复刻壳（pv-pw-shell）：组件 onMounted 拉全量数据
 //    （content.refresh + preview.open）不能真实挂载；标题栏按 PreviewTitleBar window 模式结构复刻，
-//    嵌真实旧 IconButton / SideSlider（纯件）；窗口控制三钮 = 旧 WindowControls 复刻（§23：随预览族轮再改）；
+//    嵌真实 buttons/IconButton plain / SideSlider（纯件）；窗口控制三钮 = 旧 WindowControls 复刻（§23：随预览族轮再改）；
 //    画面区 / PreviewNavigator = 静态占位（依赖 preview store）。口径变更与组件同步。
 // 2. SetupWizard.vue（首启向导 38 稿，主窗口全屏层 + 600×559 卡片）= 静态复刻壳（pv-wiz-shell）+ 真实步骤件
 //    （WizardStepSpace / WizardStepLibrary / WizardStepPlaceholder 纯 props 驱动，本地态演示，不走后端）；
@@ -10,9 +10,8 @@
 // 3. PickerPanel.vue（右侧边栏选择模式备选区，§12/§23）= 静态复刻壳（pv-pk-shell）+ 真实
 //    items/PickFileItem + PickRelationItem（纯 props 驱动，本地态演示关闭/编辑）；确认/取消接 picker store = 不响应。
 import { computed, ref } from "vue";
-import IconButtonLegacy from "../../components/IconButton.vue";
+import IconButton from "../../components/buttons/IconButton.vue";
 import SideSlider from "../../components/SideSlider.vue";
-import AppButton from "../../components/AppButton.vue";
 import WizardStepSpace from "../../components/WizardStepSpace.vue";
 import WizardStepLibrary from "../../components/WizardStepLibrary.vue";
 import WizardStepPlaceholder, { type PlaceholderIcon } from "../../components/WizardStepPlaceholder.vue";
@@ -62,7 +61,7 @@ const pkFileConfirm = computed(() =>
     <p class="pv-sec-desc">
       预览子窗口 / 首启向导 / 选择器面板均为独立窗口或全屏挂载件，依赖 store 或窗口上下文，不便真实陈列——
       统一 pv-*-shell 静态复刻（口径变更与组件同步），壳内纯 props 驱动的子件嵌真实组件
-      （IconButton / SideSlider / AppButton / 向导三步骤件 / Pick 两 item）。
+      （buttons/IconButton / SideSlider / ActionButton / 向导三步骤件 / Pick 两 item）。
     </p>
 
     <div class="pv-group">
@@ -79,18 +78,18 @@ const pkFileConfirm = computed(() =>
                 <span class="pv-pw-zoom-text">{{ pwLogoZoomText }}</span>
               </div>
               <div class="pv-pw-btns">
-                <IconButtonLegacy name="plugin" title="插件" />
-                <IconButtonLegacy name="rotate-cw" title="旋转" />
-                <IconButtonLegacy name="flip-h" title="水平翻转" />
-                <IconButtonLegacy name="fit-screen" title="适合窗口" />
-                <IconButtonLegacy name="original-size" title="原图大小" />
-                <IconButtonLegacy name="open-default" title="默认应用打开" />
-                <IconButtonLegacy name="angle-bracket" title="上一个" disabled />
-                <IconButtonLegacy name="angle-bracket" title="下一个" class="pv-rot-180" />
-                <IconButtonLegacy name="pin-on" title="窗口置顶" />
-                <IconButtonLegacy name="window-minimize" title="最小化" />
-                <IconButtonLegacy name="window-maximize" title="最大化" />
-                <IconButtonLegacy name="window-close" title="关闭" danger />
+                <IconButton name="plugin" variant="plain" title="插件" />
+                <IconButton name="rotate-cw" variant="plain" title="旋转" />
+                <IconButton name="flip-h" variant="plain" title="水平翻转" />
+                <IconButton name="fit-screen" variant="plain" title="适合窗口" />
+                <IconButton name="original-size" variant="plain" title="原图大小" />
+                <IconButton name="open-default" variant="plain" title="默认应用打开" />
+                <IconButton name="angle-bracket" variant="plain" title="上一个" disabled />
+                <IconButton name="angle-bracket" variant="plain" title="下一个" class="pv-rot-180" />
+                <IconButton name="pin-on" variant="plain" title="窗口置顶" />
+                <IconButton name="window-minimize" variant="plain" title="最小化" />
+                <IconButton name="window-maximize" variant="plain" title="最大化" />
+                <IconButton name="window-close" variant="plain" title="关闭" />
               </div>
             </div>
             <div class="pv-pw-stage">
@@ -106,8 +105,9 @@ const pkFileConfirm = computed(() =>
           </div>
           <span class="pv-cap">
             静态复刻（组件挂载即 content.refresh + preview.open，不能真实挂载），口径变更与组件同步；
-            混合体系待预览族轮——标题栏文字/图标色已吃 --n-，但间距（--space-*）、旧 IconButton、
-            窗口控制三钮（旧 WindowControls，§23「随预览族轮再改」）、window-minimize 等图标走旧版回退层；
+            混合体系待预览族轮——标题栏文字已吃 --n-，但间距（--space-*）仍旧档，真实件内按钮仍是根目录旧
+            IconButton（此处换代演示 = buttons/IconButton plain），窗口控制三钮 = 旧 WindowControls 复刻
+            （§23「随预览族轮再改」），window-minimize 等图标走旧版回退层；
             悬浮播放条 FloatBarHost（依赖 store）未复刻；壳尺寸 720×480 = 演示值（真实窗随 OS 窗口弹性）
           </span>
         </div>
@@ -120,7 +120,7 @@ const pkFileConfirm = computed(() =>
         <div class="pv-demo-cell">
           <div class="pv-wiz-shell">
             <div class="pv-wiz-titlebar">
-              <IconButtonLegacy name="window-close" title="关闭" />
+              <IconButton name="close-large" variant="plain" title="关闭" />
             </div>
             <div class="pv-wiz-logo-area">
               <div class="pv-wiz-logo" v-html="logo" />
@@ -130,8 +130,8 @@ const pkFileConfirm = computed(() =>
               </div>
             </div>
             <div v-if="wizStep === 0" class="pv-wiz-entry">
-              <AppButton label="新建储存空间" variant="primary" @click="wizStep = 1" />
-              <AppButton label="打开储存空间" disabled />
+              <ActionButton label="新建储存空间" variant="primary" size="md" @click="wizStep = 1" />
+              <ActionButton label="打开储存空间" variant="solid" size="md" disabled />
             </div>
             <WizardStepSpace
               v-else-if="wizStep === 1"
@@ -154,9 +154,9 @@ const pkFileConfirm = computed(() =>
             />
             <div v-if="wizStep > 0" class="pv-wiz-step-area">
               <div class="pv-wiz-step-row">
-                <AppButton
+                <ActionButton
                   label="上一步"
-                  size="small"
+                  size="sm"
                   :class="{ 'pv-wiz-ghost': wizStep <= 1 }"
                   @click="wizStep -= 1"
                 />
@@ -164,10 +164,10 @@ const pkFileConfirm = computed(() =>
                   <span class="no">第{{ WIZ_STEP_NO[wizStep] }}步：</span>
                   <span class="nm">{{ WIZ_STEP_TITLES[wizStep] }}</span>
                 </span>
-                <AppButton
+                <ActionButton
                   :label="wizStep === 4 ? '完成' : '下一步'"
                   variant="primary"
-                  size="small"
+                  size="sm"
                   :disabled="wizStep === 4"
                   @click="wizStep += 1"
                 />
@@ -273,7 +273,8 @@ const pkFileConfirm = computed(() =>
   background: var(--n-g1);
   box-shadow: var(--n-shadow-lg);
 }
-/* 标题栏（PreviewTitleBar window 模式）：padding 12 16 / space-between 三组；图标统一 亮色/三级 */
+/* 标题栏（PreviewTitleBar window 模式）：padding 12 16 / space-between 三组；
+   按钮 = buttons/IconButton plain（图标恒 亮色/三级，真实件仍旧 IconButton 待预览族轮） */
 .pv-pw-titlebar {
   flex: none;
   display: flex;
@@ -281,9 +282,6 @@ const pkFileConfirm = computed(() =>
   justify-content: space-between;
   gap: var(--n-space-12);
   padding: var(--n-space-12) var(--n-space-16);
-}
-.pv-pw-titlebar :deep(.icon-btn) {
-  color: var(--n-l3);
 }
 .pv-pw-nav {
   display: flex;
@@ -446,6 +444,11 @@ const pkFileConfirm = computed(() =>
   width: 100%;
   box-sizing: border-box;
   padding: var(--n-space-24);
+}
+/* ActionButton md = 宽 100% 填充式，此处需旧 AppButton 的自适应内容宽（padding 8/12） */
+.pv-wiz-entry :deep(.act-btn) {
+  width: auto;
+  padding: var(--n-space-8) var(--n-space-12);
 }
 /* 步骤区：146 高 / padding 48 / gap 12（上行 28 + 进度条 10；新体系无 48 档，取 24×2） */
 .pv-wiz-step-area {

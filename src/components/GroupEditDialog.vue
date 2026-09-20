@@ -1,14 +1,19 @@
 <script setup lang="ts">
 // 新建分组弹窗（34 稿，3.5 二轮）：分组菜单「新建分组」触发，单次只添加一个（34 稿注释）。
-// AppModal standard 603 宽，标题栏 54「添加分组」；单组编辑块（名称行 无箭头无删除 + 规则编辑器）+
-// 按钮栏 62（确认 primary / 取消 panel 88×38 主左次右）。
+// 2026-09-20 R2 旧件烧减：壳 = modals/BaseModal framed（603 宽挪 prop；标题栏 54 带底线 +
+// 关闭 X 由 framed 提供）；单组编辑块（名称行 无箭头无删除 + 规则编辑器）+ 按钮栏 62
+//（ActionButton lg 宽自适应 + 左右 48、次左主右——旧 88 定宽与主左次右序废）；
+// 输入框 = inputs/TextInput sm；滚动自管（BaseModal 无内建滚轮，旧靠 AppModal .content 兜底）。
 // 确认 = 追加到该文件夹现有组列表尾部一次提交（set_folder_groups 单撤销步）；
-// 与现有组规则完全相同 → 23 稿 alert error（前端预检 + 后端兜底，与分组管理同口径）。
-import { ref } from "vue";
-import AppModal from "./AppModal.vue";
-import AppButton from "./AppButton.vue";
-import AppInput from "./AppInput.vue";
+// 与现有组规则完全相同 → 23 稿错误提示（ConfirmModal danger + 提示音；前端预检 + 后端兜底，与分组管理同口径）。
+import { ref, watch } from "vue";
+import BaseModal from "./modals/BaseModal.vue";
+import ConfirmModal from "./modals/ConfirmModal.vue";
+import ActionButton from "./buttons/ActionButton.vue";
+import TextInput from "./inputs/TextInput.vue";
+import ScrollThumb from "./ScrollThumb.vue";
 import GroupRulesEditor from "./GroupRulesEditor.vue";
+import { playAlert } from "../lib/sounds";
 import { setFolderGroups } from "../lib/groupOps";
 import type { GroupDef, GroupRule } from "../lib/grouping";
 import { findFolder, useContentStore } from "../stores/content";
@@ -22,6 +27,14 @@ const name = ref("");
 const rules = ref<GroupRule[]>([{ kind: "ext", values: [] }]);
 const busy = ref(false);
 const saveError = ref<{ title: string; desc: string } | null>(null);
+
+// 悬浮滚轮容器锚点（ScrollThumb：滚动容器须为包裹层直接子元素）
+const scrollEl = ref<HTMLElement>();
+
+// 错误提示音（旧 AppModal alert onMounted 口径沿——弹开即播）
+watch(saveError, (v) => {
+  if (v) playAlert();
+});
 
 const items = content.placementsFor(`folder:${props.folderId}`);
 
@@ -57,106 +70,94 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <AppModal variant="standard" title="添加分组" class="group-edit" @close="emit('close')">
+  <BaseModal title="添加分组" :width="603" framed class="group-edit" @close="emit('close')">
     <div class="ge-body">
-      <div class="group-block">
-        <div class="group-title">
-          <span class="row-label">分组名称:</span>
-          <AppInput v-model="name" size="small" class="name-input" placeholder="未命名分组" />
+      <div class="scroll-wrap">
+        <div ref="scrollEl" class="ge-scroll kit-scroll">
+          <div class="group-block">
+            <div class="group-title">
+              <span class="row-label">分组名称:</span>
+              <TextInput v-model="name" size="sm" class="name-input" placeholder="未命名分组" />
+            </div>
+            <GroupRulesEditor v-model="rules" :items="items" />
+          </div>
         </div>
-        <GroupRulesEditor v-model="rules" :items="items" />
+        <ScrollThumb :body="scrollEl" />
       </div>
     </div>
     <template #actions>
-      <AppButton variant="primary" label="确认" :disabled="busy" @click="submit" />
-      <AppButton variant="panel" label="取消" :disabled="busy" @click="emit('close')" />
+      <ActionButton variant="cancel" label="取消" size="lg" :disabled="busy" @click="emit('close')" />
+      <ActionButton variant="primary" label="确认" size="lg" :disabled="busy" @click="submit" />
     </template>
-  </AppModal>
-  <!-- 23 稿错误（alert error；主「修改分组」回编辑 / 次「取消」放弃） -->
-  <AppModal
+  </BaseModal>
+  <!-- 23 稿错误提示（ConfirmModal danger；确认「修改分组」回编辑 / 取消放弃） -->
+  <ConfirmModal
     v-if="saveError"
-    variant="alert"
-    alert-icon="error"
+    kind="danger"
     :title="saveError.title"
-    @close="saveError = null"
+    confirm-label="修改分组"
+    @confirm="saveError = null"
+    @cancel="emit('close')"
   >
-    <p class="err-desc">{{ saveError.desc }}</p>
-    <template #actions>
-      <AppButton variant="primary" label="修改分组" @click="saveError = null" />
-      <AppButton variant="panel" label="取消" @click="emit('close')" />
-    </template>
-  </AppModal>
+    {{ saveError.desc }}
+  </ConfirmModal>
 </template>
 
 <style scoped>
-/* 34 稿壳：内容宽 600 + 真 border 3 补偿 = 603 */
-.group-edit :deep(.app-modal) {
-  width: 603px;
-  padding: 0;
+/* 34 稿壳：603 宽挪 width prop（旧 = 内容宽 600 + 真 border 3 补偿）；framed padding 0 贴边、
+   gap 归零（相邻区紧贴：标题栏线 / 组块线 / 按钮栏线各自承担）；视口封顶沿旧 AppModal 口径（BaseModal 不带） */
+.group-edit :deep(.bm-modal) {
+  max-height: calc(100vh - 96px);
   gap: 0;
 }
-.group-edit :deep(.titlebar) {
-  height: 54px;
-  box-sizing: border-box;
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  border-bottom: 1px solid var(--line-hover);
-  flex: none;
-}
-/* 内容区（34 稿：padding 12 24；组块 padding 12 0 自带底分隔线）；
-   壳 padding 0：归零 AppModal .content 的负 margin（2026-09-13 实机走查贴右缘口径）——
-   padding-right 保留 24（组块靠它内缩）；.content 自身即滚动容器，
-   AppModal 兜底 ScrollThumb 贴弹窗右缘 */
-.group-edit :deep(.content) {
-  padding: 0 var(--space-24);
-  gap: 0;
-  margin-right: 0;
-}
-.group-edit :deep(.actions) {
+/* 底部按钮栏（34 稿：62 高 / padding 12 12 12 24 / 顶线通栏；lg 宽自适应 + 左右 48、次左主右） */
+.group-edit :deep(.bm-actions) {
   height: 62px;
-  box-sizing: border-box;
   align-items: center;
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  border-top: 1px solid var(--line-hover);
+  padding: var(--n-space-12) var(--n-space-12) var(--n-space-12) var(--n-space-24);
+  border-top: 1px solid var(--n-g5);
   flex: none;
-}
-.group-edit :deep(.actions) .app-btn {
-  width: 88px;
 }
 .ge-body {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+/* 滚动包裹层：relative 锚 ScrollThumb；flex 列让内容区可收缩（视口封顶时自滚） */
+.scroll-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+/* 内容区（34 稿：padding 0 24 内缩自承——framed 壳 padding 0；组块 padding 12 0 自带底分隔线） */
+.ge-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--n-space-24);
 }
 .group-block {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: var(--space-12) 0;
-  border-bottom: 1px solid var(--line-hover);
+  gap: var(--n-space-12);
+  padding: var(--n-space-12) 0;
+  border-bottom: 1px solid var(--n-g5);
 }
 .group-title {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
   height: 28px;
 }
 .row-label {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
   white-space: nowrap;
   flex: none;
 }
 .name-input {
   flex: 1;
   min-width: 0;
-}
-.name-input {
-  background: var(--c1);
-}
-.err-desc {
-  margin: 0;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
 }
 </style>

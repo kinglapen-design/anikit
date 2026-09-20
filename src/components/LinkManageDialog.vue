@@ -13,13 +13,17 @@
 // 确认 = diff 三组（增/删/改）sync_asset_links 一次提交（单撤销步）；取消 / X / Esc = 全部放弃。
 // 移除 = 直接删 Placement 记录不进回收站（用户定）；后端护栏：位置归 0 报错（防孤儿资产）。
 // 档案链接管理随档案多位置立项（2026-08-24 用户定，09 待办）。
+// 壳 = modals/BaseModal framed（2026-09-20 R2 旧件烧减轮换代，旧 AppModal standard + AppButton +
+// AppSearchBar + 根 IconButton 退役）：602 宽 = 内容 552 + padding 48 + 新壳 1px border×2
+//（旧 1.5 border「+3 补偿」口径随壳换代改 +2，速查 §1）；framed 壳 padding 0，各段自承 padding 0 24；
+// 按钮序随新口径翻转次左主右、宽自适应（88 定宽废）。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import AppButton from "./AppButton.vue";
+import ActionButton from "./buttons/ActionButton.vue";
 import Checkbox from "./buttons/Checkbox.vue";
 import AppIcon from "./AppIcon.vue";
-import AppModal from "./AppModal.vue";
-import AppSearchBar from "./AppSearchBar.vue";
-import IconButton from "./IconButton.vue";
+import BaseModal from "./modals/BaseModal.vue";
+import IconButton from "./buttons/IconButton.vue";
+import TextInput from "./inputs/TextInput.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { syncAssetLinks, type SyncLinkAdd, type SyncLinkRemove, type SyncLinkRename } from "../lib/placementOps";
 import { toNewTint } from "../lib/customColors";
@@ -222,9 +226,12 @@ function toggleBlock(id: string): void {
 </script>
 
 <template>
-  <AppModal title="链接管理" variant="standard" class="link-manage" @close="onCancel">
-    <!-- 搜索框（17 稿：552×36 C1 底；过滤文件夹名，命中保留祖先全展开） -->
-    <AppSearchBar v-model="query" placeholder="搜索" />
+  <BaseModal title="链接管理" :width="602" framed class="link-manage" @close="onCancel">
+    <!-- 搜索框行（过滤文件夹名，命中保留祖先全展开；inputs/TextInput lg + 左置 search 图标 +
+         清除钮；framed 壳 padding 0 → 段自承 padding 0 24，MovePanel 同口径） -->
+    <div class="search-row">
+      <TextInput v-model="query" size="lg" leading-icon="search" clearable placeholder="搜索" />
+    </div>
     <!-- 表头（稿：34 高 / padding-bottom 12 / 底线 1px 暗-悬停；两列均分 16 标题档标签色） -->
     <div class="head-row">
       <span class="head-cell">路径</span>
@@ -239,7 +246,7 @@ function toggleBlock(id: string): void {
             <AppIcon name="tree-expand-arrow" :size="12" class="chev" :class="{ closed: blockCollapsed.has(sec.id) }" />
             <span class="group-title">{{ sec.name }} - {{ sec.count.toLocaleString() }}</span>
             <span class="spacer" />
-            <IconButton name="add-small" small disabled title="添加" @click.stop />
+            <IconButton name="add-small" variant="bare" size="sm" disabled title="添加" @click.stop />
           </div>
           <!-- 行（gap 4）：文件夹格 270 + 右列（名称框 232 + ✓）平铺多行 -->
           <template v-for="line in visibleLines(sec.lines)" :key="line.node.id">
@@ -297,28 +304,32 @@ function toggleBlock(id: string): void {
     <template #actions>
       <Checkbox v-model="onlyChecked" label="仅显示已选项" class="only-checked" />
       <span class="actions-spacer" />
-      <AppButton label="确认" variant="primary" :disabled="busy" @click="onConfirm" />
-      <AppButton label="取消" :disabled="busy" @click="onCancel" />
+      <ActionButton label="取消" variant="cancel" size="lg" :disabled="busy" @click="onCancel" />
+      <ActionButton label="确认" variant="primary" size="lg" :disabled="busy" @click="onConfirm" />
     </template>
-  </AppModal>
+  </BaseModal>
 </template>
 
 <style scoped>
-/* 17 稿：600×826（内容宽 552；定宽弹窗 border 另占 3px，速查表 §1） */
-:deep(.app-modal) {
-  width: 603px;
-  gap: 0;
+/* 17 稿：600×826（内容宽 552）——壳宽 602 由 BaseModal width prop 给（552 + padding 48 + 新壳 1px border×2；
+   旧 1.5 border「+3 补偿」口径随壳换代改 +2，速查表 §1）；framed 壳 padding 0，各段自承 padding 0 24；
+   小窗口兜底 max-height（旧 AppModal 同口径） */
+.link-manage :deep(.bm-modal) {
+  max-width: calc(100vw - 96px);
+  max-height: calc(100vh - 96px);
 }
-:deep(.content) {
-  gap: var(--space-12);
-  min-height: 0;
+/* 搜索框行（framed 段自承 padding 0 24，MovePanel 同口径） */
+.search-row {
+  padding: 0 var(--n-space-24);
+  flex: none;
 }
 /* 表头（稿：34 高 / padding-bottom 12 / 底线 1px 暗-悬停；两列均分，16/22 700 标签色） */
 .head-row {
   display: flex;
   gap: var(--space-12);
-  padding-bottom: var(--space-12);
+  padding: 0 var(--n-space-24) var(--n-space-12);
   border-bottom: 1px solid var(--line-hover);
+  flex: none;
 }
 .head-cell {
   flex: 1;
@@ -327,15 +338,16 @@ function toggleBlock(id: string): void {
   font-weight: var(--text-title-weight);
   color: var(--text-label);
 }
-/* 树形容器（稿 604 高；悬浮滚轮 ScrollThumb 贴右）；
-   负 margin 对（2026-09-13 实机走查贴右缘口径）——margin-right 负扩 24 吃进壳 padding
-   贴到弹窗缘（恰抵 .content 裁剪线内），.tree-body padding-right 补回使行原位不动 */
+/* 树形容器（稿 604 高；悬浮滚轮 ScrollThumb 贴右缘）——framed 壳 padding 0，wrap 通栏自承
+   padding-left 24 天然抵弹窗缘（旧负 margin 对随壳换代简化，2026-09-13 贴右缘口径沿），
+   .tree-body padding-right 24 补回使行原位不动、滚轮贴缘 */
 .tree-wrap {
   position: relative;
   height: 604px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  margin-right: calc(-1 * var(--space-24));
+  padding-left: var(--n-space-24);
 }
 .tree-body {
   flex: 1;
@@ -345,7 +357,7 @@ function toggleBlock(id: string): void {
   gap: var(--space-24);
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: var(--space-24);
+  padding-right: var(--n-space-24);
 }
 .block-group {
   display: flex;
@@ -520,14 +532,16 @@ function toggleBlock(id: string): void {
 .line:hover .check.ghost {
   opacity: 1;
 }
-/* 底栏：仅显示已选项居左（actions slot 右对齐口径上加左侧件） */
+/* 底栏：仅显示已选项居左（actions slot 右对齐口径上加左侧件）；
+   framed 壳 padding 0 → 按钮行自承 padding（次左主右宽自适应，88 定宽随 AppButton 退役废除） */
 .actions-spacer {
   flex: 1;
 }
 .only-checked {
   align-self: center;
 }
-:deep(.actions) .app-btn {
-  min-width: 88px;
+.link-manage :deep(.bm-actions) {
+  padding: 0 var(--n-space-24) var(--n-space-24);
+  flex: none;
 }
 </style>

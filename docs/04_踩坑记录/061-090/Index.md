@@ -24,3 +24,4 @@
 | 078 | canonicalize 逐字路径喂 Shell API 全灭——调 shell 前剥前缀还原普通路径（2026-09-17） | 2026-09-17 | [canonicalize 逐字路径喂 Shell API 全灭——调 shell 前剥前缀还原普通路径（2026-09-17）](078_canonicalize 逐字路径喂 Shell API 全灭——调 shell 前剥前缀还原普通路径（2026-09-17）.md) |
 | 079 | 最大化摘 WS_CAPTION 后窗口盖满整屏挡住任务栏——客户区仍按 rcWork 排布，底部多出任务栏高死带（2026-09-17） | 2026-09-17 | [最大化摘 WS_CAPTION 后窗口盖满整屏挡住任务栏——客户区仍按 rcWork 排布，底部多出任务栏高死带（2026-09-17）](079_最大化摘 WS_CAPTION 后窗口盖满整屏挡住任务栏——客户区仍按 rcWork 排布，底部多出任务栏高死带（2026-09-17）.md) |
 | 080 | release 构建缓存残留旧绝对路径——项目挪目录后 tauri build 必炸，清 target/release 重编（2026-09-19） | 2026-09-19 | [release 构建缓存残留旧绝对路径——项目挪目录后 tauri build 必炸，清 target 重编（2026-09-19）](080_release构建缓存残留旧绝对路径——项目挪目录后tauri build必炸，清target重编（2026-09-19）.md) |
+| 081 | 删除源文件后 vite dev 仍供旧变换缓存——preview 动态 import 整页挂掉，touch 触发重变换（2026-09-20） | 2026-09-20 | [删除源文件后 vite dev 仍供旧变换缓存（2026-09-20）](081_删除源文件后vite dev仍供旧变换缓存——preview动态import整页挂掉（2026-09-20）.md) |

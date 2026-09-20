@@ -10,7 +10,7 @@
 import { computed, nextTick, ref } from "vue";
 import AppIcon from "./AppIcon.vue";
 import AppMenu from "./AppMenu.vue";
-import IconButton from "./IconButton.vue";
+import IconButton from "./buttons/IconButton.vue";
 import MenuItem from "./MenuItem.vue";
 import TermChipsInput from "./TermChipsInput.vue";
 import {
@@ -111,7 +111,7 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
     <div v-for="(rule, i) in rules" :key="i" class="rule-row">
       <!-- 头段（× + 规则 + 下拉 + 范围）：恒 28 高居首行——chips 换行使行变高时标签保持首行垂直居中 -->
       <div class="row-head">
-        <IconButton small name="clear" title="删除规则" class="rule-del" @click="removeRule(i)" />
+        <IconButton variant="bare" size="sm" name="clear" title="删除规则" class="rule-del" @click="removeRule(i)" />
         <span class="row-label">规则:</span>
         <button class="kind-pick" @click="openKindPicker(rule, $event)">
           <span class="val">{{ kindLabel(rule.kind) }}</span>

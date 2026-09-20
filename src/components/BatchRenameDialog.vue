@@ -5,11 +5,15 @@
 // 替换 = 查找文本全处替换，原名称匹配段品牌色高亮（Eagle 交互参考：视觉上把高亮部分换成新的）。
 // 规则只作用词干、扩展名不动；撞名不拦截（后端 rename_placements 不唯一化）；
 // 失败项跳过 toast 汇总不整体回滚；无变化项不提交（名称/查找为空 → 该项保持原名）。
+// 2026-09-20 R2 旧件烧减：壳 = modals/BaseModal framed（973 宽挪 width prop；标题栏 54 带底线 +
+// 关闭 X 由 framed 提供——旧 :deep(.app-modal)/.titlebar/.content 三段覆盖尽废）；
+// 输入框 = inputs/TextInput lg（clearable 新件原生，旧 medium 档废）；按钮 = buttons/ActionButton lg
+//（模态口径：宽自适应 + 左右 48——旧 88 定宽废；次左主右——旧确认左序随新口径废）。
 import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import AppModal from "./AppModal.vue";
-import AppInput from "./AppInput.vue";
-import AppButton from "./AppButton.vue";
+import BaseModal from "./modals/BaseModal.vue";
+import TextInput from "./inputs/TextInput.vue";
+import ActionButton from "./buttons/ActionButton.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { useContentStore } from "../stores/content";
@@ -54,10 +58,10 @@ const findText = ref("");
 const replaceText = ref("");
 
 // TAB 循环聚焦（2026-09-13 实机走查：输入一个后手不离键盘——查找↔替换、名称↔起始编号互跳）
-const seqNameRef = ref<InstanceType<typeof AppInput>>();
-const seqStartRef = ref<InstanceType<typeof AppInput>>();
-const findRef = ref<InstanceType<typeof AppInput>>();
-const replaceRef = ref<InstanceType<typeof AppInput>>();
+const seqNameRef = ref<InstanceType<typeof TextInput>>();
+const seqStartRef = ref<InstanceType<typeof TextInput>>();
+const findRef = ref<InstanceType<typeof TextInput>>();
+const replaceRef = ref<InstanceType<typeof TextInput>>();
 
 // 位宽自动（PRD 02-14：<100 两位、≥100 三位）
 const padWidth = computed(() => (rows.value.length < 100 ? 2 : 3));
@@ -136,8 +140,8 @@ const listRef = ref<HTMLElement>();
 </script>
 
 <template>
-  <AppModal v-if="selection.renameDraft" title="批量重命名" class="rename-dialog" @close="onClose">
-    <!-- 表头（37 稿：双列标题档 16/22 标签色 / 下分隔线 / 列 gap 24） -->
+  <BaseModal v-if="selection.renameDraft" title="批量重命名" :width="973" framed class="rename-dialog" @close="onClose">
+    <!-- 表头（37 稿：双列标题 / 下分隔线 / 列 gap 24） -->
     <header class="rd-head">
       <span class="col">原始文件名</span>
       <span class="col">新的文件名</span>
@@ -173,71 +177,66 @@ const listRef = ref<HTMLElement>();
     <div class="rd-fields">
       <template v-if="mode === 'sequence'">
         <span class="lbl">名称:</span>
-        <AppInput ref="seqNameRef" v-model="seqName" size="medium" clearable class="grow" placeholder="输入名称" @keydown.tab.prevent="seqStartRef?.focus()" />
+        <TextInput ref="seqNameRef" v-model="seqName" size="lg" clearable class="grow" placeholder="输入名称" @keydown.tab.prevent="seqStartRef?.focus()" />
         <span class="lbl">起始编号:</span>
-        <AppInput ref="seqStartRef" v-model="seqStart" size="medium" clearable class="narrow" placeholder="1" @keydown.tab.prevent="seqNameRef?.focus()" />
+        <TextInput ref="seqStartRef" v-model="seqStart" size="lg" clearable class="narrow" placeholder="1" @keydown.tab.prevent="seqNameRef?.focus()" />
       </template>
       <template v-else>
         <span class="lbl">查找文本:</span>
-        <AppInput ref="findRef" v-model="findText" size="medium" clearable class="grow" placeholder="输入查找文本" @keydown.tab.prevent="replaceRef?.focus()" />
+        <TextInput ref="findRef" v-model="findText" size="lg" clearable class="grow" placeholder="输入查找文本" @keydown.tab.prevent="replaceRef?.focus()" />
         <span class="lbl">替换为:</span>
-        <AppInput ref="replaceRef" v-model="replaceText" size="medium" clearable class="grow" placeholder="输入替换文本" @keydown.tab.prevent="findRef?.focus()" />
+        <TextInput ref="replaceRef" v-model="replaceText" size="lg" clearable class="grow" placeholder="输入替换文本" @keydown.tab.prevent="findRef?.focus()" />
       </template>
     </div>
-    <!-- 底部栏（37 稿：62 高 / padding 12 12 12 24 / 顶部分隔线；左 segmented 右按钮组主左次右） -->
+    <!-- 底部栏（37 稿：62 高 / padding 12 12 12 24 / 顶部分隔线；左 segmented 右按钮组——
+         按钮 lg 宽自适应 + 左右 48、次左主右，2026-09-13 定稿口径） -->
     <footer class="rd-foot">
       <SegmentedControl v-model="mode" :options="MODES" variant="text" style="width: 160px" />
       <span class="spacer" />
-      <AppButton variant="primary" label="确认" :disabled="pendingItems.length === 0 || busy" @click="onConfirm" />
-      <AppButton variant="panel" label="取消" @click="onClose" />
+      <ActionButton variant="cancel" label="取消" size="lg" @click="onClose" />
+      <ActionButton variant="primary" label="确认" size="lg" :disabled="pendingItems.length === 0 || busy" @click="onConfirm" />
     </footer>
-  </AppModal>
+  </BaseModal>
 </template>
 
 <style scoped>
-/* 37 稿壳：970 内容宽 + 真 border 3 补偿 = 973（速查表 §1）；高 750 稿值 + 窗口封顶；
-   壳 padding 0（各区自负边距）gap 0（稿相邻区紧贴：表头线 / 行线 / 按钮栏线各自承担） */
-.rename-dialog :deep(.app-modal) {
-  width: 973px;
+/* 37 稿壳：宽 973 挪 BaseModal width prop（旧 = 970 内容宽 + 真 border 3 补偿，速查表 §1）；
+   高 750 稿值 + 窗口封顶；framed 壳 padding 0 天然贴边（各区自负边距），gap 归零——
+   稿相邻区紧贴：表头线 / 行线 / 按钮栏线各自承担 */
+.rename-dialog :deep(.bm-modal) {
   height: min(753px, calc(100vh - 96px));
-  padding: 0;
+  max-width: calc(100vw - 96px); /* 旧 AppModal 视口封顶口径沿（BaseModal 不带宽度封顶） */
   gap: 0;
 }
-.rename-dialog :deep(.titlebar) {
-  height: 54px;
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  border-bottom: 1px solid var(--line-hover);
-  flex: none;
-}
-.rename-dialog :deep(.content) {
-  flex: 1;
-  gap: 0;
-  min-height: 0;
-  /* 壳 padding 0：归零 AppModal .content 的负 margin 对（2026-09-13 实机走查贴右缘口径）——
-     各区自承边距（.rd-head margin 0 24 / .rd-list padding 0 24 等），.rd-list-wrap 通栏，
-     归零后 thumb 自然贴弹窗缘 */
-  margin-right: 0;
-  padding-right: 0;
-}
-/* 表头（37 稿：46 高 / 0 24 容器内 / 下分隔线暗-悬停；双列 flex 1 对齐行内双卡） */
+/* 表头（37 稿：46 高 / 0 24 容器内 / 下分隔线；双列 flex 1 对齐行内双卡）；
+   写法说明 §6 不用 margin：内缩由 padding 承担，分隔线走 ::after 内缩 24（§8 描边 ::after 工程路径） */
 .rd-head {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-24);
+  gap: var(--n-space-24);
   height: 46px;
-  margin: 0 var(--space-24);
-  border-bottom: 1px solid var(--line-hover);
+  padding: 0 var(--n-space-24);
   flex: none;
 }
+.rd-head::after {
+  content: "";
+  position: absolute;
+  left: var(--n-space-24);
+  right: var(--n-space-24);
+  bottom: 0;
+  border-bottom: 1px solid var(--n-g5);
+}
+/* 列表表头稿口径：列标签 = 正文-加粗 亮色/三级（cards/ListHeader 同款） */
 .rd-head .col {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l3);
 }
-/* 行列表：0 24 容器（稿 922 内容宽）；行 = padding 24 0 + C3 底 + 下边框（稿 item 117 高） */
+/* 行列表：0 24 容器（稿 922 内容宽）；行 = padding 24 0 + 通用/二级底 + 下边框（稿 item 117 高） */
 .rd-list-wrap {
   position: relative;
   flex: 1;
@@ -246,32 +245,32 @@ const listRef = ref<HTMLElement>();
 .rd-list {
   height: 100%;
   overflow-y: auto;
-  padding: 0 var(--space-24);
+  padding: 0 var(--n-space-24);
 }
 .rd-row {
   display: flex;
-  gap: var(--space-24);
-  padding: var(--space-24) 0;
-  background: var(--c2); /* 2026-08-19 用户定：item 底色 C3 → C2 */
-  border-bottom: 1px solid var(--line-hover);
+  gap: var(--n-space-24);
+  padding: var(--n-space-24) 0;
+  background: var(--n-g2);
+  border-bottom: 1px solid var(--n-g5);
 }
-/* 名称卡（37 稿：449×69 / C4 底 / 1px 暗-悬停 border / 圆角 8 / padding 12 / gap 8） */
+/* 名称卡（37 稿：449×69 / 通用/四级底 / 1px 通用/五级 border / 圆角 8 / padding 12 / gap 8） */
 .rd-card {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
   flex: 1;
   min-width: 0;
   height: 69px;
-  padding: var(--space-12);
-  background: var(--c4);
-  border: 1px solid var(--line-hover);
-  border-radius: var(--radius-8);
+  padding: var(--n-space-12);
+  background: var(--n-g4);
+  border: 1px solid var(--n-g5);
+  border-radius: var(--n-radius-8);
 }
 .rd-thumb {
   width: 80px;
   height: 45px;
-  border-radius: var(--radius-6);
+  border-radius: var(--n-radius-6);
   overflow: hidden;
   flex: none;
 }
@@ -291,9 +290,9 @@ const listRef = ref<HTMLElement>();
   align-items: center;
   justify-content: center;
   background: #c6c7cc;
-  font-size: var(--text-label-size);
-  font-weight: var(--text-title-weight);
-  color: var(--c3);
+  font-size: var(--n-fs-secondary);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-g3);
 }
 .rd-name {
   flex: 1;
@@ -301,26 +300,26 @@ const listRef = ref<HTMLElement>();
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-highlight);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l1);
 }
 /* 替换模式匹配段：品牌色高亮（Eagle 交互参考——原名称被替换部分一眼可辨） */
 .rd-name .hit {
-  color: var(--brand);
+  color: var(--n-brand);
 }
-/* 输入区（稿：label 14/20 标签色；输入框 C1 底 36 高 padding 8 12——medium 提权覆盖） */
+/* 输入区（稿：label 标签色；输入框 = TextInput lg 34 高——新件稿值，旧 medium 提权覆盖废） */
 .rd-fields {
   display: flex;
   align-items: center;
-  gap: var(--space-12);
-  padding: var(--space-12) var(--space-24);
+  gap: var(--n-space-12);
+  padding: var(--n-space-12) var(--n-space-24);
   flex: none;
 }
 .rd-fields .lbl {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
   flex: none;
   white-space: nowrap;
 }
@@ -332,23 +331,17 @@ const listRef = ref<HTMLElement>();
   width: 82px;
   flex: none;
 }
-.rd-fields :deep(.app-input-shell.medium) {
-  padding: var(--space-8) var(--space-12);
-}
-/* 底部栏（37 稿：62 高 / padding 12 12 12 24 / 顶部分隔线 / 右组主左次右 88×38） */
+/* 底部栏（37 稿：62 高 / padding 12 12 12 24 / 顶部分隔线通栏） */
 .rd-foot {
   display: flex;
   align-items: center;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   height: 62px;
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  border-top: 1px solid var(--line-hover);
+  padding: var(--n-space-12) var(--n-space-12) var(--n-space-12) var(--n-space-24);
+  border-top: 1px solid var(--n-g5);
   flex: none;
 }
 .rd-foot .spacer {
   flex: 1;
-}
-.rd-foot :deep(.app-btn) {
-  min-width: 88px;
 }
 </style>

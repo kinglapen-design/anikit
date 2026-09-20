@@ -10,7 +10,7 @@
 import { computed, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import SectionHeader from "./SectionHeader.vue";
-import IconButton from "./IconButton.vue";
+import IconButton from "./buttons/IconButton.vue";
 import { formatDuration } from "../lib/formatDuration";
 import { frameOfTime, totalFrames } from "../lib/formatFrame";
 import { useContentStore } from "../stores/content";

@@ -19,8 +19,7 @@ import { computed, nextTick, reactive, ref, watch } from "vue";
 import SectionTitle from "./items/SectionTitle.vue";
 import TreeRowItem from "./items/TreeRowItem.vue";
 import FolderTree from "./FolderTree.vue";
-import AppModal from "./AppModal.vue";
-import AppButton from "./AppButton.vue";
+import ConfirmModal from "./modals/ConfirmModal.vue";
 import { beginFolderDrag, dragView } from "../lib/dragOperation";
 import { createAndName } from "../lib/menuOps";
 import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
@@ -371,22 +370,20 @@ async function onSwitchLibrary(e: MouseEvent): Promise<void> {
         </div>
       </Transition>
     </section>
-    <!-- 自动导入未开启确认弹窗（confirm 形态：无 X，点遮罩 / 取消关闭） -->
-    <AppModal
+    <!-- 自动导入未开启确认弹窗（ConfirmModal：不危险的提示确认钮 = 品牌/常态，速查 §24 口径；
+         遮罩点击不关闭，取消 / 确认两路） -->
+    <ConfirmModal
       v-if="autoImportPrompt"
-      variant="confirm"
-      icon="auto-import"
       title="开启自动导入"
-      @close="autoImportPrompt = false"
+      kind="brand"
+      confirm-label="开启"
+      @confirm="onEnableAutoImport"
+      @cancel="autoImportPrompt = false"
     >
       <p class="prompt-text">
         当前资源库未开启自动导入。开启后将挂载收件箱盘符，复制进收件箱的文件会自动导入资源库。
       </p>
-      <template #actions>
-        <AppButton label="开启" variant="primary" :disabled="autoImportBusy" @click="onEnableAutoImport" />
-        <AppButton label="取消" :disabled="autoImportBusy" @click="autoImportPrompt = false" />
-      </template>
-    </AppModal>
+    </ConfirmModal>
   </div>
 </template>
 

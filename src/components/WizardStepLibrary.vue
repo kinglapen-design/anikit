@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 向导第二步（38 稿）：输入资源库名称 + 开启自动导入开关（值存库级 settings.json，行为 2.6 接）。
-import AppInput from "./AppInput.vue";
+import TextInput from "./inputs/TextInput.vue";
 import SwitchButton from "./buttons/SwitchButton.vue";
 
 const name = defineModel<string>("name", { required: true });
@@ -11,7 +11,7 @@ defineProps<{ error: string }>();
 <template>
   <div class="step-library">
     <span class="field-label">输入资源库名称:</span>
-    <AppInput v-model="name" placeholder="资源库名称" />
+    <TextInput v-model="name" placeholder="资源库名称" />
     <span class="field-label">开启自动导入</span>
     <SwitchButton v-model="autoImport" />
     <p v-if="error" class="step-error">{{ error }}</p>

@@ -7,7 +7,7 @@
 // FontFace 管理：family 名按 assetId 命名防与系统字体冲突；切素材 / 卸载组件时 fonts.delete 清理。
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import AppButton from "./AppButton.vue";
+import ActionButton from "./buttons/ActionButton.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import SideSlider from "./SideSlider.vue";
@@ -150,9 +150,10 @@ const rows = computed(() => {
       </div>
       <ScrollThumb :body="infoScrollRef" />
       <div v-if="info" class="install-bar">
-        <AppButton
+        <ActionButton
           :label="info.installed ? '从系统卸载' : '安装到系统'"
-          :variant="info.installed ? 'panel' : 'primary'"
+          :variant="info.installed ? 'solid' : 'primary'"
+          size="md"
           :disabled="busy"
           @click="toggleInstall"
         />
@@ -241,6 +242,12 @@ const rows = computed(() => {
   display: flex;
   justify-content: center;
   padding: 0 0 var(--space-20);
+}
+/* ActionButton md = 宽 100% 填充式（稿 flex-grow 拉伸语境）；此钮自适应内容居中——
+   压回 auto + 左右 12（旧 AppButton large padding 8/12 口径沿） */
+.install-bar :deep(.act-btn) {
+  width: auto;
+  padding: var(--n-space-8) var(--n-space-12);
 }
 /* 解析失败文案（说明文字档，居中底部，同 PreviewPanel error-text 口径） */
 .error-text {

@@ -1,20 +1,26 @@
 <script setup lang="ts">
 // 分组管理弹窗（33 稿，3.5 二轮）：
-// AppModal standard 603 宽（600 + 真 border 3 补偿），标题栏 54 / 内容区 padding 0 24 自滚 /
-// 底部添加分组（60 高 C4 104×36）+ 按钮栏 62 确认 primary · 取消 panel（88×38 主左次右）。
-// 组块 = 组标题行（下移/上移箭头 chevron-small + 「分组名称：」AppInput + delete-red 红删）
+// 2026-09-20 R2 旧件烧减：壳 = modals/BaseModal framed（603 宽挪 prop；标题栏 54 带底线 +
+// 关闭 X 由 framed 提供）；输入框 = inputs/TextInput sm；排序箭头 = buttons/IconButton bare sm
+//（禁用 = 新件自带 30% 透明度，旧「--line-active 原样呈现」覆盖废）；delete-red 红删新件无此变体——
+// 暂留根目录旧 IconButton（LegacyIconButton，R2 烧减遗留项）；按钮 = ActionButton
+//（按钮栏 lg 宽自适应 + 左右 48、次左主右；添加钮 solid md——旧 88 / 104 定宽皆废）。
+// 组块 = 组标题行（下移/上移箭头 chevron-small + 「分组名称：」输入框 + delete-red 红删）
 //        + GroupRulesEditor（规则行×N + 添加新规则）+ 组块底线；
 // 排序 = 箭头 + TransitionGroup 交换动画（速查表 §9 口径，不做拖拽）。
 // 草稿式：打开时快照 FolderNode.groups 进本地草稿，确认 → set_folder_groups 一次提交单撤销步；
 // 单规则组互斥转移（PRD 02-04 条款 2）：选值时从其他同 kind 单规则组摘除该值 + toast 告知；
-// 确认前预检（完全相同 / 空规则 / 空范围）→ 23 稿 alert error（后端同校验兜底）。
-import { nextTick, ref } from "vue";
-import AppModal from "./AppModal.vue";
-import AppButton from "./AppButton.vue";
-import AppInput from "./AppInput.vue";
-import IconButton from "./IconButton.vue";
+// 确认前预检（完全相同 / 空规则 / 空范围）→ ConfirmModal danger（23 稿错误提示 + 提示音沿；后端同校验兜底）。
+import { nextTick, ref, watch } from "vue";
+import BaseModal from "./modals/BaseModal.vue";
+import ConfirmModal from "./modals/ConfirmModal.vue";
+import ActionButton from "./buttons/ActionButton.vue";
+import TextInput from "./inputs/TextInput.vue";
+import IconButton from "./buttons/IconButton.vue";
+import LegacyIconButton from "./IconButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import GroupRulesEditor from "./GroupRulesEditor.vue";
+import { playAlert } from "../lib/sounds";
 import { setFolderGroups } from "../lib/groupOps";
 import { RULE_KIND_LABELS, type GroupDef, type GroupRule } from "../lib/grouping";
 import { findFolder, useContentStore } from "../stores/content";
@@ -48,8 +54,13 @@ const draft = ref<GroupDraft[]>(
 );
 const rowsEl = ref<HTMLElement>();
 const busy = ref(false);
-// 23 稿错误弹窗（alert error）：标题 + 描述；非 null = 打开
+// 23 稿错误提示（ConfirmModal danger）：标题 + 描述；非 null = 打开
 const saveError = ref<{ title: string; desc: string } | null>(null);
+
+// 错误提示音（旧 AppModal alert onMounted 口径沿——弹开即播）
+watch(saveError, (v) => {
+  if (v) playAlert();
+});
 
 // 当前视口内容（规则范围候选：扩展名 / 类型按实际存在出，33 稿注释）
 const items = content.placementsFor(`folder:${props.folderId}`);
@@ -148,7 +159,7 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <AppModal variant="standard" title="分组管理" class="group-manage" @close="emit('close')">
+  <BaseModal title="分组管理" :width="603" framed class="group-manage" @close="emit('close')">
     <div class="gm-body">
       <div class="scroll-wrap">
         <div ref="rowsEl" class="gm-rows kit-scroll">
@@ -156,11 +167,11 @@ async function submit(): Promise<void> {
             <div v-for="(g, i) in draft" :key="g.key" class="group-block">
               <!-- 组标题行（33 稿：下移 + 上移箭头 / 分组名称输入 / delete-red） -->
               <div class="group-title">
-                <IconButton small name="chevron-small" class="sort-arrow arrow-down" :disabled="i === draft.length - 1" title="下移" @click="moveGroup(i, 1)" />
-                <IconButton small name="chevron-small" class="sort-arrow" :disabled="i === 0" title="上移" @click="moveGroup(i, -1)" />
+                <IconButton variant="bare" size="sm" name="chevron-small" class="sort-arrow arrow-down" :disabled="i === draft.length - 1" title="下移" @click="moveGroup(i, 1)" />
+                <IconButton variant="bare" size="sm" name="chevron-small" class="sort-arrow" :disabled="i === 0" title="上移" @click="moveGroup(i, -1)" />
                 <span class="row-label">分组名称:</span>
-                <AppInput v-model="g.name" size="small" class="name-input" placeholder="未命名分组" />
-                <IconButton name="delete-red" delete-red title="删除分组" @click="removeGroup(i)" />
+                <TextInput v-model="g.name" size="sm" class="name-input" placeholder="未命名分组" />
+                <LegacyIconButton name="delete-red" delete-red title="删除分组" @click="removeGroup(i)" />
               </div>
               <!-- 自由组（2026-09-17 无规则空组）：无规则编辑——静态说明行；规则组 = 规则编辑器 -->
               <div v-if="g.free" class="free-hint">无规则（手动归组）——将文件拖入分组，或右键「移动至分组」</div>
@@ -170,102 +181,82 @@ async function submit(): Promise<void> {
         </div>
         <ScrollThumb :body="rowsEl" />
       </div>
-      <!-- 添加分组（33 稿：60 高容器，C4 104×36 居中）+ 添加空组（自由组，2026-09-17 实机走查） -->
+      <!-- 添加分组（33 稿：60 高容器居中）+ 添加空组（自由组，2026-09-17 实机走查） -->
       <div class="add-wrap">
-        <AppButton variant="panel" icon="add-large" label="添加分组" class="add-btn" @click="addGroup" />
-        <AppButton variant="panel" icon="add-large" label="添加空组" class="add-btn" @click="addFreeGroup" />
+        <ActionButton variant="solid" size="md" icon="add-large" label="添加分组" class="add-btn" @click="addGroup" />
+        <ActionButton variant="solid" size="md" icon="add-large" label="添加空组" class="add-btn" @click="addFreeGroup" />
       </div>
     </div>
     <template #actions>
-      <AppButton variant="primary" label="确认" :disabled="busy" @click="submit" />
-      <AppButton variant="panel" label="取消" :disabled="busy" @click="emit('close')" />
+      <ActionButton variant="cancel" label="取消" size="lg" :disabled="busy" @click="emit('close')" />
+      <ActionButton variant="primary" label="确认" size="lg" :disabled="busy" @click="submit" />
     </template>
-  </AppModal>
-  <!-- 23 稿错误（alert error 48 徽章 + 提示音；主「修改分组」回编辑 / 次「取消」放弃） -->
-  <AppModal
+  </BaseModal>
+  <!-- 23 稿错误提示（ConfirmModal danger + 提示音；确认「修改分组」回编辑 / 取消放弃） -->
+  <ConfirmModal
     v-if="saveError"
-    variant="alert"
-    alert-icon="error"
+    kind="danger"
     :title="saveError.title"
-    @close="saveError = null"
+    confirm-label="修改分组"
+    @confirm="saveError = null"
+    @cancel="emit('close')"
   >
-    <p class="err-desc">{{ saveError.desc }}</p>
-    <template #actions>
-      <AppButton variant="primary" label="修改分组" @click="saveError = null" />
-      <AppButton variant="panel" label="取消" @click="emit('close')" />
-    </template>
-  </AppModal>
+    {{ saveError.desc }}
+  </ConfirmModal>
 </template>
 
 <style scoped>
-/* 33 稿壳：内容宽 600 + 真 border 3 补偿 = 603（速查表 §1：定宽弹窗写内容宽 +3） */
-.group-manage :deep(.app-modal) {
-  width: 603px;
-  padding: 0;
+/* 33 稿壳：603 宽挪 width prop（旧 = 内容宽 600 + 真 border 3 补偿，速查表 §1）；
+   framed padding 0 贴边、gap 归零（相邻区紧贴）；视口封顶沿旧 AppModal 口径（BaseModal 不带） */
+.group-manage :deep(.bm-modal) {
+  max-height: calc(100vh - 96px);
   gap: 0;
 }
-.group-manage :deep(.titlebar) {
-  height: 54px;
-  box-sizing: border-box;
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  border-bottom: 1px solid var(--line-hover);
-  flex: none;
-}
-/* 内容区（33 稿）：padding 0 24；
-   壳 padding 0：归零 AppModal .content 的负 margin（2026-09-13 实机走查贴右缘口径）——
-   padding-right 保留 24（组块靠它内缩），贴右缘由内层 .scroll-wrap/.gm-rows 负 margin 对承担 */
-.group-manage :deep(.content) {
-  padding: 0 var(--space-24);
-  gap: 0;
-  overflow: hidden;
-  margin-right: 0;
-}
-.group-manage :deep(.actions) {
+/* 底部按钮栏（33 稿：62 高 / padding 12 12 12 24 / 顶线通栏；lg 宽自适应 + 左右 48、次左主右） */
+.group-manage :deep(.bm-actions) {
   height: 62px;
-  box-sizing: border-box;
   align-items: center;
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  border-top: 1px solid var(--line-hover);
+  padding: var(--n-space-12) var(--n-space-12) var(--n-space-12) var(--n-space-24);
+  border-top: 1px solid var(--n-g5);
   flex: none;
-}
-.group-manage :deep(.actions) .app-btn {
-  width: 88px;
 }
 .gm-body {
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
-/* 滚动包裹层：relative 锚 ScrollThumb；
-   负 margin 对（2026-09-13 实机走查贴右缘口径）——margin-right 负扩 24 吃进 .content 的
-   0 24 padding 贴到弹窗缘（恰抵 .content 裁剪线内，overflow hidden 不裁），.gm-rows 补回 */
+/* 滚动包裹层：relative 锚 ScrollThumb；flex 列让行列表可收缩（视口封顶时自滚）。
+   旧 .content padding + 负 margin 对随 AppModal 退役废除——framed 壳 padding 0，
+   包裹层天然通栏，thumb 贴弹窗缘 */
 .scroll-wrap {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  margin-right: calc(-1 * var(--space-24));
 }
-/* 内容区 414 高自滚（稿值；组块纵向排，组间距 0——组块自带 padding 12 0）；
-   padding-right 补回包裹层负扩，组块原位不动（2026-09-13 贴右缘口径） */
+/* 内容区 414 高封顶自滚（稿值；组块纵向排，组间距 0——组块自带 padding 12 0）；
+   0 24 内缩自承（framed 壳 padding 0） */
 .gm-rows {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   max-height: 414px;
-  padding-right: var(--space-24);
+  padding: 0 var(--n-space-24);
 }
 .gm-rows-inner {
   display: flex;
   flex-direction: column;
 }
 .gm-swap-move {
-  transition: transform 0.18s ease;
+  transition: transform var(--n-dur-150) var(--n-ease-in-out);
 }
-/* 组块（33 稿：padding 12 0 / gap 12 / 组底 border-bottom 暗-悬停，末块去线防与添加区叠色） */
+/* 组块（33 稿：padding 12 0 / gap 12 / 组底 1px 通用/五级，末块去线防与添加区叠色） */
 .group-block {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: var(--space-12) 0;
-  border-bottom: 1px solid var(--line-hover);
+  gap: var(--n-space-12);
+  padding: var(--n-space-12) 0;
+  border-bottom: 1px solid var(--n-g5);
 }
 .group-block:last-child {
   border-bottom: none;
@@ -274,24 +265,22 @@ async function submit(): Promise<void> {
 .group-title {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
   height: 28px;
 }
-.group-title .icon-btn.sort-arrow {
-  color: var(--text-highlight);
-}
-.group-title .icon-btn.sort-arrow:disabled {
-  color: var(--line-active);
-  opacity: 1;
+/* 排序箭头：可用态 = 亮色/一级（2026-08-14 用户定高亮档沿，提权压组件自带 .ic-btn.bare）；
+   禁用 = 新件自带 30% 透明度 */
+.group-title .ic-btn.sort-arrow {
+  color: var(--n-l1);
 }
 /* chevron-small 源图形朝上——下移旋转 180（BlockManageRow 同口径） */
 .arrow-down :deep(svg) {
   transform: rotate(180deg);
 }
 .row-label {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
   white-space: nowrap;
   flex: none;
 }
@@ -299,43 +288,28 @@ async function submit(): Promise<void> {
   flex: 1;
   min-width: 0;
 }
-/* 弹窗内输入框 token = C1（30 稿口径；AppInput 壳化后 class 落壳——底色在壳上覆盖） */
-.name-input {
-  background: var(--c1);
-}
-/* 添加分组容器（33 稿：60 高 / 按钮居中 104×36） */
+/* 添加分组容器（33 稿：60 高 / 按钮居中；钮 = solid md，旧 104 定宽废——BaseModal 罩宽自适应 + 左右 48） */
 .add-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-12); /* 双钮（添加分组 / 添加空组）间距 */
+  gap: var(--n-space-12); /* 双钮（添加分组 / 添加空组）间距 */
   height: 60px;
-  box-sizing: border-box;
-  padding: var(--space-12) var(--space-24);
+  padding: var(--n-space-12) var(--n-space-24);
   flex: none;
 }
-.add-btn {
-  width: 104px;
-}
-/* 自由组静态说明行（2026-09-17 无规则空组）：C3 容器与规则行同形，说明文字标签色 */
+/* 自由组静态说明行（2026-09-17 无规则空组）：通用/三级容器与规则行同形，说明文字亮色/三级 */
 .free-hint {
   display: flex;
   align-items: center;
   min-height: 44px;
-  box-sizing: border-box;
-  padding: var(--space-8) var(--space-12);
-  border-radius: var(--radius-6);
-  background: var(--c3);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
-  color: var(--text-label);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  padding: var(--n-space-8) var(--n-space-12);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g3);
+  box-shadow: inset 0 0 0 1px var(--n-g5);
+  color: var(--n-l3);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
   flex: none;
-}
-.err-desc {
-  margin: 0;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
 }
 </style>

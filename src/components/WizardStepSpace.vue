@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 向导第一步（38 稿）：输入储存空间名称 + 选择保存路径（选定后路径显示在按钮左侧，标签档截断）。
-import AppInput from "./AppInput.vue";
-import AppButton from "./AppButton.vue";
+import TextInput from "./inputs/TextInput.vue";
+import ActionButton from "./buttons/ActionButton.vue";
 
 const name = defineModel<string>("name", { required: true });
 const parent = defineModel<string>("parent", { required: true });
@@ -13,11 +13,11 @@ const emit = defineEmits<{ pick: [] }>();
   <div class="step-space">
     <div class="row">
       <span class="field-label">输入储存空间名称:</span>
-      <AppInput v-model="name" placeholder="输入储存空间名称..." />
+      <TextInput v-model="name" placeholder="输入储存空间名称..." />
     </div>
     <div class="row path-row">
       <span v-if="parent" class="chosen-path" :title="parent">{{ parent }}</span>
-      <AppButton label="选择保存路径" variant="primary" :disabled="busy" @click="emit('pick')" />
+      <ActionButton label="选择保存路径" variant="primary" size="md" :disabled="busy" @click="emit('pick')" />
     </div>
     <p v-if="error" class="step-error">{{ error }}</p>
   </div>
@@ -52,6 +52,12 @@ const emit = defineEmits<{ pick: [] }>();
 }
 .path-row {
   justify-content: flex-end;
+}
+/* ActionButton md = 宽 100% 填充式（稿 flex-grow 拉伸语境）；38 稿此钮自适应内容——
+   压回 auto + 左右 12（旧 AppButton large padding 8/12 口径沿） */
+.path-row :deep(.act-btn) {
+  width: auto;
+  padding: var(--n-space-8) var(--n-space-12);
 }
 /* 已选路径：标签档截断（稿无此元素，样式全取稿内档位） */
 .chosen-path {

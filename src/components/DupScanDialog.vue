@@ -6,8 +6,8 @@
 // 取消 / 关闭 = 全部不处理（纯前端清状态）；合并经 dupScanOps.confirmMerge 一次 delete_placements。
 import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import AppModal from "./AppModal.vue";
-import AppButton from "./AppButton.vue";
+import BaseModal from "./modals/BaseModal.vue";
+import ActionButton from "./buttons/ActionButton.vue";
 import Radio from "./buttons/Radio.vue";
 import DupScanGroupRow from "./DupScanGroupRow.vue";
 import ScrollThumb from "./ScrollThumb.vue";
@@ -61,9 +61,10 @@ function thumbUrl(a: DupAsset): string | null {
 </script>
 
 <template>
-  <AppModal
-    variant="standard"
+  <BaseModal
     :title="dupScanState.step === 'groups' ? '扫描重复文件' : '合并前确认'"
+    :width="dupScanState.step === 'groups' ? 714 : 970"
+    framed
     class="scan-dialog"
     :class="{ confirm: dupScanState.step === 'confirm' }"
     @close="closeScan"
@@ -146,72 +147,44 @@ function thumbUrl(a: DupAsset): string | null {
     </div>
 
     <template #actions>
-      <!-- 屏 1 底部（35 稿：62 高 / padding 12 12 12 24 / 左计数右按钮） -->
+      <!-- 屏 1 底部（35 稿：62 高 / padding 12 12 12 24 / 左计数右按钮；按钮次左主右新模态口径） -->
       <div v-if="dupScanState.step === 'groups'" class="scan-bottom">
         <div class="summary">
           <span class="sel">已选择 <b>{{ selectedFileCount }}</b> 个文件</span>
           <span class="saved">可节约 {{ formatSize(savedBytes) }} 储存空间</span>
         </div>
         <div class="btns">
-          <AppButton
+          <ActionButton variant="cancel" size="lg" label="取消" :disabled="dupScanState.busy" @click="closeScan" />
+          <ActionButton
             variant="primary"
+            size="lg"
             label="合并"
             :disabled="selectedFileCount === 0 || dupScanState.busy"
             @click="enterConfirm"
           />
-          <AppButton variant="panel" label="取消" :disabled="dupScanState.busy" @click="closeScan" />
         </div>
       </div>
-      <!-- 屏 2 底部：确认合并（主，左）/ 上一步（次，右） -->
+      <!-- 屏 2 底部：上一步（次，左）/ 确认合并（主，右）——次左主右 -->
       <div v-else class="scan-bottom end">
-        <AppButton variant="primary" label="确认合并" :disabled="dupScanState.busy" @click="confirmMerge" />
-        <AppButton variant="panel" label="上一步" :disabled="dupScanState.busy" @click="backToGroups" />
+        <ActionButton variant="solid" size="lg" label="上一步" :disabled="dupScanState.busy" @click="backToGroups" />
+        <ActionButton variant="primary" size="lg" label="确认合并" :disabled="dupScanState.busy" @click="confirmMerge" />
       </div>
     </template>
-  </AppModal>
+  </BaseModal>
 </template>
 
 <style scoped>
-/* 35 稿壳：内容宽 714 + 真 border 3 补偿 = 717，padding 0（标题栏 / 按钮行贴边）；
-   屏 2 过渡为 973（内容 970）双栏 */
-.scan-dialog :deep(.app-modal) {
-  width: 717px;
-  padding: 0;
-  gap: 0;
-  transition: width 0.2s ease;
+/* 壳 = modals/BaseModal framed（2026-09-20 R2 换代）：宽走 width prop（border-box 含 1px 边，
+   稿值屏 1 = 714 / 屏 2 = 970，旧真 border 3px 补偿随换代废除）；framed 自带 54 高标题栏 +
+   底 1px 通用/五级通栏 + 关闭 X（原 :deep(.titlebar) 覆盖与其 ::after 底线补画一并删除）；
+   内容各段（.scroll-wrap / .confirm-body）通栏自承，内层包裹 thumb 维持贴弹窗缘
+   （2026-09-13 实机走查贴右缘口径）；class 透传落在根 .bm-mask 上 → 壳样式须 :deep(.bm-modal) */
+.scan-dialog :deep(.bm-modal) {
+  max-width: calc(100vw - 96px); /* 旧壳 max-width 口径沿 */
+  transition: width 0.2s ease; /* 屏 1 ↔ 屏 2 宽度动画（旧壳既定；width 现由 prop inline 驱动） */
 }
-.scan-dialog.confirm :deep(.app-modal) {
-  width: 973px;
-}
-/* 标题栏（35 稿）：54 高 / padding 12 12 12 24 / 底线通栏（真 border 后横线与竖框不重叠——
-   边框占盒模型在内容区外侧，叠色根因已除，2026-08-13） */
-.scan-dialog :deep(.titlebar) {
-  position: relative;
-  height: 54px;
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  flex: none;
-}
-.scan-dialog :deep(.titlebar)::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: var(--line-hover);
-}
-.scan-dialog :deep(.content) {
-  flex: 1;
-  min-height: 0;
-  padding: 0;
-  gap: 0;
-  overflow: hidden;
-  /* 壳 padding 0：归零 AppModal .content 的负 margin 对（2026-09-13 实机走查贴右缘口径），
-     内层包裹（.scroll-wrap/.list-wrap/.keeper-wrap）通栏，thumb 维持贴弹窗缘 */
-  margin-right: 0;
-  padding-right: 0;
-}
-.scan-dialog :deep(.actions) {
+/* actions 槽：底部按钮行通栏不缩 */
+.scan-dialog :deep(.bm-actions) {
   flex: none;
 }
 
@@ -483,8 +456,6 @@ function thumbUrl(a: DupAsset): string | null {
   display: flex;
   gap: var(--space-12);
 }
-/* 合并 / 取消 88 定宽（35 稿：88×38，与 36 稿同口径） */
-.scan-bottom :deep(.app-btn) {
-  width: 88px;
-}
+/* 合并 / 取消 / 确认合并 / 上一步 = ActionButton lg 宽自适应 + 左右 48（BaseModal 罩层口径，
+   2026-09-13 定稿值，35 稿 88×38 定宽随换代废除） */
 </style>

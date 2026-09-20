@@ -11,7 +11,7 @@
 import { computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import IconButton from "./IconButton.vue";
+import IconButton from "./buttons/IconButton.vue";
 import SideSlider from "./SideSlider.vue";
 import WindowControls from "./WindowControls.vue";
 import { usePreviewStore } from "../stores/preview";
@@ -53,7 +53,7 @@ async function togglePin(): Promise<void> {
       <template v-if="!window">
         <!-- 返回 = chevron-large 原样朝左（2026-08-30 实机修正：图标文件实为朝左，
              速查表 §6「朝右」口径与文件相反已修正——旧 rot-180 旋转后朝右 = 反了） -->
-        <IconButton name="chevron-large" title="返回" @click="preview.close()" />
+        <IconButton variant="plain" name="chevron-large" title="返回" @click="preview.close()" />
         <!-- 索引计数（预览工具栏稿）：数字-大 mono 13/18，当前/分隔 二级、总数 三级 -->
         <span class="index-text">
           <span class="idx-cur">{{ preview.index + 1 }}</span>
@@ -69,24 +69,26 @@ async function togglePin(): Promise<void> {
     </div>
     <div class="btn-group">
       <!-- 插件（2026-09-06 接业务 = 插件列表面板浮层，预览子窗口同可开——宿主 App.vue 层） -->
-      <IconButton name="plugin" title="插件" @click="openPluginPanel" />
+      <IconButton variant="plain" name="plugin" title="插件" @click="openPluginPanel" />
       <template v-if="preview.viewable">
-        <IconButton v-if="!preview.isSource" name="rotate-cw" title="旋转" @click="preview.rotateCw()" />
-        <IconButton v-if="!preview.isSource" name="flip-h" title="水平翻转" @click="preview.toggleFlip()" />
-        <IconButton name="fit-screen" title="适合窗口" @click="preview.fit()" />
-        <IconButton name="original-size" title="原图大小" @click="preview.actual()" />
+        <IconButton v-if="!preview.isSource" variant="plain" name="rotate-cw" title="旋转" @click="preview.rotateCw()" />
+        <IconButton v-if="!preview.isSource" variant="plain" name="flip-h" title="水平翻转" @click="preview.toggleFlip()" />
+        <IconButton variant="plain" name="fit-screen" title="适合窗口" @click="preview.fit()" />
+        <IconButton variant="plain" name="original-size" title="原图大小" @click="preview.actual()" />
       </template>
       <!-- 默认应用打开：源格式（PSD 等）/ other / font / text + **伴生代理资产（8.1：fla 预览
            按伴生 WebP 显示为 anim，但本质是工程文件——入口打开 fla 本身）**；
            工作空间合成项隐藏（assetId 假 id 禁发命令，见 script isWsCurrent） -->
       <IconButton
         v-if="(preview.isSource || preview.kind === 'other' || preview.kind === 'font' || preview.kind === 'text' || !!preview.current?.playAssetId) && !isWsCurrent"
+        variant="plain"
         name="open-default"
         title="默认应用打开"
         @click="preview.openDefaultApp()"
       />
       <IconButton
         v-if="!window && !isWsCurrent"
+        variant="plain"
         name="open-new-window"
         title="新窗口打开"
         @click="openInNewWindow"
@@ -94,12 +96,14 @@ async function togglePin(): Promise<void> {
       <!-- 上一个 / 下一个 = angle-bracket 尖括号（原样朝左 / rot-180 朝右），与内容工具栏
            后退/前进同款（2026-08-30 内容容器轮统一，旧 nav-history 引用清零） -->
       <IconButton
+        variant="plain"
         name="angle-bracket"
         title="上一个"
         :disabled="preview.index <= 0"
         @click="preview.step(-1)"
       />
       <IconButton
+        variant="plain"
         name="angle-bracket"
         title="下一个"
         class="rot-180"
@@ -108,6 +112,7 @@ async function togglePin(): Promise<void> {
       />
       <template v-if="window">
         <IconButton
+          variant="plain"
           :name="ui.alwaysOnTop ? 'pin-off' : 'pin-on'"
           title="窗口置顶"
           @click="togglePin"

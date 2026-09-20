@@ -2,7 +2,7 @@
 // 左栏收起时的"展开侧边栏"按钮（dockview prefixHeaderActions，标签栏行首）：
 // 2026-08-08 收展定案——左栏整栏收起，展开按钮在标签页行（不占工具栏；工具栏左侧留给档案看板）。
 // 未收起时不渲染。出现/消失 = 透明度过渡 150ms 缓入缓出（2026-08-30 用户定，token 通用档）。
-import IconButton from "./IconButton.vue";
+import IconButton from "./buttons/IconButton.vue";
 import { useUiStore } from "../stores/ui";
 
 const ui = useUiStore();
@@ -12,6 +12,7 @@ const ui = useUiStore();
   <Transition name="sb-expand">
     <IconButton
       v-if="ui.leftCollapsed"
+      variant="plain"
       name="collapse-sidebar"
       title="展开侧边栏"
       class="flip-h"

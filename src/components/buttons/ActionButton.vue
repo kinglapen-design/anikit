@@ -23,8 +23,9 @@ withDefaults(
     size?: "lg" | "md" | "sm";
     icon?: string;
     forceState?: "" | "hover";
+    disabled?: boolean; // 禁用态 = 30% 透明度 + 不响应（2026-09-20 用户定，控件族通用口径，速查 §39②）
   }>(),
-  { variant: "solid", size: "md", icon: undefined, forceState: "" },
+  { variant: "solid", size: "md", icon: undefined, forceState: "", disabled: false },
 );
 defineEmits<{ click: [e: MouseEvent] }>();
 </script>
@@ -33,6 +34,7 @@ defineEmits<{ click: [e: MouseEvent] }>();
   <button
     class="act-btn"
     :class="[variant, size, forceState ? `force-${forceState}` : '']"
+    :disabled="disabled"
     @click="$emit('click', $event)"
   >
     <AppIcon v-if="icon" :name="icon" :size="18" />
@@ -51,6 +53,12 @@ defineEmits<{ click: [e: MouseEvent] }>();
   transition:
     background var(--n-dur-150) var(--n-ease-in-out),
     color var(--n-dur-150) var(--n-ease-in-out);
+}
+/* 禁用态 = 30% 透明度 + 不响应（控件族通用口径，速查 §39②） */
+.act-btn:disabled {
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.3;
 }
 /* 尺寸档 */
 .act-btn.lg,

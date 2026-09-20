@@ -8,8 +8,8 @@
 // 要命名导进来再说"（批量重命名归独立弹窗，阶段三，37 稿）。
 // 确认 = 按各行决策执行；取消 / 关闭（含遮罩点击）= 全部跳过——源文件从未被动过，纯前端清队列即可。
 import { computed, ref } from "vue";
-import AppModal from "./AppModal.vue";
-import AppButton from "./AppButton.vue";
+import BaseModal from "./modals/BaseModal.vue";
+import ActionButton from "./buttons/ActionButton.vue";
 import SwitchButton from "./buttons/SwitchButton.vue";
 import DuplicateRow, { type DupDecision } from "./DuplicateRow.vue";
 import ScrollThumb from "./ScrollThumb.vue";
@@ -76,7 +76,7 @@ function onCancel(): void {
 </script>
 
 <template>
-  <AppModal variant="standard" title="重复文件提示" class="dup-dialog" @close="onCancel">
+  <BaseModal title="重复文件提示" :width="970" framed class="dup-dialog" @close="onCancel">
     <div class="dup-body">
       <!-- 表头双列（36 稿：46 高 + 下分隔线，标题档文字-标签色） -->
       <div class="dup-head">
@@ -97,53 +97,36 @@ function onCancel(): void {
       </div>
     </div>
     <template #actions>
-      <!-- 底部按钮行（36 稿）：右 = 全部跟随 + 确认（主，左）/ 取消（次，右） -->
+      <!-- 底部按钮行（36 稿 + 新模态口径）：右 = 全部跟随 + 取消（次，左）/ 确认（主，右）——次左主右 -->
       <div class="dup-bottom">
         <span class="follow-label">全部跟随</span>
         <SwitchButton v-model="followAll" />
-        <AppButton variant="primary" label="确认" :disabled="busy" @click="onConfirm" />
-        <AppButton variant="panel" label="取消" :disabled="busy" @click="onCancel" />
+        <ActionButton variant="cancel" size="lg" label="取消" :disabled="busy" @click="onCancel" />
+        <ActionButton variant="primary" size="lg" label="确认" :disabled="busy" @click="onConfirm" />
       </div>
     </template>
-  </AppModal>
+  </BaseModal>
 </template>
 
 <style scoped>
-/* 36 稿总容器：970×878，padding 0（标题栏 / 按钮行贴边，区块内边距自控） */
-.dup-dialog :deep(.app-modal) {
-  width: 973px; /* 36 稿内容 970 + 真 border 3 补偿（2026-08-13 二级窗口外框改真 border） */
-  height: 878px;
-  padding: 0;
-  gap: 0;
+/* 36 稿总容器：970×878，padding 0（标题栏 / 按钮行贴边，区块内边距自控）。
+   壳 = modals/BaseModal framed（2026-09-20 R2 换代）：宽 970 稿值走 width prop（border-box 含 1px 边，
+   旧真 border 3px 补偿随换代废除）；framed 自带 54 高标题栏 + 底 1px 通用/五级通栏 + 关闭 X（原
+   :deep(.titlebar) 覆盖删除）；class 透传落在 BaseModal 根 .bm-mask 上 → 壳样式须 :deep(.bm-modal) */
+.dup-dialog :deep(.bm-modal) {
+  height: min(878px, calc(100vh - 96px)); /* 878 稿值 + 窗口封顶留呼吸（旧壳 max-height 口径沿） */
+  max-width: calc(100vw - 96px); /* 旧壳 max-width 口径沿 */
 }
-/* 标题栏（36 稿）：54 高 / padding 12 12 12 24 / 下分隔线；标题 = 文字/常态 */
-.dup-dialog :deep(.titlebar) {
-  height: 54px;
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  box-shadow: inset 0 -1px 0 0 var(--line-hover);
-  flex: none;
-}
-/* 区块展示：吃满剩余高，padding 0 24，内部自滚；
-   壳 padding 0：归零 AppModal .content 的负 margin（2026-09-13 实机走查贴右缘口径）——
+/* 区块展示：framed 内容段自承 padding 0 24（原 .content 承担，换代后归本段）；吃满剩余高，内部自滚。
    padding-right 必须保留 24（表头 / 行靠它内缩，归零会把内容冲到弹窗缘）；
-   贴右缘改由内层 .dup-wrap/.dup-scroll 负 margin 对承担 */
-.dup-dialog :deep(.content) {
-  flex: 1;
-  min-height: 0;
-  padding: 0 var(--space-24);
-  gap: 0;
-  overflow: hidden;
-  margin-right: 0;
-}
-/* actions 槽：底部按钮行通栏 */
-.dup-dialog :deep(.actions) {
-  flex: none;
-}
+   贴右缘由内层 .dup-wrap/.dup-scroll 负 margin 对承担（2026-09-13 实机走查贴右缘口径） */
 .dup-body {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+  padding: 0 var(--n-space-24);
 }
 /* 表头（36 稿）：46 高 / padding 12 0 / gap 24 / 下分隔线 */
 .dup-head {
@@ -161,14 +144,14 @@ function onCancel(): void {
   color: var(--text-label);
 }
 /* 滚动包裹层：负 margin 对（2026-09-13 实机走查贴右缘口径）——margin-right 负扩 24 吃进
-   .content 的 0 24 padding 贴到弹窗缘，.dup-scroll padding-right 补回使行内容原位不动 */
+   .dup-body 的 0 24 padding 贴到弹窗缘，.dup-scroll padding-right 补回使行内容原位不动 */
 .dup-wrap {
   position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  margin-right: calc(-1 * var(--space-24));
+  margin-right: calc(-1 * var(--n-space-24));
 }
 /* 滚轮 = ScrollThumb 悬浮件（悬停显隐，主窗口统一交互，2026-08-13 定稿）；
    2026-09-13 走查后 thumb 贴弹窗右缘（原距 inset 边框 24px 口径废） */
@@ -196,8 +179,10 @@ function onCancel(): void {
   font-weight: var(--text-title-weight);
   color: var(--text-normal);
 }
-/* 确认 / 取消 88 定宽（36 稿：88×38） */
-.dup-bottom :deep(.app-btn) {
-  width: 88px;
+/* actions 槽：底部按钮行通栏不缩（壳高被窗口封顶压时按钮行不动） */
+.dup-dialog :deep(.bm-actions) {
+  flex: none;
 }
+/* 确认 / 取消 = ActionButton lg 宽自适应 + 左右 48（BaseModal 罩层口径，2026-09-13 定稿值，
+   36 稿 88×38 定宽随换代废除） */
 </style>

@@ -5,7 +5,7 @@
 // IME 组合期（isComposing）不响应回车/空格——中文输入选词确认不误提交。
 import { ref } from "vue";
 import AppIcon from "./AppIcon.vue";
-import IconButton from "./IconButton.vue";
+import IconButton from "./buttons/IconButton.vue";
 
 const props = withDefaults(defineProps<{ terms: string[]; placeholder?: string }>(), {
   placeholder: "请输入分词",
@@ -48,7 +48,7 @@ function onKeydown(e: KeyboardEvent): void {
       @keydown="onKeydown"
       @blur="commit"
     />
-    <IconButton small name="add-large" title="添加分词" class="term-add" @click="commit" />
+    <IconButton variant="bare" size="sm" name="add-large" title="添加分词" class="term-add" @click="commit" />
   </div>
 </template>
 

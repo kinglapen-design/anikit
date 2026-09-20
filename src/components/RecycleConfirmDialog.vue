@@ -5,7 +5,7 @@
 // 右上角关闭 / 取消 = 放弃（干跑未动数据，直接关即可）。
 // 类名沿用 del-*——App.vue 快捷键让位判定按 .del-mask 查询。宿主 App.vue。
 import { computed, onBeforeUnmount, onMounted } from "vue";
-import IconButton from "./IconButton.vue";
+import IconButton from "./buttons/IconButton.vue";
 import { confirmRecycleDelete } from "../lib/placementOps";
 import { useSelectionStore } from "../stores/selection";
 
@@ -49,7 +49,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
     <div class="del-card">
       <header class="del-titlebar">
         <h2 class="del-title">{{ isClear ? "清空回收站" : "彻底删除" }}</h2>
-        <IconButton name="window-close" title="取消" @click="onCancel" />
+        <IconButton variant="plain" name="window-close" title="取消" @click="onCancel" />
       </header>
       <div class="del-body">
         <p class="del-text">{{ bodyText }}</p>

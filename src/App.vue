@@ -31,8 +31,6 @@ import PluginListPanel from "./components/plugins/PluginListPanel.vue";
 import SetupWizard from "./components/SetupWizard.vue";
 import CreateLibraryModal from "./components/CreateLibraryModal.vue";
 import MergeLibraryModal from "./components/MergeLibraryModal.vue";
-import AppModal from "./components/AppModal.vue";
-import AppButton from "./components/AppButton.vue";
 import Checkbox from "./components/buttons/Checkbox.vue";
 import ImportDialog from "./components/ImportDialog.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
@@ -59,6 +57,7 @@ import { usePickerStore } from "./stores/picker";
 import { useSelectionStore } from "./stores/selection";
 import { usePreviewStore } from "./stores/preview";
 import { wizardState, reopenLastSession, createLibraryModalState, mergeLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener } from "./lib/libraryOps";
+import { playAlert } from "./lib/sounds";
 import { closePluginPanel, pluginPanelState } from "./lib/pluginPanel";
 import { dupScanState } from "./lib/dupScanOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
@@ -121,6 +120,15 @@ function onResize(): void {
 function onWizardDone(): void {
   wizardState.open = false;
 }
+
+// 删除资源库确认 = 旧 09 稿 alert 侵入式语义：弹窗出现配提示音（旧 AppModal alert onMounted 口径，
+// 随 ConfirmModal 换代收进 App 层——AppConfirm watch playAlert 同先例）
+watch(
+  () => deleteLibraryState.name,
+  (n) => {
+    if (n) playAlert();
+  },
+);
 
 // 导入弹窗确认：关弹窗，先检测序列帧（命中追加 12_序列帧弹窗，4.1），导入走后台任务
 //（Channel 流式，到一个显示一个，UI 不阻塞）
@@ -317,13 +325,15 @@ async function togglePin(): Promise<void> {
       :names="mergeLibraryModalState.names"
       @close="mergeLibraryModalState.open = false"
     />
-    <!-- 删除资源库确认（08 稿 item 删除×；09 稿 alert 侵入式配提示音；孤儿素材复选清理） -->
-    <AppModal
+    <!-- 删除资源库确认（08 稿 item 删除×；09 稿 alert 侵入式配提示音——watch 播音见上；
+         孤儿素材复选清理；2026-09-20 R2 换代 ConfirmModal warning：确认钮 = 状态/警告底） -->
+    <ConfirmModal
       v-if="deleteLibraryState.name"
-      variant="alert"
-      alert-icon="warning"
+      kind="warning"
       :title="`删除资源库「${deleteLibraryState.name}」`"
-      @close="deleteLibraryState.name = null"
+      confirm-label="删除"
+      @confirm="confirmDeleteLibrary"
+      @cancel="deleteLibraryState.name = null"
     >
       <p class="del-lib-text">库内文件夹、标签等数据将被删除且不可恢复。</p>
       <Checkbox
@@ -333,11 +343,7 @@ async function togglePin(): Promise<void> {
         :label="`同时删除 ${deleteLibraryState.orphans} 个仅该库引用的素材文件`"
       />
       <p v-else class="del-lib-text">素材文件保留在素材库中。</p>
-      <template #actions>
-        <AppButton label="删除" variant="primary" @click="confirmDeleteLibrary" />
-        <AppButton label="取消" @click="deleteLibraryState.name = null" />
-      </template>
-    </AppModal>
+    </ConfirmModal>
     <ImportDialog
       v-else-if="content.importDraft"
       :draft="content.importDraft"

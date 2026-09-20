@@ -2,7 +2,7 @@
 // 标签栏右侧"添加标签页"按钮（1.2，figma 15：30×30 padding 6，图标同新增 add-large）：
 // dockview rightHeaderActionsComponent——每个 group 标签栏各一枚，点击在该 group 新建标签页。
 import type { IDockviewHeaderActionsProps } from "dockview-vue";
-import IconButton from "./IconButton.vue";
+import IconButton from "./buttons/IconButton.vue";
 import { useTabsStore } from "../stores/tabs";
 
 // props 运行时声明（rolldown 环境 SFC 编译器无法解析 node_modules 类型）；
@@ -17,5 +17,5 @@ function onAdd(): void {
 </script>
 
 <template>
-  <IconButton name="add-large" title="新建标签页" @click="onAdd" />
+  <IconButton variant="plain" name="add-large" title="新建标签页" @click="onAdd" />
 </template>

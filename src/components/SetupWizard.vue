@@ -10,8 +10,8 @@
 import { computed, ref } from "vue";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import IconButton from "./IconButton.vue";
-import AppButton from "./AppButton.vue";
+import IconButton from "./buttons/IconButton.vue";
+import ActionButton from "./buttons/ActionButton.vue";
 import PathErrorDialog from "./PathErrorDialog.vue";
 import WizardStepSpace from "./WizardStepSpace.vue";
 import WizardStepLibrary from "./WizardStepLibrary.vue";
@@ -222,8 +222,8 @@ function onErrorRetry(): void {
       <!-- 帧 0：入口（无步骤区） -->
       <div v-if="step === 0" class="content entry">
         <div class="entry-actions">
-          <AppButton label="新建储存空间" variant="primary" :disabled="busy" @click="step = 1" />
-          <AppButton label="打开储存空间" :disabled="busy" @click="openSpaceFlow" />
+          <ActionButton label="新建储存空间" variant="primary" size="md" :disabled="busy" @click="step = 1" />
+          <ActionButton label="打开储存空间" variant="solid" size="md" :disabled="busy" @click="openSpaceFlow" />
         </div>
       </div>
       <WizardStepSpace
@@ -248,9 +248,10 @@ function onErrorRetry(): void {
       <!-- 步骤区：上一步 / 步骤标题 / 下一步·完成 + 进度条（帧 0 无） -->
       <div v-if="step > 0" class="step-area">
         <div class="step-row">
-          <AppButton
+          <ActionButton
             label="上一步"
-            size="small"
+            variant="solid"
+            size="sm"
             class="prev-btn"
             :class="{ ghost: !prevVisible }"
             :disabled="busy"
@@ -260,10 +261,10 @@ function onErrorRetry(): void {
             <span class="step-no">第{{ STEP_NO[step] }}步：</span>
             <span class="step-name">{{ STEP_TITLES[step] }}</span>
           </span>
-          <AppButton
+          <ActionButton
             :label="isLastStep ? '完成' : '下一步'"
             variant="primary"
-            size="small"
+            size="sm"
             :disabled="busy"
             @click="onNext"
           />
@@ -370,6 +371,12 @@ function onErrorRetry(): void {
   display: flex;
   flex-direction: row;
   gap: var(--space-12);
+}
+/* ActionButton md = 宽 100% 填充式（稿 flex-grow 拉伸语境）；38 稿入口两钮自适应内容——
+   压回 auto + 左右 12（旧 AppButton large padding 8/12 口径沿） */
+.entry-actions :deep(.act-btn) {
+  width: auto;
+  padding: var(--n-space-8) var(--n-space-12);
 }
 /* 步骤区：146 高 / padding 48 / gap 12（上行 28 + 进度条 10） */
 .step-area {

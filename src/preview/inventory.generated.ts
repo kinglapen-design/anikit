@@ -12,52 +12,36 @@ export interface InventoryEntry {
 export const inventoryDate = "2026-09-20";
 export const inventoryTotals = {
   "new": 66,
-  "legacy": 5,
+  "legacy": 3,
   "business": 70,
   "dead": 2,
-  "legacyConsumers": 54,
-  "legacyTokens": 426
+  "legacyConsumers": 10,
+  "legacyTokens": 356
 };
 export const inventory: InventoryEntry[] = [
-  {
-    "path": "components/AppButton",
-    "name": "AppButton",
-    "status": "legacy",
-    "consumers": 16,
-    "legacyTokens": 16,
-    "replacement": "buttons/ActionButton"
-  },
   {
     "path": "components/IconButton",
     "name": "IconButton",
     "status": "legacy",
-    "consumers": 16,
+    "consumers": 6,
     "legacyTokens": 4,
     "replacement": "buttons/IconButton"
+  },
+  {
+    "path": "components/AppButton",
+    "name": "AppButton",
+    "status": "legacy",
+    "consumers": 2,
+    "legacyTokens": 16,
+    "replacement": "buttons/ActionButton"
   },
   {
     "path": "components/AppModal",
     "name": "AppModal",
     "status": "legacy",
-    "consumers": 13,
+    "consumers": 2,
     "legacyTokens": 12,
     "replacement": "modals/BaseModal"
-  },
-  {
-    "path": "components/AppInput",
-    "name": "AppInput",
-    "status": "legacy",
-    "consumers": 7,
-    "legacyTokens": 10,
-    "replacement": "inputs/TextInput"
-  },
-  {
-    "path": "components/AppSearchBar",
-    "name": "AppSearchBar",
-    "status": "legacy",
-    "consumers": 2,
-    "legacyTokens": 8,
-    "replacement": ""
   },
   {
     "path": "components/DetailNotes",
@@ -176,7 +160,7 @@ export const inventory: InventoryEntry[] = [
     "name": "BatchRenameDialog",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 16,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -184,7 +168,7 @@ export const inventory: InventoryEntry[] = [
     "name": "BlockManageDialog",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 3,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -192,7 +176,7 @@ export const inventory: InventoryEntry[] = [
     "name": "BlockManageRow",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 9,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -224,7 +208,7 @@ export const inventory: InventoryEntry[] = [
     "name": "DescEditDialog",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 5,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -328,7 +312,7 @@ export const inventory: InventoryEntry[] = [
     "name": "GroupEditDialog",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 7,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -336,7 +320,7 @@ export const inventory: InventoryEntry[] = [
     "name": "GroupManageDialog",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 12,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -639,15 +623,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/AppIcon",
     "name": "AppIcon",
     "status": "new",
-    "consumers": 57,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/ScrollThumb",
-    "name": "ScrollThumb",
-    "status": "new",
-    "consumers": 22,
+    "consumers": 55,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -655,7 +631,15 @@ export const inventory: InventoryEntry[] = [
     "path": "components/buttons/ActionButton",
     "name": "ActionButton",
     "status": "new",
-    "consumers": 13,
+    "consumers": 25,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/ScrollThumb",
+    "name": "ScrollThumb",
+    "status": "new",
+    "consumers": 24,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -663,9 +647,25 @@ export const inventory: InventoryEntry[] = [
     "path": "components/buttons/IconButton",
     "name": "IconButton",
     "status": "new",
-    "consumers": 10,
+    "consumers": 23,
     "legacyTokens": 0,
     "replacement": "buttons/IconButton"
+  },
+  {
+    "path": "components/inputs/TextInput",
+    "name": "TextInput",
+    "status": "new",
+    "consumers": 14,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/modals/BaseModal",
+    "name": "BaseModal",
+    "status": "new",
+    "consumers": 14,
+    "legacyTokens": 0,
+    "replacement": ""
   },
   {
     "path": "components/items/SectionTitle",
@@ -692,6 +692,14 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/modals/ConfirmModal",
+    "name": "ConfirmModal",
+    "status": "new",
+    "consumers": 6,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/buttons/SwitchButton",
     "name": "SwitchButton",
     "status": "new",
@@ -708,24 +716,8 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/inputs/TextInput",
-    "name": "TextInput",
-    "status": "new",
-    "consumers": 5,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
     "path": "components/items/TreeRowItem",
     "name": "TreeRowItem",
-    "status": "new",
-    "consumers": 5,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/modals/BaseModal",
-    "name": "BaseModal",
     "status": "new",
     "consumers": 5,
     "legacyTokens": 0,
@@ -782,14 +774,6 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/items/BaseDataItem",
     "name": "BaseDataItem",
-    "status": "new",
-    "consumers": 2,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/modals/ConfirmModal",
-    "name": "ConfirmModal",
     "status": "new",
     "consumers": 2,
     "legacyTokens": 0,

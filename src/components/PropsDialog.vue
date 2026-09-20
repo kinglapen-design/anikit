@@ -1,16 +1,19 @@
 <script setup lang="ts">
 // 属性标签弹窗（32_属性标签稿，6.1；文件与档案共用）：
-// 壳 = 479 稿宽（482 真 border 补偿）/ 标题栏 54 / 按钮栏 62（主左次右 88×38）；
+// 壳 = modals/BaseModal framed（2026-09-20 R2 旧件烧减轮换代，旧 AppModal standard + AppButton +
+// AppSearchBar + 根 IconButton 退役）：481 宽 = 479 稿 + 新壳 1px border×2、508 高 = 稿 506 + 2
+//（旧 1.5 border「+3 补偿」口径随壳换代改 +2）；标题栏 54 带底线与关闭 X = framed 自带（旧 :deep 覆盖删）；
+// 按钮栏 62（随新口径翻转次左主右、宽自适应，88 定宽废，速查 §1）。
 // 内容 = 搜索框（过滤池）+ 拥有属性行（chips × 移除 + 输入新属性回车添加 + 添加钮）
 // + 属性池「已有属性标签：」（全库聚合，点 chip 加入拥有——轻微过冲回弹，稿 prose 定；
 // 池内 × = 全局删除：警告二次确认后立即生效，全库文件与档案该词失效，不随本弹窗取消回滚）。
 // 确认 / 取消 = 草稿式：只提交本对象属性集（一步 undo），取消全部放弃。
 import { computed, onMounted, ref } from "vue";
-import AppModal from "./AppModal.vue";
-import AppButton from "./AppButton.vue";
-import AppSearchBar from "./AppSearchBar.vue";
+import BaseModal from "./modals/BaseModal.vue";
+import ActionButton from "./buttons/ActionButton.vue";
+import TextInput from "./inputs/TextInput.vue";
 import TagButton from "./buttons/TagButton.vue";
-import IconButton from "./IconButton.vue";
+import IconButton from "./buttons/IconButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { useUiStore } from "../stores/ui";
 import { useSelectionStore } from "../stores/selection";
@@ -91,11 +94,11 @@ function onCancel(): void {
 </script>
 
 <template>
-  <AppModal v-if="target" variant="standard" title="属性标签" class="props-dialog" @close="onCancel">
+  <BaseModal v-if="target" title="属性标签" :width="481" framed class="props-dialog" @close="onCancel">
     <div class="pd-body">
-      <!-- 搜索框（32 稿：36 高 C1 底；过滤池显示） -->
+      <!-- 搜索框（过滤池显示；inputs/TextInput lg + 左置 search 图标 + 清除钮） -->
       <div class="pd-search">
-        <AppSearchBar v-model="keyword" placeholder="搜索..." />
+        <TextInput v-model="keyword" size="lg" leading-icon="search" clearable placeholder="搜索..." />
       </div>
       <!-- 拥有属性行（稿：gap 8 / chip 25 高；输入新属性小框 + 添加钮） -->
       <div class="pd-owned">
@@ -113,7 +116,7 @@ function onCancel(): void {
           placeholder="输入新属性"
           @keydown.enter.prevent="onDraftEnter"
         />
-        <IconButton name="add-small" small title="添加" @click="add(draft); draft = ''" />
+        <IconButton name="add-small" variant="bare" size="sm" title="添加" @click="add(draft); draft = ''" />
       </div>
       <!-- 属性池（稿：C1 底 + 顶分隔线，「已有属性标签：」标签色 + 流式 chips gap 8；
            滚轮 = ScrollThumb 悬浮件，2026-09-13 实机走查补——此前有滚动无滚轮） -->
@@ -127,41 +130,29 @@ function onCancel(): void {
     </div>
     <template #actions>
       <div class="pd-bottom">
-        <AppButton variant="primary" label="确认" :disabled="busy" @click="onConfirm" />
-        <AppButton variant="panel" label="取消" :disabled="busy" @click="onCancel" />
+        <ActionButton label="取消" variant="cancel" size="lg" :disabled="busy" @click="onCancel" />
+        <ActionButton label="确认" variant="primary" size="lg" :disabled="busy" @click="onConfirm" />
       </div>
     </template>
-  </AppModal>
+  </BaseModal>
 </template>
 
 <style scoped>
-/* 32 稿总容器：479 宽（482 = 内容宽 + 真 border 3 补偿，DuplicateDialog 同口径）；
-   高 = 稿 506 档（509 补偿），拥有行多行换行挤压池区（flex 1 min-height 0） */
-.props-dialog :deep(.app-modal) {
-  width: 482px;
-  height: 509px;
-  padding: 0;
+/* 32 稿总容器：宽 481 由 BaseModal width prop 给（479 稿 + 新壳 1px border×2；旧 1.5 border
+   「+3 补偿」口径随壳换代改 +2，DuplicateDialog 同口径）；高 = 稿 506 + 2，拥有行多行换行挤压
+   池区（flex 1 min-height 0）；framed 壳 padding 0、列 gap 12 → gap 归零：32 稿节奏自承
+   （pd-body padding-top 12 / 按钮栏通栏分隔线贴池底，framed 默认 12 会浮线）；
+   小窗口兜底 max-height（旧 AppModal 同口径） */
+.props-dialog :deep(.bm-modal) {
+  height: 508px;
+  max-width: calc(100vw - 96px);
+  max-height: calc(100vh - 96px);
   gap: 0;
 }
-/* 标题栏（32 稿）：54 高 / padding 12 12 12 24 / 下分隔线；标题常态（AppModal 默认） */
-.props-dialog :deep(.titlebar) {
-  height: 54px;
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  box-shadow: inset 0 -1px 0 0 var(--line-hover);
-  flex: none;
-}
-.props-dialog :deep(.content) {
-  flex: 1;
-  min-height: 0;
-  padding: 0;
-  gap: 0;
-  overflow: hidden;
-  /* 壳 padding 0：归零 AppModal .content 的负 margin 对（2026-09-13 实机走查贴右缘口径），
-     .pd-body 通栏 = 属性池包裹右缘即弹窗缘 */
-  margin-right: 0;
-  padding-right: 0;
-}
-.props-dialog :deep(.actions) {
+/* 标题栏（32 稿）：54 高 / padding 12 12 12 24 / 下分隔线 = framed 自带（旧 :deep(.titlebar)
+   覆盖删）；.pd-body 通栏直挂壳（旧 :deep(.content) 归零组随壳退役——壳 padding 0 下
+   属性池包裹右缘即弹窗缘，2026-09-13 贴右缘口径沿） */
+.props-dialog :deep(.bm-actions) {
   flex: none;
 }
 .pd-body {
@@ -247,7 +238,7 @@ function onCancel(): void {
 .pool-chips .app-tag {
   cursor: pointer;
 }
-/* 底部按钮栏（62 高 / 上分隔线 / 主左次右 88×38，速查表 §1） */
+/* 底部按钮栏（62 高 / 上分隔线 / 次左主右宽自适应——88 定宽随 AppButton 退役废除，速查表 §1 新口径） */
 .pd-bottom {
   display: flex;
   flex: 1;
@@ -257,8 +248,5 @@ function onCancel(): void {
   padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
   height: 62px;
   box-shadow: inset 0 1px 0 0 var(--line-hover);
-}
-.pd-bottom :deep(.app-btn) {
-  width: 88px;
 }
 </style>

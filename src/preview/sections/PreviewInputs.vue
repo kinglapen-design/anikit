@@ -1,12 +1,14 @@
 <script setup lang="ts">
 // 组件 输入框展区——docs/06_UI重构/Design Token/组件/输入框/ 大 / 小两稿的展示与验收面。
 // force-focus = 聚焦态静态验收；每档附真实可点实例（focus-within 出聚焦描边）。
-// 聚焦描边 = 亮色/半透明-1，opacity 过渡 150ms；hover 稿无不做；禁用态稿未画（09 待办）。占位符 亮色/四级（2026-08-29 用户定）。
+// 聚焦描边 = 亮色/半透明-1，opacity 过渡 150ms；hover 稿无不做；禁用态 = 30% 透明度（2026-09-20 控件族口径，§39②）。
+// 占位符 亮色/四级（2026-08-29 用户定）。
 import { ref } from "vue";
 import TextInput from "../../components/inputs/TextInput.vue";
 
 const liveLg = ref("");
 const liveSm = ref("");
+const liveClear = ref("雪牧_自动");
 </script>
 
 <template>
@@ -14,7 +16,7 @@ const liveSm = ref("");
     <h2 class="pv-sec-title">组件 · 输入框</h2>
     <p class="pv-sec-desc">
       Design Token/组件/输入框/ 大 / 小两稿合一 TextInput：通用二级底 + 圆角 8，聚焦描边 亮色/半透明-1（<b>150ms</b> opacity，
-      双层伪元素 inset 0 同卡片线条方案）；占位符 亮色/四级（2026-08-29 用户定）；hover 稿无不做；禁用态稿未画记 09 待办。
+      双层伪元素 inset 0 同卡片线条方案）；占位符 亮色/四级（2026-08-29 用户定）；hover 稿无不做；禁用态 30% 透明度（§39②）。
     </p>
 
     <div class="pv-group">
@@ -43,6 +45,10 @@ const liveSm = ref("");
         <div class="pv-demo-cell" style="width: 240px">
           <TextInput model-value="" placeholder="搜索文件夹..." leading-icon="search" />
           <span class="pv-cap">leadingIcon 左置装饰 18 亮色/三级（移动弹窗搜索框稿，2026-09-08 扩）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <TextInput v-model="liveClear" placeholder="输入后出清除钮" leading-icon="search" clearable />
+          <span class="pv-cap">clearable 清除钮（clear 12 亮色/四级 hover 升三级；烧 AppInput/AppSearchBar 补，2026-09-20）</span>
         </div>
         <div class="pv-demo-cell" style="width: 240px">
           <TextInput model-value="全部" readonly :focusable="false" />

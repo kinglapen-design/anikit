@@ -1,16 +1,20 @@
 <script setup lang="ts">
 // 区块管理弹窗（30 稿 + 26 稿删除区块警告，2026-08-14 区块子系统）：
-// AppModal standard 壳 556 宽（+3 真 border 补偿 = 559），标题栏 54 / 内容区 padding 0 24 /
-// 底部按钮栏 62 确认 primary · 取消 panel（88×38 主左次右）；标题常态色（AppModal 默认，勿覆盖）。
+// 2026-09-20 R2 旧件烧减：壳 = modals/BaseModal framed（559 宽挪 prop；标题栏 54 带底线 +
+// 关闭 X 由 framed 提供）；按钮 = ActionButton（按钮栏 lg 宽自适应 + 左右 48、次左主右；
+// 添加钮 solid md——旧 88 / 104 定宽皆废）；删除警告 = modals/ConfirmModal warning
+//（旧 AppModal alert 退役；提示音沿——弹开即播）。
 // 草稿式：打开时从 content store 快照区块列表进本地草稿，行编辑（改名 / 换图标 / 箭头排序 /
 // 删除标记）只动草稿；确认 → apply_block_changes 一次提交（数组序 = 最终顺序）；
-// needConfirm → 26 稿 alert warning（48 徽章 + 提示音），确认后 confirmed=true 重提；
+// needConfirm → 26 稿警告，确认后 confirmed=true 重提；
 // 取消 / X = 丢弃草稿纯前端关闭。入口 = SidebarLeft section-manage（ui.blockManageOpen），宿主 App.vue。
-import { nextTick, ref } from "vue";
-import AppModal from "./AppModal.vue";
-import AppButton from "./AppButton.vue";
+import { nextTick, ref, watch } from "vue";
+import BaseModal from "./modals/BaseModal.vue";
+import ConfirmModal from "./modals/ConfirmModal.vue";
+import ActionButton from "./buttons/ActionButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import BlockManageRow from "./BlockManageRow.vue";
+import { playAlert } from "../lib/sounds";
 import { applyBlockChanges, type BlockDeleteConflict, type BlockDraft, type BlockInput } from "../lib/blockOps";
 import { DEFAULT_BLOCK_ID, useContentStore } from "../stores/content";
 
@@ -27,6 +31,11 @@ const deletedIds: string[] = [];
 // 删除非空区块的两段式确认（26 稿）：needConfirm 报告条目；非 null = 警告弹窗打开
 const conflicts = ref<BlockDeleteConflict[] | null>(null);
 const busy = ref(false);
+
+// 警告提示音（旧 AppModal alert onMounted 口径沿——弹开即播）
+watch(conflicts, (v) => {
+  if (v) playAlert();
+});
 
 // 悬浮滚轮容器锚点（ScrollThumb：滚动容器须为包裹层直接子元素）
 const rowsEl = ref<HTMLElement>();
@@ -81,11 +90,11 @@ function conflictLines(): string[] {
 </script>
 
 <template>
-  <AppModal variant="standard" title="区块管理" class="block-manage" @close="emit('close')">
+  <BaseModal title="区块管理" :width="559" framed class="block-manage" @close="emit('close')">
     <div class="bm-body">
       <div class="scroll-wrap">
         <div ref="rowsEl" class="bm-rows kit-scroll">
-          <!-- TransitionGroup：箭头排序时两行交换位置给 0.18s 位移过渡（2026-08-14 用户定：排序反馈要明显） -->
+          <!-- TransitionGroup：箭头排序时两行交换位置给位移过渡（2026-08-14 用户定：排序反馈要明显） -->
           <TransitionGroup name="bm-swap" tag="div" class="bm-rows-inner">
             <BlockManageRow
               v-for="(row, i) in draft"
@@ -102,68 +111,45 @@ function conflictLines(): string[] {
         </div>
         <ScrollThumb :body="rowsEl" />
       </div>
-      <!-- 内容底部添加区块（30 稿：容器 60 高，按钮 C4 104×36 居中） -->
+      <!-- 内容底部添加区块（30 稿：容器 60 高，按钮居中） -->
       <div class="add-wrap">
-        <AppButton variant="panel" icon="add-large" label="添加区块" class="add-btn" @click="addBlock" />
+        <ActionButton variant="solid" size="md" icon="add-large" label="添加区块" class="add-btn" @click="addBlock" />
       </div>
     </div>
     <template #actions>
-      <AppButton variant="primary" label="确认" :disabled="busy" @click="submit(false)" />
-      <AppButton variant="panel" label="取消" :disabled="busy" @click="emit('close')" />
+      <ActionButton variant="cancel" label="取消" size="lg" :disabled="busy" @click="emit('close')" />
+      <ActionButton variant="primary" label="确认" size="lg" :disabled="busy" @click="submit(false)" />
     </template>
-  </AppModal>
-  <!-- 删除非空区块警告（26 稿：alert warning 48 徽章 + 提示音；主"删除"次"取消"） -->
-  <AppModal
+  </BaseModal>
+  <!-- 删除非空区块警告（26 稿 → ConfirmModal warning + 提示音；确认「删除」 / 取消回编辑；
+       busy 重入由 submit 内部闸挡——ConfirmModal 无 disabled 能力） -->
+  <ConfirmModal
     v-if="conflicts"
-    variant="alert"
-    alert-icon="warning"
+    kind="warning"
     title="删除区块"
-    @close="conflicts = null"
+    confirm-label="删除"
+    @confirm="submit(true)"
+    @cancel="conflicts = null"
   >
     <p v-for="line in conflictLines()" :key="line" class="warn-line">{{ line }}</p>
     <p class="warn-line">删除后文件夹将移入文件夹区块。</p>
-    <template #actions>
-      <AppButton variant="primary" label="删除" :disabled="busy" @click="submit(true)" />
-      <AppButton variant="panel" label="取消" :disabled="busy" @click="conflicts = null" />
-    </template>
-  </AppModal>
+  </ConfirmModal>
 </template>
 
 <style scoped>
-/* 30 稿壳：内容宽 556 + 真 border 3 补偿 = 559，padding 0（标题栏 / 按钮栏贴边，同 DupScanDialog 口径） */
-.block-manage :deep(.app-modal) {
-  width: 559px;
-  padding: 0;
+/* 30 稿壳：559 宽挪 width prop（旧 = 内容宽 556 + 真 border 3 补偿）；framed padding 0 贴边、
+   gap 归零（标题栏 / 按钮栏贴边，同 BatchRenameDialog 口径）；视口封顶沿旧 AppModal 口径（BaseModal 不带） */
+.block-manage :deep(.bm-modal) {
+  max-height: calc(100vh - 96px);
   gap: 0;
 }
-/* 标题栏（30 稿）：54 高 / padding 12 12 12 24 / 底线通栏 */
-.block-manage :deep(.titlebar) {
-  height: 54px;
-  box-sizing: border-box;
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  border-bottom: 1px solid var(--line-hover);
-  flex: none;
-}
-/* 内容区（30 稿）：padding 0 24；滚动自管（ScrollThumb 悬浮件），壳 overflow 关闭；
-   壳 padding 0：归零 AppModal .content 的负 margin（2026-09-13 实机走查贴右缘口径）——
-   padding-right 保留 24（行靠它内缩），贴右缘由内层 .scroll-wrap/.bm-rows 负 margin 对承担 */
-.block-manage :deep(.content) {
-  padding: 0 var(--space-24);
-  gap: 0;
-  overflow: hidden;
-  margin-right: 0;
-}
-/* 底部按钮栏（30 稿）：62 高 / padding 12 12 12 24 / 顶线通栏 / 按钮 88×38 主左次右 */
-.block-manage :deep(.actions) {
+/* 底部按钮栏（30 稿）：62 高 / padding 12 12 12 24 / 顶线通栏 / lg 宽自适应 + 左右 48、次左主右 */
+.block-manage :deep(.bm-actions) {
   height: 62px;
-  box-sizing: border-box;
   align-items: center;
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
-  border-top: 1px solid var(--line-hover);
+  padding: var(--n-space-12) var(--n-space-12) var(--n-space-12) var(--n-space-24);
+  border-top: 1px solid var(--n-g5);
   flex: none;
-}
-.block-manage :deep(.actions) .app-btn {
-  width: 88px;
 }
 .bm-body {
   display: flex;
@@ -171,20 +157,21 @@ function conflictLines(): string[] {
   min-height: 0;
 }
 /* 滚动包裹层：relative 锚 ScrollThumb（悬浮滚轮悬停显隐，主窗口统一交互）；
-   负 margin 对（2026-09-13 实机走查贴右缘口径）——margin-right 负扩 24 吃进 .content 的
-   0 24 padding 贴到弹窗缘（恰抵 .content 裁剪线内，overflow hidden 不裁），.bm-rows 补回 */
+   flex 列让行列表可收缩（视口封顶时自滚）。旧 .content padding + 负 margin 对随 AppModal
+   退役废除——framed 壳 padding 0，包裹层天然通栏，thumb 贴弹窗缘 */
 .scroll-wrap {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  margin-right: calc(-1 * var(--space-24));
 }
-/* 行列表：超高自滚（4 行封顶，稿内容区 3 行量上放宽一行）；
-   padding-right 补回包裹层负扩，行内容原位不动（2026-09-13 贴右缘口径） */
+/* 行列表：超高自滚（4 行封顶，稿内容区 3 行量上放宽一行）；0 24 内缩自承（framed 壳 padding 0） */
 .bm-rows {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   max-height: 208px;
-  padding-right: var(--space-24);
+  padding: 0 var(--n-space-24);
 }
 .bm-rows-inner {
   display: flex;
@@ -192,26 +179,15 @@ function conflictLines(): string[] {
 }
 /* 排序交换动画：TransitionGroup move 钩子量位差补过渡 */
 .bm-swap-move {
-  transition: transform 0.18s ease;
+  transition: transform var(--n-dur-150) var(--n-ease-in-out);
 }
-/* 添加区块容器（30 稿）：60 高 / padding 12 24 / 按钮居中 104×36 */
+/* 添加区块容器（30 稿）：60 高 / padding 12 24 / 按钮居中（solid md，旧 104 定宽废——BaseModal 罩宽自适应 + 左右 48） */
 .add-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 60px;
-  box-sizing: border-box;
-  padding: var(--space-12) var(--space-24);
+  padding: var(--n-space-12) var(--n-space-24);
   flex: none;
-}
-.add-btn {
-  width: 104px;
-}
-/* 警告弹窗文案：正文常态色，逐行竖排 */
-.warn-line {
-  margin: 0;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
 }
 </style>
