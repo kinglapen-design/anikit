@@ -10,7 +10,7 @@
 import { computed, ref } from "vue";
 import AppModal from "./AppModal.vue";
 import AppButton from "./AppButton.vue";
-import AppSwitch from "./AppSwitch.vue";
+import SwitchButton from "./buttons/SwitchButton.vue";
 import DuplicateRow, { type DupDecision } from "./DuplicateRow.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { useContentStore, type ConflictItem, type ConflictResolution } from "../stores/content";
@@ -100,7 +100,7 @@ function onCancel(): void {
       <!-- 底部按钮行（36 稿）：右 = 全部跟随 + 确认（主，左）/ 取消（次，右） -->
       <div class="dup-bottom">
         <span class="follow-label">全部跟随</span>
-        <AppSwitch v-model="followAll" />
+        <SwitchButton v-model="followAll" />
         <AppButton variant="primary" label="确认" :disabled="busy" @click="onConfirm" />
         <AppButton variant="panel" label="取消" :disabled="busy" @click="onCancel" />
       </div>

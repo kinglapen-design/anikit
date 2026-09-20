@@ -24,9 +24,9 @@ import AppIcon from "../../components/AppIcon.vue";
 import IconButton from "../../components/IconButton.vue";
 import AppButton from "../../components/AppButton.vue";
 import AppInput from "../../components/AppInput.vue";
-import AppSegmented from "../../components/AppSegmented.vue";
-import AppSwitch from "../../components/AppSwitch.vue";
-import AppCheckbox from "../../components/AppCheckbox.vue";
+import SegmentedControl from "../../components/buttons/SegmentedControl.vue";
+import SwitchButton from "../../components/buttons/SwitchButton.vue";
+import Checkbox from "../../components/buttons/Checkbox.vue";
 import AppSearchBar from "../../components/AppSearchBar.vue";
 import AppTag from "../../components/AppTag.vue";
 import BlockManageRow from "../../components/BlockManageRow.vue";
@@ -117,7 +117,7 @@ const bmRows = ref<BlockDraft[]>([
   { key: "b-ref", id: "b-ref", name: "学习参考", icon: null },
 ]);
 
-// —— BatchRenameDialog 复刻桩（真实 AppSegmented/AppInput；行卡 = 壳内复刻）——
+// —— BatchRenameDialog 复刻桩（真实 SegmentedControl/AppInput；行卡 = 壳内复刻）——
 const renameMode = ref("sequence");
 const RENAME_MODES = [
   { value: "sequence", label: "序号命名" },
@@ -132,7 +132,7 @@ const descRow = ref({ title: "出处", content: "雪牧老师公开素材" });
 // —— PropsDialog 复刻桩（真实 AppSearchBar/AppTag）——
 const propsKeyword = ref("");
 
-// —— LinkManageDialog 复刻桩（真实 AppSearchBar/AppCheckbox/AppIcon；树行 = 壳内复刻）——
+// —— LinkManageDialog 复刻桩（真实 AppSearchBar/Checkbox/AppIcon；树行 = 壳内复刻）——
 const linkQuery = ref("");
 const linkOnlyChecked = ref(false);
 </script>
@@ -169,7 +169,7 @@ const linkOnlyChecked = ref(false);
             </div>
             <div class="pv-old-foot">
               <span class="pv-old-foot-label">全部跟随</span>
-              <AppSwitch v-model="dupFollowAll" />
+              <SwitchButton v-model="dupFollowAll" />
               <AppButton variant="primary" label="确认" />
               <AppButton variant="panel" label="取消" />
             </div>
@@ -418,7 +418,7 @@ const linkOnlyChecked = ref(false);
               </div>
             </div>
             <div class="pv-old-foot spread">
-              <AppSegmented v-model="renameMode" :options="RENAME_MODES" />
+              <SegmentedControl v-model="renameMode" variant="text" :options="RENAME_MODES" style="width: 160px" />
               <span class="pv-old-foot-btns">
                 <AppButton variant="primary" label="确认" />
                 <AppButton variant="panel" label="取消" />
@@ -468,7 +468,7 @@ const linkOnlyChecked = ref(false);
               </div>
             </div>
             <div class="pv-old-foot spread">
-              <AppCheckbox v-model="linkOnlyChecked" label="仅显示已选项" />
+              <Checkbox v-model="linkOnlyChecked" label="仅显示已选项" />
               <span class="pv-old-foot-btns">
                 <AppButton variant="primary" label="确认" />
                 <AppButton variant="panel" label="取消" />

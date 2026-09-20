@@ -13,8 +13,8 @@ export interface DupDecision {
 // 跳过 = 整行 30% 透明度（36 稿注明）且行内控件禁用（跳过开关除外——可逆切回）。
 import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import AppRadio from "./AppRadio.vue";
-import AppSwitch from "./AppSwitch.vue";
+import Radio from "./buttons/Radio.vue";
+import SwitchButton from "./buttons/SwitchButton.vue";
 import { formatSize } from "../lib/formatSize";
 import type { ConflictItem } from "../stores/content";
 
@@ -86,12 +86,12 @@ function setAction(action: DupAction): void {
          落点不设限（2026-08-13 用户定案：未分类落点同样三选一恒出，候车区收窄废除） -->
     <div class="controls">
       <div class="radios">
-        <AppRadio :model-value="decision.action" value="link" label="作为新链接导入" @update:model-value="setAction('link')" />
-        <AppRadio :model-value="decision.action" value="copy" label="作为新文件导入" @update:model-value="setAction('copy')" />
-        <AppRadio :model-value="decision.action" value="useExisting" label="用已存在文件导入" @update:model-value="setAction('useExisting')" />
+        <Radio :model-value="decision.action" value="link" label="作为新链接导入" @update:model-value="setAction('link')" />
+        <Radio :model-value="decision.action" value="copy" label="作为新文件导入" @update:model-value="setAction('copy')" />
+        <Radio :model-value="decision.action" value="useExisting" label="用已存在文件导入" @update:model-value="setAction('useExisting')" />
       </div>
       <div class="skip">
-        <AppSwitch :model-value="decision.skipped" @update:model-value="emit('change', { skipped: $event })" />
+        <SwitchButton :model-value="decision.skipped" @update:model-value="emit('change', { skipped: $event })" />
         <span class="skip-label">跳过此文件</span>
       </div>
     </div>

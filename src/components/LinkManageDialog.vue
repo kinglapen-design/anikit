@@ -15,7 +15,7 @@
 // 档案链接管理随档案多位置立项（2026-08-24 用户定，09 待办）。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import AppButton from "./AppButton.vue";
-import AppCheckbox from "./AppCheckbox.vue";
+import Checkbox from "./buttons/Checkbox.vue";
 import AppIcon from "./AppIcon.vue";
 import AppModal from "./AppModal.vue";
 import AppSearchBar from "./AppSearchBar.vue";
@@ -295,7 +295,7 @@ function toggleBlock(id: string): void {
       <ScrollThumb :body="bodyRef" />
     </div>
     <template #actions>
-      <AppCheckbox v-model="onlyChecked" label="仅显示已选项" class="only-checked" />
+      <Checkbox v-model="onlyChecked" label="仅显示已选项" class="only-checked" />
       <span class="actions-spacer" />
       <AppButton label="确认" variant="primary" :disabled="busy" @click="onConfirm" />
       <AppButton label="取消" :disabled="busy" @click="onCancel" />

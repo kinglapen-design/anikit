@@ -33,7 +33,7 @@ import CreateLibraryModal from "./components/CreateLibraryModal.vue";
 import MergeLibraryModal from "./components/MergeLibraryModal.vue";
 import AppModal from "./components/AppModal.vue";
 import AppButton from "./components/AppButton.vue";
-import AppCheckbox from "./components/AppCheckbox.vue";
+import Checkbox from "./components/buttons/Checkbox.vue";
 import ImportDialog from "./components/ImportDialog.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
 import FailedListDialog from "./components/FailedListDialog.vue";
@@ -326,7 +326,7 @@ async function togglePin(): Promise<void> {
       @close="deleteLibraryState.name = null"
     >
       <p class="del-lib-text">库内文件夹、标签等数据将被删除且不可恢复。</p>
-      <AppCheckbox
+      <Checkbox
         v-if="deleteLibraryState.orphans > 0"
         v-model="deleteLibraryState.includeOrphans"
         class="del-lib-check"

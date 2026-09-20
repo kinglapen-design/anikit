@@ -2,7 +2,7 @@
 // 扫描重复文件组行（35_扫描重复文件稿 item，320.94 高）：行头 = 组级复选框「N 个相同文件」
 //（默认全选，用户单个取消）+ 行尾红色 ⊖（从列表移除该组——纯前端操作，文件不做任何处理，
 // 2026-08-13 用户定案）；卡片横排，超过两个出横向滚动条（35 稿注明）。
-import AppCheckbox from "./AppCheckbox.vue";
+import Checkbox from "./buttons/Checkbox.vue";
 import IconButton from "./IconButton.vue";
 import DupScanCard from "./DupScanCard.vue";
 import type { DupGroup } from "../lib/dupScanOps";
@@ -15,7 +15,7 @@ const emit = defineEmits<{ remove: [] }>();
   <div class="scan-group" :class="{ off: !group.checked }">
     <!-- 行头（35 稿：复选框 + 红色删除，两端分布） -->
     <div class="row-head">
-      <AppCheckbox v-model="group.checked" :label="`${group.assets.length} 个相同文件`" />
+      <Checkbox v-model="group.checked" :label="`${group.assets.length} 个相同文件`" />
       <IconButton name="delete-red" delete-red title="从列表移除该组" @click="emit('remove')" />
     </div>
     <!-- 卡片横排（35 稿：gap 12；>2 张横向滚动） -->

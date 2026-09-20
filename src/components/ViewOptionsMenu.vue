@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 查看方式（28_展开菜单 - 查看方式，1.4 2026-08-11 全量重写；旧 03_UI 布局/05 稿 picker 行模式作废）：
 // 面板式展开菜单——宽 404 / padding 12 24 / 行高 53 / 行标题 16/22 700（标题档）；
-// 布局方式 = 切换按钮组（自适应/瀑布流/网格/列表，AppSegmented 点亮）；
+// 布局方式 = 切换按钮组（自适应/瀑布流/网格/列表，SegmentedControl 点亮）；
 // 排序方式 = 下拉 8 项 + 升/降切换（3.5 点亮：自定义 = 存储序且升降禁用；全局应用级，全视图素材区生效）；
 // 时间码显示方式 = 帧数/时长切换（点亮，播放条/悬停胶囊/笔记同值联动）；
 // 显示简介 = 下拉选内容 + 开关（ui.showBrief，与 briefMode 独立）；
@@ -11,8 +11,8 @@
 import { computed, ref } from "vue";
 import AppMenu from "./AppMenu.vue";
 import MenuItem from "./MenuItem.vue";
-import AppSwitch from "./AppSwitch.vue";
-import AppSegmented from "./AppSegmented.vue";
+import SwitchButton from "./buttons/SwitchButton.vue";
+import SegmentedControl from "./buttons/SegmentedControl.vue";
 import AppIcon from "./AppIcon.vue";
 import { useUiStore } from "../stores/ui";
 import { isDisplaySorted, type SortKey } from "../lib/sortPlacements";
@@ -63,14 +63,16 @@ const sortOrders = [
 
 const briefLabel = computed(() => briefs.find((b) => b.value === ui.briefMode)?.label ?? "尺寸");
 const sortLabel = computed(() => sortKeys.find((s) => s.value === ui.sortBy)?.label ?? "自定义");
+// 自定义 = 存储序，无升降语义——升降切换禁用（3.5 定）：
+// SegmentedControl 无禁用档（查看方式新稿 28 高小档未进组件），在 setter 拦截保持行为等价
+const sorted = computed(() => isDisplaySorted(ui.sortBy));
 const sortOrderModel = computed({
   get: () => (ui.sortAsc ? "asc" : "desc"),
   set: (v) => {
+    if (!sorted.value) return;
     ui.sortAsc = v === "asc";
   },
 });
-// 自定义 = 存储序，无升降语义——升降切换禁用（3.5 定）
-const sorted = computed(() => isDisplaySorted(ui.sortBy));
 
 // 下拉选择器（显示简介 / 排序方式两项）
 const picker = ref<{ kind: "brief" | "sort"; x: number; y: number } | null>(null);
@@ -107,7 +109,7 @@ function closeAll(): void {
       <!-- 组 1：布局 / 排序 / 时间码（稿：三行各 53 高 padding 12 0 + 行 border-bottom 暗-悬停） -->
       <div class="row tall">
         <span class="label">布局方式</span>
-        <AppSegmented v-model="ui.layoutMode" :options="layouts" small style="width: 208px" />
+        <SegmentedControl v-model="ui.layoutMode" :options="layouts" variant="text" tone="g2" style="width: 268px" />
       </div>
       <!-- 排序方式（3.5 点亮）：下拉 8 项 + 升/降切换（自定义 = 存储序，升降禁用） -->
       <div class="row tall">
@@ -117,12 +119,12 @@ function closeAll(): void {
             <span class="val">{{ sortLabel }}</span>
             <AppIcon name="tree-expand-arrow" :size="12" class="down" />
           </button>
-          <AppSegmented v-model="sortOrderModel" :options="sortOrders" small :disabled="!sorted" style="width: 104px" />
+          <SegmentedControl v-model="sortOrderModel" :options="sortOrders" variant="text" tone="g2" style="width: 134px" />
         </span>
       </div>
       <div class="row tall">
         <span class="label">时间码显示方式</span>
-        <AppSegmented v-model="ui.timeDisplay" :options="timeDisplays" small style="width: 112px" />
+        <SegmentedControl v-model="ui.timeDisplay" :options="timeDisplays" variant="text" tone="g2" style="width: 134px" />
       </div>
 
       <!-- 组 2：显示开关（稿：组容器 padding 12 0 / gap 12 / 行高 28，行间无线，组底 border-bottom） -->
@@ -134,25 +136,25 @@ function closeAll(): void {
               <span class="val">{{ briefLabel }}</span>
               <AppIcon name="tree-expand-arrow" :size="12" class="down" />
             </button>
-            <AppSwitch v-model="ui.showBrief" />
+            <SwitchButton v-model="ui.showBrief" />
           </span>
         </div>
         <div class="row">
           <span class="label">显示扩展名</span>
-          <AppSwitch v-model="ui.showExt" />
+          <SwitchButton v-model="ui.showExt" />
         </div>
         <div class="row">
           <span class="label">显示徽标</span>
-          <AppSwitch v-model="ui.showBadge" />
+          <SwitchButton v-model="ui.showBadge" />
         </div>
         <!-- 显示自定义数据（占位——6.1 自定义数据业务） -->
         <div class="row disabled">
           <span class="label">显示自定义数据</span>
-          <AppSwitch :model-value="false" disabled />
+          <SwitchButton :model-value="false" disabled />
         </div>
         <div class="row">
           <span class="label">显示子文件夹内容</span>
-          <AppSwitch v-model="ui.showSubfolders" />
+          <SwitchButton v-model="ui.showSubfolders" />
         </div>
       </div>
 
@@ -160,11 +162,11 @@ function closeAll(): void {
       <div class="group last">
         <div class="row">
           <span class="label">自动播放动图</span>
-          <AppSwitch v-model="ui.autoPlayGif" />
+          <SwitchButton v-model="ui.autoPlayGif" />
         </div>
         <div class="row">
           <span class="label">自动播放视频预览</span>
-          <AppSwitch v-model="ui.autoPlayVideo" />
+          <SwitchButton v-model="ui.autoPlayVideo" />
         </div>
       </div>
     </AppMenu>

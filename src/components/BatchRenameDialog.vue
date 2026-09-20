@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 批量重命名弹窗（37 稿，3.4，2026-08-18）：双列对照（原始文件名 / 新的文件名）+ 底部
-// 模式切换（AppSegmented：序号命名 / 替换命名——同一时刻只显示当前模式的一行输入，PRD 02-14）。
+// 模式切换（SegmentedControl：序号命名 / 替换命名——同一时刻只显示当前模式的一行输入，PRD 02-14）。
 // 实时预览只读无"应用"钮：序号 = 名称 + 起始编号（位宽按选中数 <100 两位 / ≥100 三位）；
 // 替换 = 查找文本全处替换，原名称匹配段品牌色高亮（Eagle 交互参考：视觉上把高亮部分换成新的）。
 // 规则只作用词干、扩展名不动；撞名不拦截（后端 rename_placements 不唯一化）；
@@ -10,7 +10,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import AppModal from "./AppModal.vue";
 import AppInput from "./AppInput.vue";
 import AppButton from "./AppButton.vue";
-import AppSegmented from "./AppSegmented.vue";
+import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
@@ -186,7 +186,7 @@ const listRef = ref<HTMLElement>();
     </div>
     <!-- 底部栏（37 稿：62 高 / padding 12 12 12 24 / 顶部分隔线；左 segmented 右按钮组主左次右） -->
     <footer class="rd-foot">
-      <AppSegmented v-model="mode" :options="MODES" />
+      <SegmentedControl v-model="mode" :options="MODES" variant="text" style="width: 160px" />
       <span class="spacer" />
       <AppButton variant="primary" label="确认" :disabled="pendingItems.length === 0 || busy" @click="onConfirm" />
       <AppButton variant="panel" label="取消" @click="onClose" />

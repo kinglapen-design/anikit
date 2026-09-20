@@ -16,7 +16,7 @@ import PickRelationItem from "../../components/items/PickRelationItem.vue";
 import BaseDataItem from "../../components/items/BaseDataItem.vue";
 import ColorSwatchItem from "../../components/items/ColorSwatchItem.vue";
 import AppIcon from "../../components/AppIcon.vue";
-import AppCheckbox from "../../components/AppCheckbox.vue";
+import Checkbox from "../../components/buttons/Checkbox.vue";
 
 const tints = ["", "red", "blue", "yellow", "yellowgreen", "green", "cyan", "purple", "pink", "peach"];
 
@@ -186,7 +186,7 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
         </div>
         <div class="pv-demo-cell" style="width: 240px">
           <SectionTitle variant="block" title="文件夹" :count="123" force-state="hover">
-            <template #tail><AppCheckbox v-model="tailRecursive" label="递归显示" /></template>
+            <template #tail><Checkbox v-model="tailRecursive" label="递归显示" /></template>
           </SectionTitle>
           <span class="pv-cap">tail 常驻（递归显示复选框，点击自停冒泡）+ hover 动作组</span>
         </div>

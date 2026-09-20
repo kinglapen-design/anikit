@@ -8,7 +8,7 @@ import { computed, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppModal from "./AppModal.vue";
 import AppButton from "./AppButton.vue";
-import AppRadio from "./AppRadio.vue";
+import Radio from "./buttons/Radio.vue";
 import DupScanGroupRow from "./DupScanGroupRow.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { formatSize } from "../lib/formatSize";
@@ -119,7 +119,7 @@ function thumbUrl(a: DupAsset): string | null {
             :class="{ on: keeperOf(currentGroup.hash) === a.assetId }"
             @click="setKeeper(currentGroup.hash, a.assetId)"
           >
-            <AppRadio
+            <Radio
               :model-value="keeperOf(currentGroup.hash)"
               :value="a.assetId"
               @update:model-value="setKeeper(currentGroup.hash!, String($event))"

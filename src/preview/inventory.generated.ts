@@ -11,22 +11,14 @@ export interface InventoryEntry {
 }
 export const inventoryDate = "2026-09-20";
 export const inventoryTotals = {
-  "new": 64,
-  "legacy": 12,
+  "new": 66,
+  "legacy": 6,
   "business": 70,
   "dead": 2,
-  "legacyConsumers": 93,
-  "legacyTokens": 473
+  "legacyConsumers": 55,
+  "legacyTokens": 443
 };
 export const inventory: InventoryEntry[] = [
-  {
-    "path": "components/ScrollThumb",
-    "name": "ScrollThumb",
-    "status": "legacy",
-    "consumers": 22,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
   {
     "path": "components/AppButton",
     "name": "AppButton",
@@ -58,46 +50,6 @@ export const inventory: InventoryEntry[] = [
     "consumers": 7,
     "legacyTokens": 10,
     "replacement": "inputs/TextInput"
-  },
-  {
-    "path": "components/AppMenu",
-    "name": "AppMenu",
-    "status": "legacy",
-    "consumers": 4,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/AppSwitch",
-    "name": "AppSwitch",
-    "status": "legacy",
-    "consumers": 4,
-    "legacyTokens": 7,
-    "replacement": "buttons/SwitchButton"
-  },
-  {
-    "path": "components/AppCheckbox",
-    "name": "AppCheckbox",
-    "status": "legacy",
-    "consumers": 3,
-    "legacyTokens": 8,
-    "replacement": "buttons/Checkbox"
-  },
-  {
-    "path": "components/AppSegmented",
-    "name": "AppSegmented",
-    "status": "legacy",
-    "consumers": 3,
-    "legacyTokens": 9,
-    "replacement": "buttons/SegmentedControl"
-  },
-  {
-    "path": "components/AppRadio",
-    "name": "AppRadio",
-    "status": "legacy",
-    "consumers": 2,
-    "legacyTokens": 6,
-    "replacement": "buttons/Radio"
   },
   {
     "path": "components/AppSearchBar",
@@ -695,7 +647,15 @@ export const inventory: InventoryEntry[] = [
     "path": "components/AppIcon",
     "name": "AppIcon",
     "status": "new",
-    "consumers": 58,
+    "consumers": 57,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/ScrollThumb",
+    "name": "ScrollThumb",
+    "status": "new",
+    "consumers": 22,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -724,10 +684,26 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/buttons/SegmentedControl",
+    "name": "SegmentedControl",
+    "status": "new",
+    "consumers": 6,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/items/TwoToneIcon",
     "name": "TwoToneIcon",
     "status": "new",
     "consumers": 6,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/buttons/SwitchButton",
+    "name": "SwitchButton",
+    "status": "new",
+    "consumers": 5,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -764,6 +740,14 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/AppMenu",
+    "name": "AppMenu",
+    "status": "new",
+    "consumers": 4,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/bars/BarSlider",
     "name": "BarSlider",
     "status": "new",
@@ -772,8 +756,16 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/buttons/SegmentedControl",
-    "name": "SegmentedControl",
+    "path": "components/buttons/Radio",
+    "name": "Radio",
+    "status": "new",
+    "consumers": 4,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/buttons/Checkbox",
+    "name": "Checkbox",
     "status": "new",
     "consumers": 3,
     "legacyTokens": 0,
@@ -784,14 +776,6 @@ export const inventory: InventoryEntry[] = [
     "name": "MenuItem",
     "status": "new",
     "consumers": 3,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/buttons/Radio",
-    "name": "Radio",
-    "status": "new",
-    "consumers": 2,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -910,14 +894,6 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/buttons/FontInstallButton",
     "name": "FontInstallButton",
-    "status": "new",
-    "consumers": 1,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/buttons/SwitchButton",
-    "name": "SwitchButton",
     "status": "new",
     "consumers": 1,
     "legacyTokens": 0,
@@ -1152,14 +1128,6 @@ export const inventory: InventoryEntry[] = [
     "name": "SequenceDialog",
     "status": "new",
     "consumers": 1,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/buttons/Checkbox",
-    "name": "Checkbox",
-    "status": "new",
-    "consumers": 0,
     "legacyTokens": 0,
     "replacement": ""
   },

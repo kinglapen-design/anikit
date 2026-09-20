@@ -8,7 +8,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppButton from "./AppButton.vue";
-import AppSegmented from "./AppSegmented.vue";
+import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import SideSlider from "./SideSlider.vue";
 import { getFontInfo, installFont, uninstallFont, type FontInfo } from "../lib/fontOps";
@@ -122,7 +122,7 @@ const rows = computed(() => {
 <template>
   <div class="font-preview">
     <div class="tab-bar">
-      <AppSegmented v-model="tab" :options="TABS" small style="width: 168px" />
+      <SegmentedControl v-model="tab" :options="TABS" variant="text" style="width: 168px" />
     </div>
     <!-- 预览页：演示文本（滚动区）+ 底部字号滑杆 -->
     <div v-show="tab === 'preview'" class="page">
