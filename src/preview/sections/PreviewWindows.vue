@@ -24,7 +24,7 @@ const pwZoom = ref(100);
 const pwLogoZoomText = computed(() => `${pwZoom.value}%`);
 
 // —— 向导复刻：本地步骤态（帧 0 入口 → 一~四步；步骤件全真实，数据本地暂存）——
-import logoUrl from "../../assets/image/anikit-logo.png?url"; // 正式 LOGO（同 SetupWizard，2026-09-20 入库）
+import logoUrl from "../../../assets/image/anikit-logo.png?url"; // 正式 LOGO（同 SetupWizard，2026-09-20 入库）
 const wizStep = ref(0);
 const WIZ_STEP_TITLES = ["", "配置储存空间", "创建资源库", "安装浏览器插件", "安装桥接插件"];
 const WIZ_STEP_NO = ["", "一", "二", "三", "四"];
