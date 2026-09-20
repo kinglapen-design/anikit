@@ -18,14 +18,13 @@ import WizardStepPlaceholder, { type PlaceholderIcon } from "../../components/Wi
 import PickFileItem from "../../components/items/PickFileItem.vue";
 import PickRelationItem from "../../components/items/PickRelationItem.vue";
 import ActionButton from "../../components/buttons/ActionButton.vue";
-import { getIcon } from "../../lib/icons";
 
 // —— 预览子窗口复刻：缩放滑块本地态（SideSlider 纯件可拖）——
 const pwZoom = ref(100);
 const pwLogoZoomText = computed(() => `${pwZoom.value}%`);
 
 // —— 向导复刻：本地步骤态（帧 0 入口 → 一~四步；步骤件全真实，数据本地暂存）——
-const logo = getIcon("LOGO"); // 临时 LOGO（同 SetupWizard 唯一引用）
+import logoUrl from "../../assets/image/anikit-logo.png?url"; // 正式 LOGO（同 SetupWizard，2026-09-20 入库）
 const wizStep = ref(0);
 const WIZ_STEP_TITLES = ["", "配置储存空间", "创建资源库", "安装浏览器插件", "安装桥接插件"];
 const WIZ_STEP_NO = ["", "一", "二", "三", "四"];
@@ -123,7 +122,7 @@ const pkFileConfirm = computed(() =>
               <IconButton name="close-large" variant="plain" title="关闭" />
             </div>
             <div class="pv-wiz-logo-area">
-              <div class="pv-wiz-logo" v-html="logo" />
+              <img class="pv-wiz-logo" :src="logoUrl" alt="AniKit" />
               <div class="pv-wiz-app-text">
                 <span class="pv-wiz-app-name">AniKit</span>
                 <span class="pv-wiz-app-sub">动画资产管理工具</span>
@@ -180,7 +179,7 @@ const pkFileConfirm = computed(() =>
           <span class="pv-cap">
             静态复刻壳 + 真实步骤件（WizardStepSpace/Library/Placeholder 纯 props 驱动嵌真），口径变更与组件同步；
             旧体系待换代——SetupWizard 15 处 legacy token（--c1/--c2/--text-*/--space-* 等），壳按 --n- 就近映射
-            （真实件 = C2 底 / 亮-选中 1.5px 描边 / 投影，换代前以组件为准）；全屏遮罩层（absolute inset 0）复刻略；
+            （真实件 = g3 底 / 1px 半透明-2 描边 / 投影，2026-09-20 R3 换代；换代前以组件为准）；全屏遮罩层（absolute inset 0）复刻略；
             「打开储存空间」（接后端开空间流程）与第四步「完成」（落盘建库）演示禁用；
             第三/四步 on/off 双态图标 = 旧版回退层 SVG（嵌真件自带，hover 变色可验）
           </span>
@@ -410,11 +409,7 @@ const pkFileConfirm = computed(() =>
   width: 167px;
   height: 145px;
   flex: none;
-}
-.pv-wiz-logo :deep(svg) {
-  width: 100%;
-  height: 100%;
-  display: block;
+  object-fit: contain;
 }
 .pv-wiz-app-text {
   display: flex;

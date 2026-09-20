@@ -25,9 +25,9 @@ const props = withDefaults(
     expandable?: boolean;
     open?: boolean;
     selected?: boolean;
-    // 选择域联动选中（2026-08-10 用户定，与 selected 区分）：仅 1.5px 品牌色-边框线描边、
-    // 无实心罩层——树上"当前目录"= selected 实心高亮（你在这里），"选择域成员"（文件夹卡片
-    // 选中联动 / 树多选）= 品牌色描边，与文件夹卡片选中边框同色呼应；FolderTree 绑定时互斥
+    // 选择域联动选中：半透明-2 底、无描边（2026-08-30 TreeRowItem 二轮改定 + 2026-09-20 用户确认
+    // 「树选中没有边框」；旧 1.5px 品牌描边口径废）——树上"当前目录"= selected 立体感高亮（你在这里），
+    // "选择域成员"（文件夹卡片选中联动 / 树多选）= 底色；FolderTree 绑定时互斥
     domainSelected?: boolean;
     variant?: "root" | "child" | "archive" | "quick";
     tint?: string; // 自定义色名（custom-{tint} / custom-{tint}-bg）
@@ -205,22 +205,22 @@ function onClick(e: MouseEvent): void {
 .tree-item.archive:hover:not(.selected):not(.drop-into) {
   background: linear-gradient(var(--n-l-a3), var(--n-l-a3)), var(--tint-bg, var(--n-g4));
 }
-/* 选中：叠 亮-选中 罩层 + 1px 文字常态内阴影边框（figma 02_目录 item 动画效果） */
+/* 选中：半透明-2 底 + 立体感-通用，无描边（2026-09-20 用户定「树选中没有边框」，对齐 items/TreeRowItem 定稿） */
 .tree-item.selected {
-  background: linear-gradient(var(--n-l-a1), var(--n-l-a1));
-  box-shadow: inset 0 0 0 1px var(--n-l2);
+  background: var(--n-l-a2);
+  box-shadow: var(--n-effect-raised);
 }
 .tree-item.root.selected {
-  background: linear-gradient(var(--n-l-a1), var(--n-l-a1)), var(--tint-bg, var(--n-g5));
+  background: linear-gradient(var(--n-l-a2), var(--n-l-a2)), var(--tint-bg, var(--n-g5));
 }
 .tree-item.child.selected,
 .tree-item.archive.selected {
-  background: linear-gradient(var(--n-l-a1), var(--n-l-a1)), var(--tint-bg, var(--n-g4));
+  background: linear-gradient(var(--n-l-a2), var(--n-l-a2)), var(--tint-bg, var(--n-g4));
 }
-/* 选择域联动选中（2026-08-10 用户定，与当前目录 selected 区分）：1.5px 品牌色-边框线描边、
-   不叠罩层——形态底色与 hover 罩层规则不受影响；与文件夹卡片选中边框同色呼应 */
+/* 选择域联动选中：去边框只留底色（半透明-2，对齐 TreeRowItem 2026-08-30 二轮改定——
+   2026-09-20 用户确认「树选中没有边框」；旧 1.5px 品牌描边口径废） */
 .tree-item.domain-selected {
-  box-shadow: inset 0 0 0 1.5px var(--n-brand-bright);
+  background: linear-gradient(var(--n-l-a2), var(--n-l-a2));
 }
 /* 拖拽源整项半透明（2026-07-28 复验反馈 6①，拖拽结束引擎清态即恢复） */
 .tree-item.dimmed {
@@ -248,15 +248,15 @@ function onClick(e: MouseEvent): void {
 .tree-item.drop-after::after {
   bottom: 0;
 }
-/* 拖拽并入高亮（C4c 中间 1/3 / 素材任何位置）：品牌 30% 罩层叠形态底色（与 selected 同构，
-   保留 tint 自定义色底）+ 1.5px 品牌色-边框线（2026-08-10 用户定，与文件夹卡片 drop-cover
-   同口径；原"直接替换底色"写法会抹掉 c5-base / tint 底，观感偏暗不一致） */
+/* 拖拽并入高亮（C4c 中间 1/3 / 素材任何位置）：品牌/半透明填充（--n-brand-50）叠形态底色
+   （保留 tint 自定义色底）+ 2px 品牌/常态描边（2026-09-20 用户定 2px 档，对齐 TreeRowItem；
+   原"直接替换底色"写法会抹掉 c5-base / tint 底，观感偏暗不一致） */
 .tree-item.drop-into {
-  background: linear-gradient(color-mix(in srgb, var(--n-brand) 30%, transparent), color-mix(in srgb, var(--n-brand) 30%, transparent));
-  box-shadow: inset 0 0 0 1.5px var(--n-brand-bright);
+  background: linear-gradient(var(--n-brand-50), var(--n-brand-50));
+  box-shadow: inset 0 0 0 2px var(--n-brand);
 }
 .tree-item.root.drop-into {
-  background: linear-gradient(color-mix(in srgb, var(--n-brand) 30%, transparent), color-mix(in srgb, var(--n-brand) 30%, transparent)), var(--tint-bg, var(--n-g5));
+  background: linear-gradient(var(--n-brand-50), var(--n-brand-50)), var(--tint-bg, var(--n-g5));
 }
 .tree-item.child.drop-into,
 .tree-item.archive.drop-into {
@@ -324,13 +324,13 @@ function onClick(e: MouseEvent): void {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 命名态（2026-08-10 统一口径，同文件夹/素材/列表卡片）：整 item 1.5px 品牌色-边框线高亮；
-   校验违规（重名等）整 item 边框 --n-danger 覆盖 */
+/* 命名态：整 item 2px 品牌/常态描边（2026-09-20 用户定 2px 档，对齐 TreeRowItem）；
+   校验违规（重名等）整 item 描边 --n-danger 覆盖 */
 .tree-item.naming {
-  box-shadow: inset 0 0 0 1.5px var(--n-brand-bright);
+  box-shadow: inset 0 0 0 2px var(--n-brand);
 }
 .tree-item.naming-error {
-  box-shadow: inset 0 0 0 1.5px var(--n-danger);
+  box-shadow: inset 0 0 0 2px var(--n-danger);
 }
 /* 命名输入：透明底不单独描边（整 item 高亮提示，统一口径）；共享基座在 base.css（类名并入
    .rename-input，原 .name-input 作废），本地差异 = 弹性占满 + 常态字色 + 左对齐 */

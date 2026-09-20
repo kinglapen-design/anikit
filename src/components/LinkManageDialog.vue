@@ -459,7 +459,7 @@ function toggleBlock(id: string): void {
   text-align: right;
 }
 /* 名称框（稿：232×32 / padding 6 8 / gap 6 / C4 底 / 1px 暗-悬停 / 圆角 6；
-   聚焦（编辑）态 = C2 底 + 1.5px 品牌描边） */
+   聚焦（编辑）态 = n-g2 底 + 2px 品牌描边（2026-09-20 用户定 2px 档） */
 .link-cell {
   display: flex;
   align-items: center;
@@ -475,7 +475,7 @@ function toggleBlock(id: string): void {
 }
 .link-cell.editing {
   background: var(--n-g2);
-  box-shadow: inset 0 0 0 1.5px var(--n-brand-bright);
+  box-shadow: inset 0 0 0 2px var(--n-brand);
 }
 .link-cell.empty {
   background: transparent;

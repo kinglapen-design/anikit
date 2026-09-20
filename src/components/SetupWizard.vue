@@ -16,7 +16,7 @@ import PathErrorDialog from "./PathErrorDialog.vue";
 import WizardStepSpace from "./WizardStepSpace.vue";
 import WizardStepLibrary from "./WizardStepLibrary.vue";
 import WizardStepPlaceholder, { type PlaceholderIcon } from "./WizardStepPlaceholder.vue";
-import { getIcon } from "../lib/icons";
+import logoUrl from "../../assets/image/anikit-logo.png?url";
 import { useToastStore } from "../stores/toast";
 import {
   createSpace,
@@ -36,7 +36,7 @@ const props = withDefaults(defineProps<{ closable?: boolean; startStep?: number 
 });
 const emit = defineEmits<{ done: []; cancel: [] }>();
 
-const logo = getIcon("LOGO"); // 临时 LOGO（2026-08-12 用户：后续更换，仅此一处引用）
+// 正式 LOGO（design/LOGO/02_Final_PNG 彩色版，2026-09-20 用户供稿入库 assets/image/）
 const toast = useToastStore();
 
 const standalone = props.startStep >= 2; // 菜单"新建资源库"模式：仅第二步
@@ -213,7 +213,7 @@ function onErrorRetry(): void {
         <IconButton name="window-close" title="关闭" @click="onClose" />
       </div>
       <div class="logo-area">
-        <div class="logo" v-html="logo" />
+        <img class="logo" :src="logoUrl" alt="AniKit" />
         <div class="app-text">
           <span class="app-name">AniKit</span>
           <span class="app-sub">动画资产管理工具</span>
@@ -288,7 +288,7 @@ function onErrorRetry(): void {
   justify-content: center;
   background: var(--n-g1);
 }
-/* 卡片（38 稿）：600×559 / C2 / 亮-选中 1.5px（inset 模拟，规范 4）/ 投影 / 圆角 8 */
+/* 卡片（38 稿）：600×559 / g3 底（二级面板）/ 1px 半透明-2 inset 描边（2026-09-20 R3 换代）/ 投影 / 圆角 8 */
 .wizard-card {
   box-sizing: border-box;
   width: 600px;
@@ -331,11 +331,7 @@ function onErrorRetry(): void {
   width: 167px;
   height: 145px;
   flex: none;
-}
-.logo :deep(svg) {
-  width: 100%;
-  height: 100%;
-  display: block;
+  object-fit: contain;
 }
 .app-text {
   display: flex;
@@ -344,9 +340,9 @@ function onErrorRetry(): void {
   gap: var(--n-space-6);
 }
 .app-name {
-  font-size: var(--text-display-size);
-  line-height: var(--text-display-line);
-  font-weight: var(--text-display-weight);
+  font-size: var(--n-fs-display);
+  line-height: var(--n-lh-display);
+  font-weight: var(--n-fw-bold);
   color: var(--n-l1);
 }
 .app-sub {

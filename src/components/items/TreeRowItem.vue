@@ -32,7 +32,7 @@ const props = withDefaults(
     expanded?: boolean; // folder 型：展开钮朝向（∨ / >）与文件夹-打开图标联动
     expandable?: boolean; // folder 型：有子项（false = 藏箭头保占位，列对齐）
     selected?: boolean;
-    domainSelected?: boolean; // 选择域联动（文件夹卡片选中 / 树多选）：半透明-2 底 + 1.5px 二级描边
+    domainSelected?: boolean; // 选择域联动（文件夹卡片选中 / 树多选）：半透明-2 底、无描边（2026-08-30 二轮改定 + 2026-09-20 用户确认）
     tint?: string; // folder/archive 型图标自定义九色（red/blue/...；空 = 常态双色）
     depth?: number; // 层级（内容缩进：padding-left = 6 + depth×20，稿未画层级沿用旧档）
     dimmed?: boolean; // 拖拽源半透明（0.4）
@@ -363,7 +363,7 @@ function onClick(e: MouseEvent): void {
 .force-selected .lib-switch {
   color: var(--n-l1);
 }
-/* 命名输入：透明底不单独描边（整 item 1.5px 品牌描边提示）；覆盖共享基座 20 高 → 18（item 内容行高），
+/* 命名输入：透明底不单独描边（整 item 2px 品牌描边提示）；覆盖共享基座 20 高 → 18（item 内容行高），
    字档 = 正文档 13/18（基座为旧字档） */
 .rename-input {
   flex: 1;

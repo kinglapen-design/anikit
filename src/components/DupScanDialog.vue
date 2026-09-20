@@ -262,10 +262,10 @@ function thumbUrl(a: DupAsset): string | null {
 .group-item:hover {
   background: var(--n-l-a3);
 }
-/* 当前组：与目录树 item 选中同款（2026-08-13 用户定）——亮-选中罩层 + 1.5px 文字常态内阴影 */
+/* 当前组：与目录树 item 选中同款——半透明-2 底 + 立体感-通用，无描边（2026-09-20 用户定「树选中没有边框」） */
 .group-item.cur {
-  background: var(--n-l-a1);
-  box-shadow: inset 0 0 0 1.5px var(--n-l2);
+  background: var(--n-l-a2);
+  box-shadow: var(--n-effect-raised);
 }
 .group-thumb {
   width: 40px;
@@ -340,9 +340,9 @@ function thumbUrl(a: DupAsset): string | null {
 .keeper-item:not(.on):hover {
   background: var(--n-l-a3);
 }
-/* 选中行 = 品牌色描边（选中框统一 --brand-border，1.2 走查口径） */
+/* 选中行 = 品牌 2px 描边（2026-09-20 用户定 2px 档，对齐 TreeRowItem 并入/命名描边） */
 .keeper-item.on {
-  box-shadow: inset 0 0 0 1.5px var(--n-brand-bright);
+  box-shadow: inset 0 0 0 2px var(--n-brand);
 }
 .keeper-thumb {
   width: 64px;
