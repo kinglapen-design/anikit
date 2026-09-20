@@ -1,14 +1,17 @@
 <script setup lang="ts">
 // 文件卡片——docs/06_UI重构/Design Token/组件/卡片/ 文件卡片-通用 / 视频 / 音频 / 字体 / txt-md 五稿合一
-// （同 ActionButton 五稿合一先例）：
-// kind：general = 缩略图充满（cover，沿用旧网格口径；square = shell 缩略图 / 自动导入未导入 →
+// （同 ActionButton 五稿合一先例）。内容区 kind-switch 已注册表化（2026-09-21 R5 扩展点轮，
+// 范式 = barSpecs）：kind → src/lib/cardSpecs/ CardContentSpec 查表 = 内容件（缩略图 / 波形 /
+// 字形 / 文本）+ kind 专属附加件（悬停胶囊 / 视频播放条 / 字体安装钮）+ 可选滚动胶囊接线；
+// 未注册 kind 回退 general；新内容形态 = 加 spec 文件 + 一行注册，本组件零改动。五稿口径：
+//        general = 缩略图充满（cover，沿用旧网格口径；square = shell 缩略图 / 自动导入未导入 →
 //        正方形卡 + 缩略图占 50% 居中，稿注明确）；
-//       video  = 缩略图 + 悬停胶囊（帧数 + 播放/暂停 + 音量/静音）+ 底部 4px 播放条（轨道 亮色/半透明-2、
+//        video  = 缩略图 + 悬停胶囊（帧数 + 播放/暂停 + 音量/静音）+ 底部 4px 播放条（轨道 亮色/半透明-2、
 //        填充 亮色/一级，贴底 4、左右 12）；
-//       audio  = 波形（竖线 4px 圆头 gap 4 通用/五级，根数恒定由业务保证、美观优先）+ 悬停胶囊
+//        audio  = 波形（竖线 4px 圆头 gap 4 通用/五级，根数恒定由业务保证、美观优先）+ 悬停胶囊
 //        （时长 + 播放/暂停）；进度 = 品牌色波形层 clip-path 丝滑扫过（与根数解耦，稿 prose + 2026-08-29 用户定色）；
-//       font   = 示例字块居中（标题档 亮色/四级，日/韩环境示例字业务侧替换）+ 右上 FontInstallButton；
-//       text   = 标题（标题档 二级）+ 正文（正文档 四级）滚动预览，**内容随卡宽 cqw 等比缩放**
+//        font   = 示例字块居中（标题档 亮色/四级，日/韩环境示例字业务侧替换）+ 右上 FontInstallButton；
+//        text   = 标题（标题档 二级）+ 正文（正文档 四级）滚动预览，**内容随卡宽 cqw 等比缩放**
 //        （2026-09-13 实机走查：文档卡片跟随尺寸缩放，稿基准 300 宽比例换算），内容溢出出 6px
 //        滚动胶囊（通用/四级，胶囊自身 hover 升六级——2026-09-13 全局滚动条色档定案）；
 // 悬停控件（胶囊 / 播放条 / 波形扫过）一律 hover 才出现（2026-08-29 用户定），过渡 150ms；
@@ -18,60 +21,38 @@
 // 已选压暗 30%（大勾在壳层）；thumbFit = 缩略图适配三档（cover 默认 / contain 网格固定格完整显示
 // ——旧 AssetCard 口径 / icon 格式图标 50% 居中——Eagle 口径，不与内容缩略图抢视觉噪音）；
 // 默认插槽 = 内容区扩展（壳层注入悬停播放层等，叠在缩略图上、渐变罩下）。
+// props 契约 = cardSpecs/types.ts FileCardProps（注册表接线单一事实源，注释口径在那边）。
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import type { ComponentPublicInstance } from "vue";
 import AppIcon from "../AppIcon.vue";
-import FontInstallButton from "../buttons/FontInstallButton.vue";
 import FormatBadge from "./FormatBadge.vue";
+import { cardContentSpecFor, type FileCardProps } from "../../lib/cardSpecs";
+import { generalContentSpec } from "../../lib/cardSpecs/general";
 import { useInlineRename } from "../../lib/useInlineRename";
 import "./cards.css";
 
-const props = withDefaults(
-  defineProps<{
-    kind?: "general" | "video" | "audio" | "font" | "text";
-    name: string;
-    info?: string; // 简介行（尺寸 / 时长 / 字重…，内容业务侧定）
-    badge?: string; // 格式角标文案（不传不出）
-    thumbUrl?: string; // general / video 缩略图
-    thumbFit?: "cover" | "contain" | "icon"; // 缩略图适配（icon = 格式图标 50% 居中）
-    square?: boolean; // general：shell 缩略图 / 未导入卡 = 正方形 + 50% 居中
-    capsuleText?: string; // 悬停胶囊文本（video = 帧数 / audio = 时长）
-    playing?: boolean; // 胶囊 播放 ↔ 暂停
-    muted?: boolean; // video 胶囊 音量 ↔ 静音
-    progress?: number; // 0..1：video 播放条 / audio 波形扫过
-    peaks?: number[]; // audio 波形（0..1 归一化）
-    fontLines?: string[]; // font 示例字
-    installed?: boolean; // font 安装钮选中
-    textTitle?: string; // text 卡内标题
-    textBody?: string; // text 卡正文
-    originBadge?: boolean; // 原始文件-徽章（右下 12/12）
-    selected?: boolean;
-    naming?: boolean; // 行内重命名输入态
-    picked?: boolean; // 选择模式已选（内容压暗 30%，大勾在壳层）
-    forceState?: "" | "hover" | "selected";
-  }>(),
-  {
-    kind: "general",
-    info: "",
-    badge: "",
-    thumbUrl: "",
-    thumbFit: "cover",
-    square: false,
-    capsuleText: "",
-    playing: false,
-    muted: false,
-    progress: 0,
-    peaks: () => [],
-    fontLines: () => ["永和九年", "岁在癸丑", "AaBaCcDd", "01234567"],
-    installed: false,
-    textTitle: "",
-    textBody: "",
-    originBadge: false,
-    selected: false,
-    naming: false,
-    picked: false,
-    forceState: "",
-  },
-);
+const props = withDefaults(defineProps<FileCardProps>(), {
+  kind: "general",
+  info: "",
+  badge: "",
+  thumbUrl: "",
+  thumbFit: "cover",
+  square: false,
+  capsuleText: "",
+  playing: false,
+  muted: false,
+  progress: 0,
+  peaks: () => [],
+  fontLines: () => ["永和九年", "岁在癸丑", "AaBaCcDd", "01234567"],
+  installed: false,
+  textTitle: "",
+  textBody: "",
+  originBadge: false,
+  selected: false,
+  naming: false,
+  picked: false,
+  forceState: "",
+});
 
 const emit = defineEmits<{
   nameCommit: [name: string]; // Enter / 失焦（父级判空/不变/落命令）
@@ -89,20 +70,22 @@ const { draft: nameDraft, bindInput, commit: commitName, onEsc: cancelName } = u
   onCancel: () => emit("nameCancel"),
 });
 
-const hasCapsule = computed(() => props.kind === "video" || props.kind === "audio");
-const hasProgress = computed(() => props.progress > 0);
+// 内容形态查表（R5 注册表化）：kind → CardContentSpec；未注册 kind 回退 general
+const spec = computed(() => cardContentSpecFor(props.kind) ?? generalContentSpec);
 
-// 波形竖线高度：peaks 归一化 → 百分比（最低 8% ≈ 稿最小 13px / 容器 176）
-function barH(p: number): string {
-  return `${Math.min(100, Math.max(8, p * 100))}%`;
-}
-
-// text 卡滚动胶囊：内容溢出才显，轨道 = 内容区（卡 padding 12 内），跟随滚动；
+// 滚动胶囊（scrollThumb 形态 = text 卡）：内容溢出才显，轨道 = 内容区（卡 padding 12 内），跟随滚动；
+// 拇指在根层渲染（kc-clip 外——picked 压暗不波及）；滚动容器 = 内容件根元素（spec 契约：单根、
+// 根即滚动容器），经组件 ref.$el 接线（scroll 监听 + ResizeObserver）；
 // 卡片尺寸变化（尺寸滑块）同步重算（2026-09-13 实机走查：文档卡内容随卡宽等比缩放，滚动量随动）
-const textEl = ref<HTMLElement>();
+const contentRef = ref<ComponentPublicInstance>();
 const thumb = reactive({ show: false, top: 12, height: 0 });
+function contentScrollEl(): HTMLElement | undefined {
+  const el = contentRef.value?.$el;
+  return el instanceof HTMLElement ? el : undefined;
+}
 function updateThumb(): void {
-  const el = textEl.value;
+  if (!spec.value.scrollThumb) return;
+  const el = contentScrollEl();
   if (!el) return;
   const { scrollHeight, clientHeight, scrollTop } = el;
   if (scrollHeight <= clientHeight || clientHeight === 0) {
@@ -117,10 +100,17 @@ function updateThumb(): void {
 let textRo: ResizeObserver | undefined;
 onMounted(() => {
   updateThumb();
+  if (!spec.value.scrollThumb) return;
+  const el = contentScrollEl();
+  if (!el) return;
+  el.addEventListener("scroll", updateThumb);
   textRo = new ResizeObserver(updateThumb);
-  if (textEl.value) textRo.observe(textEl.value);
+  textRo.observe(el);
 });
-onBeforeUnmount(() => textRo?.disconnect());
+onBeforeUnmount(() => {
+  contentScrollEl()?.removeEventListener("scroll", updateThumb);
+  textRo?.disconnect();
+});
 watch(
   () => [props.textTitle, props.textBody],
   () => nextTick(updateThumb),
@@ -134,39 +124,8 @@ watch(
   >
     <!-- 内容区（圆角裁剪层；选中环在层外防 overflow 切边） -->
     <div class="kc-clip">
-      <img
-        v-if="(kind === 'general' || kind === 'video') && thumbUrl"
-        :src="thumbUrl"
-        class="fc-thumb"
-        :class="square ? 'shell' : thumbFit"
-        alt=""
-        decoding="async"
-        draggable="false"
-      />
-
-      <div v-else-if="kind === 'audio'" class="fc-wave">
-        <div class="fc-wave-row">
-          <span v-for="(p, i) in peaks" :key="i" class="fc-wave-bar" :style="{ height: barH(p) }" />
-        </div>
-        <div
-          v-if="hasProgress"
-          class="fc-wave-row played"
-          :style="{ clipPath: `inset(0 ${(1 - progress) * 100}% 0 0)` }"
-        >
-          <span v-for="(p, i) in peaks" :key="i" class="fc-wave-bar" :style="{ height: barH(p) }" />
-        </div>
-      </div>
-
-      <div v-else-if="kind === 'font'" class="fc-font">
-        <div class="fc-font-lines">
-          <span v-for="l in fontLines" :key="l" class="fc-font-line">{{ l }}</span>
-        </div>
-      </div>
-
-      <div v-else-if="kind === 'text'" ref="textEl" class="fc-text" @scroll="updateThumb">
-        <div v-if="textTitle" class="fc-text-title">{{ textTitle }}</div>
-        <div class="fc-text-body">{{ textBody }}</div>
-      </div>
+      <!-- 内容形态 = cardSpecs 查表分发（缩略图 / 波形 / 字形 / 文本…），props 映射在 spec -->
+      <component :is="spec.content" ref="contentRef" v-bind="spec.contentProps(props)" />
 
       <!-- 内容区扩展槽（壳层悬停播放层等注入）：叠在缩略图上、渐变罩下 -->
       <slot />
@@ -196,33 +155,17 @@ watch(
     <!-- 格式角标（左上 12/12） -->
     <FormatBadge v-if="badge" class="fc-badge" :label="badge" />
 
-    <!-- 悬停胶囊（video / audio，hover 才现） -->
-    <div v-if="hasCapsule" class="kc-float fc-capsule">
-      <span v-if="capsuleText" class="kc-info fc-capsule-text">{{ capsuleText }}</span>
-      <AppIcon
-        :name="playing ? 'card-hover-pause' : 'card-hover-play'"
-        :size="14"
-        class="fc-capsule-icon"
-      />
-      <AppIcon
-        v-if="kind === 'video'"
-        :name="muted ? 'card-hover-mute' : 'card-hover-volume'"
-        :size="14"
-        class="fc-capsule-icon"
-      />
-    </div>
+    <!-- kind 专属附加件（悬停胶囊 / 视频播放条 / 字体安装钮…）：注册表 overlays，DOM 序 = 数组序 -->
+    <component
+      v-for="(ov, i) in spec.overlays ?? []"
+      :key="i"
+      :is="ov.comp"
+      v-bind="ov.props(props)"
+    />
 
-    <!-- 视频播放条（hover 才现） -->
-    <div v-if="kind === 'video'" class="fc-vbar">
-      <span class="fc-vbar-fill" :style="{ width: `${progress * 100}%` }" />
-    </div>
-
-    <!-- 字体安装钮（右上 12/12，恒显） -->
-    <FontInstallButton v-if="kind === 'font'" class="fc-install" :selected="installed" />
-
-    <!-- text 卡滚动胶囊（贴右缘，hover 升五级） -->
+    <!-- 滚动胶囊（scrollThumb 形态 = text 卡：贴右缘，hover 升五级） -->
     <span
-      v-if="kind === 'text'"
+      v-if="spec.scrollThumb"
       v-show="thumb.show"
       class="fc-text-thumb"
       :style="{ top: `${thumb.top}px`, height: `${thumb.height}px` }"
@@ -262,122 +205,25 @@ watch(
   cursor: text;
 }
 
-/* 缩略图：cover 充满（旧网格口径）；contain = 网格固定格完整显示不裁切（2026-07-24 用户定）；
-   icon / shell = 50% 居中 contain（格式图标 Eagle 口径 / 稿 square 注）。
-   铺满档自带圆角 8：图片走图片绘制路径画角（比容器蒙版裁剪平滑），与描边弧同心同半径——
-   2026-08-30 用户实机亮图四角锯齿（.kc-clip 蒙版弧 + 描边弧双线错位），图片自圆角后裁剪弧合一 */
-.fc-thumb.cover,
-.fc-thumb.contain {
+/* kind 内容件 / 附加件样式各随其组件（cards/contents/）—— scoped 只给末段选择器加 data-v，
+   件内祖先态选择器（.fc-root:hover …）照常命中；本节宿主只留壳层统一定位与卡级态 */
+
+/* 格式角标定位（左上 12/12） */
+.fc-badge {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: var(--n-radius-8);
-}
-.fc-thumb.cover {
-  object-fit: cover;
-}
-.fc-thumb.contain {
-  object-fit: contain;
-}
-.fc-thumb.icon,
-.fc-thumb.shell {
-  position: absolute;
-  left: 25%;
-  top: 25%;
-  width: 50%;
-  height: 50%;
-  object-fit: contain;
+  left: var(--n-space-12);
+  top: var(--n-space-12);
+  z-index: 3;
 }
 
-/* 音频波形：竖线 4px 圆头 gap 4 通用/五级，垂直居中；扫过层 = 品牌色同构层 clip-path 按进度裁。
-   扫过显隐同悬停控件口径（hover 才现，2026-08-29 用户定），播放中恒显 */
-.fc-wave {
+/* 字体安装钮定位（右上 12/12；类经 spec 映射挂 FontInstallButton 根——fc-badge 同款先例） */
+.fc-install {
   position: absolute;
-  inset: var(--n-space-12);
-  display: flex;
-  align-items: center;
-}
-.fc-wave-row {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: var(--n-space-4);
-  width: 100%;
-  height: 100%;
-}
-.fc-wave-row.played {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  transition: opacity var(--n-dur-150) var(--n-ease-in-out);
-}
-.fc-root:hover .fc-wave-row.played,
-.fc-root.force-hover .fc-wave-row.played,
-.fc-root.playing .fc-wave-row.played {
-  opacity: 1;
-}
-.fc-wave-bar {
-  flex: none;
-  width: 4px;
-  border-radius: 99px; /* 稿值 99 = 胶囊圆头（Token.md 圆角无此档，非新造 token） */
-  background: var(--n-g5);
-}
-.fc-wave-row.played .fc-wave-bar {
-  background: var(--n-brand);
+  right: var(--n-space-12);
+  top: var(--n-space-12);
+  z-index: 4;
 }
 
-/* 字体示例字：块居中、行左对齐，标题档 亮色/四级 */
-.fc-font {
-  position: absolute;
-  inset: var(--n-space-12);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.fc-font-lines {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--n-space-4);
-}
-.fc-font-line {
-  font-size: var(--n-fs-title);
-  line-height: var(--n-lh-title);
-  font-weight: var(--n-fw-bold);
-  color: var(--n-l4);
-  white-space: nowrap;
-}
-
-/* 文本预览：卡 padding 12 内滚动（滚动内容可入渐变罩下），标题 二级 / 正文 四级 gap 8；
-   内容随卡宽等比缩放（2026-09-13 实机走查：文档卡片需要跟随尺寸缩放）——cqw 容器查询单位，
-   稿基准 300 宽：标题 18px=6cqw / 正文 13px≈4.34cqw / 内边距 12px=4cqw / gap 8px≈2.67cqw */
-.fc-text {
-  position: absolute;
-  inset: 4cqw;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2.67cqw;
-  scrollbar-width: none;
-}
-.fc-text::-webkit-scrollbar {
-  display: none;
-}
-.fc-text-title {
-  flex: none;
-  font-size: 6cqw;
-  line-height: 1.45; /* 26/18 */
-  font-weight: var(--n-fw-bold);
-  color: var(--n-l2);
-}
-.fc-text-body {
-  font-size: 4.34cqw;
-  line-height: 1.39; /* 18/13 */
-  color: var(--n-l4);
-  white-space: pre-wrap;
-}
 /* 滚动胶囊：6px 通用/四级贴右缘，自身 hover 升六级（2026-09-13 实机走查全局滚动条色档
    定案应用至卡片——原稿「hover-滚动条」节 g3/g5 档被全局定案覆盖） */
 .fc-text-thumb {
@@ -391,75 +237,6 @@ watch(
 }
 .fc-text-thumb:hover {
   background: var(--n-g6);
-}
-
-/* 格式角标定位（左上 12/12） */
-.fc-badge {
-  position: absolute;
-  left: var(--n-space-12);
-  top: var(--n-space-12);
-  z-index: 3;
-}
-
-/* 悬停胶囊（右上 12/12，gap 6）：常态隐，hover 现（150ms） */
-.fc-capsule {
-  position: absolute;
-  right: var(--n-space-12);
-  top: var(--n-space-12);
-  z-index: 4;
-  gap: var(--n-space-6);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--n-dur-150) var(--n-ease-in-out);
-}
-.fc-root:hover .fc-capsule,
-.fc-root.force-hover .fc-capsule {
-  opacity: 1;
-  pointer-events: auto;
-}
-.fc-capsule-text {
-  overflow: visible;
-}
-/* 胶囊图标：常态 亮色/二级，自身 hover 提亮 亮色/一级（稿「hover-播放/音量按钮」节） */
-.fc-capsule-icon {
-  color: var(--n-l2);
-  cursor: pointer;
-  transition: color var(--n-dur-150) var(--n-ease-in-out);
-}
-.fc-capsule-icon:hover {
-  color: var(--n-l1);
-}
-
-/* 视频播放条：4px 高、左右 12、贴底 4；轨道 亮色/半透明-2、填充 亮色/一级；hover 才现 */
-.fc-vbar {
-  position: absolute;
-  left: var(--n-space-12);
-  right: var(--n-space-12);
-  bottom: var(--n-space-4);
-  z-index: 5;
-  height: 4px;
-  border-radius: 99px; /* 稿值 99 */
-  background: var(--n-l-a2);
-  opacity: 0;
-  transition: opacity var(--n-dur-150) var(--n-ease-in-out);
-}
-.fc-root:hover .fc-vbar,
-.fc-root.force-hover .fc-vbar {
-  opacity: 1;
-}
-.fc-vbar-fill {
-  display: block;
-  height: 100%;
-  border-radius: 99px; /* 稿值 99 */
-  background: var(--n-l1);
-}
-
-/* 字体安装钮定位（右上 12/12） */
-.fc-install {
-  position: absolute;
-  right: var(--n-space-12);
-  top: var(--n-space-12);
-  z-index: 4;
 }
 
 /* 命名输入：透明底不单独描边（整卡品牌环提示）；覆盖共享基座 = 正文-加粗 13/18 与名称视觉连续 */

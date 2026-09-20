@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // 素材卡片业务壳（7.1 内容容器轮改造）：视觉芯 = cards/FileCard（缩略图满铺 + 底部渐变罩名称/简介 +
 // 格式角标统一 FormatBadge 铬），本壳承担业务装配与旧机制对接——
-// box 绝对定位（虚拟滚动）/ 悬停播放层分发（视频 HoverVideoLayer / 动图 AnimImgLayer /
-// 序列帧 HoverSequenceLayer / 音频 HoverAudioLayer，注入 FileCard 默认插槽 = 缩略图上、渐变罩下）/
+// box 绝对定位（虚拟滚动）/ 悬停播放层查表分发（2026-09-21 R5 注册表化：kind → cardSpecs
+// HoverLayerSpec——视频 HoverVideoLayer / 动图 AnimImgLayer / 序列帧 HoverSequenceLayer /
+// 音频 HoverAudioLayer，注入 FileCard 默认插槽 = 缩略图上、渐变罩下）/
 // 自动播放闸（autoplayGate + IntersectionObserver 可见性）/ 就地重命名（selection.renamingKey 驱动，
 // FileCard naming 位）/ 位置徽章 + LinkListPopover / 笔记角标 / 选择模式 picked·picker-self / 拖拽半透明。
 // 口径变化：格式角标不再按格式设色（FormatBadge 统一铬，§16——formatBadgeColor 仅留"静态图不出角标"
@@ -15,13 +16,10 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import FileCard from "./cards/FileCard.vue";
-import HoverVideoLayer from "./HoverVideoLayer.vue";
-import HoverAudioLayer from "./HoverAudioLayer.vue";
-import HoverSequenceLayer from "./HoverSequenceLayer.vue";
-import AnimImgLayer from "./AnimImgLayer.vue";
 import LinkListPopover from "./LinkListPopover.vue";
 import { type Box } from "../lib/layouts";
 import { dragView } from "../lib/dragOperation";
+import { hoverLayerSpecFor } from "../lib/cardSpecs";
 import {
   displayName as assetDisplayName,
   formatBadgeColor,
@@ -74,6 +72,9 @@ const kind = computed<HoverKind>(() => {
   if (isAudioExt(ext)) return "audio";
   return "other";
 });
+// 悬停层查表（R5 注册表化，cardSpecs）：未注册（other）= null = 无悬停层；
+// autoplay 档 = animPlaying（悬停 || 自动播放名额）挂载并传 auto=!hoverActive，否则仅悬停挂载
+const hoverLayer = computed(() => hoverLayerSpecFor(kind.value));
 
 // 悬停态：驱动播放层挂载（视频/音频）与动图播放——7.1 起挂壳根（整卡即图）
 const hovered = ref(false);
@@ -259,14 +260,14 @@ const meta = computed(() => {
       @name-commit="onRenameCommit"
       @name-cancel="onRenameCancel"
     >
-      <HoverVideoLayer
-        v-if="!isWs && animPlaying && kind === 'video'"
-        :asset="asset"
-        :auto="!hoverActive"
+      <!-- 悬停播放层 = cardSpecs 查表分发（R5 注册表化，等价原四分支链）：
+           autoplay 档（video / anim / sequence）挂 animPlaying 并传 auto=!hoverActive；
+           audio 档仅悬停挂载不传 auto；other 未注册 = 无层。工作空间合成项全禁（isWs） -->
+      <component
+        :is="hoverLayer?.layer"
+        v-if="hoverLayer && !isWs && (hoverLayer.autoplay ? animPlaying : hoverActive)"
+        v-bind="hoverLayer.autoplay ? { asset, auto: !hoverActive } : { asset }"
       />
-      <AnimImgLayer v-else-if="!isWs && animPlaying && kind === 'anim'" :asset="asset" :auto="!hoverActive" />
-      <HoverAudioLayer v-else-if="!isWs && hoverActive && kind === 'audio'" :asset="asset" />
-      <HoverSequenceLayer v-else-if="!isWs && animPlaying && kind === 'sequence'" :asset="asset" :auto="!hoverActive" />
     </FileCard>
     <!-- 笔记徽章（2026-09-09 四轮用户定稿）：kc-float 角标铬「笔记 N」（笔记 = 雅黑 / 数量 = mono，
          数字档 12/16 bold 二级）——旧 16px 品牌圆点数字右上口径作废（压悬停胶囊）；

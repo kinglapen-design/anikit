@@ -11,12 +11,12 @@ export interface InventoryEntry {
 }
 export const inventoryDate = "2026-09-20";
 export const inventoryTotals = {
-  "new": 66,
+  "new": 72,
   "legacy": 2,
-  "business": 70,
+  "business": 72,
   "dead": 2,
   "legacyConsumers": 4,
-  "legacyTokens": 32
+  "legacyTokens": 29
 };
 export const inventory: InventoryEntry[] = [
   {
@@ -420,6 +420,14 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/PreviewAudioWave",
+    "name": "PreviewAudioWave",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/PreviewFont",
     "name": "PreviewFont",
     "status": "business",
@@ -446,6 +454,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/PreviewText",
     "name": "PreviewText",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/PreviewUnsupported",
+    "name": "PreviewUnsupported",
     "status": "business",
     "consumers": 1,
     "legacyTokens": 0,
@@ -496,7 +512,7 @@ export const inventory: InventoryEntry[] = [
     "name": "SetupWizard",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 3,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -615,7 +631,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/AppIcon",
     "name": "AppIcon",
     "status": "new",
-    "consumers": 54,
+    "consumers": 55,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -756,6 +772,30 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/buttons/FontInstallButton",
+    "name": "FontInstallButton",
+    "status": "new",
+    "consumers": 2,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/cards/contents/MediaCapsule",
+    "name": "MediaCapsule",
+    "status": "new",
+    "consumers": 2,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/cards/contents/ThumbContent",
+    "name": "ThumbContent",
+    "status": "new",
+    "consumers": 2,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/cards/FileCard",
     "name": "FileCard",
     "status": "new",
@@ -860,14 +900,6 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/buttons/FontInstallButton",
-    "name": "FontInstallButton",
-    "status": "new",
-    "consumers": 1,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
     "path": "components/buttons/TagButton",
     "name": "TagButton",
     "status": "new",
@@ -878,6 +910,38 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/cards/ArchiveCard",
     "name": "ArchiveCard",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/cards/contents/FontContent",
+    "name": "FontContent",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/cards/contents/TextContent",
+    "name": "TextContent",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/cards/contents/VideoBar",
+    "name": "VideoBar",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/cards/contents/WaveContent",
+    "name": "WaveContent",
     "status": "new",
     "consumers": 1,
     "legacyTokens": 0,
