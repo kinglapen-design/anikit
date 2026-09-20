@@ -18,6 +18,7 @@ import AppMenu from "../../components/AppMenu.vue";
 import MenuItem from "../../components/MenuItem.vue";
 import HoverZoomOverlay from "../../components/HoverZoomOverlay.vue";
 import ScrollThumb from "../../components/ScrollThumb.vue";
+import ViewOptionsMenu from "../../components/ViewOptionsMenu.vue";
 import FloatBarHost from "../../components/FloatBarHost.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import ActionButton from "../../components/buttons/ActionButton.vue";
@@ -97,6 +98,18 @@ const zoomAsset: PlacementView = {
 // —— ScrollThumb 真实实例：relative 包裹层 + 滚动容器（模板 ref 传 body）——
 const scrollBody = ref<HTMLElement>();
 const scrollRows = Array.from({ length: 30 }, (_, i) => `演示行 ${String(i + 1).padStart(2, "0")} —— 滚动我`);
+
+// —— ViewOptionsMenu 真实实例：ui store 预览环境纯内存（initSettings 不经 App.vue 不跑，无写回）——
+const viewOptionsOpen = ref(false);
+const viewOptionsAnchor = ref({ x: 0, y: 0 });
+const viewOptionsTrigger = ref<HTMLElement | null>(null);
+function popViewOptions(e: MouseEvent): void {
+  const el = e.currentTarget as HTMLElement;
+  const r = el.getBoundingClientRect();
+  viewOptionsTrigger.value = el;
+  viewOptionsAnchor.value = { x: r.left + 175, y: r.bottom + 4 };
+  viewOptionsOpen.value = !viewOptionsOpen.value;
+}
 </script>
 
 <template>
@@ -131,11 +144,24 @@ const scrollRows = Array.from({ length: 30 }, (_, i) => `演示行 ${String(i + 
           <ActionButton label="弹出 AppMenu（tip）" variant="solid" size="md" @click="popTipMenu" />
           <span class="pv-cap">tip 壳（linkList 二级同款）：半透明-1 + 1px 半透明-3 真 border + blur + 圆角 6，pad 0 行贴边</span>
         </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <ActionButton label="弹出查看方式面板" variant="solid" size="md" @click="popViewOptions" />
+          <span class="pv-cap">
+            ViewOptionsMenu 真实实例（2026-09-20 按查看方式 01~06 稿换代）：404 面板 + 大阴影 + 分段 sm 28 /
+            禁用 30% / picker 下拉；ui store 预览环境纯内存（不写回后端）
+          </span>
+        </div>
       </div>
     </div>
 
     <!-- 本展区自带的 ContextMenu 宿主（实机宿主在 App.vue；预览页不挂 App，自带一个供真实弹出） -->
     <ContextMenu />
+    <ViewOptionsMenu
+      v-if="viewOptionsOpen"
+      :anchor="viewOptionsAnchor"
+      :trigger="viewOptionsTrigger"
+      @close="viewOptionsOpen = false"
+    />
     <AppMenu v-if="appMenuOpen" :x="appMenuPos.x" :y="appMenuPos.y" :min-w="250" @close="appMenuOpen = false">
       <div class="pv-menu-group">
         <MenuItem label="新建文件夹" shortcut="Ctrl+Shift+N" />

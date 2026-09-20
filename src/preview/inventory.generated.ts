@@ -16,7 +16,7 @@ export const inventoryTotals = {
   "business": 70,
   "dead": 2,
   "legacyConsumers": 54,
-  "legacyTokens": 436
+  "legacyTokens": 426
 };
 export const inventory: InventoryEntry[] = [
   {
@@ -592,7 +592,7 @@ export const inventory: InventoryEntry[] = [
     "name": "ViewOptionsMenu",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 10,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
