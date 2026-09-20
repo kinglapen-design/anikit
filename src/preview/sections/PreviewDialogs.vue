@@ -111,8 +111,29 @@ const scanGroup: DupGroup = {
 // —— 分组两件复刻桩（嵌真实 GroupRulesEditor；候选范围按 items 出，空 items = 只展示已选 chips）——
 const geName = ref("");
 const geRules = ref<GroupRule[]>([{ kind: "ext", values: ["png", "fla"] }]);
-const gmName = ref("表情");
-const gmRules = ref<GroupRule[]>([{ kind: "ext", values: ["gif", "webp"] }]);
+// —— GroupManageDialog 复刻桩（R4 稿组卡片；添加/排序接本地草稿——顺势演示稿点名的两动画：
+//    新卡片入场 = 淡入 + 24 上移 250ms，排序交换 = 150ms，均纯前端）——
+interface GmCard {
+  key: string;
+  name: string;
+  free: boolean;
+  rules: GroupRule[];
+}
+let gmSeq = 0;
+const gmCards = ref<GmCard[]>([
+  { key: "g-rule", name: "表情", free: false, rules: [{ kind: "ext", values: ["gif", "webp"] }] },
+  { key: "g-free", name: "待归类", free: true, rules: [] },
+]);
+function gmMove(index: number, dir: -1 | 1): void {
+  const rows = gmCards.value;
+  const j = index + dir;
+  if (j < 0 || j >= rows.length) return;
+  const [row] = rows.splice(index, 1);
+  rows.splice(j, 0, row);
+}
+function gmAdd(free: boolean): void {
+  gmCards.value.push({ key: `g-new-${++gmSeq}`, name: "", free, rules: free ? [] : [{ kind: "ext", values: [] }] });
+}
 
 // —— BlockManageDialog 复刻桩（嵌真实 BlockManageRow；行编辑/排序钮为本地演示）——
 const bmRows = ref<BlockDraft[]>([
@@ -379,41 +400,39 @@ const linkOnlyChecked = ref(false);
               <span class="pv-bm-title">分组管理</span>
               <IconButton name="close-large" title="关闭" />
             </div>
-            <div class="pv-bm-body flush">
-              <div class="pv-group-block">
-                <div class="pv-dd-line">
-                  <IconButton name="chevron-small" variant="bare" size="sm" class="pv-arrow-down" title="下移" />
-                  <IconButton name="chevron-small" variant="bare" size="sm" disabled title="上移" />
-                  <span class="pv-dd-label wide">分组名称:</span>
-                  <TextInput v-model="gmName" size="sm" class="pv-grow" placeholder="未命名分组" />
-                  <IconButton name="clear" variant="bare" size="sm" title="删除分组" />
+            <div class="pv-gm-list">
+              <TransitionGroup name="pv-gm-swap" tag="div" class="pv-gm-cards">
+                <div v-for="(g, i) in gmCards" :key="g.key" class="pv-gm-card">
+                  <div class="pv-gm-title">
+                    <IconButton variant="bare" size="sm" name="chevron-small" class="pv-gm-arrow" :disabled="i === 0" title="上移" @click="gmMove(i, -1)" />
+                    <IconButton variant="bare" size="sm" name="chevron-small" class="pv-gm-arrow pv-arrow-down" :disabled="i === gmCards.length - 1" title="下移" @click="gmMove(i, 1)" />
+                    <TextInput v-model="g.name" size="sm" class="pv-gm-name" placeholder="未命名分组" />
+                    <IconButton name="clear" variant="bare" size="sm" title="删除分组" @click="gmCards.splice(i, 1)" />
+                  </div>
+                  <div class="pv-gm-content">
+                    <div v-if="g.free" class="pv-free-hint">无规则（手动归组）——将文件拖入分组，或右键「移动至分组」</div>
+                    <GroupRulesEditor v-else v-model="g.rules" :items="[]" />
+                  </div>
                 </div>
-                <GroupRulesEditor v-model="gmRules" :items="[]" />
-              </div>
-              <div class="pv-group-block">
-                <div class="pv-dd-line">
-                  <IconButton name="chevron-small" variant="bare" size="sm" disabled class="pv-arrow-down" title="下移" />
-                  <IconButton name="chevron-small" variant="bare" size="sm" title="上移" />
-                  <span class="pv-dd-label wide">分组名称:</span>
-                  <TextInput model-value="待归类" size="sm" class="pv-grow" placeholder="未命名分组" />
-                  <IconButton name="clear" variant="bare" size="sm" title="删除分组" />
-                </div>
-                <div class="pv-free-hint">无规则（手动归组）——将文件拖入分组，或右键「移动至分组」</div>
-              </div>
-              <div class="pv-dd-add pair">
-                <ActionButton variant="solid" size="md" icon="add-large" label="添加分组" />
-                <ActionButton variant="solid" size="md" icon="add-large" label="添加空组" />
-              </div>
+              </TransitionGroup>
             </div>
-            <div class="pv-bm-foot">
-              <ActionButton variant="cancel" label="取消" size="lg" />
-              <ActionButton variant="primary" label="确认" size="lg" />
+            <div class="pv-bm-foot bare spread">
+              <span class="pv-bm-foot-btns">
+                <ActionButton variant="cancel" size="lg" label="添加分组" @click="gmAdd(false)" />
+                <ActionButton variant="cancel" size="lg" label="添加空组" @click="gmAdd(true)" />
+              </span>
+              <span class="pv-bm-foot-btns">
+                <ActionButton variant="cancel" label="取消" size="lg" />
+                <ActionButton variant="primary" label="确认" size="lg" />
+              </span>
             </div>
           </div>
           <span class="pv-cap">
-            GroupManageDialog｜文件夹分组列表管理（组块排序/删除 + 自由组，33 稿）｜本体已换代 BaseModal framed 603（红色删除仍
-            删除 = clear X bare sm 已换代）；复刻 = 规则组 + 自由组说明行两块示例，嵌真实 GroupRulesEditor；本体读
-            content.folders、确认接后端；23 稿保存冲突提示已换 ConfirmModal danger（右下真实弹出）；口径变更与组件同步
+            GroupManageDialog｜文件夹分组列表管理｜本体已按 02_样式标注稿换代（R4：组卡片 g6 + 立体感 / 标题行 42 高 +
+            底线 亮色/禁用 / 箭头序 上移→下移 / 名称框 30 高 g4 底，「分组名称:」标签与红删废——删除 = clear X / 底栏左右组
+            无顶线 / 列表区 714 高；壳 603 沿 R2，稿 640 未随）；复刻壳同步，稿点名两动画可演示——点底部「添加分组/添加空组」
+            看新卡片入场（淡入 + 24 上移 250ms），点卡片箭头看排序交换（150ms）；规则编辑器嵌真实件（items 空桩只展示已选
+            chips）；确认/取消仅陈列（预览不接后端）；口径变更与组件同步
           </span>
         </div>
       </div>
@@ -703,6 +722,14 @@ const linkOnlyChecked = ref(false);
 .pv-bm-foot.spread {
   justify-content: space-between;
 }
+/* bare 变体（GroupManageDialog R4 稿「按钮」：62 高 / padding 12 四边 / 无顶线；内组 gap 8） */
+.pv-bm-foot.bare {
+  border-top: none;
+  padding: var(--n-space-12);
+}
+.pv-bm-foot.bare .pv-bm-foot-btns {
+  gap: var(--n-space-8);
+}
 .pv-bm-foot-btns {
   display: flex;
   align-items: center;
@@ -842,7 +869,7 @@ const linkOnlyChecked = ref(false);
 .pv-group-block:last-child {
   border-bottom: none;
 }
-/* 自由组静态说明行（2026-09-17 无规则空组；与本体 .free-hint 同步） */
+/* 自由组静态说明行（2026-09-17 无规则空组，稿外件；与本体 .free-hint 同步：g3 底 + inset 1px g5） */
 .pv-free-hint {
   display: flex;
   align-items: center;
@@ -850,12 +877,75 @@ const linkOnlyChecked = ref(false);
   box-sizing: border-box;
   padding: var(--n-space-8) var(--n-space-12);
   border-radius: var(--n-radius-6);
-  background: var(--n-g2);
-  box-shadow: inset 0 0 0 1px var(--n-l-a3);
+  background: var(--n-g3);
+  box-shadow: inset 0 0 0 1px var(--n-g5);
   color: var(--n-l3);
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
   flex: none;
+}
+/* —— GroupManageDialog R4 复刻件（02_样式标注稿，与 GroupManageDialog.vue 同步）——
+   组卡片：g6 底 + 立体感-通用 + 圆角 8 + padding 12，卡片间 gap 12（稿组间无线） */
+.pv-gm-list {
+  height: 714px; /* 稿：714 = 窗 830 - 标题栏 54 - 底栏 62 */
+  box-sizing: border-box;
+  padding: var(--n-space-12) var(--n-space-24);
+}
+.pv-gm-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-12);
+}
+.pv-gm-card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--n-space-12);
+  border-radius: var(--n-radius-8);
+  background: var(--n-g6);
+  box-shadow: var(--n-effect-raised);
+}
+/* 组标题行（稿「输入分组名称」：gap 8 / padding-bottom 12 / 底线 亮色/禁用；行高 42 由 30 输入框撑起） */
+.pv-gm-title {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-8);
+  padding-bottom: var(--n-space-12);
+  border-bottom: 1px solid var(--n-l-disabled);
+}
+/* 排序箭头（稿：可用 = 亮色/二级，提权压组件自带 .ic-btn.bare；禁用 = 控件族 30% 透明度） */
+.pv-gm-title .ic-btn.pv-gm-arrow {
+  color: var(--n-l2);
+}
+.pv-gm-name {
+  flex: 1;
+  min-width: 0;
+}
+/* 名称输入框衍生（稿：30 高 / padding 6 12 / 通用/四级底 / 左对齐 / 文字亮色/一级——提权压 .ti-root.sm） */
+.pv-gm-title .ti-root.pv-gm-name {
+  height: 30px;
+  padding: var(--n-space-6) var(--n-space-12);
+  background: var(--n-g4);
+}
+.pv-gm-name :deep(.ti-inner) {
+  text-align: left;
+  color: var(--n-l1);
+}
+/* 规则区（稿「规则列表」padding-top 12 自承） */
+.pv-gm-content {
+  padding-top: var(--n-space-12);
+}
+/* 稿点名两动画：排序交换 150 通用档；新建卡片入场 = 淡入 + 24 上移 250 小位移档 */
+.pv-gm-swap-move {
+  transition: transform var(--n-dur-150) var(--n-ease-in-out);
+}
+.pv-gm-swap-enter-from {
+  opacity: 0;
+  transform: translateY(var(--n-space-24));
+}
+.pv-gm-swap-enter-active {
+  transition:
+    opacity var(--n-dur-250) var(--n-ease-in-out),
+    transform var(--n-dur-250) var(--n-ease-in-out);
 }
 /* 批量重命名行卡复刻（37 稿：双卡 gap 24 / 卡 69 高 / 缩略占位 80×45） */
 .pv-rd-row {

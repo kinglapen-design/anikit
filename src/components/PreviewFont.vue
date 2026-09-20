@@ -1,13 +1,18 @@
 <script setup lang="ts">
-// 字体预览（5.6；Eagle 四页签先「预览 + 其它」两页，大小/字形后置 09 待办）：
-// 预览页 = 演示文本（origin 经 FontFace API 加载，webview 原生排版，后端不重渲染）+ 底部字号滑杆；
-// 其它页 = name 表元数据（名称/全名/系列/样式/版本/字数，Eagle 同款）+ 系统级安装/卸载。
+// 字体预览（5.6；R4 版式换代，稿 = docs/06_UI重构/Design Token/布局/主窗口/中间面板/中间面板-内容容器-字体预览.md）：
+// 结构 = 头部（名称 超大标题档 + FontInstallButton 安装圆钮 + 全名 标题档）→ SegmentedControl text 通栏
+// （预览/其他两段；稿四段的 大小/字形 仍后置 09 待办）→ 页区（顶 2px g4 线 + padding 12 0）。
+// 预览页 = 演示文本（origin 经 FontFace API 加载，webview 原生排版，后端不重渲染）：
+// H1 居中 MarkDown/H1 档 + 正文 MarkDown/正文档，默认字号对齐稿值（正文 15 / 标题 ×2=30）；
+// 底部字号滑杆稿未画 = 现行为保留（悬浮底部居中）。
+// 其他页 = name 表元数据卡（g2 底 + 1px g3 描边 + 圆角 8；行间 1px g3 顶线；
+// 行 = 标签 按钮文字-大 三级 ↔ 值 按钮文字 二级 两端对齐）。
 // 安装口径（2026-08-23 用户痛点定案）：用户级安装（HKCU 注册表 + 用户字体目录 + 广播），
 // 其他软件立即可见——避免 Eagle"装了识别不到"。
 // FontFace 管理：family 名按 assetId 命名防与系统字体冲突；切素材 / 卸载组件时 fonts.delete 清理。
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import ActionButton from "./buttons/ActionButton.vue";
+import FontInstallButton from "./buttons/FontInstallButton.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import SideSlider from "./SideSlider.vue";
@@ -20,7 +25,7 @@ const toast = useToastStore();
 
 const TABS = [
   { value: "preview", label: "预览" },
-  { value: "info", label: "其它" },
+  { value: "info", label: "其他" },
 ];
 
 // 演示文本（Eagle 同款英译《荷塘月色》标题与选段 + 中文一段兰亭集序——中文字体也要看得出中文形态）
@@ -38,7 +43,7 @@ const tab = ref("preview");
 const info = ref<FontInfo | null>(null);
 const loadError = ref<string | null>(null);
 const fontReady = ref(false);
-const fontSize = ref(22); // 演示文本正文字号（标题 ×2）
+const fontSize = ref(15); // 演示文本正文字号（标题 ×2）——默认对齐稿值（正文 15 / H1 30），滑杆 12-72 行为不变
 const busy = ref(false); // 安装 / 卸载在途
 const previewScrollRef = ref<HTMLElement>();
 const infoScrollRef = ref<HTMLElement>();
@@ -46,6 +51,10 @@ const infoScrollRef = ref<HTMLElement>();
 // 预览字体 family（按 assetId 命名防与系统字体冲突；未就绪时回退系统字体，加载完成即热替换）
 const family = computed(() => `anikit-font-${preview.current?.assetId ?? "none"}`);
 const demoStyle = computed(() => (fontReady.value ? { fontFamily: `"${family.value}", sans-serif` } : undefined));
+
+// 头部：名称 = 字体内部 name（未载完回退素材名）；副标题 = 全名（稿 名称+安装按钮 / AlibabaPuHuiTiM 两行结构）
+const headerName = computed(() => info.value?.name || preview.current?.name || "");
+const headerSub = computed(() => info.value?.fullName ?? "");
 
 let face: FontFace | null = null;
 
@@ -102,7 +111,8 @@ async function toggleInstall(): Promise<void> {
   }
 }
 
-// 元数据行（Eagle「其它」页同款字段 + 系统状态；空值显示 -）
+// 元数据行（Eagle「其它」页同款字段 + 系统状态；空值显示 -。
+// 稿九行含 制造商/版权/商标——后端 FontInfo 无此三字段（font.rs 唯一写点，本轮不动），维持现七行）
 const rows = computed(() => {
   const i = info.value;
   if (!i) return [];
@@ -121,42 +131,41 @@ const rows = computed(() => {
 
 <template>
   <div class="font-preview">
-    <div class="tab-bar">
-      <SegmentedControl v-model="tab" :options="TABS" variant="text" style="width: 168px" />
-    </div>
-    <!-- 预览页：演示文本（滚动区）+ 底部字号滑杆 -->
-    <div v-show="tab === 'preview'" class="page">
-      <div ref="previewScrollRef" class="scroll kit-scroll">
-        <div class="demo" :style="demoStyle">
-          <h1 class="demo-title" :style="{ fontSize: `${fontSize * 2}px` }">{{ DEMO_TITLE }}</h1>
-          <p class="demo-body" :style="{ fontSize: `${fontSize}px` }">{{ DEMO_EN }}</p>
-          <p class="demo-body" :style="{ fontSize: `${fontSize}px` }">{{ DEMO_ZH }}</p>
+    <div class="range">
+      <!-- 头部：名称 + 安装圆钮（space-between 两端）+ 全名 -->
+      <div class="head">
+        <div class="name-row">
+          <span class="name">{{ headerName }}</span>
+          <FontInstallButton :selected="info?.installed ?? false" @click="toggleInstall" />
         </div>
+        <span v-if="headerSub" class="sub">{{ headerSub }}</span>
       </div>
-      <ScrollThumb :body="previewScrollRef" />
-      <div class="size-bar">
-        <SideSlider v-model="fontSize" :min="12" :max="72" style="width: 240px" />
-      </div>
-    </div>
-    <!-- 其它页：元数据表（斑马纹行）+ 安装/卸载钮 -->
-    <div v-show="tab === 'info'" class="page">
-      <div ref="infoScrollRef" class="scroll kit-scroll">
-        <div class="info-table">
-          <div v-for="r in rows" :key="r.k" class="info-row">
-            <span class="k">{{ r.k }}</span>
-            <span class="v">{{ r.v }}</span>
+      <SegmentedControl v-model="tab" :options="TABS" variant="text" />
+      <!-- 预览页：演示文本（滚动区）+ 底部字号滑杆 -->
+      <div v-show="tab === 'preview'" class="page">
+        <div ref="previewScrollRef" class="scroll kit-scroll">
+          <div class="demo" :style="demoStyle">
+            <h1 class="demo-title" :style="{ fontSize: `${fontSize * 2}px` }">{{ DEMO_TITLE }}</h1>
+            <p class="demo-body" :style="{ fontSize: `${fontSize}px` }">{{ DEMO_EN }}</p>
+            <p class="demo-body" :style="{ fontSize: `${fontSize}px` }">{{ DEMO_ZH }}</p>
           </div>
         </div>
+        <ScrollThumb :body="previewScrollRef" />
+        <div class="size-bar">
+          <SideSlider v-model="fontSize" :min="12" :max="72" style="width: 240px" />
+        </div>
       </div>
-      <ScrollThumb :body="infoScrollRef" />
-      <div v-if="info" class="install-bar">
-        <ActionButton
-          :label="info.installed ? '从系统卸载' : '安装到系统'"
-          :variant="info.installed ? 'solid' : 'primary'"
-          size="md"
-          :disabled="busy"
-          @click="toggleInstall"
-        />
+      <!-- 其他页：元数据卡（行 = 标签 ↔ 值 两端对齐，行间 1px g3 顶线） -->
+      <div v-show="tab === 'info'" class="page">
+        <div ref="infoScrollRef" class="scroll kit-scroll">
+          <div v-if="info" class="info-list">
+            <div v-for="r in rows" :key="r.k" class="info-row">
+              <span class="k">{{ r.k }}</span>
+              <span class="v">{{ r.v }}</span>
+            </div>
+          </div>
+        </div>
+        <ScrollThumb :body="infoScrollRef" />
       </div>
     </div>
     <span v-if="loadError" class="error-text">{{ loadError }}</span>
@@ -164,90 +173,137 @@ const rows = computed(() => {
 </template>
 
 <style scoped>
+/* 稿 字体预览 根：column padding 12 12 0 + 通用/一级底（gap 24 唯一子级无效，略） */
 .font-preview {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
+  padding: var(--n-space-12) var(--n-space-12) 0;
+  background: var(--n-g1);
   user-select: text; /* 演示文本 / 元数据可选中复制（stage 全局 none 覆盖回） */
 }
-.tab-bar {
+/* 稿 显示范围：column padding 0 72 + gap 12（0.72 不透明度 = figma mock 调灰，色值已是终稿档，不乘） */
+.range {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-12);
+  padding: 0 var(--n-space-72);
+}
+/* 稿 字体名称+安装按钮 块：column gap 4 */
+.head {
   flex: none;
   display: flex;
-  justify-content: center;
-  padding: var(--n-space-12) var(--n-space-16) 0;
+  flex-direction: column;
+  gap: var(--n-space-4);
 }
+/* 稿 名称+安装按钮 行：space-between 居中（gap 稿值 10 无档，就近 --n-space-8） */
+.name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--n-space-8);
+}
+/* 稿 名称：超大标题档 36/46 Bold + MarkDown/标题色；长名省略（稿未画溢出态） */
+.name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--n-fs-display);
+  line-height: var(--n-lh-display);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-md-title);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 稿 全名：标题档 18/26 Bold + MarkDown/引用色 */
+.sub {
+  font-size: var(--n-fs-title);
+  line-height: var(--n-lh-title);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-md-other);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 稿 预览文章 / 其他 页：顶 2px 通用/四级线 + padding 12 0 */
 .page {
   position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  border-top: 2px solid var(--n-g4);
+  padding: var(--n-space-12) 0;
 }
 .scroll {
   flex: 1;
   min-height: 0;
 }
-/* 演示文本：左右 48 呼吸，底部给滑杆留位 */
+/* 演示文本：块间 gap 12（稿 预览文章 gap）；底部 72 给悬浮滑杆留位（现行为值） */
 .demo {
-  padding: var(--n-space-24) 48px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-12);
+  padding-bottom: var(--n-space-72);
 }
+/* 稿 H1 居中 MarkDown/H1 档（行高比 40/30；字号随滑杆动态，默认 30 贴稿） */
 .demo-title {
-  margin: 0 0 var(--n-space-24);
-  line-height: 1.4;
-  font-weight: 700;
-  color: var(--n-l2);
+  margin: 0;
+  line-height: 1.333;
+  font-weight: var(--n-fw-bold);
+  text-align: center;
+  color: var(--n-md-title);
 }
+/* 稿 正文 MarkDown/正文档（行高比 25/15；默认 15 贴稿） */
 .demo-body {
-  margin: 0 0 var(--n-space-16);
-  line-height: 1.8;
-  color: var(--n-l2);
+  margin: 0;
+  line-height: 1.667;
+  color: var(--n-md-body);
 }
-/* 底部字号滑杆（Eagle 同款底部居中；±按钮无图标不配） */
+/* 底部字号滑杆（稿未画，现行为保留：底部居中悬浮；±按钮无图标不配） */
 .size-bar {
   position: absolute;
   left: 50%;
   bottom: var(--n-space-16);
   transform: translateX(-50%);
 }
-/* 元数据表（Eagle 斑马纹：奇数行 C2 底；容器圆角裁边） */
-.info-table {
-  margin: var(--n-space-12) var(--n-space-16);
-  border-radius: var(--n-radius-6, 6px);
-  overflow: hidden;
+/* 稿 信息列表：通用/二级底 + 1px 通用/三级描边 + 圆角 8（全局 border-box，border 内收不占外廓） */
+.info-list {
+  background: var(--n-g2);
+  border: 1px solid var(--n-g3);
+  border-radius: var(--n-radius-8);
 }
+/* 稿 行：padding 12 16 + space-between 两端对齐（gap 稿值 10 无档，就近 --n-space-8）；
+   行间 1px 通用/三级顶线（首行无） */
 .info-row {
   display: flex;
-  gap: var(--n-space-16);
-  padding: 10px var(--n-space-16);
-  font-size: var(--n-fs-body);
-  line-height: var(--n-lh-body);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--n-space-8);
+  padding: var(--n-space-12) var(--n-space-16);
 }
-.info-row:nth-child(odd) {
-  background: var(--n-g3);
+.info-row + .info-row {
+  border-top: 1px solid var(--n-g3);
 }
+/* 稿 标签：按钮文字-大 16/22 Bold + 亮色/三级 */
 .info-row .k {
-  width: 72px;
   flex: none;
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
   color: var(--n-l3);
 }
+/* 稿 值：按钮文字 15/20 + 亮色/二级（右端对齐；长版权串折行） */
 .info-row .v {
-  flex: 1;
   min-width: 0;
+  font-size: var(--n-fs-btn);
+  line-height: var(--n-lh-btn);
   color: var(--n-l2);
+  text-align: right;
   word-break: break-all;
-}
-.install-bar {
-  flex: none;
-  display: flex;
-  justify-content: center;
-  padding: 0 0 var(--n-space-16);
-}
-/* ActionButton md = 宽 100% 填充式（稿 flex-grow 拉伸语境）；此钮自适应内容居中——
-   压回 auto + 左右 12（旧 AppButton large padding 8/12 口径沿） */
-.install-bar :deep(.act-btn) {
-  width: auto;
-  padding: var(--n-space-8) var(--n-space-12);
 }
 /* 解析失败文案（说明文字档，居中底部，同 PreviewPanel error-text 口径） */
 .error-text {

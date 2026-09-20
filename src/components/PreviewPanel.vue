@@ -4,7 +4,11 @@
 // video 把 previewMedia 的 <video> 元素挂进画面区（缩放/平移/旋转/翻转复用图片那套数学，
 // 尺寸经 loadedmetadata → onImageLoad 喂入）；audio 显示波形大图（按画面区实际像素后端重采样，
 // 未就绪回退 info 波形缩略图 contain），无缩放平移；
-// font / text（5.6）= PreviewFont / PreviewText 组件自管（无缩放平移）。
+// font / text（5.6）= PreviewFont / PreviewText 组件自管（无缩放平移）；
+// other（不支持预览态，R4 按稿 2026-09-21 落地：布局-中间面板-内容容器-此文件不支持预览）=
+// 居中立姿——格式图标 200 + 文件名（标题档二级）+ 提示「暂不支持此文件格式预览，请用其他应用打开」
+// （正文三级）+ 按钮组（ActionButton solid md：默认应用打开 / 其他应用打开；
+// ws 合成项按钮组隐藏——assetId 假 id 禁发命令，同 PreviewTitleBar isWsCurrent 口径）。
 // 交互：滚轮缩放（瞄点跟鼠标）、左键拖动平移、双击 适合窗口⇄原图大小；
 // ←/→ 上/下一个素材；,/ . sequence/anim=上/下帧 video=逐帧步进；
 // 空格 sequence/anim/audio/video=播放暂停；Esc 退出全屏/预览。
@@ -14,7 +18,9 @@ import PreviewNavigator from "./PreviewNavigator.vue";
 import PreviewStreamCanvas from "./PreviewStreamCanvas.vue";
 import PreviewFont from "./PreviewFont.vue";
 import PreviewText from "./PreviewText.vue";
+import ActionButton from "./buttons/ActionButton.vue";
 import { useHiresWaveform } from "../lib/useHiresWaveform";
+import { openWithDialog } from "../lib/placementOps";
 import { usePreviewStore } from "../stores/preview";
 import { usePreviewMediaStore } from "../stores/previewMedia";
 
@@ -35,11 +41,19 @@ const showImg = computed(
     preview.kind !== "text" &&
     preview.kind !== "other",
 );
-// other 保底：格式图标大图
+// other 不支持预览态：格式图标（current.thumbPath，200 实寸稿值）
 const iconUrl = computed(() => {
   const p = preview.current;
   return preview.kind === "other" && p?.thumbPath ? convertFileSrc(p.thumbPath) : null;
 });
+// ws 合成假 id 禁发 assetId 类命令（PRD 02 步骤 1），打开按钮组隐藏——同 PreviewTitleBar isWsCurrent 口径
+const isWsCurrent = computed(() => !!preview.current?.assetId.startsWith("ws:"));
+// 其他应用打开 = 系统"打开方式"对话框（失败 toast 在 openWithDialog 内）；默认应用打开直走 store
+function onOpenOther(): void {
+  const p = preview.current;
+  if (!p || isWsCurrent.value) return;
+  void openWithDialog(p.assetId);
+}
 // audio：波形大图——优先后端按画面区实际像素重采样的高清图（useHiresWaveform 内部已按
 // kind==='audio' 门控），未就绪 / 生成失败回退 info 波形缩略图（5.1）拉伸旧行为
 const hiresWavePath = useHiresWaveform(stageRef);
@@ -211,7 +225,19 @@ watch(
     <PreviewFont v-else-if="preview.kind === 'font'" />
     <PreviewText v-else-if="preview.kind === 'text'" />
     <div v-else-if="waveUrl" class="wave-large" :style="{ '--wave-url': `url(&quot;${waveUrl}&quot;)` }" />
-    <img v-else-if="iconUrl" class="format-icon" :src="iconUrl" draggable="false" />
+    <div v-else-if="preview.kind === 'other'" class="unsupported">
+      <div class="us-body">
+        <img v-if="iconUrl" class="us-icon" :src="iconUrl" draggable="false" />
+        <div class="us-texts">
+          <span class="us-title">{{ preview.current?.name ?? "" }}</span>
+          <span class="us-hint">暂不支持此文件格式预览，请用其他应用打开</span>
+        </div>
+        <div v-if="!isWsCurrent" class="us-actions">
+          <ActionButton label="默认应用打开" icon="open-default" @click="preview.openDefaultApp()" />
+          <ActionButton label="其他应用打开" icon="open-in-other-app" @click="onOpenOther" />
+        </div>
+      </div>
+    </div>
     <span v-if="preview.error" class="error-text">{{ preview.error }}</span>
     <PreviewNavigator v-if="preview.overflow" />
   </div>
@@ -258,14 +284,56 @@ watch(
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
 }
-.format-icon {
+/* other 不支持预览态（稿：布局-中间面板-内容容器-此文件不支持预览）：
+   根层铺满画面区内容居中；块 = column 居中 gap 24 + padding-bottom 24（稿「图标+提示+按钮」） */
+.unsupported {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 256px;
-  height: 256px;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.us-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--n-space-24);
+  padding-bottom: var(--n-space-24);
+}
+/* shell-icon：200×200 稿值（格式图标方形缩略图 contain） */
+.us-icon {
+  width: 200px;
+  height: 200px;
   object-fit: contain;
+}
+/* 标题+提示文字：column 居中 gap 8（稿） */
+.us-texts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--n-space-8);
+}
+/* 文件名 = 标题档 18/26 Bold 二级；超长截断稿未画——同 PreviewTitleBar .index-name 口径
+   nowrap 不截断（stage overflow hidden 兜底） */
+.us-title {
+  font-size: var(--n-fs-title);
+  line-height: var(--n-lh-title);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
+  white-space: nowrap;
+}
+.us-hint {
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
+}
+/* 按钮组：稿值两钮各 150 + gap 8 = 308——ActionButton md/lg 宽 100% 由父容器定格，
+   grid 双列均分贴稿（同 EmptyFolderState 居中根因口径，速查 §22） */
+.us-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--n-space-8);
+  width: 308px;
 }
 /* 媒体源报错文案（说明文字档，居中底部；转码提示已挪进播放条进度区，2026-07-26 用户定） */
 .error-text {
