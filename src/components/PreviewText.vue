@@ -129,10 +129,10 @@ onBeforeUnmount(() => void flushSave());
 .md-body {
   flex: 1;
   min-height: 0;
-  padding: var(--space-24) 32px;
-  font-size: var(--text-body-size);
+  padding: var(--n-space-24) 32px;
+  font-size: var(--n-fs-md-body);
   line-height: 1.8;
-  color: var(--text-normal);
+  color: var(--n-l2);
 }
 .md-body:deep(h1),
 .md-body:deep(h2),
@@ -143,7 +143,7 @@ onBeforeUnmount(() => void flushSave());
   margin: 1em 0 0.5em;
   line-height: 1.4;
   font-weight: 700;
-  color: var(--text-normal);
+  color: var(--n-l2);
 }
 .md-body:deep(h1:first-child),
 .md-body:deep(h2:first-child),
@@ -163,22 +163,22 @@ onBeforeUnmount(() => void flushSave());
   margin: 0 0 0.9em;
 }
 .md-body:deep(a) {
-  color: var(--brand-1);
+  color: var(--n-brand);
   pointer-events: none; /* 本轮不可点（09 待办：默认浏览器打开） */
   text-decoration: none;
 }
 .md-body:deep(code) {
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 0.9em;
-  background: var(--c4);
-  border-radius: var(--radius-4, 4px);
+  background: var(--n-g4);
+  border-radius: var(--n-radius-4, 4px);
   padding: 1px 5px;
 }
 .md-body:deep(pre) {
   margin: 0 0 1em;
-  padding: var(--space-12) var(--space-16);
-  background: var(--c2);
-  border-radius: var(--radius-6, 6px);
+  padding: var(--n-space-12) var(--n-space-16);
+  background: var(--n-g3);
+  border-radius: var(--n-radius-6, 6px);
   overflow-x: auto;
 }
 .md-body:deep(pre code) {
@@ -187,9 +187,9 @@ onBeforeUnmount(() => void flushSave());
 }
 .md-body:deep(blockquote) {
   margin: 0 0 1em;
-  padding: 2px 0 2px var(--space-12);
-  border-left: 2px solid var(--brand-1);
-  color: var(--text-label);
+  padding: 2px 0 2px var(--n-space-12);
+  border-left: 2px solid var(--n-brand);
+  color: var(--n-l3);
 }
 .md-body:deep(ul),
 .md-body:deep(ol) {
@@ -201,7 +201,7 @@ onBeforeUnmount(() => void flushSave());
 }
 .md-body:deep(hr) {
   border: none;
-  border-top: 1px solid var(--line-hover);
+  border-top: 1px solid var(--n-l-a3);
   margin: 1.4em 0;
 }
 .md-body:deep(table) {
@@ -210,13 +210,13 @@ onBeforeUnmount(() => void flushSave());
 }
 .md-body:deep(th),
 .md-body:deep(td) {
-  border: 1px solid var(--line-hover);
-  padding: 5px var(--space-12);
+  border: 1px solid var(--n-l-a3);
+  padding: 5px var(--n-space-12);
 }
 .md-body:deep(.md-img) {
-  color: var(--text-label);
-  background: var(--c2);
-  border-radius: var(--radius-4, 4px);
+  color: var(--n-l3);
+  background: var(--n-g3);
+  border-radius: var(--n-radius-4, 4px);
   padding: 2px 8px;
 }
 /* —— txt 编辑态 —— */
@@ -227,33 +227,33 @@ onBeforeUnmount(() => void flushSave());
   border: none;
   outline: none;
   background: transparent;
-  color: var(--text-normal);
-  padding: var(--space-16) var(--space-24);
+  color: var(--n-l2);
+  padding: var(--n-space-16) var(--n-space-24);
   font-family: Consolas, "Cascadia Mono", monospace;
-  font-size: var(--text-body-size);
+  font-size: var(--n-fs-body);
   line-height: 1.7;
 }
 .save-state {
   position: absolute;
-  right: var(--space-16);
-  bottom: var(--space-12);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--text-label);
+  right: var(--n-space-16);
+  bottom: var(--n-space-12);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
   pointer-events: none;
 }
 .save-state.fail {
-  color: var(--error);
+  color: var(--n-danger);
 }
 /* 读取 / 保存失败文案（说明文字档，居中底部，同 PreviewPanel error-text 口径） */
 .error-text {
   position: absolute;
   left: 50%;
-  bottom: var(--space-16);
+  bottom: var(--n-space-16);
   transform: translateX(-50%);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
   white-space: nowrap;
-  color: var(--error);
+  color: var(--n-danger);
 }
 </style>

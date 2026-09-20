@@ -131,17 +131,17 @@ function onCancel(): void {
 /* 表头（36 稿）：46 高 / padding 12 0 / gap 24 / 下分隔线 */
 .dup-head {
   display: flex;
-  gap: var(--space-24);
-  padding: var(--space-12) 0;
-  box-shadow: inset 0 -1px 0 0 var(--line-hover);
+  gap: var(--n-space-24);
+  padding: var(--n-space-12) 0;
+  box-shadow: inset 0 -1px 0 0 var(--n-l-a3);
   flex: none;
 }
 .dup-head .col {
   flex: 1;
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--text-label);
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l3);
 }
 /* 滚动包裹层：负 margin 对（2026-09-13 实机走查贴右缘口径）——margin-right 负扩 24 吃进
    .dup-body 的 0 24 padding 贴到弹窗缘，.dup-scroll padding-right 补回使行内容原位不动 */
@@ -158,7 +158,7 @@ function onCancel(): void {
 .dup-scroll {
   flex: 1;
   min-height: 0;
-  padding-right: var(--space-24);
+  padding-right: var(--n-space-24);
 }
 /* 底部按钮行（36 稿）：62 高 / 上分隔线 / padding 12 12 12 24，右对齐；
    flex: 1 占满 actions 主轴（row flex 项宽默认内容宽——不撑满上边框线会断在内容左缘，2026-08-13 走查） */
@@ -167,17 +167,17 @@ function onCancel(): void {
   flex: 1;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-12);
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
+  gap: var(--n-space-12);
+  padding: var(--n-space-12) var(--n-space-12) var(--n-space-12) var(--n-space-24);
   height: 62px;
-  box-shadow: inset 0 1px 0 0 var(--line-hover);
+  box-shadow: inset 0 1px 0 0 var(--n-l-a3);
 }
 /* 全部跟随标签（36 稿：标题档 / 文字-常态） */
 .follow-label {
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--text-normal);
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
 }
 /* actions 槽：底部按钮行通栏不缩（壳高被窗口封顶压时按钮行不动） */
 .dup-dialog :deep(.bm-actions) {

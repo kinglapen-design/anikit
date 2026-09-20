@@ -32,7 +32,7 @@ const emit = defineEmits<{ pick: [] }>();
   flex-direction: column;
   justify-content: center;
   padding: 0 var(--space-48);
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   width: 100%;
   flex: 1;
   min-height: 0;
@@ -41,14 +41,14 @@ const emit = defineEmits<{ pick: [] }>();
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   width: 100%;
 }
 .field-label {
   flex: none;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
 }
 .path-row {
   justify-content: flex-end;
@@ -66,9 +66,9 @@ const emit = defineEmits<{ pick: [] }>();
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
 }
 /* 步骤内联错误行（Eagle 式，同 CreateLibraryForm 口径）：绝对定位不挤压稿内布局；
    pointer-events none——元素盒横跨内容区与按钮行重叠，纯展示不吃点击（2026-08-12 走查） */
@@ -76,12 +76,12 @@ const emit = defineEmits<{ pick: [] }>();
   position: absolute;
   left: var(--space-48);
   right: var(--space-48);
-  bottom: var(--space-8);
+  bottom: var(--n-space-8);
   margin: 0;
   pointer-events: none;
   text-align: center;
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  color: var(--error);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-danger);
 }
 </style>

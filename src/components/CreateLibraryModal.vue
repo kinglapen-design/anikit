@@ -74,7 +74,7 @@ async function onConfirm(): Promise<void> {
   margin: 0;
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
-  color: var(--error);
+  color: var(--n-danger);
   word-break: break-all;
 }
 </style>

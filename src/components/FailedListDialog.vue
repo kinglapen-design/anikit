@@ -46,16 +46,16 @@ const listEl = ref<HTMLElement>();
 .scroll-wrap {
   position: relative;
   max-width: 372px;
-  margin-right: calc(-1 * var(--space-24));
+  margin-right: calc(-1 * var(--n-space-24));
 }
 /* 失败清单：文件名竖排间距 8（用户定）；超高自滚（上限 = 旧弹窗 160 沿用）；
    padding-right 补回包裹层负扩，文字原位不动（2026-09-13 贴右缘口径） */
 .fail-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
   max-height: 160px;
-  padding-right: var(--space-24);
+  padding-right: var(--n-space-24);
 }
 .fail-item {
   margin: 0;

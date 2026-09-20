@@ -55,23 +55,23 @@ const metaText = computed(() =>
   flex-direction: column;
   width: 327px;
   height: 240.94px;
-  border-radius: var(--radius-6);
+  border-radius: var(--n-radius-6);
   flex: none;
 }
 .scan-card::after {
   content: "";
   position: absolute;
   inset: 0;
-  border: 1px solid var(--line-hover);
-  border-radius: var(--radius-6);
+  border: 1px solid var(--n-l-a3);
+  border-radius: var(--n-radius-6);
   pointer-events: none;
 }
 /* 缩略图区（35 稿）：183.94 高 / C3 底 / 上圆角 6 */
 .thumb {
   width: 100%;
   height: 183.94px;
-  border-radius: var(--radius-6) var(--radius-6) 0 0;
-  background: var(--c3);
+  border-radius: var(--n-radius-6) var(--n-radius-6) 0 0;
+  background: var(--n-g3);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -82,7 +82,7 @@ const metaText = computed(() =>
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: var(--radius-6) var(--radius-6) 0 0; /* 双保险：容器 overflow 裁剪之外显式圆角 */
+  border-radius: var(--n-radius-6) var(--n-radius-6) 0 0; /* 双保险：容器 overflow 裁剪之外显式圆角 */
 }
 /* 格式图标：方形 contain 不裁切（2026-07-22 用户定） */
 .thumb img.icon {
@@ -96,47 +96,47 @@ const metaText = computed(() =>
   align-items: center;
   justify-content: center;
   background: #c6c7cc;
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  font-weight: var(--text-title-weight);
-  color: var(--c3);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-g3);
 }
 /* 简介区（35 稿）：57 高 / C3 底 + 上边框 / padding 8 8 8 12 / 间距 4 */
 .info {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--n-space-4);
   height: 57px;
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
-  background: var(--c3);
-  box-shadow: inset 0 1px 0 0 var(--line-hover);
-  border-radius: 0 0 var(--radius-6) var(--radius-6);
+  padding: var(--n-space-8) var(--n-space-8) var(--n-space-8) var(--n-space-12);
+  background: var(--n-g3);
+  box-shadow: inset 0 1px 0 0 var(--n-l-a3);
+  border-radius: 0 0 var(--n-radius-6) var(--n-radius-6);
   flex: none;
 }
 .name {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-highlight);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .meta {
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
 }
 /* 格式徽标（35 稿）：左上各 6，徽标档 10px，padding 2 4，圆角 4 */
 .fmt-badge {
   position: absolute;
   left: 6px;
   top: 6px;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-4);
-  font-size: var(--text-badge-size);
-  line-height: var(--text-badge-line);
-  font-weight: var(--text-title-weight);
-  color: var(--text-normal);
+  padding: var(--n-space-2) var(--n-space-4);
+  border-radius: var(--n-radius-4);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
   z-index: 1;
 }
 /* 原始文件徽章（35 稿）：右下各 8，15×15 品牌色图标 */

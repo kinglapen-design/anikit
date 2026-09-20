@@ -129,7 +129,7 @@ async function togglePin(): Promise<void> {
   align-items: center;
   justify-content: space-between;
   /* 内边距 12 16（与 ContentTitleBar 一致；2026-08-10 随 42 稿外层 padding 归零补右左 16） */
-  padding: var(--space-12) var(--space-16);
+  padding: var(--n-space-12) var(--n-space-16);
   flex: none;
 }
 /* 中栏标题栏图标按钮统一 亮色/三级（2026-08-30 用户实机定，与内容工具栏 IconButton plain 同档；
@@ -140,19 +140,19 @@ async function togglePin(): Promise<void> {
 .nav-group {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
   min-width: 0;
 }
 .btn-group {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--n-space-4);
   flex: none;
 }
 .zoom-group {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
   flex: none;
 }
 /* 上/下一个 = angle-bracket rot-180 朝右（翻转类沿用） */

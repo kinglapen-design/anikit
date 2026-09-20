@@ -243,12 +243,12 @@ watch(
   /* 旋转/翻转绕图中心，视觉可溢出 wrap（stage overflow hidden 兜底） */
 }
 /* audio：波形大图（重采样图按画面区等比渲染；CSS mask 方案——图柱 alpha 恒 100% 供 mask 取形，
-   颜色 = 静态波形实色 --wave-pending（2026-08-10 实色化，原 font-icon-3 观感作废），
+   颜色 = 静态波形实色 --n-l3（原 --wave-pending 就近；2026-08-10 实色化，font-icon-3 观感作废），
    mask-size contain 居中即原 object-fit 行为） */
 .wave-large {
   position: absolute;
   inset: 0;
-  background: var(--wave-pending);
+  background: var(--n-l3);
   -webkit-mask-image: var(--wave-url);
   mask-image: var(--wave-url);
   -webkit-mask-size: contain;
@@ -271,11 +271,11 @@ watch(
 .error-text {
   position: absolute;
   left: 50%;
-  bottom: var(--space-16);
+  bottom: var(--n-space-16);
   transform: translateX(-50%);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
   white-space: nowrap;
-  color: var(--error);
+  color: var(--n-danger);
 }
 </style>

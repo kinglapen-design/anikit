@@ -195,7 +195,7 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
 .rules-editor {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
 }
 /* 规则行（33 稿：C3 底 44 高 圆角 6 / padding 8 12 / gap 8）；
    2026-08-19 复验：补 暗-悬停边框（稿口径）；chips 换行时行高自适应（min-height），
@@ -203,20 +203,20 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
 .rule-row {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
   min-height: 44px;
   box-sizing: border-box;
-  padding: var(--space-8) var(--space-12);
-  border-radius: var(--radius-6);
-  background: var(--c3);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
+  padding: var(--n-space-8) var(--n-space-12);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g3);
+  box-shadow: inset 0 0 0 1px var(--n-l-a3);
   flex: none;
 }
 /* 头段（× 规则 下拉 范围）：恒 28 高与首行 chips 同高居中 */
 .row-head {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
   height: 28px;
   flex: none;
 }
@@ -227,9 +227,9 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
   min-width: 0;
 }
 .row-label {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
   white-space: nowrap;
   flex: none;
 }
@@ -237,22 +237,22 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
 .kind-pick {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--n-space-4);
   width: 96px;
   height: 28px;
   box-sizing: border-box;
-  padding: var(--space-4) var(--space-8);
-  border-radius: var(--radius-6);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
-  color: var(--text-normal);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  padding: var(--n-space-4) var(--n-space-8);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g4);
+  box-shadow: inset 0 0 0 1px var(--n-l-a3);
+  color: var(--n-l2);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
   flex: none;
   transition: background 0.12s ease;
 }
 .kind-pick:hover {
-  background: var(--c5);
+  background: var(--n-g5);
 }
 .kind-pick .val {
   flex: 1;
@@ -262,13 +262,13 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
   text-overflow: ellipsis;
 }
 .kind-pick .chev {
-  color: var(--text-label);
+  color: var(--n-l3);
 }
 /* 范围 chips（33 稿：28 高 C4 底；选中 = 品牌色底 + 高亮文字） */
 .chips {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
   flex-wrap: wrap;
   min-width: 0;
 }
@@ -277,50 +277,50 @@ const typeLabel = (t: string): string => GROUP_TYPE_LABELS[t as GroupType] ?? t;
   align-items: center;
   height: 28px;
   box-sizing: border-box;
-  padding: var(--space-4) var(--space-8);
-  border-radius: var(--radius-6);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
-  color: var(--text-normal);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  padding: var(--n-space-4) var(--n-space-8);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g4);
+  box-shadow: inset 0 0 0 1px var(--n-l-a3);
+  color: var(--n-l2);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
   white-space: nowrap;
   transition: background 0.12s ease;
 }
 .chip:hover {
-  background: var(--c5);
+  background: var(--n-g5);
 }
 .chip.on,
 .chip.on:hover {
-  background: var(--brand);
-  box-shadow: inset 0 0 0 1px var(--line-active);
-  color: var(--text-highlight);
+  background: var(--n-brand);
+  box-shadow: inset 0 0 0 1px var(--n-l-a2);
+  color: var(--n-l1);
 }
 /* 标签候选空态提示（2026-09-17：当前文件夹无 tags 时） */
 .chips-empty {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-faint);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l4);
 }
 /* 添加新规则（33 稿：C5 底 / 1px 亮-选中 / 圆角 6 / padding 6 12 / gap 6 / 标签档） */
 .add-rule {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
   height: 29px;
   box-sizing: border-box;
-  padding: var(--space-6) var(--space-12);
-  border-radius: var(--radius-6);
-  background: var(--c5);
-  box-shadow: inset 0 0 0 1px var(--line-active);
-  color: var(--text-normal);
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
+  padding: var(--n-space-6) var(--n-space-12);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g5);
+  box-shadow: inset 0 0 0 1px var(--n-l-a2);
+  color: var(--n-l2);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
   align-self: flex-start;
   transition: background 0.12s ease;
 }
 .add-rule:hover {
-  background: var(--c4);
+  background: var(--n-g4);
 }
 </style>

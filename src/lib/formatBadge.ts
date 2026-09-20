@@ -7,28 +7,28 @@ import type { PlacementView } from "../stores/content";
 
 /** 各软件 / 动图分组（扩展名小写 → token 变量） */
 const BRAND_COLORS: Record<string, string> = {
-  psd: "var(--custom-blue)",
-  psb: "var(--custom-blue)",
-  fla: "var(--custom-peach)",
-  svg: "var(--custom-orange)",
-  eps: "var(--custom-orange)",
-  ai: "var(--custom-orange)",
-  aep: "var(--custom-blue-violet)",
-  gif: "var(--custom-purple)",
+  psd: "var(--n-custom-blue-2)",
+  psb: "var(--n-custom-blue-2)",
+  fla: "var(--n-custom-peach-2)",
+  svg: "var(--n-custom-yellow-2)",
+  eps: "var(--n-custom-yellow-2)",
+  ai: "var(--n-custom-yellow-2)",
+  aep: "var(--n-custom-purple-2)",
+  gif: "var(--n-custom-purple-2)",
   // 视频归动图组（会动的归一组，5.1）
-  mp4: "var(--custom-purple)",
-  mov: "var(--custom-purple)",
-  avi: "var(--custom-purple)",
-  mpeg4: "var(--custom-purple)",
-  m4v: "var(--custom-purple)",
+  mp4: "var(--n-custom-purple-2)",
+  mov: "var(--n-custom-purple-2)",
+  avi: "var(--n-custom-purple-2)",
+  mpeg4: "var(--n-custom-purple-2)",
+  m4v: "var(--n-custom-purple-2)",
   // 音频绿（2026-08-10 九色化，原归"其他"中性组）
-  mp3: "var(--custom-green)",
-  wav: "var(--custom-green)",
-  wma: "var(--custom-green)",
+  mp3: "var(--n-custom-green-2)",
+  wav: "var(--n-custom-green-2)",
+  wma: "var(--n-custom-green-2)",
 };
 
 /** 未列出格式（zip / docx 等）：黄绿（九色中最低调，不抢眼） */
-const OTHER_COLOR = "var(--custom-yellow-green)";
+const OTHER_COLOR = "var(--n-custom-yellowgreen-2)";
 
 /** 静态图片格式：不出角标 */
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "bmp", "webp"]);
@@ -79,7 +79,7 @@ export function isThumbCapableExt(ext: string): boolean {
 
 /** 角标底色：null = 不显示角标；animated（WEBP 动图，5.1）覆盖静态图片归动图组 */
 export function formatBadgeColor(ext: string, isSeq = false, animated = false): string | null {
-  if (isSeq || animated) return "var(--custom-purple)";
+  if (isSeq || animated) return "var(--n-custom-purple-2)";
   const key = ext.toLowerCase();
   if (IMAGE_EXTS.has(key)) return null;
   return BRAND_COLORS[key] ?? OTHER_COLOR;

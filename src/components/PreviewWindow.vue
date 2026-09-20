@@ -39,7 +39,7 @@ onMounted(async () => {
   flex: 1;
   min-width: 0;
   height: 100%;
-  padding: var(--space-4);
+  padding: var(--n-space-4);
 }
 .pw-body {
   display: flex;

@@ -43,9 +43,9 @@ const listEl = ref<HTMLElement>();
 .lead {
   margin: 0;
   max-width: 372px;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
 }
 /* 滚动包裹层：relative 锚 ScrollThumb；限宽 372（同 AppConfirm 正文口径）；
    负 margin 对（2026-09-13 实机走查贴右缘口径）——margin-right 负扩 24 吃进壳 padding
@@ -53,27 +53,27 @@ const listEl = ref<HTMLElement>();
 .scroll-wrap {
   position: relative;
   max-width: 372px;
-  margin-top: var(--space-8);
-  margin-right: calc(-1 * var(--space-24));
+  margin-top: var(--n-space-8);
+  margin-right: calc(-1 * var(--n-space-24));
 }
 /* 清单：名称 + 路径双行竖排，间距 8；超高自滚（上限同 FailedListDialog 160）；
    padding-right 补回包裹层负扩，文字原位不动（2026-09-13 贴右缘口径） */
 .orphan-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
   max-height: 160px;
-  padding-right: var(--space-24);
+  padding-right: var(--n-space-24);
 }
 .row {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--n-space-4);
 }
 .path {
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
   word-break: break-all;
 }
 /* 确认钮 = 警告色（figma 09 警告弹窗稿：状态/警告 #DB880C = --n-warning）；

@@ -28,28 +28,28 @@ defineProps<{ error: string }>();
   justify-content: flex-end;
   align-items: center;
   padding: 0 var(--space-48);
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   width: 100%;
   flex: 1;
   min-height: 0;
 }
 .field-label {
   flex: none;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
 }
 /* 步骤内联错误行（同 WizardStepSpace 口径）：absolute 横跨内容区，pointer-events none 防挡点击 */
 .step-error {
   position: absolute;
   left: var(--space-48);
   right: var(--space-48);
-  bottom: var(--space-8);
+  bottom: var(--n-space-8);
   margin: 0;
   pointer-events: none;
   text-align: center;
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  color: var(--error);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-danger);
 }
 </style>

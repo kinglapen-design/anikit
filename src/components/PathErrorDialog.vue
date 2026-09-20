@@ -30,34 +30,34 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: var(--space-16);
-  gap: var(--space-16);
-  background: var(--c3);
+  padding: var(--n-space-16);
+  gap: var(--n-space-16);
+  background: var(--n-g3);
   box-shadow:
-    var(--shadow-pop),
-    inset 0 0 0 1px var(--border-1);
-  border-radius: var(--radius-8);
+    var(--n-shadow-lg),
+    inset 0 0 0 1px var(--n-l-a2);
+  border-radius: var(--n-radius-8);
 }
 .title-row {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
   height: 24px;
 }
 .title {
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--font-icon-1);
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l1);
 }
 .hint {
   margin: 0;
   max-width: 100%;
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  font-weight: var(--text-caption-weight);
-  color: var(--font-icon-3);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  font-weight: var(--n-fw-regular);
+  color: var(--n-l2);
   word-break: break-all; /* 长路径超 368 上限时换行（08 通用规则） */
 }
 /* 按钮组（01_按钮#07 大标题按钮-小按钮）：宽度按标题自适应（padding 8/16 / 高 38）/ 圆角 6 / 无图标 */
@@ -65,7 +65,7 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   display: flex;
   flex-direction: row;
   justify-content: flex-end; /* 08 通用规则：按钮组右对齐 */
-  gap: var(--space-16);
+  gap: var(--n-space-16);
   width: 100%;
 }
 .btn {
@@ -73,29 +73,29 @@ const emit = defineEmits<{ retry: []; cancel: [] }>();
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  padding: var(--space-8) var(--space-16);
-  gap: var(--space-6);
+  padding: var(--n-space-8) var(--n-space-16);
+  gap: var(--n-space-6);
   height: 38px;
   border: none;
-  border-radius: var(--radius-6);
+  border-radius: var(--n-radius-6);
   cursor: pointer;
-  font-family: var(--font-family);
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--font-icon-1);
+  font-family: var(--n-font-family);
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l1);
 }
 .btn.primary {
-  background: var(--brand-1);
+  background: var(--n-brand);
 }
 .btn.primary:hover {
-  background: var(--brand-2);
+  background: var(--n-brand-bright);
 }
 .btn.secondary {
-  background: var(--c5);
+  background: var(--n-g5);
 }
 .btn.secondary:hover {
-  background: var(--border-1);
+  background: var(--n-l-a2);
 }
 .btn:disabled {
   cursor: default;

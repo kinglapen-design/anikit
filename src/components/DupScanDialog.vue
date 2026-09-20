@@ -219,7 +219,7 @@ function thumbUrl(a: DupAsset): string | null {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: var(--line-hover);
+  background: var(--n-l-a3);
   z-index: 11;
   pointer-events: none;
 }
@@ -242,36 +242,36 @@ function thumbUrl(a: DupAsset): string | null {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-12);
+  gap: var(--n-space-4);
+  padding: var(--n-space-12);
 }
 /* 组列表项：56 高 = 40×40 缩略图 + 名称 / N 个文件竖排，padding 四周 8（2026-08-13 用户定）；
    hover 叠 暗-悬停 罩层；当前组 = 亮-选中 罩层 + 暗-悬停 1px 线条（树 item 强度阶梯同口径） */
 .group-item {
   display: flex;
   align-items: center;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   height: 56px;
-  padding: var(--space-8);
-  border-radius: var(--radius-6);
+  padding: var(--n-space-8);
+  border-radius: var(--n-radius-6);
   flex: none;
   text-align: left;
   cursor: pointer;
   transition: background 0.15s ease;
 }
 .group-item:hover {
-  background: var(--line-hover);
+  background: var(--n-l-a3);
 }
 /* 当前组：与目录树 item 选中同款（2026-08-13 用户定）——亮-选中罩层 + 1.5px 文字常态内阴影 */
 .group-item.cur {
-  background: var(--line-active);
-  box-shadow: inset 0 0 0 1.5px var(--text-normal);
+  background: var(--n-l-a1);
+  box-shadow: inset 0 0 0 1.5px var(--n-l2);
 }
 .group-thumb {
   width: 40px;
   height: 40px;
-  border-radius: var(--radius-6);
-  background: var(--c3);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g3);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -282,55 +282,55 @@ function thumbUrl(a: DupAsset): string | null {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: var(--radius-6); /* 双保险：容器 overflow 裁剪之外 img 显式圆角（2026-08-13 走查核对 = 6） */
+  border-radius: var(--n-radius-6); /* 双保险：容器 overflow 裁剪之外 img 显式圆角（2026-08-13 走查核对 = 6） */
 }
 .group-thumb img.icon {
   object-fit: contain;
 }
 .group-thumb .ext {
-  font-size: var(--text-badge-size);
-  line-height: var(--text-badge-line);
-  font-weight: var(--text-badge-weight);
-  color: var(--text-label);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l3);
 }
 .group-text {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--n-space-2);
   min-width: 0;
 }
 .group-name {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-highlight);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .group-count {
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
 }
 /* 右列：保留者单选列表（item = 35 稿卡片横条化：缩略图 + 名称 + 大小 + 所在文件夹标签）；
    滚轮 = ScrollThumb 悬浮件，padding 恢复纯 24（无 gutter 补偿） */
 .keeper-list {
   flex: 1;
   min-height: 0;
-  padding: var(--space-16) var(--space-24);
+  padding: var(--n-space-16) var(--n-space-24);
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
 }
 .keeper-item {
   display: flex;
   align-items: center;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   height: 52px;
-  padding: var(--space-6) var(--space-12);
-  border-radius: var(--radius-6);
-  background: var(--c2); /* 弹窗内 item 底色与二级窗口一致（2026-08-13 用户定：原 C3 改 C2） */
-  box-shadow: inset 0 0 0 1px var(--line-hover);
+  padding: var(--n-space-6) var(--n-space-12);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g3); /* 弹窗内 item 底色与二级窗口一致（2026-08-13 用户定：原 C3 改 C2） */
+  box-shadow: inset 0 0 0 1px var(--n-l-a3);
   flex: none;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -338,17 +338,17 @@ function thumbUrl(a: DupAsset): string | null {
 /* hover 叠 暗-悬停 罩层；选中行（.on）悬停不再变色——选中态由品牌色描边表达，
    叠罩会稀释描边观感（2026-08-13 走查） */
 .keeper-item:not(.on):hover {
-  background: var(--line-hover);
+  background: var(--n-l-a3);
 }
 /* 选中行 = 品牌色描边（选中框统一 --brand-border，1.2 走查口径） */
 .keeper-item.on {
-  box-shadow: inset 0 0 0 1.5px var(--brand-border);
+  box-shadow: inset 0 0 0 1.5px var(--n-brand-bright);
 }
 .keeper-thumb {
   width: 64px;
   height: 36px;
-  border-radius: var(--radius-6);
-  background: var(--c2);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g2);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -359,23 +359,23 @@ function thumbUrl(a: DupAsset): string | null {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: var(--radius-6);
+  border-radius: var(--n-radius-6);
 }
 .keeper-thumb img.icon {
   object-fit: contain;
 }
 .keeper-thumb .ext {
-  font-size: var(--text-badge-size);
-  line-height: var(--text-badge-line);
-  font-weight: var(--text-badge-weight);
-  color: var(--text-label);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l3);
 }
 .keeper-name {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-highlight);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -383,25 +383,25 @@ function thumbUrl(a: DupAsset): string | null {
 .keeper-meta {
   display: flex;
   align-items: center;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   flex: none;
 }
 .keeper-meta .size {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
   white-space: nowrap;
 }
 /* 所在文件夹标签（36 稿 chip 同款）：C4 底 + 1px 暗-悬停 / 圆角 6 / padding 4 8 / 标签档 */
 .chip {
   max-width: 140px;
-  padding: var(--space-4) var(--space-8);
-  border-radius: var(--radius-6);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  color: var(--text-label);
+  padding: var(--n-space-4) var(--n-space-8);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g4);
+  box-shadow: inset 0 0 0 1px var(--n-l-a3);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -415,8 +415,8 @@ function thumbUrl(a: DupAsset): string | null {
   flex: 1;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-12);
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
+  gap: var(--n-space-12);
+  padding: var(--n-space-12) var(--n-space-12) var(--n-space-12) var(--n-space-24);
   height: 62px;
 }
 .scan-bottom::after {
@@ -426,7 +426,7 @@ function thumbUrl(a: DupAsset): string | null {
   right: 0;
   top: 0;
   height: 1px;
-  background: var(--line-hover);
+  background: var(--n-l-a3);
 }
 .scan-bottom.end {
   justify-content: flex-end;
@@ -434,27 +434,27 @@ function thumbUrl(a: DupAsset): string | null {
 .summary {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
 }
 /* 已选择 N 个文件（35 稿：标题档 16；N 品牌色） */
 .sel {
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--text-normal);
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
 }
 .sel b {
-  color: var(--brand);
-  font-weight: var(--text-title-weight);
+  color: var(--n-brand);
+  font-weight: var(--n-fw-bold);
 }
 .saved {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
 }
 .btns {
   display: flex;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
 }
 /* 合并 / 取消 / 确认合并 / 上一步 = ActionButton lg 宽自适应 + 左右 48（BaseModal 罩层口径，
    2026-09-13 定稿值，35 稿 88×38 定宽随换代废除） */

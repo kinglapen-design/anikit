@@ -392,9 +392,9 @@ async function onSwitchLibrary(e: MouseEvent): Promise<void> {
 .prompt-text {
   margin: 0;
   max-width: 320px;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
 }
 /* 树容器（稿 左侧边栏-树容器）：column gap 8；padding 0（区块各自 padding 8 12） */
 .library-view {

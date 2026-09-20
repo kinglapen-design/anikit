@@ -326,17 +326,17 @@ function toggleBlock(id: string): void {
 /* 表头（稿：34 高 / padding-bottom 12 / 底线 1px 暗-悬停；两列均分，16/22 700 标签色） */
 .head-row {
   display: flex;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   padding: 0 var(--n-space-24) var(--n-space-12);
-  border-bottom: 1px solid var(--line-hover);
+  border-bottom: 1px solid var(--n-l-a3);
   flex: none;
 }
 .head-cell {
   flex: 1;
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--text-label);
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l3);
 }
 /* 树形容器（稿 604 高；悬浮滚轮 ScrollThumb 贴右缘）——framed 壳 padding 0，wrap 通栏自承
    padding-left 24 天然抵弹窗缘（旧负 margin 对随壳换代简化，2026-09-13 贴右缘口径沿），
@@ -354,7 +354,7 @@ function toggleBlock(id: string): void {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-24);
+  gap: var(--n-space-24);
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: var(--n-space-24);
@@ -362,44 +362,44 @@ function toggleBlock(id: string): void {
 .block-group {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
 }
 /* 组头（稿：20 高 / padding-left 8；12/17 标签色；+ 钮不接线——组头纯显示） */
 .group-head {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
   height: 20px;
-  padding-left: var(--space-8);
+  padding-left: var(--n-space-8);
   cursor: pointer;
 }
 .group-title {
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
 }
 .spacer {
   flex: 1;
 }
 .chev {
-  color: var(--text-label);
+  color: var(--n-l3);
   flex: none;
 }
 /* 行（稿：32 高 gap 12；行间 4） */
 .line {
   position: relative;
   display: flex;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   height: 32px;
-  border-radius: var(--radius-6);
+  border-radius: var(--n-radius-6);
 }
 /* 行 hover（稿"悬停"态：整行 2px 亮-选中描边；::after 伪元素画防布局抖动，速查表 §7） */
 .line:hover::after {
   content: "";
   position: absolute;
   inset: 0;
-  border: 2px solid var(--line-active);
-  border-radius: var(--radius-6);
+  border: 2px solid var(--n-l-a2);
+  border-radius: var(--n-radius-6);
   pointer-events: none;
 }
 /* 文件夹格（稿：270×32 / padding 6 8 / gap 6 / 圆角 6；
@@ -407,17 +407,17 @@ function toggleBlock(id: string): void {
 .folder-cell {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
   width: 270px;
   height: 32px;
   box-sizing: border-box;
-  padding: var(--space-6) var(--space-8);
-  border-radius: var(--radius-6);
+  padding: var(--n-space-6) var(--n-space-8);
+  border-radius: var(--n-radius-6);
   flex: none;
 }
 .folder-cell.root {
-  background: var(--c5);
-  border: 1px solid var(--line-active);
+  background: var(--n-g5);
+  border: 1px solid var(--n-l-a2);
 }
 .folder-cell.child {
   background: #1f2020;
@@ -438,24 +438,24 @@ function toggleBlock(id: string): void {
   cursor: default;
 }
 .deco {
-  color: var(--text-normal);
+  color: var(--n-l2);
   flex: none;
 }
 .fname {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .count {
   flex: none;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
   text-align: right;
 }
 /* 名称框（稿：232×32 / padding 6 8 / gap 6 / C4 底 / 1px 暗-悬停 / 圆角 6；
@@ -463,19 +463,19 @@ function toggleBlock(id: string): void {
 .link-cell {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
   width: 232px;
   height: 32px;
   box-sizing: border-box;
-  padding: var(--space-6) var(--space-8);
-  border-radius: var(--radius-6);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
+  padding: var(--n-space-6) var(--n-space-8);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g4);
+  box-shadow: inset 0 0 0 1px var(--n-l-a3);
   flex: none;
 }
 .link-cell.editing {
-  background: var(--c2);
-  box-shadow: inset 0 0 0 1.5px var(--brand-border);
+  background: var(--n-g2);
+  box-shadow: inset 0 0 0 1.5px var(--n-brand-bright);
 }
 .link-cell.empty {
   background: transparent;
@@ -485,9 +485,9 @@ function toggleBlock(id: string): void {
 .lname {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -500,15 +500,15 @@ function toggleBlock(id: string): void {
   border: none;
   outline: none;
   padding: 0;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
 }
 .badge {
   flex: none;
 }
 .badge.link {
-  color: var(--text-label);
+  color: var(--n-l3);
 }
 /* ✓（稿：18×18 位 check 15px；亮 = 常态色 / 淡 = 极淡——无链接行 hover 才出） */
 .check {
@@ -522,10 +522,10 @@ function toggleBlock(id: string): void {
   background: transparent;
   cursor: pointer;
   flex: none;
-  color: var(--text-normal);
+  color: var(--n-l2);
 }
 .check.ghost {
-  color: var(--text-faint);
+  color: var(--n-l4);
   opacity: 0;
   transition: opacity 0.12s ease;
 }

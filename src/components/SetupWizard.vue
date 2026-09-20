@@ -286,7 +286,7 @@ function onErrorRetry(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c1);
+  background: var(--n-g1);
 }
 /* 卡片（38 稿）：600×559 / C2 / 亮-选中 1.5px（inset 模拟，规范 4）/ 投影 / 圆角 8 */
 .wizard-card {
@@ -296,11 +296,11 @@ function onErrorRetry(): void {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: var(--c2);
+  background: var(--n-g3);
   box-shadow:
-    var(--shadow-pop),
-    inset 0 0 0 var(--border-strong) var(--line-active);
-  border-radius: var(--radius-8);
+    var(--n-shadow-lg),
+    inset 0 0 0 1px var(--n-l-a2);
+  border-radius: var(--n-radius-8);
 }
 /* 标题栏：46 高，右对齐关闭钮 */
 .titlebar {
@@ -309,7 +309,7 @@ function onErrorRetry(): void {
   flex-direction: row;
   justify-content: flex-end;
   align-items: flex-start;
-  padding: var(--space-8);
+  padding: var(--n-space-8);
   width: 100%;
   height: 46px;
   flex: none;
@@ -321,8 +321,8 @@ function onErrorRetry(): void {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: var(--space-24);
-  gap: var(--space-12);
+  padding: var(--n-space-24);
+  gap: var(--n-space-12);
   width: 100%;
   height: 271px;
   flex: none;
@@ -341,18 +341,18 @@ function onErrorRetry(): void {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
 }
 .app-name {
   font-size: var(--text-display-size);
   line-height: var(--text-display-line);
   font-weight: var(--text-display-weight);
-  color: var(--text-highlight);
+  color: var(--n-l1);
 }
 .app-sub {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
 }
 /* 帧 0 内容区：撑满剩余，按钮组居中（gap 12） */
 .content {
@@ -364,13 +364,13 @@ function onErrorRetry(): void {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: var(--space-24);
+  padding: var(--n-space-24);
   box-sizing: border-box;
 }
 .entry-actions {
   display: flex;
   flex-direction: row;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
 }
 /* ActionButton md = 宽 100% 填充式（稿 flex-grow 拉伸语境）；38 稿入口两钮自适应内容——
    压回 auto + 左右 12（旧 AppButton large padding 8/12 口径沿） */
@@ -384,7 +384,7 @@ function onErrorRetry(): void {
   display: flex;
   flex-direction: column;
   padding: var(--space-48);
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   width: 100%;
   height: 146px;
   flex: none;
@@ -405,27 +405,27 @@ function onErrorRetry(): void {
 .step-title {
   display: flex;
   flex-direction: row;
-  gap: var(--space-4);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  gap: var(--n-space-4);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
 }
 .step-no {
-  color: var(--text-label);
+  color: var(--n-l3);
 }
 .step-name {
-  color: var(--text-highlight);
+  color: var(--n-l1);
 }
 /* 进度条：504 通栏 × 10 / C1 轨道 / C5-底色填充，按 当前步/4 递增 */
 .progress-track {
   width: 100%;
   height: 10px;
-  background: var(--c1);
+  background: var(--n-g1);
   border-radius: var(--n-radius-pill);
   overflow: hidden;
 }
 .progress-fill {
   height: 100%;
-  background: var(--c5-base);
+  background: var(--n-g4);
   border-radius: var(--n-radius-pill);
   transition: width 0.2s ease;
 }

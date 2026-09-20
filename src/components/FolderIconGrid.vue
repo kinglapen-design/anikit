@@ -38,14 +38,14 @@ const emit = defineEmits<{ select: [name: string | null] }>();
   width: 30px;
   height: 30px;
   padding: 6px;
-  border-radius: var(--radius-6);
-  color: var(--text-normal);
+  border-radius: var(--n-radius-6);
+  color: var(--n-l2);
 }
 /* hover 叠 暗-悬停；选中 = 亮-选中背景（稿 §3 首格样例），选中项 hover 不再变色 */
 .cell:hover:not(.cur) {
-  background: linear-gradient(var(--line-hover), var(--line-hover));
+  background: linear-gradient(var(--n-l-a3), var(--n-l-a3));
 }
 .cell.cur {
-  background: var(--line-active);
+  background: var(--n-l-a1);
 }
 </style>

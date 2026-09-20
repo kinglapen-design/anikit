@@ -16,7 +16,7 @@ export const inventoryTotals = {
   "business": 70,
   "dead": 2,
   "legacyConsumers": 4,
-  "legacyTokens": 352
+  "legacyTokens": 32
 };
 export const inventory: InventoryEntry[] = [
   {
@@ -40,7 +40,7 @@ export const inventory: InventoryEntry[] = [
     "name": "DetailNotes",
     "status": "dead",
     "consumers": 0,
-    "legacyTokens": 8,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -64,7 +64,7 @@ export const inventory: InventoryEntry[] = [
     "name": "FolderIconGrid",
     "status": "business",
     "consumers": 2,
-    "legacyTokens": 1,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -72,7 +72,7 @@ export const inventory: InventoryEntry[] = [
     "name": "GroupRulesEditor",
     "status": "business",
     "consumers": 2,
-    "legacyTokens": 25,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -88,7 +88,7 @@ export const inventory: InventoryEntry[] = [
     "name": "PreviewPanel",
     "status": "business",
     "consumers": 2,
-    "legacyTokens": 2,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -104,7 +104,7 @@ export const inventory: InventoryEntry[] = [
     "name": "SideSlider",
     "status": "business",
     "consumers": 2,
-    "legacyTokens": 1,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -136,7 +136,7 @@ export const inventory: InventoryEntry[] = [
     "name": "AssetCard",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 1,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -144,7 +144,7 @@ export const inventory: InventoryEntry[] = [
     "name": "AssetGrid",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 2,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -176,7 +176,7 @@ export const inventory: InventoryEntry[] = [
     "name": "ContentArea",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 1,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -232,7 +232,7 @@ export const inventory: InventoryEntry[] = [
     "name": "DuplicateDialog",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 8,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -240,7 +240,7 @@ export const inventory: InventoryEntry[] = [
     "name": "DuplicateRow",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 21,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -248,7 +248,7 @@ export const inventory: InventoryEntry[] = [
     "name": "DupScanCard",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 16,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -256,7 +256,7 @@ export const inventory: InventoryEntry[] = [
     "name": "DupScanDialog",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 38,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -328,7 +328,7 @@ export const inventory: InventoryEntry[] = [
     "name": "HoverSequenceLayer",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 1,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -344,7 +344,7 @@ export const inventory: InventoryEntry[] = [
     "name": "HoverZoomOverlay",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 1,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -360,7 +360,7 @@ export const inventory: InventoryEntry[] = [
     "name": "InboxDiskSection",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 4,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -368,7 +368,7 @@ export const inventory: InventoryEntry[] = [
     "name": "LibraryView",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 3,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -376,7 +376,7 @@ export const inventory: InventoryEntry[] = [
     "name": "LinkManageDialog",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 28,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -400,7 +400,7 @@ export const inventory: InventoryEntry[] = [
     "name": "OrphanInfosAlert",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 6,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -408,7 +408,7 @@ export const inventory: InventoryEntry[] = [
     "name": "PathErrorDialog",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 13,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -424,7 +424,7 @@ export const inventory: InventoryEntry[] = [
     "name": "PreviewFont",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 9,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -432,7 +432,7 @@ export const inventory: InventoryEntry[] = [
     "name": "PreviewNavigator",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 1,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -448,7 +448,7 @@ export const inventory: InventoryEntry[] = [
     "name": "PreviewText",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 17,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -464,7 +464,7 @@ export const inventory: InventoryEntry[] = [
     "name": "PropsDialog",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 9,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -472,7 +472,7 @@ export const inventory: InventoryEntry[] = [
     "name": "RecycleConfirmDialog",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 13,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -480,7 +480,7 @@ export const inventory: InventoryEntry[] = [
     "name": "SectionHeader",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 11,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -488,7 +488,7 @@ export const inventory: InventoryEntry[] = [
     "name": "SequencePackView",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 12,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -496,7 +496,7 @@ export const inventory: InventoryEntry[] = [
     "name": "SetupWizard",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 15,
+    "legacyTokens": 3,
     "replacement": ""
   },
   {
@@ -552,7 +552,7 @@ export const inventory: InventoryEntry[] = [
     "name": "TermChipsInput",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 9,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -560,7 +560,7 @@ export const inventory: InventoryEntry[] = [
     "name": "TreeItem",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 30,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -584,7 +584,7 @@ export const inventory: InventoryEntry[] = [
     "name": "WizardStepLibrary",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 5,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -592,7 +592,7 @@ export const inventory: InventoryEntry[] = [
     "name": "WizardStepPlaceholder",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 3,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -600,7 +600,7 @@ export const inventory: InventoryEntry[] = [
     "name": "WizardStepSpace",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 8,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -880,7 +880,7 @@ export const inventory: InventoryEntry[] = [
     "name": "ArchiveCard",
     "status": "new",
     "consumers": 1,
-    "legacyTokens": 1,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {

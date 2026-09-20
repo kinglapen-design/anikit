@@ -180,7 +180,7 @@ const entries = computed(() => content.inboxDisk);
   padding-right: var(--n-space-12);
 }
 /* 固定提醒与操作错误：正文档 13/18（空文件夹稿「提示文字」档，2026-09-08 换代——
-   旧 caption/label 旧 token 废除），提醒 = 亮色/三级，错误用语义色 --error */
+   旧 caption/label 旧 token 废除），提醒 = 亮色/三级，错误用语义色 --n-danger */
 .notice {
   margin: 0;
   font-size: var(--n-fs-body);
@@ -191,7 +191,7 @@ const entries = computed(() => content.inboxDisk);
   margin: 0;
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
-  color: var(--error);
+  color: var(--n-danger);
   word-break: break-all;
 }
 /* 卡片列表：与素材网格视图同宽（260，2026-08-13 用户：120 太窄名称五字就截断）；
@@ -213,21 +213,21 @@ const entries = computed(() => content.inboxDisk);
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  color: var(--text-label);
+  color: var(--n-l3);
 }
 /* 被占用标记：保旧视觉旧位（右上各 4，c3 底警告字——新稿未画，同笔记角标先例）；
    壳层附件随卡芯 hover 位移 -4px（kc-media 250ms，AssetCard 位置徽章同参数跟随模式） */
 .occupied-tag {
   position: absolute;
-  top: var(--space-4);
-  right: var(--space-4);
+  top: var(--n-space-4);
+  right: var(--n-space-4);
   z-index: 6;
-  padding: 0 var(--space-4);
-  border-radius: var(--radius-4);
-  background: var(--c3);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--warning);
+  padding: 0 var(--n-space-4);
+  border-radius: var(--n-radius-4);
+  background: var(--n-g3);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-warning);
   transition: transform var(--n-dur-250) var(--n-ease-in-out);
 }
 .disk-card:hover .occupied-tag {

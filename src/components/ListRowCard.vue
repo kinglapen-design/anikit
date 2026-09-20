@@ -128,9 +128,9 @@ function startRename(): void {
 }
 /* 拖拽源 / 被剪切整体半透明（2026-07-28 复验反馈 6①/8，token 透明度档） */
 .list-row-shell.fade-source {
-  opacity: var(--opacity-drag-source);
+  opacity: 0.4;
 }
 .list-row-shell.fade-cut {
-  opacity: var(--opacity-cut);
+  opacity: 0.5;
 }
 </style>

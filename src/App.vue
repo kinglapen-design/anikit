@@ -448,13 +448,13 @@ async function togglePin(): Promise<void> {
 .del-lib-text {
   margin: 0;
   max-width: 320px;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-normal);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
 }
 /* 孤儿素材复选框：与警示正文拉开 12（2026-08-13 用户：挨太近注意不到） */
 .del-lib-check {
-  margin-top: var(--space-12);
+  margin-top: var(--n-space-12);
 }
 /* 主窗口壳（7.1 十七轮 · 主窗口骨架轮贴稿，布局/主窗口/主窗口.md）：transparent:false +
    WebView2 背景透明（backgroundColor:#00000000，Mica 由 DWM 在表面下合成，不需要 tao
@@ -537,8 +537,8 @@ async function togglePin(): Promise<void> {
   content: "";
   position: absolute;
   inset: 0;
-  border: var(--border-strong) solid var(--n-brand);
-  border-radius: var(--radius-8);
+  border: 1px solid var(--n-brand);
+  border-radius: var(--n-radius-8);
   pointer-events: none;
   z-index: 55;
 }

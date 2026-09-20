@@ -163,7 +163,7 @@ async function jump(key: string): Promise<void> {
 .items {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
 }
 /* 笔记 item（02_item 06 关联文件夹同款）：C4 底 / hover C5 / inset 1px border-1 / 圆角 8 /
    内边距 4 4 4 8 / 间距 6；relative 供浮帧画面锚定 */
@@ -171,32 +171,32 @@ async function jump(key: string): Promise<void> {
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-8);
-  border-radius: var(--radius-8);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--border-1);
+  gap: var(--n-space-6);
+  padding: var(--n-space-4) var(--n-space-4) var(--n-space-4) var(--n-space-8);
+  border-radius: var(--n-radius-8);
+  background: var(--n-g4);
+  box-shadow: inset 0 0 0 1px var(--n-l-a2);
   cursor: default;
 }
 .item:hover {
-  background: var(--c5);
+  background: var(--n-g5);
 }
 /* 左侧时间 / 帧号：副文本档，等宽对齐位 */
 .pos {
   flex: none;
   min-width: 34px;
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-3);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l2);
   white-space: nowrap;
 }
 /* 文本：font-icon-2 / 单行省略 */
 .text {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--font-icon-2);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -209,7 +209,7 @@ async function jump(key: string): Promise<void> {
   padding-right: 0;
   opacity: 0;
   overflow: hidden;
-  color: var(--font-icon-3);
+  color: var(--n-l2);
   transition:
     width 0.12s ease,
     opacity 0.12s ease,
@@ -220,21 +220,21 @@ async function jump(key: string): Promise<void> {
   opacity: 1;
 }
 .del:hover {
-  color: var(--font-icon-2);
+  color: var(--n-l2);
 }
 /* 悬停浮帧画面：item 正上方贴近浮出 / 宽 160 按比例 / 容器 C3 / inset border-1 /
    圆角 8 / --shadow-pop / 内边距 4；不吃鼠标事件防截断 hover 链 */
 .note-thumb {
   position: absolute;
-  bottom: calc(100% + var(--space-2));
+  bottom: calc(100% + var(--n-space-2));
   left: 0;
   width: 160px;
-  padding: var(--space-4);
-  border-radius: var(--radius-8);
-  background: var(--c3);
+  padding: var(--n-space-4);
+  border-radius: var(--n-radius-8);
+  background: var(--n-g3);
   box-shadow:
-    inset 0 0 0 1px var(--border-1),
-    var(--shadow-pop);
+    inset 0 0 0 1px var(--n-l-a2),
+    var(--n-shadow-lg);
   pointer-events: none;
   z-index: 10;
 }
@@ -242,11 +242,11 @@ async function jump(key: string): Promise<void> {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: var(--radius-4);
+  border-radius: var(--n-radius-4);
 }
 /* 未就绪占位：C4（高度给常规横屏比例，图到即换） */
 .placeholder {
   height: 88px;
-  background: var(--c4);
+  background: var(--n-g4);
 }
 </style>

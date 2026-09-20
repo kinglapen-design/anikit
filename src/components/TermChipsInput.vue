@@ -56,7 +56,7 @@ function onKeydown(e: KeyboardEvent): void {
 .term-chips {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
   flex-wrap: wrap;
   flex: 1;
   min-width: 0;
@@ -65,16 +65,16 @@ function onKeydown(e: KeyboardEvent): void {
 .term-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
   height: 28px;
   box-sizing: border-box;
-  padding: var(--space-4) var(--space-8);
-  border-radius: var(--radius-6);
-  background: var(--brand);
-  box-shadow: inset 0 0 0 1px var(--line-active);
-  color: var(--text-highlight);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  padding: var(--n-space-4) var(--n-space-8);
+  border-radius: var(--n-radius-6);
+  background: var(--n-brand);
+  box-shadow: inset 0 0 0 1px var(--n-l-a2);
+  color: var(--n-l1);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
   white-space: nowrap;
   flex: none;
 }
@@ -84,7 +84,7 @@ function onKeydown(e: KeyboardEvent): void {
   justify-content: center;
   width: 16px;
   height: 16px;
-  color: var(--text-highlight);
+  color: var(--n-l1);
   opacity: 0.7;
   transition: opacity 0.12s ease;
 }
@@ -97,11 +97,11 @@ function onKeydown(e: KeyboardEvent): void {
   min-width: 72px;
   height: 28px;
   background: transparent;
-  color: var(--text-normal);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  color: var(--n-l2);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
 }
 .term-input::placeholder {
-  color: var(--text-label);
+  color: var(--n-l3);
 }
 </style>

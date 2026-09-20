@@ -5,7 +5,7 @@
 // variant 四形态：root = 根父级（C5 底 + 1px 亮-选中边框）/ child = 其他层级（C5-底色，无边框）/
 // archive = 档案（C5-底色 + 品牌色提示圆点替代展开箭头）/ quick = 快速访问（无底色无箭头）；
 // tint = 自定义色名（red/orange/...）：root 底 = custom-{tint}，child/archive 底 = custom-{tint}-bg；
-// hover 叠 暗-悬停；选中叠 亮-选中 + 1.5px 文字常态内阴影边框（不掺白，2026-08-07 用户定）。
+// hover 叠 暗-悬停；选中叠 亮-选中 + 1px 文字常态内阴影边框（不掺白，2026-08-07 用户定）。
 // 命名输入态（6.1 C3）：受控 naming prop——Enter / Esc / 失焦一律保存退出，空或不变 = 保留默认名。
 // 拖拽落点（6.1 C4c）：item 高度三等分——上/下 1/3 出 2px 插入线 + hover 底（仅文件夹拖拽），
 // 中间 1/3（素材任何位置）= 并入高亮（品牌 12% 底 + inset 1px 品牌色）。
@@ -32,13 +32,13 @@ const props = withDefaults(
     variant?: "root" | "child" | "archive" | "quick";
     tint?: string; // 自定义色名（custom-{tint} / custom-{tint}-bg）
     dimmed?: boolean; // 拖拽源半透明（2026-07-28 复验反馈 6①）
-    cut?: boolean; // 剪切中半透明（3.4，--opacity-cut 档）
+    cut?: boolean; // 剪切中半透明（3.4，0.5 档）
     // 落点视觉覆盖（3.4 移动面板：本地 hover 三分判定驱动，不走拖拽引擎 dragView）；
     // 缺省 undefined = 维持引擎驱动（主窗口拖拽）
     dropZoneOverride?: "before" | "after" | "into" | null;
     folderId?: string; // 拖拽导入落点判定（App.vue elementFromPoint → closest）
     naming?: boolean; // 命名输入态（C3 新建文件夹临时节点）
-    namingError?: boolean; // 名称校验违规：输入框描边 --error
+    namingError?: boolean; // 名称校验违规：输入框描边 --n-danger
   }>(),
   {
     count: undefined,
@@ -171,23 +171,23 @@ function onClick(e: MouseEvent): void {
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
   height: 32px;
   box-sizing: border-box;
-  padding: var(--space-6) var(--space-8);
-  border-radius: var(--radius-6);
+  padding: var(--n-space-6) var(--n-space-8);
+  border-radius: var(--n-radius-6);
   cursor: pointer; /* 整卡片可点（2026-08-08 走查：padding 区不再是默认光标盲区） */
   transition: background 0.15s ease;
 }
 /* 形态底色（tint 时由 --tint-bg 覆盖）：root = C5 + 1px 亮-选中边框（内阴影模拟防抖动）；
    child / archive = C5-底色无边框；quick = 无底色 */
 .tree-item.root {
-  background: var(--tint-bg, var(--c5));
-  box-shadow: inset 0 0 0 1px var(--line-active);
+  background: var(--tint-bg, var(--n-g5));
+  box-shadow: inset 0 0 0 1px var(--n-l-a2);
 }
 .tree-item.child,
 .tree-item.archive {
-  background: var(--tint-bg, var(--c5-base));
+  background: var(--tint-bg, var(--n-g4));
 }
 .tree-item.quick {
   background: transparent; /* 无箭头占位，图标即首列（figma 02_目录 item 4） */
@@ -196,39 +196,39 @@ function onClick(e: MouseEvent): void {
    并入高亮项同样排除（2026-08-10 走查：:hover:not() 含伪类计特异性 (0,4,0)，压过
    .tree-item.child.drop-into (0,3,0)——拖拽悬停目标时 hover 罩层盖掉并入填充，只见边框不见底） */
 .tree-item.quick:hover:not(.selected):not(.drop-into) {
-  background: linear-gradient(var(--line-hover), var(--line-hover));
+  background: linear-gradient(var(--n-l-a3), var(--n-l-a3));
 }
 .tree-item.root:hover:not(.selected):not(.drop-into) {
-  background: linear-gradient(var(--line-hover), var(--line-hover)), var(--tint-bg, var(--c5));
+  background: linear-gradient(var(--n-l-a3), var(--n-l-a3)), var(--tint-bg, var(--n-g5));
 }
 .tree-item.child:hover:not(.selected):not(.drop-into),
 .tree-item.archive:hover:not(.selected):not(.drop-into) {
-  background: linear-gradient(var(--line-hover), var(--line-hover)), var(--tint-bg, var(--c5-base));
+  background: linear-gradient(var(--n-l-a3), var(--n-l-a3)), var(--tint-bg, var(--n-g4));
 }
-/* 选中：叠 亮-选中 罩层 + 1.5px 文字常态内阴影边框（figma 02_目录 item 动画效果） */
+/* 选中：叠 亮-选中 罩层 + 1px 文字常态内阴影边框（figma 02_目录 item 动画效果） */
 .tree-item.selected {
-  background: linear-gradient(var(--line-active), var(--line-active));
-  box-shadow: inset 0 0 0 var(--border-strong) var(--text-normal);
+  background: linear-gradient(var(--n-l-a1), var(--n-l-a1));
+  box-shadow: inset 0 0 0 1px var(--n-l2);
 }
 .tree-item.root.selected {
-  background: linear-gradient(var(--line-active), var(--line-active)), var(--tint-bg, var(--c5));
+  background: linear-gradient(var(--n-l-a1), var(--n-l-a1)), var(--tint-bg, var(--n-g5));
 }
 .tree-item.child.selected,
 .tree-item.archive.selected {
-  background: linear-gradient(var(--line-active), var(--line-active)), var(--tint-bg, var(--c5-base));
+  background: linear-gradient(var(--n-l-a1), var(--n-l-a1)), var(--tint-bg, var(--n-g4));
 }
 /* 选择域联动选中（2026-08-10 用户定，与当前目录 selected 区分）：1.5px 品牌色-边框线描边、
    不叠罩层——形态底色与 hover 罩层规则不受影响；与文件夹卡片选中边框同色呼应 */
 .tree-item.domain-selected {
-  box-shadow: inset 0 0 0 1.5px var(--brand-border);
+  box-shadow: inset 0 0 0 1.5px var(--n-brand-bright);
 }
 /* 拖拽源整项半透明（2026-07-28 复验反馈 6①，拖拽结束引擎清态即恢复） */
 .tree-item.dimmed {
-  opacity: var(--opacity-drag-source);
+  opacity: 0.4;
 }
-/* 剪切中整项半透明（3.4，--opacity-cut 档） */
+/* 剪切中整项半透明（3.4，0.5 档） */
 .tree-item.cut {
-  opacity: var(--opacity-cut);
+  opacity: 0.5;
 }
 /* 拖拽排序插入线（C4c，仅文件夹拖拽上/下 1/3）：2px 品牌色于 item 上/下沿 */
 .tree-item.drop-before::before,
@@ -238,7 +238,7 @@ function onClick(e: MouseEvent): void {
   left: 0;
   right: 0;
   height: 2px;
-  background: var(--brand);
+  background: var(--n-brand);
   z-index: 1;
   pointer-events: none;
 }
@@ -252,15 +252,15 @@ function onClick(e: MouseEvent): void {
    保留 tint 自定义色底）+ 1.5px 品牌色-边框线（2026-08-10 用户定，与文件夹卡片 drop-cover
    同口径；原"直接替换底色"写法会抹掉 c5-base / tint 底，观感偏暗不一致） */
 .tree-item.drop-into {
-  background: linear-gradient(var(--brand-1-30), var(--brand-1-30));
-  box-shadow: inset 0 0 0 1.5px var(--brand-border);
+  background: linear-gradient(color-mix(in srgb, var(--n-brand) 30%, transparent), color-mix(in srgb, var(--n-brand) 30%, transparent));
+  box-shadow: inset 0 0 0 1.5px var(--n-brand-bright);
 }
 .tree-item.root.drop-into {
-  background: linear-gradient(var(--brand-1-30), var(--brand-1-30)), var(--tint-bg, var(--c5));
+  background: linear-gradient(color-mix(in srgb, var(--n-brand) 30%, transparent), color-mix(in srgb, var(--n-brand) 30%, transparent)), var(--tint-bg, var(--n-g5));
 }
 .tree-item.child.drop-into,
 .tree-item.archive.drop-into {
-  background: linear-gradient(var(--brand-1-30), var(--brand-1-30)), var(--tint-bg, var(--c5-base));
+  background: linear-gradient(color-mix(in srgb, var(--n-brand) 30%, transparent), color-mix(in srgb, var(--n-brand) 30%, transparent)), var(--tint-bg, var(--n-g4));
 }
 /* 展开按钮容器：12×12（figma 02_目录 item），箭头源图形向下：收起 = rotate(-90) 朝右。
    点击热区（2026-08-08 用户定）：::after 外扩——上/下各 10（吃满 item 上下 padding，全高 32）、
@@ -272,7 +272,7 @@ function onClick(e: MouseEvent): void {
   justify-content: center;
   width: 12px;
   height: 12px;
-  color: var(--text-label);
+  color: var(--n-l3);
   flex: none;
 }
 .expand::after {
@@ -294,57 +294,57 @@ function onClick(e: MouseEvent): void {
   transform: rotate(-90deg);
 }
 .expand:hover .chev {
-  color: var(--text-normal);
+  color: var(--n-l2);
 }
 /* 档案提示圆点：品牌色（SVG 自带结构色），替代展开箭头 */
 .archive-dot-slot {
-  color: var(--brand);
+  color: var(--n-brand);
 }
 /* 内容行：图标 + 名称 + 数量（底色在 item 卡片上，本行透明） */
 .body {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
   flex: 1;
   min-width: 0;
-  color: var(--text-normal);
+  color: var(--n-l2);
   text-align: left;
 }
 /* 装饰图标 18px 常态档（figma：图标 svg = 文字/常态） */
 .deco {
-  color: var(--text-normal);
+  color: var(--n-l2);
   flex: none;
 }
 .label {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 /* 命名态（2026-08-10 统一口径，同文件夹/素材/列表卡片）：整 item 1.5px 品牌色-边框线高亮；
-   校验违规（重名等）整 item 边框 --error 覆盖 */
+   校验违规（重名等）整 item 边框 --n-danger 覆盖 */
 .tree-item.naming {
-  box-shadow: inset 0 0 0 1.5px var(--brand-border);
+  box-shadow: inset 0 0 0 1.5px var(--n-brand-bright);
 }
 .tree-item.naming-error {
-  box-shadow: inset 0 0 0 1.5px var(--error);
+  box-shadow: inset 0 0 0 1.5px var(--n-danger);
 }
 /* 命名输入：透明底不单独描边（整 item 高亮提示，统一口径）；共享基座在 base.css（类名并入
    .rename-input，原 .name-input 作废），本地差异 = 弹性占满 + 常态字色 + 左对齐 */
 .rename-input {
   flex: 1;
   min-width: 0;
-  color: var(--text-normal);
+  color: var(--n-l2);
   text-align: left;
 }
 /* 数量标签：标签档，右侧（figma 02_目录 item） */
 .count {
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
   flex: none;
 }
 </style>

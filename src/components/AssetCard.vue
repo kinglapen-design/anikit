@@ -309,10 +309,10 @@ const meta = computed(() => {
 }
 /* 拖拽源 / 被剪切整体半透明（2026-07-28 复验反馈 6①/8，速查 §5 档） */
 .asset-card.fade-source {
-  opacity: var(--opacity-drag-source);
+  opacity: 0.4;
 }
 .asset-card.fade-cut {
-  opacity: var(--opacity-cut);
+  opacity: 0.5;
 }
 /* 笔记徽章（2026-09-09 四轮用户定稿）：角标同款 kc-float 铬（padding 2/6 半透明-2 + 立体感 + blur 小 +
    圆角 4）；内容「笔记 N」——标签雅黑 / 数量 mono，数字档 12/16 bold 亮色/二级。
@@ -374,7 +374,7 @@ const meta = computed(() => {
 }
 /* 选择模式发起文件自身（2026-08-24 用户定）：剪切档半透明 + 禁选光标（不可选的视觉信号） */
 .asset-card.picker-self {
-  opacity: var(--opacity-cut);
+  opacity: 0.5;
   cursor: not-allowed;
 }
 /* 已选大勾（2026-08-23 用户贴稿）：成功色圆底 44 + check 22，居中整卡（新稿卡即图满铺） */
@@ -390,8 +390,8 @@ const meta = computed(() => {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: var(--success);
-  color: var(--text-highlight);
+  background: var(--n-success);
+  color: var(--n-l1);
   pointer-events: none;
 }
 </style>

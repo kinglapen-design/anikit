@@ -592,8 +592,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-faint);
-  font-size: var(--text-body-size);
+  color: var(--n-l4);
+  font-size: var(--n-fs-body);
   pointer-events: none;
 }
 .grid-canvas {
@@ -608,7 +608,7 @@ onBeforeUnmount(() => {
 .grid-header {
   display: flex;
   flex-direction: column;
-  gap: var(--space-24);
+  gap: var(--n-space-24);
 }
 /* 卡片层：translateY 实时跟随头部高度（逐帧重排定案后无 scale 过渡，2026-08-10）；
    显式高度 = 网格总高（2026-07-28 复验反馈 2/3 根因：子卡片全绝对定位、层高度塌缩为 0——
@@ -711,7 +711,7 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: 5;
   pointer-events: none;
-  border-radius: var(--radius-4);
+  border-radius: var(--n-radius-4);
   background: var(--n-brand-50);
   box-shadow: inset 0 0 0 1px var(--n-brand);
 }

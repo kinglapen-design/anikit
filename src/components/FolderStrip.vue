@@ -234,7 +234,7 @@ const gapBar = computed(() => {
   position: fixed;
   z-index: 5;
   width: 12px;
-  border-radius: var(--radius-4);
+  border-radius: var(--n-radius-4);
   background: var(--n-brand-50);
   box-shadow: inset 0 0 0 1px var(--n-brand);
   pointer-events: none;

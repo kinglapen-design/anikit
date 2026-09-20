@@ -67,7 +67,7 @@ function onUp(e: PointerEvent): void {
   height: 3px;
   transform: translateY(-50%);
   border-radius: 2px;
-  background: var(--line-hover); /* 滑轨 = 暗-悬停（figma 41） */
+  background: var(--n-l-a3); /* 滑轨 = 暗-悬停（figma 41） */
 }
 .thumb {
   position: absolute;
@@ -75,7 +75,7 @@ function onUp(e: PointerEvent): void {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--text-normal); /* 拖钮 = 文字/常态（2026-08-08 用户定，不用高亮档） */
+  background: var(--n-l2); /* 拖钮 = 文字/常态（2026-08-08 用户定，不用高亮档） */
   transform: translate(-50%, -50%);
   pointer-events: none;
 }

@@ -53,7 +53,7 @@ function onFold(): void {
 .section-header {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--n-space-4);
   height: 20px;
 }
 .section-header.group {
@@ -63,8 +63,8 @@ function onFold(): void {
 .fold-area {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-6);
-  border-radius: var(--radius-4);
+  gap: var(--n-space-6);
+  border-radius: var(--n-radius-4);
 }
 .chev-slot {
   display: inline-flex;
@@ -72,7 +72,7 @@ function onFold(): void {
   justify-content: center;
   width: 12px;
   height: 12px;
-  color: var(--text-label);
+  color: var(--n-l3);
   flex: none;
 }
 .chev {
@@ -84,19 +84,19 @@ function onFold(): void {
 }
 .title,
 .count {
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
   white-space: nowrap;
   transition: color 0.15s ease;
 }
 /* 分组标题：标题档 700 常态 */
 .section-header.group .title,
 .section-header.group .count {
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--text-normal);
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
 }
 .spacer {
   flex: 1;
@@ -108,13 +108,13 @@ function onFold(): void {
   justify-content: center;
   width: 20px;
   height: 20px;
-  border-radius: var(--radius-4);
-  color: var(--text-label);
+  border-radius: var(--n-radius-4);
+  color: var(--n-l3);
   flex: none;
   transition: background 0.15s ease;
 }
 .add-btn:hover {
-  background: var(--line-hover);
+  background: var(--n-l-a3);
 }
 /* 分组菜单按钮：30×30 圆角 6，标签档，hover 叠暗-悬停 */
 .group-menu-btn {
@@ -123,13 +123,13 @@ function onFold(): void {
   justify-content: center;
   width: 30px;
   height: 30px;
-  border-radius: var(--radius-6);
-  color: var(--text-label);
+  border-radius: var(--n-radius-6);
+  color: var(--n-l3);
   flex: none;
   transition: background 0.15s ease;
 }
 .group-menu-btn:hover {
-  background: var(--line-hover);
+  background: var(--n-l-a3);
 }
 /* grip 变体（详情面板，2026-07-23 用户定）：折叠区整行 hover 抓手 + 标题/箭头提亮，无底色 */
 .section-header.grip .fold-area {
@@ -138,6 +138,6 @@ function onFold(): void {
 .section-header.grip:hover .fold-area .title,
 .section-header.grip:hover .fold-area .count,
 .section-header.grip:hover .fold-area .chev-slot {
-  color: var(--text-highlight);
+  color: var(--n-l1);
 }
 </style>

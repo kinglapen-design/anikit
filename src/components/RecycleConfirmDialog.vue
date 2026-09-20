@@ -73,7 +73,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c1-80);
+  background: color-mix(in srgb, var(--n-g1) 80%, transparent);
 }
 /* 总容器：C3 / 1px border-1（inset）/ 圆角 8 / --shadow-pop */
 .del-card {
@@ -81,11 +81,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
   width: 420px;
   display: flex;
   flex-direction: column;
-  background: var(--c3);
+  background: var(--n-g3);
   box-shadow:
-    var(--shadow-pop),
-    inset 0 0 0 1px var(--border-1);
-  border-radius: var(--radius-8);
+    var(--n-shadow-lg),
+    inset 0 0 0 1px var(--n-l-a2);
+  border-radius: var(--n-radius-8);
   overflow: hidden;
 }
 /* 标题栏：高 44 / 下分割线 border-1（inset） */
@@ -93,65 +93,65 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-16);
+  padding: var(--n-space-8) var(--n-space-8) var(--n-space-8) var(--n-space-16);
   height: 44px;
   flex: none;
-  box-shadow: inset 0 -1px 0 0 var(--border-1);
+  box-shadow: inset 0 -1px 0 0 var(--n-l-a2);
 }
 .del-title {
   margin: 0;
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--font-icon-1);
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l1);
 }
 .del-body {
-  padding: var(--space-16) var(--space-32);
+  padding: var(--n-space-16) var(--n-space-36);
 }
 .del-text {
   margin: 0;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--font-icon-2);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
 }
 /* 底栏：高 70 / 上分割线 border-1（inset） */
 .del-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-16);
-  padding: 0 var(--space-32);
+  gap: var(--n-space-16);
+  padding: 0 var(--n-space-36);
   height: 70px;
   flex: none;
-  box-shadow: inset 0 1px 0 0 var(--border-1);
+  box-shadow: inset 0 1px 0 0 var(--n-l-a2);
 }
 /* 按钮（01_按钮#07 大标题按钮-小按钮；主要 / 次要） */
 .btn {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: var(--space-8) var(--space-16);
-  gap: var(--space-6);
+  padding: var(--n-space-8) var(--n-space-16);
+  gap: var(--n-space-6);
   height: 38px;
   border: none;
-  border-radius: var(--radius-6);
+  border-radius: var(--n-radius-6);
   cursor: pointer;
-  font-family: var(--font-family);
-  font-size: var(--text-title-size);
-  line-height: var(--text-title-line);
-  font-weight: var(--text-title-weight);
-  color: var(--font-icon-1);
+  font-family: var(--n-font-family);
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l1);
 }
 .btn.primary {
-  background: var(--brand-1);
+  background: var(--n-brand);
 }
 .btn.primary:hover {
-  background: var(--brand-2);
+  background: var(--n-brand-bright);
 }
 .btn.secondary {
-  background: var(--c5);
+  background: var(--n-g5);
 }
 .btn.secondary:hover {
-  background: var(--border-1);
+  background: var(--n-l-a2);
 }
 </style>

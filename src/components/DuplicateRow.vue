@@ -104,10 +104,10 @@ function setAction(action: DupAction): void {
 .dup-row {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: var(--space-24) 0;
-  background: var(--c2);
-  box-shadow: inset 0 -1px 0 0 var(--line-hover);
+  gap: var(--n-space-12);
+  padding: var(--n-space-24) 0;
+  background: var(--n-g3);
+  box-shadow: inset 0 -1px 0 0 var(--n-l-a3);
   transition: opacity 0.2s ease;
 }
 /* 跳过：整行 30% 透明（36 稿注明）；卡片与 radio 禁用，跳过开关保持可点（可逆） */
@@ -121,7 +121,7 @@ function setAction(action: DupAction): void {
 /* 左右卡片行：gap 24 */
 .cards {
   display: flex;
-  gap: var(--space-24);
+  gap: var(--n-space-24);
 }
 /* 文件卡片：449×69 / padding 12 / 圆角 8 / 1px 暗-悬停边框；
    已存在 = C4 底；新的文件 = C2 底，选"作为新文件导入"变 C4（36 稿注明） */
@@ -130,30 +130,30 @@ function setAction(action: DupAction): void {
   min-width: 0;
   display: flex;
   align-items: center;
-  padding: var(--space-12);
-  border-radius: var(--radius-8);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
+  padding: var(--n-space-12);
+  border-radius: var(--n-radius-8);
+  background: var(--n-g4);
+  box-shadow: inset 0 0 0 1px var(--n-l-a3);
 }
 .file-card.new {
-  background: var(--c2);
+  background: var(--n-g3);
   transition: background 0.2s ease;
 }
 .file-card.new.solid {
-  background: var(--c4);
+  background: var(--n-g4);
 }
 /* 缩略图：80×45 / 圆角 6；无图占位 = 36 稿浅色块 + 扩展名 */
 .thumb {
   width: 80px;
   height: 45px;
-  border-radius: var(--radius-6);
+  border-radius: var(--n-radius-6);
   background: #c6c7cc; /* 浅色（文件夹卡片），36 稿缩略图占位色 */
   overflow: hidden;
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: var(--space-8);
+  margin-right: var(--n-space-8);
 }
 .thumb img {
   width: 100%;
@@ -161,18 +161,18 @@ function setAction(action: DupAction): void {
   object-fit: cover;
 }
 .ext {
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  font-weight: var(--text-title-weight);
-  color: var(--c3);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-g3);
 }
 /* 名称：正文 / 高亮，超出省略 */
 .fname {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-highlight);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -181,26 +181,26 @@ function setAction(action: DupAction): void {
 .meta {
   display: flex;
   align-items: center;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   flex: none;
-  margin-left: var(--space-8);
+  margin-left: var(--n-space-8);
 }
 .size {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
   white-space: nowrap;
 }
 /* 所在位置标签：C4 底 + 1px 暗-悬停边框 / 圆角 6 / padding 4 8 / 标签档 */
 .chip {
   max-width: 120px;
-  padding: var(--space-4) var(--space-8);
-  border-radius: var(--radius-6);
-  background: var(--c4);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  color: var(--text-label);
+  padding: var(--n-space-4) var(--n-space-8);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g4);
+  box-shadow: inset 0 0 0 1px var(--n-l-a3);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -213,16 +213,16 @@ function setAction(action: DupAction): void {
 }
 .radios {
   display: flex;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
 }
 .skip {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--n-space-6);
 }
 .skip-label {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
 }
 </style>

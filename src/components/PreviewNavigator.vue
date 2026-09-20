@@ -109,24 +109,24 @@ const imgStyle = computed(() => ({
 </template>
 
 <style scoped>
-/* 右下角悬浮：距右下各 16；C3 底 / 1px border-1 / 圆角 8 / 浮层阴影 */
+/* 右下角悬浮：距右下各 16；n-g3 底 / 1px n-l-a2 / 圆角 8 / 浮层阴影 */
 .navigator {
   position: absolute;
   right: 16px;
   bottom: 16px;
-  padding: var(--space-4);
-  background: var(--c3);
-  border-radius: var(--radius-8);
+  padding: var(--n-space-4);
+  background: var(--n-g3);
+  border-radius: var(--n-radius-8);
   box-shadow:
-    inset 0 0 0 1px var(--border-1),
-    var(--shadow-pop);
+    inset 0 0 0 1px var(--n-l-a2),
+    var(--n-shadow-lg);
   cursor: crosshair;
   user-select: none;
 }
 .nav-box {
   position: relative;
   overflow: hidden;
-  border-radius: var(--radius-4);
+  border-radius: var(--n-radius-4);
 }
 .nav-box img {
   display: block;
@@ -136,7 +136,7 @@ const imgStyle = computed(() => ({
 /* 视口框：1px 亮线（Eagle 式白框） */
 .viewport {
   position: absolute;
-  box-shadow: inset 0 0 0 1px var(--font-icon-1);
+  box-shadow: inset 0 0 0 1px var(--n-l1);
   pointer-events: none;
 }
 </style>

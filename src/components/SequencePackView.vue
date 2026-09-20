@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 序列帧包内视图（5.2，PRD 04-序列帧"包内视图定案"）：素材卡片右键「打开序列帧包」进入
 // （视口 key = seq:{assetId}，ContentArea 分流渲染）。帧卡片列表 = 素材卡片同款视觉
-// （缩略图区 C2 / 简介区 C3 紧凑 36 / ::after 常态 1px 暗-悬停 + ::before 状态层 opacity 过渡），
+// （缩略图区 n-g2 / 简介区 n-g3 紧凑 36 / ::after 常态 1px 暗-悬停 + ::before 状态层 opacity 过渡），
 // 恒按帧序平铺（不参与排序/分组/新增区），卡片尺寸随查看方式滑块。
 // 缩略图 = cache/frames 帧条小图（与预览帧条同一份缓存；未缓存帧原图兜底 + preview-strips-ready
 // 事件渐进填）。操作：双击 / 右键「打开预览」= 退回包所在文件夹视口打开预览定位该帧；
@@ -222,12 +222,12 @@ const scrollRef = ref<HTMLElement>();
   min-height: 0;
   overflow-y: auto;
   /* 右缘留白：卡片右缘距中栏外边框 16（素材网格同口径） */
-  padding-right: var(--space-16);
+  padding-right: var(--n-space-16);
 }
 .pack-grid {
   display: grid;
-  gap: var(--space-12);
-  padding-bottom: var(--space-16);
+  gap: var(--n-space-12);
+  padding-bottom: var(--n-space-16);
 }
 /* 空态（3.6 搜索空态同款：居中标签档） */
 .empty {
@@ -235,27 +235,27 @@ const scrollRef = ref<HTMLElement>();
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
 }
 /* —— 帧卡片（素材卡片 14 稿紧凑形态同款视觉）：
-     ::after = 常态 1px 暗-悬停（无过渡）；::before = 状态层 1.5px opacity 过渡
+     ::after = 常态 1px 暗-悬停（无过渡）；::before = 状态层 1px opacity 过渡
      （hover 亮-选中实色 / 选中品牌色——踩坑 036 口径，禁 border-color 过渡）—— */
 .frame-card {
   position: relative;
   display: flex;
   flex-direction: column;
   aspect-ratio: 260 / 199; /* 素材卡 260:220 紧凑简介（57→36）折算 */
-  border-radius: var(--radius-6);
+  border-radius: var(--n-radius-6);
   cursor: default;
 }
 .frame-card::after {
   content: "";
   position: absolute;
   inset: 0;
-  border: 1px solid var(--line-hover);
-  border-radius: var(--radius-6);
+  border: 1px solid var(--n-l-a3);
+  border-radius: var(--n-radius-6);
   pointer-events: none;
 }
 .frame-card::before {
@@ -263,29 +263,29 @@ const scrollRef = ref<HTMLElement>();
   position: absolute;
   inset: 0;
   z-index: 1;
-  border: var(--border-strong) solid transparent;
-  border-radius: var(--radius-6);
+  border: 1px solid transparent;
+  border-radius: var(--n-radius-6);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.12s ease;
 }
 .frame-card:hover::before {
   opacity: 1;
-  border-color: var(--line-card-hover);
+  border-color: var(--n-l-a4);
 }
 .frame-card.selected::before {
   opacity: 1;
-  border-color: var(--brand-border);
+  border-color: var(--n-brand-bright);
 }
-/* 缩略图区：C2 底 / 圆角上沿；contain 完整显示不裁切（网格模式口径） */
+/* 缩略图区：n-g2 底 / 圆角上沿；contain 完整显示不裁切（网格模式口径） */
 .thumb {
   flex: 1;
   min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c2);
-  border-radius: var(--radius-6) var(--radius-6) 0 0;
+  background: var(--n-g2);
+  border-radius: var(--n-radius-6) var(--n-radius-6) 0 0;
   overflow: hidden;
 }
 .img {
@@ -294,24 +294,24 @@ const scrollRef = ref<HTMLElement>();
   height: 100%;
   object-fit: contain;
 }
-/* 简介区紧凑形态（36 高）：C3 / inset 顶线 / 名称单行左对齐 + 封面标记 */
+/* 简介区紧凑形态（36 高）：n-g3 / inset 顶线 / 名称单行左对齐 + 封面标记 */
 .caption {
   flex: none;
   height: 36px;
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  padding: 0 var(--space-8) 0 var(--space-12);
-  background: var(--c3);
-  box-shadow: inset 0 1px 0 0 var(--line-hover);
-  border-radius: 0 0 var(--radius-6) var(--radius-6);
+  gap: var(--n-space-4);
+  padding: 0 var(--n-space-8) 0 var(--n-space-12);
+  background: var(--n-g3);
+  box-shadow: inset 0 1px 0 0 var(--n-l-a3);
+  border-radius: 0 0 var(--n-radius-6) var(--n-radius-6);
 }
 .name {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  color: var(--text-highlight);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -319,8 +319,8 @@ const scrollRef = ref<HTMLElement>();
 /* 封面帧标记：标签档小字（复用简介档样式，不自创） */
 .cover-tag {
   flex: none;
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
 }
 </style>

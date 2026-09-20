@@ -161,12 +161,12 @@ function onCancel(): void {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  gap: var(--space-12);
-  padding-top: var(--space-12);
+  gap: var(--n-space-12);
+  padding-top: var(--n-space-12);
 }
 /* 搜索框容器（稿：padding 0 24） */
 .pd-search {
-  padding: 0 var(--space-24);
+  padding: 0 var(--n-space-24);
   flex: none;
 }
 /* 拥有属性行（稿：padding 0 24 / gap 8 / 行高 25，多行向下排自适应） */
@@ -174,8 +174,8 @@ function onCancel(): void {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-8);
-  padding: 0 var(--space-24);
+  gap: var(--n-space-8);
+  padding: 0 var(--n-space-24);
   min-height: 25px;
   flex: none;
 }
@@ -199,40 +199,40 @@ function onCancel(): void {
   width: 76px;
   height: 25px;
   box-sizing: border-box;
-  padding: var(--space-4) var(--space-8);
-  border-radius: var(--radius-6);
-  background: var(--c1);
-  box-shadow: inset 0 0 0 1px var(--line-hover);
-  color: var(--text-normal);
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
+  padding: var(--n-space-4) var(--n-space-8);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g1);
+  box-shadow: inset 0 0 0 1px var(--n-l-a3);
+  color: var(--n-l2);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
 }
 .pd-new::placeholder {
-  color: var(--text-faint);
+  color: var(--n-l4);
 }
 /* 属性池（稿：C1 底 / 顶分隔线 / padding 12 24 24 / 标签 14/20 标签色 / 流式 chips gap 8） */
 .pd-pool {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   flex: 1;
   min-height: 0;
-  padding: var(--space-12) var(--space-24) var(--space-24);
-  background: var(--c1);
-  box-shadow: inset 0 1px 0 0 var(--line-hover);
+  padding: var(--n-space-12) var(--n-space-24) var(--n-space-24);
+  background: var(--n-g1);
+  box-shadow: inset 0 1px 0 0 var(--n-l-a3);
   overflow-y: auto;
 }
 .pool-label {
-  color: var(--text-label);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  color: var(--n-l3);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
   flex: none;
 }
 .pool-chips {
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
-  gap: var(--space-8);
+  gap: var(--n-space-8);
 }
 /* 池 chip 可点（点击加入拥有） */
 .pool-chips .app-tag {
@@ -244,9 +244,9 @@ function onCancel(): void {
   flex: 1;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-12);
-  padding: var(--space-12) var(--space-12) var(--space-12) var(--space-24);
+  gap: var(--n-space-12);
+  padding: var(--n-space-12) var(--n-space-12) var(--n-space-12) var(--n-space-24);
   height: 62px;
-  box-shadow: inset 0 1px 0 0 var(--line-hover);
+  box-shadow: inset 0 1px 0 0 var(--n-l-a3);
 }
 </style>

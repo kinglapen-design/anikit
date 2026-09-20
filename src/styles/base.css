@@ -14,11 +14,11 @@ body,
 }
 
 body {
-  font-family: var(--font-family);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-  font-weight: var(--text-body-weight);
-  color: var(--text-highlight);
+  font-family: var(--n-font-family);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  font-weight: var(--n-fw-regular);
+  color: var(--n-l1);
   /* transparent 窗口（7.1 十七轮主窗口骨架轮）：body 恒透明，云母/实色双态底色与
      圆角、1px 描边由 App 根容器 .window 绘制（fx-mica = 半透明-1 / 基态 = 实色-1） */
   background: transparent;
@@ -175,7 +175,7 @@ textarea {
   padding: 0;
   border: none;
   background: transparent;
-  font-size: var(--text-body-size);
+  font-size: var(--n-fs-body);
   line-height: 20px;
   outline: none;
 }

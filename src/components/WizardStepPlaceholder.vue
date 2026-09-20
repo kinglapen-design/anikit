@@ -32,8 +32,8 @@ withDefaults(defineProps<{ text: string; icons?: PlaceholderIcon[] }>(), { icons
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: var(--space-24) var(--space-48);
-  gap: var(--space-12);
+  padding: var(--n-space-24) var(--space-48);
+  gap: var(--n-space-12);
   width: 100%;
   flex: 1;
   min-height: 0;
@@ -41,13 +41,13 @@ withDefaults(defineProps<{ text: string; icons?: PlaceholderIcon[] }>(), { icons
 .blocks {
   display: flex;
   flex-direction: row;
-  gap: var(--space-24);
+  gap: var(--n-space-24);
 }
 /* 双态图标位：48×48 无底（SVG 自带完整图形）；点击无反应（占位） */
 .block {
   position: relative;
-  width: var(--icon-48);
-  height: var(--icon-48);
+  width: 48px;
+  height: 48px;
   cursor: default;
   user-select: none;
 }
@@ -66,8 +66,8 @@ withDefaults(defineProps<{ text: string; icons?: PlaceholderIcon[] }>(), { icons
   opacity: 0;
 }
 .hint {
-  font-size: var(--text-label-size);
-  line-height: var(--text-label-line);
-  color: var(--text-label);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
 }
 </style>

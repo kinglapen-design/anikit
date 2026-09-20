@@ -242,7 +242,7 @@ const nameTip = computed(() => {
   height: 44px;
   border-radius: 50%;
   background: var(--n-success);
-  color: var(--text-highlight);
+  color: var(--n-l1);
   pointer-events: none;
 }
 </style>

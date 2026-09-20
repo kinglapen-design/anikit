@@ -19,7 +19,7 @@ const appWindow = getCurrentWindow();
 <style scoped>
 .window-controls {
   display: flex;
-  gap: var(--space-4);
+  gap: var(--n-space-4);
 }
 .window-controls.vertical {
   flex-direction: column;

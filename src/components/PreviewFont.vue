@@ -175,7 +175,7 @@ const rows = computed(() => {
   flex: none;
   display: flex;
   justify-content: center;
-  padding: var(--space-12) var(--space-16) 0;
+  padding: var(--n-space-12) var(--n-space-16) 0;
 }
 .page {
   position: relative;
@@ -190,58 +190,58 @@ const rows = computed(() => {
 }
 /* 演示文本：左右 48 呼吸，底部给滑杆留位 */
 .demo {
-  padding: var(--space-24) 48px 72px;
+  padding: var(--n-space-24) 48px 72px;
 }
 .demo-title {
-  margin: 0 0 var(--space-24);
+  margin: 0 0 var(--n-space-24);
   line-height: 1.4;
   font-weight: 700;
-  color: var(--text-normal);
+  color: var(--n-l2);
 }
 .demo-body {
-  margin: 0 0 var(--space-20);
+  margin: 0 0 var(--n-space-16);
   line-height: 1.8;
-  color: var(--text-normal);
+  color: var(--n-l2);
 }
 /* 底部字号滑杆（Eagle 同款底部居中；±按钮无图标不配） */
 .size-bar {
   position: absolute;
   left: 50%;
-  bottom: var(--space-16);
+  bottom: var(--n-space-16);
   transform: translateX(-50%);
 }
 /* 元数据表（Eagle 斑马纹：奇数行 C2 底；容器圆角裁边） */
 .info-table {
-  margin: var(--space-12) var(--space-16);
-  border-radius: var(--radius-6, 6px);
+  margin: var(--n-space-12) var(--n-space-16);
+  border-radius: var(--n-radius-6, 6px);
   overflow: hidden;
 }
 .info-row {
   display: flex;
-  gap: var(--space-16);
-  padding: 10px var(--space-16);
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
+  gap: var(--n-space-16);
+  padding: 10px var(--n-space-16);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
 }
 .info-row:nth-child(odd) {
-  background: var(--c2);
+  background: var(--n-g3);
 }
 .info-row .k {
   width: 72px;
   flex: none;
-  color: var(--text-label);
+  color: var(--n-l3);
 }
 .info-row .v {
   flex: 1;
   min-width: 0;
-  color: var(--text-normal);
+  color: var(--n-l2);
   word-break: break-all;
 }
 .install-bar {
   flex: none;
   display: flex;
   justify-content: center;
-  padding: 0 0 var(--space-20);
+  padding: 0 0 var(--n-space-16);
 }
 /* ActionButton md = 宽 100% 填充式（稿 flex-grow 拉伸语境）；此钮自适应内容居中——
    压回 auto + 左右 12（旧 AppButton large padding 8/12 口径沿） */
@@ -253,11 +253,11 @@ const rows = computed(() => {
 .error-text {
   position: absolute;
   left: 50%;
-  bottom: var(--space-16);
+  bottom: var(--n-space-16);
   transform: translateX(-50%);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
   white-space: nowrap;
-  color: var(--error);
+  color: var(--n-danger);
 }
 </style>

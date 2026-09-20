@@ -32,8 +32,8 @@ const emit = defineEmits<{ remove: [] }>();
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: var(--space-24);
+  gap: var(--n-space-12);
+  padding: var(--n-space-24);
   flex: none;
 }
 .scan-group::after {
@@ -43,7 +43,7 @@ const emit = defineEmits<{ remove: [] }>();
   right: 0;
   bottom: 0;
   height: 1px;
-  background: var(--line-hover);
+  background: var(--n-l-a3);
 }
 .scan-group:last-child::after {
   display: none;
@@ -64,9 +64,9 @@ const emit = defineEmits<{ remove: [] }>();
    滚轮走 base.css .kit-scroll-x 统一类（6px 胶囊），padding-bottom 6 预留高度容纳 */
 .cards {
   display: flex;
-  gap: var(--space-12);
+  gap: var(--n-space-12);
   align-items: center;
-  padding-bottom: var(--space-6);
+  padding-bottom: var(--n-space-6);
   transition: opacity 0.15s ease;
 }
 </style>

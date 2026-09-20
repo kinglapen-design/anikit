@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 空格放大预览浮层（2026-08-10 用户定：访达 Quick Look 逻辑，取代悬停放大镜）：
 // AssetGrid 空格键驱动（单选开 / 再按关 / 选择变化跟随），居中大图浮层（max 80vw×80vh，
-// C3 底 / inset 1px border-1 / 圆角 8 / --shadow-pop）。**整体 pointer-events: none**——
+// n-g3 底 / inset 1px n-l-a2 / 圆角 8 / --n-shadow-lg）。**整体 pointer-events: none**——
 // 鼠标事件穿透到下方网格：点击其他卡片 = 选择变化（AssetGrid watch 切换 / 关闭浮层），
 // 双击等操作同样穿透（可直进预览）。Esc 兜底关闭。图源复用 get_asset_file_path：
 // 直渲格式给源路径；psd/psb 缓存命中给全尺寸解码图、未命中先显 info 缩略图（秒显层）、
@@ -129,7 +129,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   pointer-events: none;
 }
-/* 浮层壳：C3 底 / inset 1px border-1 / 圆角 8 / --shadow-pop（浮层统一规格），内边距 8。
+/* 浮层壳：n-g3 底 / inset 1px n-l-a2 / 圆角 8 / --n-shadow-lg（浮层统一规格），内边距 8。
    固定 60vw×70vh（2026-08-10 二轮用户定：80vw×80vh 太大——下方卡片基本点不到；
    尺寸固定不随图跳，图 contain 居中） */
 .zoom-box {
@@ -138,12 +138,12 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 60vw;
   height: 70vh;
-  padding: var(--space-8);
-  border-radius: var(--radius-8);
-  background: var(--c3);
+  padding: var(--n-space-8);
+  border-radius: var(--n-radius-8);
+  background: var(--n-g3);
   box-shadow:
-    inset 0 0 0 1px var(--border-1),
-    var(--shadow-pop);
+    inset 0 0 0 1px var(--n-l-a2),
+    var(--n-shadow-lg);
 }
 .zoom-img {
   display: block;

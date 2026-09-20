@@ -45,12 +45,12 @@ const emit = defineEmits<{ pick: [id: string]; toggle: [id: string] }>();
 .pick-node {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--n-space-4);
 }
 /* 子层容器不缩进：内容缩进由 TreeItem padding-left 承担（底色满宽，与主树同口径） */
 .kids {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--n-space-4);
 }
 </style>

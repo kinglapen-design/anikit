@@ -209,7 +209,7 @@ function onRootPointerdown(e: PointerEvent): void {
   position: fixed;
   inset: 0;
   z-index: 1500;
-  background: var(--c1);
+  background: var(--n-g1);
 }
 /* 悬浮栏显隐动画（「始终显示搜索框」开关，2026-09-06 用户定）：
    显示 = 下至上浮入 / 隐藏 = 上至下沉出——位移 8 + 透明度，250ms 缓入缓出（悬浮栏族动画档 §18） */

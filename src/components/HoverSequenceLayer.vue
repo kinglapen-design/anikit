@@ -70,7 +70,7 @@ function stop(): void {
   position: absolute;
   inset: 0;
   /* 与卡片图同 C1 底：帧图透明通道盖不住底层静态封面会双重影像（2026-07-27 用户实测） */
-  background: var(--c1);
+  background: var(--n-g1);
 }
 .v {
   display: block;
