@@ -3,6 +3,7 @@
 // 仅开发环境经 #design-system 哈希进入（main.ts 动态 import，不进生产构建）；纯前端渲染，不调后端命令。
 // 组件新增 / 扩展 / 改样式时同次更新本页（ui-refactor 规范第 7 条）。
 import "./preview.css";
+import PreviewInventory from "./sections/PreviewInventory.vue";
 import PreviewColors from "./sections/PreviewColors.vue";
 import PreviewType from "./sections/PreviewType.vue";
 import PreviewEffects from "./sections/PreviewEffects.vue";
@@ -17,8 +18,12 @@ import PreviewMenus from "./sections/PreviewMenus.vue";
 import PreviewModals from "./sections/PreviewModals.vue";
 import PreviewStates from "./sections/PreviewStates.vue";
 import PreviewPlugins from "./sections/PreviewPlugins.vue";
+import PreviewDialogs from "./sections/PreviewDialogs.vue";
+import PreviewOverlays from "./sections/PreviewOverlays.vue";
+import PreviewWindows from "./sections/PreviewWindows.vue";
 
 const nav = [
+  { id: "inventory", label: "组件台账" },
   { id: "colors", label: "颜色" },
   { id: "type", label: "字体" },
   { id: "effects", label: "效果" },
@@ -33,6 +38,9 @@ const nav = [
   { id: "modals", label: "组件 模态窗口" },
   { id: "states", label: "组件 空态" },
   { id: "plugins", label: "面板 插件" },
+  { id: "dialogs", label: "业务弹窗" },
+  { id: "overlays", label: "浮层与滚动" },
+  { id: "windows", label: "独立窗口" },
 ];
 </script>
 
@@ -50,6 +58,7 @@ const nav = [
       </nav>
     </header>
     <main class="pv-main">
+      <PreviewInventory />
       <PreviewColors />
       <PreviewType />
       <PreviewEffects />
@@ -64,6 +73,9 @@ const nav = [
       <PreviewModals />
       <PreviewStates />
       <PreviewPlugins />
+      <PreviewDialogs />
+      <PreviewOverlays />
+      <PreviewWindows />
     </main>
   </div>
 </template>
