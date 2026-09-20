@@ -12,11 +12,11 @@ export interface InventoryEntry {
 export const inventoryDate = "2026-09-20";
 export const inventoryTotals = {
   "new": 66,
-  "legacy": 6,
+  "legacy": 5,
   "business": 70,
   "dead": 2,
-  "legacyConsumers": 55,
-  "legacyTokens": 443
+  "legacyConsumers": 54,
+  "legacyTokens": 436
 };
 export const inventory: InventoryEntry[] = [
   {
@@ -58,14 +58,6 @@ export const inventory: InventoryEntry[] = [
     "consumers": 2,
     "legacyTokens": 8,
     "replacement": ""
-  },
-  {
-    "path": "components/AppTag",
-    "name": "AppTag",
-    "status": "legacy",
-    "consumers": 1,
-    "legacyTokens": 7,
-    "replacement": "buttons/TagButton"
   },
   {
     "path": "components/DetailNotes",
@@ -900,6 +892,14 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/buttons/TagButton",
+    "name": "TagButton",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/cards/ArchiveCard",
     "name": "ArchiveCard",
     "status": "new",
@@ -1134,14 +1134,6 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/buttons/DropButton",
     "name": "DropButton",
-    "status": "new",
-    "consumers": 0,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/buttons/TagButton",
-    "name": "TagButton",
     "status": "new",
     "consumers": 0,
     "legacyTokens": 0,

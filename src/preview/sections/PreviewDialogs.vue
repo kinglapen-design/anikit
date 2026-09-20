@@ -10,7 +10,7 @@
 //     - DuplicateDialog（嵌真实 DuplicateRow；读 content.importConflicts，确认接后端）
 //     - DupScanDialog（嵌真实 DupScanGroupRow；读 dupScanState，合并接后端）
 //     - DescEditDialog（嵌真实 IconButton/AppInput；读 ui.descEdit，确认接后端）
-//     - PropsDialog（嵌真实 AppSearchBar/AppTag；onMounted 调 listPropPool）
+//     - PropsDialog（嵌真实 AppSearchBar/TagButton removable；onMounted 调 listPropPool）
 //     - GroupEditDialog / GroupManageDialog（嵌真实 GroupRulesEditor + AppInput；读 content.folders，确认接后端）
 //     - BlockManageDialog（嵌真实 BlockManageRow；读 content.blocks 快照，确认接后端）
 //     - BatchRenameDialog（读 selection.renameDraft + content.placements，确认接后端）
@@ -28,7 +28,7 @@ import SegmentedControl from "../../components/buttons/SegmentedControl.vue";
 import SwitchButton from "../../components/buttons/SwitchButton.vue";
 import Checkbox from "../../components/buttons/Checkbox.vue";
 import AppSearchBar from "../../components/AppSearchBar.vue";
-import AppTag from "../../components/AppTag.vue";
+import TagButton from "../../components/buttons/TagButton.vue";
 import BlockManageRow from "../../components/BlockManageRow.vue";
 import DuplicateRow, { type DupDecision } from "../../components/DuplicateRow.vue";
 import DupScanGroupRow from "../../components/DupScanGroupRow.vue";
@@ -129,8 +129,9 @@ const renameStart = ref("1");
 // —— DescEditDialog 复刻桩（真实 IconButton/AppInput）——
 const descRow = ref({ title: "出处", content: "雪牧老师公开素材" });
 
-// —— PropsDialog 复刻桩（真实 AppSearchBar/AppTag）——
+// —— PropsDialog 复刻桩（真实 AppSearchBar/TagButton removable）——
 const propsKeyword = ref("");
+const propsOwned = ref(["雪牧", "走路循环"]);
 
 // —— LinkManageDialog 复刻桩（真实 AppSearchBar/Checkbox/AppIcon；树行 = 壳内复刻）——
 const linkQuery = ref("");
@@ -268,17 +269,16 @@ const linkOnlyChecked = ref(false);
             <div class="pv-old-body">
               <AppSearchBar v-model="propsKeyword" placeholder="搜索..." />
               <div class="pv-chips">
-                <AppTag label="雪牧" />
-                <AppTag label="走路循环" />
+                <TagButton v-for="w in propsOwned" :key="w" :label="w" removable @remove="propsOwned = propsOwned.filter((x) => x !== w)" />
                 <input class="pv-tag-new" placeholder="输入新属性" />
                 <IconButton name="add-small" small title="添加" />
               </div>
               <div class="pv-pool">
                 <span class="pv-pool-label">已有属性标签:</span>
                 <div class="pv-chips">
-                  <AppTag label="参考" readonly />
-                  <AppTag label="逐帧" readonly />
-                  <AppTag label="待整理" readonly />
+                  <TagButton label="参考" removable />
+                  <TagButton label="逐帧" removable />
+                  <TagButton label="待整理" removable />
                 </div>
               </div>
             </div>
@@ -289,7 +289,7 @@ const linkOnlyChecked = ref(false);
           </div>
           <span class="pv-cap">
             PropsDialog｜文件/档案属性标签（拥有 chips + 全库属性池，32 稿）｜旧体系待换代｜静态复刻嵌真实
-            AppSearchBar/AppTag（池 chips 以 readonly 陈列，复刻不接全局删除二次确认）；本体 onMounted 调
+            AppSearchBar/TagButton removable（拥有 chips 可删=本地演示；池 chips 删除不接全局二次确认）；本体 onMounted 调
             listPropPool；口径变更与组件同步
           </span>
         </div>

@@ -413,13 +413,13 @@ function onErrorRetry(): void {
   width: 100%;
   height: 10px;
   background: var(--c1);
-  border-radius: var(--radius-pill);
+  border-radius: var(--n-radius-pill);
   overflow: hidden;
 }
 .progress-fill {
   height: 100%;
   background: var(--c5-base);
-  border-radius: var(--radius-pill);
+  border-radius: var(--n-radius-pill);
   transition: width 0.2s ease;
 }
 </style>

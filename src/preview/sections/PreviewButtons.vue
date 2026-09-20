@@ -26,6 +26,12 @@ const segTextOpts = [
   { value: "glyph", label: "字形" },
   { value: "other", label: "其他" },
 ];
+const segSm = ref("auto");
+const segSmOpts = [
+  { value: "auto", label: "自适应" },
+  { value: "grid", label: "瀑布流" },
+  { value: "list", label: "列表" },
+];
 const unit = ref("KB");
 // 拉下按钮间距矩阵静态验收（2026-08-29 走查：选中 MB/GB 时缺缝挤死，改缝恒由后项提供）
 const unitMb = ref("MB");
@@ -199,10 +205,20 @@ const swOff = ref(false);
           <span class="pv-cap">hover（半透明-2）</span>
         </div>
       </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <TagButton label="雪牧" variant="solid" size="sm" removable />
+          <span class="pv-cap">removable · 常态（hover 删除钮右至左滑入）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <TagButton label="雪牧" variant="solid" size="sm" removable force-state="hover" />
+          <span class="pv-cap">removable · hover（删除钮 12 + 左距 6，150ms）</span>
+        </div>
+      </div>
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">分段控制器（图标 / 文字，选中滑动 300ms）</h3>
+      <h3 class="pv-group-title">分段控制器（图标 / 文字 / 文字小档 28 高，选中滑动 300ms；禁用 = 30% 透明度）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell" style="width: 230px">
           <SegmentedControl v-model="segIcon" :options="segIconOpts" variant="icon" />
@@ -211,6 +227,16 @@ const swOff = ref(false);
         <div class="pv-demo-cell" style="width: 480px">
           <SegmentedControl v-model="segText" :options="segTextOpts" variant="text" />
           <span class="pv-cap">文字 · 字体预览（可点击）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell" style="width: 268px">
+          <SegmentedControl v-model="segSm" :options="segSmOpts" variant="text" tone="g2" size="sm" />
+          <span class="pv-cap">文字小档 sm · 查看方式稿（28 高 / padding 2 / g2 底，可点击）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 134px">
+          <SegmentedControl :model-value="'asc'" :options="segSmOpts" variant="text" tone="g2" size="sm" disabled />
+          <span class="pv-cap">禁用（30% 透明度，不响应）</span>
         </div>
       </div>
     </div>

@@ -6,27 +6,40 @@
 // 未选 亮色/三级，hover 段底 亮色/半透明-3；hover 过渡 150ms（--n-dur-150）。
 // tone（2026-09-06 插件面板轮扩）：text 型容器底色档——默认 g3（字体预览稿）；
 // "g2" = 通用/二级底（工具栏展开窗口-插件 稿 分类分段容器 376×40 通用/二级）。
+// size="sm"（2026-09-20 用户定，查看方式稿）：text 型 28 高小档——容器 padding 2 / 段 24 高 padding 4/8 /
+// 次要文字-加粗 12/16；禁用态 = 30% 透明度 + 不响应（同日用户定，控件族通用口径）。
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 
 const model = defineModel<string>({ required: true });
-const props = defineProps<{
-  options: readonly { value: string; label?: string; icon?: string }[];
-  variant?: "icon" | "text";
-  tone?: "g2" | "g3";
-}>();
+const props = withDefaults(
+  defineProps<{
+    options: readonly { value: string; label?: string; icon?: string }[];
+    variant?: "icon" | "text";
+    tone?: "g2" | "g3";
+    size?: "md" | "sm"; // sm = 28 高小档（查看方式稿：容器 padding 2 / 段 24 高 padding 4/8 / 次要文字-加粗 12/16）
+    disabled?: boolean; // 禁用态 = 30% 透明度 + 不响应（2026-09-20 用户定，控件族通用口径）
+  }>(),
+  { size: "md", disabled: false },
+);
 
 const index = computed(() => Math.max(0, props.options.findIndex((o) => o.value === model.value)));
 const n = computed(() => Math.max(1, props.options.length));
-// 滑块宽 = (100% - 两侧 padding 8 - 间隙 (n-1)×4) / n；位移 = index × (块宽 + 4 间隙)
+// 滑块宽 = (100% - 两侧 padding - 间隙 (n-1)×4) / n；位移 = index × (块宽 + 4 间隙)；padding 随档：md 4×2 / sm 2×2
+const pad2 = computed(() => (props.size === "sm" ? 4 : 8));
 const thumbStyle = computed(() => ({
-  width: `calc((100% - 8px - ${(n.value - 1) * 4}px) / ${n.value})`,
+  width: `calc((100% - ${pad2.value}px - ${(n.value - 1) * 4}px) / ${n.value})`,
   transform: `translateX(calc(${index.value} * (100% + 4px)))`,
 }));
 </script>
 
 <template>
-  <div class="seg" :class="[variant ?? 'icon', tone === 'g2' ? 'tone-g2' : '']" role="tablist">
+  <div
+    class="seg"
+    :class="[variant ?? 'icon', tone === 'g2' ? 'tone-g2' : '', size, { disabled }]"
+    role="tablist"
+    :aria-disabled="disabled || undefined"
+  >
     <span class="thumb" :style="thumbStyle" />
     <button
       v-for="o in options"
@@ -34,6 +47,7 @@ const thumbStyle = computed(() => ({
       class="seg-item"
       :class="{ on: o.value === model }"
       role="tab"
+      :disabled="disabled"
       @click="model = o.value"
     >
       <AppIcon v-if="o.icon" :name="o.icon" :size="18" />
@@ -53,6 +67,14 @@ const thumbStyle = computed(() => ({
   flex: none;
   width: 100%;
 }
+/* 禁用态 = 30% 透明度 + 不响应（2026-09-20 用户定，控件族通用口径） */
+.seg.disabled {
+  opacity: 0.3;
+}
+.seg.disabled .seg-item {
+  cursor: default;
+  pointer-events: none;
+}
 .seg.icon {
   height: 38px;
   background: var(--n-l-a3);
@@ -60,6 +82,11 @@ const thumbStyle = computed(() => ({
 .seg.text {
   height: 40px;
   background: var(--n-g3);
+}
+/* sm 小档（查看方式稿）：text 型容器 28 高 padding 2，段 24 高 padding 4/8 */
+.seg.text.sm {
+  height: 28px;
+  padding: var(--n-space-2);
 }
 /* tone=g2：text 型容器底 通用/二级（插件面板稿 分类分段容器） */
 .seg.text.tone-g2 {
@@ -75,6 +102,18 @@ const thumbStyle = computed(() => ({
   box-shadow: var(--n-effect-raised);
   transition: transform var(--n-dur-300) var(--n-ease-in-out);
   pointer-events: none;
+}
+.seg.sm .thumb {
+  top: var(--n-space-2);
+  bottom: var(--n-space-2);
+  left: var(--n-space-2);
+}
+/* sm 小档段件：padding 4/8 + 次要文字-加粗 12/16（查看方式稿） */
+.seg.sm .seg-item {
+  padding: var(--n-space-4) var(--n-space-8);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  font-weight: var(--n-fw-bold);
 }
 .seg-item {
   position: relative;

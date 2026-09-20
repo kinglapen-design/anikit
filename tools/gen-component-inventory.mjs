@@ -23,7 +23,6 @@ const LEGACY = new Map([
   ["AppModal", "modals/BaseModal"],
   ["AppInput", "inputs/TextInput"],
   ["AppSearchBar", ""],
-  ["AppTag", "buttons/TagButton"],
 ]);
 // 根目录里的新体系件 / 已换代壳件（preview 已验收）
 const NEW_AT_ROOT = new Set([

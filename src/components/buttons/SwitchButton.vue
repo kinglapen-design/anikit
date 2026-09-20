@@ -4,7 +4,7 @@
 // 关 = 通用/四级底 + 通用/六级描边 + 圆钮亮色/二级居左，
 // 开 = 品牌/常态底（无描边）+ 圆钮亮色/一级居右（右开左关）；
 // 横移动画 250ms 小位移（稿 prose：开关横移动画），底色/描边过渡 150ms。
-// hover / 禁用态稿未给：disabled 仅不响应点击、无视觉差异，待补稿。
+// 禁用态 = 30% 透明度（2026-09-20 用户定，控件族通用口径）。
 const model = defineModel<boolean>({ required: true });
 withDefaults(defineProps<{ disabled?: boolean }>(), { disabled: false });
 </script>
@@ -22,7 +22,7 @@ withDefaults(defineProps<{ disabled?: boolean }>(), { disabled: false });
   width: 30px;
   height: 16px;
   padding: var(--n-space-2);
-  border-radius: 999px;
+  border-radius: var(--n-radius-pill);
   background: var(--n-g4);
   box-shadow: inset 0 0 0 1px var(--n-g6);
   flex: none;
@@ -51,5 +51,6 @@ withDefaults(defineProps<{ disabled?: boolean }>(), { disabled: false });
 }
 .kit-switch:disabled {
   cursor: default;
+  opacity: 0.3;
 }
 </style>

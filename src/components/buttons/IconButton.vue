@@ -50,10 +50,11 @@ const iconSize = computed(() => (props.variant === "bare" && props.size === "sm"
     background var(--n-dur-150) var(--n-ease-in-out),
     color var(--n-dur-150) var(--n-ease-in-out);
 }
-/* 禁用态（转码中等）：仅去交互，视觉稿未画不改色（§15 口径） */
+/* 禁用态 = 30% 透明度（2026-09-20 用户定，控件族通用口径） */
 .ic-btn:disabled {
   cursor: default;
   pointer-events: none;
+  opacity: 0.3;
 }
 /* plain / float：30×30 方钮 */
 .ic-btn.plain,

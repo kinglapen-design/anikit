@@ -230,7 +230,7 @@ const scrollRows = Array.from({ length: 30 }, (_, i) => `演示行 ${String(i + 
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">悬浮滚轮 ScrollThumb（真实实例；旧件待烧——22 消费方，新滚动方案待定案）</h3>
+      <h3 class="pv-group-title">悬浮滚轮 ScrollThumb（真实实例；已新体系——g4/g6 色档 + --n-radius-pill 胶囊）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div class="pv-scroll-wrap">
@@ -241,8 +241,8 @@ const scrollRows = Array.from({ length: 30 }, (_, i) => `演示行 ${String(i + 
           </div>
           <span class="pv-cap">
             真实实例：relative 包裹层 + 滚动容器（body ref）标准用法；悬停包裹层显 / 离开隐 / 拖拽锁显，
-            6px 胶囊贴右（right 0）。色档已换 --n-g4 常态 / --n-g6 hover（2026-09-06 走查），
-            圆角仍吃旧 --radius-pill——旧件待烧（22 消费方），新滚动方案待定案
+            6px 胶囊贴右（right 0）。色档 --n-g4 常态 / --n-g6 hover（2026-09-06 走查），
+            圆角 --n-radius-pill（2026-09-20 入档）——已新体系，台账归白名单
           </span>
         </div>
       </div>

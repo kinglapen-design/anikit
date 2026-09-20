@@ -685,7 +685,7 @@ onBeforeUnmount(() => {
   position: absolute;
   right: 0;
   width: 6px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--n-radius-pill);
   /* 滚动条色档定案（2026-09-06 用户定，2026-09-13 实机走查扫尾旧 token）：6px 胶囊紧贴
      右边框 / 实色——常态 通用/四级、悬停 通用/六级（旧 C4/C5 在 g3 底上几乎不可见，全废） */
   background: var(--n-g4);

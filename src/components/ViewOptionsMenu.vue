@@ -63,13 +63,11 @@ const sortOrders = [
 
 const briefLabel = computed(() => briefs.find((b) => b.value === ui.briefMode)?.label ?? "尺寸");
 const sortLabel = computed(() => sortKeys.find((s) => s.value === ui.sortBy)?.label ?? "自定义");
-// 自定义 = 存储序，无升降语义——升降切换禁用（3.5 定）：
-// SegmentedControl 无禁用档（查看方式新稿 28 高小档未进组件），在 setter 拦截保持行为等价
+// 自定义 = 存储序，无升降语义——升降切换禁用（3.5 定；禁用态 30% 透明度，2026-09-20 控件族口径）
 const sorted = computed(() => isDisplaySorted(ui.sortBy));
 const sortOrderModel = computed({
   get: () => (ui.sortAsc ? "asc" : "desc"),
   set: (v) => {
-    if (!sorted.value) return;
     ui.sortAsc = v === "asc";
   },
 });
@@ -109,7 +107,7 @@ function closeAll(): void {
       <!-- 组 1：布局 / 排序 / 时间码（稿：三行各 53 高 padding 12 0 + 行 border-bottom 暗-悬停） -->
       <div class="row tall">
         <span class="label">布局方式</span>
-        <SegmentedControl v-model="ui.layoutMode" :options="layouts" variant="text" tone="g2" style="width: 268px" />
+        <SegmentedControl v-model="ui.layoutMode" :options="layouts" variant="text" tone="g2" size="sm" style="width: 268px" />
       </div>
       <!-- 排序方式（3.5 点亮）：下拉 8 项 + 升/降切换（自定义 = 存储序，升降禁用） -->
       <div class="row tall">
@@ -119,12 +117,12 @@ function closeAll(): void {
             <span class="val">{{ sortLabel }}</span>
             <AppIcon name="tree-expand-arrow" :size="12" class="down" />
           </button>
-          <SegmentedControl v-model="sortOrderModel" :options="sortOrders" variant="text" tone="g2" style="width: 134px" />
+          <SegmentedControl v-model="sortOrderModel" :options="sortOrders" variant="text" tone="g2" size="sm" :disabled="!sorted" style="width: 134px" />
         </span>
       </div>
       <div class="row tall">
         <span class="label">时间码显示方式</span>
-        <SegmentedControl v-model="ui.timeDisplay" :options="timeDisplays" variant="text" tone="g2" style="width: 134px" />
+        <SegmentedControl v-model="ui.timeDisplay" :options="timeDisplays" variant="text" tone="g2" size="sm" style="width: 134px" />
       </div>
 
       <!-- 组 2：显示开关（稿：组容器 padding 12 0 / gap 12 / 行高 28，行间无线，组底 border-bottom） -->

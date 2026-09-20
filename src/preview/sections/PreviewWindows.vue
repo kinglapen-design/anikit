@@ -487,7 +487,7 @@ const pkFileConfirm = computed(() =>
   width: 100%;
   height: 10px;
   background: var(--n-g1);
-  border-radius: 999px; /* 胶囊（新体系无 pill token，取旧 --radius-pill 同值） */
+  border-radius: var(--n-radius-pill); /* 胶囊（--n-radius-pill 99px，2026-09-20 入档） */
   overflow: hidden;
 }
 .pv-wiz-progress .fill {

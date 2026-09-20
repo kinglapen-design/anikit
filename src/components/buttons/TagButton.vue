@@ -5,24 +5,47 @@
 //            选中 = 品牌/常态底 + 文字升一级 + 立体感-主要按钮）；
 // ghost sm = 亮色/半透明-3，高 24 padding 4/8，次要文字-加粗 亮色/二级（hover 半透明-2；
 //            选中 = 半透明-1 底 + 文字升一级）；三者圆角 6 均带立体感-通用。
+// removable（2026-09-20 用户定「扩充点击和删除」，烧 AppTag）：hover 时删除钮右至左滑入
+// （宽 0→12 + 左距 6，150ms——沿旧 AppTag 既定交互）；removable 时根元素换 span（button 不可嵌 button）。
+import AppIcon from "../AppIcon.vue";
+
 withDefaults(
   defineProps<{
     label: string;
     variant?: "solid" | "ghost";
     size?: "md" | "sm";
     selected?: boolean;
+    removable?: boolean;
     forceState?: "" | "hover";
   }>(),
-  { variant: "solid", size: "sm", selected: false, forceState: "" },
+  { variant: "solid", size: "sm", selected: false, removable: false, forceState: "" },
 );
-defineEmits<{ click: [e: MouseEvent] }>();
+const emit = defineEmits<{ click: [e: MouseEvent]; remove: [] }>();
+
+function onRemove(e: MouseEvent): void {
+  e.stopPropagation();
+  emit("remove");
+}
 </script>
 
 <template>
+  <span
+    v-if="removable"
+    class="tag-btn removable"
+    :class="[variant, size, { selected }, forceState ? `force-${forceState}` : '']"
+    role="button"
+    @click="emit('click', $event)"
+  >
+    <span class="tag-lbl">{{ label }}</span>
+    <button class="tag-remove" v-tip="'删除'" @click="onRemove">
+      <AppIcon name="clear" :size="12" />
+    </button>
+  </span>
   <button
+    v-else
     class="tag-btn"
     :class="[variant, size, { selected }, forceState ? `force-${forceState}` : '']"
-    @click="$emit('click', $event)"
+    @click="emit('click', $event)"
   >
     {{ label }}
   </button>
@@ -83,5 +106,30 @@ defineEmits<{ click: [e: MouseEvent] }>();
 .tag-btn.ghost.selected:hover {
   background: var(--n-l-a1);
   color: var(--n-l1);
+}
+/* removable：hover 删除钮右至左滑入（宽 0→12 + 左距 6，150ms——沿旧 AppTag 既定交互） */
+.tag-btn.removable {
+  cursor: pointer;
+}
+.tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  color: var(--n-l3);
+  flex: none;
+  transition:
+    width var(--n-dur-150) var(--n-ease-in-out),
+    margin-left var(--n-dur-150) var(--n-ease-in-out);
+}
+.tag-remove:hover {
+  color: var(--n-l1);
+}
+.tag-btn.removable:hover .tag-remove,
+.tag-btn.removable.force-hover .tag-remove {
+  width: 12px;
+  margin-left: var(--n-space-6);
 }
 </style>

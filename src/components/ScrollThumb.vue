@@ -60,7 +60,7 @@ onBeforeUnmount(() => {
   position: absolute;
   right: 0;
   width: 6px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--n-radius-pill);
   background: var(--n-g4);
   z-index: 10;
   opacity: 0;

@@ -214,7 +214,7 @@ H4-H6：18px / 行高 28px / Microsoft YaHei Bold
 
 ## 4_圆角
 
-4px / 6px / 8px / 16px
+4px / 6px / 8px / 16px / 99px（胶囊——滚动条 thumb / 开关轨道 / 进度条轨道；超半高自动截胶囊，2026-09-20 用户定）
 
 ## 5_间距
 

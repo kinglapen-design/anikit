@@ -115,10 +115,10 @@ async def main() -> int:
             if not inv:
                 fails.append("台账展区缺失")
             else:
-                if inv["rows"] != 144:
-                    fails.append(f"台账行数 {inv['rows']} ≠ 144")
-                if inv["kinds"][0] != 6:
-                    fails.append(f"旧件徽标 {inv['kinds'][0]} ≠ 6")
+                if inv["rows"] != 143:
+                    fails.append(f"台账行数 {inv['rows']} ≠ 143")
+                if inv["kinds"][0] != 5:
+                    fails.append(f"旧件徽标 {inv['kinds'][0]} ≠ 5")
                 if inv["kinds"][1] != 2:
                     fails.append(f"休眠徽标 {inv['kinds'][1]} ≠ 2")
 

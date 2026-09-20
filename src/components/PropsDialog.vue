@@ -9,7 +9,7 @@ import { computed, onMounted, ref } from "vue";
 import AppModal from "./AppModal.vue";
 import AppButton from "./AppButton.vue";
 import AppSearchBar from "./AppSearchBar.vue";
-import AppTag from "./AppTag.vue";
+import TagButton from "./buttons/TagButton.vue";
 import IconButton from "./IconButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { useUiStore } from "../stores/ui";
@@ -99,10 +99,11 @@ function onCancel(): void {
       </div>
       <!-- 拥有属性行（稿：gap 8 / chip 25 高；输入新属性小框 + 添加钮） -->
       <div class="pd-owned">
-        <AppTag
+        <TagButton
           v-for="w in owned"
           :key="w"
           :label="w"
+          removable
           :class="{ pop: w === popKey }"
           @remove="owned = owned.filter((x) => x !== w)"
         />
@@ -119,7 +120,7 @@ function onCancel(): void {
       <div ref="poolRef" class="pd-pool kit-scroll">
         <span class="pool-label">已有属性标签:</span>
         <div class="pool-chips">
-          <AppTag v-for="w in poolShown" :key="w" :label="w" @click="add(w)" @remove="removePoolWord(w)" />
+          <TagButton v-for="w in poolShown" :key="w" :label="w" removable @click="add(w)" @remove="removePoolWord(w)" />
         </div>
       </div>
       <ScrollThumb :body="poolRef" />
