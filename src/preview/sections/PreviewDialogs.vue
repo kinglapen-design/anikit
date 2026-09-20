@@ -8,7 +8,7 @@
 //     按 pv-modal-shell 惯例静态复刻：壳 = pv-bm-shell（g3 底 + 1px g5 真 border + 大阴影 + 圆角 8 +
 //     壳 padding 0 + 54 高标题栏 标题 18/26 Bold 一级 + buttons/IconButton plain close-large），
 //     嵌件 = 新体系真实件（ActionButton / TextInput / SegmentedControl / SwitchButton / Checkbox /
-//     TagButton / buttons/IconButton；红色删除 = LegacyIconButton 遗留同本体），口径变更与组件同步。
+//     TagButton / buttons/IconButton（红删已改 clear X bare sm 同本体）），口径变更与组件同步。
 //     嵌套提示（23 稿保存冲突 danger / 26 稿删除区块 warning）本体已换 modals/ConfirmModal——
 //     展区给两枚真实弹出（确认/取消仅关闭，预览不接后端）。
 //   ② 仍旧 AppModal alert 待稿（2 件）：FailedListDialog（真实弹出，props 直通，重试/退出仅关闭）/
@@ -20,7 +20,6 @@
 import { ref } from "vue";
 import ActionButton from "../../components/buttons/ActionButton.vue";
 import IconButton from "../../components/buttons/IconButton.vue";
-import LegacyIconButton from "../../components/IconButton.vue";
 import TextInput from "../../components/inputs/TextInput.vue";
 import SegmentedControl from "../../components/buttons/SegmentedControl.vue";
 import SwitchButton from "../../components/buttons/SwitchButton.vue";
@@ -130,7 +129,7 @@ const RENAME_MODES = [
 const renameName = ref("角色");
 const renameStart = ref("1");
 
-// —— DescEditDialog 复刻桩（真实 buttons/IconButton + TextInput + LegacyIconButton 红删）——
+// —— DescEditDialog 复刻桩（真实 buttons/IconButton + TextInput，删除 = clear X bare sm）——
 const descRow = ref({ title: "出处", content: "雪牧老师公开素材" });
 
 // —— PropsDialog 复刻桩（真实 TextInput/TagButton；chips 增删为本地演示，不接全局删除确认）——
@@ -274,7 +273,7 @@ const linkOnlyChecked = ref(false);
                   <IconButton name="chevron-small" variant="bare" size="sm" disabled title="上移" />
                   <span class="pv-dd-label">标题:</span>
                   <TextInput v-model="descRow.title" size="sm" class="pv-grow" />
-                  <LegacyIconButton name="delete-red" delete-red title="删除" />
+                  <IconButton name="clear" variant="bare" size="sm" title="删除" />
                 </div>
                 <div class="pv-dd-line">
                   <span class="pv-ghost sm" />
@@ -295,7 +294,7 @@ const linkOnlyChecked = ref(false);
           </div>
           <span class="pv-cap">
             DescEditDialog｜文件/档案描述条目编辑（标题+内容双行、箭头排序，31 稿）｜本体已换代 BaseModal framed 482 +
-            TextInput sm + ActionButton（红色删除仍 LegacyIconButton 遗留，R2 烧减遗留项）；复刻嵌真实件；本体读
+            TextInput sm + ActionButton（删除 = clear X bare sm，2026-09-20 用户定红删改 X）；复刻嵌真实件；本体读
             ui.descEdit、确认接后端；口径变更与组件同步
           </span>
         </div>
@@ -387,7 +386,7 @@ const linkOnlyChecked = ref(false);
                   <IconButton name="chevron-small" variant="bare" size="sm" disabled title="上移" />
                   <span class="pv-dd-label wide">分组名称:</span>
                   <TextInput v-model="gmName" size="sm" class="pv-grow" placeholder="未命名分组" />
-                  <LegacyIconButton name="delete-red" delete-red title="删除分组" />
+                  <IconButton name="clear" variant="bare" size="sm" title="删除分组" />
                 </div>
                 <GroupRulesEditor v-model="gmRules" :items="[]" />
               </div>
@@ -397,7 +396,7 @@ const linkOnlyChecked = ref(false);
                   <IconButton name="chevron-small" variant="bare" size="sm" title="上移" />
                   <span class="pv-dd-label wide">分组名称:</span>
                   <TextInput model-value="待归类" size="sm" class="pv-grow" placeholder="未命名分组" />
-                  <LegacyIconButton name="delete-red" delete-red title="删除分组" />
+                  <IconButton name="clear" variant="bare" size="sm" title="删除分组" />
                 </div>
                 <div class="pv-free-hint">无规则（手动归组）——将文件拖入分组，或右键「移动至分组」</div>
               </div>
@@ -413,7 +412,7 @@ const linkOnlyChecked = ref(false);
           </div>
           <span class="pv-cap">
             GroupManageDialog｜文件夹分组列表管理（组块排序/删除 + 自由组，33 稿）｜本体已换代 BaseModal framed 603（红色删除仍
-            LegacyIconButton 遗留）；复刻 = 规则组 + 自由组说明行两块示例，嵌真实 GroupRulesEditor；本体读
+            删除 = clear X bare sm 已换代）；复刻 = 规则组 + 自由组说明行两块示例，嵌真实 GroupRulesEditor；本体读
             content.folders、确认接后端；23 稿保存冲突提示已换 ConfirmModal danger（右下真实弹出）；口径变更与组件同步
           </span>
         </div>

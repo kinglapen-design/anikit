@@ -4,7 +4,7 @@
 // 可用态亮色/一级（2026-08-14 用户定沿），禁用 = 新件自带 30% 透明度——旧「--line-active 原样呈现」
 // 覆盖随旧件退役）+「区块名称：」标签 + 输入框（inputs/TextInput sm——旧 AppInput small 与
 // 稿定 C1 底覆盖一并退役，底/描边走新件稿口径）+「默认图标：」标签 + 下拉 58×28 + 红色圆减号删除
-//（delete-red 新件无此变体——暂留根目录旧 IconButton（LegacyIconButton），R2 烧减遗留项）。
+//（删除钮 = clear X bare sm，2026-09-20 用户定「红色删除改成 X」）。
 // 「目录」行（isDefault，2026-08-14 用户定）：仅删除 opacity 0 占位不可点（目录是各兜底落点）；
 // 名称 / 图标 / 排序全部放开——锚定常量 id "dir"，改名无影响。
 // 草稿式：行编辑只改草稿对象（TextInput v-model / setIcon 直改 row 属性，提交由弹窗统一组装）。
@@ -12,7 +12,6 @@
 import AppIcon from "./AppIcon.vue";
 import TextInput from "./inputs/TextInput.vue";
 import IconButton from "./buttons/IconButton.vue";
-import LegacyIconButton from "./IconButton.vue";
 import { openPanelMenu } from "../lib/contextMenus";
 import type { BlockDraft } from "../lib/blockOps";
 
@@ -48,7 +47,7 @@ function openIconMenu(e: MouseEvent): void {
       <AppIcon :name="row.icon ?? 'folder-closed'" :size="18" />
       <AppIcon name="tree-expand-arrow" :size="12" class="pick-chev" />
     </button>
-    <LegacyIconButton name="delete-red" delete-red title="删除区块" :class="{ ghost: isDefault }" @click="emit('remove')" />
+    <IconButton name="clear" variant="bare" size="sm" title="删除区块" :class="{ ghost: isDefault }" @click="emit('remove')" />
   </div>
 </template>
 

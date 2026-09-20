@@ -12,21 +12,13 @@ export interface InventoryEntry {
 export const inventoryDate = "2026-09-20";
 export const inventoryTotals = {
   "new": 66,
-  "legacy": 3,
+  "legacy": 2,
   "business": 70,
   "dead": 2,
-  "legacyConsumers": 10,
-  "legacyTokens": 356
+  "legacyConsumers": 4,
+  "legacyTokens": 352
 };
 export const inventory: InventoryEntry[] = [
-  {
-    "path": "components/IconButton",
-    "name": "IconButton",
-    "status": "legacy",
-    "consumers": 6,
-    "legacyTokens": 4,
-    "replacement": "buttons/IconButton"
-  },
   {
     "path": "components/AppButton",
     "name": "AppButton",
@@ -623,7 +615,15 @@ export const inventory: InventoryEntry[] = [
     "path": "components/AppIcon",
     "name": "AppIcon",
     "status": "new",
-    "consumers": 55,
+    "consumers": 54,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/buttons/IconButton",
+    "name": "IconButton",
+    "status": "new",
+    "consumers": 26,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -642,14 +642,6 @@ export const inventory: InventoryEntry[] = [
     "consumers": 24,
     "legacyTokens": 0,
     "replacement": ""
-  },
-  {
-    "path": "components/buttons/IconButton",
-    "name": "IconButton",
-    "status": "new",
-    "consumers": 23,
-    "legacyTokens": 0,
-    "replacement": "buttons/IconButton"
   },
   {
     "path": "components/inputs/TextInput",

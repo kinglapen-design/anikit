@@ -2,10 +2,10 @@
 // 分组管理弹窗（33 稿，3.5 二轮）：
 // 2026-09-20 R2 旧件烧减：壳 = modals/BaseModal framed（603 宽挪 prop；标题栏 54 带底线 +
 // 关闭 X 由 framed 提供）；输入框 = inputs/TextInput sm；排序箭头 = buttons/IconButton bare sm
-//（禁用 = 新件自带 30% 透明度，旧「--line-active 原样呈现」覆盖废）；delete-red 红删新件无此变体——
-// 暂留根目录旧 IconButton（LegacyIconButton，R2 烧减遗留项）；按钮 = ActionButton
+//（禁用 = 新件自带 30% 透明度，旧「--line-active 原样呈现」覆盖废）；删除钮 = clear X bare sm
+//（2026-09-20 用户定「红色删除改成 X」，delete-red 变体退役）；按钮 = ActionButton
 //（按钮栏 lg 宽自适应 + 左右 48、次左主右；添加钮 solid md——旧 88 / 104 定宽皆废）。
-// 组块 = 组标题行（下移/上移箭头 chevron-small + 「分组名称：」输入框 + delete-red 红删）
+// 组块 = 组标题行（下移/上移箭头 chevron-small + 「分组名称：」输入框 + clear X 删除）
 //        + GroupRulesEditor（规则行×N + 添加新规则）+ 组块底线；
 // 排序 = 箭头 + TransitionGroup 交换动画（速查表 §9 口径，不做拖拽）。
 // 草稿式：打开时快照 FolderNode.groups 进本地草稿，确认 → set_folder_groups 一次提交单撤销步；
@@ -17,7 +17,6 @@ import ConfirmModal from "./modals/ConfirmModal.vue";
 import ActionButton from "./buttons/ActionButton.vue";
 import TextInput from "./inputs/TextInput.vue";
 import IconButton from "./buttons/IconButton.vue";
-import LegacyIconButton from "./IconButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import GroupRulesEditor from "./GroupRulesEditor.vue";
 import { playAlert } from "../lib/sounds";
@@ -165,13 +164,13 @@ async function submit(): Promise<void> {
         <div ref="rowsEl" class="gm-rows kit-scroll">
           <TransitionGroup name="gm-swap" tag="div" class="gm-rows-inner">
             <div v-for="(g, i) in draft" :key="g.key" class="group-block">
-              <!-- 组标题行（33 稿：下移 + 上移箭头 / 分组名称输入 / delete-red） -->
+              <!-- 组标题行（33 稿：下移 + 上移箭头 / 分组名称输入 / clear X 删除） -->
               <div class="group-title">
                 <IconButton variant="bare" size="sm" name="chevron-small" class="sort-arrow arrow-down" :disabled="i === draft.length - 1" title="下移" @click="moveGroup(i, 1)" />
                 <IconButton variant="bare" size="sm" name="chevron-small" class="sort-arrow" :disabled="i === 0" title="上移" @click="moveGroup(i, -1)" />
                 <span class="row-label">分组名称:</span>
                 <TextInput v-model="g.name" size="sm" class="name-input" placeholder="未命名分组" />
-                <LegacyIconButton name="delete-red" delete-red title="删除分组" @click="removeGroup(i)" />
+                <IconButton name="clear" variant="bare" size="sm" title="删除分组" @click="removeGroup(i)" />
               </div>
               <!-- 自由组（2026-09-17 无规则空组）：无规则编辑——静态说明行；规则组 = 规则编辑器 -->
               <div v-if="g.free" class="free-hint">无规则（手动归组）——将文件拖入分组，或右键「移动至分组」</div>

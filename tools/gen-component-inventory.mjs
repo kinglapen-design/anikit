@@ -16,12 +16,11 @@ const outFile = join(previewDir, "inventory.generated.ts");
 // 新体系子目录：目录内组件一律算新体系件
 const NEW_DIRS = new Set(["bars", "buttons", "cards", "inputs", "items", "modals", "plugins", "sections"]);
 // 根目录旧件待烧清单（2026-09-20 盘点定案，烧一件删一行；
-// AppMenu/ScrollThumb 查实为已换代件挪白名单；AppCheckbox/AppRadio/AppSegmented/AppSwitch/AppTag/AppInput/AppSearchBar 已烧删；
-// AppButton/AppModal 余 FailedListDialog/OrphanInfosAlert 两消费方（alert 系无新稿待用户定）；
-// IconButton 余 6 消费方（filled/danger/deleteRed/active 变体新件无稿，待用户定）
+// AppMenu/ScrollThumb 查实为已换代件挪白名单；AppCheckbox/AppRadio/AppSegmented/AppSwitch/AppTag/AppInput/AppSearchBar/IconButton 已烧删
+//（IconButton 四变体定案：deleteRed→clear X bare sm、danger→禁用灰，2026-09-20 用户定）；
+// AppButton/AppModal 余 FailedListDialog/OrphanInfosAlert 两消费方（alert 系无新稿待用户定）
 const LEGACY = new Map([
   ["AppButton", "buttons/ActionButton"],
-  ["IconButton", "buttons/IconButton"],
   ["AppModal", "modals/BaseModal"],
 ]);
 // 根目录里的新体系件 / 已换代壳件（preview 已验收）

@@ -4,8 +4,8 @@
 // 关闭 X 由 framed 提供）；输入框 = inputs/TextInput sm；按钮 = buttons/ActionButton——
 // 按钮栏 lg 宽自适应 + 左右 48、次左主右（旧 88 定宽与主左次右序废）；「添加描述」solid md。
 // 排序箭头 = buttons/IconButton bare sm（chevron-small，禁用 = 新件自带 30% 透明度——
-// 旧「--line-active 原样呈现」覆盖随旧件退役）；红色删除 delete-red 新件无此变体——
-// 暂留根目录旧 IconButton（LegacyIconButton，R2 烧减遗留项）。
+// 旧「--line-active 原样呈现」覆盖随旧件退役）；删除钮 = clear X bare sm（2026-09-20 用户定
+// 「红色删除改成 X」，delete-red 红底圆钮变体随根目录旧 IconButton 一并退役）。
 // 滚动自管（.dd-scroll + ScrollThumb——旧靠 AppModal .content 兜底滚动，BaseModal 无内建滚轮）。
 // 内容行箭头与删除占位不可见（稿 opacity 0 对齐）；排序 = 箭头 + TransitionGroup 交换动画
 //（2026-08-16 定案：弹窗 / 面板列表行不做拖拽，速查表 §9）；「添加描述」钮追加空条。
@@ -15,7 +15,6 @@ import BaseModal from "./modals/BaseModal.vue";
 import ActionButton from "./buttons/ActionButton.vue";
 import TextInput from "./inputs/TextInput.vue";
 import IconButton from "./buttons/IconButton.vue";
-import LegacyIconButton from "./IconButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { useUiStore } from "../stores/ui";
 import { setArchiveDescriptions, setAssetDescriptions, type DescItemInput } from "../lib/customDataOps";
@@ -91,7 +90,7 @@ function onCancel(): void {
                 />
                 <span class="dd-label">标题:</span>
                 <TextInput v-model="row.title" size="sm" class="dd-input" />
-                <LegacyIconButton name="delete-red" delete-red title="删除" @click="removeRow(i)" />
+                <IconButton name="clear" variant="bare" size="sm" title="删除" @click="removeRow(i)" />
               </div>
               <!-- 内容行：箭头 / 删除占位不可见（稿 opacity 0 对齐） -->
               <div class="dd-line">
@@ -191,10 +190,10 @@ function onCancel(): void {
   flex: none;
   visibility: hidden;
 }
-/* 删除占位（delete-red 旧件 20×20） */
+/* 删除占位（clear X bare sm 14 实寸） */
 .del-ghost {
-  width: 20px;
-  height: 20px;
+  width: 14px;
+  height: 14px;
   flex: none;
   visibility: hidden;
 }

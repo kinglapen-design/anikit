@@ -13,7 +13,7 @@
 // alert 侵入式弹出配提示音（2026-08-10 用户供音频：侵入弹窗.wav，lib/sounds）。
 import { onMounted, ref } from "vue";
 import AppIcon from "./AppIcon.vue";
-import IconButton from "./IconButton.vue";
+import IconButton from "./buttons/IconButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { playAlert } from "../lib/sounds";
 
