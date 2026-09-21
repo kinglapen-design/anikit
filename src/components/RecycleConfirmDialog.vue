@@ -2,10 +2,11 @@
 // 回收站彻底删除确认窗（6.1 二轮，2026-07-29）：Del / 右键「彻底删除」「清空回收站」先干跑
 // （confirmed=false），needConfirm 时弹出本窗——文案含"被 N 个虚拟片段引用"警示与不可恢复
 // 说明，确认后带 confirmed=true 再调（不可恢复，toast 无撤销按钮）；取消 = 放弃（干跑未动数据）。
-// 2026-09-21 换代 modals/ConfirmModal danger（用户指「不是新的弹窗样式」）：手写 del-* 壳 /
+// 2026-09-21 换代 modals/ConfirmModal（用户指「不是新的弹窗样式」）：手写 del-* 壳 /
 // 手写按钮 / absolute C1-80 遮罩全废——壳与遮罩随组件层（kit-mask 黑色-50%）；关闭 X 废
-//（ConfirmModal 口径：关闭只走取消/确认），Esc 放弃保留；危险确认钮 = danger 红
-//（旧品牌蓝主左次右废，次左主右）；警示数量词高亮 = 加粗 + 亮色/二级（§24 pw-lines b 口径）。
+//（ConfirmModal 口径：关闭只走取消/确认），Esc 放弃保留；确认钮 = **warning 警告色**
+//（同日用户定「彻底删除用警告色」——初版 danger 红改；次左主右，旧品牌蓝主左次右废）；
+// 警示数量词高亮 = 加粗 + 亮色/二级（§24 pw-lines b 口径）。
 // 快捷键让位：useGlobalKeys 遮罩查询已随换代改 .kit-mask/.bm-mask（原 .del-mask 死类名）。
 import { computed, onBeforeUnmount, onMounted } from "vue";
 import ConfirmModal from "./modals/ConfirmModal.vue";
@@ -57,7 +58,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
 <template>
   <ConfirmModal
     v-if="selection.recyclePrompt"
-    kind="danger"
+    kind="warning"
     :title="title"
     :confirm-label="title"
     cancel-label="取消"

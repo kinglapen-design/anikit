@@ -619,12 +619,13 @@ const linkOnlyChecked = ref(false);
             </div>
             <div class="pv-cm-foot">
               <button class="pv-cm-btn cancel">取消</button>
-              <button class="pv-cm-btn danger">彻底删除</button>
+              <button class="pv-cm-btn warn">彻底删除</button>
             </div>
           </div>
           <span class="pv-cap">
             RecycleConfirmDialog｜回收站彻底删除/清空二次确认（含虚拟片段引用警示，6.1 二轮）｜<b>2026-09-21 换代
-            ConfirmModal danger</b>（手写 del-* 壳 / 手写按钮 / 关闭 X 全废；警示数量词加粗高亮；Esc 放弃保留）；静态复刻，确认 =
+            ConfirmModal warning</b>（手写 del-* 壳 / 手写按钮 / 关闭 X 全废；确认钮警告色——用户定「彻底删除用警告色」；
+            警示数量词加粗高亮；Esc 放弃保留）；静态复刻，确认 =
             彻底删除，预览只陈列绝不真弹；口径变更与组件同步
           </span>
         </div>
@@ -1119,6 +1120,7 @@ const linkOnlyChecked = ref(false);
 .pv-cm-foot {
   display: flex;
   justify-content: flex-end;
+  gap: var(--n-space-8); /* 双钮间距 8（ConfirmModal .actions 口径；单钮时代漏写，2026-09-21 用户指间距不对补） */
 }
 .pv-cm-btn {
   height: 38px;
@@ -1138,9 +1140,6 @@ const linkOnlyChecked = ref(false);
   background: var(--n-g5);
   box-shadow: var(--n-effect-raised);
   color: var(--n-l2);
-}
-.pv-cm-btn.danger {
-  background: var(--n-danger);
 }
 /* 正文强调段 = 加粗 + 亮色/二级（§24 pw-lines b 口径，RecycleConfirm 警示数量词） */
 .pv-cm-body b {

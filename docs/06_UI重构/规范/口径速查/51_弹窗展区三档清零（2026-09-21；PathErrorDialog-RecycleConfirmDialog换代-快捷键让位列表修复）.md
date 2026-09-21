@@ -1,6 +1,8 @@
 # 51 弹窗展区 ③ 档清零（2026-09-21；PathErrorDialog / RecycleConfirmDialog 换代 + 快捷键让位列表修复）
 
 > 用户指 preview 展区两件「样式不对，不是新的弹窗样式」——PathErrorDialog（手写卡片壳）与 RecycleConfirmDialog（手写 del-* 壳）是业务弹窗最后的旧体系遗留。本轮全换代，**业务弹窗 13 件全新体系**；顺手修掉一个真 bug。
+>
+> **当日修订**：RecycleConfirm 确认钮初版 danger，用户同日改定「彻底删除用警告色」→ **kind="warning"**；preview 复刻 `.pv-cm-foot` 单钮时代漏写 gap 致双钮贴合（用户指「取消和主要按钮的间距全局应该一致」）→ 补 `gap: var(--n-space-8)`——**按钮行 gap 8 全局口径，复刻件与组件同查**。
 
 ## PathErrorDialog（向导内嵌卡片）
 
@@ -8,7 +10,7 @@
 
 ## RecycleConfirmDialog（彻底删除确认）
 
-手写 del-* 壳全废 → **modals/ConfirmModal kind="danger"**：壳与遮罩随组件层（absolute C1-80 遮罩废）；**关闭 X 废**（ConfirmModal 口径：关闭只走取消/确认），Esc 放弃保留；危险确认钮 danger 红（旧品牌蓝废），次左主右；标题/确认钮文案随 kind（彻底删除 / 清空回收站）直给同一字符串。警示文案改分段渲染，**数量词高亮 = 加粗 + 亮色/二级**（§24 pw-lines b 口径）——3 个素材 / 2 个虚拟片段 / N 条链接。
+手写 del-* 壳全废 → **modals/ConfirmModal kind="warning"**（确认钮警告色，用户定「彻底删除用警告色」）：壳与遮罩随组件层（absolute C1-80 遮罩废）；**关闭 X 废**（ConfirmModal 口径：关闭只走取消/确认），Esc 放弃保留；次左主右（旧品牌蓝主左次右废）；标题/确认钮文案随 kind（彻底删除 / 清空回收站）直给同一字符串。警示文案改分段渲染，**数量词高亮 = 加粗 + 亮色/二级**（§24 pw-lines b 口径）——3 个素材 / 2 个虚拟片段 / N 条链接。
 
 ## 快捷键让位判定修复（真 bug）
 
@@ -16,4 +18,4 @@
 
 ## preview 同步
 
-③ 档「手写壳」消灭：RecycleConfirm 格换 pv-cm-shell 复刻（pv-cm-btn 补 cancel / danger 两档 + pv-cm-body b 高亮档），PathError 格真实直渲 caption 更新；**pv-old-* 复刻样式全删**（pv-old-shell / pv-old-titlebar / pv-old-title / pv-del-*——旧体系复刻皮随 ③ 档清零全灭）。展区 desc 与分档注释重写：12 件业务弹窗 + OrphanInfosAlert 全部新体系。
+③ 档「手写壳」消灭：RecycleConfirm 格换 pv-cm-shell 复刻（pv-cm-btn 补 cancel 档 + pv-cm-body b 高亮档 + **pv-cm-foot 补 gap 8**——复刻按钮行间距与 ConfirmModal .actions 同口径），PathError 格真实直渲 caption 更新；**pv-old-* 复刻样式全删**（pv-old-shell / pv-old-titlebar / pv-old-title / pv-del-*——旧体系复刻皮随 ③ 档清零全灭）。展区 desc 与分档注释重写：12 件业务弹窗 + OrphanInfosAlert 全部新体系。
