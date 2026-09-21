@@ -13,7 +13,7 @@ export const inventoryDate = "2026-09-21";
 export const inventoryTotals = {
   "new": 72,
   "legacy": 0,
-  "business": 72,
+  "business": 73,
   "dead": 2,
   "legacyConsumers": 0,
   "legacyTokens": 0
@@ -46,6 +46,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/FolderIconGrid",
     "name": "FolderIconGrid",
+    "status": "business",
+    "consumers": 2,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/GroupNameInput",
+    "name": "GroupNameInput",
     "status": "business",
     "consumers": 2,
     "legacyTokens": 0,
@@ -644,18 +652,18 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/inputs/TextInput",
-    "name": "TextInput",
+    "path": "components/modals/BaseModal",
+    "name": "BaseModal",
     "status": "new",
     "consumers": 14,
     "legacyTokens": 0,
     "replacement": ""
   },
   {
-    "path": "components/modals/BaseModal",
-    "name": "BaseModal",
+    "path": "components/inputs/TextInput",
+    "name": "TextInput",
     "status": "new",
-    "consumers": 14,
+    "consumers": 13,
     "legacyTokens": 0,
     "replacement": ""
   },

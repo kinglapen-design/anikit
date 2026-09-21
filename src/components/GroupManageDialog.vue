@@ -5,8 +5,8 @@
 // 组卡片（稿「分组item」）：通用/六级底 + 立体感-通用 + 圆角 8 + padding 12，卡片间 gap 12（旧组块组底线废）；
 // 组标题行（稿「输入分组名称」42 高 / gap 8 / 底线 亮色/禁用）：上移 + 下移箭头（稿序 上→下；
 //   chevron-small bare sm，可用 = 亮色/二级——旧 2026-08-14 高亮一级档随旧稿废，禁用 = 控件族 30% 透明度）
-//   + 名称输入框（TextInput sm 衍生：30 高 / 通用/四级底 / 左对齐 / 文字亮色/一级——sm 半透明-3 描边
-//   与圆角 8 已合稿，稿无「分组名称:」文字标签）+ clear X 删除（bare sm 亮色/三级）；
+//   + 名称输入框（GroupNameInput——30 高 / 通用/四级底 / 文字亮色/一级，2026-09-21 抽共用件；
+//   稿无「分组名称:」文字标签）+ clear X 删除（bare sm 亮色/三级）；
 // 规则区 = GroupRulesEditor（规则行×N + 添加新规则——编辑器内部版式不在本稿落地范围，稿差记台账）；
 // 底栏（稿「按钮」62 高 / padding 12 四边 / space-between / 稿无顶线——旧 33 稿顶线通栏废）：
 //   左 = 添加分组（+ 添加空组，稿外件 2026-09-17 实机走查增）ActionButton cancel lg——稿 通用/五级底
@@ -20,7 +20,7 @@ import { nextTick, ref, watch } from "vue";
 import BaseModal from "./modals/BaseModal.vue";
 import ConfirmModal from "./modals/ConfirmModal.vue";
 import ActionButton from "./buttons/ActionButton.vue";
-import TextInput from "./inputs/TextInput.vue";
+import GroupNameInput from "./GroupNameInput.vue";
 import IconButton from "./buttons/IconButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import GroupRulesEditor from "./GroupRulesEditor.vue";
@@ -173,7 +173,7 @@ async function submit(): Promise<void> {
               <div class="group-title">
                 <IconButton variant="bare" size="sm" name="chevron-small" class="sort-arrow" :disabled="i === 0" title="上移" @click="moveGroup(i, -1)" />
                 <IconButton variant="bare" size="sm" name="chevron-small" class="sort-arrow arrow-down" :disabled="i === draft.length - 1" title="下移" @click="moveGroup(i, 1)" />
-                <TextInput v-model="g.name" size="sm" class="name-input" placeholder="未命名分组" />
+                <GroupNameInput v-model="g.name" />
                 <IconButton name="clear" variant="bare" size="sm" title="删除分组" @click="removeGroup(i)" />
               </div>
               <!-- 规则区（稿「规则列表」padding-top 12 自承）：自由组 = 静态说明行；规则组 = 规则编辑器 -->
@@ -303,21 +303,6 @@ async function submit(): Promise<void> {
 /* chevron-small 源图形朝上——下移旋转 180（BlockManageRow 同口径） */
 .arrow-down :deep(svg) {
   transform: rotate(180deg);
-}
-.name-input {
-  flex: 1;
-  min-width: 0;
-}
-/* 名称输入框衍生（稿：30 高 / padding 6 12 / 通用/四级底 / 文字亮色/一级；
-   基件 TextInput sm 的 半透明-3 描边与圆角 8 已合稿——提权压 .ti-root.sm；
-   左对齐 2026-09-21 起归基件统一口径，此件不再覆写） */
-.group-title .ti-root.name-input {
-  height: 30px;
-  padding: var(--n-space-6) var(--n-space-12);
-  background: var(--n-g4);
-}
-.name-input :deep(.ti-inner) {
-  color: var(--n-l1);
 }
 /* 规则区（稿「规则列表」padding-top 12：标题行底线与首条规则间隔 12 自承） */
 .group-content {

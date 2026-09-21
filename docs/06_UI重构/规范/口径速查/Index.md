@@ -52,3 +52,4 @@
 | 44 | 阶段七失败清单弹窗换代轮（2026-09-21；FailedListDialog 换 ConfirmModal danger，48 徽章废 / 次左主右 / 提示音归宿主；OrphanInfosAlert 单钮形态仍待稿） | 2026-09-21 | [44_阶段七失败清单弹窗换代轮（2026-09-21；FailedListDialog换ConfirmModal-danger）.md](44_阶段七失败清单弹窗换代轮（2026-09-21；FailedListDialog换ConfirmModal-danger）.md) |
 | 45 | 阶段七孤儿警告弹窗换代轮（2026-09-21；ConfirmModal 单钮形态 = cancelLabel 空 + 列表行学 md 代码块 + open-in-explorer 入口；AppModal/AppButton 烧删，旧件与组件内 legacy token 双清零） | 2026-09-21 | [45_阶段七孤儿警告弹窗换代轮（2026-09-21；ConfirmModal单钮形态-AppModal-AppButton烧删旧件清零）.md](45_阶段七孤儿警告弹窗换代轮（2026-09-21；ConfirmModal单钮形态-AppModal-AppButton烧删旧件清零）.md) |
 | 46 | 输入框一律左对齐（2026-09-21 用户定；TextInput sm 居中特化废，§17 修订） | 2026-09-21 | [46_输入框一律左对齐（2026-09-21；sm居中特化废）.md](46_输入框一律左对齐（2026-09-21；sm居中特化废）.md) |
+| 47 | 新建分组与分组管理统一组卡片口径（2026-09-21；GroupEditDialog 组块卡片化 + GroupNameInput 抽件；§42 编辑器稿差待办勾销） | 2026-09-21 | [47_新建分组与分组管理统一组卡片口径（2026-09-21；GroupNameInput抽件）.md](47_新建分组与分组管理统一组卡片口径（2026-09-21；GroupNameInput抽件）.md) |

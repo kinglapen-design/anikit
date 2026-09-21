@@ -29,6 +29,7 @@ import TagButton from "../../components/buttons/TagButton.vue";
 import ConfirmModal from "../../components/modals/ConfirmModal.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import BlockManageRow from "../../components/BlockManageRow.vue";
+import GroupNameInput from "../../components/GroupNameInput.vue";
 import DuplicateRow, { type DupDecision } from "../../components/DuplicateRow.vue";
 import DupScanGroupRow from "../../components/DupScanGroupRow.vue";
 import GroupRulesEditor from "../../components/GroupRulesEditor.vue";
@@ -371,11 +372,11 @@ const linkOnlyChecked = ref(false);
               <span class="pv-bm-title">添加分组</span>
               <IconButton name="close-large" title="关闭" />
             </div>
-            <div class="pv-bm-body flush">
+            <div class="pv-bm-body">
               <div class="pv-group-block">
-                <div class="pv-dd-line">
+                <div class="pv-ge-title">
                   <span class="pv-dd-label wide">分组名称:</span>
-                  <TextInput v-model="geName" size="sm" class="pv-grow" placeholder="未命名分组" />
+                  <GroupNameInput v-model="geName" />
                 </div>
                 <GroupRulesEditor v-model="geRules" :items="[]" />
               </div>
@@ -387,7 +388,8 @@ const linkOnlyChecked = ref(false);
           </div>
           <span class="pv-cap">
             GroupEditDialog｜新建单个分组（名称 + 规则编辑器，34 稿）｜本体已换代 BaseModal framed 603 +
-            TextInput/ActionButton；复刻嵌真实 GroupRulesEditor（items 空桩——候选范围按文件夹实况出，此处只展示已选
+            TextInput/ActionButton；<b>2026-09-21 组块卡片化与分组管理统一</b>（g6 卡片 + 名称行 42 底线 + 名称框
+            GroupNameInput 共用件，真实嵌）；复刻嵌真实 GroupRulesEditor（items 空桩——候选范围按文件夹实况出，此处只展示已选
             chips）；本体读 content.folders、确认接后端；23 稿保存冲突提示已换 ConfirmModal danger（右下真实弹出）；口径变更与组件同步
           </span>
         </div>
@@ -403,7 +405,7 @@ const linkOnlyChecked = ref(false);
                   <div class="pv-gm-title">
                     <IconButton variant="bare" size="sm" name="chevron-small" class="pv-gm-arrow" :disabled="i === 0" title="上移" @click="gmMove(i, -1)" />
                     <IconButton variant="bare" size="sm" name="chevron-small" class="pv-gm-arrow pv-arrow-down" :disabled="i === gmCards.length - 1" title="下移" @click="gmMove(i, 1)" />
-                    <TextInput v-model="g.name" size="sm" class="pv-gm-name" placeholder="未命名分组" />
+                    <GroupNameInput v-model="g.name" />
                     <IconButton name="clear" variant="bare" size="sm" title="删除分组" @click="gmCards.splice(i, 1)" />
                   </div>
                   <div class="pv-gm-content">
@@ -426,7 +428,7 @@ const linkOnlyChecked = ref(false);
           </div>
           <span class="pv-cap">
             GroupManageDialog｜文件夹分组列表管理｜本体已按 02_样式标注稿换代（R4：组卡片 g6 + 立体感 / 标题行 42 高 +
-            底线 亮色/禁用 / 箭头序 上移→下移 / 名称框 30 高 g4 底，「分组名称:」标签与红删废——删除 = clear X / 底栏左右组
+            底线 亮色/禁用 / 箭头序 上移→下移 / 名称框 GroupNameInput（2026-09-21 与新建分组共用抽件），「分组名称:」标签与红删废——删除 = clear X / 底栏左右组
             无顶线 / 列表区 714 高；壳 603 沿 R2，稿 640 未随）；复刻壳同步，稿点名两动画可演示——点底部「添加分组/添加空组」
             看新卡片入场（淡入 + 24 上移 250ms），点卡片箭头看排序交换（150ms）；规则编辑器嵌真实件（items 空桩只展示已选
             chips）；确认/取消仅陈列（预览不接后端）；口径变更与组件同步
@@ -855,16 +857,25 @@ const linkOnlyChecked = ref(false);
   line-height: var(--n-lh-body);
   color: var(--n-l3);
 }
-/* 分组块（组标题行 + 规则编辑器，组块底线口径；末块去线防与添加区叠色） */
+/* 新建分组组块 = 组卡片（2026-09-21 与分组管理统一口径，与本体 GroupEditDialog .group-block 同步：
+   g6 底 + 立体感-通用 + 圆角 8 + padding 12；组块底线废） */
 .pv-group-block {
   display: flex;
   flex-direction: column;
-  gap: var(--n-space-12);
-  padding: var(--n-space-12) 0;
-  border-bottom: 1px solid var(--n-g5);
+  padding: var(--n-space-12);
+  border-radius: var(--n-radius-8);
+  background: var(--n-g6);
+  box-shadow: var(--n-effect-raised);
 }
-.pv-group-block:last-child {
-  border-bottom: none;
+/* 新建分组名称行（与本体 .group-title 同步：padding-bottom 12 + 底线 亮色/禁用 + 下距 12，
+   行高由 30 名称框撑起；「分组名称:」标签 34 稿保留） */
+.pv-ge-title {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-8);
+  padding-bottom: var(--n-space-12);
+  border-bottom: 1px solid var(--n-l-disabled);
+  margin-bottom: var(--n-space-12);
 }
 /* 自由组静态说明行（2026-09-17 无规则空组，稿外件；与本体 .free-hint 同步：g3 底 + inset 1px g5） */
 .pv-free-hint {
@@ -912,20 +923,6 @@ const linkOnlyChecked = ref(false);
 /* 排序箭头（稿：可用 = 亮色/二级，提权压组件自带 .ic-btn.bare；禁用 = 控件族 30% 透明度） */
 .pv-gm-title .ic-btn.pv-gm-arrow {
   color: var(--n-l2);
-}
-.pv-gm-name {
-  flex: 1;
-  min-width: 0;
-}
-/* 名称输入框衍生（稿：30 高 / padding 6 12 / 通用/四级底 / 左对齐 / 文字亮色/一级——提权压 .ti-root.sm） */
-.pv-gm-title .ti-root.pv-gm-name {
-  height: 30px;
-  padding: var(--n-space-6) var(--n-space-12);
-  background: var(--n-g4);
-}
-.pv-gm-name :deep(.ti-inner) {
-  text-align: left;
-  color: var(--n-l1);
 }
 /* 规则区（稿「规则列表」padding-top 12 自承） */
 .pv-gm-content {
