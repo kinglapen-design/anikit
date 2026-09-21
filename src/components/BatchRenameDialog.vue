@@ -189,9 +189,10 @@ const listRef = ref<HTMLElement>();
       </template>
     </div>
     <!-- 底部栏（37 稿：62 高 / padding 12 12 12 24 / 顶部分隔线；左 segmented 右按钮组——
-         按钮 lg 宽自适应 + 左右 48、次左主右，2026-09-13 定稿口径） -->
+         按钮 lg 宽自适应 + 左右 48、次左主右，2026-09-13 定稿口径；
+         分段 tone g2——g3 轨道贴 g3 壳隐身，2026-09-21 用户报修） -->
     <footer class="rd-foot">
-      <SegmentedControl v-model="mode" :options="MODES" variant="text" style="width: 160px" />
+      <SegmentedControl v-model="mode" :options="MODES" variant="text" tone="g2" style="width: 160px" />
       <span class="spacer" />
       <ActionButton variant="cancel" label="取消" size="lg" @click="onClose" />
       <ActionButton variant="primary" label="确认" size="lg" :disabled="pendingItems.length === 0 || busy" @click="onConfirm" />

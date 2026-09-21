@@ -529,7 +529,7 @@ const linkOnlyChecked = ref(false);
               </div>
             </div>
             <div class="pv-bm-foot spread">
-              <SegmentedControl v-model="renameMode" :options="RENAME_MODES" variant="text" style="width: 160px" />
+              <SegmentedControl v-model="renameMode" :options="RENAME_MODES" variant="text" tone="g2" style="width: 160px" />
               <span class="pv-bm-foot-btns">
                 <ActionButton variant="cancel" label="取消" size="lg" />
                 <ActionButton variant="primary" label="确认" size="lg" />
@@ -538,8 +538,8 @@ const linkOnlyChecked = ref(false);
           </div>
           <span class="pv-cap">
             BatchRenameDialog｜选中集批量改名双列实时预览（序号/替换两模式，37 稿）｜本体已换代 BaseModal framed 973 +
-            TextInput lg + SegmentedControl text；复刻行卡为壳内复刻、输入框与 segmented 为真实件可交互；本体读
-            selection.renameDraft + content.placements、确认接后端；口径变更与组件同步
+            TextInput lg + SegmentedControl text <b>tone g2</b>（2026-09-21 修：g3 轨道贴 g3 壳隐身）；复刻行卡为壳内复刻、输入框与
+            segmented 为真实件可交互；本体读 selection.renameDraft + content.placements、确认接后端；口径变更与组件同步
           </span>
         </div>
       </div>
