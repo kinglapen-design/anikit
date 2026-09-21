@@ -1,4 +1,4 @@
-// 本文件由 tools/gen-component-inventory.mjs 生成（2026-09-20），勿手改——重跑 `pnpm inventory` 刷新。
+// 本文件由 tools/gen-component-inventory.mjs 生成（2026-09-21），勿手改——重跑 `pnpm inventory` 刷新。
 // 阶段七重构「组件台账」数据源：status = new 新体系 / legacy 旧件待烧 / business 业务件 / dead 零消费休眠。
 export type InventoryStatus = "new" | "legacy" | "business" | "dead";
 export interface InventoryEntry {
@@ -9,13 +9,13 @@ export interface InventoryEntry {
   legacyTokens: number;
   replacement: string;
 }
-export const inventoryDate = "2026-09-20";
+export const inventoryDate = "2026-09-21";
 export const inventoryTotals = {
   "new": 72,
   "legacy": 2,
   "business": 72,
   "dead": 2,
-  "legacyConsumers": 4,
+  "legacyConsumers": 2,
   "legacyTokens": 29
 };
 export const inventory: InventoryEntry[] = [
@@ -23,7 +23,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/AppButton",
     "name": "AppButton",
     "status": "legacy",
-    "consumers": 2,
+    "consumers": 1,
     "legacyTokens": 16,
     "replacement": "buttons/ActionButton"
   },
@@ -31,7 +31,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/AppModal",
     "name": "AppModal",
     "status": "legacy",
-    "consumers": 2,
+    "consumers": 1,
     "legacyTokens": 12,
     "replacement": "modals/BaseModal"
   },
@@ -684,6 +684,14 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/modals/ConfirmModal",
+    "name": "ConfirmModal",
+    "status": "new",
+    "consumers": 7,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/buttons/SegmentedControl",
     "name": "SegmentedControl",
     "status": "new",
@@ -694,14 +702,6 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/items/TwoToneIcon",
     "name": "TwoToneIcon",
-    "status": "new",
-    "consumers": 6,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/modals/ConfirmModal",
-    "name": "ConfirmModal",
     "status": "new",
     "consumers": 6,
     "legacyTokens": 0,

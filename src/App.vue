@@ -130,6 +130,12 @@ watch(
   },
 );
 
+// 导入/导出失败清单 = alert error 侵入式语义：弹窗出现配提示音（ConfirmModal 不带音，
+// 宿主 watch 补——§40 口径，与 deleteLibraryState 同先例）
+watch([() => content.importFailed, () => content.exportFailed], ([i, e]) => {
+  if (i || e) playAlert();
+});
+
 // 导入弹窗确认：关弹窗，先检测序列帧（命中追加 12_序列帧弹窗，4.1），导入走后台任务
 //（Channel 流式，到一个显示一个，UI 不阻塞）
 function onImportConfirm(opts: { structure: "flatten" | "keep"; source: "copy" | "move" }): void {

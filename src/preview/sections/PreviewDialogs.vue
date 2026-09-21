@@ -11,8 +11,9 @@
 //     TagButton / buttons/IconButton（红删已改 clear X bare sm 同本体）），口径变更与组件同步。
 //     嵌套提示（23 稿保存冲突 danger / 26 稿删除区块 warning）本体已换 modals/ConfirmModal——
 //     展区给两枚真实弹出（确认/取消仅关闭，预览不接后端）。
-//   ② 仍旧 AppModal alert 待稿（2 件）：FailedListDialog（真实弹出，props 直通，重试/退出仅关闭）/
-//     OrphanInfosAlert（静态复刻旧口径）——无新稿，待用户定。
+//   ② 仍旧 AppModal alert 待稿（1 件）：OrphanInfosAlert（静态复刻旧口径）——单按钮「知道了」
+//     形态 ConfirmModal 不支持（固定双钮），稿未画，待用户定。FailedListDialog 已于 2026-09-21
+//     换代 ConfirmModal danger（§24 alert 系映射落地，真实弹出，重试/退出仅关闭）。
 //   ③ 手写壳（2 件）：PathErrorDialog 纯 props 卡片真实直渲（仍旧手写壳+手写按钮）；
 //     RecycleConfirmDialog 静态复刻（手写 del-* 壳与手写按钮仍旧体系，仅关闭 X 已换 buttons/IconButton；
 //     确认 = 彻底删除，只陈列绝不真弹）。
@@ -39,7 +40,7 @@ import type { ConflictItem } from "../../stores/content";
 import type { DupGroup } from "../../lib/dupScanOps";
 import type { GroupRule } from "../../lib/grouping";
 
-// —— FailedListDialog 真实弹出（仍旧 AppModal alert 待稿；props 直通；重试/退出仅关闭演示）——
+// —— FailedListDialog 真实弹出（2026-09-21 换代 ConfirmModal danger；props 直通；重试/退出仅关闭演示）——
 const failedOpen = ref(false);
 const failedDemo = [
   { path: "C:/演示/素材/走路循环_破损.fla", reason: "文件损坏" },
@@ -232,8 +233,8 @@ const linkOnlyChecked = ref(false);
         <div class="pv-demo-cell" style="width: 240px">
           <ActionButton label="导入未完成" variant="solid" size="md" @click="failedOpen = true" />
           <span class="pv-cap">
-            FailedListDialog｜导入/导出失败清单（figma 09 侵入式）｜<b>仍旧 AppModal alert + AppButton，无新稿待用户定</b>｜真实弹出（props
-            直通，alert 提示音随壳播）；重试/退出仅关闭（预览不接后端）
+            FailedListDialog｜导入/导出失败清单｜<b>2026-09-21 换代 ConfirmModal danger</b>（48 徽章废，纯靠按钮色区分轻重；次左主右
+            = 退出左/重试右）｜真实弹出（props 直通；提示音归宿主 watch，预览不播）；重试/退出仅关闭（预览不接后端）
           </span>
         </div>
         <div class="pv-demo-cell">
