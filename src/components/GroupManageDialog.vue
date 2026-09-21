@@ -308,15 +308,15 @@ async function submit(): Promise<void> {
   flex: 1;
   min-width: 0;
 }
-/* 名称输入框衍生（稿：30 高 / padding 6 12 / 通用/四级底 / 左对齐 / 文字亮色/一级；
-   基件 TextInput sm 的 半透明-3 描边与圆角 8 已合稿——提权压 .ti-root.sm） */
+/* 名称输入框衍生（稿：30 高 / padding 6 12 / 通用/四级底 / 文字亮色/一级；
+   基件 TextInput sm 的 半透明-3 描边与圆角 8 已合稿——提权压 .ti-root.sm；
+   左对齐 2026-09-21 起归基件统一口径，此件不再覆写） */
 .group-title .ti-root.name-input {
   height: 30px;
   padding: var(--n-space-6) var(--n-space-12);
   background: var(--n-g4);
 }
 .name-input :deep(.ti-inner) {
-  text-align: left;
   color: var(--n-l1);
 }
 /* 规则区（稿「规则列表」padding-top 12：标题行底线与首条规则间隔 12 自承） */

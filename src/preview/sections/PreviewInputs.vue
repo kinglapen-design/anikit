@@ -58,7 +58,7 @@ const liveClear = ref("雪牧_自动");
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">输入框-小（高 26 / padding 4/12 / 描边 亮色/半透明-3 / 文字居中）</h3>
+      <h3 class="pv-group-title">输入框-小（高 26 / padding 4/12 / 描边 亮色/半透明-3 / 文字左对齐 2026-09-21 用户定，稿居中特化废）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell" style="width: 55px">
           <TextInput size="sm" placeholder="年" />
@@ -73,7 +73,7 @@ const liveClear = ref("雪牧_自动");
           <span class="pv-cap">聚焦</span>
         </div>
         <div class="pv-demo-cell" style="width: 120px">
-          <TextInput size="sm" v-model="liveSm" placeholder="居中" />
+          <TextInput size="sm" v-model="liveSm" placeholder="左对齐" />
           <span class="pv-cap">交互 · 宽随父容器</span>
         </div>
       </div>

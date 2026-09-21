@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 输入框——docs/06_UI重构/Design Token/组件/输入框/ 大 / 小 两稿合一：
-// size：lg = 高 34 / padding 8/12 / 常态描边 通用三级；sm = 高 26 / padding 4/12 / 常态描边 亮色/半透明-3，
-// 文字居中（稿 justify-content center，年/月/日小框语境）；lg 文字左对齐。
+// size：lg = 高 34 / padding 8/12 / 常态描边 通用三级；sm = 高 26 / padding 4/12 / 常态描边 亮色/半透明-3。
+// **文字一律左对齐**（2026-09-21 用户定：所有输入全部左对齐——sm 稿 justify-content center
+// 年/月/日小框语境特化废，日期筛选小框同改）。
 // 底色通用二级 + 圆角 8；文字 正文档 13/18 亮色/二级；占位符 亮色/四级（2026-08-29 用户定）。
 // 聚焦 = 亮色/半透明-1 描边，线条走卡片同款双层伪元素 inset 0（禁真 border 禁负 inset，速查表 §16）：
 // ::after 常态层瞬时、::before 聚焦层 opacity 过渡 150ms（聚焦不做颜色过渡，踩坑 036）。
@@ -10,7 +11,7 @@
 // leadingIcon = 左置图标 18（亮色/三级，移动弹窗搜索框稿，2026-09-08 功能模态窗二轮扩）；
 // readonly 透传（只读展示口径）。
 // clearable（2026-09-20 R2 烧 AppInput/AppSearchBar 补能力）：有内容且非禁用/只读时出清除钮
-// （clear 12 亮色/四级 hover 升三级，150ms；沿旧 AppInput/AppSearchBar 既定交互，sm 档文字居中不吃 clear）。
+// （clear 12 亮色/四级 hover 升三级，150ms；沿旧 AppInput/AppSearchBar 既定交互，sm 档暂无 clear 消费方）。
 // focusable=false = 聚焦描边不显（2026-08-31 用户定：仅快速访问固定入口框用——亮边误导人以为能输入；
 // 文件夹/文件名称框保留聚焦态，改名语义上可输入，勿全局禁用 readonly 聚焦）。
 import { ref } from "vue";
@@ -132,7 +133,8 @@ defineExpose({
   pointer-events: none;
 }
 
-/* 内嵌 input：透明去框（底色 / 描边 / 聚焦全在壳） */
+/* 内嵌 input：透明去框（底色 / 描边 / 聚焦全在壳）；文字一律左对齐（2026-09-21 用户定——
+   sm 稿居中特化废，原 .sm text-align:center 删除） */
 .ti-inner {
   flex: 1;
   min-width: 0;
@@ -144,9 +146,6 @@ defineExpose({
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
   color: var(--n-l2);
-}
-.ti-root.sm .ti-inner {
-  text-align: center;
 }
 .ti-inner::placeholder {
   color: var(--n-l4);
