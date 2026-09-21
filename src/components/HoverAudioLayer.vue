@@ -160,7 +160,7 @@ function onSeekUp(e: PointerEvent): void {
 .played {
   position: absolute;
   inset: 0;
-  background: var(--brand-1);
+  background: var(--n-brand);
   -webkit-mask-image: var(--wave-url);
   mask-image: var(--wave-url);
   -webkit-mask-size: cover;

@@ -18,11 +18,8 @@ const NEW_DIRS = new Set(["bars", "buttons", "cards", "inputs", "items", "modals
 // 根目录旧件待烧清单（2026-09-20 盘点定案，烧一件删一行；
 // AppMenu/ScrollThumb 查实为已换代件挪白名单；AppCheckbox/AppRadio/AppSegmented/AppSwitch/AppTag/AppInput/AppSearchBar/IconButton 已烧删
 //（IconButton 四变体定案：deleteRed→clear X bare sm、danger→禁用灰，2026-09-20 用户定）；
-// AppButton/AppModal 余 OrphanInfosAlert 一消费方（FailedListDialog 2026-09-21 换代 ConfirmModal danger；单按钮「知道了」形态稿缺待用户定）
-const LEGACY = new Map([
-  ["AppButton", "buttons/ActionButton"],
-  ["AppModal", "modals/BaseModal"],
-]);
+// AppButton/AppModal 2026-09-21 烧删（OrphanInfosAlert 换代 ConfirmModal warning 单钮 + open-in-explorer 入口，消费方清零）——旧件清零
+const LEGACY = new Map([]);
 // 根目录里的新体系件 / 已换代壳件（preview 已验收）
 const NEW_AT_ROOT = new Set([
   "AppIcon", "MenuItem", "AppMenu", "ScrollThumb", "ToastStack", "PickerBanner", "LinkListPopover", "EmptyFolderState",

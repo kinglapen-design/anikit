@@ -12,7 +12,7 @@ import { useUndoStore } from "../stores/undo";
 
 // 无主资产警告（2026-09-02 资产污染修复配套）：开库自检扫出孤儿 info（数据层无记录、
 // 磁盘残留、库内不可见）→ 后端 activate emit 推清单，OrphanInfosAlert 弹窗列出。
-// 简单版只展示；完整管理入口（打开资源管理器查看 / 删除按钮）用户后续补稿。
+// 管理入口 = 行尾「在资源管理器中打开」（2026-09-21 用户补稿定案；删除按钮仍未做）。
 export interface OrphanNotice {
   id: string;
   name: string;
@@ -28,6 +28,16 @@ export async function initOrphanInfosListener(): Promise<void> {
   await listen<OrphanNotice[]>("library-orphan-infos", (e) => {
     orphanInfosState.list = e.payload.length > 0 ? e.payload : null;
   });
+}
+
+// 孤儿 info 在资源管理器中打开：reveal_path 通用命令（commands::workspace，shell_open reveal——
+// 文件定位选中 / 目录打开；o.path = info 目录完整路径直传）；失败 toast
+export async function revealOrphanInfo(absPath: string): Promise<void> {
+  try {
+    await invoke("reveal_path", { absPath });
+  } catch (e) {
+    useToastStore().notify({ message: String(e), icon: "fail" });
+  }
 }
 
 export interface LibraryEntry {

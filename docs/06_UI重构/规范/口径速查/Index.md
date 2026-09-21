@@ -50,3 +50,4 @@
 | 42 | 阶段七 R4 未落地稿补齐轮（2026-09-20；分组管理 / 字体预览 / 此文件不支持预览 三稿落地） | 2026-09-20 | [42_阶段七R4未落地稿补齐轮（2026-09-20；分组管理-字体预览-不支持预览）.md](42_阶段七R4未落地稿补齐轮（2026-09-20；分组管理-字体预览-不支持预览）.md) |
 | 43 | 阶段七 R5 扩展点注册表化（2026-09-20；previewSpecs / cardSpecs 落地，四注册表成族） | 2026-09-20 | [43_阶段七R5扩展点注册表化（2026-09-20；previewSpecs-cardSpecs落地）.md](43_阶段七R5扩展点注册表化（2026-09-20；previewSpecs-cardSpecs落地）.md) |
 | 44 | 阶段七失败清单弹窗换代轮（2026-09-21；FailedListDialog 换 ConfirmModal danger，48 徽章废 / 次左主右 / 提示音归宿主；OrphanInfosAlert 单钮形态仍待稿） | 2026-09-21 | [44_阶段七失败清单弹窗换代轮（2026-09-21；FailedListDialog换ConfirmModal-danger）.md](44_阶段七失败清单弹窗换代轮（2026-09-21；FailedListDialog换ConfirmModal-danger）.md) |
+| 45 | 阶段七孤儿警告弹窗换代轮（2026-09-21；ConfirmModal 单钮形态 = cancelLabel 空 + 列表行学 md 代码块 + open-in-explorer 入口；AppModal/AppButton 烧删，旧件与组件内 legacy token 双清零） | 2026-09-21 | [45_阶段七孤儿警告弹窗换代轮（2026-09-21；ConfirmModal单钮形态-AppModal-AppButton烧删旧件清零）.md](45_阶段七孤儿警告弹窗换代轮（2026-09-21；ConfirmModal单钮形态-AppModal-AppButton烧删旧件清零）.md) |

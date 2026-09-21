@@ -11,9 +11,9 @@
 //     TagButton / buttons/IconButton（红删已改 clear X bare sm 同本体）），口径变更与组件同步。
 //     嵌套提示（23 稿保存冲突 danger / 26 稿删除区块 warning）本体已换 modals/ConfirmModal——
 //     展区给两枚真实弹出（确认/取消仅关闭，预览不接后端）。
-//   ② 仍旧 AppModal alert 待稿（1 件）：OrphanInfosAlert（静态复刻旧口径）——单按钮「知道了」
-//     形态 ConfirmModal 不支持（固定双钮），稿未画，待用户定。FailedListDialog 已于 2026-09-21
-//     换代 ConfirmModal danger（§24 alert 系映射落地，真实弹出，重试/退出仅关闭）。
+//   ② alert 系两件已全换代（2026-09-21）：FailedListDialog → ConfirmModal danger（真实弹出，
+//     重试/退出仅关闭）；OrphanInfosAlert → ConfirmModal warning 单钮（静态复刻新口径，
+//     嵌真实 IconButton open-in-explorer）。AppModal/AppButton 同轮烧删，旧件清零。
 //   ③ 手写壳（2 件）：PathErrorDialog 纯 props 卡片真实直渲（仍旧手写壳+手写按钮）；
 //     RecycleConfirmDialog 静态复刻（手写 del-* 壳与手写按钮仍旧体系，仅关闭 X 已换 buttons/IconButton；
 //     确认 = 彻底删除，只陈列绝不真弹）。
@@ -28,7 +28,6 @@ import Checkbox from "../../components/buttons/Checkbox.vue";
 import TagButton from "../../components/buttons/TagButton.vue";
 import ConfirmModal from "../../components/modals/ConfirmModal.vue";
 import AppIcon from "../../components/AppIcon.vue";
-import AppButton from "../../components/AppButton.vue"; // 仅 OrphanInfosAlert 旧口径复刻用（该件仍旧 AppModal alert 待稿）
 import BlockManageRow from "../../components/BlockManageRow.vue";
 import DuplicateRow, { type DupDecision } from "../../components/DuplicateRow.vue";
 import DupScanGroupRow from "../../components/DupScanGroupRow.vue";
@@ -238,34 +237,31 @@ const linkOnlyChecked = ref(false);
           </span>
         </div>
         <div class="pv-demo-cell">
-          <div class="pv-old-shell">
-            <div class="pv-old-alert">
-              <AppIcon name="warning" :size="48" class="pv-old-badge" />
-              <div class="pv-old-alert-text">
-                <span class="pv-old-alert-title">发现 2 个无主资产文件</span>
-                <p class="pv-old-alert-desc">
-                  以下文件残留在素材库目录中，但数据层没有对应记录（可能是删除中断的残留），不会显示在库内：
-                </p>
-                <div class="pv-old-orphan-list">
-                  <div class="pv-old-orphan-row">
-                    <span class="name">雪牧_自动.fla</span>
-                    <span class="path">素材库/info/a1b2c3/info.json</span>
-                  </div>
-                  <div class="pv-old-orphan-row">
-                    <span class="name">走路循环_01.png</span>
-                    <span class="path">素材库/info/d4e5f6/info.json</span>
-                  </div>
+          <div class="pv-cm-shell">
+            <span class="pv-cm-title">发现 2 个无主资产文件</span>
+            <div class="pv-cm-body">
+              <p class="pv-cm-lead">
+                以下文件残留在素材库目录中，但数据层没有对应记录（可能是删除中断的残留），不会显示在库内：
+              </p>
+              <div class="pv-cm-rows">
+                <div class="pv-cm-row">
+                  <span class="o-text"><b>雪牧_自动.fla</b>：素材库/info/a1b2c3/info.json</span>
+                  <IconButton name="open-in-explorer" variant="bare" size="sm" title="在资源管理器中打开" />
+                </div>
+                <div class="pv-cm-row">
+                  <span class="o-text"><b>走路循环_01.png</b>：素材库/info/d4e5f6/info.json</span>
+                  <IconButton name="open-in-explorer" variant="bare" size="sm" title="在资源管理器中打开" />
                 </div>
               </div>
             </div>
-            <div class="pv-old-alert-foot">
-              <AppButton variant="primary" label="知道了" />
+            <div class="pv-cm-foot">
+              <button class="pv-cm-btn warn">知道了</button>
             </div>
           </div>
           <span class="pv-cap">
-            OrphanInfosAlert｜开库自检孤儿 info 警告（2026-09-02 资产污染修复配套）｜<b>仍旧 AppModal alert +
-            AppButton，无新稿待用户定</b>（确认钮本体为警告色底，复刻从简）；静态复刻旧口径；本体读
-            orphanInfosState，「知道了」仅关闭
+            OrphanInfosAlert｜开库自检孤儿 info 警告（2026-09-02 资产污染修复配套）｜<b>2026-09-21 换代 ConfirmModal
+            warning 单钮</b>（48 徽章废；列表行学 md 代码块 = MCP 接入配置行口径，行尾 open-in-explorer 入口）；
+            静态复刻新口径（本体读 orphanInfosState，「知道了」仅关闭；提示音组件内 watch）
           </span>
         </div>
       </div>
@@ -1055,8 +1051,9 @@ const linkOnlyChecked = ref(false);
   color: var(--n-l4);
 }
 
-/* —— 旧体系遗留复刻壳（未换代件专用：OrphanInfosAlert 旧 AppModal alert / RecycleConfirmDialog 手写
-   del-* 壳；壳样式吃 --n- token 近似旧观感，换代时整体替换）—— */
+/* —— 旧体系遗留复刻壳（未换代件专用：RecycleConfirmDialog 手写 del-* 壳；
+   壳样式吃 --n- token 近似旧观感，换代时整体替换；OrphanInfosAlert 已于 2026-09-21 换代，
+   旧 AppModal alert 复刻样式同轮烧删）—— */
 .pv-old-shell {
   display: flex;
   flex-direction: column;
@@ -1070,56 +1067,82 @@ const linkOnlyChecked = ref(false);
 .pv-old-shell.w420 {
   width: 420px;
 }
-/* AppModal alert 形态（figma 09）：padding 24 / 内容行横排 48 徽章 + 标题/描述竖排；按钮右对齐 */
-.pv-old-alert {
+/* OrphanInfosAlert 新口径复刻（2026-09-21）：ConfirmModal 壳（520 / padding 24 / 列 gap 24）
+   + 单钮 warning；清单行 = md 代码块口径（MCP 接入配置行同款：圆角 6 / 底与描边 亮色/半透明-4 /
+   padding 6·8 / 图标钮贴右）——口径变更与组件同步 */
+.pv-cm-shell {
   display: flex;
-  align-items: flex-start;
-  gap: var(--n-space-12);
-  padding: var(--n-space-24) var(--n-space-24) 0;
+  flex-direction: column;
+  gap: var(--n-space-24);
+  width: 520px;
+  padding: var(--n-space-24);
+  box-sizing: border-box;
+  border: 1px solid var(--n-g5);
+  border-radius: var(--n-radius-8);
+  background: var(--n-g3);
+  box-shadow: var(--n-shadow-lg);
 }
-.pv-old-badge {
-  flex: none;
+.pv-cm-title {
+  font-size: var(--n-fs-title);
+  line-height: var(--n-lh-title);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l1);
 }
-.pv-old-alert-text {
+.pv-cm-body {
   display: flex;
   flex-direction: column;
   gap: var(--n-space-8);
-  min-width: 0;
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
 }
-.pv-old-alert-title {
-  font-size: var(--n-fs-btn-lg);
-  line-height: var(--n-lh-btn-lg);
+.pv-cm-lead {
+  margin: 0;
+}
+.pv-cm-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-8);
+}
+.pv-cm-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--n-space-6);
+  padding: var(--n-space-6) var(--n-space-8);
+  background: var(--n-l-a4);
+  box-shadow: inset 0 0 0 1px var(--n-l-a4);
+  border-radius: var(--n-radius-6);
+}
+.pv-cm-row .o-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pv-cm-row .o-text b {
   font-weight: var(--n-fw-bold);
   color: var(--n-l2);
 }
-.pv-old-alert-desc {
-  font-size: var(--n-fs-body);
-  line-height: var(--n-lh-body);
-  color: var(--n-l3);
+.pv-cm-row .ic-btn {
+  flex: none;
+  margin-top: 1px;
 }
-.pv-old-orphan-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--n-space-8);
-}
-.pv-old-orphan-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--n-space-4);
-  font-size: var(--n-fs-body);
-  line-height: var(--n-lh-body);
-  color: var(--n-l2);
-}
-.pv-old-orphan-row .path {
-  font-size: var(--n-fs-secondary);
-  line-height: var(--n-lh-secondary);
-  color: var(--n-l3);
-  overflow-wrap: anywhere;
-}
-.pv-old-alert-foot {
+.pv-cm-foot {
   display: flex;
   justify-content: flex-end;
-  padding: var(--n-space-24);
+}
+.pv-cm-btn {
+  height: 38px;
+  padding: var(--n-space-8) 48px;
+  border-radius: var(--n-radius-8);
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l1);
+  box-shadow: var(--n-effect-raised-primary);
+  flex: none;
+}
+.pv-cm-btn.warn {
+  background: var(--n-warning);
 }
 /* RecycleConfirmDialog 手写壳件（del-*：标题栏 44 / 正文 16 32 / 底栏 70；手写按钮以静态件近似） */
 .pv-old-titlebar {

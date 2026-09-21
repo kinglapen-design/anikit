@@ -12,29 +12,13 @@ export interface InventoryEntry {
 export const inventoryDate = "2026-09-21";
 export const inventoryTotals = {
   "new": 72,
-  "legacy": 2,
+  "legacy": 0,
   "business": 72,
   "dead": 2,
-  "legacyConsumers": 2,
-  "legacyTokens": 29
+  "legacyConsumers": 0,
+  "legacyTokens": 0
 };
 export const inventory: InventoryEntry[] = [
-  {
-    "path": "components/AppButton",
-    "name": "AppButton",
-    "status": "legacy",
-    "consumers": 1,
-    "legacyTokens": 16,
-    "replacement": "buttons/ActionButton"
-  },
-  {
-    "path": "components/AppModal",
-    "name": "AppModal",
-    "status": "legacy",
-    "consumers": 1,
-    "legacyTokens": 12,
-    "replacement": "modals/BaseModal"
-  },
   {
     "path": "components/DetailNotes",
     "name": "DetailNotes",
@@ -320,7 +304,7 @@ export const inventory: InventoryEntry[] = [
     "name": "HoverAudioLayer",
     "status": "business",
     "consumers": 1,
-    "legacyTokens": 1,
+    "legacyTokens": 0,
     "replacement": ""
   },
   {
@@ -631,7 +615,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/AppIcon",
     "name": "AppIcon",
     "status": "new",
-    "consumers": 55,
+    "consumers": 53,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -655,7 +639,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/ScrollThumb",
     "name": "ScrollThumb",
     "status": "new",
-    "consumers": 24,
+    "consumers": 23,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -687,7 +671,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/modals/ConfirmModal",
     "name": "ConfirmModal",
     "status": "new",
-    "consumers": 7,
+    "consumers": 8,
     "legacyTokens": 0,
     "replacement": ""
   },

@@ -31,8 +31,9 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
     <h2 class="pv-sec-title">组件 · 模态窗口</h2>
     <p class="pv-sec-desc">
       Design Token/组件/模态窗口/弹窗.md（2026-09-01）：窗口 520 宽 / padding 24 / 列 gap 24，通用/三级底 + 1px
-      通用/五级真 border + 大阴影 + 圆角 8；标题 18/26 Bold 亮色/一级，正文 13/18 亮色/三级；按钮 120×38 次左主右——
-      取消 通用/五级底 + 立体感-通用，确认 kind 色底 + 立体感-主要按钮。遮罩 黑色-50%，点击不关闭。
+      通用/五级真 border + 大阴影 + 圆角 8；标题 18/26 Bold 亮色/一级，正文 13/18 亮色/三级；按钮高 38 宽自适应内容
+      + 左右 48 次左主右（2026-09-13 走查定稿值，废 120 定宽）——取消 通用/五级底 + 立体感-通用，确认 kind 色底 +
+      立体感-主要按钮。遮罩 黑色-50%，点击不关闭。单钮形态（2026-09-21 用户定）= cancelLabel 空串隐藏取消钮。
       壳为预览复刻；按钮 hover 态稿未给，待补稿。
     </p>
 
@@ -71,6 +72,16 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
             </div>
           </div>
           <span class="pv-cap">brand（品牌/常态）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div class="pv-modal-shell">
+            <h2 class="pv-modal-title">发现 2 个无主资产文件</h2>
+            <p class="pv-modal-body">单钮形态（cancelLabel 空）——孤儿警告「知道了」。</p>
+            <div class="pv-modal-actions">
+              <button class="pv-modal-btn confirm warning">知道了</button>
+            </div>
+          </div>
+          <span class="pv-cap">单钮（warning 仅确认，2026-09-21）</span>
         </div>
       </div>
       <div class="pv-demo-row">
@@ -196,9 +207,9 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
   gap: var(--n-space-8);
 }
 .pv-modal-btn {
-  width: 120px;
+  /* 宽自适应内容 + 左右 48px（2026-09-13 实机走查定稿值，废 120 定宽——与 ConfirmModal .btn 同步） */
   height: 38px;
-  padding: var(--n-space-8) 0;
+  padding: var(--n-space-8) 48px;
   border-radius: var(--n-radius-8);
   font-size: var(--n-fs-btn-lg);
   line-height: var(--n-lh-btn-lg);

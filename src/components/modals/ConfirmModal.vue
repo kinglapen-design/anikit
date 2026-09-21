@@ -9,6 +9,8 @@
 // 取消 = 通用/五级底 + 立体感-通用 + 亮色/二级；
 // 确认 = kind 色底 + 立体感-主要按钮 + 亮色/一级
 //（warning 状态/警告 / danger 状态/禁止 / brand 品牌/常态——稿：不危险的提示换品牌色）。
+// 单钮形态（2026-09-21 用户定：孤儿警告「知道了」一钮，稿未画按既有件扩展）：
+// cancelLabel 传空串隐藏取消钮，仅留确认。
 // 弹出动画 = 缩放+淡入 150ms（就近套旧 AppModal modal-pop 先例）。按钮 hover 态稿未给，待补稿。
 const props = withDefaults(
   defineProps<{
@@ -28,7 +30,7 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>();
       <h2 class="title">{{ title }}</h2>
       <div class="body"><slot /></div>
       <div class="actions">
-        <button class="btn cancel" @click="emit('cancel')">{{ cancelLabel }}</button>
+        <button v-if="cancelLabel" class="btn cancel" @click="emit('cancel')">{{ cancelLabel }}</button>
         <button class="btn confirm" :class="[kind]" @click="emit('confirm')">{{ confirmLabel }}</button>
       </div>
     </div>
