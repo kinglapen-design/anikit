@@ -14,9 +14,9 @@
 //   ② alert 系两件已全换代（2026-09-21）：FailedListDialog → ConfirmModal danger（真实弹出，
 //     重试/退出仅关闭）；OrphanInfosAlert → ConfirmModal warning 单钮（静态复刻新口径，
 //     嵌真实 IconButton open-in-explorer）。AppModal/AppButton 同轮烧删，旧件清零。
-//   ③ 手写壳（2 件）：PathErrorDialog 纯 props 卡片真实直渲（仍旧手写壳+手写按钮）；
-//     RecycleConfirmDialog 静态复刻（手写 del-* 壳与手写按钮仍旧体系，仅关闭 X 已换 buttons/IconButton；
-//     确认 = 彻底删除，只陈列绝不真弹）。
+//   ③ 内嵌卡片与彻底删除（2 件，2026-09-21 全换代）：PathErrorDialog 纯 props 卡片真实直渲
+//     （新弹窗口径内嵌版：g3 + 1px g5 真 border + padding 24 / ActionButton 48 次左主右）；
+//     RecycleConfirmDialog 静态复刻 ConfirmModal danger（确认 = 彻底删除，只陈列绝不真弹）。
 // 复刻壳宽度按各组件稿值，高度按演示内容从简（本体多高随内容/视口）。
 import { ref } from "vue";
 import ActionButton from "../../components/buttons/ActionButton.vue";
@@ -168,11 +168,11 @@ const linkOnlyChecked = ref(false);
   <section id="design-system-dialogs" class="pv-section">
     <h2 class="pv-sec-title">业务弹窗（阶段七换代盘点）</h2>
     <p class="pv-sec-desc">
-      src/components/ 根目录 12 件业务弹窗 + 附属 OrphanInfosAlert。<b>9 件本体已换代 modals/BaseModal framed</b>（宽走
-      prop 稿值：973 / 970 / 714·970 / 603 / 602 / 559 / 482 / 481），此区复刻壳 = pv-bm-shell 与新壳同步（g3 底 + 1px
-      g5 真 border + 大阴影 + 圆角 8 + 壳 padding 0 + 54 高标题栏），嵌件为新体系真实件，口径变更与组件同步；嵌套提示已换
-      ConfirmModal（两枚真实弹出，预览不接后端）。<b>未换代三件</b>：FailedListDialog / OrphanInfosAlert 仍旧 AppModal
-      alert（无新稿，待用户定），PathErrorDialog / RecycleConfirmDialog 仍旧手写壳（后者仅关闭 X 已换 buttons/IconButton）。
+      src/components/ 根目录 12 件业务弹窗 + 附属 OrphanInfosAlert。<b>全部已换代新体系</b>：9 件 modals/BaseModal framed（宽走
+      prop 稿值：973 / 970 / 714·970 / 640 / 603 / 602 / 559 / 482 / 481），此区复刻壳 = pv-bm-shell 与新壳同步（g3 底 + 1px
+      g5 真 border + 大阴影 + 圆角 8 + 壳 padding 0 + 54 高标题栏），嵌件为新体系真实件，口径变更与组件同步；alert 系与确认类
+      5 件 = ConfirmModal（FailedListDialog danger / OrphanInfosAlert warning 单钮 / RecycleConfirmDialog danger /
+      嵌套提示两枚真实弹出）；PathErrorDialog = 向导内联卡片同口径（真实直渲）。旧 AppModal / AppButton / 手写壳件已全灭。
     </p>
 
     <div class="pv-group">
@@ -604,27 +604,27 @@ const linkOnlyChecked = ref(false);
             @cancel="() => {}"
           />
           <span class="pv-cap">
-            PathErrorDialog｜打开/创建资源库路径校验失败（03_UI 布局 08）｜<b>仍旧手写壳 + 手写按钮，未换代待稿</b>｜真实直渲（纯
+            PathErrorDialog｜打开/创建资源库路径校验失败（03_UI 布局 08）｜<b>2026-09-21 换代新弹窗口径</b>（向导内联卡片：
+            g3 + 1px g5 真 border + padding 24 gap 24 / 标题 18/26 / 正文 13/18 三级 / 徽章废 / ActionButton 48 次左主右）；真实直渲（纯
             props 卡片无遮罩）；重新选择路径/取消仅演示（预览不接后端）
           </span>
         </div>
         <div class="pv-demo-cell">
-          <div class="pv-old-shell w420 del">
-            <div class="pv-old-titlebar slim">
-              <span class="pv-old-title">彻底删除</span>
-              <IconButton name="window-close" title="取消" />
+          <div class="pv-cm-shell">
+            <span class="pv-cm-title">彻底删除</span>
+            <div class="pv-cm-body">
+              <p class="pv-cm-lead">
+                将彻底删除选中的 <b>3</b> 个素材，其中素材被 <b>2</b> 个虚拟片段引用，删除后引用将失效。彻底删除不可恢复，确定继续吗？
+              </p>
             </div>
-            <div class="pv-del-body">
-              将彻底删除选中的 3 个素材，其中素材被 2 个虚拟片段引用，删除后引用将失效。彻底删除不可恢复，确定继续吗？
-            </div>
-            <div class="pv-del-foot">
-              <span class="pv-del-btn primary">彻底删除</span>
-              <span class="pv-del-btn">取消</span>
+            <div class="pv-cm-foot">
+              <button class="pv-cm-btn cancel">取消</button>
+              <button class="pv-cm-btn danger">彻底删除</button>
             </div>
           </div>
           <span class="pv-cap">
-            RecycleConfirmDialog｜回收站彻底删除/清空二次确认（含虚拟片段引用警示，6.1 二轮）｜<b>手写 del-*
-            壳与手写按钮仍旧体系待稿</b>（absolute 遮罩非 BaseModal；仅关闭 X 已换 buttons/IconButton plain——复刻为真实件）；静态复刻，确认 =
+            RecycleConfirmDialog｜回收站彻底删除/清空二次确认（含虚拟片段引用警示，6.1 二轮）｜<b>2026-09-21 换代
+            ConfirmModal danger</b>（手写 del-* 壳 / 手写按钮 / 关闭 X 全废；警示数量词加粗高亮；Esc 放弃保留）；静态复刻，确认 =
             彻底删除，预览只陈列绝不真弹；口径变更与组件同步
           </span>
         </div>
@@ -1055,22 +1055,8 @@ const linkOnlyChecked = ref(false);
   color: var(--n-l4);
 }
 
-/* —— 旧体系遗留复刻壳（未换代件专用：RecycleConfirmDialog 手写 del-* 壳；
-   壳样式吃 --n- token 近似旧观感，换代时整体替换；OrphanInfosAlert 已于 2026-09-21 换代，
-   旧 AppModal alert 复刻样式同轮烧删）—— */
-.pv-old-shell {
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-  border: 1px solid var(--n-g5);
-  border-radius: var(--n-radius-8);
-  background: var(--n-g3);
-  box-shadow: var(--n-shadow-lg);
-  overflow: hidden;
-}
-.pv-old-shell.w420 {
-  width: 420px;
-}
+/* —— pv-old-* 旧体系遗留复刻壳已全灭（2026-09-21：OrphanInfosAlert / RecycleConfirmDialog
+   先后换代，③ 档手写壳清零）—— */
 /* OrphanInfosAlert 新口径复刻（2026-09-21）：ConfirmModal 壳（520 / padding 24 / 列 gap 24）
    + 单钮 warning；清单行 = md 代码块口径（MCP 接入配置行同款：圆角 6 / 底与描边 亮色/半透明-4 /
    padding 6·8 / 图标钮贴右）——口径变更与组件同步 */
@@ -1148,61 +1134,17 @@ const linkOnlyChecked = ref(false);
 .pv-cm-btn.warn {
   background: var(--n-warning);
 }
-/* RecycleConfirmDialog 手写壳件（del-*：标题栏 44 / 正文 16 32 / 底栏 70；手写按钮以静态件近似） */
-.pv-old-titlebar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--n-space-12);
-  height: 54px;
-  box-sizing: border-box;
-  padding: var(--n-space-12) var(--n-space-12) var(--n-space-12) var(--n-space-24);
-  border-bottom: 1px solid var(--n-g5);
-  flex: none;
-}
-.pv-old-titlebar.slim {
-  height: 44px;
-  padding: var(--n-space-8) var(--n-space-8) var(--n-space-8) var(--n-space-16);
-}
-.pv-old-title {
-  font-size: var(--n-fs-btn-lg);
-  line-height: var(--n-lh-btn-lg);
-  font-weight: var(--n-fw-bold);
-  color: var(--n-l2);
-}
-.pv-del-body {
-  padding: var(--n-space-16) var(--n-space-32, 32px);
-  font-size: var(--n-fs-body);
-  line-height: var(--n-lh-body);
-  color: var(--n-l2);
-}
-.pv-del-foot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--n-space-16, 16px);
-  height: 70px;
-  box-sizing: border-box;
-  padding: 0 var(--n-space-32, 32px);
-  border-top: 1px solid var(--n-g5);
-  flex: none;
-}
-.pv-del-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--n-space-8) var(--n-space-16);
-  height: 38px;
-  box-sizing: border-box;
-  border-radius: var(--n-radius-6);
+.pv-cm-btn.cancel {
   background: var(--n-g5);
-  font-size: var(--n-fs-btn-lg);
-  line-height: var(--n-lh-btn-lg);
-  font-weight: var(--n-fw-bold);
+  box-shadow: var(--n-effect-raised);
   color: var(--n-l2);
 }
-.pv-del-btn.primary {
-  background: var(--n-brand);
-  color: var(--n-l1);
+.pv-cm-btn.danger {
+  background: var(--n-danger);
+}
+/* 正文强调段 = 加粗 + 亮色/二级（§24 pw-lines b 口径，RecycleConfirm 警示数量词） */
+.pv-cm-body b {
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
 }
 </style>

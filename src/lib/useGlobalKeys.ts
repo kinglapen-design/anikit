@@ -133,7 +133,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   async function onOperationKeys(e: KeyboardEvent): Promise<void> {
     if (isEditableTarget(e.target as HTMLElement)) return;
     if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
-    if (document.querySelector(".app-menu, .zoom-mask, .modal-mask, .del-mask, .pick-mask")) return;
+    if (document.querySelector(".app-menu, .zoom-mask, .kit-mask, .bm-mask")) return;
     // 选择模式（6.2）：编辑类快捷键全禁（单击已不入选择域，本守卫双保险）；查看类（Shift+Enter
     // 默认应用打开）因选择域恒空天然无效，不单独放行
     if (picker.active) return;
@@ -353,7 +353,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     if (!mode) return;
     if (isEditableTarget(e.target as HTMLElement)) return;
     if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
-    if (document.querySelector(".app-menu, .zoom-mask, .modal-mask, .del-mask, .pick-mask")) return;
+    if (document.querySelector(".app-menu, .zoom-mask, .kit-mask, .bm-mask")) return;
     e.preventDefault();
     useUiStore().layoutMode = mode;
   }

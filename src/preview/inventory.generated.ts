@@ -623,21 +623,21 @@ export const inventory: InventoryEntry[] = [
     "path": "components/AppIcon",
     "name": "AppIcon",
     "status": "new",
-    "consumers": 53,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/buttons/IconButton",
-    "name": "IconButton",
-    "status": "new",
-    "consumers": 26,
+    "consumers": 52,
     "legacyTokens": 0,
     "replacement": ""
   },
   {
     "path": "components/buttons/ActionButton",
     "name": "ActionButton",
+    "status": "new",
+    "consumers": 26,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/buttons/IconButton",
+    "name": "IconButton",
     "status": "new",
     "consumers": 25,
     "legacyTokens": 0,
@@ -668,16 +668,16 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/items/SectionTitle",
-    "name": "SectionTitle",
+    "path": "components/modals/ConfirmModal",
+    "name": "ConfirmModal",
     "status": "new",
-    "consumers": 8,
+    "consumers": 9,
     "legacyTokens": 0,
     "replacement": ""
   },
   {
-    "path": "components/modals/ConfirmModal",
-    "name": "ConfirmModal",
+    "path": "components/items/SectionTitle",
+    "name": "SectionTitle",
     "status": "new",
     "consumers": 8,
     "legacyTokens": 0,
