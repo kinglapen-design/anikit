@@ -248,7 +248,7 @@ function toggleBlock(id: string): void {
             <span class="spacer" />
             <IconButton name="add-small" variant="bare" size="sm" disabled title="添加" @click.stop />
           </div>
-          <!-- 行（gap 4）：文件夹格 270 + 右列（名称框 232 + ✓）平铺多行 -->
+          <!-- 行（gap 4）：文件夹格 270 + 右列（名称框 flex 1 + ✓ 贴行右缘）平铺多行 -->
           <template v-for="line in visibleLines(sec.lines)" :key="line.node.id">
             <div
               v-for="d in draftsOf(line.node.id).length > 0 ? draftsOf(line.node.id) : [null]"
@@ -458,20 +458,22 @@ function toggleBlock(id: string): void {
   color: var(--n-l3);
   text-align: right;
 }
-/* 名称框（稿：232×32 / padding 6 8 / gap 6 / C4 底 / 1px 暗-悬停 / 圆角 6；
-   聚焦（编辑）态 = n-g2 底 + 2px 品牌描边（2026-09-20 用户定 2px 档） */
+/* 名称框（稿：padding 6 8 / gap 6 / C4 底 / 1px 暗-悬停 / 圆角 6；
+   聚焦（编辑）态 = n-g2 底 + 2px 品牌描边（2026-09-20 用户定 2px 档）；
+   列宽 flex 1 与表头「名称」均分列对齐——对勾贴行右缘（2026-09-21 用户定：
+   原 232 稿值固定宽右缺口 38px，用户指「旁边空出来的才是打勾的位置」） */
 .link-cell {
   display: flex;
   align-items: center;
   gap: var(--n-space-6);
-  width: 232px;
+  flex: 1;
+  min-width: 0;
   height: 32px;
   box-sizing: border-box;
   padding: var(--n-space-6) var(--n-space-8);
   border-radius: var(--n-radius-6);
   background: var(--n-g4);
   box-shadow: inset 0 0 0 1px var(--n-l-a3);
-  flex: none;
 }
 .link-cell.editing {
   background: var(--n-g2);

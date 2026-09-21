@@ -995,7 +995,8 @@ const linkOnlyChecked = ref(false);
   gap: var(--n-space-12);
   padding: var(--n-space-12) 0;
 }
-/* 链接管理行复刻（17 稿：行 32 高 gap 12；文件夹格 270 / 链接格 232） */
+/* 链接管理行复刻（17 稿：行 32 高 gap 12；文件夹格 270 / 链接格 flex 1 贴行右缘——
+   232 固定宽废，2026-09-21 用户定对勾贴右缘，与本体 .link-cell 同步） */
 .pv-lm-line {
   display: flex;
   gap: var(--n-space-12);
@@ -1022,12 +1023,14 @@ const linkOnlyChecked = ref(false);
   background: var(--n-g2);
 }
 .pv-lm-cell.link {
-  width: 232px;
+  flex: 1;
+  min-width: 0;
   background: var(--n-g4);
   box-shadow: inset 0 0 0 1px var(--n-l-a3);
 }
 .pv-lm-cell.empty {
-  width: 232px;
+  flex: 1;
+  min-width: 0;
   justify-content: flex-end;
 }
 .pv-lm-fname {
