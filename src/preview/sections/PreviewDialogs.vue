@@ -3,7 +3,7 @@
 // src/components/ 根目录 12 件业务弹窗全量收编 + 附属 OrphanInfosAlert。
 // 现状分三档：
 //   ① 本体已换代 modals/BaseModal framed（9 件）：BatchRenameDialog 973 / DuplicateDialog 970 /
-//     DupScanDialog 714·970 双屏 / GroupEditDialog 603 / GroupManageDialog 603 / LinkManageDialog 602 /
+//     DupScanDialog 714·970 双屏 / GroupEditDialog 603 / GroupManageDialog 640（2026-09-21 随稿，§42 待办勾销）/ LinkManageDialog 602 /
 //     BlockManageDialog 559 / DescEditDialog 482 / PropsDialog 481——依赖 store 数据或挂载即 invoke，
 //     按 pv-modal-shell 惯例静态复刻：壳 = pv-bm-shell（g3 底 + 1px g5 真 border + 大阴影 + 圆角 8 +
 //     壳 padding 0 + 54 高标题栏 标题 18/26 Bold 一级 + buttons/IconButton plain close-large），
@@ -394,7 +394,7 @@ const linkOnlyChecked = ref(false);
           </span>
         </div>
         <div class="pv-demo-cell">
-          <div class="pv-bm-shell w603">
+          <div class="pv-bm-shell w640">
             <div class="pv-bm-titlebar">
               <span class="pv-bm-title">分组管理</span>
               <IconButton name="close-large" title="关闭" />
@@ -429,7 +429,8 @@ const linkOnlyChecked = ref(false);
           <span class="pv-cap">
             GroupManageDialog｜文件夹分组列表管理｜本体已按 02_样式标注稿换代（R4：组卡片 g6 + 立体感 / 标题行 42 高 +
             底线 亮色/禁用 / 箭头序 上移→下移 / 名称框 GroupNameInput（2026-09-21 与新建分组共用抽件），「分组名称:」标签与红删废——删除 = clear X / 底栏左右组
-            无顶线 / 列表区 714 高；壳 603 沿 R2，稿 640 未随）；复刻壳同步，稿点名两动画可演示——点底部「添加分组/添加空组」
+            无顶线 / 列表区 714 高）；<b>壳 640 随稿</b>（2026-09-21 勾 §42 待办：底栏四钮 576 + 间距 24 = 600，603 壳挤满贴边，
+            用户报修重算）；复刻壳同步，稿点名两动画可演示——点底部「添加分组/添加空组」
             看新卡片入场（淡入 + 24 上移 250ms），点卡片箭头看排序交换（150ms）；规则编辑器嵌真实件（items 空桩只展示已选
             chips）；确认/取消仅陈列（预览不接后端）；口径变更与组件同步
           </span>
@@ -654,6 +655,9 @@ const linkOnlyChecked = ref(false);
 }
 .pv-bm-shell.w714 {
   width: 714px;
+}
+.pv-bm-shell.w640 {
+  width: 640px;
 }
 .pv-bm-shell.w603 {
   width: 603px;

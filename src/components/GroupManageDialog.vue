@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // 分组管理弹窗（稿 = docs/06_UI重构/Design Token/布局/工具栏展开窗口/分组管理.md + 同目录
 // 02_样式标注 figma CSS，2026-09-20 R4 未落地稿补齐——内脏按标注稿重写，旧归档 33 稿口径全废）：
-// 壳 = modals/BaseModal framed（603 宽沿 R2 定案，稿 640 未随）；标题栏 54 带底线 + 关闭 X 由 framed 提供。
+// 壳 = modals/BaseModal framed（**640 宽随稿**——§42「稿 640 未随」2026-09-21 勾销：底栏四钮
+//   添加分组/添加空组/取消/确认 = 160+160+128+128 = 576 + gap 8×3 = 600，603 壳内宽 579 挤满贴边，
+//   用户报「按钮都挤在一起，重新计算面板宽度」；640 内宽 616 余 16 从容）；标题栏 54 带底线 + 关闭 X 由 framed 提供。
 // 组卡片（稿「分组item」）：通用/六级底 + 立体感-通用 + 圆角 8 + padding 12，卡片间 gap 12（旧组块组底线废）；
 // 组标题行（稿「输入分组名称」42 高 / gap 8 / 底线 亮色/禁用）：上移 + 下移箭头（稿序 上→下；
 //   chevron-small bare sm，可用 = 亮色/二级——旧 2026-08-14 高亮一级档随旧稿废，禁用 = 控件族 30% 透明度）
@@ -163,7 +165,7 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <BaseModal title="分组管理" :width="603" framed class="group-manage" @close="emit('close')">
+  <BaseModal title="分组管理" :width="640" framed class="group-manage" @close="emit('close')">
     <div class="gm-body">
       <div class="scroll-wrap">
         <div ref="rowsEl" class="gm-rows kit-scroll">
