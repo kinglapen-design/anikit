@@ -106,7 +106,14 @@ export function dateBucket(iso: string, now: Date = new Date()): DateBucket {
 
 // —— 归组计算 ——
 
-/** 单规则命中判定：ext / type = 值集含项；name = 分词 AND（每词包含于名称，不区分大小写）；
+/** 名称规则匹配对象 = 词干（去最后一个 "." 后缀；点开头 / 无点 = 全名）——2026-09-22 P4⊂mp4 案：
+ *  匹配含扩展名的全名时，"P4" 会撞中 ".mp4" 的 "mp4"（"P3" 撞 ".mp3" 同理），名称分词被扩展名污染 */
+function nameStem(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(0, dot) : name;
+}
+
+/** 单规则命中判定：ext / type = 值集含项；name = 分词 AND（每词包含于名称词干，不区分大小写）；
  *  importDate / modifyDate = 命中间任一档（OR）；tags = 标签词 AND（资产须全带，精确匹配——
  *  2026-09-17，PRD 02-04）。空 values = 恒不命中（后端保存前已拦，防御） */
 function ruleHits(p: PlacementView, rule: GroupRule): boolean {
@@ -117,7 +124,7 @@ function ruleHits(p: PlacementView, rule: GroupRule): boolean {
     case "type":
       return rule.values.includes(groupTypeOf(p));
     case "name": {
-      const name = p.name.toLowerCase();
+      const name = nameStem(p.name).toLowerCase();
       return rule.values.every((w) => w.trim() !== "" && name.includes(w.trim().toLowerCase()));
     }
     case "importDate":
@@ -133,7 +140,7 @@ function ruleHits(p: PlacementView, rule: GroupRule): boolean {
  *  name / tags = 命中词数（AND 语义下命中即全词，显式计数写法与复值域同口径） */
 function ruleWeight(p: PlacementView, rule: GroupRule): number {
   if (rule.kind === "name") {
-    const name = p.name.toLowerCase();
+    const name = nameStem(p.name).toLowerCase();
     return rule.values.filter((w) => w.trim() !== "" && name.includes(w.trim().toLowerCase())).length;
   }
   if (rule.kind === "tags") {
