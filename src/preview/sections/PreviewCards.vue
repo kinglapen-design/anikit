@@ -182,7 +182,7 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">文件卡片-字体（220×220；生产已接线：示例字按 hasCjk 分流 + FontFace 真渲染，此处桩系统字体演示）</h3>
+      <h3 class="pv-group-title">文件卡片-字体（220×220 固定 1:1；示例字随卡缩放——稿基准 220 卡 ↔ 18 字，与文本卡「字号固定」相反口径；生产已接线：hasCjk 分流 + FontFace 真渲染，此处桩系统字体演示）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div style="width: 220px; height: 220px">

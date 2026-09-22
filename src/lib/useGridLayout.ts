@@ -20,6 +20,7 @@ import {
 import { useVirtualScroll } from "./useVirtualScroll";
 import { useContentStore, type PlacementView } from "../stores/content";
 import { useUiStore } from "../stores/ui";
+import { isAudioExt, isDocxExt, isFontExt, isTextExt } from "./formatBadge";
 
 /** 分组段（3.5 二轮）：displayItems 扁平数组上的 [start, end) 区间 + 组信息 */
 export interface GridSection {
@@ -57,8 +58,20 @@ export function useGridLayout(opts: {
   const content = useContentStore();
 
   // 布局算法只认数值宽高：比例跟缩略图实际尺寸走（5.4——自定义缩略图后自适应，刷新回退）；
-  // 回退链 thumbW → w（源文件尺寸，导入时与缩略图同比例）→ 300 方盒（fla 等无尺寸资源，4.2 用户定）
-  const layoutItems = computed(() => opts.items().map((it) => ({ w: it.thumbW ?? it.w ?? 300, h: it.thumbH ?? it.h ?? 300 })));
+  // 回退链 thumbW → w（源文件尺寸，导入时与缩略图同比例）→ 300 方盒（fla 等无尺寸资源，4.2 用户定）。
+  // 填充型卡片固定比例（2026-09-22 用户实机定：音频/文字/字体卡内容是波形/文本/示例字填充件，
+  // 无内容固有比例，不按缩略图尺寸走——音频旧跟波形图 640×272、字体旧跟样张 640×480、文本落 300 方盒，
+  // 全废）：**音频 = 2:1（稿 400×200）；txt/md/docx = 5:4（稿 300×240）；字体 = 1:1（稿 220×220）**；
+  // 只影响自适应 / 瀑布两模式（网格固定格比、列表固定行高本就不读 w/h）
+  const layoutItems = computed(() =>
+    opts.items().map((it) => {
+      const ext = it.ext.toLowerCase();
+      if (isAudioExt(ext)) return { w: 2, h: 1 };
+      if (isTextExt(ext) || isDocxExt(ext)) return { w: 5, h: 4 };
+      if (isFontExt(ext)) return { w: 1, h: 1 };
+      return { w: it.thumbW ?? it.w ?? 300, h: it.thumbH ?? it.h ?? 300 };
+    }),
+  );
 
   const BUFFER = 800;
 
