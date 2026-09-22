@@ -11,9 +11,12 @@
 //        audio  = 波形（竖线 4px 圆头 gap 4 通用/五级，根数恒定由业务保证、美观优先）+ 悬停胶囊
 //        （时长 + 播放/暂停）；进度 = 品牌色波形层 clip-path 丝滑扫过（与根数解耦，稿 prose + 2026-08-29 用户定色）；
 //        font   = 示例字块居中（标题档 亮色/四级，日/韩环境示例字业务侧替换）+ 右上 FontInstallButton；
-//        text   = 标题（标题档 二级）+ 正文（正文档 四级）滚动预览，**内容随卡宽 cqw 等比缩放**
-//        （2026-09-13 实机走查：文档卡片跟随尺寸缩放，稿基准 300 宽比例换算），内容溢出出 6px
-//        滚动胶囊（通用/四级，胶囊自身 hover 升六级——2026-09-13 全局滚动条色档定案）；
+//        text   = 标题（标题档 二级）+ 正文（正文档 四级）滚动预览，**字号固定稿值不随卡宽缩放**
+//        （2026-09-22 用户实机定：卡片缩放只影响显示行数；推翻 2026-09-13 cqw 等比缩放——
+//        cqw 唯一消费者已拆，fc-root container-type 同撤），滚轮不介入卡内（卡内 overflow hidden，
+//        滚轮恒滚页面），内容溢出出 6px 滚动胶囊（通用/四级，胶囊自身 hover 升六级——2026-09-13
+//        全局滚动条色档定案）**可拖**（pointerdown 自停冒泡防起卡片拖拽，2026-09-22 用户实机报
+//        「滚动条 100% 被拖拽排序覆盖」修复）；
 // 悬停控件（胶囊 / 播放条 / 波形扫过）一律 hover 才出现（2026-08-29 用户定），过渡 150ms；
 // 壳 / hover 位移 -4 + 小阴影 / 选中 2px 品牌描边 见 cards.css（kc-media / kc-sel）。
 // 业务态（7.1 内容容器轮接线，模式同 cards/FolderCard）：naming = 行内重命名（名称位换输入框；
@@ -76,7 +79,9 @@ const spec = computed(() => cardContentSpecFor(props.kind) ?? generalContentSpec
 // 滚动胶囊（scrollThumb 形态 = text 卡）：内容溢出才显，轨道 = 内容区（卡 padding 12 内），跟随滚动；
 // 拇指在根层渲染（kc-clip 外——picked 压暗不波及）；滚动容器 = 内容件根元素（spec 契约：单根、
 // 根即滚动容器），经组件 ref.$el 接线（scroll 监听 + ResizeObserver）；
-// 卡片尺寸变化（尺寸滑块）同步重算（2026-09-13 实机走查：文档卡内容随卡宽等比缩放，滚动量随动）
+// 卡片尺寸变化（尺寸滑块）同步重算（字号固定后 = 可见行数变化滚动量随动，2026-09-22 修订）；
+// 拇指可拖（2026-09-22 用户实机报「滚动条 100% 被拖拽排序覆盖」）：pointerdown 自停冒泡
+//（不到网格根不起卡片拖拽 / 框选），位移按可滚比例映射 scrollTop（useSideThumb 同款换算）
 const contentRef = ref<ComponentPublicInstance>();
 const thumb = reactive({ show: false, top: 12, height: 0 });
 function contentScrollEl(): HTMLElement | undefined {
@@ -96,6 +101,25 @@ function updateThumb(): void {
   thumb.height = h;
   thumb.top = 12 + (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - h);
   thumb.show = true;
+}
+/** 拇指拖拽滚动：位移 ×（可滚高 / 拇指行程）映射 scrollTop */
+function onThumbDown(e: PointerEvent): void {
+  const el = contentScrollEl();
+  if (!el) return;
+  e.stopPropagation(); // 防冒泡到网格根（起卡片拖拽 / 框选）
+  e.preventDefault();
+  const startY = e.clientY;
+  const startScroll = el.scrollTop;
+  const ratio = (el.scrollHeight - el.clientHeight) / Math.max(1, el.clientHeight - thumb.height);
+  const onMove = (ev: PointerEvent): void => {
+    el.scrollTop = startScroll + (ev.clientY - startY) * ratio;
+  };
+  const onUp = (): void => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
 }
 let textRo: ResizeObserver | undefined;
 onMounted(() => {
@@ -163,12 +187,14 @@ watch(
       v-bind="ov.props(props)"
     />
 
-    <!-- 滚动胶囊（scrollThumb 形态 = text 卡：贴右缘，hover 升五级） -->
+    <!-- 滚动胶囊（scrollThumb 形态 = text 卡：贴右缘，hover 升六级；可拖——pointerdown
+         自停冒泡防起卡片拖拽，2026-09-22 用户实机修复） -->
     <span
       v-if="spec.scrollThumb"
       v-show="thumb.show"
       class="fc-text-thumb"
       :style="{ top: `${thumb.top}px`, height: `${thumb.height}px` }"
+      @pointerdown="onThumbDown"
     />
 
     <!-- 原始文件-徽章（右下 12/12，品牌色原值） -->
@@ -180,7 +206,7 @@ watch(
 .fc-root {
   width: 100%;
   height: 100%;
-  container-type: inline-size; /* text 卡内容按卡宽 cqw 等比缩放（2026-09-13 实机走查） */
+  /* container-type 已撤（2026-09-22）：唯一消费者 = text 卡 cqw 等比缩放，字号改固定稿值后无用途 */
 }
 /* square 变体：shell 缩略图 / 自动导入未导入 = 正方形比例（稿注） */
 .fc-root.square {
