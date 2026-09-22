@@ -25,6 +25,7 @@
 //! - color：颜色提取（6.1 颜色解析：缩略图主色存 metadata.colors，详情颜色 bar 数据源；存量懒回填）
 //! - font：字体元数据与样张渲染（5.6，ttf-parser / fontdue 纯 Rust）+ 系统级安装卸载（用户级注册表）
 //! - text：文本资产读写（5.6，txt/md；读 UTF-8 优先 GBK 回退，写恒 UTF-8，2MB 上限）
+//! - docx：docx 预览文本提取（PRD 04-04 条 6，R6 首例：zip + quick-xml 段落结构，非版式渲染只读）
 //! - views：Placement 列表视图（中间面板与导入事件共用）
 //! - workspace：索引式工作空间只读底座（PRD 02 步骤 1：目录列举 + .anikit 缩略图缓存 + 监听热刷新）
 
@@ -37,6 +38,7 @@ pub mod cep_export;
 pub mod cep_install;
 pub mod color;
 pub mod custom_data;
+pub mod docx;
 pub mod font;
 pub mod frame_stream;
 pub mod import;

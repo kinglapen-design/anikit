@@ -2,11 +2,13 @@
 // kind → 渲染组件；宿主 PreviewPanel 按 preview.kind 查表分发，未注册 = 无组件型分支
 // （host 基建分支 img/video/sequence/anim 不经过此表）。
 // 新组件型格式（3D / 第三方插件）= 加 spec 文件 + registerPreviewPaneSpec 一行注册。
+// R6 首例验证（2026-09-22）：docx = docx.ts + 下方一行，本文件其余与宿主零改动。
 import type { PreviewPaneSpec } from "./types";
 import { fontPaneSpec } from "./font";
 import { textPaneSpec } from "./text";
 import { audioWavePaneSpec } from "./audioWave";
 import { otherPaneSpec } from "./other";
+import { docxPaneSpec } from "./docx";
 
 const registry = new Map<string, PreviewPaneSpec>();
 
@@ -20,11 +22,12 @@ export function previewPaneSpecFor(kind: string): PreviewPaneSpec | null {
   return registry.get(kind) ?? null;
 }
 
-// 内建四族：字体 / 文本 / 音频波形大图 / other 不支持预览立姿
+// 内建五族：字体 / 文本 / 音频波形大图 / docx 文档 / other 不支持预览立姿
 registerPreviewPaneSpec(fontPaneSpec);
 registerPreviewPaneSpec(textPaneSpec);
 registerPreviewPaneSpec(audioWavePaneSpec);
 registerPreviewPaneSpec(otherPaneSpec);
+registerPreviewPaneSpec(docxPaneSpec);
 
 export { PREVIEW_STAGE_KEY } from "./types";
 export type { PreviewPaneSpec } from "./types";

@@ -12,7 +12,7 @@ import { useContentStore } from "./content";
 import { usePreviewMediaStore } from "./previewMedia";
 import { usePreviewNotesStore } from "./previewNotes";
 import { useToastStore } from "./toast";
-import { isAudioExt, isFontExt, isSequence, isStaticImageExt, isTextExt, isVideoExt } from "../lib/formatBadge";
+import { isAudioExt, isDocxExt, isFontExt, isSequence, isStaticImageExt, isTextExt, isVideoExt } from "../lib/formatBadge";
 import { getAssetFilePath, listSequenceFrames, prepareAnimStrips, type FrameEntry } from "../lib/mediaOps";
 import { isWsPlacement } from "./ws";
 import { StreamSession, type StreamFrame } from "../lib/streamClient";
@@ -24,8 +24,9 @@ interface PlayFrame extends FrameEntry {
 }
 
 // image = 可显示图；sequence = 序列帧；anim = 动图（GIF/WEBP 动图）；audio/video = 音视频；
-// font = 字体（5.6）；text = 纯文本（5.6，txt 编辑 / md 渲染）；other = 格式图标保底
-export type PreviewKind = "image" | "sequence" | "anim" | "audio" | "video" | "font" | "text" | "other";
+// font = 字体（5.6）；text = 纯文本（5.6，txt 编辑 / md 渲染）；docx = Word 文档（R6，只读渲染）；
+// other = 格式图标保底
+export type PreviewKind = "image" | "sequence" | "anim" | "audio" | "video" | "font" | "text" | "docx" | "other";
 // 带图片源文件（psd/psb/ai/svg）：工具栏去旋转翻转、加默认应用打开
 const SOURCE_EXTS = ["psd", "psb", "ai", "svg"];
 
@@ -340,6 +341,11 @@ export const usePreviewStore = defineStore("preview", {
       // 纯文本（5.6）：txt = APP 内编辑（防抖自动保存）；md = markdown-it 只读渲染（编辑归 6.2）
       if (isTextExt(ext)) {
         this.kind = "text";
+        return;
+      }
+      // docx（R6）：后端段落结构提取，前端只读渲染（组件内自取数据，同 font/text 无需宿主配合）
+      if (isDocxExt(ext)) {
+        this.kind = "docx";
         return;
       }
       const r = await getAssetFilePath(p.assetId);

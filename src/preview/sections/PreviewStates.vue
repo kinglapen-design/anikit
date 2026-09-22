@@ -78,8 +78,8 @@ const fontTabs = [
         <div class="pv-demo-cell">
           <div class="pv-us-stage">
             <div class="pv-us-body">
-              <span class="pv-us-icon">DOCX</span>
-              <span class="pv-us-title">无限穿越-第一集.docx</span>
+              <span class="pv-us-icon">ZIP</span>
+              <span class="pv-us-title">素材打包备份.zip</span>
               <span class="pv-us-hint">暂不支持此文件格式预览，请用其他应用打开</span>
               <div class="pv-us-actions">
                 <ActionButton label="默认应用打开" variant="solid" size="md" icon="open-default" />
@@ -89,7 +89,8 @@ const fontTabs = [
           </div>
           <span class="pv-cap">
             稿：块 column gap 24 + padding-bottom 24 / 格式图标 200 / 标题 18/26 Bold 二级（含扩展名）/ 提示 13/18 三级 /
-            双钮 150×34 solid md（图标 18 三级）；本体 ws 合成项隐藏按钮组；预览环境不接真实打开命令
+            双钮 150×34 solid md（图标 18 三级）；本体 ws 合成项隐藏按钮组；预览环境不接真实打开命令；
+            样例格式 2026-09-22 由 docx 改 zip（docx 已支持预览，R6）
           </span>
         </div>
       </div>

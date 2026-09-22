@@ -45,6 +45,9 @@ const FONT_EXTS = new Set(["ttf", "otf", "ttc"]);
 /** 纯文本格式（5.6）：预览走文本页（txt = APP 内编辑，md = markdown-it 只读渲染） */
 const TEXT_EXTS = new Set(["txt", "md"]);
 
+/** docx 格式（R6 新功能验证首例，PRD 04-04 条 6）：预览走文档页（后端段落结构提取，只读渲染） */
+const DOCX_EXTS = new Set(["docx"]);
+
 /** 音频判定（5.1，PRD 05-01 MVP 口径） */
 export function isAudioExt(ext: string): boolean {
   return AUDIO_EXTS.has(ext.toLowerCase());
@@ -63,6 +66,11 @@ export function isFontExt(ext: string): boolean {
 /** 纯文本判定（5.6 预览 kind 分派：txt/md） */
 export function isTextExt(ext: string): boolean {
   return TEXT_EXTS.has(ext.toLowerCase());
+}
+
+/** docx 判定（R6 预览 kind 分派） */
+export function isDocxExt(ext: string): boolean {
+  return DOCX_EXTS.has(ext.toLowerCase());
 }
 
 /** 静态图片判定（4.4 文件夹卡片缩略图取子项同口径：排除 GIF / 序列帧 / 工程与矢量格式） */

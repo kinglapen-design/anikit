@@ -6,6 +6,7 @@ pub mod asset_menu;
 pub mod anim_stream;
 pub mod cep;
 pub mod custom_data;
+pub mod docx;
 pub mod font;
 pub mod import;
 pub mod inbox;

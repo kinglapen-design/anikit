@@ -3,9 +3,10 @@
 // anim = 阶段四帧流（PreviewStreamCanvas 渲染 canvas，占位缩略图 / 回退 img 在下层）；
 // video 把 previewMedia 的 <video> 元素挂进画面区（缩放/平移/旋转/翻转复用图片那套数学，
 // 尺寸经 loadedmetadata → onImageLoad 喂入）——以上为宿主级基建分支（缩放 / 元素挂载 / 流画布）；
-// 组件型分支（font / text / audio 波形大图 / other 不支持预览立姿）= previewSpecs 注册表按
+// 组件型分支（font / text / audio 波形大图 / docx / other 不支持预览立姿）= previewSpecs 注册表按
 // preview.kind 查表分发（2026-09-21 R5 扩展点注册表化：新组件型格式 = spec 文件 + 一行注册，
-// 本文件零改动；分支数据条件如 audio 靠 waveUrl 非 kind 由组件内 v-if 承接；均无缩放平移）。
+// 本文件零改动——R6 docx 验证落地；分支数据条件如 audio 靠 waveUrl 非 kind 由组件内 v-if 承接；
+// 均无缩放平移）。
 // 交互：滚轮缩放（瞄点跟鼠标）、左键拖动平移、双击 适合窗口⇄原图大小；
 // ←/→ 上/下一个素材；,/ . sequence/anim=上/下帧 video=逐帧步进；
 // 空格 sequence/anim/audio/video=播放暂停；Esc 退出全屏/预览。
@@ -27,16 +28,11 @@ let ro: ResizeObserver | undefined;
 provide(PREVIEW_STAGE_KEY, stageRef);
 
 const url = computed(() => (preview.filePath ? convertFileSrc(preview.filePath) : null));
-// <img> 渲染的 kind（video 走元素挂载；audio/font/text/other 等组件型分支经 previewSpecs 查表）
-const showImg = computed(
-  () =>
-    url.value &&
-    preview.kind !== "video" &&
-    preview.kind !== "audio" &&
-    preview.kind !== "font" &&
-    preview.kind !== "text" &&
-    preview.kind !== "other",
-);
+// <img> 渲染的 kind：白名单 = 宿主基建三分支 image / sequence / anim（R6 由排除式否定清单改白名单——
+// 新 kind（docx 及未来组件型格式）不再因漏加排除而错误走 <img> 分支；video 走元素挂载，
+// 其余组件型分支经 previewSpecs 查表）
+const IMG_KINDS = ["image", "sequence", "anim"];
+const showImg = computed(() => url.value && IMG_KINDS.includes(preview.kind));
 // 组件型分支查表（font / text / audio 波形 / other……；未注册 kind = null 不渲染）
 const paneComponent = computed(() => previewPaneSpecFor(preview.kind)?.component ?? null);
 

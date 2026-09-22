@@ -353,6 +353,7 @@ pub fn run() {
       commands::font::uninstall_font,
       commands::text::read_text_asset,
       commands::text::write_text_asset,
+      commands::docx::read_docx_asset,
       commands::notes::get_notes,
       commands::notes::set_note,
       commands::notes::get_note_thumb,

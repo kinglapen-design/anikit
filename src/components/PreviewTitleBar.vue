@@ -5,7 +5,7 @@
 // image/sequence/anim/video：缩放组 + 适合窗口 + 原图大小（源文件 PSD·AI·SVG 去旋转翻转、加默认应用打开；
 // anim/video 无默认应用打开——**8.1 例外：伴生代理资产（fla 预览按伴生 WebP 显示为 anim）有，
 // 本质工程文件，打开 fla 本身**）；audio：仅返回、索引、插件、新窗口打开、上/下一个；
-// font/text（5.6）：同 other 组（含默认应用打开；字体安装/卸载在字体预览「其它」页内，不占标题栏）；
+// font/text/docx（5.6/R6）：同 other 组（含默认应用打开；字体安装/卸载在字体预览「其它」页内，不占标题栏）；
 // other：返回、索引、插件、默认应用打开、新窗口打开、上/下一个。
 // window 模式（新窗口打开）：返回 + 索引替换为文件名标题，加置顶与完整窗口控制按钮（PRD 4.3）。
 import { computed } from "vue";
@@ -40,6 +40,17 @@ async function openInNewWindow(): Promise<void> {
 // 「默认应用打开」走 assetId 命令、「新窗口打开」子窗口按 assetId 链拉数据，本阶段均不下发/不开，
 // 两钮隐藏（其余按钮纯前端 / 按路径，照常）
 const isWsCurrent = computed(() => !!preview.current?.assetId.startsWith("ws:"));
+
+// 默认应用打开（R6 由 kind 排除式列举改判定式）：查看器媒体（viewable = image/sequence/anim/video）
+// 与 audio（APP 内播放完备）以外的 kind 恒有——font/text/docx/other 内容在 APP 内不可完整呈现
+// 或只读，外部打开即编辑入口；新 kind 默认获得，无需回本文件登记。
+// + 源格式（PSD 等，isSource）/ 伴生代理资产（8.1：fla 预览按伴生 WebP 显示为 anim，
+// 本质工程文件，打开 fla 本身）；ws 合成项隐藏（assetId 假 id 禁发命令）
+const showOpenDefault = computed(
+  () =>
+    ((!preview.viewable && preview.kind !== "audio") || preview.isSource || !!preview.current?.playAssetId) &&
+    !isWsCurrent.value,
+);
 
 async function togglePin(): Promise<void> {
   ui.alwaysOnTop = !ui.alwaysOnTop;
@@ -76,11 +87,10 @@ async function togglePin(): Promise<void> {
         <IconButton variant="plain" name="fit-screen" title="适合窗口" @click="preview.fit()" />
         <IconButton variant="plain" name="original-size" title="原图大小" @click="preview.actual()" />
       </template>
-      <!-- 默认应用打开：源格式（PSD 等）/ other / font / text + **伴生代理资产（8.1：fla 预览
-           按伴生 WebP 显示为 anim，但本质是工程文件——入口打开 fla 本身）**；
-           工作空间合成项隐藏（assetId 假 id 禁发命令，见 script isWsCurrent） -->
+      <!-- 默认应用打开：判定见 script showOpenDefault（非查看器媒体非 audio 的 kind 恒有 +
+           源格式 / 伴生代理资产；ws 合成项隐藏） -->
       <IconButton
-        v-if="(preview.isSource || preview.kind === 'other' || preview.kind === 'font' || preview.kind === 'text' || !!preview.current?.playAssetId) && !isWsCurrent"
+        v-if="showOpenDefault"
         variant="plain"
         name="open-default"
         title="默认应用打开"
