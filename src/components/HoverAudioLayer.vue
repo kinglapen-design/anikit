@@ -4,7 +4,8 @@
 //（WaveContent，peaks = get_audio_peaks 数据通道；进度 = 品牌色扫过 clip-path 与根数解耦），
 // 本层收窄为「播放 + seek 交互层」——透明整层 pointerdown/move/up seek（点击/拖动波形区）、
 // media 元素自管（悬停 300ms 进延迟、直读优先 + 转码兜底）；状态三通道 emit 上抛 AssetCard
-// → FileCard：playing（扫过恒显 + 胶囊图标）/ progress 0..1（扫过裁切）/ duration（胶囊时长兜底）；
+// → FileCard：playing（扫过恒显 + 胶囊图标）/ progress 0..1（扫过裁切，**rAF 逐帧**——
+// timeupdate 仅 4Hz 会一段段跳，2026-09-22 实机修订）/ duration（胶囊时长兜底）；
 // 胶囊播放钮点击经 FileCard playToggle → defineExpose togglePlay 回转。
 // 旧件退役：mask 波形图扫过 div（扫过归 WaveContent played 层）、自带 ha-capsule（胶囊归
 // FileCard overlays MediaCapsule——消除双胶囊）、1px 播放头竖线（更早废除——扫过层缘即播放头）。
@@ -27,12 +28,34 @@ const duration = ref(0);
 
 let seeking = false;
 
+// 进度汇报（2026-09-22 用户实机报「走带一段一段跳」）：timeupdate 仅约 4Hz——播放中改 rAF
+// 逐帧读 currentTime（60fps 丝滑扫过，稿 prose「丝滑的扫过」）；暂停 / 结束 / 卸载即停循环
+let rafId = 0;
+function stopProgressLoop(): void {
+  if (rafId) {
+    cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+}
+function startProgressLoop(): void {
+  stopProgressLoop();
+  const tick = (): void => {
+    const v = mediaRef.value;
+    if (v && duration.value > 0) {
+      emit("progress", Math.min(1, Math.max(0, v.currentTime / duration.value)));
+    }
+    rafId = requestAnimationFrame(tick);
+  };
+  rafId = requestAnimationFrame(tick);
+}
+
 // 悬停播放骨架（300ms 进入延迟 / 活跃实例注册 / disposed 护栏 / 卸载清理）收编 useHoverPlayer
 const { isDisposed } = useHoverPlayer({
   load: loadSource,
   pause: () => mediaRef.value?.pause(),
   resume: () => void mediaRef.value?.play().catch(() => {}),
   cleanup: () => {
+    stopProgressLoop();
     const v = mediaRef.value;
     if (v) {
       v.pause();
@@ -119,10 +142,9 @@ function onSeekUp(e: PointerEvent): void {
       ref="mediaRef"
       class="hidden-media"
       preload="auto"
-      @play="emit('playing', true)"
-      @pause="emit('playing', false)"
-      @ended="emit('playing', false)"
-      @timeupdate="emit('progress', duration > 0 ? (mediaRef?.currentTime ?? 0) / duration : 0)"
+      @play="emit('playing', true); startProgressLoop()"
+      @pause="emit('playing', false); stopProgressLoop()"
+      @ended="emit('playing', false); stopProgressLoop()"
       @loadedmetadata="duration = mediaRef?.duration || 0; emit('duration', duration)"
       @error="onSourceError"
     />
