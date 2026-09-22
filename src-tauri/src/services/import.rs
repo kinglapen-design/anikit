@@ -348,7 +348,10 @@ pub(crate) fn rename_origin(assets_dir: &Path, asset_id: &str, new_name: &str) -
   Ok(OriginRename { meta, renames })
 }
 
-/// 实体入库：Copy 复制；Move 优先 rename（同盘零拷贝），失败回退 复制+删除源（跨盘场景）
+/// 实体入库：Copy 复制；Move 优先 rename（同盘零拷贝），失败回退 复制+删除源（跨盘场景）。
+/// 落库后剥只读位（2026-09-22 用户实机报：微信/QQ 接收的 docx 常态带只读属性，
+/// Windows CopyFile / rename 均原样保留 → 库内文件默认应用打开只读无法编辑；
+/// 入库即归库管，库内写路径（txt 编辑保存 / 外部编辑器回写）不该被源属性卡住）
 pub(crate) fn store_file(src: &Path, dest: &Path, source: Source) -> Result<(), String> {
   match source {
     Source::Copy => {
@@ -361,7 +364,19 @@ pub(crate) fn store_file(src: &Path, dest: &Path, source: Source) -> Result<(), 
       }
     }
   }
+  clear_readonly(dest);
   Ok(())
+}
+
+/// 剥只读位（剥离失败不阻断导入——属性是附加状态，不是内容）
+fn clear_readonly(dest: &Path) {
+  if let Ok(meta) = fs::metadata(dest) {
+    let mut perm = meta.permissions();
+    if perm.readonly() {
+      perm.set_readonly(false);
+      let _ = fs::set_permissions(dest, perm);
+    }
+  }
 }
 
 /// 源文件磁盘创建时间（RFC3339 本地秒，与 imported_at 同格式）：读取失败 / 平台不支持为 None。
@@ -640,6 +655,26 @@ mod tests {
     let r = build_asset_with_id(&assets_dir, &pf, "sha256:x", "AN-NEW", Source::Move, None);
     assert!(r.is_err(), "源不存在应报错");
     assert!(!paths::info_dir(&assets_dir, "AN-NEW").exists(), "失败不留 info 壳");
+  }
+
+  #[test]
+  fn store_file_strips_readonly_attr() {
+    // 2026-09-22 用户实机报：源文件带只读属性（微信/QQ 接收常态），Copy/Move 入库后
+    // 库内文件仍只读 → docx 默认应用打开无法编辑。落库即剥只读位，两模式同口径
+    let dir = tempfile::tempdir().unwrap();
+    for (name, source) in [("a.docx", Source::Copy), ("b.docx", Source::Move)] {
+      let src = dir.path().join(name);
+      fs::write(&src, b"x").unwrap();
+      let mut perm = fs::metadata(&src).unwrap().permissions();
+      perm.set_readonly(true);
+      fs::set_permissions(&src, perm).unwrap();
+      let dest = dir.path().join(format!("in-{name}"));
+      store_file(&src, &dest, source).unwrap();
+      assert!(
+        !fs::metadata(&dest).unwrap().permissions().readonly(),
+        "{source:?} 入库后应剥只读位"
+      );
+    }
   }
 
   #[test]
