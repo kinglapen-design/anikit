@@ -7,7 +7,7 @@ import type { CardContentSpec } from "./types";
 
 export const fontContentSpec: CardContentSpec = {
   content: FontContent,
-  contentProps: (p) => ({ fontLines: p.fontLines }),
+  contentProps: (p) => ({ fontLines: p.fontLines, fontFamily: p.fontFamily }),
   overlays: [
     { comp: FontInstallButton, props: (p) => ({ class: "fc-install", selected: p.installed }) },
   ],

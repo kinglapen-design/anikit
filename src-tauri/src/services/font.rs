@@ -45,6 +45,9 @@ pub struct FontMeta {
   pub version: String,
   /// 字数（maxp num_glyphs）
   pub glyph_count: u32,
+  /// cmap 是否覆盖中文（'永' U+6C38）——卡片示例字分流用（2026-09-22 R6 font 接线：
+  /// 中文 → 四行「永和九年…」，否则拉丁三行；与样张字样口径同源）
+  pub has_cjk: bool,
 }
 
 /// 解析字体元数据；非字体 / 解析失败返回 None（能力探测语义，由缩略图管线回退格式图标）
@@ -69,6 +72,7 @@ pub fn probe_font(path: &Path) -> Option<FontMeta> {
     style: pick(&[17, 2]),
     version: pick(&[5]),
     glyph_count: u32::from(face.number_of_glyphs()),
+    has_cjk: has_cjk(&face),
   })
 }
 

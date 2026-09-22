@@ -20,6 +20,11 @@
 // 状态三通道（playing / progress / duration）回传本壳 → FileCard：扫过 = WaveContent 品牌色
 // clip-path（与根数解耦）、胶囊 = overlays MediaCapsule（播放钮 playToggle → 层 togglePlay）；
 // ws 合成项降级 general（peaks / 播放源均走 assetId 命令，假 id 禁发）。
+// 字体卡（2026-09-22 R6 三变体接线 · font 变体，稿 = 文件卡片-字体）：内容区 = 示例字块以
+// 该字体真渲染（cardFontFor 懒加载 = fontInfo + FontFace 注册家族名；示例字按 hasCjk 分流——
+// 中文四行 / 拉丁三行，与后端样张字样口径同源）；简介行 = 字重 style；右上 FontInstallButton
+//（installed 态；点击 installToggle → install/uninstall_font + toast，同预览面板口径）；
+// ws 合成项降级 general。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
@@ -30,10 +35,13 @@ import { dragView } from "../lib/dragOperation";
 import { hoverLayerSpecFor } from "../lib/cardSpecs";
 import { cardTextFor, isTextCard } from "../lib/cardText";
 import { cardPeaksFor } from "../lib/cardPeaks";
+import { cardFontFor, cardFontSetInstalled, type CardFont } from "../lib/cardFonts";
+import { installFont, uninstallFont } from "../lib/fontOps";
 import {
   displayName as assetDisplayName,
   formatBadgeColor,
   isAudioExt,
+  isFontExt,
   isSequence,
   isVideoExt,
 } from "../lib/formatBadge";
@@ -138,6 +146,46 @@ const audioCapsule = computed(() =>
 // 胶囊播放钮（FileCard playToggle 上抛）→ 悬停层 togglePlay 回转
 function onPlayToggle(): void {
   if (audioCardActive.value) hoverLayerInst.value?.togglePlay?.();
+}
+// —— 字体卡（R6 三变体接线 · font 变体）：示例字以该字体真渲染（FontFace 会话级常驻注册）——
+// 示例字分流（稿注「日/韩环境更换」的字体维度落地）：cmap 覆盖中文 → 中文四行（稿值），
+// 否则拉丁三行（与后端样张字样同口径）；系统语言维度（日韩替换文本）稿未给内容仍待供稿
+const FONT_LINES_CJK = ["永和九年", "岁在癸丑", "AaBaCcDd", "01234567"];
+const FONT_LINES_LATIN = ["ABCDEFG", "abcdefg", "0123456"];
+const fontCardActive = computed(() => isFontExt(props.asset.ext.toLowerCase()) && !isWs.value);
+const cardFont = ref<CardFont | null>(null);
+watch(
+  [() => props.asset.assetId, () => props.asset.modifiedAt, fontCardActive],
+  async ([id, , active]) => {
+    if (!active) {
+      cardFont.value = null;
+      return;
+    }
+    const font = await cardFontFor(props.asset);
+    if (props.asset.assetId !== id) return; // await 期间卡片已被虚拟滚动复用到别的资产
+    cardFont.value = font;
+  },
+  { immediate: true },
+);
+const fontLines = computed(() => (cardFont.value?.info.hasCjk ? FONT_LINES_CJK : FONT_LINES_LATIN));
+const fontBusy = ref(false); // 安装 / 卸载在途（同 PreviewFont 口径）
+// 字体安装钮（FileCard installToggle 上抛）→ install/uninstall_font + 缓存写回 + toast
+async function onInstallToggle(): Promise<void> {
+  const font = cardFont.value;
+  if (!fontCardActive.value || !font || fontBusy.value) return;
+  fontBusy.value = true;
+  const id = props.asset.assetId;
+  try {
+    const r = font.info.installed ? await uninstallFont(id) : await installFont(id);
+    if (props.asset.assetId !== id) return;
+    cardFont.value = { ...font, info: { ...font.info, installed: r.installed } };
+    cardFontSetInstalled(id, r.installed);
+    useToastStore().notify({ message: r.installed ? "已安装到系统" : "已从系统卸载", icon: "success" });
+  } catch (e) {
+    useToastStore().notify({ message: String(e), icon: "fail" });
+  } finally {
+    fontBusy.value = false;
+  }
 }
 // 拖拽期间全局禁用悬停层（2026-07-29 复验二轮 5，JS 闸）：拖拽激活时视同未悬停——
 // 播放层 v-if 条件即刻转假，走既有退出路径（卸载停播 / 动图还原封面 / 序列帧停轮播）
@@ -281,6 +329,12 @@ function onPopoverHover(inside: boolean): void {
 }
 onBeforeUnmount(() => window.clearTimeout(linkListCloseTimer));
 const displayName = computed(() => assetDisplayName(props.asset, ui.showExt));
+// 简介行：字体卡 = 字重 style（稿「Light」；未载完 / 无样式名回退通用档），其余按查看方式档
+const cardInfo = computed(() => {
+  if (!ui.showBrief) return "";
+  if (fontCardActive.value) return cardFont.value?.info.style || meta.value;
+  return meta.value;
+});
 // 简介行内容按查看方式「显示简介」下拉分流（2026-08-19 接入）：
 // 尺寸 = 音视频时长（mm:ss，5.1）/ 动图与其他按 w×h；
 // 空值兜底（2026-08-19 用户定）：档内无数据一律回退文件大小（恒有）
@@ -313,9 +367,9 @@ const meta = computed(() => {
     <!-- 视觉芯 = cards/FileCard（general 壳：图满铺 + 渐变罩名称/简介 + 格式角标统一铬）；
          悬停播放层注入默认插槽（缩略图上、渐变罩下）；video/audio 的悬停胶囊 UI 换代留播放层组件内 -->
     <FileCard
-      :kind="textCardActive ? 'text' : audioCardActive ? 'audio' : 'general'"
+      :kind="textCardActive ? 'text' : audioCardActive ? 'audio' : fontCardActive ? 'font' : 'general'"
       :name="displayName"
-      :info="ui.showBrief ? meta : ''"
+      :info="cardInfo"
       :badge="showFormatBadge ? badge : ''"
       :thumb-url="thumbUrl ?? ''"
       :thumb-fit="asset.thumbKind === 'formatIcon' ? 'icon' : ui.layoutMode === 'grid' ? 'contain' : 'cover'"
@@ -325,6 +379,9 @@ const meta = computed(() => {
       :capsule-text="audioCardActive ? audioCapsule : ''"
       :playing="audioCardActive && audioPlaying"
       :progress="audioCardActive ? audioProgress : 0"
+      :font-lines="fontCardActive ? fontLines : []"
+      :font-family="fontCardActive ? (cardFont?.family ?? '') : ''"
+      :installed="fontCardActive && (cardFont?.info.installed ?? false)"
       :selected="selected"
       :naming="renaming"
       :picked="picked"
@@ -332,6 +389,7 @@ const meta = computed(() => {
       @name-commit="onRenameCommit"
       @name-cancel="onRenameCancel"
       @play-toggle="onPlayToggle"
+      @install-toggle="onInstallToggle"
     >
       <!-- 悬停播放层 = cardSpecs 查表分发（R5 注册表化，等价原四分支链）：
            autoplay 档（video / anim / sequence）挂 animPlaying 并传 auto=!hoverActive；

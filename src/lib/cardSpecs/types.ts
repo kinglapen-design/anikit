@@ -33,6 +33,7 @@ export interface FileCardProps {
   progress?: number; // 0..1：video 播放条 / audio 波形扫过
   peaks?: number[]; // audio 波形（0..1 归一化）
   fontLines?: string[]; // font 示例字
+  fontFamily?: string; // font 卡片 FontFace 注册家族名（未就绪 / 加载失败 = 缺省系统字体渲染）
   installed?: boolean; // font 安装钮选中
   textTitle?: string; // text 卡内标题
   textBody?: string; // text 卡正文

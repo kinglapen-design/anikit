@@ -30,6 +30,9 @@ pub struct FontInfo {
   pub glyph_count: u32,
   /// 是否已装到系统（用户级注册表）
   pub installed: bool,
+  /// cmap 是否覆盖中文（'永' U+6C38）——字体卡片示例字分流（2026-09-22 R6 font 接线）：
+  /// true → 中文四行「永和九年 / 岁在癸丑 / AaBaCcDd / 01234567」，false → 拉丁三行
+  pub has_cjk: bool,
 }
 
 /// 安装 / 卸载结果（前端切换按钮态）
@@ -61,6 +64,7 @@ pub async fn get_font_info(state: State<'_, AppState>, asset_id: String) -> Resu
     version: fm.version,
     glyph_count: fm.glyph_count,
     installed,
+    has_cjk: fm.has_cjk,
   })
 }
 

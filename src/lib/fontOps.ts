@@ -12,6 +12,8 @@ export interface FontInfo {
   version: string;
   glyphCount: number;
   installed: boolean;
+  /** cmap 覆盖中文（'永' U+6C38）——卡片示例字分流（2026-09-22 R6 font 接线）：中文四行 / 拉丁三行 */
+  hasCjk: boolean;
 }
 
 // install_font / uninstall_font 返回（按钮态切换）

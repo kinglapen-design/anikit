@@ -21,7 +21,7 @@ const emit = defineEmits<{ playToggle: [] }>();
 </script>
 
 <template>
-  <div class="kc-float fc-capsule" @pointerdown.stop>
+  <div class="kc-float fc-capsule" @pointerdown.stop @click.stop>
     <span v-if="capsuleText" class="kc-info fc-capsule-text">{{ capsuleText }}</span>
     <button
       class="fc-capsule-btn fc-capsule-icon"
