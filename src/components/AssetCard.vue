@@ -11,7 +11,9 @@
 //（新稿卡即图满铺，旧仅缩略图区；渐变罩层在播放层之上、pointer-events 穿透——2026-09-08 修复：
 // 罩区吃 pointermove 致 scrub 丢跟随，仅名称文本行恢复交互不 scrub，v-tip / 双击重命名保留）；
 // 笔记角标保持旧视觉旧位（右上 4——与悬停胶囊 12 位的关系稿未画，记 09 待办）。
-// 图片类无悬停控件（2026-08-10 用户定）；查看方式"自动播放动图（含序列帧）/ 自动播放视频"开关不变。
+// 文本卡（2026-09-22 R6 三变体接线 · text 变体，稿 = 文件卡片-txt-md）：txt / md / docx 内容区 =
+// 词干标题 + 正文滚动预览（cardTextFor 懒加载，modifiedAt 版本戳自动失效）；ws 合成项降级 general
+//（assetId 假 id 禁发命令）。图片类无悬停控件（2026-08-10 用户定）；查看方式"自动播放动图（含序列帧）/ 自动播放视频"开关不变。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
@@ -20,6 +22,7 @@ import LinkListPopover from "./LinkListPopover.vue";
 import { type Box } from "../lib/layouts";
 import { dragView } from "../lib/dragOperation";
 import { hoverLayerSpecFor } from "../lib/cardSpecs";
+import { cardTextFor, isTextCard } from "../lib/cardText";
 import {
   displayName as assetDisplayName,
   formatBadgeColor,
@@ -81,6 +84,25 @@ const hovered = ref(false);
 // 工作空间磁盘实况项（PRD 02 步骤 1，assetId = ws: 合成假 id）：悬停播放层（视频/音频/序列帧/动图）
 // 全走 assetId 类命令——本阶段禁用（不挂载即静默无操作，不许报错）；自动播放同样不申请名额
 const isWs = computed(() => props.asset.assetId.startsWith("ws:"));
+
+// —— 文本卡（R6 三变体接线 · text 变体）：txt / md / docx 内容区 = 词干标题 + 正文滚动预览 ——
+const textCardActive = computed(() => isTextCard(props.asset) && !isWs.value);
+const textBody = ref("");
+const textTitle = computed(() => props.asset.name.replace(/\.[^.]+$/, ""));
+// 懒拉正文（虚拟滚动渲染即视口内）；modifiedAt 随 watch 源变化 → 编辑保存后自动重拉
+watch(
+  [() => props.asset.assetId, () => props.asset.modifiedAt, textCardActive],
+  async ([id, , active]) => {
+    if (!active) {
+      textBody.value = "";
+      return;
+    }
+    const text = await cardTextFor(props.asset);
+    if (props.asset.assetId !== id) return; // await 期间卡片已被虚拟滚动复用到别的资产
+    textBody.value = text;
+  },
+  { immediate: true },
+);
 // 拖拽期间全局禁用悬停层（2026-07-29 复验二轮 5，JS 闸）：拖拽激活时视同未悬停——
 // 播放层 v-if 条件即刻转假，走既有退出路径（卸载停播 / 动图还原封面 / 序列帧停轮播）
 const hoverActive = computed(() => hovered.value && !dragView.active);
@@ -248,11 +270,14 @@ const meta = computed(() => {
     <!-- 视觉芯 = cards/FileCard（general 壳：图满铺 + 渐变罩名称/简介 + 格式角标统一铬）；
          悬停播放层注入默认插槽（缩略图上、渐变罩下）；video/audio 的悬停胶囊 UI 换代留播放层组件内 -->
     <FileCard
+      :kind="textCardActive ? 'text' : 'general'"
       :name="displayName"
       :info="ui.showBrief ? meta : ''"
       :badge="showFormatBadge ? badge : ''"
       :thumb-url="thumbUrl ?? ''"
       :thumb-fit="asset.thumbKind === 'formatIcon' ? 'icon' : ui.layoutMode === 'grid' ? 'contain' : 'cover'"
+      :text-title="textCardActive ? textTitle : ''"
+      :text-body="textCardActive ? textBody : ''"
       :selected="selected"
       :naming="renaming"
       :picked="picked"
