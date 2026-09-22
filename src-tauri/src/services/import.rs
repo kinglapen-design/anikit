@@ -576,6 +576,14 @@ pub(crate) fn sha256_file(path: &Path) -> std::io::Result<String> {
   Ok(format!("sha256:{:x}", hasher.finalize()))
 }
 
+/// 内存内容 sha256（与 sha256_file 同输出格式）：APP 内编辑保存等内存已有全量的场景
+///（write_text_asset 保存后回写 hash——内容指纹必须跟上内容，2026-09-22 用户指出）
+pub(crate) fn sha256_bytes(bytes: &[u8]) -> String {
+  let mut hasher = Sha256::new();
+  hasher.update(bytes);
+  format!("sha256:{:x}", hasher.finalize())
+}
+
 /// 生成文件夹 ID：`F` + 时间戳（yyMMddHHmm，时间有序）+ 3 位随机字符（防同秒冲突）。
 /// 参照 new_asset_id 风格；假数据里的 F01/F02 是人工示例，实际生成用此规则。
 pub(crate) fn new_folder_id() -> String {

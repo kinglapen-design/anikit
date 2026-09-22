@@ -1,6 +1,7 @@
 //! 命令 API：文本资产（5.6）。read_text_asset = txt/md 预览读取（编码回退见 services/text）；
 //! write_text_asset = APP 内编辑保存（防抖自动落盘，2026-08-23 用户定）——origin 文本文件新写点，
-//! 保存后同步 metadata.size / modifiedAt（先落盘再同步内存索引，规范第 7 条）；
+//! 保存后同步 metadata.size / modifiedAt / hash（先落盘再同步内存索引，规范第 7 条；
+//! hash 回写 = 内容指纹跟上内容，2026-09-22 用户指出漂移隐患）；
 //! modifiedAt 随结果返回（前端同步 PlacementView）。编辑不进 undo（库操作撤销体系不覆盖内容编辑）。
 
 use serde::Serialize;
@@ -10,6 +11,7 @@ use crate::commands::library::AppState;
 use crate::commands::preview::locate_asset;
 use crate::core::json_io::write_json;
 use crate::core::library::Library;
+use crate::services::import;
 use crate::services::text;
 
 /// 文本内容
@@ -53,9 +55,11 @@ pub async fn write_text_asset(
   write_text(lib, &asset_id, &content)
 }
 
-/// 保存文本内容：覆写 origin（恒 UTF-8 无 BOM）→ metadata.size / modifiedAt 落盘 → 同步索引。
+/// 保存文本内容：覆写 origin（恒 UTF-8 无 BOM）→ metadata.size / modifiedAt / **hash** 落盘 → 同步索引。
 /// pub(crate)：server/mcp（AI 外接通道二期写工具 write_text_asset）同用；
-/// 不进 undo（库操作撤销体系不覆盖内容编辑，2026-08-23 定——MCP 工具描述同口径告知 Agent）
+/// 不进 undo（库操作撤销体系不覆盖内容编辑，2026-08-23 定——MCP 工具描述同口径告知 Agent）。
+/// hash 回写（2026-09-22 用户指出「内容变了账面照旧」隐患）：内容是编辑动作改的，
+/// 内容指纹必须同笔跟上——否则后续导入旧版撞旧 hash 误报「内容相同」，扫重也会把不同内容并一组
 pub(crate) fn write_text(lib: &mut Library, asset_id: &str, content: &str) -> Result<WriteTextResult, String> {
   let (info_dir, origin, meta) = locate_asset(lib, asset_id)?;
   if !text::is_text(&origin) {
@@ -68,6 +72,7 @@ pub(crate) fn write_text(lib: &mut Library, asset_id: &str, content: &str) -> Re
   let mut meta = meta;
   meta.size = content.len() as u64;
   meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
+  meta.hash = import::sha256_bytes(content.as_bytes());
   let modified_at = meta.modified_at.clone();
   let size = meta.size;
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
@@ -124,6 +129,12 @@ mod tests {
     assert_eq!(disk.size, r.size);
     assert_eq!(disk.modified_at, r.modified_at);
     assert_eq!(h.lib.index.assets["AN-TXT"].size, r.size);
+
+    // hash 回写（2026-09-22）：内容指纹跟上内容——导入时旧 hash，保存后 = 新内容 hash
+    let expect_hash = import::sha256_bytes("新内容 🎬 第二行".as_bytes());
+    assert_ne!(before.hash, expect_hash, "前置：编辑前后内容不同 hash 应不同");
+    assert_eq!(disk.hash, expect_hash);
+    assert_eq!(h.lib.index.assets["AN-TXT"].hash, expect_hash);
 
     // 写后读回一致
     assert_eq!(text::read_text(&origin).unwrap(), "新内容 🎬 第二行");
