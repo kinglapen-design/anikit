@@ -1,35 +1,29 @@
 <script setup lang="ts">
 // 音频卡片悬停播放层（5.3，2026-07-27 用户定案，参考图 2）：无悬停按钮，悬停即有声播放。
-// 卡片缩略图即波形图（5.1），播放时叠加：已播放部分品牌紫（div 以同一波形图作 CSS mask +
-// clip-path 裁到进度，照播放条波形方案——现 = bars/WaveProgress，2026-09-09 接入轮）；点击/拖动波形 seek；
-// 右上胶囊（7.1 内容容器轮换代，稿 = 组件/卡片/文件卡片-音频 悬停胶囊）= 时长 + 播放/暂停
-//（kc-float 铬 + card-hover-* 图标 14）；新稿扫过层无 1px 播放头竖线（旧口径废除——
-// 扫过层缘即播放头）；peaks 竖线波形如稿待后端数据通道（09 待办，本轮沿用 mask 波形图方案）。
-// media 元素组件自管。
-import { computed, ref } from "vue";
+// 2026-09-22 R6 audio 变体接线收窄：卡片内容区已换 FileCard kind="audio" 竖线波形
+//（WaveContent，peaks = get_audio_peaks 数据通道；进度 = 品牌色扫过 clip-path 与根数解耦），
+// 本层收窄为「播放 + seek 交互层」——透明整层 pointerdown/move/up seek（点击/拖动波形区）、
+// media 元素自管（悬停 300ms 进延迟、直读优先 + 转码兜底）；状态三通道 emit 上抛 AssetCard
+// → FileCard：playing（扫过恒显 + 胶囊图标）/ progress 0..1（扫过裁切）/ duration（胶囊时长兜底）；
+// 胶囊播放钮点击经 FileCard playToggle → defineExpose togglePlay 回转。
+// 旧件退役：mask 波形图扫过 div（扫过归 WaveContent played 层）、自带 ha-capsule（胶囊归
+// FileCard overlays MediaCapsule——消除双胶囊）、1px 播放头竖线（更早废除——扫过层缘即播放头）。
+import { ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import AppIcon from "./AppIcon.vue";
-import { formatDuration } from "../lib/formatDuration";
 import { getMediaSource } from "../lib/mediaOps";
 import { useHoverPlayer } from "../lib/useHoverPlayer";
-import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
-import "./cards/cards.css";
 
 const props = defineProps<{ asset: PlacementView }>();
-const ui = useUiStore();
+const emit = defineEmits<{
+  playing: [value: boolean]; // 播放 ↔ 暂停/结束
+  progress: [value: number]; // 0..1 播放进度（WaveContent 扫过裁切）
+  duration: [value: number]; // 秒（media 元数据；胶囊时长 asset.duration 兜底）
+}>();
 
 const layerRef = ref<HTMLElement>();
 const mediaRef = ref<HTMLVideoElement>(); // 音频复用 video 元素（同 previewMedia 手法）
-const playing = ref(false);
-const currentTime = ref(0);
 const duration = ref(0);
-
-const waveUrl = computed(() => (props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null));
-const waveMask = computed(() => (waveUrl.value ? { "--wave-url": `url("${waveUrl.value}")` } : {}));
-const pct = computed(() =>
-  duration.value > 0 ? Math.min(100, Math.max(0, (currentTime.value / duration.value) * 100)) : 0,
-);
 
 let seeking = false;
 
@@ -85,13 +79,15 @@ function togglePlay(): void {
   if (v.paused) void v.play().catch(() => {});
   else v.pause();
 }
+defineExpose({ togglePlay }); // 胶囊播放钮：FileCard playToggle → AssetCard 回转本层
+
 function seek(e: PointerEvent): void {
   const v = mediaRef.value;
   if (!v || duration.value <= 0) return;
   const rect = layerRef.value!.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   v.currentTime = ratio * duration.value;
-  currentTime.value = v.currentTime;
+  emit("progress", ratio); // 拖动直发（timeupdate 频率低不跟手）
 }
 function onSeekDown(e: PointerEvent): void {
   seeking = true;
@@ -123,32 +119,18 @@ function onSeekUp(e: PointerEvent): void {
       ref="mediaRef"
       class="hidden-media"
       preload="auto"
-      @play="playing = true"
-      @pause="playing = false"
-      @ended="playing = false"
-      @timeupdate="currentTime = mediaRef?.currentTime ?? 0"
-      @loadedmetadata="duration = mediaRef?.duration || 0"
+      @play="emit('playing', true)"
+      @pause="emit('playing', false)"
+      @ended="emit('playing', false)"
+      @timeupdate="emit('progress', duration > 0 ? (mediaRef?.currentTime ?? 0) / duration : 0)"
+      @loadedmetadata="duration = mediaRef?.duration || 0; emit('duration', duration)"
       @error="onSourceError"
     />
-    <!-- 已播放高亮：同一波形图作 mask（alpha 通道），品牌紫实底，clip-path 裁到进度；
-         mask-size 与卡片 img 的 object-fit 同口径（grid contain / 其他 cover） -->
-    <div
-      v-if="waveUrl"
-      class="played"
-      :class="{ contain: ui.layoutMode === 'grid' }"
-      :style="[waveMask, { clipPath: `inset(0 ${100 - pct}% 0 0)` }]"
-    />
-    <!-- 右上胶囊（7.1 换代贴稿）：时长 + 播放/暂停；不触发 seek；z 4 在渐变罩之上 -->
-    <div class="kc-float ha-capsule" @pointerdown.stop @pointermove.stop @pointerup.stop>
-      <span class="ha-pos">{{ formatDuration(asset.duration ?? duration) }}</span>
-      <button class="ha-btn" v-tip="playing ? '暂停' : '播放'" @click.stop="togglePlay">
-        <AppIcon :name="playing ? 'card-hover-pause' : 'card-hover-play'" :size="14" />
-      </button>
-    </div>
   </div>
 </template>
 
 <style scoped>
+/* 透明 seek 交互层：整卡波形区可点/可拖；视觉（竖线波形 / 扫过 / 胶囊）全归 FileCard audio 变体 */
 .hover-audio {
   position: absolute;
   inset: 0;
@@ -156,53 +138,5 @@ function onSeekUp(e: PointerEvent): void {
 }
 .hidden-media {
   display: none;
-}
-.played {
-  position: absolute;
-  inset: 0;
-  background: var(--n-brand);
-  -webkit-mask-image: var(--wave-url);
-  mask-image: var(--wave-url);
-  -webkit-mask-size: cover;
-  mask-size: cover;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  pointer-events: none;
-}
-.played.contain {
-  -webkit-mask-size: contain;
-  mask-size: contain;
-}
-/* 右上胶囊（7.1 换代贴稿 = 文件卡片-音频 悬停胶囊）：kc-float 铬；z 4 在渐变罩（z 1）之上；
-   旧右下胶囊（base.css .capsule）与 1px 播放头竖线口径废除 */
-.ha-capsule {
-  position: absolute;
-  right: var(--n-space-12);
-  top: var(--n-space-12);
-  z-index: 4;
-  gap: var(--n-space-6);
-}
-/* 时长：数字档 12/16 二级 */
-.ha-pos {
-  font-family: var(--n-font-mono);
-  font-size: var(--n-fs-num);
-  line-height: var(--n-lh-num);
-  font-weight: var(--n-fw-medium);
-  color: var(--n-l2);
-}
-/* 胶囊图标钮：常态 二级，自身 hover 提亮 一级（稿「hover-播放/音量按钮」节），150ms */
-.ha-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: var(--n-l2);
-  cursor: pointer;
-  transition: color var(--n-dur-150) var(--n-ease-in-out);
-}
-.ha-btn:hover {
-  color: var(--n-l1);
 }
 </style>

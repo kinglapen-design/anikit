@@ -39,7 +39,8 @@ const demoShell = svgUri(
     `<rect x="32" y="54" width="20" height="4" rx="2" fill="#242424"/>` +
     `</svg>`,
 );
-// 音频演示波形（47 根 = 稿 376 区 / 节距 8；根数恒定，美观优先）
+// 音频演示波形（400 稿宽 → 内容区 376 / 节距 8 = 47 根；生产 = get_audio_peaks 恒定 128 根
+// 按卡宽 max 池化重采样——根数不随时长（稿 prose 美观优先），此处桩 47 根恰与稿图同数）
 const demoPeaks = Array.from({ length: 47 }, (_, i) => 0.2 + 0.72 * Math.abs(Math.sin(i * 1.7)));
 // txt-md 演示正文（溢出出滚动胶囊）
 const demoText = `@图片1 是故事发生的场景，金属怪人的巢穴场景，空间巨大，可轻松容纳百米高的金属怪人，中间有圆形的巨大深坑。
@@ -157,7 +158,7 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">文件卡片-音频（400×200，进度 = 品牌色波形扫过，与根数解耦）</h3>
+      <h3 class="pv-group-title">文件卡片-音频（400×200，进度 = 品牌色波形扫过，与根数解耦；根数按卡宽节距 8 定，已生产接线 get_audio_peaks）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div style="width: 400px; height: 200px">

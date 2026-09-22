@@ -222,6 +222,42 @@ fn draw_channel(img: &mut RgbaImage, samples: &[f32], max_abs: f32, top_half: bo
   }
 }
 
+// ---------- 卡片 peaks（2026-09-22 R6 卡片三变体接线 · audio 变体，稿 = 组件/卡片/文件卡片-音频） ----------
+
+/// 卡片波形 peaks 根数（恒定不随时长——稿 prose「不论是 5 秒音频还是 3 分钟音频都保证根数一致，
+/// 美观第一位」；前端按卡宽节距 8px（4 线 + 4 距）max 池化重采样，128 根铺满约 1m 宽卡）
+pub const CARD_PEAKS: usize = 128;
+
+/// 音频卡片波形 peaks（0..1 归一化）：mono 混音 PCM 均分 n 桶取 max abs 联合归一
+/// （不分声道——稿 prose「不用分析上下立体声差异」）；非音频 / 解码失败 None（能力探测语义同缩略图）
+pub fn audio_peaks(path: &Path, n: usize) -> Option<Vec<f32>> {
+  if !is_audio(path) {
+    return None;
+  }
+  let pcm = ffmpeg::audio_pcm_f32(path, PCM_RATE, 1)?;
+  Some(peaks_from_pcm(&pcm, n))
+}
+
+/// PCM → n 桶 max-abs 归一化 peaks；空样本 / n=0 → 空；全静音 → 全 0（前端最低高度档兜显细线）
+fn peaks_from_pcm(samples: &[f32], n: usize) -> Vec<f32> {
+  if n == 0 || samples.is_empty() {
+    return Vec::new();
+  }
+  let max_abs = samples.iter().fold(0f32, |m, s| m.max(s.abs()));
+  if max_abs <= 0.0 {
+    return vec![0.0; n];
+  }
+  let step = samples.len() as f32 / n as f32;
+  (0..n)
+    .map(|i| {
+      let s0 = (i as f32 * step) as usize;
+      let s1 = (((i + 1) as f32 * step) as usize).max(s0 + 1).min(samples.len());
+      let peak = samples[s0..s1].iter().fold(0f32, |m, s| m.max(s.abs()));
+      peak / max_abs
+    })
+    .collect()
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -302,11 +338,34 @@ mod tests {
   }
 
   #[test]
+  fn peaks_from_pcm_bucket_max_normalized() {
+    // 桶 max-abs 联合归一：全局峰值所在桶 = 1.0，根数恒定不随时长（稿 prose）
+    let mut samples = vec![0.0f32; 8000];
+    samples[1000..2000].fill(0.5); // 第 2 桶（1/8 处）稳态 0.5
+    samples[7000] = -1.0; // 末桶孤立尖峰（负峰也取 abs）
+    let peaks = peaks_from_pcm(&samples, 8);
+    assert_eq!(peaks.len(), 8);
+    assert!((peaks[1] - 0.5).abs() < 1e-6, "{:?}", peaks);
+    assert_eq!(peaks[7], 1.0, "孤立尖峰满度保持辨识度");
+    assert_eq!(peaks[0], 0.0, "静音桶为 0（前端最低高度档兜显细线）");
+    // 短音频（样本不足 n）：每桶至少 1 样本不 panic，根数仍恒定；全局峰 0.75 落在末两桶 = 1.0
+    let short = peaks_from_pcm(&[0.25, -0.5, 0.75], 8);
+    assert_eq!(short.len(), 8);
+    assert_eq!(short[7], 1.0, "{:?}", short);
+    assert!((short[0] - 0.25 / 0.75).abs() < 1e-6, "{:?}", short);
+    // 全静音 → 全 0；空样本 / n=0 → 空
+    assert_eq!(peaks_from_pcm(&vec![0.0; 100], 8), vec![0.0; 8]);
+    assert!(peaks_from_pcm(&[], 8).is_empty());
+    assert!(peaks_from_pcm(&[1.0], 0).is_empty());
+  }
+
+  #[test]
   fn ext_gates_prevent_spawning_sidecar() {
     // 非音视频扩展名直接 None（不启动 ffprobe）
     let txt = std::path::Path::new("文档.txt");
     assert_eq!(probe_video(txt), None);
     assert_eq!(probe_audio(txt), None);
+    assert!(audio_peaks(txt, CARD_PEAKS).is_none());
     assert!(decode_preview_image(txt).is_none());
   }
 

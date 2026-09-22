@@ -348,6 +348,7 @@ pub fn run() {
       commands::media::get_media_source,
       commands::media::get_media_source_by_path,
       commands::media::get_waveform,
+      commands::media::get_audio_peaks,
       commands::font::get_font_info,
       commands::font::install_font,
       commands::font::uninstall_font,

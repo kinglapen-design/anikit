@@ -14,6 +14,12 @@
 // 文本卡（2026-09-22 R6 三变体接线 · text 变体，稿 = 文件卡片-txt-md）：txt / md / docx 内容区 =
 // 词干标题 + 正文滚动预览（cardTextFor 懒加载，modifiedAt 版本戳自动失效）；ws 合成项降级 general
 //（assetId 假 id 禁发命令）。图片类无悬停控件（2026-08-10 用户定）；查看方式"自动播放动图（含序列帧）/ 自动播放视频"开关不变。
+// 音频卡（2026-09-22 R6 三变体接线 · audio 变体，稿 = 文件卡片-音频）：内容区换 FileCard
+// kind="audio" 竖线波形（peaks = cardPeaksFor 懒加载 ← get_audio_peaks；旧 PNG 波形缩略图
+// 退出卡片层，预览播放条 / 冲突弹窗沿用）——悬停层 HoverAudioLayer 收窄为播放+seek 交互层，
+// 状态三通道（playing / progress / duration）回传本壳 → FileCard：扫过 = WaveContent 品牌色
+// clip-path（与根数解耦）、胶囊 = overlays MediaCapsule（播放钮 playToggle → 层 togglePlay）；
+// ws 合成项降级 general（peaks / 播放源均走 assetId 命令，假 id 禁发）。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
@@ -23,6 +29,7 @@ import { type Box } from "../lib/layouts";
 import { dragView } from "../lib/dragOperation";
 import { hoverLayerSpecFor } from "../lib/cardSpecs";
 import { cardTextFor, isTextCard } from "../lib/cardText";
+import { cardPeaksFor } from "../lib/cardPeaks";
 import {
   displayName as assetDisplayName,
   formatBadgeColor,
@@ -103,9 +110,45 @@ watch(
   },
   { immediate: true },
 );
+// —— 音频卡（R6 三变体接线 · audio 变体）：内容区 = 竖线波形（peaks 懒加载，口径仿文本卡）——
+const audioCardActive = computed(() => kind.value === "audio" && !isWs.value);
+const audioPeaks = ref<number[]>([]);
+watch(
+  [() => props.asset.assetId, () => props.asset.modifiedAt, audioCardActive],
+  async ([id, , active]) => {
+    if (!active) {
+      audioPeaks.value = [];
+      return;
+    }
+    const peaks = await cardPeaksFor(props.asset);
+    if (props.asset.assetId !== id) return; // await 期间卡片已被虚拟滚动复用到别的资产
+    audioPeaks.value = peaks;
+  },
+  { immediate: true },
+);
+// 悬停播放层状态回传（HoverAudioLayer → FileCard）：playing = 扫过恒显 + 胶囊图标；
+// progress 0..1 = 扫过裁切；duration = 胶囊时长兜底（asset.duration 缺时）
+const audioPlaying = ref(false);
+const audioProgress = ref(0);
+const audioDuration = ref(0);
+const hoverLayerInst = ref<{ togglePlay?: () => void }>();
+const audioCapsule = computed(() =>
+  formatDuration(props.asset.duration ?? (audioDuration.value > 0 ? audioDuration.value : 0)),
+);
+// 胶囊播放钮（FileCard playToggle 上抛）→ 悬停层 togglePlay 回转
+function onPlayToggle(): void {
+  if (audioCardActive.value) hoverLayerInst.value?.togglePlay?.();
+}
 // 拖拽期间全局禁用悬停层（2026-07-29 复验二轮 5，JS 闸）：拖拽激活时视同未悬停——
 // 播放层 v-if 条件即刻转假，走既有退出路径（卸载停播 / 动图还原封面 / 序列帧停轮播）
 const hoverActive = computed(() => hovered.value && !dragView.active);
+// 悬停层卸载（mouseleave / 拖拽起）即停播、组件无 emit 出口——状态复位（下次 hover 从 0 扫过）
+watch(hoverActive, (v) => {
+  if (!v) {
+    audioPlaying.value = false;
+    audioProgress.value = 0;
+  }
+});
 
 // —— 就地重命名（6.1 C2，2026-07-28 定案）：输入态在 FileCard（naming prop），
 // Enter / 失焦 = 提交（空或不变不动），Esc = 取消；滚出虚拟滚动销毁 = 取消（AssetGrid 先清
@@ -270,7 +313,7 @@ const meta = computed(() => {
     <!-- 视觉芯 = cards/FileCard（general 壳：图满铺 + 渐变罩名称/简介 + 格式角标统一铬）；
          悬停播放层注入默认插槽（缩略图上、渐变罩下）；video/audio 的悬停胶囊 UI 换代留播放层组件内 -->
     <FileCard
-      :kind="textCardActive ? 'text' : 'general'"
+      :kind="textCardActive ? 'text' : audioCardActive ? 'audio' : 'general'"
       :name="displayName"
       :info="ui.showBrief ? meta : ''"
       :badge="showFormatBadge ? badge : ''"
@@ -278,20 +321,30 @@ const meta = computed(() => {
       :thumb-fit="asset.thumbKind === 'formatIcon' ? 'icon' : ui.layoutMode === 'grid' ? 'contain' : 'cover'"
       :text-title="textCardActive ? textTitle : ''"
       :text-body="textCardActive ? textBody : ''"
+      :peaks="audioCardActive ? audioPeaks : []"
+      :capsule-text="audioCardActive ? audioCapsule : ''"
+      :playing="audioCardActive && audioPlaying"
+      :progress="audioCardActive ? audioProgress : 0"
       :selected="selected"
       :naming="renaming"
       :picked="picked"
       @name-edit="startRename"
       @name-commit="onRenameCommit"
       @name-cancel="onRenameCancel"
+      @play-toggle="onPlayToggle"
     >
       <!-- 悬停播放层 = cardSpecs 查表分发（R5 注册表化，等价原四分支链）：
            autoplay 档（video / anim / sequence）挂 animPlaying 并传 auto=!hoverActive；
-           audio 档仅悬停挂载不传 auto；other 未注册 = 无层。工作空间合成项全禁（isWs） -->
+           audio 档仅悬停挂载不传 auto；other 未注册 = 无层。工作空间合成项全禁（isWs）。
+           状态三通道（playing / progress / duration）仅 HoverAudioLayer 发，他层监听无害 -->
       <component
         :is="hoverLayer?.layer"
         v-if="hoverLayer && !isWs && (hoverLayer.autoplay ? animPlaying : hoverActive)"
+        ref="hoverLayerInst"
         v-bind="hoverLayer.autoplay ? { asset, auto: !hoverActive } : { asset }"
+        @playing="audioPlaying = $event"
+        @progress="audioProgress = $event"
+        @duration="audioDuration = $event"
       />
     </FileCard>
     <!-- 笔记徽章（2026-09-09 四轮用户定稿）：kc-float 角标铬「笔记 N」（笔记 = 雅黑 / 数量 = mono，

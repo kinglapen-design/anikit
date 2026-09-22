@@ -61,6 +61,7 @@ const emit = defineEmits<{
   nameCommit: [name: string]; // Enter / 失焦（父级判空/不变/落命令）
   nameCancel: []; // Esc（文件重命名口径 = 取消，区别于文件夹 escSaves）
   nameEdit: []; // 名称双击 = 进命名态（父级置 naming）
+  playToggle: []; // 悬停胶囊播放钮（MediaCapsule，2026-09-22 R6 audio 接线）——父级转悬停播放层 togglePlay
 }>();
 
 // 行内重命名（useInlineRename 封装，速查 §4）：selectStem = 词干选区不包后缀（文件口径）；
@@ -179,12 +180,14 @@ watch(
     <!-- 格式角标（左上 12/12） -->
     <FormatBadge v-if="badge" class="fc-badge" :label="badge" />
 
-    <!-- kind 专属附加件（悬停胶囊 / 视频播放条 / 字体安装钮…）：注册表 overlays，DOM 序 = 数组序 -->
+    <!-- kind 专属附加件（悬停胶囊 / 视频播放条 / 字体安装钮…）：注册表 overlays，DOM 序 = 数组序；
+         playToggle 透传（MediaCapsule 播放钮 → 父级悬停播放层；无此 emit 的附加件监听无害） -->
     <component
       v-for="(ov, i) in spec.overlays ?? []"
       :key="i"
       :is="ov.comp"
       v-bind="ov.props(props)"
+      @play-toggle="emit('playToggle')"
     />
 
     <!-- 滚动胶囊（scrollThumb 形态 = text 卡：贴右缘，hover 升六级；可拖——pointerdown

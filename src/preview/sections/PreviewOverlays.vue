@@ -6,9 +6,11 @@
 //   PreviewMenus 展区已有 MenuItem 静态陈列，此处重点是整菜单真实组件（fixed 定位 / 边界钳制 / 级联 flyout）。
 // - HoverZoomOverlay.vue（真实实例 + 复刻壳双模式）：桩资产 assetId = "ws:" 合成假 id 且 wsPath=null，
 //   onMounted 直渲分支不触后端（严禁 assetId 类命令的 ws 口径天然豁免）；空图源只验浮层壳。
-// - HoverVideoLayer / HoverAudioLayer / HoverSequenceLayer（静态复刻）：onMounted 经 useHoverPlayer
+// - HoverVideoLayer / HoverSequenceLayer（静态复刻）：onMounted 经 useHoverPlayer
 //   延迟后 invoke get_media_source / list_sequence_frames——预览红线不调后端，改静态复刻壳，
-//   复刻范围 = 控件铬（胶囊 / 播放条 / 波形高亮），媒体本体不演。
+//   复刻范围 = 控件铬（胶囊 / 播放条），媒体本体不演。
+//   （HoverAudioLayer 复刻展区 2026-09-22 撤：R6 audio 接线后该层收窄为透明 seek 交互层无视觉，
+//   波形 / 扫过 / 胶囊视觉全归 PreviewCards 文件卡片-音频展区验收）
 // - ScrollThumb.vue（真实实例）：relative 包裹层 + 滚动容器 + thumb 的宿主标准用法，纯前端测量。
 // - FloatBarHost.vue（真实实例）：不传 panelId/viewKey = 搜索侧 store 全禁（独立预览窗口同口径），
 //   previewActive=false 恒搜索态；验宿主定位层（底部居中距底 12 / 两侧 12 呼吸 / 穿透空隙）。
@@ -220,27 +222,6 @@ function popViewOptions(e: MouseEvent): void {
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">音频卡片播放层 HoverAudioLayer（静态复刻，同上红线；部分旧体系待换代——已播放高亮仍吃旧 --brand-1）</h3>
-      <div class="pv-demo-row">
-        <div class="pv-demo-cell">
-          <div class="pv-card-stage">
-            <div class="pv-wave" />
-            <div class="pv-wave played" style="clip-path: inset(0 60% 0 0)" />
-            <div class="pv-kc-float pv-hv-capsule">
-              <span class="pv-hv-pos">01:23</span>
-              <AppIcon name="card-hover-play" :size="14" class="pv-hv-btn" />
-            </div>
-          </div>
-          <span class="pv-cap">
-            复刻：卡片缩略图即波形图，已播放部分品牌紫 mask 高亮 + clip-path 裁到进度（此处以条纹桩代替
-            波形图，played 层用 --n-brand 近似旧 --brand-1）；右上胶囊 = 时长 + 播放/暂停（新体系）；
-            点击/拖动波形 seek 不演
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <div class="pv-group">
       <h3 class="pv-group-title">序列帧卡片播放层 HoverSequenceLayer（静态复刻，同上红线；旧体系待换代——层底仍吃旧 --c1）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
@@ -363,7 +344,7 @@ function popViewOptions(e: MouseEvent): void {
   backdrop-filter: blur(var(--n-blur-sm));
   border-radius: var(--n-radius-4);
 }
-/* 右上胶囊（HoverVideoLayer .hv-capsule / HoverAudioLayer .ha-capsule 同口径：右上 12/12、gap 6） */
+/* 右上胶囊（HoverVideoLayer .hv-capsule：右上 12/12、gap 6） */
 .pv-hv-capsule {
   position: absolute;
   right: var(--n-space-12);
@@ -396,28 +377,6 @@ function popViewOptions(e: MouseEvent): void {
   height: 100%;
   border-radius: 99px;
   background: var(--n-l1);
-}
-/* 波形桩（HoverAudioLayer 复刻）：条纹代替波形图；played = 品牌底 + clip-path 裁进度（实件吃旧 --brand-1） */
-.pv-wave {
-  position: absolute;
-  inset: var(--n-space-24) var(--n-space-12);
-  background: repeating-linear-gradient(
-    to right,
-    var(--n-l-a2) 0,
-    var(--n-l-a2) 3px,
-    transparent 3px,
-    transparent 7px
-  );
-  pointer-events: none;
-}
-.pv-wave.played {
-  background: repeating-linear-gradient(
-    to right,
-    var(--n-brand) 0,
-    var(--n-brand) 3px,
-    transparent 3px,
-    transparent 7px
-  );
 }
 /* 序列帧层复刻（实件层底 = 旧 --c1，此处 --n-g1 近似） */
 .pv-seq-stage {

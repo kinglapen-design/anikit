@@ -300,6 +300,55 @@ fn clamp_wave_size(w: u32, h: u32) -> (u32, u32) {
   (w.clamp(*WAVE_W.start(), *WAVE_W.end()), h.clamp(*WAVE_H.start(), *WAVE_H.end()))
 }
 
+// ---------- 卡片波形 peaks（2026-09-22 R6 卡片三变体接线 · audio 变体） ----------
+
+/// 音频卡片波形 peaks（稿 = 组件/卡片/文件卡片-音频 竖线波形数据通道，media::CARD_PEAKS 根
+/// 恒定不随时长，前端按卡宽节距 8px 重采样）：产物 cache/peaks/{assetId}.json **跨会话保留**
+///（同 cache/media 口径——全量 PCM 解码与转码同级开销，开库清空会让每次启动后首轮滚网格
+/// 全量重解码；.stamp 记源 "大小:mtime秒" 防源漂移）。非音频 / 解码失败中文报错（前端回退
+/// 空波形）。短锁快照后解码走锁外线程池（规范第 2 条）；产物按 assetId+stamp 幂等，无需并发去重
+#[tauri::command]
+pub async fn get_audio_peaks(state: State<'_, AppState>, asset_id: String) -> Result<Vec<f32>, String> {
+  let (origin, meta, root) = {
+    let guard = state.library.lock().map_err(|e| e.to_string())?;
+    let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+    let (_info_dir, origin, meta) = locate_asset(lib, &asset_id)?;
+    (origin, meta, lib.root.clone())
+  };
+  tauri::async_runtime::spawn_blocking(move || card_peaks(&origin, &meta, &root, &asset_id))
+    .await
+    .map_err(|e| format!("波形 peaks 任务失败：{e}"))?
+}
+
+fn card_peaks(origin: &Path, meta: &AssetMeta, root: &Path, asset_id: &str) -> Result<Vec<f32>, String> {
+  if !media::is_audio(origin) {
+    return Err(format!("「{}」不是音频资源", meta.name));
+  }
+  let dir = root.join(CACHE_DIR).join("peaks");
+  let out = dir.join(format!("{asset_id}.json"));
+  let stamp = stamp_path(&out);
+  // 复用判定先于二进制检查（同转码口径）：已有产物不需要 ffmpeg
+  if out.is_file() && source_stamp(origin).is_some_and(|s| read_stamp(&stamp) == Some(s)) {
+    let json = fs::read_to_string(&out).map_err(|e| format!("波形 peaks 读取失败：{e}"))?;
+    return serde_json::from_str(&json).map_err(|e| format!("波形 peaks 解析失败：{e}"));
+  }
+  if !ffmpeg::ffmpeg_available() {
+    return Err("音视频组件缺失，无法生成波形".to_string());
+  }
+  let Some(peaks) = media::audio_peaks(origin, media::CARD_PEAKS) else {
+    return Err("波形提取失败，请检查音频文件".to_string());
+  };
+  fs::create_dir_all(&dir).map_err(|e| format!("波形缓存目录创建失败：{e}"))?;
+  let json = serde_json::to_string(&peaks).map_err(|e| format!("波形 peaks 序列化失败：{e}"))?;
+  fs::write(&out, json).map_err(|e| format!("波形 peaks 保存失败：{e}"))?;
+  if let Some(s) = source_stamp(origin) {
+    if let Err(e) = fs::write(&stamp, s) {
+      log::warn!("波形 peaks 戳写入失败（{}）：{e}", stamp.display());
+    }
+  }
+  Ok(peaks)
+}
+
 /// 产物旁的戳文件：media-{assetId}.mp4.stamp
 fn stamp_path(out: &Path) -> PathBuf {
   let mut s = out.as_os_str().to_os_string();
@@ -382,6 +431,36 @@ mod tests {
     // 未命中且源是假字节：组件缺失 / 提取失败 中文文案（按环境有无 ffmpeg 二选一）
     let err = waveform(&origin, &meta, &root, "AN-AU", 640, 272).unwrap_err();
     assert!(err.contains("组件缺失") || err.contains("波形提取失败"), "{err}");
+  }
+
+  #[test]
+  fn card_peaks_rejects_non_audio_and_serves_cache_idempotently() {
+    let mut h = make_lib();
+    // 非音频资源中文报错
+    add_file(&mut h, "AN-PIC2", "参考图.png");
+    let (_i, origin, meta, root) = snap(&h, "AN-PIC2");
+    let err = card_peaks(&origin, &meta, &root, "AN-PIC2").unwrap_err();
+    assert!(err.contains("不是音频资源"), "{err}");
+
+    // 缓存命中直给（命中判定先于二进制检查：无 ffmpeg / 假字节也直接返回）
+    add_file(&mut h, "AN-AU2", "配乐.mp3");
+    let out = h.lib.root.join(CACHE_DIR).join("peaks").join("AN-AU2.json");
+    fs::create_dir_all(out.parent().unwrap()).unwrap();
+    fs::write(&out, "[0.1,0.5,1.0]").unwrap();
+    fs::write(stamp_path(&out), source_stamp(&origin).unwrap()).unwrap();
+    let (_i, origin, meta, root) = snap(&h, "AN-AU2");
+    let peaks = card_peaks(&origin, &meta, &root, "AN-AU2").unwrap();
+    assert_eq!(peaks, vec![0.1f32, 0.5, 1.0]);
+    // 幂等：stamp 一致不重写（mtime 不变）
+    let mtime = fs::metadata(&out).unwrap().modified().unwrap();
+    card_peaks(&origin, &meta, &root, "AN-AU2").unwrap();
+    assert_eq!(fs::metadata(&out).unwrap().modified().unwrap(), mtime);
+
+    // 源变化（大小变了戳失配）→ 重算：假 mp3 解码失败给中文文案（无 ffmpeg 则组件缺失）
+    fs::write(&origin, b"fake-changed-longer").unwrap();
+    let (_i, origin, meta, root) = snap(&h, "AN-AU2");
+    let err = card_peaks(&origin, &meta, &root, "AN-AU2").unwrap_err();
+    assert!(err.contains("波形提取失败") || err.contains("组件缺失"), "{err}");
   }
 
   #[test]
