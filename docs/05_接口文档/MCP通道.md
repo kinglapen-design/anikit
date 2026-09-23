@@ -49,7 +49,7 @@
 | `move_placements` | `{ items: [{ assetId, folderId, origin? }], targetFolderId }`（"root" = 未分类；去重 / 原地 / 陈旧项跳过不计） | `{ moved: number }`（实际移动条数）。**进撤销**（整体单撤销步；root → 非 root 自动摘 importedFrom 标，metadata 快照随撤销步） |
 | `move_folders` | `{ folderIds: string[], targetParentId?: string }`（targetParentId 缺省 / "root" = 顶层文件夹区块；落点 = 同级末尾，不给排序插入位；移入自身或子孙整条报错，同父 / 陈旧 id 跳过；空数组回「folderIds 至少 1 项」） | `{ moved: number }`。**进撤销**（整体单撤销步；仅改数据不动磁盘，2026-09-19 同日用户补开：结构重组留一手） |
 | `link_placements` | `{ items: [{ assetId, folderId, origin? }], targetFolderId, names?: (string \| null)[] }`（names 与 items 等长对齐，null 项 = 用源 Placement 名；缺省 = 全部源名） | `{ linked: number }`。资产本体留原地、目标文件夹建链接 Placement（不占双份磁盘）。**进撤销**（整体单撤销步） |
-| `import_paths` | `{ paths: string[], folderId?: string }`（仅文件绝对路径，文件夹请展开；复制语义源文件不动；folderId 缺省 / "root" = 未分类） | `ImportReport { items: [{ path, status, assetId?, finalName?, reason? }], imported, skippedDuplicate, renamed, failed }`——**冲突策略 = 方案一**（2026-09-19 用户定，不阻断）：hash 完全相同 → `skippedDuplicate` + 回已有资产 id；同名不同内容 → 加 `-序号` 后缀入库 → `renamed` + finalName；缩略图随管线自动生成。**不进撤销**；同步执行（回包即最终态，无进度事件、不支持取消） |
+| `import_paths` | `{ paths: string[], folderId?: string }`（仅文件绝对路径，文件夹请展开；复制语义源文件不动；folderId 缺省 / "root" = 未分类） | `ImportReport { items: [{ path, status, assetId?, finalName?, reason? }], imported, skippedDuplicate, renamed, failed }`——**冲突策略 = 方案一**（2026-09-19 用户定，不阻断）：hash 完全相同 → `skippedDuplicate` + 回已有资产 id；同名不同内容 → 加 `_序号` 后缀入库 → `renamed` + finalName；缩略图随管线自动生成。**不进撤销**；同步执行（回包即最终态，无进度事件、不支持取消） |
 
 三批回收站删除 1 个（2026-09-20，`tools/trash.rs`）：
 
@@ -64,7 +64,7 @@
 - **路径不缓存**：originName 随重命名同步改磁盘名，外部每次现推现取（get_asset_origin_path），不得缓存复用。
 - 禁止 assets/ 全目录枚举：以文件夹树 / Placement 为入口按 id 直达。
 - **写入闸 = 形态 A（2026-09-19 用户定）**：全局开关 + 撤销兜底（见头部「写入闸」段）；结构性操作（move_placements 移动）仍走形态 A 不另立逐笔弹窗（可逆，撤销兜底）；**彻底删除永不经 MCP**（L4 永远人工确认）——库内回收站可逆删除经 trash_placements（2026-09-20 用户定，进撤销）。
-- **import_paths 冲突策略 = 方案一（2026-09-19 用户定，不阻断）**：hash 完全相同 → 跳过并把已有资产 id 回给 Agent；同名不同内容 → 自动加 `-序号` 后缀入库（沿用库内 unique_name 口径）；逐文件报告可追溯。实现 = 逐文件同步直调既有 `run_import` 四阶段管线（folders.json 节流落盘单写点不破），不另造导入管线。
+- **import_paths 冲突策略 = 方案一（2026-09-19 用户定，不阻断）**：hash 完全相同 → 跳过并把已有资产 id 回给 Agent；同名不同内容 → 自动加 `_序号` 后缀入库（沿用库内 unique_name 口径）；逐文件报告可追溯。实现 = 逐文件同步直调既有 `run_import` 四阶段管线（folders.json 节流落盘单写点不破），不另造导入管线。
 - 二期余量（随后批）：set_asset_props / set_asset_descriptions。
 
 ## 客户端配置示例

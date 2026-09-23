@@ -301,13 +301,13 @@ pub(crate) fn spawn_import(
   task_id
 }
 
-/// 剪贴板临时文件名：剪贴板-yyyyMMdd-HHmm.扩展名，重名追加 -序号
+/// 剪贴板临时文件名：剪贴板-yyyyMMdd-HHmm.扩展名，重名追加 _序号（2026-09-23 序号格式自 - 改 _）
 fn clipboard_temp_name(cache_dir: &Path, ext: &str) -> String {
   let base = format!("剪贴板-{}", chrono::Local::now().format("%Y%m%d-%H%M"));
   let mut name = format!("{base}.{ext}");
   let mut n = 1;
   while cache_dir.join(&name).exists() {
-    name = format!("{base}-{n}.{ext}");
+    name = format!("{base}_{n}.{ext}");
     n += 1;
   }
   name
@@ -875,7 +875,7 @@ mod tests {
     std::fs::write(dir.path().join(&first), "x").unwrap();
     let second = clipboard_temp_name(dir.path(), "png");
     assert_ne!(first, second);
-    assert!(second.ends_with("-1.png"));
+    assert!(second.ends_with("_1.png"));
     // 扩展名透传（base64 分支按魔数定名）
     assert!(clipboard_temp_name(dir.path(), "psd").ends_with(".psd"));
   }

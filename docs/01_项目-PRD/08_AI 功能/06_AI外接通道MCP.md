@@ -34,7 +34,7 @@
 
 **二批写工具（工作流驱动，2026-09-19 用户定，五个）**：`create_folder`（新建文件夹）/ `move_placements`（资产移入文件夹——属 03 节 L3 结构性操作，仍走形态 A 全局开关 + 撤销兜底，可逆，不另立弹窗闸）/ `link_placements`（链接汇总——资产留大池、链接进场次文件夹的用户习惯配套）/ `move_folders`（移动文件夹重设父级——同日用户补：「万一改一下结构就改不动了」，仅改数据不动磁盘）/ `import_paths`（导入磁盘文件入库——Agent 外部生成图片后入库的入口，缩略图随导入管线自动生成、导入即可看图）。
 
-**import_paths 冲突策略 = 方案一（2026-09-19 用户定，不阻断，已落地）**：hash 完全相同 → 跳过并把已有资产 id 回给 Agent（查重白送，Agent 直接拿去用）；同名不同内容 → 自动加 `-序号` 后缀入库（复用 core::library::unique_name 既有单写点口径）；回包逐文件报告处理结果（imported / skippedDuplicate + 已有 id / renamed + finalName / failed + reason）。自动化场景不中断优先，全程可追溯。
+**import_paths 冲突策略 = 方案一（2026-09-19 用户定，不阻断，已落地）**：hash 完全相同 → 跳过并把已有资产 id 回给 Agent（查重白送，Agent 直接拿去用）；同名不同内容 → 自动加 `_序号` 后缀入库（复用 core::library::unique_name 既有单写点口径）；回包逐文件报告处理结果（imported / skippedDuplicate + 已有 id / renamed + finalName / failed + reason）。自动化场景不中断优先，全程可追溯。
 
 撤销口径：create_folder / move_placements / link_placements / move_folders 进撤销（同首批 _op 复用范式）；**import_paths 不进撤销**（落地时定：APP 导入管线本就不接 UndoManager——导入 = 资产池新增，撤销体系覆盖库结构操作不覆盖导入，MCP 同口径不硬接，工具描述如实告知）。
 

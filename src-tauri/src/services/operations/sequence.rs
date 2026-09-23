@@ -4,7 +4,7 @@
 //! - 删除帧（抽帧）：帧移 cache/seq-trash 暂存（会话级，开库清空 = 会话结束真删），
 //!   磁盘改名对由命令层登记 DiskOp::Rename（undo 移回 / redo 移走，双向恒不撞名——
 //!   暂存区与 frames/ 互斥），可撤销；
-//! - 重排序号：剩余帧按当前文件名顺序重排为连续序号（词干-001..N，位宽只增不减），
+//! - 重排序号：剩余帧按当前文件名顺序重排为连续序号（词干_001..N，位宽只增不减），
 //!   两段改名防撞（先临时名再目标名）；帧笔记 key 随映射迁移；磁盘改名对登记 DiskOp 可撤销。
 //!
 //! 播放口径：播放按 frames/ 文件名排序清单逐帧等长播放，序号不参与连续性推导——
@@ -50,10 +50,11 @@ fn sequence_context(lib: &Library, asset_id: &str) -> Result<(PathBuf, PathBuf, 
   Ok((info_dir, frames_dir, meta, names))
 }
 
-/// 帧名解析词干 / 序号段位宽：`{词干}-{序号}.{扩展名}`（归一格式）；不合格式 None
+/// 帧名解析词干 / 序号段位宽：`{词干}_{序号}.{扩展名}`（归一格式，2026-09-23 自 `-` 改 `_`；
+/// 存量 `-` 帧名兼容解析）；不合格式 None
 fn parse_normalized(frame: &str) -> Option<(String, usize)> {
   let (stem, _ext) = frame.rsplit_once('.')?;
-  let dash = stem.rfind('-')?;
+  let dash = stem.rfind(['-', '_'])?;
   let digits = &stem[dash + 1..];
   if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
     return None;
@@ -261,7 +262,7 @@ pub struct RenumberOutcome {
   pub renamed: usize,
 }
 
-/// 重排序号：剩余帧按当前文件名顺序重排为连续序号 `词干-001..N`（词干 = meta.name，
+/// 重排序号：剩余帧按当前文件名顺序重排为连续序号 `词干_001..N`（词干 = meta.name，
 /// 位宽 = max(现位宽, N 位数)，只增不减）。两段改名防撞（先 `~anikit-renumber` 临时名再目标名）；
 /// 帧笔记 key 随旧 → 新映射迁移（保留原文本与时间）；封面帧 / originName 跟随；
 /// 帧条缓存整清（旧帧名 key 全失效，预览按需重建）。已全部连续 = 无操作返回 0。
@@ -391,7 +392,7 @@ mod tests {
     image::RgbaImage::from_pixel(w, h, image::Rgba([200, 30, 30, 255])).save(path).unwrap();
   }
 
-  /// 造序列帧包（走路_1..=count.png 入库归一 走路-1..count，位宽 1）+ origin Placement 到 root
+  /// 造序列帧包（走路_1..=count.png 入库归一 走路_1..count，位宽 1）+ origin Placement 到 root
   fn add_sequence(h: &mut Harness, id: &str, count: u32) -> AssetMeta {
     add_sequence_wide(h, id, count, 1)
   }
@@ -449,10 +450,10 @@ mod tests {
 
     // 新素材：独立 info + 帧移入 + hash 实算 + placements 段首前插保帧序
     let names: Vec<&str> = h.lib.folders.items.iter().map(|p| p.name.as_str()).collect();
-    assert_eq!(names, ["走路-1.png", "走路-2.png", "走路-3.png"], "段首前插保持帧序");
+    assert_eq!(names, ["走路_1.png", "走路_2.png", "走路_3.png"], "段首前插保持帧序");
     for (i, id) in out.new_ids.iter().enumerate() {
       let info = h.lib.info_dir(id);
-      let frame = format!("走路-{}.png", i + 1);
+      let frame = format!("走路_{}.png", i + 1);
       assert!(info.join(&frame).is_file(), "{id} 帧应移入独立 info");
       let meta = &h.lib.index.assets[id];
       assert_eq!(meta.origin_name, frame);
@@ -479,26 +480,26 @@ mod tests {
   fn delete_frames_moves_to_trash_and_updates_meta() {
     let mut h = make_lib();
     add_sequence(&mut h, "AN-S", 4);
-    // 给 走路-2.png 写一条笔记
+    // 给 走路_2.png 写一条笔记
     let info = h.lib.info_dir("AN-S");
-    notes::upsert(&info, "走路-2.png", "这一帧要修").unwrap();
+    notes::upsert(&info, "走路_2.png", "这一帧要修").unwrap();
     let mut meta = h.lib.index.assets["AN-S"].clone();
     meta.note_count = Some(1);
     write_json(&info.join("metadata.json"), &meta).unwrap();
     h.lib.index.assets.insert("AN-S".into(), meta);
 
-    let out = delete_frames(&mut h.lib, "AN-S", &["走路-2.png".to_string()]).unwrap();
+    let out = delete_frames(&mut h.lib, "AN-S", &["走路_2.png".to_string()]).unwrap();
     assert_eq!(out.deleted, 1);
     assert_eq!(out.moves.len(), 1);
     // 帧移暂存区，frames/ 不再含
-    assert!(!paths::frames_dir(&h.lib.assets_dir, "AN-S").join("走路-2.png").exists());
+    assert!(!paths::frames_dir(&h.lib.assets_dir, "AN-S").join("走路_2.png").exists());
     assert!(out.moves[0].1.is_file(), "暂存区应有被删帧（撤销支撑）");
-    assert_eq!(frame_names(&h, "AN-S"), ["走路-1.png", "走路-3.png", "走路-4.png"]);
+    assert_eq!(frame_names(&h, "AN-S"), ["走路_1.png", "走路_3.png", "走路_4.png"]);
     // metadata：frameCount / noteCount / 封面帧不动（删的不是封面）
     let meta = &h.lib.index.assets["AN-S"];
     assert_eq!(meta.frame_count, Some(3));
     assert_eq!(meta.note_count, None, "唯一笔记随帧清除，0 记 None");
-    assert_eq!(meta.thumb_frame.as_deref(), Some("走路-1.png"));
+    assert_eq!(meta.thumb_frame.as_deref(), Some("走路_1.png"));
     // notes.json 同步
     assert!(notes::load(&info).unwrap().is_empty());
   }
@@ -507,11 +508,11 @@ mod tests {
   fn delete_frames_cover_retargets_and_rebuilds_thumb() {
     let mut h = make_lib();
     add_sequence(&mut h, "AN-S", 3);
-    let out = delete_frames(&mut h.lib, "AN-S", &["走路-1.png".to_string()]).unwrap();
+    let out = delete_frames(&mut h.lib, "AN-S", &["走路_1.png".to_string()]).unwrap();
     assert_eq!(out.deleted, 1);
     let meta = &h.lib.index.assets["AN-S"];
-    assert_eq!(meta.thumb_frame.as_deref(), Some("走路-2.png"), "封面改指剩余首帧");
-    assert_eq!(meta.origin_name, "走路-2.png", "originName 跟随");
+    assert_eq!(meta.thumb_frame.as_deref(), Some("走路_2.png"), "封面改指剩余首帧");
+    assert_eq!(meta.origin_name, "走路_2.png", "originName 跟随");
     // metadata.json 落盘
     let disk: AssetMeta = read_json(&h.lib.info_dir("AN-S").join("metadata.json")).unwrap();
     assert_eq!(disk.frame_count, Some(2));
@@ -522,7 +523,7 @@ mod tests {
     let mut h = make_lib();
     add_sequence(&mut h, "AN-S", 2);
     // 位宽 1 的 2 帧：删 2 帧 = 删空报错
-    let err = delete_frames(&mut h.lib, "AN-S", &["走路-1.png".to_string(), "走路-2.png".to_string()]).unwrap_err();
+    let err = delete_frames(&mut h.lib, "AN-S", &["走路_1.png".to_string(), "走路_2.png".to_string()]).unwrap_err();
     assert!(err.contains("至少保留 1 帧"), "{err}");
     assert_eq!(frame_names(&h, "AN-S").len(), 2, "删空被拒，帧不动");
   }
@@ -530,31 +531,31 @@ mod tests {
   #[test]
   fn renumber_fills_gaps_and_migrates_notes() {
     let mut h = make_lib();
-    add_sequence_wide(&mut h, "AN-S", 3, 3); // 走路-001..003
+    add_sequence_wide(&mut h, "AN-S", 3, 3); // 走路_001..003
                                              // 造断号：002 → 005（清单 001/003/005）
     let dir = paths::frames_dir(&h.lib.assets_dir, "AN-S");
-    fs::rename(dir.join("走路-002.png"), dir.join("走路-005.png")).unwrap();
+    fs::rename(dir.join("走路_002.png"), dir.join("走路_005.png")).unwrap();
     // 笔记挂在将改名的 003 上 + 封面帧指 003
     let info = h.lib.info_dir("AN-S");
-    notes::upsert(&info, "走路-003.png", "蓄力帧").unwrap();
+    notes::upsert(&info, "走路_003.png", "蓄力帧").unwrap();
     let mut meta = h.lib.index.assets["AN-S"].clone();
-    meta.thumb_frame = Some("走路-003.png".into());
-    meta.origin_name = "走路-003.png".into();
+    meta.thumb_frame = Some("走路_003.png".into());
+    meta.origin_name = "走路_003.png".into();
     h.lib.index.assets.insert("AN-S".into(), meta.clone());
     write_json(&info.join("metadata.json"), &meta).unwrap();
 
     let out = renumber_frames(&mut h.lib, "AN-S").unwrap();
     assert_eq!(out.renamed, 2, "003→002 / 005→003 两项改名");
-    assert_eq!(frame_names(&h, "AN-S"), ["走路-001.png", "走路-002.png", "走路-003.png"]);
+    assert_eq!(frame_names(&h, "AN-S"), ["走路_001.png", "走路_002.png", "走路_003.png"]);
     // 笔记 key 迁移（时间与文本保留）
     let list = notes::load(&info).unwrap();
     assert_eq!(list.len(), 1);
-    assert_eq!(list[0].key, "走路-002.png");
+    assert_eq!(list[0].key, "走路_002.png");
     assert_eq!(list[0].text, "蓄力帧");
     // 封面帧 / originName 跟随
     let meta = &h.lib.index.assets["AN-S"];
-    assert_eq!(meta.thumb_frame.as_deref(), Some("走路-002.png"));
-    assert_eq!(meta.origin_name, "走路-002.png");
+    assert_eq!(meta.thumb_frame.as_deref(), Some("走路_002.png"));
+    assert_eq!(meta.origin_name, "走路_002.png");
   }
 
   #[test]
@@ -576,13 +577,13 @@ mod tests {
     add_sequence_wide(&mut h, "AN-S", 3, 3);
     // 造 0 起断号：001→000、002→001（清单 000/001/003——old_i < new_i 的撞名高危形态）
     let dir = paths::frames_dir(&h.lib.assets_dir, "AN-S");
-    fs::rename(dir.join("走路-002.png"), dir.join("走路-001.tmp")).unwrap();
-    fs::rename(dir.join("走路-001.png"), dir.join("走路-000.png")).unwrap();
-    fs::rename(dir.join("走路-001.tmp"), dir.join("走路-001.png")).unwrap();
-    assert_eq!(frame_names(&h, "AN-S"), ["走路-000.png", "走路-001.png", "走路-003.png"]);
+    fs::rename(dir.join("走路_002.png"), dir.join("走路_001.tmp")).unwrap();
+    fs::rename(dir.join("走路_001.png"), dir.join("走路_000.png")).unwrap();
+    fs::rename(dir.join("走路_001.tmp"), dir.join("走路_001.png")).unwrap();
+    assert_eq!(frame_names(&h, "AN-S"), ["走路_000.png", "走路_001.png", "走路_003.png"]);
 
     let out = renumber_frames(&mut h.lib, "AN-S").unwrap();
-    assert_eq!(frame_names(&h, "AN-S"), ["走路-001.png", "走路-002.png", "走路-003.png"], "业务正向连续");
+    assert_eq!(frame_names(&h, "AN-S"), ["走路_001.png", "走路_002.png", "走路_003.png"], "业务正向连续");
 
     // 模拟 apply_disk：逆序执行 undo 序列 → 还原断号
     let apply = |ops: &[(PathBuf, PathBuf)]| {
@@ -593,8 +594,8 @@ mod tests {
       }
     };
     apply(&out.undo_ops);
-    assert_eq!(frame_names(&h, "AN-S"), ["走路-000.png", "走路-001.png", "走路-003.png"], "undo 还原断号");
+    assert_eq!(frame_names(&h, "AN-S"), ["走路_000.png", "走路_001.png", "走路_003.png"], "undo 还原断号");
     apply(&out.redo_ops);
-    assert_eq!(frame_names(&h, "AN-S"), ["走路-001.png", "走路-002.png", "走路-003.png"], "redo 重放连续");
+    assert_eq!(frame_names(&h, "AN-S"), ["走路_001.png", "走路_002.png", "走路_003.png"], "redo 重放连续");
   }
 }

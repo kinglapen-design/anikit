@@ -188,7 +188,7 @@ mod tests {
     image::RgbaImage::from_pixel(w, h, image::Rgba([30, 30, 200, 255])).save(path).unwrap();
   }
 
-  /// 造一个序列帧资源（走路_1..=3.png，入库归一 走路-001..003）并登记进内存索引
+  /// 造一个序列帧资源（走路_1..=3.png，入库归一 走路_001..003）并登记进内存索引
   fn add_sequence(h: &mut Harness, id: &str) -> AssetMeta {
     let src = h.dir.path().join(format!("源-{id}"));
     fs::create_dir_all(&src).unwrap();
@@ -235,26 +235,26 @@ mod tests {
     let before = add_sequence(&mut h, "AN-SEQ3");
     let info = h.lib.info_dir("AN-SEQ3");
 
-    let result = apply_thumb_frame(&mut h.lib, "AN-SEQ3", "走路-002.png").unwrap();
+    let result = apply_thumb_frame(&mut h.lib, "AN-SEQ3", "走路_002.png").unwrap();
     // 新缩略图沿用导入命名（词干 = 资源名），绝对路径指向 info 内文件
     assert!(result.thumb_path.ends_with("走路_thumbnail.webp"), "{}", result.thumb_path);
     assert!(PathBuf::from(&result.thumb_path).is_file());
 
     // metadata 落盘：thumbFrame / thumbnail / modifiedAt 更新
     let disk: AssetMeta = read_json(&info.join("metadata.json")).unwrap();
-    assert_eq!(disk.thumb_frame.as_deref(), Some("走路-002.png"));
+    assert_eq!(disk.thumb_frame.as_deref(), Some("走路_002.png"));
     assert_eq!(disk.thumbnail.as_deref(), Some("走路_thumbnail.webp"));
     assert_ne!(disk.thumb_frame, before.thumb_frame);
 
     // 内存索引同步（先落盘再更新）
     let indexed = &h.lib.index.assets["AN-SEQ3"];
-    assert_eq!(indexed.thumb_frame.as_deref(), Some("走路-002.png"));
+    assert_eq!(indexed.thumb_frame.as_deref(), Some("走路_002.png"));
     assert_eq!(indexed.thumbnail.as_deref(), Some("走路_thumbnail.webp"));
 
     // 帧不存在 / 非序列帧资源 → 中文报错
-    assert!(apply_thumb_frame(&mut h.lib, "AN-SEQ3", "走路-999.png").is_err());
+    assert!(apply_thumb_frame(&mut h.lib, "AN-SEQ3", "走路_999.png").is_err());
     add_file(&mut h, "AN-ONE2", "单张.png");
-    let err = apply_thumb_frame(&mut h.lib, "AN-ONE2", "走路-001.png").unwrap_err();
+    let err = apply_thumb_frame(&mut h.lib, "AN-ONE2", "走路_001.png").unwrap_err();
     assert!(err.contains("不是序列帧"), "{err}");
   }
 

@@ -297,7 +297,7 @@ mod tests {
 
     let out2 = clone_folders(&mut h.lib, &["F-TOP".into()]).unwrap();
     let name2 = &h.lib.index.folders[&out2.folder_ids[0]].name;
-    assert_eq!(name2, "F-TOP 副本-1", "同级唯一化");
+    assert_eq!(name2, "F-TOP 副本_1", "同级唯一化");
     // 陈旧 id 跳过
     let out3 = clone_folders(&mut h.lib, &["F-幽灵".into()]).unwrap();
     assert!(out3.folder_ids.is_empty());

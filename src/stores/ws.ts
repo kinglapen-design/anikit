@@ -170,7 +170,7 @@ export const useWsStore = defineStore("ws", {
       await this.refreshAround(rels);
     },
     // 移动（拖拽 / 剪切粘贴）：目标 = 自身所在目录的条目剔除（拖拽落到当前目录行 / 已剪切所在
-    // 目录粘贴 = 无操作，防 unique_target 造出 "名 (2)" 副本）
+    // 目录粘贴 = 无操作，防 unique_target 造出 "名_2" 副本）
     async move(rels: string[], destRel: string): Promise<void> {
       const targets = rels.filter((r) => (r.includes("/") ? r.slice(0, r.lastIndexOf("/")) : "") !== destRel);
       if (targets.length === 0) return;

@@ -107,7 +107,7 @@ pub struct SequenceFrames {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FrameEntry {
-  /// 帧文件名（frames/ 内归一名 标题-序号.扩展名）
+  /// 帧文件名（frames/ 内归一名 标题_序号.扩展名）
   pub name: String,
   /// 帧原图绝对路径
   pub full_path: String,
@@ -336,7 +336,7 @@ mod tests {
     image::RgbaImage::from_pixel(w, h, image::Rgba([30, 30, 200, 255])).save(path).unwrap();
   }
 
-  /// 造一个序列帧资源（走路_1..=3.png，入库归一 走路-001..003）并登记进内存索引
+  /// 造一个序列帧资源（走路_1..=3.png，入库归一 走路_001..003）并登记进内存索引
   fn add_sequence(h: &mut Harness, id: &str) -> AssetMeta {
     let src = h.dir.path().join(format!("源-{id}"));
     fs::create_dir_all(&src).unwrap();
@@ -420,9 +420,9 @@ mod tests {
 
     // 按文件名排序，fps 取 metadata（建档默认 24），thumbFrame 取 metadata
     assert_eq!(list.fps, Some(24.0));
-    assert_eq!(list.thumb_frame.as_deref(), Some("走路-001.png"));
+    assert_eq!(list.thumb_frame.as_deref(), Some("走路_001.png"));
     let names: Vec<&str> = list.frames.iter().map(|f| f.name.as_str()).collect();
-    assert_eq!(names, ["走路-001.png", "走路-002.png", "走路-003.png"]);
+    assert_eq!(names, ["走路_001.png", "走路_002.png", "走路_003.png"]);
 
     // 立即返回：帧条未缓存时 stripPath=null（后台队列异步生成）；语义：Some 时文件必须存在
     let info = h.lib.info_dir("AN-SEQ");

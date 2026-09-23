@@ -491,7 +491,7 @@ pub(crate) fn create_folder(lib: &mut Library, parent: &str, name: &str) -> Stri
 }
 
 /// 加 Placement（**前插**，2026-07-25 用户定：新导入的素材排在最前，不用下拉滚轮找）：
-/// 同文件夹显示名唯一化（冲突追加 -序号）；front_anchor 记录各文件夹本批已前插数——
+/// 同文件夹显示名唯一化（冲突追加 _序号）；front_anchor 记录各文件夹本批已前插数——
 /// 文件夹视图（placements_by_folder）按锚点段首前插、批内保序；
 /// 全部视图（folders.items）全局前插：插入位 = 本批已插总数（各文件夹锚点之和），
 /// 异文件夹混批也按到达序从头部依次后移（2026-08-20 复验修复：原按目标文件夹段首定位，

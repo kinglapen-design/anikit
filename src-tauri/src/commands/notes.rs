@@ -304,12 +304,12 @@ mod tests {
     add_file(&mut h, "AN-SEQ", "走路.fla");
     let info = h.lib.info_dir("AN-SEQ");
     fs::create_dir_all(info.join("frames")).unwrap();
-    fs::write(info.join("frames").join("走路-00001.webp"), b"fake").unwrap();
+    fs::write(info.join("frames").join("走路_00001.webp"), b"fake").unwrap();
 
     // 序列帧 / 动图分支：帧存在直给路径，缺失返回 null
-    let hit = note_thumb(&h.lib, "AN-SEQ", "走路-00001.webp").unwrap();
-    assert_eq!(hit.path.as_deref(), Some(info.join("frames").join("走路-00001.webp").to_string_lossy().as_ref()));
-    assert_eq!(note_thumb(&h.lib, "AN-SEQ", "走路-99999.webp").unwrap(), NoteThumb { path: None });
+    let hit = note_thumb(&h.lib, "AN-SEQ", "走路_00001.webp").unwrap();
+    assert_eq!(hit.path.as_deref(), Some(info.join("frames").join("走路_00001.webp").to_string_lossy().as_ref()));
+    assert_eq!(note_thumb(&h.lib, "AN-SEQ", "走路_99999.webp").unwrap(), NoteThumb { path: None });
 
     // t: key 挂在非视频上：静默 null
     assert_eq!(note_thumb(&h.lib, "AN-SEQ", "t:01.000").unwrap(), NoteThumb { path: None });

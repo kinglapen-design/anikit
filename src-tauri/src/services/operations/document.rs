@@ -176,7 +176,7 @@ mod tests {
     let (v2, _, _) = create_document(&mut h.lib, "txt", None).unwrap();
     assert_eq!(v1.name, "新建文档.txt");
     assert_ne!(v1.name, v2.name, "同文件夹撞名唯一化");
-    assert!(v2.name.starts_with("新建文档-"));
+    assert!(v2.name.starts_with("新建文档_"));
   }
 
   #[test]

@@ -300,7 +300,7 @@ mod tests {
     std::fs::create_dir_all(&dir).unwrap();
     (1..=count)
       .map(|n| {
-        let name = format!("帧-{n:03}.png");
+        let name = format!("帧_{n:03}.png");
         let p = dir.join(&name);
         make_png(&p, w, h);
         (name, p)

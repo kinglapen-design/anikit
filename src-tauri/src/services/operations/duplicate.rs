@@ -87,7 +87,7 @@ fn duplicate_one(
   let meta_path = new_info.join("metadata.json");
   let mut meta: AssetMeta = read_json(&meta_path).map_err(|e| e.to_string())?;
   meta.id = new_id.clone();
-  // 序列帧 originName 是帧名（"走路-1.png"），词干当资产名会带出 "-1"——副本沿用源资产名（2026-08-14）
+  // 序列帧 originName 是帧名（"走路_1.png"），词干当资产名会带出 "-1"——副本沿用源资产名（2026-08-14）
   meta.name = custom.map(stem_of).unwrap_or_else(|| {
     if crate::services::sequence::frames_dir_if_sequence(&lib.assets_dir, &item.asset_id, &meta).is_some() {
       meta.name.clone()
@@ -354,10 +354,10 @@ mod tests {
     assert_eq!(meta.thumbnail, old_thumb);
     let disk: AssetMeta = read_json(&new_info.join("metadata.json")).unwrap();
     assert_eq!(disk.id, *new_id, "metadata.json 落盘");
-    // Placement：origin = true（副本 = 独立本体，落点即原始位置），显示名唯一化（同名追加 -1）
+    // Placement：origin = true（副本 = 独立本体，落点即原始位置），显示名唯一化（同名追加 _1）
     let p = h.lib.folders.items.iter().find(|p| p.asset == *new_id).unwrap();
     assert!(p.origin);
-    assert_eq!(p.name, "原图-1.png");
+    assert_eq!(p.name, "原图_1.png");
     // 陈旧三元组跳过不计
     let out2 = duplicate_placements(&mut h.lib, &[pref("AN-幽灵", "root", true)], "root", &[]).unwrap();
     assert!(out2.new_ids.is_empty());
@@ -479,25 +479,25 @@ mod tests {
     assert!(h.lib.info_dir("AN-S").join("走路_thumbnail.webp").is_file());
 
     let renames = rename_placement(&mut h.lib, "AN-S", "root", true, "跑步").unwrap();
-    for f in ["跑步-1.png", "跑步-2.png", "跑步-3.png"] {
+    for f in ["跑步_1.png", "跑步_2.png", "跑步_3.png"] {
       assert!(frames_dir.join(f).is_file(), "{f} 应改词干");
     }
-    assert!(!frames_dir.join("走路-1.png").exists(), "旧词干帧已改");
+    assert!(!frames_dir.join("走路_1.png").exists(), "旧词干帧已改");
     let meta = &h.lib.index.assets["AN-S"];
     assert_eq!(meta.name, "跑步");
-    assert_eq!(meta.origin_name, "跑步-1.png", "originName 跟随封面帧");
-    assert_eq!(meta.thumb_frame.as_deref(), Some("跑步-1.png"));
+    assert_eq!(meta.origin_name, "跑步_1.png", "originName 跟随封面帧");
+    assert_eq!(meta.thumb_frame.as_deref(), Some("跑步_1.png"));
     assert_eq!(meta.thumbnail.as_deref(), Some("跑步_thumbnail.webp"), "词干缩略图同步");
     assert!(h.lib.info_dir("AN-S").join("跑步_thumbnail.webp").is_file());
     assert_eq!(renames.len(), 4, "3 帧 + 缩略图四对磁盘改名");
     let disk: AssetMeta = read_json(&h.lib.info_dir("AN-S").join("metadata.json")).unwrap();
-    assert_eq!(disk.origin_name, "跑步-1.png", "metadata.json 落盘");
+    assert_eq!(disk.origin_name, "跑步_1.png", "metadata.json 落盘");
 
     // 二次改名：重取词干靠序号尾解析，不依赖旧词干匹配
     rename_placement(&mut h.lib, "AN-S", "root", true, "跳跃").unwrap();
-    assert!(frames_dir.join("跳跃-2.png").is_file());
-    assert_eq!(h.lib.index.assets["AN-S"].thumb_frame.as_deref(), Some("跳跃-1.png"));
-    assert_eq!(h.lib.index.assets["AN-S"].origin_name, "跳跃-1.png");
+    assert!(frames_dir.join("跳跃_2.png").is_file());
+    assert_eq!(h.lib.index.assets["AN-S"].thumb_frame.as_deref(), Some("跳跃_1.png"));
+    assert_eq!(h.lib.index.assets["AN-S"].origin_name, "跳跃_1.png");
   }
 
   #[test]
@@ -529,7 +529,7 @@ mod tests {
     let new_id = &out.new_ids[0];
     assert_eq!(h.lib.index.assets[new_id].name, "走路", "序列帧副本名不取 originName 词干");
     let new_frames = crate::core::paths::frames_dir(&h.lib.assets_dir, new_id);
-    assert!(new_frames.join("走路-1.png").is_file(), "帧目录整体复制");
+    assert!(new_frames.join("走路_1.png").is_file(), "帧目录整体复制");
   }
 
   /// 副本落点（2026-08-20 用户定）：同文件夹紧随原件（新副本恒贴原件、旧副本顺后移），跨文件夹段首前插
@@ -542,12 +542,12 @@ mod tests {
     // add_png 每条前插段首 → 初始 items 序：丙, 乙, 甲
     let out = duplicate_placements(&mut h.lib, &[pref("AN-B", "root", true)], "root", &[None]).unwrap();
     let names: Vec<&str> = h.lib.folders.items.iter().map(|p| p.name.as_str()).collect();
-    assert_eq!(names, ["丙.png", "乙.png", "乙-1.png", "甲.png"], "副本紧随原件");
+    assert_eq!(names, ["丙.png", "乙.png", "乙_1.png", "甲.png"], "副本紧随原件");
     assert_eq!(h.lib.folders.items[2].asset, out.new_ids[0]);
     // 同原件再副本：新副本贴原件、旧副本后移
     duplicate_placements(&mut h.lib, &[pref("AN-B", "root", true)], "root", &[None]).unwrap();
     let names: Vec<&str> = h.lib.folders.items.iter().map(|p| p.name.as_str()).collect();
-    assert_eq!(names, ["丙.png", "乙.png", "乙-2.png", "乙-1.png", "甲.png"], "新副本恒贴原件");
+    assert_eq!(names, ["丙.png", "乙.png", "乙_2.png", "乙_1.png", "甲.png"], "新副本恒贴原件");
     // 跨文件夹副本：段首前插（导入同语义）
     let fid = crate::services::import::new_folder_id();
     h.lib

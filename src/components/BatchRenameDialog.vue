@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 批量重命名弹窗（37 稿，3.4，2026-08-18）：双列对照（原始文件名 / 新的文件名）+ 底部
 // 模式切换（SegmentedControl：序号命名 / 替换命名——同一时刻只显示当前模式的一行输入，PRD 02-14）。
-// 实时预览只读无"应用"钮：序号 = 名称 + 起始编号（位宽按选中数 <100 两位 / ≥100 三位）；
+// 实时预览只读无"应用"钮：序号 = 名称_编号（名称 + `_` + 起始编号，2026-09-23 序号格式统一 `_数字`；
+// 位宽按选中数 <100 两位 / ≥100 三位）；
 // 替换 = 查找文本全处替换，原名称匹配段品牌色高亮（Eagle 交互参考：视觉上把高亮部分换成新的）。
 // 规则只作用词干、扩展名不动；撞名不拦截（后端 rename_placements 不唯一化）；
 // 失败项跳过 toast 汇总不整体回滚；无变化项不提交（名称/查找为空 → 该项保持原名）。
@@ -81,7 +82,7 @@ function newStem(index: number, stem: string): string | null {
   if (mode.value === "sequence") {
     const base = seqName.value.trim();
     if (!base) return null;
-    return `${base}${String(startNum.value + index).padStart(padWidth.value, "0")}`;
+    return `${base}_${String(startNum.value + index).padStart(padWidth.value, "0")}`;
   }
   if (!findText.value || !stem.includes(findText.value)) return null;
   return stem.split(findText.value).join(replaceText.value);

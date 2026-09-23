@@ -9,7 +9,7 @@
 //!
 //! 冲突策略 = 方案一（不阻断）：hash 完全相同 → 管线产出 ConflictItem（本工具映射为
 //! skippedDuplicate + 已有资产 id 回给 Agent）；同名不同内容 → add_placement 既有同名单一化
-//!（`-序号` 后缀，core::library::unique_name 口径）入库（映射为 renamed + finalName）。
+//!（`_序号` 后缀，core::library::unique_name 口径）入库（映射为 renamed + finalName）。
 //! **撤销口径：不进撤销**——APP 导入管线本就不接 UndoManager（导入 = 资产池新增，
 //! 撤销体系覆盖库结构操作不覆盖导入），MCP 同口径不硬接。
 
@@ -70,7 +70,7 @@ struct ImportReport {
 #[tool_router(router = import_router, vis = "pub")]
 impl AnikitMcp {
   /// 导入磁盘文件入库（仅文件；复制语义——源文件不动），缩略图随管线自动生成（导入即可看图）。
-  /// 冲突不阻断：hash 完全相同 → 跳过并回已有资产 id；同名不同内容 → 自动加 -序号 后缀入库；
+  /// 冲突不阻断：hash 完全相同 → 跳过并回已有资产 id；同名不同内容 → 自动加 _序号 后缀入库；
   /// 逐文件报告 { path, status, assetId?, finalName?, reason? }。不进撤销；同步执行、不支持取消
   #[tool(name = "import_paths", annotations(read_only_hint = false))]
   fn import_paths(&self, Parameters(p): Parameters<ImportPathsParams>) -> Result<CallToolResult, ErrorData> {
@@ -134,7 +134,7 @@ impl AnikitMcp {
         &cancel,
       );
       for view in captured.into_inner().unwrap_or_default() {
-        let renamed = view.name != file_name; // add_placement 同名单一化加 -序号（同名不同内容）
+        let renamed = view.name != file_name; // add_placement 同名单一化加 _序号（同名不同内容）
         items.push(ImportItemReport {
           path: path.clone(),
           status: if renamed { "renamed" } else { "imported" },

@@ -277,7 +277,7 @@
     with_lib(&h, |l| {
       let names: Vec<&str> = l.folders.items.iter().map(|p| p.name.as_str()).collect();
       assert!(names.contains(&"男人.fla"));
-      assert!(names.contains(&"男人-1.fla"));
+      assert!(names.contains(&"男人_1.fla"));
     });
   }
 
@@ -601,12 +601,12 @@
     let meta = with_lib(&h, |l| l.index.assets.values().find(|a| a.frame_count.is_some()).unwrap().clone());
     assert_eq!((meta.name.as_str(), meta.ext.as_str()), ("走路", "png"));
     assert_eq!((meta.fps, meta.frame_count), (Some(24.0), Some(4)));
-    assert_eq!(meta.thumb_frame.as_deref(), Some("走路-001.png"));
+    assert_eq!(meta.thumb_frame.as_deref(), Some("走路_001.png"));
     assert_eq!((meta.width, meta.height), (Some(16), Some(12)));
     // frames/ 归一重命名（位宽 3），缩略图复用图片管线
     let info_dir = paths::info_dir(&h.assets_dir, &meta.id);
     for n in 1..=4 {
-      assert!(info_dir.join("frames").join(format!("走路-{n:03}.png")).is_file());
+      assert!(info_dir.join("frames").join(format!("走路_{n:03}.png")).is_file());
     }
     assert!(meta.thumbnail.as_deref().unwrap().ends_with("_thumbnail.webp"));
     // Placement 显示名 = 标题.扩展名；copy 源帧保留

@@ -3,7 +3,7 @@
 //! 支持 `标题001` / `标题 (1)` / `标题_001` / `标题-001`（基础名可含其他文字，序号在末尾）；
 //! 序号连续（允许少量缺帧：缺帧 ≤ max(2, 跨度/10)；同组同号不判）且 ≥ 3 才判定为序列帧；
 //! 仅对缩略图管线支持的图片格式判定。
-//! 入库归一：`{ID}.info/frames/` 存放全部帧，统一重命名为 `标题-序号.扩展名`（序号补齐位宽，
+//! 入库归一：`{ID}.info/frames/` 存放全部帧，统一重命名为 `标题_序号.扩展名`（序号补齐位宽，
 //! 库内只维护这一种格式）；metadata 记 fps（默认 24）/ frameCount / thumbFrame（默认首帧文件名）。
 //! 查重：组 hash = 各帧 sha256 按序号升序串联后再 sha256，撞 hash 走既有冲突挂起流程。
 
@@ -137,9 +137,10 @@ pub fn group_hash(frame_hashes: &[&str]) -> String {
   format!("sha256:{:x}", hasher.finalize())
 }
 
-/// 库内归一帧文件名：标题-序号.扩展名（序号补齐位宽；PRD：库内只维护这一种格式）
+/// 库内归一帧文件名：标题_序号.扩展名（序号补齐位宽；PRD：库内只维护这一种格式；
+/// 2026-09-23 序号格式自 - 改 _——存量 - 帧名 parse_frame_name 兼容，重排序号时自然迁入）
 pub fn frame_name(name: &str, number: u32, num_width: usize, ext: &str) -> String {
-  format!("{name}-{number:0>num_width$}.{ext}")
+  format!("{name}_{number:0>num_width$}.{ext}")
 }
 
 /// 序列帧资产判定（导出 / 重命名共用）：origin 不在 info 根（指向 frames/ 内帧），frames/ 目录存在。
@@ -153,8 +154,8 @@ pub(crate) fn frames_dir_if_sequence(assets_dir: &Path, asset_id: &str, meta: &A
 }
 
 /// 序列帧整组改词干（rename_origin 序列帧分支，2026-08-14 用户定：序列帧重命名帧文件跟着改）：
-/// frames/ 内帧按"新词干-序号"改名（保留序号尾与扩展名），thumb_frame / origin_name / name 同步；
-/// 磁盘改名成对入 renames（撤销登记用）。重取词干靠"末尾 -序号"解析，不依赖旧词干匹配——
+/// frames/ 内帧按"新词干_序号"改名（保留序号尾与扩展名），thumb_frame / origin_name / name 同步；
+/// 磁盘改名成对入 renames（撤销登记用）。重取词干靠"末尾 _序号"解析，不依赖旧词干匹配——
 /// 历史遗留（此功能前改名只改了 metadata）的脱钩状态也能归位，originName 无帧匹配时回退指到封面帧
 pub(crate) fn rename_frames(
   frames_dir: &Path,
@@ -204,15 +205,16 @@ pub(crate) fn rename_frames(
   Ok(())
 }
 
-/// 帧文件改词干：`{词干}-{序号}.{扩展名}` → 保留序号尾与扩展名换词干；不合帧格式返回 None
+/// 帧文件改词干：`{词干}_{序号}.{扩展名}` → 保留序号尾与扩展名换词干；不合帧格式返回 None
+///（2026-09-23 归一名自 `-` 改 `_`：存量 `-` 帧名兼容解析，改名一律产出 `_` 新格式）
 fn restem_frame(file_name: &str, new_stem: &str) -> Option<String> {
   let (stem, ext) = file_name.rsplit_once('.')?;
-  let dash = stem.rfind('-')?;
+  let dash = stem.rfind(['-', '_'])?;
   let digits = &stem[dash + 1..];
   if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
     return None;
   }
-  Some(format!("{new_stem}-{digits}.{ext}"))
+  Some(format!("{new_stem}_{digits}.{ext}"))
 }
 
 /// 序列帧打包建档（锁外重活，与 build_asset_with_id 同纪律）：建 `{ID}.info/frames/` →
@@ -409,15 +411,15 @@ mod tests {
     // frames/ 归一重命名（序号补齐位宽），剪切整组移走
     let info = paths::info_dir(&assets_dir, "AN-TEST");
     for n in 1..=3 {
-      let name = format!("标题-00{n}.png");
+      let name = format!("标题_00{n}.png");
       assert!(info.join("frames").join(&name).is_file(), "缺帧 {name}");
       assert!(!frames[n - 1].0.exists(), "剪切后源帧应消失");
     }
     // metadata：fps / frameCount / thumbFrame（首帧文件名）/ 宽高 / 缩略图
     assert_eq!(meta.fps, Some(24.0));
     assert_eq!(meta.frame_count, Some(3));
-    assert_eq!(meta.thumb_frame.as_deref(), Some("标题-001.png"));
-    assert_eq!(meta.origin_name, "标题-001.png");
+    assert_eq!(meta.thumb_frame.as_deref(), Some("标题_001.png"));
+    assert_eq!(meta.origin_name, "标题_001.png");
     assert_eq!((meta.width, meta.height), (Some(100), Some(80)));
     assert_eq!(meta.thumbnail.as_deref(), Some("标题_thumbnail.webp"));
     assert!(info.join("标题_thumbnail.webp").is_file());

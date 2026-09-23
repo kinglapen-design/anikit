@@ -29,7 +29,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 | `move_placements`（写） | 资产移入文件夹（Placement 级，去重 / 原地自动跳过），回 `{ moved }`；**进撤销** |
 | `move_folders`（写） | 移动文件夹重设父级（仅改数据不动磁盘；`targetParentId` 缺省 = 顶层），回 `{ moved }`；**进撤销** |
 | `link_placements`（写） | 链接汇总：资产留原地、目标文件夹建链接 Placement，回 `{ linked }`；**进撤销** |
-| `import_paths`（写） | 导入磁盘文件入库（缩略图自动生成、导入即可看图）；冲突不阻断——hash 相同跳过回已有 id / 同名不同内容加 `-序号` 后缀；逐文件报告；**不进撤销** |
+| `import_paths`（写） | 导入磁盘文件入库（缩略图自动生成、导入即可看图）；冲突不阻断——hash 相同跳过回已有 id / 同名不同内容加 `_序号` 后缀；逐文件报告；**不进撤销** |
 | `trash_placements`（写） | 丢到库内回收站（Placement 进 recycle.json 快照，磁盘文件不动），回 `{ requested }`；**进撤销**（Ctrl+Z 可撤、回收站可还原）。彻底删除 / 清空回收站不存在于本通道，须 APP 内人工 |
 
 ## 写入开关（二期，默认关）
@@ -56,7 +56,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 外部生成图 → 入库 → 写提示词 → 归档到场次文件夹的完整闭环：
 
 1. `list_folder_tree` 拿目标场次文件夹 id（如 `…/04_分镜/第六集/场_01`）；场次文件夹的 groups 是**规则组**（按扩展名 / 名称关键字自动归组，如「提示词」组收 md、「P1」组收名含 P1 的 mp4）——入库 / 改名即自动归组，无需手动归组调用；
-2. `import_paths` 把外部生成的图导入目标文件夹（`folderId`）；逐文件报告拿回 assetId——重复导入同文件 = `skippedDuplicate` 直接拿已有 id 用，同名不同内容 = `renamed` 自动加 `-序号` 后缀；
+2. `import_paths` 把外部生成的图导入目标文件夹（`folderId`）；逐文件报告拿回 assetId——重复导入同文件 = `skippedDuplicate` 直接拿已有 id 用，同名不同内容 = `renamed` 自动加 `_序号` 后缀；
 3. `create_document(kind="md", folderId=场次 id)` 建提示词文档 → `write_text_asset` 写入提示词正文（先建后写；覆写前记得 read 留底）→ `rename_placements` 改成规范名（规则组按名字 / 扩展名自动归进「提示词」组）；
 4. 整理归档：`move_placements` 把资产移入目标文件夹；`link_placements` 把大池里的资产以链接放进场次文件夹（本体留原地，不占双份磁盘）——「资产留大池、链接进场次」的用户习惯配套；
 5. 每步回包里的 assetId / folderId 是后续调用的定位凭据；路径一律现取（`get_asset_origin_path`），禁止缓存。

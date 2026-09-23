@@ -419,7 +419,8 @@ fn validate_name(name: &str) -> Result<(), String> {
   Ok(())
 }
 
-/// 重名自动规避：目标已存在时在词干后追加 " (n)"（n 从 2 递增），不覆盖已有条目
+/// 重名自动规避：目标已存在时在词干后追加 _n（n 从 2 递增；2026-09-23 序号格式统一定案，
+/// 原 "名 (n)" 括号式废除），不覆盖已有条目
 fn unique_target(dir: &Path, name: &str) -> PathBuf {
   let target = dir.join(name);
   if !target.exists() {
@@ -430,7 +431,7 @@ fn unique_target(dir: &Path, name: &str) -> PathBuf {
     _ => (name, ""),
   };
   for n in 2.. {
-    let candidate = dir.join(format!("{stem} ({n}){ext}"));
+    let candidate = dir.join(format!("{stem}_{n}{ext}"));
     if !candidate.exists() {
       return candidate;
     }
@@ -513,7 +514,7 @@ pub fn delete_entries(root: &Path, rels: &[String]) -> Result<(), String> {
 }
 
 /// 移动（拖拽 / 剪切粘贴）：src_rels 逐个移入 dest_rel_dir（同卷 rename）；
-/// 目录禁移入自身子树；重名自动 " (n)" 规避，不覆盖
+/// 目录禁移入自身子树；重名自动 _n 规避（n 从 2 递增），不覆盖
 pub fn move_entries(root: &Path, src_rels: &[String], dest_rel_dir: &str) -> Result<(), String> {
   let dest = resolve_under(root, dest_rel_dir)?;
   if !dest.is_dir() {
@@ -845,7 +846,7 @@ mod tests {
     assert!(rename_entry(&root, ".anikit/thumbs", "x").is_err(), ".anikit 拒绝");
   }
 
-  /// 移动：基本移入 + 重名自动 " (n)" 规避；目录禁移入自身子树
+  /// 移动：基本移入 + 重名自动 _n 规避（n 从 2 递增）；目录禁移入自身子树
   #[test]
   fn move_entries_relocates_and_avoids_clobber() {
     let (_dir, root) = make_ws();
@@ -856,7 +857,7 @@ mod tests {
     make_png(&root.join("目标/甲.png"), 10, 10);
 
     move_entries(&root, &["甲.png".to_string()], "目标").unwrap();
-    assert!(root.join("目标/甲 (2).png").is_file(), "重名应自动加后缀，不覆盖");
+    assert!(root.join("目标/甲_2.png").is_file(), "重名应自动加后缀，不覆盖");
     assert!(move_entries(&root, &["夹".to_string()], "夹/子").is_err(), "禁移入自身子树");
     move_entries(&root, &["夹".to_string()], "目标").unwrap();
     assert!(root.join("目标/夹/子/内.txt").is_file());
@@ -873,7 +874,7 @@ mod tests {
     fs::write(root.join("目标/源夹"), "占位同名文件").unwrap();
 
     copy_entries(&root, &["源夹".to_string()], "目标").unwrap();
-    assert!(root.join("目标/源夹 (2)/子/内.txt").is_file(), "重名目录应自动加后缀");
+    assert!(root.join("目标/源夹_2/子/内.txt").is_file(), "重名目录应自动加后缀");
     assert!(root.join("目标/源夹").is_file(), "原同名文件不被覆盖");
     assert!(copy_entries(&root, &[".anikit".to_string()], "目标").is_err(), ".anikit 拒绝");
   }

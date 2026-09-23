@@ -285,7 +285,7 @@ fn check_target_dir(target_dir: &str) -> Result<PathBuf, String> {
   Ok(dir)
 }
 
-/// 重名去重：目标已存在时词干追加 -1、-2…（保持扩展名）
+/// 重名去重：目标已存在时词干追加 _1、_2…（保持扩展名；2026-09-23 序号格式自 - 改 _）
 fn dedupe_path(dir: &Path, file_name: &str) -> PathBuf {
   let candidate = dir.join(file_name);
   if !candidate.exists() {
@@ -297,7 +297,7 @@ fn dedupe_path(dir: &Path, file_name: &str) -> PathBuf {
   };
   let mut n = 1;
   loop {
-    let c = dir.join(format!("{stem}-{n}{ext}"));
+    let c = dir.join(format!("{stem}_{n}{ext}"));
     if !c.exists() {
       return c;
     }
@@ -350,7 +350,7 @@ fn sequence_frames(src: &ExportSource, asset_id: &str, meta: &AssetMeta) -> Opti
   crate::services::sequence::frames_dir_if_sequence(&src.assets_dir, asset_id, meta)
 }
 
-/// 序列帧整组导出：目标目录下建 `{folder_name}/` 文件夹（重名 -序号），frames/ 内全部帧拷入
+/// 序列帧整组导出：目标目录下建 `{folder_name}/` 文件夹（重名 _序号），frames/ 内全部帧拷入
 /// （2026-08-14 用户定：序列帧用一个文件夹装起来，文件夹名称用文件名）。
 /// 拷出帧数计入 out.copied；失败帧逐条进 out.failed（源帧路径 + 实际目标路径）；
 /// 每帧（成败皆然）推一个 Item；cancel 置位时当前帧拷完后中断
@@ -447,8 +447,8 @@ fn export_file_count(src: &ExportSource, asset_id: &str) -> usize {
   usize::from(paths::origin_file(&src.assets_dir, asset_id, &meta.origin_name).is_file())
 }
 
-/// 导出文件（6.3 右键菜单）：各资产 origin 复制到目标目录（按 originName，重名 -序号）；
-/// 序列帧资产 = 建 `{资产名}/` 文件夹装全部帧（文件夹重名同样 -序号）。
+/// 导出文件（6.3 右键菜单）：各资产 origin 复制到目标目录（按 originName，重名 _序号）；
+/// 序列帧资产 = 建 `{资产名}/` 文件夹装全部帧（文件夹重名同样 _序号）。
 /// 进度：先推 Started（总数 = 文件数），逐文件推 Item；cancel 置位时当前文件拷完后中断。
 /// 返回 ExportOutcome（copied 文件数 + failed 失败清单，失败弹窗与重试用）
 pub fn export_assets(
@@ -476,7 +476,7 @@ pub fn export_assets(
   Ok(out)
 }
 
-/// 导出文件夹（6.3 右键菜单）：目标目录下建同名目录（重名 -序号），子层级保留，
+/// 导出文件夹（6.3 右键菜单）：目标目录下建同名目录（重名 _序号），子层级保留，
 /// 素材按各自 Placement 显示名复制（链接 Placement 按其显示名导出同一份内容）；
 /// 序列帧 = 显示名去扩展名建文件夹装全部帧。进度与取消同 export_assets
 pub fn export_folder(
@@ -872,7 +872,7 @@ mod tests {
     assert_eq!(out0.copied, 2, "同名也去重导出两份");
     assert!(out0.failed.is_empty());
     assert!(out.join("a.png").is_file());
-    assert!(out.join("a-1.png").is_file(), "重名追加 -序号");
+    assert!(out.join("a_1.png").is_file(), "重名追加 _序号");
     assert!(export_assets(&src, &["AN-A".into()], "不存在目录", &mut sink, &no).is_err());
   }
 
@@ -943,10 +943,10 @@ mod tests {
     assert!(out.join("a.png").is_file());
     let dir = out.join("走路");
     assert!(dir.is_dir(), "序列帧导出为资产名文件夹");
-    for f in ["走路-1.png", "走路-2.png", "走路-3.png"] {
+    for f in ["走路_1.png", "走路_2.png", "走路_3.png"] {
       assert!(dir.join(f).is_file(), "{f} 应拷入");
     }
-    assert!(!out.join("走路-1.png").is_file(), "帧不散落到目标根");
+    assert!(!out.join("走路_1.png").is_file(), "帧不散落到目标根");
   }
 
   #[test]
@@ -973,8 +973,8 @@ mod tests {
     let n = export_folder(&src, "F-TOP", out.to_str().unwrap(), &mut sink, &no).unwrap().copied;
     assert_eq!(n, 7, "序列帧 2 条 Placement × 3 帧 + 动图 1");
     let base = out.join("顶夹");
-    assert!(base.join("走路").join("走路-1.png").is_file(), "origin 显示名建文件夹");
-    assert!(base.join("别名").join("走路-2.png").is_file(), "链接别名建文件夹装同组帧");
+    assert!(base.join("走路").join("走路_1.png").is_file(), "origin 显示名建文件夹");
+    assert!(base.join("别名").join("走路_2.png").is_file(), "链接别名建文件夹装同组帧");
     assert!(base.join("动图.gif").is_file(), "动图解包 frames/ 不误判，单文件导出");
     assert!(!base.join("动图").exists(), "动图不建文件夹");
   }
@@ -1001,7 +1001,7 @@ mod tests {
     add_asset(&mut h, "AN-A", "a.png", "root");
     let seq = real_origin_file(&h.lib, "AN-S").unwrap();
     assert!(seq.is_file(), "序列帧 = frames/ 封面帧（真实存在）");
-    assert!(seq.ends_with("走路-1.png"), "{seq:?}");
+    assert!(seq.ends_with("走路_1.png"), "{seq:?}");
     let normal = real_origin_file(&h.lib, "AN-A").unwrap();
     assert!(normal.is_file() && normal.ends_with("a.png"));
     assert!(real_origin_file(&h.lib, "AN-不存在").is_err());

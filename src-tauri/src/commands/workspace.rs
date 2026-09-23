@@ -111,7 +111,7 @@ pub fn ws_delete(state: State<AppState>, rel_paths: Vec<String>) -> Result<(), S
   workspace::delete_entries(&root, &rel_paths)
 }
 
-/// 移动（拖拽 / 剪切粘贴）：rel_paths 移入 dest_rel；重名自动 " (n)" 规避
+/// 移动（拖拽 / 剪切粘贴）：rel_paths 移入 dest_rel；重名自动 _n 规避（n 从 2 递增）
 #[tauri::command]
 pub fn ws_move(state: State<AppState>, rel_paths: Vec<String>, dest_rel: String) -> Result<(), String> {
   let root = ws_root(&state)?;

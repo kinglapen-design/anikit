@@ -261,7 +261,7 @@ fn import_pair(lib: &mut Library, p: &Prepared, fla_id: &str, webp_id: &str) -> 
 // 面板对当前文档直接导画面（静态 = 播放头帧；动态 = 主时间轴帧范围），PNG/序列照常落 temp/cep-out
 // 由 APP 合成 WebP（合成能力只在 APP）。绑定目标 = 文档磁盘路径 ↔ 库内 fla 资产池内实体路径精确匹配：
 //   命中 = WebP 入库（placement 落 root）+ set_thumb_asset 绑定（已有绑定 = 换绑，旧 hidden 不动——PRD 口径）；
-//   未命中 = 不入库，WebP 挪到原 fla 旁边（{词干}.webp，重名 -序号唯一化），用户自行导入（用户定）。
+//   未命中 = 不入库，WebP 挪到原 fla 旁边（{词干}.webp，重名 _序号唯一化），用户自行导入（用户定）。
 
 /// 仅缩略图载荷（WS thumbOnly 消息）
 #[derive(Debug, Clone, Deserialize)]
@@ -396,12 +396,12 @@ pub fn thumb_commit(lib: &mut Library, p: &ThumbPrepared, over_limit: bool, webp
   }
 }
 
-/// 池外兜底落点唯一化：{stem}.webp 存在则 {stem}-2.webp 递增
+/// 池外兜底落点唯一化：{stem}.webp 存在则 {stem}_2.webp 递增（2026-09-23 序号格式自 - 改 _）
 fn unique_beside(dir: &Path, stem: &str, ext: &str) -> PathBuf {
   let mut c = dir.join(format!("{stem}.{ext}"));
   let mut n = 2;
   while c.exists() {
-    c = dir.join(format!("{stem}-{n}.{ext}"));
+    c = dir.join(format!("{stem}_{n}.{ext}"));
     n += 1;
   }
   c
@@ -682,6 +682,6 @@ mod tests {
     assert!(lib.index.assets.is_empty(), "不入库");
     assert!(!proj.join("项目.png").exists(), "清场");
     let ThumbOutcome::Beside { out_path: second, .. } = run(&mut lib) else { panic!() };
-    assert_eq!(normalize_path(&second), normalize_path(&proj.join("项目-2.webp").to_string_lossy()), "重名 -2 唯一化");
+    assert_eq!(normalize_path(&second), normalize_path(&proj.join("项目_2.webp").to_string_lossy()), "重名 _2 唯一化");
   }
 }

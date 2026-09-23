@@ -356,7 +356,7 @@ mod tests {
     let moved = move_placements(&mut h.lib, &[pref("AN-A", "root", true), pref("AN-C", "root", true)], "F01").unwrap();
     assert_eq!(moved, 1, "AN-C 目标已有同资源，去重跳过");
     let a = placement(&h.lib, "AN-A", "F01").unwrap();
-    assert_eq!(a.name, "图-1.png", "目标内显示名唯一化");
+    assert_eq!(a.name, "图_1.png", "目标内显示名唯一化");
     assert_eq!(a.order, 2, "追加段尾（目标段已有 2 条）");
     assert!(placement(&h.lib, "AN-A", "root").is_none(), "原位置不再保留");
     assert!(placement(&h.lib, "AN-C", "root").is_some(), "被跳过的保持原样");
@@ -473,7 +473,7 @@ mod tests {
     link_placements(&mut h.lib, &[pref("AN-B", "F02", true)], "F01", &[]).unwrap();
     let names: HashSet<&str> =
       h.lib.folders.items.iter().filter(|p| p.folder == "F01").map(|p| p.name.as_str()).collect();
-    assert!(names.contains("片-1.png"), "重名追加 -序号：{names:?}");
+    assert!(names.contains("片_1.png"), "重名追加 _序号：{names:?}");
   }
 
   /// 链接不设限（2026-08-13 用户定案）：落点 root（未分类）允许建链接；
@@ -488,7 +488,7 @@ mod tests {
     assert_eq!(linked, 1);
     let names: HashSet<&str> =
       h.lib.folders.items.iter().filter(|p| p.folder == "root").map(|p| p.name.as_str()).collect();
-    assert!(names.contains("候-1.png"), "同文件夹重复链接唯一化：{names:?}");
+    assert!(names.contains("候_1.png"), "同文件夹重复链接唯一化：{names:?}");
 
     // 发起端 = 候车区资产落文件夹：同样放行
     add_folder(&mut h.lib, "F01");

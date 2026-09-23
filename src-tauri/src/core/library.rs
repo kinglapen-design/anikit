@@ -633,8 +633,8 @@ pub fn reload(lib: &mut Library) -> Result<(), DataError> {
   Ok(())
 }
 
-/// 同文件夹内显示名唯一化：无冲突原样返回；冲突时在扩展名前追加 -序号
-/// （如 男人-1.fla、男人-2.fla；无扩展名则在末尾追加，如 参考-1）。
+/// 同文件夹内显示名唯一化：无冲突原样返回；冲突时在扩展名前追加 _序号
+/// （如 男人_1.fla、男人_2.fla；无扩展名则在末尾追加，如 参考_1。2026-09-23 序号格式自 - 改 _）
 pub fn unique_name(existing: &HashSet<String>, name: &str) -> String {
   if !existing.contains(name) {
     return name.to_string();
@@ -646,7 +646,7 @@ pub fn unique_name(existing: &HashSet<String>, name: &str) -> String {
   };
   let mut n = 1;
   loop {
-    let candidate = format!("{stem}-{n}{ext}");
+    let candidate = format!("{stem}_{n}{ext}");
     if !existing.contains(&candidate) {
       return candidate;
     }
@@ -1377,15 +1377,15 @@ mod tests {
   #[test]
   fn unique_name_appends_counter_before_ext() {
     let existing: HashSet<String> =
-      ["男人.fla".to_string(), "男人-1.fla".to_string(), "参考".to_string()].into_iter().collect();
+      ["男人.fla".to_string(), "男人_1.fla".to_string(), "参考".to_string()].into_iter().collect();
     // 无冲突原样返回
     assert_eq!(unique_name(&existing, "女人.fla"), "女人.fla");
-    // 冲突在扩展名前追加 -序号，已占用的序号跳过
-    assert_eq!(unique_name(&existing, "男人.fla"), "男人-2.fla");
+    // 冲突在扩展名前追加 _序号，已占用的序号跳过
+    assert_eq!(unique_name(&existing, "男人.fla"), "男人_2.fla");
     // 无扩展名在末尾追加
-    assert_eq!(unique_name(&existing, "参考"), "参考-1");
+    assert_eq!(unique_name(&existing, "参考"), "参考_1");
     // 点开头不视为扩展名
     let hidden: HashSet<String> = [".gitignore".to_string()].into_iter().collect();
-    assert_eq!(unique_name(&hidden, ".gitignore"), ".gitignore-1");
+    assert_eq!(unique_name(&hidden, ".gitignore"), ".gitignore_1");
   }
 }

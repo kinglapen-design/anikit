@@ -112,7 +112,7 @@ pub struct AssetMeta {
   pub fps: Option<f64>,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub frame_count: Option<u32>,
-  /// 封面帧文件名（frames/ 内的归一名 标题-序号.扩展名；2026-07-22 用户定案：默认首帧文件名）
+  /// 封面帧文件名（frames/ 内的归一名 标题_序号.扩展名；2026-07-22 用户定案：默认首帧文件名）
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub thumb_frame: Option<String>,
   /// hidden 标记（PRD 02-15，8.1）：图片被设为工程/档案的缩略图后打标——所有普通视图统一过滤，

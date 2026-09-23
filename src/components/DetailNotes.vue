@@ -51,7 +51,7 @@ watch(
 
 // item 左侧标识：视频 t:{秒} → 帧号（帧数模式且素材 fps 可用，5.3 帧化；底层 key 仍 `t:{秒}` 不变）
 // 或 mm:ss（时间码模式 / fps 缺失 / 音频）；动图 f:{索引}（2026-08-21 补，解包废除漏适配）与
-// 序列帧帧名（标题-00001.webp）→ 帧号数字
+// 序列帧帧名（标题_00001.png；存量 `-` 分隔帧名兼容，2026-09-23 归一名自 - 改 _）→ 帧号数字
 function label(key: string): string {
   if (key.startsWith("t:")) {
     const secs = Number(key.slice(2)) || 0;
@@ -66,7 +66,7 @@ function label(key: string): string {
     const i = Number(key.slice(2));
     return Number.isFinite(i) ? String(i + 1) : key;
   }
-  const m = key.match(/-(\d+)\.[^.]+$/);
+  const m = key.match(/[-_](\d+)\.[^.]+$/);
   return m ? String(parseInt(m[1], 10)) : key;
 }
 

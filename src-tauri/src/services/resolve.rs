@@ -640,7 +640,7 @@ mod tests {
     assert_eq!((new_meta.fps, new_meta.frame_count), (Some(24.0), Some(3)));
     let frames_dir = crate::core::paths::frames_dir(&h.assets_dir, &new_meta.id);
     for n in 1..=3 {
-      assert!(frames_dir.join(format!("走路-{n}.png")).is_file());
+      assert!(frames_dir.join(format!("走路_{n}.png")).is_file());
     }
     assert_eq!(placements_of(&h, &new_meta.id)[0].name, "走路.png", "保留两个不自动加序号——同名允许（2026-08-14 用户定）");
     // 源帧保留（继承 copy）
