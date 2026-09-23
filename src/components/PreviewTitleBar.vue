@@ -143,8 +143,8 @@ async function togglePin(): Promise<void> {
   flex: none;
 }
 /* 中栏标题栏图标按钮统一 亮色/三级（2026-08-30 用户实机定，与内容工具栏 IconButton plain 同档；
-   旧 --font-icon-2 80% 口径作废） */
-.preview-titlebar :deep(.icon-btn) {
+   旧 --font-icon-2 80% 口径作废；选择器 2026-09-23 修漂移：icon-btn → ic-btn——按钮族封装改类名） */
+.preview-titlebar :deep(.ic-btn) {
   color: var(--n-l3);
 }
 .nav-group {

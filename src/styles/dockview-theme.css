@@ -109,15 +109,17 @@
 }
 
 /* 标签页行首（prefix actions，左栏收起时的"展开侧边栏"按钮）：垂直居中；
-   无按钮时 display:none 不占位；有钮时与首标签间距 12（margin——栏级 gap 已废，见栏容器注释） */
+   无按钮时 display:none 不占位；有钮时与首标签间距 12（margin——栏级 gap 已废，见栏容器注释）。
+   内容探测用 :has(button)（2026-09-23 修复：原 :has(.icon-btn) 是 1.2 时代类名，按钮族封装
+   改 ic-btn 后选择器失联——容器恒 display:none，展开钮隐形；用元素选择器防类名再漂移） */
 .anikit-dock-theme .dv-pre-actions-container {
   display: flex;
   align-items: center;
 }
-.anikit-dock-theme .dv-pre-actions-container:not(:has(.icon-btn)) {
+.anikit-dock-theme .dv-pre-actions-container:not(:has(button)) {
   display: none;
 }
-.anikit-dock-theme .dv-pre-actions-container:has(.icon-btn) {
+.anikit-dock-theme .dv-pre-actions-container:has(button) {
   margin-right: var(--n-space-12);
 }
 .anikit-dock-theme .dv-pre-actions-container .dv-vue-part,
@@ -130,19 +132,13 @@
 /* 左侧 actions（+ 按钮，tabs 后 = 挨着最后一个标签页；DOM 顺序 tabs → left-actions → void →
    right-actions，天然位）：与标签组间距 12（margin-left——栏级 gap 已废，稿口径不变；
    flex 间距按 scrollable 的 margin 盒缘起算，视觉恒 12）；
-   钮 = IconButton 大档 30×30（稿值），色 亮/三级、hover 亮/二级 + 半透明-3 罩（贴预览展区口径） */
+   钮 = IconButton 大档 30×30（稿值），色 亮/三级、hover 亮/二级 + 半透明-3 罩——
+   2026-09-23 起直接由 IconButton plain 档自带（旧 .icon-btn 覆盖规则随类名漂移清零） */
 .anikit-dock-theme .dv-left-actions-container {
   display: flex;
   align-items: center;
   margin-left: var(--n-space-12);
   margin-right: auto; /* 钉在标签页后——后续元素（void/右端 actions/浮块）一律顶到最右 */
-}
-.anikit-dock-theme .dv-left-actions-container .icon-btn {
-  color: var(--n-l3);
-}
-.anikit-dock-theme .dv-left-actions-container .icon-btn:hover {
-  color: var(--n-l2);
-  background: var(--n-l-a3); /* shorthand 覆盖 IconButton 的 gradient 罩 */
 }
 
 /* 默认 tab 内部结构不使用（自定义 TabLabel 全接管），关掉默认关闭钮的样式干扰 */
