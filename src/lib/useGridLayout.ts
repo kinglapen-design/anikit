@@ -278,12 +278,20 @@ export function useGridLayout(opts: {
   );
 
   // 切换目录 / 视图（1.2：本标签页 viewKey 变化——dockview updateParameters 驱动）：
-  // 保存旧视口位置、登记新视口待恢复（随后 items watch 重排完成时恢复。
-  // 注册顺序必须在 items watch 之前——同 tick 内按注册顺序触发，restorePos 要先就位）
-  watch(opts.viewKey, (newKey, oldKey) => {
-    ui.setScrollPos(oldKey, pos.value);
-    restorePos = ui.scrollPosFor(newKey) ?? 0;
-  });
+  // 保存旧视口位置、登记新视口待恢复（随后 items watch 重排完成时恢复）。
+  // **必须 flush:"sync"**（2026-09-23 踩坑实锤）：items 与 viewKey 两个 pre-flush watch 的
+  // 实际触发顺序与注册序相反（items 先跑——__vkLog 探针实证），若用默认 pre：
+  // items watch 的 relayout 先把 pos 夹到新视口 max（矮视口夹到 0），viewKey watch 再跑时
+  // 保存的是被污染值、restorePos 在 relayout 之后才就位（本轮恢复失效，且悬到下次 relayout
+  // 把 reveal 定位也拉回）。sync = props patch 赋值瞬间同步执行，抢在任何排队的 relayout 前。
+  watch(
+    opts.viewKey,
+    (newKey, oldKey) => {
+      ui.setScrollPos(oldKey, pos.value);
+      restorePos = ui.scrollPosFor(newKey) ?? 0;
+    },
+    { flush: "sync" },
+  );
   watch(opts.items, () => relayout());
   // 同视口跳转定位（2026-09-23）：viewKey 不变时上方两 watch 都不触发，
   // 跳转请求自身驱动一次重排（跨视口跳转由上方重排消费，此处 pendingReveal 已空不匹配）
