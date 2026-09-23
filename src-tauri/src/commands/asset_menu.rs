@@ -106,6 +106,14 @@ pub async fn restore_thumb_asset(state: State<'_, AppState>, asset_id: String) -
   asset_menu::restore_thumb_asset(lib, &asset_id)
 }
 
+/// 解除伴生缩略图绑定（详情缩略图区块 ×，2026-09-23）：仅清工程侧 thumb_asset_id，hidden 侧不动
+#[tauri::command]
+pub async fn unbind_thumb_asset(state: State<'_, AppState>, asset_id: String) -> Result<(), String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  asset_menu::unbind_thumb_asset(lib, &asset_id)
+}
+
 /// 导出数据源快照：锁内克隆（资产索引 + folders 文件），工作线程只持快照——
 /// 导出 IO 不占用库锁，长拷贝不阻塞 UI 其他命令
 fn export_snapshot(app: &AppHandle) -> Result<asset_menu::ExportSource, String> {

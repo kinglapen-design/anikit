@@ -628,6 +628,22 @@ export async function restoreThumbAsset(assetId: string): Promise<void> {
   }
 }
 
+// 解除伴生缩略图绑定（详情面板缩略图区块 ×，2026-09-23）：仅清工程侧 thumb_asset_id，
+// hidden 伴生资产不动（还原走 restoreThumbAsset）；刷新 = 全量 refresh（卡片代理图回退格式图标）
+// + bumpDetailRev（详情缩略图区块重拉）
+export async function unbindThumbAsset(assetId: string): Promise<void> {
+  const content = useContentStore();
+  const toast = useToastStore();
+  try {
+    await invoke("unbind_thumb_asset", { assetId });
+    await content.refresh();
+    content.bumpDetailRev();
+    toast.notify({ message: "已解除缩略图绑定", icon: "success" });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+  }
+}
+
 // 发送至 Animate（8.3，PRD 07-04 快速发送）：fla → 剪贴板载荷 → WS 下发 jsx 原位粘贴；
 // 转换失败后端自动回退兜底（打开-复制-粘贴-关闭）。面板未连接 / 在途重复发送由后端报错，此处透传。
 // 点击即最小化主窗口（2026-09-08 实机走查第 20 条）：用户要看的是 AN 侧有没有导入，

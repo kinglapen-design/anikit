@@ -14,7 +14,7 @@
 #       数据卡 4 行（文件大小/格式/添加日期/修改日期——桩 width null 无尺寸行，旧口径）
 #   R9  底部信息查看管理钮：58 高块 + 34 高 solid + 文案（点亮不接业务）
 #   R10 链接关系 tab：五区块标题序 = 链接/音频/关系/缩略图/污染文件；链接卡 ×2 首行 origin 徽章；
-#       污染文件区块无动作组（稿）
+#       污染文件区块无动作组（稿）；R10f 缩略图区块接业务（2026-09-23）：调用侧卡 = 伴生资产名 + 引用数
 #   R11 提示词 tab：只读编辑框 + 五枚 solid 图标钮（业务占位）
 #   R12 tab 全局记忆：links 态点另一素材卡 a2 → 仍 links（2026-09-19 用户改定，持久化 ui.detailTab）
 #   R13 档案视口（folder:f2a）未选中 → 档案形态：封面区块 + 徽标「主角」+ chips「连载」+ 数据卡含创建日期
@@ -79,6 +79,9 @@ window.__TAURI_INTERNALS__ = {
           { folderId: "f2", blockName: "目录", path: ["场景"], name: "雪牧_自动-副本.fla", origin: false },
         ],
         archives: [],
+        // 缩略图区块（2026-09-23 接业务）：调用侧 = 伴生资产卡（名称 + 引用数），R10f 断言
+        thumbAsset: { assetId: "t1", name: "雪牧_自动.webp", users: 2 },
+        thumbUsedBy: [],
       },
       a2: {
         assetId: "a2", originName: "雪牧_跑动.fla", ext: "fla", size: 2000,
@@ -91,6 +94,7 @@ window.__TAURI_INTERNALS__ = {
           { folderId: "f1", blockName: "目录", path: ["角色"], name: "雪牧_跑动.fla", origin: true },
         ],
         archives: [],
+        thumbAsset: null, thumbUsedBy: [],
       },
     };
     const R = {
@@ -508,6 +512,21 @@ async def main():
                   and all(x.get("acts") == "1/visible" for x in stv if x.get("t") != "污染文件")
                   and [x for x in stv if x.get("t") == "污染文件"][0].get("acts") is None,
                   json.dumps(stv, ensure_ascii=False))
+
+            # ---------- R10f 缩略图区块接业务（2026-09-23）：调用侧卡 = 伴生资产名 + 引用数 ----------
+            thumbblk = await ev(
+                "(() => { const blocks = [...document.querySelectorAll('.sidebar-right .links-tab .lb-block')];"
+                " const b = blocks.find(x => x.querySelector('.st .txt')?.textContent === '缩略图');"
+                " if (!b) return null;"
+                " const items = [...b.querySelectorAll('.lb-body .lt')];"
+                " const item = items[0];"
+                " return { n: items.length,"
+                "   name: item?.querySelector('.nm')?.textContent ?? null,"
+                "   cnt: item?.querySelector('.cnt')?.textContent ?? null }; })()")
+            check("R10f 缩略图区块：调用侧卡 = 伴生资产名 + 引用数（桩 雪牧_自动.webp / 2）",
+                  isinstance(thumbblk, dict) and thumbblk.get("n") == 1
+                  and thumbblk.get("name") == "雪牧_自动.webp" and thumbblk.get("cnt") == "2",
+                  json.dumps(thumbblk, ensure_ascii=False))
 
             # ---------- R10e tab 切换滑动动画（侧栏范例同款时序 + 方向恒定左出右入，2026-08-31 用户定） ----------
             # computed 级行为断言：basic → links，入场 delay 100ms 窗内读 ——

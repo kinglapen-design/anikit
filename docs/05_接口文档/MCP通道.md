@@ -26,7 +26,7 @@
 | `search_assets` | `{ query: string, folderId?: string, recursive?: boolean }` | `SearchHits { placements: [{ assetId, folderId }], archives: [folderId] }`。范围口径：不传 folderId = 全库（回收站除外）；传 = 限定该文件夹，recursive 缺省 true 含子级 |
 | `list_folder_tree` | 无 | `FolderTreeView { blocks: [{ id, name, icon }], nodes: [{ id, name, count, totalSize, icon, kind, color, groups?, children }] }` |
 | `list_placements` | `{ folderId?: string }`（"root" = 未分类；缺省 = 全部） | `PlacementView[]`（assetId / folderId / name / 宽高 / ext / **thumbPath 缩略图绝对路径** / size / duration / tags 等，字段见 `services/views.rs`） |
-| `get_asset_detail` | `{ assetId }` | `AssetDetail`（originName / ext / size / 宽高 / duration / tags / descriptions / colors / links / note / placements 反查 / archives 归属）。**纯读**——不走 APP 侧 ensure_asset_colors 懒回填，存量资产 colors 可能为空 |
+| `get_asset_detail` | `{ assetId }` | `AssetDetail`（originName / ext / size / 宽高 / duration / tags / descriptions / colors / links / note / placements 反查 / archives 归属 / thumbAsset 调用侧伴生缩略图 / thumbUsedBy 被引用清单——后两项 2026-09-23 缩略图区块接业务补输出）。**纯读**——不走 APP 侧 ensure_asset_colors 懒回填，存量资产 colors 可能为空 |
 | `get_asset_origin_path` | `{ assetId }` | `{ originPath, thumbPath: string \| null }`——源文件真实路径（序列帧 = frames/ 封面帧，同右键「复制文件路径」口径）+ 缩略图路径（含 thumbAssetId 伴生代理：fla 等工程资产取伴生 hidden 资产的图） |
 | `read_text_asset` | `{ assetId }` | `{ content }`（txt / md；UTF-8 优先 GBK 回退，2MB 上限；非文本资产报错） |
 | `list_archives` | 无 | `ArchiveListItem[]`（folderId / badge / avatar / props / descriptions / links / createdAt / totalSize / coverPath / coverVer）；folderId 可交给 list_placements 列档案内容 |

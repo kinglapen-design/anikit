@@ -78,6 +78,11 @@ function onCardClick(p: PlacementView, e: MouseEvent): void {
       void picker.pickCoverAsset(target);
       return;
     }
+    // thumb 伴生缩略图（2026-09-23）：同 cover 单选直回范式——点图即绑定发起工程
+    if (picker.purpose === "thumb") {
+      void picker.pickThumbAsset(target);
+      return;
+    }
     // folderId 随三元组定位源 Placement（link 用途确认时 link_placements 入参）
     picker.togglePick(target);
     return;

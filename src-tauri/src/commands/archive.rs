@@ -6,7 +6,7 @@ use tauri::State;
 use crate::commands::library::AppState;
 use crate::commands::operations::fail;
 use crate::core::library::{Library, ARCHIVES_FILE, FOLDERS_FILE};
-use crate::core::models::{ArchiveData, Badge, Avatar, DescItem, Folder, Placement, ARCHIVE_KIND, DEFAULT_BLOCK_ID, ROOT_FOLDER_ID};
+use crate::core::models::{ArchiveData, AssetMeta, Badge, Avatar, DescItem, Folder, Placement, ARCHIVE_KIND, DEFAULT_BLOCK_ID, ROOT_FOLDER_ID};
 use crate::core::undo::DiskOp;
 use crate::services::archive::{self, ConvertOutcome};
 use crate::services::custom_data;
@@ -303,6 +303,21 @@ pub struct AssetDetail {
   pub placements: Vec<PlacementLink>,
   /// 归属档案：Placement 所在 folder 链上 kind = archive 者去重
   pub archives: Vec<ArchiveRef>,
+  /// 缩略图区块（8.1 伴生缩略图，2026-09-23 接业务）·调用侧：本资产 thumb_asset_id 指向的
+  /// hidden 伴生资产（users = 它被引用的总数）；无绑定 / 目标非 hidden（还原途中）= null
+  pub thumb_asset: Option<ThumbLinkItem>,
+  /// 缩略图区块·被调用侧：本资产是 hidden 伴生缩略图时，引用它的资产清单（按名称排序，users 恒 null）
+  pub thumb_used_by: Vec<ThumbLinkItem>,
+}
+
+/// 缩略图区块一条（8.1，2026-09-23）：assetId + 显示名（首条 Placement 名，无则 originName）
+/// + 引用数（仅调用侧卡片显示——稿「雪牧_自动.webp + 2」）
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThumbLinkItem {
+  pub asset_id: String,
+  pub name: String,
+  pub users: Option<u32>,
 }
 
 /// 链接区块一条：哪个区块的哪个文件夹、显示什么名称
@@ -393,7 +408,60 @@ pub(crate) fn asset_detail(lib: &Library, asset_id: &str) -> Result<AssetDetail,
     note: meta.note.clone(),
     placements,
     archives,
+    thumb_asset: thumb_link_of(lib, meta),
+    thumb_used_by: thumb_users_of(lib, meta),
   })
+}
+
+// —— 缩略图区块（8.1 伴生缩略图，2026-09-23 接业务）——
+
+/// 资产显示名：首条 Placement 名（回收站等无存活 Placement = originName 兜底）
+fn thumb_display_name(lib: &Library, asset_id: &str, origin_name: &str) -> String {
+  lib
+    .index
+    .placements_of(asset_id)
+    .first()
+    .map(|p| p.name.clone())
+    .unwrap_or_else(|| origin_name.to_string())
+}
+
+/// 引用计数：多少资产的 thumb_asset_id 指向它（调用侧卡片的「users」）
+fn thumb_user_count(lib: &Library, thumb_id: &str) -> u32 {
+  lib.index.assets.values().filter(|m| m.thumb_asset_id.as_deref() == Some(thumb_id)).count() as u32
+}
+
+/// 调用侧：本资产 thumb_asset_id → hidden 伴生资产（非 hidden 不代理，同 views::placement_view 口径）
+fn thumb_link_of(lib: &Library, meta: &AssetMeta) -> Option<ThumbLinkItem> {
+  let t = meta
+    .thumb_asset_id
+    .as_deref()
+    .and_then(|id| lib.index.assets.get(id))
+    .filter(|t| t.hidden == Some(true))?;
+  Some(ThumbLinkItem {
+    asset_id: t.id.clone(),
+    name: thumb_display_name(lib, &t.id, &t.origin_name),
+    users: Some(thumb_user_count(lib, &t.id)),
+  })
+}
+
+/// 被调用侧：本资产是 hidden 伴生缩略图时，引用它的资产清单（按显示名排序保序稳定）
+fn thumb_users_of(lib: &Library, meta: &AssetMeta) -> Vec<ThumbLinkItem> {
+  if meta.hidden != Some(true) {
+    return Vec::new();
+  }
+  let mut users: Vec<ThumbLinkItem> = lib
+    .index
+    .assets
+    .values()
+    .filter(|m| m.thumb_asset_id.as_deref() == Some(meta.id.as_str()))
+    .map(|m| ThumbLinkItem {
+      asset_id: m.id.clone(),
+      name: thumb_display_name(lib, &m.id, &m.origin_name),
+      users: None,
+    })
+    .collect();
+  users.sort_by(|a, b| a.name.cmp(&b.name));
+  users
 }
 
 /// Placement → 链接区块一条；folder 链断裂（脏数据）返回 None 整条跳过
@@ -483,6 +551,61 @@ mod tests {
   fn add_placement(lib: &mut Library, asset: &str, folder: &str, name: &str, origin: bool) {
     lib.folders.items.push(Placement { asset: asset.into(), folder: folder.into(), name: name.into(), order: 0, origin });
     lib.index.rebuild_placements(&lib.folders.items);
+  }
+
+  /// 缩略图区块（8.1 伴生缩略图，2026-09-23 接业务）：调用侧 = thumb_asset（显示名 = 首条
+  /// Placement 名 + 引用总数）；被调用侧 = hidden 资产反查使用方清单（按名排序，users 恒 None）；
+  /// 目标非 hidden 不代理（同 views::placement_view 口径）
+  #[test]
+  fn asset_detail_thumb_links() {
+    let mut h = make_lib();
+    let webp: AssetMeta = serde_json::from_value(serde_json::json!({
+      "version": 1, "id": "AN-T", "name": "雪牧_自动", "originName": "雪牧_自动.webp", "ext": "webp",
+      "size": 100, "importedAt": "2026-08-15T00:00:00+08:00", "modifiedAt": "2026-08-15T00:00:00+08:00",
+      "hidden": true
+    }))
+    .unwrap();
+    let mut fla: AssetMeta = serde_json::from_value(serde_json::json!({
+      "version": 1, "id": "AN-F", "name": "工程", "originName": "工程.fla", "ext": "fla", "size": 100,
+      "importedAt": "2026-08-15T00:00:00+08:00", "modifiedAt": "2026-08-15T00:00:00+08:00"
+    }))
+    .unwrap();
+    fla.thumb_asset_id = Some("AN-T".into());
+    let mut fla2 = fla.clone();
+    fla2.id = "AN-F2".into();
+    let mut fla3 = fla.clone();
+    fla3.id = "AN-F3".into();
+    fla3.thumb_asset_id = Some("AN-N".into()); // 指向非 hidden 资产 → 不代理
+    let plain: AssetMeta = serde_json::from_value(serde_json::json!({
+      "version": 1, "id": "AN-N", "name": "普通图", "originName": "普通图.png", "ext": "png",
+      "size": 100, "importedAt": "2026-08-15T00:00:00+08:00", "modifiedAt": "2026-08-15T00:00:00+08:00"
+    }))
+    .unwrap();
+    for m in [webp, fla, fla2, fla3, plain] {
+      h.lib.index.assets.insert(m.id.clone(), m);
+    }
+    add_placement(&mut h.lib, "AN-T", "root", "雪牧_自动.webp", true);
+    add_placement(&mut h.lib, "AN-F", "root", "工程.fla", true);
+    add_placement(&mut h.lib, "AN-F2", "root", "工程2.fla", true);
+
+    // 调用侧：fla → 伴生 webp（名称取首条 Placement 名，users = 两工程共绑 = 2）
+    let d = asset_detail(&h.lib, "AN-F").unwrap();
+    let ta = d.thumb_asset.expect("fla 应带出调用侧伴生缩略图");
+    assert_eq!(ta.asset_id, "AN-T");
+    assert_eq!(ta.name, "雪牧_自动.webp");
+    assert_eq!(ta.users, Some(2));
+    assert!(d.thumb_used_by.is_empty(), "fla 非 hidden，无被调用侧");
+
+    // 被调用侧：hidden webp 反查两个工程（按显示名排序），users 恒 None
+    let d2 = asset_detail(&h.lib, "AN-T").unwrap();
+    assert!(d2.thumb_asset.is_none(), "hidden 资产自身无调用侧");
+    let names: Vec<&str> = d2.thumb_used_by.iter().map(|u| u.name.as_str()).collect();
+    assert_eq!(names, vec!["工程.fla", "工程2.fla"], "被调用侧反查按名排序");
+    assert!(d2.thumb_used_by.iter().all(|u| u.users.is_none()));
+
+    // 非 hidden 目标不代理（还原途中脏引用不显示）
+    let d3 = asset_detail(&h.lib, "AN-F3").unwrap();
+    assert!(d3.thumb_asset.is_none(), "目标非 hidden 不代理");
   }
 
   /// 链接区块反查：普通文件夹链（区块名 + 三段路径）与未分类（目录 / ["未分类"]）

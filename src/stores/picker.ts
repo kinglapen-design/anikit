@@ -17,6 +17,11 @@
 //   同烘培可解码格式口径，isThumbCapableExt 镜像后端 is_thumb_capable）；单击图片卡片即
 //   pickCoverAsset 解析源图路径 → coverDraft → 退模式恢复档案选中，SectionPinned 消费草稿
 //   自动展开封面设置组取景态；确认按钮恒禁用（picked 恒空），Esc / 备选区取消 = 放弃。
+// 五用途起（2026-09-23 用户定）：
+// - thumb 伴生缩略图（模板 file——**单选直回**同 cover 范式）：详情缩略图区块添加钮进入，
+//   origin = 发起工程文件（fla 等）；过滤同 cover（filterImage = 可作伴生缩略图格式口径）；
+//   单击图片卡片即 pickThumbAsset → set_thumb_asset 绑定（重复 = 换绑，后端既有语义）→ 退模式
+//   恢复发起文件选中；确认按钮恒禁用，Esc / 取消 = 放弃。
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
 import { nextTick } from "vue";
@@ -29,7 +34,7 @@ import { getAssetFilePath } from "../lib/mediaOps";
 import { addRelations, type PickerTarget, type PickedRelation } from "../lib/relationOps";
 
 export type PickerTemplate = "file" | "relation";
-export type PickerPurpose = "relation" | "link" | "voice" | "cover";
+export type PickerPurpose = "relation" | "link" | "voice" | "cover" | "thumb";
 
 /** 备选匹配键（2026-09-19 BUG 3）：kind+id+folderId 三元组——同资产多条链接位置各自独立；
  *  archive 无位置概念（folderId 恒 ""） */
@@ -60,6 +65,7 @@ export const usePickerStore = defineStore("picker", {
     // 顶部横幅文案（目的 + 发起名；格式贴阶段七通知栏-选择模式稿：逗号分隔 + 名称方括号，2026-08-29）
     bannerText(state): string {
       if (state.purpose === "cover") return `选择图片，为 [${state.origin?.name ?? ""}] 设置封面`;
+      if (state.purpose === "thumb") return `选择图片，为 [${state.origin?.name ?? ""}] 设置缩略图`;
       if (state.purpose === "voice") return `选择音频，为 [${state.origin?.name ?? ""}] 链接音频`;
       if (state.purpose === "link") return `选择文件，为 [${state.targetFolder?.name ?? ""}] 添加链接文件`;
       return `选择文件/档案，为 [${state.origin?.name ?? ""}] 添加关系`;
@@ -107,6 +113,18 @@ export const usePickerStore = defineStore("picker", {
       this.enter();
       this.template = "file";
       this.purpose = "cover";
+      this.origin = origin;
+      this.targetFolder = null;
+      this.filterAudio = false;
+      this.filterImage = true;
+    },
+
+    /** 进入伴生缩略图选择模式（详情缩略图区块添加钮，2026-09-23 点亮）：过滤同 cover
+     *  （可作伴生缩略图格式）；单击图片卡片即定（pickThumbAsset 单选直回，不进备选区） */
+    enterThumb(origin: PickerTarget): void {
+      this.enter();
+      this.template = "file";
+      this.purpose = "thumb";
       this.origin = origin;
       this.targetFolder = null;
       this.filterAudio = false;
@@ -183,6 +201,26 @@ export const usePickerStore = defineStore("picker", {
         }
         this.coverDraft = { archiveId: origin.id, sourcePath: r.path };
         this.exit();
+      } catch (e) {
+        toast.notify({ message: String(e), icon: "fail" });
+      }
+    },
+
+    /** thumb 用途单选直回（2026-09-23，详情缩略图区块添加钮）：点图即 set_thumb_asset 绑定
+     * （重复 = 换绑，后端既有语义；发起工程自身不可选——后端同拦「不能把资产设为自身的缩略图」），
+     * 退模式恢复发起文件选中；刷新 = 全量 refresh（卡片代理图）+ bumpDetailRev（详情缩略图区块） */
+    async pickThumbAsset(target: PickerTarget): Promise<void> {
+      const origin = this.origin;
+      if (!origin || this.purpose !== "thumb") return;
+      if (target.kind === "asset" && target.id === origin.id) return;
+      const toast = useToastStore();
+      try {
+        await invoke("set_thumb_asset", { assetId: origin.id, thumbId: target.id });
+        this.exit();
+        const content = useContentStore();
+        await content.refresh();
+        content.bumpDetailRev();
+        toast.notify({ message: `已将「${target.name}」设置为缩略图`, icon: "success" });
       } catch (e) {
         toast.notify({ message: String(e), icon: "fail" });
       }

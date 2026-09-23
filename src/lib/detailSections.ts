@@ -46,6 +46,14 @@ export interface ArchiveRef {
   name: string;
 }
 
+/** 缩略图区块一条（8.1 伴生缩略图，2026-09-23 接业务）：assetId + 显示名 + 引用数
+ * （users 仅调用侧卡片有 = 该伴生图被引用总数；被调用侧行恒 null 不显示） */
+export interface ThumbLinkRef {
+  assetId: string;
+  name: string;
+  users: number | null;
+}
+
 /** 资产详情（get_asset_detail 只读命令） */
 export interface AssetDetail {
   assetId: string;
@@ -64,6 +72,11 @@ export interface AssetDetail {
   note: string;
   placements: PlacementLink[];
   archives: ArchiveRef[];
+  /** 缩略图区块·调用侧（8.1，2026-09-23 接业务）：本资产 thumb_asset_id 指向的 hidden 伴生资产；
+   *  无绑定 / 目标非 hidden（还原途中）= null */
+  thumbAsset: ThumbLinkRef | null;
+  /** 缩略图区块·被调用侧：本资产是 hidden 伴生缩略图时，引用它的资产清单（按显示名排序） */
+  thumbUsedBy: ThumbLinkRef[];
 }
 
 /** 详情面板展示目标：选中文件卡片 / 选中档案卡片 / 选中普通文件夹（7.1 二十三轮文件夹详情形态）/

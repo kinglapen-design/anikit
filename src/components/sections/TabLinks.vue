@@ -13,16 +13,21 @@
 //         非音频；当前目标是音频 → 标题「使用者」+ 使用方行（无添加钮，只展示/跳转））；
 //   关系 = LinkRelationItem（kind=free；点 chip = 称谓输入态二次修改 / 添加 = 选择模式 / × = 删除 /
 //         点 item = 跳转定位）；
-//   缩略图 = 占位（「图片被用作缩略图次数」反查功能未立项，2026-08-31 用户定只做 UI 不接业务）；
+//   缩略图 = 伴生缩略图（8.1，PRD 02-15，2026-09-23 接业务）：调用侧卡 = 本工程绑定的 hidden
+//         伴生资产（名称 + 引用数 users，稿「雪牧_自动.webp + 2」）；被调用侧 = 当前目标是 hidden
+//         缩略图时列引用它的使用方行（无 count）；点 item = 跳转定位（伴生资产 hidden →
+//         「缩略图」快速访问视图选中）；× = 解除绑定（unbind_thumb_asset，仅清工程侧引用）；
+//         添加 = 选择模式 thumb 用途（picker 第五用途，单选直回 = set_thumb_asset 绑定/换绑）；
 //   污染文件 = 占位（info 文件夹异物文件业务后续立项，同上；稿标题行无动作组 → actions=false）。
 // 排序 = 面板内拖标题行（本 tab 唯一可排序组，2026-08-31 用户定；DetailSections 旧 secDrag 让位范式移植，
 // 松手写 ui.detailLinksOrder 持久化）；折叠 = 标题行点击（会话级，dragView.suppressClick 守卫在调用方）。
-import { computed, onBeforeUnmount, reactive, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, reactive, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import SectionTitle from "../items/SectionTitle.vue";
 import LinkFileItem from "../items/LinkFileItem.vue";
 import LinkAudioItem from "../items/LinkAudioItem.vue";
 import LinkRelationItem from "../items/LinkRelationItem.vue";
+import LinkThumbItem from "../items/LinkThumbItem.vue";
 import TwoToneIcon from "../items/TwoToneIcon.vue";
 import AppIcon from "../AppIcon.vue";
 import {
@@ -32,7 +37,7 @@ import {
   type DetailTarget,
   type PlacementLink,
 } from "../../lib/detailSections";
-import { syncAssetLinks } from "../../lib/placementOps";
+import { syncAssetLinks, unbindThumbAsset } from "../../lib/placementOps";
 import {
   jumpToAssetPlacement,
   jumpToRelationTarget,
@@ -49,6 +54,7 @@ import { dragView } from "../../lib/dragOperation";
 import { useContentStore } from "../../stores/content";
 import { useSelectionStore } from "../../stores/selection";
 import { usePickerStore } from "../../stores/picker";
+import { useTabsStore } from "../../stores/tabs";
 import { useToastStore } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 
@@ -254,12 +260,14 @@ function originOf(): PickerTarget {
   };
 }
 
-// 添加钮分派：链接 = 链接管理弹窗 / 音频 = 选择模式 voice（过滤非音频）/ 关系 = 选择模式 relation；
-// 缩略图 / 污染文件 = 占位不接业务（2026-08-31 用户定）
+// 添加钮分派：链接 = 链接管理弹窗 / 音频 = 选择模式 voice（过滤非音频）/ 关系 = 选择模式 relation /
+// 缩略图 = 选择模式 thumb（picker 第五用途：过滤可作伴生图，点图直绑，2026-09-23 点亮）；
+// 污染文件 = 占位不接业务（2026-08-31 用户定）
 function onAdd(id: DetailLinkBlockId): void {
   if (id === "links") openLinkManage();
   else if (id === "audio") picker.enterVoice(originOf());
   else if (id === "relations") picker.enterRelation(originOf());
+  else if (id === "thumb") picker.enterThumb(originOf());
 }
 
 // —— 关系称谓二次修改（稿注：点击关系变成输入框；LinkRelationItem editing 态自包含 draft） ——
@@ -350,12 +358,49 @@ onBeforeUnmount(() => {
   }
 });
 
+// ================= 缩略图区块（8.1 伴生缩略图，2026-09-23 接业务） =================
+// 调用侧 = 本工程绑定的 hidden 伴生资产一张卡（users = 它被引用的总数，稿「名称 + 2」）；
+// 被调用侧 = 当前目标是 hidden 缩略图资产时（「缩略图」快速访问视图点开详情），列引用它的使用方行
+const thumbCall = computed(() => (file.value ? (file.value.detail.thumbAsset ?? null) : null));
+const thumbUsers = computed(() => (file.value ? (file.value.detail.thumbUsedBy ?? []) : []));
+
+// 点 item 跳转定位（2026-08-24「光显示在那是没用的」同口径）：调用侧伴生资产 hidden，
+// 普通视图过滤不可见 → 跳「缩略图」快速访问视图选中；被调用侧使用方 = 普通资产走既有跳转
+function jumpToThumb(assetId: string): void {
+  const p = content.placements.find((pl) => pl.assetId === assetId);
+  if (!p) {
+    toast.notify({ message: "目标文件不在本库任何文件夹中（可能在回收站）", icon: "fail" });
+    return;
+  }
+  const key = `${p.assetId}|${p.folderId}`;
+  useTabsStore().openView("quick:thumbnail");
+  content.requestReveal("quick:thumbnail", key);
+  void nextTick(() => selection.selectOnly(key));
+}
+function jumpToThumbUser(assetId: string): void {
+  const p =
+    content.placements.find((pl) => pl.assetId === assetId && pl.origin) ??
+    content.placements.find((pl) => pl.assetId === assetId);
+  if (!p) {
+    toast.notify({ message: "目标文件不在本库任何文件夹中（可能在回收站）", icon: "fail" });
+    return;
+  }
+  jumpToAssetPlacement(assetId, p.folderId);
+}
+
+// × = 解除绑定（仅清工程侧 thumb_asset_id，hidden 侧不动——还原为素材走卡片右键「解除缩略图」）
+function unbindCurrentThumb(): void {
+  if (!file.value) return;
+  void unbindThumbAsset(file.value.placement.assetId);
+}
+
 // 区块是否有内容（空态不渲染内容容器，展开/折叠零高度变化）
 function hasContent(id: DetailLinkBlockId): boolean {
   if (id === "links") return linkItems.value.length > 0;
   if (id === "audio") return audioViews.value.length > 0;
   if (id === "relations") return relationViews.value.length > 0;
-  return false; // 缩略图 / 污染文件 = 占位（业务未接）
+  if (id === "thumb") return thumbCall.value !== null || thumbUsers.value.length > 0;
+  return false; // 污染文件 = 占位（业务未接）
 }
 </script>
 
@@ -431,6 +476,23 @@ function hasContent(id: DetailLinkBlockId): boolean {
             @commit="(val) => commitRelation(v, val)"
             @cancel="editingId = ''"
             @close="removeRelationRow(v, '关系')"
+          />
+        </div>
+        <!-- 缩略图区块（8.1，2026-09-23 接业务）：调用侧伴生资产卡（名称 + 引用数）/ 被调用侧使用方行 -->
+        <div v-else-if="id === 'thumb'" class="lb-body">
+          <LinkThumbItem
+            v-if="thumbCall"
+            :name="thumbCall.name"
+            :count="thumbCall.users ?? undefined"
+            @click="jumpToThumb(thumbCall.assetId)"
+            @close="unbindCurrentThumb"
+          />
+          <LinkThumbItem
+            v-for="u in thumbUsers"
+            :key="u.assetId"
+            :name="u.name"
+            @click="jumpToThumbUser(u.assetId)"
+            @close="void unbindThumbAsset(u.assetId)"
           />
         </div>
       </template>

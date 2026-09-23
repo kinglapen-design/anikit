@@ -260,6 +260,22 @@ pub fn restore_thumb_asset(lib: &mut Library, asset_id: &str) -> Result<u32, Str
   Ok(refs.len() as u32)
 }
 
+/// 解除伴生缩略图绑定（详情面板缩略图区块 ×，2026-09-23）：仅清工程侧 thumb_asset_id，
+/// hidden 伴生资产不动（PRD 02-15：旧缩略图由用户手动「解除缩略图」或删除——还原走
+/// restore_thumb_asset）。无绑定 = 幂等 Ok 不落盘；不接撤销（同缩略图三件套既有口径）
+pub fn unbind_thumb_asset(lib: &mut Library, asset_id: &str) -> Result<(), String> {
+  let asset = lib.index.assets.get(asset_id).ok_or_else(|| "资源不存在，可能已被删除".to_string())?.clone();
+  if asset.thumb_asset_id.is_none() {
+    return Ok(());
+  }
+  let mut a = asset;
+  a.thumb_asset_id = None;
+  a.modified_at = super::operations::now();
+  write_json(&lib.info_dir(asset_id).join("metadata.json"), &a).map_err(|e| e.to_string())?;
+  lib.index.assets.insert(asset_id.to_string(), a);
+  Ok(())
+}
+
 /// 目标目录校验（导出公共）：存在且是目录
 fn check_target_dir(target_dir: &str) -> Result<PathBuf, String> {
   let dir = PathBuf::from(target_dir);
@@ -710,9 +726,25 @@ mod tests {
     assert!(set_thumb_asset(&mut h.lib, "AN-T", "AN-F").unwrap_err().contains("缩略图资产"));
   }
 
+  /// 解除绑定（详情缩略图区块 ×，2026-09-23）：仅清工程侧 thumb_asset_id，hidden 侧不动；
+  /// 幂等（无绑定 = Ok 不写盘）；不存在资产报中文错
   #[test]
-  fn restore_thumb_asset_clears_refs_and_unhides() {
+  fn unbind_thumb_asset_clears_binding_only() {
     let mut h = make_lib();
+    add_asset(&mut h, "AN-F", "工程.fla", "root");
+    add_asset(&mut h, "AN-T", "封面.webp", "root");
+    set_thumb_asset(&mut h.lib, "AN-F", "AN-T").unwrap();
+    unbind_thumb_asset(&mut h.lib, "AN-F").unwrap();
+    assert_eq!(h.lib.index.assets["AN-F"].thumb_asset_id, None, "工程侧引用清除");
+    assert_eq!(h.lib.index.assets["AN-T"].hidden, Some(true), "hidden 侧不动（还原走 restore）");
+    let meta: AssetMeta = read_json(&h.lib.info_dir("AN-F").join("metadata.json")).unwrap();
+    assert_eq!(meta.thumb_asset_id, None, "先落盘后内存（规范第 7 条）");
+    unbind_thumb_asset(&mut h.lib, "AN-F").unwrap(); // 幂等：无绑定 = Ok
+    assert!(unbind_thumb_asset(&mut h.lib, "AN-X").unwrap_err().contains("不存在"));
+  }
+
+  #[test]
+  fn restore_thumb_asset_clears_refs_and_unhides() {    let mut h = make_lib();
     add_asset(&mut h, "AN-F", "工程.fla", "root");
     add_asset(&mut h, "AN-F2", "工程2.fla", "root");
     add_asset(&mut h, "AN-T", "封面.webp", "root");

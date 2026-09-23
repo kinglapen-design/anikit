@@ -28,6 +28,7 @@
   [PASS] R10b 链接卡 ×2 + 首行（当前目录置顶）带 origin 徽章 — {"blocks": [{"t": "链接", "acts": true}, {"t": "音频", "acts": true}, {"t": "关系", "acts": true}, {"t": "缩略图", "acts": true}, {"t": "污染文件", "acts": false}], "cards": 2, "badge": true}
   [PASS] R10c 污染文件区块标题行无动作组（稿） — [{"t": "污染文件", "acts": false}]
   [PASS] R10d 五区块标题行折叠钮常显 + 四区块动作组常显（非悬停态 opacity 1） — [{"t": "链接", "chev": "1/visible", "acts": "1/visible"}, {"t": "音频", "chev": "1/visible", "acts": "1/visible"}, {"t": "关系", "chev": "1/visible", "acts": "1/visible"}, {"t": "缩略图", "chev": "1/visible", "acts": "1/visible"}, {"t": "污染文件", "chev": "1/visible", "acts": null}]
+  [PASS] R10f 缩略图区块：调用侧卡 = 伴生资产名 + 引用数（桩 雪牧_自动.webp / 2） — {"n": 1, "name": "雪牧_自动.webp", "cnt": "2"}
   [PASS] R10e tab 切换动画：新内容恒定右入 48px + 250ms 缓入 delay 100ms（与左侧边栏同向） — {"cls": "tab-pane tab-x-enter-active tab-x-enter-to", "dur": "0.25s, 0.25s", "delay": "0.1s, 0.1s", "ease": "cubic-bezier(0, 0, 0.1, 1), cubic-bezier(0, 0, 0.1, 1)", "tf": "matrix(1, 0, 0, 1, 48, 0)"}
   [PASS] R10e2 动画收尾：单 pane + 类摘除 + transform 归零 — {"cls": "tab-pane", "tf": "none", "n": 1}
 saved tools/style-preview/r23b-sidebar-links.png
