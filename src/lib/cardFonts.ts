@@ -23,6 +23,11 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<CardFont | null>>();
 
+/** 字体示例字分流（卡片 / 详情 pinned 共用）：cmap 覆盖中文 → 中文四行（稿值），否则拉丁三行
+ * （与后端样张字样同口径）；日韩等系统语言维度稿未给内容仍待供稿 */
+export const FONT_LINES_CJK = ["永和九年", "岁在癸丑", "AaBaCcDd", "01234567"];
+export const FONT_LINES_LATIN = ["ABCDEFG", "abcdefg", "0123456"];
+
 /** 懒拉字体卡数据（fontInfo + FontFace 家族名；缓存命中且版本一致直给，失败回退 null 并缓存） */
 export function cardFontFor(asset: Pick<PlacementView, "assetId" | "modifiedAt">): Promise<CardFont | null> {
   const id = asset.assetId;

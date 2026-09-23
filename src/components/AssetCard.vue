@@ -35,7 +35,7 @@ import { dragView } from "../lib/dragOperation";
 import { hoverLayerSpecFor } from "../lib/cardSpecs";
 import { cardTextFor, isTextCard } from "../lib/cardText";
 import { cardPeaksFor } from "../lib/cardPeaks";
-import { cardFontFor, cardFontSetInstalled, type CardFont } from "../lib/cardFonts";
+import { cardFontFor, cardFontSetInstalled, FONT_LINES_CJK, FONT_LINES_LATIN, type CardFont } from "../lib/cardFonts";
 import { installFont, uninstallFont } from "../lib/fontOps";
 import {
   displayName as assetDisplayName,
@@ -150,8 +150,6 @@ function onPlayToggle(): void {
 // —— 字体卡（R6 三变体接线 · font 变体）：示例字以该字体真渲染（FontFace 会话级常驻注册）——
 // 示例字分流（稿注「日/韩环境更换」的字体维度落地）：cmap 覆盖中文 → 中文四行（稿值），
 // 否则拉丁三行（与后端样张字样同口径）；系统语言维度（日韩替换文本）稿未给内容仍待供稿
-const FONT_LINES_CJK = ["永和九年", "岁在癸丑", "AaBaCcDd", "01234567"];
-const FONT_LINES_LATIN = ["ABCDEFG", "abcdefg", "0123456"];
 const fontCardActive = computed(() => isFontExt(props.asset.ext.toLowerCase()) && !isWs.value);
 const cardFont = ref<CardFont | null>(null);
 watch(

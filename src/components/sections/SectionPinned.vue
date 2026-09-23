@@ -8,6 +8,9 @@
 //     仅 thumbKind=asset（有内容缩略图，含 fla 伴生 webp 代理）时显示——无内容缩略图的格式
 //     （docx 等格式图标占位）不提色、整行隐藏；音频 / 字体颜色恒不变（波形恒灰、字体预览恒色）
 //     同隐藏，2026-09-23 用户定）。
+// 音频 / 字体 pinned 内容 = 卡片同源新渲染（2026-09-23 用户定，取代旧静态波形 / 样张 webp
+//   缩略图）：音频 = WaveContent 竖线波形（peaks 懒加载，静态无扫过层）；字体 = FontContent
+//   示例字以该字体真渲染（hasCjk 分流 + 字号随容器宽自缩放，同卡片口径）。
 // 名称 / 链接输入框已下移基础信息 tab 输入框区块（旧 pinned 四件口径作废）。
 // 档案形态：封面容器同款 240×240（封面 cover 充满——稿裁切语义）+ 徽标 FormatBadge（badge.text）；
 //   封面链 = 自定义封面 → 子项首图 → 默认封面图（2026-09-08 用户定，lib/archiveCover）；
@@ -20,9 +23,13 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import CoverSettings from "./CoverSettings.vue";
 import FormatBadge from "../cards/FormatBadge.vue";
 import ColorSwatchItem from "../items/ColorSwatchItem.vue";
+import WaveContent from "../cards/contents/WaveContent.vue";
+import FontContent from "../cards/contents/FontContent.vue";
 import AppIcon from "../AppIcon.vue";
 import { archiveCoverUrl } from "../../lib/archiveCover";
 import { formatBadgeColor, isAudioExt, isFontExt, isSequence } from "../../lib/formatBadge";
+import { cardPeaksFor } from "../../lib/cardPeaks";
+import { cardFontFor, FONT_LINES_CJK, FONT_LINES_LATIN, type CardFont } from "../../lib/cardFonts";
 import type { DetailTarget } from "../../lib/detailSections";
 import { useContentStore } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
@@ -125,6 +132,43 @@ const showSwatches = computed(() => {
 });
 // 格式图标缩略图 = 50% 居中 contain（卡片 thumbFit icon 档同口径，Eagle 50%；撑满太满，2026-09-23 用户定）
 const iconFit = computed(() => file.value?.placement.thumbKind === "formatIcon");
+
+// —— 音频 / 字体 pinned 内容（2026-09-23 用户定：卡片新渲染同源，旧静态缩略图退出 pinned）——
+// 音频 = 竖线波形（peaks cardPeaksFor 懒加载，progress 恒 0 = 静态无扫过层）；
+// 字体 = 示例字以该字体真渲染（cardFontFor 懒加载 + hasCjk 分流）。await 期间切选中防错配同卡片口径
+const audioKind = computed(() => !!file.value && isAudioExt(file.value.placement.ext));
+const fontKind = computed(() => !!file.value && isFontExt(file.value.placement.ext));
+const audioPeaks = ref<number[]>([]);
+watch(
+  [() => file.value?.placement.assetId, () => file.value?.placement.modifiedAt, audioKind],
+  async ([id, , active]) => {
+    const p = file.value?.placement;
+    if (!active || !p) {
+      audioPeaks.value = [];
+      return;
+    }
+    const peaks = await cardPeaksFor(p);
+    if (file.value?.placement.assetId !== id) return;
+    audioPeaks.value = peaks;
+  },
+  { immediate: true },
+);
+const cardFont = ref<CardFont | null>(null);
+watch(
+  [() => file.value?.placement.assetId, () => file.value?.placement.modifiedAt, fontKind],
+  async ([id, , active]) => {
+    const p = file.value?.placement;
+    if (!active || !p) {
+      cardFont.value = null;
+      return;
+    }
+    const font = await cardFontFor(p);
+    if (file.value?.placement.assetId !== id) return;
+    cardFont.value = font;
+  },
+  { immediate: true },
+);
+const fontLines = computed(() => (cardFont.value?.info.hasCjk ? FONT_LINES_CJK : FONT_LINES_LATIN));
 </script>
 
 <template>
@@ -148,15 +192,21 @@ const iconFit = computed(() => file.value?.placement.thumbKind === "formatIcon")
         @click="archive && (coverEditing = true)"
       >
         <template v-if="file">
-          <img
-            v-if="thumbUrl"
-            :src="thumbUrl"
-            alt=""
-            draggable="false"
-            :class="iconFit ? 'fit-icon' : 'fit-contain'"
-          />
-          <!-- 无图占位（速查表 §6）：浅色块 #C6C7CC + 扩展名文字 -->
-          <span v-else class="ext">{{ file.placement.ext.toUpperCase() }}</span>
+          <!-- 音频 / 字体 = 卡片同源新渲染（波形 / 示例字真渲染；2026-09-23 用户定，
+               旧静态波形 / 样张 webp 缩略图退出 pinned） -->
+          <WaveContent v-if="audioKind" :peaks="audioPeaks" />
+          <FontContent v-else-if="fontKind" :font-lines="fontLines" :font-family="cardFont?.family ?? ''" />
+          <template v-else>
+            <img
+              v-if="thumbUrl"
+              :src="thumbUrl"
+              alt=""
+              draggable="false"
+              :class="iconFit ? 'fit-icon' : 'fit-contain'"
+            />
+            <!-- 无图占位（速查表 §6）：浅色块 #C6C7CC + 扩展名文字 -->
+            <span v-else class="ext">{{ file.placement.ext.toUpperCase() }}</span>
+          </template>
           <FormatBadge v-if="badgeLabel" class="badge" :label="badgeLabel" />
         </template>
         <template v-else-if="archive">
