@@ -9,7 +9,8 @@
 // 区块头挂 data-block-id 兼作文件夹拖拽落点（移入该区块根级）与区块排序拖拽起点（让位式，
 // 本地 pointer 追踪，库菜单同款动画）；SectionTitle 折叠点击查 dragView.suppressClick
 //（拖完松手的紧随 click 误折叠，与旧 SectionHeader 同口径）。
-// 区块标题「更多」钮 = 点亮不接业务（2026-08-30 用户定，同菜单栏口径；区块操作菜单后续轮接）。
+// 区块标题「更多」钮 = 区块菜单（2026-09-23 接业务，menuSpecs/blockHeader：大纲管理 / 上移 / 下移，
+// 指针位弹出同分组菜单口径；选择模式整体不弹——排序与管理弹窗均非 §12.1 白名单）。
 // 新建文件夹（2026-07-29 复验三轮"先建后命名"）：入口——区块头 添加钮（该区块根级最底部，
 // 2026-08-14 起不再跟随 sidebarSelected 建兄弟）、树 item 右键菜单（同级 / 子级）；
 // 统一流程 = 直接以同级唯一默认名调 createFolder 入库 →
@@ -24,6 +25,7 @@ import { beginFolderDrag, dragView } from "../lib/dragOperation";
 import { createAndName } from "../lib/menuOps";
 import { closeContextMenu, menuState, openContextMenu } from "../lib/contextMenus";
 import { recycleBlankSpec } from "../lib/menuSpecs/recycle";
+import { blockHeaderSpec } from "../lib/menuSpecs/blockHeader";
 import { currentLibrary, currentSpace, loadLibraries, setAutoImport } from "../lib/libraryOps";
 import { libraryMenuEntries } from "../lib/menuSpecs/libraryMenu";
 import { reorderBlocks } from "../lib/blockOps";
@@ -171,6 +173,14 @@ function onAddFolder(blockId: string): void {
 function onBlockToggle(blockId: string): void {
   if (dragView.suppressClick) return;
   toggleBlockOpen(blockId);
+}
+
+// 区块标题「更多」钮（2026-09-23 接业务）：菜单 = 大纲管理 / 上移 / 下移（menuSpecs/blockHeader）；
+// 指针位弹出（同分组标题菜单 onGroupMenu 口径，无 trigger toggle）；
+// 选择模式整体不弹（排序与管理弹窗均非 §12.1 白名单，与区块头拖拽排序闸同径）
+function onBlockMenu(blockId: string, e: MouseEvent): void {
+  if (usePickerStore().active) return;
+  openContextMenu(e, blockHeaderSpec(blockId), undefined);
 }
 
 // 区块标题拖拽排序（2026-08-14 用户定：让位式——拖动段跟随指针无过渡、
@@ -356,6 +366,7 @@ async function onSwitchLibrary(e: MouseEvent): Promise<void> {
           :count="sec.nodes.length"
           :expanded="isBlockOpen(sec.block.id)"
           @toggle="onBlockToggle(sec.block.id)"
+          @more="onBlockMenu(sec.block.id, $event)"
           @add="onAddFolder(sec.block.id)"
         />
       </div>
