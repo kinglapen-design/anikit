@@ -404,25 +404,29 @@ const meta = computed(() => {
         @progress="audioProgress = $event"
         @duration="audioDuration = $event"
       />
+      <!-- 位置徽章（6.2 四轮走查③⑤）：origin ★ / 链接 icon（活位置 > 1 才上），14px 右下各 12
+           （kc-corner-badge 位，§16/§18）；悬停 = 全部链接列表浮层（LinkListPopover，可点行跳转）。
+           入 FileCard badges 槽（clip 外根内）：徽章成 .kc-media 后代，hover 徽章时卡 hover 态保持
+           （位移/阴影/描边不回退——旧在壳层时徽章非 .kc-media 子树，hover 即脱节，2026-09-23 用户实机修） -->
+      <template #badges>
+        <span
+          v-if="showOriginBadge || showLinkBadge"
+          ref="badgeAnchorRef"
+          class="card-badges"
+          :data-badge="showOriginBadge ? 'origin' : 'link'"
+          @mouseenter="openLinkList"
+          @mouseleave="closeLinkListSoon"
+        >
+          <AppIcon v-if="showOriginBadge" name="original-file-badge" :size="14" />
+          <AppIcon v-else name="linked-file-badge" :size="14" class="link-badge-icon" />
+        </span>
+      </template>
     </FileCard>
     <!-- 笔记徽章（2026-09-09 四轮用户定稿）：kc-float 角标铬「笔记 N」（笔记 = 雅黑 / 数量 = mono，
          数字档 12/16 bold 二级）——旧 16px 品牌圆点数字右上口径作废（压悬停胶囊）；
          位置 = 名称上方 6px、左缘与名称对齐（罩 padding 左 12）；隐藏简介时随名称行下移（36→56 档差） -->
     <span v-if="asset.noteCount" class="note-badge kc-float" :class="{ 'no-brief': !ui.showBrief }">
       <span class="nb-label">笔记</span><span class="nb-count">{{ asset.noteCount }}</span>
-    </span>
-    <!-- 位置徽章（6.2 四轮走查③⑤）：origin ★ / 链接 icon（活位置 > 1 才上），14px 右下各 12
-         （kc-corner-badge 位，§16/§18）；悬停 = 全部链接列表浮层（LinkListPopover，可点行跳转） -->
-    <span
-      v-if="showOriginBadge || showLinkBadge"
-      ref="badgeAnchorRef"
-      class="card-badges"
-      :data-badge="showOriginBadge ? 'origin' : 'link'"
-      @mouseenter="openLinkList"
-      @mouseleave="closeLinkListSoon"
-    >
-      <AppIcon v-if="showOriginBadge" name="original-file-badge" :size="14" />
-      <AppIcon v-else name="linked-file-badge" :size="14" class="link-badge-icon" />
     </span>
     <LinkListPopover
       v-if="linkListOpen"
@@ -477,7 +481,8 @@ const meta = computed(() => {
 .nb-count {
   font-family: var(--n-font-mono); /* 数量 = Fira Mono（数字档族） */
 }
-/* 位置徽章：14×14，卡片右下各 12（kc-corner-badge 位）；可悬停出链接列表浮层 */
+/* 位置徽章：14×14，卡片右下各 12（kc-corner-badge 位）；可悬停出链接列表浮层。
+   色档 = 亮色/一级（2026-09-23 用户实机定：三级在深底图上看不清；定位/渲染已入 FileCard badges 槽） */
 .card-badges {
   position: absolute;
   right: var(--n-space-12);
@@ -487,24 +492,24 @@ const meta = computed(() => {
   align-items: center;
   justify-content: center;
   padding: 2px;
-  color: var(--n-l3);
+  color: var(--n-l1);
 }
-/* 壳层附件（位置徽章 / 笔记角标 / 已选大勾）随卡芯 hover 位移 -4px（2026-08-30 用户实机：
-   徽章没随卡上移——卡芯 .kc-media:hover translateY(-4px) 250ms，壳层附件同参数跟随） */
-.card-badges,
+/* 壳层附件（笔记角标 / 已选大勾）随卡芯 hover 位移 -4px（2026-08-30 用户实机：
+   徽章没随卡上移——卡芯 .kc-media:hover translateY(-4px) 250ms，壳层附件同参数跟随）。
+   位置徽章不入此列（2026-09-23）：已入 FileCard badges 槽 = 卡芯子树，随父级位移天然同步——
+   再叠壳层补偿会走双份（-8px 比卡片幅度大，同日走查反馈） */
 .note-badge,
 .pick-check {
   transition: transform var(--n-dur-250) var(--n-ease-in-out);
 }
-.asset-card:hover .card-badges,
 .asset-card:hover .note-badge {
   transform: translateY(-4px);
 }
 .asset-card:hover .pick-check {
   transform: translate(-50%, calc(-50% - 4px));
 }
-/* 选择模式已选（§12）：壳层徽章 / 笔记角标同压暗 30% 档（卡内压暗归 FileCard picked）；
-   大勾不压（在壳层独立） */
+/* 选择模式已选（§12）：位置徽章（卡内 badges 槽，clip 外不被卡内压暗规则覆盖）/ 壳层笔记角标
+   同压暗 30% 档（卡内压暗归 FileCard picked）；大勾不压（在壳层独立） */
 .asset-card.picked .card-badges,
 .asset-card.picked .note-badge {
   opacity: 0.3;

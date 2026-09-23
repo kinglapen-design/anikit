@@ -205,6 +205,10 @@ watch(
 
     <!-- 原始文件-徽章（右下 12/12，品牌色原值） -->
     <AppIcon v-if="originBadge" name="original-file-badge" :size="14" class="kc-corner-badge" />
+
+    <!-- 壳层附件槽（clip 外根内）：AssetCard 位置徽章等可交互徽章入此——徽章成 .kc-media 后代，
+         hover 徽章时 .kc-media:hover 保持（卡片位移/阴影/描边不回退，2026-09-23 用户实机脱节修复） -->
+    <slot name="badges" />
   </div>
 </template>
 
