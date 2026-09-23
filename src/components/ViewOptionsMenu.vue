@@ -6,8 +6,11 @@
 // 排序方式 = 下拉 8 项（86×28 g6 底稿值）+ 升/降切换 sm 134（3.5 点亮：自定义 = 存储序且升降禁用 30%）；
 // 时间码显示方式 = 帧数/时长切换 sm 134（点亮，播放条/悬停胶囊/笔记同值联动）；
 // 显示简介 = 下拉选内容 + 开关（ui.showBrief，与 briefMode 独立）；
-// 显示扩展名（名称词干）/ 显示徽标（格式角标）/ 显示子文件夹内容 = 开关点亮；
-// 显示自定义数据（占位——6.1）；自动播放动图 / 自动播放视频预览 = 开关点亮（5.3 已接）。
+// 显示扩展名（名称词干）/ 显示格式角标（showBadge）/ 显示链接状态徽章（showLinkBadge）/
+// 显示子文件夹内容 = 开关点亮；自动播放动图 / 自动播放视频预览 = 开关点亮（5.3 已接）。
+// 开关组文案（2026-09-23 用户定）：「显示格式角标」「显示链接状态徽章」——05 稿文字图层真文案恢复
+// （换代时误取容器图层名「显示徽标 / 显示自定义数据」；链接徽章行同步点亮绑 showLinkBadge——
+// 业务 9-6 视图菜单轮已接，稿上行开关即开态，原 6.1「自定义数据」占位行废除）。
 // 稿无"查看范围 / 分组方式"行——旧行移除（ui.useGlobalView / groupBy 字段保留不删）。
 import { computed, ref } from "vue";
 import AppMenu from "./AppMenu.vue";
@@ -144,13 +147,12 @@ function closeAll(): void {
           <SwitchButton v-model="ui.showExt" />
         </div>
         <div class="row">
-          <span class="label">显示徽标</span>
+          <span class="label">显示格式角标</span>
           <SwitchButton v-model="ui.showBadge" />
         </div>
-        <!-- 显示自定义数据（占位——6.1 自定义数据业务） -->
-        <div class="row disabled">
-          <span class="label">显示自定义数据</span>
-          <SwitchButton :model-value="false" disabled />
+        <div class="row">
+          <span class="label">显示链接状态徽章</span>
+          <SwitchButton v-model="ui.showLinkBadge" />
         </div>
         <div class="row">
           <span class="label">显示子文件夹内容</span>
@@ -248,13 +250,6 @@ function closeAll(): void {
   align-items: center;
   gap: var(--n-space-12);
   flex: none;
-}
-/* 占位禁用行（业务未接）：文字 30% 透明度（控件族禁用口径随行标题），控件自身禁用档 */
-.row.disabled {
-  pointer-events: none;
-}
-.row.disabled .label {
-  opacity: 0.3;
 }
 /* 下拉选择器（03 稿：86×28 / 通用/六级底 / 1px 亮色/半透明-3 边 / 圆角 6 / 次要文字-加粗 12/16 亮色/二级 / 箭头 14 三级） */
 .picker {
