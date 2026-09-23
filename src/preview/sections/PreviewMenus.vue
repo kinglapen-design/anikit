@@ -250,7 +250,6 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
         <div class="pv-demo-cell">
           <div class="pv-menu-shell">
             <div class="pv-menu-group">
-              <MenuItem label="打开文件夹" shortcut="Enter" />
               <MenuItem label="新标签页打开" shortcut="Ctrl+Enter" />
             </div>
             <div class="pv-menu-group">
@@ -295,7 +294,7 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div class="pv-menu-shell">
-            <MenuItem label="打开文件夹" shortcut="Enter" />
+            <MenuItem label="重命名" shortcut="F2" />
             <MenuItem label="新标签页打开" shortcut="Ctrl+Enter" />
           </div>
           <span class="pv-cap">快捷键（Fira Mono 12 三级，原串直显）</span>

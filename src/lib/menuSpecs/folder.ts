@@ -53,18 +53,13 @@ function findChildrenList(nodes: FolderNode[], id: string): FolderNode[] | null 
 // 口径推翻，二级宽 184 → 226 容纳对勾列 + 长标签；对勾 = checked 函数化实时刷新，2026-09-06）；
 // 展开收起三项沿用 treeExpansion 业务；
 // 排序依据/展开收起/更改图标/更改颜色 = 树节点专属（文件夹卡片不支持，用户定）；
-// 更改图标/颜色 = 网格面板形态（2026-08-18，3.3 点亮：CtxItem.panel + ContextMenu flyout 分流渲染）。
+// 更改图标/颜色 = 网格面板形态（2026-08-18，3.3 点亮：CtxItem.panel + ContextMenu flyout 分流渲染）；
+// 「打开文件夹」首项删除（2026-09-23 用户定：左键选中即打开，菜单项冗余；档案侧「打开档案」同删——
+// Enter / Shift+Enter 快捷键本体不受影响）。
 function folderMenuEntries(folder: { id: string; name: string }, parentId: string | null, rename: () => void, treeOps: boolean): CtxEntry[] {
   const content = useContentStore();
   const selection = useSelectionStore();
   const entries: CtxEntry[] = [
-    {
-      label: "打开文件夹",
-      shortcut: "Enter",
-      action: () => {
-        useTabsStore().openView(`folder:${folder.id}`);
-      },
-    },
     {
       label: "新标签页打开",
       shortcut: "Ctrl+Enter",
@@ -246,17 +241,12 @@ export function folderCardSpec(folder: { id: string; name: string }): CtxEntry[]
   }, false);
 }
 
-// 选择模式精简集（6.2 一轮）：文件夹卡片 / 树节点共用——打开与新标签页（导航）+ 树加展开收起三项，
-// 复制链接（只读）；新建 / 重命名 / 排序 / 移动 / 删除等编辑类不出现
+// 选择模式精简集（6.2 一轮）：文件夹卡片 / 树节点共用——新标签页（导航）+ 树加展开收起三项，
+// 复制链接（只读）；新建 / 重命名 / 排序 / 移动 / 删除等编辑类不出现；
+// 「打开文件夹」2026-09-23 随主菜单同删（选择模式点击即导航，同冗余）
 function pickerFolderEntries(folder: { id: string; name: string }, parentId: string | null, treeOps: boolean): CtxEntry[] {
   const content = useContentStore();
   const entries: CtxEntry[] = [
-    {
-      label: "打开文件夹",
-      action: () => {
-        useTabsStore().openView(`folder:${folder.id}`);
-      },
-    },
     {
       label: "新标签页打开",
       action: () => {

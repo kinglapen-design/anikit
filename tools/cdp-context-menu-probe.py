@@ -244,7 +244,7 @@ async def main():
             check("A8 排序依据带箭头", await ev("[...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '排序依据')?.querySelector('.arrow svg') != null"))
             check("A9 无剪切时「粘贴文件夹」不出现（2026-09-05 走查改条件出现，旧 disabled 断言废除）", await ev("[...document.querySelectorAll('.app-menu .menu-item')].every((x) => x.querySelector('.label')?.textContent !== '粘贴文件夹')"))
             check("A10 名称→右件最小间距 36（更改颜色行 label→色块组）", await ev("(() => { const it = [...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '更改颜色'); if (!it) return false; const l = it.querySelector('.label').getBoundingClientRect(); const s = it.querySelector('.swatches').getBoundingClientRect(); return Math.abs(s.left - l.right - 36) <= 1.5; })()"))
-            check("A11 容器宽=最长项（短项右件贴右缘：容器右缘-14）", await ev("(() => { const m = document.querySelector('.app-menu'); const it = [...m.querySelectorAll('.menu-item')].find((x) => x.querySelector('.label')?.textContent === '打开文件夹'); if (!it) return false; const s = it.querySelector('.shortcut').getBoundingClientRect(); return Math.abs(m.getBoundingClientRect().right - 14 - s.right) <= 1.5; })()"))
+            check("A11 容器宽=最长项（短项右件贴右缘：容器右缘-14）", await ev("(() => { const m = document.querySelector('.app-menu'); const it = [...m.querySelectorAll('.menu-item')].find((x) => x.querySelector('.label')?.textContent === '重命名'); if (!it) return false; const s = it.querySelector('.shortcut').getBoundingClientRect(); return Math.abs(m.getBoundingClientRect().right - 14 - s.right) <= 1.5; })()"))
             await shot("ctx-menu")
 
             # —— B. hover 排序依据 → flyout ——
@@ -270,7 +270,7 @@ async def main():
             check("E4 首格双色原值（fill #BFBFBF 亮层）", await ev("document.querySelectorAll('.app-menu')[1]?.querySelector('.icon-grid .cell svg path[fill=\"#BFBFBF\"]') != null"))
             await shot("ctx-menu-iconpanel")
             # 移开（回第一组项）收 flyout
-            firstRect = await ev("(() => { const el = [...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '打开文件夹'); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()")
+            firstRect = await ev("(() => { const el = [...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.querySelector('.label')?.textContent === '新标签页打开'); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()")
             await mouse("mouseMoved", firstRect["x"], firstRect["y"])
             await asyncio.sleep(0.4)
             check("B6 移开后 flyout 收", await ev("document.querySelectorAll('.app-menu').length === 1"))

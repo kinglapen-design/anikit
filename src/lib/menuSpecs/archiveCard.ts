@@ -63,16 +63,11 @@ function selectedArchiveIds(triggerId: string): string[] {
 // rename（树节点分流用）：树档案节点的重命名入口走树命名态 namingFolderId，
 // 缺省 = 卡片命名态 namingFolderCardId。
 // 「更改封面图」稿漏画二级箭头，按 10 稿补（二级两项，占位）。
+// 「打开档案」首项删除（2026-09-23 用户定：左键选中即打开，菜单项冗余；文件夹侧「打开文件夹」同删）。
 export function archiveCardSpec(archive: { id: string; name: string }, rename?: () => void): CtxEntry[] {
   // 选择模式（6.2 一轮，PRD 03_数据链接 04）：右键仅留查看类操作，编辑类不出现
   if (usePickerStore().active) {
     return [
-      {
-        label: "打开档案",
-        action: () => {
-          useTabsStore().openView(`folder:${archive.id}`);
-        },
-      },
       {
         label: "新标签页打开",
         action: () => {
@@ -93,13 +88,6 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
   const selection = useSelectionStore();
   const parentId = findParentId(content.folders, archive.id) ?? null;
   const entries: CtxEntry[] = [
-    {
-      label: "打开档案",
-      shortcut: "Enter",
-      action: () => {
-        useTabsStore().openView(`folder:${archive.id}`);
-      },
-    },
     {
       label: "新标签页打开",
       shortcut: "Ctrl+Enter",

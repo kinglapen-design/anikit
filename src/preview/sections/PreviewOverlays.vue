@@ -30,7 +30,6 @@ import type { PlacementView } from "../../stores/content";
 
 // —— ContextMenu 真实弹出：桩 spec（分组 / 快捷键 / 对勾 / 二级 flyout / 色块行 / 禁用），action 全空操作 ——
 const ctxEntries: CtxEntry[] = [
-  { label: "打开文件夹", shortcut: "Enter", action: () => {} },
   { label: "新标签页打开", shortcut: "Ctrl+Enter", action: () => {} },
   "divider",
   {
