@@ -259,6 +259,10 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
           <LinkFileItem block-name="文件夹" folder-name="01_人物" file-name="雪牧_自动.fla" origin force-state="hover" />
           <span class="pv-cap">原始文件（品牌星徽章右下）</span>
         </div>
+        <div class="pv-demo-cell">
+          <LinkFileItem block-name="文件夹" folder-name="01_人物" file-name="雪牧_自动.fla" linked force-state="hover" />
+          <span class="pv-cap">链接文件（链接徽章右下 亮色/三级，2026-09-23 补）</span>
+        </div>
       </div>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">

@@ -387,6 +387,7 @@ function hasContent(id: DetailLinkBlockId): boolean {
             :folder-name="dirName(p)"
             :file-name="p.name"
             :origin="p.origin && linkItems.length > 1"
+            :linked="!p.origin && linkItems.length > 1"
             @click="jumpToLink(p)"
             @close="removeLink(p)"
           />

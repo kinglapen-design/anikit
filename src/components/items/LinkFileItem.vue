@@ -3,8 +3,11 @@
 // 卡片 240×66 / padding 12 / 两行：文件夹图标 + 路径（区块名 正文加粗 二级 / 目录 加粗 三级）、文件名 三级；
 // 关闭钮 hover 从右缘向左滑入并把内容推左（items.css .ni-slide 推挤机制，2026-08-29 走查定——
 // 此前绝对定位 translateX 从容器右缘进来，与其他 item 从内容缘进来不统一，作废）；
-// 原始文件徽章（品牌星）绝对定位右下——仅 origin 且活位置 > 1 出（2026-09-05 走查：与卡片徽章同口径，
-// 单位置无链接可区分不出；判定在调用方 TabLinks：origin && linkItems.length > 1）。
+// 位置徽章绝对定位右下：origin = ★（original-file-badge 品牌原值）/ 链接 = linked-file-badge 14 亮色/三级
+//（2026-09-23 补齐链接半边；稿只画了 ★——链接 icon 稿未画，色档与链接 tip 列表 LinkListRows 同档 l3；
+// 同日二轮用户定：详情面板纯底 l1 偏亮改 l3，卡片徽章 l1 例外不动——缩略图复杂需亮，§55）。
+// 徽章仅活位置 > 1 出（2026-09-05 走查：与卡片徽章同口径，单位置无链接可区分不出；
+// 判定在调用方 TabLinks：origin/linked && linkItems.length > 1）。
 import "./items.css";
 import AppIcon from "../AppIcon.vue";
 import TwoToneIcon from "./TwoToneIcon.vue";
@@ -15,9 +18,10 @@ withDefaults(
     folderName: string; // 目录名（正文-加粗，亮色/三级）
     fileName: string; // 显示名（正文，亮色/三级）
     origin?: boolean; // 原始文件徽章（品牌星，右下）
+    linked?: boolean; // 链接徽章（linked-file-badge，右下同位；与 origin 互斥，2026-09-23 补）
     forceState?: "" | "hover";
   }>(),
-  { origin: false, forceState: "" },
+  { origin: false, linked: false, forceState: "" },
 );
 
 const emit = defineEmits<{ click: []; close: [] }>();
@@ -38,7 +42,7 @@ const emit = defineEmits<{ click: []; close: [] }>();
           <span class="dir">{{ folderName }}</span>
         </span>
       </div>
-      <div class="fname" :class="{ 'has-badge': origin }">{{ fileName }}</div>
+      <div class="fname" :class="{ 'has-badge': origin || linked }">{{ fileName }}</div>
     </div>
     <span class="ni-slide">
       <span class="ni-slide-inner">
@@ -49,6 +53,9 @@ const emit = defineEmits<{ click: []; close: [] }>();
     </span>
     <span v-if="origin" class="badge" aria-hidden="true">
       <AppIcon name="original-file-badge" :size="14" />
+    </span>
+    <span v-else-if="linked" class="badge link" aria-hidden="true">
+      <AppIcon name="linked-file-badge" :size="14" />
     </span>
   </div>
 </template>
@@ -108,7 +115,7 @@ const emit = defineEmits<{ click: []; close: [] }>();
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 有原始文件徽章（右下 14px）：名称右缩 徽章 14 + 间距 6，省略号收在徽章前——
+/* 有位置徽章（右下 14px）：名称右缩 徽章 14 + 间距 6，省略号收在徽章前——
    2026-09-13 实机走查：徽章盖住长文件名 */
 .fname.has-badge {
   padding-right: calc(14px + var(--n-space-6));
@@ -121,5 +128,10 @@ const emit = defineEmits<{ click: []; close: [] }>();
   height: 14px;
   display: inline-flex;
   pointer-events: none;
+}
+/* 链接徽章 = 亮色/三级（2026-09-23 用户定：详情面板纯底上行徽章 l1 偏亮，与链接 tip 列表
+   LinkListRows 同档；卡片徽章 l1 例外不动——缩略图复杂需亮，§55。★ 为品牌原值 SVG 不吃 color） */
+.badge.link {
+  color: var(--n-l3);
 }
 </style>
