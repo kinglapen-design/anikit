@@ -1,11 +1,13 @@
 <script setup lang="ts">
 // pinned 缩略图 / 档案封面区块（7.1 二十三轮贴稿重构，稿 = 右侧边栏-详情面板-缩略图 / 档案封面）：
 // 恒顶（不参与 tab 切换）、无区块标题、无 border-top（详情面板首块）。
-// 结构 = 缩略图容器 240×240（通用二级底 + 通用三级 1px / 圆角 8；图 contain 不裁剪——速查表口径）
+// 结构 = 缩略图容器 240×240（通用二级底 + 通用三级 1px / 圆角 8；图 contain 不裁剪——速查表口径；
+//   格式图标（thumbKind=formatIcon）= 50% 居中 contain——卡片 thumbFit icon 档同口径，2026-09-23 用户定）
 //   + 格式徽标 FormatBadge（左上 12/12；静态图不出 = formatBadgeColor null 判定沿用）
 //   + 颜色列表 ColorSwatchItem（真色 = detail.colors 前 7，空 = 7 占位块——6.1 口径；
 //     仅 thumbKind=asset（有内容缩略图，含 fla 伴生 webp 代理）时显示——无内容缩略图的格式
-//     （docx 等格式图标占位）不提色、整行隐藏，2026-09-23 用户定）。
+//     （docx 等格式图标占位）不提色、整行隐藏；音频 / 字体颜色恒不变（波形恒灰、字体预览恒色）
+//     同隐藏，2026-09-23 用户定）。
 // 名称 / 链接输入框已下移基础信息 tab 输入框区块（旧 pinned 四件口径作废）。
 // 档案形态：封面容器同款 240×240（封面 cover 充满——稿裁切语义）+ 徽标 FormatBadge（badge.text）；
 //   封面链 = 自定义封面 → 子项首图 → 默认封面图（2026-09-08 用户定，lib/archiveCover）；
@@ -20,7 +22,7 @@ import FormatBadge from "../cards/FormatBadge.vue";
 import ColorSwatchItem from "../items/ColorSwatchItem.vue";
 import AppIcon from "../AppIcon.vue";
 import { archiveCoverUrl } from "../../lib/archiveCover";
-import { formatBadgeColor, isSequence } from "../../lib/formatBadge";
+import { formatBadgeColor, isAudioExt, isFontExt, isSequence } from "../../lib/formatBadge";
 import type { DetailTarget } from "../../lib/detailSections";
 import { useContentStore } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
@@ -114,8 +116,15 @@ const badgeLabel = computed(() => {
 const swatchColors = computed(() => (file.value?.detail.colors ?? []).slice(0, 7));
 // 色块行显隐（2026-09-23 用户定）：有内容缩略图才显示（thumbKind = asset，含 fla 经
 // thumb_asset_id 代理的伴生 webp——其颜色即伴生图颜色，后端 ensure_asset_colors 同径回填）；
-// 无内容缩略图的格式（格式图标占位 / 无图）不需要提取颜色，整行隐藏
-const showSwatches = computed(() => file.value?.placement.thumbKind === "asset");
+// 无内容缩略图的格式（格式图标占位 / 无图）不提色整行隐藏；音频 / 字体颜色恒不变
+// （波形恒灰、字体预览恒色）同隐藏
+const showSwatches = computed(() => {
+  const p = file.value?.placement;
+  if (!p || p.thumbKind !== "asset") return false;
+  return !isAudioExt(p.ext) && !isFontExt(p.ext);
+});
+// 格式图标缩略图 = 50% 居中 contain（卡片 thumbFit icon 档同口径，Eagle 50%；撑满太满，2026-09-23 用户定）
+const iconFit = computed(() => file.value?.placement.thumbKind === "formatIcon");
 </script>
 
 <template>
@@ -139,7 +148,13 @@ const showSwatches = computed(() => file.value?.placement.thumbKind === "asset")
         @click="archive && (coverEditing = true)"
       >
         <template v-if="file">
-          <img v-if="thumbUrl" :src="thumbUrl" alt="" draggable="false" class="fit-contain" />
+          <img
+            v-if="thumbUrl"
+            :src="thumbUrl"
+            alt=""
+            draggable="false"
+            :class="iconFit ? 'fit-icon' : 'fit-contain'"
+          />
           <!-- 无图占位（速查表 §6）：浅色块 #C6C7CC + 扩展名文字 -->
           <span v-else class="ext">{{ file.placement.ext.toUpperCase() }}</span>
           <FormatBadge v-if="badgeLabel" class="badge" :label="badgeLabel" />
@@ -188,6 +203,17 @@ const showSwatches = computed(() => file.value?.placement.thumbKind === "asset")
 }
 /* 文件缩略图 = contain 不裁剪；档案封面 = cover 充满（稿裁切语义） */
 .fit-contain {
+  object-fit: contain;
+}
+/* 格式图标 = 50% 居中 contain（卡片 ThumbContent icon 档同口径，left/top 25% + 50% 宽高；
+   图标不铺满，铺满脸圆角无意义归零） */
+.thumb img.fit-icon {
+  position: absolute;
+  left: 25%;
+  top: 25%;
+  width: 50%;
+  height: 50%;
+  border-radius: 0;
   object-fit: contain;
 }
 .fit-cover {
