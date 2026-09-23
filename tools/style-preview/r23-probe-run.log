@@ -1,0 +1,48 @@
+  [PASS] R1 右栏宽 = 264 — offsetWidth = 264
+  [PASS] R2a 窗口控制四钮 58×46 连续排 — [{"w": 58, "h": 46}, {"w": 58, "h": 46}, {"w": 58, "h": 46}, {"w": 58, "h": 46}]
+  [PASS] R2b 浮块在右栏顶行位（top 0 / right 0 / 高 46） — wc-btn 数 = 4
+  [PASS] R3a 快速访问形态：无分段控制器 / 无管理钮 / 无缩略图 — {"seg": false, "manage": false, "thumb": false, "val": "全部", "ro": true, "inputs": 1, "rows": ["文件数", "占用空间"]}
+  [PASS] R3b 单名称框 = 「全部」只读（不让改名） — {"seg": false, "manage": false, "thumb": false, "val": "全部", "ro": true, "inputs": 1, "rows": ["文件数", "占用空间"]}
+  [PASS] R3c 数据卡两行 = 文件数 / 占用空间 — {"seg": false, "manage": false, "thumb": false, "val": "全部", "ro": true, "inputs": 1, "rows": ["文件数", "占用空间"]}
+  [PASS] R3d 文件数 = 3（桩 3 条 Placement） — 值 = 3
+  [PASS] R3e 快速访问名称框：可聚焦但不出聚焦描边（聚焦保留、边不显） — {"op": "0", "focus": true}
+  [PASS] R4a 顶行 46 拖拽区 + 无 border-bottom（稿） — {"h": 46, "bb": "0px"}
+  [PASS] R4b 旧结构清零（54 工具栏 / 旧自制滚轮） — []
+  [PASS] R4c 窗口控制区透窗口底（aside 根无底无线；::before 只画顶行 46 以下 g1 + 左缘 1px） — {"bg": "rgba(0, 0, 0, 0)", "bl": "0px", "iso": "isolate", "pbg": "rgb(23, 23, 23)", "ptop": "46px", "pbl": "1px", "pz": "-1"}
+  [PASS] R4c2 背景伪元素沉底（aside isolation isolate + ::before z-index -1——防盖正常流内容） — {"bg": "rgba(0, 0, 0, 0)", "bl": "0px", "iso": "isolate", "pbg": "rgb(23, 23, 23)", "ptop": "46px", "pbl": "1px", "pz": "-1"}
+  [PASS] R5a 文件夹形态：图标缩略图 + 名称框「角色」 — {"thumb": true, "icon": true, "val": "角色", "rows": ["文件数", "档案数", "子文件夹数", "占用空间"], "seg": false, "manage": false}
+  [PASS] R5b 数据卡 4 行 = 文件数/档案数/子文件夹数/占用空间 — {"thumb": true, "icon": true, "val": "角色", "rows": ["文件数", "档案数", "子文件夹数", "占用空间"], "seg": false, "manage": false}
+  [PASS] R5c 文件夹形态无分段控制器 / 无管理钮（稿注） — {"thumb": true, "icon": true, "val": "角色", "rows": ["文件数", "档案数", "子文件夹数", "占用空间"], "seg": false, "manage": false}
+  [PASS] R6a pinned 缩略图 240 方（g2 底 + g3 1px 边） — {"thumb": true, "sq": true, "bg": "rgb(28, 28, 28)", "bw": "1px", "bc": "rgb(36, 36, 36)", "badge": "FLA", "dots": 0, "bt": {"t": "12px", "l": "12px"}}
+  [PASS] R6b FormatBadge「FLA」+ 无内容缩略图 → 色块行整行隐藏（2026-09-23 口径：不提色不显示） — {"thumb": true, "sq": true, "bg": "rgb(28, 28, 28)", "bw": "1px", "bc": "rgb(36, 36, 36)", "badge": "FLA", "dots": 0, "bt": {"t": "12px", "l": "12px"}}
+  [PASS] R6c 有内容缩略图 → 色块行显示真色（桩 a2 七色、无占位块） — {"n": 7, "first": "rgb(200, 30, 30)", "ph": 0}
+  [PASS] R7 分段控制器三段 icon 型 + 默认「基础信息」选中 — {"h": 38, "n": 3, "on": 0}
+  [PASS] R7b 图标随选中态着色：选中一级 / 未选中三级 + stroke=currentColor — [{"on": true, "color": "rgb(242, 242, 242)", "stroke": "currentColor"}, {"on": false, "color": "rgb(128, 128, 128)", "stroke": "currentColor"}, {"on": false, "color": "rgb(128, 128, 128)", "stroke": "currentColor"}]
+  [PASS] R8a 名称框值 = 雪牧_自动.fla + 链接框占位 http:// 带 link 图标 — {"name": "雪牧_自动.fla", "linkPh": "http://", "linkIcon": true, "chips": ["男", "16岁"], "dtitle": "身份", "rows": ["文件大小", "格式", "添加日期", "修改日期"]}
+  [PASS] R8b 属性 chips = 男 / 16岁 + 描述条目「身份」 — {"name": "雪牧_自动.fla", "linkPh": "http://", "linkIcon": true, "chips": ["男", "16岁"], "dtitle": "身份", "rows": ["文件大小", "格式", "添加日期", "修改日期"]}
+  [PASS] R8c 数据卡 4 行（桩 width null 无尺寸行）= 文件大小/格式/添加日期/修改日期 — {"name": "雪牧_自动.fla", "linkPh": "http://", "linkIcon": true, "chips": ["男", "16岁"], "dtitle": "身份", "rows": ["文件大小", "格式", "添加日期", "修改日期"]}
+  [PASS] R8d 描述收起 = 留一排截断正文（clamp-1 / 高 18 / line-clamp 1） — {"cls": "desc-content clamp-1", "h": 18, "lc": "1"}
+  [PASS] R8e 文件名称框保留聚焦描边（聚焦后 ::before opacity 1） — {"op": "1", "focus": true}
+  [PASS] R9 信息查看管理：58 高块 + 34 高 solid 钮 + 文案 — {"h": 58, "bh": 34, "t": "信息查看管理"}
+  [PASS] R10a 链接 tab 五区块序 = 链接/音频/关系/缩略图/污染文件 — ["链接", "音频", "关系", "缩略图", "污染文件"]
+  [PASS] R10b 链接卡 ×2 + 首行（当前目录置顶）带 origin 徽章 — {"blocks": [{"t": "链接", "acts": true}, {"t": "音频", "acts": true}, {"t": "关系", "acts": true}, {"t": "缩略图", "acts": true}, {"t": "污染文件", "acts": false}], "cards": 2, "badge": true}
+  [PASS] R10c 污染文件区块标题行无动作组（稿） — [{"t": "污染文件", "acts": false}]
+  [PASS] R10d 五区块标题行折叠钮常显 + 四区块动作组常显（非悬停态 opacity 1） — [{"t": "链接", "chev": "1/visible", "acts": "1/visible"}, {"t": "音频", "chev": "1/visible", "acts": "1/visible"}, {"t": "关系", "chev": "1/visible", "acts": "1/visible"}, {"t": "缩略图", "chev": "1/visible", "acts": "1/visible"}, {"t": "污染文件", "chev": "1/visible", "acts": null}]
+  [PASS] R10e tab 切换动画：新内容恒定右入 48px + 250ms 缓入 delay 100ms（与左侧边栏同向） — {"cls": "tab-pane tab-x-enter-active tab-x-enter-to", "dur": "0.25s, 0.25s", "delay": "0.1s, 0.1s", "ease": "cubic-bezier(0, 0, 0.1, 1), cubic-bezier(0, 0, 0.1, 1)", "tf": "matrix(1, 0, 0, 1, 48, 0)"}
+  [PASS] R10e2 动画收尾：单 pane + 类摘除 + transform 归零 — {"cls": "tab-pane", "tf": "none", "n": 1}
+saved tools/style-preview/r23b-sidebar-links.png
+  [PASS] R11 提示词 tab：只读编辑框 + 悬浮复制钮 + 五枚 solid 图标钮 — {"area": true, "ro": true, "copy": true, "btns": 5}
+  [PASS] R12 全局记忆当前 tab（links → 点 a2 → 仍 links） — {"on": 1, "links": true}
+  [PASS] R13 档案形态：封面区块 + 徽标「主角」+ chips「连载」+ 数据卡含创建日期 — {"cover": true, "badge": "主角", "chips": ["连载"], "rows": ["文件数", "占用空间", "创建日期"]}
+  [PASS] R13b 点封面 → pinned 根 250ms 高度补间启动（inline height + transition） — {"h": "424px", "tr": "height 250ms cubic-bezier(0.32, 0.08, 0.1, 1)"}
+  [PASS] R13c 封面编辑边距 = 栏缘 +12（pinned padding 12——双重 padding 24 修复）+ 动画收尾归位 — {"done": true, "ovf": "", "ph": "", "pad": "12px", "inset": 12, "slider": true, "btns": 2, "kids": [{"cls": "cs-frame", "h": 240, "disp": "block"}, {"cls": "cs-slider", "h": 10, "disp": "block"}, {"cls": "act-btn", "h": 34, "disp": "flex"}, {"cls": "ti-root", "h": 34, "disp": "flex"}, {"cls": "cs-actions", "h": 34, "disp": "flex"}]}
+  [PASS] R13c2 封面编辑五件全显（框 240 / 滑块 10 / 更换封面 34 / 角标名 34 / 按钮组 34——不许被压没） — [{"cls": "cs-frame", "h": 240, "disp": "block"}, {"cls": "cs-slider", "h": 10, "disp": "block"}, {"cls": "act-btn", "h": 34, "disp": "flex"}, {"cls": "ti-root", "h": 34, "disp": "flex"}, {"cls": "cs-actions", "h": 34, "disp": "flex"}]
+saved tools/style-preview/r23c-cover-editing.png
+  [PASS] R13d 取消退回常态组（封面回 + 设置组消失 + inline 高清空） — {"cover": true, "cs": false, "h": ""} taps=["", "", ""]
+  [PASS] R14 关闭钮 hover = 状态/禁止底 rgb(220,57,57) — hover bg = rgb(220, 57, 57)
+  [PASS] R15a 选择模式：备选区占位组（点击卡片选择 + 双框禁用） — {"group": true, "ph": "点击卡片选择", "ro": [true, true], "btns": ["取消", "确认"], "banner": true}
+  [PASS] R15b 按钮序 = 取消左 / 确认右（2026-08-31 全局定案）+ 顶部横幅 — {"group": true, "ph": "点击卡片选择", "ro": [true, true], "btns": ["取消", "确认"], "banner": true}
+  [PASS] R15c 取消退出 = 详情面板恢复（picker 消失 + pinned 回） — {"picker": false, "pin": true}
+saved tools/style-preview/r23-sidebar-right.png / tools/style-preview/r23-sidebar-right-full.png
+
+ALL PASS

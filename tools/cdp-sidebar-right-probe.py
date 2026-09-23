@@ -6,7 +6,9 @@
 #   R4  顶行 46 拖拽区无 border-bottom；旧结构清零（.panel-toolbar / .side-thumb / .picker-panel）
 #   R5  点树 f1 → 文件夹形态：folder-detail-panel 图标缩略图 + 名称框「角色」+ 数据卡 4 行
 #       （文件数/档案数/子文件夹数/占用空间），仍无分段控制器 / 管理钮
-#   R6  点素材卡 a1 → 文件形态：pinned 缩略图 240 方（g2 底 g3 边）+ FormatBadge「FLA」左上 12/12 + 颜色 7 占位
+#   R6  点素材卡 a1 → 文件形态：pinned 缩略图 240 方（g2 底 g3 边）+ FormatBadge「FLA」左上 12/12；
+#       色块行显隐（2026-09-23 用户定）：无内容缩略图（桩 a1 thumbKind null）→ 整行隐藏（R6b）；
+#       有内容缩略图（桩 a2 thumbKind asset，fla 伴生 webp 代理同径）→ 显示真色不显示占位（R6c）
 #   R7  分段控制器三段 icon，默认「基础信息」选中
 #   R8  基础信息 tab：名称框值 / 链接框占位 http://+link 图标 / 属性 chips×2 / 描述条目「身份」/
 #       数据卡 4 行（文件大小/格式/添加日期/修改日期——桩 width null 无尺寸行，旧口径）
@@ -61,7 +63,36 @@ window.__TAURI_INTERNALS__ = {
   metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
   convertFileSrc: (p) => "asset://localhost/" + encodeURIComponent(p),
   transformCallback: (cb) => { const id = ++window.__cbId; window.__cbs[id] = cb; return id; },
-  invoke: (cmd) => {
+  invoke: (cmd, args) => {
+    // 资产详情按 assetId 分桩（2026-09-23 色块行显隐口径断言：a1 无内容缩略图无色 /
+    // a2 thumbKind=asset 伴生 webp 代理同径 → 七真色）
+    const DETAILS = {
+      a1: {
+        assetId: "a1", originName: "雪牧_自动.fla", ext: "fla", size: 1000,
+        width: null, height: null, duration: null,
+        importedAt: "2026-07-12T14:26:00+08:00", modifiedAt: "2026-07-13T09:00:00+08:00",
+        tags: ["男", "16岁"],
+        descriptions: [{ title: "身份", content: "沙雕动画的御用主角" }],
+        colors: [], links: [], note: "",
+        placements: [
+          { folderId: "f1", blockName: "目录", path: ["角色"], name: "雪牧_自动.fla", origin: true },
+          { folderId: "f2", blockName: "目录", path: ["场景"], name: "雪牧_自动-副本.fla", origin: false },
+        ],
+        archives: [],
+      },
+      a2: {
+        assetId: "a2", originName: "雪牧_跑动.fla", ext: "fla", size: 2000,
+        width: null, height: null, duration: null,
+        importedAt: "2026-07-12T14:26:00+08:00", modifiedAt: "2026-07-13T09:00:00+08:00",
+        tags: [], descriptions: [],
+        colors: ["#C81E1E", "#1E1EC8", "#1EC81E", "#C8C81E", "#C81EC8", "#1EC8C8", "#808080"],
+        links: [], note: "",
+        placements: [
+          { folderId: "f1", blockName: "目录", path: ["角色"], name: "雪牧_跑动.fla", origin: true },
+        ],
+        archives: [],
+      },
+    };
     const R = {
       get_current_library: { name: "测试库", path: "E:/test-lib", assetCount: 3, folderCount: 3 },
       get_ui_settings: {},
@@ -80,7 +111,8 @@ window.__TAURI_INTERNALS__ = {
           createdAt: "2026-07-10T08:00:00+08:00", modifiedAt: "2026-07-13T09:00:00+08:00",
           importedAt: "2026-07-12T14:26:00+08:00" },
         { assetId: "a2", folderId: "f1", name: "雪牧_跑动.fla", ext: "fla", size: 2000,
-          w: null, h: null, thumbKind: null, thumbPath: null, origin: true,
+          w: null, h: null, thumbKind: "asset",
+          thumbPath: "E:/test-lib/assets/AN-A2.info/AN-A2_thumbnail.webp", origin: true,
           frameCount: null, animated: false, duration: null, bpm: null, importedFrom: null,
           createdAt: "2026-07-10T08:00:00+08:00", modifiedAt: "2026-07-13T09:00:00+08:00",
           importedAt: "2026-07-12T14:26:00+08:00" },
@@ -95,26 +127,15 @@ window.__TAURI_INTERNALS__ = {
       get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
       undo: null, redo: null,
       save_ui_settings: null,
-      get_asset_detail: {
-        assetId: "a1", originName: "雪牧_自动.fla", ext: "fla", size: 1000,
-        width: null, height: null, duration: null,
-        importedAt: "2026-07-12T14:26:00+08:00", modifiedAt: "2026-07-13T09:00:00+08:00",
-        tags: ["男", "16岁"],
-        descriptions: [{ title: "身份", content: "沙雕动画的御用主角" }],
-        colors: [], links: [], note: "",
-        placements: [
-          { folderId: "f1", blockName: "目录", path: ["角色"], name: "雪牧_自动.fla", origin: true },
-          { folderId: "f2", blockName: "目录", path: ["场景"], name: "雪牧_自动-副本.fla", origin: false },
-        ],
-        archives: [],
-      },
       get_archive_data: {
         folderId: "f2a", badge: { text: "主角", color: "#FF6566" }, avatar: null,
         props: ["连载"], descriptions: [{ title: "定位", content: "沙雕动画御用档案" }],
         links: [], createdAt: "2026-07-01T10:00:00+08:00", fileCount: 0, totalSize: 0, coverPath: null,
       },
     };
-    const v = Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null;
+    const v = cmd === "get_asset_detail"
+      ? (DETAILS[(args && args.assetId) || ""] ?? null)
+      : (Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
     return Promise.resolve(v === null ? null : structuredClone(v));
   },
 };
@@ -348,9 +369,23 @@ async def main():
                   and pin.get("bg") == "rgb(28, 28, 28)" and pin.get("bw") == "1px"
                   and pin.get("bc") == "rgb(36, 36, 36)",
                   json.dumps(pin, ensure_ascii=False))
-            check("R6b FormatBadge「FLA」+ 颜色 7 占位块（恒显口径）",
-                  isinstance(pin, dict) and pin.get("badge") == "FLA" and pin.get("dots") == 7,
+            check("R6b FormatBadge「FLA」+ 无内容缩略图 → 色块行整行隐藏（2026-09-23 口径：不提色不显示）",
+                  isinstance(pin, dict) and pin.get("badge") == "FLA" and pin.get("dots") == 0,
                   json.dumps(pin, ensure_ascii=False))
+
+            # ---------- R6c 有内容缩略图（桩 a2 thumbKind=asset，伴生 webp 代理同径）→ 色块行显示真色 ----------
+            await pointer_click(".asset-card ~ .asset-card, .asset-card:nth-child(2)")
+            sw = await ev(
+                "(() => { const dots = [...document.querySelectorAll('.section-pinned .cs-dot')];"
+                " return { n: dots.length,"
+                "   first: dots[0] ? getComputedStyle(dots[0]).backgroundColor : null,"
+                "   ph: dots.filter(d => d.className.includes('ph')).length }; })()")
+            check("R6c 有内容缩略图 → 色块行显示真色（桩 a2 七色、无占位块）",
+                  isinstance(sw, dict) and sw.get("n") == 7 and sw.get("ph") == 0
+                  and sw.get("first") == "rgb(200, 30, 30)",
+                  json.dumps(sw, ensure_ascii=False))
+            # 点回 a1 复原（R8 基础信息断言读 a1 详情）
+            await pointer_click(".asset-card")
 
             # ---------- R7 分段控制器 ----------
             seg = await ev(

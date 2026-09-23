@@ -4,6 +4,9 @@
 //! 常为黑/白杂色，混入会污染主色；半透明像素按原始 RGB 计入（不做预乘）。
 //! 提取时机：导入 / 重生成缩略图时随缩略图管线算（320px 小图亚毫秒级）；存量资产打开详情时
 //! 懒回填（ensure_asset_colors，被动补数不刷 modifiedAt、不进撤销）。
+//! 取色源 = 卡片 / 详情显示图同源（2026-09-23 用户定）：无自身缩略图的工程资产（fla 等）
+//! 经伴生缩略图代理（8.1 thumb_asset_id → hidden 资产）取其伴生 WebP 的缩略图取色——
+//! 显示的是哪张图，主色就取自哪张。
 
 use image::DynamicImage;
 
@@ -67,18 +70,26 @@ pub fn extract(img: &DynamicImage) -> Vec<String> {
 /// 规范第 7 条）。**不刷 modified_at**（被动补数不算库内变更，防 3.5 排序键漂移）、不进撤销栈
 /// （系统补数非用户写操作；后续用户写操作快照自然带上回填值）。全程 best-effort：任何一步
 /// 失败仅日志，下次打开详情重试，不影响详情读取。
+/// 取色源走伴生缩略图代理（8.1，同 views::placement_view 口径：thumb_asset_id 指向的 hidden
+/// 资产优先于自身缩略图）——fla 等工程资产显示的就是伴生 WebP 的图，主色与其同源
+/// （2026-09-23 用户定）；落盘恒写资产**自身** info 的 metadata.json，不污染伴生资产。
 pub fn ensure_asset_colors(lib: &mut Library, asset_id: &str) {
   let Some(meta) = lib.index.assets.get(asset_id) else { return };
   if !meta.colors.is_empty() {
     return;
   }
-  let Some(thumb) = meta.thumbnail.clone() else { return };
-  let dir = paths::info_dir(&lib.assets_dir, asset_id);
-  let path = dir.join(&thumb);
-  if !path.is_file() {
+  let source = meta
+    .thumb_asset_id
+    .as_deref()
+    .and_then(|id| lib.index.assets.get(id))
+    .filter(|t| t.hidden == Some(true))
+    .unwrap_or(meta);
+  let Some(thumb) = source.thumbnail.clone() else { return };
+  let thumb_path = paths::info_dir(&lib.assets_dir, &source.id).join(&thumb);
+  if !thumb_path.is_file() {
     return;
   }
-  let Some(img) = thumbnail::decode_by_signature(&path) else {
+  let Some(img) = thumbnail::decode_by_signature(&thumb_path) else {
     log::warn!("颜色回填：缩略图解码失败（{asset_id}）");
     return;
   };
@@ -88,6 +99,7 @@ pub fn ensure_asset_colors(lib: &mut Library, asset_id: &str) {
   }
   let mut meta = meta.clone();
   meta.colors = colors;
+  let dir = paths::info_dir(&lib.assets_dir, asset_id);
   if let Err(e) = write_json(&dir.join("metadata.json"), &meta) {
     log::warn!("颜色回填落盘失败（{asset_id}）：{e}");
     return;
@@ -209,5 +221,63 @@ mod tests {
     ensure_asset_colors(&mut lib, "AN-A");
     // 无缩略图引用 / 不存在的资产：静默返回
     ensure_asset_colors(&mut lib, "AN-不存在");
+  }
+
+  /// 伴生缩略图代理（2026-09-23 用户定）：fla 工程无自身缩略图 → 经 thumb_asset_id 取 hidden
+  /// 伴生资产的 webp 缩略图取色；落盘写工程自身 info 的 metadata.json，不污染伴生资产
+  #[test]
+  fn ensure_asset_colors_backfills_from_companion_thumb() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut lib = library::create_test(dir.path());
+    let fla: AssetMeta = serde_json::from_value(serde_json::json!({
+      "version": 1, "id": "AN-F", "name": "AN-F", "originName": "AN-F.fla", "ext": "fla", "size": 100,
+      "importedAt": "2026-08-23T00:00:00+08:00", "modifiedAt": "2026-08-23T00:00:00+08:00",
+      "thumbAssetId": "AN-T"
+    }))
+    .unwrap();
+    let webp: AssetMeta = serde_json::from_value(serde_json::json!({
+      "version": 1, "id": "AN-T", "name": "AN-T", "originName": "AN-T.webp", "ext": "webp", "size": 100,
+      "importedAt": "2026-08-23T00:00:00+08:00", "modifiedAt": "2026-08-23T00:00:00+08:00",
+      "thumbnail": "AN-T_thumbnail.webp", "hidden": true
+    }))
+    .unwrap();
+    // 伴生资产的缩略图文件（纯蓝）；工程自身 info 只有 metadata.json（无缩略图）
+    let thumb_dir = paths::info_dir(&lib.assets_dir, "AN-T");
+    std::fs::create_dir_all(&thumb_dir).unwrap();
+    let img = DynamicImage::ImageRgba8(RgbaImage::from_pixel(64, 64, Rgba([30, 30, 200, 255])));
+    thumbnail::save_webp(&img, &thumb_dir.join("AN-T_thumbnail.webp")).unwrap();
+    let fla_dir = paths::info_dir(&lib.assets_dir, "AN-F");
+    std::fs::create_dir_all(&fla_dir).unwrap();
+    write_json(&fla_dir.join("metadata.json"), &fla).unwrap();
+    lib.index.assets.insert("AN-F".into(), fla);
+    lib.index.assets.insert("AN-T".into(), webp);
+
+    ensure_asset_colors(&mut lib, "AN-F");
+    let after = &lib.index.assets["AN-F"];
+    // 有损 webp 往返 ±1 色偏：断言一席蓝系，不咬死精确 hex
+    assert_eq!(after.colors.len(), 1, "伴生 webp 主色回填一席：{:?}", after.colors);
+    assert!(after.colors[0].starts_with("#1E"), "蓝系主色：{:?}", after.colors);
+    assert_eq!(after.modified_at, "2026-08-23T00:00:00+08:00", "被动回填不刷排序键");
+    let disk: AssetMeta = read_json(&fla_dir.join("metadata.json")).unwrap();
+    assert_eq!(disk.colors, after.colors, "落盘 = 工程自身 metadata");
+    // 伴生资产不被污染：自身 colors 保持空、不补写它的 metadata.json
+    assert!(lib.index.assets["AN-T"].colors.is_empty());
+    assert!(!thumb_dir.join("metadata.json").exists(), "不得写伴生资产的 metadata");
+
+    // 伴生资产未被 hidden 打标时不代理（同 views::placement_view 口径：非 hidden 不代理，
+    // 防「还原为素材」途中脏引用取错图；失效引用由开库自检剔除）——工程保持无色，下回重试
+    let mut plain = lib.index.assets["AN-T"].clone();
+    plain.hidden = None;
+    lib.index.assets.insert("AN-T".into(), plain);
+    let mut fla2: AssetMeta = serde_json::from_value(serde_json::json!({
+      "version": 1, "id": "AN-G", "name": "AN-G", "originName": "AN-G.fla", "ext": "fla", "size": 100,
+      "importedAt": "2026-08-23T00:00:00+08:00", "modifiedAt": "2026-08-23T00:00:00+08:00",
+      "thumbAssetId": "AN-T"
+    }))
+    .unwrap();
+    fla2.colors = Vec::new();
+    lib.index.assets.insert("AN-G".into(), fla2);
+    ensure_asset_colors(&mut lib, "AN-G");
+    assert!(lib.index.assets["AN-G"].colors.is_empty(), "非 hidden 引用不代理取色");
   }
 }

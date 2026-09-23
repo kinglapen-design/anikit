@@ -3,7 +3,9 @@
 // 恒顶（不参与 tab 切换）、无区块标题、无 border-top（详情面板首块）。
 // 结构 = 缩略图容器 240×240（通用二级底 + 通用三级 1px / 圆角 8；图 contain 不裁剪——速查表口径）
 //   + 格式徽标 FormatBadge（左上 12/12；静态图不出 = formatBadgeColor null 判定沿用）
-//   + 颜色列表 ColorSwatchItem（真色 = detail.colors 前 7，空 = 7 占位块恒显——6.1 口径）。
+//   + 颜色列表 ColorSwatchItem（真色 = detail.colors 前 7，空 = 7 占位块——6.1 口径；
+//     仅 thumbKind=asset（有内容缩略图，含 fla 伴生 webp 代理）时显示——无内容缩略图的格式
+//     （docx 等格式图标占位）不提色、整行隐藏，2026-09-23 用户定）。
 // 名称 / 链接输入框已下移基础信息 tab 输入框区块（旧 pinned 四件口径作废）。
 // 档案形态：封面容器同款 240×240（封面 cover 充满——稿裁切语义）+ 徽标 FormatBadge（badge.text）；
 //   封面链 = 自定义封面 → 子项首图 → 默认封面图（2026-09-08 用户定，lib/archiveCover）；
@@ -108,8 +110,12 @@ const badgeLabel = computed(() => {
   return formatBadgeColor(p.ext, isSequence(p), p.animated) ? p.ext.toUpperCase() : null;
 });
 // 颜色列表真色（6.1 颜色解析）：detail.colors 前 7（透明像素不计，存 10 显 7）；
-// 空（非图片 / 无缩略图）= 7 个占位色块（恒显口径）
+// 有内容缩略图但暂未取到色（待懒回填 / 全透明图）= 7 个占位色块
 const swatchColors = computed(() => (file.value?.detail.colors ?? []).slice(0, 7));
+// 色块行显隐（2026-09-23 用户定）：有内容缩略图才显示（thumbKind = asset，含 fla 经
+// thumb_asset_id 代理的伴生 webp——其颜色即伴生图颜色，后端 ensure_asset_colors 同径回填）；
+// 无内容缩略图的格式（格式图标占位 / 无图）不需要提取颜色，整行隐藏
+const showSwatches = computed(() => file.value?.placement.thumbKind === "asset");
 </script>
 
 <template>
@@ -147,8 +153,8 @@ const swatchColors = computed(() => (file.value?.detail.colors ?? []).slice(0, 7
           </span>
         </template>
       </div>
-      <!-- 颜色列表（稿：透明壳横排；仅文件形态） -->
-      <ColorSwatchItem v-if="file" :colors="swatchColors" :placeholder-count="7" />
+      <!-- 颜色列表（稿：透明壳横排；仅文件形态且有内容缩略图——无图格式整行隐藏，2026-09-23 用户定） -->
+      <ColorSwatchItem v-if="file && showSwatches" :colors="swatchColors" :placeholder-count="7" />
     </template>
   </section>
 </template>
