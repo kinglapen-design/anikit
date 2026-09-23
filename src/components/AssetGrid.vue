@@ -13,6 +13,7 @@ import FolderStrip from "./FolderStrip.vue";
 import ArchiveStrip from "./ArchiveStrip.vue";
 import InboxDiskSection from "./InboxDiskSection.vue";
 import EmptyFolderState from "./EmptyFolderState.vue";
+import QuickNavButton from "./QuickNavButton.vue";
 import SectionTitle from "./items/SectionTitle.vue";
 import { FREE_EMPTY_H, useGridLayout, type GridSection } from "../lib/useGridLayout";
 import { groupPlacements } from "../lib/grouping";
@@ -148,6 +149,7 @@ const {
   visibleCards,
   groupHeaders,
   scrollTo, // 12 稿分组菜单「跳转」
+  smoothScrollTo, // 快速到顶 / 到底圆钮
 } = useGridLayout({
   items: () => displayItems.value,
   sections: () => gridSections.value,
@@ -156,7 +158,46 @@ const {
   trackRef,
   thumbRef,
   headerRef,
+  onUserScroll: onQuickNavScroll,
 });
+
+// —— 快速到顶 / 到底（2026-09-23 用户定）：右下角圆钮，往下持续滚动出「滚到底」、往上持续出「回到顶」；
+// 同向累计一屏行高（200px≈滚轮两下）触发，停止滚动 1.5s 收起，点击平滑滚动到位并收起 ——
+const quickNav = ref<"top" | "bottom" | null>(null);
+let navDir = 0;
+let navAcc = 0;
+let navHideTimer: ReturnType<typeof setTimeout> | undefined;
+
+function onQuickNavScroll(delta: number): void {
+  if (!scrollable.value) return;
+  const dir = Math.sign(delta);
+  if (dir !== navDir) {
+    navDir = dir;
+    navAcc = 0;
+  }
+  navAcc += Math.abs(delta);
+  if (navAcc >= 200) quickNav.value = dir > 0 ? "bottom" : "top";
+  if (quickNav.value) {
+    clearTimeout(navHideTimer);
+    navHideTimer = setTimeout(() => (quickNav.value = null), 1500);
+  }
+}
+function onQuickNavClick(): void {
+  if (!quickNav.value) return;
+  smoothScrollTo(quickNav.value === "top" ? 0 : Number.MAX_SAFE_INTEGER);
+  quickNav.value = null;
+  clearTimeout(navHideTimer);
+}
+// 切视口收起圆钮（方向累积一并清，不带入新视口）
+watch(
+  () => props.viewKey,
+  () => {
+    quickNav.value = null;
+    navDir = 0;
+    navAcc = 0;
+    clearTimeout(navHideTimer);
+  },
+);
 
 // 分组标题折叠 / 菜单（12 稿）：折叠态在 content store（会话级）；菜单由 groupHeaderSpec 出
 //（SectionTitle 折叠点击守卫在调用方，§20——dragView.suppressClick 吞拖拽后紧随 click）
@@ -372,6 +413,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   viewportRef.value?.removeEventListener("wheel", onCtrlWheel);
   if (gridToken.value) unregisterGridResolver(gridToken.value);
+  clearTimeout(navHideTimer);
 });
 </script>
 
@@ -541,6 +583,8 @@ onBeforeUnmount(() => {
         :style="{ top: `${thumbTop}px`, height: `${thumbHeight}px` }"
       />
     </div>
+    <!-- 快速到顶 / 到底圆钮（2026-09-23 用户定）：右下角，持续同向滚动出现 -->
+    <QuickNavButton :dir="quickNav" @click="onQuickNavClick" />
     <!-- 列头：随内容滚动至顶部后钉住（自定义 transform 滚动无 CSS sticky，手动计算） -->
     <ListHeader
       v-if="ui.layoutMode === 'list' && assetsOpen"

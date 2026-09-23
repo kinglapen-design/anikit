@@ -5,6 +5,9 @@
 //           solid = 通用/四级 + 立体感-通用，高 34 填充式圆角 8，图标 18 恒 亮色/二级（hover 通用/六级）；
 //           float = 通用/半透明-2 + 立体感-通用，30×30 圆角 6 浮于内容上，图标 18 恒 亮色/三级
 //                   （hover 通用/四级底）；
+//           circle = 搜索框壳同款纯圆浮钮（2026-09-23 快速到顶/到底定案）：42×42 胶囊圆角、
+//                   通用/半透明-2 + 立体感-通用 + 背景模糊-小，图标 18 亮色/三级
+//                   （hover 通用/四级底 + 图标升二级——悬浮栏图标钮 hover 口径）；
 // 图标尺寸 = 稿 icon 容器实寸（图标按实际尺寸导出，勿缩放——2026-08-29 走查）；
 // hover 过渡 = 150ms 缓入缓出（--n-dur-150）。
 // title = v-tip 悬浮 tip（内容容器轮补，与旧根目录 IconButton 对齐；禁用态视觉稿未画不做，§15）。
@@ -15,7 +18,7 @@ import type { TipValue } from "../../lib/tip";
 const props = withDefaults(
   defineProps<{
     name: string;
-    variant?: "plain" | "bare" | "solid" | "float";
+    variant?: "plain" | "bare" | "solid" | "float" | "circle";
     size?: "lg" | "sm"; // 仅 bare：大 18 / 小 14
     forceState?: "" | "hover";
     title?: string | TipValue;
@@ -112,5 +115,22 @@ const iconSize = computed(() => (props.variant === "bare" && props.size === "sm"
 .ic-btn.float:hover,
 .ic-btn.float.force-hover {
   background: var(--n-g4);
+}
+/* circle：纯圆浮钮（2026-09-23 快速到顶/到底定案——搜索框壳同款视觉 42×42 纯圆）：
+   通用/半透明-2 + 立体感-通用 + 背景模糊-小；hover 底升 通用/四级 + 图标升 亮色/二级 */
+.ic-btn.circle {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: var(--n-radius-pill);
+  background: var(--n-g-a2);
+  box-shadow: var(--n-effect-raised);
+  backdrop-filter: blur(var(--n-blur-sm));
+  color: var(--n-l3);
+}
+.ic-btn.circle:hover,
+.ic-btn.circle.force-hover {
+  background: var(--n-g4);
+  color: var(--n-l2);
 }
 </style>

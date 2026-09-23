@@ -8,10 +8,11 @@
 // 右键「重排序号 / 删除此张序列图」（多选 = 删除 N 张，Delete 键同径）；空白右键 = 重排序号。
 // 选择模型为包内本地集（帧不是 Placement，不进全局选择域）；打开本视口时全局选择域已清空
 //（assetCard 菜单 action 内 selection.clear()——防全局 Delete 误伤素材域）。
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import ScrollThumb from "./ScrollThumb.vue";
+import QuickNavButton from "./QuickNavButton.vue";
 import { listSequenceFrames, type FrameEntry } from "../lib/mediaOps";
 import { openContextMenu, type CtxEntry } from "../lib/contextMenus";
 import { deleteSequenceFrames, renumberSequenceFrames, setSequenceFrameThumb } from "../lib/placementOps";
@@ -36,7 +37,7 @@ let anchorIdx = -1; // shift 范围选锚点（frames 数组下标）
 // 按素材卡 260:220 比例折算
 const cardWidth = computed(() => Math.round(ui.rowHeightFor(`seq:${props.assetId}`) * (260 / 220)));
 
-async function load(): Promise<void> {
+async function load(restore = false): Promise<void> {
   try {
     const r = await listSequenceFrames(props.assetId);
     frames.value = r.frames;
@@ -50,6 +51,57 @@ async function load(): Promise<void> {
     frames.value = [];
     error.value = String(e);
   }
+  // 滚动位置恢复（2026-09-23 与素材网格同口径：按视口持久化，ui store 通道）——
+  // 仅首载 / 换包（热刷新 load 不动用户滚动）；等 DOM 更新出滚动高度后写入，
+  // lastScrollTop 同步防 scroll 事件把恢复位移误判成用户滚动；无记忆回顶（换包不留旧包位置）
+  if (restore) {
+    await nextTick();
+    const saved = ui.scrollPosFor(`seq:${props.assetId}`) ?? 0;
+    if (scrollRef.value) {
+      scrollRef.value.scrollTop = saved;
+      lastScrollTop = saved;
+    }
+  }
+}
+
+// —— 滚动位置记忆 + 快速到顶/到底（2026-09-23 与素材网格同口径）——
+const scrollRef = ref<HTMLElement>();
+
+// 快速导航显隐状态机（原生 scroll 版）：scroll 事件不区分用户源与程序源——点击按钮后
+// 挂起（navArmed=false），用户 wheel / 触板滚动（wheel 事件）重新武装；恢复位置时
+// lastScrollTop 同步使事件差为 0 不触发
+const quickNav = ref<"top" | "bottom" | null>(null);
+let navDir = 0;
+let navAcc = 0;
+let navArmed = true;
+let navHideTimer: ReturnType<typeof setTimeout> | undefined;
+let lastScrollTop = 0;
+
+function onPackScroll(e: Event): void {
+  const st = (e.currentTarget as HTMLElement).scrollTop;
+  const delta = st - lastScrollTop;
+  lastScrollTop = st;
+  if (!navArmed || delta === 0) return;
+  const dir = Math.sign(delta);
+  if (dir !== navDir) {
+    navDir = dir;
+    navAcc = 0;
+  }
+  navAcc += Math.abs(delta);
+  if (navAcc >= 200) quickNav.value = dir > 0 ? "bottom" : "top";
+  if (quickNav.value) {
+    clearTimeout(navHideTimer);
+    navHideTimer = setTimeout(() => (quickNav.value = null), 1500);
+  }
+}
+function onQuickNavClick(): void {
+  const el = scrollRef.value;
+  if (!el || !quickNav.value) return;
+  const toTop = quickNav.value === "top";
+  navArmed = false;
+  quickNav.value = null;
+  clearTimeout(navHideTimer);
+  el.scrollTo({ top: toTop ? 0 : el.scrollHeight, behavior: "smooth" });
 }
 
 // 热刷新：目标资产 modifiedAt 变化（删帧 / 重排 / undo-redo 后的 content.refresh 带入）→ 重拉清单；
@@ -58,12 +110,21 @@ const assetModifiedAt = computed(
   () => content.placements.find((p) => p.assetId === props.assetId)?.modifiedAt ?? null,
 );
 watch(assetModifiedAt, () => void load());
-watch(() => props.assetId, () => void load());
+watch(
+  () => props.assetId,
+  (_n, oldId) => {
+    // 换包：旧包滚动位置入记忆，新包 load 完成后恢复
+    if (scrollRef.value) ui.setScrollPos(`seq:${oldId}`, scrollRef.value.scrollTop);
+    quickNav.value = null;
+    clearTimeout(navHideTimer);
+    void load(true);
+  },
+);
 
 // 帧条小图渐进填充（与预览帧条同一事件）：未缓存帧后台生成批次推送
 let unlistenStrips: (() => void) | undefined;
 onMounted(async () => {
-  void load();
+  void load(true); // 首载恢复滚动位置
   unlistenStrips = await listen<{ assetId: string; items: { name: string; stripPath: string }[] }>(
     "preview-strips-ready",
     (e) => {
@@ -77,6 +138,9 @@ onMounted(async () => {
   window.addEventListener("keydown", onKeydown);
 });
 onBeforeUnmount(() => {
+  // 卸载（进预览 / 切换视口 / 关标签页）前保存本包滚动位置
+  if (scrollRef.value) ui.setScrollPos(`seq:${props.assetId}`, scrollRef.value.scrollTop);
+  clearTimeout(navHideTimer);
   try {
     unlistenStrips?.();
   } catch {
@@ -168,8 +232,6 @@ function onKeydown(e: KeyboardEvent): void {
   e.preventDefault();
   void deleteSequenceFrames(props.assetId, [...selected.value]);
 }
-
-const scrollRef = ref<HTMLElement>();
 </script>
 
 <template>
@@ -182,6 +244,8 @@ const scrollRef = ref<HTMLElement>();
       class="kit-scroll pack-scroll"
       @click.self="selected = new Set()"
       @contextmenu.self.prevent="blankMenu"
+      @scroll="onPackScroll"
+      @wheel.passive="navArmed = true"
     >
       <div class="pack-grid" :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${cardWidth}px, 1fr))` }">
         <div
@@ -204,6 +268,8 @@ const scrollRef = ref<HTMLElement>();
       </div>
     </div>
     <ScrollThumb v-if="!error" :body="scrollRef" />
+    <!-- 快速到顶 / 到底圆钮（2026-09-23，素材网格同口径）：右下角，持续同向滚动出现 -->
+    <QuickNavButton :dir="quickNav" @click="onQuickNavClick" />
   </div>
 </template>
 

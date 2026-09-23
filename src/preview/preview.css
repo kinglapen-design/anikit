@@ -124,6 +124,14 @@
   font-size: var(--n-fs-secondary);
   line-height: var(--n-lh-secondary);
 }
+/* 纯圆浮钮（circle）演示：chevron-large 源图形朝左，旋转定向 = 快速到顶 / 到底
+  （全局 CSS 无 :deep——AppIcon 根类 .app-icon 直接后代选择） */
+.pv-qn-up .app-icon {
+  transform: rotate(90deg);
+}
+.pv-qn-down .app-icon {
+  transform: rotate(-90deg);
+}
 
 /* TokenVar：变量实际计算值（getComputedStyle 读 :root） */
 .pv-var {

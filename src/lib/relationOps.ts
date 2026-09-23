@@ -111,11 +111,16 @@ export async function removeRelation(id: string): Promise<void> {
 }
 
 /** 跳转到指定位置（6.2 四轮走查②④⑤：链接区块 item / 打开文件链接所在位置 / 徽章悬停链接列表
- *  共用）：目标文件夹视口 + 选中该卡片；openView 入面包屑历史（后退即返回） */
+ *  共用）：目标文件夹视口 + 选中该卡片 + 滚进视野（2026-09-23 用户定：跳转不再停顶端——
+ *  pendingReveal 由目标网格重排时消费，同视口跳转由 pendingReveal watch 驱动重排）；
+ *  openView 入面包屑历史（后退即返回） */
 export function jumpToAssetPlacement(assetId: string, folderId: string): void {
   const tabs = useTabsStore();
   const selection = useSelectionStore();
-  tabs.openView(folderId === "root" ? "quick:uncategorized" : `folder:${folderId}`);
+  const content = useContentStore();
+  const viewKey = folderId === "root" ? "quick:uncategorized" : `folder:${folderId}`;
+  tabs.openView(viewKey);
+  content.requestReveal(viewKey, `${assetId}|${folderId}`);
   void nextTick(() => selection.selectOnly(`${assetId}|${folderId}`));
 }
 
@@ -145,6 +150,8 @@ export function jumpToRelationTarget(other: RelationRef): void {
     toast.notify({ message: "目标文件不在本库任何文件夹中（可能在回收站）", icon: "fail" });
     return;
   }
-  tabs.openView(p.folderId === "root" ? "quick:uncategorized" : `folder:${p.folderId}`);
+  const viewKey = p.folderId === "root" ? "quick:uncategorized" : `folder:${p.folderId}`;
+  tabs.openView(viewKey);
+  content.requestReveal(viewKey, `${p.assetId}|${p.folderId}`);
   void nextTick(() => selection.selectOnly(`${p.assetId}|${p.folderId}`));
 }

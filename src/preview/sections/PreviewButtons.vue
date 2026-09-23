@@ -170,6 +170,14 @@ const swOff = ref(false);
           <IconButton name="copy" variant="float" force-state="hover" />
           <span class="pv-cap">hover（通用/四级）</span>
         </div>
+        <div class="pv-demo-cell">
+          <IconButton name="chevron-large" variant="circle" class="pv-qn-up" />
+          <span class="pv-cap">纯圆 · 常态（快速到顶）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <IconButton name="chevron-large" variant="circle" class="pv-qn-down" force-state="hover" />
+          <span class="pv-cap">hover（快速到底）</span>
+        </div>
       </div>
     </div>
 

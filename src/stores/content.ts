@@ -252,9 +252,8 @@ let unlistenCep: (() => void) | undefined;
 // MCP 写入事件监听（PRD 08-06，2026-09-19）：MCP 写工具绕开前端改库，后端广播 mcp-library-changed
 let unlistenMcp: (() => void) | undefined;
 
-// 视口滚动位置（会话级，2026-07-25 用户定）：进出预览 / 切换目录都恢复——
-// 预览返回不跳顶（设缩略图后可直接确认），对比两个文件夹不用重新翻
-const scrollPositions = new Map<string, number>();
+// 视口滚动位置（2026-07-25 用户定；2026-09-23 迁 ui store scrollPositions 持久化）：
+// 进出预览 / 切换目录 / 重启应用都恢复——预览返回不跳顶（设缩略图后可直接确认），对比两个文件夹不用重新翻
 
 // 新增区到达序号（3.5）：单调递增计数器，区内先来在前
 let arrivalSeq = 0;
@@ -310,6 +309,9 @@ export const useContentStore = defineStore("content", {
     groupCollapsed: {} as Record<string, string[]>,
     // 左栏选中项：quick:all / quick:uncategorized… / folder:{id}
     sidebarSelected: "quick:all",
+    // 链接跳转待定位请求（2026-09-23，会话级）：relationOps 跳转登记目标视口 + 卡 key，
+    // 目标网格重排时滚进视野并消费（lib/useGridLayout）；单槽位，新请求覆盖旧
+    pendingReveal: null as { viewKey: string; key: string } | null,
     // 选中互斥：素材卡片选中（selection store）与收件箱条目选中互斥。
     // 素材卡片选中键已迁 selection store（6.1 多选改造），selectedAssetKey 为下方派生 getter；
     // 文件夹卡片 / 树 item 多选同迁 selection store 文件夹选择域（2026-07-28 复验反馈 5）
@@ -645,12 +647,16 @@ export const useContentStore = defineStore("content", {
     },
   },
   actions: {
-    // 视口滚动位置存取（key = sidebarSelected；会话级 Map，零响应式开销）
-    saveScrollPos(key: string, pos: number): void {
-      scrollPositions.set(key, pos);
+    // 链接跳转定位（2026-09-23）：跳转方登记目标视口 + 卡 key；目标网格（useGridLayout）
+    // 重排时 consume 匹配即滚进视野——consume 即清除，找不到卡（搜索过滤 / 折叠组内）静默放弃
+    requestReveal(viewKey: string, key: string): void {
+      this.pendingReveal = { viewKey, key };
     },
-    getScrollPos(key: string): number | null {
-      return scrollPositions.get(key) ?? null;
+    consumeReveal(viewKey: string): string | null {
+      if (this.pendingReveal?.viewKey !== viewKey) return null;
+      const k = this.pendingReveal.key;
+      this.pendingReveal = null;
+      return k;
     },
 
     // 逐帧笔记条数冗余同步（5.2 展示层）：set_note 返回全量后由前端算条数更新——

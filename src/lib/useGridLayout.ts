@@ -53,6 +53,8 @@ export function useGridLayout(opts: {
   trackRef: Ref<HTMLElement | undefined>;
   thumbRef: Ref<HTMLElement | undefined>;
   headerRef: Ref<HTMLElement | undefined>;
+  // 用户源滚动回调（2026-09-23 快速到顶/到底按钮显隐驱动）；程序性 scrollTo 不触发
+  onUserScroll?: (delta: number) => void;
 }) {
   const ui = useUiStore();
   const content = useContentStore();
@@ -103,11 +105,17 @@ export function useGridLayout(opts: {
     r1.value = Math.min(rs.length, lowerBound(rs, scrollPos + vh - off + BUFFER) + 1);
   }
 
-  const { pos, thumbTop, thumbHeight, scrollable, dragging, scrollTo, setTotal, attach, detach } =
-    useVirtualScroll(updateRange);
-
-  // 滚动位置持久化（2026-07-25 用户定）：按视口 key 保存，重排完成后恢复（null = 不恢复）
+  // 滚动位置持久化（2026-07-25 用户定，2026-09-23 迁 ui store 落盘）：按视口 key 保存，
+  // 重排完成后恢复（null = 不恢复）；未到位（异步内容视口高度不足被夹）保留待下次重排重试，
+  // 用户主动滚动即放弃（useVirtualScroll 用户源回调清 null）
   let restorePos: number | null = null;
+
+  const { pos, thumbTop, thumbHeight, scrollable, dragging, scrollTo, smoothScrollTo, setTotal, attach, detach } =
+    useVirtualScroll(updateRange, (delta) => {
+      // 用户接管滚动：未到位悬着的恢复位置即放弃（不再拽回用户手下），再透传给按钮显隐
+      restorePos = null;
+      opts.onUserScroll?.(delta);
+    });
 
   const visibleCards = computed(() => {
     const rs = rows.value;
@@ -213,13 +221,29 @@ export function useGridLayout(opts: {
     // 滚动位置：恢复（进出预览 / 切换目录）优先；否则回锚点；锚点卡已消失（被删等）维持重夹
     if (restorePos !== null) {
       scrollTo(restorePos);
-      restorePos = null;
+      // 到位才消费；未到位（异步内容视口高度不足被夹，如工作空间目录加载中）保留待下次
+      // 重排重试——用户主动滚动即放弃（useVirtualScroll 用户源回调清 null）
+      if (pos.value === restorePos) restorePos = null;
     } else if (anchorKey !== null) {
       const idx = items.findIndex((it) => `${it.assetId}|${it.folderId}` === anchorKey);
       const b = idx >= 0 ? boxes.value.find((bb) => bb.i === idx) : undefined;
       if (b) {
         // box.height = 行高（卡即图满铺，四种布局同构），按比例还原行内偏移
         scrollTo(b.top + headerH.value + 12 + listExtra.value + anchorRatio * b.height);
+      }
+    }
+    // 链接跳转定位（2026-09-23 用户定：跳转后视图不再停顶端）：目标卡已在视野内不动，
+    // 否则滚到居中；覆盖恢复 / 锚点位。找不到卡（搜索过滤 / 折叠组内）= 消费即放弃
+    const reveal = content.consumeReveal(opts.viewKey());
+    if (reveal) {
+      const idx = items.findIndex((it) => `${it.assetId}|${it.folderId}` === reveal);
+      const b = idx >= 0 ? boxes.value.find((bb) => bb.i === idx) : undefined;
+      if (b) {
+        const cardTop = b.top + headerH.value + 12 + listExtra.value;
+        const vh = vp.clientHeight;
+        if (cardTop < pos.value || cardTop + b.height > pos.value + vh) {
+          scrollTo(cardTop + b.height / 2 - vh / 2);
+        }
       }
     }
     console.debug(`[AssetGrid] 布局 ${items.length} 条：${(performance.now() - t0).toFixed(1)}ms`);
@@ -257,10 +281,18 @@ export function useGridLayout(opts: {
   // 保存旧视口位置、登记新视口待恢复（随后 items watch 重排完成时恢复。
   // 注册顺序必须在 items watch 之前——同 tick 内按注册顺序触发，restorePos 要先就位）
   watch(opts.viewKey, (newKey, oldKey) => {
-    content.saveScrollPos(oldKey, pos.value);
-    restorePos = content.getScrollPos(newKey) ?? 0;
+    ui.setScrollPos(oldKey, pos.value);
+    restorePos = ui.scrollPosFor(newKey) ?? 0;
   });
   watch(opts.items, () => relayout());
+  // 同视口跳转定位（2026-09-23）：viewKey 不变时上方两 watch 都不触发，
+  // 跳转请求自身驱动一次重排（跨视口跳转由上方重排消费，此处 pendingReveal 已空不匹配）
+  watch(
+    () => content.pendingReveal,
+    (r) => {
+      if (r?.viewKey === opts.viewKey()) relayout();
+    },
+  );
   // 分组规则 / 折叠态变化（3.5 二轮）：sections 引用变化即重排
   if (opts.sections) {
     watch(opts.sections, () => relayout());
@@ -289,13 +321,13 @@ export function useGridLayout(opts: {
     });
     headerRo.observe(opts.headerRef.value!);
     // 预览返回 / 视口初次挂载：恢复上次滚动位置（2026-07-25 用户定；1.2 key = 本标签页 viewKey）
-    restorePos = content.getScrollPos(opts.viewKey());
+    restorePos = ui.scrollPosFor(opts.viewKey());
     relayout();
   });
 
   onBeforeUnmount(() => {
     // 卸载（进预览 / 关闭标签页等）前保存本视口滚动位置
-    content.saveScrollPos(opts.viewKey(), pos.value);
+    ui.setScrollPos(opts.viewKey(), pos.value);
     detach();
     ro.disconnect();
     headerRo?.disconnect();
@@ -315,5 +347,6 @@ export function useGridLayout(opts: {
     visibleCards,
     groupHeaders,
     scrollTo, // 12 稿分组菜单「跳转」：滚动到组标题
+    smoothScrollTo, // 2026-09-23 快速到顶 / 到底圆钮：平滑滚动
   };
 }
