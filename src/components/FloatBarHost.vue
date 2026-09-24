@@ -319,11 +319,10 @@ function noteRemove(i: number): void {
       @progress-drag-start="spec?.dragStart?.()"
       @progress-drag-end="spec?.dragEnd?.()"
     >
-      <!-- 音频语境：进度区换波形（spec.waveFallback 提供 = 音频族；音乐预览稿 prose） -->
-      <template v-if="spec?.waveFallback" #progress>
+      <!-- 音频语境：进度区换竖条波形（spec.wave = 音频族标志；音乐预览稿 prose「只在播放条上放波形图」） -->
+      <template v-if="spec?.wave" #progress>
         <WaveProgress
           v-model="progressModel"
-          :fallback-url="spec.waveFallback()"
           @drag-start="spec?.dragStart?.()"
           @drag-end="spec?.dragEnd?.()"
         />

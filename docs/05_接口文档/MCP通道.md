@@ -59,7 +59,7 @@
 
 ## 纪律（PRD 08-06 定）
 
-- **只读白名单**：有副作用的准只读命令（get_media_source / get_waveform / list_sequence_frames / prepare_anim_strips / get_asset_file_path 等触发转码 / 后台生成队列类）**不进**只读白名单。
+- **只读白名单**：有副作用的准只读命令（get_media_source / list_sequence_frames / prepare_anim_strips / get_asset_file_path 等触发转码 / 后台生成队列类）**不进**只读白名单。
 - **看图零集成**：工具只回磁盘绝对路径，Agent 有文件权限即直读 webp 缩略图与源图，不经协议传图。
 - **路径不缓存**：originName 随重命名同步改磁盘名，外部每次现推现取（get_asset_origin_path），不得缓存复用。
 - 禁止 assets/ 全目录枚举：以文件夹树 / Placement 为入口按 id 直达。

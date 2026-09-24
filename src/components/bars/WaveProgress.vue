@@ -1,29 +1,39 @@
 <script setup lang="ts">
-// 音频波形进度条（音乐预览稿 prose：「只在播放条上放波形图即可」）——播放条进度条的音频变体，
-// 供 FloatBarPlay #progress 插槽替换 BarSlider（2026-09-09 预览悬浮栏接入轮，自旧 PlayBarAudio 移植）：
-// 两层 div 以波形图作 CSS mask（alpha 通道铺满）：底层 = 未播放 亮色/三级实色（旧 wave-pending
-// 「标签档不透明版」2026-08-10 用户定的语义档映射——mask 层不受 alpha 影响须实色）；
-// 已播放层 = 品牌底 clip-path 裁到进度；播放头 1px 品牌竖线。
-// 波形图 = 后端按轨道实际像素重采样（useHiresWaveform 返回磁盘路径，本组件 convertFileSrc 转
-// asset URL——裸路径塞 CSS url() 必加载失败，踩坑 088），未就绪/失败回退 info 波形缩略图（fallbackUrl，
-// 调用方已转换）。
+// 音频波形进度条（2026-09-25 竖条化换代，用户定：全 app 波形观感统一为文件卡片-音频稿竖条
+// 新样式——卡片 WaveContent / 详情 pinned 均已同源，播放条是最后一处旧 5.1 发丝渲染）：
+// 渲染 = WaveContent 直接复用（竖线 4px 圆头 99 gap 4 通用/五级，played 同构层品牌色 clip 进度），
+// 播放条语境差两笔 = inset 12→0 满幅、played 层祖先态显隐→恒显（下方 :deep 覆盖）；
+// 数据 = get_audio_peaks 128 根 cardPeaksFor 懒加载（SectionPinned 同范式），peaks 失败 = 空波形；
+// 播放头 1px 品牌竖线保留。旧 hires 重采样图 + CSS mask 方案退役（get_waveform 全链删除）。
 // 交互 = pointerdown 跳值 + window pointermove 拖动（BarSlider 同款链路，drag-start/end 透传 scrubbing 挂钩）。
-import { computed, ref } from "vue";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { useHiresWaveform } from "../../lib/useHiresWaveform";
+import { ref, watch } from "vue";
+import WaveContent from "../cards/contents/WaveContent.vue";
+import { cardPeaksFor } from "../../lib/cardPeaks";
+import { usePreviewStore } from "../../stores/preview";
 
-const props = withDefaults(defineProps<{ fallbackUrl?: string | null }>(), { fallbackUrl: null });
+const props = withDefaults(defineProps<{ peaks?: number[] }>(), { peaks: undefined });
 const model = defineModel<number>({ default: 0 }); // 0~1
 const emit = defineEmits<{ "drag-start": []; "drag-end": [] }>();
 
+const preview = usePreviewStore();
 const rootEl = ref<HTMLElement>();
-const hiresPath = useHiresWaveform(rootEl);
-// hiresPath 是磁盘绝对路径——必须 convertFileSrc 转 asset URL（裸路径塞 CSS url() 按相对
-// 地址解析必然加载失败：mask 空 = 层不可见只剩播放头，2026-09-25 实机报，踩坑 088）；
-// fallbackUrl 已由调用方（barSpecs audio waveFallback）转换好，不再二转
-const waveUrl = computed(() => (hiresPath.value ? convertFileSrc(hiresPath.value) : (props.fallbackUrl ?? null)));
-// 两层 mask 共用的图地址（CSS 变量下发，mask 走 alpha 通道）
-const waveMask = computed(() => (waveUrl.value ? { "--wave-url": `url("${waveUrl.value}")` } : {}));
+
+// peaks 懒加载（SectionPinned 同范式：await 期间切素材防错配）；props.peaks 提供 = 演示注入优先
+const fetchedPeaks = ref<number[]>([]);
+watch(
+  () => preview.current,
+  async (cur) => {
+    if (!cur) {
+      fetchedPeaks.value = [];
+      return;
+    }
+    const id = cur.assetId;
+    const p = await cardPeaksFor(cur);
+    if (preview.current?.assetId !== id) return;
+    fetchedPeaks.value = p;
+  },
+  { immediate: true },
+);
 
 function setFromX(clientX: number): void {
   const el = rootEl.value;
@@ -47,17 +57,15 @@ function onDown(e: PointerEvent): void {
 </script>
 
 <template>
-  <div ref="rootEl" class="wp-root" :style="waveMask" style="touch-action: none" @pointerdown="onDown">
-    <template v-if="waveUrl">
-      <div class="wave-layer base" />
-      <div class="wave-layer played" :style="{ clipPath: `inset(0 ${(1 - model) * 100}% 0 0)` }" />
-    </template>
+  <div ref="rootEl" class="wp-root" style="touch-action: none" @pointerdown="onDown">
+    <WaveContent :peaks="props.peaks ?? fetchedPeaks" :progress="model" />
     <span class="head" :style="{ left: `${model * 100}%` }" />
   </div>
 </template>
 
 <style scoped>
-/* 根：满父宽、满播放条内容高（42 - padding 12×2 = 18），圆角 4 裁波形（沿用旧口径） */
+/* 根：满父宽、满播放条内容高（42 - padding 12×2 = 18，父 .fbp-progress align-self stretch 供给，
+   §59），圆角 4 裁波形（沿用旧口径） */
 .wp-root {
   position: relative;
   width: 100%;
@@ -66,23 +74,13 @@ function onDown(e: PointerEvent): void {
   overflow: hidden;
   cursor: pointer;
 }
-.wave-layer {
-  position: absolute;
+/* WaveContent 播放条语境差：卡片 inset 12 → 满幅 0；played 扫过层卡片靠祖先 hover/playing 显隐
+   （.fc-root 语境）→ 播放条恒显（进度本色语义，无悬停概念） */
+.wp-root :deep(.fc-wave) {
   inset: 0;
-  -webkit-mask-image: var(--wave-url);
-  mask-image: var(--wave-url);
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  pointer-events: none;
 }
-.wave-layer.base {
-  background: var(--n-l3); /* 未播放 = 亮色/三级实色（旧 wave-pending 语义档映射） */
-}
-.wave-layer.played {
-  background: var(--n-brand);
-  z-index: 1;
+.wp-root :deep(.fc-wave-row.played) {
+  opacity: 1;
 }
 .head {
   position: absolute;

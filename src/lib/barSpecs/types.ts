@@ -52,5 +52,5 @@ export interface PlayBarSpec {
   dragStart?(): void; // 进度拖动起止（scrubbing 挂钩；无此概念的格式缺省）
   dragEnd?(): void;
   frames?: FrameStripSpec; // 帧条（sequence / anim）
-  waveFallback?(): string | null; // 音频波形回退图（提供 = 进度区换 WaveProgress）
+  wave?: boolean; // 音频族标志（true = 进度区换 WaveProgress 竖条波形，2026-09-25 由 waveFallback 函数简化为标志——竖条化后 peaks 由 WaveProgress 自拉，spec 无需供数）
 }

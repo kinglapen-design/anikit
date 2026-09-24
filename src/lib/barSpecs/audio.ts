@@ -1,9 +1,8 @@
 // 音频播放条 spec（旧 PlayBarAudio 删减口径）：无 快退/快进/逐帧/笔记/设封面/全屏（无画面）；
-// 进度区 = 波形（音乐预览稿 prose「只在播放条上放波形图即可」——waveFallback 提供回退图，
-// 高清重采样在 WaveProgress 内 useHiresWaveform）；时间码恒 mm:ss（音频无 fps 天然回退）。
+// 进度区 = 竖条波形（wave 标志——音乐预览稿 prose「只在播放条上放波形图即可」；2026-09-25 竖条化
+// 后 peaks 由 WaveProgress 自拉 cardPeaksFor，spec 只标族不供数）；时间码恒 mm:ss（音频无 fps 天然回退）。
 import { usePreviewStore } from "../../stores/preview";
 import { usePreviewMediaStore } from "../../stores/previewMedia";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { formatDuration } from "../formatDuration";
 import type { PlayBarSpec } from "./types";
 
@@ -33,9 +32,6 @@ export function makeAudioSpec(): PlayBarSpec {
     toggleFullscreen: () => preview.setFullscreen(!preview.fullscreen),
     dragStart: () => media.setScrubbing(true),
     dragEnd: () => media.setScrubbing(false),
-    waveFallback: () => {
-      const p = preview.current?.thumbPath;
-      return p ? convertFileSrc(p) : null;
-    },
+    wave: true,
   };
 }

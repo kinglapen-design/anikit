@@ -1,8 +1,8 @@
 # 2026-09 开发日志
 
-> 本月 184 个任务文件（命名 `YYYY-MM-DD[_NN]_标题.md`）。总目录见 [Index](../../Index.md）。
+> 本月 185 个任务文件（命名 `YYYY-MM-DD[_NN]_标题.md`）。总目录见 [Index](../../Index.md）。
 
-- **2026-09-25**：[01_音频音乐预览落地与播放条波形塌陷修复（PreviewAudio 唱片立姿换代波形大图，previewSpecs audio；.fbp-progress align-self stretch 根治；§59）](2026-09-25_01_音频音乐预览落地与播放条波形塌陷修复.md) · [02_播放条高清波形空白修复（render_waveform 留白恒 10px 吃光 18px 振幅 → 等比收缩 h/27；踩坑 087，§59 追加）](2026-09-25_02_播放条高清波形空白修复——波形渲染留白等比收缩.md) · [03_播放条波形全空根治（hiresPath 磁盘路径未走 convertFileSrc 顶掉回退旧图；踩坑 088，§59 追加）](2026-09-25_03_播放条波形全空根治——hiresPath补convertFileSrc.md)
+- **2026-09-25**：[01_音频音乐预览落地与播放条波形塌陷修复（PreviewAudio 唱片立姿换代波形大图，previewSpecs audio；.fbp-progress align-self stretch 根治；§59）](2026-09-25_01_音频音乐预览落地与播放条波形塌陷修复.md) · [02_播放条高清波形空白修复（render_waveform 留白恒 10px 吃光 18px 振幅 → 等比收缩 h/27；踩坑 087，§59 追加）](2026-09-25_02_播放条高清波形空白修复——波形渲染留白等比收缩.md) · [03_播放条波形全空根治（hiresPath 磁盘路径未走 convertFileSrc 顶掉回退旧图；踩坑 088，§59 追加）](2026-09-25_03_播放条波形全空根治——hiresPath补convertFileSrc.md) · [04_播放条波形竖条化（WaveProgress 复用 WaveContent 统一全 app 波形观感；get_waveform 全链退役；§59 追加）](2026-09-25_04_播放条波形竖条化——全app波形观感统一与get_waveform退役.md)
 
 - **2026-09-24**：[01_免安装包重打（含重命名链路两连；robocopy /MIR 换正绕 plugins 句柄锁，.new 残留待释放；冒烟 17701 听 + 收尸干净）](2026-09-24_01_免安装包重打.md) · [02_拖进度偶发「转码中…」修复（error 回退不读 MediaError.code 一刀切转码——瞬时错误先直读重试分两级，四播放点同口径；踩坑 086）](2026-09-24_02_拖进度偶发转码中修复——error回退分错误码，瞬时错误先直读重试.md)
 

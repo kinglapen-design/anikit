@@ -27,9 +27,6 @@ const BAR_RGB: [u8; 3] = [0x5B, 0x62, 0x61];
 /// 卡片缩略图柱 alpha（100%——柱色本身即按黑底调好的不透明实色，2026-08-10；
 /// 原 60% 透明叠底方案随实色化作废）
 const THUMB_ALPHA: u8 = 255;
-/// 播放条 / 预览大图柱 alpha（100%——前端走 CSS mask 调色，mask 取图 alpha：
-/// 60% 会把品牌紫稀释成 60%，故 mask 用途必须满 alpha，2026-07-26 用户定）
-const MASK_ALPHA: u8 = 255;
 /// 波形上下留白（px，272 高大图口径）；小高度按 h/27 等比收缩（见 render_waveform）——
 /// 恒 10 会把 18px 播放条请求的振幅吃成 0（全图只剩 1px 中线 = 看起来全空，2026-09-25 实机报）
 const WAVEFORM_MARGIN: u32 = 10;
@@ -120,12 +117,6 @@ pub fn video_first_frame(path: &Path) -> Option<RgbaImage> {
 /// mono 源 ffmpeg 复制成双声道自然对称）；缩略图与冲突弹窗预览共用
 pub fn waveform_image(path: &Path) -> Option<RgbaImage> {
   waveform_image_sized_alpha(path, WAVEFORM_WIDTH, WAVEFORM_HEIGHT, THUMB_ALPHA)
-}
-
-/// 按任意尺寸重采样波形图（播放条 / 预览大图按实际显示像素请求重渲，1px 级清晰，2026-07-26 定）：
-/// 渲染口径同 5.1 定稿，**alpha 恒 100%**——前端 CSS mask 调色（mask 取图 alpha，60% 会稀释品牌紫）
-pub fn waveform_image_sized(path: &Path, width: u32, height: u32) -> Option<RgbaImage> {
-  waveform_image_sized_alpha(path, width, height, MASK_ALPHA)
 }
 
 /// 按尺寸与柱 alpha 渲染波形图（内部共用）
@@ -306,9 +297,10 @@ mod tests {
 
   #[test]
   fn render_waveform_mask_alpha_is_solid() {
-    // 播放条 / 预览大图（MASK_ALPHA=255）：柱 alpha 满色——前端 CSS mask 调色不被稀释
+    // bar_alpha 参数直通：255 入 = 柱 alpha 满色（历史 = 播放条 CSS mask 调色不被稀释，
+    // mask 方案 2026-09-25 退役，参数行为保留作渲染函数契约）
     let samples: Vec<f32> = (0..4096).map(|i| if i % 2 == 0 { 0.5 } else { -0.5 }).collect();
-    let img = render_waveform(&samples, &samples, 1200, 48, MASK_ALPHA);
+    let img = render_waveform(&samples, &samples, 1200, 48, 255);
     assert_eq!(img.get_pixel(10, 24).0[3], 255, "mask 用途柱 alpha 必须满色");
   }
 
@@ -328,7 +320,7 @@ mod tests {
     // 回归钉（2026-09-25 实机报）：18px 播放条高请求，留白恒 10 时 max_half 被吃成 0、
     // 全图只剩 1px 中线（看起来全空）——留白等比收缩后 0.8 振幅柱顶距中线约 7px
     let samples: Vec<f32> = (0..4096).map(|i| if i % 2 == 0 { 0.8 } else { -0.8 }).collect();
-    let img = render_waveform(&samples, &samples, 1200, 18, MASK_ALPHA);
+    let img = render_waveform(&samples, &samples, 1200, 18, 255);
     assert!(img.get_pixel(10, 3).0[3] > 0, "18px 高小图振幅不应被留白吃光（cy-6 处应有波形）");
   }
 

@@ -23,7 +23,7 @@ use crate::core::json_io::write_json;
 use crate::core::library::CACHE_DIR;
 use crate::core::models::AssetMeta;
 use crate::core::space::WORKSPACE_DIR;
-use crate::services::{media, thumbnail, workspace as ws};
+use crate::services::{media, workspace as ws};
 
 /// 音视频播放源解析结果
 #[derive(Debug, Serialize, PartialEq)]
@@ -235,71 +235,6 @@ fn transcode_workspace_source(ws_root: &Path, origin: &Path, is_video: bool) -> 
   Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None })
 }
 
-// ---------- 波形图按需重采样 ----------
-
-/// 波形图渲染尺寸钳制范围（防前端异常值）：宽 32~7680、高 8~1080
-const WAVE_W: std::ops::RangeInclusive<u32> = 32..=7680;
-const WAVE_H: std::ops::RangeInclusive<u32> = 8..=1080;
-
-/// 按需重采样波形图结果
-#[derive(Debug, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct WaveformImage {
-  /// 重采样波形图绝对路径（cache/waveforms/{assetId}_{宽}x{高}.webp）
-  pub path: String,
-}
-
-/// 按需重采样波形图（2026-07-26 波形清晰度修复）：前端按播放条 / 预览大图实际显示像素
-/// （CSS px × devicePixelRatio）请求，后端按该尺寸重渲 PCM 波形（渲染口径同 5.1 定稿，
-/// 任意宽度 1px 级清晰，对齐 Eagle），产物缓存 cache/waveforms/（会话级，开库清空），
-/// 已存在直给不重渲。非音频资源中文报错；ffmpeg 缺失 / 提取失败给中文文案（前端回退
-/// info 缩略图拉伸旧行为）。短锁快照后重采样 / 落盘走锁外线程池（规范第 2 条）；
-/// 产物按 宽x高 文件名幂等，无需并发去重
-#[tauri::command]
-pub async fn get_waveform(
-  state: State<'_, AppState>,
-  asset_id: String,
-  width: u32,
-  height: u32,
-) -> Result<WaveformImage, String> {
-  // 短锁快照：定位资源、克隆所需字段后立即放锁（原因同 get_media_source）
-  let (origin, meta, root) = {
-    let guard = state.library.lock().map_err(|e| e.to_string())?;
-    let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
-    let (_info_dir, origin, meta) = locate_asset(lib, &asset_id)?;
-    (origin, meta, lib.root.clone())
-  };
-  tauri::async_runtime::spawn_blocking(move || waveform(&origin, &meta, &root, &asset_id, width, height))
-    .await
-    .map_err(|e| format!("波形图任务失败：{e}"))?
-}
-
-fn waveform(origin: &Path, meta: &AssetMeta, root: &Path, asset_id: &str, width: u32, height: u32) -> Result<WaveformImage, String> {
-  if !media::is_audio(origin) {
-    return Err(format!("「{}」不是音频资源", meta.name));
-  }
-  let (w, h) = clamp_wave_size(width, height);
-  let dir = root.join(CACHE_DIR).join("waveforms");
-  let out = dir.join(format!("{asset_id}_{w}x{h}.webp"));
-  if out.is_file() {
-    return Ok(WaveformImage { path: out.to_string_lossy().into_owned() });
-  }
-  if !ffmpeg::ffmpeg_available() {
-    return Err("音视频组件缺失，无法生成波形图".to_string());
-  }
-  let Some(img) = media::waveform_image_sized(&origin, w, h) else {
-    return Err("波形提取失败，请检查音频文件".to_string());
-  };
-  fs::create_dir_all(&dir).map_err(|e| format!("波形缓存目录创建失败：{e}"))?;
-  thumbnail::save_webp(&image::DynamicImage::ImageRgba8(img), &out).map_err(|e| format!("波形图保存失败：{e}"))?;
-  Ok(WaveformImage { path: out.to_string_lossy().into_owned() })
-}
-
-/// 波形图请求尺寸钳制（前端异常值不炸渲染：过小糊成一团、过大撑爆内存）
-fn clamp_wave_size(w: u32, h: u32) -> (u32, u32) {
-  (w.clamp(*WAVE_W.start(), *WAVE_W.end()), h.clamp(*WAVE_H.start(), *WAVE_H.end()))
-}
-
 // ---------- 卡片波形 peaks（2026-09-22 R6 卡片三变体接线 · audio 变体） ----------
 
 /// 音频卡片波形 peaks（稿 = 组件/卡片/文件卡片-音频 竖线波形数据通道，media::CARD_PEAKS 根
@@ -397,40 +332,6 @@ mod tests {
   fn snap(h: &Harness, id: &str) -> (PathBuf, PathBuf, AssetMeta, PathBuf) {
     let (info_dir, origin, meta) = locate_asset(&h.lib, id).unwrap();
     (info_dir, origin, meta, h.lib.root.clone())
-  }
-
-  #[test]
-  fn clamp_wave_size_bounds() {
-    assert_eq!(clamp_wave_size(1, 1), (32, 8));
-    assert_eq!(clamp_wave_size(99999, 99999), (7680, 1080));
-    assert_eq!(clamp_wave_size(1200, 48), (1200, 48));
-  }
-
-  #[test]
-  fn waveform_rejects_non_audio_and_serves_cache_idempotently() {
-    let mut h = make_lib();
-    // 非音频资源中文报错
-    add_file(&mut h, "AN-PIC", "参考图.png");
-    let (_i, origin, meta, root) = snap(&h, "AN-PIC");
-    let err = waveform(&origin, &meta, &root, "AN-PIC", 640, 272).unwrap_err();
-    assert!(err.contains("不是音频资源"), "{err}");
-
-    // 缓存命中直给（命中判定先于二进制检查：无 ffmpeg / 假字节也直接返回）
-    add_file(&mut h, "AN-AU", "配乐.mp3");
-    let out = h.lib.root.join(CACHE_DIR).join("waveforms").join("AN-AU_1200x48.webp");
-    fs::create_dir_all(out.parent().unwrap()).unwrap();
-    fs::write(&out, b"webp").unwrap();
-    let (_i, origin, meta, root) = snap(&h, "AN-AU");
-    let r = waveform(&origin, &meta, &root, "AN-AU", 1200, 48).unwrap();
-    assert_eq!(r, WaveformImage { path: out.to_string_lossy().into_owned() });
-    // 幂等：已存在不重写（mtime 不变）
-    let mtime = fs::metadata(&out).unwrap().modified().unwrap();
-    waveform(&origin, &meta, &root, "AN-AU", 1200, 48).unwrap();
-    assert_eq!(fs::metadata(&out).unwrap().modified().unwrap(), mtime);
-
-    // 未命中且源是假字节：组件缺失 / 提取失败 中文文案（按环境有无 ffmpeg 二选一）
-    let err = waveform(&origin, &meta, &root, "AN-AU", 640, 272).unwrap_err();
-    assert!(err.contains("组件缺失") || err.contains("波形提取失败"), "{err}");
   }
 
   #[test]

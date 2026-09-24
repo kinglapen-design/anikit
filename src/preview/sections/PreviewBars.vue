@@ -37,14 +37,13 @@ const livePlaying = ref(false);
 const liveMuted = ref(false);
 const liveProgress = ref(0.2);
 
-// 音频波形进度演示：data-uri svg 波形图（WaveProgress mask 只取 alpha；预览页纯前端口径，
-// 不依赖后端 get_waveform 重采样——实机图 = 后端按轨道实寸重渲 PCM）
+// 音频波形进度演示：静态 peaks（WaveProgress 2026-09-25 竖条化后 = WaveContent 同款竖条 +
+// cardPeaksFor 懒加载；预览页纯前端口径传 peaks prop 注入，不走后端 get_audio_peaks）
 const liveWaveProgress = ref(0.4);
-const demoWaveUrl = (() => {
-  const hs = [4, 9, 15, 8, 16, 6, 12, 18, 10, 14, 5, 11, 17, 7, 13, 4, 9, 16, 12, 8, 15, 6, 10, 18, 7, 14, 11, 5, 13, 9];
-  const rects = hs.map((h, i) => `<rect x='${i * 4}' y='${(18 - h) / 2}' width='2' height='${h}'/>`).join("");
-  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='${hs.length * 4}' height='18'>${rects}</svg>`)}`;
-})();
+const demoWavePeaks = [
+  0.2, 0.45, 0.8, 0.35, 0.9, 0.25, 0.6, 1, 0.5, 0.75, 0.2, 0.55, 0.95, 0.3, 0.7, 0.15, 0.4, 0.85, 0.6, 0.35,
+  0.8, 0.25, 0.5, 1, 0.3, 0.75, 0.55, 0.2, 0.7, 0.4, 0.65, 0.9, 0.3, 0.5, 0.85, 0.2, 0.6, 0.45, 0.95, 0.35,
+];
 
 // 帧条 + 播放条同宽组合（帧条自然宽 777 → 播放条 width 覆盖同步）
 const COMBO_W = 777;
@@ -200,13 +199,13 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
         <div class="pv-demo-cell">
           <FloatBar mode="play" :show="['volume', 'rate', 'loop']" v-model:progress="liveWaveProgress">
             <template #progress>
-              <WaveProgress v-model="liveWaveProgress" :fallback-url="demoWaveUrl" />
+              <WaveProgress v-model="liveWaveProgress" :peaks="demoWavePeaks" />
             </template>
           </FloatBar>
           <span class="pv-cap">
-            音频语境（2026-09-25 修正：本格进度区换真实 WaveProgress——音乐预览稿 prose「只在播放条上放波形图」；
-            未播放 亮色/三级 / 已播放+播放头 品牌；波形实机 = 后端按轨道实寸重采样，此处 data-uri 演示图；
-            进度可拖；show 组删减 = 无传输 / 步进 / 笔记 / 封面 / 全屏）
+            音频语境（进度区 = WaveProgress 竖条波形——音乐预览稿 prose「只在播放条上放波形图」；2026-09-25
+            竖条化换代：WaveContent 同款 4px 圆头竖条 通用/五级，已播放 品牌 clip + 播放头；peaks 实机 =
+            get_audio_peaks 128 根懒加载，此处静态注入；进度可拖；show 组删减 = 无传输 / 步进 / 笔记 / 封面 / 全屏）
           </span>
         </div>
         <div class="pv-demo-cell">
