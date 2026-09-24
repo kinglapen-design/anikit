@@ -72,6 +72,7 @@ async function loadSource(): Promise<void> {
     const v = mediaRef.value;
     if (!v) return;
     usedTranscode = r.transcoded;
+    directRetried = false;
     v.src = convertFileSrc(r.path);
     void v.play().catch((e) => console.warn("悬停播放失败：", e));
   } catch (e) {
@@ -82,9 +83,25 @@ async function loadSource(): Promise<void> {
 // 直读优先的播放错误回退（2026-09-13，同 HoverVideoLayer）：wma 等直解不了 →
 // error 后 forceTranscode 重调转码兜底（cache/media 持久产物，每资产只转一次）
 let usedTranscode = false;
+// 瞬时错误直读重试一次（2026-09-24，同 previewMedia 口径）：非 SRC_NOT_SUPPORTED
+// （seek / 管线偶发报错）先同源重载续播，仍 error 才落转码
+let directRetried = false;
 async function onSourceError(): Promise<void> {
   const v = mediaRef.value;
   if (!v || !v.currentSrc || usedTranscode || isDisposed()) return;
+  if (v.error?.code !== MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED && !directRetried) {
+    directRetried = true;
+    const resume = v.currentTime;
+    const onMeta = (): void => {
+      v.removeEventListener("loadedmetadata", onMeta);
+      if (isDisposed()) return;
+      if (resume > 0 && resume < (v.duration || 0)) v.currentTime = resume;
+      void v.play().catch(() => {});
+    };
+    v.addEventListener("loadedmetadata", onMeta);
+    v.load();
+    return;
+  }
   usedTranscode = true;
   try {
     const r = await getMediaSource(props.asset.assetId, true);

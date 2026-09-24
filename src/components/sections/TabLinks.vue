@@ -336,9 +336,22 @@ async function togglePlay(v: RelationView): Promise<void> {
 
 // 播放错误回退（直读优先口径）：转码兜底重试一次；仍失败 toast 原样文案
 let transcodeRetriedId = "";
+// 瞬时错误直读重试一次（2026-09-24，同 previewMedia 口径）：非 SRC_NOT_SUPPORTED
+// （seek / 管线偶发报错）先同源重载续播，仍 error 才落转码
+let directRetriedId = "";
 async function onSourceError(v: RelationView): Promise<void> {
   const el = mediaRef.value;
   if (!el || !el.currentSrc || transcodeRetriedId === v.relation.id) return;
+  if (el.error?.code !== MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED && directRetriedId !== v.relation.id) {
+    directRetriedId = v.relation.id;
+    const onMeta = (): void => {
+      el.removeEventListener("loadedmetadata", onMeta);
+      void el.play().catch(() => {});
+    };
+    el.addEventListener("loadedmetadata", onMeta);
+    el.load();
+    return;
+  }
   transcodeRetriedId = v.relation.id;
   try {
     const r = await getMediaSource(v.other.id, true);

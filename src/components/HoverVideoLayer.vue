@@ -97,6 +97,7 @@ async function loadSource(): Promise<void> {
     const v = videoRef.value;
     if (!v) return;
     usedTranscode = r.transcoded;
+    directRetried = false;
     v.src = convertFileSrc(r.path);
     v.currentTime = rangeStart();
     void v.play().catch((e) => console.warn("卡片播放失败：", e));
@@ -109,9 +110,25 @@ async function loadSource(): Promise<void> {
 // mov/wma 容器等）→ error 后带 forceTranscode 重调，后端转码兜底；转码期 ready 恒 false，
 // 卡片保持底层静态缩略图（无闪烁）
 let usedTranscode = false;
+// 瞬时错误直读重试一次（2026-09-24，同 previewMedia 口径）：seek / 硬解管线偶发报错
+// 不等于格式不可播——非 SRC_NOT_SUPPORTED 先同源重载续播，仍 error 才落转码
+let directRetried = false;
 async function onSourceError(): Promise<void> {
   const v = videoRef.value;
   if (!v || !v.currentSrc || usedTranscode || isDisposed()) return;
+  if (v.error?.code !== MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED && !directRetried) {
+    directRetried = true;
+    const resume = currentTime.value;
+    const onMeta = (): void => {
+      v.removeEventListener("loadedmetadata", onMeta);
+      if (isDisposed()) return;
+      if (resume > 0 && resume < (v.duration || 0)) v.currentTime = resume;
+      void v.play().catch(() => {});
+    };
+    v.addEventListener("loadedmetadata", onMeta);
+    v.load();
+    return;
+  }
   usedTranscode = true;
   try {
     const r = await getMediaSource(props.asset.assetId, true);

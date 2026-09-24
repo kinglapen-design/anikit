@@ -22,6 +22,11 @@ let transcodeRetried = false;
 // （curPath 非空 = onSourceError 走按路径回退；与按 assetId 模式互斥，release 两者皆清）
 let curPath: string | null = null;
 let pathTranscodeRetried = false;
+// 直读重试标记（2026-09-24 瞬时错误修复，两模式各一）：error 非"格式不支持"
+// （seek / 硬解管线偶发报错）时先同源重载直读重试一次，仍 error 才落转码兜底——
+// 一刀切转码会把瞬时错误误诊成格式不可播，白等几十秒软编码（用户实机：拖进度到开头偶发"转码中…"）
+let directRetried = false;
+let pathDirectRetried = false;
 
 function errText(e: unknown): string {
   if (typeof e === "string") return e;
@@ -86,6 +91,7 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       this.kind = kind;
       curAssetId = assetId;
       transcodeRetried = false;
+      directRetried = false;
       this.fps = kind === "video" ? fps : null;
       this.transcoding = true;
       this.transcodingSlow = false;
@@ -123,6 +129,7 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       this.kind = kind;
       curPath = absPath;
       pathTranscodeRetried = false;
+      pathDirectRetried = false;
       this.fps = kind === "video" ? fps : null;
       this.transcoding = true;
       this.transcodingSlow = false;
@@ -161,6 +168,13 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       const absPath = curPath;
       if (!absPath || pathTranscodeRetried || !el?.currentSrc) return;
       if (preview.current?.wsPath !== absPath) return;
+      // 瞬时错误先直读重试一次（口径见 onSourceError）
+      if (el.error?.code !== MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED && !pathDirectRetried) {
+        pathDirectRetried = true;
+        console.warn(`播放源瞬时错误（code=${el.error?.code ?? "?"}），直读重试：`, absPath);
+        this.retryDirect();
+        return;
+      }
       pathTranscodeRetried = true;
       clearTimeout(slowTimer);
       this.transcoding = true;
@@ -199,6 +213,16 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       const id = curAssetId;
       if (!id || transcodeRetried || !el?.currentSrc) return;
       if (preview.current?.assetId !== id) return;
+      // 瞬时错误（seek / 硬解管线偶发报错，2026-09-24 用户实机"拖进度到开头偶发转码中"）——
+      // error 不分错误码一刀切转码会把瞬时错误误诊成格式不可播，白等整段软编码：
+      // 非"格式不支持"（SRC_NOT_SUPPORTED）先同源直读重试一次，仍 error 自然落下方转码兜底；
+      // 真不支持的格式首装即报 SRC_NOT_SUPPORTED，直落转码（重试无意义）
+      if (el.error?.code !== MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED && !directRetried) {
+        directRetried = true;
+        console.warn(`播放源瞬时错误（code=${el.error?.code ?? "?"}），直读重试：`, this.srcPath);
+        this.retryDirect();
+        return;
+      }
       transcodeRetried = true;
       clearTimeout(slowTimer);
       this.transcoding = true;
@@ -225,6 +249,20 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
         this.transcodingSlow = false;
       }
     },
+    // 直读重试（瞬时错误恢复，2026-09-24）：src 不变调 load() 清 MediaError 重走管线，
+    // loadedmetadata 后恢复原播放位置续播；重试仍 error 由事件链落转码兜底（directRetried 已占位）
+    retryDirect(): void {
+      const v = el;
+      if (!v) return;
+      const resume = this.currentTime;
+      const onMeta = (): void => {
+        v.removeEventListener("loadedmetadata", onMeta);
+        if (resume > 0 && resume < (v.duration || 0)) v.currentTime = resume;
+        this.play();
+      };
+      v.addEventListener("loadedmetadata", onMeta);
+      v.load();
+    },
     // 释放（切素材/退出预览）：暂停并卸载源，状态归零（音量/静音保留用户设置）
     release(): void {
       if (el) {
@@ -236,6 +274,8 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       transcodeRetried = false;
       curPath = null;
       pathTranscodeRetried = false;
+      directRetried = false;
+      pathDirectRetried = false;
       this.kind = null;
       this.srcPath = null;
       clearTimeout(slowTimer);

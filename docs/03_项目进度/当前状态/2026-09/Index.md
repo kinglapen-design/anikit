@@ -1,9 +1,10 @@
 # 当前状态 · 2026-09
 
-> 本月 84 条状态记录。返回 [当前状态 Index](../../Index.md)。
+> 本月 85 条状态记录。返回 [当前状态 Index](../../Index.md)。
 
 | 文件 | 日期 | 标题 |
 | --- | --- | --- |
+| [2026-09-24_01_拖进度偶发转码中修复——error回退分级.md](2026-09-24_01_拖进度偶发转码中修复——error回退分级.md) | 2026-09-24 | 拖进度偶发「转码中…」修复：error 回退分错误码，瞬时错误先直读重试（2026-09-24，feat/new-ui，用户实机报） | ：error 回退不读 MediaError.code 一刀切转码（踩坑 086）→ 非 SRC_NOT_SUPPORTED 先同源 load() 直读重试一次，仍 error 才落转码；四播放点同口径；typecheck / build 绿 |
 | [2026-09-19_07_MCP二批四件套.md](2026-09-19_07_MCP二批四件套.md) | 2026-09-19 | MCP 二批结构性四件套：create_folder / move_placements / link_placements / import_paths（2026-09-19，feat/new-ui，PRD 08-06） | ：漫剧工作流 + 工作目录架构（cwd = 项目文件夹，库只当归宿走 MCP）定案；import_paths 方案一冲突策略（hash 相同回已有 id / 同名加 -序号，逐文件报告）直调 run_import 管线；三个结构件 _op 范式进撤销、import 不进撤销；分组实证全规则组不需 assign_group；471 测绿 + 真机开/关闸链式验证全通 |
 | [2026-09-19_06_MCP写入闸首批.md](2026-09-19_06_MCP写入闸首批.md) | 2026-09-19 | MCP 二期首批：写入闸形态 A + 3 写工具 + 偏好设置弹窗（2026-09-19，feat/new-ui，PRD 08-06） | ：闸 = 全局开关 mcpWriteEnabled（默认关，偏好设置弹窗开关行）逐次直读 + 撤销兜底，不逐笔弹窗；写工具 create_document / write_text_asset（不进撤销，同 APP 编辑口径）/ rename_placements，进撤销者复用命令 _op 整段单一实现；471 测绿 + typecheck 0 + 真机开/关闸链式验证 + 弹窗 CDP 断言过；设计缺口三处就近定档待用户校稿 |
 | [2026-09-19_05_MCP只读通道.md](2026-09-19_05_MCP只读通道.md) | 2026-09-19 | AI 外接通道一期：进程内嵌只读 MCP server（2026-09-19，feat/new-ui，PRD 08-06 立项并落地） | ：选型用户定 A 案 rmcp 3.4 + axum 0.8 协议层零手写；固定端口 17701 优先、被占回退动态（Codex 实测后用户定，Agent 工具只读静态 config），mcp-server.port 兜底；工具注册表兑现一类一文件 + 一行注册；只读白名单 8 工具全 readOnlyHint，薄壳转发既有命令/服务层；471 测绿 + curl 端到端真库八工具逐个戳过；二期 = 写入闸 |
