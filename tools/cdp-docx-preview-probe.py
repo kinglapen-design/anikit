@@ -204,8 +204,8 @@ async def main():
                     fails.append(f"[docx] 段落总数 {a['paras']}（期望 6）")
                 if a["truncated"] != "文档过大，仅显示前一部分":
                     fails.append(f"[docx] 截断提示不符（{a['truncated']}）")
-                if a["readCalls"] != ["D1"]:
-                    fails.append(f"[docx] read_docx_asset 调用不符（{a['readCalls']}）")
+                if not a["readCalls"] or any(c != "D1" for c in a["readCalls"]):
+                    fails.append(f"[docx] read_docx_asset 调用不符（{a['readCalls']}）——应全为 D1（文本卡懒加载 + 预览各一次均合法，2026-09-22 文本卡接线后 ≥1 次）")
             # 「默认应用打开」按钮：IconButton title 走 v-tip 不落 DOM 属性——按按钮组位序点击
             # （插件 / 默认应用打开 / 新窗口 / 上 / 下一个，docx 非 viewable 无缩放组 = 索引 1），
             # 以 open_with_default_app 调用反证按钮存在且接线活
