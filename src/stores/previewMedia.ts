@@ -1,5 +1,7 @@
 // 音视频播放（5.2）：<video> 元素模块级持有（非响应式，音频也复用 video 元素免双实现），
-// 播放状态（playing/currentTime/duration/volume/rate/loop）经元素事件同步进 store。
+// 播放状态（playing/currentTime/duration/volume/rate/loop）经元素事件同步进 store——
+// currentTime 播放中由 rAF 逐帧驱动（timeupdate 仅 4Hz 走带段跳，2026-09-25 音频卡同款丝滑化修订，
+// 消费方 = barSpecs 进度条与时间码），timeupdate 留作暂停/seek 后低速兜底。
 // get_media_source 解析播放源（2026-09-13 直读优先：先直给源路径，播放 error 回退转码
 // cache/media 持久产物，转码期 transcoding 加载态）；
 // 解析失败降级：preview.kind 落 other + 中文报错文案（preview.error 画面提示）。
@@ -27,6 +29,17 @@ let pathTranscodeRetried = false;
 // 一刀切转码会把瞬时错误误诊成格式不可播，白等几十秒软编码（用户实机：拖进度到开头偶发"转码中…"）
 let directRetried = false;
 let pathDirectRetried = false;
+
+// 走带 rAF 循环（2026-09-25 用户实机报「播放走带 fps 调高点」，音频卡 09-22 同款修法）：
+// timeupdate 仅约 4Hz，进度条 / 时间码一段段跳——播放中改 rAF 逐帧读元素 currentTime 写 store
+// （60fps 丝滑；消费方 = barSpecs 进度条与时间码，无重活）；pause / ended / release 停循环。
+let progressRaf = 0;
+function stopProgressLoop(): void {
+  if (progressRaf) {
+    cancelAnimationFrame(progressRaf);
+    progressRaf = 0;
+  }
+}
 
 function errText(e: unknown): string {
   if (typeof e === "string") return e;
@@ -64,9 +77,26 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
       el.preload = "auto";
       el.controls = false;
       el.style.cssText = "display:block;width:100%;height:100%;object-fit:contain;";
-      el.addEventListener("play", () => (this.playing = true));
-      el.addEventListener("pause", () => (this.playing = false));
-      el.addEventListener("ended", () => (this.playing = false));
+      el.addEventListener("play", () => {
+        this.playing = true;
+        // 走带丝滑化：播放中 rAF 逐帧读 currentTime（timeupdate 4Hz 段跳；幂等先停再启）
+        stopProgressLoop();
+        const tick = (): void => {
+          if (!this.scrubbing) this.currentTime = el?.currentTime ?? 0;
+          progressRaf = requestAnimationFrame(tick);
+        };
+        progressRaf = requestAnimationFrame(tick);
+      });
+      el.addEventListener("pause", () => {
+        this.playing = false;
+        stopProgressLoop();
+      });
+      el.addEventListener("ended", () => {
+        this.playing = false;
+        stopProgressLoop();
+      });
+      // timeupdate 保留作低速兜底（暂停态 seek 后同步、scrubbing 外释放对齐等）；
+      // 播放中的走带驱动已上移 rAF（本事件 4Hz 段跳，2026-09-25 修订）
       el.addEventListener("timeupdate", () => {
         if (!this.scrubbing) this.currentTime = el?.currentTime ?? 0;
       });
@@ -265,6 +295,7 @@ export const usePreviewMediaStore = defineStore("previewMedia", {
     },
     // 释放（切素材/退出预览）：暂停并卸载源，状态归零（音量/静音保留用户设置）
     release(): void {
+      stopProgressLoop();
       if (el) {
         el.pause();
         el.removeAttribute("src");
