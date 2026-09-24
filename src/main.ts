@@ -5,6 +5,8 @@ import App from "./App.vue";
 import { vTip } from "./lib/tip";
 import "./styles/fonts.css";
 import "./styles/tokens.css";
+import "./styles/checkbox.css";
+import "./styles/markdown.css";
 import "./styles/base.css";
 import "dockview-core/dist/styles/dockview.css";
 import "./styles/dockview-theme.css";

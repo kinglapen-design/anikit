@@ -44,11 +44,17 @@ const media = usePreviewMediaStore();
 const notes = usePreviewNotesStore();
 
 // ─── 模式与形态分发 ───
-// spec 按 kind 查表（barSpecs 注册表）；预览态且有 spec = play 模式，否则 search
+// spec 按 kind 查表（barSpecs 注册表）；预览态且有 spec = play 模式，否则 search；
+// md 文本编辑态（preview.mdEditing）= markdown 工具栏模式（文本编辑稿轮接入，优先级最高）
 const spec = computed(() => (props.previewActive ? playBarSpecFor(preview.kind) : null));
-const mode = computed<"search" | "play">(() => (spec.value ? "play" : "search"));
-// 预览态查不到 spec（image/font/text/other）= 宽度+透明度退场（稿 prose）；其余恒显示
-const barVisible = computed(() => !(props.previewActive && !spec.value));
+const mdEditActive = computed(
+  () => props.previewActive && preview.kind === "text" && preview.mdEditing,
+);
+const mode = computed<"search" | "markdown" | "play">(() =>
+  mdEditActive.value ? "markdown" : spec.value ? "play" : "search",
+);
+// 预览态查不到 spec（image/font/text/other）= 宽度+透明度退场（稿 prose）；md 编辑态恒显示工具栏；其余恒显示
+const barVisible = computed(() => mdEditActive.value || !(props.previewActive && !spec.value));
 
 // ─── 搜索侧（panelId/viewKey 具备才接 store）──
 const hasSearch = computed(() => !!props.panelId && !!props.viewKey);
@@ -318,6 +324,7 @@ function noteRemove(i: number): void {
       @open-fullscreen="spec?.toggleFullscreen?.()"
       @progress-drag-start="spec?.dragStart?.()"
       @progress-drag-end="spec?.dragEnd?.()"
+      @action="preview.requestMdAction($event)"
     >
       <!-- 音频语境：进度区换竖条波形（spec.wave = 音频族标志；音乐预览稿 prose「只在播放条上放波形图」） -->
       <template v-if="spec?.wave" #progress>

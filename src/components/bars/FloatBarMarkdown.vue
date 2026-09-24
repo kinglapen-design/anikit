@@ -2,7 +2,9 @@
 // MarkDown 工具栏：段落（H1-H6 / 正文 / 引用）/ 列表（无序 / 有序 / 任务）/ 插入（表格 / 代码块 /
 // 行内代码块 / 插入链接 / 分割线）/ 格式（加粗 / 斜体 / 删除线）四组，组间 .fb-group 左分隔线（稿 border-left 方案）。
 // 图标 = 按钮族 IconButton bare 复用（18 实寸 亮色/三级，hover 升二级——稿 hover-按钮组口径）。
-// 只出事件（action = 语义名）， markdown 实际操作归业务侧接入。
+// 只出事件（action = 语义名）；实际操作 = preview.requestMdAction → PreviewText 编辑态执行（lib/mdEdit）。
+// 根 mousedown.prevent = 点击不抢焦点（§36 搜索栏同口径）——编辑器 textarea 选区全程保持，
+// 动作作用于当前选区不丢（业务接入轮落地）。
 import IconButton from "../buttons/IconButton.vue";
 import "./bars.css";
 
@@ -48,7 +50,7 @@ const groups: readonly MdIcon[][] = [
 </script>
 
 <template>
-  <div class="fb-mode fbm-root">
+  <div class="fb-mode fbm-root" @mousedown.prevent>
     <div v-for="(g, gi) in groups" :key="gi" :class="gi === 0 ? 'fbm-first' : 'fb-group'">
       <IconButton
         v-for="ic in g"

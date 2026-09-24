@@ -41,7 +41,7 @@ function paraTag(heading: number): string {
 <template>
   <div class="docx-preview">
     <template v-if="doc">
-      <div ref="bodyRef" class="docx-body kit-scroll">
+      <div ref="bodyRef" class="docx-body md-body kit-scroll">
         <!-- 空文档（零段落 / 全空行）提示说明文字档 -->
         <p v-if="doc.paragraphs.length === 0" class="empty-hint">空文档</p>
         <component
@@ -73,51 +73,18 @@ function paraTag(heading: number): string {
   flex-direction: column;
   user-select: text; /* 文本可选中复制（stage 全局 none 覆盖回） */
 }
-/* —— 排版复用 md 渲染态口径（文本编辑稿，PreviewText .md-body 同档） —— */
+/* —— 排版 = styles/markdown.css .md-body 全局类（文本编辑稿口径，PreviewText 共用） —— */
 .docx-body {
   flex: 1;
   min-height: 0;
-  padding: var(--n-space-24) 32px;
-  font-size: var(--n-fs-md-body);
-  line-height: 1.8;
-  color: var(--n-l2);
   white-space: pre-wrap; /* run 内 \n（w:br）/ 连续空格原样呈现 */
   overflow-wrap: break-word;
-}
-.docx-body h1,
-.docx-body h2,
-.docx-body h3,
-.docx-body h4,
-.docx-body h5,
-.docx-body h6 {
-  margin: 1em 0 0.5em;
-  line-height: 1.4;
-  font-weight: 700;
-  color: var(--n-l2);
-  white-space: pre-wrap;
-}
-.docx-body h1:first-child,
-.docx-body h2:first-child,
-.docx-body h3:first-child {
-  margin-top: 0;
-}
-.docx-body h1 {
-  font-size: 1.7em;
-}
-.docx-body h2 {
-  font-size: 1.4em;
-}
-.docx-body h3 {
-  font-size: 1.15em;
-}
-.docx-body p {
-  margin: 0 0 0.9em;
 }
 /* 空行段落（无 run）保持行高占位 */
 .docx-body .blank::after {
   content: "\00a0";
 }
-/* 列表项：项目符号 + 悬挂缩进 */
+/* 列表项：项目符号 + 悬挂缩进（md-body flex 子级，段距由容器 gap 供给） */
 .docx-body .list {
   padding-left: 1.6em;
   text-indent: -1.6em;

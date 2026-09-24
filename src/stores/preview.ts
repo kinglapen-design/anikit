@@ -111,6 +111,10 @@ export const usePreviewStore = defineStore("preview", {
     // 动图帧条小图（key = `f:{索引}` → stripPath；prepare_anim_strips 已缓存清单 +
     // preview-strips-ready 事件渐进填充）
     animStrips: {} as Record<string, string>,
+    // md 文本编辑（文本编辑稿轮）：编辑态标记（PreviewText 进出写入；FloatBarHost 据以切 MarkDown 工具栏）
+    mdEditing: false,
+    mdActionSeq: 0, // 工具栏动作信号（search.focusSeq 同款模式：seq 推进 = 新动作待执行）
+    mdActionName: "",
   }),
   getters: {
     // 当前预览的 PlacementView（按 key 在当前视口列表里找）；
@@ -226,6 +230,16 @@ export const usePreviewStore = defineStore("preview", {
       this.animFrame = null;
       this.animTotal = 0;
       this.animStrips = {};
+      this.mdEditing = false;
+    },
+    // md 编辑态进出（PreviewText 写入；FloatBarHost 读以切悬浮栏 MarkDown 工具栏模式）
+    setMdEditing(v: boolean): void {
+      this.mdEditing = v;
+    },
+    // 悬浮栏 MarkDown 工具栏动作 → PreviewText 执行（seq 推进通知，search.focusSeq 同款模式）
+    requestMdAction(name: string): void {
+      this.mdActionName = name;
+      this.mdActionSeq++;
     },
     // 上/下一个素材（当前视口顺序，到头停）
     async step(delta: number): Promise<void> {

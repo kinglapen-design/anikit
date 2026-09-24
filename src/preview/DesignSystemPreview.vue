@@ -6,6 +6,7 @@ import "./preview.css";
 import PreviewInventory from "./sections/PreviewInventory.vue";
 import PreviewColors from "./sections/PreviewColors.vue";
 import PreviewType from "./sections/PreviewType.vue";
+import PreviewMarkdown from "./sections/PreviewMarkdown.vue";
 import PreviewEffects from "./sections/PreviewEffects.vue";
 import PreviewShape from "./sections/PreviewShape.vue";
 import PreviewMotion from "./sections/PreviewMotion.vue";
@@ -26,6 +27,7 @@ const nav = [
   { id: "inventory", label: "组件台账" },
   { id: "colors", label: "颜色" },
   { id: "type", label: "字体" },
+  { id: "markdown", label: "MarkDown 排版" },
   { id: "effects", label: "效果" },
   { id: "shape", label: "圆角 / 间距" },
   { id: "motion", label: "动画" },
@@ -61,6 +63,7 @@ const nav = [
       <PreviewInventory />
       <PreviewColors />
       <PreviewType />
+      <PreviewMarkdown />
       <PreviewEffects />
       <PreviewShape />
       <PreviewMotion />

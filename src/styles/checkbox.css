@@ -1,0 +1,37 @@
+/* 复选框框体通用类（稿 = Design Token/组件/按钮/复选框，口径 §24）：
+   buttons/Checkbox.vue 与 md 任务列表渲染（v-html 进不了 Vue 组件）共用——同款样式第二处出现抽象为通用类。
+   框 14×14 圆角 4：未选中 通用/三级底 + 通用/五级描边（hover 通用/六级）；选中 品牌/常态底 + 亮色/半透明-1 描边；
+   对勾 = check-tiny 10（.kit-check-mark 由 CSS 控色）：弹出 250ms 过冲（token 未收过冲缓动，沿组件既定档）/ 收回 150ms 缓入；
+   底/描边过渡 150ms。host 类 = 含框的交互整体（label 行）——hover 行任意处框描边升档；无 host 语境（md li）框自身 hover 命中。 */
+.kit-check-box {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--n-radius-4);
+  background: var(--n-g3);
+  box-shadow: inset 0 0 0 1px var(--n-g5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--n-l1);
+  line-height: 0;
+  flex: none;
+  transition:
+    background var(--n-dur-150) var(--n-ease-in-out),
+    box-shadow var(--n-dur-150) var(--n-ease-in-out);
+}
+.kit-check-box:hover:not(.on),
+.kit-check-host:hover .kit-check-box:not(.on) {
+  box-shadow: inset 0 0 0 1px var(--n-g6);
+}
+.kit-check-box.on {
+  background: var(--n-brand);
+  box-shadow: inset 0 0 0 1px var(--n-l-a1);
+}
+.kit-check-box .kit-check-mark {
+  transform: scale(0);
+  transition: transform var(--n-dur-150) var(--n-ease-in);
+}
+.kit-check-box.on .kit-check-mark {
+  transform: scale(1);
+  transition: transform var(--n-dur-250) cubic-bezier(0.34, 1.56, 0.64, 1);
+}
