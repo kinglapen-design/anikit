@@ -101,6 +101,9 @@ export const useTabsStore = defineStore("tabs", () => {
     for (const id of [...histories.keys()]) {
       if (!alive.has(id)) histories.delete(id);
     }
+    // 预览属主面板已关闭 → 预览一并退出（2026-09-25 绑定面板配套：不死挂僵尸预览）
+    const preview = usePreviewStore();
+    if (preview.panelId && !alive.has(preview.panelId)) preview.close();
     tabs.value = api.panels.map(panelInfo);
     const active = api.activePanel;
     activeTabId.value = active?.id ?? "";

@@ -5,8 +5,10 @@
 // 搜索栏 ↔ 播放条 morph；底部居中距底 12、两侧 12 呼吸；旧通栏 SearchBar 与预览 footer 三件套均废）；
 // 列表底部遮挡补偿 66 = layouts.ts PAD.bottom（12 栏距底 + 42 栏高 + 12 呼吸距；JS 滚动 translateY，
 // CSS padding 不影响可滚距离）。
-// 预览模式（4.3/5.2）：preview.assetKey 非空且本 panel 激活时整栏切换——预览是全局单例状态，
-// 只在激活标签页内发生，非激活 panel 保持原视口；全屏时 preview-root fixed 铺满窗口、隐藏标题栏。
+// 预览模式（4.3/5.2）：preview.assetKey 非空且本 panel 是预览属主（preview.panelId，2026-09-25 绑定
+// 发起面板根治「跟激活飘」）时整栏切换——预览状态单例但绑定发起面板：新标签 / 分屏新 panel 不抢
+// （原标签保留），B 面板双击 = 明确归 B；属主标签关闭即退出（tabs.syncMirror 清理）；全屏时
+// preview-root fixed 铺满窗口、隐藏标题栏。
 // 通知条（ToastStack）已上移到 DockHost 单例（多 panel 下每 panel 一份会重复弹出）。
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { DockviewPanelApi, IDockviewPanelProps } from "dockview-vue";
@@ -71,8 +73,11 @@ const disposeActive = panelApi.onDidActiveChange(() => {
   active.value = panelApi.isActive;
 });
 onBeforeUnmount(() => disposeActive.dispose());
-// 预览态 = preview.assetKey 非空且本 panel 激活（预览是全局单例，非激活 panel 保持原视口）
-const previewActive = computed(() => !!preview.assetKey && active.value);
+// 预览态 = preview.assetKey 非空且本 panel 是预览属主（2026-09-25 绑定发起面板根治「跟激活飘」：
+// 新标签 / 分屏新 panel 不抢预览；panelId 空 = 未绑定早期路径，回退旧激活判定）
+const previewActive = computed(
+  () => !!preview.assetKey && (preview.panelId ? preview.panelId === panelApi.id : active.value),
+);
 
 // 当前视口资源（"全部"= 全部 Placement；文件夹 = 该文件夹直接 Placement，
 // 递归显示开关 ui.showSubfolders 打开时含全部后代文件夹，2026-08-10 接入）。

@@ -15,6 +15,7 @@ import { useToastStore } from "./toast";
 import { isAudioExt, isDocxExt, isFontExt, isSequence, isStaticImageExt, isTextExt, isVideoExt } from "../lib/formatBadge";
 import { getAssetFilePath, listSequenceFrames, prepareAnimStrips, type FrameEntry } from "../lib/mediaOps";
 import { isWsPlacement } from "./ws";
+import { useTabsStore } from "./tabs";
 import { StreamSession, type StreamFrame } from "../lib/streamClient";
 
 // 播放帧（5.2 改版）：命令原始结构见 lib/mediaOps（FrameEntry.delayMs 序列帧恒 null）——
@@ -82,6 +83,10 @@ let savedView: { zoom: number; panX: number; panY: number; fitMode: boolean } | 
 export const usePreviewStore = defineStore("preview", {
   state: () => ({
     assetKey: null as string | null, // `${assetId}|${folderId}`，null = 非预览模式
+    // 预览属主面板（2026-09-25 用户实机三报根治）：预览从「全局单例跟着激活面板飘」改为绑定
+    // 发起面板——新标签 / 分屏新 panel 不抢预览（原标签保留），B 面板双击 = 预览明确归 B；
+    // null = 未绑定（布局恢复等早期路径），ContentArea 回退旧激活判定
+    panelId: null as string | null,
     kind: "image" as PreviewKind,
     filePath: null as string | null, // 当前显示图（原图 / psd 缓存 / 当前帧）绝对路径
     error: null as string | null, // 媒体源解析失败等用户可见中文文案（5.2，画面提示）
@@ -214,6 +219,10 @@ export const usePreviewStore = defineStore("preview", {
 
     // 进入预览（双击卡片 / 查看大图按钮）
     async open(key: string): Promise<void> {
+      // 绑定属主 = 打开时激活面板（tabs.activeTabId 镜像；独立预览窗口同记主窗口激活面板——与旧行为一致）
+      // options store 内调用他 store = 运行时解析，模块级循环（tabs ↔ preview）安全
+      const tabs = useTabsStore();
+      this.panelId = tabs.activeTabId || null;
       this.assetKey = key;
       await this.loadAsset();
     },
@@ -225,6 +234,7 @@ export const usePreviewStore = defineStore("preview", {
       usePreviewNotesStore().reset();
       if (this.fullscreen) void this.setFullscreen(false);
       this.assetKey = null;
+      this.panelId = null;
       this.seq = null;
       this.playing = false;
       this.animFrame = null;
