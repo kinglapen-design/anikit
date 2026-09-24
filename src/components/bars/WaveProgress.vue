@@ -4,9 +4,12 @@
 // 两层 div 以波形图作 CSS mask（alpha 通道铺满）：底层 = 未播放 亮色/三级实色（旧 wave-pending
 // 「标签档不透明版」2026-08-10 用户定的语义档映射——mask 层不受 alpha 影响须实色）；
 // 已播放层 = 品牌底 clip-path 裁到进度；播放头 1px 品牌竖线。
-// 波形图 = 后端按轨道实际像素重采样（useHiresWaveform），未就绪/失败回退 info 波形缩略图（fallbackUrl）。
+// 波形图 = 后端按轨道实际像素重采样（useHiresWaveform 返回磁盘路径，本组件 convertFileSrc 转
+// asset URL——裸路径塞 CSS url() 必加载失败，踩坑 088），未就绪/失败回退 info 波形缩略图（fallbackUrl，
+// 调用方已转换）。
 // 交互 = pointerdown 跳值 + window pointermove 拖动（BarSlider 同款链路，drag-start/end 透传 scrubbing 挂钩）。
 import { computed, ref } from "vue";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useHiresWaveform } from "../../lib/useHiresWaveform";
 
 const props = withDefaults(defineProps<{ fallbackUrl?: string | null }>(), { fallbackUrl: null });
@@ -15,7 +18,10 @@ const emit = defineEmits<{ "drag-start": []; "drag-end": [] }>();
 
 const rootEl = ref<HTMLElement>();
 const hiresPath = useHiresWaveform(rootEl);
-const waveUrl = computed(() => hiresPath.value ?? props.fallbackUrl ?? null);
+// hiresPath 是磁盘绝对路径——必须 convertFileSrc 转 asset URL（裸路径塞 CSS url() 按相对
+// 地址解析必然加载失败：mask 空 = 层不可见只剩播放头，2026-09-25 实机报，踩坑 088）；
+// fallbackUrl 已由调用方（barSpecs audio waveFallback）转换好，不再二转
+const waveUrl = computed(() => (hiresPath.value ? convertFileSrc(hiresPath.value) : (props.fallbackUrl ?? null)));
 // 两层 mask 共用的图地址（CSS 变量下发，mask 走 alpha 通道）
 const waveMask = computed(() => (waveUrl.value ? { "--wave-url": `url("${waveUrl.value}")` } : {}));
 
