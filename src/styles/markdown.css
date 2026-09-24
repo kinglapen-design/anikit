@@ -122,16 +122,16 @@
 .md-body li > ol {
   padding-top: var(--n-space-4);
 }
-/* 任务列表（GFM - [ ]）＝ 我们自己的复选框（用户定）：框体 styles/checkbox.css .kit-check-box 通用类，
-   悬挂缩进 20 = 框 14 + 文距 6（复选框组件 gap 档），框垂直对齐首行中 */
+/* 任务列表（GFM - [ ]）＝ 我们自己的复选框（用户定）：框体 styles/checkbox.css .kit-check-box 通用类；
+   对齐口径（2026-09-25 走查「三个列表要对齐」）：任务 li 与无序/有序 li 同 content 左缘（不额外缩进），
+   复选框外挂 marker 列 = content 左缘左移 20（框 14 + 文距 6 组件 gap 档）——三列表文本列齐、标记列齐 */
 .md-body li.md-task {
   position: relative;
   list-style: none;
-  padding-left: 20px;
 }
 .md-body li.md-task > .kit-check-box {
   position: absolute;
-  left: 0;
+  left: -20px;
   top: calc((var(--n-lh-md-body) - 14px) / 2);
   cursor: pointer;
 }

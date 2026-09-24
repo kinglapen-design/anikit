@@ -2,7 +2,11 @@
 // 文本预览（5.6 + 文本编辑稿轮）：txt = APP 内编辑（防抖 1s 自动保存，2026-08-23 用户定；编辑不进 undo）；
 // md = MarkDown 编辑器（本稿轮落地）——预览态 = markdown-it 渲染（排版 = styles/markdown.css 全局类，
 // 稿 = 布局/中间面板-内容容器-文本编辑；任务列表 = 复选框通用类可点 toggle、代码块右上角复制钮），
-// 点击正文进编辑态 = 全文源码编辑（防抖自动保存同 txt；悬浮栏换 MarkDown 工具栏，Esc / Ctrl+Enter 退回预览态）。
+// 点击正文进编辑态 = 全文源码编辑（防抖自动保存同 txt；悬浮栏换 MarkDown 工具栏，Esc / Ctrl+Enter /
+// 工具栏「返回预览」钮退回预览态）。
+// 编辑撤销（2026-09-25 走查补）：textarea 原生撤销遇程序化修改（工具栏动作 / toggle）即断栈——
+// 自实现快照历史（lib/mdHistory，组件会话级），编辑态 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y；
+// 与库撤销无关（「编辑不进 undo」口径不变，全局 Ctrl+Z 本对输入框让位）。
 // md 图片引用 = 库内封闭路径解析不了 → 渲染占位文本（09 待办：库内资产引用解析）；
 // md 链接本轮不可点（09 待办：默认浏览器打开）。
 // 保存竞态纪律：保存请求绑定加载时 assetId（loadedId），切素材先 flush 在途编辑再加载新内容——
@@ -11,6 +15,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { createMd } from "../lib/markdown";
 import { applyMdAction, toggleTaskLine } from "../lib/mdEdit";
+import { createMdHistory, type HistEntry } from "../lib/mdHistory";
 import { readTextAsset, writeTextAsset } from "../lib/textOps";
 import { useContentStore } from "../stores/content";
 import { usePreviewStore } from "../stores/preview";
@@ -43,6 +48,14 @@ const stateText = computed(() => {
 let loadedId: string | null = null;
 let timer = 0; // 防抖定时器（须在 load/watch 前声明——immediate watch 同步触发 load 会立即访问）
 
+// —— 编辑撤销栈（组件会话级；prevSnap = 最近一次已知的 draft+选区快照） ——
+const history = createMdHistory();
+let prevSnap: HistEntry = { text: "", start: 0, end: 0 };
+
+function snapOf(ta: HTMLTextAreaElement): HistEntry {
+  return { text: ta.value, start: ta.selectionStart, end: ta.selectionEnd };
+}
+
 async function load(): Promise<void> {
   const assetId = preview.current?.assetId;
   if (!assetId) return;
@@ -54,6 +67,8 @@ async function load(): Promise<void> {
   saveState.value = "";
   editing.value = false;
   preview.setMdEditing(false);
+  history.reset();
+  prevSnap = { text: "", start: 0, end: 0 };
   try {
     const r = await readTextAsset(assetId);
     if (loadedId !== assetId) return;
@@ -118,6 +133,7 @@ async function enterEdit(): Promise<void> {
   if (ta) {
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length); // 光标落末尾（接着写）
+    prevSnap = snapOf(ta); // 撤销基线 = 进入编辑态时刻
   }
 }
 
@@ -133,7 +149,54 @@ function onEditorKeydown(e: KeyboardEvent): void {
     e.stopPropagation();
     e.preventDefault();
     void exitEdit();
+    return;
   }
+  // 撤销 / 重做：preventDefault 禁 textarea 原生栈（程序化修改会断它，统一走自实现栈）；
+  // 不 stopPropagation——全局 Ctrl+Z 本对输入框让位（useGlobalKeys isEditableTarget）
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+    e.preventDefault();
+    if (e.shiftKey) doRedo();
+    else doUndo();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+    e.preventDefault();
+    doRedo();
+  }
+}
+
+function doUndo(): void {
+  const ta = editorRef.value;
+  const entry = history.undo(ta ? snapOf(ta) : prevSnap);
+  if (!entry) return;
+  applySnap(entry);
+}
+
+function doRedo(): void {
+  const ta = editorRef.value;
+  const entry = history.redo(ta ? snapOf(ta) : prevSnap);
+  if (!entry) return;
+  applySnap(entry);
+}
+
+function applySnap(entry: HistEntry): void {
+  draft.value = entry.text;
+  prevSnap = entry;
+  void nextTick(() => {
+    const ta = editorRef.value;
+    if (ta) {
+      ta.focus();
+      ta.setSelectionRange(entry.start, entry.end);
+    }
+  });
+}
+
+// 键入变更记录（@input 在 v-model 同步后触发：prevSnap 即变更前态；连续键入 800ms 合并一步）
+function onDraftInput(): void {
+  const ta = editorRef.value;
+  if (!ta || !isMd.value) return;
+  history.record(prevSnap, true);
+  prevSnap = snapOf(ta);
 }
 
 // —— 渲染态点击代理：复制钮 / 任务复选框 分流，其余进编辑态 ——
@@ -152,6 +215,7 @@ function onMdClick(e: MouseEvent): void {
   if (box) {
     const line = Number(box.dataset.taskLine);
     if (Number.isInteger(line) && line >= 0) {
+      history.record({ text: draft.value, start: 0, end: 0 }, false); // toggle = 独立撤销步（编辑态可撤）
       box.classList.toggle("on"); // 先原位播对勾动画；draft 触发重渲染后视觉态一致
       draft.value = toggleTaskLine(draft.value, line);
     }
@@ -165,10 +229,16 @@ watch(
   () => preview.mdActionSeq,
   () => {
     if (!editing.value || !isMd.value) return;
+    if (preview.mdActionName === "preview") {
+      void exitEdit(); // 工具栏「返回预览」钮（Esc 同义）
+      return;
+    }
     const ta = editorRef.value;
     if (!ta) return;
+    history.record(snapOf(ta), false); // 工具栏动作 = 独立撤销步
     const r = applyMdAction(draft.value, ta.selectionStart, ta.selectionEnd, preview.mdActionName);
     draft.value = r.text;
+    prevSnap = { text: r.text, start: r.start, end: r.end };
     void nextTick(() => {
       ta.focus();
       ta.setSelectionRange(r.start, r.end);
@@ -194,6 +264,7 @@ watch(
         v-model="draft"
         class="editor md-editor kit-scroll"
         spellcheck="false"
+        @input="onDraftInput"
         @keydown="onEditorKeydown"
       />
       <ScrollThumb :body="editing ? editorRef : mdScrollRef" />
