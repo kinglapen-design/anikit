@@ -192,6 +192,7 @@ async def main():
                 taskText0: body.querySelectorAll('li.md-task')[0]?.textContent.trim() ?? null,
                 gap: getComputedStyle(body).rowGap,
                 padL: getComputedStyle(body).paddingLeft,
+                padB: getComputedStyle(body).paddingBottom,
               };
             })()""")
             print("[A 预览态]", json.dumps(a, ensure_ascii=False))
@@ -206,7 +207,7 @@ async def main():
                     "bqbl": "2px", "bqblc": "rgb(36, 36, 36)", "bqc": "rgb(102, 102, 102)",
                     "prebg": "rgb(28, 28, 28)", "prebr": "8px", "prews": "pre-wrap",
                     "codefs": "14px", "codelh": "24px", "codec": "rgb(102, 102, 102)",
-                    "gap": "12px", "padL": "84px",
+                    "gap": "12px", "padL": "84px", "padB": "66px",
                 }
                 for k, want in exp.items():
                     if a.get(k) != want:
@@ -282,23 +283,30 @@ async def main():
             if not c or "代码块内容" not in c[-1]:
                 fails.append(f"[C] 剪贴板内容不符（{c}）")
 
-            # —— 场景 D：铅笔钮进编辑态（进编辑唯一入口 = 铅笔 / Ctrl+E） ——
+            # —— 场景 D：铅笔钮进编辑态（进编辑唯一入口 = 铅笔 / Ctrl+E）+ 壳宽自动展开（RO 根治） ——
+            d0 = await ev("document.querySelector('.fb-shell')?.offsetWidth ?? 0")  # 预览态壳宽（视图组 2 钮）
             await ev("document.querySelectorAll('.fbm-root > div')[0].querySelectorAll('button')[0].click()")
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(1.2)  # 组渲染 + RO 重测 + 300ms 壳宽动画
             d = await ev("""(() => ({
               ta: !!document.querySelector('.text-preview textarea.md-editor'),
               mdBar: !!document.querySelector('.fb-shell .fbm-root'),
               shellGone: document.querySelector('.fb-shell')?.classList.contains('gone') ?? null,
               groups: document.querySelectorAll('.fbm-root > div').length,
+              shellW: document.querySelector('.fb-shell')?.offsetWidth ?? 0,
+              clipOk: (() => { const r = document.querySelector('.fbm-root'); return r ? r.scrollWidth <= document.querySelector('.fb-shell').offsetWidth + 2 : null; })(),
               mdBodyVisible: !!document.querySelector('.text-preview .md-body')?.offsetParent,
             }))()""")
-            print("[D 铅笔进编辑]", json.dumps(d, ensure_ascii=False))
+            print("[D 铅笔进编辑]", json.dumps({"预览壳宽": d0, **(d or {})}, ensure_ascii=False))
             if not d or not d["ta"]:
                 fails.append("[D] 铅笔钮未进编辑态（textarea 未出现）")
             if not d or not d["mdBar"]:
                 fails.append("[D] 悬浮栏未切 MarkDown 工具栏")
             if d and d["groups"] != 5:
                 fails.append(f"[D] 编辑态工具栏应为 4 格式组 + 视图组 = 5 组（{d['groups']}）")
+            if d and d0 and d["shellW"] <= d0:
+                fails.append(f"[D] 工具栏没展开——壳宽未随组数增大（预览 {d0} → 编辑 {d['shellW']}）")
+            if d and d["clipOk"] is not True:
+                fails.append(f"[D] 工具栏内容被壳裁剪（scrollWidth 超壳宽，壳宽 {d['shellW']}）")
 
             # —— 场景 E：工具栏动作（bold 包裹选区 / h1 行首） ——
             await ev("""(() => {
@@ -413,20 +421,29 @@ async def main():
             if n2 is not True:
                 fails.append(f"[N] 预览态 Ctrl+E 未进编辑（{n2}）")
 
-            # —— 场景 O：分屏实时预览（双列 + 分割条拖动 + 右栏实时渲染）+ 眼睛钮回预览 ——
+            # —— 场景 O：分屏实时预览（双列 + 分割条拖动 + 单滚轮联动 + typewriter 跟滚）+ 眼睛钮回预览 ——
             await ev("document.querySelectorAll('.fbm-root > div')[4].querySelectorAll('button')[1].click()")  # 视图组·分屏
             await asyncio.sleep(0.6)
             o1 = await ev("""(() => ({
               bar: !!document.querySelector('.md-split-bar'),
               side: !!document.querySelector('.md-body.split-side'),
-              taGrow: document.querySelector('.md-edit-wrap .md-editor')?.style.flexGrow,
+              taGrow: document.querySelector('.md-edit-wrap .pane')?.style.flexGrow,
               viewBtns: document.querySelectorAll('.fbm-root > div')[4]?.querySelectorAll('button').length ?? -1,
+              thumbs: document.querySelectorAll('.md-edit-wrap .scroll-thumb').length,
+              sidePadB: getComputedStyle(document.querySelector('.md-body.split-side')).paddingBottom,
+              lineMarks: document.querySelectorAll('.md-body.split-side [data-line-start]').length,
             }))()""")
             print("[O1 分屏开]", json.dumps(o1, ensure_ascii=False))
             if not o1 or not o1["bar"] or not o1["side"]:
                 fails.append(f"[O] 分屏结构缺失（{o1}）")
             if o1 and o1["viewBtns"] != 2:
                 fails.append(f"[O] 视图组应为 2 钮（眼睛+分屏）（{o1['viewBtns']}）")
+            if o1 and o1["thumbs"] != 1:
+                fails.append(f"[O] 分屏应单滚轮（合并联动），实际 {o1['thumbs']} 个 ScrollThumb")
+            if o1 and o1["sidePadB"] != "66px":
+                fails.append(f"[O] 右栏底部遮挡补偿应为 66（{o1['sidePadB']}）")
+            if o1 and o1["lineMarks"] < 5:
+                fails.append(f"[O] 渲染块 data-line-start 注入不足（{o1['lineMarks']}）")
             # 分割条拖动：pointerdown → window move +200px → up；flexGrow 随 ratio 变
             await ev("""(() => {
               const bar = document.querySelector('.md-split-bar');
@@ -436,11 +453,39 @@ async def main():
               window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
             })()""")
             await asyncio.sleep(0.3)
-            o2 = await ev("document.querySelector('.md-edit-wrap .md-editor')?.style.flexGrow")
+            o2 = await ev("document.querySelector('.md-edit-wrap .pane')?.style.flexGrow")
             print("[O2 拖动]", o2)
             o2n = float(o2) if o2 else 0
             if not (0.25 <= o2n <= 0.75) or abs(o2n - 0.5) < 0.01:
                 fails.append(f"[O] 分割条拖动未改占比（{o2}）")
+            # 滚动联动（单滚轮语义）：先填充 30 个独立段落撑出两侧滚动空间（桩文档 19 行不足以滚；
+            # 单换行会被 md 折叠成一段）——左栏滚到 1/2 → 右栏按比例跟；右栏回 0 → 左栏跟回
+            await type_text("\n\n" + "填充滚动行\n\n" * 30)
+            await asyncio.sleep(0.6)
+            await ev("""(() => {
+              const ta = document.querySelector('.md-edit-wrap .md-editor');
+              ta.scrollTop = (ta.scrollHeight - ta.clientHeight) / 2;
+              ta.dispatchEvent(new Event('scroll'));
+            })()""")
+            await asyncio.sleep(0.3)
+            o2b = await ev("""(() => {
+              const ta = document.querySelector('.md-edit-wrap .md-editor');
+              const body = document.querySelector('.md-body.split-side');
+              const taMax = ta.scrollHeight - ta.clientHeight, bMax = body.scrollHeight - body.clientHeight;
+              return { taRatio: taMax > 0 ? ta.scrollTop / taMax : 0, bRatio: bMax > 0 ? body.scrollTop / bMax : 0 };
+            })()""")
+            await ev("""(() => {
+              const body = document.querySelector('.md-body.split-side');
+              body.scrollTop = 0;
+              body.dispatchEvent(new Event('scroll'));
+            })()""")
+            await asyncio.sleep(0.3)
+            o2c = await ev("document.querySelector('.md-edit-wrap .md-editor').scrollTop")
+            print("[O2b 联动]", json.dumps({"正向": o2b, "反向回滚": o2c}, ensure_ascii=False))
+            if not o2b or abs(o2b["taRatio"] - o2b["bRatio"]) > 0.06:
+                fails.append(f"[O] 正向联动不符（左 {o2b and o2b['taRatio']} vs 右 {o2b and o2b['bRatio']}）")
+            if o2c is None or abs(o2c) > 2:
+                fails.append(f"[O] 反向联动不符（右栏回 0 后左栏 {o2c}）")
             # 实时渲染：键入 **RRR** → 右栏 strong 即时出现
             await type_text("**RRR**")
             await asyncio.sleep(0.6)
@@ -448,6 +493,34 @@ async def main():
             print("[O3 实时渲染]", o3)
             if o3 is not True:
                 fails.append(f"[O] 分屏右栏未实时渲染（{o3}，期望存在 RRR strong）")
+            # typewriter 跟滚：光标移到第 49 行（填充块群中部，居中可达——文档头尾块受滚动钳制
+            # 物理上居不了中）→ 右栏滚到对应块并固定视口中间
+            o3b0 = await ev("document.querySelector('.md-body.split-side').scrollTop")
+            await ev("""(() => {
+              const ta = document.querySelector('.md-edit-wrap .md-editor');
+              const lines = ta.value.split('\\n');
+              const pos = lines.slice(0, 49).join('\\n').length + 1;
+              ta.setSelectionRange(pos, pos);
+              ta.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowLeft', bubbles: true }));
+            })()""")
+            await asyncio.sleep(0.5)
+            o3b = await ev("""(() => {
+              const body = document.querySelector('.md-body.split-side');
+              const blocks = [...body.querySelectorAll('[data-line-start]')];
+              const ta = document.querySelector('.md-edit-wrap .md-editor');
+              const line = ta.value.slice(0, ta.selectionStart).split('\\n').length - 1;
+              let t = null;
+              for (const el of blocks) { if (Number(el.dataset.lineStart) <= line) t = el; else break; }
+              if (!t) return { scroll: body.scrollTop, hit: false };
+              const bR = body.getBoundingClientRect(), tR = t.getBoundingClientRect();
+              return { scroll: body.scrollTop, hit: true,
+                       centerOff: Math.abs(tR.top + tR.height / 2 - (bR.top + bR.height / 2)) };
+            })()""")
+            print("[O3b typewriter]", json.dumps({"滚前": o3b0, **(o3b or {})}, ensure_ascii=False))
+            if not o3b or not o3b["hit"]:
+                fails.append(f"[O] typewriter 未命中光标行块（{o3b}）")
+            elif o3b["centerOff"] > 40:
+                fails.append(f"[O] 光标块未固定视口中间（偏移 {o3b['centerOff']}px，阈 40）")
             await shot("md-split")
             # 眼睛钮（视图组首钮）回预览
             await ev("document.querySelectorAll('.fbm-root > div')[4].querySelectorAll('button')[0].click()")

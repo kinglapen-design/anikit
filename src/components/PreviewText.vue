@@ -209,6 +209,62 @@ function onDraftInput(): void {
   if (!ta || !isMd.value) return;
   history.record(prevSnap, true);
   prevSnap = snapOf(ta);
+  scheduleSplitScroll();
+}
+
+// —— 分屏滚动（2026-09-25 用户定「两个滚动条合并成一个直接联动」）——
+// 单滚轮（右栏渲染体主体，贴右缘）；双向按比例联动（±1 阈值防往返震荡）；
+// 输入 / 光标移动 = typewriter 跟进：光标行对应渲染块滚到视口中间（用户「书写常在最下面，
+// 预览最后一行固定中间」），精调期间 linkLock 锁反向回写不拽左栏。
+let linkLock = 0;
+let splitScrollRaf = 0;
+
+function linkScroll(src: HTMLElement, dst: HTMLElement): void {
+  if (linkLock > 0) return;
+  const sMax = src.scrollHeight - src.clientHeight;
+  const dMax = dst.scrollHeight - dst.clientHeight;
+  if (sMax <= 0 || dMax <= 0) return;
+  const target = Math.round((src.scrollTop / sMax) * dMax);
+  if (Math.abs(dst.scrollTop - target) > 1) dst.scrollTop = target;
+}
+
+function onEditScroll(): void {
+  const ta = editorRef.value;
+  const body = mdSplitBodyRef.value;
+  if (ta && body) linkScroll(ta, body);
+}
+
+function onSideScroll(): void {
+  const ta = editorRef.value;
+  const body = mdSplitBodyRef.value;
+  if (ta && body) linkScroll(body, ta);
+}
+
+function scheduleSplitScroll(): void {
+  if (!split.value || splitScrollRaf) return;
+  splitScrollRaf = requestAnimationFrame(() => {
+    splitScrollRaf = 0;
+    const ta = editorRef.value;
+    const body = mdSplitBodyRef.value;
+    if (!ta || !body) return;
+    const line = ta.value.slice(0, ta.selectionStart).split("\n").length - 1;
+    let target: HTMLElement | null = null;
+    for (const el of body.querySelectorAll<HTMLElement>("[data-line-start]")) {
+      if (Number(el.dataset.lineStart) <= line) target = el;
+      else break;
+    }
+    if (!target) return;
+    linkLock++;
+    const bRect = body.getBoundingClientRect();
+    const tRect = target.getBoundingClientRect();
+    body.scrollTop += tRect.top - bRect.top - (bRect.height - tRect.height) / 2;
+    // scroll 事件异步派发窗口留两帧再解锁（反向回写不拽左栏）
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        linkLock--;
+      });
+    });
+  });
 }
 
 // —— 渲染态点击代理：复制钮 / 任务复选框 分流；其余 = 无操作（纯阅读可复制，进编辑走铅笔钮 / Ctrl+E）——
@@ -303,27 +359,34 @@ watch(
         @click="onMdClick"
       />
       <div v-if="editing" class="md-edit-wrap" :class="{ split }">
-        <textarea
-          ref="editorRef"
-          v-model="draft"
-          class="editor md-editor kit-scroll"
-          :style="split ? { flexGrow: splitRatio } : undefined"
-          spellcheck="false"
-          @input="onDraftInput"
-          @keydown="onEditorKeydown"
-        />
+        <div class="pane" :style="split ? { flexGrow: splitRatio } : undefined">
+          <textarea
+            ref="editorRef"
+            v-model="draft"
+            class="editor md-editor kit-scroll"
+            spellcheck="false"
+            @input="onDraftInput"
+            @keydown="onEditorKeydown"
+            @keyup="scheduleSplitScroll"
+            @click="scheduleSplitScroll"
+            @scroll.passive="onEditScroll"
+          />
+          <ScrollThumb v-if="!split" :body="editorRef" />
+        </div>
         <template v-if="split">
           <div class="md-split-bar" @pointerdown="onSplitDrag" />
-          <div
-            ref="mdSplitBodyRef"
-            class="md-body split-side kit-scroll"
-            :style="{ flexGrow: 1 - splitRatio }"
-            v-html="rendered"
-          />
+          <div class="pane" :style="{ flexGrow: 1 - splitRatio }">
+            <div
+              ref="mdSplitBodyRef"
+              class="md-body split-side kit-scroll"
+              v-html="rendered"
+              @scroll.passive="onSideScroll"
+            />
+            <ScrollThumb :body="mdSplitBodyRef" />
+          </div>
         </template>
       </div>
-      <ScrollThumb :body="editing ? editorRef : mdScrollRef" />
-      <ScrollThumb v-if="editing && split" :body="mdSplitBodyRef" />
+      <ScrollThumb v-if="!editing" :body="mdScrollRef" />
       <span v-if="saveState" class="save-state" :class="{ fail: saveState === 'fail' }">{{ stateText }}</span>
     </template>
     <!-- txt = 编辑态（textarea 即预览，防抖自动保存） -->
@@ -349,6 +412,11 @@ watch(
   flex: 1;
   min-height: 0;
 }
+/* 底部 66 遮挡补偿（§18 口径：距底 12 + 栏高 42 + 呼吸 12）——md 语境悬浮栏工具栏恒显，
+   预览态单栏渲染体同补（工具栏会挡最后一行，2026-09-25 三轮走查实机） */
+.text-preview > .md-body {
+  padding-bottom: 66px;
+}
 /* —— 编辑态（txt / md 源码共用基础档；md 版心随渲染态 84、底 66 让位悬浮栏工具栏——
    §18 遮挡补偿口径：距底 12 + 栏高 42 + 呼吸 12） —— */
 .editor {
@@ -368,14 +436,21 @@ watch(
   padding: var(--n-space-12) calc(var(--n-space-12) + var(--n-space-72)) 66px;
   font-family: var(--n-font-mono);
 }
-/* —— 编辑态容器（单栏 / 分屏双列） —— */
+/* —— 编辑态容器（单栏 / 分屏双列）；pane = 滚动容器包裹层（ScrollThumb 定位语境） —— */
 .md-edit-wrap {
   flex: 1;
   min-height: 0;
   display: flex;
 }
-.md-edit-wrap .editor {
+.md-edit-wrap .pane {
+  position: relative;
   flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+}
+.md-edit-wrap .pane .editor,
+.md-edit-wrap .pane .md-body {
+  flex: 1;
   min-width: 0;
 }
 /* 分屏 = 左源码右实时渲染（用户 2026-09-25 定）：两侧版心收窄 24（全宽 84 稿值为单栏档，
@@ -406,7 +481,7 @@ watch(
 .md-body.split-side {
   min-width: 0;
   overflow-y: auto;
-  padding: var(--n-space-12) var(--n-space-24) 0;
+  padding: var(--n-space-12) var(--n-space-24) 66px;
 }
 .save-state {
   position: absolute;

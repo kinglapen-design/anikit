@@ -11,8 +11,18 @@ const CHECK_SVG = getIcon("check-tiny").replace("<svg", '<svg class="kit-check-m
 const COPY_SVG = getIcon("copy");
 
 // 代码块包装：div.md-code + 复制钮（v-html 语境无 v-tip，钮义自明不加 title）；换行不横滚（markdown.css pre-wrap）
-function wrapCode(inner: string): string {
-  return `<div class="md-code">${inner}<button type="button" class="md-copy">${COPY_SVG}</button></div>`;
+// line = 源码起始行（0 起，分屏 typewriter 跟滚定位用，同 kitLineMap 口径）
+function wrapCode(inner: string, line: number): string {
+  const dataLine = line >= 0 ? ` data-line-start="${line}"` : "";
+  return `<div class="md-code"${dataLine}>${inner}<button type="button" class="md-copy">${COPY_SVG}</button></div>`;
+}
+
+// 块级元素源码行映射（分屏 typewriter 跟滚定位）：nesting=1 的块级 open token 一律挂 data-line-start
+function kitLineMap(state: StateCore): boolean {
+  for (const t of state.tokens) {
+    if (t.map && t.nesting === 1) t.attrSet("data-line-start", String(t.map[0]));
+  }
+  return false;
 }
 
 // 任务列表 core rule：list_item 首段 inline 以 `[ ] ` / `[x] ` 开头 → 剥前缀 + li.md-task + 注入复选框
@@ -53,9 +63,10 @@ export function createMd(): MdIt {
   md.renderer.rules.image = (tokens, idx) =>
     `<span class="md-img">[图片 ${tokens[idx].content || "未命名"}]</span>`;
   md.core.ruler.after("inline", "kit-task-list", kitTaskList);
+  md.core.ruler.after("inline", "kit-line-map", kitLineMap);
   const fence0 = md.renderer.rules.fence!;
-  md.renderer.rules.fence = (t, i, o, e, s) => wrapCode(fence0(t, i, o, e, s));
+  md.renderer.rules.fence = (t, i, o, e, s) => wrapCode(fence0(t, i, o, e, s), t[i].map?.[0] ?? -1);
   const codeBlock0 = md.renderer.rules.code_block!;
-  md.renderer.rules.code_block = (t, i, o, e, s) => wrapCode(codeBlock0(t, i, o, e, s));
+  md.renderer.rules.code_block = (t, i, o, e, s) => wrapCode(codeBlock0(t, i, o, e, s), t[i].map?.[0] ?? -1);
   return md;
 }

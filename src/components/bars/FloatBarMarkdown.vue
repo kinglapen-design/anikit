@@ -10,12 +10,23 @@
 // 只出事件（action 语义名）；实际操作 = preview.requestMdAction → PreviewText 执行
 // （lib/mdEdit 19 动作；edit / preview / split = 模式与分屏切换）。
 // 根 mousedown.prevent = 点击不抢焦点（§36 搜索栏同口径）——编辑器 textarea 选区全程保持。
-import { computed } from "vue";
+import { computed, nextTick, watch } from "vue";
 import IconButton from "../buttons/IconButton.vue";
 import "./bars.css";
 
 const props = withDefaults(defineProps<{ editing?: boolean }>(), { editing: false });
-const emit = defineEmits<{ action: [name: string] }>();
+const emit = defineEmits<{ action: [name: string]; "expanded-change": [v: boolean] }>();
+
+// 双态组数增减 → 内容宽变（2026-09-25 三轮走查「工具栏没展开」根治）：复用搜索栏
+// expanded-change 通道催 FloatBar 重测壳宽（probe max-content；根盒恒 100% 随壳，
+// ResizeObserver 观测不到内容变化——必须由组件自知上报，RO 方案已撤）
+watch(
+  () => props.editing,
+  async (v) => {
+    await nextTick(); // 组渲染完成后上报（probe 量的是新内容）
+    emit("expanded-change", v);
+  },
+);
 
 interface MdIcon {
   name: string;
