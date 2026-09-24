@@ -30,7 +30,8 @@ const THUMB_ALPHA: u8 = 255;
 /// 播放条 / 预览大图柱 alpha（100%——前端走 CSS mask 调色，mask 取图 alpha：
 /// 60% 会把品牌紫稀释成 60%，故 mask 用途必须满 alpha，2026-07-26 用户定）
 const MASK_ALPHA: u8 = 255;
-/// 波形上下留白（px）
+/// 波形上下留白（px，272 高大图口径）；小高度按 h/27 等比收缩（见 render_waveform）——
+/// 恒 10 会把 18px 播放条请求的振幅吃成 0（全图只剩 1px 中线 = 看起来全空，2026-09-25 实机报）
 const WAVEFORM_MARGIN: u32 = 10;
 
 /// 视频元数据（导入写 metadata.width/height/duration；fps 5.3 帧化改造起写入，
@@ -159,7 +160,10 @@ pub fn decode_preview_image(path: &Path) -> Option<DynamicImage> {
 /// 左右声道联合归一；静音段为细中线。
 fn render_waveform(samples_l: &[f32], samples_r: &[f32], w: u32, h: u32, bar_alpha: u8) -> RgbaImage {
   let cy = (h / 2) as f32;
-  let max_half = (h / 2).saturating_sub(WAVEFORM_MARGIN) as f32;
+  // 留白随高度等比收缩（10/272 原比例）：小高度不被吃光——18px 播放条高 margin 0 满幅、
+  // 48px margin 1；272 及以上恒 10（原 5.1 大图口径不变）
+  let margin = WAVEFORM_MARGIN.min(h / 27);
+  let max_half = (h / 2).saturating_sub(margin) as f32;
   let max_abs = samples_l
     .iter()
     .chain(samples_r.iter())
@@ -317,6 +321,15 @@ mod tests {
       assert_eq!((img.width(), img.height()), (w, h));
       assert!(img.get_pixel(w / 2, h / 2).0[3] > 0, "{w}x{h} 中线应有波形");
     }
+  }
+
+  #[test]
+  fn render_waveform_small_height_keeps_amplitude() {
+    // 回归钉（2026-09-25 实机报）：18px 播放条高请求，留白恒 10 时 max_half 被吃成 0、
+    // 全图只剩 1px 中线（看起来全空）——留白等比收缩后 0.8 振幅柱顶距中线约 7px
+    let samples: Vec<f32> = (0..4096).map(|i| if i % 2 == 0 { 0.8 } else { -0.8 }).collect();
+    let img = render_waveform(&samples, &samples, 1200, 18, MASK_ALPHA);
+    assert!(img.get_pixel(10, 3).0[3] > 0, "18px 高小图振幅不应被留白吃光（cy-6 处应有波形）");
   }
 
   #[test]
