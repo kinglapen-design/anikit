@@ -10,10 +10,9 @@ import { getIcon } from "./icons";
 const CHECK_SVG = getIcon("check-tiny").replace("<svg", '<svg class="kit-check-mark"');
 const COPY_SVG = getIcon("copy");
 
-// 代码块包装：pre 挂横滚类 + 复制钮（v-html 语境无 v-tip，钮义自明不加 title）
+// 代码块包装：div.md-code + 复制钮（v-html 语境无 v-tip，钮义自明不加 title）；换行不横滚（markdown.css pre-wrap）
 function wrapCode(inner: string): string {
-  const pre = inner.replace("<pre>", '<pre class="kit-scroll-x">');
-  return `<div class="md-code">${pre}<button type="button" class="md-copy">${COPY_SVG}</button></div>`;
+  return `<div class="md-code">${inner}<button type="button" class="md-copy">${COPY_SVG}</button></div>`;
 }
 
 // 任务列表 core rule：list_item 首段 inline 以 `[ ] ` / `[x] ` 开头 → 剥前缀 + li.md-task + 注入复选框

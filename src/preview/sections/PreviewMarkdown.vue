@@ -34,7 +34,7 @@ import AppIcon from "../../components/AppIcon.vue";
         </blockquote>
         <p>神对诺亚说：</p>
         <div class="md-code">
-          <pre class="kit-scroll-x"><code>// AniKit 前端入口（阶段 1：三栏主窗口骨架）
+          <pre><code>// AniKit 前端入口（阶段 1：三栏主窗口骨架）
 import { createApp } from "vue";
 import { createPinia } from "pinia";
 import App from "./App.vue";

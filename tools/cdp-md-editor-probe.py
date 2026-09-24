@@ -182,7 +182,7 @@ async def main():
                 h3fs: cs('h3', 'fontSize'), h3lh: cs('h3', 'lineHeight'),
                 pfs: cs('p', 'fontSize'), plh: cs('p', 'lineHeight'), pc: cs('p', 'color'),
                 bqbl: cs('blockquote', 'borderLeftWidth'), bqblc: cs('blockquote', 'borderLeftColor'), bqc: cs('blockquote', 'color'),
-                prebg: precs?.backgroundColor, prebc: precs?.borderColor, prebr: precs?.borderRadius,
+                prebg: precs?.backgroundColor, prebc: precs?.borderColor, prebr: precs?.borderRadius, prews: precs?.whiteSpace,
                 codefs: cs('.md-code code', 'fontSize'), codelh: cs('.md-code code', 'lineHeight'), codec: cs('.md-code code', 'color'),
                 copyBtn: !!body.querySelector('.md-code .md-copy'),
                 tasks: body.querySelectorAll('li.md-task').length,
@@ -204,7 +204,7 @@ async def main():
                     "h2fs": "26px", "h2lh": "36px", "h3fs": "22px", "h3lh": "32px",
                     "pfs": "15px", "plh": "25px", "pc": "rgb(153, 153, 153)",
                     "bqbl": "2px", "bqblc": "rgb(36, 36, 36)", "bqc": "rgb(102, 102, 102)",
-                    "prebg": "rgb(28, 28, 28)", "prebr": "8px",
+                    "prebg": "rgb(28, 28, 28)", "prebr": "8px", "prews": "pre-wrap",
                     "codefs": "14px", "codelh": "24px", "codec": "rgb(102, 102, 102)",
                     "gap": "12px", "padL": "84px",
                 }
@@ -242,6 +242,23 @@ async def main():
                 if abs(j["box"] - (j["plain"] - 20)) > 1.0:
                     fails.append(f"[J] 复选框未挂 marker 列（框 {j['box']}，期望 ≈{j['plain'] - 20}）")
 
+            # —— 场景 M：预览态点击文字不进编辑（2026-09-25 走查「只想复制文字」）——
+            await ev("document.querySelector('.text-preview .md-body p').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
+            await asyncio.sleep(0.5)
+            m = await ev("""(() => ({
+              ta: !!document.querySelector('.text-preview textarea.md-editor'),
+              mdBar: !!document.querySelector('.fb-shell .fbm-root'),
+              groups: document.querySelectorAll('.fbm-root > div').length,
+              viewBtns: document.querySelectorAll('.fbm-root > div')[0]?.querySelectorAll('button').length ?? -1,
+            }))()""")
+            print("[M 预览不主动编辑]", json.dumps(m, ensure_ascii=False))
+            if not m or m["ta"]:
+                fails.append(f"[M] 预览态点击文字误进编辑（{m}）")
+            if m and m["mdBar"] is not True:
+                fails.append(f"[M] md 语境悬浮栏未恒显（{m}）")
+            if m and (m["groups"] != 1 or m["viewBtns"] != 2):
+                fails.append(f"[M] 预览态工具栏应为仅视图组 2 钮（groups={m['groups']} btns={m['viewBtns']}）")
+
             # —— 场景 B：任务复选框 toggle → 防抖回写 ——
             await ev("document.querySelector('.kit-check-box[data-task-line=\\'15\\']').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
             await asyncio.sleep(1.8)  # 防抖 1s + 余量
@@ -265,22 +282,23 @@ async def main():
             if not c or "代码块内容" not in c[-1]:
                 fails.append(f"[C] 剪贴板内容不符（{c}）")
 
-            # —— 场景 D：点击正文进编辑态（textarea + 悬浮栏 MarkDown 工具栏） ——
-            await ev("document.querySelector('.text-preview .md-body p').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
+            # —— 场景 D：铅笔钮进编辑态（进编辑唯一入口 = 铅笔 / Ctrl+E） ——
+            await ev("document.querySelectorAll('.fbm-root > div')[0].querySelectorAll('button')[0].click()")
             await asyncio.sleep(1.0)
             d = await ev("""(() => ({
               ta: !!document.querySelector('.text-preview textarea.md-editor'),
               mdBar: !!document.querySelector('.fb-shell .fbm-root'),
               shellGone: document.querySelector('.fb-shell')?.classList.contains('gone') ?? null,
+              groups: document.querySelectorAll('.fbm-root > div').length,
               mdBodyVisible: !!document.querySelector('.text-preview .md-body')?.offsetParent,
             }))()""")
-            print("[D 编辑态]", json.dumps(d, ensure_ascii=False))
+            print("[D 铅笔进编辑]", json.dumps(d, ensure_ascii=False))
             if not d or not d["ta"]:
-                fails.append("[D] 编辑态 textarea 未出现")
+                fails.append("[D] 铅笔钮未进编辑态（textarea 未出现）")
             if not d or not d["mdBar"]:
                 fails.append("[D] 悬浮栏未切 MarkDown 工具栏")
-            if d and d["shellGone"] is not False:
-                fails.append(f"[D] 编辑态悬浮栏仍退场（gone={d and d['shellGone']}）")
+            if d and d["groups"] != 5:
+                fails.append(f"[D] 编辑态工具栏应为 4 格式组 + 视图组 = 5 组（{d['groups']}）")
 
             # —— 场景 E：工具栏动作（bold 包裹选区 / h1 行首） ——
             await ev("""(() => {
@@ -325,22 +343,24 @@ async def main():
               ta: !!document.querySelector('.text-preview textarea.md-editor'),
               mdBodyVisible: !!document.querySelector('.text-preview .md-body')?.offsetParent,
               mdBar: !!document.querySelector('.fb-shell .fbm-root'),
-              shellGone: document.querySelector('.fb-shell')?.classList.contains('gone') ?? null,
+              groups: document.querySelectorAll('.fbm-root > div').length,
               boldRendered: !!document.querySelector('.text-preview .md-body strong'),
               h1Count: document.querySelectorAll('.text-preview .md-body h1').length,
             }))()""")
             print("[F 退出]", json.dumps(f, ensure_ascii=False))
             if not f or f["ta"]:
                 fails.append("[F] Esc 后编辑态 textarea 仍在")
-            if f and f["mdBar"]:
-                fails.append("[F] 退出编辑态后 MarkDown 工具栏未收")
+            if f and f["mdBar"] is not True:
+                fails.append("[F] 退出编辑态后预览工具栏未保持（md 语境应恒显视图组）")
+            if f and f["groups"] != 1:
+                fails.append(f"[F] 预览态工具栏应为仅视图组（groups={f['groups']}）")
             if f and f["boldRendered"] is not True:
                 fails.append("[F] bold 未渲染回预览态（strong 缺失）")
             if f and f["h1Count"] != 2:
                 fails.append(f"[F] h1 计数不符（{f['h1Count']}，期望 2 = 原标题 + 工具栏新设）")
 
             # —— 场景 I：编辑撤销栈（2026-09-25 走查「没有接入撤销」）——键入 800ms 合并 / 工具栏独立步 / Ctrl+Z / Ctrl+Shift+Z ——
-            await ev("document.querySelector('.text-preview .md-body p').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
+            await ev("document.querySelectorAll('.fbm-root > div')[0].querySelectorAll('button')[0].click()")  # 铅笔进编辑
             await asyncio.sleep(0.8)
             async def type_text(t):  # 编程改值不触发原生 input——手动 dispatch 驱动 v-model 与记录点
                 await ev(f"""(() => {{
@@ -380,20 +400,66 @@ async def main():
             if not i3 or i3["bold"] is not True or i3["bbb"] is not True:
                 fails.append(f"[I] 重做失败（{i3}，期望 bold + BBB 全回）")
 
-            # —— 场景 K：工具栏「返回预览」钮（走查「怎么切换到预览」可见出口） ——
-            k0 = await ev("(() => { const g = document.querySelectorAll('.fbm-root > div')[4]; return g ? g.querySelectorAll('button').length : -1; })()")
-            await ev("document.querySelectorAll('.fbm-root > div')[4].querySelector('button').click()")
+            # —— 场景 N：Ctrl+E 编辑↔预览互切（编辑态 textarea 自拦退出；预览态全局追加进编辑） ——
+            await ev("document.querySelector('.text-preview textarea.md-editor').dispatchEvent(new KeyboardEvent('keydown', { key: 'e', ctrlKey: true, bubbles: true }))")
+            await asyncio.sleep(0.6)
+            n1 = await ev("!!document.querySelector('.text-preview textarea.md-editor')")
+            await ev("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', ctrlKey: true, bubbles: true }))")
+            await asyncio.sleep(0.8)
+            n2 = await ev("!!document.querySelector('.text-preview textarea.md-editor')")
+            print("[N Ctrl+E]", json.dumps({"退出": n1, "进入": n2}, ensure_ascii=False))
+            if n1 is not False:
+                fails.append(f"[N] 编辑态 Ctrl+E 未退出（{n1}）")
+            if n2 is not True:
+                fails.append(f"[N] 预览态 Ctrl+E 未进编辑（{n2}）")
+
+            # —— 场景 O：分屏实时预览（双列 + 分割条拖动 + 右栏实时渲染）+ 眼睛钮回预览 ——
+            await ev("document.querySelectorAll('.fbm-root > div')[4].querySelectorAll('button')[1].click()")  # 视图组·分屏
+            await asyncio.sleep(0.6)
+            o1 = await ev("""(() => ({
+              bar: !!document.querySelector('.md-split-bar'),
+              side: !!document.querySelector('.md-body.split-side'),
+              taGrow: document.querySelector('.md-edit-wrap .md-editor')?.style.flexGrow,
+              viewBtns: document.querySelectorAll('.fbm-root > div')[4]?.querySelectorAll('button').length ?? -1,
+            }))()""")
+            print("[O1 分屏开]", json.dumps(o1, ensure_ascii=False))
+            if not o1 or not o1["bar"] or not o1["side"]:
+                fails.append(f"[O] 分屏结构缺失（{o1}）")
+            if o1 and o1["viewBtns"] != 2:
+                fails.append(f"[O] 视图组应为 2 钮（眼睛+分屏）（{o1['viewBtns']}）")
+            # 分割条拖动：pointerdown → window move +200px → up；flexGrow 随 ratio 变
+            await ev("""(() => {
+              const bar = document.querySelector('.md-split-bar');
+              const r = bar.getBoundingClientRect();
+              bar.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.left + 2 }));
+              window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: r.left + 202 }));
+              window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+            })()""")
+            await asyncio.sleep(0.3)
+            o2 = await ev("document.querySelector('.md-edit-wrap .md-editor')?.style.flexGrow")
+            print("[O2 拖动]", o2)
+            o2n = float(o2) if o2 else 0
+            if not (0.25 <= o2n <= 0.75) or abs(o2n - 0.5) < 0.01:
+                fails.append(f"[O] 分割条拖动未改占比（{o2}）")
+            # 实时渲染：键入 **RRR** → 右栏 strong 即时出现
+            await type_text("**RRR**")
+            await asyncio.sleep(0.6)
+            o3 = await ev("[...document.querySelectorAll('.md-body.split-side strong')].some((s) => s.textContent === 'RRR')")
+            print("[O3 实时渲染]", o3)
+            if o3 is not True:
+                fails.append(f"[O] 分屏右栏未实时渲染（{o3}，期望存在 RRR strong）")
+            await shot("md-split")
+            # 眼睛钮（视图组首钮）回预览
+            await ev("document.querySelectorAll('.fbm-root > div')[4].querySelectorAll('button')[0].click()")
             await asyncio.sleep(0.8)
             k1 = await ev("""(() => ({
               ta: !!document.querySelector('.text-preview textarea.md-editor'),
               mdBar: !!document.querySelector('.fb-shell .fbm-root'),
-              mdBodyVisible: !!document.querySelector('.text-preview .md-body')?.offsetParent,
+              rrr: !!document.querySelector('.text-preview .md-body strong'),
             }))()""")
-            print("[K 返回预览钮]", json.dumps({"钮数": k0, **(k1 or {})}, ensure_ascii=False))
-            if k0 != 1:
-                fails.append(f"[K] 第五组（返回预览）钮数不符（{k0}，期望 1）")
-            if not k1 or k1["ta"] or k1["mdBar"] or k1["mdBodyVisible"] is not True:
-                fails.append(f"[K] 点击后未回预览态（{k1}）")
+            print("[O4 眼睛回预览]", json.dumps(k1, ensure_ascii=False))
+            if not k1 or k1["ta"] or k1["mdBar"] is not True or k1["rrr"] is not True:
+                fails.append(f"[O] 眼睛钮未回预览态（{k1}）")
 
             # —— 场景 G：回归——png 卡片预览仍走 img ——
             await ev("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))")

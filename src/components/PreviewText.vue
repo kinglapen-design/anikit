@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // 文本预览（5.6 + 文本编辑稿轮）：txt = APP 内编辑（防抖 1s 自动保存，2026-08-23 用户定；编辑不进 undo）；
-// md = MarkDown 编辑器（本稿轮落地）——预览态 = markdown-it 渲染（排版 = styles/markdown.css 全局类，
-// 稿 = 布局/中间面板-内容容器-文本编辑；任务列表 = 复选框通用类可点 toggle、代码块右上角复制钮），
-// 点击正文进编辑态 = 全文源码编辑（防抖自动保存同 txt；悬浮栏换 MarkDown 工具栏，Esc / Ctrl+Enter /
-// 工具栏「返回预览」钮退回预览态）。
+// md = MarkDown 编辑器（本稿轮落地 + 二轮走查改版）——预览态 = markdown-it 渲染（排版 = styles/markdown.css
+// 全局类；任务列表 = 复选框通用类可点 toggle、代码块右上角复制钮；**纯阅读不主动进编辑**——点击文字 =
+// 选中复制，进编辑唯一入口 = 悬浮栏铅笔钮 / Ctrl+E，2026-09-25 用户「只想复制文字」定）。
+// 编辑态 = 全文源码编辑（防抖自动保存同 txt；悬浮栏换全格式工具栏，眼睛钮 / Esc / Ctrl+Enter / Ctrl+E 回预览）；
+// 分屏 = 工具栏分屏钮开：左源码右实时渲染（同 draft 驱动），中间分割条左右拖（splitRatio 会话级）。
 // 编辑撤销（2026-09-25 走查补）：textarea 原生撤销遇程序化修改（工具栏动作 / toggle）即断栈——
 // 自实现快照历史（lib/mdHistory，组件会话级），编辑态 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y；
 // 与库撤销无关（「编辑不进 undo」口径不变，全局 Ctrl+Z 本对输入框让位）。
@@ -32,8 +33,11 @@ const draft = ref(""); // 编辑草稿（md 渲染源 = 草稿，复选框 toggl
 const loadError = ref<string | null>(null);
 const saveState = ref<"" | "saving" | "saved" | "fail">("");
 const editing = ref(false); // md 编辑态（false = 渲染预览态）
+const split = ref(false); // 分屏（左源码右实时渲染，会话级；切素材重置）
+const splitRatio = ref(0.5); // 分屏左栏宽度占比（分割条拖动，clamp 0.25-0.75）
 const mdScrollRef = ref<HTMLElement>();
 const editorRef = ref<HTMLTextAreaElement>();
+const mdSplitBodyRef = ref<HTMLElement>(); // 分屏右栏渲染体（ScrollThumb 第二轨）
 
 const md = createMd();
 const rendered = computed(() => (isMd.value && draft.value ? md.render(draft.value) : ""));
@@ -66,6 +70,7 @@ async function load(): Promise<void> {
   loadError.value = null;
   saveState.value = "";
   editing.value = false;
+  split.value = false;
   preview.setMdEditing(false);
   history.reset();
   prevSnap = { text: "", start: 0, end: 0 };
@@ -151,6 +156,13 @@ function onEditorKeydown(e: KeyboardEvent): void {
     void exitEdit();
     return;
   }
+  // Ctrl+E = 编辑↔预览互切（编辑态内 = 回预览；预览态进编辑 = useGlobalKeys 追加分支；
+  // 输入框内全局快捷键让位，不冲突「发送至 Animate」fla 键）
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
+    e.preventDefault();
+    void exitEdit();
+    return;
+  }
   // 撤销 / 重做：preventDefault 禁 textarea 原生栈（程序化修改会断它，统一走自实现栈）；
   // 不 stopPropagation——全局 Ctrl+Z 本对输入框让位（useGlobalKeys isEditableTarget）
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
@@ -199,7 +211,7 @@ function onDraftInput(): void {
   prevSnap = snapOf(ta);
 }
 
-// —— 渲染态点击代理：复制钮 / 任务复选框 分流，其余进编辑态 ——
+// —— 渲染态点击代理：复制钮 / 任务复选框 分流；其余 = 无操作（纯阅读可复制，进编辑走铅笔钮 / Ctrl+E）——
 function onMdClick(e: MouseEvent): void {
   const t = e.target as HTMLElement;
   const copy = t.closest(".md-copy");
@@ -219,24 +231,56 @@ function onMdClick(e: MouseEvent): void {
       box.classList.toggle("on"); // 先原位播对勾动画；draft 触发重渲染后视觉态一致
       draft.value = toggleTaskLine(draft.value, line);
     }
-    return;
   }
-  void enterEdit();
+}
+
+// —— 分屏分割条拖动（§9 ③ 窗口监听口径）：splitRatio clamp 0.25-0.75 ——
+function onSplitDrag(e: PointerEvent): void {
+  e.preventDefault();
+  const bar = e.currentTarget as HTMLElement;
+  const wrap = bar.parentElement;
+  if (!wrap) return;
+  bar.classList.add("drag");
+  const rect = wrap.getBoundingClientRect();
+  const move = (ev: PointerEvent): void => {
+    splitRatio.value = Math.min(0.75, Math.max(0.25, (ev.clientX - rect.left) / rect.width));
+  };
+  const up = (): void => {
+    bar.classList.remove("drag");
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
 }
 
 // —— 悬浮栏 MarkDown 工具栏动作（preview.requestMdAction → seq 推进；栏内 mousedown.prevent 保选区）——
 watch(
   () => preview.mdActionSeq,
   () => {
-    if (!editing.value || !isMd.value) return;
-    if (preview.mdActionName === "preview") {
-      void exitEdit(); // 工具栏「返回预览」钮（Esc 同义）
+    if (!isMd.value) return;
+    const name = preview.mdActionName;
+    if (name === "edit") {
+      void enterEdit(); // 铅笔钮 / Ctrl+E（预览态）
       return;
     }
+    if (name === "preview") {
+      void exitEdit(); // 眼睛钮（Esc / Ctrl+E 同义）
+      return;
+    }
+    if (name === "split") {
+      if (editing.value) split.value = !split.value;
+      else {
+        split.value = true; // 预览态点分屏 = 直接进分屏编辑
+        void enterEdit();
+      }
+      return;
+    }
+    if (!editing.value) return;
     const ta = editorRef.value;
     if (!ta) return;
     history.record(snapOf(ta), false); // 工具栏动作 = 独立撤销步
-    const r = applyMdAction(draft.value, ta.selectionStart, ta.selectionEnd, preview.mdActionName);
+    const r = applyMdAction(draft.value, ta.selectionStart, ta.selectionEnd, name);
     draft.value = r.text;
     prevSnap = { text: r.text, start: r.start, end: r.end };
     void nextTick(() => {
@@ -249,7 +293,7 @@ watch(
 
 <template>
   <div class="text-preview">
-    <!-- md = 编辑器：预览态渲染（v-show 保滚动位）↔ 编辑态源码 textarea -->
+    <!-- md = 编辑器：预览态渲染（v-show 保滚动位）↔ 编辑态（单栏 / 分屏左码右渲） -->
     <template v-if="isMd">
       <div
         v-show="!editing"
@@ -258,16 +302,28 @@ watch(
         v-html="rendered"
         @click="onMdClick"
       />
-      <textarea
-        v-if="editing"
-        ref="editorRef"
-        v-model="draft"
-        class="editor md-editor kit-scroll"
-        spellcheck="false"
-        @input="onDraftInput"
-        @keydown="onEditorKeydown"
-      />
+      <div v-if="editing" class="md-edit-wrap" :class="{ split }">
+        <textarea
+          ref="editorRef"
+          v-model="draft"
+          class="editor md-editor kit-scroll"
+          :style="split ? { flexGrow: splitRatio } : undefined"
+          spellcheck="false"
+          @input="onDraftInput"
+          @keydown="onEditorKeydown"
+        />
+        <template v-if="split">
+          <div class="md-split-bar" @pointerdown="onSplitDrag" />
+          <div
+            ref="mdSplitBodyRef"
+            class="md-body split-side kit-scroll"
+            :style="{ flexGrow: 1 - splitRatio }"
+            v-html="rendered"
+          />
+        </template>
+      </div>
       <ScrollThumb :body="editing ? editorRef : mdScrollRef" />
+      <ScrollThumb v-if="editing && split" :body="mdSplitBodyRef" />
       <span v-if="saveState" class="save-state" :class="{ fail: saveState === 'fail' }">{{ stateText }}</span>
     </template>
     <!-- txt = 编辑态（textarea 即预览，防抖自动保存） -->
@@ -311,6 +367,46 @@ watch(
 .md-editor {
   padding: var(--n-space-12) calc(var(--n-space-12) + var(--n-space-72)) 66px;
   font-family: var(--n-font-mono);
+}
+/* —— 编辑态容器（单栏 / 分屏双列） —— */
+.md-edit-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.md-edit-wrap .editor {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* 分屏 = 左源码右实时渲染（用户 2026-09-25 定）：两侧版心收窄 24（全宽 84 稿值为单栏档，
+   半宽沿用太奢）；分割条 = 1px 通用/三级线 + 左右 2px 命中扩边，hover / 拖拽 = 品牌色
+   （全 app 拖拽线同色系口径：插入提示 / 框选 §22） */
+.md-edit-wrap.split .md-editor {
+  padding: var(--n-space-12) var(--n-space-24) 66px;
+}
+.md-split-bar {
+  flex: none;
+  width: 5px;
+  cursor: col-resize;
+  position: relative;
+}
+.md-split-bar::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--n-g3);
+}
+.md-split-bar:hover::before,
+.md-split-bar.drag::before {
+  background: var(--n-brand);
+}
+.md-body.split-side {
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--n-space-12) var(--n-space-24) 0;
 }
 .save-state {
   position: absolute;

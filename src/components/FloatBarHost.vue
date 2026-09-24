@@ -45,16 +45,20 @@ const notes = usePreviewNotesStore();
 
 // ─── 模式与形态分发 ───
 // spec 按 kind 查表（barSpecs 注册表）；预览态且有 spec = play 模式，否则 search；
-// md 文本编辑态（preview.mdEditing）= markdown 工具栏模式（文本编辑稿轮接入，优先级最高）
+// md 文本语境（kind text 且 ext md）= markdown 工具栏恒显（2026-09-25 二轮走查改版：
+// 预览态 = 仅视图组（铅笔 / 分屏——进编辑唯一入口，预览不再点击文字进编辑）；编辑态 = 全格式组）
 const spec = computed(() => (props.previewActive ? playBarSpecFor(preview.kind) : null));
-const mdEditActive = computed(
-  () => props.previewActive && preview.kind === "text" && preview.mdEditing,
+const mdActive = computed(
+  () =>
+    props.previewActive &&
+    preview.kind === "text" &&
+    (preview.current?.ext ?? "").toLowerCase() === "md",
 );
 const mode = computed<"search" | "markdown" | "play">(() =>
-  mdEditActive.value ? "markdown" : spec.value ? "play" : "search",
+  mdActive.value ? "markdown" : spec.value ? "play" : "search",
 );
-// 预览态查不到 spec（image/font/text/other）= 宽度+透明度退场（稿 prose）；md 编辑态恒显示工具栏；其余恒显示
-const barVisible = computed(() => mdEditActive.value || !(props.previewActive && !spec.value));
+// 预览态查不到 spec（image/font/text/other）= 宽度+透明度退场（稿 prose）；md 语境恒显示工具栏；其余恒显示
+const barVisible = computed(() => mdActive.value || !(props.previewActive && !spec.value));
 
 // ─── 搜索侧（panelId/viewKey 具备才接 store）──
 const hasSearch = computed(() => !!props.panelId && !!props.viewKey);
@@ -325,6 +329,7 @@ function noteRemove(i: number): void {
       @progress-drag-start="spec?.dragStart?.()"
       @progress-drag-end="spec?.dragEnd?.()"
       @action="preview.requestMdAction($event)"
+      :editing="mdActive ? preview.mdEditing : undefined"
     >
       <!-- 音频语境：进度区换竖条波形（spec.wave = 音频族标志；音乐预览稿 prose「只在播放条上放波形图」） -->
       <template v-if="spec?.wave" #progress>

@@ -1,16 +1,20 @@
 <script setup lang="ts">
-// MarkDown 工具栏：段落（H1-H6 / 正文 / 引用）/ 列表（无序 / 有序 / 任务）/ 插入（表格 / 代码块 /
-// 行内代码块 / 插入链接 / 分割线）/ 格式（加粗 / 斜体 / 删除线）四组，组间 .fb-group 左分隔线（稿 border-left 方案）；
-// 第五组 = 返回预览钮（2026-09-25 走查「怎么切换到预览」：chevron-large 原样朝左 = 返回，与预览工具栏返回钮同图标同语义）。
+// MarkDown 工具栏（双态，2026-09-25 二轮走查改版）：
+// 编辑态（editing=true）= 段落（H1-H6 / 正文 / 引用）/ 列表（无序 / 有序 / 任务）/ 插入（表格 / 代码块 /
+// 行内代码块 / 插入链接 / 分割线）/ 格式（加粗 / 斜体 / 删除线）四组 + 视图组（眼睛 = 回预览 / 分屏）；
+// 预览态（editing=false）= 仅视图组（铅笔 = 进编辑 / 分屏）——预览态纯阅读不主动进编辑（用户「只想复制文字」），
+// 进编辑唯一入口 = 铅笔钮 / Ctrl+E（互切）。
 // 图标 = 按钮族 IconButton bare 复用（18 实寸 亮色/三级，hover 升二级——稿 hover-按钮组口径）；
-// 悬停 tip = IconButton title prop 走 v-tip（2026-09-25 走查补，内容容器轮同口径）。
-// 只出事件（action = 语义名）；实际操作 = preview.requestMdAction → PreviewText 编辑态执行（lib/mdEdit；
-// action "preview" = 退出编辑态回预览，Esc 同义）。
-// 根 mousedown.prevent = 点击不抢焦点（§36 搜索栏同口径）——编辑器 textarea 选区全程保持，
-// 动作作用于当前选区不丢（业务接入轮落地）。
+// 悬停 tip = IconButton title prop 走 v-tip。眼睛 / 分屏为库内暂代图标（view-options / collapse-sidebar，
+// 待用户补专图标后换名）；组间 .fb-group 左分隔线（稿 border-left 方案）。
+// 只出事件（action 语义名）；实际操作 = preview.requestMdAction → PreviewText 执行
+// （lib/mdEdit 19 动作；edit / preview / split = 模式与分屏切换）。
+// 根 mousedown.prevent = 点击不抢焦点（§36 搜索栏同口径）——编辑器 textarea 选区全程保持。
+import { computed } from "vue";
 import IconButton from "../buttons/IconButton.vue";
 import "./bars.css";
 
+const props = withDefaults(defineProps<{ editing?: boolean }>(), { editing: false });
 const emit = defineEmits<{ action: [name: string] }>();
 
 interface MdIcon {
@@ -18,7 +22,7 @@ interface MdIcon {
   action: string;
   tip: string;
 }
-const groups: readonly MdIcon[][] = [
+const formatGroups: readonly MdIcon[][] = [
   // 段落
   [
     { name: "heading-1", action: "h1", tip: "标题 1" },
@@ -50,9 +54,18 @@ const groups: readonly MdIcon[][] = [
     { name: "italic", action: "italic", tip: "斜体" },
     { name: "strikethrough", action: "strike", tip: "删除线" },
   ],
-  // 视图（2026-09-25 走查补：编辑态 → 预览态可见出口）
-  [{ name: "chevron-large", action: "preview", tip: "返回预览（Esc）" }],
 ];
+
+// 视图组（编辑↔预览互切 + 分屏）：图标按态切换（铅笔 = 去编辑 / 眼睛-暂代 = 回预览）
+const viewGroup = computed<MdIcon[]>(() => [
+  props.editing
+    ? { name: "view-options", action: "preview", tip: "预览（Ctrl+E）" }
+    : { name: "pencil", action: "edit", tip: "编辑（Ctrl+E）" },
+  { name: "collapse-sidebar", action: "split", tip: "分屏编辑预览" },
+]);
+const groups = computed<readonly MdIcon[][]>(() =>
+  props.editing ? [...formatGroups, viewGroup.value] : [viewGroup.value],
+);
 </script>
 
 <template>

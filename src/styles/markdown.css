@@ -73,7 +73,8 @@
 
 /* —— 代码块（稿：通用/二级底 + 通用/三级 1px 描边 + 圆角 8 + padding 16；
    内文 MarkDown/代码块 14/24 Fira Mono 其他档；右上角悬浮复制钮 30×30 通用/半透明-2 + 立体感-通用，
-   稿值位 = 右上内缩 8，TabPrompt 复制钮同款口径） —— */
+   稿值位 = 右上内缩 8，TabPrompt 复制钮同款口径）；
+   按宽度换行（2026-09-25 二轮走查用户定，横滚废除）——pre-wrap + 长串 anywhere 断行 —— */
 .md-body .md-code {
   position: relative;
 }
@@ -82,7 +83,8 @@
   background: var(--n-g2);
   border: 1px solid var(--n-g3);
   border-radius: var(--n-radius-8);
-  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .md-body .md-code code {
   font-size: var(--n-fs-md-code);

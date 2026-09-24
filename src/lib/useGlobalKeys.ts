@@ -133,6 +133,20 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   // 其余快速访问视口 pasteTarget 拦截 toast 提示）；菜单 / 浮层 / 弹窗打开时让位
   async function onOperationKeys(e: KeyboardEvent): Promise<void> {
     if (isEditableTarget(e.target as HTMLElement)) return;
+    // Ctrl+E = md 编辑↔预览互切（2026-09-25 二轮走查）：预览态进编辑——预览态本函数整体让位（下行），
+    // 故 md 语境独提前判；编辑态退出由 textarea 自拦（输入框让位全局收不到）；「发送至 Animate」
+    // fla 键在非预览语境恒先生效（预览的是 md 时 fla 判定本就不命中，双向零冲突）
+    if (
+      (e.ctrlKey || e.metaKey) &&
+      e.key.toLowerCase() === "e" &&
+      preview.assetKey &&
+      preview.kind === "text" &&
+      (preview.current?.ext ?? "").toLowerCase() === "md"
+    ) {
+      e.preventDefault();
+      preview.requestMdAction("edit");
+      return;
+    }
     if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
     if (document.querySelector(".app-menu, .zoom-mask, .kit-mask, .bm-mask")) return;
     // 选择模式（6.2）：编辑类快捷键全禁（单击已不入选择域，本守卫双保险）；查看类（Shift+Enter
