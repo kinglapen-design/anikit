@@ -10,7 +10,7 @@
 // 水平钳制在 anchor 内）。笔记弹层 = 确认制（confirm 保存不关 / cancel 关闭；切帧直接回填草稿）。
 // 搜索侧（panelId/viewKey 具备才接 store——独立预览窗口不传，search 分支全禁）：
 // draft ↔ search store 实时分词；Ctrl+F 聚焦；Esc 清空失焦 + requestHide（「始终显示搜索框」关时收回）。
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import FloatBar from "./bars/FloatBar.vue";
 import FrameStrip from "./bars/FrameStrip.vue";
 import WaveProgress from "./bars/WaveProgress.vue";
@@ -22,9 +22,9 @@ import { formatDuration } from "../lib/formatDuration";
 import { frameOfTime, totalFrames } from "../lib/formatFrame";
 import { useUiStore } from "../stores/ui";
 import { useSearchStore } from "../stores/search";
-import { usePreviewStore } from "../stores/preview";
-import { usePreviewMediaStore } from "../stores/previewMedia";
-import { usePreviewNotesStore } from "../stores/previewNotes";
+import { previewMediaSession } from "../stores/previewMedia";
+import { previewNotesSession } from "../stores/previewNotes";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 
 const props = withDefaults(
   defineProps<{
@@ -39,15 +39,16 @@ const emit = defineEmits<{ requestHide: [] }>();
 
 const ui = useUiStore();
 const search = useSearchStore();
-const preview = usePreviewStore();
-const media = usePreviewMediaStore();
-const notes = usePreviewNotesStore();
+// 预览族会话（ContentArea / PreviewWindow provide 注入；media / notes 随同属主 panel 注册表取）
+const preview = inject(PREVIEW_SESSION_KEY)!;
+const media = previewMediaSession(preview.panelId);
+const notes = previewNotesSession(preview.panelId);
 
 // ─── 模式与形态分发 ───
-// spec 按 kind 查表（barSpecs 注册表）；预览态且有 spec = play 模式，否则 search；
+// spec 按 kind 查表（barSpecs 注册表，工厂收属主 panel 会话 ctx）；预览态且有 spec = play 模式，否则 search；
 // md 文本语境（kind text 且 ext md）= markdown 工具栏恒显（2026-09-25 二轮走查改版：
 // 预览态 = 仅视图组（铅笔 / 分屏——进编辑唯一入口，预览不再点击文字进编辑）；编辑态 = 全格式组）
-const spec = computed(() => (props.previewActive ? playBarSpecFor(preview.kind) : null));
+const spec = computed(() => (props.previewActive ? playBarSpecFor(preview.kind, { preview, media }) : null));
 const mdActive = computed(
   () =>
     props.previewActive &&

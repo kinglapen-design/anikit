@@ -5,7 +5,7 @@
 // 未来新组件型格式（3D / 第三方插件）= 加一个 spec 文件 + registerPreviewPaneSpec 一行，宿主零改动。
 // 分支判定优先级：kind 查表命中即挂载组件；原模板链「audio 靠 waveUrl 非 kind」这类数据条件
 // 由组件内部 v-if 承接——数据未就绪渲染空，与链式 fallthrough 等价（各 kind 互斥，查表无顺序问题）。
-// 数据口径：组件一律无 props——store（preview / previewMedia / current / ws 判定等）自取；
+// 数据口径：组件一律无 props——inject(PREVIEW_SESSION_KEY) 取本 panel 会话；
 // 需视口实寸的分支经 PREVIEW_STAGE_KEY 注入 stage 元素。
 import type { Component, InjectionKey, Ref } from "vue";
 

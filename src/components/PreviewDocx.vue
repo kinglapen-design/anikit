@@ -2,12 +2,12 @@
 // docx 预览（R6 新功能验证首例，PRD 04-04 条 6）：后端 services/docx 段落结构提取 → 只读渲染。
 // 非版式级渲染（字体 / 字号 / 图片 / 表格框线不还原，表格按段落平铺）；编辑走「默认应用打开」。
 // 排版复用 md 渲染态口径（文本编辑稿）；加载竞态守卫 = loadedId 绑定（同 PreviewText 模式）。
-import { ref, watch } from "vue";
+import { inject, ref, watch } from "vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { readDocxAsset, type DocxContent } from "../lib/docxOps";
-import { usePreviewStore } from "../stores/preview";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 
-const preview = usePreviewStore();
+const preview = inject(PREVIEW_SESSION_KEY)!;
 
 const doc = ref<DocxContent | null>(null);
 const loadError = ref<string | null>(null);

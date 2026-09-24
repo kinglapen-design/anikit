@@ -15,9 +15,10 @@ import { formatDuration } from "../lib/formatDuration";
 import { frameOfTime, totalFrames } from "../lib/formatFrame";
 import { useContentStore } from "../stores/content";
 import { useUiStore } from "../stores/ui";
-import { usePreviewStore } from "../stores/preview";
-import { usePreviewMediaStore } from "../stores/previewMedia";
-import { usePreviewNotesStore, type NoteEntry } from "../stores/previewNotes";
+import { previewSession } from "../stores/preview";
+import { previewMediaSession } from "../stores/previewMedia";
+import { previewNotesSession, usePreviewNotesStore, type NoteEntry } from "../stores/previewNotes";
+import { useTabsStore } from "../stores/tabs";
 
 const content = useContentStore();
 const ui = useUiStore();
@@ -97,14 +98,17 @@ function closeThumb(): void {
 }
 
 // 点击 item：打开预览并定位（open 内部 await 完帧清单 / 播放源再返回，此处直接定位）+
-// 打开笔记编辑浮层（2026-07-26 用户：跳转到对应时间戳并打开编辑框）
+// 打开笔记编辑浮层（2026-07-26 用户：跳转到对应时间戳并打开编辑框）；
+// 本组件 = 右栏全局件无 panel 注入，路由激活 panel 的会话（2026-09-25 per-panel 会话化）
 async function jump(key: string): Promise<void> {
   const sel = selected.value;
   if (!sel) return;
-  const preview = usePreviewStore();
+  const pid = useTabsStore().activeTabId;
+  if (!pid) return;
+  const preview = previewSession(pid);
   await preview.open(`${sel.assetId}|${sel.folderId}`);
   // 动图（2026-08-21 修，解包废除漏适配）：seq 恒 null，按 f:{索引} 直接定位
-  //（previewNotes store 的 jump 本就是此口径，本组件这份是旧拷贝）
+  //（previewNotes 会话的 jump 本就是此口径，本组件这份是旧拷贝）
   if (preview.kind === "anim") {
     if (key.startsWith("f:")) {
       const i = Number(key.slice(2));
@@ -120,11 +124,13 @@ async function jump(key: string): Promise<void> {
       preview.setFrame(i);
     }
   } else if (preview.kind === "video" && key.startsWith("t:")) {
-    usePreviewMediaStore().pause();
-    usePreviewMediaStore().seek(Number(key.slice(2)));
+    const media = previewMediaSession(pid);
+    media.pause();
+    media.seek(Number(key.slice(2)));
   }
   // 打开笔记编辑浮层（toggle 内含暂停与懒加载；已打开则不动）
-  if (!notesStore.open) notesStore.toggle();
+  const ns = previewNotesSession(pid);
+  if (!ns.open) ns.toggle();
 }
 </script>
 

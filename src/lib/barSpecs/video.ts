@@ -3,17 +3,16 @@
 // 回退 mm:ss）；进度拖动挂 scrubbing（拖动期 timeupdate 不回写）；当前画面设为预览图 = set_video_thumb。
 // 工作空间磁盘实况（PRD 02 步骤 1）：cover（set_video_thumb）/ note（逐帧笔记）走 assetId 命令——
 // 合成假 id 严禁下发，show 组滤除（其余控件纯前端 / 按路径，照常）
+// per-panel 会话化（2026-09-25）：preview / media 会话由工厂入参闭包捕获（属主 panel），不再抓全局单例
 import { useUiStore } from "../../stores/ui";
-import { usePreviewStore } from "../../stores/preview";
-import { usePreviewMediaStore } from "../../stores/previewMedia";
+import type { PreviewSession } from "../../stores/preview";
+import type { PreviewMediaSession } from "../../stores/previewMedia";
 import { formatDuration } from "../formatDuration";
 import { frameOfTime, totalFrames } from "../formatFrame";
 import type { PlayBarSpec } from "./types";
 
-export function makeVideoSpec(): PlayBarSpec {
+export function makeVideoSpec(preview: PreviewSession, media: PreviewMediaSession): PlayBarSpec {
   const ui = useUiStore();
-  const preview = usePreviewStore();
-  const media = usePreviewMediaStore();
   const useFrames = (): boolean => ui.timeDisplay === "frames" && media.fps != null && media.fps > 0;
   const total = (): number => totalFrames(media.duration, media.fps ?? 24);
   const groups = (): PlayBarSpec["show"] =>

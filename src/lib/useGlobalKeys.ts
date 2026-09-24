@@ -2,11 +2,13 @@
 // window keydown 四处理器（剪贴板导入 / 撤销重做 / 选择 / 操作快捷键）+ 注册注销；
 // 输入框豁免判定 isEditableTarget 为 App / AssetGrid（空格）共用
 //（SidebarLeft 的 Ctrl+N 随 7.1 十八轮左栏轮撤下——新增按钮新稿无位，接菜单栏业务时恢复）。
+// 预览让位判定 per-panel（2026-09-25 会话化）：事件时刻取激活 panel 的预览会话
+//（activePreviewSession，只查不建）——**激活 panel 预览中**才让位 / 生效，其余 panel 的预览不抢全局键。
 import { onBeforeUnmount, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
-import { usePreviewStore } from "../stores/preview";
+import { activePreviewSession } from "../stores/preview";
 import { useSearchStore } from "../stores/search";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
@@ -36,7 +38,6 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   const content = useContentStore();
   const picker = usePickerStore();
   const selection = useSelectionStore();
-  const preview = usePreviewStore();
   const undo = useUndoStore();
   const search = useSearchStore();
   const tabs = useTabsStore();
@@ -95,11 +96,13 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   }
 
   // 选择快捷键（6.1，2026-07-28 用户定案）：Ctrl+A 全选素材卡片 / Esc 清空选择。
-  // 与 onPaste / onUndoRedo 同口径：输入框内不拦截；预览打开 / 预览子窗口不抢（PreviewPanel 自行处理 Esc 等）；
-  // 菜单（AppMenu）/ 悬停大图浮层（HoverZoomOverlay）打开时让位——两者各自捕获 Esc 关闭，此刻不清选择
+  // 与 onPaste / onUndoRedo 同口径：输入框内不拦截；激活 panel 预览中 / 预览子窗口不抢
+  //（PreviewPanel 自行处理 Esc 等）；菜单（AppMenu）/ 悬停大图浮层（HoverZoomOverlay）
+  // 打开时让位——两者各自捕获 Esc 关闭，此刻不清选择
   function onSelectionKeys(e: KeyboardEvent): void {
     if (isEditableTarget(e.target as HTMLElement)) return;
-    if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
+    const preview = activePreviewSession(); // 事件时刻取激活 panel 会话（只查不建；无 = null）
+    if (opts.previewParam || preview?.assetKey || opts.needLibrarySetup()) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
       if (picker.active) return; // 选择模式：全选是选择操作，禁用
       e.preventDefault();
@@ -133,13 +136,14 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   // 其余快速访问视口 pasteTarget 拦截 toast 提示）；菜单 / 浮层 / 弹窗打开时让位
   async function onOperationKeys(e: KeyboardEvent): Promise<void> {
     if (isEditableTarget(e.target as HTMLElement)) return;
+    const preview = activePreviewSession(); // 事件时刻取激活 panel 会话（只查不建；无 = null）
     // Ctrl+E = md 编辑↔预览互切（2026-09-25 二轮走查）：预览态进编辑——预览态本函数整体让位（下行），
     // 故 md 语境独提前判；编辑态退出由 textarea 自拦（输入框让位全局收不到）；「发送至 Animate」
     // fla 键在非预览语境恒先生效（预览的是 md 时 fla 判定本就不命中，双向零冲突）
     if (
       (e.ctrlKey || e.metaKey) &&
       e.key.toLowerCase() === "e" &&
-      preview.assetKey &&
+      preview?.assetKey &&
       preview.kind === "text" &&
       (preview.current?.ext ?? "").toLowerCase() === "md"
     ) {
@@ -147,7 +151,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       preview.requestMdAction("edit");
       return;
     }
-    if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
+    if (opts.previewParam || preview?.assetKey || opts.needLibrarySetup()) return;
     if (document.querySelector(".app-menu, .zoom-mask, .kit-mask, .bm-mask")) return;
     // 选择模式（6.2）：编辑类快捷键全禁（单击已不入选择域，本守卫双保险）；查看类（Shift+Enter
     // 默认应用打开）因选择域恒空天然无效，不单独放行
@@ -351,17 +355,18 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   }
 
   // Ctrl+F = 聚焦搜索框（PRD 03_查找文件 01，3.6 一轮）：输入框内也生效（任何输入态一步跳回搜索框）；
-  // 预览态 / 向导态不抢（搜索框不可见）；preventDefault 吞掉 WebView2 页面内查找
+  // 预览态（激活 panel）/ 向导态不抢（搜索框不可见）；preventDefault 吞掉 WebView2 页面内查找
   function onSearchFocus(e: KeyboardEvent): void {
     if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "f") return;
-    if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
+    const preview = activePreviewSession();
+    if (opts.previewParam || preview?.assetKey || opts.needLibrarySetup()) return;
     e.preventDefault();
     search.requestFocus(tabs.activeTabId);
   }
 
   // Alt+1~4 = 查看方式布局切换（2026-09-06 菜单栏「视图」接业务轮，稿 = 查看方式子菜单快捷键标注）：
   // 自适应 / 瀑布流 / 网格 / 列表 ↔ ui.layoutMode（与视图菜单 / ViewOptionsMenu 同状态源）。
-  // 查看类操作——选择模式白名单放行（§12.1 查看方式）；输入框 / 预览态 / 向导态不抢；
+  // 查看类操作——选择模式白名单放行（§12.1 查看方式）；输入框 / 预览态（激活 panel）/ 向导态不抢；
   // 菜单 / 浮层 / 弹窗打开时让位（同 onOperationKeys 口径）
   function onViewKeys(e: KeyboardEvent): void {
     if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
@@ -374,7 +379,8 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     const mode = modes[e.key];
     if (!mode) return;
     if (isEditableTarget(e.target as HTMLElement)) return;
-    if (opts.previewParam || preview.assetKey || opts.needLibrarySetup()) return;
+    const preview = activePreviewSession();
+    if (opts.previewParam || preview?.assetKey || opts.needLibrarySetup()) return;
     if (document.querySelector(".app-menu, .zoom-mask, .kit-mask, .bm-mask")) return;
     e.preventDefault();
     useUiStore().layoutMode = mode;

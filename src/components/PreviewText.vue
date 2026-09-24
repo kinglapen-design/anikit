@@ -12,17 +12,17 @@
 // md 链接本轮不可点（09 待办：默认浏览器打开）。
 // 保存竞态纪律：保存请求绑定加载时 assetId（loadedId），切素材先 flush 在途编辑再加载新内容——
 // 旧内容不会错存到新资产；响应到达时已切走则只更新 placements 不动编辑区状态。
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { createMd } from "../lib/markdown";
 import { applyMdAction, toggleTaskLine } from "../lib/mdEdit";
 import { createMdHistory, type HistEntry } from "../lib/mdHistory";
 import { readTextAsset, writeTextAsset } from "../lib/textOps";
 import { useContentStore } from "../stores/content";
-import { usePreviewStore } from "../stores/preview";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 import { useToastStore } from "../stores/toast";
 
-const preview = usePreviewStore();
+const preview = inject(PREVIEW_SESSION_KEY)!;
 const content = useContentStore();
 const toast = useToastStore();
 

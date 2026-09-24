@@ -9,16 +9,17 @@
 // 交互：滚轮缩放（瞄点跟鼠标）、左键拖动平移、双击 适合窗口⇄原图大小；
 // ←/→ 上/下一个素材；,/ . sequence/anim=上/下帧 video=逐帧步进；
 // 空格 sequence/anim/audio/video=播放暂停；Esc 退出全屏/预览。
-import { computed, onBeforeUnmount, onMounted, provide, ref, watch, watchEffect } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, provide, ref, watch, watchEffect } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import PreviewNavigator from "./PreviewNavigator.vue";
 import PreviewStreamCanvas from "./PreviewStreamCanvas.vue";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 import { PREVIEW_STAGE_KEY, previewPaneSpecFor } from "../lib/previewSpecs";
-import { usePreviewStore } from "../stores/preview";
-import { usePreviewMediaStore } from "../stores/previewMedia";
+import { previewMediaSession } from "../stores/previewMedia";
+import { useTabsStore } from "../stores/tabs";
 
-const preview = usePreviewStore();
-const media = usePreviewMediaStore();
+const preview = inject(PREVIEW_SESSION_KEY)!;
+const media = previewMediaSession(preview.panelId);
 const stageRef = ref<HTMLElement>();
 const videoWrapRef = ref<HTMLElement>();
 let ro: ResizeObserver | undefined;
@@ -123,6 +124,8 @@ function stepOneFrame(delta: number): void {
 }
 
 function onKeydown(e: KeyboardEvent): void {
+  const tid = useTabsStore().activeTabId;
+  if (tid && tid !== preview.panelId) return; // 分屏多预览并存：只响应激活 panel（子窗口 activeTabId 恒 "" 放行）
   const t = e.target as HTMLElement;
   if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return; // 笔记编辑中不抢键（5.2）
   switch (e.key) {

@@ -8,7 +8,7 @@
 // 文件夹经 selection.namingFolderCardId（FolderStrip 接管提交），与双击名称同径。
 import type { PlacementView } from "../../stores/content";
 import type { CtxEntry } from "../contextMenus";
-import { usePreviewStore } from "../../stores/preview";
+import { previewSession } from "../../stores/preview";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
 import { useWsStore } from "../../stores/ws";
@@ -104,7 +104,8 @@ export function wsTreeRowSpec(rel: string): CtxEntry[] {
 // 提交在 AssetCard 的 ws 分支；所在目录 rel = folderId 去 "ws:" 前缀）。
 // 批量分流（同库 3.4 口径）：触发项在选择域内且多选 → 复制 / 剪切 / 删除作用于整个选中集；
 // 重命名单项语义，多选时不出现
-export function wsCardSpec(p: PlacementView): CtxEntry[] {
+// panelId = 发起右键的 panel（2026-09-25 per-panel 会话化：「打开」开进属主 panel 会话）
+export function wsCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
   const rel = p.folderId.slice(3);
   const entryRel = p.assetId.slice(3);
   const toast = useToastStore();
@@ -118,7 +119,7 @@ export function wsCardSpec(p: PlacementView): CtxEntry[] {
       : [entryRel];
   const multi = batch.length > 1;
   return [
-    { label: "打开", action: () => void usePreviewStore().open(`${p.assetId}|${p.folderId}`) },
+    { label: "打开", action: () => void previewSession(panelId).open(`${p.assetId}|${p.folderId}`) },
     ...(multi ? [] : [{ label: "重命名", action: () => void (selection.renamingKey = key) }]),
     { label: multi ? `复制 ${batch.length} 项` : "复制", action: () => ws.setClip(batch, false) },
     { label: multi ? `剪切 ${batch.length} 项` : "剪切", action: () => ws.setClip(batch, true) },

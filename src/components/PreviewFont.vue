@@ -10,17 +10,17 @@
 // 安装口径（2026-08-23 用户痛点定案）：用户级安装（HKCU 注册表 + 用户字体目录 + 广播），
 // 其他软件立即可见——避免 Eagle"装了识别不到"。
 // FontFace 管理：family 名按 assetId 命名防与系统字体冲突；切素材 / 卸载组件时 fonts.delete 清理。
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import FontInstallButton from "./buttons/FontInstallButton.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import SideSlider from "./SideSlider.vue";
 import { getFontInfo, installFont, uninstallFont, type FontInfo } from "../lib/fontOps";
-import { usePreviewStore } from "../stores/preview";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 import { useToastStore } from "../stores/toast";
 
-const preview = usePreviewStore();
+const preview = inject(PREVIEW_SESSION_KEY)!;
 const toast = useToastStore();
 
 const TABS = [

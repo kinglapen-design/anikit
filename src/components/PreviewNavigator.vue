@@ -2,11 +2,11 @@
 // 视图导航器（4.3，Eagle 式）：图片放大超出可视范围时右下角出现，还原后消失。
 // 小图 = info 缩略图（跟随旋转/翻转）；视口框 = 当前可见区在图上的映射，
 // 拖视口框移动画面、点击小图跳转该点居中。
-import { computed, ref } from "vue";
+import { computed, inject, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { usePreviewStore } from "../stores/preview";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 
-const preview = usePreviewStore();
+const preview = inject(PREVIEW_SESSION_KEY)!;
 const boxRef = ref<HTMLElement>();
 
 // 小图用 info 缩略图（320 短边，比原图省内存）；无缩略图回退显示图

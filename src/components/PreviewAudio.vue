@@ -4,11 +4,11 @@
 // 播放条侧 = FloatBarPlay #progress 的 WaveProgress，速查 §36）：
 // 居中立姿 = 唱片-icon 200（vinyl 装饰图标，渐变底 + 转盘 + 指针、opacity 0.6 与小阴影均烘焙在 svg）
 // + 文件名（标题档 18/26 Bold 二级，含扩展名）；块 = column 居中 gap 24 + padding-bottom 24（稿「图标+提示」）。
-import { computed } from "vue";
+import { computed, inject } from "vue";
 import AppIcon from "./AppIcon.vue";
-import { usePreviewStore } from "../stores/preview";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 
-const preview = usePreviewStore();
+const preview = inject(PREVIEW_SESSION_KEY)!;
 // kind==='audio' 由注册表命中结构保证；文件名同 PreviewTitleBar .index-name 口径（nowrap 不截断）
 const fileName = computed(() => preview.current?.name ?? "");
 </script>

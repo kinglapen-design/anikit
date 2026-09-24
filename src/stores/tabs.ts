@@ -10,7 +10,7 @@ import { defineStore } from "pinia";
 import { markRaw, nextTick, ref } from "vue";
 import type { DockviewApi, IDockviewPanel, SerializedDockview } from "dockview-vue";
 import { useContentStore } from "./content";
-import { usePreviewStore } from "./preview";
+import { dropPreviewSession, eachPreviewSession, peekPreviewSession } from "./preview";
 import { useSelectionStore } from "./selection";
 import { useUiStore } from "./ui";
 import { findFolderNode } from "../lib/detailSections";
@@ -93,6 +93,12 @@ export const useTabsStore = defineStore("tabs", () => {
     };
   }
 
+  // 面板视口 key（2026-09-25 per-panel 预览会话化：预览会话按属主面板取列表源）——
+  // 未绑定 api / panel 不存在 / params 缺 viewKey 均兜底 "quick:all"
+  function viewKeyOf(panelId: string): string {
+    return (api?.getPanel(panelId)?.params?.viewKey as string) ?? "quick:all";
+  }
+
   // 镜像刷新 + 激活视口回写（侧边栏高亮跟随激活标签页）
   function syncMirror(): void {
     if (!api) return;
@@ -101,9 +107,14 @@ export const useTabsStore = defineStore("tabs", () => {
     for (const id of [...histories.keys()]) {
       if (!alive.has(id)) histories.delete(id);
     }
-    // 预览属主面板已关闭 → 预览一并退出（2026-09-25 绑定面板配套：不死挂僵尸预览）
-    const preview = usePreviewStore();
-    if (preview.panelId && !alive.has(preview.panelId)) preview.close();
+    // 已关闭 panel 的预览会话联动回收（per-panel 注册表口径：先收集再删，防边遍历边改 Map；
+    // dropPreviewSession 内含 close + $dispose + media/notes 会话联动销毁，2026-09-25）。
+    // 只收 dockview 面板会话（"tab-" 前缀）——设计稿页 "__design__" 占位会话等特殊键不动
+    const deadPanels: string[] = [];
+    eachPreviewSession((s) => {
+      if (s.panelId.startsWith("tab-") && !alive.has(s.panelId)) deadPanels.push(s.panelId);
+    });
+    for (const id of deadPanels) dropPreviewSession(id);
     tabs.value = api.panels.map(panelInfo);
     const active = api.activePanel;
     activeTabId.value = active?.id ?? "";
@@ -126,37 +137,46 @@ export const useTabsStore = defineStore("tabs", () => {
   // ---- 命令 ----
 
   // 导航即退出预览（2026-09-08 用户实机报：预览模式下点侧栏文件夹 / 快速访问，视口已切但
-  // 中栏仍是预览画面，用户不知文件夹已换）。预览 = 全局单例渲染在激活 panel（ContentArea
-  // `preview.assetKey && active`），凡视口切换 / 新开页前先关掉。同视口点击（openView 早退）
-  // 不算导航，预览保持。
-  function exitPreview(): void {
-    const preview = usePreviewStore();
-    if (preview.assetKey) preview.close();
+  // 中栏仍是预览画面，用户不知文件夹已换）。per-panel 会话化（2026-09-25）后 = 只退目标 panel
+  // 自己的预览会话（peek 只查不建）；panelId 缺省 = 遍历全关（无 api 兜底分支用）。
+  // 同视口点击（openView 早退）不算导航，预览保持。
+  function exitPreview(panelId?: string): void {
+    if (panelId) {
+      const s = peekPreviewSession(panelId);
+      if (s?.assetKey) s.close();
+      return;
+    }
+    eachPreviewSession((s) => {
+      if (s.assetKey) s.close();
+    });
   }
 
-  // 侧边栏 / 文件夹卡片等导航统一入口：锁定标签页不替换（新开），未锁定替换视口
-  function openView(viewKey: string): void {
+  // 侧边栏 / 文件夹卡片等导航统一入口：锁定标签页不替换（新开），未锁定替换视口；
+  // panelId 定向（2026-09-25 per-panel 会话化：包内视图跳回文件夹等指定目标 panel），
+  // 缺省 = 激活 panel（行为与旧口径一致）
+  function openView(viewKey: string, panelId?: string): void {
     if (!api) {
       content.sidebarSelected = viewKey;
       exitPreview();
       return;
     }
-    const active = api.activePanel;
-    if (!active || active.params?.locked) {
-      exitPreview();
+    const target = panelId ? api.getPanel(panelId) : api.activePanel;
+    if (!target || target.params?.locked) {
+      exitPreview(api.activePanel?.id);
       addTab(viewKey);
       return;
     }
-    if (panelInfo(active).viewKey === viewKey) return;
-    exitPreview();
+    if (panelInfo(target).viewKey === viewKey) return;
+    exitPreview(target.id);
     // 导航历史：旧视口（带选中快照）入后退栈、清前进栈（2026-08-20 面包屑接入；2026-08-24 快照）
-    const h = histories.get(active.id) ?? { back: [], fwd: [] };
-    h.back.push({ key: panelInfo(active).viewKey, sel: currentSel() });
+    const h = histories.get(target.id) ?? { back: [], fwd: [] };
+    h.back.push({ key: panelInfo(target).viewKey, sel: currentSel() });
     h.fwd = [];
-    histories.set(active.id, h);
-    active.api.updateParameters({ viewKey });
-    active.api.setTitle(content.viewTitle(viewKey));
-    content.sidebarSelected = viewKey; // 即时回写（onDidLayoutChange 再核对一遍）
+    histories.set(target.id, h);
+    target.api.updateParameters({ viewKey });
+    target.api.setTitle(content.viewTitle(viewKey));
+    // 侧边栏高亮只跟激活 panel（goHistory 同口径；onDidLayoutChange 再核对一遍）
+    if (api.activePanel?.id === target.id) content.sidebarSelected = viewKey;
     syncNavCan();
   }
 
@@ -171,7 +191,7 @@ export const useTabsStore = defineStore("tabs", () => {
     const [from, to] = dir === -1 ? [h.back, h.fwd] : [h.fwd, h.back];
     const target = from.pop();
     if (target === undefined) return;
-    exitPreview();
+    exitPreview(panelId);
     to.push({ key: panelInfo(panel).viewKey, sel: currentSel() });
     panel.api.updateParameters({ viewKey: target.key });
     panel.api.setTitle(content.viewTitle(target.key));
@@ -202,7 +222,7 @@ export const useTabsStore = defineStore("tabs", () => {
       exitPreview();
       return;
     }
-    exitPreview();
+    exitPreview(api.activePanel?.id);
     addTab(viewKey);
   }
 
@@ -317,5 +337,5 @@ export const useTabsStore = defineStore("tabs", () => {
     api?.layout(width, height, true);
   }
 
-  return { tabs, activeTabId, navCan, bind, openView, openInNewTab, goHistory, addTab, closeTab, activateTab, closeAllTabs, closeOtherTabs, toggleLock, splitTab, forceLayout };
+  return { tabs, activeTabId, navCan, bind, openView, openInNewTab, goHistory, addTab, closeTab, activateTab, closeAllTabs, closeOtherTabs, toggleLock, splitTab, forceLayout, viewKeyOf };
 });

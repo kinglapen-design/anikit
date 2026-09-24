@@ -12,6 +12,8 @@
 //   回收站 = 13 稿空白菜单；seq: 等其余视口照旧新增菜单；
 // 文件夹卡片 / 档案卡片 / 按钮 / 输入框上不处理（"pass"——卡片自带菜单）。
 // 1.3：菜单项按新稿纯文字口径（2026-09-01）。
+// panelId = 发起右键的 panel（2026-09-25 per-panel 预览会话化：随 AssetGrid 注入会话透传，
+// 「打开预览」开进属主 panel 自己的预览会话）
 import { useContentStore, type PlacementView } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
@@ -23,7 +25,7 @@ import { folderCardSpec } from "./folder";
 import { recycleBlankSpec, recycleCardSpec } from "./recycle";
 import { wsBlankSpec, wsCardSpec } from "./workspace";
 
-export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "done" | "pass" {
+export function openGridContextMenu(e: MouseEvent, items: PlacementView[], panelId: string): "done" | "pass" {
   const t = e.target as HTMLElement;
   const selection = useSelectionStore();
   const content = useContentStore();
@@ -36,13 +38,13 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
     if (usePickerStore().active) {
       if (content.isRecycleView || content.isWorkspaceView) return "done";
       const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
-      if (p) openContextMenu(e, assetCardSpec(p), undefined);
+      if (p) openContextMenu(e, assetCardSpec(p, panelId), undefined);
       return "done";
     }
     // 工作空间（PRD 02 步骤 1）分流前置：ws 条目出最小只读集，不进素材菜单（写操作项一律不挂）
     if (content.isWorkspaceView) {
       const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
-      if (p) openContextMenu(e, wsCardSpec(p), undefined);
+      if (p) openContextMenu(e, wsCardSpec(p, panelId), undefined);
       return "done";
     }
     if (!selection.isSelected(key)) selection.selectOnly(key);
@@ -50,11 +52,11 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[]): "don
     // recycleCardSpec 无参回退基础集）；2026-09-05 全量菜单起传条目 p（打开/导出/复制数据等要 assetId）
     if (content.isRecycleView) {
       const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
-      openContextMenu(e, recycleCardSpec(p), undefined);
+      openContextMenu(e, recycleCardSpec(p, panelId), undefined);
       return "done";
     }
     const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
-    if (p) openContextMenu(e, assetCardSpec(p), undefined);
+    if (p) openContextMenu(e, assetCardSpec(p, panelId), undefined);
     return "done";
   }
   // .disk-card = 收件箱工程文件卡片（自带 inboxDiskSpec 菜单，InboxDiskSection @contextmenu.stop 已拦冒泡）

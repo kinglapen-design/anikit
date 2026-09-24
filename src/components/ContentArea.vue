@@ -5,12 +5,11 @@
 // 搜索栏 ↔ 播放条 morph；底部居中距底 12、两侧 12 呼吸；旧通栏 SearchBar 与预览 footer 三件套均废）；
 // 列表底部遮挡补偿 66 = layouts.ts PAD.bottom（12 栏距底 + 42 栏高 + 12 呼吸距；JS 滚动 translateY，
 // CSS padding 不影响可滚距离）。
-// 预览模式（4.3/5.2）：preview.assetKey 非空且本 panel 是预览属主（preview.panelId，2026-09-25 绑定
-// 发起面板根治「跟激活飘」）时整栏切换——预览状态单例但绑定发起面板：新标签 / 分屏新 panel 不抢
-// （原标签保留），B 面板双击 = 明确归 B；属主标签关闭即退出（tabs.syncMirror 清理）；全屏时
-// preview-root fixed 铺满窗口、隐藏标题栏。
+// 预览模式（4.3/5.2）：每 panel 一个预览会话（注册表懒建、provide 注入），本 panel 会话 assetKey
+// 非空 = 本栏切预览；分屏各 panel 会话独立互不抢；属主 panel 关闭由 tabs.syncMirror 回收；
+// 全屏时 preview-root fixed 铺满窗口、隐藏标题栏。
 // 通知条（ToastStack）已上移到 DockHost 单例（多 panel 下每 panel 一份会重复弹出）。
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { DockviewPanelApi, IDockviewPanelProps } from "dockview-vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
@@ -21,7 +20,8 @@ import PreviewTitleBar from "./PreviewTitleBar.vue";
 import PreviewPanel from "./PreviewPanel.vue";
 import { findFolderNode } from "../lib/detailSections";
 import { useContentStore, type FolderNode } from "../stores/content";
-import { usePreviewStore } from "../stores/preview";
+import { previewSession } from "../stores/preview";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 import { useSearchStore } from "../stores/search";
 import { useUiStore } from "../stores/ui";
 import { useWsStore } from "../stores/ws";
@@ -33,7 +33,9 @@ const raw = defineProps<{ params: Record<string, unknown> }>();
 const frame = computed(() => raw.params as unknown as IDockviewPanelProps);
 const panelApi = frame.value.api as DockviewPanelApi; // api 引用 init 时确定、不变
 const content = useContentStore();
-const preview = usePreviewStore();
+// 本 panel 预览会话（注册表懒建；provide 给预览族组件 inject，属主恒 = 本 panel）
+const session = previewSession(panelApi.id);
+provide(PREVIEW_SESSION_KEY, session);
 const search = useSearchStore();
 const ui = useUiStore();
 
@@ -67,17 +69,15 @@ watch(
   { immediate: true },
 );
 
-// 本 panel 激活态：预览整栏切换只对激活标签页生效
+// 本 panel 激活态（dockview 镜像，透传 AssetGrid/SequencePackView 的 panel-active）
 const active = ref(panelApi.isActive);
 const disposeActive = panelApi.onDidActiveChange(() => {
   active.value = panelApi.isActive;
 });
 onBeforeUnmount(() => disposeActive.dispose());
-// 预览态 = preview.assetKey 非空且本 panel 是预览属主（2026-09-25 绑定发起面板根治「跟激活飘」：
-// 新标签 / 分屏新 panel 不抢预览；panelId 空 = 未绑定早期路径，回退旧激活判定）
-const previewActive = computed(
-  () => !!preview.assetKey && (preview.panelId ? preview.panelId === panelApi.id : active.value),
-);
+// 预览态 = 本 panel 会话 assetKey 非空（per-panel 会话：属主恒 = 本 panel，分屏各 panel 互不抢；
+// 属主 panel 关闭由 tabs.syncMirror 回收会话）
+const previewActive = computed(() => !!session.assetKey);
 
 // 当前视口资源（"全部"= 全部 Placement；文件夹 = 该文件夹直接 Placement，
 // 递归显示开关 ui.showSubfolders 打开时含全部后代文件夹，2026-08-10 接入）。
@@ -131,8 +131,8 @@ function onRootPointerdown(e: PointerEvent): void {
        未聚焦 = 本击只聚焦不清空；交互件上永不激活（复验石锤：整区激活吞 click） -->
   <main class="content-area" @pointerdown.capture="onRootPointerdown">
     <template v-if="previewActive">
-      <div class="preview-root" :class="{ fullscreen: preview.fullscreen }">
-        <PreviewTitleBar v-if="!preview.fullscreen" />
+      <div class="preview-root" :class="{ fullscreen: session.fullscreen }">
+        <PreviewTitleBar v-if="!session.fullscreen" />
         <section class="preview-section">
           <PreviewPanel />
         </section>

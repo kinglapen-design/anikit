@@ -21,7 +21,7 @@ import { useContentStore, type PlacementView } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
-import { usePreviewStore } from "../../stores/preview";
+import { previewSession } from "../../stores/preview";
 import type { CtxEntry } from "../contextMenus";
 import { isSequence as isSequenceAsset, isThumbCapableExt } from "../formatBadge";
 import {
@@ -74,13 +74,14 @@ function selectedAssetIds(): string[] {
 // 链接文件删除组只出「从文件夹中移除文件链接」，非链接出「从文件夹中移除 / 丢到回收站」
 //（稿 prose 另提及"去到未分类"，2026-08-11 用户确认无此项，不列）；
 // 提示词 = 一级菜单骨架（2026-09-05 走查重做；业务未立项全占位，记 09 待办）
-export function assetCardSpec(p: PlacementView): CtxEntry[] {
+// panelId = 发起右键的 panel（2026-09-25 per-panel 会话化：「打开预览」开进属主 panel 会话）
+export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
   // 选择模式（6.2 一轮，PRD 03_数据链接 04）：右键仅留查看类操作，编辑类不出现
-  if (usePickerStore().active) return pickerAssetCardSpec(p);
+  if (usePickerStore().active) return pickerAssetCardSpec(p, panelId);
   const content = useContentStore();
   // 虚拟视图收窄（2026-09-09 入口收窄，PRD 02-15）：全部 / 最近使用 / 缩略图不是位置——
   // 位置级与落点类不出现，留资产级 / 所见即所得集（回收站走 recycleCardSpec 专属口径，不到这里）
-  if (content.isVirtualView) return virtualAssetCardSpec(p);
+  if (content.isVirtualView) return virtualAssetCardSpec(p, panelId);
   const selection = useSelectionStore();
   const assetId = p.assetId;
   const assetKey = `${p.assetId}|${p.folderId}`;
@@ -90,7 +91,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
   // 2026-09-05 走查：没有链接状态的文件不出该项（旧"恒列置灰"废除）
   const liveCount = content.placements.filter((q) => q.assetId === assetId).length;
   const entries: CtxEntry[] = [
-    { label: "打开预览", shortcut: "Enter", action: () => void usePreviewStore().open(assetKey) },
+    { label: "打开预览", shortcut: "Enter", action: () => void previewSession(panelId).open(assetKey) },
   ];
   if (isSequence) {
     entries.push(
@@ -326,7 +327,7 @@ export function assetCardSpec(p: PlacementView): CtxEntry[] {
 // 改 hidden 伴生图名配工程名案例）/ 缩略图绑定组 / 导出 / 丢到回收站（删除 = 资产"要不要"
 // 的判断，无需在乎位置；多位置条目右键哪条丢哪条）。业务未立项占位项（新标签页 /
 // 添加资源库 / AI 工具集 / 提示词 / 置顶 / Animate 生成缩略图）快速访问不列。
-function virtualAssetCardSpec(p: PlacementView): CtxEntry[] {
+function virtualAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
   const selection = useSelectionStore();
   const content = useContentStore();
   const assetId = p.assetId;
@@ -334,7 +335,7 @@ function virtualAssetCardSpec(p: PlacementView): CtxEntry[] {
   // 活位置数（同主菜单口径）：「将此文件设为原始文件」仅链接状态（>1）出现
   const liveCount = content.placements.filter((q) => q.assetId === assetId).length;
   const entries: CtxEntry[] = [
-    { label: "打开预览", shortcut: "Enter", action: () => void usePreviewStore().open(assetKey) },
+    { label: "打开预览", shortcut: "Enter", action: () => void previewSession(panelId).open(assetKey) },
   ];
   if (isSequenceAsset(p)) {
     entries.push(
@@ -459,11 +460,11 @@ function virtualAssetCardSpec(p: PlacementView): CtxEntry[] {
 
 // 选择模式精简集（6.2 一轮，PRD 03_数据链接 04"右键仅留查看类操作，编辑类禁用"）：
 // 预览 / 打开类 / 导航 / 复制（缩略图 / 数据）——均只读，不写库不动选择域
-function pickerAssetCardSpec(p: PlacementView): CtxEntry[] {
+function pickerAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
   const assetId = p.assetId;
   const assetKey = `${p.assetId}|${p.folderId}`;
   const entries: CtxEntry[] = [
-    { label: "打开预览", action: () => void usePreviewStore().open(assetKey) },
+    { label: "打开预览", action: () => void previewSession(panelId).open(assetKey) },
   ];
   if (isSequenceAsset(p)) {
     entries.push({

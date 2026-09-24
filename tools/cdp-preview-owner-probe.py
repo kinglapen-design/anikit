@@ -1,10 +1,9 @@
-# CDP 实测：预览会话绑定发起面板（ownerPanelId，2026-09-25 用户实机报三条）。
-# 根因：预览全局单例（preview.assetKey），ContentArea previewActive = assetKey && 本 panel 激活——
-# 预览跟着激活面板飘：① 预览中「+」新标签 → 预览飘进新标签（应留原标签、新标签为列表）；
-# ② 预览中分屏 → 原标签预览丢失；③ 两面板各双击 → 预览左右跳（本版 = 可预测：谁发起归谁；
-# 真双预览对比 = per-panel 预览实例，独立立项）。
-# 场景：S1 新标签不抢预览；S2 分屏后原标签预览保留；S3 B 面板双击 = 预览明确跳 B；
-# S4 属主标签关闭 → 预览退出（syncMirror 清理）。
+# CDP 实测：预览 per-panel 会话化（2026-09-25 双预览对比立项落地）。
+# 前史：预览曾是全局单例 + ownerPanelId 绑定（踩坑 089 修「跟激活飘」），单例本质不变——
+# 分屏后 B 面板双击预览左右跳。本轮 = 每 panel 独立预览会话（preview#{panelId} 注册表）。
+# 场景：S1 新标签不抢预览；S2 分屏后原标签预览保留；S3 右栏双击 = 左右各自预览并存（双预览）；
+# S4 键盘路由（←/→ 只作用激活 panel 的会话）；S5 关右栏只收右栏会话（左栏预览保留），
+# 关左栏会话回收干净。
 import asyncio
 import base64
 import json
@@ -121,10 +120,13 @@ async def main():
 
             fails = []
 
-            # pinia state 快照（诊断：assetKey / panelId / activeTabId / tabs）
+            # pinia state 快照（诊断：per-panel 会话 = preview#{panelId} 键族 / activeTabId / tabs）
             PSTATE = """(() => {
               const s = document.querySelector('#app')?.__vue_app__?.config.globalProperties.$pinia?.state.value;
-              return s ? { key: s.preview.assetKey, pid: s.preview.panelId, active: s.tabs.activeTabId, tabs: s.tabs.tabs.map((t) => t.id) } : null;
+              if (!s) return null;
+              const sessions = {};
+              for (const k of Object.keys(s)) if (k.startsWith('preview#')) sessions[k] = s[k].assetKey;
+              return { sessions, active: s.tabs.activeTabId, tabs: s.tabs.tabs.map((t) => t.id) };
             })()"""
 
             # dockview 只渲染激活 panel 内容（非激活卸载）；tab 激活走 pointerdown（合成 click 无效实证）
@@ -186,34 +188,87 @@ async def main():
             if s2 != [True, False]:
                 fails.append(f"[S2] 分屏后预览归属不符（{s2}，期望 [属主 True, 新分屏 False]）")
 
-            # —— S3：右栏（tab[1]）双击 P2 → 预览明确跳右（谁发起归谁）；左栏回列表 ——
-            await ev("""(() => { const t = document.querySelectorAll('.dv-tab')[1]; t.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); t.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); })()""")
-            await asyncio.sleep(0.7)
-            await ev("document.querySelector('.content-area').querySelectorAll('.asset-card')[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))")
+            # —— S3：右栏（组1）双击 P2 → 左右各自预览并存（左 P1 / 右 P2，per-panel 会话） ——
+            # 注意：按组序取 .content-area（querySelector 拿首元素必误读，踩坑 089）
+            await ev("document.querySelectorAll('.content-area')[1].querySelectorAll('.asset-card')[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))")
             await asyncio.sleep(1.2)
-            s3_right = await cur_preview()  # 右栏：预览应归此
-            s3_left = await tab_preview(0)  # 左栏：应回列表
-            print("[S3 右栏双击]", json.dumps({"右栏": s3_right, "左栏": s3_left}))
-            if s3_right is not True or s3_left is not False:
-                fails.append(f"[S3] B 面板双击后预览未明确归 B（右 {s3_right} / 左 {s3_left}）")
+            s3 = await ev("[...document.querySelectorAll('.content-area')].map((a) => !!a.querySelector('.preview-root'))")
+            st3 = await ev(PSTATE)
+            print("[S3 右栏双击]", json.dumps({"面板预览": s3}))
+            print("[S3 state]", json.dumps(st3, ensure_ascii=False))
+            if s3 != [True, True]:
+                fails.append(f"[S3] 双预览未并存（{s3}，期望 [左 True, 右 True]）")
+            keys3 = sorted(v for v in (st3 or {}).get("sessions", {}).values() if v)
+            if keys3 != ["P1|root", "P2|root"]:
+                fails.append(f"[S3] 会话资产不符（{keys3}，期望左 P1|root / 右 P2|root）")
 
-            # —— S4：关闭属主（右栏 tab）→ 预览退出（任何面板都无预览） ——
-            await ev("""(() => { const t = document.querySelectorAll('.dv-tab')[1]; t.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); t.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); })()""")
-            await asyncio.sleep(0.5)
-            await ev("document.querySelectorAll('.dock-tab')[1].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))")
+            # —— S4：键盘路由——←/→ 只作用激活 panel 的会话 ——
+            # tab 索引注意（踩坑 089）：S1 的「+」tab 与属主同组——.dv-tab = [左组:属主,+tab, 右组:分屏]，
+            # 右栏 = dv-tab[2]（不是 [1]）。激活左栏按 →：左 P1→P2，右栏不动；激活右栏按 ←：右 P2→P1，左栏不动
+            async def press(key):
+                await ev(f"window.dispatchEvent(new KeyboardEvent('keydown', {{ key: '{key}' }}))")
+                await asyncio.sleep(0.9)
+
+            await ev("""(() => { const t = document.querySelectorAll('.dv-tab')[0]; t.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); t.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); })()""")
+            await asyncio.sleep(0.7)
+            await press("ArrowRight")
+            st4a = await ev(PSTATE)
+            print("[S4 左栏→]", json.dumps(st4a, ensure_ascii=False))
+            vals = sorted(v for v in (st4a or {}).get("sessions", {}).values() if v)
+            if vals != ["P2|root", "P2|root"]:
+                fails.append(f"[S4] 左栏步进未生效或误伤右栏（{vals}，期望双 P2|root）")
+            await ev("""(() => { const t = document.querySelectorAll('.dv-tab')[2]; t.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); t.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); })()""")
+            await asyncio.sleep(0.7)
+            await press("ArrowLeft")
+            st4b = await ev(PSTATE)
+            print("[S4 右栏←]", json.dumps(st4b, ensure_ascii=False))
+            vals = sorted(v for v in (st4b or {}).get("sessions", {}).values() if v)
+            if vals != ["P1|root", "P2|root"]:
+                fails.append(f"[S4] 右栏步退未生效或误伤左栏（{vals}，期望 P1|root + P2|root）")
+            # 左右会话键（供 S5 断言死 panel 的 state 键被删）
+            sessions4 = (st4b or {}).get("sessions", {})
+            right_key = next((k for k, v in sessions4.items() if v == "P1|root"), None)
+            left_key = next((k for k, v in sessions4.items() if v == "P2|root"), None)
+
+            # —— S5：关右栏 tab（dock-tab[2]）→ 只收右栏会话（左栏预览保留、state 键删除）；
+            # 再关左栏（dock-tab[0]）→ 左栏会话同收（余「+」tab 干净列表）——
+            await ev("document.querySelectorAll('.dock-tab')[2].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))")
             await asyncio.sleep(0.6)
             if not await menu_click("关闭标签页"):
-                fails.append("[S4] 右键菜单「关闭标签页」未找到")
-            s4 = await tab_preview(0)
-            s4_tabs = await tab_count()
-            print("[S4 关属主]", json.dumps({"余面板预览": s4, "tab数": s4_tabs}))
-            if s4 is not False:
-                fails.append(f"[S4] 属主标签关闭后预览未退出（{s4}）")
+                fails.append("[S5] 右键菜单「关闭标签页」未找到（右栏）")
+            await asyncio.sleep(0.5)
+            s5_left = await cur_preview()  # 仅剩左组（激活回左栏）：预览应在
+            st5 = await ev(PSTATE)
+            print("[S5 关右栏]", json.dumps({"左栏预览": s5_left}))
+            print("[S5 state]", json.dumps(st5, ensure_ascii=False))
+            if s5_left is not True:
+                fails.append(f"[S5] 关右栏误伤左栏预览（{s5_left}）")
+            sessions5 = (st5 or {}).get("sessions", {})
+            if right_key and right_key in sessions5:
+                fails.append(f"[S5] 右栏会话 state 键未删（{right_key} 仍在）")
+            vals5 = [v for v in sessions5.values() if v]
+            if vals5 != ["P2|root"]:
+                fails.append(f"[S5] 右栏会话未精准回收（{vals5}，期望仅剩左栏 P2|root）")
+            await ev("document.querySelectorAll('.dock-tab')[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))")
+            await asyncio.sleep(0.6)
+            if not await menu_click("关闭标签页"):
+                fails.append("[S5] 右键菜单「关闭标签页」未找到（左栏）")
+            await asyncio.sleep(0.5)
+            s5_none = await cur_preview()  # 余 S1 的「+」tab：干净列表
+            st5b = await ev(PSTATE)
+            print("[S5 关左栏]", json.dumps({"余tab预览": s5_none}))
+            if s5_none is not False:
+                fails.append(f"[S5] 属主关闭后余 tab 出现预览（{s5_none}）")
+            sessions5b = (st5b or {}).get("sessions", {})
+            if left_key and left_key in sessions5b:
+                fails.append(f"[S5] 左栏会话 state 键未删（{left_key} 仍在）")
+            if [v for v in sessions5b.values() if v]:
+                fails.append(f"[S5] 会话回收不干净（{sessions5b}）")
 
             if fails:
                 print("FAIL:", "; ".join(dict.fromkeys(fails)))
                 return 3
-            print("PASS: 预览绑定发起面板成立（新标签不抢 / 分屏保留 / B 双击归 B / 属主关即退）")
+            print("PASS: 预览 per-panel 会话化成立（新标签不抢 / 分屏保留 / 双预览并存 / 键盘按激活路由 / 关 panel 精准回收）")
             return 0
     finally:
         proc.terminate()

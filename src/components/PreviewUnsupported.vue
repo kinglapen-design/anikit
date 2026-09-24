@@ -4,13 +4,13 @@
 // 格式图标 200 + 文件名（标题档二级）+ 提示「暂不支持此文件格式预览，请用其他应用打开」（正文三级）
 // + 按钮组（ActionButton solid md：默认应用打开 / 其他应用打开；
 // ws 合成项按钮组隐藏——assetId 假 id 禁发命令，同 PreviewTitleBar isWsCurrent 口径）。
-import { computed } from "vue";
+import { computed, inject } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import ActionButton from "./buttons/ActionButton.vue";
 import { openWithDialog } from "../lib/placementOps";
-import { usePreviewStore } from "../stores/preview";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 
-const preview = usePreviewStore();
+const preview = inject(PREVIEW_SESSION_KEY)!;
 // 格式图标（current.thumbPath，200 实寸稿值；kind==='other' 由注册表命中结构保证）
 const iconUrl = computed(() => {
   const p = preview.current;

@@ -4,7 +4,7 @@
 // 作为 canvas 头部随网格一起滚动，网格 boxes 按头部高度偏移；
 // 滚动条贴 viewport 右缘（不占布局），asset-section 右 padding 4 作呼吸。
 // 布局 / 虚拟滚动编排在 lib/useGridLayout，空格放大预览在 lib/useSpaceZoom（2026-08-12 拆出）。
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import AssetCard from "./AssetCard.vue";
 import HoverZoomOverlay from "./HoverZoomOverlay.vue";
 import ListRowCard from "./ListRowCard.vue";
@@ -35,7 +35,7 @@ import { useContentStore, type FolderNode, type PlacementView } from "../stores/
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
-import { usePreviewStore } from "../stores/preview";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 
 const props = withDefaults(
   defineProps<{
@@ -52,7 +52,8 @@ const ui = useUiStore();
 const content = useContentStore();
 const picker = usePickerStore();
 const selection = useSelectionStore();
-const preview = usePreviewStore();
+// 本 panel 预览会话（ContentArea provide；双击进预览与右键菜单 panelId 两用）
+const preview = inject(PREVIEW_SESSION_KEY)!;
 
 // 进预览（4.3）：双击卡片
 function openPreview(p: PlacementView): void {
@@ -332,9 +333,10 @@ const {
 
 // —— 右键菜单（6.3 全量改造；1.3 一轮按新稿 02_布局 重写）：
 // 统一调度在 lib/menuSpecs/gridDispatch.openGridContextMenu（素材 / 回收站 13 稿 / 空白新增菜单
-// 均走全局宿主 lib/contextMenus；RecycleCardMenu 局部菜单 2026-08-11 废除）
+// 均走全局宿主 lib/contextMenus；RecycleCardMenu 局部菜单 2026-08-11 废除）；
+// panelId 透传 = 本 panel 预览会话属主（「打开预览」开进本 panel 会话，2026-09-25）
 function onCardContextMenu(e: MouseEvent): void {
-  openGridContextMenu(e, props.items);
+  openGridContextMenu(e, props.items, preview.panelId);
 }
 
 // —— 卡片间距排序落点解析器（C4a）：注册给拖拽引擎，算法主体在 lib/dragOperation makeGridResolver

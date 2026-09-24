@@ -6,16 +6,16 @@
 // 数据 = get_audio_peaks 128 根 cardPeaksFor 懒加载（SectionPinned 同范式），peaks 失败 = 空波形；
 // 播放头 1px 品牌竖线保留。旧 hires 重采样图 + CSS mask 方案退役（get_waveform 全链删除）。
 // 交互 = pointerdown 跳值 + window pointermove 拖动（BarSlider 同款链路，drag-start/end 透传 scrubbing 挂钩）。
-import { ref, watch } from "vue";
+import { inject, ref, watch } from "vue";
 import WaveContent from "../cards/contents/WaveContent.vue";
 import { cardPeaksFor } from "../../lib/cardPeaks";
-import { usePreviewStore } from "../../stores/preview";
+import { PREVIEW_SESSION_KEY } from "../../lib/previewSessionKey";
 
 const props = withDefaults(defineProps<{ peaks?: number[] }>(), { peaks: undefined });
 const model = defineModel<number>({ default: 0 }); // 0~1
 const emit = defineEmits<{ "drag-start": []; "drag-end": [] }>();
 
-const preview = usePreviewStore();
+const preview = inject(PREVIEW_SESSION_KEY)!;
 const rootEl = ref<HTMLElement>();
 
 // peaks 懒加载（SectionPinned 同范式：await 期间切素材防错配）；props.peaks 提供 = 演示注入优先

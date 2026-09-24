@@ -55,7 +55,7 @@ import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
 import { usePickerStore } from "./stores/picker";
 import { useSelectionStore } from "./stores/selection";
-import { usePreviewStore } from "./stores/preview";
+import { initPreviewListeners } from "./stores/preview";
 import { wizardState, reopenLastSession, createLibraryModalState, mergeLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener } from "./lib/libraryOps";
 import { playAlert } from "./lib/sounds";
 import { closePluginPanel, pluginPanelState } from "./lib/pluginPanel";
@@ -69,7 +69,6 @@ const ui = useUiStore();
 const content = useContentStore();
 const picker = usePickerStore();
 const selection = useSelectionStore();
-const preview = usePreviewStore();
 
 // 侧栏 / dock 宿主引用：收展动画引擎（useSidebarAnim）逐帧写宽与灌宽的 DOM 锚点
 const sidebarLeftRef = ref<InstanceType<typeof SidebarLeft>>();
@@ -200,7 +199,7 @@ onMounted(() => {
   void content.initMcpListener(); // MCP 写入热刷新（PRD 08-06：agent 写库 → 去抖全量对齐）
   initWsListeners(); // 工作空间磁盘实况（PRD 02 步骤 1）：fs-changed 去抖重扫 + 缩略图回填，幂等
   void initOrphanInfosListener(); // 无主资产警告（2026-09-02）——须在开库（reopenLastSession）前注册
-  void preview.initPreviewListener(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3）
+  void initPreviewListeners(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3；扇出全部已建会话）
   void webview.onDragDropEvent((event) => {
     if (event.payload.type === "drop") {
       void onDrop(event.payload.paths, event.payload.position.x, event.payload.position.y);

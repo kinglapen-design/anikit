@@ -8,7 +8,7 @@
 // 右键「重排序号 / 删除此张序列图」（多选 = 删除 N 张，Delete 键同径）；空白右键 = 重排序号。
 // 选择模型为包内本地集（帧不是 Placement，不进全局选择域）；打开本视口时全局选择域已清空
 //（assetCard 菜单 action 内 selection.clear()——防全局 Delete 误伤素材域）。
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import ScrollThumb from "./ScrollThumb.vue";
@@ -18,14 +18,16 @@ import { openContextMenu, type CtxEntry } from "../lib/contextMenus";
 import { deleteSequenceFrames, renumberSequenceFrames, setSequenceFrameThumb } from "../lib/placementOps";
 import { useContentStore } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
-import { usePreviewStore } from "../stores/preview";
 import { useTabsStore } from "../stores/tabs";
 import { useUiStore } from "../stores/ui";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 
 const props = defineProps<{ assetId: string; panelActive: boolean }>();
 
 const content = useContentStore();
 const ui = useUiStore();
+// 本 panel 预览会话（ContentArea provide；打开预览定位帧用，属主恒 = 本 panel）
+const preview = inject(PREVIEW_SESSION_KEY)!;
 
 const frames = ref<FrameEntry[]>([]);
 const thumbFrame = ref<string | null>(null);
@@ -173,15 +175,15 @@ function clickFrame(e: MouseEvent, name: string, idx: number): void {
   anchorIdx = idx;
 }
 
-// 打开预览定位该帧：退回包所在文件夹视口（preview.current 依赖视口 Placement 解析）+ 打开 + 定位
+// 打开预览定位该帧：退回包所在文件夹视口（preview.current 依赖视口 Placement 解析）+ 打开 + 定位；
+// 定向本 panel（2026-09-25 per-panel 会话化：openView 第二参传属主 panelId，预览开进本 panel 会话）
 async function openFramePreview(name: string): Promise<void> {
   const p =
     content.placements.find((x) => x.assetId === props.assetId && x.origin) ??
     content.placements.find((x) => x.assetId === props.assetId);
   if (!p) return;
   const idx = frames.value.findIndex((f) => f.name === name);
-  useTabsStore().openView(`folder:${p.folderId}`);
-  const preview = usePreviewStore();
+  useTabsStore().openView(`folder:${p.folderId}`, preview.panelId);
   await preview.open(`${p.assetId}|${p.folderId}`);
   if (idx >= 0) preview.setFrame(idx);
 }

@@ -9,7 +9,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore, type PlacementView } from "../../stores/content";
 import { useSelectionStore } from "../../stores/selection";
-import { usePreviewStore } from "../../stores/preview";
+import { previewSession } from "../../stores/preview";
 import type { CtxEntry } from "../contextMenus";
 import { copyAssetDescriptions, copyAssetTags, pasteDescriptions, pasteTags } from "../customDataOps";
 import { copyAssetLink, copyAssetPath, copyBase64, copyName, pickExportAssets, revealWithWarning } from "../menuOps";
@@ -50,8 +50,9 @@ function openDefaultApp(assetId: string): void {
 }
 
 // 回收站文件菜单（2026-09-05 走查全量版）：p = 被右键条目（PlacementView 同构，folderId 恒 "recycle"）；
-// 键解析失败兜底（p 缺失）= 只留还原/清空基础集（旧三行口径）
-export function recycleCardSpec(p?: PlacementView): CtxEntry[] {
+// 键解析失败兜底（p 缺失）= 只留还原/清空基础集（旧三行口径）；
+// panelId = 发起右键的 panel（2026-09-25 per-panel 会话化：「打开预览」开进属主 panel 会话）
+export function recycleCardSpec(p: PlacementView | undefined, panelId: string): CtxEntry[] {
   const selection = useSelectionStore();
   if (!p) {
     return [
@@ -65,7 +66,7 @@ export function recycleCardSpec(p?: PlacementView): CtxEntry[] {
   return [
     { label: "还原文件", action: () => void restoreRecycle(recycleSelectedAssetIds()) },
     "divider",
-    { label: "打开预览", shortcut: "Enter", action: () => void usePreviewStore().open(assetKey) },
+    { label: "打开预览", shortcut: "Enter", action: () => void previewSession(panelId).open(assetKey) },
     {
       label: "新标签页打开",
       shortcut: "Ctrl+Enter",

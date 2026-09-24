@@ -2,16 +2,19 @@
 // 独立预览窗口（4.3 新窗口打开）：标题栏（文件名 + 置顶 + 窗口控制）+ 预览画面 + 悬浮播放条/帧条/弹层
 //（FloatBarHost 预览态 play 模式；不传 panelId/viewKey = 搜索分支禁用，2026-09-09 二轮宿主合并）。
 // 经 URL ?preview={assetKey} 进入；数据走同一 Rust AppState，本窗口独立 pinia，拉全量后 open。
-import { onMounted } from "vue";
+import { onMounted, provide } from "vue";
 import PreviewTitleBar from "./PreviewTitleBar.vue";
 import PreviewPanel from "./PreviewPanel.vue";
 import FloatBarHost from "./FloatBarHost.vue";
 import { useContentStore } from "../stores/content";
-import { usePreviewStore } from "../stores/preview";
+import { previewSession, WINDOW_PANEL_ID } from "../stores/preview";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 
 const props = defineProps<{ assetKey: string }>();
 const content = useContentStore();
-const preview = usePreviewStore();
+// 独立子窗口会话（属主 = WINDOW_PANEL_ID；provide 给本窗口预览族组件 inject）
+const preview = previewSession(WINDOW_PANEL_ID);
+provide(PREVIEW_SESSION_KEY, preview);
 
 onMounted(async () => {
   await content.refresh();

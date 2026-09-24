@@ -22,6 +22,13 @@ import PreviewPlugins from "./sections/PreviewPlugins.vue";
 import PreviewDialogs from "./sections/PreviewDialogs.vue";
 import PreviewOverlays from "./sections/PreviewOverlays.vue";
 import PreviewWindows from "./sections/PreviewWindows.vue";
+import { provide } from "vue";
+import { previewSession } from "../stores/preview";
+import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
+
+// 预览会话占位 provide（per-panel 会话化配套：展区内真实实例 FloatBarHost / WaveProgress 注入必需；
+// "__design__" 会话永不 open（assetKey 恒 null），仅供组件取数不崩）
+provide(PREVIEW_SESSION_KEY, previewSession("__design__"));
 
 const nav = [
   { id: "inventory", label: "组件台账" },
