@@ -10,6 +10,7 @@ import { ref } from "vue";
 import FloatBar from "../../components/bars/FloatBar.vue";
 import FrameStrip from "../../components/bars/FrameStrip.vue";
 import BarSlider from "../../components/bars/BarSlider.vue";
+import WaveProgress from "../../components/bars/WaveProgress.vue";
 import RatePop from "../../components/bars/RatePop.vue";
 import VolumePop from "../../components/bars/VolumePop.vue";
 import NotesPop from "../../components/bars/NotesPop.vue";
@@ -35,6 +36,15 @@ function morphToggleFilter(f: string): void {
 const livePlaying = ref(false);
 const liveMuted = ref(false);
 const liveProgress = ref(0.2);
+
+// 音频波形进度演示：data-uri svg 波形图（WaveProgress mask 只取 alpha；预览页纯前端口径，
+// 不依赖后端 get_waveform 重采样——实机图 = 后端按轨道实寸重渲 PCM）
+const liveWaveProgress = ref(0.4);
+const demoWaveUrl = (() => {
+  const hs = [4, 9, 15, 8, 16, 6, 12, 18, 10, 14, 5, 11, 17, 7, 13, 4, 9, 16, 12, 8, 15, 6, 10, 18, 7, 14, 11, 5, 13, 9];
+  const rects = hs.map((h, i) => `<rect x='${i * 4}' y='${(18 - h) / 2}' width='2' height='${h}'/>`).join("");
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='${hs.length * 4}' height='18'>${rects}</svg>`)}`;
+})();
 
 // 帧条 + 播放条同宽组合（帧条自然宽 777 → 播放条 width 覆盖同步）
 const COMBO_W = 777;
@@ -188,8 +198,16 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
       </div>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
-          <FloatBar mode="play" :show="['volume', 'rate', 'loop']" :progress="0.4" />
-          <span class="pv-cap">按上下文删减（音频语境示例：无传输 / 步进 / 笔记 / 封面 / 全屏）</span>
+          <FloatBar mode="play" :show="['volume', 'rate', 'loop']" v-model:progress="liveWaveProgress">
+            <template #progress>
+              <WaveProgress v-model="liveWaveProgress" :fallback-url="demoWaveUrl" />
+            </template>
+          </FloatBar>
+          <span class="pv-cap">
+            音频语境（2026-09-25 修正：本格进度区换真实 WaveProgress——音乐预览稿 prose「只在播放条上放波形图」；
+            未播放 亮色/三级 / 已播放+播放头 品牌；波形实机 = 后端按轨道实寸重采样，此处 data-uri 演示图；
+            进度可拖；show 组删减 = 无传输 / 步进 / 笔记 / 封面 / 全屏）
+          </span>
         </div>
         <div class="pv-demo-cell">
           <FloatBar

@@ -1,4 +1,4 @@
-// 本文件由 tools/gen-component-inventory.mjs 生成（2026-09-21），勿手改——重跑 `pnpm inventory` 刷新。
+// 本文件由 tools/gen-component-inventory.mjs 生成（2026-09-24），勿手改——重跑 `pnpm inventory` 刷新。
 // 阶段七重构「组件台账」数据源：status = new 新体系 / legacy 旧件待烧 / business 业务件 / dead 零消费休眠。
 export type InventoryStatus = "new" | "legacy" | "business" | "dead";
 export interface InventoryEntry {
@@ -9,11 +9,11 @@ export interface InventoryEntry {
   legacyTokens: number;
   replacement: string;
 }
-export const inventoryDate = "2026-09-21";
+export const inventoryDate = "2026-09-24";
 export const inventoryTotals = {
   "new": 72,
   "legacy": 0,
-  "business": 73,
+  "business": 75,
   "dead": 2,
   "legacyConsumers": 0,
   "legacyTokens": 0
@@ -86,6 +86,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/PreviewTitleBar",
     "name": "PreviewTitleBar",
+    "status": "business",
+    "consumers": 2,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/QuickNavButton",
+    "name": "QuickNavButton",
     "status": "business",
     "consumers": 2,
     "legacyTokens": 0,
@@ -412,8 +420,16 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/PreviewAudioWave",
-    "name": "PreviewAudioWave",
+    "path": "components/PreviewAudio",
+    "name": "PreviewAudio",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/PreviewDocx",
+    "name": "PreviewDocx",
     "status": "business",
     "consumers": 1,
     "legacyTokens": 0,
@@ -639,7 +655,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/buttons/IconButton",
     "name": "IconButton",
     "status": "new",
-    "consumers": 25,
+    "consumers": 26,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -647,7 +663,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/ScrollThumb",
     "name": "ScrollThumb",
     "status": "new",
-    "consumers": 23,
+    "consumers": 24,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -772,6 +788,14 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/cards/contents/FontContent",
+    "name": "FontContent",
+    "status": "new",
+    "consumers": 2,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/cards/contents/MediaCapsule",
     "name": "MediaCapsule",
     "status": "new",
@@ -782,6 +806,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/cards/contents/ThumbContent",
     "name": "ThumbContent",
+    "status": "new",
+    "consumers": 2,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/cards/contents/WaveContent",
+    "name": "WaveContent",
     "status": "new",
     "consumers": 2,
     "legacyTokens": 0,
@@ -908,14 +940,6 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/cards/contents/FontContent",
-    "name": "FontContent",
-    "status": "new",
-    "consumers": 1,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
     "path": "components/cards/contents/TextContent",
     "name": "TextContent",
     "status": "new",
@@ -926,14 +950,6 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/cards/contents/VideoBar",
     "name": "VideoBar",
-    "status": "new",
-    "consumers": 1,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/cards/contents/WaveContent",
-    "name": "WaveContent",
     "status": "new",
     "consumers": 1,
     "legacyTokens": 0,
@@ -1014,6 +1030,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/items/LinkRelationItem",
     "name": "LinkRelationItem",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/items/LinkThumbItem",
+    "name": "LinkThumbItem",
     "status": "new",
     "consumers": 1,
     "legacyTokens": 0,
@@ -1166,14 +1190,6 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/buttons/DropButton",
     "name": "DropButton",
-    "status": "new",
-    "consumers": 0,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/items/LinkThumbItem",
-    "name": "LinkThumbItem",
     "status": "new",
     "consumers": 0,
     "legacyTokens": 0,

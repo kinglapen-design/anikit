@@ -5,6 +5,7 @@
 // 字体预览 / 不支持预览 = 静态复刻（R4 2026-09-20 换代后口径；本体依赖预览数据，壳内嵌真实 SegmentedControl/FontInstallButton/ActionButton）。
 import { ref } from "vue";
 import EmptyFolderState from "../../components/EmptyFolderState.vue";
+import AppIcon from "../../components/AppIcon.vue";
 import SegmentedControl from "../../components/buttons/SegmentedControl.vue";
 import FontInstallButton from "../../components/buttons/FontInstallButton.vue";
 import ActionButton from "../../components/buttons/ActionButton.vue";
@@ -76,10 +77,10 @@ const fontTabs = [
       <h3 class="pv-group-title">此文件不支持预览（R4 落地：中间面板-内容容器-此文件不支持预览稿；静态复刻嵌真实按钮）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
-          <div class="pv-us-stage">
-            <div class="pv-us-body">
+          <div class="pv-stand-stage">
+            <div class="pv-stand-body">
               <span class="pv-us-icon">ZIP</span>
-              <span class="pv-us-title">素材打包备份.zip</span>
+              <span class="pv-stand-title">素材打包备份.zip</span>
               <span class="pv-us-hint">暂不支持此文件格式预览，请用其他应用打开</span>
               <div class="pv-us-actions">
                 <ActionButton label="默认应用打开" variant="solid" size="md" icon="open-default" />
@@ -91,6 +92,25 @@ const fontTabs = [
             稿：块 column gap 24 + padding-bottom 24 / 格式图标 200 / 标题 18/26 Bold 二级（含扩展名）/ 提示 13/18 三级 /
             双钮 150×34 solid md（图标 18 三级）；本体 ws 合成项隐藏按钮组；预览环境不接真实打开命令；
             样例格式 2026-09-22 由 docx 改 zip（docx 已支持预览，R6）
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">音乐预览（2026-09-25 落地：中间面板-内容容器-音乐预览稿；静态复刻嵌真实 vinyl 图标）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div class="pv-stand-stage">
+            <div class="pv-stand-body">
+              <AppIcon name="vinyl" :size="200" />
+              <span class="pv-stand-title">音乐.wav</span>
+            </div>
+          </div>
+          <span class="pv-cap">
+            稿：块 column gap 24 + padding-bottom 24 / 唱片-icon 200（渐变底 + 转盘 + 指针，opacity 0.6 与小阴影烘焙在
+            svg）/ 文件名 18/26 Bold 二级（含扩展名）；波形只在播放条（稿 prose「只在播放条上放波形图即可，预览界面
+            无需波形图」）——播放条侧见 悬浮栏·播放条 展区音频波形格；本体 = PreviewAudio（previewSpecs audio 注册）
           </span>
         </div>
       </div>
@@ -166,8 +186,8 @@ const fontTabs = [
   color: var(--n-md-body);
 }
 
-/* 不支持预览复刻壳（口径与 PreviewPanel.vue R4 同步） */
-.pv-us-stage {
+/* 居中立姿族共用壳（不支持预览 / 音乐预览；口径与 PreviewUnsupported.vue R4 / PreviewAudio.vue 同步） */
+.pv-stand-stage {
   position: relative;
   width: 720px;
   height: 420px;
@@ -178,7 +198,7 @@ const fontTabs = [
   align-items: center;
   justify-content: center;
 }
-.pv-us-body {
+.pv-stand-body {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -198,7 +218,7 @@ const fontTabs = [
   font-weight: var(--n-fw-bold);
   letter-spacing: 2px;
 }
-.pv-us-title {
+.pv-stand-title {
   font-size: var(--n-fs-title);
   line-height: var(--n-lh-title);
   font-weight: var(--n-fw-bold);

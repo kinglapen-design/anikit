@@ -6,7 +6,7 @@
 import type { PreviewPaneSpec } from "./types";
 import { fontPaneSpec } from "./font";
 import { textPaneSpec } from "./text";
-import { audioWavePaneSpec } from "./audioWave";
+import { audioPaneSpec } from "./audio";
 import { otherPaneSpec } from "./other";
 import { docxPaneSpec } from "./docx";
 
@@ -22,10 +22,10 @@ export function previewPaneSpecFor(kind: string): PreviewPaneSpec | null {
   return registry.get(kind) ?? null;
 }
 
-// 内建五族：字体 / 文本 / 音频波形大图 / docx 文档 / other 不支持预览立姿
+// 内建五族：字体 / 文本 / 音频音乐预览 / docx 文档 / other 不支持预览立姿
 registerPreviewPaneSpec(fontPaneSpec);
 registerPreviewPaneSpec(textPaneSpec);
-registerPreviewPaneSpec(audioWavePaneSpec);
+registerPreviewPaneSpec(audioPaneSpec);
 registerPreviewPaneSpec(otherPaneSpec);
 registerPreviewPaneSpec(docxPaneSpec);
 

@@ -202,8 +202,12 @@ function has(g: PlayGroup): boolean {
 /* 进度条：width 327 稿值 + 默认 flex 0 1 auto + min-width 0——业务接入轮自适应（2026-09-09）：
    壳窄可缩（shrink 1）；probe（父 max-content）贡献 327 稿值——注意 flex-basis 定值 + shrink>0 时
    Blink 贡献只报内容固有尺寸（BarSlider 内容宽 0 → 整条被探针丢宽），width 定值才有贡献
-   （cdp-flex-contrib-exp.py 实测定案：basis 案 0 / width 案 327） */
+   （cdp-flex-contrib-exp.py 实测定案：basis 案 0 / width 案 327）。
+   align-self stretch（2026-09-25 波形塌陷修复）：.fb-mode align-items center 下本盒高度由内容撑，
+   BarSlider 自带轨道高不塌，WaveProgress 根 height:100% 在父高 auto 时解析失败塌成 0（波形整体
+   不可见，2026-09-09 接入轮起回归）——stretch 拉满内容盒 18（42 - padding 12×2）供百分比子高解析 */
 .fbp-progress {
+  align-self: stretch;
   width: 327px;
   min-width: 0;
   display: flex;
