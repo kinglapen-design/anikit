@@ -265,10 +265,33 @@ async def main():
             if [v for v in sessions5b.values() if v]:
                 fails.append(f"[S5] 会话回收不干净（{sessions5b}）")
 
+            # —— S6：右键「新标签页打开」（per-panel 会话化接入）→ 新开标签页直接进预览、
+            # 标题 = 资产名；源 tab 保持列表 ——（此时仅剩 S1 的「+」tab，干净列表）
+            await ev("document.querySelectorAll('.asset-card')[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))")
+            await asyncio.sleep(0.6)
+            if not await menu_click("新标签页打开"):
+                fails.append("[S6] 右键菜单「新标签页打开」未找到")
+            await asyncio.sleep(1.5)
+            st6 = await ev(PSTATE)
+            s6_preview = await cur_preview()  # 新标签页即激活：应直接是预览
+            s6_titles = await ev("[...document.querySelectorAll('.dock-tab')].map((t) => t.textContent.trim())")
+            print("[S6 新标签页打开]", json.dumps({"tabs": (st6 or {}).get("tabs"), "新页预览": s6_preview, "标题": s6_titles}, ensure_ascii=False))
+            if len((st6 or {}).get("tabs", [])) != 2:
+                fails.append(f"[S6] 未新开标签页（{st6}）")
+            if s6_preview is not True:
+                fails.append(f"[S6] 新标签页未直接进预览（{s6_preview}）")
+            if (st6 or {}).get("sessions", {}).get(f"preview#{(st6 or {}).get('active')}") != "P1|root":
+                fails.append(f"[S6] 新标签页会话资产不符（{st6}）")
+            if not any("图一" in (t or "") for t in (s6_titles or [])):
+                fails.append(f"[S6] 预览页标题未跟随资产名（{s6_titles}）")
+            s6_src = await tab_preview(0)  # 切回源 tab：应仍是列表
+            if s6_src is not False:
+                fails.append(f"[S6] 源 tab 被预览污染（{s6_src}）")
+
             if fails:
                 print("FAIL:", "; ".join(dict.fromkeys(fails)))
                 return 3
-            print("PASS: 预览 per-panel 会话化成立（新标签不抢 / 分屏保留 / 双预览并存 / 键盘按激活路由 / 关 panel 精准回收）")
+            print("PASS: 预览 per-panel 会话化成立（新标签不抢 / 分屏保留 / 双预览并存 / 键盘按激活路由 / 关 panel 精准回收 / 新标签页打开直进预览）")
             return 0
     finally:
         proc.terminate()

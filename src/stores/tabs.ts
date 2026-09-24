@@ -10,7 +10,7 @@ import { defineStore } from "pinia";
 import { markRaw, nextTick, ref } from "vue";
 import type { DockviewApi, IDockviewPanel, SerializedDockview } from "dockview-vue";
 import { useContentStore } from "./content";
-import { dropPreviewSession, eachPreviewSession, peekPreviewSession } from "./preview";
+import { dropPreviewSession, eachPreviewSession, peekPreviewSession, previewSession } from "./preview";
 import { useSelectionStore } from "./selection";
 import { useUiStore } from "./ui";
 import { findFolderNode } from "../lib/detailSections";
@@ -200,10 +200,11 @@ export const useTabsStore = defineStore("tabs", () => {
     syncNavCan();
   }
 
-  function addTab(viewKey = "quick:all", referenceGroupId?: string): void {
-    if (!api) return;
+  function addTab(viewKey = "quick:all", referenceGroupId?: string): string | null {
+    if (!api) return null;
+    const id = `tab-${Date.now()}-${seq++}`;
     api.addPanel({
-      id: `tab-${Date.now()}-${seq++}`,
+      id,
       component: "content",
       tabComponent: "tab",
       title: content.viewTitle(viewKey),
@@ -212,6 +213,16 @@ export const useTabsStore = defineStore("tabs", () => {
         ? { position: { referenceGroup: referenceGroupId, direction: "within" as const } }
         : {}),
     });
+    return id;
+  }
+
+  // 资产「新标签页打开」（2026-09-25 per-panel 会话化配套接入）：新开同源视口的标签页并直接
+  // 开该资产预览——会话即建即开（assetKey 先于 ContentArea 挂载就位，挂上即预览态）；
+  // 新页标题经 TabLabel 会话感知派生 = 资产名（退出预览自动回视口名）
+  function openPreviewInNewTab(sourcePanelId: string, assetKey: string): void {
+    const id = addTab(viewKeyOf(sourcePanelId));
+    if (!id) return;
+    void previewSession(id).open(assetKey);
   }
 
   // 新标签页打开（文件夹/档案菜单"新标签页打开"，2026-08-20 接入）：不管当前页锁定与否恒新开——
@@ -337,5 +348,5 @@ export const useTabsStore = defineStore("tabs", () => {
     api?.layout(width, height, true);
   }
 
-  return { tabs, activeTabId, navCan, bind, openView, openInNewTab, goHistory, addTab, closeTab, activateTab, closeAllTabs, closeOtherTabs, toggleLock, splitTab, forceLayout, viewKeyOf };
+  return { tabs, activeTabId, navCan, bind, openView, openInNewTab, openPreviewInNewTab, goHistory, addTab, closeTab, activateTab, closeAllTabs, closeOtherTabs, toggleLock, splitTab, forceLayout, viewKeyOf };
 });

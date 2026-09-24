@@ -1,11 +1,13 @@
 <script setup lang="ts">
 // 标签页 dockview 适配器（7.1 十九轮重写）：视觉全归 items/TabItem（贴稿），本件只接业务——
-// 标题按 viewKey 实时派生（文件夹重命名自动跟随）；锁定 = pin 替代关闭钮（TabItem locked）；
-// 右键 = lib/tabMenus；点击激活 / 拖拽换位由 dockview 外壳（.dv-tab）处理，本件不接 click。
+// 标题按 viewKey 实时派生（文件夹重命名自动跟随）；预览中的页 = 资产名（2026-09-25 per-panel
+// 会话化配套：会话 assetKey 非空即预览态，退出自动回视口名）；锁定 = pin 替代关闭钮（TabItem
+// locked）；右键 = lib/tabMenus；点击激活 / 拖拽换位由 dockview 外壳（.dv-tab）处理，本件不接 click。
 import { computed, onBeforeUnmount, ref } from "vue";
 import type { DockviewPanelApi, IDockviewPanelHeaderProps } from "dockview-vue";
 import TabItem from "./items/TabItem.vue";
 import { useContentStore } from "../stores/content";
+import { previewSession } from "../stores/preview";
 import { useTabsStore } from "../stores/tabs";
 import { openTabContextMenu } from "../lib/tabMenus";
 
@@ -20,7 +22,11 @@ const tabs = useTabsStore();
 
 const viewKey = computed(() => (frame.value.params?.viewKey as string) ?? "quick:all");
 const locked = computed(() => !!frame.value.params?.locked);
-const title = computed(() => content.viewTitle(viewKey.value));
+// 本 panel 预览会话（懒建共享注册表实例；assetKey 响应式——预览中标题 = 资产名，退出回视口名）
+const session = previewSession(panelApi.id);
+const title = computed(() =>
+  session.assetKey ? (session.current?.name ?? content.viewTitle(viewKey.value)) : content.viewTitle(viewKey.value),
+);
 
 // 选中态：panel api 事件驱动，不靠全局 CSS 类（TabItem selected 自包含样式）
 const active = ref(panelApi.isActive);

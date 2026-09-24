@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useContentStore, type PlacementView } from "../../stores/content";
 import { useSelectionStore } from "../../stores/selection";
 import { previewSession } from "../../stores/preview";
+import { useTabsStore } from "../../stores/tabs";
 import type { CtxEntry } from "../contextMenus";
 import { copyAssetDescriptions, copyAssetTags, pasteDescriptions, pasteTags } from "../customDataOps";
 import { copyAssetLink, copyAssetPath, copyBase64, copyName, pickExportAssets, revealWithWarning } from "../menuOps";
@@ -70,7 +71,7 @@ export function recycleCardSpec(p: PlacementView | undefined, panelId: string): 
     {
       label: "新标签页打开",
       shortcut: "Ctrl+Enter",
-      disabled: true, // 文件无独立标签页视口业务（标签页 = 文件夹视口），占位（同 03 稿文件菜单口径）
+      action: () => useTabsStore().openPreviewInNewTab(panelId, assetKey), // 2026-09-25 per-panel 会话化接入
     },
     { label: "新窗口打开", action: () => void invoke("open_preview_window", { assetKey }) },
     { label: "在默认应用打开", shortcut: "Shift+Enter", action: () => openDefaultApp(assetId) },

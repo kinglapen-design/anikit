@@ -109,10 +109,11 @@ export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
     );
   }
   entries.push(
+    // 新标签页打开（2026-09-25 per-panel 会话化接入）：新开同视口标签页直接进该资产预览
     {
       label: "新标签页打开",
       shortcut: "Ctrl+Enter",
-      disabled: true, // 文件无独立标签页视口业务（标签页 = 文件夹视口），占位
+      action: () => useTabsStore().openPreviewInNewTab(panelId, assetKey),
     },
     { label: "新窗口打开", action: () => void invoke("open_preview_window", { assetKey }) },
     { label: "在默认应用打开", shortcut: "Shift+Enter", action: () => openDefaultApp(assetId) },
@@ -325,8 +326,8 @@ export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
 // 导入）语义不成立（黑箱移动），一律不出现；留资产级与所见即所得项：打开外发全组 /
 // 链接管理与位置导航 / 复制（文件 / 数据）/ 重命名（用户定：卡片上所见即所得——缩略图视口
 // 改 hidden 伴生图名配工程名案例）/ 缩略图绑定组 / 导出 / 丢到回收站（删除 = 资产"要不要"
-// 的判断，无需在乎位置；多位置条目右键哪条丢哪条）。业务未立项占位项（新标签页 /
-// 添加资源库 / AI 工具集 / 提示词 / 置顶 / Animate 生成缩略图）快速访问不列。
+// 的判断，无需在乎位置；多位置条目右键哪条丢哪条）。业务未立项占位项（添加资源库 / AI 工具集 /
+// 提示词 / 置顶 / Animate 生成缩略图）快速访问不列（新标签页打开 2026-09-25 已随会话化接入点亮）。
 function virtualAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
   const selection = useSelectionStore();
   const content = useContentStore();
@@ -350,6 +351,12 @@ function virtualAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
     );
   }
   entries.push(
+    // 新标签页打开（2026-09-25 per-panel 会话化接入，同主菜单口径）
+    {
+      label: "新标签页打开",
+      shortcut: "Ctrl+Enter",
+      action: () => useTabsStore().openPreviewInNewTab(panelId, assetKey),
+    },
     { label: "新窗口打开", action: () => void invoke("open_preview_window", { assetKey }) },
     { label: "在默认应用打开", shortcut: "Shift+Enter", action: () => openDefaultApp(assetId) },
     { label: "在其他应用打开", action: () => void openWithDialog(assetId) },
