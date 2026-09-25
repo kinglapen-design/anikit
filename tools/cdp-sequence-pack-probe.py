@@ -1,4 +1,5 @@
 # CDP 实测：序列帧包内视图 + 菜单点亮（2026-08-21，5.2）
+# 2026-09-25 T0 验证网修复：选择器换代适配 + 共享桩 _probe_stub
 # 口径（PRD 04-序列帧 包内视图定案 / 05-序列帧打包 解散条）：
 # ① 素材卡片右键：打开序列帧包 / 解散序列帧包导入 两项点亮（不再 disabled）；
 # ② 打开序列帧包 → 视口切 seq:{assetId}，帧卡片列表渲染（3 帧 + 封面标记），标签页标题 = 包名；
@@ -18,15 +19,40 @@ import urllib.request
 import websockets
 import asyncio
 
+from _probe_stub import make_stub
+
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 PORT = 9372
 URL = "http://localhost:5373"
 
-STUB = r"""
-window.__calls = [];
-window.__TAURI_INTERNALS__ = {
-  metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
-  invoke: (cmd, args) => {
+# 启动链默认桩表（get_window_fx_mode / list_relations / list_inbox_snapshot / get_undo_state 等）
+# 由 _probe_stub.DEFAULT_STUBS 兜底；本探针只覆盖业务数据 + 命令拦截计数
+STUB = make_stub(
+    {
+        "get_current_library": "LIB",
+        "get_ui_settings": "{ autoPlayGif: false }",
+        "detect_doc_apps": "[]",
+        "list_placements": "placements",
+        "list_space_libraries": '["旧库"]',
+        "list_recent_libraries": '[{ name: "旧库", path: "E:/T/S/旧库", lastOpenedAt: "" }]',
+        "get_asset_file_path": '{ path: "E:/T/src.png", pending: false, animPreview: null }',
+        "get_asset_detail": """{
+          assetId: "S1", originName: "走路-001.png", ext: "png", size: 3000, width: 640, height: 480,
+          duration: null, importedAt: "2026-08-21T10:00:00+08:00", modifiedAt: "2026-08-21T10:00:00+08:00",
+          tags: [], descriptions: [], colors: [], links: [], note: "", placements: [], archives: [],
+        }""",
+        "get_notes": "[]",
+        "list_sequence_frames": """{
+          fps: 24, thumbFrame: "走路-001.png",
+          frames: [1, 2, 3].map((n) => ({
+            name: `走路-00${n}.png`,
+            fullPath: `E:/T/frames/走路-00${n}.png`,
+            stripPath: `E:/T/cache/走路-00${n}.png.webp`,
+          })),
+        }""",
+    },
+    head="window.__calls = [];",
+    handlers=r"""
     const LIB = { name: "旧库", path: "E:/T/S/旧库", assetCount: 2, folderCount: 0, autoImport: false };
     const placements = [
       { assetId: "S1", folderId: "root", name: "走路.png", w: 640, h: 480, ext: "png",
@@ -38,31 +64,6 @@ window.__TAURI_INTERNALS__ = {
         duration: null, bpm: null, importedFrom: null, noteCount: null, thumbFrame: null, fps: null,
         size: 1000, createdAt: null, modifiedAt: "2026-08-21T10:00:00+08:00", importedAt: "2026-08-21T10:00:00+08:00" },
     ];
-    const R = {
-      get_current_library: LIB,
-      get_ui_settings: { autoPlayGif: false },
-      detect_doc_apps: [],
-      list_placements: placements, list_folder_tree: { blocks: [], nodes: [] }, list_recycle: [], list_recent_assets: [],
-      list_archives: [],
-      get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
-      list_space_libraries: ["旧库"],
-      list_recent_libraries: [{ name: "旧库", path: "E:/T/S/旧库", lastOpenedAt: "" }],
-      get_asset_file_path: { path: "E:/T/src.png", pending: false, animPreview: null },
-      get_asset_detail: {
-        assetId: "S1", originName: "走路-001.png", ext: "png", size: 3000, width: 640, height: 480,
-        duration: null, importedAt: "2026-08-21T10:00:00+08:00", modifiedAt: "2026-08-21T10:00:00+08:00",
-        tags: [], links: [], note: "", placements: [], archives: [],
-      },
-      get_notes: [],
-      list_sequence_frames: {
-        fps: 24, thumbFrame: "走路-001.png",
-        frames: [1, 2, 3].map((n) => ({
-          name: `走路-00${n}.png`,
-          fullPath: `E:/T/frames/走路-00${n}.png`,
-          stripPath: `E:/T/cache/走路-00${n}.png.webp`,
-        })),
-      },
-    };
     if (["dissolve_sequence", "delete_sequence_frames", "renumber_sequence_frames", "set_thumb_frame"].includes(cmd)) {
       window.__calls.push(JSON.parse(JSON.stringify({ cmd, args })));
       if (cmd === "dissolve_sequence") return Promise.resolve(3);
@@ -72,12 +73,8 @@ window.__TAURI_INTERNALS__ = {
       }
       return Promise.resolve(2);
     }
-    return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
-  },
-  transformCallback: () => 0,
-  convertFileSrc: (p) => "asset://localhost/" + encodeURIComponent(p),
-};
-"""
+""",
+)
 
 _msg_id = 0
 
@@ -183,10 +180,12 @@ async def main():
             if not await click_menu("解散序列帧包导入"):
                 fails.append("解散菜单项点击失败")
             await asyncio.sleep(0.5)
+            # 2026-09-25 T0：确认窗换代 = ConfirmModal（.kit-mask .kit-modal，AppConfirm 桥接）；
+            # 按钮次序 = 次左主右（取消在左），按文案寻钮不按序位
             confirm = await ev("""({
-              box: !!document.querySelector('.app-confirm'),
-              text: document.querySelector('.app-confirm .text')?.textContent?.trim() ?? null,
-              btns: [...document.querySelectorAll('.app-confirm .app-btn')].map((b) => b.textContent.trim()),
+              box: !!document.querySelector('.kit-mask .kit-modal'),
+              text: document.querySelector('.kit-mask .kit-modal .body')?.textContent?.trim() ?? null,
+              btns: [...document.querySelectorAll('.kit-mask .kit-modal .btn')].map((b) => b.textContent.trim()),
             })""")
             print("解散确认窗:", json.dumps(confirm, ensure_ascii=False))
             if not confirm or not confirm["box"]:
@@ -196,9 +195,9 @@ async def main():
                 for needle in ["3 张序列帧", "2 条逐帧笔记", "不可撤销"]:
                     if needle not in t:
                         fails.append(f"解散弹窗文案缺「{needle}」（{t[:80]}）")
-                if not confirm["btns"] or confirm["btns"][0] != "解散导入":
-                    fails.append(f"解散弹窗主钮不是「解散导入」（{confirm['btns']}）——主左次右口径")
-            await ev("[...document.querySelectorAll('.app-confirm .app-btn')][0]?.click()")
+                if "解散导入" not in (confirm["btns"] or []):
+                    fails.append(f"解散弹窗缺主钮「解散导入」（{confirm['btns']}）")
+            await ev("[...document.querySelectorAll('.kit-mask .kit-modal .btn')].find((b) => b.textContent.trim() === '解散导入')?.click()")
             await asyncio.sleep(0.6)
             calls = await ev("window.__calls")
             if not any(c["cmd"] == "dissolve_sequence" and c["args"].get("assetId") == "S1" for c in (calls or [])):
@@ -213,7 +212,7 @@ async def main():
               covers: document.querySelectorAll('.frame-card .cover-tag').length,
               title: document.querySelector('.dv-tab .tab.selected .label')?.textContent?.trim()
                      ?? document.querySelector('.dv-tab .tab .label')?.textContent?.trim() ?? null,
-              detailBlocks: document.querySelectorAll('.detail-panel .detail-block').length,
+              detailRoot: document.querySelectorAll('.detail-root').length,
             })""")
             print("包内视图:", json.dumps(pack, ensure_ascii=False))
             if pack is None or pack["cards"] != ["走路-001.png", "走路-002.png", "走路-003.png"]:
@@ -222,7 +221,8 @@ async def main():
                 fails.append(f"封面标记数 {pack['covers']}（期望 1）")
             if pack and pack["title"] != "走路":
                 fails.append(f"标签页标题不是包名（{pack['title']}）")
-            if pack is not None and pack["detailBlocks"] < 1:
+            # 2026-09-25 T0：详情面板换代后根类 = .detail-root（DetailSections），旧 .detail-panel .detail-block 已删
+            if pack is not None and pack["detailRoot"] < 1:
                 fails.append("包内视图详情面板为空（期望停留序列帧包详情）")
 
             # ③ 帧右键菜单四项（含将当前帧设为预览图，2026-08-21 用户定）

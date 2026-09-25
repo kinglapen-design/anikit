@@ -1,4 +1,5 @@
 # CDP 实测：右键菜单新稿（2026-09-01，组件/上下文菜单 五件 + 用户容器定案；二十五轮口径更新；同日走查修订）
+# 2026-09-25 T0 验证网修复：选择器换代适配 + 共享桩 _probe_stub
 # A 容器/分组/item：宽度内容自适应（无内联 width，最长 item 决定）/ 名称→36px→右件最小间距 /
 #   右件贴右缘 / 无搜索区 / 无左图标 / 组间 1px 五级线（组盒内底 inset）/ item 26 高 /
 #   快捷键原串纯文本 / 展开箭头；
@@ -35,11 +36,26 @@ import urllib.request
 
 import websockets
 
+from _probe_stub import make_stub
+
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 PORT = 9347
 URL = "http://localhost:5373"
 
-STUB = r"""
+# 桩数据常量与自定义命令拦截走 make_stub 的 head / handlers；启动链默认桩表（get_window_fx_mode /
+# list_relations / list_inbox_snapshot / get_undo_state 等）由 _probe_stub.DEFAULT_STUBS 兜底
+STUB = make_stub(
+    {
+        "get_current_library": '{ name: "测试库", path: "E:/test-lib", assetCount: 3, folderCount: 3 }',
+        "get_current_space": '{ name: "S", path: "E:/T/S", autoImport: true }',
+        "list_folder_tree": "JSON.parse(JSON.stringify(TREE))",
+        "list_placements": "JSON.parse(JSON.stringify(PLACEMENTS))",
+        "list_recycle": "JSON.parse(JSON.stringify(RECYCLE))",
+        "list_recent_libraries": "[]",
+        "list_archives": "JSON.parse(JSON.stringify(ARCHIVES))",
+        "list_space_libraries": '["测试库"]',
+    },
+    head=r"""
 window.__calls = { set_folder_colors: [], set_asset_props: [], set_archive_props: [] };
 const TREE = {
   blocks: [{ id: "dir", name: "目录", icon: null }],
@@ -85,7 +101,6 @@ const DETAILS = {
   B2: { tags: ["待机"], descriptions: [] },
   R1: { tags: ["废案"], descriptions: [] },
 };
-window.__cbId = 0; window.__cbs = {};
 // contextmenu 派发记录（capture 全量，2026-09-09 S9-7 偶发不开菜单诊断：连 capture 都没有 = 事件被吞）
 window.__ctxLog = [];
 window.addEventListener('contextmenu', (e) => {
@@ -93,11 +108,8 @@ window.addEventListener('contextmenu', (e) => {
   window.__ctxLog.push(((t.className && t.className.toString()) || t.tagName || '?').slice(0, 90));
   if (window.__ctxLog.length > 30) window.__ctxLog.shift();
 }, true);
-window.__TAURI_INTERNALS__ = {
-  metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
-  convertFileSrc: (p) => "asset://localhost/" + encodeURIComponent(p),
-  transformCallback: (cb) => { const id = ++window.__cbId; window.__cbs[id] = cb; return id; },
-  invoke: (cmd, args) => {
+""",
+    handlers=r"""
     if (cmd === "set_folder_colors") {
       window.__calls.set_folder_colors.push(JSON.parse(JSON.stringify(args ?? {})));
       for (const id of args.folderIds ?? []) { const n = findNode(TREE.nodes, id); if (n) n.color = args.color; }
@@ -126,23 +138,8 @@ window.__TAURI_INTERNALS__ = {
         colors: [], links: [], note: "", placements: [], archives: [],
       })));
     }
-    const R = {
-      get_current_library: { name: "测试库", path: "E:/test-lib", assetCount: 3, folderCount: 3 },
-      get_current_space: { name: "S", path: "E:/T/S", autoImport: true },
-      get_ui_settings: {},
-      list_folder_tree: JSON.parse(JSON.stringify(TREE)),
-      list_placements: JSON.parse(JSON.stringify(PLACEMENTS)),
-      list_recycle: JSON.parse(JSON.stringify(RECYCLE)),
-      list_recent_assets: [], list_recent_libraries: [],
-      list_inbox_snapshot: [],
-      list_archives: JSON.parse(JSON.stringify(ARCHIVES)),
-      list_space_libraries: ["测试库"],
-      get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
-    };
-    return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
-  },
-};
-"""
+""",
+)
 
 _msg_id = 0
 
@@ -487,9 +484,10 @@ async def main():
             for q in ["最近使用", "自动导入", "缩略图"]:
                 await click_quick(q)
                 # 自动导入首次点击弹确认窗（探针环境 currentSpace.autoImport 恒 false）——点「开启」批准进视图
+                #（2026-09-25 T0：ConfirmModal 换代后遮罩类 = .kit-mask，按钮文案「开启」不变，LibraryView.vue:390）
                 if q == "自动导入":
-                    if await ev("!!document.querySelector('.modal-mask')"):
-                        await js_click(el_center("[...document.querySelectorAll('.modal-mask button')].find((x) => x.textContent.includes('开启'))"))
+                    if await ev("!!document.querySelector('.kit-mask')"):
+                        await js_click(el_center("[...document.querySelectorAll('.kit-mask button')].find((x) => x.textContent.includes('开启'))"))
                         await asyncio.sleep(0.6)
                 await js_rclick_expr(blank_bottom())
                 labels = await menu_labels()
@@ -524,7 +522,7 @@ async def main():
                 # 偶发不开菜单现场诊断（2026-09-09）：contextmenu capture 记录 + 浮层/遮罩存在性
                 print("DIAG S9-7 ctxLog:", await ev("JSON.stringify(window.__ctxLog.slice(-4))"),
                       "| zoom:", await ev("!!document.querySelector('.zoom-mask')"),
-                      "| modal:", await ev("!!document.querySelector('.modal-mask')"),
+                      "| modal:", await ev("!!document.querySelector('.kit-mask')"),
                       "| toast:", await ev("document.querySelectorAll('.toast').length"))
             check("S9-7 全部卡双位置：链接卡「将此文件设为原始文件」出现且可用", await ev(f"(() => {{ const it = {js_find('将此文件设为原始文件')}; return it != null && !it.disabled; }})()"), str(labels))
             await esc_close()

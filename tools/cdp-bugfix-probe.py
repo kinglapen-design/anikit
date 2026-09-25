@@ -1,8 +1,9 @@
 # CDP 探针：阶段五前 BUG 修复轮（2026-08-20，10 项中可断言的 8 项）
+# 2026-09-25 T0 验证网修复：选择器换代适配 + 共享桩 _probe_stub
 #   S1 BUG7 树数量：折叠 = 递归总数 / 展开 = 直接子项数
 #   S2 BUG3 树定位：双击文件夹卡片进视口 → 树展开祖先链 + 节点选中可见
 #   S3 BUG9 组内拖拽：同组出 reorder 调用 / 跨组无调用
-#   S4 BUG8 复制 toast：成功绿图标（#278422）非失败红（#CF4040）
+#   S4 BUG8 复制 toast：成功态圆点 .state.success 存在（非失败态；色值断言随 ToastStack 换代废除）
 #   S5 BUG10 新建文档：自定义排序下置顶（第一张卡片）
 #   S6 BUG2 新建子文件夹：父级折叠态新建 → 父级展开 + 新节点命名态
 #   S7 BUG5 新标签页打开：恒新开（标签数 +1）
@@ -19,6 +20,8 @@ import urllib.request
 
 import websockets
 
+from _probe_stub import make_stub
+
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
@@ -27,7 +30,20 @@ URL = "http://localhost:5373"
 SLEEP = 0.35
 
 # 桩：f1 角色（递归 4 = 直接 3 + 子夹 1；挂 PNG 分组）/ f1a 子夹 / f2 场景（空）
-STUB = r"""
+# 启动链默认桩表（get_window_fx_mode / list_relations / list_inbox_snapshot / get_undo_state 等）
+# 由 _probe_stub.DEFAULT_STUBS 兜底
+STUB = make_stub(
+    {
+        "get_current_library": '{ name: "测试库", path: "E:/test-lib", assetCount: 4, folderCount: 3 }',
+        "get_ui_settings": "{ showSubfolders: false }",
+        "list_folder_tree": "JSON.parse(JSON.stringify(TREE))",
+        "list_placements": "JSON.parse(JSON.stringify(PLACEMENTS))",
+        "list_recent_libraries": "[]",
+        "list_space_libraries": '["测试库"]',
+        "undo": "null",
+        "redo": "null",
+    },
+    head=r"""
 window.__calls = { reorder_placements: [] };
 const TREE = {
   blocks: [{ id: "dir", name: "目录", icon: null }],
@@ -51,12 +67,8 @@ const PLACEMENTS = [
   mk("AN-3", "文档.md", "md", { w: null, h: null }),
   mk("AN-4", "子图.png", "png", { folderId: "f1a" }),
 ];
-window.__cbId = 0; window.__cbs = {};
-window.__TAURI_INTERNALS__ = {
-  metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
-  convertFileSrc: (p) => "asset://localhost/" + encodeURIComponent(p),
-  transformCallback: (cb) => { const id = ++window.__cbId; window.__cbs[id] = cb; return id; },
-  invoke: (cmd, args) => {
+""",
+    handlers=r"""
     if (cmd === "create_document") {
       const folderId = args.targetFolder ?? "root";
       const p = mk("AN-NEW", "新建文档.txt", "txt", { folderId, w: null, h: null });
@@ -81,20 +93,8 @@ window.__TAURI_INTERNALS__ = {
       window.__calls.reorder_placements.push(JSON.parse(JSON.stringify(args ?? {})));
       return Promise.resolve(null);
     }
-    const R = {
-      get_current_library: { name: "测试库", path: "E:/test-lib", assetCount: 4, folderCount: 3 },
-      get_ui_settings: { showSubfolders: false },
-      list_folder_tree: JSON.parse(JSON.stringify(TREE)),
-      list_placements: JSON.parse(JSON.stringify(PLACEMENTS)),
-      list_recycle: [], list_recent_assets: [], list_recent_libraries: [],
-      list_inbox_snapshot: [], list_archives: [],
-      get_undo_state: { canUndo: false, canRedo: false, undoLabel: "", redoLabel: "" },
-      undo: null, redo: null,
-    };
-    return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
-  },
-};
-"""
+""",
+)
 
 _msg_id = 0
 
@@ -227,23 +227,23 @@ async def main():
 
             # ── S1 BUG7 树数量：折叠 = 递归 / 展开 = 直接 ──
             print("S1 树数量（折叠递归 / 展开直接）")
-            c_fold = await ev("document.querySelector('.tree-item[data-folder-id=\"f1\"] .count')?.textContent.trim() ?? null")
+            c_fold = await ev("document.querySelector('.tree-item[data-folder-id=\"f1\"] .cnt')?.textContent.trim() ?? null")
             check("S1a f1 折叠显示递归总数 4", c_fold == "4", str(c_fold))
-            # 点箭头展开 f1（箭头按钮 .expand，单击 item 会导航——点 expand 不导航）
-            await click_sel('.tree-item[data-folder-id="f1"] > .expand')
+            # 点箭头展开 f1（箭头按钮 .exp，单击 item 会导航——点 exp 不导航）
+            await click_sel('.tree-item[data-folder-id="f1"] .exp')
             await asyncio.sleep(0.4)
-            c_open = await ev("document.querySelector('.tree-item[data-folder-id=\"f1\"] .count')?.textContent.trim() ?? null")
-            c_sub = await ev("document.querySelector('.tree-item[data-folder-id=\"f1a\"] .count')?.textContent.trim() ?? null")
+            c_open = await ev("document.querySelector('.tree-item[data-folder-id=\"f1\"] .cnt')?.textContent.trim() ?? null")
+            c_sub = await ev("document.querySelector('.tree-item[data-folder-id=\"f1a\"] .cnt')?.textContent.trim() ?? null")
             check("S1b f1 展开显示直接子项数 3", c_open == "3", str(c_open))
             check("S1c f1a 显示递归总数 1", c_sub == "1", str(c_sub))
 
             # ── S2 BUG3 树定位：双击文件夹卡片 → 祖先链展开 + 节点选中 ──
             print("S2 双击文件夹卡片树定位")
-            await click_sel('.tree-item[data-folder-id="f1"] > .expand')  # 再折叠 f1
+            await click_sel('.tree-item[data-folder-id="f1"] .exp')  # 再折叠 f1
             await asyncio.sleep(0.3)
             collapsed = await ev("document.querySelector('.tree-item[data-folder-id=\"f1a\"]') === null")
             check("S2a 预置：f1 折叠后 f1a 树节点不可见", collapsed is True, str(collapsed))
-            await click_sel('.tree-item[data-folder-id="f1"] .body')  # 单击 f1 进视口
+            await click_sel('.tree-item[data-folder-id="f1"] .lead')  # 单击 f1 进视口
             await asyncio.sleep(0.5)
             pos = await rect('.folder-card[data-folder-id="f1a"]')
             check("S2b f1 视口出 f1a 文件夹卡片", pos is not None, "")
@@ -251,13 +251,13 @@ async def main():
                 await dblclick(pos["x"], pos["y"])
                 await asyncio.sleep(0.8)
                 sel = await ev("!!document.querySelector('.tree-item[data-folder-id=\"f1a\"].selected')")
-                cnt = await ev("document.querySelector('.tree-item[data-folder-id=\"f1\"] .count')?.textContent.trim() ?? null")
+                cnt = await ev("document.querySelector('.tree-item[data-folder-id=\"f1\"] .cnt')?.textContent.trim() ?? null")
                 check("S2c 双击卡片后 f1 展开（f1a 节点选中可见）", sel is True, f"f1.count={cnt}")
                 check("S2d f1 展开后数量 = 直接子项 3（BUG7 联动）", cnt == "3", str(cnt))
 
             # ── S3 BUG9 组内允许排序 / 跨组禁止 ──
             print("S3 组内拖拽排序")
-            await click_sel('.tree-item[data-folder-id="f1"] .body')  # 回 f1 视口
+            await click_sel('.tree-item[data-folder-id="f1"] .lead')  # 回 f1 视口
             await asyncio.sleep(0.6)
             ncalls0 = await ev("window.__calls.reorder_placements.length")
             src = await rect('.asset-card[data-key="AN-1|f1"]')
@@ -298,30 +298,50 @@ async def main():
             await key("c", "KeyC", 67, ctrl=True)
             await asyncio.sleep(0.5)
             # 多条 toast 并存（前面 reorder 的 5 秒未散）——按文案找复制那条
+            # 2026-09-25 T0：ToastStack 换代后状态点 = .state.success / .state.fail（成功绿走 currentColor
+            # + --n-success 背景，色值断言无意义）——改判 .toast .state.success 存在
             tinfo = await ev("""
               (() => {
                 const t = [...document.querySelectorAll('.toast')].find((el) => el.textContent.includes('已复制'));
                 if (!t) return null;
-                return { msg: t.querySelector('.message')?.textContent.trim() ?? '', svg: t.querySelector('.state-icon svg')?.outerHTML ?? '' };
+                return { msg: t.querySelector('.message')?.textContent.trim() ?? '', success: !!t.querySelector('.state.success') };
               })()
             """)
             check("S4a 复制 toast 文案", tinfo is not None and "已复制" in tinfo.get("msg", ""), str(tinfo))
-            check("S4b 成功绿图标（非失败红）", tinfo is not None and ("#278422" in tinfo.get("svg", "")) and ("#CF4040" not in tinfo.get("svg", "")), str(tinfo)[:120])
+            check("S4b 成功态圆点（.state.success，非失败态）", tinfo is not None and tinfo.get("success") is True, str(tinfo)[:120])
 
             # ── S5 BUG10 新建文档自定义排序下置顶 ──
+            # 2026-09-25 T0 二轮：Ctrl+N 快捷键已废（useGlobalKeys.ts:4，随 7.1 十八轮左栏轮撤下）——
+            # 改走网格空白处右键 = 07 新增菜单（gridDispatch.ts:70 folder: 视口 → addButtonSpec，
+            # 新建文档七项恒显，menuSpecs/addMenu.ts:38「文本文档」）；落点取右下偏上避开底部搜索悬浮栏
             print("S5 新建文档置顶")
-            await key("n", "KeyN", 78, ctrl=True)
-            await asyncio.sleep(0.6)
+            blank = await ev("""
+              (() => {
+                const v = document.querySelector('.grid-viewport');
+                if (!v) return null;
+                const r = v.getBoundingClientRect();
+                return { x: Math.round(r.right - 60), y: Math.round(r.bottom - 100) };
+              })()
+            """)
+            for _ in range(2):
+                if blank:
+                    await click(blank["x"], blank["y"], button="right")
+                    await asyncio.sleep(0.6)
+                if await ev("!!document.querySelector('.app-menu')"):
+                    break
+                # CDP 合成右键偶发不派发 / toast 挡命中——清 toast 原位重试（context-menu 探针 S9 同款防线）
+                await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
+                await asyncio.sleep(0.3)
             doc_item = await ev("""
               (() => {
-                const items = [...document.querySelectorAll('.menu-item .label')];
+                const items = [...document.querySelectorAll('.app-menu .menu-item .label')];
                 const it = items.find((el) => el.textContent.trim() === '文本文档');
                 if (!it) return null;
                 const r = it.closest('.menu-item').getBoundingClientRect();
                 return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
               })()
             """)
-            check("S5a 新增菜单出「文本文档」", doc_item is not None, "")
+            check("S5a 空白右键新增菜单出「文本文档」", doc_item is not None, "")
             if doc_item:
                 await click(doc_item["x"], doc_item["y"])
                 await asyncio.sleep(0.8)
@@ -330,16 +350,16 @@ async def main():
                     const c = document.querySelector('.asset-card');
                     if (!c) return null;
                     const inp = c.querySelector('.rename-input');
-                    return inp ? inp.value : (c.querySelector('.title')?.textContent.trim() ?? null);
+                    return inp ? inp.value : (c.querySelector('.kc-name')?.textContent.trim() ?? null);
                   })()
                 """)
                 check("S5b 新建文档置顶（第一张卡片，命名态）", first is not None and str(first).startswith("新建文档"), str(first))
 
             # ── S6 BUG2 新建子文件夹默认展开父级 ──
             print("S6 新建子文件夹展开父级")
-            await click_sel('.tree-item[data-folder-id="f1"] > .expand')  # 折叠 f1
+            await click_sel('.tree-item[data-folder-id="f1"] .exp')  # 折叠 f1
             await asyncio.sleep(0.3)
-            pos = await rect('.tree-item[data-folder-id="f1"] .body')
+            pos = await rect('.tree-item[data-folder-id="f1"] .lead')
             if pos:
                 await click(pos["x"], pos["y"], button="right")
                 await asyncio.sleep(0.6)
@@ -362,7 +382,7 @@ async def main():
             # ── S7 BUG5 新标签页打开恒新开 ──
             print("S7 新标签页打开")
             ntabs0 = await ev("document.querySelectorAll('.dv-tab .tab').length")
-            pos = await rect('.tree-item[data-folder-id="f2"] .body')
+            pos = await rect('.tree-item[data-folder-id="f2"] .lead')
             if pos:
                 await click(pos["x"], pos["y"], button="right")
                 await asyncio.sleep(0.6)
@@ -385,18 +405,19 @@ async def main():
 
             # ── S8 BUG6 面包屑后退 / 前进 ──
             print("S8 面包屑历史")
-            await click_sel('.tree-item[data-folder-id="f1"] .body')  # 新页 f2 → f1
+            await click_sel('.tree-item[data-folder-id="f1"] .lead')  # 新页 f2 → f1
             await asyncio.sleep(0.6)
-            await click_sel('.tree-item[data-folder-id="f2"] .body')  # f1 → f2
+            await click_sel('.tree-item[data-folder-id="f2"] .lead')  # f1 → f2
             await asyncio.sleep(0.6)
             # IconButton 用 v-tip 不落 title attribute；crumb-group 内按钮序 = 后退 / 前进（非档案视口）；
             # 多 panel 并存取可见（offsetParent 非 null）的那个工具栏
+            # 2026-09-25 T0：图标钮类名换代 .icon-btn → .ic-btn（buttons/IconButton）
             nav_btns = """
               (() => {
                 const bars = [...document.querySelectorAll('.panel-toolbar')].filter((el) => el.offsetParent !== null);
                 const bar = bars[0];
                 if (!bar) return [];
-                return [...bar.querySelectorAll('.crumb-group .icon-btn')].map((b) => {
+                return [...bar.querySelectorAll('.crumb-group .ic-btn')].map((b) => {
                   const r = b.getBoundingClientRect();
                   return { disabled: b.disabled, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
                 });
