@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 插件面板展区——docs/06_UI重构/Design Token/布局/主窗口/工具栏展开窗口/插件.md（列表浮层 400×450）
-// + Animate 插件.md（详情子窗口 544×538）（2026-09-06 插件窗轮）；MCP 详情窗复刻（544×640，
+// + Animate 插件.md（详情子窗口 544×538 稿值，2026-09-06 插件窗轮；复刻壳 2026-09-25 加高 640 容通信服务组——
+// 插件 WS 总开关 + 运行状态行，MCP 窗同款）；MCP 详情窗复刻（544×640，
 // 2026-09-20 MCP 条目轮：服务组开关行 SwitchButton + 教程配置行 copy 钮）。
 // PluginListPanel 是 AppMenu fixed 浮层、AnimatePluginWindow/McpPluginWindow 挂载即调后端命令——
 // 均不便静态展示，按 PreviewModals 的 pv-modal-shell 手法复刻口径静态陈列（口径变更时与组件同步）；
@@ -21,6 +22,8 @@ const shown = computed(() => PLUGINS.filter((p) => p.category === cat.value));
 // MCP 详情窗复刻的开关行（纯展示，不接后端）
 const mcpSvcOn = ref(true);
 const mcpWriteOn = ref(false);
+// Animate 详情窗复刻的通信服务开关（2026-09-25 插件 WS 总开关轮；纯展示，不接后端）
+const animateSvcOn = ref(true);
 </script>
 
 <template>
@@ -31,7 +34,8 @@ const mcpWriteOn = ref(false);
       真 border + 大阴影 + 圆角 8；分类分段 = SegmentedControl text 型 tone=g2（容器 通用/二级 40 高）；
       item 376×32 圆角 6（抓手 14 盒 + 图标 24 盒 + 名称 16/22 Bold 二级 + 更多钮 18 盒四级），hover 底
       亮色/半透明-3（稿未画，就近套菜单项口径，待走查）；空分类 = 「暂无插件」13/18 四级居中；
-      底部开发者选项（border-top g5）点亮不接业务。详情子窗口 544×538 = padding 24 / 列 gap 24，
+      底部开发者选项（border-top g5）点亮不接业务。详情子窗口 = padding 24 / 列 gap 24（Animate 窗复刻壳
+      640：2026-09-25 加通信服务组——开关行 + 运行状态行圆点+字重双指示，MCP 窗同款），
       按钮行右对齐（关闭 cancel 128 / 卸载 danger 128 / 安装 primary 200，均 lg 38）。
       壳为预览复刻；图标 = 命名对照十一批入库（grip / dev-options / animate-plugin / batch-thumbnails）。
     </p>
@@ -106,11 +110,25 @@ const mcpWriteOn = ref(false);
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">Animate 插件详情子窗口（544×538；图示 = 未安装态：卸载 disabled / 安装 CEP 插件点亮）</h3>
+      <h3 class="pv-group-title">Animate 插件详情子窗口（复刻壳高 640：2026-09-25 加通信服务组；图示 = 未安装态·服务运行中）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div class="pv-aw-shell">
             <h1 class="pv-aw-title">Animate 插件</h1>
+            <section class="pv-aw-group">
+              <h2 class="pv-aw-sub">通信服务</h2>
+              <div class="pv-svc-row">
+                <span class="pv-svc-item">
+                  <SwitchButton v-model="animateSvcOn" />
+                  <span class="pv-svc-label">插件通信服务</span>
+                </span>
+              </div>
+              <span class="pv-svc-status">
+                <span class="pv-svc-dot on" />
+                <span class="pv-svc-state on">运行中</span>
+                <span class="pv-svc-url">127.0.0.1:50423</span>
+              </span>
+            </section>
             <section class="pv-aw-group">
               <h2 class="pv-aw-sub">使用教程</h2>
               <ul class="pv-aw-lines">
@@ -150,7 +168,11 @@ const mcpWriteOn = ref(false);
               </span>
             </div>
           </div>
-          <span class="pv-cap">已安装态：卸载点亮、主钮文案「重新安装 / 升级」；按钮 cancel / danger 为本轮 ActionButton 新扩变体</span>
+          <span class="pv-cap">
+            已安装态：卸载点亮、主钮文案「重新安装 / 升级」；按钮 cancel / danger 为本轮 ActionButton 新扩变体。
+            通信服务组（2026-09-25 插件 WS 总开关轮）居首：开关行 + 运行状态行（圆点+字重双指示，MCP 窗同款；
+            图示地址 127.0.0.1:50423 为动态端口示例）；开关可点切（纯展示），状态行静态图示运行中
+          </span>
         </div>
       </div>
     </div>
@@ -369,7 +391,9 @@ const mcpWriteOn = ref(false);
   flex-direction: column;
   gap: var(--n-space-24);
   width: 544px;
-  height: 538px;
+  /* 壳高原稿值 538；2026-09-25 加通信服务组后静态壳加高至 640 容下新组（与 MCP 复刻壳同高；
+     实件为独立 OS 窗口 544×578、组区 ScrollThumb 滚动，不受壳高约束） */
+  height: 640px;
   box-sizing: border-box;
   padding: var(--n-space-24);
   border: 1px solid var(--n-g5);

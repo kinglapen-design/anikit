@@ -12,6 +12,11 @@
 // 封装 lib/plugins）；按钮族复用 ActionButton lg——关闭 = cancel 变体（稿 通用/五级底 128×38）、
 // 卸载 = danger 变体（稿 状态/禁止底 128×38，未安装 disabled）、安装 = primary（稿 品牌/常态 200×38，
 // 已安装文案「重新安装 / 升级」）。
+// 「通信服务」组（2026-09-25，插件 WS 通道服务总开关，PRD 07-01）：组序仿 MCP 窗服务组居首——
+// 开关行（SwitchButton + 标签，开关左文字右 gap 8 沿退役 SettingsModal 口径）+ 运行状态行
+//（MCP 窗同款圆点+字重双指示：圆点 8×8 联通成功色/断开四级灰，状态词加粗 运行中二级/未启动三级，
+// 三件套 gap 8）；状态零 ui store（子窗口双写竞态），直走 commands/plugin_server.rs
+//（settings.pluginServer 子树单写点），动作后以回包校正本地态（失败不回滚假象，MCP 同款口径）。
 // 文案贴稿：使用教程第 1 条稿原文「左下角」改「右下角」（稿按钮实际在右下，2026-09-06 任务定）；
 // 路径组 = CEP 安装路径（get_cep_install_status.installDir 后端新字段）+ Temp（库 root\temp\cep-out，
 // 未开库显示「未开库」）。
@@ -19,22 +24,28 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import ActionButton from "../buttons/ActionButton.vue";
+import SwitchButton from "../buttons/SwitchButton.vue";
 import ScrollThumb from "../ScrollThumb.vue";
 import {
   getCepInstallStatus,
   installCepPlugin,
   uninstallCepPlugin,
+  getPluginServerStatus,
+  setPluginServerEnabled,
   type CepInstallStatus,
+  type PluginServerStatus,
 } from "../../lib/plugins";
 import type { LibraryInfo } from "../../lib/libraryOps";
 
 const install = ref<CepInstallStatus | null>(null);
 const libPath = ref<string | null>(null); // 库 root（Temp 行）；null = 未开库 / 未取到
+const svc = ref<PluginServerStatus | null>(null); // 插件 WS 服务状态（通信服务组）
 const busy = ref(false);
 const bodyRef = ref<HTMLElement>();
 
 onMounted(async () => {
   install.value = await getCepInstallStatus();
+  svc.value = await getPluginServerStatus();
   try {
     const lib = await invoke<LibraryInfo | null>("get_current_library");
     libPath.value = lib?.path ?? null;
@@ -75,6 +86,25 @@ async function doUninstall(): Promise<void> {
   }
 }
 
+// 服务总开关：不用 v-model 直绑——点击只发动作，本地态以 command 回包校正（MCP 窗同款口径）
+async function onServerToggle(enabled: boolean): Promise<void> {
+  if (busy.value) return;
+  busy.value = true;
+  try {
+    const st = await setPluginServerEnabled(enabled);
+    if (st) svc.value = st;
+  } finally {
+    busy.value = false;
+  }
+}
+
+// 运行状态词（字重双指示：运行中加粗升二级 / 未启动·读取中加粗留三级）；地址 = running 时的实际端口
+const svcStateText = computed(() => {
+  const st = svc.value;
+  if (!st) return "读取中…";
+  return st.running ? "运行中" : "未启动";
+});
+
 // 路径组文案：install_dir 无法定位系统配置目录时后端给空串；状态未返回 = 读取中
 const installDirText = computed(() => {
   if (!install.value) return "读取中…";
@@ -95,6 +125,26 @@ const tempText = computed(() => (libPath.value ? `${libPath.value}\\temp\\cep-ou
     <!-- 组区（稿 介绍文本：列 gap 24；组 = 标题 16/22 Bold 二级 + 行组 gap 6 的 13/18 三级） -->
     <div class="pw-scroll-wrap">
       <div ref="bodyRef" class="pw-body kit-scroll">
+        <!-- 通信服务组（2026-09-25，组序仿 MCP 窗服务组居首）：开关行 + 运行状态行（圆点+字重双指示，
+             MCP 窗 svc-* 同款写法）；服务关时 127.0.0.1 不白听（不用动画软件插件的用户可关） -->
+        <section class="pw-group">
+          <h2 class="pw-sub">通信服务</h2>
+          <div class="svc-row">
+            <span class="svc-item">
+              <SwitchButton
+                :model-value="svc?.serverEnabled ?? false"
+                :disabled="busy || !svc"
+                @update:model-value="onServerToggle"
+              />
+              <span class="svc-label">插件通信服务</span>
+            </span>
+          </div>
+          <span class="svc-status">
+            <span class="svc-dot" :class="{ on: svc?.running }" />
+            <span class="svc-state" :class="{ on: svc?.running }">{{ svcStateText }}</span>
+            <span v-if="svc?.running && svc.port" class="svc-url">127.0.0.1:{{ svc.port }}</span>
+          </span>
+        </section>
         <section class="pw-group">
           <h2 class="pw-sub">使用教程</h2>
           <ul class="pw-lines">
@@ -227,6 +277,55 @@ const tempText = computed(() => (libPath.value ? `${libPath.value}\\temp\\cep-ou
 .pw-lines b {
   font-weight: var(--n-fw-bold);
   color: var(--n-l2);
+}
+/* 通信服务组：开关行 / 运行状态行 = McpPluginWindow svc-* 同款（scoped 样式跨组件不可复用，
+   逐项照抄 token 值保持一致）——开关左 + 文字右 gap 8（沿退役 SettingsModal 定案），标签 13/18 二级 */
+.svc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-12);
+}
+.svc-item {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-8);
+}
+.svc-label {
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
+}
+/* 运行状态行（圆点+字重双指示，2026-09-20 MCP 窗定案）：圆点 8×8 联通 状态/成功色、断开 亮色/四级；
+   状态词加粗 运行中 亮色/二级、未启动·读取中 亮色/三级；三件套间 gap 8 */
+.svc-status {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-8);
+  min-width: 0;
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+}
+.svc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--n-l4);
+  flex: none;
+}
+.svc-dot.on {
+  background: var(--n-success);
+}
+.svc-state {
+  flex: none;
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l3);
+}
+.svc-state.on {
+  color: var(--n-l2);
+}
+.svc-url {
+  color: var(--n-l3);
+  overflow-wrap: anywhere;
 }
 /* 路径行：Windows 路径允许选中复制不做（body 全局 user-select:none 沿现状）；长路径折行 */
 .pw-path {

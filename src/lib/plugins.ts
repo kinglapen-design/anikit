@@ -138,3 +138,36 @@ export async function setMcpWriteEnabled(enabled: boolean): Promise<McpStatus | 
     return null;
   }
 }
+
+// —— 插件 WS 通道（commands/plugin_server.rs，2026-09-25，MCP 同款服务总开关）——
+// 状态与 set 回包同构：调用方动作后直接以回包校正本地态；toast 在本封装内
+
+export interface PluginServerStatus {
+  running: boolean; // server 实际在跑
+  port: number | null; // 实际监听端口（127.0.0.1 动态端口，running 时有值）
+  serverEnabled: boolean; // 服务总开关配置（settings.pluginServer）
+}
+
+export async function getPluginServerStatus(): Promise<PluginServerStatus | null> {
+  try {
+    return await invoke<PluginServerStatus>("get_plugin_server_status");
+  } catch {
+    return null;
+  }
+}
+
+// 服务总开关（先启停后持久化，启动失败回错误不回写开态）
+export async function setPluginServerEnabled(enabled: boolean): Promise<PluginServerStatus | null> {
+  const toast = useToastStore();
+  try {
+    const st = await invoke<PluginServerStatus>("set_plugin_server_enabled", { enabled });
+    toast.notify({
+      message: st.running ? `插件通信服务已启动（127.0.0.1:${st.port}）` : "插件通信服务已停止",
+      icon: "success",
+    });
+    return st;
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+    return null;
+  }
+}

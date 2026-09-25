@@ -1,6 +1,7 @@
 # 2. 动画软件通信通道（WebSocket）
 
 - 服务：`server/plugin_ws.rs`（8.1 落地），`ws://127.0.0.1:{动态端口}`，lib.rs setup 拉起；端口文件 = 全局配置目录 `AniKit/plugin-server.port`（每次启动覆写——spike 验证的发现机制：插件 node fs 读文件直连，无需固定端口）。帧格式 = JSON 文本帧（camelCase）。
+- **服务总开关（2026-09-25，MCP 同款）**：`settings.pluginServer.serverEnabled` 缺省开——init 读配置决定本轮是否启动；插件面板 Animate 详情窗可随时启停（不用插件的用户关后不白听端口）。stop = graceful 收束 accept 循环 + abort 全部客户端连接（WS 长连接不随 listener 关闭自然断开）+ drain pending 立即失败 + 删端口文件（残留会误导面板连死端口）；面板侧走既有「连不上即未连接」语义。命令 = `get_plugin_server_status` / `set_plugin_server_enabled`（先启停后持久化，启动失败不记开态）。
 - **协议 v2（2026-09-25 T1 开源口径泛化）**：消息分两层——**通用层无前缀**（任何软件插件接入即用）；**软件业务消息走 `<app>.<name>` 命名空间**（前缀须与 hello 登记的 app 一致，不符回 `error`；接第二个软件如 Blender = 新命名空间 + 同模式 handler，通用层零改动）。库数据变更前端事件 = `plugin-imported`（原 cep-imported 改名）。**v1（裸消息名 + cepOutDir + flaAssetId/webpAssetId）同日废除，CEP 面板 0.4.0 同步切换**。
 - 通用层协议：
 	- C→S `{ "type": "hello", "app": "animate", "version": "2024", "panelVersion": "0.4.0" }` → 登记连接身份（app / version / panelVersion，日志备查 + 能力分级演进位，PRD 07-01）→ S→C `welcome`：`{ type, protocol: 2, libReady, libRoot, exportDir, settings, bundledPanelVersion? }`——未开库 libReady=false（面板禁导出）；**exportDir = 该软件导出中转目录**（库根 temp/ 下，animate = `temp/cep-out`；通用概念，第二软件另开子目录）；settings = 该 app 设置子树（animate = cepExport：maxSecs 默认 10 秒 / maxBytes 2M / fps 0=跟随文档；无设置族的软件 = null）；**bundledPanelVersion 仅 animate 下发 = 版本握手**（面板无热更：与面板自报 panelVersion 不等 → 面板提示「重开 / 一键升级」，2026-09-02 待办②兑现）
