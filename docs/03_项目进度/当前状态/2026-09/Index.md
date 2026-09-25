@@ -4,6 +4,7 @@
 
 | 文件 | 日期 | 标题 |
 | --- | --- | --- |
+| [2026-09-25_07_T0验证网修复.md](2026-09-25_07_T0验证网修复.md) | 2026-09-25 | T0 验证网修复（7.3，2026-09-25，feat/new-ui） | ：clippy 15 处清零（-D warnings 绿）+ 探针四退六修实跑全绿（context-menu 97 / bugfix 22 / relation-picker 20 / sidebar-anim 5 / autoplay-gate / sequence-pack）+ 共享桩工厂 _probe_stub + HMR 验证纪律入规范 §8；7.3 进度 T0✅ T1✅ |
 | [2026-09-25_06_WS协议v2泛化.md](2026-09-25_06_WS协议v2泛化.md) | 2026-09-25 | WS 协议 v2 开源口径泛化（7.3 T1，2026-09-25，feat/new-ui） | ：消息两层 = 通用层 + animate 命名空间；hello 身份登记 + 版本握手横幅（09-02 待办②兑现）；exportDir/sourceAssetId/thumbAssetId 通用化；folder_tree 下迁根治反向依赖；plugin-imported 改名；面板 0.4.0 同步；发送至 AN 对账 18 条全符合；486 测绿 + clippy 零告警；待实机联调三链路 |
 | [2026-09-25_05_架构评估与留门四定案.md](2026-09-25_05_架构评估与留门四定案.md) | 2026-09-25 | 架构包容性评估与留门四定案（2026-09-25，feat/new-ui） | ：三路实证探查——素材域扩展已注册表级，新功能域缺口在挂载点 + AppState 库中心化；UI 换代不伤筋动骨 = 台账驱动；留门四定案（详情三 tab 自定义卡片 / 中间面板 pageSpecs / 悬浮栏按钮够用 / 左栏 Obsidian 式）+ 7.3 阶段表 v2 立项 + 视频向量预研定案（零侵入、推理引擎收 adapter） |
 | [2026-09-25_04_资产新标签页打开接入.md](2026-09-25_04_资产新标签页打开接入.md) | 2026-09-25 | 资产「新标签页打开」接入（2026-09-25，feat/new-ui） | ：右键占位项点亮——新开同源视口标签页直进预览（tabs.openPreviewInNewTab），TabLabel 标题会话感知（预览中 = 资产名）；三处菜单同口径；owner 探针 S6 绿；context-menu 探针 S6/S9 属既有腐烂记待办 |
