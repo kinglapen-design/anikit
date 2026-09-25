@@ -17,6 +17,12 @@
 //! settings_for / save_settings_for 各加一支。
 //! 导入回包字段通用口径：sourceAssetId（工程源文件）/ thumbAssetId（缩略图资产）。
 //! 库数据变更广播前端事件 = plugin-imported（原 cep-imported，2026-09-25 泛化改名）。
+//!
+//! 服务总开关（2026-09-25，MCP 同款）：settings.pluginServer.serverEnabled 缺省开，
+//! init 读配置决定本轮是否启动；插件面板可随时启停（WS_HANDLE 全局单例 + stop 信号
+//! graceful 收束——停服 = abort 全部客户端连接 + drain pending 失败 + 删端口文件，
+//! 面板侧走既有「连不上即未连接」语义显示断开）。
+//!
 //! cfg(not(test)) 才由 lib.rs 拉起（同 frame_stream，踩坑 014）。
 //! v1（裸消息名 + cepOutDir + flaAssetId/webpAssetId）2026-09-25 废除，CEP 面板 0.4.0 同步切换。
 
@@ -55,10 +61,13 @@ struct ClientMeta {
   panel_version: Option<String>,
 }
 
-/// 客户端条目：服务端 → 插件单播通道 + 连接身份（None = 未 hello）
+/// 客户端条目：服务端 → 插件单播通道 + 连接身份（None = 未 hello）+ 连接任务中止柄
+///（stop 服务时 abort——WS 长连接不随 listener 关闭自然断开，须显式中止）
 struct ClientEntry {
   tx: mpsc::UnboundedSender<String>,
   meta: Option<ClientMeta>,
+  #[cfg(not(test))] // 连接任务仅 server 路径存在
+  task: tokio::task::AbortHandle,
 }
 
 /// 客户端出口表（连接 id → 条目）
@@ -165,33 +174,110 @@ fn fail_pending_of(client_id: u64) {
   }
 }
 
+// —— 服务生命周期（总开关：settings.pluginServer.serverEnabled；MCP 同款形态） ——
 
-/// lib.rs setup 拉起（tauri 异步运行时）
+/// 运行句柄（服务总开关）：stop 信号 + 实际端口 + serve 任务；全局单例（OnceLock 惰性初始化）
+#[cfg(not(test))]
+struct WsHandle {
+  stop: oneshot::Sender<()>,
+  port: u16,
+  task: tokio::task::JoinHandle<()>,
+}
+
+#[cfg(not(test))]
+static WS_HANDLE: OnceLock<Mutex<Option<WsHandle>>> = OnceLock::new();
+
+#[cfg(not(test))]
+fn handle_slot() -> &'static Mutex<Option<WsHandle>> {
+  WS_HANDLE.get_or_init(|| Mutex::new(None))
+}
+
+/// lib.rs setup 拉起（tauri 异步运行时）：读服务总开关（settings.pluginServer.serverEnabled，
+/// 缺省开）决定本轮是否启动；关 = 不监听（插件面板 Animate 详情窗可随时拉起）
 #[cfg(not(test))] // 测试构建不起 server（踩坑 014）
 pub fn init(app: AppHandle) {
+  let enabled = crate::core::config::plugin_server_settings().map(|s| s.server_enabled).unwrap_or(true);
+  if !enabled {
+    log::info!("插件 WS 服务总开关关，本轮不启动（插件面板可开启）");
+    return;
+  }
   tauri::async_runtime::spawn(async move {
-    if let Err(e) = serve(app).await {
-      log::error!("插件通信 WS 服务异常退出：{e}");
+    if let Err(e) = start(app).await {
+      log::error!("插件通信 WS 服务启动失败：{e}");
     }
   });
 }
 
+/// 启动（幂等：运行中直接回实际端口）。动态端口，实际端口恒写端口文件
 #[cfg(not(test))]
-async fn serve(app: AppHandle) -> Result<(), String> {
+pub async fn start(app: AppHandle) -> Result<u16, String> {
+  {
+    let mut guard = handle_slot().lock().map_err(|e| e.to_string())?;
+    if let Some(h) = guard.as_ref() {
+      if !h.task.is_finished() {
+        return Ok(h.port);
+      }
+      guard.take(); // 尸体清理：serve 异常退出后句柄残留，走重起路径
+    }
+  }
   let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|e| e.to_string())?;
   let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+  let (stop_tx, stop_rx) = oneshot::channel::<()>();
+  let task = tokio::spawn(async move {
+    if let Err(e) = serve(app, listener, stop_rx).await {
+      log::error!("插件通信 WS 服务异常退出：{e}");
+    }
+  });
+  let mut guard = handle_slot().lock().map_err(|e| e.to_string())?;
+  if let Some(h) = guard.as_ref() {
+    // await 期间被另一路 start 抢先（init / 详情窗并发）：弃新保旧
+    task.abort();
+    return Ok(h.port);
+  }
+  *guard = Some(WsHandle { stop: stop_tx, port, task });
   write_port_file(port);
   log::info!("插件通信 WS 服务就绪：127.0.0.1:{port}（协议 v{PROTOCOL_VERSION}）");
-  let mut next_id = 1u64;
-  loop {
-    let (stream, peer) = listener.accept().await.map_err(|e| e.to_string())?;
-    log::info!("插件客户端接入：{peer}");
-    tokio::spawn(handle_conn(app.clone(), next_id, stream));
-    next_id += 1;
+  Ok(port)
+}
+
+/// 停止（幂等：未运行直接 Ok）：stop 信号收束 accept 循环 → abort 全部客户端连接
+///（WS 长连接不随 listener 关闭自然断开）→ drain 全部 pending 立即失败 → 删端口文件
+///（残留会误导面板连死端口）
+#[cfg(not(test))]
+pub async fn stop() -> Result<(), String> {
+  let handle = handle_slot().lock().map_err(|e| e.to_string())?.take();
+  let Some(h) = handle else { return Ok(()); };
+  let _ = h.stop.send(());
+  let _ = h.task.await;
+  {
+    let mut map = clients().lock().unwrap();
+    for (_, entry) in map.drain() {
+      entry.task.abort();
+    }
+  }
+  {
+    let mut map = pending().lock().unwrap();
+    for (_, (_, sender)) in map.drain() {
+      let _ = sender.send(serde_json::json!({ "ok": false, "message": "插件服务已停止" }));
+    }
+  }
+  remove_port_file();
+  log::info!("插件 WS 服务已停止");
+  Ok(())
+}
+
+/// 运行状态查询（commands/plugin_server get_plugin_server_status 用）：
+/// serve 意外退出（句柄在但任务已完）按未运行报
+#[cfg(not(test))]
+pub fn status() -> (bool, Option<u16>) {
+  let Ok(guard) = handle_slot().lock() else { return (false, None) };
+  match guard.as_ref() {
+    Some(h) if !h.task.is_finished() => (true, Some(h.port)),
+    _ => (false, None),
   }
 }
 
-/// 端口文件（插件发现机制）：每次启动覆写；进程退出残留无害（面板连不上即显示未连接）
+/// 端口文件（插件发现机制）：每次启动覆写；停止时删除（见 stop）
 #[cfg(not(test))]
 fn write_port_file(port: u16) {
   let Some(dir) = dirs::config_dir() else {
@@ -204,6 +290,35 @@ fn write_port_file(port: u16) {
   }
 }
 
+#[cfg(not(test))]
+fn remove_port_file() {
+  let Some(dir) = dirs::config_dir() else {
+    return;
+  };
+  let _ = std::fs::remove_file(dir.join("AniKit").join("plugin-server.port"));
+}
+
+#[cfg(not(test))]
+async fn serve(app: AppHandle, listener: TcpListener, mut stop: oneshot::Receiver<()>) -> Result<(), String> {
+  let mut next_id = 1u64;
+  loop {
+    tokio::select! {
+      biased;
+      _ = &mut stop => break,
+      acc = listener.accept() => {
+        let (stream, peer) = acc.map_err(|e| e.to_string())?;
+        log::info!("插件客户端接入：{peer}");
+        // channel 与条目建在 serve 侧（条目须持连接任务中止柄供 stop 批量断开）
+        let (tx, rx) = mpsc::unbounded_channel::<String>();
+        let task = tokio::spawn(handle_conn(app.clone(), next_id, stream, tx.clone(), rx));
+        clients().lock().unwrap().insert(next_id, ClientEntry { tx, meta: None, task: task.abort_handle() });
+        next_id += 1;
+      }
+    }
+  }
+  Ok(())
+}
+
 /// 协议错误回包（未知类型 / 未握手 / 命名空间与身份不符——第三方调试友好）
 #[cfg(not(test))]
 fn error_payload(message: impl Into<String>) -> String {
@@ -211,7 +326,7 @@ fn error_payload(message: impl Into<String>) -> String {
 }
 
 #[cfg(not(test))]
-async fn handle_conn(app: AppHandle, id: u64, stream: tokio::net::TcpStream) {
+async fn handle_conn(app: AppHandle, id: u64, stream: tokio::net::TcpStream, tx: mpsc::UnboundedSender<String>, mut rx: mpsc::UnboundedReceiver<String>) {
   let ws = match tokio_tungstenite::accept_async(stream).await {
     Ok(w) => w,
     Err(e) => {
@@ -220,8 +335,6 @@ async fn handle_conn(app: AppHandle, id: u64, stream: tokio::net::TcpStream) {
     }
   };
   let (mut sink, mut read) = ws.split();
-  let (tx, mut rx) = mpsc::unbounded_channel::<String>();
-  clients().lock().unwrap().insert(id, ClientEntry { tx: tx.clone(), meta: None });
   // 出队泵：服务端 → 该客户端
   let pump = tokio::spawn(async move {
     while let Some(text) = rx.recv().await {

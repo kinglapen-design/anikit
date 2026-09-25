@@ -265,6 +265,39 @@ pub fn save_mcp_settings(value: McpSettings) -> Result<(), DataError> {
   save_to(&p, &cfg)
 }
 
+// ---------- 插件 WS 通道开关（settings.pluginServer 子树，2026-09-25；MCP 同款总开关） ----------
+
+/// 插件 WS 通道设置：服务总开关（缺省开；不用动画软件插件的用户可关，127.0.0.1 不白听）。
+/// 独立子树原因同 MCP（save_ui_settings 是 settings.ui 整体替换语义，挂 ui 子树会被快照写回抹除）；
+/// 单写点 = commands/plugin_server.rs 的 set 命令。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginServerSettings {
+  /// 服务总开关（缺省开）：启动时是否拉起插件 WS 服务（127.0.0.1 动态端口）
+  #[serde(default = "default_server_enabled")]
+  pub server_enabled: bool,
+}
+
+impl Default for PluginServerSettings {
+  fn default() -> Self {
+    Self { server_enabled: true }
+  }
+}
+
+/// 插件 WS 通道设置读取（缺字段按默认补齐）
+pub fn plugin_server_settings() -> Result<PluginServerSettings, DataError> {
+  let raw = load()?.settings.get("pluginServer").cloned().unwrap_or_else(|| serde_json::json!({}));
+  Ok(serde_json::from_value(raw).unwrap_or_default())
+}
+
+/// 插件 WS 通道设置写回（settings.pluginServer 单点覆盖）
+pub fn save_plugin_server_settings(value: PluginServerSettings) -> Result<(), DataError> {
+  let p = config_path()?;
+  let mut cfg = load_from(&p);
+  cfg.settings["pluginServer"] = serde_json::to_value(value).map_err(|e| DataError::Corrupt(e.to_string()))?;
+  save_to(&p, &cfg)
+}
+
 /// 主窗口几何读取（启动恢复用；从未保存 / 形状损坏为 None，走 tauri.conf 默认居中）
 pub fn window_state() -> Option<WindowState> {
   let cfg = load().ok()?;
@@ -409,6 +442,17 @@ mod tests {
     // 序列化落盘键名 camelCase
     let v = serde_json::to_value(McpSettings { server_enabled: false, write_enabled: true }).unwrap();
     assert_eq!(v, serde_json::json!({ "serverEnabled": false, "writeEnabled": true }));
+  }
+
+  #[test]
+  fn plugin_server_settings_default_on() {
+    // 空载荷 / 缺字段 = 缺省开（不用插件的用户手动关）
+    assert_eq!(serde_json::from_value::<PluginServerSettings>(serde_json::json!({})).unwrap(), PluginServerSettings::default());
+    assert_eq!(PluginServerSettings::default(), PluginServerSettings { server_enabled: true });
+    // 关态读写往返 + camelCase 键名
+    let v = serde_json::to_value(PluginServerSettings { server_enabled: false }).unwrap();
+    assert_eq!(v, serde_json::json!({ "serverEnabled": false }));
+    assert!(!serde_json::from_value::<PluginServerSettings>(v).unwrap().server_enabled);
   }
 
   #[test]

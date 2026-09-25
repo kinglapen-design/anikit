@@ -426,6 +426,8 @@ pub fn run() {
       commands::mcp::get_mcp_status,
       commands::mcp::set_mcp_server_enabled,
       commands::mcp::set_mcp_write_enabled,
+      commands::plugin_server::get_plugin_server_status,
+      commands::plugin_server::set_plugin_server_enabled,
       commands::asset_menu::export_assets,
       commands::asset_menu::export_folder,
       commands::asset_menu::export_retry,
