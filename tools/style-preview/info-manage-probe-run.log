@@ -1,0 +1,19 @@
+  [PASS] M1 选卡 a1 → 文件形态详情 + 信息查看管理钮
+  [PASS] M2a 弹窗开：标题「信息查看管理」/ framed / 宽 460 / 标题栏 54 — {"title": "信息查看管理", "w": 460, "framed": true, "bar": 54, "segs": ["基础信息", "链接关系", "提示词"]}
+  [PASS] M2b 分段三段 = 基础信息/链接关系/提示词（与详情三 tab 对应） — {"title": "信息查看管理", "w": 460, "framed": true, "bar": 54, "segs": ["基础信息", "链接关系", "提示词"]}
+  [PASS] M3a basic 4 行序 = 名称与链接/标签/详情/基本数据 — [{"t": "名称与链接", "off": false, "eye": 638, "up": true, "down": false}, {"t": "标签", "off": false, "eye": 638, "up": false, "down": false}, {"t": "详情", "off": false, "eye": 638, "up": false, "down": false}, {"t": "基本数据", "off": false, "eye": 638, "up": false, "down": true}]
+  [PASS] M3b 首行禁上 / 末行禁下 — [{"t": "名称与链接", "off": false, "eye": 638, "up": true, "down": false}, {"t": "标签", "off": false, "eye": 638, "up": false, "down": false}, {"t": "详情", "off": false, "eye": 638, "up": false, "down": false}, {"t": "基本数据", "off": false, "eye": 638, "up": false, "down": true}]
+  [PASS] M4 links 5 行序 = 链接/音频/关系/缩略图/污染文件 — [{"t": "链接", "off": false, "eye": 638, "up": true, "down": false}, {"t": "音频", "off": false, "eye": 638, "up": false, "down": false}, {"t": "关系", "off": false, "eye": 638, "up": false, "down": false}, {"t": "缩略图", "off": false, "eye": 638, "up": false, "down": false}, {"t": "污染文件", "off": false, "eye": 638, "up": false, "down": true}]
+  [PASS] M5a 音频上移 → 行序 = 音频/链接/关系/缩略图/污染文件 — [{"t": "音频", "off": false, "eye": 638, "up": true, "down": false}, {"t": "链接", "off": false, "eye": 638, "up": false, "down": false}, {"t": "关系", "off": false, "eye": 638, "up": false, "down": false}, {"t": "缩略图", "off": false, "eye": 638, "up": false, "down": false}, {"t": "污染文件", "off": false, "eye": 638, "up": false, "down": true}]
+  [PASS] M5b save_ui_settings 记录 detailBlocks.links.order 音频首 — ["audio", "links", "relations", "thumb", "pollution"]
+  [PASS] M6a 关系行隐藏：标题 off 禁用色 + 眼睛 svg 切换（view-off） — [{"t": "音频", "off": false, "eye": 638, "up": true, "down": false}, {"t": "链接", "off": false, "eye": 638, "up": false, "down": false}, {"t": "关系", "off": true, "eye": 700, "up": false, "down": false}, {"t": "缩略图", "off": false, "eye": 638, "up": false, "down": false}, {"t": "污染文件", "off": false, "eye": 638, "up": false, "down": true}]
+  [PASS] M6b hidden 含 relations — ["relations"]
+  [PASS] M7 详情 links 区块序 = 音频/链接/缩略图/污染文件（关系 hidden 整块不渲染） — ["音频", "链接", "缩略图", "污染文件"]
+  [PASS] M8 重开落 links 段：行序持久（音频首 / 关系行 off） — [{"t": "音频", "off": false, "eye": 638, "up": true, "down": false}, {"t": "链接", "off": false, "eye": 638, "up": false, "down": false}, {"t": "关系", "off": true, "eye": 700, "up": false, "down": false}, {"t": "缩略图", "off": false, "eye": 638, "up": false, "down": false}, {"t": "污染文件", "off": false, "eye": 638, "up": false, "down": true}]
+  [SHOT] tools/style-preview/info-manage.png
+  [PASS] M9 提示词 1 行（标题=提示词）上下箭头全禁 — [{"t": "提示词", "off": false, "eye": 638, "up": true, "down": true}]
+  [PASS] M10a 视图菜单「信息查看管理」项存在且不 disabled — {"cls": "menu-item", "dis": false}
+  [PASS] M10b 菜单项点击 → 弹窗开（第二入口）
+  [PASS] M11 详情 basic 区块类序 = tags/inputs/data（详情 hidden 不渲染） — ["tags", "inputs", "data"]
+
+ALL PASS

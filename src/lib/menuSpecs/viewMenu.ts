@@ -7,7 +7,7 @@
 //   分区块显隐排序管理，三组管理项对应三个区域：侧栏大纲 / 内容分组 / 右栏信息查看）；
 // - 分组管理 = 33 稿 GroupManageDialog（ui.groupManageOpen + groupDialogFolder 锁当前文件夹视口，
 //   ContentTitleBar 分组钮同径；非文件夹视口无目标 disabled）；
-// - 信息查看管理 = 右栏底部同名入口同一业务（排序/显隐管理面板未立项，§23 点亮不接业务）——占位；
+// - 信息查看管理 = 右栏底部同名入口同一业务（2026-09-26 接：InfoManageDialog 排序/显隐管理弹窗）；
 // - 查看方式子菜单全项 = ui store 既有持久化字段的菜单面（layoutMode / sortBy / sortAsc /
 //   timeDisplay / showBrief / briefMode / showExt / showBadge / showLinkBadge / showSubfolders /
 //   autoPlayGif / autoPlayVideo——与工具栏 ViewOptionsMenu 同状态源，天然同步）；
@@ -257,8 +257,8 @@ export function viewMenuSpec(): CtxEntry[] {
         ui.groupManageOpen = true;
       },
     },
-    // 信息查看管理 = 右栏底部同名入口同一业务（排序/显隐管理面板未立项，§23 点亮不接业务）
-    { label: "信息查看管理", disabled: true },
+    // 信息查看管理 = 右栏底部同名入口同一业务（2026-09-26 接：排序/显隐管理弹窗，宿主 App.vue）
+    { label: "信息查看管理", disabled: picking, action: () => (ui.infoManageOpen = true) },
     "divider",
     { label: "查看方式", submenu: viewModeEntries() },
     { label: "标签页", disabled: picking, submenu: tabEntries },

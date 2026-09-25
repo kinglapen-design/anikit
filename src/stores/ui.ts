@@ -1,6 +1,11 @@
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
-import { mergeDetailLinkOrder } from "../lib/detailSections";
+import {
+  defaultDetailBlocks,
+  mergeDetailBlocks,
+  type DetailBlocksState,
+  type DetailTabKey,
+} from "../lib/detailSections";
 import type { SortKey } from "../lib/sortPlacements";
 
 export type LeftView = "library" | "workspace" | "tags" | "pins";
@@ -35,7 +40,7 @@ const PERSIST_KEYS = [
   "showSubfolders",
   "timeDisplay",
   "tabLayout",
-  "detailLinksOrder",
+  "detailBlocks",
   "pluginOrder",
   "leftMode",
   "lastLibView",
@@ -110,6 +115,9 @@ export const useUiStore = defineStore("ui", {
     // 区块管理弹窗开关（2026-08-14 区块子系统，会话级）：SidebarLeft section-manage 按钮置位，
     // 弹窗宿主 App.vue（同 FailedListDialog 惯例）
     blockManageOpen: false,
+    // 信息查看管理弹窗开关（2026-09-26，会话级）：右栏底部「信息查看管理」钮 / 视图菜单同名项置位，
+    // 弹窗宿主 App.vue（blockManageOpen 惯例）
+    infoManageOpen: false,
     // 只读视口拖拽/快捷键导入拒入弹窗开关（2026-09-08，会话级）：onDrop 守卫与 Ctrl+V 系统剪贴板
     // 导入守卫置位（两处 lib 无权触达 App.vue 本地态），ConfirmModal 宿主 App.vue
     importRejectOpen: false,
@@ -122,11 +130,12 @@ export const useUiStore = defineStore("ui", {
     // 多标签页布局（1.2）：dockview toJSON 快照，tabs store 防抖写入 / 启动 fromJSON 恢复；
     // null = 无布局（首启默认单标签页）。typeof null === "object"，PERSIST_KEYS 类型校验放行对象
     tabLayout: null as object | null,
-    // 链接关系 tab 区块顺序（7.1 二十三轮 tab 化，稿序 = 链接/音频/关系/缩略图/污染文件）：
-    // 仅链接 tab 五区块可排序（面板内拖标题行，2026-08-31 用户定）；显隐体系废除
-    //（后续「信息查看管理」面板轮再接）；旧 detailSections / detailSectionsArchive 双套配置作废不迁移。
-    // 数组 typeof "object"，PERSIST_KEYS 类型校验放行（同 tabLayout 先例），形状由合并函数校验。
-    detailLinksOrder: mergeDetailLinkOrder(null),
+    // 详情面板三 tab 区块排序/显隐配置（2026-09-26 信息查看管理面板重立，旧 22 稿面板后继）：
+    // 每 tab { order（全量含隐藏，管理面板行序）, hidden（详情渲染过滤）}；管理面板箭头排序 +
+    // 眼睛显隐即时写入，链接 tab 另有面板内拖标题行入口（可见序落点，hidden 项锚定原位）。
+    // 对象 typeof "object"，PERSIST_KEYS 类型校验放行（tabLayout 先例），形状由 mergeDetailBlocks
+    // 注册表兜底；旧 detailLinksOrder 单键配置 loadSettings 迁移并入 links.order。
+    detailBlocks: defaultDetailBlocks() as DetailBlocksState,
     // 插件列表面板拖拽排序（2026-09-06 插件面板轮，稿 = 工具栏展开窗口/插件 抓手 prose）：
     // 渲染 = pluginOrder 过滤已知 id 后按数据源（lib/plugins PLUGINS）补尾；数组 typeof "object"，
     // PERSIST_KEYS 类型校验放行（tabLayout / detailLinksOrder 先例），形状由 loadSettings 兜底校验
@@ -165,14 +174,33 @@ export const useUiStore = defineStore("ui", {
     setScrollPos(viewKey: string, pos: number): void {
       this.scrollPositions[viewKey] = pos;
     },
-    // 链接关系 tab 区块拖拽落点排序（面板内拖标题行让位式，DetailSections 旧范式移植）：
-    // 直接移到目标位；越界 / 原位不动
-    moveDetailLinkTo(id: string, to: number): void {
-      const list = this.detailLinksOrder;
+    // 信息查看管理面板箭头排序（2026-09-26）：全量 order 内移动（含隐藏行）；越界 / 原位不动
+    moveDetailBlock(tab: DetailTabKey, id: string, to: number): void {
+      const list = this.detailBlocks[tab]?.order;
+      if (!list) return;
       const from = list.indexOf(id);
       if (from < 0 || to < 0 || to >= list.length || to === from) return;
       const [row] = list.splice(from, 1);
       list.splice(to, 0, row);
+    },
+    // 链接关系 tab 面板内拖标题行落点（可见序）：hidden 项锚定原位，可见项按新序回填重建全量序
+    moveDetailLinkToVisible(id: string, to: number): void {
+      const cfg = this.detailBlocks.links;
+      const visible = cfg.order.filter((x) => !cfg.hidden.includes(x));
+      const from = visible.indexOf(id);
+      if (from < 0 || to < 0 || to >= visible.length || to === from) return;
+      const [row] = visible.splice(from, 1);
+      visible.splice(to, 0, row);
+      let vi = 0;
+      cfg.order = cfg.order.map((x) => (cfg.hidden.includes(x) ? x : (visible[vi++] as string)));
+    },
+    // 信息查看管理面板眼睛显隐切换：hidden 增删（id 须在注册表序内）
+    toggleDetailBlock(tab: DetailTabKey, id: string): void {
+      const cfg = this.detailBlocks[tab];
+      if (!cfg || !cfg.order.includes(id)) return;
+      const i = cfg.hidden.indexOf(id);
+      if (i >= 0) cfg.hidden.splice(i, 1);
+      else cfg.hidden.push(id);
     },
     // 启动加载全局 UI 设置并订阅变更防抖写回（多预览窗口各自独立 Pinia 各自加载，
     // 不做跨窗口同步，2026-07-28 定）；读取失败 / 字段类型不符一律按默认值，不阻断启动。
@@ -190,8 +218,8 @@ export const useUiStore = defineStore("ui", {
           // 类型对照默认值校验：config 手改 / 旧版本字段变形不污染 store
           if (v !== undefined && typeof v === typeof state[k]) state[k] = v;
         }
-        // 链接 tab 区块序兜底合并：注册表新增补位 / 配置里已删 id 忽略（lib/detailSections）
-        this.detailLinksOrder = mergeDetailLinkOrder(this.detailLinksOrder);
+        // 详情三 tab 区块配置兜底合并：注册表新增补位 / 已删 id 忽略；旧 detailLinksOrder 迁移并入 links.order
+        this.detailBlocks = mergeDetailBlocks(this.detailBlocks, saved.detailLinksOrder);
         // 插件序兜底（同上）：config 手改变形（非数组 / 非字符串项）回退默认空序
         if (saved.pluginOrder !== undefined) {
           this.pluginOrder = Array.isArray(saved.pluginOrder)

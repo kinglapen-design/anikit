@@ -19,8 +19,10 @@
 //         「缩略图」快速访问视图选中）；× = 解除绑定（unbind_thumb_asset，仅清工程侧引用）；
 //         添加 = 选择模式 thumb 用途（picker 第五用途，单选直回 = set_thumb_asset 绑定/换绑）；
 //   污染文件 = 占位（info 文件夹异物文件业务后续立项，同上；稿标题行无动作组 → actions=false）。
-// 排序 = 面板内拖标题行（本 tab 唯一可排序组，2026-08-31 用户定；DetailSections 旧 secDrag 让位范式移植，
-// 松手写 ui.detailLinksOrder 持久化）；折叠 = 标题行点击（会话级，dragView.suppressClick 守卫在调用方）。
+// 排序 = 面板内拖标题行（2026-08-31 用户定；DetailSections 旧 secDrag 让位范式移植，
+// 可见序落点松手写 ui.detailBlocks.links——信息查看管理面板箭头排序同一配置双入口，2026-09-26）；
+// 显隐 = 管理面板眼睛（hidden 区块整块不渲染含标题行）；折叠 = 标题行点击（会话级，
+// dragView.suppressClick 守卫在调用方）。
 import { computed, nextTick, onBeforeUnmount, reactive, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import SectionTitle from "../items/SectionTitle.vue";
@@ -31,8 +33,9 @@ import LinkThumbItem from "../items/LinkThumbItem.vue";
 import TwoToneIcon from "../items/TwoToneIcon.vue";
 import AppIcon from "../AppIcon.vue";
 import {
-  DETAIL_LINK_BLOCK_TITLES,
+  DETAIL_TAB_BLOCK_TITLES,
   findFolderNode,
+  visibleDetailBlocks,
   type DetailLinkBlockId,
   type DetailTarget,
   type PlacementLink,
@@ -77,8 +80,8 @@ function toggleOpen(id: string): void {
   openMap[id] = !isOpen(id);
 }
 
-// —— 排序（ui.detailLinksOrder 持久化；块高不定，DOM 快照中线判定，旧 DetailSections 范式） ——
-const order = computed(() => ui.detailLinksOrder as DetailLinkBlockId[]);
+// —— 排序（ui.detailBlocks.links 持久化，可见序落点；块高不定，DOM 快照中线判定，旧 DetailSections 范式） ——
+const order = computed(() => visibleDetailBlocks(ui.detailBlocks.links) as DetailLinkBlockId[]);
 const tabRef = ref<HTMLElement>();
 const secDrag = reactive({ id: "", startY: 0, dy: 0, from: -1, to: -1 });
 const secSettling = ref(false); // 松手归位帧：禁块 transform 过渡
@@ -147,7 +150,7 @@ function onSecDragEnd(): void {
   secDrag.id = "";
   if (!moved || from < 0 || to === from) return;
   const draggedId = order.value[from];
-  if (draggedId) ui.moveDetailLinkTo(draggedId, to);
+  if (draggedId) ui.moveDetailLinkToVisible(draggedId, to);
   // 抑制紧随 click 误折叠（与引擎 suppressClick 同口径）
   dragView.suppressClick = true;
   setTimeout(() => (dragView.suppressClick = false), 0);
@@ -185,7 +188,7 @@ function blockStyle(i: number): string {
 const isAudioTarget = computed(() => file.value !== null && isAudioExt(file.value.placement.ext));
 function titleOf(id: DetailLinkBlockId): string {
   if (id === "audio" && isAudioTarget.value) return "使用者";
-  return DETAIL_LINK_BLOCK_TITLES[id];
+  return DETAIL_TAB_BLOCK_TITLES.links[id] ?? id;
 }
 
 // 区块动作组显隐（稿口径）：污染文件恒无（占位）；音频区块在「使用者」视角（当前目标是音频）

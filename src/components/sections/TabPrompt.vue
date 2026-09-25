@@ -8,15 +8,20 @@
 //     buttons/IconButton solid（高 34 填充式 / 图标 18 恒二级 / hover 通用六级）。
 // **业务全部不接**（提示词功能未立项，2026-08-31 用户定：UI 重构只做 UI——编辑框只读占位、
 // 按钮点亮不接业务；稿 prose「提示词按钮根据上下文需求显示」的上下文条件随业务轮再接）。
-import { ref } from "vue";
+// 显隐 = 信息查看管理面板眼睛（2026-09-26）：hidden 即整 tab 空白（单区块，允许全隐藏）。
+import { computed, ref } from "vue";
 import IconButton from "../buttons/IconButton.vue";
 import AppIcon from "../AppIcon.vue";
+import { useUiStore } from "../../stores/ui";
 
+const ui = useUiStore();
 const promptText = ref(""); // 业务未接：恒空（placeholder 占位）
+// 区块显隐（2026-09-26 信息查看管理面板）：单区块 hidden 即整 tab 空白（允许全隐藏，无空态文案）
+const blockHidden = computed(() => ui.detailBlocks.prompt.hidden.includes("prompt"));
 </script>
 
 <template>
-  <section class="prompt-block">
+  <section v-if="!blockHidden" class="prompt-block">
     <!-- 编辑框（稿：isolate 供复制钮绝对定位） -->
     <div class="editor">
       <textarea

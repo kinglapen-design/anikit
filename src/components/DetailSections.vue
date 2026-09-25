@@ -5,7 +5,7 @@
 //     提示词 prompt；buttons/SegmentedControl 滑块 thumb 300ms 形态切换）
 //   → tab 内容区（flex 1 自管滚动：kit-scroll + ScrollThumb 悬浮滚轮，速查表 §2）
 //   → 底部「信息查看管理」钮（58 高块 padding 12，ActionButton solid md + info-manage 图标；
-//     点亮不接业务——排序/显隐管理面板后续轮接，2026-08-31 用户定）。
+//     2026-09-26 接业务：开 InfoManageDialog 排序/显隐管理面板，ui.infoManageOpen 宿主 App.vue）。
 // tab 口径（2026-09-19 用户改定）：默认「基础信息」；**全局记忆 + 持久化**（ui.detailTab，
 // settings.ui 写回通道）——换选中 / 选择模式往返（右栏替换卸载）不重置，链接文件成功后
 // 留在当前 tab；旧「会话级记忆、换选中回基础信息、不写设置存储」口径（2026-08-31）废除。
@@ -86,9 +86,10 @@ const tabBodyRef = ref<HTMLElement>();
       </div>
       <ScrollThumb :body="tabBodyRef" />
     </div>
-    <!-- 信息查看管理（稿：58 高块 padding 12 / 钮 240×34 solid + info-manage）——点亮不接业务 -->
+    <!-- 信息查看管理（稿：58 高块 padding 12 / 钮 240×34 solid + info-manage）——
+         2026-09-26 接业务：开管理弹窗（ui.infoManageOpen，宿主 App.vue） -->
     <footer class="manage-bar">
-      <ActionButton label="信息查看管理" icon="info-manage" variant="solid" size="md" />
+      <ActionButton label="信息查看管理" icon="info-manage" variant="solid" size="md" @click="ui.infoManageOpen = true" />
     </footer>
   </div>
   <!-- 文件夹 / 快速访问形态（FolderDetail：无分段控制器、无信息查看管理钮——稿注

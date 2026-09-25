@@ -12,6 +12,7 @@
 //   基本数据区块（gap 12）：BaseDataItem 信息卡（文件 = 尺寸/文件大小/格式/添加日期/修改日期——
 //     创建日期 metadata 无字段不加（旧口径沿）；档案 = 文件数/占用空间/创建日期）。
 // 文件与档案同构（2026-08-31 用户定）：档案 = props / descriptions / 统计数据渲染同一结构。
+// 排序/显隐 = 信息查看管理面板配置驱动（2026-09-26）：渲染序 = ui.detailBlocks.basic 全量序过滤 hidden。
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import TextInput from "../inputs/TextInput.vue";
 import ActionButton from "../buttons/ActionButton.vue";
@@ -19,7 +20,7 @@ import IconButton from "../buttons/IconButton.vue";
 import BaseDataItem from "../items/BaseDataItem.vue";
 import AppIcon from "../AppIcon.vue";
 import { displayName } from "../../lib/formatBadge";
-import { formatDetailDate, type DetailTarget } from "../../lib/detailSections";
+import { formatDetailDate, visibleDetailBlocks, type DetailTarget } from "../../lib/detailSections";
 import { formatSize } from "../../lib/formatSize";
 import { useUiStore } from "../../stores/ui";
 
@@ -44,6 +45,9 @@ const propWords = computed(() => (file.value ? file.value.detail.tags : (archive
 const descriptions = computed(() =>
   file.value ? file.value.detail.descriptions : (archive.value?.data.descriptions ?? []),
 );
+
+// 区块渲染序（2026-09-26 信息查看管理面板）：注册表全量序过滤 hidden——排序/显隐配置驱动
+const blocks = computed(() => visibleDetailBlocks(ui.detailBlocks.basic));
 
 // —— 描述折叠（稿：标题行 expand 钮折叠正文，默认展开；收起态留一排截断——2026-08-31 用户实机定）
 //    + 3 行截断（6.1 口径：超 3 行出展开/收起小字钮）——
@@ -119,49 +123,53 @@ const dataRows = computed<{ label: string; values: string[] }[]>(() => {
 </script>
 
 <template>
-  <!-- 输入框区块（稿：padding 12 / gap 8 / border-top 通用/三级） -->
-  <section class="db-block inputs">
-    <TextInput :model-value="name" readonly placeholder="名称" />
-    <TextInput :model-value="firstLink" readonly placeholder="http://" trailing-icon="link" />
-  </section>
+  <!-- 区块渲染 = 信息查看管理配置驱动（2026-09-26）：v-for 渲染序（注册表全量序过滤 hidden）
+       + v-if 分流；隐藏区块整块不渲染——找回走管理面板眼睛（允许全隐藏，无空态文案） -->
+  <template v-for="b in blocks" :key="b">
+    <!-- 输入框区块（稿：padding 12 / gap 8 / border-top 通用/三级） -->
+    <section v-if="b === 'fields'" class="db-block inputs">
+      <TextInput :model-value="name" readonly placeholder="名称" />
+      <TextInput :model-value="firstLink" readonly placeholder="http://" trailing-icon="link" />
+    </section>
 
-  <!-- 属性标签区块（稿：padding 12 / gap 12 / border-top；chips 行 gap 6） -->
-  <section class="db-block tags">
-    <span v-for="t in propWords" :key="t" class="prop-chip">{{ t }}</span>
-    <IconButton name="add-small" variant="bare" size="sm" title="添加属性" @click="openPropsDialog" />
-  </section>
+    <!-- 属性标签区块（稿：padding 12 / gap 12 / border-top；chips 行 gap 6） -->
+    <section v-else-if="b === 'tags'" class="db-block tags">
+      <span v-for="t in propWords" :key="t" class="prop-chip">{{ t }}</span>
+      <IconButton name="add-small" variant="bare" size="sm" title="添加属性" @click="openPropsDialog" />
+    </section>
 
-  <!-- 描述详情区块（稿：条目列表 gap 12；标题行 space-between = 标题 正文-加粗 四级 + expand 折叠钮；
-       正文 13/18 二级，超 3 行截断 + 展开/收起小字钮（6.1 口径）） -->
-  <section class="db-block descs">
-    <div v-for="(d, i) in descriptions" :key="i" class="desc-item">
-      <div class="desc-head" @click="toggleBody(i)">
-        <span class="desc-title">{{ d.title }}</span>
-        <AppIcon
-          name="expand"
-          :size="14"
-          class="desc-chev"
-          :class="{ collapsed: bodyCollapsed.has(i) }"
-        />
+    <!-- 描述详情区块（稿：条目列表 gap 12；标题行 space-between = 标题 正文-加粗 四级 + expand 折叠钮；
+         正文 13/18 二级，超 3 行截断 + 展开/收起小字钮（6.1 口径）） -->
+    <section v-else-if="b === 'descs'" class="db-block descs">
+      <div v-for="(d, i) in descriptions" :key="i" class="desc-item">
+        <div class="desc-head" @click="toggleBody(i)">
+          <span class="desc-title">{{ d.title }}</span>
+          <AppIcon
+            name="expand"
+            :size="14"
+            class="desc-chev"
+            :class="{ collapsed: bodyCollapsed.has(i) }"
+          />
+        </div>
+        <!-- 收起态留一排截断正文（2026-08-31 用户实机定：收起只留标题完全看不出写的什么，
+             无法判断要不要展开；一排 = -webkit-line-clamp 1 自带省略号） -->
+        <span
+          :ref="(el) => { if (el) descEls[i] = el as HTMLElement; }"
+          class="desc-content"
+          :class="bodyCollapsed.has(i) ? 'clamp-1' : { clamp: !expanded.has(i) }"
+        >{{ d.content }}</span>
+        <button v-if="!bodyCollapsed.has(i) && needsClamp[i]" class="desc-toggle" @click="toggleDesc(i)">
+          {{ expanded.has(i) ? "收起" : "展开" }}
+        </button>
       </div>
-      <!-- 收起态留一排截断正文（2026-08-31 用户实机定：收起只留标题完全看不出写的什么，
-           无法判断要不要展开；一排 = -webkit-line-clamp 1 自带省略号） -->
-      <span
-        :ref="(el) => { if (el) descEls[i] = el as HTMLElement; }"
-        class="desc-content"
-        :class="bodyCollapsed.has(i) ? 'clamp-1' : { clamp: !expanded.has(i) }"
-      >{{ d.content }}</span>
-      <button v-if="!bodyCollapsed.has(i) && needsClamp[i]" class="desc-toggle" @click="toggleDesc(i)">
-        {{ expanded.has(i) ? "收起" : "展开" }}
-      </button>
-    </div>
-    <ActionButton label="编辑描述" icon="pencil" variant="solid" size="md" @click="openDescDialog" />
-  </section>
+      <ActionButton label="编辑描述" icon="pencil" variant="solid" size="md" @click="openDescDialog" />
+    </section>
 
-  <!-- 基本数据区块（稿：信息列表卡 = BaseDataItem） -->
-  <section class="db-block data">
-    <BaseDataItem :rows="dataRows" />
-  </section>
+    <!-- 基本数据区块（稿：信息列表卡 = BaseDataItem） -->
+    <section v-else class="db-block data">
+      <BaseDataItem :rows="dataRows" />
+    </section>
+  </template>
 </template>
 
 <style scoped>

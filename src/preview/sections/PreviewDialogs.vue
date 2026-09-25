@@ -29,6 +29,7 @@ import TagButton from "../../components/buttons/TagButton.vue";
 import ConfirmModal from "../../components/modals/ConfirmModal.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import BlockManageRow from "../../components/BlockManageRow.vue";
+import DetailBlockRow from "../../components/DetailBlockRow.vue";
 import GroupNameInput from "../../components/GroupNameInput.vue";
 import DuplicateRow, { type DupDecision } from "../../components/DuplicateRow.vue";
 import DupScanGroupRow from "../../components/DupScanGroupRow.vue";
@@ -141,6 +142,27 @@ const bmRows = ref<BlockDraft[]>([
   { key: "b-dir", id: "dir", name: "目录", icon: null },
   { key: "b-ref", id: "b-ref", name: "学习参考", icon: null },
 ]);
+
+// —— InfoManageDialog 复刻桩（嵌真实 DetailBlockRow；行排序/显隐为本地演示，2026-09-26）——
+const imTab = ref("basic");
+const imTabOptions = [
+  { value: "basic", label: "基础信息" },
+  { value: "links", label: "链接关系" },
+  { value: "prompt", label: "提示词" },
+];
+const imRows = ref([
+  { id: "fields", title: "名称与链接", hidden: false },
+  { id: "tags", title: "标签", hidden: false },
+  { id: "descs", title: "详情", hidden: true },
+  { id: "baseData", title: "基本数据", hidden: false },
+]);
+function imMove(i: number, dir: -1 | 1): void {
+  const rows = imRows.value;
+  const j = i + dir;
+  if (j < 0 || j >= rows.length) return;
+  const [row] = rows.splice(i, 1);
+  rows.splice(j, 0, row);
+}
 
 // —— BatchRenameDialog 复刻桩（真实 SegmentedControl/TextInput；行卡 = 壳内复刻）——
 const renameMode = ref("sequence");
@@ -461,6 +483,35 @@ const linkOnlyChecked = ref(false);
             快照、确认接后端；26 稿删除区块警告已换 ConfirmModal warning（右下真实弹出）；口径变更与组件同步
           </span>
         </div>
+        <div class="pv-demo-cell">
+          <div class="pv-bm-shell w460">
+            <div class="pv-bm-titlebar">
+              <span class="pv-bm-title">信息查看管理</span>
+              <IconButton name="close-large" title="关闭" />
+            </div>
+            <div class="pv-im-seg">
+              <SegmentedControl v-model="imTab" :options="imTabOptions" variant="text" tone="g2" />
+            </div>
+            <div class="pv-im-rows">
+              <DetailBlockRow
+                v-for="(row, i) in imRows"
+                :key="row.id"
+                :title="row.title"
+                :hidden="row.hidden"
+                :is-first="i === 0"
+                :is-last="i === imRows.length - 1"
+                @move-up="imMove(i, -1)"
+                @move-down="imMove(i, 1)"
+                @toggle="row.hidden = !row.hidden"
+              />
+            </div>
+          </div>
+          <span class="pv-cap">
+            InfoManageDialog｜详情三 tab 区块排序/显隐管理（2026-09-26 重立，旧 22 稿 SectionEditPanel 后继）｜
+            本体 = BaseModal framed 460 + 即时生效无按钮行；复刻嵌真实 DetailBlockRow 四行（「详情」= 隐藏行：
+            标题禁用色 + view-off 眼睛；箭头排序 / 眼睛显隐本地演示）；本体读写 ui.detailBlocks 注册表配置
+          </span>
+        </div>
         <div class="pv-demo-cell" style="width: 240px">
           <ActionButton label="保存冲突提示" variant="solid" size="md" @click="groupErrOpen = true" />
           <span class="pv-cap">
@@ -668,6 +719,16 @@ const linkOnlyChecked = ref(false);
 }
 .pv-bm-shell.w559 {
   width: 559px;
+}
+.pv-bm-shell.w460 {
+  width: 460px;
+}
+/* InfoManage 复刻（framed 列 gap 12 / 内容段自承 0 24 / 底部 24——与本体 InfoManageDialog 同步） */
+.pv-im-seg {
+  padding: var(--n-space-12) var(--n-space-24) 0;
+}
+.pv-im-rows {
+  padding: var(--n-space-12) var(--n-space-24) var(--n-space-24);
 }
 .pv-bm-shell.w482 {
   width: 482px;
