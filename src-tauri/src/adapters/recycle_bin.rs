@@ -78,6 +78,6 @@ mod tests {
     let result = delete_to_recycle(&[ghost]);
     assert!(result.is_err());
     let msg = result.unwrap_err();
-    assert!(!msg.is_empty() && msg.chars().any(|c| '\u{4e00}' <= c && c <= '\u{9fff}'), "{msg}");
+    assert!(!msg.is_empty() && msg.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)), "{msg}");
   }
 }

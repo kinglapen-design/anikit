@@ -582,10 +582,11 @@ fn migrate_and_purge_covers(root: &Path, archives: &ArchivesFile) -> (usize, usi
   if let Ok(rd) = fs::read_dir(&dir) {
     for e in rd.flatten() {
       let p = e.path();
-      if p.is_file() && !p.file_name().and_then(|n| n.to_str()).is_some_and(|n| referenced.contains(n)) {
-        if fs::remove_file(&p).is_ok() {
-          purged += 1;
-        }
+      if p.is_file()
+        && !p.file_name().and_then(|n| n.to_str()).is_some_and(|n| referenced.contains(n))
+        && fs::remove_file(&p).is_ok()
+      {
+        purged += 1;
       }
     }
   }

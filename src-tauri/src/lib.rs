@@ -272,14 +272,11 @@ pub fn run() {
 
         let w2 = w.clone();
         w.on_window_event(move |event| {
-          match event {
-            tauri::WindowEvent::CloseRequested { api, .. } => {
-              api.prevent_close();
-              let _ = w2.hide();
-              // 关闭到托盘即通知前端暂停播放（2026-07-27 用户定）
-              let _ = w2.emit("main-window-hidden", ());
-            }
-            _ => {}
+          if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = w2.hide();
+            // 关闭到托盘即通知前端暂停播放（2026-07-27 用户定）
+            let _ = w2.emit("main-window-hidden", ());
           }
         });
       }

@@ -1,5 +1,5 @@
 //! 索引式工作空间服务（PRD 02）：真实目录列举 + .anikit 缩略图缓存 + 磁盘监听热刷新
-//! + 步骤 2 基础整理写操作（新建文件夹 / 重命名 / 回收站删除 / 移动 / 复制粘贴，
+//! 与步骤 2 基础整理写操作（新建文件夹 / 重命名 / 回收站删除 / 移动 / 复制粘贴，
 //! 纯磁盘语义，越权校验与 .anikit 保护同读路径）。
 //! 缩略图缓存键 = 相对路径 + mtime + 大小（无资产 ID 可挂，PRD 技术口径），缓存放
 //! workspace/.anikit/thumbs/，可整体删除重建；新鲜度 = 文件名内嵌的 mtime+size 与当前文件
@@ -887,10 +887,10 @@ mod tests {
     fs::write(&touched, b"x").unwrap();
 
     // 登记前：同一事件不判回声
-    assert!(!is_echo_within(&[touched.clone()], Duration::from_secs(3)));
+    assert!(!is_echo_within(std::slice::from_ref(&touched), Duration::from_secs(3)));
     note_known_op(vec![touched.clone()]);
     // 窗口期内：判回声
-    assert!(is_echo_within(&[touched.clone()], Duration::from_secs(3)));
+    assert!(is_echo_within(std::slice::from_ref(&touched), Duration::from_secs(3)));
     // 混合事件（含未登记路径）不判——真实外部改动不被误吃
     assert!(!is_echo_within(&[touched, root.join("外部.txt")], Duration::from_secs(3)));
     // 极小窗口（等价过期）：不再判回声

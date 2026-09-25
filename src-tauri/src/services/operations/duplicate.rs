@@ -375,7 +375,7 @@ mod tests {
     assert!(new_info.is_dir());
 
     crate::services::operations::delete_placements(&mut h.lib, &[pref(&new_id, "root", true)], Some("recycle")).unwrap();
-    let rep = crate::services::recycle::delete_recycle(&mut h.lib, &[new_id.clone()], false).unwrap();
+    let rep = crate::services::recycle::delete_recycle(&mut h.lib, std::slice::from_ref(&new_id), false).unwrap();
     assert_eq!(rep.deleted, 1, "无引用无活链接，第一段直接删不需确认");
     assert!(!new_info.exists(), "副本 info 物理删除");
     assert!(h.lib.info_dir("AN-A").is_dir(), "源 info 不动");

@@ -373,6 +373,8 @@ fn clear_readonly(dest: &Path) {
   if let Ok(meta) = fs::metadata(dest) {
     let mut perm = meta.permissions();
     if perm.readonly() {
+      // 目的即剥只读位（Windows 微信/QQ 接收文件带只读属性场景，2026-09-22）
+      #[allow(clippy::permissions_set_readonly_false)]
       perm.set_readonly(false);
       let _ = fs::set_permissions(dest, perm);
     }
