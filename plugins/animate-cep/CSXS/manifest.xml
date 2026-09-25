@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ExtensionManifest Version="7.0" ExtensionBundleId="com.anikit.cep"
-  ExtensionBundleVersion="0.3.0"
+  ExtensionBundleVersion="0.4.0"
   ExtensionBundleName="AniKit"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="com.anikit.cep.panel" Version="0.3.0"/>
+    <Extension Id="com.anikit.cep.panel" Version="0.4.0"/>
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>

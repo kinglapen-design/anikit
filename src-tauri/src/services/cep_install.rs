@@ -11,7 +11,7 @@ use serde::Serialize;
 
 /// 插件目录名（CEP extensions 下）与随包版本（manifest ExtensionBundleVersion 同步）
 pub const PLUGIN_DIR_NAME: &str = "com.anikit.cep";
-pub const BUNDLED_VERSION: &str = "0.3.0";
+pub const BUNDLED_VERSION: &str = "0.4.0";
 
 /// PlayerDebugMode 目标键（CSXS 版本族——Animate 2019+ 覆盖；宽写无害）
 const CSXS_KEYS: &[&str] = &["CSXS.9", "CSXS.10", "CSXS.11"];

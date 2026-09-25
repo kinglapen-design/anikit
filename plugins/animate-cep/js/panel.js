@@ -1,9 +1,14 @@
-/* AniKit CEP 面板（2b 正式版）——控件逻辑与 WS 通信
- * 链路：端口文件发现 → hello/welcome（cepOutDir / settings / libReady）→ 静/动 + 命名 +
- * 目标文件夹（getTree 树选择器）→ jsx 导出 → exported 通知 → importDone/Error。
+/* AniKit CEP 面板（2b 正式版）——控件逻辑与 WS 通信（协议 v2，2026-09-25）
+ * 链路：端口文件发现 → hello（app / version / panelVersion）/ welcome（protocol / exportDir /
+ * bundledPanelVersion / settings / libReady）→ 静/动 + 命名 + 目标文件夹（getTree 树选择器）→
+ * jsx 导出 → animate.exported 通知 → animate.importDone/Error。
+ * 软件业务消息走 animate. 命名空间（v2 泛化，前缀须与 hello 登记的 app 一致）：收 importProgress /
+ * importDone / importError / thumbDone / thumbError / paste / pasteFla，发 exported / thumbOnly /
+ * pasteResult；通用层（hello / welcome / getTree / tree / saveSettings / settings / settingsError /
+ * error）无前缀。welcome 的 bundledPanelVersion ≠ PANEL_VERSION → 持久横幅提示重开/一键升级。
  * 批次 2（2026-09-02）：导出模式分段——新文件（选中元件导新 fla，上链路）/ 仅缩略图
- *（当前文档补缩略图不导 fla：getDocInfo → exportThumbFrames → thumbOnly → thumbDone
- *  bound 命中绑定 / beside 池外落原文件旁边 / thumbError）。
+ *（当前文档补缩略图不导 fla：getDocInfo → exportThumbFrames → animate.thumbOnly → animate.thumbDone
+ *  bound 命中绑定 / beside 池外落原文件旁边 / animate.thumbError）。
  * 断线续传（2026-09-02 用户实机报修复）：导出单条 pending 落 localStorage——断连/未发送/进程退出
  * 后重连开库自动重发；未开库时 5s 轮询 hello 自动跟上；「产物不存在」回执 = 重复重发撞已清场，温和提示。
  * 批次 4（2026-09-06）：导出设置面板可编辑（saveSettings / settingsError，settings 新结构删 maxEdge 加 fps）；
@@ -14,6 +19,8 @@ var ws = null;
 var cepOut = null;
 var libReady = false;
 var settings = { maxSecs: 10, maxBytes: 2097152, fps: 0 }; // fps = 新建 fla 帧率（0 = 跟随文档）
+var PANEL_VERSION = '0.4.0'; // 与 CSXS/manifest.xml ExtensionBundleVersion 同步
+var protocol = 0;            // welcome 下发的协议版本（收下备查，不强制拦）
 
 var dynamic = false;          // 静/动开关（默认静态）
 var keepOrigin = true;        // 对齐方式：true = 保持坐标（fla 保原坐标，发送至 AN 原位粘贴联动）；false = 合适舞台（居中态直存，拆素材）
@@ -45,6 +52,22 @@ function refreshExportBtn() {
   $('btnExport').disabled = !(ws && ws.readyState === 1 && libReady) || exporting;
 }
 
+/* 面板版本握手（协议 v2）：welcome 带 bundledPanelVersion，与本地 PANEL_VERSION 不等 = 面板在跑旧码
+ *（CEP 无热更）——连接行下挂持久横幅提示（非一闪而过 log），重开面板或到 AniKit 插件面板一键升级 */
+var updateHint = null;
+function checkPanelVersion(bundled) {
+  if (bundled === PANEL_VERSION) {
+    if (updateHint) { updateHint.parentNode.removeChild(updateHint); updateHint = null; }
+    return;
+  }
+  if (updateHint) return; // 重连重复 welcome 不叠加
+  updateHint = document.createElement('div');
+  updateHint.style.cssText = 'padding:6px 8px;border:1px solid var(--n-warning);border-radius:8px;color:var(--n-warning);font-size:11px;line-height:1.5;';
+  updateHint.textContent = '面板已更新（当前 ' + PANEL_VERSION + ' → 新版 ' + bundled + '），请重开面板或到 AniKit 插件面板一键升级';
+  var conn = $('conn');
+  conn.parentNode.insertBefore(updateHint, conn.nextSibling);
+}
+
 /* —— WS（自动重连：断开 / 失败 / 无端口文件 2s 重试；端口文件每次重读，
       AniKit 重启换端口也能跟上，2026-09-01 用户实机报） —— */
 var retryTimer = 0;
@@ -70,14 +93,16 @@ function connect() {
   try { if (ws) ws.close(); } catch (e) {}
   ws = new WebSocket('ws://127.0.0.1:' + port);
   ws.onopen = function () {
-    ws.send(JSON.stringify({ type: 'hello', app: 'animate', version: '2024' }));
+    ws.send(JSON.stringify({ type: 'hello', app: 'animate', version: '2024', panelVersion: PANEL_VERSION }));
   };
   ws.onmessage = function (ev) {
     var msg;
     try { msg = JSON.parse(ev.data); } catch (e) { return; }
     if (msg.type === 'welcome') {
       libReady = !!msg.libReady;
-      cepOut = msg.cepOutDir || null;
+      protocol = msg.protocol || 0;
+      cepOut = msg.exportDir || null;
+      if (msg.bundledPanelVersion) checkPanelVersion(msg.bundledPanelVersion);
       if (msg.settings) {
         settings = msg.settings;
         fillSettingsInputs(settings, true); // 用户正在编辑的框不覆盖
@@ -87,7 +112,7 @@ function connect() {
       setConn('on', libReady ? '已连接' : '已连接（AniKit 未开库）');
       if (libReady) {
         ws.send(JSON.stringify({ type: 'getTree' }));
-        // 断线续传：有未完成导出 → 自动重发（产物在 cep-out；已被处理/清理则 importError 报清）。
+        // 断线续传：有未完成导出 → 自动重发（产物在 cep-out；已被处理/清理则 animate.importError 报清）。
         // 重发等回执期间禁新导出（exporting=true）——防新导出覆盖 pending 后旧回执误清
         if (pending && !batch && !exporting) {
           exporting = true;
@@ -103,13 +128,14 @@ function connect() {
       } else {
         // 未开库：5s 轮询重发 hello（开库后面板自动跟上，2026-09-02 用户场景；单链不叠加）
         setTimeout(function () {
-          if (ws && ws.readyState === 1 && !libReady) ws.send(JSON.stringify({ type: 'hello', app: 'animate', version: '2024' }));
+          if (ws && ws.readyState === 1 && !libReady) ws.send(JSON.stringify({ type: 'hello', app: 'animate', version: '2024', panelVersion: PANEL_VERSION }));
         }, 5000);
       }
     } else if (msg.type === 'tree') {
       renderTree(msg.data);
     } else if (msg.type === 'settings') {
-      // APP 侧保存后广播（含面板 saveSettings 的回显）：刷新输入框并更新缓存
+      // APP 侧保存后广播（含面板 saveSettings 的回显）：v2 起带 app 字段，只收本软件命名空间
+      if (msg.app !== 'animate') return;
       if (msg.settings) {
         settings = msg.settings;
         fillSettingsInputs(settings, true);
@@ -119,15 +145,18 @@ function connect() {
       // APP 校验失败：报错并回滚输入框为当前 settings 值
       log('✗ 设置保存失败：' + (msg.message || '未知错误'), 'err');
       fillSettingsInputs(settings, false);
-    } else if (msg.type === 'importProgress') {
+    } else if (msg.type === 'error') {
+      // 协议层错误（未知类型 / 命名空间与登记身份不符等，v2）
+      log('✗ 协议错误：' + (msg.message || '未知错误'), 'err');
+    } else if (msg.type === 'animate.importProgress') {
       log('合成 WebP 中…');
-    } else if (msg.type === 'importDone') {
+    } else if (msg.type === 'animate.importDone') {
       if (batch) { batch.ok++; batch.done++; batchCheckDone(); return; } // 批量：计数静默，完成汇总
       clearPending();
       exporting = false;
       refreshExportBtn();
-      log('✓ 已入库：' + msg.flaAssetId + (msg.overLimit ? '（超 2M 保留产出）' : ''), 'ok');
-    } else if (msg.type === 'importError') {
+      log('✓ 已入库：' + msg.sourceAssetId + (msg.overLimit ? '（超 2M 保留产出）' : ''), 'ok');
+    } else if (msg.type === 'animate.importError') {
       if (batch) { batch.fail++; batch.done++; log('✗ 入库失败：' + msg.message, 'err'); batchCheckDone(); return; }
       clearPending(); // 服务端明确拒绝（含产物已不存在），不重发防死循环
       exporting = false;
@@ -135,8 +164,9 @@ function connect() {
       // 「产物不存在」= 重发撞见已入库清场（退出 APP 时机在 commit 后回执前）——非错误，温和提示
       if (/不存在/.test(msg.message)) log('· ' + msg.message + '（产物已入库或已清理，无需重发）');
       else log('✗ 入库失败：' + msg.message, 'err');
-    } else if (msg.type === 'thumbDone') {
+    } else if (msg.type === 'animate.thumbDone') {
       // 批次 2 仅缩略图回执：bound = 已绑定库内资产；beside = 池外落原文件旁边
+      //（bound 另带 sourceAssetId / thumbAssetId，面板展示用不到不取）
       clearPending();
       exporting = false;
       refreshExportBtn();
@@ -145,16 +175,16 @@ function connect() {
       } else {
         log('✓ 不在库内，已导出到原文件旁边：' + msg.outPath + '（自行导入）', 'ok');
       }
-    } else if (msg.type === 'thumbError') {
+    } else if (msg.type === 'animate.thumbError') {
       clearPending();
       exporting = false;
       refreshExportBtn();
       if (/不存在/.test(msg.message)) log('· ' + msg.message + '（产物已处理或已清理，无需重发）');
       else log('✗ 缩略图导出失败：' + msg.message, 'err');
-    } else if (msg.type === 'paste') {
+    } else if (msg.type === 'animate.paste') {
       // 发送至 AN（8.3）主方案：APP 已写 Flash 11 Picture 剪贴板，原位粘贴并回执
       evalJsx('pasteClipboard()', function (r) { replyPaste(msg.reqId, r); });
-    } else if (msg.type === 'pasteFla') {
+    } else if (msg.type === 'animate.pasteFla') {
       // 兜底（剪贴板转换失败）：打开-复制-粘贴-关闭（会闪窗，状态区明示）
       log('转换回退：打开「' + (msg.name || '') + '」复制粘贴中（会闪窗）…');
       evalJsx('pasteFlaFile(' + JSON.stringify(msg.flaPath || '') + ')', function (r) { replyPaste(msg.reqId, r); });
@@ -192,14 +222,14 @@ function evalJsx(script, cb) { cs.evalScript(script, function (r) { cb(r); }); }
 function replyPaste(reqId, r) {
   var ok = r === 'OK' || String(r).indexOf('OK:') === 0;
   var message = ok ? '' : String(r).replace(/^ERROR:/, '');
-  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'pasteResult', reqId: reqId, ok: ok, message: message }));
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'animate.pasteResult', reqId: reqId, ok: ok, message: message }));
 }
 
 /* —— 未完成导出的断线续传（2026-09-02 用户实机报：导出时退出 APP → 卡「等待入库」无提示无重试）——
  * 单选/仅缩略图 = 单条 pending（localStorage cepPending 持久化；产物在 cep-out 待重发，面板重开也不丢）；
  * 发消息前必查 readyState（WS 在 CLOSED 态 send **静默丢弃**是坑）；收到回执（成功/失败）清 pending；
  * welcome 且 libReady 时自动重发。批量不适用（部分入库状态不明，中断提示重导剩余项）。 —— */
-var pending = null; // { type: 'exported'|'thumbOnly', payload }
+var pending = null; // { type: 'animate.exported'|'animate.thumbOnly', payload }
 
 function setPending(type, payload) {
   pending = { type: type, payload: payload };
@@ -593,7 +623,7 @@ function exportSingle(dir) {
   });
 }
 
-/* —— 多选整合导出（批次 4，2026-09-06）：多选整体导一个 fla，单条 WS exported 消息入库（同单选契约）。
+/* —— 多选整合导出（批次 4，2026-09-06）：多选整体导一个 fla，单条 WS animate.exported 消息入库（同单选契约）。
  * 命名框空 = 落「未命名」（jsx 侧兜底替换，面板先提示）；帧率/撑满/自适应口径同 exportSelection。 —— */
 function exportMerged(dir) {
   var name = $('name').value.trim();
@@ -613,9 +643,9 @@ function exportMerged(dir) {
 }
 
 /* —— 批量分别导出（批次 3，PRD 07-03）：面板逐单项驱动 exportBatchItem（进度实时、jsx 快照选区），
- * 每项产物走既有 exported 单条消息入库。命名（2026-09-02 用户点题）：命名框批量期作**前缀**——
+ * 每项产物走既有 animate.exported 单条消息入库。命名（2026-09-02 用户点题）：命名框批量期作**前缀**——
  * 空 = 各元件名（现状）；非空 = 「前缀-序号」（总数 ≥10 补零对齐排序，jsx 侧拼）。
- * 完成条件：jsx 循环结束 且 已发 WS 全部收到 importDone/Error 回执。 —— */
+ * 完成条件：jsx 循环结束 且 已发 WS 全部收到 animate.importDone/Error 回执。 —— */
 var batch = null; // { total, sent, done, ok, fail, jsxDone }；非 null = 批量进行中
 
 function exportBatch(dir, total) {
@@ -666,7 +696,7 @@ function onBatchItem(idx, result, dir) {
   batch.sent++;
   log('(' + (idx + 1) + '/' + batch.total + ') ' + stem + ' 已导出，等待入库…');
   ws.send(JSON.stringify({
-    type: 'exported',
+    type: 'animate.exported',
     payload: {
       name: stem,
       folderId: folderId,
@@ -687,7 +717,7 @@ function batchCheckDone() {
   refreshExportBtn();
 }
 
-/* —— 仅缩略图导出（批次 2）：当前文档画面 → PNG/序列落 cep-out → WS thumbOnly →
+/* —— 仅缩略图导出（批次 2）：当前文档画面 → PNG/序列落 cep-out → WS animate.thumbOnly →
  * APP 按文档路径匹配库内 fla：命中 = WebP 入库绑定（已有绑定换绑）；未命中 = 挪到原文件旁边（用户定） —— */
 function exportThumb() {
   var dir = (cepOut || '').replace(/\\/g, '/');
@@ -719,7 +749,7 @@ function exportThumb() {
       function (r2) {
         if (r2.indexOf('OK:') !== 0) return fail(r2);
         log('已导出，等待处理…');
-        sendPayload('thumbOnly', {
+        sendPayload('animate.thumbOnly', {
           docPath: info.path,
           dynamic: dynamic,
           seqDir: dynamic ? dir + '/' + stem + '_seq' : null,
@@ -756,7 +786,7 @@ function onExported(name, dir) {
       var sm = result.match(/,skipped:(\d+)/);
       if (dynamic && sm && parseInt(sm[1], 10) > 0) log('· 已跳过非元件实例 ' + sm[1] + ' 项（画面照常导出，不逐帧推进）');
       log('已导出，等待入库…');
-      sendPayload('exported', {
+      sendPayload('animate.exported', {
         name: stem,
         folderId: folderId,
         dynamic: dynamic,
