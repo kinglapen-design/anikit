@@ -292,11 +292,12 @@ pub struct ThumbPrepared {
 }
 
 /// 仅缩略图结果（WS thumbDone 回执载荷）：Bound = 入库绑定；Beside = 落原文件旁边
+/// 协议键名通用口径（camelCase 后 = sourceAssetId / thumbAssetId，2026-09-25 T1 泛化）
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase", tag = "mode")]
 pub enum ThumbOutcome {
   #[serde(rename_all = "camelCase")]
-  Bound { asset_id: String, webp_asset_id: String, name: String, over_limit: bool, webp_bytes: u64 },
+  Bound { source_asset_id: String, thumb_asset_id: String, name: String, over_limit: bool, webp_bytes: u64 },
   #[serde(rename_all = "camelCase")]
   Beside { out_path: String, webp_bytes: u64 },
 }
@@ -384,7 +385,7 @@ pub fn thumb_commit(lib: &mut Library, p: &ThumbPrepared, over_limit: bool, webp
       });
       let name = lib.index.assets.get(asset_id).map(|m| m.name.clone()).unwrap_or_default();
       cleanup(p);
-      Ok(ThumbOutcome::Bound { asset_id: asset_id.clone(), webp_asset_id: webp_id, name, over_limit, webp_bytes })
+      Ok(ThumbOutcome::Bound { source_asset_id: asset_id.clone(), thumb_asset_id: webp_id, name, over_limit, webp_bytes })
     }
     None => {
       let dir = Path::new(&p.payload.doc_path).parent().ok_or_else(|| "文档路径无效".to_string())?;
@@ -651,11 +652,11 @@ mod tests {
     assert_eq!(prepared.matched.as_deref(), Some(fla_id.as_str()));
     let (o, b) = thumb_compose(&prepared).unwrap();
     let out = thumb_commit(&mut lib, &prepared, o, b).unwrap();
-    let ThumbOutcome::Bound { asset_id, webp_asset_id, name, .. } = out else { panic!("应命中绑定") };
-    assert_eq!(asset_id, fla_id);
+    let ThumbOutcome::Bound { source_asset_id, thumb_asset_id, name, .. } = out else { panic!("应命中绑定") };
+    assert_eq!(source_asset_id, fla_id);
     assert_eq!(name, "跑");
-    assert_eq!(lib.index.assets[&fla_id].thumb_asset_id.as_deref(), Some(webp_asset_id.as_str()), "换绑新缩略图");
-    assert_eq!(lib.index.assets[&webp_asset_id].hidden, Some(true));
+    assert_eq!(lib.index.assets[&fla_id].thumb_asset_id.as_deref(), Some(thumb_asset_id.as_str()), "换绑新缩略图");
+    assert_eq!(lib.index.assets[&thumb_asset_id].hidden, Some(true));
     assert_eq!(lib.index.assets[&old_webp_id].hidden, Some(true), "旧 hidden 不动（PRD：手动解除或删除）");
     assert!(!tdir.join("跑.png").exists(), "静图 PNG 已清场");
     assert!(!prepared.webp_tmp.exists(), "webp 已剪切入库");

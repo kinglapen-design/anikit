@@ -247,7 +247,7 @@ let unlistenInbox: (() => void) | undefined;
 let unlistenFpsHeal: (() => void) | undefined;
 // 最近使用变更事件监听（2026-07-29 复验反馈修复：原仅全量 refresh 拉取、要重启才更新）
 let unlistenRecent: (() => void) | undefined;
-// CEP 导出接收入库事件监听（8.1）：后端 WS 服务导入完成后广播 cep-imported，全量对齐
+// 插件导出接收入库事件监听（8.1）：后端 WS 服务导入完成后广播 plugin-imported，全量对齐
 let unlistenCep: (() => void) | undefined;
 // MCP 写入事件监听（PRD 08-06，2026-09-19）：MCP 写工具绕开前端改库，后端广播 mcp-library-changed
 let unlistenMcp: (() => void) | undefined;
@@ -972,7 +972,8 @@ export const useContentStore = defineStore("content", {
       unlistenRecent = await listen("recent-changed", () => void this.refreshRecent());
     },
 
-    // CEP 导出入库热刷新（8.1）：WS 服务接收入库完成广播 cep-imported → 全量对齐
+    // 插件导出入库热刷新（8.1；2026-09-25 T1 泛化改名 cep-imported → plugin-imported）：
+    // WS 服务接收入库完成广播 plugin-imported → 全量对齐
     // （新 fla 卡片显示伴生图 + 缩略图视图入列 + 目标文件夹新增，涉及视图代理与 hidden
     // 过滤多口径，局部同步成本高且易漏，导入级操作频率低，直接 refresh 同导入完成口径）
     // + 成功提示音（2026-09-02 用户定：导出时视口大概率停留在 Animate 窗口，听觉反馈兜底；
@@ -980,7 +981,7 @@ export const useContentStore = defineStore("content", {
     async initCepListener(): Promise<void> {
       if (unlistenCep) return;
       let lastSound = 0;
-      unlistenCep = await listen("cep-imported", () => {
+      unlistenCep = await listen("plugin-imported", () => {
         const now = Date.now();
         if (now - lastSound > 500) {
           lastSound = now;
@@ -993,7 +994,7 @@ export const useContentStore = defineStore("content", {
     // MCP 写入热刷新（PRD 08-06，2026-09-19 用户实测「agent 新建文件夹要重启才显示」补）：
     // 库数据文件无监听（watcher 只管收件箱），命令层写由前端自刷新，MCP 绕开前端——后端
     // server/mcp 写成功广播 mcp-library-changed；去抖 300ms 合并（Agent 批量写连发一拍全量对齐，
-    // 同 cep-imported 的 refresh 口径但不带 CEP 成功提示音）
+    // 同 plugin-imported 的 refresh 口径但不带 CEP 成功提示音）
     async initMcpListener(): Promise<void> {
       if (unlistenMcp) return;
       let timer: ReturnType<typeof setTimeout> | undefined;

@@ -36,7 +36,7 @@ pub async fn get_cep_export_settings() -> Result<CepExportSettings, String> {
 pub async fn save_cep_export_settings(settings: CepExportSettings) -> Result<(), String> {
   settings.validate()?;
   config::save_cep_export_settings(settings).map_err(|e| e.to_string())?;
-  crate::server::broadcast_settings();
+  crate::server::broadcast_settings("animate");
   Ok(())
 }
 

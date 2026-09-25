@@ -20,7 +20,7 @@ impl AnikitMcp {
   /// 浏览素材库结构的第一步——文件夹 id 供 search_assets / list_placements 限定范围
   #[tool(name = "list_folder_tree", annotations(read_only_hint = true))]
   fn list_folder_tree(&self) -> Result<CallToolResult, ErrorData> {
-    self.with_lib(|lib| Ok(crate::commands::import::folder_tree(lib)))
+    self.with_lib(|lib| Ok(crate::services::folder_tree::folder_tree(lib)))
   }
 
   /// 文件夹内资产清单（PlacementView 数组：assetId / folderId / 显示名 / 宽高 / 扩展名 /
