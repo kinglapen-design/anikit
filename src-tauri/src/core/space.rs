@@ -176,6 +176,18 @@ pub fn library_orphans(space_root: &Path, name: &str) -> Result<HashSet<String>,
   Ok(own.difference(&others).cloned().collect())
 }
 
+/// 空间级引用资产集（无主 info 扫描口径，2026-09-26 修复：原按当前库 folders ∪ recycle 判定，
+/// 把空间内其余库引用的资产全误判成无主——assets 池空间级共享，引用集必须取各库并集）。
+/// 任一库数据文件读取失败即报错（调用方降级为跳过孤儿判定——宁可漏报不可误报，
+/// 误报会诱导用户清掉他库资产）
+pub fn referenced_assets_space(space_root: &Path) -> Result<HashSet<String>, DataError> {
+  let mut all: HashSet<String> = HashSet::new();
+  for name in list_libraries(space_root)? {
+    all.extend(referenced_assets(&space_root.join(name))?);
+  }
+  Ok(all)
+}
+
 /// 库容量（合并资源库弹窗容量列，2026-09-26）：引用资产集（folders ∪ recycle，口径同孤儿判定）
 /// 的 metadata.size 求和——资产实体在空间级 assets 池多库共享，"库容量"= 该库引用资产的合计。
 /// 按 ID 经 core::paths 推导读 metadata（不枚举 assets/）；info / metadata 缺失或损坏跳过不计

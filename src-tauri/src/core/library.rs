@@ -244,8 +244,22 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
     log::info!("打开自检扶正 {origins_fixed} 个无 origin 资产（首条位置置原始标记）");
   }
   // 无主 info 扫描（2026-09-03 资产污染修复配套）：空壳自动物理删、孤儿清单存实况字段
-  //（命令层 emit 前端弹警告窗；2026-09-02 用户定：不自动删，删 / 复活由用户处置）
-  let orphans = scan_orphan_infos(&assets_dir, &folders, &recycle, &assets);
+  //（命令层 emit 前端弹警告窗；2026-09-02 用户定：不自动删，删 / 复活由用户处置）。
+  // 引用集口径（2026-09-26 修复）：空间级并集——各库 folders ∪ recycle 磁盘态 ∪ 当前库内存态
+  //（自检修复未落盘的窗口期保守兜底）；assets 池空间级共享，单库口径会把他库资产误判无主。
+  // 并集构建失败（某库数据文件损坏）→ None 跳过孤儿判定只清空壳：宁可漏报不可误报
+  let referenced = match space::referenced_assets_space(space_root) {
+    Ok(mut set) => {
+      set.extend(folders.items.iter().map(|p| p.asset.clone()));
+      set.extend(recycle.items.iter().map(|i| i.asset.clone()));
+      Some(set)
+    }
+    Err(e) => {
+      log::error!("无主 info 扫描引用集构建失败（跳过孤儿判定）：{e}");
+      None
+    }
+  };
+  let orphans = scan_orphan_infos(&assets_dir, referenced.as_ref(), &assets);
   if !orphans.is_empty() {
     let detail = orphans.iter().map(|o| format!("{}（{}）", o.id, o.name)).collect::<Vec<_>>().join("、");
     log::warn!("打开自检发现 {} 个无主资产（数据层无记录，info 残留磁盘）：{detail}", orphans.len());
@@ -406,15 +420,17 @@ fn fix_missing_origins(folders: &mut FoldersFile, recycle: &RecycleFile) -> usiz
   fixed
 }
 
-/// 无主 info 扫描（2026-09-03 资产污染修复配套，打开自检冷路径）：
+/// 无主 info 扫描（2026-09-03 资产污染修复配套，打开自检冷路径；2026-09-26 口径修复：
+/// referenced = 空间级引用集——各库 folders ∪ recycle 并集 ∪ 当前库内存态；None = 引用集
+/// 构建失败，跳过孤儿判定只清空壳，宁可漏报不误报——误报会诱导用户清掉他库资产）：
 /// - 空壳（info 目录无 metadata.json 未载入）= 导入 / 删除半截残骸 → **自动物理删**
 ///   （100% 垃圾；无数据文件，不涉及备份门禁；删除失败仅记录，下轮开库再扫）；
-/// - 孤儿（metadata 在，但 folders ∪ recycle 无任何引用）= 异常路径残留 → **只返回清单
+/// - 孤儿（metadata 在，但空间级引用集无引用）= 异常路径残留 → **只返回清单
 ///   不自动删**（可能是用户数据唯一副本，删 / 复活由用户定），调用方负责 log + 存 Library
 ///   实况字段（命令层 emit 前端弹警告窗）。
 ///
 /// 返回孤儿清单（测试断言用）
-fn scan_orphan_infos(assets_dir: &Path, folders: &FoldersFile, recycle: &RecycleFile, assets: &[AssetMeta]) -> Vec<OrphanNotice> {
+fn scan_orphan_infos(assets_dir: &Path, referenced: Option<&HashSet<String>>, assets: &[AssetMeta]) -> Vec<OrphanNotice> {
   let infos = match info_dirs(assets_dir) {
     Ok(v) => v,
     Err(e) => {
@@ -423,8 +439,6 @@ fn scan_orphan_infos(assets_dir: &Path, folders: &FoldersFile, recycle: &Recycle
     }
   };
   let loaded: HashSet<&str> = assets.iter().map(|a| a.id.as_str()).collect();
-  let referenced: HashSet<&str> =
-    folders.items.iter().map(|p| p.asset.as_str()).chain(recycle.items.iter().map(|i| i.asset.as_str())).collect();
   let mut orphans = Vec::new();
   for info in infos {
     let Some(stem) = info.file_stem().map(|s| s.to_string_lossy().into_owned()) else { continue };
@@ -433,7 +447,7 @@ fn scan_orphan_infos(assets_dir: &Path, folders: &FoldersFile, recycle: &Recycle
         Ok(()) => log::warn!("打开自检清理无主 info 空壳：{}", info.display()),
         Err(e) => log::error!("无主 info 空壳清理失败（{}）：{e}", info.display()),
       }
-    } else if !referenced.contains(stem.as_str()) {
+    } else if referenced.is_some_and(|r| !r.contains(stem.as_str())) {
       let name = assets.iter().find(|a| a.id == stem).map(|a| a.name.clone()).unwrap_or_default();
       orphans.push(OrphanNotice { id: stem, name, path: info.to_string_lossy().into_owned() });
     }
@@ -873,8 +887,9 @@ mod tests {
     assert_eq!(persisted.items[0].asset, "AN-REAL");
   }
 
-  /// 无主 info 扫描（2026-09-03 资产污染修复配套）：空壳（无 metadata.json）开库自动物理删；
-  /// 孤儿（metadata 在，folders ∪ recycle 无引用）保留不动（log 清单由用户处置）；
+  /// 无主 info 扫描（2026-09-03 资产污染修复配套；2026-09-26 口径修复为空间级引用集——
+  /// 单库空间语义不变）：空壳（无 metadata.json）开库自动物理删；
+  /// 孤儿（metadata 在，各库 folders ∪ recycle 均无引用）保留不动（log 清单由用户处置）；
   /// 正常资产与回收站引用资产不误伤
   #[test]
   fn open_scans_orphan_infos() {
@@ -1004,11 +1019,58 @@ mod tests {
     )
     .unwrap();
     let assets = load_assets(&lib.assets_dir).unwrap();
-    let orphans = scan_orphan_infos(&lib.assets_dir, &lib.folders, &lib.recycle, &assets);
+    let referenced: HashSet<String> = lib
+      .folders
+      .items
+      .iter()
+      .map(|p| p.asset.clone())
+      .chain(lib.recycle.items.iter().map(|i| i.asset.clone()))
+      .collect();
+    let orphans = scan_orphan_infos(&lib.assets_dir, Some(&referenced), &assets);
     assert_eq!(orphans.len(), 1);
     assert_eq!(orphans[0].id, "AN-ORPHAN");
     assert_eq!(orphans[0].name, "孤");
     assert!(orphans[0].path.replace('\\', "/").ends_with("assets/AN-ORPHAN.info"), "带 info 完整路径：{}", orphans[0].path);
+  }
+
+  /// 无主扫描口径 = 空间级（2026-09-26 修复：新建 / 切换库把他库资产全报无主）：
+  /// 仅被邻库引用的资产不报；全空间无引用的才报
+  #[test]
+  fn open_orphan_scan_uses_space_wide_references() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let space_root = lib.space_root.clone();
+    let root = lib.root.clone();
+    let seed = |id: &str, name: &str| {
+      let info = lib.info_dir(id);
+      fs::create_dir_all(&info).unwrap();
+      fs::write(
+        info.join("metadata.json"),
+        format!(
+          r#"{{ "version": 1, "id": "{id}", "name": "{name}", "originName": "{name}.fla",
+               "ext": "fla", "size": 1, "importedAt": "2026-09-26T01:00:00+08:00",
+               "modifiedAt": "2026-09-26T01:00:00+08:00" }}"#
+        ),
+      )
+      .unwrap();
+    };
+    seed("AN-SIBLING", "邻"); // 仅邻库引用
+    seed("AN-TRUE-ORPHAN", "孤"); // 全空间无引用
+    // 同空间第二个库（磁盘态）：folders.json 引用 AN-SIBLING
+    let mut space = space::open(&space_root).unwrap();
+    create(&mut space, "邻库").unwrap();
+    fs::write(
+      space_root.join("邻库").join(FOLDERS_FILE),
+      r#"{ "version": 1, "folders": [],
+        "items": [ { "asset": "AN-SIBLING", "folder": "root", "name": "邻.fla", "order": 0, "origin": true } ] }"#,
+    )
+    .unwrap();
+    drop(lib);
+
+    let lib2 = open(&space_root, &root).unwrap();
+    assert!(!lib2.orphan_infos.iter().any(|o| o.id == "AN-SIBLING"), "邻库引用的资产不是无主");
+    assert!(lib2.orphan_infos.iter().any(|o| o.id == "AN-TRUE-ORPHAN"), "全空间无引用才是无主");
+    assert_eq!(lib2.orphan_infos.len(), 1);
   }
 
   /// 打开自检不剔 root 链接（2026-08-13 用户定案：候车区不做内容限制，

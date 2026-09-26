@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 无主资产警告弹窗（2026-09-02 资产污染修复配套）：开库自检扫出孤儿 info
-//（数据层无记录、磁盘残留、库内不可见）→ 弹窗列清单。
+//（全空间各库数据层均无记录、磁盘残留、库内不可见——2026-09-26 口径修复为空间级并集，
+// 原当前库口径把他库资产全误报无主）→ 弹窗列清单。
 // 2026-09-21 换代（用户定稿）：modals/ConfirmModal warning 单钮形态（cancelLabel 空 = 仅「知道了」；
 // 48 warning 徽章废，§24 纯按钮色区分轻重）+ 列表行学 md 代码块（MCP 接入配置行同款口径：
 // 圆角 6 / 底与描边 亮色/半透明-4 / padding 6·8）+ 行尾「在资源管理器中打开」
@@ -33,7 +34,7 @@ const listEl = ref<HTMLElement>();
     cancel-label=""
     @confirm="orphanInfosState.list = null"
   >
-    <p class="lead">以下文件残留在素材库目录中，但数据层没有对应记录（可能是删除中断的残留），不会显示在库内：</p>
+    <p class="lead">以下文件残留在素材池（assets）中，但全空间各库的数据层都没有对应记录（可能是删除中断的残留），不会显示在库内：</p>
     <div class="scroll-wrap">
       <div ref="listEl" class="orphan-list kit-scroll">
         <div v-for="o in orphanInfosState.list" :key="o.id" class="o-row">
