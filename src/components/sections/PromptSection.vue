@@ -12,8 +12,8 @@
 //       断开 = 解绑（快照随解绑清除）、删除 = 源文档丢回收站 + 解绑；已扫描（无源文档）：
 //       编辑 = 先存为 .md 再开编辑器（PRD：分析的提示词必须先保存为 MD 才能用编辑器）、
 //       断开 = 清空、删除禁用。
-//   图标暂代（用户随后补源）：扫描 = analyze-prompt / 新建 = add-large / 指定 = set-prompt-file /
-//     编辑 = open-prompt-editor / 断开 = link / 删除 = trash。
+//   图标（2026-09-26 用户补源十八批）：扫描 = analyze-prompt / 新建 = add-new-prompt /
+//     指定 = set-prompt-file / 编辑 = open-prompt-editor / 断开 = break-prompt-link / 删除 = trash。
 // 展示语义：编辑框只读；已指定态实时经 read_text_asset 读源最新内容显示（invoke 失败 / 无 assetId
 // 回落快照 content）；无 prompt 显示空 placeholder「提示词」。
 import { computed, ref, watch } from "vue";
@@ -168,12 +168,12 @@ function onCopy(): void {
         :disabled="!canScan"
         @click="onScan"
       />
-      <IconButton name="add-large" variant="solid" title="新建提示词文档" class="grow" @click="onNew" />
+      <IconButton name="add-new-prompt" variant="solid" title="新建提示词文档" class="grow" @click="onNew" />
       <IconButton name="set-prompt-file" variant="solid" title="指定提示词文件" class="grow" @click="onAssign" />
     </div>
     <div v-else class="btn-row">
       <IconButton name="open-prompt-editor" variant="solid" title="编辑提示词" class="grow" @click="onEdit" />
-      <IconButton name="link" variant="solid" title="断开提示词链接" class="grow" @click="onDisconnect" />
+      <IconButton name="break-prompt-link" variant="solid" title="断开提示词链接" class="grow" @click="onDisconnect" />
       <IconButton
         name="trash"
         variant="solid"

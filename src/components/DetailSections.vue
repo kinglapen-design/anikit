@@ -2,8 +2,8 @@
 // 详情面板壳（7.1 二十三轮三 tab 化重构，稿 = 右侧边栏-详情面板 + 分段控制器）：
 // 结构 = pinned 缩略图/封面区块（恒顶，SectionPinned）
 //   → 分段控制器（border-top 块 padding 12；icon 型三段：基础信息 basic-info / 链接关系 link-relations /
-//     自定义组件 layout（暂代图标待用户补源，2026-09-26 提示词二轮——原「提示词」tab 废除，
-//     提示词挪基础信息区块，第三 tab = 自定义卡片占位容器，7.3 T3 detailTabSpecs 挂载位）；
+//     自定义组件 custom-component（2026-09-26 提示词二轮——原「提示词」tab 废除，提示词挪基础信息区块，
+//     第三 tab = 自定义卡片占位容器，7.3 T3 detailTabSpecs 挂载位；图标用户补源十八批）；
 //     buttons/SegmentedControl 滑块 thumb 300ms 形态切换）
 //   → tab 内容区（flex 1 自管滚动：kit-scroll + ScrollThumb 悬浮滚轮，速查表 §2）
 //   → 底部「信息查看管理」钮（58 高块 padding 12，ActionButton solid md + info-manage 图标；
@@ -39,11 +39,11 @@ const folderTarget = computed<FolderTarget | null>(() =>
 );
 
 // 分段控制器三段（稿序：基础信息 / 链接关系 / 自定义组件——自定义组件 = 占位容器，
-// 提示词挪基础信息区块（2026-09-26 提示词二轮）；layout 图标暂代待用户补源）
+// 提示词挪基础信息区块（2026-09-26 提示词二轮）；custom-component 图标用户补源十八批）
 const TAB_OPTIONS = [
   { value: "basic", icon: "basic-info" },
   { value: "links", icon: "link-relations" },
-  { value: "custom", icon: "layout" },
+  { value: "custom", icon: "custom-component" },
 ] as const;
 // 全局记忆（ui.detailTab 持久化）：卸载重挂 / 换选中不丢当前 tab
 const ui = useUiStore();
