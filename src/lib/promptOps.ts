@@ -178,7 +178,7 @@ export function assignViaPicker(origin: PickerTarget, batch: PickerTarget[]): vo
 
 export async function clearPrompts(
   targets: PromptTargets,
-  verb: "断开提示词文档链接" | "断开提示词链接" | "清空提示词" = "清空提示词",
+  verb: "断开提示词文档链接" | "断开提示词链接" | "清空提示词" | "删除提示词" = "清空提示词",
 ): Promise<void> {
   const toast = useToastStore();
   const total = targets.assets.length + targets.archives.length;

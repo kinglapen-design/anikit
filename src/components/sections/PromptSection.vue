@@ -5,13 +5,13 @@
 //   编辑框（240×232 / padding 12 / 通用二级底 + 通用三级 1px / 圆角 8）——内文 次要文字 12/16 四级，
 //     悬浮复制钮（右上内缩 12，30×30 通用/半透明-2 + 立体感-通用 / 圆角 6 / copy 图标 18 三级）；
 //   按钮组单行三钮均分（gap 8，IconButton solid 高 34 填充式 / 图标 18 恒二级）——
-//     **两态口径（2026-09-26 用户定，废五钮稿）**：
+//     **两态口径（2026-09-26 用户定，废五钮稿）+ 已扫描独立三钮（同日用户再定）**：
 //     无提示词 = 扫描（仅文件且 png/jpg/jpeg/webp 可用；档案恒无此钮）/ 新建（点击弹二级 =
 //       新建 .md / 新建 .txt 提示词文档，右键菜单同两项）/ 指定（选择模式）；
-//     有提示词 = 编辑 / 断开提示词链接 / 删除提示词文档——已指定：编辑 = 打开内置编辑器、
-//       断开 = 解绑（快照随解绑清除）、删除 = 源文档丢回收站 + 解绑；已扫描（无源文档）：
-//       编辑 = 先存为 .md 再开编辑器（PRD：分析的提示词必须先保存为 MD 才能用编辑器）、
-//       断开 = 清空、删除禁用。
+//     已扫描（扫描出的快照，仅文件可达）= 保存提示词（存为 .md 文档并绑定，保存后转已指定三钮）/
+//       重新扫描（重新分析）/ 删除提示词（清掉快照回未指定）；
+//     已指定（含保存后）= 编辑（只能进内置编辑器界面，区块编辑框恒只读）/ 断开提示词链接 /
+//       删除提示词文档（源丢回收站 + 解绑）。
 //   图标（2026-09-26 用户补源十八批）：扫描 = analyze-prompt / 新建 = add-new-prompt /
 //     指定 = set-prompt-file / 编辑 = open-prompt-editor / 断开 = break-prompt-link / 删除 = trash。
 // 展示语义：编辑框只读；已指定态实时经 read_text_asset 读源最新内容显示（invoke 失败 / 无 assetId
@@ -79,14 +79,12 @@ async function loadText(): Promise<void> {
 // 目标 / 详情编辑落盘（detailRev）变化即重拉；immediate 承担挂载首拉
 watch([() => props.target, () => content.detailRev], () => void loadText(), { immediate: true });
 
-// —— 三钮按态可用性（两态三钮，恒显按态 disabled——disabled = 仅去交互不改色，§15 口径）——
+// —— 三钮按态可用性（恒显按态 disabled——disabled = 仅去交互不改色，§15 口径）——
 // 扫描：档案恒无此钮（模板 v-if）；文件仅未指定态显示，png/jpg/jpeg/webp 可用
 const canScan = computed(() => !!file.value && isPromptAnalyzableExt(file.value.placement.ext));
-// 删除：仅已指定有源文档可删（已扫描 = 纯快照无文档，禁用）
-const canDeleteDoc = computed(() => state.value === "linked");
 const canCopy = computed(() => displayText.value.length > 0);
 
-// —— 动作 ——
+// —— 动作（无提示词）——
 function onScan(): void {
   if (file.value) void analyzePrompt([file.value.detail.assetId]);
 }
@@ -116,12 +114,24 @@ function onAssign(): void {
   assignViaPicker(origin, [origin]);
 }
 
+// —— 动作（已扫描：保存 / 重新扫描 / 删除）——
+// 保存提示词 = 快照存为 .md 文档并绑定（保存后转已指定三钮；newPromptDocuments 单目标自动打开编辑器）
+function onSaveScanned(): void {
+  void newPromptDocuments(targets.value, "md");
+}
+
+function onRescan(): void {
+  if (file.value) void analyzePrompt([file.value.detail.assetId]);
+}
+
+// 删除提示词（已扫描）= 清掉快照回未指定（clear_*_prompt，label「删除提示词」）
+function onDeleteScanned(): void {
+  void clearPrompts(targets.value, "删除提示词");
+}
+
+// —— 动作（已指定：编辑 / 断开 / 删除文档）——
+// 编辑 = 只能进内置编辑器界面（md 直进编辑态）；区块编辑框恒只读
 function onEdit(): void {
-  if (state.value === "scanned") {
-    // 已扫描无源文档：先存为 .md 再开编辑器（PRD 口径；newPromptDocuments 单目标自动打开编辑器）
-    void newPromptDocuments(targets.value, "md");
-    return;
-  }
   const t = props.target;
   void openPromptEditor(
     t.kind === "file" ? { kind: "asset", assetId: t.detail.assetId } : { kind: "archive", folderId: t.node.id },
@@ -129,8 +139,7 @@ function onEdit(): void {
 }
 
 function onDisconnect(): void {
-  // 已指定 = 断开提示词链接；已扫描 = 清空提示词——同命令 clear_*_prompt（label 分流撤销标签）
-  void clearPrompts(targets.value, state.value === "linked" ? "断开提示词链接" : "清空提示词");
+  void clearPrompts(targets.value, "断开提示词链接");
 }
 
 function onDeleteDoc(): void {
@@ -157,7 +166,8 @@ function onCopy(): void {
         <AppIcon name="copy" :size="18" />
       </button>
     </div>
-    <!-- 按钮组（两态三钮，均分 grow 1；图标暂代待用户补源） -->
+    <!-- 按钮组（三态三钮，均分 grow 1；图标：扫描/重新扫描 analyze-prompt、新建 add-new-prompt、
+         指定 set-prompt-file、保存 save-prompt、编辑 open-prompt-editor、断开 break-prompt-link、删除 trash） -->
     <div v-if="state === 'none'" class="btn-row">
       <IconButton
         v-if="file"
@@ -171,6 +181,12 @@ function onCopy(): void {
       <IconButton name="add-new-prompt" variant="solid" title="新建提示词文档" class="grow" @click="onNew" />
       <IconButton name="set-prompt-file" variant="solid" title="指定提示词文件" class="grow" @click="onAssign" />
     </div>
+    <!-- 已扫描独立三钮（2026-09-26 用户定）：保存提示词（存为 .md 并绑定 → 转已指定）/ 重新扫描 / 删除提示词 -->
+    <div v-else-if="state === 'scanned'" class="btn-row">
+      <IconButton name="save-prompt" variant="solid" title="保存提示词" class="grow" @click="onSaveScanned" />
+      <IconButton name="analyze-prompt" variant="solid" title="重新扫描" class="grow" @click="onRescan" />
+      <IconButton name="trash" variant="solid" title="删除提示词" class="grow" @click="onDeleteScanned" />
+    </div>
     <div v-else class="btn-row">
       <IconButton name="open-prompt-editor" variant="solid" title="编辑提示词" class="grow" @click="onEdit" />
       <IconButton name="break-prompt-link" variant="solid" title="断开提示词链接" class="grow" @click="onDisconnect" />
@@ -179,7 +195,6 @@ function onCopy(): void {
         variant="solid"
         title="删除提示词文档"
         class="grow"
-        :disabled="!canDeleteDoc"
         @click="onDeleteDoc"
       />
     </div>

@@ -1,9 +1,14 @@
-# CDP 实测：提示词轮 + 二轮改版（2026-09-26；spec = src/lib/menuSpecs/promptMenu.ts +
+# CDP 实测：提示词轮 + 二/三轮改版（2026-09-26；spec = src/lib/menuSpecs/promptMenu.ts +
 # src/lib/promptOps.ts + src/components/sections/PromptSection.vue + stores/picker.ts enterPrompt）
 # 二轮改版（用户定案）：详情第三 tab「提示词」废除（改「自定义组件」占位 TabCustom），提示词挪
 # 基础信息 tab 末位区块（PromptSection，注册表 fields/tags/descs/baseData/prompt）；五钮稿废 =
 # 两态三钮——无提示词 = 扫描（仅文件且 png/jpg/jpeg/webp）/ 新建（点击弹二级 .md/.txt）/ 指定（picker）；
-# 有提示词 = 编辑 / 断开提示词链接 / 删除提示词文档（已扫描态删除禁用、编辑 = 先存 md 再开、断开 = 清空）。
+# 有提示词 = 编辑 / 断开提示词链接 / 删除提示词文档。
+# 三轮改版（2026-09-26 用户再定）：scanned 态按钮独立成套——保存提示词（save-prompt，
+# new_asset_prompt_document kind=md 存为 md 并绑定 → 转已指定，单目标自动开预览）/ 重新扫描
+# （analyze-prompt = analyze_asset_prompt）/ 删除提示词（trash = clear_asset_prompt
+# label「删除提示词」，清快照回未指定）；二轮 scanned「编辑先存再开 / 断开清空 / 删除禁用」整组废除。
+# 图标改名：新建 add-new-prompt（旧 add-large）、断开 break-prompt-link（旧 link）。
 # 桩：同一文件夹 f1 内六卡——P1 png·未指定 / P2 png·已扫描 / P3 png·已指定(→T1) / F1 fla·未指定
 # （扫描格式闸负例）/ T1 txt / T2 md（picker 文本卡）；树档案 a1·未指定 / a2·已指定(→T2)。
 # 详情绑定走 DETAIL_PROMPTS（get_asset_detail 输出）；read_text_asset 由 window.__readFail
@@ -17,8 +22,9 @@
 #    编辑 → 源文档预览打开；S4b __readFail 后同卡回落快照 content；
 # S5 详情提示词区块·none（空文案 + 三钮可用 + 复制禁用；扫描 → analyze_asset_prompt；
 #    新建 → 二级两项带图标 → .md → new_asset_prompt_document kind=md + 自动开预览；
-#    指定 → picker 横幅；fla 负例扫描禁用）与 scanned（快照文案 + 删除禁用 +
-#    断开 label「清空提示词」+ 编辑 = new_asset_prompt_document md）；档案无扫描钮（两钮）；
+#    指定 → picker 横幅；fla 负例扫描禁用）与 scanned（三轮独立三钮：保存 →
+#    new_asset_prompt_document kind=md + 开预览 / 重新扫描 → analyze_asset_prompt /
+#    删除提示词 → clear_asset_prompt label「删除提示词」）；档案无扫描钮（两钮）；
 # S6 指定 picker：横幅文案 + 品牌框 + 网格只渲文本卡 + 点 md 卡 assign_asset_prompt + 退模式 toast；
 # S7 主菜单 整理▸提示词：无选中整组 disabled 恒列 / 单选文件按态点亮 / 单选档案三项（无分析）；
 # S8 信息查看管理弹窗：三段 = 基础信息/链接关系/自定义组件，基础信息段含「提示词」行，自定义组件段空。
@@ -26,6 +32,7 @@
 import asyncio
 import base64
 import json
+import re
 import subprocess
 import sys
 import time
@@ -190,6 +197,18 @@ def dev_server_up() -> bool:
 
 
 async def main():
+    # 源码静态断言素材（2026-09-26 三轮：scanned 独立成套三钮 + 图标改名 add-new-prompt /
+    # break-prompt-link）——三段 .btn-row 的 IconButton name/title 序（同 context-menu 探针 E2b 静态断言先例）
+    psrc = open("src/components/sections/PromptSection.vue", encoding="utf-8").read()
+
+    def btn_sig(block_re):
+        m = re.search(block_re, psrc, re.S)
+        return re.findall(r'name="([^"]+)"[^>]*?title="([^"]+)"', m.group(1)) if m else None
+
+    NONE_BTNS = btn_sig(r'v-if="state === \'none\'"(.*?)</div>')
+    SCANNED_BTNS = btn_sig(r'v-else-if="state === \'scanned\'"(.*?)</div>')
+    LINKED_BTNS = btn_sig(r'<div v-else class="btn-row">(.*?)</div>')
+
     dev_proc = None
     if dev_server_up():
         print("5373 已在监听，复用现有 dev server")
@@ -349,6 +368,13 @@ async def main():
 
             # —— S7a 主菜单·无选中（须最先跑：任何点击都会留下选中态）——
             check("S0 启动链渲染就绪（菜单钮存在）", boot)
+            # —— S0c PromptSection 三态三钮图标/title 序（源码静态断言）——
+            check("S0c-1 无态三钮序：analyze-prompt/扫描提示词 → add-new-prompt/新建提示词文档 → set-prompt-file/指定提示词文件",
+                  NONE_BTNS == [("analyze-prompt", "扫描提示词"), ("add-new-prompt", "新建提示词文档"), ("set-prompt-file", "指定提示词文件")], str(NONE_BTNS))
+            check("S0c-2 已扫描三钮序：save-prompt/保存提示词 → analyze-prompt/重新扫描 → trash/删除提示词",
+                  SCANNED_BTNS == [("save-prompt", "保存提示词"), ("analyze-prompt", "重新扫描"), ("trash", "删除提示词")], str(SCANNED_BTNS))
+            check("S0c-3 已指定三钮序：open-prompt-editor/编辑提示词 → break-prompt-link/断开提示词链接 → trash/删除提示词文档",
+                  LINKED_BTNS == [("open-prompt-editor", "编辑提示词"), ("break-prompt-link", "断开提示词链接"), ("trash", "删除提示词文档")], str(LINKED_BTNS))
             await js_click(el_center(MENU_BTN))
             check("S7a-1 根菜单出", await ev("document.querySelectorAll('.app-menu').length === 1"))
             await js_hover(item_center("整理"))
@@ -483,6 +509,10 @@ async def main():
                 await ev("document.querySelector('.preview-root .preview-titlebar .nav-group .ic-btn')?.click()")  # 返回钮
                 await asyncio.sleep(0.5)
 
+            # 三态按钮图标 svg 采样（S5b-4 同源对照用）：none[0]=扫描 / linked[2]=删除提示词文档
+            none_svgs = None
+            linked_svgs = None
+
             # —— S5a 详情提示词区块·none（P1 png：扫描/新建/指定 三钮；复制禁用）——
             await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
             st = await ev(PROMPT_STATE)
@@ -490,6 +520,7 @@ async def main():
                   bool(st and st["text"] == "" and st["placeholder"] == "提示词"), json.dumps(st, ensure_ascii=False))
             check("S5a-2 none 三钮全可用（png 过扫描格式闸）", bool(st and st["btns"] == [False, False, False]), json.dumps(st, ensure_ascii=False))
             check("S5a-3 none 复制钮禁用（无文本）", bool(st and st["copy"] is True), json.dumps(st, ensure_ascii=False))
+            none_svgs = await ev("[...document.querySelectorAll('.prompt-block .btn-row button .app-icon')].map((x) => x.innerHTML)")
             await ev(f"({PB_BTN(0)})?.click()")  # 扫描提示词（详情入口，S2 后第二发）
             await asyncio.sleep(0.8)
             calls = await ev("JSON.stringify(window.__calls.analyze_asset_prompt)")
@@ -537,6 +568,7 @@ async def main():
                   bool(st and st["text"] == "源最新内容"), json.dumps(st, ensure_ascii=False))
             check("S4-2 linked 三钮全可用（编辑/断开/删除）", bool(st and st["btns"] == [False, False, False]), json.dumps(st, ensure_ascii=False))
             check("S4-3 linked 复制钮可用（有文本）", bool(st and st["copy"] is False), json.dumps(st, ensure_ascii=False))
+            linked_svgs = await ev("[...document.querySelectorAll('.prompt-block .btn-row button .app-icon')].map((x) => x.innerHTML)")
             await ev("document.querySelector('.prompt-block')?.scrollIntoView({ block: 'end' })")
             await shot("prompt-section-linked")
             await ev("document.querySelector('.prompt-block .copy-btn')?.click()")
@@ -560,26 +592,42 @@ async def main():
                   bool(await poll("!!document.querySelector('.preview-root')", tries=16)))
             await close_preview()
 
-            # —— S5b 详情提示词区块·scanned（P2：编辑=存 md 再开 / 断开=清空 / 删除禁用）——
+            # —— S5b 详情提示词区块·scanned（2026-09-26 三轮独立成套：保存提示词 / 重新扫描 / 删除提示词）——
             await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
             await js_click(el_center(CARD("P2|f1")))
             await asyncio.sleep(0.9)
             st = await poll(f"(() => {{ const s = {PROMPT_STATE}; return s && s.text ? s : null; }})()")
             check("S5b-1 scanned 编辑框 = 分析快照文案", bool(st and st["text"] == "扫描快照文案"), json.dumps(st, ensure_ascii=False))
-            check("S5b-2 scanned 三钮态：编辑/断开可用、删除禁用", bool(st and st["btns"] == [False, False, True]), json.dumps(st, ensure_ascii=False))
+            check("S5b-2 scanned 三钮全可用（保存/重新扫描/删除）", bool(st and st["btns"] == [False, False, False]), json.dumps(st, ensure_ascii=False))
             check("S5b-3 scanned 复制钮可用", bool(st and st["copy"] is False), json.dumps(st, ensure_ascii=False))
-            await ev(f"({PB_BTN(1)})?.click()")  # 断开（scanned = 清空提示词）
-            await asyncio.sleep(0.8)
-            calls = await ev("JSON.stringify(window.__calls.clear_asset_prompt)")
-            check("S5b-4 断开（scanned）→ clear_asset_prompt label「清空提示词」",
-                  calls == '[{"assetId":"P3","label":"断开提示词链接"},{"assetId":"P2","label":"清空提示词"}]', str(calls))
-            await ev(f"({PB_BTN(0)})?.click()")  # 编辑（scanned = 先存为 .md 再开编辑器）
+            # 图标 DOM 同源对照：重新扫描 = none 态「扫描提示词」同 icon（analyze-prompt）；
+            # 删除提示词 = linked 态「删除提示词文档」同 icon（trash）；name/title 序静态断言见 S0c-2
+            scanned_svgs = await ev("[...document.querySelectorAll('.prompt-block .btn-row button .app-icon')].map((x) => x.innerHTML)")
+            check("S5b-4 图标同源：重新扫描=analyze-prompt / 删除提示词=trash（与 none/linked 同位 svg 一致）",
+                  bool(scanned_svgs and none_svgs and linked_svgs and len(scanned_svgs) == 3
+                       and scanned_svgs[1] == none_svgs[0] and scanned_svgs[2] == linked_svgs[2]
+                       and scanned_svgs[0] != ""),
+                  json.dumps([len(x or "") for x in (scanned_svgs or [])]))
+            # 保存提示词 = 存为 .md 并绑定 → 转已指定（new_asset_prompt_document kind=md，单目标自动开预览）
+            await ev(f"({PB_BTN(0)})?.click()")
             await asyncio.sleep(0.9)
             calls = await ev("JSON.stringify(window.__calls.new_asset_prompt_document)")
-            check("S5b-5 编辑（scanned）→ new_asset_prompt_document{assetId:P2, kind:md}",
+            check("S5b-5 保存提示词 → new_asset_prompt_document{assetId:P2, kind:md}",
                   bool(calls and json.loads(calls)[-1] == {"assetId": "P2", "folderId": "f1", "kind": "md"}), str(calls))
-            check("S5b-6 存后即开预览（.preview-root）", bool(await poll("!!document.querySelector('.preview-root')", tries=16)))
+            check("S5b-6 保存后自动打开预览（.preview-root）", bool(await poll("!!document.querySelector('.preview-root')", tries=16)))
             await close_preview()
+            # 重新扫描 = analyze_asset_prompt
+            await ev(f"({PB_BTN(1)})?.click()")
+            await asyncio.sleep(0.8)
+            calls = await ev("JSON.stringify(window.__calls.analyze_asset_prompt)")
+            check("S5b-7 重新扫描 → analyze_asset_prompt(P2)",
+                  bool(calls and json.loads(calls)[-1] == {"assetId": "P2"}), str(calls))
+            # 删除提示词 = 清空快照回未指定（clear_asset_prompt label「删除提示词」）
+            await ev(f"({PB_BTN(2)})?.click()")
+            await asyncio.sleep(0.8)
+            calls = await ev("JSON.stringify(window.__calls.clear_asset_prompt)")
+            check("S5b-8 删除提示词 → clear_asset_prompt{assetId:P2, label:删除提示词}",
+                  calls == '[{"assetId":"P3","label":"断开提示词链接"},{"assetId":"P2","label":"删除提示词"}]', str(calls))
 
             # —— S4b linked 回落：read_text_asset 抛错 → 编辑框显示快照 content ——
             await ev("window.__readFail = true")
