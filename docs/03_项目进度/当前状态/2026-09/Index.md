@@ -1,9 +1,10 @@
 # 当前状态 · 2026-09
 
-> 本月 90 条状态记录。返回 [当前状态 Index](../../Index.md)。
+> 本月 91 条状态记录。返回 [当前状态 Index](../../Index.md)。
 
 | 文件 | 日期 | 标题 |
 | --- | --- | --- |
+| [2026-09-26_02_MD工具栏视图组图标换代.md](2026-09-26_02_MD工具栏视图组图标换代.md) | 2026-09-26 | MD 工具栏视图组图标换代（2026-09-26，feat/new-ui） | ：回预览 = preview-mode / 分屏 = edit-and-preview 用户补源专图标（§60 暂代勾销）；图标十七批转 currentColor + 命名对照登记；typecheck 绿 |
 | [2026-09-26_01_信息查看管理面板轮.md](2026-09-26_01_信息查看管理面板轮.md) | 2026-09-26 | 信息查看管理面板轮：三 tab 化重立（2026-09-26，feat/new-ui） | ：旧 22 稿 SectionEditPanel 后继——详情三 tab 区块排序/显隐管理接回（§23 占位兑现）；ui.detailBlocks 三 tab 各 {order,hidden} + 链接 tab 拖拽双入口同配置；图标十六批 view/view-off；typecheck 绿 + 探针 16 项 PASS + 截图目验；待实机走查拖拽双入口/旧配置迁移/动画 |
 | [2026-09-25_08_插件WS通道服务总开关.md](2026-09-25_08_插件WS通道服务总开关.md) | 2026-09-25 | 插件 WS 通道服务总开关（2026-09-25，feat/new-ui） | ：MCP 同款——settings.pluginServer 缺省开 + plugin_ws 启停三函数 + Animate 详情窗「通信服务」组 + preview 复刻同步；487 测绿；待实机启停验证 |
 | [2026-09-25_07_T0验证网修复.md](2026-09-25_07_T0验证网修复.md) | 2026-09-25 | T0 验证网修复（7.3，2026-09-25，feat/new-ui） | ：clippy 15 处清零（-D warnings 绿）+ 探针四退六修实跑全绿（context-menu 97 / bugfix 22 / relation-picker 20 / sidebar-anim 5 / autoplay-gate / sequence-pack）+ 共享桩工厂 _probe_stub + HMR 验证纪律入规范 §8；7.3 进度 T0✅ T1✅ |

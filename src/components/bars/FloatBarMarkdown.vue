@@ -67,12 +67,14 @@ const formatGroups: readonly MdIcon[][] = [
   ],
 ];
 
-// 视图组（编辑↔预览互切 + 分屏）：图标按态切换（铅笔 = 去编辑 / 眼睛-暂代 = 回预览）
+// 视图组（编辑↔预览互切 + 分屏）：图标按态切换（铅笔 = 去编辑 / 预览模式 = 回预览）；
+// 预览模式 preview-mode / 分屏 edit-and-preview = 2026-09-26 用户补源专图标（十七批，
+// 旧暂代 view-options / collapse-sidebar 换名清零，§60 暂代待办勾销）
 const viewGroup = computed<MdIcon[]>(() => [
   props.editing
-    ? { name: "view-options", action: "preview", tip: "预览（Ctrl+E）" }
+    ? { name: "preview-mode", action: "preview", tip: "预览（Ctrl+E）" }
     : { name: "pencil", action: "edit", tip: "编辑（Ctrl+E）" },
-  { name: "collapse-sidebar", action: "split", tip: "分屏编辑预览" },
+  { name: "edit-and-preview", action: "split", tip: "分屏编辑预览" },
 ]);
 const groups = computed<readonly MdIcon[][]>(() =>
   props.editing ? [...formatGroups, viewGroup.value] : [viewGroup.value],
