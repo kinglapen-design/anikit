@@ -171,7 +171,8 @@ export function dissolveArchiveFlow(folderId: string): void {
 
 // —— 剪贴板写入（复制链接 / 路径 / base64 / 名称）——
 
-async function copyText(text: string, okMessage: string): Promise<void> {
+// 系统剪贴板写文本 + 成功 toast（3s）；提示词轮起导出复用（lib/promptOps copyPromptText）
+export async function copyText(text: string, okMessage: string): Promise<void> {
   const toast = useToastStore();
   try {
     await navigator.clipboard.writeText(text);

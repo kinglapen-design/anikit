@@ -282,6 +282,16 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
   if !thumb_refs_fixed.is_empty() {
     log::info!("打开自检剔除 {} 条失效伴生缩略图引用（thumb_asset_id）", thumb_refs_fixed.len());
   }
+  // 提示词引用自检（2026-09-26 提示词轮，PRD 03_数据链接 02_文件）：prompt.asset_id 指向
+  // 已不存在资产 → 引用置 None、快照保留降级为已扫描态（资产侧逐 metadata 落盘 + 档案侧随 archives）
+  let prompt_refs_fixed = fix_prompt_refs(&mut assets);
+  if !prompt_refs_fixed.is_empty() {
+    log::info!("打开自检降级 {} 条失效提示词引用（prompt.assetId 置 None、快照保留）", prompt_refs_fixed.len());
+  }
+  let archive_prompt_fixed = fix_archive_prompt_refs(&mut archives, &assets);
+  if archive_prompt_fixed {
+    log::info!("打开自检降级档案侧失效提示词引用（快照保留）");
+  }
   // 档案数据自检（2026-08-15 档案子系统）：剔除指向不存在 folder / folder 非档案形态的记录；
   // 同 folder_id 重复记录去重（2026-09-01 封面设置懒建 BUG 存量自愈）
   let archives_fixed = fix_archives(&mut archives, &folders);
@@ -318,21 +328,24 @@ pub fn open(space_root: &Path, path: &Path) -> Result<Library, DataError> {
     }
   }
   let folders_changed = removed > 0 || blocks_fixed || icons_fixed || origins_fixed > 0;
-  if folders_changed || archives_fixed || !thumb_refs_fixed.is_empty() {
+  let archives_changed = archives_fixed || archive_prompt_fixed;
+  if folders_changed || archives_changed || !thumb_refs_fixed.is_empty() || !prompt_refs_fixed.is_empty() {
     match backup::backup_library(path, &assets_dir) {
       Ok(_) => {
         if folders_changed {
           write_json(&path.join(FOLDERS_FILE), &folders)?;
         }
-        if archives_fixed {
+        if archives_changed {
           write_json(&path.join(ARCHIVES_FILE), &archives)?;
         }
-        // thumb_asset_id 自检落盘：逐资产 metadata.json（备份门禁同 folders——失败仅内存清理）
-        for id in &thumb_refs_fixed {
+        // thumb_asset_id / prompt 自检落盘：逐资产 metadata.json（备份门禁同 folders——失败仅内存清理）；
+        // 两清单并集去重（同一资产可能双命中）
+        let meta_fixed: HashSet<&String> = thumb_refs_fixed.iter().chain(prompt_refs_fixed.iter()).collect();
+        for id in meta_fixed {
           if let Some(a) = assets.iter().find(|a| &a.id == id) {
             let meta_path = paths::info_dir(&assets_dir, id).join("metadata.json");
             if let Err(e) = write_json(&meta_path, a) {
-              log::error!("thumb_asset_id 自检落盘失败（{id}）：{e}");
+              log::error!("引用自检落盘失败（{id}）：{e}");
             }
           }
         }
@@ -537,6 +550,40 @@ fn fix_thumb_refs(assets: &mut [AssetMeta]) -> Vec<String> {
   changed
 }
 
+/// 打开自检（2026-09-26 提示词轮，PRD 03_数据链接 02_文件「源删除不断链」）：
+/// prompt.asset_id 指向已不存在资产 → 引用置 None、**快照保留**降级为已扫描态
+///（与 sync_after_purge 的 purge 降级同口径——脏引用唯一修复方向）。只改内存返回改动 id 列表，
+/// 逐资产 metadata.json 落盘在备份门禁段（与 fix_thumb_refs 同径）
+fn fix_prompt_refs(assets: &mut [AssetMeta]) -> Vec<String> {
+  let ids: HashSet<String> = assets.iter().map(|a| a.id.clone()).collect();
+  let mut changed = Vec::new();
+  for a in assets.iter_mut() {
+    if a.prompt.as_ref().and_then(|p| p.asset_id.as_deref()).is_some_and(|t| !ids.contains(t)) {
+      if let Some(p) = a.prompt.as_mut() {
+        p.asset_id = None;
+      }
+      changed.push(a.id.clone());
+    }
+  }
+  changed
+}
+
+/// 打开自检（2026-09-26 提示词轮）：档案侧 prompt 引用同口径降级（引用资产不存在于
+/// 资产集 → 置 None 留快照）。只改内存返回是否有改动，落盘随 archives.json 备份门禁段
+fn fix_archive_prompt_refs(archives: &mut ArchivesFile, assets: &[AssetMeta]) -> bool {
+  let ids: HashSet<&str> = assets.iter().map(|a| a.id.as_str()).collect();
+  let mut changed = false;
+  for a in archives.archives.iter_mut() {
+    if a.prompt.as_ref().and_then(|p| p.asset_id.as_deref()).is_some_and(|t| !ids.contains(t)) {
+      if let Some(p) = a.prompt.as_mut() {
+        p.asset_id = None;
+      }
+      changed = true;
+    }
+  }
+  changed
+}
+
 /// archives.json 读取（2026-08-15 档案子系统）：文件不存在 = 空表（3.2 新增文件，旧库无此文件不算损坏）
 fn read_archives(path: &Path) -> Result<ArchivesFile, DataError> {
   if path.is_file() {
@@ -707,6 +754,58 @@ mod tests {
     assert_eq!(lib2.index.assets["AN-F"].thumb_asset_id, None, "开库剔除悬空引用");
     let disk: AssetMeta = read_json(&lib2.info_dir("AN-F").join("metadata.json")).unwrap();
     assert_eq!(disk.thumb_asset_id, None, "落盘一致");
+  }
+
+  #[test]
+  fn open_degrades_dangling_prompt_refs() {
+    // 2026-09-26 提示词轮：prompt.assetId 指向不存在资产 → 开库降级（引用置 None、
+    // 快照保留为已扫描态）+ 落盘一致；档案侧同口径（archives.json 落盘）
+    let dir = tempfile::tempdir().unwrap();
+    let lib = create_test(dir.path());
+    let space_root = lib.space_root.clone();
+    let root = lib.root.clone();
+    let src = dir.path().join("雪牧.png");
+    fs::write(&src, b"fake").unwrap();
+    let pf = crate::services::import::PendingFile { path: src, chain: Vec::new() };
+    let mut meta = crate::services::import::build_asset_with_id(&lib.assets_dir, &pf, "sha256:t", "AN-A", crate::services::import::Source::Copy, None).unwrap();
+    meta.prompt = Some(PromptBinding {
+      asset_id: Some("AN-GHOST".into()),
+      name: "提示词.md".into(),
+      content: "快照内容保留".into(),
+      updated_at: "2026-09-26T00:00:00+08:00".into(),
+    });
+    write_json(&lib.info_dir("AN-A").join("metadata.json"), &meta).unwrap();
+    // 档案侧脏引用（档案记录落 archives.json）
+    let mut lib = lib;
+    lib.folders.folders.push(Folder {
+      id: "F-A".into(),
+      name: "档案".into(),
+      parent: None,
+      block: None,
+      icon: None,
+      kind: Some(ARCHIVE_KIND.into()),
+      color: None,
+      groups: None,
+      order: 0,
+    });
+    write_json(&root.join(FOLDERS_FILE), &lib.folders).unwrap();
+    let mut rec = ArchiveData::new("F-A");
+    rec.prompt = meta.prompt.clone();
+    lib.archives.archives.push(rec);
+    write_json(&root.join(ARCHIVES_FILE), &lib.archives).unwrap();
+    drop(lib);
+
+    let lib2 = open(&space_root, &root).unwrap();
+    let p = lib2.index.assets["AN-A"].prompt.clone().unwrap();
+    assert_eq!(p.asset_id, None, "资产侧引用置 None 降级已扫描态");
+    assert_eq!(p.content, "快照内容保留", "快照保留不断链");
+    assert_eq!(p.name, "提示词.md", "显示名快照保留");
+    let disk: AssetMeta = read_json(&lib2.info_dir("AN-A").join("metadata.json")).unwrap();
+    assert_eq!(disk.prompt.as_ref().unwrap().asset_id, None, "资产侧落盘一致");
+    let rec = lib2.archives.archives.iter().find(|a| a.folder_id == "F-A").unwrap();
+    assert_eq!(rec.prompt.as_ref().unwrap().asset_id, None, "档案侧同降级");
+    let disk_a: ArchivesFile = read_json(&root.join(ARCHIVES_FILE)).unwrap();
+    assert_eq!(disk_a.archives[0].prompt.as_ref().unwrap().content, "快照内容保留", "档案侧落盘一致");
   }
 
   #[test]

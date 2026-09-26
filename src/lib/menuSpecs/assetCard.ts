@@ -15,7 +15,7 @@
 // - 导出二级删「导出提示词为 .MD 文档」；复制数据删「复制提示词」、加「复制标签/复制描述」，
 //   复制后「粘贴标签/粘贴描述」出现在一级「复制文件」同组下方（同日二轮修订：不放复制数据二级，
 //   与粘贴文件项习惯一致；合并追加，多选批量）；
-// - 「保存提示词」占位项改「提示词」一级菜单骨架（分析/指定/新建——业务未立项全占位，三态切换随业务轮）。
+// - 「保存提示词」占位项改「提示词」一级菜单（三态切换 = menuSpecs/promptMenu 共享构建器，提示词轮接业务）。
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore, type PlacementView } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
@@ -24,6 +24,7 @@ import { useTabsStore } from "../../stores/tabs";
 import { previewSession } from "../../stores/preview";
 import type { CtxEntry } from "../contextMenus";
 import { isSequence as isSequenceAsset, isThumbCapableExt } from "../formatBadge";
+import { assetPromptEntries } from "./promptMenu";
 import {
   copyAssetDescriptions,
   copyAssetTags,
@@ -73,7 +74,7 @@ function selectedAssetIds(): string[] {
 // 上下文规则（稿原文）：无复制/剪切 → 三个粘贴项不出现；非序列帧 → 序列帧两项不出现；
 // 链接文件删除组只出「从文件夹中移除文件链接」，非链接出「从文件夹中移除 / 丢到回收站」
 //（稿 prose 另提及"去到未分类"，2026-08-11 用户确认无此项，不列）；
-// 提示词 = 一级菜单骨架（2026-09-05 走查重做；业务未立项全占位，记 09 待办）
+// 提示词 = 一级菜单三态（2026-09-05 走查重做；提示词轮接业务，menuSpecs/promptMenu 共享构建器）
 // panelId = 发起右键的 panel（2026-09-25 per-panel 会话化：「打开预览」开进属主 panel 会话）
 export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
   // 选择模式（6.2 一轮，PRD 03_数据链接 04）：右键仅留查看类操作，编辑类不出现
@@ -273,17 +274,12 @@ export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
       ],
     },
     "divider",
-    // 提示词（2026-09-05 走查重做，一级「提示词」+ 展开箭头）：业务未立项，本轮纯菜单骨架全占位——
-    // 二级按态切换（未指定 = 分析/指定/新建；已指定 = 打开编辑器/复制/断开/删除；
-    // 已扫描 = 保存 md/txt/复制/重新分析/清空）随业务轮接
+    // 提示词（2026-09-05 走查重做，一级「提示词」+ 展开箭头；提示词轮接业务）：
+    // 三态二级共享构建器 menuSpecs/promptMenu——按右键卡 promptState 出，
+    // 多选动作对全部选中资产批量执行（跳过不兼容项，toast 汇总）
     {
       label: "提示词",
-      submenu: [
-        { label: "分析提示词", disabled: true },
-        { label: "指定文本文件为提示词", disabled: true },
-        { label: "新建 .md 提示词文档", disabled: true },
-        { label: "新建 .txt 提示词文档", disabled: true },
-      ],
+      submenu: assetPromptEntries(p, panelId),
     },
     {
       label: "复制数据",
@@ -327,7 +323,8 @@ export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
 // 链接管理与位置导航 / 复制（文件 / 数据）/ 重命名（用户定：卡片上所见即所得——缩略图视口
 // 改 hidden 伴生图名配工程名案例）/ 缩略图绑定组 / 导出 / 丢到回收站（删除 = 资产"要不要"
 // 的判断，无需在乎位置；多位置条目右键哪条丢哪条）。业务未立项占位项（添加资源库 / AI 工具集 /
-// 提示词 / 置顶 / Animate 生成缩略图）快速访问不列（新标签页打开 2026-09-25 已随会话化接入点亮）。
+// 置顶 / Animate 生成缩略图）快速访问不列；提示词组收窄集不列（走查骨架本只在位置视口，2026-09-05）。
+//（新标签页打开 2026-09-25 已随会话化接入点亮）。
 function virtualAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
   const selection = useSelectionStore();
   const content = useContentStore();

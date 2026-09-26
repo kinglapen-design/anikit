@@ -41,6 +41,7 @@ import {
 } from "../placementOps";
 import { isThumbCapableExt } from "../formatBadge";
 import { copyArchiveTags, copyAssetTags, clearTags, pasteTags } from "../customDataOps";
+import { assetPromptEntries, archivePromptEntries } from "./promptMenu";
 import type { PickerTarget } from "../relationOps";
 
 // —— 选中集解析（整理菜单 / 文件菜单的选中依赖项共用）——
@@ -302,6 +303,23 @@ function findEntries(): CtxEntry[] {
   ];
 }
 
+// 提示词组（2026-09-05 走查骨架 → 提示词轮接业务）：三态二级 = menuSpecs/promptMenu 共享构建器。
+// 主菜单口径 = 无选中目标时整组 disabled 恒列（入口汇总需完整展示，同缩略图组 2026-09-05 三轮定）；
+// 档案态读 content.archives——读不到档案数据（list_archives 未返回）时 singleArchive 已拦 null，
+// 档案选中也落整组 disabled
+function promptMenuEntries(): CtxEntry[] {
+  const a = singleAsset();
+  if (a) return assetPromptEntries(a, useTabsStore().activeTabId);
+  const ar = singleArchive();
+  if (ar) return archivePromptEntries(ar);
+  return [
+    { label: "分析提示词", disabled: true },
+    { label: "指定文本文件为提示词", disabled: true },
+    { label: "新建 .md 提示词文档", disabled: true },
+    { label: "新建 .txt 提示词文档", disabled: true },
+  ];
+}
+
 // —— 整理 ▸（选中集操作；稿全列，无业务占位）——
 function organizeEntries(): CtxEntry[] {
   const selection = useSelectionStore();
@@ -342,15 +360,10 @@ function organizeEntries(): CtxEntry[] {
     { label: "更换封面图 - 从本地磁盘", disabled: true },
     { label: "更换封面图 - 从资源库", disabled: true },
     "divider",
-    // 提示词骨架（2026-09-05 走查口径：业务未立项全占位，三态切换随业务轮）
+    // 提示词（提示词轮接业务）：单选文件/档案时按态出三态二级；无选中目标整组 disabled 恒列
     {
       label: "提示词",
-      submenu: [
-        { label: "分析提示词", disabled: true },
-        { label: "指定文本文件为提示词", disabled: true },
-        { label: "新建 .md 提示词文档", disabled: true },
-        { label: "新建 .txt 提示词文档", disabled: true },
-      ],
+      submenu: promptMenuEntries(),
     },
     "divider",
     // 添加标签 = 32 稿属性标签弹窗（单目标面板，多选禁用；2026-09-05 用户定接线）

@@ -79,6 +79,9 @@ fontdue = "0.9"
 encoding_rs = "0.8"
 # 8.3 发送至 AN：fla（XFL zip）读取 + Flash 11 Picture 剪贴板载荷打包（deflate 默认特性）
 zip = { version = "2.2", default-features = false, features = ["deflate"] }
+# 2026-09-26 提示词轮：PNG zTXt / iTXt 压缩文本 inflate（已在 Cargo.lock 经 zip 传递引入，
+# 提为直接依赖不改版本；rust_backend 纯 Rust 无 C 依赖，离线安全）
+flate2 = "1.1"
 # 8.3 发送至 AN：DOMDocument.xml 事件流改写（读写事件保属性顺序；XML 树库会丢序）
 quick-xml = "0.36"
 # AI 外接通道（MCP 一期，PRD 08-06）：官方 Rust SDK——JSON-RPC / 会话 / 工具 schema 协商不走手写；

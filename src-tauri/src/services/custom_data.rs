@@ -55,7 +55,8 @@ pub fn set_asset_descriptions(lib: &mut Library, asset_id: &str, descriptions: &
 }
 
 /// metadata 落盘 + 索引同步（先落盘再更新）+ modified_at 刷新（库内变更时刻，3.5 排序键同口径）
-fn write_asset_meta(lib: &mut Library, mut meta: crate::core::models::AssetMeta, apply: impl FnOnce(&mut crate::core::models::AssetMeta)) -> Result<(), String> {
+/// pub(crate)：services::prompt（2026-09-26 提示词轮）复用同一写点（metadata.json 单一写点纪律）
+pub(crate) fn write_asset_meta(lib: &mut Library, mut meta: crate::core::models::AssetMeta, apply: impl FnOnce(&mut crate::core::models::AssetMeta)) -> Result<(), String> {
   apply(&mut meta);
   meta.modified_at = operations::now();
   let dir = paths::info_dir(&lib.assets_dir, &meta.id);
@@ -67,7 +68,8 @@ fn write_asset_meta(lib: &mut Library, mut meta: crate::core::models::AssetMeta,
 
 /// 档案记录读写前置：文件夹存在且为档案；记录懒建（同 ensure_archive_record 口径，不落 created_at——
 /// 编辑数据不是新建 / 转换，created_at 保持转换当次语义；无记录时 created_at 留空）
-fn archive_record_mut<'a>(lib: &'a mut Library, folder_id: &str) -> Result<&'a mut crate::core::models::ArchiveData, String> {
+/// pub(crate)：services::prompt（2026-09-26 提示词轮）复用同一前置（档案提示词懒建记录）
+pub(crate) fn archive_record_mut<'a>(lib: &'a mut Library, folder_id: &str) -> Result<&'a mut crate::core::models::ArchiveData, String> {
   let f = lib.index.folders.get(folder_id).ok_or_else(|| "目标档案不存在，可能已被删除".to_string())?;
   if f.kind.as_deref() != Some(ARCHIVE_KIND) {
     return Err("目标不是档案".to_string());

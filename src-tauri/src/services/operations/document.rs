@@ -37,12 +37,16 @@ fn doc_template(kind: &str) -> Option<(&'static str, &'static [u8])> {
 }
 
 /// 新建文档（kind 见 doc_template）入库；target_folder None / "root" = 根目录。
+/// name（2026-09-26 提示词轮，PRD 03_数据链接 02_文件「新建提示词文档」）= 可选文档名词干：
+/// Some 且非空 = 词干取它（提示词文档「{资产显示名}.md」场景）；None / 空 = 原默认「新建文档」；
+/// 扩展名与撞车 _序号 后缀走既有 unique_name 口径。
 /// 返回（PlacementView, info 目录路径, 撤销备份路径）——后两个供命令层登记磁盘逆操作
 ///（撤销 = info 目录移入 cache/tmp 备份，重做 = 移回；Delete 会丢内容无法重做）
 pub fn create_document(
   lib: &mut Library,
   kind: &str,
   target_folder: Option<&str>,
+  name: Option<&str>,
 ) -> Result<(PlacementView, PathBuf, PathBuf), String> {
   let (ext, content) = doc_template(kind).ok_or_else(|| format!("不支持的新建文档类型：{kind}"))?;
   let folder_id = target_folder.unwrap_or(ROOT_FOLDER_ID);
@@ -55,8 +59,9 @@ pub fn create_document(
     .get(folder_id)
     .map(|v| v.iter().map(|p| p.name.clone()).collect())
     .unwrap_or_default();
-  let name = library::unique_name(&existing, &format!("{DOC_STEM}.{ext}"));
-  let stem = name.strip_suffix(&format!(".{ext}")).unwrap_or(DOC_STEM).to_string();
+  let base = name.map(str::trim).filter(|n| !n.is_empty()).unwrap_or(DOC_STEM);
+  let name = library::unique_name(&existing, &format!("{base}.{ext}"));
+  let stem = name.strip_suffix(&format!(".{ext}")).unwrap_or(base).to_string();
 
   let id = new_asset_id();
   let info_dir = lib.info_dir(&id);
@@ -103,6 +108,7 @@ pub fn create_document(
     source: None,
     start: None,
     end: None,
+    prompt: None,
   };
   if let Err(e) = write_json(&info_dir.join("metadata.json"), &meta) {
     let _ = fs::remove_dir_all(&info_dir);
@@ -150,7 +156,7 @@ mod tests {
   #[test]
   fn create_md_document_builds_asset_and_origin_placement() {
     let mut h = make_lib();
-    let (view, info_dir, _backup) = create_document(&mut h.lib, "md", None).unwrap();
+    let (view, info_dir, _backup) = create_document(&mut h.lib, "md", None, None).unwrap();
     assert_eq!(view.name, "新建文档.md");
     assert_eq!(view.ext, "md");
     assert!(view.origin);
@@ -172,18 +178,33 @@ mod tests {
   #[test]
   fn create_txt_document_uniquifies_name() {
     let mut h = make_lib();
-    let (v1, _, _) = create_document(&mut h.lib, "txt", None).unwrap();
-    let (v2, _, _) = create_document(&mut h.lib, "txt", None).unwrap();
+    let (v1, _, _) = create_document(&mut h.lib, "txt", None, None).unwrap();
+    let (v2, _, _) = create_document(&mut h.lib, "txt", None, None).unwrap();
     assert_eq!(v1.name, "新建文档.txt");
     assert_ne!(v1.name, v2.name, "同文件夹撞名唯一化");
     assert!(v2.name.starts_with("新建文档_"));
+  }
+
+  /// 指定文档名词干（2026-09-26 提示词轮）：词干 = name，扩展名按 kind，撞名 _序号 同既有口径；
+  /// 空串 / 纯空白 = 回退默认「新建文档」
+  #[test]
+  fn create_document_with_custom_stem() {
+    let mut h = make_lib();
+    let (v1, _, _) = create_document(&mut h.lib, "md", None, Some("雪牧")).unwrap();
+    assert_eq!(v1.name, "雪牧.md");
+    let meta: AssetMeta = read_json(&h.lib.info_dir(&v1.asset_id).join("metadata.json")).unwrap();
+    assert_eq!(meta.name, "雪牧", "metadata 词干去扩展名");
+    let (v2, _, _) = create_document(&mut h.lib, "md", None, Some("雪牧")).unwrap();
+    assert_eq!(v2.name, "雪牧_1.md", "撞名唯一化 _序号（library::unique_name 自 _1 起）");
+    let (v3, _, _) = create_document(&mut h.lib, "txt", None, Some("  ")).unwrap();
+    assert_eq!(v3.name, "新建文档.txt", "空白名回退默认词干");
   }
 
   #[test]
   fn create_binary_document_writes_template_content() {
     let mut h = make_lib();
     for (kind, ext) in [("fla", "fla"), ("psd", "psd"), ("ai", "ai"), ("docx", "docx"), ("xlsx", "xlsx")] {
-      let (view, info_dir, _) = create_document(&mut h.lib, kind, None).unwrap();
+      let (view, info_dir, _) = create_document(&mut h.lib, kind, None, None).unwrap();
       let template = doc_template(kind).unwrap().1;
       assert_eq!(view.ext, ext);
       let meta: AssetMeta = read_json(&info_dir.join("metadata.json")).unwrap();
@@ -195,7 +216,7 @@ mod tests {
   #[test]
   fn rejects_unsupported_kind_and_missing_folder() {
     let mut h = make_lib();
-    assert!(create_document(&mut h.lib, "aep", None).is_err(), "AE 不建档（2026-08-15 用户定）");
-    assert!(create_document(&mut h.lib, "md", Some("F不存在")).is_err());
+    assert!(create_document(&mut h.lib, "aep", None, None).is_err(), "AE 不建档（2026-08-15 用户定）");
+    assert!(create_document(&mut h.lib, "md", Some("F不存在"), None).is_err());
   }
 }

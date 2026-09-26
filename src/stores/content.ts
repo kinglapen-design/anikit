@@ -41,6 +41,9 @@ export interface PlacementView {
   tags: string[]; // 标签（2026-09-17 分组「标签」规则数据通道，后端 views.rs 自 metadata 同径带出）
   hidden: boolean; // hidden 伴生缩略图标记（8.1，PRD 02-15）：普通视图统一过滤，仅「缩略图」视图显示
   playAssetId?: string | null; // 播放源代理（8.1）：fla 等工程卡片动图播放的帧流开流目标（= hidden 伴生资产 id）；无代理为 null
+  // 提示词三态（2026-09-05 走查定案，提示词轮）：none = 未指定 / scanned = 已扫描（分析快照）/
+  // linked = 已指定文本文档；缺省 = none（后端并行开发期降级）
+  promptState?: "none" | "scanned" | "linked";
   // 工作空间磁盘实况合成项专属（stores/ws.ts wsEntryToPlacement，PRD 02 步骤 1）：
   // 源文件绝对路径——预览按路径分支（图片直 convertFileSrc / 音视频 get_media_source_by_path）与
   // 卡片悬停层禁用判定用；库 Placement 无此字段。此时 assetId = `ws:${relPath}` 为合成假 id，
@@ -91,6 +94,16 @@ export interface ArchiveAvatar {
   crop?: { x: number; y: number; scale: number } | null;
 }
 
+// 提示词绑定（提示词轮，后端 prompt DTO，camelCase；get_asset_detail / get_archive_data / list_archives 输出）：
+// null/缺 = 未指定；assetId 非空 = 已指定文本文档（name = 源文档显示名快照）；assetId null 且有 content = 已扫描
+// （分析快照落库）；content = 快照内容（已指定态展示层实时经 read_text_asset 读源，快照仅回落用）
+export interface PromptBinding {
+  assetId: string | null;
+  name: string;
+  content: string;
+  updatedAt: string;
+}
+
 export interface ArchiveData {
   folderId: string;
   badge?: ArchiveBadge | null;
@@ -102,6 +115,7 @@ export interface ArchiveData {
   totalSize: number; // 档案容量（字节，2026-08-30 用户定案）：档案内资产 size 去重合计（同 get_archive_data 口径）
   coverPath?: string | null; // 封面图绝对路径（6.1 list_archives 输出；无自定义封面 = null 回退子项首图 / 默认封面图）
   coverVer?: string | null; // 封面版本戳（2026-09-08 覆盖式烘培：同路径重写，mtime 戳驱动 ?v= 重载）
+  prompt?: PromptBinding | null; // 提示词绑定（提示词轮 list_archives 输出；null/缺 = 未指定）
 }
 
 /** 档案详情视图（get_archive_data，2026-08-15 任务 A 三项）：ArchiveData 全字段 + 统计 */
@@ -117,6 +131,7 @@ export interface ArchiveDetailView {
   totalSize: number; // 档案内资产 size 合计（同资产去重）
   coverPath?: string | null; // 封面图绝对路径（6.1）
   coverVer?: string | null; // 封面版本戳（同 list_archives）
+  prompt?: PromptBinding | null; // 提示词绑定（提示词轮 get_archive_data 输出；null/缺 = 未指定）
 }
 
 // 区块视图（后端 commands/import.rs BlockView；list_folder_tree 按 order 排序输出）

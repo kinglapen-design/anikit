@@ -18,6 +18,7 @@ pub mod operations;
 pub mod plugin;
 pub mod plugin_server;
 pub mod preview;
+pub mod prompt;
 pub mod recent;
 pub mod recycle;
 pub mod relations;

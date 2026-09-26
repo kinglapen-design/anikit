@@ -6,7 +6,7 @@
 // - 「置顶」删除；「从文件夹中移除档案链接」删除（档案不存在分类问题——档案本身在树容器目录里，
 //   至少也在根目录；档案进回收站语义 = 链接/原始档案独立进站，后端另轮统一立项，本轮「丢到回收站」行为照旧）；
 // - 同时多选档案+文件夹时删除组分两项（删除文件夹 / 将档案丢到回收站，splitSelectedFolderKinds 分流）；
-// - 「提示词」一级菜单 + 二级骨架（提示词业务未立项，本轮纯骨架全占位，三态切换随业务轮接）；
+// - 「提示词」一级菜单（三态切换 = menuSpecs/promptMenu 共享构建器，提示词轮接业务）；
 // - 复制数据组加「复制标签/复制描述」，复制后多出「粘贴标签/粘贴描述」（合并追加语义，多选批量）。
 import { useContentStore, type FolderNode } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
@@ -15,6 +15,7 @@ import { useTabsStore } from "../../stores/tabs";
 import type { CtxEntry, CtxItem } from "../contextMenus";
 import { menuState } from "../contextMenus";
 import { FOLDER_SWATCHES, toNewTint } from "../customColors";
+import { archivePromptEntries } from "./promptMenu";
 import {
   copyArchiveDescriptions,
   copyArchiveTags,
@@ -196,16 +197,11 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
       ],
     },
     "divider",
-    // 提示词（2026-09-05 走查重做，一级「提示词」+ 展开箭头）：业务未立项，本轮纯菜单骨架全占位——
-    // 二级按态切换（未指定 = 指定/新建；已指定 = 打开编辑器/复制/断开/删除）随业务轮接；
-    // 档案不是文件，无「分析提示词」（走查原文）
+    // 提示词（2026-09-05 走查重做，一级「提示词」+ 展开箭头；提示词轮接业务）：
+    // 三态二级共享构建器 menuSpecs/promptMenu——档案无「分析提示词」（走查原文），动作单目标
     {
       label: "提示词",
-      submenu: [
-        { label: "指定文本文档为提示词", disabled: true },
-        { label: "新建 .md 提示词文档", disabled: true },
-        { label: "新建 .txt 提示词文档", disabled: true },
-      ],
+      submenu: archivePromptEntries(archive),
     },
     {
       label: "复制数据",

@@ -17,7 +17,7 @@ import QuickNavButton from "./QuickNavButton.vue";
 import SectionTitle from "./items/SectionTitle.vue";
 import { FREE_EMPTY_H, useGridLayout, type GridSection } from "../lib/useGridLayout";
 import { groupPlacements } from "../lib/grouping";
-import { isAudioExt, isSequence, isThumbCapableExt } from "../lib/formatBadge";
+import { isAudioExt, isSequence, isTextExt, isThumbCapableExt } from "../lib/formatBadge";
 import { useSpaceZoom } from "../lib/useSpaceZoom";
 import { useMarquee, makeBoxHitTest, headerBlankClear } from "../lib/useMarquee";
 import {
@@ -84,6 +84,11 @@ function onCardClick(p: PlacementView, e: MouseEvent): void {
       void picker.pickThumbAsset(target);
       return;
     }
+    // prompt 指定提示词（提示词轮）：同 cover/thumb 单选直回——点文本卡即对目标集逐个指定
+    if (picker.purpose === "prompt") {
+      void picker.pickPromptAsset(target);
+      return;
+    }
     // folderId 随三元组定位源 Placement（link 用途确认时 link_placements 入参）
     picker.togglePick(target);
     return;
@@ -116,9 +121,11 @@ const displayItems = computed(() => {
   const items = groupSections.value ? groupSections.value.flatMap((s) => s.items) : props.items;
   // 选择模式链接音频（6.2 三轮）：过滤非音频（02 稿"过滤掉非音频文件，去掉噪音，加快选择"）；
   // 选择模式档案封面（2026-09-08）：过滤非封面图——静态图 + gif 动图（isThumbCapableExt，
-  // 与烘培可解码格式同口径），排除序列帧包（origin 指向 frames/ 内帧非实体单图，不可烘培）
+  // 与烘培可解码格式同口径），排除序列帧包（origin 指向 frames/ 内帧非实体单图，不可烘培）；
+  // 选择模式指定提示词（提示词轮）：过滤非文本——txt/md（isTextExt）
   if (picker.filterAudio) return items.filter((p) => isAudioExt(p.ext));
   if (picker.filterImage) return items.filter((p) => isThumbCapableExt(p.ext) && !isSequence(p));
+  if (picker.filterText) return items.filter((p) => isTextExt(p.ext));
   return items;
 });
 const gridSections = computed<GridSection[] | null>(() => {
@@ -445,9 +452,9 @@ onBeforeUnmount(() => {
         <FolderStrip v-if="!searching && content.stripFoldersFor(viewKey).length > 0" :view-key="viewKey" :panel-active="panelActive" />
         <!-- 档案区（3.2 一轮，PRD 02-03 三区：文件夹 / 档案 / 文件）：无档案整块不渲染（同文件夹区口径）；
              搜索态 = 命中档案列表（nodes 数据源切换，快速访问视图后端不返回档案命中——档案区仅文件夹视图出）；
-             选择模式链接音频 / 档案封面（档案非可选目标）档案区不渲染（过滤噪音） -->
+             选择模式链接音频 / 档案封面 / 指定提示词（档案非可选目标）档案区不渲染（过滤噪音） -->
         <ArchiveStrip
-          v-if="!picker.filterAudio && !picker.filterImage && (searching ? searchArchives.length > 0 : content.stripArchivesFor(viewKey).length > 0)"
+          v-if="!picker.filterAudio && !picker.filterImage && !picker.filterText && (searching ? searchArchives.length > 0 : content.stripArchivesFor(viewKey).length > 0)"
           :view-key="viewKey"
           :nodes="searching ? searchArchives : undefined"
         />

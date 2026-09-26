@@ -82,6 +82,7 @@ dependencies = [
  "drag",
  "encoding_rs",
  "ffmpeg-next",
+ "flate2",
  "fontdue",
  "futures-util",
  "image",

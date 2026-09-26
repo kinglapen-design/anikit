@@ -126,6 +126,9 @@ function buildPreviewStore(panelId: string) {
       mdEditing: false,
       mdActionSeq: 0, // 工具栏动作信号（search.focusSeq 同款模式：seq 推进 = 新动作待执行）
       mdActionName: "",
+      // 「打开编辑器」md 直进编辑态一次性信号（提示词轮，lib/promptOps openPromptPlacement 置位）：
+      // 置 true 后 open() 文本资产，PreviewText 内容就绪后消费（直进编辑态）；txt 恒编辑态无需置
+      pendingMdEdit: false,
     }),
     getters: {
       // 当前预览的 PlacementView（按 key 在属主面板视口列表里找）；
@@ -207,6 +210,7 @@ function buildPreviewStore(panelId: string) {
         this.animTotal = 0;
         this.animStrips = {};
         this.mdEditing = false;
+        this.pendingMdEdit = false; // 一次性信号不带出会话（关闭即作废）
       },
       // md 编辑态进出（PreviewText 写入；FloatBarHost 读以切悬浮栏 MarkDown 工具栏模式）
       setMdEditing(v: boolean): void {

@@ -3,9 +3,10 @@
 //!
 //! 命中范围（MVP 落地子集）：
 //! - 素材 = 资产名 / 各 Placement 显示名 / 扩展名 / 链接 / 所在路径链（区块 / 各级文件夹 / 档案名）
-//! - 档案 = 档案名 / 徽标文本 / 属性 / 描述 / 链接
+//!   / 属性 / 描述 / 提示词（绑定显示名 + 内容快照，2026-09-26 提示词轮纳入）
+//! - 档案 = 档案名 / 徽标文本 / 属性 / 描述 / 链接 / 提示词（同资产口径）
 //!
-//! 资产侧属性 / 描述 / 提示词 / 关系 / 音色与标注名 / 注释随对应功能就位后纳入（阶段六）。
+//! 资产侧关系 / 音色与标注名 / 注释随对应功能就位后纳入。
 //!
 //! 范围口径（2026-08-19 用户定）：
 //! - 当前目录跟随递归显示开关（scope.recursive）；快速访问视图 = 当前视图即当前范围（回收站里搜回收站）；
@@ -121,7 +122,8 @@ fn path_text<'a>(lib: &'a Library, folder_id: &str) -> Option<String> {
 }
 
 /// 资产可搜文本集（小写化）：资产名 / 扩展名 / 链接（decode）/ 各 Placement 显示名 + 路径链 /
-/// 属性 + 描述（标题 + 内容——资产侧属性·描述 6.1 就位纳入，PRD 03_查找文件 01 节）
+/// 属性 + 描述（标题 + 内容——资产侧属性·描述 6.1 就位纳入，PRD 03_查找文件 01 节）/
+/// 提示词（绑定显示名 + 内容快照，2026-09-26 提示词轮）
 fn asset_texts(lib: &Library, meta: &AssetMeta, placements: &[Placement]) -> Vec<String> {
   let mut texts = Vec::with_capacity(6 + placements.len() * 2);
   texts.push(meta.name.to_lowercase());
@@ -136,6 +138,10 @@ fn asset_texts(lib: &Library, meta: &AssetMeta, placements: &[Placement]) -> Vec
     texts.push(d.title.to_lowercase());
     texts.push(d.content.to_lowercase());
   }
+  if let Some(p) = &meta.prompt {
+    texts.push(p.name.to_lowercase());
+    texts.push(p.content.to_lowercase());
+  }
   for p in placements {
     texts.push(p.name.to_lowercase());
     if let Some(path) = path_text(lib, &p.folder) {
@@ -145,7 +151,8 @@ fn asset_texts(lib: &Library, meta: &AssetMeta, placements: &[Placement]) -> Vec
   texts
 }
 
-/// 档案可搜文本集（小写化）：档案名 / 徽标文本 / 属性 / 描述（标题 + 内容）/ 链接（decode）
+/// 档案可搜文本集（小写化）：档案名 / 徽标文本 / 属性 / 描述（标题 + 内容）/ 链接（decode）/
+/// 提示词（绑定显示名 + 内容快照，2026-09-26 提示词轮）
 fn archive_texts(lib: &Library, folder: &Folder) -> Vec<String> {
   let mut texts = vec![folder.name.to_lowercase()];
   if let Some(a) = lib.archives.archives.iter().find(|a| a.folder_id == folder.id) {
@@ -161,6 +168,10 @@ fn archive_texts(lib: &Library, folder: &Folder) -> Vec<String> {
     }
     for l in &a.links {
       texts.push(percent_decode(l).to_lowercase());
+    }
+    if let Some(p) = &a.prompt {
+      texts.push(p.name.to_lowercase());
+      texts.push(p.content.to_lowercase());
     }
   }
   texts
@@ -369,6 +380,7 @@ mod tests {
       source: None,
       start: None,
       end: None,
+      prompt: None,
     });
     add_placement(lib, id, &format!("{name}.{ext}"), folder, true);
   }
@@ -449,6 +461,49 @@ mod tests {
     assert_eq!(hit_keys(&search(&h.lib, "身份", &scope("quick:all"))), ["AN-B|root"], "描述标题命中");
   }
 
+  /// 提示词命中（2026-09-26 提示词轮）：资产与档案侧的绑定显示名 + 内容快照纳入搜索
+  #[test]
+  fn prompt_name_and_content_searchable() {
+    let mut h = make_lib();
+    add_asset(&mut h.lib, "AN-A", "图甲", "root");
+    add_asset(&mut h.lib, "AN-B", "图乙", "root");
+    add_folder(&mut h.lib, "F01", "项目");
+    add_folder_ex(&mut h.lib, "FA", "档案丙", Some("F01"), None, Some("archive"));
+    h.lib.index.assets.get_mut("AN-A").unwrap().prompt = Some(crate::core::models::PromptBinding {
+      asset_id: Some("AN-DOC".into()),
+      name: "雪牧提示词.md".into(),
+      content: "masterpiece, 拔剑姿势".into(),
+      updated_at: "2026-09-26T00:00:00+08:00".into(),
+    });
+    h.lib.index.assets.get_mut("AN-B").unwrap().prompt = Some(crate::core::models::PromptBinding {
+      asset_id: None,
+      name: "扫描结果".into(),
+      content: "扫描出的符文咒文".into(),
+      updated_at: "2026-09-26T00:00:00+08:00".into(),
+    });
+    h.lib.archives.archives.push(ArchiveData {
+      folder_id: "FA".into(),
+      badge: None,
+      avatar: None,
+      props: Vec::new(),
+      descriptions: Vec::new(),
+      links: Vec::new(),
+      created_at: String::new(),
+      prompt: Some(crate::core::models::PromptBinding {
+        asset_id: Some("AN-DOC".into()),
+        name: "设定集提示词".into(),
+        content: "档案级世界观咒文".into(),
+        updated_at: "2026-09-26T00:00:00+08:00".into(),
+      }),
+    });
+
+    assert_eq!(hit_keys(&search(&h.lib, "拔剑姿势", &scope("quick:all"))), ["AN-A|root"], "已指定态内容快照命中");
+    assert_eq!(hit_keys(&search(&h.lib, "雪牧提示词", &scope("quick:all"))), ["AN-A|root"], "绑定显示名命中");
+    assert_eq!(hit_keys(&search(&h.lib, "符文咒文", &scope("quick:all"))), ["AN-B|root"], "已扫描态快照命中");
+    let hits = search(&h.lib, "世界观咒文", &scope("folder:F01"));
+    assert_eq!(hits.archives, ["FA"], "档案提示词内容命中（folder 视图直属口径）");
+  }
+
   #[test]
   fn link_url_decoded_before_match() {
     let mut h = make_lib();
@@ -499,6 +554,7 @@ mod tests {
       descriptions: vec![DescItem { title: "用途".into(), content: "片头分镜".into() }],
       links: vec!["https://ref.com/?q=%E5%8F%82%E8%80%83".into()],
       created_at: String::new(),
+      prompt: None,
     });
     for kw in ["进行中", "二维动画", "用途", "片头分镜", "参考"] {
       let hits = search(&h.lib, kw, &scope("folder:F01"));

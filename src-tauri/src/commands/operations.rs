@@ -522,7 +522,7 @@ pub(crate) fn create_document_op(
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin("新建文档".to_string());
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  match operations::create_document(lib, kind, target_folder) {
+  match operations::create_document(lib, kind, target_folder, None) {
     Ok((view, info_dir, backup)) => {
       undo.record_disk_op(
         DiskOp::Rename { from: info_dir.clone(), to: backup.clone() },

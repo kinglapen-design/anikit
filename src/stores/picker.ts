@@ -22,6 +22,12 @@
 //   origin = 发起工程文件（fla 等）；过滤同 cover（filterImage = 可作伴生缩略图格式口径）；
 //   单击图片卡片即 pickThumbAsset → set_thumb_asset 绑定（重复 = 换绑，后端既有语义）→ 退模式
 //   恢复发起文件选中；确认按钮恒禁用，Esc / 取消 = 放弃。
+// 六用途起（提示词轮，2026-09-05 走查三态定案）：
+// - prompt 指定提示词（模板 file——**单选直回**同 cover/thumb 范式）：菜单「指定文本文件为提示词」/
+//   详情提示词 tab「指定」钮进入，origin = 右键卡 / 详情目标，promptBatch = 全部选中目标（含 origin，
+//   多选批量指定；档案目标 kind "archive" folderId 恒 ""）；**过滤非文本**（filterText：网格只渲染
+//   txt/md 卡片、档案区不渲染）；单击文本卡即 pickPromptAsset → 对 batch 逐个 assign_*_prompt
+//   （按 kind 分流 asset/archive 两命令）→ 退模式恢复选中；toast 汇总，确认按钮恒禁用。
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
 import { nextTick } from "vue";
@@ -29,12 +35,14 @@ import { useContentStore } from "./content";
 import { useSelectionStore } from "./selection";
 import { useToastStore } from "./toast";
 import { useUiStore } from "./ui";
+import { useUndoStore } from "./undo";
 import { linkPlacements } from "../lib/placementOps";
 import { getAssetFilePath } from "../lib/mediaOps";
+import { isTextExt } from "../lib/formatBadge";
 import { addRelations, type PickerTarget, type PickedRelation } from "../lib/relationOps";
 
 export type PickerTemplate = "file" | "relation";
-export type PickerPurpose = "relation" | "link" | "voice" | "cover" | "thumb";
+export type PickerPurpose = "relation" | "link" | "voice" | "cover" | "thumb" | "prompt";
 
 /** 备选匹配键（2026-09-19 BUG 3）：kind+id+folderId 三元组——同资产多条链接位置各自独立；
  *  archive 无位置概念（folderId 恒 ""） */
@@ -51,6 +59,8 @@ export const usePickerStore = defineStore("picker", {
     targetFolder: null as { id: string; name: string } | null, // link 落点文件夹/档案
     filterAudio: false, // voice：网格只渲染音频卡片（AssetGrid / ArchiveStrip 分流）
     filterImage: false, // cover：网格只渲染可作封面的图片卡片（静态图 + gif，排除序列帧包），档案区不渲染
+    filterText: false, // prompt：网格只渲染文本文件卡片（txt/md，isTextExt），档案区不渲染
+    promptBatch: [] as PickerTarget[], // prompt：指定目标集（origin 含在内；多选批量逐个 assign）
     coverDraft: null as { archiveId: string; sourcePath: string } | null, // cover 单选直回草稿（退模式后由 SectionPinned 一次性消费）
     picked: [] as PickedRelation[], // 备选组（多选累积；relation 用双框称谓，file 模板用 name 草稿）
     confirming: false, // 确认在途防重入（连点确认 = 重复建关系，2026-08-23 探针实证）
@@ -66,6 +76,7 @@ export const usePickerStore = defineStore("picker", {
     bannerText(state): string {
       if (state.purpose === "cover") return `选择图片，为 [${state.origin?.name ?? ""}] 设置封面`;
       if (state.purpose === "thumb") return `选择图片，为 [${state.origin?.name ?? ""}] 设置缩略图`;
+      if (state.purpose === "prompt") return `选择文本文件，为 [${state.origin?.name ?? ""}] 指定提示词`;
       if (state.purpose === "voice") return `选择音频，为 [${state.origin?.name ?? ""}] 链接音频`;
       if (state.purpose === "link") return `选择文件，为 [${state.targetFolder?.name ?? ""}] 添加链接文件`;
       return `选择文件/档案，为 [${state.origin?.name ?? ""}] 添加关系`;
@@ -77,6 +88,8 @@ export const usePickerStore = defineStore("picker", {
       this.active = true;
       this.picked = [];
       this.coverDraft = null; // 陈旧草稿清场（上轮未消费的封面图源不带入新会话）
+      this.filterText = false; // prompt 过滤清场（enterPrompt 随后自置；其余用途恒 false）
+      this.promptBatch = []; // prompt 目标集清场（同上）
       // 云母模式 DWM 窗口边框切染品牌色（四重标识之一；与 ::after 品牌框同色重叠单层，
       // 2026-08-30 实机定；实色模式 DWM 忽略、前端自绘，调用无害；失败告警不阻断——
       // 掉回常态色前端品牌框仍在，可降级）
@@ -131,6 +144,22 @@ export const usePickerStore = defineStore("picker", {
       this.filterImage = true;
     },
 
+    /** 进入指定提示词选择模式（提示词轮：菜单「指定文本文件为提示词」/ 详情提示词 tab「指定」钮）：
+     *  过滤非文本（filterText，网格只渲 txt/md、档案区不渲染）；单击文本卡即定
+     *  （pickPromptAsset 单选直回对 promptBatch 逐个指定，不进备选区）；
+     *  origin = 右键卡 / 详情目标，batch = 全部选中目标（含 origin；档案 kind "archive" folderId 恒 ""） */
+    enterPrompt(origin: PickerTarget, batch: PickerTarget[]): void {
+      this.enter();
+      this.template = "file";
+      this.purpose = "prompt";
+      this.origin = origin;
+      this.targetFolder = null;
+      this.filterAudio = false;
+      this.filterImage = false;
+      this.filterText = true;
+      this.promptBatch = batch.length > 0 ? batch : [origin];
+    },
+
     /** 进入添加文件链接模式（文件夹/档案右键 Ctrl+L / 工具栏钮）：落点 = 目标文件夹 */
     enterLink(folder: { id: string; name: string }): void {
       this.enter();
@@ -154,6 +183,8 @@ export const usePickerStore = defineStore("picker", {
       this.targetFolder = null;
       this.filterAudio = false;
       this.filterImage = false;
+      this.filterText = false;
+      this.promptBatch = [];
       this.picked = [];
       if (origin) {
         void nextTick(() => {
@@ -204,6 +235,49 @@ export const usePickerStore = defineStore("picker", {
       } catch (e) {
         toast.notify({ message: String(e), icon: "fail" });
       }
+    },
+
+    /** prompt 用途单选直回（提示词轮）：点文本卡即对 promptBatch 逐个指定提示词
+     *  （按 kind 分流 assign_asset_prompt / assign_archive_prompt；逐目标 try 失败计数不中断）；
+     *  守卫 isTextExt（网格已过滤，此处双保险防列表态漏网）；全失败留模式内可改选，
+     *  有成功即退模式（exit 恢复发起目标选中）+ 全量刷新 + toast 汇总 */
+    async pickPromptAsset(target: PickerTarget): Promise<void> {
+      const origin = this.origin;
+      if (!origin || this.purpose !== "prompt") return;
+      const toast = useToastStore();
+      if (!isTextExt(target.ext ?? "")) {
+        toast.notify({ message: "只能指定文本文件（txt / md）为提示词", icon: "fail" });
+        return;
+      }
+      const batch = this.promptBatch.length > 0 ? [...this.promptBatch] : [origin];
+      let done = 0;
+      let failed = 0;
+      let firstError: string | null = null;
+      for (const t of batch) {
+        try {
+          if (t.kind === "archive") await invoke("assign_archive_prompt", { folderId: t.id, promptAssetId: target.id });
+          else await invoke("assign_asset_prompt", { assetId: t.id, promptAssetId: target.id });
+          done++;
+        } catch (e) {
+          failed++;
+          firstError = firstError ?? String(e);
+        }
+      }
+      if (done === 0) {
+        toast.notify({ message: firstError ?? "指定提示词失败", icon: "fail" });
+        return;
+      }
+      this.exit();
+      const content = useContentStore();
+      await content.refresh(); // 全量对齐（promptState 在 PlacementView / 档案 prompt 在 archives，refresh 含 refreshArchives）
+      content.bumpDetailRev();
+      void useUndoStore().refreshState();
+      toast.notify({
+        message:
+          done > 1
+            ? `已为 ${done} 个目标指定提示词${failed > 0 ? `，${failed} 个失败` : ""}`
+            : `已为「${origin.name}」指定提示词`,
+      });
     },
 
     /** thumb 用途单选直回（2026-09-23，详情缩略图区块添加钮）：点图即 set_thumb_asset 绑定

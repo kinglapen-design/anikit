@@ -324,6 +324,40 @@ pub(crate) fn sync_after_purge(lib: &mut Library, removed: &[String]) -> Result<
       lib.index.assets.insert(id, m);
     }
   }
+  // 提示词引用降级（2026-09-26 提示词轮，PRD 03_数据链接 02_文件「源删除不断链」）：
+  // 他处 prompt.asset_id 指向被删资产 → 引用置 None、快照保留（降级为已扫描态），逐资产落盘；
+  // 档案侧同口径（archives.json 有改动才落）
+  let prompt_ref_ids: Vec<String> = lib
+    .index
+    .assets
+    .values()
+    .filter(|m| m.prompt.as_ref().and_then(|p| p.asset_id.as_deref()).is_some_and(|t| set.contains(t)))
+    .map(|m| m.id.clone())
+    .collect();
+  if !prompt_ref_ids.is_empty() {
+    let now = super::operations::now();
+    for id in prompt_ref_ids {
+      let mut m = lib.index.assets.get(&id).unwrap().clone();
+      if let Some(p) = m.prompt.as_mut() {
+        p.asset_id = None;
+      }
+      m.modified_at = now.clone();
+      crate::core::json_io::write_json(&lib.info_dir(&id).join("metadata.json"), &m).map_err(|e| e.to_string())?;
+      lib.index.assets.insert(id, m);
+    }
+  }
+  let mut archives_prompt_changed = false;
+  for a in lib.archives.archives.iter_mut() {
+    if a.prompt.as_ref().and_then(|p| p.asset_id.as_deref()).is_some_and(|t| set.contains(t)) {
+      if let Some(p) = a.prompt.as_mut() {
+        p.asset_id = None;
+      }
+      archives_prompt_changed = true;
+    }
+  }
+  if archives_prompt_changed {
+    library::save_archives(lib).map_err(|e| e.to_string())?;
+  }
   Ok(())
 }
 

@@ -31,6 +31,9 @@
 //! 回收站（recycle.json 快照、磁盘不动，同 _op 范式进撤销）；**彻底删除永不经 MCP**
 //!（recycle.rs 彻底清除 / purge.rs / 系统回收站适配器一律不注册工具）。
 //!
+//! 提示词写工具（2026-09-26 提示词轮，tools/prompt.rs）：assign_prompt / clear_prompt 两个——
+//! 目标 assetId / folderId 二选一，同 _op 范式进撤销（commands::prompt 整段复用）。
+//!
 //! 工具注册表模式（PRD 定，范式 = 前端 barSpecs）：一类一文件 + 下方一行注册；
 //! 加工具 = tools/ 加一个文件 + new() 注册处加一行。本注册表未来复用为插件 API 注册表。
 //!
@@ -72,7 +75,8 @@ impl AnikitMcp {
         + Self::write_router()
         + Self::structure_router()
         + Self::import_router()
-        + Self::trash_router(),
+        + Self::trash_router()
+        + Self::prompt_router(),
     }
   }
 
@@ -147,7 +151,7 @@ fn json_result<T: serde::Serialize>(v: &T) -> Result<CallToolResult, ErrorData> 
 /// ServerHandler：工具面由 tool_router 提供；server 名 / 版本 / 使用说明经宏参数生成。
 /// instructions = 给 Agent 的README（每次连接必读）：典型流程 + 纪律红线，与
 /// docs/05_接口文档/MCP使用指南.md 同口径（改其一必须同步另一处）
-#[tool_handler(router = self.tool_router, name = "anikit", instructions = "AniKit 素材库外接通道（MCP，一期只读 8 + 二期写工具 9）。典型流程：get_current_library 确认库已打开 → search_assets 搜索 / list_folder_tree + list_placements 浏览 → get_asset_detail 看标签·描述·注释 → get_asset_origin_path 拿磁盘绝对路径后直读文件看图（webp 缩略图优先，不经协议传图）→ read_text_asset 读提示词·剧本等文本资产。写入（九个）：create_document 新建文档入库 / write_text_asset 覆写文本资产内容 / rename_placements 批量改名（origin 缺省自动定位——该文件夹内仅此资产一条记录即命中，多条记录须照 list_placements 回包 origin 指定；命中 origin 记录连磁盘名同步改） / create_folder 新建文件夹 / move_placements 资产移入文件夹 / move_folders 移动文件夹重设父级 / link_placements 链接汇总（资产留原地、目标文件夹建链接）/ import_paths 导入磁盘文件入库 / trash_placements 丢回收站（Placement 进库内回收站，磁盘文件不动）——默认关闸，需在插件面板 MCP 详情窗开启「允许写入」，关闸调用回「MCP 写入未开启」。撤销口径：write_text_asset 与 import_paths 不进撤销（覆写前先 read_text_asset 备份；导入冲突不阻断——hash 相同跳过并回已有资产 id、同名不同内容自动加 _序号 后缀，逐文件报告），其余七个进撤销（APP 内 Ctrl+Z 可撤）。纪律：资产磁盘名随重命名变化，路径每次现取、禁止缓存复用；库未打开时工具返回「请先打开素材库」；彻底删除永不经 MCP（丢回收站经 trash_placements，可逆，回收站清空 / 彻底删除须 APP 内人工）。省 token：先 search_assets 缩小范围再按需取详情，避免无 folderId 的全库 list_placements；看图读 thumbPath 缩略图而非源图。")]
+#[tool_handler(router = self.tool_router, name = "anikit", instructions = "AniKit 素材库外接通道（MCP，一期只读 8 + 写工具 11）。典型流程：get_current_library 确认库已打开 → search_assets 搜索 / list_folder_tree + list_placements 浏览 → get_asset_detail 看标签·描述·注释·提示词 → get_asset_origin_path 拿磁盘绝对路径后直读文件看图（webp 缩略图优先，不经协议传图）→ read_text_asset 读提示词·剧本等文本资产。写入（十一个）：create_document 新建文档入库 / write_text_asset 覆写文本资产内容 / rename_placements 批量改名（origin 缺省自动定位——该文件夹内仅此资产一条记录即命中，多条记录须照 list_placements 回包 origin 指定；命中 origin 记录连磁盘名同步改） / create_folder 新建文件夹 / move_placements 资产移入文件夹 / move_folders 移动文件夹重设父级 / link_placements 链接汇总（资产留原地、目标文件夹建链接）/ import_paths 导入磁盘文件入库 / trash_placements 丢回收站（Placement 进库内回收站，磁盘文件不动）/ assign_prompt 指定提示词（提示词 = 引用库内 md/txt 文本资产 + 内容快照；目标 assetId / folderId 二选一）/ clear_prompt 断开提示词（快照随解绑清除）——默认关闸，需在插件面板 MCP 详情窗开启「允许写入」，关闸调用回「MCP 写入未开启」。撤销口径：write_text_asset 与 import_paths 不进撤销（覆写前先 read_text_asset 备份；导入冲突不阻断——hash 相同跳过并回已有资产 id、同名不同内容自动加 _序号 后缀，逐文件报告），其余九个进撤销（APP 内 Ctrl+Z 可撤）。纪律：资产磁盘名随重命名变化，路径每次现取、禁止缓存复用；库未打开时工具返回「请先打开素材库」；彻底删除永不经 MCP（丢回收站经 trash_placements，可逆，回收站清空 / 彻底删除须 APP 内人工）。省 token：先 search_assets 缩小范围再按需取详情，避免无 folderId 的全库 list_placements；看图读 thumbPath 缩略图而非源图。")]
 impl ServerHandler for AnikitMcp {}
 
 /// lib.rs setup 拉起（tauri 异步运行时，同 plugin_ws）：读服务总开关（settings.mcp.serverEnabled，

@@ -6,7 +6,7 @@ use tauri::State;
 use crate::commands::library::AppState;
 use crate::commands::operations::fail;
 use crate::core::library::{Library, ARCHIVES_FILE, FOLDERS_FILE};
-use crate::core::models::{ArchiveData, AssetMeta, Badge, Avatar, DescItem, Folder, Placement, ARCHIVE_KIND, DEFAULT_BLOCK_ID, ROOT_FOLDER_ID};
+use crate::core::models::{ArchiveData, AssetMeta, Badge, Avatar, DescItem, Folder, Placement, PromptBinding, ARCHIVE_KIND, DEFAULT_BLOCK_ID, ROOT_FOLDER_ID};
 use crate::core::undo::DiskOp;
 use crate::services::archive::{self, ConvertOutcome};
 use crate::services::custom_data;
@@ -98,6 +98,8 @@ pub struct ArchiveListItem {
   pub cover_path: Option<String>,
   /// 封面版本戳（2026-09-08 覆盖式烘培）：文件 mtime 纳秒——同路径重写后前端 ?v= 驱动 img 重载
   pub cover_ver: Option<String>,
+  /// 提示词绑定（2026-09-26 提示词轮）：ArchiveData 加了字段但本 DTO 另组，须显式带出；未指定 = null
+  pub prompt: Option<PromptBinding>,
 }
 
 /// 档案内容统计：fileCount = 档案内 Placement 数（逐条计）；
@@ -142,6 +144,7 @@ pub(crate) fn archive_list_items(lib: &Library) -> Vec<ArchiveListItem> {
         descriptions: a.descriptions,
         links: a.links,
         created_at: a.created_at,
+        prompt: a.prompt,
       }
     })
     .collect()
@@ -166,6 +169,8 @@ pub struct ArchiveDetailView {
   pub cover_path: Option<String>,
   /// 封面版本戳（2026-09-08 覆盖式烘培）：文件 mtime 纳秒，前端 ?v= 驱动 img 重载
   pub cover_ver: Option<String>,
+  /// 提示词绑定（2026-09-26 提示词轮，PRD 03_数据链接 02_文件，档案侧同构）；未指定 = null
+  pub prompt: Option<PromptBinding>,
 }
 
 /// 单个档案的详细数据 + 统计；无记录返回默认空记录（档案刚转换、尚未配置数据）
@@ -188,6 +193,7 @@ pub fn get_archive_data(state: State<AppState>, folder_id: String) -> Result<Arc
     total_size,
     cover_path,
     cover_ver,
+    prompt: rec.prompt,
   })
 }
 
@@ -308,6 +314,8 @@ pub struct AssetDetail {
   pub thumb_asset: Option<ThumbLinkItem>,
   /// 缩略图区块·被调用侧：本资产是 hidden 伴生缩略图时，引用它的资产清单（按名称排序，users 恒 null）
   pub thumb_used_by: Vec<ThumbLinkItem>,
+  /// 提示词绑定（2026-09-26 提示词轮，PRD 03_数据链接 02_文件）：引用 + 内容快照；未指定 = null
+  pub prompt: Option<PromptBinding>,
 }
 
 /// 缩略图区块一条（8.1，2026-09-23）：assetId + 显示名（首条 Placement 名，无则 originName）
@@ -410,6 +418,7 @@ pub(crate) fn asset_detail(lib: &Library, asset_id: &str) -> Result<AssetDetail,
     archives,
     thumb_asset: thumb_link_of(lib, meta),
     thumb_used_by: thumb_users_of(lib, meta),
+    prompt: meta.prompt.clone(),
   })
 }
 
@@ -709,6 +718,7 @@ mod tests {
         total_size,
         cover_path: None,
         cover_ver: None,
+        prompt: None,
       }
     };
     assert_eq!(view.file_count, 3, "Placement 逐条计数");
@@ -753,6 +763,7 @@ mod tests {
           descriptions: a.descriptions,
           links: a.links,
           created_at: a.created_at,
+          prompt: a.prompt,
         }
       })
       .unwrap();

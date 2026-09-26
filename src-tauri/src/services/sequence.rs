@@ -288,6 +288,7 @@ pub(crate) fn build_sequence_asset(
     source: None,
     start: None,
     end: None,
+    prompt: None,
   };
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
   Ok(meta)

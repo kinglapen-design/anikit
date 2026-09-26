@@ -209,6 +209,7 @@ mod tests {
         source: None,
         start: None,
         end: None,
+        prompt: None,
       },
     );
     add_placement(lib, id, name, folder, true);

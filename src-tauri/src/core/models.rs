@@ -156,6 +156,28 @@ pub struct AssetMeta {
   pub start: Option<f64>,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub end: Option<f64>,
+  /// 提示词（2026-09-26 提示词轮，PRD 03_数据链接 02_文件「提示词」）：None = 未指定不写字段，
+  /// 不升 DATA_VERSION；三态见 PromptBinding 注释
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub prompt: Option<PromptBinding>,
+}
+
+/// 提示词绑定（2026-09-26 提示词轮，PRD 03_数据链接 02_文件「提示词」）：
+/// 提示词 = 对库内 md/txt 文本资产的「引用 + 内容快照」——平时显示快照（源文档被彻底删除
+/// 不断链：引用置 None、快照保留降级为已扫描态），可跳转源文件。三态：
+/// 未指定（无 prompt 字段）/ 已指定（asset_id = Some，引用源文本资产）/ 已扫描
+/// （asset_id = None，纯快照无引用——仅资产侧经「分析提示词」产出，档案无该产出路径）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptBinding {
+  /// Some = 已指定（源文本资产 id）；None = 已扫描（纯快照）
+  pub asset_id: Option<String>,
+  /// 源文档显示名快照；已扫描态 = "扫描结果"
+  pub name: String,
+  /// 内容快照（源删除不断链兜底）
+  pub content: String,
+  /// 快照时刻 RFC3339（与 modified_at 同口径）
+  pub updated_at: String,
 }
 
 // ---------- space.json（储存空间标志与元数据，PRD 01_储存空间-02） ----------
@@ -336,6 +358,11 @@ pub struct ArchiveData {
   /// 旧数据缺省 = 空串不写字段，基础信息"创建日期"行不显示）
   #[serde(default, skip_serializing_if = "String::is_empty")]
   pub created_at: String,
+  /// 提示词（2026-09-26 提示词轮，PRD 03_数据链接 02_文件「提示词」）：与资产侧同构，
+  /// 但档案无「分析」产出路径（无已扫描态来源——仅可由指定产生；源删除降级快照同资产口径）；
+  /// None = 未指定不写字段，不升 DATA_VERSION
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub prompt: Option<PromptBinding>,
 }
 
 impl ArchiveData {
@@ -349,6 +376,7 @@ impl ArchiveData {
       descriptions: Vec::new(),
       links: Vec::new(),
       created_at: String::new(),
+      prompt: None,
     }
   }
 }
@@ -645,6 +673,7 @@ mod tests {
           descriptions: vec![DescItem { title: "设定".into(), content: "长文".into() }],
           links: vec!["https://ref".into()],
           created_at: "2026-08-15T10:00:00+08:00".into(),
+          prompt: None,
         },
         ArchiveData::new("F02"),
       ],

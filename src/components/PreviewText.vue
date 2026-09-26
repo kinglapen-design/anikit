@@ -79,12 +79,25 @@ async function load(): Promise<void> {
     if (loadedId !== assetId) return;
     source.value = r.content;
     draft.value = r.content;
+    consumePendingMdEdit(); // 「打开编辑器」md 直进编辑态：内容就绪后才允许消费（防挂载竞态）
   } catch (e) {
     if (loadedId !== assetId) return;
     loadError.value = e instanceof Error ? e.message : String(e);
+    preview.pendingMdEdit = false; // 内容加载失败：直进编辑态信号一并作废（无内容可编辑）
   }
 }
 watch(() => preview.current?.assetId, () => void load(), { immediate: true });
+
+// 「打开编辑器」md 直进编辑态（提示词轮，preview.pendingMdEdit 一次性信号）：
+// open() 为异步 loadAsset——置信号时文本尚未加载，消费点必须在内容就绪后（load() 成功尾）；
+// 另挂信号 watch 兜底「预览已停在该文本资产上再点打开编辑器」（assetId 不变 load 不重跑）的场景
+function consumePendingMdEdit(): void {
+  if (!preview.pendingMdEdit) return;
+  if (!loadedId || loadedId !== preview.current?.assetId) return; // 内容未就绪——等 load() 完成点消费
+  preview.pendingMdEdit = false;
+  void enterEdit(); // 内部守卫 isMd（txt 恒编辑态无需处理）
+}
+watch(() => preview.pendingMdEdit, consumePendingMdEdit);
 
 // —— 编辑：防抖 1s 自动保存（2026-08-23 用户定）——
 watch(draft, (v) => {

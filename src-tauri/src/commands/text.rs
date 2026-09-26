@@ -9,9 +9,7 @@ use tauri::State;
 
 use crate::commands::library::AppState;
 use crate::commands::preview::locate_asset;
-use crate::core::json_io::write_json;
 use crate::core::library::Library;
-use crate::services::import;
 use crate::services::text;
 
 /// 文本内容
@@ -58,25 +56,10 @@ pub async fn write_text_asset(
 /// 保存文本内容：覆写 origin（恒 UTF-8 无 BOM）→ metadata.size / modifiedAt / **hash** 落盘 → 同步索引。
 /// pub(crate)：server/mcp（AI 外接通道二期写工具 write_text_asset）同用；
 /// 不进 undo（库操作撤销体系不覆盖内容编辑，2026-08-23 定——MCP 工具描述同口径告知 Agent）。
-/// hash 回写（2026-09-22 用户指出「内容变了账面照旧」隐患）：内容是编辑动作改的，
-/// 内容指纹必须同笔跟上——否则后续导入旧版撞旧 hash 误报「内容相同」，扫重也会把不同内容并一组
+/// 2026-09-26 提示词轮：实现下迁 services::text::write_origin（commands 调 services 为正方向；
+/// hash 回写口径随之下迁，2026-09-22 用户指出「内容变了账面照旧」隐患的修复语义不变）
 pub(crate) fn write_text(lib: &mut Library, asset_id: &str, content: &str) -> Result<WriteTextResult, String> {
-  let (info_dir, origin, meta) = locate_asset(lib, asset_id)?;
-  if !text::is_text(&origin) {
-    return Err(format!("「{}」不是文本资源", meta.name));
-  }
-  if content.len() as u64 > text::MAX_TEXT_BYTES {
-    return Err("内容超过 2MB，无法保存".to_string());
-  }
-  std::fs::write(&origin, content.as_bytes()).map_err(|e| format!("保存失败：{e}"))?;
-  let mut meta = meta;
-  meta.size = content.len() as u64;
-  meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
-  meta.hash = import::sha256_bytes(content.as_bytes());
-  let modified_at = meta.modified_at.clone();
-  let size = meta.size;
-  write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
-  lib.index.assets.insert(asset_id.to_string(), meta);
+  let (size, modified_at) = text::write_origin(lib, asset_id, content)?;
   Ok(WriteTextResult { size, modified_at })
 }
 

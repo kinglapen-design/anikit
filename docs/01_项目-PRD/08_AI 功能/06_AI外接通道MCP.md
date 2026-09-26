@@ -38,7 +38,7 @@
 
 撤销口径：create_folder / move_placements / link_placements / move_folders 进撤销（同首批 _op 复用范式）；**import_paths 不进撤销**（落地时定：APP 导入管线本就不接 UndoManager——导入 = 资产池新增，撤销体系覆盖库结构操作不覆盖导入，MCP 同口径不硬接，工具描述如实告知）。
 
-**提示词载体说明**：提示词专属功能（[[03_数据链接]] 的提示词链接）尚未落地，当前载体 = md / txt 文本资产——写工具写的就是文本资产形态的提示词；专属功能落地后工具面再加，不冲突。
+**提示词载体说明**：提示词专属功能（[[03_数据链接]] 的提示词链接）**已落地（2026-09-26 提示词轮）**——绑定 = 对 md/txt 文本资产的引用 + 内容快照（metadata.prompt / archives.json 同构字段），APP 侧三态菜单与详情提示词 tab 全接线；MCP 工具面同步加 `assign_prompt`（指定文本资产为提示词）/ `clear_prompt`（断开，快照随解绑清除）两写工具（走写入闸、进撤销，工具面 17 → 19）。Agent 写提示词链路 = `create_document` + `write_text_asset` 写文本资产 → `assign_prompt` 绑定到目标资产/档案。
 
 **三批写工具（2026-09-20 用户定，一个）**：`trash_placements`（丢到库内回收站——Placement 从 folders.json 移入 recycle.json 按资产聚合，磁盘文件不动，进撤销同结构批 `_op` 范式，APP 内 Ctrl+Z 可撤、回收站可还原）。定案：**允许 AI 丢回收站，不许彻底删除**——彻底删除永不经 MCP（L4 永远人工确认：回收站清空 / 彻底删除 / 磁盘物理删除只在 APP 内人工）。
 

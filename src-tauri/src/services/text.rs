@@ -1,9 +1,15 @@
 //! 文本资产读写（5.6）：txt / md 预览读取 + APP 内编辑保存。
 //! 编码口径：读 = UTF-8（含 BOM 剥离）优先、失败 GBK 回退（Windows 中文用户 txt 常态 ANSI）；
 //! 写 = 恒 UTF-8 无 BOM。内容上限 2MB（提示词 / 笔记场景远超够用，防爆内存）。
+//! 2026-09-26 提示词轮：写内容核心（write_origin）自 commands/text.rs 下迁本层——
+//! services 不可反向依赖 commands，提示词「新建文档带快照内容」同用（commands 调 services 为正方向）。
 
 use std::fs;
 use std::path::Path;
+
+use crate::core::json_io::write_json;
+use crate::core::library::Library;
+use crate::services::import;
 
 /// 文本格式（预览 kind 分流共用判定）
 const TEXT_EXTS: &[&str] = &["txt", "md"];
@@ -24,6 +30,32 @@ pub fn read_text(origin: &Path) -> Result<String, String> {
   }
   let bytes = fs::read(origin).map_err(|e| format!("文件读取失败：{e}"))?;
   Ok(decode_text(&bytes))
+}
+
+/// 覆写文本资产 origin（恒 UTF-8 无 BOM）→ metadata.size / modifiedAt / **hash** 落盘 → 同步索引。
+/// 返回（size, modified_at）。hash 回写 = 内容指纹跟上内容（2026-09-22 用户指出漂移隐患）：
+/// 内容是编辑动作改的，内容指纹必须同笔跟上——否则后续导入旧版撞旧 hash 误报「内容相同」，
+/// 扫重也会把不同内容并一组。不进 undo（库操作撤销体系不覆盖内容编辑，2026-08-23 定）
+pub fn write_origin(lib: &mut Library, asset_id: &str, content: &str) -> Result<(u64, String), String> {
+  let meta = lib.index.assets.get(asset_id).ok_or_else(|| "资源不存在，可能已被删除".to_string())?.clone();
+  let info_dir = lib.info_dir(asset_id);
+  let origin = info_dir.join(&meta.origin_name);
+  if !is_text(&origin) {
+    return Err(format!("「{}」不是文本资源", meta.name));
+  }
+  if content.len() as u64 > MAX_TEXT_BYTES {
+    return Err("内容超过 2MB，无法保存".to_string());
+  }
+  fs::write(&origin, content.as_bytes()).map_err(|e| format!("保存失败：{e}"))?;
+  let mut meta = meta;
+  meta.size = content.len() as u64;
+  meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
+  meta.hash = import::sha256_bytes(content.as_bytes());
+  let modified_at = meta.modified_at.clone();
+  let size = meta.size;
+  write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;
+  lib.index.assets.insert(asset_id.to_string(), meta);
+  Ok((size, modified_at))
 }
 
 /// 解码（抽出来供单测）：UTF-8 BOM 剥离 → UTF-8 严格解码 → GBK 回退

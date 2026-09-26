@@ -70,6 +70,9 @@ pub struct PlacementView {
   pub play_asset_id: Option<String>,
   /// 标签（metadata.tags，2026-09-17 分组「标签」规则的卡片级数据通道——与排序四字段同径带出）
   pub tags: Vec<String>,
+  /// 提示词态（2026-09-26 提示词轮，PRD 03_数据链接 02_文件）：自 metadata.prompt 派生——
+  /// "none" = 未指定 / "scanned" = 已扫描（纯快照无引用）/ "linked" = 已指定（引用源文本资产）
+  pub prompt_state: &'static str,
 }
 
 /// 格式图标缓存键（空扩展名归 "file"）
@@ -141,6 +144,12 @@ pub fn placement_view(lib: &Library, meta: &AssetMeta, p: &Placement, icons: &Ha
     hidden: meta.hidden == Some(true),
     play_asset_id: thumb_meta.map(|t| t.id.clone()),
     tags: meta.tags.clone(),
+    // 提示词态取资产自身（不经伴生缩略图代理——prompt 是本资产的绑定关系）
+    prompt_state: match &meta.prompt {
+      None => "none",
+      Some(p) if p.asset_id.is_none() => "scanned",
+      Some(_) => "linked",
+    },
   }
 }
 
@@ -202,5 +211,39 @@ mod tests {
     let view2 = placement_view(&lib, &meta_f, &p, &lib.format_icons);
     assert!(!view2.thumb_path.map(|t| t.contains("AN-T")).unwrap_or(false), "目标未 hidden 不代理");
     assert!(!view2.animated && view2.play_asset_id.is_none(), "播放代理同解除");
+  }
+
+  /// 提示词态派生（2026-09-26 提示词轮）：None→"none" / assetId None→"scanned" / Some→"linked"
+  #[test]
+  fn prompt_state_derives_from_meta_prompt() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut lib = library::create_test(dir.path());
+    let src = dir.path().join("图.png");
+    std::fs::write(&src, b"fake").unwrap();
+    let pf = PendingFile { path: src, chain: Vec::new() };
+    let meta = ops::build_asset_with_id(&lib.assets_dir, &pf, "sha256:t", "AN-A", Source::Copy, None).unwrap();
+    lib.index.assets.insert("AN-A".into(), meta);
+    ops::add_placement(&mut lib, "AN-A".into(), "root".into(), "图.png".into(), true, &mut HashMap::new());
+
+    let view_of = |lib: &Library| {
+      let meta = lib.index.assets["AN-A"].clone();
+      let p = lib.index.placements_of("AN-A")[0].clone();
+      placement_view(lib, &meta, &p, &lib.format_icons).prompt_state
+    };
+    assert_eq!(view_of(&lib), "none", "无字段 = 未指定");
+    lib.index.assets.get_mut("AN-A").unwrap().prompt = Some(crate::core::models::PromptBinding {
+      asset_id: None,
+      name: "扫描结果".into(),
+      content: "x".into(),
+      updated_at: "2026-09-26T00:00:00+08:00".into(),
+    });
+    assert_eq!(view_of(&lib), "scanned", "assetId None = 已扫描");
+    lib.index.assets.get_mut("AN-A").unwrap().prompt.as_mut().unwrap().asset_id = Some("AN-DOC".into());
+    assert_eq!(view_of(&lib), "linked", "assetId Some = 已指定");
+    // camelCase 序列化键名（踩坑 031 防线）
+    let meta = lib.index.assets["AN-A"].clone();
+    let p = lib.index.placements_of("AN-A")[0].clone();
+    let v = serde_json::to_value(placement_view(&lib, &meta, &p, &lib.format_icons)).unwrap();
+    assert_eq!(v.get("promptState").and_then(|s| s.as_str()), Some("linked"));
   }
 }

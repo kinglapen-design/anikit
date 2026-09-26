@@ -303,6 +303,7 @@ pub fn merge_into(t: &mut MergeTarget, source: SourceLibrary) -> MergeOutcome {
       descriptions: a.descriptions,
       links: a.links,
       created_at: a.created_at,
+      prompt: a.prompt,
     });
   }
 
@@ -441,6 +442,7 @@ mod tests {
       descriptions: vec![],
       links: vec![],
       created_at: String::new(),
+      prompt: None,
     });
 
     let outcome = t.merge(source);

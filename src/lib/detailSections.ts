@@ -5,7 +5,7 @@
 // { order, hidden }（ui.detailBlocks 持久化，mergeDetailBlocks 注册表兜底——未知 id 忽略、
 // 缺 id 按注册表稿序补位）；排序双入口 = 管理面板箭头（全量序）+ 链接 tab 面板内拖标题行
 //（可见序落点，2026-08-31 用户定）；旧 detailLinksOrder 单键配置由 loadSettings 迁移并入。
-import type { ArchiveDetailView, FolderNode, PlacementView } from "../stores/content";
+import type { ArchiveDetailView, FolderNode, PlacementView, PromptBinding } from "../stores/content";
 
 /** 详情面板三 tab（分段控制器稿序：基础信息 / 链接关系 / 提示词） */
 export const DETAIL_TABS = ["basic", "links", "prompt"] as const;
@@ -137,6 +137,9 @@ export interface AssetDetail {
   thumbAsset: ThumbLinkRef | null;
   /** 缩略图区块·被调用侧：本资产是 hidden 伴生缩略图时，引用它的资产清单（按显示名排序） */
   thumbUsedBy: ThumbLinkRef[];
+  /** 提示词绑定（提示词轮 get_asset_detail 输出）：null/缺 = 未指定；assetId 非空 = 已指定；
+   *  assetId null 且有 content = 已扫描（分析快照） */
+  prompt?: PromptBinding | null;
 }
 
 /** 详情面板展示目标：选中文件卡片 / 选中档案卡片 / 选中普通文件夹（7.1 二十三轮文件夹详情形态）/
@@ -160,6 +163,7 @@ export function emptyArchiveData(folderId: string): ArchiveDetailView {
     fileCount: 0,
     totalSize: 0,
     coverPath: null,
+    prompt: null, // 提示词绑定（提示词轮）：未建档/未拉取 = 未指定
   };
 }
 
