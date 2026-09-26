@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 信息查看管理弹窗（2026-09-26 三 tab 化重立，旧 22 稿 SectionEditPanel 后继）：
 // 壳 = modals/BaseModal framed 460（管理弹窗族：区块管理 559 / 分组管理 640 同族先例）；
-// 内容 = SegmentedControl text 型三段（基础信息 / 链接关系 / 提示词——与详情面板三 tab 一一对应，
+// 内容 = SegmentedControl text 型三段（基础信息 / 链接关系 / 自定义组件——与详情面板三 tab 一一对应，
+// 2026-09-26 提示词二轮：原「提示词」段改自定义组件（占位容器无区块行），提示词挪基础信息区块，
 // g3 壳语境 tone g2，速查 §48）+ 当前 tab 区块行列表（DetailBlockRow：箭头排序 + view 眼睛显隐；
 // 行 = 注册表全量序含隐藏行）。
 // 生效 = 即时（旧 22 稿口径：纯视图配置直写 ui.detailBlocks，settings.ui 防抖 500ms 写回，
@@ -25,7 +26,7 @@ const ui = useUiStore();
 const TAB_OPTIONS = [
   { value: "basic", label: "基础信息" },
   { value: "links", label: "链接关系" },
-  { value: "prompt", label: "提示词" },
+  { value: "custom", label: "自定义组件" },
 ] as const;
 const tabKey = ref<DetailTabKey>(ui.detailTab);
 // SegmentedControl model 为 string——computed 包装收窄（DetailSections tab 同款写法）

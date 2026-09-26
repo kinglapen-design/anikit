@@ -148,13 +148,14 @@ const imTab = ref("basic");
 const imTabOptions = [
   { value: "basic", label: "基础信息" },
   { value: "links", label: "链接关系" },
-  { value: "prompt", label: "提示词" },
+  { value: "custom", label: "自定义组件" },
 ];
 const imRows = ref([
   { id: "fields", title: "名称与链接", hidden: false },
   { id: "tags", title: "标签", hidden: false },
   { id: "descs", title: "详情", hidden: true },
   { id: "baseData", title: "基本数据", hidden: false },
+  { id: "prompt", title: "提示词", hidden: false },
 ]);
 function imMove(i: number, dir: -1 | 1): void {
   const rows = imRows.value;

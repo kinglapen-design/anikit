@@ -1,31 +1,35 @@
 // 详情面板数据层：后端 DTO / 工具函数 + 三 tab 区块注册表。
-// 区块结构 = pinned 缩略图/封面区块（恒顶，不进注册表）+ 基础信息 / 链接关系 / 提示词 三 tab
-//（7.1 二十三轮 tab 化）；「副本」区块废除、笔记区块待补稿接回。
+// 区块结构 = pinned 缩略图/封面区块（恒顶，不进注册表）+ 基础信息 / 链接关系 / 自定义组件 三 tab
+//（7.1 二十三轮 tab 化；2026-09-26 提示词二轮用户定：提示词挪基础信息 tab 区块，第三 tab 改
+// 「自定义组件」占位容器——7.3 T3 detailTabSpecs 自定义卡片（直方图/项目待办等）的挂载位）；
+// 「副本」区块废除、笔记区块待补稿接回。
 // 排序/显隐 = 信息查看管理面板（2026-09-26 重立，旧 22 稿 SectionEditPanel 后继）：三 tab 各一套
 // { order, hidden }（ui.detailBlocks 持久化，mergeDetailBlocks 注册表兜底——未知 id 忽略、
 // 缺 id 按注册表稿序补位）；排序双入口 = 管理面板箭头（全量序）+ 链接 tab 面板内拖标题行
 //（可见序落点，2026-08-31 用户定）；旧 detailLinksOrder 单键配置由 loadSettings 迁移并入。
 import type { ArchiveDetailView, FolderNode, PlacementView, PromptBinding } from "../stores/content";
 
-/** 详情面板三 tab（分段控制器稿序：基础信息 / 链接关系 / 提示词） */
-export const DETAIL_TABS = ["basic", "links", "prompt"] as const;
+/** 详情面板三 tab（分段控制器稿序：基础信息 / 链接关系 / 自定义组件——
+ *  自定义组件 = 占位容器（2026-09-26 提示词二轮，提示词挪基础信息；原「提示词」tab 废除） */
+export const DETAIL_TABS = ["basic", "links", "custom"] as const;
 export type DetailTabKey = (typeof DETAIL_TABS)[number];
 
-/** 基础信息 tab 区块注册表（稿序：输入框 / 标签 / 详情 / 基本数据） */
-export const DETAIL_BASIC_BLOCKS = ["fields", "tags", "descs", "baseData"] as const;
+/** 基础信息 tab 区块注册表（稿序：输入框 / 标签 / 详情 / 基本数据 / 提示词——
+ *  提示词 2026-09-26 提示词二轮挪入（原独占第三 tab），排序 + 显隐随本套） */
+export const DETAIL_BASIC_BLOCKS = ["fields", "tags", "descs", "baseData", "prompt"] as const;
 
 /** 链接关系 tab 区块注册表（稿序：链接 / 音频 / 关系 / 缩略图 / 污染文件） */
 export const DETAIL_LINK_BLOCKS = ["links", "audio", "relations", "thumb", "pollution"] as const;
 export type DetailLinkBlockId = (typeof DETAIL_LINK_BLOCKS)[number];
 
-/** 提示词 tab 区块注册表（单区块——排序无意义，仅显隐） */
-export const DETAIL_PROMPT_BLOCKS = ["prompt"] as const;
+/** 自定义组件 tab 区块注册表（占位容器——暂无卡片，7.3 T3 detailTabSpecs 自定义卡片挂载位） */
+export const DETAIL_CUSTOM_BLOCKS = [] as const;
 
 /** 各 tab 区块标题（信息查看管理面板行标题；基础信息四区块详情侧无标题行，按基础信息子稿命名） */
 export const DETAIL_TAB_BLOCK_TITLES: Record<DetailTabKey, Record<string, string>> = {
-  basic: { fields: "名称与链接", tags: "标签", descs: "详情", baseData: "基本数据" },
+  basic: { fields: "名称与链接", tags: "标签", descs: "详情", baseData: "基本数据", prompt: "提示词" },
   links: { links: "链接", audio: "音频", relations: "关系", thumb: "缩略图", pollution: "污染文件" },
-  prompt: { prompt: "提示词" },
+  custom: {},
 };
 
 /** 每 tab 区块配置：order = 全量顺序（含隐藏项，管理面板行序）；hidden = 隐藏清单（详情渲染过滤） */
@@ -38,7 +42,7 @@ export type DetailBlocksState = Record<DetailTabKey, DetailBlocksConfig>;
 const DETAIL_TAB_BLOCKS: Record<DetailTabKey, readonly string[]> = {
   basic: DETAIL_BASIC_BLOCKS,
   links: DETAIL_LINK_BLOCKS,
-  prompt: DETAIL_PROMPT_BLOCKS,
+  custom: DETAIL_CUSTOM_BLOCKS,
 };
 
 /** 注册表兜底合并顺序：未知 id 忽略、重复去重、缺 id 按注册表稿序补位 */
@@ -69,7 +73,9 @@ export function defaultDetailBlocks(): DetailBlocksState {
 }
 
 /** 持久化配置兜底合并：三 tab 各 { order, hidden }；links tab 缺 order 时回退 legacyLinksOrder
- * （旧 ui.detailLinksOrder 迁移通道，loadSettings 传入；无旧配置 = 注册表稿序） */
+ * （旧 ui.detailLinksOrder 迁移通道，loadSettings 传入；无旧配置 = 注册表稿序）。
+ * 2026-09-26 提示词二轮迁移：旧「提示词」tab 配置（s.prompt）废除——其 hidden 含 "prompt"
+ * 并入 basic.hidden（用户已隐藏提示词 = 挪入基础信息后保持隐藏），order 不迁（稿序补位末尾） */
 export function mergeDetailBlocks(saved: unknown, legacyLinksOrder?: unknown): DetailBlocksState {
   const s = (saved !== null && typeof saved === "object" ? saved : {}) as Record<
     string,
@@ -81,10 +87,15 @@ export function mergeDetailBlocks(saved: unknown, legacyLinksOrder?: unknown): D
     const orderSeed = s[tab]?.order ?? (tab === "links" ? legacyLinksOrder : undefined);
     out[tab] = { order: mergeOrder(orderSeed, registry), hidden: mergeHidden(s[tab]?.hidden, registry) };
   }
+  // 旧 prompt tab hidden 迁移并入 basic（提示词区块挪入基础信息，2026-09-26）
+  const legacyPromptHidden = (s as Record<string, { hidden?: unknown } | undefined>).prompt?.hidden;
+  if (Array.isArray(legacyPromptHidden) && legacyPromptHidden.includes("prompt") && !out.basic.hidden.includes("prompt")) {
+    out.basic.hidden.push("prompt");
+  }
   return out;
 }
 
-/** 详情渲染序 = 全量序过滤隐藏项（TabBasic / TabLinks / TabPrompt 共用） */
+/** 详情渲染序 = 全量序过滤隐藏项（TabBasic / TabLinks / TabCustom 共用） */
 export function visibleDetailBlocks(cfg: DetailBlocksConfig): string[] {
   return cfg.order.filter((id) => !cfg.hidden.includes(id));
 }

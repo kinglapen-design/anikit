@@ -2,7 +2,9 @@
 // 详情面板壳（7.1 二十三轮三 tab 化重构，稿 = 右侧边栏-详情面板 + 分段控制器）：
 // 结构 = pinned 缩略图/封面区块（恒顶，SectionPinned）
 //   → 分段控制器（border-top 块 padding 12；icon 型三段：基础信息 basic-info / 链接关系 link-relations /
-//     提示词 prompt；buttons/SegmentedControl 滑块 thumb 300ms 形态切换）
+//     自定义组件 layout（暂代图标待用户补源，2026-09-26 提示词二轮——原「提示词」tab 废除，
+//     提示词挪基础信息区块，第三 tab = 自定义卡片占位容器，7.3 T3 detailTabSpecs 挂载位）；
+//     buttons/SegmentedControl 滑块 thumb 300ms 形态切换）
 //   → tab 内容区（flex 1 自管滚动：kit-scroll + ScrollThumb 悬浮滚轮，速查表 §2）
 //   → 底部「信息查看管理」钮（58 高块 padding 12，ActionButton solid md + info-manage 图标；
 //     2026-09-26 接业务：开 InfoManageDialog 排序/显隐管理面板，ui.infoManageOpen 宿主 App.vue）。
@@ -15,7 +17,7 @@ import { computed, ref, watch } from "vue";
 import SectionPinned from "./sections/SectionPinned.vue";
 import TabBasic from "./sections/TabBasic.vue";
 import TabLinks from "./sections/TabLinks.vue";
-import TabPrompt from "./sections/TabPrompt.vue";
+import TabCustom from "./sections/TabCustom.vue";
 import FolderDetail from "./sections/FolderDetail.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ActionButton from "./buttons/ActionButton.vue";
@@ -36,18 +38,19 @@ const folderTarget = computed<FolderTarget | null>(() =>
   props.target.kind === "folder" || props.target.kind === "quick" ? props.target : null,
 );
 
-// 分段控制器三段（稿序：基础信息 / 链接关系 / 提示词）
+// 分段控制器三段（稿序：基础信息 / 链接关系 / 自定义组件——自定义组件 = 占位容器，
+// 提示词挪基础信息区块（2026-09-26 提示词二轮）；layout 图标暂代待用户补源）
 const TAB_OPTIONS = [
   { value: "basic", icon: "basic-info" },
   { value: "links", icon: "link-relations" },
-  { value: "prompt", icon: "prompt" },
+  { value: "custom", icon: "layout" },
 ] as const;
 // 全局记忆（ui.detailTab 持久化）：卸载重挂 / 换选中不丢当前 tab
 const ui = useUiStore();
 const tab = computed({
   get: () => ui.detailTab,
   set: (v: string) => {
-    ui.detailTab = v as "basic" | "links" | "prompt";
+    ui.detailTab = v as "basic" | "links" | "custom";
   },
 });
 
@@ -80,7 +83,7 @@ const tabBodyRef = ref<HTMLElement>();
           <div :key="tab" class="tab-pane">
             <TabBasic v-if="tab === 'basic'" :target="tabsTarget" />
             <TabLinks v-else-if="tab === 'links'" :target="tabsTarget" />
-            <TabPrompt v-else :target="tabsTarget" />
+            <TabCustom v-else />
           </div>
         </Transition>
       </div>

@@ -147,10 +147,11 @@ export const useUiStore = defineStore("ui", {
     leftMode: "library" as "library" | "workspace" | "ai",
     lastLibView: "quick:all",
     lastWsView: "ws:",
-    // 详情面板当前 tab（7.1 二十三轮三段：basic 基础信息 / links 链接关系 / prompt 提示词）：
+    // 详情面板当前 tab（7.1 二十三轮三段；2026-09-26 提示词二轮：第三段 prompt 提示词 →
+    // custom 自定义组件占位容器，提示词挪基础信息区块；旧值 "prompt" loadSettings 迁移回 basic）：
     // 全局记忆 + 持久化（2026-09-19 用户定：换选中 / 选择模式往返不重置——链接文件成功后
     // 不再回基础信息；旧「会话级记忆换选中回 basic、不写设置存储」口径废除）
-    detailTab: "basic" as "basic" | "links" | "prompt",
+    detailTab: "basic" as "basic" | "links" | "custom",
     // 自定义数据编辑弹窗（6.1，会话级）：propsEdit = 32 稿属性标签 / descEdit = 31 稿编辑描述；
     // target = 打开时锁定的对象与当前值快照（弹窗草稿以此为初值；打开后切选中不漂移，
     // 同 groupDialogFolder 口径），宿主 App.vue；SectionCustom「添加属性 / 编辑描述」钮置位
@@ -234,6 +235,9 @@ export const useUiStore = defineStore("ui", {
         if (saved.leftWidth === 304) this.leftWidth = 254;
         // 左栏最小宽 246（同日用户实机定：再窄菜单栏四文字钮被裁）；存量更窄的值夹到 246
         if (typeof saved.leftWidth === "number" && saved.leftWidth < 246) this.leftWidth = 246;
+        // 详情第三 tab 迁移（2026-09-26 提示词二轮）：旧值 "prompt"（提示词独占 tab）废除——
+        // 提示词挪基础信息区块，第三 tab = 自定义组件占位；旧记忆回 basic（同 briefMode 迁移先例）
+        if (saved.detailTab === "prompt") this.detailTab = "basic";
         // 右栏宽默认值迁移（2026-08-31，7.1 二十三轮右栏轮）：旧默认 250 → 新稿 264；同 leftWidth 先例
         if (saved.rightWidth === 250) this.rightWidth = 264;
       } catch (e) {

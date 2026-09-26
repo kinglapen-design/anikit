@@ -1,19 +1,28 @@
-# CDP 实测：提示词轮（2026-09-26 提示词功能接业务；spec = src/lib/menuSpecs/promptMenu.ts +
-# src/lib/promptOps.ts + src/components/sections/TabPrompt.vue + stores/picker.ts enterPrompt）
+# CDP 实测：提示词轮 + 二轮改版（2026-09-26；spec = src/lib/menuSpecs/promptMenu.ts +
+# src/lib/promptOps.ts + src/components/sections/PromptSection.vue + stores/picker.ts enterPrompt）
+# 二轮改版（用户定案）：详情第三 tab「提示词」废除（改「自定义组件」占位 TabCustom），提示词挪
+# 基础信息 tab 末位区块（PromptSection，注册表 fields/tags/descs/baseData/prompt）；五钮稿废 =
+# 两态三钮——无提示词 = 扫描（仅文件且 png/jpg/jpeg/webp）/ 新建（点击弹二级 .md/.txt）/ 指定（picker）；
+# 有提示词 = 编辑 / 断开提示词链接 / 删除提示词文档（已扫描态删除禁用、编辑 = 先存 md 再开、断开 = 清空）。
 # 桩：同一文件夹 f1 内六卡——P1 png·未指定 / P2 png·已扫描 / P3 png·已指定(→T1) / F1 fla·未指定
-# （分析格式闸负例）/ T1 txt / T2 md（picker 文本卡）；树档案 a1·未指定 / a2·已指定(→T2)。
+# （扫描格式闸负例）/ T1 txt / T2 md（picker 文本卡）；树档案 a1·未指定 / a2·已指定(→T2)。
 # 详情绑定走 DETAIL_PROMPTS（get_asset_detail 输出）；read_text_asset 由 window.__readFail
-# 运行时开关切「源最新内容 / 抛错回落快照」——详情三态断言同页完成，不换桩 reload。
+# 运行时开关切「源最新内容 / 抛错回落快照」；new_asset_prompt_document 桩回真 PlacementView 并落
+# PLACEMENTS（单目标新建自动打开预览——loadAsset 按 key 找 placement，缺了预览瞬关）。
 # S1 文件卡三态菜单（none 四项·分析仅 png 可用 / scanned 五项 / linked 四项）；
 # S2 分析动作 → analyze_asset_prompt(assetId 正确)；
 # S3 档案菜单（无「分析提示词」；none 三项「指定文本文档…」/ linked 四项）；
-# S4 详情 TabPrompt·linked：编辑框 = read_text_asset 源最新、五钮按态 disabled、复制钮写剪贴板；
-#    S4b __readFail 后同卡回落快照 content；
-# S5 详情 TabPrompt·none（空文案 + 仅分析/指定可用）与 scanned（快照文案 + 打开编辑器禁用）；
-# S6 指定 picker：横幅文案「选择文本文件，为 [走路.png] 指定提示词」+ .window.picking 品牌框 +
-#    网格只渲 T1/T2 + 点 md 卡 → assign_asset_prompt{assetId:P1, promptAssetId:T2} + 退模式 toast；
-# S7 主菜单 整理▸提示词：无选中整组 disabled 恒列 / 单选文件按态点亮 / 单选档案三项（无分析）。
-# 截图留档 tools/style-preview/：prompt-picker / prompt-tab-linked。
+# S4 详情提示词区块·linked：编辑框 = read_text_asset 源最新、三钮全可用、复制钮写剪贴板、
+#    断开 → clear_asset_prompt label「断开提示词链接」、删除 → delete_asset_prompt_document、
+#    编辑 → 源文档预览打开；S4b __readFail 后同卡回落快照 content；
+# S5 详情提示词区块·none（空文案 + 三钮可用 + 复制禁用；扫描 → analyze_asset_prompt；
+#    新建 → 二级两项带图标 → .md → new_asset_prompt_document kind=md + 自动开预览；
+#    指定 → picker 横幅；fla 负例扫描禁用）与 scanned（快照文案 + 删除禁用 +
+#    断开 label「清空提示词」+ 编辑 = new_asset_prompt_document md）；档案无扫描钮（两钮）；
+# S6 指定 picker：横幅文案 + 品牌框 + 网格只渲文本卡 + 点 md 卡 assign_asset_prompt + 退模式 toast；
+# S7 主菜单 整理▸提示词：无选中整组 disabled 恒列 / 单选文件按态点亮 / 单选档案三项（无分析）；
+# S8 信息查看管理弹窗：三段 = 基础信息/链接关系/自定义组件，基础信息段含「提示词」行，自定义组件段空。
+# 截图留档 tools/style-preview/：prompt-picker / prompt-section-linked。
 import asyncio
 import base64
 import json
@@ -45,8 +54,10 @@ STUB = make_stub(
         "list_space_libraries": '["测试库"]',
     },
     head=r"""
-window.__calls = { analyze_asset_prompt: [], assign_asset_prompt: [], assign_archive_prompt: [], clipboard: [] };
+window.__calls = { analyze_asset_prompt: [], assign_asset_prompt: [], assign_archive_prompt: [], clipboard: [],
+  clear_asset_prompt: [], delete_asset_prompt_document: [], new_asset_prompt_document: [] };
 window.__readFail = false;
+window.__newId = 0;
 // 剪贴板桩：copyText 走 navigator.clipboard.writeText（lib/menuOps），headless 无授权直拒绝——换记录桩
 const __stubClip = () => {
   try {
@@ -105,6 +116,22 @@ const DETAIL_PROMPTS = {
     if (cmd === "assign_archive_prompt") {
       window.__calls.assign_archive_prompt.push(JSON.parse(JSON.stringify(args ?? {})));
       return Promise.resolve(null);
+    }
+    if (cmd === "clear_asset_prompt") {
+      window.__calls.clear_asset_prompt.push(JSON.parse(JSON.stringify(args ?? {})));
+      return Promise.resolve(null);
+    }
+    if (cmd === "delete_asset_prompt_document") {
+      window.__calls.delete_asset_prompt_document.push(JSON.parse(JSON.stringify(args ?? {})));
+      return Promise.resolve(null);
+    }
+    if (cmd === "new_asset_prompt_document") {
+      window.__calls.new_asset_prompt_document.push(JSON.parse(JSON.stringify(args ?? {})));
+      // 回真 PlacementView 并落 PLACEMENTS：单目标新建后自动打开预览（openPromptPlacement），
+      // loadAsset 按 key 在 placements 找——缺了 assetKey 置空预览瞬关（preview.ts loadAsset 开头）
+      const np = mkP("N" + (++window.__newId), args.folderId ?? "f1", "提示词文档." + (args.kind ?? "md"), args.kind ?? "md", "linked");
+      PLACEMENTS.push(np);
+      return Promise.resolve(JSON.parse(JSON.stringify(np)));
     }
     if (cmd === "read_text_asset") {
       // linked 态 TabPrompt 实时读源：__readFail 切换「源最新 / 抛错回落快照」（S4 两轮同页完成）
@@ -418,63 +445,157 @@ async def main():
             toast_text = await poll("[...document.querySelectorAll('.toast')].map((x) => x.textContent).join('|')")
             check("S6-5 退模式 toast（已为「走路.png」指定提示词）", bool(toast_text and "已为「走路.png」指定提示词" in toast_text), str(toast_text))
 
-            # —— S4 详情 TabPrompt·linked ——
-            await js_click(el_center(CARD("P3|f1")))
+            # —— S8 信息查看管理弹窗（提示词挪基础信息区块 + 第三段「自定义组件」占位）——
+            await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
+            await js_click(el_center(CARD("P1|f1")))
             await asyncio.sleep(0.8)
-            await js_click(el_center("document.querySelectorAll('.sidebar-right .seg-block .seg-item')[2]"))  # 提示词 tab
-            await asyncio.sleep(0.9)
+            await js_click(el_center("[...document.querySelectorAll('.manage-bar .act-btn')].find((b) => b.textContent.includes('信息查看管理'))"))
+            await asyncio.sleep(0.6)
+            s8seg = await ev("[...document.querySelectorAll('.info-manage .seg-item .seg-lbl')].map((x) => x.textContent)")
+            check("S8-1 管理弹窗三段 = 基础信息/链接关系/自定义组件",
+                  s8seg == ["基础信息", "链接关系", "自定义组件"], str(s8seg))
+            s8rows = await ev("[...document.querySelectorAll('.info-manage .im-row .row-title')].map((x) => x.textContent)")
+            check("S8-2 基础信息段含「提示词」行（注册表末位）",
+                  s8rows == ["名称与链接", "标签", "详情", "基本数据", "提示词"], str(s8rows))
+            await ev("document.querySelectorAll('.info-manage .seg-item')[2]?.click()")
+            await asyncio.sleep(0.6)
+            s8c = await ev("document.querySelectorAll('.info-manage .im-row').length")
+            check("S8-3 自定义组件段 = 空行列表（占位容器）", s8c == 0, str(s8c))
+            await ev("document.querySelector('.info-manage .bm-titlebar .ic-btn')?.click()")  # 关闭钮
+            await asyncio.sleep(0.5)
+            check("S8-4 弹窗关闭", await ev("!document.querySelector('.info-manage')"))
 
-            # TabPrompt 状态读取：编辑框文案 + 五钮（行一 保存/打开/删除，行二 分析/指定）+ 复制钮 disabled
-            PROMPT_TAB_STATE = """(() => {
-              const rows = document.querySelectorAll('.prompt-block .btn-row');
-              if (rows.length !== 2) return null;
-              const b = (r) => [...rows[r].querySelectorAll('button')].map((x) => x.disabled);
+            # PromptSection 状态读取（基础信息 tab 末位区块）：编辑框文案 + 三钮 disabled
+            #（无态 = 扫描/新建/指定，档案无扫描 = 两钮；有态 = 编辑/断开/删除）+ 复制钮 disabled
+            PROMPT_STATE = """(() => {
+              const blk = document.querySelector('.prompt-block');
+              if (!blk) return null;
               return {
-                text: document.querySelector('.prompt-block textarea.area')?.value ?? null,
-                placeholder: document.querySelector('.prompt-block textarea.area')?.placeholder ?? null,
-                row0: b(0), row1: b(1),
-                copy: document.querySelector('.prompt-block .copy-btn')?.disabled ?? null,
+                text: blk.querySelector('textarea.area')?.value ?? null,
+                placeholder: blk.querySelector('textarea.area')?.placeholder ?? null,
+                btns: [...blk.querySelectorAll('.btn-row button')].map((x) => x.disabled),
+                copy: blk.querySelector('.copy-btn')?.disabled ?? null,
               };
             })()"""
-            st = await poll(f"(() => {{ const s = {PROMPT_TAB_STATE}; return s && s.text ? s : null; }})()")
+            PB_BTN = lambda i: f"document.querySelectorAll('.prompt-block .btn-row button')[{i}]"
+
+            async def close_preview():
+                await ev("document.querySelector('.preview-root .preview-titlebar .nav-group .ic-btn')?.click()")  # 返回钮
+                await asyncio.sleep(0.5)
+
+            # —— S5a 详情提示词区块·none（P1 png：扫描/新建/指定 三钮；复制禁用）——
+            await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
+            st = await ev(PROMPT_STATE)
+            check("S5a-1 none 编辑框空（placeholder 提示词）",
+                  bool(st and st["text"] == "" and st["placeholder"] == "提示词"), json.dumps(st, ensure_ascii=False))
+            check("S5a-2 none 三钮全可用（png 过扫描格式闸）", bool(st and st["btns"] == [False, False, False]), json.dumps(st, ensure_ascii=False))
+            check("S5a-3 none 复制钮禁用（无文本）", bool(st and st["copy"] is True), json.dumps(st, ensure_ascii=False))
+            await ev(f"({PB_BTN(0)})?.click()")  # 扫描提示词（详情入口，S2 后第二发）
+            await asyncio.sleep(0.8)
+            calls = await ev("JSON.stringify(window.__calls.analyze_asset_prompt)")
+            check("S5a-4 详情「扫描提示词」→ analyze_asset_prompt(P1)",
+                  calls == '[{"assetId":"P1"},{"assetId":"P1"}]', str(calls))
+            # 新建提示词文档 → 弹二级（.md/.txt 带图标）→ 点 .md → invoke + 自动打开预览
+            await ev(f"({PB_BTN(1)})?.click()")
+            await asyncio.sleep(0.5)
+            fl = await menu_labels()
+            check("S5a-5 新建钮弹二级 = .md/.txt 两项", fl == ["新建 .md 提示词文档", "新建 .txt 提示词文档"], str(fl))
+            check("S5a-6 二级两项带图标（mark-slot svg）",
+                  await ev("[...document.querySelectorAll('.app-menu')[0]?.querySelectorAll('.menu-item') ?? []].every((x) => x.querySelector('.mark-slot svg') != null) && document.querySelectorAll('.app-menu')[0]?.querySelectorAll('.menu-item').length === 2"))
+            await ev(f"({js_find('新建 .md 提示词文档')})?.click()")
+            await asyncio.sleep(0.9)
+            calls = await ev("JSON.stringify(window.__calls.new_asset_prompt_document)")
+            check("S5a-7 点 .md 项 → new_asset_prompt_document{assetId:P1, folderId:f1, kind:md}",
+                  calls == '[{"assetId":"P1","folderId":"f1","kind":"md"}]', str(calls))
+            check("S5a-8 新建后自动打开预览（.preview-root）",
+                  bool(await poll("!!document.querySelector('.preview-root')", tries=16)))
+            await close_preview()
+            # 指定提示词文件 → 进 picker（详情入口，横幅同菜单入口）
+            await ev(f"({PB_BTN(2)})?.click()")
+            await asyncio.sleep(0.8)
+            s5pick = await ev("(() => ({ picking: document.querySelector('.window').classList.contains('picking'), banner: document.querySelector('.banner .text')?.textContent ?? null }))()")
+            check("S5a-9 详情「指定提示词文件」→ picker（横幅文案同菜单入口）",
+                  bool(s5pick and s5pick["picking"] and s5pick["banner"] == "选择文本文件，为 [走路.png] 指定提示词"),
+                  json.dumps(s5pick, ensure_ascii=False))
+            await esc_close()  # Esc 退 picker
+            check("S5a-10 Esc 退 picker", await ev("!document.querySelector('.window').classList.contains('picking')"))
+
+            # —— S5a-neg 扫描格式闸（F1 fla·none：扫描禁用，新建/指定可用）——
+            await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
+            await js_click(el_center(CARD("F1|f1")))
+            await asyncio.sleep(0.9)
+            st = await ev(PROMPT_STATE)
+            check("S5a-11 fla 卡：扫描禁用（格式闸）、新建/指定可用",
+                  bool(st and st["btns"] == [True, False, False]), json.dumps(st, ensure_ascii=False))
+
+            # —— S4 详情提示词区块·linked（P3→T1）——
+            await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
+            await js_click(el_center(CARD("P3|f1")))
+            await asyncio.sleep(0.9)
+            st = await poll(f"(() => {{ const s = {PROMPT_STATE}; return s && s.text ? s : null; }})()")
             check("S4-1 linked 编辑框 = 源最新内容（read_text_asset 优先）",
                   bool(st and st["text"] == "源最新内容"), json.dumps(st, ensure_ascii=False))
-            check("S4-2 linked 五钮态：保存/打开/删除可用、分析/指定禁用",
-                  bool(st and st["row0"] == [False, False, False] and st["row1"] == [True, True]),
-                  json.dumps(st, ensure_ascii=False))
+            check("S4-2 linked 三钮全可用（编辑/断开/删除）", bool(st and st["btns"] == [False, False, False]), json.dumps(st, ensure_ascii=False))
             check("S4-3 linked 复制钮可用（有文本）", bool(st and st["copy"] is False), json.dumps(st, ensure_ascii=False))
-            await shot("prompt-tab-linked")
-            await js_click(el_center("document.querySelector('.prompt-block .copy-btn')"))
+            await ev("document.querySelector('.prompt-block')?.scrollIntoView({ block: 'end' })")
+            await shot("prompt-section-linked")
+            await ev("document.querySelector('.prompt-block .copy-btn')?.click()")
             await asyncio.sleep(0.5)
             check("S4-4 点复制钮 → 剪贴板写入源文本",
                   await ev("JSON.stringify(window.__calls.clipboard)") == '["源最新内容"]',
                   str(await ev("JSON.stringify(window.__calls.clipboard)")))
-
-            # —— S5 详情 TabPrompt·none / scanned（切卡触发 loadText；tab 全局记忆不回落）——
-            await ev("window.__readFail = true")  # 后续 read_text_asset 一律抛错（S4b 回落前提）
-            await js_click(el_center(CARD("P1|f1")))
+            await ev(f"({PB_BTN(1)})?.click()")  # 断开提示词链接
+            await asyncio.sleep(0.8)
+            calls = await ev("JSON.stringify(window.__calls.clear_asset_prompt)")
+            check("S4-5 断开 → clear_asset_prompt{assetId:P3, label:断开提示词链接}",
+                  calls == '[{"assetId":"P3","label":"断开提示词链接"}]', str(calls))
+            await ev(f"({PB_BTN(2)})?.click()")  # 删除提示词文档
+            await asyncio.sleep(0.8)
+            calls = await ev("JSON.stringify(window.__calls.delete_asset_prompt_document)")
+            check("S4-6 删除 → delete_asset_prompt_document{assetId:P3}",
+                  calls == '[{"assetId":"P3"}]', str(calls))
+            await ev(f"({PB_BTN(0)})?.click()")  # 编辑提示词 → 打开源文档预览
             await asyncio.sleep(0.9)
-            st = await ev(PROMPT_TAB_STATE)
-            check("S5a-1 none 编辑框空（placeholder 提示词）",
-                  bool(st and st["text"] == "" and st["placeholder"] == "提示词"), json.dumps(st, ensure_ascii=False))
-            check("S5a-2 none 五钮态：分析/指定可用、保存/打开/删除禁用",
-                  bool(st and st["row0"] == [True, True, True] and st["row1"] == [False, False]),
-                  json.dumps(st, ensure_ascii=False))
-            check("S5a-3 none 复制钮禁用（无文本）", bool(st and st["copy"] is True), json.dumps(st, ensure_ascii=False))
+            check("S4-7 编辑 → 打开源文档预览（.preview-root）",
+                  bool(await poll("!!document.querySelector('.preview-root')", tries=16)))
+            await close_preview()
+
+            # —— S5b 详情提示词区块·scanned（P2：编辑=存 md 再开 / 断开=清空 / 删除禁用）——
+            await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
             await js_click(el_center(CARD("P2|f1")))
             await asyncio.sleep(0.9)
-            st = await ev(PROMPT_TAB_STATE)
+            st = await poll(f"(() => {{ const s = {PROMPT_STATE}; return s && s.text ? s : null; }})()")
             check("S5b-1 scanned 编辑框 = 分析快照文案", bool(st and st["text"] == "扫描快照文案"), json.dumps(st, ensure_ascii=False))
-            check("S5b-2 scanned 五钮态：保存/删除/分析/指定可用、打开编辑器禁用",
-                  bool(st and st["row0"] == [False, True, False] and st["row1"] == [False, False]),
-                  json.dumps(st, ensure_ascii=False))
+            check("S5b-2 scanned 三钮态：编辑/断开可用、删除禁用", bool(st and st["btns"] == [False, False, True]), json.dumps(st, ensure_ascii=False))
             check("S5b-3 scanned 复制钮可用", bool(st and st["copy"] is False), json.dumps(st, ensure_ascii=False))
+            await ev(f"({PB_BTN(1)})?.click()")  # 断开（scanned = 清空提示词）
+            await asyncio.sleep(0.8)
+            calls = await ev("JSON.stringify(window.__calls.clear_asset_prompt)")
+            check("S5b-4 断开（scanned）→ clear_asset_prompt label「清空提示词」",
+                  calls == '[{"assetId":"P3","label":"断开提示词链接"},{"assetId":"P2","label":"清空提示词"}]', str(calls))
+            await ev(f"({PB_BTN(0)})?.click()")  # 编辑（scanned = 先存为 .md 再开编辑器）
+            await asyncio.sleep(0.9)
+            calls = await ev("JSON.stringify(window.__calls.new_asset_prompt_document)")
+            check("S5b-5 编辑（scanned）→ new_asset_prompt_document{assetId:P2, kind:md}",
+                  bool(calls and json.loads(calls)[-1] == {"assetId": "P2", "folderId": "f1", "kind": "md"}), str(calls))
+            check("S5b-6 存后即开预览（.preview-root）", bool(await poll("!!document.querySelector('.preview-root')", tries=16)))
+            await close_preview()
 
             # —— S4b linked 回落：read_text_asset 抛错 → 编辑框显示快照 content ——
+            await ev("window.__readFail = true")
+            await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
             await js_click(el_center(CARD("P3|f1")))
             await asyncio.sleep(0.9)
-            st = await poll(f"(() => {{ const s = {PROMPT_TAB_STATE}; return s && s.text === '快照内容' ? s : null; }})()")
+            st = await poll(f"(() => {{ const s = {PROMPT_STATE}; return s && s.text === '快照内容' ? s : null; }})()")
             check("S4b linked 读源失败回落快照 content", bool(st and st["text"] == "快照内容"), json.dumps(st, ensure_ascii=False))
+
+            # —— S5c 档案详情提示词区块（a1·none）：无扫描钮（新建/指定两钮）——
+            await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
+            await js_click(el_center(TREE_NODE("a1")))
+            await asyncio.sleep(0.9)
+            st = await ev(PROMPT_STATE)
+            check("S5c 档案 none：无扫描钮（新建/指定两钮可用）",
+                  bool(st and st["btns"] == [False, False] and st["text"] == ""), json.dumps(st, ensure_ascii=False))
 
             await send(ws, "Target.closeTarget", {"targetId": tid})
     finally:

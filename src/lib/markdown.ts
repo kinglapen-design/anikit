@@ -2,7 +2,7 @@
 // 任务列表（GFM `- [ ]` / `- [x]`）＝ 我们自己的复选框（2026-09 用户定）——core rule 剥 `[ ]` 前缀、
 // li 挂 .md-task、文本前注入 .kit-check-box 静态框（styles/checkbox.css 通用类，Checkbox.vue 同款）；
 // 框带 data-task-line（源码行号，0 起），点击 toggle 回写由 PreviewText 事件代理接（lib/mdEdit.toggleTaskLine）。
-// 代码块 = div.md-code 包装 + pre.kit-scroll-x 横滚 + 右上角 .md-copy 复制钮（文本编辑稿，TabPrompt 同款口径）。
+// 代码块 = div.md-code 包装 + pre.kit-scroll-x 横滚 + 右上角 .md-copy 复制钮（文本编辑稿，PromptSection 同款口径）。
 // 图片引用 = 库内封闭路径解析不了 → 占位文本（09 待办）；链接本轮不可点（09 待办，CSS pointer-events 挡）。
 import MarkdownIt, { type MarkdownIt as MdIt, type StateCore, type Token } from "markdown-it";
 import { getIcon } from "./icons";
