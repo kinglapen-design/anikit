@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // 创建资源库弹窗（2026-09-08 换代 = 布局/模态窗口/创建资源库 稿；旧 AppModal 16 稿口径随本件退役）：
 // 菜单"新建资源库"入口（有库在用的场景；初次打开 / 无库场景走 38 向导）。
+// 改名模式（2026-09-26 重命名资源库复用本弹窗）：prop renameFrom 带旧名即为改名——
+// 标题换「重命名资源库」、输入框预填旧名、确认 = renameLibrary（当前库改名后端同步内存 root）。
 // 壳 = modals/BaseModal（400 宽）；输入 = inputs/TextInput lg（占位「名称」，自动聚焦 / Enter 确认）；
 // 按钮 = buttons/ActionButton lg（取消左 cancel / 确认右 primary——次左主右新稿口径，旧确认左序废除）。
 // 错误提示行稿未画——功能必需（名称校验 / 后端报错），就近正文档 13/18 语义色 --error。
@@ -9,13 +11,14 @@ import { nextTick, onMounted, ref } from "vue";
 import BaseModal from "./modals/BaseModal.vue";
 import TextInput from "./inputs/TextInput.vue";
 import ActionButton from "./buttons/ActionButton.vue";
-import { createLibrary, validateAssetName } from "../lib/libraryOps";
+import { createLibrary, renameLibrary, validateAssetName } from "../lib/libraryOps";
 import { useToastStore } from "../stores/toast";
 
+const props = withDefaults(defineProps<{ renameFrom?: string }>(), { renameFrom: undefined });
 const emit = defineEmits<{ close: [] }>();
 const toast = useToastStore();
 
-const name = ref("");
+const name = ref(props.renameFrom ?? "");
 const error = ref("");
 const busy = ref(false);
 const inputRef = ref<InstanceType<typeof TextInput>>();
@@ -31,10 +34,19 @@ async function onConfirm(): Promise<void> {
     error.value = msg;
     return;
   }
+  if (props.renameFrom && trimmed === props.renameFrom) {
+    error.value = "名称没有变化";
+    return;
+  }
   busy.value = true;
   try {
-    const info = await createLibrary(trimmed); // 自动导入 = 空间级设置，建库不带（2026-08-12 定案）
-    toast.notify({ message: `资源库「${info.name}」创建完成`, icon: "success", sound: true, duration: 3000 });
+    if (props.renameFrom) {
+      await renameLibrary(props.renameFrom, trimmed);
+      toast.notify({ message: `资源库已更名为「${trimmed}」`, icon: "success", sound: true, duration: 3000 });
+    } else {
+      const info = await createLibrary(trimmed); // 自动导入 = 空间级设置，建库不带（2026-08-12 定案）
+      toast.notify({ message: `资源库「${info.name}」创建完成`, icon: "success", sound: true, duration: 3000 });
+    }
     emit("close");
   } catch (e) {
     error.value = String(e);
@@ -45,7 +57,7 @@ async function onConfirm(): Promise<void> {
 </script>
 
 <template>
-  <BaseModal title="创建资源库" :width="400">
+  <BaseModal :title="renameFrom ? '重命名资源库' : '创建资源库'" :width="400">
     <div class="field">
       <TextInput
         ref="inputRef"

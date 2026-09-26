@@ -420,6 +420,63 @@ fn merge_sources_into(lib: &mut Library, space_root: &Path, sources: &[&str]) ->
   Ok(outcomes)
 }
 
+/// 重命名资源库（2026-09-26 用户定：合并命名失误的补救口 + 库管理基础能力）：库目录改名 +
+/// libraryOrder 同步（core::space::rename_library）；relations.json 端点 lib 名改写（档案 id
+/// 不动——folder 不随库改名）；全局配置最近列表同步（按旧 path 匹配，失败仅记日志——改名
+/// 已生效不回滚）；改名的是当前打开库时内存 root 同步更新，返回其最新 LibraryInfo，否则 null
+#[tauri::command]
+pub async fn rename_library(state: State<'_, AppState>, name: String, new_name: String) -> Result<Option<LibraryInfo>, String> {
+  let (info, old_path, new_path) = apply_rename_library(&state, &name, &new_name)?;
+  if let Err(e) = config::rename_library_entry(&old_path, new_name.trim(), &new_path) {
+    log::error!("改名后同步全局配置最近列表失败（不影响改名）：{e}");
+  }
+  Ok(info)
+}
+
+/// 改名编排（命令层薄壳便于单测；config 最近列表同步在命令层——保持测试不碰真实用户配置）：
+/// 返回（当前库改名时其最新 LibraryInfo，否则 None；旧路径；新路径）
+fn apply_rename_library(state: &AppState, name: &str, new_name: &str) -> Result<(Option<LibraryInfo>, String, String), String> {
+  let new_name = new_name.trim();
+  let is_current = state
+    .library
+    .lock()
+    .map_err(|e| e.to_string())?
+    .as_ref()
+    .and_then(|l| l.root.file_name().map(|n| n.to_string_lossy().into_owned()))
+    .as_deref()
+    == Some(name);
+  let (space_root, old_path, new_path) = {
+    let mut guard = state.space.lock().map_err(|e| e.to_string())?;
+    let space = guard.as_mut().ok_or_else(|| "请先打开储存空间".to_string())?;
+    space::rename_library(space, name, new_name).map_err(|e| e.to_string())?;
+    (
+      space.root.clone(),
+      space.root.join(name).to_string_lossy().into_owned(),
+      space.root.join(new_name).to_string_lossy().into_owned(),
+    )
+  };
+  // relations.json 端点 lib 名改写（folder_map 空——档案 id 不随库改名变化）
+  match relations::load_relations(&space_root) {
+    Ok(mut rels) => {
+      if relations::rewrite_lib_refs(&mut rels, name, new_name, &std::collections::HashMap::new()) {
+        if let Err(e) = relations::save_relations(&space_root, &rels) {
+          log::error!("改名改写 relations.json 落盘失败（数据文件保持原样）：{e}");
+        }
+      }
+    }
+    Err(e) => log::error!("改名改写 relations.json 读取失败（跳过）：{e}"),
+  }
+  // 当前库改名：内存 root 同步（全部路径经 lib.root / covers_dir 等现取，无缓存绝对路径）
+  if is_current {
+    let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+    if let Some(lib) = guard.as_mut() {
+      lib.root = std::path::PathBuf::from(&new_path);
+    }
+    return Ok((guard.as_ref().map(to_info), old_path, new_path));
+  }
+  Ok((None, old_path, new_path))
+}
+
 /// 封面迁移（合并编排段，目标库落盘前执行）：并入档案引用的封面文件自源库 cache/covers/
 /// 拷贝进目标库 covers/；目标撞名（仅"原名保留"路径理论可撞）唯一化并回写档案记录
 /// avatar.file。源文件缺失 / 拷贝失败只记日志——avatar 引用保留，展示侧按无封面回退
@@ -810,5 +867,58 @@ mod tests {
     assert_eq!(archives.archives[0].avatar.as_ref().unwrap().file, "随手_1.webp", "撞名唯一化并回写记录");
     assert_eq!(std::fs::read(covers_a.join("随手.webp")).unwrap(), b"old", "原有文件不被覆盖");
     assert_eq!(std::fs::read(covers_a.join("随手_1.webp")).unwrap(), b"new");
+  }
+
+  /// 重命名（2026-09-26）：非当前库 = 目录改名 + order 同步 + relations 端点 lib 改写；
+  /// 当前库 = 内存 root 同步 + 返回最新 LibraryInfo（config 最近列表同步在命令层，测试不碰真实配置）
+  #[test]
+  fn rename_library_full_chain() {
+    let (_dir, state) = make_state();
+    let space_root = state.space.lock().unwrap().as_ref().unwrap().root.clone();
+    crate::core::json_io::write_json(
+      &space_root.join(crate::core::relations::RELATIONS_FILE),
+      &serde_json::json!({ "version": 1, "relations": [ {
+        "id": "RL-1", "kind": "free", "label": "参考",
+        "from": { "lib": "库B", "kind": "asset", "id": "AN-1", "name": "一" },
+        "to": { "lib": "库A", "kind": "asset", "id": "AN-2", "name": "二" }
+      } ] }),
+    )
+    .unwrap();
+
+    // 非当前库改名：库B → 素材库
+    let (info, _, _) = apply_rename_library(&state, "库B", "素材库").unwrap();
+    assert!(info.is_none(), "非当前库不返回 info");
+    assert!(!space_root.join("库B").exists() && space_root.join("素材库").is_dir(), "目录已改");
+    assert_eq!(state.space.lock().unwrap().as_ref().unwrap().library_order, vec!["库A", "素材库"]);
+    let rels: crate::core::models::RelationsFile =
+      crate::core::json_io::read_json(&space_root.join(crate::core::relations::RELATIONS_FILE)).unwrap();
+    assert_eq!(rels.relations[0].from.lib, "素材库", "relations 端点 lib 改写");
+    assert_eq!(rels.relations[0].to.lib, "库A", "他端不动");
+
+    // 当前库改名：库A → 主库
+    let (info, _, _) = apply_rename_library(&state, "库A", "主库").unwrap();
+    let info = info.expect("当前库改名返回 info");
+    assert_eq!(info.name, "主库");
+    assert!(info.path.ends_with("主库"));
+    let guard = state.library.lock().unwrap();
+    assert_eq!(guard.as_ref().unwrap().root.file_name().unwrap().to_string_lossy(), "主库", "内存 root 同步");
+    drop(guard);
+    let rels: crate::core::models::RelationsFile =
+      crate::core::json_io::read_json(&space_root.join(crate::core::relations::RELATIONS_FILE)).unwrap();
+    assert_eq!(rels.relations[0].to.lib, "主库");
+  }
+
+  /// 改名校验：不存在库 / 撞名 / 非法名报错；同名 no-op；失败后状态不动
+  #[test]
+  fn rename_library_validates() {
+    let (_dir, state) = make_state();
+    assert!(apply_rename_library(&state, "不存在", "x").is_err());
+    assert!(apply_rename_library(&state, "库B", "库A").is_err(), "撞既有库");
+    assert!(apply_rename_library(&state, "库B", "bad:name").is_err(), "非法名");
+    assert!(apply_rename_library(&state, "库B", "库B").is_ok(), "同名 no-op");
+    let space = state.space.lock().unwrap();
+    let space = space.as_ref().unwrap();
+    assert!(space.root.join("库B").is_dir() && space.root.join("库A").is_dir(), "状态不动");
+    assert_eq!(space.library_order, vec!["库A", "库B"]);
   }
 }

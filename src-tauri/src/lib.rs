@@ -297,6 +297,7 @@ pub fn run() {
       commands::library::reorder_libraries,
       commands::library::delete_library,
       commands::library::count_library_orphans,
+      commands::library::rename_library,
       commands::library::list_merge_candidates,
       commands::library::merge_libraries,
       commands::workspace::workspace_root,

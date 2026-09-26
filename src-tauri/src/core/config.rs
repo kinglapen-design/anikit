@@ -92,6 +92,29 @@ pub fn record_library_open(name: &str, path: &str) -> Result<(), DataError> {
   save_to(&p, &cfg)
 }
 
+/// 资源库重命名配套（2026-09-26）：最近列表条目按旧 path 同步 name + path；无匹配不写盘
+pub fn rename_library_entry(old_path: &str, new_name: &str, new_path: &str) -> Result<(), DataError> {
+  let p = config_path()?;
+  let mut cfg = load_from(&p);
+  if rename_library_entry_in(&mut cfg, old_path, new_name, new_path) {
+    save_to(&p, &cfg)?;
+  }
+  Ok(())
+}
+
+/// 纯逻辑（单测直调）：libraries 最近列表里 path == old_path 的条目改 name + path；返回是否有改动
+fn rename_library_entry_in(cfg: &mut AppConfig, old_path: &str, new_name: &str, new_path: &str) -> bool {
+  let mut hit = false;
+  for e in &mut cfg.libraries {
+    if e.path == old_path {
+      e.name = new_name.to_string();
+      e.path = new_path.to_string();
+      hit = true;
+    }
+  }
+  hit
+}
+
 fn upsert_library(cfg: &mut AppConfig, name: &str, path: &str) {
   cfg.libraries.retain(|e| e.path != path);
   cfg.libraries.insert(
@@ -411,6 +434,19 @@ mod tests {
     // 从未保存过 ui 的配置读回空对象（前端按默认值补齐）
     let plain = AppConfig::default();
     assert!(plain.settings.get("ui").is_none());
+  }
+
+  /// 库重命名配套：最近列表按旧 path 同步 name + path；无匹配不改
+  #[test]
+  fn rename_library_entry_updates_by_path() {
+    let mut cfg = AppConfig::default();
+    cfg.libraries.push(LibraryEntry { name: "旧名".into(), path: "E:/空间/旧名".into(), last_opened_at: "t".into() });
+    cfg.libraries.push(LibraryEntry { name: "别库".into(), path: "E:/空间/别库".into(), last_opened_at: "t".into() });
+    assert!(rename_library_entry_in(&mut cfg, "E:/空间/旧名", "新名", "E:/空间/新名"));
+    assert_eq!(cfg.libraries[0].name, "新名");
+    assert_eq!(cfg.libraries[0].path, "E:/空间/新名");
+    assert_eq!(cfg.libraries[1].name, "别库", "无匹配不动");
+    assert!(!rename_library_entry_in(&mut cfg, "E:/不存在", "x", "y"), "无匹配返回 false");
   }
 
   #[test]

@@ -121,10 +121,24 @@ export async function listSpaceLibraries(): Promise<string[]> {
   return await invoke<string[]>("list_space_libraries").catch(() => [] as string[]);
 }
 
-// 创建资源库（16 稿弹窗 / 向导 standalone）：建库即打开，收尾同 openLibrary；
+// 新建资源库（菜单触发，16 稿弹窗 / 向导 standalone）：建库即打开，收尾同 openLibrary；
 // 自动导入是空间级设置，建库不带该参数（2026-08-12 空间级 inbox 定案）
 export async function createLibrary(name: string): Promise<LibraryInfo> {
   return await afterOpen(await invoke<LibraryInfo>("create_library", { name }));
+}
+
+// 重命名资源库（2026-09-26 用户定：合并命名失误的补救口 + 库管理基础能力）：
+// 弹窗 = CreateLibraryModal 改名模式；改名的是当前库时 currentLibrary 同步（后端返回其最新 info）
+export const renameLibraryState = reactive<{ open: boolean; from: string | null }>({ open: false, from: null });
+
+export function requestRenameLibrary(name: string): void {
+  renameLibraryState.from = name;
+  renameLibraryState.open = true;
+}
+
+export async function renameLibrary(name: string, newName: string): Promise<void> {
+  const info = await invoke<LibraryInfo | null>("rename_library", { name, newName });
+  if (info) currentLibrary.name = info.name;
 }
 
 // 打开资源库：当前空间内按名打开

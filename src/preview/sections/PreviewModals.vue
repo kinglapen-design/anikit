@@ -17,6 +17,7 @@ import type { ImportDraft } from "../../stores/content";
 
 const demoOpen = ref(false);
 const createOpen = ref(false);
+const renameOpen = ref(false);
 const mergeOpen = ref(false);
 const importFilesOpen = ref(false);
 const importFolderOpen = ref(false);
@@ -115,7 +116,11 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
         </div>
         <div class="pv-demo-cell" style="width: 240px">
           <ActionButton label="合并资源库" variant="solid" size="md" @click="mergeOpen = true" />
-          <span class="pv-cap">真实弹出：行对勾切换可验；确认钮未接动作（合并后端排期）</span>
+          <span class="pv-cap">真实弹出（mock 三库含容量）：行对勾切换可验；勾 ≥2 底行换显目标 + 确认可点（确认 = 真合并，勿点）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <ActionButton label="重命名资源库" variant="solid" size="md" @click="renameOpen = true" />
+          <span class="pv-cap">创建弹窗改名模式（renameFrom 预填旧名；确认 = 真改名，勿点）</span>
         </div>
       </div>
       <div class="pv-demo-row">
@@ -134,6 +139,7 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
       </div>
     </div>
     <CreateLibraryModal v-if="createOpen" @close="createOpen = false" />
+    <CreateLibraryModal v-if="renameOpen" rename-from="动画资产" @close="renameOpen = false" />
     <MergeLibraryModal v-if="mergeOpen" :items="mockLibItems" @close="mergeOpen = false" />
     <ImportDialog
       v-if="importFilesOpen"

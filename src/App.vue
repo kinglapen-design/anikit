@@ -57,7 +57,7 @@ import { useContentStore } from "./stores/content";
 import { usePickerStore } from "./stores/picker";
 import { useSelectionStore } from "./stores/selection";
 import { initPreviewListeners } from "./stores/preview";
-import { wizardState, reopenLastSession, createLibraryModalState, mergeLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener } from "./lib/libraryOps";
+import { wizardState, reopenLastSession, createLibraryModalState, mergeLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener, renameLibraryState } from "./lib/libraryOps";
 import { playAlert } from "./lib/sounds";
 import { closePluginPanel, pluginPanelState } from "./lib/pluginPanel";
 import { dupScanState } from "./lib/dupScanOps";
@@ -325,6 +325,12 @@ async function togglePin(): Promise<void> {
     />
     <!-- 菜单"新建资源库"（16 稿独立弹窗） -->
     <CreateLibraryModal v-if="createLibraryModalState.open" @close="createLibraryModalState.open = false" />
+    <!-- 菜单"重命名当前资源库"（复用创建弹窗改名模式，2026-09-26） -->
+    <CreateLibraryModal
+      v-if="renameLibraryState.open && renameLibraryState.from"
+      :rename-from="renameLibraryState.from"
+      @close="renameLibraryState.open = false"
+    />
     <!-- 菜单"合并资源库"（2026-09-08 稿；2026-09-26 功能轮接通：勾选项并入当前库） -->
     <MergeLibraryModal
       v-if="mergeLibraryModalState.open"

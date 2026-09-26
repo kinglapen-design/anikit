@@ -209,6 +209,36 @@ pub fn library_size(space_root: &Path, name: &str) -> Result<u64, DataError> {
   Ok(total)
 }
 
+/// 资源库重命名（2026-09-26 用户定：合并命名失误的补救口 + 库管理基础能力）：库目录改名 +
+/// libraryOrder 同步（save_space 单写点）。新旧同名 = no-op；新名走库名同一套 Windows 规则 +
+/// 空间级保留目录名 + 撞既有目录 / 库拒绝。relations.json 端点 lib 名改写与全局配置最近列表
+/// 同步在命令层（core 不依赖 config；relations 由 core::relations 单写点，命令层编排）
+pub fn rename_library(space: &mut Space, old: &str, new: &str) -> Result<(), DataError> {
+  if old == new {
+    return Ok(());
+  }
+  let old_dir = space.root.join(old);
+  if !(old_dir.is_dir() && old_dir.join(FOLDERS_FILE).is_file()) {
+    return Err(DataError::NotALibrary);
+  }
+  library::validate_library_name(new)?;
+  if [paths::ASSETS_DIR, WORKSPACE_DIR, INBOX_DIR].contains(&new.to_ascii_lowercase().as_str()) {
+    return Err(DataError::NameInvalid("该名称为储存空间保留名，请换一个"));
+  }
+  if space.root.join(new).exists() {
+    return Err(DataError::NameInvalid("已存在同名资源库，请换一个"));
+  }
+  fs::rename(&old_dir, space.root.join(new))?;
+  for n in &mut space.library_order {
+    if n == old {
+      *n = new.to_string();
+    }
+  }
+  save_space(space)?;
+  log::info!("资源库改名：{old} → {new}");
+  Ok(())
+}
+
 /// 删除资源库（3.2 删除×；确认弹窗在前端）：整个库目录递归删除，库内数据文件删除不可恢复；
 /// 素材实体保留在空间级 assets 池。delete_orphans = true 时一并删除仅被该库引用的孤儿素材实体
 /// （2026-08-12 定案：必须先算孤儿集再删库目录——删后读不到该库的 folders.json / recycle.json；
@@ -477,5 +507,31 @@ mod tests {
 
     assert_eq!(library_size(&space.root, "库A").unwrap(), 150, "folders ∪ recycle 引用求和");
     assert!(matches!(library_size(&space.root, "不存在"), Err(DataError::NotALibrary)));
+  }
+
+  /// 重命名（2026-09-26）：目录改名 + order 同步落盘；同名 no-op；撞库 / 保留名 / 非法名拒绝
+  #[test]
+  fn rename_library_renames_dir_and_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut space = create(dir.path(), "空间", false).unwrap();
+    for lib in ["库A", "库B"] {
+      make_lib_dir(&space.root, lib);
+    }
+    space.library_order = vec!["库A".into(), "库B".into()];
+
+    rename_library(&mut space, "库A", "动画资产").unwrap();
+    assert!(!space.root.join("库A").exists() && space.root.join("动画资产").join(FOLDERS_FILE).is_file(), "目录已改");
+    assert_eq!(space.library_order, vec!["动画资产", "库B"]);
+    let disk: SpaceFile = read_json(&space.root.join(SPACE_FILE)).unwrap();
+    assert_eq!(disk.library_order, vec!["动画资产", "库B"], "order 落盘");
+
+    // 同名 no-op；撞既有库 / 保留名 / 非法名 / 不存在库 全拒绝且不再动
+    assert!(rename_library(&mut space, "库B", "库B").is_ok(), "同名 no-op");
+    assert!(rename_library(&mut space, "库B", "动画资产").is_err(), "撞既有库");
+    assert!(rename_library(&mut space, "库B", "assets").is_err(), "空间级保留名");
+    assert!(rename_library(&mut space, "库B", "bad:name").is_err(), "非法名");
+    assert!(matches!(rename_library(&mut space, "不存在", "x"), Err(DataError::NotALibrary)));
+    assert!(space.root.join("库B").is_dir(), "失败后目录原样");
+    assert_eq!(space.library_order, vec!["动画资产", "库B"]);
   }
 }

@@ -3,7 +3,7 @@
 // 库列表 = 纯对勾行（MenuItem checkable，2026-09-05 用户定稿口径）——08 稿 LibraryMenuItem 抓手排序 +
 // 删除× 全库废除（2026-09-07 用户：资源库不至于多到需要排序），删除走同级「删除当前资源库」项。
 import type { CtxEntry } from "../contextMenus";
-import { currentLibrary, requestDeleteLibrary, requestLibrarySetup, requestMergeLibrary, switchLibrary } from "../libraryOps";
+import { currentLibrary, requestDeleteLibrary, requestLibrarySetup, requestMergeLibrary, requestRenameLibrary, switchLibrary } from "../libraryOps";
 
 // 新建 / 删除当前 / 合并（2026-09-26 功能轮接通；二轮修订：全库展示 + 勾选 ≥2，目标 = 勾选集中
 // libraryOrder 最前者）+ 库列表。对勾与禁用函数化求值（keepOpen 切库期间随 currentLibrary 实时）；
@@ -23,6 +23,13 @@ export function libraryMenuEntries(names: string[]): CtxEntry[] {
       : [{ label: "（当前空间无资源库）", disabled: true }];
   return [
     { label: "新建资源库", action: () => requestLibrarySetup() },
+    {
+      label: "重命名当前资源库",
+      disabled: () => !currentLibrary.name, // 无当前库不可点
+      action: () => {
+        if (currentLibrary.name) requestRenameLibrary(currentLibrary.name);
+      },
+    },
     {
       label: "删除当前资源库",
       disabled: () => !currentLibrary.name, // 无当前库不可点
