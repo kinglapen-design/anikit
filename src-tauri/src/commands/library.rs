@@ -260,95 +260,80 @@ pub struct MergeCandidate {
   pub size_bytes: u64,
 }
 
-/// 合并资源库弹窗列表：当前空间内除当前打开库外的全部库（libraryOrder 序）+ 各库容量；
-/// 容量读取失败按 0 计不阻塞列表；无当前空间返回空列表
+/// 合并资源库弹窗列表：当前空间内**全部**资源库（libraryOrder 序，含当前打开库——2026-09-26
+/// 二轮用户定：同时展示所有库，勾选两个以上合并）+ 各库容量；容量读取失败按 0 计不阻塞列表；
+/// 无当前空间返回空列表
 #[tauri::command]
 pub async fn list_merge_candidates(state: State<'_, AppState>) -> Result<Vec<MergeCandidate>, String> {
-  let current = state
-    .library
-    .lock()
-    .map_err(|e| e.to_string())?
-    .as_ref()
-    .and_then(|l| l.root.file_name().map(|n| n.to_string_lossy().into_owned()));
   let space = current_space(&state)?;
-  let mut names = space::ordered_libraries(&space).map_err(|e| e.to_string())?;
-  names.retain(|n| Some(n) != current.as_ref());
+  let names = space::ordered_libraries(&space).map_err(|e| e.to_string())?;
   Ok(names
     .into_iter()
     .map(|n| MergeCandidate { size_bytes: space::library_size(&space.root, &n).unwrap_or(0), name: n })
     .collect())
 }
 
-/// 合并资源库（2026-09-26 功能轮，PRD 01_储存空间 3.2「多个资源库允许合并为一个」）：
-/// names（弹窗勾选的其余库，可多选）逐一并入当前打开库，随后源库目录删除。返回目标库最新
-/// LibraryInfo（文件夹数等已变）。合并口径与失败处理见 core::merge 模块头与本函数编排注释
+/// 合并资源库（2026-09-26 功能轮 + 二轮交互修订，PRD 01_储存空间 3.2）：names = 弹窗勾选集
+///（≥2，含当前库与否均可），**目标库 = 勾选集中 libraryOrder 最靠前者**，其余并入它；
+/// 合并完成即打开目标库（目标非当前库时表现为切库，经 activate 统一出口：停帧流 / 清撤销 /
+/// 记最近 / 无主资产 emit）。返回目标库最新 LibraryInfo
 #[tauri::command]
-pub async fn merge_libraries(state: State<'_, AppState>, names: Vec<String>) -> Result<LibraryInfo, String> {
-  apply_merge_libraries(&state, &names)
+pub async fn merge_libraries(app: AppHandle, state: State<'_, AppState>, names: Vec<String>) -> Result<LibraryInfo, String> {
+  let lib = apply_merge_libraries(&state, &names)?;
+  activate(&app, &state, lib)
 }
 
-/// 合并编排（命令层薄壳，便于单测）：校验 → 备份目标库（失败即取消，PRD 06-04 备份门禁）→
-/// 逐源纯数据并入（core::merge）+ 封面迁移（cache/covers/ 跨库拷贝）→ 单写点落盘目标五文件
-/// （tags 不并——体系已取消且无写点）→ 重建内存索引 → relations.json 端点改写（lib 名 +
-/// 档案 id）→ space::delete_library 删源目录并更新 libraryOrder → 清撤销栈（栈内快照绑定
-/// 合并前状态，撤销会把并入内容从盘上抹掉，同删当前库口径）。
-/// 落盘失败：reload 与盘面对齐后报错，不留内存 / 磁盘分叉；
-/// 源目录删除失败容忍（数据已并入目标库，残留 = 内容相同的库，可再删）：记日志不报错
-fn apply_merge_libraries(state: &AppState, names: &[String]) -> Result<LibraryInfo, String> {
+/// 合并编排（命令层薄壳便于单测；activate 出口在命令层）：校验（≥2 / 都存在）→ 定目标
+///（libraryOrder 最靠前勾选者）→ 目标库就位（当前库即目标 = 取出直接用；否则打开目标——
+/// 库全部写操作即时落盘，源库虽可能正开着也只是内存态 == 磁盘态，合并读盘无分叉）→
+/// 备份门禁 → 逐源并入 + 封面迁移 → 单写点落盘（失败 reload 对齐盘面）→ 索引重建 →
+/// relations.json 端点改写 → 删源目录 + libraryOrder 更新（删除失败容忍记日志，残留可再删）→
+/// 清撤销栈 → 返回目标库（交 activate 收尾）。
+/// 失败路径：目标是当前库时 reload 后放回 state（不留 None 空档）；非当前库直接丢
+///（未激活无副作用，源目录此时均未动）
+fn apply_merge_libraries(state: &AppState, names: &[String]) -> Result<Library, String> {
   let mut seen = HashSet::new();
   let names: Vec<&str> = names.iter().map(|s| s.trim()).filter(|s| !s.is_empty() && seen.insert(*s)).collect();
-  if names.is_empty() {
-    return Err("请先勾选要合并的资源库".to_string());
+  if names.len() < 2 {
+    return Err("请勾选两个以上要合并的资源库".to_string());
   }
-  let mut lib_guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = lib_guard.as_mut().ok_or_else(|| "请先打开资源库".to_string())?;
-  let target_name = lib.root.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-  if names.iter().any(|n| *n == target_name) {
-    return Err("不能把当前打开的库合并进它自己".to_string());
-  }
+  // 目标 = 勾选集中 libraryOrder 最靠前者
+  let (space_root, ordered) = {
+    let guard = state.space.lock().map_err(|e| e.to_string())?;
+    let space = guard.as_ref().ok_or_else(|| "请先打开储存空间".to_string())?;
+    (space.root.clone(), space::ordered_libraries(space).map_err(|e| e.to_string())?)
+  };
   for n in &names {
-    let dir = lib.space_root.join(n);
-    if !(dir.is_dir() && dir.join(library::FOLDERS_FILE).is_file()) {
+    if !ordered.iter().any(|o| o == n) {
       return Err(format!("资源库「{n}」不存在"));
     }
   }
-  // 备份门禁：合并改写目标库数据文件 + 删源目录，先把目标库备一份；失败不继续（同开库自检口径。
-  // 源库不备——其数据（文件夹树 / Placement / 回收站 / 档案）随并入全部活进目标库，无额外所失）
-  backup::backup_library(&lib.root, &lib.assets_dir).map_err(|e| format!("合并前备份失败，已取消合并：{e}"))?;
-  let space_root = lib.space_root.clone();
-  let mut outcomes: Vec<(String, merge::MergeOutcome)> = Vec::new();
-  for n in &names {
-    let src_dir = space_root.join(n);
-    let source = merge::read_source(&src_dir).map_err(|e| format!("读取资源库「{n}」失败：{e}"))?;
-    let mut outcome = {
-      let mut t = merge::MergeTarget {
-        folders: &mut lib.folders,
-        pins: &mut lib.pins,
-        recycle: &mut lib.recycle,
-        recent: &mut lib.recent,
-        archives: &mut lib.archives,
-      };
-      merge::merge_into(&mut t, source)
-    };
-    migrate_covers(lib, &src_dir, &mut outcome);
-    outcomes.push((n.to_string(), outcome));
-  }
-  // 落盘（单写点逐一原子写；任一失败 → reload 与盘面对齐后报错）
-  if let Err(e) = (|| -> Result<(), DataError> {
-    library::save_folders(lib)?;
-    library::save_recycle(lib)?;
-    library::save_recent(lib)?;
-    library::save_pins(lib)?;
-    library::save_archives(lib)
-  })() {
-    let _ = library::reload(lib);
-    return Err(format!("合并数据保存失败：{e}"));
-  }
-  // 索引重建：assets 池不动（合并不迁实体），文件夹表 + Placement 反查重建
-  lib.index.folders = lib.folders.folders.iter().map(|f| (f.id.clone(), f.clone())).collect();
-  lib.index.rebuild_placements(&lib.folders.items);
-  let info = to_info(lib);
-  drop(lib_guard); // 后续走 AppState 其他锁 / 空间级文件，先放库锁（与 create_library 同风格）
+  let target_name = ordered.iter().find(|o| names.contains(&o.as_str())).expect("已校验全部存在").clone();
+  let sources: Vec<&str> = names.iter().copied().filter(|n| *n != target_name).collect();
+
+  // 目标库就位
+  let current_name = state
+    .library
+    .lock()
+    .map_err(|e| e.to_string())?
+    .as_ref()
+    .and_then(|l| l.root.file_name().map(|n| n.to_string_lossy().into_owned()));
+  let target_is_current = current_name.as_deref() == Some(target_name.as_str());
+  let mut lib = if target_is_current {
+    state.library.lock().map_err(|e| e.to_string())?.take().expect("current_name 来自同一状态")
+  } else {
+    library::open(&space_root, &space_root.join(&target_name)).map_err(|e| e.to_string())?
+  };
+  let outcomes = match merge_sources_into(&mut lib, &space_root, &sources) {
+    Ok(o) => o,
+    Err(e) => {
+      if target_is_current {
+        let _ = library::reload(&mut lib); // 盘面对齐（未动盘时为重读，无妨）
+        *state.library.lock().map_err(|e| e.to_string())? = Some(lib);
+      }
+      return Err(e);
+    }
+  };
 
   // relations.json 端点改写（空间级，core::relations 单写点）：指向源库的端点 lib 改目标库、
   // 档案端点 id 随重映射；读取 / 落盘失败记日志不阻断合并（同开库关系自检口径）
@@ -378,7 +363,7 @@ fn apply_merge_libraries(state: &AppState, names: &[String]) -> Result<LibraryIn
       }
     }
   }
-  // 清撤销栈：栈内快照绑定合并前数据文件
+  // 清撤销栈：栈内快照绑定合并前数据文件，撤销会把并入内容从盘上抹掉（同删当前库口径）
   state.undo.lock().map_err(|e| e.to_string())?.clear();
   for (n, outcome) in &outcomes {
     log::info!(
@@ -391,7 +376,48 @@ fn apply_merge_libraries(state: &AppState, names: &[String]) -> Result<LibraryIn
       outcome.covers.len()
     );
   }
-  Ok(info)
+  Ok(lib)
+}
+
+/// 逐源并入（apply_merge_libraries 的数据段）：备份门禁 → 读源 → 纯数据并入（core::merge）+
+/// 封面迁移 → 五文件单写点落盘（tags 不并——体系已取消且无写点；任一失败 reload 对齐盘面
+/// 后报错）→ 内存索引重建。返回各源 outcome
+fn merge_sources_into(lib: &mut Library, space_root: &Path, sources: &[&str]) -> Result<Vec<(String, merge::MergeOutcome)>, String> {
+  // 备份门禁：合并改写目标库数据文件 + 删源目录，先把目标库备一份；失败不继续（同开库自检口径。
+  // 源库不备——其数据（文件夹树 / Placement / 回收站 / 档案）随并入全部活进目标库，无额外所失）
+  backup::backup_library(&lib.root, &lib.assets_dir).map_err(|e| format!("合并前备份失败，已取消合并：{e}"))?;
+  let mut outcomes: Vec<(String, merge::MergeOutcome)> = Vec::new();
+  for n in sources {
+    let src_dir = space_root.join(n);
+    let source = merge::read_source(&src_dir).map_err(|e| format!("读取资源库「{n}」失败：{e}"))?;
+    let mut outcome = {
+      let mut t = merge::MergeTarget {
+        folders: &mut lib.folders,
+        pins: &mut lib.pins,
+        recycle: &mut lib.recycle,
+        recent: &mut lib.recent,
+        archives: &mut lib.archives,
+      };
+      merge::merge_into(&mut t, source)
+    };
+    migrate_covers(lib, &src_dir, &mut outcome);
+    outcomes.push((n.to_string(), outcome));
+  }
+  // 落盘（单写点逐一原子写；任一失败 → reload 与盘面对齐后报错）
+  if let Err(e) = (|| -> Result<(), DataError> {
+    library::save_folders(lib)?;
+    library::save_recycle(lib)?;
+    library::save_recent(lib)?;
+    library::save_pins(lib)?;
+    library::save_archives(lib)
+  })() {
+    let _ = library::reload(lib);
+    return Err(format!("合并数据保存失败：{e}"));
+  }
+  // 索引重建：assets 池不动（合并不迁实体），文件夹表 + Placement 反查重建
+  lib.index.folders = lib.folders.folders.iter().map(|f| (f.id.clone(), f.clone())).collect();
+  lib.index.rebuild_placements(&lib.folders.items);
+  Ok(outcomes)
 }
 
 /// 封面迁移（合并编排段，目标库落盘前执行）：并入档案引用的封面文件自源库 cache/covers/
@@ -652,9 +678,10 @@ mod tests {
     }
     assert!(state.undo.lock().unwrap().state().can_undo);
 
-    let info = apply_merge_libraries(&state, &["库B".to_string()]).unwrap();
-    assert_eq!(info.name, "库A");
-    assert_eq!(info.folder_count, 2, "库A 原 0 文件夹 + 源 2");
+    let lib = apply_merge_libraries(&state, &["库A".to_string(), "库B".to_string()]).unwrap();
+    assert_eq!(lib.root.file_name().unwrap().to_string_lossy(), "库A", "勾选集含当前库且 order 最前 = 目标");
+    assert_eq!(lib.index.folders.len(), 2, "库A 原 0 文件夹 + 源 2");
+    assert!(state.library.lock().unwrap().is_none(), "当前库被取出、交命令层 activate 放回");
     assert!(!state.undo.lock().unwrap().state().can_undo, "合并清撤销栈");
     assert!(!lib_b.exists(), "源库目录删除");
     assert_eq!(state.space.lock().unwrap().as_ref().unwrap().library_order, vec!["库A"], "order 移除源库");
@@ -695,14 +722,19 @@ mod tests {
     assert!(lib_a.join(crate::core::library::BACKUP_DIR).read_dir().unwrap().next().is_some(), "合并前备份目标库");
   }
 
-  /// 合并校验：空选择 / 并入自己 / 源库不存在 → 中文报错，状态不动
+  /// 合并校验（2026-09-26 二轮交互修订）：去重后不足两个 / 源库不存在 → 中文报错，状态不动
+  ///（Library 无 Debug  derive，断言走 .err() 不走 unwrap_err）
   #[test]
   fn merge_libraries_validates_input() {
     let (_dir, state) = make_state();
-    assert!(apply_merge_libraries(&state, &[]).unwrap_err().contains("勾选"));
-    let self_err = apply_merge_libraries(&state, &["库A".to_string()]).unwrap_err();
-    assert!(self_err.contains("它自己"), "{self_err}");
-    let missing = apply_merge_libraries(&state, &["不存在".to_string()]).unwrap_err();
+    let err_of = |names: &[&str]| {
+      apply_merge_libraries(&state, &names.iter().map(|s| s.to_string()).collect::<Vec<_>>()).err().expect("应报错")
+    };
+    assert!(err_of(&[]).contains("两个以上"));
+    assert!(err_of(&["库A"]).contains("两个以上"));
+    // 去重后不足两个同报
+    assert!(err_of(&["库A", "库A"]).contains("两个以上"));
+    let missing = err_of(&["库A", "不存在"]);
     assert!(missing.contains("不存在"), "{missing}");
     // 状态不动：库 A 仍开着、库 B 目录在、order 不变
     assert!(state.library.lock().unwrap().is_some());
@@ -710,6 +742,40 @@ mod tests {
     let space = space.as_ref().unwrap();
     assert!(space.root.join("库B").is_dir());
     assert_eq!(space.library_order, vec!["库A", "库B"]);
+  }
+
+  /// 目标规则（2026-09-26 二轮）：目标 = 勾选集中 libraryOrder 最靠前者，不一定是当前库——
+  /// order [库B, 库A] 时合并 → 库B 为目标，当前打开的库A 作为源并入并删目录；
+  /// 返回的 Library 即库B（命令层 activate 后当前库切换为它）
+  #[test]
+  fn merge_target_is_order_first_not_necessarily_current() {
+    let (_dir, state) = make_state();
+    {
+      let mut guard = state.space.lock().unwrap();
+      let space = guard.as_mut().unwrap();
+      space.library_order = vec!["库B".into(), "库A".into()];
+      crate::core::space::save_space(space).unwrap();
+    }
+    // 当前库库A 造内容（直接写盘——全部写操作即时落盘，内存态 == 磁盘态）
+    let space_root = state.space.lock().unwrap().as_ref().unwrap().root.clone();
+    std::fs::write(
+      space_root.join("库A").join(crate::core::library::FOLDERS_FILE),
+      r#"{ "version": 1, "folders": [ { "id": "F-A", "name": "甲夹", "parent": null, "order": 0 } ],
+        "items": [ { "asset": "AN-A", "folder": "F-A", "name": "甲.fla", "order": 0, "origin": true } ] }"#,
+    )
+    .unwrap();
+
+    let lib = apply_merge_libraries(&state, &["库A".to_string(), "库B".to_string()]).unwrap();
+    assert_eq!(lib.root.file_name().unwrap().to_string_lossy(), "库B", "order 最前的为目标库");
+    assert!(lib.index.folders.contains_key("F-A"), "库A 内容并入库B");
+    assert!(!space_root.join("库A").exists(), "源（当前库）目录删除");
+    assert_eq!(state.space.lock().unwrap().as_ref().unwrap().library_order, vec!["库B"]);
+    // 非当前目标不动 state.library（等 activate 切换）；盘上库B folders.json 一致
+    assert!(state.library.lock().unwrap().is_some());
+    let folders: crate::core::models::FoldersFile =
+      crate::core::json_io::read_json(&space_root.join("库B").join(crate::core::library::FOLDERS_FILE)).unwrap();
+    assert!(folders.folders.iter().any(|f| f.id == "F-A" && f.name == "甲夹"));
+    assert!(folders.items.iter().any(|p| p.asset == "AN-A" && p.origin));
   }
 
   /// 封面撞名唯一化（legacy 原名保留路径才可能撞）：目标已有同名文件 → 唯一化并回写档案记录
@@ -738,7 +804,7 @@ mod tests {
     std::fs::create_dir_all(&covers_a).unwrap();
     std::fs::write(covers_a.join("随手.webp"), b"old").unwrap();
 
-    apply_merge_libraries(&state, &["库B".to_string()]).unwrap();
+    apply_merge_libraries(&state, &["库A".to_string(), "库B".to_string()]).unwrap();
     let archives: crate::core::models::ArchivesFile =
       crate::core::json_io::read_json(&lib_a.join(crate::core::library::ARCHIVES_FILE)).unwrap();
     assert_eq!(archives.archives[0].avatar.as_ref().unwrap().file, "随手_1.webp", "撞名唯一化并回写记录");
