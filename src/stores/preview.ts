@@ -106,6 +106,9 @@ function buildPreviewStore(panelId: string) {
       fitMode: false,
       rotate: 0 as 0 | 90 | 180 | 270,
       flipH: false,
+      // 字体预览演示文本正文字号 px（标题 ×2；2026-09-26 用户定：预览区底部悬浮滑杆废，
+      // 字号控制归预览工具栏尺寸滑块——PreviewTitleBar/PreviewFont 经本值共享，会话级记忆）
+      fontSize: 15,
       // 帧播放（序列帧 rAF 引擎 / 动图帧流共用状态：frame = 当前帧索引，playing/rate 双向同步会话）
       seq: null as { thumbFrame: string | null; frames: PlayFrame[] } | null,
       frame: 0, // 当前帧索引（frames 数组下标 / 动图源帧索引，非帧号）

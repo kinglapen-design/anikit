@@ -1,11 +1,12 @@
 <script setup lang="ts">
-// 预览态标题栏（4.3/5.2）：返回 + 索引 x/y / 缩放滑块+百分比 / 工具按钮组。
+// 预览态标题栏（4.3/5.2）：返回 + 索引 x/y / 缩放滑块+百分比（font = 字号滑块+px 读值）/ 工具按钮组。
 // 布局模式照 ContentTitleBar（space-between 等距；图标统一 亮色/三级，2026-08-30 用户实机定——
 // 旧 80% 口径作废；返回 = chevron-large 原样朝左；索引 mono 13/18、百分比 mono 12/16）。
 // image/sequence/anim/video：缩放组 + 适合窗口 + 原图大小（源文件 PSD·AI·SVG 去旋转翻转、加默认应用打开；
 // anim/video 无默认应用打开——**8.1 例外：伴生代理资产（fla 预览按伴生 WebP 显示为 anim）有，
 // 本质工程文件，打开 fla 本身**）；audio：仅返回、索引、插件、新窗口打开、上/下一个；
-// font/text/docx（5.6/R6）：同 other 组（含默认应用打开；字体安装/卸载在字体预览「其它」页内，不占标题栏）；
+// font/text/docx（5.6/R6）：同 other 组（含默认应用打开；字体安装/卸载在字体预览「其它」页内，不占标题栏）——
+// font 另亮尺寸滑块组（控演示文本字号 12–72px，2026-09-26 用户定：预览区底部悬浮滑杆废，归工具栏尺寸滑块位）；
 // other：返回、索引、插件、默认应用打开、新窗口打开、上/下一个。
 // window 模式（新窗口打开）：返回 + 索引替换为文件名标题，加置顶与完整窗口控制按钮（PRD 4.3）。
 import { computed, inject } from "vue";
@@ -74,9 +75,17 @@ async function togglePin(): Promise<void> {
       </template>
       <span v-else class="index-name">{{ preview.current?.name ?? "预览" }}</span>
     </div>
-    <div v-if="preview.viewable" class="zoom-group">
-      <SideSlider v-model="zoomPct" :min="2" :max="800" />
-      <span class="zoom-text">{{ Math.round(preview.zoom * 100) }}%</span>
+    <div v-if="preview.viewable || preview.kind === 'font'" class="zoom-group">
+      <!-- 字体：尺寸滑块 = 演示文本字号（12–72px，会话态 preview.fontSize，读值 px）；
+           其余查看器媒体 = 缩放百分比（瞄点视图中心） -->
+      <template v-if="preview.kind === 'font'">
+        <SideSlider v-model="preview.fontSize" :min="12" :max="72" />
+        <span class="zoom-text">{{ preview.fontSize }}px</span>
+      </template>
+      <template v-else>
+        <SideSlider v-model="zoomPct" :min="2" :max="800" />
+        <span class="zoom-text">{{ Math.round(preview.zoom * 100) }}%</span>
+      </template>
     </div>
     <div class="btn-group">
       <!-- 插件（2026-09-06 接业务 = 插件列表面板浮层，预览子窗口同可开——宿主 App.vue 层） -->

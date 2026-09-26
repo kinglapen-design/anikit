@@ -3,8 +3,10 @@
 // 结构 = 头部（名称 超大标题档 + FontInstallButton 安装圆钮 + 全名 标题档）→ SegmentedControl text 通栏
 // （预览/其他两段；稿四段的 大小/字形 仍后置 09 待办）→ 页区（顶 2px g4 线 + padding 12 0）。
 // 预览页 = 演示文本（origin 经 FontFace API 加载，webview 原生排版，后端不重渲染）：
-// H1 居中 MarkDown/H1 档 + 正文 MarkDown/正文档，默认字号对齐稿值（正文 15 / 标题 ×2=30）；
-// 底部字号滑杆稿未画 = 现行为保留（悬浮底部居中）。
+// 文本源 = assets/text/荷塘月色_中文.md + 荷塘月色_英文.md（?raw 构建期内联；中文全文 + 英译全文双段排布，
+// 中英字体形态都看得出）；H1 居中 MarkDown/H1 档 + 正文 MarkDown/正文档，默认字号对齐稿值（正文 15 / 标题 ×2=30）。
+// 字号控制 = 顶部预览工具栏尺寸滑块（会话态 preview.fontSize；2026-09-26 用户定：预览区底部悬浮滑杆废——
+// 稿预览工具栏本有尺寸滑块位）。
 // 其他页 = name 表元数据卡（g2 底 + 1px g3 描边 + 圆角 8；行间 1px g3 顶线；
 // 行 = 标签 按钮文字-大 三级 ↔ 值 按钮文字 二级 两端对齐）。
 // 安装口径（2026-08-23 用户痛点定案）：用户级安装（HKCU 注册表 + 用户字体目录 + 广播），
@@ -15,10 +17,11 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import FontInstallButton from "./buttons/FontInstallButton.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ScrollThumb from "./ScrollThumb.vue";
-import SideSlider from "./SideSlider.vue";
 import { getFontInfo, installFont, uninstallFont, type FontInfo } from "../lib/fontOps";
 import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 import { useToastStore } from "../stores/toast";
+import DEMO_ZH_RAW from "../../assets/text/荷塘月色_中文.md?raw";
+import DEMO_EN_RAW from "../../assets/text/荷塘月色_英文.md?raw";
 
 const preview = inject(PREVIEW_SESSION_KEY)!;
 const toast = useToastStore();
@@ -28,22 +31,31 @@ const TABS = [
   { value: "info", label: "其他" },
 ];
 
-// 演示文本（Eagle 同款英译《荷塘月色》标题与选段 + 中文一段兰亭集序——中文字体也要看得出中文形态）
-const DEMO_TITLE = "Moonlight over the Lotus Pond";
-const DEMO_EN =
-  "It has been rather disquieting these days. Tonight, when I was sitting in the yard enjoying the cool, " +
-  "it occurred to me that the Lotus Pond, which I pass by every day, must assume quite a different look " +
-  "in such moonlit night. A full moon was rising high in the sky; the laughter of children playing " +
-  "outside had died away; in the room, my wife was patting the son, Run-er, sleepily humming a cradle song.";
-const DEMO_ZH =
-  "永和九年，岁在癸丑，暮春之初，会于会稽山阴之兰亭，修禊事也。群贤毕至，少长咸集。" +
-  "此地有崇山峻岭，茂林修竹，又有清流激湍，映带左右，引以为流觞曲水，列坐其次。";
+// 演示文本块（标题 / 正文）。源 md 极简解析：## 行 = 标题块，其余非空段（空行分隔）= 正文块；
+// > 引用 / *斜体* / <u> 下划线标记一律剥离——演示文本只取纯文本看字形
+type DemoBlock = { kind: "title" | "para"; text: string };
+function parseDemo(raw: string): DemoBlock[] {
+  const out: DemoBlock[] = [];
+  for (const chunk of raw.split(/\n\s*\n/)) {
+    let t = chunk.trim();
+    if (!t) continue;
+    const h = /^#{1,6}\s+(.*)$/.exec(t);
+    if (h) {
+      out.push({ kind: "title", text: h[1].trim() });
+      continue;
+    }
+    t = t.replace(/^>\s?/, "").replace(/<\/?u>/g, "");
+    if (t.length > 1 && t.startsWith("*") && t.endsWith("*")) t = t.slice(1, -1).trim();
+    out.push({ kind: "para", text: t });
+  }
+  return out;
+}
+const DEMO_BLOCKS: DemoBlock[] = [...parseDemo(DEMO_ZH_RAW), ...parseDemo(DEMO_EN_RAW)];
 
 const tab = ref("preview");
 const info = ref<FontInfo | null>(null);
 const loadError = ref<string | null>(null);
 const fontReady = ref(false);
-const fontSize = ref(15); // 演示文本正文字号（标题 ×2）——默认对齐稿值（正文 15 / H1 30），滑杆 12-72 行为不变
 const busy = ref(false); // 安装 / 卸载在途
 const previewScrollRef = ref<HTMLElement>();
 const infoScrollRef = ref<HTMLElement>();
@@ -141,19 +153,17 @@ const rows = computed(() => {
         <span v-if="headerSub" class="sub">{{ headerSub }}</span>
       </div>
       <SegmentedControl v-model="tab" :options="TABS" variant="text" />
-      <!-- 预览页：演示文本（滚动区）+ 底部字号滑杆 -->
+      <!-- 预览页：演示文本（滚动区；字号由顶部预览工具栏尺寸滑块控制 = preview.fontSize） -->
       <div v-show="tab === 'preview'" class="page">
         <div ref="previewScrollRef" class="scroll kit-scroll">
           <div class="demo" :style="demoStyle">
-            <h1 class="demo-title" :style="{ fontSize: `${fontSize * 2}px` }">{{ DEMO_TITLE }}</h1>
-            <p class="demo-body" :style="{ fontSize: `${fontSize}px` }">{{ DEMO_EN }}</p>
-            <p class="demo-body" :style="{ fontSize: `${fontSize}px` }">{{ DEMO_ZH }}</p>
+            <template v-for="(b, i) in DEMO_BLOCKS" :key="i">
+              <h1 v-if="b.kind === 'title'" class="demo-title" :style="{ fontSize: `${preview.fontSize * 2}px` }">{{ b.text }}</h1>
+              <p v-else class="demo-body" :style="{ fontSize: `${preview.fontSize}px` }">{{ b.text }}</p>
+            </template>
           </div>
         </div>
         <ScrollThumb :body="previewScrollRef" />
-        <div class="size-bar">
-          <SideSlider v-model="fontSize" :min="12" :max="72" style="width: 240px" />
-        </div>
       </div>
       <!-- 其他页：元数据卡（行 = 标签 ↔ 值 两端对齐，行间 1px g3 顶线） -->
       <div v-show="tab === 'info'" class="page">
@@ -242,12 +252,11 @@ const rows = computed(() => {
   flex: 1;
   min-height: 0;
 }
-/* 演示文本：块间 gap 12（稿 预览文章 gap）；底部 72 给悬浮滑杆留位（现行为值） */
+/* 演示文本：块间 gap 12（稿 预览文章 gap） */
 .demo {
   display: flex;
   flex-direction: column;
   gap: var(--n-space-12);
-  padding-bottom: var(--n-space-72);
 }
 /* 稿 H1 居中 MarkDown/H1 档（行高比 40/30；字号随滑杆动态，默认 30 贴稿） */
 .demo-title {
@@ -262,13 +271,6 @@ const rows = computed(() => {
   margin: 0;
   line-height: 1.667;
   color: var(--n-md-body);
-}
-/* 底部字号滑杆（稿未画，现行为保留：底部居中悬浮；±按钮无图标不配） */
-.size-bar {
-  position: absolute;
-  left: 50%;
-  bottom: var(--n-space-16);
-  transform: translateX(-50%);
 }
 /* 稿 信息列表：通用/二级底 + 1px 通用/三级描边 + 圆角 8（全局 border-box，border 内收不占外廓） */
 .info-list {
