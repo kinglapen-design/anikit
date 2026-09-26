@@ -3,10 +3,13 @@
 // 结构 = 头部（名称 超大标题档 + FontInstallButton 安装圆钮 + 全名 标题档）→ SegmentedControl text 通栏
 // （预览/其他两段；稿四段的 大小/字形 仍后置 09 待办）→ 页区（顶 2px g4 线 + padding 12 0）。
 // 预览页 = 演示文本（origin 经 FontFace API 加载，webview 原生排版，后端不重渲染）：
-// 文本源 = assets/text/荷塘月色_中文.md + 荷塘月色_英文.md（?raw 构建期内联；中文全文 + 英译全文双段排布，
-// 中英字体形态都看得出）；H1 居中 MarkDown/H1 档 + 正文 MarkDown/正文档，默认字号对齐稿值（正文 15 / 标题 ×2=30）。
+// 文本源 = assets/text/荷塘月色_中文.md + 荷塘月色_英文.md（?raw 构建期内联）——中英文按 info.hasCjk
+// 分流切换（2026-09-26 用户定：中文字体只放中文、英文/其他字体放英文，非双语同屏；同卡片示例字分流口径），
+// md 样式保留 = 引用块（左 2px g3 竖线 + 引用色 + 斜体）与 <u> 下划线；H1 居中 MarkDown/H1 档 +
+// 正文 MarkDown/正文档，默认字号对齐稿值（正文 15 / 标题 ×2=30）。
 // 字号控制 = 顶部预览工具栏尺寸滑块（会话态 preview.fontSize；2026-09-26 用户定：预览区底部悬浮滑杆废——
-// 稿预览工具栏本有尺寸滑块位）。
+// 稿预览工具栏本有尺寸滑块位）。滚动容器通宽、72 版心下放子级——悬浮滚轮贴中间面板右缘
+//（2026-09-26 用户定，同 MD 预览口径）。
 // 其他页 = name 表元数据卡（g2 底 + 1px g3 描边 + 圆角 8；行间 1px g3 顶线；
 // 行 = 标签 按钮文字-大 三级 ↔ 值 按钮文字 二级 两端对齐）。
 // 安装口径（2026-08-23 用户痛点定案）：用户级安装（HKCU 注册表 + 用户字体目录 + 广播），
@@ -31,26 +34,33 @@ const TABS = [
   { value: "info", label: "其他" },
 ];
 
-// 演示文本块（标题 / 正文）。源 md 极简解析：## 行 = 标题块，其余非空段（空行分隔）= 正文块；
-// > 引用 / *斜体* / <u> 下划线标记一律剥离——演示文本只取纯文本看字形
-type DemoBlock = { kind: "title" | "para"; text: string };
+// 演示文本块（标题 / 正文 / 引用）。源 md 极简解析：## 行 = 标题块；> 开头 = 引用块（整段 *斜体*
+// 脱壳、样式由 .demo-quote 承担）；其余非空段（空行分隔）= 正文块。md 样式保留口径（2026-09-26 用户定）：
+// 引用与 <u> 下划线留着看字形——html 先全文转义再恢复 u 标签（源文件构建期内联可信，防将来混入其它 HTML）
+type DemoBlock = { kind: "title" | "para" | "quote"; html: string };
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 function parseDemo(raw: string): DemoBlock[] {
   const out: DemoBlock[] = [];
   for (const chunk of raw.split(/\n\s*\n/)) {
-    let t = chunk.trim();
+    const t = chunk.trim();
     if (!t) continue;
     const h = /^#{1,6}\s+(.*)$/.exec(t);
     if (h) {
-      out.push({ kind: "title", text: h[1].trim() });
+      out.push({ kind: "title", html: escapeHtml(h[1].trim()) });
       continue;
     }
-    t = t.replace(/^>\s?/, "").replace(/<\/?u>/g, "");
-    if (t.length > 1 && t.startsWith("*") && t.endsWith("*")) t = t.slice(1, -1).trim();
-    out.push({ kind: "para", text: t });
+    const quote = t.startsWith(">");
+    let body = quote ? t.replace(/^>\s?/, "") : t;
+    if (body.length > 1 && body.startsWith("*") && body.endsWith("*")) body = body.slice(1, -1);
+    const html = escapeHtml(body.trim()).replace(/&lt;(\/?)u&gt;/g, "<$1u>");
+    out.push({ kind: quote ? "quote" : "para", html });
   }
   return out;
 }
-const DEMO_BLOCKS: DemoBlock[] = [...parseDemo(DEMO_ZH_RAW), ...parseDemo(DEMO_EN_RAW)];
+const DEMO_ZH_BLOCKS = parseDemo(DEMO_ZH_RAW);
+const DEMO_EN_BLOCKS = parseDemo(DEMO_EN_RAW);
 
 const tab = ref("preview");
 const info = ref<FontInfo | null>(null);
@@ -63,6 +73,10 @@ const infoScrollRef = ref<HTMLElement>();
 // 预览字体 family（按 assetId 命名防与系统字体冲突；未就绪时回退系统字体，加载完成即热替换）
 const family = computed(() => `anikit-font-${preview.current?.assetId ?? "none"}`);
 const demoStyle = computed(() => (fontReady.value ? { fontFamily: `"${family.value}", sans-serif` } : undefined));
+
+// 中英文分流切换（2026-09-26 用户定：中文字体只放中文、英文/其他字体放英文——同卡片示例字 hasCjk
+// 分流口径；info 未载完默认中文 = 稿 H1 荷塘月色语境）
+const demoBlocks = computed(() => ((info.value?.hasCjk ?? true) ? DEMO_ZH_BLOCKS : DEMO_EN_BLOCKS));
 
 // 头部：名称 = 字体内部 name（未载完回退素材名）；副标题 = 全名（稿 名称+安装按钮 / AlibabaPuHuiTiM 两行结构）
 const headerName = computed(() => info.value?.name || preview.current?.name || "");
@@ -152,14 +166,17 @@ const rows = computed(() => {
         </div>
         <span v-if="headerSub" class="sub">{{ headerSub }}</span>
       </div>
-      <SegmentedControl v-model="tab" :options="TABS" variant="text" />
-      <!-- 预览页：演示文本（滚动区；字号由顶部预览工具栏尺寸滑块控制 = preview.fontSize） -->
+      <div class="seg-wrap">
+        <SegmentedControl v-model="tab" :options="TABS" variant="text" />
+      </div>
+      <!-- 预览页：演示文本（滚动容器通宽 = 悬浮滚轮贴面板右缘；字号 = 顶部预览工具栏尺寸滑块 preview.fontSize） -->
       <div v-show="tab === 'preview'" class="page">
         <div ref="previewScrollRef" class="scroll kit-scroll">
           <div class="demo" :style="demoStyle">
-            <template v-for="(b, i) in DEMO_BLOCKS" :key="i">
-              <h1 v-if="b.kind === 'title'" class="demo-title" :style="{ fontSize: `${preview.fontSize * 2}px` }">{{ b.text }}</h1>
-              <p v-else class="demo-body" :style="{ fontSize: `${preview.fontSize}px` }">{{ b.text }}</p>
+            <template v-for="(b, i) in demoBlocks" :key="i">
+              <h1 v-if="b.kind === 'title'" class="demo-title" :style="{ fontSize: `${preview.fontSize * 2}px` }" v-html="b.html" />
+              <p v-else-if="b.kind === 'quote'" class="demo-quote" :style="{ fontSize: `${preview.fontSize}px` }" v-html="b.html" />
+              <p v-else class="demo-body" :style="{ fontSize: `${preview.fontSize}px` }" v-html="b.html" />
             </template>
           </div>
         </div>
@@ -193,21 +210,27 @@ const rows = computed(() => {
   background: var(--n-g1);
   user-select: text; /* 演示文本 / 元数据可选中复制（stage 全局 none 覆盖回） */
 }
-/* 稿 显示范围：column padding 0 72 + gap 12（0.72 不透明度 = figma mock 调灰，色值已是终稿档，不乘） */
+/* 稿 显示范围：column + gap 12（0.72 不透明度 = figma mock 调灰，色值已是终稿档，不乘）；
+   横向 72 版心下放到各子级——滚动容器通宽，悬浮滚轮贴中间面板右缘（2026-09-26 用户定，同 MD 预览口径） */
 .range {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--n-space-12);
-  padding: 0 var(--n-space-72);
 }
-/* 稿 字体名称+安装按钮 块：column gap 4 */
+/* 稿 字体名称+安装按钮 块：column gap 4（72 版心） */
 .head {
   flex: none;
   display: flex;
   flex-direction: column;
   gap: var(--n-space-4);
+  padding: 0 var(--n-space-72);
+}
+/* 分段控制器通栏（72 版心内） */
+.seg-wrap {
+  flex: none;
+  padding: 0 var(--n-space-72);
 }
 /* 稿 名称+安装按钮 行：space-between 居中（gap 稿值 10 无档，就近 --n-space-8） */
 .name-row {
@@ -238,19 +261,27 @@ const rows = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 稿 预览文章 / 其他 页：顶 2px 通用/四级线 + padding 12 0 */
+/* 稿 预览文章 / 其他 页：通宽（悬浮滚轮贴面板右缘）；顶 2px 通用/四级线以 ::before 收 72 版心 +
+   线下 12 间隙（原 border-top 随通宽化移此，视觉同稿），页底 12 */
 .page {
   position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-top: 2px solid var(--n-g4);
-  padding: var(--n-space-12) 0;
+  padding-bottom: var(--n-space-12);
 }
+.page::before {
+  content: "";
+  flex: none;
+  margin: 0 var(--n-space-72) var(--n-space-12);
+  border-top: 2px solid var(--n-g4);
+}
+/* 滚动容器通宽，72 版心由容器横向 padding 承担（ScrollThumb 在容器外的 page 右缘 = 面板右缘） */
 .scroll {
   flex: 1;
   min-height: 0;
+  padding: 0 var(--n-space-72);
 }
 /* 演示文本：块间 gap 12（稿 预览文章 gap） */
 .demo {
@@ -271,6 +302,16 @@ const rows = computed(() => {
   margin: 0;
   line-height: 1.667;
   color: var(--n-md-body);
+}
+/* 引用块（源 md > *…*，2026-09-26 用户定 md 样式保留）：MarkDown 引用口径——左 2px 通用/三级竖线 +
+   padding 4/0/4/16 + MarkDown/引用色 + 斜体（行高比同正文）；<u> 下划线走 UA 默认，不再另配 */
+.demo-quote {
+  margin: 0;
+  padding: var(--n-space-4) 0 var(--n-space-4) var(--n-space-16);
+  border-left: 2px solid var(--n-g3);
+  font-style: italic;
+  line-height: 1.667;
+  color: var(--n-md-other);
 }
 /* 稿 信息列表：通用/二级底 + 1px 通用/三级描边 + 圆角 8（全局 border-box，border 内收不占外廓） */
 .info-list {
