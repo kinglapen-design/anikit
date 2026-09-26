@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 use crate::core::json_io::{read_json, write_json, DataError};
 use crate::core::library::{self, FOLDERS_FILE, RECYCLE_FILE};
-use crate::core::models::{FoldersFile, RecycleFile, SpaceFile};
+use crate::core::models::{AssetMeta, FoldersFile, RecycleFile, SpaceFile};
 use crate::core::paths;
 
 pub const SPACE_FILE: &str = "space.json";
@@ -174,6 +174,27 @@ pub fn library_orphans(space_root: &Path, name: &str) -> Result<HashSet<String>,
     }
   }
   Ok(own.difference(&others).cloned().collect())
+}
+
+/// 库容量（合并资源库弹窗容量列，2026-09-26）：引用资产集（folders ∪ recycle，口径同孤儿判定）
+/// 的 metadata.size 求和——资产实体在空间级 assets 池多库共享，"库容量"= 该库引用资产的合计。
+/// 按 ID 经 core::paths 推导读 metadata（不枚举 assets/）；info / metadata 缺失或损坏跳过不计
+pub fn library_size(space_root: &Path, name: &str) -> Result<u64, DataError> {
+  let lib_dir = space_root.join(name);
+  if !(lib_dir.is_dir() && lib_dir.join(FOLDERS_FILE).is_file()) {
+    return Err(DataError::NotALibrary);
+  }
+  let assets = paths::assets_dir(space_root);
+  let mut total = 0u64;
+  for id in referenced_assets(&lib_dir)? {
+    let meta_path = paths::info_dir(&assets, &id).join("metadata.json");
+    if meta_path.is_file() {
+      if let Ok(meta) = read_json::<AssetMeta>(&meta_path) {
+        total += meta.size;
+      }
+    }
+  }
+  Ok(total)
 }
 
 /// 删除资源库（3.2 删除×；确认弹窗在前端）：整个库目录递归删除，库内数据文件删除不可恢复；
@@ -407,5 +428,42 @@ mod tests {
     assert!(matches!(delete_library(&mut space, "不存在", false), Err(DataError::NotALibrary)));
     fs::create_dir_all(space.root.join("普通目录")).unwrap();
     assert!(matches!(delete_library(&mut space, "普通目录", false), Err(DataError::NotALibrary)));
+  }
+
+  /// library_size（合并弹窗容量列）：引用资产（folders ∪ recycle）的 metadata.size 求和；
+  /// 未被他库引用不扣减（共享资产各库都计）；metadata 缺失跳过；非库目录报错
+  #[test]
+  fn library_size_sums_referenced_metadata() {
+    let dir = tempfile::tempdir().unwrap();
+    let space = create(dir.path(), "空间", false).unwrap();
+    let assets = paths::assets_dir(&space.root);
+    // 两个资产：被引用 100B、回收站引用 50B；未引用 999B 不计
+    for (id, size) in [("AN-A", 100u64), ("AN-R", 50), ("AN-X", 999)] {
+      let info = paths::info_dir(&assets, id);
+      fs::create_dir_all(&info).unwrap();
+      fs::write(
+        info.join("metadata.json"),
+        format!(
+          r#"{{ "version": 1, "id": "{id}", "name": "{id}", "originName": "{id}.fla", "ext": "fla",
+               "size": {size}, "importedAt": "2026-09-26T00:00:00+08:00", "modifiedAt": "2026-09-26T00:00:00+08:00" }}"#
+        ),
+      )
+      .unwrap();
+    }
+    let lib_dir = space.root.join("库A");
+    fs::create_dir_all(&lib_dir).unwrap();
+    fs::write(
+      lib_dir.join(FOLDERS_FILE),
+      r#"{ "version": 1, "folders": [], "items": [ { "asset": "AN-A", "folder": "root", "name": "A.fla", "order": 0, "origin": true } ] }"#,
+    )
+    .unwrap();
+    fs::write(
+      lib_dir.join(RECYCLE_FILE),
+      r#"{ "version": 1, "items": [ { "asset": "AN-R", "placements": [], "deletedAt": "2026-09-26T01:00:00+08:00" } ] }"#,
+    )
+    .unwrap();
+
+    assert_eq!(library_size(&space.root, "库A").unwrap(), 150, "folders ∪ recycle 引用求和");
+    assert!(matches!(library_size(&space.root, "不存在"), Err(DataError::NotALibrary)));
   }
 }

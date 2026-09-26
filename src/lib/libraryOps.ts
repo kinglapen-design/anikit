@@ -176,18 +176,36 @@ export function requestLibrarySetup(): void {
   createLibraryModalState.open = true;
 }
 
-// 合并资源库（菜单触发，2026-09-08 布局/模态窗口稿纯 UI 轮）：弹窗列表数据 = 当前空间已登记的
-// 其余库（排除当前库）——打开时加载快照进 state（预览页陈列走 mock props，不经此处）；
-// 容量列与合并动作后端未实现，随功能轮补
-export const mergeLibraryModalState = reactive<{ open: boolean; names: string[] }>({
+// 合并资源库（2026-09-08 弹窗 UI / 2026-09-26 功能轮）：弹窗列表 = 当前空间其余库 + 容量
+//（list_merge_candidates 一次返回，打开时加载快照进 state；预览页陈列走 mock props 不经此处）；
+// 确认 = 勾选项（多选）并入当前打开库（merge_libraries），源库目录删除；成功全量刷新 + toast 带音
+export interface MergeCandidate {
+  name: string;
+  sizeBytes: number;
+}
+
+export const mergeLibraryModalState = reactive<{ open: boolean; items: MergeCandidate[] }>({
   open: false,
-  names: [],
+  items: [],
 });
 
 export async function requestMergeLibrary(): Promise<void> {
-  const { names } = await loadLibraries();
-  mergeLibraryModalState.names = names.filter((n) => n !== currentLibrary.name);
+  const items = await invoke<MergeCandidate[]>("list_merge_candidates").catch(() => [] as MergeCandidate[]);
+  mergeLibraryModalState.items = items;
   mergeLibraryModalState.open = true;
+}
+
+// 合并确认（弹窗确认钮；空选择在弹窗侧不响应，不会调到这里）
+export async function confirmMergeLibraries(names: string[]): Promise<void> {
+  const toast = useToastStore();
+  try {
+    const info = await invoke<LibraryInfo>("merge_libraries", { names });
+    mergeLibraryModalState.open = false;
+    await useContentStore().refresh();
+    toast.notify({ message: `已将 ${names.length} 个资源库并入「${info.name}」`, icon: "success", sound: true, duration: 3000 });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+  }
 }
 
 // 删除资源库（08 稿 item 删除×）：确认弹窗状态 + 执行。

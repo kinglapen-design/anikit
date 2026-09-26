@@ -588,13 +588,8 @@ pub(crate) fn sha256_bytes(bytes: &[u8]) -> String {
 
 /// 生成文件夹 ID：`F` + 时间戳（yyMMddHHmm，时间有序）+ 3 位随机字符（防同秒冲突）。
 /// 参照 new_asset_id 风格；假数据里的 F01/F02 是人工示例，实际生成用此规则。
-pub(crate) fn new_folder_id() -> String {
-  const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  use rand::Rng;
-  let mut rng = rand::thread_rng();
-  let suffix: String = (0..3).map(|_| ALPHABET[rng.gen_range(0..ALPHABET.len())] as char).collect();
-  format!("F{}-{suffix}", chrono::Local::now().format("%y%m%d%H%M"))
-}
+///（2026-09-26 上移 core::models——库合并撞 id 重生成同用；此处转接保持 `ops::new_folder_id()` 口径不变）
+pub(crate) use crate::core::models::new_folder_id;
 
 /// Placement 显示名 / metadata.originName：含扩展名的文件名
 pub(crate) fn file_name(path: &Path) -> String {

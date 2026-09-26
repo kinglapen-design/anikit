@@ -5,6 +5,7 @@
 //! - paths：assets 池路径推导单点（ID → info 路径）
 //! - space：储存空间创建 / 校验 / 打开（PRD 01_储存空间）
 //! - library：素材库创建 / 校验 / 打开
+//! - merge：资源库合并（源库数据并入当前库的纯数据口径，PRD 01_储存空间 3.2）
 //! - index：内存索引（Asset ↔ Placement 反查）
 //! - backup：滚动备份（10 份）
 //! - migrate：版本迁移骨架
@@ -15,6 +16,7 @@ pub mod config;
 pub mod index;
 pub mod json_io;
 pub mod library;
+pub mod merge;
 pub mod migrate;
 pub mod models;
 pub mod notes;

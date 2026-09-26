@@ -325,10 +325,10 @@ async function togglePin(): Promise<void> {
     />
     <!-- 菜单"新建资源库"（16 稿独立弹窗） -->
     <CreateLibraryModal v-if="createLibraryModalState.open" @close="createLibraryModalState.open = false" />
-    <!-- 菜单"合并资源库"（2026-09-08 布局/模态窗口稿纯 UI 轮：列表 = 已登记其余库，合并动作未实接） -->
+    <!-- 菜单"合并资源库"（2026-09-08 稿；2026-09-26 功能轮接通：勾选项并入当前库） -->
     <MergeLibraryModal
       v-if="mergeLibraryModalState.open"
-      :names="mergeLibraryModalState.names"
+      :items="mergeLibraryModalState.items"
       @close="mergeLibraryModalState.open = false"
     />
     <!-- 删除资源库确认（08 稿 item 删除×；09 稿 alert 侵入式配提示音——watch 播音见上；

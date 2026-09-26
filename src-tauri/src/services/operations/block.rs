@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use crate::core::library::{self, Library};
-use crate::core::models::{Block, DEFAULT_BLOCK_ID};
+use crate::core::models::{new_block_id, Block, DEFAULT_BLOCK_ID};
 
 use super::sync_folder_index;
 
@@ -40,15 +40,7 @@ pub struct ApplyBlockReport {
   pub blocks: Vec<BlockDeleteConflict>,
 }
 
-/// 生成区块 ID：`B` + 时间戳（yyMMddHHmm，时间有序）+ 3 位随机字符（对齐 new_folder_id 风格）
-fn new_block_id() -> String {
-  const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  use rand::Rng;
-  let mut rng = rand::thread_rng();
-  let suffix: String = (0..3).map(|_| ALPHABET[rng.gen_range(0..ALPHABET.len())] as char).collect();
-  format!("B{}-{suffix}", chrono::Local::now().format("%y%m%d%H%M"))
-}
-
+/// 生成区块 ID：2026-09-26 上移 core::models（库合并撞 id 重生成同用），此处直接引用
 /// 草稿式一次提交：blocks = 最终保留的全部区块（数组序 = 显示顺序，order 连续重写 0..n，
 /// 对齐 reorder_folders 做法）；deleted = 待删区块 id。
 /// deleted 含非空区块（存在 Folder.block 指向它的顶级文件夹）且 confirmed = false 时返回

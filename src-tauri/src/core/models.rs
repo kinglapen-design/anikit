@@ -31,6 +31,28 @@ pub fn new_asset_id() -> String {
   format!("AN{}-{suffix}", chrono::Local::now().format("%y%m%d%H%M"))
 }
 
+/// 生成文件夹 ID：`F` + 时间戳（yyMMddHHmm，时间有序）+ 3 位随机字符（防同秒冲突）。
+/// 参照 new_asset_id 风格；假数据里的 F01/F02 是人工示例，实际生成用此规则。
+///（2026-09-26 自 services/import.rs 上移 core——库合并撞 id 重生成需要用，core 不反向依赖
+/// services；services/import.rs 以 pub(crate) use 转出口径不变，同 ROOT_FOLDER_ID 先例）
+pub fn new_folder_id() -> String {
+  const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  use rand::Rng;
+  let mut rng = rand::thread_rng();
+  let suffix: String = (0..3).map(|_| ALPHABET[rng.gen_range(0..ALPHABET.len())] as char).collect();
+  format!("F{}-{suffix}", chrono::Local::now().format("%y%m%d%H%M"))
+}
+
+/// 生成区块 ID：`B` + 时间戳（yyMMddHHmm，时间有序）+ 3 位随机字符（对齐 new_folder_id 风格）；
+/// 2026-09-26 自 services/operations/block.rs 上移 core（库合并撞 id 重生成同用）
+pub fn new_block_id() -> String {
+  const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  use rand::Rng;
+  let mut rng = rand::thread_rng();
+  let suffix: String = (0..3).map(|_| ALPHABET[rng.gen_range(0..ALPHABET.len())] as char).collect();
+  format!("B{}-{suffix}", chrono::Local::now().format("%y%m%d%H%M"))
+}
+
 fn is_false(v: &bool) -> bool {
   !*v
 }

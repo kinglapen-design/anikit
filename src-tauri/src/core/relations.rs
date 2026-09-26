@@ -50,6 +50,33 @@ pub fn prune_relations(file: &mut RelationsFile, lib_name: &str, folders: &Folde
   before != file.relations.len()
 }
 
+/// 库合并配套（2026-09-26，PRD 01_储存空间 3.2）：源库并入目标库后，端点 lib 指向源库的关系
+/// 改写为目标库——档案端点 id 随 folder_map 重映射（资产端点 id 不动：assets 池空间级共享，
+/// 合并不迁实体）；名称快照不动（跨库显示兜底语义不变）。返回是否有改动（有改动由调用方落盘）
+pub fn rewrite_lib_refs(
+  file: &mut RelationsFile,
+  from_lib: &str,
+  to_lib: &str,
+  folder_map: &std::collections::HashMap<String, String>,
+) -> bool {
+  let mut changed = false;
+  for r in &mut file.relations {
+    for endpoint in [&mut r.from, &mut r.to] {
+      if endpoint.lib != from_lib {
+        continue;
+      }
+      endpoint.lib = to_lib.to_string();
+      if endpoint.kind == "archive" {
+        if let Some(new_id) = folder_map.get(&endpoint.id) {
+          endpoint.id = new_id.clone();
+        }
+      }
+      changed = true;
+    }
+  }
+  changed
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -103,5 +130,23 @@ mod tests {
     assert_eq!(ids, vec!["RL-1", "RL-4"]);
     // 再跑一遍无改动（幂等）
     assert!(!prune_relations(&mut file, "本库", &folders, &assets));
+  }
+
+  /// 库合并配套：指向源库的端点 lib 改写为目标库；档案端点 id 随 folder_map 重映射，
+  /// 资产端点 id 不动；无关端点不动；幂等
+  #[test]
+  fn rewrite_lib_refs_retargets_source_endpoints() {
+    let mut file = RelationsFile::new();
+    file.relations = vec![
+      rel("RL-1", rref("源库", "asset", "AN-1"), rref("目标库", "archive", "F-T")), // from 改写
+      rel("RL-2", rref("目标库", "asset", "AN-2"), rref("源库", "archive", "F-OLD")), // to 改写 + 档案 id 重映射
+      rel("RL-3", rref("他库", "asset", "AN-3"), rref("目标库", "asset", "AN-4")), // 无关不动
+    ];
+    let folder_map: std::collections::HashMap<String, String> = [("F-OLD".to_string(), "F-NEW".to_string())].into_iter().collect();
+    assert!(rewrite_lib_refs(&mut file, "源库", "目标库", &folder_map));
+    assert_eq!((file.relations[0].from.lib.as_str(), file.relations[0].from.id.as_str()), ("目标库", "AN-1"), "资产端点 id 不动");
+    assert_eq!((file.relations[1].to.lib.as_str(), file.relations[1].to.id.as_str()), ("目标库", "F-NEW"), "档案端点 id 重映射");
+    assert_eq!(file.relations[2].from.lib, "他库");
+    assert!(!rewrite_lib_refs(&mut file, "源库", "目标库", &folder_map), "幂等");
   }
 }

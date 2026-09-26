@@ -21,7 +21,11 @@ const mergeOpen = ref(false);
 const importFilesOpen = ref(false);
 const importFolderOpen = ref(false);
 const seqOpen = ref(false);
-const mockLibNames = ["沙雕动画资源库", "学习参考", "项目素材备份"];
+const mockLibItems = [
+  { name: "沙雕动画资源库", sizeBytes: 320 * 1024 ** 3 },
+  { name: "学习参考", sizeBytes: 12.6 * 1024 ** 3 },
+  { name: "项目素材备份", sizeBytes: 860 * 1024 ** 2 },
+];
 const draftFiles: ImportDraft = { kind: "files", paths: ["C:/演示/主角-走01.png"], targetFolder: null };
 const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素材"], targetFolder: null };
 </script>
@@ -130,7 +134,7 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
       </div>
     </div>
     <CreateLibraryModal v-if="createOpen" @close="createOpen = false" />
-    <MergeLibraryModal v-if="mergeOpen" :names="mockLibNames" @close="mergeOpen = false" />
+    <MergeLibraryModal v-if="mergeOpen" :items="mockLibItems" @close="mergeOpen = false" />
     <ImportDialog
       v-if="importFilesOpen"
       :draft="draftFiles"
