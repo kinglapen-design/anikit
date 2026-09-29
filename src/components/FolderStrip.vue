@@ -33,8 +33,10 @@ const tabs = useTabsStore();
 const ws = useWsStore();
 const folderOpen = ref(true);
 // 工作空间视口（PRD 02，2026-09-17 实机定：文件夹同库口径进网格）：导航 / 右键菜单 /
-// 简介行全部分流；库侧专属域（多选选择 / 剪切态 / 排序并入 data-folder-id）不适用——
-// 步骤 2 起 ws 文件夹卡片改挂 data-ws-folder（= rel）作素材移动拖拽落点，落点视觉 drop-into 同位
+// 简介行全部分流；2026-09-26 选中链接通（原「文件夹选择域不接合成 id」是步骤 2 未落地期的
+// 暂缓闸，写操作落地后遗留成"点击无选中反馈"）——ws 文件夹与文件同走素材选择域（ws: 合成键）；
+// 库侧专属域（剪切态 / 排序并入 data-folder-id）不适用——ws 文件夹卡片改挂 data-ws-folder（= rel）
+// 作素材移动拖拽落点，落点视觉 drop-into 同位
 const isWs = computed(() => props.viewKey.startsWith("ws:"));
 // 折叠切换：SectionTitle 守卫在调用方（§20——dragView.suppressClick 吞拖拽后紧随 click）
 function onFold(): void {
@@ -59,13 +61,21 @@ function folderLines(f: FolderNode): string[][] {
   ];
 }
 
+// ws 文件夹卡片选择键（2026-09-26）：与 ws 文件卡同域同键形 assetId|folderId（均 ws: 前缀合成；
+// viewKey = "ws:"+所在目录 rel 即 folderId 段）——ws 写操作全按路径，键仅作选择域身份
+const wsCardKey = (id: string): string => `ws:${id}|${props.viewKey}`;
+
 // 文件夹卡片选中（2026-07-28 复验反馈 5：迁 selection store 文件夹选择域——单击 = 单选 /
 // Ctrl+单击 = 加选切换 / Shift+单击 = 按条带顺序锚点范围选；与素材 / 收件箱条目互斥，
-// 互斥清理由 clickFolder 内部统一做）；有效拖拽结束后的紧随 click 不触发（C4 引擎置位）
+// 互斥清理由 clickFolder 内部统一做）；有效拖拽结束后的紧随 click 不触发（C4 引擎置位）。
+// ws 分流（2026-09-26）：文件夹进素材选择域（clickItem），三态与 Shift 条带顺序范围选同口径
 function onSelect(id: string, e: MouseEvent): void {
   if (dragView.suppressClick) return;
-  if (isWs.value) return; // ws：文件夹选择域不接合成 id（写操作归步骤 2）
   if (usePickerStore().active) return; // 选择模式（6.2）：文件夹不是可选目标，单击无操作（双击导航保留）
+  if (isWs.value) {
+    selection.clickItem(wsCardKey(id), { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey }, stripFolders.value.map((f) => wsCardKey(f.id)));
+    return;
+  }
   selection.clickFolder(
     id,
     { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey },
@@ -79,11 +89,13 @@ function onEnter(id: string): void {
   tabs.openView(isWs.value ? `ws:${id}` : `folder:${id}`);
 }
 
-// 右键（6.3；1.3 一轮按 05 稿 320 宽 + 搜索框）：未选中项先单选（与树 item 同规则），全局菜单宿主
-// 选择模式（6.2）：不入选择域，直接出菜单（spec 内精简为查看类）
-// ws：选择域不适用，直接出 ws 菜单（打开 / 资源管理器定位 / 刷新——无库写操作项）
+// 右键（6.3；1.3 一轮按 05 稿 320 宽 + 搜索框）：未选中项先单选（与树 item 同规则，ws 同口径），
+// 全局菜单宿主；选择模式（6.2）：不入选择域，直接出菜单（spec 内精简为查看类）；
+// ws 菜单 = wsFolderSpec（打开 / 重命名 / 复制 / 剪切 / 删除等按路径写操作，批量分流同 wsCardSpec）
 function onMenu(f: { id: string; name: string }, e: MouseEvent): void {
   if (isWs.value) {
+    const key = wsCardKey(f.id);
+    if (!selection.isSelected(key)) selection.clickItem(key);
     openContextMenu(e, wsFolderSpec(f.id, f.name), undefined);
     return;
   }
@@ -170,7 +182,7 @@ const gapBar = computed(() => {
         :name="f.name"
         :lines="folderLines(f)"
         class="cell"
-        :selected="!isWs && selection.isFolderSelected(f.id)"
+        :selected="isWs ? selection.isSelected(wsCardKey(f.id)) : selection.isFolderSelected(f.id)"
         :dimmed="!isWs && (dragView.folderIds?.has(f.id) ?? false)"
         :cut="!isWs && selection.isFolderCut(f.id)"
         :naming="namingId === f.id"

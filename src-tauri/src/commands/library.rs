@@ -64,8 +64,9 @@ pub(crate) fn to_info(lib: &Library) -> LibraryInfo {
 
 /// 空间进入打开状态：更新应用状态 + 记录到全局配置最近列表 + 按空间级 autoImport 启停收件箱
 /// （2026-08-12 用户定：inbox 空间级共用，盘符挂载恒定指向空间 inbox/、不随切库变化；
-/// 关 = 防御性停止，换掉开着收件箱的旧空间时卸干净）+ 启停工作空间监听（PRD 02 步骤 1：
-/// workspace/ 存在才监听，.anikit 缓存写回自激已滤）
+/// 关 = 防御性停止，换掉开着收件箱的旧空间时卸干净）+ 工作空间缓存版本迁移（2026-09-26
+/// 有界命名切换：旧命名 thumbs/peaks 一次性清空，纯缓存可重建）+ 启停工作空间监听
+/// （PRD 02 步骤 1：workspace/ 存在才监听，.anikit 缓存写回自激已滤）
 fn activate_space(app: &AppHandle, state: &State<AppState>, space: Space) -> Result<SpaceInfo, String> {
   let info = space_info(&space);
   let root = space.root.clone();
@@ -77,6 +78,7 @@ fn activate_space(app: &AppHandle, state: &State<AppState>, space: Space) -> Res
   } else {
     crate::services::inbox::stop(app);
   }
+  crate::services::workspace::migrate_cache(&root);
   crate::services::workspace::start_watch(app, &root);
   Ok(info)
 }

@@ -284,6 +284,61 @@ fn card_peaks(origin: &Path, meta: &AssetMeta, root: &Path, asset_id: &str) -> R
   Ok(peaks)
 }
 
+// ---------- 卡片波形 peaks · 按真实路径（2026-09-26 工作空间三类填充卡对接 · 音频卡） ----------
+
+/// 工作空间音频卡片波形 peaks：语义同 get_audio_peaks（恒定 128 根，前端卡片 catch 兜底空波形），
+/// 产物磁盘缓存换锚——库侧 cache/peaks/{assetId}.json+.stamp，ws 侧无资产 id 可挂，
+/// 仿 ws 缩略图口径存 workspace/.anikit/peaks/{job_key}.json（job_key 同源 = 截断 url-safe
+/// 前缀 + fnv64hex(rel) + mtime + size，全长有界，踩坑 092）：
+/// **文件名内嵌 mtime+size，按当前实况重算期望文件名存在即命中**（无 .stamp 旁文件）；
+/// 源变化 → 期望名变 → 重算并 purge_stale 顺清同 rel 旧缓存。越界 / 非音频中文报错；
+/// 解码走锁外线程池（规范第 2 条）
+#[tauri::command]
+pub async fn get_audio_peaks_by_path(state: State<'_, AppState>, abs_path: String) -> Result<Vec<f32>, String> {
+  let space = state.space.lock().map_err(|e| e.to_string())?.clone().ok_or_else(|| "请先打开储存空间".to_string())?;
+  let ws_root = space.root.join(WORKSPACE_DIR);
+  tauri::async_runtime::spawn_blocking(move || card_peaks_by_path(&ws_root, Path::new(&abs_path)))
+    .await
+    .map_err(|e| format!("波形 peaks 任务失败：{e}"))?
+}
+
+/// 按路径 peaks 实现（命令层薄壳，便于单测）：越界 / 非音频 = 中文 Err；
+/// 缓存命中判定同 ws 缩略图（重算期望文件名），复用判定先于二进制检查（同库侧口径）
+fn card_peaks_by_path(ws_root: &Path, origin: &Path) -> Result<Vec<f32>, String> {
+  if !origin.is_file() || !ws::is_under(ws_root, origin) {
+    return Err("路径不在当前工作空间内（或文件已不存在）".to_string());
+  }
+  if !media::is_audio(origin) {
+    let name = origin.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| origin.to_string_lossy().into_owned());
+    return Err(format!("「{name}」不是音频资源"));
+  }
+  let rel = ws::rel_of(ws_root, origin).ok_or_else(|| "路径不在当前工作空间内".to_string())?;
+  let meta = fs::metadata(origin).map_err(|e| format!("源文件读取失败：{e}"))?;
+  let mtime_ms = meta
+    .modified()
+    .ok()
+    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+    .map(|d| d.as_millis() as i64)
+    .unwrap_or(0);
+  let dir = ws_root.join(ws::CACHE_DIR).join("peaks");
+  let out = dir.join(format!("{}.json", ws::job_key(&rel, mtime_ms, meta.len())));
+  if out.is_file() {
+    let json = fs::read_to_string(&out).map_err(|e| format!("波形 peaks 读取失败：{e}"))?;
+    return serde_json::from_str(&json).map_err(|e| format!("波形 peaks 解析失败：{e}"));
+  }
+  if !ffmpeg::ffmpeg_available() {
+    return Err("音视频组件缺失，无法生成波形".to_string());
+  }
+  let Some(peaks) = media::audio_peaks(origin, media::CARD_PEAKS) else {
+    return Err("波形提取失败，请检查音频文件".to_string());
+  };
+  fs::create_dir_all(&dir).map_err(|e| format!("波形缓存目录创建失败：{e}"))?;
+  let json = serde_json::to_string(&peaks).map_err(|e| format!("波形 peaks 序列化失败：{e}"))?;
+  fs::write(&out, json).map_err(|e| format!("波形 peaks 保存失败：{e}"))?;
+  ws::purge_stale(&dir, &rel, &out);
+  Ok(peaks)
+}
+
 /// 产物旁的戳文件：media-{assetId}.mp4.stamp
 fn stamp_path(out: &Path) -> PathBuf {
   let mut s = out.as_os_str().to_os_string();
@@ -447,5 +502,63 @@ mod tests {
     // force 转码：假字节 / 无 ffmpeg 环境给两种中文文案之一
     let err = media_source_by_path(&ws_root, &mp4, true).unwrap_err();
     assert!(err.contains("该格式暂时无法播放") || err.contains("音视频组件缺失"), "{err}");
+  }
+
+  /// 按路径取卡片波形 peaks（2026-09-26 工作空间音频卡）：缓存键 = .anikit/peaks/
+  /// {job_key}.json（job_key 同 ws 缩略图 = 截断前缀+hash+mtime+size，文件名内嵌实况，
+  /// 存在即命中、无 .stamp）；命中直给（无 ffmpeg 也返回）；源变化 → 期望名变 → 失鲜重算
+  ///（假 mp3 解码失败中文错）；越界 / 不存在 / 非音频中文错
+  #[test]
+  fn card_peaks_by_path_cache_keyed_by_rel_mtime_size() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws_root = dir.path().join("workspace");
+    fs::create_dir_all(&ws_root).unwrap();
+    let mp3 = ws_root.join("配乐.mp3");
+    fs::write(&mp3, b"fake").unwrap();
+
+    // 预置期望名产物 → 命中直给（复用判定先于二进制检查：无 ffmpeg / 假字节也直接返回）
+    let meta = fs::metadata(&mp3).unwrap();
+    let mtime_ms = meta.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+    let peaks_dir = ws_root.join(ws::CACHE_DIR).join("peaks");
+    fs::create_dir_all(&peaks_dir).unwrap();
+    let expect = peaks_dir.join(format!("{}.json", ws::job_key("配乐.mp3", mtime_ms, meta.len())));
+    fs::write(&expect, "[0.1,0.5,1.0]").unwrap();
+    let peaks = card_peaks_by_path(&ws_root, &mp3).unwrap();
+    assert_eq!(peaks, vec![0.1f32, 0.5, 1.0]);
+
+    // 源变化（大小变）→ 期望名变 → 失鲜重算：假 mp3 解码失败给中文文案（无 ffmpeg 则组件缺失）
+    fs::write(&mp3, b"fake-changed-longer").unwrap();
+    let err = card_peaks_by_path(&ws_root, &mp3).unwrap_err();
+    assert!(err.contains("波形提取失败") || err.contains("组件缺失"), "{err}");
+
+    // 非音频 / 越界 / 不存在中文错
+    let txt = ws_root.join("笔记.txt");
+    fs::write(&txt, b"x").unwrap();
+    assert!(card_peaks_by_path(&ws_root, &txt).unwrap_err().contains("不是音频资源"));
+    let outside = dir.path().join("外.mp3");
+    fs::write(&outside, b"fake").unwrap();
+    assert!(card_peaks_by_path(&ws_root, &outside).unwrap_err().contains("不在当前工作空间"));
+    assert!(card_peaks_by_path(&ws_root, &ws_root.join("不存在.mp3")).unwrap_err().contains("不在当前工作空间"));
+  }
+
+  /// 深中文 rel（踩坑 092 实锤场景：旧「整条编码路径」命名 257 字符超 NTFS 255 组件上限
+  /// 写盘必败）：新命名有界可落盘、按期望名预置即命中
+  #[test]
+  fn card_peaks_by_path_deep_cjk_rel_bounded_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws_root = dir.path().join("workspace");
+    let rel = "02_创作/01_原创动画/01_计划中/224/01_灵感/05_音乐/不要去看天气预报.wav";
+    let wav = ws_root.join(rel);
+    fs::create_dir_all(wav.parent().unwrap()).unwrap();
+    fs::write(&wav, b"fake").unwrap();
+
+    let meta = fs::metadata(&wav).unwrap();
+    let mtime_ms = meta.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+    let name = format!("{}.json", ws::job_key(rel, mtime_ms, meta.len()));
+    assert!(name.len() <= 160, "peaks 缓存文件名有界：{}", name.len());
+    let peaks_dir = ws_root.join(ws::CACHE_DIR).join("peaks");
+    fs::create_dir_all(&peaks_dir).unwrap();
+    fs::write(peaks_dir.join(&name), "[0.25,0.75]").unwrap();
+    assert_eq!(card_peaks_by_path(&ws_root, &wav).unwrap(), vec![0.25f32, 0.75]);
   }
 }

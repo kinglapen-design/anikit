@@ -146,11 +146,13 @@ export const useSelectionStore = defineStore("selection", {
 
     // 卡片点击三态（2026-07-28 用户定案）：
     // 无修饰 = 单选（清空后选它，anchor = 它）；ctrl = 切换该项（anchor 跟到最后点击）；
-    // shift = 锚点（无则当前首项）到该项在当前视口顺序中的区间全选（清空后选区间，anchor 不动）
-    clickItem(key: string, mods: ClickMods = {}): void {
+    // shift = 锚点（无则当前首项）到该项在当前视口顺序中的区间全选（清空后选区间，anchor 不动）。
+    // order（2026-09-26 补）：范围选顺序调用方显式给（ws 文件夹卡片 = 条带顺序——文件夹不是
+    // Placement 不在 visiblePlacements）；缺省 = 当前视口素材可见序
+    clickItem(key: string, mods: ClickMods = {}, order?: string[]): void {
       this.clearFolders(); // 选素材清文件夹（互斥）
       if (mods.shift) {
-        const keys = useContentStore().visiblePlacements.map(keyOf);
+        const keys = order ?? useContentStore().visiblePlacements.map(keyOf);
         const to = keys.indexOf(key);
         if (to < 0) return;
         const fromKey = this.anchor ?? this.first;
@@ -245,7 +247,10 @@ export const useSelectionStore = defineStore("selection", {
     },
 
     // 选中项三元组清单（6.1 命令入参）：按当前视口顺序输出（稳定、与可见顺序一致），
-    // 视口外的选中项（切过目录未 prune 的极少窗口期）追加在后；origin 从 PlacementView 取
+    // 视口外的选中项（切过目录未 prune 的极少窗口期）追加在后；origin 从 PlacementView 取。
+    // ws 文件夹键兜底合成（2026-09-26 ws 文件夹卡片 / 树行选中入素材域）：文件夹不是
+    // Placement 查不到，按键形直合成——ws 写操作全按路径，只取 assetId 里的 rel；
+    // ws 键只在 ws 视口产生（切视图即清空），库命令路径收不到
     selectedRefs(): PlacementRef[] {
       const content = useContentStore();
       const byKey = new Map(content.placements.map((p) => [keyOf(p), p]));
@@ -261,7 +266,12 @@ export const useSelectionStore = defineStore("selection", {
       for (const k of this.selected) {
         if (seen.has(k)) continue;
         const p = byKey.get(k);
-        if (p) out.push({ assetId: p.assetId, folderId: p.folderId, origin: p.origin });
+        if (p) {
+          out.push({ assetId: p.assetId, folderId: p.folderId, origin: p.origin });
+        } else if (k.startsWith("ws:")) {
+          const [assetId, folderId] = k.split("|");
+          out.push({ assetId, folderId: folderId ?? "", origin: true });
+        }
       }
       return out;
     },
@@ -299,11 +309,12 @@ export const useSelectionStore = defineStore("selection", {
       for (const e of content.recycleEntries) valid.add(keyOf(e));
       for (const e of content.recentAssets) valid.add(keyOf(e));
       // 工作空间磁盘实况选中键（PRD 02 步骤 1）存活以 ws store 已缓存条目为准——
-      // 合成项不在 content.placements，不补判会被库 refresh 连带清掉
+      // 合成项不在 content.placements，不补判会被库 refresh 连带清掉；
+      // 2026-09-26 起目录键同样存活（ws 文件夹卡片 / 树行选中入素材域）
       const ws = useWsStore();
       for (const entries of ws.dirs.values()) {
         for (const e of entries) {
-          if (!e.isDir) valid.add(`ws:${e.relPath}|ws:${e.relPath.split("/").slice(0, -1).join("/")}`);
+          valid.add(`ws:${e.relPath}|ws:${e.relPath.split("/").slice(0, -1).join("/")}`);
         }
       }
       for (const k of [...this.selected]) {

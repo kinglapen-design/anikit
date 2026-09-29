@@ -48,6 +48,7 @@ const props = withDefaults(defineProps<FileCardProps>(), {
   peaks: () => [],
   fontLines: () => ["永和九年", "岁在癸丑", "AaBaCcDd", "01234567"],
   installed: false,
+  installable: true,
   textTitle: "",
   textBody: "",
   originBadge: false,
@@ -77,6 +78,10 @@ const { draft: nameDraft, bindInput, commit: commitName, onEsc: cancelName } = u
 
 // 内容形态查表（R5 注册表化）：kind → CardContentSpec；未注册 kind 回退 general
 const spec = computed(() => cardContentSpecFor(props.kind) ?? generalContentSpec);
+
+// 附加件显隐（2026-09-26 overlay when 谓词首例）：spec 声明静态清单，宿主按当前 props 过滤
+//（ws 字体卡 installable=false → 安装钮不出；无谓词的附加件恒渲染）
+const visibleOverlays = computed(() => (spec.value.overlays ?? []).filter((ov) => !ov.when || ov.when(props)));
 
 // 滚动胶囊（scrollThumb 形态 = text 卡）：内容溢出才显，轨道 = 内容区（卡 padding 12 内），跟随滚动；
 // 拇指在根层渲染（kc-clip 外——picked 压暗不波及）；滚动容器 = 内容件根元素（spec 契约：单根、
@@ -181,11 +186,11 @@ watch(
     <!-- 格式角标（左上 12/12） -->
     <FormatBadge v-if="badge" class="fc-badge" :label="badge" />
 
-    <!-- kind 专属附加件（悬停胶囊 / 视频播放条 / 字体安装钮…）：注册表 overlays，DOM 序 = 数组序；
-         事件透传：playToggle（MediaCapsule 播放钮 → 悬停播放层）/ installToggle（FontInstallButton
-         click → 安装切换；MediaCapsule 根已 click.stop 不误发，无 emit 的附加件监听无害） -->
+    <!-- kind 专属附加件（悬停胶囊 / 视频播放条 / 字体安装钮…）：注册表 overlays 经 when 谓词过滤，
+         DOM 序 = 数组序；事件透传：playToggle（MediaCapsule 播放钮 → 悬停播放层）/ installToggle
+         （FontInstallButton click → 安装切换；MediaCapsule 根已 click.stop 不误发，无 emit 的附加件监听无害） -->
     <component
-      v-for="(ov, i) in spec.overlays ?? []"
+      v-for="(ov, i) in visibleOverlays"
       :key="i"
       :is="ov.comp"
       v-bind="ov.props(props)"

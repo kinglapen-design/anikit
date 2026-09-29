@@ -4,6 +4,9 @@
 // cache/peaks/{assetId}.json 跨会话缓存）。虚拟滚动只渲染可见卡 → 调用即视口懒加载；
 // 会话级缓存 key = assetId，附带 modifiedAt 版本——源文件替换等任何 modifiedAt 变化后
 // 自动重拉（免手动失效登记，同 cardText 口径）；inflight 去重防同卡并发。
+// 工作空间分支（2026-09-26 填充卡对接）：条目带 wsPath 时走 get_audio_peaks_by_path
+//（产物缓存换锚 workspace/.anikit/peaks/{urlsafe(rel)}-{mtime_ms}-{size}.json，文件名内嵌
+// 实况判新鲜）——assetId = "ws:"+rel 合成假 id 严禁发后端，仅作前端缓存键（纯前端键允许）。
 import { invoke } from "@tauri-apps/api/core";
 import type { PlacementView } from "../stores/content";
 
@@ -17,13 +20,16 @@ const inflight = new Map<string, Promise<number[]>>();
 
 /** 懒拉卡片波形 peaks（缓存命中且版本一致直给；失败回退空数组并缓存——空波形 = 纯色底，
  *  modifiedAt 变化后自然重试；非音频 / 解码失败由后端中文报错，此处静默兜底） */
-export function cardPeaksFor(asset: Pick<PlacementView, "assetId" | "modifiedAt">): Promise<number[]> {
+export function cardPeaksFor(asset: Pick<PlacementView, "assetId" | "modifiedAt" | "wsPath">): Promise<number[]> {
   const id = asset.assetId;
   const hit = cache.get(id);
   if (hit && hit.modifiedAt === asset.modifiedAt) return Promise.resolve(hit.peaks);
   const flying = inflight.get(id);
   if (flying) return flying;
-  const p = invoke<number[]>("get_audio_peaks", { assetId: id })
+  const request = asset.wsPath
+    ? invoke<number[]>("get_audio_peaks_by_path", { absPath: asset.wsPath })
+    : invoke<number[]>("get_audio_peaks", { assetId: id });
+  const p = request
     .then((peaks) => {
       cache.set(id, { modifiedAt: asset.modifiedAt, peaks });
       return peaks;

@@ -18,6 +18,11 @@ export async function readTextAsset(assetId: string): Promise<TextContent> {
   return await invoke<TextContent>("read_text_asset", { assetId });
 }
 
+// 按真实路径读文本内容（2026-09-26 工作空间文本卡；越界 / 非文本 / 超上限抛中文文案）
+export async function readTextByPath(absPath: string): Promise<TextContent> {
+  return await invoke<TextContent>("read_text_by_path", { absPath });
+}
+
 // 保存文本内容（APP 内编辑防抖自动落盘；编辑不进 undo）
 export async function writeTextAsset(assetId: string, content: string): Promise<WriteTextResult> {
   return await invoke<WriteTextResult>("write_text_asset", { assetId, content });

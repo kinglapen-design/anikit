@@ -11,7 +11,7 @@ export interface InventoryEntry {
 }
 export const inventoryDate = "2026-09-26";
 export const inventoryTotals = {
-  "new": 73,
+  "new": 74,
   "legacy": 0,
   "business": 77,
   "dead": 2,
@@ -695,7 +695,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/inputs/TextInput",
     "name": "TextInput",
     "status": "new",
-    "consumers": 13,
+    "consumers": 14,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -796,6 +796,14 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/items/BaseDataItem",
+    "name": "BaseDataItem",
+    "status": "new",
+    "consumers": 3,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/MenuItem",
     "name": "MenuItem",
     "status": "new",
@@ -838,14 +846,6 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/cards/FileCard",
     "name": "FileCard",
-    "status": "new",
-    "consumers": 2,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/items/BaseDataItem",
-    "name": "BaseDataItem",
     "status": "new",
     "consumers": 2,
     "legacyTokens": 0,
@@ -1198,6 +1198,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/sections/TabLinks",
     "name": "TabLinks",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/sections/WsDetail",
+    "name": "WsDetail",
     "status": "new",
     "consumers": 1,
     "legacyTokens": 0,

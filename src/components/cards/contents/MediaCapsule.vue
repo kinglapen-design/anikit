@@ -4,13 +4,15 @@
 // 悬停才现（2026-08-29 用户定）：显隐走祖先态选择器 .fc-root:hover / .force-hover，过渡 150ms。
 // 播放钮可点（2026-09-22 R6 audio 接线）：playToggle 上抛宿主 → 悬停播放层 togglePlay
 //（click.stop 防卡片选中、pointerdown.stop 防起卡片拖拽 / 穿透到下方 seek 层）。
+// capsuleText 空串 = 整体不渲染（2026-09-26 ws 音频卡首例：悬停播放层不接时胶囊无可播层、
+// 时长无数据，空壳死钮不出）；库侧两档胶囊文本恒非空，行为不变。
 import AppIcon from "../../AppIcon.vue";
 import "../cards.css"; // kc-float / kc-info 共享铬（层叠一次导入，与 FileCard 同源）
 
 defineOptions({ inheritAttrs: false });
 withDefaults(
   defineProps<{
-    capsuleText?: string; // 胶囊文本（video = 帧数 / audio = 时长）
+    capsuleText?: string; // 胶囊文本（video = 帧数 / audio = 时长）；空串 = 胶囊整体不渲染
     playing?: boolean; // 播放 ↔ 暂停
     muted?: boolean; // 音量 ↔ 静音（muteIcon 档才出）
     muteIcon?: boolean; // video 档：音量/静音钮（audio 胶囊无此钮）
@@ -21,8 +23,8 @@ const emit = defineEmits<{ playToggle: [] }>();
 </script>
 
 <template>
-  <div class="kc-float fc-capsule" @pointerdown.stop @click.stop>
-    <span v-if="capsuleText" class="kc-info fc-capsule-text">{{ capsuleText }}</span>
+  <div v-if="capsuleText" class="kc-float fc-capsule" @pointerdown.stop @click.stop>
+    <span class="kc-info fc-capsule-text">{{ capsuleText }}</span>
     <button
       class="fc-capsule-btn fc-capsule-icon"
       v-tip="playing ? '暂停' : '播放'"

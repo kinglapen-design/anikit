@@ -10,7 +10,9 @@ use tauri::State;
 use crate::commands::library::AppState;
 use crate::commands::preview::locate_asset;
 use crate::core::library::Library;
+use crate::core::space::WORKSPACE_DIR;
 use crate::services::text;
+use crate::services::workspace as ws;
 
 /// 文本内容
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -61,6 +63,33 @@ pub async fn write_text_asset(
 pub(crate) fn write_text(lib: &mut Library, asset_id: &str, content: &str) -> Result<WriteTextResult, String> {
   let (size, modified_at) = text::write_origin(lib, asset_id, content)?;
   Ok(WriteTextResult { size, modified_at })
+}
+
+// ---------- 按真实路径读取（2026-09-26 工作空间三类填充卡对接 · 文本卡） ----------
+
+/// 按真实路径读文本内容（工作空间文本卡正文）：越界 / 非文本 / 超上限中文报错
+/// （前端卡片 catch 兜底空串）。未开空间报「请先打开储存空间」（同写操作口径——
+/// 调用方必为已展示的 ws 条目，空返回无意义）。
+/// async：文件 IO，一律走线程池（规范第 2 条，同 read_text_asset）
+#[tauri::command]
+pub async fn read_text_by_path(state: State<'_, AppState>, abs_path: String) -> Result<TextContent, String> {
+  let space = state.space.lock().map_err(|e| e.to_string())?.clone().ok_or_else(|| "请先打开储存空间".to_string())?;
+  let ws_root = space.root.join(WORKSPACE_DIR);
+  text_by_path(&ws_root, std::path::Path::new(&abs_path))
+}
+
+/// 按路径读取实现（命令层薄壳，便于单测）：存在性 + workspace 越界校验同
+/// get_media_source_by_path 口径；ws 无 metadata，错误文案取名自路径尾
+fn text_by_path(ws_root: &std::path::Path, origin: &std::path::Path) -> Result<TextContent, String> {
+  if !origin.is_file() || !ws::is_under(ws_root, origin) {
+    return Err("路径不在当前工作空间内（或文件已不存在）".to_string());
+  }
+  if !text::is_text(origin) {
+    let name = origin.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| origin.to_string_lossy().into_owned());
+    return Err(format!("「{name}」不是文本资源"));
+  }
+  let content = text::read_text(origin)?;
+  Ok(TextContent { content })
 }
 
 #[cfg(test)]
@@ -139,5 +168,30 @@ mod tests {
     let big = "a".repeat((text::MAX_TEXT_BYTES + 1) as usize);
     let err = write_text(&mut h.lib, "AN-MD", &big).unwrap_err();
     assert!(err.contains("2MB"), "{err}");
+  }
+
+  /// 按路径读取（2026-09-26 工作空间文本卡）：workspace 内 txt 正常读回；越界 / 不存在 /
+  /// 非文本一律中文错（前端卡片 catch 兜底空串）
+  #[test]
+  fn text_by_path_reads_inside_and_rejects_outside() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws_root = dir.path().join("workspace");
+    std::fs::create_dir_all(&ws_root).unwrap();
+
+    let txt = ws_root.join("笔记.txt");
+    std::fs::write(&txt, "你好\n第二行 🎬").unwrap();
+    assert_eq!(text_by_path(&ws_root, &txt).unwrap(), TextContent { content: "你好\n第二行 🎬".to_string() });
+
+    // 非文本（扩展名路由）中文错
+    let png = ws_root.join("图.png");
+    std::fs::write(&png, b"fake").unwrap();
+    let err = text_by_path(&ws_root, &png).unwrap_err();
+    assert!(err.contains("不是文本资源"), "{err}");
+
+    // 越界 / 不存在
+    let outside = dir.path().join("外.txt");
+    std::fs::write(&outside, b"x").unwrap();
+    assert!(text_by_path(&ws_root, &outside).unwrap_err().contains("不在当前工作空间"));
+    assert!(text_by_path(&ws_root, &ws_root.join("不存在.txt")).unwrap_err().contains("不在当前工作空间"));
   }
 }

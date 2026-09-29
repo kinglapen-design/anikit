@@ -6,7 +6,7 @@
 // 稿未画不接，09 待办）/ 文件大小·修改日期接真值（PlacementView.size / modifiedAt——
 // 旧假占位（"123 MB" 写死）本轮废除，阶段 4 欠账清）。
 // 尺寸列：音频显示时长（metadata 宽高是波形图尺寸非内容尺寸，5.1）；其余 w×h，无尺寸显示格式。
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import RowCard from "./cards/ListRowCard.vue";
 import type { Box } from "../lib/layouts";
@@ -18,6 +18,7 @@ import { renamePlacement } from "../lib/placementOps";
 import { useSelectionStore } from "../stores/selection";
 import { useContentStore } from "../stores/content";
 import { useUiStore } from "../stores/ui";
+import { isWsPlacement, useWsStore } from "../stores/ws";
 import type { PlacementView } from "../stores/content";
 
 const props = withDefaults(
@@ -88,6 +89,15 @@ function startRename(): void {
   if (content.isRecycleView || content.isWorkspaceView) return;
   selection.renamingKey = rowKey;
 }
+
+// 工作空间缩略图视口优先（2026-09-26 性能优化 C，同 AssetCard 口径）：列表行无可见性观察，
+// 虚拟滚动挂载 ≈ 视口 + 800px buffer 区，挂载即上报 ws store 合批插队队首
+onMounted(() => {
+  const p = props.asset;
+  if (isWsPlacement(p) && p.thumbPath === null && p.wsPath) {
+    useWsStore().requestVisibleThumbs([p.wsPath]);
+  }
+});
 </script>
 
 <template>

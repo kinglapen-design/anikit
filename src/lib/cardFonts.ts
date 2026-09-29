@@ -5,8 +5,12 @@
 // 空间隔离——预览卸载 fonts.delete 不误伤卡片）：卡片滚出视口不回收，网格来回滚动重载字体的
 // 开销大于常驻内存（Eagle 同全加载口径）。加载失败（损坏字体）回退空 family = 系统字体渲染。
 // 缓存口径同 cardText / cardPeaks：会话级 Map + modifiedAt 版本戳 + inflight 去重 + 失败缓存。
+// 工作空间分支（2026-09-26 填充卡对接）：条目带 wsPath 时走 get_font_info_by_path
+//——assetId = "ws:"+rel 合成假 id 严禁发后端，仅作前端缓存键（纯前端键允许）；
+// FontFace 家族名 ws 改用 encodeURIComponent(relPath)（假 id 含斜杠 / 非 ASCII，编码防冲突）；
+// 安装 / 卸载是 assetId 命令且系统级写入，ws 不开按路径版（卡片不出安装钮，AssetCard 壳控制）。
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { getFontInfo, type FontInfo } from "./fontOps";
+import { getFontInfo, getFontInfoByPath, type FontInfo } from "./fontOps";
 import type { PlacementView } from "../stores/content";
 
 export interface CardFont {
@@ -29,7 +33,7 @@ export const FONT_LINES_CJK = ["永和九年", "岁在癸丑", "AaBaCcDd", "0123
 export const FONT_LINES_LATIN = ["ABCDEFG", "abcdefg", "0123456"];
 
 /** 懒拉字体卡数据（fontInfo + FontFace 家族名；缓存命中且版本一致直给，失败回退 null 并缓存） */
-export function cardFontFor(asset: Pick<PlacementView, "assetId" | "modifiedAt">): Promise<CardFont | null> {
+export function cardFontFor(asset: Pick<PlacementView, "assetId" | "modifiedAt" | "wsPath">): Promise<CardFont | null> {
   const id = asset.assetId;
   const hit = cache.get(id);
   if (hit && hit.modifiedAt === asset.modifiedAt) return Promise.resolve(hit.font);
@@ -55,9 +59,14 @@ export function cardFontSetInstalled(assetId: string, installed: boolean): void 
   if (hit?.font) hit.font = { ...hit.font, info: { ...hit.font.info, installed } };
 }
 
-async function load(asset: Pick<PlacementView, "assetId">): Promise<CardFont | null> {
-  const info = await getFontInfo(asset.assetId);
-  const family = `anikit-card-font-${asset.assetId}`;
+async function load(asset: Pick<PlacementView, "assetId" | "wsPath">): Promise<CardFont | null> {
+  const wsPath = asset.wsPath ?? null;
+  const info = wsPath ? await getFontInfoByPath(wsPath) : await getFontInfo(asset.assetId);
+  // ws 家族名按编码后 relPath（assetId 剥 "ws:" 前缀）——encodeURIComponent 单射，
+  // 防斜杠 / 非 ASCII 冲突；库侧维持 assetId 原名
+  const family = wsPath
+    ? `anikit-card-font-ws-${encodeURIComponent(asset.assetId.slice(3))}`
+    : `anikit-card-font-${asset.assetId}`;
   // 幂等：同 family 已注册不重复加载（FontFace 不可枚举查重，以 cache 命中为已注册证据——
   // 走到此即缓存未命中 = 未注册或版本过期，重复 new FontFace 覆盖同名注册亦无害）
   try {

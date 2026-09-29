@@ -158,7 +158,7 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">文件卡片-音频（400×200，进度 = 品牌色波形扫过，与根数解耦；根数按卡宽节距 8 定，已生产接线 get_audio_peaks）</h3>
+      <h3 class="pv-group-title">文件卡片-音频（400×200，进度 = 品牌色波形扫过，与根数解耦；根数按卡宽节距 8 定，已生产接线 get_audio_peaks；capsuleText 空 = 胶囊整体不渲染，2026-09-26 ws 音频卡口径）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div style="width: 400px; height: 200px">
@@ -178,11 +178,17 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
           </div>
           <span class="pv-cap">选中 · 播放中</span>
         </div>
+        <div class="pv-demo-cell">
+          <div style="width: 400px; height: 200px">
+            <FileCard kind="audio" name="雪牧.wav" info="12:23" badge="WAV" :peaks="demoPeaks" origin-badge force-state="hover" />
+          </div>
+          <span class="pv-cap">hover · 无胶囊（ws）</span>
+        </div>
       </div>
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">文件卡片-字体（220×220 固定 1:1；示例字随卡缩放——稿基准 220 卡 ↔ 18 字，与文本卡「字号固定」相反口径；生产已接线：hasCjk 分流 + FontFace 真渲染，此处桩系统字体演示）</h3>
+      <h3 class="pv-group-title">文件卡片-字体（220×220 固定 1:1；示例字随卡缩放——稿基准 220 卡 ↔ 18 字，与文本卡「字号固定」相反口径；生产已接线：hasCjk 分流 + FontFace 真渲染，此处桩系统字体演示；installable=false = 无安装钮，2026-09-26 ws 字体卡口径）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div style="width: 220px; height: 220px">
@@ -201,6 +207,12 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
             <FileCard kind="font" name="yahei.ttf" info="Light" badge="TTF" origin-badge selected />
           </div>
           <span class="pv-cap">选中</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div style="width: 220px; height: 220px">
+            <FileCard kind="font" name="yahei.ttf" info="Light" badge="TTF" origin-badge :installable="false" force-state="hover" />
+          </div>
+          <span class="pv-cap">hover · 无安装钮（ws）</span>
         </div>
       </div>
     </div>

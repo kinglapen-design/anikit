@@ -27,6 +27,11 @@ import type { PlacementView } from "./content";
 const inFlight = new Map<string, Promise<void>>();
 let rootPromise: Promise<void> | null = null;
 
+// 视口优先请求合批（2026-09-26 ws 缩略图性能优化 C）：可见卡上报即收集，120ms 一拍整批
+// priority=true 插队队首（固定节拍而非去抖——连续滚动时去抖永不到点，请求会被无限推迟）
+const visiblePending = new Set<string>();
+let visibleTimer: ReturnType<typeof setTimeout> | undefined;
+
 // ws 合成 PlacementView 的 assetId / folderId 前缀（viewKey 同口径："ws:" = 根，"ws:a/b" = relPath）
 export const WS_ID_PREFIX = "ws:";
 
@@ -209,7 +214,9 @@ export const useWsStore = defineStore("ws", {
     async unpin(rel: string): Promise<void> {
       this.pinned = await unpinWsEntry(rel);
     },
-    // 对已加载目录里 thumbPath 为 null 的文件发后台生成请求（生成完成经 workspace-thumbs-ready 回填）
+    // 对已加载目录里 thumbPath 为 null 的文件发后台生成请求（生成完成经 workspace-thumbs-ready 回填）。
+    // 全量排队列尾部（后端 worker 池去重，重复发起零成本）；解码失败条目经失败记忆落回格式图标
+    // （thumbPath 非 null）后天然滤出本清单，不再重复请求（2026-09-26 性能优化）
     requestMissingThumbs(onlyRel?: string): void {
       const rels = onlyRel !== undefined ? [onlyRel] : Object.keys(this.loaded);
       const paths: string[] = [];
@@ -223,18 +230,36 @@ export const useWsStore = defineStore("ws", {
       }
       if (paths.length > 0) void requestWorkspaceThumbs(paths).catch(() => {});
     },
+    // 视口内（含近 buffer 区）缺失项优先请求：卡片组件按可见性 / 挂载上报，合批一拍
+    // priority=true 插队队首——恢复滚动位置落在目录中部时，可见卡不等前面全部生成完
+    requestVisibleThumbs(absPaths: string[]): void {
+      for (const p of absPaths) visiblePending.add(p);
+      if (visibleTimer === undefined) {
+        visibleTimer = setTimeout(() => {
+          visibleTimer = undefined;
+          const batch = [...visiblePending];
+          visiblePending.clear();
+          if (batch.length > 0) void requestWorkspaceThumbs(batch, true).catch(() => {});
+        }, 120);
+      }
+    },
     // 缩略图批次回填：absPath 匹配已缓存条目 → 换新数组触发响应式（未加载目录的条目忽略，
-    // 下次 loadDir 自然命中新鲜缓存）
+    // 下次 loadDir 自然命中新鲜缓存）；负载带 thumbKind（2026-09-26）：asset = 内容缩略图——
+    // w/h 为空（视频/音频等非图片）时补上，布局回退链 thumbW→w 据此由 300 方盒恢复真实比例
+    //（2026-09-26 视频卡裁切修复；图片条目 w/h 已是源魔数探测值，不覆盖）；
+    // formatIcon = 解码失败条目落回的系统格式图标——只换图标与来源，不动 w/h
+    //（图标见方不代表源比例，落回条目维持方盒 / 已探测比例）
     patchThumbs(items: WsThumbReady[]): void {
       if (items.length === 0) return;
-      const byAbs = new Map(items.map((it) => [it.absPath, it.thumbPath]));
+      const byAbs = new Map(items.map((it) => [it.absPath, it]));
       for (const [rel, entries] of this.dirs) {
         if (!entries.some((e) => !e.isDir && e.thumbPath === null)) continue;
         const next = entries.map((e) => {
           const abs = e.isDir ? null : this.absPath(e.relPath);
-          const thumb = abs !== null ? byAbs.get(abs) : undefined;
-          // 本事件只载内容缩略图（格式图标在 list 时已就位）——回填即 asset 来源
-          return thumb !== undefined ? { ...e, thumbPath: thumb, thumbKind: "asset" as const } : e;
+          const ready = abs !== null ? byAbs.get(abs) : undefined;
+          if (ready === undefined) return e;
+          const dims = e.w === null && ready.thumbKind === "asset" ? { w: ready.w, h: ready.h } : {};
+          return { ...e, ...dims, thumbPath: ready.thumbPath, thumbKind: ready.thumbKind };
         });
         this.dirs.set(rel, next);
       }
@@ -244,9 +269,11 @@ export const useWsStore = defineStore("ws", {
 
 // 磁盘实况条目 → 合成 PlacementView（content.ts:15-42 形状；缺的真实数据给安全缺省值）：
 // id/assetId 合成 = `ws:${relPath}`（假 id，禁发 assetId 类命令）；folderId = `ws:${所在目录 rel}`
-//（视口 key 同口径，根级文件 = "ws:"）；thumbW/H 恒 null（布局回退链 thumbW→w，图片条目带
-// 后端探测的真实宽高 w/h（2026-09-17 实机定：卡片按真实比例自适应，禁填充裁切；非图片
-// 无尺寸回退 300 方盒）；modifiedAt/importedAt 由 mtimeMs
+//（视口 key 同口径，根级文件 = "ws:"）；thumbW/H 恒 null（布局回退链 thumbW→w——图片条目带
+// 后端魔数探测的真实宽高 w/h（2026-09-17 实机定：卡片按真实比例自适应，禁填充裁切），非图片
+//（视频/音频/字体等）由后端读缓存缩略图文件头回填、或 thumbs-ready 事件随生成结果回填
+//（2026-09-26：缩略图与源同比例，布局只用比例）；缩略图未就绪仍无尺寸时回退 300 方盒，就绪后
+// 自动重排恢复）；modifiedAt/importedAt 由 mtimeMs
 // 转 RFC3339（? v= URL 版本戳 + 排序键）；frameCount/animated 恒 null/false（GIF 预览走直渲源
 // 原生循环）；wsPath = 源文件绝对路径（预览按路径分支与卡片悬停判定用，库 Placement 无此字段）
 function wsEntryToPlacement(e: WsEntry, parentRel: string, rootPath: string | null): PlacementView {

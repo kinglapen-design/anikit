@@ -26,3 +26,8 @@ export interface DocxContent {
 export async function readDocxAsset(assetId: string): Promise<DocxContent> {
   return await invoke<DocxContent>("read_docx_asset", { assetId });
 }
+
+// 按真实路径读 docx 预览内容（2026-09-26 工作空间文本卡 docx 支路；越界 / 非 docx 抛中文文案）
+export async function readDocxByPath(absPath: string): Promise<DocxContent> {
+  return await invoke<DocxContent>("read_docx_by_path", { absPath });
+}

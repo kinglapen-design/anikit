@@ -52,18 +52,29 @@ export function wsBlankSpec(rel: string): CtxEntry[] {
 }
 
 // ws 文件夹菜单（FolderStrip ws 分流调用；打开 = 进该目录视口，与双击同径；
-// 重命名 = 置 FolderStrip 行内命名态，提交在 FolderStrip 的 ws 分支）
+// 重命名 = 置 FolderStrip 行内命名态，提交在 FolderStrip 的 ws 分支）。
+// 批量分流（2026-09-26 文件夹卡片进选择域，同 wsCardSpec / 库 3.4 口径）：触发项在选择域内
+// 且多选 → 复制 / 剪切 / 删除作用于整个选中集（文件与文件夹可混合——ws 写操作按路径受理）；
+// 重命名单项语义，多选时不出现
 export function wsFolderSpec(rel: string, _name: string): CtxEntry[] {
   const toast = useToastStore();
   const ws = useWsStore();
+  const selection = useSelectionStore();
   const fail = (e: unknown) => toast.notify({ message: String(e), icon: "fail" });
+  const parentRel = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+  const key = `ws:${rel}|ws:${parentRel}`;
+  const batch =
+    selection.count > 1 && selection.isSelected(key)
+      ? selection.selectedRefs().filter((r) => r.assetId.startsWith("ws:")).map((r) => r.assetId.slice(3))
+      : [rel];
+  const multi = batch.length > 1;
   return [
     { label: "打开", action: () => void useTabsStore().openView(`ws:${rel}`) },
     { label: "新建文件夹", action: () => void ws.createFolder(rel).catch(fail) },
-    { label: "重命名", action: () => void (useSelectionStore().namingFolderCardId = rel) },
-    { label: "复制", action: () => ws.setClip([rel], false) },
-    { label: "剪切", action: () => ws.setClip([rel], true) },
-    { label: "删除", action: () => confirmDelete([rel], _name) },
+    ...(multi ? [] : [{ label: "重命名", action: () => void (selection.namingFolderCardId = rel) }]),
+    { label: multi ? `复制 ${batch.length} 项` : "复制", action: () => ws.setClip(batch, false) },
+    { label: multi ? `剪切 ${batch.length} 项` : "剪切", action: () => ws.setClip(batch, true) },
+    { label: multi ? `删除 ${batch.length} 项` : "删除", action: () => confirmDelete(batch, multi ? `已选中的 ${batch.length} 项` : _name) },
     {
       label: "在资源管理器中显示",
       action: () => {
@@ -76,18 +87,33 @@ export function wsFolderSpec(rel: string, _name: string): CtxEntry[] {
   ];
 }
 
-// ws 树行菜单（WorkspaceTree 行包装 div 右键调用；最小集：打开 / 固定或取消固定 /
-// 在资源管理器中显示 / 刷新——重命名等写操作走视口卡片 / 空白菜单，树行保持轻量）
+// ws 树行菜单（WorkspaceTree 行包装 div 右键调用；重命名等单项写操作走视口卡片 / 空白菜单）。
+// 批量分流（2026-09-26_18 树行多选入域，同 wsFolderSpec / wsCardSpec 口径）：触发行在选择域内
+// 且多选 → 复制 / 剪切 / 删除作用于整个选中集（文件与文件夹可混合——ws 写操作按路径受理）；
+// 未选中行右键由调用方先单选入域。pin 行（常用区块）复用本 spec——纯导航行不入选择域，
+// 批量分流天然不命中，退化为对 pin 目录自身的单项管理操作
 export function wsTreeRowSpec(rel: string): CtxEntry[] {
   const ws = useWsStore();
+  const selection = useSelectionStore();
   const fail = (e: unknown) => useToastStore().notify({ message: String(e), icon: "fail" });
   const pinned = ws.pinned.includes(rel);
+  const name = rel.slice(rel.lastIndexOf("/") + 1);
+  const parentRel = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+  const key = `ws:${rel}|ws:${parentRel}`;
+  const batch =
+    selection.count > 1 && selection.isSelected(key)
+      ? selection.selectedRefs().filter((r) => r.assetId.startsWith("ws:")).map((r) => r.assetId.slice(3))
+      : [rel];
+  const multi = batch.length > 1;
   return [
     { label: "打开", action: () => void useTabsStore().openView(`ws:${rel}`) },
     {
       label: pinned ? "从常用中取消固定" : "固定到常用",
       action: () => void (pinned ? ws.unpin(rel) : ws.pin(rel)).catch(fail),
     },
+    { label: multi ? `复制 ${batch.length} 项` : "复制", action: () => ws.setClip(batch, false) },
+    { label: multi ? `剪切 ${batch.length} 项` : "剪切", action: () => ws.setClip(batch, true) },
+    { label: multi ? `删除 ${batch.length} 项` : "删除", action: () => confirmDelete(batch, multi ? `已选中的 ${batch.length} 项` : name) },
     {
       label: "在资源管理器中显示",
       action: () => {

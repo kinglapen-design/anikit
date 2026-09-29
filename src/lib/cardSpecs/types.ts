@@ -35,6 +35,7 @@ export interface FileCardProps {
   fontLines?: string[]; // font 示例字
   fontFamily?: string; // font 卡片 FontFace 注册家族名（未就绪 / 加载失败 = 缺省系统字体渲染）
   installed?: boolean; // font 安装钮选中
+  installable?: boolean; // font 安装钮显隐（2026-09-26 ws 字体卡：安装是 assetId 系统级命令，ws 不出钮）；缺省 = true
   textTitle?: string; // text 卡内标题
   textBody?: string; // text 卡正文
   originBadge?: boolean; // 原始文件-徽章（右下 12/12）
@@ -49,6 +50,8 @@ export interface CardContentOverlay {
   comp: Component;
   /** 宿主 props → 附加件 props 映射（静态变体参也走这里，如胶囊音量钮档） */
   props: (p: FileCardProps) => Record<string, unknown>;
+  /** 显隐谓词（2026-09-26 ws 字体卡安装钮隐藏首例）：缺省 / 返回 true = 渲染；false = 不出 */
+  when?: (p: FileCardProps) => boolean;
 }
 
 /** FileCard 内容形态（kind → 内容区 + kind 专属附加件） */

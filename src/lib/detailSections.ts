@@ -8,6 +8,7 @@
 // 缺 id 按注册表稿序补位）；排序双入口 = 管理面板箭头（全量序）+ 链接 tab 面板内拖标题行
 //（可见序落点，2026-08-31 用户定）；旧 detailLinksOrder 单键配置由 loadSettings 迁移并入。
 import type { ArchiveDetailView, FolderNode, PlacementView, PromptBinding } from "../stores/content";
+import type { WsEntry } from "./wsOps";
 
 /** 详情面板三 tab（分段控制器稿序：基础信息 / 链接关系 / 自定义组件——
  *  自定义组件 = 占位容器（2026-09-26 提示词二轮，提示词挪基础信息；原「提示词」tab 废除） */
@@ -154,12 +155,16 @@ export interface AssetDetail {
 }
 
 /** 详情面板展示目标：选中文件卡片 / 选中档案卡片 / 选中普通文件夹（7.1 二十三轮文件夹详情形态）/
- *  快速访问视口（未选中文件时显示当前视口信息，同日用户定；quick = 全部/未分类等快速访问） */
+ *  快速访问视口（未选中文件时显示当前视口信息，同日用户定；quick = 全部/未分类等快速访问）/
+ *  工作空间磁盘实况文件（2026-09-26：ws 合成项 assetId = ws: 假 id 禁发 assetId 命令，
+ *  数据 = ws store 目录缓存条目 WsEntry + 所在目录绝对路径 dirPath；简化基础信息形态，
+ *  不进三 tab / ui.detailBlocks 配置体系） */
 export type DetailTarget =
   | { kind: "file"; placement: PlacementView; detail: AssetDetail }
   | { kind: "archive"; node: FolderNode; data: ArchiveDetailView }
   | { kind: "folder"; node: FolderNode }
-  | { kind: "quick"; viewKey: string; name: string };
+  | { kind: "quick"; viewKey: string; name: string }
+  | { kind: "ws"; entry: WsEntry; dirPath: string | null };
 
 /** 档案无记录 / 未拉取时的默认空数据（与后端 ArchiveData::new + 零统计同形） */
 export function emptyArchiveData(folderId: string): ArchiveDetailView {

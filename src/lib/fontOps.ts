@@ -26,6 +26,12 @@ export async function getFontInfo(assetId: string): Promise<FontInfo> {
   return await invoke<FontInfo>("get_font_info", { assetId });
 }
 
+// 按真实路径读字体元数据与安装状态（2026-09-26 工作空间字体卡；越界 / 非字体 / 解析失败抛中文文案）。
+// 安装 / 卸载无按路径版（系统级写入只认库资产），ws 卡片不出安装钮
+export async function getFontInfoByPath(absPath: string): Promise<FontInfo> {
+  return await invoke<FontInfo>("get_font_info_by_path", { absPath });
+}
+
 // 安装到系统（用户级：其他软件立即可见）
 export async function installFont(assetId: string): Promise<FontInstallState> {
   return await invoke<FontInstallState>("install_font", { assetId });

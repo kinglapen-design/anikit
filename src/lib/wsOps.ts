@@ -17,10 +17,12 @@ export interface WsEntry {
   name: string; // 条目名（文件 / 文件夹名）
   relPath: string; // 相对 workspace 根的路径（/ 分隔）
   isDir: boolean;
+  hasSubDir?: boolean; // 目录条目：是否含可见子目录（2026-09-26 树展开箭头真实化，列目录时后端顺带扫描）；文件恒 false；缺省（旧缓存）时树回退旧乐观判定
   size: number; // 文件字节数；目录恒 0
   mtimeMs: number; // 文件修改时间（Unix 毫秒）；目录恒 0
-  w: number | null; // 图片像素宽（内容魔数探测）；非图片 / 目录 = null
-  h: number | null; // 图片像素高，同上
+  ctimeMs: number; // 文件创建时间（Unix 毫秒，2026-09-26 详情面板基础数据补）；目录 / 平台不支持恒 0
+  w: number | null; // 布局比例来源宽：图片 = 源像素（魔数探测）；非图片缓存新鲜 = 缩略图宽（与源同比例）；无 = null
+  h: number | null; // 同上（高）
   ext: string; // 小写无点扩展名；目录 / 无扩展名 = ""
   thumbPath: string | null; // 缩略图缓存绝对路径：内容缩略图新鲜 / 格式图标已缓存时给，否则 null
   thumbKind: "asset" | "formatIcon" | null; // 缩略图来源（同库 ThumbKind 口径；未就绪 = null）
@@ -30,6 +32,9 @@ export interface WsEntry {
 export interface WsThumbReady {
   absPath: string; // 源文件绝对路径
   thumbPath: string; // 缩略图缓存绝对路径
+  w: number; // 缩略图实际像素宽（2026-09-26：随回填写条目 w/h，卡片恢复真实比例）；formatIcon 落回项 = 图标边长（忽略）
+  h: number; // 同上（高）
+  thumbKind: "asset" | "formatIcon"; // 2026-09-26 失败记忆补：asset = 内容缩略图；formatIcon = 解码失败条目落回的系统格式图标
 }
 
 // 当前空间的工作空间根；未开空间 null
@@ -43,10 +48,11 @@ export async function listWorkspaceDir(relPath: string): Promise<WsEntry[]> {
   return await invoke<WsEntry[]>("list_workspace_dir", { relPath });
 }
 
-// 请求缩略图：立即返回，后台逐一生成缺失 / 过期的缓存（解码失败条目跳过），
-// 完成 emit workspace-thumbs-ready（负载 = 本趟实际生成成功的清单，可能为空数组）
-export async function requestWorkspaceThumbs(absPaths: string[]): Promise<void> {
-  await invoke("request_workspace_thumbs", { absPaths });
+// 请求缩略图：立即返回，任务进后端进程级 worker 池（固定并发 + 跨请求去重 + 失败记忆，
+// 2026-09-26 性能优化）；priority=true 整批插队队首（视口内缺失项），否则排尾部。
+// 完成批次 emit workspace-thumbs-ready（负载含本趟生成成功的内容缩略图 + 失败条目的格式图标落回）
+export async function requestWorkspaceThumbs(absPaths: string[], priority = false): Promise<void> {
+  await invoke("request_workspace_thumbs", { absPaths, priority });
 }
 
 // 在文件管理器中打开并选中（条目右键；约束在当前空间 workspace 内，越界 / 不存在抛中文错）

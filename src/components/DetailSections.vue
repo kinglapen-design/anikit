@@ -13,12 +13,16 @@
 // 留在当前 tab；旧「会话级记忆、换选中回基础信息、不写设置存储」口径（2026-08-31）废除。
 // 旧体系废除：pinned + 7 排序区块堆叠栈 / 注册表双套配置 / 22 稿 SectionEditPanel（摘挂载退役）/
 // DetailNotes 笔记区块（待补稿接回，09 待办）。
+// 形态分流：文件/档案 = pinned + 三 tab + 管理钮；文件夹/快速访问 = FolderDetail；
+// 工作空间磁盘实况文件 = WsDetail 简化基础信息（2026-09-26：无 pinned / 分段控制器 / 管理钮，
+// 不进 ui.detailBlocks 配置体系，滚动壳与文件夹形态共用）。
 import { computed, ref, watch } from "vue";
 import SectionPinned from "./sections/SectionPinned.vue";
 import TabBasic from "./sections/TabBasic.vue";
 import TabLinks from "./sections/TabLinks.vue";
 import TabCustom from "./sections/TabCustom.vue";
 import FolderDetail from "./sections/FolderDetail.vue";
+import WsDetail from "./sections/WsDetail.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ActionButton from "./buttons/ActionButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
@@ -31,12 +35,16 @@ const props = defineProps<{ target: DetailTarget }>();
 //（Extract 收窄供子组件类型安全——v-if 分流不参与 TS 收窄）
 type TabsTarget = Extract<DetailTarget, { kind: "file" | "archive" }>;
 type FolderTarget = Extract<DetailTarget, { kind: "folder" | "quick" }>;
+// 工作空间磁盘实况文件形态（2026-09-26）= WsDetail 简化基础信息（同无分段控制器 / 无管理钮，
+// 不进 ui.detailBlocks 配置体系；滚动壳与文件夹形态共用）
+type WsTarget = Extract<DetailTarget, { kind: "ws" }>;
 const tabsTarget = computed<TabsTarget | null>(() =>
   props.target.kind === "file" || props.target.kind === "archive" ? props.target : null,
 );
 const folderTarget = computed<FolderTarget | null>(() =>
   props.target.kind === "folder" || props.target.kind === "quick" ? props.target : null,
 );
+const wsTarget = computed<WsTarget | null>(() => (props.target.kind === "ws" ? props.target : null));
 
 // 分段控制器三段（稿序：基础信息 / 链接关系 / 自定义组件——自定义组件 = 占位容器，
 // 提示词挪基础信息区块（2026-09-26 提示词二轮）；custom-component 图标用户补源十八批）
@@ -96,11 +104,13 @@ const tabBodyRef = ref<HTMLElement>();
     </footer>
   </div>
   <!-- 文件夹 / 快速访问形态（FolderDetail：无分段控制器、无信息查看管理钮——稿注
-       「文件夹详情不需要信息查看按钮」；同套滚动壳防内容溢出） -->
-  <div v-else-if="folderTarget" class="detail-root">
+       「文件夹详情不需要信息查看按钮」；同套滚动壳防内容溢出）；
+       工作空间磁盘实况文件形态（WsDetail，2026-09-26）同壳——简化基础信息，无管理钮 -->
+  <div v-else-if="folderTarget || wsTarget" class="detail-root">
     <div class="tab-scroll-wrap">
       <div ref="tabBodyRef" class="tab-body kit-scroll">
-        <FolderDetail :target="folderTarget" />
+        <FolderDetail v-if="folderTarget" :target="folderTarget" />
+        <WsDetail v-else-if="wsTarget" :target="wsTarget" />
       </div>
       <ScrollThumb :body="tabBodyRef" />
     </div>

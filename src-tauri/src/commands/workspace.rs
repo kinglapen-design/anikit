@@ -4,12 +4,12 @@
 //! 空间报错；业务在 services::workspace，本层只做取空间快照与参数传递。
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 
 use crate::commands::library::AppState;
 use crate::adapters::shell_open;
 use crate::core::space::WORKSPACE_DIR;
-use crate::services::workspace::{self, ThumbReady, WsEntry};
+use crate::services::workspace::{self, WsEntry};
 
 /// 工作空间根信息
 #[derive(Debug, Clone, Serialize)]
@@ -30,7 +30,9 @@ pub fn workspace_root(state: State<AppState>) -> Option<WorkspaceRootInfo> {
 }
 
 /// 列举工作空间目录：relPath 空串 = 根；目录在前、同名不区分大小写排序；thumbPath 仅缓存新鲜时给。
-/// 未开空间 / workspace 目录缺失 / 越界或读取失败 → Ok(空列表)（降级不报错，参照 list_space_libraries）
+/// 未开空间 / workspace 目录缺失 / 越界或读取失败 → Ok(空列表)（降级不报错，参照 list_space_libraries）。
+/// 同步 IO + exe 图标的 COM 提取（SHELL_ICON_LOCK 进程级互斥）挪 spawn_blocking（2026-09-26
+/// 性能优化 B）：大目录列举阻塞 tokio worker 会饿死同线程的帧流 WS 等异步任务
 #[tauri::command]
 pub async fn list_workspace_dir(state: State<'_, AppState>, rel_path: String) -> Result<Vec<WsEntry>, String> {
   let Some(space) = state.space.lock().map_err(|e| e.to_string())?.clone() else { return Ok(Vec::new()) };
@@ -38,10 +40,14 @@ pub async fn list_workspace_dir(state: State<'_, AppState>, rel_path: String) ->
   if !root.is_dir() {
     return Ok(Vec::new());
   }
-  Ok(workspace::list_dir(&root, &rel_path).unwrap_or_else(|e| {
-    log::warn!("工作空间目录列举失败（rel={rel_path}）：{e}");
-    Vec::new()
-  }))
+  tauri::async_runtime::spawn_blocking(move || {
+    Ok(workspace::list_dir(&root, &rel_path).unwrap_or_else(|e| {
+      log::warn!("工作空间目录列举失败（rel={rel_path}）：{e}");
+      Vec::new()
+    }))
+  })
+  .await
+  .map_err(|e| format!("工作空间目录列举任务异常：{e}"))?
 }
 
 /// 在文件管理器中打开并选中（工作空间条目右键；按真实路径，约束在当前空间 workspace 内）
@@ -59,24 +65,26 @@ pub fn reveal_path(state: State<AppState>, abs_path: String) -> Result<(), Strin
   shell_open::reveal(&target)
 }
 
-/// 请求缩略图：立即返回，后台线程逐一生成缺失 / 过期的缓存（解码失败条目跳过），
-/// 完成 emit workspace-thumbs-ready（负载 = 本趟实际生成成功的 Vec<ThumbReady>，可能为空数组）。
-/// 线程内不可用 State（spawn 前克隆 AppHandle）；未开空间 / 目录缺失不动
+/// 请求缩略图（2026-09-26 性能优化 A/B 重写）：立即返回，任务进进程级 worker 池
+/// （services::ws_thumb_queue：固定并发 = 可用并行度一半钳 1..=4、跨请求去重、失败记忆——
+/// 解码失败键本会话不再重试，失败条目以格式图标形态随事件落回）；priority=true 整批插队
+/// 队首（前端视口内缺失项），否则排尾部。完成批次仍 emit workspace-thumbs-ready
+/// （负载 Vec<ThumbReady>，2026-09-26 起条目新增 thumbKind 字段）。
+/// 入队前的逐条 stat / 新鲜度判定是同步 IO，挪 spawn_blocking；未开空间 / 目录缺失不动
 #[tauri::command]
-pub fn request_workspace_thumbs(app: AppHandle, state: State<AppState>, abs_paths: Vec<String>) -> Result<(), String> {
+pub async fn request_workspace_thumbs(state: State<'_, AppState>, abs_paths: Vec<String>, priority: Option<bool>) -> Result<(), String> {
   let Some(space) = state.space.lock().map_err(|e| e.to_string())?.clone() else { return Ok(()) };
   let root = space.root.join(WORKSPACE_DIR);
   if !root.is_dir() {
     return Ok(());
   }
   let paths: Vec<std::path::PathBuf> = abs_paths.into_iter().map(std::path::PathBuf::from).collect();
-  std::thread::spawn(move || {
-    let ready: Vec<ThumbReady> = workspace::request_thumbs(&root, paths);
-    if let Err(e) = app.emit(workspace::THUMBS_EVENT, ready) {
-      log::debug!("工作空间缩略图事件推送失败（前端可能已关闭）：{e}");
-    }
-  });
-  Ok(())
+  let priority = priority.unwrap_or(false);
+  tauri::async_runtime::spawn_blocking(move || {
+    crate::services::ws_thumb_queue::global().submit(root, paths, priority);
+  })
+  .await
+  .map_err(|e| format!("工作空间缩略图入队异常：{e}"))
 }
 
 // ---------- 步骤 2 基础整理写操作（命令返回即更新 UI，watcher 回声由服务消重） ----------

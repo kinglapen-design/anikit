@@ -32,6 +32,8 @@
 //! - folder_tree：文件夹树视图组装（命令层 / plugin_ws / MCP 三处共用，2026-09-25 自 commands 下迁）
 //! - views：Placement 列表视图（中间面板与导入事件共用）
 //! - workspace：索引式工作空间只读底座（PRD 02 步骤 1：目录列举 + .anikit 缩略图缓存 + 监听热刷新）
+//! - ws_thumb_queue：工作空间缩略图生成队列（2026-09-26 性能优化：常驻 worker 池固定并发 +
+//!   跨请求去重 + 失败记忆 + 视口优先插队，取代每 invoke 裸 spawn 串行线程）
 
 pub mod anim;
 pub mod anim_preview;
@@ -69,3 +71,4 @@ pub mod thumb_formats;
 pub mod thumbnail;
 pub mod views;
 pub mod workspace;
+pub mod ws_thumb_queue;

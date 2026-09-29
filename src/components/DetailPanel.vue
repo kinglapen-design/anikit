@@ -2,9 +2,12 @@
 // 详情面板（7.1 二十三轮三 tab 化 + 文件夹详情形态）：数据装配壳——
 // 选中文件卡片 → watch selectedAssetKey 调 get_asset_detail（await 期间切选中防错配）；
 // 选中档案卡片 / 普通文件夹卡片（selection 文件夹选择域首项按 kind 分流）；
+// 选中工作空间磁盘实况文件 / 文件夹（2026-09-26；文件夹随当日选中链接通——文件夹卡片 /
+// 树行点击入素材选择域）：assetId = ws: 假 id 禁发 assetId 类命令——
+//   数据 = ws store 目录缓存条目（WsEntry 磁盘实况）直达，简化基础信息形态（WsDetail）；
 // **视口未选中文件时回退显示当前停留视口的文件夹 / 档案 / 快速访问信息**（2026-08-31 用户定，
 // 稿 = 右侧面板-文件夹详情；快速访问 = 简化版：无缩略图 + 名称框禁改名 + 文件数/占用空间两行）。
-// 渲染结构（pinned + 分段控制器三 tab / FolderDetail 形态分流）在共享组合 DetailSections。
+// 渲染结构（pinned + 分段控制器三 tab / FolderDetail / WsDetail 形态分流）在共享组合 DetailSections。
 import { computed, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import DetailSections from "./DetailSections.vue";
@@ -16,9 +19,11 @@ import {
 } from "../lib/detailSections";
 import { useContentStore, type ArchiveDetailView, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
+import { useWsStore, WS_ID_PREFIX } from "../stores/ws";
 
 const content = useContentStore();
 const selection = useSelectionStore();
+const ws = useWsStore();
 
 // 资产详情（选中文件卡片驱动；切换即清空，拉到后校验选中未变再落）
 const detail = ref<AssetDetail | null>(null);
@@ -28,7 +33,7 @@ async function loadDetail(clear: boolean): Promise<void> {
   if (!key) return;
   const assetId = key.split("|")[0];
   // 工作空间磁盘实况合成项（PRD 02 步骤 1）：assetId = ws: 假 id 严禁发 assetId 类命令——
-  // 详情面板本阶段留空（右栏无目标即隐藏）
+  // 详情由下方 wsTarget 从 ws store 目录缓存直达（2026-09-26 基础数据形态）
   if (assetId.startsWith("ws:")) return;
   try {
     const d = await invoke<AssetDetail>("get_asset_detail", { assetId });
@@ -89,11 +94,27 @@ const folderNode = computed<FolderNode | null>(() => {
   return null;
 });
 
+// 工作空间磁盘实况选中条目（2026-09-26 基础数据形态；文件与文件夹同径——文件夹随当日
+// 文件夹卡片 / 树行选中链接通）：数据 = ws store 目录缓存条目直达
+// （磁盘实况语义，无任何附加数据）；dirPath = 所在目录绝对路径（root 未就绪窗口期 = null，
+// 位置框显占位）。多选与库侧同口径 = 显示选择域首项（selectedAssetKey = selection.first 转发）；
+// 条目不在缓存（刚被删 / 目录未加载）= null 留空
+const wsTarget = computed<Extract<DetailTarget, { kind: "ws" }> | null>(() => {
+  const key = content.selectedAssetKey;
+  if (!key.startsWith(WS_ID_PREFIX)) return null;
+  const rel = key.split("|")[0].slice(WS_ID_PREFIX.length);
+  const parentRel = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+  const entry = ws.entries(parentRel).find((e) => e.relPath === rel);
+  return entry ? { kind: "ws", entry, dirPath: ws.absPath(parentRel) } : null;
+});
+
 // 当前展示目标：选中文件 > 选中/视口档案 > 选中普通文件夹 > 视口回退（文件夹 / 快速访问）；
 // 回收站选中（2026-08-16 用户拍板）：Placement 不在 content.placements（folderId 恒 "recycle"），
 // 回退 recycleEntries 取缩略图/显示数据（get_asset_detail 按 assetId 不依赖 Placement）
 const target = computed<DetailTarget | null>(() => {
   const key = content.selectedAssetKey;
+  // 工作空间磁盘实况分支优先：假 id 永不出库侧 detail，后续 file 分支恒不命中（缓存直达）
+  if (key.startsWith(WS_ID_PREFIX)) return wsTarget.value;
   if (key && detail.value) {
     const p =
       content.placements.find((pl) => `${pl.assetId}|${pl.folderId}` === key) ??

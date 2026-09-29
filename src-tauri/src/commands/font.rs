@@ -8,7 +8,9 @@ use tauri::State;
 
 use crate::commands::library::AppState;
 use crate::commands::preview::locate_asset;
+use crate::core::space::WORKSPACE_DIR;
 use crate::services::font;
+use crate::services::workspace as ws;
 
 /// 字体元数据 + 安装状态（预览「其它」页数据源）
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -110,6 +112,47 @@ pub async fn uninstall_font(state: State<'_, AppState>, asset_id: String) -> Res
   Ok(FontInstallState { installed: false })
 }
 
+// ---------- 按真实路径读取（2026-09-26 工作空间三类填充卡对接 · 字体卡） ----------
+
+/// 按真实路径读字体元数据与安装状态（工作空间字体卡）：形状同 get_font_info
+///（originPath = ws 源文件绝对路径，前端 FontFace 经 convertFileSrc 加载）；
+/// 越界 / 非字体 / 解析失败中文报错（前端卡片 catch 兜底系统字体渲染）。
+/// 安装 / 卸载为 assetId 命令 + 系统级写入，ws 不开按路径版（前端 ws 下不出安装钮）。
+/// async：文件 IO + 解析，一律走线程池（规范第 2 条，同 get_font_info）
+#[tauri::command]
+pub async fn get_font_info_by_path(state: State<'_, AppState>, abs_path: String) -> Result<FontInfo, String> {
+  let space = state.space.lock().map_err(|e| e.to_string())?.clone().ok_or_else(|| "请先打开储存空间".to_string())?;
+  let ws_root = space.root.join(WORKSPACE_DIR);
+  font_info_by_path(&ws_root, std::path::Path::new(&abs_path))
+}
+
+/// 按路径读取实现（命令层薄壳，便于单测）：存在性 + workspace 越界校验同
+/// get_media_source_by_path 口径；ws 无 metadata，错误文案取名自路径尾
+fn font_info_by_path(ws_root: &std::path::Path, origin: &std::path::Path) -> Result<FontInfo, String> {
+  if !origin.is_file() || !ws::is_under(ws_root, origin) {
+    return Err("路径不在当前工作空间内（或文件已不存在）".to_string());
+  }
+  let name = || origin.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| origin.to_string_lossy().into_owned());
+  if !font::is_font(origin) {
+    return Err(format!("「{}」不是字体资源", name()));
+  }
+  let Some(fm) = font::probe_font(origin) else {
+    return Err("字体文件解析失败".to_string());
+  };
+  let installed = font::font_installed(&font::font_full_names(origin));
+  Ok(FontInfo {
+    origin_path: origin.to_string_lossy().into_owned(),
+    name: fm.name,
+    full_name: fm.full_name,
+    family: fm.family,
+    style: fm.style,
+    version: fm.version,
+    glyph_count: fm.glyph_count,
+    installed,
+    has_cjk: fm.has_cjk,
+  })
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -150,5 +193,33 @@ mod tests {
     assert!(font::is_font(&origin));
     assert!(font::font_full_names(&origin).is_empty());
     assert!(font::probe_font(&origin).is_none());
+  }
+
+  /// 按路径读取（2026-09-26 工作空间字体卡）：越界 / 不存在 / 非字体 / 假字体一律中文错
+  ///（前端卡片 catch 兜底系统字体渲染）；真字体正路径 = services/font 层职责
+  ///（ANIKIT_TEST_FONT 目检测试），此处不重复
+  #[test]
+  fn font_info_by_path_gates() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws_root = dir.path().join("workspace");
+    std::fs::create_dir_all(&ws_root).unwrap();
+
+    // 假字体：is_font 过扩展名，probe 失败 → 「字体文件解析失败」
+    let fake = ws_root.join("假字体.ttf");
+    std::fs::write(&fake, b"not a font").unwrap();
+    let err = font_info_by_path(&ws_root, &fake).unwrap_err();
+    assert!(err.contains("解析失败"), "{err}");
+
+    // 非字体（扩展名路由）中文错
+    let txt = ws_root.join("笔记.txt");
+    std::fs::write(&txt, b"x").unwrap();
+    let err = font_info_by_path(&ws_root, &txt).unwrap_err();
+    assert!(err.contains("不是字体资源"), "{err}");
+
+    // 越界 / 不存在
+    let outside = dir.path().join("外.ttf");
+    std::fs::write(&outside, b"fake").unwrap();
+    assert!(font_info_by_path(&ws_root, &outside).unwrap_err().contains("不在当前工作空间"));
+    assert!(font_info_by_path(&ws_root, &ws_root.join("不存在.ttf")).unwrap_err().contains("不在当前工作空间"));
   }
 }

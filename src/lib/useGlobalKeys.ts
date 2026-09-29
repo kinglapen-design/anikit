@@ -159,7 +159,8 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     // 工作空间磁盘实况（PRD 02 步骤 2）：F2 重命名 / Del 回收站删除 / Ctrl+C·X 写 ws 剪贴板 /
     // Ctrl+V 粘贴（ws 内剪贴板非空时）接 ws 按路径命令；其余库快捷键（D 副本 / Y 移动 / J 链接 /
     // L 添加链接 / E 发送至 AN 等）在 ws 无对应语义，一律不响应——assetId = ws: 合成假 id
-    // 严禁落入任何 assetId 类命令
+    // 严禁落入任何 assetId 类命令。选中集可含文件夹键（2026-09-26 文件夹卡片 / 树行入素材域），
+    // 复制 / 剪切 / 删除对文件与文件夹混合整批受理（ws 命令按路径无差别）
     if (content.isWorkspaceView) {
       const ws = useWsStore();
       const rels = () =>
@@ -168,7 +169,16 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       if (e.key === "F2") {
         if (selection.count === 1) {
           e.preventDefault();
-          selection.renamingKey = selection.first;
+          // 文件夹键路由到文件夹卡片命名态（renamingKey 只有素材卡消费）；仅当前视口条带内
+          // 可命名——树行选中的当前目录自身不在条带内，保持无响应（右键菜单 / 名称双击可改）
+          const key = selection.first;
+          const [assetId, folderId] = key.split("|");
+          const entry = ws.entries((folderId ?? "").slice(3)).find((x) => `ws:${x.relPath}` === assetId);
+          if (entry?.isDir) {
+            if (content.stripFolders.some((f) => f.id === entry.relPath)) selection.namingFolderCardId = entry.relPath;
+          } else {
+            selection.renamingKey = key;
+          }
         }
         return;
       }
