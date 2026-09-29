@@ -115,7 +115,7 @@ pub fn run() {
       undo: std::sync::Mutex::new(core::undo::UndoManager::default()),
     })
     .setup(|app| {
-      // 日志 release 同样启用（2026-10-03 兼容轮：朋友机透明子窗口创建失败零提示零日志，
+      // 日志 release 同样启用（2026-09-29 兼容轮：朋友机透明子窗口创建失败零提示零日志，
       // 排障纯靠猜——文件日志 = 发版排障唯一线索）；文件在 app_log_dir
       //（%APPDATA%/com.anikit.dev/logs/anikit.log），超 5MB 轮转保留 2 份
       app.handle().plugin(

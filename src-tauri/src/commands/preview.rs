@@ -284,7 +284,7 @@ pub async fn open_preview_window(app: tauri::AppHandle, asset_key: String) -> Re
   Ok(())
 }
 
-/// 子窗口统一打开（预览 / 插件详情共用，2026-10-03 兼容轮）：transparent(true) 优先——
+/// 子窗口统一打开（预览 / 插件详情共用，2026-09-29 兼容轮）：transparent(true) 优先——
 /// tao transparent 是 layered 窗口 hack（主窗口 063 六轮已弃用改 transparent:false + 框架延伸
 /// 方案，子窗口沿用旧方案中），部分机器（实体 Win11 实测：点「新窗口打开」零反应、任务栏
 /// 无窗、无错误提示）创建失败；**失败降级 transparent(false) 重建**（视觉退为实色方角，

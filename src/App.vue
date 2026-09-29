@@ -83,7 +83,7 @@ const webview = getCurrentWebviewWindow();
 // 窗口背景效果模式（7.1 十七轮 · 主窗口骨架轮）：Win11 22H2+ = mica（云母透底），
 // 其余 = solid（实色-1 --n-g-a1-solid 回退）。基态样式即 solid 观感，查询返回 mica
 // 才单向切换——防首帧半透明闪。主窗口与预览子窗口同此一处（.window 为共同根）。
-// URL ?fx=solid|mica 显式指定（2026-10-03 兼容轮：后端透明子窗口创建失败降级非透明
+// URL ?fx=solid|mica 显式指定（2026-09-29 兼容轮：后端透明子窗口创建失败降级非透明
 // 重建时追加 fx=solid——非透明窗口无云母载体，若按主模式 mica 切透明底会露出 webview
 // 白底）；显式指定时跳过 get_window_fx_mode 查询
 const fxForced = new URLSearchParams(window.location.search).get("fx");

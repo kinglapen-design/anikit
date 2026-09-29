@@ -31,7 +31,7 @@ const zoomPct = computed({
   set: (v: number) => preview.zoomAt(v / 100, preview.viewW / 2, preview.viewH / 2),
 });
 
-// 新窗口打开（4.3）：同资产复用聚焦；失败 toast 在封装内（2026-10-03 兼容轮）
+// 新窗口打开（4.3）：同资产复用聚焦；失败 toast 在封装内（2026-09-29 兼容轮）
 async function openInNewWindow(): Promise<void> {
   if (!preview.assetKey) return;
   await openPreviewWindow(preview.assetKey);

@@ -27,7 +27,7 @@ pub async fn open_plugin_window(app: tauri::AppHandle, plugin_id: String) -> Res
     )
   };
   log::info!("[plugin] 创建插件详情子窗口 {label}（transparent）");
-  // 开窗走 preview.rs 共用实现（透明优先 / 失败降级非透明重建，2026-10-03 兼容轮）
+  // 开窗走 preview.rs 共用实现（透明优先 / 失败降级非透明重建，2026-09-29 兼容轮）
   crate::commands::preview::open_child_window(&app, &label, mk_url, "AniKit 插件", w, h, "[plugin]")?;
   Ok(())
 }
