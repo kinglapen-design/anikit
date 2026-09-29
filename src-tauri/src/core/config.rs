@@ -2,6 +2,7 @@
 //! （Windows：%APPDATA%\AniKit），内容：资源库列表 / 工作空间列表 / 全局设置。
 //! 全局唯一，不属于任何库；丢失成本低，损坏时记日志并自愈重建。
 
+use std::fs;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -149,6 +150,16 @@ fn upsert_space(cfg: &mut AppConfig, name: &str, path: &str) {
 
 fn load_from(path: &Path) -> AppConfig {
   if !path.exists() {
+    // 未完成写入兜底（踩坑 095 遗留现场恢复）：旧「先删后换」窗口期被杀会留下
+    // 「目标丢失 + .tmp 完整」——tmp 能解析则恢复当次写入成果并顺手转正，半截 tmp 弃用
+    let tmp = path.with_extension("json.tmp");
+    if tmp.exists() {
+      if let Ok(cfg) = read_json::<AppConfig>(&tmp) {
+        log::warn!("{} 缺失但发现完整 .tmp 残留，已从临时文件恢复并转正", path.display());
+        let _ = fs::rename(&tmp, path);
+        return cfg;
+      }
+    }
     return AppConfig::default();
   }
   match read_json(path) {
@@ -416,6 +427,31 @@ mod tests {
     std::fs::write(&path, "{ broken").unwrap();
     let cfg = load_from(&path);
     assert_eq!(cfg, AppConfig::default());
+  }
+
+  #[test]
+  fn missing_target_recovers_from_tmp_residue() {
+    // 踩坑 095 遗留现场：目标丢失 + .tmp 完整残留（旧「先删后换」窗口期被杀）→ 恢复并转正
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    let mut cfg = AppConfig::default();
+    cfg.settings["mcp"] = serde_json::json!({ "serverEnabled": true, "writeEnabled": true });
+    std::fs::write(path.with_extension("json.tmp"), serde_json::to_string_pretty(&cfg).unwrap())
+      .unwrap();
+    let back = load_from(&path);
+    assert_eq!(back.settings["mcp"]["writeEnabled"], true, "tmp 残留的写入成果应被恢复");
+    assert!(path.exists(), "tmp 应转正为目标文件");
+    assert!(!path.with_extension("json.tmp").exists());
+  }
+
+  #[test]
+  fn missing_target_broken_tmp_falls_back_default() {
+    // 半截 tmp（写 tmp 中途被杀）不可用 → 默认重建，不把坏数据扶正
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    std::fs::write(path.with_extension("json.tmp"), "{ broken").unwrap();
+    let back = load_from(&path);
+    assert_eq!(back, AppConfig::default());
   }
 
   #[test]

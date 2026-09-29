@@ -78,8 +78,8 @@ pub fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T, DataError> {
   serde_json::from_str(&text).map_err(|e| DataError::Corrupt(format!("{}：{e}", path.display())))
 }
 
-/// 原子写 JSON：写入同名 .tmp 后替换目标（Windows 的 rename 不覆盖已有文件，先删后换；
-/// 删与换之间的窗口期极短且 .tmp 仍在，可人工救急）。
+/// 原子写 JSON：写入同名 .tmp 后原子替换目标（Windows = MoveFileExW 覆盖式 rename，
+/// 无「先删后换」窗口期，踩坑 095；POSIX = rename 原子覆盖）。
 /// 输出带缩进，保证人类可读（记事本可救急，PRD 06-03）。
 pub fn write_json<T: Serialize>(path: &Path, data: &T) -> Result<(), DataError> {
   let text =
@@ -91,10 +91,40 @@ pub fn write_json<T: Serialize>(path: &Path, data: &T) -> Result<(), DataError> 
 pub(crate) fn write_text_atomic(path: &Path, text: &str) -> Result<(), DataError> {
   let tmp = path.with_extension("json.tmp");
   fs::write(&tmp, text)?;
-  if path.exists() {
-    fs::remove_file(path)?;
+  replace_file(&tmp, path)
+}
+
+/// 原子替换目标文件（2026-09-29 踩坑 095：原「先删目标再 rename」在删与换之间有窗口期——
+/// 进程恰在窗口内被杀（强杀 / 关电源）= 目标永久丢失。config.json 消失后启动按默认重建，
+/// ui / 窗口几何由前端内存态随即写回无感，唯 MCP 写入闸 / 插件服务开关等无前端快照的子树
+/// 静默回默认（用户实机「MCP 写入开关自己关掉」病根））：
+/// Windows = MoveFileExW（REPLACE_EXISTING 覆盖 + WRITE_THROUGH 写穿落盘）原子替换无窗口期；
+/// 其余平台 fs::rename 本就原子覆盖。
+#[cfg(windows)]
+fn replace_file(tmp: &Path, path: &Path) -> Result<(), DataError> {
+  use std::os::windows::ffi::OsStrExt;
+  use windows::Win32::Storage::FileSystem::{
+    MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+  };
+  use windows::core::PCWSTR;
+  let to_wide = |p: &Path| -> Vec<u16> { p.as_os_str().encode_wide().chain(Some(0)).collect() };
+  let from_w = to_wide(tmp);
+  let to_w = to_wide(path);
+  unsafe {
+    MoveFileExW(
+      PCWSTR(from_w.as_ptr()),
+      PCWSTR(to_w.as_ptr()),
+      MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+    )
   }
-  fs::rename(&tmp, path)?;
+  .map_err(|e| DataError::Io(std::io::Error::other(e)))?;
+  Ok(())
+}
+
+/// 非 Windows：POSIX rename 原子覆盖已存在目标
+#[cfg(not(windows))]
+fn replace_file(tmp: &Path, path: &Path) -> Result<(), DataError> {
+  fs::rename(tmp, path)?;
   Ok(())
 }
 
@@ -130,6 +160,19 @@ mod tests {
     fs::write(&path, r#"{ "folders": [], "items": [] }"#).unwrap();
     let result = read_json::<crate::core::models::FoldersFile>(&path);
     assert!(matches!(result, Err(DataError::Corrupt(_))));
+  }
+
+  #[test]
+  fn overwrite_existing_target() {
+    // 目标已存在时覆盖写（原子替换路径，踩坑 095 前是「先删后换」）
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    fs::write(&path, r#"{ "version": 1, "settings": { "old": true } }"#).unwrap();
+    let data = crate::core::models::FoldersFile::new();
+    write_json(&path, &data).unwrap();
+    let back: crate::core::models::FoldersFile = read_json(&path).unwrap();
+    assert_eq!(data, back);
+    assert!(!dir.path().join("config.json.tmp").exists());
   }
 
   #[test]
