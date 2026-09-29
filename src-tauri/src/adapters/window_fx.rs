@@ -152,6 +152,34 @@ pub fn extend_frame(hwnd: windows::Win32::Foundation::HWND) {
   log::info!("[window_fx] DwmExtendFrameIntoClientArea(-1) = {r:?}");
 }
 
+/// 常态边框色（COLORREF 0x00BBGGRR）= 通用/六级 --n-g6 #333——与实色模式前端自绘
+/// 边框同色，云母/实色两模式全窗统一。
+pub const BORDER_COLOR_NORMAL: u32 = 0x0033_3333;
+
+/// 窗口边框显式染色（2026-09-29 修复「边框线没了」）：**Win11 25H2（26200）起 DWM
+/// 默认边框（DWMWA_COLOR_NONE）不再绘制**——实机剖线实证窗外→窗内像素直接突变无过渡，
+/// 显式染色则 DWM 正常画出 2 物理 px 线（25H2 实测）。故「DWM 默认半透明边框」口径
+/// （2026-09-06 六轮定）在 25H2 失效，回到显式染色（同 0830 方案，色仍 #333）。
+/// 选择模式进出由 set_main_border_picking 切染品牌色 ↔ 本函数染回常态。
+#[cfg(windows)]
+pub fn paint_border(hwnd: windows::Win32::Foundation::HWND) {
+  use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
+  let color: u32 = BORDER_COLOR_NORMAL;
+  let r = unsafe {
+    DwmSetWindowAttribute(
+      hwnd,
+      DWMWA_BORDER_COLOR,
+      &color as *const _ as *const std::ffi::c_void,
+      std::mem::size_of_val(&color) as u32,
+    )
+  };
+  log::info!("[window_fx] DwmSetWindowAttribute(BORDER_COLOR, #333) = {r:?}");
+}
+
+/// 非 Windows 占位（主窗口/子窗口调用点不重复 cfg 块）。
+#[cfg(not(windows))]
+pub fn paint_border(_hwnd: ()) {}
+
 /// build 号 → 模式（纯函数，单测边界）。
 pub fn mode_for_build(build: u32) -> &'static str {
   if build >= 22621 {

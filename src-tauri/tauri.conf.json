@@ -22,7 +22,8 @@
         "backgroundColor": "#00000000",
         "shadow": true,
         "center": true,
-        "visible": false
+        "visible": false,
+        "theme": "Dark"
       }
     ],
     "security": {

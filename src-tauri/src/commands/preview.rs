@@ -280,11 +280,18 @@ pub async fn open_preview_window(app: tauri::AppHandle, asset_key: String) -> Re
     .transparent(true)
     .shadow(true)
     .center()
+    // 锁深色（2026-09-29，理由见 plugin.rs 同注 / tauri.conf theme:"Dark"）
+    .theme(Some(tauri::Theme::Dark))
     .build()
     .map_err(|e| e.to_string())
   .map(|win| {
-    // 与主窗口同口径接云母（7.1 十七轮；前端 PreviewWindow 根同样查 get_window_fx_mode 切底色）
+    // 与主窗口同口径接云母（7.1 十七轮；前端 PreviewWindow 根同样查 get_window_fx_mode 切底色）；
+    // 边框 = 显式染 #333（2026-09-29：25H2 起 DWM 默认边框不再绘制）
     crate::adapters::window_fx::apply(&win);
+    #[cfg(target_os = "windows")]
+    if let Ok(raw) = win.hwnd() {
+      crate::adapters::window_fx::paint_border(windows::Win32::Foundation::HWND(raw.0 as _));
+    }
   })?;
   Ok(())
 }

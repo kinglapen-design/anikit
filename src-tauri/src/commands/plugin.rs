@@ -30,10 +30,18 @@ pub async fn open_plugin_window(app: tauri::AppHandle, plugin_id: String) -> Res
     .transparent(true)
     .shadow(true)
     .center()
+    // 锁深色（2026-09-29 修复「浅色系统主题下云母变白」）：默认跟随系统会让浅色主题
+    // 把窗口 dark mode 置 0 → Mica 浅色/退化白底 × 深色 UI 无浅色适配；锁定后 Mica
+    // 恒深色变体、DWM 退化实底也恒深色。与主窗口 tauri.conf theme:"Dark" 同口径
+    .theme(Some(tauri::Theme::Dark))
     .build()
     .map_err(|e| e.to_string())?;
-  // 与主窗口 / 预览窗同口径接云母（7.1 十七轮）；边框 = DWM 默认（2026-09-06 六轮用户定：
-  // DWM 原生默认边框即半透明，全窗统一交 DWM——主窗口 #333 实心染色同轮撤销）
+  // 与主窗口 / 预览窗同口径接云母（7.1 十七轮）；边框 = 显式染 #333（2026-09-29 修订：
+  // 25H2 起 DWM 默认边框 COLOR_NONE 不再绘制，显式染色才画线）
   crate::adapters::window_fx::apply(&win);
+  #[cfg(target_os = "windows")]
+  if let Ok(raw) = win.hwnd() {
+    crate::adapters::window_fx::paint_border(windows::Win32::Foundation::HWND(raw.0 as _));
+  }
   Ok(())
 }

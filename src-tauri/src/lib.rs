@@ -127,6 +127,10 @@ pub fn run() {
       // 提交新任务作废旧任务（快速切换素材不堆积），须在命令可达前初始化
       services::preview_queue::init(app.handle().clone());
 
+      // 工作空间缩略图 worker 池（2026-09-26 性能优化）：固定并发 + 跨请求去重 + 失败记忆，
+      // 须在命令可达前初始化（事件经 workspace-thumbs-ready 回填）
+      services::ws_thumb_queue::init(app.handle().clone());
+
       // 动图帧流服务（阶段四·自研解码器）：WS server 推帧，预览窗口动图播放源
       // cfg(not(test))：init 内部持 AppHandle + 起 WS server，测试构建编译不出该函数（踩坑 014）
       #[cfg(not(test))]
@@ -255,9 +259,10 @@ pub fn run() {
             // caption、还原加回）。失焦欺骗：骗 DWM 恒按激活渲染——失焦不再退化云母成实色、
             // 阴影不再收小。详见 window_fx::main_window_guard 注释
             adapters::window_fx::install_main_window_guard(hwnd);
-            // 主窗口边框 = **DWM 默认半透明**（2026-09-06 六轮用户改定：DWM 原生默认边框即半透明，
-            // 直接交给 DWM，全窗统一——原 2026-08-30「实心 #333 染色」撤销；子窗口本就未染色同此口径；
-            // 选择模式进出仍由 set_main_border_picking 切染品牌色 ↔ COLOR_NONE 恢复默认）。
+            // 主窗口边框 = 显式染 --n-g6 #333（2026-09-29 修订：Win11 25H2 起 DWM 默认边框
+            // COLOR_NONE 不再绘制——实机剖线实证窗外→窗内直接突变无过渡、显式染色正常画线；
+            // 原 2026-09-06 六轮「DWM 默认半透明」口径在 25H2 失效，回到显式染色。
+            // 选择模式进出仍由 set_main_border_picking 切染品牌色 ↔ 染回 #333）。
             // 云母模式边框由 DWM 沿圆角裁切路径画——恒连续恒贴边；前端 ::before 云母模式不画
             //（DWM 线与 CSS inset 0 线有 ~0.5px 系统错位，双画恒双层，踩坑 063），
             // 实色模式前端自绘（Win10 DWM 无默认边框可画）。
@@ -267,6 +272,7 @@ pub fn run() {
             // 最大化摘 caption、还原加回，最大化云母保留，
             // window_fx::extend_frame / sync_caption_for_state）。
             adapters::window_fx::extend_frame(hwnd);
+            adapters::window_fx::paint_border(hwnd);
           }
         }
 
@@ -348,12 +354,16 @@ pub fn run() {
       commands::media::get_media_source,
       commands::media::get_media_source_by_path,
       commands::media::get_audio_peaks,
+      commands::media::get_audio_peaks_by_path,
       commands::font::get_font_info,
+      commands::font::get_font_info_by_path,
       commands::font::install_font,
       commands::font::uninstall_font,
       commands::text::read_text_asset,
+      commands::text::read_text_by_path,
       commands::text::write_text_asset,
       commands::docx::read_docx_asset,
+      commands::docx::read_docx_by_path,
       commands::notes::get_notes,
       commands::notes::set_note,
       commands::notes::get_note_thumb,

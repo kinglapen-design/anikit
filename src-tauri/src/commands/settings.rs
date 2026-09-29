@@ -40,8 +40,9 @@ pub async fn get_window_fx_mode() -> Result<String, String> {
 /// 主窗口 DWM 边框色随选择模式切换（6.2 四重标识之一；踩坑 063 六轮定：云母模式边框 =
 /// DWM 染色线独存，前端零绘制——CSS 任何线/环与 DWM 线并集必错位分离）。
 /// picking = 品牌色-常态 #0F89EC（2026-08-30 用户改定，原 品牌色-边框线 #3CDDD2 废除）、
-/// 常态 = **COLOR_NONE 恢复 DWM 默认半透明**（2026-09-06 六轮用户改定——DWM 原生默认边框即半透明，
-/// 直接交给 DWM；原「实心 #333」档撤销）。Win11 22000+ 生效，Win10 忽略（实色模式边框前端自绘，
+/// 常态 = 染回 #333（window_fx::BORDER_COLOR_NORMAL；2026-09-29 修订——Win11 25H2 起
+/// COLOR_NONE 默认边框不再绘制，恢复原「恢复默认」会丢边框线）。
+/// Win11 22000+ 生效，Win10 忽略（实色模式边框前端自绘，
 /// 调用无害）；任何失败静默 Ok——掉回常态色，观感可降级不阻断。
 #[tauri::command]
 pub async fn set_main_border_picking(app: tauri::AppHandle, picking: bool) -> Result<(), String> {
@@ -54,10 +55,12 @@ pub async fn set_main_border_picking(app: tauri::AppHandle, picking: bool) -> Re
       match w.hwnd() {
         Ok(raw) => {
           let hwnd = HWND(raw.0 as _);
-          // COLORREF 0x00BBGGRR：品牌色-常态 #0F89EC → B=0xEC G=0x89 R=0x0F；
-          // 常态 = DWMWA_COLOR_NONE（0xFFFFFFFE，恢复 DWM 默认半透明边框，2026-09-06 六轮用户改定）
-          const DWMWA_COLOR_NONE: u32 = 0xFFFF_FFFE;
-          let border: u32 = if picking { 0x00EC_890F } else { DWMWA_COLOR_NONE };
+          // COLORREF 0x00BBGGRR：品牌色-常态 #0F89EC → B=0xEC G=0x89 R=0x0F
+          let border: u32 = if picking {
+            0x00EC_890F
+          } else {
+            crate::adapters::window_fx::BORDER_COLOR_NORMAL
+          };
           let r = unsafe {
             DwmSetWindowAttribute(
               hwnd,
