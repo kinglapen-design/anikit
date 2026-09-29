@@ -115,13 +115,20 @@ pub fn run() {
       undo: std::sync::Mutex::new(core::undo::UndoManager::default()),
     })
     .setup(|app| {
-      if cfg!(debug_assertions) {
-        app.handle().plugin(
-          tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build(),
-        )?;
-      }
+      // 日志 release 同样启用（2026-10-03 兼容轮：朋友机透明子窗口创建失败零提示零日志，
+      // 排障纯靠猜——文件日志 = 发版排障唯一线索）；文件在 app_log_dir
+      //（%APPDATA%/com.anikit.dev/logs/anikit.log），超 5MB 轮转保留 2 份
+      app.handle().plugin(
+        tauri_plugin_log::Builder::default()
+          .level(log::LevelFilter::Info)
+          .targets([
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: None }),
+          ])
+          .max_file_size(5_000_000)
+          .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(2))
+          .build(),
+      )?;
 
       // 预览解析队列（4.3 预览窗口）：单 worker 串行执行 psd 解码 / 帧条生成，
       // 提交新任务作废旧任务（快速切换素材不堆积），须在命令可达前初始化

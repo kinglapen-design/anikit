@@ -24,6 +24,7 @@ import { useTabsStore } from "../../stores/tabs";
 import { previewSession } from "../../stores/preview";
 import type { CtxEntry } from "../contextMenus";
 import { isSequence as isSequenceAsset, isThumbCapableExt } from "../formatBadge";
+import { openPreviewWindow } from "../previewOps";
 import { assetPromptEntries } from "./promptMenu";
 import {
   copyAssetDescriptions,
@@ -116,7 +117,7 @@ export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
       shortcut: "Ctrl+Enter",
       action: () => useTabsStore().openPreviewInNewTab(panelId, assetKey),
     },
-    { label: "新窗口打开", action: () => void invoke("open_preview_window", { assetKey }) },
+    { label: "新窗口打开", action: () => void openPreviewWindow(assetKey) },
     { label: "在默认应用打开", shortcut: "Shift+Enter", action: () => openDefaultApp(assetId) },
     { label: "在其他应用打开", action: () => void openWithDialog(assetId) },
     // 发送至 Animate（8.3，PRD 07-04 点亮）：仅 fla + 单选（多选发送记 09 待办）；
@@ -354,7 +355,7 @@ function virtualAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
       shortcut: "Ctrl+Enter",
       action: () => useTabsStore().openPreviewInNewTab(panelId, assetKey),
     },
-    { label: "新窗口打开", action: () => void invoke("open_preview_window", { assetKey }) },
+    { label: "新窗口打开", action: () => void openPreviewWindow(assetKey) },
     { label: "在默认应用打开", shortcut: "Shift+Enter", action: () => openDefaultApp(assetId) },
     { label: "在其他应用打开", action: () => void openWithDialog(assetId) },
     // 发送至 Animate：仅 fla + 单选（同主菜单口径）
@@ -480,7 +481,7 @@ function pickerAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
     });
   }
   entries.push(
-    { label: "新窗口打开", action: () => void invoke("open_preview_window", { assetKey }) },
+    { label: "新窗口打开", action: () => void openPreviewWindow(assetKey) },
     { label: "在默认应用打开", action: () => openDefaultApp(assetId) },
     { label: "在其他应用打开", action: () => void openWithDialog(assetId) },
     { label: "在资源管理器打开", action: () => revealWithWarning(assetId) },

@@ -10,7 +10,6 @@
 // other：返回、索引、插件、默认应用打开、新窗口打开、上/下一个。
 // window 模式（新窗口打开）：返回 + 索引替换为文件名标题，加置顶与完整窗口控制按钮（PRD 4.3）。
 import { computed, inject } from "vue";
-import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import IconButton from "./buttons/IconButton.vue";
 import SideSlider from "./SideSlider.vue";
@@ -18,6 +17,7 @@ import WindowControls from "./WindowControls.vue";
 import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 import { useUiStore } from "../stores/ui";
 import { openPluginPanel } from "../lib/pluginPanel";
+import { openPreviewWindow } from "../lib/previewOps";
 
 withDefaults(defineProps<{ window?: boolean }>(), { window: false });
 
@@ -31,10 +31,10 @@ const zoomPct = computed({
   set: (v: number) => preview.zoomAt(v / 100, preview.viewW / 2, preview.viewH / 2),
 });
 
-// 新窗口打开（4.3）：同资产复用聚焦
+// 新窗口打开（4.3）：同资产复用聚焦；失败 toast 在封装内（2026-10-03 兼容轮）
 async function openInNewWindow(): Promise<void> {
   if (!preview.assetKey) return;
-  await invoke("open_preview_window", { assetKey: preview.assetKey });
+  await openPreviewWindow(preview.assetKey);
 }
 
 // 工作空间磁盘实况（PRD 02 步骤 1）：预览目标是 ws 合成项（assetId 假 id）——

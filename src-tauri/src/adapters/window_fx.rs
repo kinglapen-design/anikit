@@ -180,6 +180,18 @@ pub fn paint_border(hwnd: windows::Win32::Foundation::HWND) {
 #[cfg(not(windows))]
 pub fn paint_border(_hwnd: ()) {}
 
+/// 窗口级边框染色封装：hwnd 提取与 cfg 收编（preview / plugin 子窗口调用点不再重复 cfg 块）。
+#[cfg(windows)]
+pub fn paint_window_border(win: &tauri::WebviewWindow) {
+  if let Ok(raw) = win.hwnd() {
+    paint_border(windows::Win32::Foundation::HWND(raw.0 as _));
+  }
+}
+
+/// 非 Windows 占位。
+#[cfg(not(windows))]
+pub fn paint_window_border(_win: &tauri::WebviewWindow) {}
+
 /// build 号 → 模式（纯函数，单测边界）。
 pub fn mode_for_build(build: u32) -> &'static str {
   if build >= 22621 {

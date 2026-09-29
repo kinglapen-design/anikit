@@ -21,27 +21,13 @@ pub async fn open_plugin_window(app: tauri::AppHandle, plugin_id: String) -> Res
     win.set_focus().map_err(|e| e.to_string())?;
     return Ok(());
   }
-  let url = tauri::WebviewUrl::App(format!("index.html?plugin={plugin_id}").into());
-  let win = tauri::WebviewWindowBuilder::new(&app, &label, url)
-    .title("AniKit 插件")
-    .inner_size(w, h)
-    .resizable(true)
-    .decorations(false)
-    .transparent(true)
-    .shadow(true)
-    .center()
-    // 锁深色（2026-09-29 修复「浅色系统主题下云母变白」）：默认跟随系统会让浅色主题
-    // 把窗口 dark mode 置 0 → Mica 浅色/退化白底 × 深色 UI 无浅色适配；锁定后 Mica
-    // 恒深色变体、DWM 退化实底也恒深色。与主窗口 tauri.conf theme:"Dark" 同口径
-    .theme(Some(tauri::Theme::Dark))
-    .build()
-    .map_err(|e| e.to_string())?;
-  // 与主窗口 / 预览窗同口径接云母（7.1 十七轮）；边框 = 显式染 #333（2026-09-29 修订：
-  // 25H2 起 DWM 默认边框 COLOR_NONE 不再绘制，显式染色才画线）
-  crate::adapters::window_fx::apply(&win);
-  #[cfg(target_os = "windows")]
-  if let Ok(raw) = win.hwnd() {
-    crate::adapters::window_fx::paint_border(windows::Win32::Foundation::HWND(raw.0 as _));
-  }
+  let mk_url = |fx_solid: bool| {
+    tauri::WebviewUrl::App(
+      format!("index.html?plugin={plugin_id}{}", if fx_solid { "&fx=solid" } else { "" }).into(),
+    )
+  };
+  log::info!("[plugin] 创建插件详情子窗口 {label}（transparent）");
+  // 开窗走 preview.rs 共用实现（透明优先 / 失败降级非透明重建，2026-10-03 兼容轮）
+  crate::commands::preview::open_child_window(&app, &label, mk_url, "AniKit 插件", w, h, "[plugin]")?;
   Ok(())
 }

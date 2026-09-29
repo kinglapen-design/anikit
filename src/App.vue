@@ -83,7 +83,11 @@ const webview = getCurrentWebviewWindow();
 // 窗口背景效果模式（7.1 十七轮 · 主窗口骨架轮）：Win11 22H2+ = mica（云母透底），
 // 其余 = solid（实色-1 --n-g-a1-solid 回退）。基态样式即 solid 观感，查询返回 mica
 // 才单向切换——防首帧半透明闪。主窗口与预览子窗口同此一处（.window 为共同根）。
-const fxMode = ref<"solid" | "mica">("solid");
+// URL ?fx=solid|mica 显式指定（2026-10-03 兼容轮：后端透明子窗口创建失败降级非透明
+// 重建时追加 fx=solid——非透明窗口无云母载体，若按主模式 mica 切透明底会露出 webview
+// 白底）；显式指定时跳过 get_window_fx_mode 查询
+const fxForced = new URLSearchParams(window.location.search).get("fx");
+const fxMode = ref<"solid" | "mica">(fxForced === "mica" ? "mica" : "solid");
 
 // 启动时未打开任何素材库 → 强制弹初次打开向导（38_向导稿，2.1；状态在 libraryOps.wizardState）
 const wizardOpen = () => wizardState.open;
@@ -176,12 +180,15 @@ let unlistenDragDrop: (() => void) | undefined;
 
 onMounted(() => {
   void syncMaximized();
-  // 查询窗口背景效果模式（返回 mica 才切半透明底；失败保持 solid 实色）
-  void invoke<string>("get_window_fx_mode")
-    .then((m) => {
-      if (m === "mica") fxMode.value = "mica";
-    })
-    .catch(() => {});
+  // 查询窗口背景效果模式（返回 mica 才切半透明底；失败保持 solid 实色）；
+  // URL 显式指定 fx 的窗口（后端降级非透明兼容窗）跳过查询
+  if (fxForced !== "solid" && fxForced !== "mica") {
+    void invoke<string>("get_window_fx_mode")
+      .then((m) => {
+        if (m === "mica") fxMode.value = "mica";
+      })
+      .catch(() => {});
+  }
   void ui.initSettings(); // 全局 UI 设置加载 + 变更防抖写回（2026-07-28 持久化）
   window.addEventListener("resize", onResize);
   // 视图切换（6.1）：左栏选中项变化即清空素材选择；

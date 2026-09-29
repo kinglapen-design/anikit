@@ -14,6 +14,7 @@ import { useTabsStore } from "../../stores/tabs";
 import type { CtxEntry } from "../contextMenus";
 import { copyAssetDescriptions, copyAssetTags, pasteDescriptions, pasteTags } from "../customDataOps";
 import { copyAssetLink, copyAssetPath, copyBase64, copyName, pickExportAssets, revealWithWarning } from "../menuOps";
+import { openPreviewWindow } from "../previewOps";
 import {
   clearRecycle,
   deleteRecycle,
@@ -73,7 +74,7 @@ export function recycleCardSpec(p: PlacementView | undefined, panelId: string): 
       shortcut: "Ctrl+Enter",
       action: () => useTabsStore().openPreviewInNewTab(panelId, assetKey), // 2026-09-25 per-panel 会话化接入
     },
-    { label: "新窗口打开", action: () => void invoke("open_preview_window", { assetKey }) },
+    { label: "新窗口打开", action: () => void openPreviewWindow(assetKey) },
     { label: "在默认应用打开", shortcut: "Shift+Enter", action: () => openDefaultApp(assetId) },
     { label: "在其他应用打开", action: () => void openWithDialog(assetId) },
     // 发送至 Animate（同 03 稿口径：仅 fla + 单选）——回收站场景 = 发送查看确认
