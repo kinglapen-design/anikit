@@ -117,7 +117,7 @@ pub fn run() {
     .setup(|app| {
       // 日志 release 同样启用（2026-09-29 兼容轮：朋友机透明子窗口创建失败零提示零日志，
       // 排障纯靠猜——文件日志 = 发版排障唯一线索）；文件在 app_log_dir
-      //（%APPDATA%/com.anikit.dev/logs/anikit.log），超 5MB 轮转保留 2 份
+      //（Tauri v2 Windows = %LOCALAPPDATA%/com.anikit.dev/logs/anikit.log），超 5MB 轮转保留 2 份
       app.handle().plugin(
         tauri_plugin_log::Builder::default()
           .level(log::LevelFilter::Info)
