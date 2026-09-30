@@ -404,6 +404,8 @@ watch(visibleCards, (cards) => {
 // 注册表多网格共存——**不再按 panelActive 注册**（跨 pane 落点需要每个可见网格都在册；
 // dockview 隐藏标签页层 rect 全零，命中判定天然不中）；token 归属本实例，卸载只清自己；
 // visibleKeys = 网格可见序（组拼接序——显示排序物化以它为准）；scroll 供边缘自动滚动；
+// layer = **视口根**（pane 级落点命中区——2026-10-01 走查修复：原传卡片层只到内容高，
+// 下半视口不触发 pane 高亮；间隙解析的卡片层坐标系在 makeGridResolver 自持，不受影响）；
 // dropFolder = 并入移动目标（folder: → id / 未分类 root / 回收站 / ws / 虚拟视图 null 不落）
 const gridToken = ref(0);
 onMounted(() => {
@@ -412,7 +414,7 @@ onMounted(() => {
     resolve: resolveGap,
     visibleKeys: () => displayItems.value.map((p) => `${p.assetId}|${p.folderId}`),
     scroll: { viewport: () => viewportRef.value, scrollTo, pos: () => pos.value },
-    layer: () => cardsLayerRef.value,
+    layer: () => viewportRef.value,
     dropFolder: () => {
       const vk = props.viewKey;
       if (vk.startsWith("folder:")) return vk.slice(7);

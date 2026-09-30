@@ -134,8 +134,9 @@ export interface GridScroll {
   scrollTo: (y: number) => void;
   pos: () => number;
 }
-/** 网格注册项（2026-09-17 分屏跨视口拖拽改造，单例 → 注册表）：
- * 每个可见 AssetGrid 一份；命中按层 rect 包含判定（dockview 隐藏标签页 rect 全零天然不中） */
+/** 网格注册项（2026-09-17 分屏跨视口拖拽改造，单例 → 注册表）：每个可见 AssetGrid 一份；
+ * pane 命中按**视口根** rect 包含判定（2026-10-01 走查修复——原卡片层只到内容高，下半视口
+ * 不触发 pane 高亮；dockview 隐藏标签页 rect 全零天然不中） */
 export interface GridRegistration {
   resolve: GridResolver;
   visibleKeys?: () => string[];
@@ -432,7 +433,10 @@ function updateDropTarget(e: DropPointer): void {
         return;
       }
       if (target.startsWith("ws:")) {
-        if (items.some((it) => it.assetId.startsWith("ws:"))) {
+        // ws 素材按路径移动（库素材不落 ws）；**同目录禁止高亮**（2026-10-01 用户定，库分支
+        // 同口径）——被拖 ws 项全已在目标目录 = 移动无意义，不出落点
+        const wsItems = items.filter((it) => it.assetId.startsWith("ws:"));
+        if (wsItems.length > 0 && !wsItems.every((it) => it.folderId === target)) {
           dragView.paneDrop = token;
           sess.drop = async () => dropWsAssetsInto(items, target.slice(3));
         }
@@ -468,6 +472,48 @@ function updateDropTarget(e: DropPointer): void {
       return;
     }
   }
+}
+
+// —— OS 文件拖入悬停高亮（2026-10-01 ws ↔ Explorer 互通走查：外部拖入无提示）——
+// Tauri onDragDropEvent 的 enter / over 驱动，落点语义与 App.vue onDrop 解析一致：
+// 树行（库文件夹 / ws）/ 文件夹卡片（库 / ws）= 并入高亮；可导入视口（库文件夹 / 未分类 /
+// ws）= pane 级高亮；虚拟视图 / 回收站视口（拒入口径）不出。视觉槽与内部拖拽共用
+//（dragView.tree / folderCardId / paneDrop）——单指针同一时刻只拖一样，两引擎不并发；
+// drop / leave 调 osFileDragHoverEnd 清槽
+export function osFileDragHover(x: number, y: number): void {
+  resetIndicators();
+  const el = document.elementFromPoint(x, y) as HTMLElement | null;
+  if (!el) return;
+  const treeItem = el.closest<HTMLElement>(".tree-item[data-folder-id]");
+  if (treeItem) {
+    dragView.tree = { folderId: treeItem.getAttribute("data-folder-id")!, zone: "into" };
+    return;
+  }
+  const wsFolderCard = el.closest<HTMLElement>(".folder-card[data-ws-folder]");
+  if (wsFolderCard) {
+    dragView.folderCardId = `ws:${wsFolderCard.getAttribute("data-ws-folder")}`;
+    return;
+  }
+  const folderCard = el.closest<HTMLElement>(".folder-card[data-folder-id], .archive-card[data-folder-id]");
+  if (folderCard) {
+    dragView.folderCardId = folderCard.getAttribute("data-folder-id")!;
+    return;
+  }
+  for (const [token, grid] of gridResolvers) {
+    const layer = grid.layer();
+    if (!layer) continue;
+    const r = layer.getBoundingClientRect();
+    if (r.width === 0 || x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+    const target = grid.dropFolder();
+    if (target === null || target === "recycle") return; // 虚拟视图 / 回收站视口 = 拒入，不高亮
+    dragView.paneDrop = token;
+    return;
+  }
+}
+
+// OS 文件拖入高亮清槽（drop 前 / leave 调用）
+export function osFileDragHoverEnd(): void {
+  resetIndicators();
 }
 
 // 文件夹卡片同级判定：目标卡片在当前文件夹条带、且拖拽组有成员在条带（混排护栏，同级排序）

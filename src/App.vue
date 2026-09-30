@@ -61,6 +61,7 @@ import { useWsStore } from "./stores/ws";
 import { initPreviewListeners } from "./stores/preview";
 import { wizardState, reopenLastSession, createLibraryModalState, mergeLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener, renameLibraryState } from "./lib/libraryOps";
 import { playAlert } from "./lib/sounds";
+import { osFileDragHover, osFileDragHoverEnd } from "./lib/dragOperation";
 import { closePluginPanel, pluginPanelState } from "./lib/pluginPanel";
 import { dupScanState } from "./lib/dupScanOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
@@ -233,8 +234,16 @@ onMounted(() => {
   void initOrphanInfosListener(); // 无主资产警告（2026-09-02）——须在开库（reopenLastSession）前注册
   void initPreviewListeners(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3；扇出全部已建会话）
   void webview.onDragDropEvent((event) => {
-    if (event.payload.type === "drop") {
-      void onDrop(event.payload.paths, event.payload.position.x, event.payload.position.y);
+    const p = event.payload;
+    // OS 文件拖入悬停高亮（2026-10-01 走查：外部拖入无提示）——enter / over 实时解落点给
+    // 树行 / 文件夹卡 / 视口高亮（dragOperation 同视觉槽）；leave / drop 清槽后走落盘流
+    if (p.type === "enter" || p.type === "over") {
+      osFileDragHover(p.position.x, p.position.y);
+      return;
+    }
+    osFileDragHoverEnd();
+    if (p.type === "drop") {
+      void onDrop(p.paths, p.position.x, p.position.y);
     }
   }).then((fn) => {
     unlistenDragDrop = fn;
