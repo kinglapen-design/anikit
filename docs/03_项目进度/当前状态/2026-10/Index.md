@@ -1,9 +1,10 @@
 # 当前状态 · 2026-10
 
-> 本月 6 条状态记录。返回 [当前状态 Index](../Index.md)。
+> 本月 7 条状态记录。返回 [当前状态 Index](../Index.md)。
 
 | 文件 | 日期 | 标题 |
 | --- | --- | --- |
+| [2026-10-01_07_工作空间与资源管理器拖拽剪贴板互通.md](2026-10-01_07_工作空间与资源管理器拖拽剪贴板互通.md) | 2026-10-01 | 工作空间 ↔ 资源管理器拖拽与剪贴板互通 | ：待办立项 A 节兑现，先改 PRD 02-13 再动工——拖入一律复制（onDrop ws 落点三分支 + ws_import_paths / import_external_entries 护栏）；拖出复制语义（ws_drag_paths 共用 start_files_drag）；剪贴板双向（ws_write_clipboard 剪切附 DropEffect=MOVE，粘贴序号仲裁 ws_paste_system）；菜单「粘贴」条件扩 + spec async 化；剪切半透明三处接通；558 测绿 + clippy 净 + typecheck 绿；待实机走查 |
 | [2026-10-01_06_工作空间性能优化二轮.md](2026-10-01_06_工作空间性能优化二轮.md) | 2026-10-01 | 工作空间性能优化二轮 | ：待办三点 + 观察项落地——①fs-changed 负载带变更目录 rel 集（父+祖父，null 兜底全量），前端 rescanDirs 精准重扫；②DirScan thumbs 快照集合 + probe.json 魔数探测缓存（含负缓存）；③ensureDir 挂载跳过 + 切空间 ws store $reset；④worker 池上限 4→8；556 测绿 + clippy 净 + typecheck 绿；待实机走查 |
 | [2026-10-01_05_回收站行归位与快速入口总容器.md](2026-10-01_05_回收站行归位与快速入口总容器.md) | 2026-10-01 | 回收站行归位与快速入口总容器 | ：用户走查修订——回收站行挪根层最上方 + 套库快速访问同口径无标题总容器（行 gap 2，后续入口行直接加不动嵌套）；零新组件零新 token；typecheck 绿 |
 | [2026-10-01_04_工作空间侧栏回收站行.md](2026-10-01_04_工作空间侧栏回收站行.md) | 2026-10-01 | 工作空间侧栏回收站行 | ：ws 删除走系统回收站（PRD 06 既有）——根层底部固定「回收站」行（库快速访问同款 TreeRowItem quick + trash，无数量），点击 = 新命令 open_system_recycle_bin（explorer shell:RecycleBinFolder）；554 测绿 + clippy 净 + typecheck 绿；待实机走查 |
