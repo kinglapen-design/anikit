@@ -4,7 +4,8 @@
 // 剪贴板组（复制 / 剪切 / 粘贴条件出现 / 重命名单选 / 创建副本）│ 复制数据 ▸ │ 删除 │ 刷新；
 // 文件夹（卡片与树行共用主体）= 新标签页 / 新建文件夹（同级）/ 新建子文件夹 │ 固定·取消固定 │
 // 剪贴板组 │ 复制数据 ▸ │ 资源管理器 / 系统菜单 │ 删除 │ 刷新（树行无重命名——ws 树无行内命名态）；
-// 空白 = 新建文件夹 / 粘贴（剪贴板非空）│ 在资源管理器中显示 │ 刷新。
+// 空白 = 新建文件夹 / 粘贴（剪贴板非空）│ 在资源管理器中显示 / 系统菜单（目录背景版——经典版
+// 新建 / 排序方式 / 查看 / 刷新 / 属性 在其中）│ 刷新。
 // 「系统菜单」= Windows 原生右键菜单（IContextMenu：压缩解压 / TortoiseGit 等 shell 扩展全量）。
 // 一律按路径走 ws 命令（assetId = ws: 合成假 id 严禁发 assetId 类命令）；
 // 写操作失败 toast 报错，成功由 ws store 局部重扫（watcher 回声后端消重）。
@@ -29,6 +30,7 @@ import {
   sendPathToAnimate,
   wsFileBase64,
   wsShellMenu,
+  wsShellMenuBackground,
 } from "../wsOps";
 import { copyText } from "../menuOps";
 import { useToastStore } from "../../stores/toast";
@@ -139,6 +141,14 @@ export function wsBlankSpec(rel: string): CtxEntry[] {
   entries.push(
     "divider",
     { label: "在资源管理器中显示", action: () => revealRel(rel) },
+    // 系统菜单 - 目录背景版（2026-09-29 补）：经典版 新建 / 排序方式 / 查看 / 刷新 / 属性 在其中
+    {
+      label: "系统菜单",
+      action: () => {
+        const abs = ws.absPath(rel);
+        if (abs) void wsShellMenuBackground(abs).catch(fail);
+      },
+    },
     "divider",
     { label: "刷新", action: () => refreshDir(rel) },
   );

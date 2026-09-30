@@ -321,6 +321,7 @@ pub fn run() {
       commands::workspace::open_path_with_dialog,
       commands::workspace::ws_file_base64,
       commands::workspace::ws_shell_menu,
+      commands::workspace::ws_shell_menu_background,
       commands::workspace::send_path_to_animate,
       commands::workspace::ws_create_folder,
       commands::workspace::ws_rename,

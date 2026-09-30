@@ -84,6 +84,11 @@ export async function wsShellMenu(absPaths: string[]): Promise<void> {
   await invoke("ws_shell_menu", { absPaths });
 }
 
+// 系统右键菜单 - 目录背景版（空白处右键；经典版 新建 / 排序方式 / 查看 / 刷新 / 属性 在其中）
+export async function wsShellMenuBackground(absPath: string): Promise<void> {
+  await invoke("ws_shell_menu_background", { absPath });
+}
+
 // 发送至 Animate（8.3 按路径入口，仅 fla；与库素材共用后端 send_fla 流程，返回素材名）
 export async function sendPathToAnimate(absPath: string): Promise<string> {
   return await invoke<string>("send_path_to_animate", { absPath });

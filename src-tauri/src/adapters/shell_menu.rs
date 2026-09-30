@@ -1,7 +1,9 @@
 //! Windows 原生（系统）右键菜单适配器：工作空间「系统菜单」项（压缩 / 解压 / TortoiseGit 等
 //! shell 扩展全量出现——7-Zip 系扩展注册的是经典 IContextMenu 动词，本实现即经典菜单；
 //! Win11 新样式菜单的 IExplorerCommand 现代扩展不可托管，不在其中）。
-//! 桌面 IShellFolder + 全 PIDL 的 GetUIObjectOf：跨目录多选同 Explorer 口径天然成立。
+//! 两形态：条目菜单（桌面 IShellFolder + 全 PIDL 的 GetUIObjectOf，跨目录多选同 Explorer
+//! 口径天然成立）与目录背景菜单（BindToObject 取目录自身 IShellFolder → CreateViewObject，
+//! 经典版 查看 / 排序方式 / 新建 / 刷新 在其中，空白处右键用）。
 //! 消息转发：7-Zip 等扩展的子菜单与自绘项依赖 IContextMenu2/3 消息回填——菜单挂在自建
 //! 消息窗上，WndProc 把 WM_INITMENUPOPUP / WM_DRAWITEM / WM_MEASUREITEM / WM_MENUSELECT /
 //! WM_MENUCHAR 转发给 HandleMenuMsg(2)，不转发则子菜单不展开、自绘项空白。
@@ -9,11 +11,16 @@
 //! TrackPopupMenuEx 模态循环在本线程自泵消息，主线程不被占用（webview 不冻结）。
 //! 非 Windows 暂不支持（PRD 未定 macOS 口径）。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-/// 在光标处弹出系统右键菜单并执行选中命令；用户取消 = Ok(())；失败返回中文人话
+/// 在光标处弹出条目的系统右键菜单并执行选中命令；用户取消 = Ok(())；失败返回中文人话
 pub fn show(paths: &[PathBuf]) -> Result<(), String> {
   imp::show(paths)
+}
+
+/// 目录背景版（空白处右键）：经典版 新建 / 排序方式 / 查看 / 刷新 / 属性 等在其中
+pub fn show_background(dir: &Path) -> Result<(), String> {
+  imp::show_background(dir)
 }
 
 #[cfg(windows)]
@@ -49,37 +56,61 @@ mod imp {
     cm2: Option<IContextMenu2>,
   }
 
-  pub(super) fn show(paths: &[PathBuf]) -> Result<(), String> {
-    if paths.is_empty() {
-      return Err("没有可操作的条目".to_string());
-    }
+  /// STA 套间包装：两入口共用（spawn_blocking 线程非 COM 线程，自初始化；S_FALSE 重入也放行）
+  fn run_sta(f: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
     unsafe {
       let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
       if hr.is_err() {
         return Err(format!("COM 初始化失败：{}", hr.message()));
       }
-      let r = show_sta(paths);
+      let r = f();
       CoUninitialize();
       r
     }
   }
 
-  /// STA 线程内主流程：全 PIDL 解析 → 菜单构建与模态弹出 → 命令执行；PIDL 泄漏防护统一收尾
-  fn show_sta(paths: &[PathBuf]) -> Result<(), String> {
+  pub(super) fn show(paths: &[PathBuf]) -> Result<(), String> {
+    if paths.is_empty() {
+      return Err("没有可操作的条目".to_string());
+    }
+    run_sta(|| show_items_sta(paths))
+  }
+
+  pub(super) fn show_background(dir: &std::path::Path) -> Result<(), String> {
+    run_sta(|| {
+      let pidl = parse_pidl(dir)?;
+      let result = unsafe { popup_and_invoke(|hwnd| background_menu(hwnd, pidl)) };
+      unsafe { CoTaskMemFree(Some(pidl as *const core::ffi::c_void)) };
+      result
+    })
+  }
+
+  /// 单路径 → 全 PIDL（桌面根）；失败中文错
+  fn parse_pidl(p: &std::path::Path) -> Result<*mut ITEMIDLIST, String> {
+    let h = HSTRING::from(p.as_os_str());
+    let mut pidl: *mut ITEMIDLIST = null_mut();
+    let r = unsafe { SHParseDisplayName(PCWSTR::from_raw(h.as_ptr()), None, &mut pidl, 0, None) };
+    if r.is_err() || pidl.is_null() {
+      return Err(format!("路径解析失败：{}", p.display()));
+    }
+    Ok(pidl)
+  }
+
+  /// 条目菜单 STA 主流程：全 PIDL 解析 → 菜单构建与模态弹出 → 命令执行；PIDL 泄漏防护统一收尾
+  fn show_items_sta(paths: &[PathBuf]) -> Result<(), String> {
     let mut pidls: Vec<*mut ITEMIDLIST> = Vec::with_capacity(paths.len());
     let mut result = Ok(());
     for p in paths {
-      let h = HSTRING::from(p.as_os_str());
-      let mut pidl: *mut ITEMIDLIST = null_mut();
-      let r = unsafe { SHParseDisplayName(PCWSTR::from_raw(h.as_ptr()), None, &mut pidl, 0, None) };
-      if r.is_err() || pidl.is_null() {
-        result = Err(format!("路径解析失败：{}", p.display()));
-        break;
+      match parse_pidl(p) {
+        Ok(pidl) => pidls.push(pidl),
+        Err(e) => {
+          result = Err(e);
+          break;
+        }
       }
-      pidls.push(pidl);
     }
     if result.is_ok() {
-      result = unsafe { popup_and_invoke(&pidls) };
+      result = unsafe { popup_and_invoke(|hwnd| item_menu(hwnd, &pidls)) };
     }
     for pidl in pidls {
       unsafe { CoTaskMemFree(Some(pidl as *const core::ffi::c_void)) };
@@ -87,25 +118,34 @@ mod imp {
     result
   }
 
-  /// 菜单构建 → 模态弹出（光标处）→ 选中命令 InvokeCommand；取消 / 空菜单 = Ok
-  unsafe fn popup_and_invoke(pidls: &[*mut ITEMIDLIST]) -> Result<(), String> {
-    let hwnd = create_forward_window()?;
-    let result = menu_at_cursor(hwnd, pidls);
-    let _ = DestroyWindow(hwnd);
-    result
+  /// 条目菜单对象：桌面 IShellFolder 的 GetUIObjectOf 直接吃全 PIDL 切片——
+  /// 跨目录多选同 Explorer 口径天然成立
+  unsafe fn item_menu(hwnd: HWND, pidls: &[*mut ITEMIDLIST]) -> Result<IContextMenu, String> {
+    let desktop: IShellFolder = SHGetDesktopFolder().map_err(|e| format!("Shell 桌面对象获取失败：{e}"))?;
+    let apidl: Vec<*const ITEMIDLIST> = pidls.iter().map(|p| *p as *const ITEMIDLIST).collect();
+    desktop
+      .GetUIObjectOf(hwnd, &apidl, None)
+      .map_err(|e| format!("右键菜单对象获取失败：{e}"))
   }
 
-  unsafe fn menu_at_cursor(hwnd: HWND, pidls: &[*mut ITEMIDLIST]) -> Result<(), String> {
+  /// 目录背景菜单对象（空白处右键）：BindToObject 取目录自身 IShellFolder → CreateViewObject
+  unsafe fn background_menu(hwnd: HWND, pidl: *const ITEMIDLIST) -> Result<IContextMenu, String> {
     let desktop: IShellFolder = SHGetDesktopFolder().map_err(|e| format!("Shell 桌面对象获取失败：{e}"))?;
-    // 桌面 IShellFolder 的 GetUIObjectOf 直接吃全 PIDL 切片——跨目录多选同 Explorer 口径天然成立
-    let apidl: Vec<*const ITEMIDLIST> = pidls.iter().map(|p| *p as *const ITEMIDLIST).collect();
-    let cm: IContextMenu = desktop
-      .GetUIObjectOf(hwnd, &apidl, None)
-      .map_err(|e| format!("右键菜单对象获取失败：{e}"))?;
+    let folder: IShellFolder = desktop.BindToObject(pidl, None).map_err(|e| format!("目录 Shell 对象获取失败：{e}"))?;
+    folder.CreateViewObject(hwnd).map_err(|e| format!("背景菜单对象获取失败：{e}"))
+  }
 
-    let menu = CreatePopupMenu().map_err(|e| format!("菜单创建失败：{e}"))?;
-    let result = populate_and_track(hwnd, &cm, menu);
-    let _ = DestroyMenu(menu);
+  /// 菜单构建（build 给 IContextMenu）→ CreatePopupMenu 装配 → 模态弹出（光标处）→ 命令执行；
+  /// 宿主窗与菜单句柄统一收尾
+  unsafe fn popup_and_invoke(build: impl FnOnce(HWND) -> Result<IContextMenu, String>) -> Result<(), String> {
+    let hwnd = create_forward_window()?;
+    let result = build(hwnd).and_then(|cm| {
+      let menu = CreatePopupMenu().map_err(|e| format!("菜单创建失败：{e}"))?;
+      let r = populate_and_track(hwnd, &cm, menu);
+      let _ = DestroyMenu(menu);
+      r
+    });
+    let _ = DestroyWindow(hwnd);
     result
   }
 
@@ -211,26 +251,38 @@ mod imp {
       std::fs::write(&f, b"x").unwrap();
       unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-        let h = HSTRING::from(f.as_os_str());
-        let mut pidl: *mut ITEMIDLIST = null_mut();
-        let r = SHParseDisplayName(PCWSTR::from_raw(h.as_ptr()), None, &mut pidl, 0, None);
-        assert!(r.is_ok() && !pidl.is_null(), "存在文件应解析出 PIDL");
+        let pidl = parse_pidl(&f).unwrap();
+        assert!(!pidl.is_null(), "存在文件应解析出 PIDL");
         CoTaskMemFree(Some(pidl as *const core::ffi::c_void));
-        let ghost = HSTRING::from(dir.path().join("不存在.png").as_os_str());
-        let mut bad: *mut ITEMIDLIST = null_mut();
-        let r2 = SHParseDisplayName(PCWSTR::from_raw(ghost.as_ptr()), None, &mut bad, 0, None);
-        assert!(r2.is_err(), "不存在路径应解析失败");
+        let ghost = dir.path().join("不存在.png");
+        assert!(parse_pidl(&ghost).is_err(), "不存在路径应解析失败");
         CoUninitialize();
       }
+    }
+
+    /// 目录背景菜单对象（CreateViewObject）：存在目录可取到 IContextMenu（不弹出，只取对象）
+    #[test]
+    fn background_menu_object_obtainable() {
+      let dir = tempfile::tempdir().unwrap();
+      run_sta(|| unsafe {
+        let pidl = parse_pidl(dir.path())?;
+        let r = background_menu(HWND::default(), pidl).map(|_| ());
+        CoTaskMemFree(Some(pidl as *const core::ffi::c_void));
+        r
+      })
+      .unwrap();
     }
   }
 }
 
 #[cfg(not(windows))]
 mod imp {
-  use std::path::PathBuf;
+  use std::path::{Path, PathBuf};
 
   pub(super) fn show(_paths: &[PathBuf]) -> Result<(), String> {
+    Err("暂不支持".to_string())
+  }
+  pub(super) fn show_background(_dir: &Path) -> Result<(), String> {
     Err("暂不支持".to_string())
   }
 }

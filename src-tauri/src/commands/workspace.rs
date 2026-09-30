@@ -111,6 +111,19 @@ pub async fn ws_shell_menu(state: State<'_, AppState>, abs_paths: Vec<String>) -
     .map_err(|e| format!("系统菜单任务异常：{e}"))?
 }
 
+/// 系统右键菜单 - 目录背景版（空白处右键「系统菜单」；经典版 新建 / 排序方式 / 查看 等在其中：
+/// CreateViewObject 取目录背景 IContextMenu；「新建」落盘经 watcher 热刷新回视图）
+#[tauri::command]
+pub async fn ws_shell_menu_background(state: State<'_, AppState>, abs_path: String) -> Result<(), String> {
+  let target = validated_ws_path(&state, &abs_path)?;
+  if !target.is_dir() {
+    return Err("目标不是文件夹".to_string());
+  }
+  tauri::async_runtime::spawn_blocking(move || crate::adapters::shell_menu::show_background(&target))
+    .await
+    .map_err(|e| format!("系统菜单任务异常：{e}"))?
+}
+
 /// 发送至 Animate（工作空间按路径入口，8.3 移植）：仅 fla；流程与库素材共用 cep::send_fla
 #[tauri::command]
 pub async fn send_path_to_animate(state: State<'_, AppState>, abs_path: String) -> Result<String, String> {
