@@ -202,7 +202,7 @@ export const useWsStore = defineStore("ws", {
       await this.refreshAround(targets, destRel);
       if (clip.cut) this.clip = null;
     },
-    // 创建副本（库「创建副本」Ctrl+D 移植，2026-09-29）：同目录复制，后端重名 _n 规避；
+    // 创建副本（库「创建副本」Ctrl+D 移植，2026-10-01）：同目录复制，后端重名 _n 规避；
     // 文件与文件夹混合整批受理（同其余 ws 写操作口径）
     async duplicate(rels: string[]): Promise<void> {
       if (rels.length === 0) return;

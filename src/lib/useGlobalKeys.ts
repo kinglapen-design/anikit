@@ -158,7 +158,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     // 选择模式（6.2）：编辑类快捷键全禁（单击已不入选择域，本守卫双保险）；查看类（Shift+Enter
     // 默认应用打开）因选择域恒空天然无效，不单独放行
     if (picker.active) return;
-    // 工作空间磁盘实况（PRD 02 步骤 2 + 2026-09-29 库菜单移植轮）：F2 重命名 / Del 回收站删除 /
+    // 工作空间磁盘实况（PRD 02 步骤 2 + 2026-10-01 库菜单移植轮）：F2 重命名 / Del 回收站删除 /
     // Ctrl+C·X 写 ws 剪贴板 / Ctrl+V 粘贴（ws 内剪贴板非空时）/ Ctrl+D 创建副本（同目录 _n 规避）/
     // Shift+Enter 默认应用打开 / Ctrl+E 发送至 Animate（单选 fla）接 ws 按路径命令；
     // 其余库快捷键（Y 移动 / J 链接 / L 添加链接等）在 ws 无对应语义，一律不响应——assetId = ws:

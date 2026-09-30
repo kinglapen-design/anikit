@@ -107,8 +107,13 @@ tempfile = "3"
 # 纯 debug（opt-level 0）图像解码 / 重采样慢 10-30 倍（1080p webp 帧条 725ms/帧）。
 # 自身 crate O1：image crate 的 imageops::resize 是泛型函数，在调用方（我们）单态化编译，
 # 只优化依赖 crate 管不到它；O1 对数值重采样提升一个量级，编译速度损失可忽略
+# incremental = false（2026-10-01，踩坑 091 第三次复发按定案关闭）：rust 工具链升级
+#（含 1.98.0→1.98.1 这种 patch）后增量缓存新旧 anon.*.llvm 符号混链 → dev 链接 LNK2019
+# 几十上百连发；清 incremental 只能救当次，patch 升级每隔几周来一次——釜底抽薪关增量，
+# 代价 = 每次改 Rust 全量重编本 crate（换取链接绝对可靠）
 [profile.dev]
 opt-level = 1
+incremental = false
 
 # 全部依赖 O2（解码链在依赖 crate 内的部分：webp/png/psd 解码等）；
 # 依赖只编一次，不影响日常增量构建；release 不受影响

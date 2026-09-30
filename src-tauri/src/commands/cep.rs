@@ -63,7 +63,7 @@ pub async fn send_to_animate(state: tauri::State<'_, crate::commands::library::A
 }
 
 /// 发送至 Animate 共享流程（库素材 send_to_animate 与工作空间按路径入口 send_path_to_animate
-/// 共用，2026-09-29 右键菜单移植抽出）：剪贴板载荷转换（锁外线程池）→ 失败回退兜底 → WS 下发；
+/// 共用，2026-10-01 右键菜单移植抽出）：剪贴板载荷转换（锁外线程池）→ 失败回退兜底 → WS 下发；
 /// 发送锁在途期间拒绝新发送（无队列口径不变）
 pub(crate) async fn send_fla(name: String, fla_path: std::path::PathBuf) -> Result<String, String> {
   let _permit = crate::server::try_acquire_send().ok_or("上一次发送尚未完成，请稍候")?;

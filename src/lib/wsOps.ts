@@ -60,7 +60,7 @@ export async function revealPath(absPath: string): Promise<void> {
   await invoke("reveal_path", { absPath });
 }
 
-// —— 打开类（2026-09-29 库右键菜单移植，按真实路径 + 后端 is_under 越界校验同径）——
+// —— 打开类（2026-10-01 库右键菜单移植，按真实路径 + 后端 is_under 越界校验同径）——
 
 // 用系统默认程序打开（库「在默认应用打开」按路径版）
 export async function openPathWithDefaultApp(absPath: string): Promise<void> {

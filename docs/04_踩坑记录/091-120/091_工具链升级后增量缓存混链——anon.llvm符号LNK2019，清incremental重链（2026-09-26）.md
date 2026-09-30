@@ -16,8 +16,10 @@ rust 工具链 1.97 → 1.98 升级（clippy 报错提示 URL 已带 rust-1.98.0
 
 **定稿解法：`rm -rf target/debug/incremental` + 重编**（dev 链接即恢复；231 个符号一次清净）。
 
+**三次复发与终局（2026-10-01）**：诱因 = rust 1.98.0 → **1.98.1 patch 升级**（patch 版本同样改变 anon 符号哈希，旧增量会话报废；用户 dev 链接 LNK2019×35）。清 incremental 救当次后，按下方预防节定案兑现——**`[profile.dev] incremental = false` 终局关闭**（patch 升级每隔几周来一次，清缓存只救当次）；全量重编 1m37s 链接绿。代价 = 每次改 Rust 全量重编本 crate；回退 = 删 Cargo.toml 该行。
+
 ## 预防
 
 - **rust 工具链升级后第一件事 = 删 `target/debug/incremental`**（比 cargo clean -p app 便宜且对症）；版本漂移信号 = 报错 / clippy 提示 URL 里的版本号与上次记录不符（本项目 09-02 曾记 1.97 lint 漂移）。
 - 同类「测试绿但 dev 链不上 / 反过来」先看产物新旧，不先怀疑代码。
-- 增量缓存保命符：编译巨慢的机器可 `[profile.dev] incremental = false` 釜底抽薪（牺牲日常重编速度）；本项目 dev 循环依赖增量，暂不关——**同症状第三次复发时再关**。
+- 增量缓存保命符：编译巨慢的机器可 `[profile.dev] incremental = false` 釜底抽薪（牺牲日常重编速度）；本项目 dev 循环依赖增量，暂不关——**同症状第三次复发时再关**（**2026-10-01 已触发并关闭**，见上节终局）。
