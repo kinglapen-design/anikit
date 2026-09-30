@@ -8,6 +8,7 @@ import { defineStore } from "pinia";
 import {
   createWsFolder,
   deleteWsEntries,
+  duplicateWsEntries,
   getWorkspaceRoot,
   listWorkspaceDir,
   listWsPinned,
@@ -153,13 +154,15 @@ export const useWsStore = defineStore("ws", {
       // 写操作可能殃及固定条目（改名 / 移动 / 删除）——后端读取即静默剔除回写，重取对齐
       void this.loadPinned();
     },
-    // 新建文件夹：默认名「新建文件夹」，本地按当前目录缓存避让重名（与后端 unique_target 同形）
-    async createFolder(rel: string): Promise<void> {
+    // 新建文件夹：默认名「新建文件夹」，本地按当前目录缓存避让重名（库 uniqueFolderName 同形，
+    // 尾缀 -n；原括号式 " (n)" 随 2026-09-23 序号定案废除）；返回实际创建名（调用方接行内命名态用）
+    async createFolder(rel: string): Promise<string> {
       const names = new Set((this.dirs.get(rel) ?? []).map((e) => e.name));
       let name = "新建文件夹";
-      for (let n = 2; names.has(name); n += 1) name = `新建文件夹 (${n})`;
+      for (let n = 2; names.has(name); n += 1) name = `新建文件夹-${n}`;
       await createWsFolder(rel, name);
       await this.refreshAround([], rel);
+      return name;
     },
     // 重命名（文件与文件夹同径）：空 / 不变不动；成功重扫源父目录与源子树（目录改名殃及子路径）
     async rename(rel: string, newName: string): Promise<void> {
@@ -198,6 +201,13 @@ export const useWsStore = defineStore("ws", {
       await pasteWsEntries(targets, destRel, clip.cut);
       await this.refreshAround(targets, destRel);
       if (clip.cut) this.clip = null;
+    },
+    // 创建副本（库「创建副本」Ctrl+D 移植，2026-09-29）：同目录复制，后端重名 _n 规避；
+    // 文件与文件夹混合整批受理（同其余 ws 写操作口径）
+    async duplicate(rels: string[]): Promise<void> {
+      if (rels.length === 0) return;
+      await duplicateWsEntries(rels);
+      await this.refreshAround(rels);
     },
     // —— 步骤 3 常用固定（清单以后端返回为准覆写：固定顺序 + 失效剔除都由后端权威）——
     // 未开空间容忍空（命令层降级 []）；失败静默（不打扰主流程，下次重试）

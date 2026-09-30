@@ -1,8 +1,9 @@
 // 网格右键统一调度（6.3，自 AssetGrid 拆出；2026-08-12 自 menuSpecs.ts 再拆，规范第 3 条行数控制）：
 // 素材卡片 = 素材菜单（回收站视口 = 13 稿回收站菜单，1.3 归并全局宿主，RecycleCardMenu 局部菜单废除；
 // 虚拟视图 = 收窄集——2026-09-09 入口收窄，assetCardSpec 内分流）；
-// 工作空间视口（PRD 02 步骤 1）= ws 专属最小集——卡片走 wsCardSpec（打开/资源管理器显示[占位置灰]/
-// 刷新），空白走 wsBlankSpec（刷新）；只读底座，素材菜单的一切写操作项不挂；
+// 工作空间视口（PRD 02）= ws 专属菜单集——卡片走 wsCardSpec、文件夹卡走 wsFolderSpec、空白走
+// wsBlankSpec（2026-09-29 库菜单移植轮：打开外发 / 剪贴板 / 副本 / 复制数据 / 系统菜单全量对齐
+// 库菜单分组与快捷键标注；库专属段不挂）；
 // 空白处（含 grid-header）按视口分流（2026-09-05 走查「快速访问」节，旧"一律 07 新增菜单"废除）：
 //   folder: 视口 = 07 新增菜单（addButtonSpec）；
 //   未分类 = quickFullSpec（去新建文件夹/新建档案——快速访问无文件夹概念；2026-09-09 收窄：
@@ -41,7 +42,8 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[], panel
       if (p) openContextMenu(e, assetCardSpec(p, panelId), undefined);
       return "done";
     }
-    // 工作空间（PRD 02 步骤 1）分流前置：ws 条目出最小只读集，不进素材菜单（写操作项一律不挂）
+    // 工作空间（PRD 02）分流前置：ws 条目出 ws 专属菜单集（2026-09-29 移植轮扩为全量——
+    // 打开外发 / 剪贴板 / 副本 / 复制数据 / 系统菜单），不进素材菜单（assetId 类写操作项一律不挂）
     if (content.isWorkspaceView) {
       const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
       if (p) openContextMenu(e, wsCardSpec(p, panelId), undefined);

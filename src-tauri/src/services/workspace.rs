@@ -772,6 +772,20 @@ pub fn copy_entries(root: &Path, src_rels: &[String], dest_rel_dir: &str) -> Res
   Ok(())
 }
 
+/// 创建副本（「创建副本」Ctrl+D，库侧同名操作移植）：逐项复制进自身所在目录——
+/// 落点 = 源父目录（copy_entries 的固定同目录形态），重名自动 _n 规避不覆盖
+pub fn duplicate_entries(root: &Path, rels: &[String]) -> Result<(), String> {
+  for rel in rels {
+    let src = resolve_existing(root, rel)?;
+    let parent = src.parent().ok_or_else(|| "路径不合法".to_string())?.to_path_buf();
+    let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).ok_or_else(|| "路径不合法".to_string())?;
+    let target = unique_target(&parent, &name);
+    copy_recursive(&src, &target)?;
+    note_known_op(vec![target]);
+  }
+  Ok(())
+}
+
 // ---------- 视图状态：常用固定（PRD 02 步骤 3，.anikit/workspace.json） ----------
 
 /// 视图状态文件形状（字段后补；当前仅 pinned = 常用固定 rel 清单）
@@ -1319,6 +1333,22 @@ mod tests {
     assert!(root.join("目标/源夹_2/子/内.txt").is_file(), "重名目录应自动加后缀");
     assert!(root.join("目标/源夹").is_file(), "原同名文件不被覆盖");
     assert!(copy_entries(&root, &[".anikit".to_string()], "目标").is_err(), ".anikit 拒绝");
+  }
+
+  /// 创建副本（duplicate_entries）：落点 = 源自身所在目录，重名 _n 规避；目录递归；缺失 / .anikit 拒绝
+  #[test]
+  fn duplicate_entries_copy_into_own_parent() {
+    let (_dir, root) = make_ws();
+    make_png(&root.join("甲.png"), 10, 10);
+    fs::create_dir_all(root.join("夹/子")).unwrap();
+    fs::create_dir_all(root.join(".anikit/thumbs")).unwrap();
+
+    duplicate_entries(&root, &["甲.png".to_string(), "甲.png".to_string(), "夹".to_string()]).unwrap();
+    assert!(root.join("甲_2.png").is_file(), "首个副本 _2");
+    assert!(root.join("甲_3.png").is_file(), "同批第二个副本 _3（不互相覆盖）");
+    assert!(root.join("夹_2/子").is_dir(), "目录副本递归");
+    assert!(duplicate_entries(&root, &["不存在.png".to_string()]).is_err(), "缺失条目报错");
+    assert!(duplicate_entries(&root, &[".anikit/thumbs".to_string()]).is_err(), ".anikit 拒绝");
   }
 
   /// 回声消重：窗口期内本进程操作的事件判回声；窗口外 / 无关路径不判

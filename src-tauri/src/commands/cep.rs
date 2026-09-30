@@ -59,6 +59,13 @@ pub async fn send_to_animate(state: tauri::State<'_, crate::commands::library::A
   if !fla_path.is_file() {
     return Err(format!("实体文件不存在：{}", fla_path.display()));
   }
+  send_fla(name, fla_path).await
+}
+
+/// 发送至 Animate 共享流程（库素材 send_to_animate 与工作空间按路径入口 send_path_to_animate
+/// 共用，2026-09-29 右键菜单移植抽出）：剪贴板载荷转换（锁外线程池）→ 失败回退兜底 → WS 下发；
+/// 发送锁在途期间拒绝新发送（无队列口径不变）
+pub(crate) async fn send_fla(name: String, fla_path: std::path::PathBuf) -> Result<String, String> {
   let _permit = crate::server::try_acquire_send().ok_or("上一次发送尚未完成，请稍候")?;
 
   // 锁外转换（zip+XML 慢 IO 走线程池）；失败 = 自动回退兜底（转换原因记日志不打扰用户）

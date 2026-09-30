@@ -37,7 +37,10 @@ tauri-plugin-dialog = "2"
 #   失焦态角弧带非客户区穿透修复，踩坑 063 六轮）
 # + 8.3 发送至 AN（Flash 11 Picture 私有剪贴板写入：RegisterClipboardFormatW / SetClipboardData
 #   = Win32_System_DataExchange，GlobalAlloc/Lock = Win32_System_Memory）
-windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_Media", "Win32_System_Registry", "Win32_UI_Controls", "Win32_System_DataExchange", "Win32_System_Memory"] }
+# + 工作空间「系统菜单」（IContextMenu 原生右键菜单：SHParseDisplayName / SHGetDesktopFolder /
+#   TrackPopupMenuEx 在已有 Win32_UI_Shell + Win32_UI_WindowsAndMessaging 内；消息转发窗口的
+#   类注册 hInstance 取模块句柄 = Win32_System_LibraryLoader）
+windows = { version = "0.62", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_Media", "Win32_System_Registry", "Win32_UI_Controls", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_LibraryLoader"] }
 # 数据层：时间戳（ID / importedAt / 备份命名）
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 # 数据层：ID 随机字符

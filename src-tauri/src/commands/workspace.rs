@@ -53,16 +53,76 @@ pub async fn list_workspace_dir(state: State<'_, AppState>, rel_path: String) ->
 /// 在文件管理器中打开并选中（工作空间条目右键；按真实路径，约束在当前空间 workspace 内）
 #[tauri::command]
 pub fn reveal_path(state: State<AppState>, abs_path: String) -> Result<(), String> {
-  let space = state.space.lock().map_err(|e| e.to_string())?.clone().ok_or_else(|| "请先打开储存空间".to_string())?;
-  let root = space.root.join(WORKSPACE_DIR);
-  let target = std::path::PathBuf::from(&abs_path);
+  shell_open::reveal(&validated_ws_path(&state, &abs_path)?)
+}
+
+/// 按路径校验（工作空间右键打开类 / 复制数据 / 系统菜单共用）：当前空间 workspace 内 + 存在
+fn validated_ws_path(state: &State<AppState>, abs_path: &str) -> Result<std::path::PathBuf, String> {
+  let root = ws_root(state)?;
+  let target = std::path::PathBuf::from(abs_path);
   if !workspace::is_under(&root, &target) {
     return Err("路径不在当前工作空间内".to_string());
   }
   if !target.exists() {
+    return Err("条目已不存在（可能刚被移动或删除）".to_string());
+  }
+  Ok(target)
+}
+
+/// 用系统默认程序打开（工作空间文件右键移植库「在默认应用打开」；按真实路径）
+#[tauri::command]
+pub fn open_path_with_default_app(state: State<AppState>, abs_path: String) -> Result<(), String> {
+  shell_open::open(&validated_ws_path(&state, &abs_path)?)
+}
+
+/// 在其他应用打开（系统「打开方式」对话框；按真实路径）
+#[tauri::command]
+pub fn open_path_with_dialog(state: State<AppState>, abs_path: String) -> Result<(), String> {
+  shell_open::open_as(&validated_ws_path(&state, &abs_path)?)
+}
+
+/// 复制 base64（复制数据子菜单移植；格式白名单与 10MB 上限同库侧口径，services::asset_menu 复用，
+/// psd/psb/svg 走解码合成图 → PNG；纯读操作）
+#[tauri::command]
+pub fn ws_file_base64(state: State<AppState>, abs_path: String) -> Result<String, String> {
+  let target = validated_ws_path(&state, &abs_path)?;
+  if !target.is_file() {
+    return Err("文件夹不支持 base64 复制".to_string());
+  }
+  let ext = target.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+  let size = std::fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
+  crate::services::asset_menu::base64_from_origin(&target, &ext, size)
+}
+
+/// 系统右键菜单（Windows 原生 IContextMenu：压缩解压 / Git 等 shell 扩展全量，多选整组弹出）：
+/// 模态菜单在 spawn_blocking 线程的 STA 内弹出（光标处），主线程不冻结；命令返回 = 菜单已关
+/// 且选中命令已执行；用户取消 = Ok(())
+#[tauri::command]
+pub async fn ws_shell_menu(state: State<'_, AppState>, abs_paths: Vec<String>) -> Result<(), String> {
+  let mut paths = Vec::with_capacity(abs_paths.len());
+  for p in &abs_paths {
+    paths.push(validated_ws_path(&state, p)?);
+  }
+  if paths.is_empty() {
+    return Err("没有可操作的条目".to_string());
+  }
+  tauri::async_runtime::spawn_blocking(move || crate::adapters::shell_menu::show(&paths))
+    .await
+    .map_err(|e| format!("系统菜单任务异常：{e}"))?
+}
+
+/// 发送至 Animate（工作空间按路径入口，8.3 移植）：仅 fla；流程与库素材共用 cep::send_fla
+#[tauri::command]
+pub async fn send_path_to_animate(state: State<'_, AppState>, abs_path: String) -> Result<String, String> {
+  let target = validated_ws_path(&state, &abs_path)?;
+  if target.extension().map(|e| e.to_string_lossy().to_lowercase()).as_deref() != Some("fla") {
+    return Err("仅 fla 素材支持发送至 Animate".to_string());
+  }
+  if !target.is_file() {
     return Err("文件已不存在（可能刚被移动或删除）".to_string());
   }
-  shell_open::reveal(&target)
+  let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).ok_or_else(|| "路径不合法".to_string())?;
+  crate::commands::cep::send_fla(name, target).await
 }
 
 /// 请求缩略图（2026-09-26 性能优化 A/B 重写）：立即返回，任务进进程级 worker 池
@@ -135,6 +195,13 @@ pub fn ws_paste(state: State<AppState>, rel_paths: Vec<String>, dest_rel: String
   } else {
     workspace::copy_entries(&root, &rel_paths, &dest_rel)
   }
+}
+
+/// 创建副本（库「创建副本」Ctrl+D 移植）：rel_paths 逐个复制进自身所在目录，重名自动 _n 规避
+#[tauri::command]
+pub fn ws_duplicate(state: State<AppState>, rel_paths: Vec<String>) -> Result<(), String> {
+  let root = ws_root(&state)?;
+  workspace::duplicate_entries(&root, &rel_paths)
 }
 
 // ---------- 步骤 3 常用固定（.anikit/workspace.json，PRD 02） ----------

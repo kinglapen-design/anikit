@@ -10,6 +10,7 @@
 //! - decoder：ffmpeg-next 库级解码（阶段四自研解码器：GIF/视频逐帧 RGBA 帧流；webp 归 services/anim）
 //! - window_fx：窗口背景效果（7.1 十七轮：Win11 22H2+ 云母 Mica，其余实色回退）
 //! - clipboard：系统剪贴板私有格式写入（8.4 发送至 AN：Flash 11 Picture，arboard 不管私有格式）
+//! - shell_menu：Windows 原生右键菜单（IContextMenu 经典菜单 + 消息转发窗口；工作空间「系统菜单」项）
 
 pub mod clipboard;
 pub mod decoder;
@@ -17,6 +18,7 @@ pub mod ffmpeg;
 pub mod inbox_drive;
 pub mod inbox_watch;
 pub mod recycle_bin;
+pub mod shell_menu;
 pub mod shell_open;
 pub mod shell_path;
 pub mod shell_thumb;

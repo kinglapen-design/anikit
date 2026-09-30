@@ -28,6 +28,8 @@ import {
   sendToAnimate,
 } from "./placementOps";
 import { cloneFolderFlow, currentLinkTarget, deleteFoldersFlow, enterLinkPicker, findParentId, moveAssetsFlow, moveFoldersFlow } from "./menuOps";
+import { openPathWithDefaultApp } from "./wsOps";
+import { sendWsToAnimate } from "./menuSpecs/workspace";
 
 // 输入框豁免判定：文本输入态（input / textarea / contenteditable）不拦截全局快捷键
 export function isEditableTarget(t: HTMLElement): boolean {
@@ -156,16 +158,29 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     // 选择模式（6.2）：编辑类快捷键全禁（单击已不入选择域，本守卫双保险）；查看类（Shift+Enter
     // 默认应用打开）因选择域恒空天然无效，不单独放行
     if (picker.active) return;
-    // 工作空间磁盘实况（PRD 02 步骤 2）：F2 重命名 / Del 回收站删除 / Ctrl+C·X 写 ws 剪贴板 /
-    // Ctrl+V 粘贴（ws 内剪贴板非空时）接 ws 按路径命令；其余库快捷键（D 副本 / Y 移动 / J 链接 /
-    // L 添加链接 / E 发送至 AN 等）在 ws 无对应语义，一律不响应——assetId = ws: 合成假 id
-    // 严禁落入任何 assetId 类命令。选中集可含文件夹键（2026-09-26 文件夹卡片 / 树行入素材域），
-    // 复制 / 剪切 / 删除对文件与文件夹混合整批受理（ws 命令按路径无差别）
+    // 工作空间磁盘实况（PRD 02 步骤 2 + 2026-09-29 库菜单移植轮）：F2 重命名 / Del 回收站删除 /
+    // Ctrl+C·X 写 ws 剪贴板 / Ctrl+V 粘贴（ws 内剪贴板非空时）/ Ctrl+D 创建副本（同目录 _n 规避）/
+    // Shift+Enter 默认应用打开 / Ctrl+E 发送至 Animate（单选 fla）接 ws 按路径命令；
+    // 其余库快捷键（Y 移动 / J 链接 / L 添加链接等）在 ws 无对应语义，一律不响应——assetId = ws:
+    // 合成假 id 严禁落入任何 assetId 类命令。选中集可含文件夹键（2026-09-26 文件夹卡片 / 树行入素材域），
+    // 复制 / 剪切 / 删除 / 副本对文件与文件夹混合整批受理（ws 命令按路径无差别）
     if (content.isWorkspaceView) {
       const ws = useWsStore();
       const rels = () =>
         selection.selectedRefs().filter((r) => r.assetId.startsWith("ws:")).map((r) => r.assetId.slice(3));
       const fail = (err: unknown) => useToastStore().notify({ message: String(err), icon: "fail" });
+      // Shift+Enter = 默认应用打开（库 6.3 右键菜单同键移植，按路径版命令）
+      if (e.key === "Enter" && e.shiftKey) {
+        if (selection.count === 1) {
+          const targets = rels();
+          const abs = targets.length === 1 ? ws.absPath(targets[0]) : null;
+          if (abs) {
+            e.preventDefault();
+            void openPathWithDefaultApp(abs).catch(fail);
+          }
+        }
+        return;
+      }
       if (e.key === "F2") {
         if (selection.count === 1) {
           e.preventDefault();
@@ -203,6 +218,30 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
         if (k === "v" && !e.shiftKey && !e.altKey && ws.clip) {
           e.preventDefault(); // 粘贴到当前视口目录（sidebarSelected = 活动 viewKey，tabs 同步口径）
           void ws.paste(content.sidebarSelected.slice(3)).catch(fail);
+          return;
+        }
+        // Ctrl+D = 创建副本（库素材域同键移植）：选中集同目录复制，后端重名 _n 规避
+        if (k === "d" && !e.shiftKey && !e.altKey) {
+          const targets = rels();
+          if (targets.length > 0) {
+            e.preventDefault();
+            void ws.duplicate(targets).catch(fail);
+          }
+          return;
+        }
+        // Ctrl+E = 发送至 Animate（8.3 同键按路径移植）：单选 fla 生效（菜单同款口径）
+        if (k === "e" && !e.shiftKey && !e.altKey) {
+          if (selection.count === 1) {
+            const [assetId, folderId] = selection.first.split("|");
+            const entry = ws.entries((folderId ?? "").slice(3)).find((x) => `ws:${x.relPath}` === assetId);
+            if (entry && !entry.isDir && entry.ext === "fla") {
+              const abs = ws.absPath(entry.relPath);
+              if (abs) {
+                e.preventDefault();
+                sendWsToAnimate(abs);
+              }
+            }
+          }
           return;
         }
       }

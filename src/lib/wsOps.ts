@@ -60,6 +60,35 @@ export async function revealPath(absPath: string): Promise<void> {
   await invoke("reveal_path", { absPath });
 }
 
+// —— 打开类（2026-09-29 库右键菜单移植，按真实路径 + 后端 is_under 越界校验同径）——
+
+// 用系统默认程序打开（库「在默认应用打开」按路径版）
+export async function openPathWithDefaultApp(absPath: string): Promise<void> {
+  await invoke("open_path_with_default_app", { absPath });
+}
+
+// 在其他应用打开（系统「打开方式」对话框；openas 动词缺失时后端 rundll32 兜底）
+export async function openPathWithDialog(absPath: string): Promise<void> {
+  await invoke("open_path_with_dialog", { absPath });
+}
+
+// 复制 base64（复制数据子菜单移植；格式白名单 png/jpg/jpeg/bmp/webp/gif + psd/psb/svg 解码合成图、
+// 10MB 上限同库侧口径，不满足抛中文错）
+export async function wsFileBase64(absPath: string): Promise<string> {
+  return await invoke<string>("ws_file_base64", { absPath });
+}
+
+// 系统右键菜单（Windows 原生 IContextMenu：压缩解压 / TortoiseGit 等 shell 扩展全量；多选整组弹出，
+// 后端在光标处模态弹出，命令返回 = 菜单已关且选中命令已执行；取消 = 正常返回）
+export async function wsShellMenu(absPaths: string[]): Promise<void> {
+  await invoke("ws_shell_menu", { absPaths });
+}
+
+// 发送至 Animate（8.3 按路径入口，仅 fla；与库素材共用后端 send_fla 流程，返回素材名）
+export async function sendPathToAnimate(absPath: string): Promise<string> {
+  return await invoke<string>("send_path_to_animate", { absPath });
+}
+
 // —— 步骤 2 基础整理写操作（命令返回即更新 UI；watcher 回声后端消重，见 services/workspace）——
 
 // 新建文件夹：relDir 下创建 name；重名 / 非法名抛中文错（commands/workspace.rs ws_create_folder）
@@ -85,6 +114,11 @@ export async function moveWsEntries(relPaths: string[], destRel: string): Promis
 // 粘贴：复制（cut=false）或移动（cut=true）进 destRel；剪切成功后前端清剪贴板
 export async function pasteWsEntries(relPaths: string[], destRel: string, cut: boolean): Promise<void> {
   await invoke("ws_paste", { relPaths, destRel, cut });
+}
+
+// 创建副本（库「创建副本」Ctrl+D 移植）：relPaths 逐个复制进自身所在目录，重名自动 _n 规避
+export async function duplicateWsEntries(relPaths: string[]): Promise<void> {
+  await invoke("ws_duplicate", { relPaths });
 }
 
 // —— 步骤 3 常用固定（视图状态 = .anikit/workspace.json 的 pinned 清单，PRD 02 技术口径）——
