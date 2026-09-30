@@ -640,10 +640,18 @@ onBeforeUnmount(() => {
   outline: none;
 }
 /* 分屏跨视口并入落点（2026-09-17 实机走查「标签分屏后文件要能跨分屏拖拽」）：
-   目标 pane 级高亮 = 并入同款——品牌/半透明填充 + 2px 品牌描边（inset 不占布局，§20 口径） */
-.grid-viewport.pane-drop {
+   目标 pane 级高亮 = 并入同款——品牌/半透明填充 + 2px 品牌描边（inset 不占布局，§20 口径）。
+   ::after 覆盖层绘制（pointer-events none 不挡卡片 / 滚动条）：右收 12 / 底收 12——视口几何
+   右 0 底 0（asset-section 右 0 让滚动条贴边框、底 0），与 section 承担的左 12 / 上 12 对齐成
+   四边等距框（2026-10-01 走查：高亮左有边距右贴边，左右不统一） */
+.grid-viewport.pane-drop::after {
+  content: "";
+  position: absolute;
+  inset: 0 var(--n-space-12) var(--n-space-12) 0;
   background: var(--n-brand-50);
   box-shadow: inset 0 0 0 2px var(--n-brand);
+  pointer-events: none;
+  z-index: 10;
 }
 /* 搜索空态（3.6）：absolute 居中于 viewport（内容为空无滚动，天然居中） */
 .search-empty {
