@@ -243,3 +243,9 @@ pub fn ws_unpin(state: State<AppState>, rel_path: String) -> Result<Vec<String>,
   let root = ws_root(&state)?;
   Ok(workspace::unpin(&root, &rel_path))
 }
+
+/// 打开系统回收站（工作空间侧栏回收站行点击，2026-10-01；ws 删除走系统回收站，PRD 06）
+#[tauri::command]
+pub fn open_system_recycle_bin() -> Result<(), String> {
+  shell_open::open_recycle_bin()
+}

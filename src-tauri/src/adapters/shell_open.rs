@@ -18,6 +18,11 @@ pub fn reveal(path: &Path) -> Result<(), String> {
   imp::reveal(path)
 }
 
+/// 打开系统回收站（工作空间侧栏回收站行，2026-10-01；ws 删除走系统回收站，PRD 06）
+pub fn open_recycle_bin() -> Result<(), String> {
+  imp::open_recycle_bin()
+}
+
 #[cfg(windows)]
 mod imp {
   use std::path::Path;
@@ -78,6 +83,18 @@ mod imp {
       Err(format!("打开文件管理器失败（{}），错误码 {}", path.display(), result.0 as usize))
     }
   }
+
+  pub(super) fn open_recycle_bin() -> Result<(), String> {
+    // shell:RecycleBinFolder 虚拟路径经 ShellExecuteW 原样传参（同 reveal 口径，不走 Command 转义）
+    let params = HSTRING::from("shell:RecycleBinFolder");
+    let result =
+      unsafe { ShellExecuteW(None, w!("open"), w!("explorer.exe"), PCWSTR::from_raw(params.as_ptr()), None, SW_SHOW) };
+    if (result.0 as usize) > 32 {
+      Ok(())
+    } else {
+      Err(format!("打开系统回收站失败，错误码 {}", result.0 as usize))
+    }
+  }
 }
 
 #[cfg(not(windows))]
@@ -91,6 +108,9 @@ mod imp {
     Err("暂不支持".to_string())
   }
   pub(super) fn reveal(_path: &Path) -> Result<(), String> {
+    Err("暂不支持".to_string())
+  }
+  pub(super) fn open_recycle_bin() -> Result<(), String> {
     Err("暂不支持".to_string())
   }
 }

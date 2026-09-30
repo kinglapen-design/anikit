@@ -1,8 +1,10 @@
 <script setup lang="ts">
-// 工作空间树（PRD 02 + 步骤 3）：常用固定区块 + 文件夹区块，区块标题（items/SectionTitle
-// block「常用 / N」「文件夹 / N」）分割——2026-09-17 用户截图定；区块写法与库 LibraryView
-// 完全同口径：段容器内 标题↔内容 gap 8、行 items gap 2、段间距 8（容器 padding 8 12 共享），
-// hover 出展开钮点击折叠区块（FolderStrip / ArchiveStrip / LibraryView 区块同先例）。
+// 工作空间树（PRD 02 + 步骤 3）：常用固定区块 + 文件夹区块 + 回收站行（2026-10-01 用户定，
+// 库快速访问回收站同款 TreeRowItem quick + trash，点击 = 资源管理器打开系统回收站——
+// ws 删除走系统回收站，PRD 06），区块标题（items/SectionTitle block「常用 / N」「文件夹 / N」）
+// 分割——2026-09-17 用户截图定；区块写法与库 LibraryView 完全同口径：段容器内 标题↔内容 gap 8、
+// 行 items gap 2、段间距 8（容器 padding 8 12 共享），hover 出展开钮点击折叠区块
+//（FolderStrip / ArchiveStrip / LibraryView 区块同先例）。
 // 行列表（含递归展开）在 WsTreeRows（根/子层共用）；步骤 3 废除根行「工作空间」（磁盘上无此
 // 目录，合成父级与子级同缩进视觉撞兄弟），根视口经切 workspace 分段自动 openView("ws:") 与
 // 历史后退可达。workspace/ 目录不存在（exists=false）= 空态文案（正文档 + 亮色/四级，
@@ -13,8 +15,10 @@ import TreeRowItem from "./items/TreeRowItem.vue";
 import WsTreeRows from "./WsTreeRows.vue";
 import { openContextMenu } from "../lib/contextMenus";
 import { wsTreeRowSpec } from "../lib/menuSpecs/workspace";
+import { openSystemRecycleBin } from "../lib/wsOps";
 import { useContentStore } from "../stores/content";
 import { useTabsStore } from "../stores/tabs";
+import { useToastStore } from "../stores/toast";
 import { useWsStore } from "../stores/ws";
 
 // rel = 本层目录（"" = 根）；depth = 本层内容缩进档（子层经 WsTreeRows 传给递归实例）
@@ -51,6 +55,11 @@ function openDir(rel: string): void {
 // pin 行右键（取消固定 / 打开 / 资源管理器，wsTreeRowSpec 按清单状态分流）
 function onPinMenu(e: MouseEvent, rel: string): void {
   openContextMenu(e, wsTreeRowSpec(rel), undefined);
+}
+
+// 回收站行（2026-10-01 用户定）：点击 = 资源管理器打开系统回收站（ws 删除走系统回收站，PRD 06）
+function onOpenRecycleBin(): void {
+  void openSystemRecycleBin().catch((e: unknown) => useToastStore().notify({ message: String(e), icon: "fail" }));
 }
 </script>
 
@@ -94,6 +103,9 @@ function onPinMenu(e: MouseEvent, rel: string): void {
         />
         <WsTreeRows v-if="treeOpen" :rel="props.rel" :depth="0" />
       </section>
+      <!-- 回收站行（2026-10-01 用户定）：库快速访问回收站同款（TreeRowItem quick + trash 图标）；
+           点击 = 资源管理器打开系统回收站；无数量（磁盘实况不跟踪系统回收站内容） -->
+      <TreeRowItem kind="quick" icon="trash" name="回收站" @click="onOpenRecycleBin" />
       <!-- 空态：workspace 目录不存在（exists=false）。root=null 是拉取中 / 未开空间的瞬态
           （ensureRoot null 不缓存、下次调用即重试），不渲染「未开启」误标（2026-09-17 实机报）；
           不随区块折叠隐藏 -->

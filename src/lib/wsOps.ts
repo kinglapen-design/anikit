@@ -89,6 +89,11 @@ export async function wsShellMenuBackground(absPath: string): Promise<void> {
   await invoke("ws_shell_menu_background", { absPath });
 }
 
+// 打开系统回收站（工作空间侧栏回收站行，2026-10-01；ws 删除 = 系统回收站，PRD 06）
+export async function openSystemRecycleBin(): Promise<void> {
+  await invoke("open_system_recycle_bin");
+}
+
 // 发送至 Animate（8.3 按路径入口，仅 fla；与库素材共用后端 send_fla 流程，返回素材名）
 export async function sendPathToAnimate(absPath: string): Promise<string> {
   return await invoke<string>("send_path_to_animate", { absPath });

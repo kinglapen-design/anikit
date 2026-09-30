@@ -332,6 +332,7 @@ pub fn run() {
       commands::workspace::ws_list_pinned,
       commands::workspace::ws_pin,
       commands::workspace::ws_unpin,
+      commands::workspace::open_system_recycle_bin,
       commands::settings::get_ui_settings,
       commands::settings::save_ui_settings,
       commands::settings::save_window_state,
