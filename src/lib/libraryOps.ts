@@ -9,6 +9,7 @@ import { useContentStore } from "../stores/content";
 import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
 import { useUndoStore } from "../stores/undo";
+import { useWsStore } from "../stores/ws";
 
 // 无主资产警告（2026-09-02 资产污染修复配套）：开库自检扫出孤儿 info（数据层无记录、
 // 磁盘残留、库内不可见）→ 后端 activate emit 推清单，OrphanInfosAlert 弹窗列出。
@@ -107,6 +108,7 @@ export async function createSpace(parentPath: string, name: string, autoImport: 
   const info = await invoke<SpaceInfo>("create_space", { parentPath, name, autoImport });
   currentSpace.name = info.name;
   currentSpace.autoImport = info.autoImport;
+  useWsStore().$reset(); // 同 openSpace：新空间 = 新工作空间，ws 缓存重置
   return info;
 }
 
@@ -114,6 +116,10 @@ export async function openSpace(path: string): Promise<SpaceInfo> {
   const info = await invoke<SpaceInfo>("open_space", { path });
   currentSpace.name = info.name;
   currentSpace.autoImport = info.autoImport;
+  // 工作空间绑定空间（workspace/ 在空间根下）：切空间重置 ws store——目录缓存以 rel 为键
+  // 跨空间撞名、root 缓存指向旧空间（2026-10-01 性能优化③配套：视口挂载跳过以「事件维持
+  // 新鲜」为前提，缓存必须归属当前空间；顺带根治切空间后 ws 根残留旧值的存量隐患）
+  useWsStore().$reset();
   return info;
 }
 

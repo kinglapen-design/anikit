@@ -2,8 +2,9 @@
 //! 原「每次 invoke 裸 spawn 一条线程 + 严格串行 for」（commands::workspace 直调
 //! services::workspace::request_thumbs）——
 //!
-//! - **固定并发度**：N = 可用并行度一半（钳 1..=4）。解码 / 重采样 / webp 编码是 CPU 密集
-//!   重活，留一半核给 UI 与系统；音视频逐文件 spawn ffmpeg 也随池限流（原串行 → 至多 N 并发）。
+//! - **固定并发度**：N = 可用并行度一半（钳 1..=8；上限 4→8 系 2026-10-01 用户定「提高
+//!   一点」——留一半核给 UI 与系统的口径不变，宽核机不再被低上限卡住）。解码 / 重采样 /
+//!   webp 编码是 CPU 密集重活；音视频逐文件 spawn ffmpeg 也随池限流（原串行 → 至多 N 并发）。
 //!   结构仿 preview_queue / anim_preview_queue 自管 worker（Condvar 常驻线程）而非 rayon
 //!   par_iter——任务来自持续到达的请求事件流、需常驻队列 + 跨请求去重 + 队首插队，
 //!   不是一把批处理形态。
@@ -103,9 +104,10 @@ pub struct WsThumbQueue {
   shared: Arc<Shared>,
 }
 
-/// worker 数 = 可用并行度一半（钳 1..=4）：解码重采样是 CPU 密集，留一半核给 UI / 系统
+/// worker 数 = 可用并行度一半（钳 1..=8，2026-10-01 上限 4→8）：解码重采样是 CPU 密集，
+/// 留一半核给 UI / 系统
 fn worker_count() -> usize {
-  (std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4) / 2).clamp(1, 4)
+  (std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4) / 2).clamp(1, 8)
 }
 
 /// 入队：priority 整批插到队首（rev 逐个 push_front 保批内顺序），普通批排尾部
@@ -280,10 +282,10 @@ mod tests {
     ThumbJob { root: root.to_path_buf(), abs: root.join(rel), rel: rel.to_string(), mtime_ms: 1, size: 1 }
   }
 
-  /// worker 数公式：可用并行度一半，钳 1..=4
+  /// worker 数公式：可用并行度一半，钳 1..=8
   #[test]
   fn worker_count_bounded() {
-    assert!((1..=4).contains(&worker_count()));
+    assert!((1..=8).contains(&worker_count()));
   }
 
   /// 入队顺序：priority 整批插队首且保批内顺序，普通批排尾

@@ -9,8 +9,13 @@
 //! 缩略图生成的并发 / 去重 / 事件回吐归 services::ws_thumb_queue（2026-09-26 性能优化：
 //! 原「每 invoke 裸 spawn 一条线程严格串行」退役）；本模块保留缓存键口径、单条生成原语
 //! 与进程级失败记忆（解码失败键集合——命中即跳过不再重试，列举时落回系统格式图标）。
+//! 2026-10-01 性能优化二轮（待办 2026-10-01 三点 + 观察项）：
+//! ① fs-changed 负载改带变更目录 rel 集（changed_dirs），前端按集精准重扫取代全量重扫；
+//! ② list_dir 逐文件 syscall 瘦身——thumbs 目录趟初一次 read_dir 进内存集合匹配
+//!（DirScan.thumb_names，消 2N 次 is_file + exe 图标探测），图片魔数探测结果按 job_key
+//! 持久缓存（.anikit/probe.json，含非图片负缓存，源变化键自然失效）。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -26,7 +31,11 @@ use crate::core::space::WORKSPACE_DIR;
 use crate::services::thumbnail;
 use crate::services::views::ThumbKind;
 
-/// 磁盘实况热刷新事件名（负载 = ()；.anikit 缓存写回自激已滤，前端去抖重扫）
+/// 磁盘实况热刷新事件名（负载 = Option<Vec<String>>：变更涉及的目录 rel 去重排序集——
+/// 父目录（条目增删改殃及所在目录列举）+ 祖父目录（目录增删殃及父目录条目的 hasSubDir
+/// 展开箭头），前端按集精准重扫已加载目录；null = 事件路径剥不出监听根前缀（形态异常），
+/// 前端回退全量重扫。2026-10-01 精准化——原恒 ()，前端 300ms 去抖后全量重扫所有已加载目录；
+/// .anikit 缓存写回自激已滤）
 pub const FS_CHANGED_EVENT: &str = "workspace-fs-changed";
 /// 缩略图批次完成事件名（负载 = Vec<ThumbReady>：本趟实际生成成功的内容缩略图 +
 /// 解码失败条目的格式图标落回（thumbKind 区分），经 ws_thumb_queue 批量回吐）
@@ -129,10 +138,13 @@ pub(crate) fn rel_of(root: &Path, abs: &Path) -> Option<String> {
 // ---------- 目录列举 ----------
 
 /// 列举 workspace 根下 rel 目录：目录在前、同名不区分大小写排序；.anikit 缓存目录隐藏；
-/// thumbPath 仅缓存新鲜时给。rel 空串 = 根。越界 / 目录不存在给中文错（命令层降级为空列表）
+/// thumbPath 仅缓存新鲜时给。rel 空串 = 根。越界 / 目录不存在给中文错（命令层降级为空列表）。
+/// 趟内共享 DirScan（2026-10-01 syscall 瘦身）：thumbs 目录文件名一趟一次 read_dir 快照 +
+/// 魔数探测持久缓存，逐文件的 is_file 双扩展名探测 / 图标探测 / 文件头实探全部消掉
 pub fn list_dir(root: &Path, rel: &str) -> Result<Vec<WsEntry>, String> {
   let abs = resolve_under(root, rel)?;
   let rd = fs::read_dir(&abs).map_err(|e| format!("目录读取失败：{e}"))?;
+  let mut scan = DirScan::load(root);
   let mut entries = Vec::new();
   for e in rd.flatten() {
     let path = e.path();
@@ -140,19 +152,21 @@ pub fn list_dir(root: &Path, rel: &str) -> Result<Vec<WsEntry>, String> {
     if name == CACHE_DIR {
       continue; // .anikit 缓存目录不出现在磁盘实况里
     }
-    if let Some(en) = entry(root, rel, &path, &name, path.is_dir()) {
+    if let Some(en) = entry(root, rel, &path, &name, path.is_dir(), &mut scan) {
       entries.push(en);
     }
   }
   entries.sort_by(|a, b| {
     b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())).then_with(|| a.name.cmp(&b.name))
   });
+  scan.save(root);
   Ok(entries)
 }
 
 /// 单条目：文件补 大小 / mtime / 扩展名 / 缩略图（内容缩略图 → 格式图标回退）；目录恒无缩略图，
-/// 补 has_sub_dir（树展开箭头显隐用）
-fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool) -> Option<WsEntry> {
+/// 补 has_sub_dir（树展开箭头显隐用）。scan = 本趟列目录共享缓存（thumbs 文件名快照集合 +
+/// 魔数探测持久缓存，2026-10-01 syscall 瘦身）
+fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool, scan: &mut DirScan) -> Option<WsEntry> {
   let rel = if rel_base.is_empty() { name.to_string() } else { format!("{rel_base}/{name}") };
   let meta = fs::metadata(path).ok();
   let size = if is_dir { 0 } else { meta.as_ref().map(|m| m.len()).unwrap_or(0) };
@@ -181,19 +195,21 @@ fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool) -> 
   } else {
     path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default()
   };
-  // 图片探测宽高（魔数不认扩展名，壁纸站扩展名撒谎场景同 thumbnail::probe 口径）；
-  // 只读文件头，探测失败静默 null——布局回退方盒（useGridLayout 既定链）
-  let (mut w, mut h) = if is_dir { (None, None) } else { crate::services::thumbnail::probe(path).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None)) };
+  // 图片探测宽高（魔数不认扩展名，壁纸站扩展名撒谎场景同 thumbnail::probe 口径）：
+  // 探测结果按 job_key(rel,mtime,size) 持久缓存（probe.json，含非图片 / 失败负缓存），
+  // 缓存未命中才读文件头实探；探测失败静默 null——布局回退方盒（useGridLayout 既定链）
+  let (mut w, mut h) = if is_dir { (None, None) } else { scan.probe_dims(&rel, mtime_ms, size, path).map(|(w, h)| (Some(w), Some(h))).unwrap_or((None, None)) };
   // 缩略图来源（2026-09-17 实机定：非图片/音视频类型必须有系统格式图标，不许空盒）：
   // ① 内容缩略图缓存新鲜 = asset；② 缩略管线解不出的类型（w/h 探测失败且非音视频）=
   //   现场 shell 提取系统格式图标——exe 走文件级缓存（.anikit/thumbs/{job_key}.icon.webp，
   //   同扩展名各程序图标不同），其余按扩展名缓存 {ext}.webp（库 cache/thumbs 同口径换锚）；
   // ③ 可解码但尚未生成 = (null, null)，后台生成后 thumbs-ready 回填；
   // ④ 失败记忆命中（2026-09-26：解码失败过的键 rel+mtime+size）视同不可解码落回 ② 的格式图标——
-  //   失败条目不再空盒、不再随每次重扫重复请求重复失败
+  //   失败条目不再空盒、不再随每次重扫重复请求重复失败。
+  // ① ② 的命中判定全走 scan.thumb_names 快照集合（2026-10-01：原逐文件 is_file 探测退役）
   let (thumb_path, thumb_kind) = if is_dir {
     (None, None)
-  } else if let Some(t) = fresh_thumb_path(root, &rel, mtime_ms, size) {
+  } else if let Some(t) = scan.thumb_hit(root, &rel, mtime_ms, size) {
     // 非图片（视频/音频/字体等）魔数探测不出尺寸，缩略图未就绪前只能回退 300 方盒裁切
     // （2026-09-26 实机报 ws 视频卡上下被裁）：缓存缩略图与源同比例，仅读缓存文件头回填
     // 宽高（列目录逐文件 spawn ffprobe 太慢，布局只用比例故缩略图尺寸即够；image crate 的
@@ -216,14 +232,21 @@ fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool) -> 
       // 所有 exe）：命名同内容缩略图键（job_key = 截断前缀+hash+mtime+size，内嵌 .icon
       // 中缀防与内容缩略图撞名），改版本即失效重提并顺清旧缓存；thumbKind 仍 = FormatIcon
       if ext == "exe" {
-        match ensure_exe_icon(root, path, &rel, mtime_ms, size) {
+        match ensure_exe_icon(root, path, &rel, mtime_ms, size, scan) {
           Some(p) => (Some(p.to_string_lossy().into_owned()), Some(ThumbKind::FormatIcon)),
           None => (None, None),
         }
-      } else if crate::services::thumbnail::ensure_format_icon_in(&dir, path, &ext) {
-        (Some(crate::services::thumbnail::format_icon_path_in(&dir, &ext).to_string_lossy().into_owned()), Some(ThumbKind::FormatIcon))
       } else {
-        (None, None)
+        // 按扩展名格式图标：先查趟内快照集合（命中零 syscall），未命中走 ensure（现场提取
+        // 落盘后把新名补进集合，同趟后续同扩展名条目直接命中）
+        let key = if ext.is_empty() { "file" } else { ext.as_str() };
+        let icon_name = format!("{key}.webp");
+        if scan.icon_hit(&icon_name) || thumbnail::ensure_format_icon_in(&dir, path, &ext) {
+          scan.mark_icon(icon_name);
+          (Some(thumbnail::format_icon_path_in(&dir, &ext).to_string_lossy().into_owned()), Some(ThumbKind::FormatIcon))
+        } else {
+          (None, None)
+        }
       }
     } else {
       (None, None)
@@ -250,6 +273,118 @@ fn has_visible_sub_dir(path: &Path) -> bool {
     }
   }
   false
+}
+
+// ---------- 列目录趟内缓存（2026-10-01 性能优化②：list_dir 逐文件 syscall 瘦身） ----------
+
+/// 单趟列目录的共享缓存（list_dir 趟初建、趟末 save 收尾）：
+/// - thumb_names = thumbs 目录文件名快照集合：一次 read_dir 消掉逐文件「内容缩略图 webp/png
+///   双扩展名 is_file 探测 + exe 文件级图标探测 + 按扩展名格式图标探测」（原万级目录每次
+///   列举数万次 syscall 的大头）；趟中新落盘的图标名顺手补进集合（同趟后续同键条目直接命中）；
+/// - probe = 图片魔数探测结果持久缓存（.anikit/probe.json）：键 = job_key(rel,mtime,size)
+///   （同 thumbs 键径——源变化键自然失效，无需主动清），值 = Some([w,h]) 或 None（非图片 /
+///   探测失败负缓存——否则非图片条目每次列举都重开文件头实探）；纯缓存可删可重建
+struct DirScan {
+  thumb_names: HashSet<String>,
+  /// 探测缓存本趟快照（只读；趟内新增进 probe_new，save 时合并回写）
+  probe: HashMap<String, Option<(u32, u32)>>,
+  /// 本趟新探测的条目（脏标记 = 非空才回写）
+  probe_new: HashMap<String, Option<(u32, u32)>>,
+  /// 本趟触及的全部探测键（超限重建白名单）
+  probe_keep: HashSet<String>,
+}
+
+/// 魔数探测缓存文件名（.anikit/probe.json）
+const PROBE_CACHE_FILE: &str = "probe.json";
+/// 探测缓存条目上限：超限回写按本趟白名单重建（老键下次列举重探一次自愈，防无界膨胀）
+const PROBE_CACHE_MAX: usize = 50_000;
+
+/// probe.json 读改写锁：list_dir 跑在 spawn_blocking 可多趟并发，串化防并发趟互相覆盖
+/// 新增（丢键本无谓——下趟重探自愈，但白烧一趟逐文件实探）
+fn probe_io_lock() -> &'static Mutex<()> {
+  static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+  LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn probe_cache_path(root: &Path) -> PathBuf {
+  root.join(CACHE_DIR).join(PROBE_CACHE_FILE)
+}
+
+/// 读探测缓存：缺文件 / 解析失败 = 空（纯缓存口径，可删可重建）
+fn read_probe_cache(root: &Path) -> HashMap<String, Option<(u32, u32)>> {
+  fs::read_to_string(probe_cache_path(root)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+}
+
+impl DirScan {
+  fn load(root: &Path) -> Self {
+    let thumb_names: HashSet<String> = match fs::read_dir(thumbs_dir(root)) {
+      Ok(rd) => rd.flatten().filter_map(|e| e.file_name().into_string().ok()).collect(),
+      Err(_) => HashSet::new(), // 缓存目录不存在 = 全未命中（等价首次使用）
+    };
+    let probe = probe_io_lock().lock().map(|_| read_probe_cache(root)).unwrap_or_default();
+    Self { thumb_names, probe, probe_new: HashMap::new(), probe_keep: HashSet::new() }
+  }
+
+  /// 趟末收尾：有新增才回写——锁内重读合并（并发趟的新增互不抹掉；只并入本趟新增而不是
+  /// 整份快照，并发趟间隙被超限重建剪掉的旧键不被复活），超限按白名单重建，原子写落盘
+  ///（踩坑 095 口径，纯缓存丢一半也无害）；失败仅记日志（下趟重探）
+  fn save(self, root: &Path) {
+    if self.probe_new.is_empty() {
+      return;
+    }
+    let path = probe_cache_path(root);
+    let result = probe_io_lock().lock().map(|_g| -> Result<(), String> {
+      let mut map = read_probe_cache(root);
+      map.extend(self.probe_new);
+      if map.len() > PROBE_CACHE_MAX {
+        map.retain(|k, _| self.probe_keep.contains(k));
+      }
+      if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("探测缓存目录创建失败：{e}"))?;
+      }
+      let text = serde_json::to_string(&map).map_err(|e| format!("探测缓存序列化失败：{e}"))?;
+      crate::core::json_io::write_text_atomic(&path, &text).map_err(|e| format!("{e}"))
+    });
+    match result {
+      Ok(Ok(())) => {}
+      Ok(Err(e)) => log::warn!("工作空间探测缓存落盘失败（{}）：{e}", path.display()),
+      Err(_) => log::warn!("工作空间探测缓存写锁已中毒"),
+    }
+  }
+
+  /// 内容缩略图缓存命中（fresh_thumb_path 的趟内零 syscall 版）：期望文件名在快照集合内
+  /// 即新鲜（webp / png 双编码产物都认）；命中组绝对路径返回
+  fn thumb_hit(&self, ws_root: &Path, rel: &str, mtime_ms: i64, size: u64) -> Option<String> {
+    for ext in ["webp", "png"] {
+      let name = cache_name(rel, mtime_ms, size, ext);
+      if self.thumb_names.contains(&name) {
+        return Some(thumbs_dir(ws_root).join(name).to_string_lossy().into_owned());
+      }
+    }
+    None
+  }
+
+  /// 图标缓存名是否在快照集合（exe 文件级图标 / 按扩展名格式图标共用判定）
+  fn icon_hit(&self, name: &str) -> bool {
+    self.thumb_names.contains(name)
+  }
+
+  /// 趟内新落盘的图标名补进集合（同趟后续同键条目直接命中，不再走 ensure 的内部 is_file）
+  fn mark_icon(&mut self, name: String) {
+    self.thumb_names.insert(name);
+  }
+
+  /// 魔数探测（缓存版）：命中（含 None 负缓存）直接返回；未命中实探并记本趟新增
+  fn probe_dims(&mut self, rel: &str, mtime_ms: i64, size: u64, path: &Path) -> Option<(u32, u32)> {
+    let key = job_key(rel, mtime_ms, size);
+    self.probe_keep.insert(key.clone());
+    if let Some(&cached) = self.probe.get(&key) {
+      return cached;
+    }
+    let r = thumbnail::probe(path);
+    self.probe_new.insert(key, r);
+    r
+  }
 }
 
 // ---------- 缩略图缓存 ----------
@@ -416,24 +551,21 @@ fn icon_cache_name(rel: &str, mtime_ms: i64, size: u64) -> String {
   format!("{}.icon.webp", job_key(rel, mtime_ms, size))
 }
 
-/// exe 图标缓存命中（新鲜）判定：按当前 mtime+size 重算期望文件名，存在即新鲜
-fn fresh_exe_icon_path(ws_root: &Path, rel: &str, mtime_ms: i64, size: u64) -> Option<PathBuf> {
-  let dest = thumbs_dir(ws_root).join(icon_cache_name(rel, mtime_ms, size));
-  dest.is_file().then_some(dest)
-}
-
-/// exe 文件级图标缓存：已新鲜直接命中；否则现场 shell 提取该文件自身的图标落盘
-/// （不按扩展名——同扩展名各程序图标不同），顺手清理同 relPath 旧缓存；提取失败 None
-fn ensure_exe_icon(ws_root: &Path, abs: &Path, rel: &str, mtime_ms: i64, size: u64) -> Option<PathBuf> {
-  if let Some(p) = fresh_exe_icon_path(ws_root, rel, mtime_ms, size) {
-    return Some(p);
+/// exe 文件级图标缓存：趟内快照集合命中（新鲜 = 期望文件名在集合内）直接组路径；否则现场
+/// shell 提取该文件自身的图标落盘（不按扩展名——同扩展名各程序图标不同），顺手清理同
+/// relPath 旧缓存并把新名补进趟内集合；提取失败 None
+fn ensure_exe_icon(ws_root: &Path, abs: &Path, rel: &str, mtime_ms: i64, size: u64, scan: &mut DirScan) -> Option<PathBuf> {
+  let name = icon_cache_name(rel, mtime_ms, size);
+  let dir = thumbs_dir(ws_root);
+  let dest = dir.join(&name);
+  if scan.icon_hit(&name) {
+    return Some(dest);
   }
   let img = shell_thumb::format_icon(abs, shell_thumb::FORMAT_ICON_EDGE)?;
-  let dir = thumbs_dir(ws_root);
   fs::create_dir_all(&dir).ok()?;
-  let dest = dir.join(icon_cache_name(rel, mtime_ms, size));
   thumbnail::save_webp(&image::DynamicImage::ImageRgba8(img), &dest).ok()?;
   purge_stale(&dir, rel, &dest);
+  scan.mark_icon(name);
   Some(dest)
 }
 
@@ -517,8 +649,34 @@ pub fn migrate_cache(space_root: &Path) {
 
 // ---------- 监听生命周期 ----------
 
+/// 变更路径集 → 涉及目录 rel 去重排序集（fs-changed 精准重扫负载，2026-10-01 性能优化①）：
+/// 每条路径取父目录（条目增删改殃及所在目录列举）与祖父目录（目录增删殃及父目录条目
+/// 在祖父列举里的 hasSubDir 展开箭头）；.anikit 内路径跳过（调用方已整批滤过，双保险）。
+/// notify 事件路径 = 监听根词法前缀 + 相对段（Windows 后端不 canonicalize，notify 8.2
+/// 源码实证）→ 词法 strip_prefix，不 canonicalize（删除事件的旧路径已不存在，规范化必败
+/// 会把所有删除事件打成全量兜底）；任一非缓存路径剥不出前缀 → None（前端回退全量重扫）
+fn changed_dirs(ws_dir: &Path, paths: &[PathBuf]) -> Option<Vec<String>> {
+  let mut out = std::collections::BTreeSet::new();
+  for p in paths {
+    if in_cache_dir(p) {
+      continue;
+    }
+    let rel = p.strip_prefix(ws_dir).ok()?;
+    if rel.as_os_str().is_empty() {
+      out.insert(String::new()); // 监听根自身事件（属性变更等）→ 根目录
+      continue;
+    }
+    let parent = rel.parent();
+    for anc in [parent, parent.and_then(|pp| pp.parent())].into_iter().flatten() {
+      out.insert(anc.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/"));
+    }
+  }
+  Some(out.into_iter().collect())
+}
+
 /// 启动工作空间监听（空间打开唯一入口 activate_space 调用；workspace/ 目录缺失则不启）：
-/// 任何路径事件（.anikit 缓存写回自激已滤）→ emit workspace-fs-changed，前端去抖重扫。
+/// 任何路径事件（.anikit 缓存写回自激已滤）→ emit workspace-fs-changed（负载 = 变更涉及的
+/// 目录 rel 集，changed_dirs；前端去抖后按集精准重扫，2026-10-01 精准化）。
 /// 用**纯转发轻量监听**（不就绪判定，零遍历零探测，stop 秒退——2026-09-19 用户实机
 /// 「接入工作空间后托盘退出又卡又慢」：复用收件箱就绪判定版时对活动条目每 500ms 递归
 /// 探测全树，退出 join 还要等当趟遍历跑完）。
@@ -533,13 +691,14 @@ pub fn start_watch(app: &AppHandle, space_root: &Path) {
     return;
   }
   let app_emit = app.clone();
+  let ws_dir = dir.clone();
   let handle = match inbox_watch::spawn_changes_only(
     dir,
     move |paths| {
       // .anikit 缓存写回自激滤掉 + 已知操作回声消重（PRD 步骤 2：命令返回即更新 UI，
       // 窗口期内本进程写操作的 watcher 事件不上报，窗口外 / 混合事件照常推送）
       if paths.iter().any(|p| !in_cache_dir(p)) && !is_echo(paths) {
-        if let Err(e) = app_emit.emit(FS_CHANGED_EVENT, ()) {
+        if let Err(e) = app_emit.emit(FS_CHANGED_EVENT, changed_dirs(&ws_dir, paths)) {
           log::debug!("工作空间实况事件推送失败（前端可能已关闭）：{e}");
         }
       }
@@ -1264,8 +1423,65 @@ mod tests {
     assert_eq!((e2.thumb_path, e2.thumb_kind), (None, None), "源变化后旧失败键失效，重新待生成");
   }
 
-  // ---------- 步骤 2 写操作 ----------
+  /// fs-changed 精准重扫负载（2026-10-01 性能优化①）：变更路径 → 父目录 + 祖父目录 rel
+  /// 去重排序集；.anikit 缓存路径滤掉；监听根外路径 → None（前端全量兜底）；根自身事件 → 根
+  #[test]
+  fn changed_dirs_maps_to_parent_and_grandparent() {
+    let ws = Path::new("C:/空间/workspace");
+    // 根级文件：父 = ""（无祖父）
+    assert_eq!(changed_dirs(ws, &[ws.join("图.png")]), Some(vec![String::new()]));
+    // 深层文件：父 + 祖父；同目录两文件去重（BTreeSet 保序："夹" < "夹/子"）
+    assert_eq!(
+      changed_dirs(ws, &[ws.join("夹/子/甲.png"), ws.join("夹/子/乙.png")]),
+      Some(vec!["夹".to_string(), "夹/子".to_string()])
+    );
+    // 缓存目录内路径整批滤掉 → 空集（调用方已整批滤过才 emit，双保险口径自洽）
+    assert_eq!(changed_dirs(ws, &[ws.join(".anikit/thumbs/x.webp")]), Some(vec![]));
+    // 混合：缓存路径滤、正常路径留
+    assert_eq!(
+      changed_dirs(ws, &[ws.join(".anikit/thumbs/x.webp"), ws.join("夹/新.png")]),
+      Some(vec![String::new(), "夹".to_string()])
+    );
+    // 监听根外路径 → None（前端回退全量重扫）
+    assert_eq!(changed_dirs(ws, &[Path::new("D:/其他/图.png").to_path_buf()]), None);
+    // 监听根自身事件（rel 空）→ 根目录
+    assert_eq!(changed_dirs(ws, &[ws.to_path_buf()]), Some(vec![String::new()]));
+  }
 
+  /// 魔数探测缓存（2026-10-01 性能优化②）：首趟列举后 probe.json 落盘——图片记 [w,h]、
+  /// 非图片记 null 负缓存；预置假尺寸的二趟列举直接吃缓存（证明不再实探）、无新增不重写
+  #[test]
+  fn probe_cache_roundtrip_and_negative_entry() {
+    let (_dir, root) = make_ws();
+    make_png(&root.join("图.png"), 100, 80);
+    fs::write(root.join("说明.txt"), b"hello").unwrap();
+    let key_of = |rel: &str| {
+      let meta = fs::metadata(root.join(rel)).unwrap();
+      let mtime_ms = meta.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64;
+      job_key(rel, mtime_ms, meta.len())
+    };
+    let (key_png, key_txt) = (key_of("图.png"), key_of("说明.txt"));
+
+    let list = list_dir(&root, "").unwrap();
+    assert_eq!(list.iter().find(|e| e.name == "图.png").unwrap().w, Some(100));
+    let map: serde_json::Value =
+      serde_json::from_str(&fs::read_to_string(root.join(".anikit/probe.json")).expect("探测缓存应落盘")).unwrap();
+    assert_eq!(map[key_png.as_str()], serde_json::json!([100, 80]), "图片探测结果入缓存");
+    assert_eq!(map[key_txt.as_str()], serde_json::Value::Null, "非图片记负缓存（不再每次列举重探）");
+
+    // 预置假尺寸：二趟列举若重探会得到真值 100×80，吃缓存则回假值
+    let seed: HashMap<String, Option<(u32, u32)>> = HashMap::from([(key_png.clone(), Some((7, 9))), (key_txt, None)]);
+    fs::write(root.join(".anikit/probe.json"), serde_json::to_string(&seed).unwrap()).unwrap();
+    let list2 = list_dir(&root, "").unwrap();
+    let e = list2.iter().find(|e| e.name == "图.png").unwrap();
+    assert_eq!((e.w, e.h), (Some(7), Some(9)), "二趟命中缓存不重探");
+    // 两键全命中无新增 → 不重写（假值仍在，未被回写覆盖）
+    let map2: serde_json::Value =
+      serde_json::from_str(&fs::read_to_string(root.join(".anikit/probe.json")).unwrap()).unwrap();
+    assert_eq!(map2[key_png.as_str()], serde_json::json!([7, 9]));
+  }
+
+  // ---------- 步骤 2 写操作 ----------
   /// 新建：成功创建；重名 / 非法名（空、..、分隔符、结尾点）给中文错
   #[test]
   fn create_folder_validates_and_rejects_duplicates() {

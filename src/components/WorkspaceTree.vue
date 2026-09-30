@@ -34,13 +34,15 @@ const isRoot = computed(() => props.rel === "");
 const pinsOpen = ref(true);
 const treeOpen = ref(true);
 
-// 懒加载：层级挂载即拉本目录 listing（根层随分段切换挂载；子层随父级展开挂载）；
-// 根层另取固定清单（ensureRoot 已拉一次，此处兜底会话内 pin 变化）+ 拉各 pin 目录计数
+// 懒加载：层级挂载即确保本目录 listing 已加载（根层随分段切换挂载；子层随父级展开挂载）——
+// 已加载即跳过（2026-10-01 性能优化③：加载后由 fs-changed 精准重扫维持新鲜，挂载不再全量
+// 重读，ContentArea 视口同口径）；根层另取固定清单（ensureRoot 已拉一次，此处兜底会话内
+// pin 变化）+ 确保各 pin 目录已加载（计数显示用）
 onMounted(() => {
-  void ws.loadDir(props.rel);
+  void ws.ensureDir(props.rel);
   if (isRoot.value) {
     void ws.loadPinned();
-    for (const rel of ws.pinned) void ws.loadDir(rel);
+    for (const rel of ws.pinned) void ws.ensureDir(rel);
   }
 });
 

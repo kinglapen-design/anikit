@@ -116,7 +116,7 @@ export async function deleteWsEntries(relPaths: string[]): Promise<void> {
   await invoke("ws_delete", { relPaths });
 }
 
-// 移动（拖拽 / 剪切粘贴）：relPaths 移入 destRel；重名自动 " (n)" 规避
+// 移动（拖拽 / 剪切粘贴）：relPaths 移入 destRel；重名自动 "名_n" 规避（n 从 2 递增，2026-09-23 序号统一定案）
 export async function moveWsEntries(relPaths: string[], destRel: string): Promise<void> {
   await invoke("ws_move", { relPaths, destRel });
 }
@@ -150,19 +150,37 @@ export async function unpinWsEntry(rel: string): Promise<string[]> {
 }
 
 // —— 事件监听（App.vue onMounted 统一调，模块级幂等）——
-// fs-changed 写入连发去抖 300ms 合并为一拍重扫（缩略图缓存写回已后端过滤，不触发）；
+// fs-changed（2026-10-01 精准化，性能优化①）：负载 = 变更涉及的目录 rel 数组（去重排序，
+// 父目录 + 祖父目录），写入连发去抖 300ms 合并——窗口内多拍目录集取并集，按集精准重扫
+// （仅已加载目录；未加载目录下次展开 / 进视口时 loadDir 自然取新）；负载 null = 后端路径
+// 解析失败的形态异常，整窗回退全量重扫（rescanLoaded）。
 // thumbs-ready 总是 emit（可能空数组），补丁回填 ws store 对应条目的 thumbPath
 let started = false;
 let fsTimer: ReturnType<typeof setTimeout> | undefined;
+let fsAll = false; // 去抖窗口内混入 null 拍 → 整窗回退全量
+const fsDirs = new Set<string>(); // 去抖窗口内变更目录并集
 
 export function initWsListeners(): void {
   if (started) return;
   started = true;
   const ws = useWsStore();
   void ws.ensureRoot();
-  void listen("workspace-fs-changed", () => {
+  void listen<string[] | null>("workspace-fs-changed", (e) => {
+    if (e.payload === null) {
+      fsAll = true;
+      fsDirs.clear();
+    } else if (!fsAll) {
+      for (const d of e.payload) fsDirs.add(d);
+    }
     clearTimeout(fsTimer);
-    fsTimer = setTimeout(() => void ws.rescanLoaded(), 300);
+    fsTimer = setTimeout(() => {
+      const all = fsAll;
+      const dirs = [...fsDirs];
+      fsAll = false;
+      fsDirs.clear();
+      if (all) void ws.rescanLoaded();
+      else if (dirs.length > 0) void ws.rescanDirs(dirs);
+    }, 300);
   });
   void listen<WsThumbReady[]>("workspace-thumbs-ready", (e) => ws.patchThumbs(e.payload));
 }

@@ -129,9 +129,20 @@ export const useWsStore = defineStore("ws", {
         inFlight.delete(rel);
       }
     },
-    // fs-changed 去抖后调用：重扫全部已加载目录（loadDir 内含缩略图补请求）
+    // fs-changed 去抖后全量重扫（仅负载 null 的形态异常兜底用；loadDir 内含缩略图补请求）
     async rescanLoaded(): Promise<void> {
       await Promise.all(Object.keys(this.loaded).map((rel) => this.loadDir(rel)));
+    },
+    // fs-changed 精准重扫（2026-10-01 性能优化①）：只重扫事件涉及的已加载目录——
+    // 未加载目录无可视呈现，下次展开 / 进视口时 loadDir 自然取新
+    async rescanDirs(rels: string[]): Promise<void> {
+      await Promise.all(rels.filter((rel) => this.loaded[rel]).map((rel) => this.loadDir(rel)));
+    },
+    // 视口挂载入口（2026-10-01 性能优化③）：已加载目录跳过全量重读——加载后由 fs-changed
+    // 精准重扫维持新鲜（监听盲区以右键「刷新」refreshDir 兜底）；未加载才走 loadDir 首发
+    async ensureDir(rel: string): Promise<void> {
+      if (this.loaded[rel]) return;
+      await this.loadDir(rel);
     },
     // 手动刷新兜底（PRD 02 定案：右键「刷新」）：全量重扫当前目录
     async refreshDir(rel: string): Promise<void> {
