@@ -235,15 +235,20 @@ onMounted(() => {
   void initPreviewListeners(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3；扇出全部已建会话）
   void webview.onDragDropEvent((event) => {
     const p = event.payload;
+    // DragDropEvent 的 position 是**物理像素**（PhysicalPosition，webview.d.ts 类型实证），
+    // elementFromPoint / getBoundingClientRect 是 CSS 逻辑像素——显示器缩放 >100% 时必须除
+    // devicePixelRatio 换算，否则落点命中区整体偏移（踩坑 096：125% 缩放下侧边栏右侧误触发、
+    // 视口右侧不触发；库导入树行落点同隐患同修）
+    const scale = window.devicePixelRatio || 1;
     // OS 文件拖入悬停高亮（2026-10-01 走查：外部拖入无提示）——enter / over 实时解落点给
     // 树行 / 文件夹卡 / 视口高亮（dragOperation 同视觉槽）；leave / drop 清槽后走落盘流
     if (p.type === "enter" || p.type === "over") {
-      osFileDragHover(p.position.x, p.position.y);
+      osFileDragHover(p.position.x / scale, p.position.y / scale);
       return;
     }
     osFileDragHoverEnd();
     if (p.type === "drop") {
-      void onDrop(p.paths, p.position.x, p.position.y);
+      void onDrop(p.paths, p.position.x / scale, p.position.y / scale);
     }
   }).then((fn) => {
     unlistenDragDrop = fn;
