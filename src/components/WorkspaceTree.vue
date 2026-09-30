@@ -55,9 +55,10 @@ function openDir(rel: string): void {
   tabs.openView(`ws:${rel}`);
 }
 
-// pin 行右键（取消固定 / 打开 / 资源管理器，wsTreeRowSpec 按清单状态分流）
+// pin 行右键（取消固定 / 打开 / 资源管理器，wsTreeRowSpec 按清单状态分流）；
+// spec async（build 前 refreshSystemClip，2026-10-01），@contextmenu.prevent 已同步拦默认
 function onPinMenu(e: MouseEvent, rel: string): void {
-  openContextMenu(e, wsTreeRowSpec(rel), undefined);
+  void wsTreeRowSpec(rel).then((spec) => openContextMenu(e, spec, undefined));
 }
 
 // 回收站行（2026-10-01 用户定）：点击 = 资源管理器打开系统回收站（ws 删除走系统回收站，PRD 06）

@@ -71,8 +71,9 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     // 只读视口拒入（2026-09-08 用户定，isNoImportView 统一判定；2026-09-09 收窄扩「全部」）：
     // 全部 / 最近使用 / 自动导入 / 缩略图 / 回收站不允许额外导入——系统剪贴板导入同拖拽口径
     // 弹错误弹窗（与拖拽共用 ui.importRejectOpen）；未分类 = 候车区总入口豁免（落 root）。
-    // 工作空间（PRD 02 步骤 2）静默让位：粘贴走 ws 内剪贴板（onOperationKeys ws 分支），
-    // 系统剪贴板文件导入进工作空间未立项（库互通另行立项），不弹拒入窗
+    // 工作空间（PRD 02-13，2026-10-01）静默让位：ws 的 Ctrl+V 归 onOperationKeys ws 分支
+    //（store 内序号仲裁——内部剪贴板或系统剪贴板文件粘贴进当前目录），库的系统剪贴板导入
+    //（图片 / 文本入库）在 ws 视口不触发，不弹拒入窗
     if (content.isWorkspaceView) return;
     if (content.isNoImportView) {
       ui.importRejectOpen = true;
@@ -159,7 +160,8 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     // 默认应用打开）因选择域恒空天然无效，不单独放行
     if (picker.active) return;
     // 工作空间磁盘实况（PRD 02 步骤 2 + 2026-10-01 库菜单移植轮）：F2 重命名 / Del 回收站删除 /
-    // Ctrl+C·X 写 ws 剪贴板 / Ctrl+V 粘贴（ws 内剪贴板非空时）/ Ctrl+D 创建副本（同目录 _n 规避）/
+    // Ctrl+C·X 写 ws 剪贴板（store 内同步写系统剪贴板）/ Ctrl+V 粘贴（恒调，store 内序号仲裁：
+    // 内部剪贴板 / 系统剪贴板文件二选一）/ Ctrl+D 创建副本（同目录 _n 规避）/
     // Shift+Enter 默认应用打开 / Ctrl+E 发送至 Animate（单选 fla）接 ws 按路径命令；
     // 其余库快捷键（Y 移动 / J 链接 / L 添加链接等）在 ws 无对应语义，一律不响应——assetId = ws:
     // 合成假 id 严禁落入任何 assetId 类命令。选中集可含文件夹键（2026-09-26 文件夹卡片 / 树行入素材域），
@@ -215,8 +217,11 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
           }
           return;
         }
-        if (k === "v" && !e.shiftKey && !e.altKey && ws.clip) {
-          e.preventDefault(); // 粘贴到当前视口目录（sidebarSelected = 活动 viewKey，tabs 同步口径）
+        if (k === "v" && !e.shiftKey && !e.altKey) {
+          // 粘贴到当前视口目录（sidebarSelected = 活动 viewKey，tabs 同步口径）；
+          // 2026-10-01 扩为恒调（PRD 02-13）：内部剪贴板空 / 序号已变时 store 内仲裁落
+          // 系统剪贴板文件粘贴（Explorer 复制·剪切的文件粘进当前目录）
+          e.preventDefault();
           void ws.paste(content.sidebarSelected.slice(3)).catch(fail);
           return;
         }

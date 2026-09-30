@@ -114,10 +114,12 @@ export const dragView = reactive({
 });
 
 // 素材卡片透明度态（2026-07-28 复验反馈 6①/8）：拖拽源 = source（--opacity-drag-source）/
-// 被剪切 = cut（--opacity-cut，粘贴 / 覆盖 / 清空后 clipboard 变化自动恢复）
+// 被剪切 = cut（--opacity-cut，粘贴 / 覆盖 / 清空后 clipboard 变化自动恢复）；
+// ws 键（ws:+rel）剪切集在 ws store clip——2026-10-01 同源接入（--opacity-cut 库同口径）
 export function assetCardFade(key: string): "source" | "cut" | null {
   if (dragView.assetKeys?.has(key)) return "source";
-  return useSelectionStore().isCut(key) ? "cut" : null;
+  if (useSelectionStore().isCut(key)) return "cut";
+  return key.startsWith("ws:") && useWsStore().isCutKey(key) ? "cut" : null;
 }
 
 // 卡片间距解析器：AssetGrid 注册（它持有 boxes / 滚动 pos）。注册归属激活 panel、谁注册谁注销
@@ -690,10 +692,15 @@ function onMove(e: PointerEvent): void {
     (e.clientX < 0 || e.clientY < 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight)
   ) {
     const ids = [...new Set(sess.items.map((it) => it.assetId))];
-    // ws 合成项（ws: 假 id）不可拖出——drag_assets 是库命令，只带真实 assetId
+    // ws 合成项（ws:+rel）走 ws_drag_paths 按路径拖出（2026-10-01 ws ↔ Explorer 互通，
+    // PRD 02-13 复制语义）；库资产走 drag_assets。一个拖拽手势的项来自同一视口同域，
+    // ws 与库 id 不会混；若混有，ws 优先走 ws_drag_paths，库 id 静默不拖
+    const wsRels = ids.filter((id) => id.startsWith("ws:")).map((id) => id.slice(3));
     const libIds = ids.filter((id) => !id.startsWith("ws:"));
     endDrag(true);
-    if (libIds.length > 0) {
+    if (wsRels.length > 0) {
+      void invoke("ws_drag_paths", { relPaths: wsRels }).catch((err) => console.warn("拖出失败", err));
+    } else if (libIds.length > 0) {
       void invoke("drag_assets", { assetIds: libIds }).catch((err) => console.warn("拖出失败", err));
     }
     return;

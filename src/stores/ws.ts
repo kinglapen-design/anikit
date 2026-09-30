@@ -9,6 +9,7 @@ import {
   createWsFolder,
   deleteWsEntries,
   duplicateWsEntries,
+  getClipboardSeq,
   getWorkspaceRoot,
   listWorkspaceDir,
   listWsPinned,
@@ -18,10 +19,15 @@ import {
   renameWsEntry,
   requestWorkspaceThumbs,
   unpinWsEntry,
+  wsClipboardFiles,
+  wsImportPaths,
+  wsPasteSystem,
+  wsWriteClipboard,
   type WsEntry,
   type WsRootInfo,
   type WsThumbReady,
 } from "../lib/wsOps";
+import { useToastStore } from "./toast";
 import type { PlacementView } from "./content";
 
 // 目录拉取竞态守卫：同一 rel 在途请求共享一趟（fs-changed 连发 / 树展开与视口加载并发常见）
@@ -49,9 +55,15 @@ export const useWsStore = defineStore("ws", {
     dirs: new Map<string, WsEntry[]>(),
     // 加载完成标记（含加载结果为空；未加载目录不在其中——树据此判定展开钮形态）
     loaded: {} as Record<string, boolean>,
-    // 工作空间内剪贴板（PRD 02 步骤 2：复制·剪切·粘贴 = 纯磁盘操作，与系统剪贴板无关）：
-    // rel 清单 + cut 语义；剪切粘贴成功即清空
+    // 工作空间内剪贴板（PRD 02 步骤 2：复制·剪切·粘贴 = 磁盘操作；2026-10-01 起同步写系统
+    // 剪贴板，Explorer 可接力）：rel 清单 + cut 语义；剪切粘贴成功即清空
     clip: null as { rels: string[]; cut: boolean } | null,
+    // 系统剪贴板写入完成时刻的序号（2026-10-01 粘贴仲裁基准，库 selection.clipboardSeq 同构）：
+    // 「先写后记」防竞态——粘贴时序号未变 = 自己刚写的 → 内部粘贴；变了 = 外部覆盖 → 系统剪贴板粘贴
+    clipSeq: null as number | null,
+    // 系统剪贴板是否含文件（菜单「粘贴」出现条件 = clip 非空 || systemClipHasFiles；
+    // 右键开 ws 菜单前 refreshSystemClip 刷新）
+    systemClipHasFiles: false,
     // 步骤 3 常用固定：rel 清单（顺序 = 固定先后；持久化于 .anikit/workspace.json，
     // 读取时后端静默剔除失效条目——改名 / 移动 / 删除 / 非目录）
     pinned: [] as string[],
@@ -69,6 +81,14 @@ export const useWsStore = defineStore("ws", {
         (state.dirs.get(rel) ?? [])
           .filter((e) => !e.isDir)
           .map((e) => wsEntryToPlacement(e, rel, state.root?.rootPath ?? null));
+    },
+    // 剪切集中项淡化（2026-10-01，--opacity-cut 库同口径）：key = ws 选择域键
+    //（`ws:{rel}|ws:{所在目录rel}`）；clip.cut 且 rels 含该项 rel 即淡化
+    isCutKey: (state) => (key: string): boolean => {
+      const c = state.clip;
+      if (!c?.cut || !key.startsWith(WS_ID_PREFIX)) return false;
+      const rel = key.slice(WS_ID_PREFIX.length, key.indexOf("|"));
+      return c.rels.includes(rel);
     },
   },
   actions: {
@@ -196,22 +216,62 @@ export const useWsStore = defineStore("ws", {
       await moveWsEntries(targets, destRel);
       await this.refreshAround(targets, destRel);
     },
-    // 复制 / 剪切入剪贴板（rels = 相对根路径；粘贴到自身所在目录 = 无操作由调用方判）
+    // 复制 / 剪切入剪贴板（rels = 相对根路径；粘贴到自身所在目录 = 无操作由调用方判）。
+    // 2026-10-01 PRD 02-13：写内部剪贴板的同时同步写系统剪贴板（CF_HDROP，Explorer 可直接
+    // 粘贴接力；复制附位图 / 剪切附 DropEffect=MOVE，库 2026-09-17 同口径）——fire-and-forget，
+    // 「先写后记」（库 placementOps 2026-09-19 竞态根治同模式）：写完再记序号作粘贴仲裁基准
     setClip(rels: string[], cut: boolean): void {
       this.clip = rels.length > 0 ? { rels, cut } : null;
+      if (rels.length === 0) return;
+      void (async () => {
+        try {
+          await wsWriteClipboard(rels, cut);
+          this.clipSeq = await getClipboardSeq();
+        } catch (e) {
+          console.debug("ws 系统剪贴板写入不可用：", e);
+        }
+      })();
     },
-    // 粘贴进 destRel；剪切成功后清空剪贴板（一次性语义）
+    // 粘贴进 destRel（2026-10-01 仲裁，库 2026-09-17 序号机制同构）：内部剪贴板非空且序号未变
+    //（自己刚复制 / 剪切的；序号读取失败 / 未记录同库口径保持内部优先）→ 内部粘贴
+    //（剪切成功清 clip）；序号已变（外部覆盖）或内部空 → 系统剪贴板文件粘进目标目录——
+    // 复制来源恒复制 / 剪切来源 = 移动；无文件静默，源全失效 toast
     async paste(destRel: string): Promise<void> {
+      const seq = await getClipboardSeq().catch(() => -1);
       const clip = this.clip;
-      if (!clip) return;
-      const targets = clip.rels.filter((r) => {
-        const parent = r.includes("/") ? r.slice(0, r.lastIndexOf("/")) : "";
-        return parent !== destRel;
-      });
-      if (targets.length === 0) return;
-      await pasteWsEntries(targets, destRel, clip.cut);
-      await this.refreshAround(targets, destRel);
-      if (clip.cut) this.clip = null;
+      if (clip && (this.clipSeq === null || seq < 0 || seq === this.clipSeq)) {
+        const targets = clip.rels.filter((r) => {
+          const parent = r.includes("/") ? r.slice(0, r.lastIndexOf("/")) : "";
+          return parent !== destRel;
+        });
+        if (targets.length === 0) return;
+        await pasteWsEntries(targets, destRel, clip.cut);
+        await this.refreshAround(targets, destRel);
+        if (clip.cut) this.clip = null;
+        return;
+      }
+      const r = await wsPasteSystem(destRel);
+      if (!r.hadFiles) return; // 系统剪贴板无文件属常态，静默
+      if (r.pasted.length === 0) {
+        useToastStore().notify({ message: "剪贴板中的文件已不存在", icon: "fail" });
+        return;
+      }
+      await this.refreshAround(r.pasted, destRel);
+    },
+    // 系统剪贴板含文件态刷新（右键开 ws 菜单前调，菜单「粘贴」出现条件用）；失败静默保持原值
+    async refreshSystemClip(): Promise<void> {
+      try {
+        const r = await wsClipboardFiles();
+        this.systemClipHasFiles = r.paths.length > 0;
+      } catch {
+        /* 静默：读取失败保持原值，菜单可见性降级 */
+      }
+    },
+    // Explorer 拖入（2026-10-01 PRD 02-13：拖入一律复制，非破坏口径）：外部绝对路径复制进
+    // destRel；成功后按既有方式局部重扫（目标目录 + 落点目录子树内已加载目录）
+    async importPaths(absPaths: string[], destRel: string): Promise<void> {
+      const created = await wsImportPaths(absPaths, destRel);
+      if (created.length > 0) await this.refreshAround(created, destRel);
     },
     // 创建副本（库「创建副本」Ctrl+D 移植，2026-10-01）：同目录复制，后端重名 _n 规避；
     // 文件与文件夹混合整批受理（同其余 ws 写操作口径）

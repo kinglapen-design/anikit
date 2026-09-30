@@ -57,7 +57,8 @@ pub fn reveal_path(state: State<AppState>, abs_path: String) -> Result<(), Strin
 }
 
 /// 按路径校验（工作空间右键打开类 / 复制数据 / 系统菜单共用）：当前空间 workspace 内 + 存在
-fn validated_ws_path(state: &State<AppState>, abs_path: &str) -> Result<std::path::PathBuf, String> {
+/// pub(crate)：lib.rs ws_drag_paths 与本文件剪贴板命令复用同一越界口径
+pub(crate) fn validated_ws_path(state: &State<AppState>, abs_path: &str) -> Result<std::path::PathBuf, String> {
   let root = ws_root(state)?;
   let target = std::path::PathBuf::from(abs_path);
   if !workspace::is_under(&root, &target) {
@@ -67,6 +68,13 @@ fn validated_ws_path(state: &State<AppState>, abs_path: &str) -> Result<std::pat
     return Err("条目已不存在（可能刚被移动或删除）".to_string());
   }
   Ok(target)
+}
+
+/// rel → 校验后的绝对路径（2026-10-01 ws 剪贴板 / 拖出命令族共用）：root 拼接后经
+/// validated_ws_path 同口径校验（`..` / 绝对路径组件越界由 is_under 规范化比对拦下）
+pub(crate) fn validated_ws_rel(state: &State<AppState>, rel: &str) -> Result<std::path::PathBuf, String> {
+  let root = ws_root(state)?;
+  validated_ws_path(state, &root.join(rel).to_string_lossy())
 }
 
 /// 用系统默认程序打开（工作空间文件右键移植库「在默认应用打开」；按真实路径）
@@ -215,6 +223,99 @@ pub fn ws_paste(state: State<AppState>, rel_paths: Vec<String>, dest_rel: String
 pub fn ws_duplicate(state: State<AppState>, rel_paths: Vec<String>) -> Result<(), String> {
   let root = ws_root(&state)?;
   workspace::duplicate_entries(&root, &rel_paths)
+}
+
+// ---------- ws ↔ Explorer 剪贴板 / 拖入互通（2026-10-01，PRD 02-13） ----------
+// 剪贴板读写属 COM/IO，一律 async（规范 §2）；实际读写与位图解码挪 spawn_blocking 不占 tokio worker
+
+/// 系统剪贴板文件清单（ws_clipboard_files 返回 / 菜单「粘贴」可见性查询用）
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WsClipboardFiles {
+  /// CF_HDROP 文件绝对路径集（无文件 = 空）
+  pub paths: Vec<String>,
+  /// Preferred DropEffect=MOVE（外部剪切 = 移动语义）
+  pub cut: bool,
+}
+
+/// ws_paste_system 返回：had_files = 系统剪贴板含文件列表（false = 无文件属常态，前端静默）；
+/// pasted = 实际落入的目标 rel 集（源已不存在项跳过，全失效 = 空，前端 toast）；moved = 外部剪切移动入
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WsPasteSystemResult {
+  pub pasted: Vec<String>,
+  pub moved: bool,
+  pub had_files: bool,
+}
+
+/// 写系统剪贴板（PRD 02-13：ws 复制 / 剪切同步写系统剪贴板，Explorer 可直接粘贴接力）：
+/// CF_HDROP 文件列表 + 单张静态图 ≤20MB 附位图（PNG + CF_DIBV5，库 2026-09-17 同口径，
+/// services::asset_menu::clipboard_bitmap 复用）+ 剪切附 Preferred DropEffect=MOVE
+///（资源管理器粘贴即移动，源由系统自删）。rel 逐条校验（越界 / 不存在跳过 + 去重保序），空集报错
+#[tauri::command]
+pub async fn ws_write_clipboard(state: State<'_, AppState>, rel_paths: Vec<String>, cut: bool) -> Result<(), String> {
+  let mut seen = std::collections::HashSet::new();
+  let paths: Vec<std::path::PathBuf> = rel_paths
+    .iter()
+    .filter_map(|rel| validated_ws_rel(&state, rel).ok())
+    .filter(|p| seen.insert(p.clone()))
+    .collect();
+  if paths.is_empty() {
+    return Err("没有可复制的文件".to_string());
+  }
+  tauri::async_runtime::spawn_blocking(move || {
+    let bitmap = crate::services::asset_menu::clipboard_bitmap(&paths);
+    let refs: Vec<&std::path::Path> = paths.iter().map(|p| p.as_path()).collect();
+    crate::adapters::clipboard::write_files_clipboard(&refs, bitmap.as_ref(), cut)
+  })
+  .await
+  .map_err(|e| format!("系统剪贴板写入任务异常：{e}"))?
+}
+
+/// 读系统剪贴板文件清单（右键菜单「粘贴」出现条件 = 内部剪贴板非空 || 系统剪贴板含文件，
+/// 前端开 ws 菜单前查询）；仲裁读取在 ws_paste_system 内，不经本命令
+#[tauri::command]
+pub async fn ws_clipboard_files() -> Result<WsClipboardFiles, String> {
+  tauri::async_runtime::spawn_blocking(|| {
+    let (paths, cut) = crate::adapters::clipboard::read_files_clipboard();
+    Ok(WsClipboardFiles {
+      paths: paths.into_iter().map(|p| p.to_string_lossy().into_owned()).collect(),
+      cut,
+    })
+  })
+  .await
+  .map_err(|e| format!("系统剪贴板读取任务异常：{e}"))?
+}
+
+/// 系统剪贴板粘贴进 ws（PRD 02-13 粘贴仲裁的外部分支）：读 CF_HDROP → 源已不存在项跳过 →
+/// **复制来源恒复制 / 剪切来源（DropEffect=MOVE）= 移动**（同盘 rename，异盘复制后删源）；
+/// 目录递归、重名 名_n 规避；图片 / 文本等无文件内容不导入（库导入专属）
+#[tauri::command]
+pub async fn ws_paste_system(state: State<'_, AppState>, dest_rel: String) -> Result<WsPasteSystemResult, String> {
+  let root = ws_root(&state)?;
+  tauri::async_runtime::spawn_blocking(move || {
+    let (paths, cut) = crate::adapters::clipboard::read_files_clipboard();
+    if paths.is_empty() {
+      return Ok(WsPasteSystemResult { pasted: Vec::new(), moved: false, had_files: false });
+    }
+    let sources: Vec<std::path::PathBuf> = paths.into_iter().filter(|p| p.exists()).collect();
+    let pasted = workspace::import_external_entries(&root, &sources, &dest_rel, cut)?;
+    Ok(WsPasteSystemResult { pasted, moved: cut, had_files: true })
+  })
+  .await
+  .map_err(|e| format!("系统剪贴板粘贴任务异常：{e}"))?
+}
+
+/// Explorer 拖入（PRD 02-13：拖入一律复制，非破坏口径与剪贴板导入同源）：源 = 外部绝对路径
+///（不做 root 约束，不存在项跳过），dest 走 ws 校验（越界 / 非目录 / .anikit 内中文报错）；
+/// 目录递归、重名 名_n 规避；返回 created rel 集（前端局部重扫锚）
+#[tauri::command]
+pub async fn ws_import_paths(state: State<'_, AppState>, abs_paths: Vec<String>, dest_rel: String) -> Result<Vec<String>, String> {
+  let root = ws_root(&state)?;
+  let sources: Vec<std::path::PathBuf> = abs_paths.into_iter().map(std::path::PathBuf::from).filter(|p| p.exists()).collect();
+  tauri::async_runtime::spawn_blocking(move || workspace::import_external_entries(&root, &sources, &dest_rel, false))
+    .await
+    .map_err(|e| format!("工作空间导入任务异常：{e}"))?
 }
 
 // ---------- 步骤 3 常用固定（.anikit/workspace.json，PRD 02） ----------

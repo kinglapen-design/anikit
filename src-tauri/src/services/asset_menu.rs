@@ -107,6 +107,7 @@ pub fn set_thumbnail_from_clipboard(lib: &mut Library, asset_id: &str) -> Result
 /// 内部「复制文件」同步调用——CF_HDROP 文件列表（各软件按附件粘贴）+ 单张静态图且 ≤20MB
 /// 附位图（PNG + CF_DIBV5，对话框直接贴图；Eagle 同款）。ws: 与解析失败项跳过
 /// （real_origin_file 同 resolve_drag_paths 口径）；纯读操作不改库数据。
+/// 恒 cut=false：库剪切不写系统剪贴板（移动语义 APP 内流转，PRD 02-13 2026-09-17 定案）
 pub fn copy_files_to_system_clipboard(lib: &Library, asset_ids: &[String]) -> Result<(), String> {
   let mut seen = std::collections::HashSet::new();
   let paths: Vec<PathBuf> = asset_ids
@@ -117,22 +118,30 @@ pub fn copy_files_to_system_clipboard(lib: &Library, asset_ids: &[String]) -> Re
   if paths.is_empty() {
     return Err("没有可复制的文件".to_string());
   }
-  // 单张静态图且体量可控（≤20MB 解码预算）附位图：对话框/IM 直接贴图；否则仅 CF_HDROP 附件
-  let mut bitmap: Option<image::RgbaImage> = None;
-  if paths.len() == 1 {
-    let p = &paths[0];
-    let ext = p
-      .extension()
-      .and_then(|e| e.to_str())
-      .map(|e| e.to_ascii_lowercase())
-      .unwrap_or_default();
-    let small = fs::metadata(p).map(|m| m.len() <= 20 * 1024 * 1024).unwrap_or(false);
-    if small && matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "bmp" | "webp" | "gif") {
-      bitmap = image::open(p).ok().map(|i| i.to_rgba8());
-    }
-  }
+  let bitmap = clipboard_bitmap(&paths);
   let refs: Vec<&Path> = paths.iter().map(|p| p.as_path()).collect();
-  crate::adapters::clipboard::write_files_clipboard(&refs, bitmap.as_ref())
+  crate::adapters::clipboard::write_files_clipboard(&refs, bitmap.as_ref(), false)
+}
+
+/// 系统剪贴板附位图（库 2026-09-17 与 ws 2026-10-01 同口径，供 write_files_clipboard 复用）：
+/// 仅当文件清单 = 单张静态图（png/jpg/jpeg/bmp/webp/gif）且 ≤20MB（解码预算）时解码附位图——
+/// 对话框 / IM 直接贴图；否则 None（仅 CF_HDROP 附件）。解码失败静默 None
+pub fn clipboard_bitmap(paths: &[PathBuf]) -> Option<image::RgbaImage> {
+  if paths.len() != 1 {
+    return None;
+  }
+  let p = &paths[0];
+  let ext = p
+    .extension()
+    .and_then(|e| e.to_str())
+    .map(|e| e.to_ascii_lowercase())
+    .unwrap_or_default();
+  let small = fs::metadata(p).map(|m| m.len() <= 20 * 1024 * 1024).unwrap_or(false);
+  if small && matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "bmp" | "webp" | "gif") {
+    image::open(p).ok().map(|i| i.to_rgba8())
+  } else {
+    None
+  }
 }
 
 /// 自定义缩略图（6.3 右键菜单）：指定图片文件（动图取首帧——generate 解码首帧口径与导入一致）

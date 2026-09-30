@@ -43,10 +43,11 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[], panel
       return "done";
     }
     // 工作空间（PRD 02）分流前置：ws 条目出 ws 专属菜单集（2026-10-01 移植轮扩为全量——
-    // 打开外发 / 剪贴板 / 副本 / 复制数据 / 系统菜单），不进素材菜单（assetId 类写操作项一律不挂）
+    // 打开外发 / 剪贴板 / 副本 / 复制数据 / 系统菜单），不进素材菜单（assetId 类写操作项一律不挂）；
+    // spec async（build 前 refreshSystemClip），e.preventDefault 已同步完成，菜单随后异步弹出
     if (content.isWorkspaceView) {
       const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
-      if (p) openContextMenu(e, wsCardSpec(p, panelId), undefined);
+      if (p) void wsCardSpec(p, panelId).then((spec) => openContextMenu(e, spec, undefined));
       return "done";
     }
     if (!selection.isSelected(key)) selection.selectOnly(key);
@@ -67,7 +68,8 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[], panel
   // 选择模式（6.2）：空白处新增菜单是编辑类，不出
   if (usePickerStore().active) return "done";
   const vk = content.sidebarSelected;
-  if (vk.startsWith("ws:")) openContextMenu(e, wsBlankSpec(vk.slice(3)), undefined);
+  // ws spec async（build 前 refreshSystemClip，2026-10-01），e.preventDefault 已同步完成
+  if (vk.startsWith("ws:")) void wsBlankSpec(vk.slice(3)).then((spec) => openContextMenu(e, spec, undefined));
   else if (vk === "quick:recycle") openContextMenu(e, recycleBlankSpec(), undefined);
   else if (vk.startsWith("folder:")) openContextMenu(e, addButtonSpec(), undefined);
   else if (vk === "quick:uncategorized") openContextMenu(e, quickFullSpec(), undefined);

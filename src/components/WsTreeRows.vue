@@ -72,13 +72,14 @@ function onRowClick(rel: string, e: MouseEvent): void {
 
 // 行右键菜单（固定·取消固定按清单状态自动切换，spec 内分流）；
 // 未选中项先单选（FolderStrip ws 卡片同口径），批量复制 / 剪切 / 删除随选择域分流；
-// 选择模式（6.2）不入选择域，直接出菜单
+// 选择模式（6.2）不入选择域，直接出菜单；
+// spec async（build 前 refreshSystemClip，2026-10-01），@contextmenu.prevent 已同步拦默认
 function onRowMenu(e: MouseEvent, rel: string): void {
   if (!usePickerStore().active) {
     const key = rowKey(rel);
     if (!selection.isSelected(key)) selection.clickItem(key);
   }
-  openContextMenu(e, wsTreeRowSpec(rel), undefined);
+  void wsTreeRowSpec(rel).then((spec) => openContextMenu(e, spec, undefined));
 }
 
 // 拖拽落点视觉（PRD 02 步骤 2：树行 = ws 素材移动落点，引擎 dragView.tree 按 "ws:"+rel 命中；
@@ -97,6 +98,7 @@ function dropZone(rel: string): "before" | "after" | "into" | undefined {
           :name="d.name"
           :data-folder-id="`ws:${d.relPath}`"
           :drop-zone="dropZone(d.relPath)"
+          :cut="ws.isCutKey(rowKey(d.relPath))"
           :count="ws.loadedOk(d.relPath) ? ws.fileCount(d.relPath) : undefined"
           :expanded="isTreeOpen(d.relPath)"
           :expandable="expandable(d)"

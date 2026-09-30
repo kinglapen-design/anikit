@@ -33,11 +33,38 @@ fn drag_assets(
     let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
     resolve_drag_paths(lib, &asset_ids)
   };
+  start_files_drag(&window, paths)
+}
+
+/// 工作空间拖出（2026-10-01 ws ↔ Explorer 双向拖拽，PRD 02-13）：ws 文件卡片拖出窗口 =
+/// drag_assets 同机制（指针越出窗口边界后原生层发起 CF_HDROP 系统级拖拽，宣告复制效果、
+/// 源文件不动；落资源管理器 = 复制）。入参 = rel 清单（手势途中一次 IPC 直达，同 drag_assets
+/// 口径）；逐条按 ws 校验转绝对路径（越界 / 不存在跳过 + 去重保序；**文件夹不拖出**——
+/// 同库「文件夹不拖出」口径，拖出集只收文件）；空集报错。同步命令主线程 DoDragDrop（踩坑 004）
+#[tauri::command]
+fn ws_drag_paths(
+  window: tauri::WebviewWindow,
+  state: tauri::State<'_, commands::library::AppState>,
+  rel_paths: Vec<String>,
+) -> Result<(), String> {
+  let mut seen = std::collections::HashSet::new();
+  let paths: Vec<std::path::PathBuf> = rel_paths
+    .iter()
+    .filter_map(|rel| commands::workspace::validated_ws_rel(&state, rel).ok())
+    .filter(|p| p.is_file())
+    .filter(|p| seen.insert(p.clone()))
+    .collect();
+  start_files_drag(&window, paths)
+}
+
+/// 跨窗口拖出共用主体（drag_assets / ws_drag_paths）：空集报错 + 主线程 DoDragDrop
+///（DragItem::Files / 空拖拽图 / Options::default = DragMode::Copy 只宣告 DROPEFFECT_COPY）
+fn start_files_drag(window: &tauri::WebviewWindow, paths: Vec<std::path::PathBuf>) -> Result<(), String> {
   if paths.is_empty() {
     return Err("没有可拖出的文件".to_string());
   }
   drag::start_drag(
-    &window,
+    window,
     drag::DragItem::Files(paths),
     drag::Image::Raw(Vec::new()),
     |_result, _cursor| {},
@@ -298,6 +325,7 @@ pub fn run() {
     })
     .invoke_handler(tauri::generate_handler![
       drag_assets,
+      ws_drag_paths,
       commands::library::create_space,
       commands::library::open_space,
       commands::library::get_current_space,
@@ -329,6 +357,10 @@ pub fn run() {
       commands::workspace::ws_move,
       commands::workspace::ws_paste,
       commands::workspace::ws_duplicate,
+      commands::workspace::ws_write_clipboard,
+      commands::workspace::ws_clipboard_files,
+      commands::workspace::ws_paste_system,
+      commands::workspace::ws_import_paths,
       commands::workspace::ws_list_pinned,
       commands::workspace::ws_pin,
       commands::workspace::ws_unpin,

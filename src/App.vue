@@ -56,6 +56,8 @@ import { useUiStore } from "./stores/ui";
 import { useContentStore } from "./stores/content";
 import { usePickerStore } from "./stores/picker";
 import { useSelectionStore } from "./stores/selection";
+import { useToastStore } from "./stores/toast";
+import { useWsStore } from "./stores/ws";
 import { initPreviewListeners } from "./stores/preview";
 import { wizardState, reopenLastSession, createLibraryModalState, mergeLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener, renameLibraryState } from "./lib/libraryOps";
 import { playAlert } from "./lib/sounds";
@@ -70,6 +72,8 @@ const ui = useUiStore();
 const content = useContentStore();
 const picker = usePickerStore();
 const selection = useSelectionStore();
+const toast = useToastStore();
+const ws = useWsStore();
 
 // 侧栏 / dock 宿主引用：收展动画引擎（useSidebarAnim）逐帧写宽与灌宽的 DOM 锚点
 const sidebarLeftRef = ref<InstanceType<typeof SidebarLeft>>();
@@ -151,6 +155,26 @@ function onImportConfirm(opts: { structure: "flatten" | "keep"; source: "copy" |
 // 拖拽导入（PRD 05-01）：webview 拖放事件拿文件路径，落点在文件树 item 上则导入至该文件夹
 async function onDrop(paths: string[], x: number, y: number): Promise<void> {
   if (wizardState.open || paths.length === 0 || content.importDraft) return;
+  // 工作空间落点（2026-10-01 ws ↔ Explorer 互通，PRD 02-13：拖入一律复制——非破坏口径）：
+  // 树行（data-folder-id = "ws:"+rel）/ 文件夹卡片（data-ws-folder = rel）/ 视口空白
+  //（当前视口是 ws 且无其他落点）= 当前目录——命中即按路径复制进落点目录，不进库导入流
+  //（ws 树行落点此前混进库导入流的隐患同修）；命中库树行 / 库卡片（非 ws: 值）不拦截，
+  // 完全走既有库导入 / 拒入流
+  const dropEl = document.elementFromPoint(x, y);
+  const hitFolderId = dropEl?.closest("[data-folder-id]")?.getAttribute("data-folder-id") ?? null;
+  const hitWsFolder = dropEl?.closest("[data-ws-folder]")?.getAttribute("data-ws-folder") ?? null;
+  let wsDest: string | null = null;
+  if (hitFolderId?.startsWith("ws:")) wsDest = hitFolderId.slice(3);
+  else if (hitWsFolder !== null) wsDest = hitWsFolder;
+  else if (hitFolderId === null && content.isWorkspaceView) wsDest = content.sidebarSelected.slice(3);
+  if (wsDest !== null) {
+    try {
+      await ws.importPaths(paths, wsDest);
+    } catch (e) {
+      toast.notify({ message: String(e), icon: "fail" });
+    }
+    return;
+  }
   // 只读视口拒入（2026-09-08 用户定，isNoImportView 统一判定；2026-09-09 收窄扩「全部」）：
   // 全部 / 最近使用 / 自动导入 / 缩略图 / 回收站不允许额外导入——拖入直接拒绝弹错误弹窗，
   // 走 classify / importDraft 前拦截（弹窗开关在 ui store：Ctrl+V 拒入同弹，lib 无权触达本地态）；

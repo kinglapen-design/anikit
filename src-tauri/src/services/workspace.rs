@@ -945,6 +945,57 @@ pub fn duplicate_entries(root: &Path, rels: &[String]) -> Result<(), String> {
   Ok(())
 }
 
+/// 外部条目导入（2026-10-01 ws ↔ Explorer 互通，PRD 02-13：拖入一律复制 / 系统剪贴板粘贴
+/// 仲裁外部分支）：sources（绝对路径，不做 root 约束）逐个进 dest_rel——copy = 复制（目录递归）；
+/// cut = 移动（先试同盘 rename，失败回退复制后删源）。源已不存在跳过（读取到粘贴的间隙删除）；
+/// 源是目录且目标落在其**子树内**（含源自身）跳过——防爆递归，与 move_entries「目录禁移入
+/// 自身子树」同口径；**剪切粘贴到自身所在目录 = 无操作**（防 unique_target 造 _n 改名，
+/// 前端 ws store move / paste 同口径）；重名自动 _n 规避不覆盖。返回 created rel 集
+pub fn import_external_entries(root: &Path, sources: &[PathBuf], dest_rel: &str, cut: bool) -> Result<Vec<String>, String> {
+  let dest = resolve_under(root, dest_rel)?;
+  if !dest.is_dir() {
+    return Err("目标目录不存在".to_string());
+  }
+  if in_cache_dir(&dest) {
+    return Err(".anikit 缓存目录不允许操作".to_string());
+  }
+  let canon_dest = dest.canonicalize().unwrap_or_else(|_| dest.clone());
+  let mut created = Vec::new();
+  for src in sources {
+    if !src.exists() {
+      continue;
+    }
+    let canon_src = src.canonicalize().unwrap_or_else(|_| src.clone());
+    if src.is_dir() && canon_dest.starts_with(&canon_src) {
+      continue; // 目标落在源子树内：复制 / 移动进自己必然爆炸
+    }
+    if cut && canon_src.parent() == Some(canon_dest.as_path()) {
+      continue; // 剪切粘贴到自身所在目录 = 无操作
+    }
+    let Some(name) = src.file_name().map(|n| n.to_string_lossy().into_owned()) else { continue };
+    let target = unique_target(&dest, &name);
+    if cut {
+      // 移动：先试 rename（同盘瞬时）；失败（跨盘 / 占用）回退复制后删源
+      if fs::rename(src, &target).is_err() {
+        copy_recursive(src, &target)?;
+        if src.is_dir() {
+          fs::remove_dir_all(src).map_err(|e| format!("移动失败（无法删除源目录 {}）：{e}", src.display()))?;
+        } else {
+          fs::remove_file(src).map_err(|e| format!("移动失败（无法删除源文件 {}）：{e}", src.display()))?;
+        }
+      }
+      note_known_op(vec![src.clone(), target.clone()]);
+    } else {
+      copy_recursive(src, &target)?;
+      note_known_op(vec![target.clone()]);
+    }
+    if let Some(rel) = rel_of(root, &target) {
+      created.push(rel);
+    }
+  }
+  Ok(created)
+}
+
 // ---------- 视图状态：常用固定（PRD 02 步骤 3，.anikit/workspace.json） ----------
 
 /// 视图状态文件形状（字段后补；当前仅 pinned = 常用固定 rel 清单）
@@ -1565,6 +1616,53 @@ mod tests {
     assert!(root.join("夹_2/子").is_dir(), "目录副本递归");
     assert!(duplicate_entries(&root, &["不存在.png".to_string()]).is_err(), "缺失条目报错");
     assert!(duplicate_entries(&root, &[".anikit/thumbs".to_string()]).is_err(), ".anikit 拒绝");
+  }
+
+  /// 外部导入（2026-10-01 Explorer 拖入 / 系统剪贴板粘贴）：复制入（源不动 + 目录递归）/
+  /// 重名 _n / 剪切移动（源移出）/ 目标落源子树内跳过 / 剪切到同目录无操作 / 不存在源跳过 / .anikit 拒绝
+  #[test]
+  fn import_external_copies_moves_and_protects() {
+    let (_dir, root) = make_ws();
+    let outside = tempfile::tempdir().unwrap();
+    fs::write(outside.path().join("外.png"), b"png").unwrap();
+    fs::create_dir_all(outside.path().join("包/子")).unwrap();
+    fs::write(outside.path().join("包/子/a.txt"), b"a").unwrap();
+
+    // 复制入：文件 + 目录递归，源不动；返回 created rel
+    let created =
+      import_external_entries(&root, &[outside.path().join("外.png"), outside.path().join("包")], "", false).unwrap();
+    assert_eq!(created, vec!["外.png".to_string(), "包".to_string()]);
+    assert!(root.join("外.png").is_file() && root.join("包/子/a.txt").is_file());
+    assert!(outside.path().join("外.png").is_file(), "复制源不动");
+
+    // 重名 _n 规避不覆盖
+    let created = import_external_entries(&root, &[outside.path().join("外.png")], "", false).unwrap();
+    assert_eq!(created, vec!["外_2.png".to_string()]);
+
+    // 剪切移动：源消失、目标出现
+    fs::write(outside.path().join("走.txt"), b"go").unwrap();
+    let created = import_external_entries(&root, &[outside.path().join("走.txt")], "", true).unwrap();
+    assert_eq!(created, vec!["走.txt".to_string()]);
+    assert!(!outside.path().join("走.txt").exists(), "剪切源已移出");
+    assert!(root.join("走.txt").is_file());
+
+    // 目标落在源子树内（含源自身）跳过——防爆递归
+    fs::create_dir_all(root.join("包/内层")).unwrap();
+    let created = import_external_entries(&root, &[root.join("包")], "包/内层", false).unwrap();
+    assert!(created.is_empty(), "目标在源子树内跳过");
+    assert!(!root.join("包/内层/包").exists());
+
+    // 剪切粘贴到自身所在目录 = 无操作（防 _n 改名）
+    fs::write(root.join("留.txt"), b"stay").unwrap();
+    let created = import_external_entries(&root, &[root.join("留.txt")], "", true).unwrap();
+    assert!(created.is_empty(), "剪切到同目录无操作");
+    assert!(root.join("留.txt").is_file() && !root.join("留_2.txt").exists());
+
+    // 不存在源跳过；.anikit 目标拒绝
+    let created = import_external_entries(&root, &[outside.path().join("不存在.txt")], "", false).unwrap();
+    assert!(created.is_empty(), "不存在源静默跳过");
+    fs::create_dir_all(root.join(".anikit")).unwrap();
+    assert!(import_external_entries(&root, &[outside.path().join("外.png")], ".anikit", false).is_err(), ".anikit 目标拒绝");
   }
 
   /// 回声消重：窗口期内本进程操作的事件判回声；窗口外 / 无关路径不判

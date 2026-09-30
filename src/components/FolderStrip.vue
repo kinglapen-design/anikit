@@ -35,8 +35,8 @@ const folderOpen = ref(true);
 // 工作空间视口（PRD 02，2026-09-17 实机定：文件夹同库口径进网格）：导航 / 右键菜单 /
 // 简介行全部分流；2026-09-26 选中链接通（原「文件夹选择域不接合成 id」是步骤 2 未落地期的
 // 暂缓闸，写操作落地后遗留成"点击无选中反馈"）——ws 文件夹与文件同走素材选择域（ws: 合成键）；
-// 库侧专属域（剪切态 / 排序并入 data-folder-id）不适用——ws 文件夹卡片改挂 data-ws-folder（= rel）
-// 作素材移动拖拽落点，落点视觉 drop-into 同位
+// 库侧专属域（排序并入 data-folder-id）不适用——ws 文件夹卡片改挂 data-ws-folder（= rel）
+// 作素材移动拖拽落点，落点视觉 drop-into 同位；剪切态 ws 走 ws.isCutKey（2026-10-01 接通）
 const isWs = computed(() => props.viewKey.startsWith("ws:"));
 // 折叠切换：SectionTitle 守卫在调用方（§20——dragView.suppressClick 吞拖拽后紧随 click）
 function onFold(): void {
@@ -91,12 +91,13 @@ function onEnter(id: string): void {
 
 // 右键（6.3；1.3 一轮按 05 稿 320 宽 + 搜索框）：未选中项先单选（与树 item 同规则，ws 同口径），
 // 全局菜单宿主；选择模式（6.2）：不入选择域，直接出菜单（spec 内精简为查看类）；
-// ws 菜单 = wsFolderSpec（打开 / 重命名 / 复制 / 剪切 / 删除等按路径写操作，批量分流同 wsCardSpec）
+// ws 菜单 = wsFolderSpec（打开 / 重命名 / 复制 / 剪切 / 删除等按路径写操作，批量分流同 wsCardSpec）；
+// spec async（build 前 refreshSystemClip，2026-10-01），@contextmenu.prevent 已同步拦默认
 function onMenu(f: { id: string; name: string }, e: MouseEvent): void {
   if (isWs.value) {
     const key = wsCardKey(f.id);
     if (!selection.isSelected(key)) selection.clickItem(key);
-    openContextMenu(e, wsFolderSpec(f.id, f.name), undefined);
+    void wsFolderSpec(f.id, f.name).then((spec) => openContextMenu(e, spec, undefined));
     return;
   }
   if (usePickerStore().active) {
@@ -184,7 +185,7 @@ const gapBar = computed(() => {
         class="cell"
         :selected="isWs ? selection.isSelected(wsCardKey(f.id)) : selection.isFolderSelected(f.id)"
         :dimmed="!isWs && (dragView.folderIds?.has(f.id) ?? false)"
-        :cut="!isWs && selection.isFolderCut(f.id)"
+        :cut="isWs ? ws.isCutKey(wsCardKey(f.id)) : selection.isFolderCut(f.id)"
         :naming="namingId === f.id"
         :drop-into="dragView.folderCardId === (isWs ? `ws:${f.id}` : f.id)"
         :data-folder-id="isWs ? undefined : f.id"

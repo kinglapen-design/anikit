@@ -4,7 +4,8 @@
 // 剪贴板组（复制 / 剪切 / 粘贴条件出现 / 重命名单选 / 创建副本）│ 复制数据 ▸ │ 删除 │ 刷新；
 // 文件夹（卡片与树行共用主体）= 新标签页 / 新建文件夹（同级）/ 新建子文件夹 │ 固定·取消固定 │
 // 剪贴板组 │ 复制数据 ▸ │ 资源管理器 / 系统菜单 │ 删除 │ 刷新（树行无重命名——ws 树无行内命名态）；
-// 空白 = 新建文件夹 / 粘贴（剪贴板非空）│ 在资源管理器中显示 / 系统菜单（目录背景版——经典版
+// 空白 = 新建文件夹 / 粘贴（内部剪贴板非空 || 系统剪贴板含文件——2026-10-01 PRD 02-13 扩，
+// spec 构建 async：build 前 refreshSystemClip）│ 在资源管理器中显示 / 系统菜单（目录背景版——经典版
 // 新建 / 排序方式 / 查看 / 刷新 / 属性 在其中）│ 刷新。
 // 「系统菜单」= Windows 原生右键菜单（IContextMenu：压缩解压 / TortoiseGit 等 shell 扩展全量）。
 // 一律按路径走 ws 命令（assetId = ws: 合成假 id 严禁发 assetId 类命令）；
@@ -125,15 +126,18 @@ function copyDataSubmenu(rel: string, name: string, forFile: boolean): CtxEntry[
   ];
 }
 
-// 视口空白处菜单（gridDispatch ws 分支调用）
-export function wsBlankSpec(rel: string): CtxEntry[] {
+// 视口空白处菜单（gridDispatch ws 分支调用）。
+// 2026-10-01 起 spec 构建 async：先 refreshSystemClip——「粘贴」出现条件 = 内部剪贴板非空 ||
+// 系统剪贴板含文件（PRD 02-13；系统菜单已证明右键流程可 async）
+export async function wsBlankSpec(rel: string): Promise<CtxEntry[]> {
   const ws = useWsStore();
+  await ws.refreshSystemClip();
   const entries: CtxEntry[] = [
     { label: "新建文件夹", shortcut: "Ctrl+Shift+N", action: () => void createAndRename(rel) },
   ];
-  if (ws.clip) {
+  if (ws.clip || ws.systemClipHasFiles) {
     entries.push({
-      label: ws.clip.cut ? "粘贴（移动）" : "粘贴",
+      label: ws.clip?.cut ? "粘贴（移动）" : "粘贴",
       shortcut: "Ctrl+V",
       action: () => void ws.paste(rel).catch(fail),
     });
@@ -159,10 +163,12 @@ export function wsBlankSpec(rel: string): CtxEntry[] {
 // 与库 folderMenuEntries 对齐移植（2026-10-01）：打开组 / 固定 / 剪贴板组 / 复制数据 / 系统菜单组 /
 // 删除 / 刷新——库的库专属段（排序依据 / 展开收起 / 图标颜色 / 添加资源库 / 导出）不挂（磁盘实况无语义）。
 // 「打开」冗余项不列（同库 2026-09-23_02 口径：单击卡片 / 树行已导航）。
-function wsFolderEntries(rel: string, name: string, rename: boolean): CtxEntry[] {
+// async 同 wsBlankSpec：build 前 refreshSystemClip（「粘贴」出现条件扩为 内部非空 || 系统含文件）
+async function wsFolderEntries(rel: string, name: string, rename: boolean): Promise<CtxEntry[]> {
   const ws = useWsStore();
   const selection = useSelectionStore();
   const tabs = useTabsStore();
+  await ws.refreshSystemClip();
   const parentRel = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
   const key = `ws:${rel}|ws:${parentRel}`;
   const batch = batchRels(key, rel);
@@ -180,11 +186,12 @@ function wsFolderEntries(rel: string, name: string, rename: boolean): CtxEntry[]
     "divider",
     { label: multi ? `复制 ${batch.length} 项` : "复制", shortcut: "Ctrl+C", action: () => ws.setClip(batch, false) },
     { label: multi ? `剪切 ${batch.length} 项` : "剪切", shortcut: "Ctrl+X", action: () => ws.setClip(batch, true) },
-    // 粘贴进该文件夹（库文件夹菜单「粘贴文件夹」同语义；ws 剪贴板非空才出现）
-    ...(ws.clip
+    // 粘贴进该文件夹（库文件夹菜单「粘贴文件夹」同语义；2026-10-01 出现条件扩为
+    // 内部剪贴板非空 || 系统剪贴板含文件，动作不变——store 内序号仲裁）
+    ...(ws.clip || ws.systemClipHasFiles
       ? [
           {
-            label: ws.clip.cut ? "粘贴（移动）" : "粘贴",
+            label: ws.clip?.cut ? "粘贴（移动）" : "粘贴",
             shortcut: "Ctrl+V",
             action: () => void ws.paste(rel).catch(fail),
           } as CtxEntry,
@@ -215,15 +222,15 @@ function wsFolderEntries(rel: string, name: string, rename: boolean): CtxEntry[]
 }
 
 // ws 文件夹卡片菜单（FolderStrip ws 分流调用；重命名 = 置 FolderStrip 行内命名态，提交在其 ws 分支）
-export function wsFolderSpec(rel: string, name: string): CtxEntry[] {
-  return wsFolderEntries(rel, name, true);
+export async function wsFolderSpec(rel: string, name: string): Promise<CtxEntry[]> {
+  return await wsFolderEntries(rel, name, true);
 }
 
 // ws 树行菜单（WorkspaceTree 行包装 div 右键调用；pin 行（常用区块）复用本 spec——纯导航行
 // 不入选择域，批量分流天然不命中，退化为对 pin 目录自身的单项管理操作）。
 // 树行无重命名项（ws 树无行内命名态——重命名走视口文件夹卡片 / 名称双击）
-export function wsTreeRowSpec(rel: string): CtxEntry[] {
-  return wsFolderEntries(rel, rel.slice(rel.lastIndexOf("/") + 1), false);
+export async function wsTreeRowSpec(rel: string): Promise<CtxEntry[]> {
+  return await wsFolderEntries(rel, rel.slice(rel.lastIndexOf("/") + 1), false);
 }
 
 // ws 条目菜单（打开预览 = 进预览，与双击卡片同径；重命名 = 置卡片行内命名态，
@@ -231,13 +238,15 @@ export function wsTreeRowSpec(rel: string): CtxEntry[] {
 // 与库 assetCardSpec 对齐移植（2026-10-01）：库的库专属组（移动至分组 / 链接管理 / 缩略图 /
 // 导出 / AI / 提示词 / 置顶）不挂——磁盘实况无语义或未立项；「新窗口打开」不挂（预览子窗口
 // 视口解析不含 ws 合成项，链路未通）。
-// panelId = 发起右键的 panel（2026-09-25 per-panel 会话化：「打开预览」开进属主 panel 会话）
-export function wsCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
+// panelId = 发起右键的 panel（2026-09-25 per-panel 会话化：「打开预览」开进属主 panel 会话）。
+// async 同 wsBlankSpec：build 前 refreshSystemClip（「粘贴」出现条件扩为 内部非空 || 系统含文件）
+export async function wsCardSpec(p: PlacementView, panelId: string): Promise<CtxEntry[]> {
   const rel = p.folderId.slice(3);
   const entryRel = p.assetId.slice(3);
   const ws = useWsStore();
   const selection = useSelectionStore();
   const tabs = useTabsStore();
+  await ws.refreshSystemClip();
   const key = `${p.assetId}|${p.folderId}`;
   const batch = batchRels(key, entryRel);
   const multi = batch.length > 1;
@@ -275,11 +284,12 @@ export function wsCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
     "divider",
     { label: multi ? `复制 ${batch.length} 项` : "复制", shortcut: "Ctrl+C", action: () => ws.setClip(batch, false) },
     { label: multi ? `剪切 ${batch.length} 项` : "剪切", shortcut: "Ctrl+X", action: () => ws.setClip(batch, true) },
-    // 粘贴进当前目录（库素材菜单粘贴项同语义；ws 剪贴板非空才出现）
-    ...(ws.clip
+    // 粘贴进当前目录（库素材菜单粘贴项同语义；2026-10-01 出现条件扩为
+    // 内部剪贴板非空 || 系统剪贴板含文件，动作不变——store 内序号仲裁）
+    ...(ws.clip || ws.systemClipHasFiles
       ? [
           {
-            label: ws.clip.cut ? "粘贴（移动）" : "粘贴",
+            label: ws.clip?.cut ? "粘贴（移动）" : "粘贴",
             shortcut: "Ctrl+V",
             action: () => void ws.paste(rel).catch(fail),
           } as CtxEntry,

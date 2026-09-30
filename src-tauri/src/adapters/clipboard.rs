@@ -5,12 +5,15 @@
 //!   - read_image_dib_fallback：arboard get_image 只认 PNG / CF_DIBV5 两格式，大量软件
 //!     （QQ·微信截图、Win32 老程序）只写 CF_DIB——兜底直读（「外部剪贴板导入以前可以现在不行」根因）；
 //!   - write_files_clipboard：单次开剪贴板写 CF_HDROP 文件列表 + 可选位图（PNG + CF_DIBV5），
-//!     支撑「复制文件」同步写系统剪贴板（复制图片可粘到 APP 外，Eagle 同款）。
+//!     支撑「复制文件」同步写系统剪贴板（复制图片可粘到 APP 外，Eagle 同款）；
+//!     2026-10-01 起 cut=true 额外写 Preferred DropEffect=MOVE（ws 剪切互通：资源管理器
+//!     粘贴即移动，源由系统自删，PRD 02-13）。
+//!   - read_files_clipboard（2026-10-01 ws 粘贴仲裁）：CF_HDROP 路径逐个读出 + DropEffect。
 //!
 //! 业务语义（fla → 载荷转换）在 services/send_stage，本层只管字节读写。
 
 #[cfg(windows)]
-pub use imp::{clipboard_sequence, read_image_dib_fallback, write_files_clipboard, write_flash_picture};
+pub use imp::{clipboard_sequence, read_files_clipboard, read_image_dib_fallback, write_files_clipboard, write_flash_picture};
 
 #[cfg(not(windows))]
 pub fn clipboard_sequence() -> u32 {
@@ -31,8 +34,14 @@ pub fn read_image_dib_fallback() -> Result<image::RgbaImage, String> {
 pub fn write_files_clipboard(
   _paths: &[&std::path::Path],
   _image: Option<&image::RgbaImage>,
+  _cut: bool,
 ) -> Result<(), String> {
   Err("当前平台不支持剪贴板写入".to_string())
+}
+
+#[cfg(not(windows))]
+pub fn read_files_clipboard() -> (Vec<std::path::PathBuf>, bool) {
+  (Vec::new(), false)
 }
 
 #[cfg(windows)]
@@ -91,7 +100,7 @@ mod imp {
   // —— 2026-09-17 实机走查补：CF_DIB 兜底读 + CF_HDROP/位图写入 ——
 
   use std::os::windows::ffi::OsStrExt;
-  use std::path::Path;
+  use std::path::{Path, PathBuf};
   use windows::Win32::Graphics::Gdi::{BITMAPV5HEADER, BI_BITFIELDS};
   use windows::Win32::System::DataExchange::GetClipboardData;
   use windows::Win32::System::Memory::GlobalSize;
@@ -167,8 +176,10 @@ mod imp {
       .map_err(|e| format!("剪贴板图片解码失败：{e}"))
   }
 
-  /// 单次开剪贴板写：CF_HDROP 文件列表 + 可选位图（PNG 在前兼容性更好 + CF_DIBV5，arboard 同口径）
-  pub fn write_files_clipboard(paths: &[&Path], image: Option<&image::RgbaImage>) -> Result<(), String> {
+  /// 单次开剪贴板写：CF_HDROP 文件列表 + 可选位图（PNG 在前兼容性更好 + CF_DIBV5，arboard 同口径）；
+  /// cut=true 附 Preferred DropEffect=MOVE（2026-10-01 ws 剪切互通：资源管理器粘贴即移动，
+  /// 源由系统自删）；复制按惯例不写 DropEffect
+  pub fn write_files_clipboard(paths: &[&Path], image: Option<&image::RgbaImage>, cut: bool) -> Result<(), String> {
     if paths.is_empty() && image.is_none() {
       return Err("没有可写入的内容".to_string());
     }
@@ -177,6 +188,10 @@ mod imp {
       unsafe { EmptyClipboard() }.map_err(|e| format!("清空剪贴板失败：{e}"))?;
       if !paths.is_empty() {
         set_bytes(CF_HDROP, &build_hdrop_bytes(paths))?;
+        if let Some(effect) = preferred_drop_effect(cut) {
+          let fmt = register_format("Preferred DropEffect")?;
+          set_bytes(fmt, &effect.to_le_bytes())?;
+        }
       }
       if let Some(img) = image {
         let png_fmt = register_format("PNG")?;
@@ -185,6 +200,63 @@ mod imp {
       }
       Ok(())
     })();
+    unsafe {
+      let _ = CloseClipboard();
+    }
+    r
+  }
+
+  /// Preferred DropEffect 写入值（2026-10-01 ws ↔ Explorer 剪切互通）：剪切 = DROPEFFECT_MOVE(2)
+  /// ——资源管理器粘贴即移动（源由系统自删）；复制按惯例不写（None）
+  fn preferred_drop_effect(cut: bool) -> Option<u32> {
+    if cut { Some(2) } else { None }
+  }
+
+  /// DropEffect 读侧解释：MOVE(2) = 移动语义，其余（COPY(1) / 其他值）= 复制
+  fn drop_effect_is_move(v: u32) -> bool {
+    v == 2
+  }
+
+  /// 读系统剪贴板文件列表（2026-10-01 ws 粘贴仲裁，PRD 02-13）：CF_HDROP 逐个 DragQueryFileW
+  /// 取宽字符路径 + Preferred DropEffect（MOVE = 剪切移动语义，不存在 / COPY = 复制）。
+  /// 无 CF_HDROP / 剪贴板被占用 = 空 vec（调用方按「无文件」静默降级，不打扰）
+  pub fn read_files_clipboard() -> (Vec<PathBuf>, bool) {
+    use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
+    if open_with_retry().is_err() {
+      return (Vec::new(), false);
+    }
+    let r = unsafe {
+      let mut paths = Vec::new();
+      if let Ok(h) = GetClipboardData(CF_HDROP) {
+        let drop = HDROP(h.0);
+        let count = DragQueryFileW(drop, 0xFFFF_FFFF, None);
+        for i in 0..count {
+          // 先问长度（不含 NUL），再按 长度+1 缓冲取串
+          let len = DragQueryFileW(drop, i, None) as usize;
+          let mut buf = vec![0u16; len + 1];
+          let got = DragQueryFileW(drop, i, Some(&mut buf)) as usize;
+          if got > 0 {
+            paths.push(PathBuf::from(String::from_utf16_lossy(&buf[..got])));
+          }
+        }
+      }
+      let mut is_move = false;
+      if let Ok(fmt) = register_format("Preferred DropEffect") {
+        if let Ok(h) = GetClipboardData(fmt) {
+          let hg = windows::Win32::Foundation::HGLOBAL(h.0);
+          let ptr = GlobalLock(hg);
+          // 防御第三方写入的畸形数据：不足 4 字节不当 DropEffect 解读
+          if !ptr.is_null() && GlobalSize(hg) >= 4 {
+            let v = std::ptr::read_unaligned(ptr as *const u32);
+            is_move = drop_effect_is_move(v);
+          }
+          if !ptr.is_null() {
+            let _ = GlobalUnlock(hg);
+          }
+        }
+      }
+      (paths, is_move)
+    };
     unsafe {
       let _ = CloseClipboard();
     }
@@ -307,6 +379,15 @@ mod imp {
       // 第二行 = 源上排（红/绿）：红 RGBA(255,0,0) → BGRA(0,0,255)
       assert_eq!(&px[8..12], &[0, 0, 255, 255], "源红 → BGRA");
       assert_eq!(&px[12..16], &[0, 255, 0, 255], "源绿 → BGRA");
+    }
+
+    #[test]
+    fn preferred_drop_effect_move_only_for_cut() {
+      assert_eq!(preferred_drop_effect(true), Some(2), "剪切 = DROPEFFECT_MOVE 写入");
+      assert_eq!(preferred_drop_effect(false), None, "复制按惯例不写 DropEffect");
+      assert!(drop_effect_is_move(2), "MOVE = 移动语义");
+      assert!(!drop_effect_is_move(1), "COPY = 复制语义");
+      assert!(!drop_effect_is_move(0), "空值 = 复制语义");
     }
 
     #[test]

@@ -131,6 +131,47 @@ export async function duplicateWsEntries(relPaths: string[]): Promise<void> {
   await invoke("ws_duplicate", { relPaths });
 }
 
+// —— 2026-10-01 ws ↔ Explorer 双向拖拽 + 剪贴板互通（PRD 02-13）——
+
+// 系统剪贴板文件清单（ws_clipboard_files；菜单「粘贴」可见性查询用）
+export interface WsClipboardFiles {
+  paths: string[]; // CF_HDROP 文件绝对路径（无文件 = 空）
+  cut: boolean; // Preferred DropEffect=MOVE（外部剪切 = 移动语义）
+}
+
+// ws_paste_system 结果
+export interface WsPasteSystemResult {
+  pasted: string[]; // 实际落入的目标 rel 集（源已不存在项跳过；全失效 = 空，调用方 toast）
+  moved: boolean; // 外部剪切 = 移动入（同盘 rename / 异盘复制后删源）
+  hadFiles: boolean; // 系统剪贴板含文件列表（false = 无文件属常态，调用方静默）
+}
+
+// 写系统剪贴板（复制 / 剪切同步：CF_HDROP + 单张静态图 ≤20MB 附位图，库同口径；
+// 剪切附 Preferred DropEffect=MOVE——资源管理器粘贴即移动）。relPaths 后端逐条校验（失败跳过）
+export async function wsWriteClipboard(relPaths: string[], cut: boolean): Promise<void> {
+  await invoke("ws_write_clipboard", { relPaths, cut });
+}
+
+// 读系统剪贴板文件清单（右键开 ws 菜单前 refreshSystemClip 调本接口）
+export async function wsClipboardFiles(): Promise<WsClipboardFiles> {
+  return await invoke<WsClipboardFiles>("ws_clipboard_files");
+}
+
+// 系统剪贴板粘贴进 destRel（粘贴仲裁外部分支：复制来源恒复制 / 剪切来源 = 移动）
+export async function wsPasteSystem(destRel: string): Promise<WsPasteSystemResult> {
+  return await invoke<WsPasteSystemResult>("ws_paste_system", { destRel });
+}
+
+// Explorer 拖入（恒 copy，非破坏口径）：外部绝对路径复制进 destRel；返回 created rel 集
+export async function wsImportPaths(absPaths: string[], destRel: string): Promise<string[]> {
+  return await invoke<string[]>("ws_import_paths", { absPaths, destRel });
+}
+
+// 系统剪贴板序号（粘贴仲裁基准：序号变 = 外部覆盖；placementOps 库侧 2026-09-19 同源调用）
+export async function getClipboardSeq(): Promise<number> {
+  return await invoke<number>("get_clipboard_seq");
+}
+
 // —— 步骤 3 常用固定（视图状态 = .anikit/workspace.json 的 pinned 清单，PRD 02 技术口径）——
 // 后端读取时静默剔除失效条目（删除 / 改名 / 非目录）并回写；未开空间一律返回 []
 
