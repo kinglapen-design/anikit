@@ -1070,15 +1070,23 @@ pub fn duplicate_entries(root: &Path, rels: &[String]) -> Result<(), String> {
 
 // ---------- 链接（junction 方向 b：外部文件夹挂进 WS 子目录，PRD 02） ----------
 
-/// add / retarget 共用的目标校验：存在且是目录；不在 root 内（含等于——工作空间内的目录
-/// 直接整理即可，挂链接只会埋「同一份内容两个词法身份」的坑）；不是 root 祖先（防循环
-/// 嵌套）。返回 canonical 目标路径
+/// add / retarget 共用的目标校验：存在且是目录；**不在储存空间整树内**（ws root 是空间根
+/// 直接子目录（core::space WORKSPACE_DIR），parent 即空间根——空间根自身本就被下方祖先校验
+/// 拒，但 assets 素材池 / 自动导入 / 库数据这些 workspace 平级目录两个校验都不沾：素材池挂进
+/// 工作空间 = 绕过库封闭语义直接改库文件，元数据必脱钩，2026-10-02 用户问「选了储存空间自身
+/// 怎么办」后补）；不在 root 内（含等于——工作空间内的目录直接整理即可，挂链接只会埋「同一份
+/// 内容两个词法身份」的坑）；不是 root 祖先（防循环嵌套）。返回 canonical 目标路径
 fn check_link_target(root: &Path, target: &Path) -> Result<PathBuf, String> {
   if !target.is_dir() {
     return Err(format!("链接目标不是文件夹：{}", target.display()));
   }
   let canon_target = target.canonicalize().map_err(|e| format!("链接目标不可用：{e}"))?;
   let canon_root = root.canonicalize().map_err(|e| format!("工作空间不可用：{e}"))?;
+  if let Some(canon_space) = root.parent().and_then(|p| p.canonicalize().ok()) {
+    if canon_target.starts_with(&canon_space) {
+      return Err("储存空间内的目录不能挂载（素材池 / 自动导入 / 库数据是 AniKit 自留地）".to_string());
+    }
+  }
   if canon_target.starts_with(&canon_root) {
     return Err("工作空间内的目录无需挂载（直接整理即可）".to_string());
   }
@@ -2198,27 +2206,32 @@ mod tests {
     assert!(crate::adapters::junction::is_reparse_dir(&root.join("门")), "落盘不破坏链接本体");
   }
 
-  /// 挂载 / 改挂（add_link / retarget_link）：目标校验（非目录 / root 内 / 祖先拒绝）；
-  /// 挂载名 = target 目录名、重名 _n；登记入册；改挂换目标登记更新；remove_link 走系统
-  /// 回收站（红线 a spike 已验证），不进自动化测试
+  /// 挂载 / 改挂（add_link / retarget_link）：目标校验（非目录 / 储存空间整树 / root 内 /
+  /// 祖先拒绝）；挂载名 = target 目录名、重名 _n；登记入册；改挂换目标登记更新；
+  /// remove_link 走系统回收站（红线 a spike 已验证），不进自动化测试
   #[cfg(windows)]
   #[test]
   fn add_and_retarget_link_validate_and_register() {
     let (dir, root) = make_ws();
-    let outside = dir.path().join("外部");
+    // 合法目标必须在空间外（dir.path() = 空间根，树内一律拒挂）——另起独立 tempdir 当「外部」
+    let ext = tempfile::tempdir().unwrap();
+    let outside = ext.path().join("外部");
     fs::create_dir_all(outside.join("子")).unwrap();
-    let other = dir.path().join("别处");
+    let other = ext.path().join("别处");
     fs::create_dir_all(&other).unwrap();
 
-    // 拒绝：非目录 / 工作空间内（含等于）/ 祖先
+    // 拒绝：非目录 / 储存空间整树（空间根 + 素材池等平级兄弟，2026-10-02 补）/ 工作空间内（含等于）/ 祖先
     assert!(add_link(&root, "", &dir.path().join("不存在")).is_err(), "目标不存在拒绝");
     let f = dir.path().join("文件.txt");
     fs::write(&f, b"x").unwrap();
     assert!(add_link(&root, "", &f).is_err(), "文件拒绝");
     fs::create_dir_all(root.join("内夹")).unwrap();
+    let assets = dir.path().join("assets");
+    fs::create_dir_all(&assets).unwrap();
+    assert!(add_link(&root, "", dir.path()).is_err(), "空间根拒绝（储存空间自留地）");
+    assert!(add_link(&root, "", &assets).is_err(), "空间内兄弟目录（素材池）拒绝");
     assert!(add_link(&root, "", &root.join("内夹")).is_err(), "root 内目录拒绝");
     assert!(add_link(&root, "", &root).is_err(), "root 本身拒绝");
-    assert!(add_link(&root, "", dir.path()).is_err(), "root 祖先拒绝（防循环）");
 
     // 成功：挂载名 = target 目录名，登记入册，透过门能读内容
     let rel = add_link(&root, "", &outside).unwrap();
