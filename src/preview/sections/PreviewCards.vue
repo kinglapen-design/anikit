@@ -70,7 +70,7 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
     </p>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">文件卡片-通用（395×222；square = shell 缩略图 / 未导入 50% 居中；thumbFit 三档）</h3>
+      <h3 class="pv-group-title">文件卡片-通用（395×222；square = shell 缩略图 / 未导入 50% 居中；thumbFit 三档；名称双击重命名/v-tip 热区 = 文本宽 §64）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div style="width: 395px; height: 222px">
@@ -263,7 +263,7 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">文件夹卡片（220×122，hover 仅底升六级；图标恒默认色——变色只留树容器；业务态 dimmed / cut / naming / dropInto）</h3>
+      <h3 class="pv-group-title">文件夹卡片（220×122，hover 仅底升六级；图标恒默认色——变色只留树容器；业务态 dimmed / cut / naming / dropInto；名称双击重命名热区 = 文本宽 §64）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div style="width: 220px; height: 122px">
@@ -313,7 +313,7 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">档案卡片（250×250 正方形，角标 = 属性文字；右下 = 链接文件-徽章；业务态 dimmed / cut / naming / dropInto / picked / pickerSelf）</h3>
+      <h3 class="pv-group-title">档案卡片（250×250 正方形，角标 = 属性文字；右下 = 链接文件-徽章；业务态 dimmed / cut / naming / dropInto / picked / pickerSelf；名称双击重命名热区 = 文本宽 §64）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div style="width: 250px">

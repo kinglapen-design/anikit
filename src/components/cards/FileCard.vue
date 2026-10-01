@@ -231,8 +231,9 @@ watch(
 /* 圆角裁剪层 .kc-clip 见 cards.css（与档案卡共享） */
 
 /* 渐变罩 pointer-events 穿透（2026-09-08 用户实机报：悬停视频 scrub 划过罩区丢失跟随——
-   罩贴底 ≈74px 高、冒泡不经播放层，pointermove 被吃）；名称文本行 / 命名输入恢复 auto
-   保 v-tip / 双击重命名 / 输入交互（"底部名称行不 scrub"旧口径精确化到文本行；
+   罩贴底 ≈74px 高、冒泡不经播放层，pointermove 被吃）；名称文本 / 命名输入恢复 auto
+   保 v-tip / 双击重命名 / 输入交互（"底部名称行不 scrub"旧口径先精确化到文本行、
+   再随 §64 收缩到真实文本宽——span 外空白穿透可 scrub / 双击预览不挡；
    info 行无交互一并穿透，也可 scrub） */
 .kc-overlay {
   pointer-events: none;

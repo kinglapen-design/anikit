@@ -152,8 +152,12 @@ const nameTip = computed(() => {
   color: var(--n-l2);
 }
 
-/* 名称 = 标题档 一级；属性 / 数量行 = 数字档 二级，分隔符同行 */
+/* 名称 = 标题档 一级；属性 / 数量行 = 数字档 二级，分隔符同行。
+   名称收缩到文本宽（2026-10-02 用户实机定，§64）：双击重命名 / v-tip 热区 = 真实标题文本区域，
+   行空白双击 = 冒泡卡片「进入档案」不误重命名；max-width 保长名截断 */
 .ar-name {
+  align-self: flex-start;
+  max-width: 100%;
   font-size: var(--n-fs-title);
   line-height: var(--n-lh-title);
   font-weight: var(--n-fw-bold);

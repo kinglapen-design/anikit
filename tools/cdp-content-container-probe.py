@@ -10,7 +10,8 @@
 #       滚动条贴右缘口径，ContentArea 注释在案）+ 网格最右卡右缘距视口右缘 12（±1）
 #   T6  文件卡：壳 box 绝对定位 + 芯 FileCard g2 #1C1C1C 圆角 8 + .kc-clip 裁剪层 + 渐变罩
 #       （名称 13/18 Bold 一级 + 简介 mono 12/16 二级 + padding 24/12/12）+ fla 卡 FormatBadge
-#       左上 12/12（kc-float 半透明-2 底 + 圆角 4 + mono 12/16 Bold 二级）+ png 静态图无徽标
+#       左上 12/12（kc-float 半透明-2 底 + 圆角 4 + mono 12/16 Bold 二级）+ png 静态图无徽标；
+#       T6e 名称热区 = 文本宽（elementFromPoint：行空白不命中 .kc-name，§64）
 #   T7  文件夹区块标题（SectionTitle block）：16 高 / padding-left 8 /「文件夹/1」12/16 Bold 四级 /
 #       actions=false 无 .acts + tail「递归显示」复选框（label 12/16）+ 展开钮 14 常态 hidden
 #   T7b 稿无动作钮 + 无 tail + 展开钮 14 常态隐
@@ -18,10 +19,12 @@
 #       （行空白 = 普通指针，文字区 = 抓手——2026-10-02 用户定，§63）
 #   T8  文件夹卡：grid auto-rows 122 + gap 12 + 卡 122 高 宽 ≥220 + g3 底圆角 8 padding 12 +
 #       名称 18/26 Bold 一级 + folder-large 24 双色调无 tint + 简介两行 mono 12/16 三级 +
-#       文本精确「2 个文件/500.0 MB」「1 个档案/1 个子文件夹」（桩 f1a 带 totalSize + 双类子级）
+#       文本精确「2 个文件/500.0 MB」「1 个档案/1 个子文件夹」（桩 f1a 带 totalSize + 双类子级）；
+#       T8d 名称热区 = 文本宽（行空白不命中 .fd-name、图标仍右缘，§64）+
+#       T8e 真实双击名称 → 命名输入框现 / Esc 退出
 #   T9  档案区：标题「档案/1」无 .acts + 卡正方形（offsetWidth===offsetHeight ≥250）+ flow gap 12 +
 #       g2 底圆角 8 + 罩名称 18/26 Bold 一级 + 属性行「立绘|彩色」/ 数量行「2 个文件/1.25 GB」
-#       mono 12/16 二级 + 徽标「主角」左上 12/12 统一铬
+#       mono 12/16 二级 + 徽标「主角」左上 12/12 统一铬；T9e 名称热区 = 文本宽（§64）
 #   T10 内容标题「内容/5」（递归显示开 = f1 子树全部 5 条）
 #   T4c 文件夹视口下「添加文件/档案链接」钮解禁（落点 = 本视口；分组管理钮递归显示时禁用）
 #   T11 后退/前进接线：进 f1 后后退解禁 → 点后退回 quick:all（文件夹区消失、前进解禁）→ 点前进回 f1
@@ -34,7 +37,8 @@
 #   T14 列表行：57 高 padding 6/12/6/6 gap 12 g2 底圆角 8 + 缩略图 80×45（g3 + g5 描边圆角 6）+
 #       数据列 123 mono 数字-大 三级 + 名称 13/18 Bold 一级 + 文件大小/修改日期真值；
 #       T14d 真实点击行 → 选中（2026-08-30 列表选中回归，壳 list-row 标记类补回）+
-#       T14e 格式图标行 icon 档 50% 居中（a2 桩 thumbKind=formatIcon）
+#       T14e 格式图标行 icon 档 50% 居中（a2 桩 thumbKind=formatIcon）+
+#       T14f 名称热区 = 文本宽（.lr-name 本就内容宽，登记防回归，§64）
 #   T15 排序接线：点「文件大小」→ 列 active + 行序升序（首行 50.0 KB）；再点 → 箭头 desc +
 #       降序（首行 5.0 MB）；点「尺寸」列 → 无反应（无 SortKey 档纯展示）
 #   T15b 表头右缘 = 行右缘 = 视口右缘 -12（钉顶列头与行严格对齐）
@@ -235,6 +239,24 @@ async def main():
                     f.write(base64.b64decode(s["result"]["data"]))
                 print("saved", path)
 
+            async def real_click(x, y, count=1):
+                # 真实鼠标点击（Input.dispatchMouseEvent）——JS .click() 不走命中测试，
+                # 热区收窄类断言必须真实派发；count=2 = 双击第二下（Chromium 据此派发 dblclick）
+                await send(ws, "Input.dispatchMouseEvent",
+                           {"type": "mouseMoved", "x": x, "y": y}, session=sess)
+                await asyncio.sleep(0.15)
+                await send(ws, "Input.dispatchMouseEvent",
+                           {"type": "mousePressed", "x": x, "y": y,
+                            "button": "left", "buttons": 1, "clickCount": count}, session=sess)
+                await send(ws, "Input.dispatchMouseEvent",
+                           {"type": "mouseReleased", "x": x, "y": y,
+                            "button": "left", "buttons": 0, "clickCount": count}, session=sess)
+                await asyncio.sleep(0.4)
+
+            async def real_dblclick(x, y):
+                await real_click(x, y, 1)
+                await real_click(x, y, 2)
+
             # 注入桩 → 加载主窗口（默认单标签 quick:all，桩 5 条 Placement 全出卡）
             await send(ws, "Page.addScriptToEvaluateOnNewDocument", {"source": STUB}, session=sess)
             await send(ws, "Page.navigate", {"url": URL}, session=sess)
@@ -381,6 +403,22 @@ async def main():
                 "!!document.querySelector('.content-area .asset-card[data-key=\"a1|f1\"] .fc-badge')")
             check("T6d png 静态图不出格式徽标（formatBadgeColor null 口径）", png_badge is False, str(png_badge))
 
+            # T6e 文件卡名称收缩到文本宽（2026-10-02 用户实机定，§64）：elementFromPoint 命中判定——
+            # 名称行空白（文本右侧）不命中 .kc-name（双击 = 预览，不误重命名），文本上才命中
+            hit6 = await ev(
+                "(() => { const nm = document.querySelector('.content-area .asset-card[data-key=\"a1|f1\"] .kc-name');"
+                " if (!nm) return null; const ov = nm.closest('.kc-overlay').getBoundingClientRect();"
+                " const nr = nm.getBoundingClientRect(); const y = nr.y + nr.height / 2;"
+                " const ex = Math.min(nr.right + 20, ov.right - 16);"
+                " const atE = document.elementFromPoint(ex, y);"
+                " const atT = document.elementFromPoint(nr.x + nr.width / 2, y);"
+                " return { empty: atE ? (atE.closest('.kc-name') ? 'name' : atE.className) : null,"
+                "  text: !!atT?.closest('.kc-name'), nw: nr.width, ow: ov.width }; })()")
+            check("T6e 名称行空白不命中 .kc-name + 文本命中（热区 = 文本宽）",
+                  isinstance(hit6, dict) and hit6.get("empty") != "name" and hit6.get("text") is True
+                  and hit6.get("nw", 1e9) < hit6.get("ow", 0) - 24,
+                  json.dumps(hit6, ensure_ascii=False))
+
             # ================= 阶段 B：进 folder:f1 —— 三区容器 =================
             await ev("document.querySelector('.block-tree .tree-item[data-folder-id=\"f1\"]')"
                      ".dispatchEvent(new MouseEvent('click', { bubbles: true }))")
@@ -481,6 +519,35 @@ async def main():
                           and l.get("c") == "rgb(128, 128, 128)" for l in lines8),
                   json.dumps(lines8, ensure_ascii=False))
 
+            # T8d 文件夹卡名称热区 = 文本宽（2026-10-02 用户实机定，§64——双击进入误触重命名根治）：
+            # 名称行空白（文本右、图标左）elementFromPoint 不命中 .fd-name（双击 = 进入），
+            # 文本上才命中；真实双击文本 → 出命名输入框，Esc（escSaves 同名 no-op）→ 退出
+            hit8 = await ev(
+                "(() => { const hd = document.querySelector('.folder-card .fd-head');"
+                " if (!hd) return null; const nm = hd.querySelector('.fd-name');"
+                " const hr = hd.getBoundingClientRect(); const nr = nm.getBoundingClientRect();"
+                " const y = nr.y + nr.height / 2; const ex = Math.min(nr.right + 20, hr.right - 34);"
+                " const atE = document.elementFromPoint(ex, y);"
+                " const atT = document.elementFromPoint(nr.x + nr.width / 2, y);"
+                " return { empty: atE ? (atE.closest('.fd-name') ? 'name' : atE.className) : null,"
+                "  text: !!atT?.closest('.fd-name'), nw: nr.width, hw: hr.width,"
+                "  tx: nr.x + nr.width / 2, ty: y }; })()")
+            check("T8d 名称行空白不命中 .fd-name + 文本命中（图标仍右缘，热区 = 文本宽）",
+                  isinstance(hit8, dict) and hit8.get("empty") != "name" and hit8.get("text") is True
+                  and hit8.get("nw", 1e9) < hit8.get("hw", 0) - 32,
+                  json.dumps(hit8, ensure_ascii=False))
+            if isinstance(hit8, dict) and "tx" in hit8:
+                await real_dblclick(hit8["tx"], hit8["ty"])
+                rn_ok = await wait_for("!!document.querySelector('.folder-card .rename-input')", 5)
+                await ev("document.querySelector('.folder-card .rename-input')"
+                         "?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))")
+                rn_gone = await wait_for("!document.querySelector('.folder-card .rename-input')", 5)
+                check("T8e 双击名称文本 → 命名输入框现 / Esc 退出（同名 no-op 不落命令）",
+                      rn_ok is True and rn_gone is True, f"show={rn_ok} hide={rn_gone}")
+                # 鼠标挪走（v-tip 不干扰后续命中判定）
+                await send(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": 30, "y": 850}, session=sess)
+                await asyncio.sleep(0.3)
+
             ar9 = await ev(
                 "(() => { const sec = document.querySelector('.archive-block');"
                 " if (!sec) return null; const st = sec.querySelector('.st.block');"
@@ -524,6 +591,21 @@ async def main():
                   and ar9.get("bl") == "12px" and ar9.get("btop") == "12px"
                   and ar9.get("bbg") == "rgba(41, 41, 41, 0.75)" and ar9.get("bbr") == "4px",
                   json.dumps(ar9, ensure_ascii=False))
+
+            # T9e 档案卡名称热区 = 文本宽（§64）：名称行空白不命中 .ar-name（双击 = 进入档案），文本上才命中
+            hit9 = await ev(
+                "(() => { const nm = document.querySelector('.archive-block .ar-name');"
+                " if (!nm) return null; const ov = nm.closest('.kc-overlay').getBoundingClientRect();"
+                " const nr = nm.getBoundingClientRect(); const y = nr.y + nr.height / 2;"
+                " const ex = Math.min(nr.right + 20, ov.right - 16);"
+                " const atE = document.elementFromPoint(ex, y);"
+                " const atT = document.elementFromPoint(nr.x + nr.width / 2, y);"
+                " return { empty: atE ? (atE.closest('.ar-name') ? 'name' : atE.className) : null,"
+                "  text: !!atT?.closest('.ar-name'), nw: nr.width, ow: ov.width }; })()")
+            check("T9e 名称行空白不命中 .ar-name + 文本命中（热区 = 文本宽）",
+                  isinstance(hit9, dict) and hit9.get("empty") != "name" and hit9.get("text") is True
+                  and hit9.get("nw", 1e9) < hit9.get("ow", 0) - 24,
+                  json.dumps(hit9, ensure_ascii=False))
 
             ch10 = await ev(
                 "(() => { const el = document.querySelector('.grid-header > .st.block');"
@@ -593,20 +675,8 @@ async def main():
                   json.dumps(grp, ensure_ascii=False))
 
             # T12b 分组标题折叠热区收文字区（2026-10-02 用户实机定，hotZone=lead，速查 §63）：
-            # 行空白真实点击不折叠；点文字折叠；点展开钮展开（必须 Input.dispatchMouseEvent——
-            # JS .click() 不走命中测试，测不到热区收窄）
-            async def real_click(x, y):
-                await send(ws, "Input.dispatchMouseEvent",
-                           {"type": "mouseMoved", "x": x, "y": y}, session=sess)
-                await asyncio.sleep(0.15)
-                await send(ws, "Input.dispatchMouseEvent",
-                           {"type": "mousePressed", "x": x, "y": y,
-                            "button": "left", "buttons": 1, "clickCount": 1}, session=sess)
-                await send(ws, "Input.dispatchMouseEvent",
-                           {"type": "mouseReleased", "x": x, "y": y,
-                            "button": "left", "buttons": 0, "clickCount": 1}, session=sess)
-                await asyncio.sleep(0.4)
-
+            # 行空白真实点击不折叠；点文字折叠；点展开钮展开（real_click = Input.dispatchMouseEvent
+            # 真实派发——JS .click() 不走命中测试，测不到热区收窄）
             async def grp_open():
                 return await ev(
                     "document.querySelector('.group-header .st.group .chev')?.classList.contains('open') ?? null")
@@ -751,6 +821,24 @@ async def main():
                   isinstance(ico, dict) and "icon" in (ico.get("cls") or "")
                   and ico.get("w") == 39 and abs((ico.get("h") or 0) - 21.5) < 1,
                   json.dumps(ico))
+
+            # T14f 列表行名称热区 = 文本宽（§64 登记——.lr-name 本就内容宽无 grow，防回归）：
+            # 名称格空白不命中 .lr-name（双击 = 预览），文本上才命中
+            hit14 = await ev(
+                "(() => { const rows = [...document.querySelectorAll('.list-row-shell')]"
+                ".sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top));"
+                " const nm = rows[0]?.querySelector('.lr-name'); if (!nm) return null;"
+                " const cell = nm.closest('.lr-name-cell').getBoundingClientRect();"
+                " const nr = nm.getBoundingClientRect(); const y = nr.y + nr.height / 2;"
+                " const ex = Math.min(nr.right + 40, cell.right - 8);"
+                " const atE = document.elementFromPoint(ex, y);"
+                " const atT = document.elementFromPoint(nr.x + nr.width / 2, y);"
+                " return { empty: atE ? (atE.closest('.lr-name') ? 'name' : atE.className) : null,"
+                "  text: !!atT?.closest('.lr-name'), nw: nr.width, cw: cell.width }; })()")
+            check("T14f 名称格空白不命中 .lr-name + 文本命中（热区 = 文本宽）",
+                  isinstance(hit14, dict) and hit14.get("empty") != "name" and hit14.get("text") is True
+                  and hit14.get("nw", 1e9) < hit14.get("cw", 0),
+                  json.dumps(hit14, ensure_ascii=False))
 
             async def read_sizes():
                 return await ev(

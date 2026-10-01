@@ -107,11 +107,15 @@ const nameTip = computed(() => {
   display: flex;
   flex-direction: row;
   align-items: center;
+  justify-content: space-between; /* 图标恒右缘（名称收缩后站位不变） */
   gap: var(--n-space-8);
 }
+/* 名称收缩到文本宽（2026-10-02 用户实机定，§64）：双击重命名热区 = 真实标题文本区域，
+   行空白双击 = 冒泡卡片「进入」不误重命名；flex 0 1 auto + max-width 保长名截断 */
 .fd-name {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
   font-size: var(--n-fs-title);
   line-height: var(--n-lh-title);
   font-weight: var(--n-fw-bold);

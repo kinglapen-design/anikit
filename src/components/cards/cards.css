@@ -111,7 +111,11 @@
   padding: var(--n-space-24) var(--n-space-12) var(--n-space-12);
   background: var(--n-g-grad-2);
 }
+/* 名称收缩到文本宽（2026-10-02 用户实机定，§64）：双击重命名 / v-tip 热区 = 真实标题文本区域，
+   行空白穿透（罩 pointer-events none 下 scrub / 双击预览不挡）；max-width 保长名截断 */
 .kc-name {
+  align-self: flex-start;
+  max-width: 100%;
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
   font-weight: var(--n-fw-bold);
