@@ -293,10 +293,12 @@ pub fn run() {
             // 一并撤除——按钮画布 = 玻璃，玻璃没了 caption 全程保留，动画/无按钮兼得，
             // 详见 window_fx::main_window_guard 注释）
             adapters::window_fx::install_main_window_guard(hwnd);
-            // 主窗口边框 = 前端自绘（实色单态：常态 ::before 1px #333、picking ::after
-            // 品牌框）——2026-10-01 撤 DWM 染色（DWM 线与 CSS 线并集必错位双层，
-            // 踩坑 063；25H2 起 DWM 默认边框本就不画，不染 = 前端单画干净解）。
-            // 子窗口边框仍由 paint_window_border 建窗染色（子窗口前端不自绘）。
+            // 主窗口边框 = DWM 显式染 #333（2026-10-02 恢复，用户定「边框和投影交给
+            // DWM」：撤玻璃后 DWM 恢复画默认边框，10-01 错撤染色改前端自绘 → 2px 双层被
+            // 实机抓出；DWM 线与 CSS 线并集必错位双层，踩坑 063——DWM 独存唯一均匀解；
+            // 25H2 起默认边框停画，显式染色全版本一致画线）。picking 进出由
+            // set_main_border_picking 切染品牌色 ↔ 染回 #333。子窗口建窗染色同体系。
+            adapters::window_fx::paint_border(hwnd);
           }
         }
 

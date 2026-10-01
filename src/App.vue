@@ -527,9 +527,9 @@ async function togglePin(): Promise<void> {
    原生按钮画不出）。窗口底色 = 基态实色-1 --n-g-a1-solid 单态（fx-mica 永不触发，
    其 CSS 为云母时代暂留 dead path，待实机定案后整层清理）。
    圆角 = 前端自裁 8（最大化归零），不透明底下与 DWM 系统圆角同径无双裁透缝问题。
-   窗口边框 = 前端 ::before 自绘（1px --n-g6；DWM 染色 2026-10-01 撤——DWM 线与 CSS
-   线并集必错位双层，踩坑 063；25H2 起 DWM 默认边框本就不画）。
-   选择模式品牌框 = 前端 ::after 自绘（set_main_border_picking 已 no-op 化）。 */
+   窗口边框与 picking 品牌框 = DWM 染色线独存、前端零绘制（2026-10-02 用户定
+   「边框和投影交给 DWM」：常态染 #333 / picking 切染品牌色 set_main_border_picking；
+   DWM 线与 CSS 线并集必双层，踩坑 063——前端自绘框 10-02 已撤）。 */
 .window {
   position: relative;
   height: 100%;
@@ -551,64 +551,14 @@ async function togglePin(): Promise<void> {
 .window.maximized {
   border-radius: 0;
 }
-/* 云母模式最大化不回实色（2026-09-08 二轮根治，踩坑 071）：原生按钮画在最大化
-   caption 条带而非玻璃上——Rust 守卫接管 NCCALCSIZE/GETMINMAXINFO 归零条带杀按钮，
-   玻璃恒 -1 云母最大化保留（Codex 实机先例），.window 底不按 maximized 切换 */
-/* 1px 窗口描边（伪元素 inset 0 自绘不占空间）——**仅实色回退模式自绘**（通用/六级实心
-   --n-g6 + 圆角 8 随壳自裁，Win10 DWM 无边框可画）；云母模式零绘制（边框主权 100% 交
-   DWM，见下）；z-54 = 三栏内容之上、picking 外框（55）之下；最大化贴屏边无意义隐藏 */
-.window::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border: 1px solid var(--n-g6);
-  border-radius: var(--n-radius-8);
-  pointer-events: none;
-  z-index: 54;
-}
-/* 云母模式 CSS 描边零绘制（2026-08-30 六轮定稿，win-border-measure 实机像素测量推翻
-   五轮遮罩环）：实测 @150%——DWM 线 = 2 物理 px 四边均匀；Chromium 把 CSS 1px border
-   吸附成物理 1px 锐线（宽度吸附设备像素，无半透列），但 CSS 线与 DWM 线的并集左右
-   不对称（左/上边视口缘贴 DWM 线内缘 → 并集 3px；右/下边视口缘伸入 DWM 线区 1px →
-   CSS 被盖，并集 2px）= 四边 3 vs 2 粗细不一；角部 CSS 弧（半径 7 逻辑 = 10.5 物理）
-   与 DWM 裁切弧（10.3 物理）异径分离 → 两弧间露内容色缝（用户实机"圆弧变细/缝隙"
-   真身）。任何 CSS 线都逃不掉这套系统错位，唯一均匀解 = 纯 DWM 独画（"别人的完美
-   边框"即此路径）；角弧 AA 过渡带 = Windows 原生通病（搜索面板同病），接受。
-   maximized 时 DWM 不裁角不画边，同零画（合并入选择器列表）。 */
-.window.fx-mica::before,
-.window.maximized.fx-mica::before {
-  border: 0;
-  box-shadow: none;
-}
-.window.maximized::before {
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-/* 选择模式常态描边让位（实色模式由 ::after 品牌框独存；云母模式 ::before 恒零画） */
-.window.picking::before {
-  border: 0;
-}
-/* 选择模式整圈品牌色外边框（6.2 一轮，PRD 03_数据链接 04 四重标识之一；2026-08-30 用户
-   改定 = 品牌色-常态 --n-brand，原 品牌色-边框线 --brand-border 废除）——**仅实色模式自绘**；
-   云母模式不画：品牌框 = DWM 切染品牌线独存（六轮定稿：CSS 任何线/环与 DWM 线并集
-   必错位分离，高亮品牌色下尤显——纯 DWM 染色线 = 原生观感）。
-   伪元素不遮交互；z-index 55：盖三栏内容（win-controls 浮块 60 与弹窗仍在其上） */
-.window.picking::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border: 1px solid var(--n-brand);
-  border-radius: var(--n-radius-8);
-  pointer-events: none;
-  z-index: 55;
-}
-.window.fx-mica.picking::after {
-  border: 0; /* 云母模式 ::after 零画：品牌框 = DWM 切染品牌线独存 */
-}
-.window.maximized.picking::after {
-  border-radius: 0;
-}
+/* 窗口边框与 picking 品牌框 = DWM 染色线独存，前端零绘制（2026-10-02 用户定「边框和
+   投影交给 DWM 就行」——10-01 弃云母时按 25H2「默认边框停画」（玻璃场景实证）错撤染色
+   改前端自绘，撤玻璃后 DWM 恢复画默认边框，与 ::before 自绘叠成 2px 双层被实机抓出；
+   DWM 线与 CSS 线并集必错位双层（四边 3vs2、角弧异径出缝），踩坑 063——纯 DWM = 唯一
+   均匀解。常态染 #333（lib.rs paint_border，25H2 默认停画故显式染色）、picking 切染
+   品牌色（set_main_border_picking）；最大化 DWM 本不画边框，无需前端处理。
+   历史自绘实现（::before 1px --n-g6 / ::after 1px --n-brand）与云母期注释随本变更删除；
+   fx-mica 余下 dead path 待整层清理。 */
 /* 窗口控制浮块（2026-08-08 定案）：恒在窗口右上角（标签栏行 / 右栏标题栏同一位），
    侧栏收展时它不参与布局变化——从根上消除窗口控制的跳变；
    7.1 二十三轮贴稿：浮块无 padding/gap，四钮连续排（右栏-窗口控制稿）；
