@@ -21,11 +21,7 @@ pub async fn open_plugin_window(app: tauri::AppHandle, plugin_id: String) -> Res
     win.set_focus().map_err(|e| e.to_string())?;
     return Ok(());
   }
-  let mk_url = |fx_solid: bool| {
-    tauri::WebviewUrl::App(
-      format!("index.html?plugin={plugin_id}{}", if fx_solid { "&fx=solid" } else { "" }).into(),
-    )
-  };
+  let mk_url = || tauri::WebviewUrl::App(format!("index.html?plugin={plugin_id}").into());
   log::info!("[plugin] 创建插件详情子窗口 {label}（transparent）");
   // 开窗走 preview.rs 共用实现（透明优先 / 失败降级非透明重建，2026-09-29 兼容轮）
   crate::commands::preview::open_child_window(&app, &label, mk_url, "AniKit 插件", w, h, "[plugin]")?;

@@ -7,7 +7,8 @@
 //! 无系统按钮穿帮）；而 DWM 原生按钮的画布是整窗玻璃（踩坑 071 一轮实证：
 //! 最大化态撤玻璃 → 稳态按钮没了）——撤玻璃后 caption 无需再摘，
 //! 动画与「无原生按钮」兼得。底色改不透明后 WebView2 不再依赖 DWM backdrop，
-//! 前端 get_window_fx_mode 恒 solid 走基态实色（--n-g-a1-solid #1F1F1F，前端零改动）。
+//! 前端基态实色（--n-g-a1-solid #1F1F1F）单态——fx 双态机制（get_window_fx_mode /
+//! fx-mica）2026-10-02 已整层拆除。
 //!
 //! 历史（踩坑 071 全录）：7.1 十七轮接云母（Win11 22H2+ Mica，063 六轮定稿
 //! `transparent:false + ExtendFrame(-1)` 玻璃载体 + set_effects）→ 玻璃 + tao 保留的
@@ -15,12 +16,6 @@
 //! → 2026-09-08 三轮终局「WM_WINDOWPOSCHANGING 动画前摘 caption、还原加回」杀按钮，
 //! 连带伤亡 = 动画期 DWM 面对无 caption 窗口不播过渡动画。2026-10-01 用户定案：
 //! 动画优先于云母，删云母路线（撤 Mica + 撤玻璃 + caption 全程保留）。
-
-use std::sync::OnceLock;
-
-/// 主窗口实际生效的模式（恒 "solid"；保留接口仅因前端 get_window_fx_mode 查询链不动，
-/// 前端基态即实色，solid 时不加 fx-mica 类）。
-static MAIN_MODE: OnceLock<&'static str> = OnceLock::new();
 
 /// 主窗口守卫 subclass：失焦欺骗（2026-08-30 用户方案）——失焦时 DWM 把窗口阴影收成
 /// 小圈，绑 DWM 的"窗口激活态"渲染判定；拦截 WM_NCACTIVATE 把 wParam 恒改 TRUE 再下放
@@ -94,19 +89,3 @@ pub fn paint_window_border(win: &tauri::WebviewWindow) {
 /// 非 Windows 占位。
 #[cfg(not(windows))]
 pub fn paint_window_border(_win: &tauri::WebviewWindow) {}
-
-/// 对窗口应用模式：2026-10-01 起恒 solid（云母已撤，见模块注释）。保留函数与签名
-/// 仅因主窗口（lib.rs）与子窗口（open_child_window）共用本调用点。
-pub fn apply(_win: &tauri::WebviewWindow) -> &'static str {
-  "solid"
-}
-
-/// 主窗口启动时调用：记录主模式（前端 get_window_fx_mode 查询依据）。
-pub fn apply_main(win: &tauri::WebviewWindow) {
-  let _ = MAIN_MODE.set(apply(win));
-}
-
-/// 主窗口实际模式（恒 solid，前端基态即实色）。
-pub fn main_mode() -> &'static str {
-  MAIN_MODE.get().copied().unwrap_or("solid")
-}

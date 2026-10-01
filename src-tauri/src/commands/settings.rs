@@ -30,14 +30,6 @@ pub async fn exit_app(app: tauri::AppHandle) -> Result<(), String> {
   Ok(())
 }
 
-/// 查询主窗口背景效果模式："solid"（实色 --n-g-a1-solid）。2026-10-01 弃云母后恒 solid
-/// （踩坑 071 四轮：撤 Mica + 撤整窗玻璃 + caption 全程保留，换回最大化过渡动画）；
-/// 接口保留仅因前端查询链不动，前端基态即实色。
-#[tauri::command]
-pub async fn get_window_fx_mode() -> Result<String, String> {
-  Ok(crate::adapters::window_fx::main_mode().to_string())
-}
-
 /// 主窗口 DWM 边框色随选择模式切换（6.2 四重标识之一；踩坑 063：边框 = DWM 染色线
 /// 独存，前端零绘制——CSS 任何线/环与 DWM 线并集必错位分离成双层；2026-10-02 实机复证：
 /// 弃云母撤玻璃后 DWM 恢复画默认边框，前端 ::before 自绘与之叠成 2px 双层被用户抓出，

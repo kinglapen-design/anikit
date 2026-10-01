@@ -254,7 +254,7 @@ pub fn run() {
       // 关闭按钮 = 隐藏到托盘，不退出（快捷搜索框要求软件常驻后台）
       // 窗口底色 = 不透明实底 #1F1F1F（2026-10-01 终局转向：弃云母换回最大化过渡
       // 动画——撤 Mica + 撤整窗玻璃 + WS_CAPTION 全程保留，详见 adapters/window_fx.rs
-      // 模块注释；前端 get_window_fx_mode 恒 solid 走基态实色）
+      // 模块注释；前端基态实色单态，fx 双态机制 2026-10-02 已拆）
       if let Some(w) = app.get_webview_window("main") {
         // 主窗口几何恢复（2026-07-28 用户定：窗口大小位置持久化；tauri.conf visible:false
         // 先隐后显防跳变，预览子窗口不记录不恢复）：显示器拔除致坐标落空时只恢复尺寸不恢复位置
@@ -280,8 +280,6 @@ pub fn run() {
         }
         let _ = w.show();
         let _ = w.set_focus();
-        // 记录主窗口 fx 模式（2026-10-01 起恒 solid——弃云母，前端查询依据）
-        adapters::window_fx::apply_main(&w);
 
         #[cfg(target_os = "windows")]
         {
@@ -361,7 +359,6 @@ pub fn run() {
       commands::settings::save_ui_settings,
       commands::settings::save_window_state,
       commands::settings::exit_app,
-      commands::settings::get_window_fx_mode,
       commands::settings::set_main_border_picking,
       commands::import::classify_paths,
       commands::import::detect_sequences,

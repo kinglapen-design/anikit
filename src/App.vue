@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 主窗口（7.1 十七轮 · 主窗口骨架轮贴稿）：transparent:false + WebView2 背景透明
 // （063 六轮方案一定稿：tao transparent 的 blur-behind hack 会让圆角月牙缝成透底洞）+
-// 运行时按系统版本云母/实色双态（fx-mica = 半透明-1 底透云母；基态 = 实色-1 回退）；
+// 窗口背景 = 实色-1 --n-g-a1-solid 单态（2026-10-01 弃云母，踩坑 071 四轮；
+// fx-mica 双态机制 2026-10-02 已整层拆除）；
 // 窗口描边分模式：实色 = 前端自绘 1px（::before）；云母 = 零绘制、**DWM 默认半透明边框独存**
 // （2026-09-06 六轮用户改定：DWM 原生默认即半透明全窗交 DWM——原 #333 实心染色撤销；踩坑 063）；
 // 圆角 8，最大化去圆角与描边；
@@ -84,15 +85,6 @@ const dockHostRef = ref<InstanceType<typeof DockHost>>();
 const maximized = ref(false);
 const appWindow = getCurrentWindow();
 const webview = getCurrentWebviewWindow();
-
-// 窗口背景效果模式（7.1 十七轮 · 主窗口骨架轮）：Win11 22H2+ = mica（云母透底），
-// 其余 = solid（实色-1 --n-g-a1-solid 回退）。基态样式即 solid 观感，查询返回 mica
-// 才单向切换——防首帧半透明闪。主窗口与预览子窗口同此一处（.window 为共同根）。
-// URL ?fx=solid|mica 显式指定（2026-09-29 兼容轮：后端透明子窗口创建失败降级非透明
-// 重建时追加 fx=solid——非透明窗口无云母载体，若按主模式 mica 切透明底会露出 webview
-// 白底）；显式指定时跳过 get_window_fx_mode 查询
-const fxForced = new URLSearchParams(window.location.search).get("fx");
-const fxMode = ref<"solid" | "mica">(fxForced === "mica" ? "mica" : "solid");
 
 // 启动时未打开任何素材库 → 强制弹初次打开向导（38_向导稿，2.1；状态在 libraryOps.wizardState）
 const wizardOpen = () => wizardState.open;
@@ -205,15 +197,6 @@ let unlistenDragDrop: (() => void) | undefined;
 
 onMounted(() => {
   void syncMaximized();
-  // 查询窗口背景效果模式（返回 mica 才切半透明底；失败保持 solid 实色）；
-  // URL 显式指定 fx 的窗口（后端降级非透明兼容窗）跳过查询
-  if (fxForced !== "solid" && fxForced !== "mica") {
-    void invoke<string>("get_window_fx_mode")
-      .then((m) => {
-        if (m === "mica") fxMode.value = "mica";
-      })
-      .catch(() => {});
-  }
   void ui.initSettings(); // 全局 UI 设置加载 + 变更防抖写回（2026-07-28 持久化）
   window.addEventListener("resize", onResize);
   // 视图切换（6.1）：左栏选中项变化即清空素材选择；
@@ -310,7 +293,7 @@ async function togglePin(): Promise<void> {
 </script>
 
 <template>
-  <div class="window" :class="{ maximized, picking: picker.active, 'fx-mica': fxMode === 'mica' }">
+  <div class="window" :class="{ maximized, picking: picker.active }">
     <PreviewWindow v-if="previewParam" :asset-key="previewParam" />
     <!-- 插件详情子窗口（?plugin={id} 分发，?preview= 先例）：只渲染插件面板（无三栏无弹窗）；
          未知 id = 错误提示帧 -->
@@ -524,8 +507,8 @@ async function togglePin(): Promise<void> {
    2026-10-01 终局转向（踩坑 071 四轮，用户定案「动画优先于云母」）：弃云母——撤
    set_effects(Mica) + 撤整窗玻璃（ExtendFrame(-1)，云母载体）+ WS_CAPTION 全程保留，
    换回 DWM 最大化/还原过渡动画（动画依附 caption；按钮画布 = 玻璃，玻璃撤了 DWM
-   原生按钮画不出）。窗口底色 = 基态实色-1 --n-g-a1-solid 单态（fx-mica 永不触发，
-   其 CSS 为云母时代暂留 dead path，待实机定案后整层清理）。
+   原生按钮画不出）。窗口底色 = 基态实色-1 --n-g-a1-solid 单态（fx-mica 双态机制
+   2026-10-02 已整层拆除）。
    圆角 = 前端自裁 8（最大化归零），不透明底下与 DWM 系统圆角同径无双裁透缝问题。
    窗口边框与 picking 品牌框 = DWM 染色线独存、前端零绘制（2026-10-02 用户定
    「边框和投影交给 DWM」：常态染 #333 / picking 切染品牌色 set_main_border_picking；
@@ -540,14 +523,6 @@ async function togglePin(): Promise<void> {
   overflow: hidden;
   border-radius: var(--n-radius-8);
 }
-.window.fx-mica {
-  /* 云母模式 = 窗口底全透明，DWM 云母直接呈现（2026-08-30 用户定：稿 93% 是 figma
-     模拟手法，工程里云母上不叠色；实色区由各面板自画——内容容器/右栏 g1 卡片） */
-  background: transparent;
-  /* 圆角交 DWM 系统圆角独裁（前端再裁 radius 8 会与 DWM 裁切路径 AA 差在四角透缝）；
-     实色模式 DWM 无圆角裁切，仍基态前端自裁 8 */
-  border-radius: 0;
-}
 .window.maximized {
   border-radius: 0;
 }
@@ -557,8 +532,7 @@ async function togglePin(): Promise<void> {
    DWM 线与 CSS 线并集必错位双层（四边 3vs2、角弧异径出缝），踩坑 063——纯 DWM = 唯一
    均匀解。常态染 #333（lib.rs paint_border，25H2 默认停画故显式染色）、picking 切染
    品牌色（set_main_border_picking）；最大化 DWM 本不画边框，无需前端处理。
-   历史自绘实现（::before 1px --n-g6 / ::after 1px --n-brand）与云母期注释随本变更删除；
-   fx-mica 余下 dead path 待整层清理。 */
+   历史自绘实现（::before 1px --n-g6 / ::after 1px --n-brand）与云母期注释随本变更删除。 */
 /* 窗口控制浮块（2026-08-08 定案）：恒在窗口右上角（标签栏行 / 右栏标题栏同一位），
    侧栏收展时它不参与布局变化——从根上消除窗口控制的跳变；
    7.1 二十三轮贴稿：浮块无 padding/gap，四钮连续排（右栏-窗口控制稿）；

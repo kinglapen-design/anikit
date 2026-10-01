@@ -269,15 +269,8 @@ pub async fn open_preview_window(app: tauri::AppHandle, asset_key: String) -> Re
     win.set_focus().map_err(|e| e.to_string())?;
     return Ok(());
   }
-  let mk_url = |fx_solid: bool| {
-    tauri::WebviewUrl::App(
-      format!(
-        "index.html?preview={}{}",
-        asset_key.replace('|', "%7C"),
-        if fx_solid { "&fx=solid" } else { "" },
-      )
-      .into(),
-    )
+  let mk_url = || {
+    tauri::WebviewUrl::App(format!("index.html?preview={}", asset_key.replace('|', "%7C")).into())
   };
   log::info!("[preview] 创建预览子窗口 {label}（transparent）");
   open_child_window(&app, &label, mk_url, "AniKit 预览", 1000.0, 760.0, "[preview]")?;
@@ -289,21 +282,19 @@ pub async fn open_preview_window(app: tauri::AppHandle, asset_key: String) -> Re
 /// 方案，子窗口沿用旧方案中），部分机器（实体 Win11 实测：点「新窗口打开」零反应、任务栏
 /// 无窗、无错误提示）创建失败；**失败降级 transparent(false) 重建**（视觉退为实色方角，
 /// 功能可用），原始错误进日志文件（release 排障唯一线索）。
-/// mk_url(fx_solid) 生成入口 URL——降级重建传 true 追加 &fx=solid 让前端锁实色底
-/// （非透明窗口无云母载体，否则主模式为 mica 时子窗口切透明底露出 webview 白底）。
-/// 云母 apply 2026-10-01 起为 no-op（弃云母恒 solid，透明窗由前端实色底盖住）；
-/// 边框染色两模式同做（DWMWA_BORDER_COLOR 与透明与否无关）。
+/// 前端基态实色单态（fx 机制 2026-10-02 已拆：原降级重建追加 &fx=solid 锁实色、
+/// 云母 apply 均已随弃云母移除）；边框染色两模式同做（DWMWA_BORDER_COLOR 与透明与否无关）。
 pub(crate) fn open_child_window(
   app: &tauri::AppHandle,
   label: &str,
-  mk_url: impl Fn(bool) -> tauri::WebviewUrl,
+  mk_url: impl Fn() -> tauri::WebviewUrl,
   title: &str,
   w: f64,
   h: f64,
   log_tag: &str,
 ) -> Result<tauri::WebviewWindow, String> {
-  let build = |transparent: bool, fx_solid: bool| {
-    tauri::WebviewWindowBuilder::new(app, label, mk_url(fx_solid))
+  let build = |transparent: bool| {
+    tauri::WebviewWindowBuilder::new(app, label, mk_url())
       .title(title)
       .inner_size(w, h)
       .resizable(true)
@@ -312,21 +303,16 @@ pub(crate) fn open_child_window(
       .shadow(true)
       .center()
       // 锁深色（2026-09-29 修复「浅色系统主题下云母变白」）：默认跟随系统会让浅色主题
-      // 把窗口 dark mode 置 0 → Mica 浅色/退化白底 × 深色 UI 无浅色适配；锁定后 Mica
-      // 恒深色变体、DWM 退化实底也恒深色。与主窗口 tauri.conf theme:"Dark" 同口径
+      // 把窗口 dark mode 置 0 → Mica 浅色/退化白底 × 深色 UI 无浅色适配；锁定后
+      // DWM 退化实底恒深色。与主窗口 tauri.conf theme:"Dark" 同口径
       .theme(Some(tauri::Theme::Dark))
       .build()
   };
-  let win = match build(true, false) {
-    Ok(win) => {
-      // 与主窗口同口径走 fx 查询（2026-10-01 起 apply 恒 solid = no-op；前端子窗口根
-      // 查 get_window_fx_mode 走基态实色底盖住透明窗）
-      crate::adapters::window_fx::apply(&win);
-      win
-    }
+  let win = match build(true) {
+    Ok(win) => win,
     Err(e) => {
       log::error!("{log_tag} 透明子窗口创建失败：{e}——降级非透明重建 {label}");
-      let win = build(false, true).map_err(|e2| {
+      let win = build(false).map_err(|e2| {
         log::error!("{log_tag} 非透明重建仍失败：{e2}");
         format!("窗口创建失败：{e2}")
       })?;
