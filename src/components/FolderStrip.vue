@@ -174,6 +174,7 @@ const gapBar = computed(() => {
       :count="stripFolders.length"
       :expanded="folderOpen"
       :actions="false"
+      hot-zone="lead"
       @toggle="onFold"
     />
     <div v-if="folderOpen" class="flow">

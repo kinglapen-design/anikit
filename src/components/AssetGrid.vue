@@ -475,6 +475,7 @@ onBeforeUnmount(() => {
           :count="items.length"
           :expanded="assetsOpen"
           :actions="false"
+          hot-zone="lead"
           @toggle="onAssetsFold"
         />
       </div>
@@ -537,6 +538,7 @@ onBeforeUnmount(() => {
             :title="h.name"
             :count="h.count"
             :expanded="!content.isGroupCollapsed(gridFolderId ?? '', h.groupId)"
+            hot-zone="lead"
             @toggle="onGroupFold(h.groupId)"
             @more="onGroupMenu(h, $event)"
           />
@@ -571,6 +573,7 @@ onBeforeUnmount(() => {
         :title="stickyGroup.name"
         :count="stickyGroup.count"
         :expanded="stickyGroup.open"
+        hot-zone="lead"
         @toggle="onGroupFold(stickyGroup.groupId)"
         @more="onGroupMenu(stickyGroup, $event)"
       />

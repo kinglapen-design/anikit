@@ -18,8 +18,9 @@ withDefaults(
     actions?: boolean; // 动作组（更多/添加）显隐——false = 整块不渲染（列表容器区块标题稿无动作钮，7.1 内容容器轮）
     staticActions?: boolean; // 折叠钮与动作组常显（链接关系 tab 五区块稿口径，2026-08-31 用户定；默认 hover 现身）
     forceState?: "" | "hover"; // 预览页强制态（hover 展开动作组）
+    hotZone?: "bar" | "lead"; // 折叠点击热区：bar = 整行（默认，侧栏/详情/弹窗）/ lead = 仅文字区（中间列表容器口径，2026-10-02 用户实机定，§63）
   }>(),
-  { count: undefined, expanded: false, withLink: false, withMore: true, actions: true, staticActions: false, forceState: "" },
+  { count: undefined, expanded: false, withLink: false, withMore: true, actions: true, staticActions: false, forceState: "", hotZone: "bar" },
 );
 
 const emit = defineEmits<{ toggle: []; more: [e: MouseEvent]; add: [e: MouseEvent]; link: [e: MouseEvent] }>();
@@ -28,10 +29,11 @@ const emit = defineEmits<{ toggle: []; more: [e: MouseEvent]; add: [e: MouseEven
 <template>
   <div
     class="st"
-    :class="[variant, staticActions ? 'static-actions' : '', forceState ? `force-${forceState}` : '']"
-    @click="emit('toggle')"
+    :class="[variant, staticActions ? 'static-actions' : '', hotZone === 'lead' ? 'hot-lead' : '', forceState ? `force-${forceState}` : '']"
+    @click="hotZone === 'bar' && emit('toggle')"
   >
-    <span class="lead">
+    <!-- hotZone=lead：折叠热区收文字区（标题/数量/展开钮——chev 自带 stop 不重复触发），行空白点击落空不折叠 -->
+    <span class="lead" @click="hotZone === 'lead' && emit('toggle')">
       <span class="tt">
         <span class="txt">{{ title }}</span>
         <template v-if="count !== undefined">

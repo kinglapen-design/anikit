@@ -134,6 +134,7 @@ const entries = computed(() => content.inboxDisk);
       :count="entries.length"
       :expanded="diskOpen"
       :actions="false"
+      hot-zone="lead"
       @toggle="onFold"
     />
     <template v-if="diskOpen">

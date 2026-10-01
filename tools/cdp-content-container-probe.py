@@ -25,6 +25,8 @@
 #   T11 后退/前进接线：进 f1 后后退解禁 → 点后退回 quick:all（文件夹区消失、前进解禁）→ 点前进回 f1
 #   T12 关「递归显示」→ 内容变 3 + 分组标题两枚（SectionTitle group 26 高 18/26 Bold 二级：
 #       未分组/2、图片/1——桩 f1 带 groups 规则 type=image）
+#   T12b 分组标题折叠热区收文字区（2026-10-02 用户定 hotZone=lead，§63）：真实点击行空白不折叠 /
+#       点文字折叠 / 点展开钮再展开（.chev open 类为信号）
 #   T13 列表表头：34 高 g3 底圆角 8 padding 8/12 gap 12 + 名称列 flex 1 + 四数据列各 123 +
 #       标签 13/18 Bold 三级
 #   T14 列表行：57 高 padding 6/12/6/6 gap 12 g2 底圆角 8 + 缩略图 80×45（g3 + g5 描边圆角 6）+
@@ -41,6 +43,9 @@
 #       「将文件拖拽至此处导入」13/18 三级 + 双钮（导入文件/导入文件夹 = ActionButton solid md
 #       34 高 g4 #292929 圆角 8）+ 按钮组 282 宽 gap 8
 #   截图 r21-content-container-{full,grid,list,search,empty}.png
+# 已知漂移（2026-10-02 记，超出当轮修复预算不追）：T4/T4b/T4b2 仍按「4 钮 + 插件禁用 + 无第五钮」
+#   旧口径断言——现 5 钮（插件已接业务解禁 §37 + 详情钮常态渲染），待详情钮业务口径重推后修。
+#   同轮已修换代漂移：.app-switch→.kit-switch（SwitchButton）、.app-seg→.seg .seg-item（SegmentedControl）。
 # 桩：5 Placement（f1×3 + f1a×1 + f1a1×1）+ 树（f1[子 f1a[子 f1a1 + 档案 ar1sub] + 档案 ar1] +
 #   空文件夹 f-empty）；list_archives 带 badge/props/totalSize；search_assets 固定命中；
 #   全量清单补齐（list_relations 缺了 DetailPanel 会崩）+ structuredClone 深拷贝（速查 §12）。
@@ -518,8 +523,10 @@ async def main():
 
             t4c = await ev(
                 "[...document.querySelectorAll('" + TB + " .btn-group .ic-btn')].map((b) => b.disabled)")
-            check("T4c 文件夹视口：添加链接钮解禁 + 分组管理递归时禁用 + 插件恒禁用",
-                  isinstance(t4c, list) and t4c[0] is False and t4c[1] is True and t4c[2] is True,
+            # 钮序 = 添加链接 / 插件 / 分组管理 / 查看方式 /（右栏收起时）详情——插件已接业务解禁（§37），
+            # 旧「插件恒禁用」断言废除；分组管理递归显示时禁用口径不变
+            check("T4c 文件夹视口：添加链接钮解禁 + 分组管理递归时禁用",
+                  isinstance(t4c, list) and t4c[0] is False and t4c[2] is True,
                   json.dumps(t4c))
 
             # 截图：文件夹视口三区全景（整窗 + 内容容器 2x 局部）
@@ -551,7 +558,7 @@ async def main():
             await wait_for("!!document.querySelector('.app-menu')", 5)
             await ev("[...document.querySelectorAll('.app-menu .row')]"
                      ".find((r) => r.querySelector('.label')?.textContent === '显示子文件夹内容')"
-                     "?.querySelector('.app-switch')?.click()")
+                     "?.querySelector('.kit-switch')?.click()")
             await ev("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))")
             await wait_for("!document.querySelector('.app-menu')", 5)
             await wait_for(
@@ -571,22 +578,66 @@ async def main():
                           and g.get("fw") == "700" and g.get("c") == "rgb(191, 191, 191)" for g in grp),
                   json.dumps(grp, ensure_ascii=False))
 
+            # T12b 分组标题折叠热区收文字区（2026-10-02 用户实机定，hotZone=lead，速查 §63）：
+            # 行空白真实点击不折叠；点文字折叠；点展开钮展开（必须 Input.dispatchMouseEvent——
+            # JS .click() 不走命中测试，测不到热区收窄）
+            async def real_click(x, y):
+                await send(ws, "Input.dispatchMouseEvent",
+                           {"type": "mouseMoved", "x": x, "y": y}, session=sess)
+                await asyncio.sleep(0.15)
+                await send(ws, "Input.dispatchMouseEvent",
+                           {"type": "mousePressed", "x": x, "y": y,
+                            "button": "left", "buttons": 1, "clickCount": 1}, session=sess)
+                await send(ws, "Input.dispatchMouseEvent",
+                           {"type": "mouseReleased", "x": x, "y": y,
+                            "button": "left", "buttons": 0, "clickCount": 1}, session=sess)
+                await asyncio.sleep(0.4)
+
+            async def grp_open():
+                return await ev(
+                    "document.querySelector('.group-header .st.group .chev')?.classList.contains('open') ?? null")
+
+            grect = await ev(
+                "(() => { const st = document.querySelector('.group-header .st.group');"
+                " const ld = st.querySelector('.lead').getBoundingClientRect();"
+                " const tt = st.querySelector('.tt').getBoundingClientRect();"
+                " const cv = st.querySelector('.chev').getBoundingClientRect();"
+                " const sr = st.getBoundingClientRect();"
+                " return { ex: Math.min(ld.right + 24, sr.right - 60), y: sr.y + sr.height / 2,"
+                "  tx: tt.x + tt.width / 2, cx: cv.x + cv.width / 2 }; })()")
+            if isinstance(grect, dict) and "ex" in grect:
+                open0 = await grp_open()
+                await real_click(grect["ex"], grect["y"])
+                open1 = await grp_open()
+                check("T12b 点分组标题行空白 → 不折叠（热区收文字区）",
+                      open0 is True and open1 is True, f"before={open0} after={open1}")
+                await real_click(grect["tx"], grect["y"])
+                open2 = await grp_open()
+                check("T12c 点分组标题文字 → 折叠", open2 is False, f"open={open2}")
+                await real_click(grect["cx"], grect["y"])
+                open3 = await grp_open()
+                check("T12d 点展开钮 → 重新展开", open3 is True, f"open={open3}")
+                await send(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": 30, "y": 850}, session=sess)
+                await asyncio.sleep(0.3)
+            else:
+                check("T12b 分组标题热区断言前置（组标题存在）", False, json.dumps(grect))
+
             # ================= 阶段 D：开递归 + 列表模式 =================
             await ev("[...document.querySelectorAll('" + TB + " .btn-group .ic-btn')][3].click()")
             await wait_for("!!document.querySelector('.app-menu')", 5)
             await ev("[...document.querySelectorAll('.app-menu .row')]"
                      ".find((r) => r.querySelector('.label')?.textContent === '显示子文件夹内容')"
-                     "?.querySelector('.app-switch')?.click()")
+                     "?.querySelector('.kit-switch')?.click()")
             await ev("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))")
             await wait_for("!document.querySelector('.app-menu')", 5)
             await wait_for(
                 "document.querySelector('.grid-header > .st.block .num')?.textContent === '5'"
                 " && document.querySelectorAll('.group-header').length === 0", 8)
             await asyncio.sleep(0.6)
-            # 查看方式菜单 → 布局切「列表」
+            # 查看方式菜单 → 布局切「列表」（控件族换代：SegmentedControl = .seg .seg-item，旧 .app-seg 废）
             await ev("[...document.querySelectorAll('" + TB + " .btn-group .ic-btn')][3].click()")
-            await wait_for("!!document.querySelector('.app-menu .app-seg')", 5)
-            await ev("[...document.querySelectorAll('.app-menu .app-seg .item')]"
+            await wait_for("!!document.querySelector('.app-menu .seg')", 5)
+            await ev("[...document.querySelectorAll('.app-menu .seg .seg-item')]"
                      ".find((b) => b.textContent.trim() === '列表').click()")
             await wait_for("!!document.querySelector('.list-header .lh-root')", 8)
             await asyncio.sleep(0.8)

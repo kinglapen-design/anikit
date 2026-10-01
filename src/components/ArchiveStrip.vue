@@ -120,6 +120,7 @@ async function onRenameCommit(f: FolderNode, name: string): Promise<void> {
       :count="stripArchives.length"
       :expanded="archiveOpen"
       :actions="false"
+      hot-zone="lead"
       @toggle="onFold"
     />
     <div v-if="archiveOpen" class="flow">
