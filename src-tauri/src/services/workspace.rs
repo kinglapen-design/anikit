@@ -14,6 +14,11 @@
 //! ② list_dir 逐文件 syscall 瘦身——thumbs 目录趟初一次 read_dir 进内存集合匹配
 //!（DirScan.thumb_names，消 2N 次 is_file + exe 图标探测），图片魔数探测结果按 job_key
 //! 持久缓存（.anikit/probe.json，含非图片负缓存，源变化键自然失效）。
+//! 2026-10-02 链接（junction 方向 b：外部文件夹挂进 WS 子目录）：登记清单存
+//! .anikit/workspace.json links（挂载点 rel → 目标绝对路径，路径闸放行链接子树的凭据，
+//! list_dir 惰性补登记）；resolve_under 命中登记链接返回**词法**「门」路径（fs 操作打在
+//! 链接本体上而不是目标上）；spike 实测 RDC 递归监听不穿透 junction → watcher 为每条
+//! 「链接在且目标在」单独补 target 监听，事件路径翻译回词法「门」口径走同一刷新管道。
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -25,6 +30,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::adapters::inbox_watch;
+use crate::adapters::junction;
 use crate::adapters::shell_thumb;
 use crate::commands::library::AppState;
 use crate::core::space::WORKSPACE_DIR;
@@ -57,6 +63,11 @@ pub struct WsEntry {
   /// read_dir 提前退出扫描，发现任一非 .anikit 子目录即 true，不再前端乐观显示后消箭头）；
   /// 文件恒 false
   pub has_sub_dir: bool,
+  /// 目录链接（2026-10-02 junction 方向 b：外部文件夹挂进 WS 的「门」）：目录 reparse point
+  /// 即 true（断链也 true——门没了目标仍是门）；文件恒 false。前端据此换链接图标 / 出「解除挂载」
+  pub is_link: bool,
+  /// 链接目标当前可达（= 本条 metadata 跟随探测成功；断链 = false）；非链接恒 false
+  pub link_ok: bool,
   /// 文件字节数；目录恒 0
   pub size: u64,
   /// 文件修改时间（Unix 毫秒）；目录恒 0
@@ -99,12 +110,24 @@ pub struct ThumbReady {
 // ---------- 路径解析（防穿越） ----------
 
 /// rel 解析到 workspace 根内的绝对路径：拒绝 .. 与绝对路径（组件级过滤，防穿越），
-/// 存在则规范化（消符号链接 / 短名越界）；不存在按词法拼接结果用（列举瞬间被删不报错成越界）
+/// 存在则规范化（消符号链接 / 短名越界）；不存在按词法拼接结果用（列举瞬间被删不报错成越界）。
+/// 2026-10-02 链接放行（junction 方向 b）：canonicalize 越界时查登记链接清单——
+/// rel 命中链接（本身或子树）且规范化结果落在链接目标内 → 返回**词法**路径而不是
+/// canonical。词法是命门：rel 恰等于 link.rel 时（对「门」本身重命名 / 移动 / 删除 / 列目录）
+/// fs 操作必须打在 junction 本体上而不是目标上；命中链接的后代路径也统一词法
+///（shell 菜单 / 拖出 / 剪贴板都要 junction 视角路径）
 fn resolve_under(root: &Path, rel: &str) -> Result<PathBuf, String> {
   let mut out = root.to_path_buf();
+  let mut norm = String::new(); // / 分隔词法 rel（登记链接比对用；组件重建，\ 输入也归一）
   for comp in Path::new(rel).components() {
     match comp {
-      Component::Normal(c) => out.push(c),
+      Component::Normal(c) => {
+        if !norm.is_empty() {
+          norm.push('/');
+        }
+        norm.push_str(&c.to_string_lossy());
+        out.push(c);
+      }
       Component::CurDir => {}
       _ => return Err("路径不合法：只能访问工作空间内的目录".to_string()),
     }
@@ -112,23 +135,44 @@ fn resolve_under(root: &Path, rel: &str) -> Result<PathBuf, String> {
   let canon_root = root.canonicalize().map_err(|e| format!("工作空间不可用：{e}"))?;
   match out.canonicalize() {
     Ok(c) if c.starts_with(&canon_root) => Ok(c),
-    Ok(_) => Err("路径越界：不允许访问工作空间外的目录".to_string()),
-    Err(_) => Ok(out),
+    Ok(c) => {
+      // canonicalize 越界：唯一合法出口 = 命中登记链接（junction 子树）
+      if let Some(link) = find_link(&read_links(root), &norm) {
+        let canon_target = Path::new(&link.target).canonicalize().unwrap_or_else(|_| PathBuf::from(&link.target));
+        if c.starts_with(&canon_target) {
+          return Ok(out); // 词法「门」路径，见函数 doc
+        }
+      }
+      Err("路径越界：不允许访问工作空间外的目录".to_string())
+    }
+    Err(_) => Ok(out), // 不存在 / 断链：词法结果照旧（断链目录 read_dir 自然失败成空列表）
   }
 }
 
-/// 绝对路径是否位于 root 内（规范化后前缀判定；不存在 / 越界返回 false）
+/// 绝对路径是否位于 root 内（词法剥前缀优先走 resolve_under 口径——junction 子树的词法
+/// 「门」路径经登记链接放行；剥不出再回退规范化前缀判定；不存在 / 越界返回 false）
 /// pub(crate)：commands::media 按路径取播放源时复用同一越界口径
 pub(crate) fn is_under(root: &Path, abs: &Path) -> bool {
+  if let Ok(rel) = abs.strip_prefix(root) {
+    let rel = rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
+    return resolve_under(root, &rel).is_ok();
+  }
   match (root.canonicalize(), abs.canonicalize()) {
     (Ok(canon_root), Ok(canon)) => canon.starts_with(canon_root),
     _ => false,
   }
 }
 
-/// root 内绝对路径 → / 分隔相对路径（canonicalize 后剥前缀，保证与 list_dir 的 relPath 同源）
+/// root 内绝对路径 → / 分隔相对路径（词法剥前缀优先——junction 子树必须保住「门」词法 rel，
+/// 缓存键 / 事件负载全按词法口径与 list_dir 的 relPath 同源；词法剥不出——带 .. / 根本不在
+/// root 下——再回退规范化剥前缀口径）
 /// pub(crate)：commands::media 按路径取卡片波形 peaks 时以 rel 拼缓存键（2026-09-26 填充卡对接）
 pub(crate) fn rel_of(root: &Path, abs: &Path) -> Option<String> {
+  if let Ok(rel) = abs.strip_prefix(root) {
+    if !rel.components().any(|c| !matches!(c, Component::Normal(_) | Component::CurDir)) {
+      return Some(rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/"));
+    }
+  }
   let canon_root = root.canonicalize().ok()?;
   let canon = abs.canonicalize().ok()?;
   let rel = canon.strip_prefix(canon_root).ok()?;
@@ -140,11 +184,16 @@ pub(crate) fn rel_of(root: &Path, abs: &Path) -> Option<String> {
 /// 列举 workspace 根下 rel 目录：目录在前、同名不区分大小写排序；.anikit 缓存目录隐藏；
 /// thumbPath 仅缓存新鲜时给。rel 空串 = 根。越界 / 目录不存在给中文错（命令层降级为空列表）。
 /// 趟内共享 DirScan（2026-10-01 syscall 瘦身）：thumbs 目录文件名一趟一次 read_dir 快照 +
-/// 魔数探测持久缓存，逐文件的 is_file 双扩展名探测 / 图标探测 / 文件头实探全部消掉
+/// 魔数探测持久缓存，逐文件的 is_file 双扩展名探测 / 图标探测 / 文件头实探全部消掉。
+/// 链接惰性登记（2026-10-02 junction 方向 b）：趟初读登记清单，趟内碰上「不经过任何已登记
+/// 链接」的未登记 junction 补登记（target = canonicalize 优先、断链退 read_target 还原），
+/// 趟末有新增才回写——登记清单是路径闸放行链接子树与 watcher 补监听的唯一凭据
 pub fn list_dir(root: &Path, rel: &str) -> Result<Vec<WsEntry>, String> {
   let abs = resolve_under(root, rel)?;
   let rd = fs::read_dir(&abs).map_err(|e| format!("目录读取失败：{e}"))?;
   let mut scan = DirScan::load(root);
+  let mut links = read_links(root);
+  let mut registered = false;
   let mut entries = Vec::new();
   for e in rd.flatten() {
     let path = e.path();
@@ -152,7 +201,20 @@ pub fn list_dir(root: &Path, rel: &str) -> Result<Vec<WsEntry>, String> {
     if name == CACHE_DIR {
       continue; // .anikit 缓存目录不出现在磁盘实况里
     }
-    if let Some(en) = entry(root, rel, &path, &name, path.is_dir(), &mut scan) {
+    // junction（含断链）必须列作目录条目：跟随式 is_dir 对断链得 false，故「跟随是目录 ||
+    // DirEntry 不跟随类型疑似目录 / reparse」的候选补一次 reparse 检测（DirEntry::file_type
+    // 零 syscall；is_reparse_dir 仅候选一次 symlink_metadata，普通文件不查）
+    let ft = e.file_type().ok();
+    let mut is_dir = path.is_dir();
+    let is_link = if is_dir || ft.is_some_and(|t| t.is_dir() || t.is_symlink()) { junction::is_reparse_dir(&path) } else { false };
+    is_dir = is_dir || is_link;
+    if let Some(en) = entry(root, rel, &path, &name, is_dir, is_link, &mut scan) {
+      if is_link && find_link(&links, &en.rel_path).is_none() {
+        if let Some(target) = path.canonicalize().ok().or_else(|| junction::read_target(&path)) {
+          links.push(LinkEntry { rel: en.rel_path.clone(), target: target.to_string_lossy().into_owned() });
+          registered = true;
+        }
+      }
       entries.push(en);
     }
   }
@@ -160,15 +222,23 @@ pub fn list_dir(root: &Path, rel: &str) -> Result<Vec<WsEntry>, String> {
     b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())).then_with(|| a.name.cmp(&b.name))
   });
   scan.save(root);
+  if registered {
+    if let Err(e) = merge_links(root, links) {
+      log::warn!("链接惰性登记回写失败：{e}");
+    }
+  }
   Ok(entries)
 }
 
 /// 单条目：文件补 大小 / mtime / 扩展名 / 缩略图（内容缩略图 → 格式图标回退）；目录恒无缩略图，
-/// 补 has_sub_dir（树展开箭头显隐用）。scan = 本趟列目录共享缓存（thumbs 文件名快照集合 +
-/// 魔数探测持久缓存，2026-10-01 syscall 瘦身）
-fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool, scan: &mut DirScan) -> Option<WsEntry> {
+/// 补 has_sub_dir（树展开箭头显隐用）。is_link = 目录链接（junction「门」，含断链——断链时
+/// 跟随式 metadata 失败 link_ok 自然 false、has_sub_dir 的 read_dir 失败自然 false）。
+/// scan = 本趟列目录共享缓存（thumbs 文件名快照集合 + 魔数探测持久缓存，2026-10-01 syscall 瘦身）
+fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool, is_link: bool, scan: &mut DirScan) -> Option<WsEntry> {
   let rel = if rel_base.is_empty() { name.to_string() } else { format!("{rel_base}/{name}") };
   let meta = fs::metadata(path).ok();
+  // 链接目标可达性 = 跟随式 metadata 探测成功（断链 = false；非链接恒 false）
+  let link_ok = is_link && meta.is_some();
   let size = if is_dir { 0 } else { meta.as_ref().map(|m| m.len()).unwrap_or(0) };
   let mtime_ms = if is_dir {
     0
@@ -255,7 +325,7 @@ fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool, sca
   // 目录条目：是否含子目录（树展开箭头显隐，2026-09-26）——列目录已持各条目路径，
   // 顺带单次扫描即得真实信息，免去前端「未加载乐观显示、展开后才消箭头」
   let has_sub_dir = is_dir && has_visible_sub_dir(path);
-  Some(WsEntry { name: name.to_string(), rel_path: rel, is_dir, has_sub_dir, size, mtime_ms, ctime_ms, w, h, ext, thumb_path, thumb_kind })
+  Some(WsEntry { name: name.to_string(), rel_path: rel, is_dir, has_sub_dir, is_link, link_ok, size, mtime_ms, ctime_ms, w, h, ext, thumb_path, thumb_kind })
 }
 
 /// 目录是否含可见子目录：单次 read_dir 提前退出——发现任一非 .anikit 子目录即 true，
@@ -674,13 +744,20 @@ fn changed_dirs(ws_dir: &Path, paths: &[PathBuf]) -> Option<Vec<String>> {
   Some(out.into_iter().collect())
 }
 
-/// 启动工作空间监听（空间打开唯一入口 activate_space 调用；workspace/ 目录缺失则不启）：
-/// 任何路径事件（.anikit 缓存写回自激已滤）→ emit workspace-fs-changed（负载 = 变更涉及的
-/// 目录 rel 集，changed_dirs；前端去抖后按集精准重扫，2026-10-01 精准化）。
+/// 启动工作空间监听（空间打开入口 activate_space + 链接拓扑变化后的命令层重建调用；
+/// workspace/ 目录缺失则不启）：任何路径事件（.anikit 缓存写回自激已滤）→ emit
+/// workspace-fs-changed（负载 = 变更涉及的目录 rel 集，changed_dirs；前端去抖后按集
+/// 精准重扫，2026-10-01 精准化）。
 /// 用**纯转发轻量监听**（不就绪判定，零遍历零探测，stop 秒退——2026-09-19 用户实机
 /// 「接入工作空间后托盘退出又卡又慢」：复用收件箱就绪判定版时对活动条目每 500ms 递归
 /// 探测全树，退出 join 还要等当趟遍历跑完）。
-/// 先停旧监听（切空间防御性清理）；全部失败记日志降级，不影响空间打开
+/// 2026-10-02 链接补监听（junction 方向 b）：spike 实测 RDC 递归监听**不穿透** junction
+/// （主监听收不到链接子树事件）→ 每条「junction 在且目标在」的登记链接单独补一条
+/// target 监听，事件路径由 target 真实前缀翻译回 `ws_dir.join(link.rel + 相对段)` 词法
+/// 「门」路径后走同一 changed_dirs / 回声消重管道（词法路径与 note_known_op 登记的
+/// 词法「门」路径天然匹配，回声消重不用改）。
+/// 先停旧监听（切空间 / 重建防御性清理）+ 链接台账对账（本体没了的剔出——delete 走
+/// 回收站后这里自洽）；全部失败记日志降级，不影响空间打开
 pub fn start_watch(app: &AppHandle, space_root: &Path) {
   stop_watch(app);
   // 切空间清空缩略图队列 pending（旧空间的排队任务无意义；进行中的任务落盘幂等无害——
@@ -690,10 +767,12 @@ pub fn start_watch(app: &AppHandle, space_root: &Path) {
   if !dir.is_dir() {
     return;
   }
+  reconcile_links(&dir);
+  let mut handles = Vec::new();
   let app_emit = app.clone();
   let ws_dir = dir.clone();
-  let handle = match inbox_watch::spawn_changes_only(
-    dir,
+  match inbox_watch::spawn_changes_only(
+    dir.clone(),
     move |paths| {
       // .anikit 缓存写回自激滤掉 + 已知操作回声消重（PRD 步骤 2：命令返回即更新 UI，
       // 窗口期内本进程写操作的 watcher 事件不上报，窗口外 / 混合事件照常推送）
@@ -704,25 +783,45 @@ pub fn start_watch(app: &AppHandle, space_root: &Path) {
       }
     },
   ) {
-    Ok(h) => h,
-    Err(e) => {
-      log::error!("工作空间监听启动失败：{e}");
-      return;
+    Ok(h) => handles.push(h),
+    Err(e) => log::error!("工作空间监听启动失败：{e}"),
+  }
+  for link in read_links(&dir) {
+    let link_root = dir.join(&link.rel);
+    if !junction::is_reparse_dir(&link_root) {
+      continue; // 门没了（reconcile 已剔，双保险）
     }
-  };
+    let Ok(canon_target) = link_root.canonicalize() else { continue }; // 断链：目标没了无可监听
+    let app_emit = app.clone();
+    let ws_dir = dir.clone();
+    match inbox_watch::spawn_changes_only(canon_target.clone(), move |paths| {
+      // target 真实前缀 → 词法「门」前缀（剥不出的异常形态原样透传，changed_dirs 会归
+      // None 让前端全量兜底）
+      let translated: Vec<PathBuf> =
+        paths.iter().map(|p| p.strip_prefix(&canon_target).map(|rest| link_root.join(rest)).unwrap_or_else(|_| p.clone())).collect();
+      if translated.iter().any(|p| !in_cache_dir(p)) && !is_echo(&translated) {
+        if let Err(e) = app_emit.emit(FS_CHANGED_EVENT, changed_dirs(&ws_dir, &translated)) {
+          log::debug!("工作空间实况事件推送失败（前端可能已关闭）：{e}");
+        }
+      }
+    }) {
+      Ok(h) => handles.push(h),
+      Err(e) => log::warn!("链接目标监听启动失败（{}）：{e}", link.target),
+    }
+  }
   match app.state::<AppState>().workspace.lock() {
-    Ok(mut slot) => *slot = Some(handle),
+    Ok(mut slot) => *slot = handles,
     Err(e) => {
       log::error!("工作空间监听登记失败：{e}");
-      drop(handle); // 登记失败即回收（Drop 自动 stop）
+      drop(handles); // 登记失败即回收（Drop 自动 stop）
     }
   }
 }
 
-/// 停止工作空间监听（切空间 / 应用退出时调）；句柄 take 后 Drop 自动 stop（join 回收线程）
+/// 停止工作空间监听（切空间 / 应用退出时调）；句柄全取走后 Drop 自动 stop（join 回收线程）
 pub fn stop_watch(app: &AppHandle) {
-  let handle = app.state::<AppState>().workspace.lock().ok().and_then(|mut slot| slot.take());
-  drop(handle);
+  let handles = app.state::<AppState>().workspace.lock().map(|mut slot| std::mem::take(&mut *slot)).unwrap_or_default();
+  drop(handles);
 }
 
 /// 路径是否位于 .anikit 缓存目录内（缩略图 / 转码产物写回会触发监听，滤掉防自激；
@@ -834,7 +933,9 @@ fn resolve_existing(root: &Path, rel: &str) -> Result<PathBuf, String> {
   if in_cache_dir(&p) {
     return Err(".anikit 缓存目录不允许操作".to_string());
   }
-  if !p.exists() {
+  // exists 跟随 reparse——断链链接会误判「不存在」；链接本体在 = 存在（断链的门也要能
+  // 改名 / 移动 / 删除）
+  if !p.exists() && !junction::is_reparse_dir(&p) {
     return Err(format!("条目已不存在：{rel}"));
   }
   Ok(p)
@@ -856,7 +957,9 @@ pub fn create_folder(root: &Path, rel_dir: &str, name: &str) -> Result<(), Strin
   Ok(())
 }
 
-/// 重命名：rel 最后一段改为 new_name（文件与文件夹同径）；目标重名报错，名字不变不动
+/// 重命名：rel 最后一段改为 new_name（文件与文件夹同径）；目标重名报错，名字不变不动。
+/// 链接台账同步：被改名的若是登记链接（或其子树含链接），rel 整体平移（junction 改名
+/// 只动「门」不动目标，红线 b 已验证）
 pub fn rename_entry(root: &Path, rel: &str, new_name: &str) -> Result<(), String> {
   validate_name(new_name)?;
   let src = resolve_existing(root, rel)?;
@@ -871,11 +974,17 @@ pub fn rename_entry(root: &Path, rel: &str, new_name: &str) -> Result<(), String
     return Err(format!("已存在同名条目：{new_name}"));
   }
   fs::rename(&src, &dest).map_err(|e| format!("重命名失败：{e}"))?;
+  if let Some(new_rel) = rel_of(root, &dest) {
+    if let Err(e) = update_link_rel(root, rel, &new_rel) {
+      log::warn!("链接登记清单改名同步失败：{e}");
+    }
+  }
   note_known_op(vec![src, dest]);
   Ok(())
 }
 
-/// 回收站删除：多路径一次调用（系统回收站，PRD 06 不进库内回收站）
+/// 回收站删除：多路径一次调用（系统回收站，PRD 06 不进库内回收站）。
+/// 链接台账同步：被删项若是登记链接（或其子树含链接——父目录删除殃及门）一并剔出
 pub fn delete_entries(root: &Path, rels: &[String]) -> Result<(), String> {
   let mut paths = Vec::new();
   for rel in rels {
@@ -885,12 +994,18 @@ pub fn delete_entries(root: &Path, rels: &[String]) -> Result<(), String> {
     return Ok(());
   }
   crate::adapters::recycle_bin::delete_to_recycle(&paths)?;
+  for rel in rels {
+    if let Err(e) = unregister_link(root, rel) {
+      log::warn!("链接登记清单删除同步失败：{e}");
+    }
+  }
   note_known_op(paths);
   Ok(())
 }
 
 /// 移动（拖拽 / 剪切粘贴）：src_rels 逐个移入 dest_rel_dir（同卷 rename）；
-/// 目录禁移入自身子树；重名自动 _n 规避（n 从 2 递增），不覆盖
+/// 目录禁移入自身子树；重名自动 _n 规避（n 从 2 递增），不覆盖。
+/// 链接台账同步：被移动的若是登记链接（或其子树含链接），rel 平移到新落点
 pub fn move_entries(root: &Path, src_rels: &[String], dest_rel_dir: &str) -> Result<(), String> {
   let dest = resolve_under(root, dest_rel_dir)?;
   if !dest.is_dir() {
@@ -907,6 +1022,14 @@ pub fn move_entries(root: &Path, src_rels: &[String], dest_rel_dir: &str) -> Res
     let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).ok_or_else(|| "路径不合法".to_string())?;
     let target = unique_target(&dest, &name);
     fs::rename(&src, &target).map_err(|e| format!("移动失败（{name}）：{e}"))?;
+    // 台账新 rel 由「父目录 rel + 落点文件名」拼词法——直接 rel_of(target) 对 junction
+    // 落点会被 canonicalize 跟随进目标而剥不出 root 前缀（None → 漏同步）
+    if let (Some(parent_rel), Some(fname)) = (target.parent().and_then(|p| rel_of(root, p)), target.file_name()) {
+      let new_rel = if parent_rel.is_empty() { fname.to_string_lossy().into_owned() } else { format!("{parent_rel}/{}", fname.to_string_lossy()) };
+      if let Err(e) = update_link_rel(root, rel, &new_rel) {
+        log::warn!("链接登记清单移动同步失败：{e}");
+      }
+    }
     note_known_op(vec![src, target]);
   }
   Ok(())
@@ -942,6 +1065,87 @@ pub fn duplicate_entries(root: &Path, rels: &[String]) -> Result<(), String> {
     copy_recursive(&src, &target)?;
     note_known_op(vec![target]);
   }
+  Ok(())
+}
+
+// ---------- 链接（junction 方向 b：外部文件夹挂进 WS 子目录，PRD 02） ----------
+
+/// add / retarget 共用的目标校验：存在且是目录；不在 root 内（含等于——工作空间内的目录
+/// 直接整理即可，挂链接只会埋「同一份内容两个词法身份」的坑）；不是 root 祖先（防循环
+/// 嵌套）。返回 canonical 目标路径
+fn check_link_target(root: &Path, target: &Path) -> Result<PathBuf, String> {
+  if !target.is_dir() {
+    return Err(format!("链接目标不是文件夹：{}", target.display()));
+  }
+  let canon_target = target.canonicalize().map_err(|e| format!("链接目标不可用：{e}"))?;
+  let canon_root = root.canonicalize().map_err(|e| format!("工作空间不可用：{e}"))?;
+  if canon_target.starts_with(&canon_root) {
+    return Err("工作空间内的目录无需挂载（直接整理即可）".to_string());
+  }
+  if canon_root.starts_with(&canon_target) {
+    return Err("不能挂载工作空间的祖先目录（会形成循环）".to_string());
+  }
+  Ok(canon_target)
+}
+
+/// 挂载外部文件夹：dest_rel 下建链接指向 target（junction::create 失败内部回滚不留半截），
+/// 登记清单 + 已知操作回声登记；挂载名 = target 目录名（validate_name 口径），重名 _n 规避。
+/// 返回挂载点 rel（前端选中 / 局部刷新锚）
+pub fn add_link(root: &Path, dest_rel: &str, target: &Path) -> Result<String, String> {
+  let dest = resolve_under(root, dest_rel)?;
+  if !dest.is_dir() {
+    return Err("目标目录不存在".to_string());
+  }
+  let canon_target = check_link_target(root, target)?;
+  let name = canon_target.file_name().map(|n| n.to_string_lossy().into_owned()).ok_or_else(|| "链接目标路径不合法".to_string())?;
+  validate_name(&name)?;
+  let link_abs = unique_target(&dest, &name);
+  junction::create(&link_abs, &canon_target)?;
+  // 挂载点 rel 由「dest 的 rel + 落点名」拼词法——直接 rel_of(link_abs) 会被 canonicalize
+  // 跟随进目标而剥不出 root 前缀（junction 落点恒如此，move_entries 同坑同药）
+  let Some(dest_rel_norm) = rel_of(root, &dest) else {
+    let _ = junction::remove(&link_abs); // 词法都组不出来 = 环境异常，回滚不留门
+    return Err("挂载点路径解析失败".to_string());
+  };
+  let Some(fname) = link_abs.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+    let _ = junction::remove(&link_abs);
+    return Err("挂载点路径解析失败".to_string());
+  };
+  let link_rel = if dest_rel_norm.is_empty() { fname } else { format!("{dest_rel_norm}/{fname}") };
+  register_link(root, &link_rel, &canon_target)?;
+  note_known_op(vec![link_abs]);
+  Ok(link_rel)
+}
+
+/// 解除挂载：链接本体进系统回收站（红线 a 已验证只删链接不动目标）+ 剔出登记清单；
+/// **断链链接同样可移除**（回收站删除断链 junction 红线 a 补例已验证）。rel 不是链接报错
+pub fn remove_link(root: &Path, rel: &str) -> Result<(), String> {
+  let abs = resolve_under(root, rel)?;
+  if in_cache_dir(&abs) {
+    return Err(".anikit 缓存目录不允许操作".to_string());
+  }
+  if !junction::is_reparse_dir(&abs) {
+    return Err("该条目不是挂载的外部文件夹".to_string());
+  }
+  crate::adapters::recycle_bin::delete_to_recycle(std::slice::from_ref(&abs))?;
+  unregister_link(root, rel)?;
+  note_known_op(vec![abs]);
+  Ok(())
+}
+
+/// 改挂目标：junction 不支持原地改写目标，先删再建同 rel 指向新目标 + 登记更新。
+/// 校验同 add_link；建失败时旧链接已没（登记留着，reconcile 会剔，自洽）。
+/// 断链链接也可走本径「送修」——词法路径照常删建
+pub fn retarget_link(root: &Path, rel: &str, new_target: &Path) -> Result<(), String> {
+  let abs = resolve_under(root, rel)?;
+  if !junction::is_reparse_dir(&abs) {
+    return Err("该条目不是挂载的外部文件夹".to_string());
+  }
+  let canon_target = check_link_target(root, new_target)?;
+  junction::remove(&abs)?;
+  junction::create(&abs, &canon_target)?;
+  register_link(root, rel, &canon_target)?;
+  note_known_op(vec![abs]);
   Ok(())
 }
 
@@ -996,13 +1200,27 @@ pub fn import_external_entries(root: &Path, sources: &[PathBuf], dest_rel: &str,
   Ok(created)
 }
 
-// ---------- 视图状态：常用固定（PRD 02 步骤 3，.anikit/workspace.json） ----------
+// ---------- 视图状态：常用固定 + 链接登记清单（PRD 02 步骤 3 / junction 方向 b，.anikit/workspace.json） ----------
 
-/// 视图状态文件形状（字段后补；当前仅 pinned = 常用固定 rel 清单）
+/// 视图状态文件形状：pinned = 常用固定 rel 清单；links = 登记链接清单
+///（junction 方向 b：挂进 WS 的外部文件夹「门」台账——路径闸放行链接子树、watcher 补监听、
+/// 断链保留标记全靠它；可删可重建，删了链接退化为「未登记 junction = 越界拒绝」，
+/// 下次 list_dir 惰性补登记自愈）
 #[derive(Default, serde::Deserialize, serde::Serialize)]
 struct ViewState {
   #[serde(default)]
   pinned: Vec<String>,
+  #[serde(default)]
+  links: Vec<LinkEntry>,
+}
+
+/// 登记链接条目：rel = 挂载点 / 分隔相对路径；target = 目标绝对路径字符串
+///（登记时 canonicalize 后形态；断链惰性登记可能是 read_target 还原的普通形——
+/// 使用方一律再 canonicalize 后比对，两形态自洽）
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct LinkEntry {
+  pub rel: String,
+  pub target: String,
 }
 
 fn view_state_path(root: &Path) -> PathBuf {
@@ -1014,13 +1232,122 @@ fn read_view_state(root: &Path) -> ViewState {
   fs::read_to_string(view_state_path(root)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
 }
 
+/// 写视图状态：走 write_text_atomic（.tmp 先写后换，踩坑 095 口径——links 台账丢一半
+/// 就是链接越界放行失效 / watcher 漏监听，不允许窗口期）
 fn write_view_state(root: &Path, st: &ViewState) -> Result<(), String> {
   let path = view_state_path(root);
   if let Some(parent) = path.parent() {
     fs::create_dir_all(parent).map_err(|e| format!("视图状态写入失败：{e}"))?;
   }
   let text = serde_json::to_string_pretty(st).map_err(|e| format!("视图状态序列化失败：{e}"))?;
-  fs::write(&path, text).map_err(|e| format!("视图状态写入失败：{e}"))
+  crate::core::json_io::write_text_atomic(&path, &text).map_err(|e| format!("视图状态写入失败：{e}"))
+}
+
+/// 读登记链接清单（view state 的 links 子树；路径闸 / watcher / 命令层共用）
+pub fn read_links(root: &Path) -> Vec<LinkEntry> {
+  read_view_state(root).links
+}
+
+/// rel 是否命中登记链接：本身 = 链接（rel == link.rel）或在链接子树内
+///（rel 以 link.rel + "/" 为前缀；rel 一律 / 分隔，resolve_under 已组件级归一）
+fn find_link<'a>(links: &'a [LinkEntry], rel: &str) -> Option<&'a LinkEntry> {
+  links.iter().find(|l| match rel.strip_prefix(&l.rel) {
+    Some("") => true,
+    Some(rest) => rest.starts_with('/'),
+    None => false,
+  })
+}
+
+/// 登记链接（读-改-写 view state；同 rel 幂等更新 target——retarget 复用本径）
+pub fn register_link(root: &Path, rel: &str, target: &Path) -> Result<(), String> {
+  let mut st = read_view_state(root);
+  let target = target.to_string_lossy().into_owned();
+  match st.links.iter_mut().find(|l| l.rel == rel) {
+    Some(l) => l.target = target,
+    None => st.links.push(LinkEntry { rel: rel.to_string(), target }),
+  }
+  write_view_state(root, &st)
+}
+
+/// 剔出登记（含子树：父目录删除 / 链接移除后，其下嵌套登记一并失效）；无变化不回写
+pub fn unregister_link(root: &Path, rel: &str) -> Result<(), String> {
+  let mut st = read_view_state(root);
+  let before = st.links.len();
+  let prefix = format!("{rel}/");
+  st.links.retain(|l| l.rel != rel && !l.rel.starts_with(&prefix));
+  if st.links.len() != before {
+    write_view_state(root, &st)?;
+  }
+  Ok(())
+}
+
+/// 链接改名 / 移动后清单 rel 平移（rename / move 服务成功后调用）：命中项本身改挂新 rel，
+/// 子树路径（被 rename / move 的目录其下嵌套的链接）整体换词干；无命中不回写
+pub fn update_link_rel(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> {
+  let mut st = read_view_state(root);
+  let mut changed = false;
+  for l in &mut st.links {
+    let new = match l.rel.strip_prefix(old_rel) {
+      Some("") => Some(new_rel.to_string()),
+      Some(rest) if rest.starts_with('/') => Some(format!("{new_rel}{rest}")),
+      _ => None,
+    };
+    if let Some(new) = new {
+      l.rel = new;
+      changed = true;
+    }
+  }
+  if changed {
+    write_view_state(root, &st)?;
+  }
+  Ok(())
+}
+
+/// 惰性登记批量合并回写（list_dir 趟末）：以最新 view state 为准并入本趟新登记项
+///（并发 pin 等写不被抹掉），本就存在的 rel 以最新值为准不覆盖
+fn merge_links(root: &Path, links: Vec<LinkEntry>) -> Result<(), String> {
+  let mut st = read_view_state(root);
+  let mut changed = false;
+  for l in links {
+    if !st.links.iter().any(|x| x.rel == l.rel) {
+      st.links.push(l);
+      changed = true;
+    }
+  }
+  if changed {
+    write_view_state(root, &st)?;
+  }
+  Ok(())
+}
+
+/// 链接台账对账（start_watch 调用；用户直接动磁盘后的自愈点）：
+/// junction 本体没了 → 剔出清单；junction 在、目标变了（read_target 与登记不一致）→
+/// 更新登记；junction 在、目标断了（read_target 还原不出 canonical 形态）→ **保留不动**
+///（只标记不剔除定案——断链是常态，链接送修期间台账不能丢）。有变化才回写
+pub fn reconcile_links(root: &Path) {
+  let mut st = read_view_state(root);
+  let mut changed = false;
+  st.links.retain_mut(|l| {
+    let abs = root.join(&l.rel);
+    if !junction::is_reparse_dir(&abs) {
+      changed = true; // 本体没了（delete 走回收站 / 外部删了门）→ 剔出
+      return false;
+    }
+    // 目标活着才比对（read_target 还原 + canonicalize 成功）；断了保留登记原样
+    if let Some(actual) = junction::read_target(&abs).and_then(|t| t.canonicalize().ok()) {
+      let registered = Path::new(&l.target).canonicalize().unwrap_or_else(|_| PathBuf::from(&l.target));
+      if actual != registered {
+        l.target = actual.to_string_lossy().into_owned();
+        changed = true;
+      }
+    }
+    true
+  });
+  if changed {
+    if let Err(e) = write_view_state(root, &st) {
+      log::warn!("链接登记清单对账回写失败：{e}");
+    }
+  }
 }
 
 /// 常用固定清单（PRD 步骤 3）：读取时剔除已不存在 / 已改名 / 非目录条目（静默回写），
@@ -1711,5 +2038,205 @@ mod tests {
     pin(&root, "夹B新").unwrap();
     assert_eq!(unpin(&root, "夹A新"), vec!["夹B新".to_string()], "取消后返回剩余清单");
     assert_eq!(unpin(&root, "夹B新"), Vec::<String>::new());
+  }
+
+  // ---------- 链接（junction 方向 b） ----------
+
+  /// 路径闸链接放行（2026-10-02）：普通路径照旧 canonical；登记链接子树放行且返回**词法**
+  /// 「门」路径（fs 操作打在链接本体上）；未登记 junction 越界拒绝；断链登记链接词法 Ok；
+  /// 嵌套 junction（链接内再有链接指向 target 外）拒绝；is_under / rel_of 同词法口径
+  #[cfg(windows)]
+  #[test]
+  fn resolve_under_link_subtree_lexical() {
+    let (dir, root) = make_ws();
+    let outside = dir.path().join("外部");
+    fs::create_dir_all(outside.join("子")).unwrap();
+    fs::write(outside.join("子/内.txt"), b"x").unwrap();
+    let far = tempfile::tempdir().unwrap();
+    fs::write(far.path().join("远.txt"), b"x").unwrap();
+    crate::adapters::junction::create(&outside.join("嵌"), far.path()).unwrap(); // 嵌套：链接里再有链接指向更外
+    crate::adapters::junction::create(&root.join("门"), &outside).unwrap();
+    crate::adapters::junction::create(&root.join("野门"), &outside).unwrap();
+    let canon_outside = outside.canonicalize().unwrap();
+    register_link(&root, "门", &canon_outside).unwrap();
+
+    // 普通路径不变：canonical 形态返回
+    fs::create_dir_all(root.join("普通")).unwrap();
+    assert_eq!(resolve_under(&root, "普通").unwrap(), root.canonicalize().unwrap().join("普通"));
+
+    // 登记链接：本体与子树都放行，且返回词法路径（不是 canonical！）
+    assert_eq!(resolve_under(&root, "门").unwrap(), root.join("门"), "「门」本身返回词法路径");
+    assert_eq!(resolve_under(&root, "门/子/内.txt").unwrap(), root.join("门").join("子").join("内.txt"), "链接子树返回词法路径");
+    let abs = root.join("门").join("子").join("内.txt");
+    assert!(is_under(&root, &abs), "链接子树词法路径视为 root 内");
+    assert_eq!(rel_of(&root, &abs).as_deref(), Some("门/子/内.txt"), "rel 保「门」词法口径");
+
+    // 未登记 junction 拒绝；嵌套 junction（指向 target 外）拒绝
+    assert!(resolve_under(&root, "野门/子/内.txt").is_err(), "未登记 junction 必须越界拒绝");
+    assert!(resolve_under(&root, "门/嵌/远.txt").is_err(), "嵌套 junction 指向 target 外必须拒绝");
+
+    // 断链登记链接：本体 / 子树词法 Ok（rename / remove / read_dir 自然失败口径）
+    crate::adapters::junction::create(&root.join("断门"), &outside).unwrap();
+    register_link(&root, "断门", &canon_outside).unwrap();
+    fs::remove_dir_all(&outside).unwrap();
+    assert_eq!(resolve_under(&root, "断门").unwrap(), root.join("断门"));
+    assert!(resolve_under(&root, "断门/子").is_ok(), "断链子树词法放行（read_dir 自然失败成空列表）");
+  }
+
+  /// 链接台账对账：junction 本体没了 → 剔出；目标变了 → 更新登记；断链 → 保留不动
+  #[cfg(windows)]
+  #[test]
+  fn reconcile_links_prunes_updates_keeps_broken() {
+    let (dir, root) = make_ws();
+    let a = dir.path().join("甲");
+    let b = dir.path().join("乙");
+    fs::create_dir_all(&a).unwrap();
+    fs::create_dir_all(&b).unwrap();
+    let canon_a = a.canonicalize().unwrap();
+    let canon_b = b.canonicalize().unwrap();
+
+    register_link(&root, "没了", &canon_a).unwrap(); // 只登记没建门
+    crate::adapters::junction::create(&root.join("改指"), &a).unwrap();
+    register_link(&root, "改指", &canon_a).unwrap();
+    crate::adapters::junction::create(&root.join("断链"), &a).unwrap();
+    register_link(&root, "断链", &canon_a).unwrap();
+
+    // 改指：外部改挂（remove + create 同 rel 指向乙）；断链：目标甲整个删掉
+    crate::adapters::junction::remove(&root.join("改指")).unwrap();
+    crate::adapters::junction::create(&root.join("改指"), &b).unwrap();
+    fs::remove_dir_all(&a).unwrap();
+
+    reconcile_links(&root);
+    let links = read_links(&root);
+    assert!(!links.iter().any(|l| l.rel == "没了"), "本体没了剔出");
+    assert_eq!(links.iter().find(|l| l.rel == "改指").unwrap().target, canon_b.to_string_lossy(), "目标变了更新登记");
+    let broken = links.iter().find(|l| l.rel == "断链").expect("断链保留不剔除");
+    assert_eq!(broken.target, canon_a.to_string_lossy(), "断链登记原样不动");
+  }
+
+  /// 链接台账随写操作同步：rename（链接本体）/ move（移入目录）/ rename（祖先目录殃及）
+  /// rel 平移；unregister 含子树（delete 剔除逻辑——delete_entries 走系统回收站不进自动化测试）
+  #[cfg(windows)]
+  #[test]
+  fn links_follow_rename_move_and_unregister_tree() {
+    let (dir, root) = make_ws();
+    let outside = dir.path().join("外部");
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(outside.join("内容.txt"), b"x").unwrap();
+    crate::adapters::junction::create(&root.join("门"), &outside).unwrap();
+    register_link(&root, "门", &outside.canonicalize().unwrap()).unwrap();
+
+    rename_entry(&root, "门", "新门").unwrap();
+    assert_eq!(read_links(&root)[0].rel, "新门", "链接本体改名 rel 平移");
+    assert!(outside.join("内容.txt").is_file(), "目标不动（rename 只动门）");
+    assert!(root.join("新门/内容.txt").is_file(), "新名仍指向原目标");
+
+    fs::create_dir_all(root.join("夹")).unwrap();
+    move_entries(&root, &["新门".to_string()], "夹").unwrap();
+    assert_eq!(read_links(&root)[0].rel, "夹/新门", "链接移动 rel 平移到新落点");
+    assert!(crate::adapters::junction::is_reparse_dir(&root.join("夹/新门")), "移动后仍是 junction");
+
+    rename_entry(&root, "夹", "夹改").unwrap();
+    assert_eq!(read_links(&root)[0].rel, "夹改/新门", "祖先目录改名子树 rel 平移");
+
+    // unregister 含子树：父目录删除殃及门下嵌套登记一并剔
+    register_link(&root, "夹改/新门/嵌", &outside.canonicalize().unwrap()).unwrap();
+    unregister_link(&root, "夹改").unwrap();
+    assert!(read_links(&root).is_empty(), "子树登记一并剔出");
+  }
+
+  /// 惰性登记：list_dir 碰上未登记 junction 自动补登记（写进 workspace.json）；已登记不重复；
+  /// 断链链接 = 目录条目 isLink/linkOk=false、hasSubDir=false、登记保留
+  #[cfg(windows)]
+  #[test]
+  fn list_dir_lazy_registers_links() {
+    let (dir, root) = make_ws();
+    let outside = dir.path().join("外部");
+    fs::create_dir_all(outside.join("子")).unwrap();
+    crate::adapters::junction::create(&root.join("门"), &outside).unwrap();
+    fs::create_dir_all(root.join("普通夹")).unwrap();
+    make_png(&root.join("图.png"), 10, 10);
+
+    let list = list_dir(&root, "").unwrap();
+    let en = list.iter().find(|e| e.name == "门").unwrap();
+    assert!(en.is_dir && en.is_link && en.link_ok, "junction 列作目录条目 isLink/linkOk");
+    assert!(en.has_sub_dir, "目标有子目录 → 展开箭头");
+    assert!(!list.iter().find(|e| e.name == "普通夹").unwrap().is_link, "普通目录不误判");
+    assert!(!list.iter().find(|e| e.name == "图.png").unwrap().is_link, "文件恒非链接");
+    let links = read_links(&root);
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].rel, "门");
+    assert_eq!(links[0].target, outside.canonicalize().unwrap().to_string_lossy(), "登记 target = canonical 形态");
+
+    list_dir(&root, "").unwrap();
+    assert_eq!(read_links(&root).len(), 1, "已登记不重复");
+
+    // 断链：目录条目 linkOk=false、无展开箭头、登记保留
+    fs::remove_dir_all(&outside).unwrap();
+    let en2 = list_dir(&root, "").unwrap().into_iter().find(|e| e.name == "门").unwrap();
+    assert!(en2.is_dir && en2.is_link && !en2.link_ok, "断链链接 = 目录条目 linkOk=false");
+    assert!(!en2.has_sub_dir, "断链链接 read_dir 失败自然无箭头");
+    assert_eq!(read_links(&root).len(), 1, "断链登记保留");
+  }
+
+  /// 外部导入落点在链接目录内 = 落真实目标（写文件验证落盘位置）；返回 created rel 保「门」口径
+  #[cfg(windows)]
+  #[test]
+  fn import_into_link_lands_in_real_target() {
+    let (dir, root) = make_ws();
+    let outside = dir.path().join("外部");
+    fs::create_dir_all(&outside).unwrap();
+    crate::adapters::junction::create(&root.join("门"), &outside).unwrap();
+    register_link(&root, "门", &outside.canonicalize().unwrap()).unwrap();
+    let src = dir.path().join("源.txt");
+    fs::write(&src, b"x").unwrap();
+
+    let created = import_external_entries(&root, std::slice::from_ref(&src), "门", false).unwrap();
+    assert_eq!(created, vec!["门/源.txt".to_string()], "created rel 保词法「门」口径");
+    assert!(outside.join("源.txt").is_file(), "文件必须落真实目标");
+    assert!(crate::adapters::junction::is_reparse_dir(&root.join("门")), "落盘不破坏链接本体");
+  }
+
+  /// 挂载 / 改挂（add_link / retarget_link）：目标校验（非目录 / root 内 / 祖先拒绝）；
+  /// 挂载名 = target 目录名、重名 _n；登记入册；改挂换目标登记更新；remove_link 走系统
+  /// 回收站（红线 a spike 已验证），不进自动化测试
+  #[cfg(windows)]
+  #[test]
+  fn add_and_retarget_link_validate_and_register() {
+    let (dir, root) = make_ws();
+    let outside = dir.path().join("外部");
+    fs::create_dir_all(outside.join("子")).unwrap();
+    let other = dir.path().join("别处");
+    fs::create_dir_all(&other).unwrap();
+
+    // 拒绝：非目录 / 工作空间内（含等于）/ 祖先
+    assert!(add_link(&root, "", &dir.path().join("不存在")).is_err(), "目标不存在拒绝");
+    let f = dir.path().join("文件.txt");
+    fs::write(&f, b"x").unwrap();
+    assert!(add_link(&root, "", &f).is_err(), "文件拒绝");
+    fs::create_dir_all(root.join("内夹")).unwrap();
+    assert!(add_link(&root, "", &root.join("内夹")).is_err(), "root 内目录拒绝");
+    assert!(add_link(&root, "", &root).is_err(), "root 本身拒绝");
+    assert!(add_link(&root, "", dir.path()).is_err(), "root 祖先拒绝（防循环）");
+
+    // 成功：挂载名 = target 目录名，登记入册，透过门能读内容
+    let rel = add_link(&root, "", &outside).unwrap();
+    assert_eq!(rel, "外部");
+    assert!(crate::adapters::junction::is_reparse_dir(&root.join("外部")));
+    assert!(root.join("外部/子").is_dir(), "透过门读目标内容");
+    let links = read_links(&root);
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].rel, "外部");
+    assert_eq!(links[0].target, outside.canonicalize().unwrap().to_string_lossy());
+
+    // 重名 _n 规避
+    let rel2 = add_link(&root, "", &outside).unwrap();
+    assert_eq!(rel2, "外部_2", "同名 target 再挂 _n 规避");
+
+    // 改挂：换目标 + 登记更新；非链接拒绝
+    retarget_link(&root, "外部_2", &other).unwrap();
+    assert_eq!(crate::adapters::junction::read_target(&root.join("外部_2")).unwrap().canonicalize().unwrap(), other.canonicalize().unwrap());
+    assert_eq!(read_links(&root).iter().find(|l| l.rel == "外部_2").unwrap().target, other.canonicalize().unwrap().to_string_lossy());
+    assert!(retarget_link(&root, "内夹", &other).is_err(), "非链接拒绝改挂");
   }
 }

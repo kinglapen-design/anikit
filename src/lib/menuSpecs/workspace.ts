@@ -2,11 +2,15 @@
 // 2026-10-01 库菜单移植轮——分组 / 分割线 / 快捷键标注全面对齐库菜单稿（纯文字口径）：
 // 文件 = 打开预览组（新标签页 / 默认应用 / 其他应用 / 发送至 Animate / 资源管理器 / 系统菜单）│
 // 剪贴板组（复制 / 剪切 / 粘贴条件出现 / 重命名单选 / 创建副本）│ 复制数据 ▸ │ 删除 │ 刷新；
-// 文件夹（卡片与树行共用主体）= 新标签页 / 新建文件夹（同级）/ 新建子文件夹 │ 固定·取消固定 │
+// 文件夹（卡片与树行共用主体）= 新标签页 / 新建文件夹（同级）/ 新建子文件夹 / 添加链接文件夹… │
+// 重新指向…·移除链接（仅链接门，junction 方向 b 2026-10-02）·固定·取消固定 │
 // 剪贴板组 │ 复制数据 ▸ │ 资源管理器 / 系统菜单 │ 删除 │ 刷新（树行无重命名——ws 树无行内命名态）；
-// 空白 = 新建文件夹 / 粘贴（内部剪贴板非空 || 系统剪贴板含文件——2026-10-01 PRD 02-13 扩，
+// 空白 = 新建文件夹 / 添加链接文件夹… / 粘贴（内部剪贴板非空 || 系统剪贴板含文件——2026-10-01 PRD 02-13 扩，
 // spec 构建 async：build 前 refreshSystemClip）│ 在资源管理器中显示 / 系统菜单（目录背景版——经典版
 // 新建 / 排序方式 / 查看 / 刷新 / 属性 在其中）│ 刷新。
+// 链接门（junction 方向 b）：「添加链接文件夹…」= 系统目录选择器 → ws_add_link（挂载名 = 目标目录名，
+// 重名后端 _n；校验拒绝中文错 toast）；「重新指向… / 移除链接」仅当条目是链接门（ws.linkState 查父目录
+// 缓存，未加载按非链接不列——条件出现口径速查 §25）；移除链接 = 只删门进系统回收站，目标内容不动。
 // 「系统菜单」= Windows 原生右键菜单（IContextMenu：压缩解压 / TortoiseGit 等 shell 扩展全量）。
 // 一律按路径走 ws 命令（assetId = ws: 合成假 id 严禁发 assetId 类命令）；
 // 写操作失败 toast 报错，成功由 ws store 局部重扫（watcher 回声后端消重）。
@@ -17,6 +21,7 @@
 //（useGlobalKeys ws 分支）；Enter / Ctrl+Enter / Ctrl+Shift+N / Ctrl+Shift+Alt+N 仅展示（库同）。
 import { nextTick } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { open } from "@tauri-apps/plugin-dialog";
 import type { PlacementView } from "../../stores/content";
 import type { CtxEntry } from "../contextMenus";
 import { previewSession } from "../../stores/preview";
@@ -53,6 +58,44 @@ function confirmDelete(rels: string[], name: string): void {
     onConfirm: () =>
       void useWsStore()
         .removeEntries(rels)
+        .catch((e: unknown) => useToastStore().notify({ message: String(e), icon: "fail" })),
+  };
+}
+
+// —— junction 挂载（方向 b：外部文件夹挂进 WS 子目录，2026-10-02）——
+
+// 链接目标目录选择器（添加链接文件夹 / 重新指向共用）：取消 = null 则止
+async function pickLinkTarget(): Promise<string | null> {
+  const picked = await open({ directory: true, multiple: false });
+  return typeof picked === "string" ? picked : null;
+}
+
+// 添加链接文件夹：选中外部目录以 junction 挂进 destRel（挂载名 = 目标目录名，重名后端 _n）；
+// 校验拒绝（非目录 / 工作空间内 / 祖先循环）后端中文错 toast
+async function addLinkFlow(destRel: string): Promise<void> {
+  const dir = await pickLinkTarget();
+  if (dir === null) return;
+  await useWsStore().addLink(destRel, dir).catch(fail);
+}
+
+// 重新指向（断链送修同径）：链接重指向新选目录
+async function retargetLinkFlow(rel: string): Promise<void> {
+  const dir = await pickLinkTarget();
+  if (dir === null) return;
+  await useWsStore().retargetLink(rel, dir).catch(fail);
+}
+
+// 移除链接两段确认（与删除同款 confirmPrompt 警告黄钮）：只移除链接本身（junction 门进系统
+// 回收站可找回），目标文件夹内容不受影响——文案明说
+function confirmRemoveLink(rel: string, name: string): void {
+  useSelectionStore().confirmPrompt = {
+    title: "移除链接",
+    body: `只移除链接「${name}」本身（进系统回收站，可找回），目标文件夹内容不受影响。`,
+    confirmLabel: "移除链接",
+    kind: "warning",
+    onConfirm: () =>
+      void useWsStore()
+        .removeLink(rel)
         .catch((e: unknown) => useToastStore().notify({ message: String(e), icon: "fail" })),
   };
 }
@@ -134,6 +177,8 @@ export async function wsBlankSpec(rel: string): Promise<CtxEntry[]> {
   await ws.refreshSystemClip();
   const entries: CtxEntry[] = [
     { label: "新建文件夹", shortcut: "Ctrl+Shift+N", action: () => void createAndRename(rel) },
+    // 链接文件夹（junction 方向 b）：外部目录挂进当前目录
+    { label: "添加链接文件夹…", action: () => void addLinkFlow(rel) },
   ];
   if (ws.clip || ws.systemClipHasFiles) {
     entries.push({
@@ -174,11 +219,22 @@ async function wsFolderEntries(rel: string, name: string, rename: boolean): Prom
   const batch = batchRels(key, rel);
   const multi = batch.length > 1;
   const pinned = ws.pinned.includes(rel);
+  // 链接门（junction 方向 b）：条目联接态查父目录缓存——非链接 / 父目录未加载（null）按非链接，
+  // 「重新指向… / 移除链接」不列（条件出现 ≠ disabled 占位，速查 §25）
+  const link = ws.linkState(rel);
   return [
     { label: "新标签页打开", shortcut: "Ctrl+Enter", action: () => tabs.openInNewTab(`ws:${rel}`) },
     { label: "新建文件夹", shortcut: "Ctrl+Shift+N", action: () => void createAndRename(parentRel) },
     { label: "新建子文件夹", shortcut: "Ctrl+Shift+Alt+N", action: () => void createAndRename(rel) },
+    // 链接文件夹（junction 方向 b）：外部目录挂进本文件夹
+    { label: "添加链接文件夹…", action: () => void addLinkFlow(rel) },
     "divider",
+    ...(link?.isLink
+      ? [
+          { label: "重新指向…", action: () => void retargetLinkFlow(rel) } as CtxEntry,
+          { label: "移除链接", action: () => confirmRemoveLink(rel, name) } as CtxEntry,
+        ]
+      : []),
     {
       label: pinned ? "从常用中取消固定" : "固定到常用",
       action: () => void (pinned ? ws.unpin(rel) : ws.pin(rel)).catch(fail),

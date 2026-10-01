@@ -263,7 +263,7 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">文件夹卡片（220×122，hover 仅底升六级；图标恒默认色——变色只留树容器；业务态 dimmed / cut / naming / dropInto；名称双击重命名热区 = 文本宽 §64）</h3>
+      <h3 class="pv-group-title">文件夹卡片（220×122，hover 仅底升六级；图标恒默认色——变色只留树容器；业务态 dimmed / cut / naming / dropInto / badge 链接门徽章；名称双击重命名热区 = 文本宽 §64）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div style="width: 220px; height: 122px">
@@ -308,6 +308,20 @@ const archiveStats = ["1,233 个文件", "1.25 GB"];
             <FolderCard name="01_人物" :lines="folderLines" drop-into />
           </div>
           <span class="pv-cap">拖拽并入 dropInto（品牌/半透明 + 2px 品牌描边）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div style="width: 220px; height: 122px">
+            <FolderCard name="01_人物" :lines="folderLines" badge="linked-file-badge" />
+          </div>
+          <span class="pv-cap">链接文件夹（junction 挂链徽章 10px 右下，2026-10-02）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <div style="width: 220px; height: 122px">
+            <FolderCard name="01_人物" :lines="folderLines" badge="warning-small" dimmed />
+          </div>
+          <span class="pv-cap">断链（warning-small + dimmed 0.4 置灰）</span>
         </div>
       </div>
     </div>

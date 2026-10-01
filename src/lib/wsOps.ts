@@ -18,6 +18,8 @@ export interface WsEntry {
   relPath: string; // 相对 workspace 根的路径（/ 分隔）
   isDir: boolean;
   hasSubDir?: boolean; // 目录条目：是否含可见子目录（2026-09-26 树展开箭头真实化，列目录时后端顺带扫描）；文件恒 false；缺省（旧缓存）时树回退旧乐观判定
+  isLink?: boolean; // 目录联接（junction 方向 b，2026-10-02）：目录 reparse point 即 true（断链也 true——门没了目标仍是门）；文件恒 false；缺省（旧缓存）按非链接
+  linkOk?: boolean; // 联接目标当前可达（跟随式探测成功；断链 = false）；非联接恒 false
   size: number; // 文件字节数；目录恒 0
   mtimeMs: number; // 文件修改时间（Unix 毫秒）；目录恒 0
   ctimeMs: number; // 文件创建时间（Unix 毫秒，2026-09-26 详情面板基础数据补）；目录 / 平台不支持恒 0
@@ -188,6 +190,24 @@ export async function pinWsEntry(rel: string): Promise<string[]> {
 // 取消固定；返回最新清单（失效条目读取时顺带清理）
 export async function unpinWsEntry(rel: string): Promise<string[]> {
   return await invoke<string[]>("ws_unpin", { relPath: rel });
+}
+
+// —— junction 挂载（方向 b：外部文件夹挂进 WS 子目录，2026-10-02，commands/workspace.rs）——
+
+// 挂载外部文件夹：targetPath（外部目录绝对路径）以 junction 挂进 destRel 下，挂载名 = 目标目录名
+//（重名自动 _n 规避）；返回挂载点 rel。拒绝（target 非目录 / 在工作空间内 / 是祖先形成循环）抛中文错
+export async function addWsLink(destRel: string, targetPath: string): Promise<string> {
+  return await invoke<string>("ws_add_link", { destRel, targetPath });
+}
+
+// 解除挂载：链接本体进系统回收站（只删「门」不动外部目标）；断链同样可移除；非链接条目抛中文错
+export async function removeWsLink(relPath: string): Promise<void> {
+  await invoke("ws_remove_link", { relPath });
+}
+
+// 改挂目标：链接重指向 newTarget（校验同挂载——目录 / 不在工作空间内 / 非祖先）；断链链接走本径「送修」
+export async function retargetWsLink(relPath: string, newTarget: string): Promise<void> {
+  await invoke("ws_retarget_link", { relPath, newTarget });
 }
 
 // —— 事件监听（App.vue onMounted 统一调，模块级幂等）——

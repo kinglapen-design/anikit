@@ -11,12 +11,14 @@
 //! - window_fx：窗口背景效果（2026-10-01 终局转向：弃云母恒 solid 实底，换回最大化过渡动画）
 //! - clipboard：系统剪贴板私有格式写入（8.4 发送至 AN：Flash 11 Picture，arboard 不管私有格式）
 //! - shell_menu：Windows 原生右键菜单（IContextMenu 经典菜单 + 消息转发窗口；工作空间「系统菜单」项）
+//! - junction：NTFS 目录链接（工作空间「外部文件夹挂进 WS」方向 b：创建 / 读目标 / 删除 reparse point）
 
 pub mod clipboard;
 pub mod decoder;
 pub mod ffmpeg;
 pub mod inbox_drive;
 pub mod inbox_watch;
+pub mod junction;
 pub mod recycle_bin;
 pub mod shell_menu;
 pub mod shell_open;

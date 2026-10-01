@@ -10,7 +10,10 @@
 //   拖拽排序插入线 = 2px 品牌/常态（item 上/下沿）；并入 drop-into = 品牌/半透明填充 + 2px 品牌/常态描边；
 //   重命名输入态 naming = 2px 品牌/常态描边（校验违规换 --n-danger），输入框透明底（base.css
 //   .rename-input 共享基座，本地覆盖 18 高 + 新字档）；
-//   拖拽源 dimmed / 剪切 cut = 整项半透明 0.4 / 0.5（沿用速查 §5 既有档）；
+//   拖拽源 dimmed / 剪切 cut = 整项半透明 0.4 / 0.5（沿用速查 §5 既有档；
+//   dimmed 复用：ws 断链文件夹整行置灰同档，junction 方向 b 2026-10-02）；
+//   链接门徽章 badge（folder 型，2026-10-02）：10px 图标叠文件夹图标右下角——挂链 = linked-file-badge
+//   （currentColor 三级 / 选中一级），断链 = warning-small（双色调默认档）+ 调用方传 dimmed；
 //   层级缩进 = padding-left 6 + depth×20（稿未画层级，沿用旧 20 档）；
 //   档案提示装饰圆点 tint 变色后 = 该色-2 暗档（二轮实机定）；tint + 选中 = 该色-1 亮档（三轮实机定；
 //   无 tint 选中 = 亮色/一级）。
@@ -35,12 +38,13 @@ const props = withDefaults(
     domainSelected?: boolean; // 选择域联动（文件夹卡片选中 / 树多选）：半透明-2 底、无描边（2026-08-30 二轮改定 + 2026-09-20 用户确认）
     tint?: string; // folder/archive 型图标自定义九色（red/blue/...；空 = 常态双色）
     depth?: number; // 层级（内容缩进：padding-left = 6 + depth×20，稿未画层级沿用旧档）
-    dimmed?: boolean; // 拖拽源半透明（0.4）
+    dimmed?: boolean; // 拖拽源半透明（0.4）；ws 断链文件夹置灰复用本档（junction 方向 b，2026-10-02）
     cut?: boolean; // 剪切中半透明（0.5）
     dropZone?: "before" | "after" | "into" | null; // 拖拽落点（父级按引擎/本地判定算好传入）
     naming?: boolean; // 行内重命名输入态（useInlineRename，速查 §4）
     namingError?: boolean; // 名称校验违规：描边 --n-danger
     switchable?: boolean; // 名称后常显切换资源库钮（2026-09-07 用户定，quick「全部」行专用）
+    badge?: string; // 文件夹图标右下角 10px 徽章图标名（junction 方向 b，2026-10-02：linked-file-badge = 挂链 / warning-small = 断链；仅 folder 型消费）
     forceState?: "" | "hover" | "selected"; // 预览页强制态
   }>(),
   {
@@ -59,6 +63,7 @@ const props = withDefaults(
     naming: false,
     namingError: false,
     switchable: false,
+    badge: "",
     forceState: "",
   },
 );
@@ -135,8 +140,16 @@ function onClick(e: MouseEvent): void {
       <span v-else-if="kind === 'archive'" class="dot" :data-tint="tint || undefined" aria-hidden="true" />
       <template v-if="kind === 'folder'">
         <!-- 自定义图标同走双色变量通道（2026-09-08 走查修复：原 AppIcon 原值直出，tint 改色不生效） -->
-        <TwoToneIcon v-if="icon" :name="icon" :size="18" :tint="tint" />
-        <TwoToneIcon v-else :name="expanded ? 'folder-open' : 'folder-closed'" :size="18" :tint="tint" />
+        <span class="fico">
+          <TwoToneIcon v-if="icon" :name="icon" :size="18" :tint="tint" />
+          <TwoToneIcon v-else :name="expanded ? 'folder-open' : 'folder-closed'" :size="18" :tint="tint" />
+          <!-- 链接门徽章（junction 方向 b，2026-10-02）：10px 叠图标右下角；warning-small = 双色调
+               结构图标走 TwoToneIcon 变量通道，单灰线条徽章（linked-file-badge）走 AppIcon currentColor -->
+          <span v-if="badge" class="fico-badge" aria-hidden="true">
+            <TwoToneIcon v-if="badge === 'warning-small'" :name="badge" :size="10" />
+            <AppIcon v-else :name="badge" :size="10" />
+          </span>
+        </span>
       </template>
       <TwoToneIcon v-else-if="kind === 'archive'" name="archive" :size="18" :tint="tint" />
       <span v-else-if="kind === 'quick' && icon" class="qico"><AppIcon :name="icon" :size="18" /></span>
@@ -315,6 +328,31 @@ function onClick(e: MouseEvent): void {
 .selected .dot[data-tint="peach"]::before,
 .force-selected .dot[data-tint="peach"]::before {
   background: var(--n-custom-peach-1);
+}
+/* 文件夹图标盒（badge 锚点）：尺寸同 TwoToneIcon 18 盒 */
+.fico {
+  position: relative;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+/* 链接门徽章（junction 方向 b，2026-10-02）：10px 叠文件夹图标右下角（无稿零件最小方案——
+   尺寸 10 / 右下 0 偏移待用户实机走查）；色档 = 亮色/三级（树行纯底，行类徽章 §57 同档），
+   选中行随图标提亮一级（.qico 同款规则）；断链行置灰由调用方传 dimmed（整行 0.4） */
+.fico-badge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  display: inline-flex;
+  pointer-events: none;
+  color: var(--n-l3);
+}
+.selected .fico-badge,
+.force-selected .fico-badge {
+  color: var(--n-l1);
 }
 /* quick 图标稿 = 三级（folder 自定义图标 2026-09-08 起走 TwoToneIcon 双色通道，tint 驱动不吃 color 档） */
 .qico {

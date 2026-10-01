@@ -51,6 +51,17 @@ const subDirs = computed(() => ws.subDirs(props.rel));
 // pin 行显示名 = rel 最后一段
 const pinName = (rel: string): string => rel.slice(rel.lastIndexOf("/") + 1);
 
+// pin 行链接门（junction 方向 b，2026-10-02，树行同口径）：挂链 = linked-file-badge；断链 =
+// warning-small + dimmed 置灰；联接态存父目录条目列表——父目录未加载（null）按非链接无徽章（降级）
+const pinBadge = (rel: string): string => {
+  const s = ws.linkState(rel);
+  return s?.isLink ? (s.linkOk ? "linked-file-badge" : "warning-small") : "";
+};
+const pinDimmed = (rel: string): boolean => {
+  const s = ws.linkState(rel);
+  return !!s?.isLink && !s.linkOk;
+};
+
 function openDir(rel: string): void {
   tabs.openView(`ws:${rel}`);
 }
@@ -93,6 +104,8 @@ function onOpenRecycleBin(): void {
             <TreeRowItem
               kind="folder"
               :name="pinName(rel)"
+              :badge="pinBadge(rel)"
+              :dimmed="pinDimmed(rel)"
               :count="ws.loadedOk(rel) ? ws.fileCount(rel) : undefined"
               :expandable="false"
               :selected="content.sidebarSelected === `ws:${rel}`"

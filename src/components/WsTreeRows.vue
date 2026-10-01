@@ -35,6 +35,11 @@ const subDirs = computed(() => ws.subDirs(props.rel));
 const expandable = (d: WsEntry): boolean =>
   d.hasSubDir ?? (!ws.loadedOk(d.relPath) || ws.subDirs(d.relPath).length > 0);
 
+// 链接门（junction 方向 b，2026-10-02）：挂链 = linked-file-badge 徽章；断链 = warning-small 徽章 +
+// 整行 dimmed 置灰（0.4 既有档）；断链双击进入 = 空列表（后端降级，不加额外提示）
+const linkBadge = (d: WsEntry): string => (d.isLink ? (d.linkOk ? "linked-file-badge" : "warning-small") : "");
+const linkDimmed = (d: WsEntry): boolean => !!d.isLink && !d.linkOk;
+
 // 行选择键（ws 文件夹与文件同走素材选择域，2026-09-26 对齐库侧选中链）：assetId|folderId 键形同 ws 文件卡
 const rowKey = (rel: string): string => `ws:${rel}|ws:${props.rel}`;
 
@@ -97,6 +102,8 @@ function dropZone(rel: string): "before" | "after" | "into" | undefined {
           kind="folder"
           :name="d.name"
           :data-folder-id="`ws:${d.relPath}`"
+          :badge="linkBadge(d)"
+          :dimmed="linkDimmed(d)"
           :drop-zone="dropZone(d.relPath)"
           :cut="ws.isCutKey(rowKey(d.relPath))"
           :count="ws.loadedOk(d.relPath) ? ws.fileCount(d.relPath) : undefined"

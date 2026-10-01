@@ -75,6 +75,10 @@ export interface FolderNode {
   // 分组规则（2026-08-19，3.5 二轮 / PRD 02-04）：内容区分组显示配置，档案与普通文件夹通用；
   // 缺省 / 空 = 不分组。归组计算 = lib/grouping.ts（显示层，不改数据）
   groups?: import("../lib/grouping").GroupDef[] | null;
+  // 工作空间目录联接态（junction 方向 b，2026-10-02；仅 ws 合成节点带，WsEntry 字段透传）：
+  // isLink = 联接门（断链也 true）；linkOk = 目标可达。库文件夹恒缺省
+  isLink?: boolean;
+  linkOk?: boolean;
   children: FolderNode[];
 }
 
@@ -563,7 +567,8 @@ export const useContentStore = defineStore("content", {
         }
         // 工作空间视口（PRD 02 步骤 1，2026-09-17 实机定：文件夹同库视图口径进网格 FolderStrip）：
         // 直接子目录合成 FolderNode——id = relPath（FolderStrip 按 ws 前缀分流导航 / 菜单），
-        // count = 直接文件数，children 不填（简介行走 FolderStrip ws 分支自取）
+        // count = 直接文件数，children 不填（简介行走 FolderStrip ws 分支自取）；
+        // isLink / linkOk 透传（junction 方向 b，2026-10-02：卡片链接徽章与断链置灰用）
         if (viewKey.startsWith("ws:")) {
           const ws = useWsStore();
           return ws.subDirs(viewKey.slice(3)).map((d) => ({
@@ -572,6 +577,8 @@ export const useContentStore = defineStore("content", {
             count: ws.fileCount(d.relPath),
             totalSize: 0,
             kind: null,
+            isLink: d.isLink ?? false,
+            linkOk: d.linkOk ?? false,
             children: [],
           }));
         }

@@ -138,7 +138,7 @@ pub fn run() {
       library: std::sync::Mutex::new(None),
       imports: std::sync::Mutex::new(std::collections::HashMap::new()),
       inbox: std::sync::Mutex::new(None),
-      workspace: std::sync::Mutex::new(None),
+      workspace: std::sync::Mutex::new(Vec::new()),
       undo: std::sync::Mutex::new(core::undo::UndoManager::default()),
     })
     .setup(|app| {
@@ -353,6 +353,9 @@ pub fn run() {
       commands::workspace::ws_list_pinned,
       commands::workspace::ws_pin,
       commands::workspace::ws_unpin,
+      commands::workspace::ws_add_link,
+      commands::workspace::ws_remove_link,
+      commands::workspace::ws_retarget_link,
       commands::workspace::open_system_recycle_bin,
       commands::settings::get_ui_settings,
       commands::settings::save_ui_settings,

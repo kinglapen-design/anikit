@@ -111,6 +111,20 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
       </div>
       <div class="pv-demo-row">
         <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" name="外部素材" :count="20" badge="linked-file-badge" />
+          <span class="pv-cap">链接文件夹（junction 挂链徽章 10px 右下，2026-10-02）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" name="外部素材" badge="warning-small" dimmed />
+          <span class="pv-cap">断链（warning-small + dimmed 0.4 置灰）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 230px">
+          <TreeRowItem kind="folder" name="外部素材" :count="20" badge="linked-file-badge" force-state="selected" />
+          <span class="pv-cap">挂链徽章 · 选中（随图标提亮一级）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell" style="width: 230px">
           <TreeRowItem kind="quick" icon="library" name="动画素材" :count="3134" switchable />
           <span class="pv-cap">资源库行 · 库名 + 切换钮（2026-09-07 定）</span>
         </div>

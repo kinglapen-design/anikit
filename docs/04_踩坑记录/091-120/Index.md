@@ -1,9 +1,10 @@
 # 踩坑记录 091-120
 
-> 四段式：现象 / 原因 / 解法 / 预防。共 8 条。返回 [Index](../Index.md)。
+> 四段式：现象 / 原因 / 解法 / 预防。共 9 条。返回 [Index](../Index.md)。
 
 | 编号 | 标题 | 日期 | 链接 |
 | --- | --- | --- | --- |
+| 099 | RDC 递归监听不穿透 junction——链接子树事件零上报（notify Windows 后端无标志静默漏报，RDC 机制本身行为）；每链接目标单独补 target 监听 + 事件路径翻译回词法门路径走同一 changed_dirs 管道，拓扑变化恒整体重建（2026-10-02） | 2026-10-02 | [RDC 递归监听不穿透 junction（2026-10-02）](099_RDC递归监听不穿透junction——链接子树事件零上报，每链接目标单独补监听+路径翻译（2026-10-02）.md) |
 | 098 | dockview 对已激活 panel 重复 openPanel 无守卫——pane 聚焦 / 切标签即 renderPanel（内容元素 detach→reattach），内嵌滚动位置归零（Vue 无感：组件不重建、元素同一；MO 轨迹 childList -1/+1 实锤）；应用层滚动保活 = 位置记组件闭包 + 盯宿主 content 容器 childList 恢复（2026-10-02） | 2026-10-02 | [dockview 重复 openPanel 无守卫（2026-10-02）](098_dockview重复openPanel无守卫——pane激活即detach重挂内容滚动归零（2026-10-02）.md) |
 | 097 | tao transparent 子窗口环境性瞬时全灭——实体 Win11 同版系统隔夜自愈无根因可捕（故障窗口期无日志）；open_child_window 失败降级非透明重建 + release 文件日志 + invoke 封装 toast 上保险；发包命名 v{版本}-{日期}（2026-09-30） | 2026-09-30 | [tao transparent 子窗口环境性瞬时全灭（2026-09-30）](097_tao_transparent子窗口环境性瞬时全灭——隔夜自愈无根因可捕，降级重建+release文件日志上保险（2026-09-30）.md) |
 | 096 | cargo build --release ≠ tauri build——custom-protocol feature 决定 dev/prod（不看 PROFILE），直编出 dev 模式包连 devUrl 白屏；冒烟只验后端端口是盲点，release 验证必须含真 UI 截图（2026-09-29） | 2026-09-29 | [cargo 直编出 dev 模式包（2026-09-29）](096_cargo_release直编≠tauri_build——custom-protocol注入缺失出dev模式包连devUrl白屏（2026-09-29）.md) |

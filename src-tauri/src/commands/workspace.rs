@@ -4,7 +4,7 @@
 //! 空间报错；业务在 services::workspace，本层只做取空间快照与参数传递。
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::commands::library::AppState;
 use crate::adapters::shell_open;
@@ -176,6 +176,18 @@ fn ws_root(state: &State<AppState>) -> Result<std::path::PathBuf, String> {
   Ok(space.root.join(WORKSPACE_DIR))
 }
 
+/// 链接拓扑可能变化后重建工作空间监听（junction 方向 b：每条「链接在且目标在」各补一条
+/// target 监听——增删 / 重指 / 改名 / 移动「门」都会改变这个集合）。重建 = stop + spawn
+/// 轻量监听，代价可忽略，故不挑「是否真的动了链接」恒重跑（简单口径，2026-10-02 定）；
+/// start_watch 内 reconcile 顺带剔出已消失链接的登记，自洽
+fn restart_watch(app: &AppHandle, state: &State<AppState>) {
+  if let Ok(guard) = state.space.lock() {
+    if let Some(space) = guard.as_ref() {
+      workspace::start_watch(app, &space.root);
+    }
+  }
+}
+
 /// 新建文件夹：rel_dir 下创建 name；重名 / 非法名 / .anikit 内给中文错
 #[tauri::command]
 pub fn ws_create_folder(state: State<AppState>, rel_dir: String, name: String) -> Result<(), String> {
@@ -188,33 +200,41 @@ pub fn ws_create_folder(state: State<AppState>, rel_dir: String, name: String) -
 
 /// 重命名：rel_path 最后一段改为 new_name（文件与文件夹同径）；目标重名给中文错
 #[tauri::command]
-pub fn ws_rename(state: State<AppState>, rel_path: String, new_name: String) -> Result<(), String> {
+pub fn ws_rename(app: AppHandle, state: State<AppState>, rel_path: String, new_name: String) -> Result<(), String> {
   let root = ws_root(&state)?;
-  workspace::rename_entry(&root, &rel_path, &new_name)
+  workspace::rename_entry(&root, &rel_path, &new_name)?;
+  restart_watch(&app, &state); // 改的可能就是链接「门」——监听恒重建（简单口径见 restart_watch）
+  Ok(())
 }
 
 /// 删除到系统回收站（多路径一次调用；PRD 06 不进库内回收站）
 #[tauri::command]
-pub fn ws_delete(state: State<AppState>, rel_paths: Vec<String>) -> Result<(), String> {
+pub fn ws_delete(app: AppHandle, state: State<AppState>, rel_paths: Vec<String>) -> Result<(), String> {
   let root = ws_root(&state)?;
-  workspace::delete_entries(&root, &rel_paths)
+  workspace::delete_entries(&root, &rel_paths)?;
+  restart_watch(&app, &state); // 删的可能含链接「门」或其祖先——监听恒重建
+  Ok(())
 }
 
 /// 移动（拖拽 / 剪切粘贴）：rel_paths 移入 dest_rel；重名自动 _n 规避（n 从 2 递增）
 #[tauri::command]
-pub fn ws_move(state: State<AppState>, rel_paths: Vec<String>, dest_rel: String) -> Result<(), String> {
+pub fn ws_move(app: AppHandle, state: State<AppState>, rel_paths: Vec<String>, dest_rel: String) -> Result<(), String> {
   let root = ws_root(&state)?;
-  workspace::move_entries(&root, &rel_paths, &dest_rel)
+  workspace::move_entries(&root, &rel_paths, &dest_rel)?;
+  restart_watch(&app, &state); // 移的可能含链接「门」——监听恒重建
+  Ok(())
 }
 
 /// 粘贴：rel_paths 复制（cut=false）或移动（cut=true）进 dest_rel；剪切成功后前端清剪贴板
 #[tauri::command]
-pub fn ws_paste(state: State<AppState>, rel_paths: Vec<String>, dest_rel: String, cut: bool) -> Result<(), String> {
+pub fn ws_paste(app: AppHandle, state: State<AppState>, rel_paths: Vec<String>, dest_rel: String, cut: bool) -> Result<(), String> {
   let root = ws_root(&state)?;
   if cut {
-    workspace::move_entries(&root, &rel_paths, &dest_rel)
+    workspace::move_entries(&root, &rel_paths, &dest_rel)?;
+    restart_watch(&app, &state); // 剪切 = 移动，可能动链接「门」——监听恒重建
+    Ok(())
   } else {
-    workspace::copy_entries(&root, &rel_paths, &dest_rel)
+    workspace::copy_entries(&root, &rel_paths, &dest_rel) // 复制不改链接拓扑，不重建
   }
 }
 
@@ -223,6 +243,39 @@ pub fn ws_paste(state: State<AppState>, rel_paths: Vec<String>, dest_rel: String
 pub fn ws_duplicate(state: State<AppState>, rel_paths: Vec<String>) -> Result<(), String> {
   let root = ws_root(&state)?;
   workspace::duplicate_entries(&root, &rel_paths)
+}
+
+// ---------- 链接（junction 方向 b：外部文件夹挂进 WS 子目录，PRD 02） ----------
+
+/// 挂载外部文件夹：target_path（外部目录绝对路径）以 junction 挂进 dest_rel 下，
+/// 挂载名 = target 目录名（重名自动 _n 规避）；返回挂载点 rel。
+/// 拒绝：target 非目录 / 在工作空间内（含等于）/ 是工作空间祖先（防循环）——中文报错
+#[tauri::command]
+pub fn ws_add_link(app: AppHandle, state: State<AppState>, dest_rel: String, target_path: String) -> Result<String, String> {
+  let root = ws_root(&state)?;
+  let rel = workspace::add_link(&root, &dest_rel, std::path::Path::new(&target_path))?;
+  restart_watch(&app, &state); // 新链接 = 新补一条 target 监听——重建
+  Ok(rel)
+}
+
+/// 解除挂载：链接本体进系统回收站（只删「门」不动外部目标），剔出登记清单；
+/// 断链链接同样可移除。rel 不是链接给中文错
+#[tauri::command]
+pub fn ws_remove_link(app: AppHandle, state: State<AppState>, rel_path: String) -> Result<(), String> {
+  let root = ws_root(&state)?;
+  workspace::remove_link(&root, &rel_path)?;
+  restart_watch(&app, &state); // 链接没了 = 补监听少一条——重建
+  Ok(())
+}
+
+/// 改挂目标：rel 链接重指向 new_target（外部目录绝对路径）；校验同挂载（目录 /
+/// 不在工作空间内 / 非祖先）。断链链接走本径「送修」
+#[tauri::command]
+pub fn ws_retarget_link(app: AppHandle, state: State<AppState>, rel_path: String, new_target: String) -> Result<(), String> {
+  let root = ws_root(&state)?;
+  workspace::retarget_link(&root, &rel_path, std::path::Path::new(&new_target))?;
+  restart_watch(&app, &state); // 目标变了 = 补监听换 target——重建
+  Ok(())
 }
 
 // ---------- ws ↔ Explorer 剪贴板 / 拖入互通（2026-10-01，PRD 02-13） ----------

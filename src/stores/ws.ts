@@ -6,6 +6,7 @@
 // 消费方按本文件导出的 isWsPlacement 判定走按路径分支或直接禁用。
 import { defineStore } from "pinia";
 import {
+  addWsLink,
   createWsFolder,
   deleteWsEntries,
   duplicateWsEntries,
@@ -16,8 +17,10 @@ import {
   moveWsEntries,
   pasteWsEntries,
   pinWsEntry,
+  removeWsLink,
   renameWsEntry,
   requestWorkspaceThumbs,
+  retargetWsLink,
   unpinWsEntry,
   wsClipboardFiles,
   wsImportPaths,
@@ -89,6 +92,15 @@ export const useWsStore = defineStore("ws", {
       if (!c?.cut || !key.startsWith(WS_ID_PREFIX)) return false;
       const rel = key.slice(WS_ID_PREFIX.length, key.indexOf("|"));
       return c.rels.includes(rel);
+    },
+    // 链接门查询（junction 方向 b，2026-10-02；菜单「重新指向…/移除链接」出现条件与 pin 行徽章用）：
+    // 条目的联接态存在父目录条目列表里——父目录未加载 / 条目缺失 = null（调用方按非链接降级）；
+    // 字段缺省（旧缓存）按 false
+    linkState: (state) => (rel: string): { isLink: boolean; linkOk: boolean } | null => {
+      const parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+      const name = rel.includes("/") ? rel.slice(rel.lastIndexOf("/") + 1) : rel;
+      const e = state.dirs.get(parent)?.find((x) => x.name === name);
+      return e ? { isLink: !!e.isLink, linkOk: !!e.linkOk } : null;
     },
   },
   actions: {
@@ -279,6 +291,24 @@ export const useWsStore = defineStore("ws", {
       if (rels.length === 0) return;
       await duplicateWsEntries(rels);
       await this.refreshAround(rels);
+    },
+    // —— junction 挂载（方向 b：外部文件夹挂进 WS 子目录，2026-10-02）——
+    // 挂载外部文件夹：targetPath 以 junction 挂进 destRel（挂载名 = 目标目录名，重名后端 _n）；
+    // 返回挂载点 rel——父级 = destRel 随 refreshAround 一并重扫；校验失败中文错向上抛（菜单层 toast）
+    async addLink(destRel: string, targetPath: string): Promise<void> {
+      const rel = await addWsLink(destRel, targetPath);
+      await this.refreshAround([rel]);
+    },
+    // 解除挂载：链接本体进系统回收站（只删「门」不动目标）；断链同径可移除
+    async removeLink(rel: string): Promise<void> {
+      await removeWsLink(rel);
+      await this.refreshAround([rel]);
+    },
+    // 改挂目标（断链送修同径）：链接重指向 newTarget——子树内容整体换，
+    // refreshAround 重扫父级 + 子树内已加载目录
+    async retargetLink(rel: string, newTarget: string): Promise<void> {
+      await retargetWsLink(rel, newTarget);
+      await this.refreshAround([rel]);
     },
     // —— 步骤 3 常用固定（清单以后端返回为准覆写：固定顺序 + 失效剔除都由后端权威）——
     // 未开空间容忍空（命令层降级 []）；失败静默（不打扰主流程，下次重试）

@@ -65,6 +65,11 @@ function folderLines(f: FolderNode): string[][] {
 // viewKey = "ws:"+所在目录 rel 即 folderId 段）——ws 写操作全按路径，键仅作选择域身份
 const wsCardKey = (id: string): string => `ws:${id}|${props.viewKey}`;
 
+// ws 链接门（junction 方向 b，2026-10-02，树行同口径）：挂链 = linked-file-badge 徽章；
+// 断链 = warning-small 徽章 + 整卡 dimmed 置灰（0.4 既有档）
+const wsBadge = (f: FolderNode): string => (f.isLink ? (f.linkOk ? "linked-file-badge" : "warning-small") : "");
+const wsBroken = (f: FolderNode): boolean => !!f.isLink && !f.linkOk;
+
 // 文件夹卡片选中（2026-07-28 复验反馈 5：迁 selection store 文件夹选择域——单击 = 单选 /
 // Ctrl+单击 = 加选切换 / Shift+单击 = 按条带顺序锚点范围选；与素材 / 收件箱条目互斥，
 // 互斥清理由 clickFolder 内部统一做）；有效拖拽结束后的紧随 click 不触发（C4 引擎置位）。
@@ -184,8 +189,9 @@ const gapBar = computed(() => {
         :name="f.name"
         :lines="folderLines(f)"
         class="cell"
+        :badge="isWs ? wsBadge(f) : ''"
         :selected="isWs ? selection.isSelected(wsCardKey(f.id)) : selection.isFolderSelected(f.id)"
-        :dimmed="!isWs && (dragView.folderIds?.has(f.id) ?? false)"
+        :dimmed="isWs ? wsBroken(f) : (dragView.folderIds?.has(f.id) ?? false)"
         :cut="isWs ? ws.isCutKey(wsCardKey(f.id)) : selection.isFolderCut(f.id)"
         :naming="namingId === f.id"
         :drop-into="dragView.folderCardId === (isWs ? `ws:${f.id}` : f.id)"

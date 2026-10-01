@@ -22,9 +22,10 @@ pub struct AppState {
   pub imports: Mutex<std::collections::HashMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>>>,
   /// 收件箱运行实例（3.2）：空间级共用，随空间打开 / 自动导入开关 / 退出由 services::inbox 启停
   pub inbox: Mutex<Option<crate::services::inbox::InboxHandle>>,
-  /// 工作空间监听实例（PRD 02 步骤 1）：随空间打开启停（.anikit 缓存写回自激已滤），
-  /// 切空间 / 应用退出由 services::workspace 收
-  pub workspace: Mutex<Option<crate::adapters::inbox_watch::WatchHandle>>,
+  /// 工作空间监听实例集（PRD 02 步骤 1）：主监听 + 每条「junction 在且目标在」的登记链接
+  /// 各一条 target 监听（2026-10-02 junction 方向 b：spike 实测 RDC 不穿透 junction）；
+  /// 随空间打开启停、链接拓扑变化后由 services::workspace 重建收
+  pub workspace: Mutex<Vec<crate::adapters::inbox_watch::WatchHandle>>,
   /// 撤销 / 重做双栈（6.0）：会话级不持久化，库切换清空
   pub undo: Mutex<crate::core::undo::UndoManager>,
 }
@@ -531,7 +532,7 @@ mod tests {
       library: Mutex::new(Some(lib_a)),
       imports: Mutex::new(std::collections::HashMap::new()),
       inbox: Mutex::new(None),
-      workspace: Mutex::new(None),
+      workspace: Mutex::new(Vec::new()),
       undo: Mutex::new(crate::core::undo::UndoManager::default()),
     };
     (dir, state)

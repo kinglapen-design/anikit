@@ -7,9 +7,13 @@
 // 简介 = 两行统计（数字档 亮色/三级，段间 " / " 分隔 gap 4）；名称行与简介间距 36（稿值，填满 122 高链）。
 // 业务态（7.1 内容容器轮接线，模式同 items/TreeRowItem）：naming = 行内重命名输入态
 //（useInlineRename，速查 §4；空/不变判定在父级，nameCommit 上抛）；拖拽源 dimmed / 剪切 cut =
-// 整卡半透明 0.4 / 0.5（速查 §5 既有档）；拖拽并入 dropInto = 品牌/半透明填充 + 2px 品牌/常态描边
-//（::after 伪元素，速查 §7 / §20 口径）。名称双击 = nameEdit（父级进命名态）；悬停 tip = 名称 + 简介行。
+// 整卡半透明 0.4 / 0.5（速查 §5 既有档；dimmed 复用：ws 断链文件夹整卡置灰同档，junction 方向 b
+// 2026-10-02）；链接门徽章 badge（2026-10-02）= 10px 图标叠 fd-head 文件夹图标右下角（挂链 =
+// linked-file-badge 三级 / 断链 = warning-small + dimmed）；拖拽并入 dropInto = 品牌/半透明填充 +
+// 2px 品牌/常态描边（::after 伪元素，速查 §7 / §20 口径）。名称双击 = nameEdit（父级进命名态）；
+// 悬停 tip = 名称 + 简介行。
 import { computed } from "vue";
+import AppIcon from "../AppIcon.vue";
 import TwoToneIcon from "../items/TwoToneIcon.vue";
 import { useInlineRename } from "../../lib/useInlineRename";
 import "./cards.css";
@@ -19,13 +23,14 @@ const props = withDefaults(
     name: string;
     lines?: string[][]; // 统计行（每行若干段，段间 " / "）
     selected?: boolean;
-    dimmed?: boolean; // 拖拽源半透明（0.4）
+    dimmed?: boolean; // 拖拽源半透明（0.4）；ws 断链文件夹置灰复用本档（junction 方向 b，2026-10-02）
     cut?: boolean; // 剪切半透明（0.5）
     naming?: boolean; // 行内重命名输入态
     dropInto?: boolean; // 拖拽并入落点（父级按引擎判定算好传入）
+    badge?: string; // 文件夹图标右下角 10px 徽章图标名（junction 方向 b，2026-10-02：linked-file-badge = 挂链 / warning-small = 断链）
     forceState?: "" | "hover" | "selected";
   }>(),
-  { lines: () => [], selected: false, dimmed: false, cut: false, naming: false, dropInto: false, forceState: "" },
+  { lines: () => [], selected: false, dimmed: false, cut: false, naming: false, dropInto: false, badge: "", forceState: "" },
 );
 
 const emit = defineEmits<{
@@ -70,7 +75,15 @@ const nameTip = computed(() => {
         @pointerdown.stop
       />
       <span v-else class="fd-name" v-tip="nameTip" @dblclick.stop="emit('nameEdit')">{{ name }}</span>
-      <TwoToneIcon name="folder-large" :size="24" />
+      <span class="fd-fico">
+        <TwoToneIcon name="folder-large" :size="24" />
+        <!-- 链接门徽章（junction 方向 b，2026-10-02）：10px 叠图标右下角；warning-small = 双色调
+             结构图标走 TwoToneIcon 变量通道，单灰线条徽章（linked-file-badge）走 AppIcon currentColor -->
+        <span v-if="badge" class="fd-badge" aria-hidden="true">
+          <TwoToneIcon v-if="badge === 'warning-small'" :name="badge" :size="10" />
+          <AppIcon v-else :name="badge" :size="10" />
+        </span>
+      </span>
     </div>
     <div class="fd-stats">
       <div v-for="(line, i) in lines" :key="i" class="fd-line">
@@ -109,6 +122,27 @@ const nameTip = computed(() => {
   align-items: center;
   justify-content: space-between; /* 图标恒右缘（名称收缩后站位不变） */
   gap: var(--n-space-8);
+}
+/* 文件夹图标盒（badge 锚点）：尺寸同 TwoToneIcon 24 盒 */
+.fd-fico {
+  position: relative;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+/* 链接门徽章（junction 方向 b，2026-10-02）：10px 叠文件夹图标右下角（无稿零件最小方案——
+   尺寸 10 / 右下 0 偏移待用户实机走查）；色档 = 亮色/三级（卡片纯底，行类徽章 §57 同档）；
+   断链卡置灰由调用方传 dimmed（整卡 0.4） */
+.fd-badge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  display: inline-flex;
+  pointer-events: none;
+  color: var(--n-l3);
 }
 /* 名称收缩到文本宽（2026-10-02 用户实机定，§64）：双击重命名热区 = 真实标题文本区域，
    行空白双击 = 冒泡卡片「进入」不误重命名；flex 0 1 auto + max-width 保长名截断 */
