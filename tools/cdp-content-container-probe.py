@@ -13,7 +13,9 @@
 #       左上 12/12（kc-float 半透明-2 底 + 圆角 4 + mono 12/16 Bold 二级）+ png 静态图无徽标
 #   T7  文件夹区块标题（SectionTitle block）：16 高 / padding-left 8 /「文件夹/1」12/16 Bold 四级 /
 #       actions=false 无 .acts + tail「递归显示」复选框（label 12/16）+ 展开钮 14 常态 hidden
-#   T7b hover 标题行（Input.dispatchMouseEvent 真实移动）→ 展开钮现 + 抓手指针
+#   T7b 稿无动作钮 + 无 tail + 展开钮 14 常态隐
+#   T7c/d hover 标题行（Input.dispatchMouseEvent 真实移动）→ 展开钮现 + 抓手指针收窄到热区
+#       （行空白 = 普通指针，文字区 = 抓手——2026-10-02 用户定，§63）
 #   T8  文件夹卡：grid auto-rows 122 + gap 12 + 卡 122 高 宽 ≥220 + g3 底圆角 8 padding 12 +
 #       名称 18/26 Bold 一级 + folder-large 24 双色调无 tint + 简介两行 mono 12/16 三级 +
 #       文本精确「2 个文件/500.0 MB」「1 个档案/1 个子文件夹」（桩 f1a 带 totalSize + 双类子级）
@@ -409,21 +411,33 @@ async def main():
                   and st7.get("cw") == 14 and st7.get("cv") == "hidden",
                   json.dumps(st7, ensure_ascii=False))
 
-            # T7c hover 标题行（真实鼠标移动）→ 展开钮现 + 抓手指针
+            # T7c hover 标题行（真实鼠标移动）：行空白 = 展开钮现 + 普通指针（抓手指针收窄到热区，
+            # 2026-10-02 用户定——热区外抓手误导像可拖拽，§63）；文字区 = 抓手指针
             rect = await ev(
-                "(() => { const r = document.querySelector('.folder-block .st.block').getBoundingClientRect();"
-                " return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()")
+                "(() => { const el = document.querySelector('.folder-block .st.block');"
+                " const r = el.getBoundingClientRect();"
+                " const t = el.querySelector('.tt').getBoundingClientRect();"
+                " return { ex: r.x + r.width / 2, y: r.y + r.height / 2,"
+                "  tx: t.x + t.width / 2, ty: t.y + t.height / 2 }; })()")
             if isinstance(rect, dict):
                 await send(ws, "Input.dispatchMouseEvent",
-                           {"type": "mouseMoved", "x": rect["x"], "y": rect["y"]}, session=sess)
+                           {"type": "mouseMoved", "x": rect["ex"], "y": rect["y"]}, session=sess)
                 await asyncio.sleep(0.5)
             hv = await ev(
                 "(() => { const el = document.querySelector('.folder-block .st.block');"
                 " return { cv: getComputedStyle(el.querySelector('.chev')).visibility,"
                 "  cur: getComputedStyle(el).cursor }; })()")
-            check("T7c hover 标题行 → 展开钮现 + 抓手指针",
-                  isinstance(hv, dict) and hv.get("cv") == "visible" and hv.get("cur") == "grab",
+            check("T7c hover 行空白 → 展开钮现 + 普通指针（热区外不出抓手）",
+                  isinstance(hv, dict) and hv.get("cv") == "visible" and hv.get("cur") == "default",
                   json.dumps(hv))
+            if isinstance(rect, dict):
+                await send(ws, "Input.dispatchMouseEvent",
+                           {"type": "mouseMoved", "x": rect["tx"], "y": rect["ty"]}, session=sess)
+                await asyncio.sleep(0.4)
+            hv2 = await ev(
+                "(() => { const el = document.querySelector('.folder-block .st.block .lead');"
+                " return el ? getComputedStyle(el).cursor : null; })()")
+            check("T7d hover 文字区 → 抓手指针（热区内）", hv2 == "grab", str(hv2))
             # 鼠标挪走（后续截图不带 hover 态）
             await send(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": 30, "y": 850}, session=sess)
             await asyncio.sleep(0.3)

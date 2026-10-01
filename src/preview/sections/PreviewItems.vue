@@ -206,7 +206,7 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
         </div>
         <div class="pv-demo-cell" style="width: 400px">
           <SectionTitle variant="group" title="人物设定" :count="2" hot-zone="lead" />
-          <span class="pv-cap">hotZone=lead：折叠热区收文字区（中间列表容器口径，2026-10-02 用户定，§63）</span>
+          <span class="pv-cap">hotZone=lead：折叠热区 + 抓手指针均收文字区（中间列表容器口径，2026-10-02 用户定，§63）</span>
         </div>
       </div>
     </div>
