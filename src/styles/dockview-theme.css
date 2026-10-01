@@ -41,7 +41,8 @@
    底透明透窗口底（十七轮定），内容容器 g1 卡片顶边即分界。
    不用栏级 gap：void / right-actions 零宽时 gap 仍生效——+ 钮右端会凭空多 24
    （双 gap 12，2026-08-30 实机「右端空白 48 > 稿值 24」根因）；间距改挂具体元素
-   （pre-actions 有钮时 margin-right 12、left-actions margin-left 12），有内容才占距 */
+   （pre-actions 有钮时 margin-right 12、left-actions margin-left 4——2026-10-02 用户定
+   挨近），有内容才占距 */
 .anikit-dock-theme .dv-tabs-and-actions-container {
   padding: var(--n-space-4) var(--n-space-24) 0 var(--n-space-36);
   box-sizing: border-box;
@@ -82,7 +83,7 @@
 }
 
 /* 标签列表（稿值）：标签页间 gap 4（选中反弧肩径同此值，hover 罩右下间距才能统一 4）；
-   栏内容区 38（46 - padding-top 8），标签页 stretch 贴满 = 底与内容容器顶齐平。
+   栏内容区 34（38 - padding-top 4），标签页 height:100% 贴满 = 底与内容容器顶齐平。
    反弧肩膀伸出 tab 本体左右各 4px——.dv-scrollable（overflow hidden，dockview 7 包装层）与
    本容器均裁至内容盒，首尾标签的外侧肩膀被裁掉（2026-08-30 实机 BUG，探针截图像素实证）：
    两层各加 padding 0 4px + 负 margin 抵消——tab 视觉位置不变，padding 区供肩膀绘制 */
@@ -97,8 +98,8 @@
 }
 
 /* 标签页外壳（尺寸层；视觉归 TabItem）：180 固定宽 + 过多平分收缩（shrink 1 + min-width 0，
-   覆盖 dockview 默认 flex-shrink 0 溢出滚动）；高 100% = 38；去 dockview 默认 padding/圆角，
-   hover/选中底色一律不画（TabItem 自绘，防双层罩） */
+   覆盖 dockview 默认 flex-shrink 0 溢出滚动）；高 100% = 34（栏内容区）；去 dockview 默认
+   padding/圆角，hover/选中底色一律不画（TabItem 自绘，防双层罩） */
 .anikit-dock-theme .dv-tabs-container > .dv-tab {
   width: 180px;
   flex: 0 1 auto;
@@ -110,13 +111,14 @@
   background: transparent;
 }
 
-/* 标签页行首（prefix actions，左栏收起时的"展开侧边栏"按钮）：垂直居中；
+/* 标签页行首（prefix actions，左栏收起时的"展开侧边栏"按钮）：**顶部对齐**（2026-10-02
+   用户定：30 钮与 34 标签页顶对齐，顶 4 底 4 与栏 padding-top 对称；+ 钮同口径）；
    无按钮时 display:none 不占位；有钮时与首标签间距 12（margin——栏级 gap 已废，见栏容器注释）。
    内容探测用 :has(button)（2026-09-23 修复：原 :has(.icon-btn) 是 1.2 时代类名，按钮族封装
    改 ic-btn 后选择器失联——容器恒 display:none，展开钮隐形；用元素选择器防类名再漂移） */
 .anikit-dock-theme .dv-pre-actions-container {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
 }
 .anikit-dock-theme .dv-pre-actions-container:not(:has(button)) {
   display: none;
@@ -132,14 +134,15 @@
 }
 
 /* 左侧 actions（+ 按钮，tabs 后 = 挨着最后一个标签页；DOM 顺序 tabs → left-actions → void →
-   right-actions，天然位）：与标签组间距 12（margin-left——栏级 gap 已废，稿口径不变；
-   flex 间距按 scrollable 的 margin 盒缘起算，视觉恒 12）；
+   right-actions，天然位）：与标签组间距 **4**（margin-left——栏级 gap 已废；2026-10-02 用户定
+   12 → 4 挨近，与标签间 gap 4 同档；非标签页肩膀挤开——肩膀是 4px 视觉外溢不占布局）；
+   **顶部对齐**（同日用户定：30 钮与 34 标签页顶对齐，顶 4 底 4 与栏 padding-top 4 对称）；
    钮 = IconButton 大档 30×30（稿值），色 亮/三级、hover 亮/二级 + 半透明-3 罩——
    2026-09-23 起直接由 IconButton plain 档自带（旧 .icon-btn 覆盖规则随类名漂移清零） */
 .anikit-dock-theme .dv-left-actions-container {
   display: flex;
-  align-items: center;
-  margin-left: var(--n-space-12);
+  align-items: flex-start;
+  margin-left: var(--n-space-4);
   margin-right: auto; /* 钉在标签页后——后续元素（void/右端 actions/浮块）一律顶到最右 */
 }
 
