@@ -112,6 +112,10 @@ export const useSelectionStore = defineStore("selection", {
     namingFolderId: null as string | null,
     // 通用确认弹窗（6.3：文件管理器打开警示 / 删除文件夹 / 彻底删除素材·文件夹，宿主 App.vue）
     confirmPrompt: null as ConfirmPrompt | null,
+    // 断链修复弹窗（junction 方向 b 二轮，2026-10-02 用户定：选中断链链接目录即弹——
+    // 主钮 重新定位… / 次钮 删除链接 / 取消 = 先不管；宿主 App.vue）：
+    // 三触发源 = 选中单断链（App.vue watch）/ 导航拦截（tabs.openView ws 守卫）/ 幽灵回退（缓存过期实际已断）
+    brokenLinkPrompt: null as { rel: string; name: string } | null,
     // 移动面板草稿（3.4，29 稿移动面板宿主 App.vue）：非空 = 移动面板打开
     moveDraft: null as MoveDraft | null,
     // 批量重命名草稿（3.4，37 稿批量重命名弹窗宿主 App.vue）：多选「重命名」/ Ctrl+R 触发，

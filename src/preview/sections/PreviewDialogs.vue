@@ -52,6 +52,7 @@ const failedDemo = [
 // —— 嵌套提示真实弹出（本体已换 ConfirmModal；确认/取消仅关闭，预览不接后端）——
 const groupErrOpen = ref(false); // 23 稿保存冲突 danger（GroupEdit / GroupManage 共用）
 const blockWarnOpen = ref(false); // 26 稿删除区块警告 warning（BlockManage）
+const brokenLinkOpen = ref(false); // 断链修复弹窗 brand 三钮（junction 方向 b，2026-10-02；ConfirmModal secondaryLabel 扩位首例）
 
 // —— DuplicateDialog 复刻桩（嵌真实 DuplicateRow：radio 三选一 + 跳过开关可交互，纯前端）——
 const dupConflict: ConflictItem = {
@@ -526,6 +527,13 @@ const linkOnlyChecked = ref(false);
             26 稿嵌套警告（BlockManage 删除非空区块）｜本体已换 ConfirmModal warning｜真实弹出：「删除」/「取消」仅关闭（预览不接后端）
           </span>
         </div>
+        <div class="pv-demo-cell" style="width: 240px">
+          <ActionButton label="断链修复弹窗" variant="solid" size="md" @click="brokenLinkOpen = true" />
+          <span class="pv-cap">
+            断链修复弹窗（junction 方向 b，2026-10-02 用户定）｜ConfirmModal brand 三钮（secondaryLabel 扩位首例）：
+            主钮 重新定位… / 次钮 删除链接 / 取消 = 先不管｜真实弹出：三钮仅关闭（预览不接后端）
+          </span>
+        </div>
       </div>
     </div>
 
@@ -548,6 +556,19 @@ const linkOnlyChecked = ref(false);
       @cancel="blockWarnOpen = false"
     >
       区块「学习参考」内还有 3 个文件夹。删除后文件夹将移入文件夹区块。
+    </ConfirmModal>
+    <ConfirmModal
+      v-if="brokenLinkOpen"
+      kind="brand"
+      title="链接已失效"
+      confirm-label="重新定位…"
+      secondary-label="删除链接"
+      cancel-label="先不管"
+      @confirm="brokenLinkOpen = false"
+      @secondary="brokenLinkOpen = false"
+      @cancel="brokenLinkOpen = false"
+    >
+      链接「新建文件夹」指向的目标文件夹不存在或已被移动。可以重新定位到新位置，或删除这个链接（只删链接本身，进系统回收站可找回）。
     </ConfirmModal>
 
     <div class="pv-group">

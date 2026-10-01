@@ -13,6 +13,7 @@ import { useContentStore } from "./content";
 import { dropPreviewSession, eachPreviewSession, peekPreviewSession, previewSession } from "./preview";
 import { useSelectionStore } from "./selection";
 import { useUiStore } from "./ui";
+import { useWsStore } from "./ws";
 import { findFolderNode } from "../lib/detailSections";
 
 export interface TabInfo {
@@ -157,6 +158,18 @@ export const useTabsStore = defineStore("tabs", () => {
   // 锁定新开分支不退预览（2026-10-02 用户实机报：锁定预览页点侧栏新开标签后回来预览没了——
   // 新开的是独立标签页，原页视口未替换，预览必须保留；「导航即退出预览」只管视口被替换的情形）
   function openView(viewKey: string, panelId?: string): void {
+    // ws 断链门拦截（junction 方向 b 二轮，2026-10-02 用户实机报「双击没有任何提示，以为 UI 卡住」）：
+    // 缓存已知断链 = 弹修复窗 + 不导航（选中断链同弹，App.vue 单选 watch 同径）；
+    // 缓存说没断的放行——实际断了由 loadDir Err → 幽灵回退补弹窗 + 重扫翻正徽章（App.vue watch）
+    if (viewKey.startsWith("ws:")) {
+      const rel = viewKey.slice(3);
+      const link = rel ? useWsStore().linkState(rel) : null;
+      if (link?.isLink && !link.linkOk) {
+        const s = useSelectionStore();
+        if (s.brokenLinkPrompt?.rel !== rel) s.brokenLinkPrompt = { rel, name: rel.split("/").pop() ?? rel };
+        return;
+      }
+    }
     if (!api) {
       content.sidebarSelected = viewKey;
       exitPreview();

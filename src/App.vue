@@ -62,6 +62,7 @@ import { useTabsStore } from "./stores/tabs";
 import { useWsStore } from "./stores/ws";
 import { initPreviewListeners } from "./stores/preview";
 import { wizardState, reopenLastSession, createLibraryModalState, mergeLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener, renameLibraryState } from "./lib/libraryOps";
+import { retargetLinkFlow } from "./lib/menuSpecs/workspace";
 import { playAlert } from "./lib/sounds";
 import { osFileDragHover, osFileDragHoverEnd, isOsDragOutActive } from "./lib/dragOperation";
 import { closePluginPanel, pluginPanelState } from "./lib/pluginPanel";
@@ -78,6 +79,26 @@ const selection = useSelectionStore();
 const toast = useToastStore();
 const tabs = useTabsStore();
 const ws = useWsStore();
+
+// 断链链接目录判定（断链修复弹窗三触发源共用——选中 watch / openView 守卫 / 幽灵回退）：
+// 父目录缓存条目 = 链接门且目标不可达
+function isBrokenWsLink(rel: string): boolean {
+  const l = ws.linkState(rel);
+  return !!l?.isLink && !l.linkOk;
+}
+
+// 断链修复弹窗动作（2026-10-02 用户定）：主钮 = 重新定位（系统目录选择器重挂同 rel）；
+// 次钮 = 删除链接（只删门进系统回收站，弹窗本身即提示不再二次确认）；取消 = 先不管
+async function onBrokenLinkRetarget(): Promise<void> {
+  const p = selection.brokenLinkPrompt;
+  selection.brokenLinkPrompt = null;
+  if (p) await retargetLinkFlow(p.rel);
+}
+function onBrokenLinkRemove(): void {
+  const p = selection.brokenLinkPrompt;
+  selection.brokenLinkPrompt = null;
+  if (p) void ws.removeLink(p.rel).catch((e: unknown) => toast.notify({ message: String(e), icon: "fail" }));
+}
 
 // 侧栏 / dock 宿主引用：收展动画引擎（useSidebarAnim）逐帧写宽与灌宽的 DOM 锚点
 const sidebarLeftRef = ref<InstanceType<typeof SidebarLeft>>();
@@ -211,15 +232,43 @@ onMounted(() => {
     else ui.lastLibView = vk;
   });
   // 幽灵视口自愈（2026-10-02 标签页 BUG 修复）：当前 ws 视口目录已不存在（lastWsView 跨空间
-  // 重放的幽灵路径 / 外部删除）→ 回退到最近存活祖先；父级仍缺失则其 loadDir 继续置 missing
-  // 连环回退直至根（根缺失 = workspace 目录没了，openView 同视口早退不成环，root.exists 空态接管）
+  // 重放的幽灵路径 / 外部删除）→ 回退到最近存活祖先；父级仍缺失 / 同断链则先爬开再回退
+  //（断链父级会被 openView 守卫拦截，连环回退直至根；根缺失 = openView 同视口早退不成环，
+  // root.exists 空态接管）。二轮补反馈（用户实机报「双击没有任何提示，以为 UI 卡住」）：
+  // 断链 → 断链修复弹窗（缓存说没断实际断了的路径）；普通目录没了 → toast；顺带重扫父级翻正徽章
   watch(
     () => (content.sidebarSelected.startsWith("ws:") ? ws.missing[content.sidebarSelected.slice(3)] : undefined),
     (m) => {
       if (!m) return;
       const rel = content.sidebarSelected.slice(3);
-      const parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+      if (rel) {
+        const link = ws.linkState(rel);
+        if (link?.isLink) {
+          if (selection.brokenLinkPrompt?.rel !== rel) selection.brokenLinkPrompt = { rel, name: rel.split("/").pop() ?? rel };
+        } else {
+          toast.notify({ message: "目录已不存在或已被移动，已回退到上级目录", icon: "fail" });
+        }
+      }
+      void ws.refreshAround([rel]); // 重扫父级——断链条目陈旧挂链徽章随列举翻正（目标被删零事件场景）
+      let parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+      while (parent && (ws.missing[parent] || isBrokenWsLink(parent))) {
+        parent = parent.includes("/") ? parent.slice(0, parent.lastIndexOf("/")) : "";
+      }
       tabs.openView(parent ? `ws:${parent}` : "ws:");
+    },
+  );
+  // 选中断链即弹修复窗（2026-10-02 用户定）：单选且为断链链接目录 → brokenLinkPrompt
+  //（导航拦截 openView 守卫 / 幽灵回退同弹一窗，三源按 rel 去重）
+  watch(
+    () => {
+      if (selection.selected.size !== 1) return null;
+      const key = selection.selected.values().next().value as string | undefined;
+      if (!key?.startsWith("ws:")) return null;
+      const rel = key.slice(3, key.indexOf("|") === -1 ? undefined : key.indexOf("|"));
+      return isBrokenWsLink(rel) ? rel : null;
+    },
+    (rel) => {
+      if (rel && selection.brokenLinkPrompt?.rel !== rel) selection.brokenLinkPrompt = { rel, name: rel.split("/").pop() ?? rel };
     },
   );
   void content.initInboxListener(); // 收件箱自动入库（3.2），App 存活期注册一次
@@ -474,6 +523,21 @@ async function togglePin(): Promise<void> {
     <ContextMenu />
     <!-- 通用确认弹窗（6.3：警示前置 / 删除文件夹 / 彻底删除二次确认） -->
     <AppConfirm v-if="selection.confirmPrompt" />
+    <!-- 断链修复弹窗（junction 方向 b 二轮，2026-10-02 用户定：选中断链链接目录即弹——
+         主钮 重新定位… / 次钮 删除链接 / 取消 = 先不管；三触发源：单选 / 导航拦截 / 幽灵回退） -->
+    <ConfirmModal
+      v-if="selection.brokenLinkPrompt"
+      title="链接已失效"
+      kind="brand"
+      confirm-label="重新定位…"
+      secondary-label="删除链接"
+      cancel-label="先不管"
+      @confirm="onBrokenLinkRetarget"
+      @secondary="onBrokenLinkRemove"
+      @cancel="selection.brokenLinkPrompt = null"
+    >
+      链接「{{ selection.brokenLinkPrompt.name }}」指向的目标文件夹不存在或已被移动。可以重新定位到新位置，或删除这个链接（只删链接本身，进系统回收站可找回）。
+    </ConfirmModal>
     <!-- 只读视口导入拒入（2026-09-08：与右键收窄同口径；2026-09-09 收窄扩「全部」五视口）——
          新弹窗定稿件 ConfirmModal danger（状态/禁止钮），纯告知两钮同义关闭；拖拽与 Ctrl+V 共用 -->
     <ConfirmModal

@@ -11,6 +11,8 @@
 //（warning 状态/警告 / danger 状态/禁止 / brand 品牌/常态——稿：不危险的提示换品牌色）。
 // 单钮形态（2026-09-21 用户定：孤儿警告「知道了」一钮，稿未画按既有件扩展）：
 // cancelLabel 传空串隐藏取消钮，仅留确认。
+// 三钮形态（2026-10-02 断链修复弹窗，用户定「主按钮 重新定位 / 次按钮 删除链接 / 关闭 = 先不管」）：
+// secondaryLabel 传非空即在取消与确认之间加次钮（中性底同取消钮，稿未画按既有件扩展）。
 // 弹出动画 = 缩放+淡入 150ms（就近套旧 AppModal modal-pop 先例）。按钮 hover 态稿未给，待补稿。
 const props = withDefaults(
   defineProps<{
@@ -18,10 +20,11 @@ const props = withDefaults(
     kind?: "warning" | "danger" | "brand";
     confirmLabel?: string;
     cancelLabel?: string;
+    secondaryLabel?: string; // 次钮文字（三钮形态；空 = 不出现）
   }>(),
-  { kind: "warning", confirmLabel: "确认", cancelLabel: "取消" },
+  { kind: "warning", confirmLabel: "确认", cancelLabel: "取消", secondaryLabel: "" },
 );
-const emit = defineEmits<{ confirm: []; cancel: [] }>();
+const emit = defineEmits<{ confirm: []; cancel: []; secondary: [] }>();
 </script>
 
 <template>
@@ -31,6 +34,7 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>();
       <div class="body"><slot /></div>
       <div class="actions">
         <button v-if="cancelLabel" class="btn cancel" @click="emit('cancel')">{{ cancelLabel }}</button>
+        <button v-if="secondaryLabel" class="btn cancel" @click="emit('secondary')">{{ secondaryLabel }}</button>
         <button class="btn confirm" :class="[kind]" @click="emit('confirm')">{{ confirmLabel }}</button>
       </div>
     </div>
