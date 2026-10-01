@@ -153,7 +153,9 @@ export const useTabsStore = defineStore("tabs", () => {
 
   // 侧边栏 / 文件夹卡片等导航统一入口：锁定标签页不替换（新开），未锁定替换视口；
   // panelId 定向（2026-09-25 per-panel 会话化：包内视图跳回文件夹等指定目标 panel），
-  // 缺省 = 激活 panel（行为与旧口径一致）
+  // 缺省 = 激活 panel（行为与旧口径一致）。
+  // 锁定新开分支不退预览（2026-10-02 用户实机报：锁定预览页点侧栏新开标签后回来预览没了——
+  // 新开的是独立标签页，原页视口未替换，预览必须保留；「导航即退出预览」只管视口被替换的情形）
   function openView(viewKey: string, panelId?: string): void {
     if (!api) {
       content.sidebarSelected = viewKey;
@@ -162,7 +164,6 @@ export const useTabsStore = defineStore("tabs", () => {
     }
     const target = panelId ? api.getPanel(panelId) : api.activePanel;
     if (!target || target.params?.locked) {
-      exitPreview(api.activePanel?.id);
       addTab(viewKey);
       return;
     }
@@ -226,14 +227,14 @@ export const useTabsStore = defineStore("tabs", () => {
   }
 
   // 新标签页打开（文件夹/档案菜单"新标签页打开"，2026-08-20 接入）：不管当前页锁定与否恒新开——
-  // 原实现误用 openView（未锁定页只替换视口，等于没开新页）
+  // 原实现误用 openView（未锁定页只替换视口，等于没开新页）。
+  // 不动当前页预览（2026-10-02 同 openView 锁定分支口径：新开页是独立标签，原页预览保留）
   function openInNewTab(viewKey: string): void {
     if (!api) {
       content.sidebarSelected = viewKey;
       exitPreview();
       return;
     }
-    exitPreview(api.activePanel?.id);
     addTab(viewKey);
   }
 
@@ -280,12 +281,16 @@ export const useTabsStore = defineStore("tabs", () => {
   // undefined 为 0 不可见——均作废。
   // direction 四向全收（2026-09-07 单标签拖拽分屏拦截复用：左/右/上/下边缘拖入，
   // 右键菜单只用 right/below 两向）。
+  // 预览态随视口一并复制（2026-10-02 用户实机报：预览中分屏新 pane 退出预览——分屏 = 当前视口
+  // 完整复制，源 panel 在预览的资产在新 panel 直接进预览；会话即建即开，ContentArea 挂上即预览态，
+  // 同 openPreviewInNewTab 链路；per-panel 会话化天然支持双预览并存）
   function splitTab(id: string, direction: "left" | "right" | "above" | "below"): void {
     const panel = api?.getPanel(id);
     if (!panel) return;
     const viewKey = (panel.params?.viewKey as string) ?? "quick:all";
     const locked = !!panel.params?.locked;
-    api!.addPanel({
+    const assetKey = peekPreviewSession(id)?.assetKey ?? null;
+    const newPanel = api!.addPanel({
       id: `tab-${Date.now()}-${seq++}`,
       component: "content",
       tabComponent: "tab",
@@ -293,6 +298,7 @@ export const useTabsStore = defineStore("tabs", () => {
       params: { viewKey, locked },
       position: { referencePanel: panel, direction },
     });
+    if (assetKey) void previewSession(newPanel.id).open(assetKey);
   }
 
   // ---- 绑定与恢复 ----

@@ -1,9 +1,10 @@
 # 踩坑记录 091-120
 
-> 四段式：现象 / 原因 / 解法 / 预防。共 7 条。返回 [Index](../Index.md)。
+> 四段式：现象 / 原因 / 解法 / 预防。共 8 条。返回 [Index](../Index.md)。
 
 | 编号 | 标题 | 日期 | 链接 |
 | --- | --- | --- | --- |
+| 098 | dockview 对已激活 panel 重复 openPanel 无守卫——pane 聚焦 / 切标签即 renderPanel（内容元素 detach→reattach），内嵌滚动位置归零（Vue 无感：组件不重建、元素同一；MO 轨迹 childList -1/+1 实锤）；应用层滚动保活 = 位置记组件闭包 + 盯宿主 content 容器 childList 恢复（2026-10-02） | 2026-10-02 | [dockview 重复 openPanel 无守卫（2026-10-02）](098_dockview重复openPanel无守卫——pane激活即detach重挂内容滚动归零（2026-10-02）.md) |
 | 097 | tao transparent 子窗口环境性瞬时全灭——实体 Win11 同版系统隔夜自愈无根因可捕（故障窗口期无日志）；open_child_window 失败降级非透明重建 + release 文件日志 + invoke 封装 toast 上保险；发包命名 v{版本}-{日期}（2026-09-30） | 2026-09-30 | [tao transparent 子窗口环境性瞬时全灭（2026-09-30）](097_tao_transparent子窗口环境性瞬时全灭——隔夜自愈无根因可捕，降级重建+release文件日志上保险（2026-09-30）.md) |
 | 096 | cargo build --release ≠ tauri build——custom-protocol feature 决定 dev/prod（不看 PROFILE），直编出 dev 模式包连 devUrl 白屏；冒烟只验后端端口是盲点，release 验证必须含真 UI 截图（2026-09-29） | 2026-09-29 | [cargo 直编出 dev 模式包（2026-09-29）](096_cargo_release直编≠tauri_build——custom-protocol注入缺失出dev模式包连devUrl白屏（2026-09-29）.md) |
 | 091 | 工具链升级后增量缓存混链——anon.*.llvm 符号 LNK2019（cargo clean -p 不够，清 target/debug/incremental 才断根；2026-10-01 三次复发（patch 升级同触发）→ [profile.dev] incremental=false 终局关闭）（2026-09-26） | 2026-09-26 | [工具链升级后增量缓存混链（2026-09-26）](091_工具链升级后增量缓存混链——anon.llvm符号LNK2019，清incremental重链（2026-09-26）.md) |

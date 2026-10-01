@@ -12,7 +12,7 @@
 // md 链接本轮不可点（09 待办：默认浏览器打开）。
 // 保存竞态纪律：保存请求绑定加载时 assetId（loadedId），切素材先 flush 在途编辑再加载新内容——
 // 旧内容不会错存到新资产；响应到达时已切走则只更新 placements 不动编辑区状态。
-import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { createMd } from "../lib/markdown";
 import { applyMdAction, toggleTaskLine } from "../lib/mdEdit";
@@ -52,6 +52,33 @@ const stateText = computed(() => {
 let loadedId: string | null = null;
 let timer = 0; // 防抖定时器（须在 load/watch 前声明——immediate watch 同步触发 load 会立即访问）
 
+// —— 滚动保活（2026-10-02 用户实机报「重新聚焦回第一行」根治，声明须在 immediate watch 前）——
+// 根因：dockview 对已激活 panel 重复 openPanel 无守卫（pane 重新聚焦 panelApi.setActive /
+// 同 group 切标签页均触发）→ panel 内容 DOM detach→reattach，同元素 scrollTop 被浏览器归零
+//（探针 cdp-md-scroll-repro 实锤：全程无 load 重跑、元素同一、display 正常）；
+// v-show 进出编辑态的 display:none 同款归零（display 恢复后滚动位置不还原）。
+// 对策：滚动位置记进组件闭包（DOM 操作够不着），dockview 重挂 / 显隐回显时恢复；
+// 切素材 load() 清零从新文档顶读。挂载与显隐的恢复接线在 load() 后（keepMo / watch）。
+const keepEls = new Map<string, () => HTMLElement | undefined>();
+const keepPos = new Map<string, number>();
+function onKeepScroll(key: string, el: HTMLElement | undefined): void {
+  if (el) keepPos.set(key, el.scrollTop);
+}
+function restoreKeeps(): void {
+  for (const [key, getEl] of keepEls) {
+    const el = getEl();
+    const saved = keepPos.get(key) ?? 0;
+    if (!el || saved <= 0 || el.scrollTop >= saved - 1) continue;
+    el.scrollTop = saved; // 首拍即改；布局未稳被钳时 nextTick 补一拍
+    void nextTick(() => {
+      if (el.scrollTop < saved - 1) el.scrollTop = saved;
+    });
+  }
+}
+keepEls.set("md", () => mdScrollRef.value);
+keepEls.set("editor", () => editorRef.value);
+keepEls.set("split", () => mdSplitBodyRef.value);
+
 // —— 编辑撤销栈（组件会话级；prevSnap = 最近一次已知的 draft+选区快照） ——
 const history = createMdHistory();
 let prevSnap: HistEntry = { text: "", start: 0, end: 0 };
@@ -65,6 +92,7 @@ async function load(): Promise<void> {
   if (!assetId) return;
   await flushSave(); // 切走前落盘在途编辑（旧资产内容保存回旧资产）
   loadedId = assetId;
+  keepPos.clear(); // 切素材：滚动记忆清零（新文档从顶读，防保活把旧位置拉回）
   source.value = "";
   draft.value = "";
   loadError.value = null;
@@ -87,6 +115,26 @@ async function load(): Promise<void> {
   }
 }
 watch(() => preview.current?.assetId, () => void load(), { immediate: true });
+
+// 保活的挂载与显隐恢复（声明在 load() 前，见上）：
+// 宿主 .dv-content-container 的 childList 变化 = dockview 重挂本 panel → 恢复；
+// 显隐切换（display:none 同款归零，MO 感知不到 DOM 未变的切换）走 watch——
+// 回预览态 md-body 恢复；分屏开关右栏新挂载恢复（进编辑态不恢复——enterEdit 设计即「光标落末尾」）
+let keepMo: MutationObserver | null = null;
+onMounted(() => {
+  const host = (mdScrollRef.value ?? editorRef.value)?.closest(".dv-content-container");
+  if (!host) return;
+  keepMo = new MutationObserver(restoreKeeps);
+  keepMo.observe(host, { childList: true });
+});
+onBeforeUnmount(() => {
+  keepMo?.disconnect();
+  keepMo = null;
+});
+watch(editing, (v) => {
+  if (!v) void nextTick(() => restoreKeeps());
+});
+watch(split, () => void nextTick(() => restoreKeeps()));
 
 // 「打开编辑器」md 直进编辑态（提示词轮，preview.pendingMdEdit 一次性信号）：
 // open() 为异步 loadAsset——置信号时文本尚未加载，消费点必须在内容就绪后（load() 成功尾）；
@@ -242,12 +290,14 @@ function linkScroll(src: HTMLElement, dst: HTMLElement): void {
 }
 
 function onEditScroll(): void {
+  onKeepScroll("editor", editorRef.value);
   const ta = editorRef.value;
   const body = mdSplitBodyRef.value;
   if (ta && body) linkScroll(ta, body);
 }
 
 function onSideScroll(): void {
+  onKeepScroll("split", mdSplitBodyRef.value);
   const ta = editorRef.value;
   const body = mdSplitBodyRef.value;
   if (ta && body) linkScroll(body, ta);
@@ -362,7 +412,7 @@ watch(
 
 <template>
   <div class="text-preview">
-    <!-- md = 编辑器：预览态渲染（v-show 保滚动位）↔ 编辑态（单栏 / 分屏左码右渲） -->
+    <!-- md = 编辑器：预览态渲染（v-show 不重建，滚动由 keepPos 保活恢复）↔ 编辑态（单栏 / 分屏左码右渲） -->
     <template v-if="isMd">
       <div
         v-show="!editing"
@@ -370,6 +420,7 @@ watch(
         class="md-body kit-scroll"
         v-html="rendered"
         @click="onMdClick"
+        @scroll.passive="onKeepScroll('md', mdScrollRef)"
       />
       <div v-if="editing" class="md-edit-wrap" :class="{ split }">
         <div class="pane" :style="split ? { flexGrow: splitRatio } : undefined">
@@ -404,7 +455,13 @@ watch(
     </template>
     <!-- txt = 编辑态（textarea 即预览，防抖自动保存） -->
     <template v-else>
-      <textarea ref="editorRef" v-model="draft" class="editor kit-scroll" spellcheck="false" />
+      <textarea
+        ref="editorRef"
+        v-model="draft"
+        class="editor kit-scroll"
+        spellcheck="false"
+        @scroll.passive="onKeepScroll('editor', editorRef)"
+      />
       <ScrollThumb :body="editorRef" />
       <span v-if="saveState" class="save-state" :class="{ fail: saveState === 'fail' }">{{ stateText }}</span>
     </template>
