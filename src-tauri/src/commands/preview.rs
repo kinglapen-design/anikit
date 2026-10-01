@@ -283,7 +283,8 @@ pub async fn open_preview_window(app: tauri::AppHandle, asset_key: String) -> Re
 /// 无窗、无错误提示）创建失败；**失败降级 transparent(false) 重建**（视觉退为实色方角，
 /// 功能可用），原始错误进日志文件（release 排障唯一线索）。
 /// 前端基态实色单态（fx 机制 2026-10-02 已拆：原降级重建追加 &fx=solid 锁实色、
-/// 云母 apply 均已随弃云母移除）；边框染色两模式同做（DWMWA_BORDER_COLOR 与透明与否无关）。
+/// 云母 apply 均已随弃云母移除）；边框 = DWM 默认半透明统一（2026-10-02 用户定
+/// 「子窗口也都放开」——建窗染 #333 撤销，与主窗口同口径）。
 pub(crate) fn open_child_window(
   app: &tauri::AppHandle,
   label: &str,
@@ -320,8 +321,6 @@ pub(crate) fn open_child_window(
       win
     }
   };
-  // 边框 = 显式染 #333（2026-09-29 修订：25H2 起 DWM 默认边框 COLOR_NONE 不再绘制，显式染色才画线）
-  crate::adapters::window_fx::paint_window_border(&win);
   Ok(win)
 }
 
