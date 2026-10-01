@@ -44,7 +44,7 @@ const props = withDefaults(
     naming?: boolean; // 行内重命名输入态（useInlineRename，速查 §4）
     namingError?: boolean; // 名称校验违规：描边 --n-danger
     switchable?: boolean; // 名称后常显切换资源库钮（2026-09-07 用户定，quick「全部」行专用）
-    badge?: string; // 文件夹图标右下角 10px 徽章图标名（junction 方向 b，2026-10-02：linked-file-badge = 挂链 / warning-small = 断链；仅 folder 型消费）
+    badge?: string; // 名称后 14px 链接标识图标名（junction 方向 b，2026-10-02 二轮：linked-file-badge = 挂链 / warning-small = 断链；仅 folder 型消费；叠图标 10px 首轮被否——看不清）
     forceState?: "" | "hover" | "selected"; // 预览页强制态
   }>(),
   {
@@ -143,12 +143,6 @@ function onClick(e: MouseEvent): void {
         <span class="fico">
           <TwoToneIcon v-if="icon" :name="icon" :size="18" :tint="tint" />
           <TwoToneIcon v-else :name="expanded ? 'folder-open' : 'folder-closed'" :size="18" :tint="tint" />
-          <!-- 链接门徽章（junction 方向 b，2026-10-02）：10px 叠图标右下角；warning-small = 双色调
-               结构图标走 TwoToneIcon 变量通道，单灰线条徽章（linked-file-badge）走 AppIcon currentColor -->
-          <span v-if="badge" class="fico-badge" aria-hidden="true">
-            <TwoToneIcon v-if="badge === 'warning-small'" :name="badge" :size="10" />
-            <AppIcon v-else :name="badge" :size="10" />
-          </span>
         </span>
       </template>
       <TwoToneIcon v-else-if="kind === 'archive'" name="archive" :size="18" :tint="tint" />
@@ -166,6 +160,13 @@ function onClick(e: MouseEvent): void {
         @pointerdown.stop
       />
       <span v-else class="nm">{{ name }}</span>
+      <!-- 链接门标识（junction 方向 b，2026-10-02 二轮：叠图标 10px 看不清，用户定挪名称后）：
+           14px——挂链 = linked-file-badge / 断链 = warning-small（双色调走 TwoToneIcon 通道）；
+           命名态隐藏（同 lib-switch） -->
+      <span v-if="badge && kind === 'folder' && !naming" class="mlink" aria-hidden="true">
+        <TwoToneIcon v-if="badge === 'warning-small'" :name="badge" :size="14" />
+        <AppIcon v-else :name="badge" :size="14" />
+      </span>
       <!-- 切换资源库钮（switchable，2026-09-07 用户定）：与图标/名称同容器等距（.lead gap 6） -->
       <button v-if="switchable && !naming" class="lib-switch" title="切换资源库" @click.stop="emit('switch', $event)">
         <AppIcon name="switch-library" :size="18" />
@@ -337,21 +338,19 @@ function onClick(e: MouseEvent): void {
   height: 18px;
   flex: none;
 }
-/* 链接门徽章（junction 方向 b，2026-10-02）：10px 叠文件夹图标右下角（无稿零件最小方案——
-   尺寸 10 / 右下 0 偏移待用户实机走查）；色档 = 亮色/三级（树行纯底，行类徽章 §57 同档），
-   选中行随图标提亮一级（.qico 同款规则）；断链行置灰由调用方传 dimmed（整行 0.4） */
-.fico-badge {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 10px;
-  height: 10px;
+/* 链接门标识（junction 方向 b，2026-10-02 二轮）：名称后 14px——叠图标 10px 用户实机看不清改定位；
+   色档 = 亮色/三级（树行纯底，行类徽章 §57 同档），选中行随图标提亮一级（.qico 同款规则）；
+   断链行置灰由调用方传 dimmed（整行 0.4） */
+.mlink {
   display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: none;
   pointer-events: none;
   color: var(--n-l3);
 }
-.selected .fico-badge,
-.force-selected .fico-badge {
+.selected .mlink,
+.force-selected .mlink {
   color: var(--n-l1);
 }
 /* quick 图标稿 = 三级（folder 自定义图标 2026-09-08 起走 TwoToneIcon 双色通道，tint 驱动不吃 color 档） */
