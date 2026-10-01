@@ -129,7 +129,8 @@
 .anikit-dock-theme .dv-pre-actions-container .dv-vue-part,
 .anikit-dock-theme .dv-left-actions-container .dv-vue-part {
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* 2026-10-02：vue-part 包装层 dockview 默认 height:100%，
+    内部须同 flex-start 按钮才真正顶对齐（原 center → 钮在 34 区居中 = 顶 6 底 2，用户实测抓出） */
   justify-content: center;
 }
 
