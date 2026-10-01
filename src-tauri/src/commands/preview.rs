@@ -307,6 +307,17 @@ pub(crate) fn open_child_window(
       // 把窗口 dark mode 置 0 → Mica 浅色/退化白底 × 深色 UI 无浅色适配；锁定后
       // DWM 退化实底恒深色。与主窗口 tauri.conf theme:"Dark" 同口径
       .theme(Some(tauri::Theme::Dark))
+      // 先隐后显防白闪（2026-10-02 用户实机报「先加载边框和投影再出内容」）：弃云母后
+      // WebView2 初始化期默认白底暴露（云母时代 set_effects(Mica) 顺带把默认背景变深色
+      // 材料遮住）——visible(false) + 页面加载完成再 show/set_focus，初始化期不可见；
+      // 降级非透明窗同此遮盖（白底初始化期同样不可见）。
+      .visible(false)
+      .on_page_load(|webview, payload| {
+        if payload.event() == tauri::webview::PageLoadEvent::Finished {
+          let _ = webview.show();
+          let _ = webview.set_focus();
+        }
+      })
       .build()
   };
   let win = match build(true) {
