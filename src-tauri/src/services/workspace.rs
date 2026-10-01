@@ -329,7 +329,10 @@ fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool, is_
 }
 
 /// 目录是否含可见子目录：单次 read_dir 提前退出——发现任一非 .anikit 子目录即 true，
-/// 开销可忽略；可见口径与 list_dir 一致（只滤缓存目录，隐藏 / 系统目录照常计入）；
+/// 开销可忽略；可见口径与 list_dir 一致（只滤缓存目录，隐藏 / 系统目录照常计入，
+/// **reparse 目录（含断链 junction）也算子目录**——跟随式 is_dir 对断链得 false，
+/// 曾把「只含断链门」的父目录误判无子级、树展开箭头消失断链子夹不可达（2026-10-02 实机报）；
+/// DirEntry::file_type 零 syscall，仅疑似 reparse 候选补一次检测）；
 /// 读取失败（权限 / 列举瞬间被删）按 false —— 扫不出子级就不出箭头
 fn has_visible_sub_dir(path: &Path) -> bool {
   let Ok(rd) = fs::read_dir(path) else { return false };
@@ -338,7 +341,8 @@ fn has_visible_sub_dir(path: &Path) -> bool {
     if p.file_name().is_some_and(|n| n.to_string_lossy() == CACHE_DIR) {
       continue;
     }
-    if p.is_dir() {
+    let ft = e.file_type().ok();
+    if p.is_dir() || (ft.is_some_and(|t| t.is_symlink()) && crate::adapters::junction::is_reparse_dir(&p)) {
       return true;
     }
   }
@@ -2186,6 +2190,15 @@ mod tests {
     assert!(en2.is_dir && en2.is_link && !en2.link_ok, "断链链接 = 目录条目 linkOk=false");
     assert!(!en2.has_sub_dir, "断链链接 read_dir 失败自然无箭头");
     assert_eq!(read_links(&root).len(), 1, "断链登记保留");
+
+    // 断链门也是子目录（2026-10-02 断链箭头修复）：只含断链门的父目录必须有展开箭头
+    fs::create_dir_all(root.join("父夹")).unwrap();
+    let t2 = dir.path().join("目标2");
+    fs::create_dir_all(&t2).unwrap();
+    crate::adapters::junction::create(&root.join("父夹/断门"), &t2).unwrap();
+    fs::remove_dir_all(&t2).unwrap(); // 目标没了 = 断链（junction 只能向活目标建）
+    let list3 = list_dir(&root, "").unwrap();
+    assert!(list3.iter().find(|e| e.name == "父夹").unwrap().has_sub_dir, "只含断链门的父目录必须有展开箭头");
   }
 
   /// 外部导入落点在链接目录内 = 落真实目标（写文件验证落盘位置）；返回 created rel 保「门」口径
