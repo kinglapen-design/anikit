@@ -24,6 +24,7 @@ import {
   unpinWsEntry,
   wsClipboardFiles,
   wsImportPaths,
+  wsMovableRels,
   wsPasteSystem,
   wsWriteClipboard,
   type WsEntry,
@@ -227,10 +228,11 @@ export const useWsStore = defineStore("ws", {
       await deleteWsEntries(rels);
       await this.refreshAround(rels);
     },
-    // 移动（拖拽 / 剪切粘贴）：目标 = 自身所在目录的条目剔除（拖拽落到当前目录行 / 已剪切所在
-    // 目录粘贴 = 无操作，防 unique_target 造出 "名_2" 副本）
+    // 移动（拖拽 / 剪切粘贴）：不可移项按 wsMovableRels 剔除（同父空移 / 目标 = 自身 /
+    // 目标在源子树内，2026-10-02 与引擎落点判定同口径前置）——全剔完 = 无操作，
+    // 防 unique_target 造出 "名_2" 副本，也防拖拽落自身 / 子孙触后端护栏报错
     async move(rels: string[], destRel: string): Promise<void> {
-      const targets = rels.filter((r) => (r.includes("/") ? r.slice(0, r.lastIndexOf("/")) : "") !== destRel);
+      const targets = wsMovableRels(rels, destRel);
       if (targets.length === 0) return;
       await moveWsEntries(targets, destRel);
       await this.refreshAround(targets, destRel);

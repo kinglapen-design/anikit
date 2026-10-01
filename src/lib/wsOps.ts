@@ -123,6 +123,18 @@ export async function moveWsEntries(relPaths: string[], destRel: string): Promis
   await invoke("ws_move", { relPaths, destRel });
 }
 
+// 移动可行性过滤（引擎落点判定与 store.move 同口径，2026-10-02 文件夹拖拽移动接入时立）：
+// 剔除三类不可移项——① 同父（目标 = 源所在目录 = 空移，防 unique_target 造「名_2」副本）；
+// ② 目标 = 源自身；③ 目标在源子树内（②③ = 后端 ws_move「不能移动到自身 / 自己的子目录」
+// 护栏的前端前置——全剔完 = 落点不高亮、松手无操作，而非报错 toast）
+export function wsMovableRels(rels: string[], destRel: string): string[] {
+  return rels.filter((r) => {
+    if (r === destRel || destRel.startsWith(`${r}/`)) return false;
+    const parent = r.includes("/") ? r.slice(0, r.lastIndexOf("/")) : "";
+    return parent !== destRel;
+  });
+}
+
 // 粘贴：复制（cut=false）或移动（cut=true）进 destRel；剪切成功后前端清剪贴板
 export async function pasteWsEntries(relPaths: string[], destRel: string, cut: boolean): Promise<void> {
   await invoke("ws_paste", { relPaths, destRel, cut });

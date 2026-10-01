@@ -4,7 +4,8 @@
 // 2026-09-26 接通；同日 _18 补 Ctrl/Shift 多选：Ctrl = 加选/减选不导航，Shift = 同级范围选，
 // 均对齐库 FolderTree 三态；展开钮挂 treeExpansion，显隐按条目 hasSubDir，展开递归 WorkspaceTree）+
 // 行包装 div 右键 wsTreeRowSpec（打开 / 固定·取消固定 / 复制·剪切·删除批量分流 / 资源管理器 / 刷新）+
-// 拖拽落点（data-folder-id="ws:"+rel，落点视觉 dropZone）。
+// 拖拽落点（data-folder-id="ws:"+rel，落点视觉 dropZone）+ 拖拽起点（行 @pointerdown →
+// beginAssetDrag，2026-10-02 用户定——ws 文件夹在素材选择域，asset kind 命中引擎 ws 全部落点）。
 import { computed, nextTick } from "vue";
 import TreeRowItem from "./items/TreeRowItem.vue";
 import WorkspaceTree from "./WorkspaceTree.vue";
@@ -12,7 +13,7 @@ import { openContextMenu } from "../lib/contextMenus";
 import { wsTreeRowSpec } from "../lib/menuSpecs/workspace";
 import { isTreeOpen, toggleOpen } from "../lib/treeExpansion";
 import { expandEnter, expandLeave } from "../lib/expandAnim";
-import { dragView } from "../lib/dragOperation";
+import { beginAssetDrag, dragView } from "../lib/dragOperation";
 import { useContentStore } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
@@ -87,6 +88,16 @@ function onRowMenu(e: MouseEvent, rel: string): void {
   void wsTreeRowSpec(rel).then((spec) => openContextMenu(e, spec, undefined));
 }
 
+// 行拖拽起点（2026-10-02 用户定：剪切移动之后补拖拽移动，ws 文件夹卡片同轮接入）——
+// ws 文件夹与文件同走素材选择域，asset kind 起拖天然命中引擎 ws 落点三分支（树行 /
+// 文件夹卡 / pane 视口）；展开钮 / 命名输入框由 beginAssetDrag 的 button·input 守卫排除；
+// 选择模式（6.2）禁用拖拽（库 beginFolderDrag 同口径）；落点守卫（同目录 / 自身 / 子孙）
+// 在引擎 wsMovableRels，拖到不可落目标不出高亮、松手无操作
+function onRowPointerDown(e: PointerEvent, rel: string): void {
+  if (usePickerStore().active) return;
+  beginAssetDrag(e, rowKey(rel));
+}
+
 // 拖拽落点视觉（PRD 02 步骤 2：树行 = ws 素材移动落点，引擎 dragView.tree 按 "ws:"+rel 命中；
 // ws 只有并入（into）语义，before/after 排序不出现）
 function dropZone(rel: string): "before" | "after" | "into" | undefined {
@@ -103,7 +114,7 @@ function dropZone(rel: string): "before" | "after" | "into" | undefined {
           :name="d.name"
           :data-folder-id="`ws:${d.relPath}`"
           :badge="linkBadge(d)"
-          :dimmed="linkDimmed(d)"
+          :dimmed="linkDimmed(d) || (dragView.assetKeys?.has(rowKey(d.relPath)) ?? false)"
           :drop-zone="dropZone(d.relPath)"
           :cut="ws.isCutKey(rowKey(d.relPath))"
           :count="ws.loadedOk(d.relPath) ? ws.fileCount(d.relPath) : undefined"
@@ -114,6 +125,7 @@ function dropZone(rel: string): "before" | "after" | "into" | undefined {
           :depth="props.depth"
           @toggle="toggleOpen(d.relPath)"
           @click="onRowClick(d.relPath, $event)"
+          @pointerdown="onRowPointerDown($event, d.relPath)"
         />
         <Transition :css="false" @enter="expandEnter" @leave="expandLeave">
           <div v-if="isTreeOpen(d.relPath)" class="ws-children">

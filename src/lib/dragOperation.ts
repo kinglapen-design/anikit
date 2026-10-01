@@ -60,6 +60,7 @@ import {
   isArchiveFolder,
   visibleTreeFolderIds,
 } from "./dragFolderOps";
+import { wsMovableRels } from "./wsOps";
 
 // 自 dragFolderOps 转出（规范第 3 条行数控制，2026-07-29）；re-export 保既有引用点不动
 export { visibleTreeFolderIds };
@@ -305,17 +306,21 @@ function updateDropTarget(e: DropPointer): void {
   const items = sess.items;
   const folderIds = sess.folderIds;
   const ctrl = e.ctrlKey || e.metaKey;
+  // ws 拖拽项 rel 列表（树行 / 文件夹卡 / pane 三处 ws 落点共用；空 = 非 ws 拖拽）
+  const wsRels = items.filter((it) => it.assetId.startsWith("ws:")).map((it) => it.assetId.slice(3));
 
   // 文件树 item（TreeItem 根带 data-folder-id；快速访问项无此属性天然不作落点）
   const treeItem = el.closest<HTMLElement>(".tree-item[data-folder-id]");
   if (treeItem) {
     const id = treeItem.getAttribute("data-folder-id")!;
     // 工作空间树行（WorkspaceTree 渲染 "ws:"+rel 合成 id，PRD 02 步骤 2）：只接 ws 素材
-    // 并入 = 移动进该目录；文件夹拖拽在工作空间无排序语义，不作落点
+    // 并入 = 移动进该目录；文件夹拖拽在工作空间无排序语义，不作落点。
+    // 不可移项（同目录 / 目标 = 自身 / 目标在源子树内，wsMovableRels）全剔完 = 不高亮不落
     if (id.startsWith("ws:")) {
-      if (sess.kind === "asset" && items.some((it) => it.assetId.startsWith("ws:"))) {
+      const targetRel = id.slice(3);
+      if (sess.kind === "asset" && wsMovableRels(wsRels, targetRel).length > 0) {
         dragView.tree = { folderId: id, zone: "into" };
-        sess.drop = async () => dropWsAssetsInto(items, id.slice(3));
+        sess.drop = async () => dropWsAssetsInto(items, targetRel);
       }
       return;
     }
@@ -353,11 +358,12 @@ function updateDropTarget(e: DropPointer): void {
   }
 
   // 工作空间文件夹卡片（FolderStrip ws 分流渲染 data-ws-folder = rel，PRD 02 步骤 2）：
-  // 只接 ws 素材并入 = 移动；文件夹卡片拖拽在 ws 无排序语义，不作落点
+  // 只接 ws 素材并入 = 移动；文件夹卡片拖拽在 ws 无排序语义，不作落点；
+  // 不可移项剔除同树行口径（拖到自身卡片 / 同目录空移不出高亮）
   const wsFolderCard = el.closest<HTMLElement>(".folder-card[data-ws-folder]");
   if (wsFolderCard) {
-    if (sess.kind === "asset" && items.some((it) => it.assetId.startsWith("ws:"))) {
-      const rel = wsFolderCard.getAttribute("data-ws-folder")!;
+    const rel = wsFolderCard.getAttribute("data-ws-folder")!;
+    if (sess.kind === "asset" && wsMovableRels(wsRels, rel).length > 0) {
       dragView.folderCardId = `ws:${rel}`;
       sess.drop = async () => dropWsAssetsInto(items, rel);
     }
@@ -433,10 +439,10 @@ function updateDropTarget(e: DropPointer): void {
         return;
       }
       if (target.startsWith("ws:")) {
-        // ws 素材按路径移动（库素材不落 ws）；**同目录禁止高亮**（2026-10-01 用户定，库分支
-        // 同口径）——被拖 ws 项全已在目标目录 = 移动无意义，不出落点
-        const wsItems = items.filter((it) => it.assetId.startsWith("ws:"));
-        if (wsItems.length > 0 && !wsItems.every((it) => it.folderId === target)) {
+        // ws 素材按路径移动（库素材不落 ws）；**不可移不出高亮**（2026-10-01 用户定同目录禁高亮，
+        // 库分支同口径；2026-10-02 文件夹拖拽接入扩为 wsMovableRels 三剔——同目录 / 自身 / 子孙
+        // 全剔完 = 移动无意义，不出落点）
+        if (wsMovableRels(wsRels, target.slice(3)).length > 0) {
           dragView.paneDrop = token;
           sess.drop = async () => dropWsAssetsInto(items, target.slice(3));
         }
@@ -542,8 +548,9 @@ async function dropAssetsInto(items: PlacementRef[], folderId: string, ctrl: boo
   await ops.movePlacements(items, folderId);
 }
 
-// ws 素材落工作空间文件夹（树行 / 文件夹卡片，PRD 02 步骤 2 拖拽移动）：assetId 剥 ws:
-// 前缀得 rel，按路径 ws_move（重名自动 " (n)" 规避）；store 局部重扫刷新（watcher 回声后端消重）
+// ws 素材落工作空间文件夹（树行 / 文件夹卡片 / pane 视口，PRD 02 步骤 2 拖拽移动）：
+// assetId 剥 ws: 前缀得 rel，按路径 ws_move（重名自动「名_n」规避）；不可移项落点判定已剔，
+// ws.move 内 wsMovableRels 再剔兜底；store 局部重扫刷新（watcher 回声后端消重）
 async function dropWsAssetsInto(items: PlacementRef[], targetRel: string): Promise<void> {
   const rels = items.filter((it) => it.assetId.startsWith("ws:")).map((it) => it.assetId.slice(3));
   if (rels.length === 0) return;
@@ -905,6 +912,17 @@ export function gridPointerDown(e: PointerEvent, onBlank: (e: PointerEvent) => v
     if (cs.isRecycleView || (cs.isVirtualView && !cs.isWorkspaceView)) return;
     const key = card.getAttribute("data-key");
     if (key) beginAssetDrag(e, key);
+    return;
+  }
+  // 工作空间文件夹卡片（data-ws-folder = rel，2026-10-02 用户定拖拽移动补起点——此前 ws
+  // 文件夹卡片只能当落点不能当拖拽源）：ws 文件夹与文件同走素材选择域（FolderStrip
+  // wsCardKey 键形 = ws:rel|ws:父级rel），asset kind 起拖天然命中引擎 ws 落点三分支
+  //（树行 / 文件夹卡 / pane），库文件夹的排序 / move_folders 语义一律不沾
+  const wsFolderCard = t.closest(".folder-card[data-ws-folder]");
+  if (wsFolderCard) {
+    const rel = wsFolderCard.getAttribute("data-ws-folder")!;
+    const parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+    beginAssetDrag(e, `ws:${rel}|ws:${parent}`);
     return;
   }
   const folderCard = t.closest(".folder-card[data-folder-id], .archive-card[data-folder-id]");

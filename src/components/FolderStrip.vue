@@ -36,7 +36,9 @@ const folderOpen = ref(true);
 // 简介行全部分流；2026-09-26 选中链接通（原「文件夹选择域不接合成 id」是步骤 2 未落地期的
 // 暂缓闸，写操作落地后遗留成"点击无选中反馈"）——ws 文件夹与文件同走素材选择域（ws: 合成键）；
 // 库侧专属域（排序并入 data-folder-id）不适用——ws 文件夹卡片改挂 data-ws-folder（= rel）
-// 作素材移动拖拽落点，落点视觉 drop-into 同位；剪切态 ws 走 ws.isCutKey（2026-10-01 接通）
+// 作素材移动拖拽落点，落点视觉 drop-into 同位；剪切态 ws 走 ws.isCutKey（2026-10-01 接通）；
+// 拖拽起点 = 引擎 gridPointerDown 的 data-ws-folder 分支 beginAssetDrag（2026-10-02 补，
+// asset kind 命中 ws 全部落点），拖拽源半透明 = dragView.assetKeys 同库文件夹卡口径
 const isWs = computed(() => props.viewKey.startsWith("ws:"));
 // 折叠切换：SectionTitle 守卫在调用方（§20——dragView.suppressClick 吞拖拽后紧随 click）
 function onFold(): void {
@@ -191,7 +193,7 @@ const gapBar = computed(() => {
         class="cell"
         :badge="isWs ? wsBadge(f) : ''"
         :selected="isWs ? selection.isSelected(wsCardKey(f.id)) : selection.isFolderSelected(f.id)"
-        :dimmed="isWs ? wsBroken(f) : (dragView.folderIds?.has(f.id) ?? false)"
+        :dimmed="isWs ? wsBroken(f) || (dragView.assetKeys?.has(wsCardKey(f.id)) ?? false) : (dragView.folderIds?.has(f.id) ?? false)"
         :cut="isWs ? ws.isCutKey(wsCardKey(f.id)) : selection.isFolderCut(f.id)"
         :naming="namingId === f.id"
         :drop-into="dragView.folderCardId === (isWs ? `ws:${f.id}` : f.id)"

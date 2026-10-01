@@ -3,9 +3,10 @@
 // 行 gap 2，位于 常用/文件夹 区块之上，后续入口行直接加进容器；首行 = 回收站，TreeRowItem quick +
 // trash 图标，点击 = 资源管理器打开系统回收站——ws 删除走系统回收站，PRD 06）+ 常用固定区块 +
 // 文件夹区块，区块标题（items/SectionTitle block「常用 / N」「文件夹 / N」）分割——2026-09-17 用户
-// 截图定；区块写法与库 LibraryView 完全同口径：段容器内 标题↔内容 gap 8、行 items gap 2、
-// 段间距 8（容器 padding 8 12 共享），hover 出展开钮点击折叠区块（FolderStrip / ArchiveStrip /
-// LibraryView 区块同先例）。
+// 截图定；区块写法与库 LibraryView 完全同口径：树容器 padding 0 + column gap 8，区块各自
+// padding 8 12（相邻区块视觉间距 8+8+8 = 24——2026-10-02 用户实机报「挤在一起」后贴稿修正，
+// 原「容器统一 padding 8 12、区块无 padding」段间仅 8），段容器内 标题↔内容 gap 8、行 items
+// gap 2，hover 出展开钮点击折叠区块（FolderStrip / ArchiveStrip / LibraryView 区块同先例）。
 // 行列表（含递归展开）在 WsTreeRows（根/子层共用）；步骤 3 废除根行「工作空间」（磁盘上无此
 // 目录，合成父级与子级同缩进视觉撞兄弟）——2026-10-02 用户实机报「根目录无法加链接：侧栏无根入口、
 // 树空白无菜单」后**根入口行回籍快速入口容器**（入口行 ≠ 合成父级，不撞旧坑：点击 = 根视口
@@ -97,7 +98,7 @@ function onTreeBlankMenu(e: MouseEvent): void {
 </script>
 
 <template>
-  <div class="ws-tree" :class="{ root: isRoot }" @contextmenu.prevent="onTreeBlankMenu">
+  <div class="ws-tree" @contextmenu.prevent="onTreeBlankMenu">
     <template v-if="isRoot">
       <!-- 快速入口容器（2026-10-01 用户定，库快速访问区块同口径：无区块标题的总容器、
            行 gap 2，位于 常用/文件夹 区块之上——后续入口行（不止回收站）直接加进本容器，
@@ -144,7 +145,7 @@ function onTreeBlankMenu(e: MouseEvent): void {
           </div>
         </div>
       </section>
-      <!-- 文件夹区块（标题↔树 gap 8 / 行 gap 2 / 段距 8，LibraryView 树容器同口径） -->
+      <!-- 文件夹区块（标题↔树 gap 8 / 行 gap 2 / 区块自带 padding 8 12，LibraryView 树容器同口径） -->
       <section class="ws-section">
         <SectionTitle
           variant="block"
@@ -169,23 +170,23 @@ function onTreeBlankMenu(e: MouseEvent): void {
 </template>
 
 <style scoped>
-/* 树容器：非根层单个子容器（gap 无意义）；根层 = 段堆叠，段间距 8 + 容器 padding 8 12
-   （LibraryView 树容器同口径：padding 由容器统一给，区块不再各自 padding） */
+/* 树容器（LibraryView 树容器同口径，稿 = 布局/主窗口/左侧边栏-树容器）：非根层单个子容器
+   （gap 无意义）；根层 = 段堆叠——容器 padding 0 + column gap 8，区块各自 padding 8 12
+  （相邻区块视觉间距 = 8+8+8 = 24，2026-10-02 用户实机报「挤在一起」后贴稿修正；
+   原「容器统一 padding 8 12、区块无 padding」段间仅 8 为偏差来源） */
 .ws-tree {
   display: flex;
   flex-direction: column;
   gap: var(--n-space-8);
 }
-.ws-tree.root {
-  padding: var(--n-space-8) var(--n-space-12);
-}
-/* 区块（LibraryView .block.tree 同口径）：标题↔内容 gap 8 */
+/* 区块（LibraryView .block 同口径）：自带 padding 8 12，标题↔内容 gap 8 */
 .ws-section {
   display: flex;
   flex-direction: column;
   gap: var(--n-space-8);
+  padding: var(--n-space-8) var(--n-space-12);
 }
-/* 快速入口容器（库 .block.quick 同口径）：无区块标题，行 gap 2；容器 padding 由 .ws-tree.root 统一给 */
+/* 快速入口容器（库 .block.quick 同口径）：无区块标题，行 gap 2（padding 随 .ws-section 统一给） */
 .ws-quick {
   gap: var(--n-space-2);
 }
@@ -201,7 +202,7 @@ function onTreeBlankMenu(e: MouseEvent): void {
 }
 /* 空态（未开空间 / 目录不存在）：正文档 + 亮色/四级居中（SidebarLeft .empty-state 同档） */
 .ws-empty {
-  padding: var(--n-space-12) 0;
+  padding: var(--n-space-12);
   text-align: center;
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
