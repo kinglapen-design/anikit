@@ -291,12 +291,12 @@ pub fn run() {
             // 一并撤除——按钮画布 = 玻璃，玻璃没了 caption 全程保留，动画/无按钮兼得，
             // 详见 window_fx::main_window_guard 注释）
             adapters::window_fx::install_main_window_guard(hwnd);
-            // 主窗口边框 = DWM 显式染 #333（2026-10-02 恢复，用户定「边框和投影交给
-            // DWM」：撤玻璃后 DWM 恢复画默认边框，10-01 错撤染色改前端自绘 → 2px 双层被
-            // 实机抓出；DWM 线与 CSS 线并集必错位双层，踩坑 063——DWM 独存唯一均匀解；
-            // 25H2 起默认边框停画，显式染色全版本一致画线）。picking 进出由
-            // set_main_border_picking 切染品牌色 ↔ 染回 #333。子窗口建窗染色同体系。
-            adapters::window_fx::paint_border(hwnd);
+            // 主窗口边框 = DWM 默认半透明独存，不显式染色（2026-10-02 用户定：
+            // 「DWM 默认的边框不是半透明的么」——09-06 六轮口径回归；撤玻璃后 DWM
+            // 默认边框正常画（本机 25H2 实证：「25H2 默认停画」只是玻璃 -1 场景特例，
+            // 不可外推无玻璃窗口）。picking 进出由 set_main_border_picking 切染品牌色 ↔
+            // 恢复 COLOR_NONE 默认。子窗口仍建窗染 #333——transparent layered 场景与
+            // 玻璃同族（默认可能停画），染色保险）。
           }
         }
 

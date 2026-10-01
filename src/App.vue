@@ -510,9 +510,10 @@ async function togglePin(): Promise<void> {
    原生按钮画不出）。窗口底色 = 基态实色-1 --n-g-a1-solid 单态（fx-mica 双态机制
    2026-10-02 已整层拆除）。
    圆角 = 前端自裁 8（最大化归零），不透明底下与 DWM 系统圆角同径无双裁透缝问题。
-   窗口边框与 picking 品牌框 = DWM 染色线独存、前端零绘制（2026-10-02 用户定
-   「边框和投影交给 DWM」：常态染 #333 / picking 切染品牌色 set_main_border_picking；
-   DWM 线与 CSS 线并集必双层，踩坑 063——前端自绘框 10-02 已撤）。 */
+   窗口边框 = DWM 默认半透明独存、前端零绘制、不显式染色（2026-10-02 用户定
+   「DWM 默认的边框不是半透明的么」——09-06 六轮口径；撤玻璃后默认边框正常画，
+   25H2「默认停画」只是玻璃场景特例；picking 切染品牌色 ↔ 恢复 COLOR_NONE，
+   set_main_border_picking）。 */
 .window {
   position: relative;
   height: 100%;
@@ -530,8 +531,7 @@ async function togglePin(): Promise<void> {
    投影交给 DWM 就行」——10-01 弃云母时按 25H2「默认边框停画」（玻璃场景实证）错撤染色
    改前端自绘，撤玻璃后 DWM 恢复画默认边框，与 ::before 自绘叠成 2px 双层被实机抓出；
    DWM 线与 CSS 线并集必错位双层（四边 3vs2、角弧异径出缝），踩坑 063——纯 DWM = 唯一
-   均匀解。常态染 #333（lib.rs paint_border，25H2 默认停画故显式染色）、picking 切染
-   品牌色（set_main_border_picking）；最大化 DWM 本不画边框，无需前端处理。
+   均匀解。最大化 DWM 本不画边框，无需前端处理。
    历史自绘实现（::before 1px --n-g6 / ::after 1px --n-brand）与云母期注释随本变更删除。 */
 /* 窗口控制浮块（2026-08-08 定案）：恒在窗口右上角（标签栏行 / 右栏标题栏同一位），
    侧栏收展时它不参与布局变化——从根上消除窗口控制的跳变；

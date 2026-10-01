@@ -30,13 +30,12 @@ pub async fn exit_app(app: tauri::AppHandle) -> Result<(), String> {
   Ok(())
 }
 
-/// 主窗口 DWM 边框色随选择模式切换（6.2 四重标识之一；踩坑 063：边框 = DWM 染色线
-/// 独存，前端零绘制——CSS 任何线/环与 DWM 线并集必错位分离成双层；2026-10-02 实机复证：
-/// 弃云母撤玻璃后 DWM 恢复画默认边框，前端 ::before 自绘与之叠成 2px 双层被用户抓出，
-/// 染色体系恢复）。
+/// 主窗口 DWM 边框色随选择模式切换（6.2 四重标识之一；踩坑 063：边框 = DWM 线
+/// 独存，前端零绘制——CSS 任何线/环与 DWM 线并集必错位分离成双层）。
 /// picking = 品牌色-常态 #0F89EC（2026-08-30 用户改定，原 品牌色-边框线 #3CDDD2 废除）、
-/// 常态 = 染回 #333（window_fx::BORDER_COLOR_NORMAL；2026-09-29 修订——Win11 25H2 起
-/// COLOR_NONE 默认边框不再绘制，恢复原「恢复默认」会丢边框线）。
+/// 常态 = **恢复 DWM 默认半透明**（DWMWA_COLOR_NONE；2026-10-02 用户定「DWM 默认的边框
+/// 不是半透明的么」——09-06 六轮口径回归；撤玻璃后默认边框正常画，25H2「默认停画」
+/// 只是玻璃 -1 场景特例。曾误改染回 #333 实色，同日回滚）。
 /// Win11 22000+ 生效，Win10 忽略（DWM 无边框可画，调用无害）；
 /// 任何失败静默 Ok——掉回常态色，观感可降级不阻断。
 #[tauri::command]
@@ -50,12 +49,9 @@ pub async fn set_main_border_picking(app: tauri::AppHandle, picking: bool) -> Re
       match w.hwnd() {
         Ok(raw) => {
           let hwnd = HWND(raw.0 as _);
-          // COLORREF 0x00BBGGRR：品牌色-常态 #0F89EC → B=0xEC G=0x89 R=0x0F
-          let border: u32 = if picking {
-            0x00EC_890F
-          } else {
-            crate::adapters::window_fx::BORDER_COLOR_NORMAL
-          };
+          // COLORREF 0x00BBGGRR：品牌色-常态 #0F89EC → B=0xEC G=0x89 R=0x0F；
+          // 退出 = DWMWA_COLOR_NONE（0xFFFFFFFF）恢复 DWM 默认半透明
+          let border: u32 = if picking { 0x00EC_890F } else { 0xFFFF_FFFF };
           let r = unsafe {
             DwmSetWindowAttribute(
               hwnd,
