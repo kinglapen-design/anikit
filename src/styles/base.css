@@ -19,8 +19,8 @@ body {
   line-height: var(--n-lh-body);
   font-weight: var(--n-fw-regular);
   color: var(--n-l1);
-  /* transparent 窗口（7.1 十七轮主窗口骨架轮）：body 恒透明，云母/实色双态底色与
-     圆角、1px 描边由 App 根容器 .window 绘制（fx-mica = 半透明-1 / 基态 = 实色-1） */
+  /* body 恒透明，窗口实色底与圆角、1px 描边由 App 根容器 .window 绘制
+     （2026-10-01 弃云母转实色单态，踩坑 071 四轮；fx-mica 暂留 dead path） */
   background: transparent;
   user-select: none;
   -webkit-user-select: none;

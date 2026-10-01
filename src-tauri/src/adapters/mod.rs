@@ -8,7 +8,7 @@
 //! - recycle_bin：系统回收站删除（SHFileOperationW FOF_ALLOWUNDO，工作空间步骤 2，PRD 06 不进库内回收站）
 //! - ffmpeg：ffmpeg / ffprobe sidecar（5.1 音视频元数据 / 抽帧 / PCM，二进制缺失返回 None 保底）
 //! - decoder：ffmpeg-next 库级解码（阶段四自研解码器：GIF/视频逐帧 RGBA 帧流；webp 归 services/anim）
-//! - window_fx：窗口背景效果（7.1 十七轮：Win11 22H2+ 云母 Mica，其余实色回退）
+//! - window_fx：窗口背景效果（2026-10-01 终局转向：弃云母恒 solid 实底，换回最大化过渡动画）
 //! - clipboard：系统剪贴板私有格式写入（8.4 发送至 AN：Flash 11 Picture，arboard 不管私有格式）
 //! - shell_menu：Windows 原生右键菜单（IContextMenu 经典菜单 + 消息转发窗口；工作空间「系统菜单」项）
 

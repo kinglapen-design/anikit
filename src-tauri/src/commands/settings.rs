@@ -30,59 +30,23 @@ pub async fn exit_app(app: tauri::AppHandle) -> Result<(), String> {
   Ok(())
 }
 
-/// 查询主窗口背景效果模式（7.1 十七轮主窗口骨架轮）："mica"（Win11 22H2+ 云母）/
-/// "solid"（实色回退 --n-g-a1-solid）。前端据此前切换 .window 底色。
+/// 查询主窗口背景效果模式："solid"（实色 --n-g-a1-solid）。2026-10-01 弃云母后恒 solid
+/// （踩坑 071 四轮：撤 Mica + 撤整窗玻璃 + caption 全程保留，换回最大化过渡动画）；
+/// 接口保留仅因前端查询链不动，前端基态即实色。
 #[tauri::command]
 pub async fn get_window_fx_mode() -> Result<String, String> {
   Ok(crate::adapters::window_fx::main_mode().to_string())
 }
 
-/// 主窗口 DWM 边框色随选择模式切换（6.2 四重标识之一；踩坑 063 六轮定：云母模式边框 =
-/// DWM 染色线独存，前端零绘制——CSS 任何线/环与 DWM 线并集必错位分离）。
-/// picking = 品牌色-常态 #0F89EC（2026-08-30 用户改定，原 品牌色-边框线 #3CDDD2 废除）、
-/// 常态 = 染回 #333（window_fx::BORDER_COLOR_NORMAL；2026-09-29 修订——Win11 25H2 起
-/// COLOR_NONE 默认边框不再绘制，恢复原「恢复默认」会丢边框线）。
-/// Win11 22000+ 生效，Win10 忽略（实色模式边框前端自绘，
-/// 调用无害）；任何失败静默 Ok——掉回常态色，观感可降级不阻断。
+/// 主窗口 DWM 边框染色——**2026-10-01 起 no-op**（弃云母转实色单态后，边框/品牌框
+/// 主权全归前端自绘：常态 ::before 1px --n-g6、picking ::after 1px --n-brand；
+/// DWM 染色线与 CSS 线并集必错位分离成双层，踩坑 063 实测，故染色全撤；
+/// 25H2 起 DWM 默认边框本就不再绘制，不染 = 前端单画干净解）。
+/// 历史：6.2 四重标识 = DWM 切染品牌色 #0F89EC（云母期口径）；2026-09-29 曾为 25H2
+/// 边框停画补显式染色——那是云母模式（前端零绘制）的修复，实色单态下由前端接管。
+/// 保留命令壳仅因前端 picker store 调用链不动；任何情况静默 Ok。
 #[tauri::command]
 pub async fn set_main_border_picking(app: tauri::AppHandle, picking: bool) -> Result<(), String> {
-  #[cfg(target_os = "windows")]
-  {
-    use tauri::Manager;
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
-    if let Some(w) = app.get_webview_window("main") {
-      match w.hwnd() {
-        Ok(raw) => {
-          let hwnd = HWND(raw.0 as _);
-          // COLORREF 0x00BBGGRR：品牌色-常态 #0F89EC → B=0xEC G=0x89 R=0x0F
-          let border: u32 = if picking {
-            0x00EC_890F
-          } else {
-            crate::adapters::window_fx::BORDER_COLOR_NORMAL
-          };
-          let r = unsafe {
-            DwmSetWindowAttribute(
-              hwnd,
-              DWMWA_BORDER_COLOR,
-              &border as *const _ as *const std::ffi::c_void,
-              std::mem::size_of_val(&border) as u32,
-            )
-          };
-          // 埋点（2026-08-30 三轮排障：选择模式角部暗点疑似切色未生效——失败原静默吞掉无信号）
-          if let Err(e) = r {
-            log::warn!("[window_fx] set_main_border_picking({picking}) DwmSetWindowAttribute 失败：{e}");
-          } else {
-            log::info!("[window_fx] 主窗口边框切色 picking={picking}");
-          }
-        }
-        Err(e) => log::warn!("[window_fx] set_main_border_picking 取 hwnd 失败：{e}"),
-      }
-    } else {
-      log::warn!("[window_fx] set_main_border_picking：main 窗口不存在");
-    }
-  }
-  #[cfg(not(target_os = "windows"))]
   let _ = (app, picking);
   Ok(())
 }

@@ -252,8 +252,9 @@ pub fn run() {
         .build(app)?;
 
       // 关闭按钮 = 隐藏到托盘，不退出（快捷搜索框要求软件常驻后台）
-      // 窗口为 transparent + 运行时按系统版本接云母（7.1 十七轮：Win11 22H2+ Mica，
-      // 其余实色回退 --n-g-a1-solid，前端 get_window_fx_mode 查询后切 .window 底色）
+      // 窗口底色 = 不透明实底 #1F1F1F（2026-10-01 终局转向：弃云母换回最大化过渡
+      // 动画——撤 Mica + 撤整窗玻璃 + WS_CAPTION 全程保留，详见 adapters/window_fx.rs
+      // 模块注释；前端 get_window_fx_mode 恒 solid 走基态实色）
       if let Some(w) = app.get_webview_window("main") {
         // 主窗口几何恢复（2026-07-28 用户定：窗口大小位置持久化；tauri.conf visible:false
         // 先隐后显防跳变，预览子窗口不记录不恢复）：显示器拔除致坐标落空时只恢复尺寸不恢复位置
@@ -279,9 +280,7 @@ pub fn run() {
         }
         let _ = w.show();
         let _ = w.set_focus();
-        // 云母接入须在 show 后（7.1 十七轮实机实证：show 前 set_effects 会把 WebView2
-        // 内容吞掉只剩云母渐变——热切换不吞；透明窗口初始化期的 DWM 背景材料与 webview
-        // 合成冲突，窗口显示后再设则两者兼容）
+        // 记录主窗口 fx 模式（2026-10-01 起恒 solid——弃云母，前端查询依据）
         adapters::window_fx::apply_main(&w);
 
         #[cfg(target_os = "windows")]
@@ -289,24 +288,15 @@ pub fn run() {
           use windows::Win32::Foundation::HWND;
           if let Ok(raw) = w.hwnd() {
             let hwnd = HWND(raw.0 as _);
-            // 主窗口守卫（2026-08-30 失焦欺骗 + 2026-09-08 走查 17 三轮终局：最大化摘
-            // caption、还原加回）。失焦欺骗：骗 DWM 恒按激活渲染——失焦不再退化云母成实色、
-            // 阴影不再收小。详见 window_fx::main_window_guard 注释
+            // 主窗口守卫（2026-08-30 失焦欺骗：骗 DWM 恒按激活渲染——失焦阴影不再收小；
+            // 曾兼管「最大化摘 caption」杀 DWM 原生按钮，2026-10-01 随弃云母撤玻璃
+            // 一并撤除——按钮画布 = 玻璃，玻璃没了 caption 全程保留，动画/无按钮兼得，
+            // 详见 window_fx::main_window_guard 注释）
             adapters::window_fx::install_main_window_guard(hwnd);
-            // 主窗口边框 = 显式染 --n-g6 #333（2026-09-29 修订：Win11 25H2 起 DWM 默认边框
-            // COLOR_NONE 不再绘制——实机剖线实证窗外→窗内直接突变无过渡、显式染色正常画线；
-            // 原 2026-09-06 六轮「DWM 默认半透明」口径在 25H2 失效，回到显式染色。
-            // 选择模式进出仍由 set_main_border_picking 切染品牌色 ↔ 染回 #333）。
-            // 云母模式边框由 DWM 沿圆角裁切路径画——恒连续恒贴边；前端 ::before 云母模式不画
-            //（DWM 线与 CSS inset 0 线有 ~0.5px 系统错位，双画恒双层，踩坑 063），
-            // 实色模式前端自绘（Win10 DWM 无默认边框可画）。
-            // 框架延伸整窗（margins -1）：配合 transparent:false（2026-08-30 六轮方案一，
-            // 用户定）——DWM 帧/backdrop 填充月牙缝 + 云母载体；全程恒 -1 不按最大化/全屏
-            // 切换（2026-09-08 三轮终局：原生按钮只依附 WS_CAPTION 样式，杀按钮 = 守卫
-            // 最大化摘 caption、还原加回，最大化云母保留，
-            // window_fx::extend_frame / sync_caption_for_state）。
-            adapters::window_fx::extend_frame(hwnd);
-            adapters::window_fx::paint_border(hwnd);
+            // 主窗口边框 = 前端自绘（实色单态：常态 ::before 1px #333、picking ::after
+            // 品牌框）——2026-10-01 撤 DWM 染色（DWM 线与 CSS 线并集必错位双层，
+            // 踩坑 063；25H2 起 DWM 默认边框本就不画，不染 = 前端单画干净解）。
+            // 子窗口边框仍由 paint_window_border 建窗染色（子窗口前端不自绘）。
           }
         }
 

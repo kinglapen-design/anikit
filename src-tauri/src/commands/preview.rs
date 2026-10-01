@@ -291,7 +291,8 @@ pub async fn open_preview_window(app: tauri::AppHandle, asset_key: String) -> Re
 /// 功能可用），原始错误进日志文件（release 排障唯一线索）。
 /// mk_url(fx_solid) 生成入口 URL——降级重建传 true 追加 &fx=solid 让前端锁实色底
 /// （非透明窗口无云母载体，否则主模式为 mica 时子窗口切透明底露出 webview 白底）。
-/// 云母 apply 仅透明窗口做；边框染色两模式同做（DWMWA_BORDER_COLOR 与透明与否无关）。
+/// 云母 apply 2026-10-01 起为 no-op（弃云母恒 solid，透明窗由前端实色底盖住）；
+/// 边框染色两模式同做（DWMWA_BORDER_COLOR 与透明与否无关）。
 pub(crate) fn open_child_window(
   app: &tauri::AppHandle,
   label: &str,
@@ -318,7 +319,8 @@ pub(crate) fn open_child_window(
   };
   let win = match build(true, false) {
     Ok(win) => {
-      // 与主窗口同口径接云母（7.1 十七轮；前端子窗口根同样查 get_window_fx_mode 切底色）
+      // 与主窗口同口径走 fx 查询（2026-10-01 起 apply 恒 solid = no-op；前端子窗口根
+      // 查 get_window_fx_mode 走基态实色底盖住透明窗）
       crate::adapters::window_fx::apply(&win);
       win
     }

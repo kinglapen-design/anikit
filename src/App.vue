@@ -520,18 +520,16 @@ async function togglePin(): Promise<void> {
   margin-top: var(--n-space-12);
 }
 /* 主窗口壳（7.1 十七轮 · 主窗口骨架轮贴稿，布局/主窗口/主窗口.md）：transparent:false +
-   WebView2 背景透明（backgroundColor:#00000000，Mica 由 DWM 在表面下合成，不需要 tao
-   transparent——其 blur-behind hack 会让圆角月牙缝 alpha=0 透底，063 六轮方案一）+
-   运行时按系统版本云母/实色双态——基态 = 实色-1 --n-g-a1-solid 回退底，fx-mica = 全透明
-   （云母直呈）；大阴影 = DWM shadow（tauri.conf shadow:true）。
-   圆角分模式（2026-08-30 实机 BUG 后改定）：实色 = 前端自裁 8（最大化归零）；云母 = DWM
-   系统圆角独裁、前端 radius 0 不裁——双层裁切的 AA 路径差在四角透出云母成缝隙（踩坑 063）。
-   窗口边框（2026-09-06 六轮用户改定 = **DWM 默认半透明**，原 2026-08-30「通用/六级实心 #333
-   染色」撤销——DWM 原生默认边框即半透明，全窗交 DWM；子窗口本就未染色同此口径）：云母 =
-   DWM 沿圆角裁切路径画独存（lib.rs 不再染色），前端 CSS 零绘制——六轮实测（win-border-measure）：
-   CSS 线与 DWM 线的并集左右/角弧必错位分离（四边 3vs2、角缝），五轮遮罩环反成分缝
-   之源，纯 DWM = 唯一均匀解（踩坑 063）；实色 = 前端 ::before 自绘（Win10 DWM 无边框
-   可画）。选择模式进出 = set_main_border_picking 切染品牌色 ↔ COLOR_NONE 恢复默认（§19）。 */
+   WebView2 不透明实底（backgroundColor:#1F1F1F）+ shadow:true（tauri.conf）。
+   2026-10-01 终局转向（踩坑 071 四轮，用户定案「动画优先于云母」）：弃云母——撤
+   set_effects(Mica) + 撤整窗玻璃（ExtendFrame(-1)，云母载体）+ WS_CAPTION 全程保留，
+   换回 DWM 最大化/还原过渡动画（动画依附 caption；按钮画布 = 玻璃，玻璃撤了 DWM
+   原生按钮画不出）。窗口底色 = 基态实色-1 --n-g-a1-solid 单态（fx-mica 永不触发，
+   其 CSS 为云母时代暂留 dead path，待实机定案后整层清理）。
+   圆角 = 前端自裁 8（最大化归零），不透明底下与 DWM 系统圆角同径无双裁透缝问题。
+   窗口边框 = 前端 ::before 自绘（1px --n-g6；DWM 染色 2026-10-01 撤——DWM 线与 CSS
+   线并集必错位双层，踩坑 063；25H2 起 DWM 默认边框本就不画）。
+   选择模式品牌框 = 前端 ::after 自绘（set_main_border_picking 已 no-op 化）。 */
 .window {
   position: relative;
   height: 100%;
