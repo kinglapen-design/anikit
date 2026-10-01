@@ -337,21 +337,21 @@ async function togglePin(): Promise<void> {
       <SplitBar v-if="!ui.rightCollapsed" side="right" />
       <SidebarRight ref="sidebarRightRef" />
       <!-- 窗口控制浮块（2026-08-08 定案恒在右上角；7.1 二十三轮贴稿 布局/主窗口/右侧边栏-窗口控制：
-           4 钮 58×46 满格 hit 区连续排（无容器底无间隙），图标 18 亮色/二级，
+           4 钮满格 hit 区连续排（无容器底无间隙）；2026-10-01 用户修订 58×36 / 图标 16），
            hover 亮色/半透明-3 底、关闭 hover 状态/禁止底；置顶 = pin-on / 置顶中 = pin-off。
            关闭由 Rust 侧 CloseRequested 拦截转托盘（原 WindowControls 口径） -->
       <div v-if="!previewParam" class="win-controls-overlay">
         <button class="wc-btn" v-tip="'窗口置顶'" @click="togglePin">
-          <AppIcon :name="ui.alwaysOnTop ? 'pin-off' : 'pin-on'" :size="18" />
+          <AppIcon :name="ui.alwaysOnTop ? 'pin-off' : 'pin-on'" :size="16" />
         </button>
         <button class="wc-btn" v-tip="'最小化'" @click="appWindow.minimize()">
-          <AppIcon name="minimize" :size="18" />
+          <AppIcon name="minimize" :size="16" />
         </button>
         <button class="wc-btn" v-tip="'最大化'" @click="appWindow.toggleMaximize()">
-          <AppIcon name="maximize" :size="18" />
+          <AppIcon name="maximize" :size="16" />
         </button>
         <button class="wc-btn close" v-tip="'关闭'" @click="appWindow.close()">
-          <AppIcon name="close-large" :size="18" />
+          <AppIcon name="close-large" :size="16" />
         </button>
       </div>
     </template>
@@ -611,20 +611,22 @@ async function togglePin(): Promise<void> {
 }
 /* 窗口控制浮块（2026-08-08 定案）：恒在窗口右上角（标签栏行 / 右栏标题栏同一位），
    侧栏收展时它不参与布局变化——从根上消除窗口控制的跳变；
-   7.1 二十三轮贴稿：浮块无 padding/gap，四钮 58×46 连续排（右栏-窗口控制稿） */
+   7.1 二十三轮贴稿：浮块无 padding/gap，四钮连续排（右栏-窗口控制稿）；
+   2026-10-01 用户修订：58×46 → 58×36、图标 18 → 16（标题栏降占位） */
 .win-controls-overlay {
   position: absolute;
   top: 0;
   right: 0;
-  height: 46px;
+  height: 36px;
   display: flex;
   z-index: 60;
 }
-/* 窗口控制钮（稿）：58×46 满格 hit 区、无容器底；图标 18 亮色/二级；
+/* 窗口控制钮（稿；2026-10-01 用户修订：58×36——标题栏 46 → 36 降占位随行高，
+   图标 18 → 16 缩小一点同轮定）：满格 hit 区、无容器底；图标 16 亮色/二级；
    hover 亮色/半透明-3 底、关闭 hover 状态/禁止底（稿 1_hover 节）；过渡 150ms 通用档 */
 .wc-btn {
   width: 58px;
-  height: 46px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;

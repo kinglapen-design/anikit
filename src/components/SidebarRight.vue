@@ -53,7 +53,7 @@ const picker = usePickerStore();
   isolation: isolate;
 }
 /* g1 栏底 + 左缘 1px 通用/三级通栏分隔线下移伪元素、只画顶行以下（2026-08-31 用户实机定）：
-   顶行 46（窗口控制行）不要底色——透主窗口云母/实色-1，与菜单栏、标签栏同一行连成一片；
+   顶行 36（窗口控制行；2026-10-01 由 46 降）不要底色——透主窗口实色-1，与菜单栏、标签栏同一行连成一片；
    aside 根不再挂 background/border-left（根挂 = 顶行也被盖成 g1 色块）。
    **z-index: -1 必须**（同日实机 BUG：无 z-index 的 absolute 伪元素列于层叠第 6 层 = 定位元素档，
    会盖住正常流内容（ActionButton / cs-slider 等无定位元素「能盲点但看不到」——pointer-events none
@@ -61,7 +61,7 @@ const picker = usePickerStore();
 .sidebar-right::before {
   content: "";
   position: absolute;
-  top: 46px;
+  top: 36px;
   left: 0;
   right: 0;
   bottom: 0;
@@ -70,10 +70,10 @@ const picker = usePickerStore();
   border-left: 1px solid var(--n-g3);
   pointer-events: none;
 }
-/* 顶行 46（稿 窗口控制行）：窗口拖拽区；稿无底色无下边框（透窗口底——云母/实色-1） */
+/* 顶行 36（稿 窗口控制行；2026-10-01 由 46 降，用户定稿修订）：窗口拖拽区；稿无底色无下边框（透窗口底） */
 .bar-title {
   width: var(--sb-w); /* 定宽：aside 收窄时裁剪不挤压 */
-  height: 46px;
+  height: 36px;
   flex: none;
 }
 </style>

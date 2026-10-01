@@ -1,6 +1,8 @@
 /* AniKit dockview 主题：
-   标签栏（7.1 十九轮贴稿 布局/主窗口/中间面板-标签栏）——栏 46 / padding 8·24·0·36 / 行 gap 12；
-   标签页 180×38（固定宽 + 过多平分收缩，2026-08-30 用户定）/ 间 gap 4 / 选中 = g1 底与内容容器
+   标签栏（7.1 十九轮贴稿 布局/主窗口/中间面板-标签栏；2026-10-01 用户修订降占位）——栏 36 /
+   padding 4·24·0·36 / 行 gap 12；
+   标签页 180×32（固定宽 + 过多平分收缩，2026-08-30 用户定；高度 38 → 32 同 2026-10-01 修订）/
+   间 gap 4 / 选中 = g1 底与内容容器
    无缝（反弧肩膀）/ 未选中透明三级字；标签页视觉全在 items/TabItem（scoped 自包含），本层只管
    dockview 外壳尺寸与栏容器排布；右键 = 39 号稿菜单（lib/tabMenus）。
    变量名见 dockview-core/dist/styles/dockview.css（dockview-theme-dark）。 */
@@ -10,7 +12,7 @@
      内容容器卡片由下方 .dv-content-container 规则提供 g1 实底） */
   --dv-group-view-background-color: transparent;
   --dv-tabs-and-actions-container-background-color: transparent;
-  --dv-tabs-and-actions-container-height: 46px;
+  --dv-tabs-and-actions-container-height: 36px;
 
   /* 标签页外壳四档全透明（视觉由 TabItem 自绘：选中 g1 / 未选中透明） */
   --dv-activegroup-visiblepanel-tab-background-color: transparent;
@@ -35,13 +37,13 @@
   --dv-drag-over-border: 1px solid var(--n-brand);
 }
 
-/* 标签栏条（稿值）：46 高 / padding 8·24·0·36 / 底透明透窗口底（十七轮定），
-   内容容器 g1 卡片顶边即分界。
+/* 标签栏条（2026-10-01 用户定稿修订 46 → 36 降占位）：36 高 / padding 4·24·0·36 /
+   底透明透窗口底（十七轮定），内容容器 g1 卡片顶边即分界。
    不用栏级 gap：void / right-actions 零宽时 gap 仍生效——+ 钮右端会凭空多 24
    （双 gap 12，2026-08-30 实机「右端空白 48 > 稿值 24」根因）；间距改挂具体元素
    （pre-actions 有钮时 margin-right 12、left-actions margin-left 12），有内容才占距 */
 .anikit-dock-theme .dv-tabs-and-actions-container {
-  padding: var(--n-space-8) var(--n-space-24) 0 var(--n-space-36);
+  padding: var(--n-space-4) var(--n-space-24) 0 var(--n-space-36);
   box-sizing: border-box;
 }
 
