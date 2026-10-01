@@ -11,8 +11,10 @@
 //（warning 状态/警告 / danger 状态/禁止 / brand 品牌/常态——稿：不危险的提示换品牌色）。
 // 单钮形态（2026-09-21 用户定：孤儿警告「知道了」一钮，稿未画按既有件扩展）：
 // cancelLabel 传空串隐藏取消钮，仅留确认。
-// 三钮形态（2026-10-02 断链修复弹窗，用户定「主按钮 重新定位 / 次按钮 删除链接 / 关闭 = 先不管」）：
-// secondaryLabel 传非空即在取消与确认之间加次钮（中性底同取消钮，稿未画按既有件扩展）。
+// 三钮形态（2026-10-02 断链修复弹窗，用户定「主按钮 重新定位 / 次按钮 删除链接 / 关闭 = 取消」）：
+// secondaryLabel 传非空即在取消与确认之间加次钮（中性底同取消钮，稿未画按既有件扩展）；
+// **三钮横向 padding 收 24**（48 定稿值是双钮账——三钮 484 > 520 宽内容区 472 必溢出，
+// flex-end 对齐把首钮顶出左缘，同日用户实机报「顶到边上没有间距」）。
 // 弹出动画 = 缩放+淡入 150ms（就近套旧 AppModal modal-pop 先例）。按钮 hover 态稿未给，待补稿。
 const props = withDefaults(
   defineProps<{
@@ -32,7 +34,7 @@ const emit = defineEmits<{ confirm: []; cancel: []; secondary: [] }>();
     <div class="kit-modal" role="dialog" :aria-label="props.title">
       <h2 class="title">{{ title }}</h2>
       <div class="body"><slot /></div>
-      <div class="actions">
+      <div class="actions" :class="{ three: !!secondaryLabel }">
         <button v-if="cancelLabel" class="btn cancel" @click="emit('cancel')">{{ cancelLabel }}</button>
         <button v-if="secondaryLabel" class="btn cancel" @click="emit('secondary')">{{ secondaryLabel }}</button>
         <button class="btn confirm" :class="[kind]" @click="emit('confirm')">{{ confirmLabel }}</button>
@@ -90,6 +92,11 @@ const emit = defineEmits<{ confirm: []; cancel: []; secondary: [] }>();
   display: flex;
   justify-content: flex-end;
   gap: var(--n-space-8);
+}
+/* 三钮形态横向 padding 收 24（双钮定稿值 48 三钮必溢出顶边，2026-10-02 实机报；两钮形态不动） */
+.actions.three .btn {
+  padding-left: var(--n-space-24);
+  padding-right: var(--n-space-24);
 }
 .btn {
   /* 宽度自适应内容 + 左右 48px（2026-09-13 实机走查用户定稿值，废 120×38 定宽） */

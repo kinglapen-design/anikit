@@ -524,14 +524,14 @@ async function togglePin(): Promise<void> {
     <!-- 通用确认弹窗（6.3：警示前置 / 删除文件夹 / 彻底删除二次确认） -->
     <AppConfirm v-if="selection.confirmPrompt" />
     <!-- 断链修复弹窗（junction 方向 b 二轮，2026-10-02 用户定：选中断链链接目录即弹——
-         主钮 重新定位… / 次钮 删除链接 / 取消 = 先不管；三触发源：单选 / 导航拦截 / 幽灵回退） -->
+         主钮 重新定位… / 次钮 删除链接 / 取消；三触发源：单选 / 导航拦截 / 幽灵回退） -->
     <ConfirmModal
       v-if="selection.brokenLinkPrompt"
       title="链接已失效"
       kind="brand"
       confirm-label="重新定位…"
       secondary-label="删除链接"
-      cancel-label="先不管"
+      cancel-label="取消"
       @confirm="onBrokenLinkRetarget"
       @secondary="onBrokenLinkRemove"
       @cancel="selection.brokenLinkPrompt = null"

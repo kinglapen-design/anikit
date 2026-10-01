@@ -530,8 +530,8 @@ const linkOnlyChecked = ref(false);
         <div class="pv-demo-cell" style="width: 240px">
           <ActionButton label="断链修复弹窗" variant="solid" size="md" @click="brokenLinkOpen = true" />
           <span class="pv-cap">
-            断链修复弹窗（junction 方向 b，2026-10-02 用户定）｜ConfirmModal brand 三钮（secondaryLabel 扩位首例）：
-            主钮 重新定位… / 次钮 删除链接 / 取消 = 先不管｜真实弹出：三钮仅关闭（预览不接后端）
+            断链修复弹窗（junction 方向 b，2026-10-02 用户定）｜ConfirmModal brand 三钮（secondaryLabel 扩位首例，
+            横向 padding 收 24——双钮定稿值 48 三钮溢出顶边）：主钮 重新定位… / 次钮 删除链接 / 取消｜真实弹出：三钮仅关闭（预览不接后端）
           </span>
         </div>
       </div>
@@ -563,7 +563,7 @@ const linkOnlyChecked = ref(false);
       title="链接已失效"
       confirm-label="重新定位…"
       secondary-label="删除链接"
-      cancel-label="先不管"
+      cancel-label="取消"
       @confirm="brokenLinkOpen = false"
       @secondary="brokenLinkOpen = false"
       @cancel="brokenLinkOpen = false"
