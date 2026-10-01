@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // 标签页 item——docs/06_UI重构/Design Token/组件/item/标签页 item/ + 布局/中间面板-标签栏
 // 选中：通用/一级底 + 圆角 8 8 0 0 + 与中间面板无缝衔接（底部两侧反弧肩膀，radial-gradient 反圆角）；
-// 未选中 hover：30 高 6px 圆角矩形罩（inset 上 0 / 左右 4 / 下 4 = 相对栏顶 4 底 4，与 + 钮同位，
-// 2026-10-02 用户定）；关闭钮常态仅选中显示。
+// 未选中 hover：6px 圆角矩形罩（inset 上下 4 / 左右 0——上下一致文字居中，相邻罩间距 = gap 4
+// 全向统一，2026-10-02 用户定）；关闭钮常态仅选中显示。
 // 锁定（稿未画）：pin-small 14 替代关闭钮，色 = 未选中亮/三级、选中亮/二级（2026-08-30 用户定）。
 import AppIcon from "../AppIcon.vue";
 
@@ -94,13 +94,13 @@ const emit = defineEmits<{ click: []; close: [] }>();
 .tab.force-selected .pin {
   color: var(--n-l2);
 }
-/* 未选中 hover：30 高罩（inset 上 0 / 左右 4 / 下 4）——相对栏 38 = 顶 4 底 4，
-   与 + 钮（30 顶对齐）同位同高（2026-10-02 用户定「hover 也用 30 高和添加一样最美观」）；
-   6px 圆角矩形罩（亮色/半透明-3） */
+/* 未选中 hover：6px 圆角矩形罩（亮色/半透明-3）——inset 上下 4 / 左右 0
+   （2026-10-02 用户定：上下一致文字居中——30 高顶 4 底 4 版文字偏下被否；
+   左右贴 tab 盒缘，相邻标签页罩间距 = 标签页 gap 4 = 罩 bottom 4，全向统一） */
 .tab:not(.selected):not(.force-selected)::after {
   content: "";
   position: absolute;
-  inset: 0 var(--n-space-4) var(--n-space-4);
+  inset: var(--n-space-4) 0;
   border-radius: var(--n-radius-6);
   background: transparent;
   transition: background var(--n-dur-100) var(--n-ease-in-out);
