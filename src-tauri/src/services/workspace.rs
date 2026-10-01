@@ -1094,7 +1094,8 @@ fn check_link_target(root: &Path, target: &Path) -> Result<PathBuf, String> {
 pub fn add_link(root: &Path, dest_rel: &str, target: &Path) -> Result<String, String> {
   let dest = resolve_under(root, dest_rel)?;
   if !dest.is_dir() {
-    return Err("目标目录不存在".to_string());
+    // 「落点」写明防误读：用户刚选完链接目标，「目标目录不存在」会被读成选中的目标（2026-10-02 实机）
+    return Err(format!("挂载落点目录不存在：{dest_rel}"));
   }
   let canon_target = check_link_target(root, target)?;
   let name = canon_target.file_name().map(|n| n.to_string_lossy().into_owned()).ok_or_else(|| "链接目标路径不合法".to_string())?;

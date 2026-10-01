@@ -58,6 +58,10 @@ export const useWsStore = defineStore("ws", {
     dirs: new Map<string, WsEntry[]>(),
     // 加载完成标记（含加载结果为空；未加载目录不在其中——树据此判定展开钮形态）
     loaded: {} as Record<string, boolean>,
+    // 目录缺失标记（2026-10-02 幽灵视口修复）：list_workspace_dir 报错（目录没了 / 越界）即置位，
+    // 加载成功清除——后端 2026-10-02 起 Err 原样上抛，「目录没了」与「空目录」由此可分；
+    // App.vue watch 据此把当前视口回退到最近存活祖先（lastWsView 跨空间重放幽灵路径的修复点）
+    missing: {} as Record<string, boolean>,
     // 工作空间内剪贴板（PRD 02 步骤 2：复制·剪切·粘贴 = 磁盘操作；2026-10-01 起同步写系统
     // 剪贴板，Explorer 可接力）：rel 清单 + cut 语义；剪切粘贴成功即清空
     clip: null as { rels: string[]; cut: boolean } | null,
@@ -135,7 +139,8 @@ export const useWsStore = defineStore("ws", {
       if (!root) return null;
       return rel === "" ? root : `${root}\\${rel.replace(/\//g, "\\")}`;
     },
-    // 加载目录（竞态守卫；未开空间 / 目录缺失 → 空列表入缓存，与后端降级口径一致）；
+    // 加载目录（竞态守卫；未开空间 → 空列表入缓存；目录缺失 / 越界 → 空列表入缓存 + missing 置位，
+    // 幽灵视口由 App.vue watch missing 回退存活祖先——2026-10-02 起后端 Err 原样上抛不再冒充空目录）；
     // 完成后对本目录补请求缺失缩略图（后台生成，经 workspace-thumbs-ready 回填）——
     // 首开示图 / fs-changed 重扫 / 手动刷新全走本路径，缩略图自补全覆盖
     async loadDir(rel: string): Promise<void> {
@@ -146,9 +151,11 @@ export const useWsStore = defineStore("ws", {
         try {
           const entries = await listWorkspaceDir(rel);
           this.dirs.set(rel, entries);
+          delete this.missing[rel];
         } catch (e) {
           console.warn(`工作空间目录刷新失败（${rel}，静默降级）：`, e);
           this.dirs.set(rel, []);
+          this.missing[rel] = true;
         } finally {
           this.loaded[rel] = true;
           this.requestMissingThumbs(rel);

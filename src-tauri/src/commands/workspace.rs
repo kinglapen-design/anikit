@@ -30,7 +30,9 @@ pub fn workspace_root(state: State<AppState>) -> Option<WorkspaceRootInfo> {
 }
 
 /// 列举工作空间目录：relPath 空串 = 根；目录在前、同名不区分大小写排序；thumbPath 仅缓存新鲜时给。
-/// 未开空间 / workspace 目录缺失 / 越界或读取失败 → Ok(空列表)（降级不报错，参照 list_space_libraries）。
+/// 未开空间 / workspace 根缺失 → Ok(空列表)（启动暂态降级）；**目录缺失 / 越界等列举失败 → Err
+/// 原样上抛**（2026-10-02 幽灵视口修复：降级成空列表会让「目录没了」与「空目录」不可分，
+/// 前端无从把幽灵视口回退到存活祖先——lastWsView 跨空间未校验重放的 05_分镜 教训）。
 /// 同步 IO + exe 图标的 COM 提取（SHELL_ICON_LOCK 进程级互斥）挪 spawn_blocking（2026-09-26
 /// 性能优化 B）：大目录列举阻塞 tokio worker 会饿死同线程的帧流 WS 等异步任务
 #[tauri::command]
@@ -40,14 +42,9 @@ pub async fn list_workspace_dir(state: State<'_, AppState>, rel_path: String) ->
   if !root.is_dir() {
     return Ok(Vec::new());
   }
-  tauri::async_runtime::spawn_blocking(move || {
-    Ok(workspace::list_dir(&root, &rel_path).unwrap_or_else(|e| {
-      log::warn!("工作空间目录列举失败（rel={rel_path}）：{e}");
-      Vec::new()
-    }))
-  })
-  .await
-  .map_err(|e| format!("工作空间目录列举任务异常：{e}"))?
+  tauri::async_runtime::spawn_blocking(move || workspace::list_dir(&root, &rel_path))
+    .await
+    .map_err(|e| format!("工作空间目录列举任务异常：{e}"))?
 }
 
 /// 在文件管理器中打开并选中（工作空间条目右键；按真实路径，约束在当前空间 workspace 内）

@@ -58,6 +58,7 @@ import { useContentStore } from "./stores/content";
 import { usePickerStore } from "./stores/picker";
 import { useSelectionStore } from "./stores/selection";
 import { useToastStore } from "./stores/toast";
+import { useTabsStore } from "./stores/tabs";
 import { useWsStore } from "./stores/ws";
 import { initPreviewListeners } from "./stores/preview";
 import { wizardState, reopenLastSession, createLibraryModalState, mergeLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener, renameLibraryState } from "./lib/libraryOps";
@@ -75,6 +76,7 @@ const content = useContentStore();
 const picker = usePickerStore();
 const selection = useSelectionStore();
 const toast = useToastStore();
+const tabs = useTabsStore();
 const ws = useWsStore();
 
 // 侧栏 / dock 宿主引用：收展动画引擎（useSidebarAnim）逐帧写宽与灌宽的 DOM 锚点
@@ -208,6 +210,18 @@ onMounted(() => {
     if (vk.startsWith("ws:")) ui.lastWsView = vk;
     else ui.lastLibView = vk;
   });
+  // 幽灵视口自愈（2026-10-02 标签页 BUG 修复）：当前 ws 视口目录已不存在（lastWsView 跨空间
+  // 重放的幽灵路径 / 外部删除）→ 回退到最近存活祖先；父级仍缺失则其 loadDir 继续置 missing
+  // 连环回退直至根（根缺失 = workspace 目录没了，openView 同视口早退不成环，root.exists 空态接管）
+  watch(
+    () => (content.sidebarSelected.startsWith("ws:") ? ws.missing[content.sidebarSelected.slice(3)] : undefined),
+    (m) => {
+      if (!m) return;
+      const rel = content.sidebarSelected.slice(3);
+      const parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+      tabs.openView(parent ? `ws:${parent}` : "ws:");
+    },
+  );
   void content.initInboxListener(); // 收件箱自动入库（3.2），App 存活期注册一次
   void content.initFpsHealListener(); // 存量视频 fps 自愈通知（2026-07-28 复验反馈修复）
   void content.initRecentListener(); // 最近使用热刷新（2026-07-29 复验反馈修复）
