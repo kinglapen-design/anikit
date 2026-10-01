@@ -61,7 +61,7 @@ import { useWsStore } from "./stores/ws";
 import { initPreviewListeners } from "./stores/preview";
 import { wizardState, reopenLastSession, createLibraryModalState, mergeLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener, renameLibraryState } from "./lib/libraryOps";
 import { playAlert } from "./lib/sounds";
-import { osFileDragHover, osFileDragHoverEnd } from "./lib/dragOperation";
+import { osFileDragHover, osFileDragHoverEnd, isOsDragOutActive } from "./lib/dragOperation";
 import { closePluginPanel, pluginPanelState } from "./lib/pluginPanel";
 import { dupScanState } from "./lib/dupScanOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
@@ -235,6 +235,9 @@ onMounted(() => {
   void initPreviewListeners(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3；扇出全部已建会话）
   void webview.onDragDropEvent((event) => {
     const p = event.payload;
+    // 自身拖出窗口期（2026-10-01 走查：拖出错、未松手原路放回居然触发导入）——OLE DoDragDrop
+    // 存续期间收到的 enter / over / drop 全是这条自己的拖：整体早退，OLE 侧报无放置 = 拖取消
+    if (isOsDragOutActive()) return;
     // DragDropEvent 的 position 是**物理像素**（PhysicalPosition，webview.d.ts 类型实证），
     // elementFromPoint / getBoundingClientRect 是 CSS 逻辑像素——显示器缩放 >100% 时必须除
     // devicePixelRatio 换算，否则落点命中区整体偏移（踩坑 096：125% 缩放下侧边栏右侧误触发、

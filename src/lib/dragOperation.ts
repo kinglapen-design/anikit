@@ -480,6 +480,14 @@ function updateDropTarget(e: DropPointer): void {
 // ws）= pane 级高亮；虚拟视图 / 回收站视口（拒入口径）不出。视觉槽与内部拖拽共用
 //（dragView.tree / folderCardId / paneDrop）——单指针同一时刻只拖一样，两引擎不并发；
 // drop / leave 调 osFileDragHoverEnd 清槽
+
+// 自身拖出窗口期（2026-10-01 走查：拖出后未松手原路放回 = 取消，不触发回导）：
+// drag_assets / ws_drag_paths 的 OLE 拖放存续期间为 true——App.vue 的 onDragDropEvent
+// 整体早退（不高亮、不落盘）
+let osDragOutActive = false;
+export function isOsDragOutActive(): boolean {
+  return osDragOutActive;
+}
 export function osFileDragHover(x: number, y: number): void {
   resetIndicators();
   const el = document.elementFromPoint(x, y) as HTMLElement | null;
@@ -744,10 +752,21 @@ function onMove(e: PointerEvent): void {
     const wsRels = ids.filter((id) => id.startsWith("ws:")).map((id) => id.slice(3));
     const libIds = ids.filter((id) => !id.startsWith("ws:"));
     endDrag(true);
-    if (wsRels.length > 0) {
-      void invoke("ws_drag_paths", { relPaths: wsRels }).catch((err) => console.warn("拖出失败", err));
-    } else if (libIds.length > 0) {
-      void invoke("drag_assets", { assetIds: libIds }).catch((err) => console.warn("拖出失败", err));
+    if (wsRels.length > 0 || libIds.length > 0) {
+      // 自身拖出窗口期标记（2026-10-01 走查「拖出去发现拖错、原路放回居然触发导入」）：
+      // OLE DoDragDrop 模态循环期间（invoke resolve = 松手 / 取消），onDragDropEvent 收到的
+      // enter / over / drop 全是这条自己的拖——App.vue 据此整体抑制（不高亮、不落盘，
+      // OLE 侧报无放置 = 拖取消）；单指针同一时刻只有一条系统拖放，布尔即可
+      osDragOutActive = true;
+      const p =
+        wsRels.length > 0
+          ? invoke("ws_drag_paths", { relPaths: wsRels })
+          : invoke("drag_assets", { assetIds: libIds });
+      void p
+        .catch((err) => console.warn("拖出失败", err))
+        .finally(() => {
+          osDragOutActive = false;
+        });
     }
     return;
   }
