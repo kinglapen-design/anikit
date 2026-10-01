@@ -562,7 +562,7 @@ onBeforeUnmount(() => {
     <EmptyFolderState v-if="folderEmpty" />
     <!-- sticky 置顶分组标题（05_区块标题：滚过顶后停留，下一组接替顶走）；C1 实底盖卡片；
          贴 viewport 顶（2026-08-19 复验：原 top=headerH+12 悬在视口中部截断首行卡片）；
-         列表模式让开钉顶列头（46+6=listExtra） -->
+         列表模式让开钉顶列头（34+6=listExtra，6px 缝由 CSS 零模糊阴影补盖——见样式注） -->
     <div
       v-if="stickyGroup && assetsOpen"
       class="sticky-group-header"
@@ -726,13 +726,17 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 0 0 2px var(--n-brand);
 }
 /* sticky 置顶分组标题（05_区块标题：滚到容器顶部停留，该组滚完下一组接替）：
-   viewport 内绝对定位（不随 canvas transform）+ g1 实底盖滚过卡片；shift 位移 = 下一组顶走 */
+   viewport 内绝对定位（不随 canvas transform）+ g1 实底盖滚过卡片；shift 位移 = 下一组顶走。
+   列表模式钉顶列头（34 高）与本标题（top = listExtra = 40）间的 6px 行距缝会漏滚动行
+   （2026-10-02 用户实机报，截图行从缝间探出）——零模糊阴影向上补 6px 同色遮盖（§7 零模糊口径），
+   标题文本站位不动；阴影随 shift 让位同上移，[34,66] 全程连续覆盖（上移部分由钉顶列头盖住） */
 .sticky-group-header {
   position: absolute;
   left: 0;
   right: 12px;
   height: 26px;
   background: var(--n-g1);
+  box-shadow: 0 -6px 0 var(--n-g1);
   z-index: 5;
 }
 /* border-1：滚动条 6px 胶囊、贴 viewport 右缘、不影响布局；命中区 12px。
