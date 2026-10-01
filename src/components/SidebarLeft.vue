@@ -167,14 +167,14 @@ const bodyRef = ref<HTMLElement>();
   min-height: 0;
   overflow: hidden;
 }
-/* 菜单栏：36 高 / padding 0 12（上下留白归 0 靠居中）/ gap 2（2026-10-01 用户定稿修订：
-   46 → 36 降标题栏占位；内容物 = 收起钮 30，上下各余 3）；定宽 --sb-w（aside 收窄时裁剪不挤压） */
+/* 菜单栏：38 高 / padding 0 12（上下留白归 0 靠居中——内容物收起钮 30，上下各余 4）/
+   gap 2（2026-10-01 用户定稿修订：46 → 38 降标题栏占位）；定宽 --sb-w（aside 收窄时裁剪不挤压） */
 .menu-bar {
   display: flex;
   align-items: center;
   gap: var(--n-space-2);
   width: var(--sb-w);
-  height: 36px;
+  height: 38px;
   box-sizing: border-box;
   padding: 0 var(--n-space-12);
   flex: none;

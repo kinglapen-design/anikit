@@ -388,7 +388,7 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
   display: flex;
   align-items: flex-end;
   gap: var(--n-space-4);
-  height: 36px;
+  height: 38px;
   padding: 0 var(--n-space-24) 0 var(--n-space-36);
   background: var(--n-g3);
   border-radius: var(--n-radius-8) var(--n-radius-8) 0 0;

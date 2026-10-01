@@ -41,7 +41,7 @@ const emit = defineEmits<{ click: []; close: [] }>();
   display: flex;
   align-items: center;
   gap: var(--n-space-8);
-  height: 32px; /* 2026-10-01 用户修订：38 → 32（标题栏 46 → 36 降占位联动） */
+  height: 34px; /* 2026-10-01 用户修订：38 → 34 = 文字 18 + 上下 8（标题栏降占位联动） */
   padding: 0 var(--n-space-16);
   min-width: 0;
   border-radius: var(--n-radius-8) var(--n-radius-8) 0 0;
