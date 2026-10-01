@@ -108,7 +108,7 @@ export async function createSpace(parentPath: string, name: string, autoImport: 
   const info = await invoke<SpaceInfo>("create_space", { parentPath, name, autoImport });
   currentSpace.name = info.name;
   currentSpace.autoImport = info.autoImport;
-  useWsStore().$reset(); // 同 openSpace：新空间 = 新工作空间，ws 缓存重置
+  void useWsStore().reseedAfterSpaceChange(); // 同 openSpace：新空间 = 新工作空间，ws 缓存复位重引
   return info;
 }
 
@@ -118,8 +118,12 @@ export async function openSpace(path: string): Promise<SpaceInfo> {
   currentSpace.autoImport = info.autoImport;
   // 工作空间绑定空间（workspace/ 在空间根下）：切空间重置 ws store——目录缓存以 rel 为键
   // 跨空间撞名、root 缓存指向旧空间（2026-10-01 性能优化③配套：视口挂载跳过以「事件维持
-  // 新鲜」为前提，缓存必须归属当前空间；顺带根治切空间后 ws 根残留旧值的存量隐患）
-  useWsStore().$reset();
+  // 新鲜」为前提，缓存必须归属当前空间；顺带根治切空间后 ws 根残留旧值的存量隐患）。
+  // 2026-10-02 启动空白修复：复位后**没有任何人会自动重扫**（initWsListeners 幂等 /
+  // ContentArea 与树的挂载加载已跑过 / 后端开空间不发事件）——reseedAfterSpaceChange
+  // 一包到底：$reset + 代际递增（在途 loadDir 丢弃）+ 立即重拉根信息，root 重新就绪
+  // 驱动 ContentArea / WorkspaceTree 的 root watch 各自重引
+  void useWsStore().reseedAfterSpaceChange();
   return info;
 }
 

@@ -60,12 +60,14 @@ const seqPackAssetId = computed(() => (viewKey.value.startsWith("seq:") ? viewKe
 // 工作空间视口（PRD 02 步骤 1）：挂载 + viewKey 变化即确保对应目录已加载——已加载即跳过
 //（2026-10-01 性能优化③：加载后由 fs-changed 精准重扫维持新鲜，挂载不再全量重读；
 // 懒加载竞态守卫在 ws store；loadDir 完成自动补请求缺失缩略图；fs-changed 经
-// initWsListeners 统一驱动 rescanDirs / 兜底 rescanLoaded，此处只管线首发）
+// initWsListeners 统一驱动 rescanDirs / 兜底 rescanLoaded，此处只管线首发）；
+// 兼 watch ws.root（2026-10-02 启动空白修复）：启动 / 切空间时挂载加载可能跑在空间就绪前
+//（loadDir 早退不入缓存），root 重新就绪（reseedAfterSpaceChange）必须补一次重引
 const ws = useWsStore();
 watch(
-  viewKey,
-  (vk) => {
-    if (vk.startsWith("ws:")) void ws.ensureDir(vk.slice(3));
+  [viewKey, () => ws.root],
+  () => {
+    if (viewKey.value.startsWith("ws:")) void ws.ensureDir(viewKey.value.slice(3));
   },
   { immediate: true },
 );

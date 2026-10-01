@@ -37,6 +37,9 @@ import type { PlacementView } from "./content";
 // 目录拉取竞态守卫：同一 rel 在途请求共享一趟（fs-changed 连发 / 树展开与视口加载并发常见）
 const inFlight = new Map<string, Promise<void>>();
 let rootPromise: Promise<void> | null = null;
+// 空间代际（2026-10-02 启动空白修复）：reseedAfterSpaceChange 递增——在途 loadDir 兑现时
+// 比对，代际不等 = 空间已切换，丢弃结果防旧空间数据写毒复位后的 store
+let epoch = 0;
 
 // 视口优先请求合批（2026-09-26 ws 缩略图性能优化 C）：可见卡上报即收集，120ms 一拍整批
 // priority=true 插队队首（固定节拍而非去抖——连续滚动时去抖永不到点，请求会被无限推迟）
@@ -133,6 +136,17 @@ export const useWsStore = defineStore("ws", {
       }
       await rootPromise;
     },
+    // 空间切换复位（libraryOps openSpace / createSpace 专用，2026-10-02 启动空白修复）：
+    // $reset 清全部缓存（目录缓存以 rel 为键跨空间撞名、root 指向旧空间）+ 代际递增
+    //（在途 loadDir 兑现按代际丢弃）+ 立即重拉根信息。**复位后没有任何人会自动重扫**
+    //（initWsListeners 幂等 / ContentArea 与树的挂载加载已跑过 / 后端开空间不发事件），
+    // root 重新就绪驱动消费方（ContentArea / WorkspaceTree）的 root watch 各自重引；
+    // ensureRoot 成功分支自带 loadPinned + 缩略图补请求
+    async reseedAfterSpaceChange(): Promise<void> {
+      epoch += 1;
+      this.$reset();
+      await this.ensureRoot();
+    },
     // rel 解析为绝对路径：rootPath + rel（后端 rel 为 / 分隔，Windows 下拼 \ ——convertFileSrc 与
     // list_workspace_dir 同源，盘符与分隔符随系统走；root 未就绪返回 null）
     absPath(rel: string): string | null {
@@ -140,26 +154,36 @@ export const useWsStore = defineStore("ws", {
       if (!root) return null;
       return rel === "" ? root : `${root}\\${rel.replace(/\//g, "\\")}`;
     },
-    // 加载目录（竞态守卫；未开空间 → 空列表入缓存；目录缺失 / 越界 → 空列表入缓存 + missing 置位，
-    // 幽灵视口由 App.vue watch missing 回退存活祖先——2026-10-02 起后端 Err 原样上抛不再冒充空目录）；
-    // 完成后对本目录补请求缺失缩略图（后台生成，经 workspace-thumbs-ready 回填）——
-    // 首开示图 / fs-changed 重扫 / 手动刷新全走本路径，缩略图自补全覆盖
+    // 加载目录（竞态守卫）。**root 未就绪（未开空间，启动暂态）直接返回不入缓存**——
+    // 2026-10-02 启动空白修复：原「未开空间 → 空列表入缓存」会把启动早期后端降级 Ok([])
+    // 当真（loaded 置位后空间就绪也无人重扫，中栏恒空白）；root 重新就绪由消费方 watch
+    // ws.root 重引（ContentArea / WorkspaceTree）。目录缺失 / 越界 → 空列表入缓存 + missing
+    // 置位（幽灵视口由 App.vue watch missing 回退存活祖先——2026-10-02 起后端 Err 原样上抛
+    // 不再冒充空目录）；完成后对本目录补请求缺失缩略图（后台生成，经 workspace-thumbs-ready
+    // 回填）——首开示图 / fs-changed 重扫 / 手动刷新全走本路径，缩略图自补全覆盖。
+    // 代际守卫：在途兑现时空间已切换（reseedAfterSpaceChange 递增 epoch）→ 整趟丢弃
     async loadDir(rel: string): Promise<void> {
       await this.ensureRoot();
+      if (!this.root) return;
       const pending = inFlight.get(rel);
       if (pending) return await pending;
+      const gen = epoch;
       const p = (async () => {
         try {
           const entries = await listWorkspaceDir(rel);
+          if (gen !== epoch) return;
           this.dirs.set(rel, entries);
           delete this.missing[rel];
         } catch (e) {
+          if (gen !== epoch) return;
           console.warn(`工作空间目录刷新失败（${rel}，静默降级）：`, e);
           this.dirs.set(rel, []);
           this.missing[rel] = true;
         } finally {
-          this.loaded[rel] = true;
-          this.requestMissingThumbs(rel);
+          if (gen === epoch) {
+            this.loaded[rel] = true;
+            this.requestMissingThumbs(rel);
+          }
         }
       })();
       inFlight.set(rel, p);

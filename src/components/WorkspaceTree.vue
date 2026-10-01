@@ -15,7 +15,7 @@
 // 树容器空白（非 .tree-item 落点）右键同出根空白菜单——根目录写操作（新建 / 添加链接文件夹…）
 // 由此有处可触发。workspace/ 目录不存在（exists=false）= 空态文案（正文档 + 亮色/四级，
 // SidebarLeft 同风格；root=null 是拉取瞬态不渲染误标；不随区块折叠隐藏）。
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import SectionTitle from "./items/SectionTitle.vue";
 import TreeRowItem from "./items/TreeRowItem.vue";
 import WsTreeRows from "./WsTreeRows.vue";
@@ -43,13 +43,25 @@ const treeOpen = ref(true);
 // 已加载即跳过（2026-10-01 性能优化③：加载后由 fs-changed 精准重扫维持新鲜，挂载不再全量
 // 重读，ContentArea 视口同口径）；根层另取固定清单（ensureRoot 已拉一次，此处兜底会话内
 // pin 变化）+ 确保各 pin 目录已加载（计数显示用）
-onMounted(() => {
+onMounted(ensureLoaded);
+
+// 空间就绪重引（2026-10-02 启动空白修复）：启动 / 切空间时挂载加载可能跑在空间就绪前
+//（loadDir 早退不入缓存、loadPinned 得空清单），root 重新就绪（reseedAfterSpaceChange）
+// 补一次重引——树与 ContentArea 各自负责本区域，不依赖切换时机
+watch(
+  () => ws.root,
+  (r) => {
+    if (r) ensureLoaded();
+  },
+);
+
+function ensureLoaded(): void {
   void ws.ensureDir(props.rel);
   if (isRoot.value) {
     void ws.loadPinned();
     for (const rel of ws.pinned) void ws.ensureDir(rel);
   }
-});
+}
 
 const subDirs = computed(() => ws.subDirs(props.rel));
 
