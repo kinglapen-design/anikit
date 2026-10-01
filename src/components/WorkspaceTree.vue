@@ -7,15 +7,19 @@
 // 段间距 8（容器 padding 8 12 共享），hover 出展开钮点击折叠区块（FolderStrip / ArchiveStrip /
 // LibraryView 区块同先例）。
 // 行列表（含递归展开）在 WsTreeRows（根/子层共用）；步骤 3 废除根行「工作空间」（磁盘上无此
-// 目录，合成父级与子级同缩进视觉撞兄弟），根视口经切 workspace 分段自动 openView("ws:") 与
-// 历史后退可达。workspace/ 目录不存在（exists=false）= 空态文案（正文档 + 亮色/四级，
+// 目录，合成父级与子级同缩进视觉撞兄弟）——2026-10-02 用户实机报「根目录无法加链接：侧栏无根入口、
+// 树空白无菜单」后**根入口行回籍快速入口容器**（入口行 ≠ 合成父级，不撞旧坑：点击 = 根视口
+// openView("ws:")，右键 = 根空白菜单 wsBlankSpec("")；名称与根标签标题同 = 「工作空间」，
+// content.viewTitle 口径；回收站行居次位——10-01「回收站最上方」是对区块而言，根入口先之）；
+// 树容器空白（非 .tree-item 落点）右键同出根空白菜单——根目录写操作（新建 / 添加链接文件夹…）
+// 由此有处可触发。workspace/ 目录不存在（exists=false）= 空态文案（正文档 + 亮色/四级，
 // SidebarLeft 同风格；root=null 是拉取瞬态不渲染误标；不随区块折叠隐藏）。
 import { computed, onMounted, ref } from "vue";
 import SectionTitle from "./items/SectionTitle.vue";
 import TreeRowItem from "./items/TreeRowItem.vue";
 import WsTreeRows from "./WsTreeRows.vue";
 import { openContextMenu } from "../lib/contextMenus";
-import { wsTreeRowSpec } from "../lib/menuSpecs/workspace";
+import { wsBlankSpec, wsTreeRowSpec } from "../lib/menuSpecs/workspace";
 import { openSystemRecycleBin } from "../lib/wsOps";
 import { useContentStore } from "../stores/content";
 import { useTabsStore } from "../stores/tabs";
@@ -76,16 +80,41 @@ function onPinMenu(e: MouseEvent, rel: string): void {
 function onOpenRecycleBin(): void {
   void openSystemRecycleBin().catch((e: unknown) => useToastStore().notify({ message: String(e), icon: "fail" }));
 }
+
+// 根入口行右键 = 根空白菜单（wsBlankSpec("")：新建文件夹 / 添加链接文件夹… / 粘贴 / 资源管理器 /
+// 系统菜单 / 刷新——根目录写操作入口，2026-10-02 用户实机报后补）；spec async 同 pin 行口径
+function onRootMenu(e: MouseEvent): void {
+  void wsBlankSpec("").then((spec) => openContextMenu(e, spec, undefined));
+}
+
+// 树容器空白右键（非 .tree-item 落点 = 行与标题之外的空位）= 同根空白菜单；行自身右键已 .stop 拦截；
+// 递归子层（v-else 分支共用本容器）不响应——根目录菜单只归根层
+function onTreeBlankMenu(e: MouseEvent): void {
+  if (!isRoot.value) return;
+  if ((e.target as HTMLElement).closest(".tree-item")) return;
+  void wsBlankSpec("").then((spec) => openContextMenu(e, spec, undefined));
+}
 </script>
 
 <template>
-  <div class="ws-tree" :class="{ root: isRoot }">
+  <div class="ws-tree" :class="{ root: isRoot }" @contextmenu.prevent="onTreeBlankMenu">
     <template v-if="isRoot">
       <!-- 快速入口容器（2026-10-01 用户定，库快速访问区块同口径：无区块标题的总容器、
            行 gap 2，位于 常用/文件夹 区块之上——后续入口行（不止回收站）直接加进本容器，
-           不动区块嵌套）：回收站行 = 库快速访问回收站同款（TreeRowItem quick + trash 图标），
+           不动区块嵌套）：首行 = 根入口「工作空间」（2026-10-02 用户实机报后回籍——点击 = 根视口，
+           右键 = 根空白菜单 wsBlankSpec("")；数量 = 根目录直接文件数同 pin 行口径）；
+           回收站行居次 = 库快速访问回收站同款（TreeRowItem quick + trash 图标），
            点击 = 资源管理器打开系统回收站；无数量（磁盘实况不跟踪系统回收站内容） -->
       <section class="ws-section ws-quick">
+        <TreeRowItem
+          kind="quick"
+          icon="workspace"
+          name="工作空间"
+          :count="ws.loadedOk('') ? ws.fileCount('') : undefined"
+          :selected="content.sidebarSelected === 'ws:'"
+          @click="openDir('')"
+          @contextmenu.prevent.stop="onRootMenu"
+        />
         <TreeRowItem kind="quick" icon="trash" name="回收站" @click="onOpenRecycleBin" />
       </section>
       <!-- 常用固定区块（步骤 3：行 = 目录快捷入口，右键可取消固定；
