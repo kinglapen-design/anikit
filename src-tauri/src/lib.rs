@@ -140,6 +140,7 @@ pub fn run() {
       inbox: std::sync::Mutex::new(None),
       workspace: std::sync::Mutex::new(Vec::new()),
       undo: std::sync::Mutex::new(core::undo::UndoManager::default()),
+      ws_searches: std::sync::Mutex::new(std::collections::HashMap::new()),
     })
     .setup(|app| {
       // 日志 release 同样启用（2026-09-29 兼容轮：朋友机透明子窗口创建失败零提示零日志，
@@ -358,6 +359,12 @@ pub fn run() {
       commands::workspace::ws_add_link,
       commands::workspace::ws_remove_link,
       commands::workspace::ws_retarget_link,
+      commands::workspace::ws_search,
+      commands::workspace::ws_search_crawl_start,
+      commands::workspace::ws_search_crawl_cancel,
+      commands::workspace::everything_status,
+      commands::workspace::launch_everything,
+      commands::workspace::open_external_url,
       commands::workspace::ws_link_out,
       commands::workspace::ws_link_overview,
       commands::workspace::ws_remove_portal,

@@ -4,13 +4,22 @@
 // 关闭 = 取消：进度条立即隐藏，后台把当前文件处理完后真实停止（cancel 语义，见 11 文档注）。
 // 2026-08-14 用户定：导出复用本组件样式与位置——导入优先（同跑时先显导入），
 // 导出总数 = 文件数（序列帧按帧计），清点期（total=0）不定态同"扫描中"。
+// 2026-10-03 工作空间搜索轮：爬盘回退进度复用本组件（用户定「参考导入文件的那个进度条」）——
+// 无导入导出且本 panel 爬盘进行中时显示：总数未知恒不定态（扫描中滑块），标签「已扫 N 个文件」，
+// 关闭 = 取消爬盘（保留已命中的部分结果）；导入 / 导出优先（同跑先显导入导出）。
 import { computed } from "vue";
 import IconButton from "./buttons/IconButton.vue";
 import { useContentStore } from "../stores/content";
+import { useSearchStore } from "../stores/search";
 
+const props = withDefaults(defineProps<{ panelId?: string }>(), { panelId: undefined });
 const content = useContentStore();
+const search = useSearchStore();
 const isExport = computed(() => !content.importProgress && !!content.exportProgress);
 const p = computed(() => content.importProgress ?? content.exportProgress);
+// 爬盘态（ws 搜索回退层）：本 panel 进行中爬盘；导入 / 导出优先
+const crawl = computed(() => (props.panelId ? search.crawlActiveFor(props.panelId) : null));
+const crawling = computed(() => !p.value && crawl.value !== null);
 
 const scanning = computed(() => (p.value ? p.value.total === 0 : false));
 const ratio = computed(() => {
@@ -18,14 +27,16 @@ const ratio = computed(() => {
   return Math.min(1, p.value.done / p.value.total);
 });
 const label = computed(() => {
+  if (crawling.value) return `正在搜索（已扫 ${crawl.value!.scanned.toLocaleString()} 个文件）`;
   if (!p.value) return "";
   if (p.value.total === 0) return isExport.value ? "正在清点文件…" : "正在扫描文件…";
   return isExport.value
     ? `正在导出文件 (${p.value.done} / ${p.value.total})`
     : `正在导入文件 (${p.value.done} / ${p.value.total})`;
 });
-// 预计剩余：按已处理速率估算（done 变化即重算）
+// 预计剩余：按已处理速率估算（done 变化即重算）；爬盘总数未知不出 ETA
 const eta = computed(() => {
+  if (crawling.value) return "";
   if (!p.value || p.value.done === 0 || p.value.total === 0) return "";
   const elapsed = (Date.now() - p.value.startedAt) / 1000;
   if (elapsed <= 0) return "";
@@ -36,19 +47,28 @@ const eta = computed(() => {
 });
 
 function cancel(): void {
+  if (crawling.value && props.panelId) {
+    search.cancelCrawlFor(props.panelId);
+    return;
+  }
   if (isExport.value) void content.cancelExport();
   else void content.cancelImport();
 }
 </script>
 
 <template>
-  <div v-if="p" class="import-progress">
-    <div class="bar" :class="{ scanning }">
+  <div v-if="p || crawling" class="import-progress">
+    <div class="bar" :class="{ scanning: scanning || crawling }">
       <div class="fill" :style="scanning ? undefined : { width: `${ratio * 100}%` }" />
     </div>
     <span class="label">{{ label }}</span>
     <span v-if="eta" class="eta">{{ eta }}</span>
-    <IconButton name="close-small" variant="plain" :title="isExport ? '取消导出' : '取消导入'" @click="cancel" />
+    <IconButton
+      name="close-small"
+      variant="plain"
+      :title="crawling ? '取消搜索' : isExport ? '取消导出' : '取消导入'"
+      @click="cancel"
+    />
   </div>
 </template>
 

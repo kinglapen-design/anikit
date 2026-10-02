@@ -171,6 +171,12 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
           <span class="pv-cap">展开成筛选 · 选中「标签」（半透明-1 + 一级）/ hover「时长」（底升半透明-2）</span>
         </div>
       </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <FloatBar mode="search" :filters="[]" />
+          <span class="pv-cap">工作空间态（2026-10-03）：filters 传空 = 无筛选能力，筛选钮整颗不渲染</span>
+        </div>
+      </div>
     </div>
 
     <div class="pv-group">

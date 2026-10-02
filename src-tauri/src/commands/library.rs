@@ -28,6 +28,9 @@ pub struct AppState {
   pub workspace: Mutex<Vec<crate::adapters::inbox_watch::WatchHandle>>,
   /// 撤销 / 重做双栈（6.0）：会话级不持久化，库切换清空
   pub undo: Mutex<crate::core::undo::UndoManager>,
+  /// 工作空间爬盘搜索任务取消标记（2026-10-03 工作空间搜索回退层）：task_id → 置位即取消，
+  /// 任务结束从表中移除（imports 同构）
+  pub ws_searches: Mutex<std::collections::HashMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -537,6 +540,7 @@ mod tests {
       inbox: Mutex::new(None),
       workspace: Mutex::new(Vec::new()),
       undo: Mutex::new(crate::core::undo::UndoManager::default()),
+      ws_searches: Mutex::new(std::collections::HashMap::new()),
     };
     (dir, state)
   }

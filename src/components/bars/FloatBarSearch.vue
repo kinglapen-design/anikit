@@ -9,6 +9,9 @@
 // 自动实时搜索（input 即 v-model）；搜索图标点击 = 预留（未来展开向量/AI 搜索选项，稿 prose）。
 // 业务接入（2026-08-31 悬浮栏接入轮）：expose focus/blur + escape emit 供业务壳 FloatBarHost
 //（Ctrl+F 聚焦 / Esc 清空失焦口径）。
+// 2026-10-03 工作空间搜索轮：filters 传空 = 无筛选能力视口（ws 磁盘实况无附加数据可筛）——
+// 筛选钮与展开链整颗不渲染（原恒渲染，走查被点破）；enter emit = 回退爬盘显式触发键（ws 无
+// Everything 时不跟即时搜索混，Enter 才开扫，定案见 PRD 02 搜索节）。
 import { onMounted, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import "./bars.css";
@@ -35,6 +38,7 @@ const emit = defineEmits<{
   "expanded-change": [v: boolean]; // FloatBar 宽度重测挂钩
   "focused-change": [v: boolean];
   escape: []; // Esc（业务壳口径：清空并失焦，FloatBarHost）
+  enter: []; // Enter（2026-10-03 ws 回退爬盘显式触发键；其余语境 = 立即重搜一次）
 }>();
 const query = defineModel<string>("query", { default: "" });
 
@@ -92,14 +96,16 @@ function onFiltersWheel(e: WheelEvent): void {
       @focus="setFocused(true)"
       @blur="setFocused(false)"
       @keydown.esc="emit('escape')"
+      @keydown.enter="emit('enter')"
     />
     <!-- 栏内按钮一律 @mousedown.prevent：阻止 input 失焦——否则聚焦态点筛选时 blur 抢先触发
          壳宽 450→250 收缩动画，按钮随壳边移出指针下方，mouseup 落空 click 不成立（2026-09-09 走查修复）；
          顺带保持输入聚焦，点筛选/收起后可继续敲字 -->
-    <button v-if="!expanded" class="fbs-ic filter" @mousedown.prevent @click="setExpanded(true)">
+    <!-- 筛选钮（2026-10-03）：filters 传空 = 无筛选能力视口（ws）整颗不渲染，展开链同理 -->
+    <button v-if="!expanded && filters.length > 0" class="fbs-ic filter" @mousedown.prevent @click="setExpanded(true)">
       <AppIcon name="filter" :size="18" />
     </button>
-    <template v-else>
+    <template v-else-if="expanded && filters.length > 0">
       <div class="fb-group fbs-filters" @wheel="onFiltersWheel">
         <button
           v-for="f in filters"

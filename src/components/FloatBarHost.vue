@@ -65,6 +65,9 @@ const barVisible = computed(() => mdActive.value || !(props.previewActive && !sp
 const hasSearch = computed(() => !!props.panelId && !!props.viewKey);
 const draft = ref(props.panelId ? search.draftFor(props.panelId) : "");
 const activeFilters = ref<string[]>([]); // 筛选按钮组点亮不接业务（本地切换；筛选弹窗另轮）
+// ws 视口 = 磁盘实况无附加数据可筛（2026-10-03 用户定「没有用」）：filters 传空 → 筛选钮整颗不渲染
+const wsView = computed(() => !!props.viewKey?.startsWith("ws:"));
+const searchFilters = computed(() => (wsView.value ? [] : undefined));
 const floatBarRef = ref<InstanceType<typeof FloatBar>>();
 
 watch(draft, (v) => {
@@ -98,6 +101,10 @@ function onEscape(): void {
   draft.value = "";
   floatBarRef.value?.blurSearch();
   emit("requestHide");
+}
+// Enter（2026-10-03 ws 搜索轮）：库 / Everything 可用 = 立即重搜；ws 无 Everything = 显式触发爬盘回退
+function onEnter(): void {
+  if (hasSearch.value) search.enterPressed(props.panelId!, props.viewKey!);
 }
 onMounted(() => {
   // 热重载 / 布局恢复：残留内容命中可能已失效，补搜一次恢复结果态
@@ -310,9 +317,11 @@ function noteRemove(i: number): void {
       v-bind="playAttrs"
       v-model:query="draft"
       :active="activeFilters"
+      :filters="searchFilters"
       @update:progress="progressModel = $event"
       @filter-toggle="toggleFilter"
       @escape="onEscape"
+      @enter="onEnter"
       @toggle-play="spec?.togglePlay()"
       @seek-back="spec?.seekBack?.()"
       @seek-forward="spec?.seekForward?.()"

@@ -45,8 +45,10 @@ const props = withDefaults(
     // 3.6 搜索态（ContentArea 判定传入）：分组失效平铺 / 文件夹区块隐藏 / 档案区显示命中档案
     searching?: boolean;
     searchArchives?: FolderNode[];
+    // ws 搜索降级引导（2026-10-03）：非空 = 空态改显引导文案（Everything 未运行按 Enter 爬盘）
+    searchHint?: string;
   }>(),
-  { panelActive: false, searching: false, searchArchives: () => [] },
+  { panelActive: false, searching: false, searchArchives: () => [], searchHint: "" },
 );
 const ui = useUiStore();
 const content = useContentStore();
@@ -556,8 +558,9 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
-    <!-- 搜索空态（3.6，用户定：中央「无搜索结果」极淡档；pointer-events none 不挡空白右键 / 框选） -->
-    <div v-if="searchEmpty" class="search-empty">无搜索结果</div>
+    <!-- 搜索空态（3.6，用户定：中央「无搜索结果」极淡档；pointer-events none 不挡空白右键 / 框选）；
+         2026-10-03 ws 降级：searchHint 非空 = Everything 不可用引导文案（按 Enter 爬盘） -->
+    <div v-if="searchEmpty" class="search-empty">{{ searchHint || "无搜索结果" }}</div>
     <!-- 空文件夹空态（7.1 内容容器轮贴稿）：三区皆空 → 中央插画 + 导入双钮（组件根穿透，仅钮可点） -->
     <EmptyFolderState v-if="folderEmpty" />
     <!-- sticky 置顶分组标题（05_区块标题：滚过顶后停留，下一组接替顶走）；C1 实底盖卡片；

@@ -117,7 +117,8 @@ pub struct ThumbReady {
 /// canonical。词法是命门：rel 恰等于 link.rel 时（对「门」本身重命名 / 移动 / 删除 / 列目录）
 /// fs 操作必须打在 junction 本体上而不是目标上；命中链接的后代路径也统一词法
 ///（shell 菜单 / 拖出 / 剪贴板都要 junction 视角路径）
-fn resolve_under(root: &Path, rel: &str) -> Result<PathBuf, String> {
+/// pub(crate)：ws_search 的范围锚点解析同闸（2026-10-03 工作空间搜索）
+pub(crate) fn resolve_under(root: &Path, rel: &str) -> Result<PathBuf, String> {
   let mut out = root.to_path_buf();
   let mut norm = String::new(); // / 分隔词法 rel（登记链接比对用；组件重建，\ 输入也归一）
   for comp in Path::new(rel).components() {

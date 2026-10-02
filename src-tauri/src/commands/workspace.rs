@@ -467,3 +467,123 @@ pub fn ws_unpin(state: State<AppState>, rel_path: String) -> Result<Vec<String>,
 pub fn open_system_recycle_bin() -> Result<(), String> {
   shell_open::open_recycle_bin()
 }
+
+// ---------- 工作空间搜索（PRD 02「搜索」双层架构，2026-10-03 落地）----------
+
+/// Everything 能力状态（前端降级 UI 依据）：running（含版本）/ installedNotRunning（可代拉起）/ notInstalled
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EverythingStatusInfo {
+  pub status: &'static str,
+  pub version: Option<String>,
+}
+
+/// Everything 能力探测（FindWindow + 注册表，轻量；前端 ws 搜索分流前查询）
+#[tauri::command]
+pub fn everything_status() -> EverythingStatusInfo {
+  match crate::adapters::everything::detect() {
+    crate::adapters::everything::EverythingStatus::Running { version: (a, b, c, d) } => {
+      EverythingStatusInfo { status: "running", version: Some(format!("{a}.{b}.{c}.{d}")) }
+    }
+    crate::adapters::everything::EverythingStatus::InstalledNotRunning { .. } => {
+      EverythingStatusInfo { status: "installedNotRunning", version: None }
+    }
+    crate::adapters::everything::EverythingStatus::NotInstalled => EverythingStatusInfo { status: "notInstalled", version: None },
+  }
+}
+
+/// 代拉起 Everything（「已安装未运行」态的 toast 动作；启动用户自己的软件无授权问题，2026-10-02 定案）
+#[tauri::command]
+pub fn launch_everything() -> Result<(), String> {
+  match crate::adapters::everything::detect() {
+    crate::adapters::everything::EverythingStatus::Running { .. } => Ok(()),
+    crate::adapters::everything::EverythingStatus::InstalledNotRunning { exe: Some(exe) } => shell_open::open(&exe),
+    _ => Err("未检测到 Everything 安装，请先下载安装".to_string()),
+  }
+}
+
+/// 打开外部链接（默认浏览器；仅 http/https——协议白名单在适配器层）
+#[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+  shell_open::open_url(&url)
+}
+
+/// ws 搜索响应：status = ok / everythingUnavailable（前端据此落回退层引导）；entries = 命中条目
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WsSearchResponse {
+  pub status: &'static str,
+  pub entries: Vec<WsEntry>,
+}
+
+/// 工作空间搜索（Everything 层，实时随输入）：query = 原始草稿（`~` 全局 / `//` 前缀后端同规则剥）；
+/// view_rel = 当前视口目录（`~` 时后端换算根）。同步 IPC 挪 spawn_blocking（踩坑 074 口径）
+#[tauri::command]
+pub async fn ws_search(state: State<'_, AppState>, query: String, view_rel: String) -> Result<WsSearchResponse, String> {
+  let Some(space) = state.space.lock().map_err(|e| e.to_string())?.clone() else { return Err("请先打开储存空间".to_string()) };
+  let root = space.root.join(WORKSPACE_DIR);
+  tauri::async_runtime::spawn_blocking(move || {
+    let (keywords, global) = crate::services::ws_search::parse_query(&query);
+    if keywords.is_empty() {
+      return Ok(WsSearchResponse { status: "ok", entries: Vec::new() });
+    }
+    let scope = if global { String::new() } else { view_rel };
+    match crate::services::ws_search::search(&root, &scope, &keywords)? {
+      crate::services::ws_search::WsSearchOutcome::Hits(entries) => Ok(WsSearchResponse { status: "ok", entries }),
+      crate::services::ws_search::WsSearchOutcome::Unavailable => Ok(WsSearchResponse { status: "everythingUnavailable", entries: Vec::new() }),
+    }
+  })
+  .await
+  .map_err(|e| format!("工作空间搜索任务异常：{e}"))?
+}
+
+/// 爬盘任务 id 计数（imports 同构）
+static NEXT_CRAWL_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// 回退爬盘启动（Enter 显式触发；**不接 `~` 全局**——全局慢搜开销大无意义，2026-10-03 用户定案，
+/// 前端走通知栏指路 Everything，后端拒收兜底）。立即返回 task_id；进度 / 命中批次经
+/// ws-search-crawl 事件流式推送（含 done / cancelled 收尾拍）
+#[tauri::command]
+pub fn ws_search_crawl_start(app: AppHandle, state: State<AppState>, query: String, view_rel: String) -> Result<u64, String> {
+  use tauri::{Emitter, Manager};
+  let Some(space) = state.space.lock().map_err(|e| e.to_string())?.clone() else { return Err("请先打开储存空间".to_string()) };
+  let (keywords, global) = crate::services::ws_search::parse_query(&query);
+  if global {
+    return Err("全局搜索需要 Everything 支持（爬盘回退仅搜当前目录）".to_string());
+  }
+  if keywords.is_empty() {
+    return Err("请输入搜索关键字".to_string());
+  }
+  let root = space.root.join(WORKSPACE_DIR);
+  let task_id = NEXT_CRAWL_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+  let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+  state.ws_searches.lock().map_err(|e| e.to_string())?.insert(task_id, cancel.clone());
+  std::thread::spawn(move || {
+    let emit = |ev: crate::services::ws_search::CrawlEvent| {
+      if let Err(e) = app.emit(crate::services::ws_search::CRAWL_EVENT, ev) {
+        log::debug!("爬盘进度事件发送失败（前端可能已关闭）：{e}");
+      }
+    };
+    let result = crate::services::ws_search::crawl(&root, &view_rel, &keywords, &cancel, |scanned, hits| {
+      emit(crate::services::ws_search::CrawlEvent { task_id, scanned, hits, done: false, cancelled: false });
+    });
+    let cancelled = cancel.load(std::sync::atomic::Ordering::Relaxed);
+    if let Err(e) = &result {
+      log::warn!("爬盘搜索失败（{view_rel}）：{e}");
+    }
+    emit(crate::services::ws_search::CrawlEvent { task_id, scanned: result.unwrap_or(0), hits: Vec::new(), done: true, cancelled });
+    if let Ok(mut reg) = app.state::<AppState>().ws_searches.lock() {
+      reg.remove(&task_id);
+    }
+  });
+  Ok(task_id)
+}
+
+/// 取消爬盘（进度条关闭钮 / Esc 清空搜索；未知 id 静默——任务可能已自然结束）
+#[tauri::command]
+pub fn ws_search_crawl_cancel(state: State<AppState>, task_id: u64) -> Result<(), String> {
+  if let Some(flag) = state.ws_searches.lock().map_err(|e| e.to_string())?.get(&task_id) {
+    flag.store(true, std::sync::atomic::Ordering::Relaxed);
+  }
+  Ok(())
+}

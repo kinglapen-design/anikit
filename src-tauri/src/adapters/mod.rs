@@ -13,9 +13,12 @@
 //! - shell_menu：Windows 原生右键菜单（IContextMenu 经典菜单 + 消息转发窗口；工作空间「系统菜单」项）
 //! - junction：NTFS 目录链接（工作空间「外部文件夹挂进 WS」方向 b：创建 / 读目标 / 删除 reparse point）
 //! - space_icon：储存空间文件夹品牌图标（desktop.ini IconResource + 文件夹只读位，Eagle .library 同款）
+//! - everything：Everything 搜索 IPC（工作空间搜索 2026-10-03：手写 1.4 WM_COPYDATA QUERY2，
+//!   能力三态探测 + 回包接收窗，不引 DLL / es.exe 零分发授权问题）
 
 pub mod clipboard;
 pub mod decoder;
+pub mod everything;
 pub mod ffmpeg;
 pub mod inbox_drive;
 pub mod inbox_watch;

@@ -88,9 +88,18 @@ const previewActive = computed(() => !!session.assetKey);
 // 命中键过滤叠加在范围基底上——全局范围（chip / ~ 前缀）基底 = 全库（quick:all 不过滤即全量，
 // 回收站本就不在 placements 内），当前范围基底 = 本视口（placementsFor 已含递归 / quick 口径）。
 //（复验修复：原恒取本视口基底——空文件夹全局搜索时命中键在基底外被滤光，探针 S14 钉）
+// 2026-10-03 ws 搜索轮：ws 视口搜索态数据源 = search store 的 wsEntries 合成（后端 Everything /
+// 爬盘命中跨目录，不在本视口目录缓存内，不能走命中键过滤基底链；键口径与合成链一致）
 const searching = computed(() => search.isActive(panelApi.id));
+const wsView = computed(() => viewKey.value.startsWith("ws:"));
+// ws 降级引导空态文案（2026-10-03 ws 搜索轮）：Everything 不可用且未发起爬盘 → 「按 Enter」引导；
+// 其余搜索态空态 = 既有「无搜索结果」（AssetGrid 渲染位）
+const searchHint = computed(() =>
+  wsView.value && search.wsNeedsEnter(panelApi.id) ? "Everything 未运行——按 Enter 遍历搜索当前目录（全局搜索需 Everything 支持）" : "",
+);
 const items = computed(() => {
   if (!searching.value) return content.placementsFor(viewKey.value);
+  if (wsView.value) return search.wsPlacementsFor(panelApi.id);
   const hits = search.hitsFor(panelApi.id);
   const base = search.effectiveGlobal(panelApi.id)
     ? content.placementsFor("quick:all")
@@ -145,7 +154,7 @@ function onRootPointerdown(e: PointerEvent): void {
       <!-- 视口主体列：工具栏 + 卡片列表；多功能悬浮栏浮于下方（不占布局） -->
       <div class="viewport-main">
         <ContentTitleBar :view-key="viewKey" :panel-id="panelApi.id" />
-        <ImportProgressBar />
+        <ImportProgressBar :panel-id="panelApi.id" />
         <section class="asset-section">
           <SequencePackView v-if="seqPackAssetId" :asset-id="seqPackAssetId" :panel-active="active" />
           <AssetGrid
@@ -155,6 +164,7 @@ function onRootPointerdown(e: PointerEvent): void {
             :panel-active="active"
             :searching="searching"
             :search-archives="searchArchiveNodes"
+            :search-hint="searchHint"
           />
         </section>
       </div>

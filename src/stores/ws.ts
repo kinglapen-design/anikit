@@ -420,7 +420,8 @@ export const useWsStore = defineStore("ws", {
 // 自动重排恢复）；modifiedAt/importedAt 由 mtimeMs
 // 转 RFC3339（? v= URL 版本戳 + 排序键）；frameCount/animated 恒 null/false（GIF 预览走直渲源
 // 原生循环）；wsPath = 源文件绝对路径（预览按路径分支与卡片悬停判定用，库 Placement 无此字段）
-function wsEntryToPlacement(e: WsEntry, parentRel: string, rootPath: string | null): PlacementView {
+// export（2026-10-03 工作空间搜索）：搜索命中条目（stores/search wsEntries）经本函数合成进网格
+export function wsEntryToPlacement(e: WsEntry, parentRel: string, rootPath: string | null): PlacementView {
   const iso = e.mtimeMs > 0 ? new Date(e.mtimeMs).toISOString() : "";
   return {
     assetId: `${WS_ID_PREFIX}${e.relPath}`,

@@ -23,6 +23,12 @@ pub fn open_recycle_bin() -> Result<(), String> {
   imp::open_recycle_bin()
 }
 
+/// 打开外部链接（默认浏览器，2026-10-03 工作空间搜索「下载 Everything」指路）：
+/// 仅放行 http/https（协议白名单防 file:// 等滥用）
+pub fn open_url(url: &str) -> Result<(), String> {
+  imp::open_url(url)
+}
+
 #[cfg(windows)]
 mod imp {
   use std::path::Path;
@@ -95,6 +101,19 @@ mod imp {
       Err(format!("打开系统回收站失败，错误码 {}", result.0 as usize))
     }
   }
+
+  pub(super) fn open_url(url: &str) -> Result<(), String> {
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+      return Err("仅支持 http(s) 链接".to_string());
+    }
+    let hurl = HSTRING::from(url);
+    let result = unsafe { ShellExecuteW(None, w!("open"), PCWSTR::from_raw(hurl.as_ptr()), None, None, SW_SHOW) };
+    if (result.0 as usize) > 32 {
+      Ok(())
+    } else {
+      Err(format!("打开链接失败（{url}），错误码 {}", result.0 as usize))
+    }
+  }
 }
 
 #[cfg(not(windows))]
@@ -111,6 +130,9 @@ mod imp {
     Err("暂不支持".to_string())
   }
   pub(super) fn open_recycle_bin() -> Result<(), String> {
+    Err("暂不支持".to_string())
+  }
+  pub(super) fn open_url(_url: &str) -> Result<(), String> {
     Err("暂不支持".to_string())
   }
 }
