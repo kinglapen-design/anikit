@@ -10,6 +10,8 @@
 // 空白 = 新建文件夹 / 添加链接文件夹… / 粘贴（内部剪贴板非空 || 系统剪贴板含文件——2026-10-01 PRD 02-13 扩，
 // spec 构建 async：build 前 refreshSystemClip）│ 在资源管理器中显示 / 系统菜单（目录背景版——经典版
 // 新建 / 排序方式 / 查看 / 刷新 / 属性 在其中）│ 刷新。
+// 侧栏「文件夹」区块标题（2026-10-03 用户定，库区块头同口径悬停动作钮）：+ = 根目录新建文件夹
+//（createAndRename("") 同径）；⋯ = 添加链接文件夹…（挂根）/ 管理工作空间面板。
 // 链接门（junction 方向 b）：「添加链接文件夹…」= 系统目录选择器 → ws_add_link（挂载名 = 目标目录名，
 // 重名后端 _n；校验拒绝中文错 toast）；「重新定位… / 删除链接」仅当条目是链接门（ws.linkState 查父目录
 // 缓存，未加载按非链接不列——条件出现口径速查 §25）；删除链接 = 只删门进系统回收站，目标内容不动；
@@ -45,6 +47,7 @@ import {
 } from "../wsOps";
 import { copyText, importWsToLibraryFlow } from "../menuOps";
 import { useToastStore } from "../../stores/toast";
+import { useUiStore } from "../../stores/ui";
 
 const fail = (e: unknown) => useToastStore().notify({ message: String(e), icon: "fail" });
 
@@ -123,7 +126,8 @@ function confirmRemoveLink(rel: string, name: string): void {
 // 新建文件夹共享入口（库「先建后命名」口径移植）：默认名创建（ws store 避让重名），
 // 当前视口正是父目录时进新卡片的行内命名态（FolderStrip watcher 消费；其余入口如树行
 // 新建子文件夹不在当前视口条带内，不进命名态——与库树命名态在卡片缺位时的降级同理）
-async function createAndRename(rel: string): Promise<void> {
+//（export = 侧栏「文件夹」区块标题 + 钮复用同径，rel "" = 根目录新建，2026-10-03）
+export async function createAndRename(rel: string): Promise<void> {
   const ws = useWsStore();
   try {
     const name = await ws.createFolder(rel);
@@ -222,6 +226,16 @@ export async function wsBlankSpec(rel: string): Promise<CtxEntry[]> {
     { label: "刷新", action: () => refreshDir(rel) },
   );
   return entries;
+}
+
+// 侧栏「文件夹」区块标题「更多」钮菜单（2026-10-03 用户定：区块头悬停动作钮补齐，
+// 与库区块头 ⋯ 钮同口径指针位弹出）：添加链接文件夹（destRel "" = 挂根，管理面板
+// 添加钮同径）/ 管理工作空间面板（appMenu「管理工作空间」同入口，ui.wsManageOpen）
+export function wsFolderSectionSpec(): CtxEntry[] {
+  return [
+    { label: "添加链接文件夹…", action: () => void addLinkFlow("") },
+    { label: "管理工作空间", action: () => void (useUiStore().wsManageOpen = true) },
+  ];
 }
 
 // ws 文件夹菜单主体（文件夹卡片 / 树行共用）：树行无行内命名态 → rename = false 摘重命名项。

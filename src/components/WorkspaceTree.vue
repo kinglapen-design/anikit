@@ -3,7 +3,8 @@
 // 行 gap 2，位于 常用/文件夹 区块之上，后续入口行直接加进容器；首行 = 回收站，TreeRowItem quick +
 // trash 图标，点击 = 资源管理器打开系统回收站——ws 删除走系统回收站，PRD 06）+ 常用固定区块 +
 // 文件夹区块，区块标题（items/SectionTitle block「常用 / N」「文件夹 / N」）分割——2026-09-17 用户
-// 截图定；区块写法与库 LibraryView 完全同口径：树容器 padding 0 + column gap 8，区块各自
+// 截图定；「文件夹」标题悬停动作钮 2026-10-03 用户定（库区块头同口径）：+ = 根目录新建文件夹，
+// ⋯ = 添加链接文件夹…（挂根）/ 管理工作空间面板；区块写法与库 LibraryView 完全同口径：树容器 padding 0 + column gap 8，区块各自
 // padding 8 12（相邻区块视觉间距 8+8+8 = 24——2026-10-02 用户实机报「挤在一起」后贴稿修正，
 // 原「容器统一 padding 8 12、区块无 padding」段间仅 8），段容器内 标题↔内容 gap 8、行 items
 // gap 2，hover 出展开钮点击折叠区块（FolderStrip / ArchiveStrip / LibraryView 区块同先例）。
@@ -20,7 +21,7 @@ import SectionTitle from "./items/SectionTitle.vue";
 import TreeRowItem from "./items/TreeRowItem.vue";
 import WsTreeRows from "./WsTreeRows.vue";
 import { openContextMenu } from "../lib/contextMenus";
-import { wsBlankSpec, wsTreeRowSpec } from "../lib/menuSpecs/workspace";
+import { createAndRename, wsBlankSpec, wsFolderSectionSpec, wsTreeRowSpec } from "../lib/menuSpecs/workspace";
 import { openSystemRecycleBin } from "../lib/wsOps";
 import { useContentStore } from "../stores/content";
 import { useTabsStore } from "../stores/tabs";
@@ -100,6 +101,17 @@ function onRootMenu(e: MouseEvent): void {
   void wsBlankSpec("").then((spec) => openContextMenu(e, spec, undefined));
 }
 
+// 「文件夹」区块标题动作钮（2026-10-03 用户定，库区块头悬停动作钮同口径）：
+// + = 根目录新建文件夹（createAndRename("") 右键菜单同径；区块折叠时先强制展开让新行可见——
+// LibraryView.onAddFolder 同先例）；⋯ = 添加链接文件夹…（挂根）/ 管理工作空间面板
+function onAddFolder(): void {
+  treeOpen.value = true;
+  void createAndRename("");
+}
+function onFolderSectionMenu(e: MouseEvent): void {
+  openContextMenu(e, wsFolderSectionSpec(), undefined);
+}
+
 // 树容器空白右键（非 .tree-item 落点 = 行与标题之外的空位）= 同根空白菜单；行自身右键已 .stop 拦截；
 // 递归子层（v-else 分支共用本容器）不响应——根目录菜单只归根层
 function onTreeBlankMenu(e: MouseEvent): void {
@@ -157,15 +169,17 @@ function onTreeBlankMenu(e: MouseEvent): void {
           </div>
         </div>
       </section>
-      <!-- 文件夹区块（标题↔树 gap 8 / 行 gap 2 / 区块自带 padding 8 12，LibraryView 树容器同口径） -->
+      <!-- 文件夹区块（标题↔树 gap 8 / 行 gap 2 / 区块自带 padding 8 12，LibraryView 树容器同口径；
+           标题动作钮 2026-10-03 接业务：+ = 根目录新建文件夹，⋯ = 添加链接文件夹… / 管理工作空间） -->
       <section class="ws-section">
         <SectionTitle
           variant="block"
           title="文件夹"
           :count="subDirs.length"
           :expanded="treeOpen"
-          :actions="false"
           @toggle="treeOpen = !treeOpen"
+          @more="onFolderSectionMenu"
+          @add="onAddFolder"
         />
         <WsTreeRows v-if="treeOpen" :rel="props.rel" :depth="0" />
       </section>
