@@ -2,12 +2,14 @@
 // 确认弹窗（selection.confirmPrompt）、剪贴板写入、新建文件夹共享入口。
 // 命令调用一律走 placementOps（UI 唯一入口），本层只做流程编排。
 import { open } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import { useContentStore, DEFAULT_BLOCK_ID, type FolderNode, type PlacementView } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
 import { useUiStore } from "../stores/ui";
+import { useWsStore } from "../stores/ws";
 import {
   createFolder,
   createArchive,
@@ -262,6 +264,79 @@ export async function pickExportAssets(assetIds: string[]): Promise<void> {
 export async function pickExportFolder(folderId: string): Promise<void> {
   const dir = await open({ directory: true, multiple: false });
   if (typeof dir === "string") await exportFolder(folderId, dir);
+}
+
+// —— 库 ↔ 工作空间互通（2026-10-03 定案，PRD 02「与资源库互通」节）——
+// 双向一律复制不搬动源（硬链接落盘属阶段九批次）：库 → ws = 导出管线（export_assets /
+// export_folder 与「导出到本地磁盘」同一条），ws → 库 = 导入管线（importDraft 既有流）；
+// 目的地均由 DestTreeDialog 目的树选择器（移动面板样式）选定，单击落点出确认弹窗后执行
+
+// 导出到工作空间（素材卡菜单）：选择器 = 工作空间目录树（懒加载）；空间未就绪直出 toast
+export function exportAssetsToWsFlow(assetIds: string[]): void {
+  if (assetIds.length === 0) return;
+  const ws = useWsStore();
+  const content = useContentStore();
+  if (!ws.root?.exists) {
+    useToastStore().notify({ message: "工作空间未就绪，无法导出", icon: "fail" });
+    return;
+  }
+  const sourceName =
+    assetIds.length === 1
+      ? (content.placements.find((p) => p.assetId === assetIds[0])?.name ?? "1 个素材")
+      : `${assetIds.length} 个素材`;
+  useSelectionStore().destTreeDraft = {
+    tree: "ws",
+    title: "导出到工作空间",
+    sourceName,
+    onPick: async (rel) => {
+      const abs = ws.absPath(rel ?? "");
+      if (!abs) return false;
+      await exportAssets(assetIds, abs);
+      return true;
+    },
+  };
+}
+
+// 导出到工作空间（文件夹卡 / 树行菜单）：整棵导出同「导出到本地磁盘」语义（层级 + 显示名重建）
+export function exportFolderToWsFlow(folderId: string): void {
+  const ws = useWsStore();
+  const content = useContentStore();
+  if (!ws.root?.exists) {
+    useToastStore().notify({ message: "工作空间未就绪，无法导出", icon: "fail" });
+    return;
+  }
+  useSelectionStore().destTreeDraft = {
+    tree: "ws",
+    title: "导出到工作空间",
+    sourceName: content.folderName(folderId) ?? folderId,
+    onPick: async (rel) => {
+      const abs = ws.absPath(rel ?? "");
+      if (!abs) return false;
+      await exportFolder(folderId, abs);
+      return true;
+    },
+  };
+}
+
+// 工作空间导入到库（ws 文件卡 / 文件夹卡 / 树行菜单）：rel 转绝对路径，kind 由后端
+// classify_paths 权威判定（App.vue onDrop 同径）；导入弹窗占用中不叠加（onDrop 同守卫）
+export function importWsToLibraryFlow(rels: string[]): void {
+  if (rels.length === 0) return;
+  const ws = useWsStore();
+  const content = useContentStore();
+  if (content.importDraft) return;
+  const paths = rels.map((r) => ws.absPath(r)).filter((p): p is string => p !== null);
+  if (paths.length === 0) return;
+  useSelectionStore().destTreeDraft = {
+    tree: "library",
+    title: "导入到库",
+    sourceName: rels.length === 1 ? (rels[0].split("/").pop() ?? rels[0]) : `${rels.length} 项`,
+    onPick: async (folderId) => {
+      const { kind } = await invoke<{ kind: "files" | "folder" | "mixed" }>("classify_paths", { paths });
+      content.importDraft = { kind, paths, targetFolder: folderId };
+      return true;
+    },
+  };
 }
 
 // —— 删除流程（确认弹窗编排）——

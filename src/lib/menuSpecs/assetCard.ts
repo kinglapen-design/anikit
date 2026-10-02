@@ -38,6 +38,7 @@ import {
   copyBase64,
   copyName,
   dissolveSequenceFlow,
+  exportAssetsToWsFlow,
   moveAssetsFlow,
   pickCustomThumb,
   pickExportAssets,
@@ -256,6 +257,11 @@ export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
           label: "导出到本地磁盘",
           action: () => void pickExportAssets(selection.selectedRefs().map((r) => r.assetId)),
         },
+        // 导出到工作空间（2026-10-03 库 ↔ ws 互通）：同一导出管线，目的地 = 树选择器选定 ws 目录
+        {
+          label: "导出到工作空间",
+          action: () => exportAssetsToWsFlow(selection.selectedRefs().map((r) => r.assetId)),
+        },
         // 「导出提示词为 .MD 文档」占位删除（2026-09-05 走查）
       ],
     },
@@ -439,6 +445,10 @@ function virtualAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
     {
       label: "导出到本地磁盘",
       action: () => void pickExportAssets(selection.selectedRefs().map((r) => r.assetId)),
+    },
+    {
+      label: "导出到工作空间",
+      action: () => exportAssetsToWsFlow(selection.selectedRefs().map((r) => r.assetId)),
     },
     {
       label: "复制数据",

@@ -18,6 +18,8 @@ import SequenceDialog from "../../components/SequenceDialog.vue";
 import TextInput from "../../components/inputs/TextInput.vue";
 import SectionTitle from "../../components/items/SectionTitle.vue";
 import TreeRowItem from "../../components/items/TreeRowItem.vue";
+import DestTreeDialog from "../../components/DestTreeDialog.vue";
+import { useSelectionStore } from "../../stores/selection";
 import type { ImportDraft } from "../../stores/content";
 
 const demoOpen = ref(false);
@@ -46,6 +48,17 @@ const mockLibItems = [
 ];
 const draftFiles: ImportDraft = { kind: "files", paths: ["C:/演示/主角-走01.png"], targetFolder: null };
 const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素材"], targetFolder: null };
+// 目的树选择器真实弹出（DestTreeDialog，2026-10-03 库 ↔ 工作空间互通；mock 草稿——
+// 确认闭包不动作直接关；库模式数据源 = content.blockSections，预览环境连真实库陈列完整树）
+const selection = useSelectionStore();
+function openDestTree(): void {
+  selection.destTreeDraft = {
+    tree: "library",
+    title: "导入到库",
+    sourceName: "演示文件.png",
+    onPick: () => Promise.resolve(true),
+  };
+}
 </script>
 
 <template>
@@ -335,8 +348,18 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
             区块标题 force-hover 展示添加钮（稿有画，移动窗新建文件夹未立项 = 点亮不接业务）；业务弹窗依赖库数据，不进真实弹出
           </span>
         </div>
+        <div class="pv-demo-cell">
+          <ActionButton label="目的树选择器" variant="solid" size="md" @click="openDestTree" />
+          <span class="pv-cap">
+            真实弹出（DestTreeDialog，库 ↔ 工作空间互通共用：壳 / 搜索 / MoveNode 树全复用移动面板，
+            差异 = 行级 hover 恒并入 + 首行「未分类」根落点）——mock 草稿确认即关；
+            单击行出 ConfirmPrompt 两段确认（移动面板同口径）；库数据空时只出未分类行
+          </span>
+        </div>
       </div>
     </div>
+
+    <DestTreeDialog v-if="selection.destTreeDraft" />
 
   </section>
 </template>

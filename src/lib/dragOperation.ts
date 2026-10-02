@@ -313,20 +313,33 @@ function updateDropTarget(e: DropPointer): void {
   const treeItem = el.closest<HTMLElement>(".tree-item[data-folder-id]");
   if (treeItem) {
     const id = treeItem.getAttribute("data-folder-id")!;
-    // 工作空间树行（WorkspaceTree 渲染 "ws:"+rel 合成 id，PRD 02 步骤 2）：只接 ws 素材
-    // 并入 = 移动进该目录；文件夹拖拽在工作空间无排序语义，不作落点。
-    // 不可移项（同目录 / 目标 = 自身 / 目标在源子树内，wsMovableRels）全剔完 = 不高亮不落
+    // 工作空间树行（WorkspaceTree 渲染 "ws:"+rel 合成 id，PRD 02 步骤 2）：
+    // ws 素材并入 = 移动进该目录（不可移项 wsMovableRels 全剔完 = 不高亮不落）；
+    // 库素材并入 = **复制**（2026-10-03 库 ↔ ws 互通，导出管线落该目录）；
+    // 文件夹拖拽在工作空间无排序语义，不作落点；混选（库 + ws）防御性不落（选择域天然同质）
     if (id.startsWith("ws:")) {
       const targetRel = id.slice(3);
-      if (sess.kind === "asset" && wsMovableRels(wsRels, targetRel).length > 0) {
-        dragView.tree = { folderId: id, zone: "into" };
-        sess.drop = async () => dropWsAssetsInto(items, targetRel);
+      if (sess.kind === "asset") {
+        if (wsRels.length === 0) {
+          dragView.tree = { folderId: id, zone: "into" };
+          sess.drop = async () => dropLibraryAssetsIntoWs(items, targetRel);
+        } else if (wsRels.length === items.length && wsMovableRels(wsRels, targetRel).length > 0) {
+          dragView.tree = { folderId: id, zone: "into" };
+          sess.drop = async () => dropWsAssetsInto(items, targetRel);
+        }
       }
       return;
     }
     const r = treeItem.getBoundingClientRect();
     const rel = (e.clientY - r.top) / Math.max(1, r.height);
     if (sess.kind === "asset") {
+      // ws 条目 → 库文件夹 = **导入**（2026-10-03 互通）：importDraft 既有流——替换旧死链
+      //（原进 move_placements 带 ws 合成 id 被后端按陈旧跳过、误 toast「已移动 0 个项目」）
+      if (wsRels.length === items.length) {
+        dragView.tree = { folderId: id, zone: "into" };
+        sess.drop = async () => dropWsAssetsIntoLibrary(wsRels, id);
+        return;
+      }
       // 素材拖到树 item 任何位置都算并入（2026-07-28 定案）
       dragView.tree = { folderId: id, zone: "into" };
       sess.drop = async () => dropAssetsInto(items, id, ctrl);
@@ -358,14 +371,19 @@ function updateDropTarget(e: DropPointer): void {
   }
 
   // 工作空间文件夹卡片（FolderStrip ws 分流渲染 data-ws-folder = rel，PRD 02 步骤 2）：
-  // 只接 ws 素材并入 = 移动；文件夹卡片拖拽在 ws 无排序语义，不作落点；
-  // 不可移项剔除同树行口径（拖到自身卡片 / 同目录空移不出高亮）
+  // ws 素材并入 = 移动（不可移项剔除同树行口径）；库素材并入 = **复制**（2026-10-03 互通，
+  // 导出管线落该目录）；文件夹卡片拖拽在 ws 无排序语义，不作落点
   const wsFolderCard = el.closest<HTMLElement>(".folder-card[data-ws-folder]");
   if (wsFolderCard) {
     const rel = wsFolderCard.getAttribute("data-ws-folder")!;
-    if (sess.kind === "asset" && wsMovableRels(wsRels, rel).length > 0) {
-      dragView.folderCardId = `ws:${rel}`;
-      sess.drop = async () => dropWsAssetsInto(items, rel);
+    if (sess.kind === "asset") {
+      if (wsRels.length === 0) {
+        dragView.folderCardId = `ws:${rel}`;
+        sess.drop = async () => dropLibraryAssetsIntoWs(items, rel);
+      } else if (wsRels.length === items.length && wsMovableRels(wsRels, rel).length > 0) {
+        dragView.folderCardId = `ws:${rel}`;
+        sess.drop = async () => dropWsAssetsInto(items, rel);
+      }
     }
     return;
   }
@@ -375,6 +393,12 @@ function updateDropTarget(e: DropPointer): void {
   if (folderCard) {
     const id = folderCard.getAttribute("data-folder-id")!;
     if (sess.kind === "asset") {
+      // ws 条目 → 库文件夹卡 = **导入**（2026-10-03 互通，替换 move 死链同树行口径）
+      if (wsRels.length === items.length) {
+        dragView.folderCardId = id;
+        sess.drop = async () => dropWsAssetsIntoLibrary(wsRels, id);
+        return;
+      }
       dragView.folderCardId = id;
       sess.drop = async () => dropAssetsInto(items, id, ctrl);
       return;
@@ -434,18 +458,30 @@ function updateDropTarget(e: DropPointer): void {
       const target = grid.dropFolder();
       if (target === null) return; // 指针在某网格但不可落（虚拟视图）——不出落点
       if (target === "recycle") {
+        // ws 合成项不走库回收站（快速访问行同口径）——不作落点
+        if (wsRels.length === items.length) return;
         dragView.paneDrop = token;
         sess.drop = async () => dropAssetsToRecycle(items);
         return;
       }
       if (target.startsWith("ws:")) {
-        // ws 素材按路径移动（库素材不落 ws）；**不可移不出高亮**（2026-10-01 用户定同目录禁高亮，
+        // ws 素材按路径移动；**不可移不出高亮**（2026-10-01 用户定同目录禁高亮，
         // 库分支同口径；2026-10-02 文件夹拖拽接入扩为 wsMovableRels 三剔——同目录 / 自身 / 子孙
-        // 全剔完 = 移动无意义，不出落点）
-        if (wsMovableRels(wsRels, target.slice(3)).length > 0) {
+        // 全剔完 = 移动无意义，不出落点）；
+        // 库素材落 ws 视口 = **复制**进该目录（2026-10-03 互通，导出管线）
+        if (wsRels.length === 0) {
+          dragView.paneDrop = token;
+          sess.drop = async () => dropLibraryAssetsIntoWs(items, target.slice(3));
+        } else if (wsRels.length === items.length && wsMovableRels(wsRels, target.slice(3)).length > 0) {
           dragView.paneDrop = token;
           sess.drop = async () => dropWsAssetsInto(items, target.slice(3));
         }
+        return;
+      }
+      // ws 条目落库视口 = **导入**进目标文件夹（2026-10-03 互通，替换 move 死链；未分类视口 = 根）
+      if (wsRels.length === items.length) {
+        dragView.paneDrop = token;
+        sess.drop = async () => dropWsAssetsIntoLibrary(wsRels, target === "root" ? null : target);
         return;
       }
       // 同文件夹判定按**被拖项自身 folderId**（2026-09-17 实机走查实锤：旧按激活 pane 文件夹
@@ -555,6 +591,34 @@ async function dropWsAssetsInto(items: PlacementRef[], targetRel: string): Promi
   const rels = items.filter((it) => it.assetId.startsWith("ws:")).map((it) => it.assetId.slice(3));
   if (rels.length === 0) return;
   await useWsStore().move(rels, targetRel);
+}
+
+// 库素材落工作空间目录（树行 / 文件夹卡 / pane，2026-10-03 库 → ws 互通，PRD 02「与资源库互通」）：
+// = 「导出到本地磁盘」同一管线（export_assets：originName 拷出 + 序列帧打包 + 名_n 规避 +
+// 进度条 / 失败重试弹窗），目的地 = ws 目录绝对路径；watcher 回声驱动树 / 视口刷新。
+// 同一资产多位置去重（assetId 唯一拷一次——副本语义属库内，导出端重复拷贝无意义）
+async function dropLibraryAssetsIntoWs(items: PlacementRef[], targetRel: string): Promise<void> {
+  const abs = useWsStore().absPath(targetRel);
+  if (!abs) return;
+  const ids = [...new Set(items.map((it) => it.assetId))];
+  await ops.exportAssets(ids, abs);
+}
+
+// ws 条目落库文件夹（树行 / 文件夹卡 / pane，2026-10-03 ws → 库互通，PRD 02「与资源库互通」）：
+// = 导入进库——rel 转绝对路径接既有 importDraft 流（导入弹窗确认结构 / 序列帧打包检测全继承；
+// kind 由 classify_paths 权威判定，App.vue onDrop 同径；导入弹窗占用中不叠加，onDrop 同守卫）
+async function dropWsAssetsIntoLibrary(rels: string[], folderId: string | null): Promise<void> {
+  const ws = useWsStore();
+  const content = useContentStore();
+  if (content.importDraft) return;
+  const paths = rels.map((r) => ws.absPath(r)).filter((p): p is string => p !== null);
+  if (paths.length === 0) return;
+  try {
+    const { kind } = await invoke<{ kind: "files" | "folder" | "mixed" }>("classify_paths", { paths });
+    content.importDraft = { kind, paths, targetFolder: folderId };
+  } catch (e) {
+    console.error("工作空间导入进库失败：", e);
+  }
 }
 
 // 素材落快速访问「回收站」行（2026-09-08 用户定）：丢到回收站——deletePlacements 默认

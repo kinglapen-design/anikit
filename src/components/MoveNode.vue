@@ -21,6 +21,10 @@ const props = defineProps<{
   forceOpen: boolean;
   hint: { id: string; zone: MoveZone } | null;
   inheritTint?: string;
+  // —— 目的树选择器变体（2026-10-03 库 ↔ 工作空间互通 DestTreeDialog 复用；缺省全 = 移动面板原行为）——
+  intoOnly?: boolean; // 无兄弟排序落点：行级 hover 恒为并入（不画上/下插入线）
+  expandable?: (node: FolderNode) => boolean; // 展开箭头判定（缺省 = children 非空；ws 懒加载 = hasSubDir）
+  countOf?: (node: FolderNode) => number; // 数量取值（缺省 = node.count + content.directCounts；ws 无库计数 = 0 不渲染）
 }>();
 const emit = defineEmits<{
   toggle: [id: string];
@@ -35,8 +39,13 @@ const isOpen = computed(() => props.forceOpen || !props.collapsed.has(props.node
 // 自定义色（同 FolderTree nodeTint）：本节点色 ?? 祖先链最近色；展示层经 toNewTint 映射新九色名
 const tint = computed(() => props.node.color ?? props.inheritTint);
 
-// 三分判定：行包裹层即热区（子层递归在 .mv-kids 兄弟容器，不冒泡进本行）
+// 三分判定：行包裹层即热区（子层递归在 .mv-kids 兄弟容器，不冒泡进本行）；
+// intoOnly 变体（目的树选择器）无兄弟落点——恒为并入
 function onRowMove(e: MouseEvent): void {
+  if (props.intoOnly) {
+    emit("hover", props.node.id, "into");
+    return;
+  }
   const row = e.currentTarget as HTMLElement;
   const r = row.getBoundingClientRect();
   const ratio = (e.clientY - r.top) / r.height;
@@ -51,10 +60,10 @@ function onRowMove(e: MouseEvent): void {
         :kind="node.kind === 'archive' ? 'archive' : 'folder'"
         :icon="node.kind === 'archive' ? '' : (node.icon ?? '')"
         :name="node.name"
-        :count="node.count"
-        :direct-count="content.directCounts.get(node.id) ?? 0"
+        :count="countOf ? countOf(node) : node.count"
+        :direct-count="countOf ? countOf(node) : (content.directCounts.get(node.id) ?? 0)"
         :expanded="isOpen"
-        :expandable="node.children.length > 0"
+        :expandable="expandable ? expandable(node) : node.children.length > 0"
         :tint="toNewTint(tint)"
         :depth="depth"
         :drop-zone="hint?.id === node.id ? hint.zone : null"
@@ -73,6 +82,9 @@ function onRowMove(e: MouseEvent): void {
           :force-open="forceOpen"
           :hint="hint"
           :inherit-tint="tint"
+          :into-only="intoOnly"
+          :expandable="expandable"
+          :count-of="countOf"
           @toggle="emit('toggle', $event)"
           @hover="(id, zone) => emit('hover', id, zone)"
           @leave="emit('leave', $event)"

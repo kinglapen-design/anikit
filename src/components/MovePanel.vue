@@ -20,6 +20,7 @@ import { expandEnter, expandLeave } from "../lib/expandAnim";
 import { useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { moveFolders, movePlacements } from "../lib/placementOps";
+import "./moveTree.css"; // 移动面板族共享壳样式（DestTreeDialog 目的树选择器同款）
 
 const content = useContentStore();
 const selection = useSelectionStore();
@@ -234,40 +235,5 @@ const treeRef = ref<HTMLElement>();
 </template>
 
 <style scoped>
-/* 移动稿壳：460 宽稿值由 BaseModal width prop 给（border-box 含 1px 边）；
-   高 822 稿值 + 窗口封顶留呼吸（旧 29 稿 906+96 封顶口径沿）；
-   class 透传落在 BaseModal 根 .bm-mask 上 → 壳样式须 :deep(.bm-modal) */
-.move-panel :deep(.bm-modal) {
-  height: min(822px, calc(100vh - 96px));
-}
-.mv-search {
-  padding: 0 var(--n-space-24);
-  flex: none;
-}
-.mv-wrap {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-}
-/* 树形容器：0 24 padding（稿）；区块间 gap 24（稿），区块内 标题→树 gap 8（稿 文件夹-区块 gap 8） */
-.mv-tree {
-  height: 100%;
-  overflow-y: auto;
-  padding: 0 var(--n-space-24);
-  display: flex;
-  flex-direction: column;
-  gap: var(--n-space-24);
-}
-.mv-block {
-  display: flex;
-  flex-direction: column;
-  gap: var(--n-space-8);
-  flex: none;
-}
-/* 区块内树 item 间 gap 2（移动稿 树形容器 gap 2） */
-.mv-nodes {
-  display: flex;
-  flex-direction: column;
-  gap: var(--n-space-2);
-}
+/* 壳 / 搜索框 / 树容器样式 = moveTree.css 共享件（DestTreeDialog 同款，2026-10-03 抽出） */
 </style>

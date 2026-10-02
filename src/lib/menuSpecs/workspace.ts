@@ -43,7 +43,7 @@ import {
   wsShellMenu,
   wsShellMenuBackground,
 } from "../wsOps";
-import { copyText } from "../menuOps";
+import { copyText, importWsToLibraryFlow } from "../menuOps";
 import { useToastStore } from "../../stores/toast";
 
 const fail = (e: unknown) => useToastStore().notify({ message: String(e), icon: "fail" });
@@ -251,6 +251,8 @@ async function wsFolderEntries(rel: string, name: string, rename: boolean): Prom
     // 链出去（方向 a′ 产品化）：本文件夹在外部落点摆入口 junction（只管创建不管存续）；
     // 多选只作用被右键项（§65 链接菜单口径），不整批分流
     { label: "在外部位置创建链接…", action: () => void linkOutFlow(rel) },
+    // 导入到库（2026-10-03 ws ↔ 库互通）：文件夹整棵进库（结构保留 / 序列帧由导入弹窗确认）
+    { label: "导入到库", action: () => importWsToLibraryFlow(batch) },
     "divider",
     ...(link?.isLink
       ? [
@@ -358,6 +360,9 @@ export async function wsCardSpec(p: PlacementView, panelId: string): Promise<Ctx
         if (abs) sendWsToAnimate(abs);
       },
     },
+    // 导入到库（2026-10-03 ws ↔ 库互通，PRD 02）：ws → 库 = 复制导入（importDraft 既有流），
+    // 目标文件夹由库树选择器定；混选（文件 + 文件夹）整批受理（classify_paths 判 kind）
+    { label: "导入到库", action: () => importWsToLibraryFlow(batch) },
     { label: "在资源管理器中显示", action: () => revealRel(entryRel) },
     { label: "系统菜单", action: () => openShellMenu(batch) },
     "divider",

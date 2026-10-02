@@ -1,0 +1,40 @@
+/* 移动面板族共享样式（MovePanel 移动面板 / DestTreeDialog 目的树选择器，2026-10-03 抽出）：
+   稿 = 布局/模态窗口/移动——壳 = BaseModal framed 460（border-box 含 1px 边）+ 高 822 稿值
+   封顶留呼吸（旧 29 稿 906+96 口径沿）；class 透传落在 BaseModal 根 .bm-mask 上 → 壳样式
+   写 .move-panel .bm-modal（原 scoped :deep 同款选择器，随共享化转全局类选择器） */
+.move-panel .bm-modal {
+  height: min(822px, calc(100vh - 96px));
+}
+/* 搜索框（移动稿：0 24 padding；lg 34 高 + 左置搜索图标） */
+.mv-search {
+  padding: 0 var(--n-space-24);
+  flex: none;
+}
+/* 树形容器包裹层：relative = ScrollThumb 悬浮滚轮锚点（速查 §2） */
+.mv-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+/* 树形容器：0 24 padding（稿）；区块间 gap 24（稿） */
+.mv-tree {
+  height: 100%;
+  overflow-y: auto;
+  padding: 0 var(--n-space-24);
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-24);
+}
+/* 区块：标题→树 gap 8（稿 文件夹-区块 gap 8） */
+.mv-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-8);
+  flex: none;
+}
+/* 区块内树 item 间 gap 2（移动稿 树形容器 gap 2） */
+.mv-nodes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-2);
+}

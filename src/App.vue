@@ -52,6 +52,7 @@ import AppConfirm from "./components/AppConfirm.vue";
 import ConfirmModal from "./components/modals/ConfirmModal.vue";
 import OrphanInfosAlert from "./components/OrphanInfosAlert.vue";
 import MovePanel from "./components/MovePanel.vue";
+import DestTreeDialog from "./components/DestTreeDialog.vue";
 import BatchRenameDialog from "./components/BatchRenameDialog.vue";
 import ToastStack from "./components/ToastStack.vue";
 import { useUiStore } from "./stores/ui";
@@ -513,6 +514,8 @@ async function togglePin(): Promise<void> {
     <!-- 移动面板（3.4，29 稿）：移动文件 / 文件夹 / 档案共用，菜单 / Ctrl+Y 触发；
          须在 AppConfirm 之前——面板点击落点后弹确认窗，同 z-index 后渲染者在上 -->
     <MovePanel v-if="selection.moveDraft" />
+    <!-- 目的树选择器（2026-10-03 库 ↔ 工作空间互通）：「导出到工作空间 / 导入到库」共用 -->
+    <DestTreeDialog v-if="selection.destTreeDraft" />
     <!-- 批量重命名弹窗（3.4，37 稿）：多选「重命名」/ Ctrl+R 触发 -->
     <BatchRenameDialog v-if="selection.renameDraft" />
     <!-- 属性标签弹窗（6.1，32 稿）/ 编辑描述弹窗（31 稿）：详情面板自定义数据区块入口，

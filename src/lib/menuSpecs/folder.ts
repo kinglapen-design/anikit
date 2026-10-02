@@ -20,6 +20,7 @@ import {
   deleteFoldersFlow,
   cloneFolderFlow,
   enterLinkPicker,
+  exportFolderToWsFlow,
   findParentId,
   moveFoldersFlow,
   pickExportFolder,
@@ -212,6 +213,8 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
       submenu: [
         { label: "导出为素材包", disabled: true },
         { label: "导出到本地磁盘", action: () => void pickExportFolder(folder.id) },
+        // 导出到工作空间（2026-10-03 库 ↔ ws 互通）：整棵导出同本地磁盘语义，树选择器定 ws 目录
+        { label: "导出到工作空间", action: () => exportFolderToWsFlow(folder.id) },
       ],
     },
     "divider",

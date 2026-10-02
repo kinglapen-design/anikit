@@ -73,6 +73,18 @@ export type MoveDraft =
   | { kind: "assets"; refs: PlacementRef[] }
   | { kind: "folders"; ids: string[] };
 
+// 目的树选择器草稿（2026-10-03 库 ↔ 工作空间互通，PRD 02 互通节）：「导出到工作空间 /
+// 导入到库」共用的移动面板样式树选择弹窗（宿主 App.vue DestTreeDialog）——
+// tree = 数据源（"ws" = 工作空间目录树，懒加载逐级展开 / "library" = 库文件夹树含未分类行）；
+// onPick = 单击落点确认后的执行闭包：ws 模式 target = rel（"" = 根），library 模式 = folderId
+//（null = 未分类根）；返回 true 关面板（pinia state 存闭包 = confirmPrompt.onConfirm 先例）
+export interface DestTreeDraft {
+  tree: "ws" | "library";
+  title: string; // 弹窗标题 + 确认钮文案（移动面板口径）
+  sourceName: string; // 发起名（确认文案品牌色高亮段）
+  onPick: (target: string | null) => Promise<boolean>;
+}
+
 // （2026-07-29 复验三轮：新建文件夹改"先建后命名"，原 NewFolderDraft 命名中临时节点已移除）
 
 function keyOf(p: { assetId: string; folderId: string }): string {
@@ -118,6 +130,9 @@ export const useSelectionStore = defineStore("selection", {
     brokenLinkPrompt: null as { rel: string; name: string } | null,
     // 移动面板草稿（3.4，29 稿移动面板宿主 App.vue）：非空 = 移动面板打开
     moveDraft: null as MoveDraft | null,
+    // 目的树选择器草稿（2026-10-03 库 ↔ 工作空间互通，宿主 App.vue DestTreeDialog）：
+    // 非空 = 「导出到工作空间 / 导入到库」树选择弹窗打开
+    destTreeDraft: null as DestTreeDraft | null,
     // 批量重命名草稿（3.4，37 稿批量重命名弹窗宿主 App.vue）：多选「重命名」/ Ctrl+R 触发，
     // 非空 = 弹窗打开；内容为打开时刻的选中 Placement 快照
     renameDraft: null as PlacementRef[] | null,
