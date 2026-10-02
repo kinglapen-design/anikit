@@ -12,6 +12,7 @@
 //! - clipboard：系统剪贴板私有格式写入（8.4 发送至 AN：Flash 11 Picture，arboard 不管私有格式）
 //! - shell_menu：Windows 原生右键菜单（IContextMenu 经典菜单 + 消息转发窗口；工作空间「系统菜单」项）
 //! - junction：NTFS 目录链接（工作空间「外部文件夹挂进 WS」方向 b：创建 / 读目标 / 删除 reparse point）
+//! - space_icon：储存空间文件夹品牌图标（desktop.ini IconResource + 文件夹只读位，Eagle .library 同款）
 
 pub mod clipboard;
 pub mod decoder;
@@ -24,4 +25,5 @@ pub mod shell_menu;
 pub mod shell_open;
 pub mod shell_path;
 pub mod shell_thumb;
+pub mod space_icon;
 pub mod window_fx;

@@ -81,6 +81,9 @@ fn activate_space(app: &AppHandle, state: &State<AppState>, space: Space) -> Res
   }
   crate::services::workspace::migrate_cache(&root);
   crate::services::workspace::start_watch(app, &root);
+  // 空间文件夹品牌图标（2026-10-03 用户定，Eagle .library 同款）：创建 / 打开同覆盖，
+  // 现有空间惰性补写；微秒级 IO 同步可接受（migrate_cache 同径），失败内部静默
+  crate::adapters::space_icon::apply(&root);
   Ok(info)
 }
 
