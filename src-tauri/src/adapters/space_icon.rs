@@ -10,8 +10,10 @@
 
 use std::path::Path;
 
-/// 空间文件夹图标（设计稿 `design/LOGO/image/AniKit-library-folder-clean-v3-1024.png` 离线转
-/// ICO，16/24/32/48/64/256 六尺寸；换图标 = 重转覆盖同路径，exe 重编随包）
+/// 空间文件夹图标（设计稿 `design/LOGO/02_Final_PNG/AniKit-library-folder-clean-v4-1024.png`
+/// 离线转 ICO：宽长方形款（2026-10-03 v4 换稿——v3 正方形与资源管理器默认图标并排显空），
+/// 内容 alpha>8 trim 后等比贴 92% 宽正方形画布，16/24/32/48/64/256 六尺寸；
+/// 换图标 = 重转覆盖同路径，exe 重编随包；已落地空间靠「字节不一致覆写」幂等换新）
 const SPACE_ICON: &[u8] = include_bytes!("../../icons/space-folder.ico");
 
 const ICO_NAME: &str = "AniKit.ico";
