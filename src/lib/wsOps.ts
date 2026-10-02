@@ -223,10 +223,48 @@ export async function retargetWsLink(relPath: string, newTarget: string): Promis
 }
 
 // 从 WS 里「链出去」（方向 a′ 产品化，2026-10-02）：rel 文件夹在外部 destDir 下摆入口 junction
-//（入口名 = 文件夹名，重名后端 _n），返回入口绝对路径。**只管创建不管存续**——root 外不登记
-// 不监听。校验拒绝（源非文件夹 / 断链门 / 落点缺失 / 落点在储存空间内）抛中文错
+//（入口名 = 文件夹名，重名后端 _n），返回入口绝对路径。登记 portals 台账（管理工作空间面板
+// 总览凭据）；校验拒绝（源非文件夹 / 断链门 / 落点缺失 / 落点在储存空间内）抛中文错
 export async function linkOutWsFolder(relPath: string, destDir: string): Promise<string> {
   return await invoke<string>("ws_link_out", { relPath, destDir });
+}
+
+// —— 管理工作空间面板（2026-10-02 落地，commands/workspace.rs）——
+
+// ws_link_overview 返回：链进来门清单（ok = 门在且目标在）+ 链出去入口分组
+//（ok = 门在且指向该 rel 当前真实路径——改名/移动后旧门指向原路径即断；relOk = 文件夹本体在不在）
+export interface WsLinkItem {
+  rel: string;
+  target: string;
+  ok: boolean;
+}
+export interface WsPortalItem {
+  path: string;
+  ok: boolean;
+}
+export interface WsPortalGroup {
+  rel: string;
+  relOk: boolean;
+  portals: WsPortalItem[];
+}
+export interface WsLinkOverview {
+  links: WsLinkItem[];
+  portals: WsPortalGroup[];
+}
+
+// 链接总览（未开空间 / 目录缺失 = 空总览，后端降级不报错）
+export async function wsLinkOverview(): Promise<WsLinkOverview> {
+  return await invoke<WsLinkOverview>("ws_link_overview");
+}
+
+// 删除一条链出去入口：门在 = 门进系统回收站 + 剔登记；门没了 = 仅剔登记
+export async function wsRemovePortal(relPath: string, portal: string): Promise<void> {
+  await invoke("ws_remove_portal", { relPath, portal });
+}
+
+// 在资源管理器中显示链接关联的外部路径（链接目标 / 链出去入口——不受 ws 内约束，仅校验存在性）
+export async function wsRevealExternal(absPath: string): Promise<void> {
+  await invoke("ws_reveal_external", { absPath });
 }
 
 // —— 事件监听（App.vue onMounted 统一调，模块级幂等）——

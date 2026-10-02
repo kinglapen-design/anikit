@@ -118,6 +118,9 @@ export const useUiStore = defineStore("ui", {
     // 信息查看管理弹窗开关（2026-09-26，会话级）：右栏底部「信息查看管理」钮 / 视图菜单同名项置位，
     // 弹窗宿主 App.vue（blockManageOpen 惯例）
     infoManageOpen: false,
+    // 管理工作空间弹窗开关（2026-10-02，会话级）：菜单「仓库 ▸ 管理工作空间」置位，宿主 App.vue
+    //（infoManageOpen 惯例）
+    wsManageOpen: false,
     // 只读视口拖拽/快捷键导入拒入弹窗开关（2026-09-08，会话级）：onDrop 守卫与 Ctrl+V 系统剪贴板
     // 导入守卫置位（两处 lib 无权触达 App.vue 本地态），ConfirmModal 宿主 App.vue
     importRejectOpen: false,

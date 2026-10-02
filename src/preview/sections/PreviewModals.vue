@@ -9,6 +9,8 @@ import IconButton from "../../components/buttons/IconButton.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import TwoToneIcon from "../../components/items/TwoToneIcon.vue";
 import ConfirmModal from "../../components/modals/ConfirmModal.vue";
+import WsManageDialog from "../../components/WsManageDialog.vue";
+import type { WsLinkOverview } from "../../lib/wsOps";
 import CreateLibraryModal from "../../components/CreateLibraryModal.vue";
 import MergeLibraryModal from "../../components/MergeLibraryModal.vue";
 import ImportDialog from "../../components/ImportDialog.vue";
@@ -25,6 +27,18 @@ const mergeOpen = ref(false);
 const importFilesOpen = ref(false);
 const importFolderOpen = ref(false);
 const seqOpen = ref(false);
+// 管理工作空间真实弹出（WsManageDialog 已沉淀，2026-10-02；mock 台账数据，操作钮 mock 态不动作）
+const wsManageOpen = ref(false);
+const wsManageMock: WsLinkOverview = {
+  links: [
+    { rel: "01_projects", target: "D:\\anikit\\01_projects", ok: true },
+    { rel: "参考素材", target: "D:\\参考\\动作参考", ok: false },
+  ],
+  portals: [
+    { rel: "02_创作", relOk: true, portals: [{ path: "D:\\常用\\02_创作", ok: true }, { path: "E:\\工作盘\\创作", ok: true }] },
+    { rel: "04_文库", relOk: true, portals: [{ path: "C:\\Users\\kingl\\Desktop\\文库", ok: false }] },
+  ],
+};
 const mockLibItems = [
   { name: "沙雕动画资源库", sizeBytes: 320 * 1024 ** 3 },
   { name: "学习参考", sizeBytes: 12.6 * 1024 ** 3 },
@@ -159,7 +173,14 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
     <SequenceDialog v-if="seqOpen" @confirm="seqOpen = false" @cancel="seqOpen = false" />
 
     <div class="pv-group">
-      <h3 class="pv-group-title">管理工作空间（设计稿提案 2026-10-02 · 未沉淀组件——链接进来 / 链出去双向总览面板）</h3>
+      <h3 class="pv-group-title">管理工作空间（2026-10-02 已落地接生产 = components/WsManageDialog——链接进来 / 链出去双向总览；静态复刻壳留作常态陈列，真实弹出走 mock 台账）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell" style="width: 240px">
+          <ActionButton label="打开交互演示" variant="solid" size="md" @click="wsManageOpen = true" />
+          <span class="pv-cap">真实弹出（mock 台账：链进来 1 正常 + 1 断链 / 链出去 2 组含门没了态）——操作钮 mock 态只演示 hover 滑入，点击不动作</span>
+        </div>
+      </div>
+      <WsManageDialog v-if="wsManageOpen" :mock="wsManageMock" @close="wsManageOpen = false" />
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <div class="pv-move-shell w640">
@@ -256,15 +277,12 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
             </div>
           </div>
           <span class="pv-cap">
-            <b>提案待定点</b>：①链出去要显示 ⇒ 登记口径升级（原「不登记」→ workspace.json 记 portals 台账：创建时登记、
-            打开面板对账，门没了只标记不剔除可手删——仍不做自动管理）；②添加链进来挂工作空间根（换位置走后补拖拽）；
-            ③「链出去新文件夹…」需两步选择（WS 内选文件夹 + 选落点），或保持右键「在外部位置创建链接…」发起、
-            面板只管总览与追加；④删除均走 confirmPrompt 警告确认（门进系统回收站可找回）。壳 640 = 分组管理先例
-            （pv-move-shell 复刻壳加 w640 档）；<b>二轮（用户走查）</b>：卡片化分层——行 / 组 = g4 底 + 1px g5 + 圆角 8 卡
-            （hover g5/g6，ni-card 升档），操作组 = 污染文件 item 同款 ni-slide hover 滑入（18 盒 l4→l2），添加行整行按钮化
-            （g4 底 hover g5），两区块 24+1px g5 顶线+24 分隔；无底部按钮行（即时生效，§61 同口径）。
-            提案未定稿，暂陈列于本区（framed 复刻族旁），定稿后沉淀组件并迁业务弹窗展区；
-            <b>三轮（用户定）</b>：添加行换真件 ActionButton solid md + 前置图标 add-small（展区「导入文件」同排同款）
+            壳 640 = 分组管理先例（pv-move-shell 复刻壳加 w640 档）；卡片化分层（g4 底 + 1px g5 + 圆角 8 = ni-card 升档，
+            行卡 hover g5/g6，断链整卡 dimmed 置灰）；操作组 = 污染文件 item 同款 ni-slide hover 滑入（18 盒 l4→l2）；
+            添加钮 = ActionButton solid md 真件；两区块 24+1px g5 顶线+24 分界；无底部按钮行（即时生效，§61 同口径）。
+            <b>已接生产（2026-10-02）</b>：本体 = WsManageDialog（台账 = workspace.json 的 links + portals，
+            对账 = 后端现场探测；链出去文件夹改名 / 移动后台账词法平移、旧门指向原路径即对账断）；
+            本复刻壳留作常态陈列（口径变更与组件同步）
           </span>
         </div>
         <div class="pv-demo-cell">

@@ -78,7 +78,8 @@ async function pickLinkTarget(title?: string): Promise<string | null> {
 
 // 添加链接文件夹：选中外部目录以 junction 挂进 destRel（挂载名 = 目标目录名，重名后端 _n）；
 // 校验拒绝（非目录 / 工作空间内 / 祖先循环）后端中文错 toast
-async function addLinkFlow(destRel: string): Promise<void> {
+//（export = 「管理工作空间」面板「添加链接文件夹」钮复用同径，destRel "" = 挂根，2026-10-02）
+export async function addLinkFlow(destRel: string): Promise<void> {
   const dir = await pickLinkTarget();
   if (dir === null) return;
   await useWsStore().addLink(destRel, dir).catch(fail);

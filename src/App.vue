@@ -42,6 +42,7 @@ import LinkManageDialog from "./components/LinkManageDialog.vue";
 import RecycleConfirmDialog from "./components/RecycleConfirmDialog.vue";
 import BlockManageDialog from "./components/BlockManageDialog.vue";
 import InfoManageDialog from "./components/InfoManageDialog.vue";
+import WsManageDialog from "./components/WsManageDialog.vue";
 import GroupManageDialog from "./components/GroupManageDialog.vue";
 import GroupEditDialog from "./components/GroupEditDialog.vue";
 import PropsDialog from "./components/PropsDialog.vue";
@@ -489,6 +490,7 @@ async function togglePin(): Promise<void> {
     <!-- 信息查看管理弹窗（2026-09-26 三 tab 化重立，旧 22 稿 SectionEditPanel 后继）：
          右栏底部「信息查看管理」钮 / 视图菜单同名项触发 -->
     <InfoManageDialog v-if="ui.infoManageOpen" @close="ui.infoManageOpen = false" />
+    <WsManageDialog v-if="ui.wsManageOpen" @close="ui.wsManageOpen = false" />
     <!-- 分组弹窗（3.5 二轮）：33 稿分组管理（工具栏分组管理钮 / 12 稿菜单「编辑分组」）/
          34 稿新建分组（12 稿菜单「新建分组」）；目标文件夹 = 打开时锁定的 groupDialogFolder -->
     <GroupManageDialog

@@ -1189,7 +1189,84 @@ pub fn link_out(root: &Path, rel: &str, dest_dir: &Path) -> Result<PathBuf, Stri
   validate_name(&name)?;
   let link_abs = unique_target(&canon_dest, &name);
   junction::create(&link_abs, &src)?;
+  // 登记入口台账（「管理工作空间」面板总览凭据；登记失败不回头拆门——门已建好能用，
+  // 台账少了面板少一行而已，下次对账可手删重建）
+  if let Err(e) = register_portal(root, rel, &link_abs) {
+    log::warn!("链出去入口登记失败：{e}");
+  }
   Ok(link_abs)
+}
+
+/// 链接总览（「管理工作空间」面板数据源，2026-10-02）：
+/// links = 链进来门清单 + 存活态（ok = 门在且目标在——断链口径同 WsEntry.linkOk）；
+/// portals = 链出去按 rel 分组（ok = 门在且**指向该 rel 当前真实路径**——文件夹改名 /
+/// 移动后台账词法平移但旧门指向原路径，对账即断；rel_ok = WS 内文件夹本体还在不在）
+pub fn link_overview(root: &Path) -> LinkOverview {
+  let links = read_links(root)
+    .into_iter()
+    .map(|l| {
+      let door = root.join(l.rel.replace('/', "\\"));
+      let ok = junction::is_reparse_dir(&door) && std::path::Path::new(&l.target).is_dir();
+      LinkOverviewItem { rel: l.rel, target: l.target, ok }
+    })
+    .collect();
+  let mut groups: Vec<PortalOverviewGroup> = Vec::new();
+  for p in read_portals(root) {
+    let src = resolve_under(root, &p.rel).ok().filter(|p| p.is_dir());
+    let canon_src = src.as_ref().and_then(|s| s.canonicalize().ok());
+    let ok = junction::is_reparse_dir(std::path::Path::new(&p.portal))
+      && match (&canon_src, junction::read_target(std::path::Path::new(&p.portal))) {
+        (Some(want), Some(got)) => got.canonicalize().ok().as_ref() == Some(want),
+        _ => false,
+      };
+    let item = PortalOverviewItem { path: p.portal, ok };
+    match groups.iter_mut().find(|g| g.rel == p.rel) {
+      Some(g) => g.portals.push(item),
+      None => groups.push(PortalOverviewGroup { rel: p.rel, rel_ok: canon_src.is_some(), portals: vec![item] }),
+    }
+  }
+  LinkOverview { links, portals: groups }
+}
+
+/// 链接总览返回形状（serde camelCase 给前端）
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkOverview {
+  pub links: Vec<LinkOverviewItem>,
+  pub portals: Vec<PortalOverviewGroup>,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkOverviewItem {
+  pub rel: String,
+  pub target: String,
+  pub ok: bool,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortalOverviewGroup {
+  pub rel: String,
+  pub rel_ok: bool,
+  pub portals: Vec<PortalOverviewItem>,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortalOverviewItem {
+  pub path: String,
+  pub ok: bool,
+}
+
+/// 删除一条链出去入口（面板「删除入口 / 删除记录」）：门在 = 门进系统回收站（红线 a 同口径
+/// 只删门）+ 剔登记；门没了 = 仅剔登记。rel 校验走 resolve_under（越界拒）
+pub fn remove_portal(root: &Path, rel: &str, portal: &Path) -> Result<(), String> {
+  resolve_under(root, rel)?;
+  if junction::is_reparse_dir(portal) {
+    crate::adapters::recycle_bin::delete_to_recycle(&[portal.to_path_buf()])?;
+  }
+  unregister_portal(root, rel, portal)
 }
 
 /// 外部条目导入（2026-10-01 ws ↔ Explorer 互通，PRD 02-13：拖入一律复制 / 系统剪贴板粘贴
@@ -1245,16 +1322,20 @@ pub fn import_external_entries(root: &Path, sources: &[PathBuf], dest_rel: &str,
 
 // ---------- 视图状态：常用固定 + 链接登记清单（PRD 02 步骤 3 / junction 方向 b，.anikit/workspace.json） ----------
 
-/// 视图状态文件形状：pinned = 常用固定 rel 清单；links = 登记链接清单
-///（junction 方向 b：挂进 WS 的外部文件夹「门」台账——路径闸放行链接子树、watcher 补监听、
-/// 断链保留标记全靠它；可删可重建，删了链接退化为「未登记 junction = 越界拒绝」，
-/// 下次 list_dir 惰性补登记自愈）
+/// 视图状态文件形状：pinned = 常用固定 rel 清单；links = 登记链接清单（junction 方向 b：挂进 WS 的
+/// 外部文件夹「门」台账——路径闸放行链接子树、watcher 补监听、断链保留标记全靠它；可删可重建，
+/// 删了链接退化为「未登记 junction = 越界拒绝」，下次 list_dir 惰性补登记自愈）；
+/// portals = 链出去入口台账（junction 方向 a′「管理工作空间」面板 2026-10-02：WS 内文件夹在外部
+/// 摆放的入口门清单——面板总览与对账全靠它；**只管标记不做自动管理**：门没了只标记可手删，
+/// 断了不影响 WS 内本体分毫）
 #[derive(Default, serde::Deserialize, serde::Serialize)]
 struct ViewState {
   #[serde(default)]
   pinned: Vec<String>,
   #[serde(default)]
   links: Vec<LinkEntry>,
+  #[serde(default)]
+  portals: Vec<PortalEntry>,
 }
 
 /// 登记链接条目：rel = 挂载点 / 分隔相对路径；target = 目标绝对路径字符串
@@ -1264,6 +1345,14 @@ struct ViewState {
 pub struct LinkEntry {
   pub rel: String,
   pub target: String,
+}
+
+/// 链出去入口条目：rel = WS 内文件夹（/ 分隔相对路径）；portal = 外部入口门绝对路径
+///（link_out 创建时登记 canonicalize 形态；一文件夹可多条入口——扁平多条不嵌套）
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct PortalEntry {
+  pub rel: String,
+  pub portal: String,
 }
 
 fn view_state_path(root: &Path) -> PathBuf {
@@ -1312,33 +1401,43 @@ pub fn register_link(root: &Path, rel: &str, target: &Path) -> Result<(), String
   write_view_state(root, &st)
 }
 
-/// 剔出登记（含子树：父目录删除 / 链接移除后，其下嵌套登记一并失效）；无变化不回写
+/// 剔出登记（含子树：父目录删除 / 链接移除后，其下嵌套登记一并失效）；portals 同剔
+///（链出去文件夹被删 = 其入口登记同失效）；无变化不回写
 pub fn unregister_link(root: &Path, rel: &str) -> Result<(), String> {
   let mut st = read_view_state(root);
-  let before = st.links.len();
+  let before = st.links.len() + st.portals.len();
   let prefix = format!("{rel}/");
   st.links.retain(|l| l.rel != rel && !l.rel.starts_with(&prefix));
-  if st.links.len() != before {
+  st.portals.retain(|p| p.rel != rel && !p.rel.starts_with(&prefix));
+  if st.links.len() + st.portals.len() != before {
     write_view_state(root, &st)?;
   }
   Ok(())
 }
 
 /// 链接改名 / 移动后清单 rel 平移（rename / move 服务成功后调用）：命中项本身改挂新 rel，
-/// 子树路径（被 rename / move 的目录其下嵌套的链接）整体换词干；无命中不回写
+/// 子树路径（被 rename / move 的目录其下嵌套的链接）整体换词干；portals.rel 同平移
+///（门在外部不动，WS 内文件夹挪了词法身份跟着走——对账时按新 rel 验指向）；无命中不回写
 pub fn update_link_rel(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> {
-  let mut st = read_view_state(root);
-  let mut changed = false;
-  for l in &mut st.links {
-    let new = match l.rel.strip_prefix(old_rel) {
+  fn shifted(rel: &mut String, old_rel: &str, new_rel: &str) -> bool {
+    let new = match rel.strip_prefix(old_rel) {
       Some("") => Some(new_rel.to_string()),
       Some(rest) if rest.starts_with('/') => Some(format!("{new_rel}{rest}")),
       _ => None,
     };
     if let Some(new) = new {
-      l.rel = new;
-      changed = true;
+      *rel = new;
+      return true;
     }
+    false
+  }
+  let mut st = read_view_state(root);
+  let mut changed = false;
+  for l in &mut st.links {
+    changed |= shifted(&mut l.rel, old_rel, new_rel);
+  }
+  for p in &mut st.portals {
+    changed |= shifted(&mut p.rel, old_rel, new_rel);
   }
   if changed {
     write_view_state(root, &st)?;
@@ -1358,6 +1457,39 @@ fn merge_links(root: &Path, links: Vec<LinkEntry>) -> Result<(), String> {
     }
   }
   if changed {
+    write_view_state(root, &st)?;
+  }
+  Ok(())
+}
+
+// —— 链出去入口台账（portals；方向 a′「管理工作空间」面板，2026-10-02）——
+// 与 links 同文件同写点；rename / move / delete 的 rel 平移与剔除随 update_link_rel /
+// unregister_link 一并处理（调用点零新增）。无 reconcile——root 外的门 watcher 管不到，
+// 对账在面板打开 / 操作时现场探测（link_overview）
+
+/// 读链出去入口台账（view state 的 portals 子树）
+pub fn read_portals(root: &Path) -> Vec<PortalEntry> {
+  read_view_state(root).portals
+}
+
+/// 登记一条链出去入口（link_out 创建成功后调用；同 rel+portal 幂等不重复）
+pub fn register_portal(root: &Path, rel: &str, portal: &Path) -> Result<(), String> {
+  let mut st = read_view_state(root);
+  let portal = portal.to_string_lossy().into_owned();
+  if !st.portals.iter().any(|p| p.rel == rel && p.portal == portal) {
+    st.portals.push(PortalEntry { rel: rel.to_string(), portal });
+    write_view_state(root, &st)?;
+  }
+  Ok(())
+}
+
+/// 剔出一条链出去入口登记（面板「删除入口 / 删除记录」；无命中不回写）
+pub fn unregister_portal(root: &Path, rel: &str, portal: &Path) -> Result<(), String> {
+  let mut st = read_view_state(root);
+  let portal = portal.to_string_lossy().into_owned();
+  let before = st.portals.len();
+  st.portals.retain(|p| !(p.rel == rel && p.portal == portal));
+  if st.portals.len() != before {
     write_view_state(root, &st)?;
   }
   Ok(())
@@ -2343,5 +2475,57 @@ mod tests {
     let nested = link_out(&root, "外部目标", &spot).unwrap();
     let got2 = crate::adapters::junction::read_target(&nested).unwrap().canonicalize().unwrap();
     assert_eq!(got2, target.canonicalize().unwrap(), "门套门展平直指最终目标");
+  }
+
+  /// 链出去台账 + 总览对账 + 删除入口（管理工作空间面板后端，2026-10-02）：
+  /// link_out 登记 portals；overview = links 存活态 + portals 指向对账（改名后台账词法
+  /// 平移但旧门指向原路径 = 断）；remove_portal 门没了仅剔登记；unregister_link 同剔 portals
+  #[cfg(windows)]
+  #[test]
+  fn link_out_registry_and_overview() {
+    let (_dir, root) = make_ws(); // _dir = tempdir 守卫（持有不 drop，空间根树不参与本测）
+    fs::create_dir_all(root.join("项目/素材")).unwrap();
+    let ext = tempfile::tempdir().unwrap();
+    let spot = ext.path().join("常用位置");
+    fs::create_dir_all(&spot).unwrap();
+
+    // link_out 登记 portals；建成即对账 ok
+    let link = link_out(&root, "项目/素材", &spot).unwrap();
+    let ov = link_overview(&root);
+    assert_eq!(ov.portals.len(), 1);
+    assert_eq!(ov.portals[0].rel, "项目/素材");
+    assert!(ov.portals[0].rel_ok);
+    assert_eq!(ov.portals[0].portals.len(), 1);
+    assert!(ov.portals[0].portals[0].ok, "建成即对账应 ok");
+    assert_eq!(ov.portals[0].portals[0].path, link.to_string_lossy());
+
+    // 链进来存活态（方向 b 同总览）：正常 ok / 目标删了 断
+    let outside = ext.path().join("外部");
+    fs::create_dir_all(&outside).unwrap();
+    add_link(&root, "", &outside).unwrap();
+    let ov = link_overview(&root);
+    assert_eq!(ov.links.len(), 1);
+    assert!(ov.links[0].ok, "门与目标都在 = ok");
+    fs::remove_dir_all(&outside).unwrap();
+    assert!(!link_overview(&root).links[0].ok, "目标没了 = 断链");
+
+    // 文件夹改名：台账 rel 平移，旧门指向原路径 → 对账断
+    rename_entry(&root, "项目/素材", "素材改").unwrap();
+    let ov = link_overview(&root);
+    assert_eq!(ov.portals[0].rel, "项目/素材改", "台账 rel 随改名平移");
+    assert!(ov.portals[0].rel_ok, "文件夹本体还在");
+    assert!(!ov.portals[0].portals[0].ok, "旧门指向原路径 = 对账断");
+
+    // 门没了 = 对账断；remove_portal 仅剔登记（不碰已没的门）
+    junction::remove(&link).unwrap();
+    assert!(!link_overview(&root).portals[0].portals[0].ok, "门没了对账断");
+    remove_portal(&root, "项目/素材改", &link).unwrap();
+    assert!(read_portals(&root).is_empty(), "剔登记后台账空");
+
+    // unregister_link 同剔 portals（删除 WS 内文件夹走的剔除径，回收站副作用不进测试）
+    link_out(&root, "项目/素材改", &spot).unwrap();
+    assert_eq!(read_portals(&root).len(), 1);
+    unregister_link(&root, "项目").unwrap();
+    assert!(read_portals(&root).is_empty(), "父目录剔除 = 子树 portals 同剔");
   }
 }

@@ -277,13 +277,47 @@ pub fn ws_retarget_link(app: AppHandle, state: State<AppState>, rel_path: String
 
 /// 从 WS 里「链出去」（方向 a′ 产品化）：rel 文件夹在外部 dest_dir 下摆入口 junction
 ///（入口名 = 文件夹名，重名 _n 规避），返回入口绝对路径。**只管创建不管存续**——入口在
-/// root 外，不登记台账、不补监听（无需 AppHandle 重建监听）；落点拒储存空间整树。
+/// root 外，不补监听（无需 AppHandle 重建监听）；登记 portals 台账供「管理工作空间」面板
+/// 总览（登记失败不拆门）；落点拒储存空间整树。
 /// 拒绝（源非文件夹 / 断链门 / 落点缺失 / 落点在空间内）中文报错
 #[tauri::command]
 pub fn ws_link_out(state: State<AppState>, rel_path: String, dest_dir: String) -> Result<String, String> {
   let root = ws_root(&state)?;
   let link = workspace::link_out(&root, &rel_path, std::path::Path::new(&dest_dir))?;
   Ok(link.to_string_lossy().into_owned())
+}
+
+/// 链接总览（「管理工作空间」面板数据源）：链进来门清单（带存活态）+ 链出去入口分组
+///（带对账态——门在且指向该 rel 当前真实路径才算 ok）。未开空间 / 目录缺失 = 空总览不报错
+///（面板空态口径，ws_list_pinned 同惯例）
+#[tauri::command]
+pub fn ws_link_overview(state: State<AppState>) -> workspace::LinkOverview {
+  let Ok(root) = ws_root(&state) else {
+    return workspace::LinkOverview { links: Vec::new(), portals: Vec::new() };
+  };
+  if !root.is_dir() {
+    return workspace::LinkOverview { links: Vec::new(), portals: Vec::new() };
+  }
+  workspace::link_overview(&root)
+}
+
+/// 删除一条链出去入口：门在 = 门进系统回收站（只删门不动 WS 内文件夹）+ 剔登记；
+/// 门没了 = 仅剔登记（「删除记录」同径）
+#[tauri::command]
+pub fn ws_remove_portal(state: State<AppState>, rel_path: String, portal: String) -> Result<(), String> {
+  let root = ws_root(&state)?;
+  workspace::remove_portal(&root, &rel_path, std::path::Path::new(&portal))
+}
+
+/// 在资源管理器中显示链接关联的外部路径（面板专用：链接目标 / 链出去入口——都在 workspace
+/// 外，validated_ws_path 的 ws 内约束不适用；reveal 是无害只读操作，仅校验存在性）
+#[tauri::command]
+pub fn ws_reveal_external(abs_path: String) -> Result<(), String> {
+  let target = std::path::PathBuf::from(&abs_path);
+  if !target.exists() {
+    return Err("路径已不存在（可能刚被移动或删除）".to_string());
+  }
+  crate::adapters::shell_open::reveal(&target)
 }
 
 // ---------- ws ↔ Explorer 剪贴板 / 拖入互通（2026-10-01，PRD 02-13） ----------

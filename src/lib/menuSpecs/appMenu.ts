@@ -170,7 +170,8 @@ function repoEntries(libraryNames: string[]): CtxEntry[] {
     // 资源库 ▸ = 共享 spec（menuSpecs/libraryMenu，2026-09-07 提取）：侧栏资源库行切换钮同一内容
     { label: "资源库", submenu: libraryMenuEntries(libraryNames) },
     "divider",
-    { label: "管理工作空间", disabled: true },
+    // 管理工作空间（2026-10-02 落地点亮）：链接进来 / 链出去双向总览面板，宿主 App.vue
+    { label: "管理工作空间", action: () => void (useUiStore().wsManageOpen = true) },
     { label: "清除缓存并重新加载", disabled: true },
   ];
 }
