@@ -199,10 +199,7 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
                     </span></span>
                   </div>
                 </div>
-                <button class="pv-ws-addbtn">
-                  <AppIcon name="add-small" :size="16" />
-                  添加链接文件夹…（挂载到工作空间根目录）
-                </button>
+                <ActionButton label="添加链接文件夹…" icon="add-small" variant="solid" size="md" title="选外部文件夹，挂载到工作空间根目录" />
               </div>
               <!-- 区块二：链出去（方向 a′ 入口台账）；顶部分隔线 + 大间距区分功能 -->
               <div class="pv-ws-sec sep">
@@ -254,10 +251,7 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
                     </div>
                   </div>
                 </div>
-                <button class="pv-ws-addbtn">
-                  <AppIcon name="add-small" :size="16" />
-                  链出去新文件夹…（选工作空间文件夹 → 选入口摆放位置）
-                </button>
+                <ActionButton label="链出去新文件夹…" icon="add-small" variant="solid" size="md" title="选工作空间文件夹 → 选入口摆放位置" />
               </div>
             </div>
           </div>
@@ -269,7 +263,8 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
             （pv-move-shell 复刻壳加 w640 档）；<b>二轮（用户走查）</b>：卡片化分层——行 / 组 = g4 底 + 1px g5 + 圆角 8 卡
             （hover g5/g6，ni-card 升档），操作组 = 污染文件 item 同款 ni-slide hover 滑入（18 盒 l4→l2），添加行整行按钮化
             （g4 底 hover g5），两区块 24+1px g5 顶线+24 分隔；无底部按钮行（即时生效，§61 同口径）。
-            提案未定稿，暂陈列于本区（framed 复刻族旁），定稿后沉淀组件并迁业务弹窗展区
+            提案未定稿，暂陈列于本区（framed 复刻族旁），定稿后沉淀组件并迁业务弹窗展区；
+            <b>三轮（用户定）</b>：添加行换真件 ActionButton solid md + 前置图标 add-small（展区「导入文件」同排同款）
           </span>
         </div>
         <div class="pv-demo-cell">
@@ -282,18 +277,12 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
               <div class="pv-ws-sec">
                 <SectionTitle variant="block" title="链接进来的文件夹" :count="0" expanded :with-more="false" />
                 <p class="pv-ws-empty">还没有链接进来的文件夹——右键工作空间空白处或文件夹，选「添加链接文件夹…」</p>
-                <button class="pv-ws-addbtn">
-                  <AppIcon name="add-small" :size="16" />
-                  添加链接文件夹…（挂载到工作空间根目录）
-                </button>
+                <ActionButton label="添加链接文件夹…" icon="add-small" variant="solid" size="md" title="选外部文件夹，挂载到工作空间根目录" />
               </div>
               <div class="pv-ws-sec sep">
                 <SectionTitle variant="block" title="链出去的文件夹" :count="0" expanded :with-more="false" />
                 <p class="pv-ws-empty">还没有链出去的文件夹——右键工作空间文件夹，选「在外部位置创建链接…」</p>
-                <button class="pv-ws-addbtn">
-                  <AppIcon name="add-small" :size="16" />
-                  链出去新文件夹…（选工作空间文件夹 → 选入口摆放位置）
-                </button>
+                <ActionButton label="链出去新文件夹…" icon="add-small" variant="solid" size="md" title="选工作空间文件夹 → 选入口摆放位置" />
               </div>
             </div>
           </div>
@@ -600,29 +589,6 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
 }
 .pv-ws-subpath.dim {
   opacity: 0.4;
-}
-/* 添加行 = 整行按钮：40 高 / g4 底 + 圆角 8 / 图标+文字二级；hover g5 底 + 一级 */
-.pv-ws-addbtn {
-  display: flex;
-  align-items: center;
-  gap: var(--n-space-6);
-  height: 40px;
-  padding: 0 var(--n-space-12);
-  box-sizing: border-box;
-  border-radius: var(--n-radius-8);
-  background: var(--n-g4);
-  font-size: var(--n-fs-body);
-  line-height: var(--n-lh-body);
-  color: var(--n-l2);
-  cursor: pointer;
-  flex: none;
-  transition:
-    color var(--n-dur-100) var(--n-ease-in-out),
-    background var(--n-dur-100) var(--n-ease-in-out);
-}
-.pv-ws-addbtn:hover {
-  color: var(--n-l1);
-  background: var(--n-g5);
 }
 /* 空态引导行：次要文字 12/16 三级，上下留白 12 */
 .pv-ws-empty {
