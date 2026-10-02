@@ -224,6 +224,11 @@ onMounted(() => {
   void syncMaximized();
   void ui.initSettings(); // 全局 UI 设置加载 + 变更防抖写回（2026-07-28 持久化）
   window.addEventListener("resize", onResize);
+  // ws 视口键清理（2026-10-03_12 用户定）：scrollPositions / viewRowHeights 的 ws: 键随浏览
+  // 只增不减，目录删除 / 改名后成僵尸——root 就绪（启动 / 切空间 reseed 后）静默剔一轮
+  watch(() => ws.root, (r) => {
+    if (r) void ui.pruneWsViewKeys();
+  }, { immediate: true });
   // 视图切换（6.1）：左栏选中项变化即清空素材选择；
   // 3.5 新增区同口径归位（2026-08-19 用户定：切视图再回来 = 新增项并入排序流）；
   // 顺带按 ws: 前缀归桶记录各模式停留视口（2026-09-19 用户定：库 / 工作空间切换各自恢复）；

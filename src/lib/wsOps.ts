@@ -27,6 +27,11 @@ export async function wsDirStats(relPath: string): Promise<WsDirStats> {
   return await invoke<WsDirStats>("ws_dir_stats", { relPath });
 }
 
+// 目录存在性批量判定（ws_dirs_exist，2026-10-03_12 视口键清理）：跟随 is_dir || reparse 断链门
+export async function wsDirsExist(rels: string[]): Promise<boolean[]> {
+  return await invoke<boolean[]>("ws_dirs_exist", { rels });
+}
+
 // list_workspace_dir 单条（services/workspace.rs WsEntry）：磁盘实况语义，无标签 / 评分等附加数据
 export interface WsEntry {
   name: string; // 条目名（文件 / 文件夹名）

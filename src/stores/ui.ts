@@ -7,6 +7,7 @@ import {
   type DetailTabKey,
 } from "../lib/detailSections";
 import type { SortKey } from "../lib/sortPlacements";
+import { wsDirsExist } from "../lib/wsOps";
 
 export type LeftView = "library" | "workspace" | "tags" | "pins";
 export type RightView = "detail" | "aiChat" | "aiPaint" | "aiVideo";
@@ -214,6 +215,29 @@ export const useUiStore = defineStore("ui", {
     initSettings(): Promise<void> {
       settingsPromise ??= this.loadSettings();
       return settingsPromise;
+    },
+    // ws 视口键清理（2026-10-03_12 用户定）：scrollPositions / viewRowHeights 按视口记键
+    // 只增不减，ws 目录删除 / 改名后旧键成僵尸——root 就绪（启动 / 切空间）时静默剔一轮。
+    // 判定走后端批量 stat（跟随 is_dir || reparse 断链门 = 活）；命令失败保守不清；
+    // folder: 键留观察项（库文件夹 id 稳定僵尸率低，且 folders 树无加载完成标记易误剔）
+    async pruneWsViewKeys(): Promise<void> {
+      const wsKeys = new Set(
+        [...Object.keys(this.scrollPositions), ...Object.keys(this.viewRowHeights)].filter((k) =>
+          k.startsWith("ws:"),
+        ),
+      );
+      const rels = [...wsKeys].map((k) => k.slice(3)).filter((rel) => rel !== ""); // 根键恒活
+      if (rels.length === 0) return;
+      const alive = await wsDirsExist(rels).catch(() => null);
+      if (!alive) return;
+      const dead = new Set(rels.filter((_, i) => !alive[i]).map((rel) => `ws:${rel}`));
+      if (dead.size === 0) return;
+      for (const k of Object.keys(this.scrollPositions)) {
+        if (dead.has(k)) delete this.scrollPositions[k];
+      }
+      for (const k of Object.keys(this.viewRowHeights)) {
+        if (dead.has(k)) delete this.viewRowHeights[k];
+      }
     },
     async loadSettings(): Promise<void> {
       try {

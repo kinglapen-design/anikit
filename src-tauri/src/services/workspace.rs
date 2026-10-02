@@ -231,6 +231,23 @@ pub fn list_dir(root: &Path, rel: &str) -> Result<Vec<WsEntry>, String> {
   Ok(entries)
 }
 
+/// 目录存在性批量判定（2026-10-03_12 前端 ws 视口键清理用）：跟随式 is_dir || reparse 门
+///（断链门树里仍显示、视口可开弹修复窗 = 活键口径）；越界（`..` / 绝对路径组件）/ 文件 = false。
+/// 逐键 stat 零 read_dir（几百键微秒级）。**不走 resolve_under 越界闸**——那是写操作安全语义
+///（未登记 junction = 越界拒绝），而链接门（含用户自建的未登记野门）在树里照常显示、视口键
+/// 是活键；存在性判定只回答「目录在不在」，词法校验防越界即可
+pub fn dir_exists(root: &Path, rel: &str) -> bool {
+  let mut abs = root.to_path_buf();
+  for comp in Path::new(rel).components() {
+    match comp {
+      Component::Normal(c) => abs.push(c),
+      Component::CurDir => {}
+      _ => return false,
+    }
+  }
+  abs.is_dir() || junction::is_reparse_dir(&abs)
+}
+
 /// 目录属性统计（2026-10-03 详情面板目录属性落地，Windows 属性窗口「包含 / 大小」口径）：
 /// 递归子树的文件总数 / 子文件夹总数（不含根自身）/ 文件字节总和（库 FolderDetail「占用空间」
 /// 同口径 = 字节求和，非簇对齐）。ctime_ms / mtime_ms = 根目录自身时间（详情根视口的合成条目
@@ -1806,6 +1823,29 @@ mod tests {
     assert_eq!(s.files, 2, "穿透统计目标内容，回环不重复计");
     assert_eq!(s.dirs, 4, "内 / 门 / 外子 / 回环（门本身计 1，子树防回环跳过）");
     assert_eq!(s.total_size, 5);
+  }
+
+  /// 目录存在性判定（2026-10-03_12 ws 视口键清理）：目录 / 链接门（含断链）true；
+  /// 文件 / 不存在 / 越界 false
+  #[test]
+  fn dir_exists_covers_link_and_rejects_non_dir() {
+    let (_dir, root) = make_ws();
+    fs::create_dir_all(root.join("子")).unwrap();
+    fs::write(root.join("文.txt"), b"x").unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    crate::adapters::junction::create(&root.join("门"), outside.path()).unwrap();
+    // 断链门 = 先建门再删目标（create 要求目标已存在）
+    let gone = outside.path().join("没了");
+    fs::create_dir_all(&gone).unwrap();
+    crate::adapters::junction::create(&root.join("断门"), &gone).unwrap();
+    fs::remove_dir(&gone).unwrap();
+    assert!(dir_exists(&root, ""));
+    assert!(dir_exists(&root, "子"));
+    assert!(dir_exists(&root, "门"), "链接门 = 活");
+    assert!(dir_exists(&root, "断门"), "断链门树里仍显示 = 活（reparse 判定）");
+    assert!(!dir_exists(&root, "文.txt"), "文件不是目录");
+    assert!(!dir_exists(&root, "没有"));
+    assert!(!dir_exists(&root, "../越界"), "越界拒");
   }
 
   /// url-safe 编码：非 ASCII 与 / 转 %XX，单射（不同 rel 不同名）

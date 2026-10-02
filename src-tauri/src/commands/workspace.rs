@@ -47,6 +47,15 @@ pub async fn list_workspace_dir(state: State<'_, AppState>, rel_path: String) ->
     .map_err(|e| format!("工作空间目录列举任务异常：{e}"))?
 }
 
+/// 目录存在性批量判定（2026-10-03_12 前端 ws 视口键清理——scrollPositions / viewRowHeights
+/// 的 ws: 键随浏览只增不减，目录删除 / 改名后成僵尸，root 就绪时静默剔除）：
+/// 逐键 stat（跟随 is_dir || reparse 断链门），未开空间全 false（前端只在 root 就绪后调）
+#[tauri::command]
+pub fn ws_dirs_exist(state: State<AppState>, rels: Vec<String>) -> Vec<bool> {
+  let Ok(root) = ws_root(&state) else { return vec![false; rels.len()] };
+  rels.iter().map(|rel| workspace::dir_exists(&root, rel)).collect()
+}
+
 /// 目录属性统计（2026-10-03 详情面板目录属性：文件数 / 子文件夹数 / 占用空间 + 根目录自身
 /// 时间）：递归穿透 junction、canonical 防循环、.anikit 跳过，口径见 services::workspace::dir_stats。
 /// 同步递归 IO 挪 spawn_blocking（list_workspace_dir 同径——大子树遍历阻塞 tokio worker 会
