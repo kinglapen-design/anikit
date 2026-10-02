@@ -332,6 +332,7 @@ pub fn run() {
       commands::library::merge_libraries,
       commands::workspace::workspace_root,
       commands::workspace::list_workspace_dir,
+      commands::workspace::ws_dir_stats,
       commands::workspace::request_workspace_thumbs,
       commands::workspace::reveal_path,
       commands::workspace::open_path_with_default_app,

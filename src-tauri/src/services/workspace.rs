@@ -70,10 +70,11 @@ pub struct WsEntry {
   pub link_ok: bool,
   /// 文件字节数；目录恒 0
   pub size: u64,
-  /// 文件修改时间（Unix 毫秒）；目录恒 0
+  /// 修改时间（Unix 毫秒）：文件 = mtime；目录 = 目录 mtime（Windows 有效，直接子项增删时更新，
+  /// 2026-10-03 目录属性落地放开）；平台不支持 / 获取失败恒 0
   pub mtime_ms: i64,
-  /// 文件创建时间（Unix 毫秒，2026-09-26 详情面板基础数据补）：复用同一份 metadata 零额外开销；
-  /// 目录 / 平台不支持（created() Err）恒 0
+  /// 创建时间（Unix 毫秒，2026-09-26 详情面板基础数据补）：复用同一份 metadata 零额外开销；
+  /// 目录同样取值（2026-10-03 放开）；平台不支持（created() Err）恒 0
   pub ctime_ms: i64,
   /// 布局比例来源宽高（PRD 02：卡片布局按真实比例自适应，无填充裁切）：图片 = 源像素
   /// （内容魔数探测）；非图片（视频/音频/字体等）缓存缩略图新鲜时 = 缩略图尺寸（与源同比例，
@@ -230,6 +231,64 @@ pub fn list_dir(root: &Path, rel: &str) -> Result<Vec<WsEntry>, String> {
   Ok(entries)
 }
 
+/// 目录属性统计（2026-10-03 详情面板目录属性落地，Windows 属性窗口「包含 / 大小」口径）：
+/// 递归子树的文件总数 / 子文件夹总数（不含根自身）/ 文件字节总和（库 FolderDetail「占用空间」
+/// 同口径 = 字节求和，非簇对齐）。ctime_ms / mtime_ms = 根目录自身时间（详情根视口的合成条目
+/// 无 entry 时间取此；子目录前端优先用条目值）。
+#[derive(Debug, Default, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WsDirStats {
+  pub files: u64,
+  pub dirs: u64,
+  pub total_size: u64,
+  pub ctime_ms: i64,
+  pub mtime_ms: i64,
+}
+
+/// 统计口径：**穿透 junction**（Explorer 属性窗口同口径——方向 b 链接门的内容是「挂进来的
+/// 文件夹」，用户认知即自身内容），canonicalize 已访问集防循环（外部自建 junction 可能指回
+/// 空间内；断链门 canonicalize 失败自然跳过其子树，门本身已在父级计数）；`.anikit` 全层跳过
+///（list_dir 同口径，缓存不是用户内容）；读取失败子树静默跳过。目录不存在 / 越界 Err 上抛
+///（list_dir 同径——详情面板只对现存目录发起，失败前端静默不加行）
+pub fn dir_stats(root: &Path, rel: &str) -> Result<WsDirStats, String> {
+  let abs = resolve_under(root, rel)?;
+  let meta = fs::metadata(&abs).map_err(|e| format!("目录读取失败：{e}"))?;
+  let to_ms = |t: std::io::Result<std::time::SystemTime>| {
+    t.ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64).unwrap_or(0)
+  };
+  let mut stats = WsDirStats { ctime_ms: to_ms(meta.created()), mtime_ms: to_ms(meta.modified()), ..Default::default() };
+  let mut seen = std::collections::HashSet::new();
+  let mut stack = vec![abs];
+  while let Some(dir) = stack.pop() {
+    match dir.canonicalize() {
+      Ok(c) => {
+        if !seen.insert(c) {
+          continue; // junction 回环：已访问过的子树不重复统计
+        }
+      }
+      Err(_) => continue, // 断链门：门本身已计数，子树不可达
+    }
+    let Ok(rd) = fs::read_dir(&dir) else { continue };
+    for e in rd.flatten() {
+      if e.file_name() == CACHE_DIR {
+        continue;
+      }
+      let Ok(ft) = e.file_type() else { continue };
+      // 目录判定：普通目录 || 目录 reparse（junction「门」）——std file_type 对链接不跟随，
+      // is_dir()/is_file() 对 reparse 恒 false（!is_symlink 门），junction 须候选补 reparse
+      // 检测（list_dir 同口径；文件符号链接 is_reparse_dir false 自然不计）
+      if ft.is_dir() || (ft.is_symlink() && junction::is_reparse_dir(&e.path())) {
+        stats.dirs += 1;
+        stack.push(e.path());
+      } else if ft.is_file() {
+        stats.files += 1;
+        stats.total_size += e.metadata().map(|m| m.len()).unwrap_or(0);
+      }
+    }
+  }
+  Ok(stats)
+}
+
 /// 单条目：文件补 大小 / mtime / 扩展名 / 缩略图（内容缩略图 → 格式图标回退）；目录恒无缩略图，
 /// 补 has_sub_dir（树展开箭头显隐用）。is_link = 目录链接（junction「门」，含断链——断链时
 /// 跟随式 metadata 失败 link_ok 自然 false、has_sub_dir 的 read_dir 失败自然 false）。
@@ -240,26 +299,22 @@ fn entry(root: &Path, rel_base: &str, path: &Path, name: &str, is_dir: bool, is_
   // 链接目标可达性 = 跟随式 metadata 探测成功（断链 = false；非链接恒 false）
   let link_ok = is_link && meta.is_some();
   let size = if is_dir { 0 } else { meta.as_ref().map(|m| m.len()).unwrap_or(0) };
-  let mtime_ms = if is_dir {
-    0
-  } else {
-    meta.as_ref()
-      .and_then(|m| m.modified().ok())
-      .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-      .map(|d| d.as_millis() as i64)
-      .unwrap_or(0)
-  };
-  // 创建时间（2026-09-26 详情面板基础数据）：metadata 已在手，created() 零额外 syscall；
-  // 平台不支持 / 获取失败静默 0（前端不显示该行）
-  let ctime_ms = if is_dir {
-    0
-  } else {
-    meta.as_ref()
-      .and_then(|m| m.created().ok())
-      .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-      .map(|d| d.as_millis() as i64)
-      .unwrap_or(0)
-  };
+  // 修改 / 创建时间：目录同样取值（Windows 目录时间有效；mtime = 直接子项增删时更新，语义
+  // 正对详情「修改日期」）——2026-10-03 详情面板目录属性落地放开（原人为抹零是「目录无
+  // 递归统计」口径的连带，时间并非统计）；平台不支持 / 获取失败静默 0（前端不加行口径不变）
+  let mtime_ms = meta
+    .as_ref()
+    .and_then(|m| m.modified().ok())
+    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+    .map(|d| d.as_millis() as i64)
+    .unwrap_or(0);
+  // 创建时间（2026-09-26 详情面板基础数据）：metadata 已在手，created() 零额外 syscall
+  let ctime_ms = meta
+    .as_ref()
+    .and_then(|m| m.created().ok())
+    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+    .map(|d| d.as_millis() as i64)
+    .unwrap_or(0);
   let ext = if is_dir {
     String::new()
   } else {
@@ -1668,7 +1723,8 @@ mod tests {
     assert_eq!(alpha.thumb_path, None, "未生成缓存时 thumbPath=null");
 
     let dir_en = list.iter().find(|e| e.is_dir).unwrap();
-    assert_eq!((dir_en.size, dir_en.mtime_ms), (0, 0));
+    assert_eq!(dir_en.size, 0);
+    assert!(dir_en.mtime_ms > 0, "目录时间 2026-10-03 放开：目录 mtime 有效（直接子项增删时更新）");
     assert_eq!(dir_en.ext, "");
     let noext = list.iter().find(|e| e.name == "无扩展名").unwrap();
     assert_eq!(noext.ext, "");
@@ -1715,6 +1771,41 @@ mod tests {
     assert!(list_dir(&root, &abs_outside.to_string_lossy()).is_err(), "绝对路径应被拒绝");
     assert!(list_dir(&root, "不存在/子").is_err(), "不存在的目录读取出错（非越界）");
     assert!(resolve_under(&root, "").is_ok(), "空 rel = 根");
+  }
+
+  /// 目录属性统计（2026-10-03）：递归计数 / 字节求和 / .anikit 跳过 / 不存在 Err
+  #[test]
+  fn dir_stats_counts_recursively() {
+    let (_dir, root) = make_ws();
+    fs::create_dir_all(root.join("a/b")).unwrap();
+    fs::write(root.join("a/一.txt"), b"12345").unwrap();
+    fs::write(root.join("a/b/二.txt"), b"678").unwrap();
+    fs::write(root.join("根.txt"), b"9").unwrap();
+    fs::create_dir_all(root.join(CACHE_DIR)).unwrap();
+    fs::write(root.join(CACHE_DIR).join("缓存.txt"), b"xxxx").unwrap();
+    let s = dir_stats(&root, "a").unwrap();
+    assert_eq!((s.files, s.dirs, s.total_size), (2, 1, 8), "a 子树：b 计入（不含 a 自身）");
+    let s_root = dir_stats(&root, "").unwrap();
+    assert_eq!((s_root.files, s_root.dirs, s_root.total_size), (3, 2, 9), "根：.anikit 整棵跳过");
+    assert!(dir_stats(&root, "不存在").is_err(), "目录不存在 Err 上抛（list_dir 同径）");
+  }
+
+  /// 目录属性统计穿透 junction（Explorer 同口径）+ canonical 集防回环（2026-10-03）
+  #[test]
+  fn dir_stats_junction_pierce_and_loop_guard() {
+    let (_dir, root) = make_ws();
+    fs::create_dir_all(root.join("内")).unwrap();
+    fs::write(root.join("内/a.txt"), b"xx").unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    fs::create_dir_all(outside.path().join("外子")).unwrap();
+    fs::write(outside.path().join("外子/b.txt"), b"yyy").unwrap();
+    crate::adapters::junction::create(&root.join("门"), outside.path()).unwrap();
+    // 回环门：指向空间自身——防回环必须终止且内容不重复统计
+    crate::adapters::junction::create(&root.join("内/回环"), &root).unwrap();
+    let s = dir_stats(&root, "").unwrap();
+    assert_eq!(s.files, 2, "穿透统计目标内容，回环不重复计");
+    assert_eq!(s.dirs, 4, "内 / 门 / 外子 / 回环（门本身计 1，子树防回环跳过）");
+    assert_eq!(s.total_size, 5);
   }
 
   /// url-safe 编码：非 ASCII 与 / 转 %XX，单射（不同 rel 不同名）

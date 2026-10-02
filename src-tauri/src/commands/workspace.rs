@@ -47,6 +47,19 @@ pub async fn list_workspace_dir(state: State<'_, AppState>, rel_path: String) ->
     .map_err(|e| format!("工作空间目录列举任务异常：{e}"))?
 }
 
+/// 目录属性统计（2026-10-03 详情面板目录属性：文件数 / 子文件夹数 / 占用空间 + 根目录自身
+/// 时间）：递归穿透 junction、canonical 防循环、.anikit 跳过，口径见 services::workspace::dir_stats。
+/// 同步递归 IO 挪 spawn_blocking（list_workspace_dir 同径——大子树遍历阻塞 tokio worker 会
+/// 饿死同线程异步任务）；未开空间 / 目录缺失 / 越界 Err 上抛（前端只对现存目录发起，失败静默不加行）
+#[tauri::command]
+pub async fn ws_dir_stats(state: State<'_, AppState>, rel_path: String) -> Result<workspace::WsDirStats, String> {
+  let Some(space) = state.space.lock().map_err(|e| e.to_string())?.clone() else { return Err("未开启工作空间".to_string()) };
+  let root = space.root.join(WORKSPACE_DIR);
+  tauri::async_runtime::spawn_blocking(move || workspace::dir_stats(&root, &rel_path))
+    .await
+    .map_err(|e| format!("工作空间目录统计任务异常：{e}"))?
+}
+
 /// 在文件管理器中打开并选中（工作空间条目右键；按真实路径，约束在当前空间 workspace 内）
 #[tauri::command]
 pub fn reveal_path(state: State<AppState>, abs_path: String) -> Result<(), String> {

@@ -12,6 +12,21 @@ export interface WsRootInfo {
   exists: boolean; // 目录是否存在（空间创建初期 / 目录被删时 false，前端据此显空态）
 }
 
+// 目录属性统计（ws_dir_stats，2026-10-03 详情面板目录属性）：递归文件总数 / 子文件夹总数
+//（不含根自身）/ 文件字节总和（占用空间 = 字节求和，库 FolderDetail 同口径）；穿透 junction
+// 防回环、.anikit 跳过；ctimeMs/mtimeMs = 根目录自身时间（根视口合成条目无 entry 时间取此）
+export interface WsDirStats {
+  files: number;
+  dirs: number;
+  totalSize: number;
+  ctimeMs: number;
+  mtimeMs: number;
+}
+
+export async function wsDirStats(relPath: string): Promise<WsDirStats> {
+  return await invoke<WsDirStats>("ws_dir_stats", { relPath });
+}
+
 // list_workspace_dir 单条（services/workspace.rs WsEntry）：磁盘实况语义，无标签 / 评分等附加数据
 export interface WsEntry {
   name: string; // 条目名（文件 / 文件夹名）
