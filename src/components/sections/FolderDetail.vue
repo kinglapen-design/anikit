@@ -66,10 +66,12 @@ const dataRows = computed<{ label: string; values: string[] }[]>(() => {
       <AppIcon name="folder-detail-panel" :size="192" />
     </div>
   </section>
-  <!-- 输入框区块（稿：padding 12 / gap 8 / border-top 通用/三级）；
+  <!-- 输入框区块（稿：padding 12 / gap 8 / border-top 通用/三级——border-top 是与缩略图区块的
+       分隔；quick 形态无缩略图区块时本块成面板首块，去 border-top（.fd-first，2026-10-03 WsDetail
+       同报同修：首块 top-border 与窗口控制区衔接多出 1px 线）；
        快速访问 = 单名称框（不让改名——本面板输入框恒只读口径；focusable=false 不出聚焦描边，
        2026-08-31 用户定：固定入口亮聚焦边误导人以为能输入；文件夹名称框保留聚焦态） -->
-  <section class="fd-inputs">
+  <section class="fd-inputs" :class="{ 'fd-first': !folder }">
     <TextInput :model-value="folder ? folder.name : (quick?.name ?? '')" readonly :focusable="!!folder" placeholder="名称" />
     <TextInput v-if="folder" model-value="" readonly placeholder="http://" trailing-icon="link" />
   </section>
@@ -106,6 +108,11 @@ const dataRows = computed<{ label: string; values: string[] }[]>(() => {
   padding: var(--n-space-12);
   border-top: 1px solid var(--n-g3);
   flex: none;
+}
+/* quick 形态 = 面板首块（无缩略图区块）：去 border-top——首块 top-border 与窗口控制区衔接
+   多出 1px 线（2026-10-03 WsDetail 同报同修；文件夹形态保留 = 与缩略图区块的分隔线） */
+.fd-inputs.fd-first {
+  border-top: none;
 }
 .fd-data {
   display: flex;

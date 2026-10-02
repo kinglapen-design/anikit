@@ -93,7 +93,9 @@ const dataRows = computed<{ label: string; values: string[] }[]>(() => {
 </script>
 
 <template>
-  <!-- 输入框区块（详情区块公共壳：padding 12 / gap 8 / border-top 通用/三级——同 FolderDetail fd-inputs）；
+  <!-- 输入框区块（详情区块公共壳：padding 12 / gap 8——**首块无 border-top**（FolderDetail
+       .fd-thumb 同口径：本形态无缩略图区块，输入框区块即面板首块，top-border 会与窗口控制区
+       衔接多出 1px 线，2026-10-03 实机报）；
        位置框 root 未就绪的窗口期 dirPath 为 null → 空值显 placeholder -->
   <section class="wd-inputs">
     <TextInput :model-value="name" readonly placeholder="名称" />
@@ -113,7 +115,8 @@ const dataRows = computed<{ label: string; values: string[] }[]>(() => {
   flex-direction: column;
   gap: var(--n-space-8);
   padding: var(--n-space-12);
-  border-top: 1px solid var(--n-g3);
+  /* 无 border-top——本形态首块（无缩略图区块），贴面板顶（FolderDetail .fd-thumb 首块同口径，
+     2026-10-03 实机报：与窗口控制区衔接多出 1px 线） */
   flex: none;
 }
 .wd-data {
