@@ -3,6 +3,7 @@
 // ConfirmModal 是 fixed 遮罩层不便静态展示：.pv-modal-shell 复刻窗口口径（口径变更时与组件同步），
 // 末行真实弹出实例验收遮罩（黑色-50%）与弹出动画（缩放+淡入 150ms）。
 import { ref } from "vue";
+import "../../components/items/items.css";
 import ActionButton from "../../components/buttons/ActionButton.vue";
 import IconButton from "../../components/buttons/IconButton.vue";
 import AppIcon from "../../components/AppIcon.vue";
@@ -167,87 +168,97 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
               <IconButton name="close-large" title="关闭" />
             </div>
             <div class="pv-ws-body">
-              <SectionTitle variant="block" title="链接进来的文件夹" :count="2" expanded :with-more="false" />
-              <div class="pv-ws-rows">
-                <!-- 正常链接门：徽章 + 门名 / ← 目标路径 + 三操作（重新定位 / 显示 / 删除） -->
-                <div class="pv-ws-row">
-                  <AppIcon name="linked-file-badge" :size="18" class="pv-ws-lead" />
-                  <div class="pv-ws-text">
-                    <span class="pv-ws-name">01_projects</span>
-                    <span class="pv-ws-path" title="D:\anikit\01_projects">← D:\anikit\01_projects</span>
+              <!-- 区块一：链进来（方向 b 门清单） -->
+              <div class="pv-ws-sec">
+                <SectionTitle variant="block" title="链接进来的文件夹" :count="2" expanded :with-more="false" />
+                <div class="pv-ws-cards">
+                  <!-- 正常链接门：徽章 + 门名 / ← 目标路径；操作组 hover 滑入（污染文件 item 同款） -->
+                  <div class="pv-ws-card ni-hover">
+                    <AppIcon name="linked-file-badge" :size="18" class="pv-ws-lead" />
+                    <div class="pv-ws-text">
+                      <span class="pv-ws-name">01_projects</span>
+                      <span class="pv-ws-path" title="D:\anikit\01_projects">← D:\anikit\01_projects</span>
+                    </div>
+                    <span class="ni-slide"><span class="ni-slide-inner">
+                      <button class="pv-ws-act" title="重新定位…"><AppIcon name="link-small" :size="18" /></button>
+                      <button class="pv-ws-act" title="在资源管理器中显示"><AppIcon name="open-in-explorer" :size="18" /></button>
+                      <button class="pv-ws-act" title="删除链接（只删门进回收站）"><AppIcon name="trash" :size="18" /></button>
+                    </span></span>
                   </div>
-                  <span class="pv-ws-ops">
-                    <IconButton variant="bare" size="sm" name="link-small" title="重新定位…" />
-                    <IconButton variant="bare" size="sm" name="open-in-explorer" title="在资源管理器中显示" />
-                    <IconButton variant="bare" size="sm" name="trash" title="删除链接（只删门进回收站）" />
-                  </span>
-                </div>
-                <!-- 断链门：名后 warning 徽章 + 文本 dimmed 0.4 置灰（§65 同档） -->
-                <div class="pv-ws-row">
-                  <AppIcon name="linked-file-badge" :size="18" class="pv-ws-lead" />
-                  <div class="pv-ws-text dim">
-                    <span class="pv-ws-name">参考素材<TwoToneIcon name="warning-small" :size="14" class="pv-ws-warn" /></span>
-                    <span class="pv-ws-path" title="D:\参考\动作参考（目标已不存在）">← D:\参考\动作参考</span>
+                  <!-- 断链门：整卡 dimmed 0.4 置灰 + 名后 warning 徽章（§65 同档） -->
+                  <div class="pv-ws-card ni-hover dim">
+                    <AppIcon name="linked-file-badge" :size="18" class="pv-ws-lead" />
+                    <div class="pv-ws-text">
+                      <span class="pv-ws-name">参考素材<TwoToneIcon name="warning-small" :size="14" class="pv-ws-warn" /></span>
+                      <span class="pv-ws-path" title="D:\参考\动作参考（目标已不存在）">← D:\参考\动作参考</span>
+                    </div>
+                    <span class="ni-slide"><span class="ni-slide-inner">
+                      <button class="pv-ws-act" title="重新定位…"><AppIcon name="link-small" :size="18" /></button>
+                      <button class="pv-ws-act" title="在资源管理器中显示"><AppIcon name="open-in-explorer" :size="18" /></button>
+                      <button class="pv-ws-act" title="删除链接（只删门进回收站）"><AppIcon name="trash" :size="18" /></button>
+                    </span></span>
                   </div>
-                  <span class="pv-ws-ops">
-                    <IconButton variant="bare" size="sm" name="link-small" title="重新定位…" />
-                    <IconButton variant="bare" size="sm" name="open-in-explorer" title="在资源管理器中显示" />
-                    <IconButton variant="bare" size="sm" name="trash" title="删除链接（只删门进回收站）" />
-                  </span>
                 </div>
+                <button class="pv-ws-addbtn">
+                  <AppIcon name="add-small" :size="16" />
+                  添加链接文件夹…（挂载到工作空间根目录）
+                </button>
               </div>
-              <button class="pv-ws-add">
-                <AppIcon name="add-small" :size="16" />
-                添加链接文件夹…（挂载到工作空间根目录）
-              </button>
-              <SectionTitle variant="block" title="链出去的文件夹" :count="2" expanded :with-more="false" />
-              <div class="pv-ws-rows">
-                <!-- 组 1：文件夹 + 两条入口（均正常） -->
-                <div class="pv-ws-group">
-                  <div class="pv-ws-ghead">
-                    <TwoToneIcon name="folder-closed" :size="18" />
-                    <span class="pv-ws-name">02_创作</span>
-                    <IconButton variant="bare" size="sm" name="add-small" title="添加入口路径…" class="pv-ws-gadd" />
+              <!-- 区块二：链出去（方向 a′ 入口台账）；顶部分隔线 + 大间距区分功能 -->
+              <div class="pv-ws-sec sep">
+                <SectionTitle variant="block" title="链出去的文件夹" :count="2" expanded :with-more="false" />
+                <div class="pv-ws-cards">
+                  <!-- 组 1：文件夹 + 两条入口（均正常）；组卡 hover 首行出「添加入口」，子行各自 hover 出操作 -->
+                  <div class="pv-ws-gcard">
+                    <div class="pv-ws-ghead">
+                      <TwoToneIcon name="folder-closed" :size="18" />
+                      <span class="pv-ws-name">02_创作</span>
+                      <span class="ni-slide"><span class="ni-slide-inner">
+                        <button class="pv-ws-act" title="添加入口路径…"><AppIcon name="add-small" :size="18" /></button>
+                      </span></span>
+                    </div>
+                    <div class="pv-ws-sub ni-hover">
+                      <AppIcon name="link-small" :size="14" class="pv-ws-sublead" />
+                      <span class="pv-ws-subpath" title="D:\常用\02_创作">D:\常用\02_创作</span>
+                      <span class="ni-slide"><span class="ni-slide-inner">
+                        <button class="pv-ws-act" title="在资源管理器中显示"><AppIcon name="open-in-explorer" :size="18" /></button>
+                        <button class="pv-ws-act" title="删除入口（门进回收站 + 剔记录）"><AppIcon name="trash" :size="18" /></button>
+                      </span></span>
+                    </div>
+                    <div class="pv-ws-sub ni-hover">
+                      <AppIcon name="link-small" :size="14" class="pv-ws-sublead" />
+                      <span class="pv-ws-subpath" title="E:\工作盘\创作">E:\工作盘\创作</span>
+                      <span class="ni-slide"><span class="ni-slide-inner">
+                        <button class="pv-ws-act" title="在资源管理器中显示"><AppIcon name="open-in-explorer" :size="18" /></button>
+                        <button class="pv-ws-act" title="删除入口（门进回收站 + 剔记录）"><AppIcon name="trash" :size="18" /></button>
+                      </span></span>
+                    </div>
                   </div>
-                  <div class="pv-ws-sub">
-                    <AppIcon name="link-small" :size="14" class="pv-ws-sublead" />
-                    <span class="pv-ws-path one" title="D:\常用\02_创作">D:\常用\02_创作</span>
-                    <span class="pv-ws-ops">
-                      <IconButton variant="bare" size="sm" name="open-in-explorer" title="在资源管理器中显示" />
-                      <IconButton variant="bare" size="sm" name="trash" title="删除入口（门进回收站 + 剔记录）" />
-                    </span>
-                  </div>
-                  <div class="pv-ws-sub">
-                    <AppIcon name="link-small" :size="14" class="pv-ws-sublead" />
-                    <span class="pv-ws-path one" title="E:\工作盘\创作">E:\工作盘\创作</span>
-                    <span class="pv-ws-ops">
-                      <IconButton variant="bare" size="sm" name="open-in-explorer" title="在资源管理器中显示" />
-                      <IconButton variant="bare" size="sm" name="trash" title="删除入口（门进回收站 + 剔记录）" />
-                    </span>
+                  <!-- 组 2：入口被外部删除（门没了 = 子行置灰 + warning，操作只留删除记录） -->
+                  <div class="pv-ws-gcard">
+                    <div class="pv-ws-ghead">
+                      <TwoToneIcon name="folder-closed" :size="18" />
+                      <span class="pv-ws-name">04_文库</span>
+                      <span class="ni-slide"><span class="ni-slide-inner">
+                        <button class="pv-ws-act" title="添加入口路径…"><AppIcon name="add-small" :size="18" /></button>
+                      </span></span>
+                    </div>
+                    <div class="pv-ws-sub ni-hover">
+                      <AppIcon name="link-small" :size="14" class="pv-ws-sublead" />
+                      <span class="pv-ws-subpath dim" title="C:\Users\kingl\Desktop\文库（入口已不存在）">
+                        C:\Users\kingl\Desktop\文库<TwoToneIcon name="warning-small" :size="14" class="pv-ws-warn" />
+                      </span>
+                      <span class="ni-slide"><span class="ni-slide-inner">
+                        <button class="pv-ws-act" title="删除记录（入口已不在，仅剔登记）"><AppIcon name="trash" :size="18" /></button>
+                      </span></span>
+                    </div>
                   </div>
                 </div>
-                <!-- 组 2：入口被外部删除（门没了 = 置灰 + warning，操作只留删除记录） -->
-                <div class="pv-ws-group">
-                  <div class="pv-ws-ghead">
-                    <TwoToneIcon name="folder-closed" :size="18" />
-                    <span class="pv-ws-name">04_文库</span>
-                    <IconButton variant="bare" size="sm" name="add-small" title="添加入口路径…" class="pv-ws-gadd" />
-                  </div>
-                  <div class="pv-ws-sub">
-                    <AppIcon name="link-small" :size="14" class="pv-ws-sublead" />
-                    <span class="pv-ws-path one dim" title="C:\Users\kingl\Desktop\文库（入口已不存在）">
-                      C:\Users\kingl\Desktop\文库<TwoToneIcon name="warning-small" :size="14" class="pv-ws-warn" />
-                    </span>
-                    <span class="pv-ws-ops">
-                      <IconButton variant="bare" size="sm" name="trash" title="删除记录（入口已不在，仅剔登记）" />
-                    </span>
-                  </div>
-                </div>
+                <button class="pv-ws-addbtn">
+                  <AppIcon name="add-small" :size="16" />
+                  链出去新文件夹…（选工作空间文件夹 → 选入口摆放位置）
+                </button>
               </div>
-              <button class="pv-ws-add">
-                <AppIcon name="add-small" :size="16" />
-                链出去新文件夹…（选工作空间文件夹 → 选入口摆放位置）
-              </button>
             </div>
           </div>
           <span class="pv-cap">
@@ -255,8 +266,10 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
             打开面板对账，门没了只标记不剔除可手删——仍不做自动管理）；②添加链进来挂工作空间根（换位置走后补拖拽）；
             ③「链出去新文件夹…」需两步选择（WS 内选文件夹 + 选落点），或保持右键「在外部位置创建链接…」发起、
             面板只管总览与追加；④删除均走 confirmPrompt 警告确认（门进系统回收站可找回）。壳 640 = 分组管理先例
-            （pv-move-shell 复刻壳加 w640 档）；行 = DetailBlockRow 52 双行族 / 链出去 40 首行 + 32 子行缩进 26；
-            无底部按钮行（即时生效，§61 同口径）。提案未定稿，暂陈列于本区（framed 复刻族旁），定稿后沉淀组件并迁业务弹窗展区
+            （pv-move-shell 复刻壳加 w640 档）；<b>二轮（用户走查）</b>：卡片化分层——行 / 组 = g4 底 + 1px g5 + 圆角 8 卡
+            （hover g5/g6，ni-card 升档），操作组 = 污染文件 item 同款 ni-slide hover 滑入（18 盒 l4→l2），添加行整行按钮化
+            （g4 底 hover g5），两区块 24+1px g5 顶线+24 分隔；无底部按钮行（即时生效，§61 同口径）。
+            提案未定稿，暂陈列于本区（framed 复刻族旁），定稿后沉淀组件并迁业务弹窗展区
           </span>
         </div>
         <div class="pv-demo-cell">
@@ -266,18 +279,22 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
               <IconButton name="close-large" title="关闭" />
             </div>
             <div class="pv-ws-body">
-              <SectionTitle variant="block" title="链接进来的文件夹" :count="0" expanded :with-more="false" />
-              <p class="pv-ws-empty">还没有链接进来的文件夹——右键工作空间空白处或文件夹，选「添加链接文件夹…」</p>
-              <button class="pv-ws-add">
-                <AppIcon name="add-small" :size="16" />
-                添加链接文件夹…（挂载到工作空间根目录）
-              </button>
-              <SectionTitle variant="block" title="链出去的文件夹" :count="0" expanded :with-more="false" />
-              <p class="pv-ws-empty">还没有链出去的文件夹——右键工作空间文件夹，选「在外部位置创建链接…」</p>
-              <button class="pv-ws-add">
-                <AppIcon name="add-small" :size="16" />
-                链出去新文件夹…（选工作空间文件夹 → 选入口摆放位置）
-              </button>
+              <div class="pv-ws-sec">
+                <SectionTitle variant="block" title="链接进来的文件夹" :count="0" expanded :with-more="false" />
+                <p class="pv-ws-empty">还没有链接进来的文件夹——右键工作空间空白处或文件夹，选「添加链接文件夹…」</p>
+                <button class="pv-ws-addbtn">
+                  <AppIcon name="add-small" :size="16" />
+                  添加链接文件夹…（挂载到工作空间根目录）
+                </button>
+              </div>
+              <div class="pv-ws-sec sep">
+                <SectionTitle variant="block" title="链出去的文件夹" :count="0" expanded :with-more="false" />
+                <p class="pv-ws-empty">还没有链出去的文件夹——右键工作空间文件夹，选「在外部位置创建链接…」</p>
+                <button class="pv-ws-addbtn">
+                  <AppIcon name="add-small" :size="16" />
+                  链出去新文件夹…（选工作空间文件夹 → 选入口摆放位置）
+                </button>
+              </div>
             </div>
           </div>
           <span class="pv-cap">空态形态：区块无行 = 引导文案一行（次要文字 12/16 三级），添加行照常</span>
@@ -423,29 +440,53 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
   gap: var(--n-space-2);
 }
 
-/* —— 管理工作空间提案（2026-10-02）：行族 = DetailBlockRow 52 双行口径 / 链出去组 = 40 组首行 +
-   32 入口子行（缩进 26 对齐组首行名称起点）——全 token 零新档 —— */
+/* —— 管理工作空间提案（2026-10-02 二轮，用户走查后卡片化）——
+   行 / 组 = 卡片分层（g4 底 + 1px g5 + 圆角 8；行卡 hover g5 底 g6 描边——ni-card 口径升一档）；
+   操作组 = 污染文件 item 同款 ni-slide hover 滑入（18 盒 l4→l2）；添加行整行按钮化（g4 底 hover g5）；
+   两区块 = 父 gap 24 + 1px g5 顶线 + 24 留白（功能分界）——全 token 零新档 */
 .pv-ws-body {
   display: flex;
   flex-direction: column;
+  gap: var(--n-space-24);
   padding: 0 var(--n-space-24) var(--n-space-24);
 }
-.pv-ws-rows {
+/* 区块容器：标题 → 卡组 → 添加行 */
+.pv-ws-sec {
   display: flex;
   flex-direction: column;
+  gap: var(--n-space-8);
 }
-/* 链接门行：52 高（border-box）/ padding 12 0 / gap 8 / 底线 g5 末行去线（DetailBlockRow 同口径） */
-.pv-ws-row {
+/* 区块二：顶部分隔线 + 线后 24 留白（父 gap 24 在线前——合计 24+1+24 功能分界） */
+.pv-ws-sec.sep {
+  border-top: 1px solid var(--n-g5);
+  padding-top: var(--n-space-24);
+}
+.pv-ws-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-8);
+}
+/* 行卡（链进来门）：g4 底 + 1px g5 + 圆角 8 + padding 12；hover g5 底 g6 描边 */
+.pv-ws-card {
   display: flex;
   align-items: center;
   gap: var(--n-space-8);
-  height: 52px;
-  padding: var(--n-space-12) 0;
+  padding: var(--n-space-12);
   box-sizing: border-box;
-  border-bottom: 1px solid var(--n-g5);
+  background: var(--n-g4);
+  border: 1px solid var(--n-g5);
+  border-radius: var(--n-radius-8);
+  transition:
+    background var(--n-dur-100) var(--n-ease-in-out),
+    border-color var(--n-dur-100) var(--n-ease-in-out);
 }
-.pv-ws-row:last-child {
-  border-bottom: none;
+.pv-ws-card:hover {
+  background: var(--n-g5);
+  border-color: var(--n-g6);
+}
+/* 断链整卡置灰 = dimmed 0.4 既有档（§5 / §65） */
+.pv-ws-card.dim {
+  opacity: 0.4;
 }
 .pv-ws-lead {
   color: var(--n-l2);
@@ -477,76 +518,111 @@ const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素�
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 断链 / 门没了置灰 = dimmed 0.4 既有档（§5 / §65） */
-.pv-ws-text.dim,
-.pv-ws-path.dim {
-  opacity: 0.4;
-}
 .pv-ws-warn {
   flex: none;
 }
-/* 行尾操作组（IconButton bare sm 自带常态三级 hover 二级档） */
-.pv-ws-ops {
+/* 操作钮（污染文件 item .act 同款）：18 盒 / 常态四级 hover 二级 */
+.pv-ws-act {
   display: inline-flex;
   align-items: center;
-  gap: var(--n-space-2);
+  justify-content: center;
+  width: 18px;
+  height: 18px;
   flex: none;
+  padding: 0;
+  color: var(--n-l4);
+  cursor: pointer;
+  transition: color var(--n-dur-100) var(--n-ease-in-out);
 }
-/* 区块底添加行：40 高 / 图标+文字三级 hover 一级 + 四级底 hover（文字钮就近档） */
-.pv-ws-add {
+.pv-ws-act:hover {
+  color: var(--n-l2);
+}
+/* 组卡（链出去文件夹 + 其入口子行）：同卡底但列向；hover 不变底（让位子行 hover 层），仅首行滑入「添加入口」 */
+.pv-ws-gcard {
   display: flex;
-  align-items: center;
-  gap: var(--n-space-6);
-  height: 40px;
-  padding: 0 var(--n-space-8);
+  flex-direction: column;
+  padding: var(--n-space-4) var(--n-space-12);
   box-sizing: border-box;
-  border-radius: var(--n-radius-6);
-  font-size: var(--n-fs-body);
-  line-height: var(--n-lh-body);
-  color: var(--n-l3);
-  flex: none;
-  transition:
-    color var(--n-dur-150) var(--n-ease-in-out),
-    background var(--n-dur-150) var(--n-ease-in-out);
-}
-.pv-ws-add:hover {
-  color: var(--n-l1);
   background: var(--n-g4);
+  border: 1px solid var(--n-g5);
+  border-radius: var(--n-radius-8);
 }
-/* 链出去组首行：40 高 / 文件夹图标 18 + 名 13/18 一级 + 行尾添加入口钮 */
+/* 组卡 hover 仅出首行「添加入口」（ni-slide 直达子选择器——不波及子行各自的滑入组） */
+.pv-ws-gcard:hover > .pv-ws-ghead > .ni-slide {
+  grid-template-columns: 1fr;
+  opacity: 1;
+}
+/* 组首行：36 高 / 图标 18 + 名 13/18 一级 + 右端滑入添加钮；底部 1px g5 与子行分隔 */
 .pv-ws-ghead {
   display: flex;
   align-items: center;
   gap: var(--n-space-8);
-  height: 40px;
+  height: 36px;
   box-sizing: border-box;
+  border-bottom: 1px solid var(--n-g5);
 }
-.pv-ws-gadd {
-  margin-left: auto;
+.pv-ws-ghead .pv-ws-name {
+  flex: 1;
+  min-width: 0;
 }
-/* 入口子行：32 高 / 缩进 26（18 图标位 + gap 8，对齐组首行名称）/ 链接图标 14 三级 +
-   路径 12/16 二级截断 / 行尾操作 */
+/* 入口子行：30 高 / 缩进 26（18 图标位 + gap 8 对齐组首行名）/ 链接图标 14 三级 +
+   路径 12/16 二级截断；hover = g5 底圆角 6 小底（嵌套层级）+ 操作组滑入 */
 .pv-ws-sub {
   display: flex;
   align-items: center;
   gap: var(--n-space-8);
-  height: 32px;
+  height: 30px;
   padding-left: 26px;
+  padding-right: var(--n-space-4);
   box-sizing: border-box;
+  border-radius: var(--n-radius-6);
+  transition: background var(--n-dur-100) var(--n-ease-in-out);
+}
+.pv-ws-sub:hover {
+  background: var(--n-g5);
 }
 .pv-ws-sublead {
   color: var(--n-l3);
   flex: none;
 }
-.pv-ws-sub .pv-ws-path {
+.pv-ws-subpath {
   flex: 1;
   min-width: 0;
-  color: var(--n-l2);
-}
-.pv-ws-sub .pv-ws-path.one {
   display: inline-flex;
   align-items: center;
   gap: var(--n-space-4);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pv-ws-subpath.dim {
+  opacity: 0.4;
+}
+/* 添加行 = 整行按钮：40 高 / g4 底 + 圆角 8 / 图标+文字二级；hover g5 底 + 一级 */
+.pv-ws-addbtn {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-6);
+  height: 40px;
+  padding: 0 var(--n-space-12);
+  box-sizing: border-box;
+  border-radius: var(--n-radius-8);
+  background: var(--n-g4);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
+  cursor: pointer;
+  flex: none;
+  transition:
+    color var(--n-dur-100) var(--n-ease-in-out),
+    background var(--n-dur-100) var(--n-ease-in-out);
+}
+.pv-ws-addbtn:hover {
+  color: var(--n-l1);
+  background: var(--n-g5);
 }
 /* 空态引导行：次要文字 12/16 三级，上下留白 12 */
 .pv-ws-empty {
