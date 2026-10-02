@@ -234,6 +234,18 @@ export const useTabsStore = defineStore("tabs", () => {
     return id;
   }
 
+  // 标签栏「+」新建标签页（2026-10-03 用户定）：落点跟随停留视图种类——参照组停在库 →
+  // 全部 "quick:all"，停在工作空间 → 根视图 "ws:"。参照组 = + 钮所在 group（分屏下各组
+  // + 钮跟随本组视口，不串台），取不到回退激活 panel；关空补默认 / 布局恢复等内部路径
+  // 仍走 addTab 显式 key，不经本函数
+  function addTabAtHome(referenceGroupId?: string): string | null {
+    let vk = referenceGroupId
+      ? ((api?.getGroup(referenceGroupId)?.activePanel?.params?.viewKey as string) ?? "")
+      : "";
+    if (!vk && api?.activePanel) vk = panelInfo(api.activePanel).viewKey;
+    return addTab(vk.startsWith("ws:") ? "ws:" : "quick:all", referenceGroupId);
+  }
+
   // 资产「新标签页打开」（2026-09-25 per-panel 会话化配套接入）：新开同源视口的标签页并直接
   // 开该资产预览——会话即建即开（assetKey 先于 ContentArea 挂载就位，挂上即预览态）；
   // 新页标题经 TabLabel 会话感知派生 = 资产名（退出预览自动回视口名）
@@ -371,5 +383,5 @@ export const useTabsStore = defineStore("tabs", () => {
     api?.layout(width, height, true);
   }
 
-  return { tabs, activeTabId, navCan, bind, openView, openInNewTab, openPreviewInNewTab, goHistory, addTab, closeTab, activateTab, closeAllTabs, closeOtherTabs, toggleLock, splitTab, forceLayout, viewKeyOf };
+  return { tabs, activeTabId, navCan, bind, openView, openInNewTab, openPreviewInNewTab, goHistory, addTab, addTabAtHome, closeTab, activateTab, closeAllTabs, closeOtherTabs, toggleLock, splitTab, forceLayout, viewKeyOf };
 });

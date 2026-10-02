@@ -225,12 +225,19 @@ onMounted(() => {
   window.addEventListener("resize", onResize);
   // 视图切换（6.1）：左栏选中项变化即清空素材选择；
   // 3.5 新增区同口径归位（2026-08-19 用户定：切视图再回来 = 新增项并入排序流）；
-  // 顺带按 ws: 前缀归桶记录各模式停留视口（2026-09-19 用户定：库 / 工作空间切换各自恢复）
+  // 顺带按 ws: 前缀归桶记录各模式停留视口（2026-09-19 用户定：库 / 工作空间切换各自恢复）；
+  // 分段选择器跟随定位（2026-10-03 用户定：切标签页 / 分屏激活变化即把左栏定位到当前视口
+  // 所属的库 / 工作空间视图——旧只记停留桶不同步模式，侧栏树与内容区各说各话）
   watch(() => content.sidebarSelected, (vk) => {
     selection.clear();
     content.clearArrivals();
-    if (vk.startsWith("ws:")) ui.lastWsView = vk;
-    else ui.lastLibView = vk;
+    if (vk.startsWith("ws:")) {
+      ui.lastWsView = vk;
+      ui.leftMode = "workspace";
+    } else {
+      ui.lastLibView = vk;
+      ui.leftMode = "library";
+    }
   });
   // 幽灵视口自愈（2026-10-02 标签页 BUG 修复）：当前 ws 视口目录已不存在（lastWsView 跨空间
   // 重放的幽灵路径 / 外部删除）→ 回退到最近存活祖先；父级仍缺失 / 同断链则先爬开再回退

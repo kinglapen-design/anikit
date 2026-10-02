@@ -146,7 +146,9 @@ export const useUiStore = defineStore("ui", {
     // 左侧分段模式 + 各模式停留视口（2026-09-19 用户定：库 / 工作空间切换各自记忆中间容器，
     // 切回恢复——旧「切 workspace 仅无 ws 页才开根视口、切回库不动」停留对方目录口径废除）：
     // lastLibView / lastWsView 由 App.vue 的 sidebarSelected watch 按 ws: 前缀归桶持续记录，
-    // 持久化三键；启动时中间容器仍由 tabLayout 恢复，本组只管侧栏模式与切换基点
+    // 同一 watch 同步回写 leftMode（2026-10-03 用户定：切标签页 / 分屏激活变化时分段选择器
+    // 跟随定位到当前视口所属视图）；持久化三键；启动时中间容器仍由 tabLayout 恢复，
+    // 本组只管侧栏模式与切换基点
     leftMode: "library" as "library" | "workspace" | "ai",
     lastLibView: "quick:all",
     lastWsView: "ws:",

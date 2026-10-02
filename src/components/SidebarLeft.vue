@@ -96,6 +96,8 @@ function onViewMenu(e: MouseEvent): void {
 // 模式与停留视口持久化（ui.leftMode / lastLibView / lastWsView，2026-09-19 用户定）：
 // 切分段 = 恢复该模式停留视口（库 / 工作空间各自记忆，App.vue 按 ws: 前缀归桶持续记录）——
 // 旧「切 workspace 仅无 ws 页才开根视口、切回库不动」停留对方目录口径废除；
+// 反向同步（2026-10-03 用户定）：切标签页 / 分屏激活变化时 App.vue watch 回写 leftMode，
+// 分段选择器跟随定位到当前视口所属视图；
 // 选择模式（6.2 白名单收窄）下禁用切换——树 / 快速访问导航是挑选主通路，须恒在。
 // AI 占位段不动中间容器。
 const tabs = useTabsStore();
