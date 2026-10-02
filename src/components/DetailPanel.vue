@@ -6,7 +6,9 @@
 // 树行点击入素材选择域）：assetId = ws: 假 id 禁发 assetId 类命令——
 //   数据 = ws store 目录缓存条目（WsEntry 磁盘实况）直达，简化基础信息形态（WsDetail）；
 // **视口未选中文件时回退显示当前停留视口的文件夹 / 档案 / 快速访问信息**（2026-08-31 用户定，
-// 稿 = 右侧面板-文件夹详情；快速访问 = 简化版：无缩略图 + 名称框禁改名 + 文件数/占用空间两行）。
+// 稿 = 右侧面板-文件夹详情；快速访问 = 简化版：无缩略图 + 名称框禁改名 + 文件数/占用空间两行）；
+// **工作空间视口同口径回退**（2026-10-03 用户定）：未选中任何项时显示当前视口目录的信息，
+// 形态 = 选中该文件夹同款的 WsDetail 简化基础信息（名称 / 位置 / 类型行）。
 // 渲染结构（pinned + 分段控制器三 tab / FolderDetail / WsDetail 形态分流）在共享组合 DetailSections。
 import { computed, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
@@ -108,7 +110,57 @@ const wsTarget = computed<Extract<DetailTarget, { kind: "ws" }> | null>(() => {
   return entry ? { kind: "ws", entry, dirPath: ws.absPath(parentRel) } : null;
 });
 
-// 当前展示目标：选中文件 > 选中/视口档案 > 选中普通文件夹 > 视口回退（文件夹 / 快速访问）；
+// 工作空间视口回退（2026-10-03 用户定，库 folder/quick 视口回退同口径）：未选中任何项时
+// 显示当前视口目录的信息——形态 = 选中该文件夹同款的 WsDetail 简化基础信息。
+// 子目录条目 = 父目录缓存条目（wsTarget 同径；深层视口父目录未必加载——下方 watch 幂等
+// ensureDir 触发，加载完成响应式到位；窗口期 = null 留白）。根视口（rel ""）非任何目录的
+// 条目：合成根目录条目——名称 = content.viewTitle（「工作空间」，根入口行 / 根标签标题同口径），
+// 位置 = 根绝对路径；root 未就绪（未开空间 / 启动暂态）= null 留白
+const wsViewportTarget = computed<Extract<DetailTarget, { kind: "ws" }> | null>(() => {
+  const vk = content.sidebarSelected;
+  if (!vk.startsWith(WS_ID_PREFIX)) return null;
+  const rel = vk.slice(WS_ID_PREFIX.length);
+  if (rel === "") {
+    const rootPath = ws.root?.rootPath;
+    if (!rootPath) return null;
+    return {
+      kind: "ws",
+      entry: {
+        name: content.viewTitle(vk),
+        relPath: "",
+        isDir: true,
+        size: 0,
+        mtimeMs: 0,
+        ctimeMs: 0,
+        w: null,
+        h: null,
+        ext: "",
+        thumbPath: null,
+        thumbKind: null,
+      },
+      dirPath: rootPath,
+    };
+  }
+  const parentRel = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+  const entry = ws.entries(parentRel).find((e) => e.relPath === rel);
+  return entry ? { kind: "ws", entry, dirPath: ws.absPath(parentRel) } : null;
+});
+
+// 视口回退的目录条目依赖父目录缓存（深层视口父目录未必加载过）——回退激活（无选中 + ws 视口）
+// 且父目录未加载时幂等触发（ensureDir 已加载即跳过；加载完成 entries 变更驱动上方 computed 到位）
+watch(
+  () => [nothingSelected.value, content.sidebarSelected] as const,
+  ([nothing, vk]) => {
+    if (!nothing || !vk.startsWith(WS_ID_PREFIX)) return;
+    const rel = vk.slice(WS_ID_PREFIX.length);
+    if (rel === "") return;
+    const parentRel = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+    void ws.ensureDir(parentRel);
+  },
+  { immediate: true },
+);
+
+// 当前展示目标：选中文件 > 选中/视口档案 > 选中普通文件夹 > 视口回退（文件夹 / 快速访问 / 工作空间视口目录）；
 // 回收站选中（2026-08-16 用户拍板）：Placement 不在 content.placements（folderId 恒 "recycle"），
 // 回退 recycleEntries 取缩略图/显示数据（get_asset_detail 按 assetId 不依赖 Placement）
 const target = computed<DetailTarget | null>(() => {
@@ -127,12 +179,15 @@ const target = computed<DetailTarget | null>(() => {
   }
   const fn = folderNode.value;
   if (fn) return { kind: "folder", node: fn };
-  // 视口回退（未选中文件时显示当前视口信息）：文件夹视口 → folder 形态；快速访问 → quick 形态
+  // 视口回退（未选中文件时显示当前视口信息）：文件夹视口 → folder 形态；快速访问 → quick 形态；
+  // 工作空间视口 → ws 形态（2026-10-03 用户定，选中该文件夹同款 WsDetail；null = 父目录未加载
+  // 窗口期 / root 未就绪，留白同库侧数据未就位口径）
   if (nothingSelected.value) {
     const vn = viewportFolderNode.value;
     if (vn) return { kind: "folder", node: vn };
     const vk = content.sidebarSelected;
     if (vk.startsWith("quick:")) return { kind: "quick", viewKey: vk, name: content.viewTitle(vk) };
+    if (vk.startsWith(WS_ID_PREFIX)) return wsViewportTarget.value;
   }
   return null;
 });
