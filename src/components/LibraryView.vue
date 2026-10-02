@@ -363,7 +363,7 @@ async function onSwitchLibrary(e: MouseEvent): Promise<void> {
         <SectionTitle
           variant="block"
           :title="sec.block.name"
-          :count="sec.nodes.length"
+          :count="sec.folderCount"
           :expanded="isBlockOpen(sec.block.id)"
           @toggle="onBlockToggle(sec.block.id)"
           @more="onBlockMenu(sec.block.id, $event)"

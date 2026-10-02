@@ -155,6 +155,10 @@ export interface FolderTreeView {
 export interface BlockSection {
   block: BlockView;
   nodes: FolderNode[];
+  // 区块标题数量 = 递归文件夹总数（含全部后代层级，2026-10-03 用户定——原仅顶级 nodes.length，
+  // 与移动面板 countNodes 同口径；LibraryView 侧栏区块标题用本字段；MovePanel 搜索态需按过滤后
+  // 节点计数，仍用其本地 countNodes）
+  folderCount: number;
 }
 
 export interface ImportDraft {
@@ -640,7 +644,8 @@ export const useContentStore = defineStore("content", {
       return map;
     },
     // 按区块分组的顶级节点（2026-08-14 区块子系统）：block null/"dir"/失效引用均归默认区块「目录」；
-    // 后端开库自检保证 blocks 非空且含 dir，空数组兜底合成默认区块（并行开发期降级）
+    // 后端开库自检保证 blocks 非空且含 dir，空数组兜底合成默认区块（并行开发期降级）；
+    // folderCount = 递归文件夹总数（区块标题口径，含全部后代层级）
     blockSections(state): BlockSection[] {
       const blocks: BlockView[] =
         state.blocks.length > 0 ? state.blocks : [{ id: DEFAULT_BLOCK_ID, name: "目录", icon: null }];
@@ -649,7 +654,11 @@ export const useContentStore = defineStore("content", {
         const b = n.block ?? DEFAULT_BLOCK_ID;
         return known.has(b) ? b : DEFAULT_BLOCK_ID;
       };
-      return blocks.map((block) => ({ block, nodes: state.folders.filter((n) => ofBlock(n) === block.id) }));
+      const countTree = (nodes: FolderNode[]): number => nodes.reduce((s, n) => s + 1 + countTree(n.children), 0);
+      return blocks.map((block) => {
+        const nodes = state.folders.filter((n) => ofBlock(n) === block.id);
+        return { block, nodes, folderCount: countTree(nodes) };
+      });
     },
     // 当前视口对应的导入目标文件夹（菜单触发导入用；"全部"= 根目录 null）
     currentFolderId(state): string | null {

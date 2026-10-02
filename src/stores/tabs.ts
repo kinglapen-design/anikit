@@ -95,9 +95,13 @@ export const useTabsStore = defineStore("tabs", () => {
   }
 
   // 面板视口 key（2026-09-25 per-panel 预览会话化：预览会话按属主面板取列表源）——
-  // 未绑定 api / panel 不存在 / params 缺 viewKey 均兜底 "quick:all"
+  // 未绑定 api / panel 不存在 / params 缺 viewKey 均兜底 "quick:all"。
+  // 响应式锚点（2026-10-03 预览计数不刷新修复）：dockview api/params 非响应式（上方声明），
+  // pinia getter（preview.index/total 等）经本函数取列表源——先读 tabs 镜像建立依赖，
+  // 视口替换经 syncMirror 重建 tabs 即触发重算；取值仍以 api 实时为准（syncMirror 前瞬态不读旧值）
   function viewKeyOf(panelId: string): string {
-    return (api?.getPanel(panelId)?.params?.viewKey as string) ?? "quick:all";
+    const mirrored = tabs.value.find((t) => t.id === panelId)?.viewKey;
+    return (api?.getPanel(panelId)?.params?.viewKey as string) ?? mirrored ?? "quick:all";
   }
 
   // 镜像刷新 + 激活视口回写（侧边栏高亮跟随激活标签页）
