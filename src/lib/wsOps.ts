@@ -222,6 +222,13 @@ export async function retargetWsLink(relPath: string, newTarget: string): Promis
   await invoke("ws_retarget_link", { relPath, newTarget });
 }
 
+// 从 WS 里「链出去」（方向 a′ 产品化，2026-10-02）：rel 文件夹在外部 destDir 下摆入口 junction
+//（入口名 = 文件夹名，重名后端 _n），返回入口绝对路径。**只管创建不管存续**——root 外不登记
+// 不监听。校验拒绝（源非文件夹 / 断链门 / 落点缺失 / 落点在储存空间内）抛中文错
+export async function linkOutWsFolder(relPath: string, destDir: string): Promise<string> {
+  return await invoke<string>("ws_link_out", { relPath, destDir });
+}
+
 // —— 事件监听（App.vue onMounted 统一调，模块级幂等）——
 // fs-changed（2026-10-01 精准化，性能优化①）：负载 = 变更涉及的目录 rel 数组（去重排序，
 // 父目录 + 祖父目录），写入连发去抖 300ms 合并——窗口内多拍目录集取并集，按集精准重扫

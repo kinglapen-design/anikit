@@ -356,6 +356,7 @@ pub fn run() {
       commands::workspace::ws_add_link,
       commands::workspace::ws_remove_link,
       commands::workspace::ws_retarget_link,
+      commands::workspace::ws_link_out,
       commands::workspace::open_system_recycle_bin,
       commands::settings::get_ui_settings,
       commands::settings::save_ui_settings,

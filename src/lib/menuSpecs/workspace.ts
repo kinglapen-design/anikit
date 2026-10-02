@@ -2,8 +2,10 @@
 // 2026-10-01 库菜单移植轮——分组 / 分割线 / 快捷键标注全面对齐库菜单稿（纯文字口径）：
 // 文件 = 打开预览组（新标签页 / 默认应用 / 其他应用 / 发送至 Animate / 资源管理器 / 系统菜单）│
 // 剪贴板组（复制 / 剪切 / 粘贴条件出现 / 重命名单选 / 创建副本）│ 复制数据 ▸ │ 删除 │ 刷新；
-// 文件夹（卡片与树行共用主体）= 新标签页 / 新建文件夹（同级）/ 新建子文件夹 / 添加链接文件夹… │
-// 重新定位…·删除链接（仅链接门，junction 方向 b 2026-10-02；断链即弹修复窗同术语）·固定·取消固定 │
+// 文件夹（卡片与树行共用主体）= 新标签页 / 新建文件夹（同级）/ 新建子文件夹 / 添加链接文件夹… /
+// 在外部位置创建链接…（方向 a′ 产品化 2026-10-02：本文件夹在外部落点摆入口 junction，只管创建
+// 不管存续）│ 重新定位…·删除链接（仅链接门，junction 方向 b 2026-10-02；断链即弹修复窗同术语）·
+// 固定·取消固定 │
 // 剪贴板组 │ 复制数据 ▸ │ 资源管理器 / 系统菜单 │ 删除 │ 刷新（树行无重命名——ws 树无行内命名态）；
 // 空白 = 新建文件夹 / 添加链接文件夹… / 粘贴（内部剪贴板非空 || 系统剪贴板含文件——2026-10-01 PRD 02-13 扩，
 // spec 构建 async：build 前 refreshSystemClip）│ 在资源管理器中显示 / 系统菜单（目录背景版——经典版
@@ -32,6 +34,7 @@ import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
 import { useWsStore } from "../../stores/ws";
 import {
+  linkOutWsFolder,
   openPathWithDefaultApp,
   openPathWithDialog,
   revealPath,
@@ -66,9 +69,10 @@ function confirmDelete(rels: string[], name: string): void {
 
 // —— junction 挂载（方向 b：外部文件夹挂进 WS 子目录，2026-10-02）——
 
-// 链接目标目录选择器（添加链接文件夹 / 重新指向共用）：取消 = null 则止
-async function pickLinkTarget(): Promise<string | null> {
-  const picked = await open({ directory: true, multiple: false });
+// 链接目标目录选择器（添加链接文件夹 / 重新指向 / 链出去三用——链出去选的是「入口摆放位置」，
+// 语义相反给 title 防混淆）：取消 = null 则止
+async function pickLinkTarget(title?: string): Promise<string | null> {
+  const picked = await open({ directory: true, multiple: false, ...(title ? { title } : {}) });
   return typeof picked === "string" ? picked : null;
 }
 
@@ -78,6 +82,19 @@ async function addLinkFlow(destRel: string): Promise<void> {
   const dir = await pickLinkTarget();
   if (dir === null) return;
   await useWsStore().addLink(destRel, dir).catch(fail);
+}
+
+// 从 WS 里链出去（方向 a′ 产品化，2026-10-02）：本文件夹在外部落点摆入口 junction——内容
+// 留空间卷（阶段九硬链接永不跨卷），外部门误删十秒重建；只管创建不管存续（不登记不监听），
+// 成功 toast 入口绝对路径；校验拒绝（源非文件夹 / 落点在储存空间内）后端中文错 toast
+async function linkOutFlow(rel: string): Promise<void> {
+  const dir = await pickLinkTarget("选择链接入口的摆放位置");
+  if (dir === null) return;
+  const link = await linkOutWsFolder(rel, dir).catch((e: unknown) => {
+    fail(e);
+    return null;
+  });
+  if (link !== null) useToastStore().notify({ message: `已创建外部链接入口：${link}`, icon: "success" });
 }
 
 // 重新定位（断链送修同径；断链修复弹窗主钮共用——export 供 App.vue 断链弹窗调）：链接重指向新选目录
@@ -230,6 +247,9 @@ async function wsFolderEntries(rel: string, name: string, rename: boolean): Prom
     { label: "新建子文件夹", shortcut: "Ctrl+Shift+Alt+N", action: () => void createAndRename(rel) },
     // 链接文件夹（junction 方向 b）：外部目录挂进本文件夹
     { label: "添加链接文件夹…", action: () => void addLinkFlow(rel) },
+    // 链出去（方向 a′ 产品化）：本文件夹在外部落点摆入口 junction（只管创建不管存续）；
+    // 多选只作用被右键项（§65 链接菜单口径），不整批分流
+    { label: "在外部位置创建链接…", action: () => void linkOutFlow(rel) },
     "divider",
     ...(link?.isLink
       ? [

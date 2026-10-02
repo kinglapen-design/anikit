@@ -1162,6 +1162,36 @@ pub fn retarget_link(root: &Path, rel: &str, new_target: &Path) -> Result<(), St
   Ok(())
 }
 
+/// 从 WS 里「链出去」（方向 a′ 产品化，2026-10-02 用户定）：rel 文件夹在外部 dest_dir 下
+/// 摆入口 junction——内容物理留在空间卷（阶段九硬链接永不触发跨卷回退），外部门误删十秒重建。
+/// **只管创建不管存续**：入口在 root 外，不登记台账、不补监听（内容本体在 root 内已被主
+/// watcher 覆盖；方向 b 的断链标记体系只管 WS 内的门，root 外的门 APP 无感也无需感）。
+/// 落点校验：存在且是目录；**不在储存空间整树内**（与 check_link_target 同闸——workspace 内
+/// 摆入口 = 同一内容两个词法身份，素材池 / 库数据 = 自留地；落点是源的祖先无害：入口指向
+/// 子孙不构成环）。入口名 = 源文件夹名，重名 _n 规避。源是方向 b 的门时 create 内 canonicalize
+/// 展平，入口直指最终目标（NTFS 少一层穿透，内容仍只有一份）。返回入口绝对路径（前端 toast）
+pub fn link_out(root: &Path, rel: &str, dest_dir: &Path) -> Result<PathBuf, String> {
+  let src = resolve_existing(root, rel)?;
+  if !src.is_dir() {
+    // is_dir 跟随穿透：断链的门此处也false——给「送修」指引而非笼统「不是文件夹」
+    return Err(if junction::is_reparse_dir(&src) { "断链的链接文件夹请先重新定位".to_string() } else { "链接入口只能建在文件夹上".to_string() });
+  }
+  if !dest_dir.is_dir() {
+    return Err(format!("入口落点不是文件夹：{}", dest_dir.display()));
+  }
+  let canon_dest = dest_dir.canonicalize().map_err(|e| format!("入口落点不可用：{e}"))?;
+  if let Some(canon_space) = root.parent().and_then(|p| p.canonicalize().ok()) {
+    if canon_dest.starts_with(&canon_space) {
+      return Err("入口不能落在储存空间内（素材池 / 库数据是 AniKit 自留地；工作空间内的目录直接整理即可）".to_string());
+    }
+  }
+  let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).ok_or_else(|| "路径不合法".to_string())?;
+  validate_name(&name)?;
+  let link_abs = unique_target(&canon_dest, &name);
+  junction::create(&link_abs, &src)?;
+  Ok(link_abs)
+}
+
 /// 外部条目导入（2026-10-01 ws ↔ Explorer 互通，PRD 02-13：拖入一律复制 / 系统剪贴板粘贴
 /// 仲裁外部分支）：sources（绝对路径，不做 root 约束）逐个进 dest_rel——copy = 复制（目录递归）；
 /// cut = 移动（先试同盘 rename，失败回退复制后删源）。源已不存在跳过（读取到粘贴的间隙删除）；
@@ -2265,5 +2295,53 @@ mod tests {
     assert_eq!(crate::adapters::junction::read_target(&root.join("外部_2")).unwrap().canonicalize().unwrap(), other.canonicalize().unwrap());
     assert_eq!(read_links(&root).iter().find(|l| l.rel == "外部_2").unwrap().target, other.canonicalize().unwrap().to_string_lossy());
     assert!(retarget_link(&root, "内夹", &other).is_err(), "非链接拒绝改挂");
+  }
+
+  /// 链出去（link_out，方向 a′ 产品化 2026-10-02）：WS 内文件夹在外部落点建入口 junction。
+  /// 校验（源缺失 / 文件 / 落点缺失 / 落点在储存空间整树内拒绝）；入口名 = 源文件夹名重名 _n；
+  /// 透过入口读写 = WS 内同一份；不登记台账不补监听（root 外的门不归 WS 管）；
+  /// 源是方向 b 的门时入口直指最终目标（canonicalize 展平）
+  #[cfg(windows)]
+  #[test]
+  fn link_out_creates_external_portal() {
+    let (dir, root) = make_ws();
+    fs::create_dir_all(root.join("项目/素材")).unwrap();
+    fs::write(root.join("项目/素材/内容.txt"), b"x").unwrap();
+    let ext = tempfile::tempdir().unwrap();
+    let spot = ext.path().join("常用位置");
+    fs::create_dir_all(&spot).unwrap();
+
+    // 拒绝：源不存在 / 源是文件 / 落点缺失 / 落点在储存空间整树内（workspace 内 + 素材池兄弟）
+    assert!(link_out(&root, "不存在", &spot).is_err(), "源不存在拒绝");
+    fs::write(root.join("文件.txt"), b"x").unwrap();
+    assert!(link_out(&root, "文件.txt", &spot).is_err(), "文件拒绝");
+    assert!(link_out(&root, "项目/素材", &ext.path().join("不存在")).is_err(), "落点缺失拒绝");
+    fs::create_dir_all(root.join("内夹")).unwrap();
+    assert!(link_out(&root, "项目/素材", &root.join("内夹")).is_err(), "workspace 内落点拒绝");
+    let assets = dir.path().join("assets");
+    fs::create_dir_all(&assets).unwrap();
+    assert!(link_out(&root, "项目/素材", &assets).is_err(), "素材池落点拒绝");
+
+    // 成功：入口 = 落点下源名 junction，直指源真实路径，透过入口写 = WS 内同一份
+    let link = link_out(&root, "项目/素材", &spot).unwrap();
+    assert_eq!(link.file_name().unwrap().to_string_lossy(), "素材");
+    assert!(crate::adapters::junction::is_reparse_dir(&link));
+    let got = crate::adapters::junction::read_target(&link).unwrap().canonicalize().unwrap();
+    assert_eq!(got, root.join("项目/素材").canonicalize().unwrap());
+    fs::write(link.join("经门写.txt"), b"y").unwrap();
+    assert!(root.join("项目/素材/经门写.txt").is_file(), "经入口写 = 落 WS 内同一份");
+
+    // 重名 _n 规避；不登记台账（root 外的门不归 WS 管）
+    let link2 = link_out(&root, "项目/素材", &spot).unwrap();
+    assert_eq!(link2.file_name().unwrap().to_string_lossy(), "素材_2");
+    assert!(read_links(&root).is_empty(), "外部入口不入 WS 链接台账");
+
+    // 源是方向 b 的门：入口直指最终目标（canonicalize 展平，NTFS 少一层穿透）
+    let target = ext.path().join("外部目标");
+    fs::create_dir_all(&target).unwrap();
+    add_link(&root, "", &target).unwrap();
+    let nested = link_out(&root, "外部目标", &spot).unwrap();
+    let got2 = crate::adapters::junction::read_target(&nested).unwrap().canonicalize().unwrap();
+    assert_eq!(got2, target.canonicalize().unwrap(), "门套门展平直指最终目标");
   }
 }

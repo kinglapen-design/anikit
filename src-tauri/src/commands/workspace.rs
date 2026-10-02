@@ -275,6 +275,17 @@ pub fn ws_retarget_link(app: AppHandle, state: State<AppState>, rel_path: String
   Ok(())
 }
 
+/// 从 WS 里「链出去」（方向 a′ 产品化）：rel 文件夹在外部 dest_dir 下摆入口 junction
+///（入口名 = 文件夹名，重名 _n 规避），返回入口绝对路径。**只管创建不管存续**——入口在
+/// root 外，不登记台账、不补监听（无需 AppHandle 重建监听）；落点拒储存空间整树。
+/// 拒绝（源非文件夹 / 断链门 / 落点缺失 / 落点在空间内）中文报错
+#[tauri::command]
+pub fn ws_link_out(state: State<AppState>, rel_path: String, dest_dir: String) -> Result<String, String> {
+  let root = ws_root(&state)?;
+  let link = workspace::link_out(&root, &rel_path, std::path::Path::new(&dest_dir))?;
+  Ok(link.to_string_lossy().into_owned())
+}
+
 // ---------- ws ↔ Explorer 剪贴板 / 拖入互通（2026-10-01，PRD 02-13） ----------
 // 剪贴板读写属 COM/IO，一律 async（规范 §2）；实际读写与位图解码挪 spawn_blocking 不占 tokio worker
 
