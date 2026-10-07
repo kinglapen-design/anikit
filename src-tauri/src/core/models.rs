@@ -53,6 +53,17 @@ pub fn new_block_id() -> String {
   format!("B{}-{suffix}", chrono::Local::now().format("%y%m%d%H%M"))
 }
 
+/// 生成分组 ID：`G` + 时间戳（yyMMddHHmm）+ 3 位随机字符（对齐 F / B 系风格）。
+/// 前端建的组是 `g{ts36}-{rand36}` 自造式（GroupEditDialog），后端生成走本规则——
+/// 2026-10-08 随 MCP set_folder_groups 新组缺省 id 落地（server/mcp/tools/groups.rs 用）
+pub fn new_group_id() -> String {
+  const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  use rand::Rng;
+  let mut rng = rand::thread_rng();
+  let suffix: String = (0..3).map(|_| ALPHABET[rng.gen_range(0..ALPHABET.len())] as char).collect();
+  format!("G{}-{suffix}", chrono::Local::now().format("%y%m%d%H%M"))
+}
+
 fn is_false(v: &bool) -> bool {
   !*v
 }
@@ -590,6 +601,15 @@ mod tests {
     assert!(id.starts_with("AN"));
     assert_eq!(id.len(), 2 + 10 + 1 + 5); // AN + 时间戳 + - + 5 位随机字符
     let suffix = &id[13..];
+    assert!(suffix.chars().all(|c| c.is_ascii_alphanumeric() && !matches!(c, '0' | 'O' | '1' | 'I')));
+  }
+
+  #[test]
+  fn group_id_format() {
+    let id = new_group_id();
+    assert!(id.starts_with('G'));
+    assert_eq!(id.len(), 1 + 10 + 1 + 3); // G + 时间戳 + - + 3 位随机字符
+    let suffix = &id[12..];
     assert!(suffix.chars().all(|c| c.is_ascii_alphanumeric() && !matches!(c, '0' | 'O' | '1' | 'I')));
   }
 

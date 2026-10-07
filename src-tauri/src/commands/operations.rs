@@ -166,12 +166,22 @@ pub async fn set_folder_groups(
   folder_id: String,
   groups: Vec<crate::core::models::GroupDef>,
 ) -> Result<(), String> {
+  set_folder_groups_op(&state, &folder_id, groups)
+}
+
+/// 设置文件夹分组整段（锁 library → 锁 undo → 单撤销步，锁序与撤销三步同命令层各操作）；
+/// pub(crate)：server/mcp（AI 外接通道四批写工具 set_folder_groups）同用
+pub(crate) fn set_folder_groups_op(
+  state: &AppState,
+  folder_id: &str,
+  groups: Vec<crate::core::models::GroupDef>,
+) -> Result<(), String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin("设置分组");
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  match operations::set_folder_groups(lib, &folder_id, groups) {
+  match operations::set_folder_groups(lib, folder_id, groups) {
     Ok(()) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(())

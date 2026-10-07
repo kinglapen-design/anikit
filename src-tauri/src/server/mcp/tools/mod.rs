@@ -3,6 +3,7 @@
 pub mod archives;
 pub mod assets;
 pub mod folders;
+pub mod groups;
 pub mod import;
 pub mod library;
 pub mod prompt;

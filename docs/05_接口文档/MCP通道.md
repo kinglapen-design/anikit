@@ -5,7 +5,7 @@
 - 实现：官方 Rust SDK `rmcp` 3.4（Streamable HTTP server 为 Tower service，axum `nest_service("/mcp", …)` 挂载；复用 Tauri tokio 运行时，不另起进程）。协议握手 / 会话管理 / 工具 schema 协商全由 SDK 承担。
 - 安全口径：仅回环监听、无鉴权（本机 Agent 场景）；Host 头校验防 DNS rebinding 由 rmcp 内置（≥1.4.0，默认 allowedHosts = localhost / 127.0.0.1 / ::1）。**测试构建不起 server**（cfg(not(test))，踩坑 014 同 plugin_ws）。
 - **写入闸（二期，2026-09-19 用户定形态 A；2026-09-20 开关挪插件面板 MCP 详情窗）**：全局写入开关 + 撤销兜底——开关持久化 config.json `settings.mcp.writeEnabled`（默认 false，插件面板「AI 外接通道（MCP）」详情窗「允许写入」开启；初版落点 settings.ui.mcpWriteEnabled 由后端一次性迁移）；MCP 写调用**逐次检查**（`write_gate` 直读配置，core::config 无缓存、低频调用直读可接受），关态 / 读取失败一律回工具级错误「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」（isError=true，与「请先打开素材库」同口径）。不做逐笔弹窗（首批全是 L2 可逆操作，二批结构性操作可逆仍走形态 A）；**彻底删除永不经 MCP**（L4 永远人工确认；库内回收站可逆删除经 trash_placements，2026-09-20 用户定）。
-- **写入热刷新（2026-09-19 补）**：库数据文件无监听（命令层写由前端自刷新），MCP 绕开前端——九个写工具成功路径广播 `mcp-library-changed`（`emit_library_changed`；import_paths 有真实入库才发），前端 `initMcpListener` 去抖 300ms 全量对齐（同 cep-imported 的 refresh 口径，不带成功提示音）。
+- **写入热刷新（2026-09-19 补）**：库数据文件无监听（命令层写由前端自刷新），MCP 绕开前端——十二个写工具成功路径广播 `mcp-library-changed`（`emit_library_changed`；import_paths 有真实入库才发），前端 `initMcpListener` 去抖 300ms 全量对齐（同 cep-imported 的 refresh 口径，不带成功提示音）。
 
 ## 握手流程（Streamable HTTP，单端点 POST /mcp）
 
@@ -14,7 +14,7 @@
 3. 之后 `tools/list` / `tools/call` 均 POST 同端点、带 session 头；回包同为 SSE `data:` 帧。
 4. 会话内存态（LocalSessionManager），APP 重启即失效——Agent 重连重新 initialize 即可。
 
-## 工具面（17 个 = 一期只读 8 + 二期写 9）
+## 工具面（20 个 = 一期只读 8 + 二期写 12）
 
 加工具 = `server/mcp/tools/` 加一个文件 + `mod.rs` 注册处一行（工具注册表模式，范式 = 前端 barSpecs；未来复用为插件 API 注册表）。回包统一：**仅 `content` 文本（紧凑 JSON），不带 structuredContent**——同一份数据双带会被不查重的客户端双倍计入上下文（2026-09-19 用户实测额度消耗后定的省 token 口径；未声明 outputSchema 时 structuredContent 本就可选）；库未打开回工具级错误（`isError: true`，文本「请先打开素材库」），不静默空表；域错误（资产不存在等）同口径回中文原因。
 
@@ -31,7 +31,7 @@
 | `read_text_asset` | `{ assetId }` | `{ content }`（txt / md；UTF-8 优先 GBK 回退，2MB 上限；非文本资产报错） |
 | `list_archives` | 无 | `ArchiveListItem[]`（folderId / badge / avatar / props / descriptions / links / createdAt / totalSize / coverPath / coverVer）；folderId 可交给 list_placements 列档案内容 |
 
-写 9 个（二期，全部 `annotations.readOnlyHint = false`）：公共门禁 = **write_gate 逐次检查** `settings.mcp.writeEnabled`（关态回「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」工具级错误）。撤销口径分流——进撤销 7 个（create_document / rename_placements / create_folder / move_placements / move_folders / link_placements / trash_placements）复用 `commands::operations` 抽出的 `_op` 整段（锁 library → 锁 undo → 单写点 + 单撤销步，与 APP 命令同一实现）；不进撤销 2 个 = write_text_asset（与 APP 内文本编辑同口径，2026-08-23 定）+ import_paths（APP 导入管线本就不接 UndoManager，不硬接）。
+写 12 个（二期，全部 `annotations.readOnlyHint = false`）：公共门禁 = **write_gate 逐次检查** `settings.mcp.writeEnabled`（关态回「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」工具级错误）。撤销口径分流——进撤销 10 个（create_document / rename_placements / create_folder / move_placements / move_folders / link_placements / trash_placements / assign_prompt / clear_prompt / set_folder_groups）复用 `commands::operations` / `commands::prompt` 抽出的 `_op` 整段（锁 library → 锁 undo → 单写点 + 单撤销步，与 APP 命令同一实现）；不进撤销 2 个 = write_text_asset（与 APP 内文本编辑同口径，2026-08-23 定）+ import_paths（APP 导入管线本就不接 UndoManager，不硬接）。
 
 首批 3 个（2026-09-19，`tools/write.rs`）：
 
@@ -56,6 +56,19 @@
 | 工具 | 入参 | 回包（同命令层结构） |
 | --- | --- | --- |
 | `trash_placements` | `{ items: [{ assetId, folderId, origin? }] }`（单条 = 1 项数组；陈旧 / 重复三元组自动跳过不计；空数组回「items 至少 1 项」） | `{ requested: number }`（请求条数）。Placement 从 folders.json 移入 recycle.json 按资产聚合，**磁盘文件不动**。**进撤销**（整体单撤销步；APP 内 Ctrl+Z 可撤、回收站可还原）。红线：彻底删除 / 清空回收站永不经 MCP，须 APP 内人工 |
+
+提示词批 2 个（2026-09-26，`tools/prompt.rs`）：
+
+| 工具 | 入参 | 回包（同命令层结构） |
+| --- | --- | --- |
+| `assign_prompt` | `{ assetId? / folderId?, promptAssetId }`（目标二选一——assetId 资产 / folderId 档案；promptAssetId = 库内 md/txt 文本资产） | 成功空 content。提示词 = 引用 + 内容快照（源被彻底删除不断链，快照保留）。**进撤销** |
+| `clear_prompt` | `{ assetId? / folderId? }`（目标二选一） | 成功空 content。断开提示词绑定，快照随解绑清除。**进撤销** |
+
+四批分组 1 个（2026-10-08，`tools/groups.rs`）：
+
+| 工具 | 入参 | 回包（同命令层结构） |
+| --- | --- | --- |
+| `set_folder_groups` | `{ folderId, groups: [{ id?, name, rules?: [{ kind, values }], members? }] }`——**全量草稿式提交** = 该文件夹分组终态数组（空数组 = 取消分组、漏交 = 删组）；id 缺省 / 空 = 新建组（后端 `G` 系生成），改既有组照 `list_folder_tree` 回包抄。rules 空 = 自由组（members = assetId 手动归组）；rules 非空 = 规则组（组内 AND：ext 扩展名 / type 八类 / name 名称词 / importDate / modifyDate 日期档 / tags 标签词；values 空数组拒绝；规则集完全相同的组拒绝） | 终态 `GroupDef[]`（新建组含生成 id）。**进撤销**（整体单撤销步）。assign_group 不设工具（PRD 2026-09-19 结论维持，自由组成员经 members 全量管理） |
 
 ## 纪律（PRD 08-06 定）
 
