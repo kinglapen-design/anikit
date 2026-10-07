@@ -237,6 +237,14 @@ function onGroupMenu(h: { groupId: string | null }, e: MouseEvent): void {
   if (!fid) return;
   openContextMenu(e, groupHeaderSpec({ folderId: fid, groupId: h.groupId, scrollToGroup }), undefined);
 }
+// 分组标题「+」钮（2026-10-08 接业务）= 34 稿新建分组弹窗——与分组菜单「新建分组」同径：
+// groupDialogFolder 锁当前文件夹 + groupEditOpen，宿主 App.vue
+function onGroupAdd(): void {
+  const fid = gridFolderId.value;
+  if (!fid) return;
+  ui.groupDialogFolder = fid;
+  ui.groupEditOpen = true;
+}
 // 空自由组提示框清单（2026-09-17 无规则空组）：展开态且成员为空的自由组——占位提示即拖入落点
 const emptyFreeHeaders = computed(() =>
   groupHeaders.value.filter(
@@ -525,7 +533,7 @@ onBeforeUnmount(() => {
              "首列前插提示线不可见 / 盖住卡片"——grid-viewport overflow 裁剪会把行首间隙
              （负 layer-x = 容器 16 留白区）整条裁掉，原 Math.max(0,…) 钳位又拉回盖住卡片） -->
         <!-- 分组标题（3.5 二轮；7.1 内容容器轮 = SectionTitle group 贴稿）：canvas 内随滚动的原位标题
-             （absolute 于 cards-layer 坐标系）；more = 分组菜单，add 点亮不接业务；
+             （absolute 于 cards-layer 坐标系）；more = 分组菜单，add = 34 稿新建分组弹窗（2026-10-08 接）；
              data-group-drop（2026-09-17 自由组 / 未分组段）：素材拖入 = 移动至分组（"" = 移出） -->
         <div
           v-for="h in groupHeaders"
@@ -543,6 +551,7 @@ onBeforeUnmount(() => {
             hot-zone="lead"
             @toggle="onGroupFold(h.groupId)"
             @more="onGroupMenu(h, $event)"
+            @add="onGroupAdd()"
           />
         </div>
         <!-- 空自由组提示框（2026-09-17 无规则空组）：小高度占位 + 居中提示，本身即拖入落点 -->
@@ -579,6 +588,7 @@ onBeforeUnmount(() => {
         hot-zone="lead"
         @toggle="onGroupFold(stickyGroup.groupId)"
         @more="onGroupMenu(stickyGroup, $event)"
+        @add="onGroupAdd()"
       />
     </div>
     <Teleport to="body">
