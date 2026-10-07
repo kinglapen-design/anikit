@@ -1,9 +1,9 @@
 // 分组标题菜单（12 稿，3.5 二轮）：分组标题 group-menu 按钮触发。
 // 一级：跳转▸（二级 = 全部分组列表，点击滚动跳转，滚动条联动）/ 新建分组（34 稿弹窗）/
 // 编辑分组（33 稿管理弹窗）/ 展开折叠▸（二级：当前分组 / 全部分组 / 排除当前分组展开全部）/
-// 上移 / 下移 / 删除。
+// 移动至顶层 / 上移 / 下移 / 移动至底层（2026-10-08 用户定：组多了一层一层挪麻烦）/ 删除。
 // 未分组（组 id null）简化：仅 跳转▸ / 展开折叠▸（未分组不是真组——无规则可编辑、不参与组序）。
-// 上移 / 下移 / 删除 = 即时生效（set_folder_groups 单撤销步；删除组不删文件，内容归未分组——
+// 移动四件 / 删除 = 即时生效（set_folder_groups 单撤销步；删除组不删文件，内容归未分组——
 // 分组只是显示层归组，无确认）。
 import { useContentStore } from "../../stores/content";
 import { useUiStore } from "../../stores/ui";
@@ -82,6 +82,16 @@ export function groupHeaderSpec(ctx: GroupMenuCtx): CtxEntry[] {
     },
     foldItem,
     {
+      label: "移动至顶层",
+      disabled: index <= 0,
+      action: () => {
+        if (index <= 0) return;
+        const next = defs.filter((g) => g.id !== gid);
+        next.unshift(defs[index]);
+        commit(next);
+      },
+    },
+    {
       label: "上移",
       trailingIcon: "chevron-small",
       disabled: index <= 0,
@@ -101,6 +111,16 @@ export function groupHeaderSpec(ctx: GroupMenuCtx): CtxEntry[] {
         if (index >= defs.length - 1) return;
         const next = [...defs];
         [next[index], next[index + 1]] = [next[index + 1], next[index]];
+        commit(next);
+      },
+    },
+    {
+      label: "移动至底层",
+      disabled: index >= defs.length - 1,
+      action: () => {
+        if (index >= defs.length - 1) return;
+        const next = defs.filter((g) => g.id !== gid);
+        next.push(defs[index]);
         commit(next);
       },
     },
