@@ -592,9 +592,19 @@ export async function setCustomThumb(assetId: string, sourcePath: string): Promi
   await runThumbOp(() => invoke("set_thumbnail_custom", { assetId, sourcePath }), "已自定义缩略图");
 }
 
-// 刷新缩略图（强制重生成，防自检失败）
+// 刷新缩略图（强制重生成，防自检失败；2026-10-08 扩展为全格式 + 文件数据托底）：
+// 后端无条件重算 size/hash/宽高 + 重跑缩略图管线——文本等无内容缩略图格式 thumbPath 为空，
+// 数据已同步、卡片回退格式图标，吐司分流「已更新文件数据」（旧行为是报"该格式暂不支持"）
 export async function refreshThumb(assetId: string): Promise<void> {
-  await runThumbOp(() => invoke("refresh_thumbnail", { assetId }), "已刷新缩略图");
+  const content = useContentStore();
+  const toast = useToastStore();
+  try {
+    const r = await invoke<{ thumbPath: string | null }>("refresh_thumbnail", { assetId });
+    await content.refresh();
+    toast.notify({ message: r.thumbPath ? "已刷新缩略图" : "已更新文件数据", icon: "success" });
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+  }
 }
 
 // —— 缩略图链接（批次 4，2026-09-02，PRD 04-03 缩略图组）：「转换为缩略图链接并复制」= 纯引用复制

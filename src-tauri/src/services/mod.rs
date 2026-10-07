@@ -25,6 +25,8 @@
 //! - color：颜色提取（6.1 颜色解析：缩略图主色存 metadata.colors，详情颜色 bar 数据源；存量懒回填）
 //! - font：字体元数据与样张渲染（5.6，ttf-parser / fontdue 纯 Rust）+ 系统级安装卸载（用户级注册表）
 //! - text：文本资产读写（5.6，txt/md；读 UTF-8 优先 GBK 回退，写恒 UTF-8，2MB 上限）
+//! - origin_sync：origin 外部编辑同步（2026-10-08 哈希漂移治理第 2 层：读取触点自愈 +
+//!   「刷新缩略图」手动托底，size/hash/宽高/缩略图回写）
 //! - prompt_scan：内嵌提示词扫描（2026-09-26 提示词轮，PRD 03_数据链接 02_文件「分析提示词」：
 //!   PNG tEXt/iTXt/zTXt + JPEG/WEBP EXIF + ComfyUI 节点图抽取，本地解析无 AI）
 //! - prompt：提示词业务（2026-09-26 提示词轮：指定 / 清除 / 同步快照 / 分析 / 新建提示词文档）
@@ -54,6 +56,7 @@ pub mod import_task;
 pub mod inbox;
 pub mod media;
 pub mod operations;
+pub mod origin_sync;
 pub mod preview_queue;
 pub mod prompt;
 pub mod prompt_scan;

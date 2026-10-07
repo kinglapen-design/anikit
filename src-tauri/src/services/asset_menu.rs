@@ -16,6 +16,7 @@ use crate::core::json_io::write_json;
 use crate::core::library::{Library, CACHE_DIR};
 use crate::core::models::AssetMeta;
 use crate::core::paths;
+use crate::services::origin_sync;
 use crate::services::thumbnail;
 use crate::services::thumb_formats;
 
@@ -155,15 +156,13 @@ pub fn set_thumbnail_custom(lib: &mut Library, asset_id: &str, source_path: &str
   persist(lib, &info_dir, meta, &thumb, true)
 }
 
-/// 强制刷新缩略图（6.3 右键菜单"防自检失败"）：从 origin 重跑导入同管线
-/// （generate 内含图片 / PSD / SVG / 视频首帧 / 音频波形全格式兜底）
-pub fn refresh_thumbnail(lib: &mut Library, asset_id: &str) -> Result<ThumbResult, String> {
-  let (info_dir, origin, meta) = locate(lib, asset_id)?;
-  if !origin.is_file() {
-    return Err(format!("「{}」的源文件缺失", meta.name));
-  }
-  let thumb = regenerate(&info_dir, &meta, &origin).ok_or_else(|| "该格式暂不支持刷新缩略图".to_string())?;
-  persist(lib, &info_dir, meta, &thumb, false)
+/// 刷新缩略图（6.3 右键菜单"防自检失败"；2026-10-08 扩展为全格式 + 文件数据托底）：
+/// 无条件重算 size / hash / 宽高 + 从 origin 重跑导入同管线缩略图（含音视频首帧 / 波形）；
+/// 文本等无内容缩略图格式不再报"不支持"——数据照刷、缩略图回退格式图标。
+/// 序列帧 / 虚拟片段 / origin 缺失仍报「源文件缺失」（同旧口径）
+pub fn refresh_thumbnail(lib: &mut Library, asset_id: &str) -> Result<origin_sync::RefreshResult, String> {
+  let out = origin_sync::refresh_from_origin(lib, asset_id)?;
+  Ok(origin_sync::RefreshResult { thumb_path: out.thumb_path, size: out.size, modified_at: out.modified_at })
 }
 
 /// 复制缩略图位图到剪贴板（5.4；2026-08-22 用户定：全类型统一复制各自缩略图——
@@ -818,10 +817,11 @@ mod tests {
   fn refresh_and_custom_thumbnail_regenerate() {
     let mut h = make_lib();
     add_asset(&mut h, "AN-A", "图.png", "root");
-    // refresh：从 origin 重生成，thumbFrame 不动
+    // refresh：从 origin 重生成 + 数据重算（2026-10-08 托底扩展），thumbFrame 不动
     let r = refresh_thumbnail(&mut h.lib, "AN-A").unwrap();
-    assert!(r.thumb_path.ends_with("图_thumbnail.webp"), "{}", r.thumb_path);
-    assert!(PathBuf::from(&r.thumb_path).is_file());
+    let thumb_path = r.thumb_path.expect("图片应重生成内容缩略图");
+    assert!(thumb_path.ends_with("图_thumbnail.webp"), "{thumb_path}");
+    assert!(PathBuf::from(&thumb_path).is_file());
     // custom：外来图片 → thumbFrame 清空
     let custom = h.dir.path().join("自定义.png");
     make_png(&custom, 50, 50);

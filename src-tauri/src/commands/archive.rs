@@ -350,14 +350,20 @@ pub struct ArchiveRef {
   pub name: String,
 }
 
-/// 资产详情（只读）；资产不存在报中文错。
+/// 资产详情；资产不存在报中文错。
 /// 6.1 颜色解析：返回前对存量资产懒回填主色（ensure_asset_colors：colors 空 + 有缩略图才触发，
-/// 被动补数不刷 modifiedAt、不进撤销，失败静默下回重试）——读命令带这一处维护性写副作用
+/// 被动补数不刷 modifiedAt、不进撤销，失败静默下回重试）——读命令带维护性写副作用先例；
+/// 2026-10-08 origin 外部编辑自愈（哈希漂移治理第 2 层）同例挂上：size/mtime 漂移 →
+/// 回写 size/hash/宽高（+ 非音视频重生成缩略图）后广播 asset-origin-healed 同步前端。
+/// 自愈涉文件 IO，改 async 走线程池（规范第 2 条；原同步壳只剩内存索引读）
 #[tauri::command]
-pub fn get_asset_detail(state: State<AppState>, asset_id: String) -> Result<AssetDetail, String> {
+pub async fn get_asset_detail(app: tauri::AppHandle, state: State<'_, AppState>, asset_id: String) -> Result<AssetDetail, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   crate::services::color::ensure_asset_colors(lib, &asset_id);
+  if let Some((size, modified_at)) = crate::services::origin_sync::heal_if_drifted(lib, &asset_id) {
+    crate::services::origin_sync::emit_healed(&app, &asset_id, size, &modified_at);
+  }
   asset_detail(lib, &asset_id)
 }
 

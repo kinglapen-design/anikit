@@ -31,10 +31,16 @@ pub struct WriteTextResult {
 
 /// 读取文本内容（txt / md；UTF-8 优先 GBK 回退，2MB 上限）。
 /// async：文件 IO，一律走线程池（规范第 2 条）
+/// 2026-10-08 origin 外部编辑自愈（哈希漂移治理第 2 层）：文本卡正文懒拉即触点——
+/// 外部编辑器（Typora 等）回写后 size/mtime 漂移 → 自愈回写 + 广播 asset-origin-healed，
+/// 卡片 modifiedAt 版本戳失效自动重拉，手动「刷新缩略图」之外的自动托底
 #[tauri::command]
-pub async fn read_text_asset(state: State<'_, AppState>, asset_id: String) -> Result<TextContent, String> {
-  let guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+pub async fn read_text_asset(app: tauri::AppHandle, state: State<'_, AppState>, asset_id: String) -> Result<TextContent, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  if let Some((size, modified_at)) = crate::services::origin_sync::heal_if_drifted(lib, &asset_id) {
+    crate::services::origin_sync::emit_healed(&app, &asset_id, size, &modified_at);
+  }
   let (_info_dir, origin, meta) = locate_asset(lib, &asset_id)?;
   if !text::is_text(&origin) {
     return Err(format!("「{}」不是文本资源", meta.name));

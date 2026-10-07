@@ -290,6 +290,7 @@ onMounted(() => {
   void content.initRecentListener(); // 最近使用热刷新（2026-07-29 复验反馈修复）
   void content.initCepListener(); // CEP 导出入库热刷新（8.1：WS 接收入库完成 → 全量对齐）
   void content.initMcpListener(); // MCP 写入热刷新（PRD 08-06：agent 写库 → 去抖全量对齐）
+  void content.initOriginHealListener(); // origin 外部编辑自愈热刷新（2026-10-08：读取触点回写 → 同步 size/modifiedAt）
   initWsListeners(); // 工作空间磁盘实况（PRD 02 步骤 1）：fs-changed 去抖重扫 + 缩略图回填，幂等
   void initOrphanInfosListener(); // 无主资产警告（2026-09-02）——须在开库（reopenLastSession）前注册
   void initPreviewListeners(); // 预览就绪事件（PSD 高清 / 帧条渐进，4.3；扇出全部已建会话）

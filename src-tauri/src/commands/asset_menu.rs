@@ -14,7 +14,7 @@ use crate::commands::import::NEXT_TASK_ID;
 use crate::commands::library::AppState;
 use crate::commands::operations::fail;
 use crate::core::library::FOLDERS_FILE;
-use crate::services::{asset_menu, purge};
+use crate::services::{asset_menu, origin_sync, purge};
 use crate::services::purge::DeleteFolderReport;
 use crate::services::recycle::DeleteRecycleReport;
 
@@ -57,9 +57,11 @@ pub async fn set_thumbnail_custom(
   asset_menu::set_thumbnail_custom(lib, &asset_id, &source_path)
 }
 
-/// 强制刷新缩略图（从 origin 重跑导入同管线，防缩略图损坏 / 自检失败）
+/// 刷新缩略图（2026-10-08 扩展为全格式 + 文件数据托底）：无条件重算 size/hash/宽高 +
+/// 从 origin 重跑导入同管线缩略图；文本等无内容缩略图格式 = 数据刷新 + 回退格式图标
+///（thumbPath 为空，前端吐司分流「已更新文件数据」），不再报"该格式暂不支持"
 #[tauri::command]
-pub async fn refresh_thumbnail(state: State<'_, AppState>, asset_id: String) -> Result<asset_menu::ThumbResult, String> {
+pub async fn refresh_thumbnail(state: State<'_, AppState>, asset_id: String) -> Result<origin_sync::RefreshResult, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   asset_menu::refresh_thumbnail(lib, &asset_id)

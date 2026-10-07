@@ -274,6 +274,8 @@ let unlistenRecent: (() => void) | undefined;
 let unlistenCep: (() => void) | undefined;
 // MCP 写入事件监听（PRD 08-06，2026-09-19）：MCP 写工具绕开前端改库，后端广播 mcp-library-changed
 let unlistenMcp: (() => void) | undefined;
+// origin 外部编辑自愈事件监听（2026-10-08 哈希漂移治理第 2 层）
+let unlistenOriginHeal: (() => void) | undefined;
 
 // 视口滚动位置（2026-07-25 用户定；2026-09-23 迁 ui store scrollPositions 持久化）：
 // 进出预览 / 切换目录 / 重启应用都恢复——预览返回不跳顶（设缩略图后可直接确认），对比两个文件夹不用重新翻
@@ -992,6 +994,22 @@ export const useContentStore = defineStore("content", {
       unlistenFpsHeal = await listen<{ assetId: string; fps: number }>("video-fps-healed", (e) => {
         for (const p of this.placements) {
           if (p.assetId === e.payload.assetId) p.fps = e.payload.fps;
+        }
+      });
+    },
+
+    // origin 外部编辑自愈通知（2026-10-08 哈希漂移治理第 2 层）：读取触点（详情 / 文本卡 /
+    // docx 卡）检到 origin 被外部改写（size / mtime 漂移）自愈回写后广播——同步该资产全部
+    // Placement 的 size / modifiedAt（同 video-fps-healed 多 Placement 口径）：卡片尺寸标签
+    // 即时正确，文本卡正文按 modifiedAt 版本戳失效自动重拉，免手动「刷新缩略图」
+    async initOriginHealListener(): Promise<void> {
+      if (unlistenOriginHeal) return;
+      unlistenOriginHeal = await listen<{ assetId: string; size: number; modifiedAt: string }>("asset-origin-healed", (e) => {
+        for (const p of this.placements) {
+          if (p.assetId === e.payload.assetId) {
+            p.size = e.payload.size;
+            p.modifiedAt = e.payload.modifiedAt;
+          }
         }
       });
     },

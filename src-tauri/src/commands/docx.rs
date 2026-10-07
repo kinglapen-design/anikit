@@ -12,10 +12,15 @@ use crate::services::workspace as ws;
 
 /// 读取 docx 预览内容（段落结构 + 截断标记；XML 32MB / 文本 2MB 上限见 services/docx）。
 /// async：文件 IO，一律走线程池（规范第 2 条）
+/// 2026-10-08 origin 外部编辑自愈（同 read_text_asset 触点口径——Word 等默认应用回写后
+/// size/mtime 漂移自愈 + 广播 asset-origin-healed）
 #[tauri::command]
-pub async fn read_docx_asset(state: State<'_, AppState>, asset_id: String) -> Result<DocxContent, String> {
-  let guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+pub async fn read_docx_asset(app: tauri::AppHandle, state: State<'_, AppState>, asset_id: String) -> Result<DocxContent, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  if let Some((size, modified_at)) = crate::services::origin_sync::heal_if_drifted(lib, &asset_id) {
+    crate::services::origin_sync::emit_healed(&app, &asset_id, size, &modified_at);
+  }
   let (_info_dir, origin, meta) = locate_asset(lib, &asset_id)?;
   if !docx::is_docx(&origin) {
     return Err(format!("「{}」不是 docx 资源", meta.name));
