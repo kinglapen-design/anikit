@@ -540,6 +540,11 @@ fn thumbs_dir(ws_root: &Path) -> PathBuf {
   ws_root.join(CACHE_DIR).join("thumbs")
 }
 
+/// pub(crate)：ws_search 搜索命中条目的缓存缩略图回填复用（2026-10-03）
+pub(crate) fn thumbs_dir_of(ws_root: &Path) -> PathBuf {
+  thumbs_dir(ws_root)
+}
+
 /// rel 的 url-safe 编码：保留 [A-Za-z0-9._-]，其余字节（含 / 与非 ASCII）%XX 大写——
 /// 单射 ⇒ 唯一，且 Windows 文件名合法。**只做编码原语**：落盘文件名一律走 key_prefix +
 /// fnv64hex 的有界口径（整条编码中文每字符 9 倍膨胀无上限，踩坑 092）

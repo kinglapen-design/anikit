@@ -100,6 +100,9 @@ pub fn search(root: &Path, scope_rel: &str, keywords: &[String]) -> Result<WsSea
   let mut seen = HashSet::new();
   out.retain(|e| seen.insert(e.rel_path.clone()));
   out.truncate(MAX_HITS as usize);
+  for e in &mut out {
+    fill_cached_thumb(root, e);
+  }
   Ok(WsSearchOutcome::Hits(out))
 }
 
@@ -184,7 +187,35 @@ fn strip_prefix_ci<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
   rest.strip_prefix(['\\', '/']).filter(|s| !s.is_empty())
 }
 
-/// Everything 命中 → 磁盘实况条目（缩略图 / 宽高不在此探测——前端可见卡上报走既有缩略图管线补）
+/// 搜索命中条目的缓存缩略图回填（list_dir entry() 同口径 ①②④）：①内容缩略图缓存新鲜 = asset
+///（w/h 读缓存文件头回填，视频等非图片恢复真实比例）；②失败记忆命中 → 按扩展名格式图标已在
+/// 缓存才给（exe 文件级图标与未缓存图标不现场提取——逐命中 shell 提取太贵，交前端可见卡上报
+/// 走缩略图队列事件落回）；③可解码但未生成 = 不动（null → 前端上报生成 → 事件回填）
+fn fill_cached_thumb(root: &Path, e: &mut WsEntry) {
+  if e.is_dir {
+    return;
+  }
+  if let Some(p) = workspace::fresh_thumb_path(root, &e.rel_path, e.mtime_ms, e.size) {
+    if e.w.is_none() {
+      if let Ok((tw, th)) = image::image_dimensions(std::path::Path::new(&p)) {
+        e.w = Some(tw);
+        e.h = Some(th);
+      }
+    }
+    e.thumb_path = Some(p);
+    e.thumb_kind = Some(crate::services::views::ThumbKind::Asset);
+    return;
+  }
+  if workspace::is_thumb_failed(root, &e.rel_path, e.mtime_ms, e.size) && !e.ext.is_empty() {
+    let icon = crate::services::thumbnail::format_icon_path_in(&workspace::thumbs_dir_of(root), &e.ext);
+    if icon.is_file() {
+      e.thumb_path = Some(icon.to_string_lossy().into_owned());
+      e.thumb_kind = Some(crate::services::views::ThumbKind::FormatIcon);
+    }
+  }
+}
+
+/// Everything 命中 → 磁盘实况条目（缩略图 / 宽高缓存在 search() 统一回填——纯映射保持无 IO 可测）
 fn hit_to_entry(rel: String, hit: &everything::Hit) -> WsEntry {
   let name = rel.rsplit('/').next().unwrap_or(rel.as_str()).to_string();
   let ext = if hit.is_dir { String::new() } else { name.rsplit_once('.').map(|(_, e)| e.to_lowercase()).unwrap_or_default() };
@@ -248,7 +279,11 @@ pub fn crawl(root: &Path, scope_rel: &str, keywords: &[String], cancel: &AtomicB
     }
     if !hits.is_empty() || scanned - last_emit >= 512 {
       last_emit = scanned;
-      on_batch(scanned, std::mem::take(&mut hits));
+      let mut hits = std::mem::take(&mut hits);
+      for e in &mut hits {
+        fill_cached_thumb(root, e);
+      }
+      on_batch(scanned, hits);
     }
   }
   Ok(scanned)
@@ -290,7 +325,9 @@ fn scan_dir(dir: &Path, dir_rel: &str, kws: &[String]) -> DirScan {
   out
 }
 
-/// 爬盘命中 → 磁盘实况条目（metadata 现读：大小 / mtime；缩略图走前端可见卡上报管线补）
+/// 爬盘命中 → 磁盘实况条目（metadata 现读：大小 / mtime；缓存缩略图由 crawl() 发射前统一回填
+/// ——fresh 跳过入队零事件的坑（新鲜缓存静默跳过 = 无事件回填，搜索集非目录缓存，必须就地给），
+/// 未生成的仍走前端可见卡上报管线）
 fn crawl_entry(rel: &str, name: &str, e: &std::fs::DirEntry) -> WsEntry {
   let meta = e.metadata().ok();
   let ext = name.rsplit_once('.').map(|(_, x)| x.to_lowercase()).unwrap_or_default();

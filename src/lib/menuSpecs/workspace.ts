@@ -32,6 +32,7 @@ import type { PlacementView } from "../../stores/content";
 import type { CtxEntry } from "../contextMenus";
 import { previewSession } from "../../stores/preview";
 import { useContentStore } from "../../stores/content";
+import { useSearchStore } from "../../stores/search";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
 import { useWsStore } from "../../stores/ws";
@@ -348,6 +349,21 @@ export async function wsCardSpec(p: PlacementView, panelId: string): Promise<Ctx
   return [
     { label: "打开预览", shortcut: "Enter", action: () => void previewSession(panelId).open(key) },
     { label: "新标签页打开", shortcut: "Ctrl+Enter", action: () => tabs.openPreviewInNewTab(panelId, key) },
+    // 打开目标文件夹（2026-10-03 用户定，仅搜索态出现——命中跨目录，回目录定位）：导航进所在
+    // 目录视口 + 关闭搜索（清空草稿）+ requestReveal 滚到该文件（网格重排 consume 匹配）
+    ...(useSearchStore().isActive(panelId)
+      ? [
+          {
+            label: "打开目标文件夹",
+            action: () => {
+              const targetView = `ws:${rel}`;
+              useContentStore().requestReveal(targetView, key);
+              useSearchStore().setDraft(panelId, tabs.viewKeyOf(panelId), "");
+              tabs.openView(targetView, panelId);
+            },
+          } as CtxEntry,
+        ]
+      : []),
     // 打开外发组（库 6.3 同组移植）：默认应用 / 打开方式作用于被右键项（同库单发口径，不批量）
     {
       label: "在默认应用打开",

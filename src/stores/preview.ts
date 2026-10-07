@@ -18,6 +18,7 @@ import { useToastStore } from "./toast";
 import { isAudioExt, isDocxExt, isFontExt, isSequence, isStaticImageExt, isTextExt, isVideoExt } from "../lib/formatBadge";
 import { getAssetFilePath, listSequenceFrames, prepareAnimStrips, type FrameEntry } from "../lib/mediaOps";
 import { isWsPlacement } from "./ws";
+import { useSearchStore } from "./search";
 import { useTabsStore } from "./tabs";
 import { StreamSession, type StreamFrame } from "../lib/streamClient";
 
@@ -33,6 +34,17 @@ interface PlayFrame extends FrameEntry {
 export type PreviewKind = "image" | "sequence" | "anim" | "audio" | "video" | "font" | "text" | "docx" | "other";
 // 带图片源文件（psd/psb/ai/svg）：工具栏去旋转翻转、加默认应用打开
 const SOURCE_EXTS = ["psd", "psb", "ai", "svg"];
+
+// 预览导航列表（current/index/total/step 同一数据源）：ws 搜索态 = 搜索结果集（ws 命中跨目录
+// 合成、只存于 search store wsEntries，视口目录缓存查不到——2026-10-03 修复双击搜索结果是空开）；
+// 其余 = 视口 placements（库搜索 = 同集过滤子集，天然兼容）
+function previewList(panelId: string, viewKey: string, content: ReturnType<typeof useContentStore>): import("./content").PlacementView[] {
+  if (viewKey.startsWith("ws:")) {
+    const search = useSearchStore();
+    if (search.isActive(panelId)) return search.wsPlacementsFor(panelId);
+  }
+  return content.placementsFor(viewKey);
+}
 
 const ZOOM_MIN = 0.02;
 const ZOOM_MAX = 32;
@@ -134,25 +146,26 @@ function buildPreviewStore(panelId: string) {
       // 当前预览的 PlacementView（按 key 在属主面板视口列表里找）；
       // 包内视图（5.2，2026-08-21）：placementsFor 恒空——回退全量 placements 按 key 精确匹配，
       // 详情面板笔记跳帧在包内可直接开预览定位（index/total 仍按视口 = 空，上/下一个自然无效）
+      // ws 搜索态（2026-10-03 修复）：ws 搜索命中跨目录合成、只存于 search store wsEntries，
+      // 视口目录缓存与库 placements 都查不到——搜索态优先在搜索结果集里找，否则双击打开静默无效
       current(): import("./content").PlacementView | null {
         const content = useContentStore();
         if (!this.assetKey) return null;
         return (
-          content.placementsFor(useTabsStore().viewKeyOf(panelId)).find((p) => `${p.assetId}|${p.folderId}` === this.assetKey) ??
+          previewList(panelId, useTabsStore().viewKeyOf(panelId), content).find((p) => `${p.assetId}|${p.folderId}` === this.assetKey) ??
           content.placements.find((p) => `${p.assetId}|${p.folderId}` === this.assetKey) ??
           null
         );
       },
-      // 索引 x/y（属主面板视口顺序）
+      // 索引 x/y（属主面板视口顺序；ws 搜索态 = 搜索结果集顺序，与网格同序）
       index(): number {
         const content = useContentStore();
         if (!this.assetKey) return 0;
-        return content.placementsFor(useTabsStore().viewKeyOf(panelId)).findIndex(
-          (p) => `${p.assetId}|${p.folderId}` === this.assetKey,
-        );
+        const list = previewList(panelId, useTabsStore().viewKeyOf(panelId), content);
+        return list.findIndex((p) => `${p.assetId}|${p.folderId}` === this.assetKey);
       },
       total(): number {
-        return useContentStore().placementsFor(useTabsStore().viewKeyOf(panelId)).length;
+        return previewList(panelId, useTabsStore().viewKeyOf(panelId), useContentStore()).length;
       },
       isSource(): boolean {
         const ext = this.current?.ext.toLowerCase() ?? "";
@@ -221,9 +234,9 @@ function buildPreviewStore(panelId: string) {
         this.mdActionName = name;
         this.mdActionSeq++;
       },
-      // 上/下一个素材（属主面板视口顺序，到头停）
+      // 上/下一个素材（属主面板视口顺序，到头停；ws 搜索态 = 搜索结果集顺序，previewList 同源）
       async step(delta: number): Promise<void> {
-        const list = useContentStore().placementsFor(useTabsStore().viewKeyOf(panelId));
+        const list = previewList(panelId, useTabsStore().viewKeyOf(panelId), useContentStore());
         const next = this.index + delta;
         if (next < 0 || next >= list.length) return;
         const p = list[next];

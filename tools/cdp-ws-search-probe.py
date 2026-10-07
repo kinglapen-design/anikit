@@ -61,10 +61,10 @@ STUB = make_stub(
     if (cmd === "ws_search_crawl_cancel") {{ window.__calls.crawl_cancel.push(args?.taskId); return Promise.resolve(null); }}
     if (cmd === "open_external_url") {{ window.__calls.open_url.push(args?.url); return Promise.resolve(null); }}
     if (cmd === "launch_everything") {{ window.__calls.launch_ev.push(1); return Promise.resolve(null); }}
-    if (cmd === "list_workspace_dir") {{ return Promise.resolve([{_dir("分镜")}, {_dir("资料")},
+    if (cmd === "list_workspace_dir") {{ window.__calls.list_dir.push(args?.relPath ?? ""); return Promise.resolve([{_dir("分镜")}, {_dir("资料")},
       {_file("说明.txt", "说明.txt")}]); }}
 """,
-    head="window.__calls = { ws_search: [], crawl_start: [], crawl_cancel: [], open_url: [], launch_ev: [] };",
+    head="window.__calls = { ws_search: [], crawl_start: [], crawl_cancel: [], open_url: [], launch_ev: [], list_dir: [] };",
 )
 
 _msg_id = 0
@@ -242,6 +242,37 @@ async def main() -> int:
             await ev(ESC_INPUT)
             await asyncio.sleep(0.8)
             check("S7 Esc 清空 → 退出搜索态（计数消失 + 空态消失）", (await ev(RESULT_COUNT)) == "" and (await ev(EMPTY_TEXT)) == "")
+
+            # —— S8 双击搜索结果 = 开预览（2026-10-03 修复：ws 命中跨目录合成，预览数据源换搜索结果集）——
+            await ev("window.__evDown = false")
+            await asyncio.sleep(3.3)  # 能力缓存 TTL（3s）过期，下一轮搜索重探测为 running
+            await ev(TYPE % json.dumps("镜头"))
+            await asyncio.sleep(1.2)
+            check("S8a 搜索结果 2 卡就绪", await ev(CARD_COUNT) == 2)
+            # 搜索态右键 = 含「打开目标文件夹」
+            await click("document.querySelector('.asset-card')", button="right")
+            await asyncio.sleep(0.5)
+            labels = await ev("[...document.querySelectorAll('.app-menu .menu-item .label')].map((x) => x.textContent?.trim())")
+            check("S8b 搜索态右键 = 含打开目标文件夹", "打开目标文件夹" in (labels or []), labels)
+            await ev("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))")
+            await asyncio.sleep(0.4)
+            await ev("""(() => { const c = document.querySelector('.asset-card');
+              c?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); })()""")
+            await asyncio.sleep(1.0)
+            check("S8c 双击搜索结果 = 预览打开", await ev("!!document.querySelector('.preview-root')") is True)
+            # 返回退出预览（标题栏返回钮 = .preview-titlebar .nav-group 首个 IconButton；title 走 v-tip 不落 DOM 属性）
+            await click("document.querySelector('.preview-titlebar .nav-group button')")
+            await asyncio.sleep(0.6)
+
+            # —— S9 打开目标文件夹：跳目录 + 关搜索 ——
+            await click("document.querySelector('.asset-card')", button="right")
+            await asyncio.sleep(0.5)
+            await click("[...document.querySelectorAll('.app-menu .menu-item')].find((x) => x.textContent?.includes('打开目标文件夹'))")
+            await asyncio.sleep(1.0)
+            dirs = await ev("window.__calls.list_dir")
+            draft = await ev("document.querySelector('.fbs-input')?.value ?? ''")
+            check("S9a 点打开目标文件夹 = 导航进所在目录（list_dir 收 分镜）", (dirs or [])[-1:] == ["分镜"], dirs)
+            check("S9b 搜索已关闭（草稿清空 + 计数消失）", draft == "" and (await ev(RESULT_COUNT)) == "", (draft, await ev(RESULT_COUNT)))
 
             print("FAIL 清单:", fails if fails else "无")
             return 1 if fails else 0
