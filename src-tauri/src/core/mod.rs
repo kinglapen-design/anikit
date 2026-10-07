@@ -11,6 +11,7 @@
 //! - migrate：版本迁移骨架
 //! - config：全局配置（%APPDATA%\AniKit\config.json）
 
+pub mod anikit_ref;
 pub mod backup;
 pub mod config;
 pub mod index;

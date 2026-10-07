@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // 基础信息 tab（7.1 二十三轮贴稿，稿 = 右侧边栏-详情面板-基础信息 + 输入框/标签/详情/基本数据 四子稿）：
 // 区块链（全带 border-top 通用/三级，padding 12）：
-//   输入框区块（gap 8）：名称 TextInput lg 只读 + 链接 TextInput lg 只读（占位 http:// + 右置 link 图标）——
-//     名称/链接输入框自旧 pinned 区块移入（旧 36 高 C2 口径作废），只读业务口径不变（一轮只读沿用）；
+//   输入框区块（gap 8）：名称 TextInput lg 只读 + 链接 TextInput lg 可编辑（2026-10-08 S4 勾销只读口径：
+//     blur/Enter 提交首条 links，右置 link 钮 = 打开链接——anikit:// 内部跳转 / http(s) 默认浏览器）；
 //   标签区块（gap 12，垂直居中）：属性 chips（高 25 / 通用四级底 + 通用六级 1px / 圆角 6 / 次要文字 12/16 二级
 //     ——figma「标签」档 12/17 未收录 Token.md，2026-08-31 用户定就近用档）
 //     + add-small 添加钮（6.1 业务：开 32 稿属性弹窗 ui.propsEdit）；
@@ -16,6 +16,7 @@
 // 文件与档案同构（2026-08-31 用户定）：档案 = props / descriptions / 统计数据渲染同一结构。
 // 排序/显隐 = 信息查看管理面板配置驱动（2026-09-26）：渲染序 = ui.detailBlocks.basic 全量序过滤 hidden。
 import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import TextInput from "../inputs/TextInput.vue";
 import ActionButton from "../buttons/ActionButton.vue";
 import IconButton from "../buttons/IconButton.vue";
@@ -25,6 +26,9 @@ import AppIcon from "../AppIcon.vue";
 import { displayName } from "../../lib/formatBadge";
 import { formatDetailDate, visibleDetailBlocks, type DetailTarget } from "../../lib/detailSections";
 import { formatSize } from "../../lib/formatSize";
+import { setAssetLinks, setArchiveLinks } from "../../lib/customDataOps";
+import { jumpToAnikitRef, parseAnikitRef } from "../../lib/anikitLink";
+import { useToastStore } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 
 const props = defineProps<{ target: Extract<DetailTarget, { kind: "file" | "archive" }> }>();
@@ -33,7 +37,7 @@ const ui = useUiStore();
 const file = computed(() => (props.target.kind === "file" ? props.target : null));
 const archive = computed(() => (props.target.kind === "archive" ? props.target : null));
 
-// 名称 / 链接（只读展示；链接 = detail.links / archives.json links 首条，空 = placeholder http://）
+// 名称（只读）；链接可编辑（2026-10-08 S4 anikit 协议消费端：detail.links / archives.json links 首条，空 = placeholder http://）
 const name = computed(() => {
   if (file.value) return displayName(file.value.placement, ui.showExt);
   return archive.value?.node.name ?? "";
@@ -42,6 +46,52 @@ const firstLink = computed(() => {
   if (file.value) return file.value.detail.links[0] ?? "";
   return archive.value?.data.links[0] ?? "";
 });
+
+// —— 链接输入框（S4）：blur / Enter 提交（首条语义——非空 = links 全量 [v]，清空 = []）；
+//    右置 link 钮 = 打开链接：anikit:// 内部跳转（lib/anikitLink），http(s) 默认浏览器，空值 = 聚焦输入框 ——
+const toast = useToastStore();
+const linkDraft = ref("");
+const linkInputRef = ref<InstanceType<typeof TextInput>>();
+watch(firstLink, (v) => {
+  linkDraft.value = v;
+}, { immediate: true });
+
+let linkCommitting = false; // Enter → blur 双触发守卫（重复提交会双 toast）
+async function commitLink(): Promise<void> {
+  const v = linkDraft.value.trim();
+  if (v !== linkDraft.value) linkDraft.value = v;
+  if (v === firstLink.value || linkCommitting) return;
+  linkCommitting = true;
+  try {
+    const links = v ? [v] : [];
+    const ok = file.value
+      ? await setAssetLinks(file.value.placement.assetId, links)
+      : archive.value
+        ? await setArchiveLinks(archive.value.node.id, links)
+        : false;
+    if (!ok) linkDraft.value = firstLink.value; // 失败回滚显示（toast 已在封装内）
+  } finally {
+    linkCommitting = false;
+  }
+}
+
+function onLinkIconClick(): void {
+  const v = linkDraft.value.trim() || firstLink.value;
+  if (!v) {
+    linkInputRef.value?.focus();
+    return;
+  }
+  const ref = parseAnikitRef(v);
+  if (ref) {
+    jumpToAnikitRef(ref);
+    return;
+  }
+  if (/^https?:\/\//.test(v)) {
+    void invoke("open_external_url", { url: v }).catch((e) => toast.notify({ message: String(e), icon: "fail" }));
+    return;
+  }
+  toast.notify({ message: "无法识别的链接（支持 http(s):// 与 anikit://）", icon: "fail" });
+}
 
 // 属性（文件 = tags 语义属性词；档案 = props）与描述（两侧统一标题 + 内容列表）——SectionCustom 旧业务
 const propWords = computed(() => (file.value ? file.value.detail.tags : (archive.value?.data.props ?? [])));
@@ -132,7 +182,17 @@ const dataRows = computed<{ label: string; values: string[] }[]>(() => {
     <!-- 输入框区块（稿：padding 12 / gap 8 / border-top 通用/三级） -->
     <section v-if="b === 'fields'" class="db-block inputs">
       <TextInput :model-value="name" readonly placeholder="名称" />
-      <TextInput :model-value="firstLink" readonly placeholder="http://" trailing-icon="link" />
+      <!-- 链接框可编辑（2026-10-08 S4）：blur / Enter 提交，右置钮 = 打开链接（anikit 内部跳转 / http 浏览器） -->
+      <TextInput
+        ref="linkInputRef"
+        v-model="linkDraft"
+        placeholder="http://"
+        trailing-icon="link"
+        trailing-button
+        @trailing-click="onLinkIconClick"
+        @focusout="commitLink"
+        @keydown.enter.prevent="commitLink"
+      />
     </section>
 
     <!-- 属性标签区块（稿：padding 12 / gap 12 / border-top；chips 行 gap 6） -->

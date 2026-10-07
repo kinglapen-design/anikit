@@ -19,7 +19,8 @@ use crate::server::mcp::{AnikitMcp, json_result, write_gate};
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetFolderGroupsParams {
-  /// 目标文件夹 id（取自 list_folder_tree 节点 id）
+  /// 目标文件夹 id（取自 list_folder_tree 节点 id；anikit://folder/{id} 链接形态同吃）
+  #[serde(deserialize_with = "super::de_ref_id")]
   pub folder_id: String,
   /// 分组定义**全量数组**（草稿式整交 = 该文件夹分组终态；空数组 = 取消分组）。
   /// 改既有组照 list_folder_tree 回包 groups 抄改；漏交的组 = 删除

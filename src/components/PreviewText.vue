@@ -8,8 +8,8 @@
 // 编辑撤销（2026-09-25 走查补）：textarea 原生撤销遇程序化修改（工具栏动作 / toggle）即断栈——
 // 自实现快照历史（lib/mdHistory，组件会话级），编辑态 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y；
 // 与库撤销无关（「编辑不进 undo」口径不变，全局 Ctrl+Z 本对输入框让位）。
-// md 图片引用 = 库内封闭路径解析不了 → 渲染占位文本（09 待办：库内资产引用解析）；
-// md 链接本轮不可点（09 待办：默认浏览器打开）。
+// md 图片引用 = anikit 双形态渲染真图、点击内部跳转（2026-10-08 S3 勾销两个 09 待办；lib/markdown.ts 管道）；
+// md 链接可点（同轮）：anikit:// 内部跳转，http(s) 默认浏览器（onMdClick 代理）。
 // 保存竞态纪律：保存请求绑定加载时 assetId（loadedId），切素材先 flush 在途编辑再加载新内容——
 // 旧内容不会错存到新资产；响应到达时已切走则只更新 placements 不动编辑区状态。
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -18,6 +18,8 @@ import { createMd } from "../lib/markdown";
 import { applyMdAction, toggleTaskLine } from "../lib/mdEdit";
 import { createMdHistory, type HistEntry } from "../lib/mdHistory";
 import { readTextAsset, writeTextAsset } from "../lib/textOps";
+import { jumpToAnikitRef, parseAnikitRef } from "../lib/anikitLink";
+import { invoke } from "@tauri-apps/api/core";
 import { useContentStore } from "../stores/content";
 import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 import { useToastStore } from "../stores/toast";
@@ -330,7 +332,7 @@ function scheduleSplitScroll(): void {
   });
 }
 
-// —— 渲染态点击代理：复制钮 / 任务复选框 分流；其余 = 无操作（纯阅读可复制，进编辑走铅笔钮 / Ctrl+E）——
+// —— 渲染态点击代理：复制钮 / anikit 图与链接 / 任务复选框 分流；其余 = 无操作（纯阅读可复制，进编辑走铅笔钮 / Ctrl+E）——
 function onMdClick(e: MouseEvent): void {
   const t = e.target as HTMLElement;
   const copy = t.closest(".md-copy");
@@ -342,6 +344,22 @@ function onMdClick(e: MouseEvent): void {
     );
     return;
   }
+  // anikit 引用图片（2026-10-08 S3）：点击 = 内部跳转选中该资产（渲染层行为，源码保持裸 ![]() 语法）
+  const img = t.closest<HTMLElement>("img.md-asset[data-anikit-id]");
+  if (img?.dataset.anikitId) {
+    jumpToAnikitRef({ kind: "item", id: img.dataset.anikitId });
+    return;
+  }
+  // 链接可点（同轮勾销 09 待办）：anikit:// = 内部跳转；http(s) = 默认浏览器打开
+  const a = t.closest("a");
+  if (a) {
+    e.preventDefault();
+    const href = a.getAttribute("href") ?? "";
+    const ref = parseAnikitRef(href);
+    if (ref) jumpToAnikitRef(ref);
+    else if (/^https?:\/\//.test(href)) void invoke("open_external_url", { url: href }).catch((err) => toast.notify({ message: String(err), icon: "fail" }));
+    return;
+  }
   const box = t.closest<HTMLElement>(".kit-check-box[data-task-line]");
   if (box) {
     const line = Number(box.dataset.taskLine);
@@ -351,6 +369,23 @@ function onMdClick(e: MouseEvent): void {
       draft.value = toggleTaskLine(draft.value, line);
     }
   }
+}
+
+// —— 编辑态粘贴补全（2026-10-08 S3）：剪贴板整串为 anikit 引用（item）→ 插入 ![名](anikit://item/{id})
+//  图片语法；非 anikit 链接 / folder 引用走默认粘贴。独立撤销步同工具栏动作口径 ——
+function onEditorPaste(e: ClipboardEvent): void {
+  const ta = editorRef.value;
+  if (!ta || !isMd.value) return;
+  const text = e.clipboardData?.getData("text/plain") ?? "";
+  const ref = parseAnikitRef(text);
+  if (!ref || ref.kind !== "item") return;
+  e.preventDefault();
+  const name = content.placements.find((x) => x.assetId === ref.id)?.name ?? "图片";
+  history.record(snapOf(ta), false);
+  ta.setRangeText(`![${name}](anikit://item/${ref.id})`, ta.selectionStart, ta.selectionEnd, "end");
+  draft.value = ta.value;
+  prevSnap = snapOf(ta);
+  scheduleSplitScroll();
 }
 
 // —— 分屏分割条拖动（§9 ③ 窗口监听口径）：splitRatio clamp 0.25-0.75 ——
@@ -430,6 +465,7 @@ watch(
             class="editor md-editor kit-scroll"
             spellcheck="false"
             @input="onDraftInput"
+            @paste="onEditorPaste"
             @keydown="onEditorKeydown"
             @keyup="scheduleSplitScroll"
             @click="scheduleSplitScroll"

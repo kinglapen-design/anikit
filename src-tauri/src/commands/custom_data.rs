@@ -48,6 +48,42 @@ pub async fn set_asset_descriptions(state: State<'_, AppState>, asset_id: String
   }
 }
 
+/// 编辑文件链接（metadata.links URL 列表，2026-10-08 S4 anikit 协议消费端：详情链接输入框可编辑化）
+#[tauri::command]
+pub async fn set_asset_links(state: State<'_, AppState>, asset_id: String, links: Vec<String>) -> Result<(), String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin("编辑链接");
+  undo.record_file(&paths::info_dir(&lib.assets_dir, &asset_id).join("metadata.json")).map_err(|e| e.to_string())?;
+  match custom_data::set_asset_links(lib, &asset_id, &links) {
+    Ok(true) => undo.commit().map_err(|e| e.to_string()),
+    Ok(false) => {
+      undo.cancel();
+      Ok(())
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
+/// 编辑档案链接（archives.json links，同上）
+#[tauri::command]
+pub async fn set_archive_links(state: State<'_, AppState>, folder_id: String, links: Vec<String>) -> Result<(), String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin("编辑链接");
+  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
+  match custom_data::set_archive_links(lib, &folder_id, &links) {
+    Ok(true) => undo.commit().map_err(|e| e.to_string()),
+    Ok(false) => {
+      undo.cancel();
+      Ok(())
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
 /// 属性池（只读）：全库聚合去重（资产 tags + 档案 props），按小写字典序
 #[tauri::command]
 pub fn list_prop_pool(state: State<AppState>) -> Result<Vec<String>, String> {

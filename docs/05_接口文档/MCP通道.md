@@ -18,15 +18,17 @@
 
 加工具 = `server/mcp/tools/` 加一个文件 + `mod.rs` 注册处一行（工具注册表模式，范式 = 前端 barSpecs；未来复用为插件 API 注册表）。回包统一：**仅 `content` 文本（紧凑 JSON），不带 structuredContent**——同一份数据双带会被不查重的客户端双倍计入上下文（2026-09-19 用户实测额度消耗后定的省 token 口径；未声明 outputSchema 时 structuredContent 本就可选）；库未打开回工具级错误（`isError: true`，文本「请先打开素材库」），不静默空表；域错误（资产不存在等）同口径回中文原因。
 
+**URI 增强（2026-10-08 S5，PRD 02-09）**：①所有收 assetId / folderId 的工具参数经 `core::anikit_ref::normalize_ref_id` 归一化（Params struct 字段挂 serde deserialize_with）——`anikit://item|folder/{id}` 与 `http(s)://127.0.0.1:{port}/(open/)item|folder/{id}` 链接形态直接吃，AI 整段透传用户粘贴的链接即可；②`search_assets` placements 每项与 `get_asset_detail` 顶层附 `uri` 字段（http open 形态 `http://127.0.0.1:{port}/open/item/{id}`，server/media.rs 端点——AI 回复用户时可点击回 AniKit；新增字段不破坏既有解析）。
+
 只读 8 个（一期，全部 `annotations.readOnlyHint = true`）：
 
 | 工具 | 入参 | 回包（同命令层结构） |
 | --- | --- | --- |
 | `get_current_library` | 无 | `{ space: SpaceInfo \| null, library: LibraryInfo \| null }`——探状态用，未开库不算错误 |
-| `search_assets` | `{ query: string, folderId?: string, recursive?: boolean }` | `SearchHits { placements: [{ assetId, folderId }], archives: [folderId] }`。范围口径：不传 folderId = 全库（回收站除外）；传 = 限定该文件夹，recursive 缺省 true 含子级 |
+| `search_assets` | `{ query: string, folderId?: string, recursive?: boolean }` | `SearchHits { placements: [{ assetId, folderId, uri }], archives: [folderId] }`（uri = http open 点击跳转链接，2026-10-08 S5）。范围口径：不传 folderId = 全库（回收站除外）；传 = 限定该文件夹，recursive 缺省 true 含子级 |
 | `list_folder_tree` | 无 | `FolderTreeView { blocks: [{ id, name, icon }], nodes: [{ id, name, count, totalSize, icon, kind, color, groups?, children }] }` |
 | `list_placements` | `{ folderId?: string }`（"root" = 未分类；缺省 = 全部） | `PlacementView[]`（assetId / folderId / name / 宽高 / ext / **thumbPath 缩略图绝对路径** / size / duration / tags 等，字段见 `services/views.rs`） |
-| `get_asset_detail` | `{ assetId }` | `AssetDetail`（originName / ext / size / 宽高 / duration / tags / descriptions / colors / links / note / placements 反查 / archives 归属 / thumbAsset 调用侧伴生缩略图 / thumbUsedBy 被引用清单——后两项 2026-09-23 缩略图区块接业务补输出）。**纯读**——不走 APP 侧 ensure_asset_colors 懒回填，存量资产 colors 可能为空 |
+| `get_asset_detail` | `{ assetId }` | `AssetDetail`（originName / ext / size / 宽高 / duration / tags / descriptions / colors / links / note / placements 反查 / archives 归属 / thumbAsset 调用侧伴生缩略图 / thumbUsedBy 被引用清单——后两项 2026-09-23 缩略图区块接业务补输出）+ 顶层 `uri`（http open 点击跳转链接，2026-10-08 S5）。**纯读**——不走 APP 侧 ensure_asset_colors 懒回填，存量资产 colors 可能为空 |
 | `get_asset_origin_path` | `{ assetId }` | `{ originPath, thumbPath: string \| null }`——源文件真实路径（序列帧 = frames/ 封面帧，同右键「复制文件路径」口径）+ 缩略图路径（含 thumbAssetId 伴生代理：fla 等工程资产取伴生 hidden 资产的图） |
 | `read_text_asset` | `{ assetId }` | `{ content }`（txt / md；UTF-8 优先 GBK 回退，2MB 上限；非文本资产报错） |
 | `list_archives` | 无 | `ArchiveListItem[]`（folderId / badge / avatar / props / descriptions / links / createdAt / totalSize / coverPath / coverVer）；folderId 可交给 list_placements 列档案内容 |

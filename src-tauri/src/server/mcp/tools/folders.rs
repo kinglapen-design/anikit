@@ -10,7 +10,8 @@ use crate::server::mcp::AnikitMcp;
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ListPlacementsParams {
-  /// 文件夹 id（取自 list_folder_tree 节点 id；"root" = 未分类）；缺省 = 全部 Placement
+  /// 文件夹 id（取自 list_folder_tree 节点 id；"root" = 未分类；anikit://folder/{id} 链接形态同吃）；缺省 = 全部 Placement
+  #[serde(deserialize_with = "super::de_ref_id_opt")]
   pub folder_id: Option<String>,
 }
 

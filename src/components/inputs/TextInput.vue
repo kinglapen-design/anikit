@@ -25,14 +25,16 @@ withDefaults(
     readonly?: boolean;
     leadingIcon?: string; // 左置装饰图标（移动弹窗搜索框稿：18 实寸 亮色/三级）
     trailingIcon?: string;
+    trailingButton?: boolean; // trailingIcon 升可点钮（2026-10-08 S4 详情链接框：点击 = 打开链接；默认纯装饰口径不变）
     focusable?: boolean; // false = 聚焦描边不显（2026-08-31 用户定：快速访问固定入口框不给聚焦边框——
     // 亮了误导人以为能输入；文件夹/文件名称框保留聚焦态，改名业务语义上可输入）
     clearable?: boolean; // 有内容时出清除钮（烧 AppInput/AppSearchBar 补的能力，2026-09-20）
     forceState?: "" | "focus";
   }>(),
-  { size: "lg", placeholder: undefined, disabled: false, readonly: false, leadingIcon: undefined, trailingIcon: undefined, focusable: true, clearable: false, forceState: "" },
+  { size: "lg", placeholder: undefined, disabled: false, readonly: false, leadingIcon: undefined, trailingIcon: undefined, trailingButton: false, focusable: true, clearable: false, forceState: "" },
 );
 const model = defineModel<string>({ default: "" });
+const emit = defineEmits<{ trailingClick: [] }>();
 
 const inputEl = ref<HTMLInputElement>();
 function onClear(): void {
@@ -68,8 +70,17 @@ defineExpose({
     >
       <AppIcon name="clear" :size="12" />
     </button>
-    <!-- 右置装饰图标（详情面板链接框稿：18 实寸 亮色/四级，纯装饰不交互） -->
-    <AppIcon v-if="trailingIcon" :name="trailingIcon" :size="18" class="ti-trail" />
+    <!-- 右置图标：trailingButton = 可点钮（详情链接框：打开链接，亮色/四级 hover 升三级）；否则纯装饰不交互 -->
+    <button
+      v-if="trailingIcon && trailingButton"
+      class="ti-trail-btn"
+      :disabled="disabled"
+      tabindex="-1"
+      @click="emit('trailingClick')"
+    >
+      <AppIcon :name="trailingIcon" :size="18" />
+    </button>
+    <AppIcon v-else-if="trailingIcon" :name="trailingIcon" :size="18" class="ti-trail" />
   </div>
 </template>
 
@@ -165,6 +176,25 @@ defineExpose({
   color: var(--n-l4);
   pointer-events: none;
 }
+/* 右置可点钮（trailingButton）：底色透明，亮色/四级 hover 升三级（清除钮同口径） */
+.ti-trail-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--n-l4);
+  cursor: pointer;
+}
+.ti-trail-btn:hover {
+  color: var(--n-l3);
+}
+.ti-trail-btn:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
 /* 清除钮（clearable）：亮色/四级，hover 升三级 150ms */
 .ti-clear {
   flex: none;
@@ -179,7 +209,8 @@ defineExpose({
 }
 .ti-root.has-lead,
 .ti-root:has(.ti-clear),
-.ti-root:has(.ti-trail) {
+.ti-root:has(.ti-trail),
+.ti-root:has(.ti-trail-btn) {
   gap: var(--n-space-6);
 }
 </style>

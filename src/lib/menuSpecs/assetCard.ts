@@ -36,6 +36,7 @@ import {
   copyAssetLink,
   copyAssetPath,
   copyBase64,
+  copyMdImage,
   copyName,
   dissolveSequenceFlow,
   exportAssetsToWsFlow,
@@ -45,6 +46,7 @@ import {
   revealWithWarning,
 } from "../menuOps";
 import { assignGroup } from "../groupOps";
+import { exportMdBundleAsset } from "../mdBundleOps";
 import {
   applyClipboardThumb,
   applyThumbLink,
@@ -262,6 +264,10 @@ export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
           label: "导出到工作空间",
           action: () => exportAssetsToWsFlow(selection.selectedRefs().map((r) => r.assetId)),
         },
+        // 打包导出 MD（2026-10-08 S6，PRD 02-09）：anikit 引用收集 → {文档名}-打包/；仅 md 资产出现
+        ...(p.ext.toLowerCase() === "md"
+          ? [{ label: "打包导出 MD…", action: () => void exportMdBundleAsset(assetId) } as CtxEntry]
+          : []),
         // 「导出提示词为 .MD 文档」占位删除（2026-09-05 走查）
       ],
     },
@@ -293,6 +299,9 @@ export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
       submenu: [
         { label: "复制链接", action: () => void copyAssetLink(assetId) },
         { label: "复制文件路径", action: () => void copyAssetPath(assetId) },
+        // 复制 MD 图片（2026-10-08 S2，PRD 02-09 对外形态）：裸 ![]() / 带跳转回链两态
+        { label: "复制 MD 图片", action: () => void copyMdImage(assetId, p.name, false) },
+        { label: "复制 MD 图片（带跳转）", action: () => void copyMdImage(assetId, p.name, true) },
         "divider",
         { label: "复制名称", action: () => copyName(p.name) },
         { label: "复制 base64", action: () => copyBase64(assetId) },
@@ -450,11 +459,18 @@ function virtualAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
       label: "导出到工作空间",
       action: () => exportAssetsToWsFlow(selection.selectedRefs().map((r) => r.assetId)),
     },
+    // 打包导出 MD（2026-10-08 S6）：拍平一级同导出口径；仅 md 资产出现
+    ...(p.ext.toLowerCase() === "md"
+      ? [{ label: "打包导出 MD…", action: () => void exportMdBundleAsset(assetId) } as CtxEntry]
+      : []),
     {
       label: "复制数据",
       submenu: [
         { label: "复制链接", action: () => void copyAssetLink(assetId) },
         { label: "复制文件路径", action: () => void copyAssetPath(assetId) },
+        // 复制 MD 图片（2026-10-08 S2，PRD 02-09 对外形态）：裸 ![]() / 带跳转回链两态
+        { label: "复制 MD 图片", action: () => void copyMdImage(assetId, p.name, false) },
+        { label: "复制 MD 图片（带跳转）", action: () => void copyMdImage(assetId, p.name, true) },
         "divider",
         { label: "复制名称", action: () => copyName(p.name) },
         { label: "复制 base64", action: () => copyBase64(assetId) },
@@ -505,6 +521,9 @@ function pickerAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
       submenu: [
         { label: "复制链接", action: () => void copyAssetLink(assetId) },
         { label: "复制文件路径", action: () => void copyAssetPath(assetId) },
+        // 复制 MD 图片（2026-10-08 S2，PRD 02-09 对外形态）：裸 ![]() / 带跳转回链两态
+        { label: "复制 MD 图片", action: () => void copyMdImage(assetId, p.name, false) },
+        { label: "复制 MD 图片（带跳转）", action: () => void copyMdImage(assetId, p.name, true) },
         "divider",
         { label: "复制名称", action: () => copyName(p.name) },
         { label: "复制 base64", action: () => copyBase64(assetId) },

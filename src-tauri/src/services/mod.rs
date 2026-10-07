@@ -14,6 +14,7 @@
 //! - anim_preview_queue：小动画生成队列（单 worker 无代际作废，导入挂钩 + 懒生成；事件 preview-anim-ready）
 //! - frame_stream：动图帧流（阶段四·自研解码器：解码线程会话 + WS 推帧，预览窗口播放源；卡片层 2026-09-02 回滚原生 img）
 //! - media：音视频元数据与预览图（5.1，ffprobe/ffmpeg sidecar；视频首帧 / 音频波形）
+//! - md_bundle：MD 打包导出（2026-10-08 S6，PRD 02-09：anikit 双形态引用收集 → assets/ + 改写相对路径）
 //! - operations：素材基础操作（6.1 选择态：新建文件夹 / 移动 / 排序 / 关联 / 副本 / 重命名 / 删除）
 //! - archive：档案文件夹（3.2 一轮骨架：新建档案 / 文件夹 ⇄ 档案转换 / 档案数据清单）
 //! - recent：最近使用（6.1 第二轮，recent.json LRU 500；唯一启用入口 = 默认程序打开成功）
@@ -55,6 +56,7 @@ pub mod import;
 pub mod import_task;
 pub mod inbox;
 pub mod media;
+pub mod md_bundle;
 pub mod operations;
 pub mod origin_sync;
 pub mod preview_queue;

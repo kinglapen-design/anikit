@@ -47,6 +47,7 @@ import {
   wsShellMenuBackground,
 } from "../wsOps";
 import { copyText, importWsToLibraryFlow } from "../menuOps";
+import { exportMdBundleWs } from "../mdBundleOps";
 import { useToastStore } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 
@@ -393,6 +394,19 @@ export async function wsCardSpec(p: PlacementView, panelId: string): Promise<Ctx
     // 导入到库（2026-10-03 ws ↔ 库互通，PRD 02）：ws → 库 = 复制导入（importDraft 既有流），
     // 目标文件夹由库树选择器定；混选（文件 + 文件夹）整批受理（classify_paths 判 kind）
     { label: "导入到库", action: () => importWsToLibraryFlow(batch) },
+    // 打包导出 MD（2026-10-08 S6，PRD 02-09）：anikit 双形态引用收集 → 文档旁 {文档名}-打包/；
+    // 仅 md 单选出现（多选批量打包未立项）
+    ...(p.ext === "md" && !multi
+      ? [
+          {
+            label: "打包导出 MD…",
+            action: () => {
+              const abs = ws.absPath(entryRel);
+              if (abs) void exportMdBundleWs(abs);
+            },
+          } as CtxEntry,
+        ]
+      : []),
     { label: "在资源管理器中显示", action: () => revealRel(entryRel) },
     { label: "系统菜单", action: () => openShellMenu(batch) },
     "divider",

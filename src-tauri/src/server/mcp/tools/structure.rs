@@ -19,6 +19,7 @@ pub struct CreateFolderParams {
   /// 文件夹名（空名 / Windows 非法字符后端拒绝）
   pub name: String,
   /// 父文件夹 id（取自 list_folder_tree 节点 id）；缺省 / "root" = 顶层
+  #[serde(deserialize_with = "super::de_ref_id_opt")]
   pub parent_id: Option<String>,
 }
 
@@ -26,9 +27,11 @@ pub struct CreateFolderParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlacementRefParams {
-  /// 资产 id
+  /// 资产 id（anikit:// 链接形态同吃）
+  #[serde(deserialize_with = "super::de_ref_id")]
   pub asset_id: String,
   /// 所在文件夹 id（Placement 定位二元组之一）
+  #[serde(deserialize_with = "super::de_ref_id")]
   pub folder_id: String,
   /// 是否原始 Placement（**定位三元组之一**，照回包 origin 字段抄；缺省 false = 只命中链接件——
   /// 对 origin 记录漏传本字段会定位落空被跳过）
@@ -43,6 +46,7 @@ pub struct MovePlacementsParams {
   /// 待移动 Placement 清单（单条 = 1 项数组）
   pub items: Vec<PlacementRefParams>,
   /// 目标文件夹 id（取自 list_folder_tree 节点 id；"root" = 未分类）
+  #[serde(deserialize_with = "super::de_ref_id")]
   pub target_folder_id: String,
 }
 
@@ -51,8 +55,10 @@ pub struct MovePlacementsParams {
 #[serde(rename_all = "camelCase")]
 pub struct MoveFoldersParams {
   /// 待移动文件夹 id 清单（取自 list_folder_tree 节点 id；单条 = 1 项数组）
+  #[serde(deserialize_with = "super::de_ref_id_vec")]
   pub folder_ids: Vec<String>,
   /// 目标父文件夹 id；缺省 / "root" = 顶层（文件夹区块）
+  #[serde(deserialize_with = "super::de_ref_id_opt")]
   pub target_parent_id: Option<String>,
 }
 
@@ -63,6 +69,7 @@ pub struct LinkPlacementsParams {
   /// 待链接 Placement 清单（单条 = 1 项数组）
   pub items: Vec<PlacementRefParams>,
   /// 目标文件夹 id（链接 Placement 建在该文件夹，资产本体留原地）
+  #[serde(deserialize_with = "super::de_ref_id")]
   pub target_folder_id: String,
   /// 自定义显示名清单（与 items 等长对齐；null 项 = 用源 Placement 名；整参缺省 = 全部用源名）
   pub names: Option<Vec<Option<String>>>,

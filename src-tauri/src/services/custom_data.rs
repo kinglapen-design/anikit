@@ -104,6 +104,42 @@ pub fn set_archive_descriptions(lib: &mut Library, folder_id: &str, descriptions
   Ok(true)
 }
 
+/// 链接归一化：逐条 trim、去空串、保序去重（normalize_props 同口径）
+fn normalize_links(links: &[String]) -> Vec<String> {
+  let mut out: Vec<String> = Vec::new();
+  for l in links {
+    let t = l.trim();
+    if !t.is_empty() && !out.iter().any(|x| x == t) {
+      out.push(t.to_string());
+    }
+  }
+  out
+}
+
+/// 设置文件链接（metadata.links URL 列表，2026-10-08 S4 anikit 协议消费端——详情链接输入框数据源）。
+/// 返回是否有改动
+pub fn set_asset_links(lib: &mut Library, asset_id: &str, links: &[String]) -> Result<bool, String> {
+  let meta = lib.index.assets.get(asset_id).ok_or_else(|| "资源不存在，可能已被删除".to_string())?.clone();
+  let next = normalize_links(links);
+  if next == meta.links {
+    return Ok(false);
+  }
+  write_asset_meta(lib, meta, |m| m.links = next)?;
+  Ok(true)
+}
+
+/// 设置档案链接（archives.json links，同上）。返回是否有改动
+pub fn set_archive_links(lib: &mut Library, folder_id: &str, links: &[String]) -> Result<bool, String> {
+  let next = normalize_links(links);
+  let rec = archive_record_mut(lib, folder_id)?;
+  if rec.links == next {
+    return Ok(false);
+  }
+  rec.links = next;
+  library::save_archives(lib).map_err(|e| e.to_string())?;
+  Ok(true)
+}
+
 /// 属性池（32 稿「已有属性标签：」）：全库聚合去重，按小写字典序（稳定可测）
 pub fn list_prop_pool(lib: &Library) -> Vec<String> {
   let mut pool: Vec<String> = Vec::new();

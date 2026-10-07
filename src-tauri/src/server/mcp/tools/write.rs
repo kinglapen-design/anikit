@@ -21,6 +21,7 @@ pub struct CreateDocumentParams {
   /// 文档类型：md / txt / fla / psd / ai / docx / xlsx（写提示词场景主要 md）
   pub kind: String,
   /// 目标文件夹 id（取自 list_folder_tree 节点 id；"root" = 根目录）；缺省 = 根目录
+  #[serde(deserialize_with = "super::de_ref_id_opt")]
   pub folder_id: Option<String>,
 }
 
@@ -28,7 +29,8 @@ pub struct CreateDocumentParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteTextParams {
-  /// 资产 id（search_assets / list_placements 回包里的 assetId）
+  /// 资产 id（search_assets / list_placements 回包里的 assetId；anikit:// 链接形态同吃）
+  #[serde(deserialize_with = "super::de_ref_id")]
   pub asset_id: String,
   /// 新内容全文（整体覆写，恒 UTF-8 无 BOM；上限 2MB）
   pub content: String,
@@ -38,9 +40,11 @@ pub struct WriteTextParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameItemParams {
-  /// 资产 id
+  /// 资产 id（anikit:// 链接形态同吃）
+  #[serde(deserialize_with = "super::de_ref_id")]
   pub asset_id: String,
   /// 所在文件夹 id（Placement 定位二元组之一，取自 list_placements 回包 folderId）
+  #[serde(deserialize_with = "super::de_ref_id")]
   pub folder_id: String,
   /// Placement 定位三元组之一：true = 原始 Placement / false = 链接件（照 list_placements 回包
   /// origin 字段抄）；**缺省 = 自动定位**——该文件夹内此资产仅一条记录时自动命中，多条

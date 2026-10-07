@@ -69,6 +69,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 - **写入先确认开关**：写工具默认关闸，回「MCP 写入未开启」时提示用户去插件面板 MCP 详情窗开启，不要重试刷屏。
 - **路径不缓存**：资产磁盘名随库内重命名同步变化，路径必须每次现取现用。
 - 浏览走文件夹树 / 搜索入口按 id 直达，不要全目录枚举 assets 池。
+- **id 参数可传链接**（2026-10-08 S5）：assetId / folderId 参数直接吃 `anikit://item|folder/{id}` 与 `http://127.0.0.1:{port}/(open/)item|folder/{id}` 链接形态——用户粘贴的链接整段透传即可，无需自行字符串处理；`search_assets` placements 与 `get_asset_detail` 回包附 `uri` 字段（http open 形态），回复用户时可直接引用（点击回 AniKit 定位）。
 
 ## 省 token（2026-09-19 用户实测后补）
 

@@ -3,8 +3,14 @@
 // li 挂 .md-task、文本前注入 .kit-check-box 静态框（styles/checkbox.css 通用类，Checkbox.vue 同款）；
 // 框带 data-task-line（源码行号，0 起），点击 toggle 回写由 PreviewText 事件代理接（lib/mdEdit.toggleTaskLine）。
 // 代码块 = div.md-code 包装 + pre.kit-scroll-x 横滚 + 右上角 .md-copy 复制钮（文本编辑稿，PromptSection 同款口径）。
-// 图片引用 = 库内封闭路径解析不了 → 占位文本（09 待办）；链接本轮不可点（09 待办，CSS pointer-events 挡）。
+// 图片 = anikit 引用渲染真图（2026-10-08 S3，PRD 02-09：anikit://item/{id} 与 http://127.0.0.1:*/item/{id}
+// 双形态归一 → convertFileSrc 缩略图，点击 = 内部跳转由 PreviewText 代理接 data-anikit-id）；
+// 非 anikit 引用 / 无缩略图 = 占位文本（旧口径）。链接可点（同轮：anikit:// 内部跳转，http(s) 默认浏览器——
+// validateLink 白名单放行 anikit 协议，markdown-it 默认只认 http/ftp/mailto 会掐死自定义协议 href）。
 import MarkdownIt, { type MarkdownIt as MdIt, type StateCore, type Token } from "markdown-it";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { useContentStore } from "../stores/content";
+import { parseAnikitRef } from "./anikitLink";
 import { getIcon } from "./icons";
 
 const CHECK_SVG = getIcon("check-tiny").replace("<svg", '<svg class="kit-check-mark"');
@@ -56,12 +62,35 @@ function kitTaskList(state: StateCore): boolean {
   return false;
 }
 
+/** anikit 图片 URL（2026-10-08 S3）：缩略图 convertFileSrc + ?v=modifiedAt 版本戳（AssetCard 同口径）；
+ *  资产不在库 / 无缩略图 = null 落占位文本（库侧前端不持 originPath，不回退源文件） */
+function anikitImageUrl(assetId: string): string | null {
+  const p = useContentStore().placements.find((x) => x.assetId === assetId);
+  if (!p?.thumbPath) return null;
+  return `${convertFileSrc(p.thumbPath)}?v=${encodeURIComponent(p.modifiedAt ?? "")}`;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 /** 创建 markdown-it 渲染实例（PreviewText 单例；渲染无状态可多组件共享） */
 export function createMd(): MdIt {
   const md = new MarkdownIt({ html: false, linkify: true, breaks: false });
-  // 图片引用解析不了（库内封闭）：渲染占位文本（09 待办：库内资产引用解析）
-  md.renderer.rules.image = (tokens, idx) =>
-    `<span class="md-img">[图片 ${tokens[idx].content || "未命名"}]</span>`;
+  // anikit:// 协议放行（默认 validateLink 只认 http/https/ftp/mailto，自定义协议 href 会被掐空）
+  const validate0 = md.validateLink.bind(md);
+  md.validateLink = (url: string) => url.startsWith("anikit://") || validate0(url);
+  // 图片 = anikit 引用渲染真图（点击 = 内部跳转，PreviewText 代理接 data-anikit-id）；其余占位文本
+  md.renderer.rules.image = (tokens, idx) => {
+    const t = tokens[idx];
+    const alt = t.content || "未命名";
+    const fallback = `<span class="md-img">[图片 ${escapeHtml(alt)}]</span>`;
+    const ref = parseAnikitRef(String(t.attrGet("src") ?? ""));
+    if (!ref || ref.kind !== "item") return fallback;
+    const url = anikitImageUrl(ref.id);
+    if (!url) return fallback;
+    return `<img class="md-asset" src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" data-anikit-id="${ref.id}" loading="lazy">`;
+  };
   md.core.ruler.after("inline", "kit-task-list", kitTaskList);
   md.core.ruler.after("inline", "kit-line-map", kitLineMap);
   const fence0 = md.renderer.rules.fence!;

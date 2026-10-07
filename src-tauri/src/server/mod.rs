@@ -5,6 +5,8 @@
 
 #[cfg(not(test))] // 测试构建不起 server（踩坑 014）
 mod mcp;
+#[cfg(not(test))] // 同上（媒体端点与 MCP 同实例挂载）
+mod media;
 mod plugin_ws;
 
 pub use plugin_ws::{broadcast_settings, request_paste, try_acquire_send};

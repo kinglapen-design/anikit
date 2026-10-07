@@ -144,11 +144,14 @@
   border-top: 2px solid var(--n-g3);
 }
 
-/* —— 链接：本轮不可点（09 待办：默认浏览器打开；既有口径） —— */
+/* —— 链接可点（2026-10-08 S3 勾销 09 待办）：anikit:// = 内部跳转，http(s) = 默认浏览器（PreviewText 点击代理） —— */
 .md-body a {
   color: var(--n-brand);
-  pointer-events: none;
   text-decoration: none;
+  cursor: pointer;
+}
+.md-body a:hover {
+  text-decoration: underline;
 }
 
 /* —— 表格（稿未画；沿既有口径） —— */
@@ -161,7 +164,13 @@
   padding: 5px var(--n-space-12);
 }
 
-/* —— 图片占位（库内封闭路径解析不了 → 占位文本；09 待办，既有口径） —— */
+/* —— 图片：anikit 引用渲染真图（2026-10-08 S3，点击 = 内部跳转）；其余 = 占位文本（旧口径） —— */
+.md-body img.md-asset {
+  max-width: 100%;
+  border-radius: var(--n-radius-4);
+  cursor: pointer;
+  vertical-align: top;
+}
 .md-body .md-img {
   color: var(--n-l3);
   background: var(--n-g3);

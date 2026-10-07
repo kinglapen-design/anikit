@@ -29,6 +29,7 @@ import {
   revealInExplorer,
 } from "./placementOps";
 import { levelDisplaySorted, materializeLevelOrder } from "./dragFolderOps";
+import { getMcpStatus } from "./plugins";
 import { treeExpansion } from "./treeExpansion";
 
 // —— 导入系统对话框（1.3：新增菜单三入口共用——侧栏新增按钮 / 空白右键 / Ctrl+N）——
@@ -202,6 +203,23 @@ export async function copyAssetPath(assetId: string): Promise<void> {
 export async function copyBase64(assetId: string): Promise<void> {
   const b64 = await getAssetBase64(assetId);
   if (b64) await copyText(b64, "已复制 base64");
+}
+
+// 复制 MD 图片（2026-10-08 S2，PRD 02-09 对外可点击形态）：![名](http://127.0.0.1:{port}/item/{id})；
+// withLink = 图片套跳转回链 [![名](…/item/{id})](…/open/item/{id})（外部 MD 点击图片回 AniKit）。
+// 端口 ≠ 17701 = 被占回退动态——写死在文档里的 URL 重启后可能失效（端口纪律，复制时提醒）
+export async function copyMdImage(assetId: string, name: string, withLink: boolean): Promise<void> {
+  const toast = useToastStore();
+  const st = await getMcpStatus();
+  if (!st?.running || !st.port) {
+    toast.notify({ message: "媒体服务未运行（插件面板 MCP 详情窗可开启）", icon: "fail" });
+    return;
+  }
+  const base = `http://127.0.0.1:${st.port}`;
+  const img = `${base}/item/${assetId}`;
+  const text = withLink ? `[![${name}](${img})](${base}/open/item/${assetId})` : `![${name}](${img})`;
+  const ok = st.port === 17701 ? "已复制 MD 图片" : `已复制 MD 图片（端口 ${st.port} 被占，重启后链接可能失效）`;
+  await copyText(text, ok);
 }
 
 export function copyName(name: string): Promise<void> {

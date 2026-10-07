@@ -63,6 +63,16 @@ export async function setArchiveDescriptions(folderId: string, descriptions: Des
   return await run(() => "编辑描述", () => invoke("set_archive_descriptions", { folderId, descriptions }));
 }
 
+/** 编辑文件链接（2026-10-08 S4 anikit 协议消费端：详情链接输入框；links = 全量数组，首条语义传 [v] / 清空传 []） */
+export async function setAssetLinks(assetId: string, links: string[]): Promise<boolean> {
+  return await run(() => "编辑链接", () => invoke("set_asset_links", { assetId, links }));
+}
+
+/** 编辑档案链接（同上） */
+export async function setArchiveLinks(folderId: string, links: string[]): Promise<boolean> {
+  return await run(() => "编辑链接", () => invoke("set_archive_links", { folderId, links }));
+}
+
 /** 属性池（32 稿弹窗打开时拉取；失败静默降级空池，不阻断弹窗） */
 export async function listPropPool(): Promise<string[]> {
   try {

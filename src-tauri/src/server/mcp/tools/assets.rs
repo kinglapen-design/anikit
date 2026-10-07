@@ -12,7 +12,8 @@ use crate::services::{asset_menu, views};
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetParams {
-  /// 资产 id（如 "AN-20260901-XXXXXX"）
+  /// 资产 id（如 "AN-20260901-XXXXXX"；anikit://item/{id} 与 http://127.0.0.1:{port}/(open/)item/{id} 链接形态同吃）
+  #[serde(deserialize_with = "super::de_ref_id")]
   pub asset_id: String,
 }
 
@@ -31,10 +32,18 @@ struct OriginPaths {
 impl AnikitMcp {
   /// 资产详情：基础信息（名 / 扩展名 / 尺寸 / 时长 / 大小 / 时间戳）+ 属性词 tags +
   /// 描述 descriptions + 注释 note + 链接 links + 主色 colors + Placement 反查 placements +
-  /// 归属档案 archives。纯读（不做 APP 侧的懒回填主色——存量资产 colors 可能为空）
+  /// 归属档案 archives + uri（http open 形态点击跳转链接，2026-10-08 S5）。
+  /// 纯读（不做 APP 侧的懒回填主色——存量资产 colors 可能为空）
   #[tool(name = "get_asset_detail", annotations(read_only_hint = true))]
   fn get_asset_detail(&self, Parameters(p): Parameters<AssetParams>) -> Result<CallToolResult, ErrorData> {
-    self.with_lib(|lib| crate::commands::archive::asset_detail(lib, &p.asset_id))
+    self.with_lib(|lib| {
+      let detail = crate::commands::archive::asset_detail(lib, &p.asset_id)?;
+      // 顶层附 uri 字段（新增不破坏既有 Agent 解析）：AI 回复用户时可点击回 AniKit
+      let mut v = serde_json::to_value(&detail).map_err(|e| e.to_string())?;
+      let port = crate::server::mcp::status().1.unwrap_or(17701);
+      v["uri"] = serde_json::Value::String(crate::core::anikit_ref::open_uri(port, "item", &p.asset_id));
+      Ok(v)
+    })
   }
 
   /// 资产源文件与缩略图的磁盘绝对路径。Agent 读图 = 直读 thumbPath（webp 缩略图）或
