@@ -15,7 +15,7 @@
 //   图标（2026-09-26 用户补源十八批）：扫描 = analyze-prompt / 新建 = add-new-prompt /
 //     指定 = set-prompt-file / 编辑 = open-prompt-editor / 断开 = break-prompt-link / 删除 = trash。
 // 展示语义：编辑框只读；已指定态实时经 read_text_asset 读源最新内容显示（invoke 失败 / 无 assetId
-// 回落快照 content）；无 prompt 显示空 placeholder「提示词」。
+// 回落快照 content）；无提示词态整块隐藏编辑框只留三钮（2026-10-08 用户定——框不可输入，空着占位置没意义）。
 import { computed, ref, watch } from "vue";
 import IconButton from "../buttons/IconButton.vue";
 import AppIcon from "../AppIcon.vue";
@@ -153,8 +153,8 @@ function onCopy(): void {
 
 <template>
   <section class="prompt-block">
-    <!-- 编辑框（稿：isolate 供复制钮绝对定位）；只读展示，无 prompt = 空 placeholder「提示词」 -->
-    <div class="editor">
+    <!-- 编辑框（稿：isolate 供复制钮绝对定位）；只读展示，无提示词态整块隐藏只留三钮（2026-10-08 用户定） -->
+    <div v-if="state !== 'none'" class="editor">
       <textarea
         :value="displayText"
         class="area"

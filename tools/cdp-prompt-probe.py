@@ -492,7 +492,8 @@ async def main():
             check("S8-4 弹窗关闭", await ev("!document.querySelector('.info-manage')"))
 
             # PromptSection 状态读取（基础信息 tab 末位区块）：编辑框文案 + 三钮 disabled
-            #（无态 = 扫描/新建/指定，档案无扫描 = 两钮；有态 = 编辑/断开/删除）+ 复制钮 disabled
+            #（无态 = 扫描/新建/指定，档案无扫描 = 两钮；有态 = 编辑/断开/删除）+ 复制钮 disabled；
+            # 无提示词态编辑框整块隐藏（2026-10-08 定），text/placeholder/copy 均 null
             PROMPT_STATE = """(() => {
               const blk = document.querySelector('.prompt-block');
               if (!blk) return null;
@@ -516,10 +517,10 @@ async def main():
             # —— S5a 详情提示词区块·none（P1 png：扫描/新建/指定 三钮；复制禁用）——
             await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
             st = await ev(PROMPT_STATE)
-            check("S5a-1 none 编辑框空（placeholder 提示词）",
-                  bool(st and st["text"] == "" and st["placeholder"] == "提示词"), json.dumps(st, ensure_ascii=False))
+            check("S5a-1 none 态编辑框隐藏（无 textarea，2026-10-08 定）",
+                  bool(st and st["text"] is None and st["placeholder"] is None), json.dumps(st, ensure_ascii=False))
             check("S5a-2 none 三钮全可用（png 过扫描格式闸）", bool(st and st["btns"] == [False, False, False]), json.dumps(st, ensure_ascii=False))
-            check("S5a-3 none 复制钮禁用（无文本）", bool(st and st["copy"] is True), json.dumps(st, ensure_ascii=False))
+            check("S5a-3 none 态无复制钮（编辑框隐藏）", bool(st and st["copy"] is None), json.dumps(st, ensure_ascii=False))
             none_svgs = await ev("[...document.querySelectorAll('.prompt-block .btn-row button .app-icon')].map((x) => x.innerHTML)")
             await ev(f"({PB_BTN(0)})?.click()")  # 扫描提示词（详情入口，S2 后第二发）
             await asyncio.sleep(0.8)
