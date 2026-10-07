@@ -404,13 +404,14 @@ mod imp {
       assert!(parse_list2(&[]).is_err());
     }
 
-    /// 真机冒烟（需 Everything 运行中）：cargo test -p app everything -- --ignored
-    #[test]
-    #[ignore = "需本机运行 Everything"]
-    fn live_query_smoke() {
-      let hits = query("anikit", 5).expect("Everything 运行中应可查询");
-      assert!(!hits.is_empty(), "anikit 关键字应命中（本机开发目录）");
-    }
+    /// 真机冒烟（需本机运行 Everything）
+
+  #[test]
+  #[ignore = "需本机运行 Everything"]
+  fn live_query_smoke() {
+    let hits = query("anikit", 5).expect("Everything 运行中应可查询");
+    assert!(!hits.is_empty(), "anikit 关键字应命中（本机开发目录）");
+  }
   }
 }
 

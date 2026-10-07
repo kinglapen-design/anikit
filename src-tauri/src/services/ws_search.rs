@@ -71,26 +71,14 @@ pub fn parse_query(query: &str) -> (Vec<String>, bool) {
 /// 目录缺失 / 越界 → Err（同 list_dir 口径）；Everything 不可用 → Ok(Unavailable)
 pub fn search(root: &Path, scope_rel: &str, keywords: &[String]) -> Result<WsSearchOutcome, String> {
   let links = workspace::read_links(root);
-  // 范围锚点：scope 落在链接子树时，查询锚 = 链接目标 + 子路径（Everything 只认真实路径），
-  // 命中映射回词法门路径（link_prefix 携带）；普通范围 = root + rel，link_prefix = None
-  let (anchor_abs, anchor_map) = scope_anchor(root, scope_rel, &links)?;
+  let legs = scope_legs(root, scope_rel, &links)?;
   let kw = keywords.join(" ");
-  let mut out = match query_abs(&anchor_abs, &kw) {
-    Ok(hits) => map_hits(&hits, &anchor_abs, anchor_map.as_ref()),
-    Err(outcome) => return Ok(outcome),
-  };
-  // 范围内每条登记链接补一条目标查询（scope 本身在该链接内时主查询已覆盖，跳过）
-  for link in links_in_scope(scope_rel, &links, anchor_map.as_ref()) {
-    let target = shell_path::to_shell_string(Path::new(&link.target));
-    if !Path::new(&target).is_dir() {
-      continue; // 断链：门不可达，内容本就不该出现（一次 stat，廉价）
-    }
-    match query_abs(Path::new(&target), &kw) {
-      Ok(extra) => {
-        let map = (target.clone(), link.rel.clone());
-        out.extend(map_hits(&extra, Path::new(&target), Some(&map)));
-      }
-      Err(_) => log::warn!("链接 {} 目标查询失败（跳过该链接）", link.rel),
+  let mut out = Vec::new();
+  for (i, leg) in legs.iter().enumerate() {
+    match query_abs(&leg.anchor, &kw) {
+      Ok(hits) => out.extend(map_hits(&hits, leg)),
+      Err(WsSearchOutcome::Unavailable) if i == 0 => return Ok(WsSearchOutcome::Unavailable), // 主腿不可用 = 整体降级
+      Err(_) => log::warn!("链接 {:?} 目标查询失败（跳过该链接）", legs.get(i).map(|l| &l.base)),
     }
     if out.len() >= MAX_HITS as usize {
       break;
@@ -99,6 +87,10 @@ pub fn search(root: &Path, scope_rel: &str, keywords: &[String]) -> Result<WsSea
   // rel 去重（链接目标恰落在 root 内等重叠场景）+ 限流
   let mut seen = HashSet::new();
   out.retain(|e| seen.insert(e.rel_path.clone()));
+  // 剔除索引滞后幽灵命中（Everything 对文件夹索引 / USN 盲区有滞后——用户刚搬走 / 删除的文件
+  // 可能还在索引里；不剔除则预览 / 缩略图 / 打开目标文件夹全落空并触发幽灵回退连环 toast。
+  // 一词法拼接 + is_file 单 syscall，千条毫秒级；链接门路径跟随穿透正常工作）
+  out.retain(|e| root.join(e.rel_path.replace('/', "\\")).is_file());
   out.truncate(MAX_HITS as usize);
   for e in &mut out {
     fill_cached_thumb(root, e);
@@ -106,34 +98,43 @@ pub fn search(root: &Path, scope_rel: &str, keywords: &[String]) -> Result<WsSea
   Ok(WsSearchOutcome::Hits(out))
 }
 
-/// 范围 → Everything 查询锚点：返回（查询绝对路径，Some((目标规范化串, 链接/范围词法 rel 前缀))）
-/// scope 在链接子树 = 锚为目标子路径、映射前缀 = 该链接 rel；普通 scope = root+rel、无映射前缀
-fn scope_anchor(root: &Path, scope_rel: &str, links: &[LinkEntry]) -> Result<(PathBuf, Option<(String, String)>), String> {
-  let abs = workspace::resolve_under(root, scope_rel)?;
-  if scope_rel.is_empty() {
-    return Ok((abs, None));
-  }
-  if let Some(link) = links.iter().find(|l| scope_rel == l.rel || scope_rel.starts_with(&format!("{}/", l.rel))) {
-    let sub = scope_rel.strip_prefix(&link.rel).unwrap_or("").trim_start_matches('/');
-    let target = shell_path::to_shell_string(Path::new(&link.target));
-    let anchor = if sub.is_empty() { PathBuf::from(&target) } else { Path::new(&target).join(sub.replace('/', "\\")) };
-    return Ok((anchor, Some((target, link.rel.clone()))));
-  }
-  Ok((abs, None))
+/// 查询腿：一条 Everything 查询的锚点与命中映射前缀。
+/// anchor = 实际查询的绝对路径（Everything 只认真实路径；链接子树 = 目标侧路径）；
+/// base = 命中映射回的词法 rel 前缀（**门词法**——scope 在链接子树时 base 仍是 scope_rel 门路径）
+struct QueryLeg {
+  anchor: PathBuf,
+  base: String,
 }
 
-/// 范围内还需补查的链接：scope 为根（全局）= 全部链接；否则 = rel 落在 scope 子树内的链接；
-/// scope 本身落在某链接内时该链接由主查询覆盖（排除）
-fn links_in_scope<'a>(scope_rel: &str, links: &'a [LinkEntry], anchor_map: Option<&(String, String)>) -> Vec<&'a LinkEntry> {
-  links
-    .iter()
-    .filter(|l| {
-      if anchor_map.is_some_and(|(_, rel)| rel == &l.rel) {
-        return false; // 主查询已覆盖
-      }
-      scope_rel.is_empty() || l.rel.starts_with(&format!("{scope_rel}/"))
-    })
-    .collect()
+/// 范围 → 查询腿集：主腿（scope 本身）+ 范围内每条登记链接的补查腿。
+/// **rel 恒为工作空间根相对词法路径**（2026-10-03 修复：旧版命中按 scope 锚点剥前缀，
+/// 子目录视口搜索时 rel 少了视口前缀——预览 / 缩略图 / 跳转全落空）；
+/// 断链门不补查（门不可达内容本就不该出现，一次 stat 廉价）
+fn scope_legs(root: &Path, scope_rel: &str, links: &[LinkEntry]) -> Result<Vec<QueryLeg>, String> {
+  let abs = workspace::resolve_under(root, scope_rel)?;
+  // scope 落在链接子树：主腿锚 = 链接目标 + 子路径（Everything 按真实目标建档，门路径下查不到）
+  let main = match links.iter().find(|l| !scope_rel.is_empty() && (scope_rel == l.rel || scope_rel.starts_with(&format!("{}/", l.rel)))) {
+    Some(link) => {
+      let sub = scope_rel.strip_prefix(&link.rel).unwrap_or("").trim_start_matches('/');
+      let target = shell_path::to_shell_string(Path::new(&link.target));
+      QueryLeg { anchor: if sub.is_empty() { PathBuf::from(&target) } else { Path::new(&target).join(sub.replace('/', "\\")) }, base: scope_rel.to_string() }
+    }
+    None => QueryLeg { anchor: abs, base: scope_rel.to_string() },
+  };
+  let mut legs = vec![main];
+  for link in links {
+    let covered_by_main = !scope_rel.is_empty() && (scope_rel == link.rel || scope_rel.starts_with(&format!("{}/", link.rel)));
+    let in_scope = scope_rel.is_empty() || link.rel.starts_with(&format!("{scope_rel}/"));
+    if covered_by_main || !in_scope {
+      continue;
+    }
+    let target = shell_path::to_shell_string(Path::new(&link.target));
+    if !Path::new(&target).is_dir() {
+      continue;
+    }
+    legs.push(QueryLeg { anchor: PathBuf::from(target), base: link.rel.clone() });
+  }
+  Ok(legs)
 }
 
 /// 单条 `path:"<abs>" file: 关键字` 查询；**abs 先过 to_shell_string**——resolve_under 对存在
@@ -150,14 +151,10 @@ fn query_abs(abs: &Path, kw: &str) -> Result<Vec<everything::Hit>, WsSearchOutco
   }
 }
 
-/// 命中映射：abs 前缀（词法，ASCII 大小写不敏感 + 精确回退）→ 词法 rel；.anikit 剔除；
-/// map_prefix = Some((目标规范化串, rel 前缀)) 时按链接目标映射回门路径
-fn map_hits(hits: &[everything::Hit], anchor_abs: &Path, map_prefix: Option<&(String, String)>) -> Vec<WsEntry> {
-  let anchor = shell_path::to_shell_string(anchor_abs);
-  let (prefix, rel_base) = match map_prefix {
-    Some((target, rel)) => (target.clone(), rel.clone()),
-    None => (anchor, String::new()),
-  };
+/// 命中映射：剥查询腿锚点前缀（词法，ASCII 大小写不敏感 + 精确回退）→ 拼 leg.base 词法前缀；
+/// .anikit 剔除（仅根级可能出现）
+fn map_hits(hits: &[everything::Hit], leg: &QueryLeg) -> Vec<WsEntry> {
+  let prefix = shell_path::to_shell_string(&leg.anchor);
   hits
     .iter()
     .filter_map(|h| {
@@ -165,7 +162,7 @@ fn map_hits(hits: &[everything::Hit], anchor_abs: &Path, map_prefix: Option<&(St
       if sub.is_empty() {
         return None; // 锚自身（file: 查询不会出现，防御）
       }
-      let rel = if rel_base.is_empty() { sub.replace('\\', "/") } else { format!("{}/{}", rel_base, sub.replace('\\', "/")) };
+      let rel = if leg.base.is_empty() { sub.replace('\\', "/") } else { format!("{}/{}", leg.base, sub.replace('\\', "/")) };
       if rel == workspace::CACHE_DIR || rel.starts_with(&format!("{}/", workspace::CACHE_DIR)) {
         return None;
       }
@@ -381,33 +378,45 @@ mod tests {
 
   #[test]
   fn map_hits_excludes_anikit_and_maps_rel() {
-    let root = Path::new("E:\\ws");
+    let leg = QueryLeg { anchor: PathBuf::from("E:\\ws"), base: String::new() };
     let hits = vec![
       everything::Hit { path: "E:\\ws\\分镜\\01.png".into(), is_dir: false, size: Some(1), mtime_ms: Some(100) },
       everything::Hit { path: "E:\\ws\\.anikit\\cache.png".into(), is_dir: false, size: Some(1), mtime_ms: None },
       everything::Hit { path: "D:\\elsewhere\\x.png".into(), is_dir: false, size: None, mtime_ms: None },
     ];
-    let out = map_hits(&hits, root, None);
+    let out = map_hits(&hits, &leg);
     assert_eq!(out.len(), 1);
     assert_eq!(out[0].rel_path, "分镜/01.png");
     assert_eq!(out[0].name, "01.png");
     assert_eq!(out[0].ext, "png");
   }
 
+  /// 回归（2026-10-03 实机三报根因）：子目录视口搜索的命中 rel 必须是**工作空间根相对**——
+  /// 旧版按 scope 锚点剥前缀丢了视口段（预览 / 缩略图 / 打开目标文件夹全落空）
+  #[test]
+  fn map_hits_scoped_stays_root_relative() {
+    let leg = QueryLeg { anchor: PathBuf::from("E:\\ws\\分镜"), base: "分镜".to_string() };
+    let hits = vec![everything::Hit { path: "E:\\ws\\分镜\\子\\01.png".into(), is_dir: false, size: Some(1), mtime_ms: None }];
+    let out = map_hits(&hits, &leg);
+    assert_eq!(out[0].rel_path, "分镜/子/01.png");
+  }
+
   #[test]
   fn map_hits_link_prefix_back_to_door() {
+    let leg = QueryLeg { anchor: PathBuf::from("D:\\外部库"), base: "素材库".to_string() };
     let hits = vec![everything::Hit { path: "D:\\外部库\\镜头\\a.fla".into(), is_dir: false, size: Some(2), mtime_ms: None }];
-    let out = map_hits(&hits, Path::new("D:\\外部库"), Some(&("D:\\外部库".to_string(), "素材库".to_string())));
+    let out = map_hits(&hits, &leg);
     assert_eq!(out[0].rel_path, "素材库/镜头/a.fla");
   }
 
   #[test]
-  fn scope_anchor_inside_link_uses_target() {
+  fn scope_legs_inside_link_uses_target_with_door_base() {
     let (_d, root) = make_ws();
     let links = vec![LinkEntry { rel: "门".to_string(), target: "D:\\target".to_string() }];
-    let (anchor, map) = scope_anchor(&root, "门/子层", &links).unwrap();
-    assert_eq!(anchor, Path::new("D:\\target").join("子层"));
-    assert_eq!(map, Some(("D:\\target".to_string(), "门".to_string())));
+    let legs = scope_legs(&root, "门/子层", &links).unwrap();
+    assert_eq!(legs[0].anchor, Path::new("D:\\target").join("子层"));
+    assert_eq!(legs[0].base, "门/子层"); // 命中映射回门词法（不丢 scope 深度）
+    assert_eq!(legs.len(), 1); // 主腿已覆盖，不再补查
   }
 
   #[test]
@@ -450,5 +459,73 @@ mod tests {
     let (_d, root) = make_ws();
     let cancel = AtomicBool::new(false);
     assert!(crawl(&root, "不存在", &["x".to_string()], &cancel, |_, _| {}).is_err());
+  }
+
+  /// 真机全链路（需本机 Everything + 真实工作空间 E:\anikit\workspace 存在）：
+  /// cargo test -p app ws_search::tests::live_real_workspace -- --ignored --nocapture
+  /// 打印命中的 rel / size / mtime / thumb 回填实况 + 父目录 list_dir 可用性 + 音视频判定
+  #[test]
+  #[ignore = "需本机 Everything + 真实工作空间"]
+  fn live_real_workspace() {
+    let root = Path::new(r"E:\anikit\workspace");
+    if !root.is_dir() {
+      eprintln!("跳过：真实工作空间不存在");
+      return;
+    }
+    let WsSearchOutcome::Hits(entries) = search(root, "", &["224".to_string()]).expect("搜索应可用") else {
+      panic!("Everything 不可用");
+    };
+    eprintln!("命中 {} 条", entries.len());
+    for e in &entries {
+      eprintln!("  rel={} size={} mtime={} thumb={:?} kind={:?}", e.rel_path, e.size, e.mtime_ms, e.thumb_path.is_some(), e.thumb_kind);
+      // ③ 导航目标可用性：父目录 list_dir 必须能列（幽灵回退链排查）
+      let parent = e.rel_path.rsplit_once('/').map(|(p, _)| p).unwrap_or("");
+      let listed = workspace::list_dir(root, parent);
+      eprintln!("    父目录 [{parent}] list_dir = {:?}", listed.as_ref().map(|v| v.len()));
+      // ① 音视频按路径预览判定链（media_source_by_path 同口径）
+      let abs = workspace::resolve_under(root, &e.rel_path).unwrap();
+      eprintln!("    is_file={} is_under={} is_audio={} is_video={}",
+        abs.is_file(),
+        workspace::is_under(root, &abs),
+        crate::services::media::is_audio(&abs),
+        crate::services::media::is_video(&abs));
+    }
+    assert!(!entries.is_empty(), "真实工作空间搜 224 应有命中");
+  }
+
+  /// 真机定点（需本机 Everything + 真实工作空间）：对 "224.wav" 与截图 png 逐条查
+  /// 判定链 + 缩略图缓存命中实况（轻量版：不跑 list_dir——大目录 probe.json 开销被上轮实测拖慢）
+  #[test]
+  #[ignore = "需本机 Everything + 真实工作空间"]
+  fn live_real_workspace_focused() {
+    let root = Path::new(r"E:\anikit\workspace");
+    if !root.is_dir() {
+      eprintln!("跳过：真实工作空间不存在");
+      return;
+    }
+    for kw in ["224.wav", "定妆照"] {
+      // 定点：带 scope 搜（实机三报的场景 = 子目录视口搜索；根 scope 掩盖过 rel 映射 bug）
+      let WsSearchOutcome::Hits(entries) = search(root, "02_创作/01_原创动画/01_计划中", &[kw.to_string()]).expect("搜索应可用") else {
+        panic!("Everything 不可用");
+      };
+      eprintln!("== [{kw}] 命中 {} 条", entries.len());
+      for e in entries.iter().take(8) {
+        let abs = workspace::resolve_under(root, &e.rel_path).unwrap();
+        let fresh = workspace::fresh_thumb_path(root, &e.rel_path, e.mtime_ms, e.size);
+        eprintln!(
+          "  rel={}\n    is_file={} is_under={} is_audio={} ext={} size={} mtime={}\n    回填 thumb={:?} kind={:?} fresh缓存={:?}",
+          e.rel_path,
+          abs.is_file(),
+          workspace::is_under(root, &abs),
+          crate::services::media::is_audio(&abs),
+          e.ext,
+          e.size,
+          e.mtime_ms,
+          e.thumb_path.is_some(),
+          e.thumb_kind,
+          fresh,
+        );
+      }
+    }
   }
 }
