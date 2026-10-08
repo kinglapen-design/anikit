@@ -126,6 +126,12 @@ pub fn import_paths(
   Ok(spawn_import(app, root, assets_dir, opts, on_event, None))
 }
 
+/// 剪贴板内容级重试（2026-10-08 实机报「外部复制图片马上粘贴像空值」根因治理）：
+/// 外部程序常异步提交剪贴板（截图工具先走 UI 动画、浏览器复制大图先编码），
+/// Ctrl+V 瞬间三路皆空属常态——50ms × 10 次 ≈ 最长等 500ms 等内容到达
+const CLIPBOARD_READ_ATTEMPTS: u32 = 10;
+const CLIPBOARD_READ_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
+
 /// 剪贴板导入：先读图片（截图场景 → PNG 落 cache/tmp 临时文件），无图再读文件列表
 /// （资源管理器 Ctrl+C 的文件，CF_HDROP），再读 base64 文本（2026-08-14 用户定：
 /// data URI / 裸 base64 解码按魔数定扩展名落临时文件）；三者皆无报错。
@@ -144,19 +150,41 @@ pub fn import_clipboard(
   let (root, assets_dir) = current_paths(&app)?;
   ensure_target(&app, &target_folder)?;
 
+  // 内容读取（图片 → 文件列表 → 文本，与下述三分支同优先级）：外部程序异步提交剪贴板，
+  // 单次读在内容到达前必空（粘贴像「空值」，稍等再粘才好——2026-10-08 用户实机报）。
+  // 三路皆空按 50ms 重读、最长等 500ms；任何一路有内容（含不可导入的纯文本）即停——
+  // 有内容 = 写入方已提交完毕，再等也不会变
+  let mut clip_image: Option<(u32, u32, Vec<u8>)> = None;
+  let mut files: Vec<PathBuf> = Vec::new();
+  let mut text: Option<String> = None;
+  for attempt in 0..CLIPBOARD_READ_ATTEMPTS {
+    // arboard 只认 PNG / CF_DIBV5——QQ·微信截图等只写 CF_DIB 的软件走 DIB 兜底
+    //（2026-09-17 实机走查「外部剪贴板以前能导入现在不行」根因）
+    clip_image = clipboard
+      .get_image()
+      .ok()
+      .map(|img| (img.width as u32, img.height as u32, img.bytes.into_owned()))
+      .or_else(|| {
+        crate::adapters::clipboard::read_image_dib_fallback()
+          .ok()
+          .map(|rgba| (rgba.width(), rgba.height(), rgba.into_raw()))
+      });
+    if clip_image.is_none() {
+      files = clipboard.get().file_list().unwrap_or_default();
+    }
+    if clip_image.is_none() && files.is_empty() {
+      text = clipboard.get_text().ok();
+    }
+    if clip_image.is_some() || !files.is_empty() || text.is_some() {
+      break;
+    }
+    if attempt + 1 < CLIPBOARD_READ_ATTEMPTS {
+      std::thread::sleep(CLIPBOARD_READ_INTERVAL);
+    }
+  }
+
   // 图片分支：截图 / 剪贴板图片 → PNG 落 cache/tmp 走管线（无冲突挂起才即删，有冲突保留
-  // 供 resolve copy 回读，开库整目录清空兜底）；
-  // arboard 只认 PNG / CF_DIBV5——QQ·微信截图等只写 CF_DIB 的软件走 DIB 兜底
-  //（2026-09-17 实机走查「外部剪贴板以前能导入现在不行」根因）
-  let clip_image: Option<(u32, u32, Vec<u8>)> = clipboard
-    .get_image()
-    .ok()
-    .map(|img| (img.width as u32, img.height as u32, img.bytes.into_owned()))
-    .or_else(|| {
-      crate::adapters::clipboard::read_image_dib_fallback()
-        .ok()
-        .map(|rgba| (rgba.width(), rgba.height(), rgba.into_raw()))
-    });
+  // 供 resolve copy 回读，开库整目录清空兜底）
   if let Some((w, h, bytes)) = clip_image {
     let cache_dir = root.join(CACHE_DIR).join("tmp");
     std::fs::create_dir_all(&cache_dir).map_err(|e| format!("缓存目录创建失败：{e}"))?;
@@ -174,7 +202,6 @@ pub fn import_clipboard(
   }
 
   // 文件列表分支：资源管理器复制的文件 / 文件夹（CF_HDROP）
-  let files = clipboard.get().file_list().unwrap_or_default();
   if !files.is_empty() {
     let opts = ImportOptions {
       structure: Structure::Flatten,
@@ -189,7 +216,7 @@ pub fn import_clipboard(
 
   // base64 文本分支：别处复制的文件 base64（data URI / 裸 base64）→ 魔数定扩展名
   // → 落 cache/tmp 临时文件走管线（命名与清理同 PNG 分支口径）
-  if let Ok(text) = clipboard.get_text() {
+  if let Some(text) = text {
     match parse_base64_payload(&text) {
       Ok(Some((ext, bytes))) => {
         let cache_dir = root.join(CACHE_DIR).join("tmp");
