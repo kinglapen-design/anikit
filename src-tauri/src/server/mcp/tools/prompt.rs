@@ -18,13 +18,13 @@ use crate::server::mcp::{AnikitMcp, json_result, write_gate};
 #[serde(rename_all = "camelCase")]
 pub struct PromptTargetParams {
   /// 目标资产 id（与 folderId 二选一；anikit://item/{id} 链接形态同吃）
-  #[serde(deserialize_with = "super::de_ref_id_opt")]
+  #[serde(default, deserialize_with = "super::de_ref_id_opt")]
   pub asset_id: Option<String>,
   /// 目标档案 folderId（与 assetId 二选一）
-  #[serde(deserialize_with = "super::de_ref_id_opt")]
+  #[serde(default, deserialize_with = "super::de_ref_id_opt")]
   pub folder_id: Option<String>,
   /// 【assign_prompt 必填】提示词文档资产 id（库内 md/txt 文本资产）
-  #[serde(deserialize_with = "super::de_ref_id_opt")]
+  #[serde(default, deserialize_with = "super::de_ref_id_opt")]
   pub prompt_asset_id: Option<String>,
 }
 

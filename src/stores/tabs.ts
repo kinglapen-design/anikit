@@ -268,9 +268,11 @@ export const useTabsStore = defineStore("tabs", () => {
   }
 
   // 跳转定位标签页（2026-10-08 用户定：anikit 引用点击跳转 = 新起标签页定位，不打断当前视口）：
-  // 已有同 viewKey 标签页 = 激活复用（防频繁点击堆积，同浏览器标签堆积教训），没有 = 新开
+  // 已有同 viewKey 标签页 = 激活复用（防频繁点击堆积，同浏览器标签堆积教训），没有 = 新开；
+  // **复用仅限纯网格态**——已有页正在预览时激活它看不到定位（预览盖住网格，用户零感知，
+  // 2026-10-08 同文件夹点击图片「以为没跳转」实机报），此情形新开一页（原页预览保留不打断）
   function openInFreshTab(viewKey: string): void {
-    const existing = api?.panels.find((p) => p.params?.viewKey === viewKey);
+    const existing = api?.panels.find((p) => p.params?.viewKey === viewKey && !peekPreviewSession(p.id)?.assetKey);
     if (existing) {
       existing.api.setActive();
       return;

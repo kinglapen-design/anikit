@@ -21,7 +21,7 @@ pub struct CreateDocumentParams {
   /// 文档类型：md / txt / fla / psd / ai / docx / xlsx（写提示词场景主要 md）
   pub kind: String,
   /// 目标文件夹 id（取自 list_folder_tree 节点 id；"root" = 根目录）；缺省 = 根目录
-  #[serde(deserialize_with = "super::de_ref_id_opt")]
+  #[serde(default, deserialize_with = "super::de_ref_id_opt")]
   pub folder_id: Option<String>,
 }
 

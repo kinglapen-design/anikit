@@ -15,7 +15,7 @@ pub struct SearchParams {
   /// 搜索关键字：空格分词 AND、不区分大小写；命中资产名 / Placement 显示名 / 扩展名 / 链接 / 路径链 / 档案名等
   pub query: String,
   /// 限定文件夹 id（取自 list_folder_tree 的节点 id；anikit://folder/{id} 链接形态同吃）；缺省 = 全库搜索
-  #[serde(deserialize_with = "super::de_ref_id_opt")]
+  #[serde(default, deserialize_with = "super::de_ref_id_opt")]
   pub folder_id: Option<String>,
   /// 限定文件夹时是否含全部子文件夹；缺省 true（未限定文件夹时无效）
   pub recursive: Option<bool>,

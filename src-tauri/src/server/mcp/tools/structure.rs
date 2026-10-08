@@ -19,7 +19,7 @@ pub struct CreateFolderParams {
   /// 文件夹名（空名 / Windows 非法字符后端拒绝）
   pub name: String,
   /// 父文件夹 id（取自 list_folder_tree 节点 id）；缺省 / "root" = 顶层
-  #[serde(deserialize_with = "super::de_ref_id_opt")]
+  #[serde(default, deserialize_with = "super::de_ref_id_opt")]
   pub parent_id: Option<String>,
 }
 
@@ -58,7 +58,7 @@ pub struct MoveFoldersParams {
   #[serde(deserialize_with = "super::de_ref_id_vec")]
   pub folder_ids: Vec<String>,
   /// 目标父文件夹 id；缺省 / "root" = 顶层（文件夹区块）
-  #[serde(deserialize_with = "super::de_ref_id_opt")]
+  #[serde(default, deserialize_with = "super::de_ref_id_opt")]
   pub target_parent_id: Option<String>,
 }
 
