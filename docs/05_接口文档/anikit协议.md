@@ -9,4 +9,10 @@
 
 **归一化解析**：`core/anikit_ref.rs`（Rust：MCP 工具参数 / open_uri 生成）与 `src/lib/anikitLink.ts`（前端：渲染 / 粘贴 / 跳转）同逻辑——anikit:// 与 http(s)://127.0.0.1:{port}/(open/)item|folder/{id} 双形态 → 纯 id。
 
+**外部编辑器兼容性（2026-10-08 实机走查补）**：
+
+- **Obsidian**：http 图片正常渲染；anikit:// 链接首次点击弹「Open external link?」安全确认（其对一切外部协议的标准行为，Eagle eagle:// 同款）——勾「Always open anikit:// links」一次永久免弹。
+- **VS Code**：预览安全级别 Strict（默认）拦截 http 本地图片（右上角横幅「已禁用此文档中的部分内容」，图片裂图）——点横幅切「允许不安全内容」即显示（每文档一次，或设置 `markdown.preview.security`）。参见 [vscode#32251](https://github.com/microsoft/vscode/issues/32251)。
+- **Typora / AniKit 内部编辑器**：正常渲染（内部走 convertFileSrc 不经 http）。
+
 **MD 打包导出**（`services/md_bundle.rs` + `commands/md_bundle.rs`，S6）：扫描文档双形态 item 引用（open/ 回链保留不改写）→ 图源同 /item/{id} 口径导出 {文档名}-打包/assets/（重名 _n）+ 引用改写相对路径。命令：`export_md_bundle(assetId, destDir)`（库内 md，目录选择器）/ `ws_export_md_bundle(absPath)`（ws md，落点文档旁），回包 `BundleReport { outDir, images, docFile, skipped[] }`；不改库数据不进撤销。

@@ -25,3 +25,8 @@ curl 真机调 MCP 时发现 `search_assets` 不带 folderId 报「missing field
 经 MCP get_asset_origin_path 拿磁盘路径直读 P2.md：文档里引用是标准半角带跳转形态、在代码块外——markdown-it 必正常解析。用户截图里「显示为源码文本」的行是**编辑中间态**（draft 未保存 / 未回预览态），保存并回预览态（眼睛钮 / Ctrl+E）即渲染为图。
 
 typecheck 0 错 + cargo check 净。**待实机走查：同文件夹预览中点图 = 新开页定位 / 不同文件夹 / 重复点击不堆积 / Obsidian 勾 Always 后免弹**。探针留档回归。
+
+## 走查补记（同日晚，用户复测后答疑轮）
+
+- **媒体端点三态 curl 实证**（用户 dev 实例 17701）：`/item/{真id}` = 200 image/png 1.8MB 真图 / 假 id = 404 / `/open/item/{id}` = 200 极简页——端点行为全对。
+- **VS Code 预览裂图答疑**：用户报 VS Code 预览里图片裂图——非端点问题（curl 实证出图），是 VS Code 预览安全级别 Strict（默认）拦 http 本地图片（横幅「已禁用此文档中的部分内容」），点横幅切「允许不安全内容」即显示（[vscode#32251](https://github.com/microsoft/vscode/issues/32251) 同款）。外部编辑器兼容性清单补进接口文档 anikit协议.md（Obsidian 勾 Always 免弹 / VS Code 切档 / Typora 与内部正常）。
