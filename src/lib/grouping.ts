@@ -5,6 +5,8 @@
 // 组一 名称{P1}、组二 名称{P1,2K}，P1_02_2K 命中词 1 vs 2，应归组二），平局按分组定义顺序先建者优先；
 // 未命中任何组 = 未分组（在头）。
 // 组内顺序 = 输入流相对序（placementsFor 输出已含新增区置顶 + 排序键，stable 分割自然带入组内）。
+// 组拼接扁平序 = 视口显示序唯一口径（content.displayOrderFor：范围选 / 全选 / 选中集输出 /
+// 预览翻页与网格所见同序——2026-10-08 修复分组下范围选跨组带项、预览翻页跳序）。
 import type { PlacementView } from "../stores/content";
 import { isAudioExt, isStaticImageExt, isVideoExt } from "./formatBadge";
 

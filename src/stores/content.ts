@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isStaticImageExt } from "../lib/formatBadge";
+import { groupPlacements } from "../lib/grouping";
 import { sortPlacements } from "../lib/sortPlacements";
 import { playFail, playSuccess } from "../lib/sounds";
 import { useSelectionStore } from "./selection";
@@ -482,6 +483,20 @@ export const useContentStore = defineStore("content", {
     // 当前视口的资源列表（激活标签页视口；操作上下文统一走这个——交互发生时所在 panel 必为激活）
     visiblePlacements(state): PlacementView[] {
       return this.placementsFor(state.sidebarSelected);
+    },
+    // 视口显示序（2026-10-08 立为"顺序即用户所见"消费方统一口径，修复分组下范围选 / 预览翻页
+    // 与网格所见不一致）：分组视口 = 组拼接扁平序（未分组在头 + 定义序，组内保持 placementsFor
+    // 相对序——与 AssetGrid displayItems 同源同序）；无分组 / 递归显示 / 快速访问 = placementsFor 原序
+    //（folderGroupsFor 已含视口门类与递归闸）。搜索态平铺不在此体现（per-panel 态）——
+    // 网格点击由 AssetGrid 显式传 displayItems 顺序覆盖
+    displayOrderFor() {
+      return (viewKey: string): PlacementView[] => {
+        const items = this.placementsFor(viewKey);
+        const defs = this.folderGroupsFor(viewKey);
+        if (!defs) return items;
+        const secs = groupPlacements(items, defs);
+        return secs ? secs.flatMap((s) => s.items) : items;
+      };
     },
     // 视口标题（1.2 多标签页：标签页标题 / 面包屑共用）：folder → 实时文件夹名（重命名跟随）；
     // quick 五项 → 固定文案；seq（5.2 包内视图）→ 序列帧包名（资产已删/已解散兜底"序列帧包"）；

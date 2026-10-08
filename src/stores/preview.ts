@@ -37,13 +37,17 @@ const SOURCE_EXTS = ["psd", "psb", "ai", "svg"];
 
 // 预览导航列表（current/index/total/step 同一数据源）：ws 搜索态 = 搜索结果集（ws 命中跨目录
 // 合成、只存于 search store wsEntries，视口目录缓存查不到——2026-10-03 修复双击搜索结果是空开）；
-// 其余 = 视口 placements（库搜索 = 同集过滤子集，天然兼容）
+// 库视口非搜索态 = 视口显示序（content.displayOrderFor：分组视口 = 组拼接扁平序——2026-10-08
+// 修复分组下翻页按未分组序走、与网格所见"下一个"不符）；搜索态分组失效平铺（AssetGrid 同口径），
+// 保 placementsFor 未分组序（库搜索 = 同集过滤子集，天然兼容）
 function previewList(panelId: string, viewKey: string, content: ReturnType<typeof useContentStore>): import("./content").PlacementView[] {
+  const search = useSearchStore();
   if (viewKey.startsWith("ws:")) {
-    const search = useSearchStore();
     if (search.isActive(panelId)) return search.wsPlacementsFor(panelId);
+    return content.placementsFor(viewKey);
   }
-  return content.placementsFor(viewKey);
+  if (search.isActive(panelId)) return content.placementsFor(viewKey);
+  return content.displayOrderFor(viewKey);
 }
 
 const ZOOM_MIN = 0.02;
@@ -234,7 +238,7 @@ function buildPreviewStore(panelId: string) {
         this.mdActionName = name;
         this.mdActionSeq++;
       },
-      // 上/下一个素材（属主面板视口顺序，到头停；ws 搜索态 = 搜索结果集顺序，previewList 同源）
+      // 上/下一个素材（属主面板视口显示序——分组视口 = 组拼接序，到头停；ws 搜索态 = 搜索结果集顺序，previewList 同源）
       async step(delta: number): Promise<void> {
         const list = previewList(panelId, useTabsStore().viewKeyOf(panelId), useContentStore());
         const next = this.index + delta;

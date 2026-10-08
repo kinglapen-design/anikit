@@ -96,7 +96,14 @@ function onCardClick(p: PlacementView, e: MouseEvent): void {
     return;
   }
   if (e.ctrlKey || e.metaKey || e.shiftKey) {
-    selection.clickItem(`${p.assetId}|${p.folderId}`, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
+    // 范围选顺序 = 本网格显示序（displayItems：分组拼接序 / 搜索态平铺过滤集）——
+    // 2026-10-08 修复分组下 Shift 范围选按未分组序取区间、跨组带进别组文件；
+    // 显式传序同时保非激活 panel 点击不以激活视口为准（displayOrderFor 兜底仍留 store 缺省）
+    selection.clickItem(
+      `${p.assetId}|${p.folderId}`,
+      { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey },
+      displayItems.value.map((x) => `${x.assetId}|${x.folderId}`),
+    );
     content.selectedInboxName = "";
   } else {
     selection.selectOnly(`${p.assetId}|${p.folderId}`);

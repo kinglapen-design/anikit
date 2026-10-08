@@ -1,7 +1,8 @@
 // 素材选择态（6.1，2026-07-28 用户定案）：多选 Set + Shift 锚点，会话级状态不进 ui 持久化。
 // key = `${assetId}|${folderId}`（Placement 无自身 ID，沿用原 selectedAssetKey 同构格式）。
 // 消费口径：详情面板 / 预览等单资产消费方读 content.selectedAssetKey（= 本 store first() 转发）；
-// 卡片选中视觉读 isSelected；范围选按 content.visiblePlacements 顺序取锚点区间。
+// 卡片选中视觉读 isSelected；范围选 / 全选 / 选中集输出按 content.displayOrderFor 视口显示序
+//（分组视口 = 组拼接扁平序，与网格所见一致——2026-10-08 修复分组下范围选跨组带项）。
 // 文件夹选择域（2026-07-28 复验反馈 5）：selectedFolders（folderId）+ folderAnchor，
 // 与素材选择互斥（选文件夹清素材、选素材清文件夹）；全选 / 框选仍只涉及素材；
 // 范围选顺序由调用方给（文件夹卡片 = 条带顺序 / 树 item = 可见展开态扁平化顺序），
@@ -166,12 +167,14 @@ export const useSelectionStore = defineStore("selection", {
     // 卡片点击三态（2026-07-28 用户定案）：
     // 无修饰 = 单选（清空后选它，anchor = 它）；ctrl = 切换该项（anchor 跟到最后点击）；
     // shift = 锚点（无则当前首项）到该项在当前视口顺序中的区间全选（清空后选区间，anchor 不动）。
-    // order（2026-09-26 补）：范围选顺序调用方显式给（ws 文件夹卡片 = 条带顺序——文件夹不是
-    // Placement 不在 visiblePlacements）；缺省 = 当前视口素材可见序
+    // order：范围选顺序调用方显式给——AssetGrid 恒传本网格 displayItems（组拼接显示序 / 搜索态
+    // 平铺过滤集，2026-10-08 起）；ws 文件夹卡片 = 条带顺序（文件夹不是 Placement 不在视口列表）。
+    // 缺省 = 当前激活视口显示序（content.displayOrderFor：分组视口 = 组拼接序）
     clickItem(key: string, mods: ClickMods = {}, order?: string[]): void {
       this.clearFolders(); // 选素材清文件夹（互斥）
       if (mods.shift) {
-        const keys = order ?? useContentStore().visiblePlacements.map(keyOf);
+        const content = useContentStore();
+        const keys = order ?? content.displayOrderFor(content.sidebarSelected).map(keyOf);
         const to = keys.indexOf(key);
         if (to < 0) return;
         const fromKey = this.anchor ?? this.first;
@@ -239,10 +242,12 @@ export const useSelectionStore = defineStore("selection", {
       useContentStore().selectedInboxName = "";
     },
 
-    // 全选（Ctrl+A，2026-07-28 用户定：仅素材卡片口径 = 当前视口全部 Placement）
+    // 全选（Ctrl+A，2026-07-28 用户定：仅素材卡片口径 = 当前视口全部 Placement）；
+    // 键序 = 视口显示序（displayOrderFor，分组视口 = 组拼接序——锚点 = 视觉首项，2026-10-08）
     selectAll(): void {
       this.clearFolders();
-      const keys = useContentStore().visiblePlacements.map(keyOf);
+      const content = useContentStore();
+      const keys = content.displayOrderFor(content.sidebarSelected).map(keyOf);
       this.selected.clear();
       for (const k of keys) this.selected.add(k);
       this.anchor = keys[0] ?? null;
@@ -265,7 +270,8 @@ export const useSelectionStore = defineStore("selection", {
       useContentStore().selectedInboxName = "";
     },
 
-    // 选中项三元组清单（6.1 命令入参）：按当前视口顺序输出（稳定、与可见顺序一致），
+    // 选中项三元组清单（6.1 命令入参）：按当前视口显示序输出（displayOrderFor——分组视口 = 组拼接
+    // 扁平序，与用户所见一致，2026-10-08；批量重命名编号等顺序敏感消费方随视觉序），
     // 视口外的选中项（切过目录未 prune 的极少窗口期）追加在后；origin 从 PlacementView 取。
     // ws 文件夹键兜底合成（2026-09-26 ws 文件夹卡片 / 树行选中入素材域）：文件夹不是
     // Placement 查不到，按键形直合成——ws 写操作全按路径，只取 assetId 里的 rel；
@@ -275,7 +281,7 @@ export const useSelectionStore = defineStore("selection", {
       const byKey = new Map(content.placements.map((p) => [keyOf(p), p]));
       const out: PlacementRef[] = [];
       const seen = new Set<string>();
-      for (const p of content.visiblePlacements) {
+      for (const p of content.displayOrderFor(content.sidebarSelected)) {
         const k = keyOf(p);
         if (this.selected.has(k) && !seen.has(k)) {
           seen.add(k);
