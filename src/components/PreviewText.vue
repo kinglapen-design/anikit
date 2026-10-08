@@ -344,9 +344,12 @@ function onMdClick(e: MouseEvent): void {
     );
     return;
   }
-  // anikit 引用图片（2026-10-08 S3）：点击 = 内部跳转选中该资产（渲染层行为，源码保持裸 ![]() 语法）
+  // anikit 引用图片（2026-10-08 S3）：点击 = 内部跳转选中该资产（渲染层行为，源码保持裸 ![]() 语法）；
+  // preventDefault 必须——带跳转回链形态 [![..](..)](..open/item/x) 的 img 被 <a> 包裹，
+  // 不拦默认行为会让 webview 整窗导航到 open 端点回页（2026-10-08 实机事故：APP 被回页替换关不掉）
   const img = t.closest<HTMLElement>("img.md-asset[data-anikit-id]");
   if (img?.dataset.anikitId) {
+    e.preventDefault();
     jumpToAnikitRef({ kind: "item", id: img.dataset.anikitId });
     return;
   }
@@ -480,6 +483,7 @@ watch(
               ref="mdSplitBodyRef"
               class="md-body split-side kit-scroll"
               v-html="rendered"
+              @click="onMdClick"
               @scroll.passive="onSideScroll"
             />
             <ScrollThumb :body="mdSplitBodyRef" />

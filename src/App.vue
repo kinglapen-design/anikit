@@ -73,7 +73,7 @@ import { useGlobalKeys } from "./lib/useGlobalKeys";
 import { useSidebarAnim } from "./lib/useSidebarAnim";
 import { useWindowStatePersistence } from "./lib/windowState";
 import { initWsListeners } from "./lib/wsOps";
-import { initMediaOpenListener } from "./lib/anikitLink";
+import { initMediaOpenListener, jumpToAnikitRef, parseAnikitRef } from "./lib/anikitLink";
 
 const ui = useUiStore();
 const content = useContentStore();
@@ -292,6 +292,7 @@ onMounted(() => {
   void content.initCepListener(); // CEP 导出入库热刷新（8.1：WS 接收入库完成 → 全量对齐）
   void content.initMcpListener(); // MCP 写入热刷新（PRD 08-06：agent 写库 → 去抖全量对齐）
   initMediaOpenListener(); // 媒体服务 /open 点击跳转（2026-10-08 S1：后端 media-open → 定位目标）
+  document.addEventListener("click", onLinkNavGuard, true); // webview 导航兜底（同日实机事故防线）
   void content.initOriginHealListener(); // origin 外部编辑自愈热刷新（2026-10-08：读取触点回写 → 同步 size/modifiedAt）
   initWsListeners(); // 工作空间磁盘实况（PRD 02 步骤 1）：fs-changed 去抖重扫 + 缩略图回填，幂等
   void initOrphanInfosListener(); // 无主资产警告（2026-09-02）——须在开库（reopenLastSession）前注册
@@ -344,8 +345,31 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearTimeout(resizeTimer);
   window.removeEventListener("resize", onResize);
+  document.removeEventListener("click", onLinkNavGuard, true);
   unlistenDragDrop?.();
 });
+
+// webview 导航兜底（2026-10-08 实机事故：MD 带跳转回链图片点击漏 preventDefault，整窗被 open 端点
+// 回页 HTML 替换关不掉）——document 捕获阶段拦截一切 <a href="http(s):// / anikit://"> 的默认导航：
+// webview 不是浏览器，链接导航会替换掉 APP 本体。anikit → 内部跳转；http(s) → 默认浏览器打开；
+// stopPropagation 全权接管（组件内冒泡处理不再跑，行为等价）。子窗口不经本文件，由组件自身代理拦
+function onLinkNavGuard(e: MouseEvent): void {
+  const a = (e.target as HTMLElement).closest?.("a");
+  if (!a) return;
+  const href = a.getAttribute("href") ?? "";
+  const ref = parseAnikitRef(href);
+  if (ref) {
+    e.preventDefault();
+    e.stopPropagation();
+    jumpToAnikitRef(ref);
+    return;
+  }
+  if (/^https?:\/\//.test(href)) {
+    e.preventDefault();
+    e.stopPropagation();
+    void invoke("open_external_url", { url: href }).catch(() => {});
+  }
+}
 
 // 可视窗口边缘 resize 判定（透明阴影带外缘的 tao 物理判定保留作补充）
 const resizeZones: { dir: ResizeDirection; cls: string }[] = [
