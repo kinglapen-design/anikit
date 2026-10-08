@@ -15,9 +15,12 @@
 //! - space_icon：储存空间文件夹品牌图标（desktop.ini IconResource + 文件夹只读位，Eagle .library 同款）
 //! - everything：Everything 搜索 IPC（工作空间搜索 2026-10-03：手写 1.4 WM_COPYDATA QUERY2，
 //!   能力三态探测 + 回包接收窗，不引 DLL / es.exe 零分发授权问题）
+//! - deep_link：anikit:// 系统协议注册（2026-10-08 复活：HKCU 注册表免提权 + 命令行参数解析 +
+//!   冷启动 pending，外部点击零浏览器标签页直达）
 
 pub mod clipboard;
 pub mod decoder;
+pub mod deep_link;
 pub mod everything;
 pub mod ffmpeg;
 pub mod inbox_drive;

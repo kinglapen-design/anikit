@@ -206,8 +206,9 @@ export async function copyBase64(assetId: string): Promise<void> {
 }
 
 // 复制 MD 图片（2026-10-08 S2，PRD 02-09 对外可点击形态）：![名](http://127.0.0.1:{port}/item/{id})；
-// withLink = 图片套跳转回链 [![名](…/item/{id})](…/open/item/{id})（外部 MD 点击图片回 AniKit）。
-// 端口 ≠ 17701 = 被占回退动态——写死在文档里的 URL 重启后可能失效（端口纪律，复制时提醒）
+// withLink = 图片套跳转回链 [![名](…/item/{id})](anikit://item/{id})——回链用 anikit:// 内部标识符：
+// deep-link 系统协议注册后外部点击零浏览器标签页直达（http /open 形态留给 AI 场景——MCP uri 字段，
+// AI 客户端渲染器只认 http）。端口 ≠ 17701 = 被占回退动态——写死在文档里的 URL 重启后可能失效
 export async function copyMdImage(assetId: string, name: string, withLink: boolean): Promise<void> {
   const toast = useToastStore();
   const st = await getMcpStatus();
@@ -217,7 +218,7 @@ export async function copyMdImage(assetId: string, name: string, withLink: boole
   }
   const base = `http://127.0.0.1:${st.port}`;
   const img = `${base}/item/${assetId}`;
-  const text = withLink ? `[![${name}](${img})](${base}/open/item/${assetId})` : `![${name}](${img})`;
+  const text = withLink ? `[![${name}](${img})](anikit://item/${assetId})` : `![${name}](${img})`;
   const ok = st.port === 17701 ? "已复制 MD 图片" : `已复制 MD 图片（端口 ${st.port} 被占，重启后链接可能失效）`;
   await copyText(text, ok);
 }

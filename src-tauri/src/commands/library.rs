@@ -173,6 +173,13 @@ pub fn get_current_library(state: State<AppState>) -> Option<LibraryInfo> {
   state.library.lock().ok()?.as_ref().map(to_info)
 }
 
+/// 冷启动 deep-link 消费（2026-10-08 deep-link 复活）：anikit:// 协议链接拉起进程时 setup 暂存的
+/// 待跳转链接，前端 initMediaOpenListener 注册后 take 一次（一次性消费；库未就绪由前端等 placements）
+#[tauri::command]
+pub fn take_pending_deep_link() -> Option<(String, String)> {
+  crate::adapters::deep_link::take_pending()
+}
+
 /// 开关自动导入（2.1：向导第二步初值 / 快速访问"自动导入"确认弹窗开启）：
 /// 空间级设置（space.json 单写点，2026-08-12 用户定：inbox 空间级共用）；
 /// 开 = 启动收件箱（盘符挂载 + 监听空间 inbox/），关 = 停止收件箱（卸载盘符）

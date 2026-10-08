@@ -125,10 +125,14 @@ pub fn run() {
   std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--force-color-profile=srgb");
 
   tauri::Builder::default()
-    // 单实例必须最先注册：二次启动时聚焦已有窗口
-    .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    // 单实例必须最先注册：二次启动时聚焦已有窗口；deep-link 点击 = 系统以 URL 参数拉起——
+    // 运行中实例直接收 media-open 跳转（2026-10-08 deep-link 复活，零浏览器标签页）
+    .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
       if let Some(w) = app.get_webview_window("main") {
         show_main_window(&w, false);
+      }
+      if let Some((kind, id)) = adapters::deep_link::parse_args(&args) {
+        let _ = app.emit("media-open", serde_json::json!({ "kind": kind, "id": id }));
       }
     }))
     .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -181,6 +185,13 @@ pub fn run() {
       // AI 外接通道 MCP 服务（一期只读，PRD 08-06）：Streamable HTTP，127.0.0.1 动态端口 + 端口文件
       #[cfg(not(test))]
       server::init_mcp(app.handle().clone());
+
+      // anikit:// 系统协议注册（2026-10-08 deep-link 复活，PRD 02-09）：HKCU 注册表幂等覆写
+      //（exe 漂移自愈），外部点击零浏览器标签页直达；冷启动带链接参数存 pending 待前端消费
+      adapters::deep_link::ensure_registered();
+      if let Some(r) = adapters::deep_link::parse_args(&std::env::args().collect::<Vec<_>>()) {
+        adapters::deep_link::set_pending(r);
+      }
 
       // 全局热键 alt+`：呼出 / 隐藏主窗口（后续用于快捷搜索框）
       // 注册失败（热键被他方占用）只记日志降级，不阻断启动
@@ -458,6 +469,7 @@ pub fn run() {
       commands::custom_data::set_archive_links,
       commands::md_bundle::export_md_bundle,
       commands::md_bundle::ws_export_md_bundle,
+      commands::library::take_pending_deep_link,
       commands::custom_data::list_prop_pool,
       commands::custom_data::delete_props_globally,
       commands::prompt::analyze_asset_prompt,

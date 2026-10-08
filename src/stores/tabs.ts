@@ -267,6 +267,17 @@ export const useTabsStore = defineStore("tabs", () => {
     addTab(viewKey);
   }
 
+  // 跳转定位标签页（2026-10-08 用户定：anikit 引用点击跳转 = 新起标签页定位，不打断当前视口）：
+  // 已有同 viewKey 标签页 = 激活复用（防频繁点击堆积，同浏览器标签堆积教训），没有 = 新开
+  function openInFreshTab(viewKey: string): void {
+    const existing = api?.panels.find((p) => p.params?.viewKey === viewKey);
+    if (existing) {
+      existing.api.setActive();
+      return;
+    }
+    openInNewTab(viewKey);
+  }
+
   function closeTab(id: string): void {
     const panel = api?.getPanel(id);
     if (!panel || panel.params?.locked) return;
@@ -383,5 +394,5 @@ export const useTabsStore = defineStore("tabs", () => {
     api?.layout(width, height, true);
   }
 
-  return { tabs, activeTabId, navCan, bind, openView, openInNewTab, openPreviewInNewTab, goHistory, addTab, addTabAtHome, closeTab, activateTab, closeAllTabs, closeOtherTabs, toggleLock, splitTab, forceLayout, viewKeyOf };
+  return { tabs, activeTabId, navCan, bind, openView, openInNewTab, openInFreshTab, openPreviewInNewTab, goHistory, addTab, addTabAtHome, closeTab, activateTab, closeAllTabs, closeOtherTabs, toggleLock, splitTab, forceLayout, viewKeyOf };
 });
