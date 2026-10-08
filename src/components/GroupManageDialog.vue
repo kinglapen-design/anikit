@@ -16,7 +16,9 @@
 // 动画（稿 prose 点名两件）：新建分组卡片从下至上入场（enter 淡入 + 24 上移，--n-dur-250 小位移档）
 //   + 排序 TransitionGroup 交换动画（150 通用档沿速查 §9，不做拖拽）。
 // 草稿式：打开时快照 FolderNode.groups 进本地草稿，确认 → set_folder_groups 一次提交单撤销步；
-// 单规则组互斥转移（PRD 02-04 条款 2）：选值时从其他同 kind 单规则组摘除该值 + toast 告知；
+// 单规则组互斥转移（PRD 02-04 条款 2）：选值时从其他同 kind 单规则组摘除该值 + toast 告知——
+// 仅扩展名/类型/日期（单值域天然互斥）；名称/标签词不互斥（2026-10-08 用户定：多词 AND 靠前缀
+// 重叠细分——杰森 vs 杰森+妈妈，重叠资产由命中词数权重归更具体组）；
 // 确认前预检（完全相同 / 空规则 / 空范围）→ ConfirmModal danger（错误提示 + 提示音沿；后端同校验兜底）。
 import { nextTick, ref, watch } from "vue";
 import BaseModal from "./modals/BaseModal.vue";
@@ -99,8 +101,12 @@ function removeGroup(index: number): void {
 }
 
 // 单规则组互斥转移（02-04 条款 2）：组二选了组一已占用的扩展名/类型/日期 → 该项自动从组一
-// 转移（仅对"单规则组"生效；多规则组合允许重叠）+ toast 告知；确认前取消全部恢复（草稿丢弃）
+// 转移（仅对"单规则组"生效；多规则组合允许重叠）+ toast 告知；确认前取消全部恢复（草稿丢弃）。
+// 名称/标签词不互斥早退（2026-10-08 用户定）：多词 AND 靠前缀重叠细分（杰森 vs 杰森+妈妈、
+// P1 vs P1+2K），重叠资产由命中词数权重归更具体组——互斥会把共享词从原组摘除，与 09-17
+// 权重修订直接矛盾（名称{P1} + 名称{P1,2K} 两组在互斥下根本配不出来）
 function onPickValue(rule: GroupRule, value: string): void {
+  if (rule.kind === "name" || rule.kind === "tags") return;
   for (const g of draft.value) {
     if (g.rules.length !== 1) continue;
     const r = g.rules[0];

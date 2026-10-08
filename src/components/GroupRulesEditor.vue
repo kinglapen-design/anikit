@@ -6,7 +6,8 @@
 // 标签 = 当前文件夹实际存在 tags chips（2026-09-17，词间 AND；空态一行提示），
 // 名称 = 分词 chips 输入（TermChipsInput：回车/空格/+/失焦提交，词间 AND——2026-08-19 复验由单输入框改）；
 // 底部「添加新规则」钮（C5 底 102×29）。标签冒号 = 英文「:」（2026-08-19 用户定，全库统一）。
-// 单规则组互斥转移（PRD 02-04 条款 2）由父级经 pickValue 事件处理（编辑器不感知其他组）。
+// 单规则组互斥转移（PRD 02-04 条款 2，仅扩展名/类型/日期；名称/标签不互斥——2026-10-08 用户定）
+// 由父级经 pickValue 事件处理（编辑器不感知其他组）。
 import { computed, nextTick, ref } from "vue";
 import AppIcon from "./AppIcon.vue";
 import AppMenu from "./AppMenu.vue";
@@ -84,7 +85,7 @@ function toggleValue(rule: GroupRule, value: string): void {
   }
 }
 
-// —— 名称规则：分词 chips（TermChipsInput；词间 AND；提交走 pickValue 互斥转移，同 chips 口径） ——
+// —— 名称规则：分词 chips（TermChipsInput；词间 AND；名称/标签不参互斥——2026-10-08，重叠词靠命中词数权重归属） ——
 function addTerm(rule: GroupRule, value: string): void {
   const v = value.trim();
   if (!v || rule.values.includes(v)) return;

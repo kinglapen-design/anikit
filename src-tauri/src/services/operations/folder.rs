@@ -261,7 +261,8 @@ fn apply_folder_color(lib: &mut Library, folder_id: &str, color: Option<&str>) -
 /// 草稿式一次提交；空数组 = 不分组（存 None 不写字段）。校验：**规则组**规则范围非空 +
 /// 规则集合完全相同的两组禁止保存（23 稿"无法保存，存在完全相同的分组"；名称不查重——2026-08-19 用户定）；
 /// **rules 为空 = 自由组（2026-09-17，PRD 02-04 无规则空组）放开**——无规则可比，查重只管规则组；
-/// 单规则组互斥转移由前端草稿内完成（确认前取消全恢复），后端不再处理
+/// 单规则组互斥转移由前端草稿内完成（确认前取消全恢复），后端不再处理；
+/// 互斥仅扩展名/类型/日期——名称/标签词不互斥（2026-10-08 用户定：多词 AND 靠前缀重叠细分，靠命中词数权重归属）
 pub fn set_folder_groups(lib: &mut Library, folder_id: &str, groups: Vec<GroupDef>) -> Result<(), String> {
   if !lib.index.folders.contains_key(folder_id) {
     return Err("目标文件夹不存在，可能已被删除".to_string());
