@@ -50,6 +50,8 @@ const inputRef = ref<HTMLInputElement>();
 defineExpose({
   focus: () => inputRef.value?.focus(),
   blur: () => inputRef.value?.blur(),
+  // 菜单栏「查找 ▸ 筛选器」入口（2026-10-09 五轮）：FloatBarHost 经 FloatBar 透传调用展开筛选组
+  openFilters: () => setExpanded(true),
 });
 
 const expanded = ref(props.initialExpanded);

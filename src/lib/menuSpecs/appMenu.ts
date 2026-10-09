@@ -258,9 +258,17 @@ function fileEntries(): CtxEntry[] {
 }
 
 // —— 查找 ▸（搜索 / 筛选 / 扫描）——
+// 筛选器子菜单（2026-10-09 筛选业务五轮点亮）：维度项 = 悬浮栏展开筛选组并打开对应弹窗
+// （requestFilterPop → FloatBarHost；与按钮组 10 项同序同名）；「重置所有筛选」= clearAllFilters，
+// 无生效筛选时禁用；ws 视口无筛选能力整组禁用（悬浮栏筛选钮同口径不渲染）
+const FILTER_MENU_DIMS = ["颜色", "时长", "属性", "扩展名", "文件夹", "比例", "链接", "大小", "添加日期", "修改日期"] as const;
 function findEntries(): CtxEntry[] {
-  // 筛选器 / 以图找图 = 业务另轮（筛选 9 子稿 + 后端筛选条件；以图搜图未立项）——全占位
+  // 以图找图 = 业务另轮（未立项）——占位
   const scan = scanEntries(); // [扫描重复文件 ▸（三范围）, 扫描文件/档案链接 disabled]
+  const panelId = useTabsStore().activeTabId;
+  const viewKey = useContentStore().sidebarSelected;
+  const canFilter = !!panelId && !viewKey.startsWith("ws:");
+  const hasFilters = canFilter && useSearchStore().activeFilterDims(panelId).length > 0;
   return [
     {
       label: "搜索",
@@ -276,16 +284,17 @@ function findEntries(): CtxEntry[] {
     {
       label: "筛选器",
       submenu: [
-        { label: "重置所有筛选", disabled: true },
+        {
+          label: "重置所有筛选",
+          disabled: !hasFilters,
+          action: () => useSearchStore().clearAllFilters(panelId, viewKey),
+        },
         "divider",
-        { label: "颜色", disabled: true },
-        { label: "时长", disabled: true },
-        { label: "标签", disabled: true },
-        { label: "扩展名", disabled: true },
-        { label: "文件夹", disabled: true },
-        { label: "链接状态", disabled: true },
-        { label: "文件大小", disabled: true },
-        { label: "日期", disabled: true },
+        ...FILTER_MENU_DIMS.map((dim) => ({
+          label: dim as string,
+          disabled: !canFilter,
+          action: () => useSearchStore().requestFilterPop(panelId, dim),
+        })),
       ],
     },
     {

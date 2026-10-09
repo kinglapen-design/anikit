@@ -38,6 +38,8 @@ const modeRef = ref<ComponentPublicInstance | null>(null);
 defineExpose({
   focusSearch: () => (modeRef.value as { focus?: () => void } | null)?.focus?.(),
   blurSearch: () => (modeRef.value as { blur?: () => void } | null)?.blur?.(),
+  // 展开筛选组转发（2026-10-09 五轮：菜单栏筛选器入口；仅 search 模式实现）
+  openFilters: () => (modeRef.value as { openFilters?: () => void } | null)?.openFilters?.(),
 });
 
 const slotEl = ref<HTMLElement>();

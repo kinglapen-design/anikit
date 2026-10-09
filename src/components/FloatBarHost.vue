@@ -230,6 +230,16 @@ watch(
     if (props.panelId && search.focusPanelId === props.panelId) floatBarRef.value?.focusSearch();
   },
 );
+// 菜单栏「查找 ▸ 筛选器」请求（2026-10-09 五轮）：展开筛选组 + 打开对应维度弹窗（定位 anchor 中心）
+watch(
+  () => search.filterPopSeq,
+  () => {
+    if (!props.panelId || search.filterPopPanelId !== props.panelId) return;
+    floatBarRef.value?.openFilters();
+    filterPop.value = search.filterPopDim;
+    void placePop(undefined, "filter");
+  },
+);
 function toggleFilter(key: string, ev?: MouseEvent): void {
   const opening = filterPop.value !== key;
   filterPop.value = opening ? key : "";

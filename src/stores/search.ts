@@ -202,6 +202,11 @@ export const useSearchStore = defineStore("search", () => {
   // Ctrl+F 聚焦请求（FloatBarHost watch 比对 panelId 后聚焦自身输入框）
   const focusSeq = ref(0);
   const focusPanelId = ref("");
+  // 菜单栏「查找 ▸ 筛选器」打开弹窗请求（2026-10-09 五轮；focusSeq 同模式：
+  // FloatBarHost watch 比对 panelId 后展开筛选组并打开对应维度弹窗）
+  const filterPopSeq = ref(0);
+  const filterPopPanelId = ref("");
+  const filterPopDim = ref("");
 
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -594,6 +599,14 @@ export const useSearchStore = defineStore("search", () => {
     focusSeq.value++;
   }
 
+  /** 菜单栏筛选器入口：请求某 panel 悬浮栏展开筛选组并打开对应维度弹窗 */
+  function requestFilterPop(panelId: string, dim: string): void {
+    if (!panelId) return;
+    filterPopPanelId.value = panelId;
+    filterPopDim.value = dim;
+    filterPopSeq.value++;
+  }
+
   /** 全局搜索入口（菜单栏主菜单「查找 ▸ 全局搜索」，2026-09-05 用户定：聚焦搜索 + 帮用户输入 `~`）：
    *  草稿补 `~` 前缀（已带 `~` 不动只聚焦；纯 `~` 无关键字不进搜索态，等用户续输） */
   function prefillGlobal(panelId: string, viewKey: string): void {
@@ -606,6 +619,9 @@ export const useSearchStore = defineStore("search", () => {
   return {
     focusSeq,
     focusPanelId,
+    filterPopSeq,
+    filterPopPanelId,
+    filterPopDim,
     isActive,
     hitsFor,
     hitArchivesFor,
@@ -615,6 +631,7 @@ export const useSearchStore = defineStore("search", () => {
     rerun,
     removePanel,
     requestFocus,
+    requestFilterPop,
     prefillGlobal,
     // 筛选（2026-10-09 筛选业务二轮）
     filtersFor,
