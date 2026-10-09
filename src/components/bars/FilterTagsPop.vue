@@ -42,7 +42,7 @@ const shown = computed(() => {
       />
       <TagButton label="清除" size="md" @click="emit('clear')" />
     </div>
-    <div class="fp-list">
+    <div class="fp-taglist">
       <TagButton
         v-for="t in shown"
         :key="t"
@@ -68,8 +68,11 @@ const shown = computed(() => {
   height: 44px;
   padding: var(--n-space-8) var(--n-space-8) var(--n-space-8) var(--n-space-12);
 }
-.fp-list {
+/* chips 流式区：横排 wrap 换行（2026-10-09 走查修复——类名避 bars.css 列表族 .fp-list
+   （column 布局），旧同名时被全局 column 穿透成竖排；scoped 未声明 direction 的属性全局可渗入） */
+.fp-taglist {
   display: flex;
+  flex-direction: row;
   flex-wrap: wrap;
   align-content: flex-start;
   gap: var(--n-space-8);

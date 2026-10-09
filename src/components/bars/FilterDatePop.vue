@@ -59,6 +59,13 @@ function commit(): void {
   }
   // 非法值（月 13 / 日 40 等）= 半成品不提交（草稿保留）
 }
+// 自定义反选：对勾点击 = 取消自定义并清空三框（2026-10-09 走查）
+function clearCustom(): void {
+  cy.value = "";
+  cm.value = "";
+  cd.value = "";
+  emit("setCustom", null);
+}
 </script>
 
 <template>
@@ -78,7 +85,10 @@ function commit(): void {
         <TextInput v-model="cy" size="sm" class="fp-year" placeholder="年" @focusout="commit" @keydown.enter="commit" />
         <TextInput v-model="cm" size="sm" class="fp-md" placeholder="月" @focusout="commit" @keydown.enter="commit" />
         <TextInput v-model="cd" size="sm" class="fp-md" placeholder="日" @focusout="commit" @keydown.enter="commit" />
-        <AppIcon name="check" :size="18" class="fp-check" :class="{ on: custom }" />
+        <!-- 自定义反选（2026-10-09 走查）：对勾可点 = 取消自定义并清框；未生效时隐形不可点 -->
+        <button class="fp-uncheck" :class="{ on: custom }" v-tip="custom ? '取消自定义' : undefined" :disabled="!custom" @click="clearCustom">
+          <AppIcon name="check" :size="18" />
+        </button>
       </div>
     </div>
   </div>
@@ -96,5 +106,24 @@ function commit(): void {
 .fp-md {
   width: 40px;
   flex: none;
+}
+/* 自定义对勾钮（复用 .fp-check 显隐口径；生效时可点 = 取消自定义，未生效隐形不响应） */
+.fp-uncheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: var(--n-l1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--n-dur-150) var(--n-ease-in-out);
+}
+.fp-uncheck.on {
+  opacity: 1;
+  pointer-events: auto;
+  cursor: pointer;
 }
 </style>

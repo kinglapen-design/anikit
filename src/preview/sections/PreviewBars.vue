@@ -96,6 +96,11 @@ const liveFolderSel = ref<string[]>(["F02"]);
 // 颜色 / 范围弹窗交互实例
 const liveColor = ref<string | null>("#0F89EC");
 const liveDur = ref<{ unit: string; min: number | null; max: number | null }>({ unit: "帧", min: 10, max: 240 });
+// 比例 / 日期交互实例（目验自定义对勾取消，2026-10-09 走查补）
+const liveRatioSel = ref<string[]>(["landscape", "21:9"]);
+const RATIO_PRESET_KEYS = ["landscape", "square", "portrait"];
+const liveDateBuckets = ref<string[]>(["today", "week"]);
+const liveDateCustom = ref<{ year?: number; month?: number; day?: number } | null>({ year: 2026 });
 const liveExtSel = ref<string[]>(["aep"]);
 const liveTagSel = ref<string[]>(["拔剑", "Q版"]);
 function toggleIn(list: string[], key: string): string[] {
@@ -276,12 +281,21 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
           </span>
         </div>
         <div class="pv-demo-cell">
-          <FilterRatioPop :selected="['landscape', '16:9']" force-hover="square" />
-          <span class="pv-cap">比例 · 三档 + 自定义尾行（选中横图 + 自定义 16:9 对勾生效 / hover 方形）</span>
+          <FilterRatioPop
+            :selected="liveRatioSel"
+            @toggle="liveRatioSel = toggleIn(liveRatioSel, $event)"
+            @set-custom="liveRatioSel = [...liveRatioSel.filter((r) => RATIO_PRESET_KEYS.includes(r)), ...($event ? [$event] : [])]"
+          />
+          <span class="pv-cap">比例 · 三档 + 自定义尾行（对勾可点 = 取消自定义；{{ liveRatioSel.join("、") || "未选" }}）</span>
         </div>
         <div class="pv-demo-cell">
-          <FilterDatePop :buckets="['today', 'week']" :custom="{ year: 2026 }" force-hover="month" />
-          <span class="pv-cap">日期 · 六档 + 自定义年月日（添加 / 修改共用；选中当天+近一周 + 自定义 2026 年 / hover 最近一月）</span>
+          <FilterDatePop
+            :buckets="liveDateBuckets"
+            :custom="liveDateCustom"
+            @toggle="liveDateBuckets = toggleIn(liveDateBuckets, $event)"
+            @set-custom="liveDateCustom = $event"
+          />
+          <span class="pv-cap">日期 · 六档 + 自定义年月日（添加 / 修改共用；对勾可点 = 取消自定义）</span>
         </div>
       </div>
       <div class="pv-demo-row">
