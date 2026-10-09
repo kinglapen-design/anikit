@@ -31,6 +31,7 @@ impl AnikitMcp {
       global: p.folder_id.is_none(),
       view_key: p.folder_id.map(|id| format!("folder:{id}")).unwrap_or_else(|| "quick:all".to_string()),
       recursive: p.recursive.unwrap_or(true),
+      filters: crate::services::search::SearchFilters::default(), // MCP 搜索不暴露筛选（2026-10-09）
     };
     self.with_lib(|lib| {
       let hits = search::search(lib, &p.query, &scope);
