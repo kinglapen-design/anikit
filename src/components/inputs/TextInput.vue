@@ -12,6 +12,8 @@
 // readonly 透传（只读展示口径）。
 // clearable（2026-09-20 R2 烧 AppInput/AppSearchBar 补能力）：有内容且非禁用/只读时出清除钮
 // （clear 12 亮色/四级 hover 升三级，150ms；沿旧 AppInput/AppSearchBar 既定交互，sm 档暂无 clear 消费方）。
+// leading slot（2026-10-09 筛选业务四轮）：左置自定义元素位（颜色筛选 16×16 色块）——
+// 与 leadingIcon 同位互斥（slot 优先），gap 复用 has-lead 口径。
 // focusable=false = 聚焦描边不显（2026-08-31 用户定：仅快速访问固定入口框用——亮边误导人以为能输入；
 // 文件夹/文件名称框保留聚焦态，改名语义上可输入，勿全局禁用 readonly 聚焦）。
 import { ref } from "vue";
@@ -49,9 +51,11 @@ defineExpose({
 </script>
 
 <template>
-  <div class="ti-root" :class="[size, { disabled, 'has-lead': !!leadingIcon, 'no-focus': !focusable }, forceState ? `force-${forceState}` : '']">
+  <div class="ti-root" :class="[size, { disabled, 'has-lead': !!leadingIcon || !!$slots.leading, 'no-focus': !focusable }, forceState ? `force-${forceState}` : '']">
+    <!-- 左置自定义元素（leading slot，颜色筛选色块；与 leadingIcon 同位互斥，slot 优先） -->
+    <slot v-if="$slots.leading" name="leading" />
     <!-- 左置装饰图标（移动弹窗搜索框稿：18 实寸 亮色/三级，纯装饰不交互） -->
-    <AppIcon v-if="leadingIcon" :name="leadingIcon" :size="18" class="ti-lead" />
+    <AppIcon v-else-if="leadingIcon" :name="leadingIcon" :size="18" class="ti-lead" />
     <input
       ref="inputEl"
       v-model="model"

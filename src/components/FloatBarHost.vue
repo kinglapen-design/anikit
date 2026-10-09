@@ -22,6 +22,8 @@ import FilterTagsPop from "./bars/FilterTagsPop.vue";
 import FilterRatioPop from "./bars/FilterRatioPop.vue";
 import FilterDatePop from "./bars/FilterDatePop.vue";
 import FilterFoldersPop from "./bars/FilterFoldersPop.vue";
+import FilterColorPop from "./bars/FilterColorPop.vue";
+import FilterRangePop from "./bars/FilterRangePop.vue";
 import { playBarSpecFor } from "../lib/barSpecs";
 import { formatDuration } from "../lib/formatDuration";
 import { frameOfTime, totalFrames } from "../lib/formatFrame";
@@ -160,6 +162,51 @@ const folderNodes = computed(() => content.folders);
 const rootDirectCount = computed(() => content.placements.filter((p) => p.folderId === "root").length);
 function onFolderToggle(id: string): void {
   patchFilter({ folderIds: toggleIn(filtersNow.value?.folderIds ?? [], id) });
+}
+
+// 颜色（2026-10-09 四轮）：单选色条件（colors 数组取首项；FilterColorPop SV 盘自绘）
+const colorNow = computed(() => filtersNow.value?.colors[0] ?? null);
+function onColorSet(hex: string | null): void {
+  patchFilter({ colors: hex ? [hex] : [] });
+}
+
+// 时长（unit = 帧/秒/分 ↔ frames/seconds/minutes 随条件下发，后端按素材 fps 换算帧）
+const DURATION_UNITS = ["帧", "秒", "分"] as const;
+const DURATION_UNIT_KEYS: Record<string, string> = { "帧": "frames", "秒": "seconds", "分": "minutes" };
+const durationUnit = computed(() => {
+  const u = filtersNow.value?.duration?.unit;
+  return u === "frames" ? "帧" : u === "minutes" ? "分" : "秒";
+});
+function onDurationUnit(u: string): void {
+  const d = filtersNow.value?.duration;
+  patchFilter({ duration: { unit: DURATION_UNIT_KEYS[u] ?? "seconds", min: d?.min, max: d?.max } });
+}
+function onDurationRange(r: { min: number | null; max: number | null }): void {
+  const d = filtersNow.value?.duration;
+  patchFilter({
+    duration: { unit: d?.unit ?? "seconds", min: r.min ?? undefined, max: r.max ?? undefined },
+  });
+}
+
+// 大小（条件恒字节；单位 KB/MB/GB = 纯显示档，数值按当前单位换算进出）
+const SIZE_UNITS = ["KB", "MB", "GB"] as const;
+const SIZE_MULT: Record<string, number> = { KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3 };
+const sizeUnit = ref<string>("MB");
+function sizeShown(bytes: number | undefined): number | null {
+  if (bytes == null) return null;
+  const v = bytes / (SIZE_MULT[sizeUnit.value] ?? 1);
+  return Number(v.toFixed(2));
+}
+const sizeMinShown = computed(() => sizeShown(filtersNow.value?.size?.min));
+const sizeMaxShown = computed(() => sizeShown(filtersNow.value?.size?.max));
+function onSizeRange(r: { min: number | null; max: number | null }): void {
+  const mult = SIZE_MULT[sizeUnit.value] ?? 1;
+  patchFilter({
+    size: {
+      min: r.min != null ? Math.round(r.min * mult) : undefined,
+      max: r.max != null ? Math.round(r.max * mult) : undefined,
+    },
+  });
 }
 
 watch(draft, (v) => {
@@ -589,6 +636,43 @@ function noteRemove(i: number): void {
         :custom="filtersNow?.modified?.custom ?? null"
         @toggle="onDateToggle('modified', $event)"
         @set-custom="onDateCustom('modified', $event)"
+      />
+    </Transition>
+    <Transition name="fbh-pop">
+      <FilterColorPop
+        v-if="filterPop === '颜色'"
+        class="fbh-pop"
+        :style="popStyle"
+        :color="colorNow"
+        @set-color="onColorSet"
+      />
+    </Transition>
+    <Transition name="fbh-pop">
+      <FilterRangePop
+        v-if="filterPop === '时长'"
+        class="fbh-pop"
+        :style="popStyle"
+        :units="DURATION_UNITS"
+        :unit="durationUnit"
+        :min="filtersNow?.duration?.min ?? null"
+        :max="filtersNow?.duration?.max ?? null"
+        @set-unit="onDurationUnit"
+        @set-range="onDurationRange"
+        @clear="patchFilter({ duration: null })"
+      />
+    </Transition>
+    <Transition name="fbh-pop">
+      <FilterRangePop
+        v-if="filterPop === '大小'"
+        class="fbh-pop"
+        :style="popStyle"
+        :units="SIZE_UNITS"
+        :unit="sizeUnit"
+        :min="sizeMinShown"
+        :max="sizeMaxShown"
+        @set-unit="sizeUnit = $event"
+        @set-range="onSizeRange"
+        @clear="patchFilter({ size: null })"
       />
     </Transition>
   </div>

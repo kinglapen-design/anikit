@@ -20,6 +20,7 @@ import { ref } from "vue";
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { formatSize } from "../lib/formatSize";
 import { useUiStore } from "./ui";
 import { useToastStore } from "./toast";
 import { useWsStore, wsEntryToPlacement, WS_ID_PREFIX } from "./ws";
@@ -121,6 +122,16 @@ const DATE_BUCKET_LABELS: Record<string, string> = {
   year: "最近一年",
   earlier: "更早",
 };
+const DURATION_UNIT_LABELS: Record<string, string> = { frames: "帧", seconds: "秒", minutes: "分" };
+
+/** 范围摘要（≥min / ≤max / min~max；大小经 formatSize 人性化） */
+function rangeSummary(min: number | undefined, max: number | undefined, suffix: string, size = false): string {
+  const fmt = (v: number): string => (size ? formatSize(v) : String(v));
+  if (min != null && max != null) return `${fmt(min)}~${fmt(max)}${suffix}`;
+  if (min != null) return `≥${fmt(min)}${suffix}`;
+  if (max != null) return `≤${fmt(max)}${suffix}`;
+  return "";
+}
 
 /** 日期条件摘要（档位中文 + 自定义 y-m-d 拼接，任意组合） */
 function dateSummary(c: DateCond | null): string {
@@ -255,10 +266,12 @@ export const useSearchStore = defineStore("search", () => {
     const act = dimActives(f);
     const out: Record<string, string> = {};
     if (act["颜色"]) out["颜色"] = f.colors.join("、");
+    if (act["时长"]) out["时长"] = rangeSummary(f.duration?.min, f.duration?.max, DURATION_UNIT_LABELS[f.duration?.unit ?? "seconds"] ?? "秒");
     if (act["属性"]) out["属性"] = f.tags.join("、");
     if (act["扩展名"]) out["扩展名"] = f.exts.map((e) => EXT_LABELS[e] ?? e).join("、");
     if (act["比例"]) out["比例"] = f.ratios.map((r) => RATIO_LABELS[r] ?? r).join("、");
     if (act["链接"]) out["链接"] = f.linkStates.map((s) => LINK_STATE_LABELS[s] ?? s).join("、");
+    if (act["大小"]) out["大小"] = rangeSummary(f.size?.min, f.size?.max, "", true);
     if (act["添加日期"]) out["添加日期"] = dateSummary(f.imported);
     if (act["修改日期"]) out["修改日期"] = dateSummary(f.modified);
     return out;

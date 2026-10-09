@@ -19,6 +19,8 @@ import FilterTagsPop from "../../components/bars/FilterTagsPop.vue";
 import FilterFoldersPop from "../../components/bars/FilterFoldersPop.vue";
 import FilterRatioPop from "../../components/bars/FilterRatioPop.vue";
 import FilterDatePop from "../../components/bars/FilterDatePop.vue";
+import FilterColorPop from "../../components/bars/FilterColorPop.vue";
+import FilterRangePop from "../../components/bars/FilterRangePop.vue";
 import ToastStack from "../../components/ToastStack.vue";
 import PickerBanner from "../../components/PickerBanner.vue";
 import LinkListPopover from "../../components/LinkListPopover.vue";
@@ -91,6 +93,9 @@ const demoFolderNodes: FolderNode[] = [
   { id: "F07", name: "03_道具", count: 19, totalSize: 0, children: [] },
 ];
 const liveFolderSel = ref<string[]>(["F02"]);
+// 颜色 / 范围弹窗交互实例
+const liveColor = ref<string | null>("#0F89EC");
+const liveDur = ref<{ unit: string; min: number | null; max: number | null }>({ unit: "帧", min: 10, max: 240 });
 const liveExtSel = ref<string[]>(["aep"]);
 const liveTagSel = ref<string[]>(["拔剑", "Q版"]);
 function toggleIn(list: string[], key: string): string[] {
@@ -277,6 +282,34 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
         <div class="pv-demo-cell">
           <FilterDatePop :buckets="['today', 'week']" :custom="{ year: 2026 }" force-hover="month" />
           <span class="pv-cap">日期 · 六档 + 自定义年月日（添加 / 修改共用；选中当天+近一周 + 自定义 2026 年 / hover 最近一月）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <FilterColorPop :color="liveColor" @set-color="liveColor = $event" />
+          <span class="pv-cap">
+            颜色 · SV 盘自绘（色相随当前色，点击/拖动取色；HEX + RGB/HSL 切换 + 清除 = 空态白底斜杠；
+            当前 {{ liveColor ?? "空" }}）
+          </span>
+        </div>
+        <div class="pv-demo-cell">
+          <FilterColorPop :color="null" />
+          <span class="pv-cap">颜色 · 空态（色块白底斜杠；色盘默认品牌蓝色相）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <FilterRangePop
+            :units="['帧', '秒', '分']"
+            :unit="liveDur.unit"
+            :min="liveDur.min"
+            :max="liveDur.max"
+            @set-unit="liveDur.unit = $event"
+            @set-range="liveDur = { ...liveDur, min: $event.min, max: $event.max }"
+          />
+          <span class="pv-cap">时长 · 单位切换（帧/秒/分，当前 {{ liveDur.unit }}）+ 最小/最大 + 清除</span>
+        </div>
+        <div class="pv-demo-cell">
+          <FilterRangePop :units="['KB', 'MB', 'GB']" unit="MB" :min="1.5" :max="20" force-hover="GB" />
+          <span class="pv-cap">大小 · KB/MB/GB（示例 1.5~20 MB / hover GB）</span>
         </div>
       </div>
     </div>
