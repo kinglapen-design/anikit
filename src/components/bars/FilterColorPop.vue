@@ -2,9 +2,11 @@
 // 筛选弹窗 · 颜色（稿 = 中间面板-多功能悬浮栏-筛选/颜色 250×339）：单选色条件（后端 colors 数组取首项）。
 // ① 色盘 226×223 = SV 盘（水平 白→纯色 = 饱和 0→100、垂直 亮→黑 = 明度 100→0，色相 = 当前色色相；
 //    稿位图落地 = canvas 三层渐变自绘 + 选择环定位，2026-10-09 四轮）；点击 / 拖动取色。
-// ② HEX 行：16×16 色块（TextInput leading slot；空态 = 白底斜杠，稿 prose「清除后色块变成白色加一条斜杠」）
+// ② 色相条 226×12（稿无此件——稿内换色相只能输数值，2026-10-09 用户拍板补：彩虹渐变 CSS 直画 +
+//    指示环，点击 / 拖动换色相；有条件色时保持饱和明度重合成，无色仅换盘底；弹窗高 339 → 363 稿差标注）。
+// ③ HEX 行：16×16 色块（TextInput leading slot；空态 = 白底斜杠，稿 prose「清除后色块变成白色加一条斜杠」）
 //    + HEX 输入框 + 清除钮（TagButton solid md）——清除 = 清空颜色筛选。
-// ③ RGB 行：三框 50 宽（HSL 模式 = H 0-360 / S 0-100 / L 0-100）+ RGB/HSL 切换钮（稿 1_点击-模式切换，
+// ④ RGB 行：三框 50 宽（HSL 模式 = H 0-360 / S 0-100 / L 0-100）+ RGB/HSL 切换钮（稿 1_点击-模式切换，
 //    钮面 = 当前模式）。输入提交 = focusout / Enter，非法值不生效（草稿保留）。
 import { computed, onMounted, ref, watch } from "vue";
 import TagButton from "../buttons/TagButton.vue";
@@ -162,6 +164,26 @@ function onPadMove(e: PointerEvent): void {
   if (e.buttons > 0) pickAt(e);
 }
 
+// 色相条取色相（点击 / 拖动，2026-10-09 用户拍板补件）：有条件色时保持饱和明度重合成提交，
+// 无色仅换盘底（不写条件）；回流 hsv.h ≈ hue（差 <1° 守卫）条不跳
+function huePickAt(e: PointerEvent): void {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const h = Math.min(359.99, Math.max(0, ((e.clientX - rect.left) / rect.width) * 360));
+  hue.value = h;
+  const rgb = props.color ? hexToRgb(props.color) : null;
+  if (!rgb) return;
+  const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+  const next = hsvToRgb(h, hsv.s, hsv.v);
+  emit("setColor", rgbToHex(next.r, next.g, next.b));
+}
+function onHueDown(e: PointerEvent): void {
+  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  huePickAt(e);
+}
+function onHueMove(e: PointerEvent): void {
+  if (e.buttons > 0) huePickAt(e);
+}
+
 // HEX / 三框提交
 function commitHex(): void {
   const rgb = hexToRgb(hexDraft.value);
@@ -202,6 +224,10 @@ const swatchStyle = computed(() => (props.color ? { background: props.color } : 
       <canvas ref="padRef" :width="PAD_W" :height="PAD_H"></canvas>
       <span v-if="ringPos" class="fp-ring" :style="{ left: `${ringPos.x}px`, top: `${ringPos.y}px` }"></span>
     </div>
+    <!-- 色相条（稿无此件，2026-10-09 用户拍板补：彩虹渐变 + 指示环，点击 / 拖动换色相） -->
+    <div class="fp-hue" @pointerdown="onHueDown" @pointermove="onHueMove">
+      <span class="fp-hue-ring" :style="{ left: `${(hue / 360) * 100}%` }"></span>
+    </div>
     <!-- HEX 行（色块 leading + 输入框 + 清除；空态色块 = 白底斜杠，稿 prose） -->
     <div class="fp-row">
       <TextInput v-model="hexDraft" size="lg" placeholder="#RRGGBB" @focusout="commitHex" @keydown.enter="commitHex">
@@ -237,6 +263,10 @@ const swatchStyle = computed(() => (props.color ? { background: props.color } : 
   gap: var(--n-space-12);
   padding: var(--n-space-12);
   width: 250px;
+  /* 稿宽下限防守（2026-10-09 走查）：fbh-pop max-width:100% 在窄 anchor 下会压缩弹窗，
+     内部定宽件（色盘 226）与行内右端件（清除钮）被挤溢出——恒稿宽，超窄时溢出 anchor 由
+     placePop 钳制管位置，不压坏内容 */
+  min-width: 250px;
 }
 /* 色盘：226×223 稿值，圆角 8 与壳同档收边 */
 .fp-pad {
@@ -254,6 +284,28 @@ const swatchStyle = computed(() => (props.color ? { background: props.color } : 
 /* 选择环（稿：空心圆环骑盘缘） */
 .fp-ring {
   position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+/* 色相条（226×12，彩虹渐变 CSS 直画 + 指示环同选择环口径） */
+.fp-hue {
+  position: relative;
+  width: 226px;
+  height: 12px;
+  flex: none;
+  border-radius: var(--n-radius-6);
+  background: linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+  cursor: crosshair;
+  touch-action: none;
+}
+.fp-hue-ring {
+  position: absolute;
+  top: 50%;
   width: 14px;
   height: 14px;
   border: 2px solid #fff;

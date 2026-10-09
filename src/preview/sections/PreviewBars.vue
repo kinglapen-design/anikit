@@ -302,13 +302,18 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
         <div class="pv-demo-cell">
           <FilterColorPop :color="liveColor" @set-color="liveColor = $event" />
           <span class="pv-cap">
-            颜色 · SV 盘自绘（色相随当前色，点击/拖动取色；HEX + RGB/HSL 切换 + 清除 = 空态白底斜杠；
+            颜色 · SV 盘自绘 + 色相条（色相随当前色 / 条点击拖动换色相；HEX + RGB/HSL 切换 + 清除 = 空态白底斜杠；
             当前 {{ liveColor ?? "空" }}）
           </span>
         </div>
         <div class="pv-demo-cell">
-          <FilterColorPop :color="null" />
-          <span class="pv-cap">颜色 · 空态（色块白底斜杠；色盘默认品牌蓝色相）</span>
+          <div style="max-width: 180px">
+            <FilterColorPop :color="null" style="max-width: 100%" />
+          </div>
+          <span class="pv-cap">
+            颜色 · 空态 + 窄 anchor 压制复现（外容器 max-width 180 模拟 fbh-pop 压窄：稿宽 250 不被压坏、
+            行内右端件不顶出——2026-10-09 走查修复语境）
+          </span>
         </div>
         <div class="pv-demo-cell">
           <FilterRangePop

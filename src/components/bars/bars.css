@@ -112,3 +112,9 @@
   background: var(--n-l-a2);
   box-shadow: var(--n-effect-raised);
 }
+/* 筛选弹窗内输入框可缩（2026-10-09 走查）：flex item 自动最小宽 = 内容 min-content（色块 +
+   文本 + padding ≈ 107），窄容器压缩时 shrink 卡死会把行内右端件（清除钮）顶出弹窗——
+   min-width: 0 放开收缩，右端件永不被顶出 */
+.fp-root .ti-root {
+  min-width: 0;
+}

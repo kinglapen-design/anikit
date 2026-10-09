@@ -60,6 +60,7 @@ const shown = computed(() => {
   display: flex;
   flex-direction: column;
   width: 350px;
+  min-width: 350px; /* 稿宽下限防守（同 FilterColorPop 口径，2026-10-09 走查） */
 }
 .fp-head {
   display: flex;
