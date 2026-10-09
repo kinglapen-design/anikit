@@ -1,0 +1,134 @@
+/* md 编辑器 Live Preview 排版（2026-10-10 CM6 内核换代；稿 = 文本编辑稿 + 口径 §60，
+   数值与 styles/markdown.css 同源——同 token 双写不抽通用类：选择器语境不同（.cm-line 行装饰 vs 渲染标签），
+   稿值唯一源头仍是 Design Token/布局/中间面板-内容容器-文本编辑）。
+   口径：行级样式恒挂（光标在内排版不塌）；隐标记/widget 光标外行生效（lib/cmMd.ts 装饰层）；
+   块距 = md 空行自然撑开（编辑器无渲染态 flex gap 12）；表格 / Setext 标题保源码态待另轮。
+   色档 = 1.5（标题 75 / 正文 60 / 其他 40；标记回落亮色/三级），线 = 通用/三级。 */
+
+/* —— 基底：版心左右各 84（12+72，渲染态同口径）+ 底 66 让位悬浮栏（§18 遮挡补偿） —— */
+.cm-editor {
+  font-family: var(--n-font-family);
+  font-size: var(--n-fs-md-body);
+  line-height: var(--n-lh-md-body);
+  color: var(--n-md-body);
+}
+.cm-editor .cm-content {
+  padding: var(--n-space-12) calc(var(--n-space-12) + var(--n-space-72)) 66px;
+  caret-color: var(--n-l1);
+}
+.cm-editor .cm-line {
+  padding: 0; /* 版心左缘与渲染态齐（base theme 横 padding 4 会让文本错开 4px） */
+}
+.cm-editor .cm-cursor {
+  border-left-color: var(--n-l1);
+}
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground {
+  background: var(--n-brand-50);
+}
+
+/* —— 标题（稿：H1 30/40 带 2px 分割线、H2 26/36、H3 22/32、H4-H6 18/28，Bold，MarkDown/标题） —— */
+.cm-editor .cm-line.cm-lp-h1,
+.cm-editor .cm-line.cm-lp-h2,
+.cm-editor .cm-line.cm-lp-h3,
+.cm-editor .cm-line.cm-lp-h4,
+.cm-editor .cm-line.cm-lp-h5,
+.cm-editor .cm-line.cm-lp-h6 {
+  font-weight: var(--n-fw-bold);
+  color: var(--n-md-title);
+}
+.cm-editor .cm-line.cm-lp-h1 {
+  font-size: var(--n-fs-md-h1);
+  line-height: var(--n-lh-md-h1);
+  padding-bottom: var(--n-space-12);
+  border-bottom: 2px solid var(--n-g3);
+}
+.cm-editor .cm-line.cm-lp-h2 {
+  font-size: var(--n-fs-md-h2);
+  line-height: var(--n-lh-md-h2);
+}
+.cm-editor .cm-line.cm-lp-h3 {
+  font-size: var(--n-fs-md-h3);
+  line-height: var(--n-lh-md-h3);
+}
+.cm-editor .cm-line.cm-lp-h4,
+.cm-editor .cm-line.cm-lp-h5,
+.cm-editor .cm-line.cm-lp-h6 {
+  font-size: var(--n-fs-md-h4);
+  line-height: var(--n-lh-md-h4);
+}
+
+/* —— 引用（稿：左 2px 通用/三级竖线 + padding-left 16 + 其他档色；行竖线相连成通长竖条） —— */
+.cm-editor .cm-line.cm-lp-quote {
+  padding-left: var(--n-space-16);
+  border-left: 2px solid var(--n-g3);
+  color: var(--n-md-other);
+}
+
+/* —— 行内格式（样式恒挂；标记隐藏由装饰层零宽替换供给） —— */
+.cm-editor .cm-lp-strong {
+  font-weight: var(--n-fw-bold);
+}
+.cm-editor .cm-lp-em {
+  font-style: italic;
+}
+.cm-editor .cm-lp-strike {
+  text-decoration: line-through;
+}
+/* 行内代码（沿 markdown.css 口径：mono 0.9em / 通用/四级底 / 圆角 4 / padding 1px 5px） */
+.cm-editor .cm-lp-inline-code {
+  font-family: var(--n-font-mono);
+  font-size: 0.9em;
+  background: var(--n-g4);
+  border-radius: var(--n-radius-4);
+  padding: 1px 5px;
+}
+.cm-editor .cm-lp-link {
+  color: var(--n-brand);
+}
+
+/* —— 任务框（kit-check-box 通用类第三处用：Checkbox.vue / markdown-it 渲染 / CM6 widget）：
+   行内直立对齐 + 右距 6（组件 gap 档，替换范围已吃掉标记后空格）；
+   display 必须 inline-flex 压过通用类 flex——块级 flex 会把框挤成独立行（编辑器行内语境） —— */
+.cm-editor .cm-lp-task {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-right: var(--n-space-6);
+  cursor: pointer;
+}
+
+/* —— 代码块卡片（稿：通用/二级底 + 通用/三级 1px 描边 + 圆角 8 + padding 16；
+   行装饰拼卡：横 padding 与左右描边逐行供给，上下 padding / 圆角由首末行供给；
+   内文 14 Fira Mono 其他档） —— */
+.cm-editor .cm-line.cm-lp-code-line {
+  padding: 0 var(--n-space-16);
+  background: var(--n-g2);
+  border-left: 1px solid var(--n-g3);
+  border-right: 1px solid var(--n-g3);
+}
+.cm-editor .cm-line.cm-lp-code-first {
+  padding-top: var(--n-space-16);
+  border-top: 1px solid var(--n-g3);
+  border-top-left-radius: var(--n-radius-8);
+  border-top-right-radius: var(--n-radius-8);
+}
+.cm-editor .cm-line.cm-lp-code-last {
+  padding-bottom: var(--n-space-16);
+  border-bottom: 1px solid var(--n-g3);
+  border-bottom-left-radius: var(--n-radius-8);
+  border-bottom-right-radius: var(--n-radius-8);
+}
+.cm-editor .cm-lp-code-text {
+  font-family: var(--n-font-mono);
+  font-size: var(--n-fs-md-code);
+  color: var(--n-md-other);
+}
+
+/* —— 分割线（稿 Line 7 同档：2px 通用/三级满宽；widget 置换行内容，垂直居中于行高） —— */
+.cm-editor .cm-lp-hr {
+  display: block;
+  border-top: 2px solid var(--n-g3);
+  margin-top: calc((var(--n-lh-md-body) - 2px) / 2);
+}
+
+/* —— 图片 widget（markdown.css 同款口径去 .md-body 前缀共享，见该文件） —— */

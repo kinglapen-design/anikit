@@ -14,6 +14,8 @@ import AppIcon from "../../components/AppIcon.vue";
       稿 = 布局/主窗口/中间面板-内容容器-文本编辑；样式 = styles/markdown.css 全局类（PreviewText md 渲染态 /
       PreviewDocx 共用）。版心 = 容器 padding 12 + 内容 72（左右各 84）、块间 gap 12；H1 带 2px 通用/三级分割线；
       任务列表 = .kit-check-box 复选框通用类（hover 描边升通用/六级、对勾 250ms 过冲弹出——本区可真实 hover 验收）。
+      2026-10-10 起编辑态 = CM6 Live Preview（lib/cmMd.ts + styles/cm-md.css，同 token 双写）；编辑态验收走
+      tools/cdp-md-editor-probe.py（场景 D/P），本区保持渲染态静态验收。
     </p>
     <div class="md-stage">
       <div class="md-body">

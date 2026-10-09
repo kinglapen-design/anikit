@@ -8,9 +8,7 @@
 // 非 anikit 引用 / 无缩略图 = 占位文本（旧口径）。链接可点（同轮：anikit:// 内部跳转，http(s) 默认浏览器——
 // validateLink 白名单放行 anikit 协议，markdown-it 默认只认 http/ftp/mailto 会掐死自定义协议 href）。
 import MarkdownIt, { type MarkdownIt as MdIt, type StateCore, type Token } from "markdown-it";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { useContentStore } from "../stores/content";
-import { parseAnikitRef } from "./anikitLink";
+import { parseAnikitRef, anikitThumbUrl } from "./anikitLink";
 import { getIcon } from "./icons";
 
 const CHECK_SVG = getIcon("check-tiny").replace("<svg", '<svg class="kit-check-mark"');
@@ -62,12 +60,9 @@ function kitTaskList(state: StateCore): boolean {
   return false;
 }
 
-/** anikit 图片 URL（2026-10-08 S3）：缩略图 convertFileSrc + ?v=modifiedAt 版本戳（AssetCard 同口径）；
- *  资产不在库 / 无缩略图 = null 落占位文本（库侧前端不持 originPath，不回退源文件） */
+/** anikit 图片 URL = anikitThumbUrl 共享实现（lib/anikitLink；CM6 Live Preview 图片 widget 同源） */
 function anikitImageUrl(assetId: string): string | null {
-  const p = useContentStore().placements.find((x) => x.assetId === assetId);
-  if (!p?.thumbPath) return null;
-  return `${convertFileSrc(p.thumbPath)}?v=${encodeURIComponent(p.modifiedAt ?? "")}`;
+  return anikitThumbUrl(assetId);
 }
 
 function escapeHtml(s: string): string {

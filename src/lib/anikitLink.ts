@@ -4,6 +4,7 @@
 
 import { nextTick, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useContentStore } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
@@ -24,6 +25,14 @@ export function parseAnikitRef(text: string): AnikitRef | null {
   const external = /^https?:\/\/(?:127\.0\.0\.1|localhost):\d+\/(?:open\/)?(item|folder)\/([^\s/?#]+)$/.exec(t);
   if (external) return { kind: external[1] as AnikitRef["kind"], id: external[2] };
   return null;
+}
+
+/** anikit 图片缩略图 URL（2026-10-08 S3；2026-10-10 自 lib/markdown 提为共享——md 渲染态与 CM6 Live Preview 图片 widget 共用）：
+ *  缩略图 convertFileSrc + ?v=modifiedAt 版本戳（AssetCard 同口径）；资产不在库 / 无缩略图 = null 落占位文本 */
+export function anikitThumbUrl(assetId: string): string | null {
+  const p = useContentStore().placements.find((x) => x.assetId === assetId);
+  if (!p?.thumbPath) return null;
+  return `${convertFileSrc(p.thumbPath)}?v=${encodeURIComponent(p.modifiedAt ?? "")}`;
 }
 
 /** 跳转到 anikit 引用目标（media-open 事件 / links 输入框点击 / 内部 MD 渲染态点击共用）：

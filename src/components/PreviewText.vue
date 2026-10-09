@@ -1,22 +1,22 @@
 <script setup lang="ts">
 // 文本预览（5.6 + 文本编辑稿轮）：txt = APP 内编辑（防抖 1s 自动保存，2026-08-23 用户定；编辑不进 undo）；
-// md = MarkDown 编辑器（本稿轮落地 + 二轮走查改版）——预览态 = markdown-it 渲染（排版 = styles/markdown.css
-// 全局类；任务列表 = 复选框通用类可点 toggle、代码块右上角复制钮；**纯阅读不主动进编辑**——点击文字 =
-// 选中复制，进编辑唯一入口 = 悬浮栏铅笔钮 / Ctrl+E，2026-09-25 用户「只想复制文字」定）。
-// 编辑态 = 全文源码编辑（防抖自动保存同 txt；悬浮栏换全格式工具栏，眼睛钮 / Esc / Ctrl+Enter / Ctrl+E 回预览）；
-// 分屏 = 工具栏分屏钮开：左源码右实时渲染（同 draft 驱动），中间分割条左右拖（splitRatio 会话级）。
-// 编辑撤销（2026-09-25 走查补）：textarea 原生撤销遇程序化修改（工具栏动作 / toggle）即断栈——
-// 自实现快照历史（lib/mdHistory，组件会话级），编辑态 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y；
-// 与库撤销无关（「编辑不进 undo」口径不变，全局 Ctrl+Z 本对输入框让位）。
-// md 图片引用 = anikit 双形态渲染真图、点击内部跳转（2026-10-08 S3 勾销两个 09 待办；lib/markdown.ts 管道）；
-// md 链接可点（同轮）：anikit:// 内部跳转，http(s) 默认浏览器（onMdClick 代理）。
+// md = MarkDown 编辑器（本稿轮落地 + 二轮走查改版 + 2026-10-10 CM6 换代）——预览态 = markdown-it 渲染
+//（排版 = styles/markdown.css 全局类；任务列表 = 复选框通用类可点 toggle、代码块右上角复制钮；**纯阅读不主动进编辑**——
+// 点击文字 = 选中复制，进编辑唯一入口 = 悬浮栏铅笔钮 / Ctrl+E，2026-09-25 用户「只想复制文字」定）。
+// 编辑态 = CodeMirror 6 Live Preview（所见所得，PRD 04-04 条 6 新口径推翻旧「不引入所见即所得」）：
+// 光标外行内联渲染 / 光标行回落源码（lib/cmMd.ts 装配 + styles/cm-md.css 排版，数值同文本编辑稿 token）；
+// 撤销 = CM6 原生事务栈（自实现 mdHistory 快照栈退役，「编辑不进 undo」口径不变）；
+// 分屏 = 工具栏分屏钮开：左 CM6 编辑右 markdown-it 实时渲染（同 draft 驱动），中间分割条左右拖（splitRatio 会话级）。
+// md 图片引用 = anikit 双形态渲染真图、点击内部跳转（2026-10-08 S3；渲染态 lib/markdown.ts 管道，
+// 编辑态 cmMd 图片 widget，缩略图 URL 同源 lib/anikitLink.anikitThumbUrl）；
+// md 链接可点（渲染态）：anikit:// 内部跳转，http(s) 默认浏览器（onMdClick 代理）。
 // 保存竞态纪律：保存请求绑定加载时 assetId（loadedId），切素材先 flush 在途编辑再加载新内容——
 // 旧内容不会错存到新资产；响应到达时已切走则只更新 placements 不动编辑区状态。
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { createMd } from "../lib/markdown";
 import { applyMdAction, toggleTaskLine } from "../lib/mdEdit";
-import { createMdHistory, type HistEntry } from "../lib/mdHistory";
+import { createMdEditor, type MdEditorHandle } from "../lib/cmMd";
 import { readTextAsset, writeTextAsset } from "../lib/textOps";
 import { jumpToAnikitRef, parseAnikitRef } from "../lib/anikitLink";
 import { invoke } from "@tauri-apps/api/core";
@@ -38,8 +38,10 @@ const editing = ref(false); // md 编辑态（false = 渲染预览态）
 const split = ref(false); // 分屏（左源码右实时渲染，会话级；切素材重置）
 const splitRatio = ref(0.5); // 分屏左栏宽度占比（分割条拖动，clamp 0.25-0.75）
 const mdScrollRef = ref<HTMLElement>();
-const editorRef = ref<HTMLTextAreaElement>();
+const editorRef = ref<HTMLTextAreaElement>(); // txt 编辑区（md 已换 CM6，见 cmHostRef）
 const mdSplitBodyRef = ref<HTMLElement>(); // 分屏右栏渲染体（ScrollThumb 第二轨）
+const cmHostRef = ref<HTMLElement>(); // md CM6 挂载点
+const cmScrollEl = ref<HTMLElement>(); // CM6 滚动容器（ScrollThumb / 滚动保活取元用）
 
 const md = createMd();
 const rendered = computed(() => (isMd.value && draft.value ? md.render(draft.value) : ""));
@@ -78,15 +80,15 @@ function restoreKeeps(): void {
   }
 }
 keepEls.set("md", () => mdScrollRef.value);
-keepEls.set("editor", () => editorRef.value);
+keepEls.set("editor", () => (isMd.value ? cmScrollEl.value : editorRef.value));
 keepEls.set("split", () => mdSplitBodyRef.value);
 
-// —— 编辑撤销栈（组件会话级；prevSnap = 最近一次已知的 draft+选区快照） ——
-const history = createMdHistory();
-let prevSnap: HistEntry = { text: "", start: 0, end: 0 };
-
-function snapOf(ta: HTMLTextAreaElement): HistEntry {
-  return { text: ta.value, start: ta.selectionStart, end: ta.selectionEnd };
+// —— md CM6 编辑器实例（编辑态存活，出编辑态 / 切素材销毁；撤销 = 内核原生事务栈） ——
+let mdEditor: MdEditorHandle | null = null;
+function destroyMdEditor(): void {
+  mdEditor?.destroy();
+  mdEditor = null;
+  cmScrollEl.value = undefined;
 }
 
 async function load(): Promise<void> {
@@ -99,11 +101,10 @@ async function load(): Promise<void> {
   draft.value = "";
   loadError.value = null;
   saveState.value = "";
+  destroyMdEditor();
   editing.value = false;
   split.value = false;
   preview.setMdEditing(false);
-  history.reset();
-  prevSnap = { text: "", start: 0, end: 0 };
   try {
     const r = await readTextAsset(assetId);
     if (loadedId !== assetId) return;
@@ -151,6 +152,7 @@ watch(() => preview.pendingMdEdit, consumePendingMdEdit);
 
 // —— 编辑：防抖 1s 自动保存（2026-08-23 用户定）——
 watch(draft, (v) => {
+  mdEditor?.setDoc(v); // 外部 draft 变更回灌 CM6（分屏右栏复选框 toggle 等；内核内变更 setDoc 自守恒等）
   if (v === source.value) return;
   window.clearTimeout(timer);
   saveState.value = "saving";
@@ -188,99 +190,55 @@ async function flushSave(): Promise<void> {
 }
 onBeforeUnmount(() => {
   preview.setMdEditing(false);
+  destroyMdEditor();
   void flushSave();
 });
 
-// —— md 编辑态进出（预览态点击正文进入；Esc / Ctrl+Enter 退出）——
+// —— md 编辑态进出（进编辑唯一入口 = 铅笔钮 / Ctrl+E / 打开编辑器信号；Esc / Ctrl+Enter / Ctrl+E 退出——
+//    键位由 cmMd Prec.high 键图回调 onExitEdit，组件不再挂 DOM keydown）——
 async function enterEdit(): Promise<void> {
   if (!isMd.value || editing.value) return;
   editing.value = true;
   preview.setMdEditing(true);
   await nextTick();
-  const ta = editorRef.value;
-  if (ta) {
-    ta.focus();
-    ta.setSelectionRange(ta.value.length, ta.value.length); // 光标落末尾（接着写）
-    prevSnap = snapOf(ta); // 撤销基线 = 进入编辑态时刻
-  }
+  const host = cmHostRef.value;
+  if (!host) return;
+  destroyMdEditor(); // 防御：编辑态重进 / 重挂不叠实例
+  mdEditor = createMdEditor({
+    parent: host,
+    doc: draft.value,
+    onDocChanged: (text) => {
+      draft.value = text; // → 防抖保存管线（watch draft）
+    },
+    onCursorActivity: () => scheduleSplitScroll(),
+    onScroll: () => onEditScroll(),
+    onExitEdit: () => void exitEdit(),
+  });
+  cmScrollEl.value = mdEditor.view.scrollDOM;
+  mdEditor.focusEnd(); // 光标落末尾（接着写）
 }
 
 async function exitEdit(): Promise<void> {
   if (!editing.value) return;
   await flushSave();
+  destroyMdEditor();
   editing.value = false;
   preview.setMdEditing(false);
 }
 
-function onEditorKeydown(e: KeyboardEvent): void {
-  if (e.key === "Escape" || (e.key === "Enter" && (e.ctrlKey || e.metaKey))) {
-    e.stopPropagation();
-    e.preventDefault();
-    void exitEdit();
-    return;
-  }
-  // Ctrl+E = 编辑↔预览互切（编辑态内 = 回预览；预览态进编辑 = useGlobalKeys 追加分支；
-  // 输入框内全局快捷键让位，不冲突「发送至 Animate」fla 键）
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
-    e.preventDefault();
-    void exitEdit();
-    return;
-  }
-  // 撤销 / 重做：preventDefault 禁 textarea 原生栈（程序化修改会断它，统一走自实现栈）；
-  // 不 stopPropagation——全局 Ctrl+Z 本对输入框让位（useGlobalKeys isEditableTarget）
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-    e.preventDefault();
-    if (e.shiftKey) doRedo();
-    else doUndo();
-    return;
-  }
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
-    e.preventDefault();
-    doRedo();
-  }
-}
-
-function doUndo(): void {
-  const ta = editorRef.value;
-  const entry = history.undo(ta ? snapOf(ta) : prevSnap);
-  if (!entry) return;
-  applySnap(entry);
-}
-
-function doRedo(): void {
-  const ta = editorRef.value;
-  const entry = history.redo(ta ? snapOf(ta) : prevSnap);
-  if (!entry) return;
-  applySnap(entry);
-}
-
-function applySnap(entry: HistEntry): void {
-  draft.value = entry.text;
-  prevSnap = entry;
-  void nextTick(() => {
-    const ta = editorRef.value;
-    if (ta) {
-      ta.focus();
-      ta.setSelectionRange(entry.start, entry.end);
-    }
-  });
-}
-
-// 键入变更记录（@input 在 v-model 同步后触发：prevSnap 即变更前态；连续键入 800ms 合并一步）
-function onDraftInput(): void {
-  const ta = editorRef.value;
-  if (!ta || !isMd.value) return;
-  history.record(prevSnap, true);
-  prevSnap = snapOf(ta);
-  scheduleSplitScroll();
+// 退出键上浮截停（旧 textarea stopPropagation 口径平移）：CM6 键图在 contentDOM 先处理退出，
+// 冒泡到宿主时拦停——Esc / Ctrl+Enter 不再上浮到面板级 / 全局监听（否则 Esc 会连带关预览，探针 F 实锤）
+function onCmKeydownGuard(e: KeyboardEvent): void {
+  if (e.key === "Escape" || (e.key === "Enter" && (e.ctrlKey || e.metaKey))) e.stopPropagation();
 }
 
 // —— 分屏滚动（2026-09-25 用户定「两个滚动条合并成一个直接联动」）——
 // 单滚轮（右栏渲染体主体，贴右缘）；双向按比例联动（±1 阈值防往返震荡）；
 // 输入 / 光标移动 = typewriter 跟进：光标行对应渲染块滚到视口中间（用户「书写常在最下面，
-// 预览最后一行固定中间」），精调期间 linkLock 锁反向回写不拽左栏。
+// 预览最后一行固定中间」），16ms 定时器合一（rAF 弃用——headless 按需出帧模式下帧生产停摆时回调永不达，
+// 2026-10-10 踩坑），精调期间 linkLock 锁反向回写不拽左栏。
 let linkLock = 0;
-let splitScrollRaf = 0;
+let splitScrollRaf = 0; // setTimeout 句柄（历史名留 raf；16ms 合一节流）
 
 function linkScroll(src: HTMLElement, dst: HTMLElement): void {
   if (linkLock > 0) return;
@@ -292,27 +250,30 @@ function linkScroll(src: HTMLElement, dst: HTMLElement): void {
 }
 
 function onEditScroll(): void {
-  onKeepScroll("editor", editorRef.value);
-  const ta = editorRef.value;
+  onKeepScroll("editor", cmScrollEl.value);
+  const src = cmScrollEl.value;
   const body = mdSplitBodyRef.value;
-  if (ta && body) linkScroll(ta, body);
+  if (src && body) linkScroll(src, body);
 }
 
 function onSideScroll(): void {
   onKeepScroll("split", mdSplitBodyRef.value);
-  const ta = editorRef.value;
+  const src = cmScrollEl.value;
   const body = mdSplitBodyRef.value;
-  if (ta && body) linkScroll(body, ta);
+  if (src && body) linkScroll(body, src);
 }
 
 function scheduleSplitScroll(): void {
-  if (!split.value || splitScrollRaf) return;
-  splitScrollRaf = requestAnimationFrame(() => {
+  if (!split.value) return;
+  // 定时器合一（2026-10-10 踩坑：headless 按需出帧模式 rAF 会整段停摆成僵尸回调——帧生产依赖视觉损伤，
+  // 空损伤窗口期永不回调、守卫 id 永锁；定时器无此依赖，16ms ≈ 一帧，连续键入合一后者赢）
+  if (splitScrollRaf) window.clearTimeout(splitScrollRaf);
+  splitScrollRaf = window.setTimeout(() => {
     splitScrollRaf = 0;
-    const ta = editorRef.value;
+    const view = mdEditor?.view;
     const body = mdSplitBodyRef.value;
-    if (!ta || !body) return;
-    const line = ta.value.slice(0, ta.selectionStart).split("\n").length - 1;
+    if (!view || !body) return;
+    const line = view.state.doc.lineAt(view.state.selection.main.head).number - 1; // 0 起，同 data-line-start 口径
     let target: HTMLElement | null = null;
     for (const el of body.querySelectorAll<HTMLElement>("[data-line-start]")) {
       if (Number(el.dataset.lineStart) <= line) target = el;
@@ -323,13 +284,11 @@ function scheduleSplitScroll(): void {
     const bRect = body.getBoundingClientRect();
     const tRect = target.getBoundingClientRect();
     body.scrollTop += tRect.top - bRect.top - (bRect.height - tRect.height) / 2;
-    // scroll 事件异步派发窗口留两帧再解锁（反向回写不拽左栏）
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        linkLock--;
-      });
-    });
-  });
+    // scroll 事件异步派发窗口留 60ms 再解锁（反向回写不拽左栏；原双 rAF 解锁同因饿死弃用）
+    window.setTimeout(() => {
+      linkLock--;
+    }, 60);
+  }, 16);
 }
 
 // —— 渲染态点击代理：复制钮 / anikit 图与链接 / 任务复选框 分流；其余 = 无操作（纯阅读可复制，进编辑走铅笔钮 / Ctrl+E）——
@@ -367,29 +326,14 @@ function onMdClick(e: MouseEvent): void {
   if (box) {
     const line = Number(box.dataset.taskLine);
     if (Number.isInteger(line) && line >= 0) {
-      history.record({ text: draft.value, start: 0, end: 0 }, false); // toggle = 独立撤销步（编辑态可撤）
       box.classList.toggle("on"); // 先原位播对勾动画；draft 触发重渲染后视觉态一致
-      draft.value = toggleTaskLine(draft.value, line);
+      draft.value = toggleTaskLine(draft.value, line); // 分屏态经 watch(draft) 回灌 CM6（mdEditor.setDoc）
     }
   }
 }
 
-// —— 编辑态粘贴补全（2026-10-08 S3）：剪贴板整串为 anikit 引用（item）→ 插入 ![名](anikit://item/{id})
-//  图片语法；非 anikit 链接 / folder 引用走默认粘贴。独立撤销步同工具栏动作口径 ——
-function onEditorPaste(e: ClipboardEvent): void {
-  const ta = editorRef.value;
-  if (!ta || !isMd.value) return;
-  const text = e.clipboardData?.getData("text/plain") ?? "";
-  const ref = parseAnikitRef(text);
-  if (!ref || ref.kind !== "item") return;
-  e.preventDefault();
-  const name = content.placements.find((x) => x.assetId === ref.id)?.name ?? "图片";
-  history.record(snapOf(ta), false);
-  ta.setRangeText(`![${name}](anikit://item/${ref.id})`, ta.selectionStart, ta.selectionEnd, "end");
-  draft.value = ta.value;
-  prevSnap = snapOf(ta);
-  scheduleSplitScroll();
-}
+// —— 编辑态粘贴补全（2026-10-08 S3）已随 CM6 内核平移进 lib/cmMd.ts domEventHandlers.paste（同口径：
+//  剪贴板整串为 anikit item 引用 → 插入 ![名](anikit://item/{id}) 图片语法；独立撤销步 userEvent input.paste）——
 
 // —— 分屏分割条拖动（§9 ③ 窗口监听口径）：splitRatio clamp 0.25-0.75 ——
 function onSplitDrag(e: PointerEvent): void {
@@ -434,16 +378,10 @@ watch(
       return;
     }
     if (!editing.value) return;
-    const ta = editorRef.value;
-    if (!ta) return;
-    history.record(snapOf(ta), false); // 工具栏动作 = 独立撤销步
-    const r = applyMdAction(draft.value, ta.selectionStart, ta.selectionEnd, name);
-    draft.value = r.text;
-    prevSnap = { text: r.text, start: r.start, end: r.end };
-    void nextTick(() => {
-      ta.focus();
-      ta.setSelectionRange(r.start, r.end);
-    });
+    if (!mdEditor) return;
+    const sel = mdEditor.view.state.selection.main;
+    const r = applyMdAction(draft.value, sel.from, sel.to, name);
+    mdEditor.applySource(r.text, r.start, r.end, preview.mdActionSeq); // 独立撤销步（userEvent 带 seq）
   },
 );
 </script>
@@ -462,19 +400,9 @@ watch(
       />
       <div v-if="editing" class="md-edit-wrap" :class="{ split }">
         <div class="pane" :style="split ? { flexGrow: splitRatio } : undefined">
-          <textarea
-            ref="editorRef"
-            v-model="draft"
-            class="editor md-editor kit-scroll"
-            spellcheck="false"
-            @input="onDraftInput"
-            @paste="onEditorPaste"
-            @keydown="onEditorKeydown"
-            @keyup="scheduleSplitScroll"
-            @click="scheduleSplitScroll"
-            @scroll.passive="onEditScroll"
-          />
-          <ScrollThumb v-if="!split" :body="editorRef" />
+          <!-- md 编辑 = CM6 Live Preview 内核（lib/cmMd.ts 装配；排版 styles/cm-md.css 全局类） -->
+          <div ref="cmHostRef" class="cm-host" @keydown="onCmKeydownGuard" />
+          <ScrollThumb v-if="!split" :body="cmScrollEl" />
         </div>
         <template v-if="split">
           <div class="md-split-bar" @pointerdown="onSplitDrag" />
@@ -527,8 +455,8 @@ watch(
 .text-preview > .md-body {
   padding-bottom: 66px;
 }
-/* —— 编辑态（txt / md 源码共用基础档；md 版心随渲染态 84、底 66 让位悬浮栏工具栏——
-   §18 遮挡补偿口径：距底 12 + 栏高 42 + 呼吸 12） —— */
+/* —— 编辑态（txt 基础档；md = CM6 内核，排版 styles/cm-md.css 全局类——版心 84 / 底 66 让位悬浮栏
+   工具栏同 §18 遮挡补偿口径；分屏两侧版心收窄 24 见 .md-edit-wrap.split 下覆写） —— */
 .editor {
   flex: 1;
   min-height: 0;
@@ -542,9 +470,19 @@ watch(
   font-size: var(--n-fs-body);
   line-height: 1.7;
 }
-.md-editor {
-  padding: var(--n-space-12) calc(var(--n-space-12) + var(--n-space-72)) 66px;
-  font-family: var(--n-font-mono);
+/* CM6 宿主与内核布局（外观数值全在 cm-md.css；此处只管 flex 填充与滚动容器） */
+.cm-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.cm-host :deep(.cm-editor) {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.cm-host :deep(.cm-scroller) {
+  overflow: auto;
 }
 /* —— 编辑态容器（单栏 / 分屏双列）；pane = 滚动容器包裹层（ScrollThumb 定位语境） —— */
 .md-edit-wrap {
@@ -558,15 +496,15 @@ watch(
   min-width: 0;
   display: flex;
 }
-.md-edit-wrap .pane .editor,
+.md-edit-wrap .pane .cm-host,
 .md-edit-wrap .pane .md-body {
   flex: 1;
   min-width: 0;
 }
-/* 分屏 = 左源码右实时渲染（用户 2026-09-25 定）：两侧版心收窄 24（全宽 84 稿值为单栏档，
+/* 分屏 = 左 CM6 编辑右实时渲染（用户 2026-09-25 定）：两侧版心收窄 24（全宽 84 稿值为单栏档，
    半宽沿用太奢）；分割条 = 1px 通用/三级线 + 左右 2px 命中扩边，hover / 拖拽 = 品牌色
    （全 app 拖拽线同色系口径：插入提示 / 框选 §22） */
-.md-edit-wrap.split .md-editor {
+.md-edit-wrap.split .cm-host :deep(.cm-content) {
   padding: var(--n-space-12) var(--n-space-24) 66px;
 }
 .md-split-bar {
