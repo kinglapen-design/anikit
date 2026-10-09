@@ -12,6 +12,8 @@
 // 2026-10-03 工作空间搜索轮：filters 传空 = 无筛选能力视口（ws 磁盘实况无附加数据可筛）——
 // 筛选钮与展开链整颗不渲染（原恒渲染，走查被点破）；enter emit = 回退爬盘显式触发键（ws 无
 // Everything 时不跟即时搜索混，Enter 才开扫，定案见 PRD 02 搜索节）。
+// 2026-10-09 筛选业务二轮：filter-toggle 携带点击事件（FloatBarHost 弹窗对齐触发钮定位用）；
+// summaries = 生效条件摘要（chip v-tip，空串不出）；「标签」文案改「属性」（PRD 03 §2 定案）。
 import { onMounted, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import "./bars.css";
@@ -19,14 +21,16 @@ import "./bars.css";
 const props = withDefaults(
   defineProps<{
     filters?: readonly string[]; // 筛选按钮组（稿 10 项）
-    active?: readonly string[]; // 选中筛选项（父级持有，filter-toggle 翻转）
+    active?: readonly string[]; // 生效或弹窗打开中筛选项（父级持有，filter-toggle 开合弹窗）
+    summaries?: Record<string, string>; // 生效条件摘要（chip v-tip；空 = 无摘要不出 tip）
     initialExpanded?: boolean; // 预览页静态陈列
     forceState?: "" | "focus"; // 预览页静态验收：聚焦宽 450
     forceHoverFilter?: string; // 预览页静态验收：某筛选钮 hover
   }>(),
   {
-    filters: () => ["颜色", "时长", "标签", "扩展名", "文件夹", "比例", "链接", "大小", "添加日期", "修改日期"],
+    filters: () => ["颜色", "时长", "属性", "扩展名", "文件夹", "比例", "链接", "大小", "添加日期", "修改日期"],
     active: () => [],
+    summaries: () => ({}),
     initialExpanded: false,
     forceState: "",
     forceHoverFilter: undefined,
@@ -34,10 +38,10 @@ const props = withDefaults(
 );
 const emit = defineEmits<{
   "search-click": []; // 预留：未来向量 / AI 搜索选项
-  "filter-toggle": [key: string];
+  "filter-toggle": [key: string, ev: MouseEvent]; // 业务壳开合对应筛选弹窗（ev = 触发钮定位）
   "expanded-change": [v: boolean]; // FloatBar 宽度重测挂钩
   "focused-change": [v: boolean];
-  escape: []; // Esc（业务壳口径：清空并失焦，FloatBarHost）
+  escape: []; // Esc（业务壳口径：弹窗开着先关弹窗，否则清空并失焦，FloatBarHost）
   enter: []; // Enter（2026-10-03 ws 回退爬盘显式触发键；其余语境 = 立即重搜一次）
 }>();
 const query = defineModel<string>("query", { default: "" });
@@ -112,8 +116,9 @@ function onFiltersWheel(e: WheelEvent): void {
           :key="f"
           class="fbs-chip"
           :class="[{ on: active.includes(f), 'force-hover': forceHoverFilter === f }]"
+          v-tip="summaries[f] || undefined"
           @mousedown.prevent
-          @click="emit('filter-toggle', f)"
+          @click="emit('filter-toggle', f, $event)"
         >
           {{ f }}
         </button>

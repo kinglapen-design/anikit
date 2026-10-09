@@ -14,6 +14,8 @@ import WaveProgress from "../../components/bars/WaveProgress.vue";
 import RatePop from "../../components/bars/RatePop.vue";
 import VolumePop from "../../components/bars/VolumePop.vue";
 import NotesPop from "../../components/bars/NotesPop.vue";
+import FilterChipsPop from "../../components/bars/FilterChipsPop.vue";
+import FilterTagsPop from "../../components/bars/FilterTagsPop.vue";
 import ToastStack from "../../components/ToastStack.vue";
 import PickerBanner from "../../components/PickerBanner.vue";
 import LinkListPopover from "../../components/LinkListPopover.vue";
@@ -51,6 +53,29 @@ const COMBO_W = 777;
 // 弹层交互实例
 const liveRate = ref("1x");
 const liveVolume = ref(0.2);
+
+// 筛选弹窗（2026-10-09 筛选业务二轮）：chip 类三维度陈列——扩展名 / 链接 / 属性（「标签」落地名
+// = 属性，PRD 03 §2）；真实交互实例选中集本地持有
+const demoExtItems = [
+  { key: "seq", label: "序列帧" },
+  { key: "md", label: "md" },
+  { key: "fla", label: "fla" },
+  { key: "psd", label: "psd" },
+  { key: "aep", label: "aep" },
+  { key: "ai", label: "ai" },
+];
+const demoLinkItems = [
+  { key: "origin", label: "原始" },
+  { key: "linked", label: "链接" },
+  { key: "thumb", label: "缩略图" },
+  { key: "none", label: "无链接" },
+];
+const demoTagItems = ["走路", "跑步", "拔剑", "Q版", "主角", "场景", "沙雕", "打斗", "表情", "转头"];
+const liveExtSel = ref<string[]>(["aep"]);
+const liveTagSel = ref<string[]>(["拔剑", "Q版"]);
+function toggleIn(list: string[], key: string): string[] {
+  return list.includes(key) ? list.filter((k) => k !== key) : [...list, key];
+}
 
 // 条形滑块三档 tone 交互实例（宽度 = 各自稿值语境：进度 327 / 音量 100 / 尺寸 100）
 const sliderLight = ref(0.35);
@@ -167,14 +192,47 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
       </div>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
-          <FloatBar mode="search" initial-expanded :active="['标签']" force-hover-filter="时长" />
-          <span class="pv-cap">展开成筛选 · 选中「标签」（半透明-1 + 一级）/ hover「时长」（底升半透明-2）</span>
+          <FloatBar mode="search" initial-expanded :active="['属性']" :summaries="{ 属性: '拔剑、Q版' }" force-hover-filter="时长" />
+          <span class="pv-cap">展开成筛选 · 选中「属性」（半透明-1 + 一级 + v-tip 摘要）/ hover「时长」（底升半透明-2）</span>
         </div>
       </div>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
           <FloatBar mode="search" :filters="[]" />
           <span class="pv-cap">工作空间态（2026-10-03）：filters 传空 = 无筛选能力，筛选钮整颗不渲染</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">筛选弹窗（2026-10-09 筛选业务二轮；chips = TagButton solid sm，选中 = 品牌底 + 立体感-主要按钮）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <FilterChipsPop :items="demoExtItems" :selected="['aep']" force-hover="psd" />
+          <span class="pv-cap">扩展名 · 选中 aep / hover psd（force 静态；首项「序列帧」虚拟类别）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <FilterChipsPop :items="demoLinkItems" :selected="['thumb']" />
+          <span class="pv-cap">链接状态 · 四态 chips（选中「缩略图」）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <FilterChipsPop :items="demoExtItems" :selected="liveExtSel" @toggle="liveExtSel = toggleIn(liveExtSel, $event)" />
+          <span class="pv-cap">真实交互（多选即时生效；{{ liveExtSel.join("、") || "未选" }}）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <FilterTagsPop :items="demoTagItems" :selected="['拔剑']" force-hover="Q版" />
+          <span class="pv-cap">属性 · 350 宽两段式（搜索头行 + 分隔线 + chips 流式区滚轮；选中拔剑 / hover Q版）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <FilterTagsPop
+            :items="demoTagItems"
+            :selected="liveTagSel"
+            @toggle="liveTagSel = toggleIn(liveTagSel, $event)"
+            @clear="liveTagSel = []"
+          />
+          <span class="pv-cap">真实交互（搜索过滤 / 多选 / 清除 = 清空全部选中；{{ liveTagSel.join("、") || "未选" }}）</span>
         </div>
       </div>
     </div>

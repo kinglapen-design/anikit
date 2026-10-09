@@ -17,11 +17,14 @@ import WaveProgress from "./bars/WaveProgress.vue";
 import RatePop from "./bars/RatePop.vue";
 import VolumePop from "./bars/VolumePop.vue";
 import NotesPop from "./bars/NotesPop.vue";
+import FilterChipsPop from "./bars/FilterChipsPop.vue";
+import FilterTagsPop from "./bars/FilterTagsPop.vue";
 import { playBarSpecFor } from "../lib/barSpecs";
 import { formatDuration } from "../lib/formatDuration";
 import { frameOfTime, totalFrames } from "../lib/formatFrame";
 import { useUiStore } from "../stores/ui";
-import { useSearchStore } from "../stores/search";
+import { useSearchStore, type SearchFilters } from "../stores/search";
+import { useContentStore } from "../stores/content";
 import { previewMediaSession } from "../stores/previewMedia";
 import { previewNotesSession } from "../stores/previewNotes";
 import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
@@ -64,11 +67,65 @@ const barVisible = computed(() => mdActive.value || !(props.previewActive && !sp
 // ─── 搜索侧（panelId/viewKey 具备才接 store）──
 const hasSearch = computed(() => !!props.panelId && !!props.viewKey);
 const draft = ref(props.panelId ? search.draftFor(props.panelId) : "");
-const activeFilters = ref<string[]>([]); // 筛选按钮组点亮不接业务（本地切换；筛选弹窗另轮）
 // ws 视口 = 磁盘实况无附加数据可筛（2026-10-03 用户定「没有用」）：filters 传空 → 筛选钮整颗不渲染
 const wsView = computed(() => !!props.viewKey?.startsWith("ws:"));
 const searchFilters = computed(() => (wsView.value ? [] : undefined));
 const floatBarRef = ref<InstanceType<typeof FloatBar>>();
+
+// ─── 筛选弹窗（2026-10-09 筛选业务二轮）──
+// 点击制开合（再点同钮 / 点外 / Esc / 切视口 / 切出搜索态 = 关）；定位 = 触发钮上方居中钳制
+// （RatePop 族同径 placePop）。按钮 on 态 = 该维度有生效条件 或 弹窗打开中（2026-10-09 呈现形态
+// 定案）；生效条件摘要经 summaries → chip v-tip 显示。
+const content = useContentStore();
+const filterPop = ref(""); // 打开中的筛选维度（"" = 全关）
+const activeFilters = computed<string[]>(() => {
+  const dims = props.panelId ? search.activeFilterDims(props.panelId) : [];
+  return filterPop.value && !dims.includes(filterPop.value) ? [...dims, filterPop.value] : dims;
+});
+const filterSummaries = computed(() => (props.panelId ? search.filterSummaries(props.panelId) : {}));
+const filtersNow = computed<SearchFilters | null>(() => (props.panelId ? search.filtersFor(props.panelId) : null));
+
+// 弹窗数据源（content.placements 全量算出，零后端新增）：扩展名 = 库内实有扩展名集 +
+// 有序列帧资产时首项「序列帧」虚拟类别；属性 = 全库属性词集；链接状态 = 静态四态
+const extItems = computed(() => {
+  const exts = new Set<string>();
+  let hasSeq = false;
+  for (const p of content.placements) {
+    if (p.ext) exts.add(p.ext.toLowerCase());
+    if (p.frameCount != null) hasSeq = true;
+  }
+  const items = [...exts].sort().map((e) => ({ key: e, label: e }));
+  if (hasSeq) items.unshift({ key: "seq", label: "序列帧" });
+  return items;
+});
+const LINK_ITEMS = [
+  { key: "origin", label: "原始" },
+  { key: "linked", label: "链接" },
+  { key: "thumb", label: "缩略图" },
+  { key: "none", label: "无链接" },
+] as const;
+const tagItems = computed(() => {
+  const set = new Set<string>();
+  for (const p of content.placements) for (const t of p.tags) set.add(t);
+  return [...set].sort();
+});
+
+function patchFilter(patch: Partial<SearchFilters>): void {
+  if (!props.panelId || !props.viewKey) return;
+  search.patchFilters(props.panelId, props.viewKey, patch);
+}
+function toggleIn(list: readonly string[], key: string): string[] {
+  return list.includes(key) ? list.filter((k) => k !== key) : [...list, key];
+}
+function onExtToggle(key: string): void {
+  patchFilter({ exts: toggleIn(filtersNow.value?.exts ?? [], key) });
+}
+function onLinkToggle(key: string): void {
+  patchFilter({ linkStates: toggleIn(filtersNow.value?.linkStates ?? [], key) });
+}
+function onTagToggle(tag: string): void {
+  patchFilter({ tags: toggleIn(filtersNow.value?.tags ?? [], tag) });
+}
 
 watch(draft, (v) => {
   if (hasSearch.value) search.setDraft(props.panelId!, props.viewKey!, v);
@@ -91,13 +148,17 @@ watch(
     if (props.panelId && search.focusPanelId === props.panelId) floatBarRef.value?.focusSearch();
   },
 );
-function toggleFilter(key: string): void {
-  const i = activeFilters.value.indexOf(key);
-  if (i >= 0) activeFilters.value.splice(i, 1);
-  else activeFilters.value.push(key);
+function toggleFilter(key: string, ev?: MouseEvent): void {
+  const opening = filterPop.value !== key;
+  filterPop.value = opening ? key : "";
+  if (opening) void placePop(ev, "filter");
 }
-// Esc = 清空并失焦；「始终显示搜索框」关时顺带收回悬浮栏
+// Esc = 弹窗开着先关弹窗；否则清空并失焦，「始终显示搜索框」关时顺带收回悬浮栏
 function onEscape(): void {
+  if (filterPop.value) {
+    filterPop.value = "";
+    return;
+  }
   draft.value = "";
   floatBarRef.value?.blurSearch();
   emit("requestHide");
@@ -109,9 +170,29 @@ function onEnter(): void {
 onMounted(() => {
   // 热重载 / 布局恢复：残留内容命中可能已失效，补搜一次恢复结果态
   if (hasSearch.value) search.rerun(props.panelId!, props.viewKey!);
+  // 筛选弹窗点外 / Esc 关闭（捕获期：落在弹窗或筛选钮上的交给 click 处理）
+  document.addEventListener("pointerdown", onDocPointerDown, true);
+  document.addEventListener("keydown", onDocKeydown, true);
 });
 onBeforeUnmount(() => {
   if (props.panelId) search.removePanel(props.panelId);
+  document.removeEventListener("pointerdown", onDocPointerDown, true);
+  document.removeEventListener("keydown", onDocKeydown, true);
+});
+
+// 点外关闭：落点在弹窗（.fp-root）或筛选钮（.fbs-chip）外即收
+function onDocPointerDown(e: PointerEvent): void {
+  if (!filterPop.value) return;
+  const t = e.target as HTMLElement | null;
+  if (t?.closest(".fp-root") || t?.closest(".fbs-chip")) return;
+  filterPop.value = "";
+}
+function onDocKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape") filterPop.value = "";
+}
+// 切视口 / 切出搜索态（预览 / md 工具栏）：弹窗随语境收回
+watch([() => props.viewKey, mode], () => {
+  filterPop.value = "";
 });
 
 // ─── 播放侧：spec → FloatBarPlay props ───
@@ -185,6 +266,7 @@ const POP_SEL: Record<string, string> = {
   volume: ".vp-root",
   tc: ".fbh-tc-pop",
   note: ".np-root",
+  filter: ".fp-root",
 };
 async function placePop(ev?: Event, kind: string = "rate"): Promise<void> {
   const anchor = anchorRef.value;
@@ -318,6 +400,7 @@ function noteRemove(i: number): void {
       v-model:query="draft"
       :active="activeFilters"
       :filters="searchFilters"
+      :summaries="filterSummaries"
       @update:progress="progressModel = $event"
       @filter-toggle="toggleFilter"
       @escape="onEscape"
@@ -395,6 +478,38 @@ function noteRemove(i: number): void {
         @remove="noteRemove"
         @confirm="noteConfirm"
         @cancel="notes.open = false"
+      />
+    </Transition>
+    <!-- 筛选弹窗（点击制；chip 类三维度 = 扩展名 / 链接 / 属性，其余维度随对应轮接入） -->
+    <Transition name="fbh-pop">
+      <FilterChipsPop
+        v-if="filterPop === '扩展名'"
+        class="fbh-pop"
+        :style="popStyle"
+        :items="extItems"
+        :selected="filtersNow?.exts ?? []"
+        @toggle="onExtToggle"
+      />
+    </Transition>
+    <Transition name="fbh-pop">
+      <FilterChipsPop
+        v-if="filterPop === '链接'"
+        class="fbh-pop"
+        :style="popStyle"
+        :items="LINK_ITEMS"
+        :selected="filtersNow?.linkStates ?? []"
+        @toggle="onLinkToggle"
+      />
+    </Transition>
+    <Transition name="fbh-pop">
+      <FilterTagsPop
+        v-if="filterPop === '属性'"
+        class="fbh-pop"
+        :style="popStyle"
+        :items="tagItems"
+        :selected="filtersNow?.tags ?? []"
+        @toggle="onTagToggle"
+        @clear="patchFilter({ tags: [] })"
       />
     </Transition>
   </div>

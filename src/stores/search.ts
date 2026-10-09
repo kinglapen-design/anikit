@@ -3,8 +3,10 @@
 // 口径（2026-08-19 用户定）：结果替换素材区（清空恢复）/ 排序生效分组平铺 / 当前目录跟随递归开关 /
 // 快速访问 = 当前视图即范围（回收站里搜回收站）。
 // 输入形态（2026-08-31 用户定案，7.1 二十二轮悬浮栏接入）：多功能悬浮栏单行输入实时分词——
-// tag 化 chips（`~` / `//` / `/` 前缀 tag、空格成 chip、kbd 提示组）废除，筛选与搜索分离
-//（筛选 = 悬浮栏筛选按钮组 + 弹窗，随筛选轮点亮）；`~` 手敲全局保留（后端前缀协议不变）。
+// tag 化 chips（`~` / `//` / `/` 前缀 tag、空格成 chip、kbd 提示组）废除，筛选与搜索分离；
+// `~` 手敲全局保留（后端前缀协议不变）。
+// 筛选（2026-10-09 筛选业务二轮点亮）：悬浮栏筛选按钮组 + 弹窗，条件 per-panel 持有随
+// scope.filters 下发；口径 = 维度内 OR、跨维度 AND、×搜索 AND；纯筛选同进搜索态（PRD 03 §2）。
 //
 // 工作空间搜索（2026-10-03，PRD 02「搜索」双层架构）：
 // - ws 视口分流到 ws_search 命令（Everything 手写 IPC）；`~` = 全景搜索工作空间（scope 换算根），
@@ -29,6 +31,87 @@ interface SearchHits {
   placements: { assetId: string; folderId: string }[];
   archives: string[];
 }
+
+// ---------- 筛选（2026-10-09 筛选业务二轮，PRD 03_查找文件 02）----------
+// 条件 per-panel 持有（与后端 SearchFilters camelCase 对齐），随 search_assets scope.filters 下发；
+// 口径 = 维度内 OR、跨维度 AND、×搜索 AND（2026-10-09 用户定案）；纯筛选（无关键字）同样进入
+// 搜索态（结果替换素材区），isActive = 有关键字 || 有生效筛选。ws 视口筛选钮不渲染，filters 恒空。
+interface DurationRange {
+  unit: string;
+  min?: number;
+  max?: number;
+}
+interface ByteRange {
+  min?: number;
+  max?: number;
+}
+interface Ymd {
+  year?: number;
+  month?: number;
+  day?: number;
+}
+interface DateCond {
+  buckets: string[];
+  custom?: Ymd | null;
+}
+export interface SearchFilters {
+  colors: string[];
+  duration: DurationRange | null;
+  tags: string[];
+  exts: string[];
+  folderIds: string[];
+  ratios: string[];
+  linkStates: string[];
+  size: ByteRange | null;
+  imported: DateCond | null;
+  modified: DateCond | null;
+}
+
+function emptyFilters(): SearchFilters {
+  return {
+    colors: [],
+    duration: null,
+    tags: [],
+    exts: [],
+    folderIds: [],
+    ratios: [],
+    linkStates: [],
+    size: null,
+    imported: null,
+    modified: null,
+  };
+}
+
+/** 筛选维度（与 FloatBarSearch 默认 filters 数组同文案；「标签」落地名 = 属性，PRD 03 §2） */
+const FILTER_DIMS = ["颜色", "时长", "属性", "扩展名", "文件夹", "比例", "链接", "大小", "添加日期", "修改日期"] as const;
+
+function dateCondActive(c: DateCond | null): boolean {
+  return (
+    !!c &&
+    (c.buckets.length > 0 ||
+      (!!c.custom && (c.custom.year != null || c.custom.month != null || c.custom.day != null)))
+  );
+}
+
+/** 各维度生效判定（与后端 SearchFilters::has_active 同口径：范围双端空 / 日期空壳不算） */
+function dimActives(f: SearchFilters): Record<string, boolean> {
+  return {
+    "颜色": f.colors.length > 0,
+    "时长": !!f.duration && (f.duration.min != null || f.duration.max != null),
+    "属性": f.tags.length > 0,
+    "扩展名": f.exts.length > 0,
+    "文件夹": f.folderIds.length > 0,
+    "比例": f.ratios.length > 0,
+    "链接": f.linkStates.length > 0,
+    "大小": !!f.size && (f.size.min != null || f.size.max != null),
+    "添加日期": dateCondActive(f.imported),
+    "修改日期": dateCondActive(f.modified),
+  };
+}
+
+/** 链接状态 / 扩展名特殊值的条件摘要文案 */
+const LINK_STATE_LABELS: Record<string, string> = { origin: "原始", linked: "链接", thumb: "缩略图", none: "无链接" };
+const EXT_LABELS: Record<string, string> = { seq: "序列帧" };
 
 // 后端 commands/workspace.rs WsSearchResponse
 interface WsSearchResponse {
@@ -64,6 +147,7 @@ interface PanelSearch {
   hits: Set<string>; // `${assetId}|${folderId}`（与选择 / 拖拽键同口径）
   hitArchives: Set<string>; // 命中档案 folderId
   seq: number; // 竞态序号（防抖与异步返回只收最新）
+  filters: SearchFilters; // 筛选条件（2026-10-09 筛选业务二轮；ws 视口恒空）
   wsEntries: WsEntry[]; // ws 视口命中条目（2026-10-03；视图层数据源）
   crawl: CrawlState | null; // ws 回退爬盘任务（null = 未发起 / 已结束清理）
   globalNotified: boolean; // 本段 `~` 会话已弹过指路通知（去重）
@@ -93,7 +177,7 @@ export const useSearchStore = defineStore("search", () => {
   function ensure(panelId: string): PanelSearch {
     let s = panels.value.get(panelId);
     if (!s) {
-      s = { draft: "", hits: new Set(), hitArchives: new Set(), seq: 0, wsEntries: [], crawl: null, globalNotified: false };
+      s = { draft: "", hits: new Set(), hitArchives: new Set(), seq: 0, filters: emptyFilters(), wsEntries: [], crawl: null, globalNotified: false };
       panels.value.set(panelId, s);
     }
     return s;
@@ -110,10 +194,15 @@ export const useSearchStore = defineStore("search", () => {
     return d ? d.split(/\s+/).filter(Boolean) : [];
   }
 
-  /** 搜索态 = 剥前缀后有关键字（纯 `~` / `//` 不进入搜索态） */
+  /** 有生效筛选（与后端 has_active 同口径） */
+  function hasAnyFilter(s: PanelSearch): boolean {
+    return Object.values(dimActives(s.filters)).some(Boolean);
+  }
+
+  /** 搜索态 = 剥前缀后有关键字或有生效筛选（纯 `~` / `//` 且无条件不进入搜索态） */
   function isActive(panelId: string): boolean {
     const s = panels.value.get(panelId);
-    return !!s && keywordsOf(s).length > 0;
+    return !!s && (keywordsOf(s).length > 0 || hasAnyFilter(s));
   }
 
   function hitsFor(panelId: string): Set<string> {
@@ -122,6 +211,49 @@ export const useSearchStore = defineStore("search", () => {
 
   function hitArchivesFor(panelId: string): Set<string> {
     return panels.value.get(panelId)?.hitArchives ?? new Set();
+  }
+
+  // ---------- 筛选条件读写（2026-10-09 筛选业务二轮） ----------
+
+  /** 当前筛选条件（FloatBarHost 弹窗数据源；无 panel 回空集） */
+  function filtersFor(panelId: string): SearchFilters {
+    return panels.value.get(panelId)?.filters ?? emptyFilters();
+  }
+
+  /** 生效维度列表（按钮 on 态数据源，顺序 = 按钮组序） */
+  function activeFilterDims(panelId: string): string[] {
+    const s = panels.value.get(panelId);
+    if (!s) return [];
+    const act = dimActives(s.filters);
+    return FILTER_DIMS.filter((d) => act[d]);
+  }
+
+  /** 条件摘要（按钮 v-tip；仅 chip 类三维度有摘要，其余维度随对应弹窗轮补） */
+  function filterSummaries(panelId: string): Record<string, string> {
+    const f = panels.value.get(panelId)?.filters;
+    if (!f) return {};
+    const act = dimActives(f);
+    const out: Record<string, string> = {};
+    if (act["颜色"]) out["颜色"] = f.colors.join("、");
+    if (act["属性"]) out["属性"] = f.tags.join("、");
+    if (act["扩展名"]) out["扩展名"] = f.exts.map((e) => EXT_LABELS[e] ?? e).join("、");
+    if (act["链接"]) out["链接"] = f.linkStates.map((s) => LINK_STATE_LABELS[s] ?? s).join("、");
+    return out;
+  }
+
+  /** 改某维度条件（patch 维度级整体覆盖）并按防抖重搜 */
+  function patchFilters(panelId: string, viewKey: string, patch: Partial<SearchFilters>): void {
+    const s = ensure(panelId);
+    Object.assign(s.filters, patch);
+    scheduleRun(panelId, viewKey);
+  }
+
+  /** 清空全部筛选（菜单「重置所有筛选」同径） */
+  function clearAllFilters(panelId: string, viewKey: string): void {
+    const s = panels.value.get(panelId);
+    if (!s || !hasAnyFilter(s)) return;
+    s.filters = emptyFilters();
+    scheduleRun(panelId, viewKey);
   }
 
   /** 全局范围 = 草稿带 `~` 前缀（无范围按钮，手敲生效；后端 parse_query 同规则再剥一次） */
@@ -365,7 +497,8 @@ export const useSearchStore = defineStore("search", () => {
     const s = panels.value.get(panelId);
     if (!s) return;
     const seq = ++s.seq;
-    if (keywordsOf(s).length === 0) {
+    // 无条件（无关键字且无生效筛选）= 清空退出搜索态；纯筛选 = 照常发搜（后端 query 空走纯筛选）
+    if (keywordsOf(s).length === 0 && !hasAnyFilter(s)) {
       s.hits = new Set();
       s.hitArchives = new Set();
       return;
@@ -374,7 +507,7 @@ export const useSearchStore = defineStore("search", () => {
     try {
       const r = await invoke<SearchHits>("search_assets", {
         query: s.draft.trim(),
-        scope: { viewKey, recursive: ui.showSubfolders, global: effectiveGlobal(panelId) },
+        scope: { viewKey, recursive: ui.showSubfolders, global: effectiveGlobal(panelId), filters: s.filters },
       });
       if (s.seq !== seq) return; // 过期响应丢弃
       s.hits = new Set(r.placements.map((k) => `${k.assetId}|${k.folderId}`));
@@ -385,12 +518,12 @@ export const useSearchStore = defineStore("search", () => {
     }
   }
 
-  /** 内容变更（draft）：无关键字即时退出搜索态；有关键字防抖 150ms 后搜 */
+  /** 内容变更（draft / filters）：无条件即时退出搜索态；有条件防抖 150ms 后搜 */
   function scheduleRun(panelId: string, viewKey: string): void {
     const s = panels.value.get(panelId);
     const t = timers.get(panelId);
     if (t) clearTimeout(t);
-    if (!s || keywordsOf(s).length === 0) {
+    if (!s || (keywordsOf(s).length === 0 && !hasAnyFilter(s))) {
       void run(panelId, viewKey);
       return;
     }
@@ -447,6 +580,12 @@ export const useSearchStore = defineStore("search", () => {
     removePanel,
     requestFocus,
     prefillGlobal,
+    // 筛选（2026-10-09 筛选业务二轮）
+    filtersFor,
+    activeFilterDims,
+    filterSummaries,
+    patchFilters,
+    clearAllFilters,
     // ws 搜索（2026-10-03）
     wsEntriesFor,
     wsPlacementsFor,
