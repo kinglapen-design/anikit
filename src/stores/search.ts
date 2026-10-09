@@ -109,9 +109,29 @@ function dimActives(f: SearchFilters): Record<string, boolean> {
   };
 }
 
-/** 链接状态 / 扩展名特殊值的条件摘要文案 */
+/** 链接状态 / 扩展名 / 比例 / 日期档位特殊值的条件摘要文案 */
 const LINK_STATE_LABELS: Record<string, string> = { origin: "原始", linked: "链接", thumb: "缩略图", none: "无链接" };
 const EXT_LABELS: Record<string, string> = { seq: "序列帧" };
+const RATIO_LABELS: Record<string, string> = { landscape: "横图", square: "方形", portrait: "竖图" };
+const DATE_BUCKET_LABELS: Record<string, string> = {
+  today: "当天",
+  yesterday: "昨天",
+  week: "最近一周",
+  month: "最近一月",
+  year: "最近一年",
+  earlier: "更早",
+};
+
+/** 日期条件摘要（档位中文 + 自定义 y-m-d 拼接，任意组合） */
+function dateSummary(c: DateCond | null): string {
+  if (!c) return "";
+  const parts = c.buckets.map((b) => DATE_BUCKET_LABELS[b] ?? b);
+  if (c.custom) {
+    const custom = [c.custom.year, c.custom.month, c.custom.day].filter((v) => v != null).join("-");
+    if (custom) parts.push(custom);
+  }
+  return parts.join("、");
+}
 
 // 后端 commands/workspace.rs WsSearchResponse
 interface WsSearchResponse {
@@ -228,7 +248,7 @@ export const useSearchStore = defineStore("search", () => {
     return FILTER_DIMS.filter((d) => act[d]);
   }
 
-  /** 条件摘要（按钮 v-tip；仅 chip 类三维度有摘要，其余维度随对应弹窗轮补） */
+  /** 条件摘要（按钮 v-tip；文件夹维度需树名称解析暂不出摘要，随走查反馈补） */
   function filterSummaries(panelId: string): Record<string, string> {
     const f = panels.value.get(panelId)?.filters;
     if (!f) return {};
@@ -237,7 +257,10 @@ export const useSearchStore = defineStore("search", () => {
     if (act["颜色"]) out["颜色"] = f.colors.join("、");
     if (act["属性"]) out["属性"] = f.tags.join("、");
     if (act["扩展名"]) out["扩展名"] = f.exts.map((e) => EXT_LABELS[e] ?? e).join("、");
+    if (act["比例"]) out["比例"] = f.ratios.map((r) => RATIO_LABELS[r] ?? r).join("、");
     if (act["链接"]) out["链接"] = f.linkStates.map((s) => LINK_STATE_LABELS[s] ?? s).join("、");
+    if (act["添加日期"]) out["添加日期"] = dateSummary(f.imported);
+    if (act["修改日期"]) out["修改日期"] = dateSummary(f.modified);
     return out;
   }
 

@@ -19,6 +19,9 @@ import VolumePop from "./bars/VolumePop.vue";
 import NotesPop from "./bars/NotesPop.vue";
 import FilterChipsPop from "./bars/FilterChipsPop.vue";
 import FilterTagsPop from "./bars/FilterTagsPop.vue";
+import FilterRatioPop from "./bars/FilterRatioPop.vue";
+import FilterDatePop from "./bars/FilterDatePop.vue";
+import FilterFoldersPop from "./bars/FilterFoldersPop.vue";
 import { playBarSpecFor } from "../lib/barSpecs";
 import { formatDuration } from "../lib/formatDuration";
 import { frameOfTime, totalFrames } from "../lib/formatFrame";
@@ -85,17 +88,16 @@ const activeFilters = computed<string[]>(() => {
 const filterSummaries = computed(() => (props.panelId ? search.filterSummaries(props.panelId) : {}));
 const filtersNow = computed<SearchFilters | null>(() => (props.panelId ? search.filtersFor(props.panelId) : null));
 
-// 弹窗数据源（content.placements 全量算出，零后端新增）：扩展名 = 库内实有扩展名集 +
-// 有序列帧资产时首项「序列帧」虚拟类别；属性 = 全库属性词集；链接状态 = 静态四态
+// 弹窗数据源（content.placements 全量算出，零后端新增）：扩展名 = 库内实有扩展名集，
+// 首项恒列「序列帧」虚拟类别（frameCount 序列帧/动图/视频同字段不可据以判定，选中零结果
+// 属正常筛选语义）；属性 = 全库属性词集；链接状态 = 静态四态
 const extItems = computed(() => {
   const exts = new Set<string>();
-  let hasSeq = false;
   for (const p of content.placements) {
     if (p.ext) exts.add(p.ext.toLowerCase());
-    if (p.frameCount != null) hasSeq = true;
   }
   const items = [...exts].sort().map((e) => ({ key: e, label: e }));
-  if (hasSeq) items.unshift({ key: "seq", label: "序列帧" });
+  items.unshift({ key: "seq", label: "序列帧" });
   return items;
 });
 const LINK_ITEMS = [
@@ -125,6 +127,39 @@ function onLinkToggle(key: string): void {
 }
 function onTagToggle(tag: string): void {
   patchFilter({ tags: toggleIn(filtersNow.value?.tags ?? [], tag) });
+}
+
+// 比例（2026-10-09 三轮）：预设三档 toggle + 自定义 "w:h" 整体替换（自定义唯一）
+const RATIO_PRESETS = ["landscape", "square", "portrait"];
+function onRatioToggle(key: string): void {
+  patchFilter({ ratios: toggleIn(filtersNow.value?.ratios ?? [], key) });
+}
+function onRatioCustom(ratio: string | null): void {
+  const presets = (filtersNow.value?.ratios ?? []).filter((r) => RATIO_PRESETS.includes(r));
+  patchFilter({ ratios: ratio ? [...presets, ratio] : presets });
+}
+
+// 日期（添加 / 修改共用 FilterDatePop；field 区分落点字段，预设与自定义同维度内 OR）
+type DateField = "imported" | "modified";
+type DateCondDraft = { buckets: string[]; custom: { year?: number; month?: number; day?: number } | null };
+function dateCondOf(field: DateField): DateCondDraft {
+  const c = filtersNow.value?.[field];
+  return { buckets: c?.buckets ?? [], custom: c?.custom ?? null };
+}
+function onDateToggle(field: DateField, key: string): void {
+  const c = dateCondOf(field);
+  patchFilter({ [field]: { buckets: toggleIn(c.buckets, key), custom: c.custom } });
+}
+function onDateCustom(field: DateField, ymd: DateCondDraft["custom"]): void {
+  const c = dateCondOf(field);
+  patchFilter({ [field]: { buckets: c.buckets, custom: ymd } });
+}
+
+// 文件夹（含后代口径 = 后端预展开；数据源 = content.folders 树 + root 直属数，零后端新增）
+const folderNodes = computed(() => content.folders);
+const rootDirectCount = computed(() => content.placements.filter((p) => p.folderId === "root").length);
+function onFolderToggle(id: string): void {
+  patchFilter({ folderIds: toggleIn(filtersNow.value?.folderIds ?? [], id) });
 }
 
 watch(draft, (v) => {
@@ -510,6 +545,50 @@ function noteRemove(i: number): void {
         :selected="filtersNow?.tags ?? []"
         @toggle="onTagToggle"
         @clear="patchFilter({ tags: [] })"
+      />
+    </Transition>
+    <Transition name="fbh-pop">
+      <FilterFoldersPop
+        v-if="filterPop === '文件夹'"
+        class="fbh-pop"
+        :style="popStyle"
+        :nodes="folderNodes"
+        :root-count="rootDirectCount"
+        :selected="filtersNow?.folderIds ?? []"
+        @toggle="onFolderToggle"
+        @clear="patchFilter({ folderIds: [] })"
+      />
+    </Transition>
+    <Transition name="fbh-pop">
+      <FilterRatioPop
+        v-if="filterPop === '比例'"
+        class="fbh-pop"
+        :style="popStyle"
+        :selected="filtersNow?.ratios ?? []"
+        @toggle="onRatioToggle"
+        @set-custom="onRatioCustom"
+      />
+    </Transition>
+    <Transition name="fbh-pop">
+      <FilterDatePop
+        v-if="filterPop === '添加日期'"
+        class="fbh-pop"
+        :style="popStyle"
+        :buckets="filtersNow?.imported?.buckets ?? []"
+        :custom="filtersNow?.imported?.custom ?? null"
+        @toggle="onDateToggle('imported', $event)"
+        @set-custom="onDateCustom('imported', $event)"
+      />
+    </Transition>
+    <Transition name="fbh-pop">
+      <FilterDatePop
+        v-if="filterPop === '修改日期'"
+        class="fbh-pop"
+        :style="popStyle"
+        :buckets="filtersNow?.modified?.buckets ?? []"
+        :custom="filtersNow?.modified?.custom ?? null"
+        @toggle="onDateToggle('modified', $event)"
+        @set-custom="onDateCustom('modified', $event)"
       />
     </Transition>
   </div>

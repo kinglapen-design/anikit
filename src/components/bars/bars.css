@@ -47,3 +47,68 @@
   padding-left: var(--n-space-8);
   border-left: 1px solid var(--n-l-a3);
 }
+
+/* ---------- 筛选弹窗 · 列表族（比例 / 日期 / 文件夹共用，2026-10-09 筛选业务三轮） ----------
+   稿 = 中间面板-多功能悬浮栏-筛选/比例·日期·文件夹：容器纵向 padding 12 gap 4；
+   item = 26 高 padding 4/6/4/8 圆角 6 + 右置对勾 18（check currentColor 由 .fp-check color 驱动）；
+   选中 = 一级文字 + 对勾显，未选 = 三级文字 + 对勾隐，hover = 半透明-3 底（稿 prose） */
+.fp-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-4);
+  padding: var(--n-space-12);
+  overflow-y: auto;
+}
+.fp-item {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-6);
+  height: 26px;
+  padding: var(--n-space-4) var(--n-space-6) var(--n-space-4) var(--n-space-8);
+  border-radius: var(--n-radius-6);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l3);
+  white-space: nowrap;
+  text-align: left;
+  transition:
+    background var(--n-dur-150) var(--n-ease-in-out),
+    color var(--n-dur-150) var(--n-ease-in-out);
+}
+.fp-item:hover,
+.fp-item.force-hover {
+  background: var(--n-l-a3);
+}
+.fp-item.on {
+  color: var(--n-l1);
+}
+.fp-check {
+  margin-left: auto;
+  flex: none;
+  color: var(--n-l1);
+  opacity: 0;
+  transition: opacity var(--n-dur-150) var(--n-ease-in-out);
+}
+.fp-item.on .fp-check,
+.fp-check.on {
+  opacity: 1;
+}
+/* 自定义尾行（比例 w:h / 日期 年月日）：输入框 TextInput sm 窄宽 + 分隔符 + 生效对勾 */
+.fp-custom {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-6);
+  height: 34px;
+}
+.fp-custom .fp-colon {
+  color: var(--n-l3);
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  flex: none;
+}
+/* 文件夹弹窗选中行（稿：半透明-2 底 + 立体感-通用 + 一级文字）——覆盖 .fp-item 选中底 */
+.fp-tree .fp-item.on {
+  background: var(--n-l-a2);
+  box-shadow: var(--n-effect-raised);
+}

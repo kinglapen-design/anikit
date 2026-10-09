@@ -16,12 +16,15 @@ import VolumePop from "../../components/bars/VolumePop.vue";
 import NotesPop from "../../components/bars/NotesPop.vue";
 import FilterChipsPop from "../../components/bars/FilterChipsPop.vue";
 import FilterTagsPop from "../../components/bars/FilterTagsPop.vue";
+import FilterFoldersPop from "../../components/bars/FilterFoldersPop.vue";
+import FilterRatioPop from "../../components/bars/FilterRatioPop.vue";
+import FilterDatePop from "../../components/bars/FilterDatePop.vue";
 import ToastStack from "../../components/ToastStack.vue";
 import PickerBanner from "../../components/PickerBanner.vue";
 import LinkListPopover from "../../components/LinkListPopover.vue";
 import { useToastStore } from "../../stores/toast";
 import { usePickerStore } from "../../stores/picker";
-import { useContentStore, type PlacementView } from "../../stores/content";
+import { useContentStore, type PlacementView, type FolderNode } from "../../stores/content";
 
 // 模式切换 morph 演示
 const morphMode = ref<"search" | "markdown" | "play">("search");
@@ -71,6 +74,23 @@ const demoLinkItems = [
   { key: "none", label: "无链接" },
 ];
 const demoTagItems = ["走路", "跑步", "拔剑", "Q版", "主角", "场景", "沙雕", "打斗", "表情", "转头"];
+// 文件夹弹窗 mock 树（FolderNode 形；count = 递归总数）
+const demoFolderNodes: FolderNode[] = [
+  {
+    id: "F01", name: "01_角色", count: 36, totalSize: 0, children: [
+      { id: "F02", name: "主角", count: 12, totalSize: 0, children: [] },
+      { id: "F03", name: "配角", count: 24, totalSize: 0, children: [] },
+    ],
+  },
+  {
+    id: "F04", name: "02_场景", count: 58, totalSize: 0, children: [
+      { id: "F05", name: "室内", count: 30, totalSize: 0, children: [] },
+      { id: "F06", name: "室外", count: 28, totalSize: 0, children: [] },
+    ],
+  },
+  { id: "F07", name: "03_道具", count: 19, totalSize: 0, children: [] },
+];
+const liveFolderSel = ref<string[]>(["F02"]);
 const liveExtSel = ref<string[]>(["aep"]);
 const liveTagSel = ref<string[]>(["拔剑", "Q版"]);
 function toggleIn(list: string[], key: string): string[] {
@@ -233,6 +253,30 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
             @clear="liveTagSel = []"
           />
           <span class="pv-cap">真实交互（搜索过滤 / 多选 / 清除 = 清空全部选中；{{ liveTagSel.join("、") || "未选" }}）</span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <FilterFoldersPop
+            :nodes="demoFolderNodes"
+            :root-count="7"
+            :selected="liveFolderSel"
+            force-hover="F04"
+            @toggle="liveFolderSel = toggleIn(liveFolderSel, $event)"
+            @clear="liveFolderSel = []"
+          />
+          <span class="pv-cap">
+            文件夹 · 树形复选（350×468 稿：双色文件夹 icon 随选中升亮 / 递归数量 / 未分类首项；勾选含后代
+            = 后端口径；选中「主角」/ hover「02_场景」）
+          </span>
+        </div>
+        <div class="pv-demo-cell">
+          <FilterRatioPop :selected="['landscape', '16:9']" force-hover="square" />
+          <span class="pv-cap">比例 · 三档 + 自定义尾行（选中横图 + 自定义 16:9 对勾生效 / hover 方形）</span>
+        </div>
+        <div class="pv-demo-cell">
+          <FilterDatePop :buckets="['today', 'week']" :custom="{ year: 2026 }" force-hover="month" />
+          <span class="pv-cap">日期 · 六档 + 自定义年月日（添加 / 修改共用；选中当天+近一周 + 自定义 2026 年 / hover 最近一月）</span>
         </div>
       </div>
     </div>

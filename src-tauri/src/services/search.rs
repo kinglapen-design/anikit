@@ -219,7 +219,7 @@ pub struct SearchFilters {
   pub tags: Vec<String>,
   /// 扩展名（小写；"seq" = 序列帧虚拟类别）
   pub exts: Vec<String>,
-  /// 所在文件夹 id（Placement 直属，不含后代）
+  /// 所在文件夹 id（自身或后代——树形复选圈整棵子树，2026-10-09 三轮定；"root" = 未分类）
   pub folder_ids: Vec<String>,
   /// 比例档位（landscape / square / portrait）或自定义 "w:h"
   pub ratios: Vec<String>,
@@ -325,10 +325,12 @@ impl SearchFilters {
     true
   }
 
-  /// 位置级维度 AND：所在文件夹（Placement 直属）+ 链接状态
-  fn placement_pass(&self, meta: &AssetMeta, p: &Placement, alive: usize) -> bool {
-    if !self.folder_ids.is_empty() && !self.folder_ids.iter().any(|f| f == &p.folder) {
-      return false;
+  /// 位置级维度 AND：所在文件夹（folder_filter = 预展开含后代集）+ 链接状态
+  fn placement_pass(&self, meta: &AssetMeta, p: &Placement, alive: usize, folder_filter: Option<&HashSet<&str>>) -> bool {
+    if let Some(set) = folder_filter {
+      if !set.contains(p.folder.as_str()) {
+        return false;
+      }
     }
     let valid: Vec<&String> = self.link_states.iter().filter(|s| LINK_STATES.contains(&s.as_str())).collect();
     if !valid.is_empty() && !valid.iter().any(|s| link_state_hit(s, meta, p, alive)) {
@@ -499,6 +501,18 @@ pub fn search(lib: &Library, query: &str, scope: &SearchScope) -> SearchHits {
 
   let mut hits = SearchHits::default();
 
+  // 文件夹筛选预展开（树形复选 = 含后代：勾父文件夹圈整棵子树，2026-10-09 三轮定）
+  let folder_filter: Option<HashSet<&str>> = if scope.filters.folder_ids.is_empty() {
+    None
+  } else {
+    let mut set = HashSet::new();
+    for id in &scope.filters.folder_ids {
+      set.insert(id.as_str());
+      collect_descendants(lib, id, &mut set);
+    }
+    Some(set)
+  };
+
   // 回收站范围（非全局时）：快照 placements 补文本；命中键 folderId 恒 "recycle"（前端回收站视图键口径）；
   // 筛选同口径施加（资产级对 meta，位置级对快照 placements，「无链接」按快照条数）
   if !global && scope.view_key == "quick:recycle" {
@@ -510,7 +524,7 @@ pub fn search(lib: &Library, query: &str, scope: &SearchScope) -> SearchHits {
       if !keywords.is_empty() && !matches(&asset_texts(lib, meta, &item.placements), &keywords) {
         continue;
       }
-      if item.placements.iter().any(|p| scope.filters.placement_pass(meta, p, item.placements.len())) {
+      if item.placements.iter().any(|p| scope.filters.placement_pass(meta, p, item.placements.len(), folder_filter.as_ref())) {
         hits.placements.push(SearchHitKey { asset_id: item.asset.clone(), folder_id: "recycle".into() });
       }
     }
@@ -559,7 +573,7 @@ pub fn search(lib: &Library, query: &str, scope: &SearchScope) -> SearchHits {
           _ => true, // quick:all / quick:inbox / quick:recent
         }
       };
-      if in_scope && scope.filters.placement_pass(meta, p, placements.len()) {
+      if in_scope && scope.filters.placement_pass(meta, p, placements.len(), folder_filter.as_ref()) {
         hits.placements.push(SearchHitKey { asset_id: meta.id.clone(), folder_id: p.folder.clone() });
       }
     }
@@ -1143,16 +1157,25 @@ mod tests {
   fn filters_folder_ids_placement_level() {
     let mut h = make_lib();
     add_folder(&mut h.lib, "F01", "文件夹");
+    add_folder_ex(&mut h.lib, "F02", "子夹", Some("F01"), None, None);
     add_asset(&mut h.lib, "AN-A", "两位置", "root");
     add_placement(&mut h.lib, "AN-A", "两位置.png", "F01", false);
     add_asset(&mut h.lib, "AN-B", "夹内", "F01");
+    add_asset(&mut h.lib, "AN-C", "子夹内", "F02");
 
-    // 位置级判定：AN-A 仅 F01 位置命中，root 位置不带出
+    // 位置级判定：AN-A 仅 F01 位置命中，root 位置不带出；**含后代**（勾父圈整棵子树，2026-10-09 三轮定）
     let f = SearchFilters { folder_ids: vec!["F01".into()], ..Default::default() };
-    assert_eq!(hit_keys(&search(&h.lib, "", &scope_filtered("quick:all", f))), ["AN-A|F01", "AN-B|F01"]);
+    assert_eq!(
+      hit_keys(&search(&h.lib, "", &scope_filtered("quick:all", f))),
+      ["AN-A|F01", "AN-B|F01", "AN-C|F02"],
+      "自身或后代（F02 子夹随 F01 命中）"
+    );
     // root 直属（未分类）
     let f = SearchFilters { folder_ids: vec!["root".into()], ..Default::default() };
     assert_eq!(hit_keys(&search(&h.lib, "", &scope_filtered("quick:all", f))), ["AN-A|root"]);
+    // 仅子夹 = 不含父
+    let f = SearchFilters { folder_ids: vec!["F02".into()], ..Default::default() };
+    assert_eq!(hit_keys(&search(&h.lib, "", &scope_filtered("quick:all", f))), ["AN-C|F02"]);
   }
 
   #[test]
