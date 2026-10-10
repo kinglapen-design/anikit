@@ -380,6 +380,27 @@ async def main():
             print("[P2 光标行回落]", json.dumps(p2, ensure_ascii=False))
             if p2 is None or not p2.startswith("# **"):
                 fails.append(f"[P] 光标行源码回落失败（{p2}，期望 '# **方舟前史**'）")
+
+            # —— 场景 Q：编辑态方向键归光标（2026-10-10 用户实机报「左右无法移动指针」）——
+            # PreviewPanel 窗级 ←/→ = 上/下一个素材，守卫原为 tagName INPUT/TEXTAREA 漏 contenteditable——
+            # 断言：cm-content 上 ArrowLeft/ArrowRight 后光标移动且编辑器/素材不切换（.cm-editor 存活）
+            await ev("document.querySelector('.text-preview .cm-content').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))")
+            await asyncio.sleep(0.3)
+            q = await ev("""(() => {
+              const host = document.querySelector('.text-preview .cm-host');
+              if (!host || !host.__cmView) return { dead: true };
+              return { head: host.__cmView.state.selection.main.head, alive: !!document.querySelector('.text-preview .cm-editor') };
+            })()""")
+            print("[Q 方向键归光标]", json.dumps(q, ensure_ascii=False))
+            if not q or q.get("dead") or not q["alive"]:
+                fails.append(f"[Q] ArrowLeft 后编辑器被切走（{q}，预览快捷键抢键未让位）")
+            elif q["head"] != 1:
+                fails.append(f"[Q] ArrowLeft 光标未左移（head={q['head']}，期望 1——P2 停在 2）")
+            await ev("document.querySelector('.text-preview .cm-content').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))")
+            await asyncio.sleep(0.3)
+            q2 = await ev("document.querySelector('.text-preview .cm-host').__cmView.state.selection.main.head")
+            if q2 != 2:
+                fails.append(f"[Q] ArrowRight 光标未右移（head={q2}，期望 2）")
             await shot("md-live-preview")
 
             # —— 场景 L：工具栏悬停 tip（2026-09-25 走查补）——hover bold 钮出 v-tip「加粗」

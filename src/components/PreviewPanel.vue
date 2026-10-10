@@ -17,6 +17,7 @@ import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 import { PREVIEW_STAGE_KEY, previewPaneSpecFor } from "../lib/previewSpecs";
 import { previewMediaSession } from "../stores/previewMedia";
 import { useTabsStore } from "../stores/tabs";
+import { isEditableTarget } from "../lib/useGlobalKeys";
 
 const preview = inject(PREVIEW_SESSION_KEY)!;
 const media = previewMediaSession(preview.panelId);
@@ -127,7 +128,7 @@ function onKeydown(e: KeyboardEvent): void {
   const tid = useTabsStore().activeTabId;
   if (tid && tid !== preview.panelId) return; // 分屏多预览并存：只响应激活 panel（子窗口 activeTabId 恒 "" 放行）
   const t = e.target as HTMLElement;
-  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return; // 笔记编辑中不抢键（5.2）
+  if (isEditableTarget(t)) return; // 输入态不抢键（5.2；含 CM6 contenteditable——md 编辑态 ←/→ 归光标，2026-10-10 用户实机报修）
   switch (e.key) {
     case "Escape":
       if (preview.fullscreen) void preview.setFullscreen(false);
