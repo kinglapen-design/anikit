@@ -517,14 +517,20 @@ async def main():
             if not (0.25 <= o2n <= 0.75) or abs(o2n - 0.5) < 0.01:
                 fails.append(f"[O] 分割条拖动未改占比（{o2}）")
             # 滚动联动（单滚轮语义）：先填充 30 个独立段落撑出两侧滚动空间（桩文档 19 行不足以滚；
-            # 单换行会被 md 折叠成一段）——填充后光标归文档首行再等 1.2s 让 typewriter 定时器收敛
-            #（headless 定时器节流，迟到的「跟滚到光标行」会篡改联动断言现场），再左栏滚到 1/2 → 右栏按比例跟；右栏回 0 → 左栏跟回
+            # 单换行会被 md 折叠成一段）——填充后**轮询右栏滚到底确认跟滚定时器已跑完**
+            #（光标恒在文末 = 跟滚目标即底部，到底只有定时器能写、观测无歧义；归 0 轮询撞「本来就 0」、
+            # 稳定窗轮询撞「节流冻结超窗」两版假收敛均已实锤，2026-10-10 三连），再左栏滚到 1/2 → 右栏按比例跟；右栏回 0 → 左栏跟回
             await type_text("\n\n" + "填充滚动行\n\n" * 30)
-            await ev("""(() => {
-              const v = document.querySelector('.text-preview .cm-host').__cmView;
-              v.dispatch({ selection: { anchor: 0 } });
-            })()""")
-            await asyncio.sleep(1.2)
+            for _ in range(40):  # 最长 10s（headless 定时器节流 ~1s 粒度）
+                await asyncio.sleep(0.25)
+                settled = await ev("""(() => {
+                  const body = document.querySelector('.md-body.split-side');
+                  const max = body.scrollHeight - body.clientHeight;
+                  return max > 0 && body.scrollTop >= max - 2;
+                })()""")
+                if settled:
+                    break
+            await asyncio.sleep(0.3)  # 余量：linkLock 60ms 解锁落定
             await ev("""(() => {
               const sc = document.querySelector('.md-edit-wrap .cm-scroller');
               sc.scrollTop = (sc.scrollHeight - sc.clientHeight) / 2;
@@ -558,26 +564,30 @@ async def main():
                 fails.append(f"[O] 分屏右栏未实时渲染（{o3}，期望存在 RRR strong）")
             # typewriter 跟滚：光标移到第 49 行（填充块群中部，居中可达——文档头尾块受滚动钳制
             # 物理上居不了中）→ 右栏滚到对应块并固定视口中间（CM6 选区 dispatch → updateListener 自动触发跟滚；
-            # 16ms 定时器 + headless 后台定时器节流，收敛等待放宽 1.2s）
+            # 16ms 定时器 + headless 后台定时器节流窗口不定——轮询 centerOff 收敛代替固定 sleep）
             o3b0 = await ev("document.querySelector('.md-body.split-side').scrollTop")
             await ev("""(() => {
               const v = document.querySelector('.text-preview .cm-host').__cmView;
               const pos = v.state.doc.line(50).from + 1;
               v.dispatch({ selection: { anchor: pos } });
             })()""")
-            await asyncio.sleep(1.2)
-            o3b = await ev("""(() => {
-              const body = document.querySelector('.md-body.split-side');
-              const blocks = [...body.querySelectorAll('[data-line-start]')];
-              const v = document.querySelector('.text-preview .cm-host').__cmView;
-              const line = v.state.doc.lineAt(v.state.selection.main.head).number - 1;
-              let t = null;
-              for (const el of blocks) { if (Number(el.dataset.lineStart) <= line) t = el; else break; }
-              if (!t) return { scroll: body.scrollTop, hit: false };
-              const bR = body.getBoundingClientRect(), tR = t.getBoundingClientRect();
-              return { scroll: body.scrollTop, hit: true,
-                       centerOff: Math.abs(tR.top + tR.height / 2 - (bR.top + bR.height / 2)) };
-            })()""")
+            o3b = None
+            for _ in range(20):
+                await asyncio.sleep(0.1)
+                o3b = await ev("""(() => {
+                  const body = document.querySelector('.md-body.split-side');
+                  const blocks = [...body.querySelectorAll('[data-line-start]')];
+                  const v = document.querySelector('.text-preview .cm-host').__cmView;
+                  const line = v.state.doc.lineAt(v.state.selection.main.head).number - 1;
+                  let t = null;
+                  for (const el of blocks) { if (Number(el.dataset.lineStart) <= line) t = el; else break; }
+                  if (!t) return { scroll: body.scrollTop, hit: false };
+                  const bR = body.getBoundingClientRect(), tR = t.getBoundingClientRect();
+                  return { scroll: body.scrollTop, hit: true,
+                           centerOff: Math.abs(tR.top + tR.height / 2 - (bR.top + bR.height / 2)) };
+                })()""")
+                if o3b and o3b.get("hit") and o3b["centerOff"] <= 40:
+                    break
             print("[O3b typewriter]", json.dumps({"滚前": o3b0, **(o3b or {})}, ensure_ascii=False))
             if not o3b or not o3b["hit"]:
                 fails.append(f"[O] typewriter 未命中光标行块（{o3b}）")

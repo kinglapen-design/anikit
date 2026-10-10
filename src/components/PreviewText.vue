@@ -237,11 +237,13 @@ function onCmKeydownGuard(e: KeyboardEvent): void {
 // 输入 / 光标移动 = typewriter 跟进：光标行对应渲染块滚到视口中间（用户「书写常在最下面，
 // 预览最后一行固定中间」），16ms 定时器合一（rAF 弃用——headless 按需出帧模式下帧生产停摆时回调永不达，
 // 2026-10-10 踩坑），精调期间 linkLock 锁反向回写不拽左栏。
-let linkLock = 0;
+// linkLock = 墙钟截止时刻（不用计数 + 定时器解锁——headless 定时器节流会让解锁回调迟数秒，
+// 锁长期卡死联动全瘫，同日实锤；墙钟到点自然失效，零回调依赖）
+let linkLockUntil = 0;
 let splitScrollRaf = 0; // setTimeout 句柄（历史名留 raf；16ms 合一节流）
 
 function linkScroll(src: HTMLElement, dst: HTMLElement): void {
-  if (linkLock > 0) return;
+  if (performance.now() < linkLockUntil) return;
   const sMax = src.scrollHeight - src.clientHeight;
   const dMax = dst.scrollHeight - dst.clientHeight;
   if (sMax <= 0 || dMax <= 0) return;
@@ -280,14 +282,10 @@ function scheduleSplitScroll(): void {
       else break;
     }
     if (!target) return;
-    linkLock++;
+    linkLockUntil = performance.now() + 100; // 墙钟锁 100ms：盖住本写入引发的异步 scroll 事件回环
     const bRect = body.getBoundingClientRect();
     const tRect = target.getBoundingClientRect();
     body.scrollTop += tRect.top - bRect.top - (bRect.height - tRect.height) / 2;
-    // scroll 事件异步派发窗口留 60ms 再解锁（反向回写不拽左栏；原双 rAF 解锁同因饿死弃用）
-    window.setTimeout(() => {
-      linkLock--;
-    }, 60);
   }, 16);
 }
 
@@ -505,7 +503,7 @@ watch(
    半宽沿用太奢）；分割条 = 1px 通用/三级线 + 左右 2px 命中扩边，hover / 拖拽 = 品牌色
    （全 app 拖拽线同色系口径：插入提示 / 框选 §22） */
 .md-edit-wrap.split .cm-host :deep(.cm-content) {
-  padding: var(--n-space-12) var(--n-space-24) 66px;
+  padding: var(--n-space-12) var(--n-space-24) calc(66px + 50vh);
 }
 .md-split-bar {
   flex: none;

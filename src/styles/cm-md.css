@@ -5,15 +5,19 @@
    块距 = md 空行自然撑开（编辑器无渲染态 flex gap 12）；表格 / Setext 标题保源码态待另轮。
    色档 = 1.5（标题 75 / 正文 60 / 其他 40；标记回落亮色/三级），线 = 通用/三级。 */
 
-/* —— 基底：版心左右各 84（12+72，渲染态同口径）+ 底 66 让位悬浮栏（§18 遮挡补偿） —— */
+/* —— 基底：版心左右各 84（12+72，渲染态同口径）+ 底 66 让位悬浮栏（§18 遮挡补偿）
+   + 50vh 文末抬高余量（2026-10-10 用户定：写到文末眼睛不盯最底行——滚动余量放大半屏，
+   末行可抬至视口中部，Obsidian typewriter 同思路；预览态阅读不需要，仅编辑态供给）。
+   字体必须打在 .cm-content 上（(0,2,0) 压 CM6 base theme 的 .cm-content font-family: monospace——
+   打 .cm-editor 会被直属规则截断继承，中文落 monospace=宋体，2026-10-10 用户实机报修） —— */
 .cm-editor {
-  font-family: var(--n-font-family);
   font-size: var(--n-fs-md-body);
   line-height: var(--n-lh-md-body);
   color: var(--n-md-body);
 }
 .cm-editor .cm-content {
-  padding: var(--n-space-12) calc(var(--n-space-12) + var(--n-space-72)) 66px;
+  padding: var(--n-space-12) calc(var(--n-space-12) + var(--n-space-72)) calc(66px + 50vh);
+  font-family: var(--n-font-family);
   caret-color: var(--n-l1);
 }
 .cm-editor .cm-line {
