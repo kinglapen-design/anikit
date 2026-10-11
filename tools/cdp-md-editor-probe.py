@@ -212,12 +212,12 @@ async def main():
             else:
                 exp = {
                     "h1fs": "30px", "h1lh": "40px", "h1bb": "2px",
-                    "h1bbc": "rgb(36, 36, 36)", "h1c": "rgb(191, 191, 191)",
+                    "h1bbc": "rgb(36, 36, 36)", "h1c": "rgb(204, 204, 204)",
                     "h2fs": "26px", "h2lh": "36px", "h3fs": "22px", "h3lh": "32px",
-                    "pfs": "15px", "plh": "25px", "pc": "rgb(153, 153, 153)",
-                    "bqbl": "2px", "bqblc": "rgb(36, 36, 36)", "bqc": "rgb(102, 102, 102)",
+                    "pfs": "15px", "plh": "25px", "pc": "rgb(166, 166, 166)",
+                    "bqbl": "2px", "bqblc": "rgb(36, 36, 36)", "bqc": "rgb(115, 115, 115)",
                     "prebg": "rgb(28, 28, 28)", "prebr": "8px", "prews": "pre-wrap",
-                    "codefs": "14px", "codelh": "24px", "codec": "rgb(102, 102, 102)",
+                    "codefs": "14px", "codelh": "24px", "codec": "rgb(115, 115, 115)",
                     "gap": "12px", "padL": "84px", "padB": "66px",
                 }
                 for k, want in exp.items():
