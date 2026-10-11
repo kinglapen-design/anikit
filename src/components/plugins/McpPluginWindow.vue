@@ -138,7 +138,7 @@ async function copyCfg(text: string, name: string): Promise<void> {
               <IconButton name="copy" variant="bare" size="sm" title="复制" @click="copyCfg(cfgClaude, 'Claude Code')" />
             </li>
             <li>
-              接入后 Agent 默认只能 <b>[只读]</b>（搜索、浏览、看图等 8 个工具）；需要 Agent 写入时开启上方
+              接入后 Agent 默认只能 <b>[只读]</b>（搜索、浏览、看图等 9 个工具）；需要 Agent 写入时开启上方
               <b>[允许写入]</b>（13 个写工具；彻底删除永不经 MCP，回收站清空须 APP 内人工）。
             </li>
           </ul>
@@ -147,7 +147,7 @@ async function copyCfg(text: string, name: string): Promise<void> {
           <h2 class="pw-sub">功能列表</h2>
           <ul class="pw-lines">
             <li>
-              <b>只读（8 个）</b>：当前库状态 / 搜索素材 / 文件夹树 / 文件夹资产清单 / 资产详情 /
+              <b>只读（9 个）</b>：当前库状态 / 搜索素材 / 文件夹树 / 文件夹资产清单 / 链接清单 / 资产详情 /
               源文件与缩略图磁盘路径（看图入口）/ 读文本资产 / 档案列表。
             </li>
             <li>

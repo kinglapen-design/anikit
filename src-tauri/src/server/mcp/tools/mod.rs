@@ -9,6 +9,7 @@ pub mod folders;
 pub mod groups;
 pub mod import;
 pub mod library;
+pub mod links;
 pub mod prompt;
 pub mod search;
 pub mod structure;

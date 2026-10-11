@@ -1,6 +1,6 @@
 # MCP 使用指南（给 Agent 与接入者）
 
-AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期写工具 13 个，写入闸形态 A）。本文是接入与使用说明；协议层细节（握手 / 回包结构 / 错误口径）见 [MCP通道](MCP通道.md)。
+AniKit 进程内嵌的 MCP server（PRD 08-06：只读 9 工具 + 二期写工具 13 个，写入闸形态 A）。本文是接入与使用说明；协议层细节（握手 / 回包结构 / 错误口径）见 [MCP通道](MCP通道.md)。
 
 ## 连接
 
@@ -10,7 +10,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 - Codex：`config.toml` 加 `[mcp_servers.anikit]` + `url = "http://127.0.0.1:17701/mcp"`，重启会话
 - Claude Code：`claude mcp add --transport http anikit http://127.0.0.1:17701/mcp`
 
-## 工具速览（21 个 = 只读 8 + 写 13）
+## 工具速览（22 个 = 只读 9 + 写 13）
 
 | 工具 | 用途 |
 | --- | --- |
@@ -18,6 +18,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 | `search_assets` | 分词搜索（空格 AND）；`folderId` 可限定文件夹 |
 | `list_folder_tree` | 文件夹树（区块 + 节点，拿文件夹 id；节点带 groups 分组配置） |
 | `list_placements` | 文件夹资产清单，带 `thumbPath` 缩略图绝对路径 |
+| `list_links` | 全库链接清单（2026-10-12）：链接位置 + 原始位置（`PlacementLink` 结构，原始不在库 = null）+ `uri` |
 | `get_asset_detail` | 资产详情：属性词 / 描述 / 注释 / 链接 / 主色 / 归属 |
 | `get_asset_origin_path` | 源文件与缩略图磁盘绝对路径（看图入口） |
 | `read_text_asset` | 文本资产内容（txt / md，提示词、剧本等） |
@@ -50,7 +51,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 ### 批量看资产写提示词（一期只读链路）
 
 1. `get_current_library` 确认库已打开（未开时其余工具回「请先打开素材库」）；
-2. `search_assets` 搜关键词，或 `list_folder_tree` → `list_placements` 按文件夹浏览；
+2. `search_assets` 搜关键词，或 `list_folder_tree` → `list_placements` 按文件夹浏览；`list_links` 看全库链接清单（链在哪个文件夹、原件在哪）；
 3. `get_asset_origin_path` 拿 `thumbPath`（webp 缩略图）/ `originPath`（源图）**磁盘绝对路径，直接用文件读取能力看图**，不经协议传图；
 4. `get_asset_detail` 看既有标签 / 描述 / 注释作参考；
 5. `read_text_asset` 读提示词模板、剧本等文本资产。
@@ -62,7 +63,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 1. `list_folder_tree` 拿目标场次文件夹 id（如 `…/04_分镜/第六集/场_01`）；场次文件夹的 groups 是**规则组**（按扩展名 / 名称关键字自动归组，如「提示词」组收 md、「P1」组收名含 P1 的 mp4）——入库 / 改名即自动归组，无需手动归组调用；**新建场次文件夹的分组定义用 `set_folder_groups` 一次配好**（照既有场次回包 groups 抄改即可）；
 2. `import_paths` 把外部生成的图导入目标文件夹（`folderId`）；逐文件报告拿回 assetId——重复导入同文件 = `skippedDuplicate` 直接拿已有 id 用，同名不同内容 = `renamed` 自动加 `_序号` 后缀；
 3. `create_document(kind="md", folderId=场次 id)` 建提示词文档 → `write_text_asset` 写入提示词正文（先建后写；覆写前记得 read 留底）→ `rename_placements` 改成规范名（规则组按名字 / 扩展名自动归进「提示词」组）→ `assign_prompt` 把文档绑定为对应资产 / 档案的提示词（引用 + 快照，APP 详情提示词 tab 与右键「提示词」菜单即时可见）；
-4. 整理归档：`move_placements` 把资产移入目标文件夹；`link_placements` 把大池里的资产以链接放进场次文件夹（本体留原地，不占双份磁盘）——「资产留大池、链接进场次」的用户习惯配套；
+4. 整理归档：`move_placements` 把资产移入目标文件夹；`link_placements` 把大池里的资产以链接放进场次文件夹（本体留原地，不占双份磁盘）——「资产留大池、链接进场次」的用户习惯配套；`list_links` 随时回查全库链接及其原始位置；
 5. 每步回包里的 assetId / folderId 是后续调用的定位凭据；路径一律现取（`get_asset_origin_path`），禁止缓存。
 
 ## 纪律红线
@@ -76,7 +77,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 
 MCP 进 Agent 上下文的开销分三块，对应三招：
 
-- **工具 schema 固定开销**（每会话一次）：21 个工具的说明 + 参数 schema。Kimi Code 侧可在 mcp.json 给 anikit 加 `"deferred": true`（按需加载，见 Kimi Code MCP 文档），不用工具时不占上下文。
+- **工具 schema 固定开销**（每会话一次）：22 个工具的说明 + 参数 schema。Kimi Code 侧可在 mcp.json 给 anikit 加 `"deferred": true`（按需加载，见 Kimi Code MCP 文档），不用工具时不占上下文。
 - **回包体积**（每次调用）：本通道已做两刀——回包仅 `content` 紧凑 JSON、不带 structuredContent 重复副本。Agent 侧配合：先 `search_assets` 缩小范围再按需 `get_asset_detail`，避免不带 folderId 的全库 `list_placements`（几百条 Placement 全字段很占额度）。
 - **图片读取**：看图读 `thumbPath`（webp 缩略图，几百 token 级），非必要不读源图（大图千 token 级）。
 

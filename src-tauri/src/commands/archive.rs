@@ -480,7 +480,8 @@ fn thumb_users_of(lib: &Library, meta: &AssetMeta) -> Vec<ThumbLinkItem> {
 }
 
 /// Placement → 链接区块一条；folder 链断裂（脏数据）返回 None 整条跳过
-fn placement_link(lib: &Library, p: &Placement) -> Option<PlacementLink> {
+/// pub(crate)：server/mcp list_links（AI 外接通道只读补批，2026-10-12）同用
+pub(crate) fn placement_link(lib: &Library, p: &Placement) -> Option<PlacementLink> {
   if p.folder == ROOT_FOLDER_ID {
     return Some(PlacementLink {
       folder_id: None,

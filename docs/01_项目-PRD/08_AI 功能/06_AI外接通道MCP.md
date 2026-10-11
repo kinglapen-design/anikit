@@ -20,7 +20,7 @@
 
 **工具注册表模式**：一类一文件 + 一行注册（前端 barSpecs 为范式）。MCP 工具注册表与未来的插件 API 注册表是同一份资产，一次投入两处兑现；8.2 批量生成缩略图共享同一套通道基础。
 
-一期只读白名单（薄壳转发既有 command）：`search_assets` / `list_folder_tree` / `list_placements` / `get_asset_detail` / `get_asset_origin_path`（源图与缩略图路径）/ `read_text_asset` / `list_archives` / `get_current_library`。**看图零集成**：返回磁盘绝对路径，Agent 有文件权限即直读 webp 缩略图与源图，不经协议传图。
+一期只读白名单（薄壳转发既有 command）：`search_assets` / `list_folder_tree` / `list_placements` / `get_asset_detail` / `get_asset_origin_path`（源图与缩略图路径）/ `read_text_asset` / `list_archives` / `get_current_library`（2026-10-12 补第九个 `list_links`，见下「只读补批」）。**看图零集成**：返回磁盘绝对路径，Agent 有文件权限即直读 webp 缩略图与源图，不经协议传图。
 
 纪律：禁止 assets/ 全目录枚举（以 folders.json 的 Placement 为入口按 ID 直达）；originName 随重命名同步改磁盘名，外部不得缓存路径、每次现推；有副作用的准只读命令（触发转码 / 后台生成队列类）不进只读白名单；库未打开时返回明确错误而非静默空表。
 
@@ -48,6 +48,8 @@
 
 二期余量（随后批）：`set_asset_props`（打属性词）/ `set_asset_descriptions`（写描述）。AI 写入内容统一打标记、可一键清除（对齐 03 节 L2）随批量业务再评。
 
+**只读补批 `list_links`（2026-10-12 用户定，第九个只读工具）**：全库链接 Placement 清单——「资产留大池、链接进场次」组织习惯的可见性配套：AI 建链接（`link_placements`）后需要能回查哪些文件是链接、链在哪个文件夹、原件在哪。无参全库列举（链接体量小，不破省 token 口径；替代「全量 `list_placements` 自行过滤 origin」的重路径），逐条回 `assetId / ext / link / origin / uri`——link 与 origin 均复用详情链接区块 `PlacementLink` 结构（folderId 为 null = 未分类 root / blockName / path 路径链 / name），origin = null 表示原始 Placement 已不在库（进回收站或彻底删除）；uri = http open 点击跳转形态（2026-10-08 S5 同口径）。工具面 21 → 22（只读 9 + 写 13）。
+
 ### 阶段表
 
-① 本 PRD 立项（2026-09-19）→ ② **只读 MCP**（2026-09-19 落地，Codex 真库验证跑通）→ ③ **写入闸首批**（2026-09-19 落地，形态 A + 三写工具 + 偏好设置弹窗）→ ④ **二批结构性五件套**（create_folder / move_placements / link_placements / move_folders / import_paths 方案一冲突策略，2026-09-19 定案并落地）→ ⑤ **三批 trash_placements**（库内回收站可逆删除：允许 AI 丢回收站、彻底删除永不经 MCP，2026-09-20 定案并落地）→ ⑥ **MCP 条目化进插件面板**（2026-09-20 落地：桥接类「AI 外接通道（MCP）」条目 + 详情窗四组——服务总开关 / 允许写入挪入 / 使用教程含 Agent 接入配置复制 / 功能列表 / 路径；偏好设置弹窗退役）→ ⑦ **四批 set_folder_groups**（分组定义写工具：场次规则组的 Agent 侧入口，全量草稿式提交 + 新组 id 后端生成，2026-10-08 定案）→ ⑧ **五批 rename_folders**（文件夹改名 / 批量改名：APP 文件夹批量重命名的 Agent 侧入口，失败跳过汇总、进撤销，2026-10-11 定案并落地）→ ⑨ 余量批（属性词 / 描述 / 打标记；一键写 Agent 配置、已配置工具检测随该批再评）。可选起步垫（库索引导出小命令）未做、随需要再评。接口文档 `docs/05_接口文档/MCP通道.md` + `MCP使用指南.md` 随开发同步。
+① 本 PRD 立项（2026-09-19）→ ② **只读 MCP**（2026-09-19 落地，Codex 真库验证跑通）→ ③ **写入闸首批**（2026-09-19 落地，形态 A + 三写工具 + 偏好设置弹窗）→ ④ **二批结构性五件套**（create_folder / move_placements / link_placements / move_folders / import_paths 方案一冲突策略，2026-09-19 定案并落地）→ ⑤ **三批 trash_placements**（库内回收站可逆删除：允许 AI 丢回收站、彻底删除永不经 MCP，2026-09-20 定案并落地）→ ⑥ **MCP 条目化进插件面板**（2026-09-20 落地：桥接类「AI 外接通道（MCP）」条目 + 详情窗四组——服务总开关 / 允许写入挪入 / 使用教程含 Agent 接入配置复制 / 功能列表 / 路径；偏好设置弹窗退役）→ ⑦ **四批 set_folder_groups**（分组定义写工具：场次规则组的 Agent 侧入口，全量草稿式提交 + 新组 id 后端生成，2026-10-08 定案）→ ⑧ **五批 rename_folders**（文件夹改名 / 批量改名：APP 文件夹批量重命名的 Agent 侧入口，失败跳过汇总、进撤销，2026-10-11 定案并落地）→ ⑨ **只读补批 list_links**（全库链接 Placement 清单：链接位置 + 原始位置（PlacementLink 结构）+ uri，「链接进场次」习惯的可见性配套，2026-10-12 定案并落地）→ ⑩ 余量批（属性词 / 描述 / 打标记；一键写 Agent 配置、已配置工具检测随该批再评）。可选起步垫（库索引导出小命令）未做、随需要再评。接口文档 `docs/05_接口文档/MCP通道.md` + `MCP使用指南.md` 随开发同步。
