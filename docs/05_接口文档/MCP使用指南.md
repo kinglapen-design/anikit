@@ -1,6 +1,6 @@
 # MCP 使用指南（给 Agent 与接入者）
 
-AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期写工具 12 个，写入闸形态 A）。本文是接入与使用说明；协议层细节（握手 / 回包结构 / 错误口径）见 [MCP通道](MCP通道.md)。
+AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期写工具 13 个，写入闸形态 A）。本文是接入与使用说明；协议层细节（握手 / 回包结构 / 错误口径）见 [MCP通道](MCP通道.md)。
 
 ## 连接
 
@@ -10,7 +10,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 - Codex：`config.toml` 加 `[mcp_servers.anikit]` + `url = "http://127.0.0.1:17701/mcp"`，重启会话
 - Claude Code：`claude mcp add --transport http anikit http://127.0.0.1:17701/mcp`
 
-## 工具速览（20 个 = 只读 8 + 写 12）
+## 工具速览（21 个 = 只读 8 + 写 13）
 
 | 工具 | 用途 |
 | --- | --- |
@@ -34,14 +34,15 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 | `assign_prompt`（写） | 指定提示词（2026-09-26 提示词轮）：把库内 md/txt 文本资产设为目标的提示词——目标 `assetId` / `folderId`（档案）二选一 + `promptAssetId`；引用 + 内容快照（源被彻底删除不断链，快照保留）；**进撤销** |
 | `clear_prompt`（写） | 断开提示词：移除目标（`assetId` / `folderId` 二选一）的提示词绑定，快照随解绑清除；**进撤销** |
 | `set_folder_groups`（写） | 设置文件夹分组定义（2026-10-08 四批）：全量草稿式提交——`groups` = 该文件夹分组终态数组（空数组 = 取消分组、漏交 = 删组）；改既有组照 `list_folder_tree` 回包抄 id，新组 id 缺省后端生成随回包返回；规则组 = `rules` 非空自动归组，自由组 = 空 `rules` + `members` 手动归组；**进撤销** |
+| `rename_folders`（写） | 文件夹改名 / 批量改名（2026-10-11 五批）：`items: [{ folderId, newName }]`，单个文件夹改名 = 1 项数组；仅改数据不动磁盘（文件夹无磁盘实体）、同名不拦截（文件夹名允许重复）、失败项（非法名 / 已删 id）跳过进 failed 汇总，回 BatchRenameReport；**进撤销** |
 
 ## 写入开关（二期，默认关）
 
-十二个写工具受**全局写入开关**门禁：插件面板「AI 外接通道（MCP）」详情窗 →「允许写入」（持久化于全局 config.json `settings.mcp.writeEnabled`，默认关；2026-09-20 从偏好设置弹窗挪入，旧 settings.ui.mcpWriteEnabled 自动迁移）。开关**逐次生效**——写调用每次都现查：关态一律回工具级错误「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」，开态直接执行。写前建议流程：
+十三个写工具受**全局写入开关**门禁：插件面板「AI 外接通道（MCP）」详情窗 →「允许写入」（持久化于全局 config.json `settings.mcp.writeEnabled`，默认关；2026-09-20 从偏好设置弹窗挪入，旧 settings.ui.mcpWriteEnabled 自动迁移）。开关**逐次生效**——写调用每次都现查：关态一律回工具级错误「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」，开态直接执行。写前建议流程：
 
 1. `write_text_asset` 覆写内容**不进撤销**（与 APP 内编辑同口径）——先 `read_text_asset` 留底再覆写；
 2. `import_paths` **不进撤销**（导入 = 资产池新增，撤销体系不覆盖）——但冲突策略不阻断：重复导入同文件只会 `skippedDuplicate` 回已有 id，放心重试；
-3. 其余十个（create_document / rename_placements / create_folder / move_placements / move_folders / link_placements / trash_placements / assign_prompt / clear_prompt / set_folder_groups）进撤销——用户在 APP 内 Ctrl+Z 可整步撤回，但仍请克制调用、批量改名一次给全数组；
+3. 其余十一个（create_document / rename_placements / rename_folders / create_folder / move_placements / move_folders / link_placements / trash_placements / assign_prompt / clear_prompt / set_folder_groups）进撤销——用户在 APP 内 Ctrl+Z 可整步撤回，但仍请克制调用、批量改名一次给全数组；
 4. 彻底删除类操作不存在于本通道（L4 永远人工确认），不要尝试构造；丢回收站用 `trash_placements`（可逆）。
 
 ## 典型流程
@@ -75,7 +76,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：一期只读 8 工具 + 二期�
 
 MCP 进 Agent 上下文的开销分三块，对应三招：
 
-- **工具 schema 固定开销**（每会话一次）：20 个工具的说明 + 参数 schema。Kimi Code 侧可在 mcp.json 给 anikit 加 `"deferred": true`（按需加载，见 Kimi Code MCP 文档），不用工具时不占上下文。
+- **工具 schema 固定开销**（每会话一次）：21 个工具的说明 + 参数 schema。Kimi Code 侧可在 mcp.json 给 anikit 加 `"deferred": true`（按需加载，见 Kimi Code MCP 文档），不用工具时不占上下文。
 - **回包体积**（每次调用）：本通道已做两刀——回包仅 `content` 紧凑 JSON、不带 structuredContent 重复副本。Agent 侧配合：先 `search_assets` 缩小范围再按需 `get_asset_detail`，避免不带 folderId 的全库 `list_placements`（几百条 Placement 全字段很占额度）。
 - **图片读取**：看图读 `thumbPath`（webp 缩略图，几百 token 级），非必要不读源图（大图千 token 级）。
 

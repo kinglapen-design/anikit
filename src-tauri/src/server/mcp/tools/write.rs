@@ -1,8 +1,10 @@
 //! 工具：二期首批写工具（PRD 08-06 写入闸形态 A，2026-09-19 用户定，三个，全部
-//! annotations(read_only_hint = false)）——create_document / write_text_asset / rename_placements。
+//! annotations(read_only_hint = false)）——create_document / write_text_asset / rename_placements；
+//! 五批（2026-10-11 用户定）加 rename_folders（文件夹改名 / 批量改名，单条 = 1 项数组，
+//! 复用 commands::operations::rename_folders_op——APP 文件夹批量重命名（PRD 02-14）同实现）。
 //! 门禁 = 全局写入开关（mod.rs write_gate：settings.ui.mcpWriteEnabled 逐次检查，关态回
-//! 「MCP 写入未开启」工具级错误）；撤销口径 = create_document / rename_placements 进撤销
-//!（复用 commands::operations 命令整段抽出的 _op 函数，单写点 + 单撤销步），
+//! 「MCP 写入未开启」工具级错误）；撤销口径 = create_document / rename_placements / rename_folders
+//! 进撤销（复用 commands::operations 命令整段抽出的 _op 函数，单写点 + 单撤销步），
 //! write_text_asset 不进撤销（与 APP 内文本编辑同口径，2026-08-23 定，工具描述同口径告知 Agent）。
 
 use rmcp::handler::server::wrapper::Parameters;
@@ -12,7 +14,7 @@ use tauri::Manager;
 
 use crate::commands::library::AppState;
 use crate::server::mcp::{AnikitMcp, json_result, write_gate};
-use crate::services::operations::RenameItem;
+use crate::services::operations::{RenameFolderItem, RenameItem};
 
 /// create_document 入参
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -68,6 +70,25 @@ pub struct RenamePlacementsParams {
   pub items: Vec<RenameItemParams>,
 }
 
+/// rename_folders 单项（2026-10-11 五批）：folderId + 新名（同 APP 文件夹批量重命名口径）
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameFolderItemParams {
+  /// 文件夹 id（取自 list_folder_tree 节点 id；anikit://folder/{id} 链接形态同吃）
+  #[serde(deserialize_with = "super::de_ref_id")]
+  pub folder_id: String,
+  /// 新名（空名 / Windows 非法字符 / 保留名该项进 failed；同名不拦截——文件夹名允许重复）
+  pub new_name: String,
+}
+
+/// rename_folders 入参
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameFoldersParams {
+  /// 改名清单（单个文件夹改名 = 1 项数组）
+  pub items: Vec<RenameFolderItemParams>,
+}
+
 #[tool_router(router = write_router, vis = "pub")]
 impl AnikitMcp {
   /// 在素材库新建文档入库（md / txt / fla / psd / ai / docx / xlsx），返回 PlacementView。进撤销
@@ -119,6 +140,29 @@ impl AnikitMcp {
     match crate::commands::operations::rename_placements_op(&state, &items) {
       Ok(report) => {
         self.emit_library_changed("rename_placements");
+        json_result(&report)
+      }
+      Err(msg) => Ok(CallToolResult::error(vec![ContentBlock::text(msg)])),
+    }
+  }
+
+  /// 文件夹改名（单个 = 1 项数组，批量 = 多项）。仅改数据不动磁盘（文件夹是数据层分组，
+  /// 无磁盘实体）；同名不拦截（文件夹名允许重复）；失败项（非法名 / 已删除 id）跳过进
+  /// failed 不整体回滚，返回 BatchRenameReport { renamed 成功计数, failed 失败清单（新名 + 原因） }。进撤销
+  #[tool(name = "rename_folders", annotations(read_only_hint = false))]
+  fn rename_folders(&self, Parameters(p): Parameters<RenameFoldersParams>) -> Result<CallToolResult, ErrorData> {
+    if let Some(err) = write_gate() {
+      return Ok(err);
+    }
+    if p.items.is_empty() {
+      return Ok(CallToolResult::error(vec![ContentBlock::text("items 至少 1 项")]));
+    }
+    let items: Vec<RenameFolderItem> =
+      p.items.into_iter().map(|it| RenameFolderItem { folder_id: it.folder_id, new_name: it.new_name }).collect();
+    let state = self.app.state::<AppState>();
+    match crate::commands::operations::rename_folders_op(&state, &items) {
+      Ok(report) => {
+        self.emit_library_changed("rename_folders");
         json_result(&report)
       }
       Err(msg) => Ok(CallToolResult::error(vec![ContentBlock::text(msg)])),

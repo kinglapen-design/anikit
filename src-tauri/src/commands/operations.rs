@@ -95,12 +95,18 @@ pub async fn rename_folder(
 /// 单次落盘 + 单撤销步（报告结构与素材批量重命名 BatchRenameReport 同构）
 #[tauri::command]
 pub async fn rename_folders(state: State<'_, AppState>, items: Vec<RenameFolderItem>) -> Result<BatchRenameReport, String> {
+  rename_folders_op(&state, &items)
+}
+
+/// 批量重命名文件夹整段（锁 library → 锁 undo → 单撤销步）；pub(crate)：server/mcp
+///（AI 外接通道五批写工具 rename_folders）同用——失败项跳过不整体回滚语义对 MCP 同样生效
+pub(crate) fn rename_folders_op(state: &AppState, items: &[RenameFolderItem]) -> Result<BatchRenameReport, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin(format!("批量重命名 {} 个文件夹", items.len()));
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  match operations::rename_folders(lib, &items) {
+  match operations::rename_folders(lib, items) {
     Ok((renamed, failed)) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(BatchRenameReport { renamed, failed })
