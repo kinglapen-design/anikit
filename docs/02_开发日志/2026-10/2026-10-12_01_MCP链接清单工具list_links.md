@@ -19,4 +19,4 @@
 
 cargo check / clippy 净 + cargo test 全绿 + typecheck 0 错。**过程插曲**：从仓库根 `cargo check --manifest-path` 撞 ffmpeg-sys-next pkg-config 报错——`src-tauri/.cargo/config.toml` 的 `[env]`（FFMPEG_DIR / LIBCLANG_PATH）按 cwd 向上查找，根目录跑吃不到；须 `cd src-tauri` 内跑（历史会话一贯如此）。
 
-**待实机走查**：真机握手 tools/list 22 在列 + 实调 list_links 看链接 / 原始位置与 uri（参照四批 10-08 走查法）；改后重打包才进 zip。
+**实机走查（2026-10-12_02 免安装包重打轮已销）**：真机握手 tools/list 22 在列 + 实调 list_links 真库回 274 条零错误零 null origin。
