@@ -3,8 +3,9 @@
 // DetailNotes 业务本体移植，样式换代：旧 SectionHeader → items/SectionTitle block 型（折叠钮常显、
 // 无动作组——添加走预览悬浮栏笔记钮）、旧 02_item 06 稿 item → items/NoteItem（笔记 item 稿件，
 // 时间码数字档 + ni-slide 滑入删除））：
-// 仅库内文件形态（assetId 级——档案无逐帧笔记；回收站选中沿旧口径不渲染）；标题行恒渲染
-//（链接 tab 五区块同款 2026-08-31 口径：没有内容标题也要在），无笔记仅不渲染列表容器。
+// **有笔记才显示（2026-10-12 同日走查用户定——图片无笔记语义，恢复旧 DetailNotes 口径；
+// 撤销本轮「标题行恒渲染」）**：无笔记 / 档案（assetId 级，无逐帧笔记）/ 回收站选中（沿旧口径
+// 不开预览跳帧）= 整个卡片不渲染。
 // 业务不变：watch 目标 assetId / notesStore.version 拉取（get_notes 热刷新）；
 // 时间码 = 视频 帧号/mm:ss 随「时间显示」设置（5.3 帧化，fps 可用才显帧号）/ 动图 f:索引 /
 // 序列帧帧名 → 帧号；× = set_note 空文本（noteCount 角标同步在 store 收尾）；
@@ -137,7 +138,8 @@ async function jump(key: string): Promise<void> {
 </script>
 
 <template>
-  <section v-if="file" class="notes-card">
+  <!-- 有笔记才显示（2026-10-12 走查定）：无笔记 / 档案 / 回收站选中 = 整个卡片不渲染 -->
+  <section v-if="file && notes.length > 0" class="notes-card">
     <SectionTitle
       variant="block"
       title="逐帧笔记"
@@ -146,8 +148,8 @@ async function jump(key: string): Promise<void> {
       static-actions
       @toggle="open = !open"
     />
-    <!-- 无笔记仅不渲染列表容器（空数据不渲染容器口径）；悬停浮帧锚点 = 行外包 relative 槽 -->
-    <div v-if="open && notes.length > 0" class="notes-body">
+    <!-- 折叠 = 列表容器不渲染（空数据不渲染容器口径） -->
+    <div v-if="open" class="notes-body">
       <div
         v-for="n in notes"
         :key="n.key"

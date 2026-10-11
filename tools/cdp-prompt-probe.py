@@ -532,9 +532,13 @@ async def main():
             await ev("document.querySelectorAll('.detail-root .seg-item')[2]?.click()")
             await asyncio.sleep(0.9)
             check("S5a-0 切自定义组件 tab（提示词卡片可见）", await ev("!!document.querySelector('.prompt-block')"))
-            # 逐帧笔记卡片（2026-10-12 接回）：文件形态标题行恒渲染（桩无笔记数据 = 仅标题行无列表）
-            check("S5a-0b 逐帧笔记卡片标题行在（文件形态）",
-                  await ev("document.querySelector('.notes-card .st .txt')?.textContent === '逐帧笔记'"))
+            # 提示词卡片标题行（2026-10-12 同日走查用户定：包 SectionTitle 标题行）
+            check("S5a-0a 提示词卡片标题行 = 「提示词」",
+                  await ev("document.querySelector('.prompt-block .st .txt')?.textContent === '提示词'"))
+            # 逐帧笔记卡片 = 有笔记才显示（2026-10-12 同日走查修订：图片无笔记语义；
+            # 桩无笔记数据 → 不渲染；撤销首轮「标题行恒渲染」口径）
+            check("S5a-0b 逐帧笔记卡片无笔记不渲染（2026-10-12 走查修订）",
+                  await ev("!document.querySelector('.notes-card')"))
             st = await ev(PROMPT_STATE)
             check("S5a-1 none 态编辑框隐藏（无 textarea，2026-10-08 定）",
                   bool(st and st["text"] is None and st["placeholder"] is None), json.dumps(st, ensure_ascii=False))

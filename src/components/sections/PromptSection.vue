@@ -2,7 +2,7 @@
 // 提示词卡片（自定义组件 tab 卡片，2026-10-12 挪入——2026-09-26 二轮「挪基础信息末位」口径修订，
 // 三 tab 语义分界：基础信息 = 是什么 / 链接关系 = 和谁连着 / 自定义组件 = 文件级生产批注扩展；
 // 稿 = 右侧边栏-详情面板-提示词 的编辑框/复制钮沿用；区块壳 = 详情区块同款
-// padding 12 / gap 12 / border-top 通用/三级，无标题行）：
+// padding 12 / gap 12 / border-top 通用/三级）：
 //   编辑框（240×232 / padding 12 / 通用二级底 + 通用三级 1px / 圆角 8）——内文 次要文字 12/16 四级，
 //     悬浮复制钮（右上内缩 12，30×30 通用/半透明-2 + 立体感-通用 / 圆角 6 / copy 图标 18 三级）；
 //   按钮组单行三钮均分（gap 8，IconButton solid 高 34 填充式 / 图标 18 恒二级）——
@@ -15,11 +15,14 @@
 //       删除提示词文档（源丢回收站 + 解绑）。
 //   图标（2026-09-26 用户补源十八批）：扫描 = analyze-prompt / 新建 = add-new-prompt /
 //     指定 = set-prompt-file / 编辑 = open-prompt-editor / 断开 = break-prompt-link / 删除 = trash。
+// 标题行（2026-10-12 同日走查，用户定）：items/SectionTitle block 型「提示词」——折叠钮常显、
+//   无动作组（操作钮在卡片内三钮）；折叠 = 编辑框与按钮组整块不渲染（会话级）。
 // 展示语义：编辑框只读；已指定态实时经 read_text_asset 读源最新内容显示（invoke 失败 / 无 assetId
 // 回落快照 content）；无提示词态整块隐藏编辑框只留三钮（2026-10-08 用户定——框不可输入，空着占位置没意义）。
 import { computed, ref, watch } from "vue";
 import IconButton from "../buttons/IconButton.vue";
 import AppIcon from "../AppIcon.vue";
+import SectionTitle from "../items/SectionTitle.vue";
 import { useContentStore } from "../../stores/content";
 import type { DetailTarget } from "../../lib/detailSections";
 import type { PickerTarget } from "../../lib/relationOps";
@@ -40,6 +43,9 @@ import { readTextAsset } from "../../lib/textOps";
 
 const props = defineProps<{ target: Extract<DetailTarget, { kind: "file" | "archive" }> }>();
 const content = useContentStore();
+
+// 标题行折叠（会话级，默认展开）
+const open = ref(true);
 
 const file = computed(() => (props.target.kind === "file" ? props.target : null));
 const archive = computed(() => (props.target.kind === "archive" ? props.target : null));
@@ -154,6 +160,16 @@ function onCopy(): void {
 
 <template>
   <section class="prompt-block">
+    <!-- 标题行（2026-10-12 同日走查用户定）：折叠钮常显、无动作组（操作在下方三钮） -->
+    <SectionTitle
+      variant="block"
+      title="提示词"
+      :expanded="open"
+      :actions="false"
+      static-actions
+      @toggle="open = !open"
+    />
+    <template v-if="open">
     <!-- 编辑框（稿：isolate 供复制钮绝对定位）；只读展示，无提示词态整块隐藏只留三钮（2026-10-08 用户定） -->
     <div v-if="state !== 'none'" class="editor">
       <textarea
@@ -199,6 +215,7 @@ function onCopy(): void {
         @click="onDeleteDoc"
       />
     </div>
+    </template>
   </section>
 </template>
 
