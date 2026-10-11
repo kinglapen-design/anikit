@@ -32,6 +32,7 @@
     "codemirror": "^6.0.2",
     "dockview-core": "^7.0.4",
     "dockview-vue": "^7.0.4",
+    "mammoth": "^1.13.0",
     "markdown-it": "^15.0.0",
     "pinia": "^4.0.2",
     "vue": "^3.5.40"

@@ -1,25 +1,87 @@
-# CDP 实测：R6 docx 预览（2026-09-22，拓展性验证首例）。
-# 场景：A docx 卡片双击 → kind=docx 分派 + previewSpecs 注册命中（.docx-preview 渲染，
-# 标题/粗斜体/列表/空行/截断提示结构断言）；B showImg 白名单生效（thumbPath 桩非空但
-# .preview-stage 下不渲染 img——排除式清单漏加新 kind 的回归点）；C 标题栏「默认应用打开」
-# 判定式覆盖 docx；D 回归：png 卡片预览仍走 img（白名单不误伤 image kind）。
-# 桩模式不验后端 zip 解析（cargo test services::docx 8 例已覆盖真实 zip 回路）。
+# CDP 实测：docx 预览 mammoth 链路（2026-10-10 换引擎，PRD 04-04 条 6；初代 quick-xml 段落提取版作废——
+# 用户实机「反馈文档 = 视频截图配文字」，表格平铺 / 无图片不达标）。
+# 场景：A docx 卡片双击 → kind=docx 分派 + mammoth 转 HTML 渲染（标题 / 粗体 / 表格框线 / 图片内嵌
+# data URI / 列表）——桩造真 docx（zip + 表格 + 内嵌 1px PNG，python zipfile 手搓 XML）；
+# B showImg 白名单（.img-wrap 不出现——docx 的 img 只许长在 .docx-html 里）；C「默认应用打开」按钮；
+# D 回归：png 卡片预览仍走 img。
+# 桩模式不验后端（cargo test services::docx 覆盖字节回路）；文本卡懒加载仍走 read_docx_asset（桩同供）。
 import asyncio
 import base64
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.request
+import zipfile
 
 import websockets
 
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # 控制台 GBK 装不下 • 等字符
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 PORT = 9372
 URL = "http://localhost:5373"
+
+# 1×1 PNG（内嵌图夹具）
+PNG_1PX = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+
+# 最小合法 docx：标题段 + 粗体段 + 2x2 表格 + 内嵌图段
+DOCUMENT_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+ xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+ xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+ xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>分镜脚本 与 备注</w:t></w:r></w:p>
+<w:p><w:r><w:t>主角从左侧入画，</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>快步</w:t></w:r><w:r><w:t>走向讲台。</w:t></w:r></w:p>
+<w:tbl>
+<w:tr><w:tc><w:p><w:r><w:t>镜头</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>时长</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>全景</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>2 秒</w:t></w:r></w:p></w:tc></w:tr>
+</w:tbl>
+<w:p><w:r><w:drawing><wp:inline><wp:extent cx="914400" cy="914400"/>
+<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+<pic:pic><pic:blipFill><a:blip r:embed="rId5"/></pic:blipFill></pic:pic>
+</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+</w:body></w:document>"""
+
+STYLES_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style>
+</w:styles>"""
+
+CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Default Extension="png" ContentType="image/png"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>"""
+
+RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>"""
+
+DOC_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/img1.png"/>
+</Relationships>"""
+
+
+def build_docx_b64() -> str:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", CONTENT_TYPES)
+        z.writestr("_rels/.rels", RELS)
+        z.writestr("word/document.xml", DOCUMENT_XML)
+        z.writestr("word/styles.xml", STYLES_XML)
+        z.writestr("word/_rels/document.xml.rels", DOC_RELS)
+        z.writestr("word/media/img1.png", PNG_1PX)
+    return base64.b64encode(buf.getvalue()).decode()
+
 
 STUB = r"""
 window.__calls = [];
@@ -49,22 +111,14 @@ window.__TAURI_INTERNALS__ = {
       get_notes: [],
       prepare_anim_strips: { items: [] },
     };
+    if (cmd === "read_docx_binary") {
+      // 原始 IPC 正常路径回 ArrayBuffer；桩经 JSON 只能回 number[]——docxOps.readDocxBinary 有回退归一
+      const u8 = Uint8Array.from(atob(window.__docxB64), (c) => c.charCodeAt(0));
+      return Promise.resolve(Array.from(u8));
+    }
     if (cmd === "read_docx_asset") {
-      return Promise.resolve({
-        paragraphs: [
-          { heading: 1, list: false, runs: [{ text: "分镜脚本 & 备注", bold: false, italic: false }] },
-          { heading: 2, list: false, runs: [{ text: "第一幕 登场", bold: false, italic: false }] },
-          { heading: 0, list: false, runs: [
-            { text: "主角从左侧入画，", bold: false, italic: false },
-            { text: "快步", bold: true, italic: false },
-            { text: "走向讲台。", bold: false, italic: false },
-          ] },
-          { heading: 0, list: true, runs: [{ text: "全景，2 秒", bold: false, italic: false }] },
-          { heading: 0, list: false, runs: [] },
-          { heading: 0, list: true, runs: [{ text: "斜体备注：注意光影", bold: false, italic: true }] },
-        ],
-        truncated: true,
-      });
+      // 文本卡懒加载仍走段落提取（卡片不吃 mammoth）
+      return Promise.resolve({ paragraphs: [{ heading: 0, list: false, runs: [{ text: "卡片正文", bold: false, italic: false }] }], truncated: false });
     }
     if (cmd === "get_asset_file_path") return Promise.resolve({ path: "E:/T/src.png", pending: false, animPreview: null });
     return Promise.resolve(Object.prototype.hasOwnProperty.call(R, cmd) ? R[cmd] : null);
@@ -72,7 +126,8 @@ window.__TAURI_INTERNALS__ = {
   transformCallback: () => 0,
   convertFileSrc: (p) => "asset://localhost/" + encodeURIComponent(p),
 };
-"""
+window.__docxB64 = "__DOCX_B64__";
+""".replace("__DOCX_B64__", build_docx_b64())
 
 _msg_id = 0
 
@@ -161,51 +216,44 @@ async def main():
                     f.write(base64.b64decode(s["result"]["data"]))
                 print("截图:", out)
 
-            # —— 场景 A/B/C：docx 预览结构 + showImg 白名单 + 打开按钮 ——
-            await open_card(0, 2.0)
+            # —— 场景 A/B/C：docx mammoth 渲染 + showImg 白名单 + 打开按钮 ——
+            await open_card(0, 2.5)
             a = await ev("""(() => {
               const stage = document.querySelector('.preview-stage');
               const root = document.querySelector('.docx-preview');
               if (!stage || !root) return null;
-              const body = root.querySelector('.docx-body');
+              const body = root.querySelector('.docx-html');
+              if (!body) return { noHtml: true };
+              const imgs = body.querySelectorAll('img');
               return {
-                imgInStage: stage.querySelectorAll('img').length,
+                wrapImgs: stage.querySelectorAll('.img-wrap img').length,
                 h1: body.querySelector('h1')?.textContent ?? null,
-                h2: body.querySelector('h2')?.textContent ?? null,
-                bold: [...body.querySelectorAll('.b')].map((s) => s.textContent),
-                italic: [...body.querySelectorAll('.i')].map((s) => s.textContent),
-                lists: body.querySelectorAll('.list').length,
-                bullets: [...body.querySelectorAll('.bullet')].map((s) => s.textContent),
-                blanks: body.querySelectorAll('.blank').length,
-                paras: [...body.children].filter((c) => !c.classList.contains('truncated-hint') && !c.classList.contains('empty-hint')).length,
-                truncated: root.querySelector('.truncated-hint')?.textContent ?? null,
-                readCalls: window.__calls.filter((c) => c.cmd === 'read_docx_asset').map((c) => c.args.assetId),
+                bold: [...body.querySelectorAll('strong')].map((s) => s.textContent),
+                tables: body.querySelectorAll('table').length,
+                cells: [...body.querySelectorAll('td')].map((c) => c.textContent),
+                imgs: imgs.length,
+                imgSrc: imgs[0]?.src.slice(0, 30) ?? null,
+                binaryCalls: window.__calls.filter((c) => c.cmd === 'read_docx_binary').map((c) => c.args.assetId),
               };
             })()""")
-            print("[docx]", json.dumps(a, ensure_ascii=False))
+            print("[docx mammoth]", json.dumps(a, ensure_ascii=False))
             if not a:
                 fails.append("[docx] 预览组件未渲染（kind 分派 / spec 注册未命中）")
+            elif a.get("noHtml"):
+                fails.append("[docx] mammoth HTML 容器未出现（转换失败）")
             else:
-                if a["imgInStage"] != 0:
-                    fails.append(f"[docx] showImg 白名单失效：stage 内出现 img ×{a['imgInStage']}")
-                if a["h1"] != "分镜脚本 & 备注":
-                    fails.append(f"[docx] h1 不符（{a['h1']}）")
-                if a["h2"] != "第一幕 登场":
-                    fails.append(f"[docx] h2 不符（{a['h2']}）")
+                if a["wrapImgs"] != 0:
+                    fails.append(f"[docx] showImg 白名单失效：.img-wrap 出现 img ×{a['wrapImgs']}")
+                if a["h1"] != "分镜脚本 与 备注":
+                    fails.append(f"[docx] h1 不符（{a['h1']}）——styles.xml heading 1 映射未生效")
                 if a["bold"] != ["快步"]:
                     fails.append(f"[docx] 粗体不符（{a['bold']}）")
-                if a["italic"] != ["斜体备注：注意光影"]:
-                    fails.append(f"[docx] 斜体不符（{a['italic']}）")
-                if a["lists"] != 2 or a["bullets"] != ["•", "•"]:
-                    fails.append(f"[docx] 列表不符（lists={a['lists']} bullets={a['bullets']}）")
-                if a["blanks"] != 1:
-                    fails.append(f"[docx] 空行段落 {a['blanks']}（期望 1）")
-                if a["paras"] != 6:
-                    fails.append(f"[docx] 段落总数 {a['paras']}（期望 6）")
-                if a["truncated"] != "文档过大，仅显示前一部分":
-                    fails.append(f"[docx] 截断提示不符（{a['truncated']}）")
-                if not a["readCalls"] or any(c != "D1" for c in a["readCalls"]):
-                    fails.append(f"[docx] read_docx_asset 调用不符（{a['readCalls']}）——应全为 D1（文本卡懒加载 + 预览各一次均合法，2026-09-22 文本卡接线后 ≥1 次）")
+                if a["tables"] != 1 or a["cells"] != ["镜头", "时长", "全景", "2 秒"]:
+                    fails.append(f"[docx] 表格不符（tables={a['tables']} cells={a['cells']}）")
+                if a["imgs"] != 1 or not (a["imgSrc"] or "").startswith("data:image/png"):
+                    fails.append(f"[docx] 图片内嵌不符（imgs={a['imgs']} src={a['imgSrc']}）")
+                if a["binaryCalls"] != ["D1"]:
+                    fails.append(f"[docx] read_docx_binary 调用不符（{a['binaryCalls']}）")
             # 「默认应用打开」按钮：IconButton title 走 v-tip 不落 DOM 属性——按按钮组位序点击
             # （插件 / 默认应用打开 / 新窗口 / 上 / 下一个，docx 非 viewable 无缩放组 = 索引 1），
             # 以 open_with_default_app 调用反证按钮存在且接线活
@@ -233,7 +281,7 @@ async def main():
             if fails:
                 print("FAIL:", "; ".join(dict.fromkeys(fails)))
                 return 3
-            print("PASS: R6 docx 预览链路成立（kind 分派 / spec 注册 / 结构渲染 / showImg 白名单 / 打开按钮判定式 / png 回归）")
+            print("PASS: docx mammoth 预览链路成立（kind 分派 / 标题粗体 / 表格 / 图片内嵌 / showImg 白名单 / 打开按钮 / png 回归）")
             return 0
     finally:
         proc.terminate()

@@ -1,5 +1,8 @@
-//! 命令 API：docx 预览（PRD 04-04 条 6，2026-09-22 R6 新功能验证首例）。
-//! read_docx_asset = docx 只读预览内容提取（services/docx 解析段落结构，非版式级渲染）；
+//! 命令 API：docx 预览（PRD 04-04 条 6）。
+//! read_docx_binary = 预览给原始字节（2026-10-10 mammoth 换引擎：前端 mammoth.js 转 HTML，
+//! 表格带框线 / 图片内嵌）；read_docx_asset = 库内文本卡段落结构提取（卡片要轻文本、不渲染 HTML
+//! 不吃 mammoth——图文大文档按字节拉进卡片太贵，2026-10-10 换引擎时实证存活）；read_docx_by_path =
+//! 工作空间文本卡同口径按路径版。
 //! 只读不编辑，无写命令（编辑走默认应用打开，「软件内部不内置编辑器」口径）。
 
 use tauri::State;
@@ -10,10 +13,27 @@ use crate::core::space::WORKSPACE_DIR;
 use crate::services::docx::{self, DocxContent};
 use crate::services::workspace as ws;
 
-/// 读取 docx 预览内容（段落结构 + 截断标记；XML 32MB / 文本 2MB 上限见 services/docx）。
+/// 读取 docx 原始字节（预览 mammoth 链路；64MB 容量闸在 services::docx::read_docx_bytes）。
+/// 返回原始二进制 IPC 响应（前端 invoke 得 ArrayBuffer，不经 JSON 序列化）。
 /// async：文件 IO，一律走线程池（规范第 2 条）
-/// 2026-10-08 origin 外部编辑自愈（同 read_text_asset 触点口径——Word 等默认应用回写后
-/// size/mtime 漂移自愈 + 广播 asset-origin-healed）
+/// origin 外部编辑自愈触点（同 read_text_asset 口径——Word 等默认应用回写后 size/mtime
+/// 漂移自愈 + 广播 asset-origin-healed）
+#[tauri::command]
+pub async fn read_docx_binary(app: tauri::AppHandle, state: State<'_, AppState>, asset_id: String) -> Result<tauri::ipc::Response, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  if let Some((size, modified_at)) = crate::services::origin_sync::heal_if_drifted(lib, &asset_id) {
+    crate::services::origin_sync::emit_healed(&app, &asset_id, size, &modified_at);
+  }
+  let (_info_dir, origin, _meta) = locate_asset(lib, &asset_id)?;
+  let bytes = docx::read_docx_bytes(&origin)?;
+  Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// 读取 docx 预览内容（段落结构 + 截断标记；XML 32MB / 文本 2MB 上限见 services/docx）。
+/// 消费方 = 库内文本卡正文懒加载（lib/cardText.ts；预览已换 mammoth 不走此路）。
+/// async：文件 IO，一律走线程池（规范第 2 条）
+/// 2026-10-08 origin 外部编辑自愈（同 read_text_asset 触点口径）
 #[tauri::command]
 pub async fn read_docx_asset(app: tauri::AppHandle, state: State<'_, AppState>, asset_id: String) -> Result<DocxContent, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;

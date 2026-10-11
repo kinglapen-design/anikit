@@ -424,6 +424,7 @@ pub fn run() {
       commands::text::read_text_asset,
       commands::text::read_text_by_path,
       commands::text::write_text_asset,
+      commands::docx::read_docx_binary,
       commands::docx::read_docx_asset,
       commands::docx::read_docx_by_path,
       commands::notes::get_notes,

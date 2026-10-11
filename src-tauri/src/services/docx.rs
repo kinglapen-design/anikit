@@ -1,9 +1,8 @@
-//! docx 预览文本提取（PRD 04-04 条 6，2026-09-22 R6 新功能验证首例）：zip 取 word/document.xml，
-//! quick-xml 流式解析段落结构——标题级（pStyle = Heading1-6 / 中文 Word 样式 id "1"-"6" / Title）、
-//! 粗体（w:b）/ 斜体（w:i，w:val 关闭态识别）、列表标记（w:numPr，统一一级）；w:br → \n、w:tab → \t。
-//! 表格内容按段落平铺（无框线），图片 / 分栏 / 页眉页脚 / 文本框不还原（非版式级渲染，
-//! 「软件不内置文档渲染器」口径不变）。上限：document.xml 解压后 32MB（防解压炸弹，按实读字节截流）、
-//! 文本总量 2MB（对齐 services/text）截断置 truncated。零新依赖（zip / quick-xml 为 8.3 fla XFL 既有依赖）。
+//! docx 服务（PRD 04-04 条 6）：两路——① **预览 = read_docx_bytes 给原始字节**（2026-10-10 mammoth 换引擎：
+//! 解析 / 渲染全在前端 mammoth.js，表格带框线 + 图片内嵌；后端只管存在性 / 格式门 / 64MB 容量闸）；
+//! ② 工作空间文本卡内容 = read_docx 段落提取（2026-09-22 R6 首例：zip 取 word/document.xml，quick-xml
+//! 流式解析段落结构——标题级 / 粗斜体 / 列表标记；w:br → \n；上限：document.xml 解压后 32MB 截流防爆、
+//! 文本 2MB 截断置 truncated）。零新后端依赖（zip / quick-xml 为 8.3 fla XFL 既有依赖）。
 
 use std::fs;
 use std::io::Read;
@@ -50,6 +49,23 @@ pub fn is_docx(path: &Path) -> bool {
     .extension()
     .map(|s| s.to_string_lossy().eq_ignore_ascii_case("docx"))
     .unwrap_or(false)
+}
+
+/// 预览 HTML 化（2026-10-10 mammoth 换引擎）的文件字节上限（64MB——截图反馈文档图多量大；
+/// 解压 / 转换由前端 mammoth + JSZip 自理，此闸只防巨型包一次读爆内存）
+const MAX_DOCX_BYTES: u64 = 64 * 1024 * 1024;
+
+/// 读取 docx 原始字节（ mammoth 预览链路：后端只做存在性 / 格式门 / 容量闸 + 给字节，解析全部前端）
+pub fn read_docx_bytes(origin: &Path) -> Result<Vec<u8>, String> {
+  if !is_docx(origin) {
+    let name = origin.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| origin.to_string_lossy().into_owned());
+    return Err(format!("「{name}」不是 docx 资源"));
+  }
+  let size = fs::metadata(origin).map_err(|e| format!("文件读取失败：{e}"))?.len();
+  if size > MAX_DOCX_BYTES {
+    return Err("文档过大（超过 64MB），暂不支持预览".to_string());
+  }
+  fs::read(origin).map_err(|e| format!("文件读取失败：{e}"))
 }
 
 /// 读取并解析 docx：zip 取 word/document.xml → 段落结构提取
@@ -335,6 +351,24 @@ mod tests {
     assert!(text.len() <= MAX_TEXT_BYTES);
     // 截断点紧贴上限（"字" 3 字节，char 边界回退 ≤2 字节）
     assert!(text.len() > MAX_TEXT_BYTES - 3);
+  }
+
+  #[test]
+  fn read_docx_bytes_roundtrip_and_gates() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = make_docx(
+      dir.path(),
+      "反馈.docx",
+      &format!("{DOC_OPEN}<w:p><w:r><w:t>截图配字</w:t></w:r></w:p>{DOC_CLOSE}"),
+    );
+    // 字节级一致（mammoth 链路 = 原样给字节，不改一字）
+    assert_eq!(read_docx_bytes(&path).unwrap(), fs::read(&path).unwrap());
+    // 非 docx 格式门（扩展名先于存在性）
+    let err = read_docx_bytes(dir.path().join("笔记.txt").as_path()).unwrap_err();
+    assert!(err.contains("不是 docx 资源"), "{err}");
+    // 不存在 → 读取失败
+    let err = read_docx_bytes(dir.path().join("不存在.docx").as_path()).unwrap_err();
+    assert!(err.contains("读取失败"), "{err}");
   }
 
   #[test]
