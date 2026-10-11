@@ -1,13 +1,17 @@
 # CDP 实测：提示词轮 + 二/三轮改版（2026-09-26；spec = src/lib/menuSpecs/promptMenu.ts +
 # src/lib/promptOps.ts + src/components/sections/PromptSection.vue + stores/picker.ts enterPrompt）
 # 二轮改版（用户定案）：详情第三 tab「提示词」废除（改「自定义组件」占位 TabCustom），提示词挪
-# 基础信息 tab 末位区块（PromptSection，注册表 fields/tags/descs/baseData/prompt）；五钮稿废 =
+# 基础信息 tab 末位区块；五钮稿废 =
 # 两态三钮——无提示词 = 扫描（仅文件且 png/jpg/jpeg/webp）/ 新建（点击弹二级 .md/.txt）/ 指定（picker）；
 # 有提示词 = 编辑 / 断开提示词链接 / 删除提示词文档。
 # 三轮改版（2026-09-26 用户再定）：scanned 态按钮独立成套——保存提示词（save-prompt，
 # new_asset_prompt_document kind=md 存为 md 并绑定 → 转已指定，单目标自动开预览）/ 重新扫描
 # （analyze-prompt = analyze_asset_prompt）/ 删除提示词（trash = clear_asset_prompt
 # label「删除提示词」，清快照回未指定）；二轮 scanned「编辑先存再开 / 断开清空 / 删除禁用」整组废除。
+# 四轮改版（2026-10-12 用户定）：提示词自基础信息末位挪回自定义组件 tab（三 tab 语义分界 =
+# 是什么 / 和谁连着 / 文件级生产批注扩展），同 tab 装入逐帧笔记卡片（NotesSection 接回换代）；
+# 注册表 = basic[fields/tags/descs/baseData] / custom[prompt/notes]；详情断言前先切第三 seg-item
+#（ui.detailTab 全局记忆，切一次后续选中保持 custom）。
 # 图标改名：新建 add-new-prompt（旧 add-large）、断开 break-prompt-link（旧 link）。
 # 桩：同一文件夹 f1 内六卡——P1 png·未指定 / P2 png·已扫描 / P3 png·已指定(→T1) / F1 fla·未指定
 # （扫描格式闸负例）/ T1 txt / T2 md（picker 文本卡）；树档案 a1·未指定 / a2·已指定(→T2)。
@@ -25,9 +29,11 @@
 #    指定 → picker 横幅；fla 负例扫描禁用）与 scanned（三轮独立三钮：保存 →
 #    new_asset_prompt_document kind=md + 开预览 / 重新扫描 → analyze_asset_prompt /
 #    删除提示词 → clear_asset_prompt label「删除提示词」）；档案无扫描钮（两钮）；
-# S6 指定 picker：横幅文案 + 品牌框 + 网格只渲文本卡 + 点 md 卡 assign_asset_prompt + 退模式 toast；
+# S6 指定 picker：横幅文案 + picking 态（品牌框 2026-10-02 起挪 DWM 窗口边框染色，前端 ::after
+#    撤除不可断言）+ 网格只渲文本卡 + 点 md 卡 assign_asset_prompt + 退模式 toast；
 # S7 主菜单 整理▸提示词：无选中整组 disabled 恒列 / 单选文件按态点亮 / 单选档案三项（无分析）；
-# S8 信息查看管理弹窗：三段 = 基础信息/链接关系/自定义组件，基础信息段含「提示词」行，自定义组件段空。
+# S8 信息查看管理弹窗：三段 = 基础信息/链接关系/自定义组件；基础信息段四行（提示词已挪），
+#    自定义组件段 = 提示词/逐帧笔记两行（2026-10-12 四轮）。
 # 截图留档 tools/style-preview/：prompt-picker / prompt-section-linked。
 import asyncio
 import base64
@@ -454,9 +460,8 @@ async def main():
                 cards,
               };
             })()""")
-            check("S6-1 picker 四重标识：picking + 品牌框 + 横幅文案",
-                  bool(s6 and s6["picking"] and s6["bw"] in ("1px", "1.5px") and s6["bc"] == "rgb(15, 137, 236)"
-                       and s6["banner"] == "选择文本文件，为 [走路.png] 指定提示词"),
+            check("S6-1 picker 标识：picking + 横幅文案（品牌框 2026-10-02 起挪 DWM 窗口边框染色，前端 ::after 撤除不可断言）",
+                  bool(s6 and s6["picking"] and s6["banner"] == "选择文本文件，为 [走路.png] 指定提示词"),
                   json.dumps(s6, ensure_ascii=False))
             check("S6-2 网格只渲文本卡（T1/T2；png/fla 全过滤）",
                   bool(s6 and sorted(s6["cards"]) == ["T1|f1", "T2|f1"]), json.dumps(s6["cards"] if s6 else None))
@@ -471,7 +476,7 @@ async def main():
             toast_text = await poll("[...document.querySelectorAll('.toast')].map((x) => x.textContent).join('|')")
             check("S6-5 退模式 toast（已为「走路.png」指定提示词）", bool(toast_text and "已为「走路.png」指定提示词" in toast_text), str(toast_text))
 
-            # —— S8 信息查看管理弹窗（提示词挪基础信息区块 + 第三段「自定义组件」占位）——
+            # —— S8 信息查看管理弹窗（2026-10-12 四轮：提示词挪自定义组件段 + 逐帧笔记行填入）——
             await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
             await js_click(el_center(CARD("P1|f1")))
             await asyncio.sleep(0.8)
@@ -481,17 +486,23 @@ async def main():
             check("S8-1 管理弹窗三段 = 基础信息/链接关系/自定义组件",
                   s8seg == ["基础信息", "链接关系", "自定义组件"], str(s8seg))
             s8rows = await ev("[...document.querySelectorAll('.info-manage .im-row .row-title')].map((x) => x.textContent)")
-            check("S8-2 基础信息段含「提示词」行（注册表末位）",
-                  s8rows == ["名称与链接", "标签", "详情", "基本数据", "提示词"], str(s8rows))
+            check("S8-2 基础信息段四行（提示词已挪自定义组件段，2026-10-12 四轮）",
+                  s8rows == ["名称与链接", "标签", "详情", "基本数据"], str(s8rows))
             await ev("document.querySelectorAll('.info-manage .seg-item')[2]?.click()")
-            await asyncio.sleep(0.6)
-            s8c = await ev("document.querySelectorAll('.info-manage .im-row').length")
-            check("S8-3 自定义组件段 = 空行列表（占位容器）", s8c == 0, str(s8c))
+            # 切段动画双 pane 并存期旧段行仍在 DOM——取最后 pane（新入场段），轮询至行集到位
+            s8c = None
+            for _ in range(10):
+                await asyncio.sleep(0.3)
+                s8c = await ev("(() => { const panes = [...document.querySelectorAll('.info-manage .im-pane')]; const p = panes[panes.length - 1]; return p ? [...p.querySelectorAll('.im-row .row-title')].map((x) => x.textContent) : null; })()")
+                if s8c == ["提示词", "逐帧笔记"]:
+                    break
+            check("S8-3 自定义组件段 = 提示词/逐帧笔记两行（2026-10-12 四轮）",
+                  s8c == ["提示词", "逐帧笔记"], str(s8c))
             await ev("document.querySelector('.info-manage .bm-titlebar .ic-btn')?.click()")  # 关闭钮
             await asyncio.sleep(0.5)
             check("S8-4 弹窗关闭", await ev("!document.querySelector('.info-manage')"))
 
-            # PromptSection 状态读取（基础信息 tab 末位区块）：编辑框文案 + 三钮 disabled
+            # PromptSection 状态读取（自定义组件 tab 首卡，2026-10-12 四轮）：编辑框文案 + 三钮 disabled
             #（无态 = 扫描/新建/指定，档案无扫描 = 两钮；有态 = 编辑/断开/删除）+ 复制钮 disabled；
             # 无提示词态编辑框整块隐藏（2026-10-08 定），text/placeholder/copy 均 null
             PROMPT_STATE = """(() => {
@@ -514,8 +525,16 @@ async def main():
             none_svgs = None
             linked_svgs = None
 
-            # —— S5a 详情提示词区块·none（P1 png：扫描/新建/指定 三钮；复制禁用）——
+            # —— S5a 详情提示词卡片·none（P1 png：扫描/新建/指定 三钮；复制禁用）——
+            # 提示词卡片在自定义组件 tab（2026-10-12 四轮）：选中后切第三段再断言
+            #（ui.detailTab 全局记忆——切一次，后续 S4/S5b/S5c 换选中保持 custom 不再切）
             await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
+            await ev("document.querySelectorAll('.detail-root .seg-item')[2]?.click()")
+            await asyncio.sleep(0.9)
+            check("S5a-0 切自定义组件 tab（提示词卡片可见）", await ev("!!document.querySelector('.prompt-block')"))
+            # 逐帧笔记卡片（2026-10-12 接回）：文件形态标题行恒渲染（桩无笔记数据 = 仅标题行无列表）
+            check("S5a-0b 逐帧笔记卡片标题行在（文件形态）",
+                  await ev("document.querySelector('.notes-card .st .txt')?.textContent === '逐帧笔记'"))
             st = await ev(PROMPT_STATE)
             check("S5a-1 none 态编辑框隐藏（无 textarea，2026-10-08 定）",
                   bool(st and st["text"] is None and st["placeholder"] is None), json.dumps(st, ensure_ascii=False))
@@ -638,13 +657,16 @@ async def main():
             st = await poll(f"(() => {{ const s = {PROMPT_STATE}; return s && s.text === '快照内容' ? s : null; }})()")
             check("S4b linked 读源失败回落快照 content", bool(st and st["text"] == "快照内容"), json.dumps(st, ensure_ascii=False))
 
-            # —— S5c 档案详情提示词区块（a1·none）：无扫描钮（新建/指定两钮）——
+            # —— S5c 档案详情提示词卡片（a1·none）：无扫描钮（新建/指定两钮）——
+            #（text 期望 None：2026-10-08 无态隐藏编辑框后 textarea 不存在——该轮漏改本条，2026-10-12 顺手修）
             await ev("[...document.querySelectorAll('.toast')].forEach((x) => x.remove())")
             await js_click(el_center(TREE_NODE("a1")))
             await asyncio.sleep(0.9)
             st = await ev(PROMPT_STATE)
             check("S5c 档案 none：无扫描钮（新建/指定两钮可用）",
-                  bool(st and st["btns"] == [False, False] and st["text"] == ""), json.dumps(st, ensure_ascii=False))
+                  bool(st and st["btns"] == [False, False] and st["text"] is None), json.dumps(st, ensure_ascii=False))
+            # 档案形态无逐帧笔记卡片（assetId 级业务，2026-10-12）
+            check("S5c-2 档案形态无逐帧笔记卡片", await ev("!document.querySelector('.notes-card')"))
 
             await send(ws, "Target.closeTarget", {"targetId": tid})
     finally:

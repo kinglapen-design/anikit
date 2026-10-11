@@ -416,7 +416,7 @@ export const useContentStore = defineStore("content", {
     // 详情面板 / 预览等单资产消费方原样不动；空串 = 无选中（语义同原 state 字段）。
     // 序列帧包内视图（5.2，2026-08-21 用户定：详情面板停留序列帧的详情不为空）：
     // 选择域进包时已清空（防全局 Delete 误伤），此处回退 placements 内该包资产（origin 优先；
-    // 包已解散 = 空串空面板）——消费方仅 DetailPanel / DetailNotes，两者据此显示包的详情与笔记
+    // 包已解散 = 空串空面板）——消费方仅 DetailPanel / NotesSection，两者据此显示包的详情与笔记
     selectedAssetKey(): string {
       const first = useSelectionStore().first;
       if (first) return first;

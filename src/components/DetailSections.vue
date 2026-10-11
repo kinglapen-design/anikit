@@ -2,8 +2,8 @@
 // 详情面板壳（7.1 二十三轮三 tab 化重构，稿 = 右侧边栏-详情面板 + 分段控制器）：
 // 结构 = pinned 缩略图/封面区块（恒顶，SectionPinned）
 //   → 分段控制器（border-top 块 padding 12；icon 型三段：基础信息 basic-info / 链接关系 link-relations /
-//     自定义组件 custom-component（2026-09-26 提示词二轮——原「提示词」tab 废除，提示词挪基础信息区块，
-//     第三 tab = 自定义卡片占位容器，7.3 T3 detailTabSpecs 挂载位；图标用户补源十八批）；
+//     自定义组件 custom-component（2026-10-12 转正：占位期结束，装入提示词 + 逐帧笔记两张真卡片——
+//     三 tab 语义分界 = 是什么 / 和谁连着 / 文件级生产批注扩展，PRD 07 扩展点第 1 条同日修订）；
 //     buttons/SegmentedControl 滑块 thumb 300ms 形态切换）
 //   → tab 内容区（flex 1 自管滚动：kit-scroll + ScrollThumb 悬浮滚轮，速查表 §2）
 //   → 底部「信息查看管理」钮（58 高块 padding 12，ActionButton solid md + info-manage 图标；
@@ -11,8 +11,8 @@
 // tab 口径（2026-09-19 用户改定）：默认「基础信息」；**全局记忆 + 持久化**（ui.detailTab，
 // settings.ui 写回通道）——换选中 / 选择模式往返（右栏替换卸载）不重置，链接文件成功后
 // 留在当前 tab；旧「会话级记忆、换选中回基础信息、不写设置存储」口径（2026-08-31）废除。
-// 旧体系废除：pinned + 7 排序区块堆叠栈 / 注册表双套配置 / 22 稿 SectionEditPanel（摘挂载退役）/
-// DetailNotes 笔记区块（待补稿接回，09 待办）。
+// 旧体系废除：pinned + 7 排序区块堆叠栈 / 注册表双套配置 / 22 稿 SectionEditPanel（摘挂载退役）；
+// DetailNotes 笔记区块 2026-10-12 接回换代 = sections/NotesSection（自定义组件 tab 第二张卡片）。
 // 形态分流：文件/档案 = pinned + 三 tab + 管理钮；文件夹/快速访问 = FolderDetail；
 // 工作空间磁盘实况文件 = WsDetail 简化基础信息（2026-09-26：无 pinned / 分段控制器 / 管理钮，
 // 不进 ui.detailBlocks 配置体系，滚动壳与文件夹形态共用）。
@@ -91,7 +91,7 @@ const tabBodyRef = ref<HTMLElement>();
           <div :key="tab" class="tab-pane">
             <TabBasic v-if="tab === 'basic'" :target="tabsTarget" />
             <TabLinks v-else-if="tab === 'links'" :target="tabsTarget" />
-            <TabCustom v-else />
+            <TabCustom v-else :target="tabsTarget" />
           </div>
         </Transition>
       </div>

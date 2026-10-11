@@ -10,9 +10,9 @@
 //     标题行收起 = 留一排截断（2026-08-31 用户实机定）；超 3 行截断 + 展开/收起小字钮 6.1 口径保留）
 //     + 编辑描述 ActionButton（6.1 业务：ui.descEdit）；
 //   基本数据区块（gap 12）：BaseDataItem 信息卡（文件 = 尺寸/文件大小/格式/添加日期/修改日期——
-//     创建日期 metadata 无字段不加（旧口径沿）；档案 = 文件数/占用空间/创建日期）；
-//   提示词区块（2026-09-26 提示词二轮挪入，原独占第三 tab 废除）= PromptSection（编辑框 +
-//     悬浮复制钮 + 两态三钮：无 = 扫描/新建▸二级/指定，有 = 编辑/断开链接/删除文档；档案无扫描钮）。
+//     创建日期 metadata 无字段不加（旧口径沿）；档案 = 文件数/占用空间/创建日期）。
+//   （提示词区块 2026-10-12 挪回自定义组件 tab——2026-09-26 二轮挪入末位口径修订，
+//     三 tab 语义分界：是什么 / 和谁连着 / 文件级生产批注扩展）
 // 文件与档案同构（2026-08-31 用户定）：档案 = props / descriptions / 统计数据渲染同一结构。
 // 排序/显隐 = 信息查看管理面板配置驱动（2026-09-26）：渲染序 = ui.detailBlocks.basic 全量序过滤 hidden。
 import { computed, nextTick, onMounted, ref, watch } from "vue";
@@ -21,7 +21,6 @@ import TextInput from "../inputs/TextInput.vue";
 import ActionButton from "../buttons/ActionButton.vue";
 import IconButton from "../buttons/IconButton.vue";
 import BaseDataItem from "../items/BaseDataItem.vue";
-import PromptSection from "./PromptSection.vue";
 import AppIcon from "../AppIcon.vue";
 import { displayName } from "../../lib/formatBadge";
 import { formatDetailDate, visibleDetailBlocks, type DetailTarget } from "../../lib/detailSections";
@@ -180,8 +179,7 @@ const dataRows = computed<{ label: string; values: string[] }[]>(() => {
        + v-if 分流；隐藏区块整块不渲染——找回走管理面板眼睛（允许全隐藏，无空态文案） -->
   <template v-for="b in blocks" :key="b">
     <!-- 输入框区块（稿：padding 12 / gap 8 / border-top 通用/三级） -->
-    <section v-if="b === 'fields'" class="db-block inputs">
-      <TextInput :model-value="name" readonly placeholder="名称" />
+    <section v-if="b === 'fields'" class="db-block inputs"><TextInput :model-value="name" readonly placeholder="名称" />
       <!-- 链接框可编辑（2026-10-08 S4）：blur / Enter 提交，右置钮 = 打开链接（anikit 内部跳转 / http 浏览器） -->
       <TextInput
         ref="linkInputRef"
@@ -232,10 +230,6 @@ const dataRows = computed<{ label: string; values: string[] }[]>(() => {
     <section v-else-if="b === 'baseData'" class="db-block data">
       <BaseDataItem :rows="dataRows" />
     </section>
-
-    <!-- 提示词区块（2026-09-26 提示词二轮挪入：原独占第三 tab 废除，挪基础信息末位；
-         排序/显隐随 basic 套注册表） -->
-    <PromptSection v-else :target="target" />
   </template>
 </template>
 

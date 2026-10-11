@@ -1,4 +1,4 @@
-// 本文件由 tools/gen-component-inventory.mjs 生成（2026-09-26），勿手改——重跑 `pnpm inventory` 刷新。
+// 本文件由 tools/gen-component-inventory.mjs 生成（2026-10-11），勿手改——重跑 `pnpm inventory` 刷新。
 // 阶段七重构「组件台账」数据源：status = new 新体系 / legacy 旧件待烧 / business 业务件 / dead 零消费休眠。
 export type InventoryStatus = "new" | "legacy" | "business" | "dead";
 export interface InventoryEntry {
@@ -9,27 +9,27 @@ export interface InventoryEntry {
   legacyTokens: number;
   replacement: string;
 }
-export const inventoryDate = "2026-09-26";
+export const inventoryDate = "2026-10-11";
 export const inventoryTotals = {
-  "new": 74,
+  "new": 82,
   "legacy": 0,
-  "business": 77,
+  "business": 78,
   "dead": 2,
   "legacyConsumers": 0,
   "legacyTokens": 0
 };
 export const inventory: InventoryEntry[] = [
   {
-    "path": "components/DetailNotes",
-    "name": "DetailNotes",
+    "path": "components/FolderPickNode",
+    "name": "FolderPickNode",
     "status": "dead",
     "consumers": 0,
     "legacyTokens": 0,
     "replacement": ""
   },
   {
-    "path": "components/FolderPickNode",
-    "name": "FolderPickNode",
+    "path": "components/SectionHeader",
+    "name": "SectionHeader",
     "status": "dead",
     "consumers": 0,
     "legacyTokens": 0,
@@ -70,6 +70,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/LinkListRows",
     "name": "LinkListRows",
+    "status": "business",
+    "consumers": 2,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/MoveNode",
+    "name": "MoveNode",
     "status": "business",
     "consumers": 2,
     "legacyTokens": 0,
@@ -190,6 +198,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/DescEditDialog",
     "name": "DescEditDialog",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/DestTreeDialog",
+    "name": "DestTreeDialog",
     "status": "business",
     "consumers": 1,
     "legacyTokens": 0,
@@ -388,14 +404,6 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/MoveNode",
-    "name": "MoveNode",
-    "status": "business",
-    "consumers": 1,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
     "path": "components/MovePanel",
     "name": "MovePanel",
     "status": "business",
@@ -502,14 +510,6 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/RecycleConfirmDialog",
     "name": "RecycleConfirmDialog",
-    "status": "business",
-    "consumers": 1,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/SectionHeader",
-    "name": "SectionHeader",
     "status": "business",
     "consumers": 1,
     "legacyTokens": 0,
@@ -644,6 +644,14 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/WsManageDialog",
+    "name": "WsManageDialog",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/WsTreeRows",
     "name": "WsTreeRows",
     "status": "business",
@@ -655,21 +663,21 @@ export const inventory: InventoryEntry[] = [
     "path": "components/AppIcon",
     "name": "AppIcon",
     "status": "new",
-    "consumers": 52,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/buttons/IconButton",
-    "name": "IconButton",
-    "status": "new",
-    "consumers": 27,
+    "consumers": 58,
     "legacyTokens": 0,
     "replacement": ""
   },
   {
     "path": "components/buttons/ActionButton",
     "name": "ActionButton",
+    "status": "new",
+    "consumers": 27,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/buttons/IconButton",
+    "name": "IconButton",
     "status": "new",
     "consumers": 26,
     "legacyTokens": 0,
@@ -679,15 +687,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/ScrollThumb",
     "name": "ScrollThumb",
     "status": "new",
-    "consumers": 25,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/modals/BaseModal",
-    "name": "BaseModal",
-    "status": "new",
-    "consumers": 15,
+    "consumers": 26,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -695,7 +695,31 @@ export const inventory: InventoryEntry[] = [
     "path": "components/inputs/TextInput",
     "name": "TextInput",
     "status": "new",
-    "consumers": 14,
+    "consumers": 21,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/modals/BaseModal",
+    "name": "BaseModal",
+    "status": "new",
+    "consumers": 17,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/items/SectionTitle",
+    "name": "SectionTitle",
+    "status": "new",
+    "consumers": 11,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/items/TwoToneIcon",
+    "name": "TwoToneIcon",
+    "status": "new",
+    "consumers": 9,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -704,14 +728,6 @@ export const inventory: InventoryEntry[] = [
     "name": "ConfirmModal",
     "status": "new",
     "consumers": 9,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/items/SectionTitle",
-    "name": "SectionTitle",
-    "status": "new",
-    "consumers": 8,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -732,8 +748,8 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/items/TwoToneIcon",
-    "name": "TwoToneIcon",
+    "path": "components/buttons/TagButton",
+    "name": "TagButton",
     "status": "new",
     "consumers": 6,
     "legacyTokens": 0,
@@ -868,6 +884,62 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/bars/FilterChipsPop",
+    "name": "FilterChipsPop",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/bars/FilterColorPop",
+    "name": "FilterColorPop",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/bars/FilterDatePop",
+    "name": "FilterDatePop",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/bars/FilterFoldersPop",
+    "name": "FilterFoldersPop",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/bars/FilterRangePop",
+    "name": "FilterRangePop",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/bars/FilterRatioPop",
+    "name": "FilterRatioPop",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/bars/FilterTagsPop",
+    "name": "FilterTagsPop",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/bars/FloatBar",
     "name": "FloatBar",
     "status": "new",
@@ -934,14 +1006,6 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/bars/WaveProgress",
     "name": "WaveProgress",
-    "status": "new",
-    "consumers": 1,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/buttons/TagButton",
-    "name": "TagButton",
     "status": "new",
     "consumers": 1,
     "legacyTokens": 0,
@@ -1060,6 +1124,14 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/items/NoteItem",
+    "name": "NoteItem",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/items/PickFileItem",
     "name": "PickFileItem",
     "status": "new",
@@ -1164,6 +1236,14 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/sections/NotesSection",
+    "name": "NotesSection",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/sections/PromptSection",
     "name": "PromptSection",
     "status": "new",
@@ -1222,14 +1302,6 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/buttons/DropButton",
     "name": "DropButton",
-    "status": "new",
-    "consumers": 0,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/items/NoteItem",
-    "name": "NoteItem",
     "status": "new",
     "consumers": 0,
     "legacyTokens": 0,

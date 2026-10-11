@@ -23,7 +23,7 @@ export interface NoteThumb {
   path: string | null;
 }
 
-// 共享命令层（全局单例）：笔记命令统一封装（DetailNotes 同走，规范第 1 条）
+// 共享命令层（全局单例）：笔记命令统一封装（NotesSection 同走，规范第 1 条）
 export const usePreviewNotesStore = defineStore("previewNotes", {
   state: () => ({
     // 数据变更版本号（set_note 后 +1）：详情面板笔记区块 watch 它做热刷新（2026-07-26 用户）
