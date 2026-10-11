@@ -42,7 +42,7 @@
 //      重定向到卡片根元素，名称区 @dblclick.stop 收不到；capture 后移到 startDrag（拖拽全程仍有效）。
 import { reactive } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { useContentStore, type PlacementView } from "../stores/content";
+import { placementKey, placementRef, useContentStore, type PlacementView } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
@@ -216,9 +216,14 @@ export function makeGridResolver(ctx: {
       }
     }
     let gap: GapIndicator;
+    // 组约束锚点 = 指示器实际贴附的项（2026-10-11 修复"组尾——最后一行最后一列之后——无法落"：
+    // 行末间隙的 beforeKey 已是**下一行**首项，分组边界上即下一组首项，按它判组恒跨组误杀；
+    // 而竖块实际画在指针所在行的末卡之后，落点组应按该贴附项判定）
+    let anchorKey: string;
     if (idx < 0) {
       const last = bs[bs.length - 1];
       gap = { left: last.left + last.width, top: last.top, width: GAP, height: last.height, beforeKey: null };
+      anchorKey = ctx.keyAt(last.i); // 段尾 = 贴最末可见项之后
     } else {
       const b = bs[idx];
       const prev = bs[idx - 1];
@@ -231,6 +236,7 @@ export function makeGridResolver(ctx: {
           height: prev.height,
           beforeKey: ctx.keyAt(b.i),
         };
+        anchorKey = ctx.keyAt(prev.i);
       } else {
         const sameRow = prev && prev.top === b.top;
         gap = {
@@ -240,6 +246,7 @@ export function makeGridResolver(ctx: {
           height: b.height,
           beforeKey: ctx.keyAt(b.i),
         };
+        anchorKey = ctx.keyAt(b.i); // 竖块画在后项前 / 行首前 = 贴间隙后项
       }
     }
     // 组约束：分组模式下（groupOfKey 有定义）拖拽组与落点须同组
@@ -249,8 +256,6 @@ export function makeGridResolver(ctx: {
         for (const k of draggedKeys) {
           if (ctx.groupOfKey(k) !== g0) return null; // 多选跨组：禁止
         }
-        // 落点组 = 间隙后项的组；段尾（beforeKey null）= 最末可见项的组
-        const anchorKey = gap.beforeKey ?? ctx.keyAt(bs[bs.length - 1].i);
         if (ctx.groupOfKey(anchorKey) !== g0) return null;
       }
     }
@@ -262,7 +267,7 @@ const START_THRESHOLD = 6;
 
 interface Session {
   kind: DragKind;
-  key: string; // asset = `${assetId}|${folderId}`；folder = 按下的 folderId
+  key: string; // asset = placementKey（撞键行带 `|origin|name` 后缀，2026-10-11）；folder = 按下的 folderId
   startX: number;
   startY: number;
   started: boolean;
@@ -500,7 +505,9 @@ function updateDropTarget(e: DropPointer): void {
   // ws 磁盘实况无排序语义：间隙不作落点（防合成 id 进 reorder_placements）
   if (sess.kind === "asset" && gridResolvers.size > 0) {
     if (items.every((it) => it.assetId.startsWith("ws:"))) return;
-    const draggedKeys = items.map((it) => `${it.assetId}|${it.folderId}`);
+    // 拖拽组 key 集 = 选择域实况快照（placementKey 口径，撞键行带后缀——2026-10-11 选择域
+    // 独立化；assetKeys 在 startDrag 自 selection.selected 快照，与原 items.map 同覆盖范围）
+    const draggedKeys = [...(dragView.assetKeys ?? [])];
     for (const [token, grid] of gridResolvers) {
       const gap = grid.resolve(e.clientX, e.clientY, draggedKeys);
       if (!gap) continue;
@@ -510,7 +517,8 @@ function updateDropTarget(e: DropPointer): void {
       dragView.gapGrid = token;
       activeGridScroll = grid.scroll ?? null;
       const visibleKeys = grid.visibleKeys;
-      sess.drop = async () => dropAssetsGap(items, gap, target, visibleKeys);
+      const dKeys = new Set(draggedKeys);
+      sess.drop = async () => dropAssetsGap(items, dKeys, gap, target, visibleKeys);
       return;
     }
   }
@@ -630,8 +638,10 @@ async function dropAssetsToRecycle(items: PlacementRef[]): Promise<void> {
 
 // 素材落卡片间隙：reorder_placements（仅目标文件夹段内项参与；beforeItem = 间隙后项）；
 // target = 归属网格的目标文件夹（2026-09-17 分屏改造显式带入——不再读激活 pane 的 currentFolderId，
-// 同文件夹两分屏且第三 pane 激活时也不会错位）；visibleKeys = 归属网格的可见序
-async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator, target: string, visibleKeys?: () => string[]): Promise<void> {
+// 同文件夹两分屏且第三 pane 激活时也不会错位）；visibleKeys = 归属网格的可见序；
+// dKeys = 拖拽组选择键集（placementKey 口径，2026-10-11 选择域独立化——撞键行不再靠三元组
+// 模糊匹配，组成员判定 / 物化排序 / 「插到自身前」护栏全部按键精确）
+async function dropAssetsGap(dragged: PlacementRef[], dKeys: ReadonlySet<string>, gap: GapIndicator, target: string, visibleKeys?: () => string[]): Promise<void> {
   const content = useContentStore();
   const items = dragged.filter((it) => it.folderId === target);
   if (items.length === 0) return;
@@ -642,7 +652,7 @@ async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator, target:
     // 否则 refresh 后排序键盖回，拖拽等于没执行。物化静默（不单独 toast，undo 快照仍在）。
     // 可见序以网格注册序为准（2026-08-20 组内排序放开：分组模式 = 组拼接序 displayItems，
     // 非 placementsFor 原序——物化组拼接序才能切回自定义后屏幕位置不变）；无注册序退回 placementsFor
-    if (gap.beforeKey && items.some((it) => `${it.assetId}|${it.folderId}` === gap.beforeKey)) return; // 插到自身前 = 无操作
+    if (gap.beforeKey && dKeys.has(gap.beforeKey)) return; // 插到自身前 = 无操作
     const base = content.placementsFor(`folder:${target}`).filter((p) => p.folderId === target);
     let visible = base;
     const keys = visibleKeys?.();
@@ -650,22 +660,21 @@ async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator, target:
       const order = new Map(keys.map((k, i) => [k, i] as const));
       visible = [...base].sort(
         (a, b) =>
-          (order.get(`${a.assetId}|${a.folderId}`) ?? Number.MAX_SAFE_INTEGER) -
-          (order.get(`${b.assetId}|${b.folderId}`) ?? Number.MAX_SAFE_INTEGER),
+          (order.get(placementKey(a)) ?? Number.MAX_SAFE_INTEGER) -
+          (order.get(placementKey(b)) ?? Number.MAX_SAFE_INTEGER),
       );
     }
-    const inDrag = (p: PlacementView): boolean =>
-      items.some((it) => it.assetId === p.assetId && it.folderId === p.folderId && it.origin === p.origin);
+    const inDrag = (p: PlacementView): boolean => dKeys.has(placementKey(p));
     const rest = visible.filter((p) => !inDrag(p));
     let insert = rest.length;
     if (gap.beforeKey) {
-      const at = rest.findIndex((p) => `${p.assetId}|${p.folderId}` === gap.beforeKey);
+      const at = rest.findIndex((p) => placementKey(p) === gap.beforeKey);
       if (at >= 0) insert = at;
     }
     const ordered = visible.filter(inDrag); // 拖拽组保持可见序中的相对顺序
     const seq = [...rest.slice(0, insert), ...ordered, ...rest.slice(insert)];
     const ok = await ops.reorderPlacements(
-      seq.map((p) => ({ assetId: p.assetId, folderId: p.folderId, origin: p.origin })),
+      seq.map((p) => placementRef(p)),
       target,
       null, // 整层序列全传 + 段尾锚点 = 全层重写（reorder_folders 物化同模式）
     );
@@ -677,9 +686,9 @@ async function dropAssetsGap(dragged: PlacementRef[], gap: GapIndicator, target:
   }
   let beforeItem: PlacementRef | null = null;
   if (gap.beforeKey) {
-    if (items.some((it) => `${it.assetId}|${it.folderId}` === gap.beforeKey)) return; // 插到自身前 = 无操作
-    const p = content.visiblePlacements.find((v) => `${v.assetId}|${v.folderId}` === gap.beforeKey);
-    if (p) beforeItem = { assetId: p.assetId, folderId: p.folderId, origin: p.origin };
+    if (dKeys.has(gap.beforeKey)) return; // 插到自身前 = 无操作
+    const p = content.visiblePlacements.find((v) => placementKey(v) === gap.beforeKey);
+    if (p) beforeItem = placementRef(p);
   }
   await ops.reorderPlacements(items, target, beforeItem);
 }
@@ -769,7 +778,13 @@ function startDrag(e: PointerEvent): void {
   const hit = document.elementFromPoint(sess.startX, sess.startY) as HTMLElement | null;
   let anchor = hit?.closest<HTMLElement>(".asset-card, .list-row, .folder-card, .archive-card, .tree-item") ?? null;
   if (sess.kind === "asset" && sess.items.length > 0) {
-    const k0 = `${sess.items[0].assetId}|${sess.items[0].folderId}`;
+    // data-key = placementKey 口径（撞键行带后缀，2026-10-11）：从 placements 反解首项精确键
+    //（ref 撞键时携 name 可辨；反解不到 = 项已失效，退基底键——查不到卡片走原 anchor 兜底）
+    const r0 = sess.items[0];
+    const pv = useContentStore().placements.find(
+      (p) => p.assetId === r0.assetId && p.folderId === r0.folderId && p.origin === r0.origin && (r0.name === undefined || p.name === r0.name),
+    );
+    const k0 = pv ? placementKey(pv) : `${r0.assetId}|${r0.folderId}`;
     // 查询限定拖拽源所在网格（2026-09-13 修复）：多标签页下同 key 卡片会命中隐藏 panel
     //（display:none → 零 rect → ghost 尺寸 / 取图错），全局查询仅作兜底
     const scope: ParentNode = sess.capEl?.closest(".grid-viewport") ?? document;

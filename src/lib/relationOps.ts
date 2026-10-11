@@ -5,7 +5,7 @@
 // 空 = 未填写，反向显示回退 label。本轮 kind 恒 free；voice 音色随链接音频轮接入。
 import { invoke } from "@tauri-apps/api/core";
 import { nextTick } from "vue";
-import { useContentStore } from "../stores/content";
+import { placementKey, useContentStore } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
@@ -113,15 +113,25 @@ export async function removeRelation(id: string): Promise<void> {
 /** 跳转到指定位置（6.2 四轮走查②④⑤：链接区块 item / 打开文件链接所在位置 / 徽章悬停链接列表
  *  共用）：目标文件夹视口 + 选中该卡片 + 滚进视野（2026-09-23 用户定：跳转不再停顶端——
  *  pendingReveal 由目标网格重排时消费，同视口跳转由 pendingReveal watch 驱动重排）；
- *  openView 入面包屑历史（后退即返回） */
-export function jumpToAssetPlacement(assetId: string, folderId: string): void {
+ *  openView 入面包屑历史（后退即返回）。
+ *  hint（2026-10-11 选择域独立化）：撞键行（同资产同文件夹多条位置）按 origin/name 精确到行 */
+export function jumpToAssetPlacement(assetId: string, folderId: string, hint?: { origin?: boolean; name?: string }): void {
   const tabs = useTabsStore();
   const selection = useSelectionStore();
   const content = useContentStore();
   const viewKey = folderId === "root" ? "quick:uncategorized" : `folder:${folderId}`;
+  const p =
+    content.placements.find(
+      (pl) =>
+        pl.assetId === assetId &&
+        pl.folderId === folderId &&
+        (hint?.origin === undefined || pl.origin === hint.origin) &&
+        (hint?.name === undefined || pl.name === hint.name),
+    ) ?? content.placements.find((pl) => pl.assetId === assetId && pl.folderId === folderId);
+  const key = p ? placementKey(p) : `${assetId}|${folderId}`;
   tabs.openView(viewKey);
-  content.requestReveal(viewKey, `${assetId}|${folderId}`);
-  void nextTick(() => selection.selectOnly(`${assetId}|${folderId}`));
+  content.requestReveal(viewKey, key);
+  void nextTick(() => selection.selectOnly(key));
 }
 
 /** 跳转定位（2026-08-24 用户定：详情数据 item 点文件卡 = 跳过去——"光显示在那是没用的"）：
@@ -152,6 +162,6 @@ export function jumpToRelationTarget(other: RelationRef): void {
   }
   const viewKey = p.folderId === "root" ? "quick:uncategorized" : `folder:${p.folderId}`;
   tabs.openView(viewKey);
-  content.requestReveal(viewKey, `${p.assetId}|${p.folderId}`);
-  void nextTick(() => selection.selectOnly(`${p.assetId}|${p.folderId}`));
+  content.requestReveal(viewKey, placementKey(p));
+  void nextTick(() => selection.selectOnly(placementKey(p)));
 }

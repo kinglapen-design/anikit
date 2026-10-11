@@ -78,7 +78,7 @@ pub struct LinkPlacementsParams {
 fn to_refs(items: Vec<PlacementRefParams>) -> Vec<PlacementRef> {
   items
     .into_iter()
-    .map(|it| PlacementRef { asset_id: it.asset_id, folder_id: it.folder_id, origin: it.origin })
+    .map(|it| PlacementRef { asset_id: it.asset_id, folder_id: it.folder_id, origin: it.origin, name: None })
     .collect()
 }
 

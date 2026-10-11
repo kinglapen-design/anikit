@@ -6,7 +6,7 @@
 //（activePreviewSession，只查不建）——**激活 panel 预览中**才让位 / 生效，其余 panel 的预览不抢全局键。
 import { onBeforeUnmount, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { useContentStore } from "../stores/content";
+import { placementKey, useContentStore } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { activePreviewSession } from "../stores/preview";
 import { useSearchStore } from "../stores/search";
@@ -282,7 +282,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     if (e.key === "Enter" && e.shiftKey) {
       if (selection.count === 1 && !content.isRecycleView) {
         e.preventDefault();
-        const p = content.visiblePlacements.find((v) => `${v.assetId}|${v.folderId}` === selection.first);
+        const p = content.visiblePlacements.find((v) => placementKey(v) === selection.first);
         if (p) {
           void invoke("open_with_default_app", { assetId: p.assetId }).then(() => content.refreshRecent());
         }
@@ -364,7 +364,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     if (k === "j") {
       if (selection.selectedFolders.size === 0 && selection.count === 1 && !content.isRecycleView) {
         e.preventDefault();
-        const p = content.visiblePlacements.find((v) => `${v.assetId}|${v.folderId}` === selection.first);
+        const p = content.visiblePlacements.find((v) => placementKey(v) === selection.first);
         if (p) selection.linkManageDraft = { assetId: p.assetId, name: p.name };
       }
       return;
@@ -387,7 +387,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     // Ctrl+E = 发送至 Animate（8.3，PRD 07-04）：单选 fla 素材生效（菜单同款口径；回收站只读不发）
     if (k === "e") {
       if (selection.selectedFolders.size === 0 && selection.count === 1 && !content.isRecycleView) {
-        const p = content.visiblePlacements.find((v) => `${v.assetId}|${v.folderId}` === selection.first);
+        const p = content.visiblePlacements.find((v) => placementKey(v) === selection.first);
         if (p && p.ext === "fla") {
           e.preventDefault();
           void sendToAnimate(p.assetId);

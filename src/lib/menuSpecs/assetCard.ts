@@ -17,7 +17,7 @@
 //   与粘贴文件项习惯一致；合并追加，多选批量）；
 // - 「保存提示词」占位项改「提示词」一级菜单（三态切换 = menuSpecs/promptMenu 共享构建器，提示词轮接业务）。
 import { invoke } from "@tauri-apps/api/core";
-import { useContentStore, type PlacementView } from "../../stores/content";
+import { placementKey, useContentStore, type PlacementView } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
@@ -89,7 +89,7 @@ export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
   if (content.isVirtualView) return virtualAssetCardSpec(p, panelId);
   const selection = useSelectionStore();
   const assetId = p.assetId;
-  const assetKey = `${p.assetId}|${p.folderId}`;
+  const assetKey = placementKey(p);
   const isSequence = isSequenceAsset(p); // 序列帧（动图同 frameCount 字段，靠 animated 区分）
   const hasClipboard = selection.clipboard !== null;
   // 活位置数（同 assetId 全部 Placement）：「将此文件设为原始文件」仅链接状态（>1）出现——
@@ -345,7 +345,7 @@ function virtualAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
   const selection = useSelectionStore();
   const content = useContentStore();
   const assetId = p.assetId;
-  const assetKey = `${p.assetId}|${p.folderId}`;
+  const assetKey = placementKey(p);
   // 活位置数（同主菜单口径）：「将此文件设为原始文件」仅链接状态（>1）出现
   const liveCount = content.placements.filter((q) => q.assetId === assetId).length;
   const entries: CtxEntry[] = [
@@ -493,7 +493,7 @@ function virtualAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
 // 预览 / 打开类 / 导航 / 复制（缩略图 / 数据）——均只读，不写库不动选择域
 function pickerAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
   const assetId = p.assetId;
-  const assetKey = `${p.assetId}|${p.folderId}`;
+  const assetKey = placementKey(p);
   const entries: CtxEntry[] = [
     { label: "打开预览", action: () => void previewSession(panelId).open(assetKey) },
   ];

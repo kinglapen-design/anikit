@@ -7,7 +7,7 @@
 // 拖拽引擎同款手法）。滚动条悬停显隐（同日）共用 panelHover。
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useSelectionStore } from "../stores/selection";
-import type { PlacementView } from "../stores/content";
+import { placementKey, type PlacementView } from "../stores/content";
 import { isEditableTarget } from "./useGlobalKeys";
 
 export function useSpaceZoom(opts: { items: () => PlacementView[]; panelActive: () => boolean }) {
@@ -16,7 +16,7 @@ export function useSpaceZoom(opts: { items: () => PlacementView[]; panelActive: 
   const panelHover = ref(false);
   let lastPointer = { x: 0, y: 0 };
   function findByKey(key: string | null): PlacementView | null {
-    return key ? (opts.items().find((i) => `${i.assetId}|${i.folderId}` === key) ?? null) : null;
+    return key ? (opts.items().find((i) => placementKey(i) === key) ?? null) : null;
   }
   // 指针位置追踪（网格 pointermove 时由组件调用，与框选移动同线）
   function trackPointer(e: PointerEvent): void {

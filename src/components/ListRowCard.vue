@@ -16,7 +16,7 @@ import { formatSize } from "../lib/formatSize";
 import { formatDetailDate } from "../lib/detailSections";
 import { renamePlacement } from "../lib/placementOps";
 import { useSelectionStore } from "../stores/selection";
-import { useContentStore } from "../stores/content";
+import { placementKey, placementRef, useContentStore } from "../stores/content";
 import { useUiStore } from "../stores/ui";
 import { isWsPlacement, useWsStore } from "../stores/ws";
 import type { PlacementView } from "../stores/content";
@@ -69,14 +69,11 @@ const linkedBadge = computed(() => ui.showLinkBadge && !props.asset.origin && li
 
 // —— 就地重命名（6.1 C2，与 AssetCard 同口径）：Enter / 失焦确认（空或不变不动）/ Esc 取消；
 // 滚出虚拟滚动销毁 = 取消（AssetGrid 先清 renamingKey，blur 晚到按 key 失配判取消）
-const rowKey = `${props.asset.assetId}|${props.asset.folderId}`;
+const rowKey = placementKey(props.asset);
 async function onRenameCommit(name: string): Promise<void> {
   selection.renamingKey = null;
   if (!name || name === props.asset.name) return;
-  await renamePlacement(
-    { assetId: props.asset.assetId, folderId: props.asset.folderId, origin: props.asset.origin },
-    name,
-  );
+  await renamePlacement(placementRef(props.asset), name);
 }
 function onRenameCancel(): void {
   selection.renamingKey = null;

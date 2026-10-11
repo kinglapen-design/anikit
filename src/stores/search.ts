@@ -175,7 +175,8 @@ interface CrawlState {
 
 interface PanelSearch {
   draft: string; // 输入框草稿（输入即参与搜索）
-  hits: Set<string>; // `${assetId}|${folderId}`（与选择 / 拖拽键同口径）
+  hits: Set<string>; // `${assetId}|${folderId}` 基底键（自洽子域：后端搜索只回二元组——同夹多条
+  // 位置同亮属正常；选择 / 拖拽键的撞键后缀口径见 content.placementKey，2026-10-11）
   hitArchives: Set<string>; // 命中档案 folderId
   seq: number; // 竞态序号（防抖与异步返回只收最新）
   filters: SearchFilters; // 筛选条件（2026-10-09 筛选业务二轮；ws 视口恒空）

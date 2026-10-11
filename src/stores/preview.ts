@@ -11,7 +11,7 @@ import { markRaw, nextTick } from "vue";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useContentStore } from "./content";
+import { placementKey, useContentStore } from "./content";
 import { dropPreviewMediaSession, eachPreviewMediaSession, previewMediaSession } from "./previewMedia";
 import { dropPreviewNotesSession, previewNotesSession } from "./previewNotes";
 import { useToastStore } from "./toast";
@@ -102,7 +102,7 @@ function buildPreviewStore(panelId: string) {
 
   return defineStore(`preview#${panelId}`, {
     state: () => ({
-      assetKey: null as string | null, // `${assetId}|${folderId}`，null = 非预览模式
+      assetKey: null as string | null, // placementKey 口径（撞键行带后缀），null = 非预览模式
       // 预览属主面板（2026-09-25 用户实机三报根治）：per-panel 会话化后属主 = 会话本身
       //（工厂参数，创建后不变）——新标签 / 分屏新 panel 各持各的会话，互不抢预览、不左右跳
       panelId,
@@ -156,8 +156,8 @@ function buildPreviewStore(panelId: string) {
         const content = useContentStore();
         if (!this.assetKey) return null;
         return (
-          previewList(panelId, useTabsStore().viewKeyOf(panelId), content).find((p) => `${p.assetId}|${p.folderId}` === this.assetKey) ??
-          content.placements.find((p) => `${p.assetId}|${p.folderId}` === this.assetKey) ??
+          previewList(panelId, useTabsStore().viewKeyOf(panelId), content).find((p) => placementKey(p) === this.assetKey) ??
+          content.placements.find((p) => placementKey(p) === this.assetKey) ??
           null
         );
       },
@@ -166,7 +166,7 @@ function buildPreviewStore(panelId: string) {
         const content = useContentStore();
         if (!this.assetKey) return 0;
         const list = previewList(panelId, useTabsStore().viewKeyOf(panelId), content);
-        return list.findIndex((p) => `${p.assetId}|${p.folderId}` === this.assetKey);
+        return list.findIndex((p) => placementKey(p) === this.assetKey);
       },
       total(): number {
         return previewList(panelId, useTabsStore().viewKeyOf(panelId), useContentStore()).length;
@@ -244,7 +244,7 @@ function buildPreviewStore(panelId: string) {
         const next = this.index + delta;
         if (next < 0 || next >= list.length) return;
         const p = list[next];
-        this.assetKey = `${p.assetId}|${p.folderId}`;
+        this.assetKey = placementKey(p);
         await this.loadAsset();
       },
       // 按当前 PlacementView 判定类型并加载显示路径（5.2 kind 分派）：

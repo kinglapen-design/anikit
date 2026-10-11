@@ -34,7 +34,10 @@ use serde::{Deserialize, Serialize};
 use crate::core::library::{self, Library};
 use crate::services::import::ROOT_FOLDER_ID;
 
-/// Placement 定位三元组（Placement 无自身 ID，models.rs；前端选择项原样回传）
+/// Placement 定位三元组（Placement 无自身 ID，models.rs；前端选择项原样回传）。
+/// name（2026-10-11 选择域独立化配套）：同文件夹同资产多条位置（origin + 链接 / 重复链接，
+/// 2026-08-13 放开）时按显示名精确到行——find_placement 见名即用 find_placement_named 语义；
+/// None = 三元组首条（原语义，MCP 等旧调用方不变）
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlacementRef {
@@ -42,11 +45,15 @@ pub struct PlacementRef {
   pub folder_id: String,
   #[serde(default)]
   pub origin: bool,
+  #[serde(default)]
+  pub name: Option<String>,
 }
 
 /// 批量重命名单项（3.4，37 稿）：定位三元组 + 新显示名（词干规则由前端组装，含扩展名）。
 /// origin = None 时自动消歧（2026-09-20，MCP 调用方常省略踩坑后加）：(asset, folder)
-/// 恰好一条记录即命中；多条（origin + 链接同文件夹）进 failed 要求指定。APP 前端恒传 Some
+/// 恰好一条记录即命中；多条（origin + 链接同文件夹）进 failed 要求指定。APP 前端恒传 Some。
+/// old_name（2026-10-11 选择域独立化配套）：同 origin 重复链接按旧显示名精确到行
+///（resolve_origin 消歧也吃它——origin None + oldName 唯一命中即取该行 origin）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameItem {
@@ -55,6 +62,8 @@ pub struct RenameItem {
   #[serde(default)]
   pub origin: Option<bool>,
   pub new_name: String,
+  #[serde(default)]
+  pub old_name: Option<String>,
 }
 
 /// 链接管理（17 稿，6.2 三轮）新增链接一条：目标文件夹 + 显示名（空 = 用资产名）
@@ -108,22 +117,27 @@ pub(crate) fn parent_key(parent: Option<&str>) -> Option<String> {
   }
 }
 
-/// 按三元组定位 Placement 在 folders.items 中的下标
+/// 按三元组定位 Placement 在 folders.items 中的下标；item.name 给了 = 精确到行
+///（同文件夹重复链接 / origin+链接同夹可区分，2026-10-11 选择域独立化配套）
 pub(crate) fn find_placement(lib: &Library, item: &PlacementRef) -> Option<usize> {
-  lib
-    .folders
-    .items
-    .iter()
-    .position(|p| p.asset == item.asset_id && p.folder == item.folder_id && p.origin == item.origin)
+  find_placement_named(lib, item, item.name.as_deref())
 }
 
 /// RenameItem.origin 缺省消歧（2026-09-20）：Some 直用；None = 按 (asset, folder) 找——
+/// oldName 给了先按 (asset, folder, name) 精确试（2026-10-11：同 origin 重复链接可消歧）；
 /// 恰好一条记录取其实际 origin；零条 / 多条 = None（零条走原「项目不存在」路径、多条进
 /// failed 要求指定，由调用方分流）。命令层 undo 快照与 service 匹配共用本 helper（单写点）
 pub(crate) fn resolve_origin(lib: &Library, it: &RenameItem) -> Option<bool> {
   match it.origin {
     Some(o) => Some(o),
     None => {
+      if let Some(n) = &it.old_name {
+        let mut hits =
+          lib.folders.items.iter().filter(|p| p.asset == it.asset_id && p.folder == it.folder_id && p.name == *n);
+        if let (Some(p), None) = (hits.next(), hits.next()) {
+          return Some(p.origin);
+        }
+      }
       let mut hits = lib.folders.items.iter().filter(|p| p.asset == it.asset_id && p.folder == it.folder_id);
       match (hits.next(), hits.next()) {
         (Some(p), None) => Some(p.origin),

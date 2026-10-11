@@ -31,7 +31,7 @@ import {
 import { openGridContextMenu } from "../lib/menuSpecs/gridDispatch";
 import { groupHeaderSpec } from "../lib/menuSpecs/groupHeader";
 import { openContextMenu } from "../lib/contextMenus";
-import { useContentStore, type FolderNode, type PlacementView } from "../stores/content";
+import { placementKey, useContentStore, type FolderNode, type PlacementView } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { useUiStore } from "../stores/ui";
@@ -59,7 +59,7 @@ const preview = inject(PREVIEW_SESSION_KEY)!;
 
 // 进预览（4.3）：双击卡片
 function openPreview(p: PlacementView): void {
-  void preview.open(`${p.assetId}|${p.folderId}`);
+  void preview.open(placementKey(p));
 }
 
 // 卡片点击选择（6.1，2026-07-28 用户定案）：单击 = 单选 / Ctrl+单击 = 加选切换 /
@@ -100,13 +100,13 @@ function onCardClick(p: PlacementView, e: MouseEvent): void {
     // 2026-10-08 修复分组下 Shift 范围选按未分组序取区间、跨组带进别组文件；
     // 显式传序同时保非激活 panel 点击不以激活视口为准（displayOrderFor 兜底仍留 store 缺省）
     selection.clickItem(
-      `${p.assetId}|${p.folderId}`,
+      placementKey(p),
       { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey },
-      displayItems.value.map((x) => `${x.assetId}|${x.folderId}`),
+      displayItems.value.map((x) => placementKey(x)),
     );
     content.selectedInboxName = "";
   } else {
-    selection.selectOnly(`${p.assetId}|${p.folderId}`);
+    selection.selectOnly(placementKey(p));
   }
 }
 
@@ -351,7 +351,7 @@ const {
   hitTest: makeBoxHitTest({
     boxes: () => boxes.value,
     offsetY: () => headerH.value + 12 + listExtra.value - pos.value,
-    keyAt: (i) => `${displayItems.value[i].assetId}|${displayItems.value[i].folderId}`,
+    keyAt: (i) => placementKey(displayItems.value[i]),
   }),
 });
 
@@ -371,7 +371,7 @@ const keyGroupMap = computed(() => {
   const secs = groupSections.value;
   if (secs) {
     for (const s of secs) {
-      for (const p of s.items) m.set(`${p.assetId}|${p.folderId}`, s.groupId);
+      for (const p of s.items) m.set(placementKey(p), s.groupId);
     }
   }
   return m;
@@ -380,7 +380,7 @@ const resolveGap = makeGridResolver({
   isFolderView: () => props.viewKey.startsWith("folder:"),
   layer: () => cardsLayerRef.value,
   boxes: () => boxes.value,
-  keyAt: (i) => `${displayItems.value[i].assetId}|${displayItems.value[i].folderId}`,
+  keyAt: (i) => placementKey(displayItems.value[i]),
   groupOfKey: (key) => (groupSections.value ? keyGroupMap.value.get(key) : undefined),
 });
 
@@ -412,7 +412,7 @@ const gapClient = computed(() => {
 //（卡片组件 blur 晚于本清理到达时按 key 失配判取消，见 AssetCard.commitRename）
 watch(visibleCards, (cards) => {
   const key = selection.renamingKey;
-  if (key && !cards.some((c) => `${c.asset.assetId}|${c.asset.folderId}` === key)) {
+  if (key && !cards.some((c) => placementKey(c.asset) === key)) {
     selection.renamingKey = null;
   }
 });
@@ -429,7 +429,7 @@ onMounted(() => {
   viewportRef.value!.addEventListener("wheel", onCtrlWheel, { passive: false });
   gridToken.value = registerGridResolver({
     resolve: resolveGap,
-    visibleKeys: () => displayItems.value.map((p) => `${p.assetId}|${p.folderId}`),
+    visibleKeys: () => displayItems.value.map((p) => placementKey(p)),
     scroll: { viewport: () => viewportRef.value, scrollTo, pos: () => pos.value },
     layer: () => viewportRef.value,
     dropFolder: () => {
@@ -508,14 +508,14 @@ onBeforeUnmount(() => {
         <template v-if="ui.layoutMode === 'list'">
           <ListRowCard
             v-for="c in visibleCards"
-            :key="`${c.asset.assetId}|${c.asset.folderId}`"
+            :key="placementKey(c.asset)"
             :asset="c.asset"
             :box="c.box"
             :odd="c.odd"
-            :selected="selection.isSelected(`${c.asset.assetId}|${c.asset.folderId}`)"
-            :renaming="selection.renamingKey === `${c.asset.assetId}|${c.asset.folderId}`"
-            :faded="assetCardFade(`${c.asset.assetId}|${c.asset.folderId}`)"
-            :data-key="`${c.asset.assetId}|${c.asset.folderId}`"
+            :selected="selection.isSelected(placementKey(c.asset))"
+            :renaming="selection.renamingKey === placementKey(c.asset)"
+            :faded="assetCardFade(placementKey(c.asset))"
+            :data-key="placementKey(c.asset)"
             :data-drag-name="c.asset.name"
             @select="onCardClick(c.asset, $event)"
             @dblclick="openPreview(c.asset)"
@@ -524,13 +524,13 @@ onBeforeUnmount(() => {
         <template v-else>
           <AssetCard
             v-for="c in visibleCards"
-            :key="`${c.asset.assetId}|${c.asset.folderId}`"
+            :key="placementKey(c.asset)"
             :asset="c.asset"
             :box="c.box"
-            :selected="selection.isSelected(`${c.asset.assetId}|${c.asset.folderId}`)"
-            :renaming="selection.renamingKey === `${c.asset.assetId}|${c.asset.folderId}`"
-            :faded="assetCardFade(`${c.asset.assetId}|${c.asset.folderId}`)"
-            :data-key="`${c.asset.assetId}|${c.asset.folderId}`"
+            :selected="selection.isSelected(placementKey(c.asset))"
+            :renaming="selection.renamingKey === placementKey(c.asset)"
+            :faded="assetCardFade(placementKey(c.asset))"
+            :data-key="placementKey(c.asset)"
             :data-drag-name="c.asset.name"
             @click="onCardClick(c.asset, $event)"
             @dblclick="openPreview(c.asset)"
@@ -646,7 +646,7 @@ onBeforeUnmount(() => {
          浮层开着时切换 / 点选状态换了图不换，三轮误判根因实在此；key 变即强制重建重载） -->
     <HoverZoomOverlay
       v-if="zoomAsset"
-      :key="`${zoomAsset.assetId}|${zoomAsset.folderId}`"
+      :key="placementKey(zoomAsset)"
       :asset="zoomAsset"
       @close="zoomAsset = null"
       @space="onZoomSpace"

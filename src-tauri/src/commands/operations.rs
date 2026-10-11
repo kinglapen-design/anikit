@@ -547,7 +547,7 @@ pub(crate) fn create_document_op(
 
 /// 重命名 Placement：显示名即时改；原始 Placement 追加磁盘段（originName + 词干缩略图
 /// 同步改名，成对登记 DiskOp::Rename——注意 record_disk_op(undo_op, redo_op) 参数顺序）；
-/// 链接 Placement 仅改显示名
+/// 链接 Placement 仅改显示名。oldName（2026-10-11）：同文件夹同 origin 重复链接按旧名精确到行
 #[tauri::command]
 pub async fn rename_placement(
   state: State<'_, AppState>,
@@ -555,6 +555,7 @@ pub async fn rename_placement(
   folder_id: String,
   origin: bool,
   new_name: String,
+  old_name: Option<String>,
 ) -> Result<(), String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
@@ -564,7 +565,7 @@ pub async fn rename_placement(
   if origin {
     undo.record_file(&meta_path(lib, &asset_id)).map_err(|e| e.to_string())?;
   }
-  match operations::rename_placement(lib, &asset_id, &folder_id, origin, &new_name) {
+  match operations::rename_placement(lib, &asset_id, &folder_id, origin, &new_name, old_name.as_deref()) {
     Ok(renames) => {
       for (old_path, new_path) in &renames {
         undo.record_disk_op(

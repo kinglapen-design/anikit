@@ -8,7 +8,7 @@
 // 逐目标 try、失败计数不中断、跳过不兼容项，一次刷新 + 汇总 toast（不带撤销钮，Ctrl+Z 逐步回滚）。
 // 指定流程在选择模式（stores/picker purpose "prompt"）——picker 不反向依赖本模块（防循环引用）。
 import { invoke } from "@tauri-apps/api/core";
-import { useContentStore, type PlacementView, type PromptBinding } from "../stores/content";
+import { placementKey, useContentStore, type PlacementView, type PromptBinding } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
@@ -243,7 +243,7 @@ function openPromptPlacement(p: PlacementView, panelId?: string): void {
   if (!id) return;
   const session = previewSession(id);
   if (p.ext.toLowerCase() === "md") session.pendingMdEdit = true;
-  void session.open(`${p.assetId}|${p.folderId}`);
+  void session.open(placementKey(p));
 }
 
 export async function newPromptDocuments(targets: PromptTargets, kind: "md" | "txt"): Promise<void> {

@@ -1,5 +1,7 @@
 // 素材选择态（6.1，2026-07-28 用户定案）：多选 Set + Shift 锚点，会话级状态不进 ui 持久化。
-// key = `${assetId}|${folderId}`（Placement 无自身 ID，沿用原 selectedAssetKey 同构格式）。
+// key = placementKey(p)（content.ts 导出）：基底 `${assetId}|${folderId}`，同资产同文件夹多条
+// 位置（origin + 链接 / 重复链接）撞键时加 `|origin|name` 后缀精确到行（2026-10-11 选择域独立化——
+// 实机报"同文件原始与链接同时被选中"；此前 2026-09-19 只修过选择模式 picker 域，主选择域未修）。
 // 消费口径：详情面板 / 预览等单资产消费方读 content.selectedAssetKey（= 本 store first() 转发）；
 // 卡片选中视觉读 isSelected；范围选 / 全选 / 选中集输出按 content.displayOrderFor 视口显示序
 //（分组视口 = 组拼接扁平序，与网格所见一致——2026-10-08 修复分组下范围选跨组带项）。
@@ -9,7 +11,7 @@
 // 锚点不在同域可见列表时退化单选（与素材范围选同规则）。
 // content store 与本 store 互相 lazy 取用（函数内 useXxxStore），避免模块循环引用初始化问题。
 import { defineStore } from "pinia";
-import { useContentStore, type FolderNode } from "./content";
+import { placementKey, placementRef, useContentStore, type FolderNode } from "./content";
 import { useWsStore } from "./ws";
 
 // 点击修饰键（ctrl 含 macOS metaKey，调用方归一化后传入）
@@ -18,11 +20,14 @@ export interface ClickMods {
   shift?: boolean;
 }
 
-// Placement 定位三元组（与后端 services/operations PlacementRef 对应，camelCase）
+// Placement 定位三元组（与后端 services/operations PlacementRef 对应，camelCase）；
+// name（2026-10-11）：撞键行（同资产同文件夹多条位置）携带显示名精确到行——后端 find_placement
+// 见名即按行匹配，陈旧名 = 匹配落空跳过（不错伤他行）；非撞键项不携带（无字段）
 export interface PlacementRef {
   assetId: string;
   folderId: string;
   origin: boolean;
+  name?: string;
 }
 
 // 内部剪贴板（6.1，2026-07-28 用户定案）：仅素材 Placement，文件夹不进；
@@ -88,9 +93,13 @@ export interface DestTreeDraft {
 
 // （2026-07-29 复验三轮：新建文件夹改"先建后命名"，原 NewFolderDraft 命名中临时节点已移除）
 
-function keyOf(p: { assetId: string; folderId: string }): string {
-  return `${p.assetId}|${p.folderId}`;
+// 选择键单写点 = content.placementKey（撞键后缀判定在它那里；本函数仅留窄签名兼容旧调用点）
+function keyOf(p: { assetId: string; folderId: string; origin?: boolean; name?: string }): string {
+  return placementKey(p);
 }
+
+// 命令入参行 = content.placementRef（撞键行附 name 精确到行，2026-10-11）
+const refOf = placementRef;
 
 export const useSelectionStore = defineStore("selection", {
   state: () => ({
@@ -272,7 +281,8 @@ export const useSelectionStore = defineStore("selection", {
 
     // 选中项三元组清单（6.1 命令入参）：按当前视口显示序输出（displayOrderFor——分组视口 = 组拼接
     // 扁平序，与用户所见一致，2026-10-08；批量重命名编号等顺序敏感消费方随视觉序），
-    // 视口外的选中项（切过目录未 prune 的极少窗口期）追加在后；origin 从 PlacementView 取。
+    // 视口外的选中项（切过目录未 prune 的极少窗口期）追加在后；origin 从 PlacementView 取，
+    // 撞键行附 name 精确到行（refOf，2026-10-11 选择域独立化）。
     // ws 文件夹键兜底合成（2026-09-26 ws 文件夹卡片 / 树行选中入素材域）：文件夹不是
     // Placement 查不到，按键形直合成——ws 写操作全按路径，只取 assetId 里的 rel；
     // ws 键只在 ws 视口产生（切视图即清空），库命令路径收不到
@@ -285,14 +295,14 @@ export const useSelectionStore = defineStore("selection", {
         const k = keyOf(p);
         if (this.selected.has(k) && !seen.has(k)) {
           seen.add(k);
-          out.push({ assetId: p.assetId, folderId: p.folderId, origin: p.origin });
+          out.push(refOf(p));
         }
       }
       for (const k of this.selected) {
         if (seen.has(k)) continue;
         const p = byKey.get(k);
         if (p) {
-          out.push({ assetId: p.assetId, folderId: p.folderId, origin: p.origin });
+          out.push(refOf(p));
         } else if (k.startsWith("ws:")) {
           const [assetId, folderId] = k.split("|");
           out.push({ assetId, folderId: folderId ?? "", origin: true });

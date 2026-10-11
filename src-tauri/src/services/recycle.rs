@@ -416,7 +416,7 @@ mod tests {
   /// 把资源 origin Placement 删进回收站（走删除的 recycle 分支，数据与线上一致；
   /// 2026-08-19 位置级模型：无"最后一条"判定，origin 单独删即进回收站）
   fn recycle_asset(h: &mut Harness, id: &str, folder: &str) {
-    let pref = PlacementRef { asset_id: id.into(), folder_id: folder.into(), origin: true };
+    let pref = PlacementRef { asset_id: id.into(), folder_id: folder.into(), origin: true, name: None };
     delete_placements(&mut h.lib, &[pref], Some("recycle")).unwrap();
   }
 
@@ -433,8 +433,8 @@ mod tests {
     finish(&mut h.lib).unwrap();
     // 两条 Placement 一次调用删除：位置级模型进同一条回收站记录（按资产聚合）
     let prefs = vec![
-      PlacementRef { asset_id: "AN-A".into(), folder_id: "F01".into(), origin: true },
-      PlacementRef { asset_id: "AN-A".into(), folder_id: "root".into(), origin: false },
+      PlacementRef { asset_id: "AN-A".into(), folder_id: "F01".into(), origin: true, name: None },
+      PlacementRef { asset_id: "AN-A".into(), folder_id: "root".into(), origin: false, name: None },
     ];
     delete_placements(&mut h.lib, &prefs, Some("recycle")).unwrap();
 
@@ -597,7 +597,7 @@ mod tests {
     // 链接单独丢回收站 = 纯位置记录（无 origin 快照）
     delete_placements(
       &mut h.lib,
-      &[PlacementRef { asset_id: "AN-A".into(), folder_id: "root".into(), origin: false }],
+      &[PlacementRef { asset_id: "AN-A".into(), folder_id: "root".into(), origin: false, name: None }],
       Some("recycle"),
     )
     .unwrap();

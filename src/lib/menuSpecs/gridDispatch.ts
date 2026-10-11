@@ -15,7 +15,7 @@
 // 1.3：菜单项按新稿纯文字口径（2026-09-01）。
 // panelId = 发起右键的 panel（2026-09-25 per-panel 预览会话化：随 AssetGrid 注入会话透传，
 // 「打开预览」开进属主 panel 自己的预览会话）
-import { useContentStore, type PlacementView } from "../../stores/content";
+import { placementKey, useContentStore, type PlacementView } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { openContextMenu } from "../contextMenus";
@@ -38,7 +38,7 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[], panel
     // 工作空间同不出（只读底座无挑选语义——选择模式入口全在库视口）
     if (usePickerStore().active) {
       if (content.isRecycleView || content.isWorkspaceView) return "done";
-      const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
+      const p = items.find((it) => placementKey(it) === key);
       if (p) openContextMenu(e, assetCardSpec(p, panelId), undefined);
       return "done";
     }
@@ -46,7 +46,7 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[], panel
     // 打开外发 / 剪贴板 / 副本 / 复制数据 / 系统菜单），不进素材菜单（assetId 类写操作项一律不挂）；
     // spec async（build 前 refreshSystemClip），e.preventDefault 已同步完成，菜单随后异步弹出
     if (content.isWorkspaceView) {
-      const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
+      const p = items.find((it) => placementKey(it) === key);
       if (p) void wsCardSpec(p, panelId).then((spec) => openContextMenu(e, spec, undefined));
       return "done";
     }
@@ -54,11 +54,11 @@ export function openGridContextMenu(e: MouseEvent, items: PlacementView[], panel
     // 回收站分流前置（2026-08-11 修复 item 右键调不出：键解析失败也不依赖 items 反查——
     // recycleCardSpec 无参回退基础集）；2026-09-05 全量菜单起传条目 p（打开/导出/复制数据等要 assetId）
     if (content.isRecycleView) {
-      const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
+      const p = items.find((it) => placementKey(it) === key);
       openContextMenu(e, recycleCardSpec(p, panelId), undefined);
       return "done";
     }
-    const p = items.find((it) => `${it.assetId}|${it.folderId}` === key);
+    const p = items.find((it) => placementKey(it) === key);
     if (p) openContextMenu(e, assetCardSpec(p, panelId), undefined);
     return "done";
   }

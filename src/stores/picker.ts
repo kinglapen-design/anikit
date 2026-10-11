@@ -31,7 +31,7 @@
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
 import { nextTick } from "vue";
-import { useContentStore } from "./content";
+import { placementKey, placementRef, useContentStore } from "./content";
 import { useSelectionStore } from "./selection";
 import { useToastStore } from "./toast";
 import { useUiStore } from "./ui";
@@ -44,10 +44,11 @@ import { addRelations, type PickerTarget, type PickedRelation } from "../lib/rel
 export type PickerTemplate = "file" | "relation";
 export type PickerPurpose = "relation" | "link" | "voice" | "cover" | "thumb" | "prompt";
 
-/** 备选匹配键（2026-09-19 BUG 3）：kind+id+folderId 三元组——同资产多条链接位置各自独立；
- *  archive 无位置概念（folderId 恒 ""） */
-function pickKey(kind: "asset" | "archive", id: string, folderId?: string): string {
-  return `${kind}|${id}|${folderId ?? ""}`;
+/** 备选匹配键（2026-09-19 BUG 3 = kind+id+folderId 三元组；2026-10-11 选择域独立化补第 4 维
+ *  name——同文件夹同资产的**重复链接**三元组仍撞，同夹多链接各自独立备选到行）；
+ *  archive 无位置概念（恒 `archive|{id}`） */
+function pickKey(kind: "asset" | "archive", id: string, folderId?: string, name?: string): string {
+  return kind === "archive" ? `archive|${id}` : `asset|${id}|${folderId ?? ""}|${name ?? ""}`;
 }
 
 export const usePickerStore = defineStore("picker", {
@@ -189,8 +190,17 @@ export const usePickerStore = defineStore("picker", {
       if (origin) {
         void nextTick(() => {
           const selection = useSelectionStore();
-          if (origin.kind === "archive") selection.clickFolder(origin.id);
-          else selection.selectOnly(`${origin.id}|${origin.folderId ?? "root"}`);
+          if (origin.kind === "archive") {
+            selection.clickFolder(origin.id);
+          } else {
+            // 撞键行按 origin+name 反解精确行（2026-10-11 选择域独立化）
+            const content = useContentStore();
+            const folderId = origin.folderId ?? "root";
+            const p =
+              content.placements.find((pl) => pl.assetId === origin.id && pl.folderId === folderId && pl.origin === (origin.origin ?? false) && pl.name === origin.name) ??
+              content.placements.find((pl) => pl.assetId === origin.id && pl.folderId === folderId);
+            selection.selectOnly(p ? placementKey(p) : `${origin.id}|${folderId}`);
+          }
         });
       }
     },
@@ -198,13 +208,13 @@ export const usePickerStore = defineStore("picker", {
     /** 单击卡片 = 加入/移出备选（多选累积：点新卡追加一组、点已选移除该组）；
      *  发起文件自身不可选（卡片半透明禁选态，后端同拦）；
      *  file 模板行 name 草稿默认取源显示名（备选区输入框可改，确认按行写入）；
-     *  匹配键 = 三元组 kind+id+folderId（2026-09-19 BUG 3：曾按 kind+id 匹配——同资产多条
-     *  链接位置共享 assetId，任一位置入备选、同资产全部位置卡片都亮大勾，点另一条还误判
-     *  "取消"→ 改为 Placement 级独立选择；archive 无位置概念 folderId 恒 ""） */
+     *  匹配键 = kind+id+folderId+name（2026-09-19 BUG 3 三元组——同资产多条链接位置共享 assetId，
+     *  任一位置入备选、同资产全部位置卡片都亮大勾，点另一条还误判"取消"；2026-10-11 补 name 维——
+     *  同文件夹重复链接三元组仍撞，精确到行；archive 无位置概念恒 archive|{id}） */
     togglePick(target: PickerTarget): void {
       if (this.origin && this.origin.kind === target.kind && this.origin.id === target.id) return;
-      const key = pickKey(target.kind, target.id, target.folderId);
-      const i = this.picked.findIndex((p) => pickKey(p.target.kind, p.target.id, p.target.folderId) === key);
+      const key = pickKey(target.kind, target.id, target.folderId, target.name);
+      const i = this.picked.findIndex((p) => pickKey(p.target.kind, p.target.id, p.target.folderId, p.target.name) === key);
       if (i >= 0) {
         this.picked.splice(i, 1);
         return;
@@ -212,9 +222,9 @@ export const usePickerStore = defineStore("picker", {
       this.picked.push({ target, label: "", reverseLabel: "", name: target.name });
     },
 
-    isPicked(kind: "asset" | "archive", id: string, folderId?: string): boolean {
-      const key = pickKey(kind, id, folderId);
-      return this.picked.some((p) => pickKey(p.target.kind, p.target.id, p.target.folderId) === key);
+    isPicked(kind: "asset" | "archive", id: string, folderId?: string, name?: string): boolean {
+      const key = pickKey(kind, id, folderId, name);
+      return this.picked.some((p) => pickKey(p.target.kind, p.target.id, p.target.folderId, p.target.name) === key);
     },
 
     /** cover 用途单选直回（2026-09-08 用户定：选择图片后不进备选区，直接显示在封面里）：
@@ -311,7 +321,9 @@ export const usePickerStore = defineStore("picker", {
           const folder = this.targetFolder;
           if (!folder) return;
           const ok = await linkPlacements(
-            this.picked.map((p) => ({ assetId: p.target.id, folderId: p.target.folderId ?? "root", origin: p.target.origin ?? false })),
+            this.picked.map((p) =>
+              placementRef({ assetId: p.target.id, folderId: p.target.folderId ?? "root", origin: p.target.origin ?? false, name: p.target.name }),
+            ),
             folder.id,
             this.picked.map((p) => p.name?.trim() || null),
           );

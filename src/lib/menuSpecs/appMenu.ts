@@ -11,7 +11,7 @@
 // - 整理 = 选中集操作（素材卡 / 档案卡域）。有既有业务的接线（同 assetCard / useGlobalKeys 口径），
 //   无业务 disabled 占位（速查 §6）；回收站视口只读——编辑类项全 disabled（useGlobalKeys 同口径）。
 import { invoke } from "@tauri-apps/api/core";
-import { useContentStore, DEFAULT_BLOCK_ID, type PlacementView } from "../../stores/content";
+import { placementKey, useContentStore, DEFAULT_BLOCK_ID, type PlacementView } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
@@ -53,7 +53,7 @@ function singleAsset(): PlacementView | null {
   const content = useContentStore();
   if (selection.selectedFolders.size > 0 || selection.count !== 1 || content.isRecycleView) return null;
   if (content.isWorkspaceView) return null;
-  return content.visiblePlacements.find((v) => `${v.assetId}|${v.folderId}` === selection.first) ?? null;
+  return content.visiblePlacements.find((v) => placementKey(v) === selection.first) ?? null;
 }
 
 // 单选档案卡（FolderNode 判定走 content.archives map）

@@ -304,19 +304,22 @@ fn prompt_doc_source(prompt: Option<&PromptBinding>) -> Result<String, String> {
   }
 }
 
-/// 源文档全部活 Placement 丢回收站：同文件夹多链接三元组相同（PlacementRef 无 name 维度），
-/// delete_placements 单轮去重只删首条——逐轮重收直至清空（2026-09-26 提示词轮）
+/// 源文档全部活 Placement 丢回收站：同文件夹多链接按 name 精确到行，单轮清空
+///（2026-10-11 PlacementRef 补 name 维度，原"三元组相同只能删首条、逐轮重收"写法废除）
 fn recycle_prompt_doc(lib: &mut Library, src_id: &str) -> Result<(), String> {
-  loop {
-    let prefs: Vec<PlacementRef> = lib
-      .index
-      .placements_of(src_id)
-      .iter()
-      .map(|p| PlacementRef { asset_id: src_id.to_string(), folder_id: p.folder.clone(), origin: p.origin })
-      .collect();
-    if prefs.is_empty() {
-      return Ok(());
-    }
-    operations::delete_placements(lib, &prefs, Some("recycle"))?;
+  let prefs: Vec<PlacementRef> = lib
+    .index
+    .placements_of(src_id)
+    .iter()
+    .map(|p| PlacementRef {
+      asset_id: src_id.to_string(),
+      folder_id: p.folder.clone(),
+      origin: p.origin,
+      name: Some(p.name.clone()),
+    })
+    .collect();
+  if prefs.is_empty() {
+    return Ok(());
   }
+  operations::delete_placements(lib, &prefs, Some("recycle"))
 }

@@ -40,7 +40,7 @@ impl AnikitMcp {
     let items: Vec<PlacementRef> = p
       .items
       .into_iter()
-      .map(|it| PlacementRef { asset_id: it.asset_id, folder_id: it.folder_id, origin: it.origin })
+      .map(|it| PlacementRef { asset_id: it.asset_id, folder_id: it.folder_id, origin: it.origin, name: None })
       .collect();
     let state = self.app.state::<AppState>();
     match crate::commands::operations::delete_placements_op(&state, &items, Some("recycle")) {

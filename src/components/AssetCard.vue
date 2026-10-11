@@ -57,7 +57,7 @@ import { acquireAutoplay, releaseAutoplay, type AutoplayPool } from "../lib/auto
 import { useUiStore } from "../stores/ui";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
-import { useContentStore } from "../stores/content";
+import { placementKey, placementRef, useContentStore } from "../stores/content";
 import { useToastStore } from "../stores/toast";
 import { useWsStore } from "../stores/ws";
 import type { PlacementView } from "../stores/content";
@@ -209,10 +209,10 @@ watch(hoverActive, (v) => {
 const selection = useSelectionStore();
 const picker = usePickerStore();
 const content = useContentStore();
-const cardKey = `${props.asset.assetId}|${props.asset.folderId}`;
+const cardKey = placementKey(props.asset);
 // 选择模式（6.2 一轮，PRD 03_数据链接 04 四重标识之四）：已选卡片压暗（30% 档）+ 品牌绿大勾；
-// 三元组匹配（2026-09-19 BUG 3：同资产多条链接位置独立选择，不再按 assetId 联动亮勾）
-const picked = computed(() => picker.active && picker.isPicked("asset", props.asset.assetId, props.asset.folderId));
+// 行级匹配（2026-09-19 BUG 3 三元组独立选择 → 2026-10-11 补 name 维：同夹重复链接各自亮勾）
+const picked = computed(() => picker.active && picker.isPicked("asset", props.asset.assetId, props.asset.folderId, props.asset.name));
 // 发起文件自身（2026-08-24 用户定）：剪切档半透明 + 禁选（togglePick 同拦），视觉明确"不可选"
 const pickerSelf = computed(() => picker.active && picker.origin?.kind === "asset" && picker.origin.id === props.asset.assetId);
 // 重命名提交 / 取消（FileCard nameCommit / nameCancel 上抛；空/不变判定在本壳，TreeRowItem 口径）；
@@ -228,10 +228,7 @@ async function onRenameCommit(name: string): Promise<void> {
     }
     return;
   }
-  await renamePlacement(
-    { assetId: props.asset.assetId, folderId: props.asset.folderId, origin: props.asset.origin },
-    name,
-  );
+  await renamePlacement(placementRef(props.asset), name);
 }
 function onRenameCancel(): void {
   selection.renamingKey = null;

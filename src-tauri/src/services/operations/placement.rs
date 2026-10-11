@@ -9,7 +9,7 @@ use crate::core::paths;
 use crate::services::import as ops;
 use crate::services::import::ROOT_FOLDER_ID;
 
-use super::{check_folder, find_placement, find_placement_named, finish, rewrite_orders, PlacementRef, SyncLinkAdd, SyncLinkRemove, SyncLinkRename};
+use super::{check_folder, find_placement, finish, rewrite_orders, PlacementRef, SyncLinkAdd, SyncLinkRemove, SyncLinkRename};
 
 /// 移动 Placement 到目标文件夹，返回实际移动条数：
 /// - 目标文件夹已有同资源 Placement 则去重跳过（resolve.rs use_existing 语义）；
@@ -179,10 +179,11 @@ pub fn link_placements(
   Ok(linked)
 }
 
-/// 删除行定位（sync_asset_links）：三元组 + 可选 name（闭包形式会在跨可变借用时撞 E0502，独立 fn）
+/// 删除行定位（sync_asset_links）：name 随三元组入 PlacementRef（给了 = 精确到行；
+/// find_placement 见名即用精确语义，2026-10-11 PlacementRef 补 name 维度）
 fn locate_remove(lib: &Library, asset_id: &str, r: &SyncLinkRemove) -> Option<usize> {
-  let item = PlacementRef { asset_id: asset_id.into(), folder_id: r.folder_id.clone(), origin: r.origin };
-  find_placement_named(lib, &item, r.name.as_deref())
+  let item = PlacementRef { asset_id: asset_id.into(), folder_id: r.folder_id.clone(), origin: r.origin, name: r.name.clone() };
+  find_placement(lib, &item)
 }
 
 /// 将此文件设为原始文件（6.2 四轮走查③，PRD 01 边界规则 8 手动 origin 转移——"原始文件标识
@@ -199,11 +200,11 @@ pub fn set_placement_origin(
   if !lib.index.assets.contains_key(asset_id) {
     return Err("文件不存在，可能已被删除".to_string());
   }
-  let item = PlacementRef { asset_id: asset_id.into(), folder_id: folder_id.into(), origin: false };
+  let item = PlacementRef { asset_id: asset_id.into(), folder_id: folder_id.into(), origin: false, name: name.map(|n| n.to_string()) };
   // 先按 origin=false 找；找不到再按 true 找（幂等判定）
-  let pos = find_placement_named(lib, &item, name).or_else(|| {
-    let item_origin = PlacementRef { asset_id: asset_id.into(), folder_id: folder_id.into(), origin: true };
-    find_placement_named(lib, &item_origin, name)
+  let pos = find_placement(lib, &item).or_else(|| {
+    let item_origin = PlacementRef { asset_id: asset_id.into(), folder_id: folder_id.into(), origin: true, name: name.map(|n| n.to_string()) };
+    find_placement(lib, &item_origin)
   });
   let Some(pos) = pos else {
     return Err("项目不存在，可能已被移动或删除".to_string());
@@ -248,8 +249,8 @@ pub fn sync_asset_links(
     check_folder(lib, &a.folder_id)?;
   }
   for r in renames {
-    let item = PlacementRef { asset_id: asset_id.into(), folder_id: r.folder_id.clone(), origin: r.origin };
-    if find_placement_named(lib, &item, r.old_name.as_deref()).is_none() {
+    let item = PlacementRef { asset_id: asset_id.into(), folder_id: r.folder_id.clone(), origin: r.origin, name: r.old_name.clone() };
+    if find_placement(lib, &item).is_none() {
       return Err("项目不存在，可能已被移动或删除".to_string());
     }
   }
@@ -261,12 +262,11 @@ pub fn sync_asset_links(
   }
   let mut disk_renames = Vec::new();
   for r in renames {
-    let item = PlacementRef { asset_id: asset_id.into(), folder_id: r.folder_id.clone(), origin: r.origin };
-    let pos = find_placement_named(lib, &item, r.old_name.as_deref())
-      .ok_or_else(|| "项目不存在，可能已被移动或删除".to_string())?;
+    let item = PlacementRef { asset_id: asset_id.into(), folder_id: r.folder_id.clone(), origin: r.origin, name: r.old_name.clone() };
+    let pos = find_placement(lib, &item).ok_or_else(|| "项目不存在，可能已被移动或删除".to_string())?;
     if r.origin {
       // origin 每资产恒一条（无重复歧义）：rename_placement 全语义（校验 + 磁盘 originName 段）
-      let mut pairs = super::duplicate::rename_placement(lib, asset_id, &r.folder_id, r.origin, &r.new_name)?;
+      let mut pairs = super::duplicate::rename_placement(lib, asset_id, &r.folder_id, r.origin, &r.new_name, r.old_name.as_deref())?;
       disk_renames.append(&mut pairs);
     } else {
       // 链接行：仅改显示名（撞名不拦截——显示名放开），按精确定位改防重复链接命中错行
@@ -335,7 +335,7 @@ mod tests {
   }
 
   fn pref(asset: &str, folder: &str, origin: bool) -> PlacementRef {
-    PlacementRef { asset_id: asset.into(), folder_id: folder.into(), origin }
+    PlacementRef { asset_id: asset.into(), folder_id: folder.into(), origin, name: None }
   }
 
   fn placement(lib: &Library, asset: &str, folder: &str) -> Option<Placement> {

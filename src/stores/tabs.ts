@@ -9,7 +9,7 @@
 import { defineStore } from "pinia";
 import { markRaw, nextTick, ref } from "vue";
 import type { DockviewApi, IDockviewPanel, SerializedDockview } from "dockview-vue";
-import { useContentStore } from "./content";
+import { placementKey, useContentStore } from "./content";
 import { dropPreviewSession, eachPreviewSession, peekPreviewSession, previewSession } from "./preview";
 import { useSelectionStore } from "./selection";
 import { useUiStore } from "./ui";
@@ -65,8 +65,8 @@ export const useTabsStore = defineStore("tabs", () => {
       if (sel.asset) {
         const k = sel.asset;
         const exists =
-          content.placements.some((p) => `${p.assetId}|${p.folderId}` === k) ||
-          content.recycleEntries.some((p) => `${p.assetId}|${p.folderId}` === k);
+          content.placements.some((p) => placementKey(p) === k) ||
+          content.recycleEntries.some((p) => placementKey(p) === k);
         if (exists) selection.selectOnly(k);
       } else if (sel.folder && findFolderNode(content.folders, sel.folder)) {
         selection.clickFolder(sel.folder);

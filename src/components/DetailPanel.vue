@@ -19,7 +19,7 @@ import {
   type AssetDetail,
   type DetailTarget,
 } from "../lib/detailSections";
-import { useContentStore, type ArchiveDetailView, type FolderNode } from "../stores/content";
+import { placementKey, useContentStore, type ArchiveDetailView, type FolderNode } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useWsStore, WS_ID_PREFIX } from "../stores/ws";
 
@@ -169,8 +169,8 @@ const target = computed<DetailTarget | null>(() => {
   if (key.startsWith(WS_ID_PREFIX)) return wsTarget.value;
   if (key && detail.value) {
     const p =
-      content.placements.find((pl) => `${pl.assetId}|${pl.folderId}` === key) ??
-      content.recycleEntries.find((e) => `${e.assetId}|${e.folderId}` === key);
+      content.placements.find((pl) => placementKey(pl) === key) ??
+      content.recycleEntries.find((e) => placementKey(e) === key);
     if (p) return { kind: "file", placement: p, detail: detail.value };
   }
   const an = archiveNode.value;

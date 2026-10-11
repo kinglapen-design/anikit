@@ -13,7 +13,7 @@ import SectionHeader from "./SectionHeader.vue";
 import IconButton from "./buttons/IconButton.vue";
 import { formatDuration } from "../lib/formatDuration";
 import { frameOfTime, totalFrames } from "../lib/formatFrame";
-import { useContentStore } from "../stores/content";
+import { placementKey, useContentStore } from "../stores/content";
 import { useUiStore } from "../stores/ui";
 import { previewSession } from "../stores/preview";
 import { previewMediaSession } from "../stores/previewMedia";
@@ -32,7 +32,7 @@ const thumbUrl = ref<string | null>(null); // null = 未就绪 / 取不到（C4 
 
 // 当前选中的 PlacementView（无选中 = null）
 const selected = computed(
-  () => content.placements.find((p) => `${p.assetId}|${p.folderId}` === content.selectedAssetKey) ?? null,
+  () => content.placements.find((p) => placementKey(p) === content.selectedAssetKey) ?? null,
 );
 
 // 选中变化 / 笔记数据变更（预览浮层写删、本组件删除）→ 拉取笔记 + 关浮层
@@ -106,7 +106,7 @@ async function jump(key: string): Promise<void> {
   const pid = useTabsStore().activeTabId;
   if (!pid) return;
   const preview = previewSession(pid);
-  await preview.open(`${sel.assetId}|${sel.folderId}`);
+  await preview.open(placementKey(sel));
   // 动图（2026-08-21 修，解包废除漏适配）：seq 恒 null，按 f:{索引} 直接定位
   //（previewNotes 会话的 jump 本就是此口径，本组件这份是旧拷贝）
   if (preview.kind === "anim") {

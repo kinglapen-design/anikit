@@ -6,7 +6,7 @@ import { nextTick, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useContentStore } from "../stores/content";
+import { placementKey, useContentStore } from "../stores/content";
 import { useSelectionStore } from "../stores/selection";
 import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
@@ -54,8 +54,8 @@ export function jumpToAnikitRef(ref: AnikitRef): void {
     }
     const viewKey = p.folderId === "root" ? "quick:uncategorized" : `folder:${p.folderId}`;
     tabs.openInFreshTab(viewKey);
-    content.requestReveal(viewKey, `${p.assetId}|${p.folderId}`);
-    void nextTick(() => selection.selectOnly(`${p.assetId}|${p.folderId}`));
+    content.requestReveal(viewKey, placementKey(p));
+    void nextTick(() => selection.selectOnly(placementKey(p)));
     return;
   }
   tabs.openInFreshTab(`folder:${ref.id}`);

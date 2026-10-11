@@ -64,7 +64,7 @@ const rows = computed<Row[]>(() =>
 );
 
 function jump(r: Row): void {
-  jumpToAssetPlacement(props.assetId, r.folderId);
+  jumpToAssetPlacement(props.assetId, r.folderId, { origin: r.origin, name: r.name });
   emit("jump");
 }
 </script>

@@ -9,7 +9,7 @@
 // 两段式确认、不可恢复无撤销；后端契约并行开发，UI 直接 invoke）。
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useContentStore } from "../stores/content";
+import { placementKey, useContentStore } from "../stores/content";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
 import { useToastStore } from "../stores/toast";
 import { useUndoStore } from "../stores/undo";
@@ -125,6 +125,7 @@ export async function renamePlacement(ref: PlacementRef, newName: string): Promi
       folderId: ref.folderId,
       origin: ref.origin,
       newName,
+      oldName: ref.name ?? null, // 撞键行按旧名精确到行（2026-10-11 选择域独立化）
     });
   }, () => `重命名为 ${newName.trim()}`);
 }
@@ -241,7 +242,7 @@ export function recycleSelectedAssetIds(): string[] {
   const content = useContentStore();
   const out: string[] = [];
   for (const e of content.recycleEntries) {
-    if (selection.selected.has(`${e.assetId}|${e.folderId}`) && !out.includes(e.assetId)) {
+    if (selection.selected.has(placementKey(e)) && !out.includes(e.assetId)) {
       out.push(e.assetId);
     }
   }
@@ -411,7 +412,7 @@ export async function createDocument(kind: NewDocKind): Promise<void> {
     content.markArrivals([`${view.assetId}|${view.folderId}`]); // 3.5 新增区：新建文档置顶可见
     await content.refresh();
     void undo.refreshState();
-    selection.renamingKey = `${view.assetId}|${view.folderId}`;
+    selection.renamingKey = placementKey(view);
     toast.notify({ message: "已新建文档", actionLabel: "撤销", onAction: () => void undo.undo() });
   } catch (e) {
     toast.notify({ message: String(e), icon: "fail" });
@@ -720,6 +721,7 @@ export interface RenameItemInput {
   folderId: string;
   origin: boolean;
   newName: string;
+  oldName?: string; // 撞键行（同资产同文件夹多条位置）按旧名精确到行（2026-10-11 选择域独立化）
 }
 export async function renamePlacementsBatch(items: RenameItemInput[]): Promise<boolean> {
   const content = useContentStore();

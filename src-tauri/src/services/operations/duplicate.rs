@@ -144,17 +144,19 @@ fn rollback_copies(lib: &mut Library, out: &DuplicateOutcome) {
 /// 索引同步，返回磁盘改名清单（旧路径, 新路径）（命令层登记 DiskOp::Rename；链接 Placement 为空）。
 /// 原始 Placement 改名补扩展名（用户只改词干不丢 .fla，Windows 资源管理器同行为）；
 /// 磁盘物理约束仍在：origin 撞名致改名失败中文报错整体回滚。
-/// 磁盘段先行（更易失败：fla 被 Animate 占用）；folders.json 落盘失败时磁盘改名尽力改回
+/// 磁盘段先行（更易失败：fla 被 Animate 占用）；folders.json 落盘失败时磁盘改名尽力改回。
+/// old_name（2026-10-11 选择域独立化配套）：同文件夹同 origin 重复链接按显示名精确到行；None = 三元组首条
 pub fn rename_placement(
   lib: &mut Library,
   asset_id: &str,
   folder_id: &str,
   origin: bool,
   new_name: &str,
+  old_name: Option<&str>,
 ) -> Result<Vec<(PathBuf, PathBuf)>, String> {
   let trimmed = new_name.trim();
   library::validate_library_name(trimmed).map_err(|e| e.to_string())?;
-  let item = PlacementRef { asset_id: asset_id.into(), folder_id: folder_id.into(), origin };
+  let item = PlacementRef { asset_id: asset_id.into(), folder_id: folder_id.into(), origin, name: old_name.map(|n| n.to_string()) };
   let pos = find_placement(lib, &item).ok_or_else(|| "项目不存在，可能已被移动或删除".to_string())?;
   let effective = effective_name(lib, asset_id, origin, trimmed);
 
@@ -210,14 +212,14 @@ pub fn rename_placements(lib: &mut Library, items: &[RenameItem]) -> Result<Batc
         if lib.folders.items.iter().any(|p| p.asset == it.asset_id && p.folder == it.folder_id) {
           out.failed.push(BatchRenameFailed {
             name: it.new_name.clone(),
-            reason: "该文件夹内此资产有多条记录（origin / 链接），请指定 origin 字段".to_string(),
+            reason: "该文件夹内此资产有多条记录（origin / 链接），请指定 origin 或 oldName 字段".to_string(),
           });
           continue;
         }
         false // 零条记录：走原路径报「项目不存在」
       }
     };
-    match rename_placement(lib, &it.asset_id, &it.folder_id, origin, &it.new_name) {
+    match rename_placement(lib, &it.asset_id, &it.folder_id, origin, &it.new_name, it.old_name.as_deref()) {
       Ok(rs) => {
         out.renames.extend(rs);
         out.renamed += 1;
@@ -328,7 +330,7 @@ mod tests {
   }
 
   fn pref(asset: &str, folder: &str, origin: bool) -> PlacementRef {
-    PlacementRef { asset_id: asset.into(), folder_id: folder.into(), origin }
+    PlacementRef { asset_id: asset.into(), folder_id: folder.into(), origin, name: None }
   }
 
   #[test]
@@ -403,7 +405,7 @@ mod tests {
     let info = h.lib.info_dir("AN-A");
     assert!(info.join("原图_thumbnail.webp").is_file());
 
-    let renames = rename_placement(&mut h.lib, "AN-A", "root", true, "新图").unwrap();
+    let renames = rename_placement(&mut h.lib, "AN-A", "root", true, "新图", None).unwrap();
     // 无扩展名自动补 .png；磁盘 originName + 词干缩略图同步改名
     assert!(info.join("新图.png").is_file());
     assert!(!info.join("原图.png").exists());
@@ -429,7 +431,7 @@ mod tests {
     finish(&mut h.lib).unwrap();
     let info = h.lib.info_dir("AN-A");
 
-    let renames = rename_placement(&mut h.lib, "AN-A", "root", false, "别名.png").unwrap();
+    let renames = rename_placement(&mut h.lib, "AN-A", "root", false, "别名.png", None).unwrap();
     assert!(renames.is_empty(), "链接 Placement 无磁盘段");
     assert!(info.join("原图.png").is_file(), "磁盘不动");
     assert_eq!(h.lib.index.assets["AN-A"].origin_name, "原图.png");
@@ -443,12 +445,12 @@ mod tests {
     add_png(&mut h, "AN-A", "原图.png");
     // 首尾空白先 trim 再校验："名 " trim 后为合法名；"名." 与纯空白拒绝
     for bad in ["", "   ", "坏:名", "con", "名."] {
-      assert!(rename_placement(&mut h.lib, "AN-A", "root", true, bad).is_err(), "应拒绝：{bad:?}");
+      assert!(rename_placement(&mut h.lib, "AN-A", "root", true, bad, None).is_err(), "应拒绝：{bad:?}");
     }
-    assert!(rename_placement(&mut h.lib, "AN-A", "root", false, "幽灵").is_err(), "链接三元组不匹配");
+    assert!(rename_placement(&mut h.lib, "AN-A", "root", false, "幽灵", None).is_err(), "链接三元组不匹配");
     // 同文件夹撞名不追加序号（显示名放开，2026-08-18 用户定"护栏全拆"）
     add_png(&mut h, "AN-B", "另图.png");
-    rename_placement(&mut h.lib, "AN-B", "root", true, "原图.png").unwrap();
+    rename_placement(&mut h.lib, "AN-B", "root", true, "原图.png", None).unwrap();
     let b = h.lib.folders.items.iter().find(|p| p.asset == "AN-B").unwrap();
     assert_eq!(b.name, "原图.png", "显示名放开不唯一化");
   }
@@ -478,7 +480,7 @@ mod tests {
     let frames_dir = crate::core::paths::frames_dir(&h.lib.assets_dir, "AN-S");
     assert!(h.lib.info_dir("AN-S").join("走路_thumbnail.webp").is_file());
 
-    let renames = rename_placement(&mut h.lib, "AN-S", "root", true, "跑步").unwrap();
+    let renames = rename_placement(&mut h.lib, "AN-S", "root", true, "跑步", None).unwrap();
     for f in ["跑步_1.png", "跑步_2.png", "跑步_3.png"] {
       assert!(frames_dir.join(f).is_file(), "{f} 应改词干");
     }
@@ -494,7 +496,7 @@ mod tests {
     assert_eq!(disk.origin_name, "跑步_1.png", "metadata.json 落盘");
 
     // 二次改名：重取词干靠序号尾解析，不依赖旧词干匹配
-    rename_placement(&mut h.lib, "AN-S", "root", true, "跳跃").unwrap();
+    rename_placement(&mut h.lib, "AN-S", "root", true, "跳跃", None).unwrap();
     assert!(frames_dir.join("跳跃_2.png").is_file());
     assert_eq!(h.lib.index.assets["AN-S"].thumb_frame.as_deref(), Some("跳跃_1.png"));
     assert_eq!(h.lib.index.assets["AN-S"].origin_name, "跳跃_1.png");
@@ -515,7 +517,7 @@ mod tests {
     fs::create_dir_all(&unpack).unwrap();
     fs::write(unpack.join("动图-00001.webp"), b"f").unwrap();
 
-    rename_placement(&mut h.lib, "AN-G", "root", true, "新动图").unwrap();
+    rename_placement(&mut h.lib, "AN-G", "root", true, "新动图", None).unwrap();
     assert!(h.lib.info_dir("AN-G").join("新动图.gif").is_file(), "origin 正常改名");
     assert_eq!(h.lib.index.assets["AN-G"].origin_name, "新动图.gif");
     assert!(unpack.join("动图-00001.webp").is_file(), "解包帧目录不动");
@@ -576,6 +578,7 @@ mod tests {
       folder_id: "root".into(),
       origin: Some(origin),
       new_name: name.into(),
+      old_name: None,
     };
 
     let out = rename_placements(
@@ -617,6 +620,7 @@ mod tests {
       folder_id: "root".into(),
       origin,
       new_name: name.into(),
+      old_name: None,
     };
 
     let out = rename_placements(
@@ -636,5 +640,44 @@ mod tests {
     assert!(h.lib.info_dir("AN-A").join("新A.png").is_file(), "消歧命中 origin 后磁盘同步改名");
     assert_eq!(h.lib.folders.items.iter().find(|p| p.asset == "AN-B").unwrap().name, "新B.png", "链接消歧命中");
     assert_eq!(out.renames.len(), 2, "仅 AN-A 的 origin + 词干缩略图两对磁盘改名");
+  }
+
+  /// oldName 精确到行（2026-10-11 选择域独立化配套）：同文件夹同 origin 重复链接各改各的，
+  /// 不再双双命中 vec 首条；origin None + oldName 唯一命中时 resolve_origin 按该行消歧
+  #[test]
+  fn rename_placements_old_name_pinpoints_duplicate_links() {
+    let mut h = make_lib();
+    add_png(&mut h, "AN-A", "原图A.png"); // root origin
+    ops::add_placement(&mut h.lib, "AN-A".into(), "root".into(), "链接一.png".into(), false, &mut HashMap::new());
+    ops::add_placement(&mut h.lib, "AN-A".into(), "root".into(), "链接二.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+
+    let out = rename_placements(
+      &mut h.lib,
+      &[
+        // 两条同 origin=false 链接：oldName 各指各行
+        RenameItem { asset_id: "AN-A".into(), folder_id: "root".into(), origin: Some(false), new_name: "甲改.png".into(), old_name: Some("链接一.png".into()) },
+        RenameItem { asset_id: "AN-A".into(), folder_id: "root".into(), origin: Some(false), new_name: "乙改.png".into(), old_name: Some("链接二.png".into()) },
+        // origin None + oldName 唯一命中 origin 行：resolve_origin 按名消歧（磁盘同步改名发生）
+        RenameItem { asset_id: "AN-A".into(), folder_id: "root".into(), origin: None, new_name: "原图A2.png".into(), old_name: Some("原图A.png".into()) },
+      ],
+    )
+    .unwrap();
+    assert_eq!(out.renamed, 3);
+    assert!(out.failed.is_empty());
+    let names: Vec<&str> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-A").map(|p| p.name.as_str()).collect();
+    assert_eq!(names.len(), 3);
+    assert!(names.contains(&"原图A2.png") && names.contains(&"甲改.png") && names.contains(&"乙改.png"), "三行各中各的：{names:?}");
+    assert!(h.lib.info_dir("AN-A").join("原图A2.png").is_file(), "origin 行按名消歧命中后磁盘同步");
+
+    // oldName 陈旧（刚被改掉的旧名）：失败收集不错伤他行
+    let out = rename_placements(
+      &mut h.lib,
+      &[RenameItem { asset_id: "AN-A".into(), folder_id: "root".into(), origin: Some(false), new_name: "幽灵.png".into(), old_name: Some("链接一.png".into()) }],
+    )
+    .unwrap();
+    assert_eq!(out.renamed, 0);
+    assert_eq!(out.failed.len(), 1);
+    assert!(out.failed[0].reason.contains("不存在"));
   }
 }

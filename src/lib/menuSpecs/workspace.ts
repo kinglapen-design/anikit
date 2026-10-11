@@ -31,7 +31,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type { PlacementView } from "../../stores/content";
 import type { CtxEntry } from "../contextMenus";
 import { previewSession } from "../../stores/preview";
-import { useContentStore } from "../../stores/content";
+import { placementKey, useContentStore } from "../../stores/content";
 import { useSearchStore } from "../../stores/search";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
@@ -344,7 +344,7 @@ export async function wsCardSpec(p: PlacementView, panelId: string): Promise<Ctx
   const selection = useSelectionStore();
   const tabs = useTabsStore();
   await ws.refreshSystemClip();
-  const key = `${p.assetId}|${p.folderId}`;
+  const key = placementKey(p); // ws 键永不撞（合成项不进 content.placements 撞键集），得基底原样
   const batch = batchRels(key, entryRel);
   const multi = batch.length > 1;
   return [

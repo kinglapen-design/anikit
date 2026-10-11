@@ -54,7 +54,7 @@ import { getMediaSource } from "../../lib/mediaOps";
 import { isAudioExt } from "../../lib/formatBadge";
 import { currentLibrary } from "../../lib/libraryOps";
 import { dragView } from "../../lib/dragOperation";
-import { useContentStore } from "../../stores/content";
+import { placementKey, useContentStore } from "../../stores/content";
 import { useSelectionStore } from "../../stores/selection";
 import { usePickerStore } from "../../stores/picker";
 import { useTabsStore } from "../../stores/tabs";
@@ -230,7 +230,7 @@ async function removeLink(p: PlacementLink): Promise<void> {
 }
 function jumpToLink(p: PlacementLink): void {
   if (!file.value) return;
-  jumpToAssetPlacement(file.value.placement.assetId, p.folderId ?? "root");
+  jumpToAssetPlacement(file.value.placement.assetId, p.folderId ?? "root", { origin: p.origin, name: p.name });
 }
 
 // ================= 关系 / 音频共用（relations 视图） =================
@@ -388,7 +388,7 @@ function jumpToThumb(assetId: string): void {
     toast.notify({ message: "目标文件不在本库任何文件夹中（可能在回收站）", icon: "fail" });
     return;
   }
-  const key = `${p.assetId}|${p.folderId}`;
+  const key = placementKey(p);
   useTabsStore().openView("quick:thumbnail");
   content.requestReveal("quick:thumbnail", key);
   void nextTick(() => selection.selectOnly(key));
@@ -401,7 +401,7 @@ function jumpToThumbUser(assetId: string): void {
     toast.notify({ message: "目标文件不在本库任何文件夹中（可能在回收站）", icon: "fail" });
     return;
   }
-  jumpToAssetPlacement(assetId, p.folderId);
+  jumpToAssetPlacement(assetId, p.folderId, { origin: p.origin, name: p.name });
 }
 
 // × = 解除绑定（仅清工程侧 thumb_asset_id，hidden 侧不动——还原为素材走卡片右键「解除缩略图」）

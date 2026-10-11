@@ -52,6 +52,31 @@ export interface PlacementView {
   wsPath?: string | null;
 }
 
+// —— Placement 选择键（2026-10-11 选择域独立化，实机报"同文件原始与链接同时被选中"）——
+// 基底 = `${assetId}|${folderId}`（沿用原口径）；同资产同文件夹多条位置（origin + 链接 /
+// 重复链接——2026-08-13 放开重复链接后合法）基底撞键，追加 `|{origin?1:0}|{name}` 后缀精确到行。
+// 后缀判定看全库 placements 撞键集（dupPlacementKeys），与视口无关——同一 Placement 跨视图同键。
+// ws 合成键 / 回收站键永不撞（ws 条目不属 content.placements；回收站 folderId 恒 "recycle"
+// 且按资产聚合单条），经本函数原样得基底。名称经 validate_library_name 校验不含 "|"，分隔安全。
+export function placementKey(p: { assetId: string; folderId: string; origin?: boolean; name?: string }): string {
+  const base = `${p.assetId}|${p.folderId}`;
+  if (!useContentStore().dupPlacementKeys.has(base)) return base;
+  return `${base}|${p.origin ? 1 : 0}|${p.name ?? ""}`;
+}
+
+// 命令入参行（selection.PlacementRef 同形，为绕 import 环此处独立声明）：撞键行附 name
+// 精确到行——后端 find_placement 见名即按行匹配，陈旧名 = 匹配落空跳过（不错伤他行）；
+// 非撞键项不带 name（今日行为零变化）
+export function placementRef(p: { assetId: string; folderId: string; origin: boolean; name?: string }): {
+  assetId: string;
+  folderId: string;
+  origin: boolean;
+  name?: string;
+} {
+  const base = `${p.assetId}|${p.folderId}`;
+  return placementKey(p) === base ? { assetId: p.assetId, folderId: p.folderId, origin: p.origin } : { assetId: p.assetId, folderId: p.folderId, origin: p.origin, name: p.name };
+}
+
 // 最近使用 / 回收站视图 DTO（6.1 二轮）已拆至 stores/quickViews.ts（规范第 3 条行数控制），
 // 此处 re-export 保既有引用点不动
 export type { RecentAssetView, RecycleEntryView } from "./quickViews";
@@ -328,7 +353,8 @@ export const useContentStore = defineStore("content", {
     detailRev: 0,
     // 3.5 排序新增区（2026-08-19 用户定）：排序状态下新增 / 导入的项不按排序键分散、集中置顶
     // （先来在前）——用户要能找到新建文件、确认导入数量；切视图（sidebarSelected 变化）/ 切库 /
-    // 拖拽物化时归位清空。key = `${assetId}|${folderId}`（与选择 / 拖拽键同口径），value = 到达序号
+    // 拖拽物化时归位清空。key = `${assetId}|${folderId}`（自洽子域——新增区只关心资产到达，
+    // 不区分同夹多条位置；选择 / 拖拽键的撞键后缀口径见 placementKey，2026-10-11），value = 到达序号
     newArrivals: new Map<string, number>(),
     // 3.5 分组折叠态（会话级）：folderId → 折叠组 id 列表（"__ungrouped" = 未分组组）；
     // 与树展开态同口径（会话级不持久化，lib/treeExpansion 先例）
@@ -399,7 +425,7 @@ export const useContentStore = defineStore("content", {
         const p =
           this.placements.find((x) => x.assetId === id && x.origin) ??
           this.placements.find((x) => x.assetId === id);
-        return p ? `${p.assetId}|${p.folderId}` : "";
+        return p ? placementKey(p) : "";
       }
       return "";
     },
@@ -483,6 +509,17 @@ export const useContentStore = defineStore("content", {
     // 当前视口的资源列表（激活标签页视口；操作上下文统一走这个——交互发生时所在 panel 必为激活）
     visiblePlacements(state): PlacementView[] {
       return this.placementsFor(state.sidebarSelected);
+    },
+    // 同资产同文件夹多条位置的基底 key 集（placementKey 后缀判定，2026-10-11 选择域独立化）
+    dupPlacementKeys(state): Set<string> {
+      const seen = new Set<string>();
+      const dup = new Set<string>();
+      for (const p of state.placements) {
+        const k = `${p.assetId}|${p.folderId}`;
+        if (seen.has(k)) dup.add(k);
+        else seen.add(k);
+      }
+      return dup;
     },
     // 视口显示序（2026-10-08 立为"顺序即用户所见"消费方统一口径，修复分组下范围选 / 预览翻页
     // 与网格所见不一致）：分组视口 = 组拼接扁平序（未分组在头 + 定义序，组内保持 placementsFor

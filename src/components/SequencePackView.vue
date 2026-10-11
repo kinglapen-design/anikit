@@ -16,7 +16,7 @@ import QuickNavButton from "./QuickNavButton.vue";
 import { listSequenceFrames, type FrameEntry } from "../lib/mediaOps";
 import { openContextMenu, type CtxEntry } from "../lib/contextMenus";
 import { deleteSequenceFrames, renumberSequenceFrames, setSequenceFrameThumb } from "../lib/placementOps";
-import { useContentStore } from "../stores/content";
+import { placementKey, useContentStore } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useTabsStore } from "../stores/tabs";
 import { useUiStore } from "../stores/ui";
@@ -184,7 +184,7 @@ async function openFramePreview(name: string): Promise<void> {
   if (!p) return;
   const idx = frames.value.findIndex((f) => f.name === name);
   useTabsStore().openView(`folder:${p.folderId}`, preview.panelId);
-  await preview.open(`${p.assetId}|${p.folderId}`);
+  await preview.open(placementKey(p));
   if (idx >= 0) preview.setFrame(idx);
 }
 

@@ -125,7 +125,7 @@ mod tests {
   }
 
   fn pref(asset: &str, folder: &str, origin: bool) -> PlacementRef {
-    PlacementRef { asset_id: asset.into(), folder_id: folder.into(), origin }
+    PlacementRef { asset_id: asset.into(), folder_id: folder.into(), origin, name: None }
   }
 
   fn count(lib: &Library, asset: &str) -> usize {
@@ -193,5 +193,32 @@ mod tests {
     // 未知 / 空删除方式拒绝
     assert!(delete_placements(&mut h.lib, &[], Some("销毁")).is_err());
     assert!(delete_placements(&mut h.lib, &[], None).is_err());
+  }
+
+  /// 同文件夹重复链接（2026-08-13 放开）：name 精确到行——指名删第二条只中第二条；
+  /// 不带 name = 三元组首条（兜底原语义，2026-10-11 PlacementRef 补 name 维度）
+  #[test]
+  fn delete_recycle_same_folder_duplicate_links_named() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01");
+    add_asset(&mut h, "AN-A", "a.png", "F01"); // origin
+    ops::add_placement(&mut h.lib, "AN-A".into(), "F01".into(), "链接一.png".into(), false, &mut HashMap::new());
+    ops::add_placement(&mut h.lib, "AN-A".into(), "F01".into(), "链接二.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+
+    // name 精确：删「链接二」只中该行，origin 与「链接一」不动
+    let named = PlacementRef { asset_id: "AN-A".into(), folder_id: "F01".into(), origin: false, name: Some("链接二.png".into()) };
+    delete_placements(&mut h.lib, &[named], Some("recycle")).unwrap();
+    let rest: Vec<_> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-A").collect();
+    assert_eq!(rest.len(), 2, "只删一条链接");
+    assert!(rest.iter().any(|p| p.origin), "origin 不动");
+    assert!(rest.iter().any(|p| !p.origin && p.name == "链接一.png"), "另一条链接不动");
+    assert_eq!(h.lib.recycle.items[0].placements[0].name, "链接二.png", "回收站快照 = 被删那行");
+
+    // 不带 name = 三元组首条（兜底原语义）
+    delete_placements(&mut h.lib, &[pref("AN-A", "F01", false)], Some("recycle")).unwrap();
+    let rest: Vec<_> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-A").collect();
+    assert_eq!(rest.len(), 1);
+    assert!(rest[0].origin, "链接删完只剩 origin");
   }
 }

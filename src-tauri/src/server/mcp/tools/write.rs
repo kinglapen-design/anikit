@@ -54,6 +54,10 @@ pub struct RenameItemParams {
   pub origin: Option<bool>,
   /// 新名（含扩展名；origin 项无扩展名时自动补原扩展名）
   pub new_name: String,
+  /// Placement 精确定位之四（2026-10-11）：同文件夹同 origin 的**重复链接**按旧显示名区分到行
+  ///（照 list_placements 回包显示名抄）；origin + 链接两条的场景指定 origin 即可，无需本字段
+  #[serde(default)]
+  pub old_name: Option<String>,
 }
 
 /// rename_placements 入参
@@ -109,7 +113,7 @@ impl AnikitMcp {
     let items: Vec<RenameItem> = p
       .items
       .into_iter()
-      .map(|it| RenameItem { asset_id: it.asset_id, folder_id: it.folder_id, origin: it.origin, new_name: it.new_name })
+      .map(|it| RenameItem { asset_id: it.asset_id, folder_id: it.folder_id, origin: it.origin, new_name: it.new_name, old_name: it.old_name })
       .collect();
     let state = self.app.state::<AppState>();
     match crate::commands::operations::rename_placements_op(&state, &items) {

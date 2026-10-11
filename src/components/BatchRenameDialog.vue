@@ -10,14 +10,14 @@
 // 关闭 X 由 framed 提供——旧 :deep(.app-modal)/.titlebar/.content 三段覆盖尽废）；
 // 输入框 = inputs/TextInput lg（clearable 新件原生，旧 medium 档废）；按钮 = buttons/ActionButton lg
 //（模态口径：宽自适应 + 左右 48——旧 88 定宽废；次左主右——旧确认左序随新口径废）。
-import { computed, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import BaseModal from "./modals/BaseModal.vue";
 import TextInput from "./inputs/TextInput.vue";
 import ActionButton from "./buttons/ActionButton.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ScrollThumb from "./ScrollThumb.vue";
-import { useContentStore } from "../stores/content";
+import { placementKey, useContentStore } from "../stores/content";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
 import { renamePlacementsBatch, type RenameItemInput } from "../lib/placementOps";
 
@@ -34,9 +34,11 @@ interface Row {
 }
 const rows = computed<Row[]>(() => {
   const draft = selection.renameDraft ?? [];
-  const byKey = new Map(content.placements.map((p) => [`${p.assetId}|${p.folderId}|${p.origin}`, p]));
+  // 撞键行（同资产同文件夹多条位置）按 placementKey 各归各行（2026-10-11 选择域独立化——
+  // 原三元组映射把同 origin 重复链接全映射到首行）
+  const byKey = new Map(content.placements.map((p) => [placementKey(p), p]));
   return draft.map((ref) => {
-    const p = byKey.get(`${ref.assetId}|${ref.folderId}|${ref.origin}`);
+    const p = byKey.get(placementKey(ref));
     return {
       ref,
       name: p?.name ?? "",
@@ -63,6 +65,11 @@ const seqNameRef = ref<InstanceType<typeof TextInput>>();
 const seqStartRef = ref<InstanceType<typeof TextInput>>();
 const findRef = ref<InstanceType<typeof TextInput>>();
 const replaceRef = ref<InstanceType<typeof TextInput>>();
+
+// 打开即聚焦首输入框（2026-10-11 用户要求：免每次手点；默认序号模式聚焦「名称」）
+onMounted(() => {
+  void nextTick(() => seqNameRef.value?.focus());
+});
 
 // 位宽自动（PRD 02-14：<100 两位、≥100 三位）
 const padWidth = computed(() => (rows.value.length < 100 ? 2 : 3));
@@ -122,6 +129,7 @@ const pendingItems = computed<RenameItemInput[]>(() =>
       folderId: row.ref.folderId,
       origin: row.ref.origin,
       newName: previewName(row, i),
+      oldName: row.ref.name, // 撞键行附旧名精确到行（后端 RenameItem oldName，2026-10-11）
     })),
 );
 
@@ -150,7 +158,7 @@ const listRef = ref<HTMLElement>();
     <!-- 行列表（滚轮 = ScrollThumb 悬浮件） -->
     <div class="rd-list-wrap">
       <div ref="listRef" class="rd-list kit-scroll">
-        <div v-for="(row, i) in rows" :key="`${row.ref.assetId}|${row.ref.folderId}|${row.ref.origin}`" class="rd-row">
+        <div v-for="(row, i) in rows" :key="placementKey(row.ref)" class="rd-row">
           <div class="rd-card">
             <span class="rd-thumb">
               <img v-if="row.thumb" :src="row.thumb" :class="{ icon: row.contain }" alt="" />

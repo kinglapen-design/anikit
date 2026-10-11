@@ -7,7 +7,7 @@
 //   回收站写能力随"档案进回收站"一轮后端统一立项（记 09 待办）；
 // - 空白处 = 扫描两项（在回收站就是为了清理）+ 还原全部 / 清空。
 import { invoke } from "@tauri-apps/api/core";
-import { useContentStore, type PlacementView } from "../../stores/content";
+import { placementKey, useContentStore, type PlacementView } from "../../stores/content";
 import { useSelectionStore } from "../../stores/selection";
 import { previewSession } from "../../stores/preview";
 import { useTabsStore } from "../../stores/tabs";
@@ -64,7 +64,7 @@ export function recycleCardSpec(p: PlacementView | undefined, panelId: string): 
     ];
   }
   const assetId = p.assetId;
-  const assetKey = `${p.assetId}|${p.folderId}`;
+  const assetKey = placementKey(p);
   return [
     { label: "还原文件", action: () => void restoreRecycle(recycleSelectedAssetIds()) },
     "divider",

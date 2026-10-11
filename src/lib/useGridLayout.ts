@@ -18,7 +18,7 @@ import {
   type Row,
 } from "./layouts";
 import { useVirtualScroll } from "./useVirtualScroll";
-import { useContentStore, type PlacementView } from "../stores/content";
+import { placementKey, useContentStore, type PlacementView } from "../stores/content";
 import { useUiStore } from "../stores/ui";
 import { isAudioExt, isDocxExt, isFontExt, isTextExt } from "./formatBadge";
 
@@ -163,7 +163,7 @@ export function useGridLayout(opts: {
         // box.i 可能越界（items 里无此下标），取不到卡就不锚定，等下一轮一致化
         const first = items[boxes.value[row.start]?.i ?? -1];
         if (first) {
-          anchorKey = `${first.assetId}|${first.folderId}`;
+          anchorKey = placementKey(first);
           anchorRatio = row.height > 0 ? (layerY - row.top) / row.height : 0;
         }
       }
@@ -225,7 +225,7 @@ export function useGridLayout(opts: {
       // 重排重试——用户主动滚动即放弃（useVirtualScroll 用户源回调清 null）
       if (pos.value === restorePos) restorePos = null;
     } else if (anchorKey !== null) {
-      const idx = items.findIndex((it) => `${it.assetId}|${it.folderId}` === anchorKey);
+      const idx = items.findIndex((it) => placementKey(it) === anchorKey);
       const b = idx >= 0 ? boxes.value.find((bb) => bb.i === idx) : undefined;
       if (b) {
         // box.height = 行高（卡即图满铺，四种布局同构），按比例还原行内偏移
@@ -236,7 +236,7 @@ export function useGridLayout(opts: {
     // 否则滚到居中；覆盖恢复 / 锚点位。找不到卡（搜索过滤 / 折叠组内）= 消费即放弃
     const reveal = content.consumeReveal(opts.viewKey());
     if (reveal) {
-      const idx = items.findIndex((it) => `${it.assetId}|${it.folderId}` === reveal);
+      const idx = items.findIndex((it) => placementKey(it) === reveal);
       const b = idx >= 0 ? boxes.value.find((bb) => bb.i === idx) : undefined;
       if (b) {
         const cardTop = b.top + headerH.value + 12 + listExtra.value;
