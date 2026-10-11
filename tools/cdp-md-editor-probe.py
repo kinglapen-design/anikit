@@ -51,6 +51,9 @@ MD_SRC = """# 方舟前史
 | 名称 | 数值 |
 | --- | --- |
 | 正文 | 15 |
+
+```
+```
 """
 
 STUB = r"""
@@ -233,6 +236,21 @@ async def main():
                     fails.append("[A] 代码块复制钮缺失")
             await shot("md-preview")
 
+            # —— 场景 A2：空代码块最小高度（2026-10-11 用户实机报：空块装不下复制钮溢出）——
+            # 46 = 钮距顶 8 + 钮 30 + 下 8；断言文末空块 pre 达 46 且钮底缘不出容器
+            a2 = await ev("""(() => {
+              const pres = [...document.querySelectorAll('.text-preview .md-body .md-code pre')];
+              const empty = pres[pres.length - 1];
+              if (!empty) return null;
+              const btn = empty.closest('.md-code').querySelector('.md-copy');
+              const pr = empty.getBoundingClientRect(), br = btn.getBoundingClientRect();
+              return { minH: getComputedStyle(empty).minHeight, h: Math.round(pr.height),
+                       btnIn: br.bottom <= pr.bottom + 0.5 };
+            })()""")
+            print("[A2 空代码块]", json.dumps(a2, ensure_ascii=False))
+            if not a2 or a2["minH"] != "46px" or a2["h"] < 46 or a2["btnIn"] is not True:
+                fails.append(f"[A2] 空代码块复制钮溢出未根治（{a2}，期望 min-height 46px 且钮在容器内）")
+
             # —— 场景 J：三列表对齐（2026-09-25 走查）——任务文本列 = 无序/有序文本列；复选框挂 marker 列（文本列 -20） ——
             j = await ev("""(() => {
               const body = document.querySelector('.text-preview .md-body');
@@ -373,8 +391,8 @@ async def main():
                     fails.append(f"[P] 光标行未回落源码（{p1['h1'][1]}，期望 # 前缀可见）")
             if not p1 or p1["tasks"] != 2 or p1["taskOn"] != 2:
                 fails.append(f"[P] 任务框 widget 不符（{p1}，期望 2 框 2 on——场景 B 已把首任务勾上）")
-            if p1 and (p1["codeLines"] != 3 or p1["codeFirst"] != 1 or p1["codeLast"] != 1):
-                fails.append(f"[P] 代码块卡片行装饰不符（{p1}，期望 3 行 1 首 1 末）")
+            if p1 and (p1["codeLines"] != 5 or p1["codeFirst"] != 2 or p1["codeLast"] != 2):
+                fails.append(f"[P] 代码块卡片行装饰不符（{p1}，期望 5 行 2 首 2 末——含文末空代码块两栅线行）")
             if p1 and p1["quote"] < 1:
                 fails.append(f"[P] 引用行装饰缺失（{p1}）")
             # 光标移进首行 → 该行回落源码（# 与 ** 标记现身）
