@@ -15,7 +15,7 @@ use crate::core::models::Folder;
 use crate::core::paths;
 use crate::core::undo::{DiskOp, UndoManager};
 use crate::services::import::ROOT_FOLDER_ID;
-use crate::services::operations::{self, ApplyBlockReport, BatchRenameFailed, BlockInput, PlacementRef, RenameItem, SyncLinkAdd, SyncLinkRemove, SyncLinkRename};
+use crate::services::operations::{self, ApplyBlockReport, BatchRenameFailed, BlockInput, PlacementRef, RenameFolderItem, RenameItem, SyncLinkAdd, SyncLinkRemove, SyncLinkRename};
 
 /// metadata.json 路径（由 ID 推导，PRD 01-2.3）
 fn meta_path(lib: &Library, asset_id: &str) -> PathBuf {
@@ -85,6 +85,25 @@ pub async fn rename_folder(
     Ok(()) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(())
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
+/// 批量重命名文件夹（2026-10-11，PRD 02-14 文件夹批量重命名）：逐条改名（仅改数据不动磁盘——
+/// Folder 是数据层分组无磁盘实体），失败项（非法名 / 陈旧 id）跳过汇总进 failed 不整体回滚；
+/// 单次落盘 + 单撤销步（报告结构与素材批量重命名 BatchRenameReport 同构）
+#[tauri::command]
+pub async fn rename_folders(state: State<'_, AppState>, items: Vec<RenameFolderItem>) -> Result<BatchRenameReport, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin(format!("批量重命名 {} 个文件夹", items.len()));
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  match operations::rename_folders(lib, &items) {
+    Ok((renamed, failed)) => {
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(BatchRenameReport { renamed, failed })
     }
     Err(e) => Err(fail(lib, &mut undo, e)),
   }

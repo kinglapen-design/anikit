@@ -111,7 +111,17 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
           } as CtxEntry,
         ]
       : []),
-    { label: "重命名", shortcut: "F2", action: rename },
+    // 批量重命名（2026-10-11，PRD 02-14）：触发项在文件夹多选域内 → 弹窗批量序号命名整个
+    // 选中集（编号 = 树 DFS 视觉序；档案混选同批）；单选照旧就地重命名
+    selection.selectedFolders.size > 1 && selection.selectedFolders.has(folder.id)
+      ? {
+          label: "批量重命名",
+          shortcut: "F2",
+          action: () => {
+            selection.renameFolderDraft = selection.selectedFolderIdsInTreeOrder();
+          },
+        }
+      : { label: "重命名", shortcut: "F2", action: rename },
     "divider",
     // 克隆（3.4 四轮点亮）：复制克隆无弹窗；多选域内触发 → 批量克隆整个选中集
     { label: "克隆", shortcut: "Ctrl+D", action: () => cloneFolderFlow(folder.id) },

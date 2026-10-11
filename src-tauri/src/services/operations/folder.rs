@@ -8,7 +8,7 @@ use crate::core::models::{Folder, GroupDef, GroupRule, ARCHIVE_KIND};
 use crate::services::import as ops;
 use crate::services::import::ROOT_FOLDER_ID;
 
-use super::{check_folder, parent_key};
+use super::{check_folder, parent_key, BatchRenameFailed};
 
 /// 新建文件夹：after_folder_id 给了就插到该兄弟之后（同级后续 order 顺移 +1），否则末尾。
 /// 名称走库名同一套 Windows 命名规则（前后端同规则，命令接口统一把关）。
@@ -160,6 +160,46 @@ pub fn rename_folder(lib: &mut Library, folder_id: &str, new_name: &str) -> Resu
   library::save_folders(lib).map_err(|e| e.to_string())?;
   log::info!("重命名文件夹 {folder_id} 为 {name}");
   Ok(())
+}
+
+/// 批量重命名文件夹单项（2026-10-11，PRD 02-14 文件夹批量重命名）：folderId + 新名
+///（词干规则无——文件夹无扩展名，新名由前端弹窗整名组装）
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameFolderItem {
+  pub folder_id: String,
+  pub new_name: String,
+}
+
+/// 批量重命名文件夹（2026-10-11）：逐条 trim + 校验（同 rename_folder 口径）后改名，
+/// **失败项（非法名 / 陈旧 id）跳过汇总进 failed，不整体回滚**；同名幂等仍计 renamed；
+/// 全部处理完单次落盘（不像 rename_folder 逐条落盘）。Folder 是数据层分组，改名不动磁盘；
+/// 同名不拦截——文件夹名本就允许重复（PRD 02-14）
+pub fn rename_folders(lib: &mut Library, items: &[RenameFolderItem]) -> Result<(usize, Vec<BatchRenameFailed>), String> {
+  let mut renamed = 0usize;
+  let mut failed: Vec<BatchRenameFailed> = Vec::new();
+  for it in items {
+    let name = it.new_name.trim();
+    if let Err(e) = library::validate_library_name(name) {
+      failed.push(BatchRenameFailed { name: name.to_string(), reason: e.to_string() });
+      continue;
+    }
+    match lib.folders.folders.iter_mut().find(|f| f.id == it.folder_id) {
+      None => failed.push(BatchRenameFailed { name: name.to_string(), reason: "目标文件夹不存在，可能已被删除".to_string() }),
+      Some(f) => {
+        if f.name != name {
+          f.name = name.to_string();
+        }
+        renamed += 1;
+      }
+    }
+  }
+  if renamed > 0 {
+    sync_folder_index(lib);
+    library::save_folders(lib).map_err(|e| e.to_string())?;
+  }
+  log::info!("批量重命名文件夹 {renamed} 个（失败 {}）", failed.len());
+  Ok((renamed, failed))
 }
 
 /// Folder 数据改动后索引同步（folders.folders 为事实来源，全量重建映射）
@@ -922,6 +962,70 @@ mod tests {
     undo.undo().unwrap();
     crate::core::library::reload(&mut h.lib).unwrap();
     assert_eq!(h.lib.index.folders["F01"].name, "人物", "undo 后恢复原名");
+  }
+
+  /// 批量重命名（2026-10-11，PRD 02-14 文件夹批量重命名）：逐条改名单次落盘 + 索引同步；
+  /// 非法名 / 陈旧 id 跳过进 failed 不整体回滚；同名幂等仍计 renamed；同名不拦截（文件夹名允许重复）
+  #[test]
+  fn rename_folders_batch_partial_failure() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "甲", None, 0);
+    add_folder(&mut h.lib, "F02", "乙", None, 1);
+    add_folder(&mut h.lib, "F03", "丙", None, 2);
+    add_folder(&mut h.lib, "F04", "丁", None, 3);
+
+    let items = vec![
+      RenameFolderItem { folder_id: "F01".into(), new_name: "分镜_01".into() },
+      RenameFolderItem { folder_id: "F02".into(), new_name: "坏:名".into() }, // 非法名 → failed
+      RenameFolderItem { folder_id: "F-陈旧".into(), new_name: "分镜_03".into() }, // 陈旧 id → failed
+      RenameFolderItem { folder_id: "F03".into(), new_name: "  丙  ".into() }, // trim 后同名 = 幂等
+      RenameFolderItem { folder_id: "F04".into(), new_name: "分镜_01".into() }, // 与他项撞名不拦截
+    ];
+    let (renamed, failed) = rename_folders(&mut h.lib, &items).unwrap();
+    assert_eq!(renamed, 3, "F01 改名 + F03 幂等 + F04 撞名照改");
+    assert_eq!(failed.len(), 2, "非法名与陈旧 id 各一");
+    assert_eq!(failed[0].name, "坏:名");
+    assert!(failed[1].reason.contains("不存在"), "{:?}", failed[1]);
+    assert_eq!(h.lib.index.folders["F01"].name, "分镜_01", "索引同步");
+    assert_eq!(h.lib.index.folders["F02"].name, "乙", "失败项数据不动");
+    assert_eq!(h.lib.index.folders["F04"].name, "分镜_01", "文件夹名允许重复");
+    // 落盘验证（单次落盘，磁盘 = 事实来源）
+    let disk: FoldersFile = read_json(&h.lib.root.join(FOLDERS_FILE)).unwrap();
+    assert_eq!(disk.folders.iter().find(|f| f.id == "F01").unwrap().name, "分镜_01");
+    assert_eq!(disk.folders.iter().find(|f| f.id == "F02").unwrap().name, "乙");
+    // 全失败不落盘（盘保持原样）
+    let before = std::fs::read_to_string(h.lib.root.join(FOLDERS_FILE)).unwrap();
+    let (renamed, failed) =
+      rename_folders(&mut h.lib, &[RenameFolderItem { folder_id: "F-不存在".into(), new_name: "x".into() }]).unwrap();
+    assert_eq!((renamed, failed.len()), (0, 1));
+    assert_eq!(std::fs::read_to_string(h.lib.root.join(FOLDERS_FILE)).unwrap(), before, "全失败不落盘");
+  }
+
+  /// 撤销接入验证（2026-10-11）：批量重命名一步回滚整批
+  #[test]
+  fn undo_rolls_back_rename_folders() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "甲", None, 0);
+    add_folder(&mut h.lib, "F02", "乙", None, 1);
+    library::save_folders(&h.lib).unwrap(); // 先落盘，撤销快照才含测试数据
+    let path = h.lib.root.join(FOLDERS_FILE);
+
+    let mut undo = UndoManager::default();
+    undo.begin("批量重命名 2 个文件夹");
+    undo.record_file(&path).unwrap();
+    let items = vec![
+      RenameFolderItem { folder_id: "F01".into(), new_name: "分镜_01".into() },
+      RenameFolderItem { folder_id: "F02".into(), new_name: "分镜_02".into() },
+    ];
+    let (renamed, failed) = rename_folders(&mut h.lib, &items).unwrap();
+    assert_eq!((renamed, failed.len()), (2, 0));
+    undo.commit().unwrap();
+    assert_eq!(undo.state().undo_label.as_deref(), Some("批量重命名 2 个文件夹"));
+
+    undo.undo().unwrap();
+    crate::core::library::reload(&mut h.lib).unwrap();
+    assert_eq!(h.lib.index.folders["F01"].name, "甲", "undo 后整批恢复原名");
+    assert_eq!(h.lib.index.folders["F02"].name, "乙");
   }
 
   /// 更改图标（2026-08-18，3.3，同步语义）：默认影响子级——后代图标与本节点当前图标一致的

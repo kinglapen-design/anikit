@@ -149,14 +149,24 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
           } as CtxEntry,
         ]
       : []),
-    {
-      label: "重命名",
-      shortcut: "F2",
-      action: () => {
-        if (rename) rename(); // 树档案节点：树命名态（folder.ts treeItemSpec 分流传入）
-        else selection.namingFolderCardId = archive.id;
-      },
-    },
+    // 批量重命名（2026-10-11，PRD 02-14）：触发项在文件夹多选域内 → 弹窗批量序号命名整个
+    // 选中集（档案与文件夹同域同批）；单选照旧就地重命名
+    selection.selectedFolders.size > 1 && selection.selectedFolders.has(archive.id)
+      ? {
+          label: "批量重命名",
+          shortcut: "F2",
+          action: () => {
+            selection.renameFolderDraft = selection.selectedFolderIdsInTreeOrder();
+          },
+        }
+      : {
+          label: "重命名",
+          shortcut: "F2",
+          action: () => {
+            if (rename) rename(); // 树档案节点：树命名态（folder.ts treeItemSpec 分流传入）
+            else selection.namingFolderCardId = archive.id;
+          },
+        },
     "divider",
     // 克隆（2026-09-05 走查：档案「作为副本粘贴」删除，走与文件夹一样的克隆）：
     // clone_folders 递归复制子树（结构 / 资产物理副本 / 档案记录），多选域内触发批量分流

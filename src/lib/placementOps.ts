@@ -752,6 +752,42 @@ export async function renamePlacementsBatch(items: RenameItemInput[]): Promise<b
   }
 }
 
+// 批量重命名文件夹（2026-10-11，PRD 02-14）：folderId + 新名逐条（仅改数据不动磁盘——Folder
+// 无磁盘实体），失败项（非法名 / 陈旧 id）跳过 toast 汇总不整体回滚；单撤销步。
+// toast 自组同 renamePlacementsBatch 口径（部分失败换 fail 图标文案）
+export interface RenameFolderItemInput {
+  folderId: string;
+  newName: string;
+}
+export async function renameFoldersBatch(items: RenameFolderItemInput[]): Promise<boolean> {
+  const content = useContentStore();
+  const toast = useToastStore();
+  const undo = useUndoStore();
+  try {
+    const r = await invoke<BatchRenameReport>("rename_folders", { items });
+    await content.refresh();
+    void undo.refreshState();
+    if (r.failed.length > 0) {
+      toast.notify({
+        message: `已重命名 ${r.renamed} 个文件夹，${r.failed.length} 个失败（${r.failed[0].reason}）`,
+        icon: "fail",
+        actionLabel: "撤销",
+        onAction: () => void undo.undo(),
+      });
+    } else {
+      toast.notify({
+        message: `已批量重命名 ${r.renamed} 个文件夹`,
+        actionLabel: "撤销",
+        onAction: () => void undo.undo(),
+      });
+    }
+    return true;
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+    return false;
+  }
+}
+
 // 克隆文件夹报告（后端 CloneReport 同构）
 export interface CloneFoldersResult {
   folderIds: string[];

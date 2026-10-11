@@ -548,8 +548,9 @@ async function togglePin(): Promise<void> {
     <MovePanel v-if="selection.moveDraft" />
     <!-- 目的树选择器（2026-10-03 库 ↔ 工作空间互通）：「导出到工作空间 / 导入到库」共用 -->
     <DestTreeDialog v-if="selection.destTreeDraft" />
-    <!-- 批量重命名弹窗（3.4，37 稿）：多选「重命名」/ Ctrl+R 触发 -->
-    <BatchRenameDialog v-if="selection.renameDraft" />
+    <!-- 批量重命名弹窗（3.4，37 稿）：素材多选「重命名」/ F2 触发；文件夹域多选同弹窗
+         （renameFolderDraft 文件夹模式，2026-10-11） -->
+    <BatchRenameDialog v-if="selection.renameDraft || selection.renameFolderDraft" />
     <!-- 属性标签弹窗（6.1，32 稿）/ 编辑描述弹窗（31 稿）：详情面板自定义数据区块入口，
          文件与档案同做；须在 AppConfirm 之前——池内 × 删除弹确认窗，后渲染者在上 -->
     <PropsDialog v-if="ui.propsEdit" />

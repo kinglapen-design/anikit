@@ -24,9 +24,10 @@ import {
   pasteDuplicate,
 } from "../placementOps";
 
-// 重命名（F2 同径）：文件夹域单选 = 卡片/树命名态分流（条带可见走卡片，否则树）；素材域单选 = 就地重命名；
-// 素材域多选 = 批量重命名弹窗（2026-09-23 随 F2 多选接入同步放开，右键菜单「批量重命名」同径；
-// 工作空间视口排除——ws 无批量改名，ws: 合成 id 严禁落 assetId 类命令）
+// 重命名（F2 同径）：文件夹域单选 = 卡片/树命名态分流（条带可见走卡片，否则树）；
+// 文件夹域多选 = 批量重命名弹窗（2026-10-11，renameFolderDraft——编号按树 DFS 视觉序，档案混选同批）；
+// 素材域单选 = 就地重命名；素材域多选 = 批量重命名弹窗（2026-09-23 随 F2 多选接入同步放开，
+// 右键菜单「批量重命名」同径；工作空间视口排除——ws 无批量改名，ws: 合成 id 严禁落 assetId 类命令）
 function renameFlow(): void {
   const content = useContentStore();
   const selection = useSelectionStore();
@@ -36,6 +37,10 @@ function renameFlow(): void {
     const cur = content.currentFolderId;
     if (cur !== null && parent === cur) selection.namingFolderCardId = id;
     else selection.namingFolderId = id;
+    return;
+  }
+  if (selection.selectedFolders.size > 1) {
+    selection.renameFolderDraft = selection.selectedFolderIdsInTreeOrder();
     return;
   }
   if (selection.selectedFolders.size === 0 && selection.count === 1) {
@@ -60,10 +65,11 @@ export function editMenuSpec(): CtxEntry[] {
   // 粘贴落点口径（与 pasteTarget 严格一致）：folder: 视口或未分类可粘贴（未分类落 root），
   // 其余视口（全部/最近使用/自动导入/缩略图/回收站/seq: 等）一律置灰
   const canPaste = content.sidebarSelected.startsWith("folder:") || content.sidebarSelected === "quick:uncategorized";
-  // 重命名可用：回收站只读全禁；文件夹域单选 / 素材域单选 / 素材域多选（批量重命名，ws 视口除外）
+  // 重命名可用：回收站只读全禁；文件夹域单选（就地）/ 文件夹域多选（批量，2026-10-11）/
+  // 素材域单选 / 素材域多选（批量重命名，ws 视口除外）
   const canRename =
     !recycle &&
-    (selection.selectedFolders.size === 1 ||
+    (selection.selectedFolders.size > 0 ||
       (!hasFolders && selection.count === 1) ||
       (!hasFolders && selection.count > 1 && !content.isWorkspaceView));
   return [
@@ -100,8 +106,11 @@ export function editMenuSpec(): CtxEntry[] {
     },
     "divider",
     {
-      // 素材域多选显示「批量重命名」（与右键菜单同口径，2026-09-23）
-      label: !hasFolders && selection.count > 1 && !content.isWorkspaceView ? "批量重命名" : "重命名",
+      // 素材域多选 / 文件夹域多选显示「批量重命名」（与右键菜单同口径，2026-09-23 / 文件夹 2026-10-11）
+      label:
+        (hasFolders && selection.selectedFolders.size > 1) || (!hasFolders && selection.count > 1 && !content.isWorkspaceView)
+          ? "批量重命名"
+          : "重命名",
       shortcut: "F2",
       disabled: !canRename,
       action: renameFlow,

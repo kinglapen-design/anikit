@@ -436,6 +436,7 @@ pub fn run() {
       commands::operations::create_folder,
       commands::operations::create_document,
       commands::operations::rename_folder,
+      commands::operations::rename_folders,
       commands::operations::set_folder_icon,
       commands::operations::set_folder_color,
       commands::operations::set_folder_colors,

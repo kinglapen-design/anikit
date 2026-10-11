@@ -126,8 +126,9 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   }
 
   // 操作快捷键（6.1 阶段 C，2026-07-28 用户定案，与 onSelectionKeys 同口径）：
-  // F2 = 重命名（单选 = 就地重命名：素材卡片；文件夹域 = 文件夹重命名——条带可见走卡片命名态，
+  // F2 = 重命名（单选 = 就地重命名：素材卡片；文件夹域单选 = 文件夹重命名——条带可见走卡片命名态，
   // 否则树命名态，3.4 七轮接入；多选素材 = 批量重命名弹窗，2026-09-23 接入；
+  // 文件夹域多选 = 批量重命名弹窗文件夹模式，2026-10-11 接入；
   // Ctrl+R 废除 = WebView2 刷新键吞掉防误刷，2026-08-18 用户定）；
   // Del = 删除选中项（2026-07-29 用户修订：取消两段式询问，直接移入回收站，撤销可找回）；
   // Ctrl+C / Ctrl+X = 写内部剪贴板（仅素材）；Ctrl+V 仲裁（内部非空 → copy 静默链接粘贴 /
@@ -255,9 +256,17 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     // F2 = 重命名：单选 = 就地重命名（素材卡片；文件夹域 = 文件夹重命名，3.4 七轮接入——
     // 当前视口条带含该项走卡片命名态（用户视线在卡片），否则树命名态；档案同径）；
     // 多选素材 = 批量重命名弹窗（2026-09-23 接入，右键菜单「批量重命名」同径——37 稿 renameDraft 驱动；
+    // 文件夹域多选 = 同弹窗文件夹模式（2026-10-11，renameFolderDraft 驱动）；
     // 回收站只读不触发，虚拟视图与单选同口径放行）
     if (e.key === "F2") {
       if (content.isRecycleView) return;
+      // 文件夹域多选 = 批量重命名弹窗（2026-10-11，PRD 02-14；素材多选同径renameDraft）：
+      // 编号按树 DFS 视觉序（selectedFolderIdsInTreeOrder），单选维持就地重命名
+      if (selection.selectedFolders.size > 1) {
+        e.preventDefault();
+        selection.renameFolderDraft = selection.selectedFolderIdsInTreeOrder();
+        return;
+      }
       if (selection.selectedFolders.size === 1) {
         e.preventDefault();
         const id = selection.orderedSelectedFolderIds()[0];

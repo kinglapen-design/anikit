@@ -146,6 +146,10 @@ export const useSelectionStore = defineStore("selection", {
     // 批量重命名草稿（3.4，37 稿批量重命名弹窗宿主 App.vue）：多选「重命名」/ Ctrl+R 触发，
     // 非空 = 弹窗打开；内容为打开时刻的选中 Placement 快照
     renameDraft: null as PlacementRef[] | null,
+    // 文件夹批量重命名草稿（2026-10-11，PRD 02-14）：folderId 列表（树 DFS 视觉序，
+    // selectedFolderIdsInTreeOrder 产出），与 renameDraft 互斥（两选择域天然互斥）；
+    // 同一弹窗 BatchRenameDialog 文件夹模式消费（宿主 App.vue）
+    renameFolderDraft: null as string[] | null,
     // 文件夹卡片就地重命名目标 id（6.3 右键"重命名"与名称双击同入口，FolderCard 读）
     namingFolderCardId: null as string | null,
   }),
@@ -319,6 +323,22 @@ export const useSelectionStore = defineStore("selection", {
         if (!out.includes(id)) out.push(id);
       }
       return out;
+    },
+
+    // 选中文件夹按树 DFS 视觉序输出（2026-10-11 文件夹批量重命名：编号顺序口径——
+    // 与素材批量重命名「编号按视觉序」同款；条带选中 = 树里同父级 children 序，天然是 DFS 序子序列；
+    // 折叠未见的选中项落在 DFS 序里同样覆盖）
+    selectedFolderIdsInTreeOrder(): string[] {
+      const content = useContentStore();
+      const order: string[] = [];
+      const walk = (nodes: FolderNode[]): void => {
+        for (const n of nodes) {
+          order.push(n.id);
+          walk(n.children);
+        }
+      };
+      walk(content.folders);
+      return this.orderedSelectedFolderIds(order);
     },
 
     // 被剪切项（2026-07-28 复验反馈 8）：cut 期间卡片半透明；粘贴成功 / 被新 copy 覆盖 /

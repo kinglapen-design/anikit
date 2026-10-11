@@ -28,6 +28,7 @@ import Checkbox from "../../components/buttons/Checkbox.vue";
 import TagButton from "../../components/buttons/TagButton.vue";
 import ConfirmModal from "../../components/modals/ConfirmModal.vue";
 import AppIcon from "../../components/AppIcon.vue";
+import TwoToneIcon from "../../components/items/TwoToneIcon.vue";
 import BlockManageRow from "../../components/BlockManageRow.vue";
 import DetailBlockRow from "../../components/DetailBlockRow.vue";
 import GroupNameInput from "../../components/GroupNameInput.vue";
@@ -174,6 +175,9 @@ const RENAME_MODES = [
 ] as const;
 const renameName = ref("角色");
 const renameStart = ref("1");
+// 文件夹模式复刻桩（2026-10-11）：仅序号命名，无分段切换
+const renameFolderName = ref("分镜");
+const renameFolderStart = ref("1");
 
 // —— DescEditDialog 复刻桩（真实 buttons/IconButton + TextInput，删除 = clear X bare sm）——
 const descRow = ref({ title: "出处", content: "雪牧老师公开素材" });
@@ -614,6 +618,61 @@ const linkOnlyChecked = ref(false);
             BatchRenameDialog｜选中集批量改名双列实时预览（序号/替换两模式，37 稿）｜本体已换代 BaseModal framed 973 +
             TextInput lg + SegmentedControl text <b>tone g2</b>（2026-09-21 修：g3 轨道贴 g3 壳隐身）；复刻行卡为壳内复刻、输入框与
             segmented 为真实件可交互；本体读 selection.renameDraft + content.placements、确认接后端；口径变更与组件同步
+          </span>
+        </div>
+      </div>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div class="pv-bm-shell w973">
+            <div class="pv-bm-titlebar">
+              <span class="pv-bm-title">批量重命名</span>
+              <IconButton name="close-large" title="关闭" />
+            </div>
+            <div class="pv-bm-body flush">
+              <div class="pv-bm-cols inset">
+                <span class="col">原名称</span>
+                <span class="col">新名称</span>
+              </div>
+              <div class="pv-rd-row">
+                <div class="pv-rd-card">
+                  <span class="pv-rd-thumb folder"><TwoToneIcon name="folder-closed" :size="24" /></span>
+                  <span class="pv-rd-name">表情</span>
+                </div>
+                <div class="pv-rd-card">
+                  <span class="pv-rd-thumb folder"><TwoToneIcon name="folder-closed" :size="24" /></span>
+                  <span class="pv-rd-name">分镜_01</span>
+                </div>
+              </div>
+              <div class="pv-rd-row">
+                <div class="pv-rd-card">
+                  <span class="pv-rd-thumb folder"><TwoToneIcon name="archive" :size="24" tint="blue" /></span>
+                  <span class="pv-rd-name">角色档案</span>
+                </div>
+                <div class="pv-rd-card">
+                  <span class="pv-rd-thumb folder"><TwoToneIcon name="archive" :size="24" tint="blue" /></span>
+                  <span class="pv-rd-name">分镜_02</span>
+                </div>
+              </div>
+              <div class="pv-rd-fields">
+                <span class="pv-dd-label wide">名称:</span>
+                <TextInput v-model="renameFolderName" size="lg" clearable class="pv-grow" placeholder="输入名称" />
+                <span class="pv-dd-label wide">起始编号:</span>
+                <TextInput v-model="renameFolderStart" size="lg" clearable class="pv-narrow" placeholder="1" />
+              </div>
+            </div>
+            <div class="pv-bm-foot spread">
+              <span />
+              <span class="pv-bm-foot-btns">
+                <ActionButton variant="cancel" label="取消" size="lg" />
+                <ActionButton variant="primary" label="确认" size="lg" />
+              </span>
+            </div>
+          </div>
+          <span class="pv-cap">
+            BatchRenameDialog 文件夹模式（2026-10-11，PRD 02-14 文件夹批量重命名）｜selection.renameFolderDraft 驱动——
+            <b>仅序号命名</b>（无分段切换 / 无替换模式），缩略位 = TwoToneIcon 24 居中无底块（自定义图标 / 档案 archive /
+            tint 同树行口径），表头「原名称 / 新名称」（无扩展名语义）；编号顺序 = 树 DFS 视觉序；确认接 rename_folders
+            单撤销步，失败跳过 toast 汇总
           </span>
         </div>
       </div>
@@ -1062,6 +1121,10 @@ const linkOnlyChecked = ref(false);
   line-height: var(--n-lh-secondary);
   font-weight: var(--n-fw-bold);
   color: var(--n-g3);
+}
+/* 文件夹模式缩略位（2026-10-11）：无底块，TwoToneIcon 24 居中（同本体 .rd-thumb.folder） */
+.pv-rd-thumb.folder {
+  background: none;
 }
 .pv-rd-name {
   flex: 1;

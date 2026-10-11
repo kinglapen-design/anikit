@@ -6,6 +6,9 @@
 // 替换 = 查找文本全处替换，原名称匹配段品牌色高亮（Eagle 交互参考：视觉上把高亮部分换成新的）。
 // 规则只作用词干、扩展名不动；撞名不拦截（后端 rename_placements 不唯一化）；
 // 失败项跳过 toast 汇总不整体回滚；无变化项不提交（名称/查找为空 → 该项保持原名）。
+// 文件夹模式（2026-10-11，PRD 02-14 文件夹批量重命名）：renameFolderDraft（folderId 树 DFS 视觉序）
+// 驱动——仅序号命名（无分段切换 / 无替换模式），无词干拆分（文件夹无扩展名），缩略位换 TwoToneIcon
+// 文件夹图标（自定义图标 / 档案 archive / 颜色 tint 同树行口径）；两草稿与两选择域同口径天然互斥。
 // 2026-09-20 R2 旧件烧减：壳 = modals/BaseModal framed（973 宽挪 width prop；标题栏 54 带底线 +
 // 关闭 X 由 framed 提供——旧 :deep(.app-modal)/.titlebar/.content 三段覆盖尽废）；
 // 输入框 = inputs/TextInput lg（clearable 新件原生，旧 medium 档废）；按钮 = buttons/ActionButton lg
@@ -17,22 +20,55 @@ import TextInput from "./inputs/TextInput.vue";
 import ActionButton from "./buttons/ActionButton.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ScrollThumb from "./ScrollThumb.vue";
-import { placementKey, useContentStore } from "../stores/content";
+import TwoToneIcon from "./items/TwoToneIcon.vue";
+import { placementKey, useContentStore, type FolderNode } from "../stores/content";
 import { useSelectionStore, type PlacementRef } from "../stores/selection";
-import { renamePlacementsBatch, type RenameItemInput } from "../lib/placementOps";
+import { renameFoldersBatch, renamePlacementsBatch, type RenameFolderItemInput, type RenameItemInput } from "../lib/placementOps";
+import { toNewTint } from "../lib/customColors";
 
 const content = useContentStore();
 const selection = useSelectionStore();
 
-// —— 行数据（renameDraft = 打开时刻选中集快照；名称/缩略图读 content.placements 实况）——
+// —— 模式与行数据 ——
+// folderMode：renameFolderDraft 非空 = 文件夹批量重命名（2026-10-11）；renameDraft = 素材。
+// 行数据（draft = 打开时刻选中集快照；素材名称/缩略图读 content.placements 实况，
+// 文件夹名称/图标/颜色读 content.folders 实况）
+const folderMode = computed(() => selection.renameFolderDraft !== null);
 interface Row {
-  ref: PlacementRef;
+  key: string; // v-for 键（素材 = placementKey；文件夹 = folderId）
+  ref: PlacementRef | null; // 素材行定位；文件夹行 = null（folderId 即 key）
   name: string;
   thumb: string | null;
   contain: boolean; // 格式图标 contain 不裁切（速查表 §6）
   ext: string;
+  // —— 文件夹行（素材行恒缺省）——
+  icon: string; // 自定义图标名（空 = 默认 folder-closed）；档案 = "archive"
+  tint: string; // 自定义颜色 tint（toNewTint 转换；空 = 常态双色）
 }
 const rows = computed<Row[]>(() => {
+  if (folderMode.value) {
+    const byId = new Map<string, FolderNode>();
+    const walk = (nodes: FolderNode[]): void => {
+      for (const n of nodes) {
+        byId.set(n.id, n);
+        walk(n.children);
+      }
+    };
+    walk(content.folders);
+    return (selection.renameFolderDraft ?? []).map((id) => {
+      const n = byId.get(id);
+      return {
+        key: id,
+        ref: null,
+        name: n?.name ?? "",
+        thumb: null,
+        contain: false,
+        ext: "",
+        icon: n?.kind === "archive" ? "archive" : (n?.icon ?? ""),
+        tint: toNewTint(n?.color ?? undefined),
+      };
+    });
+  }
   const draft = selection.renameDraft ?? [];
   // 撞键行（同资产同文件夹多条位置）按 placementKey 各归各行（2026-10-11 选择域独立化——
   // 原三元组映射把同 origin 重复链接全映射到首行）
@@ -40,11 +76,14 @@ const rows = computed<Row[]>(() => {
   return draft.map((ref) => {
     const p = byKey.get(placementKey(ref));
     return {
+      key: placementKey(ref),
       ref,
       name: p?.name ?? "",
       thumb: p?.thumbPath ? convertFileSrc(p.thumbPath) : null,
       contain: p?.thumbKind === "formatIcon",
       ext: p?.ext ?? "",
+      icon: "",
+      tint: "",
     };
   });
 });
@@ -95,6 +134,11 @@ function newStem(index: number, stem: string): string | null {
   return stem.split(findText.value).join(replaceText.value);
 }
 function previewName(row: Row, index: number): string {
+  // 文件夹模式：无词干拆分（文件夹无扩展名），仅序号命名（mode 恒 sequence，分段切换隐藏）
+  if (folderMode.value) {
+    const base = seqName.value.trim();
+    return base ? `${base}_${String(startNum.value + index).padStart(padWidth.value, "0")}` : row.name;
+  }
   const { stem, ext } = splitName(row.name);
   const ns = newStem(index, stem);
   return ns === null ? row.name : ns + ext;
@@ -120,49 +164,68 @@ function stemSegments(stem: string): { text: string; hit: boolean }[] {
 }
 
 // 可执行项（有变化才提交）；全不变更确认钮禁用
-const pendingItems = computed<RenameItemInput[]>(() =>
-  rows.value
-    .map((row, i) => ({ row, i }))
-    .filter(({ row, i }) => newStem(i, splitName(row.name).stem) !== null)
-    .map(({ row, i }) => ({
-      assetId: row.ref.assetId,
-      folderId: row.ref.folderId,
-      origin: row.ref.origin,
-      newName: previewName(row, i),
-      oldName: row.ref.name, // 撞键行附旧名精确到行（后端 RenameItem oldName，2026-10-11）
-    })),
-);
+const pendingPlacementItems = computed<RenameItemInput[]>(() => {
+  if (folderMode.value) return [];
+  return rows.value.flatMap((row, i) => {
+    if (!row.ref || newStem(i, splitName(row.name).stem) === null) return [];
+    return [
+      {
+        assetId: row.ref.assetId,
+        folderId: row.ref.folderId,
+        origin: row.ref.origin,
+        newName: previewName(row, i),
+        oldName: row.ref.name, // 撞键行附旧名精确到行（后端 RenameItem oldName，2026-10-11）
+      },
+    ];
+  });
+});
+// 文件夹模式可执行项（2026-10-11）：folderId + 新名；序号名称为空 = 保持原名不提交
+const pendingFolderItems = computed<RenameFolderItemInput[]>(() => {
+  if (!folderMode.value || !seqName.value.trim()) return [];
+  return rows.value.map((row, i) => ({ folderId: row.key, newName: previewName(row, i) }));
+});
+const pendingCount = computed(() => (folderMode.value ? pendingFolderItems.value.length : pendingPlacementItems.value.length));
 
 const busy = ref(false);
 async function onConfirm(): Promise<void> {
-  if (pendingItems.value.length === 0 || busy.value) return;
+  if (pendingCount.value === 0 || busy.value) return;
   busy.value = true;
-  const ok = await renamePlacementsBatch(pendingItems.value);
+  const ok = folderMode.value
+    ? await renameFoldersBatch(pendingFolderItems.value)
+    : await renamePlacementsBatch(pendingPlacementItems.value);
   busy.value = false;
-  if (ok) selection.renameDraft = null; // 部分失败也关（toast 已汇总，撤销入口在 toast）
+  if (ok) {
+    selection.renameDraft = null; // 部分失败也关（toast 已汇总，撤销入口在 toast）
+    selection.renameFolderDraft = null;
+  }
 }
 function onClose(): void {
   selection.renameDraft = null;
+  selection.renameFolderDraft = null;
 }
 
 const listRef = ref<HTMLElement>();
 </script>
 
 <template>
-  <BaseModal v-if="selection.renameDraft" title="批量重命名" :width="973" framed class="rename-dialog" @close="onClose">
-    <!-- 表头（37 稿：双列标题 / 下分隔线 / 列 gap 24） -->
+  <BaseModal v-if="selection.renameDraft || selection.renameFolderDraft" title="批量重命名" :width="973" framed class="rename-dialog" @close="onClose">
+    <!-- 表头（37 稿：双列标题 / 下分隔线 / 列 gap 24；文件夹模式无扩展名语义，列名从宽） -->
     <header class="rd-head">
-      <span class="col">原始文件名</span>
-      <span class="col">新的文件名</span>
+      <span class="col">{{ folderMode ? "原名称" : "原始文件名" }}</span>
+      <span class="col">{{ folderMode ? "新名称" : "新的文件名" }}</span>
     </header>
     <!-- 行列表（滚轮 = ScrollThumb 悬浮件） -->
     <div class="rd-list-wrap">
       <div ref="listRef" class="rd-list kit-scroll">
-        <div v-for="(row, i) in rows" :key="placementKey(row.ref)" class="rd-row">
+        <div v-for="(row, i) in rows" :key="row.key" class="rd-row">
           <div class="rd-card">
-            <span class="rd-thumb">
-              <img v-if="row.thumb" :src="row.thumb" :class="{ icon: row.contain }" alt="" />
-              <span v-else class="ph">{{ row.ext || "—" }}</span>
+            <span class="rd-thumb" :class="{ folder: folderMode }">
+              <!-- 文件夹模式：文件夹图标（自定义 / 档案 / tint 同树行口径，2026-10-11） -->
+              <TwoToneIcon v-if="folderMode" :name="row.icon || 'folder-closed'" :size="24" :tint="row.tint" />
+              <template v-else>
+                <img v-if="row.thumb" :src="row.thumb" :class="{ icon: row.contain }" alt="" />
+                <span v-else class="ph">{{ row.ext || "—" }}</span>
+              </template>
             </span>
             <span class="rd-name" :title="row.name">
             <template v-for="(seg, j) in stemSegments(splitName(row.name).stem)" :key="j"
@@ -172,9 +235,12 @@ const listRef = ref<HTMLElement>();
             </span>
           </div>
           <div class="rd-card">
-            <span class="rd-thumb">
-              <img v-if="row.thumb" :src="row.thumb" :class="{ icon: row.contain }" alt="" />
-              <span v-else class="ph">{{ row.ext || "—" }}</span>
+            <span class="rd-thumb" :class="{ folder: folderMode }">
+              <TwoToneIcon v-if="folderMode" :name="row.icon || 'folder-closed'" :size="24" :tint="row.tint" />
+              <template v-else>
+                <img v-if="row.thumb" :src="row.thumb" :class="{ icon: row.contain }" alt="" />
+                <span v-else class="ph">{{ row.ext || "—" }}</span>
+              </template>
             </span>
             <span class="rd-name" :title="previewName(row, i)">{{ previewName(row, i) }}</span>
           </div>
@@ -201,10 +267,11 @@ const listRef = ref<HTMLElement>();
          按钮 lg 宽自适应 + 左右 48、次左主右，2026-09-13 定稿口径；
          分段 tone g2——g3 轨道贴 g3 壳隐身，2026-09-21 用户报修） -->
     <footer class="rd-foot">
-      <SegmentedControl v-model="mode" :options="MODES" variant="text" tone="g2" style="width: 160px" />
+      <!-- 文件夹模式仅序号命名（2026-10-11 用户定「_[序号] 方式命名」），分段切换不渲染 -->
+      <SegmentedControl v-if="!folderMode" v-model="mode" :options="MODES" variant="text" tone="g2" style="width: 160px" />
       <span class="spacer" />
       <ActionButton variant="cancel" label="取消" size="lg" @click="onClose" />
-      <ActionButton variant="primary" label="确认" size="lg" :disabled="pendingItems.length === 0 || busy" @click="onConfirm" />
+      <ActionButton variant="primary" label="确认" size="lg" :disabled="pendingCount === 0 || busy" @click="onConfirm" />
     </footer>
   </BaseModal>
 </template>
@@ -291,6 +358,12 @@ const listRef = ref<HTMLElement>();
 }
 .rd-thumb img.icon {
   object-fit: contain;
+}
+/* 文件夹模式缩略位（2026-10-11）：TwoToneIcon 24 档居中（文件夹卡片顶行图标同档），无底块 */
+.rd-thumb.folder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 /* 无图占位（速查表 §6）：浅色块 #C6C7CC + 扩展名文字 */
 .rd-thumb .ph {
