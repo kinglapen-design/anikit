@@ -9,7 +9,7 @@
 // - 任务框 / 图片 widget 例外恒渲染（框点击 toggle、图点击跳转；光标进图区间回落源码便于改 alt/url）；
 // - 表格 / Setext 标题本轮不装饰（保源码态，待另轮）；块距 = md 空行自然撑开（非渲染态 flex gap 12）。
 
-import { EditorState, Prec, type Extension, type Range } from "@codemirror/state";
+import { EditorState, Prec, StateEffect, StateField, type Extension, type Range } from "@codemirror/state";
 import {
   Decoration,
   EditorView,
@@ -127,6 +127,80 @@ class HrWidget extends WidgetType {
     d.className = "cm-lp-hr";
     return d;
   }
+}
+
+// —— 无序列表圆点 widget（光标外替换 `-`/`+`/`*` 标记；尾随空格留在源码里供给点距） ——
+class BulletWidget extends WidgetType {
+  override eq(): boolean {
+    return true;
+  }
+  override toDOM(): HTMLElement {
+    const s = document.createElement("span");
+    s.className = "cm-lp-bullet";
+    s.textContent = "•";
+    return s;
+  }
+}
+
+// —— 表格 widget（光标外整段替换为渲染表格，点击 = 光标落入表首回落源码编辑；
+// 单元格 = 纯文本（行内格式不展开，v1）；对齐读分隔行 :--- 语法 ——
+class TableWidget extends WidgetType {
+  constructor(
+    readonly rows: string[][],
+    readonly aligns: string[],
+    readonly from: number,
+  ) {
+    super();
+  }
+  override eq(w: TableWidget): boolean {
+    return w.from === this.from && w.rows.flat().join("") === this.rows.flat().join("") && w.aligns.join() === this.aligns.join();
+  }
+  override toDOM(view: EditorView): HTMLElement {
+    const wrap = document.createElement("div");
+    // 借 .md-body 的 table/th/td 排版（markdown.css 既有口径）；cm-lp-table 压掉 .md-body 的版心与块距
+    wrap.className = "md-body cm-lp-table";
+    const table = document.createElement("table");
+    const [head, ...body] = this.rows;
+    if (head) {
+      const tr = document.createElement("tr");
+      head.forEach((c, i) => {
+        const th = document.createElement("th");
+        th.textContent = c;
+        if (this.aligns[i]) th.style.textAlign = this.aligns[i];
+        tr.appendChild(th);
+      });
+      table.createTHead().appendChild(tr);
+    }
+    const tbody = table.createTBody();
+    for (const r of body) {
+      const tr = document.createElement("tr");
+      r.forEach((c, i) => {
+        const td = document.createElement("td");
+        td.textContent = c;
+        if (this.aligns[i]) td.style.textAlign = this.aligns[i];
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    }
+    wrap.appendChild(table);
+    wrap.onmousedown = (e) => e.preventDefault(); // 点击不抢焦点，由 onclick 显式落光标
+    wrap.onclick = () => {
+      view.dispatch({ selection: { anchor: Math.min(this.from + 1, view.state.doc.length) } }); // 进表区间 → active → 回落源码
+      view.focus();
+    };
+    return wrap;
+  }
+}
+
+/** 解析 GFM 表格源码：首行表头、次行分隔（对齐）、余为数据行；空表返回 null */
+function parseTable(src: string): { rows: string[][]; aligns: string[] } | null {
+  const lines = src.split("\n").filter((l) => l.trim().startsWith("|") || l.includes("|"));
+  if (lines.length < 2) return null;
+  const cells = (l: string): string[] => l.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
+  const delim = cells(lines[1]);
+  if (!delim.every((d) => /^:?-{3,}:?$/.test(d))) return null;
+  const aligns = delim.map((d) => (d.startsWith(":") && d.endsWith(":") ? "center" : d.endsWith(":") ? "right" : d.startsWith(":") ? "left" : ""));
+  return { rows: [cells(lines[0]), ...lines.slice(2).map(cells)], aligns };
 }
 
 /** 装饰区间是否与任一选区相交（光标贴边 = 在内——回落源码便于编辑） */
@@ -279,6 +353,54 @@ function buildLpDeco(view: EditorView): DecorationSet {
             }
             return false;
           }
+          // —— Setext 标题（=== 下划线式）：首行挂标题字号（下划线行保源码，不藏——藏行会塌行高） ——
+          case "SetextHeading1":
+          case "SetextHeading2": {
+            const lFrom = state.doc.lineAt(node.from).from;
+            lineDeco(lFrom, name === "SetextHeading1" ? "cm-lp-h1" : "cm-lp-h2");
+            return false;
+          }
+          // —— 表格不走此处：块级 widget 必须 StateField 供给（plugins 禁 block 装饰，跨行 inline
+          // 替换会炸 drawSelection 矩形测量）——见 tableField（StateField + 视口 nudge） ——
+          // —— 列表项：嵌套层级 = 光标外隐藏行首空格 + 行 padding-left 渲染（每级 24，组件间距档） ——
+          case "ListItem": {
+            let depth = 0;
+            for (let p = node.node.parent; p; p = p.parent) {
+              if (p.name === "BulletList" || p.name === "OrderedList") depth++;
+            }
+            if (depth <= 1) return true; // 顶级不缩进
+            const l = state.doc.lineAt(node.from);
+            if (isActive(state, l.from, l.to)) return true; // 光标行回落源码（含行首空格）
+            decos.push(
+              Decoration.line({ attributes: { style: `padding-left: ${(depth - 1) * 24}px` } }).range(l.from),
+            );
+            const lead = /^\s+/.exec(l.text)?.[0];
+            if (lead) decos.push(HIDE.range(l.from, l.from + lead.length));
+            return true;
+          }
+          // —— 列表标记：光标外——任务行 `-` 整藏（复选框 widget 即标记），无序换 `•`，有序数字本就所见 ——
+          case "ListMark": {
+            const item = node.node.parent;
+            // TaskMarker 是 ListItem 孙级（Task(TaskMarker)，实树语法 dump 实证），浅层递归查
+            let isTask = false;
+            for (let c = item?.firstChild; c; c = c.nextSibling) {
+              if (c.name === "TaskMarker" || c.name === "Task" || c.getChild("TaskMarker")) {
+                isTask = true;
+                break;
+              }
+            }
+            const ordered = item?.parent?.name === "OrderedList";
+            const l = state.doc.lineAt(node.from);
+            if (ordered || isActive(state, l.from, l.to)) return false;
+            let to = node.to;
+            if (state.sliceDoc(to, to + 1) === " ") to++;
+            if (isTask) {
+              decos.push(HIDE.range(node.from, to)); // 任务行连尾随空格一起藏（复选框自带 margin-right 6）
+            } else {
+              decos.push(Decoration.replace({ widget: new BulletWidget() }).range(node.from, node.to)); // 圆点不换尾随空格，点距 = 源码空格
+            }
+            return false;
+          }
           default:
             return true;
         }
@@ -310,6 +432,51 @@ const lpPlugin = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 );
 
+// —— 表格装饰 = StateField 供给（块级 widget 的合法通道：plugins 禁 block 装饰；跨行 inline 替换会让
+//  drawSelection 矩形测量炸 coordsAt）——文档 / 选区变更重算；视口变化经 nudge 插件延后 dispatch 补算
+// （语法树只解析到可见区 + 余量，远处表格滚近后经 nudge 渲染；update 里禁直接 dispatch，queueMicrotask 让过本拍） ——
+const refreshTables = StateEffect.define<null>();
+
+function buildTableDeco(state: EditorState): DecorationSet {
+  const decos: Range<Decoration>[] = [];
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (node.name !== "Table") return true;
+      if (isActive(state, node.from, node.to)) return false; // 光标在内 = 源码编辑
+      const t = parseTable(state.sliceDoc(node.from, node.to));
+      if (!t) return false;
+      decos.push(Decoration.replace({ widget: new TableWidget(t.rows, t.aligns, node.from), block: true }).range(node.from, node.to));
+      return false;
+    },
+  });
+  return Decoration.set(decos, true);
+}
+
+const tableField = StateField.define<DecorationSet>({
+  create: (state) => buildTableDeco(state),
+  update: (val, tr) => {
+    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(refreshTables))) return buildTableDeco(tr.state);
+    return val;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+const tableViewportNudge = ViewPlugin.fromClass(
+  class {
+    dead = false;
+    update(u: ViewUpdate): void {
+      if (!u.viewportChanged) return;
+      const v = u.view;
+      queueMicrotask(() => {
+        if (!this.dead) v.dispatch({ effects: refreshTables.of(null) });
+      });
+    }
+    destroy(): void {
+      this.dead = true;
+    }
+  },
+);
+
 // 源码回落态的语法高亮（激活行标记可见时的色档；排版数值在 styles/cm-md.css）
 const mdHighlight = HighlightStyle.define([
   { tag: tags.heading, color: "var(--n-md-title)" },
@@ -332,6 +499,8 @@ export function createMdEditor(opts: MdEditorOpts): MdEditorHandle {
     markdown({ base: markdownLanguage, codeLanguages: languages }), // 自带 Enter 续列表 / 退格剥标记键图
     syntaxHighlighting(mdHighlight),
     lpPlugin,
+    tableField,
+    tableViewportNudge,
     EditorView.lineWrapping,
     Prec.high(
       keymap.of([

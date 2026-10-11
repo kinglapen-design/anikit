@@ -135,4 +135,18 @@
   margin-top: calc((var(--n-lh-md-body) - 2px) / 2);
 }
 
+/* —— 列表（2026-10-10 二轮补渲染）：无序标记 = • widget（正文色）；嵌套缩进 = 行 padding-left
+   每级 24（行装饰 attributes style 供给，光标行回落源码含行首空格）；任务行 `-` 整藏（复选框即标记） —— */
+.cm-editor .cm-lp-bullet {
+  color: var(--n-md-body);
+}
+
+/* —— 表格 widget（借 markdown.css .md-body 的 table/th/td 排版；压掉版心与块距，块级整段替换） —— */
+.cm-editor .cm-lp-table {
+  display: block;
+  padding: 0;
+  gap: 0;
+  cursor: default;
+}
+
 /* —— 图片 widget（markdown.css 同款口径去 .md-body 前缀共享，见该文件） —— */

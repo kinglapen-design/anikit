@@ -44,6 +44,13 @@ MD_SRC = """# 方舟前史
 - [x] 已完成任务
 
 1. 有序一项
+
+- 父级一项
+  - 嵌套一项
+
+| 名称 | 数值 |
+| --- | --- |
+| 正文 | 15 |
 """
 
 STUB = r"""
@@ -402,6 +409,58 @@ async def main():
             if q2 != 2:
                 fails.append(f"[Q] ArrowRight 光标未右移（head={q2}，期望 2）")
             await shot("md-live-preview")
+
+            # —— 场景 R：表格 / 列表渲染（2026-10-10 二轮补——用户实机盘点未渲染项）——
+            # 表格 = 整段 widget（点击回落源码）；无序标记 = •；任务行 `-` 整藏；嵌套行 padding-left 24/级
+            r = await ev("""(() => {
+              const host = document.querySelector('.text-preview .cm-host');
+              const lines = [...host.querySelectorAll('.cm-line')];
+              const nested = lines.find((l) => l.textContent.includes('嵌套一项'));
+              const taskLine = lines.find((l) => l.textContent.includes('未完成任务'));
+              return {
+                table: !!host.querySelector('.cm-lp-table table'),
+                th: host.querySelector('.cm-lp-table th')?.textContent ?? null,
+                td: host.querySelector('.cm-lp-table td')?.textContent ?? null,
+                bullets: host.querySelectorAll('.cm-lp-bullet').length,
+                nestedPad: nested ? getComputedStyle(nested).paddingLeft : null,
+                taskMarkGone: taskLine ? !taskLine.textContent.trim().startsWith('-') : null,
+                taskBox: taskLine ? !!taskLine.querySelector('.cm-lp-task') : null,
+              };
+            })()""")
+            print("[R1 表格与列表]", json.dumps(r, ensure_ascii=False))
+            if not r or not r["table"] or r["th"] != "名称" or r["td"] != "正文":
+                fails.append(f"[R] 表格 widget 不符（{r}，期望 表头 名称 / 首格 正文）")
+            if r and r["bullets"] != 3:
+                fails.append(f"[R] 无序圆点数量不符（{r['bullets']}，期望 3 = 无序一项 / 父级 / 嵌套）")
+            if r and r["nestedPad"] != "24px":
+                fails.append(f"[R] 嵌套缩进不符（{r and r['nestedPad']}，期望 24px）")
+            if r and (r["taskMarkGone"] is not True or r["taskBox"] is not True):
+                fails.append(f"[R] 任务行 `-` 未整藏或复选框缺失（{r}）")
+            r_bullet_leak = await ev("""(() => {
+              const host = document.querySelector('.text-preview .cm-host');
+              const taskLine = [...host.querySelectorAll('.cm-line')].find((l) => l.textContent.includes('未完成任务'));
+              return taskLine ? !!taskLine.querySelector('.cm-lp-bullet') : null;
+            })()""")
+            if r_bullet_leak is not False:
+                fails.append(f"[R] 任务行漏出圆点（应整藏，{r_bullet_leak}）")
+            # 点击表格 → 光标入表 → 回落源码；光标移出 → 回渲染
+            await ev("document.querySelector('.text-preview .cm-lp-table').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
+            await asyncio.sleep(0.5)
+            r2 = await ev("""(() => ({
+              widgetGone: !document.querySelector('.text-preview .cm-lp-table'),
+              src: [...document.querySelectorAll('.text-preview .cm-line')].some((l) => l.textContent.includes('| 名称 |')),
+            }))()""")
+            print("[R2 点击回落源码]", json.dumps(r2, ensure_ascii=False))
+            if not r2 or not r2["widgetGone"] or not r2["src"]:
+                fails.append(f"[R] 点击表格未回落源码（{r2}）")
+            await ev("""(() => {
+              const v = document.querySelector('.text-preview .cm-host').__cmView;
+              v.dispatch({ selection: { anchor: 2 } });
+            })()""")
+            await asyncio.sleep(0.5)
+            r3 = await ev("!!document.querySelector('.text-preview .cm-lp-table table')")
+            if r3 is not True:
+                fails.append(f"[R] 光标移出后表格未回渲染（{r3}）")
 
             # —— 场景 L：工具栏悬停 tip（2026-09-25 走查补）——hover bold 钮出 v-tip「加粗」
             # （400ms 延迟 + headless 定时器节流，轮询至 1.6s 收敛）
