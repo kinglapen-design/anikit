@@ -63,6 +63,7 @@ const liveVolume = ref(0.2);
 // = 属性，PRD 03 §2）；真实交互实例选中集本地持有
 const demoExtItems = [
   { key: "seq", label: "序列帧" },
+  { key: "archive", label: "档案" },
   { key: "md", label: "md" },
   { key: "fla", label: "fla" },
   { key: "psd", label: "psd" },

@@ -91,15 +91,15 @@ const filterSummaries = computed(() => (props.panelId ? search.filterSummaries(p
 const filtersNow = computed<SearchFilters | null>(() => (props.panelId ? search.filtersFor(props.panelId) : null));
 
 // 弹窗数据源（content.placements 全量算出，零后端新增）：扩展名 = 库内实有扩展名集，
-// 首项恒列「序列帧」虚拟类别（frameCount 序列帧/动图/视频同字段不可据以判定，选中零结果
-// 属正常筛选语义）；属性 = 全库属性词集；链接状态 = 静态四态
+// 首项恒列「序列帧」「档案」两虚拟类别（seq：frameCount 序列帧/动图/视频同字段不可据以判定，选中零结果
+// 属正常筛选语义；archive = 2026-10-12 档案虚拟类别，档案区按可判定维度参与）；属性 = 全库属性词集；链接状态 = 静态四态
 const extItems = computed(() => {
   const exts = new Set<string>();
   for (const p of content.placements) {
     if (p.ext) exts.add(p.ext.toLowerCase());
   }
   const items = [...exts].sort().map((e) => ({ key: e, label: e }));
-  items.unshift({ key: "seq", label: "序列帧" });
+  items.unshift({ key: "seq", label: "序列帧" }, { key: "archive", label: "档案" });
   return items;
 });
 const LINK_ITEMS = [

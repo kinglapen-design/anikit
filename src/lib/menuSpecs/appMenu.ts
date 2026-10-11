@@ -10,6 +10,8 @@
 // - 查找→筛选器 / 以图找图 = 业务另轮（筛选 9 子稿 / 以图搜图未立项），全占位；
 // - 整理 = 选中集操作（素材卡 / 档案卡域）。有既有业务的接线（同 assetCard / useGlobalKeys 口径），
 //   无业务 disabled 占位（速查 §6）；回收站视口只读——编辑类项全 disabled（useGlobalKeys 同口径）。
+// 2026-10-12 用户定：链接三件套（文件/档案链接管理 Ctrl+J / 添加文件/档案链接 Ctrl+L / 打开链接所在位置）
+// 自文件▸与整理▸摘除——名称承诺档案多位置（未立项）误导用户；文件侧右键菜单与快捷键入口不动。
 import { invoke } from "@tauri-apps/api/core";
 import { placementKey, useContentStore, DEFAULT_BLOCK_ID, type PlacementView } from "../../stores/content";
 import { usePickerStore } from "../../stores/picker";
@@ -25,8 +27,6 @@ import {
   convertToArchiveFlow,
   createAndName,
   createArchiveAndName,
-  currentLinkTarget,
-  enterLinkPicker,
   moveAssetsFlow,
   pickCustomThumb,
   pickExportAssets,
@@ -129,32 +129,6 @@ function openPropsEdit(): void {
   }
 }
 
-// 链接管理 / 添加链接 / 链接位置三项（文件·整理两菜单同形，抽出共用）
-function linkEntries(): CtxEntry[] {
-  const a = singleAsset();
-  const t = currentLinkTarget();
-  return [
-    {
-      label: "文件/档案链接管理",
-      shortcut: "Ctrl+J",
-      disabled: !a,
-      action: () => {
-        if (a) useSelectionStore().linkManageDraft = { assetId: a.assetId, name: a.name };
-      },
-    },
-    {
-      label: "添加文件/档案链接",
-      shortcut: "Ctrl+L",
-      disabled: t === null,
-      action: () => {
-        if (t) enterLinkPicker(t);
-      },
-    },
-    // 二级 = linkList 面板（LinkListRows，与卡片徽章 hover 弹窗同构；单选素材才有位置列表）
-    { label: "打开文件/档案链接所在位置", disabled: !a, panel: a ? { kind: "linkList", assetId: a.assetId } : undefined },
-  ];
-}
-
 // —— 仓库 ▸（储存空间 + 资源库两级管理）——
 function repoEntries(libraryNames: string[]): CtxEntry[] {
   const space = currentSpace.name;
@@ -243,8 +217,6 @@ function fileEntries(): CtxEntry[] {
     { label: "导入文件夹", disabled: content.isNoImportView, action: () => void pickImportPaths("folder") },
     { label: "导入链接", disabled: true },
     { label: "导入素材包", disabled: true },
-    "divider",
-    ...linkEntries(),
     "divider",
     { label: "添加至其他资源库", disabled: true },
     {
@@ -346,8 +318,6 @@ function organizeEntries(): CtxEntry[] {
   const liveCount = a ? content.placements.filter((q) => q.assetId === a.assetId).length : 0;
   const canSetOrigin = !!a && !a.origin && liveCount > 1;
   return [
-    ...linkEntries(),
-    "divider",
     { label: "添加关系", disabled: !target, action: () => target && usePickerStore().enterRelation(target) },
     "divider",
     { label: "添加音频", disabled: !target, action: () => target && usePickerStore().enterVoice(target) },

@@ -369,7 +369,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       return;
     }
     // Ctrl+J = 文件链接管理（17 稿，6.2 三轮）：单选素材打开链接管理弹窗（回收站只读不开；
-    // 档案链接管理随档案多位置立项，文件夹域不响应）
+    // 档案无链接管理——多位置未立项，菜单栏与档案右键占位 2026-10-12 已摘，文件夹域不响应）
     if (k === "j") {
       if (selection.selectedFolders.size === 0 && selection.count === 1 && !content.isRecycleView) {
         e.preventDefault();

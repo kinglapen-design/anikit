@@ -20,7 +20,7 @@ use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use crate::core::library::Library;
-use crate::core::models::{AssetMeta, Folder, Placement, ROOT_FOLDER_ID};
+use crate::core::models::{ArchiveData, AssetMeta, Folder, Placement, ROOT_FOLDER_ID};
 
 /// 搜索范围（前端按视口组装）：viewKey + 递归开关 + 全局标记；query 含 ~ 前缀时强制全局
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -202,10 +202,13 @@ fn collect_descendants<'a>(lib: &'a Library, id: &str, set: &mut HashSet<&'a str
 // ---------- 筛选（2026-10-09 筛选业务一轮，PRD 03_查找文件 02 节）----------
 //
 // 口径：维度内多选 OR、跨维度 AND、与分词搜索 AND；无有效条件（has_active = false）= 不施加
-// 筛选（等价旧行为，档案区照出）。筛选激活时档案区不出（筛选 = 找文件，档案实体无筛选维度可判定）。
+// 筛选（等价旧行为，档案区照出）。筛选激活时档案区默认不出（筛选 = 找文件）；例外 = 扩展名维度
+// 勾选虚拟类别 "archive"（2026-10-12 用户定）：档案按可判定维度参与（属性 / 所在文件夹 = parent /
+// 添加日期 = created_at），资产专属维度（颜色 / 时长 / 比例 / 大小 / 链接状态 / 修改日期）激活即出局。
 // 链接状态四态：origin / linked = 位置级（该卡是否原始放置）；thumb = 资产有伴生缩略图引用
 // （thumb_asset_id，8.1 缩略图链接）；none = 资产仅 1 条活位置（无任何链接件）。
-// 扩展名虚拟类别 "seq" = 序列帧（frames_dir_if_sequence 磁盘口径，与导出 / 重命名同一判定）。
+// 扩展名虚拟类别 "seq" = 序列帧（frames_dir_if_sequence 磁盘口径，与导出 / 重命名同一判定）；
+// "archive" = 档案（资产侧永不命中——档案不是资产，判定在档案区段）。
 
 /// 筛选条件集（内嵌 SearchScope；逐维度定义见各字段注释）
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -335,6 +338,44 @@ impl SearchFilters {
     let valid: Vec<&String> = self.link_states.iter().filter(|s| LINK_STATES.contains(&s.as_str())).collect();
     if !valid.is_empty() && !valid.iter().any(|s| link_state_hit(s, meta, p, alive)) {
       return false;
+    }
+    true
+  }
+
+  /// 档案级维度 AND（入场券 = exts 含 "archive" 虚拟类别，由调用处判）：可判定维度 = 属性 /
+  /// 所在文件夹（parent，含后代集同资产位置口径）/ 添加日期（created_at）；资产专属维度
+  ///（颜色 / 时长 / 比例 / 大小 / 链接状态 / 修改日期）激活 = 档案出局（跨维度 AND）
+  fn archive_pass(&self, data: Option<&ArchiveData>, folder: &Folder, folder_filter: Option<&HashSet<&str>>, today: NaiveDate) -> bool {
+    if !self.colors.is_empty() || !self.ratios.is_empty() || !self.link_states.is_empty() {
+      return false;
+    }
+    if self.duration.as_ref().is_some_and(|d| d.min.is_some() || d.max.is_some()) {
+      return false;
+    }
+    if self.size.as_ref().is_some_and(|s| s.min.is_some() || s.max.is_some()) {
+      return false;
+    }
+    if self.modified.as_ref().is_some_and(DateCond::has_active) {
+      return false;
+    }
+    if !self.tags.is_empty() {
+      let props: &[String] = data.map_or(&[], |a| &a.props);
+      if !tags_hit(&self.tags, props) {
+        return false;
+      }
+    }
+    if let Some(set) = folder_filter {
+      if !folder.parent.as_deref().is_some_and(|p| set.contains(p)) {
+        return false;
+      }
+    }
+    if let Some(c) = &self.imported {
+      if c.has_active() {
+        let Some(a) = data else { return false };
+        if !date_hit(c, &a.created_at, today) {
+          return false;
+        }
+      }
     }
     true
   }
@@ -581,8 +622,11 @@ pub fn search(lib: &Library, query: &str, scope: &SearchScope) -> SearchHits {
 
   // 档案命中：仅文件夹视图出档案区（快速访问同既有口径不出）；非全局 = 仅直属（同 stripArchivesFor
   // 口径，递归开关不影响档案区）；全局 = 全库命中档案。
-  // 筛选激活时档案区不出（筛选 = 找文件，档案实体无筛选维度可判定，2026-10-09 定）
-  if !filtering {
+  // 筛选激活时档案区默认不出（筛选 = 找文件，2026-10-09 定）；例外 = 扩展名维度含虚拟类别
+  // "archive"（2026-10-12 用户定）——档案经 archive_pass 按可判定维度参与筛选
+  let archive_category =
+    scope.filters.exts.iter().any(|w| w.trim_start_matches('.').eq_ignore_ascii_case("archive"));
+  if !filtering || archive_category {
     for f in &lib.folders.folders {
       if f.kind.as_deref() != Some("archive") {
         continue;
@@ -595,7 +639,16 @@ pub fn search(lib: &Library, query: &str, scope: &SearchScope) -> SearchHits {
           None => false,
         }
       };
-      if in_scope && matches(&archive_texts(lib, f), &keywords) {
+      if !in_scope {
+        continue;
+      }
+      if filtering {
+        let data = lib.archives.archives.iter().find(|a| a.folder_id == f.id);
+        if !scope.filters.archive_pass(data, f, folder_filter.as_ref(), today) {
+          continue;
+        }
+      }
+      if matches(&archive_texts(lib, f), &keywords) {
         hits.archives.push(f.id.clone());
       }
     }
@@ -1256,5 +1309,72 @@ mod tests {
     // 与真实扩展名混选 OR
     let f = SearchFilters { exts: vec!["seq".into(), "png".into()], ..Default::default() };
     assert_eq!(hit_keys(&search(&h.lib, "", &scope_filtered("quick:all", f))), ["AN-P|root", "AN-S|root"]);
+  }
+
+  /// 档案虚拟类别（2026-10-12 用户定）：exts 含 "archive" 时档案区参与筛选，按可判定维度 AND
+  #[test]
+  fn filters_archive_virtual_category() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01", "项目");
+    add_folder_ex(&mut h.lib, "AR-A", "角色档案", Some("F01"), None, Some("archive"));
+    add_folder_ex(&mut h.lib, "AR-B", "场景档案", None, None, Some("archive")); // 根级档案
+    add_asset_ex(&mut h.lib, "AN-A", "角色图", "png", &[], None, "F01");
+    h.lib.archives.archives.push(ArchiveData {
+      folder_id: "AR-A".into(),
+      badge: None,
+      avatar: None,
+      props: vec!["主角".into()],
+      descriptions: Vec::new(),
+      links: Vec::new(),
+      created_at: days_ago_rfc3339(3),
+      prompt: None,
+    });
+
+    let cat = |exts: &[&str]| SearchFilters { exts: exts.iter().map(|s| s.to_string()).collect(), ..Default::default() };
+    // 纯类别筛选：folder 视图直属口径（AR-B 根级，folder:F01 视口不出）；资产无 archive 扩展名不中
+    let hits = search(&h.lib, "", &scope_filtered("folder:F01", cat(&["archive"])));
+    assert_eq!(hits.archives, ["AR-A"]);
+    assert!(hits.placements.is_empty());
+    // 全局 = 全库档案
+    let mut g = scope_filtered("quick:all", cat(&["archive"]));
+    g.global = true;
+    assert_eq!(search(&h.lib, "", &g).archives, ["AR-A", "AR-B"]);
+    // 维度内 OR：archive ∪ png → 档案与 png 资产同中
+    let hits = search(&h.lib, "", &scope_filtered("folder:F01", cat(&["archive", "png"])));
+    assert_eq!(hits.archives, ["AR-A"]);
+    assert_eq!(hit_keys(&hits), ["AN-A|F01"]);
+    // 大小写 / 点前缀容忍（同资产侧 exts 惯例）
+    assert_eq!(search(&h.lib, "", &scope_filtered("folder:F01", cat(&[".Archive"]))).archives, ["AR-A"]);
+    // 跨维度 AND——属性：命中「主角」出，不中的词剔出
+    let f = SearchFilters { tags: vec!["主角".into()], ..cat(&["archive"]) };
+    assert_eq!(search(&h.lib, "", &scope_filtered("folder:F01", f)).archives, ["AR-A"]);
+    let f = SearchFilters { tags: vec!["配角".into()], ..cat(&["archive"]) };
+    assert!(search(&h.lib, "", &scope_filtered("folder:F01", f)).archives.is_empty());
+    // 所在文件夹维度（含后代集同口径）：AR-A parent = F01 中；AR-B 根级无 parent 不中
+    let f = SearchFilters { folder_ids: vec!["F01".into()], ..cat(&["archive"]) };
+    let mut g = scope_filtered("quick:all", f);
+    g.global = true;
+    assert_eq!(search(&h.lib, "", &g).archives, ["AR-A"]);
+    // 添加日期维度（created_at）：3 天前 ∈ week；earlier 不中
+    let f = SearchFilters {
+      imported: Some(DateCond { buckets: vec!["week".into()], custom: None }),
+      ..cat(&["archive"])
+    };
+    assert_eq!(search(&h.lib, "", &scope_filtered("folder:F01", f)).archives, ["AR-A"]);
+    let f = SearchFilters {
+      imported: Some(DateCond { buckets: vec!["earlier".into()], custom: None }),
+      ..cat(&["archive"])
+    };
+    assert!(search(&h.lib, "", &scope_filtered("folder:F01", f)).archives.is_empty());
+    // 资产专属维度激活 = 档案出局（大小 / 颜色 / 修改日期各验一处代表）
+    let f = SearchFilters { size: Some(ByteRange { min: Some(1), max: None }), ..cat(&["archive"]) };
+    assert!(search(&h.lib, "", &scope_filtered("folder:F01", f)).archives.is_empty());
+    let f = SearchFilters { colors: vec!["#FF0000".into()], ..cat(&["archive"]) };
+    assert!(search(&h.lib, "", &scope_filtered("folder:F01", f)).archives.is_empty());
+    // 筛选 × 搜索 AND：关键字命中档案名才出
+    assert_eq!(search(&h.lib, "角色", &scope_filtered("folder:F01", cat(&["archive"]))).archives, ["AR-A"]);
+    assert!(search(&h.lib, "不存在词", &scope_filtered("folder:F01", cat(&["archive"]))).archives.is_empty());
+    // 未勾档案类别 = 旧口径档案区不出（filters_active_suppresses_archives 同义回归）
+    assert!(search(&h.lib, "", &scope_filtered("folder:F01", cat(&["png"]))).archives.is_empty());
   }
 }

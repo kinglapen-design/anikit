@@ -112,7 +112,7 @@ function dimActives(f: SearchFilters): Record<string, boolean> {
 
 /** 链接状态 / 扩展名 / 比例 / 日期档位特殊值的条件摘要文案 */
 const LINK_STATE_LABELS: Record<string, string> = { origin: "原始", linked: "链接", thumb: "缩略图", none: "无链接" };
-const EXT_LABELS: Record<string, string> = { seq: "序列帧" };
+const EXT_LABELS: Record<string, string> = { seq: "序列帧", archive: "档案" };
 const RATIO_LABELS: Record<string, string> = { landscape: "横图", square: "方形", portrait: "竖图" };
 const DATE_BUCKET_LABELS: Record<string, string> = {
   today: "当天",

@@ -1,6 +1,8 @@
 // 04 稿 · 档案卡片右键菜单 spec（自 menuSpecs.ts 拆出，规范第 3 条行数控制）：菜单项按新稿纯文字口径（2026-09-01）。
 // 2026-09-05 走查「上下文菜单」档案节修订：
-// - 「作为链接粘贴」移除（只有复制档案后才出现——复制档案业务随档案多位置立项另轮，届时按条件接回）；
+// - 「作为链接粘贴」移除（只有复制档案后才出现）；
+// 2026-10-12 用户定：档案多位置类占位全摘（档案链接管理 / 打开档案链接所在位置 / 复制档案——未立项留着误导用户，
+//   「作为链接粘贴」随复制档案一并不再列；立项接回时恢复）；「导出档案」点亮（本地磁盘 / 工作空间，同文件夹管线）。
 // - 「作为副本粘贴」删除（档案走与文件夹一样的克隆，新加「克隆」Ctrl+D = clone_folders，档案记录随迁）；
 // - 「导出文件」文案修正为「导出档案」，二级删「导出提示词为 .MD 文档」（占位废除）；
 // - 「置顶」删除；「从文件夹中移除档案链接」删除（档案不存在分类问题——档案本身在树容器目录里，
@@ -33,8 +35,10 @@ import {
   dissolveArchiveFlow,
   cloneFolderFlow,
   enterLinkPicker,
+  exportFolderToWsFlow,
   findParentId,
   moveFoldersFlow,
+  pickExportFolder,
   splitSelectedFolderKinds,
   topLevelBlockId,
 } from "../menuOps";
@@ -123,14 +127,11 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
     },
     "divider",
     { label: "移动档案", shortcut: "Ctrl+Y", action: () => moveFoldersFlow(archive.id) },
-    // 档案链接管理：随档案多位置立项（2026-08-24 用户定——角色档案整体链接到其他项目，数据模型级改动）
-    { label: "档案链接管理", shortcut: "Ctrl+J", disabled: true },
+    // 添加链接 = 档案作落点收文件链接（link_placements 既有业务，保留）；档案自身多位置类占位
+    //（链接管理 / 打开链接所在位置 / 复制档案）2026-10-12 用户定摘除——多位置未立项，留着误导用户
     { label: "添加文件/档案链接", shortcut: "Ctrl+L", action: () => enterLinkPicker({ id: archive.id, name: archive.name }) },
-    { label: "打开档案链接所在位置", submenu: [{ label: "（无）", disabled: true }] },
     "divider",
     { label: "剪切档案", shortcut: "Ctrl+X", action: () => cutFoldersFlow(archive.id) },
-    // 复制档案：占位 disabled——复制/作为链接粘贴业务随档案多位置立项另轮（2026-09-05 走查定）
-    { label: "复制档案", shortcut: "Ctrl+C", disabled: true },
     // 粘贴标签/描述（2026-09-05 走查二轮修订：不放复制数据二级——复制后一级跟在复制项后，
     // 与粘贴文件项习惯一致；合并追加；多选域内触发 = 域内全部档案批量）
     ...(selection.copiedData.tags?.length
@@ -200,10 +201,12 @@ export function archiveCardSpec(archive: { id: string; name: string }, rename?: 
     { label: "添加至其他资源库", submenu: [{ label: "（暂无其他资源库）", disabled: true }] },
     {
       // 2026-09-05 走查修正：文案写错——档案菜单是「导出档案」；「导出提示词为 .MD 文档」占位删除
+      // 2026-10-12 点亮：export_folder 无 kind 门禁（档案无子级 = 扁平导出），与文件夹菜单同管线同项
       label: "导出档案",
       submenu: [
         { label: "导出为素材包", disabled: true },
-        { label: "导出到本地磁盘", disabled: true },
+        { label: "导出到本地磁盘", action: () => void pickExportFolder(archive.id) },
+        { label: "导出到工作空间", action: () => exportFolderToWsFlow(archive.id) },
       ],
     },
     "divider",
