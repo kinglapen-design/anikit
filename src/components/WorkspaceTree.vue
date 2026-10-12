@@ -22,7 +22,8 @@ import TreeRowItem from "./items/TreeRowItem.vue";
 import WsTreeRows from "./WsTreeRows.vue";
 import { openContextMenu } from "../lib/contextMenus";
 import { createAndRename, wsBlankSpec, wsFolderSectionSpec, wsTreeRowSpec } from "../lib/menuSpecs/workspace";
-import { restoreWsExpanded } from "../lib/treeExpansion";
+import { isWsTreeOpen, restoreWsExpanded, toggleWsOpen } from "../lib/treeExpansion";
+import { expandEnter, expandLeave } from "../lib/expandAnim";
 import { openSystemRecycleBin } from "../lib/wsOps";
 import { useContentStore } from "../stores/content";
 import { useTabsStore } from "../stores/tabs";
@@ -82,6 +83,12 @@ const subDirs = computed(() => ws.subDirs(props.rel));
 
 // pin 行显示名 = rel 最后一段
 const pinName = (rel: string): string => rel.slice(rel.lastIndexOf("/") + 1);
+
+// pin 行树结构（2026-10-12 用户定：固定到常用的文件夹带树，不再只是快捷入口——
+// 展开钮显隐同 WsTreeRows 旧缓存回退口径「未加载乐观给箭头」，各 pin listing 本就被
+// ensureLoaded 预拉（计数显示），加载落地即收敛）；展开态共享 ws 集（与主树同 rel 同态、
+// 随空间持久化），子级 = WsTreeRows 主树行全行为（导航 / 选择 / 右键 / 拖拽）
+const pinExpandable = (rel: string): boolean => !ws.loadedOk(rel) || ws.subDirs(rel).length > 0;
 
 // pin 行链接门（junction 方向 b，2026-10-02，树行同口径）：挂链 = linked-file-badge；断链 =
 // warning-small + dimmed 置灰；联接态存父目录条目列表——父目录未加载（null）按非链接无徽章（降级）
@@ -156,8 +163,8 @@ function onTreeBlankMenu(e: MouseEvent): void {
         />
         <TreeRowItem kind="quick" icon="trash" name="回收站" @click="onOpenRecycleBin" />
       </section>
-      <!-- 常用固定区块（步骤 3：行 = 目录快捷入口，右键可取消固定；
-           数量 = 该目录直接文件数，未加载不显示） -->
+      <!-- 常用固定区块（步骤 3：行 = 固定目录，右键可取消固定；数量 = 该目录直接文件数，
+           未加载不显示；2026-10-12 起带树结构——展开钮 + 子级主树行全行为） -->
       <section v-if="ws.pinned.length" class="ws-section">
         <SectionTitle
           variant="block"
@@ -175,11 +182,19 @@ function onTreeBlankMenu(e: MouseEvent): void {
               :badge="pinBadge(rel)"
               :dimmed="pinDimmed(rel)"
               :count="ws.loadedOk(rel) ? ws.fileCount(rel) : undefined"
-              :expandable="false"
+              :expandable="pinExpandable(rel)"
+              :expanded="isWsTreeOpen(rel)"
               :selected="content.sidebarSelected === `ws:${rel}`"
               :depth="0"
+              @toggle="toggleWsOpen(rel)"
               @click="openDir(rel)"
             />
+            <!-- pin 行子级树（主树行同件全行为；展开态与主树同 rel 共享） -->
+            <Transition :css="false" @enter="expandEnter" @leave="expandLeave">
+              <div v-if="isWsTreeOpen(rel)" class="ws-children">
+                <WsTreeRows :rel="rel" :depth="1" />
+              </div>
+            </Transition>
           </div>
         </div>
       </section>
