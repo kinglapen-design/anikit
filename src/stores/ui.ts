@@ -47,6 +47,7 @@ const PERSIST_KEYS = [
   "lastLibView",
   "lastWsView",
   "detailTab",
+  "wsTreeExpanded",
 ] as const;
 
 // 变更防抖写回（500ms；模块级单例防重复订阅）
@@ -153,6 +154,11 @@ export const useUiStore = defineStore("ui", {
     leftMode: "library" as "library" | "workspace" | "ai",
     lastLibView: "quick:all",
     lastWsView: "ws:",
+    // ws 树展开态按空间记忆（2026-10-12 用户报「视口记住上次停留文件夹、树展开每次要重新
+    // 展开」补落）：空间 rootPath → 展开目录 relPath 清单；lib/treeExpansion 恢复
+    //（root 就绪 + wsDirsExist 剔僵尸键）与写回（展开变化即同步，$subscribe 防抖落盘）。
+    // 按空间分键 = 踩坑 100 教训——路径类记忆跨空间共享重放必出幽灵态；库树展开态维持会话级
+    wsTreeExpanded: {} as Record<string, string[]>,
     // 详情面板当前 tab（7.1 二十三轮三段；2026-09-26 提示词二轮：第三段 prompt 提示词 →
     // custom 自定义组件占位容器，提示词挪基础信息区块；旧值 "prompt" loadSettings 迁移回 basic）：
     // 全局记忆 + 持久化（2026-09-19 用户定：换选中 / 选择模式往返不重置——链接文件成功后
@@ -255,6 +261,18 @@ export const useUiStore = defineStore("ui", {
           this.pluginOrder = Array.isArray(saved.pluginOrder)
             ? saved.pluginOrder.filter((x): x is string => typeof x === "string")
             : [];
+        }
+        // ws 树展开态兜底（pluginOrder 同先例）：赋值循环的 typeof "object" 校验会放行 null /
+        // 数组 / 值非字符串数组的变形项，逐项剔净——非对象归空、值只留字符串
+        if (saved.wsTreeExpanded !== undefined) {
+          const raw = saved.wsTreeExpanded;
+          const clean: Record<string, string[]> = {};
+          if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
+            for (const [space, rels] of Object.entries(raw)) {
+              if (Array.isArray(rels)) clean[space] = rels.filter((x): x is string => typeof x === "string");
+            }
+          }
+          this.wsTreeExpanded = clean;
         }
         // 「无显示」档废除迁移（2026-08-19）：旧配置 briefMode "none" 回退尺寸档（赋值循环只校验
         // typeof 不校验枚举值，运行态可能已被 "none" 覆盖，此处纠正）

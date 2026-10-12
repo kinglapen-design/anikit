@@ -22,6 +22,7 @@ import TreeRowItem from "./items/TreeRowItem.vue";
 import WsTreeRows from "./WsTreeRows.vue";
 import { openContextMenu } from "../lib/contextMenus";
 import { createAndRename, wsBlankSpec, wsFolderSectionSpec, wsTreeRowSpec } from "../lib/menuSpecs/workspace";
+import { restoreWsExpanded } from "../lib/treeExpansion";
 import { openSystemRecycleBin } from "../lib/wsOps";
 import { useContentStore } from "../stores/content";
 import { useTabsStore } from "../stores/tabs";
@@ -44,7 +45,10 @@ const treeOpen = ref(true);
 // 已加载即跳过（2026-10-01 性能优化③：加载后由 fs-changed 精准重扫维持新鲜，挂载不再全量
 // 重读，ContentArea 视口同口径）；根层另取固定清单（ensureRoot 已拉一次，此处兜底会话内
 // pin 变化）+ 确保各 pin 目录已加载（计数显示用）
-onMounted(ensureLoaded);
+onMounted(() => {
+  ensureLoaded();
+  restoreExpanded();
+});
 
 // 空间就绪重引（2026-10-02 启动空白修复）：启动 / 切空间时挂载加载可能跑在空间就绪前
 //（loadDir 早退不入缓存、loadPinned 得空清单），root 重新就绪（reseedAfterSpaceChange）
@@ -52,9 +56,19 @@ onMounted(ensureLoaded);
 watch(
   () => ws.root,
   (r) => {
-    if (r) ensureLoaded();
+    if (r) {
+      ensureLoaded();
+      restoreExpanded();
+    }
   },
 );
+
+// 树展开态按空间恢复（2026-10-12 持久化补落）：root 就绪即恢复本空间上次展开清单——
+// 幂等（同空间重复调用跳过），仅根实例触发（递归子层不管；isRoot 守卫同 onTreeBlankMenu 口径）
+function restoreExpanded(): void {
+  if (!isRoot.value || !ws.root) return;
+  void restoreWsExpanded(ws.root.rootPath);
+}
 
 function ensureLoaded(): void {
   void ws.ensureDir(props.rel);

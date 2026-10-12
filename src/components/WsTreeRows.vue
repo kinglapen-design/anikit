@@ -2,7 +2,8 @@
 // ws 子目录行列表（WorkspaceTree 根层 / 递归子层共用，避免行模板两处重复）：
 // 本层 = rel 的子目录行（plain click = 导航 ws 视口 + 单选入素材选择域——库 FolderTree 同口径，
 // 2026-09-26 接通；同日 _18 补 Ctrl/Shift 多选：Ctrl = 加选/减选不导航，Shift = 同级范围选，
-// 均对齐库 FolderTree 三态；展开钮挂 treeExpansion，显隐按条目 hasSubDir，展开递归 WorkspaceTree）+
+// 均对齐库 FolderTree 三态；展开钮挂 treeExpansion 的 ws 集（按空间持久化，2026-10-12），
+// 显隐按条目 hasSubDir，展开递归 WorkspaceTree）+
 // 行包装 div 右键 wsTreeRowSpec（打开 / 固定·取消固定 / 复制·剪切·删除批量分流 / 资源管理器 / 刷新）+
 // 拖拽落点（data-folder-id="ws:"+rel，落点视觉 dropZone）+ 拖拽起点（行 @pointerdown →
 // beginAssetDrag，2026-10-02 用户定——ws 文件夹在素材选择域，asset kind 命中引擎 ws 全部落点）。
@@ -11,7 +12,7 @@ import TreeRowItem from "./items/TreeRowItem.vue";
 import WorkspaceTree from "./WorkspaceTree.vue";
 import { openContextMenu } from "../lib/contextMenus";
 import { wsTreeRowSpec } from "../lib/menuSpecs/workspace";
-import { isTreeOpen, toggleOpen } from "../lib/treeExpansion";
+import { isWsTreeOpen, toggleWsOpen } from "../lib/treeExpansion";
 import { expandEnter, expandLeave } from "../lib/expandAnim";
 import { beginAssetDrag, dragView } from "../lib/dragOperation";
 import { useContentStore } from "../stores/content";
@@ -118,17 +119,17 @@ function dropZone(rel: string): "before" | "after" | "into" | undefined {
           :drop-zone="dropZone(d.relPath)"
           :cut="ws.isCutKey(rowKey(d.relPath))"
           :count="ws.loadedOk(d.relPath) ? ws.fileCount(d.relPath) : undefined"
-          :expanded="isTreeOpen(d.relPath)"
+          :expanded="isWsTreeOpen(d.relPath)"
           :expandable="expandable(d)"
           :selected="content.sidebarSelected === `ws:${d.relPath}`"
           :domain-selected="selection.isSelected(rowKey(d.relPath)) && content.sidebarSelected !== `ws:${d.relPath}`"
           :depth="props.depth"
-          @toggle="toggleOpen(d.relPath)"
+          @toggle="toggleWsOpen(d.relPath)"
           @click="onRowClick(d.relPath, $event)"
           @pointerdown="onRowPointerDown($event, d.relPath)"
         />
         <Transition :css="false" @enter="expandEnter" @leave="expandLeave">
-          <div v-if="isTreeOpen(d.relPath)" class="ws-children">
+          <div v-if="isWsTreeOpen(d.relPath)" class="ws-children">
             <!-- 递归子层：挂载即懒加载其 listing -->
             <WorkspaceTree :rel="d.relPath" :depth="childDepth" />
           </div>
