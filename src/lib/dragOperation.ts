@@ -646,14 +646,21 @@ async function dropAssetsGap(dragged: PlacementRef[], dKeys: ReadonlySet<string>
   const items = dragged.filter((it) => it.folderId === target);
   if (items.length === 0) return;
   const ui = useUiStore();
-  if (isDisplaySorted(ui.sortBy)) {
+  const base = content.placementsFor(`folder:${target}`).filter((p) => p.folderId === target);
+  // 新增区置顶期间该段可见序 ≠ 存储序（2026-10-13 用户实机报"链接与原始文件同夹时拖拽排序提示
+  // 成功但没用、切目录又好了"）：pinned 项钉在段首（key 不区分同夹多条位置，origin + 链接两条
+  // 同钉），自定义排序分支按存储序插入与所见落点错位——拖 pinned 项存储侧可能是无操作，
+  // refresh 后钉住盖回 = "排序成功但没执行"；切目录 clearArrivals 归位后自愈。
+  // 与显示排序同口径：目标段可见清单含 pinned 项即走物化（可见序物化进存储序 + 归位）
+  const pinned =
+    content.newArrivals.size > 0 && base.some((p) => content.newArrivals.has(`${p.assetId}|${p.folderId}`));
+  if (isDisplaySorted(ui.sortBy) || pinned) {
     // 显示排序下拖拽排序（3.5，02 整理"物化 + 切回自定义"口径的素材侧延伸）：把该层可见序
     // （新增区置顶段 + 排序流）物化为存储序、拖拽组按落点并入，整层一次重写并切回自定义——
     // 否则 refresh 后排序键盖回，拖拽等于没执行。物化静默（不单独 toast，undo 快照仍在）。
     // 可见序以网格注册序为准（2026-08-20 组内排序放开：分组模式 = 组拼接序 displayItems，
     // 非 placementsFor 原序——物化组拼接序才能切回自定义后屏幕位置不变）；无注册序退回 placementsFor
     if (gap.beforeKey && dKeys.has(gap.beforeKey)) return; // 插到自身前 = 无操作
-    const base = content.placementsFor(`folder:${target}`).filter((p) => p.folderId === target);
     let visible = base;
     const keys = visibleKeys?.();
     if (keys) {
@@ -679,7 +686,7 @@ async function dropAssetsGap(dragged: PlacementRef[], dKeys: ReadonlySet<string>
       null, // 整层序列全传 + 段尾锚点 = 全层重写（reorder_folders 物化同模式）
     );
     if (ok) {
-      ui.sortBy = "";
+      if (isDisplaySorted(ui.sortBy)) ui.sortBy = ""; // 物化后切回自定义（pinned 进分支时本就自定义，不动）
       content.clearArrivals(); // 可见序（含新增区位置）已物化进存储序，新增区概念由自定义序承接
     }
     return;
