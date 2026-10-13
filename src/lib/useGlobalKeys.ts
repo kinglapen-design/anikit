@@ -22,6 +22,7 @@ import {
   deletePlacements,
   deleteRecycle,
   duplicateSelected,
+  openAssetWithDefaultApp,
   pasteClipboard,
   pasteDuplicate,
   recycleSelectedAssetIds,
@@ -287,14 +288,13 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       }
       return;
     }
-    // Shift+Enter = 默认应用打开（6.3 右键菜单同款，2026-07-29 用户设计）
+    // Shift+Enter = 默认应用打开（6.3 右键菜单同款，2026-07-29 用户设计）；
+    // 动作本体 = placementOps.openAssetWithDefaultApp（2026-10-13 抽出——双击分流共用）
     if (e.key === "Enter" && e.shiftKey) {
       if (selection.count === 1 && !content.isRecycleView) {
         e.preventDefault();
         const p = content.visiblePlacements.find((v) => placementKey(v) === selection.first);
-        if (p) {
-          void invoke("open_with_default_app", { assetId: p.assetId }).then(() => content.refreshRecent());
-        }
+        if (p) void openAssetWithDefaultApp(p.assetId);
       }
       return;
     }
@@ -459,6 +459,18 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     if (e.key === "Escape") escHadOverlay = !!document.querySelector(".app-menu, .zoom-mask");
   }
 
+  // Ctrl+, = 偏好设置开/关（2026-10-13 设置面板接生产；快捷键表「偏好设置」同键点亮）：
+  // 输入框 / 子窗口 / 向导态不抢；菜单 / 浮层（app-menu / zoom-mask / kit-mask）打开时让位——
+  // bm-mask 刻意不在让位清单：面板自己开着时再按 Ctrl+, = 关闭（toggle 语义，§51 mask 惯例）
+  function onSettingsKey(e: KeyboardEvent): void {
+    if (!(e.ctrlKey || e.metaKey) || e.key !== ",") return;
+    if (isEditableTarget(e.target as HTMLElement)) return;
+    if (opts.previewParam || opts.needLibrarySetup()) return;
+    if (document.querySelector(".app-menu, .zoom-mask, .kit-mask")) return;
+    e.preventDefault();
+    ui.settingsOpen = !ui.settingsOpen;
+  }
+
   onMounted(() => {
     window.addEventListener("keydown", onEscCapture, true);
     window.addEventListener("keydown", onPaste);
@@ -467,6 +479,7 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     window.addEventListener("keydown", onOperationKeys);
     window.addEventListener("keydown", onSearchFocus);
     window.addEventListener("keydown", onViewKeys);
+    window.addEventListener("keydown", onSettingsKey);
   });
   onBeforeUnmount(() => {
     window.removeEventListener("keydown", onEscCapture, true);
@@ -476,5 +489,6 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
     window.removeEventListener("keydown", onOperationKeys);
     window.removeEventListener("keydown", onSearchFocus);
     window.removeEventListener("keydown", onViewKeys);
+    window.removeEventListener("keydown", onSettingsKey);
   });
 }

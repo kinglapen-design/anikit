@@ -18,6 +18,7 @@ import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
 import { useSearchStore } from "../../stores/search";
+import { useToastStore } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import type { CtxEntry, CtxItem } from "../contextMenus";
 import { currentSpace } from "../libraryOps";
@@ -392,16 +393,23 @@ export function appMenuSpec(libraryNames: string[]): CtxEntry[] {
     "divider",
     {
       label: "偏好设置",
-      // 2026-09-20 退役占位：弹窗唯一内容（MCP 写入开关）已挪插件面板 MCP 详情窗
-      //（plugins/McpPluginWindow，settings.mcp 子树），空壳弹窗删除；后续设置项立项再点亮
-      disabled: true,
+      shortcut: "Ctrl+,",
+      // 2026-10-13 设置面板接生产点亮（preview 六轮定稿）：SettingsDialog 宿主 App.vue
+      action: () => void (useUiStore().settingsOpen = true),
     },
     {
       label: "帮助",
       submenu: [
         { label: "使用教程", disabled: true },
         { label: "意见反馈", disabled: true },
-        { label: "查看软件日志", disabled: true },
+        // 查看软件日志（2026-10-13 点亮）：与设置面板「关于」区块同一动作（show_logs_in_explorer）
+        {
+          label: "查看软件日志",
+          action: () =>
+            void invoke("show_logs_in_explorer").catch((e) =>
+              useToastStore().notify({ message: String(e), icon: "fail" }),
+            ),
+        },
       ],
     },
     "divider",

@@ -75,8 +75,13 @@ const props = withDefaults(
 const ui = useUiStore();
 const thumbUrl = computed(() =>
   // ?v=modifiedAt = 缩略图 URL 版本戳：设封面后 modifiedAt 变 → URL 变 → img 重新加载
-  //（asset 协议同 URL 有启发式缓存，2026-08-20 用户实机"静帧不热刷新"修复；query 不影响协议路径解析）
-  props.asset.thumbPath ? `${convertFileSrc(props.asset.thumbPath)}?v=${encodeURIComponent(props.asset.modifiedAt ?? "")}` : null,
+  //（asset 协议同 URL 有启发式缓存，2026-08-20 用户实机"静帧不热刷新"修复；query 不影响协议路径解析）；
+  // &e=thumbEpoch = 清缓存重建代际戳（2026-10-13 设置面板清 lib-thumbs 闭环：重建不刷 modifiedAt，
+  // 同 URL 会滞留旧图/破图；epoch 为 0 也带，URL 形状恒定。网格卡先接——PreviewNavigator /
+  // SectionPinned / anikitLink / DupScanCard 不动）
+  props.asset.thumbPath
+    ? `${convertFileSrc(props.asset.thumbPath)}?v=${encodeURIComponent(props.asset.modifiedAt ?? "")}&e=${ui.thumbEpoch}`
+    : null,
 );
 // 动图（5.1）：GIF / WEBP 动图；与序列帧区分（序列帧同样带 frameCount）
 const isAnim = computed(() => props.asset.animated);

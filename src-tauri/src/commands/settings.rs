@@ -23,6 +23,32 @@ pub async fn save_window_state(state: WindowState) -> Result<(), String> {
   config::save_window_state(state).map_err(|e| e.to_string())
 }
 
+/// 日志目录在资源管理器中定位（设置面板「关于 · 查看软件日志」与主菜单「帮助 ▸ 查看软件日志」
+/// 共用，2026-10-13）：日志在 app_log_dir（%LOCALAPPDATA%\com.anikit.dev\logs），定位最新一份
+/// .log（轮转 KeepSome(2)，文件名随插件默认）；目录里没有 .log 则直接打开目录兜底；
+/// 目录不存在 = 尚未产生日志。Shell 调用走线程池（COM 纪律）
+#[tauri::command]
+pub async fn show_logs_in_explorer(app: tauri::AppHandle) -> Result<(), String> {
+  use tauri::Manager;
+  let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+  if !dir.is_dir() {
+    return Err("日志目录不存在（尚未产生日志）".to_string());
+  }
+  // 最新一份 .log（按修改时间；文件名不硬编码——插件默认名变了也不瞎）
+  let newest = std::fs::read_dir(&dir)
+    .ok()
+    .and_then(|rd| {
+      rd.filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|x| x == "log"))
+        .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())
+    })
+    .map(|e| e.path());
+  match newest {
+    Some(f) => crate::adapters::shell_open::reveal(&f),
+    None => crate::adapters::shell_open::open(&dir),
+  }
+}
+
 /// 退出应用（1.3 汉堡菜单"退出"，2026-08-11 用户定：完全结束进程）
 #[tauri::command]
 pub async fn exit_app(app: tauri::AppHandle) -> Result<(), String> {

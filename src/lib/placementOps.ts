@@ -559,6 +559,19 @@ export async function revealInExplorer(assetId: string): Promise<void> {
   }
 }
 
+// 默认应用打开（库资产，6.3 Shift+Enter；2026-10-13 抽出共用：偏好设置「双击素材卡片 =
+// 默认应用打开」分流同径——AssetGrid dblclick 与 useGlobalKeys Shift+Enter 都走这里）：
+// 后端记录最近使用并广播 recent-changed，成功后刷新最近使用
+export async function openAssetWithDefaultApp(assetId: string): Promise<void> {
+  const content = useContentStore();
+  try {
+    await invoke("open_with_default_app", { assetId });
+    await content.refreshRecent();
+  } catch (e) {
+    useToastStore().notify({ message: String(e), icon: "fail" });
+  }
+}
+
 // 缩略图三件套：不接撤销（同设封面帧既有口径）；成功刷新 + 普通 toast
 async function runThumbOp(action: () => Promise<unknown>, okMessage: string): Promise<void> {
   const content = useContentStore();

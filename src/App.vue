@@ -43,6 +43,7 @@ import RecycleConfirmDialog from "./components/RecycleConfirmDialog.vue";
 import BlockManageDialog from "./components/BlockManageDialog.vue";
 import InfoManageDialog from "./components/InfoManageDialog.vue";
 import WsManageDialog from "./components/WsManageDialog.vue";
+import SettingsDialog from "./components/SettingsDialog.vue";
 import GroupManageDialog from "./components/GroupManageDialog.vue";
 import GroupEditDialog from "./components/GroupEditDialog.vue";
 import PropsDialog from "./components/PropsDialog.vue";
@@ -224,6 +225,13 @@ let unlistenDragDrop: (() => void) | undefined;
 onMounted(() => {
   void syncMaximized();
   void ui.initSettings(); // 全局 UI 设置加载 + 变更防抖写回（2026-07-28 持久化）
+  // alwaysOnTop 启动恢复（2026-10-13 顺手修：持久化键与 loadSettings 读回一直在，启动路径
+  // 漏应用——仅 togglePin 调 setAlwaysOnTop）；仅主窗口（预览 / 插件子窗口 pin 语义不动）
+  if (!previewParam && !pluginParam) {
+    void ui.initSettings().then(() => {
+      if (ui.alwaysOnTop) void appWindow.setAlwaysOnTop(true);
+    });
+  }
   window.addEventListener("resize", onResize);
   // ws 视口键清理（2026-10-03_12 用户定）：scrollPositions / viewRowHeights 的 ws: 键随浏览
   // 只增不减，目录删除 / 改名后成僵尸——root 就绪（启动 / 切空间 reseed 后）静默剔一轮
@@ -291,6 +299,7 @@ onMounted(() => {
   void content.initRecentListener(); // 最近使用热刷新（2026-07-29 复验反馈修复）
   void content.initCepListener(); // CEP 导出入库热刷新（8.1：WS 接收入库完成 → 全量对齐）
   void content.initMcpListener(); // MCP 写入热刷新（PRD 08-06：agent 写库 → 去抖全量对齐）
+  void content.initThumbRebuildListener(); // 清缓存缩略图重建热刷新（2026-10-13 设置面板闭环：thumbEpoch 变址 + 全量对齐）
   initMediaOpenListener(); // 媒体服务 /open 点击跳转（2026-10-08 S1：后端 media-open → 定位目标）
   document.addEventListener("click", onLinkNavGuard, true); // webview 导航兜底（同日实机事故防线）
   void content.initOriginHealListener(); // origin 外部编辑自愈热刷新（2026-10-08：读取触点回写 → 同步 size/modifiedAt）
@@ -531,6 +540,8 @@ async function togglePin(): Promise<void> {
          右栏底部「信息查看管理」钮 / 视图菜单同名项触发 -->
     <InfoManageDialog v-if="ui.infoManageOpen" @close="ui.infoManageOpen = false" />
     <WsManageDialog v-if="ui.wsManageOpen" @close="ui.wsManageOpen = false" />
+    <!-- 偏好设置弹窗（2026-10-13 接生产，preview 六轮定稿）：主菜单「偏好设置」/ Ctrl+, 触发 -->
+    <SettingsDialog v-if="ui.settingsOpen" @close="ui.settingsOpen = false" />
     <!-- 分组弹窗（3.5 二轮）：33 稿分组管理（工具栏分组管理钮 / 12 稿菜单「编辑分组」）/
          34 稿新建分组（12 稿菜单「新建分组」）；目标文件夹 = 打开时锁定的 groupDialogFolder -->
     <GroupManageDialog

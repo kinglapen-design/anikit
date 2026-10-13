@@ -145,7 +145,7 @@ async function linkOutNew(): Promise<void> {
     <div class="wm-body">
       <!-- 区块一：链进来（方向 b 门清单） -->
       <div class="wm-sec">
-        <SectionTitle variant="block" title="链接进来的文件夹" :count="overview.links.length" expanded :with-more="false" />
+        <SectionTitle variant="block" title="链接进来的文件夹" :count="overview.links.length" expanded :actions="false" />
         <div v-if="overview.links.length" class="wm-cards">
           <div v-for="l in overview.links" :key="l.rel" class="wm-card ni-hover" :class="{ dim: !l.ok }">
             <AppIcon name="linked-file-badge" :size="18" class="wm-lead" />
@@ -167,7 +167,7 @@ async function linkOutNew(): Promise<void> {
       </div>
       <!-- 区块二：链出去（方向 a′ 入口台账）；顶部分隔线 + 大间距区分功能 -->
       <div class="wm-sec sep">
-        <SectionTitle variant="block" title="链出去的文件夹" :count="overview.portals.length" expanded :with-more="false" />
+        <SectionTitle variant="block" title="链出去的文件夹" :count="overview.portals.length" expanded :actions="false" />
         <div v-if="overview.portals.length" class="wm-cards">
           <div v-for="g in overview.portals" :key="g.rel" class="wm-gcard">
             <div class="wm-ghead" :class="{ dim: !g.relOk }">

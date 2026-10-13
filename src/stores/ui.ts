@@ -48,6 +48,8 @@ const PERSIST_KEYS = [
   "lastWsView",
   "detailTab",
   "wsTreeExpanded",
+  "spaceZoomMode",
+  "doubleClickOpen",
 ] as const;
 
 // 变更防抖写回（500ms；模块级单例防重复订阅）
@@ -123,6 +125,21 @@ export const useUiStore = defineStore("ui", {
     // 管理工作空间弹窗开关（2026-10-02，会话级）：菜单「仓库 ▸ 管理工作空间」置位，宿主 App.vue
     //（infoManageOpen 惯例）
     wsManageOpen: false,
+    // 偏好设置弹窗开关（2026-10-13 设置面板接生产，会话级）：主菜单「偏好设置」/ Ctrl+, 置位，
+    // 宿主 App.vue（infoManageOpen 惯例）
+    settingsOpen: false,
+    // 空格预览模式（2026-10-13 偏好设置「通用」区块，持久化）：hover = 悬停优先（原语义——悬停卡
+    // 即览、无悬停回退单选项）/ selected = 仅选中项（悬停不跟随，useSpaceZoom 消费）
+    spaceZoomMode: "hover" as "hover" | "selected",
+    // 双击素材卡片行为（同上）：preview = 应用内预览（原语义）/ app = 默认应用打开
+    //（Shift+Enter 同链路，AssetGrid dblclick 分流）
+    doubleClickOpen: "preview" as "preview" | "app",
+    // 缩略图重建代际（2026-10-13 设置面板清缓存闭环，会话级不进 PERSIST_KEYS）：
+    // 清 lib-thumbs 后后端全库重建完成发 library-thumbs-rebuilt——重建不刷 modifiedAt，
+    // 卡片 URL（?v=modifiedAt）不变会命中 asset 协议缓存滞留旧图/破图；bump 后卡片 URL
+    // 追加 &e=epoch 变址强制重载（archiveCover coverVer 同族版本戳口径；网格卡先接，
+    // PreviewNavigator / SectionPinned / anikitLink / DupScanCard 不动）
+    thumbEpoch: 0,
     // 只读视口拖拽/快捷键导入拒入弹窗开关（2026-09-08，会话级）：onDrop 守卫与 Ctrl+V 系统剪贴板
     // 导入守卫置位（两处 lib 无权触达 App.vue 本地态），ConfirmModal 宿主 App.vue
     importRejectOpen: false,
@@ -171,6 +188,10 @@ export const useUiStore = defineStore("ui", {
     descEdit: null as { kind: "file" | "archive"; id: string; name: string; initial: { title: string; content: string }[] } | null,
   }),
   actions: {
+    // thumbEpoch 代际 +1（library-thumbs-rebuilt 事件驱动，content.initThumbRebuildListener）
+    bumpThumbEpoch(): void {
+      this.thumbEpoch += 1;
+    },
     // 视口有效卡片行高（2026-09-13 实机走查：尺寸按视口记忆——每个视口文件类型不同，
     // 不要统一应用；未定制的视口回退全局 targetRowHeight）
     rowHeightFor(viewKey: string): number {

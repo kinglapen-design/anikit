@@ -359,6 +359,13 @@ pub struct InboxHandle {
   drive: Option<char>,
 }
 
+impl InboxHandle {
+  /// 当前挂载盘符（设置面板「自动导入」区块盘符状态行查询，2026-10-13）
+  pub(crate) fn drive_letter(&self) -> Option<char> {
+    self.drive
+  }
+}
+
 /// 启动收件箱（空间打开 / 自动导入开启后调用，root = 空间根）：先停旧实例；任一部件失败记日志降级继续
 pub fn start(app: &AppHandle, root: &Path) {
   stop(app);

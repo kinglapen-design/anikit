@@ -302,6 +302,9 @@ let unlistenCep: (() => void) | undefined;
 let unlistenMcp: (() => void) | undefined;
 // origin 外部编辑自愈事件监听（2026-10-08 哈希漂移治理第 2 层）
 let unlistenOriginHeal: (() => void) | undefined;
+// 清缓存后缩略图全库重建完成事件监听（2026-10-13 设置面板闭环）：library-thumbs-rebuilt →
+// thumbEpoch 变址 + 全量对齐（fallback 回退格式图标会改 thumbPath/thumbKind，必须重拉数据）
+let unlistenThumbRebuild: (() => void) | undefined;
 
 // 视口滚动位置（2026-07-25 用户定；2026-09-23 迁 ui store scrollPositions 持久化）：
 // 进出预览 / 切换目录 / 重启应用都恢复——预览返回不跳顶（设缩略图后可直接确认），对比两个文件夹不用重新翻
@@ -1088,6 +1091,19 @@ export const useContentStore = defineStore("content", {
           lastSound = now;
           playSuccess();
         }
+        void this.refresh();
+      });
+    },
+
+    // 清缓存后缩略图重建热刷新（2026-10-13 设置面板清 lib-thumbs 闭环，接口 22）：
+    // 后端维护性写不刷 modifiedAt（同主色懒回填口径）→ 卡片 ?v=modifiedAt URL 不变会命中
+    // asset 协议缓存滞留旧图/破图——bumpThumbEpoch 变址（&e= 版本戳）强制重载 +
+    // refresh 全量对齐（同 initCepListener 口径：导入级操作频率低，局部同步易漏直接全量；
+    // fallback 回退格式图标的情形 thumbPath/thumbKind 会变，必须重拉数据）
+    async initThumbRebuildListener(): Promise<void> {
+      if (unlistenThumbRebuild) return;
+      unlistenThumbRebuild = await listen("library-thumbs-rebuilt", () => {
+        useUiStore().bumpThumbEpoch();
         void this.refresh();
       });
     },

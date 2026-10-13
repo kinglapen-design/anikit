@@ -38,9 +38,12 @@ const selection = useSelectionStore();
 const content = useContentStore();
 const emit = defineEmits<{ select: [e: MouseEvent] }>();
 
-// ?v=modifiedAt = 缩略图 URL 版本戳（同 AssetCard：设封面后 URL 变强制 img 重载，asset 协议缓存修复）
+// ?v=modifiedAt = 缩略图 URL 版本戳（同 AssetCard：设封面后 URL 变强制 img 重载，asset 协议缓存修复）；
+// &e=thumbEpoch = 清缓存重建代际戳（2026-10-13，同 AssetCard 口径：网格卡先接，其余消费方不动）
 const thumbUrl = computed(() =>
-  props.asset.thumbPath ? `${convertFileSrc(props.asset.thumbPath)}?v=${encodeURIComponent(props.asset.modifiedAt ?? "")}` : null,
+  props.asset.thumbPath
+    ? `${convertFileSrc(props.asset.thumbPath)}?v=${encodeURIComponent(props.asset.modifiedAt ?? "")}&e=${ui.thumbEpoch}`
+    : null,
 );
 // 尺寸列：音频显示时长（5.1）；其余 w×h，无尺寸显示格式
 const size = computed(() => {

@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, State};
 
 use crate::adapters::{inbox_watch, shell_open};
 use crate::commands::import::{current_paths, spawn_import};
@@ -108,6 +108,14 @@ pub fn delete_inbox_entry(app: AppHandle, name: String) -> Result<(), String> {
   result.map_err(|e| format!("删除「{name}」失败：{e}"))?;
   inbox::blocked_remove(&root, &name);
   Ok(())
+}
+
+/// 收件箱盘符挂载态查询（设置面板「自动导入」区块状态行，2026-10-13）：
+/// 收件箱运行中且盘符在挂 → Some("Z:")；未启动 / 挂载失败 / 托盘手动卸载 → None。
+/// sync 纯内存读（AppState.inbox 短锁），无 IO
+#[tauri::command]
+pub fn get_inbox_drive_letter(state: State<'_, AppState>) -> Option<String> {
+  state.inbox.lock().ok()?.as_ref()?.drive_letter().map(|c| format!("{c}:"))
 }
 
 /// 校验条目名并解析为 inbox 下一级路径：拒绝路径分隔符与 Windows 非法字符（防路径穿越）；

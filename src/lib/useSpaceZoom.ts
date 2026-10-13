@@ -8,10 +8,12 @@
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useSelectionStore } from "../stores/selection";
 import { placementKey, type PlacementView } from "../stores/content";
+import { useUiStore } from "../stores/ui";
 import { isEditableTarget } from "./useGlobalKeys";
 
 export function useSpaceZoom(opts: { items: () => PlacementView[]; panelActive: () => boolean }) {
   const selection = useSelectionStore();
+  const ui = useUiStore();
   const zoomAsset = ref<PlacementView | null>(null);
   const panelHover = ref(false);
   let lastPointer = { x: 0, y: 0 };
@@ -37,7 +39,15 @@ export function useSpaceZoom(opts: { items: () => PlacementView[]; panelActive: 
     // 浮层开着时交给其 window 级监听处理（同日：焦点不在网格时空格也要生效；此处不处理防双触发）
     if (zoomAsset.value) return;
     e.preventDefault();
-    const p = findByKey(hoverKeyAtPoint()) ?? (selection.count === 1 ? findByKey(selection.first) : null);
+    // 空格预览模式（2026-10-13 偏好设置「通用」区块，ui.spaceZoomMode 持久化）：
+    // selected = 仅当前选中项（悬停不跟随；无选中 / 多选保守不动作）；
+    // hover = 悬停优先、无悬停回退单选项（2026-08-10 原语义不变）
+    const p =
+      ui.spaceZoomMode === "selected"
+        ? selection.count === 1
+          ? findByKey(selection.first)
+          : null
+        : (findByKey(hoverKeyAtPoint()) ?? (selection.count === 1 ? findByKey(selection.first) : null));
     if (p) zoomAsset.value = p;
   }
   // 浮层空格（window 级，焦点任意）：**纯 toggle 再按即关**（2026-08-10 用户定二轮：

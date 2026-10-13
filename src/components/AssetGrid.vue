@@ -31,6 +31,7 @@ import {
 import { openGridContextMenu } from "../lib/menuSpecs/gridDispatch";
 import { groupHeaderSpec } from "../lib/menuSpecs/groupHeader";
 import { openContextMenu } from "../lib/contextMenus";
+import { openAssetWithDefaultApp } from "../lib/placementOps";
 import { placementKey, useContentStore, type FolderNode, type PlacementView } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
@@ -60,6 +61,13 @@ const preview = inject(PREVIEW_SESSION_KEY)!;
 // 进预览（4.3）：双击卡片
 function openPreview(p: PlacementView): void {
   void preview.open(placementKey(p));
+}
+
+// 双击素材卡片分流（2026-10-13 偏好设置「通用」区块，ui.doubleClickOpen 持久化）：
+// preview = 应用内预览（原语义）/ app = 默认应用打开（Shift+Enter 同链路，placementOps 共用件）
+function onCardDblclick(p: PlacementView): void {
+  if (ui.doubleClickOpen === "app") void openAssetWithDefaultApp(p.assetId);
+  else openPreview(p);
 }
 
 // 卡片点击选择（6.1，2026-07-28 用户定案）：单击 = 单选 / Ctrl+单击 = 加选切换 /
@@ -518,7 +526,7 @@ onBeforeUnmount(() => {
             :data-key="placementKey(c.asset)"
             :data-drag-name="c.asset.name"
             @select="onCardClick(c.asset, $event)"
-            @dblclick="openPreview(c.asset)"
+            @dblclick="onCardDblclick(c.asset)"
           />
         </template>
         <template v-else>

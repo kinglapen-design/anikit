@@ -11,6 +11,8 @@ import TwoToneIcon from "../../components/items/TwoToneIcon.vue";
 import ConfirmModal from "../../components/modals/ConfirmModal.vue";
 import WsManageDialog from "../../components/WsManageDialog.vue";
 import type { WsLinkOverview } from "../../lib/wsOps";
+import SettingsDialog from "../../components/SettingsDialog.vue";
+import type { SettingsMockData } from "../../lib/settingsData";
 import CreateLibraryModal from "../../components/CreateLibraryModal.vue";
 import MergeLibraryModal from "../../components/MergeLibraryModal.vue";
 import ImportDialog from "../../components/ImportDialog.vue";
@@ -46,6 +48,28 @@ const mockLibItems = [
   { name: "学习参考", sizeBytes: 12.6 * 1024 ** 3 },
   { name: "项目素材备份", sizeBytes: 860 * 1024 ** 2 },
 ];
+// 设置面板真实弹出（1.0 收尾第 1 项，preview 先行——纯展示组件，不接 store / 后端）：
+// mock 缓存各项给代表字节数（GB/MB/KB/B 全覆盖 formatSize 各档）、盘符「已挂载 Z:」、版本 0.1.0
+const settingsOpen = ref(false);
+const settingsMock: SettingsMockData = {
+  spaceZoom: "hover",
+  doubleClick: "preview",
+  autoImport: true,
+  inboxDrive: "Z:",
+  cacheLib: [
+    { id: "lib-thumb", label: "缩略图与动图", note: "清理后自动重建", bytes: 1.28 * 1024 ** 3 },
+    { id: "lib-preview", label: "预览与帧缓存", bytes: 864 * 1024 ** 2 },
+    { id: "lib-media", label: "音视频转码与波形", bytes: 412.5 * 1024 ** 2 },
+    { id: "lib-icon", label: "系统格式图标", bytes: 768 * 1024 },
+  ],
+  cacheWs: [
+    { id: "ws-thumb", label: "缩略图与图标", bytes: 96.4 * 1024 ** 2 },
+    { id: "ws-media", label: "音视频转码与波形", bytes: 128 * 1024 ** 2 },
+    { id: "ws-probe", label: "探测缓存", bytes: 512 },
+  ],
+  cep: { maxSecs: 10, maxMB: 2, fps: 0 },
+  version: "0.1.0",
+};
 const draftFiles: ImportDraft = { kind: "files", paths: ["C:/演示/主角-走01.png"], targetFolder: null };
 const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素材"], targetFolder: null };
 // 目的树选择器真实弹出（DestTreeDialog，2026-10-03 库 ↔ 工作空间互通；mock 草稿——
@@ -204,7 +228,7 @@ function openDestTree(): void {
             <div class="pv-ws-body">
               <!-- 区块一：链进来（方向 b 门清单） -->
               <div class="pv-ws-sec">
-                <SectionTitle variant="block" title="链接进来的文件夹" :count="2" expanded :with-more="false" />
+                <SectionTitle variant="block" title="链接进来的文件夹" :count="2" expanded :actions="false" />
                 <div class="pv-ws-cards">
                   <!-- 正常链接门：徽章 + 门名 / ← 目标路径；操作组 hover 滑入（污染文件 item 同款） -->
                   <div class="pv-ws-card ni-hover">
@@ -237,7 +261,7 @@ function openDestTree(): void {
               </div>
               <!-- 区块二：链出去（方向 a′ 入口台账）；顶部分隔线 + 大间距区分功能 -->
               <div class="pv-ws-sec sep">
-                <SectionTitle variant="block" title="链出去的文件夹" :count="2" expanded :with-more="false" />
+                <SectionTitle variant="block" title="链出去的文件夹" :count="2" expanded :actions="false" />
                 <div class="pv-ws-cards">
                   <!-- 组 1：文件夹 + 两条入口（均正常）；组卡 hover 首行出「添加入口」，子行各自 hover 出操作 -->
                   <div class="pv-ws-gcard">
@@ -306,12 +330,12 @@ function openDestTree(): void {
             </div>
             <div class="pv-ws-body">
               <div class="pv-ws-sec">
-                <SectionTitle variant="block" title="链接进来的文件夹" :count="0" expanded :with-more="false" />
+                <SectionTitle variant="block" title="链接进来的文件夹" :count="0" expanded :actions="false" />
                 <p class="pv-ws-empty">还没有链接进来的文件夹——右键工作空间空白处或文件夹，选「添加链接文件夹…」</p>
                 <ActionButton label="添加链接文件夹…" icon="add-small" variant="solid" size="md" title="选外部文件夹，挂载到工作空间根目录" />
               </div>
               <div class="pv-ws-sec sep">
-                <SectionTitle variant="block" title="链出去的文件夹" :count="0" expanded :with-more="false" />
+                <SectionTitle variant="block" title="链出去的文件夹" :count="0" expanded :actions="false" />
                 <p class="pv-ws-empty">还没有链出去的文件夹——右键工作空间文件夹，选「在外部位置创建链接…」</p>
                 <ActionButton label="链出去新文件夹…" icon="add-small" variant="solid" size="md" title="选工作空间文件夹 → 选入口摆放位置" />
               </div>
@@ -320,6 +344,31 @@ function openDestTree(): void {
           <span class="pv-cap">空态形态：区块无行 = 引导文案一行（次要文字 12/16 三级），添加行照常</span>
         </div>
       </div>
+    </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">设置面板（2026-10-13 已接生产 = components/SettingsDialog + lib/settingsData——主菜单「偏好设置」/ Ctrl+, 入口；mock 陈列保留作常态陈列）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell" style="width: 240px">
+          <ActionButton label="打开交互演示" variant="solid" size="md" @click="settingsOpen = true" />
+          <span class="pv-cap">
+            真实弹出（mock 全量：缓存 B/KB/MB/GB 各档代表值、盘符「已挂载 Z:」、版本 0.1.0）。
+            2026-10-13 四轮定稿（截图箭头）= Eagle 式左右布局·左浅右深**全出血**：壳 BaseModal framed 720×480 定高；
+            左导航列 168 壳色 g3（树行口径 32 高 / hover a3 / 选中 a2 + l1；行首 18px 图标占位空盒后补）；
+            列右缘 1px g5 竖线顶贴标题线到底缘通高；右内容区 = g1 深色填满（撤三轮内嵌卡片——
+            标题横线 / 竖线 / 两块底色相连无断缝；framed 列 gap 归 0 + 内容段 padding 四边归零——
+            注意 fallthrough class 落在 BaseModal 根 = 遮罩上，压壳样式须 :deep 进 .bm-modal.framed（五轮修横带的教训））；切分类 = 详情面板 tab 切换同款（150 缓出 + 250 缓入 delay 100 位移 48px）。
+            无按钮行（即时生效，§61/§66）；Esc/X 关闭，遮罩点击不关闭。
+            <b>已接生产（2026-10-13）</b>：业务收口 lib/settingsData.ts（UI 无业务）——通用 = ui 持久化键
+            （spaceZoomMode / doubleClickOpen）；自动导入 = 空间级 set_auto_import + 盘符 get_inbox_drive_letter；
+            缓存 = get_cache_overview / clear_cache（全部清理走 confirmPrompt warning）+ library-thumbs-rebuilt 事件；
+            插件 = cep_export_settings 读写（MB↔字节换算，护栏同后端 validate）；关于 = getVersion +
+            show_logs_in_explorer。mock 弹出 = 陈列态（isMock 早退，命令一律不发）；
+            快捷键 = 组件内静态数组（bound 标志），未接入行 = 键位降四级 +「未接入」警告橙尾标（颜色即状态区分）
+          </span>
+        </div>
+      </div>
+      <SettingsDialog v-if="settingsOpen" :mock="settingsMock" @close="settingsOpen = false" />
     </div>
 
     <div class="pv-group">

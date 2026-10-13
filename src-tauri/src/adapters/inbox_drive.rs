@@ -7,9 +7,10 @@
 
 use std::path::Path;
 
-/// 盘符候选顺序：A / B（软盘位常年空闲），其后 Z→E 倒序挑不常用字母
+/// 盘符候选顺序：Z→E 倒序挑不常用字母（2026-10-13 改定：A / B 移出候选——软盘位
+/// 有软件对 A: 路径报错，用户实机踩坑；已挂载指向同目录的盘符仍正常复用，只影响新挂载挑选）
 const CANDIDATES: &[char] = &[
-  'A', 'B', 'Z', 'Y', 'X', 'W', 'V', 'U', 'T', 'S', 'R', 'Q', 'P', 'O', 'N', 'M', 'L', 'K', 'J', 'I', 'H', 'G', 'F', 'E',
+  'Z', 'Y', 'X', 'W', 'V', 'U', 'T', 'S', 'R', 'Q', 'P', 'O', 'N', 'M', 'L', 'K', 'J', 'I', 'H', 'G', 'F', 'E',
 ];
 
 /// 挂载 dir 为盘符，返回盘符字母；已挂载指向同一目录则复用该盘符（幂等）
@@ -18,7 +19,7 @@ pub fn mount(dir: &Path) -> Result<char, String> {
   if let Some(letter) = mounted_letter(dir) {
     return Ok(letter);
   }
-  let letter = free_letter().ok_or_else(|| "没有可用盘符（A / B 与 Z–E 均被占用）".to_string())?;
+  let letter = free_letter().ok_or_else(|| "没有可用盘符（Z–E 均被占用）".to_string())?;
   define(letter, &raw_target(dir)).map_err(|e| format!("盘符 {letter}: 挂载失败：{e}"))?;
   Ok(letter)
 }
@@ -117,5 +118,19 @@ mod tests {
   fn normalize_is_case_insensitive() {
     assert_eq!(normalize("\\??\\E:\\Foo"), normalize("\\??\\e:\\foo"));
     assert_ne!(normalize("\\??\\E:\\Foo"), normalize("\\??\\E:\\Bar"));
+  }
+
+  /// 候选序（2026-10-13 改定）：Z 起倒序、E 收尾；A / B 软盘位移出候选（有软件对 A: 报错）
+  #[test]
+  fn candidates_start_at_z_and_exclude_floppy_letters() {
+    assert_eq!(CANDIDATES.first(), Some(&'Z'), "Z 起倒序优先");
+    assert_eq!(CANDIDATES.last(), Some(&'E'));
+    assert!(!CANDIDATES.contains(&'A') && !CANDIDATES.contains(&'B'), "A / B 不作候选");
+    // 22 个字母连续倒序无重复（Z..=E）
+    assert_eq!(CANDIDATES.len(), 22);
+    let mut sorted = CANDIDATES.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(sorted.len(), 22, "候选无重复");
   }
 }
