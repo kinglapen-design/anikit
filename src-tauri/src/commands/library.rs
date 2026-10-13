@@ -12,7 +12,7 @@ use crate::core::config::{self, LibraryEntry};
 use crate::core::json_io::DataError;
 use crate::core::library::{self, Library};
 use crate::core::space::{self, Space};
-use crate::core::{backup, merge, relations};
+use crate::core::{backup, merge, paths, relations};
 
 /// 应用状态：当前储存空间 + 当前打开的素材库（同一时刻只开一个库）+ 导入任务注册表 + 收件箱实例 + 撤销栈
 pub struct AppState {
@@ -228,6 +228,30 @@ fn apply_count_orphans(state: &AppState, name: &str) -> Result<u64, String> {
     state.space.lock().map_err(|e| e.to_string())?.clone().ok_or_else(|| "请先打开储存空间".to_string())?;
   let orphans = space::library_orphans(&space.root, name).map_err(|e| e.to_string())?;
   Ok(orphans.len() as u64)
+}
+
+/// 无主资产「在资源管理器中打开」（OrphanInfosAlert 行尾按钮，2026-10-13 修复：原复用工作空间
+/// reveal_path，其校验口径 = 当前空间 workspace 内，assets 池路径必败「路径不在当前工作空间内」）：
+/// 校验基准 = 当前空间 assets 池内 + 存在，再 shell_open::reveal
+#[tauri::command]
+pub fn reveal_orphan_info(state: State<AppState>, abs_path: String) -> Result<(), String> {
+  crate::adapters::shell_open::reveal(&validated_pool_path(&state, &abs_path)?)
+}
+
+/// 按路径校验（无主资产打开）：当前空间 assets 池内 + 存在
+/// （commands::workspace::validated_ws_path 同构，校验基准从 workspace 根换成空间级素材池）
+fn validated_pool_path(state: &AppState, abs_path: &str) -> Result<std::path::PathBuf, String> {
+  let space =
+    state.space.lock().map_err(|e| e.to_string())?.clone().ok_or_else(|| "请先打开储存空间".to_string())?;
+  let pool = paths::assets_dir(&space.root);
+  let target = std::path::PathBuf::from(abs_path);
+  if !crate::services::workspace::is_under(&pool, &target) {
+    return Err("路径不在素材池内".to_string());
+  }
+  if !target.exists() {
+    return Err("条目已不存在（可能刚被移动或删除）".to_string());
+  }
+  Ok(target)
 }
 
 /// 删除资源库（3.2 删除×；确认弹窗在前端）：返回删除后剩余库名列表（按 libraryOrder 序），
@@ -684,6 +708,28 @@ mod tests {
     // 库不存在报中文错
     let err = apply_count_orphans(&state, "不存在").unwrap_err();
     assert!(err.contains("资源库"), "应报中文错：{err}");
+  }
+
+  /// 无主资产打开校验（2026-10-13）：池内现存 info 放行；workspace 内 / 池内不存在 / `..` 逃逸三拒
+  /// （原复用工作空间 reveal_path 对 assets 池路径必败「不在当前工作空间内」的回归钉）
+  #[test]
+  fn pool_path_validation_accepts_info_rejects_others() {
+    let (_dir, state) = make_state();
+    let assets = seed_library(&state, "库A", &["AN-ORPHAN"], &[]);
+    let info = crate::core::paths::info_dir(&assets, "AN-ORPHAN");
+    assert!(validated_pool_path(&state, &info.to_string_lossy()).is_ok(), "池内现存 info 应放行");
+
+    let ws_root = state.space.lock().unwrap().as_ref().unwrap().root.join(crate::core::space::WORKSPACE_DIR);
+    let err = validated_pool_path(&state, &ws_root.to_string_lossy()).unwrap_err();
+    assert!(err.contains("素材池"), "workspace 路径应报素材池越界：{err}");
+
+    let missing = assets.join("AN-GONE.info");
+    let err = validated_pool_path(&state, &missing.to_string_lossy()).unwrap_err();
+    assert!(err.contains("已不存在"), "池内不存在应报已不存在：{err}");
+
+    let escape = assets.join("..").join("workspace");
+    let err = validated_pool_path(&state, &escape.to_string_lossy()).unwrap_err();
+    assert!(err.contains("素材池"), "`..` 逃逸应报素材池越界：{err}");
   }
 
   /// 合并端到端（2026-09-26）：源库五文件 + 档案封面 + 空间级 relations 并入当前库（落盘 + 索引），

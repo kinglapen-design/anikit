@@ -31,11 +31,12 @@ export async function initOrphanInfosListener(): Promise<void> {
   });
 }
 
-// 孤儿 info 在资源管理器中打开：reveal_path 通用命令（commands::workspace，shell_open reveal——
-// 文件定位选中 / 目录打开；o.path = info 目录完整路径直传）；失败 toast
+// 孤儿 info 在资源管理器中打开：专用命令 reveal_orphan_info（commands::library，校验口径 = 当前空间
+// assets 池内 + 存在——2026-10-13 前复用工作空间 reveal_path，对池内路径必败「不在当前工作空间内」；
+// o.path = info 目录完整路径直传）；失败 toast
 export async function revealOrphanInfo(absPath: string): Promise<void> {
   try {
-    await invoke("reveal_path", { absPath });
+    await invoke("reveal_orphan_info", { absPath });
   } catch (e) {
     useToastStore().notify({ message: String(e), icon: "fail" });
   }

@@ -342,6 +342,7 @@ pub fn run() {
       commands::library::rename_library,
       commands::library::list_merge_candidates,
       commands::library::merge_libraries,
+      commands::library::reveal_orphan_info,
       commands::workspace::workspace_root,
       commands::workspace::list_workspace_dir,
       commands::workspace::ws_dir_stats,
