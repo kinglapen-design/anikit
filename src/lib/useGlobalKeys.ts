@@ -1,6 +1,9 @@
 // 全局键盘 composable（2026-08-12 自 App.vue 拆出，规范第 3 条行数控制）：
 // window keydown 四处理器（剪贴板导入 / 撤销重做 / 选择 / 操作快捷键）+ 注册注销；
-// 输入框豁免判定 isEditableTarget 为 App / AssetGrid（空格）共用
+// 打开类（Enter / Ctrl+Enter）与新建类（N 组合 + "/"）两组 2026-10-15 点亮轮拆为
+// useGlobalKeysOpen / useGlobalKeysCreate 两文件（本文件近 500 行硬上限），共享让位判定
+// globalKeysGuard；输入框豁免判定 isEditableTarget 同迁 guard，此处 re-export
+//（App / AssetGrid 空格 / PreviewPanel / useSpaceZoom 既有引用不破）。
 //（SidebarLeft 的 Ctrl+N 随 7.1 十八轮左栏轮撤下——新增按钮新稿无位，接菜单栏业务时恢复）。
 // 预览让位判定 per-panel（2026-09-25 会话化）：事件时刻取激活 panel 的预览会话
 //（activePreviewSession，只查不建）——**激活 panel 预览中**才让位 / 生效，其余 panel 的预览不抢全局键。
@@ -31,11 +34,12 @@ import {
 import { cloneFolderFlow, currentLinkTarget, deleteFoldersFlow, enterLinkPicker, findParentId, moveAssetsFlow, moveFoldersFlow } from "./menuOps";
 import { openPathWithDefaultApp } from "./wsOps";
 import { sendWsToAnimate } from "./menuSpecs/workspace";
+import { isEditableTarget } from "./globalKeysGuard";
+import { useOpenKeys } from "./useGlobalKeysOpen";
+import { useCreateKeys } from "./useGlobalKeysCreate";
 
-// 输入框豁免判定：文本输入态（input / textarea / contenteditable）不拦截全局快捷键
-export function isEditableTarget(t: HTMLElement): boolean {
-  return t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable;
-}
+// isEditableTarget 实现已迁 globalKeysGuard（2026-10-15），re-export 保持既有引用路径不破
+export { isEditableTarget };
 
 export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySetup: () => boolean }): void {
   const content = useContentStore();
@@ -45,6 +49,9 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
   const search = useSearchStore();
   const tabs = useTabsStore();
   const ui = useUiStore();
+  // 打开类（Enter / Ctrl+Enter）+ 新建类（N 组合 / "/"）两组子 composable（同组件实例注册）
+  useOpenKeys(opts);
+  useCreateKeys(opts);
 
   // 粘贴仲裁（2026-09-17 实机走查修订）：内部剪贴板非空时——系统剪贴板序号未变 = 内部粘贴
   //（链接 / 移动，原 6.1 定案）；**序号变了 = 用户在外部复制了新内容**（覆盖 APP 内剪贴板）→
@@ -289,9 +296,10 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       return;
     }
     // Shift+Enter = 默认应用打开（6.3 右键菜单同款，2026-07-29 用户设计）；
-    // 动作本体 = placementOps.openAssetWithDefaultApp（2026-10-13 抽出——双击分流共用）
+    // 动作本体 = placementOps.openAssetWithDefaultApp（2026-10-13 抽出——双击分流共用）；
+    // 回收站同放行（2026-10-15：recycle 菜单该项本就可点，原 !isRecycleView 守卫排除 = 口径不一瑕疵）
     if (e.key === "Enter" && e.shiftKey) {
-      if (selection.count === 1 && !content.isRecycleView) {
+      if (selection.count === 1) {
         e.preventDefault();
         const p = content.visiblePlacements.find((v) => placementKey(v) === selection.first);
         if (p) void openAssetWithDefaultApp(p.assetId);
@@ -393,9 +401,10 @@ export function useGlobalKeys(opts: { previewParam: string | null; needLibrarySe
       e.preventDefault();
       return;
     }
-    // Ctrl+E = 发送至 Animate（8.3，PRD 07-04）：单选 fla 素材生效（菜单同款口径；回收站只读不发）
+    // Ctrl+E = 发送至 Animate（8.3，PRD 07-04）：单选 fla 素材生效（菜单同款口径）；
+    // 回收站同放行（2026-10-15：PRD 07-04 入口含回收站右键「发送查看确认」，原守卫排除 = 口径不一瑕疵勾销）
     if (k === "e") {
-      if (selection.selectedFolders.size === 0 && selection.count === 1 && !content.isRecycleView) {
+      if (selection.selectedFolders.size === 0 && selection.count === 1) {
         const p = content.visiblePlacements.find((v) => placementKey(v) === selection.first);
         if (p && p.ext === "fla") {
           e.preventDefault();

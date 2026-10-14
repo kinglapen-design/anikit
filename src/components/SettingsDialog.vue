@@ -18,8 +18,10 @@
 // doubleClickOpen）；自动导入 = 空间级 set_auto_import + 盘符查询 get_inbox_drive_letter；
 // 缓存 = get_cache_overview / clear_cache + library-thumbs-rebuilt 事件；插件 = cep_export_settings
 // 读写（护栏与后端 validate 同区间）；关于 = getVersion + show_logs_in_explorer。
-// 快捷键表 = 组件内静态数组（action / keys / bound），未接入行 = 不置灰、键位降四级 +「未接入」警告橙尾标
-//（三轮用户定：颜色即状态区分），点亮 = 直接改 bound 标志。字节格式化复用 lib/formatSize。
+// 快捷键表 = 组件内静态数组（action / keys / bound），2026-10-15 全量点亮（原未接入七行实绑 +
+// 回收站两键守卫放行 + Shift+Delete / Alt+F4 补全）；未接入行样式机制保留 = 不置灰、键位降四级 +
+//「未接入」警告橙尾标（三轮用户定：颜色即状态区分），后续新键未接时标 bound:false 即复用。
+// 字节格式化复用 lib/formatSize。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import BaseModal from "./modals/BaseModal.vue";
 import ActionButton from "./buttons/ActionButton.vue";
@@ -84,7 +86,9 @@ const DOUBLE_CLICK_OPTIONS = [
   { value: "app", label: "默认应用打开" },
 ] as const;
 
-// 快捷键表（bound = 已接入；点亮 = 直接改标志。排布 = 已接入在前，未接入橙标组殿后）
+// 快捷键表（2026-10-15 全量点亮：Enter / Ctrl+Enter / 新建类五键与 "/" 实绑 = useGlobalKeysOpen /
+// useGlobalKeysCreate，回收站 Shift+Enter / Ctrl+E 守卫放行；Shift+Delete / Alt+F4 两行补齐全菜单标注。
+// bound 字段与「未接入」橙标机制保留——后续新增未接键时标 bound:false 即可，无需再改模板）
 const SHORTCUTS: { action: string; keys: string; bound: boolean }[] = [
   { action: "撤销", keys: "Ctrl+Z", bound: true },
   { action: "重做", keys: "Ctrl+Shift+Z", bound: true },
@@ -97,23 +101,25 @@ const SHORTCUTS: { action: string; keys: string; bound: boolean }[] = [
   { action: "重命名", keys: "F2", bound: true },
   { action: "创建副本", keys: "Ctrl+D", bound: true },
   { action: "删除", keys: "Delete", bound: true },
+  { action: "从文件夹中移除", keys: "Shift+Delete", bound: true },
   { action: "移动", keys: "Ctrl+Y", bound: true },
   { action: "链接管理", keys: "Ctrl+J", bound: true },
   { action: "添加链接", keys: "Ctrl+L", bound: true },
   { action: "发送至 Animate", keys: "Ctrl+E", bound: true },
+  { action: "打开预览", keys: "Enter", bound: true },
+  { action: "新标签页打开", keys: "Ctrl+Enter", bound: true },
   { action: "在默认应用打开", keys: "Shift+Enter", bound: true },
+  { action: "新建文件夹", keys: "Ctrl+Shift+N", bound: true },
+  { action: "新建子文件夹", keys: "Ctrl+Shift+Alt+N", bound: true },
+  { action: "新建档案", keys: "Shift+N", bound: true },
+  { action: "转换为档案", keys: "Alt+N", bound: true },
+  { action: "展开或收起所有文件夹", keys: "/", bound: true },
   { action: "搜索", keys: "Ctrl+F", bound: true },
   { action: "切换布局", keys: "Alt+1~4", bound: true },
   { action: "悬停预览", keys: "空格", bound: true },
   { action: "呼出或隐藏窗口", keys: "Alt+`", bound: true },
   { action: "偏好设置", keys: "Ctrl+,", bound: true },
-  { action: "打开预览", keys: "Enter", bound: false },
-  { action: "新标签页打开", keys: "Ctrl+Enter", bound: false },
-  { action: "新建文件夹", keys: "Ctrl+Shift+N", bound: false },
-  { action: "新建子文件夹", keys: "Ctrl+Shift+Alt+N", bound: false },
-  { action: "新建档案", keys: "Shift+N", bound: false },
-  { action: "转换为档案", keys: "Alt+N", bound: false },
-  { action: "展开或收起所有文件夹", keys: "", bound: false },
+  { action: "退出", keys: "Alt+F4", bound: true },
 ];
 
 // Esc 关闭（LinkManageDialog 同径：capture + stopPropagation；输入框内 Esc 不关窗——AppMenu 同口径）

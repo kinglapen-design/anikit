@@ -23,8 +23,9 @@
 // 重命名 = 行内命名态入口：卡片经 selection.renamingKey（AssetCard 接管提交），
 // 文件夹经 selection.namingFolderCardId（FolderStrip 接管提交），与双击名称同径；
 // 新建 = 库「先建后命名」口径——默认名创建后当前视口正是父目录时进卡片行内命名态。
-// 快捷键标注与库同口径：F2 / Delete / Ctrl+C·X·V / Shift+Enter / Ctrl+D / Ctrl+E 已绑
-//（useGlobalKeys ws 分支）；Enter / Ctrl+Enter / Ctrl+Shift+N / Ctrl+Shift+Alt+N 仅展示（库同）。
+// 快捷键标注与库同口径全绑：F2 / Delete / Ctrl+C·X·V / Shift+Enter / Ctrl+D / Ctrl+E
+//（useGlobalKeys ws 分支）+ Enter / Ctrl+Enter（useGlobalKeysOpen）/ Ctrl+Shift+N / Ctrl+Shift+Alt+N
+//（useGlobalKeysCreate——当前目录新建，2026-10-15 全量点亮轮）。
 import { nextTick } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";

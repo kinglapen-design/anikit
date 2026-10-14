@@ -90,8 +90,9 @@ function folderMenuEntries(folder: { id: string; name: string }, parentId: strin
     },
     {
       label: "转换为档案",
-      shortcut: "菜单+N",
+      // Alt+N（2026-10-15 全量点亮轮统一标注：appMenu / 速查表同键，旧「菜单+N」标注废除）；
       // 两段式（3.2 一轮）：有子文件夹先弹警告确认，确认后剔除层级转换
+      shortcut: "Alt+N",
       action: () => convertToArchiveFlow(folder.id),
     },
     "divider",
