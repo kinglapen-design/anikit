@@ -27,11 +27,14 @@ export interface LayoutResult {
 }
 
 // 网格内边距（7.1 内容容器轮贴稿——中间面板-内容容器-列表容器 padding 12 12 0）：
-// 左 0 / 上 0（asset-section padding 上左 12 承担），右 12（滚动条贴右边框后卡片右缘距边框恒 12，
-// 滚动条 6px 与命中区 12 均在此带内）；底 66 = 悬浮栏遮挡补偿（7.1 二十二轮，2026-08-31：
+// 上 0（asset-section padding 上 12 承担）；**左 12 入布局**（2026-10-15 用户实机报「框选没有
+// 包含左边距、卡片投影被裁剪」——原左 12 由 asset-section padding 承担在 viewport 外，
+// grid-viewport overflow:hidden 把首列卡 hover 投影左缘裁掉、框选矩形也进不了左边距带；
+// 移入布局后视口满宽、左右同构，框选与投影各有 12 呼吸带）；右 12（滚动条贴右边框后卡片右缘
+// 距边框恒 12，滚动条 6px 与命中区 12 均在此带内）；底 66 = 悬浮栏遮挡补偿（7.1 二十二轮，2026-08-31：
 // 悬浮栏距底 12 + 栏高 42 + 栏与末行卡片呼吸距 12，JS 滚动 translateY 不吃 CSS padding——
 // 底部留白计入布局总高，末行卡片才能滚出遮挡区；稿值组合非新造）
-export const PAD = { top: 0, right: 12, bottom: 66, left: 0 };
+export const PAD = { top: 0, right: 12, bottom: 66, left: 12 };
 // 卡片间距（figma 42 文件卡片列表 gap 12，2026-08-10）：列间距 12，行间距 12
 export const COL_GAP = 12;
 export const ROW_GAP = 12;

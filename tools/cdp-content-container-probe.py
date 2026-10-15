@@ -6,8 +6,9 @@
 #       用户实机纠正 / 拖钮 10px 圆 二级 无边框）
 #   T4  按钮组 gap 2 + 4 钮 30×30 + 插件业务禁用 + 右栏展开态无第五钮
 #   T4b 收起右栏 → 第五钮「展开详细信息」现（collapse-sidebar flip-h）；点它 → 右栏展开 + 钮消失
-#   T5  列表容器 padding：asset-section 上 12 / 左 12 / 下 0 / 右 0（稿右 12 由布局 PAD.right 承担——
-#       滚动条贴右缘口径，ContentArea 注释在案）+ 网格最右卡右缘距视口右缘 12（±1）
+#   T5  列表容器 padding：asset-section 上 12 / 左 0 / 下 0 / 右 0（左右 12 由布局 PAD 承担——
+#       左 12 于 2026-10-15 自 section 移入 PAD.left：viewport 满宽，框选覆盖左边距带、
+#       首列卡投影不被左缘裁剪）+ 网格最右卡右缘距视口右缘 12（±1）+ 首列卡左缘距视口左缘 12（±1）
 #   T6  文件卡：壳 box 绝对定位 + 芯 FileCard g2 #1C1C1C 圆角 8 + .kc-clip 裁剪层 + 渐变罩
 #       （名称 13/18 Bold 一级 + 简介 mono 12/16 二级 + padding 24/12/12）+ fla 卡 FormatBadge
 #       左上 12/12（kc-float 半透明-2 底 + 圆角 4 + mono 12/16 Bold 二级）+ png 静态图无徽标；
@@ -342,22 +343,27 @@ async def main():
             back4 = await ev("document.querySelectorAll('" + TB + " .btn-group .ic-btn').length")
             check("T4b2 点第五钮 → 右栏展开 + 钮消失", back4 == 4, str(back4))
 
-            # T5 列表容器 padding + 网格最右卡右缘（稿右 12 = PAD.right 口径）
+            # T5 列表容器 padding + 网格最右卡右缘（稿左右 12 = 布局 PAD 口径，2026-10-15 左 12 入布局）
             sec = await ev(
                 "(() => { const el = document.querySelector('.content-area .asset-section');"
                 " const s = getComputedStyle(el);"
                 " return { pt: s.paddingTop, pr: s.paddingRight, pb: s.paddingBottom, pl: s.paddingLeft }; })()")
-            check("T5a 列表容器 padding 上12 左12 下0 右0（右 12 归布局 PAD.right，滚动条贴缘）",
-                  isinstance(sec, dict) and sec.get("pt") == "12px" and sec.get("pl") == "12px"
+            check("T5a 列表容器 padding 上12 左0 下0 右0（左右 12 归布局 PAD，viewport 满宽——框选覆盖左边距带）",
+                  isinstance(sec, dict) and sec.get("pt") == "12px" and sec.get("pl") == "0px"
                   and sec.get("pb") == "0px" and sec.get("pr") == "0px",
                   json.dumps(sec))
             edge5 = await ev(
                 "(() => { const vp = document.querySelector('.content-area .grid-viewport').getBoundingClientRect();"
                 " const rs = [...document.querySelectorAll('.content-area .asset-card')]"
                 "   .map((c) => c.getBoundingClientRect().right);"
-                " return { gap: vp.right - Math.max(...rs) }; })()")
+                " const ls = [...document.querySelectorAll('.content-area .asset-card')]"
+                "   .map((c) => c.getBoundingClientRect().left);"
+                " return { gap: vp.right - Math.max(...rs), lg: Math.min(...ls) - vp.left }; })()")
             check("T5b 网格最右卡右缘距视口右缘 12（±1）",
                   isinstance(edge5, dict) and abs(edge5.get("gap", 0) - 12) <= 1,
+                  json.dumps(edge5))
+            check("T5c 首列卡左缘距视口左缘 12（±1，PAD.left——投影/框选呼吸带）",
+                  isinstance(edge5, dict) and abs(edge5.get("lg", 0) - 12) <= 1,
                   json.dumps(edge5))
 
             card6 = await ev(

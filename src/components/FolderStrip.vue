@@ -162,7 +162,8 @@ const gapBar = computed(() => {
   if (!el || !vr) return null;
   const r = el.getBoundingClientRect();
   // 钳制口径同 AssetGrid gapClient（2026-09-13 四轮）：纵向求交（条带随 canvas 滚出视口不画到
-  // 工具栏上）；横向不钳——首卡前插落在宿主列表容器 padding-left 12 留白带是设计口径
+  // 工具栏上）；横向不钳——首卡前插落在左 12 边距带是设计口径（与右侧 PAD.right 对称；
+  // 边距带 2026-10-15 起由网格 PAD.left 承担，原宿主「列表容器 padding-left 12」已撤）
   const top = Math.max(r.top, vr.top);
   const bottom = Math.min(r.bottom, vr.bottom);
   if (bottom <= top) return null;

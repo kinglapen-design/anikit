@@ -2,7 +2,8 @@
 // 内容区素材网格：自适应布局 + 自定义 transform 虚拟滚动（踩坑 005 定案）。
 // 卡片列表共用一个滚动（03_UI 布局/03_中间面板 03）：文件夹区块与"内容"副标题
 // 作为 canvas 头部随网格一起滚动，网格 boxes 按头部高度偏移；
-// 滚动条贴 viewport 右缘（不占布局），asset-section 右 padding 4 作呼吸。
+// 滚动条贴 viewport 右缘（不占布局）；卡片左右边距各 12 由布局 PAD 承担（layouts.ts——
+// 左 12 自 2026-10-15 入布局：框选矩形覆盖左边距带、首列卡投影不被 viewport 左缘裁剪）。
 // 布局 / 虚拟滚动编排在 lib/useGridLayout，空格放大预览在 lib/useSpaceZoom（2026-08-12 拆出）。
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import AssetCard from "./AssetCard.vue";
@@ -398,9 +399,9 @@ const resolveGap = makeGridResolver({
 // 非激活 panel 不渲染（2026-09-13 实机走查修复"提示线跑到列表盒子外"）：dockview 非激活标签页
 // 不卸载仅 display:none，隐藏实例的层 rect 全零 → 竖块会按 layer 原始坐标画到窗口左上盒子外。
 // 钳制口径（同日四轮定稿）：**纵向求交、横向不钳**——纵向：Teleport 无 overflow 裁剪，滚出视口的
-// 间隙行会把竖块画到工具栏 / 标签栏上，求交后不渲染；横向：行首间隙 g.left=-GAP 落在宿主
-//（列表容器 padding-left 12）留白带是设计口径（与右侧 PAD.right 对称，"和右侧一样在边距处"），
-// 钳进视口反而盖住首卡（三轮"最左侧提示没了 / 覆盖卡片"两轮试错定稿）
+// 间隙行会把竖块画到工具栏 / 标签栏上，求交后不渲染；横向：行首间隙落在左 12 边距带是设计口径
+//（与右侧 PAD.right 对称，"和右侧一样在边距处"；边距带 2026-10-15 起由布局 PAD.left 承担，
+// 原宿主「列表容器 padding-left 12」已撤），钳进视口反而盖住首卡（三轮"最左侧提示没了 / 覆盖卡片"两轮试错定稿）
 const gapClient = computed(() => {
   const g = dragView.gap;
   // 只渲染归属网格的提示线（2026-09-17 分屏跨视口改造，替代 panelActive 门控——
@@ -672,13 +673,14 @@ onBeforeUnmount(() => {
 }
 /* 分屏跨视口并入落点（2026-09-17 实机走查「标签分屏后文件要能跨分屏拖拽」）：
    目标 pane 级高亮 = 并入同款——品牌/半透明填充 + 2px 品牌描边（inset 不占布局，§20 口径）。
-   ::after 覆盖层绘制（pointer-events none 不挡卡片 / 滚动条）：右收 12 / 底收 12——视口几何
-   右 0 底 0（asset-section 右 0 让滚动条贴边框、底 0），与 section 承担的左 12 / 上 12 对齐成
-   四边等距框（2026-10-01 走查：高亮左有边距右贴边，左右不统一） */
+   ::after 覆盖层绘制（pointer-events none 不挡卡片 / 滚动条）：右收 12 / 底收 12 / 左收 12——
+   视口几何右 0 底 0 左 0（asset-section 右 0 让滚动条贴边框、底 0；左 12 边距 2026-10-15 起
+   入布局 PAD.left），与 section 承担的上 12 对齐成四边等距框（2026-10-01 走查：高亮左有边距
+   右贴边，左右不统一） */
 .grid-viewport.pane-drop::after {
   content: "";
   position: absolute;
-  inset: 0 var(--n-space-12) var(--n-space-12) 0;
+  inset: 0 var(--n-space-12) var(--n-space-12) var(--n-space-12);
   background: var(--n-brand-50);
   box-shadow: inset 0 0 0 2px var(--n-brand);
   pointer-events: none;
@@ -703,11 +705,14 @@ onBeforeUnmount(() => {
   will-change: transform;
 }
 /* 头部：文件夹区块与"内容"副标题（区块间隔 24——figma 42 列表 gap 24，2026-08-10），
-   grid 自然流即时精确，不参与缩放 */
+   grid 自然流即时精确，不参与缩放；
+   左 padding 12 对齐卡片列左缘（layouts.ts PAD.left 12 入布局，2026-10-15——区块条带
+   与素材卡左缘齐；右 12 由各 strip 自收 padding-right 承担） */
 .grid-header {
   display: flex;
   flex-direction: column;
   gap: var(--n-space-24);
+  padding-left: var(--n-space-12);
 }
 /* 卡片层：translateY 实时跟随头部高度（逐帧重排定案后无 scale 过渡，2026-08-10）；
    显式高度 = 网格总高（2026-07-28 复验反馈 2/3 根因：子卡片全绝对定位、层高度塌缩为 0——
@@ -721,10 +726,11 @@ onBeforeUnmount(() => {
   will-change: transform;
 }
 /* 分组标题（3.5 二轮）：canvas 内原位标题——absolute 于 cards-layer 坐标系（top 由 groupHeaders 给），
-   高 26（7.1 内容容器轮 SectionTitle group 稿值）；右缘 12 与卡片右缘对齐（布局 PAD.right）；随 canvas 滚动 */
+   高 26（7.1 内容容器轮 SectionTitle group 稿值）；左缘 12（PAD.left）右缘 12（PAD.right）与卡片
+   行列对齐；随 canvas 滚动 */
 .group-header {
   position: absolute;
-  left: 0;
+  left: 12px;
   right: 12px;
   height: 26px;
   border-radius: var(--n-radius-6);
@@ -735,10 +741,10 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 0 0 2px var(--n-brand);
 }
 /* 空自由组提示框（2026-09-17 无规则空组）：小高度占位 + 居中提示（辅助说明文字档）；
-   本身即拖入落点；左缘 0 右缘 12 与卡片列对齐 */
+   本身即拖入落点；左缘 12（PAD.left）右缘 12（PAD.right）与卡片列对齐 */
 .free-empty-hint {
   position: absolute;
-  left: 0;
+  left: 12px;
   right: 12px;
   display: flex;
   align-items: center;
@@ -760,7 +766,7 @@ onBeforeUnmount(() => {
    标题文本站位不动；阴影随 shift 让位同上移，[34,66] 全程连续覆盖（上移部分由钉顶列头盖住） */
 .sticky-group-header {
   position: absolute;
-  left: 0;
+  left: 12px;
   right: 12px;
   height: 26px;
   background: var(--n-g1);

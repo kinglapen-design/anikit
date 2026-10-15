@@ -276,7 +276,8 @@ function onKeydown(e: KeyboardEvent): void {
 </template>
 
 <style scoped>
-/* 包内视图容器：占满素材区（ContentArea .asset-section 承担 padding 12 0 0 12——右 0 让滚动条贴右边框），
+/* 包内视图容器：占满素材区（ContentArea .asset-section 承担 padding 12 0 0 0——右 0 让滚动条贴右边框；
+   左 12 边距 2026-10-15 起随素材网格同轮改由 .pack-scroll 自承，与网格 PAD.left 同口径），
    relative 供 ScrollThumb 锚定；2026-09-13 走查核实：thumb 已在面板右缘（.pack-scroll 自承右 padding），无需整改 */
 .seq-pack {
   position: relative;
@@ -289,7 +290,9 @@ function onKeydown(e: KeyboardEvent): void {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* 右缘留白：卡片右缘距中栏外边框 16（素材网格同口径） */
+  /* 左缘留白 12：随素材网格 PAD.left 同口径（2026-10-15 自 asset-section 移入——原由 section
+     padding-left 承担）；右缘留白：卡片右缘距中栏外边框 16（素材网格同口径） */
+  padding-left: var(--n-space-12);
   padding-right: var(--n-space-16);
 }
 .pack-grid {

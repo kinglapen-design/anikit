@@ -205,14 +205,16 @@ function onRootPointerdown(e: PointerEvent): void {
   min-height: 0;
   min-width: 0;
 }
-/* 卡片列表（7.1 内容容器轮贴稿——列表容器 padding 12 12 0）：上 12 / 左 12 / 下 0；
-   右 0——滚动条紧贴右边框（卡片右缘距边框 12 由布局 PAD.right 12 承担，layouts.ts） */
+/* 卡片列表（7.1 内容容器轮贴稿——列表容器 padding 12 12 0）：上 12 / 右 0 / 下 0 / 左 0；
+   右 0——滚动条紧贴右边框；左右 12 边距统一由布局 PAD 承担（layouts.ts——左 12 于 2026-10-15
+   自本区移入布局：viewport 满宽后框选矩形可覆盖左边距带、首列卡 hover 投影不再被
+   viewport overflow 左缘裁剪，与右侧同构） */
 .asset-section {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: var(--n-space-12) 0 0 var(--n-space-12);
+  padding: var(--n-space-12) 0 0 0;
 }
 /* 预览模式根：占满中栏；全屏时 fixed 铺满窗口（2026-07-25 定案：显示器全屏）。
    悬浮栏宿主（FloatBarHost）挂 content-area 根部两分支外（预览进出不卸载 = morph 成立前提）；

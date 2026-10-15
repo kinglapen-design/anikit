@@ -32,7 +32,7 @@ function onSort(col: string): void {
 </script>
 
 <template>
-  <!-- 钉顶壳：absolute 满宽（右缘 12 = 网格 PAD.right，与行 box 右缘齐——列头列与行列严格对齐）；
+  <!-- 钉顶壳：absolute 满宽（左 12 = PAD.left / 右缘 12 = 网格 PAD.right，与行 box 左右缘齐——列头列与行列严格对齐）；
        top 由 AssetGrid :style 驱动（滚过顶钉住） -->
   <div class="list-header">
     <ListHeaderCore :sort-key="sortKey" :sort-dir="sortDir" @sort="onSort" />
@@ -40,12 +40,13 @@ function onSort(col: string): void {
 </template>
 
 <style scoped>
-/* 钉顶壳（7.1 换代）：列头满宽区 right 12 对齐行右缘（旧 padding 右 24 对齐口径随新件同构列构废除）；
-   高 34 = 芯件稿值（旧 46 废除）；滚动条区由 PAD.right 承担与网格卡同口径 */
+/* 钉顶壳（7.1 换代）：列头满宽区左 12（PAD.left，2026-10-15 入布局）右 12 对齐行缘
+   （旧 padding 右 24 对齐口径随新件同构列构废除）；高 34 = 芯件稿值（旧 46 废除）；
+   滚动条区由 PAD.right 承担与网格卡同口径 */
 .list-header {
   position: absolute;
   top: 0;
-  left: 0;
+  left: 12px;
   right: 12px;
   z-index: 5;
 }
