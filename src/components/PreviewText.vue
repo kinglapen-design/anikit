@@ -66,6 +66,7 @@ const rendered = computed(() => {
 // 大纲栏开关 = store 会话态（切素材保持，关预览复位）；当前节行号（滚动联动高亮，null = 首个标题之前）
 const outlineOpen = computed(() => isMd.value && preview.mdOutline);
 const activeOutlineLine = ref<number | null>(null);
+const outlineWidth = ref(168); // 大纲栏宽（右缘拖拽调宽，组件内 clamp 120-360；会话级——切素材 / 开合保持）
 
 const stateText = computed(() => {
   if (saveState.value === "saving") return "保存中…";
@@ -492,8 +493,8 @@ watch(
     <!-- md = 编辑器：预览态渲染（v-show 不重建，滚动由 keepPos 保活恢复）↔ 编辑态（单栏 / 分屏左码右渲） -->
     <template v-if="isMd">
       <div class="md-row">
-        <!-- 大纲栏（2026-10-15 大纲轮；MdOutline 纯展示件，v-if 开合、进场 150ms 缓出，速查 §71） -->
-        <MdOutline v-if="outlineOpen" :items="outlineItems" :active-line="activeOutlineLine" @jump="onOutlineJump" />
+        <!-- 大纲栏（2026-10-15 大纲轮；MdOutline 纯展示件，v-if 开合、进场 150ms 缓出；右缘拖拽调宽，速查 §71） -->
+        <MdOutline v-if="outlineOpen" v-model:width="outlineWidth" :items="outlineItems" :active-line="activeOutlineLine" @jump="onOutlineJump" />
         <div class="md-col">
           <div
             v-show="!editing"
