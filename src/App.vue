@@ -37,6 +37,7 @@ import ImportDialog from "./components/ImportDialog.vue";
 import SequenceDialog from "./components/SequenceDialog.vue";
 import FailedListDialog from "./components/FailedListDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
+import LinkScanDialog from "./components/LinkScanDialog.vue";
 import DupScanDialog from "./components/DupScanDialog.vue";
 import LinkManageDialog from "./components/LinkManageDialog.vue";
 import RecycleConfirmDialog from "./components/RecycleConfirmDialog.vue";
@@ -70,6 +71,7 @@ import { playAlert } from "./lib/sounds";
 import { osFileDragHover, osFileDragHoverEnd, isOsDragOutActive } from "./lib/dragOperation";
 import { closePluginPanel, pluginPanelState } from "./lib/pluginPanel";
 import { dupScanState } from "./lib/dupScanOps";
+import { linkScanState } from "./lib/linkScanOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
 import { useSidebarAnim } from "./lib/useSidebarAnim";
 import { useWindowStatePersistence } from "./lib/windowState";
@@ -530,6 +532,8 @@ async function togglePin(): Promise<void> {
     <DuplicateDialog v-if="content.importConflicts && content.importConflicts.length > 0" />
     <!-- 扫描重复文件（2.7 二轮，35 稿 + 合并前确认）：汉堡"查找" / 新增菜单触发 -->
     <DupScanDialog v-if="dupScanState.groups" />
+    <!-- 扫描文件/档案链接（2026-10-16 立项，PRD 03_查找文件-04）：查找 / 新增 / 快速访问·回收站空白同入口 -->
+    <LinkScanDialog v-if="linkScanState.groups" />
     <!-- 链接管理弹窗（17 稿，6.2 三轮）：文件右键 Ctrl+J / 详情链接区块添加钮触发 -->
     <LinkManageDialog v-if="selection.linkManageDraft" />
     <!-- 回收站彻底删除确认窗（6.1 二轮）：虚拟片段引用警示，不可恢复无撤销 -->

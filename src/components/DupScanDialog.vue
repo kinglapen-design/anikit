@@ -11,6 +11,7 @@ import ActionButton from "./buttons/ActionButton.vue";
 import Radio from "./buttons/Radio.vue";
 import DupScanGroupRow from "./DupScanGroupRow.vue";
 import ScrollThumb from "./ScrollThumb.vue";
+import "./scanDialog.css";
 import { formatSize } from "../lib/formatSize";
 import {
   dupScanState,
@@ -70,8 +71,8 @@ function thumbUrl(a: DupAsset): string | null {
     @close="closeScan"
   >
     <!-- 屏 1：结果列表（35 稿）；悬浮滚轮悬停显隐（主窗口统一交互） -->
-    <div v-if="dupScanState.step === 'groups'" class="scroll-wrap">
-      <div ref="groupsBody" class="groups-body kit-scroll">
+    <div v-if="dupScanState.step === 'groups'" class="scd-scroll">
+      <div ref="groupsBody" class="scd-body kit-scroll">
         <DupScanGroupRow
           v-for="g in dupScanState.groups"
           :key="g.hash"
@@ -148,12 +149,12 @@ function thumbUrl(a: DupAsset): string | null {
 
     <template #actions>
       <!-- 屏 1 底部（35 稿：62 高 / padding 12 12 12 24 / 左计数右按钮；按钮次左主右新模态口径） -->
-      <div v-if="dupScanState.step === 'groups'" class="scan-bottom">
-        <div class="summary">
-          <span class="sel">已选择 <b>{{ selectedFileCount }}</b> 个文件</span>
-          <span class="saved">可节约 {{ formatSize(savedBytes) }} 储存空间</span>
+      <div v-if="dupScanState.step === 'groups'" class="scd-bottom">
+        <div class="scd-summary">
+          <span class="scd-sel">已选择 <b>{{ selectedFileCount }}</b> 个文件</span>
+          <span class="scd-saved">可节约 {{ formatSize(savedBytes) }} 储存空间</span>
         </div>
-        <div class="btns">
+        <div class="scd-btns">
           <ActionButton variant="cancel" size="lg" label="取消" :disabled="dupScanState.busy" @click="closeScan" />
           <ActionButton
             variant="primary"
@@ -165,7 +166,7 @@ function thumbUrl(a: DupAsset): string | null {
         </div>
       </div>
       <!-- 屏 2 底部：上一步（次，左）/ 确认合并（主，右）——次左主右 -->
-      <div v-else class="scan-bottom end">
+      <div v-else class="scd-bottom end">
         <ActionButton variant="solid" size="lg" label="上一步" :disabled="dupScanState.busy" @click="backToGroups" />
         <ActionButton variant="primary" size="lg" label="确认合并" :disabled="dupScanState.busy" @click="confirmMerge" />
       </div>
@@ -174,34 +175,16 @@ function thumbUrl(a: DupAsset): string | null {
 </template>
 
 <style scoped>
-/* 壳 = modals/BaseModal framed（2026-09-20 R2 换代）：宽走 width prop（border-box 含 1px 边，
-   稿值屏 1 = 714 / 屏 2 = 970，旧真 border 3px 补偿随换代废除）；framed 自带 54 高标题栏 +
-   底 1px 通用/五级通栏 + 关闭 X（原 :deep(.titlebar) 覆盖与其 ::after 底线补画一并删除）；
-   内容各段（.scroll-wrap / .confirm-body）通栏自承，内层包裹 thumb 维持贴弹窗缘
-   （2026-09-13 实机走查贴右缘口径）；class 透传落在根 .bm-mask 上 → 壳样式须 :deep(.bm-modal) */
-.scan-dialog :deep(.bm-modal) {
-  max-width: calc(100vw - 96px); /* 旧壳 max-width 口径沿 */
-  transition: width 0.2s ease; /* 屏 1 ↔ 屏 2 宽度动画（旧壳既定；width 现由 prop inline 驱动） */
-}
-/* actions 槽：底部按钮行通栏不缩 */
-.scan-dialog :deep(.bm-actions) {
-  flex: none;
-}
-
-/* 滚动包裹层：relative 锚 ScrollThumb（悬浮滚轮悬停显隐，主窗口统一交互）。
-   真 border（2026-08-13 用户定）后弹窗边框占盒模型——滚轮贴内容区右缘与边框贴邻不重叠，
-   无需补画右缘线（原 box-shadow inset 时代的 ::after 补线已撤）；左列分隔线仍在内容区内，
-   滚轮会压，由 .list-wrap::after 上层补画 */
-.scroll-wrap,
+/* 壳 = modals/BaseModal framed（宽走 width prop：屏 1 = 714 / 屏 2 = 970）；壳覆盖（max-width 封顶 /
+   宽度动画 / actions 通栏）与屏 1 滚动区 / 底部按钮行样式 = scanDialog.css 扫描弹窗族共享件
+   （2026-10-16 抽出，LinkScanDialog 同用）；本文件 scoped 只剩屏 2（合并前确认双栏）特有样式。
+   滚轮贴内容区右缘与真 border 贴邻不重叠；左列分隔线在内容区内会被滚轮压，由 .list-wrap::after 上层补画 */
 .list-wrap,
 .keeper-wrap {
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-.scroll-wrap {
-  flex: 1;
 }
 .list-wrap {
   width: 250px;
@@ -222,11 +205,6 @@ function thumbUrl(a: DupAsset): string | null {
   background: var(--n-l-a3);
   z-index: 11;
   pointer-events: none;
-}
-
-/* —— 屏 1：内容自适应 + 上限自滚（原生条隐藏，滚轮 = ScrollThumb 悬浮件）—— */
-.groups-body {
-  max-height: calc(100vh - 280px);
 }
 
 /* —— 屏 2：双栏 —— */
@@ -407,55 +385,6 @@ function thumbUrl(a: DupAsset): string | null {
   text-overflow: ellipsis;
 }
 
-/* 底部（35 稿）：62 高 / padding 12 12 12 24；flex: 1 撑满 actions 通栏
-   （不撑满上边框线会断在内容左缘，DuplicateDialog 走查同口径）；顶线 ::after 通栏 */
-.scan-bottom {
-  position: relative;
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--n-space-12);
-  padding: var(--n-space-12) var(--n-space-12) var(--n-space-12) var(--n-space-24);
-  height: 62px;
-}
-.scan-bottom::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 1px;
-  background: var(--n-l-a3);
-}
-.scan-bottom.end {
-  justify-content: flex-end;
-}
-.summary {
-  display: flex;
-  align-items: center;
-  gap: var(--n-space-8);
-}
-/* 已选择 N 个文件（35 稿：标题档 16；N 品牌色） */
-.sel {
-  font-size: var(--n-fs-btn-lg);
-  line-height: var(--n-lh-btn-lg);
-  font-weight: var(--n-fw-bold);
-  color: var(--n-l2);
-}
-.sel b {
-  color: var(--n-brand);
-  font-weight: var(--n-fw-bold);
-}
-.saved {
-  font-size: var(--n-fs-body);
-  line-height: var(--n-lh-body);
-  color: var(--n-l3);
-}
-.btns {
-  display: flex;
-  gap: var(--n-space-12);
-}
 /* 合并 / 取消 / 确认合并 / 上一步 = ActionButton lg 宽自适应 + 左右 48（BaseModal 罩层口径，
-   2026-09-13 定稿值，35 稿 88×38 定宽随换代废除） */
+   2026-09-13 定稿值，35 稿 88×38 定宽随换代废除）；底部行样式 = scanDialog.css .scd-bottom 族 */
 </style>

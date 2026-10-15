@@ -2,8 +2,8 @@
 // 业务弹窗展区（阶段七换代盘点；2026-09-20 R2 旧件烧减轮后同步，2026-09-21 跟进）：
 // src/components/ 根目录 12 件业务弹窗全量收编 + 附属 OrphanInfosAlert。
 // 现状分三档：
-//   ① 本体已换代 modals/BaseModal framed（9 件）：BatchRenameDialog 973 / DuplicateDialog 970 /
-//     DupScanDialog 714·970 双屏 / GroupEditDialog 603 / GroupManageDialog 640（2026-09-21 随稿，§42 待办勾销）/ LinkManageDialog 602 /
+//   ① 本体已换代 modals/BaseModal framed（10 件）：BatchRenameDialog 973 / DuplicateDialog 970 /
+//     DupScanDialog 714·970 双屏 / LinkScanDialog 714（2026-10-16 扫描文件/档案链接）/ GroupEditDialog 603 / GroupManageDialog 640（2026-09-21 随稿，§42 待办勾销）/ LinkManageDialog 602 /
 //     BlockManageDialog 559 / DescEditDialog 482 / PropsDialog 481——依赖 store 数据或挂载即 invoke，
 //     按 pv-modal-shell 惯例静态复刻：壳 = pv-bm-shell（g3 底 + 1px g5 真 border + 大阴影 + 圆角 8 +
 //     壳 padding 0 + 54 高标题栏 标题 18/26 Bold 一级 + buttons/IconButton plain close-large），
@@ -18,7 +18,7 @@
 //     （新弹窗口径内嵌版：g3 + 1px g5 真 border + padding 24 / ActionButton 48 次左主右）；
 //     RecycleConfirmDialog 静态复刻 ConfirmModal danger（确认 = 彻底删除，只陈列绝不真弹）。
 // 复刻壳宽度按各组件稿值，高度按演示内容从简（本体多高随内容/视口）。
-import { ref } from "vue";
+import { ref, reactive } from "vue";
 import ActionButton from "../../components/buttons/ActionButton.vue";
 import IconButton from "../../components/buttons/IconButton.vue";
 import TextInput from "../../components/inputs/TextInput.vue";
@@ -34,12 +34,14 @@ import DetailBlockRow from "../../components/DetailBlockRow.vue";
 import GroupNameInput from "../../components/GroupNameInput.vue";
 import DuplicateRow, { type DupDecision } from "../../components/DuplicateRow.vue";
 import DupScanGroupRow from "../../components/DupScanGroupRow.vue";
+import LinkScanGroupRow from "../../components/LinkScanGroupRow.vue";
 import GroupRulesEditor from "../../components/GroupRulesEditor.vue";
 import PathErrorDialog from "../../components/PathErrorDialog.vue";
 import FailedListDialog from "../../components/FailedListDialog.vue";
 import type { BlockDraft } from "../../lib/blockOps";
 import type { ConflictItem } from "../../stores/content";
 import type { DupGroup } from "../../lib/dupScanOps";
+import type { LinkGroup } from "../../lib/linkScanOps";
 import type { GroupRule } from "../../lib/grouping";
 
 // —— FailedListDialog 真实弹出（2026-09-21 换代 ConfirmModal danger；props 直通；重试/退出仅关闭演示）——
@@ -111,6 +113,29 @@ const scanGroup: DupGroup = {
     },
   ],
 };
+
+// —— LinkScanDialog 复刻桩（嵌真实 LinkScanGroupRow；链接卡复选 = 删除标记可交互，
+//    一条预选演示压暗 30%；reactive 包装保交互回显）——
+const linkScanGroup = reactive<LinkGroup>({
+  asset: {
+    assetId: "scan-l1",
+    name: "跑步循环_01.fla",
+    folderId: "f-renwu",
+    folderName: "01_人物",
+    w: null,
+    h: null,
+    ext: "fla",
+    size: 1_258_291,
+    thumbPath: null,
+    thumbKind: null,
+    placements: [{ folderId: "f-renwu", origin: true }],
+  },
+  links: [
+    { folderId: "f-renwu", folderName: "01_人物", name: "跑步-主角入场链接.fla", checked: true },
+    { folderId: "f-zaji", folderName: "杂集", name: "跑步备份.fla", checked: false },
+    { folderId: "root", folderName: "未分类", name: "跑步循环_01.fla", checked: false },
+  ],
+});
 
 // —— 分组两件复刻桩（嵌真实 GroupRulesEditor；候选范围按 items 出，空 items = 只展示已选 chips）——
 const geName = ref("");
@@ -256,6 +281,27 @@ const linkOnlyChecked = ref(false);
             DupScanDialog 屏 1（714 宽组列表，35 稿）｜本体已换代 BaseModal framed（屏 1 = 714 / 屏 2 = 970，宽度过渡 200ms 沿）；
             复刻嵌真实 DupScanGroupRow（组复选可交互）；本体读 dupScanState、合并 = delete_placements；屏 2（970
             宽合并前确认双栏）未复刻；口径变更与组件同步
+          </span>
+        </div>
+        <div class="pv-demo-cell">
+          <div class="pv-bm-shell w714">
+            <div class="pv-bm-titlebar">
+              <span class="pv-bm-title">扫描文件/档案链接</span>
+              <IconButton name="close-large" title="关闭" />
+            </div>
+            <LinkScanGroupRow :group="linkScanGroup" />
+            <div class="pv-bm-foot spread">
+              <span class="pv-bm-summary">已选择 <b>1</b> 个链接文件</span>
+              <span class="pv-bm-foot-btns">
+                <ActionButton variant="cancel" label="取消" size="lg" />
+                <ActionButton variant="primary" label="删除链接文件" size="lg" />
+              </span>
+            </div>
+          </div>
+          <span class="pv-cap">
+            LinkScanDialog（714 单屏组列表，35 稿复用，PRD 03_查找文件-04，2026-10-16 立项）｜复刻嵌真实
+            LinkScanGroupRow（链接卡复选 = 删除标记可交互，一条预选演示压暗 30%；首列原始文件卡恒留不可选）；
+            本体读 linkScanState、删除 = delete_placements recycle（undo 一步）；无屏 2 确认；口径变更与组件同步
           </span>
         </div>
         <div class="pv-demo-cell" style="width: 240px">

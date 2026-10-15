@@ -136,6 +136,56 @@ fn dup_asset_view(lib: &Library, meta: &AssetMeta, icons: &HashSet<String>) -> D
   }
 }
 
+// —— 扫描文件/档案链接（2026-10-16 立项落地，待办 2026-08-13 兑现，PRD 03_查找文件-04）——
+
+/// 链接位置视图（链接卡数据源）：所在文件夹 + 显示名（删除时回传 PlacementRef.name 精确到行）
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkPlacementView {
+  pub folder_id: String,
+  pub folder_name: String,
+  pub name: String,
+}
+
+/// 链接组：有 ≥1 条链接 Placement 的资产一组；asset = 首列原始文件卡（无活 origin 取第一条兜底）
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkGroupView {
+  pub asset: DupAssetView,
+  pub links: Vec<LinkPlacementView>,
+}
+
+/// 扫描文件/档案链接（全库单范围，只读纯内存）：folders.items 聚合，有链接的资产成组；
+/// 组内链接按所在文件夹名 / 显示名排序；组间链接数降序（清理视角多链优先），平手按首列名与 id
+pub fn scan_links(lib: &Library, icons: &HashSet<String>) -> Vec<LinkGroupView> {
+  let mut groups: Vec<LinkGroupView> = Vec::new();
+  for meta in lib.index.assets.values() {
+    let placements = lib.index.placements_of(&meta.id);
+    let mut links: Vec<LinkPlacementView> = placements
+      .iter()
+      .filter(|p| !p.origin)
+      .map(|p| LinkPlacementView {
+        folder_id: p.folder.clone(),
+        folder_name: folder_name(lib, &p.folder),
+        name: p.name.clone(),
+      })
+      .collect();
+    if links.is_empty() {
+      continue;
+    }
+    links.sort_by(|a, b| a.folder_name.cmp(&b.folder_name).then_with(|| a.name.cmp(&b.name)));
+    groups.push(LinkGroupView { asset: dup_asset_view(lib, meta, icons), links });
+  }
+  groups.sort_by(|a, b| {
+    b.links
+      .len()
+      .cmp(&a.links.len())
+      .then_with(|| a.asset.name.cmp(&b.asset.name))
+      .then_with(|| a.asset.asset_id.cmp(&b.asset.asset_id))
+  });
+  groups
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -295,5 +345,67 @@ mod tests {
     let groups = scan(&h.lib, &ScanScope::All);
     assert_eq!(groups[0].assets[0].asset_id, "AN-EARLY", "导入最早 = 默认保留者排首");
     assert_eq!(groups[0].assets[1].asset_id, "AN-LATE");
+  }
+
+  // —— 扫描文件/档案链接（PRD 03_查找文件-04）——
+
+  fn scan_only_links(lib: &Library) -> Vec<LinkGroupView> {
+    scan_links(lib, &HashSet::new())
+  }
+
+  /// 有链接的资产成组：首列 = origin 显示名；纯 origin / 无 Placement 资产不入组；链接按文件夹名排序
+  #[test]
+  fn links_grouped_per_asset_with_origin_first() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "FA", "夹A");
+    add_folder(&mut h.lib, "FB", "夹B");
+    add_asset(&mut h.lib, "AN-A", "甲.png", "sha256:x", 100, "2026-08-01T10:00:00+08:00", "root");
+    add_placement(&mut h.lib, "AN-A", "甲链接B.png", "FB", false);
+    add_placement(&mut h.lib, "AN-A", "甲链接A.png", "FA", false);
+    add_asset(&mut h.lib, "AN-B", "乙.png", "sha256:y", 50, "2026-08-02T10:00:00+08:00", "root");
+
+    let groups = scan_only_links(&h.lib);
+    assert_eq!(groups.len(), 1, "纯 origin 资产不成组");
+    let g = &groups[0];
+    assert_eq!(g.asset.asset_id, "AN-A");
+    assert_eq!(g.asset.name, "甲.png", "首列 = origin 显示名");
+    let names: Vec<&str> = g.links.iter().map(|l| l.name.as_str()).collect();
+    assert_eq!(names, ["甲链接A.png", "甲链接B.png"], "链接按所在文件夹名排序");
+    assert_eq!(g.links[0].folder_name, "夹A");
+    assert_eq!(g.links[1].folder_name, "夹B");
+  }
+
+  /// 无活 origin（origin 在回收站）：首列兜底第一条 Placement；root 链接文件夹名 = 未分类
+  #[test]
+  fn links_fallback_first_placement_when_no_origin() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "FA", "夹A");
+    add_asset(&mut h.lib, "AN-A", "甲.png", "sha256:x", 100, "2026-08-01T10:00:00+08:00", "root");
+    h.lib.folders.items.retain(|p| !(p.asset == "AN-A" && p.origin));
+    add_placement(&mut h.lib, "AN-A", "链接一.png", "FA", false);
+    add_placement(&mut h.lib, "AN-A", "链接二.png", "root", false);
+
+    let groups = scan_only_links(&h.lib);
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].asset.name, "链接一.png", "无活 origin 兜底第一条 Placement");
+    assert_eq!(groups[0].links.len(), 2);
+    assert_eq!(groups[0].links.iter().find(|l| l.folder_id == "root").unwrap().folder_name, "未分类");
+  }
+
+  /// 组间排序：链接数降序（清理视角多链优先），平手按首列显示名
+  #[test]
+  fn links_groups_sorted_by_link_count_desc() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "FA", "夹A");
+    add_asset(&mut h.lib, "AN-A", "一链.png", "sha256:x", 100, "2026-08-01T10:00:00+08:00", "root");
+    add_placement(&mut h.lib, "AN-A", "一链-链接.png", "FA", false);
+    add_asset(&mut h.lib, "AN-B", "两链.png", "sha256:y", 100, "2026-08-02T10:00:00+08:00", "root");
+    add_placement(&mut h.lib, "AN-B", "两链-链接1.png", "FA", false);
+    add_placement(&mut h.lib, "AN-B", "两链-链接2.png", "root", false);
+
+    let groups = scan_only_links(&h.lib);
+    assert_eq!(groups.len(), 2);
+    assert_eq!(groups[0].asset.asset_id, "AN-B", "链接数降序");
+    assert_eq!(groups[1].asset.asset_id, "AN-A");
   }
 }

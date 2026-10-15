@@ -1,0 +1,125 @@
+/* 扫描弹窗族共享样式（2026-10-16 抽出：扫描重复文件 DupScanDialog + 扫描文件/档案链接 LinkScanDialog，
+   35 稿同族）——壳覆盖 / 组行 / 卡片横排 / 底部计数按钮行两弹窗同构，禁重复堆叠（规范）。
+   类名 scd- 前缀防撞：.scroll-wrap 等通用名是各弹窗 scoped 自有件，勿全局化。 */
+
+/* 壳覆盖（BaseModal framed：class 透传落根 .bm-mask，壳样式走后代选择器） */
+.scan-dialog .bm-modal {
+  max-width: calc(100vw - 96px); /* 视口封顶（§40：BaseModal 不带，弹窗自加） */
+  transition: width 0.2s ease; /* 重复扫描 屏1↔屏2 宽度动画（链接扫描单屏无宽度变化，规则无害） */
+}
+.scan-dialog .bm-actions {
+  flex: none; /* actions 槽：底部按钮行通栏不缩 */
+}
+
+/* 屏 1 纵向滚动区：relative 锚 ScrollThumb（悬浮滚轮悬停显隐）；内容自适应 + 上限自滚 */
+.scd-scroll {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.scd-body {
+  max-height: calc(100vh - 280px);
+}
+
+/* 组行（35 稿 item）：padding 24 / gap 12；底线 ::after 通栏，
+   最后一组不出——否则与底部按钮栏顶线重叠成双线（2026-08-13 走查） */
+.scd-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-12);
+  padding: var(--n-space-24);
+  flex: none;
+}
+.scd-group::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--n-l-a3);
+}
+.scd-group:last-child::after {
+  display: none;
+}
+/* 行头（35 稿：复选框/说明文字 + 红色 X，两端分布） */
+.scd-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  height: 20px;
+  flex: none;
+}
+/* 行头说明文字（链接扫描「N 个链接文件」）：与 Checkbox label 同档（次要文字 12/16 二级） */
+.scd-head-text {
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l2);
+}
+/* 重复扫描组取消勾选：卡片行压暗 30%（§5 档，DuplicateRow skipped 同口径）；
+   行头复选框保持常态可操作（可逆勾回） */
+.scd-group.off .scd-cards {
+  opacity: 0.3;
+}
+/* 卡片行：横向滚动（35 稿注明：单行卡片超过两个时横向滚动条）；
+   滚轮走 base.css .kit-scroll-x 统一类（6px 胶囊），padding-bottom 6 预留高度容纳 */
+.scd-cards {
+  display: flex;
+  gap: var(--n-space-12);
+  align-items: center;
+  padding-bottom: var(--n-space-6);
+  transition: opacity 0.15s ease;
+}
+
+/* 底部（35 稿）：62 高 / padding 12 12 12 24；flex: 1 撑满 actions 通栏
+   （不撑满上边框线会断在内容左缘）；顶线 ::after 通栏 */
+.scd-bottom {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--n-space-12);
+  padding: var(--n-space-12) var(--n-space-12) var(--n-space-12) var(--n-space-24);
+  height: 62px;
+}
+.scd-bottom::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--n-l-a3);
+}
+.scd-bottom.end {
+  justify-content: flex-end;
+}
+.scd-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-8);
+}
+/* 已选择 N（35 稿：标题档 16；N 品牌色） */
+.scd-sel {
+  font-size: var(--n-fs-btn-lg);
+  line-height: var(--n-lh-btn-lg);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
+}
+.scd-sel b {
+  color: var(--n-brand);
+  font-weight: var(--n-fw-bold);
+}
+.scd-saved {
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
+}
+.scd-btns {
+  display: flex;
+  gap: var(--n-space-12);
+}

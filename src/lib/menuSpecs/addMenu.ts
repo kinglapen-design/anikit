@@ -13,6 +13,7 @@ import { createAndName, createArchiveAndName, currentLinkTarget, enterLinkPicker
 import { openBlock } from "../treeExpansion";
 import { createDocument, pasteClipboard, pasteDuplicate, type NewDocKind } from "../placementOps";
 import { openScan } from "../dupScanOps";
+import { openLinkScan } from "../linkScanOps";
 
 // —— 素材卡片空白处（废除，2026-08-11：空白右键统一走 07 新增菜单；
 // 布局方式/排序/显示简介/分组依据归 28 查看方式菜单 ViewOptionsMenu）——
@@ -42,7 +43,8 @@ export function newDocGroupEntries(): CtxEntry[] {
 }
 
 // —— 扫描两项（新增菜单 / 快速访问收窄菜单 / 回收站空白菜单共用，2026-09-05 抽出）——
-// 扫描重复文件范围上下文（2.7 二轮点亮）：当前目录 = 文件夹视图才有；所选文件 = 选中资产去重集
+// 扫描重复文件范围上下文（2.7 二轮点亮）：当前目录 = 文件夹视图才有；所选文件 = 选中资产去重集；
+// 扫描文件/档案链接（2026-10-16 立项点亮，PRD 03_查找文件-04）：全库单范围无二级
 export function scanEntries(): CtxEntry[] {
   const selection = useSelectionStore();
   const content = useContentStore();
@@ -67,7 +69,7 @@ export function scanEntries(): CtxEntry[] {
         },
       ],
     },
-    { label: "扫描文件/档案链接", disabled: true },
+    { label: "扫描文件/档案链接", action: () => void openLinkScan() },
   ];
 }
 
