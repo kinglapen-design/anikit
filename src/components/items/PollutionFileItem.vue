@@ -80,6 +80,11 @@ const emit = defineEmits<{ click: []; openExplorer: []; import: []; trash: [] }>
   color: var(--n-l4);
   transition: color var(--n-dur-100) var(--n-ease-in-out);
 }
+/* 滑入按钮组不参与收缩（2026-10-16 实机报：三钮 70px 定宽被 flex 比例收缩裁掉尾钮）——
+   全部让位由名称吸收（.lead min-width 0 + 省略），机制契约 = 按钮完整滑入、内容被推左 */
+.pf .ni-slide {
+  flex: none;
+}
 .act:hover {
   color: var(--n-l2);
 }

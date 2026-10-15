@@ -325,6 +325,10 @@ const swatchDemo = ["#943743", "#F5D0D0", "#984343", "#623C30", "#FCF7F4", "#6B4
           <PollutionFileItem name="恢复_雪牧.fla" force-state="hover" />
           <span class="pv-cap">hover（按钮组滑入）</span>
         </div>
+        <div class="pv-demo-cell">
+          <PollutionFileItem name="风格化_赛博废土_21x9_超长文件名版本.png" force-state="hover" />
+          <span class="pv-cap">长名 hover（钮组不裁切，2026-10-16 修复回归位）</span>
+        </div>
       </div>
     </div>
 
