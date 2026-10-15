@@ -18,18 +18,21 @@
 //         缩略图时列引用它的使用方行（无 count）；点 item = 跳转定位（伴生资产 hidden →
 //         「缩略图」快速访问视图选中）；× = 解除绑定（unbind_thumb_asset，仅清工程侧引用）；
 //         添加 = 选择模式 thumb 用途（picker 第五用途，单选直回 = set_thumb_asset 绑定/换绑）；
-//   污染文件 = 占位（info 文件夹异物文件业务后续立项，同上；稿标题行无动作组 → actions=false）。
+//   污染文件 = info 文件夹异物清单（2026-10-16 接业务，1.0 收尾第 5 项）：PollutionFileItem
+//         卡片（警告图标 + 名称，hover 滑入三动作 = 打开资源管理器 / 导入（move 清污）/ 丢回收站）；
+//         稿标题行无动作组 → actions=false 保持。
 // 排序 = 面板内拖标题行（2026-08-31 用户定；DetailSections 旧 secDrag 让位范式移植，
 // 可见序落点松手写 ui.detailBlocks.links——信息查看管理面板箭头排序同一配置双入口，2026-09-26）；
 // 显隐 = 管理面板眼睛（hidden 区块整块不渲染含标题行）；折叠 = 标题行点击（会话级，
 // dragView.suppressClick 守卫在调用方）。
-import { computed, nextTick, onBeforeUnmount, reactive, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import SectionTitle from "../items/SectionTitle.vue";
 import LinkFileItem from "../items/LinkFileItem.vue";
 import LinkAudioItem from "../items/LinkAudioItem.vue";
 import LinkRelationItem from "../items/LinkRelationItem.vue";
 import LinkThumbItem from "../items/LinkThumbItem.vue";
+import PollutionFileItem from "../items/PollutionFileItem.vue";
 import TwoToneIcon from "../items/TwoToneIcon.vue";
 import AppIcon from "../AppIcon.vue";
 import {
@@ -53,6 +56,15 @@ import {
 import { getMediaSource } from "../../lib/mediaOps";
 import { isAudioExt } from "../../lib/formatBadge";
 import { currentLibrary } from "../../lib/libraryOps";
+import {
+  importPollution,
+  pollutionState,
+  refreshPollution,
+  repollPollution,
+  revealPollution,
+  trashPollution,
+  type PollutionItem,
+} from "../../lib/pollutionOps";
 import { dragView } from "../../lib/dragOperation";
 import { placementKey, useContentStore } from "../../stores/content";
 import { useSelectionStore } from "../../stores/selection";
@@ -191,7 +203,7 @@ function titleOf(id: DetailLinkBlockId): string {
   return DETAIL_TAB_BLOCK_TITLES.links[id] ?? id;
 }
 
-// 区块动作组显隐（稿口径）：污染文件恒无（占位）；音频区块在「使用者」视角（当前目标是音频）
+// 区块动作组显隐（稿口径）：污染文件恒无（稿标题行无动作组，业务 2026-10-16 已接、动作在卡片上）；音频区块在「使用者」视角（当前目标是音频）
 // 同样无添加钮——voice 语义 = 使用方 → 音频，从音频发起只会造出 音频→音频 的语义乱链
 //（"使用者"区块混入它自己"链接"的音频，2026-09-19 用户实机"链接音频加了不显示/对不上"）
 function hasActions(id: DetailLinkBlockId): boolean {
@@ -265,7 +277,7 @@ function originOf(): PickerTarget {
 
 // 添加钮分派：链接 = 链接管理弹窗 / 音频 = 选择模式 voice（过滤非音频）/ 关系 = 选择模式 relation /
 // 缩略图 = 选择模式 thumb（picker 第五用途：过滤可作伴生图，点图直绑，2026-09-23 点亮）；
-// 污染文件 = 占位不接业务（2026-08-31 用户定）
+// 污染文件无添加钮（稿口径，hasActions 拦截不会到这里）
 function onAdd(id: DetailLinkBlockId): void {
   if (id === "links") openLinkManage();
   else if (id === "audio") picker.enterVoice(originOf());
@@ -410,13 +422,27 @@ function unbindCurrentThumb(): void {
   void unbindThumbAsset(file.value.placement.assetId);
 }
 
+// ================= 污染文件区块（2026-10-16 接业务，1.0 收尾第 5 项） =================
+// info 文件夹异物清单（业务口径见 pollutionOps / PRD 03_数据链接 02）：目标变化即扫
+//（单目录 read_dir 极廉价）；库内容全量刷新（导入完成 / 撤销等 content.refresh 链路）对齐重扫
+// 目标归属校验：切换目标后在途回包未到时，不把上一目标的清单显示给当前目标（行按 name 定键错显）
+const pollutionItems = computed<PollutionItem[]>(() =>
+  file.value && pollutionState.assetId === file.value.placement.assetId ? pollutionState.items : [],
+);
+watch(() => file.value?.placement.assetId ?? null, (id) => void refreshPollution(id), { immediate: true });
+watch(() => content.placements, () => void repollPollution());
+
+function importPollutionRow(item: PollutionItem): void {
+  importPollution(item, file.value?.placement.folderId ?? null);
+}
+
 // 区块是否有内容（空态不渲染内容容器，展开/折叠零高度变化）
 function hasContent(id: DetailLinkBlockId): boolean {
   if (id === "links") return linkItems.value.length > 0;
   if (id === "audio") return audioViews.value.length > 0;
   if (id === "relations") return relationViews.value.length > 0;
   if (id === "thumb") return thumbCall.value !== null || thumbUsers.value.length > 0;
-  return false; // 污染文件 = 占位（业务未接）
+  return pollutionItems.value.length > 0; // 污染文件
 }
 </script>
 
@@ -509,6 +535,17 @@ function hasContent(id: DetailLinkBlockId): boolean {
             :name="u.name"
             @click="jumpToThumbUser(u.assetId)"
             @close="void unbindThumbAsset(u.assetId)"
+          />
+        </div>
+        <!-- 污染文件区块（2026-10-16 接业务）：info 异物卡，hover 滑入三动作；点击行无操作（稿无 prose） -->
+        <div v-else-if="id === 'pollution'" class="lb-body">
+          <PollutionFileItem
+            v-for="item in pollutionItems"
+            :key="item.name"
+            :name="item.name"
+            @open-explorer="revealPollution(item.path)"
+            @import="importPollutionRow(item)"
+            @trash="void trashPollution(item)"
           />
         </div>
       </template>

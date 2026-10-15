@@ -19,6 +19,7 @@ pub mod notes;
 pub mod operations;
 pub mod plugin;
 pub mod plugin_server;
+pub mod pollution;
 pub mod preview;
 pub mod prompt;
 pub mod recent;

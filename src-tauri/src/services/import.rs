@@ -316,6 +316,7 @@ pub(crate) fn rename_origin(assets_dir: &Path, asset_id: &str, new_name: &str) -
   let info_dir = paths::info_dir(assets_dir, asset_id);
   let meta_path = info_dir.join("metadata.json");
   let mut meta: AssetMeta = read_json(&meta_path).map_err(|e| e.to_string())?;
+  let old_origin_name = meta.origin_name.clone();
   let mut renames = Vec::new();
   if let Some(frames_dir) = crate::services::sequence::frames_dir_if_sequence(assets_dir, asset_id, &meta) {
     // 序列帧：origin 是 frames/ 内封面帧（info 根无实体），整组帧文件同步改词干
@@ -341,6 +342,21 @@ pub(crate) fn rename_origin(assets_dir: &Path, asset_id: &str, new_name: &str) -
       fs::rename(&old_thumb, &new_thumb_path).map_err(|e| format!("缩略图改名失败：{e}"))?;
       renames.push((old_thumb, new_thumb_path));
       meta.thumbnail = Some(new_thumb);
+    }
+  }
+  // 动图小动画缓存（{词干}_anim.webp 推导名，paths 单点）同步改名——改名不动它会残留旧词干缓存，
+  // 被污染文件判定为异物（已知集按当前 origin 推导，2026-10-16 污染业务堵增量）；可重建缓存，
+  // 目标撞名（名称回收场景）直接删旧的不占撤销对
+  let old_anim = paths::anim_preview_file(assets_dir, asset_id, &old_origin_name);
+  let new_anim = paths::anim_preview_file(assets_dir, asset_id, &meta.origin_name);
+  if old_anim != new_anim && old_anim.exists() {
+    if new_anim.exists() {
+      if let Err(e) = fs::remove_file(&old_anim) {
+        log::warn!("旧词干动图缓存清理失败（可重建，不阻断改名）：{e}");
+      }
+    } else {
+      fs::rename(&old_anim, &new_anim).map_err(|e| format!("动图缓存改名失败：{e}"))?;
+      renames.push((old_anim, new_anim));
     }
   }
   meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);

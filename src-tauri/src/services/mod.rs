@@ -39,6 +39,7 @@
 //! - ws_thumb_queue：工作空间缩略图生成队列（2026-09-26 性能优化：常驻 worker 池固定并发 +
 //!   跨请求去重 + 失败记忆 + 视口优先插队，取代每 invoke 裸 spawn 串行线程）
 //! - cache：缓存占用统计与一键清理（设置面板缓存页，PRD 06_数据 §07；含全库缩略图后台重建）
+//! - pollution：污染文件（2026-10-16，1.0 收尾第 5 项：info 文件夹异物可见性——已知集判定 / 清单 / 丢回收站）
 
 pub mod anim;
 pub mod anim_preview;
@@ -61,6 +62,7 @@ pub mod media;
 pub mod md_bundle;
 pub mod operations;
 pub mod origin_sync;
+pub mod pollution;
 pub mod preview_queue;
 pub mod prompt;
 pub mod prompt_scan;

@@ -343,6 +343,8 @@ pub fn run() {
       commands::library::list_merge_candidates,
       commands::library::merge_libraries,
       commands::library::reveal_orphan_info,
+      commands::pollution::list_pollution_files,
+      commands::pollution::trash_pollution_file,
       commands::workspace::workspace_root,
       commands::workspace::list_workspace_dir,
       commands::workspace::ws_dir_stats,

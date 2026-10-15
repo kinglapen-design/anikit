@@ -423,6 +423,28 @@ mod tests {
     assert_eq!(folders.items[0].name, "新图.png", "folders.json 落盘");
   }
 
+  /// 动图小动画缓存随改名同步（2026-10-16 污染业务堵增量：{词干}_anim.webp 推导名不换会残留旧词干
+  /// 缓存被判污染）；目标撞名（名称回收）删旧的不占撤销对——可重建缓存
+  #[test]
+  fn rename_origin_placement_renames_anim_cache() {
+    let mut h = make_lib();
+    add_png(&mut h, "AN-A", "原图.png");
+    let info = h.lib.info_dir("AN-A");
+    fs::write(info.join("原图_anim.webp"), b"anim").unwrap();
+
+    let renames = rename_placement(&mut h.lib, "AN-A", "root", true, "新图", None).unwrap();
+    assert!(info.join("新图_anim.webp").is_file(), "动图缓存同步改名");
+    assert!(!info.join("原图_anim.webp").exists(), "旧词干缓存不残留");
+    assert_eq!(renames.len(), 3, "origin + 缩略图 + 动图缓存三对磁盘改名");
+
+    // 撞名场景：再改名回收旧词干，目标已有同名缓存 → 删旧词干文件、保留目标现存缓存
+    fs::write(info.join("原图_anim.webp"), b"stale").unwrap();
+    rename_placement(&mut h.lib, "AN-A", "root", true, "原图.png", None).unwrap();
+    assert!(info.join("原图_anim.webp").is_file(), "改名回旧词干正常");
+    assert!(!info.join("新图_anim.webp").exists(), "旧词干缓存已删");
+    assert_eq!(fs::read(info.join("原图_anim.webp")).unwrap(), b"stale", "撞名保留目标现存缓存");
+  }
+
   #[test]
   fn rename_link_placement_only_changes_display_name() {
     let mut h = make_lib();
