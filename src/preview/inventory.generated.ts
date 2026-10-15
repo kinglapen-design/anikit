@@ -13,8 +13,8 @@ export const inventoryDate = "2026-10-15";
 export const inventoryTotals = {
   "new": 82,
   "legacy": 0,
-  "business": 79,
-  "dead": 3,
+  "business": 80,
+  "dead": 2,
   "legacyConsumers": 0,
   "legacyTokens": 0
 };
@@ -22,14 +22,6 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/FolderPickNode",
     "name": "FolderPickNode",
-    "status": "dead",
-    "consumers": 0,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/MdOutline",
-    "name": "MdOutline",
     "status": "dead",
     "consumers": 0,
     "legacyTokens": 0,
@@ -406,6 +398,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/LinkManageDialog",
     "name": "LinkManageDialog",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/MdOutline",
+    "name": "MdOutline",
     "status": "business",
     "consumers": 1,
     "legacyTokens": 0,

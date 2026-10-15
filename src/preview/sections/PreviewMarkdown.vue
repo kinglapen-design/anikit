@@ -109,11 +109,12 @@ app.mount("#app");</code></pre>
       </div>
     </div>
     <p class="pv-sec-desc mo-desc">
-      大纲栏（2026-10-15 大纲轮初案，无设计稿——陈列待用户定稿，口径速查 §71；交互参照 = 飞书文档大纲）：
-      md 预览面板左侧可开关标题导航——宽 168（设置面板左导航同宽）/ 右缘 1px g3 竖线 / item 26 高菜单 item 同档 /
-      缩进 12/级 / hover 底 l-a3 / 当前节 底 l-a2 + 文字 l1 / 底 66 悬浮栏补偿 / 长列表 ScrollThumb。
-      左 cell = 常态（cur 当前节 = 1.1_亚当与夏娃、force-hover 演示 = 2._挪亚方舟、超长省略、可滚动）；
-      右 cell = 空态「本文档没有标题」。
+      大纲栏（2026-10-15 大纲轮，PRD 04「md 大纲栏」；用户看稿一轮定稿 = 一级标题加大加粗（15/Bold），
+      其余照初案，口径速查 §71；交互参照 = 飞书文档大纲）：md 预览面板左侧可开关标题导航——宽 168（设置面板左导航同宽）/
+      右缘 1px g3 竖线 / item 26 高菜单 item 同档 / 缩进 12/级 / hover 底 l-a3 / 当前节 底 l-a2 + 文字 l1 /
+      底 66 悬浮栏补偿 / 长列表 ScrollThumb。左 cell = 常态（cur 当前节 = 1.1_亚当与夏娃、force-hover 演示 = 2._挪亚方舟、
+      超长省略、可滚动）；右 cell = 空态「本文档没有标题」。已接生产（PreviewText 三态 + store mdOutline 会话态 +
+      悬浮栏视图组大纲钮，图标 collapse-sidebar 暂代占位）。
     </p>
     <div class="mo-row">
       <div class="mo-stage">

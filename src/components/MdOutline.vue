@@ -5,7 +5,8 @@
 //（md 分屏分割条同档，滚轮 hover 压线一小段可接受 = 2026-08-13 主窗口统一口径）/
 // item 26 高 / 圆角 6 / padding 4 8 / 正文 13/18 l2（菜单 item 同档，§3），缩进 12/级；
 // hover 底 l-a3（菜单 item hover 同档）；当前节 cur = 底 l-a2 + 文字 l1（设置面板导航选中同口径，
-// 选中态不叠 hover，§3）；空态「本文档没有标题」l3；底 66 悬浮栏遮挡补偿（§18）；
+// 选中态不叠 hover，§3）；**一级标题加大加粗**（2026-10-15 用户看稿定稿：fs-md-body 15 + fw-bold，
+// 其余照初案）；空态「本文档没有标题」l3；底 66 悬浮栏遮挡补偿（§18）；
 // 滚动 = kit-scroll + ScrollThumb（§2）。forceHoverLine = preview 陈列演示态桥接。
 import { nextTick, ref, watch } from "vue";
 import ScrollThumb from "./ScrollThumb.vue";
@@ -45,7 +46,7 @@ watch(
           :key="h.line"
           type="button"
           class="mo-item"
-          :class="{ cur: h.line === activeLine, 'force-hover': h.line === forceHoverLine }"
+          :class="{ cur: h.line === activeLine, l1: h.level === 1, 'force-hover': h.line === forceHoverLine }"
           :style="{ paddingLeft: `${8 + (h.level - 1) * 12}px` }"
           @click="emit('jump', h.line)"
         >
@@ -66,6 +67,14 @@ watch(
   min-height: 0;
   display: flex;
   border-right: 1px solid var(--n-g3); /* md 分屏分割条同档竖线 */
+  /* 进场动画（稿无数值就近套档：150ms 缓出 + 8px 滑移，速查 §71；v-if 关闭瞬时——出向无可过渡挂载点） */
+  animation: mo-in var(--n-dur-150) var(--n-ease-out);
+}
+@keyframes mo-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
 }
 .mo-scroll {
   flex: 1;
@@ -104,6 +113,11 @@ watch(
 }
 .mo-item.cur:hover {
   background: var(--n-l-a2); /* 选中态行 hover 不再变色（§3） */
+}
+/* 一级标题加大加粗（2026-10-15 用户看稿定稿）：fs-md-body 15 + fw-bold，行高行宽不变 */
+.mo-item.l1 {
+  font-size: var(--n-fs-md-body);
+  font-weight: var(--n-fw-bold);
 }
 .mo-empty {
   padding: var(--n-space-12) var(--n-space-8);

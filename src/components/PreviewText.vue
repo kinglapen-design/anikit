@@ -10,15 +10,22 @@
 // md 图片引用 = anikit 双形态渲染真图、点击内部跳转（2026-10-08 S3；渲染态 lib/markdown.ts 管道，
 // 编辑态 cmMd 图片 widget，缩略图 URL 同源 lib/anikitLink.anikitThumbUrl）；
 // md 链接可点（渲染态）：anikit:// 内部跳转，http(s) 默认浏览器（onMdClick 代理）。
+// md 大纲栏（2026-10-15 大纲轮，PRD 04「md 大纲栏」，组件 MdOutline 纯展示件）：悬浮栏大纲钮开关
+//（store mdOutline 会话级，切素材保持）；渲染与大纲共用同一次 parse（tokens 双消费，lib/mdOutline）；
+// 三态支持——预览 = 渲染块按 data-line-start 定位 / 编辑 = CM scrollIntoView / 分屏 = 右栏精确 + 左栏 CM
+//（linkLock 防互拽）；滚动联动高亮当前节（渲染体跟滚动顶、CM 跟可视顶行），大纲内自动滚进视野。
 // 保存竞态纪律：保存请求绑定加载时 assetId（loadedId），切素材先 flush 在途编辑再加载新内容——
 // 旧内容不会错存到新资产；响应到达时已切走则只更新 placements 不动编辑区状态。
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ScrollThumb from "./ScrollThumb.vue";
+import MdOutline from "./MdOutline.vue";
 import { createMd } from "../lib/markdown";
+import { extractMdOutline, type MdOutlineItem } from "../lib/mdOutline";
 import { applyMdAction, toggleTaskLine } from "../lib/mdEdit";
 import { createMdEditor, type MdEditorHandle } from "../lib/cmMd";
 import { readTextAsset, writeTextAsset } from "../lib/textOps";
 import { jumpToAnikitRef, parseAnikitRef } from "../lib/anikitLink";
+import { EditorView } from "@codemirror/view";
 import { invoke } from "@tauri-apps/api/core";
 import { useContentStore } from "../stores/content";
 import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
@@ -44,7 +51,21 @@ const cmHostRef = ref<HTMLElement>(); // md CM6 挂载点
 const cmScrollEl = ref<HTMLElement>(); // CM6 滚动容器（ScrollThumb / 滚动保活取元用）
 
 const md = createMd();
-const rendered = computed(() => (isMd.value && draft.value ? md.render(draft.value) : ""));
+// 大纲标题清单（渲染与大纲共用同一次 parse——tokens 双消费：heading_open 自带层级与源码行号，
+// 行号与 kitLineMap 挂的 data-line-start 同口径，跳转定位直接对齐；lib/mdOutline）
+const outlineItems = ref<MdOutlineItem[]>([]);
+const rendered = computed(() => {
+  if (!isMd.value || !draft.value) {
+    outlineItems.value = [];
+    return "";
+  }
+  const tokens = md.parse(draft.value, {});
+  outlineItems.value = extractMdOutline(tokens);
+  return md.renderer.render(tokens, md.options, {});
+});
+// 大纲栏开关 = store 会话态（切素材保持，关预览复位）；当前节行号（滚动联动高亮，null = 首个标题之前）
+const outlineOpen = computed(() => isMd.value && preview.mdOutline);
+const activeOutlineLine = ref<number | null>(null);
 
 const stateText = computed(() => {
   if (saveState.value === "saving") return "保存中…";
@@ -136,8 +157,14 @@ onBeforeUnmount(() => {
 });
 watch(editing, (v) => {
   if (!v) void nextTick(() => restoreKeeps());
+  void nextTick(retrackOutline); // 显隐切换后重锚大纲当前节（v-show 同款归零恢复同拍）
 });
-watch(split, () => void nextTick(() => restoreKeeps()));
+watch(split, () =>
+  void nextTick(() => {
+    restoreKeeps();
+    retrackOutline();
+  }),
+);
 
 // 「打开编辑器」md 直进编辑态（提示词轮，preview.pendingMdEdit 一次性信号）：
 // open() 为异步 loadAsset——置信号时文本尚未加载，消费点必须在内容就绪后（load() 成功尾）；
@@ -256,6 +283,7 @@ function onEditScroll(): void {
   const src = cmScrollEl.value;
   const body = mdSplitBodyRef.value;
   if (src && body) linkScroll(src, body);
+  if (!split.value) trackOutlineFromCm(); // 分屏大纲只跟右栏（左栏滚动经 linkScroll 带动右栏，事件链自然覆盖）
 }
 
 function onSideScroll(): void {
@@ -263,6 +291,7 @@ function onSideScroll(): void {
   const src = cmScrollEl.value;
   const body = mdSplitBodyRef.value;
   if (src && body) linkScroll(body, src);
+  trackOutlineFromBody(body);
 }
 
 function scheduleSplitScroll(): void {
@@ -287,6 +316,76 @@ function scheduleSplitScroll(): void {
     const tRect = target.getBoundingClientRect();
     body.scrollTop += tRect.top - bRect.top - (bRect.height - tRect.height) / 2;
   }, 16);
+}
+
+// —— 大纲当前节跟踪与跳转（飞书式滚动联动高亮）——
+// 渲染体（预览 / 分屏右栏）：最后一个「块顶 ≤ 滚动顶 + 24」的标题 = 当前节（阈值 = 版心上 padding 12 + 呼吸 12）；
+// 编辑态单栏：CM 可视顶行（lineBlockAtHeight）同口径换算；分屏只跟右栏——左栏滚动经 linkScroll 带动右栏，
+// 右栏自身 scroll 事件链自然覆盖，无需双源。
+const OUTLINE_TOP_THRESHOLD = 24;
+
+function outlineLineAtBodyTop(body: HTMLElement): number | null {
+  const bodyTop = body.getBoundingClientRect().top;
+  let line: number | null = null;
+  for (const el of body.querySelectorAll<HTMLElement>("h1[data-line-start],h2[data-line-start],h3[data-line-start],h4[data-line-start],h5[data-line-start],h6[data-line-start]")) {
+    const top = el.getBoundingClientRect().top - bodyTop + body.scrollTop;
+    if (top <= body.scrollTop + OUTLINE_TOP_THRESHOLD) line = Number(el.dataset.lineStart);
+    else break;
+  }
+  return line;
+}
+
+function trackOutlineFromBody(body: HTMLElement | undefined): void {
+  if (!body || !outlineOpen.value) return;
+  activeOutlineLine.value = outlineLineAtBodyTop(body);
+}
+
+function trackOutlineFromCm(): void {
+  const view = mdEditor?.view;
+  if (!view || !outlineOpen.value) return;
+  const topLine = view.state.doc.lineAt(view.lineBlockAtHeight(view.scrollDOM.scrollTop + 1).from).number - 1;
+  let line: number | null = null;
+  for (const h of outlineItems.value) {
+    if (h.line <= topLine) line = h.line;
+    else break;
+  }
+  activeOutlineLine.value = line;
+}
+
+// 形态切换 / 开关后重锚当前节（v-show 显隐与分屏挂载后 DOM 就位再算）
+function retrackOutline(): void {
+  if (!outlineOpen.value) return;
+  if (!editing.value) trackOutlineFromBody(mdScrollRef.value);
+  else if (split.value) trackOutlineFromBody(mdSplitBodyRef.value);
+  else trackOutlineFromCm();
+}
+watch(outlineOpen, () => void nextTick(retrackOutline));
+
+// 预览态 md-body 滚动（保活 + 大纲跟踪合一）
+function onPreviewScroll(): void {
+  onKeepScroll("md", mdScrollRef.value);
+  trackOutlineFromBody(mdScrollRef.value);
+}
+
+// 大纲点击跳转：预览 = 渲染块按 data-line-start 定位（行号同源唯一——每块起始行独占）；
+// 编辑 = CM 光标落行首 + scrollIntoView 顶对齐；分屏 = 右栏精确定位 + 左栏 CM 同步
+//（linkLock 墙钟锁 100ms 防两侧互拽，typewriter 同口径）；先置当前节，点击反馈不等滚动事件
+function onOutlineJump(line: number): void {
+  activeOutlineLine.value = line;
+  if (editing.value) {
+    const view = mdEditor?.view;
+    if (view) {
+      const pos = view.state.doc.line(Math.min(line + 1, view.state.doc.lines)).from;
+      view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: "start", yMargin: 12 }) });
+      view.focus();
+    }
+    if (!split.value) return;
+  }
+  const body = editing.value ? mdSplitBodyRef.value : mdScrollRef.value;
+  const el = body?.querySelector<HTMLElement>(`[data-line-start="${line}"]`);
+  if (!body || !el) return;
+  if (editing.value) linkLockUntil = performance.now() + 100;
+  body.scrollTop = el.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 12;
 }
 
 // —— 渲染态点击代理：复制钮 / anikit 图与链接 / 任务复选框 分流；其余 = 无操作（纯阅读可复制，进编辑走铅笔钮 / Ctrl+E）——
@@ -375,6 +474,10 @@ watch(
       }
       return;
     }
+    if (name === "outline") {
+      preview.setMdOutline(!preview.mdOutline); // 大纲钮（预览 / 编辑 / 分屏三态可开关）
+      return;
+    }
     if (!editing.value) return;
     if (!mdEditor) return;
     const sel = mdEditor.view.state.selection.main;
@@ -388,35 +491,41 @@ watch(
   <div class="text-preview">
     <!-- md = 编辑器：预览态渲染（v-show 不重建，滚动由 keepPos 保活恢复）↔ 编辑态（单栏 / 分屏左码右渲） -->
     <template v-if="isMd">
-      <div
-        v-show="!editing"
-        ref="mdScrollRef"
-        class="md-body kit-scroll"
-        v-html="rendered"
-        @click="onMdClick"
-        @scroll.passive="onKeepScroll('md', mdScrollRef)"
-      />
-      <div v-if="editing" class="md-edit-wrap" :class="{ split }">
-        <div class="pane" :style="split ? { flexGrow: splitRatio } : undefined">
-          <!-- md 编辑 = CM6 Live Preview 内核（lib/cmMd.ts 装配；排版 styles/cm-md.css 全局类） -->
-          <div ref="cmHostRef" class="cm-host" @keydown="onCmKeydownGuard" />
-          <ScrollThumb v-if="!split" :body="cmScrollEl" />
-        </div>
-        <template v-if="split">
-          <div class="md-split-bar" @pointerdown="onSplitDrag" />
-          <div class="pane" :style="{ flexGrow: 1 - splitRatio }">
-            <div
-              ref="mdSplitBodyRef"
-              class="md-body split-side kit-scroll"
-              v-html="rendered"
-              @click="onMdClick"
-              @scroll.passive="onSideScroll"
-            />
-            <ScrollThumb :body="mdSplitBodyRef" />
+      <div class="md-row">
+        <!-- 大纲栏（2026-10-15 大纲轮；MdOutline 纯展示件，v-if 开合、进场 150ms 缓出，速查 §71） -->
+        <MdOutline v-if="outlineOpen" :items="outlineItems" :active-line="activeOutlineLine" @jump="onOutlineJump" />
+        <div class="md-col">
+          <div
+            v-show="!editing"
+            ref="mdScrollRef"
+            class="md-body kit-scroll"
+            v-html="rendered"
+            @click="onMdClick"
+            @scroll.passive="onPreviewScroll"
+          />
+          <div v-if="editing" class="md-edit-wrap" :class="{ split }">
+            <div class="pane" :style="split ? { flexGrow: splitRatio } : undefined">
+              <!-- md 编辑 = CM6 Live Preview 内核（lib/cmMd.ts 装配；排版 styles/cm-md.css 全局类） -->
+              <div ref="cmHostRef" class="cm-host" @keydown="onCmKeydownGuard" />
+              <ScrollThumb v-if="!split" :body="cmScrollEl" />
+            </div>
+            <template v-if="split">
+              <div class="md-split-bar" @pointerdown="onSplitDrag" />
+              <div class="pane" :style="{ flexGrow: 1 - splitRatio }">
+                <div
+                  ref="mdSplitBodyRef"
+                  class="md-body split-side kit-scroll"
+                  v-html="rendered"
+                  @click="onMdClick"
+                  @scroll.passive="onSideScroll"
+                />
+                <ScrollThumb :body="mdSplitBodyRef" />
+              </div>
+            </template>
           </div>
-        </template>
+          <ScrollThumb v-if="!editing" :body="mdScrollRef" />
+        </div>
       </div>
-      <ScrollThumb v-if="!editing" :body="mdScrollRef" />
       <span v-if="saveState" class="save-state" :class="{ fail: saveState === 'fail' }">{{ stateText }}</span>
     </template>
     <!-- txt = 编辑态（textarea 即预览，防抖自动保存） -->
@@ -448,9 +557,23 @@ watch(
   flex: 1;
   min-height: 0;
 }
+/* 大纲栏布局壳（2026-10-15 大纲轮）：md 区 = 大纲 + 内容双列；md-col = 原 .text-preview 列语境
+  （ScrollThumb 相对锚 / 底部 66 补偿选择器随之下移，大纲栏自身滚动与样式全在 MdOutline 内） */
+.md-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.md-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
 /* 底部 66 遮挡补偿（§18 口径：距底 12 + 栏高 42 + 呼吸 12）——md 语境悬浮栏工具栏恒显，
    预览态单栏渲染体同补（工具栏会挡最后一行，2026-09-25 三轮走查实机） */
-.text-preview > .md-body {
+.md-col > .md-body {
   padding-bottom: 66px;
 }
 /* —— 编辑态（txt 基础档；md = CM6 内核，排版 styles/cm-md.css 全局类——版心 84 / 底 66 让位悬浮栏

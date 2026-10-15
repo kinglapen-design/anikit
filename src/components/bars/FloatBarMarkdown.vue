@@ -67,14 +67,17 @@ const formatGroups: readonly MdIcon[][] = [
   ],
 ];
 
-// 视图组（编辑↔预览互切 + 分屏）：图标按态切换（铅笔 = 去编辑 / 预览模式 = 回预览）；
+// 视图组（编辑↔预览互切 + 分屏 + 大纲）：图标按态切换（铅笔 = 去编辑 / 预览模式 = 回预览）；
 // 预览模式 preview-mode / 分屏 edit-and-preview = 2026-09-26 用户补源专图标（十七批，
-// 旧暂代 view-options / collapse-sidebar 换名清零，§60 暂代待办勾销）
+// 旧暂代 view-options / collapse-sidebar 换名清零，§60 暂代待办勾销）；
+// 大纲 = 2026-10-15 大纲轮新增（PRD 04「md 大纲栏」，预览 / 编辑 / 分屏三态可开关）——
+// 图标 collapse-sidebar 暂代占位（用户定「先随便找一个占位，到时候一起换」，待补源后换名，速查 §71）
 const viewGroup = computed<MdIcon[]>(() => [
   props.editing
     ? { name: "preview-mode", action: "preview", tip: "预览（Ctrl+E）" }
     : { name: "pencil", action: "edit", tip: "编辑（Ctrl+E）" },
   { name: "edit-and-preview", action: "split", tip: "分屏编辑预览" },
+  { name: "collapse-sidebar", action: "outline", tip: "大纲" },
 ]);
 const groups = computed<readonly MdIcon[][]>(() =>
   props.editing ? [...formatGroups, viewGroup.value] : [viewGroup.value],

@@ -140,6 +140,8 @@ function buildPreviewStore(panelId: string) {
       animStrips: {} as Record<string, string>,
       // md 文本编辑（文本编辑稿轮）：编辑态标记（PreviewText 进出写入；FloatBarHost 据以切 MarkDown 工具栏）
       mdEditing: false,
+      // md 大纲栏开关（2026-10-15 大纲轮，PRD 04「md 大纲栏」）：会话级——切素材保持，关预览复位
+      mdOutline: false,
       mdActionSeq: 0, // 工具栏动作信号（search.focusSeq 同款模式：seq 推进 = 新动作待执行）
       mdActionName: "",
       // 「打开编辑器」md 直进编辑态一次性信号（提示词轮，lib/promptOps openPromptPlacement 置位）：
@@ -227,11 +229,16 @@ function buildPreviewStore(panelId: string) {
         this.animTotal = 0;
         this.animStrips = {};
         this.mdEditing = false;
+        this.mdOutline = false;
         this.pendingMdEdit = false; // 一次性信号不带出会话（关闭即作废）
       },
       // md 编辑态进出（PreviewText 写入；FloatBarHost 读以切悬浮栏 MarkDown 工具栏模式）
       setMdEditing(v: boolean): void {
         this.mdEditing = v;
+      },
+      // md 大纲栏开关（PreviewText 读；FloatBarMarkdown 大纲钮经 requestMdAction("outline") 翻转）
+      setMdOutline(v: boolean): void {
+        this.mdOutline = v;
       },
       // 悬浮栏 MarkDown 工具栏动作 → PreviewText 执行（seq 推进通知，search.focusSeq 同款模式）
       requestMdAction(name: string): void {
