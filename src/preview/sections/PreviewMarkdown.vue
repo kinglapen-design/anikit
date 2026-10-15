@@ -5,6 +5,26 @@
 // 任务列表（.kit-check-box 复选框，组件/按钮/复选框稿通用类）/ 普通列表 / 行内代码 / 分割线 / 表格。
 // 结构与 lib/markdown.ts 渲染输出同形（md-task 悬挂缩进、md-code 包装），静态展示不接交互。
 import AppIcon from "../../components/AppIcon.vue";
+import MdOutline from "../../components/MdOutline.vue";
+import type { MdOutlineItem } from "../../lib/mdOutline";
+
+// 大纲栏陈列数据（2026-10-15 大纲轮初案）：14 条撑出滚动 + cur 当前节 + force-hover 演示 + 超长省略
+const outlineDemo: MdOutlineItem[] = [
+  { level: 1, text: "方舟前史", line: 0 },
+  { level: 2, text: "1._创世纪", line: 2 },
+  { level: 3, text: "1.1_亚当与夏娃", line: 4 },
+  { level: 3, text: "1.2_该隐与亚伯", line: 10 },
+  { level: 2, text: "2._挪亚方舟", line: 16 },
+  { level: 3, text: "2.1_洪水将至", line: 20 },
+  { level: 4, text: "2.1.1_方舟的造法", line: 24 },
+  { level: 4, text: "2.1.2_超长标题演示——超出栏宽以省略号收尾的一段标题文本", line: 28 },
+  { level: 2, text: "3._出埃及记", line: 34 },
+  { level: 3, text: "3.1_红海", line: 40 },
+  { level: 3, text: "3.2_旷野四十年", line: 46 },
+  { level: 2, text: "4._申命记", line: 52 },
+  { level: 3, text: "4.1_摩西遗训", line: 58 },
+  { level: 1, text: "新约开端", line: 64 },
+];
 </script>
 
 <template>
@@ -88,6 +108,29 @@ app.mount("#app");</code></pre>
         </table>
       </div>
     </div>
+    <p class="pv-sec-desc mo-desc">
+      大纲栏（2026-10-15 大纲轮初案，无设计稿——陈列待用户定稿，口径速查 §71；交互参照 = 飞书文档大纲）：
+      md 预览面板左侧可开关标题导航——宽 168（设置面板左导航同宽）/ 右缘 1px g3 竖线 / item 26 高菜单 item 同档 /
+      缩进 12/级 / hover 底 l-a3 / 当前节 底 l-a2 + 文字 l1 / 底 66 悬浮栏补偿 / 长列表 ScrollThumb。
+      左 cell = 常态（cur 当前节 = 1.1_亚当与夏娃、force-hover 演示 = 2._挪亚方舟、超长省略、可滚动）；
+      右 cell = 空态「本文档没有标题」。
+    </p>
+    <div class="mo-row">
+      <div class="mo-stage">
+        <MdOutline :items="outlineDemo" :active-line="4" :force-hover-line="16" />
+        <div class="md-body mo-excerpt">
+          <h1>方舟前史</h1>
+          <h2>1._创世纪</h2>
+          <h3>1.1_亚当与夏娃</h3>
+          <p>夏娃摘下一颗苹果，开启了人类的时代。</p>
+          <h3>1.2_该隐与亚伯</h3>
+          <p>该隐与他兄弟亚伯说话，二人正在田间。</p>
+        </div>
+      </div>
+      <div class="mo-stage mo-empty-stage">
+        <MdOutline :items="[]" />
+      </div>
+    </div>
   </section>
 </template>
 
@@ -98,5 +141,35 @@ app.mount("#app");</code></pre>
   border: 1px solid var(--n-l-a3);
   border-radius: var(--n-radius-8);
   overflow: hidden;
+}
+/* 大纲栏 cell 舞台（2026-10-15 大纲轮） */
+.mo-desc {
+  margin-top: var(--n-space-24);
+}
+.mo-row {
+  display: flex;
+  gap: var(--n-space-16);
+  margin-top: var(--n-space-16);
+  align-items: flex-start;
+}
+.mo-stage {
+  flex: 1;
+  min-width: 0;
+  height: 320px;
+  display: flex;
+  border: 1px solid var(--n-l-a3);
+  border-radius: var(--n-radius-8);
+  overflow: hidden;
+}
+.mo-stage .md-body.mo-excerpt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--n-space-12) var(--n-space-24); /* 陈列语境版心收窄（84 = 生产单栏稿值） */
+}
+.mo-empty-stage {
+  flex: none;
+  width: 240px;
+  height: 160px;
 }
 </style>

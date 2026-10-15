@@ -1,4 +1,4 @@
-// 本文件由 tools/gen-component-inventory.mjs 生成（2026-10-11），勿手改——重跑 `pnpm inventory` 刷新。
+// 本文件由 tools/gen-component-inventory.mjs 生成（2026-10-15），勿手改——重跑 `pnpm inventory` 刷新。
 // 阶段七重构「组件台账」数据源：status = new 新体系 / legacy 旧件待烧 / business 业务件 / dead 零消费休眠。
 export type InventoryStatus = "new" | "legacy" | "business" | "dead";
 export interface InventoryEntry {
@@ -9,12 +9,12 @@ export interface InventoryEntry {
   legacyTokens: number;
   replacement: string;
 }
-export const inventoryDate = "2026-10-11";
+export const inventoryDate = "2026-10-15";
 export const inventoryTotals = {
   "new": 82,
   "legacy": 0,
-  "business": 78,
-  "dead": 2,
+  "business": 79,
+  "dead": 3,
   "legacyConsumers": 0,
   "legacyTokens": 0
 };
@@ -22,6 +22,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/FolderPickNode",
     "name": "FolderPickNode",
+    "status": "dead",
+    "consumers": 0,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/MdOutline",
+    "name": "MdOutline",
     "status": "dead",
     "consumers": 0,
     "legacyTokens": 0,
@@ -524,6 +532,14 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/SettingsDialog",
+    "name": "SettingsDialog",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/SetupWizard",
     "name": "SetupWizard",
     "status": "business",
@@ -671,7 +687,15 @@ export const inventory: InventoryEntry[] = [
     "path": "components/buttons/ActionButton",
     "name": "ActionButton",
     "status": "new",
-    "consumers": 27,
+    "consumers": 28,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/ScrollThumb",
+    "name": "ScrollThumb",
+    "status": "new",
+    "consumers": 28,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -684,18 +708,10 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/ScrollThumb",
-    "name": "ScrollThumb",
-    "status": "new",
-    "consumers": 26,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
     "path": "components/inputs/TextInput",
     "name": "TextInput",
     "status": "new",
-    "consumers": 21,
+    "consumers": 22,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -703,7 +719,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/modals/BaseModal",
     "name": "BaseModal",
     "status": "new",
-    "consumers": 17,
+    "consumers": 18,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -711,7 +727,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/items/SectionTitle",
     "name": "SectionTitle",
     "status": "new",
-    "consumers": 11,
+    "consumers": 13,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -735,7 +751,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/buttons/SegmentedControl",
     "name": "SegmentedControl",
     "status": "new",
-    "consumers": 7,
+    "consumers": 8,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -743,7 +759,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/buttons/SwitchButton",
     "name": "SwitchButton",
     "status": "new",
-    "consumers": 6,
+    "consumers": 7,
     "legacyTokens": 0,
     "replacement": ""
   },
