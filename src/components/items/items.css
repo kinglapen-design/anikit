@@ -67,3 +67,21 @@
   position: absolute;
   inset: -4px;
 }
+
+/* 滑入动作钮（18×18，与 ni-slide 配套）：常态 亮色/四级，hover 提亮 亮色/二级——
+   2026-10-16 自 PollutionFileItem scoped .act 抽出（扫描污染文件弹窗第二处消费，同款抽象） */
+.ni-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  padding: 0;
+  color: var(--n-l4);
+  cursor: pointer;
+  transition: color var(--n-dur-100) var(--n-ease-in-out);
+}
+.ni-act:hover {
+  color: var(--n-l2);
+}

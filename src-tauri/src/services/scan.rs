@@ -106,8 +106,9 @@ pub fn scan_duplicates(lib: &Library, scope: &ScanScope, icons: &HashSet<String>
   groups
 }
 
-/// 资产 + origin Placement → 视图（缩略图口径与 placement_view 一致）
-fn dup_asset_view(lib: &Library, meta: &AssetMeta, icons: &HashSet<String>) -> DupAssetView {
+/// 资产 + origin Placement → 视图（缩略图口径与 placement_view 一致）；
+/// pub(crate)：污染扫描（pollution.rs）行卡同结构复用
+pub(crate) fn dup_asset_view(lib: &Library, meta: &AssetMeta, icons: &HashSet<String>) -> DupAssetView {
   let placements = lib.index.placements_of(&meta.id);
   let origin = origin_placement(placements).expect("候选资产必有 Placement");
   let key = if meta.ext.is_empty() { "file" } else { meta.ext.as_str() };

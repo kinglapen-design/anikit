@@ -29,13 +29,13 @@ const emit = defineEmits<{ click: []; openExplorer: []; import: []; trash: [] }>
     </span>
     <span class="ni-slide">
       <span class="ni-slide-inner">
-        <button class="act" @click.stop="emit('openExplorer')">
+        <button class="ni-act" @click.stop="emit('openExplorer')">
           <AppIcon name="open-in-explorer" :size="18" />
         </button>
-        <button class="act" @click.stop="emit('import')">
+        <button class="ni-act" @click.stop="emit('import')">
           <AppIcon name="import" :size="18" />
         </button>
-        <button class="act" @click.stop="emit('trash')">
+        <button class="ni-act" @click.stop="emit('trash')">
           <AppIcon name="trash" :size="18" />
         </button>
       </span>
@@ -69,23 +69,10 @@ const emit = defineEmits<{ click: []; openExplorer: []; import: []; trash: [] }>
   text-overflow: ellipsis;
   min-width: 0;
 }
-.act {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  flex: none;
-  padding: 0;
-  color: var(--n-l4);
-  transition: color var(--n-dur-100) var(--n-ease-in-out);
-}
 /* 滑入按钮组不参与收缩（2026-10-16 实机报：三钮 70px 定宽被 flex 比例收缩裁掉尾钮）——
-   全部让位由名称吸收（.lead min-width 0 + 省略），机制契约 = 按钮完整滑入、内容被推左 */
+   全部让位由名称吸收（.lead min-width 0 + 省略），机制契约 = 按钮完整滑入、内容被推左；
+   钮体样式 = items.css .ni-act 共享类（同日抽出，扫描污染文件弹窗同用） */
 .pf .ni-slide {
   flex: none;
-}
-.act:hover {
-  color: var(--n-l2);
 }
 </style>

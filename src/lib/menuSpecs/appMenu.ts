@@ -24,6 +24,7 @@ import type { CtxEntry, CtxItem } from "../contextMenus";
 import { currentSpace } from "../libraryOps";
 import { libraryMenuEntries } from "./libraryMenu";
 import { newDocGroupEntries, scanEntries } from "./addMenu";
+import { openPollutionScan } from "../pollutionScanOps";
 import {
   convertToArchiveFlow,
   createAndName,
@@ -237,7 +238,7 @@ function fileEntries(): CtxEntry[] {
 const FILTER_MENU_DIMS = ["颜色", "时长", "属性", "扩展名", "文件夹", "比例", "链接", "大小", "添加日期", "修改日期"] as const;
 function findEntries(): CtxEntry[] {
   // 以图找图 = 业务另轮（未立项）——占位
-  const scan = scanEntries(); // [扫描重复文件 ▸（三范围）, 扫描文件/档案链接 disabled]
+  const scan = scanEntries(); // [扫描重复文件 ▸（三范围）, 扫描文件/档案链接]
   const panelId = useTabsStore().activeTabId;
   const viewKey = useContentStore().sidebarSelected;
   const canFilter = !!panelId && !viewKey.startsWith("ws:");
@@ -282,7 +283,10 @@ function findEntries(): CtxEntry[] {
       ],
     },
     scan[0], // 扫描重复文件 ▸（当前目录 / 全部 / 所选文件，范围禁用上下文在 scanEntries 内）
-    scan[1], // 扫描文件/档案链接（占位）
+    scan[1], // 扫描文件/档案链接（2026-10-16 立项点亮，全库单范围）
+    // 扫描污染文件（2026-10-16 立项，PRD 03_查找文件-05）：全库 info 异物总览，菜单栏单入口
+    // （不进 scanEntries 共享组——污染扫描是全库治理，不是位置语境动作）
+    { label: "扫描污染文件", action: () => void openPollutionScan() },
   ];
 }
 

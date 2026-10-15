@@ -345,6 +345,7 @@ pub fn run() {
       commands::library::reveal_orphan_info,
       commands::pollution::list_pollution_files,
       commands::pollution::trash_pollution_file,
+      commands::pollution::scan_pollution,
       commands::workspace::workspace_root,
       commands::workspace::list_workspace_dir,
       commands::workspace::ws_dir_stats,

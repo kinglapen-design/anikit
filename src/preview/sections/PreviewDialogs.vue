@@ -2,8 +2,8 @@
 // 业务弹窗展区（阶段七换代盘点；2026-09-20 R2 旧件烧减轮后同步，2026-09-21 跟进）：
 // src/components/ 根目录 12 件业务弹窗全量收编 + 附属 OrphanInfosAlert。
 // 现状分三档：
-//   ① 本体已换代 modals/BaseModal framed（10 件）：BatchRenameDialog 973 / DuplicateDialog 970 /
-//     DupScanDialog 714·970 双屏 / LinkScanDialog 714（2026-10-16 扫描文件/档案链接）/ GroupEditDialog 603 / GroupManageDialog 640（2026-09-21 随稿，§42 待办勾销）/ LinkManageDialog 602 /
+//   ① 本体已换代 modals/BaseModal framed（11 件）：BatchRenameDialog 973 / DuplicateDialog 970 /
+//     DupScanDialog 714·970 双屏 / LinkScanDialog 714（2026-10-16 扫描文件/档案链接）/ PollutionScanDialog 714（同日 扫描污染文件）/ GroupEditDialog 603 / GroupManageDialog 640（2026-09-21 随稿，§42 待办勾销）/ LinkManageDialog 602 /
 //     BlockManageDialog 559 / DescEditDialog 482 / PropsDialog 481——依赖 store 数据或挂载即 invoke，
 //     按 pv-modal-shell 惯例静态复刻：壳 = pv-bm-shell（g3 底 + 1px g5 真 border + 大阴影 + 圆角 8 +
 //     壳 padding 0 + 54 高标题栏 标题 18/26 Bold 一级 + buttons/IconButton plain close-large），
@@ -35,6 +35,7 @@ import GroupNameInput from "../../components/GroupNameInput.vue";
 import DuplicateRow, { type DupDecision } from "../../components/DuplicateRow.vue";
 import DupScanGroupRow from "../../components/DupScanGroupRow.vue";
 import LinkScanGroupRow from "../../components/LinkScanGroupRow.vue";
+import PollutionScanRow from "../../components/PollutionScanRow.vue";
 import GroupRulesEditor from "../../components/GroupRulesEditor.vue";
 import PathErrorDialog from "../../components/PathErrorDialog.vue";
 import FailedListDialog from "../../components/FailedListDialog.vue";
@@ -42,6 +43,7 @@ import type { BlockDraft } from "../../lib/blockOps";
 import type { ConflictItem } from "../../stores/content";
 import type { DupGroup } from "../../lib/dupScanOps";
 import type { LinkGroup } from "../../lib/linkScanOps";
+import type { PollutionAsset } from "../../lib/pollutionScanOps";
 import type { GroupRule } from "../../lib/grouping";
 
 // —— FailedListDialog 真实弹出（2026-09-21 换代 ConfirmModal danger；props 直通；重试/退出仅关闭演示）——
@@ -136,6 +138,28 @@ const linkScanGroup = reactive<LinkGroup>({
     { folderId: "root", folderName: "未分类", name: "跑步循环_01.fla", checked: false },
   ],
 });
+
+// —— PollutionScanDialog 复刻桩（嵌真实 PollutionScanRow 两态：常态 + force-hover 滑入钮组演示）——
+const pollutionScanRow: PollutionAsset = {
+  asset: {
+    assetId: "scan-p1",
+    name: "雪牧_自动.fla",
+    folderId: "f-renwu",
+    folderName: "01_人物",
+    w: null,
+    h: null,
+    ext: "fla",
+    size: 1_258_291,
+    thumbPath: null,
+    thumbKind: null,
+    placements: [{ folderId: "f-renwu", origin: true }],
+  },
+  infoPath: "E:/演示空间/assets/AN-DEMO.info",
+  items: [
+    { name: "RECOVER_雪牧_自动.fla", path: "E:/演示空间/assets/AN-DEMO.info/RECOVER_雪牧_自动.fla", isDir: false },
+    { name: "旧词干_anim.webp", path: "E:/演示空间/assets/AN-DEMO.info/旧词干_anim.webp", isDir: false },
+  ],
+};
 
 // —— 分组两件复刻桩（嵌真实 GroupRulesEditor；候选范围按 items 出，空 items = 只展示已选 chips）——
 const geName = ref("");
@@ -302,6 +326,30 @@ const linkOnlyChecked = ref(false);
             LinkScanDialog（714 单屏组列表，35 稿复用，PRD 03_查找文件-04，2026-10-16 立项）｜复刻嵌真实
             LinkScanGroupRow（链接卡复选 = 删除标记可交互，一条预选演示压暗 30%；首列原始文件卡恒留不可选）；
             本体读 linkScanState、删除 = delete_placements recycle（undo 一步）；无屏 2 确认；口径变更与组件同步
+          </span>
+        </div>
+        <div class="pv-demo-cell">
+          <div class="pv-bm-shell w714">
+            <div class="pv-bm-titlebar">
+              <span class="pv-bm-title">扫描污染文件</span>
+              <IconButton name="close-large" title="关闭" />
+            </div>
+            <div style="display: flex; flex-direction: column; gap: var(--n-space-8); padding: var(--n-space-12)">
+              <PollutionScanRow :row="pollutionScanRow" />
+              <PollutionScanRow :row="pollutionScanRow" force-state="hover" />
+            </div>
+            <div class="pv-bm-foot spread">
+              <span class="pv-bm-summary">共 <b>1</b> 个资产有污染文件 · 合计 2 个条目</span>
+              <span class="pv-bm-foot-btns">
+                <ActionButton variant="cancel" label="关闭" size="lg" />
+              </span>
+            </div>
+          </div>
+          <span class="pv-cap">
+            PollutionScanDialog（714 单屏，PRD 03_查找文件-05，2026-10-16 立项）｜复刻嵌真实 PollutionScanRow
+            两态（常态 + force-hover 滑入钮组 = 打开资源管理器 / 全部丢到回收站）；点击行 = 定位（跳转 origin
+            视口 + 详情切链接 tab）；本体读 pollutionScanState，全清 = 逐条 trash_pollution_file；行列表
+            padding/gap 为壳内私有样式本 cell 内联重现；口径变更与组件同步
           </span>
         </div>
         <div class="pv-demo-cell" style="width: 240px">

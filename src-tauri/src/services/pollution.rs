@@ -95,6 +95,33 @@ pub fn trash_pollution(assets_dir: &Path, meta: &AssetMeta, name: &str) -> Resul
   crate::adapters::recycle_bin::delete_to_recycle(&[target])
 }
 
+// —— 全库污染扫描（2026-10-16 立项，PRD 03_查找文件-05）——
+
+/// 扫描弹窗行视图：asset = 卡片数据（复用扫描重复文件 DupAssetView 全字段）+
+/// info_path（「打开资源管理器」直传）+ items 污染清单（同详情区块数据源）
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PollutionAssetView {
+  pub asset: crate::services::scan::DupAssetView,
+  pub info_path: String,
+  pub items: Vec<PollutionItem>,
+}
+
+/// 全库污染扫描 IO 段（锁外执行，spawn_blocking）：逐资产 list_pollution（每资产 2~3 次
+/// 目录级 syscall，不读内容不算 hash）；候选裁剪（只扫有活 Placement 的资产）在命令层快照时做。
+/// 单资产 read_dir 失败不拖垮全扫——记 log 跳过；返回 (asset_id, items) 仅含命中资产
+pub fn scan_pollution(assets_dir: &Path, metas: &[AssetMeta]) -> Vec<(String, Vec<PollutionItem>)> {
+  let mut hits = Vec::new();
+  for meta in metas {
+    match list_pollution(assets_dir, meta) {
+      Ok(items) if !items.is_empty() => hits.push((meta.id.clone(), items)),
+      Ok(_) => {}
+      Err(e) => log::warn!("污染扫描跳过 {}：{e}", meta.id),
+    }
+  }
+  hits
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -209,5 +236,28 @@ mod tests {
     trash_pollution(&lib.assets_dir, &m, "恢复_雪牧.fla").unwrap();
     assert!(!info.join("恢复_雪牧.fla").exists(), "异物已进回收站");
     assert!(info.join("雪牧.fla").is_file() && info.join("metadata.json").is_file(), "库管文件不动");
+  }
+
+  /// 全库扫描（PRD 03_查找文件-05）：只收有污染条目的资产；干净资产 / info 缺失资产不命中
+  #[test]
+  fn scan_collects_only_polluted_assets() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = library::create_test(dir.path());
+    let clean = meta("AN-A", "雪牧.fla");
+    let dirty = meta("AN-B", "乙.png");
+    let ghost = meta("AN-C", "丙.png"); // info 目录不存在
+    let info_a = lib.info_dir("AN-A");
+    touch(&info_a, "metadata.json");
+    touch(&info_a, "雪牧.fla");
+    let info_b = lib.info_dir("AN-B");
+    touch(&info_b, "metadata.json");
+    touch(&info_b, "乙.png");
+    touch(&info_b, "RECOVER_乙.png");
+
+    let hits = scan_pollution(&lib.assets_dir, &[clean, dirty, ghost]);
+    assert_eq!(hits.len(), 1, "只有污染资产命中：{hits:?}");
+    assert_eq!(hits[0].0, "AN-B");
+    assert_eq!(hits[0].1.len(), 1);
+    assert_eq!(hits[0].1[0].name, "RECOVER_乙.png");
   }
 }

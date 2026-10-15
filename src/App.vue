@@ -38,6 +38,7 @@ import SequenceDialog from "./components/SequenceDialog.vue";
 import FailedListDialog from "./components/FailedListDialog.vue";
 import DuplicateDialog from "./components/DuplicateDialog.vue";
 import LinkScanDialog from "./components/LinkScanDialog.vue";
+import PollutionScanDialog from "./components/PollutionScanDialog.vue";
 import DupScanDialog from "./components/DupScanDialog.vue";
 import LinkManageDialog from "./components/LinkManageDialog.vue";
 import RecycleConfirmDialog from "./components/RecycleConfirmDialog.vue";
@@ -72,6 +73,7 @@ import { osFileDragHover, osFileDragHoverEnd, isOsDragOutActive } from "./lib/dr
 import { closePluginPanel, pluginPanelState } from "./lib/pluginPanel";
 import { dupScanState } from "./lib/dupScanOps";
 import { linkScanState } from "./lib/linkScanOps";
+import { pollutionScanState } from "./lib/pollutionScanOps";
 import { useGlobalKeys } from "./lib/useGlobalKeys";
 import { useSidebarAnim } from "./lib/useSidebarAnim";
 import { useWindowStatePersistence } from "./lib/windowState";
@@ -534,6 +536,8 @@ async function togglePin(): Promise<void> {
     <DupScanDialog v-if="dupScanState.groups" />
     <!-- 扫描文件/档案链接（2026-10-16 立项，PRD 03_查找文件-04）：查找 / 新增 / 快速访问·回收站空白同入口 -->
     <LinkScanDialog v-if="linkScanState.groups" />
+    <!-- 扫描污染文件（2026-10-16 立项，PRD 03_查找文件-05）：菜单栏 查找▸ 单入口 -->
+    <PollutionScanDialog v-if="pollutionScanState.groups" />
     <!-- 链接管理弹窗（17 稿，6.2 三轮）：文件右键 Ctrl+J / 详情链接区块添加钮触发 -->
     <LinkManageDialog v-if="selection.linkManageDraft" />
     <!-- 回收站彻底删除确认窗（6.1 二轮）：虚拟片段引用警示，不可恢复无撤销 -->
