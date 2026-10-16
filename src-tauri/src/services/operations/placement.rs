@@ -223,6 +223,47 @@ pub fn set_placement_origin(
   Ok(true)
 }
 
+/// 链接归并（扫描文件/档案链接 屏 2 确认，PRD 03_查找文件-04，2026-10-16 两段式改版）：
+/// 每个保留者位置**成为/保持唯一 origin**，该资产其余全部位置（链接 + 被替换的旧 origin）
+/// 移入回收站——资产只剩保留者一个位置；物理不动（记录级，recycle.json 聚合可还原）。
+/// 逐条删链接归链接管理（sync_asset_links），本函数只做整组归并。
+/// 实现 = 既有原语编排（delete_placements recycle + set_placement_origin 幂等），finish 随原语；
+/// 保留者定位先按传入 origin、落空换另一态再找（同 set_placement_origin 口径），陈旧跳过不计；
+/// 返回清除的位置总数（0 = 命令层不进撤销栈）
+pub fn consolidate_asset_links(lib: &mut Library, keepers: &[PlacementRef]) -> Result<usize, String> {
+  let mut cleared = 0usize;
+  for keeper in keepers {
+    let Some(pos) = find_placement(lib, keeper).or_else(|| {
+      let mut alt = keeper.clone();
+      alt.origin = !keeper.origin;
+      find_placement(lib, &alt)
+    }) else {
+      continue; // 陈旧（刚被移动/删除）跳过
+    };
+    let asset_id = keeper.asset_id.clone();
+    // 其余全部位置进回收站：按行精确（name 恒携带，撞键行不错伤）；下标集在删除前取定
+    let others: Vec<PlacementRef> = lib
+      .folders
+      .items
+      .iter()
+      .enumerate()
+      .filter(|(i, p)| *i != pos && p.asset == asset_id)
+      .map(|(_, p)| PlacementRef {
+        asset_id: asset_id.clone(),
+        folder_id: p.folder.clone(),
+        origin: p.origin,
+        name: Some(p.name.clone()),
+      })
+      .collect();
+    super::delete_placements(lib, &others, Some("recycle"))?;
+    cleared += others.len();
+    // 保留者成为 origin（已是 = 幂等无操作；原 origin 已在回收站，恒 ≤ 1 不变式天然成立）
+    set_placement_origin(lib, &asset_id, &keeper.folder_id, keeper.name.as_deref())?;
+  }
+  log::info!("链接归并 {} 组，清除 {} 个位置", keepers.len(), cleared);
+  Ok(cleared)
+}
+
 /// 链接管理（17 稿，6.2 三轮）：一个资产的位置增 / 删 / 改三组一次提交（命令层单撤销步）。
 /// - renames 先行（rename_placement 语义：链接仅改显示名、origin 同步磁盘 originName 段，
 ///   返回磁盘改名清单供命令层登记 DiskOp）；oldName 给了 = 同文件夹重复链接精确到行；
@@ -616,5 +657,49 @@ mod tests {
     // 目标不存在报错
     assert!(set_placement_origin(&mut h.lib, "AN-A", "F99", None).is_err());
     assert!(set_placement_origin(&mut h.lib, "AN-X", "F02", None).is_err());
+  }
+
+  /// 链接归并（PRD 03_查找文件-04 屏 2 确认）：保留者 = origin → 链接全清进回收站；
+  /// 保留者 = 链接 → 提升 origin，旧 origin 与其余链接全清——资产只剩保留者一个位置
+  #[test]
+  fn consolidate_keeps_single_origin() {
+    let mut h = make_lib();
+    add_folder(&mut h.lib, "F01");
+    add_folder(&mut h.lib, "F02");
+    add_asset(&mut h, "AN-A", "图.png", "F01", None);
+    ops::add_placement(&mut h.lib, "AN-A".into(), "F02".into(), "图-链A.png".into(), false, &mut HashMap::new());
+    ops::add_placement(&mut h.lib, "AN-A".into(), "F02".into(), "图-链B.png".into(), false, &mut HashMap::new());
+    finish(&mut h.lib).unwrap();
+
+    // 保留 origin：两条链接进回收站，origin 不动
+    let cleared = consolidate_asset_links(
+      &mut h.lib,
+      &[PlacementRef { asset_id: "AN-A".into(), folder_id: "F01".into(), origin: true, name: Some("图.png".into()) }],
+    )
+    .unwrap();
+    assert_eq!(cleared, 2);
+    let live: Vec<&Placement> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-A").collect();
+    assert_eq!(live.len(), 1, "只剩保留者");
+    assert!(live[0].origin && live[0].folder == "F01");
+    assert_eq!(h.lib.recycle.items.iter().find(|r| r.asset == "AN-A").map(|r| r.placements.len()), Some(2), "链接进回收站");
+
+    // 还原后改保留链接：链接提升 origin，旧 origin 与其余链接全清
+    crate::services::recycle::restore_recycle(&mut h.lib, &["AN-A".to_string()]).unwrap();
+    let cleared = consolidate_asset_links(
+      &mut h.lib,
+      &[PlacementRef { asset_id: "AN-A".into(), folder_id: "F02".into(), origin: false, name: Some("图-链B.png".into()) }],
+    )
+    .unwrap();
+    assert_eq!(cleared, 2, "旧 origin + 另一链接同清");
+    let live: Vec<&Placement> = h.lib.folders.items.iter().filter(|p| p.asset == "AN-A").collect();
+    assert_eq!(live.len(), 1);
+    assert!(live[0].origin && live[0].name == "图-链B.png" && live[0].folder == "F02", "保留链接已提升 origin");
+    // 陈旧保留者跳过
+    let cleared = consolidate_asset_links(
+      &mut h.lib,
+      &[PlacementRef { asset_id: "AN-A".into(), folder_id: "F99".into(), origin: false, name: None }],
+    )
+    .unwrap();
+    assert_eq!(cleared, 0);
   }
 }

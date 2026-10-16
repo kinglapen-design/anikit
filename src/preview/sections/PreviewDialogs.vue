@@ -116,8 +116,7 @@ const scanGroup: DupGroup = {
   ],
 };
 
-// —— LinkScanDialog 复刻桩（嵌真实 LinkScanGroupRow；链接卡复选 = 删除标记可交互，
-//    一条预选演示压暗 30%；reactive 包装保交互回显）——
+// —— LinkScanDialog 复刻桩（嵌真实 LinkScanGroupRow；组复选可交互，两段式：屏 2 = 保留者 radio）——
 const linkScanGroup = reactive<LinkGroup>({
   asset: {
     assetId: "scan-l1",
@@ -130,13 +129,20 @@ const linkScanGroup = reactive<LinkGroup>({
     size: 1_258_291,
     thumbPath: null,
     thumbKind: null,
-    placements: [{ folderId: "f-renwu", origin: true }],
+    placements: [
+      { folderId: "f-renwu", origin: true },
+      { folderId: "f-renwu", origin: false },
+      { folderId: "f-zaji", origin: false },
+      { folderId: "root", origin: false },
+    ],
   },
+  origin: { folderId: "f-renwu", folderName: "01_人物", name: "跑步循环_01.fla" },
   links: [
-    { folderId: "f-renwu", folderName: "01_人物", name: "跑步-主角入场链接.fla", checked: true },
-    { folderId: "f-zaji", folderName: "杂集", name: "跑步备份.fla", checked: false },
-    { folderId: "root", folderName: "未分类", name: "跑步循环_01.fla", checked: false },
+    { folderId: "f-renwu", folderName: "01_人物", name: "跑步-主角入场链接.fla" },
+    { folderId: "f-zaji", folderName: "杂集", name: "跑步备份.fla" },
+    { folderId: "root", folderName: "未分类", name: "跑步循环_01.fla" },
   ],
+  checked: true,
 });
 
 // —— PollutionScanDialog 复刻桩（嵌真实 PollutionScanRow 两态：常态 + force-hover 滑入钮组演示）——
@@ -315,17 +321,17 @@ const linkOnlyChecked = ref(false);
             </div>
             <LinkScanGroupRow :group="linkScanGroup" />
             <div class="pv-bm-foot spread">
-              <span class="pv-bm-summary">已选择 <b>1</b> 个链接文件</span>
+              <span class="pv-bm-summary">已选择 <b>1</b> 个文件 · 将清除 3 个位置</span>
               <span class="pv-bm-foot-btns">
                 <ActionButton variant="cancel" label="取消" size="lg" />
-                <ActionButton variant="primary" label="删除链接文件" size="lg" />
+                <ActionButton variant="primary" label="合并" size="lg" />
               </span>
             </div>
           </div>
           <span class="pv-cap">
-            LinkScanDialog（714 单屏组列表，35 稿复用，PRD 03_查找文件-04，2026-10-16 立项）｜复刻嵌真实
-            LinkScanGroupRow（链接卡复选 = 删除标记可交互，一条预选演示压暗 30%；首列原始文件卡恒留不可选）；
-            本体读 linkScanState、删除 = delete_placements recycle（undo 一步）；无屏 2 确认；口径变更与组件同步
+            LinkScanDialog 屏 1（714 组列表，35 稿族，PRD 03_查找文件-04，2026-10-16 立项 + 同日两段式改版）｜复刻嵌真实
+            LinkScanGroupRow（组复选可交互，卡片只看不动）；本体读 linkScanState；屏 2（970 保留者 radio：每组选一个位置
+            保留当原始文件，其余全部清除进回收站 = consolidate_asset_links 单命令 undo 一步）未复刻；口径变更与组件同步
           </span>
         </div>
         <div class="pv-demo-cell">

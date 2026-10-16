@@ -462,6 +462,30 @@ pub async fn set_placement_origin(
   }
 }
 
+/// 链接归并（扫描文件/档案链接 屏 2 确认，PRD 03_查找文件-04，2026-10-16 两段式改版）：
+/// 每个保留者位置成为/保持唯一 origin，该资产其余位置全部移入回收站（物理不动，
+/// 整批一次撤销步）；返回清除的位置总数（0 = 不进撤销栈）
+#[tauri::command]
+pub async fn consolidate_asset_links(state: State<'_, AppState>, keepers: Vec<PlacementRef>) -> Result<usize, String> {
+  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
+  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
+  undo.begin(format!("归并 {} 组链接", keepers.len()));
+  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  undo.record_file(&lib.root.join(RECYCLE_FILE)).map_err(|e| e.to_string())?;
+  match operations::consolidate_asset_links(lib, &keepers) {
+    Ok(0) => {
+      undo.cancel();
+      Ok(0)
+    }
+    Ok(n) => {
+      undo.commit().map_err(|e| e.to_string())?;
+      Ok(n)
+    }
+    Err(e) => Err(fail(lib, &mut undo, e)),
+  }
+}
+
 /// 创建副本：info 目录整体复制 + 新资源实体，返回新 assetId 清单；
 /// 磁盘副作用成对登记（undo = 删除新 info 目录 / redo = 复制还原）
 #[tauri::command]

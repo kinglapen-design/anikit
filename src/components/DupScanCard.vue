@@ -5,12 +5,10 @@
 // 左上格式徽标（formatBadgeColor，静态图片 null 不出）+ 右下原始文件徽章
 //（35 稿注明：只扫描原始文件，徽章恒为原始文件徽章）。无悬停播放 / 选择 / 重命名交互。
 // 2026-10-16 链接扫描复用扩展（PRD 03_查找文件-04，同名第二处不新建组件）：
-// badge="link" 换链接徽章；nameOverride / metaOverride 覆盖名称与简介行（链接卡 = 链接显示名 +
-// 所在文件夹）；selectable 开整卡点击 + 右上复选框（复选 = 删除标记），selected 压暗 30%（§5 档）。
+// badge="link" 换链接徽章；nameOverride / metaOverride 覆盖名称与简介行（链接卡 = 链接显示名 + 所在文件夹）。
 import { computed } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
-import Checkbox from "./buttons/Checkbox.vue";
 import { formatBadgeColor } from "../lib/formatBadge";
 import type { DupAsset } from "../lib/dupScanOps";
 
@@ -20,12 +18,9 @@ const props = withDefaults(
     badge?: "origin" | "link";
     nameOverride?: string;
     metaOverride?: string;
-    selectable?: boolean;
-    selected?: boolean;
   }>(),
   { badge: "origin", nameOverride: undefined, metaOverride: undefined },
 );
-const emit = defineEmits<{ toggle: [] }>();
 
 const thumbUrl = computed(() =>
   props.asset.thumbPath ? convertFileSrc(props.asset.thumbPath) : null,
@@ -41,14 +36,10 @@ const metaText = computed(
       ? `${props.asset.w} x ${props.asset.h}`
       : props.asset.ext.toUpperCase()),
 );
-
-function onClick(): void {
-  if (props.selectable) emit("toggle");
-}
 </script>
 
 <template>
-  <div class="scan-card" :class="{ selectable, selected }" @click="onClick">
+  <div class="scan-card">
     <div class="thumb">
       <img
         v-if="thumbUrl"
@@ -65,14 +56,6 @@ function onClick(): void {
       <span class="meta">{{ metaText }}</span>
     </div>
     <span v-if="badgeColor" class="fmt-badge" :style="{ background: badgeColor }">{{ asset.ext.toUpperCase() }}</span>
-    <!-- 可选卡复选框（链接卡 = 删除标记）：右上 6/6 与格式徽标同位镜像；点击不冒泡（卡 click 同义防双触发） -->
-    <Checkbox
-      v-if="selectable"
-      class="card-check"
-      :model-value="selected"
-      @update:model-value="emit('toggle')"
-      @click.stop
-    />
     <AppIcon :name="badge === 'link' ? 'linked-file-badge' : 'original-file-badge'" :size="15" class="origin-badge" />
   </div>
 </template>
@@ -174,21 +157,6 @@ function onClick(): void {
   position: absolute;
   right: 8px;
   bottom: 8px;
-  z-index: 1;
-}
-/* 可选卡（链接扫描）：整卡可点；选中 = 删除标记压暗 30%（§5 档，跳过/取消勾选同口径） */
-.scan-card.selectable {
-  cursor: pointer;
-  transition: opacity 0.15s ease;
-}
-.scan-card.selected {
-  opacity: 0.3;
-}
-/* 卡上复选框：右上各 6（与格式徽标左上同位镜像） */
-.card-check {
-  position: absolute;
-  right: 6px;
-  top: 6px;
   z-index: 1;
 }
 </style>

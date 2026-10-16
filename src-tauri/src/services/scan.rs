@@ -148,11 +148,13 @@ pub struct LinkPlacementView {
   pub name: String,
 }
 
-/// 链接组：有 ≥1 条链接 Placement 的资产一组；asset = 首列原始文件卡（无活 origin 取第一条兜底）
+/// 链接组：有 ≥1 条链接 Placement 的资产一组；asset = 首列原始文件卡（无活 origin 取第一条兜底）；
+/// origin = 活 origin 位置（屏 2 保留者默认选中；None = origin 在回收站，屏 2 默认退首条链接）
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkGroupView {
   pub asset: DupAssetView,
+  pub origin: Option<LinkPlacementView>,
   pub links: Vec<LinkPlacementView>,
 }
 
@@ -162,20 +164,18 @@ pub fn scan_links(lib: &Library, icons: &HashSet<String>) -> Vec<LinkGroupView> 
   let mut groups: Vec<LinkGroupView> = Vec::new();
   for meta in lib.index.assets.values() {
     let placements = lib.index.placements_of(&meta.id);
-    let mut links: Vec<LinkPlacementView> = placements
-      .iter()
-      .filter(|p| !p.origin)
-      .map(|p| LinkPlacementView {
-        folder_id: p.folder.clone(),
-        folder_name: folder_name(lib, &p.folder),
-        name: p.name.clone(),
-      })
-      .collect();
+    let view_of = |p: &Placement| LinkPlacementView {
+      folder_id: p.folder.clone(),
+      folder_name: folder_name(lib, &p.folder),
+      name: p.name.clone(),
+    };
+    let origin = placements.iter().find(|p| p.origin).map(&view_of);
+    let mut links: Vec<LinkPlacementView> = placements.iter().filter(|p| !p.origin).map(view_of).collect();
     if links.is_empty() {
       continue;
     }
     links.sort_by(|a, b| a.folder_name.cmp(&b.folder_name).then_with(|| a.name.cmp(&b.name)));
-    groups.push(LinkGroupView { asset: dup_asset_view(lib, meta, icons), links });
+    groups.push(LinkGroupView { asset: dup_asset_view(lib, meta, icons), origin, links });
   }
   groups.sort_by(|a, b| {
     b.links
@@ -370,6 +370,8 @@ mod tests {
     let g = &groups[0];
     assert_eq!(g.asset.asset_id, "AN-A");
     assert_eq!(g.asset.name, "甲.png", "首列 = origin 显示名");
+    let origin = g.origin.as_ref().expect("活 origin 位置");
+    assert_eq!((origin.name.as_str(), origin.folder_name.as_str()), ("甲.png", "未分类"), "屏 2 默认保留者");
     let names: Vec<&str> = g.links.iter().map(|l| l.name.as_str()).collect();
     assert_eq!(names, ["甲链接A.png", "甲链接B.png"], "链接按所在文件夹名排序");
     assert_eq!(g.links[0].folder_name, "夹A");
@@ -389,6 +391,7 @@ mod tests {
     let groups = scan_only_links(&h.lib);
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].asset.name, "链接一.png", "无活 origin 兜底第一条 Placement");
+    assert!(groups[0].origin.is_none(), "origin 在回收站 = None（屏 2 默认退首条链接）");
     assert_eq!(groups[0].links.len(), 2);
     assert_eq!(groups[0].links.iter().find(|l| l.folder_id == "root").unwrap().folder_name, "未分类");
   }

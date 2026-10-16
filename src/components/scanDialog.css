@@ -123,3 +123,206 @@
   display: flex;
   gap: var(--n-space-12);
 }
+
+/* —— 屏 2（合并前确认双栏，Eagle 式）：重复扫描「保留者」与链接扫描「保留当原始文件」同构 —— */
+
+/* 双栏体：左 250 组列表 + 右保留者列表；高度内容自适应带视口上限 */
+.scd-confirm {
+  display: flex;
+  height: min(560px, calc(100vh - 300px));
+}
+.scd-gwrap,
+.scd-kwrap {
+  position: relative; /* 锚 ScrollThumb（悬浮滚轮悬停显隐） */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.scd-gwrap {
+  width: 250px;
+  flex: none;
+}
+.scd-kwrap {
+  flex: 1;
+  min-width: 0;
+}
+/* 左列与右列的 1px 分隔线（暗-悬停）：内容区内会被滚轮压，补画在上层（z-index 11、事件穿透） */
+.scd-gwrap::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--n-l-a3);
+  z-index: 11;
+  pointer-events: none;
+}
+/* 左列组列表：容器 padding 12 全边 + gap 4 + item 圆角 6 */
+.scd-glist {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-4);
+  padding: var(--n-space-12);
+}
+/* 组列表项：56 高 = 40×40 缩略图 + 名称 / N 个文件竖排，padding 四周 8；
+   hover 叠 暗-悬停 罩层；当前组 = 亮-选中 罩层 + 立体感-通用，无描边（树选中同口径） */
+.scd-gitem {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-12);
+  height: 56px;
+  padding: var(--n-space-8);
+  border-radius: var(--n-radius-6);
+  flex: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.scd-gitem:hover {
+  background: var(--n-l-a3);
+}
+.scd-gitem.cur {
+  background: var(--n-l-a2);
+  box-shadow: var(--n-effect-raised);
+}
+.scd-gthumb {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--n-radius-6);
+  background: var(--n-g3);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.scd-gthumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--n-radius-6); /* 双保险：容器 overflow 裁剪之外 img 显式圆角 */
+}
+.scd-gthumb img.icon {
+  object-fit: contain;
+}
+.scd-gthumb .ext {
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l3);
+}
+.scd-gtext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-2);
+  min-width: 0;
+}
+.scd-gname {
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scd-gcount {
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
+}
+/* 右列：保留者单选列表（item = 35 稿卡片横条化：缩略图 + 名称 + 大小 + 所在文件夹标签）；
+   滚轮 = ScrollThumb 悬浮件，padding 纯 24（无 gutter 补偿） */
+.scd-klist {
+  flex: 1;
+  min-height: 0;
+  padding: var(--n-space-16) var(--n-space-24);
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-8);
+}
+.scd-kitem {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-12);
+  height: 52px;
+  padding: var(--n-space-6) var(--n-space-12);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g3); /* 弹窗内 item 底色与二级窗口一致 */
+  box-shadow: inset 0 0 0 1px var(--n-l-a3);
+  flex: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+/* hover 叠 暗-悬停 罩层；选中行（.on）悬停不再变色——选中态由品牌色描边表达，叠罩会稀释观感 */
+.scd-kitem:not(.on):hover {
+  background: var(--n-l-a3);
+}
+/* 选中行 = 品牌 2px 描边（TreeRowItem 并入/命名描边同档） */
+.scd-kitem.on {
+  box-shadow: inset 0 0 0 2px var(--n-brand);
+}
+.scd-kthumb {
+  width: 64px;
+  height: 36px;
+  border-radius: var(--n-radius-6);
+  background: var(--n-g2);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.scd-kthumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--n-radius-6);
+}
+.scd-kthumb img.icon {
+  object-fit: contain;
+}
+.scd-kthumb .ext {
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l3);
+}
+.scd-kname {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scd-kmeta {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-12);
+  flex: none;
+}
+.scd-kmeta .size {
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l3);
+  white-space: nowrap;
+}
+/* 所在文件夹标签（36 稿 chip 同款）：C4 底 + 1px 暗-悬停 / 圆角 6 / padding 4 8 / 标签档 */
+.scd-chip {
+  max-width: 140px;
+  padding: var(--n-space-4) var(--n-space-8);
+  border-radius: var(--n-radius-6);
+  background: var(--n-g4);
+  box-shadow: inset 0 0 0 1px var(--n-l-a3);
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

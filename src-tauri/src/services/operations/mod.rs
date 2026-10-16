@@ -18,7 +18,7 @@ pub use delete::delete_placements;
 pub use document::create_document;
 pub use duplicate::{duplicate_placements, rename_placement, rename_placements, BatchRenameFailed};
 pub use folder::{assign_group, create_folder, move_folders, rename_folder, rename_folders, reorder_folders, set_folder_color, set_folder_colors, set_folder_groups, set_folder_icon, RenameFolderItem};
-pub use placement::{link_placements, move_placements, reorder_placements, set_placement_origin, sync_asset_links};
+pub use placement::{consolidate_asset_links, link_placements, move_placements, reorder_placements, set_placement_origin, sync_asset_links};
 
 /// 按三元组 + 可选显示名定位 Placement（name 给了 = 精确到行：同文件夹同 origin 的重复链接
 /// 可区分；缺省 = 三元组第一条，sync_asset_links 删除 / 改名定位用）

@@ -83,18 +83,18 @@ function thumbUrl(a: DupAsset): string | null {
       <ScrollThumb :body="groupsBody" />
     </div>
 
-    <!-- 屏 2：合并前确认（Eagle 式：左组列表 + 右保留者单选） -->
-    <div v-else class="confirm-body">
-      <div class="list-wrap">
-        <aside ref="groupListEl" class="group-list kit-scroll">
+    <!-- 屏 2：合并前确认（Eagle 式：左组列表 + 右保留者单选；样式 = scanDialog.css scd- 共享族） -->
+    <div v-else class="scd-confirm">
+      <div class="scd-gwrap">
+        <aside ref="groupListEl" class="scd-glist kit-scroll">
           <button
             v-for="g in confirmGroups"
             :key="g.hash"
-            class="group-item"
+            class="scd-gitem"
             :class="{ cur: g.hash === currentGroup?.hash }"
             @click="selectGroup(g.hash)"
           >
-            <span class="group-thumb">
+            <span class="scd-gthumb">
               <img
                 v-if="g.assets[0] && thumbUrl(g.assets[0])"
                 :class="{ icon: g.assets[0].thumbKind === 'formatIcon' }"
@@ -104,20 +104,20 @@ function thumbUrl(a: DupAsset): string | null {
               />
               <span v-else class="ext">{{ g.assets[0]?.ext.toUpperCase() }}</span>
             </span>
-            <span class="group-text">
-              <span class="group-name" :title="g.assets[0]?.name">{{ g.assets[0]?.name }}</span>
-              <span class="group-count">{{ g.assets.length }} 个文件</span>
+            <span class="scd-gtext">
+              <span class="scd-gname" :title="g.assets[0]?.name">{{ g.assets[0]?.name }}</span>
+              <span class="scd-gcount">{{ g.assets.length }} 个文件</span>
             </span>
           </button>
         </aside>
         <ScrollThumb :body="groupListEl" />
       </div>
-      <section v-if="currentGroup" class="keeper-wrap">
-        <div ref="keeperListEl" class="keeper-list kit-scroll">
+      <section v-if="currentGroup" class="scd-kwrap">
+        <div ref="keeperListEl" class="scd-klist kit-scroll">
           <div
             v-for="a in currentGroup.assets"
             :key="a.assetId"
-            class="keeper-item"
+            class="scd-kitem"
             :class="{ on: keeperOf(currentGroup.hash) === a.assetId }"
             @click="setKeeper(currentGroup.hash, a.assetId)"
           >
@@ -126,7 +126,7 @@ function thumbUrl(a: DupAsset): string | null {
               :value="a.assetId"
               @update:model-value="setKeeper(currentGroup.hash!, String($event))"
             />
-            <span class="keeper-thumb">
+            <span class="scd-kthumb">
               <img
                 v-if="thumbUrl(a)"
                 :class="{ icon: a.thumbKind === 'formatIcon' }"
@@ -136,10 +136,10 @@ function thumbUrl(a: DupAsset): string | null {
               />
               <span v-else class="ext">{{ a.ext.toUpperCase() }}</span>
             </span>
-            <span class="keeper-name" :title="a.name">{{ a.name }}</span>
-            <span class="keeper-meta">
+            <span class="scd-kname" :title="a.name">{{ a.name }}</span>
+            <span class="scd-kmeta">
               <span class="size">{{ formatSize(a.size) }}</span>
-              <span class="chip" :title="a.folderName">{{ a.folderName }}</span>
+              <span class="scd-chip" :title="a.folderName">{{ a.folderName }}</span>
             </span>
           </div>
         </div>
@@ -174,217 +174,3 @@ function thumbUrl(a: DupAsset): string | null {
   </BaseModal>
 </template>
 
-<style scoped>
-/* 壳 = modals/BaseModal framed（宽走 width prop：屏 1 = 714 / 屏 2 = 970）；壳覆盖（max-width 封顶 /
-   宽度动画 / actions 通栏）与屏 1 滚动区 / 底部按钮行样式 = scanDialog.css 扫描弹窗族共享件
-   （2026-10-16 抽出，LinkScanDialog 同用）；本文件 scoped 只剩屏 2（合并前确认双栏）特有样式。
-   滚轮贴内容区右缘与真 border 贴邻不重叠；左列分隔线在内容区内会被滚轮压，由 .list-wrap::after 上层补画 */
-.list-wrap,
-.keeper-wrap {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.list-wrap {
-  width: 250px;
-  flex: none;
-}
-.keeper-wrap {
-  flex: 1;
-  min-width: 0;
-}
-/* 左列：与右列的 1px 分隔线（暗-悬停）补画在上层（z-index 11 > 滚轮 10，事件穿透） */
-.list-wrap::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--n-l-a3);
-  z-index: 11;
-  pointer-events: none;
-}
-
-/* —— 屏 2：双栏 —— */
-.confirm-body {
-  display: flex;
-  height: min(560px, calc(100vh - 300px));
-}
-/* 左列：250 组列表；容器 padding 12 全边（2026-08-13 用户定）+ gap 4 + item 圆角 6；
-   与右列的 1px 分隔线由 .list-wrap::after 上层补画（滚轮贴边不压线），此处不再自画；
-   滚轮 = ScrollThumb 悬浮件（不占布局，边距即纯 padding，无需凑 gutter） */
-.group-list {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--n-space-4);
-  padding: var(--n-space-12);
-}
-/* 组列表项：56 高 = 40×40 缩略图 + 名称 / N 个文件竖排，padding 四周 8（2026-08-13 用户定）；
-   hover 叠 暗-悬停 罩层；当前组 = 亮-选中 罩层 + 暗-悬停 1px 线条（树 item 强度阶梯同口径） */
-.group-item {
-  display: flex;
-  align-items: center;
-  gap: var(--n-space-12);
-  height: 56px;
-  padding: var(--n-space-8);
-  border-radius: var(--n-radius-6);
-  flex: none;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.group-item:hover {
-  background: var(--n-l-a3);
-}
-/* 当前组：与目录树 item 选中同款——半透明-2 底 + 立体感-通用，无描边（2026-09-20 用户定「树选中没有边框」） */
-.group-item.cur {
-  background: var(--n-l-a2);
-  box-shadow: var(--n-effect-raised);
-}
-.group-thumb {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--n-radius-6);
-  background: var(--n-g3);
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-}
-.group-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: var(--n-radius-6); /* 双保险：容器 overflow 裁剪之外 img 显式圆角（2026-08-13 走查核对 = 6） */
-}
-.group-thumb img.icon {
-  object-fit: contain;
-}
-.group-thumb .ext {
-  font-size: var(--n-fs-secondary);
-  line-height: var(--n-lh-secondary);
-  font-weight: var(--n-fw-bold);
-  color: var(--n-l3);
-}
-.group-text {
-  display: flex;
-  flex-direction: column;
-  gap: var(--n-space-2);
-  min-width: 0;
-}
-.group-name {
-  font-size: var(--n-fs-body);
-  line-height: var(--n-lh-body);
-  color: var(--n-l1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.group-count {
-  font-size: var(--n-fs-secondary);
-  line-height: var(--n-lh-secondary);
-  color: var(--n-l3);
-}
-/* 右列：保留者单选列表（item = 35 稿卡片横条化：缩略图 + 名称 + 大小 + 所在文件夹标签）；
-   滚轮 = ScrollThumb 悬浮件，padding 恢复纯 24（无 gutter 补偿） */
-.keeper-list {
-  flex: 1;
-  min-height: 0;
-  padding: var(--n-space-16) var(--n-space-24);
-  display: flex;
-  flex-direction: column;
-  gap: var(--n-space-8);
-}
-.keeper-item {
-  display: flex;
-  align-items: center;
-  gap: var(--n-space-12);
-  height: 52px;
-  padding: var(--n-space-6) var(--n-space-12);
-  border-radius: var(--n-radius-6);
-  background: var(--n-g3); /* 弹窗内 item 底色与二级窗口一致（2026-08-13 用户定：原 C3 改 C2） */
-  box-shadow: inset 0 0 0 1px var(--n-l-a3);
-  flex: none;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-/* hover 叠 暗-悬停 罩层；选中行（.on）悬停不再变色——选中态由品牌色描边表达，
-   叠罩会稀释描边观感（2026-08-13 走查） */
-.keeper-item:not(.on):hover {
-  background: var(--n-l-a3);
-}
-/* 选中行 = 品牌 2px 描边（2026-09-20 用户定 2px 档，对齐 TreeRowItem 并入/命名描边） */
-.keeper-item.on {
-  box-shadow: inset 0 0 0 2px var(--n-brand);
-}
-.keeper-thumb {
-  width: 64px;
-  height: 36px;
-  border-radius: var(--n-radius-6);
-  background: var(--n-g2);
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-}
-.keeper-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: var(--n-radius-6);
-}
-.keeper-thumb img.icon {
-  object-fit: contain;
-}
-.keeper-thumb .ext {
-  font-size: var(--n-fs-secondary);
-  line-height: var(--n-lh-secondary);
-  font-weight: var(--n-fw-bold);
-  color: var(--n-l3);
-}
-.keeper-name {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--n-fs-body);
-  line-height: var(--n-lh-body);
-  color: var(--n-l1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.keeper-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--n-space-12);
-  flex: none;
-}
-.keeper-meta .size {
-  font-size: var(--n-fs-body);
-  line-height: var(--n-lh-body);
-  color: var(--n-l3);
-  white-space: nowrap;
-}
-/* 所在文件夹标签（36 稿 chip 同款）：C4 底 + 1px 暗-悬停 / 圆角 6 / padding 4 8 / 标签档 */
-.chip {
-  max-width: 140px;
-  padding: var(--n-space-4) var(--n-space-8);
-  border-radius: var(--n-radius-6);
-  background: var(--n-g4);
-  box-shadow: inset 0 0 0 1px var(--n-l-a3);
-  font-size: var(--n-fs-secondary);
-  line-height: var(--n-lh-secondary);
-  color: var(--n-l3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 合并 / 取消 / 确认合并 / 上一步 = ActionButton lg 宽自适应 + 左右 48（BaseModal 罩层口径，
-   2026-09-13 定稿值，35 稿 88×38 定宽随换代废除）；底部行样式 = scanDialog.css .scd-bottom 族 */
-</style>
