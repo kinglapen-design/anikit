@@ -13,7 +13,8 @@ pub fn open_as(path: &Path) -> Result<(), String> {
   imp::open_as(path)
 }
 
-/// 在文件管理器中打开并选中（6.3 右键菜单）：explorer /select
+/// 在文件管理器中打开（6.3 右键菜单）：目录 = 直接进入本体，文件 = explorer /select 父目录选中
+///（目录/文件分流 2026-10-16 用户实机定——此前一律 /select，目录停在父级）
 pub fn reveal(path: &Path) -> Result<(), String> {
   imp::reveal(path)
 }
@@ -76,6 +77,12 @@ mod imp {
   }
 
   pub(super) fn reveal(path: &Path) -> Result<(), String> {
+    // 目录 / 文件分流（2026-10-16 用户实机定，污染扫描「打开资源管理器」走查）：
+    // 目录 = 直接进入本体（ShellExecuteW "open" 开目录 = Explorer 导航进该目录），
+    // 文件 = explorer /select 在父目录中选中（文件无法"进入"）。
+    if path.is_dir() {
+      return open(path);
+    }
     // explorer /select,"路径"：经 ShellExecuteW 传 lpParameters（原样传递）。
     // **不能用 std::process::Command**——arg 含空格 / 引号时 Rust 自动加外层引号并把内层引号
     // 转义为 \"，而 explorer 不按 CommandLineToArgvW 解析（吃原始命令行），转义后路径断 →
