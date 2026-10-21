@@ -1,8 +1,8 @@
 # 2026-10 开发日志
 
-> 本月 128 个任务文件（命名 `YYYY-MM-DD[_NN]_标题.md`）。总目录见 [Index](../../Index.md）。
+> 本月 129 个任务文件（命名 `YYYY-MM-DD[_NN]_标题.md`）。总目录见 [Index](../../Index.md）。
 
-- **2026-10-21**：[01_工作空间树缩进线对齐库树（用户截图定「和库的树样式对齐」——缩进线机制自 FolderTree scoped 抽为 base.css 通用类 .tree-guide（--guide-x = depth×20+15 对父级展开钮尖角 / 缺省 --n-custom-2-50 / 罩层之下），FolderTree / WsTreeRows / WorkspaceTree pin 行三处共用；ws 无自定义色恒缺省档，MoveNode 稿无维持不画；探针 cdp-ws-tree-guide-probe 7 项全 PASS（含库树蓝色 color-mix 档回归）+ typecheck 0 错；速查 §73 新立；待实机走查观感）](2026-10-21_01_工作空间树缩进线对齐库树.md)
+- **2026-10-21**：[01_工作空间树缩进线对齐库树（用户截图定「和库的树样式对齐」——缩进线机制自 FolderTree scoped 抽为 base.css 通用类 .tree-guide（--guide-x = depth×20+15 对父级展开钮尖角 / 缺省 --n-custom-2-50 / 罩层之下），FolderTree / WsTreeRows / WorkspaceTree pin 行三处共用；ws 无自定义色恒缺省档，MoveNode 稿无维持不画；探针 cdp-ws-tree-guide-probe 7 项全 PASS（含库树蓝色 color-mix 档回归）+ typecheck 0 错；速查 §73 新立；待实机走查观感）](2026-10-21_01_工作空间树缩进线对齐库树.md) · [02_免安装包重打（含 01 轮缩进线改动——旧包实例收净后 build --no-bundle 106s 一把过 + 组装 409MB / zip 172MB 新包 `anikit-v0.1.0-20261021.zip`；冒烟 = dist 新哈希 index-Dlph9Hok 核实含 tree-guide + 新包实跑 MCP 17701 initialize 握手应答（只读 9+写 13）+ 收件箱 Some('Z') + taskkill 收净）](2026-10-21_02_免安装包重打.md)
 
 - **2026-10-17**：[01_免安装包重打（含 10-16 全日五轮：链接扫描两段式 + 污染扫描 + reveal 目录进入修复——无实例占用，`build --no-bundle` 1m29s 一把过 → pack-portable 组装 409MB + zip 172MB `anikit-v0.1.0-20261017.zip`；冒烟 = 新包实跑 MCP 17701 initialize 握手应答（只读 9+写 13）+ 收件箱 Some('Z') + dist 新哈希 index-Dwf_PmMI.js 核实含「扫描污染文件 / consolidate_asset_links」+ taskkill 收净）](2026-10-17_01_免安装包重打.md)
 
