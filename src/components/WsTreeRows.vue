@@ -129,7 +129,11 @@ function dropZone(rel: string): "before" | "after" | "into" | undefined {
           @pointerdown="onRowPointerDown($event, d.relPath)"
         />
         <Transition :css="false" @enter="expandEnter" @leave="expandLeave">
-          <div v-if="isWsTreeOpen(d.relPath)" class="ws-children">
+          <div
+            v-if="isWsTreeOpen(d.relPath)"
+            class="ws-children tree-guide"
+            :style="{ '--guide-x': `${props.depth * 20 + 15}px` }"
+          >
             <!-- 递归子层：挂载即懒加载其 listing -->
             <WorkspaceTree :rel="d.relPath" :depth="childDepth" />
           </div>
@@ -151,4 +155,6 @@ function dropZone(rel: string): "before" | "after" | "into" | undefined {
   flex-direction: column;
   gap: var(--n-space-2);
 }
+/* .ws-children 缩进竖线 = 共享类 .tree-guide（base.css，2026-10-21 对齐库 FolderTree）：
+   --guide-x = depth×20+15 正对父级展开钮尖角；ws 目录无自定义色，线色恒缺省 --n-custom-2-50 */
 </style>

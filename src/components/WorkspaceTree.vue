@@ -191,7 +191,7 @@ function onTreeBlankMenu(e: MouseEvent): void {
             />
             <!-- pin 行子级树（主树行同件全行为；展开态与主树同 rel 共享） -->
             <Transition :css="false" @enter="expandEnter" @leave="expandLeave">
-              <div v-if="isWsTreeOpen(rel)" class="ws-children">
+              <div v-if="isWsTreeOpen(rel)" class="ws-children tree-guide" style="--guide-x: 15px">
                 <WsTreeRows :rel="rel" :depth="1" />
               </div>
             </Transition>
@@ -255,6 +255,8 @@ function onTreeBlankMenu(e: MouseEvent): void {
   flex-direction: column;
   gap: var(--n-space-2);
 }
+/* pin 行 .ws-children 缩进竖线 = 共享类 .tree-guide（base.css，2026-10-21 对齐库 FolderTree）：
+   pin 行 depth 0 → --guide-x 恒 15px（0×20+15）；线色恒缺省 --n-custom-2-50（ws 无自定义色） */
 /* 空态（未开空间 / 目录不存在）：正文档 + 亮色/四级居中（SidebarLeft .empty-state 同档） */
 .ws-empty {
   padding: var(--n-space-12);

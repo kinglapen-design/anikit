@@ -182,3 +182,25 @@ textarea {
 
 /* 悬停播放层右下胶囊共享样式已于 7.1 内容容器轮废除（HoverVideoLayer / HoverAudioLayer
    换代为 kc-float 新稿胶囊，cards.css） */
+
+/* 树子层缩进竖线共享口径（库 FolderTree / 工作空间树 WorkspaceTree·WsTreeRows 共用，
+   2026-10-21 ws 树对齐库树时抽象为通用类）：子层容器挂本类 + --guide-x 定位（= depth×20+15
+   = 父级 item 左 padding 6 + depth×20 + 展开钮半宽 9，正对父级展开钮尖角），纵贯首子项
+   顶部至末子项底部（top 0 bottom 0 贯穿）；线色 = --guide-color，缺省常态-2 半透明
+  （--n-custom-2-50，2026-08-30 五轮实机定），库树节点设自定义色时传该色-2 的 50%
+   color-mix 档（ws 目录无自定义色，恒走缺省档）。不设 z-index（同层先绘制）= 线沉在
+   item 选中/悬停罩层之下——罩层半透明，线透过自然变暗属预期观感；线在 item 空白
+   padding 区（子级内容从 depth×20+26 起），不压内容 */
+.tree-guide {
+  position: relative;
+}
+.tree-guide::before {
+  content: "";
+  position: absolute;
+  left: var(--guide-x);
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--guide-color, var(--n-custom-2-50));
+  pointer-events: none;
+}
