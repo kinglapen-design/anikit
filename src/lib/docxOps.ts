@@ -48,3 +48,11 @@ export async function docxToHtml(buf: ArrayBuffer): Promise<string> {
 export async function readDocxByPath(absPath: string): Promise<DocxContent> {
   return await invoke<DocxContent>("read_docx_by_path", { absPath });
 }
+
+// 按真实路径读 docx 原始字节（2026-10-23 工作空间文档预览放行：预览 mammoth 链路按路径版；
+// 越界 / 非 docx / 损坏 / 超 64MB 抛中文文案）
+export async function readDocxBinaryByPath(absPath: string): Promise<ArrayBuffer> {
+  const r = await invoke<ArrayBuffer | number[]>("read_docx_binary_by_path", { absPath });
+  if (r instanceof ArrayBuffer) return r;
+  return new Uint8Array(r).buffer; // 桩 / 非常规通道回退（同 readDocxBinary）
+}

@@ -20,7 +20,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import FontInstallButton from "./buttons/FontInstallButton.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ScrollThumb from "./ScrollThumb.vue";
-import { getFontInfo, installFont, uninstallFont, type FontInfo } from "../lib/fontOps";
+import { getFontInfo, getFontInfoByPath, installFont, uninstallFont, type FontInfo } from "../lib/fontOps";
 import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 import { useToastStore } from "../stores/toast";
 import DEMO_ZH_RAW from "../../assets/text/荷塘月色_中文.md?raw";
@@ -84,14 +84,19 @@ const headerSub = computed(() => info.value?.fullName ?? "");
 
 let face: FontFace | null = null;
 
+// ws 合成项（2026-10-23 文档预览放行）：元数据走按路径版 get_font_info_by_path；
+// 安装 / 卸载无按路径版（系统级写入只认库资产），ws 不出安装钮（同卡片 installable 口径）
+const isWs = computed(() => !!preview.current?.wsPath);
+
 async function load(): Promise<void> {
-  const assetId = preview.current?.assetId;
-  if (!assetId) return;
+  const cur = preview.current;
+  if (!cur) return;
+  const assetId = cur.assetId;
   unloadFont();
   info.value = null;
   loadError.value = null;
   try {
-    const r = await getFontInfo(assetId);
+    const r = cur.wsPath ? await getFontInfoByPath(cur.wsPath) : await getFontInfo(assetId);
     if (preview.current?.assetId !== assetId) return;
     info.value = r;
     // FontFace 加载（文件损坏 / 读取失败）：回退系统字体渲染演示文本 + 中文提示（元数据页不受影响）
@@ -162,7 +167,7 @@ const rows = computed(() => {
       <div class="head">
         <div class="name-row">
           <span class="name">{{ headerName }}</span>
-          <FontInstallButton :selected="info?.installed ?? false" @click="toggleInstall" />
+          <FontInstallButton v-if="!isWs" :selected="info?.installed ?? false" @click="toggleInstall" />
         </div>
         <span v-if="headerSub" class="sub">{{ headerSub }}</span>
       </div>

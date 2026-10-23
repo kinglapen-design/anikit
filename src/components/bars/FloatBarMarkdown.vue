@@ -10,11 +10,12 @@
 // 只出事件（action 语义名）；实际操作 = preview.requestMdAction → PreviewText 执行
 // （lib/mdEdit 19 动作；edit / preview / split = 模式与分屏切换）。
 // 根 mousedown.prevent = 点击不抢焦点（§36 搜索栏同口径）——编辑器 textarea 选区全程保持。
+// ws 只读预览（2026-10-23 文档预览放行）：readonly = 编辑 / 分屏入口不出，视图组只留大纲钮。
 import { computed, nextTick, watch } from "vue";
 import IconButton from "../buttons/IconButton.vue";
 import "./bars.css";
 
-const props = withDefaults(defineProps<{ editing?: boolean }>(), { editing: false });
+const props = withDefaults(defineProps<{ editing?: boolean; readonly?: boolean }>(), { editing: false, readonly: false });
 const emit = defineEmits<{ action: [name: string]; "expanded-change": [v: boolean] }>();
 
 // 双态组数增减 → 内容宽变（2026-09-25 三轮走查「工具栏没展开」根治）：复用搜索栏
@@ -72,13 +73,17 @@ const formatGroups: readonly MdIcon[][] = [
 // 旧暂代 view-options / collapse-sidebar 换名清零，§60 暂代待办勾销）；
 // 大纲 = 2026-10-15 大纲轮新增（PRD 04「md 大纲栏」，预览 / 编辑 / 分屏三态可开关）——
 // 图标 collapse-sidebar 暂代占位（用户定「先随便找一个占位，到时候一起换」，待补源后换名，速查 §71）
-const viewGroup = computed<MdIcon[]>(() => [
-  props.editing
-    ? { name: "preview-mode", action: "preview", tip: "预览（Ctrl+E）" }
-    : { name: "pencil", action: "edit", tip: "编辑（Ctrl+E）" },
-  { name: "edit-and-preview", action: "split", tip: "分屏编辑预览" },
-  { name: "collapse-sidebar", action: "outline", tip: "大纲" },
-]);
+const viewGroup = computed<MdIcon[]>(() => {
+  // ws 只读预览（2026-10-23 放行定案）：编辑 / 分屏入口不出（写回磁盘链路另立），只留大纲钮
+  if (props.readonly) return [{ name: "collapse-sidebar", action: "outline", tip: "大纲" }];
+  return [
+    props.editing
+      ? { name: "preview-mode", action: "preview", tip: "预览（Ctrl+E）" }
+      : { name: "pencil", action: "edit", tip: "编辑（Ctrl+E）" },
+    { name: "edit-and-preview", action: "split", tip: "分屏编辑预览" },
+    { name: "collapse-sidebar", action: "outline", tip: "大纲" },
+  ];
+});
 const groups = computed<readonly MdIcon[][]>(() =>
   props.editing ? [...formatGroups, viewGroup.value] : [viewGroup.value],
 );

@@ -2,12 +2,13 @@
 // other 不支持预览立姿（原 PreviewPanel other 分支，2026-09-21 R5 抽入 previewSpecs；
 // R4 按稿 2026-09-21 落地：布局-中间面板-内容容器-此文件不支持预览）= 居中立姿——
 // 格式图标 200 + 文件名（标题档二级）+ 提示「暂不支持此文件格式预览，请用其他应用打开」（正文三级）
-// + 按钮组（ActionButton solid md：默认应用打开 / 其他应用打开；
-// ws 合成项按钮组隐藏——assetId 假 id 禁发命令，同 PreviewTitleBar isWsCurrent 口径）。
+// + 按钮组（ActionButton solid md：默认应用打开 / 其他应用打开；ws 合成项 2026-10-23 放行——
+// 两钮分流按路径命令，与 ws 右键菜单同一出口）。
 import { computed, inject } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import ActionButton from "./buttons/ActionButton.vue";
 import { openWithDialog } from "../lib/placementOps";
+import { openPathWithDialog } from "../lib/wsOps";
 import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 
 const preview = inject(PREVIEW_SESSION_KEY)!;
@@ -16,12 +17,14 @@ const iconUrl = computed(() => {
   const p = preview.current;
   return p?.thumbPath ? convertFileSrc(p.thumbPath) : null;
 });
-// ws 合成假 id 禁发 assetId 类命令（PRD 02 步骤 1），打开按钮组隐藏——同 PreviewTitleBar isWsCurrent 口径
-const isWsCurrent = computed(() => !!preview.current?.assetId.startsWith("ws:"));
-// 其他应用打开 = 系统"打开方式"对话框（失败 toast 在 openWithDialog 内）；默认应用打开直走 store
+// 其他应用打开 = 系统"打开方式"对话框（失败 toast 在封装内）；默认应用打开直走 store（ws 内部分流）
 function onOpenOther(): void {
   const p = preview.current;
-  if (!p || isWsCurrent.value) return;
+  if (!p) return;
+  if (p.wsPath) {
+    void openPathWithDialog(p.wsPath);
+    return;
+  }
   void openWithDialog(p.assetId);
 }
 </script>
@@ -34,7 +37,8 @@ function onOpenOther(): void {
         <span class="us-title">{{ preview.current?.name ?? "" }}</span>
         <span class="us-hint">暂不支持此文件格式预览，请用其他应用打开</span>
       </div>
-      <div v-if="!isWsCurrent" class="us-actions">
+      <!-- 按钮组（ws 合成项同出——2026-10-23 放行，两钮按路径分流） -->
+      <div class="us-actions">
         <ActionButton label="默认应用打开" icon="open-default" @click="preview.openDefaultApp()" />
         <ActionButton label="其他应用打开" icon="open-in-other-app" @click="onOpenOther" />
       </div>

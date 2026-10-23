@@ -341,6 +341,10 @@ const showPop = ref(false); // 浮层按当前锚点位置落位——滚动后�
           <FloatBar mode="markdown" />
           <span class="pv-cap">常态（图标 三级，hover 升二级 = IconButton bare 口径）</span>
         </div>
+        <div class="pv-demo-cell">
+          <FloatBar mode="markdown" readonly />
+          <span class="pv-cap">ws 只读（2026-10-23 文档预览放行）：编辑 / 分屏钮不出，视图组只留大纲</span>
+        </div>
       </div>
     </div>
 

@@ -4,9 +4,11 @@
 // 浮动布局图片与文本框降级顺序内嵌、形状批注丢失（已知口径，真撞上再升 docx-preview）。
 // 编辑走「默认应用打开」。排版 = styles/markdown.css .md-body 全局类（文本编辑稿口径，标签选择器天然命中）；
 // 加载竞态守卫 = loadedId 绑定（同 PreviewText 模式）。
+// 工作空间按路径版（2026-10-23 文档预览放行，PRD 02 技术口径「文档预览」条）：
+// wsPath 分流 read_docx_binary_by_path，其后 mammoth 链路同库零差异。
 import { inject, ref, watch } from "vue";
 import ScrollThumb from "./ScrollThumb.vue";
-import { docxToHtml, readDocxBinary } from "../lib/docxOps";
+import { docxToHtml, readDocxBinary, readDocxBinaryByPath } from "../lib/docxOps";
 import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 
 const preview = inject(PREVIEW_SESSION_KEY)!;
@@ -18,13 +20,14 @@ const bodyRef = ref<HTMLElement>();
 let loadedId: string | null = null;
 
 async function load(): Promise<void> {
-  const assetId = preview.current?.assetId;
-  if (!assetId) return;
+  const cur = preview.current;
+  if (!cur) return;
+  const assetId = cur.assetId;
   loadedId = assetId;
   html.value = null;
   loadError.value = null;
   try {
-    const buf = await readDocxBinary(assetId);
+    const buf = cur.wsPath ? await readDocxBinaryByPath(cur.wsPath) : await readDocxBinary(assetId);
     const out = await docxToHtml(buf);
     if (loadedId !== assetId) return; // await 期间已切走
     html.value = out;

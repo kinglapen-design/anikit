@@ -435,6 +435,7 @@ pub fn run() {
       commands::docx::read_docx_binary,
       commands::docx::read_docx_asset,
       commands::docx::read_docx_by_path,
+      commands::docx::read_docx_binary_by_path,
       commands::notes::get_notes,
       commands::notes::set_note,
       commands::notes::get_note_thumb,

@@ -515,6 +515,7 @@ function noteRemove(i: number): void {
       @progress-drag-end="spec?.dragEnd?.()"
       @action="preview.requestMdAction($event)"
       :editing="mdActive ? preview.mdEditing : undefined"
+      :readonly="mdActive && !!preview.current?.wsPath ? true : undefined"
     >
       <!-- 音频语境：进度区换竖条波形（spec.wave = 音频族标志；音乐预览稿 prose「只在播放条上放波形图」） -->
       <template v-if="spec?.wave" #progress>

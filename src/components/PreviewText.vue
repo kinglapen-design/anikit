@@ -16,6 +16,9 @@
 //（linkLock 防互拽）；滚动联动高亮当前节（渲染体跟滚动顶、CM 跟可视顶行），大纲内自动滚进视野。
 // 保存竞态纪律：保存请求绑定加载时 assetId（loadedId），切素材先 flush 在途编辑再加载新内容——
 // 旧内容不会错存到新资产；响应到达时已切走则只更新 placements 不动编辑区状态。
+// ws 只读（2026-10-23 文档预览放行，PRD 02 技术口径「文档预览」条）：内容走 read_text_by_path；
+// 编辑态 / 任务框回写 / txt 编辑全关（编辑入口 = FloatBarMarkdown readonly 摘钮 + enterEdit 守卫），
+// 保存管线对 ws 天然不触发（draft 无变更源）。
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import MdOutline from "./MdOutline.vue";
@@ -23,7 +26,7 @@ import { createMd } from "../lib/markdown";
 import { extractMdOutline, type MdOutlineItem } from "../lib/mdOutline";
 import { applyMdAction, toggleTaskLine } from "../lib/mdEdit";
 import { createMdEditor, type MdEditorHandle } from "../lib/cmMd";
-import { readTextAsset, writeTextAsset } from "../lib/textOps";
+import { readTextAsset, readTextByPath, writeTextAsset } from "../lib/textOps";
 import { jumpToAnikitRef, parseAnikitRef } from "../lib/anikitLink";
 import { EditorView } from "@codemirror/view";
 import { invoke } from "@tauri-apps/api/core";
@@ -36,6 +39,9 @@ const content = useContentStore();
 const toast = useToastStore();
 
 const isMd = computed(() => (preview.current?.ext ?? "").toLowerCase() === "md");
+// ws 文档预览 = 只读（2026-10-23 放行定案，PRD 02 技术口径「文档预览」条）：
+// 编辑态 / 分屏 / 任务框回写全关（写回磁盘链路另立），悬浮栏编辑入口由 FloatBarMarkdown readonly 摘钮
+const wsReadonly = computed(() => !!preview.current?.wsPath);
 
 const source = ref(""); // 已加载 / 已保存内容（保存基准）
 const draft = ref(""); // 编辑草稿（md 渲染源 = 草稿，复选框 toggle / 编辑实时反映）
@@ -114,8 +120,9 @@ function destroyMdEditor(): void {
 }
 
 async function load(): Promise<void> {
-  const assetId = preview.current?.assetId;
-  if (!assetId) return;
+  const cur = preview.current;
+  if (!cur) return;
+  const assetId = cur.assetId;
   await flushSave(); // 切走前落盘在途编辑（旧资产内容保存回旧资产）
   loadedId = assetId;
   keepPos.clear(); // 切素材：滚动记忆清零（新文档从顶读，防保活把旧位置拉回）
@@ -128,7 +135,8 @@ async function load(): Promise<void> {
   split.value = false;
   preview.setMdEditing(false);
   try {
-    const r = await readTextAsset(assetId);
+    // ws 合成项走按路径版（2026-10-23 文档预览放行；read_text_by_path，编码回退与 2MB 上限同口径）
+    const r = cur.wsPath ? await readTextByPath(cur.wsPath) : await readTextAsset(assetId);
     if (loadedId !== assetId) return;
     source.value = r.content;
     draft.value = r.content;
@@ -225,7 +233,7 @@ onBeforeUnmount(() => {
 // —— md 编辑态进出（进编辑唯一入口 = 铅笔钮 / Ctrl+E / 打开编辑器信号；Esc / Ctrl+Enter / Ctrl+E 退出——
 //    键位由 cmMd Prec.high 键图回调 onExitEdit，组件不再挂 DOM keydown）——
 async function enterEdit(): Promise<void> {
-  if (!isMd.value || editing.value) return;
+  if (!isMd.value || editing.value || wsReadonly.value) return; // ws 只读（2026-10-23）：编辑入口全关
   editing.value = true;
   preview.setMdEditing(true);
   await nextTick();
@@ -422,6 +430,7 @@ function onMdClick(e: MouseEvent): void {
   }
   const box = t.closest<HTMLElement>(".kit-check-box[data-task-line]");
   if (box) {
+    if (wsReadonly.value) return; // ws 只读（2026-10-23）：任务框 toggle 回写源码属编辑，不响应
     const line = Number(box.dataset.taskLine);
     if (Number.isInteger(line) && line >= 0) {
       box.classList.toggle("on"); // 先原位播对勾动画；draft 触发重渲染后视觉态一致
@@ -529,13 +538,14 @@ watch(
       </div>
       <span v-if="saveState" class="save-state" :class="{ fail: saveState === 'fail' }">{{ stateText }}</span>
     </template>
-    <!-- txt = 编辑态（textarea 即预览，防抖自动保存） -->
+    <!-- txt = 编辑态（textarea 即预览，防抖自动保存）；ws 只读（2026-10-23）：readonly 禁编辑 -->
     <template v-else>
       <textarea
         ref="editorRef"
         v-model="draft"
         class="editor kit-scroll"
         spellcheck="false"
+        :readonly="wsReadonly"
         @scroll.passive="onKeepScroll('editor', editorRef)"
       />
       <ScrollThumb :body="editorRef" />

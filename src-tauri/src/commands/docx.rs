@@ -2,7 +2,8 @@
 //! read_docx_binary = 预览给原始字节（2026-10-10 mammoth 换引擎：前端 mammoth.js 转 HTML，
 //! 表格带框线 / 图片内嵌）；read_docx_asset = 库内文本卡段落结构提取（卡片要轻文本、不渲染 HTML
 //! 不吃 mammoth——图文大文档按字节拉进卡片太贵，2026-10-10 换引擎时实证存活）；read_docx_by_path =
-//! 工作空间文本卡同口径按路径版。
+//! 工作空间文本卡同口径按路径版；read_docx_binary_by_path = 预览 mammoth 链路按路径版
+//!（2026-10-23 工作空间文档预览放行，PRD 02 技术口径「文档预览」条）。
 //! 只读不编辑，无写命令（编辑走默认应用打开，「软件内部不内置编辑器」口径）。
 
 use tauri::State;
@@ -60,9 +61,33 @@ pub async fn read_docx_by_path(state: State<'_, AppState>, abs_path: String) -> 
   docx_by_path(&ws_root, std::path::Path::new(&abs_path))
 }
 
+/// 按真实路径读 docx 原始字节（2026-10-23 工作空间文档预览放行，PRD 02 技术口径「文档预览」条）：
+/// 预览 mammoth 链路按路径版——原始二进制 IPC（前端 invoke 得 ArrayBuffer，不经 JSON），
+/// 校验同 read_docx_by_path；64MB 容量闸在 services::docx::read_docx_bytes。
+/// async：文件 IO，一律走线程池（规范第 2 条，同 read_docx_binary）
+#[tauri::command]
+pub async fn read_docx_binary_by_path(state: State<'_, AppState>, abs_path: String) -> Result<tauri::ipc::Response, String> {
+  let space = state.space.lock().map_err(|e| e.to_string())?.clone().ok_or_else(|| "请先打开储存空间".to_string())?;
+  let ws_root = space.root.join(WORKSPACE_DIR);
+  let bytes = docx_bytes_by_path(&ws_root, std::path::Path::new(&abs_path))?;
+  Ok(tauri::ipc::Response::new(bytes))
+}
+
 /// 按路径读取实现（命令层薄壳，便于单测）：存在性 + workspace 越界校验同
 /// get_media_source_by_path 口径；ws 无 metadata，错误文案取名自路径尾
 fn docx_by_path(ws_root: &std::path::Path, origin: &std::path::Path) -> Result<DocxContent, String> {
+  check_ws_docx(ws_root, origin)?;
+  docx::read_docx(origin)
+}
+
+/// 按路径读字节实现（命令层薄壳，便于单测）：校验与 docx_by_path 同口径
+fn docx_bytes_by_path(ws_root: &std::path::Path, origin: &std::path::Path) -> Result<Vec<u8>, String> {
+  check_ws_docx(ws_root, origin)?;
+  docx::read_docx_bytes(origin)
+}
+
+/// ws 内 docx 路径校验（两个按路径命令共用）：越界 / 不存在 / 非 docx 一律中文错
+fn check_ws_docx(ws_root: &std::path::Path, origin: &std::path::Path) -> Result<(), String> {
   if !origin.is_file() || !ws::is_under(ws_root, origin) {
     return Err("路径不在当前工作空间内（或文件已不存在）".to_string());
   }
@@ -70,7 +95,7 @@ fn docx_by_path(ws_root: &std::path::Path, origin: &std::path::Path) -> Result<D
     let name = origin.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| origin.to_string_lossy().into_owned());
     return Err(format!("「{name}」不是 docx 资源"));
   }
-  docx::read_docx(origin)
+  Ok(())
 }
 
 #[cfg(test)]
@@ -122,5 +147,34 @@ mod tests {
     );
     assert!(docx_by_path(&ws_root, &outside).unwrap_err().contains("不在当前工作空间"));
     assert!(docx_by_path(&ws_root, &ws_root.join("不存在.docx")).unwrap_err().contains("不在当前工作空间"));
+  }
+
+  /// 按路径读原始字节（2026-10-23 ws 文档预览放行）：字节与源文件逐字节一致；
+  /// 越界 / 不存在 / 非 docx 与 docx_by_path 同口径中文错
+  #[test]
+  fn docx_bytes_by_path_roundtrip_and_rejects() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws_root = dir.path().join("workspace");
+    std::fs::create_dir_all(&ws_root).unwrap();
+
+    let path = make_docx(
+      &ws_root,
+      "字节.docx",
+      r#"<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>"#,
+    );
+    let bytes = docx_bytes_by_path(&ws_root, &path).unwrap();
+    assert_eq!(bytes, std::fs::read(&path).unwrap());
+
+    let txt = ws_root.join("笔记.txt");
+    std::fs::write(&txt, b"x").unwrap();
+    assert!(docx_bytes_by_path(&ws_root, &txt).unwrap_err().contains("不是 docx 资源"));
+
+    let outside = make_docx(
+      dir.path(),
+      "外.docx",
+      r#"<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>"#,
+    );
+    assert!(docx_bytes_by_path(&ws_root, &outside).unwrap_err().contains("不在当前工作空间"));
+    assert!(docx_bytes_by_path(&ws_root, &ws_root.join("不存在.docx")).unwrap_err().contains("不在当前工作空间"));
   }
 }

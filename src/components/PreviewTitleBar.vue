@@ -37,20 +37,18 @@ async function openInNewWindow(): Promise<void> {
   await openPreviewWindow(preview.assetKey);
 }
 
-// 工作空间磁盘实况（PRD 02 步骤 1）：预览目标是 ws 合成项（assetId 假 id）——
-// 「默认应用打开」走 assetId 命令、「新窗口打开」子窗口按 assetId 链拉数据，本阶段均不下发/不开，
-// 两钮隐藏（其余按钮纯前端 / 按路径，照常）
+// 工作空间磁盘实况（PRD 02 步骤 1 + 2026-10-23 文档预览放行）：预览目标是 ws 合成项（assetId 假 id）——
+// 「新窗口打开」子窗口按 assetId 链拉数据，不下发隐藏；「默认应用打开」已放行（store openDefaultApp
+// 内分流按路径命令 open_path_with_default_app，与 ws 右键菜单同一出口）
 const isWsCurrent = computed(() => !!preview.current?.assetId.startsWith("ws:"));
 
 // 默认应用打开（R6 由 kind 排除式列举改判定式）：查看器媒体（viewable = image/sequence/anim/video）
 // 与 audio（APP 内播放完备）以外的 kind 恒有——font/text/docx/other 内容在 APP 内不可完整呈现
 // 或只读，外部打开即编辑入口；新 kind 默认获得，无需回本文件登记。
 // + 源格式（PSD 等，isSource）/ 伴生代理资产（8.1：fla 预览按伴生 WebP 显示为 anim，
-// 本质工程文件，打开 fla 本身）；ws 合成项隐藏（assetId 假 id 禁发命令）
+// 本质工程文件，打开 fla 本身）；ws 合成项同有（2026-10-23 放行，按路径命令）
 const showOpenDefault = computed(
-  () =>
-    ((!preview.viewable && preview.kind !== "audio") || preview.isSource || !!preview.current?.playAssetId) &&
-    !isWsCurrent.value,
+  () => (!preview.viewable && preview.kind !== "audio") || preview.isSource || !!preview.current?.playAssetId,
 );
 
 async function togglePin(): Promise<void> {

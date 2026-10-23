@@ -18,6 +18,7 @@ import { useToastStore } from "./toast";
 import { isAudioExt, isDocxExt, isFontExt, isSequence, isStaticImageExt, isTextExt, isVideoExt } from "../lib/formatBadge";
 import { getAssetFilePath, listSequenceFrames, prepareAnimStrips, type FrameEntry } from "../lib/mediaOps";
 import { isWsPlacement } from "./ws";
+import { openPathWithDefaultApp } from "../lib/wsOps";
 import { useSearchStore } from "./search";
 import { useTabsStore } from "./tabs";
 import { StreamSession, type StreamFrame } from "../lib/streamClient";
@@ -279,10 +280,12 @@ function buildPreviewStore(panelId: string) {
         }
         this.filePath = p.thumbPath; // 秒显：info 缩略图（格式图标同路径，other 情形也先盖住旧图）
         const ext = p.ext.toLowerCase();
-        // 工作空间磁盘实况（PRD 02 步骤 1）：assetId = ws: 合成假 id，一律走按路径分支，不碰 assetId 命令——
-        // 图片 / 动图（GIF 及 WEBP 动图 Chromium 原生循环）/ SVG 直 convertFileSrc 源路径（秒显后换源）；
-        // 音视频走 get_media_source_by_path（previewMedia.loadPath，error 后 forceTranscode 兜底，踩坑 075 口径）；
-        // 其余（字体 / 文本 / 工程 / 未知格式 = assetId 强依赖类型）优雅降级 other（格式图标保底，不报错）
+        // 工作空间磁盘实况（PRD 02 步骤 1 + 2026-10-23 文档预览放行）：assetId = ws: 合成假 id，
+        // 一律走按路径分支，不碰 assetId 命令——图片 / 动图（GIF 及 WEBP 动图 Chromium 原生循环）/ SVG
+        // 直 convertFileSrc 源路径（秒显后换源）；音视频走 get_media_source_by_path（previewMedia.loadPath，
+        // error 后 forceTranscode 兜底，踩坑 075 口径）；字体 / 文本 / docx 进对应预览页（组件内按 wsPath
+        // 分流按路径命令，宿主零配合；md / txt 只读不编辑——写回磁盘链路另立）；其余（工程 / 未知格式）
+        // 优雅降级 other（格式图标保底，不报错）
         if (isWsPlacement(p)) {
           const wsPath = p.wsPath;
           if (!wsPath) {
@@ -305,7 +308,19 @@ function buildPreviewStore(panelId: string) {
             this.filePath = wsPath;
             return;
           }
-          this.kind = "other"; // 字体 / 文本 / 工程等：assetId 强依赖，工作空间下不进对应预览页
+          if (isFontExt(ext)) {
+            this.kind = "font";
+            return;
+          }
+          if (isTextExt(ext)) {
+            this.kind = "text";
+            return;
+          }
+          if (isDocxExt(ext)) {
+            this.kind = "docx";
+            return;
+          }
+          this.kind = "other"; // 工程 / 未知格式：格式图标保底
           this.filePath = null;
           return;
         }
@@ -661,8 +676,13 @@ function buildPreviewStore(panelId: string) {
       },
       async openDefaultApp(): Promise<void> {
         const p = this.current;
-        // ws 合成假 id 禁发 assetId 类命令（PRD 02 步骤 1：按路径系统打开未立项，标题栏入口已隐藏）
-        if (!p || isWsPlacement(p)) return;
+        if (!p) return;
+        // ws 按路径版（2026-10-23 文档预览放行：open_path_with_default_app 既有命令，
+        // 与 ws 右键菜单「在默认应用打开」同一出口；ws 无最近使用语义，不刷 refreshRecent）
+        if (isWsPlacement(p)) {
+          if (p.wsPath) await openPathWithDefaultApp(p.wsPath);
+          return;
+        }
         await invoke("open_with_default_app", { assetId: p.assetId });
         // 成功后直接重拉最近使用（2026-07-29 复验反馈：双保险，同 AssetCard.openDefault）
         await useContentStore().refreshRecent();
