@@ -13,6 +13,7 @@ TARGET = ROOT / "src-tauri" / "target" / "release"
 VENDOR_BIN = ROOT / "src-tauri" / "vendor" / "ffmpeg" / "bin"
 BINARIES = ROOT / "src-tauri" / "binaries"
 PLUGINS = ROOT / "plugins" / "animate-cep"
+OBSIDIAN_PLUGIN = ROOT / "plugins" / "obsidian-anikit-paste"  # 源目录可能暂缺，存在才拷
 OUT_DIR = ROOT / "release" / "anikit-portable-new"
 ZIP_ROOT_NAME = "anikit-portable"  # zip 包内根目录名（用户既定口径）
 
@@ -25,7 +26,8 @@ def main() -> int:
     # 1. 产物齐备性检查
     app_exe = TARGET / "app.exe"
     app_lib = TARGET / "deps" / "app_lib.dll"
-    for p in [app_exe, app_lib]:
+    paste_exe = TARGET / "anikit-paste.exe"  # 编辑器贴图直链小工具（src/bin/anikit-paste.rs）
+    for p in [app_exe, app_lib, paste_exe]:
         if not p.is_file():
             print(f"缺产物：{p}（先跑 pnpm tauri build --no-bundle）")
             return 2
@@ -42,6 +44,7 @@ def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     shutil.copy2(app_exe, OUT_DIR / "anikit.exe")
     shutil.copy2(app_lib, OUT_DIR / "app_lib.dll")
+    shutil.copy2(paste_exe, OUT_DIR / "anikit-paste.exe")
     for d in av_dlls:
         shutil.copy2(d, OUT_DIR / d.name)
     shutil.copy2(BINARIES / "ffmpeg-x86_64-pc-windows-msvc.exe", OUT_DIR / "ffmpeg.exe")
@@ -50,6 +53,11 @@ def main() -> int:
     if (OUT_DIR / "plugins" / "animate-cep").exists():
         shutil.rmtree(OUT_DIR / "plugins" / "animate-cep")
     shutil.copytree(PLUGINS, OUT_DIR / "plugins" / "animate-cep")
+    # plugins/obsidian-anikit-paste 整树镜像（源目录可能暂缺——存在才拷）
+    if OBSIDIAN_PLUGIN.is_dir():
+        if (OUT_DIR / "plugins" / "obsidian-anikit-paste").exists():
+            shutil.rmtree(OUT_DIR / "plugins" / "obsidian-anikit-paste")
+        shutil.copytree(OBSIDIAN_PLUGIN, OUT_DIR / "plugins" / "obsidian-anikit-paste")
     total = sum(f.stat().st_size for f in OUT_DIR.rglob("*") if f.is_file())
     print(f"组装完成：{OUT_DIR}（{total / 1024 / 1024:.0f} MB）")
 

@@ -17,6 +17,7 @@ pub mod md_bundle;
 pub mod media;
 pub mod notes;
 pub mod operations;
+pub mod paste_link;
 pub mod plugin;
 pub mod plugin_server;
 pub mod pollution;

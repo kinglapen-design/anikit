@@ -1,6 +1,8 @@
 // anikit 链接工具（2026-10-08 双形态分工，PRD 02-09）：anikit://item|folder/{id} = 内部标识符，
 // http://127.0.0.1:{port}/(open/)item|folder/{id} = 对外可点击形态——渲染 / 粘贴 / 跳转 / 打包共用
-// 同一归一化解析器；media-open 事件 = 媒体服务 /open 端点点击跳转（S1，server/media.rs）
+// 同一归一化解析器；media-open 事件 = 媒体服务 /open 端点点击跳转（S1，server/media.rs）。
+// by-name 变体（2026-10-23 编辑器贴图直链，PRD 02-09「by-name 形态」条）：item/by-name/{文件名}——
+// 粘贴写链时资产可能尚未入库拿不到 id，先记唯一时间戳名，点击跳转时再按 originName 解析最新一笔。
 
 import { nextTick, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
@@ -12,14 +14,19 @@ import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
 
 export interface AnikitRef {
-  kind: "item" | "folder";
-  id: string;
+  kind: "item" | "folder" | "item-by-name";
+  id: string; // item-by-name 时 = 文件名（已 percent-decode）
 }
 
 /** anikit 引用归一化解析（trim 后全串匹配）：anikit://item|folder/{id} 与
- *  http(s)://127.0.0.1:{port}/(open/)item|folder/{id} 同认 */
+ *  http(s)://127.0.0.1:{port}/(open/)item|folder/{id} 同认；by-name 变体先于裸 item 匹配
+ * （by-name 段含 /，裸 item 正则本就吃不下，双保险） */
 export function parseAnikitRef(text: string): AnikitRef | null {
   const t = text.trim();
+  const internalByName = /^anikit:\/\/item\/by-name\/([^\s/?#]+)$/.exec(t);
+  if (internalByName) return { kind: "item-by-name", id: decodeURIComponent(internalByName[1]) };
+  const externalByName = /^https?:\/\/(?:127\.0\.0\.1|localhost):\d+\/(?:open\/)?item\/by-name\/([^\s/?#]+)$/.exec(t);
+  if (externalByName) return { kind: "item-by-name", id: decodeURIComponent(externalByName[1]) };
   const internal = /^anikit:\/\/(item|folder)\/([^\s/?#]+)$/.exec(t);
   if (internal) return { kind: internal[1] as AnikitRef["kind"], id: internal[2] };
   const external = /^https?:\/\/(?:127\.0\.0\.1|localhost):\d+\/(?:open\/)?(item|folder)\/([^\s/?#]+)$/.exec(t);
@@ -44,6 +51,17 @@ export function jumpToAnikitRef(ref: AnikitRef): void {
   const toast = useToastStore();
   const tabs = useTabsStore();
   const selection = useSelectionStore();
+  // by-name 形态（2026-10-23 贴图直链）：点击时才按 originName 解析最新资产
+  //（写链时可能尚未入库）；解析成 id 后走既有 item 分支
+  if (ref.kind === "item-by-name") {
+    void invoke<string | null>("resolve_asset_by_origin_name", { name: ref.id })
+      .then((id) => {
+        if (id) jumpToAnikitRef({ kind: "item", id });
+        else toast.notify({ message: "该图片尚未导入或已从库中删除", icon: "fail" });
+      })
+      .catch((e) => toast.notify({ message: String(e), icon: "fail" }));
+    return;
+  }
   if (ref.kind === "item") {
     const p =
       content.placements.find((pl) => pl.assetId === ref.id && pl.origin) ??

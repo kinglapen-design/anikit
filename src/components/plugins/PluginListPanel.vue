@@ -31,6 +31,7 @@ import {
   getCepInstallStatus,
   getMcpStatus,
   installCepPlugin,
+  installObsidianPluginFlow,
   openPluginWindow,
   setMcpServerEnabled,
   uninstallCepPlugin,
@@ -166,6 +167,21 @@ async function onMore(p: PluginMeta, e: MouseEvent): Promise<void> {
         },
       },
       { label: running ? "停止服务" : "启动服务", action: () => void setMcpServerEnabled(!running) },
+      { label: "配置快捷键", disabled: true },
+    ]);
+    return;
+  }
+  // 编辑器贴图直链（2026-10-23）：更多菜单 = 打开 + 安装 Obsidian 插件（Typora 侧无安装概念，仅复制命令）
+  if (p.id === "paste-link") {
+    openContextMenu(e, [
+      {
+        label: "打开",
+        action: () => {
+          emit("close");
+          void openPluginWindow(p.id);
+        },
+      },
+      { label: "安装 Obsidian 插件…", action: () => void installObsidianPluginFlow() },
       { label: "配置快捷键", disabled: true },
     ]);
     return;

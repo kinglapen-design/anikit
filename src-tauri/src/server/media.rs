@@ -1,8 +1,10 @@
 //! 本地媒体服务端点（2026-10-08 anikit 协议消费端 S1，PRD 02-09 双形态分工的对外形态）：
 //! 与 MCP 同 axum 实例 / 同端口（17701 优先）同生共死——mcp/mod.rs start() 挂载路由：
-//!   GET /item/{id}        图片字节流（按 ID 实时解析磁盘路径，重命名/移动不死链）
-//!   GET /open/{kind}/{id} 点击跳转回 AniKit（emit media-open 前端选中定位 + 主窗口前置 + 极简回页；
-//!                         kind = item | folder）
+//!   GET /item/{id}           图片字节流（按 ID 实时解析磁盘路径，重命名/移动不死链）
+//!   GET /item/by-name/{name} 图片字节流（按 originName 解析最新一笔，2026-10-23 编辑器贴图直链——
+//!                            粘贴写链接时资产可能尚未入库拿不到 ID，由写入方生成唯一时间戳名）
+//!   GET /open/{kind}/{id}    点击跳转回 AniKit（emit media-open 前端选中定位 + 主窗口前置 + 极简回页；
+//!                            kind = item | folder）
 //! 库未打开 / ID 不存在 / 文件读取失败 = 404 纯文本；deep-link 系统注册废案（2026-08-21 定案
 //! 作废）由 open 端点替代——外部 MD 回链与 AI 回复链接均走 http 形态，portable 零系统副作用。
 
@@ -14,6 +16,8 @@ use axum::response::{Html, IntoResponse, Response};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::commands::library::AppState;
+use crate::core::library::Library;
+use crate::core::models::AssetMeta;
 use crate::services::md_bundle::DIRECT_IMAGE_EXTS;
 use crate::services::{asset_menu, views};
 
@@ -32,19 +36,50 @@ pub async fn item_image(State(app): State<AppHandle>, Path(id): Path<String>) ->
     let Some(meta) = lib.index.assets.get(&id) else {
       return text_err(StatusCode::NOT_FOUND, "资源不存在，可能已被删除");
     };
-    if DIRECT_IMAGE_EXTS.contains(&meta.ext.to_ascii_lowercase().as_str()) {
-      asset_menu::real_origin_file(lib, &id).ok().map(|p| (p, mime_of(&meta.ext)))
-    } else {
-      // 缩略图走 thumbAssetId 伴生代理（同 services::views::placement_view 口径，不自己拼词干）
-      let thumb_source = meta
-        .thumb_asset_id
-        .as_deref()
-        .and_then(|i| lib.index.assets.get(i))
-        .filter(|t| t.hidden == Some(true))
-        .unwrap_or(meta);
-      views::thumb_path(lib, thumb_source, &lib.format_icons).map(|p| (PathBuf::from(p), "image/webp"))
-    }
+    image_source(lib, &id, meta)
   };
+  serve_image(found).await
+}
+
+/// GET /item/by-name/{name}：按磁盘文件名（originName）解析最新一笔的图片字节流
+///（2026-10-23 编辑器贴图直链，PRD 02-09 by-name 形态）。解析口径 = core::index 的
+/// latest_by_origin_name（小写归一等值 + 排除回收站 / hidden 伴生 + imported_at 最新）；
+/// axum Path 提取已对路径段做 percent-decode，name 即原始文件名
+pub async fn item_image_by_name(State(app): State<AppHandle>, Path(name): Path<String>) -> Response {
+  let found = {
+    let state = app.state::<AppState>();
+    let Ok(guard) = state.library.lock() else {
+      return text_err(StatusCode::INTERNAL_SERVER_ERROR, "库锁异常");
+    };
+    let Some(lib) = guard.as_ref() else {
+      return text_err(StatusCode::NOT_FOUND, "请先打开素材库");
+    };
+    let Some(meta) = lib.index.latest_by_origin_name(&name, &lib.recycle) else {
+      return text_err(StatusCode::NOT_FOUND, "资源不存在，可能尚未导入");
+    };
+    image_source(lib, &meta.id.clone(), meta)
+  };
+  serve_image(found).await
+}
+
+/// meta → (图片路径, MIME) 查表（item_image / item_image_by_name 共用段）：
+/// 直渲扩展名走 origin 字节；其余走 thumbAssetId 伴生代理缩略图（同 views::placement_view 口径）
+fn image_source(lib: &Library, id: &str, meta: &AssetMeta) -> Option<(PathBuf, &'static str)> {
+  if DIRECT_IMAGE_EXTS.contains(&meta.ext.to_ascii_lowercase().as_str()) {
+    asset_menu::real_origin_file(lib, id).ok().map(|p| (p, mime_of(&meta.ext)))
+  } else {
+    let thumb_source = meta
+      .thumb_asset_id
+      .as_deref()
+      .and_then(|i| lib.index.assets.get(i))
+      .filter(|t| t.hidden == Some(true))
+      .unwrap_or(meta);
+    views::thumb_path(lib, thumb_source, &lib.format_icons).map(|p| (PathBuf::from(p), "image/webp"))
+  }
+}
+
+/// 锁外读盘 + 字节流响应（404 纯文本兜底；no-cache 口径见 item_image）
+async fn serve_image(found: Option<(PathBuf, &'static str)>) -> Response {
   let Some((path, mime)) = found else {
     return text_err(StatusCode::NOT_FOUND, "该资产没有可用的图片");
   };

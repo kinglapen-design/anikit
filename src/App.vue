@@ -28,6 +28,7 @@ import AppIcon from "./components/AppIcon.vue";
 import PreviewWindow from "./components/PreviewWindow.vue";
 import AnimatePluginWindow from "./components/plugins/AnimatePluginWindow.vue";
 import McpPluginWindow from "./components/plugins/McpPluginWindow.vue";
+import PasteLinkPluginWindow from "./components/plugins/PasteLinkPluginWindow.vue";
 import PluginListPanel from "./components/plugins/PluginListPanel.vue";
 import SetupWizard from "./components/SetupWizard.vue";
 import CreateLibraryModal from "./components/CreateLibraryModal.vue";
@@ -416,6 +417,7 @@ async function togglePin(): Promise<void> {
          未知 id = 错误提示帧 -->
     <AnimatePluginWindow v-else-if="pluginParam === 'animate'" />
     <McpPluginWindow v-else-if="pluginParam === 'mcp'" />
+    <PasteLinkPluginWindow v-else-if="pluginParam === 'paste-link'" />
     <div v-else-if="pluginParam" class="plugin-unknown">未知插件：{{ pluginParam }}</div>
     <!-- 子窗口的通知条挂点（6.0；主窗口通知族挂 DockHost 内统一锚点；预览 / 插件详情同挂） -->
     <div v-if="previewParam || pluginParam" class="notice-anchor">

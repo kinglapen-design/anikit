@@ -7,7 +7,8 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 
 mod adapters;
 mod commands;
-mod core;
+// pub：anikit-paste 独立 bin（src/bin/）复用 config_path / INBOX_DIR / anikit_ref，防目录名漂移
+pub mod core;
 mod server;
 mod services;
 
@@ -482,6 +483,9 @@ pub fn run() {
       commands::md_bundle::export_md_bundle,
       commands::md_bundle::ws_export_md_bundle,
       commands::library::take_pending_deep_link,
+      commands::library::resolve_asset_by_origin_name,
+      commands::paste_link::get_paste_link_info,
+      commands::paste_link::install_obsidian_plugin,
       commands::custom_data::list_prop_pool,
       commands::custom_data::delete_props_globally,
       commands::prompt::analyze_asset_prompt,

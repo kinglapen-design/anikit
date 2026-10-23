@@ -1,0 +1,9 @@
+{
+  "id": "anikit-paste",
+  "name": "AniKit 贴图直链",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "粘贴/拖入图片不存 vault 附件夹，直接拷进 AniKit 自动导入收件箱入库，并当场插入可渲染可点击的 anikit:// 双形态链接。",
+  "author": "AniKit",
+  "isDesktopOnly": true
+}

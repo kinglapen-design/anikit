@@ -1,6 +1,8 @@
 //! MD 打包导出（2026-10-08 S6，PRD 02-09「打包导出」定案——AE 收集打包的 MD 版）：
 //! 扫描文档内 anikit 资产引用（anikit://item/{id} 与 http(s)://127.0.0.1:{port}/item/{id} 双形态，
-//! 同一归一化口径见 core::anikit_ref），图源与 server/media.rs /item/{id} 端点同口径
+//! 同一归一化口径见 core::anikit_ref；2026-10-23 扩 by-name 变体——捕获 "by-name/{percent编码名}"
+//! 全串，export_bundle 按 originName 解析最新非回收站资产再取图源），图源与 server/media.rs
+//! /item/{id} 端点同口径
 //!（图片 = origin 原图 / 非图片 = webp 缩略图）→ 导出 out_dir/assets/ + 引用 URL 改写相对路径。
 //! open/ 回链形态不收集不改写（原样保留——接收者无 AniKit 点不开，文档回本机后仍可用）；
 //! folder 引用不收集。纯函数与编排分离：scan/rewrite 可单测，export_bundle 做库查询与 IO。
@@ -38,6 +40,24 @@ fn read_id(content: &str, start: usize) -> usize {
   e
 }
 
+/// by-name 变体续读（2026-10-23 编辑器贴图直链）：读到的 id 恰为 "by-name" 且紧随 '/' →
+/// 续读 percent 编码文件名（写入方 percent_encode 产物字符集 = 字母数字 + % . - _ ~），
+/// 返回扩后结束索引；否则原样返回
+fn extend_by_name(content: &str, id_start: usize, id_end: usize) -> usize {
+  let bytes = content.as_bytes();
+  if &bytes[id_start..id_end] != b"by-name" || bytes.get(id_end) != Some(&b'/') {
+    return id_end;
+  }
+  let mut e = id_end + 1;
+  while e < bytes.len() && by_name_char(bytes[e]) {
+    e += 1;
+  }
+  e
+}
+fn by_name_char(b: u8) -> bool {
+  b.is_ascii_alphanumeric() || matches!(b, b'%' | b'.' | b'-' | b'_' | b'~')
+}
+
 /// 扫描 MD 文本里的 anikit 资产引用（双形态；open/ 回链与 folder 引用不收集）。返回按 start 升序。
 /// 全程字节比较不切 str——非 ASCII 文本（中文文档）无 char boundary 风险（踩坑预防：str 切片必须字符边界）
 pub fn scan_refs(content: &str) -> Vec<RefHit> {
@@ -52,6 +72,7 @@ pub fn scan_refs(content: &str) -> Vec<RefHit> {
       let id_start = i + ANIKIT.len();
       let id_end = read_id(content, id_start);
       if id_end > id_start {
+        let id_end = extend_by_name(content, id_start, id_end); // by-name 变体续读（普通 id 原样）
         hits.push(RefHit { start: i, end: id_end, asset_id: content[id_start..id_end].to_string() });
         i = id_end;
         continue;
@@ -71,6 +92,7 @@ pub fn scan_refs(content: &str) -> Vec<RefHit> {
         let id_start = j + 1 + "item/".len();
         let id_end = read_id(content, id_start);
         if id_end > id_start {
+          let id_end = extend_by_name(content, id_start, id_end);
           hits.push(RefHit { start: i, end: id_end, asset_id: content[id_start..id_end].to_string() });
           i = id_end;
           continue;
@@ -148,7 +170,23 @@ pub fn export_bundle(lib: &Library, doc_stem: &str, content: &str, out_dir: &Pat
     std::fs::create_dir_all(&assets_dir).map_err(|e| format!("创建 assets 目录失败：{e}"))?;
   }
   for id in ids {
-    match image_source(lib, id) {
+    // by-name 变体（2026-10-23 编辑器贴图直链）："by-name/{percent编码文件名}" → 按 originName
+    // 解析最新一笔非回收站资产再取图源；url_of_id 的键仍用原始捕获串（rewrite 按原文匹配）
+    let resolved: Option<String> = match id.strip_prefix("by-name/") {
+      Some(enc) => {
+        let name = crate::core::anikit_ref::percent_decode(enc);
+        match lib.index.latest_by_origin_name(&name, &lib.recycle) {
+          Some(m) => Some(m.id.clone()),
+          None => {
+            skipped.push(format!("{name}：by-name 引用未命中（尚未导入或已删除）"));
+            continue;
+          }
+        }
+      }
+      None => None,
+    };
+    let real_id: &str = resolved.as_deref().unwrap_or(id);
+    match image_source(lib, real_id) {
       Ok(Some((src, want_name))) => {
         let file = unique_name(&mut used, &want_name);
         if let Err(e) = std::fs::copy(&src, assets_dir.join(&file)) {
@@ -237,5 +275,20 @@ mod tests {
     assert_eq!(unique_name(&mut used, "a.png"), "a.png");
     assert_eq!(unique_name(&mut used, "a.png"), "a_2.png");
     assert_eq!(unique_name(&mut used, "a.png"), "a_3.png");
+  }
+
+  /// by-name 变体（2026-10-23 编辑器贴图直链）：两形态捕获 "by-name/{percent编码名}" 全串
+  ///（export_bundle 再按 originName 解析最新资产）；普通 id 不受影响；未命中改写时原样保留
+  #[test]
+  fn scan_by_name_form() {
+    let doc = "![p](anikit://item/by-name/%E8%B4%B4%E5%9B%BE-1.png) ![h](http://127.0.0.1:17701/item/by-name/%E8%B4%B4%E5%9B%BE-2.png) ![n](anikit://item/AN-1)";
+    let hits = scan_refs(doc);
+    let ids: Vec<&str> = hits.iter().map(|h| h.asset_id.as_str()).collect();
+    assert_eq!(ids, ["by-name/%E8%B4%B4%E5%9B%BE-1.png", "by-name/%E8%B4%B4%E5%9B%BE-2.png", "AN-1"]);
+    let out = rewrite(doc, &hits, |id| {
+      if id == "by-name/%E8%B4%B4%E5%9B%BE-1.png" { Some("assets/a.png".to_string()) } else { None }
+    });
+    assert!(out.contains("](assets/a.png)"), "命中改写：{out}");
+    assert!(out.contains("item/by-name/%E8%B4%B4%E5%9B%BE-2.png"), "未命中保留原链接：{out}");
   }
 }

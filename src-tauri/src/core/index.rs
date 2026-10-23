@@ -1,9 +1,9 @@
 //! 内存索引（PRD 06-03）：打开库时建立，运行期查询全部走内存。
 //! 写操作先落盘再更新索引（01_开发规范 第 7 条）。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::core::models::{AssetMeta, Folder, FoldersFile, Placement};
+use crate::core::models::{AssetMeta, Folder, FoldersFile, Placement, RecycleFile};
 
 #[derive(Debug, Default)]
 pub struct LibraryIndex {
@@ -42,12 +42,57 @@ impl LibraryIndex {
   pub fn placements_of(&self, asset_id: &str) -> &[Placement] {
     self.placements_by_asset.get(asset_id).map(Vec::as_slice).unwrap_or(&[])
   }
+
+  /// 按磁盘文件名（originName）反查最新一笔资产（2026-10-23 编辑器贴图直链 by-name 形态，PRD 02-09）：
+  /// 等值比较两端小写归一（Windows 文件名大小写不敏感）；排除回收站与 hidden 伴生资产；
+  /// 多笔命中取 imported_at 最新
+  pub fn latest_by_origin_name(&self, name: &str, recycle: &RecycleFile) -> Option<&AssetMeta> {
+    let needle = name.to_lowercase();
+    let recycled: HashSet<&str> = recycle.items.iter().map(|i| i.asset.as_str()).collect();
+    self
+      .assets
+      .values()
+      .filter(|a| a.origin_name.to_lowercase() == needle)
+      .filter(|a| a.hidden != Some(true) && !recycled.contains(a.id.as_str()))
+      .max_by(|a, b| imported_at_cmp(&a.imported_at, &b.imported_at))
+  }
+}
+
+/// imported_at 比较：RFC3339 解析后比时刻（chrono 在依赖内，防跨 offset 字典序失真）；
+/// 任一端解析失败回退字符串序（同 offset 字典序可比）
+fn imported_at_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+  match (chrono::DateTime::parse_from_rfc3339(a), chrono::DateTime::parse_from_rfc3339(b)) {
+    (Ok(x), Ok(y)) => x.cmp(&y),
+    _ => a.cmp(b),
+  }
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::models::FoldersFile;
+  use crate::core::models::{FoldersFile, RecycleItem};
+
+  fn meta(id: &str, origin: &str, imported_at: &str) -> AssetMeta {
+    serde_json::from_value(serde_json::json!({
+      "version": 1, "id": id, "name": id, "originName": origin, "ext": "png", "size": 1,
+      "importedAt": imported_at, "modifiedAt": imported_at
+    }))
+    .unwrap()
+  }
+
+  fn index_of(assets: Vec<AssetMeta>) -> LibraryIndex {
+    LibraryIndex { assets: assets.into_iter().map(|a| (a.id.clone(), a)).collect(), ..Default::default() }
+  }
+
+  fn recycle_of(ids: &[&str]) -> RecycleFile {
+    RecycleFile {
+      version: 1,
+      items: ids
+        .iter()
+        .map(|id| RecycleItem { asset: id.to_string(), placements: Vec::new(), deleted_at: "t".into() })
+        .collect(),
+    }
+  }
 
   #[test]
   fn reverse_lookup_by_asset() {
@@ -77,5 +122,53 @@ mod tests {
     assert_eq!(index.placements_by_folder["F01"].len(), 1);
     assert_eq!(index.placements_by_folder["F02"].len(), 2);
     assert_eq!(index.folders.len(), 2);
+  }
+
+  /// by-name 解析：同名两笔取 imported_at 最新（跨 offset 也按真实时刻比）
+  #[test]
+  fn latest_by_origin_name_picks_newest() {
+    let index = index_of(vec![
+      meta("AN-OLD", "贴图-a.png", "2026-10-20T10:00:00+08:00"),
+      meta("AN-NEW", "贴图-a.png", "2026-10-23T10:00:00+08:00"),
+    ]);
+    let hit = index.latest_by_origin_name("贴图-a.png", &RecycleFile::new()).unwrap();
+    assert_eq!(hit.id, "AN-NEW");
+  }
+
+  /// by-name 解析：回收站资产排除（最新一笔在回收站则取次新；全部在回收站 = None）
+  #[test]
+  fn latest_by_origin_name_excludes_recycled() {
+    let index = index_of(vec![
+      meta("AN-OLD", "贴图-a.png", "2026-10-20T10:00:00+08:00"),
+      meta("AN-NEW", "贴图-a.png", "2026-10-23T10:00:00+08:00"),
+    ]);
+    let hit = index.latest_by_origin_name("贴图-a.png", &recycle_of(&["AN-NEW"])).unwrap();
+    assert_eq!(hit.id, "AN-OLD", "最新一笔在回收站应跳过取次新");
+    assert!(index.latest_by_origin_name("贴图-a.png", &recycle_of(&["AN-NEW", "AN-OLD"])).is_none());
+  }
+
+  /// by-name 解析：hidden 伴生资产（缩略图代理源）不参与解析
+  #[test]
+  fn latest_by_origin_name_excludes_hidden() {
+    let mut hid = meta("AN-HID", "贴图-a.png", "2026-10-23T10:00:00+08:00");
+    hid.hidden = Some(true);
+    let index = index_of(vec![meta("AN-VIS", "贴图-a.png", "2026-10-20T10:00:00+08:00"), hid]);
+    let hit = index.latest_by_origin_name("贴图-a.png", &RecycleFile::new()).unwrap();
+    assert_eq!(hit.id, "AN-VIS");
+  }
+
+  /// by-name 解析：大小写归一（Windows 文件名大小写不敏感）
+  #[test]
+  fn latest_by_origin_name_case_insensitive() {
+    let index = index_of(vec![meta("AN-A", "贴图-A.PNG", "2026-10-23T10:00:00+08:00")]);
+    let hit = index.latest_by_origin_name("贴图-a.png", &RecycleFile::new()).unwrap();
+    assert_eq!(hit.id, "AN-A");
+  }
+
+  /// by-name 解析：查无 = None
+  #[test]
+  fn latest_by_origin_name_miss_returns_none() {
+    let index = index_of(vec![meta("AN-A", "贴图-a.png", "2026-10-23T10:00:00+08:00")]);
+    assert!(index.latest_by_origin_name("贴图-b.png", &RecycleFile::new()).is_none());
   }
 }

@@ -10,6 +10,7 @@
 // batch-thumbnails = 玻璃质感位图图标（用户直投 批量生产缩略图-icon，base64 内嵌原值）；
 // mcp = MCP 官方插头对接 logo（十三批用户直投，黑线条转 currentColor）。
 import { invoke } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useToastStore } from "../stores/toast";
 
 export interface PluginMeta {
@@ -26,6 +27,7 @@ export const PLUGIN_CATEGORIES = ["桥接", "格式", "属性", "效率", "其�
 export const PLUGINS: readonly PluginMeta[] = [
   { id: "animate", name: "Animate 插件", icon: "animate-plugin", category: "桥接" },
   { id: "mcp", name: "MCP 连接器", icon: "mcp", category: "桥接" }, // UI 显示名去括号（2026-09-20 用户定「名字不要加括号」；文档术语 AI 外接通道（MCP）不变）
+  { id: "paste-link", name: "编辑器贴图直链", icon: "insert-link", category: "桥接" }, // 2026-10-23；图标 insert-link 占位（待用户补源随批换）
   { id: "batch-thumbnails", name: "批量生成缩略图", icon: "batch-thumbnails", category: "桥接", disabled: true },
 ];
 
@@ -170,4 +172,42 @@ export async function setPluginServerEnabled(enabled: boolean): Promise<PluginSe
     toast.notify({ message: String(e), icon: "fail" });
     return null;
   }
+}
+
+// —— 编辑器贴图直链（2026-10-23，commands/paste_link.rs；PRD 05-01「编辑器贴图直链」条 + 02-09「by-name 形态」条）——
+// 贴图工具 anikit-paste.exe 随包分发；Obsidian 插件文件嵌 exe 字节（include_bytes），安装时写出——
+// portable / dev 路径解析问题由此根除。toast 在本封装内
+
+export interface PasteLinkInfo {
+  command: string; // Typora 自定义上传命令（exe 绝对路径，含引号）
+  toolPath: string; // anikit-paste.exe 实际位置
+  inboxDir: string | null; // 收件箱真实目录（未打开储存空间 = null）
+}
+
+export async function getPasteLinkInfo(): Promise<PasteLinkInfo | null> {
+  try {
+    return await invoke<PasteLinkInfo>("get_paste_link_info");
+  } catch {
+    return null;
+  }
+}
+
+// 安装 Obsidian 插件到指定 vault（返回插件目录 = {vault}/.obsidian/plugins/anikit-paste）
+export async function installObsidianPlugin(vaultPath: string): Promise<string | null> {
+  const toast = useToastStore();
+  try {
+    const dir = await invoke<string>("install_obsidian_plugin", { vaultPath });
+    toast.notify({ message: "插件已安装，重启 Obsidian 后在 设置 > 第三方插件 启用「AniKit 贴图直链」", icon: "success" });
+    return dir;
+  } catch (e) {
+    toast.notify({ message: String(e), icon: "fail" });
+    return null;
+  }
+}
+
+// 「选择库安装」流程（面板更多菜单 / 详情窗按钮共用）：目录选择器 → 安装
+export async function installObsidianPluginFlow(): Promise<void> {
+  const picked = await openDialog({ directory: true, multiple: false, title: "选择 Obsidian 库（vault）根目录" });
+  if (typeof picked !== "string" || !picked) return;
+  await installObsidianPlugin(picked);
 }

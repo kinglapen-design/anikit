@@ -180,6 +180,18 @@ pub fn take_pending_deep_link() -> Option<(String, String)> {
   crate::adapters::deep_link::take_pending()
 }
 
+/// 按磁盘文件名（originName）解析最新一笔资产 ID（2026-10-23 编辑器贴图直链 by-name 深链消费，
+/// PRD 02-09）：前端拿到 anikit://item/by-name/{文件名} 后调本命令换 ID，再走既有 item 跳转定位；
+/// 库未打开 / 解析不到（尚未导入或已删除）返回 null
+#[tauri::command]
+pub fn resolve_asset_by_origin_name(state: State<AppState>, name: String) -> Result<Option<String>, String> {
+  let guard = state.library.lock().map_err(|e| e.to_string())?;
+  let Some(lib) = guard.as_ref() else {
+    return Ok(None);
+  };
+  Ok(lib.index.latest_by_origin_name(&name, &lib.recycle).map(|m| m.id.clone()))
+}
+
 /// 开关自动导入（2.1：向导第二步初值 / 快速访问"自动导入"确认弹窗开启）：
 /// 空间级设置（space.json 单写点，2026-08-12 用户定：inbox 空间级共用）；
 /// 开 = 启动收件箱（盘符挂载 + 监听空间 inbox/），关 = 停止收件箱（卸载盘符）

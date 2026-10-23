@@ -14,6 +14,7 @@ pub async fn open_plugin_window(app: tauri::AppHandle, plugin_id: String) -> Res
   let (w, h) = match plugin_id.as_str() {
     "animate" => (544.0, 578.0),
     "mcp" => (544.0, 640.0),
+    "paste-link" => (544.0, 600.0), // 2026-10-23 编辑器贴图直链（四组实量估值，实机走查校）
     _ => return Err(format!("未知插件：{plugin_id}")),
   };
   let label = format!("plugin-{plugin_id}");

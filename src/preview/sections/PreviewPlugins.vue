@@ -251,6 +251,57 @@ const animateSvcOn = ref(true);
         </div>
       </div>
     </div>
+
+    <div class="pv-group">
+      <h3 class="pv-group-title">编辑器贴图直链 详情子窗口（544×600，2026-10-23；四组 = 说明 / Typora / Obsidian / 路径，图示 = 媒体服务运行中）</h3>
+      <div class="pv-demo-row">
+        <div class="pv-demo-cell">
+          <div class="pv-aw-shell pv-aw-shell--mcp">
+            <h1 class="pv-aw-title">编辑器贴图直链</h1>
+            <section class="pv-aw-group">
+              <h2 class="pv-aw-sub">说明</h2>
+              <ul class="pv-aw-lines">
+                <li>在 Typora / Obsidian 里照常粘贴图片：图片自动拷入 AniKit 收件箱并导入素材库，文档当场拿到稳定链接。</li>
+                <li>链接按文件名解析（by-name）：粘贴即写链，无需等待导入完成；AniKit 没开也能贴，下次启动自动入库。</li>
+              </ul>
+            </section>
+            <section class="pv-aw-group">
+              <h2 class="pv-aw-sub">Typora</h2>
+              <ul class="pv-aw-lines">
+                <li>「上传服务」选 <b>[Custom Command]</b>，自定义命令粘贴下方文本：</li>
+                <li class="pv-cfg-row">
+                  <span class="pv-cfg-text">"D:\AniKit\anikit-paste.exe"</span>
+                  <IconButton name="copy" variant="bare" size="sm" title="复制" />
+                </li>
+              </ul>
+            </section>
+            <section class="pv-aw-group">
+              <h2 class="pv-aw-sub">Obsidian</h2>
+              <ul class="pv-aw-lines">
+                <li>点下方按钮选择库（vault）根目录安装，重启后在 设置 → 第三方插件 启用 <b>[AniKit 贴图直链]</b>。</li>
+              </ul>
+              <div>
+                <ActionButton label="选择库安装插件…" icon="import-file" variant="solid" size="md" />
+              </div>
+            </section>
+            <div class="pv-aw-spacer" />
+            <div class="pv-aw-actions pv-aw-actions--mcp">
+              <span class="pv-svc-status">
+                <span class="pv-svc-dot on" />
+                <span class="pv-svc-state on">媒体服务运行中</span>
+              </span>
+              <span class="pv-aw-btn" style="width: 128px">
+                <ActionButton label="关闭" variant="cancel" size="lg" />
+              </span>
+            </div>
+          </div>
+          <span class="pv-cap">
+            版式照 MCP 窗（§37 四组口径，零新样式）：Typora 配置块 + 复制钮 / Obsidian 安装钮（ActionButton solid md + import-file 图标）；
+            底部左件 = 媒体服务状态（渲染依赖，圆点+字重双指示）。列表条目自动带新项（PLUGINS 注册表），图标 insert-link 占位待补源
+          </span>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 

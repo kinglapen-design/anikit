@@ -226,9 +226,11 @@ pub async fn start(app: AppHandle) -> Result<u16, String> {
     StreamableHttpServerConfig::default(),
   );
   // 媒体服务端点（2026-10-08 anikit 协议消费端 S1，server/media.rs）：/item/{id} 图片字节流 +
-  // /open/{kind}/{id} 点击跳转回 AniKit——对外可点击形态，与本服务同端口同生共死
+  // /open/{kind}/{id} 点击跳转回 AniKit——对外可点击形态，与本服务同端口同生共死；
+  // /item/by-name/{name}（2026-10-23 编辑器贴图直链）按 originName 解析最新一笔
   let router = axum::Router::new()
     .nest_service("/mcp", service)
+    .route("/item/by-name/{name}", axum::routing::get(crate::server::media::item_image_by_name))
     .route("/item/{id}", axum::routing::get(crate::server::media::item_image))
     .route("/open/{kind}/{id}", axum::routing::get(crate::server::media::open_ref))
     .with_state(router_app);

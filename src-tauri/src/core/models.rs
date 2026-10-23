@@ -591,6 +591,48 @@ impl RelationsFile {
   }
 }
 
+impl Default for FoldersFile {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+impl Default for TagsFile {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+impl Default for PinsFile {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+impl Default for RecycleFile {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+impl Default for RecentFile {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+impl Default for ArchivesFile {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+impl Default for RelationsFile {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
