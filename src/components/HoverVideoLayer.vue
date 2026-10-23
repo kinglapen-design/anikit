@@ -18,7 +18,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import AppIcon from "./AppIcon.vue";
 import { formatDuration } from "../lib/formatDuration";
 import { frameOfTime, totalFrames } from "../lib/formatFrame";
-import { getMediaSource } from "../lib/mediaOps";
+import { getMediaSource, getMediaSourceByPath } from "../lib/mediaOps";
 import { AUTOPLAY_ENTER_DELAY, HOVER_ENTER_DELAY, useHoverPlayer } from "../lib/useHoverPlayer";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
@@ -59,8 +59,10 @@ const pct = computed(() => {
 });
 // 胶囊位置标识（5.3 帧化改造，2026-07-28 用户定：帧数优先）：查看方式"时间显示 = 帧数"且
 // 素材 fps 可用 → 当前帧号；fps 缺失或时间码模式回退当前时间（mm:ss）
+// fps 来源：库 = 素材元数据；ws 无元数据 = 播放源响应实时探测值（2026-10-23 悬停放行接入）
+const fpsLive = ref<number | null>(null);
 const posText = computed(() => {
-  const fps = props.asset.fps;
+  const fps = props.asset.fps ?? fpsLive.value;
   if (ui.timeDisplay === "frames" && fps != null && fps > 0) {
     const total = totalFrames(duration.value || props.asset.duration || 0, fps);
     return String(frameOfTime(currentTime.value, fps, total));
@@ -92,12 +94,16 @@ const { isDisposed } = useHoverPlayer({
 
 async function loadSource(): Promise<void> {
   try {
-    const r = await getMediaSource(props.asset.assetId);
-    if (isDisposed()) return;
+    // ws 合成项走按路径版（2026-10-23 悬停放行）；null = 非音视频 / 越界，保持底层静态缩略图
+    const r = props.asset.wsPath
+      ? await getMediaSourceByPath(props.asset.wsPath)
+      : await getMediaSource(props.asset.assetId);
+    if (!r || isDisposed()) return;
     const v = videoRef.value;
     if (!v) return;
     usedTranscode = r.transcoded;
     directRetried = false;
+    if (r.fps != null) fpsLive.value = r.fps; // ws 无 fps 元数据：响应实时探测值补位（胶囊帧号照常）
     v.src = convertFileSrc(r.path);
     v.currentTime = rangeStart();
     void v.play().catch((e) => console.warn("卡片播放失败：", e));
@@ -131,8 +137,10 @@ async function onSourceError(): Promise<void> {
   }
   usedTranscode = true;
   try {
-    const r = await getMediaSource(props.asset.assetId, true);
-    if (isDisposed()) return;
+    const r = props.asset.wsPath
+      ? await getMediaSourceByPath(props.asset.wsPath, true)
+      : await getMediaSource(props.asset.assetId, true);
+    if (!r || isDisposed()) return;
     v.src = convertFileSrc(r.path);
     v.currentTime = rangeStart();
     void v.play().catch(() => {});

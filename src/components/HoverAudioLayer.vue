@@ -11,7 +11,7 @@
 // FileCard overlays MediaCapsule——消除双胶囊）、1px 播放头竖线（更早废除——扫过层缘即播放头）。
 import { ref } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { getMediaSource } from "../lib/mediaOps";
+import { getMediaSource, getMediaSourceByPath } from "../lib/mediaOps";
 import { useHoverPlayer } from "../lib/useHoverPlayer";
 import type { PlacementView } from "../stores/content";
 
@@ -67,8 +67,11 @@ const { isDisposed } = useHoverPlayer({
 
 async function loadSource(): Promise<void> {
   try {
-    const r = await getMediaSource(props.asset.assetId);
-    if (isDisposed()) return;
+    // ws 合成项走按路径版（2026-10-23 悬停放行）；null = 非音视频 / 越界，保持下层波形不播
+    const r = props.asset.wsPath
+      ? await getMediaSourceByPath(props.asset.wsPath)
+      : await getMediaSource(props.asset.assetId);
+    if (!r || isDisposed()) return;
     const v = mediaRef.value;
     if (!v) return;
     usedTranscode = r.transcoded;
@@ -104,8 +107,10 @@ async function onSourceError(): Promise<void> {
   }
   usedTranscode = true;
   try {
-    const r = await getMediaSource(props.asset.assetId, true);
-    if (isDisposed()) return;
+    const r = props.asset.wsPath
+      ? await getMediaSourceByPath(props.asset.wsPath, true)
+      : await getMediaSource(props.asset.assetId, true);
+    if (!r || isDisposed()) return;
     v.src = convertFileSrc(r.path);
     void v.play().catch(() => {});
   } catch (e) {

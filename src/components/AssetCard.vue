@@ -83,8 +83,14 @@ const thumbUrl = computed(() =>
     ? `${convertFileSrc(props.asset.thumbPath)}?v=${encodeURIComponent(props.asset.modifiedAt ?? "")}&e=${ui.thumbEpoch}`
     : null,
 );
-// 动图（5.1）：GIF / WEBP 动图；与序列帧区分（序列帧同样带 frameCount）
-const isAnim = computed(() => props.asset.animated);
+// 工作空间磁盘实况项（PRD 02 步骤 1，assetId = ws: 合成假 id）：悬停播放层 / 自动播放
+// 2026-10-23 放行（PRD 02 技术口径「卡片悬停播放与自动播放」条）——层内按 wsPath 分流按路径命令；
+// 序列帧无 ws 语义（无打包概念）不出；wsPath 缺失（rootPath 未就绪窗口期）仍不挂载
+const isWs = computed(() => props.asset.assetId.startsWith("ws:"));
+// 动图（5.1）：GIF / WEBP 动图；与序列帧区分（序列帧同样带 frameCount）。
+// ws 无 animated 元数据：GIF 按扩展名直认（AnimImgLayer 原文件直渲，静态 GIF 罕见且直渲无害）；
+// 动态 WebP 需魔数探测 ANIM 位（待办 2026-10-23），未接前 ws WebP 一律无悬停播放
+const isAnim = computed(() => props.asset.animated || (isWs.value && props.asset.ext.toLowerCase() === "gif"));
 // 序列帧（2026-07-22 用户定）：格式角标显示"序列帧"，名称后缀显示为 .序列帧（仅显示层，数据不动）
 const isSeq = computed(() => isSequence(props.asset));
 
@@ -105,9 +111,6 @@ const hoverLayer = computed(() => hoverLayerSpecFor(kind.value));
 
 // 悬停态：驱动播放层挂载（视频/音频）与动图播放——7.1 起挂壳根（整卡即图）
 const hovered = ref(false);
-// 工作空间磁盘实况项（PRD 02 步骤 1，assetId = ws: 合成假 id）：悬停播放层（视频/音频/序列帧/动图）
-// 全走 assetId 类命令——本阶段禁用（不挂载即静默无操作，不许报错）；自动播放同样不申请名额
-const isWs = computed(() => props.asset.assetId.startsWith("ws:"));
 
 // —— 文本卡（R6 三变体接线 · text 变体）：txt / md / docx 内容区 = 词干标题 + 正文滚动预览 ——
 // ws 合成项 2026-09-26 起接通（by-path 命令）；wsPath 缺失（rootPath 未就绪的窗口期）仍降级 general
@@ -129,7 +132,7 @@ watch(
   { immediate: true },
 );
 // —— 音频卡（R6 三变体接线 · audio 变体）：内容区 = 竖线波形（peaks 懒加载，口径仿文本卡）——
-// ws 合成项 2026-09-26 起接通（get_audio_peaks_by_path）；悬停播放层 / 胶囊仍禁（模板侧 isWs 闸不动）
+// ws 合成项 2026-09-26 起接通（get_audio_peaks_by_path）；悬停播放层 / 胶囊 2026-10-23 放行
 const audioCardActive = computed(() => kind.value === "audio" && (!isWs.value || !!props.asset.wsPath));
 const audioPeaks = ref<number[]>([]);
 watch(
@@ -151,9 +154,12 @@ const audioPlaying = ref(false);
 const audioProgress = ref(0);
 const audioDuration = ref(0);
 const hoverLayerInst = ref<{ togglePlay?: () => void }>();
-const audioCapsule = computed(() =>
-  formatDuration(props.asset.duration ?? (audioDuration.value > 0 ? audioDuration.value : 0)),
-);
+// 胶囊时长：ws 无时长元数据（2026-10-23 放行）——未悬停装载前不出胶囊（不显示 0:00），
+// 悬停后由元素元数据回填（duration emit）；库侧时长缺失边界同愈（原显示 0:00）
+const audioCapsule = computed(() => {
+  const d = props.asset.duration ?? (audioDuration.value > 0 ? audioDuration.value : 0);
+  return d > 0 ? formatDuration(d) : "";
+});
 // 胶囊播放钮（FileCard playToggle 上抛）→ 悬停层 togglePlay 回转
 function onPlayToggle(): void {
   if (audioCardActive.value) hoverLayerInst.value?.togglePlay?.();
@@ -262,7 +268,7 @@ const rootEl = ref<HTMLElement>();
 let visibilityObs: IntersectionObserver | undefined;
 const gatePool = computed<AutoplayPool>(() => (kind.value === "video" ? "video" : "anim"));
 const wantAutoplay = computed(() => {
-  if (isWs.value) return false; // 工作空间合成项：悬停/自动播放层走 assetId 命令，禁用（步骤 1）
+  if (isWs.value && !props.asset.wsPath) return false; // wsPath 未就绪窗口期不申请（2026-10-23 放行后仅余此闸）
   if (!cardVisible.value) return false;
   if (kind.value === "anim" || kind.value === "sequence") return ui.autoPlayGif;
   if (kind.value === "video") return ui.autoPlayVideo;
@@ -391,7 +397,7 @@ const meta = computed(() => {
       :text-title="textCardActive ? textTitle : ''"
       :text-body="textCardActive ? textBody : ''"
       :peaks="audioCardActive ? audioPeaks : []"
-      :capsule-text="audioCardActive && !isWs ? audioCapsule : ''"
+      :capsule-text="audioCardActive ? audioCapsule : ''"
       :playing="audioCardActive && audioPlaying"
       :progress="audioCardActive ? audioProgress : 0"
       :font-lines="fontCardActive ? fontLines : []"
@@ -409,11 +415,12 @@ const meta = computed(() => {
     >
       <!-- 悬停播放层 = cardSpecs 查表分发（R5 注册表化，等价原四分支链）：
            autoplay 档（video / anim / sequence）挂 animPlaying 并传 auto=!hoverActive；
-           audio 档仅悬停挂载不传 auto；other 未注册 = 无层。工作空间合成项全禁（isWs）。
+           audio 档仅悬停挂载不传 auto；other 未注册 = 无层。ws 合成项 2026-10-23 放行
+           （层内 wsPath 分流按路径命令；序列帧无 ws 语义，ws 项天然不命中 sequence kind）。
            状态三通道（playing / progress / duration）仅 HoverAudioLayer 发，他层监听无害 -->
       <component
         :is="hoverLayer?.layer"
-        v-if="hoverLayer && !isWs && (hoverLayer.autoplay ? animPlaying : hoverActive)"
+        v-if="hoverLayer && (hoverLayer.autoplay ? animPlaying : hoverActive)"
         ref="hoverLayerInst"
         v-bind="hoverLayer.autoplay ? { asset, auto: !hoverActive } : { asset }"
         @playing="audioPlaying = $event"

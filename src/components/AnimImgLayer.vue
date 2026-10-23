@@ -34,6 +34,12 @@ const { isDisposed } = useHoverPlayer({
 });
 
 async function start(): Promise<void> {
+  // ws 合成项（2026-10-23 悬停放行）：ws 无 info 小动画缓存——直渲原文件 Chromium 原生循环
+  //（GIF 按扩展名直认，AssetCard isAnim 口径）；库资产维持下段 assetId 链不动
+  if (props.asset.wsPath) {
+    src.value = convertFileSrc(props.asset.wsPath);
+    return;
+  }
   // 播放源代理（8.1）：fla 等工程卡片的伴生 WebP 动图，播放目标是 hidden 资产而非自身
   let r;
   try {
