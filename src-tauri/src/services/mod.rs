@@ -59,6 +59,7 @@ pub mod import;
 pub mod import_task;
 pub mod inbox;
 pub mod media;
+pub mod media_source;
 pub mod md_bundle;
 pub mod operations;
 pub mod origin_sync;
