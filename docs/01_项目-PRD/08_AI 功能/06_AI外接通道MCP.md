@@ -18,7 +18,7 @@
 
 ### 工具面
 
-**工具注册表模式**：一类一文件 + 一行注册（前端 barSpecs 为范式）。MCP 工具注册表与未来的插件 API 注册表是同一份资产，一次投入两处兑现；8.2 批量生成缩略图共享同一套通道基础。
+**工具注册表模式**：一类一文件 + 一行注册（前端 barSpecs 为范式）。MCP 工具注册表与未来的插件 API 注册表共享设计资产，一次投入两处兑现。
 
 一期只读白名单（薄壳转发既有 command）：`search_assets` / `list_folder_tree` / `list_placements` / `get_asset_detail` / `get_asset_origin_path`（源图与缩略图路径）/ `read_text_asset` / `list_archives` / `get_current_library`（2026-10-12 补第九个 `list_links`，见下「只读补批」）。**看图零集成**：返回磁盘绝对路径，Agent 有文件权限即直读 webp 缩略图与源图，不经协议传图。
 
