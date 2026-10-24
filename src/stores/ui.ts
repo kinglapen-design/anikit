@@ -50,6 +50,7 @@ const PERSIST_KEYS = [
   "wsTreeExpanded",
   "spaceZoomMode",
   "doubleClickOpen",
+  "mdBundleExportDir",
 ] as const;
 
 // 变更防抖写回（500ms；模块级单例防重复订阅）
@@ -134,6 +135,9 @@ export const useUiStore = defineStore("ui", {
     // 双击素材卡片行为（同上）：preview = 应用内预览（原语义）/ app = 默认应用打开
     //（Shift+Enter 同链路，AssetGrid dblclick 分流）
     doubleClickOpen: "preview" as "preview" | "app",
+    // WS 的 MD 打包默认导出目录（2026-10-24 偏好设置「通用」）：空串 = 当前文档旁；
+    // 全局应用级设置，不随空间 / 库拆分，由 settingsData 选择目录、mdBundleOps 消费
+    mdBundleExportDir: "",
     // 缩略图重建代际（2026-10-13 设置面板清缓存闭环，会话级不进 PERSIST_KEYS）：
     // 清 lib-thumbs 后后端全库重建完成发 library-thumbs-rebuilt——重建不刷 modifiedAt，
     // 卡片 URL（?v=modifiedAt）不变会命中 asset 协议缓存滞留旧图/破图；bump 后卡片 URL

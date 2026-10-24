@@ -15,7 +15,7 @@
 // 区块标题 = SectionTitle block（:actions="false" 消死添加钮；不可折叠——hover 折叠箭头/grab 光标为共享件
 // 既定行为，不改共享件）。
 // 业务全部在 lib/settingsData.ts（UI 无业务，规范第 1 条）：通用 = ui 持久化键（spaceZoomMode /
-// doubleClickOpen）；自动导入 = 空间级 set_auto_import + 盘符查询 get_inbox_drive_letter；
+// doubleClickOpen / mdBundleExportDir）；自动导入 = 空间级 set_auto_import + 盘符查询 get_inbox_drive_letter；
 // 缓存 = get_cache_overview / clear_cache + library-thumbs-rebuilt 事件；插件 = cep_export_settings
 // 读写（护栏与后端 validate 同区间）；关于 = getVersion + show_logs_in_explorer。
 // 快捷键表 = 组件内静态数组（action / keys / bound），2026-10-15 全量点亮（原未接入七行实绑 +
@@ -41,6 +41,9 @@ const emit = defineEmits<{ close: [] }>();
 const {
   spaceZoom,
   doubleClick,
+  mdBundleDir,
+  chooseMdBundleDir,
+  resetMdBundleDir,
   autoImport,
   inboxDrive,
   cacheLib,
@@ -167,6 +170,16 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
               <div class="sd-row">
                 <span class="sd-label">双击素材卡片</span>
                 <SegmentedControl v-model="doubleClick" :options="DOUBLE_CLICK_OPTIONS" variant="text" tone="g2" size="sm" class="sd-seg" />
+              </div>
+              <div class="sd-field">
+                <div class="sd-row">
+                  <span class="sd-label">MD 打包导出目录</span>
+                  <span class="sd-input-side">
+                    <ActionButton label="选择目录…" variant="ghost" size="sm" @click="chooseMdBundleDir" />
+                    <ActionButton label="恢复默认" variant="ghost" size="sm" :disabled="!mdBundleDir" @click="resetMdBundleDir" />
+                  </span>
+                </div>
+                <p class="sd-note">{{ mdBundleDir || "未设置：导出到当前文档旁" }}</p>
               </div>
             </div>
             <!-- 自动导入 -->

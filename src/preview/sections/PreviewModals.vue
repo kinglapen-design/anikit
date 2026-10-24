@@ -54,6 +54,7 @@ const settingsOpen = ref(false);
 const settingsMock: SettingsMockData = {
   spaceZoom: "hover",
   doubleClick: "preview",
+  mdBundleDir: "D:\\AniKit导出\\MD",
   autoImport: true,
   inboxDrive: "Z:",
   cacheLib: [
@@ -360,7 +361,8 @@ function openDestTree(): void {
             注意 fallthrough class 落在 BaseModal 根 = 遮罩上，压壳样式须 :deep 进 .bm-modal.framed（五轮修横带的教训））；切分类 = 详情面板 tab 切换同款（150 缓出 + 250 缓入 delay 100 位移 48px）。
             无按钮行（即时生效，§61/§66）；Esc/X 关闭，遮罩点击不关闭。
             <b>已接生产（2026-10-13）</b>：业务收口 lib/settingsData.ts（UI 无业务）——通用 = ui 持久化键
-            （spaceZoomMode / doubleClickOpen）；自动导入 = 空间级 set_auto_import + 盘符 get_inbox_drive_letter；
+            （spaceZoomMode / doubleClickOpen / mdBundleExportDir；MD 默认目录可选 / 恢复文档旁，mock 两态本地演示）；
+            自动导入 = 空间级 set_auto_import + 盘符 get_inbox_drive_letter；
             缓存 = get_cache_overview / clear_cache（全部清理走 confirmPrompt warning）+ library-thumbs-rebuilt 事件；
             插件 = cep_export_settings 读写（MB↔字节换算，护栏同后端 validate）；关于 = getVersion +
             show_logs_in_explorer。mock 弹出 = 陈列态（isMock 早退，命令一律不发）；

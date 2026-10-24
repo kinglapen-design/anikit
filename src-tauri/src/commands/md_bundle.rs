@@ -42,19 +42,82 @@ pub async fn export_md_bundle(state: State<'_, AppState>, asset_id: String, dest
   md_bundle::export_bundle(lib, &meta.name, &content, &out_dir)
 }
 
-/// 工作空间 md 打包导出：文档旁建 {文档名}-打包/（abs_path 经 validated_ws_path 校验；
-/// 引用的库资产解析需要库已打开）
+/// WS 落点：配置目录有效则使用；空配置回退文档旁。失效配置明确报错，不静默换目录。
+fn ws_bundle_base(path: &std::path::Path, dest_dir: Option<String>) -> Result<std::path::PathBuf, String> {
+  if let Some(dir) = dest_dir.map(|d| d.trim().to_owned()).filter(|d| !d.is_empty()) {
+    let base = std::path::PathBuf::from(dir);
+    if !base.is_dir() {
+      return Err("默认导出目录不存在或不是文件夹，请在偏好设置中重新选择".to_string());
+    }
+    return Ok(base);
+  }
+  path.parent().map(|p| p.to_path_buf()).ok_or_else(|| "路径异常".to_string())
+}
+
+/// 工作空间 md 打包导出：默认文档旁，可被偏好设置的默认导出目录覆盖（abs_path 经
+/// validated_ws_path 校验；引用的库资产解析需要库已打开）
 #[tauri::command]
-pub async fn ws_export_md_bundle(state: State<'_, AppState>, abs_path: String) -> Result<BundleReport, String> {
+pub async fn ws_export_md_bundle(
+  state: State<'_, AppState>,
+  abs_path: String,
+  dest_dir: Option<String>,
+) -> Result<BundleReport, String> {
   let path = validated_ws_path(&state, &abs_path)?;
   if path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).as_deref() != Some("md") {
     return Err("仅支持 md 文档打包".to_string());
   }
   let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).ok_or_else(|| "文件名异常".to_string())?;
-  let parent = path.parent().ok_or_else(|| "路径异常".to_string())?.to_path_buf();
+  let base = ws_bundle_base(&path, dest_dir)?;
   let content = text::read_text(&path)?;
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
-  let out_dir = fresh_bundle_dir(&parent, &stem)?;
+  let out_dir = fresh_bundle_dir(&base, &stem)?;
   md_bundle::export_bundle(lib, &stem, &content, &out_dir)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn ws_bundle_base_uses_config_and_document_parent() {
+    let tmp = tempfile::tempdir().unwrap();
+    let configured = tmp.path().join("exports");
+    std::fs::create_dir(&configured).unwrap();
+    let doc = tmp.path().join("vault").join("笔记.md");
+    assert_eq!(ws_bundle_base(&doc, Some(configured.to_string_lossy().into_owned())).unwrap(), configured);
+    assert_eq!(ws_bundle_base(&doc, Some("  ".to_string())).unwrap(), tmp.path().join("vault"));
+    assert_eq!(ws_bundle_base(&doc, None).unwrap(), tmp.path().join("vault"));
+  }
+
+  #[test]
+  fn ws_bundle_base_rejects_missing_configured_dir() {
+    let tmp = tempfile::tempdir().unwrap();
+    let doc = tmp.path().join("vault").join("笔记.md");
+    let missing = tmp.path().join("missing").to_string_lossy().into_owned();
+    let err = ws_bundle_base(&doc, Some(missing)).unwrap_err();
+    assert!(err.contains("重新选择"), "{err}");
+  }
+
+  #[test]
+  fn ws_bundle_outputs_land_in_selected_and_document_dirs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut space = crate::core::space::create(tmp.path(), "空间", false).unwrap();
+    let lib = crate::core::library::create(&mut space, "库").unwrap();
+    let configured = tmp.path().join("exports");
+    std::fs::create_dir(&configured).unwrap();
+    let doc = tmp.path().join("vault").join("笔记.md");
+    let bases = [
+      ws_bundle_base(&doc, Some(configured.to_string_lossy().into_owned())).unwrap(),
+      ws_bundle_base(&doc, None).unwrap(),
+    ];
+    for (i, base) in bases.iter().enumerate() {
+      let stem = format!("笔记{i}");
+      let out = fresh_bundle_dir(base, &stem).unwrap();
+      let report = md_bundle::export_bundle(&lib, &stem, "# 无图", &out).unwrap();
+      assert_eq!(report.images, 0);
+      assert_eq!(report.doc_file, format!("{stem}.md"));
+      assert!(out.join(report.doc_file).is_file());
+    }
+  }
 }

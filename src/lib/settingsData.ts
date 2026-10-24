@@ -1,6 +1,6 @@
 // 偏好设置面板数据层（2026-10-13 接生产；preview 六轮定稿后由纯展示件接线，规范第 1 条 UI 无业务——
 // 命令调用 / 状态订阅全部收口本 composable，SettingsDialog.vue 只剩模板与样式）：
-// 通用 = ui store 持久化键（spaceZoomMode / doubleClickOpen，消费方 useSpaceZoom / AssetGrid）；
+// 通用 = ui store 持久化键（spaceZoomMode / doubleClickOpen / mdBundleExportDir）；
 // 自动导入 = 空间级 currentSpace + setAutoImport（space.json 单写点，libraryOps）+ 盘符薄查询
 // get_inbox_drive_letter；缓存 = get_cache_overview / clear_cache（接口 22；全部清理走
 // confirmPrompt warning——不可逆口径：自定义缩略图重建后回退派生图不可复原）+ library-thumbs-rebuilt
@@ -11,6 +11,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getVersion } from "@tauri-apps/api/app";
+import { open } from "@tauri-apps/plugin-dialog";
 import { currentSpace, setAutoImport } from "./libraryOps";
 import { formatSize } from "./formatSize";
 import { useSelectionStore } from "../stores/selection";
@@ -26,6 +27,7 @@ export interface SettingsCacheItem {
 export interface SettingsMockData {
   spaceZoom: "hover" | "selected";
   doubleClick: "preview" | "app";
+  mdBundleDir: string;
   autoImport: boolean;
   inboxDrive: string | null;
   cacheLib: SettingsCacheItem[];
@@ -81,6 +83,34 @@ export function useSettingsData(mock: SettingsMockData | undefined) {
       else if (v === "preview" || v === "app") ui.doubleClickOpen = v;
     },
   });
+  const mdBundleLocal = ref(mock?.mdBundleDir ?? "");
+  const mdBundleDir = computed<string>({
+    get: () => (isMock ? mdBundleLocal.value : ui.mdBundleExportDir),
+    set: (v) => {
+      const dir = v.trim();
+      if (isMock) mdBundleLocal.value = dir;
+      else ui.mdBundleExportDir = dir;
+    },
+  });
+  async function chooseMdBundleDir(): Promise<void> {
+    if (isMock) {
+      mdBundleLocal.value = mock?.mdBundleDir || "D:\\AniKit导出\\MD";
+      return;
+    }
+    try {
+      const dest = await open({
+        directory: true,
+        title: "选择 MD 默认打包导出位置",
+        defaultPath: ui.mdBundleExportDir || undefined,
+      });
+      if (dest) ui.mdBundleExportDir = dest;
+    } catch (e) {
+      toast.notify({ message: String(e), icon: "fail" });
+    }
+  }
+  function resetMdBundleDir(): void {
+    mdBundleDir.value = "";
+  }
 
   // —— 自动导入（空间级设置：换空间后重读盘符；开关失败 currentSpace 不翻 = 开关自动回弹） ——
   const autoImportLocal = ref(mock?.autoImport ?? false);
@@ -249,6 +279,9 @@ export function useSettingsData(mock: SettingsMockData | undefined) {
     isMock,
     spaceZoom,
     doubleClick,
+    mdBundleDir,
+    chooseMdBundleDir,
+    resetMdBundleDir,
     autoImport,
     inboxDrive,
     cacheLib,

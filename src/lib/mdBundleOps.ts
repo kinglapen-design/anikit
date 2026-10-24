@@ -1,9 +1,11 @@
 // MD 打包导出（2026-10-08 S6，PRD 02-09——AE 收集打包的 MD 版）：解析文档内 anikit 双形态引用
-// → 收集图片导出 {文档名}-打包/assets/ + 引用改写相对路径。库内 md = 目录选择器选落点；ws md = 文档旁。
+// → 收集图片导出 {文档名}-打包/assets/ + 引用改写相对路径。库内 md = 目录选择器选落点；
+// ws md = 默认文档旁，可由偏好设置的全局默认导出目录覆盖。
 
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { useToastStore } from "../stores/toast";
+import { useUiStore } from "../stores/ui";
 
 export interface BundleReport {
   outDir: string; // 产物目录（{文档名}-打包/）
@@ -19,9 +21,10 @@ export async function exportMdBundleAsset(assetId: string): Promise<void> {
   await run(() => invoke<BundleReport>("export_md_bundle", { assetId, destDir: dest }));
 }
 
-/** 工作空间 md 打包导出：落点固定文档旁 {文档名}-打包/ */
+/** 工作空间 md 打包导出：有默认目录用默认目录，空配置回退文档旁 */
 export async function exportMdBundleWs(absPath: string): Promise<void> {
-  await run(() => invoke<BundleReport>("ws_export_md_bundle", { absPath }));
+  const destDir = useUiStore().mdBundleExportDir.trim();
+  await run(() => invoke<BundleReport>("ws_export_md_bundle", { absPath, destDir: destDir || null }));
 }
 
 async function run(action: () => Promise<BundleReport>): Promise<void> {
