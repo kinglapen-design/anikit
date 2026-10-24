@@ -1,7 +1,7 @@
 //! 收件箱文件监听适配器（PRD 05-01）：notify 增量事件（Windows 走 ReadDirectoryChangesW，
 //! 非轮询、常驻零 CPU）监听 inbox 目录；按"顶层条目"（被丢入的文件 / 文件夹）聚合活动，
-//! 做写入完成检测——距最后一次活动超过 STABLE、大小两轮探测一致、全部文件可移走，
-//! 三者齐备才整批回调。逐条目独立判定（2026-07-22 用户定案）：被占用的条目自己等放手，
+//! 做写入完成检测——距最后一次活动超过 STABLE（编辑器贴图用短档）、大小两轮探测一致、
+//! 全部文件可移走，三者齐备才整批回调。逐条目独立判定（2026-07-22 用户定案）：被占用的条目自己等放手，
 //! 不影响其他条目入库；recover 类临时文件会随之入库，由用户自删（伴生图识别归 3.7 族后置）。
 
 use std::collections::HashMap;
@@ -15,6 +15,8 @@ use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 
 /// 写入完成判定：距最后一次文件活动的静默时长（PRD"大小连续 N 秒稳定"）
 const STABLE: Duration = Duration::from_secs(2);
+/// 编辑器贴图（贴图-*）短静默档：同步写入的工具通常已关文件，仍保留两轮大小与可移走探测
+const EDITOR_PASTE_STABLE: Duration = Duration::from_millis(500);
 /// 就绪判定节拍：仅队列非空时启用（队列空则纯事件阻塞，零定时器）；
 /// 每拍只对事件已上报的条目做探测（exists + 可移走 + 大小），不扫目录
 const TICK: Duration = Duration::from_millis(500);
@@ -167,6 +169,13 @@ fn root_entry(dir: &Path, p: &Path) -> Option<PathBuf> {
   Some(dir.join(first.as_os_str()))
 }
 
+/// 编辑器贴图（同步写入、统一 `贴图-` 前缀）用短静默档；普通条目维持 2 秒。
+fn stable_for(path: &Path) -> Duration {
+  let is_editor_paste = path.is_file()
+    && path.file_name().map(|name| name.to_string_lossy().starts_with("贴图-")).unwrap_or(false);
+  if is_editor_paste { EDITOR_PASTE_STABLE } else { STABLE }
+}
+
 /// 逐条判定就绪：静默期满 + 全部文件可移走 + 大小两轮一致 → 出队回调；
 /// 条目被移走 / 读不了则丢弃；被占用顺延活动时刻（自己等放手，不拖累其他条目）
 fn drain_ready(pending: &mut HashMap<PathBuf, Pending>, on_ready: &impl Fn(Vec<PathBuf>)) {
@@ -175,7 +184,7 @@ fn drain_ready(pending: &mut HashMap<PathBuf, Pending>, on_ready: &impl Fn(Vec<P
     if !path.exists() {
       return false; // 写入中途被移走 / 删除，丢弃
     }
-    if st.last_activity.elapsed() < STABLE {
+    if st.last_activity.elapsed() < stable_for(path) {
       return true;
     }
     if !entry_movable(path) {
@@ -289,6 +298,34 @@ mod tests {
     assert_eq!(entry_size(Path::new("不存在")), Some(0)); // 读不了的目录按空树计
   }
 
+  /// 编辑器贴图在 2 秒静默未满时也可就绪，但仍须两轮大小一致；同批普通文件不放行
+  #[test]
+  fn editor_paste_uses_short_stable_and_keeps_two_probes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paste = tmp.path().join("贴图-20261025-test.png");
+    let normal = tmp.path().join("普通.png");
+    std::fs::write(&paste, "内容").unwrap();
+    std::fs::write(&normal, "内容").unwrap();
+    let mut pending = HashMap::new();
+    pending.insert(paste.clone(), Pending { last_activity: Instant::now() - Duration::from_millis(600), last_size: None });
+    pending.insert(normal.clone(), Pending::hot());
+    let (tx, rx) = mpsc::channel();
+
+    drain_ready(&mut pending, &|paths| {
+      let _ = tx.send(paths);
+    });
+    assert!(rx.try_recv().is_err(), "贴图首轮只记录大小，不能立即就绪");
+    assert!(pending.contains_key(&paste));
+
+    drain_ready(&mut pending, &|paths| {
+      let _ = tx.send(paths);
+    });
+    let got = rx.recv().unwrap();
+    assert_eq!(got, vec![paste.clone()]);
+    assert!(!pending.contains_key(&paste));
+    assert!(pending.contains_key(&normal), "普通文件仍须等满 2 秒静默");
+  }
+
   /// 真监听集成：写入文件 → 静默期满 → 回调就绪（STABLE + 两轮探测 ≈ 3s，给足余量）
   #[test]
   fn watcher_reports_settled_file() {
@@ -310,6 +347,31 @@ mod tests {
     let got = rx.recv_timeout(Duration::from_secs(15)).expect("15 秒内应收到就绪回调");
     assert!(got.contains(&file), "就绪批次应包含写入的文件：{got:?}");
 
+    handle.stop();
+  }
+
+  /// 真监听集成：编辑器贴图走短静默档，应在普通文件 2 秒静默期满前就绪
+  #[test]
+  fn watcher_reports_editor_paste_before_normal_stable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("inbox");
+    std::fs::create_dir_all(&dir).unwrap();
+    let (tx, rx) = mpsc::channel();
+    let mut handle = spawn(
+      dir.clone(),
+      move |paths| {
+        let _ = tx.send(paths);
+      },
+      |_| {},
+    )
+    .unwrap();
+
+    let file = dir.join("贴图-20261025-test.png");
+    let started = Instant::now();
+    std::fs::write(&file, "内容").unwrap();
+    let got = rx.recv_timeout(Duration::from_secs(5)).expect("5 秒内应收到贴图就绪回调");
+    assert!(got.contains(&file), "就绪批次应包含贴图：{got:?}");
+    assert!(started.elapsed() < STABLE, "贴图就绪超过普通静默档：{:?}", started.elapsed());
     handle.stop();
   }
 
