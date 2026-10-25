@@ -27,9 +27,15 @@ def main() -> int:
     app_exe = TARGET / "app.exe"
     app_lib = TARGET / "deps" / "app_lib.dll"
     paste_exe = TARGET / "anikit-paste.exe"  # 编辑器贴图直链小工具（src/bin/anikit-paste.rs）
-    for p in [app_exe, app_lib, paste_exe]:
+    semantic_exe = TARGET / "semantic-worker.exe"  # 语义推理隔离进程（src/bin/semantic-worker.rs）
+    for p in [app_exe, app_lib, paste_exe, semantic_exe]:
         if not p.is_file():
             print(f"缺产物：{p}（先跑 pnpm tauri build --no-bundle）")
+            return 2
+    semantic_runtime = BINARIES / "semantic-runtime"
+    for name in ["onnxruntime.dll", "onnxruntime_providers_shared.dll", "DirectML.dll"]:
+        if not (semantic_runtime / name).is_file():
+            print(f"缺语义运行时：{semantic_runtime / name}（先跑 python tools/fetch-semantic-runtime.py）")
             return 2
     av_dlls = sorted(VENDOR_BIN.glob("*.dll"))
     if len(av_dlls) != 7:
@@ -45,10 +51,14 @@ def main() -> int:
     shutil.copy2(app_exe, OUT_DIR / "anikit.exe")
     shutil.copy2(app_lib, OUT_DIR / "app_lib.dll")
     shutil.copy2(paste_exe, OUT_DIR / "anikit-paste.exe")
+    shutil.copy2(semantic_exe, OUT_DIR / "semantic-worker.exe")
     for d in av_dlls:
         shutil.copy2(d, OUT_DIR / d.name)
     shutil.copy2(BINARIES / "ffmpeg-x86_64-pc-windows-msvc.exe", OUT_DIR / "ffmpeg.exe")
     shutil.copy2(BINARIES / "ffprobe-x86_64-pc-windows-msvc.exe", OUT_DIR / "ffprobe.exe")
+    if (OUT_DIR / "semantic-runtime").exists():
+        shutil.rmtree(OUT_DIR / "semantic-runtime")
+    shutil.copytree(semantic_runtime, OUT_DIR / "semantic-runtime")
     # plugins/animate-cep 整树镜像
     if (OUT_DIR / "plugins" / "animate-cep").exists():
         shutil.rmtree(OUT_DIR / "plugins" / "animate-cep")
