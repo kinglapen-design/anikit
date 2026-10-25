@@ -11,3 +11,4 @@
 - `semantic-clip/` —— 1.0 语义分析前置 spike（2026-10-24）：中文 CLIP 双塔导出、Rust `ort` CPU / DirectML、私有运行时与中文检索验收；模型、缓存、虚拟环境均本地隔离，不进主线
 - `semantic-eval/` —— 真实动作语义验收集与模型共用评测：BridgeData V2（CC BY 4.0）轨迹抽帧、hard negatives、TopK / MRR 与错误分析
 - `semantic-multilingual/` —— 许可清晰的多语言 CLIP 备选 spike：指定文本 / 图像双塔、CPU / DirectML 与同一质量集对照，不修改主线
+- `semantic-store/` —— SQLite 语义数据层 spike：模型 revision 隔离、分段向量幂等替换、确定性 topK、任务检查点与重开续跑；3 测 + clippy 净
