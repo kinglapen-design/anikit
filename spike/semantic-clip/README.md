@@ -26,6 +26,8 @@ source scripts/env.sh
 bash scripts/export_onnx.sh
 "$PYTHON" scripts/prepare_reference.py
 cargo build --release --locked --manifest-path rust/Cargo.toml
+"$SPIKE_ROOT/rust/target/release/semantic-clip-spike.exe" --prepare-native
+"$PYTHON" scripts/native_reference.py
 "$SPIKE_ROOT/rust/target/release/semantic-clip-spike.exe" --backend cpu
 "$SPIKE_ROOT/rust/target/release/semantic-clip-spike.exe" --backend directml
 ```
@@ -34,33 +36,38 @@ cargo build --release --locked --manifest-path rust/Cargo.toml
 
 官方 `pytorch_to_onnx.py` 以 `ViT-B-16`、文本长度 52、opset 13 同时导出文本和视觉模型。当前 Torch 会将视觉侧 `MultiheadAttention` 追踪为 SDPA，因此 `scripts/official_export.py` 仅增加一层兼容入口：把 Torch 自带的 SDPA 数学展开符号函数注册到 opset 13，再原样调用官方脚本。本模型为非因果注意力，不使用 opset 14 的 `Trilu`。官方脚本也生成 FP16 文件，但本次 Rust 验证只使用重命名后的 FP32 `text.onnx` 和 `vision.onnx`。
 
-`prepare_reference.py` 从与官方代码一致的 `vocab.txt` 生成 `tokenizer.json`，逐条确认其 52 个 token IDs 与官方 `clip.tokenize` 完全相同。Python ONNX Runtime 仅使用 `CPUExecutionProvider`，生成完整向量参考和 manifest。图像使用官方 `examples/pokemon.jpeg` 与官方 `image_transform`；Python 和 Rust 共享同一个预处理后的 little-endian FP32 NCHW 文件，避免把图像缩放差异混入 ORT 对照。**本 spike 尚未实现 Rust 原生 JPEG/ bicubic 预处理。**
+`prepare_reference.py` 从与官方代码一致的 `vocab.txt` 生成 `tokenizer.json`，逐条确认其 52 个 token IDs 与官方 `clip.tokenize` 完全相同。Python ONNX Runtime 仅使用 `CPUExecutionProvider`，生成完整向量参考和 manifest。Rust 原生路径直接读取官方 `examples/pokemon.jpeg`，执行 JPEG 解码、直接 224×224 CatmullRom bicubic resize、RGB NCHW normalize，无 center crop。`--prepare-native` 写出的 FP32 文件只供 `native_reference.py` 生成独立的 Python-native 对照；Rust 模型输入始终来自自身 JPEG 预处理，不读取共享 FP32 文件。
 
-## 2026-10-24 实测结果
+## 原生预处理与 warmed smoke（2026-10-25）
 
-两种后端均为 `status = passed`、`backend_verified = true`。CPU 路径只注册 CPU EP；DirectML 路径按高性能 GPU 的 DirectML→CPU 顺序注册，并启用注册失败即报错。程序还解析 ORT profiling 的 `args.provider`，而不是以注册成功冒充实际 GPU 执行。
+两种后端均为 `status = passed`、`backend_verified = true`。CPU 路径只注册 CPU EP；DirectML 路径按高性能 GPU 的 DirectML→CPU 顺序注册，并启用注册失败即报错。程序解析 ORT profiling 的 `args.provider`，实际分别只有 `CPUExecutionProvider` 和 `DmlExecutionProvider`。
 
-| 项目 | Rust CPU | Rust DirectML |
-| --- | ---: | ---: |
-| 实际 provider（profiling） | 仅 `CPUExecutionProvider` | 仅 `DmlExecutionProvider` |
-| 文本/图像 provider 计数 | 1800 / 455 | 5 / 1 |
-| 环境初始化 | 42.27 ms | 40.44 ms |
-| 文本模型冷加载 | 304.02 ms | 1088.72 ms |
-| 图像模型冷加载 | 448.41 ms | 905.55 ms |
-| 首次“机器人洗碗”推理 | 18.52 ms | 4.92 ms |
-| 图像推理 | 45.36 ms | 5.69 ms |
-| 峰值工作集 | 1,142,136,832 B | 1,013,096,448 B |
-| 结束前两模型仍驻留的工作集 | 834,158,592 B | 380,862,464 B |
+### 预处理与数值对照
 
-这些是单次冷启动 spike 数据，不是稳定性能基准；工作集来自 Windows `GetProcessMemoryInfo`，不含独立 GPU 显存统计。DirectML 的 `actual_backend` 证明的是 EP 节点放置，不额外冒充已识别具体显卡型号。
+原生张量与 Python/PIL 官方预处理张量共 150,528 个元素：
 
-共同数值结果：
+| 指标 | 结果 |
+| --- | ---: |
+| 逐位一致元素比例 | 89.08575% |
+| 平均绝对差 | 0.0022076732 |
+| RMS 差 | 0.0070585905 |
+| 最大绝对差 | 0.0583937168 |
 
-- “机器人洗碗”token IDs 前缀为 `[101, 3322, 1690, 782, 3819, 4813, 102]`，其余补零；输出形状为 `[1,512]`，全部有限，归一化 L2 约为 1。
-- CPU 的“机器人洗碗”归一化向量与 Python 最大绝对差为 `1.34e-7`，DirectML 为 `3.58e-7`。
-- 图像与“机器人洗碗”的 cosine：Python `0.28803691`，CPU `0.28803709`，DirectML `0.28803694`。
-- 官方四候选分类均以“皮卡丘”为最高项；Python 概率 `0.94367826`，CPU `0.94367701`，DirectML `0.94367665`。
-- Python 参考使用 ORT 1.20.1，Rust 私有运行时为 ORT 1.24.4；报告保留了逐向量差异和容差，未将不同版本视为必须逐位一致。
+差异来自 JPEG 解码器，不能隐藏为“逐位一致”。因此报告同时保留两套对照：Python/PIL 跨解码器差异只作观察；严格 smoke 使用 Python 对 **Rust 原生张量** 独立跑出的 `native-python-reference.json`。Rust 与 Python-native 的图像输出差异为：CPU 原始向量最大差 `2.24e-6`、归一化向量最大差 `1.55e-7`；DirectML 分别为 `4.77e-6`、`1.49e-7`，均通过原容差。跨解码器图像归一化向量最大差约 `0.00152758`，最大 cosine 差约 `0.00051126`；皮卡丘仍为最高分类。
+
+“机器人洗碗”及官方四候选的 token、形状、有限值、L2、相似度和 Python-native 对照均通过。原生张量 SHA256 为 `727925fbfbccb81515527c0928fb5f9b99564d869c378c8a0d4d15f8225007d4`，用于防止误用过期参考。
+
+### 预热后重复计时
+
+文本预热 3 次后测 20 次；图像预热 2 次后测 10 次。预处理与 ORT 推理分开计时，P50/P95 使用排序样本线性插值。
+
+| 指标（ms） | Rust CPU P50 | Rust CPU P95 | DirectML P50 | DirectML P95 |
+| --- | ---: | ---: | ---: | ---: |
+| 原生 JPEG 预处理（10 次） | 0.5836 | 0.6123 | 0.4094 | 0.4262 |
+| “机器人洗碗”文本推理（20 次） | 17.4510 | 22.4673 | 3.1843 | 3.4161 |
+| 原生图像推理（10 次） | 45.2793 | 46.1930 | 3.6442 | 3.9173 |
+
+峰值工作集分别为 CPU `1,141,727,232 B`、DirectML `986,963,968 B`，不含独立 GPU 显存统计。全部原始样本在报告中；这些仍是单台机器的 spike 数据，不是正式性能 benchmark。
 
 ## 产物与日志
 
@@ -68,8 +75,9 @@ cargo build --release --locked --manifest-path rust/Cargo.toml
 - `outputs/download-manifest.json`：固定 HF 文件及哈希。
 - `outputs/runtime-manifest.json`：NuGet 包与私有 DLL 哈希。
 - `outputs/reference.json`：Python token IDs、完整向量、相似度和参考耗时。
-- `outputs/rust-cpu.json`、`outputs/rust-directml.json`：实际后端、数值断言、耗时、RSS 和 profiling 路径。
-- `logs/`：环境、下载、导出、构建及两种后端的原始运行日志；`logs/python-reference-utf8.log` 是原 Python 日志的 UTF-8 转码副本。
+- `outputs/native_image_input.f32`、`outputs/native-python-reference.json`：仅供独立交叉验证的原生张量与 Python-native 参考，不作为 Rust 模型输入文件。
+- `outputs/rust-cpu-native.json`、`outputs/rust-directml-native.json`：原生预处理误差、实际后端、数值断言、预热 P50/P95、RSS 和 profiling 路径；旧共享输入基线报告仍保留为 `outputs/rust-cpu.json`、`outputs/rust-directml.json`。
+- `logs/`：环境、下载、导出、构建及两种后端的原始运行日志；`logs/prepare-native.log`、`logs/native-python-reference.log`、`logs/rust-cpu-native.log`、`logs/rust-directml-native.log` 对应本轮原生验证。
 
 私有运行时文件共 35,877,968 字节：
 
@@ -83,4 +91,4 @@ cargo build --release --locked --manifest-path rust/Cargo.toml
 
 ## 未覆盖与后续
 
-未进行 40–60 片段质量库、1000 帧耐久、RN50 对照或正式性能 benchmark，也未验证 Rust 原生图像预处理。建议先解决权重许可，再补原生预处理一致性、 warmed-up 重复计时和显存指标；质量库与耐久验证应使用独立的真实数据集，不由本次单例结果外推。
+50 轨迹/150 帧真实质量集及中文检索评估已在 `spike/semantic-eval/` 完成。仍未进行 1000 帧连续处理内存观察、RN50 对照或正式性能 benchmark。建议先解决权重许可，再依据质量集中的细粒度动作错误决定模型路线；预热计时与单例结果不外推到长期稳定性。

@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "metric_definitions": {
+    "top1_top5_top10": "Hit rate: fraction of non-diagnostic queries with at least one positive image at or above rank k.",
+    "mrr": "Mean reciprocal rank of the first positive image; zero if no positive is present in the full ranking.",
+    "hard_negative_margin": "Best positive cosine minus best hard-negative cosine; positive is better. Empty hard-negative sets are excluded from that class's aggregate.",
+    "diagnostic_only": "Zero-positive queries are ranked and reported but excluded from Top-k, MRR and hard-negative aggregates."
+  },
+  "queries": [
+    {
+      "id": "sink_scene",
+      "text_zh": "厨房里的水槽",
+      "text_en": "a kitchen sink",
+      "annotation_basis": "Visual review of sink tags on every selected frame; includes dry toy sinks and a real sink adjacent to burners.",
+      "positive": {"tags_any": ["sink"]}
+    },
+    {
+      "id": "pot_scene",
+      "text_zh": "锅或平底锅",
+      "text_en": "a pot or pan",
+      "annotation_basis": "Visual review of pot/pan tags, including silver pots, pans and strainers; no action is implied.",
+      "positive": {"tags_any": ["pot", "pan"]}
+    },
+    {
+      "id": "utensil_scene",
+      "text_zh": "勺子、叉子或刀具",
+      "text_en": "a spoon, fork, or knife",
+      "annotation_basis": "Visual review of spoon/fork/knife/spatula tags; brush alone is not counted as these utensils.",
+      "positive": {"tags_any": ["spoon", "fork", "knife", "spatula"]}
+    },
+    {
+      "id": "sponge_brush_scene",
+      "text_zh": "海绵或刷子",
+      "text_en": "a sponge or brush",
+      "annotation_basis": "Visual review of sponge/brush tags; includes sponge wiping, placement and burner scenes without asserting washing.",
+      "positive": {"tags_any": ["sponge", "brush"]}
+    },
+    {
+      "id": "wipe_pot_with_sponge",
+      "text_zh": "机械臂用海绵擦拭锅",
+      "text_en": "a robot arm wiping a pot with a sponge",
+      "annotation_basis": "T013-T016 original annotation 'wipe pot with sponge' plus visible sponge-pot contact; not dishwashing.",
+      "positive": {"samples": ["T013", "T014", "T015", "T016"], "frames": ["mid", "last"]},
+      "hard_negatives": {
+        "subject_match_action_mismatch": {"samples": ["T021", "T005", "T043"], "frames": ["mid", "last"], "basis": "Pot/sponge is present but the action is placing or moving, not wiping."},
+        "action_match_subject_mismatch": {"samples": ["T017", "T018", "T019", "T049", "T033", "T034"], "frames": ["mid", "last"], "basis": "Wiping is correct, but the target is a burner or washing machine rather than a pot."}
+      }
+    },
+    {
+      "id": "put_pot_in_sink",
+      "text_zh": "机械臂把锅放进水槽",
+      "text_en": "a robot arm putting a pot in the sink",
+      "annotation_basis": "T001/T006 pot-into-dry-sink annotations and visible final placement; not washing.",
+      "positive": {"samples": ["T001", "T006"], "frames": ["mid", "last"]},
+      "hard_negatives": {
+        "subject_match_action_mismatch": {"samples": ["T005", "T043", "T048"], "frames": ["mid", "last"], "basis": "Pot/pan is manipulated but removed or moved elsewhere, not put in the sink."},
+        "action_match_subject_mismatch": {"samples": ["T002", "T003", "T004", "T008"], "frames": ["mid", "last"], "basis": "Something is placed in the sink, but it is a spoon or fork rather than a pot."}
+      }
+    },
+    {
+      "id": "put_spoon_in_sink",
+      "text_zh": "机械臂把勺子放进水槽",
+      "text_en": "a robot arm putting a spoon in the sink",
+      "annotation_basis": "T002 blue spoon placed in the dry sink; T007 is the reverse action.",
+      "positive": {"samples": ["T002"], "frames": ["mid", "last"]},
+      "hard_negatives": {
+        "subject_match_action_mismatch": {"samples": ["T007", "T042", "T045", "T047"], "frames": ["mid", "last"], "basis": "Spoon is present but removed or moved elsewhere."},
+        "action_match_subject_mismatch": {"samples": ["T001", "T006", "T003", "T004", "T008"], "frames": ["mid", "last"], "basis": "Placement in the sink is correct, but the manipulated subject is a pot or fork."}
+      }
+    },
+    {
+      "id": "open_microwave",
+      "text_zh": "机械臂打开微波炉",
+      "text_en": "a robot arm opening the microwave",
+      "annotation_basis": "T023/T024 show a closed-to-open microwave door transition.",
+      "positive": {"samples": ["T023", "T024"], "frames": ["mid", "last"]},
+      "hard_negatives": {
+        "subject_match_action_mismatch": {"samples": ["T025", "T026"], "frames": ["mid", "last"], "basis": "Microwave is correct, but the action is closing."},
+        "action_match_subject_mismatch": {"samples": ["T027", "T028"], "frames": ["mid", "last"], "basis": "Opening is correct, but the subject is a box drawer."}
+      }
+    },
+    {
+      "id": "close_microwave",
+      "text_zh": "机械臂关闭微波炉",
+      "text_en": "a robot arm closing the microwave",
+      "annotation_basis": "T025/T026 show an open-to-closed microwave door transition.",
+      "positive": {"samples": ["T025", "T026"], "frames": ["mid", "last"]},
+      "hard_negatives": {
+        "subject_match_action_mismatch": {"samples": ["T023", "T024"], "frames": ["mid", "last"], "basis": "Microwave is correct, but the action is opening."},
+        "action_match_subject_mismatch": {"samples": ["T029", "T030"], "frames": ["mid", "last"], "basis": "Closing is correct, but the subject is a box drawer."}
+      }
+    },
+    {
+      "id": "open_drawer",
+      "text_zh": "机械臂打开盒子的抽屉",
+      "text_en": "a robot arm opening the drawer of a box",
+      "annotation_basis": "T027/T028 original 'open drawer of box' and visible open drawer.",
+      "positive": {"samples": ["T027", "T028"], "frames": ["mid", "last"]},
+      "hard_negatives": {
+        "subject_match_action_mismatch": {"samples": ["T029", "T030"], "frames": ["mid", "last"], "basis": "The box drawer is closed instead."},
+        "action_match_subject_mismatch": {"samples": ["T023", "T024"], "frames": ["mid", "last"], "basis": "Opening is correct, but the subject is a microwave."}
+      }
+    },
+    {
+      "id": "close_drawer",
+      "text_zh": "机械臂关闭盒子的抽屉",
+      "text_en": "a robot arm closing the drawer of a box",
+      "annotation_basis": "T029/T030 original 'close drawer of box' and visible closed drawer.",
+      "positive": {"samples": ["T029", "T030"], "frames": ["mid", "last"]},
+      "hard_negatives": {
+        "subject_match_action_mismatch": {"samples": ["T027", "T028"], "frames": ["mid", "last"], "basis": "The box drawer is opened instead."},
+        "action_match_subject_mismatch": {"samples": ["T025", "T026"], "frames": ["mid", "last"], "basis": "Closing is correct, but the subject is a microwave."}
+      }
+    },
+    {
+      "id": "wipe_burner",
+      "text_zh": "机械臂擦拭灶台",
+      "text_en": "a robot arm wiping a stovetop burner",
+      "annotation_basis": "T017-T019 visible cloth wiping and T049 burner-cleaning annotation with reviewed action scope.",
+      "positive": {"samples": ["T017", "T018", "T019", "T049"], "frames": ["mid", "last"]},
+      "hard_negatives": {
+        "subject_match_action_mismatch": {"samples": ["T050"], "frames": ["mid", "last"], "basis": "Sponge is moved on a burner, but no clear wiping action is visible."},
+        "action_match_subject_mismatch": {"samples": ["T013", "T014", "T015", "T016", "T033", "T034"], "frames": ["mid", "last"], "basis": "Wiping is correct, but the target is a pot or washing machine."}
+      }
+    },
+    {
+      "id": "wipe_washing_machine",
+      "text_zh": "机械臂擦拭洗衣机",
+      "text_en": "a robot arm wiping a washing machine",
+      "annotation_basis": "T033/T034 show blue cloth wiping the washing machine's front surface.",
+      "positive": {"samples": ["T033", "T034"], "frames": ["mid", "last"]},
+      "hard_negatives": {
+        "subject_match_action_mismatch": {"samples": ["T035", "T036", "T037"], "frames": ["mid", "last"], "basis": "Cloth and washing machine are present, but the action is placing or removing rather than wiping."},
+        "action_match_subject_mismatch": {"samples": ["T017", "T018", "T019", "T049", "T013", "T014", "T015", "T016"], "frames": ["mid", "last"], "basis": "Wiping is correct, but the target is a burner or pot."}
+      }
+    },
+    {
+      "id": "place_cloth_on_washing_machine_door",
+      "text_zh": "机械臂把布放到洗衣机门上",
+      "text_en": "a robot arm placing a cloth on the washing machine door",
+      "annotation_basis": "T035/T036 full-resolution review supports cloth on the circular door surface, not insertion into the drum.",
+      "positive": {"samples": ["T035", "T036"], "frames": ["mid", "last"]},
+      "hard_negatives": {
+        "subject_match_action_mismatch": {"samples": ["T033", "T034", "T037"], "frames": ["mid", "last"], "basis": "Cloth and washing machine are present, but the action is wiping or removing into a basket."}
+      }
+    },
+    {
+      "id": "fold_cloth",
+      "text_zh": "机械臂折叠布料",
+      "text_en": "a robot arm folding a cloth",
+      "annotation_basis": "T031/T032 original 'fold cloth in half' and visible folding sequence.",
+      "positive": {"samples": ["T031", "T032"], "frames": ["mid", "last"]},
+      "hard_negatives": {
+        "subject_match_action_mismatch": {"samples": ["T033", "T034", "T035", "T036", "T037"], "frames": ["mid", "last"], "basis": "Cloth is present but is wiped, placed or removed, not folded."}
+      }
+    },
+    {
+      "id": "sweep_granules",
+      "text_zh": "机械臂把颗粒扫成一堆",
+      "text_en": "a robot arm sweeping granules into a pile",
+      "annotation_basis": "T039/T040 original 'sweep into pile' and visible granules gathered on a white tray.",
+      "positive": {"samples": ["T039", "T040"], "frames": ["mid", "last"]}
+    },
+    {
+      "id": "put_mushroom_in_pot",
+      "text_zh": "机械臂把蘑菇放进锅里",
+      "text_en": "a robot arm putting a mushroom in a pot",
+      "annotation_basis": "T041/T044/T046 annotations and visible mushroom placement into a pot.",
+      "positive": {"samples": ["T041", "T044", "T046"], "frames": ["mid", "last"]},
+      "hard_negatives": {
+        "subject_match_action_mismatch": {"samples": ["T041", "T044", "T046"], "frames": ["first"], "basis": "Initial frame contains the mushroom and pot, but placement has not occurred."},
+        "action_match_subject_mismatch": {"samples": ["T021"], "frames": ["mid", "last"], "basis": "Placement into a pot is correct, but the object is a sponge."}
+      }
+    },
+    {
+      "id": "robot_washes_dishes_diagnostic",
+      "text_zh": "机器人洗碗",
+      "text_en": "a robot washing dishes",
+      "annotation_basis": "No direct positive. Pot wiping and dry-sink placement are deliberately not relabeled as dishwashing.",
+      "diagnostic_only": true,
+      "positive": {"samples": []}
+    }
+  ]
+}

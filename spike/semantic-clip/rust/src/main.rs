@@ -1,3 +1,5 @@
+mod preprocess;
+
 use std::{
     collections::BTreeMap,
     fs,
@@ -57,6 +59,7 @@ impl Backend {
 struct Args {
     root: PathBuf,
     backend: Backend,
+    prepare_native: bool,
 }
 
 impl Args {
@@ -65,6 +68,7 @@ impl Args {
             .map(PathBuf::from)
             .unwrap_or(std::env::current_dir()?);
         let mut backend = Backend::Cpu;
+        let mut prepare_native = false;
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -74,8 +78,11 @@ impl Args {
                 "--backend" => {
                     backend = Backend::parse(&args.next().context("--backend requires a value")?)?;
                 }
+                "--prepare-native" => prepare_native = true,
                 "-h" | "--help" => {
-                    println!("semantic-clip-spike [--root PATH] [--backend cpu|directml]");
+                    println!(
+                        "semantic-clip-spike [--root PATH] [--backend cpu|directml] [--prepare-native]"
+                    );
                     std::process::exit(0);
                 }
                 _ => bail!("unknown argument: {arg}"),
@@ -86,6 +93,7 @@ impl Args {
                 .canonicalize()
                 .with_context(|| format!("invalid root: {}", root.display()))?,
             backend,
+            prepare_native,
         })
     }
 }
@@ -111,6 +119,14 @@ struct TextReference {
 struct ImageReference {
     unnormalized: Vec<f32>,
     normalized: Vec<f32>,
+}
+
+#[derive(Deserialize)]
+struct NativePythonReference {
+    tensor_sha256: String,
+    image: ImageReference,
+    cosine_similarities: BTreeMap<String, f32>,
+    official_candidate_probabilities: Vec<f32>,
 }
 
 struct Embedding {
@@ -155,7 +171,7 @@ fn main() {
         eprintln!("cannot create {}: {error}", output.display());
         std::process::exit(2);
     }
-    let report_path = output.join(format!("rust-{}.json", args.backend.as_str()));
+    let report_path = output.join(format!("rust-{}-native.json", args.backend.as_str()));
     let mut report = json!({
         "status": "running",
         "requested_backend": args.backend.as_str(),
@@ -170,8 +186,12 @@ fn main() {
     let result = run(&args, &mut report);
     match result {
         Ok(()) => {
-            report["status"] = json!("passed");
-            report["backend_verified"] = json!(true);
+            if args.prepare_native {
+                report["status"] = json!("prepared");
+            } else {
+                report["status"] = json!("passed");
+                report["backend_verified"] = json!(true);
+            }
         }
         Err(error) => {
             report["status"] = json!("failed");
@@ -185,12 +205,16 @@ fn main() {
         std::process::exit(2);
     }
     println!("{rendered}");
-    if report["status"] != "passed" {
+    if report["status"] != "passed" && report["status"] != "prepared" {
         std::process::exit(1);
     }
 }
 
 fn run(args: &Args, report: &mut Value) -> Result<()> {
+    if args.prepare_native {
+        prepare_native_input(args, report)?;
+        return Ok(());
+    }
     let runtime = args.root.join("runtime");
     set_dll_directory(&runtime)?;
     report["private_runtime_dlls"] = json!(dll_records(&runtime)?);
@@ -270,47 +294,92 @@ fn run(args: &Args, report: &mut Value) -> Result<()> {
     report["timings_ms"]["text_inference"] = json!(text_timings);
     report["memory"]["after_text_inference"] = json!(memory_usage()?);
 
-    let image_data = read_image_input(&args.root.join("outputs/image_input.f32"))?;
-    let image_tensor = Tensor::from_array(([1_usize, 3, 224, 224], image_data))?;
+    let image_path = args.root.join("vendor/Chinese-CLIP/examples/pokemon.jpeg");
+    let native_image = preprocess::load_jpeg(&image_path)?;
+    let python_image_data = read_image_input(&args.root.join("outputs/image_input.f32"))?;
+    let preprocessing_comparison = preprocess::compare(&native_image.data, &python_image_data)?;
+    let (_, native_tensor_hash) = write_native_tensor(args, &native_image.data)?;
+    let native_reference_path = args.root.join("outputs/native-python-reference.json");
+    let native_reference: NativePythonReference =
+        serde_json::from_slice(&fs::read(&native_reference_path).with_context(|| {
+            format!(
+                "read {}; run --prepare-native and scripts/native_reference.py first",
+                native_reference_path.display()
+            )
+        })?)?;
+    if native_reference.tensor_sha256 != native_tensor_hash {
+        bail!(
+            "native Python reference is stale; rerun --prepare-native and scripts/native_reference.py"
+        );
+    }
+    report["native_preprocessing"] = json!({
+        "source": image_path.to_string_lossy(),
+        "source_dimensions": [native_image.source_width, native_image.source_height],
+        "output_shape": [1, 3, 224, 224],
+        "pipeline": "JPEG decode + direct 224x224 CatmullRom bicubic resize + RGB NCHW normalize; no center crop",
+        "decode_resize_normalize_ms": native_image.elapsed_ms,
+        "python_reference_tensor": "outputs/image_input.f32 (comparison only; not used for inference)",
+        "comparison_to_python": preprocessing_comparison,
+        "native_tensor_used_for_inference": true,
+        "python_native_reference": native_reference_path,
+        "python_native_reference_tensor_sha256": &native_reference.tensor_sha256,
+    });
+    let image_tensor = Tensor::from_array(([1_usize, 3, 224, 224], native_image.data.clone()))?;
     let start = Instant::now();
     let image_embedding = infer(&mut vision_session, image_tensor, "unnorm_image_features")?;
     report["timings_ms"]["vision_inference"] = json!(milliseconds(start));
     let image_comparison = compare_embedding(
         &image_embedding,
-        &reference.image.unnormalized,
-        &reference.image.normalized,
+        &native_reference.image.unnormalized,
+        &native_reference.image.normalized,
         tolerance,
     )?;
     report["image_result"] = json!({
-        "source": "official examples/pokemon.jpeg via Python image_transform; raw tensor shared with Python",
-        "comparison": image_comparison,
+        "source": "Rust native JPEG preprocessing; no shared FP32 model input",
+        "comparison_to_python_native_tensor": image_comparison,
+        "cross_decoder_difference_from_python_pil": {
+            "max_abs_diff_unnormalized": max_abs_diff(&image_embedding.raw, &reference.image.unnormalized)?,
+            "max_abs_diff_normalized": max_abs_diff(&image_embedding.unit, &reference.image.normalized)?,
+        },
     });
     report["memory"]["after_vision_inference"] = json!(memory_usage()?);
 
     let mut similarities = BTreeMap::new();
     let mut similarity_results = Vec::new();
+    let mut cross_decoder_max_cosine_diff = 0.0_f32;
     for (text, unit_text) in &unit_texts {
         let similarity = dot(&image_embedding.unit, unit_text);
-        let python_similarity = reference.cosine_similarities[text];
+        let python_similarity = native_reference.cosine_similarities[text];
+        let python_pil_similarity = reference.cosine_similarities[text];
         if (similarity - python_similarity).abs() > tolerance {
-            bail!("cosine mismatch for {text:?}: Rust={similarity}, Python={python_similarity}");
+            bail!(
+                "cosine mismatch for {text:?}: Rust={similarity}, Python-native={python_similarity}"
+            );
         }
+        cross_decoder_max_cosine_diff =
+            cross_decoder_max_cosine_diff.max((similarity - python_pil_similarity).abs());
         similarities.insert(text.clone(), similarity);
         similarity_results.push(json!({
             "text": text,
             "rust_cosine": similarity,
-            "python_cosine": python_similarity,
+            "python_native_cosine": python_similarity,
+            "python_pil_cosine": python_pil_similarity,
         }));
     }
     report["similarities"] = json!(similarity_results);
+    report["cross_decoder_max_cosine_diff"] = json!(cross_decoder_max_cosine_diff);
     let probabilities = softmax_probabilities(&reference.official_candidates, &similarities)?;
     let probability_diff = probabilities
         .iter()
-        .zip(&reference.official_candidate_probabilities)
+        .zip(&native_reference.official_candidate_probabilities)
         .fold(0.0_f32, |acc, (left, right)| acc.max((left - right).abs()));
     if probability_diff > tolerance {
-        bail!("official sample probability mismatch: {probability_diff}");
+        bail!("official sample probability mismatch vs Python-native: {probability_diff}");
     }
+    let cross_decoder_probability_diff = probabilities
+        .iter()
+        .zip(&reference.official_candidate_probabilities)
+        .fold(0.0_f32, |acc, (left, right)| acc.max((left - right).abs()));
     let best = reference.official_candidates[probabilities
         .iter()
         .enumerate()
@@ -324,10 +393,27 @@ fn run(args: &Args, report: &mut Value) -> Result<()> {
     report["official_sample"] = json!({
         "candidates": reference.official_candidates,
         "probabilities": probabilities,
-        "python_probabilities": reference.official_candidate_probabilities,
-        "max_abs_probability_diff": probability_diff,
+        "python_native_probabilities": native_reference.official_candidate_probabilities,
+        "python_pil_probabilities": reference.official_candidate_probabilities,
+        "max_abs_probability_diff_vs_python_native": probability_diff,
+        "cross_decoder_max_probability_diff": cross_decoder_probability_diff,
         "best": best,
     });
+
+    let robot = reference
+        .texts
+        .first()
+        .context("missing robot text reference")?;
+    if robot.text != "机器人洗碗" {
+        bail!("unexpected first text reference: {:?}", robot.text);
+    }
+    warmed_benchmark(
+        &mut text_session,
+        &mut vision_session,
+        robot,
+        &image_path,
+        report,
+    )?;
 
     let text_profile = finish_profile(&mut text_session)?;
     let vision_profile = finish_profile(&mut vision_session)?;
@@ -360,6 +446,116 @@ fn run(args: &Args, report: &mut Value) -> Result<()> {
     }
     report["memory"]["final"] = json!(memory_usage()?);
     Ok(())
+}
+
+fn prepare_native_input(args: &Args, report: &mut Value) -> Result<()> {
+    let image_path = args.root.join("vendor/Chinese-CLIP/examples/pokemon.jpeg");
+    let native = preprocess::load_jpeg(&image_path)?;
+    let python = read_image_input(&args.root.join("outputs/image_input.f32"))?;
+    let comparison = preprocess::compare(&native.data, &python)?;
+    let (tensor_path, tensor_hash) = write_native_tensor(args, &native.data)?;
+    report["native_preprocessing"] = json!({
+        "source": image_path.to_string_lossy(),
+        "source_dimensions": [native.source_width, native.source_height],
+        "output_shape": [1, 3, 224, 224],
+        "pipeline": "JPEG decode + direct 224x224 CatmullRom bicubic resize + RGB NCHW normalize; no center crop",
+        "decode_resize_normalize_ms": native.elapsed_ms,
+        "comparison_to_python": comparison,
+        "native_tensor_written": tensor_path,
+        "native_tensor_sha256": tensor_hash,
+        "next_step": "Run scripts/native_reference.py, then run without --prepare-native",
+    });
+    Ok(())
+}
+
+fn write_native_tensor(args: &Args, data: &[f32]) -> Result<(PathBuf, String)> {
+    let bytes = preprocess::little_endian_bytes(data);
+    let hash = preprocess::sha256(&bytes);
+    let path = args.root.join("outputs/native_image_input.f32");
+    fs::write(&path, bytes).with_context(|| format!("write {}", path.display()))?;
+    Ok((path, hash))
+}
+
+fn warmed_benchmark(
+    text_session: &mut Session,
+    vision_session: &mut Session,
+    robot: &TextReference,
+    image_path: &Path,
+    report: &mut Value,
+) -> Result<()> {
+    let ids = robot
+        .token_ids
+        .iter()
+        .map(|id| i64::from(*id))
+        .collect::<Vec<_>>();
+    for _ in 0..3 {
+        let tensor = Tensor::from_array(([1_usize, CONTEXT_LENGTH], ids.clone()))?;
+        infer(text_session, tensor, "unnorm_text_features")?;
+    }
+    let mut text_times = Vec::new();
+    for _ in 0..20 {
+        let tensor = Tensor::from_array(([1_usize, CONTEXT_LENGTH], ids.clone()))?;
+        let start = Instant::now();
+        infer(text_session, tensor, "unnorm_text_features")?;
+        text_times.push(milliseconds(start));
+    }
+    for _ in 0..2 {
+        let native = preprocess::load_jpeg(image_path)?;
+        let tensor = Tensor::from_array(([1_usize, 3, 224, 224], native.data))?;
+        infer(vision_session, tensor, "unnorm_image_features")?;
+    }
+    let mut preprocess_times = Vec::new();
+    let mut vision_times = Vec::new();
+    for _ in 0..10 {
+        let native = preprocess::load_jpeg(image_path)?;
+        preprocess_times.push(native.elapsed_ms);
+        let tensor = Tensor::from_array(([1_usize, 3, 224, 224], native.data))?;
+        let start = Instant::now();
+        infer(vision_session, tensor, "unnorm_image_features")?;
+        vision_times.push(milliseconds(start));
+    }
+    report["warmed_benchmark"] = json!({
+        "text_query": robot.text,
+        "text_warmup_iterations": 3,
+        "text_measured_iterations": 20,
+        "vision_warmup_iterations": 2,
+        "vision_measured_iterations": 10,
+        "percentile_method": "linear interpolation over sorted measured samples",
+        "native_preprocess_ms": timing_summary(&preprocess_times),
+        "text_inference_ms": timing_summary(&text_times),
+        "vision_inference_ms": timing_summary(&vision_times),
+        "raw_samples": {
+            "native_preprocess_ms": preprocess_times,
+            "text_inference_ms": text_times,
+            "vision_inference_ms": vision_times,
+        },
+    });
+    report["memory"]["after_warmed_benchmark"] = json!(memory_usage()?);
+    Ok(())
+}
+
+fn timing_summary(samples: &[f64]) -> Value {
+    if samples.is_empty() {
+        return json!({ "count": 0 });
+    }
+    let mut sorted = samples.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    json!({
+        "count": sorted.len(),
+        "min": sorted[0],
+        "p50": percentile(&sorted, 0.50),
+        "p95": percentile(&sorted, 0.95),
+        "mean": sorted.iter().sum::<f64>() / sorted.len() as f64,
+        "max": sorted[sorted.len() - 1],
+    })
+}
+
+fn percentile(sorted: &[f64], quantile: f64) -> f64 {
+    let position = (sorted.len() - 1) as f64 * quantile;
+    let lower = position.floor() as usize;
+    let upper = position.ceil() as usize;
+    let fraction = position - lower as f64;
+    sorted[lower] * (1.0 - fraction) + sorted[upper] * fraction
 }
 
 fn create_session(

@@ -1,0 +1,3692 @@
+{
+  "schema_version": 1,
+  "source": {
+    "dataset": "BridgeData V2",
+    "dataset_page": "https://rail-berkeley.github.io/bridgedata/",
+    "csv_url": "https://rail-berkeley.github.io/bridgedata/traj_links.csv",
+    "csv_sha256": "a9c971ba2dbd3b5f55fa091bf1873f26d1ded6fd06d3808f9497f68bb6729567",
+    "download_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "attribution": "BridgeData V2, Homer Walke et al., RAIL Berkeley"
+  },
+  "selection_rule": "Filter original CSV annotations for sink, dishware, pot/pan, sponge/brush, cleaning, kitchen operations, cloth/laundry and other actions; keep fixed CSV line numbers chosen to cover these groups and explicit hard-negative pairs; no random sampling and no archive download. Select first, floor(last/2), last frames from images0.",
+  "trajectory_count": 50,
+  "image_count": 150,
+  "review_status": "reviewed_all_150_images_via_9_contact_sheets_with_targeted_full_resolution_checks",
+  "dishwashing_assessment": {
+    "selected_set_direct_positive": false,
+    "finding": "No direct robot dishwashing positive was found in the selected set or in the full-CSV wash/rinse/clean keyword scan. Wiping a pot with a sponge is only a wiping action; placing pots or utensils in a dry toy sink is only placement. Neither is relabeled as washing dishes.",
+    "scope_limit": "The keyword scan does not prove that every one of the complete BridgeData trajectories lacks dishwashing; it is sufficient to exclude an unsupported dishwashing positive from this quality set.",
+    "aggregate_metric_rule": "The robot-washes-dishes query is diagnostic-only with zero positives and is excluded from Top-k and MRR aggregates."
+  },
+  "trajectories": [
+    {
+      "sample_id": "T001",
+      "csv_line": 9181,
+      "category": "sink_dishware",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj7",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj7/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj7/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj7/images0/im_46.jpg",
+        "put the silver pot in the middle inside of the sink"
+      ],
+      "annotations": [
+        "put the silver pot in the middle inside of the sink"
+      ],
+      "last_frame_index": 46,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sink",
+          "pot",
+          "spoon",
+          "spatula",
+          "dishrack",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Dry blue toy sink; robot places a silver pot into the basin. No washing or water visible."
+      },
+      "frames": [
+        {
+          "image_id": "T001_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj7/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj7/images0/im_0.jpg",
+          "path": "data/images/T001_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 69018,
+          "sha256": "c8ced64e61ea1dc5b5bdee97cbd7259e21a06032f07e4e1a5145710c831799e2"
+        },
+        {
+          "image_id": "T001_mid",
+          "frame_label": "mid",
+          "frame_index": 23,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj7/images0/im_23.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj7/images0/im_23.jpg",
+          "path": "data/images/T001_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 70663,
+          "sha256": "989c70dae038e75f16de08ef5b3b82329dde0570c89fd7441ffc2426529838a5"
+        },
+        {
+          "image_id": "T001_last",
+          "frame_label": "last",
+          "frame_index": 46,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj7/images0/im_46.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj7/images0/im_46.jpg",
+          "path": "data/images/T001_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 75418,
+          "sha256": "0b8a717e3495560285038f4b5c9bc3243daa54070d3565567969223ec321be61"
+        }
+      ]
+    },
+    {
+      "sample_id": "T002",
+      "csv_line": 9182,
+      "category": "sink_dishware",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj16",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj16/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj16/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj16/images0/im_58.jpg",
+        "put the blue spoon in the sink"
+      ],
+      "annotations": [
+        "put the blue spoon in the sink"
+      ],
+      "last_frame_index": 58,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sink",
+          "pot",
+          "spoon",
+          "spatula",
+          "dishrack",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Robot moves a blue spoon into the dry sink; a pot remains on the left."
+      },
+      "frames": [
+        {
+          "image_id": "T002_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj16/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj16/images0/im_0.jpg",
+          "path": "data/images/T002_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 68915,
+          "sha256": "91f1fc501d5406a58820273a9ec3423ffa4b8595ddcfc17f4c1ecbebcfea8766"
+        },
+        {
+          "image_id": "T002_mid",
+          "frame_label": "mid",
+          "frame_index": 29,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj16/images0/im_29.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj16/images0/im_29.jpg",
+          "path": "data/images/T002_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 68637,
+          "sha256": "5d3885a74e20f30c1e54916b6eccdb0ac812ece700d4679fb6bfc375629e2534"
+        },
+        {
+          "image_id": "T002_last",
+          "frame_label": "last",
+          "frame_index": 58,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj16/images0/im_58.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj16/images0/im_58.jpg",
+          "path": "data/images/T002_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 69716,
+          "sha256": "cb023904cab02cc77f06ec8acd39d4b85f0ff0055db8908a3f79a84fe23069ed"
+        }
+      ]
+    },
+    {
+      "sample_id": "T003",
+      "csv_line": 9186,
+      "category": "sink_dishware",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj18",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj18/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj18/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj18/images0/im_58.jpg",
+        "put the blue fork on the right side of the silver strainer in the sink"
+      ],
+      "annotations": [
+        "put the blue fork on the right side of the silver strainer in the sink"
+      ],
+      "last_frame_index": 58,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sink",
+          "pot",
+          "strainer",
+          "fork",
+          "dishrack",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Blue fork is placed beside a silver strainer/pot in the sink area."
+      },
+      "frames": [
+        {
+          "image_id": "T003_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj18/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj18/images0/im_0.jpg",
+          "path": "data/images/T003_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 76776,
+          "sha256": "f5cbe45957fedbd801b90f1781eedfb5f5bd9e5afd5f2124870117405e7208ac"
+        },
+        {
+          "image_id": "T003_mid",
+          "frame_label": "mid",
+          "frame_index": 29,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj18/images0/im_29.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj18/images0/im_29.jpg",
+          "path": "data/images/T003_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 73845,
+          "sha256": "ab442d4c11df132cdac52ff4686dfc5cdbd354b3f1c68422403731641f07a231"
+        },
+        {
+          "image_id": "T003_last",
+          "frame_label": "last",
+          "frame_index": 58,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj18/images0/im_58.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj18/images0/im_58.jpg",
+          "path": "data/images/T003_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 76927,
+          "sha256": "e6de7c3ab8c5b80836d6401fbb452b269adb7705031604d2bcd4602408e0ea20"
+        }
+      ]
+    },
+    {
+      "sample_id": "T004",
+      "csv_line": 9191,
+      "category": "sink_dishware",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj11",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj11/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj11/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj11/images0/im_56.jpg",
+        "put the fork inside the silver pan in the sink"
+      ],
+      "annotations": [
+        "put the fork inside the silver pan in the sink"
+      ],
+      "last_frame_index": 56,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sink",
+          "pot",
+          "pan",
+          "fork",
+          "dishrack",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Fork ends inside the silver pan in the sink; distinct from placing a pot."
+      },
+      "frames": [
+        {
+          "image_id": "T004_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj11/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj11/images0/im_0.jpg",
+          "path": "data/images/T004_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 79169,
+          "sha256": "5b461cb2dcfbc18429ed969b4b5b7dab220fe2c92eae572fe0e5ecf893055b30"
+        },
+        {
+          "image_id": "T004_mid",
+          "frame_label": "mid",
+          "frame_index": 28,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj11/images0/im_28.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj11/images0/im_28.jpg",
+          "path": "data/images/T004_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 81436,
+          "sha256": "610c7a93ac7a364cfbeb98c5b5300bf273d2b27590e6ff16bf033f7f9292a4f0"
+        },
+        {
+          "image_id": "T004_last",
+          "frame_label": "last",
+          "frame_index": 56,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj11/images0/im_56.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj11/images0/im_56.jpg",
+          "path": "data/images/T004_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 78002,
+          "sha256": "8848c2e7166dde67f37d8169153b17bebcbd3f9ba5ea2dfe22b307ea10072b2a"
+        }
+      ]
+    },
+    {
+      "sample_id": "T005",
+      "csv_line": 9197,
+      "category": "sink_dishware",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj1",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj1/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj1/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj1/images0/im_50.jpg",
+        "moved the silver pot out of the sink"
+      ],
+      "annotations": [
+        "moved the silver pot out of the sink"
+      ],
+      "last_frame_index": 50,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sink",
+          "pot",
+          "colander",
+          "fork",
+          "dishrack",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Robot lifts the silver pan/pot away from the sink area; useful as same-subject wrong-action negative."
+      },
+      "frames": [
+        {
+          "image_id": "T005_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj1/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj1/images0/im_0.jpg",
+          "path": "data/images/T005_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 77541,
+          "sha256": "32f1c7f2888b19d24167c04e246bbbaec50b8f2e8f960cb778434746e74d5867"
+        },
+        {
+          "image_id": "T005_mid",
+          "frame_label": "mid",
+          "frame_index": 25,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj1/images0/im_25.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj1/images0/im_25.jpg",
+          "path": "data/images/T005_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 75178,
+          "sha256": "dfdaa8855f9482b247a7959e3f110f2209fe7a043a84583258834a3760b89cc7"
+        },
+        {
+          "image_id": "T005_last",
+          "frame_label": "last",
+          "frame_index": 50,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj1/images0/im_50.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj1/images0/im_50.jpg",
+          "path": "data/images/T005_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 74268,
+          "sha256": "fccd5a964313f97551ac728d7843f3253219661f3091b74d1aa538a9a8a634bf"
+        }
+      ]
+    },
+    {
+      "sample_id": "T006",
+      "csv_line": 9207,
+      "category": "sink_dishware",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/04/2022-07-22_14-21-33/raw/traj_group0/traj5",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/04/2022-07-22_14-21-33/raw/traj_group0/traj5/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/04/2022-07-22_14-21-33/raw/traj_group0/traj5/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/04/2022-07-22_14-21-33/raw/traj_group0/traj5/images0/im_46.jpg",
+        "put the silver pot to the sink"
+      ],
+      "annotations": [
+        "put the silver pot to the sink"
+      ],
+      "last_frame_index": 46,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sink",
+          "pot",
+          "spatula",
+          "dishrack",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Robot moves the silver pot toward and into the dry sink; no cleaning claimed."
+      },
+      "frames": [
+        {
+          "image_id": "T006_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/04/2022-07-22_14-21-33/raw/traj_group0/traj5/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/04/2022-07-22_14-21-33/raw/traj_group0/traj5/images0/im_0.jpg",
+          "path": "data/images/T006_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 67737,
+          "sha256": "53e6796ef1d91641154ac11a660298e754e93afb47a10de7e0e45fc85a5b9396"
+        },
+        {
+          "image_id": "T006_mid",
+          "frame_label": "mid",
+          "frame_index": 23,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/04/2022-07-22_14-21-33/raw/traj_group0/traj5/images0/im_23.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/04/2022-07-22_14-21-33/raw/traj_group0/traj5/images0/im_23.jpg",
+          "path": "data/images/T006_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 69065,
+          "sha256": "e5f2c9d575b7c6f93f2cbcc7137f7585f2696e8416e768cc3a18d6de7abd6f75"
+        },
+        {
+          "image_id": "T006_last",
+          "frame_label": "last",
+          "frame_index": 46,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/04/2022-07-22_14-21-33/raw/traj_group0/traj5/images0/im_46.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/04/2022-07-22_14-21-33/raw/traj_group0/traj5/images0/im_46.jpg",
+          "path": "data/images/T006_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 76138,
+          "sha256": "cd61cda57211d47a9df15aa23d52074a8875da66b625344b2b4dea129d7c7aad"
+        }
+      ]
+    },
+    {
+      "sample_id": "T007",
+      "csv_line": 9171,
+      "category": "sink_dishware",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj6",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj6/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj6/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj6/images0/im_53.jpg",
+        "took the spoon from the sink and put it inside the pan"
+      ],
+      "annotations": [
+        "took the spoon from the sink and put it inside the pan"
+      ],
+      "last_frame_index": 53,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sink",
+          "pot",
+          "pan",
+          "spoon",
+          "spatula",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Spoon is taken from the sink and moved toward the pan; opposite action to spoon-into-sink."
+      },
+      "frames": [
+        {
+          "image_id": "T007_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj6/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj6/images0/im_0.jpg",
+          "path": "data/images/T007_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 72725,
+          "sha256": "b659e8db27364adca504bcaf0cc7c9c9d57836653885efc6306d83faf8bd997b"
+        },
+        {
+          "image_id": "T007_mid",
+          "frame_label": "mid",
+          "frame_index": 26,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj6/images0/im_26.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj6/images0/im_26.jpg",
+          "path": "data/images/T007_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 73122,
+          "sha256": "bd5d4a8518d0c1181468d8e4af2ec64743045220f74c7bf255b7336bbfb8c077"
+        },
+        {
+          "image_id": "T007_last",
+          "frame_label": "last",
+          "frame_index": 53,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj6/images0/im_53.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/07/2022-07-23_12-20-59/raw/traj_group0/traj6/images0/im_53.jpg",
+          "path": "data/images/T007_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 68991,
+          "sha256": "a208b805de81382880682b068183f542a72b5ed92e9c1e356e301c389778e1fe"
+        }
+      ]
+    },
+    {
+      "sample_id": "T008",
+      "csv_line": 9251,
+      "category": "sink_dishware",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj0",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj0/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj0/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj0/images0/im_45.jpg",
+        "put the red fork in the sink"
+      ],
+      "annotations": [
+        "put the red fork in the sink"
+      ],
+      "last_frame_index": 45,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sink",
+          "pot",
+          "fork",
+          "dishrack",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Red fork is placed into the dry sink."
+      },
+      "frames": [
+        {
+          "image_id": "T008_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj0/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj0/images0/im_0.jpg",
+          "path": "data/images/T008_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 70878,
+          "sha256": "6b4ec5ba9f4ee2e4dfaa7b2a3581daceba4db77d4bb84aa7bf5227db5b80fde1"
+        },
+        {
+          "image_id": "T008_mid",
+          "frame_label": "mid",
+          "frame_index": 22,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj0/images0/im_22.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj0/images0/im_22.jpg",
+          "path": "data/images/T008_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 68188,
+          "sha256": "27e4586d545aa2dcf69142523d825eb1720c792a00ce95136630bb6b7e5b92d1"
+        },
+        {
+          "image_id": "T008_last",
+          "frame_label": "last",
+          "frame_index": 45,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj0/images0/im_45.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj0/images0/im_45.jpg",
+          "path": "data/images/T008_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 74854,
+          "sha256": "6415d88beb920d1beceed7c15f5054f3a10535f632fa95aa57dd6800b8aedfbc"
+        }
+      ]
+    },
+    {
+      "sample_id": "T009",
+      "csv_line": 9243,
+      "category": "sink_dishware",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj4",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj4/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj4/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj4/images0/im_54.jpg",
+        "take the red fork out of the sink"
+      ],
+      "annotations": [
+        "take the red fork out of the sink"
+      ],
+      "last_frame_index": 54,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sink",
+          "pot",
+          "fork",
+          "dishrack",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Red fork is removed from the sink and ends on the left."
+      },
+      "frames": [
+        {
+          "image_id": "T009_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj4/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj4/images0/im_0.jpg",
+          "path": "data/images/T009_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 75352,
+          "sha256": "88bdd13cd3db6724531df4cd0770f256a557e97e0b1b9c869905c63501c62095"
+        },
+        {
+          "image_id": "T009_mid",
+          "frame_label": "mid",
+          "frame_index": 27,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj4/images0/im_27.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj4/images0/im_27.jpg",
+          "path": "data/images/T009_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 76766,
+          "sha256": "48287895c731beeaeb5eb78e372f556700397d2502c33aa9f23080b4a950af49"
+        },
+        {
+          "image_id": "T009_last",
+          "frame_label": "last",
+          "frame_index": 54,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj4/images0/im_54.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/03/2022-07-22_13-55-08/raw/traj_group0/traj4/images0/im_54.jpg",
+          "path": "data/images/T009_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 75358,
+          "sha256": "5e0f4dddf99dacf2f44367d53e0049a2167139692177579671c33377615ad992"
+        }
+      ]
+    },
+    {
+      "sample_id": "T010",
+      "csv_line": 9198,
+      "category": "sink_dishware",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj5",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj5/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj5/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj5/images0/im_58.jpg",
+        "move the fork in the lower  left side of the sink"
+      ],
+      "annotations": [
+        "move the fork in the lower  left side of the sink"
+      ],
+      "last_frame_index": 58,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sink",
+          "pot",
+          "fork",
+          "dishrack",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Blue fork is moved within the sink area toward its lower-left side."
+      },
+      "frames": [
+        {
+          "image_id": "T010_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj5/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj5/images0/im_0.jpg",
+          "path": "data/images/T010_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 78277,
+          "sha256": "dbd7aca742de0cf20fa41b2ab8af6879c8bd3c8fde3bf3b45ee39990cf6af7cb"
+        },
+        {
+          "image_id": "T010_mid",
+          "frame_label": "mid",
+          "frame_index": 29,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj5/images0/im_29.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj5/images0/im_29.jpg",
+          "path": "data/images/T010_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 76140,
+          "sha256": "4816d39963e840a330aade340146577457fc8872a78d1df6283f2641567bf13f"
+        },
+        {
+          "image_id": "T010_last",
+          "frame_label": "last",
+          "frame_index": 58,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj5/images0/im_58.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/00/2022-07-22_12-51-36/raw/traj_group0/traj5/images0/im_58.jpg",
+          "path": "data/images/T010_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 79448,
+          "sha256": "08e7a568326fcf313f1e67a6c70720a8481854d0e9ad359a2e071f670f15df2e"
+        }
+      ]
+    },
+    {
+      "sample_id": "T011",
+      "csv_line": 9238,
+      "category": "sink_dishware",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/09/2022-07-23_13-13-59/raw/traj_group0/traj8",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/09/2022-07-23_13-13-59/raw/traj_group0/traj8/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/09/2022-07-23_13-13-59/raw/traj_group0/traj8/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/09/2022-07-23_13-13-59/raw/traj_group0/traj8/images0/im_51.jpg",
+        "put the yellow knife in the left side of the sink"
+      ],
+      "annotations": [
+        "put the yellow knife in the left side of the sink"
+      ],
+      "last_frame_index": 51,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sink",
+          "knife",
+          "dishrack",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Yellow knife is placed on the left side of the sink."
+      },
+      "frames": [
+        {
+          "image_id": "T011_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/09/2022-07-23_13-13-59/raw/traj_group0/traj8/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/09/2022-07-23_13-13-59/raw/traj_group0/traj8/images0/im_0.jpg",
+          "path": "data/images/T011_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 73066,
+          "sha256": "17fb9723ff56e51f624f635c7cbe2ba153a4417950c0477f91a269c0bb439eec"
+        },
+        {
+          "image_id": "T011_mid",
+          "frame_label": "mid",
+          "frame_index": 25,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/09/2022-07-23_13-13-59/raw/traj_group0/traj8/images0/im_25.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/09/2022-07-23_13-13-59/raw/traj_group0/traj8/images0/im_25.jpg",
+          "path": "data/images/T011_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 72283,
+          "sha256": "f175c6f18886d3956ed061fa49a6ccd08a2790854bc6721bb1c40126b08533a2"
+        },
+        {
+          "image_id": "T011_last",
+          "frame_label": "last",
+          "frame_index": 51,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/09/2022-07-23_13-13-59/raw/traj_group0/traj8/images0/im_51.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/09/2022-07-23_13-13-59/raw/traj_group0/traj8/images0/im_51.jpg",
+          "path": "data/images/T011_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 74016,
+          "sha256": "fc759173074ebe972ac95d273379bf9981c780f674b660c72d30e7221ee3d355"
+        }
+      ]
+    },
+    {
+      "sample_id": "T012",
+      "csv_line": 9307,
+      "category": "sink_dishware",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/02/2022-07-22_13-28-27/raw/traj_group0/traj14",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/02/2022-07-22_13-28-27/raw/traj_group0/traj14/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/02/2022-07-22_13-28-27/raw/traj_group0/traj14/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/02/2022-07-22_13-28-27/raw/traj_group0/traj14/images0/im_58.jpg",
+        "move the knife and put in the left sink"
+      ],
+      "annotations": [
+        "move the knife and put in the left sink"
+      ],
+      "last_frame_index": 58,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sink",
+          "pot",
+          "knife",
+          "dishrack",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Knife is moved to the left side of the sink near a small pot."
+      },
+      "frames": [
+        {
+          "image_id": "T012_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/02/2022-07-22_13-28-27/raw/traj_group0/traj14/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/02/2022-07-22_13-28-27/raw/traj_group0/traj14/images0/im_0.jpg",
+          "path": "data/images/T012_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 71169,
+          "sha256": "f9ecbbaca733c307ec471ed6f800eac7a499faa65c6eee2a6e2c007611c996d3"
+        },
+        {
+          "image_id": "T012_mid",
+          "frame_label": "mid",
+          "frame_index": 29,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/02/2022-07-22_13-28-27/raw/traj_group0/traj14/images0/im_29.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/02/2022-07-22_13-28-27/raw/traj_group0/traj14/images0/im_29.jpg",
+          "path": "data/images/T012_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 73149,
+          "sha256": "35063ad97455c6263ffb26c97da250af3ab0a04513376d5e08cd6dc7d9091ff3"
+        },
+        {
+          "image_id": "T012_last",
+          "frame_label": "last",
+          "frame_index": 58,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree/toysink3/02/2022-07-22_13-28-27/raw/traj_group0/traj14/images0/im_58.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree/toysink3/02/2022-07-22_13-28-27/raw/traj_group0/traj14/images0/im_58.jpg",
+          "path": "data/images/T012_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 69423,
+          "sha256": "552595e7aeff8cfbf328e6351f866f1f53e06be825e6fb5f5587e55a9337eaae"
+        }
+      ]
+    },
+    {
+      "sample_id": "T013",
+      "csv_line": 12602,
+      "category": "cleaning_sponge_brush",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj20",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj20/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj20/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj20/images0/im_23.jpg",
+        "wipe pot with sponge"
+      ],
+      "annotations": [
+        "wipe pot with sponge"
+      ],
+      "last_frame_index": 23,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "pot",
+          "sponge",
+          "stove",
+          "countertop",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "first",
+          "mid",
+          "last"
+        ],
+        "observation": "Yellow sponge is visibly rubbed on the pot lid; this is wiping, not dishwashing with water."
+      },
+      "frames": [
+        {
+          "image_id": "T013_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj20/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj20/images0/im_0.jpg",
+          "path": "data/images/T013_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 96264,
+          "sha256": "661a86a8792ec3c0aaf5d2fba870d90eb537331ae6be2e8f0c62553d63e5756b"
+        },
+        {
+          "image_id": "T013_mid",
+          "frame_label": "mid",
+          "frame_index": 11,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj20/images0/im_11.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj20/images0/im_11.jpg",
+          "path": "data/images/T013_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 95471,
+          "sha256": "0030dd22e7cb7e583e25e6a155325a356377295dfc4f37b9eef6ae18c5785000"
+        },
+        {
+          "image_id": "T013_last",
+          "frame_label": "last",
+          "frame_index": 23,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj20/images0/im_23.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj20/images0/im_23.jpg",
+          "path": "data/images/T013_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 97400,
+          "sha256": "e97717c1d43f428ada53860fbdf9996c15524a814de233d26893a98e8b61cf81"
+        }
+      ]
+    },
+    {
+      "sample_id": "T014",
+      "csv_line": 12603,
+      "category": "cleaning_sponge_brush",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj1",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj1/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj1/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj1/images0/im_23.jpg",
+        "wipe pot with sponge"
+      ],
+      "annotations": [
+        "wipe pot with sponge"
+      ],
+      "last_frame_index": 23,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "pot",
+          "sponge",
+          "countertop",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "first",
+          "mid",
+          "last"
+        ],
+        "observation": "Robot uses a yellow sponge on the pot; clear wiping action."
+      },
+      "frames": [
+        {
+          "image_id": "T014_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj1/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj1/images0/im_0.jpg",
+          "path": "data/images/T014_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 93871,
+          "sha256": "878ab0e6193c853deeeb89c63c507e6085dbde2c9331fe8c2dbc9bcdefec3413"
+        },
+        {
+          "image_id": "T014_mid",
+          "frame_label": "mid",
+          "frame_index": 11,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj1/images0/im_11.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj1/images0/im_11.jpg",
+          "path": "data/images/T014_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 93382,
+          "sha256": "4d682be16785bf3bebcb0c2612eaf14f8553e73de9ac00e1b368a1a88c452fdd"
+        },
+        {
+          "image_id": "T014_last",
+          "frame_label": "last",
+          "frame_index": 23,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj1/images0/im_23.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj1/images0/im_23.jpg",
+          "path": "data/images/T014_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 92950,
+          "sha256": "0bf9c19d247ec232b635389c3f6169e89f8f8ed32873bcb7506b0f21a4c1b03f"
+        }
+      ]
+    },
+    {
+      "sample_id": "T015",
+      "csv_line": 12618,
+      "category": "cleaning_sponge_brush",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj0",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj0/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj0/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj0/images0/im_23.jpg",
+        "wipe pot with sponge"
+      ],
+      "annotations": [
+        "wipe pot with sponge"
+      ],
+      "last_frame_index": 23,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "pot",
+          "sponge",
+          "countertop",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "first",
+          "mid",
+          "last"
+        ],
+        "observation": "Sponge contacts and wipes the pot lid; no sink or water."
+      },
+      "frames": [
+        {
+          "image_id": "T015_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj0/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj0/images0/im_0.jpg",
+          "path": "data/images/T015_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 93612,
+          "sha256": "ba2a441ca1b91cb7b6f3408747e9f8e7b0d3cfbb54463c0d0e4f940608d647c1"
+        },
+        {
+          "image_id": "T015_mid",
+          "frame_label": "mid",
+          "frame_index": 11,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj0/images0/im_11.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj0/images0/im_11.jpg",
+          "path": "data/images/T015_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 91332,
+          "sha256": "8294f4f40de1ac10a1e5809cb50afa3aec84ab4ab0a9bf952ae72eb2c5ffa3b6"
+        },
+        {
+          "image_id": "T015_last",
+          "frame_label": "last",
+          "frame_index": 23,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj0/images0/im_23.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-10-18/raw/traj_group0/traj0/images0/im_23.jpg",
+          "path": "data/images/T015_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 93839,
+          "sha256": "02c12a9bf960e0548827ef0acc47a57c8fc16e56a715522046fa554bdab06ca8"
+        }
+      ]
+    },
+    {
+      "sample_id": "T016",
+      "csv_line": 12640,
+      "category": "cleaning_sponge_brush",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-31-01/raw/traj_group0/traj6",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-31-01/raw/traj_group0/traj6/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-31-01/raw/traj_group0/traj6/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-31-01/raw/traj_group0/traj6/images0/im_23.jpg",
+        "wipe pot with sponge"
+      ],
+      "annotations": [
+        "wipe pot with sponge"
+      ],
+      "last_frame_index": 23,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "pot",
+          "sponge",
+          "stove",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "first",
+          "mid",
+          "last"
+        ],
+        "observation": "Yellow sponge wipes the pot on the stove area."
+      },
+      "frames": [
+        {
+          "image_id": "T016_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-31-01/raw/traj_group0/traj6/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-31-01/raw/traj_group0/traj6/images0/im_0.jpg",
+          "path": "data/images/T016_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 106645,
+          "sha256": "85287b1aa343cebe92859895ae0b8966b8a934aa14387558c6f8edc2905fbed0"
+        },
+        {
+          "image_id": "T016_mid",
+          "frame_label": "mid",
+          "frame_index": 11,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-31-01/raw/traj_group0/traj6/images0/im_11.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-31-01/raw/traj_group0/traj6/images0/im_11.jpg",
+          "path": "data/images/T016_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 106211,
+          "sha256": "9b86fa8472276ae384b33bbe3204e4ae682b38f0b0b44c7ede43cfa13cfb7192"
+        },
+        {
+          "image_id": "T016_last",
+          "frame_label": "last",
+          "frame_index": 23,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-31-01/raw/traj_group0/traj6/images0/im_23.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/wipe_pot_with_sponge/2021-09-08_15-31-01/raw/traj_group0/traj6/images0/im_23.jpg",
+          "path": "data/images/T016_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 107200,
+          "sha256": "5ad794bb5ed3177537734a47396d5282ddcb92a12c7e758968631d1dfb1acdeb"
+        }
+      ]
+    },
+    {
+      "sample_id": "T017",
+      "csv_line": 10909,
+      "category": "cleaning_sponge_brush",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj13",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj13/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj13/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj13/images0/im_44.jpg",
+        "wiped the right burner with the orange cloth",
+        ""
+      ],
+      "annotations": [
+        "wiped the right burner with the orange cloth"
+      ],
+      "last_frame_index": 44,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "burner",
+          "cloth",
+          "pot",
+          "sink",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Orange cloth is used to wipe the right burner."
+      },
+      "frames": [
+        {
+          "image_id": "T017_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj13/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj13/images0/im_0.jpg",
+          "path": "data/images/T017_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 91589,
+          "sha256": "7de83faf48db59bfbf74caf2cdc7d58a130569fe5248dda16efc5a5f9223f383"
+        },
+        {
+          "image_id": "T017_mid",
+          "frame_label": "mid",
+          "frame_index": 22,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj13/images0/im_22.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj13/images0/im_22.jpg",
+          "path": "data/images/T017_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 91313,
+          "sha256": "6abb602fd4ea0944ccd958898881dda83f5e432465ba3fd3131ceefe128c3bcc"
+        },
+        {
+          "image_id": "T017_last",
+          "frame_label": "last",
+          "frame_index": 44,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj13/images0/im_44.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj13/images0/im_44.jpg",
+          "path": "data/images/T017_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 91741,
+          "sha256": "1f08f959ca51a4cbd6688993ae9a799d9f36816fe53c8000acffa8097fa630e8"
+        }
+      ]
+    },
+    {
+      "sample_id": "T018",
+      "csv_line": 10923,
+      "category": "cleaning_sponge_brush",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj2",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj2/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj2/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj2/images0/im_51.jpg",
+        "moved the orange clothing to wipe the burnsen burner"
+      ],
+      "annotations": [
+        "moved the orange clothing to wipe the burnsen burner"
+      ],
+      "last_frame_index": 51,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "burner",
+          "cloth",
+          "pot",
+          "sink",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Robot moves orange cloth over the burner surface."
+      },
+      "frames": [
+        {
+          "image_id": "T018_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj2/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj2/images0/im_0.jpg",
+          "path": "data/images/T018_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 94962,
+          "sha256": "13e18547fba4641f38aa0e1da561cb4be4d3613a90950c90506cb948f2313b22"
+        },
+        {
+          "image_id": "T018_mid",
+          "frame_label": "mid",
+          "frame_index": 25,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj2/images0/im_25.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj2/images0/im_25.jpg",
+          "path": "data/images/T018_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 89770,
+          "sha256": "8b10c37e2a8d23d57bf638229935ad758c20b46b1d7eb5943feb359de28fa989"
+        },
+        {
+          "image_id": "T018_last",
+          "frame_label": "last",
+          "frame_index": 51,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj2/images0/im_51.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree_push_sweep/toykitchen6/04/2022-08-13_12-09-16/raw/traj_group0/traj2/images0/im_51.jpg",
+          "path": "data/images/T018_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 90831,
+          "sha256": "59d0ecd0f1a02404ed94bd4d2ec728189ee739d94016c6878701f49ec7832bea"
+        }
+      ]
+    },
+    {
+      "sample_id": "T019",
+      "csv_line": 11104,
+      "category": "cleaning_sponge_brush",
+      "trajectory_key": "raw/icra/toykitchen_fixed_cam_resetfree_combo/toykitchen6/00/2022-08-25_12-35-31/raw/traj_group0/traj0",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree_combo/toykitchen6/00/2022-08-25_12-35-31/raw/traj_group0/traj0/",
+      "raw_csv_row": [
+        "raw/icra/toykitchen_fixed_cam_resetfree_combo/toykitchen6/00/2022-08-25_12-35-31/raw/traj_group0/traj0/images0/im_0.jpg",
+        "raw/icra/toykitchen_fixed_cam_resetfree_combo/toykitchen6/00/2022-08-25_12-35-31/raw/traj_group0/traj0/images0/im_23.jpg",
+        "wipe the burner"
+      ],
+      "annotations": [
+        "wipe the burner"
+      ],
+      "last_frame_index": 23,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "burner",
+          "cloth",
+          "pot",
+          "sink",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Orange cloth wipes the left burner; same action as burner cleaning but a different trajectory."
+      },
+      "frames": [
+        {
+          "image_id": "T019_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree_combo/toykitchen6/00/2022-08-25_12-35-31/raw/traj_group0/traj0/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree_combo/toykitchen6/00/2022-08-25_12-35-31/raw/traj_group0/traj0/images0/im_0.jpg",
+          "path": "data/images/T019_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 96374,
+          "sha256": "29ed497d46db49474c478a47b7054d6f5d406bd350088daa278a0d5b7409403b"
+        },
+        {
+          "image_id": "T019_mid",
+          "frame_label": "mid",
+          "frame_index": 11,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree_combo/toykitchen6/00/2022-08-25_12-35-31/raw/traj_group0/traj0/images0/im_11.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree_combo/toykitchen6/00/2022-08-25_12-35-31/raw/traj_group0/traj0/images0/im_11.jpg",
+          "path": "data/images/T019_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 90137,
+          "sha256": "504ecd71cc52ea28d88fa3f2f22b7f6c3118b68a71016cbfc7f54761fa1e4e0b"
+        },
+        {
+          "image_id": "T019_last",
+          "frame_label": "last",
+          "frame_index": 23,
+          "source_path": "raw/icra/toykitchen_fixed_cam_resetfree_combo/toykitchen6/00/2022-08-25_12-35-31/raw/traj_group0/traj0/images0/im_23.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/icra/toykitchen_fixed_cam_resetfree_combo/toykitchen6/00/2022-08-25_12-35-31/raw/traj_group0/traj0/images0/im_23.jpg",
+          "path": "data/images/T019_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 93128,
+          "sha256": "15c66a5423d396bcaf002647b6fc62b287d882545b92c1666d132d3f37288293"
+        }
+      ]
+    },
+    {
+      "sample_id": "T020",
+      "csv_line": 1592,
+      "category": "cleaning_sponge_brush",
+      "trajectory_key": "raw/rss/toykitchen7/pnp_sweep/12/2023-02-06_12-49-33/raw/traj_group0/traj19",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep/12/2023-02-06_12-49-33/raw/traj_group0/traj19/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen7/pnp_sweep/12/2023-02-06_12-49-33/raw/traj_group0/traj19/images0/im_0.jpg",
+        "raw/rss/toykitchen7/pnp_sweep/12/2023-02-06_12-49-33/raw/traj_group0/traj19/images0/im_34.jpg",
+        "move the yellow pad to the front edge of the table",
+        "move the sponge to the front edge of the table"
+      ],
+      "annotations": [
+        "move the yellow pad to the front edge of the table",
+        "move the sponge to the front edge of the table"
+      ],
+      "last_frame_index": 34,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sponge",
+          "pot",
+          "countertop",
+          "stove",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Yellow sponge is moved on the tabletop, not used to wash a dish."
+      },
+      "frames": [
+        {
+          "image_id": "T020_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep/12/2023-02-06_12-49-33/raw/traj_group0/traj19/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep/12/2023-02-06_12-49-33/raw/traj_group0/traj19/images0/im_0.jpg",
+          "path": "data/images/T020_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 119719,
+          "sha256": "3e1ae7372ccbe77f030f1f5f42b908ad3b0cf32b69eb965d24d1e14dde86fbc7"
+        },
+        {
+          "image_id": "T020_mid",
+          "frame_label": "mid",
+          "frame_index": 17,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep/12/2023-02-06_12-49-33/raw/traj_group0/traj19/images0/im_17.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep/12/2023-02-06_12-49-33/raw/traj_group0/traj19/images0/im_17.jpg",
+          "path": "data/images/T020_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 116374,
+          "sha256": "a3f2c38c9c4983f2b996297227b163472f901ec293b92f6e1060a16e96c21d44"
+        },
+        {
+          "image_id": "T020_last",
+          "frame_label": "last",
+          "frame_index": 34,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep/12/2023-02-06_12-49-33/raw/traj_group0/traj19/images0/im_34.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep/12/2023-02-06_12-49-33/raw/traj_group0/traj19/images0/im_34.jpg",
+          "path": "data/images/T020_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 120482,
+          "sha256": "c86068b939f72343a82e4f4e38966c6e477cf862e211935b6de5d21071771821"
+        }
+      ]
+    },
+    {
+      "sample_id": "T021",
+      "csv_line": 4261,
+      "category": "cleaning_sponge_brush",
+      "trajectory_key": "raw/rss/toykitchen2/pnp_sweep/49/2023-01-21_16-21-32/raw/traj_group0/traj17",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen2/pnp_sweep/49/2023-01-21_16-21-32/raw/traj_group0/traj17/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen2/pnp_sweep/49/2023-01-21_16-21-32/raw/traj_group0/traj17/images0/im_0.jpg",
+        "raw/rss/toykitchen2/pnp_sweep/49/2023-01-21_16-21-32/raw/traj_group0/traj17/images0/im_48.jpg",
+        "pick up the yellow sponge and put it into the pot",
+        "move the corn and place into pot"
+      ],
+      "annotations": [
+        "pick up the yellow sponge and put it into the pot",
+        "move the corn and place into pot"
+      ],
+      "last_frame_index": 48,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "sponge",
+          "pot",
+          "spoon",
+          "countertop",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Yellow sponge is placed inside the pot; placement is not wiping."
+      },
+      "frames": [
+        {
+          "image_id": "T021_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen2/pnp_sweep/49/2023-01-21_16-21-32/raw/traj_group0/traj17/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen2/pnp_sweep/49/2023-01-21_16-21-32/raw/traj_group0/traj17/images0/im_0.jpg",
+          "path": "data/images/T021_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 103936,
+          "sha256": "d765fe2952c14ed05b61d9130b19428e2bcd9a0cc8eea566e79174055967c4c1"
+        },
+        {
+          "image_id": "T021_mid",
+          "frame_label": "mid",
+          "frame_index": 24,
+          "source_path": "raw/rss/toykitchen2/pnp_sweep/49/2023-01-21_16-21-32/raw/traj_group0/traj17/images0/im_24.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen2/pnp_sweep/49/2023-01-21_16-21-32/raw/traj_group0/traj17/images0/im_24.jpg",
+          "path": "data/images/T021_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 101199,
+          "sha256": "37e3dd413f639192b33a8b97a28a7d74d619e3caec727231ae81dae9ee2c4c88"
+        },
+        {
+          "image_id": "T021_last",
+          "frame_label": "last",
+          "frame_index": 48,
+          "source_path": "raw/rss/toykitchen2/pnp_sweep/49/2023-01-21_16-21-32/raw/traj_group0/traj17/images0/im_48.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen2/pnp_sweep/49/2023-01-21_16-21-32/raw/traj_group0/traj17/images0/im_48.jpg",
+          "path": "data/images/T021_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 104230,
+          "sha256": "b10b87f5b9add2436d6f8a301539ab378add0ded4ff3b823a8c318af67e0d731"
+        }
+      ]
+    },
+    {
+      "sample_id": "T022",
+      "csv_line": 2735,
+      "category": "cleaning_sponge_brush",
+      "trajectory_key": "raw/rss/toykitchen2/pnp_sweep/194/2023-01-29_08-56-22/raw/traj_group0/traj5",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen2/pnp_sweep/194/2023-01-29_08-56-22/raw/traj_group0/traj5/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen2/pnp_sweep/194/2023-01-29_08-56-22/raw/traj_group0/traj5/images0/im_0.jpg",
+        "raw/rss/toykitchen2/pnp_sweep/194/2023-01-29_08-56-22/raw/traj_group0/traj5/images0/im_28.jpg",
+        "put the brush on the yellow cloth",
+        "put the scrubber on top of the yellow cloth"
+      ],
+      "annotations": [
+        "put the brush on the yellow cloth",
+        "put the scrubber on top of the yellow cloth"
+      ],
+      "last_frame_index": 28,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "brush",
+          "cloth",
+          "pot",
+          "countertop",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Blue brush is placed on a yellow cloth; no scrubbing action."
+      },
+      "frames": [
+        {
+          "image_id": "T022_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen2/pnp_sweep/194/2023-01-29_08-56-22/raw/traj_group0/traj5/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen2/pnp_sweep/194/2023-01-29_08-56-22/raw/traj_group0/traj5/images0/im_0.jpg",
+          "path": "data/images/T022_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 102093,
+          "sha256": "0ca8324adab7781b6c9be9a56e8c3ba21b647de4ea46bbcf944788fa90907831"
+        },
+        {
+          "image_id": "T022_mid",
+          "frame_label": "mid",
+          "frame_index": 14,
+          "source_path": "raw/rss/toykitchen2/pnp_sweep/194/2023-01-29_08-56-22/raw/traj_group0/traj5/images0/im_14.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen2/pnp_sweep/194/2023-01-29_08-56-22/raw/traj_group0/traj5/images0/im_14.jpg",
+          "path": "data/images/T022_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 96010,
+          "sha256": "3090c39dac4793e383c9492047b58c10dbe7a79aa608149ecfd0bfd1424d1adc"
+        },
+        {
+          "image_id": "T022_last",
+          "frame_label": "last",
+          "frame_index": 28,
+          "source_path": "raw/rss/toykitchen2/pnp_sweep/194/2023-01-29_08-56-22/raw/traj_group0/traj5/images0/im_28.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen2/pnp_sweep/194/2023-01-29_08-56-22/raw/traj_group0/traj5/images0/im_28.jpg",
+          "path": "data/images/T022_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 100298,
+          "sha256": "22bb7a5d2f2da5abc0fff0bff038ef7ad3a0f3768d341d1f08e4654971405a0b"
+        }
+      ]
+    },
+    {
+      "sample_id": "T023",
+      "csv_line": 11353,
+      "category": "kitchen_ops",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj14",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj14/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj14/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj14/images0/im_34.jpg",
+        "open microwave"
+      ],
+      "annotations": [
+        "open microwave"
+      ],
+      "last_frame_index": 34,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "microwave",
+          "pot",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Microwave door transitions from closed to open."
+      },
+      "frames": [
+        {
+          "image_id": "T023_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj14/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj14/images0/im_0.jpg",
+          "path": "data/images/T023_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 76478,
+          "sha256": "a83f220b5ba80d980fb85028494a6868b22cce4c2a49e7bff80776c486a794c5"
+        },
+        {
+          "image_id": "T023_mid",
+          "frame_label": "mid",
+          "frame_index": 17,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj14/images0/im_17.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj14/images0/im_17.jpg",
+          "path": "data/images/T023_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 70321,
+          "sha256": "376c0905539cb5e960d793c495a0ddee934b67e9fbd240799fdb31b44f35b191"
+        },
+        {
+          "image_id": "T023_last",
+          "frame_label": "last",
+          "frame_index": 34,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj14/images0/im_34.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj14/images0/im_34.jpg",
+          "path": "data/images/T023_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 57197,
+          "sha256": "75482b660c0146c9aefb23648bf051e7f76d05a667e215526dc5e31da0d0aedf"
+        }
+      ]
+    },
+    {
+      "sample_id": "T024",
+      "csv_line": 11354,
+      "category": "kitchen_ops",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj4",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj4/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj4/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj4/images0/im_38.jpg",
+        "open microwave"
+      ],
+      "annotations": [
+        "open microwave"
+      ],
+      "last_frame_index": 38,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "microwave",
+          "pot",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Robot opens the microwave door."
+      },
+      "frames": [
+        {
+          "image_id": "T024_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj4/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj4/images0/im_0.jpg",
+          "path": "data/images/T024_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 76417,
+          "sha256": "d75af6f6096bce775d635e14e2111663d805f6dd9c239d502651a245710646dd"
+        },
+        {
+          "image_id": "T024_mid",
+          "frame_label": "mid",
+          "frame_index": 19,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj4/images0/im_19.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj4/images0/im_19.jpg",
+          "path": "data/images/T024_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 72702,
+          "sha256": "8e3c0efc32e9404f87f78acfa414e96a844d80ee48aa570c1023d444df4c4ffb"
+        },
+        {
+          "image_id": "T024_last",
+          "frame_label": "last",
+          "frame_index": 38,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj4/images0/im_38.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/open_microwave/2022-03-05_13-37-05/raw/traj_group0/traj4/images0/im_38.jpg",
+          "path": "data/images/T024_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 72644,
+          "sha256": "bf4dad9f30564518e9a18264451ec2da7362c845b4172d8e299151fe4d3e8090"
+        }
+      ]
+    },
+    {
+      "sample_id": "T025",
+      "csv_line": 11503,
+      "category": "kitchen_ops",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj11",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj11/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj11/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj11/images0/im_35.jpg",
+        "close microwave"
+      ],
+      "annotations": [
+        "close microwave"
+      ],
+      "last_frame_index": 35,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "microwave",
+          "pot",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Open microwave door is closed by the final frame."
+      },
+      "frames": [
+        {
+          "image_id": "T025_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj11/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj11/images0/im_0.jpg",
+          "path": "data/images/T025_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 78591,
+          "sha256": "a19c7a70de1727512c9b5cbd9bc10846f8907dca5a9ad1f0652550e9665adc8c"
+        },
+        {
+          "image_id": "T025_mid",
+          "frame_label": "mid",
+          "frame_index": 17,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj11/images0/im_17.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj11/images0/im_17.jpg",
+          "path": "data/images/T025_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 72865,
+          "sha256": "3385f265faed06c01567bc4ecd11d29addf40148bf6980ba08d1750e77ec6660"
+        },
+        {
+          "image_id": "T025_last",
+          "frame_label": "last",
+          "frame_index": 35,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj11/images0/im_35.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj11/images0/im_35.jpg",
+          "path": "data/images/T025_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 76860,
+          "sha256": "2ddb17206d9c72b3a8986e03aa6bb40a86d12c1e106311c95c184e76032058aa"
+        }
+      ]
+    },
+    {
+      "sample_id": "T026",
+      "csv_line": 11504,
+      "category": "kitchen_ops",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj23",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj23/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj23/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj23/images0/im_38.jpg",
+        "close microwave"
+      ],
+      "annotations": [
+        "close microwave"
+      ],
+      "last_frame_index": 38,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "microwave",
+          "pot",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Robot closes the microwave door."
+      },
+      "frames": [
+        {
+          "image_id": "T026_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj23/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj23/images0/im_0.jpg",
+          "path": "data/images/T026_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 74053,
+          "sha256": "0da395d97b812414ac521f41f254454af6b631965f8f67e2f041464736d6b619"
+        },
+        {
+          "image_id": "T026_mid",
+          "frame_label": "mid",
+          "frame_index": 19,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj23/images0/im_19.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj23/images0/im_19.jpg",
+          "path": "data/images/T026_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 73037,
+          "sha256": "038cfb9e1cb47daf52a20c02546edefd085af94c49531b9688089f95563b81f5"
+        },
+        {
+          "image_id": "T026_last",
+          "frame_label": "last",
+          "frame_index": 38,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj23/images0/im_38.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen5/close_microwave/2022-03-05_14-41-45/raw/traj_group0/traj23/images0/im_38.jpg",
+          "path": "data/images/T026_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 73793,
+          "sha256": "7b5bb8e98da3dce883c0362b128f29d34bf87e1354e41b6780c46965bccd7938"
+        }
+      ]
+    },
+    {
+      "sample_id": "T027",
+      "csv_line": 12153,
+      "category": "kitchen_ops",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj0",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj0/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj0/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj0/images0/im_16.jpg",
+        "open drawer of box"
+      ],
+      "annotations": [
+        "open drawer of box"
+      ],
+      "last_frame_index": 16,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "drawer",
+          "box",
+          "pot",
+          "bowl",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Box drawer changes from closed to open."
+      },
+      "frames": [
+        {
+          "image_id": "T027_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj0/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj0/images0/im_0.jpg",
+          "path": "data/images/T027_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 98806,
+          "sha256": "282446113066a3c8f32e895bcdfc6fdf5e75346461ef340e7992b8b4feaa397e"
+        },
+        {
+          "image_id": "T027_mid",
+          "frame_label": "mid",
+          "frame_index": 8,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj0/images0/im_8.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj0/images0/im_8.jpg",
+          "path": "data/images/T027_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 97875,
+          "sha256": "a56217a99f52ee8a7098a47891fdfdd8df1c2deead01b090908dc00d55694bf4"
+        },
+        {
+          "image_id": "T027_last",
+          "frame_label": "last",
+          "frame_index": 16,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj0/images0/im_16.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj0/images0/im_16.jpg",
+          "path": "data/images/T027_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 96812,
+          "sha256": "0706e48d99ef8d5fa4e8b423a581ad7a0e36fab8351eab2a9e724e391f2f94ce"
+        }
+      ]
+    },
+    {
+      "sample_id": "T028",
+      "csv_line": 12154,
+      "category": "kitchen_ops",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj3",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj3/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj3/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj3/images0/im_16.jpg",
+        "open drawer of box"
+      ],
+      "annotations": [
+        "open drawer of box"
+      ],
+      "last_frame_index": 16,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "drawer",
+          "box",
+          "pot",
+          "bowl",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Robot opens the box drawer."
+      },
+      "frames": [
+        {
+          "image_id": "T028_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj3/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj3/images0/im_0.jpg",
+          "path": "data/images/T028_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 99367,
+          "sha256": "485066f8575061392e242e841b03dc13f89a87429d765566b07cc665dae4f8d2"
+        },
+        {
+          "image_id": "T028_mid",
+          "frame_label": "mid",
+          "frame_index": 8,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj3/images0/im_8.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj3/images0/im_8.jpg",
+          "path": "data/images/T028_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 97575,
+          "sha256": "3995b1099cbdbc0930f1006e70f2cf15adfb57a3b40cb371d550127f7061bc89"
+        },
+        {
+          "image_id": "T028_last",
+          "frame_label": "last",
+          "frame_index": 16,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj3/images0/im_16.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/open_drawer_of_box/2021-08-23_16-20-54/raw/traj_group0/traj3/images0/im_16.jpg",
+          "path": "data/images/T028_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 96051,
+          "sha256": "8c57538256814c275b32698662b4df66fb73db81f8b151a888909b07bb985691"
+        }
+      ]
+    },
+    {
+      "sample_id": "T029",
+      "csv_line": 13387,
+      "category": "kitchen_ops",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj12",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj12/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj12/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj12/images0/im_17.jpg",
+        "close drawer of box"
+      ],
+      "annotations": [
+        "close drawer of box"
+      ],
+      "last_frame_index": 17,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "drawer",
+          "box",
+          "pot",
+          "bowl",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Open box drawer is closed by the final frame."
+      },
+      "frames": [
+        {
+          "image_id": "T029_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj12/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj12/images0/im_0.jpg",
+          "path": "data/images/T029_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 97308,
+          "sha256": "f761b503d771d0d44cf57d59d422352951686cb962c1e0a40d176515113fbe64"
+        },
+        {
+          "image_id": "T029_mid",
+          "frame_label": "mid",
+          "frame_index": 8,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj12/images0/im_8.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj12/images0/im_8.jpg",
+          "path": "data/images/T029_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 95726,
+          "sha256": "c17605308d7c1ed1f8c9c214e92f7798d12f9faa712cb9ceaa972293c7ec0cbb"
+        },
+        {
+          "image_id": "T029_last",
+          "frame_label": "last",
+          "frame_index": 17,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj12/images0/im_17.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj12/images0/im_17.jpg",
+          "path": "data/images/T029_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 96419,
+          "sha256": "6f68fdef4cd43e0591daac62cfd76ed4a4883d262f0ba9b3650a9a1c935bca72"
+        }
+      ]
+    },
+    {
+      "sample_id": "T030",
+      "csv_line": 13388,
+      "category": "kitchen_ops",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj18",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj18/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj18/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj18/images0/im_13.jpg",
+        "close drawer of box"
+      ],
+      "annotations": [
+        "close drawer of box"
+      ],
+      "last_frame_index": 13,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "drawer",
+          "box",
+          "pot",
+          "bowl",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Robot closes the box drawer."
+      },
+      "frames": [
+        {
+          "image_id": "T030_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj18/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj18/images0/im_0.jpg",
+          "path": "data/images/T030_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 98661,
+          "sha256": "d0304ee44ef032357837c566de1c2f4606f5cc2b0d02bc3300fc839def970817"
+        },
+        {
+          "image_id": "T030_mid",
+          "frame_label": "mid",
+          "frame_index": 6,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj18/images0/im_6.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj18/images0/im_6.jpg",
+          "path": "data/images/T030_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 95667,
+          "sha256": "4d02840b1f02ecb979b328fc8d32b260f822b97ab2c70fd76eeee061380371a3"
+        },
+        {
+          "image_id": "T030_last",
+          "frame_label": "last",
+          "frame_index": 13,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj18/images0/im_13.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/close_drawer_of_box/2021-08-23_16-48-51/raw/traj_group0/traj18/images0/im_13.jpg",
+          "path": "data/images/T030_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 97921,
+          "sha256": "209a1b38b66cc42d15e459b990c0a6d1fc90be4b38fbb9a069fd794d6d3bb6ec"
+        }
+      ]
+    },
+    {
+      "sample_id": "T031",
+      "csv_line": 12737,
+      "category": "cloth_laundry_other",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-29-22/raw/traj_group0/traj0",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-29-22/raw/traj_group0/traj0/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-29-22/raw/traj_group0/traj0/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-29-22/raw/traj_group0/traj0/images0/im_23.jpg",
+        "fold cloth in half"
+      ],
+      "annotations": [
+        "fold cloth in half"
+      ],
+      "last_frame_index": 23,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "cloth",
+          "countertop",
+          "pot",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "White cloth is folded on the countertop."
+      },
+      "frames": [
+        {
+          "image_id": "T031_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-29-22/raw/traj_group0/traj0/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-29-22/raw/traj_group0/traj0/images0/im_0.jpg",
+          "path": "data/images/T031_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 87487,
+          "sha256": "b89932b6d54a52a87aa0c1a77b563fba8e0acd0a44bda3eced3f47b9e55d1fd1"
+        },
+        {
+          "image_id": "T031_mid",
+          "frame_label": "mid",
+          "frame_index": 11,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-29-22/raw/traj_group0/traj0/images0/im_11.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-29-22/raw/traj_group0/traj0/images0/im_11.jpg",
+          "path": "data/images/T031_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 88016,
+          "sha256": "10a6a2c143a533e84b6769877bc24c6c197cfe8df8298198d90598259bb7e5ae"
+        },
+        {
+          "image_id": "T031_last",
+          "frame_label": "last",
+          "frame_index": 23,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-29-22/raw/traj_group0/traj0/images0/im_23.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-29-22/raw/traj_group0/traj0/images0/im_23.jpg",
+          "path": "data/images/T031_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 97498,
+          "sha256": "97cbc8e4184fae96866225a2680a256b705313f10b0f279db0509dedae8dab2e"
+        }
+      ]
+    },
+    {
+      "sample_id": "T032",
+      "csv_line": 12738,
+      "category": "cloth_laundry_other",
+      "trajectory_key": "raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-38-23/raw/traj_group0/traj21",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-38-23/raw/traj_group0/traj21/",
+      "raw_csv_row": [
+        "raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-38-23/raw/traj_group0/traj21/images0/im_0.jpg",
+        "raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-38-23/raw/traj_group0/traj21/images0/im_23.jpg",
+        "fold cloth in half"
+      ],
+      "annotations": [
+        "fold cloth in half"
+      ],
+      "last_frame_index": 23,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "cloth",
+          "countertop",
+          "pot",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Robot folds the white cloth in half."
+      },
+      "frames": [
+        {
+          "image_id": "T032_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-38-23/raw/traj_group0/traj21/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-38-23/raw/traj_group0/traj21/images0/im_0.jpg",
+          "path": "data/images/T032_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 87719,
+          "sha256": "443644d6689d9f01ef816e81409f4f8eefe746fcf4cba31aa155af8e992a0177"
+        },
+        {
+          "image_id": "T032_mid",
+          "frame_label": "mid",
+          "frame_index": 11,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-38-23/raw/traj_group0/traj21/images0/im_11.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-38-23/raw/traj_group0/traj21/images0/im_11.jpg",
+          "path": "data/images/T032_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 88620,
+          "sha256": "67d4585883d541a21e2f96eb4daf7377051f39e8df39f1df20d831e1e08e37d3"
+        },
+        {
+          "image_id": "T032_last",
+          "frame_label": "last",
+          "frame_index": 23,
+          "source_path": "raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-38-23/raw/traj_group0/traj21/images0/im_23.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v1/berkeley/toykitchen2/fold_cloth_in_half/2021-08-23_17-38-23/raw/traj_group0/traj21/images0/im_23.jpg",
+          "path": "data/images/T032_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 86913,
+          "sha256": "8f3f631b819d436ca5b1f5dfd6324c9e0fe1d2923c243e24fb1e4ecea2358dd1"
+        }
+      ]
+    },
+    {
+      "sample_id": "T033",
+      "csv_line": 39087,
+      "category": "cloth_laundry_other",
+      "trajectory_key": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj6",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj6/",
+      "raw_csv_row": [
+        "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj6/images0/im_0.jpg",
+        "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj6/images0/im_36.jpg",
+        "take the blue cloth and wipe the washing machine with this cloth"
+      ],
+      "annotations": [
+        "take the blue cloth and wipe the washing machine with this cloth"
+      ],
+      "last_frame_index": 36,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "washing_machine",
+          "cloth",
+          "laundry_basket",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Blue cloth is wiped across the washing machine's front surface."
+      },
+      "frames": [
+        {
+          "image_id": "T033_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj6/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj6/images0/im_0.jpg",
+          "path": "data/images/T033_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 97065,
+          "sha256": "55687f2f24197e435d216618007c41abd8ad402efad0f323caa5eef7c02414a0"
+        },
+        {
+          "image_id": "T033_mid",
+          "frame_label": "mid",
+          "frame_index": 18,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj6/images0/im_18.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj6/images0/im_18.jpg",
+          "path": "data/images/T033_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 92405,
+          "sha256": "8a4e663416adc71ef5bf75982c19777c134be7fd6be29c7be21ee580773c28cf"
+        },
+        {
+          "image_id": "T033_last",
+          "frame_label": "last",
+          "frame_index": 36,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj6/images0/im_36.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj6/images0/im_36.jpg",
+          "path": "data/images/T033_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 92496,
+          "sha256": "b4aaa3528fca64637af1e32ff59ce6a54467744a070ecf7321cacc0fdfae0cf8"
+        }
+      ]
+    },
+    {
+      "sample_id": "T034",
+      "csv_line": 39097,
+      "category": "cloth_laundry_other",
+      "trajectory_key": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj16",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj16/",
+      "raw_csv_row": [
+        "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj16/images0/im_0.jpg",
+        "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj16/images0/im_47.jpg",
+        "take the blue cloth in the white basket and wipe the washing machine"
+      ],
+      "annotations": [
+        "take the blue cloth in the white basket and wipe the washing machine"
+      ],
+      "last_frame_index": 47,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "washing_machine",
+          "cloth",
+          "laundry_basket",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Robot wipes the washing machine with a blue cloth."
+      },
+      "frames": [
+        {
+          "image_id": "T034_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj16/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj16/images0/im_0.jpg",
+          "path": "data/images/T034_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 89124,
+          "sha256": "72dfb126cc0b1533edf445f05e2f93880203c85c3b1bc2af51b1ef7b881f231c"
+        },
+        {
+          "image_id": "T034_mid",
+          "frame_label": "mid",
+          "frame_index": 23,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj16/images0/im_23.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj16/images0/im_23.jpg",
+          "path": "data/images/T034_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 83416,
+          "sha256": "46d53f491819abd169ce213936da4a5833ad5fc4ca38b7e9e9f9a4a8c1256cb6"
+        },
+        {
+          "image_id": "T034_last",
+          "frame_label": "last",
+          "frame_index": 47,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj16/images0/im_47.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/22/2023-02-11_18-59-48/raw/traj_group0/traj16/images0/im_47.jpg",
+          "path": "data/images/T034_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 93917,
+          "sha256": "e35e7fa1058f8b3b60e3c41ba19ce04444cd686e9b78ad4ced57c0edb7538ebe"
+        }
+      ]
+    },
+    {
+      "sample_id": "T035",
+      "csv_line": 39001,
+      "category": "cloth_laundry_other",
+      "trajectory_key": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj0",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj0/",
+      "raw_csv_row": [
+        "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj0/images0/im_0.jpg",
+        "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj0/images0/im_36.jpg",
+        "place a green cloth in the washing machine"
+      ],
+      "annotations": [
+        "place a green cloth in the washing machine"
+      ],
+      "last_frame_index": 36,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "partial",
+        "scene_tags": [
+          "washing_machine",
+          "cloth",
+          "laundry_basket",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Green cloth ends on the circular door surface; the image does not prove insertion into the drum despite the annotation saying 'in'."
+      },
+      "frames": [
+        {
+          "image_id": "T035_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj0/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj0/images0/im_0.jpg",
+          "path": "data/images/T035_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 90460,
+          "sha256": "3155268e200ec74e4dae8e5ac921d6ea68fdd08e83cb1c48b7dbb9d8bb3e557e"
+        },
+        {
+          "image_id": "T035_mid",
+          "frame_label": "mid",
+          "frame_index": 18,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj0/images0/im_18.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj0/images0/im_18.jpg",
+          "path": "data/images/T035_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 91470,
+          "sha256": "9c86ae1faeea6ed9cb1fc0a1c50fcf9f5b7db4c5a3dbde7ef0c6cd3b1e4c9fb8"
+        },
+        {
+          "image_id": "T035_last",
+          "frame_label": "last",
+          "frame_index": 36,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj0/images0/im_36.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj0/images0/im_36.jpg",
+          "path": "data/images/T035_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 93269,
+          "sha256": "f8cc407c8c94ccc01d95f6196fefc5259759ee7e0c340c123b9e4b86f9cad23b"
+        }
+      ]
+    },
+    {
+      "sample_id": "T036",
+      "csv_line": 39008,
+      "category": "cloth_laundry_other",
+      "trajectory_key": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj10",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj10/",
+      "raw_csv_row": [
+        "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj10/images0/im_0.jpg",
+        "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj10/images0/im_33.jpg",
+        "put the yellow cloth in the washing machine"
+      ],
+      "annotations": [
+        "put the yellow cloth in the washing machine"
+      ],
+      "last_frame_index": 33,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "partial",
+        "scene_tags": [
+          "washing_machine",
+          "cloth",
+          "laundry_basket",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Yellow cloth is placed on the washing machine door surface; do not infer entry into the drum."
+      },
+      "frames": [
+        {
+          "image_id": "T036_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj10/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj10/images0/im_0.jpg",
+          "path": "data/images/T036_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 87652,
+          "sha256": "826ea83956d7f41078ed4da01b475c3bc5f2d932e02401e776d6e248d797e114"
+        },
+        {
+          "image_id": "T036_mid",
+          "frame_label": "mid",
+          "frame_index": 16,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj10/images0/im_16.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj10/images0/im_16.jpg",
+          "path": "data/images/T036_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 86716,
+          "sha256": "3a3349652c9a43122b246d709c1d4c610e332c6ae1ddb8bf2a597acd0562aeda"
+        },
+        {
+          "image_id": "T036_last",
+          "frame_label": "last",
+          "frame_index": 33,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj10/images0/im_33.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/31/2023-02-11_20-08-26/raw/traj_group0/traj10/images0/im_33.jpg",
+          "path": "data/images/T036_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 94556,
+          "sha256": "e6ec7ff8c085f6811184a9f26774090ea1319d9329048a9d8ca8705669f5d9f8"
+        }
+      ]
+    },
+    {
+      "sample_id": "T037",
+      "csv_line": 39033,
+      "category": "cloth_laundry_other",
+      "trajectory_key": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/03/2023-02-10_11-55-17/raw/traj_group0/traj14",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/03/2023-02-10_11-55-17/raw/traj_group0/traj14/",
+      "raw_csv_row": [
+        "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/03/2023-02-10_11-55-17/raw/traj_group0/traj14/images0/im_0.jpg",
+        "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/03/2023-02-10_11-55-17/raw/traj_group0/traj14/images0/im_31.jpg",
+        "take the orange cloth out of the washing machine and put it inside the white basket"
+      ],
+      "annotations": [
+        "take the orange cloth out of the washing machine and put it inside the white basket"
+      ],
+      "last_frame_index": 31,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "washing_machine",
+          "cloth",
+          "laundry_basket",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Orange cloth is removed and ends inside the white basket."
+      },
+      "frames": [
+        {
+          "image_id": "T037_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/03/2023-02-10_11-55-17/raw/traj_group0/traj14/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/03/2023-02-10_11-55-17/raw/traj_group0/traj14/images0/im_0.jpg",
+          "path": "data/images/T037_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 98207,
+          "sha256": "b791a58d911d20e44869abac4219434673baf9b212b819b1b7e96d1616916e9c"
+        },
+        {
+          "image_id": "T037_mid",
+          "frame_label": "mid",
+          "frame_index": 15,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/03/2023-02-10_11-55-17/raw/traj_group0/traj14/images0/im_15.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/03/2023-02-10_11-55-17/raw/traj_group0/traj14/images0/im_15.jpg",
+          "path": "data/images/T037_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 96539,
+          "sha256": "b5f5f471622cfc7294423c6786f37bc268f591adde3ec83cd6ad964003ddfcd5"
+        },
+        {
+          "image_id": "T037_last",
+          "frame_label": "last",
+          "frame_index": 31,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/03/2023-02-10_11-55-17/raw/traj_group0/traj14/images0/im_31.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/03/2023-02-10_11-55-17/raw/traj_group0/traj14/images0/im_31.jpg",
+          "path": "data/images/T037_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 90992,
+          "sha256": "b676b20aa7c5f5b488377717cbb4f536a0bad321708fef2d472b3f5c5dfed091"
+        }
+      ]
+    },
+    {
+      "sample_id": "T038",
+      "csv_line": 39044,
+      "category": "cloth_laundry_other",
+      "trajectory_key": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/09/2023-02-11_16-34-52/raw/traj_group0/traj14",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/09/2023-02-11_16-34-52/raw/traj_group0/traj14/",
+      "raw_csv_row": [
+        "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/09/2023-02-11_16-34-52/raw/traj_group0/traj14/images0/im_0.jpg",
+        "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/09/2023-02-11_16-34-52/raw/traj_group0/traj14/images0/im_41.jpg",
+        "move the laundry basket in front of the washing machine"
+      ],
+      "annotations": [
+        "move the laundry basket in front of the washing machine"
+      ],
+      "last_frame_index": 41,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "washing_machine",
+          "cloth",
+          "laundry_basket",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Robot moves the white laundry basket in front of the washing machine."
+      },
+      "frames": [
+        {
+          "image_id": "T038_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/09/2023-02-11_16-34-52/raw/traj_group0/traj14/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/09/2023-02-11_16-34-52/raw/traj_group0/traj14/images0/im_0.jpg",
+          "path": "data/images/T038_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 94419,
+          "sha256": "8a1c0a3e7facccd91aa6c2aadc0ace444333a65266f863e1341084d1a7246150"
+        },
+        {
+          "image_id": "T038_mid",
+          "frame_label": "mid",
+          "frame_index": 20,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/09/2023-02-11_16-34-52/raw/traj_group0/traj14/images0/im_20.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/09/2023-02-11_16-34-52/raw/traj_group0/traj14/images0/im_20.jpg",
+          "path": "data/images/T038_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 88937,
+          "sha256": "3471003112d97a4e64bacc9babcfea6281f36814f7eabe813c74a72c197038fb"
+        },
+        {
+          "image_id": "T038_last",
+          "frame_label": "last",
+          "frame_index": 41,
+          "source_path": "raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/09/2023-02-11_16-34-52/raw/traj_group0/traj14/images0/im_41.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_laundry_machine/pnp_sweep/09/2023-02-11_16-34-52/raw/traj_group0/traj14/images0/im_41.jpg",
+          "path": "data/images/T038_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 91296,
+          "sha256": "2ee05e706e8e6201516b868a0e7b52d523792bd21550d7260cebfa6f3ae40364"
+        }
+      ]
+    },
+    {
+      "sample_id": "T039",
+      "csv_line": 27087,
+      "category": "cloth_laundry_other",
+      "trajectory_key": "raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj7",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj7/",
+      "raw_csv_row": [
+        "raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj7/images0/im_0.jpg",
+        "raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj7/images0/im_98.jpg",
+        "sweep into pile"
+      ],
+      "annotations": [
+        "sweep into pile"
+      ],
+      "last_frame_index": 98,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "granular",
+          "sweeper",
+          "tray",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Robot sweeps dark granules into a pile on a white tray."
+      },
+      "frames": [
+        {
+          "image_id": "T039_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj7/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj7/images0/im_0.jpg",
+          "path": "data/images/T039_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 91510,
+          "sha256": "e8e0169522116378c6e5b5c9ade9f8af8bcae56b47e8f78ac48fd65715745cd6"
+        },
+        {
+          "image_id": "T039_mid",
+          "frame_label": "mid",
+          "frame_index": 49,
+          "source_path": "raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj7/images0/im_49.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj7/images0/im_49.jpg",
+          "path": "data/images/T039_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 90226,
+          "sha256": "6e04fc1f4531b967803eb8496bf66a373926c16d30a69f38dff4466c531f6e5e"
+        },
+        {
+          "image_id": "T039_last",
+          "frame_label": "last",
+          "frame_index": 98,
+          "source_path": "raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj7/images0/im_98.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj7/images0/im_98.jpg",
+          "path": "data/images/T039_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 86729,
+          "sha256": "0ca809ff18192609a5d5167c0152e341e0aae9dec5f38c3865130377521d3a1a"
+        }
+      ]
+    },
+    {
+      "sample_id": "T040",
+      "csv_line": 27088,
+      "category": "cloth_laundry_other",
+      "trajectory_key": "raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj16",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj16/",
+      "raw_csv_row": [
+        "raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj16/images0/im_0.jpg",
+        "raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj16/images0/im_81.jpg",
+        "sweep into pile"
+      ],
+      "annotations": [
+        "sweep into pile"
+      ],
+      "last_frame_index": 81,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "granular",
+          "sweeper",
+          "tray",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Granules are swept into piles by the robot tool."
+      },
+      "frames": [
+        {
+          "image_id": "T040_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj16/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj16/images0/im_0.jpg",
+          "path": "data/images/T040_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 98048,
+          "sha256": "9a099bd9213f4cd987cf93d1df74e41befdcbe97ae35ecfccdab50a03440aaf1"
+        },
+        {
+          "image_id": "T040_mid",
+          "frame_label": "mid",
+          "frame_index": 40,
+          "source_path": "raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj16/images0/im_40.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj16/images0/im_40.jpg",
+          "path": "data/images/T040_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 92724,
+          "sha256": "a1590ddb1c1456f8513b4e2a821e9903c9ff2257dd8926d9891440bfa2ee39d9"
+        },
+        {
+          "image_id": "T040_last",
+          "frame_label": "last",
+          "frame_index": 81,
+          "source_path": "raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj16/images0/im_81.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/bridge_data_v2/datacol2_folding_table_white_tray/sweep_granular/12/2023-05-25_17-53-48/raw/traj_group0/traj16/images0/im_81.jpg",
+          "path": "data/images/T040_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 92422,
+          "sha256": "648b773bf99bf9e3b3d3db778db550fa29f92ce7868bcfed8a432888d1547e38"
+        }
+      ]
+    },
+    {
+      "sample_id": "T041",
+      "csv_line": 1,
+      "category": "pot_utensil_actions",
+      "trajectory_key": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj253",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj253/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj253/images0/im_0.jpg",
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj253/images0/im_27.jpg",
+        "place the red and white mushroom in the pot",
+        "move the mushroom into the pot"
+      ],
+      "annotations": [
+        "place the red and white mushroom in the pot",
+        "move the mushroom into the pot"
+      ],
+      "last_frame_index": 27,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "pot",
+          "mushroom",
+          "spoon",
+          "cloth",
+          "stove",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Mushroom is placed into a silver pot on a kitchen countertop."
+      },
+      "frames": [
+        {
+          "image_id": "T041_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj253/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj253/images0/im_0.jpg",
+          "path": "data/images/T041_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 120503,
+          "sha256": "36937b5a339a11e3296da928c5a5edff19712ba04a4b93d3ae994665b75d08cb"
+        },
+        {
+          "image_id": "T041_mid",
+          "frame_label": "mid",
+          "frame_index": 13,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj253/images0/im_13.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj253/images0/im_13.jpg",
+          "path": "data/images/T041_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 121969,
+          "sha256": "6aeafa7a80c7796e242d99d059f04aa9f25185cb96c2471b6cc20da53b320a3d"
+        },
+        {
+          "image_id": "T041_last",
+          "frame_label": "last",
+          "frame_index": 27,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj253/images0/im_27.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj253/images0/im_27.jpg",
+          "path": "data/images/T041_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 120524,
+          "sha256": "0e01dd9fa8164bf4bb8ec93815f232069fda5eb7d38f5106cd3eb101297e42f1"
+        }
+      ]
+    },
+    {
+      "sample_id": "T042",
+      "csv_line": 5,
+      "category": "pot_utensil_actions",
+      "trajectory_key": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj66",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj66/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj66/images0/im_0.jpg",
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj66/images0/im_26.jpg",
+        "place the spoon on top of the towel",
+        "pick up the spoon and put it on the napkin"
+      ],
+      "annotations": [
+        "place the spoon on top of the towel",
+        "pick up the spoon and put it on the napkin"
+      ],
+      "last_frame_index": 26,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "pot",
+          "spoon",
+          "cloth",
+          "stove",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Spoon is placed on a cloth near a pot."
+      },
+      "frames": [
+        {
+          "image_id": "T042_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj66/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj66/images0/im_0.jpg",
+          "path": "data/images/T042_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 123271,
+          "sha256": "d0f2b25be1fac51f7d5494a32d023d8ff8f11033d79b3a7b850047686292d6a6"
+        },
+        {
+          "image_id": "T042_mid",
+          "frame_label": "mid",
+          "frame_index": 13,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj66/images0/im_13.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj66/images0/im_13.jpg",
+          "path": "data/images/T042_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 120860,
+          "sha256": "a1a12edb2d1296d26de5387557c99768e669c2e67aeca785f053a557dda98926"
+        },
+        {
+          "image_id": "T042_last",
+          "frame_label": "last",
+          "frame_index": 26,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj66/images0/im_26.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj66/images0/im_26.jpg",
+          "path": "data/images/T042_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 119850,
+          "sha256": "5e84795d3bcf330aceb43e6025507a925a6bc4193ded36dac8dc87ca9d396e3d"
+        }
+      ]
+    },
+    {
+      "sample_id": "T043",
+      "csv_line": 9,
+      "category": "pot_utensil_actions",
+      "trajectory_key": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj54",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj54/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj54/images0/im_0.jpg",
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj54/images0/im_30.jpg",
+        "place the metal pot to the left of the spoon",
+        "move the pot to the left of the spoon"
+      ],
+      "annotations": [
+        "place the metal pot to the left of the spoon",
+        "move the pot to the left of the spoon"
+      ],
+      "last_frame_index": 30,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "pot",
+          "spoon",
+          "cloth",
+          "stove",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Metal pot is moved to the left of a spoon."
+      },
+      "frames": [
+        {
+          "image_id": "T043_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj54/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj54/images0/im_0.jpg",
+          "path": "data/images/T043_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 117233,
+          "sha256": "05a2a713a5848848244d39d4e05117107b3627c33f11fa3e6d0ab06accf4fce5"
+        },
+        {
+          "image_id": "T043_mid",
+          "frame_label": "mid",
+          "frame_index": 15,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj54/images0/im_15.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj54/images0/im_15.jpg",
+          "path": "data/images/T043_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 120524,
+          "sha256": "7f370e6483fd617e2e4cb390409b9b09940d8938e0ca487a4af015d745d69336"
+        },
+        {
+          "image_id": "T043_last",
+          "frame_label": "last",
+          "frame_index": 30,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj54/images0/im_30.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj54/images0/im_30.jpg",
+          "path": "data/images/T043_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 119480,
+          "sha256": "c4c0a8dd451c335f926c0f5d11f74ef003f0f3f687970def8001992a54adacc3"
+        }
+      ]
+    },
+    {
+      "sample_id": "T044",
+      "csv_line": 21,
+      "category": "pot_utensil_actions",
+      "trajectory_key": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj134",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj134/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj134/images0/im_0.jpg",
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj134/images0/im_25.jpg",
+        "move the mushroom and drop it in the pot",
+        "place the mushroom into the silver pot"
+      ],
+      "annotations": [
+        "move the mushroom and drop it in the pot",
+        "place the mushroom into the silver pot"
+      ],
+      "last_frame_index": 25,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "pot",
+          "mushroom",
+          "spoon",
+          "cloth",
+          "stove",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Mushroom is dropped into the pot."
+      },
+      "frames": [
+        {
+          "image_id": "T044_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj134/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj134/images0/im_0.jpg",
+          "path": "data/images/T044_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 116716,
+          "sha256": "f0926970815cb9d0e99a29e942131214e732a2dad6512c79d31540db2b899688"
+        },
+        {
+          "image_id": "T044_mid",
+          "frame_label": "mid",
+          "frame_index": 12,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj134/images0/im_12.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj134/images0/im_12.jpg",
+          "path": "data/images/T044_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 116848,
+          "sha256": "85fa3a41608d12d7f8cbcf0efa2f1ff3c7938ed60103ff888d17a26befe7f26f"
+        },
+        {
+          "image_id": "T044_last",
+          "frame_label": "last",
+          "frame_index": 25,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj134/images0/im_25.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj134/images0/im_25.jpg",
+          "path": "data/images/T044_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 117490,
+          "sha256": "a42ac2d27afbfb143ecb212af62abf527469fb142f265d7a403fddb92cdb4946"
+        }
+      ]
+    },
+    {
+      "sample_id": "T045",
+      "csv_line": 25,
+      "category": "pot_utensil_actions",
+      "trajectory_key": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj8",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj8/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj8/images0/im_0.jpg",
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj8/images0/im_37.jpg",
+        "move spoon to above silver pot",
+        "place the yellow spoon behind the metal pot"
+      ],
+      "annotations": [
+        "move spoon to above silver pot",
+        "place the yellow spoon behind the metal pot"
+      ],
+      "last_frame_index": 37,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "pot",
+          "spoon",
+          "cloth",
+          "stove",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Yellow spoon is moved behind the metal pot."
+      },
+      "frames": [
+        {
+          "image_id": "T045_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj8/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj8/images0/im_0.jpg",
+          "path": "data/images/T045_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 119867,
+          "sha256": "82ada88acf68625e9dbcb4d585536b90c2ac2f80089fe908fb99018f657e2071"
+        },
+        {
+          "image_id": "T045_mid",
+          "frame_label": "mid",
+          "frame_index": 18,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj8/images0/im_18.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj8/images0/im_18.jpg",
+          "path": "data/images/T045_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 117507,
+          "sha256": "4c7ef703a43d02c37286e93624b2613eea38905cd5c97047ae32eb8e65bd5ffc"
+        },
+        {
+          "image_id": "T045_last",
+          "frame_label": "last",
+          "frame_index": 37,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj8/images0/im_37.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj8/images0/im_37.jpg",
+          "path": "data/images/T045_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 118131,
+          "sha256": "fc8f9a50cfddfd1638fcbd12337d82196cf2a7b1e5fe92600eb27fa1e16ffa6d"
+        }
+      ]
+    },
+    {
+      "sample_id": "T046",
+      "csv_line": 30,
+      "category": "pot_utensil_actions",
+      "trajectory_key": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj106",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj106/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj106/images0/im_0.jpg",
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj106/images0/im_48.jpg",
+        "grab the mushroom and put it inside the silver pot",
+        "pick up mushroom and place it in the pot"
+      ],
+      "annotations": [
+        "grab the mushroom and put it inside the silver pot",
+        "pick up mushroom and place it in the pot"
+      ],
+      "last_frame_index": 48,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "pot",
+          "mushroom",
+          "spoon",
+          "cloth",
+          "stove",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Mushroom is grasped and placed inside the silver pot."
+      },
+      "frames": [
+        {
+          "image_id": "T046_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj106/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj106/images0/im_0.jpg",
+          "path": "data/images/T046_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 118151,
+          "sha256": "3854a93c37e79d47debd4567fe8329e6f91c9ae1ebb8e1c78873bdbaf650c5f9"
+        },
+        {
+          "image_id": "T046_mid",
+          "frame_label": "mid",
+          "frame_index": 24,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj106/images0/im_24.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj106/images0/im_24.jpg",
+          "path": "data/images/T046_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 116573,
+          "sha256": "db0067ce6c1b77cedea27969829d2d8a549a39eb6616155c465d674e9efdb22a"
+        },
+        {
+          "image_id": "T046_last",
+          "frame_label": "last",
+          "frame_index": 48,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj106/images0/im_48.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj106/images0/im_48.jpg",
+          "path": "data/images/T046_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 116969,
+          "sha256": "50c0763c598b27389c8966efd698b7624031c0eb3cc9c0db22f4ac6b9931654e"
+        }
+      ]
+    },
+    {
+      "sample_id": "T047",
+      "csv_line": 36,
+      "category": "pot_utensil_actions",
+      "trajectory_key": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj208",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj208/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj208/images0/im_0.jpg",
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj208/images0/im_29.jpg",
+        "move the spoon to the front left corner of the table",
+        "move the yellow spoon to the left of the silver pot"
+      ],
+      "annotations": [
+        "move the spoon to the front left corner of the table",
+        "move the yellow spoon to the left of the silver pot"
+      ],
+      "last_frame_index": 29,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "pot",
+          "spoon",
+          "cloth",
+          "stove",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Yellow spoon is moved toward the front-left near the pot."
+      },
+      "frames": [
+        {
+          "image_id": "T047_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj208/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj208/images0/im_0.jpg",
+          "path": "data/images/T047_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 121194,
+          "sha256": "2b4d4df0044278e38c683ac047d14bc63c3909460512f32a31e74ea4b0f16c4d"
+        },
+        {
+          "image_id": "T047_mid",
+          "frame_label": "mid",
+          "frame_index": 14,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj208/images0/im_14.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj208/images0/im_14.jpg",
+          "path": "data/images/T047_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 120851,
+          "sha256": "e60337fd0669dbb2b62e88249fbaf16031395a2ebe24aa31c6b09fb261e80dc2"
+        },
+        {
+          "image_id": "T047_last",
+          "frame_label": "last",
+          "frame_index": 29,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj208/images0/im_29.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj208/images0/im_29.jpg",
+          "path": "data/images/T047_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 122006,
+          "sha256": "71afadee2577d6716cfb9394f003afee0edb63ffd8c344978185cac04f40a31d"
+        }
+      ]
+    },
+    {
+      "sample_id": "T048",
+      "csv_line": 37,
+      "category": "pot_utensil_actions",
+      "trajectory_key": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj5",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj5/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj5/images0/im_0.jpg",
+        "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj5/images0/im_27.jpg",
+        "place the metal pan between the blue cloth and the front edge of the table",
+        "move the pot in front of the blue towel"
+      ],
+      "annotations": [
+        "place the metal pan between the blue cloth and the front edge of the table",
+        "move the pot in front of the blue towel"
+      ],
+      "last_frame_index": 27,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "pot",
+          "pan",
+          "spoon",
+          "cloth",
+          "stove",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Metal pan is positioned between the cloth and the front edge of the table."
+      },
+      "frames": [
+        {
+          "image_id": "T048_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj5/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj5/images0/im_0.jpg",
+          "path": "data/images/T048_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 118646,
+          "sha256": "4366d737fee8d0c3e15413e461df1cb43603579d20c778b64d1435671aca212c"
+        },
+        {
+          "image_id": "T048_mid",
+          "frame_label": "mid",
+          "frame_index": 13,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj5/images0/im_13.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj5/images0/im_13.jpg",
+          "path": "data/images/T048_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 118548,
+          "sha256": "bb6c77ea98e9a15134988c1d99eb7487f61d28fd231d2021d8dbf89e504bd71e"
+        },
+        {
+          "image_id": "T048_last",
+          "frame_label": "last",
+          "frame_index": 27,
+          "source_path": "raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj5/images0/im_27.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen7/pnp_sweep_target_fixed/00/2023-03-01_11-34-36/raw/traj_group0/traj5/images0/im_27.jpg",
+          "path": "data/images/T048_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 117263,
+          "sha256": "86b7d09ea92c64925ce91f39d76c8fb71bc97b245815cd4c24a8167c4bc08f62"
+        }
+      ]
+    },
+    {
+      "sample_id": "T049",
+      "csv_line": 7817,
+      "category": "burner_cleaning",
+      "trajectory_key": "raw/rss/toykitchen6/pnp_sweep/37/2023-02-07_18-49-54/raw/traj_group0/traj15",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen6/pnp_sweep/37/2023-02-07_18-49-54/raw/traj_group0/traj15/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen6/pnp_sweep/37/2023-02-07_18-49-54/raw/traj_group0/traj15/images0/im_0.jpg",
+        "raw/rss/toykitchen6/pnp_sweep/37/2023-02-07_18-49-54/raw/traj_group0/traj15/images0/im_29.jpg",
+        "cleaning the burner in the house"
+      ],
+      "annotations": [
+        "cleaning the burner in the house"
+      ],
+      "last_frame_index": 29,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported_with_action_scope_limit",
+        "scene_tags": [
+          "burner",
+          "pot",
+          "sponge",
+          "cloth",
+          "sink",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "Burner cleaning with cloth/sponge is supported by annotation and contact sequence; no dishwashing is inferred."
+      },
+      "frames": [
+        {
+          "image_id": "T049_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen6/pnp_sweep/37/2023-02-07_18-49-54/raw/traj_group0/traj15/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen6/pnp_sweep/37/2023-02-07_18-49-54/raw/traj_group0/traj15/images0/im_0.jpg",
+          "path": "data/images/T049_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 99461,
+          "sha256": "bd0b7e91a1b76a3c97207d91583dc1900412d5e77d6211938fdeef5bab59a315"
+        },
+        {
+          "image_id": "T049_mid",
+          "frame_label": "mid",
+          "frame_index": 14,
+          "source_path": "raw/rss/toykitchen6/pnp_sweep/37/2023-02-07_18-49-54/raw/traj_group0/traj15/images0/im_14.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen6/pnp_sweep/37/2023-02-07_18-49-54/raw/traj_group0/traj15/images0/im_14.jpg",
+          "path": "data/images/T049_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 102795,
+          "sha256": "b768fe76d0a987d6ab3a9ed99f6b3052fcbdf3af4758e2af0112d27d95ed2f31"
+        },
+        {
+          "image_id": "T049_last",
+          "frame_label": "last",
+          "frame_index": 29,
+          "source_path": "raw/rss/toykitchen6/pnp_sweep/37/2023-02-07_18-49-54/raw/traj_group0/traj15/images0/im_29.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen6/pnp_sweep/37/2023-02-07_18-49-54/raw/traj_group0/traj15/images0/im_29.jpg",
+          "path": "data/images/T049_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 95673,
+          "sha256": "304664e562ed05dfce885f7523a180f1d3448d7c8ade5c10339ff891638de427"
+        }
+      ]
+    },
+    {
+      "sample_id": "T050",
+      "csv_line": 7847,
+      "category": "burner_cleaning",
+      "trajectory_key": "raw/rss/toykitchen6/pnp_sweep/61/2023-02-08_14-02-34/raw/traj_group0/traj9",
+      "trajectory_url_prefix": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen6/pnp_sweep/61/2023-02-08_14-02-34/raw/traj_group0/traj9/",
+      "raw_csv_row": [
+        "raw/rss/toykitchen6/pnp_sweep/61/2023-02-08_14-02-34/raw/traj_group0/traj9/images0/im_0.jpg",
+        "raw/rss/toykitchen6/pnp_sweep/61/2023-02-08_14-02-34/raw/traj_group0/traj9/images0/im_40.jpg",
+        "move the white sponge to the upper side of the left burner"
+      ],
+      "annotations": [
+        "move the white sponge to the upper side of the left burner"
+      ],
+      "last_frame_index": 40,
+      "visual_review": {
+        "status": "reviewed",
+        "annotation_support": "supported",
+        "scene_tags": [
+          "burner",
+          "pot",
+          "sponge",
+          "brush",
+          "sink",
+          "robot_arm"
+        ],
+        "action_evidence_frames": [
+          "mid",
+          "last"
+        ],
+        "observation": "White sponge is moved on the left burner; no clear wiping action is claimed."
+      },
+      "frames": [
+        {
+          "image_id": "T050_first",
+          "frame_label": "first",
+          "frame_index": 0,
+          "source_path": "raw/rss/toykitchen6/pnp_sweep/61/2023-02-08_14-02-34/raw/traj_group0/traj9/images0/im_0.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen6/pnp_sweep/61/2023-02-08_14-02-34/raw/traj_group0/traj9/images0/im_0.jpg",
+          "path": "data/images/T050_first.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 99723,
+          "sha256": "a1f0c2628d0a33021054c2b9088cc5839625850401244b11fde976cf606311cd"
+        },
+        {
+          "image_id": "T050_mid",
+          "frame_label": "mid",
+          "frame_index": 20,
+          "source_path": "raw/rss/toykitchen6/pnp_sweep/61/2023-02-08_14-02-34/raw/traj_group0/traj9/images0/im_20.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen6/pnp_sweep/61/2023-02-08_14-02-34/raw/traj_group0/traj9/images0/im_20.jpg",
+          "path": "data/images/T050_mid.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 99324,
+          "sha256": "623bf1e6aa28fc95535ae825b93a1ab1833ede2b51c8b61a3d6b6b6888e601b4"
+        },
+        {
+          "image_id": "T050_last",
+          "frame_label": "last",
+          "frame_index": 40,
+          "source_path": "raw/rss/toykitchen6/pnp_sweep/61/2023-02-08_14-02-34/raw/traj_group0/traj9/images0/im_40.jpg",
+          "url": "https://rail.eecs.berkeley.edu/datasets/bridge_release/raw/rss/toykitchen6/pnp_sweep/61/2023-02-08_14-02-34/raw/traj_group0/traj9/images0/im_40.jpg",
+          "path": "data/images/T050_last.jpg",
+          "format": "JPEG",
+          "width": 640,
+          "height": 480,
+          "bytes": 101653,
+          "sha256": "c7634f6413c2dfeff299a94b0f59e0c0923aaf2a11ca5f3fd6244c0cdff132c3"
+        }
+      ]
+    }
+  ]
+}
