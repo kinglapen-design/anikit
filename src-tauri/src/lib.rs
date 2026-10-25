@@ -511,6 +511,8 @@ pub fn run() {
       commands::scan::scan_duplicates,
       commands::scan::scan_links,
       commands::search::search_assets,
+      commands::semantic::get_semantic_settings,
+      commands::semantic::save_semantic_settings,
       commands::preview::open_with_default_app,
       commands::preview::open_preview_window,
       commands::asset_menu::open_with_dialog,

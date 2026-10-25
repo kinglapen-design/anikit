@@ -75,6 +75,7 @@ pub mod relations;
 pub mod resolve;
 pub mod scan;
 pub mod search;
+pub mod semantic;
 pub mod send_stage;
 pub mod sequence;
 pub mod text;

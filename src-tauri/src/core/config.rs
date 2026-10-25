@@ -332,6 +332,38 @@ pub fn save_plugin_server_settings(value: PluginServerSettings) -> Result<(), Da
   save_to(&p, &cfg)
 }
 
+// ---------- 语义分析设置（settings.semantic 子树，PRD 08-04；独立写点，避免 settings.ui 整体覆盖） ----------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SemanticDevice {
+  #[default]
+  Cpu,
+  Gpu,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticSettings {
+  #[serde(default)]
+  pub device: SemanticDevice,
+  /// 开发 / 离线包覆盖路径；缺省走全局模型目录（services/semantic/model）
+  #[serde(default)]
+  pub model_dir: Option<String>,
+}
+
+pub fn semantic_settings() -> Result<SemanticSettings, DataError> {
+  let raw = load()?.settings.get("semantic").cloned().unwrap_or_else(|| serde_json::json!({}));
+  Ok(serde_json::from_value(raw).unwrap_or_default())
+}
+
+pub fn save_semantic_settings(value: SemanticSettings) -> Result<(), DataError> {
+  let p = config_path()?;
+  let mut cfg = load_from(&p);
+  cfg.settings["semantic"] = serde_json::to_value(value).map_err(|e| DataError::Corrupt(e.to_string()))?;
+  save_to(&p, &cfg)
+}
+
 /// 主窗口几何读取（启动恢复用；从未保存 / 形状损坏为 None，走 tauri.conf 默认居中）
 pub fn window_state() -> Option<WindowState> {
   let cfg = load().ok()?;
@@ -549,5 +581,15 @@ mod tests {
     assert!(CepExportSettings { max_secs: 0, ..Default::default() }.validate().is_err());
     assert!(CepExportSettings { max_secs: 601, ..Default::default() }.validate().is_err());
     assert!(CepExportSettings { max_bytes: 100, ..Default::default() }.validate().is_err());
+  }
+
+  #[test]
+  fn semantic_settings_default_and_roundtrip() {
+    let defaults = serde_json::from_value::<SemanticSettings>(serde_json::json!({})).unwrap();
+    assert_eq!(defaults, SemanticSettings { device: SemanticDevice::Cpu, model_dir: None });
+    let custom = SemanticSettings { device: SemanticDevice::Gpu, model_dir: Some("D:/models/clip".into()) };
+    let value = serde_json::to_value(&custom).unwrap();
+    assert_eq!(value, serde_json::json!({ "device": "gpu", "modelDir": "D:/models/clip" }));
+    assert_eq!(serde_json::from_value::<SemanticSettings>(value).unwrap(), custom);
   }
 }

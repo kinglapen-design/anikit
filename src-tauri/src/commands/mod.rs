@@ -28,6 +28,7 @@ pub mod recycle;
 pub mod relations;
 pub mod scan;
 pub mod search;
+pub mod semantic;
 pub mod sequence;
 pub mod settings;
 pub mod text;

@@ -94,6 +94,10 @@ quick-xml = "0.36"
 rmcp = { version = "3.4", features = ["transport-streamable-http-server"] }
 # AI 外接通道：axum nest_service 挂载 rmcp Streamable HTTP Tower 服务（最小特性面）
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+# 语义分析（PRD 08-04）：SQLite 派生索引 + 本地 CLIP（CPU / DirectML，私有 ORT 动态运行时）
+rusqlite = { version = "0.38", features = ["bundled"] }
+ort = { version = "2.0.0-rc.15", default-features = false, features = ["std", "ndarray", "api-24", "directml", "load-dynamic"] }
+tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"] }
 
 # 阶段四 spike 同款补丁：ffmpeg-next 8.1.0 的 EXIF frame side data 门控门槛
 #（avcodec minor>=28 才开 ffmpeg_8_1）滞后于实际合入（avutil 60.10 / avcodec 62.13 已含
