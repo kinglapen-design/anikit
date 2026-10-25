@@ -12,3 +12,4 @@
 - `semantic-eval/` —— 真实动作语义验收集与模型共用评测：BridgeData V2（CC BY 4.0）轨迹抽帧、hard negatives、TopK / MRR 与错误分析
 - `semantic-multilingual/` —— 许可清晰的多语言 CLIP 备选 spike：指定文本 / 图像双塔、CPU / DirectML 与同一质量集对照，不修改主线
 - `semantic-store/` —— SQLite 语义数据层 spike：模型 revision 隔离、分段向量幂等替换、确定性 topK、任务检查点与重开续跑；3 测 + clippy 净
+- `semantic-siglip/` —— SigLIP 2 base patch16-512 对照：同 150 帧 / 17+1 查询实测质量下降且成本更高，不选作 1.0 基础模型，保留复现证据
