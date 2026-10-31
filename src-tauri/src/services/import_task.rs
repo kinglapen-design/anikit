@@ -1,7 +1,7 @@
 //! 导入任务编排：四阶段并行流水线，UI 主线程全程不被阻塞。
 //!
-//! 1. 并行 sha256（rayon 默认线程池，锁外 IO）；2. 一次短锁全量查重（冲突分离、
-//!    预分配 asset id、keep 建层级发 folders）；3. 并行 复制/移动+缩略图+metadata（锁外）；
+//! 1. 并行 sha256（rayon 默认线程池，锁外 IO）；2. 命中候选锁外复核 + 一次短锁全量查重
+//!    （冲突分离、预分配 asset id、keep 建层级发 folders）；3. 并行 复制/移动+缩略图+metadata（锁外）；
 //! 4. mpsc 消费者串行注册 Placement/索引并发 Asset 事件（到一个显示一个）。
 //!
 //! 分段短锁纪律不变：锁内只做查重、Placement 追加、索引插入、folders.json 节流落盘
@@ -9,6 +9,8 @@
 //! hash 冲突不自动链接（PRD 10_重复添加提示）：收集 ConflictItem 挂起，待用户决策。
 //! 序列帧打包模式（SequenceMode::Pack，4.1）：扫描后先按 sequence::detect_groups 分组，
 //! 管线以"单元"推进——单文件或整组序列帧；组 hash 查重、整组建一个 Asset（frames/ 归一）。
+
+mod dedup;
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -258,8 +260,9 @@ fn prepare_folders(
   Ok(())
 }
 
-/// 阶段 2（一次短锁）：全量查重。命中库内 → 立即组装冲突挂起（源侧锁外补；不分渠道，
-/// 同渠道静默合并 2026-08-13 定案废除）；命中同批次 → 延后冲突；未命中 → 预分配 ID + 解析落点生成工作项
+/// 阶段 2：命中候选锁外重算真实 hash 并修正漂移 → 一次短锁全量查重。命中库内 → 立即组装冲突挂起
+///（源侧锁外补；不分渠道，同渠道静默合并 2026-08-13 定案废除）；命中同批次 → 延后冲突；
+/// 未命中 → 预分配 ID + 解析落点生成工作项
 #[allow(clippy::too_many_arguments)]
 fn dedup_phase(
   state: &mut TaskState,
@@ -271,6 +274,7 @@ fn dedup_phase(
   groups: &[SequenceGroup],
   imported_from: Option<&str>,
 ) -> Result<Phase2, String> {
+  dedup::refresh_candidate_hashes(lib, units)?;
   let root_buf = root.to_path_buf();
   let mut phase = Phase2 { work: Vec::new(), deferred: Vec::new() };
   let mut immediate: Vec<(Unit, ConflictItem)> = Vec::new();

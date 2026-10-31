@@ -263,6 +263,42 @@
   }
 
   #[test]
+  fn stale_existing_hash_is_rehashed_before_conflict() {
+    let h = make_lib();
+    let original = h._dir.path().join("提示词.md");
+    fs::write(&original, "").unwrap();
+    run(&h, opts(Structure::Flatten, Source::Copy, vec![original]));
+    let existing_id = with_lib(&h, |l| l.folders.items[0].asset.clone());
+    let origin = with_lib(&h, |l| {
+      let meta = &l.index.assets[&existing_id];
+      l.info_dir(&existing_id).join(&meta.origin_name)
+    });
+    let edited = "# 已在外部编辑器写入正文\n不是空文件";
+    fs::write(&origin, edited).unwrap();
+
+    let empty = h._dir.path().join("S01.txt");
+    fs::write(&empty, "").unwrap();
+    let (out, _) = run(&h, opts(Structure::Flatten, Source::Copy, vec![empty]));
+    assert_eq!((out.imported, out.conflicts.len(), out.failed.len()), (1, 0, 0), "旧空哈希不得误报非空资产：{:?}", out.conflicts);
+
+    let expected_hash = ops::sha256_bytes(edited.as_bytes());
+    with_lib(&h, |l| {
+      let meta = &l.index.assets[&existing_id];
+      assert_eq!(meta.size, edited.len() as u64);
+      assert_eq!(meta.hash, expected_hash);
+    });
+    let disk: AssetMeta = read_json(&paths::info_dir(&h.assets_dir, &existing_id).join("metadata.json")).unwrap();
+    assert_eq!((disk.size, disk.hash), (edited.len() as u64, expected_hash));
+
+    let duplicate = h._dir.path().join("S02.txt");
+    fs::write(&duplicate, "").unwrap();
+    let (out, _) = run(&h, opts(Structure::Flatten, Source::Copy, vec![duplicate]));
+    assert_eq!(out.conflicts.len(), 1, "真实空文件重复仍应判重");
+    assert_ne!(out.conflicts[0].existing_asset_id, existing_id);
+    assert_eq!(out.conflicts[0].existing_name, "S01.txt");
+  }
+
+  #[test]
   fn duplicate_display_name_gets_counter_suffix() {
     let h = make_lib();
     let d1 = h._dir.path().join("源一");
