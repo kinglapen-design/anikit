@@ -1,11 +1,11 @@
 # 3. AI 外接通道（MCP，一期只读 + 二期写工具）
 
-- 服务：`server/mcp/`（PRD 08-06），`http://127.0.0.1:17701/mcp`——**固定端口 17701 优先**（Agent 工具只读静态 config，动态端口每重启失效不匹配；被占回退动态），lib.rs setup 拉起（`server::init_mcp`，读服务总开关决定是否启动）；端口文件 = 全局配置目录 `AniKit/mcp-server.port`（每次启动覆写实际端口，兜底发现；停服即删）。
+- 服务：`server/mcp/`（PRD 08-06），`http://127.0.0.1:17701/mcp`——**固定端口 17701 优先**（Agent 工具只读静态 config，动态端口每重启失效不匹配；被占回退动态），lib.rs setup 拉起（`server::init_mcp`，读服务总开关决定是否启动）；端口文件 = 全局配置目录 `AniKit/mcp-server.port`（每次启动覆写实际端口，兜底发现；停服即删）。显式 `ANIKIT_CONFIG_DIR` 的隔离验收改为写该目录下的同名文件，不覆盖用户实例的端口文件。
 - **服务总开关与面板命令（2026-09-20 插件面板 MCP 详情窗配套）**：全局句柄 `MCP_HANDLE`（stop 信号 + 实际端口 + serve 任务）支持运行期启停（graceful shutdown）；配置 `settings.mcp` 子树（`serverEnabled` 缺省 true / `writeEnabled` 缺省 false，core::config 单写点，旧 `settings.ui.mcpWriteEnabled` 一次性迁移）。命令：`get_mcp_status`（running / port / url / serverEnabled / writeEnabled）/ `set_mcp_server_enabled`（先启停后持久化）/ `set_mcp_write_enabled`（持久化即生效）——回包同构 McpStatus，前端插件面板详情窗（plugins/McpPluginWindow）直调，不经 ui store 管道。
 - 实现：官方 Rust SDK `rmcp` 3.4（Streamable HTTP server 为 Tower service，axum `nest_service("/mcp", …)` 挂载；复用 Tauri tokio 运行时，不另起进程）。协议握手 / 会话管理 / 工具 schema 协商全由 SDK 承担。
 - 安全口径：仅回环监听、无鉴权（本机 Agent 场景）；Host 头校验防 DNS rebinding 由 rmcp 内置（≥1.4.0，默认 allowedHosts = localhost / 127.0.0.1 / ::1）。**测试构建不起 server**（cfg(not(test))，踩坑 014 同 plugin_ws）。
 - **写入闸（二期，2026-09-19 用户定形态 A；2026-09-20 开关挪插件面板 MCP 详情窗）**：全局写入开关 + 撤销兜底——开关持久化 config.json `settings.mcp.writeEnabled`（默认 false，插件面板「AI 外接通道（MCP）」详情窗「允许写入」开启；初版落点 settings.ui.mcpWriteEnabled 由后端一次性迁移）；MCP 写调用**逐次检查**（`write_gate` 直读配置，core::config 无缓存、低频调用直读可接受），关态 / 读取失败一律回工具级错误「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」（isError=true，与「请先打开素材库」同口径）。不做逐笔弹窗（首批全是 L2 可逆操作，二批结构性操作可逆仍走形态 A）；**彻底删除永不经 MCP**（L4 永远人工确认；库内回收站可逆删除经 trash_placements，2026-09-20 用户定）。
-- **写入热刷新（2026-09-19 补）**：库数据文件无监听（命令层写由前端自刷新），MCP 绕开前端——十三个写工具成功路径广播 `mcp-library-changed`（`emit_library_changed`；import_paths 有真实入库才发），前端 `initMcpListener` 去抖 300ms 全量对齐（同 cep-imported 的 refresh 口径，不带成功提示音）。
+- **写入热刷新（2026-09-19 补）**：库数据文件无监听（命令层写由前端自刷新），MCP 绕开前端——素材结构写工具成功路径广播 `mcp-library-changed`（`emit_library_changed`；import_paths 有真实入库才发），前端 `initMcpListener` 去抖 300ms 全量对齐（同 cep-imported 的 refresh 口径，不带成功提示音）。语义任务另发 `semantic-analysis-progress`，不进素材结构撤销栈。
 
 ## 握手流程（Streamable HTTP，单端点 POST /mcp）
 
@@ -14,13 +14,13 @@
 3. 之后 `tools/list` / `tools/call` 均 POST 同端点、带 session 头；回包同为 SSE `data:` 帧。
 4. 会话内存态（LocalSessionManager），APP 重启即失效——Agent 重连重新 initialize 即可。
 
-## 工具面（22 个 = 只读 9 + 二期写 13）
+## 工具面（32 个 = 只读 12 + 写 20）
 
 加工具 = `server/mcp/tools/` 加一个文件 + `mod.rs` 注册处一行（工具注册表模式，范式 = 前端 barSpecs；未来复用为插件 API 注册表）。回包统一：**仅 `content` 文本（紧凑 JSON），不带 structuredContent**——同一份数据双带会被不查重的客户端双倍计入上下文（2026-09-19 用户实测额度消耗后定的省 token 口径；未声明 outputSchema 时 structuredContent 本就可选）；库未打开回工具级错误（`isError: true`，文本「请先打开素材库」），不静默空表；域错误（资产不存在等）同口径回中文原因。
 
 **URI 增强（2026-10-08 S5，PRD 02-09）**：①所有收 assetId / folderId 的工具参数经 `core::anikit_ref::normalize_ref_id` 归一化（Params struct 字段挂 serde deserialize_with）——`anikit://item|folder/{id}` 与 `http(s)://127.0.0.1:{port}/(open/)item|folder/{id}` 链接形态直接吃，AI 整段透传用户粘贴的链接即可；②`search_assets` placements 每项、`get_asset_detail` 顶层与 `list_links` 逐项附 `uri` 字段（http open 形态 `http://127.0.0.1:{port}/open/item/{id}`，server/media.rs 端点——AI 回复用户时可点击回 AniKit；新增字段不破坏既有解析）。
 
-只读 9 个（全部 `annotations.readOnlyHint = true`）：
+只读 12 个（全部 `annotations.readOnlyHint = true`）：
 
 | 工具 | 入参 | 回包（同命令层结构） |
 | --- | --- | --- |
@@ -33,8 +33,11 @@
 | `get_asset_origin_path` | `{ assetId }` | `{ originPath, thumbPath: string \| null }`——源文件真实路径（序列帧 = frames/ 封面帧，同右键「复制文件路径」口径）+ 缩略图路径（含 thumbAssetId 伴生代理：fla 等工程资产取伴生 hidden 资产的图） |
 | `read_text_asset` | `{ assetId }` | `{ content }`（txt / md；UTF-8 优先 GBK 回退，2MB 上限；非文本资产报错） |
 | `list_archives` | 无 | `ArchiveListItem[]`（folderId / badge / avatar / props / descriptions / links / createdAt / totalSize / coverPath / coverVer）；folderId 可交给 list_placements 列档案内容 |
+| `semantic_search` | `{ query, folderId?, recursive?, limit? }` | 已有语义索引的最佳片段、其他命中段、真实毫秒 / 原始帧索引与 uri；只查询，不自动分析，不调用外部 provider；limit 为资产数，缺省 30、上限 100 |
+| `get_semantic_analysis_task` | `{ taskId }` | 当前库单个任务快照（含 mode / status / completed / errors）；不存在或不属于当前库 = null |
+| `list_semantic_analysis_tasks` | 无 | 当前库任务清单，最多 50 个，其他库不可见 |
 
-写 13 个（二期，全部 `annotations.readOnlyHint = false`）：公共门禁 = **write_gate 逐次检查** `settings.mcp.writeEnabled`（关态回「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」工具级错误）。撤销口径分流——进撤销 11 个（create_document / rename_placements / rename_folders / create_folder / move_placements / move_folders / link_placements / trash_placements / assign_prompt / clear_prompt / set_folder_groups）复用 `commands::operations` / `commands::prompt` 抽出的 `_op` 整段（锁 library → 锁 undo → 单写点 + 单撤销步，与 APP 命令同一实现）；不进撤销 2 个 = write_text_asset（与 APP 内文本编辑同口径，2026-08-23 定）+ import_paths（APP 导入管线本就不接 UndoManager，不硬接）。
+写 20 个（全部 `annotations.readOnlyHint = false`）：公共门禁 = **write_gate 逐次检查** `settings.mcp.writeEnabled`（关态回「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」工具级错误）。撤销口径分流——进撤销 12 个（create_document / rename_placements / rename_folders / create_folder / move_placements / move_folders / link_placements / trash_placements / assign_prompt / clear_prompt / set_folder_groups / create_semantic_segment）复用 `commands::operations` / `commands::prompt` 抽出的 `_op` 整段（锁 library → 锁 undo → 单写点 + 单撤销步，与 APP 命令同一实现）；不进撤销 8 个 = write_text_asset（与 APP 内文本编辑同口径，2026-08-23 定）+ import_paths（APP 导入管线本就不接 UndoManager，不硬接）+ 六个语义任务工具（检查点恢复，不修改素材权威 JSON）。
 
 首批 3 个（2026-09-19，`tools/write.rs`）：
 
@@ -78,6 +81,23 @@
 | 工具 | 入参 | 回包（同命令层结构） |
 | --- | --- | --- |
 | `rename_folders` | `{ items: [{ folderId, newName }] }`（单个文件夹改名 = 1 项数组，与 rename_placements 同形；空数组回「items 至少 1 项」） | `BatchRenameReport { renamed, failed: [{ name, reason }] }`——仅改数据不动磁盘（Folder 无磁盘实体）；同名不拦截（文件夹名允许重复）、同名幂等仍计 renamed；失败项（非法名 / 陈旧 id）跳过进 failed 不整体回滚。**进撤销**（整体单撤销步） |
+
+语义任务批 6 个（2026-10-27，`tools/semantic.rs`）：全部受写入闸、只作用当前库、不进素材结构撤销栈，进度经任务检查点恢复。
+
+| 工具 | 入参 | 回包与边界 |
+| --- | --- | --- |
+| `start_semantic_analysis` | `{ assetIds: string[] }` | 返回 taskId；清单必须非空，不支持 folderId 或缺省全库。启动本地基础画面分析 |
+| `start_detailed_semantic_analysis` | `{ assetIds: string[] }` | 返回 taskId；先有同模型基础分析，使用用户已配置的 OpenAI 兼容 / Ollama provider，不配置或回显 API key |
+| `pause_semantic_analysis` | `{ taskId }` | 暂停指定任务，保留原 basic / detailed 模式 |
+| `resume_semantic_analysis` | `{ taskId }` | 返回原 taskId 或中断恢复的新 taskId，保持原模式 |
+| `cancel_semantic_analysis` | `{ taskId }` | 取消指定任务；已取消的未完成项可重试 |
+| `retry_semantic_analysis` | `{ taskId }` | 返回新 taskId，重试失败和未完成素材，保持原模式 |
+
+片段创建 1 个（2026-10-27，`tools/semantic.rs`）：
+
+| 工具 | 入参 | 回包与边界 |
+| --- | --- | --- |
+| `create_semantic_segment` | `{ assetId, segmentId, targetFolderId?, physical? }` | 返回新 `PlacementView`。`physical=false` 为引用源范围的虚拟片段，`true` 为独立物理资产；缺省放到未分类。必须有同模型版本、同分析版本与源指纹一致的命中，不允许嵌套；视频按真实 PTS，动图 / 序列帧按原始帧索引。**进撤销**，成功后广播 `mcp-library-changed` |
 
 ## 纪律（PRD 08-06 定）
 

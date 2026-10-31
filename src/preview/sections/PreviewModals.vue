@@ -70,6 +70,20 @@ const settingsMock: SettingsMockData = {
   ],
   cep: { maxSecs: 10, maxMB: 2, fps: 0 },
   version: "0.1.0",
+  semantic: {
+    device: "gpu",
+    modelDir: "D:\\AniKit模型\\clip-vit-b32-multilingual",
+    runtime: {
+      requestedBackend: "directml",
+      actualBackend: "cpu",
+      modelDir: "D:\\AniKit模型\\clip-vit-b32-multilingual",
+      runtimeDir: "D:\\AniKit运行时",
+      dimension: 512,
+    },
+    provider: { kind: "ollama", endpoint: "http://127.0.0.1:11434", model: "qwen3-vl-demo", timeoutSecs: 90 },
+    hasKey: true,
+    connection: { ok: true, message: "连接成功，已找到模型「qwen3-vl-demo」", latencyMs: 36 },
+  },
 };
 const draftFiles: ImportDraft = { kind: "files", paths: ["C:/演示/主角-走01.png"], targetFolder: null };
 const draftFolder: ImportDraft = { kind: "folder", paths: ["C:/演示/角色素材"], targetFolder: null };
@@ -365,7 +379,9 @@ function openDestTree(): void {
             自动导入 = 空间级 set_auto_import + 盘符 get_inbox_drive_letter；
             缓存 = get_cache_overview / clear_cache（全部清理走 confirmPrompt warning）+ library-thumbs-rebuilt 事件；
             插件 = cep_export_settings 读写（MB↔字节换算，护栏同后端 validate）；关于 = getVersion +
-            show_logs_in_explorer。mock 弹出 = 陈列态（isMock 早退，命令一律不发）；
+            show_logs_in_explorer。通用页另含语义分析设置（components/settings/SemanticSettings + lib/semanticSettings：
+            CPU / DirectML、模型目录、实际后端回退说明、外部 provider 与 Windows 钥匙串；sd 行样式共享 styles/settings.css）。
+            mock 弹出 = 陈列态（含 DirectML 回退 CPU、Ollama 配置与连接成功样例，命令一律不发）；
             快捷键 = 组件内静态数组（bound 标志），未接入行 = 键位降四级 +「未接入」警告橙尾标（颜色即状态区分）
           </span>
         </div>

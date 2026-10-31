@@ -7,6 +7,7 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 /// Tauri externalBin 命名约定：{name}-{target triple}
@@ -205,6 +206,242 @@ pub fn video_frame_png(path: &Path, at_secs: f64) -> Option<Vec<u8>> {
   run("ffmpeg", &args)
 }
 
+pub struct ProcessOutput {
+  pub stdout: Vec<u8>,
+  pub stderr: Vec<u8>,
+}
+
+/// 分析任务专用：可取消的 sidecar 调用。取消或超时都会杀进程并收尸，reader 线程随管道断开结束。
+pub fn run_cancellable(name: &str, args: &[String], cancel: &AtomicBool) -> Option<ProcessOutput> {
+  run_cancellable_with_timeout(name, args, cancel, PROBE_TIMEOUT)
+}
+
+pub fn run_cancellable_with_timeout(name: &str, args: &[String], cancel: &AtomicBool, timeout: Duration) -> Option<ProcessOutput> {
+  if cancel.load(Ordering::Relaxed) {
+    return None;
+  }
+  let bin = sidecar_path(name)?;
+  let mut cmd = Command::new(bin);
+  cmd.args(args).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+  #[cfg(windows)]
+  std::os::windows::process::CommandExt::creation_flags(&mut cmd, CREATE_NO_WINDOW);
+  let mut child = match cmd.spawn() {
+    Ok(c) => c,
+    Err(e) => {
+      log::warn!("{name} 启动失败：{e}");
+      return None;
+    }
+  };
+  let mut out_pipe = child.stdout.take()?;
+  let mut err_pipe = child.stderr.take()?;
+  let out_reader = std::thread::spawn(move || {
+    let mut buf = Vec::new();
+    let _ = out_pipe.read_to_end(&mut buf);
+    buf
+  });
+  let err_reader = std::thread::spawn(move || {
+    let mut buf = Vec::new();
+    let _ = err_pipe.read_to_end(&mut buf);
+    buf
+  });
+  let deadline = Instant::now() + timeout;
+  let status = loop {
+    if cancel.load(Ordering::Relaxed) {
+      let _ = child.kill();
+      let _ = child.wait();
+      return None;
+    }
+    match child.try_wait() {
+      Ok(Some(status)) => break status,
+      Ok(None) => {
+        if Instant::now() >= deadline {
+          let _ = child.kill();
+          let _ = child.wait();
+          log::warn!("{name} 超时（{}s）已终止", timeout.as_secs());
+          return None;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+      }
+      Err(e) => {
+        log::warn!("{name} 等待失败：{e}");
+        return None;
+      }
+    }
+  };
+  let stdout = out_reader.join().unwrap_or_default();
+  let stderr = err_reader.join().unwrap_or_default();
+  if !status.success() {
+    log::warn!("{name} 退出码 {:?}：{}", status.code(), String::from_utf8_lossy(&stderr).trim());
+    return None;
+  }
+  Some(ProcessOutput { stdout, stderr })
+}
+
+pub fn clip_video(source: &Path, output: &Path, start_secs: f64, duration_secs: f64, cancel: &AtomicBool) -> Result<(), String> {
+  if !start_secs.is_finite() || start_secs < 0.0 || !duration_secs.is_finite() || duration_secs <= 0.0 {
+    return Err("视频截取时间范围无效".into());
+  }
+  if !ffmpeg_available() {
+    return Err("音视频组件缺失，无法截取片段".into());
+  }
+  let mut args = vec![
+    "-v".into(), "error".into(), "-y".into(), "-ss".into(), format!("{start_secs:.6}"),
+    "-accurate_seek".into(), "-i".into(), source.to_string_lossy().into_owned(),
+    "-t".into(), format!("{duration_secs:.6}"), "-map".into(), "0:v:0".into(),
+    "-c:v".into(), "libopenh264".into(), "-b:v".into(), "3M".into(),
+  ];
+  if has_audio_stream(source) {
+    args.extend(["-map".into(), "0:a:0".into(), "-c:a".into(), "aac".into()]);
+  }
+  args.extend(["-movflags".into(), "+faststart".into(), output.to_string_lossy().into_owned()]);
+  match run_cancellable_with_timeout("ffmpeg", &args, cancel, clip_timeout(duration_secs)).filter(|_| output.is_file()) {
+    Some(_) => Ok(()),
+    None => {
+      let _ = std::fs::remove_file(output);
+      Err("视频截取失败，请检查源文件与 ffmpeg 组件".into())
+    }
+  }
+}
+
+#[derive(Clone, Copy)]
+pub enum FrameClipFormat {
+  Gif,
+  Webp,
+  Apng,
+}
+
+pub fn clip_frames(script: &Path, output: &Path, format: FrameClipFormat, duration_secs: f64, cancel: &AtomicBool) -> Result<(), String> {
+  if !duration_secs.is_finite() || duration_secs <= 0.0 {
+    return Err("帧片段时长无效".into());
+  }
+  if !ffmpeg_available() {
+    return Err("音视频组件缺失，无法截取片段".into());
+  }
+  let mut args = vec![
+    "-v".into(), "error".into(), "-y".into(), "-f".into(), "concat".into(), "-safe".into(), "0".into(),
+    "-i".into(), script.to_string_lossy().into_owned(), "-fps_mode".into(), "vfr".into(),
+    "-enc_time_base".into(), "1/1000".into(), "-t".into(), format!("{duration_secs:.6}"),
+  ];
+  match format {
+    FrameClipFormat::Gif => args.extend([
+      "-filter_complex".into(), "[0:v]split[a][b];[a]palettegen=stats_mode=full[p];[b][p]paletteuse=dither=none".into(),
+      "-loop".into(), "0".into(), "-f".into(), "gif".into(),
+    ]),
+    FrameClipFormat::Webp => args.extend(["-c:v".into(), "libwebp_anim".into(), "-lossless".into(), "1".into(), "-loop".into(), "0".into(), "-f".into(), "webp".into()]),
+    FrameClipFormat::Apng => args.extend(["-c:v".into(), "apng".into(), "-plays".into(), "0".into(), "-f".into(), "apng".into()]),
+  }
+  args.push(output.to_string_lossy().into_owned());
+  match run_cancellable_with_timeout("ffmpeg", &args, cancel, clip_timeout(duration_secs)).filter(|_| output.is_file()) {
+    Some(_) => Ok(()),
+    None => {
+      let _ = std::fs::remove_file(output);
+      Err("动图 / 序列帧截取失败，请检查源帧与 ffmpeg 组件".into())
+    }
+  }
+}
+
+fn clip_timeout(duration_secs: f64) -> Duration {
+  Duration::from_secs((duration_secs.max(0.0) * 4.0 + 300.0).clamp(300.0, 3600.0) as u64)
+}
+
+/// 精确抽帧并返回 ffmpeg 报告的真实 PTS；关键帧定位后仍精确解码到目标，copyts 保留源时间轴。
+pub fn video_frame_png_precise(path: &Path, at_secs: f64, cancel: &AtomicBool) -> Option<(Vec<u8>, f64)> {
+  let args = vec![
+    "-hide_banner".into(), "-loglevel".into(), "info".into(),
+    "-copyts".into(), "-ss".into(), format!("{at_secs:.3}"), "-accurate_seek".into(),
+    "-i".into(), path.to_string_lossy().into_owned(),
+    "-frames:v".into(), "1".into(), "-vf".into(), "showinfo".into(),
+    "-f".into(), "image2pipe".into(), "-vcodec".into(), "png".into(), "-".into(),
+  ];
+  if let Some(output) = run_cancellable("ffmpeg", &args, cancel) {
+    if !output.stdout.is_empty() {
+      if let Some(pts) = parse_pts_times(&output.stderr).into_iter().next() {
+        return Some((output.stdout, pts));
+      }
+    }
+  }
+  if cancel.load(Ordering::Relaxed) {
+    return None;
+  }
+  let duration = probe_json(path)?.get("format")?.get("duration")?.as_str()?.parse::<f64>().ok()?;
+  if (at_secs - duration).abs() > 0.002 {
+    return None;
+  }
+  video_frame_png_before(path, at_secs, cancel)
+}
+
+fn video_frame_png_before(path: &Path, at_secs: f64, cancel: &AtomicBool) -> Option<(Vec<u8>, f64)> {
+  let args = vec![
+    "-hide_banner".into(), "-loglevel".into(), "info".into(),
+    "-copyts".into(), "-ss".into(), format!("{:.3}", (at_secs - 1.0).max(0.0)), "-accurate_seek".into(),
+    "-i".into(), path.to_string_lossy().into_owned(),
+    "-vf".into(), "scale=224:-2,showinfo".into(),
+    "-f".into(), "image2pipe".into(), "-vcodec".into(), "png".into(), "-".into(),
+  ];
+  let output = run_cancellable("ffmpeg", &args, cancel)?;
+  let pts = parse_pts_times(&output.stderr).into_iter().last()?;
+  Some((last_png(&output.stdout)?.to_vec(), pts))
+}
+
+fn last_png(bytes: &[u8]) -> Option<&[u8]> {
+  const SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+  let mut position = 0;
+  let mut last = None;
+  while position + 8 <= bytes.len() {
+    if &bytes[position..position + 8] != SIGNATURE {
+      return None;
+    }
+    let start = position;
+    position += 8;
+    loop {
+      if position + 12 > bytes.len() {
+        return None;
+      }
+      let len = u32::from_be_bytes(bytes[position..position + 4].try_into().ok()?) as usize;
+      let end = position.checked_add(len + 12)?;
+      if end > bytes.len() {
+        return None;
+      }
+      let kind = &bytes[position + 4..position + 8];
+      position = end;
+      if kind == b"IEND" {
+        last = Some(&bytes[start..position]);
+        break;
+      }
+    }
+  }
+  last
+}
+
+/// 场景切分点（scene score 0.25）；失败 / 超时由调用方回退固定时间窗。
+pub fn scene_cut_times(path: &Path, cancel: &AtomicBool) -> Option<Vec<f64>> {
+  let args = vec![
+    "-hide_banner".into(),
+    "-loglevel".into(),
+    "info".into(),
+    "-i".into(),
+    path.to_string_lossy().into_owned(),
+    "-vf".into(),
+    "select='gt(scene,0.25)',showinfo".into(),
+    "-an".into(),
+    "-f".into(),
+    "null".into(),
+    "-".into(),
+  ];
+  let output = run_cancellable("ffmpeg", &args, cancel)?;
+  let times = parse_pts_times(&output.stderr);
+  if times.is_empty() { None } else { Some(times) }
+}
+
+fn parse_pts_times(stderr: &[u8]) -> Vec<f64> {
+  let text = String::from_utf8_lossy(stderr);
+  text
+    .split("pts_time:")
+    .skip(1)
+    .filter_map(|tail| tail.split_whitespace().next()?.parse::<f64>().ok())
+    .collect()
+}
+
 /// ffmpeg 解音频为 f32le PCM（sample_rate Hz，时长封顶 PCM_MAX_SECS）；
 /// channels = 声道数（1 = 混音 mono，2 = 立体声交错 LRLR…）；返回逐样本 f32；解码失败返回 None
 pub fn audio_pcm_f32(path: &Path, sample_rate: u32, channels: u16) -> Option<Vec<f32>> {
@@ -249,6 +486,36 @@ mod tests {
   fn run_returns_none_for_missing_binary() {
     // 不存在的 sidecar 名必然解析不到路径 → None，不 panic
     assert_eq!(run("definitely-not-a-real-sidecar", &[]), None);
+  }
+
+  #[test]
+  fn cancellable_precise_rejects_cancel_before_start() {
+    let cancel = AtomicBool::new(true);
+    assert!(video_frame_png_precise(Path::new("missing.mp4"), 0.0, &cancel).is_none());
+  }
+
+  #[test]
+  fn png_stream_selects_the_last_complete_frame() {
+    let png = b"\x89PNG\r\n\x1a\n\0\0\0\0IEND\0\0\0\0";
+    let bytes = [png.as_slice(), png.as_slice()].concat();
+    assert_eq!(last_png(&bytes).unwrap(), png);
+    assert!(last_png(&bytes[..bytes.len() - 1]).is_none());
+  }
+
+  #[test]
+  #[ignore]
+  fn precise_frame_smoke() {
+    let sample = Path::new(env!("CARGO_MANIFEST_DIR")).join("../spike/decode-proto/testdata/big.mp4");
+    if !sample.is_file() {
+      return;
+    }
+    let cancel = AtomicBool::new(false);
+    let (png, pts) = video_frame_png_precise(&sample, 0.25, &cancel).expect("精确抽帧应成功");
+    assert!(png.starts_with(b"\x89PNG"));
+    assert!(pts >= 0.25, "实际 PTS 不应早于请求：{pts}");
+    let (last, pts) = video_frame_png_precise(&sample, 9.999, &cancel).expect("末帧应成功");
+    assert!(last.starts_with(b"\x89PNG"));
+    assert!((9.9..10.0).contains(&pts), "末帧真实 PTS 应在源时长内：{pts}");
   }
 
   /// 需要真二进制 + 真媒体文件：cargo test -- --ignored ffmpeg_probe --nocapture

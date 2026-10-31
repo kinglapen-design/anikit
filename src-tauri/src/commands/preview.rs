@@ -12,7 +12,6 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::adapters::shell_open;
 use crate::commands::library::AppState;
-use crate::core::json_io::read_json;
 use crate::core::library::Library;
 use crate::core::models::AssetMeta;
 use crate::services::preview_queue::{self, PreviewTask};
@@ -53,13 +52,16 @@ pub async fn get_asset_file_path(state: State<'_, AppState>, asset_id: String) -
 
 fn asset_file_path(lib: &Library, asset_id: &str) -> Result<AssetFilePath, String> {
   let (_info_dir, origin, meta) = locate_asset(lib, asset_id)?;
+  if meta.r#type.as_deref() == Some("segment") && crate::services::anim::is_animated_file(&meta, &origin) {
+    return Ok(AssetFilePath { path: None, pending: false, anim_preview: None });
+  }
   let ext = meta.ext.to_lowercase();
   if is_webview_direct(&ext) {
     // 动图（gif/webp 多帧）：小动画缓存命中直给；未命中提交后台懒生成（存量旧动图首次播放
     // 回退原文件、生成完成经 preview-anim-ready 热切换）。cfg(not(test)) 同 sequence_frames 自愈——
     // 单测共享全局 worker，submit 会与测试手动生成并发写同一临时库（偶发竞态）；
     // 懒生成是薄包装，队列与生成各有独立测试
-    let anim_preview = if crate::services::anim::is_anim(&meta) {
+    let anim_preview = if crate::services::anim::is_animated_file(&meta, &origin) {
       let hit = crate::services::anim_preview::fresh_anim_preview(&lib.assets_dir, asset_id, &meta.origin_name);
       #[cfg(not(test))]
       if hit.is_none() {
@@ -101,6 +103,8 @@ pub struct SequenceFrames {
   /// 封面帧文件名（frames/ 内归一名；metadata 未记时为 null）
   pub thumb_frame: Option<String>,
   pub frames: Vec<FrameEntry>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub segment: Option<crate::services::semantic::types::SegmentRange>,
 }
 
 /// 单帧条目
@@ -130,16 +134,18 @@ pub async fn list_sequence_frames(state: State<'_, AppState>, asset_id: String) 
 }
 
 fn sequence_frames(lib: &Library, asset_id: &str) -> Result<SequenceFrames, String> {
-  let (info_dir, _origin, meta) = locate_asset(lib, asset_id)?;
-  if crate::services::anim::is_anim(&meta) {
+  let playback = crate::services::semantic::playback::resolve(&lib.assets_dir, asset_id)?;
+  let (info_dir, origin, meta) = (playback.info_dir, playback.origin, playback.meta);
+  if crate::services::anim::is_animated_file(&meta, &origin) {
     return Err(format!("「{}」是动图资源，无序列帧清单（播放/帧条走帧流）", meta.name));
   }
   let frames_dir = info_dir.join("frames");
   if !frames_dir.is_dir() {
     return Err(format!("「{}」不是序列帧资源", meta.name));
   }
-  let frames = scan_frames(lib, asset_id, &frames_dir);
-  Ok(SequenceFrames { fps: Some(meta.fps.unwrap_or(DEFAULT_FPS)), thumb_frame: meta.thumb_frame, frames })
+  let frames = scan_frames(lib, asset_id, &frames_dir)?;
+  let segment = crate::services::semantic::playback::range_from_meta(&meta)?;
+  Ok(SequenceFrames { fps: Some(meta.fps.unwrap_or(DEFAULT_FPS)), thumb_frame: meta.thumb_frame, frames, segment })
 }
 
 /// 动图帧条清单（阶段四·解包废除，2026-08-20）：返回已缓存帧条（cache/frames/{id}/f-*.webp，
@@ -154,7 +160,7 @@ pub async fn prepare_anim_strips(state: State<'_, AppState>, asset_id: String) -
 
 fn prepare_anim_strips_inner(lib: &Library, asset_id: &str) -> Result<AnimStrips, String> {
   let (_info_dir, origin, meta) = locate_asset(lib, asset_id)?;
-  if !crate::services::anim::is_anim(&meta) {
+  if !crate::services::anim::is_animated_file(&meta, &origin) {
     return Err(format!("「{}」不是动图资源", meta.name));
   }
   // 已缓存清单（扫目录而非按 frameCount 推导——探测帧数与实际帧数可能出入）
@@ -201,22 +207,13 @@ fn scan_frames(
   lib: &Library,
   asset_id: &str,
   frames_dir: &std::path::Path,
-) -> Vec<FrameEntry> {
-  let mut names: Vec<String> = fs::read_dir(frames_dir)
-    .map(|rd| {
-      rd.filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.is_file())
-        .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
-        .collect()
-    })
-    .unwrap_or_default();
-  names.sort();
+) -> Result<Vec<FrameEntry>, String> {
+  let paths = crate::services::sequence::ordered_frame_paths(frames_dir)?;
   let mut uncached: Vec<(String, PathBuf)> = Vec::new();
-  let frames = names
+  let frames = paths
     .into_iter()
-    .map(|name| {
-      let full = frames_dir.join(&name);
+    .map(|full| {
+      let name = full.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
       let strip_path = thumbnail::frame_strip_path(&lib.root, asset_id, &name);
       if strip_path.is_none() {
         uncached.push((name.clone(), full.clone()));
@@ -231,7 +228,7 @@ fn scan_frames(
       frames: uncached,
     });
   }
-  frames
+  Ok(frames)
 }
 
 // ---------- 默认程序打开 ----------
@@ -340,13 +337,8 @@ pub(crate) fn open_child_window(
 /// 定位资源：读 metadata + 推导 info 目录与源文件绝对路径（PRD 01-2.3：真实路径不存绝对路径，由 ID 推导）
 /// pub(crate)：thumb_frame / anim 等预览系命令共用
 pub(crate) fn locate_asset(lib: &Library, asset_id: &str) -> Result<(PathBuf, PathBuf, AssetMeta), String> {
-  let info_dir = lib.info_dir(asset_id);
-  if !info_dir.is_dir() {
-    return Err(format!("资源不存在：{asset_id}"));
-  }
-  let meta: AssetMeta = read_json(&info_dir.join("metadata.json")).map_err(|e| e.to_string())?;
-  let origin = info_dir.join(&meta.origin_name);
-  Ok((info_dir, origin, meta))
+  let playback = crate::services::semantic::playback::resolve(&lib.assets_dir, asset_id)?;
+  Ok((playback.target_info_dir, playback.origin, playback.meta))
 }
 
 #[cfg(test)]

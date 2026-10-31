@@ -37,7 +37,7 @@ const props = withDefaults(
   },
 );
 const emit = defineEmits<{
-  "search-click": []; // 预留：未来向量 / AI 搜索选项
+  "search-click": [ev: MouseEvent]; // 搜索模式（智能回退 / 分词 / 语义）
   "filter-toggle": [key: string, ev: MouseEvent]; // 业务壳开合对应筛选弹窗（ev = 触发钮定位）
   "expanded-change": [v: boolean]; // FloatBar 宽度重测挂钩
   "focused-change": [v: boolean];
@@ -91,7 +91,7 @@ function onFiltersWheel(e: WheelEvent): void {
     class="fb-mode fbs-root"
     :class="[{ expanded, focused: focused || forceState === 'focus' }]"
   >
-    <button class="fbs-ic search" @click="emit('search-click')">
+    <button class="fbs-ic search" @mousedown.prevent @click="emit('search-click', $event)">
       <AppIcon name="search" :size="18" />
     </button>
     <input

@@ -1,7 +1,9 @@
 # 组装 + 打包 AniKit 免安装包（既定流程：tauri build --no-bundle 产物 → portable 目录 → zip）
-# 用法：tools/.venv/Scripts/python.exe tools/pack-portable.py [YYYYMMDD]
+# 用法：tools/.venv/Scripts/python.exe tools/pack-portable.py YYYYMMDD [输出目录名]
 # 来源：开发日志 2026-09-26_19 / 2026-10-03_09 既定流程
+import hashlib
 import io
+import json
 import shutil
 import subprocess
 import sys
@@ -14,8 +16,44 @@ VENDOR_BIN = ROOT / "src-tauri" / "vendor" / "ffmpeg" / "bin"
 BINARIES = ROOT / "src-tauri" / "binaries"
 PLUGINS = ROOT / "plugins" / "animate-cep"
 OBSIDIAN_PLUGIN = ROOT / "plugins" / "obsidian-anikit-paste"  # 源目录可能暂缺，存在才拷
-OUT_DIR = ROOT / "release" / "anikit-portable-new"
+MODEL_SOURCE = ROOT / "assets" / "models" / "multilingual-v1"
+MODEL_REVISION = "58edf8cada9e398793dca955574a48cbb7f18be2+3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268"
+OUT_NAME = sys.argv[2] if len(sys.argv) > 2 else "anikit-portable-new"
+if Path(OUT_NAME).name != OUT_NAME or OUT_NAME in {"", ".", ".."}:
+    raise SystemExit("输出目录名只能是 release 下的单个目录名")
+OUT_DIR = ROOT / "release" / OUT_NAME
 ZIP_ROOT_NAME = "anikit-portable"  # zip 包内根目录名（用户既定口径）
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def validate_model() -> bool:
+    manifest_path = MODEL_SOURCE / "model-manifest.json"
+    if not manifest_path.is_file():
+        print(f"缺离线模型：{manifest_path}（先跑 python tools/prepare-semantic-model.py）")
+        return False
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if f"{manifest['text_model_revision']}+{manifest['image_model_revision']}" != MODEL_REVISION:
+        print("离线模型 revision 与后端固定版本不一致")
+        return False
+    records = {item["path"]: item for item in manifest["files"]}
+    for name in ["text.onnx", "vision.onnx", "tokenizer.json"]:
+        key = f"models/{name}"
+        path = MODEL_SOURCE / key
+        if not path.is_file() or sha256(path) != records[key]["sha256"]:
+            print(f"离线模型校验失败：{key}")
+            return False
+    for name in ["Apache-2.0.txt", "OpenAI-CLIP-LICENSE.txt", "THIRD_PARTY_NOTICES.md"]:
+        if not (MODEL_SOURCE / "notices" / name).is_file():
+            print(f"缺模型许可文件：{name}")
+            return False
+    return True
 
 
 def main() -> int:
@@ -45,6 +83,8 @@ def main() -> int:
         if not (BINARIES / f"{sidecar}-x86_64-pc-windows-msvc.exe").is_file():
             print(f"缺 sidecar：{sidecar}（先跑 python tools/fetch-ffmpeg.py）")
             return 2
+    if not validate_model():
+        return 2
 
     # 2. 组装（OUT_DIR 整目录镜像 = 产物集）
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -59,6 +99,10 @@ def main() -> int:
     if (OUT_DIR / "semantic-runtime").exists():
         shutil.rmtree(OUT_DIR / "semantic-runtime")
     shutil.copytree(semantic_runtime, OUT_DIR / "semantic-runtime")
+    if (OUT_DIR / "models").exists():
+        shutil.rmtree(OUT_DIR / "models")
+    model_out = OUT_DIR / "models" / "multilingual-v1" / MODEL_REVISION
+    shutil.copytree(MODEL_SOURCE, model_out)
     # plugins/animate-cep 整树镜像
     if (OUT_DIR / "plugins" / "animate-cep").exists():
         shutil.rmtree(OUT_DIR / "plugins" / "animate-cep")

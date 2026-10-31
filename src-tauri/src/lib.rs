@@ -5,6 +5,11 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
+// Tauri 默认资源只链接 bins；lib 单测也需 Common Controls v6，否则 rfd 在装载期即失败。
+#[cfg(test)]
+#[link(name = "resource", kind = "static")]
+unsafe extern "C" {}
+
 mod adapters;
 mod commands;
 // pub：anikit-paste 独立 bin（src/bin/）复用 config_path / INBOX_DIR / anikit_ref，防目录名漂移
@@ -116,26 +121,35 @@ fn show_main_window(w: &tauri::WebviewWindow, emit_shown: bool) {
   }
 }
 
+fn with_single_instance(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+  // 隔离验收可并行于用户实例；必须同时提供独立 ANIKIT_CONFIG_DIR，默认单实例行为不变。
+  if std::env::var_os("ANIKIT_E2E").is_some() {
+    return builder;
+  }
+  builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+    if let Some(w) = app.get_webview_window("main") {
+      show_main_window(&w, false);
+    }
+    if let Some((kind, id)) = adapters::deep_link::parse_args(&args) {
+      let _ = app.emit("media-open", serde_json::json!({ "kind": kind, "id": id }));
+    }
+  }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   // WebView2 色彩管理对齐（2026-07-23 偏色排查）：WebView2 与 Edge 在 BT2020 广色域屏上
   // 色彩表现不一致（WebView2 已知问题 WebViewFeedback #141/#4245）——Edge/Figma 偏紫、
   // 软件偏灰，暗部最明显。强制按 sRGB 渲染，保证设计稿（sRGB）在软件内所见即所得。
-  // 须在 webview 创建前设置。
+  // 须在 webview 创建前设置；保留调用方已有的远程调试等参数。
   #[cfg(windows)]
-  std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--force-color-profile=srgb");
+  {
+    let existing = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default();
+    let separator = if existing.trim().is_empty() { "" } else { " " };
+    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", format!("{existing}{separator}--force-color-profile=srgb"));
+  }
 
-  tauri::Builder::default()
-    // 单实例必须最先注册：二次启动时聚焦已有窗口；deep-link 点击 = 系统以 URL 参数拉起——
-    // 运行中实例直接收 media-open 跳转（2026-10-08 deep-link 复活，零浏览器标签页）
-    .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-      if let Some(w) = app.get_webview_window("main") {
-        show_main_window(&w, false);
-      }
-      if let Some((kind, id)) = adapters::deep_link::parse_args(&args) {
-        let _ = app.emit("media-open", serde_json::json!({ "kind": kind, "id": id }));
-      }
-    }))
+  with_single_instance(tauri::Builder::default())
     .plugin(tauri_plugin_global_shortcut::Builder::new().build())
     .plugin(tauri_plugin_dialog::init())
     .manage(commands::library::AppState {
@@ -146,6 +160,7 @@ pub fn run() {
       workspace: std::sync::Mutex::new(Vec::new()),
       undo: std::sync::Mutex::new(core::undo::UndoManager::default()),
       ws_searches: std::sync::Mutex::new(std::collections::HashMap::new()),
+      semantic_tasks: std::sync::Mutex::new(std::collections::HashMap::new()),
     })
     .setup(|app| {
       // 日志 release 同样启用（2026-09-29 兼容轮：朋友机透明子窗口创建失败零提示零日志，
@@ -162,6 +177,26 @@ pub fn run() {
           .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(2))
           .build(),
       )?;
+      if std::env::var_os("ANIKIT_E2E").is_some() && app.get_webview_window("main").is_none() {
+        let port = std::env::var("ANIKIT_CDP_PORT").unwrap_or_else(|_| "19333".into());
+        let args = format!("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --force-color-profile=srgb --remote-debugging-port={port}");
+        let browser_dir = std::env::var_os("ANIKIT_CONFIG_DIR").map(std::path::PathBuf::from).ok_or_else(|| "ANIKIT_E2E 需要 ANIKIT_CONFIG_DIR".to_string())?.join("webview");
+        std::fs::create_dir_all(&browser_dir)?;
+        tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
+          .data_directory(browser_dir)
+          .title("AniKit")
+          .inner_size(1340.0, 1150.0)
+          .resizable(true)
+          .decorations(false)
+          .transparent(false)
+          .theme(Some(tauri::Theme::Dark))
+          .shadow(true)
+          .center()
+          .visible(false)
+          .additional_browser_args(&args)
+          .build()?;
+        log::info!("验收窗口浏览器参数：{args}");
+      }
 
       // 预览解析队列（4.3 预览窗口）：单 worker 串行执行 psd 解码 / 帧条生成，
       // 提交新任务作废旧任务（快速切换素材不堆积），须在命令可达前初始化
@@ -189,7 +224,9 @@ pub fn run() {
 
       // anikit:// 系统协议注册（2026-10-08 deep-link 复活，PRD 02-09）：HKCU 注册表幂等覆写
       //（exe 漂移自愈），外部点击零浏览器标签页直达；冷启动带链接参数存 pending 待前端消费
-      adapters::deep_link::ensure_registered();
+      if std::env::var_os("ANIKIT_E2E").is_none() {
+        adapters::deep_link::ensure_registered();
+      }
       if let Some(r) = adapters::deep_link::parse_args(&std::env::args().collect::<Vec<_>>()) {
         adapters::deep_link::set_pending(r);
       }
@@ -293,6 +330,10 @@ pub fn run() {
         }
         let _ = w.show();
         let _ = w.set_focus();
+        #[cfg(debug_assertions)]
+        if std::env::var_os("ANIKIT_E2E").is_some() {
+          w.open_devtools();
+        }
 
         #[cfg(target_os = "windows")]
         {
@@ -514,6 +555,21 @@ pub fn run() {
       commands::semantic::get_semantic_settings,
       commands::semantic::save_semantic_settings,
       commands::semantic::test_semantic_runtime,
+      commands::semantic::start_semantic_analysis,
+      commands::semantic::get_semantic_analysis_task,
+      commands::semantic::list_semantic_analysis_tasks,
+      commands::semantic::pause_semantic_analysis,
+      commands::semantic::resume_semantic_analysis,
+      commands::semantic::cancel_semantic_analysis,
+      commands::semantic::retry_semantic_analysis,
+      commands::semantic::semantic_search,
+      commands::semantic::create_semantic_segment,
+      commands::semantic::start_detailed_semantic_analysis,
+      commands::semantic::get_semantic_provider_settings,
+      commands::semantic::save_semantic_provider_settings,
+      commands::semantic::set_semantic_provider_key,
+      commands::semantic::clear_semantic_provider_key,
+      commands::semantic::test_semantic_provider,
       commands::preview::open_with_default_app,
       commands::preview::open_preview_window,
       commands::asset_menu::open_with_dialog,

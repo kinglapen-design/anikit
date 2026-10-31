@@ -44,3 +44,9 @@ design/
 tools/test-assets/
 # Obsidian 个人配置（窗口状态等，不入库）
 docs/.obsidian/
+
+# 语义离线模型文件与隔离验收产物（prepare-semantic-model.py / 探针可再生）
+assets/models/*/models/
+assets/models/*/assets/
+tools/style-preview/semantic-e2e/
+.cache/

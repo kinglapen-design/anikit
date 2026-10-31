@@ -22,6 +22,7 @@ import { openPathWithDefaultApp } from "../lib/wsOps";
 import { useSearchStore } from "./search";
 import { useTabsStore } from "./tabs";
 import { StreamSession, type StreamFrame } from "../lib/streamClient";
+import { segmentFrameCount, type SegmentRange } from "../lib/semantic";
 
 // 播放帧（5.2 改版）：命令原始结构见 lib/mediaOps（FrameEntry.delayMs 序列帧恒 null）——
 // 加载时统一预填 delayMs（动图用后端逐帧下发值；序列帧按 1000/fps），播放引擎按帧时长/rate 驱动。
@@ -47,7 +48,7 @@ function previewList(panelId: string, viewKey: string, content: ReturnType<typeo
     if (search.isActive(panelId)) return search.wsPlacementsFor(panelId);
     return content.placementsFor(viewKey);
   }
-  if (search.isActive(panelId)) return content.placementsFor(viewKey);
+  if (search.isActive(panelId)) return search.resultPlacementsFor(panelId, viewKey);
   return content.displayOrderFor(viewKey);
 }
 
@@ -128,6 +129,7 @@ function buildPreviewStore(panelId: string) {
       fontSize: 15,
       // 帧播放（序列帧 rAF 引擎 / 动图帧流共用状态：frame = 当前帧索引，playing/rate 双向同步会话）
       seq: null as { thumbFrame: string | null; frames: PlayFrame[] } | null,
+      segment: null as SegmentRange | null,
       frame: 0, // 当前帧索引（frames 数组下标 / 动图源帧索引，非帧号）
       playing: false,
       rate: 1,
@@ -212,9 +214,12 @@ function buildPreviewStore(panelId: string) {
     },
     actions: {
       // 进入预览（双击卡片 / 查看大图按钮）：属主 = 会话本身（per-panel 工厂参数），不再快照激活面板
-      async open(key: string): Promise<void> {
+      async open(key: string, segment?: import("../lib/semantic").SegmentHit | null): Promise<void> {
         this.assetKey = key;
         await this.loadAsset();
+        if (this.assetKey !== key) return;
+        const target = segment === undefined ? useSearchStore().semanticHitFor(panelId, key.split("|")[0])?.best : segment;
+        if (target) this.seekToSegment(target);
       },
       // 退出预览
       close(): void {
@@ -225,6 +230,7 @@ function buildPreviewStore(panelId: string) {
         if (this.fullscreen) void this.setFullscreen(false);
         this.assetKey = null;
         this.seq = null;
+        this.segment = null;
         this.playing = false;
         this.animFrame = null;
         this.animTotal = 0;
@@ -273,11 +279,13 @@ function buildPreviewStore(panelId: string) {
         this.animTotal = 0;
         this.animStrips = {};
         this.resetView();
+        this.segment = null;
         const p = this.current;
         if (!p) {
           this.assetKey = null;
           return;
         }
+        this.segment = p.segment ?? null;
         this.filePath = p.thumbPath; // 秒显：info 缩略图（格式图标同路径，other 情形也先盖住旧图）
         const ext = p.ext.toLowerCase();
         // 工作空间磁盘实况（PRD 02 步骤 1 + 2026-10-23 文档预览放行）：assetId = ws: 合成假 id，
@@ -328,6 +336,7 @@ function buildPreviewStore(panelId: string) {
           this.kind = "sequence";
           const r = await listSequenceFrames(p.assetId);
           if (this.current?.assetId !== p.assetId) return; // await 期间已切走
+          this.segment = r.segment ?? this.segment;
           this.seq = {
             thumbFrame: r.thumbFrame,
             frames: r.frames.map((f) => ({ ...f, delayMs: 1000 / (r.fps ?? 24) })),
@@ -396,7 +405,8 @@ function buildPreviewStore(panelId: string) {
       // 动图加载（阶段四·预览对接帧流 + 解包废除，2026-08-20 用户定案）：
       // 播放 = WS 帧流渲染 canvas（对 origin 运行时解码）；帧条 = prepare_anim_strips 按需解码
       // （cache/frames 会话级，事件渐进补齐）；设封面 / 笔记帧画面 = 后端 `f:{索引}` 抽帧。
-      // 全部不依赖磁盘帧图（frames/ 导入解包已废除）。帧流失败回退原生 <img> 播源文件（无播放条）。
+      // 全部不依赖磁盘帧图（frames/ 导入解包已废除）。普通动图帧流失败回退原生 <img>；
+      // 虚拟片段失败保持封面并报错，不得退回播放整个源文件。
       async loadAnim(assetId: string): Promise<void> {
         stopStream();
         this.animFrame = null;
@@ -412,16 +422,22 @@ function buildPreviewStore(panelId: string) {
           return;
         }
         streamSession = s;
+        this.segment = s?.segment ?? this.segment;
         if (s) {
           this.playing = true; // 会话默认即播（进入自动播放，同 2026-07-25 用户定）
           s.setRate(this.rate); // 倍速跨素材保持，同步进新会话
-          this.animTotal = this.current?.frameCount ?? 0;
+          this.animTotal = segmentFrameCount(this.segment) || (this.current?.frameCount ?? 0);
+          this.frame = this.segment?.startFrame ?? this.frame;
           // 封面帧定位（对齐原 initFrame 行为：封面帧为初始帧，播放中 seek 后继续播）：
           // thumbFrame 新格式 = `f:{索引}`；存量帧名（{标题}-00042.webp）按尾号兼容解析
           const cover = animCoverIndex(this.current?.thumbFrame);
           if (cover !== null && cover > 0) this.setFrame(cover);
+        } else if (this.segment) {
+          this.playing = false;
+          this.kind = "other";
+          this.error = "动图片段帧流不可用，无法按原始帧范围播放";
+          return;
         } else {
-          // 帧流失败回退：原生 <img> 播源文件（gif/webp 直渲格式返回源路径；取不到则保持缩略图）
           this.playing = false;
           const f = await getAssetFilePath(sourceId);
           if (this.current?.assetId !== assetId || this.kind !== "anim") return;
@@ -449,7 +465,7 @@ function buildPreviewStore(panelId: string) {
         }
         this.animFrame = markRaw(f);
         this.frame = f.frameIndex;
-        if (f.frameIndex + 1 > this.animTotal) this.animTotal = f.frameIndex + 1;
+        if (!this.segment && f.frameIndex + 1 > this.animTotal) this.animTotal = f.frameIndex + 1;
         if (this.naturalW !== f.w || this.naturalH !== f.h) this.onImageLoad(f.w, f.h, true);
       },
       // 出帧尺寸跟随显示尺寸（帧短边 × zoom；PreviewPanel watchEffect 驱动：viewW/H/zoom 变化）
@@ -460,13 +476,15 @@ function buildPreviewStore(panelId: string) {
       // 帧播放进入点（序列帧/动图共用）：封面帧为初始帧，进入自动播放（2026-07-25 用户定）
       initFrame(): void {
         if (!this.seq) return;
+        const start = this.segment?.startFrame ?? 0;
+        const end = this.segment?.endFrame ?? this.seq.frames.length - 1;
         const cover = this.seq.thumbFrame
           ? this.seq.frames.findIndex((f) => f.name === this.seq!.thumbFrame)
           : -1;
-        this.frame = cover >= 0 ? cover : 0;
+        this.frame = cover >= start && cover <= end ? cover : start;
         const f = this.seq.frames[this.frame];
         if (f?.fullPath) this.filePath = f.fullPath;
-        if (this.seq.frames.length >= 2) this.play();
+        if (end > start) this.play();
       },
       resetView(): void {
         this.zoom = 1;
@@ -523,17 +541,36 @@ function buildPreviewStore(panelId: string) {
         this.flipH = !this.flipH;
       },
       // —— 帧播放（序列帧 rAF 引擎；动图 = 帧流会话命令，5.2 交互语义不变）——
+      seekToSegment(hit: import("../lib/semantic").SegmentHit): void {
+        if (this.kind === "video") {
+          previewMediaSession(panelId).seek(hit.startMs / 1000);
+          return;
+        }
+        if (this.kind !== "anim" && this.kind !== "sequence") return;
+        if (hit.startFrame === null) {
+          useToastStore().notify({ message: "该语义片段缺少原始帧索引，无法定位", icon: "fail" });
+          return;
+        }
+        if (this.kind === "anim" && !streamSession) {
+          useToastStore().notify({ message: "动图帧流未就绪，暂时无法定位到该帧", icon: "fail" });
+          return;
+        }
+        this.setFrame(hit.startFrame);
+      },
       setFrame(i: number): void {
+        const start = this.segment?.startFrame ?? 0;
         if (this.kind === "anim" && streamSession) {
-          const n = Math.max(1, this.animTotal);
-          const t = Math.min(n - 1, Math.max(0, i));
+          const fallback = this.animTotal > 0 ? this.animTotal - 1 : Math.max(0, i);
+          const end = this.segment?.endFrame ?? fallback;
+          const t = Math.min(end, Math.max(start, i));
           this.frame = t; // 乐观更新帧号；目标帧到达前忽略在途旧帧
           seekTarget = t;
           streamSession.seek(t);
           return;
         }
         if (!this.seq || this.seq.frames.length === 0) return;
-        this.frame = Math.min(this.seq.frames.length - 1, Math.max(0, i));
+        const end = this.segment?.endFrame ?? this.seq.frames.length - 1;
+        this.frame = Math.min(end, Math.max(start, i));
         const f = this.seq.frames[this.frame];
         if (f.fullPath) this.filePath = f.fullPath; // 路径缺失兜底：保持当前画面
         this.preloadAround();
@@ -556,7 +593,8 @@ function buildPreviewStore(panelId: string) {
           streamSession.setPlaying(true);
           return;
         }
-        if (!this.seq || this.seq.frames.length < 2 || this.playing) return;
+        if (!this.seq || this.playing) return;
+        if (this.segment ? segmentFrameCount(this.segment) < 2 : this.seq.frames.length < 2) return;
         this.playing = true;
         lastT = performance.now();
         acc = 0;
@@ -569,7 +607,9 @@ function buildPreviewStore(panelId: string) {
           while (guard++ < 8) {
             const interval = Math.max(16, this.seq.frames[this.frame].delayMs / this.rate);
             if (acc < interval) break;
-            const next = (this.frame + 1) % n;
+            const next = this.segment
+              ? this.frame >= (this.segment.endFrame ?? this.frame) ? (this.segment.startFrame ?? 0) : this.frame + 1
+              : (this.frame + 1) % n;
             if (!this.seq.frames[next].fullPath) {
               acc = 0; // 下一帧路径缺失：停住等就绪（不追帧防跳变；解包帧正常恒有路径）
               break;
@@ -602,10 +642,13 @@ function buildPreviewStore(panelId: string) {
       },
       // 预加载相邻帧（防切帧白闪；路径缺失帧跳过）
       preloadAround(): void {
-        if (!this.seq) return;
+        if (!this.seq || this.seq.frames.length === 0) return;
         const n = this.seq.frames.length;
+        const start = this.segment?.startFrame ?? 0;
+        const count = segmentFrameCount(this.segment) || n;
         for (const d of [1, 2, -1]) {
-          const f = this.seq.frames[(this.frame + d + n) % n];
+          const offset = ((this.frame - start + d) % count + count) % count;
+          const f = this.seq.frames[start + offset];
           if (f?.fullPath) {
             const img = new Image();
             img.src = convertFileSrc(f.fullPath);

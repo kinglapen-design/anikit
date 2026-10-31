@@ -316,6 +316,18 @@ pub struct AssetDetail {
   pub thumb_used_by: Vec<ThumbLinkItem>,
   /// 提示词绑定（2026-09-26 提示词轮，PRD 03_数据链接 02_文件）：引用 + 内容快照；未指定 = null
   pub prompt: Option<PromptBinding>,
+  #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
+  pub r#type: Option<String>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub source: Option<String>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub start: Option<f64>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub end: Option<f64>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub start_frame: Option<u32>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub end_frame: Option<u32>,
 }
 
 /// 缩略图区块一条（8.1，2026-09-23）：assetId + 显示名（首条 Placement 名，无则 originName）
@@ -425,6 +437,12 @@ pub(crate) fn asset_detail(lib: &Library, asset_id: &str) -> Result<AssetDetail,
     thumb_asset: thumb_link_of(lib, meta),
     thumb_used_by: thumb_users_of(lib, meta),
     prompt: meta.prompt.clone(),
+    r#type: meta.r#type.clone(),
+    source: meta.source.clone(),
+    start: meta.start,
+    end: meta.end,
+    start_frame: meta.start_frame,
+    end_frame: meta.end_frame,
   })
 }
 

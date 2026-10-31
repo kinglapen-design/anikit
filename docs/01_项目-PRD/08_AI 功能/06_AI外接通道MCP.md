@@ -50,6 +50,14 @@
 
 **只读补批 `list_links`（2026-10-12 用户定，第九个只读工具）**：全库链接 Placement 清单——「资产留大池、链接进场次」组织习惯的可见性配套：AI 建链接（`link_placements`）后需要能回查哪些文件是链接、链在哪个文件夹、原件在哪。无参全库列举（链接体量小，不破省 token 口径；替代「全量 `list_placements` 自行过滤 origin」的重路径），逐条回 `assetId / ext / link / origin / uri`——link 与 origin 均复用详情链接区块 `PlacementLink` 结构（folderId 为 null = 未分类 root / blockName / path 路径链 / name），origin = null 表示原始 Placement 已不在库（进回收站或彻底删除）；uri = http open 点击跳转形态（2026-10-08 S5 同口径）。工具面 21 → 22（只读 9 + 写 13）。
 
+### 语义检索与任务工具（2026-10-25）
+
+语义分析接入同一命令服务层，不另造检索或任务管线。只读工具为 `semantic_search`、`get_semantic_analysis_task`、`list_semantic_analysis_tasks`。语义检索支持中文查询、文件夹范围与递归选项，返回素材的最佳片段、其他命中段和真实时间戳 / 帧索引；只查询已有派生索引，不因查询自动分析素材。首次查询可能加载本地文本模型，但不调用外部 provider。
+
+任务工具为 `start_semantic_analysis`、`start_detailed_semantic_analysis`、`pause_semantic_analysis`、`resume_semantic_analysis`、`cancel_semantic_analysis`、`retry_semantic_analysis`。它们属于受控写操作，逐次经过现有 MCP 写入闸，不进素材结构撤销栈；索引进度经任务检查点恢复。启动分析必须提供非空 `assetIds`，**不向 Agent 开放缺省全库或目录批扫**。详细分析只访问用户已配置的 provider，不在 MCP 返回或配置工具中暴露 API key。暂停、恢复、取消和重试仅作用于当前素材库的任务，恢复与重试保持原任务的基础 / 详细模式。
+
+命中片段新增 `create_semantic_segment`（2026-10-27）：输入 `assetId + segmentId + targetFolderId? + physical?`，虚拟片段引用源范围，物理截取为独立普通资产；必须同模型 / 分析版本和源指纹，禁止嵌套。创建进入普通撤销，成功后广播库变更。工具面为 **32 个 = 只读 12 + 写 20**，其中创建片段等 12 个写工具进撤销，文本覆写 / 导入及六个语义任务工具共 8 个不进撤销。
+
 ### 阶段表
 
 ① 本 PRD 立项（2026-09-19）→ ② **只读 MCP**（2026-09-19 落地，Codex 真库验证跑通）→ ③ **写入闸首批**（2026-09-19 落地，形态 A + 三写工具 + 偏好设置弹窗）→ ④ **二批结构性五件套**（create_folder / move_placements / link_placements / move_folders / import_paths 方案一冲突策略，2026-09-19 定案并落地）→ ⑤ **三批 trash_placements**（库内回收站可逆删除：允许 AI 丢回收站、彻底删除永不经 MCP，2026-09-20 定案并落地）→ ⑥ **MCP 条目化进插件面板**（2026-09-20 落地：桥接类「AI 外接通道（MCP）」条目 + 详情窗四组——服务总开关 / 允许写入挪入 / 使用教程含 Agent 接入配置复制 / 功能列表 / 路径；偏好设置弹窗退役）→ ⑦ **四批 set_folder_groups**（分组定义写工具：场次规则组的 Agent 侧入口，全量草稿式提交 + 新组 id 后端生成，2026-10-08 定案）→ ⑧ **五批 rename_folders**（文件夹改名 / 批量改名：APP 文件夹批量重命名的 Agent 侧入口，失败跳过汇总、进撤销，2026-10-11 定案并落地）→ ⑨ **只读补批 list_links**（全库链接 Placement 清单：链接位置 + 原始位置（PlacementLink 结构）+ uri，「链接进场次」习惯的可见性配套，2026-10-12 定案并落地）→ ⑩ 余量批（属性词 / 描述 / 打标记；一键写 Agent 配置、已配置工具检测随该批再评）。可选起步垫（库索引导出小命令）未做、随需要再评。接口文档 `docs/05_接口文档/MCP通道.md` + `MCP使用指南.md` 随开发同步。

@@ -12,9 +12,9 @@ export default defineConfig({
     port: 5373,
     strictPort: true,
     watch: {
-      // cargo 构建产物会被 vite 监视并报 EBUSY，必须排除；
+      // cargo 构建产物会被 vite 监视并报 EBUSY，必须排除；离线模型、发布产物与隔离验收库也不是前端模块。
       // .pnpm-store = 项目内 pnpm 包存储（2026-09-13 迁入，pnpm-workspace.yaml storeDir），内容不变、无需监视
-      ignored: ["**/src-tauri/**", "**/.pnpm-store/**"],
+      ignored: ["**/src-tauri/**", "**/.pnpm-store/**", "**/assets/models/**", "**/release/**", "**/tools/style-preview/semantic-e2e/**"],
     },
   },
 });

@@ -83,6 +83,23 @@ fn is_image_ext(ext: &str) -> bool {
   matches!(ext, "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp")
 }
 
+pub(crate) fn ordered_frame_paths(frames_dir: &Path) -> Result<Vec<PathBuf>, String> {
+  let mut frames = Vec::new();
+  for entry in fs::read_dir(frames_dir).map_err(|e| format!("读取序列帧目录失败：{e}"))? {
+    let path = entry.map_err(|e| format!("读取序列帧条目失败：{e}"))?.path();
+    if !path.is_file() || !path.extension().is_some_and(|ext| is_image_ext(&ext.to_string_lossy().to_lowercase())) {
+      continue;
+    }
+    let stem = path.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
+    let Some((_, number, _)) = parse_frame_name(&stem) else {
+      return Err(format!("序列帧文件名无法识别：{}", path.display()));
+    };
+    frames.push((number, path));
+  }
+  frames.sort_by(|left, right| left.0.cmp(&right.0).then(left.1.file_name().cmp(&right.1.file_name())));
+  Ok(frames.into_iter().map(|(_, path)| path).collect())
+}
+
 /// 检测序列帧分组：输入展开后的文件清单，返回判定的组（组内帧按序号升序）。
 /// 分组键 = （所在目录， 基础名， 扩展名， 位宽）——仅同目录兄弟文件成组。纯函数不碰磁盘。
 pub fn detect_groups(files: &[PendingFile]) -> Vec<SequenceGroup> {
@@ -288,6 +305,8 @@ pub(crate) fn build_sequence_asset(
     source: None,
     start: None,
     end: None,
+    start_frame: None,
+    end_frame: None,
     prompt: None,
   };
   write_json(&info_dir.join("metadata.json"), &meta).map_err(|e| e.to_string())?;

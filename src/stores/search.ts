@@ -25,7 +25,8 @@ import { useUiStore } from "./ui";
 import { useToastStore } from "./toast";
 import { useWsStore, wsEntryToPlacement, WS_ID_PREFIX } from "./ws";
 import type { WsEntry } from "../lib/wsOps";
-import type { PlacementView } from "./content";
+import { useContentStore, type PlacementView } from "./content";
+import { semanticSearch, type SemanticAssetHit, type SemanticMode } from "../lib/semantic";
 
 // 后端 services/search.rs SearchHits（camelCase）
 interface SearchHits {
@@ -183,6 +184,10 @@ interface PanelSearch {
   wsEntries: WsEntry[]; // ws 视口命中条目（2026-10-03；视图层数据源）
   crawl: CrawlState | null; // ws 回退爬盘任务（null = 未发起 / 已结束清理）
   globalNotified: boolean; // 本段 `~` 会话已弹过指路通知（去重）
+  mode: SemanticMode;
+  semanticHits: Record<string, SemanticAssetHit>;
+  semanticOrder: string[];
+  error: string | null;
 }
 
 const DEBOUNCE_MS = 150; // inbox-fs-changed 去抖同值先例
@@ -214,7 +219,10 @@ export const useSearchStore = defineStore("search", () => {
   function ensure(panelId: string): PanelSearch {
     let s = panels.value.get(panelId);
     if (!s) {
-      s = { draft: "", hits: new Set(), hitArchives: new Set(), seq: 0, filters: emptyFilters(), wsEntries: [], crawl: null, globalNotified: false };
+      s = {
+        draft: "", hits: new Set(), hitArchives: new Set(), seq: 0, filters: emptyFilters(), wsEntries: [], crawl: null, globalNotified: false,
+        mode: "auto", semanticHits: {}, semanticOrder: [], error: null,
+      };
       panels.value.set(panelId, s);
     }
     return s;
@@ -248,6 +256,36 @@ export const useSearchStore = defineStore("search", () => {
 
   function hitArchivesFor(panelId: string): Set<string> {
     return panels.value.get(panelId)?.hitArchives ?? new Set();
+  }
+
+  function resultPlacementsFor(panelId: string, viewKey: string): PlacementView[] {
+    const s = panels.value.get(panelId);
+    if (!s) return [];
+    const content = useContentStore();
+    const base = content.placementsFor(effectiveGlobal(panelId) ? "quick:all" : viewKey);
+    if (s.semanticOrder.length > 0) {
+      const order = new Map(s.semanticOrder.map((key, index) => [key, index]));
+      return base.filter((p) => order.has(`${p.assetId}|${p.folderId}`)).sort((left, right) => {
+        const a = order.get(`${left.assetId}|${left.folderId}`)!;
+        const b = order.get(`${right.assetId}|${right.folderId}`)!;
+        return a - b;
+      });
+    }
+    if (s.mode === "semantic") return [];
+    const hits = s.hits;
+    return base.filter((p) => hits.has(`${p.assetId}|${p.folderId}`));
+  }
+
+  function semanticHitFor(panelId: string, assetId: string): SemanticAssetHit | null {
+    return panels.value.get(panelId)?.semanticHits[assetId] ?? null;
+  }
+
+  function modeFor(panelId: string): SemanticMode {
+    return panels.value.get(panelId)?.mode ?? "auto";
+  }
+
+  function errorFor(panelId: string): string | null {
+    return panels.value.get(panelId)?.error ?? null;
   }
 
   // ---------- 筛选条件读写（2026-10-09 筛选业务二轮） ----------
@@ -532,6 +570,33 @@ export const useSearchStore = defineStore("search", () => {
 
   // ---------- 库搜索（原链路） ----------
 
+  function clearSemantic(s: PanelSearch): void {
+    s.semanticHits = {};
+    s.semanticOrder = [];
+  }
+
+  async function runSemantic(s: PanelSearch, scope: Parameters<typeof semanticSearch>[1], seq: number): Promise<void> {
+    const query = keywordsOf(s).join(" ");
+    s.hits = new Set();
+    s.hitArchives = new Set();
+    if (!query) {
+      clearSemantic(s);
+      return;
+    }
+    try {
+      const result = await semanticSearch(query, scope);
+      if (s.seq !== seq) return;
+      s.semanticHits = Object.fromEntries(result.hits.map((hit) => [hit.best.assetId, hit]));
+      s.semanticOrder = result.hits.flatMap((hit) => hit.placements.map((p) => `${p.assetId}|${p.folderId}`));
+      s.error = null;
+    } catch (err) {
+      if (s.seq !== seq) return;
+      clearSemantic(s);
+      s.error = err instanceof Error ? err.message : String(err);
+      console.debug("语义搜索失败：", err);
+    }
+  }
+
   async function run(panelId: string, viewKey: string): Promise<void> {
     if (viewKey.startsWith(WS_ID_PREFIX)) {
       return runWs(panelId, viewKey);
@@ -539,23 +604,28 @@ export const useSearchStore = defineStore("search", () => {
     const s = panels.value.get(panelId);
     if (!s) return;
     const seq = ++s.seq;
-    // 无条件（无关键字且无生效筛选）= 清空退出搜索态；纯筛选 = 照常发搜（后端 query 空走纯筛选）
     if (keywordsOf(s).length === 0 && !hasAnyFilter(s)) {
       s.hits = new Set();
       s.hitArchives = new Set();
+      clearSemantic(s);
+      s.error = null;
       return;
     }
-    const ui = useUiStore();
+    const scope = { viewKey, recursive: useUiStore().showSubfolders, global: effectiveGlobal(panelId), filters: s.filters };
+    if (s.mode === "semantic" && keywordsOf(s).length > 0) {
+      await runSemantic(s, scope, seq);
+      return;
+    }
     try {
-      const r = await invoke<SearchHits>("search_assets", {
-        query: s.draft.trim(),
-        scope: { viewKey, recursive: ui.showSubfolders, global: effectiveGlobal(panelId), filters: s.filters },
-      });
-      if (s.seq !== seq) return; // 过期响应丢弃
+      const r = await invoke<SearchHits>("search_assets", { query: s.draft.trim(), scope });
+      if (s.seq !== seq) return;
       s.hits = new Set(r.placements.map((k) => `${k.assetId}|${k.folderId}`));
       s.hitArchives = new Set(r.archives);
+      s.error = null;
+      const hasResults = r.placements.length > 0 || r.archives.length > 0;
+      if (s.mode === "auto" && !hasResults && keywordsOf(s).length > 0) await runSemantic(s, scope, seq);
+      else clearSemantic(s);
     } catch (err) {
-      // 未开库等异常：搜索是高频路径，失败静默降级保持旧命中（toast 会刷屏）
       console.debug("搜索失败：", err);
     }
   }
@@ -580,9 +650,36 @@ export const useSearchStore = defineStore("search", () => {
     scheduleRun(panelId, viewKey);
   }
 
+  function setMode(panelId: string, viewKey: string, mode: SemanticMode): void {
+    const s = ensure(panelId);
+    s.mode = mode;
+    s.seq++;
+    s.error = null;
+    if (mode === "semantic") {
+      s.hits = new Set();
+      s.hitArchives = new Set();
+    } else {
+      clearSemantic(s);
+    }
+    scheduleRun(panelId, viewKey);
+  }
+
+  async function runNow(panelId: string, viewKey: string): Promise<string | null> {
+    await run(panelId, viewKey);
+    return errorFor(panelId);
+  }
+
   /** 视图 / 递归开关变化：搜索保持并按新范围重搜（2026-08-19 定案） */
   function rerun(panelId: string, viewKey: string): void {
     if (isActive(panelId)) void run(panelId, viewKey);
+  }
+
+  async function refreshSemanticSearches(viewKeyOf: (panelId: string) => string): Promise<void> {
+    const pending: Promise<void>[] = [];
+    for (const [panelId, state] of panels.value) {
+      if (state.mode !== "keyword" && isActive(panelId)) pending.push(run(panelId, viewKeyOf(panelId)));
+    }
+    await Promise.all(pending);
   }
 
   function removePanel(panelId: string): void {
@@ -626,6 +723,13 @@ export const useSearchStore = defineStore("search", () => {
     isActive,
     hitsFor,
     hitArchivesFor,
+    resultPlacementsFor,
+    semanticHitFor,
+    modeFor,
+    errorFor,
+    setMode,
+    runNow,
+    refreshSemanticSearches,
     effectiveGlobal,
     draftFor,
     setDraft,

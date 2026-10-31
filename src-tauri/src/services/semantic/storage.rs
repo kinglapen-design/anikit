@@ -1,12 +1,10 @@
-#![allow(dead_code)] // V1～V5 分批接线的公开契约；语义搜索 / 分析任务 / MCP 接入后移除
+use std::{cmp::Ordering, fs, path::{Path, PathBuf}};
 
-use std::{cmp::Ordering, fs, path::Path};
-
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use super::types::{ModelRevision, SegmentHit, SegmentInput};
 
-const SCHEMA_VERSION: i32 = 1;
+const SCHEMA_VERSION: i32 = 4;
 
 pub struct SemanticStore {
   pub(crate) conn: Connection,
@@ -60,6 +58,8 @@ impl SemanticStore {
           library_root TEXT NOT NULL,
           assets_dir TEXT NOT NULL,
           device TEXT NOT NULL,
+          mode TEXT NOT NULL DEFAULT 'basic',
+          actual_backend TEXT NOT NULL DEFAULT 'unknown',
           status TEXT NOT NULL,
           total INTEGER NOT NULL,
           completed INTEGER NOT NULL DEFAULT 0,
@@ -74,14 +74,46 @@ impl SemanticStore {
           PRIMARY KEY(task_id, asset_id),
           FOREIGN KEY(task_id) REFERENCES analysis_tasks(id) ON DELETE CASCADE
         );
-        PRAGMA user_version = 1;",
+        CREATE TABLE IF NOT EXISTS semantic_documents(
+          id INTEGER PRIMARY KEY,
+          segment_id INTEGER NOT NULL UNIQUE,
+          asset_id TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          certainty TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          model TEXT NOT NULL,
+          prompt_version TEXT NOT NULL,
+          source_json TEXT NOT NULL,
+          frame_ms TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(segment_id) REFERENCES semantic_segments(id) ON DELETE CASCADE,
+          FOREIGN KEY(asset_id) REFERENCES semantic_assets(asset_id) ON DELETE CASCADE
+        );",
       )
       .map_err(|e| format!("初始化语义索引失败：{e}"))?;
     let version: i32 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).map_err(|e| e.to_string())?;
-    if version != SCHEMA_VERSION {
+    if version > SCHEMA_VERSION {
       return Err(format!("不支持的语义索引版本：{version}"));
     }
+    if version == 1 {
+      conn.execute_batch("ALTER TABLE analysis_tasks ADD COLUMN actual_backend TEXT NOT NULL DEFAULT 'unknown';").map_err(|e| format!("迁移语义索引失败：{e}"))?;
+    }
+    if (1..SCHEMA_VERSION).contains(&version) {
+      conn.execute_batch("ALTER TABLE analysis_tasks ADD COLUMN mode TEXT NOT NULL DEFAULT 'basic';").map_err(|e| format!("迁移语义任务模式失败：{e}"))?;
+    }
+    conn.pragma_update(None, "user_version", SCHEMA_VERSION).map_err(|e| e.to_string())?;
     Ok(Self { conn })
+  }
+
+  pub fn open_library(root: &Path) -> Result<Self, String> {
+    static RECOVERED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<PathBuf>>> = std::sync::OnceLock::new();
+    let store = Self::open(&root.join(crate::core::library::VECTORS_DIR).join("semantic.sqlite3"))?;
+    let recovered = RECOVERED.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+    let first = recovered.lock().map_err(|e| e.to_string())?.insert(root.to_path_buf());
+    if first {
+      store.recover_interrupted(&root.to_string_lossy())?;
+    }
+    Ok(store)
   }
 
   pub fn register_model(&self, model: &ModelRevision) -> Result<(), String> {
@@ -149,63 +181,91 @@ impl SemanticStore {
     Ok(())
   }
 
-  pub fn search(&self, model: &ModelRevision, query: &[f32], limit: usize) -> Result<Vec<SegmentHit>, String> {
+  pub fn fail_asset_analysis(&mut self, asset_id: &str, error: &str) -> Result<(), String> {
+    let tx = self.conn.transaction().map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM semantic_segments WHERE asset_id=?1", [asset_id]).map_err(|e| e.to_string())?;
+    tx.execute("UPDATE semantic_assets SET status='failed', error=?2 WHERE asset_id=?1", params![asset_id, error]).map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| format!("标记语义分析失败：{e}"))?;
+    Ok(())
+  }
+
+  pub fn search(&self, model: &ModelRevision, analysis_version: u32, query: &[f32], limit: usize) -> Result<Vec<SegmentHit>, String> {
     let query = normalize(query)?;
     if query.len() != model.dimension {
       return Err("查询向量维度与模型不一致".into());
     }
-    let mut stmt = self
-      .conn
-      .prepare(
-        "SELECT s.id, s.asset_id, s.start_ms, s.end_ms, s.start_frame, s.end_frame, s.kind, s.text, s.vector
-         FROM semantic_segments s JOIN semantic_assets a ON a.asset_id=s.asset_id
-         WHERE a.model_id=?1 AND a.model_revision=?2 AND a.status='ready'",
-      )
-      .map_err(|e| e.to_string())?;
-    let rows = stmt
-      .query_map(params![model.id, model.revision], |row| {
-        let bytes: Vec<u8> = row.get(8)?;
-        Ok((
-          SegmentHit {
-            segment_id: row.get(0)?,
-            asset_id: row.get(1)?,
-            start_ms: row.get(2)?,
-            end_ms: row.get(3)?,
-            start_frame: row.get(4)?,
-            end_frame: row.get(5)?,
-            score: 0.0,
-            kind: row.get(6)?,
-            text: row.get(7)?,
-          },
-          bytes,
-        ))
-      })
-      .map_err(|e| format!("读取语义片段失败：{e}"))?;
-    let mut hits = Vec::new();
+    let mut stmt = self.conn.prepare(
+      "SELECT s.id, s.asset_id, s.start_ms, s.end_ms, s.start_frame, s.end_frame, s.kind, s.text, s.vector, d.certainty
+       FROM semantic_segments s JOIN semantic_assets a ON a.asset_id=s.asset_id
+       LEFT JOIN semantic_documents d ON d.segment_id=s.id
+       WHERE a.model_id=?1 AND a.model_revision=?2 AND a.analysis_version=?3 AND a.status='ready'",
+    ).map_err(|e| e.to_string())?;
+    let rows = stmt.query_map(params![model.id, model.revision, analysis_version], |row| {
+      let bytes: Vec<u8> = row.get(8)?;
+      Ok((SegmentHit {
+        segment_id: row.get(0)?, asset_id: row.get(1)?, start_ms: row.get(2)?, end_ms: row.get(3)?,
+        start_frame: row.get(4)?, end_frame: row.get(5)?, score: 0.0, kind: row.get(6)?, certainty: row.get(9)?, text: row.get(7)?,
+      }, bytes))
+    }).map_err(|e| format!("读取语义片段失败：{e}"))?;
+    let mut grouped = std::collections::BTreeMap::new();
     for row in rows {
       let (mut hit, bytes) = row.map_err(|e| e.to_string())?;
       let vector = decode_vector(&bytes)?;
       if vector.len() == query.len() {
         hit.score = dot(&query, &vector);
-        hits.push(hit);
+        let segments: &mut Vec<SegmentHit> = grouped.entry(hit.asset_id.clone()).or_default();
+        segments.push(hit);
+        segments.sort_by(|left, right| {
+          right.score.partial_cmp(&left.score).unwrap_or(Ordering::Equal).then(left.segment_id.cmp(&right.segment_id))
+        });
+        segments.truncate(8);
       }
     }
-    hits.sort_by(|left, right| {
-      right.score.partial_cmp(&left.score).unwrap_or(Ordering::Equal).then(left.segment_id.cmp(&right.segment_id))
+    let mut assets = grouped.into_values().collect::<Vec<Vec<SegmentHit>>>();
+    assets.sort_by(|left, right| {
+      right[0].score.partial_cmp(&left[0].score).unwrap_or(Ordering::Equal).then(left[0].asset_id.cmp(&right[0].asset_id))
     });
-    hits.truncate(limit);
-    Ok(hits)
+    assets.truncate(limit);
+    Ok(assets.into_iter().flatten().collect())
   }
 
+  pub fn asset_segments(&self, asset_id: &str) -> Result<Vec<SegmentHit>, String> {
+    let mut stmt = self.conn.prepare(
+      "SELECT s.id, s.asset_id, s.start_ms, s.end_ms, s.start_frame, s.end_frame, s.kind, s.text, d.certainty
+       FROM semantic_segments s LEFT JOIN semantic_documents d ON d.segment_id=s.id WHERE s.asset_id=?1 ORDER BY s.start_ms, s.id",
+    ).map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([asset_id], |row| Ok(SegmentHit {
+      segment_id: row.get(0)?, asset_id: row.get(1)?, start_ms: row.get(2)?, end_ms: row.get(3)?,
+      start_frame: row.get(4)?, end_frame: row.get(5)?, score: 0.0, kind: row.get(6)?, certainty: row.get(8)?, text: row.get(7)?,
+    })).map_err(|e| e.to_string())?;
+    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(|e| e.to_string())
+  }
+
+  pub fn asset_source_fingerprint(&self, asset_id: &str) -> Result<Option<String>, String> {
+    self.conn.query_row("SELECT source_fingerprint FROM semantic_assets WHERE asset_id=?1", [asset_id], |row| row.get(0))
+      .optional().map_err(|e| e.to_string())
+  }
+
+  pub fn segment_total(&self) -> Result<i64, String> {
+    self.conn.query_row("SELECT COUNT(*) FROM semantic_segments", [], |row| row.get(0)).map_err(|e| e.to_string())
+  }
+
+  #[cfg(test)]
   pub fn segment_count(&self, asset_id: &str) -> Result<i64, String> {
-    self
-      .conn
-      .query_row("SELECT COUNT(*) FROM semantic_segments WHERE asset_id=?1", [asset_id], |row| row.get(0))
-      .map_err(|e| e.to_string())
+    self.conn.query_row("SELECT COUNT(*) FROM semantic_segments WHERE asset_id=?1", [asset_id], |row| row.get(0)).map_err(|e| e.to_string())
+  }
+
+  pub fn segment_count_for_model(&self, asset_id: &str, model: &ModelRevision, analysis_version: u32) -> Result<i64, String> {
+    self.conn.query_row(
+      "SELECT COUNT(*) FROM semantic_segments s JOIN semantic_assets a ON a.asset_id=s.asset_id
+       WHERE s.asset_id=?1 AND a.model_id=?2 AND a.model_revision=?3 AND a.analysis_version=?4 AND a.status='ready'",
+      params![asset_id, model.id, model.revision, analysis_version],
+      |row| row.get(0),
+    ).map_err(|e| e.to_string())
   }
 }
 
-fn normalize(vector: &[f32]) -> Result<Vec<f32>, String> {
+pub(crate) fn normalize(vector: &[f32]) -> Result<Vec<f32>, String> {
   if vector.is_empty() || vector.iter().any(|value| !value.is_finite()) {
     return Err("向量包含空值或非法数值".into());
   }
@@ -216,7 +276,7 @@ fn normalize(vector: &[f32]) -> Result<Vec<f32>, String> {
   Ok(vector.iter().map(|value| value / norm).collect())
 }
 
-fn encode_vector(vector: &[f32]) -> Vec<u8> {
+pub(crate) fn encode_vector(vector: &[f32]) -> Vec<u8> {
   vector.iter().flat_map(|value| value.to_le_bytes()).collect()
 }
 
@@ -267,13 +327,49 @@ mod tests {
       .unwrap();
     store.replace_asset_analysis("a1", "video", "fp2", &model(2), 1, &[segment(2000, vec![0.0, 2.0])]).unwrap();
     assert_eq!(store.segment_count("a1").unwrap(), 1);
-    let hits = store.search(&model(2), &[0.0, 3.0], 10).unwrap();
+    let hits = store.search(&model(2), 1, &[0.0, 3.0], 10).unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].start_ms, 2000);
     assert_eq!(hits[0].start_frame, Some(2));
     assert_eq!(hits[0].kind, "visual");
     assert!((hits[0].score - 1.0).abs() < 0.00001);
-    assert!(store.search(&model(3), &[1.0, 0.0], 10).is_err());
+    assert!(store.search(&model(3), 1, &[1.0, 0.0], 10).is_err());
+  }
+
+  #[test]
+  fn analysis_versions_are_isolated_and_failure_removes_stale_segments() {
+    let (_dir, mut store) = store();
+    store.replace_asset_analysis("a1", "video", "fp1", &model(2), 1, &[segment(0, vec![1.0, 0.0])]).unwrap();
+    assert!(store.search(&model(2), 2, &[1.0, 0.0], 10).unwrap().is_empty());
+    assert_eq!(store.segment_count_for_model("a1", &model(2), 1).unwrap(), 1);
+    store.fail_asset_analysis("a1", "decode failed").unwrap();
+    assert_eq!(store.segment_count("a1").unwrap(), 0);
+    assert!(store.asset_segments("a1").unwrap().is_empty());
+    assert!(store.search(&model(2), 1, &[1.0, 0.0], 10).unwrap().is_empty());
+  }
+
+  #[test]
+  fn v1_task_schema_migrates_backend_and_default_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("semantic.sqlite3");
+    let conn = Connection::open(&path).unwrap();
+    conn.execute_batch(
+      "CREATE TABLE analysis_tasks(
+        id TEXT PRIMARY KEY, library_root TEXT NOT NULL, assets_dir TEXT NOT NULL,
+        device TEXT NOT NULL, status TEXT NOT NULL, total INTEGER NOT NULL,
+        completed INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO analysis_tasks(id, library_root, assets_dir, device, status, total)
+        VALUES('legacy', '/library', '/assets', 'cpu', 'running', 1);
+      PRAGMA user_version=1;",
+    ).unwrap();
+    drop(conn);
+    let store = SemanticStore::open(&path).unwrap();
+    let snapshot = store.task_snapshot("legacy").unwrap().unwrap();
+    assert_eq!(snapshot.actual_backend, "unknown");
+    assert_eq!(snapshot.mode, "basic");
+    assert_eq!(snapshot.status, "running");
   }
 
   #[test]

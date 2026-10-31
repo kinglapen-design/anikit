@@ -20,6 +20,7 @@
         "decorations": false,
         "transparent": false,
         "backgroundColor": "#1F1F1F",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --force-color-profile=srgb",
         "shadow": true,
         "center": true,
         "visible": false,

@@ -41,6 +41,9 @@ fn locate(lib: &Library, asset_id: &str) -> Result<(PathBuf, PathBuf, AssetMeta)
 /// thumb_frame → frames/ 内任一文件，保证落点是真实文件
 pub fn real_origin_file(lib: &Library, asset_id: &str) -> Result<PathBuf, String> {
   let meta = lib.index.assets.get(asset_id).ok_or_else(|| "资源不存在，可能已被删除".to_string())?;
+  if meta.r#type.as_deref() == Some("segment") {
+    return Ok(crate::services::semantic::playback::resolve(&lib.assets_dir, asset_id)?.origin);
+  }
   if let Some(frames) = crate::services::sequence::frames_dir_if_sequence(&lib.assets_dir, asset_id, meta) {
     let cover = frames.join(&meta.origin_name);
     if cover.is_file() {

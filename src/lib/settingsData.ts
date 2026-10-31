@@ -6,6 +6,7 @@
 // confirmPrompt warning——不可逆口径：自定义缩略图重建后回退派生图不可复原）+ library-thumbs-rebuilt
 // 事件 toast + 就地重拉；插件 = get/save_cep_export_settings（后端存字节，前端 MB 显示换算，
 // 护栏钳制与后端 validate 同区间）；关于 = getVersion + show_logs_in_explorer。
+// 语义分析独立走 lib/semanticSettings，避免本设置数据层越过 500 行；mock 数据仅作类型关联。
 // mock = preview 陈列态：全部控件本地陈列、命令一律不发（WsManageDialog isMock 先例）。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
@@ -17,6 +18,7 @@ import { formatSize } from "./formatSize";
 import { useSelectionStore } from "../stores/selection";
 import { useToastStore } from "../stores/toast";
 import { useUiStore } from "../stores/ui";
+import type { SemanticSettingsMock } from "./semanticSettings";
 
 export interface SettingsCacheItem {
   id: string;
@@ -34,6 +36,7 @@ export interface SettingsMockData {
   cacheWs: SettingsCacheItem[];
   cep: { maxSecs: number; maxMB: number; fps: number };
   version: string;
+  semantic?: SemanticSettingsMock;
 }
 
 interface CacheOverview {

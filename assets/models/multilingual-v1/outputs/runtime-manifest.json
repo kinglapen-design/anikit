@@ -1,0 +1,43 @@
+{
+  "packages": [
+    {
+      "name": "Microsoft.ML.OnnxRuntime.DirectML",
+      "version": "1.24.4",
+      "url": "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.DirectML/1.24.4",
+      "sha256": "57e9f11b73437bef7a309496135d4c1f96b1a8e9ddba60013fa27bfc1d788681"
+    },
+    {
+      "name": "Microsoft.AI.DirectML",
+      "version": "1.15.4",
+      "url": "https://www.nuget.org/api/v2/package/Microsoft.AI.DirectML/1.15.4",
+      "sha256": "4e7cb7ddce8cf837a7a75dc029209b520ca0101470fcdf275c1f49736a3615b9"
+    }
+  ],
+  "runtime_files": [
+    {
+      "path": "runtime/onnxruntime.dll",
+      "bytes": 17328152,
+      "sha256": "e7eedec6a6f26dc39dc948276a75ef6d2bee3fff944d874ceed0bbd3b97bff40"
+    },
+    {
+      "path": "runtime/onnxruntime_providers_shared.dll",
+      "bytes": 22040,
+      "sha256": "265c8daf29637cb259cac8be9f08f2cd45f3883f0f0e4949cbfddd5b4cbec3b6"
+    },
+    {
+      "path": "runtime/DirectML.dll",
+      "bytes": 18527776,
+      "sha256": "9c9e6d822561c6c41b90e6994b3e8857cf1d66dbfb1e0c4c799c7c89b4e92da1"
+    }
+  ],
+  "sources": {
+    "onnxruntime.dll": "copied from read-only semantic-clip runtime",
+    "onnxruntime_providers_shared.dll": "copied from read-only semantic-clip runtime",
+    "licenses/OnnxRuntime-LICENSE.txt": "copied from read-only semantic-clip runtime",
+    "licenses/OnnxRuntime-ThirdPartyNotices.txt": "copied from read-only semantic-clip runtime",
+    "DirectML.dll": "copied from read-only semantic-clip runtime",
+    "licenses/DirectML-LICENSE.txt": "copied from read-only semantic-clip runtime",
+    "licenses/DirectML-LICENSE-CODE.txt": "copied from read-only semantic-clip runtime",
+    "licenses/DirectML-ThirdPartyNotices.txt": "copied from read-only semantic-clip runtime"
+  }
+}

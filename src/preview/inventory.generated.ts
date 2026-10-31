@@ -1,4 +1,4 @@
-// 本文件由 tools/gen-component-inventory.mjs 生成（2026-10-15），勿手改——重跑 `pnpm inventory` 刷新。
+// 本文件由 tools/gen-component-inventory.mjs 生成（2026-10-31），勿手改——重跑 `pnpm inventory` 刷新。
 // 阶段七重构「组件台账」数据源：status = new 新体系 / legacy 旧件待烧 / business 业务件 / dead 零消费休眠。
 export type InventoryStatus = "new" | "legacy" | "business" | "dead";
 export interface InventoryEntry {
@@ -9,11 +9,11 @@ export interface InventoryEntry {
   legacyTokens: number;
   replacement: string;
 }
-export const inventoryDate = "2026-10-15";
+export const inventoryDate = "2026-10-31";
 export const inventoryTotals = {
-  "new": 82,
+  "new": 83,
   "legacy": 0,
-  "business": 80,
+  "business": 85,
   "dead": 2,
   "legacyConsumers": 0,
   "legacyTokens": 0
@@ -32,6 +32,14 @@ export const inventory: InventoryEntry[] = [
     "name": "SectionHeader",
     "status": "dead",
     "consumers": 0,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/DupScanCard",
+    "name": "DupScanCard",
+    "status": "business",
+    "consumers": 2,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -260,14 +268,6 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/DupScanCard",
-    "name": "DupScanCard",
-    "status": "business",
-    "consumers": 1,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
     "path": "components/DupScanDialog",
     "name": "DupScanDialog",
     "status": "business",
@@ -404,6 +404,22 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/LinkScanDialog",
+    "name": "LinkScanDialog",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/LinkScanGroupRow",
+    "name": "LinkScanGroupRow",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/MdOutline",
     "name": "MdOutline",
     "status": "business",
@@ -438,6 +454,22 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/PickerPanel",
     "name": "PickerPanel",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/PollutionScanDialog",
+    "name": "PollutionScanDialog",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/PollutionScanRow",
+    "name": "PollutionScanRow",
     "status": "business",
     "consumers": 1,
     "legacyTokens": 0,
@@ -526,6 +558,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/SequencePackView",
     "name": "SequencePackView",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/settings/SemanticSettings",
+    "name": "SemanticSettings",
     "status": "business",
     "consumers": 1,
     "legacyTokens": 0,
@@ -679,7 +719,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/AppIcon",
     "name": "AppIcon",
     "status": "new",
-    "consumers": 58,
+    "consumers": 60,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -687,7 +727,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/buttons/ActionButton",
     "name": "ActionButton",
     "status": "new",
-    "consumers": 28,
+    "consumers": 32,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -695,7 +735,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/ScrollThumb",
     "name": "ScrollThumb",
     "status": "new",
-    "consumers": 28,
+    "consumers": 31,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -703,7 +743,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/buttons/IconButton",
     "name": "IconButton",
     "status": "new",
-    "consumers": 26,
+    "consumers": 28,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -711,7 +751,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/inputs/TextInput",
     "name": "TextInput",
     "status": "new",
-    "consumers": 22,
+    "consumers": 23,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -719,7 +759,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/modals/BaseModal",
     "name": "BaseModal",
     "status": "new",
-    "consumers": 18,
+    "consumers": 20,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -728,6 +768,14 @@ export const inventory: InventoryEntry[] = [
     "name": "SectionTitle",
     "status": "new",
     "consumers": 13,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/buttons/SegmentedControl",
+    "name": "SegmentedControl",
+    "status": "new",
+    "consumers": 9,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -748,14 +796,6 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/buttons/SegmentedControl",
-    "name": "SegmentedControl",
-    "status": "new",
-    "consumers": 8,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
     "path": "components/buttons/SwitchButton",
     "name": "SwitchButton",
     "status": "new",
@@ -768,6 +808,14 @@ export const inventory: InventoryEntry[] = [
     "name": "TagButton",
     "status": "new",
     "consumers": 6,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/buttons/Radio",
+    "name": "Radio",
+    "status": "new",
+    "consumers": 5,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -804,18 +852,10 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
-    "path": "components/buttons/Radio",
-    "name": "Radio",
-    "status": "new",
-    "consumers": 4,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
     "path": "components/buttons/Checkbox",
     "name": "Checkbox",
     "status": "new",
-    "consumers": 3,
+    "consumers": 4,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -1164,6 +1204,14 @@ export const inventory: InventoryEntry[] = [
     "replacement": ""
   },
   {
+    "path": "components/items/PollutionFileItem",
+    "name": "PollutionFileItem",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
     "path": "components/items/TabItem",
     "name": "TabItem",
     "status": "new",
@@ -1222,6 +1270,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/plugins/McpPluginWindow",
     "name": "McpPluginWindow",
+    "status": "new",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/plugins/PasteLinkPluginWindow",
+    "name": "PasteLinkPluginWindow",
     "status": "new",
     "consumers": 1,
     "legacyTokens": 0,
@@ -1318,14 +1374,6 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/buttons/DropButton",
     "name": "DropButton",
-    "status": "new",
-    "consumers": 0,
-    "legacyTokens": 0,
-    "replacement": ""
-  },
-  {
-    "path": "components/items/PollutionFileItem",
-    "name": "PollutionFileItem",
     "status": "new",
     "consumers": 0,
     "legacyTokens": 0,

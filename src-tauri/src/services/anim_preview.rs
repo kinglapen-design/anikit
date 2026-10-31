@@ -94,11 +94,11 @@ pub fn fresh_anim_preview(assets_dir: &Path, asset_id: &str, origin_name: &str) 
 pub fn ensure_anim_preview(assets_dir: &Path, asset_id: &str) -> Option<PathBuf> {
   let info_dir = paths::info_dir(assets_dir, asset_id);
   let meta: AssetMeta = read_json(&info_dir.join("metadata.json")).ok()?;
-  if !anim::is_anim(&meta) {
+  let origin = info_dir.join(&meta.origin_name);
+  if !anim::is_animated_file(&meta, &origin) {
     return None;
   }
   let dest = paths::anim_preview_file(assets_dir, asset_id, &meta.origin_name);
-  let origin = info_dir.join(&meta.origin_name);
   if is_fresh(&dest, &origin) {
     return Some(dest);
   }

@@ -41,7 +41,7 @@ const canFwd = computed(() => (props.panelId ? (tabs.navCan[props.panelId]?.fwd 
 // 搜索结果计数（3.6 接线）：搜索态显示「搜索结果 / N」，N = 文件命中 + 档案命中总数
 const searching = computed(() => (props.panelId ? search.isActive(props.panelId) : false));
 const searchCount = computed(() =>
-  props.panelId ? search.hitsFor(props.panelId).size + search.hitArchivesFor(props.panelId).size : 0,
+  props.panelId ? search.resultPlacementsFor(props.panelId, props.viewKey).length + search.hitArchivesFor(props.panelId).size : 0,
 );
 
 // 卡片尺寸滑块（稿宽 100）：BarSlider 0~1 归一化 ↔ targetRowHeight 80~gridWidth 实际像素换算；

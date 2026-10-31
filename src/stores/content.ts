@@ -42,6 +42,7 @@ export interface PlacementView {
   tags: string[]; // 标签（2026-09-17 分组「标签」规则数据通道，后端 views.rs 自 metadata 同径带出）
   hidden: boolean; // hidden 伴生缩略图标记（8.1，PRD 02-15）：普通视图统一过滤，仅「缩略图」视图显示
   playAssetId?: string | null; // 播放源代理（8.1）：fla 等工程卡片动图播放的帧流开流目标（= hidden 伴生资产 id）；无代理为 null
+  segment?: import("../lib/semantic").SegmentRange | null;
   // 提示词三态（2026-09-05 走查定案，提示词轮）：none = 未指定 / scanned = 已扫描（分析快照）/
   // linked = 已指定文本文档；缺省 = none（后端并行开发期降级）
   promptState?: "none" | "scanned" | "linked";

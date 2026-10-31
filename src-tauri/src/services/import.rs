@@ -455,6 +455,8 @@ fn make_meta(
     source: None,
     start: None,
     end: None,
+    start_frame: None,
+    end_frame: None,
     prompt: None,
   }
 }
@@ -733,6 +735,7 @@ mod tests {
       fps: None,
       hidden: false,
       play_asset_id: None,
+      segment: None,
       tags: vec![],
       prompt_state: "none",
     };

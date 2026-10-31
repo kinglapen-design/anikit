@@ -319,7 +319,10 @@ fn run() -> Result<(), String> {
         });
         match result {
           Ok((actual, embedding)) => write_response(json!({ "type": "result", "id": id, "actualBackend": actual, "embedding": embedding }))?,
-          Err(error) => write_response(json!({ "type": "error", "id": id, "message": error }))?,
+          Err(error) => {
+            let retryable = !error.starts_with("读取图片失败") && error != "图片尺寸为零";
+            write_response(json!({ "type": "error", "id": id, "message": error, "retryable": retryable }))?
+          }
         }
       }
       Request::EmbedImage { id, path } => {
@@ -329,7 +332,10 @@ fn run() -> Result<(), String> {
         });
         match result {
           Ok((actual, embedding)) => write_response(json!({ "type": "result", "id": id, "actualBackend": actual, "embedding": embedding }))?,
-          Err(error) => write_response(json!({ "type": "error", "id": id, "message": error }))?,
+          Err(error) => {
+            let retryable = !error.starts_with("读取图片失败") && error != "图片尺寸为零";
+            write_response(json!({ "type": "error", "id": id, "message": error, "retryable": retryable }))?
+          }
         }
       }
       Request::Shutdown { id } => {

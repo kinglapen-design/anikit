@@ -33,9 +33,9 @@ const NOTE_THUMBS_DIR: &str = "note-thumbs";
 pub async fn get_notes(state: State<'_, AppState>, asset_id: String) -> Result<Vec<NoteEntry>, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
-  let (info_dir, _origin, meta) = locate_asset(lib, &asset_id)?;
+  let (info_dir, origin, meta) = locate_asset(lib, &asset_id)?;
   let list = notes::load(&info_dir).map_err(|e| e.to_string())?;
-  if crate::services::anim::is_anim(&meta) && list.iter().any(|n| legacy_anim_frame_index(&n.key).is_some()) {
+  if crate::services::anim::is_animated_file(&meta, &origin) && list.iter().any(|n| legacy_anim_frame_index(&n.key).is_some()) {
     let migrated = migrate_anim_keys(list);
     return notes::replace_all(&info_dir, migrated).map_err(|e| e.to_string());
   }
@@ -148,7 +148,7 @@ fn note_thumb(lib: &Library, asset_id: &str, key: &str) -> Result<NoteThumb, Str
   }
   // 动图 `f:{索引}`：origin 运行时解码抽帧 → cache/note-thumbs 幂等（解包废除后无磁盘帧图）
   if let Some(idx) = key.strip_prefix("f:") {
-    if !crate::services::anim::is_anim(&meta) {
+    if !crate::services::anim::is_animated_file(&meta, &origin) {
       return Ok(NoteThumb { path: None }); // f: key 挂在非动图上：静默 null（占位）
     }
     let idx: u32 = idx.parse().map_err(|_| "笔记定位（key）不合法".to_string())?;

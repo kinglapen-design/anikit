@@ -66,6 +66,7 @@ import { useSelectionStore } from "./stores/selection";
 import { useToastStore } from "./stores/toast";
 import { useTabsStore } from "./stores/tabs";
 import { useWsStore } from "./stores/ws";
+import { useSemanticTaskStore } from "./stores/semantic";
 import { initPreviewListeners } from "./stores/preview";
 import { wizardState, reopenLastSession, createLibraryModalState, mergeLibraryModalState, deleteLibraryState, confirmDeleteLibrary, initOrphanInfosListener, renameLibraryState } from "./lib/libraryOps";
 import { retargetLinkFlow } from "./lib/menuSpecs/workspace";
@@ -304,6 +305,7 @@ onMounted(() => {
   void content.initRecentListener(); // 最近使用热刷新（2026-07-29 复验反馈修复）
   void content.initCepListener(); // CEP 导出入库热刷新（8.1：WS 接收入库完成 → 全量对齐）
   void content.initMcpListener(); // MCP 写入热刷新（PRD 08-06：agent 写库 → 去抖全量对齐）
+  void useSemanticTaskStore().init(); // 分析完成刷新语义命中，防止重分析后使用陈旧 segmentId
   void content.initThumbRebuildListener(); // 清缓存缩略图重建热刷新（2026-10-13 设置面板闭环：thumbEpoch 变址 + 全量对齐）
   initMediaOpenListener(); // 媒体服务 /open 点击跳转（2026-10-08 S1：后端 media-open → 定位目标）
   document.addEventListener("click", onLinkNavGuard, true); // webview 导航兜底（同日实机事故防线）

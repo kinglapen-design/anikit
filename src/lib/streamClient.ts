@@ -10,6 +10,7 @@
 //（5.3 视频接入已回滚，2026-08-22：视频播放回 <video> 元素 asset 直读，帧流仅动图在用——
 // 视频会话 / 音轨 PCM / 音画同步随之拆除，存档见 12d8bc6）
 import { invoke } from "@tauri-apps/api/core";
+import type { SegmentRange } from "./semantic";
 
 export interface StreamFrame {
   w: number;
@@ -29,18 +30,19 @@ export class StreamSession {
   private constructor(
     private readonly session: number,
     private readonly onFrame: (f: StreamFrame) => void,
+    readonly segment: SegmentRange | null,
   ) {}
 
   /** 动图会话（预览）：shortEdge = 显示短边（后端 clamp）。失败返回 null（回退静态封面） */
   static async start(assetId: string, shortEdge: number, onFrame: (f: StreamFrame) => void): Promise<StreamSession | null> {
-    let info: { session: number; port: number };
+    let info: { session: number; port: number; segment?: SegmentRange };
     try {
-      info = await invoke<{ session: number; port: number }>("start_anim_stream", { assetId, shortEdge });
+      info = await invoke<{ session: number; port: number; segment?: SegmentRange }>("start_anim_stream", { assetId, shortEdge });
     } catch {
       return null;
     }
     if (!info.port) return null; // WS server 未起（初始化失败）：同样回退
-    const s = new StreamSession(info.session, onFrame);
+    const s = new StreamSession(info.session, onFrame, info.segment ?? null);
     s.connect(info.port);
     return s;
   }

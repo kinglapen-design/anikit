@@ -13,6 +13,7 @@ import { useContentStore } from "./content";
 import { previewSession } from "./preview";
 import { useToastStore } from "./toast";
 import { getMediaSource, getMediaSourceByPath } from "../lib/mediaOps";
+import type { SegmentRange } from "../lib/semantic";
 
 function errText(e: unknown): string {
   if (typeof e === "string") return e;
@@ -63,6 +64,7 @@ function buildPreviewMediaStore(panelId: string) {
       // UI 以 seek() 乐观目标值为准（跟手），避免被元素实际位置回拽（弹回）；松手恢复同步
       scrubbing: false,
       duration: 0,
+      segment: null as SegmentRange | null,
       // 视频帧率（5.3 帧化改造，2026-07-28 用户定：帧数优先）：load 时由 PlacementView.fps 传入，
       // 音频 / 未知为 null（帧显示与逐帧步进回退时间口径）；切素材 release 复位
       fps: null as number | null,
@@ -84,7 +86,7 @@ function buildPreviewMediaStore(panelId: string) {
           // 走带丝滑化：播放中 rAF 逐帧读 currentTime（timeupdate 4Hz 段跳；幂等先停再启）
           stopProgressLoop();
           const tick = (): void => {
-            if (!this.scrubbing) this.currentTime = el?.currentTime ?? 0;
+            this.syncProgress();
             progressRaf = requestAnimationFrame(tick);
           };
           progressRaf = requestAnimationFrame(tick);
@@ -99,9 +101,7 @@ function buildPreviewMediaStore(panelId: string) {
         });
         // timeupdate 保留作低速兜底（暂停态 seek 后同步、scrubbing 外释放对齐等）；
         // 播放中的走带驱动已上移 rAF（本事件 4Hz 段跳，2026-09-25 修订）
-        el.addEventListener("timeupdate", () => {
-          if (!this.scrubbing) this.currentTime = el?.currentTime ?? 0;
-        });
+        el.addEventListener("timeupdate", () => this.syncProgress());
         el.addEventListener("durationchange", () => (this.duration = el?.duration || 0));
         // 直读优先的播放错误回退（2026-09-13）：源编码直解不了 → error 后按装载模式路由回退
         // （按 assetId 链 / 工作空间按路径链，PRD 02 步骤 1）
@@ -111,6 +111,7 @@ function buildPreviewMediaStore(panelId: string) {
         });
         el.addEventListener("loadedmetadata", () => {
           this.duration = el?.duration || 0;
+          if (this.segment) this.seek(this.segment.startMs / 1000);
           // 视频尺寸喂给查看器（fit/缩放数学与图片同一套）
           if (this.kind === "video" && el) previewSession(panelId).onImageLoad(el.videoWidth, el.videoHeight);
         });
@@ -138,9 +139,10 @@ function buildPreviewMediaStore(panelId: string) {
           // 2026-07-28 复验反馈修复：存量视频播放条/笔记立即正确）
           if (kind === "video" && r.fps != null) this.fps = r.fps;
           this.srcPath = r.path;
+          this.segment = r.segment ?? null;
           const v = this.getEl();
           v.src = convertFileSrc(r.path);
-          v.loop = this.loop;
+          v.loop = this.loop && !this.segment;
           this.play();
         } catch (e) {
           if (preview.current?.assetId !== assetId) return;
@@ -160,6 +162,7 @@ function buildPreviewMediaStore(panelId: string) {
         const preview = previewSession(panelId);
         this.kind = kind;
         curPath = absPath;
+        this.segment = null;
         pathTranscodeRetried = false;
         pathDirectRetried = false;
         this.fps = kind === "video" ? fps : null;
@@ -317,13 +320,18 @@ function buildPreviewMediaStore(panelId: string) {
         this.playing = false;
         this.currentTime = 0;
         this.duration = 0;
+        this.segment = null;
         this.fps = null;
         this.rate = 1;
         this.loop = false;
       },
       play(): void {
         const v = this.getEl();
-        if (v.src) void v.play().catch((e) => console.warn("播放失败：", e));
+        if (!v.src) return;
+        if (this.segment && (v.currentTime < this.segment.startMs / 1000 || v.currentTime >= this.segment.endMs / 1000)) {
+          this.seek(this.segment.startMs / 1000);
+        }
+        void v.play().catch((e) => console.warn("播放失败：", e));
       },
       pause(): void {
         el?.pause();
@@ -332,10 +340,24 @@ function buildPreviewMediaStore(panelId: string) {
         if (this.playing) this.pause();
         else this.play();
       },
+      syncProgress(): void {
+        if (!el || this.scrubbing) return;
+        if (this.segment && el.currentTime >= this.segment.endMs / 1000) {
+          if (this.loop) this.seek(this.segment.startMs / 1000);
+          else {
+            el.pause();
+            this.seek(this.segment.endMs / 1000);
+          }
+        } else {
+          this.currentTime = el.currentTime;
+        }
+      },
       seek(t: number): void {
         const v = this.getEl();
-        const max = this.duration > 0 ? this.duration : Number.MAX_SAFE_INTEGER;
-        v.currentTime = Math.min(max, Math.max(0, t));
+        const min = this.segment?.startMs ? this.segment.startMs / 1000 : 0;
+        const end = this.segment ? this.segment.endMs / 1000 : Number.MAX_SAFE_INTEGER;
+        const max = Math.min(this.duration > 0 ? this.duration : Number.MAX_SAFE_INTEGER, end);
+        v.currentTime = Math.min(max, Math.max(min, t));
         this.currentTime = v.currentTime;
       },
       seekBy(delta: number): void {
@@ -366,7 +388,7 @@ function buildPreviewMediaStore(panelId: string) {
       },
       toggleLoop(): void {
         this.loop = !this.loop;
-        this.getEl().loop = this.loop;
+        this.getEl().loop = this.loop && !this.segment;
       },
       // 当前画面设为预览图（5.2 视频）：ffmpeg 截帧走缩略图管线，前端即时换卡片图（同 setAsThumb 技巧）；
       // toast 反馈 + modifiedAt URL 版本戳 + 视图外兜底 refresh（2026-08-20 与动图侧同修复）

@@ -22,6 +22,7 @@ import { usePickerStore } from "../../stores/picker";
 import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
 import { previewSession } from "../../stores/preview";
+import { useSemanticTaskStore } from "../../stores/semantic";
 import type { CtxEntry } from "../contextMenus";
 import { isSequence as isSequenceAsset, isThumbCapableExt } from "../formatBadge";
 import { openPreviewWindow } from "../previewOps";
@@ -81,6 +82,7 @@ function selectedAssetIds(): string[] {
 // 提示词 = 一级菜单三态（2026-09-05 走查重做；提示词轮接业务，menuSpecs/promptMenu 共享构建器）
 // panelId = 发起右键的 panel（2026-09-25 per-panel 会话化：「打开预览」开进属主 panel 会话）
 export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
+  const semanticTasks = useSemanticTaskStore();
   // 选择模式（6.2 一轮，PRD 03_数据链接 04）：右键仅留查看类操作，编辑类不出现
   if (usePickerStore().active) return pickerAssetCardSpec(p, panelId);
   const content = useContentStore();
@@ -281,7 +283,11 @@ export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
         { label: "自动抠图", disabled: true },
         { label: "裁剪", disabled: true },
         "divider",
-        { label: "分析文件向量", disabled: true },
+        { label: "分析文件向量", action: () => void semanticTasks.start(selectedAssetIds()) },
+        { label: "详细语义分析（外部服务）", action: () => void semanticTasks.startDetailed(selectedAssetIds()) },
+        "divider",
+        { label: "创建虚拟片段（当前命中）", disabled: !!p.segment, action: () => void semanticTasks.create(assetId, false, panelId) },
+        { label: "物理截取当前命中", disabled: !!p.segment, action: () => void semanticTasks.create(assetId, true, panelId) },
         "divider",
         { label: "引用至 AI 对话框", disabled: true },
       ],
@@ -342,6 +348,7 @@ export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
 // 置顶 / Animate 生成缩略图）快速访问不列；提示词组收窄集不列（走查骨架本只在位置视口，2026-09-05）。
 //（新标签页打开 2026-09-25 已随会话化接入点亮）。
 function virtualAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
+  const semanticTasks = useSemanticTaskStore();
   const selection = useSelectionStore();
   const content = useContentStore();
   const assetId = p.assetId;
@@ -463,6 +470,18 @@ function virtualAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
     ...(p.ext.toLowerCase() === "md"
       ? [{ label: "打包导出 MD…", action: () => void exportMdBundleAsset(assetId) } as CtxEntry]
       : []),
+    "divider",
+    {
+      label: "AI 工具集",
+      submenu: [
+        { label: "分析文件向量", action: () => void semanticTasks.start(selectedAssetIds()) },
+        { label: "详细语义分析（外部服务）", action: () => void semanticTasks.startDetailed(selectedAssetIds()) },
+        "divider",
+        { label: "创建虚拟片段（当前命中）", disabled: !!p.segment, action: () => void semanticTasks.create(assetId, false, panelId) },
+        { label: "物理截取当前命中", disabled: !!p.segment, action: () => void semanticTasks.create(assetId, true, panelId) },
+      ],
+    },
+    "divider",
     {
       label: "复制数据",
       submenu: [

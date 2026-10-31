@@ -485,7 +485,7 @@ fn register_one(
   let name = unit_name(files, groups, item.unit);
   let asset_id = asset.id.clone();
   // 动图（2.3 恢复）：注册成功后提交小动画生成队列——info/{stem}_anim.webp 短边 320 卡片播放源
-  let anim = crate::services::anim::is_anim(&asset);
+  let anim = crate::services::anim::is_animated_file(&asset, &crate::core::paths::origin_file(assets_dir, &asset_id, &asset.origin_name));
   let result = with_lib(lib, state, move |l| {
     if let Some(ext) = icon {
       l.format_icons.insert(ext);

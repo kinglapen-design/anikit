@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 输入框——docs/06_UI重构/Design Token/组件/输入框/ 大 / 小 两稿合一：
 // size：lg = 高 34 / padding 8/12 / 常态描边 通用三级；sm = 高 26 / padding 4/12 / 常态描边 亮色/半透明-3。
+// type = text / password（2026-10-25 外部 provider 密钥输入扩；只改原生遮罩，样式完全一致）。
 // **文字一律左对齐**（2026-09-21 用户定：所有输入全部左对齐——sm 稿 justify-content center
 // 年/月/日小框语境特化废，日期筛选小框同改）。
 // 底色通用二级 + 圆角 8；文字 正文档 13/18 亮色/二级；占位符 亮色/四级（2026-08-29 用户定）。
@@ -22,6 +23,7 @@ import AppIcon from "../AppIcon.vue";
 withDefaults(
   defineProps<{
     size?: "lg" | "sm";
+    type?: "text" | "password";
     placeholder?: string;
     disabled?: boolean;
     readonly?: boolean;
@@ -33,7 +35,7 @@ withDefaults(
     clearable?: boolean; // 有内容时出清除钮（烧 AppInput/AppSearchBar 补的能力，2026-09-20）
     forceState?: "" | "focus";
   }>(),
-  { size: "lg", placeholder: undefined, disabled: false, readonly: false, leadingIcon: undefined, trailingIcon: undefined, trailingButton: false, focusable: true, clearable: false, forceState: "" },
+  { size: "lg", type: "text", placeholder: undefined, disabled: false, readonly: false, leadingIcon: undefined, trailingIcon: undefined, trailingButton: false, focusable: true, clearable: false, forceState: "" },
 );
 const model = defineModel<string>({ default: "" });
 const emit = defineEmits<{ trailingClick: [] }>();
@@ -60,6 +62,7 @@ defineExpose({
       ref="inputEl"
       v-model="model"
       class="ti-inner"
+      :type="type"
       :placeholder="placeholder"
       :disabled="disabled"
       :readonly="readonly"

@@ -3,6 +3,7 @@
 // 类型以后端序列化结构为唯一来源（src-tauri/src/commands/preview.rs、media.rs；
 // serde camelCase，Option ↔ TS null）。本层不吞错：失败原样抛出，各调用点按原有 try/catch 处理。
 import { invoke } from "@tauri-apps/api/core";
+import type { SegmentRange } from "./semantic";
 
 // get_asset_file_path 返回：path = webview 可渲染文件绝对路径（直渲格式 = 源路径；
 // psd/psb = 已缓存的解码预览；暂不可得为 null）；pending = 高清层后台解析中（完成经 preview-full-ready 推送）；
@@ -20,6 +21,7 @@ export interface MediaSource {
   path: string;
   transcoded: boolean;
   fps: number | null;
+  segment?: SegmentRange;
 }
 
 // 单帧条目：fullPath = 帧原图绝对路径；stripPath = 帧条小图（null = 后台生成中，
@@ -36,6 +38,7 @@ export interface SequenceFrames {
   fps: number | null;
   thumbFrame: string | null;
   frames: FrameEntry[];
+  segment?: SegmentRange;
 }
 
 // prepare_anim_strips 返回的单条（name = `f:{索引0起}`，与 preview-strips-ready 事件 items 同构）

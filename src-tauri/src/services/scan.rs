@@ -260,6 +260,8 @@ mod tests {
         source: None,
         start: None,
         end: None,
+        start_frame: None,
+        end_frame: None,
         prompt: None,
       },
     );

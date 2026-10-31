@@ -18,6 +18,8 @@
 // doubleClickOpen / mdBundleExportDir）；自动导入 = 空间级 set_auto_import + 盘符查询 get_inbox_drive_letter；
 // 缓存 = get_cache_overview / clear_cache + library-thumbs-rebuilt 事件；插件 = cep_export_settings
 // 读写（护栏与后端 validate 同区间）；关于 = getVersion + show_logs_in_explorer。
+// 语义分析 = components/settings/SemanticSettings + lib/semanticSettings（同一通用页；设备 / 模型目录 /
+// 外部 provider 与 Windows 钥匙串）；共享 sd 行样式 = styles/settings.css。
 // 快捷键表 = 组件内静态数组（action / keys / bound），2026-10-15 全量点亮（原未接入七行实绑 +
 // 回收站两键守卫放行 + Shift+Delete / Alt+F4 补全）；未接入行样式机制保留 = 不置灰、键位降四级 +
 //「未接入」警告橙尾标（三轮用户定：颜色即状态区分），后续新键未接时标 bound:false 即复用。
@@ -29,6 +31,7 @@ import SegmentedControl from "./buttons/SegmentedControl.vue";
 import SwitchButton from "./buttons/SwitchButton.vue";
 import SectionTitle from "./items/SectionTitle.vue";
 import TextInput from "./inputs/TextInput.vue";
+import SemanticSettings from "./settings/SemanticSettings.vue";
 import ScrollThumb from "./ScrollThumb.vue";
 import { formatSize } from "../lib/formatSize";
 import { useSettingsData, type SettingsMockData } from "../lib/settingsData";
@@ -181,6 +184,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
                 </div>
                 <p class="sd-note">{{ mdBundleDir || "未设置：导出到当前文档旁" }}</p>
               </div>
+              <SemanticSettings :mock="mock?.semantic" />
             </div>
             <!-- 自动导入 -->
             <div v-else-if="tab === 'import'" class="sd-rows">
@@ -401,53 +405,6 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
   transform: translateX(-48px);
   opacity: 0;
 }
-/* 28 行组（§39⑤ 查看方式稿自动播放组口径：行 28 / gap 8） */
-.sd-rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--n-space-8);
-}
-/* 行：高 28，label 与控件两端对齐 */
-.sd-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--n-space-12);
-  height: 28px;
-}
-/* 行 + 行下说明 的复合块（自动导入开关行） */
-.sd-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--n-space-4);
-}
-/* 行 label：13/18 二级 */
-.sd-label {
-  font-size: var(--n-fs-body);
-  line-height: var(--n-lh-body);
-  color: var(--n-l2);
-  white-space: nowrap;
-}
-/* 次要文字三语境同款 12/16 三级：说明行 / 右侧状态·数值·单位 / 缓存子组小标 */
-.sd-note,
-.sd-value,
-.sd-sub {
-  font-size: var(--n-fs-secondary);
-  line-height: var(--n-lh-secondary);
-  color: var(--n-l3);
-}
-.sd-note {
-  margin: 0;
-}
-.sd-value {
-  white-space: nowrap;
-  flex: none;
-}
-/* 行内分段控制器：收缩为内容宽（组件根默认 100% 均分） */
-.sd-seg {
-  width: auto;
-  flex: none;
-}
 /* 缓存区块：子组间 + 合计行 gap 12 */
 .sd-cache {
   display: flex;
@@ -474,17 +431,6 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
   display: flex;
   flex-direction: column;
   gap: var(--n-space-2);
-}
-/* 插件输入行右组：TextInput sm 定宽 96 + 单位/说明 */
-.sd-input-side {
-  display: flex;
-  align-items: center;
-  gap: var(--n-space-8);
-  flex: none;
-}
-.sd-num {
-  width: 96px;
-  flex: none;
 }
 /* 快捷键表：行 22 紧凑排 */
 .sd-keys {

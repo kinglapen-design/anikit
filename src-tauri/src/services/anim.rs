@@ -1,15 +1,14 @@
-//! 动图（GIF / WEBP 动图）探测与逐帧解码：纯 Rust，无 ffmpeg 依赖。
-//! probe：GIF 走自研字节级扫描（2026-07-26：image crate into_frames 全量解码像素数帧，
-//! 大 GIF 导入等半天——字节扫描只读块结构不解像素，微秒级返回）；WEBP 走 image-webp 元数据。
-//! decode_frames 流式逐帧回调：单趟解码供**帧流 webp 桥（frame_stream）与动图帧条
-//! （preview_queue::AnimStrips）**；decode_frame 单帧解码供设封面 / 笔记帧画面抽帧
-//! （2026-08-20 解包废除后，三者全部对 origin 运行时解码）。静态 gif/webp（单帧）按静态图片处理。
+//! 动图（GIF / WEBP / APNG）探测与逐帧解码：纯 Rust，无 ffmpeg 依赖。
+//! probe 只读元数据与帧时长，不解码整段像素；decode_frames 单趟流式回调供帧流、
+//! 帧条、设封面与语义分析共用。静态单帧图片按普通图片处理。
 
 use std::path::Path;
 
 use image::{AnimationDecoder, RgbaImage};
 
 use crate::core::models::AssetMeta;
+
+mod apng;
 
 /// 动图信息：导入时写 metadata（width/height/duration/frameCount）
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -20,30 +19,33 @@ pub struct AnimInfo {
   pub duration_secs: f64,
 }
 
-/// 探测动图信息；非 gif/webp、静态（单帧）、解析失败均返回 None（"能力探测"语义）
+/// 探测动图信息；非动图、静态（单帧）、解析失败均返回 None（"能力探测"语义）
 pub fn probe(path: &Path) -> Option<AnimInfo> {
   match ext_of(path).as_str() {
     "gif" => probe_gif(path),
     "webp" => probe_webp(path),
+    "png" => apng::probe(path),
     _ => None,
   }
 }
 
-/// 动图资产判定：gif/webp 且已 probe 出多帧（frame_count 有值，导入时 probe 写入）。
-/// 帧流路由 / list_sequence_frames 拒绝分支 / 封面帧抽帧分支 / 笔记抽帧分支共用同一口径
+/// GIF / WebP 元数据判定；APNG 必须用源文件路径判定，不能与 PNG 序列帧混淆。
 pub fn is_anim(meta: &AssetMeta) -> bool {
   meta.frame_count.is_some() && matches!(meta.ext.to_lowercase().as_str(), "gif" | "webp")
 }
 
+pub fn is_animated_file(meta: &AssetMeta, origin: &Path) -> bool {
+  is_anim(meta) || (meta.ext.eq_ignore_ascii_case("png") && apng::probe(origin).is_some())
+}
+
 /// 流式解码全部帧：逐帧回调（帧序号 0 起、RGBA 完整帧、该帧显示时长 ms），回调返回 false 中止。
-/// 单趟解码（替代 decode_frame 每帧全量重解码的 O(n²)）。
-/// GIF 迭代器内部已完成 disposal/画布合成（image 0.25 GifFrameIterator 直接产完整画面），
-/// 与 decode_frame 的 collect_frames 语义一致；单帧解码失败跳过并 warn（序号仍占位），不整体失败。
-/// 非 gif/webp / 打开失败返回 None。
+/// 单趟解码（替代 decode_frame 每帧全量重解码的 O(n²)）。失败帧跳过并 warn，序号仍占位。
+/// 非动图 / 打开失败返回 None。
 pub fn decode_frames(path: &Path, mut on_frame: impl FnMut(u32, RgbaImage, u32) -> bool) -> Option<()> {
   match ext_of(path).as_str() {
     "gif" => stream_gif(path, &mut on_frame),
     "webp" => stream_webp(path, &mut on_frame),
+    "png" => apng::stream(path, &mut on_frame),
     _ => None,
   }
 }

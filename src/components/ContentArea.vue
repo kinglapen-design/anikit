@@ -100,11 +100,7 @@ const searchHint = computed(() =>
 const items = computed(() => {
   if (!searching.value) return content.placementsFor(viewKey.value);
   if (wsView.value) return search.wsPlacementsFor(panelApi.id);
-  const hits = search.hitsFor(panelApi.id);
-  const base = search.effectiveGlobal(panelApi.id)
-    ? content.placementsFor("quick:all")
-    : content.placementsFor(viewKey.value);
-  return base.filter((p) => hits.has(`${p.assetId}|${p.folderId}`));
+  return search.resultPlacementsFor(panelApi.id, viewKey.value);
 });
 // 搜索态命中档案节点列表（AssetGrid 档案区数据源；无效 id 兜底剔除）
 const searchArchiveNodes = computed<FolderNode[]>(() => {

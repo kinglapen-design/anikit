@@ -6,3 +6,5 @@
 		- `set_anim_stream_playing(session: number, playing: boolean)` —— 播放 / 暂停（预览播放条/空格；暂停 = 推完当前帧阻塞，恢复无缝续播）
 		- `set_anim_stream_rate(session: number, rate: number)` —— 倍速（预览 RateControl；非法值 ≤0/NaN/无穷 忽略）
 		- `seek_anim_stream(session: number, frameIndex: number)` —— 动图定位到目标帧（预览播放条拖动 / 逐帧步进）
+
+**虚拟片段（2026-10-27）**：`start_anim_stream` 对 `type=segment` 的动图额外返回可选 `segment: { startMs, endMs, startFrame, endFrame }`，帧流从来源的 `startFrame` 起播，到 `endFrame` 后停止或循环回起点，seek 也钳在该范围。`idx` 始终是来源原始帧索引，不按片段重新编号。来源缺失或帧索引不完整时明确失败；普通动图没有 `segment` 字段，行为不变。

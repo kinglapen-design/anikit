@@ -72,6 +72,8 @@ pub struct PlacementView {
   pub tags: Vec<String>,
   /// 提示词态（2026-09-26 提示词轮，PRD 03_数据链接 02_文件）：自 metadata.prompt 派生——
   /// "none" = 未指定 / "scanned" = 已扫描（纯快照无引用）/ "linked" = 已指定（引用源文本资产）
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub segment: Option<crate::services::semantic::types::SegmentRange>,
   pub prompt_state: &'static str,
 }
 
@@ -143,6 +145,7 @@ pub fn placement_view(lib: &Library, meta: &AssetMeta, p: &Placement, icons: &Ha
     fps,
     hidden: meta.hidden == Some(true),
     play_asset_id: thumb_meta.map(|t| t.id.clone()),
+    segment: crate::services::semantic::playback::range_from_meta(meta).ok().flatten(),
     tags: meta.tags.clone(),
     // 提示词态取资产自身（不经伴生缩略图代理——prompt 是本资产的绑定关系）
     prompt_state: match &meta.prompt {

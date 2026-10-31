@@ -5,21 +5,25 @@
 // per-panel 会话化（2026-09-25）：preview 会话由工厂入参闭包捕获（属主 panel），不再抓全局单例
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { PreviewSession } from "../../stores/preview";
+import { segmentFrameCount } from "../semantic";
 import type { PlayBarSpec } from "./types";
 
 export function makeFramesSpec(preview: PreviewSession): PlayBarSpec {
-  const count = (): number =>
-    preview.kind === "anim" ? preview.animTotal : (preview.seq?.frames.length ?? 0);
+  const count = (): number => preview.segment
+    ? segmentFrameCount(preview.segment)
+    : preview.kind === "anim" ? preview.animTotal : (preview.seq?.frames.length ?? 0);
+  const start = (): number => preview.segment?.startFrame ?? 0;
+  const end = (): number => preview.segment?.endFrame ?? Math.max(0, count() - 1);
   return {
     show: ["rate", "note", "cover", "fullscreen"],
     playing: () => preview.playing,
     disabled: () => false,
-    progressGet: () => (count() > 1 ? preview.frame / (count() - 1) : 0),
+    progressGet: () => (end() > start() ? (preview.frame - start()) / (end() - start()) : 0),
     progressSet: (p) => {
-      if (count() > 0) preview.setFrame(Math.round(p * (count() - 1)));
+      if (count() > 0) preview.setFrame(start() + Math.round(p * (end() - start())));
     },
     tcCurr: () => String(preview.frame + 1),
-    tcTotal: () => String(count()),
+    tcTotal: () => String(preview.segment ? end() + 1 : count()),
     rate: () => preview.rate,
     setRate: (r) => preview.setRate(r),
     togglePlay: () => preview.togglePlay(),
@@ -29,15 +33,16 @@ export function makeFramesSpec(preview: PreviewSession): PlayBarSpec {
     frames: {
       count,
       thumb: (i) => {
+        const sourceIndex = start() + i;
         if (preview.kind === "anim") {
-          const p = preview.animStrips[`f:${i}`];
+          const p = preview.animStrips[`f:${sourceIndex}`];
           return p ? convertFileSrc(p) : null;
         }
-        const f = preview.seq?.frames[i];
+        const f = preview.seq?.frames[sourceIndex];
         return f?.stripPath ? convertFileSrc(f.stripPath) : null;
       },
-      frame: () => preview.frame,
-      setFrame: (i) => preview.setFrame(i),
+      frame: () => preview.frame - start(),
+      setFrame: (i) => preview.setFrame(start() + i),
       stepFrame: (d) => preview.stepFrame(d),
     },
   };

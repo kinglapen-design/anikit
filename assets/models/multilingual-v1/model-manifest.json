@@ -1,0 +1,132 @@
+{
+  "text_model": "sentence-transformers/clip-ViT-B-32-multilingual-v1",
+  "text_model_revision": "58edf8cada9e398793dca955574a48cbb7f18be2",
+  "text_license": "apache-2.0",
+  "image_model": "openai/clip-vit-base-patch32",
+  "image_model_revision": "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268",
+  "image_license_evidence": "OpenAI official CLIP repository MIT; HF mirror has no license tag",
+  "openai_source_revision": "d05afc436d78f1c48dc0dbf8e5980a9d471f35f6",
+  "context_length": 128,
+  "embedding_dimension": 512,
+  "image_shape": [
+    1,
+    3,
+    224,
+    224
+  ],
+  "precision": "FP32",
+  "files": [
+    {
+      "path": "models/text.onnx",
+      "bytes": 540591040,
+      "sha256": "d8cc5dcab1e6b37048b93e14dfaf90ca4a13d84704b8c161f06e4e5a97b07355"
+    },
+    {
+      "path": "models/vision.onnx",
+      "bytes": 351517281,
+      "sha256": "91b93a912b0b8d6e355a9605bbce66415eb7366295819f2883dc66d9e266f5ca"
+    },
+    {
+      "path": "models/tokenizer.json",
+      "bytes": 2919627,
+      "sha256": "672146ee6867dc02a01c474090e237789f8a066ee7247bb2cb6c8688a27536a8"
+    }
+  ],
+  "checkpoints": [
+    {
+      "path": "weights/text/model.safetensors",
+      "bytes": 538947416,
+      "sha256": "7b968c09938603158413ea2c91af82e82158ebb6db901a6cf97c28ce7d7ebc6d"
+    },
+    {
+      "path": "weights/text/2_Dense/model.safetensors",
+      "bytes": 1572984,
+      "sha256": "d12568dc7300970a4d3dbb49068ad16cd89b99840b74b026f8e48071e9414f74"
+    },
+    {
+      "path": "weights/image/pytorch_model.bin",
+      "bytes": 605247071,
+      "sha256": "a63082132ba4f97a80bea76823f544493bffa8082296d62d71581a4feff1576f"
+    }
+  ],
+  "onnx": {
+    "text": {
+      "ir_version": 8,
+      "opsets": {
+        "": 17
+      },
+      "inputs": [
+        {
+          "name": "input_ids",
+          "element_type": 7,
+          "shape": [
+            1,
+            128
+          ]
+        },
+        {
+          "name": "attention_mask",
+          "element_type": 7,
+          "shape": [
+            1,
+            128
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "unnorm_text_features",
+          "element_type": 1,
+          "shape": [
+            1,
+            512
+          ]
+        },
+        {
+          "name": "text_features",
+          "element_type": 1,
+          "shape": [
+            1,
+            512
+          ]
+        }
+      ]
+    },
+    "vision": {
+      "ir_version": 8,
+      "opsets": {
+        "": 17
+      },
+      "inputs": [
+        {
+          "name": "pixel_values",
+          "element_type": 1,
+          "shape": [
+            1,
+            3,
+            224,
+            224
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "unnorm_image_features",
+          "element_type": 1,
+          "shape": [
+            1,
+            512
+          ]
+        },
+        {
+          "name": "image_features",
+          "element_type": 1,
+          "shape": [
+            1,
+            512
+          ]
+        }
+      ]
+    }
+  }
+}

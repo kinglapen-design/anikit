@@ -518,12 +518,21 @@ fn date_hit(cond: &DateCond, rfc3339: &str, today: NaiveDate) -> bool {
   custom_hit || cond.buckets.iter().any(|b| bucket_hit(b, date, today))
 }
 
+/// 语义检索候选集：复用分词搜索的范围、回收站 / hidden 与筛选规则，不做关键词过滤。
+pub fn search_candidates(lib: &Library, scope: &SearchScope) -> SearchHits {
+  search_impl(lib, &[], false, scope)
+}
+
 pub fn search(lib: &Library, query: &str, scope: &SearchScope) -> SearchHits {
   let (keywords, force_global) = parse_query(query);
-  let filtering = scope.filters.has_active();
-  if keywords.is_empty() && !filtering {
+  if keywords.is_empty() && !scope.filters.has_active() {
     return SearchHits::default();
   }
+  search_impl(lib, &keywords, force_global, scope)
+}
+
+fn search_impl(lib: &Library, keywords: &[String], force_global: bool, scope: &SearchScope) -> SearchHits {
+  let filtering = scope.filters.has_active();
   let today = chrono::Local::now().date_naive();
   let global = force_global || scope.global;
 
@@ -562,7 +571,7 @@ pub fn search(lib: &Library, query: &str, scope: &SearchScope) -> SearchHits {
       if filtering && !scope.filters.asset_pass(lib, meta, today) {
         continue;
       }
-      if !keywords.is_empty() && !matches(&asset_texts(lib, meta, &item.placements), &keywords) {
+      if !keywords.is_empty() && !matches(&asset_texts(lib, meta, &item.placements), keywords) {
         continue;
       }
       if item.placements.iter().any(|p| scope.filters.placement_pass(meta, p, item.placements.len(), folder_filter.as_ref())) {
@@ -600,7 +609,7 @@ pub fn search(lib: &Library, query: &str, scope: &SearchScope) -> SearchHits {
     if filtering && !scope.filters.asset_pass(lib, meta, today) {
       continue;
     }
-    if !keywords.is_empty() && !matches(&asset_texts(lib, meta, placements), &keywords) {
+    if !keywords.is_empty() && !matches(&asset_texts(lib, meta, placements), keywords) {
       continue;
     }
     for p in placements {
@@ -648,7 +657,7 @@ pub fn search(lib: &Library, query: &str, scope: &SearchScope) -> SearchHits {
           continue;
         }
       }
-      if matches(&archive_texts(lib, f), &keywords) {
+      if matches(&archive_texts(lib, f), keywords) {
         hits.archives.push(f.id.clone());
       }
     }
@@ -744,6 +753,8 @@ mod tests {
       source: None,
       start: None,
       end: None,
+      start_frame: None,
+      end_frame: None,
       prompt: None,
     });
     add_placement(lib, id, &format!("{name}.{ext}"), folder, true);

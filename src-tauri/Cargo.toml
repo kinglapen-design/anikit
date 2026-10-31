@@ -1,5 +1,6 @@
 [package]
 name = "app"
+default-run = "app"
 version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
@@ -98,6 +99,9 @@ axum = { version = "0.8", default-features = false, features = ["http1", "tokio"
 rusqlite = { version = "0.38", features = ["bundled"] }
 ort = { version = "2.0.0-rc.15", default-features = false, features = ["std", "ndarray", "api-24", "directml", "load-dynamic"] }
 tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"] }
+# 外部详细分析：仅用户配置的 HTTP provider；API key 由 Windows 凭据管理器保管
+reqwest = { version = "0.12.28", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots"] }
+keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
 
 # 阶段四 spike 同款补丁：ffmpeg-next 8.1.0 的 EXIF frame side data 门控门槛
 #（avcodec minor>=28 才开 ffmpeg_8_1）滞后于实际合入（avutil 60.10 / avcodec 62.13 已含
@@ -108,6 +112,7 @@ ffmpeg-next = { path = "patches/ffmpeg-next" }
 
 [dev-dependencies]
 tempfile = "3"
+tauri = { version = "2.11.3", features = ["test"] }
 
 # dev 构建优化（2026-07-26 实测定位，动图帧条 5-10 秒根因）：
 # 纯 debug（opt-level 0）图像解码 / 重采样慢 10-30 倍（1080p webp 帧条 725ms/帧）。

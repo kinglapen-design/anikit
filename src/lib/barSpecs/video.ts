@@ -14,7 +14,9 @@ import type { PlayBarSpec } from "./types";
 export function makeVideoSpec(preview: PreviewSession, media: PreviewMediaSession): PlayBarSpec {
   const ui = useUiStore();
   const useFrames = (): boolean => ui.timeDisplay === "frames" && media.fps != null && media.fps > 0;
-  const total = (): number => totalFrames(media.duration, media.fps ?? 24);
+  const start = (): number => (media.segment?.startMs ?? 0) / 1000;
+  const end = (): number => media.segment ? media.segment.endMs / 1000 : media.duration;
+  const total = (): number => totalFrames(end(), media.fps ?? 24);
   const groups = (): PlayBarSpec["show"] =>
     preview.current?.assetId.startsWith("ws:")
       ? (["transport", "step", "volume", "rate", "loop", "fullscreen"] as const)
@@ -23,15 +25,15 @@ export function makeVideoSpec(preview: PreviewSession, media: PreviewMediaSessio
     show: groups(),
     playing: () => media.playing,
     disabled: () => media.transcodingSlow,
-    progressGet: () => (media.duration > 0 ? media.currentTime / media.duration : 0),
+    progressGet: () => (end() > start() ? (media.currentTime - start()) / (end() - start()) : 0),
     progressSet: (p) => {
-      if (media.duration > 0) media.seek(p * media.duration);
+      if (end() > start()) media.seek(start() + p * (end() - start()));
     },
     tcCurr: () =>
       useFrames() && media.fps
         ? String(frameOfTime(media.currentTime, media.fps, total()))
         : formatDuration(media.currentTime),
-    tcTotal: () => (useFrames() ? String(total()) : formatDuration(media.duration)),
+    tcTotal: () => (useFrames() ? String(total()) : formatDuration(end())),
     rate: () => media.rate,
     setRate: (r) => media.setRate(r),
     togglePlay: () => media.togglePlay(),

@@ -33,9 +33,6 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use crate::core::json_io::read_json;
-use crate::core::models::AssetMeta;
-use crate::core::paths;
 use crate::services::{anim, thumbnail};
 
 /// 会话上限（前端 anim 池 50 + 预览单实例之上留余量，防泄漏打爆 CPU）
@@ -66,6 +63,8 @@ pub struct StreamStart {
   pub fps: Option<f64>,
   /// 时长秒（动图 metadata duration 透传，可能 null）
   pub duration: Option<f64>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub segment: Option<crate::services::semantic::types::SegmentRange>,
 }
 
 #[derive(Clone, Default)]
@@ -91,19 +90,21 @@ struct Session {
   rate: AtomicU32,
   /// 待定位目标帧索引（NO_SEEK = 无）：快进 / 回退重开见模块头注释
   seek_to: AtomicU64,
+  range: Option<(u32, u32)>,
   slot: Mutex<Latest>,
   tx: tokio::sync::watch::Sender<u64>,
 }
 
 impl Session {
-  fn new(short_edge: u32) -> Arc<Self> {
+  fn ranged(short_edge: u32, range: Option<(u32, u32)>) -> Arc<Self> {
     let (tx, _rx) = tokio::sync::watch::channel(0u64);
     Arc::new(Session {
       stop: AtomicBool::new(false),
       target: AtomicU32::new(clamp_edge(short_edge)),
       playing: AtomicBool::new(true),
       rate: AtomicU32::new(1.0f32.to_bits()),
-      seek_to: AtomicU64::new(NO_SEEK),
+      seek_to: AtomicU64::new(range.map(|(start, _)| u64::from(start)).unwrap_or(NO_SEEK)),
+      range,
       slot: Mutex::new(Latest::default()),
       tx,
     })
@@ -240,9 +241,12 @@ fn frame_bytes(f: &Latest) -> Vec<u8> {
 /// short_edge = 目标短边（卡片显示尺寸，clamp [MIN_EDGE, MAX_EDGE]；不足不放大）。
 /// 非动图 / metadata 缺失 / 超上限返回 Err（前端回退静态缩略图）。
 pub fn start(assets_dir: &Path, asset_id: &str, short_edge: u32) -> Result<StreamStart, String> {
-  let meta: AssetMeta = read_json(&paths::info_dir(assets_dir, asset_id).join("metadata.json"))
-    .map_err(|e| format!("metadata 读取失败: {e}"))?;
-  if !anim::is_anim(&meta) {
+  let playback = crate::services::semantic::playback::resolve(assets_dir, asset_id)?;
+  let segment = playback.segment.clone();
+  let bounds = segment.as_ref().map(|range| range.frame_bounds()).transpose()?;
+  let meta = playback.media_meta().clone();
+  let origin = playback.origin;
+  if !anim::is_animated_file(&meta, &origin) {
     return Err("非动图资产".to_string());
   }
   let gs = global();
@@ -252,12 +256,11 @@ pub fn start(assets_dir: &Path, asset_id: &str, short_edge: u32) -> Result<Strea
       return Err(format!("帧流会话已达上限 {MAX_SESSIONS}"));
     }
   }
-  let origin = paths::origin_file(assets_dir, asset_id, &meta.origin_name);
   if !origin.is_file() {
     return Err("origin 文件不存在".to_string());
   }
   let id = gs.next.fetch_add(1, Ordering::Relaxed);
-  let sess = Session::new(short_edge);
+  let sess = Session::ranged(short_edge, bounds);
   let runner = Arc::clone(&sess);
   let ext = meta.ext.to_lowercase();
   std::thread::Builder::new()
@@ -269,7 +272,8 @@ pub fn start(assets_dir: &Path, asset_id: &str, short_edge: u32) -> Result<Strea
     session: id,
     port: gs.port.load(Ordering::Relaxed) as u16,
     fps: None,
-    duration: meta.duration,
+    duration: segment.as_ref().map(|range| range.duration_secs()).or(meta.duration),
+    segment,
   })
 }
 
@@ -302,7 +306,8 @@ pub fn set_rate(session: u64, rate: f32) {
 /// 目标在当前之后 = 快进（不推帧不睡眠）；已过 = 中止本趟重开从头快进。会话不存在静默忽略。
 pub fn seek(session: u64, frame_index: u32) {
   if let Some(sess) = global().sessions.lock().unwrap().get(&session) {
-    sess.seek_to.store(frame_index as u64, Ordering::Relaxed);
+    let index = sess.range.map(|(start, end)| frame_index.clamp(start, end)).unwrap_or(frame_index);
+    sess.seek_to.store(index as u64, Ordering::Relaxed);
   }
 }
 
@@ -326,6 +331,9 @@ fn run_session(sess: Arc<Session>, origin: PathBuf, ext: String) {
     if sess.stop.load(Ordering::Relaxed) {
       return;
     }
+    if let Some((start, _)) = sess.range {
+      sess.seek_to.store(u64::from(start), Ordering::Relaxed);
+    }
     let alive = match ext.as_str() {
       "webp" => run_webp_once(&sess, &origin),
       _ => run_ffmpeg_once(&sess, &origin), // gif 及其余动图走 ffmpeg
@@ -344,6 +352,9 @@ enum Gate {
 }
 
 fn gate(sess: &Arc<Session>, idx: u32) -> Gate {
+  if sess.range.is_some_and(|(_, end)| idx > end) {
+    return Gate::Abort;
+  }
   let t = sess.seek_to.load(Ordering::Relaxed);
   if t == NO_SEEK {
     return Gate::Deliver;
@@ -671,5 +682,14 @@ mod tests {
     wait_frame(st.session, "出帧");
     stop_all();
     assert!(global().sessions.lock().unwrap().is_empty());
+  }
+
+  #[test]
+  fn ranged_gate_starts_and_ends_on_original_frame_bounds() {
+    let session = Session::ranged(320, Some((1, 2)));
+    assert!(matches!(gate(&session, 0), Gate::Skip));
+    assert!(matches!(gate(&session, 1), Gate::Deliver));
+    assert!(matches!(gate(&session, 2), Gate::Deliver));
+    assert!(matches!(gate(&session, 3), Gate::Abort));
   }
 }

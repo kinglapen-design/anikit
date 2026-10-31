@@ -1,0 +1,55 @@
+.sd-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-8);
+}
+.sd-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--n-space-12);
+  height: 28px;
+}
+.sd-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-4);
+}
+.sd-label {
+  font-size: var(--n-fs-body);
+  line-height: var(--n-lh-body);
+  color: var(--n-l2);
+  white-space: nowrap;
+}
+.sd-note,
+.sd-value,
+.sd-sub {
+  font-size: var(--n-fs-secondary);
+  line-height: var(--n-lh-secondary);
+  color: var(--n-l3);
+}
+.sd-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.sd-value {
+  white-space: nowrap;
+  flex: none;
+}
+.sd-seg {
+  width: auto;
+  flex: none;
+}
+.sd-input-side {
+  display: flex;
+  align-items: center;
+  gap: var(--n-space-8);
+  flex: none;
+}
+.sd-input-side > .ti-root {
+  min-width: 0;
+}
+.sd-num {
+  width: 96px;
+  flex: none;
+}

@@ -33,6 +33,9 @@ import { useContentStore } from "../stores/content";
 import { previewMediaSession } from "../stores/previewMedia";
 import { previewNotesSession } from "../stores/previewNotes";
 import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
+import { openContextMenu } from "../lib/contextMenus";
+import type { SemanticMode } from "../lib/semantic";
+import { useToastStore } from "../stores/toast";
 
 const props = withDefaults(
   defineProps<{
@@ -255,9 +258,28 @@ function onEscape(): void {
   floatBarRef.value?.blurSearch();
   emit("requestHide");
 }
+function onSearchMode(ev: MouseEvent): void {
+  if (!hasSearch.value) return;
+  filterPop.value = "";
+  const labels: Record<SemanticMode, string> = { auto: "智能搜索", keyword: "分词搜索", semantic: "语义搜索" };
+  const modes: SemanticMode[] = ["auto", "keyword", "semantic"];
+  openContextMenu(ev, modes.map((value) => ({
+    label: labels[value],
+    checkable: true,
+    checked: search.modeFor(props.panelId!) === value,
+    disabled: wsView.value && value === "semantic",
+    action: () => search.setMode(props.panelId!, props.viewKey!, value),
+  })));
+}
 // Enter（2026-10-03 ws 搜索轮）：库 / Everything 可用 = 立即重搜；ws 无 Everything = 显式触发爬盘回退
-function onEnter(): void {
-  if (hasSearch.value) search.enterPressed(props.panelId!, props.viewKey!);
+async function onEnter(): Promise<void> {
+  if (!hasSearch.value) return;
+  if (wsView.value) {
+    search.enterPressed(props.panelId!, props.viewKey!);
+    return;
+  }
+  const error = await search.runNow(props.panelId!, props.viewKey!);
+  if (error) useToastStore().notify({ message: error, icon: "fail" });
 }
 onMounted(() => {
   // 热重载 / 布局恢复：残留内容命中可能已失效，补搜一次恢复结果态
@@ -495,6 +517,7 @@ function noteRemove(i: number): void {
       :summaries="filterSummaries"
       @update:progress="progressModel = $event"
       @filter-toggle="toggleFilter"
+      @search-click="onSearchMode"
       @escape="onEscape"
       @enter="onEnter"
       @toggle-play="spec?.togglePlay()"

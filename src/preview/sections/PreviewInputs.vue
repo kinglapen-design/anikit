@@ -51,6 +51,10 @@ const liveClear = ref("雪牧_自动");
           <span class="pv-cap">clearable 清除钮（clear 12 亮色/四级 hover 升三级；烧 AppInput/AppSearchBar 补，2026-09-20）</span>
         </div>
         <div class="pv-demo-cell" style="width: 240px">
+          <TextInput type="password" model-value="演示密钥" />
+          <span class="pv-cap">type=password：密码遮罩（外部 provider 密钥输入；样式不变）</span>
+        </div>
+        <div class="pv-demo-cell" style="width: 240px">
           <TextInput model-value="全部" readonly :focusable="false" />
           <span class="pv-cap">focusable=false：聚焦描边不显（快速访问固定入口框，2026-08-31 用户定）</span>
         </div>

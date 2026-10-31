@@ -80,6 +80,17 @@ pub fn model_dir() -> Result<PathBuf, String> {
   if let Some(path) = crate::core::config::semantic_settings().map_err(|e| e.to_string())?.model_dir {
     return canonical_existing(&PathBuf::from(path), "语义模型目录");
   }
+  let exe = std::env::current_exe().map_err(|e| format!("定位当前程序失败：{e}"))?;
+  if let Some(parent) = exe.parent() {
+    let packaged = parent.join("models").join("multilingual-v1").join(MODEL_REVISION);
+    if packaged.is_dir() {
+      return canonical_existing(&packaged, "语义模型目录");
+    }
+    let development = parent.join("..").join("..").join("assets").join("models").join("multilingual-v1");
+    if development.is_dir() {
+      return canonical_existing(&development, "语义模型目录");
+    }
+  }
   dirs::data_local_dir()
     .map(|dir| dir.join("AniKit").join("models").join("multilingual-v1").join(MODEL_REVISION))
     .ok_or_else(|| "无法定位语义模型目录".into())

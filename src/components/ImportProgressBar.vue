@@ -7,26 +7,39 @@
 // 2026-10-03 工作空间搜索轮：爬盘回退进度复用本组件（用户定「参考导入文件的那个进度条」）——
 // 无导入导出且本 panel 爬盘进行中时显示：总数未知恒不定态（扫描中滑块），标签「已扫 N 个文件」，
 // 关闭 = 取消爬盘（保留已命中的部分结果）；导入 / 导出优先（同跑先显导入导出）。
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import IconButton from "./buttons/IconButton.vue";
 import { useContentStore } from "../stores/content";
 import { useSearchStore } from "../stores/search";
+import { useSemanticTaskStore } from "../stores/semantic";
 
 const props = withDefaults(defineProps<{ panelId?: string }>(), { panelId: undefined });
 const content = useContentStore();
 const search = useSearchStore();
+const semanticTasks = useSemanticTaskStore();
+onMounted(() => void semanticTasks.init());
 const isExport = computed(() => !content.importProgress && !!content.exportProgress);
 const p = computed(() => content.importProgress ?? content.exportProgress);
+const semantic = computed(() => {
+  const task = semanticTasks.active;
+  return !p.value && task && ["running", "paused"].includes(task.status) ? task : null;
+});
 // 爬盘态（ws 搜索回退层）：本 panel 进行中爬盘；导入 / 导出优先
 const crawl = computed(() => (props.panelId ? search.crawlActiveFor(props.panelId) : null));
-const crawling = computed(() => !p.value && crawl.value !== null);
+const crawling = computed(() => !p.value && !semantic.value && crawl.value !== null);
 
-const scanning = computed(() => (p.value ? p.value.total === 0 : false));
+const scanning = computed(() => semantic.value ? semantic.value.total === 0 : p.value?.total === 0);
 const ratio = computed(() => {
+  if (semantic.value) return semantic.value.total > 0 ? Math.min(1, semantic.value.completed / semantic.value.total) : 0;
   if (!p.value || p.value.total === 0) return 0;
   return Math.min(1, p.value.done / p.value.total);
 });
 const label = computed(() => {
+  if (semantic.value) {
+    const task = semantic.value;
+    const prefix = task.status === "paused" ? "已暂停" : "正在";
+    return task.total === 0 ? `${prefix}准备语义模型…` : `${prefix}语义分析 (${task.completed} / ${task.total})`;
+  }
   if (crawling.value) return `正在搜索（已扫 ${crawl.value!.scanned.toLocaleString()} 个文件）`;
   if (!p.value) return "";
   if (p.value.total === 0) return isExport.value ? "正在清点文件…" : "正在扫描文件…";
@@ -36,7 +49,7 @@ const label = computed(() => {
 });
 // 预计剩余：按已处理速率估算（done 变化即重算）；爬盘总数未知不出 ETA
 const eta = computed(() => {
-  if (crawling.value) return "";
+  if (semantic.value || crawling.value) return "";
   if (!p.value || p.value.done === 0 || p.value.total === 0) return "";
   const elapsed = (Date.now() - p.value.startedAt) / 1000;
   if (elapsed <= 0) return "";
@@ -47,6 +60,10 @@ const eta = computed(() => {
 });
 
 function cancel(): void {
+  if (semantic.value) {
+    void semanticTasks.cancelActive();
+    return;
+  }
   if (crawling.value && props.panelId) {
     search.cancelCrawlFor(props.panelId);
     return;
@@ -66,7 +83,7 @@ function cancel(): void {
     <IconButton
       name="close-small"
       variant="plain"
-      :title="crawling ? '取消搜索' : isExport ? '取消导出' : '取消导入'"
+      :title="semantic ? '取消语义分析' : crawling ? '取消搜索' : isExport ? '取消导出' : '取消导入'"
       @click="cancel"
     />
   </div>

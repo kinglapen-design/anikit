@@ -31,6 +31,8 @@ pub struct AppState {
   /// 工作空间爬盘搜索任务取消标记（2026-10-03 工作空间搜索回退层）：task_id → 置位即取消，
   /// 任务结束从表中移除（imports 同构）
   pub ws_searches: Mutex<std::collections::HashMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+  /// 语义分析任务控制（PRD 08-04：暂停 / 恢复 / 取消共享 worker 与 ffmpeg 标志）
+  pub semantic_tasks: Mutex<std::collections::HashMap<String, std::sync::Arc<crate::services::semantic::control::AnalysisControl>>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -584,6 +586,7 @@ mod tests {
       workspace: Mutex::new(Vec::new()),
       undo: Mutex::new(crate::core::undo::UndoManager::default()),
       ws_searches: Mutex::new(std::collections::HashMap::new()),
+      semantic_tasks: Mutex::new(std::collections::HashMap::new()),
     };
     (dir, state)
   }

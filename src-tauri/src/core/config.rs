@@ -76,6 +76,16 @@ pub struct WindowState {
 }
 
 pub fn config_path() -> Result<std::path::PathBuf, DataError> {
+  config_path_from(std::env::var_os("ANIKIT_CONFIG_DIR").map(std::path::PathBuf::from).as_deref())
+}
+
+fn config_path_from(override_dir: Option<&Path>) -> Result<std::path::PathBuf, DataError> {
+  if let Some(dir) = override_dir {
+    if dir.as_os_str().is_empty() {
+      return Err(DataError::Corrupt("ANIKIT_CONFIG_DIR 不能为空".into()));
+    }
+    return Ok(dir.join("config.json"));
+  }
   dirs::config_dir()
     .map(|d| d.join("AniKit").join("config.json"))
     .ok_or_else(|| DataError::Corrupt("无法定位系统配置目录".into()))
@@ -364,6 +374,18 @@ pub fn save_semantic_settings(value: SemanticSettings) -> Result<(), DataError> 
   save_to(&p, &cfg)
 }
 
+pub fn semantic_provider_settings<T: serde::de::DeserializeOwned + Default>() -> Result<T, DataError> {
+  let raw = load()?.settings.get("semanticProvider").cloned().unwrap_or_else(|| serde_json::json!({}));
+  Ok(serde_json::from_value(raw).unwrap_or_default())
+}
+
+pub fn save_semantic_provider_settings<T: Serialize>(value: T) -> Result<(), DataError> {
+  let p = config_path()?;
+  let mut cfg = load_from(&p);
+  cfg.settings["semanticProvider"] = serde_json::to_value(value).map_err(|e| DataError::Corrupt(e.to_string()))?;
+  save_to(&p, &cfg)
+}
+
 /// 主窗口几何读取（启动恢复用；从未保存 / 形状损坏为 None，走 tauri.conf 默认居中）
 pub fn window_state() -> Option<WindowState> {
   let cfg = load().ok()?;
@@ -591,5 +613,12 @@ mod tests {
     let value = serde_json::to_value(&custom).unwrap();
     assert_eq!(value, serde_json::json!({ "device": "gpu", "modelDir": "D:/models/clip" }));
     assert_eq!(serde_json::from_value::<SemanticSettings>(value).unwrap(), custom);
+  }
+
+  #[test]
+  fn config_dir_override_is_explicit_and_nonempty() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(config_path_from(Some(dir.path())).unwrap(), dir.path().join("config.json"));
+    assert!(config_path_from(Some(Path::new(""))).is_err());
   }
 }

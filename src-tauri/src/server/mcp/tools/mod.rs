@@ -12,6 +12,7 @@ pub mod library;
 pub mod links;
 pub mod prompt;
 pub mod search;
+pub mod semantic;
 pub mod structure;
 pub mod text;
 pub mod trash;

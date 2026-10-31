@@ -36,6 +36,8 @@ pub struct MediaSource {
   /// 素材自身帧率（视频；2026-07-28 复验反馈修复：自愈后的准确值随响应下发，
   /// 前端播放条/笔记立即正确，不等重拉 PlacementView）；音频 / 未知为 null
   pub fps: Option<f64>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub segment: Option<crate::services::semantic::types::SegmentRange>,
 }
 
 /// 同资产播放源解析并发去重：并发重复调用串行化，后者拿到锁时转码产物 stamp 已命中，
@@ -55,11 +57,12 @@ pub async fn get_media_source(
   force_transcode: Option<bool>,
 ) -> Result<MediaSource, String> {
   // 短锁快照：定位资源、克隆出后续所需全部字段后立即放锁
-  let (info_dir, origin, meta, root) = {
+  let (info_dir, origin, meta, root, segment) = {
     let guard = state.library.lock().map_err(|e| e.to_string())?;
     let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
-    let (info_dir, origin, meta) = locate_asset(lib, &asset_id)?;
-    (info_dir, origin, meta, lib.root.clone())
+    let playback = crate::services::semantic::playback::resolve(&lib.assets_dir, &asset_id)?;
+    let meta = playback.media_meta().clone();
+    (playback.info_dir, playback.origin, meta, lib.root.clone(), playback.segment)
   };
   // 同资产并发去重（见 MEDIA_SRC_LOCKS 注释），guard 持到重活与回写完成
   let asset_lock = {
@@ -74,7 +77,7 @@ pub async fn get_media_source(
   let asset_id2 = asset_id.clone();
   let force = force_transcode.unwrap_or(false);
   let (src, healed) =
-    tauri::async_runtime::spawn_blocking(move || media_source_heavy(&info_dir, &origin, meta, &root, &asset_id2, force))
+    tauri::async_runtime::spawn_blocking(move || media_source_heavy(&info_dir, &origin, meta, &root, &asset_id2, force, segment))
       .await
       .map_err(|e| format!("播放源解析任务失败：{e}"))??;
   // fps 自愈回写（仅视频且探测到新 fps）：metadata.json 已在锁外落盘，这里短锁同步内存索引；
@@ -82,9 +85,10 @@ pub async fn get_media_source(
   if let Some(meta) = healed {
     let mut guard = state.library.lock().map_err(|e| e.to_string())?;
     if let Some(lib) = guard.as_mut() {
+      let id = meta.id.clone();
       let fps = meta.fps.unwrap_or(0.0);
-      lib.index.assets.insert(asset_id.clone(), meta);
-      let _ = app.emit("video-fps-healed", serde_json::json!({ "assetId": asset_id, "fps": fps }));
+      lib.index.assets.insert(id.clone(), meta);
+      let _ = app.emit("video-fps-healed", serde_json::json!({ "assetId": id, "fps": fps }));
     }
   }
   Ok(src)
@@ -101,6 +105,7 @@ fn media_source_heavy(
   root: &Path,
   asset_id: &str,
   force: bool,
+  segment: Option<crate::services::semantic::types::SegmentRange>,
 ) -> Result<(MediaSource, Option<AssetMeta>), String> {
   let video = media::is_video(origin);
   if !video && !media::is_audio(origin) {
@@ -129,9 +134,10 @@ fn media_source_heavy(
   } else {
     // 直读优先（2026-09-13，模块头口径）：不做 ffprobe 分流——能否解码由 webview 试播判定，
     // 播放 error 后前端带 force_transcode 回退转码
-    MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps: None }
+    MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps: None, segment: None }
   };
   src.fps = fps;
+  src.segment = segment;
   Ok((src, healed))
 }
 
@@ -142,7 +148,7 @@ fn transcode_source(root: &Path, asset_id: &str, origin: &Path, is_video: bool) 
   let out = out_dir.join(format!("media-{asset_id}.{}", if is_video { "mp4" } else { "wav" }));
   let stamp = stamp_path(&out);
   if out.is_file() && source_stamp(origin).is_some_and(|s| read_stamp(&stamp) == Some(s)) {
-    return Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None });
+    return Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None, segment: None });
   }
   if !ffmpeg::ffmpeg_available() {
     return Err("音视频组件缺失，无法播放该格式".to_string());
@@ -157,7 +163,7 @@ fn transcode_source(root: &Path, asset_id: &str, origin: &Path, is_video: bool) 
       log::warn!("转码戳写入失败（{}）：{e}", stamp.display());
     }
   }
-  Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None })
+  Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None, segment: None })
 }
 
 // ---------- 按真实路径取播放源（PRD 02 步骤 1 工作空间预览） ----------
@@ -199,7 +205,7 @@ fn media_source_by_path(ws_root: &Path, origin: &Path, force: bool) -> Result<Op
   if force {
     return transcode_workspace_source(ws_root, origin, video).map(Some);
   }
-  Ok(Some(MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps }))
+  Ok(Some(MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps, segment: None }))
 }
 
 /// 工作空间转码兜底：产物 workspace/.anikit/media/media-{大小}-{mtime秒}.mp4|.wav + .stamp
@@ -217,7 +223,7 @@ fn transcode_workspace_source(ws_root: &Path, origin: &Path, is_video: bool) -> 
   let out = out_dir.join(format!("media-{}-{secs}.{}", meta.len(), if is_video { "mp4" } else { "wav" }));
   let stamp = stamp_path(&out);
   if out.is_file() && source_stamp(origin).is_some_and(|s| read_stamp(&stamp) == Some(s)) {
-    return Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None });
+    return Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None, segment: None });
   }
   if !ffmpeg::ffmpeg_available() {
     return Err("音视频组件缺失，无法播放该格式".to_string());
@@ -232,7 +238,7 @@ fn transcode_workspace_source(ws_root: &Path, origin: &Path, is_video: bool) -> 
       log::warn!("转码戳写入失败（{}）：{e}", out.display());
     }
   }
-  Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None })
+  Ok(MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None, segment: None })
 }
 
 // ---------- 卡片波形 peaks（2026-09-22 R6 卡片三变体接线 · audio 变体） ----------
@@ -424,15 +430,15 @@ mod tests {
     let mut h = make_lib();
     add_file(&mut h, "AN-PIC", "参考图.png");
     let (info_dir, origin, meta, root) = snap(&h, "AN-PIC");
-    let err = media_source_heavy(&info_dir, &origin, meta, &root, "AN-PIC", false).unwrap_err();
+    let err = media_source_heavy(&info_dir, &origin, meta, &root, "AN-PIC", false, None).unwrap_err();
     assert!(err.contains("不是音视频资源"), "{err}");
 
     // 直读优先：不探测不看内容直给源路径（假字节也直给；播不了由前端 error 回退 force 转码）
     add_file(&mut h, "AN-AU", "配乐.wma");
     let (info_dir, origin, meta, root) = snap(&h, "AN-AU");
-    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-AU", false).unwrap();
+    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-AU", false, None).unwrap();
     assert!(healed.is_none());
-    assert_eq!(src, MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps: None });
+    assert_eq!(src, MediaSource { path: origin.to_string_lossy().into_owned(), transcoded: false, fps: None, segment: None });
   }
 
   #[test]
@@ -442,7 +448,7 @@ mod tests {
     let mut h = make_lib();
     add_file(&mut h, "AN-VID2", "片段.mp4");
     let (info_dir, origin, meta, root) = snap(&h, "AN-VID2");
-    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID2", false).unwrap();
+    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID2", false, None).unwrap();
     assert!(!src.transcoded);
     assert_eq!(src.path, origin.to_string_lossy());
     assert!(healed.is_none(), "探测失败不应产生自愈回写");
@@ -462,14 +468,14 @@ mod tests {
     fs::create_dir_all(out.parent().unwrap()).unwrap();
     fs::write(&out, b"transcoded").unwrap();
     fs::write(stamp_path(&out), source_stamp(&origin).unwrap()).unwrap();
-    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID", true).unwrap();
+    let (src, healed) = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID", true, None).unwrap();
     assert!(healed.is_none());
-    assert_eq!(src, MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None });
+    assert_eq!(src, MediaSource { path: out.to_string_lossy().into_owned(), transcoded: true, fps: None, segment: None });
 
     // 源变化（大小变了戳失配）→ 重转：假 mp4 转码失败给中文文案；无 ffmpeg 则组件缺失文案
     fs::write(&origin, b"fake-changed-longer").unwrap();
     let (info_dir, origin, meta, root) = snap(&h, "AN-VID");
-    let err = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID", true).unwrap_err();
+    let err = media_source_heavy(&info_dir, &origin, meta, &root, "AN-VID", true, None).unwrap_err();
     assert!(
       err.contains("该格式暂时无法播放") || err.contains("音视频组件缺失"),
       "{err}"
@@ -488,7 +494,7 @@ mod tests {
     let mp4 = ws_root.join("片段.mp4");
     fs::write(&mp4, b"fake").unwrap();
     let src = media_source_by_path(&ws_root, &mp4, false).unwrap().unwrap();
-    assert_eq!(src, MediaSource { path: mp4.to_string_lossy().into_owned(), transcoded: false, fps: None });
+    assert_eq!(src, MediaSource { path: mp4.to_string_lossy().into_owned(), transcoded: false, fps: None, segment: None });
 
     // 非音视频（图片）→ null；workspace 外 → null；不存在 → null
     let png = ws_root.join("图.png");

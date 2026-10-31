@@ -167,6 +167,11 @@ pub struct AssetMeta {
   pub start: Option<f64>,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub end: Option<f64>,
+  /// 来源动图 / 序列帧的原始帧索引（0 起、含端点），不经过平均 fps 换算
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub start_frame: Option<u32>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub end_frame: Option<u32>,
   /// 提示词（2026-09-26 提示词轮，PRD 03_数据链接 02_文件「提示词」）：None = 未指定不写字段，
   /// 不升 DATA_VERSION；三态见 PromptBinding 注释
   #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -50,10 +50,10 @@ pub async fn set_thumb_frame(
   apply_thumb_frame(lib, &asset_id, &frame_name)
 }
 
-fn apply_thumb_frame(lib: &mut Library, asset_id: &str, frame_name: &str) -> Result<SetThumbResult, String> {
+pub(crate) fn apply_thumb_frame(lib: &mut Library, asset_id: &str, frame_name: &str) -> Result<SetThumbResult, String> {
   let (info_dir, origin, meta) = locate_asset(lib, asset_id)?;
   // 动图分支（解包废除）：`f:{索引}` → origin 解码抽帧，thumbFrame 同格式记录
-  if crate::services::anim::is_anim(&meta) {
+  if crate::services::anim::is_animated_file(&meta, &origin) {
     let idx = parse_anim_frame_key(frame_name)?;
     let (img, _delay) = crate::services::anim::decode_frame(&origin, idx)
       .ok_or_else(|| format!("第 {} 帧解码失败，请重试", idx + 1))?;

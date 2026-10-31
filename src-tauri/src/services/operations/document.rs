@@ -108,6 +108,8 @@ pub fn create_document(
     source: None,
     start: None,
     end: None,
+    start_frame: None,
+    end_frame: None,
     prompt: None,
   };
   if let Err(e) = write_json(&info_dir.join("metadata.json"), &meta) {
