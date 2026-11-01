@@ -14,13 +14,13 @@
 3. 之后 `tools/list` / `tools/call` 均 POST 同端点、带 session 头；回包同为 SSE `data:` 帧。
 4. 会话内存态（LocalSessionManager），APP 重启即失效——Agent 重连重新 initialize 即可。
 
-## 工具面（32 个 = 只读 12 + 写 20）
+## 工具面（40 个 = 只读 13 + 写 27）
 
 加工具 = `server/mcp/tools/` 加一个文件 + `mod.rs` 注册处一行（工具注册表模式，范式 = 前端 barSpecs；未来复用为插件 API 注册表）。回包统一：**仅 `content` 文本（紧凑 JSON），不带 structuredContent**——同一份数据双带会被不查重的客户端双倍计入上下文（2026-09-19 用户实测额度消耗后定的省 token 口径；未声明 outputSchema 时 structuredContent 本就可选）；库未打开回工具级错误（`isError: true`，文本「请先打开素材库」），不静默空表；域错误（资产不存在等）同口径回中文原因。
 
 **URI 增强（2026-10-08 S5，PRD 02-09）**：①所有收 assetId / folderId 的工具参数经 `core::anikit_ref::normalize_ref_id` 归一化（Params struct 字段挂 serde deserialize_with）——`anikit://item|folder/{id}` 与 `http(s)://127.0.0.1:{port}/(open/)item|folder/{id}` 链接形态直接吃，AI 整段透传用户粘贴的链接即可；②`search_assets` placements 每项、`get_asset_detail` 顶层与 `list_links` 逐项附 `uri` 字段（http open 形态 `http://127.0.0.1:{port}/open/item/{id}`，server/media.rs 端点——AI 回复用户时可点击回 AniKit；新增字段不破坏既有解析）。
 
-只读 12 个（全部 `annotations.readOnlyHint = true`）：
+只读 13 个（全部 `annotations.readOnlyHint = true`）：
 
 | 工具 | 入参 | 回包（同命令层结构） |
 | --- | --- | --- |
@@ -33,11 +33,12 @@
 | `get_asset_origin_path` | `{ assetId }` | `{ originPath, thumbPath: string \| null }`——源文件真实路径（序列帧 = frames/ 封面帧，同右键「复制文件路径」口径）+ 缩略图路径（含 thumbAssetId 伴生代理：fla 等工程资产取伴生 hidden 资产的图） |
 | `read_text_asset` | `{ assetId }` | `{ content }`（txt / md；UTF-8 优先 GBK 回退，2MB 上限；非文本资产报错） |
 | `list_archives` | 无 | `ArchiveListItem[]`（folderId / badge / avatar / props / descriptions / links / createdAt / totalSize / coverPath / coverVer）；folderId 可交给 list_placements 列档案内容 |
+| `get_archive_data` | `{ folderId }` | `ArchiveDetailView`（ArchiveData 全字段 + fileCount / totalSize / coverPath / coverVer / prompt）；无数据记录时回默认空记录 + 统计 |
 | `semantic_search` | `{ query, folderId?, recursive?, limit? }` | 已有语义索引的最佳片段、其他命中段、真实毫秒 / 原始帧索引与 uri；只查询，不自动分析，不调用外部 provider；limit 为资产数，缺省 30、上限 100 |
 | `get_semantic_analysis_task` | `{ taskId }` | 当前库单个任务快照（含 mode / status / completed / errors）；不存在或不属于当前库 = null |
 | `list_semantic_analysis_tasks` | 无 | 当前库任务清单，最多 50 个，其他库不可见 |
 
-写 20 个（全部 `annotations.readOnlyHint = false`）：公共门禁 = **write_gate 逐次检查** `settings.mcp.writeEnabled`（关态回「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」工具级错误）。撤销口径分流——进撤销 12 个（create_document / rename_placements / rename_folders / create_folder / move_placements / move_folders / link_placements / trash_placements / assign_prompt / clear_prompt / set_folder_groups / create_semantic_segment）复用 `commands::operations` / `commands::prompt` 抽出的 `_op` 整段（锁 library → 锁 undo → 单写点 + 单撤销步，与 APP 命令同一实现）；不进撤销 8 个 = write_text_asset（与 APP 内文本编辑同口径，2026-08-23 定）+ import_paths（APP 导入管线本就不接 UndoManager，不硬接）+ 六个语义任务工具（检查点恢复，不修改素材权威 JSON）。
+写 27 个（全部 `annotations.readOnlyHint = false`）：公共门禁 = **write_gate 逐次检查** `settings.mcp.writeEnabled`（关态回「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」工具级错误）。撤销口径分流——进撤销 20 个（create_document / rename_placements / rename_folders / create_folder / move_placements / move_folders / link_placements / trash_placements / assign_prompt / clear_prompt / set_folder_groups / create_semantic_segment + 档案批 create_archive / convert_to_archive / convert_to_folder / set_archive_props / set_archive_descriptions / set_archive_links / delete_archive）复用 `commands::operations` / `commands::archive_ops` / `commands::prompt` 抽出的 `_op` 整段（锁 library → 锁 undo → 单写点 + 单撤销步，与 APP 命令同一实现）；不进撤销 8 个 = write_text_asset（与 APP 内文本编辑同口径，2026-08-23 定）+ import_paths（APP 导入管线本就不接 UndoManager，不硬接）+ 六个语义任务工具（检查点恢复，不修改素材权威 JSON）。
 
 首批 3 个（2026-09-19，`tools/write.rs`）：
 
@@ -98,6 +99,18 @@
 | 工具 | 入参 | 回包与边界 |
 | --- | --- | --- |
 | `create_semantic_segment` | `{ assetId, segmentId, targetFolderId?, physical? }` | 返回新 `PlacementView`。`physical=false` 为引用源范围的虚拟片段，`true` 为独立物理资产；缺省放到未分类。必须有同模型版本、同分析版本与源指纹一致的命中，不允许嵌套；视频按真实 PTS，动图 / 序列帧按原始帧索引。**进撤销**，成功后广播 `mcp-library-changed` |
+
+档案管理批 7 个写工具（2026-10-31，`tools/archives.rs`；详情只读见上表）：全部复用 `commands/archive_ops.rs`，进撤销并广播 `mcp-library-changed`。
+
+| 工具 | 入参 | 回包与边界 |
+| --- | --- | --- |
+| `create_archive` | `{ name, parentId?, afterFolderId?, blockId? }` | 返回新 `Folder`。parentId 缺省 / "root" = 顶层；afterFolderId 为可选同级插入锚点，blockId 为可选顶层区块 |
+| `convert_to_archive` | `{ folderId, confirmed? }` | 返回 `done` / `need_confirm`。有子文件夹且未确认时不改数据；confirmed=true 后平移子树 Placement、删除子文件夹节点 |
+| `convert_to_folder` | `{ folderId }` | 解散为普通文件夹并清 archives.json 记录，Placement 不动；成功回 `{}` |
+| `set_archive_props` | `{ folderId, props: string[] }` | 属性词终态整体替换，trim / 去空 / 保序去重；空数组 = 清空；成功回 `{}` |
+| `set_archive_descriptions` | `{ folderId, descriptions: [{ title, content }] }` | 描述终态整体替换，标题 / 内容 trim，双空项丢弃；成功回 `{}` |
+| `set_archive_links` | `{ folderId, links: string[] }` | 链接终态整体替换，trim / 去空 / 保序去重；成功回 `{}` |
+| `delete_archive` | `{ folderId }` | 仅接受档案；返回 `DeleteFolderReport`。删除档案节点与 archives.json 记录，全部 Placement 移未分类，素材实体不动；可撤销，物理删除不开放 |
 
 ## 纪律（PRD 08-06 定）
 

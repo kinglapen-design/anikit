@@ -1,6 +1,6 @@
 # MCP 使用指南（给 Agent 与接入者）
 
-AniKit 进程内嵌的 MCP server（PRD 08-06：只读 12 工具 + 写工具 20 个，写入闸形态 A）。本文是接入与使用说明；协议层细节（握手 / 回包结构 / 错误口径）见 [MCP通道](MCP通道.md)。
+AniKit 进程内嵌的 MCP server（PRD 08-06：只读 13 工具 + 写工具 27 个，写入闸形态 A）。本文是接入与使用说明；协议层细节（握手 / 回包结构 / 错误口径）见 [MCP通道](MCP通道.md)。
 
 ## 连接
 
@@ -10,7 +10,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：只读 12 工具 + 写工具 20 
 - Codex：`config.toml` 加 `[mcp_servers.anikit]` + `url = "http://127.0.0.1:17701/mcp"`，重启会话
 - Claude Code：`claude mcp add --transport http anikit http://127.0.0.1:17701/mcp`
 
-## 工具速览（32 个 = 只读 12 + 写 20）
+## 工具速览（40 个 = 只读 13 + 写 27）
 
 | 工具 | 用途 |
 | --- | --- |
@@ -23,6 +23,14 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：只读 12 工具 + 写工具 20 
 | `get_asset_origin_path` | 源文件与缩略图磁盘绝对路径（看图入口） |
 | `read_text_asset` | 文本资产内容（txt / md，提示词、剧本等） |
 | `list_archives` | 档案列表（封面、属性、描述等） |
+| `get_archive_data` | 单档详情：属性 / 描述 / 链接 / 封面 / 提示词与统计 |
+| `create_archive`（写） | 新建档案，回 Folder；`parentId` 缺省 = 顶层；**进撤销** |
+| `convert_to_archive`（写） | 文件夹转档案；有子级先回 `need_confirm`，`confirmed=true` 才剔除层级；**进撤销** |
+| `convert_to_folder`（写） | 档案解散为普通文件夹并清档案数据记录，Placement 不动；**进撤销** |
+| `set_archive_props`（写） | 整体设置档案属性词，trim / 去空 / 保序去重；**进撤销** |
+| `set_archive_descriptions`（写） | 整体设置档案描述（标题 + 内容数组）；**进撤销** |
+| `set_archive_links`（写） | 整体设置档案链接，trim / 去空 / 保序去重；**进撤销** |
+| `delete_archive`（写） | 删除档案节点与数据记录，Placement 移未分类、素材实体不动；**进撤销**，不开放物理删除 |
 | `semantic_search` | 中文语义检索已有索引，回最佳片段、其他命中段、毫秒 / 原始帧索引与 uri；不因查询自动分析，也不调用外部 provider |
 | `get_semantic_analysis_task` | 当前库单个分析任务快照（含 basic / detailed 模式、进度、真实后端与错误） |
 | `list_semantic_analysis_tasks` | 当前库分析任务清单，其他库不可见 |
@@ -49,12 +57,12 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：只读 12 工具 + 写工具 20 
 
 ## 写入开关（二期，默认关）
 
-二十个写工具受**全局写入开关**门禁：插件面板「AI 外接通道（MCP）」详情窗 →「允许写入」（持久化于全局 config.json `settings.mcp.writeEnabled`，默认关；2026-09-20 从偏好设置弹窗挪入，旧 settings.ui.mcpWriteEnabled 自动迁移）。开关**逐次生效**——写调用每次都现查：关态一律回工具级错误「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」，开态直接执行。六个语义任务工具不进撤销，恢复靠任务检查点；启动分析必须明确给非空 assetIds，不允许 Agent 默认全库分析。写前建议流程：
+二十七个写工具受**全局写入开关**门禁：插件面板「AI 外接通道（MCP）」详情窗 →「允许写入」（持久化于全局 config.json `settings.mcp.writeEnabled`，默认关；2026-09-20 从偏好设置弹窗挪入，旧 settings.ui.mcpWriteEnabled 自动迁移）。开关**逐次生效**——写调用每次都现查：关态一律回工具级错误「MCP 写入未开启（插件面板 MCP 详情窗里可开启）」，开态直接执行。六个语义任务工具不进撤销，恢复靠任务检查点；启动分析必须明确给非空 assetIds，不允许 Agent 默认全库分析。写前建议流程：
 
 1. `write_text_asset` 覆写内容**不进撤销**（与 APP 内编辑同口径）——先 `read_text_asset` 留底再覆写；
 2. `import_paths` **不进撤销**（导入 = 资产池新增，撤销体系不覆盖）——但冲突策略不阻断：重复导入同文件只会 `skippedDuplicate` 回已有 id，放心重试；
-3. 其余十二个（create_document / rename_placements / rename_folders / create_folder / move_placements / move_folders / link_placements / trash_placements / assign_prompt / clear_prompt / set_folder_groups / create_semantic_segment）进撤销——用户在 APP 内 Ctrl+Z 可整步撤回，但仍请克制调用、批量改名一次给全数组；
-4. 彻底删除类操作不存在于本通道（L4 永远人工确认），不要尝试构造；丢回收站用 `trash_placements`（可逆）。
+3. 其余二十个（create_document / rename_placements / rename_folders / create_folder / move_placements / move_folders / link_placements / trash_placements / assign_prompt / clear_prompt / set_folder_groups / create_semantic_segment + 七个档案写工具）进撤销——用户在 APP 内 Ctrl+Z 可整步撤回，但仍请克制调用、批量改名一次给全数组；
+4. 彻底删除类操作不存在于本通道（L4 永远人工确认），不要尝试构造；丢回收站用 `trash_placements`（可逆）。`delete_archive` 只删除档案节点与数据记录，素材实体保留，不是物理删除。
 
 ## 典型流程
 
@@ -76,6 +84,12 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：只读 12 工具 + 写工具 20 
 4. 整理归档：`move_placements` 把资产移入目标文件夹；`link_placements` 把大池里的资产以链接放进场次文件夹（本体留原地，不占双份磁盘）——「资产留大池、链接进场次」的用户习惯配套；`list_links` 随时回查全库链接及其原始位置；
 5. 每步回包里的 assetId / folderId 是后续调用的定位凭据；路径一律现取（`get_asset_origin_path`），禁止缓存。
 
+### 档案管理链路（2026-10-31）
+
+`create_archive` 返回新 folderId 后，用 `set_archive_props` / `set_archive_descriptions` / `set_archive_links` 写档案数据，用 `get_archive_data` 回读，用 `move_placements` 或 `link_placements` 汇总素材。已有文件夹可经 `convert_to_archive` 转换；返回 `need_confirm` 时先确认是否允许剔除子文件夹层级，再以 `confirmed=true` 重调。
+
+`delete_archive` 删除档案节点和数据记录，档案内素材移入未分类，不删除素材实体，APP 内可撤销。只需要去掉档案形态时改用 `convert_to_folder`；改名和移动仍用 `rename_folders` / `move_folders`。
+
 ### 语义检索与任务（2026-10-27）
 
 先在 APP 选中素材做基础分析，或经 `start_semantic_analysis` 显式给非空 assetIds；检索不会自动替你分析全库。`semantic_search` 返回每个资产的最佳片段、其他命中段与真实毫秒 / 原始帧索引，可交给 APP 预览定位。任务用 `get_semantic_analysis_task` / `list_semantic_analysis_tasks` 查询，按 taskId 暂停、恢复、取消或重试，恢复保持原 basic / detailed 模式。
@@ -93,7 +107,7 @@ AniKit 进程内嵌的 MCP server（PRD 08-06：只读 12 工具 + 写工具 20 
 
 MCP 进 Agent 上下文的开销分三块，对应三招：
 
-- **工具 schema 固定开销**（每会话一次）：32 个工具的说明 + 参数 schema。Kimi Code 侧可在 mcp.json 给 anikit 加 `"deferred": true`（按需加载，见 Kimi Code MCP 文档），不用工具时不占上下文。
+- **工具 schema 固定开销**（每会话一次）：40 个工具的说明 + 参数 schema。Kimi Code 侧可在 mcp.json 给 anikit 加 `"deferred": true`（按需加载，见 Kimi Code MCP 文档），不用工具时不占上下文。
 - **回包体积**（每次调用）：本通道已做两刀——回包仅 `content` 紧凑 JSON、不带 structuredContent 重复副本。Agent 侧配合：先 `search_assets` 缩小范围再按需 `get_asset_detail`，避免不带 folderId 的全库 `list_placements`（几百条 Placement 全字段很占额度）。
 - **图片读取**：看图读 `thumbPath`（webp 缩略图，几百 token 级），非必要不读源图（大图千 token 级）。
 

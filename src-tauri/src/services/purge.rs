@@ -3,9 +3,9 @@
 //!   info（失败收集名单不中断）→ 只清成功项 Placement + 四处同步（index / recycle / recent /
 //!   pins，复用 recycle.rs 同收尾）；失败项数据层原样保留可重试（2026-09-03 资产污染修复：
 //!   旧序"先清数据后删物理"半途失败产孤儿）；**不接撤销**。
-//! - delete_folder(permanent=false)："删除文件夹"——子树 origin Placement 改挂 root（素材进未分类，
-//!   2026-07-29 用户定）+ 链接 Placement 随文件夹直接删除（不进回收站，2026-08-12 用户定案，
-//!   PRD 02-15）+ 子树文件夹节点删除；仅改数据，**撤销三步由命令层接入**。
+//! - delete_folder(permanent=false)："删除文件夹"——子树全部 Placement（origin / 链接同口径）
+//!   改挂 root（素材进未分类，2026-08-19 位置级模型）+ 子树文件夹节点与对应档案记录删除；
+//!   仅改数据，**撤销三步由命令层接入**。
 //! - delete_folder(permanent=true)："彻底删除文件夹"——两段式 → 子树资产物理全删（同上当先物理
 //!   后数据，失败项挪未分类保留）+ 节点删除；**不接撤销**。两形态执行前均 backup_library 兜底
 //!   （失败仅警告不阻断）。
@@ -16,7 +16,7 @@ use std::fs;
 use serde::Serialize;
 
 use crate::core::backup;
-use crate::core::library::Library;
+use crate::core::library::{self, Library};
 use crate::services::import::ROOT_FOLDER_ID;
 use crate::services::operations::{finish, rewrite_orders, sync_folder_index};
 use crate::services::recycle::{count_segment_refs, sync_after_purge, DeleteRecycleReport};
@@ -179,11 +179,13 @@ pub fn delete_folder(lib: &mut Library, folder_id: &str, permanent: bool, confir
   }
   lib.folders.items = kept;
   lib.folders.folders.retain(|f| !subtree_set.contains(f.id.as_str()));
+  lib.archives.archives.retain(|a| !subtree_set.contains(a.folder_id.as_str()));
   sync_folder_index(lib);
   if !failed_ids.is_empty() {
     rewrite_orders(lib, ROOT_FOLDER_ID);
   }
   finish(lib)?;
+  library::save_archives(lib).map_err(|e| e.to_string())?;
   sync_after_purge(lib, &removed)?;
   if !failed.is_empty() {
     return Err(format!(
@@ -259,9 +261,11 @@ pub fn delete_folders(lib: &mut Library, folder_ids: &[String]) -> Result<Delete
   }
   lib.folders.items = kept;
   lib.folders.folders.retain(|f| !subtree_ref.contains(f.id.as_str()));
+  lib.archives.archives.retain(|a| !subtree_ref.contains(a.folder_id.as_str()));
   sync_folder_index(lib);
   rewrite_orders(lib, ROOT_FOLDER_ID);
   finish(lib)?;
+  library::save_archives(lib).map_err(|e| e.to_string())?;
   log::info!("删除 {} 个文件夹（{moved} 个素材移入未分类，{folder_count} 个文件夹节点）", roots.len());
   Ok(DeleteFolderReport { moved_placements: moved, deleted_folders: folder_count, ..empty_report() })
 }

@@ -5,11 +5,10 @@ use tauri::State;
 
 use crate::commands::library::AppState;
 use crate::commands::operations::fail;
-use crate::core::library::{Library, ARCHIVES_FILE, FOLDERS_FILE};
+use crate::core::library::{Library, ARCHIVES_FILE};
 use crate::core::models::{ArchiveData, AssetMeta, Badge, Avatar, DescItem, Folder, Placement, PromptBinding, ARCHIVE_KIND, DEFAULT_BLOCK_ID, ROOT_FOLDER_ID};
 use crate::core::undo::DiskOp;
-use crate::services::archive::{self, ConvertOutcome};
-use crate::services::custom_data;
+use crate::services::archive;
 
 /// 新建档案：parentId = null / "root" 为顶层；afterFolderId / blockId 口径同 create_folder
 #[tauri::command]
@@ -20,65 +19,20 @@ pub async fn create_archive(
   after_folder_id: Option<String>,
   block_id: Option<String>,
 ) -> Result<Folder, String> {
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
-  undo.begin("新建档案");
-  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
-  match archive::create_archive(lib, parent_id.as_deref(), &name, after_folder_id.as_deref(), block_id.as_deref()) {
-    Ok(folder) => {
-      undo.commit().map_err(|e| e.to_string())?;
-      Ok(folder)
-    }
-    Err(e) => Err(fail(lib, &mut undo, e)),
-  }
+  super::archive_ops::create_archive_op(&state, parent_id.as_deref(), &name, after_folder_id.as_deref(), block_id.as_deref())
 }
 
 /// 文件夹转换为档案（两段式）：有子文件夹且 confirmed = false 时返回 "need_confirm"
 /// 不动数据（询问段丢弃事务，不进撤销栈）；否则剔除层级并置 kind，返回 "done"；已是档案幂等 "done"
 #[tauri::command]
-pub async fn convert_to_archive(
-  state: State<'_, AppState>,
-  folder_id: String,
-  confirmed: bool,
-) -> Result<String, String> {
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
-  undo.begin("转换为档案");
-  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
-  match archive::convert_to_archive(lib, &folder_id, confirmed) {
-    // 询问段未动数据：丢弃事务，不进撤销栈
-    Ok(ConvertOutcome::NeedConfirm) => {
-      undo.cancel();
-      Ok("need_confirm".to_string())
-    }
-    Ok(ConvertOutcome::Done) => {
-      undo.commit().map_err(|e| e.to_string())?;
-      Ok("done".to_string())
-    }
-    Err(e) => Err(fail(lib, &mut undo, e)),
-  }
+pub async fn convert_to_archive(state: State<'_, AppState>, folder_id: String, confirmed: bool) -> Result<String, String> {
+  super::archive_ops::convert_to_archive_op(&state, &folder_id, confirmed)
 }
 
 /// 档案解散为普通文件夹：摘 kind 标记 + 清 archives.json 中该档案的记录
 #[tauri::command]
 pub async fn convert_to_folder(state: State<'_, AppState>, folder_id: String) -> Result<(), String> {
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
-  undo.begin("解散档案为文件夹");
-  undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
-  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
-  match archive::convert_to_folder(lib, &folder_id) {
-    Ok(()) => {
-      undo.commit().map_err(|e| e.to_string())?;
-      Ok(())
-    }
-    Err(e) => Err(fail(lib, &mut undo, e)),
-  }
+  super::archive_ops::convert_to_folder_op(&state, &folder_id)
 }
 
 /// 档案清单项（list_archives 输出）：ArchiveData 全字段 + 容量 + 封面图绝对路径 + 版本戳
@@ -178,10 +132,15 @@ pub struct ArchiveDetailView {
 pub fn get_archive_data(state: State<AppState>, folder_id: String) -> Result<ArchiveDetailView, String> {
   let guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
-  let rec = lib.archives.archives.iter().find(|a| a.folder_id == folder_id).cloned().unwrap_or_else(|| ArchiveData::new(&folder_id));
-  let (file_count, total_size) = archive_stats(lib, &folder_id);
-  let (cover_path, cover_ver) = archive::cover_file_info(lib, &folder_id).unzip();
-  Ok(ArchiveDetailView {
+  Ok(archive_detail(lib, &folder_id))
+}
+
+/// 档案详情组装；pub(crate)：server/mcp 与 APP 共用同一视图
+pub(crate) fn archive_detail(lib: &Library, folder_id: &str) -> ArchiveDetailView {
+  let rec = lib.archives.archives.iter().find(|a| a.folder_id == folder_id).cloned().unwrap_or_else(|| ArchiveData::new(folder_id));
+  let (file_count, total_size) = archive_stats(lib, folder_id);
+  let (cover_path, cover_ver) = archive::cover_file_info(lib, folder_id).unzip();
+  ArchiveDetailView {
     folder_id: rec.folder_id,
     badge: rec.badge,
     avatar: rec.avatar,
@@ -194,43 +153,19 @@ pub fn get_archive_data(state: State<AppState>, folder_id: String) -> Result<Arc
     cover_path,
     cover_ver,
     prompt: rec.prompt,
-  })
+  }
 }
 
 /// 编辑档案属性（6.1，archives.json 单写点）
 #[tauri::command]
 pub async fn set_archive_props(state: State<'_, AppState>, folder_id: String, props: Vec<String>) -> Result<(), String> {
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
-  undo.begin("编辑属性");
-  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
-  match custom_data::set_archive_props(lib, &folder_id, &props) {
-    Ok(true) => undo.commit().map_err(|e| e.to_string()),
-    Ok(false) => {
-      undo.cancel();
-      Ok(())
-    }
-    Err(e) => Err(fail(lib, &mut undo, e)),
-  }
+  super::archive_ops::set_archive_props_op(&state, &folder_id, &props)
 }
 
 /// 编辑档案描述（6.1）
 #[tauri::command]
 pub async fn set_archive_descriptions(state: State<'_, AppState>, folder_id: String, descriptions: Vec<DescItem>) -> Result<(), String> {
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
-  undo.begin("编辑描述");
-  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
-  match custom_data::set_archive_descriptions(lib, &folder_id, &descriptions) {
-    Ok(true) => undo.commit().map_err(|e| e.to_string()),
-    Ok(false) => {
-      undo.cancel();
-      Ok(())
-    }
-    Err(e) => Err(fail(lib, &mut undo, e)),
-  }
+  super::archive_ops::set_archive_descriptions_op(&state, &folder_id, &descriptions)
 }
 
 /// 档案封面设置（6.1，43 稿确认）：徽标三角（null/省略 = 不动……serde Option<Option<Badge>>：

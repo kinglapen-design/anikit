@@ -1,7 +1,7 @@
 //! 命令 API：右键菜单配套（6.3）——打开方式 / 资源管理器定位 / 缩略图三件套 /
 //! 导出 / 彻底删除（素材 / 文件夹）/ base64。
-//! 仅 delete_folder（permanent=false，"删除文件夹"素材移未分类）接撤销三步（锁序 library → undo）；
-//! 彻底删除两命令不接撤销（物理不可逆，删前 backup_library 兜底）；其余为只读或库外写。
+//! delete_folder（permanent=false）与 delete_folders 接撤销三步（锁序 library → undo，
+//! folders.json + archives.json 双快照）；彻底删除两命令不接撤销（物理不可逆，删前 backup_library 兜底）。
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,7 +13,7 @@ use crate::adapters::shell_open;
 use crate::commands::import::NEXT_TASK_ID;
 use crate::commands::library::AppState;
 use crate::commands::operations::fail;
-use crate::core::library::FOLDERS_FILE;
+use crate::core::library::{ARCHIVES_FILE, FOLDERS_FILE};
 use crate::services::{asset_menu, origin_sync, purge};
 use crate::services::purge::DeleteFolderReport;
 use crate::services::recycle::DeleteRecycleReport;
@@ -240,10 +240,15 @@ pub async fn delete_folder(
   if permanent {
     return purge::delete_folder(lib, &folder_id, true, confirmed);
   }
+  if lib.index.folders.get(&folder_id).is_some_and(|f| f.kind.as_deref() == Some(crate::core::models::ARCHIVE_KIND)) {
+    drop(guard);
+    return super::archive_ops::delete_archive_op(&state, &folder_id);
+  }
   let name = lib.index.folders.get(&folder_id).map(|f| f.name.clone()).unwrap_or_else(|| folder_id.clone());
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin(format!("删除文件夹 {name}"));
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
   match purge::delete_folder(lib, &folder_id, false, confirmed) {
     Ok(report) => {
       undo.commit().map_err(|e| e.to_string())?;
@@ -269,6 +274,7 @@ pub async fn delete_folders(state: State<'_, AppState>, folder_ids: Vec<String>)
   let mut undo = state.undo.lock().map_err(|e| e.to_string())?;
   undo.begin(label);
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
+  undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
   match purge::delete_folders(lib, &folder_ids) {
     Ok(report) => {
       undo.commit().map_err(|e| e.to_string())?;
