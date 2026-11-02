@@ -65,7 +65,6 @@ impl SemanticStore {
     Ok(())
   }
 
-  #[cfg(test)]
   pub fn provider_document_count(&self, asset_id: &str) -> Result<i64, String> {
     self.conn.query_row("SELECT COUNT(*) FROM semantic_documents WHERE asset_id=?1", [asset_id], |row| row.get(0)).map_err(|e| e.to_string())
   }

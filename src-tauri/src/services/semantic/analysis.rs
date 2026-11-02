@@ -398,6 +398,23 @@ fn supported(lib: &Library, asset_id: &str, meta: &AssetMeta) -> bool {
   media_support::is_video(&origin) || meta.ext.eq_ignore_ascii_case("png")
 }
 
+/// 单资产分析状态（详情面板「语义分析」行）：可分析判定走 supported 同口径；
+/// 段数 / 详细文档数全容错——模型目录未配置或索引不可读时按 0 返回，不打断面板展示
+pub fn asset_status<R: tauri::Runtime>(app: &AppHandle<R>, asset_id: &str) -> Result<super::types::SemanticAssetStatus, String> {
+  let state = app.state::<AppState>();
+  let guard = state.library.lock().map_err(|e| e.to_string())?;
+  let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
+  let analyzable = lib.index.assets.get(asset_id).is_some_and(|meta| supported(lib, asset_id, meta));
+  let mut status = super::types::SemanticAssetStatus { analyzable, segment_count: 0, detailed_count: 0 };
+  if analyzable {
+    if let (Ok(store), Ok(manifest)) = (open_store(&lib.root), model::model_dir().and_then(|dir| ModelManifest::load(&dir))) {
+      status.segment_count = store.segment_count_for_model(asset_id, &manifest.revision, super::media::ANALYSIS_VERSION).unwrap_or(0);
+      status.detailed_count = store.provider_document_count(asset_id).unwrap_or(0);
+    }
+  }
+  Ok(status)
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

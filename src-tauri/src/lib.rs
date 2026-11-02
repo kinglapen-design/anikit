@@ -557,6 +557,7 @@ pub fn run() {
       commands::semantic::test_semantic_runtime,
       commands::semantic::start_semantic_analysis,
       commands::semantic::get_semantic_analysis_task,
+      commands::semantic::get_semantic_asset_status,
       commands::semantic::list_semantic_analysis_tasks,
       commands::semantic::pause_semantic_analysis,
       commands::semantic::resume_semantic_analysis,

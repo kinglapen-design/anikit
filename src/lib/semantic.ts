@@ -87,6 +87,14 @@ export interface AnalysisTask {
   errors: { assetId: string; error: string }[];
 }
 
+/** 单资产分析状态（详情面板「语义分析」行）：analyzable = 可否参与分析（视频/动图/序列帧）；
+ * segmentCount = 当前模型版本有效分段数；detailedCount = 详细分析文档数（description/event） */
+export interface SemanticAssetStatus {
+  analyzable: boolean;
+  segmentCount: number;
+  detailedCount: number;
+}
+
 export type ProviderKind = "openai-compatible" | "ollama";
 
 export interface ProviderSettings {
@@ -133,6 +141,10 @@ export function testSemanticRuntime(): Promise<SemanticRuntimeStatus> {
 
 export function getSemanticAnalysisTask(taskId: string): Promise<AnalysisTask | null> {
   return invoke("get_semantic_analysis_task", { taskId });
+}
+
+export function getSemanticAssetStatus(assetId: string): Promise<SemanticAssetStatus> {
+  return invoke("get_semantic_asset_status", { assetId });
 }
 
 export function listSemanticAnalysisTasks(): Promise<AnalysisTask[]> {

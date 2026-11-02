@@ -75,6 +75,11 @@ pub async fn get_semantic_analysis_task(app: tauri::AppHandle, task_id: String) 
 }
 
 #[tauri::command]
+pub async fn get_semantic_asset_status(app: tauri::AppHandle, asset_id: String) -> Result<crate::services::semantic::types::SemanticAssetStatus, String> {
+  analysis::asset_status(&app, &asset_id)
+}
+
+#[tauri::command]
 pub async fn list_semantic_analysis_tasks(app: tauri::AppHandle) -> Result<Vec<TaskSnapshot>, String> {
   analysis::list_tasks(&app)
 }

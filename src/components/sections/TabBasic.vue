@@ -26,8 +26,10 @@ import { displayName } from "../../lib/formatBadge";
 import { formatDetailDate, visibleDetailBlocks, type DetailTarget } from "../../lib/detailSections";
 import { formatSize } from "../../lib/formatSize";
 import { setAssetLinks, setArchiveLinks } from "../../lib/customDataOps";
+import { getSemanticAssetStatus, type SemanticAssetStatus } from "../../lib/semantic";
 import { jumpToAnikitRef, parseAnikitRef } from "../../lib/anikitLink";
 import { useToastStore } from "../../stores/toast";
+import { useSemanticTaskStore } from "../../stores/semantic";
 import { useUiStore } from "../../stores/ui";
 
 const props = defineProps<{ target: Extract<DetailTarget, { kind: "file" | "archive" }> }>();
@@ -35,6 +37,29 @@ const ui = useUiStore();
 
 const file = computed(() => (props.target.kind === "file" ? props.target : null));
 const archive = computed(() => (props.target.kind === "archive" ? props.target : null));
+
+// —— 语义分析状态（2026-11-02 用户实机：「怎么知道哪个有向量哪个没有」）——
+// 基本数据末位「语义分析」行：未分析 / 基础 N 段 / 基础 N 段 + 详细 M 条；仅可分析类型
+// （视频/动图/序列帧）出行。任务完成（semanticTasks.last 快照更新）即重拉，随分析实时刷新
+const semanticTasks = useSemanticTaskStore();
+const semanticStatus = ref<SemanticAssetStatus | null>(null);
+watch(
+  [() => file.value?.detail.assetId, () => semanticTasks.last?.id],
+  async ([id]) => {
+    if (!id) {
+      semanticStatus.value = null;
+      return;
+    }
+    try {
+      const status = await getSemanticAssetStatus(id);
+      if (file.value?.detail.assetId !== id) return; // await 期间已切选中
+      semanticStatus.value = status;
+    } catch {
+      semanticStatus.value = null; // 读取失败静默（状态行不打断面板）
+    }
+  },
+  { immediate: true },
+);
 
 // 名称（只读）；链接可编辑（2026-10-08 S4 anikit 协议消费端：detail.links / archives.json links 首条，空 = placeholder http://）
 const name = computed(() => {
@@ -162,6 +187,18 @@ const dataRows = computed<{ label: string; values: string[] }[]>(() => {
     out.push({ label: "格式", values: [d.ext.toUpperCase()] });
     out.push({ label: "添加日期", values: formatDetailDate(d.importedAt).split(" ") });
     out.push({ label: "修改日期", values: formatDetailDate(d.modifiedAt).split(" ") });
+    // 语义分析状态行（2026-11-02）：仅可分析类型出（analyzable 后端同 supported 口径）——
+    // 未分析 / 基础 N 段 / 基础 N 段 + 详细 M 条（详细 = description/event 文档数）
+    const sem = semanticStatus.value;
+    if (sem?.analyzable) {
+      const text =
+        sem.segmentCount === 0
+          ? "未分析"
+          : sem.detailedCount > 0
+            ? `基础 ${sem.segmentCount} 段 + 详细 ${sem.detailedCount} 条`
+            : `基础 ${sem.segmentCount} 段`;
+      out.push({ label: "语义分析", values: [text] });
+    }
     return out;
   }
   const d = props.target.data;
