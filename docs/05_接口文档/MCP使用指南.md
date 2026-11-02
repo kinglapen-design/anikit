@@ -115,3 +115,17 @@ MCP 进 Agent 上下文的开销分三块，对应三招：
 
 - 裸浏览器 / 无 `Accept: text/event-stream` 头的请求访问 `/mcp` 回 406「Client must accept text/event-stream」——规范行为，不是故障。
 - 连不上先确认 APP 在运行；端口异常时读 `mcp-server.port` 拿实际端口。
+
+## CLI 外接入口（anikit-cli，2026-11-02）
+
+终端 Agent 与脚本可以走 `anikit-cli.exe`（免安装包根目录自带）：同一 MCP 服务的瘦客户端，无需配置 MCP 连接，子命令即工具。首版 = 只读 13 工具全量 + `tools` 列表；写命令后续补批。
+
+```bash
+anikit-cli status                          # 确认库已打开
+anikit-cli search 杰森 --folder F2610080228-XJZ --pretty
+anikit-cli path AN2609250223-Q5BW7         # 拿磁盘路径后直读文件看图
+anikit-cli detail anikit://item/AN2609250223-Q5BW7
+anikit-cli semantic 跑步动作 --limit 5
+```
+
+输出紧凑 JSON（`--pretty` 缩进）；退出码 0 成功 / 1 工具级错误（stdout `{"error":...}`）/ 2 连接·用法错误（stderr）。命令表与协议细节见 [CLI通道](CLI通道.md)。

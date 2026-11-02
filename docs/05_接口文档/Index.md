@@ -36,4 +36,5 @@
 
 - [WebSocket通道](WebSocket通道.md)
 - [MCP通道](MCP通道.md)（接入与使用说明：[MCP使用指南](MCP使用指南.md)）
+- [CLI通道](CLI通道.md)（anikit-cli 瘦客户端：只读命令先行，经 MCP 复用同一业务与红线）
 - [anikit协议](anikit协议.md)
