@@ -38,12 +38,17 @@ pub fn parse_response(
     .get("events")
     .and_then(Value::as_array)
     .ok_or_else(|| "provider 返回 JSON 缺少 events 数组".to_string())?;
-  let events = events
-    .iter()
-    .enumerate()
-    .map(|(index, event)| parse_event(event, index, frame_count, frame_times, duration_ms))
-    .collect::<Result<Vec<_>, _>>()?;
-  Ok((description, events))
+  // 不合规事件逐个丢弃而非整单失败（2026-11-02 用户实机：DeepSeek 单个事件区间编歪
+  // 「时间区间未覆盖任何证据帧」→ 整段素材白跑——模型随机失误不该浪费整次调用与额度；
+  // 防幻觉口径不变：不合规事件不入库，description 与合规事件保留）
+  let mut events_out = Vec::with_capacity(events.len());
+  for (index, event) in events.iter().enumerate() {
+    match parse_event(event, index, frame_count, frame_times, duration_ms) {
+      Ok(parsed) => events_out.push(parsed),
+      Err(error) => log::warn!("[semantic] 丢弃不合规事件：{error}"),
+    }
+  }
+  Ok((description, events_out))
 }
 
 fn validate_frames(frame_count: usize, frame_times: &[i64], duration_ms: i64) -> Result<(), String> {
@@ -193,23 +198,35 @@ mod tests {
   }
 
   #[test]
-  fn rejects_bad_time_certainty_and_uncovered_evidence() {
-    let mut bad = Vec::new();
-    for (start, end) in [(-1, 900), (900, 100), (100, 4001)] {
-      let mut value = event("observed");
-      value["startMs"] = json!(start);
-      value["endMs"] = json!(end);
-      bad.push(value);
-    }
-    for evidence in [json!([]), json!([3]), json!([1])] {
-      let mut value = event("observed");
-      value["evidence"] = evidence;
-      bad.push(value);
-    }
-    bad.push(event("certain"));
-    for value in bad {
-      assert!(parse_response(&document(value), 3, &[100, 950, 1000], 4000).is_err());
-    }
+  fn drops_bad_events_but_keeps_description_and_good_ones() {
+    // 单个不合规事件 → 丢弃不入库（2026-11-02 容错口径），不再整单失败
+    let bad_cases = {
+      let mut bad = Vec::new();
+      for (start, end) in [(-1, 900), (900, 100), (100, 4001)] {
+        let mut value = event("observed");
+        value["startMs"] = json!(start);
+        value["endMs"] = json!(end);
+        bad.push(value);
+      }
+      for evidence in [json!([]), json!([3]), json!([1])] {
+        let mut value = event("observed");
+        value["evidence"] = evidence;
+        bad.push(value);
+      }
+      bad.push(event("certain"));
+      bad
+    };
+    // 好坏混合：仅合规事件保留，description 不受影响
+    let mut mixed = bad_cases.clone();
+    mixed.push(event("hypothesis"));
+    let (description, events) = parse_response(&json!({"description":"整体描述","events":mixed}).to_string(), 3, &[100, 950, 1000], 4000).unwrap();
+    assert_eq!(description, "整体描述");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].certainty, "hypothesis");
+    // 全坏：事件清空但整单仍成功（description 保底）
+    let (_, events) = parse_response(&json!({"description":"整体描述","events":bad_cases}).to_string(), 3, &[100, 950, 1000], 4000).unwrap();
+    assert!(events.is_empty());
+    // 主干校验不变：description 空 / 帧数不匹配仍整单失败
     assert!(parse_response(&json!({"description":" ","events":[]}).to_string(), 1, &[0], 0).is_err());
     assert!(parse_response(&document(event("observed")), 2, &[100, 950, 1000], 4000).is_err());
   }
