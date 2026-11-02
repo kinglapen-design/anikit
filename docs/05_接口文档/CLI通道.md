@@ -52,3 +52,5 @@ id 类参数（assetId / folderId）与 MCP 同口径：可直接粘贴 `anikit:
 ## 分发
 
 随免安装包带件：`tools/pack-portable.py` 组装 `anikit-cli.exe` 到包根（与 anikit.exe / anikit-paste.exe 并列）。构建 = `cargo build --release --bins`（tauri build --no-bundle 全 bins 同出）。开发自测 = `cargo run --bin anikit-cli -- status`；单元测试 = `cargo test --bin anikit-cli`（参数映射 / SSE 切分 / 回包提取与瘦身）。
+
+**插件面板入口（2026-11-02）**：MCP 连接器详情窗「CLI 命令行」组提供用法说明与四个常用命令复制块（--help / status / search / path），路径组标注 CLI 程序位置。

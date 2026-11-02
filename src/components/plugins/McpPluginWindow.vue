@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // AI 外接通道（MCP）详情子窗口（2026-09-20，待办细节清单 09-20 立项；版式仿 AnimatePluginWindow——
 // 544×640 非模态独立窗，可移动/缩放、单例聚焦，open_plugin_window 后端命令，URL ?plugin=mcp 分发）：
-// 四组内容 = 服务（MCP 服务 + 允许写入 两开关同一行）/ 使用教程（三种 Agent 接入配置 + 复制钮）/
-// 功能列表（只读 13 + 写 27）/ 路径（服务地址 + 端口文件）；底部按钮行 = 左件运行状态 + 右件「关闭」钮
+// 五组内容 = 服务（MCP 服务 + 允许写入 两开关同一行）/ 使用教程（三种 Agent 接入配置 + 复制钮）/
+// CLI 命令行（anikit-cli 用法，2026-11-02 用户定写入插件面板）/ 功能列表（只读 13 + 写 27）/
+// 路径（服务地址 + 端口文件 + CLI 程序）；底部按钮行 = 左件运行状态 + 右件「关闭」钮
 //（MCP 无文件可装，无安装/卸载——「真安装动作 = 写 Agent 配置」，本轮做展示+复制，一键写配置属远期项）。
 // 同日 UI 调整轮（用户实机标注定案）：① 两开关同一行 gap 12（省纵向空间）；② 运行状态挪按钮行左件，
 // 三轮定 = **圆点+字重双指示**（圆点保留——用户澄清要废的是「运行中·http」的间隔中点非绿点）——
@@ -88,6 +89,16 @@ async function copyCfg(text: string, name: string): Promise<void> {
     toast.notify({ message: "复制失败", icon: "fail" });
   }
 }
+
+// CLI 命令复制（2026-11-02 CLI 组）：与 copyCfg 同径，文案独立
+async function copyCli(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.notify({ message: "CLI 命令已复制", icon: "success" });
+  } catch {
+    toast.notify({ message: "复制失败", icon: "fail" });
+  }
+}
 </script>
 
 <template>
@@ -143,6 +154,36 @@ async function copyCfg(text: string, name: string): Promise<void> {
             </li>
           </ul>
         </section>
+        <!-- CLI 命令行组（2026-11-02，PRD 08-06 CLI 外接入口）：配置块与复制钮复用使用教程组同口径 -->
+        <section class="pw-group">
+          <h2 class="pw-sub">CLI 命令行</h2>
+          <ul class="pw-lines">
+            <li>
+              程序目录自带 <b>anikit-cli.exe</b>（与 anikit.exe 同目录）＝ 同一 MCP 服务的命令行瘦客户端，
+              终端 Agent 与脚本免配置直接用；首版为 <b>[只读]</b> 13 个命令，写命令后续补批。
+            </li>
+            <li class="cfg-row">
+              <span class="cfg-text"><b>查看全部命令</b>：anikit-cli --help</span>
+              <IconButton name="copy" variant="bare" size="sm" title="复制" @click="copyCli('anikit-cli --help')" />
+            </li>
+            <li class="cfg-row">
+              <span class="cfg-text"><b>确认库已打开</b>：anikit-cli status</span>
+              <IconButton name="copy" variant="bare" size="sm" title="复制" @click="copyCli('anikit-cli status')" />
+            </li>
+            <li class="cfg-row">
+              <span class="cfg-text"><b>搜索素材</b>：anikit-cli search 关键词 --pretty</span>
+              <IconButton name="copy" variant="bare" size="sm" title="复制" @click="copyCli('anikit-cli search 关键词 --pretty')" />
+            </li>
+            <li class="cfg-row">
+              <span class="cfg-text"><b>拿磁盘路径看图</b>：anikit-cli path &lt;资产id&gt;</span>
+              <IconButton name="copy" variant="bare" size="sm" title="复制" @click="copyCli('anikit-cli path <资产id>')" />
+            </li>
+            <li>
+              输出为紧凑 JSON（<b>--pretty</b> 缩进），退出码 0 成功 / 1 工具级错误 / 2 连接或用法错误；
+              id 参数可直接粘贴 anikit:// 链接。完整命令表见接口文档 CLI通道.md。
+            </li>
+          </ul>
+        </section>
         <section class="pw-group">
           <h2 class="pw-sub">功能列表</h2>
           <ul class="pw-lines">
@@ -163,6 +204,7 @@ async function copyCfg(text: string, name: string): Promise<void> {
           <ul class="pw-lines">
             <li class="pw-path">服务地址: {{ status?.url ?? "未运行（固定端口 17701 优先，被占回退动态）" }}</li>
             <li class="pw-path">端口文件: %APPDATA%\AniKit\mcp-server.port</li>
+            <li class="pw-path">CLI 程序: 程序目录\anikit-cli.exe（与 anikit.exe 同目录）</li>
           </ul>
         </section>
       </div>

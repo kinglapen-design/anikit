@@ -178,10 +178,10 @@ const animateSvcOn = ref(true);
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">MCP 详情子窗口（544×640，2026-09-20；四组 = 服务 / 使用教程 / 功能列表 / 路径，图示 = 服务开·只读态）</h3>
+      <h3 class="pv-group-title">MCP 详情子窗口（544×640，2026-09-20；五组 = 服务 / 使用教程 / CLI 命令行（2026-11-02）/ 功能列表 / 路径，图示 = 服务开·只读态）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell">
-          <div class="pv-aw-shell pv-aw-shell--mcp">
+          <div class="pv-aw-shell pv-aw-shell--mcp pv-aw-shell--auto">
             <h1 class="pv-aw-title">MCP 连接器</h1>
             <section class="pv-aw-group">
               <h2 class="pv-aw-sub">服务</h2>
@@ -213,14 +213,37 @@ const animateSvcOn = ref(true);
                   <span class="pv-cfg-text"><b>Claude Code</b>：运行 claude mcp add --transport http anikit http://127.0.0.1:17701/mcp</span>
                   <IconButton name="copy" variant="bare" size="sm" title="复制" />
                 </li>
-                <li>接入后 Agent 默认只能 <b>[只读]</b>（搜索、浏览、看图等 12 个工具）；需要 Agent 写入时开启上方 <b>[允许写入]</b>。</li>
+                <li>接入后 Agent 默认只能 <b>[只读]</b>（搜索、浏览、看图等 13 个工具）；需要 Agent 写入时开启上方 <b>[允许写入]</b>（27 个写工具；彻底删除永不经 MCP，回收站清空须 APP 内人工）。</li>
+              </ul>
+            </section>
+            <section class="pv-aw-group">
+              <h2 class="pv-aw-sub">CLI 命令行</h2>
+              <ul class="pv-aw-lines">
+                <li>程序目录自带 <b>anikit-cli.exe</b>（与 anikit.exe 同目录）＝ 同一 MCP 服务的命令行瘦客户端，终端 Agent 与脚本免配置直接用；首版为 <b>[只读]</b> 13 个命令，写命令后续补批。</li>
+                <li class="pv-cfg-row">
+                  <span class="pv-cfg-text"><b>查看全部命令</b>：anikit-cli --help</span>
+                  <IconButton name="copy" variant="bare" size="sm" title="复制" />
+                </li>
+                <li class="pv-cfg-row">
+                  <span class="pv-cfg-text"><b>确认库已打开</b>：anikit-cli status</span>
+                  <IconButton name="copy" variant="bare" size="sm" title="复制" />
+                </li>
+                <li class="pv-cfg-row">
+                  <span class="pv-cfg-text"><b>搜索素材</b>：anikit-cli search 关键词 --pretty</span>
+                  <IconButton name="copy" variant="bare" size="sm" title="复制" />
+                </li>
+                <li class="pv-cfg-row">
+                  <span class="pv-cfg-text"><b>拿磁盘路径看图</b>：anikit-cli path &lt;资产id&gt;</span>
+                  <IconButton name="copy" variant="bare" size="sm" title="复制" />
+                </li>
+                <li>输出为紧凑 JSON（<b>--pretty</b> 缩进），退出码 0 成功 / 1 工具级错误 / 2 连接或用法错误；id 参数可直接粘贴 anikit:// 链接。完整命令表见接口文档 CLI通道.md。</li>
               </ul>
             </section>
             <section class="pv-aw-group">
               <h2 class="pv-aw-sub">功能列表</h2>
               <ul class="pv-aw-lines">
-                <li><b>只读（12 个）</b>：当前库状态 / 搜索素材 / 文件夹树 / 文件夹资产清单 / 链接清单 / 资产详情 / 磁盘路径（看图入口）/ 读文本资产 / 档案列表 / 语义检索 / 语义任务查询。</li>
-                <li><b>写入（20 个，需开 [允许写入]）</b>：新建文档 / 覆写文本 / 批量改名 / 新建文件夹 / 移入文件夹 / 移动文件夹 / 链接汇总 / 导入入库 / 丢回收站 / 指定与断开提示词 / 设置文件夹分组 / 基础与详细语义分析、任务控制 / 创建虚拟或物理片段。</li>
+                <li><b>只读（13 个）</b>：当前库状态 / 搜索素材 / 文件夹树 / 文件夹资产清单 / 链接清单 / 资产详情 / 源文件与缩略图磁盘路径（看图入口）/ 读文本资产 / 档案列表与详情 / 语义检索 / 语义任务查询。</li>
+                <li><b>写入（27 个，需开 [允许写入]）</b>：新建文档 / 覆写文本资产 / 批量改名 / 新建文件夹 / 资产移入文件夹 / 移动文件夹 / 文件夹改名 / 链接汇总 / 导入磁盘文件入库 / 丢回收站 / 指定与断开提示词 / 设置文件夹分组 / 新建、转换、编辑与删除档案 / 基础与详细语义分析、任务控制 / 创建虚拟或物理片段（语义任务、覆写文本与导入不进撤销，其余进撤销）。</li>
               </ul>
             </section>
             <section class="pv-aw-group">
@@ -228,6 +251,7 @@ const animateSvcOn = ref(true);
               <ul class="pv-aw-lines">
                 <li>服务地址: http://127.0.0.1:17701/mcp</li>
                 <li>端口文件: %APPDATA%\AniKit\mcp-server.port</li>
+                <li>CLI 程序: 程序目录\anikit-cli.exe（与 anikit.exe 同目录）</li>
               </ul>
             </section>
             <div class="pv-aw-spacer" />
@@ -245,6 +269,7 @@ const animateSvcOn = ref(true);
           <span class="pv-cap">
             版式仿 Animate 窗；两开关同一行 gap 12（开关左 + 标签右 gap 8 沿退役 SettingsModal 口径），服务关时「允许写入」禁用；
             配置行 = 圆角矩形块（圆角 6 / 亮色/半透明-4 底与描边，学 md 代码块）+ IconButton bare sm copy；
+            CLI 命令行组（2026-11-02）= anikit-cli 用法四配置块 + 说明行，同配置块口径零新样式；
             按钮行左件 = 运行状态（圆点+字重双指示：圆点 联通成功色/断开四级灰 + 状态词加粗 运行中二级/已停止三级，gap 8）；
             无安装/卸载钮（MCP 无文件可装）
           </span>
@@ -514,6 +539,11 @@ const animateSvcOn = ref(true);
    运行状态挪按钮行左件（字重区分 加粗 运行中二级·已停止三级）/ 配置行圆角矩形块化 圆角 6·a4 底与描边）：壳高 640，余同 pv-aw 系 —— */
 .pv-aw-shell--mcp {
   height: 640px;
+}
+/* MCP 五组（2026-11-02 加 CLI 命令行组）内容超 640 壳高——本陈列壳改内容自然撑高防叠字
+  （实件 = 独立 OS 窗 544×640 + 组区 ScrollThumb 滚动，不受影响；贴图窗复刻壳维持 640） */
+.pv-aw-shell--auto {
+  height: auto;
 }
 .pv-svc-row {
   display: flex;
