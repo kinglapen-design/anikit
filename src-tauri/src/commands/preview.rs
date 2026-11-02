@@ -304,6 +304,12 @@ pub(crate) fn open_child_window(
       // 把窗口 dark mode 置 0 → Mica 浅色/退化白底 × 深色 UI 无浅色适配；锁定后
       // DWM 退化实底恒深色。与主窗口 tauri.conf theme:"Dark" 同口径
       .theme(Some(tauri::Theme::Dark))
+      // Runtime 156 子窗口 UDF 隔离（踩坑 121，2026-11-02）：156.0.4314.58（11-01 自动更新）起
+      // 与主窗口共享 user-data-dir 时第二个 WebView 创建报 0x8007139F（同 UDF 多
+      // CoreWebView2Environment 冲突；透明与否无关，build(false) 同样失败）——
+      // 每 label 独立 UDF（主窗口与彼此全隔离），wry 报 ERROR 后 build 仍 Ok 的
+      // 隐形失败由下方 3s 超时 show 兜底暴露
+      .data_directory(child_data_dir(app, label))
       // 先隐后显防白闪（2026-10-02 用户实机报「先加载边框和投影再出内容」）：弃云母后
       // WebView2 初始化期默认白底暴露（云母时代 set_effects(Mica) 顺带把默认背景变深色
       // 材料遮住）——visible(false) + 页面加载完成再 show/set_focus，初始化期不可见；
@@ -329,7 +335,24 @@ pub(crate) fn open_child_window(
       win
     }
   };
+  // 先隐后显超时兜底（踩坑 121）：on_page_load 不 Finished（加载失败 / webview 创建异常）时
+  // 窗口永不 show = 故障隐形——3s 强制 show（已 show 幂等无感），故障窗可见可关、报错不再藏
+  {
+    let win = win.clone();
+    tauri::async_runtime::spawn(async move {
+      tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+      let _ = win.show();
+    });
+  }
   Ok(win)
+}
+
+/// 子窗口独立 user-data-dir（Runtime 156 UDF 冲突规避）：app_local_data_dir/EBWebView-children/{label}
+fn child_data_dir(app: &AppHandle, label: &str) -> PathBuf {
+  let base = app.path().app_local_data_dir().unwrap_or_else(|_| std::env::temp_dir());
+  let dir = base.join("EBWebView-children").join(label);
+  let _ = fs::create_dir_all(&dir);
+  dir
 }
 
 // ---------- 共用 ----------

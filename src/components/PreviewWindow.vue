@@ -16,8 +16,23 @@ const content = useContentStore();
 const preview = previewSession(WINDOW_PANEL_ID);
 provide(PREVIEW_SESSION_KEY, preview);
 
+// 启动竞态（2026-11-02 踩坑 121 附带，用户实机截图「请先打开素材库」坐实）：子窗口 onMounted 即
+// content.refresh()，启动早期 AppState 库未就绪时吃「请先打开素材库」——主窗口有库就绪等待
+//（deep-link pending 同口径），子窗口补同款：仅拦库未就绪错 200ms×50 重试，其余错误原样抛
+async function refreshWhenLibraryReady(): Promise<void> {
+  for (let i = 0; i < 50; i++) {
+    try {
+      await content.refresh();
+      return;
+    } catch (e) {
+      if (!String(e).includes("请先打开素材库") || i === 49) throw e;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+}
+
 onMounted(async () => {
-  await content.refresh();
+  await refreshWhenLibraryReady();
   await preview.open(props.assetKey);
 });
 </script>
