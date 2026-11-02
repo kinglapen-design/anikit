@@ -58,6 +58,7 @@ import { useUiStore } from "../stores/ui";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
 import { placementKey, placementRef, useContentStore } from "../stores/content";
+import { useSearchStore } from "../stores/search";
 import { useToastStore } from "../stores/toast";
 import { useWsStore } from "../stores/ws";
 import type { PlacementView } from "../stores/content";
@@ -66,6 +67,7 @@ const props = withDefaults(
   defineProps<{
     asset: PlacementView;
     box: Box;
+    panelId?: string; // 属主面板 id（AssetGrid 注入）——语义命中徽标查 search store per-panel 命中表用
     selected?: boolean;
     renaming?: boolean;
     faded?: "source" | "cut" | null; // 拖拽源半透明 / 被剪切半透明（2026-07-28 复验反馈 6①/8）
@@ -327,6 +329,18 @@ const badge = computed(() => {
 const showFormatBadge = computed(
   () => ui.showBadge && formatBadgeColor(props.asset.ext, isSeq.value, isAnim.value) !== null,
 );
+// —— 语义命中徽标（2026-11-02 用户实机：语义搜索"能定位到视频，但卡片上看不到时间戳"）——
+// 语义结果态直显命中段时间：best 段起点 mm:ss（formatDuration）+ 多段 "+N"；跳转本体不变——
+// 双击卡片 → preview.open → seekToSegment 定位到命中段（preview.ts:221，徽标纯展示不拦事件）
+const search = useSearchStore();
+const semanticHit = computed(() => (props.panelId ? search.semanticHitFor(props.panelId, props.asset.assetId) : null));
+const semanticBadge = computed(() => {
+  const hit = semanticHit.value;
+  if (!hit) return "";
+  const time = formatDuration(hit.best.startMs / 1000);
+  const extra = hit.segments.length - 1;
+  return extra > 0 ? `${time} +${extra}` : time;
+});
 // —— 位置徽章（6.2 四轮走查③：「有链接」（活位置 > 1）才上徽章——origin ★ / 链接 icon，
 //    单位置文件无徽章；⑤悬停 = LinkListPopover 全部链接列表）——
 // 视图菜单「显示链接标识」总开关（ui.showLinkBadge，2026-09-06）关时两侧都不上徽章
@@ -451,6 +465,10 @@ const meta = computed(() => {
     <span v-if="asset.noteCount" class="note-badge kc-float" :class="{ 'no-brief': !ui.showBrief }">
       <span class="nb-label">笔记</span><span class="nb-count">{{ asset.noteCount }}</span>
     </span>
+    <!-- 语义命中徽标（2026-11-02 用户实机定）：语义搜索结果态直显命中段时间（best 段起点 mm:ss，
+         多段 "+N" 并记）——kc-float 铬右上各 12（FormatBadge 左上位的镜像）；仅视频/动图/序列帧
+         有命中（音频/字体不在分析范围，右上无胶囊/安装钮冲突） -->
+    <span v-if="semanticBadge" class="semantic-badge kc-float">{{ semanticBadge }}</span>
     <LinkListPopover
       v-if="linkListOpen"
       :asset="asset"
@@ -504,6 +522,21 @@ const meta = computed(() => {
 .nb-count {
   font-family: var(--n-font-mono); /* 数量 = Fira Mono（数字档族） */
 }
+/* 语义命中徽标（2026-11-02 定）：kc-float 铬（同笔记徽章 / FormatBadge 同源），右上各 12
+   （FormatBadge 左上位的镜像）；mono 数字档 12/16 bold 二级（同笔记数量档）；纯展示不拦事件 */
+.semantic-badge {
+  position: absolute;
+  right: var(--n-space-12);
+  top: var(--n-space-12);
+  z-index: 6;
+  font-family: var(--n-font-mono);
+  font-size: var(--n-fs-num);
+  line-height: var(--n-lh-num);
+  font-weight: var(--n-fw-bold);
+  color: var(--n-l2);
+  white-space: nowrap;
+  pointer-events: none;
+}
 /* 位置徽章：14×14，卡片右下各 12（kc-corner-badge 位）；可悬停出链接列表浮层。
    色档 = 亮色/一级（2026-09-23 用户实机定：三级在深底图上看不清；定位/渲染已入 FileCard badges 槽） */
 .card-badges {
@@ -522,10 +555,14 @@ const meta = computed(() => {
    位置徽章不入此列（2026-09-23）：已入 FileCard badges 槽 = 卡芯子树，随父级位移天然同步——
    再叠壳层补偿会走双份（-8px 比卡片幅度大，同日走查反馈） */
 .note-badge,
+.semantic-badge,
 .pick-check {
   transition: transform var(--n-dur-250) var(--n-ease-in-out);
 }
 .asset-card:hover .note-badge {
+  transform: translateY(-4px);
+}
+.asset-card:hover .semantic-badge {
   transform: translateY(-4px);
 }
 .asset-card:hover .pick-check {
@@ -534,7 +571,8 @@ const meta = computed(() => {
 /* 选择模式已选（§12）：位置徽章（卡内 badges 槽，clip 外不被卡内压暗规则覆盖）/ 壳层笔记角标
    同压暗 30% 档（卡内压暗归 FileCard picked）；大勾不压（在壳层独立） */
 .asset-card.picked .card-badges,
-.asset-card.picked .note-badge {
+.asset-card.picked .note-badge,
+.asset-card.picked .semantic-badge {
   opacity: 0.3;
 }
 /* 选择模式发起文件自身（2026-08-24 用户定）：剪切档半透明 + 禁选光标（不可选的视觉信号） */

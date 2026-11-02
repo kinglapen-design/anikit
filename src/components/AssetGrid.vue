@@ -536,6 +536,7 @@ onBeforeUnmount(() => {
             :key="placementKey(c.asset)"
             :asset="c.asset"
             :box="c.box"
+            :panel-id="preview.panelId"
             :selected="selection.isSelected(placementKey(c.asset))"
             :renaming="selection.renamingKey === placementKey(c.asset)"
             :faded="assetCardFade(placementKey(c.asset))"

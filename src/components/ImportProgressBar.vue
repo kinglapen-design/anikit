@@ -74,7 +74,7 @@ function cancel(): void {
 </script>
 
 <template>
-  <div v-if="p || crawling" class="import-progress">
+  <div v-if="p || semantic || crawling" class="import-progress">
     <div class="bar" :class="{ scanning: scanning || crawling }">
       <div class="fill" :style="scanning ? undefined : { width: `${ratio * 100}%` }" />
     </div>
