@@ -263,17 +263,32 @@ export const useSearchStore = defineStore("search", () => {
     if (!s) return [];
     const content = useContentStore();
     const base = content.placementsFor(effectiveGlobal(panelId) ? "quick:all" : viewKey);
-    if (s.semanticOrder.length > 0) {
-      const order = new Map(s.semanticOrder.map((key, index) => [key, index]));
-      return base.filter((p) => order.has(`${p.assetId}|${p.folderId}`)).sort((left, right) => {
-        const a = order.get(`${left.assetId}|${left.folderId}`)!;
-        const b = order.get(`${right.assetId}|${right.folderId}`)!;
+    const key = (p: PlacementView): string => `${p.assetId}|${p.folderId}`;
+    if (s.mode === "semantic") {
+      // 纯语义模式：仅语义命中，按相关度序（原口径不变）
+      if (s.semanticOrder.length === 0) return [];
+      const order = new Map(s.semanticOrder.map((k, index) => [k, index]));
+      return base.filter((p) => order.has(key(p))).sort((left, right) => {
+        const a = order.get(key(left))!;
+        const b = order.get(key(right))!;
         return a - b;
       });
     }
-    if (s.mode === "semantic") return [];
-    const hits = s.hits;
-    return base.filter((p) => hits.has(`${p.assetId}|${p.folderId}`));
+    // 分词 / 智能模式：关键词命中按视口序；**auto 并联合并**（2026-11-02 用户实机定）——
+    // 语义命中按相关度追加在后，同 assetId 去重（关键词卡优先占位，不为语义重复出卡）；
+    // 语义命中卡以命中徽标 / 命中帧图为天然区分（无新 UI 元素），预览上下个同源
+    const keywordResults = base.filter((p) => s.hits.has(key(p)));
+    if (s.semanticOrder.length === 0) return keywordResults;
+    const seen = new Set(keywordResults.map((p) => p.assetId));
+    const order = new Map(s.semanticOrder.map((k, index) => [k, index]));
+    const semanticResults = base
+      .filter((p) => order.has(key(p)) && !seen.has(p.assetId))
+      .sort((left, right) => {
+        const a = order.get(key(left))!;
+        const b = order.get(key(right))!;
+        return a - b;
+      });
+    return [...keywordResults, ...semanticResults];
   }
 
   function semanticHitFor(panelId: string, assetId: string): SemanticAssetHit | null {
@@ -575,10 +590,14 @@ export const useSearchStore = defineStore("search", () => {
     s.semanticOrder = [];
   }
 
-  async function runSemantic(s: PanelSearch, scope: Parameters<typeof semanticSearch>[1], seq: number): Promise<void> {
+  async function runSemantic(s: PanelSearch, scope: Parameters<typeof semanticSearch>[1], seq: number, keepKeywordHits = false): Promise<void> {
     const query = keywordsOf(s).join(" ");
-    s.hits = new Set();
-    s.hitArchives = new Set();
+    // 并联合并（2026-11-02 用户实机定，PRD 03 智能路由节）：auto 模式保留关键词命中，
+    // 语义结果追加在后；纯语义模式（手动）维持清空关键词通道的原口径
+    if (!keepKeywordHits) {
+      s.hits = new Set();
+      s.hitArchives = new Set();
+    }
     if (!query) {
       clearSemantic(s);
       return;
@@ -617,14 +636,21 @@ export const useSearchStore = defineStore("search", () => {
       return;
     }
     try {
+      // auto 并联合并（2026-11-02 用户实机「搜左轮只出资产图片、视频出不来」修订，PRD 03）：
+      // 原降级路由 = 关键词有命中即短路不跑语义，向量结果被遮盖——改为关键词与语义并发双跑，
+      // 结果合并在 resultPlacementsFor（关键词视口序在前、语义按相关度去重追加）；
+      // 手动「分词」模式仍只跑关键词（wantSemantic=false）
+      const wantSemantic = s.mode === "auto" && keywordsOf(s).length > 0;
+      const semanticJob = wantSemantic ? runSemantic(s, scope, seq, true) : null;
       const r = await invoke<SearchHits>("search_assets", { query: s.draft.trim(), scope });
+      await semanticJob; // 已并发起跑（内部自捕错误不 reject），等齐收口
       if (s.seq !== seq) return;
       s.hits = new Set(r.placements.map((k) => `${k.assetId}|${k.folderId}`));
       s.hitArchives = new Set(r.archives);
-      s.error = null;
-      const hasResults = r.placements.length > 0 || r.archives.length > 0;
-      if (s.mode === "auto" && !hasResults && keywordsOf(s).length > 0) await runSemantic(s, scope, seq);
-      else clearSemantic(s);
+      if (!wantSemantic) {
+        clearSemantic(s);
+        s.error = null; // 纯关键词路径维持旧清错口径；并联路径 error 归 runSemantic 自管（防吞语义错误）
+      }
     } catch (err) {
       console.debug("搜索失败：", err);
     }
