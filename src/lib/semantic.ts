@@ -46,9 +46,16 @@ export interface SemanticSearchHits {
 
 /** 定位段选择（2026-11-02 用户实机：详细分析的 description 段覆盖全片、起点恒 0，
  * 分数却常最高——徽标显示 00:00、跳转定位失效）：segments（后端已按分数降序）中取首个
- * 非 description 窄段（event / visual 才有时间定位价值）；窗口内无非宽段回退 best */
+ * 非 description 窄段（event / visual 才有时间定位价值）；窗口内无非宽段回退 best。
+ * 二轮（同日「女人脸上的血」实机）：**event 优先于 visual**——AI 事件段是「发生了什么」的
+ * 判定区间，定位精度天然高于画面相似段；「伤痕≈血」语义邻近会让开头 visual 段误压
+ * 真正的事件段（血迹在 24s 的 event 被 0s 伤痕画面段挤后） */
 export function pickLocateSegment(hit: SemanticAssetHit): SegmentHit {
-  return hit.segments.find((segment) => segment.kind !== "description") ?? hit.best;
+  return (
+    hit.segments.find((segment) => segment.kind === "event") ??
+    hit.segments.find((segment) => segment.kind !== "description") ??
+    hit.best
+  );
 }
 
 /** 语义命中帧缩略图：复用笔记抽帧命令（幂等缓存）——视频 `t:{秒}` / 动图 `f:{帧索引}` /
