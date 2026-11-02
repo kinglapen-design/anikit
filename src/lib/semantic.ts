@@ -44,6 +44,20 @@ export interface SemanticSearchHits {
   modelRevision: string;
 }
 
+/** 定位段选择（2026-11-02 用户实机：详细分析的 description 段覆盖全片、起点恒 0，
+ * 分数却常最高——徽标显示 00:00、跳转定位失效）：segments（后端已按分数降序）中取首个
+ * 非 description 窄段（event / visual 才有时间定位价值）；窗口内无非宽段回退 best */
+export function pickLocateSegment(hit: SemanticAssetHit): SegmentHit {
+  return hit.segments.find((segment) => segment.kind !== "description") ?? hit.best;
+}
+
+/** 语义命中帧缩略图：复用笔记抽帧命令（幂等缓存）——视频 `t:{秒}` / 动图 `f:{帧索引}` /
+ * 序列帧帧名直给；取不到返回 null（前端保持原封面，不打扰） */
+export async function getSemanticHitThumb(assetId: string, key: string): Promise<string | null> {
+  const r = await invoke<{ path: string | null }>("get_note_thumb", { assetId, key });
+  return r.path;
+}
+
 export interface SemanticScope {
   viewKey: string;
   recursive: boolean;

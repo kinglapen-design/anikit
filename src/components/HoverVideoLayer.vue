@@ -24,7 +24,7 @@ import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
 import "./cards/cards.css";
 
-const props = withDefaults(defineProps<{ asset: PlacementView; auto?: boolean }>(), { auto: false });
+const props = withDefaults(defineProps<{ asset: PlacementView; auto?: boolean; startAt?: number | null }>(), { auto: false, startAt: null });
 const ui = useUiStore();
 
 // 自动播放预览范围上限（秒，2026-07-27 用户定：自动播放最大只支持 10 秒）
@@ -38,14 +38,27 @@ const duration = ref(0);
 const muted = ref(true); // 默认静音；自动播放模式恒静音（多视频同播），悬停可点音量钮开
 const playing = ref(false); // 播放/暂停胶囊钮态（7.1 内容容器轮新增——稿悬停胶囊含播放/暂停）
 
-// 范围起点：自动播放 = 封面帧秒数（源已变短于封面帧时回退 0）；悬停 = 0（完整播放）
+// 起点钳制：源已变短于目标起点时回退 0
+function clampStart(s: number): number {
+  const d = duration.value || props.asset.duration || 0;
+  return d > 0 && s >= d ? 0 : s;
+}
+// 语义命中起点（2026-11-02 用户实机定：「开了自动播放就从命中的往后放」）——
+// startAt 仅语义搜索命中态由 AssetCard 传入（定位窄段 startMs）；null = 无命中走原口径
+const hitStart = computed(() => (props.startAt != null && props.startAt > 0 ? clampStart(props.startAt) : null));
+// 范围起点：自动播放 = 命中点优先（无命中回退封面帧秒数）；悬停 = 0（完整播放）
 function rangeStart(): number {
   if (!props.auto) return 0;
+  if (hitStart.value != null) return hitStart.value;
   const tf = props.asset.thumbFrame;
   let s = tf?.startsWith("t:") ? Number(tf.slice(2)) || 0 : 0;
-  const d = duration.value || props.asset.duration || 0;
-  if (d > 0 && s >= d) s = 0;
-  return s;
+  return clampStart(s);
+}
+// 初始落点：悬停模式 = 命中点优先（范围仍全片——「没开自动播放就停在命中的那一帧」，
+// scrub / 循环不受影响）；自动播放 = 范围起点
+function initialSeek(): number {
+  if (!props.auto && hitStart.value != null) return hitStart.value;
+  return rangeStart();
 }
 // 范围终点：自动播放 = 起点 + 10 秒封顶时长；悬停 = 片尾
 function rangeEnd(): number {
@@ -105,7 +118,7 @@ async function loadSource(): Promise<void> {
     directRetried = false;
     if (r.fps != null) fpsLive.value = r.fps; // ws 无 fps 元数据：响应实时探测值补位（胶囊帧号照常）
     v.src = convertFileSrc(r.path);
-    v.currentTime = rangeStart();
+    v.currentTime = initialSeek();
     void v.play().catch((e) => console.warn("卡片播放失败：", e));
   } catch (e) {
     console.warn("卡片播放源解析失败：", e);
@@ -142,7 +155,7 @@ async function onSourceError(): Promise<void> {
       : await getMediaSource(props.asset.assetId, true);
     if (!r || isDisposed()) return;
     v.src = convertFileSrc(r.path);
-    v.currentTime = rangeStart();
+    v.currentTime = initialSeek();
     void v.play().catch(() => {});
   } catch (e) {
     console.warn("卡片播放转码兜底失败：", e);

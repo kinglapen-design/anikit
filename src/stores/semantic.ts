@@ -10,6 +10,7 @@ import {
   startSemanticAnalysis,
   startDetailedSemanticAnalysis,
   createSemanticSegment,
+  pickLocateSegment,
   type AnalysisProgress,
   type AnalysisTask,
 } from "../lib/semantic";
@@ -99,7 +100,9 @@ export const useSemanticTaskStore = defineStore("semanticTasks", () => {
   async function create(assetId: string, physical: boolean, panelId: string): Promise<void> {
     const search = useSearchStore();
     await search.runNow(panelId, useTabsStore().viewKeyOf(panelId));
-    const hit = search.semanticHitFor(panelId, assetId)?.best;
+    const raw = search.semanticHitFor(panelId, assetId);
+    // 创建片段取定位窄段（同 preview.open 口径：description 全片宽段无沉淀意义）
+    const hit = raw ? pickLocateSegment(raw) : undefined;
     const toast = useToastStore();
     if (!hit) {
       toast.notify({ message: "请先在语义搜索中打开该素材，再创建命中片段", icon: "fail" });

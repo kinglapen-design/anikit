@@ -52,6 +52,8 @@ import {
 import { formatDuration } from "../lib/formatDuration";
 import { formatSize } from "../lib/formatSize";
 import { formatDetailDate } from "../lib/detailSections";
+import { getSemanticHitThumb, pickLocateSegment } from "../lib/semantic";
+import { listSequenceFrames } from "../lib/mediaOps";
 import { renamePlacement } from "../lib/placementOps";
 import { acquireAutoplay, releaseAutoplay, type AutoplayPool } from "../lib/autoplayGate";
 import { useUiStore } from "../stores/ui";
@@ -76,14 +78,16 @@ const props = withDefaults(
 );
 const ui = useUiStore();
 const thumbUrl = computed(() =>
+  // 语义命中帧图优先（2026-11-02：语义结果态卡片静态图 = 命中段首帧，见下方 watch）；
   // ?v=modifiedAt = 缩略图 URL 版本戳：设封面后 modifiedAt 变 → URL 变 → img 重新加载
   //（asset 协议同 URL 有启发式缓存，2026-08-20 用户实机"静帧不热刷新"修复；query 不影响协议路径解析）；
   // &e=thumbEpoch = 清缓存重建代际戳（2026-10-13 设置面板清 lib-thumbs 闭环：重建不刷 modifiedAt，
   // 同 URL 会滞留旧图/破图；epoch 为 0 也带，URL 形状恒定。网格卡先接——PreviewNavigator /
   // SectionPinned / anikitLink / DupScanCard 不动）
-  props.asset.thumbPath
+  hitThumbUrl.value ??
+  (props.asset.thumbPath
     ? `${convertFileSrc(props.asset.thumbPath)}?v=${encodeURIComponent(props.asset.modifiedAt ?? "")}&e=${ui.thumbEpoch}`
-    : null,
+    : null),
 );
 // 工作空间磁盘实况项（PRD 02 步骤 1，assetId = ws: 合成假 id）：悬停播放层 / 自动播放
 // 2026-10-23 放行（PRD 02 技术口径「卡片悬停播放与自动播放」条）——层内按 wsPath 分流按路径命令；
@@ -330,16 +334,65 @@ const showFormatBadge = computed(
   () => ui.showBadge && formatBadgeColor(props.asset.ext, isSeq.value, isAnim.value) !== null,
 );
 // —— 语义命中徽标（2026-11-02 用户实机：语义搜索"能定位到视频，但卡片上看不到时间戳"）——
-// 语义结果态直显命中段时间：best 段起点 mm:ss（formatDuration）+ 多段 "+N"；跳转本体不变——
+// 语义结果态直显命中段时间：定位窄段起点 mm:ss（formatDuration）+ 多段 "+N"；跳转本体不变——
 // 双击卡片 → preview.open → seekToSegment 定位到命中段（preview.ts:221，徽标纯展示不拦事件）
 const search = useSearchStore();
 const semanticHit = computed(() => (props.panelId ? search.semanticHitFor(props.panelId, props.asset.assetId) : null));
+// 定位窄段（2026-11-02 二轮：pickLocateSegment 排除全片 description 宽段——详细分析后 best 常是
+// description（起点恒 0），徽标 00:00 / 起播点失效；徽标、命中帧图、悬停起播点统一取本段）
+const locateSegment = computed(() => (semanticHit.value ? pickLocateSegment(semanticHit.value) : null));
 const semanticBadge = computed(() => {
   const hit = semanticHit.value;
-  if (!hit) return "";
-  const time = formatDuration(hit.best.startMs / 1000);
+  const seg = locateSegment.value;
+  if (!hit || !seg) return "";
+  const time = formatDuration(seg.startMs / 1000);
   const extra = hit.segments.length - 1;
   return extra > 0 ? `${time} +${extra}` : time;
+});
+// —— 语义命中帧缩略图（2026-11-02 用户实机定：「没开自动播放就停在命中的那一帧」）——
+// 语义结果态卡片静态图 = 定位段首帧：视频 t:{秒} / 动图 f:{帧索引} / 序列帧帧名，
+// 复用笔记抽帧命令（幂等缓存，命中帧图 = 派生数据）；取不到保持原封面不打扰
+const hitThumbUrl = ref<string | null>(null);
+watch(
+  [locateSegment, () => props.asset.assetId],
+  async ([seg, id]) => {
+    hitThumbUrl.value = null;
+    if (!seg || isWs.value) return;
+    let key: string | null = null;
+    if (kind.value === "video") {
+      key = `t:${+(seg.startMs / 1000).toFixed(3)}`;
+    } else if (kind.value === "anim") {
+      if (seg.startFrame == null) return;
+      key = `f:${seg.startFrame}`;
+    } else if (kind.value === "sequence") {
+      if (seg.startFrame == null) return;
+      try {
+        const r = await listSequenceFrames(id);
+        if (props.asset.assetId !== id || locateSegment.value !== seg) return;
+        key = r.frames[seg.startFrame]?.name ?? null;
+      } catch {
+        return; // 帧清单读取失败：保持原封面
+      }
+    }
+    if (!key) return;
+    try {
+      const path = await getSemanticHitThumb(id, key);
+      if (props.asset.assetId !== id || locateSegment.value !== seg) return;
+      hitThumbUrl.value = path ? convertFileSrc(path) : null;
+    } catch {
+      /* 抽帧失败保持原封面 */
+    }
+  },
+  { immediate: true },
+);
+// 悬停播放层命中起点透传（2026-11-02 用户实机定：「开了自动播放就从命中的往后放」）——
+// 视频层 startAt 秒 / 序列帧层 startFrame 帧索引；动图原生 img 无起播帧控制（记待办）
+const semanticHoverProps = computed(() => {
+  const seg = locateSegment.value;
+  if (!seg) return {};
+  if (kind.value === "video") return { startAt: seg.startMs / 1000 };
+  if (kind.value === "sequence" && seg.startFrame != null) return { startFrame: seg.startFrame };
+  return {};
 });
 // —— 位置徽章（6.2 四轮走查③：「有链接」（活位置 > 1）才上徽章——origin ★ / 链接 icon，
 //    单位置文件无徽章；⑤悬停 = LinkListPopover 全部链接列表）——
@@ -436,7 +489,7 @@ const meta = computed(() => {
         :is="hoverLayer?.layer"
         v-if="hoverLayer && (hoverLayer.autoplay ? animPlaying : hoverActive)"
         ref="hoverLayerInst"
-        v-bind="hoverLayer.autoplay ? { asset, auto: !hoverActive } : { asset }"
+        v-bind="{ ...(hoverLayer.autoplay ? { asset, auto: !hoverActive } : { asset }), ...semanticHoverProps }"
         @playing="audioPlaying = $event"
         @progress="audioProgress = $event"
         @duration="audioDuration = $event"

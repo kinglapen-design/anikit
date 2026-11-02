@@ -22,7 +22,7 @@ import { openPathWithDefaultApp } from "../lib/wsOps";
 import { useSearchStore } from "./search";
 import { useTabsStore } from "./tabs";
 import { StreamSession, type StreamFrame } from "../lib/streamClient";
-import { segmentFrameCount, type SegmentRange } from "../lib/semantic";
+import { pickLocateSegment, segmentFrameCount, type SegmentRange } from "../lib/semantic";
 
 // 播放帧（5.2 改版）：命令原始结构见 lib/mediaOps（FrameEntry.delayMs 序列帧恒 null）——
 // 加载时统一预填 delayMs（动图用后端逐帧下发值；序列帧按 1000/fps），播放引擎按帧时长/rate 驱动。
@@ -218,7 +218,10 @@ function buildPreviewStore(panelId: string) {
         this.assetKey = key;
         await this.loadAsset();
         if (this.assetKey !== key) return;
-        const target = segment === undefined ? useSearchStore().semanticHitFor(panelId, key.split("|")[0])?.best : segment;
+        // 命中定位取窄段（pickLocateSegment：排除全片 description 宽段——2026-11-02 用户实机报
+        // 详细分析后 best 恒为 description（起点 0），跳转与徽标定位全失效）
+        const hit = segment === undefined ? useSearchStore().semanticHitFor(panelId, key.split("|")[0]) : null;
+        const target = segment === undefined ? (hit ? pickLocateSegment(hit) : undefined) : segment;
         if (target) this.seekToSegment(target);
       },
       // 退出预览

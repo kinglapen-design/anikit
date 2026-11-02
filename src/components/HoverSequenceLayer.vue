@@ -10,8 +10,10 @@ import { listSequenceFrames } from "../lib/mediaOps";
 import { useUiStore } from "../stores/ui";
 import type { PlacementView } from "../stores/content";
 
-// auto = 自动播放触发（视口可见性驱动）；缺省 false = 悬停触发
-const props = withDefaults(defineProps<{ asset: PlacementView; auto?: boolean }>(), { auto: false });
+// auto = 自动播放触发（视口可见性驱动）；缺省 false = 悬停触发；
+// startFrame = 语义命中原始帧（2026-11-02 用户实机定，AssetCard 定位窄段透传）——
+// 起播索引优先于封面帧；null = 无命中走原口径
+const props = withDefaults(defineProps<{ asset: PlacementView; auto?: boolean; startFrame?: number | null }>(), { auto: false, startFrame: null });
 const ui = useUiStore();
 
 const frames = ref<string[]>([]);
@@ -36,9 +38,10 @@ async function loadFrames(): Promise<void> {
     const r = await listSequenceFrames(props.asset.assetId);
     if (isDisposed() || r.frames.length === 0) return;
     frames.value = r.frames.map((f) => convertFileSrc(f.fullPath));
-    // 从封面帧开始播（thumbFrame = 帧名），未设置从头
+    // 起播索引：语义命中帧优先（startFrame 定位窄段透传）；无命中回退封面帧（thumbFrame = 帧名），未设置从头
+    const hit = props.startFrame;
     const cover = r.thumbFrame ? r.frames.findIndex((f) => f.name === r.thumbFrame) : -1;
-    idx.value = cover >= 0 ? cover : 0;
+    idx.value = hit != null && hit >= 0 && hit < r.frames.length ? hit : cover >= 0 ? cover : 0;
     fps = r.fps ?? 24;
     start();
   } catch (e) {
