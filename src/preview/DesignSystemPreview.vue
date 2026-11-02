@@ -22,6 +22,7 @@ import PreviewPlugins from "./sections/PreviewPlugins.vue";
 import PreviewDialogs from "./sections/PreviewDialogs.vue";
 import PreviewOverlays from "./sections/PreviewOverlays.vue";
 import PreviewWindows from "./sections/PreviewWindows.vue";
+import DevTokenPanel from "./DevTokenPanel.vue";
 import { provide } from "vue";
 import { previewSession } from "../stores/preview";
 import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
@@ -87,5 +88,6 @@ const nav = [
       <PreviewOverlays />
       <PreviewWindows />
     </main>
+    <DevTokenPanel />
   </div>
 </template>

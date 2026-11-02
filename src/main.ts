@@ -17,6 +17,11 @@ import "./styles/dockview-theme.css";
 window.addEventListener("contextmenu", (e) => e.preventDefault());
 
 async function bootstrap() {
+  // dev token 调参（2026-11-02）：localStorage 覆盖恢复到 :root，主 App 与 preview 页同吃；生产不进
+  if (import.meta.env.DEV) {
+    const { applyDevTokenOverrides } = await import("./preview/devTokens");
+    applyDevTokenOverrides();
+  }
   // 设计系统预览页（阶段七）：开发环境 + #design-system 哈希进入；动态 import 保证不进生产构建
   const designPreview = import.meta.env.DEV && location.hash.startsWith("#design-system");
   const Root = designPreview ? (await import("./preview/DesignSystemPreview.vue")).default : App;
