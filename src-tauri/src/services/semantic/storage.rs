@@ -190,6 +190,58 @@ impl SemanticStore {
   }
 
   pub fn search(&self, model: &ModelRevision, analysis_version: u32, query: &[f32], limit: usize) -> Result<Vec<SegmentHit>, String> {
+    self.search_impl(model, analysis_version, query, None, limit)
+  }
+
+  pub fn search_scoped(
+    &self,
+    model: &ModelRevision,
+    analysis_version: u32,
+    query: &[f32],
+    asset_ids: &std::collections::HashSet<String>,
+    limit: usize,
+  ) -> Result<Vec<SegmentHit>, String> {
+    self.search_impl(model, analysis_version, query, Some(asset_ids), limit)
+  }
+
+  pub fn has_ready_segments_for_assets(
+    &self,
+    model_id: &str,
+    model_revision: &str,
+    analysis_version: u32,
+    asset_ids: &std::collections::HashSet<String>,
+  ) -> Result<bool, String> {
+    let ids = asset_ids.iter().collect::<Vec<_>>();
+    for chunk in ids.chunks(500) {
+      let placeholders = vec!["?"; chunk.len()].join(",");
+      let sql = format!(
+        "SELECT 1 FROM semantic_segments s JOIN semantic_assets a ON a.asset_id=s.asset_id
+         WHERE a.model_id=?1 AND a.model_revision=?2 AND a.analysis_version=?3 AND a.status='ready'
+           AND s.asset_id IN ({placeholders}) LIMIT 1",
+      );
+      let mut values = vec![
+        rusqlite::types::Value::Text(model_id.into()),
+        rusqlite::types::Value::Text(model_revision.into()),
+        rusqlite::types::Value::Integer(analysis_version.into()),
+      ];
+      values.extend(chunk.iter().map(|id| rusqlite::types::Value::Text((*id).clone())));
+      let mut stmt = self.conn.prepare(&sql).map_err(|e| format!("检查范围语义片段失败：{e}"))?;
+      let mut rows = stmt.query(rusqlite::params_from_iter(values)).map_err(|e| format!("检查范围语义片段失败：{e}"))?;
+      if rows.next().map_err(|e| format!("检查范围语义片段失败：{e}"))?.is_some() {
+        return Ok(true);
+      }
+    }
+    Ok(false)
+  }
+
+  fn search_impl(
+    &self,
+    model: &ModelRevision,
+    analysis_version: u32,
+    query: &[f32],
+    asset_ids: Option<&std::collections::HashSet<String>>,
+    limit: usize,
+  ) -> Result<Vec<SegmentHit>, String> {
     let query = normalize(query)?;
     if query.len() != model.dimension {
       return Err("查询向量维度与模型不一致".into());
@@ -201,15 +253,19 @@ impl SemanticStore {
        WHERE a.model_id=?1 AND a.model_revision=?2 AND a.analysis_version=?3 AND a.status='ready'",
     ).map_err(|e| e.to_string())?;
     let rows = stmt.query_map(params![model.id, model.revision, analysis_version], |row| {
+      let asset_id: String = row.get(1)?;
+      if asset_ids.is_some_and(|ids| !ids.contains(&asset_id)) {
+        return Ok(None);
+      }
       let bytes: Vec<u8> = row.get(8)?;
-      Ok((SegmentHit {
-        segment_id: row.get(0)?, asset_id: row.get(1)?, start_ms: row.get(2)?, end_ms: row.get(3)?,
+      Ok(Some((SegmentHit {
+        segment_id: row.get(0)?, asset_id, start_ms: row.get(2)?, end_ms: row.get(3)?,
         start_frame: row.get(4)?, end_frame: row.get(5)?, score: 0.0, kind: row.get(6)?, certainty: row.get(9)?, text: row.get(7)?,
-      }, bytes))
+      }, bytes)))
     }).map_err(|e| format!("读取语义片段失败：{e}"))?;
     let mut grouped = std::collections::BTreeMap::new();
     for row in rows {
-      let (mut hit, bytes) = row.map_err(|e| e.to_string())?;
+      let Some((mut hit, bytes)) = row.map_err(|e| e.to_string())? else { continue };
       let vector = decode_vector(&bytes)?;
       if vector.len() == query.len() {
         hit.score = dot(&query, &vector);
@@ -334,6 +390,26 @@ mod tests {
     assert_eq!(hits[0].kind, "visual");
     assert!((hits[0].score - 1.0).abs() < 0.00001);
     assert!(store.search(&model(3), 1, &[1.0, 0.0], 10).is_err());
+  }
+
+  #[test]
+  fn scoped_search_filters_before_ranking_and_checks_ready_segments() {
+    let (_dir, mut store) = store();
+    store.replace_asset_analysis("a1", "video", "fp1", &model(2), 1, &[segment(0, vec![1.0, 0.0])]).unwrap();
+    store.replace_asset_analysis("a2", "video", "fp2", &model(2), 1, &[segment(0, vec![0.0, 1.0])]).unwrap();
+    let only_a1 = std::collections::HashSet::from(["a1".to_string()]);
+    assert!(store.has_ready_segments_for_assets(&model(2).id, &model(2).revision, 1, &only_a1).unwrap());
+    let hits = store.search_scoped(&model(2), 1, &[0.0, 1.0], &only_a1, 1).unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].asset_id, "a1");
+    assert_eq!(hits[0].score, 0.0);
+
+    let missing = std::collections::HashSet::from(["missing".to_string()]);
+    assert!(!store.has_ready_segments_for_assets(&model(2).id, &model(2).revision, 1, &missing).unwrap());
+    assert!(store.search_scoped(&model(2), 1, &[0.0, 1.0], &missing, 1).unwrap().is_empty());
+
+    let over_one_chunk = (0..500).map(|index| format!("missing-{index}")).chain(["a2".to_string()]).collect();
+    assert!(store.has_ready_segments_for_assets(&model(2).id, &model(2).revision, 1, &over_one_chunk).unwrap());
   }
 
   #[test]

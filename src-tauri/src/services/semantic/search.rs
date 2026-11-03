@@ -42,14 +42,22 @@ pub fn semantic_search<R: tauri::Runtime>(app: &AppHandle<R>, query: &str, scope
   if placement_map.is_empty() {
     return Ok(SemanticSearchHits { hits: Vec::new(), actual_backend: "unknown".into(), model_revision: model::MODEL_REVISION.into() });
   }
+  let candidate_ids = placement_map.keys().cloned().collect::<std::collections::HashSet<_>>();
   let store = SemanticStore::open_library(&root)?;
   if store.segment_total()? == 0 {
+    return Ok(SemanticSearchHits { hits: Vec::new(), actual_backend: "unknown".into(), model_revision: model::MODEL_REVISION.into() });
+  }
+  if !store.has_ready_segments_for_assets(model::MODEL_ID, model::MODEL_REVISION, super::media::ANALYSIS_VERSION, &candidate_ids)? {
     return Ok(SemanticSearchHits { hits: Vec::new(), actual_backend: "unknown".into(), model_revision: model::MODEL_REVISION.into() });
   }
   let manifest = ModelManifest::load(&model::model_dir()?)?;
   let query_embedding = worker::embed_text(query.trim())?;
   let limit = limit.unwrap_or(30).clamp(1, 100);
-  let hits = store.search(&manifest.revision, super::media::ANALYSIS_VERSION, &query_embedding.embedding, limit)?;
+  let hits = if scope.global {
+    store.search(&manifest.revision, super::media::ANALYSIS_VERSION, &query_embedding.embedding, limit)?
+  } else {
+    store.search_scoped(&manifest.revision, super::media::ANALYSIS_VERSION, &query_embedding.embedding, &candidate_ids, limit)?
+  };
   let mut grouped = BTreeMap::new();
   for hit in hits {
     let Some(placements) = placement_map.get(&hit.asset_id) else { continue };

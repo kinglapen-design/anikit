@@ -93,10 +93,13 @@ const previewActive = computed(() => !!session.assetKey);
 const searching = computed(() => search.isActive(panelApi.id));
 const wsView = computed(() => viewKey.value.startsWith("ws:"));
 // ws 降级引导空态文案（2026-10-03 ws 搜索轮）：Everything 不可用且未发起爬盘 → 「按 Enter」引导；
-// 其余搜索态空态 = 既有「无搜索结果」（AssetGrid 渲染位）
-const searchHint = computed(() =>
-  wsView.value && search.wsNeedsEnter(panelApi.id) ? "Everything 未运行——按 Enter 遍历搜索当前目录（全局搜索需 Everything 支持）" : "",
-);
+// 库查询中显示「搜索中...」，本轮结束后空结果才由 AssetGrid 回退为「无搜索结果」。
+const searchHint = computed(() => {
+  if (wsView.value && search.wsNeedsEnter(panelApi.id)) {
+    return "Everything 未运行——按 Enter 遍历搜索当前目录（全局搜索需 Everything 支持）";
+  }
+  return !wsView.value && search.isPending(panelApi.id) ? "搜索中..." : "";
+});
 const items = computed(() => {
   if (!searching.value) return content.placementsFor(viewKey.value);
   if (wsView.value) return search.wsPlacementsFor(panelApi.id);

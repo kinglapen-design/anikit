@@ -188,6 +188,7 @@ interface PanelSearch {
   semanticHits: Record<string, SemanticAssetHit>;
   semanticOrder: string[];
   error: string | null;
+  pending: boolean; // 本轮分词 / 语义查询仍在进行（含输入防抖）
 }
 
 const DEBOUNCE_MS = 150; // inbox-fs-changed 去抖同值先例
@@ -221,7 +222,7 @@ export const useSearchStore = defineStore("search", () => {
     if (!s) {
       s = {
         draft: "", hits: new Set(), hitArchives: new Set(), seq: 0, filters: emptyFilters(), wsEntries: [], crawl: null, globalNotified: false,
-        mode: "auto", semanticHits: {}, semanticOrder: [], error: null,
+        mode: "auto", semanticHits: {}, semanticOrder: [], error: null, pending: false,
       };
       panels.value.set(panelId, s);
     }
@@ -248,6 +249,10 @@ export const useSearchStore = defineStore("search", () => {
   function isActive(panelId: string): boolean {
     const s = panels.value.get(panelId);
     return !!s && (keywordsOf(s).length > 0 || hasAnyFilter(s));
+  }
+
+  function isPending(panelId: string): boolean {
+    return panels.value.get(panelId)?.pending ?? false;
   }
 
   function hitsFor(panelId: string): Set<string> {
@@ -628,35 +633,40 @@ export const useSearchStore = defineStore("search", () => {
       s.hitArchives = new Set();
       clearSemantic(s);
       s.error = null;
+      s.pending = false;
       return;
     }
+    s.pending = true;
+    if (s.mode !== "keyword") clearSemantic(s);
     const scope = { viewKey, recursive: useUiStore().showSubfolders, global: effectiveGlobal(panelId), filters: s.filters };
     if (s.mode === "semantic" && keywordsOf(s).length > 0) {
       await runSemantic(s, scope, seq);
+      if (s.seq === seq) s.pending = false;
       return;
     }
+    // auto = 分词与语义并发；分词命中先显示，语义命中随后经 resultPlacementsFor 去重追加。
+    const wantSemantic = s.mode === "auto" && keywordsOf(s).length > 0;
+    const semanticJob = wantSemantic ? runSemantic(s, scope, seq, true) : null;
     try {
-      // auto 并联合并（2026-11-02 用户实机「搜左轮只出资产图片、视频出不来」修订，PRD 03）：
-      // 原降级路由 = 关键词有命中即短路不跑语义，向量结果被遮盖——改为关键词与语义并发双跑，
-      // 结果合并在 resultPlacementsFor（关键词视口序在前、语义按相关度去重追加）；
-      // 手动「分词」模式仍只跑关键词（wantSemantic=false）
-      const wantSemantic = s.mode === "auto" && keywordsOf(s).length > 0;
-      const semanticJob = wantSemantic ? runSemantic(s, scope, seq, true) : null;
       const r = await invoke<SearchHits>("search_assets", { query: s.draft.trim(), scope });
-      await semanticJob; // 已并发起跑（内部自捕错误不 reject），等齐收口
       if (s.seq !== seq) return;
       s.hits = new Set(r.placements.map((k) => `${k.assetId}|${k.folderId}`));
       s.hitArchives = new Set(r.archives);
       if (!wantSemantic) {
         clearSemantic(s);
-        s.error = null; // 纯关键词路径维持旧清错口径；并联路径 error 归 runSemantic 自管（防吞语义错误）
+        s.error = null;
       }
+      await semanticJob;
+      if (s.seq === seq) s.pending = false;
     } catch (err) {
+      await semanticJob;
+      if (s.seq !== seq) return;
+      s.pending = false;
       console.debug("搜索失败：", err);
     }
   }
 
-  /** 内容变更（draft / filters）：无条件即时退出搜索态；有条件防抖 150ms 后搜 */
+  /** 内容变更（draft / filters）：无条件即时退出搜索态；有条件立即进入查询中，防抖 150ms 后搜 */
   function scheduleRun(panelId: string, viewKey: string): void {
     const s = panels.value.get(panelId);
     const t = timers.get(panelId);
@@ -665,6 +675,8 @@ export const useSearchStore = defineStore("search", () => {
       void run(panelId, viewKey);
       return;
     }
+    s.seq++;
+    s.pending = true;
     timers.set(
       panelId,
       setTimeout(() => void run(panelId, viewKey), DEBOUNCE_MS),
@@ -747,6 +759,7 @@ export const useSearchStore = defineStore("search", () => {
     filterPopPanelId,
     filterPopDim,
     isActive,
+    isPending,
     hitsFor,
     hitArchivesFor,
     resultPlacementsFor,
