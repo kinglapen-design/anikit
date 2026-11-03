@@ -18,10 +18,14 @@ import {
   type DevToken,
   type DevTokenOverrides,
 } from "./devTokens";
+import DevInspectorPanel from "./DevInspectorPanel.vue";
 
 const tokens = parseTokens(tokensCss);
 // 挂载即恢复（主 App 经 main.ts 恢复；preview 独立进入时这里兜底）
 applyDevTokenOverrides();
+
+// 双页（2026-11-02 组件检查器轮）：组件 = 点选组件调间距实时看效果（用户主推）；Token = 全局变量
+const tab = ref<"inspector" | "tokens">("inspector");
 
 const overrides = ref<DevTokenOverrides>(loadOverrides());
 const open = ref(false);
@@ -107,12 +111,17 @@ async function copy(kind: "css" | "json"): Promise<void> {
     <aside v-if="open" class="dt-panel">
       <header class="dt-head">
         <div class="dt-title">
-          Token 调参
+          调参
           <span class="dt-sub">实时生效 · 主界面同吃 · 仅 dev</span>
         </div>
         <button class="dt-close" title="关闭" @click="open = false">×</button>
       </header>
-      <div class="dt-tools">
+      <div class="dt-tabs">
+        <button class="dt-tab" :class="{ on: tab === 'inspector' }" @click="tab = 'inspector'">组件</button>
+        <button class="dt-tab" :class="{ on: tab === 'tokens' }" @click="tab = 'tokens'">Token</button>
+      </div>
+      <DevInspectorPanel v-if="tab === 'inspector'" />
+      <div v-else class="dt-tools">
         <input v-model="query" class="dt-input" placeholder="搜名称 / 注释…" />
         <div class="dt-toolrow">
           <select v-model="groupFilter" class="dt-input dt-select">
@@ -131,7 +140,7 @@ async function copy(kind: "css" | "json"): Promise<void> {
           <button class="dt-btn dt-reset-all" :disabled="!changedCount" title="全部重置" @click="resetAll">↺</button>
         </div>
       </div>
-      <div class="dt-list">
+      <div v-if="tab === 'tokens'" class="dt-list">
         <div v-for="t in visible" :key="t.name" class="dt-row" :class="{ changed: t.name in overrides }">
           <div class="dt-rowhead">
             <span class="dt-name" :title="t.group">{{ t.name }}</span>
@@ -173,7 +182,7 @@ async function copy(kind: "css" | "json"): Promise<void> {
         </div>
         <div v-if="!visible.length" class="dt-empty">无匹配 token</div>
       </div>
-      <div v-if="exportText" class="dt-export">
+      <div v-if="exportText && tab === 'tokens'" class="dt-export">
         <div class="dt-export-head">
           <span>剪贴板被拦，请全选手动复制（Ctrl+C）</span>
           <button class="dt-close" title="关闭" @click="exportText = ''">×</button>
@@ -265,60 +274,14 @@ async function copy(kind: "css" | "json"): Promise<void> {
 .dt-close:hover {
   color: var(--n-l1);
 }
+/* 共享小件（.dt-input / .dt-btn / .dt-toolrow / .dt-reset / .dt-empty / .dt-tabs 等）
+   已抽 preview.css 全局（2026-11-02 组件检查器轮，与 DevInspectorPanel 共用） */
 .dt-tools {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 12px;
   border-bottom: 1px solid var(--n-g5);
-}
-.dt-toolrow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.dt-input {
-  min-width: 0;
-  padding: 4px 8px;
-  border: 1px solid var(--n-g5);
-  border-radius: var(--n-radius-4);
-  background: var(--n-g1);
-  color: var(--n-l2);
-  font-size: var(--n-fs-secondary);
-}
-.dt-input:focus {
-  outline: none;
-  border-color: var(--n-brand);
-}
-.dt-select {
-  flex: 1;
-}
-.dt-check {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--n-l3);
-  font-size: var(--n-fs-secondary);
-  white-space: nowrap;
-}
-.dt-btn {
-  flex: 1;
-  padding: 4px 8px;
-  border: 1px solid var(--n-g5);
-  border-radius: var(--n-radius-4);
-  background: var(--n-g4);
-  color: var(--n-l2);
-  font-size: var(--n-fs-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.dt-btn:hover:not(:disabled) {
-  background: var(--n-g5);
-  color: var(--n-l1);
-}
-.dt-btn:disabled {
-  color: var(--n-l-disabled);
-  cursor: default;
 }
 .dt-reset-all {
   flex: none;
@@ -396,25 +359,9 @@ async function copy(kind: "css" | "json"): Promise<void> {
   background: none;
   cursor: pointer;
 }
-.dt-reset {
-  padding: 0 4px;
-  border: none;
-  background: none;
-  color: var(--n-l3);
-  cursor: pointer;
-}
-.dt-reset:hover {
-  color: var(--n-brand-bright);
-}
 .dt-origin {
   color: var(--n-l4);
   font-size: var(--n-fs-secondary);
-}
-.dt-empty {
-  padding: 24px 12px;
-  color: var(--n-l3);
-  font-size: var(--n-fs-secondary);
-  text-align: center;
 }
 .dt-export {
   display: flex;

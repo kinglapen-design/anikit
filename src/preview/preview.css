@@ -140,3 +140,94 @@
   line-height: var(--n-lh-secondary);
   color: var(--n-l3);
 }
+
+/* —— dev 调参共享小件（DevTokenPanel / DevInspectorPanel 共用，2026-11-02 组件检查器轮抽出） —— */
+.dt-input {
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--n-g5);
+  border-radius: var(--n-radius-4);
+  background: var(--n-g1);
+  color: var(--n-l2);
+  font-size: var(--n-fs-secondary);
+}
+.dt-input:focus {
+  outline: none;
+  border-color: var(--n-brand);
+}
+.dt-select {
+  flex: 1;
+}
+.dt-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--n-l3);
+  font-size: var(--n-fs-secondary);
+  white-space: nowrap;
+}
+.dt-btn {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--n-g5);
+  border-radius: var(--n-radius-4);
+  background: var(--n-g4);
+  color: var(--n-l2);
+  font-size: var(--n-fs-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dt-btn:hover:not(:disabled) {
+  background: var(--n-g5);
+  color: var(--n-l1);
+}
+.dt-btn:disabled {
+  color: var(--n-l-disabled);
+  cursor: default;
+}
+.dt-toolrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dt-reset {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--n-l3);
+  cursor: pointer;
+}
+.dt-reset:hover {
+  color: var(--n-brand-bright);
+}
+.dt-empty {
+  padding: 24px 12px;
+  color: var(--n-l3);
+  font-size: var(--n-fs-secondary);
+  text-align: center;
+}
+.dt-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 12px 8px;
+  border-bottom: 1px solid var(--n-g5);
+}
+.dt-tab {
+  flex: 1;
+  padding: 4px 8px;
+  border: none;
+  border-radius: var(--n-radius-4);
+  background: none;
+  color: var(--n-l3);
+  font-size: var(--n-fs-secondary);
+  cursor: pointer;
+}
+.dt-tab:hover {
+  background: var(--n-l-a3);
+  color: var(--n-l1);
+}
+.dt-tab.on {
+  background: var(--n-l-a2);
+  color: var(--n-l1);
+  font-weight: var(--n-fw-bold);
+}
