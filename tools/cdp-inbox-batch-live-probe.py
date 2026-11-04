@@ -13,7 +13,7 @@ import uuid
 import websockets
 
 ROOT = Path(__file__).resolve().parent.parent
-EXE = ROOT / "src-tauri" / "target" / "release" / "app.exe"
+EXE = Path(os.environ.get("ANIKIT_INBOX_EXE", str(ROOT / "src-tauri" / "target" / "release" / "app.exe")))
 BASE = ROOT / "tools" / "style-preview" / "inbox-batch-e2e"
 PORT = 19349
 _msg_id = 0
