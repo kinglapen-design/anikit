@@ -478,6 +478,7 @@ pub fn run() {
       commands::inbox::list_inbox_snapshot,
       commands::inbox::get_inbox_drive_letter,
       commands::inbox::import_inbox_entry,
+      commands::inbox::import_inbox_entries,
       commands::inbox::open_inbox_entry,
       commands::inbox::rename_inbox_entry,
       commands::inbox::delete_inbox_entry,

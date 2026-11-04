@@ -126,7 +126,7 @@ export function editMenuSpec(): CtxEntry[] {
     {
       label: "清除选择",
       shortcut: "Esc",
-      disabled: !hasAssets && !hasFolders && !content.selectedInboxName,
+      disabled: !hasAssets && !hasFolders && !selection.inboxCount,
       action: () => selection.clear(),
     },
     "divider",

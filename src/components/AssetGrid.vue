@@ -113,7 +113,7 @@ function onCardClick(p: PlacementView, e: MouseEvent): void {
       { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey },
       displayItems.value.map((x) => placementKey(x)),
     );
-    content.selectedInboxName = "";
+    selection.clearInbox();
   } else {
     selection.selectOnly(placementKey(p));
   }

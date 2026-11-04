@@ -403,8 +403,6 @@ export const useContentStore = defineStore("content", {
     // 收件箱磁盘实况（4.4"工程文件"区块）：磁盘为事实来源，不建档不写库；
     // inbox-fs-changed 事件（去抖 150ms）与手动操作后全量重扫替换
     inboxDisk: [] as InboxDiskEntry[],
-    // 选中互斥第三态：磁盘实况条目选中名（与素材 / 文件夹选中（均在 selection store）互斥）
-    selectedInboxName: "",
     // 原导入的来源模式（冲突"保留两个"决策继承；剪贴板导入恒 move）
     lastImportSource: "copy" as "copy" | "move",
     // 原导入的完整参数（导入失败弹窗"重试"按原参数重投失败项，2026-08-14 用户定）；
@@ -1038,6 +1036,7 @@ export const useContentStore = defineStore("content", {
       // 快层目录 size=0 / occupied=false 是已知过渡态，占用标记与目录大小以本事件合并后为准
       await listen<InboxDiskEntry[]>("inbox-disk-details", (e) => {
         this.inboxDisk = markRaw(e.payload);
+        useSelectionStore().pruneInbox(e.payload.map((entry) => entry.name));
       });
     },
 
@@ -1125,7 +1124,9 @@ export const useContentStore = defineStore("content", {
     // 拉取收件箱磁盘实况快层快照（4.4）：失败静默降级——实况是辅助展示，不阻断任何流程
     async refreshInboxDisk(): Promise<void> {
       try {
-        this.inboxDisk = markRaw(await invoke<InboxDiskEntry[]>("list_inbox_snapshot"));
+        const entries = await invoke<InboxDiskEntry[]>("list_inbox_snapshot");
+        this.inboxDisk = markRaw(entries);
+        useSelectionStore().pruneInbox(entries.map((entry) => entry.name));
       } catch (e) {
         console.warn("收件箱磁盘实况刷新失败（静默降级）：", e);
       }

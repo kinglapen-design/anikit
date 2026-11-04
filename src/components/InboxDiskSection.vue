@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // 收件箱"工程文件"磁盘实况区块（4.4，PRD 05-01 2026-07-25 语义重定）：
 // 磁盘为事实来源——不建档不写库，热刷新由 content.inboxDisk 全量替换驱动；
-// 白名单以外不自动导入，右键手动"导入"= 移走入库（剪切语义；先弹确认明示"源文件将从收件箱移走"，
-// PRD 05-01 硬性要求，2.6；确认后进度条 / 重复提示流与常规导入一致）。
+// 白名单以外不自动导入，右键手动"导入"= 单个 / 批量移走入库（剪切语义；一次确认明示
+// "源文件将从收件箱移走"，确认后进度条 / 重复提示流与常规导入一致）。
 // 占用条目：仅实况展示（"被占用"标记），导入 / 重命名禁用，后端同口径再拦一道。
 // 文件图标：优先系统格式图标缓存（iconPath，details 事件补齐），无缓存则仅左上格式角标；
 // 目录恒 folder-closed 居中（存量元素保旧 40 档，新稿未画）。占用标记以 details 合并后为准
@@ -21,7 +21,7 @@ import SectionTitle from "./items/SectionTitle.vue";
 import { dragView } from "../lib/dragOperation";
 import { openContextMenu } from "../lib/contextMenus";
 import { inboxDiskSpec } from "../lib/menuSpecs/inboxDisk";
-import { deleteInboxEntry, confirmImportInboxEntry, openInboxEntry, renameInboxEntry } from "../lib/inboxOps";
+import { deleteInboxEntry, confirmImportInboxEntries, openInboxEntry, renameInboxEntry } from "../lib/inboxOps";
 import { useContentStore, type InboxDiskEntry } from "../stores/content";
 import { usePickerStore } from "../stores/picker";
 import { useSelectionStore } from "../stores/selection";
@@ -58,25 +58,30 @@ function sizeLabel(e: InboxDiskEntry): string {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
-// 选中：与素材 / 文件夹选中互斥（content.selectedInboxName 第三态；
-// selection.clear() 2026-08-13 起连收件箱条目一并清——先清后写名，顺序不可颠倒；
-// 点空白（headerBlankClear / 框选未过阈值）经同一 clear 反选本域卡片）
-function select(e: InboxDiskEntry): void {
+// 选中：与素材 / 文件夹选中互斥；Ctrl 逐项切换、Shift 范围选与素材卡同口径
+function select(e: InboxDiskEntry, mouse?: MouseEvent): void {
   if (usePickerStore().active) return; // 选择模式（6.2，白名单收窄）：收件箱条目不可选（非库内资产）
-  selection.clear();
-  content.selectedInboxName = e.name;
+  selection.clickInbox(
+    e.name,
+    { ctrl: mouse?.ctrlKey || mouse?.metaKey, shift: mouse?.shiftKey },
+    entries.value.map((entry) => entry.name),
+  );
 }
 
-// 右键菜单（1.3 归并全局宿主 ContextMenu）：打开 / 重命名 / 删除 / 导入（占用禁用导入与重命名）
+// 右键已选中项保留整组；未选中项先单选。批量导入一次确认、一次任务，任一项占用则禁用
 function openMenu(e: MouseEvent, entry: InboxDiskEntry): void {
   if (usePickerStore().active) return; // 选择模式（6.2，白名单收窄）：收件箱菜单全是编辑类，不出
-  select(entry);
+  if (!selection.selectedInbox.has(entry.name)) select(entry);
+  const selectedEntries = entries.value.filter((item) => selection.selectedInbox.has(item.name));
+  const names = selectedEntries.map((item) => item.name);
   openContextMenu(e, inboxDiskSpec(entry, {
+    count: names.length,
+    occupied: selectedEntries.some((item) => item.occupied),
+  }, {
     onOpen: () => void openEntry(entry),
     onRename: () => startRename(entry),
     onDelete: () => void deleteEntry(entry),
-    // 2.6：手动导入先弹确认（PRD 05-01 硬性：入口必须明示"源文件将从收件箱移走"），确认后执行
-    onImport: () => confirmImportInboxEntry(entry.name, showError),
+    onImport: () => confirmImportInboxEntries(names, showError),
   }));
 }
 
@@ -91,7 +96,8 @@ async function openEntry(entry: InboxDiskEntry): Promise<void> {
 async function deleteEntry(entry: InboxDiskEntry): Promise<void> {
   try {
     await deleteInboxEntry(entry.name);
-    if (content.selectedInboxName === entry.name) content.selectedInboxName = "";
+    selection.selectedInbox.delete(entry.name);
+    if (selection.inboxAnchor === entry.name) selection.inboxAnchor = null;
   } catch (err) {
     showError(err);
   }
@@ -117,7 +123,8 @@ function onRenameCommit(entry: InboxDiskEntry, name: string): void {
 async function doRename(oldName: string, newName: string): Promise<void> {
   try {
     await renameInboxEntry(oldName, newName);
-    if (content.selectedInboxName === oldName) content.selectedInboxName = newName;
+    if (selection.selectedInbox.delete(oldName)) selection.selectedInbox.add(newName);
+    if (selection.inboxAnchor === oldName) selection.inboxAnchor = newName;
   } catch (err) {
     showError(err);
   }
@@ -146,7 +153,7 @@ const entries = computed(() => content.inboxDisk);
           v-for="e in entries"
           :key="e.name"
           class="disk-card"
-          @click="select(e)"
+          @click="select(e, $event)"
           @contextmenu.prevent.stop="openMenu($event, e)"
         >
           <FileCard
@@ -155,7 +162,7 @@ const entries = computed(() => content.inboxDisk);
             :badge="e.isDir ? '' : extLabel(e)"
             :thumb-url="e.iconPath ? convertFileSrc(e.iconPath) : ''"
             square
-            :selected="content.selectedInboxName === e.name"
+            :selected="selection.selectedInbox.has(e.name)"
             :naming="renaming === e.name"
             @name-edit="startRename(e)"
             @name-commit="onRenameCommit(e, $event)"

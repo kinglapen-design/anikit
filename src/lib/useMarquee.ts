@@ -43,10 +43,10 @@ export function makeBoxHitTest(ctx: {
 }
 
 // 头部空白 pointerdown = 清空选择（2026-07-28 复验反馈 4，与底部空白同语义）；
-// 文件夹卡片 / 按钮 / 输入框不挡——SectionHeader 折叠点击与 FolderCard 自身点击保留
+// 文件夹卡片 / 收件箱卡片 / 按钮 / 输入框不挡——卡片多选按下不得先清上一项
 export function headerBlankClear(e: PointerEvent): void {
   const t = e.target as HTMLElement;
-  if (t.closest(".folder-card, button, input")) return;
+  if (t.closest(".folder-card, .disk-card, button, input")) return;
   useSelectionStore().clear();
 }
 

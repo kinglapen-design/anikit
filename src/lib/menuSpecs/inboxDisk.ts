@@ -10,12 +10,20 @@ export interface InboxDiskMenuActions {
   onImport: () => void;
 }
 
-export function inboxDiskSpec(entry: { occupied: boolean }, actions: InboxDiskMenuActions): CtxEntry[] {
+export function inboxDiskSpec(
+  entry: { occupied: boolean },
+  selected: { count: number; occupied: boolean },
+  actions: InboxDiskMenuActions,
+): CtxEntry[] {
   return [
     { label: "打开", action: actions.onOpen },
     { label: "重命名", disabled: entry.occupied, action: actions.onRename },
     { label: "删除", action: actions.onDelete },
     "divider",
-    { label: "导入", disabled: entry.occupied, action: actions.onImport },
+    {
+      label: selected.count > 1 ? `导入 ${selected.count} 项` : "导入",
+      disabled: selected.occupied,
+      action: actions.onImport,
+    },
   ];
 }

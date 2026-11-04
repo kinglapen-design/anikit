@@ -25,21 +25,24 @@ export async function renameInboxEntry(name: string, newName: string): Promise<v
   await useContentStore().refreshInboxDisk();
 }
 
-// 手动导入前置确认（PRD 05-01，2.6）：入口必须明示"源文件将从收件箱移走"——
-// 先弹确认（AppConfirm），确认才执行；onError 由组件侧错误条处理
-export function confirmImportInboxEntry(name: string, onError: (e: unknown) => void): void {
+// 手动导入前置确认（PRD 05-01，2.6）：单个 / 批量均只确认一次，明示源文件将移走
+export function confirmImportInboxEntries(names: string[], onError: (e: unknown) => void): void {
+  const selected = [...new Set(names)];
+  if (selected.length === 0) return;
   useSelectionStore().confirmPrompt = {
     title: "导入到资源库",
-    body: `「${name}」将从收件箱移走入库，原位置不再保留。`,
-    confirmLabel: "导入",
+    body: selected.length === 1
+      ? `「${selected[0]}」将从收件箱移走入库，原位置不再保留。`
+      : `已选择的 ${selected.length} 个条目将从收件箱移走入库，原位置不再保留。`,
+    confirmLabel: selected.length === 1 ? "导入" : `导入 ${selected.length} 项`,
     kind: "warning", // 「原位置不再保留」= 警示语义，警告黄钮（2026-09-08 用户定按钮颜色区分口径）
-    onConfirm: () => void importInboxEntry(name).catch(onError),
+    onConfirm: () => void importInboxEntries(selected).catch(onError),
   };
 }
 
-// 手动导入 = 移走入库：进度初值 / Channel 事件转发 / taskId 回填与 content.startImport 同口径；
-// 失败复位进度条后抛出（防卡"扫描中"）
-export async function importInboxEntry(name: string): Promise<void> {
+// 手动导入 = 移走入库：整批共用进度、冲突与失败流；失败复位进度条后抛出（防卡"扫描中"）
+export async function importInboxEntries(names: string[]): Promise<void> {
+  if (names.length === 0) return;
   const content = useContentStore();
   content.lastImportSource = "move"; // 收件箱恒 Move（过境：导入后即移走）
   content.importProgress = { taskId: null, total: 0, done: 0, startedAt: Date.now() };
@@ -49,7 +52,7 @@ export async function importInboxEntry(name: string): Promise<void> {
     if (e.type === "finished") void content.refreshInboxDisk(); // 移走后实况剔除该条目
   };
   try {
-    const taskId = await invoke<number>("import_inbox_entry", { name, onEvent });
+    const taskId = await invoke<number>("import_inbox_entries", { names, onEvent });
     if (content.importProgress && content.importProgress.taskId === null) {
       content.importProgress.taskId = taskId;
     }

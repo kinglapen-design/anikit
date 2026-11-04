@@ -110,6 +110,9 @@ export const useSelectionStore = defineStore("selection", {
     // 文件夹选择域（2026-07-28 复验反馈 5）：folderId 集合 + 范围选锚点；与素材选择互斥
     selectedFolders: new Set<string>() as Set<string>,
     folderAnchor: null as string | null,
+    // 收件箱磁盘条目选择域（2026-11-04 批量手动导入）：与素材 / 文件夹选择互斥
+    selectedInbox: new Set<string>() as Set<string>,
+    inboxAnchor: null as string | null,
     // —— 6.1 阶段 C 操作态（会话级，均不进持久化）——
     clipboard: null as InternalClipboard | null,
     // 内剪贴板写入时刻的系统剪贴板序号（2026-09-17 粘贴仲裁）：Ctrl+V 时序号变了 =
@@ -162,6 +165,9 @@ export const useSelectionStore = defineStore("selection", {
     count(state): number {
       return state.selected.size;
     },
+    inboxCount(state): number {
+      return state.selectedInbox.size;
+    },
   },
   actions: {
     isSelected(key: string): boolean {
@@ -175,6 +181,50 @@ export const useSelectionStore = defineStore("selection", {
     clearFolders(): void {
       this.selectedFolders.clear();
       this.folderAnchor = null;
+    },
+
+    clearInbox(): void {
+      this.selectedInbox.clear();
+      this.inboxAnchor = null;
+    },
+
+    // 收件箱与素材卡同套三态：单选 / Ctrl 切换 / Shift 按当前磁盘显示序范围选
+    clickInbox(name: string, mods: ClickMods = {}, order: string[] = []): void {
+      this.selected.clear();
+      this.anchor = null;
+      this.renamingKey = null;
+      this.clearFolders();
+      const names = order.length > 0 ? order : useContentStore().inboxDisk.map((e) => e.name);
+      if (mods.shift) {
+        const to = names.indexOf(name);
+        const from = this.inboxAnchor ? names.indexOf(this.inboxAnchor) : -1;
+        if (to < 0 || from < 0) {
+          this.selectedInbox.clear();
+          this.selectedInbox.add(name);
+          this.inboxAnchor = name;
+          return;
+        }
+        this.selectedInbox.clear();
+        const [a, b] = from < to ? [from, to] : [to, from];
+        for (let i = a; i <= b; i++) this.selectedInbox.add(names[i]);
+        return;
+      }
+      if (mods.ctrl) {
+        if (this.selectedInbox.has(name)) this.selectedInbox.delete(name);
+        else this.selectedInbox.add(name);
+      } else {
+        this.selectedInbox.clear();
+        this.selectedInbox.add(name);
+      }
+      this.inboxAnchor = name;
+    },
+
+    pruneInbox(names: Iterable<string>): void {
+      const alive = new Set(names);
+      for (const name of [...this.selectedInbox]) {
+        if (!alive.has(name)) this.selectedInbox.delete(name);
+      }
+      if (this.inboxAnchor && !alive.has(this.inboxAnchor)) this.inboxAnchor = null;
     },
 
     // 卡片点击三态（2026-07-28 用户定案）：
@@ -223,7 +273,7 @@ export const useSelectionStore = defineStore("selection", {
       this.selected.clear();
       this.anchor = null;
       this.renamingKey = null;
-      useContentStore().selectedInboxName = "";
+      this.clearInbox();
       if (mods.shift) {
         const to = order.indexOf(id);
         const from = this.folderAnchor ? order.indexOf(this.folderAnchor) : -1;
@@ -252,7 +302,7 @@ export const useSelectionStore = defineStore("selection", {
     // 单选并互斥清收件箱条目选中（卡片点击、右键未选中项先单选同口径，6.1 阶段 C）
     selectOnly(key: string): void {
       this.clickItem(key);
-      useContentStore().selectedInboxName = "";
+      this.clearInbox();
     },
 
     // 全选（Ctrl+A，2026-07-28 用户定：仅素材卡片口径 = 当前视口全部 Placement）；
@@ -278,9 +328,8 @@ export const useSelectionStore = defineStore("selection", {
       this.anchor = null;
       this.renamingKey = null; // 选择清空 = 重命名输入态一并取消
       this.clearFolders();
-      // 收件箱"工程文件"条目选中一并清（2026-08-13 用户：空白反选对第三域同样生效——
-      // 选中卡片后点空白可取消；InboxDiskSection.select 先 clear 再写名，顺序不可颠倒）
-      useContentStore().selectedInboxName = "";
+      // 空白反选、切换选择域与 Esc 都清空收件箱选择及 Shift 锚点
+      this.clearInbox();
     },
 
     // 选中项三元组清单（6.1 命令入参）：按当前视口显示序输出（displayOrderFor——分组视口 = 组拼接

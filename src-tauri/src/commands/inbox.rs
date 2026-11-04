@@ -3,6 +3,7 @@
 //! 入口动作名"导入"），不做复制导入（避免磁盘实况与库内资产双份）。
 //! 所有磁盘命令只操作 inbox 根下一级条目，resolve_entry 统一防路径穿越。
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use tauri::ipc::Channel;
@@ -33,31 +34,51 @@ pub fn list_inbox_snapshot(app: AppHandle) -> Result<Vec<InboxEntry>, String> {
   Ok(inbox::snapshot_fast(&root, cache_root.as_deref()))
 }
 
-/// 手动导入单个条目：移走入库（Move + Keep 层级；imported_from = "inbox" 维持渠道标记，
-/// "已导入"区块口径不变）。撞 hash 与常规导入同口径走正常重复提示（冲突挂起弹窗）——
-/// 同渠道静默合并 2026-08-13 用户定案废除（PRD 05）。占用条目禁止导入，返回中文人话；
-/// Channel 复用现有导入事件流（11_导入进度条 / 10_重复添加提示）。
-/// 条目路径按空间根推导（收件箱空间级），导入目标仍是当前打开的库
+/// 单条入口保留兼容；批量与单条共用同一导入管线（Move + Keep + imported_from = "inbox"）
 #[tauri::command]
 pub fn import_inbox_entry(app: AppHandle, name: String, on_event: Channel<ImportEvent>) -> Result<u64, String> {
+  import_inbox_entries(app, vec![name], on_event)
+}
+
+/// 批量手动导入：先整组校验存在与占用，再一次性发起；任一失败不导入部分条目。
+/// 撞 hash、进度与失败事件均复用常规导入，源文件从收件箱移走，原位置不保留副本。
+#[tauri::command]
+pub fn import_inbox_entries(app: AppHandle, names: Vec<String>, on_event: Channel<ImportEvent>) -> Result<u64, String> {
   let space_root = current_space_root(&app)?;
   let (root, assets_dir) = current_paths(&app)?;
-  let path = resolve_entry(&space_root.join(INBOX_DIR), &name)?;
-  if !path.exists() {
-    return Err(format!("「{name}」已不在收件箱，可能刚被移走或删除"));
-  }
-  if !inbox_watch::entry_movable(&path) {
-    return Err(format!("「{name}」正被其他软件占用，请先在对应软件里关闭它再导入"));
-  }
+  let paths = resolve_import_paths(&space_root, &names)?;
   let opts = ImportOptions {
     structure: Structure::Keep,
     source: Source::Move,
     target_folder: None,
-    paths: vec![path],
+    paths,
     imported_from: Some("inbox".to_string()),
     sequence_mode: SequenceMode::Scatter,
   };
   Ok(spawn_import(app, root, assets_dir, opts, on_event, None))
+}
+
+fn resolve_import_paths(space_root: &Path, names: &[String]) -> Result<Vec<PathBuf>, String> {
+  if names.is_empty() {
+    return Err("请先选择要导入的条目".to_string());
+  }
+  let dir = space_root.join(INBOX_DIR);
+  let mut seen = HashSet::new();
+  let mut paths = Vec::with_capacity(names.len());
+  for name in names {
+    if !seen.insert(name.as_str()) {
+      continue;
+    }
+    let path = resolve_entry(&dir, name)?;
+    if !path.exists() {
+      return Err(format!("「{name}」已不在收件箱，可能刚被移走或删除"));
+    }
+    if !inbox_watch::entry_movable(&path) {
+      return Err(format!("「{name}」正被其他软件占用，请先在对应软件里关闭它再导入"));
+    }
+    paths.push(path);
+  }
+  Ok(paths)
 }
 
 /// 用系统默认程序打开条目（工程中查看 / 继续编辑）
@@ -146,6 +167,29 @@ mod tests {
     let dir = tmp.path().join(crate::core::space::INBOX_DIR);
     std::fs::create_dir_all(&dir).unwrap();
     (tmp, dir)
+  }
+
+  /// 批量路径保持传入顺序并去重，普通 doc 等工程文件也可一次交付导入管线
+  #[test]
+  fn resolve_import_paths_accepts_batch_and_dedups() {
+    let (tmp, dir) = harness();
+    for name in ["一.doc", "二.doc", "三.doc"] {
+      std::fs::write(dir.join(name), name).unwrap();
+    }
+    let names = vec!["一.doc".to_string(), "二.doc".to_string(), "一.doc".to_string(), "三.doc".to_string()];
+    let paths = resolve_import_paths(tmp.path(), &names).unwrap();
+    assert_eq!(paths, vec![dir.join("一.doc"), dir.join("二.doc"), dir.join("三.doc")]);
+  }
+
+  /// 空批次直接拒绝；整组校验阶段遇到缺失项即报错，不返回可导入的部分路径
+  #[test]
+  fn resolve_import_paths_rejects_empty_or_missing_entry() {
+    let (tmp, dir) = harness();
+    assert!(resolve_import_paths(tmp.path(), &[]).is_err());
+    std::fs::write(dir.join("在.doc"), "x").unwrap();
+    let names = vec!["在.doc".to_string(), "已删.doc".to_string()];
+    let error = resolve_import_paths(tmp.path(), &names).unwrap_err();
+    assert!(error.contains("已删.doc"), "错误应指向缺失项：{error}");
   }
 
   /// 路径穿越与 Windows 非法字符一律拒绝
