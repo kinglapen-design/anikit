@@ -14,7 +14,8 @@
 // 树上/下 1/3：整组同父 = reorder_folders 同级排序，跨父级 = move_folders 带 beforeFolderId
 // 定位插入（2026-07-29 复验：嵌套文件夹拖出）；树中间 1/3 / 文件夹卡片并入 = move_folders 移动层级
 //（2026-07-28 复验反馈 5 接入，替换原"暂不支持"toast）。
-// 拖拽中 Esc 取消；拖出窗口（素材）= 移交系统级拖放（CF_HDROP，拖至其他软件 / 任务栏图标打开）；
+// 拖拽中 Esc 取消；文件卡移动超阈值即提前移交 OLE 系统拖放（2026-11-04 快速松手竞态修复），
+// 本窗 enter / over 继续驱动上述落点，出窗可拖至其他软件 / 任务栏图标；曾出窗再返回 = 取消。
 // 文件夹拖出窗口 / 松开无效区域 = 无操作。
 //
 // 2026-07-28 复验反馈修复（根因记录）：
@@ -531,13 +532,44 @@ function updateDropTarget(e: DropPointer): void {
 //（dragView.tree / folderCardId / paneDrop）——单指针同一时刻只拖一样，两引擎不并发；
 // drop / leave 调 osFileDragHoverEnd 清槽
 
-// 自身拖出窗口期（2026-10-01 走查：拖出后未松手原路放回 = 取消，不触发回导）：
-// drag_assets / ws_drag_paths 的 OLE 拖放存续期间为 true——App.vue 的 onDragDropEvent
-// 整体早退（不高亮、不落盘）
+// 自身 OLE 拖放存续期间为 true。文件卡形成拖拽即提前接管（2026-11-04 快速松手竞态修复）：
+// 本窗 enter / over 继续驱动原应用内落点；曾经出窗再返回只取消，不回导也不执行窗内落点。
+interface OsDragOutcome {
+  dropped: boolean;
+  x: number;
+  y: number;
+  ctrl: boolean;
+}
 let osDragOutActive = false;
+let osDragSession: Session | null = null;
+let osWentOutside = false;
 export function isOsDragOutActive(): boolean {
   return osDragOutActive;
 }
+
+export function osOwnDragHover(x: number, y: number): void {
+  const s = osDragSession;
+  if (!osDragOutActive || !s || sess !== s) return;
+  if (osWentOutside) {
+    resetIndicators();
+    return;
+  }
+  lastX = x;
+  lastY = y;
+  if (s.ghost) {
+    s.ghost.style.display = "";
+    moveGhost(s.ghost, x, y);
+  }
+  updateDropTarget({ clientX: x, clientY: y, ctrlKey: lastCtrl, metaKey: lastCtrl });
+}
+
+export function osOwnDragLeave(): void {
+  if (!osDragOutActive) return;
+  osWentOutside = true;
+  resetIndicators();
+  if (osDragSession?.ghost) osDragSession.ghost.style.display = "none";
+}
+
 export function osFileDragHover(x: number, y: number): void {
   resetIndicators();
   const el = document.elementFromPoint(x, y) as HTMLElement | null;
@@ -747,14 +779,83 @@ function stopEdgeScroll(): void {
   edgeRaf = 0;
 }
 
+function outsideWindow(x: number, y: number): boolean {
+  return x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight;
+}
+
+function removeGestureListeners(): void {
+  window.removeEventListener("pointermove", onMove);
+  window.removeEventListener("pointerup", onUp);
+  window.removeEventListener("pointercancel", onCancel);
+  window.removeEventListener("keydown", onKey, true);
+  window.removeEventListener("blur", onWindowBlur);
+  document.removeEventListener("mouseleave", onDocLeave);
+}
+
+function releaseCapture(s: Session): void {
+  if (!s.capEl || !s.captured) return;
+  try {
+    s.capEl.releasePointerCapture(s.pointerId);
+    s.captured = false;
+  } catch {
+    /* 已自动释放 */
+  }
+}
+
+function finishOsDrag(s: Session, outcome: OsDragOutcome): void {
+  const ownsSession = osDragSession === s;
+  osDragSession = null;
+  if (ownsSession && sess === s) {
+    // 后端 ScreenToClient 返回物理像素；DOM 落点与窗口边界一律 CSS 像素（开发规范 §4）。
+    const scale = window.devicePixelRatio || 1;
+    const x = outcome.x / scale;
+    const y = outcome.y / scale;
+    const inside = !outsideWindow(x, y);
+    if (outcome.dropped && inside && !osWentOutside) {
+      updateDropTarget({ clientX: x, clientY: y, ctrlKey: outcome.ctrl, metaKey: outcome.ctrl });
+      endDrag(false);
+    } else {
+      endDrag(true);
+    }
+  }
+  // Wry 的 Drop 事件先于 DoDragDrop 返回排队；迟一拍清标记，杜绝自身文件被当成外部拖入回导。
+  window.setTimeout(() => {
+    osDragOutActive = false;
+  }, 0);
+}
+
+function beginOsHandoff(e: PointerEvent): void {
+  const s = sess;
+  if (!s || s.kind !== "asset" || osDragOutActive) return;
+  const ids = [...new Set(s.items.map((it) => it.assetId))];
+  const wsRels = ids.filter((id) => id.startsWith("ws:")).map((id) => id.slice(3));
+  const libIds = ids.filter((id) => !id.startsWith("ws:"));
+  if (wsRels.length === 0 && libIds.length === 0) return;
+  osDragOutActive = true;
+  osDragSession = s;
+  osWentOutside = outsideWindow(e.clientX, e.clientY);
+  removeGestureListeners();
+  releaseCapture(s);
+  if (osWentOutside && s.ghost) s.ghost.style.display = "none";
+  const p =
+    wsRels.length > 0
+      ? invoke<OsDragOutcome>("ws_drag_paths", { relPaths: wsRels })
+      : invoke<OsDragOutcome>("drag_assets", { assetIds: libIds });
+  void p
+    .then((outcome) => finishOsDrag(s, outcome))
+    .catch((err: unknown) => {
+      console.warn("拖出失败", err);
+      const scale = window.devicePixelRatio || 1;
+      finishOsDrag(s, { dropped: false, x: e.clientX * scale, y: e.clientY * scale, ctrl: false });
+    });
+}
+
 function startDrag(e: PointerEvent): void {
   if (!sess || sess.started) return;
   sess.started = true;
   // pointer capture 在拖拽真正启动时才挂（2026-08-18 修复"双击名称变打开"：begin 即 capture 会把
   // 双击序列的第二击与 dblclick 重定向到卡片根元素，名称区 @dblclick.stop 永远收不到——
   // click 仍派发到卡片根所以单击无碍，dblclick 被子元素 .stop 的链路被 capture 截断）。
-  // 拖到窗外松手 pointerup 仍能派发（capture 拖拽全程有效）；按下即划出窗口的窗口期由
-  // begin 先取消旧会话 + onMove buttons 自清 + docLeave 划出取消三兜底
   if (sess.capEl) {
     try {
       sess.capEl.setPointerCapture(sess.pointerId);
@@ -811,6 +912,9 @@ function startDrag(e: PointerEvent): void {
   document.body.style.userSelect = "none"; // 拖拽期间禁止文本选择
   document.body.classList.add("dragging"); // 拖拽期间禁用悬停控件（2026-07-29 复验二轮 5，CSS 闸）
   startEdgeScroll(); // 边缘自动滚动（素材拖拽且网格注册了滚动接口时才实际滚动，见 edgeScrollFrame）
+  // 文件卡形成拖拽即提前进入 OLE，不能等越界后才调用：快速松手时后者必错过系统接管窗口期。
+  // ws 文件夹卡 / 树行仍走原应用内手势；它们不是合法系统拖出源。
+  if (sess.kind === "asset" && sess.capEl?.matches(".asset-card, .list-row")) beginOsHandoff(e);
 }
 
 function onMove(e: PointerEvent): void {
@@ -829,38 +933,11 @@ function onMove(e: PointerEvent): void {
   if (!sess.started) {
     if (Math.hypot(e.clientX - sess.startX, e.clientY - sess.startY) < START_THRESHOLD) return;
     startDrag(e);
+    if (osDragOutActive) return;
   }
-  // 拖出窗口（素材）= 移交系统级拖放（PRD 05_导入与导出：跨窗口拖至其他软件打开；Windows 底层
-  // CF_HDROP，拖至任务栏图标走系统"打开方式"同链路）：capture 生效后窗外 pointermove 照常派发
-  // 且坐标越界。文件夹 = info 目录非用户文件，不拖出。先取消内部会话再 invoke——DoDragDrop 模态
-  // 循环接管指针直至松手；路径解析放后端锁内完成（一次 IPC 直达，手势途中经不起前端往返）
-  if (
-    sess.kind === "asset" &&
-    (e.clientX < 0 || e.clientY < 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight)
-  ) {
-    const ids = [...new Set(sess.items.map((it) => it.assetId))];
-    // ws 合成项（ws:+rel）走 ws_drag_paths 按路径拖出（2026-10-01 ws ↔ Explorer 互通，
-    // PRD 02-13 复制语义）；库资产走 drag_assets。一个拖拽手势的项来自同一视口同域，
-    // ws 与库 id 不会混；若混有，ws 优先走 ws_drag_paths，库 id 静默不拖
-    const wsRels = ids.filter((id) => id.startsWith("ws:")).map((id) => id.slice(3));
-    const libIds = ids.filter((id) => !id.startsWith("ws:"));
-    endDrag(true);
-    if (wsRels.length > 0 || libIds.length > 0) {
-      // 自身拖出窗口期标记（2026-10-01 走查「拖出去发现拖错、原路放回居然触发导入」）：
-      // OLE DoDragDrop 模态循环期间（invoke resolve = 松手 / 取消），onDragDropEvent 收到的
-      // enter / over / drop 全是这条自己的拖——App.vue 据此整体抑制（不高亮、不落盘，
-      // OLE 侧报无放置 = 拖取消）；单指针同一时刻只有一条系统拖放，布尔即可
-      osDragOutActive = true;
-      const p =
-        wsRels.length > 0
-          ? invoke("ws_drag_paths", { relPaths: wsRels })
-          : invoke("drag_assets", { assetIds: libIds });
-      void p
-        .catch((err) => console.warn("拖出失败", err))
-        .finally(() => {
-          osDragOutActive = false;
-        });
-    }
+  // ws 文件夹等非系统拖出源维持旧的越界分支；文件卡已在 startDrag 提前接管，不会走到这里。
+  if (sess.kind === "asset" && outsideWindow(e.clientX, e.clientY)) {
+    beginOsHandoff(e);
     return;
   }
   if (sess.ghost) moveGhost(sess.ghost, e.clientX, e.clientY);
@@ -871,21 +948,9 @@ function endDrag(cancelled: boolean): void {
   const s = sess;
   if (!s) return;
   sess = null;
-  window.removeEventListener("pointermove", onMove);
-  window.removeEventListener("pointerup", onUp);
-  window.removeEventListener("pointercancel", onCancel);
-  window.removeEventListener("keydown", onKey, true);
-  window.removeEventListener("blur", onWindowBlur);
-  document.removeEventListener("mouseleave", onDocLeave);
+  removeGestureListeners();
   stopEdgeScroll();
-  // 释放 pointer capture（元素已卸载等情况 capture 已自动释放，吞异常）
-  if (s.capEl && s.captured) {
-    try {
-      s.capEl.releasePointerCapture(s.pointerId);
-    } catch {
-      /* 已自动释放 */
-    }
-  }
+  releaseCapture(s);
   s.ghost?.remove();
   document.body.style.userSelect = "";
   document.body.classList.remove("dragging");

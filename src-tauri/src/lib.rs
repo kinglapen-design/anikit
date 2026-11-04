@@ -22,18 +22,28 @@ pub struct TrayItems {
   pub inbox: CheckMenuItem<tauri::Wry>,
 }
 
+/// 系统拖放结束时的真实结果：是否落窗、窗口客户区物理坐标、Ctrl 实态。
+/// 前端据此决定执行应用内落点还是结束跨窗口拖拽，避免依赖指针事件是否来得及抵达。
+#[derive(serde::Serialize, Clone, Copy, Default)]
+#[serde(rename_all = "camelCase")]
+struct DragOutcome {
+  dropped: bool,
+  x: i32,
+  y: i32,
+  ctrl: bool,
+}
+
 /// 跨窗口拖出：从窗口拖文件到其他软件打开（WebView HTML5 拖拽出不了窗口边界，
 /// 由原生层发起系统级拖拽，Windows 底层即 CF_HDROP——拖至任务栏图标走系统"打开方式"同链路）。
-/// 入参 = 资产 id 集（前端在指针越出窗口边界的手势途中调用，需一次 IPC 直达 DoDragDrop，
-/// 路径若先经前端往返解析，OLE 接管时机被拉长、松手即失拖出窗口期）；锁内只做 index 查表 +
-/// real_origin_file 定位（序列帧 = frames/ 封面帧），不涉重 IO；不存在 / 解析失败的 id 静默跳过。
-/// 注意：OLE 拖拽（DoDragDrop）必须在主线程发起，同步命令即运行于主线程（踩坑 004）。
+/// 入参 = 资产 id 集（文件卡形成拖拽即调用，提前进入 DoDragDrop，快速松手也不会错过接管窗口期）；
+/// 锁内只做 index 查表 + real_origin_file 定位（序列帧 = frames/ 封面帧），不涉重 IO；
+/// 不存在 / 解析失败的 id 静默跳过。OLE 拖拽必须在主线程发起，同步命令即运行于主线程（踩坑 004）。
 #[tauri::command]
 fn drag_assets(
   window: tauri::WebviewWindow,
   state: tauri::State<'_, commands::library::AppState>,
   asset_ids: Vec<String>,
-) -> Result<(), String> {
+) -> Result<DragOutcome, String> {
   let paths = {
     let guard = state.library.lock().map_err(|e| e.to_string())?;
     let lib = guard.as_ref().ok_or_else(|| "请先打开素材库".to_string())?;
@@ -42,17 +52,15 @@ fn drag_assets(
   start_files_drag(&window, paths)
 }
 
-/// 工作空间拖出（2026-10-01 ws ↔ Explorer 双向拖拽，PRD 02-13）：ws 文件卡片拖出窗口 =
-/// drag_assets 同机制（指针越出窗口边界后原生层发起 CF_HDROP 系统级拖拽，宣告复制效果、
-/// 源文件不动；落资源管理器 = 复制）。入参 = rel 清单（手势途中一次 IPC 直达，同 drag_assets
-/// 口径）；逐条按 ws 校验转绝对路径（越界 / 不存在跳过 + 去重保序；**文件夹不拖出**——
-/// 同库「文件夹不拖出」口径，拖出集只收文件）；空集报错。同步命令主线程 DoDragDrop（踩坑 004）
+/// 工作空间拖出：ws 文件卡片与库文件卡共用提前系统接管机制（CF_HDROP、复制效果、源文件不动）。
+/// rel 逐条校验转绝对路径（越界 / 不存在跳过 + 去重保序；文件夹不拖出），空集报错。
+/// 同步命令主线程 DoDragDrop（踩坑 004）。
 #[tauri::command]
 fn ws_drag_paths(
   window: tauri::WebviewWindow,
   state: tauri::State<'_, commands::library::AppState>,
   rel_paths: Vec<String>,
-) -> Result<(), String> {
+) -> Result<DragOutcome, String> {
   let mut seen = std::collections::HashSet::new();
   let paths: Vec<std::path::PathBuf> = rel_paths
     .iter()
@@ -64,19 +72,43 @@ fn ws_drag_paths(
 }
 
 /// 跨窗口拖出共用主体（drag_assets / ws_drag_paths）：空集报错 + 主线程 DoDragDrop
-///（DragItem::Files / 空拖拽图 / Options::default = DragMode::Copy 只宣告 DROPEFFECT_COPY）
-fn start_files_drag(window: &tauri::WebviewWindow, paths: Vec<std::path::PathBuf>) -> Result<(), String> {
+///（DragItem::Files / 空拖拽图 / Options::default = DragMode::Copy 只宣告 DROPEFFECT_COPY）。
+fn start_files_drag(window: &tauri::WebviewWindow, paths: Vec<std::path::PathBuf>) -> Result<DragOutcome, String> {
   if paths.is_empty() {
     return Err("没有可拖出的文件".to_string());
   }
+  let outcome = std::sync::Arc::new(std::sync::Mutex::new(DragOutcome::default()));
+  let callback_outcome = outcome.clone();
   drag::start_drag(
     window,
     drag::DragItem::Files(paths),
     drag::Image::Raw(Vec::new()),
-    |_result, _cursor| {},
+    move |result, cursor| {
+      if let Ok(mut o) = callback_outcome.lock() {
+        o.dropped = matches!(result, drag::DragResult::Dropped);
+        o.x = cursor.x;
+        o.y = cursor.y;
+      }
+    },
     drag::Options::default(),
   )
-  .map_err(|e| e.to_string())
+  .map_err(|e| e.to_string())?;
+  let mut result = outcome.lock().map_err(|e| e.to_string())?.to_owned();
+  #[cfg(windows)]
+  {
+    use windows::Win32::Foundation::{HWND, POINT};
+    use windows::Win32::Graphics::Gdi::ScreenToClient;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL};
+    let raw = window.hwnd().map_err(|e| e.to_string())?;
+    let mut point = POINT { x: result.x, y: result.y };
+    unsafe {
+      let _ = ScreenToClient(HWND(raw.0 as _), &mut point);
+      result.ctrl = (GetAsyncKeyState(VK_CONTROL.0 as i32) as u16 & 0x8000) != 0;
+    }
+    result.x = point.x;
+    result.y = point.y;
+  }
+  Ok(result)
 }
 
 /// 拖出路径解析：id → info 内真实实体路径，去重保序，失败项跳过
