@@ -16,7 +16,7 @@ const ui = useUiStore();
 
 // 卡片渲染序 = 注册表全量序过滤隐藏项（TabBasic 同口径；允许全隐藏，无空态文案）
 const blocks = computed(() => visibleDetailBlocks(ui.detailBlocks.custom));
-</script></script>
+</script>
 
 <template>
   <template v-for="b in blocks" :key="b">
