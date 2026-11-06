@@ -14,7 +14,12 @@ use crate::core::library::{self, Library};
 use crate::core::space::{self, Space};
 use crate::core::{backup, merge, paths, relations};
 
-/// 应用状态：当前储存空间 + 当前打开的素材库（同一时刻只开一个库）+ 导入任务注册表 + 收件箱实例 + 撤销栈
+/// 应用状态（7.3 T6 解库中心化口径，2026-11-03）：
+/// - 空间级（库无关）：space / inbox / workspace —— 随空间启停；
+/// - 库级：library / undo —— 当前打开的素材库（同一时刻只开一个），撤销栈绑库、库切换清空；
+/// - 任务域（imports / ws_searches / semantic_tasks）= **非库功能域状态落点先例**：
+///   新功能域（待办等）状态 = 本结构按域独立 Mutex 表 + 独立数据文件与服务模块，不进库锁；
+///   撤销不共享库栈——域内自管 UndoManager 或按域评估不进撤销（PRD 07 扩展点口径）。
 pub struct AppState {
   pub space: Mutex<Option<Space>>,
   pub library: Mutex<Option<Library>>,

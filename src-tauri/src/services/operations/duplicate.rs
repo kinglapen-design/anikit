@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::core::json_io::{read_json, write_json};
+use crate::core::json_io::read_json;
 use crate::core::library::{self, Library};
 use crate::core::models::{new_asset_id, AssetMeta, Placement};
 use crate::services::import as ops;
@@ -98,7 +98,7 @@ fn duplicate_one(
   let stamp = now();
   meta.imported_at = stamp.clone();
   meta.modified_at = stamp;
-  write_json(&meta_path, &meta).map_err(|e| e.to_string())?;
+  crate::core::paths::save_asset_metadata(&lib.assets_dir, &meta).map_err(|e| e.to_string())?;
   lib.index.assets.insert(new_id.clone(), meta); // 先落盘再同步内存（规范第 7 条）
 
   if item.folder_id == target_folder {

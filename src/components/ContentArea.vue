@@ -13,7 +13,6 @@ import { computed, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { DockviewPanelApi, IDockviewPanelProps } from "dockview-vue";
 import ContentTitleBar from "./ContentTitleBar.vue";
 import AssetGrid from "./AssetGrid.vue";
-import SequencePackView from "./SequencePackView.vue";
 import FloatBarHost from "./FloatBarHost.vue";
 import ImportProgressBar from "./ImportProgressBar.vue";
 import PreviewTitleBar from "./PreviewTitleBar.vue";
@@ -25,6 +24,7 @@ import { PREVIEW_SESSION_KEY } from "../lib/previewSessionKey";
 import { useSearchStore } from "../stores/search";
 import { useUiStore } from "../stores/ui";
 import { useWsStore } from "../stores/ws";
+import { pageSpecFor } from "../lib/pageSpecs";
 
 // props 运行时声明（rolldown 环境 SFC 编译器无法解析 node_modules 类型，defineProps 泛型须字面量）。
 // dockview-vue 传参约定（v7 源码 VueRenderer.init）：framework props 整组包在一个 params prop 里——
@@ -53,9 +53,10 @@ watch(
 // 本标签页视口（frame.params = addPanel/updateParameters 的用户参数）
 const viewKey = computed(() => (frame.value.params?.viewKey as string) ?? "quick:all");
 
-// 序列帧包内视图（5.2）：viewKey = seq:{assetId}——素材区整区换包内帧卡片列表
-//（数据不走 placementsFor：帧不是 Placement；搜索/排序/分组对包内不适用，组件内自管）
-const seqPackAssetId = computed(() => (viewKey.value.startsWith("seq:") ? viewKey.value.slice(4) : null));
+// 自定义页面分发（7.3 T2 pageSpecs 注册表）：viewKey 前缀查表——命中 = 页面组件（序列帧包内等），
+// 未命中 = AssetGrid 默认素材网格页；预览态先于本表（previewActive 分支），ws 视口走默认页
+const pageSpec = computed(() => pageSpecFor(viewKey.value));
+const pageSpecProps = computed(() => pageSpec.value?.props?.(viewKey.value) ?? {});
 
 // 工作空间视口（PRD 02 步骤 1）：挂载 + viewKey 变化即确保对应目录已加载——已加载即跳过
 //（2026-10-01 性能优化③：加载后由 fs-changed 精准重扫维持新鲜，挂载不再全量重读；
@@ -155,7 +156,7 @@ function onRootPointerdown(e: PointerEvent): void {
         <ContentTitleBar :view-key="viewKey" :panel-id="panelApi.id" />
         <ImportProgressBar :panel-id="panelApi.id" />
         <section class="asset-section">
-          <SequencePackView v-if="seqPackAssetId" :asset-id="seqPackAssetId" :panel-active="active" />
+          <component :is="pageSpec.component" v-if="pageSpec" v-bind="pageSpecProps" :panel-active="active" />
           <AssetGrid
             v-else
             :items="items"

@@ -22,6 +22,12 @@ pub fn metadata_file(assets_dir: &Path, id: &str) -> PathBuf {
   info_dir(assets_dir, id).join("metadata.json")
 }
 
+/// metadata.json 单一写点（开发规范 第 1 条；7.3 T7 写点收敛，2026-11-03）：
+/// 全量覆写资产元数据一律经本函数（原子写随 json_io），调用点禁止自行拼路径直写
+pub fn save_asset_metadata(assets_dir: &Path, asset: &crate::core::models::AssetMeta) -> Result<(), crate::core::json_io::DataError> {
+  crate::core::json_io::write_json(&metadata_file(assets_dir, &asset.id), asset)
+}
+
 /// 资源 ID → info 内 frames/ 目录（序列帧 / 动图解包逐帧高清图）
 pub fn frames_dir(assets_dir: &Path, id: &str) -> PathBuf {
   info_dir(assets_dir, id).join("frames")

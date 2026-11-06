@@ -18,14 +18,12 @@
 // 不进 ui.detailBlocks 配置体系，滚动壳与文件夹形态共用）。
 import { computed, ref, watch } from "vue";
 import SectionPinned from "./sections/SectionPinned.vue";
-import TabBasic from "./sections/TabBasic.vue";
-import TabLinks from "./sections/TabLinks.vue";
-import TabCustom from "./sections/TabCustom.vue";
 import FolderDetail from "./sections/FolderDetail.vue";
 import WsDetail from "./sections/WsDetail.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ActionButton from "./buttons/ActionButton.vue";
 import ScrollThumb from "./ScrollThumb.vue";
+import { DETAIL_TAB_SPECS, detailTabSpecFor } from "../lib/detailTabSpecs";
 import type { DetailTarget } from "../lib/detailSections";
 import { useUiStore } from "../stores/ui";
 
@@ -46,13 +44,9 @@ const folderTarget = computed<FolderTarget | null>(() =>
 );
 const wsTarget = computed<WsTarget | null>(() => (props.target.kind === "ws" ? props.target : null));
 
-// 分段控制器三段（稿序：基础信息 / 链接关系 / 自定义组件——自定义组件 = 占位容器，
-// 提示词挪基础信息区块（2026-09-26 提示词二轮）；custom-component 图标用户补源十八批）
-const TAB_OPTIONS = [
-  { value: "basic", icon: "basic-info" },
-  { value: "links", icon: "link-relations" },
-  { value: "custom", icon: "custom-component" },
-] as const;
+// 分段控制器与内容分发同表驱动（7.3 T3 detailTabSpecs 注册表，2026-11-03）：
+// 新详情 tab = DETAIL_TAB_SPECS 加一条 + 内容组件，本文件零改动
+const TAB_OPTIONS = DETAIL_TAB_SPECS.map((s) => ({ value: s.key, icon: s.icon }));
 // 全局记忆（ui.detailTab 持久化）：卸载重挂 / 换选中不丢当前 tab
 const ui = useUiStore();
 const tab = computed({
@@ -89,9 +83,7 @@ const tabBodyRef = ref<HTMLElement>();
       <div ref="tabBodyRef" class="tab-body kit-scroll">
         <Transition name="tab-x">
           <div :key="tab" class="tab-pane">
-            <TabBasic v-if="tab === 'basic'" :target="tabsTarget" />
-            <TabLinks v-else-if="tab === 'links'" :target="tabsTarget" />
-            <TabCustom v-else :target="tabsTarget" />
+            <component :is="detailTabSpecFor(tab).component" :target="tabsTarget" />
           </div>
         </Transition>
       </div>

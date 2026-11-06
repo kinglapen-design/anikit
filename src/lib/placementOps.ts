@@ -709,7 +709,7 @@ export interface DeleteFolderResult {
 export async function deleteFolder(folderId: string): Promise<boolean> {
   let report: DeleteFolderResult | null = null;
   return await runOp(async () => {
-    report = await invoke<DeleteFolderResult>("delete_folder", { folderId, permanent: false, confirmed: false });
+    report = await invoke<DeleteFolderResult>("delete_folder", { folderId });
   }, () => `删除文件夹（${report?.movedPlacements ?? 0} 个素材移入未分类）`);
 }
 

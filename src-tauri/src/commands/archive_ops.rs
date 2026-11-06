@@ -107,7 +107,7 @@ pub(crate) fn delete_archive_op(state: &AppState, folder_id: &str) -> Result<Del
   undo.begin(format!("删除文件夹 {name}"));
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
   undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
-  match purge::delete_folder(lib, folder_id, false, false) {
+  match purge::delete_folders(lib, std::slice::from_ref(&folder_id.to_string())) {
     Ok(report) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(report)

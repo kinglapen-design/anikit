@@ -2,7 +2,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::core::json_io::write_json;
 use crate::core::library::{self, Library};
 use crate::core::models::Placement;
 use crate::core::paths;
@@ -56,8 +55,7 @@ fn clear_imported_from(lib: &mut Library, asset_id: &str) -> Result<(), String> 
     return Ok(());
   }
   meta.imported_from = None;
-  let meta_path = paths::metadata_file(&lib.assets_dir, asset_id);
-  write_json(&meta_path, &meta).map_err(|e| e.to_string())?;
+  paths::save_asset_metadata(&lib.assets_dir, &meta).map_err(|e| e.to_string())?;
   lib.index.assets.insert(asset_id.to_string(), meta);
   Ok(())
 }

@@ -23,5 +23,6 @@ pub mod models;
 pub mod notes;
 pub mod paths;
 pub mod relations;
+pub mod self_check;
 pub mod space;
 pub mod undo;

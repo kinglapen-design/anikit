@@ -11,7 +11,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use crate::core::json_io::{read_json, write_json};
+use crate::core::json_io::read_json;
 use crate::core::library::{self, Library};
 use crate::core::models::{new_asset_id, ArchiveData, AssetMeta, Folder, Placement, ARCHIVE_KIND};
 use crate::services::import as ops;
@@ -178,7 +178,7 @@ fn clone_asset(lib: &mut Library, src_id: &str, out: &mut CloneOutcome) -> Resul
   let stamp = now();
   meta.imported_at = stamp.clone();
   meta.modified_at = stamp;
-  write_json(&meta_path, &meta).map_err(|e| e.to_string())?;
+  crate::core::paths::save_asset_metadata(&lib.assets_dir, &meta).map_err(|e| e.to_string())?;
   lib.index.assets.insert(new_id.clone(), meta); // 先落盘再同步内存（规范第 7 条）
   out.copies.push((old_info, new_info));
   out.new_asset_ids.push(new_id.clone());

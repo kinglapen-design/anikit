@@ -8,7 +8,6 @@ use std::sync::Mutex;
 
 use rayon::prelude::*;
 
-use crate::core::json_io::write_json;
 use crate::core::library::Library;
 use crate::services::import as ops;
 use crate::services::operations;
@@ -94,8 +93,7 @@ fn commit_rehashed(lib: &Mutex<Option<Library>>, items: Vec<Rehashed>) -> Result
     meta.size = item.size;
     meta.hash = item.hash;
     meta.modified_at = operations::now();
-    let metadata_path = lib.info_dir(&c.asset_id).join("metadata.json");
-    write_json(&metadata_path, &meta).map_err(|e| format!("库内文件哈希回写失败：{e}"))?;
+    crate::core::paths::save_asset_metadata(&lib.assets_dir, &meta).map_err(|e| format!("库内文件哈希回写失败：{e}"))?;
     log::info!("导入查重复核修正哈希漂移（{}）", c.asset_id);
     lib.index.assets.insert(c.asset_id, meta);
   }

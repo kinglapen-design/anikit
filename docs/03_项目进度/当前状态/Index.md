@@ -10,6 +10,8 @@
 
 ## 条目总表（按月份）
 
+- **2026-11-05（7.3 余量 · 1.0 收尾第 7 项 ✅）**：T2–T7 全落——**T2** `lib/pageSpecs.ts`（viewKey 前缀 → 页面组件，ContentArea 查表分发，seq: 首条）；**T3** `lib/detailTabSpecs.ts`（DETAIL_TAB_SPECS + 自定义卡片组件映射，TabCustom / DetailSections if 链全收查表）；**T4** `lib/sidebarSpecs.ts`（分段 + 内容 + 停留视口恢复封装，ui.leftMode 放宽 string）；**T5** 自检链收编 `core/self_check.rs`（open() 十段幂等自愈原序抽入 run_self_checks，落盘仍备份门禁段；library.rs 1553→1217）+ PRD 06-05 分界（持续自愈留自检，结构变更才升 MIGRATIONS，不造空升级）；**T6** AppState 分区口径 + PRD 07 非库域节（按域独立 Mutex 表不进库锁、撤销不共享库栈）；**T7** = 8.2 置灰清理（plugins.ts / pluginMenu.ts / PluginListPanel / PreviewPlugins）+ **metadata.json 写点收敛**（paths::save_asset_metadata 单点 + 12 处改调）+ **死命令删除**（delete_assets_permanently + delete_folder permanent=true 链，archive_ops 与前端 placementOps 同步收窄，接口 16 更新）+ 大文件评估（content.ts 1184 / AssetGrid 828 / config.rs 624 暂不拆记理由，library.rs 已治理）。typecheck 0 错 + clippy 净 + cargo test 全绿；PRD 06/07、接口 16、路线图勾销随提交；**1.0 收尾只剩第 9 项（发布文档与入口）**（[日志](../../02_开发日志/2026-11/2026-11-05_01_7.3余量.md)、[当前状态](2026-11/2026-11-05_01_7.3余量.md)）。
+
 - **2026-11-04（免安装包重打）**：用户定「提交打包」，含批量手动导入提交 `d7920d2e`；`build --no-bundle` 一次过 → `anikit-portable-new` **1317.65 MiB** + 同名更新 `anikit-v0.1.0-20261104.zip` **911,180,565 字节（868.97 MiB）**。ZIP 54 条目 CRC 全过 + 主程序/CLI 与构建逐字节一致；直接运行包内程序完成隔离 10 doc 批量导入全链，临时实例、数据与盘符已清，原 `next` 未中断（[日志](../../02_开发日志/2026-11/2026-11-04_04_免安装包重打.md)、[当前状态](2026-11/2026-11-04_04_免安装包重打.md)）。
 
 - **2026-11-04（收件箱批量手动导入）**：工程文件支持 Ctrl 逐项多选、Shift 范围多选，右键保留整组、一次确认后单任务批量移走入库；后端统一去重与存在 / 占用校验，任一无效不部分导入，原单条命令保留兼容。选择互斥、刷新清理、重命名同步与 `.disk-card` 空白判定排除已接通；typecheck / 709+4 测 / release 构建通过，真实隔离实例 10 doc 全链验收完成，临时数据已清，未重打免安装包（[日志](../../02_开发日志/2026-11/2026-11-04_02_收件箱批量手动导入.md)、[当前状态](2026-11/2026-11-04_02_收件箱批量手动导入.md)）。

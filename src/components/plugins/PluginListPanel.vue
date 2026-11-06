@@ -14,10 +14,9 @@
 // 松手写 ui.pluginOrder 持久化（渲染序 = pluginOrder 过滤已知 id + 数据源补尾）；
 // 更多菜单 = openContextMenu「打开 / 安装或卸载（按 Animate 安装态动态文案）/ 配置快捷键（业务未立项占位禁用）」；
 // 单击 item（非禁用）= 打开对应详情子窗口（invoke open_plugin_window）+ 关浮层；
-// 底部「开发者选项」（padding 12 24 + border-top g5；dev-options 18 盒 14 图标 + 13/18 二级）点亮不接业务（菜单栏既有惯例）；
-// 「批量生成缩略图」业务未立项 = 整项禁用（名称/图标降四级、不响应点击、更多钮同禁，2026-09-06 用户定）。
+// 底部「开发者选项」（padding 12 24 + border-top g5；dev-options 18 盒 14 图标 + 13/18 二级）点亮不接业务（菜单栏既有惯例）。
 // 图标（2026-09-06 用户直投源图入库，命名对照十一批）：grip（抓手，四级 currentColor）/ dev-options /
-// animate-plugin（品牌彩色原值）/ batch-thumbnails（玻璃质感位图原值）。
+// animate-plugin（品牌彩色原值）。
 import { computed, onBeforeUnmount, reactive, ref } from "vue";
 import AppMenu from "../AppMenu.vue";
 import AppIcon from "../AppIcon.vue";
@@ -295,9 +294,8 @@ async function onMore(p: PluginMeta, e: MouseEvent): Promise<void> {
 .plugin-item:hover {
   background: var(--n-l-a3);
 }
-/* 禁用项（批量生成缩略图，业务未立项）：名称/图标降四级、不响应点击（更多钮同禁）；
-   位图图标（batch-thumbnails 玻璃质感图）不吃 color——降档只作用于名称与 currentColor 图标，
-   位图禁用观感待用户走查 */
+/* 禁用项（通用口径）：名称/图标降四级、不响应点击（更多钮同禁）；位图图标不吃 color，
+   降档只作用于名称与 currentColor 图标 */
 .plugin-item.disabled {
   pointer-events: none;
   cursor: default;

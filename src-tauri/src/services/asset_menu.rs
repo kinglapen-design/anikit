@@ -230,12 +230,12 @@ pub fn set_thumb_asset(lib: &mut Library, asset_id: &str, thumb_id: &str) -> Res
   let mut a = asset;
   a.thumb_asset_id = Some(thumb_id.to_string());
   a.modified_at = now.clone();
-  write_json(&lib.info_dir(asset_id).join("metadata.json"), &a).map_err(|e| e.to_string())?;
+  crate::core::paths::save_asset_metadata(&lib.assets_dir, &a).map_err(|e| e.to_string())?;
   lib.index.assets.insert(asset_id.to_string(), a);
   let mut t = thumb;
   t.hidden = Some(true);
   t.modified_at = now;
-  write_json(&lib.info_dir(thumb_id).join("metadata.json"), &t).map_err(|e| e.to_string())?;
+  crate::core::paths::save_asset_metadata(&lib.assets_dir, &t).map_err(|e| e.to_string())?;
   lib.index.assets.insert(thumb_id.to_string(), t);
   Ok(())
 }
@@ -260,13 +260,13 @@ pub fn restore_thumb_asset(lib: &mut Library, asset_id: &str) -> Result<u32, Str
     let mut m = lib.index.assets.get(id).unwrap().clone();
     m.thumb_asset_id = None;
     m.modified_at = now.clone();
-    write_json(&lib.info_dir(id).join("metadata.json"), &m).map_err(|e| e.to_string())?;
+    crate::core::paths::save_asset_metadata(&lib.assets_dir, &m).map_err(|e| e.to_string())?;
     lib.index.assets.insert(id.clone(), m);
   }
   let mut a = asset;
   a.hidden = None;
   a.modified_at = now;
-  write_json(&lib.info_dir(asset_id).join("metadata.json"), &a).map_err(|e| e.to_string())?;
+  crate::core::paths::save_asset_metadata(&lib.assets_dir, &a).map_err(|e| e.to_string())?;
   lib.index.assets.insert(asset_id.to_string(), a);
   Ok(refs.len() as u32)
 }
@@ -282,7 +282,7 @@ pub fn unbind_thumb_asset(lib: &mut Library, asset_id: &str) -> Result<(), Strin
   let mut a = asset;
   a.thumb_asset_id = None;
   a.modified_at = super::operations::now();
-  write_json(&lib.info_dir(asset_id).join("metadata.json"), &a).map_err(|e| e.to_string())?;
+  crate::core::paths::save_asset_metadata(&lib.assets_dir, &a).map_err(|e| e.to_string())?;
   lib.index.assets.insert(asset_id.to_string(), a);
   Ok(())
 }

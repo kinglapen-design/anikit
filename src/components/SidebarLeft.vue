@@ -14,13 +14,12 @@
 // 收展动画 = sidebarShowWidths 唯一写点（速查 §8）：模板只绑它，toggle 只翻布尔；
 // 本文件禁挂 width 的 CSS transition（与逐帧 JS 写宽打架 = 慢一帧）；
 // --sb-w 恒为展开宽、子块定宽 = 收窄时右缘裁剪不挤压；展开按钮在标签页行首（SidebarExpandButton）。
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import IconButton from "./buttons/IconButton.vue";
 import ActionButton from "./buttons/ActionButton.vue";
 import SegmentedControl from "./buttons/SegmentedControl.vue";
 import ScrollThumb from "./ScrollThumb.vue";
-import LibraryView from "./LibraryView.vue";
-import WorkspaceTree from "./WorkspaceTree.vue";
+import { SIDEBAR_SECTION_SPECS, sidebarSectionSpecFor } from "../lib/sidebarSpecs";
 import { useUiStore } from "../stores/ui";
 import { usePickerStore } from "../stores/picker";
 import { useTabsStore } from "../stores/tabs";
@@ -101,17 +100,17 @@ function onViewMenu(e: MouseEvent): void {
 // 选择模式（6.2 白名单收窄）下禁用切换——树 / 快速访问导航是挑选主通路，须恒在。
 // AI 占位段不动中间容器。
 const tabs = useTabsStore();
-const segOptions = [
-  { value: "library", icon: "library" },
-  { value: "workspace", icon: "workspace" },
-  { value: "ai", icon: "ai-chat" },
-] as const;
+// 分段与内容分发同表驱动（7.3 T4 sidebarSpecs 注册表，2026-11-03）：
+// 新分段 = SIDEBAR_SECTION_SPECS 加一条 + 内容组件，本文件零改动
+const segOptions = SIDEBAR_SECTION_SPECS.map((s) => ({ value: s.key, icon: s.icon }));
+const currentSpec = computed(() => sidebarSectionSpecFor(ui.leftMode));
 function onModeChange(v: string): void {
   if (picker.active) return;
-  ui.leftMode = v as "library" | "workspace" | "ai";
-  // 切分段恢复该模式停留视口（openView 同视口早退；锁定页按既有 Eagle 语义新开标签页）
-  if (v === "workspace") tabs.openView(ui.lastWsView || "ws:");
-  else if (v === "library") tabs.openView(ui.lastLibView || "quick:all");
+  ui.leftMode = v;
+  // 切分段恢复该模式停留视口（spec.viewToOpen 封装停留记忆键；空串 = 占位段不动中间容器；
+  // openView 同视口早退；锁定页按既有 Eagle 语义新开标签页）
+  const target = sidebarSectionSpecFor(v).viewToOpen(ui);
+  if (target) tabs.openView(target);
 }
 
 const bodyRef = ref<HTMLElement>();
@@ -145,13 +144,10 @@ const bodyRef = ref<HTMLElement>();
          AI = 空态占位；视图切换 = 旧内容左移出、新内容右移入（2026-08-30 用户实机定）300ms 缓入缓出（与滑块同步） -->
     <div class="side-body">
       <Transition name="view-x">
-        <div v-if="ui.leftMode === 'library'" ref="bodyRef" class="tree-scroll kit-scroll" key="library">
-          <LibraryView />
+        <div v-if="currentSpec.component" ref="bodyRef" class="tree-scroll kit-scroll" :key="currentSpec.key">
+          <component :is="currentSpec.component" />
         </div>
-        <div v-else-if="ui.leftMode === 'workspace'" ref="bodyRef" class="tree-scroll kit-scroll" key="workspace">
-          <WorkspaceTree />
-        </div>
-        <div v-else class="empty-state" key="empty">功能正在开发中</div>
+        <div v-else class="empty-state" :key="currentSpec.key">功能正在开发中</div>
       </Transition>
       <ScrollThumb :body="bodyRef" />
     </div>

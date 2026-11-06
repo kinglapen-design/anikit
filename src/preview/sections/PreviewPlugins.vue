@@ -69,7 +69,7 @@ const animateSvcOn = ref(true);
               <span class="dev-label">开发者选项</span>
             </div>
           </div>
-          <span class="pv-cap">400×450；「批量生成缩略图」业务未立项 = 禁用占位（降四级不响应）</span>
+          <span class="pv-cap">400×450；禁用占位项已随 8.2 撤销清理摘除（2026-11-03 T7）</span>
         </div>
         <div class="pv-demo-cell">
           <div class="pv-item-demo">
@@ -93,17 +93,6 @@ const animateSvcOn = ref(true);
               <IconButton name="more-large" variant="bare" class="more-btn" />
             </div>
             <span class="pv-cap">item hover（底 亮色/半透明-3，待走查）</span>
-          </div>
-          <div class="pv-item-demo">
-            <div class="pv-plugin-item disabled">
-              <span class="lead">
-                <span class="grip"><AppIcon name="grip" :size="14" /></span>
-                <span class="p-icon"><AppIcon name="batch-thumbnails" :size="22" /></span>
-                <span class="p-name">批量生成缩略图</span>
-              </span>
-              <IconButton name="more-large" variant="bare" class="more-btn" />
-            </div>
-            <span class="pv-cap">item 禁用（名称/图标降四级；位图图标不吃 color，降档仅作用于名称——待走查）</span>
           </div>
         </div>
       </div>

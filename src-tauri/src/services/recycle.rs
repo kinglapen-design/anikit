@@ -320,7 +320,7 @@ pub(crate) fn sync_after_purge(lib: &mut Library, removed: &[String]) -> Result<
       let mut m = lib.index.assets.get(&id).unwrap().clone();
       m.thumb_asset_id = None;
       m.modified_at = now.clone();
-      crate::core::json_io::write_json(&lib.info_dir(&id).join("metadata.json"), &m).map_err(|e| e.to_string())?;
+      crate::core::paths::save_asset_metadata(&lib.assets_dir, &m).map_err(|e| e.to_string())?;
       lib.index.assets.insert(id, m);
     }
   }
@@ -342,7 +342,7 @@ pub(crate) fn sync_after_purge(lib: &mut Library, removed: &[String]) -> Result<
         p.asset_id = None;
       }
       m.modified_at = now.clone();
-      crate::core::json_io::write_json(&lib.info_dir(&id).join("metadata.json"), &m).map_err(|e| e.to_string())?;
+      crate::core::paths::save_asset_metadata(&lib.assets_dir, &m).map_err(|e| e.to_string())?;
       lib.index.assets.insert(id, m);
     }
   }

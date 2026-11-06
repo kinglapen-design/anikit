@@ -1,1 +1,1 @@
-	- `delete_assets_permanently(assetIds, confirmed) -> { needConfirm, segmentRefs, deleted }` —— 素材直接彻底删除（两段式；**先物理后数据**——逐个删 info 失败收集名单不中断，只清成功项 Placement + 四处同步清理，失败项数据层原样保留可重试，2026-09-02 资产污染修复）
+	- ~~`delete_assets_permanently(assetIds, confirmed)`~~ **已随 2026-11-03 T7 死命令处置删除**——前端无调用方（素材彻底删除归回收站 `delete_recycle` / `clear_recycle`，见 09_快速访问-最近使用与回收站.md），服务实现与命令壳同步摘除

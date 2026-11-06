@@ -16,7 +16,6 @@ use crate::commands::operations::fail;
 use crate::core::library::{ARCHIVES_FILE, FOLDERS_FILE};
 use crate::services::{asset_menu, origin_sync, purge};
 use crate::services::purge::DeleteFolderReport;
-use crate::services::recycle::DeleteRecycleReport;
 
 /// 其他应用打开（系统"打开方式"对话框）；序列帧 = frames/ 封面帧（real_origin_file 特判）
 #[tauri::command]
@@ -214,32 +213,13 @@ pub fn cancel_export(state: State<'_, AppState>, task_id: u64) -> Result<(), Str
   }
 }
 
-/// 素材直接彻底删除（两段式；不经过回收站，不接撤销）
+/// 删除文件夹（子树素材移未分类 + 节点删除，接撤销；档案形态分流 delete_archive_op）。
+/// 7.3 T7 死命令处置（2026-11-03）：delete_assets_permanently 与 permanent=true 分支已删——
+/// 回收站彻底清除走 delete_recycle / clear_recycle；本命令 permanent / confirmed 参数随撤
 #[tauri::command]
-pub async fn delete_assets_permanently(
-  state: State<'_, AppState>,
-  asset_ids: Vec<String>,
-  confirmed: bool,
-) -> Result<DeleteRecycleReport, String> {
+pub async fn delete_folder(state: State<'_, AppState>, folder_id: String) -> Result<DeleteFolderReport, String> {
   let mut guard = state.library.lock().map_err(|e| e.to_string())?;
   let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  purge::delete_assets_permanently(lib, &asset_ids, confirmed)
-}
-
-/// 删除文件夹两形态：permanent=false = "删除文件夹"（子树素材移未分类 + 节点删除，接撤销）；
-/// permanent=true = "彻底删除文件夹"（两段式，子树资产物理全删，不接撤销）
-#[tauri::command]
-pub async fn delete_folder(
-  state: State<'_, AppState>,
-  folder_id: String,
-  permanent: bool,
-  confirmed: bool,
-) -> Result<DeleteFolderReport, String> {
-  let mut guard = state.library.lock().map_err(|e| e.to_string())?;
-  let lib = guard.as_mut().ok_or_else(|| "请先打开素材库".to_string())?;
-  if permanent {
-    return purge::delete_folder(lib, &folder_id, true, confirmed);
-  }
   if lib.index.folders.get(&folder_id).is_some_and(|f| f.kind.as_deref() == Some(crate::core::models::ARCHIVE_KIND)) {
     drop(guard);
     return super::archive_ops::delete_archive_op(&state, &folder_id);
@@ -249,7 +229,7 @@ pub async fn delete_folder(
   undo.begin(format!("删除文件夹 {name}"));
   undo.record_file(&lib.root.join(FOLDERS_FILE)).map_err(|e| e.to_string())?;
   undo.record_file(&lib.root.join(ARCHIVES_FILE)).map_err(|e| e.to_string())?;
-  match purge::delete_folder(lib, &folder_id, false, confirmed) {
+  match purge::delete_folders(lib, std::slice::from_ref(&folder_id)) {
     Ok(report) => {
       undo.commit().map_err(|e| e.to_string())?;
       Ok(report)

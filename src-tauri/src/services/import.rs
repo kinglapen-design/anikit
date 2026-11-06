@@ -360,7 +360,7 @@ pub(crate) fn rename_origin(assets_dir: &Path, asset_id: &str, new_name: &str) -
     }
   }
   meta.modified_at = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
-  write_json(&meta_path, &meta).map_err(|e| e.to_string())?;
+  crate::core::paths::save_asset_metadata(assets_dir, &meta).map_err(|e| e.to_string())?;
   Ok(OriginRename { meta, renames })
 }
 

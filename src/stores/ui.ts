@@ -172,7 +172,8 @@ export const useUiStore = defineStore("ui", {
     // 同一 watch 同步回写 leftMode（2026-10-03 用户定：切标签页 / 分屏激活变化时分段选择器
     // 跟随定位到当前视口所属视图）；持久化三键；启动时中间容器仍由 tabLayout 恢复，
     // 本组只管侧栏模式与切换基点
-    leftMode: "library" as "library" | "workspace" | "ai",
+    // 分段 id 注册表化（7.3 T4，sidebarSpecs.ts）：类型放宽 string，新分段不再改本 store
+    leftMode: "library" as string,
     lastLibView: "quick:all",
     lastWsView: "ws:",
     // ws 树展开态按空间记忆（2026-10-12 用户报「视口记住上次停留文件夹、树展开每次要重新
