@@ -99,7 +99,7 @@ mod tests {
     assert_eq!(store.provider_document_count("a1").unwrap(), 1);
     assert_eq!(store.segment_count("a1").unwrap(), 2);
     let hits = store.search(&model(), 1, &[0.0, 1.0], 10).unwrap();
-    assert_eq!(hits[0].certainty.as_deref(), Some("hypothesis"));
+    assert!(hits.iter().any(|hit| hit.kind == "event" && hit.certainty.as_deref() == Some("hypothesis")));
     assert!(hits.iter().any(|hit| hit.kind == "visual"));
     store.replace_asset_analysis("a1", "video", "fp2", &model(), 1, &[visual]).unwrap();
     assert_eq!(store.provider_document_count("a1").unwrap(), 0);

@@ -11,6 +11,7 @@ pub mod provider_media;
 pub mod provider_schema;
 pub mod provider_store;
 pub mod provider_types;
+mod rank;
 pub mod sampling;
 pub mod search;
 pub mod segment;

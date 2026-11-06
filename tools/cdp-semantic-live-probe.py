@@ -196,10 +196,9 @@ async def search_api(ws, session, query, view_key="quick:all"):
     result = await invoke(ws, session, "semantic_search", {"query": query, "scope": scope(view_key), "limit": 10})
     require(result["hits"], f"语义检索为空：{query}")
     require(result["actualBackend"] == "cpu", f"搜索后端不符：{result}")
-    scores = [hit["best"]["score"] for hit in result["hits"]]
-    require(scores == sorted(scores, reverse=True), f"相关度未降序：{scores}")
     for hit in result["hits"]:
         assert 0 < len(hit["segments"]) <= 8 and hit["matchCount"] > 0
+        require(hit["best"]["segmentId"] == hit["segments"][0]["segmentId"], f"best 未保持融合排序首位：{hit}")
     return result
 
 
@@ -216,6 +215,8 @@ async def panel_id(ws, session):
 async def search_ui(ws, session, query):
     global PANEL_ID
     PANEL_ID = await panel_id(ws, session)
+    await evaluate(ws, session, f"document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('tabs').openView('quick:all', {js_string(PANEL_ID)})")
+    await wait_value(ws, session, f"document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('tabs').viewKeyOf({js_string(PANEL_ID)}) === 'quick:all'", "切到全部视口", 10)
     view_key = await evaluate(ws, session, f"document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('tabs').viewKeyOf({js_string(PANEL_ID)})")
     await wait_value(ws, session, "!!document.querySelector('.fbs-ic.search')", "搜索栏就绪", 10)
     await click(ws, session, ".fbs-ic.search")
@@ -225,7 +226,7 @@ async def search_ui(ws, session, query):
     await send(ws, "Input.dispatchKeyEvent", {"type": "keyDown", "key": "a", "code": "KeyA", "windowsVirtualKeyCode": 65, "modifiers": 2}, session)
     await send(ws, "Input.dispatchKeyEvent", {"type": "keyUp", "key": "a", "code": "KeyA", "windowsVirtualKeyCode": 65, "modifiers": 2}, session)
     await send(ws, "Input.insertText", {"text": query}, session)
-    await wait_value(ws, session, f"document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('search').resultPlacementsFor({js_string(PANEL_ID)}, {js_string(view_key)}).length > 0", "界面语义搜索结果")
+    await wait_value(ws, session, f"document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('search').draftFor({js_string(PANEL_ID)}) === {js_string(query)} && !document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('search').isPending({js_string(PANEL_ID)}) && document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('search').resultPlacementsFor({js_string(PANEL_ID)}, {js_string(view_key)}).length > 0", "界面语义搜索结果")
     expected = [f"{placement['assetId']}|{placement['folderId']}" for hit in (await search_api(ws, session, query, view_key))["hits"] for placement in hit["placements"]]
     ordered = await evaluate(ws, session, f"document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('search').resultPlacementsFor({js_string(PANEL_ID)}, {js_string(view_key)}).map(p => `${{p.assetId}}|${{p.folderId}}`)")
     require(ordered == expected, f"界面结果与相关度顺序不一致：{ordered} != {expected}")
@@ -302,7 +303,7 @@ async def open_preview(ws, session, kind, single_click=False):
     else:
         expected = hit["startFrame"]
         require(expected is not None, f"序列帧命中缺原始帧索引：{hit}")
-        actual = await wait_value(ws, session, f"{preview_value('frame')} === {expected} ? {preview_value('seq')}.frames[{expected}].name : null", f"序列帧定位到 {expected}", 60)
+        actual = await wait_value(ws, session, f"{preview_value('frame')} === {expected} ? {preview_value('seq')}?.frames?.[{expected}]?.name : null", f"序列帧定位到 {expected}", 60)
         require(actual == f"blank-test_{expected + 1}.png", f"序列帧实际文件错位：{actual} != {expected}")
         log(f"[S6] 序列帧定位原始帧 {expected}：{actual}")
     await click(ws, session, ".preview-titlebar .nav-group button")
@@ -378,7 +379,7 @@ async def verify_mcp(ws, session):
     require(initialized["serverInfo"]["name"] == "anikit", f"MCP 握手异常：{initialized}")
     rpc(port, "notifications/initialized", session_id=session_id)
     tools, _ = rpc(port, "tools/list", session_id=session_id)
-    require(len(tools["tools"]) == 32, f"MCP 工具数不符：{len(tools['tools'])}")
+    require(len(tools["tools"]) == 40, f"MCP 工具数不符：{len(tools['tools'])}")
     annotations = {tool["name"]: tool.get("annotations", {}) for tool in tools["tools"]}
     require(annotations["semantic_search"].get("readOnlyHint") is True, "语义检索未标只读")
     require(annotations["start_semantic_analysis"].get("readOnlyHint") is False, "分析任务未标受控写")
@@ -402,7 +403,7 @@ async def verify_mcp(ws, session):
     await invoke(ws, session, "set_mcp_write_enabled", {"enabled": False})
     gated = call_tool(port, "start_semantic_analysis", {"assetIds": [ASSETS["video"]["assetId"]]}, session_id)
     require("MCP 写入未开启" in gated.get("error", ""), f"写入闸未生效：{gated}")
-    log("[S7] MCP 握手、32 工具、语义检索、任务控制、库隔离与写入闸全通过")
+    log("[S7] MCP 握手、40 工具、语义检索、任务控制、库隔离与写入闸全通过")
 
 
 async def main():

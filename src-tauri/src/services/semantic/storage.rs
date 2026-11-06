@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fs, path::{Path, PathBuf}};
+use std::{fs, path::{Path, PathBuf}};
 
 use rusqlite::{params, Connection, OptionalExtension};
 
@@ -263,26 +263,16 @@ impl SemanticStore {
         start_frame: row.get(4)?, end_frame: row.get(5)?, score: 0.0, kind: row.get(6)?, certainty: row.get(9)?, text: row.get(7)?,
       }, bytes)))
     }).map_err(|e| format!("读取语义片段失败：{e}"))?;
-    let mut grouped = std::collections::BTreeMap::new();
+    let mut hits = Vec::new();
     for row in rows {
       let Some((mut hit, bytes)) = row.map_err(|e| e.to_string())? else { continue };
       let vector = decode_vector(&bytes)?;
       if vector.len() == query.len() {
         hit.score = dot(&query, &vector);
-        let segments: &mut Vec<SegmentHit> = grouped.entry(hit.asset_id.clone()).or_default();
-        segments.push(hit);
-        segments.sort_by(|left, right| {
-          right.score.partial_cmp(&left.score).unwrap_or(Ordering::Equal).then(left.segment_id.cmp(&right.segment_id))
-        });
-        segments.truncate(8);
+        hits.push(hit);
       }
     }
-    let mut assets = grouped.into_values().collect::<Vec<Vec<SegmentHit>>>();
-    assets.sort_by(|left, right| {
-      right[0].score.partial_cmp(&left[0].score).unwrap_or(Ordering::Equal).then(left[0].asset_id.cmp(&right[0].asset_id))
-    });
-    assets.truncate(limit);
-    Ok(assets.into_iter().flatten().collect())
+    Ok(super::rank::rank_segments(hits, limit))
   }
 
   pub fn asset_segments(&self, asset_id: &str) -> Result<Vec<SegmentHit>, String> {
@@ -410,6 +400,23 @@ mod tests {
 
     let over_one_chunk = (0..500).map(|index| format!("missing-{index}")).chain(["a2".to_string()]).collect();
     assert!(store.has_ready_segments_for_assets(&model(2).id, &model(2).revision, 1, &over_one_chunk).unwrap());
+  }
+
+  #[test]
+  fn mixed_channels_use_rank_fusion_instead_of_raw_cross_channel_scores() {
+    let (_dir, mut store) = store();
+    store.replace_asset_analysis("visual-target", "video", "fp1", &model(2), 1, &[segment(0, vec![0.9, 0.19_f32.sqrt()])]).unwrap();
+    store.replace_asset_analysis("text-target", "video", "fp2", &model(2), 1, &[segment(0, vec![0.0, 1.0])]).unwrap();
+    store.conn.execute(
+      "INSERT INTO semantic_segments(asset_id, start_ms, end_ms, start_frame, end_frame, kind, text, vector, dimension)
+       VALUES('text-target', 0, 1000, 0, 1, 'event', '文字高匹配', ?1, 2)",
+      [encode_vector(&[1.0, 0.0])],
+    ).unwrap();
+    let hits = store.search(&model(2), 1, &[1.0, 0.0], 10).unwrap();
+    assert_eq!(hits[0].asset_id, "visual-target");
+    assert_eq!(hits[0].kind, "visual");
+    assert!((hits[0].score - 0.9).abs() < 0.00001);
+    assert!(hits.iter().any(|hit| hit.asset_id == "text-target" && hit.kind == "event" && hit.score == 1.0));
   }
 
   #[test]

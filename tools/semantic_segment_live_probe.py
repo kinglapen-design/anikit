@@ -105,6 +105,7 @@ async def verify_segments(probe, ws, session):
     known = {item["assetId"] for item in before}
     await probe.evaluate(ws, session, f"window.__segmentKnown = new Set({json.dumps(list(known))}); true")
     selector = f"[data-key=\"{source['assetId']}|{source['folderId']}\"]"
+    await probe.wait_value(ws, session, f"!!document.querySelector({probe.js_string(selector)})", "片段源卡等待语义刷新", 30)
     await right_click(probe, ws, session, selector)
     await hover_text(probe, ws, session, "AI 工具集")
     await probe.wait_value(ws, session, "[...document.querySelectorAll('button')].some(item => item.textContent.trim() === '创建虚拟片段（当前命中）')", "AI 子菜单展开", 3)
@@ -133,7 +134,7 @@ async def verify_segments(probe, ws, session):
     _, session_id = probe.rpc(port, "initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "segment-live-probe", "version": "1.0"}})
     probe.rpc(port, "notifications/initialized", session_id=session_id)
     tools, _ = probe.rpc(port, "tools/list", session_id=session_id)
-    probe.require(len(tools["tools"]) == 32, f"片段接入后 MCP 工具数不符：{len(tools['tools'])}")
+    probe.require(len(tools["tools"]) == 40, f"片段接入后 MCP 工具数不符：{len(tools['tools'])}")
     for kind in ("anim", "sequence"):
         hit = probe.HITS[kind]["best"]
         virtual = probe.call_tool(port, "create_semantic_segment", {"assetId": hit["assetId"], "segmentId": hit["segmentId"]}, session_id)
@@ -150,4 +151,4 @@ async def verify_segments(probe, ws, session):
     probe.require(Path(origin).is_file() and Path(origin).read_bytes()[:6] in (b"GIF87a", b"GIF89a"), f"物理动图不可独立播放：{origin}")
     await open_created(probe, ws, session, placement, "physical-anim", hit)
     await probe.invoke(ws, session, "set_mcp_write_enabled", {"enabled": False})
-    probe.log("[S9] 虚拟视频 / 动图 / 序列帧范围播放、物理动图独立播放与 MCP 32 工具全通过")
+    probe.log("[S9] 虚拟视频 / 动图 / 序列帧范围播放、物理动图独立播放与 MCP 40 工具全通过")

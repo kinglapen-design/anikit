@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
@@ -58,22 +58,54 @@ pub fn semantic_search<R: tauri::Runtime>(app: &AppHandle<R>, query: &str, scope
   } else {
     store.search_scoped(&manifest.revision, super::media::ANALYSIS_VERSION, &query_embedding.embedding, &candidate_ids, limit)?
   };
-  let mut grouped = BTreeMap::new();
-  for hit in hits {
-    let Some(placements) = placement_map.get(&hit.asset_id) else { continue };
-    let entry = grouped.entry(hit.asset_id.clone()).or_insert_with(|| SemanticAssetHit {
-      placements: placements.clone(), best: hit.clone(), segments: Vec::new(), match_count: 0,
-    });
-    if hit.score > entry.best.score {
-      entry.best = hit.clone();
-    }
-    entry.segments.push(hit);
-  }
-  let mut hits = grouped.into_values().collect::<Vec<_>>();
+  let mut hits = group_hits(hits, &placement_map);
   for hit in &mut hits {
     hit.match_count = store.segment_count_for_model(&hit.best.asset_id, &manifest.revision, super::media::ANALYSIS_VERSION)?;
-    hit.segments.sort_by(|left, right| right.score.partial_cmp(&left.score).unwrap_or(std::cmp::Ordering::Equal));
   }
-  hits.sort_by(|left, right| right.best.score.partial_cmp(&left.best.score).unwrap_or(std::cmp::Ordering::Equal).then(left.best.asset_id.cmp(&right.best.asset_id)));
   Ok(SemanticSearchHits { hits, actual_backend: query_embedding.actual_backend, model_revision: manifest.revision.revision })
+}
+
+fn group_hits(hits: Vec<SegmentHit>, placement_map: &HashMap<String, Vec<SearchHitKey>>) -> Vec<SemanticAssetHit> {
+  let mut grouped: Vec<SemanticAssetHit> = Vec::new();
+  let mut indices: HashMap<String, usize> = HashMap::new();
+  for hit in hits {
+    let Some(placements) = placement_map.get(&hit.asset_id) else { continue };
+    if let Some(index) = indices.get(&hit.asset_id).copied() {
+      grouped[index].segments.push(hit);
+      continue;
+    }
+    indices.insert(hit.asset_id.clone(), grouped.len());
+    grouped.push(SemanticAssetHit {
+      placements: placements.clone(), best: hit.clone(), segments: vec![hit], match_count: 0,
+    });
+  }
+  grouped
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn hit(asset_id: &str, segment_id: i64, kind: &str, score: f32) -> SegmentHit {
+    SegmentHit {
+      segment_id, asset_id: asset_id.into(), start_ms: 0, end_ms: 1000,
+      start_frame: None, end_frame: None, score, kind: kind.into(), certainty: None, text: String::new(),
+    }
+  }
+
+  #[test]
+  fn grouping_preserves_fused_asset_best_and_segment_order() {
+    let placements = HashMap::from([
+      ("a1".to_string(), vec![SearchHitKey { asset_id: "a1".into(), folder_id: "f1".into() }]),
+      ("a2".to_string(), vec![SearchHitKey { asset_id: "a2".into(), folder_id: "f2".into() }]),
+    ]);
+    let grouped = group_hits(vec![
+      hit("a1", 1, "visual", 0.2),
+      hit("a1", 2, "event", 0.9),
+      hit("a2", 3, "visual", 0.8),
+    ], &placements);
+    assert_eq!(grouped.iter().map(|hit| hit.best.asset_id.as_str()).collect::<Vec<_>>(), ["a1", "a2"]);
+    assert_eq!(grouped[0].best.segment_id, 1);
+    assert_eq!(grouped[0].segments.iter().map(|hit| hit.segment_id).collect::<Vec<_>>(), [1, 2]);
+  }
 }
