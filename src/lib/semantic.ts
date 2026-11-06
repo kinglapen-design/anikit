@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { SearchFilters } from "../stores/search";
+import type { PlacementView } from "../stores/content";
+import { isSequence, isVideoExt } from "./formatBadge";
 
 export type SemanticMode = "auto" | "keyword" | "semantic";
 
@@ -42,6 +44,10 @@ export interface SemanticSearchHits {
   hits: SemanticAssetHit[];
   actualBackend: string;
   modelRevision: string;
+}
+
+export function hasSemanticTimeline(asset: Pick<PlacementView, "ext" | "animated" | "frameCount">): boolean {
+  return isVideoExt(asset.ext) || !!asset.animated || isSequence(asset);
 }
 
 /** 定位段选择：segments 已由后端按分通道融合相关度排序，跳过覆盖全片、无定位价值的
@@ -100,7 +106,7 @@ export interface AnalysisTask {
   errors: { assetId: string; error: string }[];
 }
 
-/** 单资产分析状态（详情面板「语义分析」行）：analyzable = 可否参与分析（视频/动图/序列帧）；
+/** 单资产分析状态（详情面板「语义分析」行）：analyzable = 可否参与基础分析（视频/动图/序列帧/常见静态图）；
  * segmentCount = 当前模型版本有效分段数；detailedCount = 详细分析文档数（description/event） */
 export interface SemanticAssetStatus {
   analyzable: boolean;

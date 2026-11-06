@@ -26,6 +26,7 @@ pub fn export(source: &AssetMeta, assets_dir: &Path, range: &SegmentRange, work_
       ffmpeg::clip_video(&playback.origin, &output, range.start_ms as f64 / 1000.0, duration, cancel)?;
       Ok(ExportedClip { path: output, extension: "mp4" })
     }
+    MediaKind::Image => Err("静态图片不支持创建语义片段".into()),
     MediaKind::Anim | MediaKind::Sequence => {
       let frames = selected_frames(source, assets_dir, &playback.origin, range, work_dir, kind)?;
       let format = if kind == MediaKind::Sequence {
@@ -67,6 +68,7 @@ pub fn write_evidence_frame(source: &AssetMeta, assets_dir: &Path, range: &Segme
       let (image, _) = anim::decode_frame(&playback.origin, index).ok_or_else(|| "无法读取片段起点的动图原始帧".to_string())?;
       image.save(&path).map_err(|e| format!("写入片段封面失败：{e}"))?;
     }
+    MediaKind::Image => return Err("静态图片不支持创建语义片段".into()),
     MediaKind::Sequence => {
       let index = range.frame_bounds()?.0 as usize;
       let frames_dir = sequence::frames_dir_if_sequence(assets_dir, &source.id, source).ok_or_else(|| "序列帧目录不存在".to_string())?;

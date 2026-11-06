@@ -4,6 +4,11 @@ use crate::services::{anim, sequence};
 
 use super::{control::AnalysisControl, sampling::{embed_window, FrameSample, FrameWindow, WindowSampler}, types::SegmentInput};
 
+pub fn analyze_image(origin: &Path, work_dir: &Path, control: &AnalysisControl) -> Result<(Vec<SegmentInput>, String), String> {
+  let sample = FrameSample::path(None, origin.to_path_buf(), 0, 0);
+  embed_window(FrameWindow { samples: vec![sample] }, work_dir, control)
+}
+
 pub fn analyze_anim(origin: &Path, work_dir: &Path, control: &AnalysisControl) -> Result<(Vec<SegmentInput>, String), String> {
   let duration_ms = anim::probe(origin).map(|info| (info.duration_secs * 1000.0).round() as i64).filter(|duration| *duration > 0);
   let mut sampler = WindowSampler::new(duration_ms);

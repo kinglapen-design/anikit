@@ -52,7 +52,7 @@ import {
 import { formatDuration } from "../lib/formatDuration";
 import { formatSize } from "../lib/formatSize";
 import { formatDetailDate } from "../lib/detailSections";
-import { getSemanticHitThumb, pickLocateSegment } from "../lib/semantic";
+import { getSemanticHitThumb, hasSemanticTimeline, pickLocateSegment } from "../lib/semantic";
 import { listSequenceFrames } from "../lib/mediaOps";
 import { renamePlacement } from "../lib/placementOps";
 import { acquireAutoplay, releaseAutoplay, type AutoplayPool } from "../lib/autoplayGate";
@@ -342,6 +342,7 @@ const semanticHit = computed(() => (props.panelId ? search.semanticHitFor(props.
 // description（起点恒 0），徽标 00:00 / 起播点失效；徽标、命中帧图、悬停起播点统一取本段）
 const locateSegment = computed(() => (semanticHit.value ? pickLocateSegment(semanticHit.value) : null));
 const semanticBadge = computed(() => {
+  if (!hasSemanticTimeline(props.asset)) return "";
   const hit = semanticHit.value;
   const seg = locateSegment.value;
   if (!hit || !seg) return "";

@@ -23,6 +23,7 @@ import { useSelectionStore } from "../../stores/selection";
 import { useTabsStore } from "../../stores/tabs";
 import { previewSession } from "../../stores/preview";
 import { useSemanticTaskStore } from "../../stores/semantic";
+import { hasSemanticTimeline } from "../semantic";
 import type { CtxEntry } from "../contextMenus";
 import { isSequence as isSequenceAsset, isThumbCapableExt } from "../formatBadge";
 import { openPreviewWindow } from "../previewOps";
@@ -284,10 +285,10 @@ export function assetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
         { label: "裁剪", disabled: true },
         "divider",
         { label: "分析文件向量", action: () => void semanticTasks.start(selectedAssetIds()) },
-        { label: "详细语义分析（外部服务）", action: () => void semanticTasks.startDetailed(selectedAssetIds()) },
+        { label: "详细语义分析（外部服务）", disabled: !hasSemanticTimeline(p), action: () => void semanticTasks.startDetailed(selectedAssetIds()) },
         "divider",
-        { label: "创建虚拟片段（当前命中）", disabled: !!p.segment, action: () => void semanticTasks.create(assetId, false, panelId) },
-        { label: "物理截取当前命中", disabled: !!p.segment, action: () => void semanticTasks.create(assetId, true, panelId) },
+        { label: "创建虚拟片段（当前命中）", disabled: !!p.segment || !hasSemanticTimeline(p), action: () => void semanticTasks.create(assetId, false, panelId) },
+        { label: "物理截取当前命中", disabled: !!p.segment || !hasSemanticTimeline(p), action: () => void semanticTasks.create(assetId, true, panelId) },
         "divider",
         { label: "引用至 AI 对话框", disabled: true },
       ],
@@ -475,10 +476,10 @@ function virtualAssetCardSpec(p: PlacementView, panelId: string): CtxEntry[] {
       label: "AI 工具集",
       submenu: [
         { label: "分析文件向量", action: () => void semanticTasks.start(selectedAssetIds()) },
-        { label: "详细语义分析（外部服务）", action: () => void semanticTasks.startDetailed(selectedAssetIds()) },
+        { label: "详细语义分析（外部服务）", disabled: !hasSemanticTimeline(p), action: () => void semanticTasks.startDetailed(selectedAssetIds()) },
         "divider",
-        { label: "创建虚拟片段（当前命中）", disabled: !!p.segment, action: () => void semanticTasks.create(assetId, false, panelId) },
-        { label: "物理截取当前命中", disabled: !!p.segment, action: () => void semanticTasks.create(assetId, true, panelId) },
+        { label: "创建虚拟片段（当前命中）", disabled: !!p.segment || !hasSemanticTimeline(p), action: () => void semanticTasks.create(assetId, false, panelId) },
+        { label: "物理截取当前命中", disabled: !!p.segment || !hasSemanticTimeline(p), action: () => void semanticTasks.create(assetId, true, panelId) },
       ],
     },
     "divider",

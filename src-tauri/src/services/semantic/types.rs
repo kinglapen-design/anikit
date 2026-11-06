@@ -99,7 +99,7 @@ pub struct TaskSnapshot {
   pub errors: Vec<TaskError>,
 }
 
-/// 单资产分析状态（详情面板「语义分析」行）：analyzable = 可否参与分析（视频/动图/序列帧/png 动图同
+/// 单资产分析状态（详情面板「语义分析」行）：analyzable = 可否参与基础分析（视频/动图/序列帧/常见静态图；png 动图同
 /// analysis::supported 口径）；segment_count = 当前模型版本有效分段数；detailed_count = 详细分析文档数
 ///（description/event）。两者全容错——模型未配置或索引不可读按 0 返回
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

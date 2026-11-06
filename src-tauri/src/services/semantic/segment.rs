@@ -90,10 +90,14 @@ fn build(root: PathBuf, assets_dir: PathBuf, source: AssetMeta, folder: String, 
       meta.size = 0;
       meta.hash = format!("sha256:{:x}", Sha256::digest(format!("{}:{}:{}:{:?}:{:?}", source.hash, range.start_ms, range.end_ms, range.start_frame, range.end_frame)));
       meta.duration = Some(range.duration_secs());
-      meta.frame_count = if kind == media::MediaKind::Video { None } else { Some(range.frame_count()) };
+      meta.frame_count = match kind {
+        media::MediaKind::Video | media::MediaKind::Image => None,
+        media::MediaKind::Anim | media::MediaKind::Sequence => Some(range.frame_count()),
+      };
       meta.thumb_frame = match kind {
         media::MediaKind::Video => Some(format!("t:{:.3}", range.start_ms as f64 / 1000.0)),
         media::MediaKind::Anim => Some(format!("f:{}", range.frame_bounds()?.0)),
+        media::MediaKind::Image => None,
         media::MediaKind::Sequence => {
           let dir = sequence::frames_dir_if_sequence(&assets_dir, &source.id, &source).ok_or_else(|| "序列帧目录不存在".to_string())?;
           let frames = sequence::ordered_frame_paths(&dir)?;

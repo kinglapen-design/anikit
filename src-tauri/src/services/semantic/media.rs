@@ -13,6 +13,7 @@ pub enum MediaKind {
   Video,
   Anim,
   Sequence,
+  Image,
 }
 
 impl MediaKind {
@@ -21,8 +22,13 @@ impl MediaKind {
       Self::Video => "video",
       Self::Anim => "anim",
       Self::Sequence => "sequence",
+      Self::Image => "image",
     }
   }
+}
+
+pub fn is_static_image_ext(ext: &str) -> bool {
+  matches!(ext.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "webp" | "bmp")
 }
 
 pub struct MediaAnalysis {
@@ -43,16 +49,19 @@ pub fn analyze_asset(meta: &AssetMeta, assets_dir: &Path, asset_id: &str, work_d
     MediaKind::Anim
   } else if media::is_video(&origin) {
     MediaKind::Video
+  } else if is_static_image_ext(&meta.ext) {
+    MediaKind::Image
   } else {
-    return Err(format!("「{}」不是可分析的视频、动图或序列帧", meta.name));
+    return Err(format!("「{}」不是可分析的视频、动图、序列帧或静态图片", meta.name));
   };
   let (segments, actual_backend) = match kind {
     MediaKind::Sequence => frames::analyze_sequence(&info_dir.join("frames"), meta.fps.unwrap_or(sequence::DEFAULT_FPS), work_dir, control)?,
     MediaKind::Anim => frames::analyze_anim(&origin, work_dir, control)?,
     MediaKind::Video => video::analyze(&origin, meta, work_dir, control)?,
+    MediaKind::Image => frames::analyze_image(&origin, work_dir, control)?,
   };
   if segments.is_empty() {
-    return Err(format!("「{}」没有可分析的帧", meta.name));
+    return Err(format!("「{}」没有可分析的画面", meta.name));
   }
   Ok(MediaAnalysis { kind, fingerprint, segments, actual_backend })
 }
@@ -86,10 +95,6 @@ fn hash_stat(hasher: &mut Sha256, stat: &fs::Metadata) {
     hasher.update(duration.as_secs().to_le_bytes());
     hasher.update(duration.subsec_nanos().to_le_bytes());
   }
-}
-
-pub fn is_apng(path: &Path) -> bool {
-  path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("png")) && anim::probe(path).is_some()
 }
 
 struct TempGuard {
