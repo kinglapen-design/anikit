@@ -1,4 +1,6 @@
-//! 会话级撤销 / 重做双栈（6.0 地基；上限 50 步，库切换清空，不持久化——与 Eagle 一致）。
+//! 会话级撤销 / 重做双栈（6.0 地基；**上限 50 步 + 快照总字节预算 64 MiB 双限**（2026-11-06
+//! 长期运行内存治理，待办 11-04：50 步 × 整份 folders.json 快照无字节上限 = 主进程随操作
+//! 线性增长），超出淘汰最旧；库切换清空，不持久化——与 Eagle 一致）。
 //!
 //! UndoEntry = 操作标签 + 受影响数据文件操作前 / 后快照 + 磁盘逆操作清单（成对）。
 //! 快照注入点 = 各数据文件单一写点：写操作命令按 `begin(标签)` → 写点前 `record_file(路径)`
@@ -16,6 +18,20 @@ use crate::core::json_io::{write_text_atomic, DataError};
 
 /// 双栈上限（步），超出丢最旧
 pub const MAX_STEPS: usize = 50;
+
+/// 快照总字节预算（2026-11-06 内存治理）：undo + redo 两栈 before/after 快照合计上限，
+/// 超出淘汰 undo 栈最旧（redo 是最近撤销的工作，保）；undo 空了仍超才淘汰 redo 最旧
+pub const MAX_SNAPSHOT_BYTES: usize = 64 * 1024 * 1024;
+
+/// 单步快照字节 = before + after 各文件内容长度合计（None = 文件不存在 = 0）
+fn snapshot_bytes(entry: &UndoEntry) -> usize {
+  entry
+    .before
+    .iter()
+    .chain(entry.after.iter())
+    .map(|s| s.content.as_ref().map_or(0, |c| c.len()))
+    .sum()
+}
 
 /// 数据文件快照：content = None 表示快照时文件不存在（undo = 删除该文件，redo = 按 after 重建）
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,7 +150,19 @@ impl UndoManager {
       self.undo.remove(0);
     }
     self.redo.clear();
+    self.enforce_snapshot_budget();
     Ok(())
+  }
+
+  /// 快照字节预算执行（commit / undo / redo 后调用）：两栈合计超预算即淘汰最旧
+  fn enforce_snapshot_budget(&mut self) {
+    let mut total: usize = self.undo.iter().chain(self.redo.iter()).map(snapshot_bytes).sum();
+    while total > MAX_SNAPSHOT_BYTES && !self.undo.is_empty() {
+      total -= snapshot_bytes(&self.undo.remove(0));
+    }
+    while total > MAX_SNAPSHOT_BYTES && !self.redo.is_empty() {
+      total -= snapshot_bytes(&self.redo.remove(0));
+    }
   }
 
   /// 丢弃进行中的事务（操作中途失败回滚业务后调用）
@@ -150,6 +178,7 @@ impl UndoManager {
     let entry = self.undo.pop().expect("已确认非空");
     let label = entry.label.clone();
     self.redo.push(entry);
+    self.enforce_snapshot_budget();
     Ok(Some(label))
   }
 
@@ -161,6 +190,7 @@ impl UndoManager {
     let entry = self.redo.pop().expect("已确认非空");
     let label = entry.label.clone();
     self.undo.push(entry);
+    self.enforce_snapshot_budget();
     Ok(Some(label))
   }
 
@@ -406,6 +436,27 @@ mod tests {
     m.redo().unwrap();
     assert_eq!(fs::read_to_string(copy.join("metadata.json")).unwrap(), "{}");
     assert_eq!(fs::read_to_string(copy.join("frames/f1.png")).unwrap(), "x", "redo 应递归复制还原");
+  }
+
+  /// 快照总字节预算（2026-11-06 内存治理）：超限淘汰最旧，撤销仍可用
+  #[test]
+  fn snapshot_byte_budget_evicts_oldest() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("big.json");
+    let big = "x".repeat(1024 * 1024); // 每步 before+after 各 1 MiB = 2 MiB/步
+    fs::write(&path, &big).unwrap();
+
+    let mut m = manager();
+    for i in 0..40 {
+      m.begin(format!("第{i}步"));
+      m.record_file(&path).unwrap();
+      m.commit().unwrap();
+    }
+    // 40 步 × 2 MiB = 80 MiB > 64 MiB 预算 → 淘汰至预算内
+    let total: usize = m.undo.iter().chain(m.redo.iter()).map(snapshot_bytes).sum();
+    assert!(total <= MAX_SNAPSHOT_BYTES, "总快照字节 {total} 应 ≤ 预算 {MAX_SNAPSHOT_BYTES}");
+    assert!(m.state().can_undo, "预算淘汰后撤销仍可用");
+    assert_ne!(m.undo.first().map(|e| e.label.clone()).as_deref(), Some("第0步"), "最旧步已淘汰");
   }
 
   /// 无事务时 record 静默；begin 覆盖未提交事务；clear 清空全部

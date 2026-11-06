@@ -309,7 +309,7 @@ pub(crate) fn open_child_window(
       // CoreWebView2Environment 冲突；透明与否无关，build(false) 同样失败）——
       // 每 label 独立 UDF（主窗口与彼此全隔离），wry 报 ERROR 后 build 仍 Ok 的
       // 隐形失败由下方 3s 超时 show 兜底暴露
-      .data_directory(child_data_dir(app, label))
+      .data_directory(child_data_dir(app))
       // 先隐后显防白闪（2026-10-02 用户实机报「先加载边框和投影再出内容」）：弃云母后
       // WebView2 初始化期默认白底暴露（云母时代 set_effects(Mica) 顺带把默认背景变深色
       // 材料遮住）——visible(false) + 页面加载完成再 show/set_focus，初始化期不可见；
@@ -347,10 +347,12 @@ pub(crate) fn open_child_window(
   Ok(win)
 }
 
-/// 子窗口独立 user-data-dir（Runtime 156 UDF 冲突规避）：app_local_data_dir/EBWebView-children/{label}
-fn child_data_dir(app: &AppHandle, label: &str) -> PathBuf {
+/// 子窗口族共享 user-data-dir（2026-11-06 进程膨胀治理，踩坑 121 后续）：每 label 独立 UDF =
+/// 每子窗口一份完整 browser process（资源膨胀）——改子窗口族共享一份（与主窗口隔离）。
+/// Runtime 156 对族内多 environment 是否接受以实窗验证为准；若仍 0x8007139F 回退每 label
+fn child_data_dir(app: &AppHandle) -> PathBuf {
   let base = app.path().app_local_data_dir().unwrap_or_else(|_| std::env::temp_dir());
-  let dir = base.join("EBWebView-children").join(label);
+  let dir = base.join("EBWebView-children");
   let _ = fs::create_dir_all(&dir);
   dir
 }

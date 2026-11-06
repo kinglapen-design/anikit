@@ -40,3 +40,5 @@
 - **WebView2 Runtime 自动更新是不可控外部变量**：版本目录安装时间（`C:\Program Files (x86)\Microsoft\EdgeWebView\Application\`）是首选对照证据；先区分「代码回归」与「Runtime 更新」再决定改不改代码。
 - **UDF 隔离的副作用要知道**：子窗口变独立 browser process——主窗口 CDP `/json` 看不到子窗口 target（探针断言不能查 target，要查 Windows 窗口标题 / 截屏）；`document.title` 不改变原生窗口标题（builder 定），探针状态要写 DOM 截屏读；`open_preview_window` 的 assetKey = **`${assetId}|${folderId}`**（placementKey，非纯 assetId——传纯 id 会 current null 黑屏，属于探针参数错不是产品 bug）。
 - Runtime 修复共享 UDF 创建后，可考虑回滚为共享 UDF（隔离目录 `EBWebView-children/{label}` 会逐窗累积，若长期保留需评估清理策略——本轮先记待办）。
+
+**后续（2026-11-06 进程膨胀治理）**：每 label 独立 UDF = 每子窗口一份完整 browser process，多开即资源膨胀。改**子窗口族共享一份**（`EBWebView-children`，与主窗口隔离）——dev 实窗验证 Runtime 156 接受「主窗口 + 子窗口族」两 UDF 且族内多 environment 正常（插件窗 + 预览窗同开无 wry ERROR）。子窗口族共享是长期形态；旧逐 label 目录残留可手动清理（不影响新运行）。
