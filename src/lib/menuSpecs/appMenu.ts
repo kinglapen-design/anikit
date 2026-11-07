@@ -22,6 +22,7 @@ import { useToastStore } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import type { CtxEntry, CtxItem } from "../contextMenus";
 import { currentSpace } from "../libraryOps";
+import { FEEDBACK_URL, openExternalUrl } from "../aboutData";
 import { libraryMenuEntries } from "./libraryMenu";
 import { newDocGroupEntries, scanEntries } from "./addMenu";
 import { openPollutionScan } from "../pollutionScanOps";
@@ -404,9 +405,14 @@ export function appMenuSpec(libraryNames: string[]): CtxEntry[] {
     {
       label: "帮助",
       submenu: [
-        { label: "使用教程", disabled: true },
-        { label: "意见反馈", disabled: true },
-        // 查看软件日志（2026-10-13 点亮）：与设置面板「关于」区块同一动作（show_logs_in_explorer）
+        { label: "使用教程", action: () => void (useUiStore().helpOpen = true) },
+        {
+          label: "意见反馈",
+          action: () =>
+            void openExternalUrl(FEEDBACK_URL).catch((e) =>
+              useToastStore().notify({ message: String(e), icon: "fail" }),
+            ),
+        },
         {
           label: "查看软件日志",
           action: () =>
@@ -417,7 +423,7 @@ export function appMenuSpec(libraryNames: string[]): CtxEntry[] {
       ],
     },
     "divider",
-    { label: "关于 AniKit", disabled: true },
+    { label: "关于 AniKit", action: () => void (useUiStore().aboutOpen = true) },
     "divider",
     { label: "退出", shortcut: "Alt+F4", action: () => void invoke("exit_app") },
   ];

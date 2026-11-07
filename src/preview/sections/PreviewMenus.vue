@@ -33,11 +33,11 @@ import { FOLDER_SWATCHES } from "../../lib/customColors";
               <MenuItem label="整理" arrow />
             </div>
             <div class="pv-menu-group">
-              <MenuItem label="偏好设置" disabled />
+              <MenuItem label="偏好设置" />
               <MenuItem label="帮助" arrow />
             </div>
             <div class="pv-menu-group">
-              <MenuItem label="关于 AniKit" disabled />
+              <MenuItem label="关于 AniKit" />
             </div>
             <div class="pv-menu-group">
               <MenuItem label="退出" shortcut="Alt+F4" />

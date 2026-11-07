@@ -12,6 +12,8 @@ import ConfirmModal from "../../components/modals/ConfirmModal.vue";
 import WsManageDialog from "../../components/WsManageDialog.vue";
 import type { WsLinkOverview } from "../../lib/wsOps";
 import SettingsDialog from "../../components/SettingsDialog.vue";
+import HelpDialog from "../../components/HelpDialog.vue";
+import AboutDialog from "../../components/AboutDialog.vue";
 import type { SettingsMockData } from "../../lib/settingsData";
 import CreateLibraryModal from "../../components/CreateLibraryModal.vue";
 import MergeLibraryModal from "../../components/MergeLibraryModal.vue";
@@ -48,9 +50,10 @@ const mockLibItems = [
   { name: "学习参考", sizeBytes: 12.6 * 1024 ** 3 },
   { name: "项目素材备份", sizeBytes: 860 * 1024 ** 2 },
 ];
-// 设置面板真实弹出（1.0 收尾第 1 项，preview 先行——纯展示组件，不接 store / 后端）：
-// mock 缓存各项给代表字节数（GB/MB/KB/B 全覆盖 formatSize 各档）、盘符「已挂载 Z:」、版本 0.1.0
+// 设置 / 帮助 / 关于真实弹出：mock 与 demo 模式不发命令
 const settingsOpen = ref(false);
+const helpOpen = ref(false);
+const aboutOpen = ref(false);
 const settingsMock: SettingsMockData = {
   spaceZoom: "hover",
   doubleClick: "preview",
@@ -69,7 +72,6 @@ const settingsMock: SettingsMockData = {
     { id: "ws-probe", label: "探测缓存", bytes: 512 },
   ],
   cep: { maxSecs: 10, maxMB: 2, fps: 0 },
-  version: "0.1.0",
   semantic: {
     device: "gpu",
     modelDir: "D:\\AniKit模型\\clip-vit-b32-multilingual",
@@ -362,31 +364,22 @@ function openDestTree(): void {
     </div>
 
     <div class="pv-group">
-      <h3 class="pv-group-title">设置面板（2026-10-13 已接生产 = components/SettingsDialog + lib/settingsData——主菜单「偏好设置」/ Ctrl+, 入口；mock 陈列保留作常态陈列）</h3>
+      <h3 class="pv-group-title">设置、使用教程与关于（2026-11-08 发布入口轮）</h3>
       <div class="pv-demo-row">
         <div class="pv-demo-cell" style="width: 240px">
-          <ActionButton label="打开交互演示" variant="solid" size="md" @click="settingsOpen = true" />
+          <ActionButton label="偏好设置" variant="solid" size="md" @click="settingsOpen = true" />
+          <ActionButton label="使用教程" variant="solid" size="md" @click="helpOpen = true" />
+          <ActionButton label="关于 AniKit" variant="solid" size="md" @click="aboutOpen = true" />
           <span class="pv-cap">
-            真实弹出（mock 全量：缓存 B/KB/MB/GB 各档代表值、盘符「已挂载 Z:」、版本 0.1.0）。
-            2026-10-13 四轮定稿（截图箭头）= Eagle 式左右布局·左浅右深**全出血**：壳 BaseModal framed 720×480 定高；
-            左导航列 168 壳色 g3（树行口径 32 高 / hover a3 / 选中 a2 + l1；行首 18px 图标占位空盒后补）；
-            列右缘 1px g5 竖线顶贴标题线到底缘通高；右内容区 = g1 深色填满（撤三轮内嵌卡片——
-            标题横线 / 竖线 / 两块底色相连无断缝；framed 列 gap 归 0 + 内容段 padding 四边归零——
-            注意 fallthrough class 落在 BaseModal 根 = 遮罩上，压壳样式须 :deep 进 .bm-modal.framed（五轮修横带的教训））；切分类 = 详情面板 tab 切换同款（150 缓出 + 250 缓入 delay 100 位移 48px）。
-            无按钮行（即时生效，§61/§66）；Esc/X 关闭，遮罩点击不关闭。
-            <b>已接生产（2026-10-13）</b>：业务收口 lib/settingsData.ts（UI 无业务）——通用 = ui 持久化键
-            （spaceZoomMode / doubleClickOpen / mdBundleExportDir；MD 默认目录可选 / 恢复文档旁，mock 两态本地演示）；
-            自动导入 = 空间级 set_auto_import + 盘符 get_inbox_drive_letter；
-            缓存 = get_cache_overview / clear_cache（全部清理走 confirmPrompt warning）+ library-thumbs-rebuilt 事件；
-            插件 = cep_export_settings 读写（MB↔字节换算，护栏同后端 validate）；关于 = getVersion +
-            show_logs_in_explorer。通用页另含语义分析设置（components/settings/SemanticSettings + lib/semanticSettings：
-            CPU / DirectML、模型目录、实际后端回退说明、外部 provider 与 Windows 钥匙串；sd 行样式共享 styles/settings.css）。
-            mock 弹出 = 陈列态（含 DirectML 回退 CPU、Ollama 配置与连接成功样例，命令一律不发）；
-            快捷键 = 组件内静态数组（bound 标志），未接入行 = 键位降四级 +「未接入」警告橙尾标（颜色即状态区分）
+            设置壳 880×640 并随视口收缩；语义分析独立分类，分组、长路径与按钮换行均可验收。
+            教程直接渲染 docs/使用教程.md；关于显示 0.1.0 早期版本、仓库、反馈和日志入口。
+            全部为真实组件，mock / demo 模式不发后端命令。
           </span>
         </div>
       </div>
       <SettingsDialog v-if="settingsOpen" :mock="settingsMock" @close="settingsOpen = false" />
+      <AboutDialog v-if="aboutOpen" demo demo-version="0.1.0" @close="aboutOpen = false" @open-help="helpOpen = true" />
+      <HelpDialog v-if="helpOpen" @close="helpOpen = false" />
     </div>
 
     <div class="pv-group">

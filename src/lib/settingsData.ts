@@ -1,17 +1,7 @@
-// 偏好设置面板数据层（2026-10-13 接生产；preview 六轮定稿后由纯展示件接线，规范第 1 条 UI 无业务——
-// 命令调用 / 状态订阅全部收口本 composable，SettingsDialog.vue 只剩模板与样式）：
-// 通用 = ui store 持久化键（spaceZoomMode / doubleClickOpen / mdBundleExportDir）；
-// 自动导入 = 空间级 currentSpace + setAutoImport（space.json 单写点，libraryOps）+ 盘符薄查询
-// get_inbox_drive_letter；缓存 = get_cache_overview / clear_cache（接口 22；全部清理走
-// confirmPrompt warning——不可逆口径：自定义缩略图重建后回退派生图不可复原）+ library-thumbs-rebuilt
-// 事件 toast + 就地重拉；插件 = get/save_cep_export_settings（后端存字节，前端 MB 显示换算，
-// 护栏钳制与后端 validate 同区间）；关于 = getVersion + show_logs_in_explorer。
-// 语义分析独立走 lib/semanticSettings，避免本设置数据层越过 500 行；mock 数据仅作类型关联。
-// mock = preview 陈列态：全部控件本地陈列、命令一律不发（WsManageDialog isMock 先例）。
+// 偏好设置命令与状态订阅；UI 只保留模板与样式。mock 模式只操作本地陈列态，不发命令。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getVersion } from "@tauri-apps/api/app";
 import { open } from "@tauri-apps/plugin-dialog";
 import { currentSpace, setAutoImport } from "./libraryOps";
 import { formatSize } from "./formatSize";
@@ -35,7 +25,6 @@ export interface SettingsMockData {
   cacheLib: SettingsCacheItem[];
   cacheWs: SettingsCacheItem[];
   cep: { maxSecs: number; maxMB: number; fps: number };
-  version: string;
   semantic?: SemanticSettingsMock;
 }
 
@@ -252,13 +241,6 @@ export function useSettingsData(mock: SettingsMockData | undefined) {
     }
   }
 
-  // —— 关于（版本读 tauri.conf.json；日志 = show_logs_in_explorer，与主菜单「帮助」同动作） ——
-  const version = ref(mock?.version ?? "0.1.0");
-  function openLogs(): void {
-    if (isMock) return;
-    void invoke("show_logs_in_explorer").catch((e) => toast.notify({ message: String(e), icon: "fail" }));
-  }
-
   // 打开面板拉取（mock 陈列态一律不发命令）；library-thumbs-rebuilt = lib-thumbs 清理后的
   // 后台重建完成事件（接口 22）——toast 报数 + 就地重拉占用
   let unlistenRebuilt: (() => void) | undefined;
@@ -267,7 +249,6 @@ export function useSettingsData(mock: SettingsMockData | undefined) {
     void refreshDrive();
     void refreshCache();
     void loadCep();
-    version.value = await getVersion().catch(() => version.value);
     unlistenRebuilt = await listen<{ rebuilt: number; fallback: number }>("library-thumbs-rebuilt", (e) => {
       toast.notify({
         message: `缩略图重建完成：${e.payload.rebuilt} 张已重建${e.payload.fallback > 0 ? `，${e.payload.fallback} 张回退格式图标` : ""}`,
@@ -297,7 +278,5 @@ export function useSettingsData(mock: SettingsMockData | undefined) {
     cepMB,
     cepFps,
     commitCep,
-    version,
-    openLogs,
   };
 }

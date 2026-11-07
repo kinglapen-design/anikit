@@ -47,6 +47,8 @@ import BlockManageDialog from "./components/BlockManageDialog.vue";
 import InfoManageDialog from "./components/InfoManageDialog.vue";
 import WsManageDialog from "./components/WsManageDialog.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
+import HelpDialog from "./components/HelpDialog.vue";
+import AboutDialog from "./components/AboutDialog.vue";
 import GroupManageDialog from "./components/GroupManageDialog.vue";
 import GroupEditDialog from "./components/GroupEditDialog.vue";
 import PropsDialog from "./components/PropsDialog.vue";
@@ -560,6 +562,8 @@ async function togglePin(): Promise<void> {
     <WsManageDialog v-if="ui.wsManageOpen" @close="ui.wsManageOpen = false" />
     <!-- 偏好设置弹窗（2026-10-13 接生产，preview 六轮定稿）：主菜单「偏好设置」/ Ctrl+, 触发 -->
     <SettingsDialog v-if="ui.settingsOpen" @close="ui.settingsOpen = false" />
+    <AboutDialog v-if="ui.aboutOpen" @close="ui.aboutOpen = false" @open-help="ui.helpOpen = true" />
+    <HelpDialog v-if="ui.helpOpen" @close="ui.helpOpen = false" />
     <!-- 分组弹窗（3.5 二轮）：33 稿分组管理（工具栏分组管理钮 / 12 稿菜单「编辑分组」）/
          34 稿新建分组（12 稿菜单「新建分组」）；目标文件夹 = 打开时锁定的 groupDialogFolder -->
     <GroupManageDialog

@@ -1,4 +1,4 @@
-// 本文件由 tools/gen-component-inventory.mjs 生成（2026-10-31），勿手改——重跑 `pnpm inventory` 刷新。
+// 本文件由 tools/gen-component-inventory.mjs 生成（2026-11-07），勿手改——重跑 `pnpm inventory` 刷新。
 // 阶段七重构「组件台账」数据源：status = new 新体系 / legacy 旧件待烧 / business 业务件 / dead 零消费休眠。
 export type InventoryStatus = "new" | "legacy" | "business" | "dead";
 export interface InventoryEntry {
@@ -9,11 +9,11 @@ export interface InventoryEntry {
   legacyTokens: number;
   replacement: string;
 }
-export const inventoryDate = "2026-10-31";
+export const inventoryDate = "2026-11-07";
 export const inventoryTotals = {
   "new": 83,
   "legacy": 0,
-  "business": 85,
+  "business": 87,
   "dead": 2,
   "legacyConsumers": 0,
   "legacyTokens": 0
@@ -120,6 +120,14 @@ export const inventory: InventoryEntry[] = [
     "name": "WorkspaceTree",
     "status": "business",
     "consumers": 2,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/AboutDialog",
+    "name": "AboutDialog",
+    "status": "business",
+    "consumers": 1,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -326,6 +334,14 @@ export const inventory: InventoryEntry[] = [
   {
     "path": "components/GroupManageDialog",
     "name": "GroupManageDialog",
+    "status": "business",
+    "consumers": 1,
+    "legacyTokens": 0,
+    "replacement": ""
+  },
+  {
+    "path": "components/HelpDialog",
+    "name": "HelpDialog",
     "status": "business",
     "consumers": 1,
     "legacyTokens": 0,
@@ -727,7 +743,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/buttons/ActionButton",
     "name": "ActionButton",
     "status": "new",
-    "consumers": 32,
+    "consumers": 33,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -735,7 +751,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/ScrollThumb",
     "name": "ScrollThumb",
     "status": "new",
-    "consumers": 31,
+    "consumers": 32,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -759,7 +775,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/modals/BaseModal",
     "name": "BaseModal",
     "status": "new",
-    "consumers": 20,
+    "consumers": 22,
     "legacyTokens": 0,
     "replacement": ""
   },
@@ -767,7 +783,7 @@ export const inventory: InventoryEntry[] = [
     "path": "components/items/SectionTitle",
     "name": "SectionTitle",
     "status": "new",
-    "consumers": 13,
+    "consumers": 14,
     "legacyTokens": 0,
     "replacement": ""
   },

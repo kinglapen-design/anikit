@@ -129,6 +129,9 @@ export const useUiStore = defineStore("ui", {
     // 偏好设置弹窗开关（2026-10-13 设置面板接生产，会话级）：主菜单「偏好设置」/ Ctrl+, 置位，
     // 宿主 App.vue（infoManageOpen 惯例）
     settingsOpen: false,
+    // 使用教程 / 关于弹窗（2026-11-08，会话级）：主菜单与关于窗互相进入，宿主 App.vue
+    helpOpen: false,
+    aboutOpen: false,
     // 空格预览模式（2026-10-13 偏好设置「通用」区块，持久化）：hover = 悬停优先（原语义——悬停卡
     // 即览、无悬停回退单选项）/ selected = 仅选中项（悬停不跟随，useSpaceZoom 消费）
     spaceZoomMode: "hover" as "hover" | "selected",

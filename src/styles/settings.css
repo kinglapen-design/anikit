@@ -1,25 +1,28 @@
 .sd-rows {
   display: flex;
   flex-direction: column;
-  gap: var(--n-space-8);
+  gap: var(--n-space-12);
 }
 .sd-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--n-space-12);
-  height: 28px;
+  min-height: 28px;
 }
 .sd-field {
   display: flex;
   flex-direction: column;
-  gap: var(--n-space-4);
+  gap: var(--n-space-6);
+  min-width: 0;
 }
 .sd-label {
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: var(--n-fs-body);
   line-height: var(--n-lh-body);
   color: var(--n-l2);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .sd-note,
 .sd-value,
@@ -33,23 +36,40 @@
   overflow-wrap: anywhere;
 }
 .sd-value {
-  white-space: nowrap;
   flex: none;
 }
-.sd-seg {
+.sd-row .sd-seg.seg {
   width: auto;
   flex: none;
+}
+.sd-pane > .st.block .tt {
+  color: var(--n-l1);
+}
+.sd-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--n-space-12);
+  min-width: 0;
+  padding: var(--n-space-16);
+  border-radius: var(--n-radius-8);
+  background: var(--n-g2);
+  box-shadow: inset 0 0 0 1px var(--n-g3);
+}
+.sd-section .st.block .tt {
+  color: var(--n-l2);
 }
 .sd-input-side {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--n-space-8);
-  flex: none;
-}
-.sd-input-side > .ti-root {
   min-width: 0;
 }
-.sd-num {
+.sd-input-side > .ti-root {
+  flex: 1;
+  min-width: 0;
+}
+.sd-input-side > .ti-root.sd-num {
   width: 96px;
   flex: none;
 }
