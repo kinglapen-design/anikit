@@ -35,6 +35,13 @@
 
 应用内也可通过「帮助 → 使用教程」阅读同一份教程。
 
+## 贡献者
+
+- [kinglapen-design](https://github.com/kinglapen-design) —— 项目创建者与维护者。
+- **Kimi（Moonshot AI / 月之暗面）** —— AI 辅助设计、编码、测试、文档与发布协作。
+
+详见 [CONTRIBUTORS.md](CONTRIBUTORS.md)。
+
 ## 本地开发
 
 需要 Node.js、pnpm、Rust 与 Tauri 的 Windows 构建环境。依赖版本以 `package.json`、`pnpm-lock.yaml` 和 `src-tauri/Cargo.lock` 为准。
