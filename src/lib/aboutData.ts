@@ -3,7 +3,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { useToastStore } from "../stores/toast";
 
-export const PROJECT_URL = "https://github.com/Lapen/anikit";
+export const PROJECT_URL = "https://github.com/kinglapen-design/anikit";
 export const FEEDBACK_URL = `${PROJECT_URL}/issues`;
 
 export async function openExternalUrl(url: string): Promise<void> {

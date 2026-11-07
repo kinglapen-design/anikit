@@ -6,7 +6,7 @@
 
 ## 下载与运行
 
-前往 [GitHub Releases](https://github.com/Lapen/anikit/releases) 下载最新的 Windows 免安装包。
+前往 [GitHub Releases](https://github.com/kinglapen-design/anikit/releases) 下载最新的 Windows 免安装包。
 
 1. 完整解压 ZIP，不要只解压或移动 `anikit.exe`。
 2. 运行 `anikit.exe`，按向导创建或打开储存空间与资源库。
